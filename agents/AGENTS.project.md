@@ -1,10 +1,4 @@
-# Codex 项目级规则模板
-
-本文件用于同步到真实项目仓库根目录的 `AGENTS.md`。Codex 启动后会先读取全局规则，再读取当前项目目录下的 `AGENTS.md`；本文件只补充项目级上下文，不重复 `agents/AGENTS.global.md` 中已经定义的通用规则、Skill 调用边界和验证最低要求。
-
-当本文件与 `agents/AGENTS.global.md` 冲突时，以真实项目仓库内更深层的 `AGENTS.md` 和项目已有规范为准。
-
----
+# Codex 项目级规则
 
 ## 项目事实源
 
