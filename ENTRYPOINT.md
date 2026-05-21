@@ -51,7 +51,7 @@ agentmemory 在当前流程中不是新的 Agent Harness，也不是 Trellis / G
 |---|---|---|
 | 任务开始 | Codex 读取 PRD、AGENTS.md、Skills | Codex 先判断是否需要从 agentmemory MCP 检索历史上下文 |
 | 任务编排 | Trellis 选择 Native Workflow 或 TDD Workflow | Trellis 仍负责 workflow；agentmemory 只提供历史记忆 |
-| 代码理解 | GitNexus / Graphify 辅助分析 | GitNexus / Graphify 仍以当前仓库为准；agentmemory 只补充历史决策和踩坑记录 |
+| 代码理解 | GitNexus / Graphify 辅助分析 | GitNexus / Graphify 仍以当前工作项目为准；agentmemory 只补充历史决策和踩坑记录 |
 | 测试验证 | TestSprite 辅助生成测试计划与回归 | TestSprite 仍负责测试；重要测试策略可沉淀进 agentmemory |
 | 任务结束 | Review / PR / 发布 / 复盘 | 若产生长期价值，Codex 调用 agentmemory MCP 写入结构化记忆 |
 
@@ -111,7 +111,7 @@ MCP-only 模式下的调用边界：
 | 场景 | 是否建议 recall | 说明 |
 |---|---:|---|
 | 跨会话持续开发任务 | 是 | 需要找回之前的设计决策、上下文和未完成事项 |
-| 涉及项目架构或业务规则 | 是 | 可检索历史约定，但当前事实仍需以仓库文件为准 |
+| 涉及项目架构或业务规则 | 是 | 可检索历史约定，但当前事实仍需以当前工作项目文件为准 |
 | 涉及 Trellis workflow 调整 | 是 | 可检索之前对 Native / TDD workflow 的使用约定 |
 | 涉及 Graphify / GitNexus 使用策略 | 是 | 可检索历史工具配置、踩坑和推荐命令 |
 | 线上故障 / 性能问题复盘 | 是 | 可检索类似历史故障、定位方式和修复结论 |
@@ -160,7 +160,7 @@ MCP-only 模式下的调用边界：
 | 核心用途 | recall 历史上下文；remember 长期价值结论 |
 | 不替代的工具 | 不替代 Trellis、GitNexus、Graphify、TestSprite |
 | 是否默认用于所有任务 | 否；复杂任务、跨会话任务、历史项目任务优先使用 |
-| 当前事实来源 | 当前仓库文件、GitNexus、Graphify、测试结果优先；agentmemory 仅作历史上下文 |
+| 当前事实来源 | 当前工作项目文件、GitNexus、Graphify、测试结果优先；agentmemory 仅作历史上下文 |
 | 禁止记录 | API Key、密码、token、敏感凭据、无长期价值的临时信息 |
 
 ### 4.1 Codex MCP-only 接入后的调用流程
@@ -183,10 +183,10 @@ MCP-only 模式下的调用边界：
 #### 任务开始前 recall
 
 ```text
-请先调用 agentmemory MCP，检索当前项目相关的历史记忆，重点查找：
+请先调用 agentmemory MCP，检索当前工作项目相关的历史记忆，重点查找：
 1. Trellis workflow 使用约定
 2. Graphify / GitNexus 的使用规则
-3. 当前仓库的架构决策
+3. 当前工作项目的架构决策
 4. 之前类似问题的处理记录
 
 拿到记忆后，先总结可用上下文，再开始分析本次需求。
@@ -211,15 +211,15 @@ MCP-only 模式下的调用边界：
 ```text
 请按以下流程处理本任务：
 
-1. 先调用 agentmemory MCP，检索当前项目相关记忆：
+1. 先调用 agentmemory MCP，检索当前工作项目相关记忆：
    - Trellis workflow
    - Graphify 使用约定
    - GitNexus 使用约定
-   - 当前仓库架构决策
+   - 当前工作项目架构决策
    - 历史类似问题
 
-2. 根据检索到的记忆，结合当前仓库文件进行分析。
-   注意：agentmemory 只作为历史上下文，当前事实必须以仓库文件为准。
+2. 根据检索到的记忆，结合当前工作项目文件进行分析。
+   注意：agentmemory 只作为历史上下文，当前事实必须以当前工作项目文件为准。
 
 3. 执行必要的代码阅读、修改、测试或文档更新。
 
@@ -231,54 +231,17 @@ MCP-only 模式下的调用边界：
    - 后续风险
 ```
 
-### 4.3 建议加入 AGENTS.md 的规则
+### 4.3 AGENTS.md 同步策略
 
-```md
-## Agent Memory MCP 使用规则
+本仓库只是 Codex 配置文件与 Skill 的摘录/同步源，不代表真实业务项目结构。为减少 Codex 上下文噪音，agentmemory MCP-only 规则按层级拆分维护：
 
-当前项目已通过 MCP-only 方式接入 agentmemory。
+- 全局规则：`agents/AGENTS.global.md` 与实际全局 `AGENTS.md` 只保存通用可用性判断、recall / remember 边界、事实源优先级和敏感信息禁令。
+- 配置仓库规则：根目录 `AGENTS.md` 只保存本配置摘录仓库自身规则、每日版本检查、`更新` / `update` 指令和对 `ENTRYPOINT.md` 的引用。
+- 项目规则模板：`agents/AGENTS.project.md` 用于同步到真实项目仓库根目录的 `AGENTS.md`，补充项目级 Trellis、GitNexus、Graphify、Channel、验证和 Lessons 规则，并继承全局 agentmemory 边界。
+- Skill 规则：Skill 只保留自身生命周期、验证或记录职责；agentmemory 这类跨工具调度规则不重复写入每个 Skill。
+- 本地实际路径同步：只有用户主动输入 `同步` 或 `sync` 时，才同步 `agents/AGENTS.global.md` 和 4 个全局 Skill 到本地 PC；普通编辑任务不自动同步。
 
-### 任务开始前
-
-当任务满足以下任一条件时，Codex 必须先调用 agentmemory MCP 检索历史记忆：
-
-- 涉及当前项目的架构、业务规则、历史决策；
-- 涉及 Trellis workflow；
-- 涉及 Graphify / GitNexus 的既有使用约定；
-- 涉及之前排查过的线上故障、性能问题、测试问题；
-- 涉及跨会话持续开发任务；
-- 用户明确要求“参考之前记录”、“沿用之前方案”、“记住/回忆”。
-
-### 任务执行中
-
-agentmemory 返回的内容只能作为历史上下文。
-
-涉及以下内容时，必须重新读取当前仓库文件或重新运行相关工具：
-
-- 当前代码实现；
-- 当前依赖版本；
-- 当前配置文件；
-- 当前测试结果；
-- 当前 Graphify / GitNexus 分析结果。
-
-### 任务完成后
-
-当任务产生长期价值时，Codex 应主动调用 agentmemory MCP 写入记忆：
-
-- 重要架构决策；
-- 关键 bug 根因；
-- 重要修复方案；
-- Trellis workflow 调整；
-- Graphify / GitNexus 分析结论；
-- 测试策略；
-- 后续风险点。
-
-### 禁止事项
-
-- 不要把 agentmemory 中的旧记忆当成当前事实。
-- 不要记录敏感凭据、API Key、密码、token。
-- 不要记录临时性、无长期价值的信息。
-```
+不要把本章节或提示词模板整段复制进多个 AGENTS.md。需要调整规则时，优先按上面的职责边界更新对应文件。
 
 ---
 
@@ -294,7 +257,7 @@ agentmemory 返回的内容只能作为历史上下文。
 | 可用 API Key 类型 | GEMINI_API_KEY / GOOGLE_API_KEY / MOONSHOT_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY |
 | 大仓库处理 | 超过阈值时需要缩小范围或分目录执行 |
 | 当前关注问题 | 多仓库关联建图、全仓库代码级图谱、文档/图片语义抽取 |
-| 与 agentmemory 的关系 | Graphify 负责当前仓库知识图谱；agentmemory 可记录建图结论、限制和后续注意事项 |
+| 与 agentmemory 的关系 | Graphify 负责当前工作项目知识图谱；agentmemory 可记录建图结论、限制和后续注意事项 |
 
 ---
 
@@ -375,7 +338,7 @@ PRD 输入
 | agentmemory | 历史上下文 recall、长期价值结论 remember | 不作为当前代码事实源，不替代 GitNexus / Graphify |
 | Trellis | Workflow 编排、任务拆解、Native / TDD 流程选择 | 不作为长期记忆层 |
 | GitNexus | 当前代码理解、依赖关系、影响分析、调试辅助 | 不负责跨会话记忆 |
-| Graphify | 当前仓库知识图谱、代码 / 文档语义结构 | 不负责记录任务过程和历史决策 |
+| Graphify | 当前工作项目知识图谱、代码 / 文档语义结构 | 不负责记录任务过程和历史决策 |
 | TestSprite | 自动化测试计划、测试用例、回归辅助 | 不负责架构决策记忆 |
 
 ---
@@ -402,7 +365,7 @@ Codex 作为核心开发入口
 agentmemory MCP-only 作为 Codex 的长期历史上下文层
 Trellis 作为 Agent Harness 编排层
 GitNexus 负责当前代码理解和影响分析
-Graphify 负责当前仓库知识图谱
+Graphify 负责当前工作项目知识图谱
 TestSprite 负责自动化测试与回归验证
 ```
 
@@ -412,5 +375,5 @@ agentmemory 的推荐定位：
 复杂任务、跨会话任务、历史项目任务：先 recall。
 普通简单任务：可跳过。
 产生长期价值的架构决策、问题根因、工具配置、测试策略：完成后 remember。
-当前事实始终以当前仓库文件、GitNexus、Graphify、测试结果为准。
+当前事实始终以当前工作项目文件、GitNexus、Graphify、测试结果为准。
 ```

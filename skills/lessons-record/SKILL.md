@@ -13,8 +13,6 @@ description: Use when a durable lesson should be recorded after bug fixes, rollb
 2. `docs/lessons.md`
 3. `.codex/lessons.md`
 
----
-
 ## 必须记录的场景
 
 出现以下情况时，需要记录 lesson：

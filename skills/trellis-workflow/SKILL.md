@@ -24,8 +24,6 @@ description: Use for Trellis workflow tasks, including reading .trellis/workflow
 `.trellis/workflow.md` 是当前项目实际生效的 workflow。  
 所有 Trellis 阶段判断必须以该文件为准。
 
----
-
 ## Workflow 模板规则
 
 如果 Trellis 支持 workflow templates，可在初始化或后续通过 `trellis workflow` 选择 / 切换 workflow。

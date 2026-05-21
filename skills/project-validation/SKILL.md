@@ -16,8 +16,6 @@ description: Use after code changes to choose and run validation commands for No
 - 如果完整检查成本较高，先运行聚焦检查。
 - 说明跳过的检查和剩余风险。
 
----
-
 ## Node / JavaScript / TypeScript
 
 优先：

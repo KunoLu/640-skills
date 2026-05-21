@@ -73,8 +73,6 @@ description: Use only when the user explicitly requests Trellis Channel, multi-a
 - `.trellis/tasks/<task>/implement.md`
 - `.trellis/spec`，仅当结论属于长期项目规范时
 
----
-
 ## Worker Guard
 
 使用 `trellis channel spawn` 时，应遵循 `.trellis/config.yaml` 中的 `channel.worker_guard` 设置。

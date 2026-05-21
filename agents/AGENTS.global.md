@@ -83,6 +83,36 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 不假设索引存在。
 - 仅在该判断影响任务风险时，在最终输出中说明已跳过。
 
+### agentmemory
+
+agentmemory 只作为 MCP-only 历史上下文层使用，不作为 Skill、hook 或自动会话记录能力来假设。
+
+仅当同时满足以下条件时，才使用 agentmemory：
+
+1. agentmemory MCP 工具可用。
+2. 当前任务需要历史上下文。
+
+适合 recall / search 的场景：
+
+- 跨会话持续开发任务。
+- 涉及项目架构、业务规则或历史决策。
+- 涉及 Trellis workflow、GitNexus、Graphify、TestSprite 等既有使用约定。
+- 涉及之前排查过的故障、性能问题、测试问题。
+- 用户明确要求参考、沿用、回忆或记住之前内容。
+
+使用规则：
+
+- 任务开始前，如符合条件，先通过 agentmemory MCP recall / search，并简要总结可用上下文。
+- agentmemory 返回内容只作为历史线索；当前事实必须以用户正在处理的项目文件、工具输出、测试结果和用户最新指令为准。
+- 任务完成后，只有产生长期价值结论时，才通过 agentmemory MCP remember / save。
+- 不记录 API Key、密码、token、敏感凭据、个人隐私、临时噪音或无复用价值的过程信息。
+
+如果 agentmemory MCP 不可用，或任务不需要历史上下文：
+
+- 跳过 agentmemory。
+- 不阻塞任务。
+- 不假设存在历史记忆。
+
 ---
 
 ## Skills 调用规则

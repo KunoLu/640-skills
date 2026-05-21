@@ -1,14 +1,64 @@
 # AI Tools 项目规则
 
+本仓库是 Codex 配置文件与 Skill 的摘录/同步源，不代表一个真实业务项目结构。本文件只保留本配置摘录仓库自身直接生效的补充规则；通用规则已迁移到 `agents/AGENTS.global.md`，真实项目根目录模板维护在 `agents/AGENTS.project.md`。
+
 ## Agent 规则文件路径
 
-当前项目的 agent 规则文件路径如下：
+本配置集维护的 agent 规则文件路径如下：
 
-- 根目录 `AGENTS.md`：保存本项目当前直接生效的补充规则，包括每日版本检查自动化和 `更新` / `update` 指令。
+- 根目录 `AGENTS.md`：保存本配置摘录仓库自身直接生效的补充规则，包括每日版本检查自动化和 `更新` / `update` 指令。
 - `agents/AGENTS.global.md`：保存迁移后的全局规则文档。
 - `agents/AGENTS.project.md`：保存迁移后的项目规则文档。
 
 每日版本检查自动化如需读取、评估或修改 agent 规则，只能使用上述路径。不要再读取或修改根目录旧路径 `AGENTS.global.md` 和 `AGENTS.project.md`。
+
+## 本地同步规则
+
+普通修改任务只更新本配置摘录仓库内的源文件，不要立即同步到本地 PC 的实际生效路径。
+
+只有当用户主动输入 `同步` 或 `sync` 时，才执行本节同步流程。
+
+同步触发后，只同步以下全局规则和全局 Skill：
+
+| 源文件 | 本地目标路径 |
+|---|---|
+| `agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
+| `skills/trellis-workflow/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-workflow/SKILL.md` |
+| `skills/trellis-channel/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-channel/SKILL.md` |
+| `skills/project-validation/SKILL.md` | `/Users/lusonglin/.agent/skills/project-validation/SKILL.md` |
+| `skills/lessons-record/SKILL.md` | `/Users/lusonglin/.agent/skills/lessons-record/SKILL.md` |
+
+同步要求：
+
+1. 先读取源文件，确认路径正确。
+2. 将源文件复制到对应本地目标路径。
+3. 使用 `cmp -s` 或等价方式确认源文件与目标文件一致。
+4. 在最终输出中说明已同步的文件和校验结果。
+
+不要同步：
+
+- `agents/AGENTS.project.md`
+
+`agents/AGENTS.project.md` 是用于复制到真实项目仓库根目录 `AGENTS.md` 的项目级模板，只在具体项目需要时由用户手动落地或明确要求同步。
+
+### 同步指令
+
+当用户输入 `同步` 或 `sync` 时：
+
+1. 执行上面的本地同步流程。
+2. 不修改 `ENTRYPOINT.md` 版本号。
+3. 不归档 `UPDATE.md`。
+4. 不提交或推送变更。
+
+## Agent Memory MCP-only
+
+本配置集的 agentmemory 规则以 `ENTRYPOINT.md` 中的 MCP-only 定位为准：
+
+- agentmemory 是 Codex 的历史上下文层，不是 Trellis、GitNexus、Graphify、TestSprite 或当前项目文件的替代品。
+- 只有在 agentmemory MCP 工具可用，且任务涉及跨会话上下文、历史决策、工具使用约定、故障复盘或用户明确要求回忆/记住时，才进行 recall / search。
+- 任务完成后，只有长期价值结论才写入 remember / save，例如架构决策、关键问题根因、重要修复方案、工具策略、验证策略和后续风险。
+- 当前事实始终以用户正在处理的项目文件、`ENTRYPOINT.md` 中记录的工具策略、实际工具输出和验证结果为准。
+- 不要把 API Key、密码、token、敏感凭据、个人隐私或临时噪音写入 agentmemory。
 
 ## 每日版本检查自动化
 
