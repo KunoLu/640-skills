@@ -10,8 +10,8 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.132.0 | stable-only | 是 | 核心 Coding Agent |
-| Trellis | mindfold-ai/trellis | v0.6.0-beta.20 | same-prerelease-channel | 是 | Agent Harness / 工作流编排 |
+| Codex | openai/codex | v0.133.0 | stable-only | 是 | 核心 Coding Agent |
+| Trellis | mindfold-ai/trellis | v0.6.0-beta.21 | same-prerelease-channel | 是 | Agent Harness / 工作流编排 |
 | GitNexus | abhigyanpatwari/GitNexus | V1.6.5 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Graphify | safishamsi/graphify | v0.8.14 | stable-only | 是 | 仓库知识图谱生成 |
 | agentmemory | rohitg00/agentmemory | v0.9.21 | stable-only | 是 | AI 编程代理持久化记忆；当前推荐 MCP-only 接入 Codex |
@@ -78,8 +78,8 @@ MCP-only 模式下的调用边界：
 
 | 工具 | 当前定位 | 当前使用/讨论版本 | 使用状态 | 备注 |
 |---|---|---:|---|---|
-| Codex | 核心 Coding Agent | v0.132.0 | 已纳入主流程 | 作为主要开发执行入口，配合 AGENTS.md、Skills、Trellis、GitNexus、Graphify、agentmemory 使用 |
-| Trellis | Agent Harness / 工作流编排 | v0.6.0-beta.20 | 已纳入主流程 | 重点关注 Native Workflow 与 TDD Workflow 的切换 |
+| Codex | 核心 Coding Agent | v0.133.0 | 已纳入主流程 | 作为主要开发执行入口，配合 AGENTS.md、Skills、Trellis、GitNexus、Graphify、agentmemory 使用 |
+| Trellis | Agent Harness / 工作流编排 | v0.6.0-beta.21 | 已纳入主流程 | 重点关注 Native Workflow 与 TDD Workflow 的切换 |
 | agentmemory | 持久化记忆 / 历史上下文检索 | v0.9.21 | 已纳入主流程 | 当前推荐 Codex MCP-only 接入；用于 recall 历史上下文与 remember 长期价值结论 |
 | GitNexus | 代码理解、依赖关系、影响分析 | V1.6.5 | 已纳入主流程 | 使用全局 gitnexus-mcp；不再作为自定义 Skill 维护 |
 | Graphify | 仓库知识图谱生成 | v0.8.14 | 已纳入/持续评估 | 当前关注 `graphify extract .`、`graphify update .`、LLM API Key 配置、全仓库/多仓库建图能力 |
@@ -347,8 +347,8 @@ PRD 输入
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.132.0 |
-| Agent Harness | Trellis | v0.6.0-beta.20 |
+| Coding Agent | Codex | v0.133.0 |
+| Agent Harness | Trellis | v0.6.0-beta.21 |
 | 持久化记忆 | agentmemory | v0.9.21 |
 | 代码理解 | GitNexus | V1.6.5 |
 | 知识图谱 | Graphify | v0.8.14 |

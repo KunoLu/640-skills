@@ -27,3 +27,10 @@
 - 根因：没有区分“维护仓库源文件”和“落地到本地实际路径”两个动作，触发语义不够明确。
 - 修复：将同步逻辑改为只有用户主动输入 `同步` 或 `sync` 时才执行；普通修改任务只更新仓库源文件。
 - 预防：后续新增同步目标或同步规则时，必须明确触发词、同步范围、校验方式，并保持项目级模板 `agents/AGENTS.project.md` 不自动同步。
+
+## 自动化规则不得写入可复用模板
+
+- 问题：每日版本更新中，为了约束本仓库自动化如何把 release 结论沉淀为通用规则，曾把该要求误写入 `agents/AGENTS.global.md` 和 `agents/AGENTS.project.md`，污染了给其他项目直接复用的全局/项目级模板。
+- 根因：没有先判断规则的适用主体，把“本配置摘录仓库的自动化运行逻辑”和“真实项目会继承的长期 agent 行为规范”混为一谈。
+- 修复：撤回两份 agents 模板中的自动化专用规则，只在根 `AGENTS.md` 保留每日版本检查自动化约束；`skills/trellis-channel/SKILL.md` 仅保留与 Trellis Channel 实际使用边界相关的通用规则。
+- 预防：后续根据 release notes 修改规则时，先分类目标文件角色：根 `AGENTS.md` 可写本仓库自动化流程，`agents/AGENTS.global.md` / `agents/AGENTS.project.md` 只写对真实项目普遍成立的行为规范，`skills/**/SKILL.md` 只写该 Skill 自身长期有效的使用规则。

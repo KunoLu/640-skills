@@ -68,7 +68,20 @@ Codex 每日版本检查自动化必须遵守：
 2. 自动化只读取 `ENTRYPOINT.md` 中的当前版本作为比对基线；不要修改 `ENTRYPOINT.md` 中任何工具的当前版本号。
 3. 对同一工具多次执行自动化时，`UPDATE.md` 中的版本区间必须始终保持为：`ENTRYPOINT.md` 中该工具当前版本号 -> 最新检测并完成比对分析的版本号。
 4. 如果同一工具、同一起始版本已有更新区间，后续检测到更高版本时，只更新该段二级标题的目标版本号和段落内容，不新增重复区间。
-5. 除非用户手动输入 `更新` 或 `update`，否则不要把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`。
+5. 如果 GitHub release body 缺失、为空或明显不足以判断变更，不要直接写成“无可追溯变更”；必须继续从以下维度补充获取版本更新信息，并在 `UPDATE.md` 中说明哪些来源有依据、哪些来源缺失：
+   - 官方 docs / changelog 页面或文档仓库对应版本条目。
+   - GitHub compare 区间。
+   - 具体 commit diff 和变更文件列表。
+   - migration manifest、upgrade manifest 或等价迁移元数据。
+   - npm 包 metadata、tarball 内容、发布文件结构或本地包结构推断。
+6. 评估是否需要修改本仓库规则时，不要只检查是否存在与上游同名的模板或配置文件；还必须用 release 中出现的关键概念、命令、配置项和兼容性关键词扫描以下本地文件，并在 `UPDATE.md` 的影响分析中说明命中结果和处理决定：
+   - `AGENTS.md`
+   - `agents/AGENTS.global.md`
+   - `agents/AGENTS.project.md`
+   - `skills/**/SKILL.md`
+7. 如果 release 改动影响某个工具的使用边界、命令建议、配置禁用项、兼容性风险或迁移步骤，即使本仓库没有对应模板文件，也要最小化更新相关 AGENTS 或 Skill 规则。
+8. 由 release 触发的 AGENTS 或 Skill 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。只有当规则本身必须表达明确兼容边界时，才允许写最低/最高版本要求。
+9. 除非用户手动输入 `更新` 或 `update`，否则不要把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`。
 
 ## 更新指令
 

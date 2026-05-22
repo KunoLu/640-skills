@@ -122,8 +122,12 @@ interrupt 必须使用专用 interrupt 流程，不要通过普通 tag 路由模
 - Trellis 多 Agent 工作优先使用 `trellis channel`。
 - 普通 Trellis task 使用 Codex inline 主会话完成。
 - 不依赖 Codex 内置 `features.multi_agent_v2` 作为 Trellis 主流程。
-- 除非明确测试该行为，否则不要混用 Trellis Channel 和 Codex 内置多 Agent。
-- 避免递归派发或嵌套子线程。
+- 不要在项目级 `.codex/config.toml` 写入 `[features.multi_agent_v2]`。
+- Trellis 生成或更新 Codex project config 时，不应生成 `[features.multi_agent_v2]` block；这样可以避免不同 Codex CLI 版本对 structured feature table 的兼容性差异阻塞 Codex 启动。
+- 如果项目继承了旧 Trellis 生成的 `[features.multi_agent_v2]` block，优先运行 `trellis update` 重新生成 `.codex/config.toml`，不要手工保留项目级 structured feature table 配置。
+- 如确需测试或调优 Codex 内置 multi-agent，仅在确认 Codex CLI 版本兼容后，放到用户级 `~/.codex/config.toml`。
+- 除非明确测试该行为，否则不要混用 Trellis Channel 和 Codex 内置 multi-agent。
+- 避免递归派发、嵌套子线程或 sub-thread 套娃。
 
 ---
 
