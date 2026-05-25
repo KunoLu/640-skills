@@ -72,6 +72,9 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 - 代码库问题优先使用 `graphify query "<question>"`、`graphify path "<A>" "<B>"` 或 `graphify explain "<concept>"` 获取局部上下文。
 - `graphify-out/GRAPH_REPORT.md` 仅用于广泛架构审查，或 query/path/explain 信息不足时读取。
 - 修改代码后，如项目已维护 Graphify 图谱且命令可用，运行 `graphify update .` 更新图谱。
+- 如果需要安装项目级 Graphify Skill，使用 `graphify install --project` 或对应平台子命令的 `--project`，避免误装到用户主目录。
+- Graphify 建图或语义抽取命令返回非零退出码时，按真实失败处理，优先检查 LLM provider、API Key、网络和抽取日志，不要接受静默空图作为成功结果。
+- Graphify 输出的跨语言 INFERRED `calls` 边不能单独作为事实依据；涉及调用关系、影响分析或架构结论时，先重新建图或回到源码 / 局部 query 交叉验证。
 - Graphify 负责当前项目知识图谱；agentmemory 只记录可复用的建图结论、限制和后续注意事项。
 
 ---
