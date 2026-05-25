@@ -13,7 +13,7 @@
 | Codex | openai/codex | v0.133.0 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.0-beta.21 | same-prerelease-channel | 是 | Agent Harness / 工作流编排 |
 | GitNexus | abhigyanpatwari/GitNexus | V1.6.5 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
-| Graphify | safishamsi/graphify | v0.8.17 | stable-only | 是 | 仓库知识图谱生成 |
+| Graphify | safishamsi/graphify | v0.8.18 | stable-only | 是 | 仓库知识图谱生成 |
 | agentmemory | rohitg00/agentmemory | v0.9.21 | stable-only | 是 | AI 编程代理持久化记忆；当前推荐 MCP-only 接入 Codex |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
 
@@ -82,7 +82,7 @@ MCP-only 模式下的调用边界：
 | Trellis | Agent Harness / 工作流编排 | v0.6.0-beta.21 | 已纳入主流程 | 重点关注 Native Workflow 与 TDD Workflow 的切换 |
 | agentmemory | 持久化记忆 / 历史上下文检索 | v0.9.21 | 已纳入主流程 | 当前推荐 Codex MCP-only 接入；用于 recall 历史上下文与 remember 长期价值结论 |
 | GitNexus | 代码理解、依赖关系、影响分析 | V1.6.5 | 已纳入主流程 | 使用全局 gitnexus-mcp；不再作为自定义 Skill 维护 |
-| Graphify | 仓库知识图谱生成 | v0.8.17 | 已纳入/持续评估 | 当前关注 `graphify extract .`、`graphify update .`、LLM API Key 配置、全仓库/多仓库建图能力 |
+| Graphify | 仓库知识图谱生成 | v0.8.18 | 已纳入/持续评估 | 当前关注 `graphify extract .`、`graphify update .`、LLM API Key 配置、全仓库/多仓库建图能力 |
 | TestSprite | AI Testing Agent / 自动化测试 | latest | 使用中 | 当前认为比 Midscene 更成熟好用；支持前后端测试场景，需要评估生成文件是否入库 |
 
 ---
@@ -249,7 +249,7 @@ MCP-only 模式下的调用边界：
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.8.17 |
+| 当前关注版本 | v0.8.18 |
 | 建图命令 | 优先使用 `graphify extract .` |
 | 更新命令 | 使用 `graphify update .` 更新已有图谱 |
 | 旧命令差异 | 旧版本中曾出现 `graphify .` 用法；新版本应以当前 CLI help 为准 |
@@ -351,7 +351,7 @@ PRD 输入
 | Agent Harness | Trellis | v0.6.0-beta.21 |
 | 持久化记忆 | agentmemory | v0.9.21 |
 | 代码理解 | GitNexus | V1.6.5 |
-| 知识图谱 | Graphify | v0.8.17 |
+| 知识图谱 | Graphify | v0.8.18 |
 | 自动化测试 | TestSprite | latest |
 
 ---

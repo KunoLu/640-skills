@@ -34,3 +34,10 @@
 - 根因：没有先判断规则的适用主体，把“本配置摘录仓库的自动化运行逻辑”和“真实项目会继承的长期 agent 行为规范”混为一谈。
 - 修复：撤回两份 agents 模板中的自动化专用规则，只在根 `AGENTS.md` 保留每日版本检查自动化约束；`skills/trellis-channel/SKILL.md` 仅保留与 Trellis Channel 实际使用边界相关的通用规则。
 - 预防：后续根据 release notes 修改规则时，先分类目标文件角色：根 `AGENTS.md` 可写本仓库自动化流程，`agents/AGENTS.global.md` / `agents/AGENTS.project.md` 只写对真实项目普遍成立的行为规范，`skills/**/SKILL.md` 只写该 Skill 自身长期有效的使用规则。
+
+## 验证脚本枚举 Skill 时必须过滤目录
+
+- 问题：每日版本检查的 Node 验证脚本直接遍历 `skills/` 并拼接 `SKILL.md`，把 macOS 产生的 `.DS_Store` 当成目录读取，导致验证脚本自身失败。
+- 根因：验证脚本假设 `skills/` 下只有 Skill 目录，没有使用 `Dirent.isDirectory()` 或等价方式过滤文件。
+- 修复：重新运行验证时只枚举目录，并保留 `.gitignore` 三行校验，确认 `.DS_Store` 仍被忽略。
+- 预防：后续所有针对 `skills/**/SKILL.md` 的自动化检查都应先过滤目录或直接使用 `rg --files skills -g SKILL.md`，不要手写无类型的路径拼接。
