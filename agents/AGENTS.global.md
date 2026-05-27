@@ -105,6 +105,8 @@ agentmemory 只作为 MCP-only 历史上下文层使用，不作为 Skill、hook
 - 任务开始前，如符合条件，先通过 agentmemory MCP recall / search，并简要总结可用上下文。
 - agentmemory 返回内容只作为历史线索；当前事实必须以用户正在处理的项目文件、工具输出、测试结果和用户最新指令为准。
 - 任务完成后，只有产生长期价值结论时，才通过 agentmemory MCP remember / save。
+- 多 Agent 或多角色共用同一 agentmemory 实例时，不要默认记忆已按角色隔离；如任务需要隔离上下文，先确认 `AGENT_ID` / `AGENTMEMORY_AGENT_SCOPE` 等作用域配置或在工具调用中显式限定范围。
+- 如果 agentmemory MCP 暴露的工具面过大，只能按项目需要收窄到核心工具集；不要假设所有安装都会使用完整 MCP 工具集。
 - 不记录 API Key、密码、token、敏感凭据、个人隐私、临时噪音或无复用价值的过程信息。
 
 如果 agentmemory MCP 不可用，或任务不需要历史上下文：
