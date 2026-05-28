@@ -2,20 +2,8 @@
 
 ## 项目事实源
 
-- 当前项目的代码、配置、测试、README、CI、任务产物和工具输出优先于历史记忆和通用假设。
-- agentmemory 只作为 MCP-only 历史上下文层；召回结果不能替代当前项目文件、GitNexus、Graphify 或测试结果。
+- 当前项目的代码、配置、测试、README、CI、任务产物和工具输出优先于通用假设。
 - 如果本项目有更深层 `AGENTS.md`，修改对应目录文件前必须读取并遵守。
-
----
-
-## Agent Memory MCP-only
-
-本项目沿用全局 agentmemory 规则，并补充以下项目级用法：
-
-- 任务涉及本项目历史架构决策、业务规则、Trellis workflow、GitNexus / Graphify 使用约定、测试策略、故障复盘或跨会话持续开发时，先 recall / search。
-- recall 后先总结可用历史上下文，再读取当前项目文件和必要工具输出。
-- 任务完成后，仅当产生长期价值结论时 remember / save，例如架构决策、关键问题根因、重要修复方案、工具策略、验证策略和后续风险。
-- 不要记录 API Key、密码、token、敏感凭据、个人隐私、完整日志或无长期复用价值的临时信息。
 
 ---
 
@@ -59,24 +47,52 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 ---
 
+## mattpocock/skills 项目级编排
+
+本项目只接入以下官方 mattpocock/skills，并默认原样使用：
+
+- `diagnose`
+- `tdd`
+- `grill-me`
+- `grill-with-docs`
+- `handoff`
+- `write-a-skill`
+- `zoom-out`
+- `to-prd`
+- `to-issues`
+
+编排说明：
+
+- 普通 bug、测试失败或运行时异常：`diagnose` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
+- 线上问题、日志异常或数据不一致：`diagnose` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
+- 中大型需求：`grill-me` 或 `grill-with-docs` → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite。
+- 高风险后端逻辑、算法或数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` → GitNexus impact-analysis → 回归测试。
+- 陌生模块或上下文不清：`zoom-out` → GitNexus exploring / impact-analysis → Codex implementation。
+- 长任务暂停、`/clear`、新会话或交接前：`handoff`。
+- 需要创建或维护 Skill 时：`write-a-skill`。
+
+`to-prd` 默认输出 Markdown PRD；`to-issues` 默认输出 vertical-slice Markdown tasks。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
+
+---
+
 ## Graphify
 
-仅当当前项目存在 Graphify 输出或用户明确要求时使用 Graphify：
-
-- 存在 `graphify-out/graph.json`
-- 存在 `graphify-out/wiki/index.md`
-- 用户明确输入 `/graphify` 或要求使用 Graphify
+Graphify 降级为可选架构可视化工具。仅当用户明确输入 `$graphify`、提到 Graphify、知识图谱或图谱可视化，并且当前环境已确认安装 Graphify 且相关命令可执行时使用。
 
 使用规则：
 
+- 不因项目存在 `graphify-out/` 就主动调用 Graphify。
+- 不因代码范围大、架构不清或影响范围不明就主动调用 Graphify；这些场景优先使用 `zoom-out`、GitNexus exploring / impact-analysis 和项目文件。
+- 如果 Graphify 不可用，直接跳过，不阻塞任务。
 - 代码库问题优先使用 `graphify query "<question>"`、`graphify path "<A>" "<B>"` 或 `graphify explain "<concept>"` 获取局部上下文。
 - `graphify-out/GRAPH_REPORT.md` 仅用于广泛架构审查，或 query/path/explain 信息不足时读取。
-- 修改代码后，如项目已维护 Graphify 图谱且命令可用，运行 `graphify update .` 更新图谱。
+- 只有本次任务已按上述条件启用 Graphify，且项目已维护 Graphify 图谱时，代码修改后才考虑运行 `graphify update .` 更新图谱。
+- 更新已有图谱时，优先让 `graphify update .` 按磁盘状态协调删除文件后的节点；不要用手工改图谱或仅依赖增量标志来处理 ghost node。
+- 如果 Graphify hook 因 `graphify-out/` 变化反复触发，可用 `GRAPHIFY_SKIP_HOOK=1` 做一次性跳过并检查 hook 日志；不要提交无意义的图谱 churn。
 - Graphify 可抽取 MCP 配置中的服务、包引用和 env var 名称，但不应依赖它读取或保留 env 值；涉及凭据时仍按敏感信息处理。
 - 中文查询效果依赖当前 Graphify 安装的中文分词支持；查询中文复合词结果异常时，先检查可选中文 extra 是否安装，再回退到更明确的关键词或源码验证。
 - Graphify 建图或语义抽取命令返回非零退出码时，按真实失败处理，优先检查 LLM provider、API Key、网络和抽取日志，不要接受静默空图作为成功结果。
 - Graphify 输出的跨语言 INFERRED `calls` 边不能单独作为事实依据；涉及调用关系、影响分析或架构结论时，先重新建图或回到源码 / 局部 query 交叉验证。
-- Graphify 负责当前项目知识图谱；agentmemory 只记录可复用的建图结论、限制和后续注意事项。
 
 ---
 
@@ -90,8 +106,8 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 调用 `trellis-channel` Skill。
 - 不要仅因任务复杂、文件多或跨模块就启用 Channel。
-- Channel 结论必须整理回 task artifacts 或 `.trellis/spec`；只有长期复用价值的摘要才写入 agentmemory。
-- Channel runtime、events、forum、thread、原始 worker 日志默认不要提交到远程仓库，也不要写入 agentmemory。
+- Channel 结论必须整理回 task artifacts 或 `.trellis/spec`。
+- Channel runtime、events、forum、thread、原始 worker 日志默认不要提交到远程仓库。
 
 ---
 
@@ -152,5 +168,3 @@ rtk go test ./...
 - `.trellis/spec/lessons.md`
 - `docs/lessons.md`
 - `.codex/lessons.md`
-
-如果 agentmemory MCP 可用，且 lesson 对跨会话任务有长期价值，可额外保存一段摘要；agentmemory 不替代项目内 lesson 文件。

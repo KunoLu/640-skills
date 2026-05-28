@@ -83,37 +83,21 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 不假设索引存在。
 - 仅在该判断影响任务风险时，在最终输出中说明已跳过。
 
-### agentmemory
+### Graphify
 
-agentmemory 只作为 MCP-only 历史上下文层使用，不作为 Skill、hook 或自动会话记录能力来假设。
+Graphify 为可选架构可视化工具，不进入默认 Agent Harness 主流程。
 
-仅当同时满足以下条件时，才使用 agentmemory：
+仅当同时满足以下条件时，才使用 Graphify：
 
-1. agentmemory MCP 工具可用。
-2. 当前任务需要历史上下文。
-
-适合 recall / search 的场景：
-
-- 跨会话持续开发任务。
-- 涉及项目架构、业务规则或历史决策。
-- 涉及 Trellis workflow、GitNexus、Graphify、TestSprite 等既有使用约定。
-- 涉及之前排查过的故障、性能问题、测试问题。
-- 用户明确要求参考、沿用、回忆或记住之前内容。
+1. 用户明确提到 Graphify、`$graphify`、知识图谱或图谱可视化。
+2. 当前环境已确认安装 Graphify，并且相关命令可执行。
 
 使用规则：
 
-- 任务开始前，如符合条件，先通过 agentmemory MCP recall / search，并简要总结可用上下文。
-- agentmemory 返回内容只作为历史线索；当前事实必须以用户正在处理的项目文件、工具输出、测试结果和用户最新指令为准。
-- 任务完成后，只有产生长期价值结论时，才通过 agentmemory MCP remember / save。
-- 多 Agent 或多角色共用同一 agentmemory 实例时，不要默认记忆已按角色隔离；如任务需要隔离上下文，先确认 `AGENT_ID` / `AGENTMEMORY_AGENT_SCOPE` 等作用域配置或在工具调用中显式限定范围。
-- 如果 agentmemory MCP 暴露的工具面过大，只能按项目需要收窄到核心工具集；不要假设所有安装都会使用完整 MCP 工具集。
-- 不记录 API Key、密码、token、敏感凭据、个人隐私、临时噪音或无复用价值的过程信息。
-
-如果 agentmemory MCP 不可用，或任务不需要历史上下文：
-
-- 跳过 agentmemory。
-- 不阻塞任务。
-- 不假设存在历史记忆。
+- 不因项目存在 `graphify-out/` 就主动调用 Graphify。
+- 不因代码范围大、架构不清或影响范围不明就主动调用 Graphify；这些场景优先使用 `zoom-out`、GitNexus exploring / impact-analysis 和项目文件。
+- 如果 Graphify 不可用，直接跳过，不阻塞任务。
+- Graphify 输出只能作为辅助线索；涉及调用关系、影响分析、架构结论或修复范围时，必须回到源码、项目文档、GitNexus、测试或工具输出交叉验证。
 
 ---
 
@@ -133,17 +117,32 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `trellis-channel` | Trellis Channel / 多 Agent / 多模型协作 | 用户明确要求 Channel、worker、forum、thread、并行评审时 |
 | `project-validation` | 判断代码修改后的验证策略 | 修改代码后、执行验证前 |
 | `lessons-record` | 记录长期经验教训 | bug 修复、回滚、工具误判、验证失败、上下文丢失后 |
-| `spec-plan` | 架构 / 数据模型 / 权限设计 | brainstorm / planning 后、update-spec 前 |
+| `diagnose` | 诊断 bug、测试失败、运行时错误、性能回归、日志异常、线上问题或数据不一致 | 问题根因不清或需要系统化排障时 |
+| `tdd` | 测试先行、回归测试、复杂逻辑验证、高风险修改 | 需要用测试固化行为再实现时 |
+| `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 用户希望先打磨计划、决策或设计时 |
+| `grill-with-docs` | 结合项目文档澄清需求、术语、领域模型和 ADR / CONTEXT 沉淀 | 项目内需求或方案进入 PRD / Trellis 前 |
+| `handoff` | 长会话交接、上下文压缩、跨会话继续任务 | `/clear`、新会话、Trellis 暂停或多会话交接前 |
+| `write-a-skill` | 创建或维护自定义 Skill | 用户要求新增、改造或沉淀 Skill 时 |
+| `zoom-out` | 陌生模块、系统上下文、调用方地图和抽象层级提升 | 修改不熟悉代码区域前或上下文不清时 |
+| `to-prd` | 将当前对话和代码库理解整理为 Markdown PRD | 需求需要沉淀为 PRD 时 |
+| `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 修改 | before-dev 前 |
-| `git-commit-auto` | 生成提交信息 | finish-work 后 |
-| `git-worktree-flow` | 隔离开发环境 | before-dev 前，需要时 |
 
-### 自定义 Skill 使用边界
+### 自定义 Skills 使用边界
 
-- `spec-plan`：仅用于需要长期规范沉淀的架构、数据模型、权限、API 或业务规则设计；不要用于一次性实现清单。
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。
-- `git-commit-auto`：仅在任务已完成、验证已执行、准备生成提交信息时调用；不要在开发中途调用。
-- `git-worktree-flow`：仅在需要隔离开发、并行任务、风险较高修改或避免污染当前工作区时调用。
+- **mattpocock/skills** 仅纳入 `diagnose`、`tdd`、`grill-me`、`grill-with-docs`、`handoff`、`write-a-skill`、`zoom-out`、`to-prd`、`to-issues`。
+- **mattpocock/skills** 优先原样使用官方 Skill；除非用户明确要求，不 fork、不改写官方 Skill 文件。
+- **mattpocock/skills** 相关 skill 使用边界说明：
+    - `diagnose` 用于系统化排障；代码级问题根因不清时结合 GitNexus debugging，修复前有风险时结合 GitNexus impact-analysis，并补充或更新回归测试。
+    - `tdd` 适用于 bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑和高风险修改；不要强制用于简单文案、样式、配置说明或一次性脚本。
+    - `grill-me` 用于通用计划、设计和决策的质询；如果问题可通过读取当前项目文件回答，先探索项目文件。
+    - `grill-with-docs` 用于项目内需求澄清、领域术语对齐、CONTEXT.md 或 ADR 沉淀；不要把 CONTEXT.md 写成临时规格书。
+    - `handoff` 交接内容应包含当前目标、已完成工作、关键决策、文件 / 产物、已尝试命令、开放问题、建议下一步 Skill、不要重复事项和敏感信息脱敏说明。
+    - `write-a-skill` 创建的新 Skill 默认使用 `SKILL.md` 作为入口，长内容拆到 reference，确定性操作优先脚本化，description 必须写清触发场景。
+    - `zoom-out` 用于先看模块边界、调用方和系统上下文；如果进入实现，再结合 GitNexus exploring / impact-analysis。
+    - `to-prd` 默认输出 Markdown PRD；不要发布到 GitHub、Linear 或任何 issue tracker，除非用户明确要求。
+    - `to-issues` 中的 issue 视为通用实现任务；默认输出 Trellis-ready Markdown vertical slices，标注 AFK / HITL、依赖顺序、验收标准和测试策略，不自动发布到 issue tracker。
 
 ### Skill 不可用时
 
@@ -194,7 +193,9 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 
 仅在上下文污染或过大时使用 `/clear`。
 
-执行 `/clear` 前，必须先总结：
+执行 `/clear`、长任务暂停、新会话切换或交接前，如当前任务存在未完成上下文，优先使用 `handoff` Skill 生成交接摘要。
+
+如果 `handoff` 不可用，按以下字段手工总结：
 
 - 当前结论
 - 关键决策

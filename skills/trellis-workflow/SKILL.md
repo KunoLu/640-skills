@@ -45,6 +45,25 @@ description: Use for Trellis workflow tasks, including reading .trellis/workflow
 
 ---
 
+## Trellis TDD Workflow 与 `tdd` Skill
+
+Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具体实现时的测试先行方法。两者可以组合，但不能互相替代。
+
+当项目实际使用 Trellis TDD workflow，或用户明确要求 Trellis TDD 时：
+
+- 继续按 `.trellis/workflow.md` 执行 Trellis 阶段。
+- 开发前仍执行 `$trellis-before-dev`。
+- 具体实现中，如 `tdd` Skill 可用，使用 `tdd` 指导 red-green-refactor。
+- 开发后仍执行 `$trellis-check` 和项目验证命令。
+
+当项目使用 Trellis `native` workflow 时：
+
+- 不因 `native` workflow 而禁止 `tdd` Skill。
+- 仅在 bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、高风险修改或需要回归测试时按需使用 `tdd`。
+- 不为简单文案、样式、配置说明或纯文档修改强制使用 `tdd`。
+
+---
+
 ## 任务产物
 
 - `prd.md`：需求、约束、验收标准

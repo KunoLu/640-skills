@@ -57,15 +57,13 @@
 3. 不归档 `UPDATE.md`。
 4. 不提交或推送变更。
 
-## Agent Memory MCP-only
+## Agent Harness 瘦身规则
 
-本配置集的 agentmemory 规则以 `ENTRYPOINT.md` 中的 MCP-only 定位为准：
+本配置集后续不再接入 agentmemory。不要调用或配置 agentmemory，也不要把 agentmemory 写回 `ENTRYPOINT.md`、AGENTS 模板、Skill 模板或自动化规则。
 
-- agentmemory 是 Codex 的历史上下文层，不是 Trellis、GitNexus、Graphify、TestSprite 或当前项目文件的替代品。
-- 只有在 agentmemory MCP 工具可用，且任务涉及跨会话上下文、历史决策、工具使用约定、故障复盘或用户明确要求回忆/记住时，才进行 recall / search。
-- 任务完成后，只有长期价值结论才写入 remember / save，例如架构决策、关键问题根因、重要修复方案、工具策略、验证策略和后续风险。
-- 当前事实始终以用户正在处理的项目文件、`ENTRYPOINT.md` 中记录的工具策略、实际工具输出和验证结果为准。
-- 不要把 API Key、密码、token、敏感凭据、个人隐私或临时噪音写入 agentmemory。
+Graphify 降级为可选架构可视化工具。只有用户明确要求 Graphify 或输入 `$graphify`，且当前环境已确认安装并可执行时，才使用 Graphify；否则跳过 Graphify，不得阻塞任务流程。
+
+mattpocock/skills 默认按官方文件原样使用，本仓库只在 AGENTS 模板中维护本地使用边界。不要在本仓库内安装、fork 或改写这些官方 Skill。
 
 ## 每日版本检查自动化
 
