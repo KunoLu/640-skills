@@ -69,3 +69,10 @@
 - 根因：没有先确认用户提供的配置片段属于“展示内容”还是“当前仓库变更”，忽略了本仓库是配置摘录源且用户正在讨论 HTML 展示内容的上下文。
 - 修复：立即恢复当前仓库 `.gitignore` 原内容，并删除误新增的 `.gitattributes`。
 - 预防：后续展示型、文档型任务中，用户给出的配置片段默认先视为文档内容候选；只有用户明确要求修改当前仓库配置文件时，才落地到仓库根配置。
+
+## GitHub blob 页面不得作为唯一最新版本依据
+
+- 问题：每日版本检查中，GitHub blob 页面和网页搜索片段一度显示 Graphify 最新仍停在 `0.8.26`，但 GitHub Releases 与 raw changelog 已发布 `0.8.27`。
+- 根因：只看渲染后的 changelog blob 或搜索片段会受页面缓存、折叠和抓取结果影响，无法保证覆盖最新 release 条目。
+- 修复：改用 GitHub Releases 页面和 raw changelog 交叉确认，校正本次区间为 `v0.8.26 -> v0.8.27`。
+- 预防：后续每日版本检查遇到 changelog / release 信息不一致时，至少交叉检查 GitHub Releases、raw changelog 或 tags；不要把 GitHub blob 渲染页或搜索片段当作唯一最新版本依据。
