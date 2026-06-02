@@ -10,10 +10,10 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.135.0 | stable-only | 是 | 核心 Coding Agent |
-| Trellis | mindfold-ai/trellis | v0.6.0-beta.21 | same-prerelease-channel | 是 | 复杂任务编排 / TDD workflow |
+| Codex | openai/codex | v0.136.0 | stable-only | 是 | 核心 Coding Agent |
+| Trellis | mindfold-ai/trellis | v0.6.0-beta.22 | same-prerelease-channel | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | V1.6.5 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
-| Graphify | safishamsi/graphify | v0.8.27 | stable-only | 是 | 可选架构可视化；仅用户主动调用且确认安装时使用 |
+| Graphify | safishamsi/graphify | v0.8.28 | stable-only | 是 | 可选架构可视化；仅用户主动调用且确认安装时使用 |
 | TestSprite | 待明确 | latest | manual | 否 | 测试计划、E2E、自动化测试辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
 
@@ -185,7 +185,7 @@ handoff
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.6.0-beta.21 |
+| 当前关注版本 | v0.6.0-beta.22 |
 | 当前定位 | 复杂任务编排 / 多阶段任务 / TDD workflow |
 | 启用条件 | 存在 Trellis 强证据，或任务复杂度需要 Trellis |
 | Native Workflow | 普通功能开发、文档修改、小型 bug 修复、工具配置调整 |
@@ -225,7 +225,7 @@ handoff
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.8.27 |
+| 当前关注版本 | v0.8.28 |
 | 当前定位 | 可选架构可视化工具 |
 | 是否默认使用 | 否 |
 | 启用条件 | 用户明确要求 Graphify，且当前环境确认安装并可执行 |
@@ -239,10 +239,10 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.135.0 |
-| Agent Harness | Trellis | v0.6.0-beta.21 |
+| Coding Agent | Codex | v0.136.0 |
+| Agent Harness | Trellis | v0.6.0-beta.22 |
 | 代码理解 | GitNexus | V1.6.5 |
-| 可选知识图谱 | Graphify | v0.8.27 |
+| 可选知识图谱 | Graphify | v0.8.28 |
 | 自动化测试 | TestSprite | latest |
 
 ---

@@ -92,6 +92,16 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 - `$trellis-update-spec`：更新长期项目规范
 - `$trellis-brainstorm`：澄清不明确需求
 
+## Codex Sub-agent 生成文件排障
+
+Codex 平台的 Trellis sub-agent TOML 由模板和 context prelude injector 共同生成。
+
+如果 `.codex/agents/trellis-check.toml` 或 `.codex/agents/trellis-implement.toml` 中重复出现 `Required: Load Trellis Context First`：
+
+- 优先运行 `trellis update` 重新生成 `.codex/agents/`。
+- 不要手工保留或维护重复 prelude。
+- 更新后检查每个相关 agent 文件只保留一份 context-loading prelude，并仍能定位 active task、读取 `check.jsonl` / `implement.jsonl` 和 task artifacts。
+
 ---
 
 ## 开发前
