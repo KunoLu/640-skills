@@ -76,3 +76,10 @@
 - 根因：只看渲染后的 changelog blob 或搜索片段会受页面缓存、折叠和抓取结果影响，无法保证覆盖最新 release 条目。
 - 修复：改用 GitHub Releases 页面和 raw changelog 交叉确认，校正本次区间为 `v0.8.26 -> v0.8.27`。
 - 预防：后续每日版本检查遇到 changelog / release 信息不一致时，至少交叉检查 GitHub Releases、raw changelog 或 tags；不要把 GitHub blob 渲染页或搜索片段当作唯一最新版本依据。
+
+## 合并远程分支后仍需校验仓库硬规则
+
+- 问题：将远程 `main` 快进到本地后，远程历史中的 `.gitignore` 第四行 `.pi/` 被带入本地，违反本仓库 `.gitignore` 必须严格三行的规则。
+- 根因：合并远程分支时只关注 Git 历史推进，容易忽略远程已有提交也可能与当前仓库硬规则冲突。
+- 修复：推送前重新校验 `.gitignore` 精确内容，删除 `.pi/` 并保留 `.DS_Store`、`.gitnexus/`、`.trellis/` 三行。
+- 预防：后续在 `main` 合并、快进或推送前，都要运行 `.gitignore` 精确三行检查；即使变更来自远程已有提交，也不能跳过本仓库规则验证。
