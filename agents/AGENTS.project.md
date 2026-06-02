@@ -7,6 +7,18 @@
 
 ---
 
+## UI/UX 设计上下文
+
+默认继承全局规则：`impeccable` 的项目上下文文件维护在 `docs/PRODUCT.md` 和 `docs/DESIGN.md`。
+
+项目级补充：
+
+- 如果本项目已有明确设计文档路径或更深层 `AGENTS.md` 指定其他路径，以项目事实为准。
+- 不要在项目根目录、`.agents/context/`、`docs/` 中维护多份同名上下文文件。
+- 如果 `docs/` 会被文档站公开发布，先确认这些设计上下文是否允许公开；不允许公开时，按项目发布配置排除，或由项目 `AGENTS.md` 指定其他路径。
+
+---
+
 ## Trellis
 
 仅当当前项目存在 Trellis 强证据时使用 Trellis：
@@ -96,7 +108,10 @@ Graphify 降级为可选架构可视化工具。仅当用户明确输入 `$graph
 - Graphify 的 `references` 语义边可能携带 `parameter_type`、`return_type`、`generic_arg`、`field`、`attribute` 等上下文；分析类型依赖时优先用这些上下文缩小范围，并区分 `inherits` 与 `implements`。
 - `graphify-out/GRAPH_REPORT.md` 中的 `Import Cycles` 只能作为循环依赖审查线索；重构前仍需回到源码、import 图或局部 query 验证。
 - 使用 `graphify provider add/list/show/remove` 配置自定义 OpenAI-compatible backend 时，确认 API key env、provider 优先级和数据驻留要求；`~/.graphify/providers.json` 视为本机配置，不要提交或写入项目文档。
+- 分析 Dart / Flutter 代码时，可把 Graphify 抽取出的 `part of`、`extends` / `with` / `implements`、泛型参数映射和泛型调用作为候选图谱信号；涉及影响范围或重构结论时仍需回到源码验证。
+- 如果项目依赖 DreamMaker `.dm` / `.dme` AST 抽取，安装或升级 Graphify 时必须确认已启用当前包文档要求的 optional extra；默认安装可能故意省略需要本机编译工具链的解析器。
 - 如果图谱社区名称仍是 `Community N` 这类占位名，且 Graphify 已按规则启用并配置了可用 backend，可用 `graphify label <path>` 重新生成社区名称；社区标签只能辅助导航，不替代源码和局部 query/path/explain 验证。
+- 社区 ID 稳定性可用于减少重复建图或 graph diff 的无意义噪声，但不要把社区数字 ID 当成长期业务语义；跨版本、重建图谱或重要审查前仍以标签、节点和源码核对。
 - Graphify 抽取异常或 JS/TS 工作区文件被跳过时，可用 `GRAPHIFY_DEBUG=1` 获取完整 traceback；`.graphifyignore` 中以 `/` 开头的规则按仓库根目录锚定，不要当作任意层级匹配。
 - Graphify 输出的跨语言 INFERRED `calls` 边不能单独作为事实依据；涉及调用关系、影响分析或架构结论时，先重新建图或回到源码 / 局部 query 交叉验证。
 - Graphify 升级后，如果结论依赖旧图谱中的文件 / symbol node ID、社区标签、TypeScript 继承边、JS/TS 声明节点、Markdown 代码块节点、Lua import、跨语言 `references` / `calls`、`graph.json` diff 稳定性或安装路径信息，先重新建图或运行 `graphify update .`，再回到源码 / 局部 query 交叉验证。

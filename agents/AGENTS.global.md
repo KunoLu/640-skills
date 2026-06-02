@@ -127,10 +127,21 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `to-prd` | 将当前对话和代码库理解整理为 Markdown PRD | 需求需要沉淀为 PRD 时 |
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 修改 | before-dev 前 |
+| `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确设计方向后，或实现后的 audit / polish 阶段；仅在 Skill 可用且上下文可用时 |
 
 ### 自定义 Skills 使用边界
 
-- `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。
+- `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认设计智能入口，用于产品类型、目标用户、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
+- `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先给设计系统和领域建议，`impeccable` 再把具体界面收敛为 brief、实现检查项或 polish backlog。
+- `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
+- 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
+- `impeccable` 上下文文件必须避免多源冲突：如果项目根目录、`.agents/context/`、`docs/` 中同时存在 `PRODUCT.md` 或 `DESIGN.md`，以项目 `AGENTS.md` 指定路径为准；在读取和写入前先确认实际采用的上下文目录，避免同名文件分散在多个位置。
+- UI/UX Skill 编排：
+    - 新页面 / 新组件 / 大幅改版：先用 `ui-ux-pro-max` 判断产品类型、目标用户、风格、配色、字体、布局和可访问性基线；再在 `impeccable` 可用时使用 `shape` 形成任务级 design brief，获得用户确认后再实现。
+    - 端到端高质量视觉实现：`ui-ux-pro-max` 输出设计系统方向；`impeccable craft` 只在 brief 已确认且需要完整设计执行时使用，并遵守其中的用户确认 gate。
+    - 既有 UI 审查：先用 `ui-ux-pro-max` 的优先级清单覆盖可访问性、交互、性能、响应式、排版和颜色；再在 `impeccable` 可用时用 `audit` / `critique` 生成问题 backlog。
+    - 实现后收尾：运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
+    - 冲突处理：项目 `AGENTS.md`、设计系统、tokens、组件库和已确认品牌规范优先；可访问性、响应式和项目验证不可降级。`impeccable` 的硬性反模板化规则可否决 `ui-ux-pro-max` 的泛化风格建议，除非项目既有品牌规范明确要求该设计语言。
 - **mattpocock/skills** 仅纳入 `diagnose`、`tdd`、`grill-me`、`grill-with-docs`、`handoff`、`write-a-skill`、`zoom-out`、`to-prd`、`to-issues`。
 - **mattpocock/skills** 优先原样使用官方 Skill；除非用户明确要求，不 fork、不改写官方 Skill 文件。
 - **mattpocock/skills** 相关 skill 使用边界说明：
