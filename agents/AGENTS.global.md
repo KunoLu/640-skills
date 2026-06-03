@@ -83,24 +83,6 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 不假设索引存在。
 - 仅在该判断影响任务风险时，在最终输出中说明已跳过。
 
-### Graphify
-
-Graphify 为可选架构可视化工具，不进入默认 Agent Harness 主流程。
-
-仅当同时满足以下条件时，才使用 Graphify：
-
-1. 用户明确提到 Graphify、`$graphify`、知识图谱或图谱可视化。
-2. 当前环境已确认安装 Graphify，并且相关命令可执行。
-
-使用规则：
-
-- 不因项目存在 `graphify-out/` 就主动调用 Graphify。
-- 不因代码范围大、架构不清或影响范围不明就主动调用 Graphify；这些场景优先使用 `zoom-out`、GitNexus exploring / impact-analysis 和项目文件。
-- 如果 Graphify 不可用，直接跳过，不阻塞任务。
-- Graphify 输出只能作为辅助线索；涉及调用关系、影响分析、架构结论或修复范围时，必须回到源码、项目文档、GitNexus、测试或工具输出交叉验证。
-
----
-
 ## Skills 调用规则
 
 **规则**：相关 Skill 可用且任务场景明确匹配时，优先调用对应 Skill；不可用时直接跳过，不阻塞任务。

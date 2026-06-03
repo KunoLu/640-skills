@@ -2,7 +2,6 @@
 
 > 本文件记录个人 Codex Agent Harness 的模板化工具定位、版本监控基线和 Skill 编排规则。
 > 当前主流程已收敛为 `Codex + GitNexus + Trellis + TestSprite`。
-> agentmemory 已从流程中移除；Graphify 降级为用户主动调用且确认安装后才使用的可选架构可视化工具。
 
 ## 0. 版本监控配置
 
@@ -13,7 +12,6 @@
 | Codex | openai/codex | v0.136.0 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.0-beta.22 | same-prerelease-channel | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | V1.6.5 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
-| Graphify | safishamsi/graphify | v0.8.28 | stable-only | 是 | 可选架构可视化；仅用户主动调用且确认安装时使用 |
 | TestSprite | 待明确 | latest | manual | 否 | 测试计划、E2E、自动化测试辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
 
@@ -39,8 +37,6 @@ flowchart TD
     J --> K
 ```
 
-Graphify 不进入默认链路。只有用户明确提到 Graphify、`$graphify`、知识图谱或图谱可视化，并确认当前环境已安装 Graphify 且命令可执行时，才使用 Graphify。
-
 ### 1.2 工具定位
 
 | 工具 | 当前定位 | 是否进入主流程 | 使用边界 |
@@ -49,35 +45,10 @@ Graphify 不进入默认链路。只有用户明确提到 Graphify、`$graphify`
 | GitNexus | 代码理解 / 影响分析 / debug / refactor 辅助 | 是 | 代码结构、影响范围、Bug 根因或重构风险不清时调用 |
 | Trellis | 复杂任务编排 / 多阶段任务 / TDD workflow | 按场景启用 | 中大型任务、高风险任务、跨模块任务、长期任务启用；小任务不强制使用 |
 | TestSprite | 测试计划 / E2E / 自动化测试辅助 | 测试阶段启用 | 涉及 UI/E2E、端到端业务流程、测试计划生成或回归验证时启用 |
-| Graphify | 可选架构可视化 | 否 | 仅用户主动调用且确认安装时使用；不可用时跳过且不阻塞 |
 
 ---
 
-## 2. 工具瘦身规则
-
-### 2.1 agentmemory
-
-agentmemory 已从本地 Agent Harness Workflow 中移除：
-
-- 不再作为历史上下文层。
-- 不再调用或配置 agentmemory。
-- 不再作为 Trellis、GitNexus、Graphify、TestSprite 或当前项目文件的补充事实源。
-- 不再写入 AGENTS 模板、Skill 模板或自动化规则。
-
-### 2.2 Graphify
-
-Graphify 降级为 optional、user-triggered、installed-only 的架构可视化工具：
-
-- 不主动调用。
-- 不因项目存在 `graphify-out/` 就自动使用。
-- 不因代码范围大、架构复杂或影响范围不清就自动使用。
-- 只有用户明确要求 Graphify，且当前环境确认安装并可执行命令时才使用。
-- 如果不可用，直接跳过，不阻塞任务。
-- Graphify 输出仅作辅助线索；架构结论、调用关系和影响分析必须与源码、项目文档、GitNexus 或测试结果交叉验证。
-
----
-
-## 3. mattpocock/skills 接入规则
+## 2. mattpocock/skills 接入规则
 
 仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并默认原样使用官方文件：
 
@@ -93,7 +64,7 @@ to-prd
 to-issues
 ```
 
-### 3.1 使用边界
+### 2.1 使用边界
 
 | Skill | 使用场景 | 本地适配 |
 |---|---|---|
@@ -107,7 +78,7 @@ to-issues
 | `to-prd` | 将当前对话和代码库理解整理为 PRD | 默认输出 Markdown PRD；不自动发布到 issue tracker |
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 默认输出 Trellis-ready Markdown vertical slices；不自动发布到 issue tracker |
 
-### 3.2 推荐编排
+### 2.2 推荐编排
 
 小型代码修改：
 
@@ -181,7 +152,7 @@ handoff
 
 ---
 
-## 4. Trellis 当前使用要点
+## 3. Trellis 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -194,7 +165,7 @@ handoff
 
 ---
 
-## 5. GitNexus 当前使用要点
+## 4. GitNexus 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -207,7 +178,7 @@ handoff
 
 ---
 
-## 6. TestSprite 当前使用要点
+## 5. TestSprite 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -221,33 +192,18 @@ handoff
 
 ---
 
-## 7. Graphify 当前使用要点
-
-| 项目 | 当前结论 |
-|---|---|
-| 当前关注版本 | v0.8.28 |
-| 当前定位 | 可选架构可视化工具 |
-| 是否默认使用 | 否 |
-| 启用条件 | 用户明确要求 Graphify，且当前环境确认安装并可执行 |
-| 建图命令 | 使用前以当前 CLI help 为准 |
-| 更新命令 | 已启用且项目维护图谱时，才考虑 `graphify update .` |
-| 不可用时 | 跳过，不阻塞任务 |
-
----
-
-## 8. 当前版本汇总
+## 6. 当前版本汇总
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
 | Coding Agent | Codex | v0.136.0 |
 | Agent Harness | Trellis | v0.6.0-beta.22 |
 | 代码理解 | GitNexus | V1.6.5 |
-| 可选知识图谱 | Graphify | v0.8.28 |
 | 自动化测试 | TestSprite | latest |
 
 ---
 
-## 9. 精简结论
+## 7. 精简结论
 
 当前 AI Tools 的主线调整为：
 
@@ -261,7 +217,5 @@ TestSprite 负责测试计划、E2E 和回归验证
 辅助策略：
 
 ```text
-agentmemory = removed
-Graphify = optional, user-triggered, installed-only
 mattpocock/skills = official skills unchanged + AGENTS usage boundaries
 ```

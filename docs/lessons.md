@@ -11,14 +11,14 @@
 
 - 问题：维护 Codex 配置摘录时，容易把仓库内的 `AGENTS.md`、`skills/`、`ENTRYPOINT.md` 当成真实业务项目结构来解释，从而引入“当前仓库直接生效”“当前仓库事实源”等误导措辞。
 - 根因：配置摘录仓库同时保存全局规则、项目级规则模板和 Skill 镜像，外观类似项目根目录，但其目标是为后续同步和复用配置，不代表正在开发的业务仓库。
-- 修复：将相关文档改为“配置文件与 Skill 的摘录/同步源”，把 agentmemory 的事实源表述为“当前工作项目文件、工具输出和验证结果”。
+- 修复：将相关文档改为“配置文件与 Skill 的摘录/同步源”，避免把配置摘录仓库误写成真实工作项目的事实源。
 - 预防：后续修改本仓库时，先区分“配置摘录源”和“真实工作项目”；不要因为缺少 `.trellis/`、`.gitnexus/` 等目录就改写模板规则的适用边界。
 
 ## 项目级 AGENTS 模板不得镜像配置仓库根 AGENTS
 
 - 问题：`agents/AGENTS.project.md` 被错误改成了与本配置仓库根 `AGENTS.md` 基本相同的内容，丢失了它作为真实项目仓库根目录 `AGENTS.md` 模板的角色。
 - 根因：没有区分三类文件：`agents/AGENTS.global.md` 是 Codex 全局规则模板，`agents/AGENTS.project.md` 是真实项目级规则模板，本仓库根 `AGENTS.md` 只是配置摘录仓库自身规则。
-- 修复：重新将 `agents/AGENTS.project.md` 调整为真实项目级模板，承接全局规则并补充项目事实源、agentmemory、Trellis、GitNexus、Graphify、Channel、验证和 Lessons 的项目级约束。
+- 修复：重新将 `agents/AGENTS.project.md` 调整为真实项目级模板，承接全局规则并补充项目事实源、Trellis、GitNexus、Channel、验证和 Lessons 的项目级约束。
 - 预防：后续同步规则时，不能把本仓库根 `AGENTS.md` 复制到 `agents/AGENTS.project.md`；两者加载位置、适用对象和内容职责不同。
 
 ## 本地配置同步必须显式触发
@@ -60,7 +60,7 @@
 
 - 问题：手动 `update` 写回 `ENTRYPOINT.md` 时，脚本用“第一列等于工具名”的宽泛表格正则替换版本，误改了“工具定位”表里的“是否进入主流程”列，并把“当前版本汇总”表压成一行。
 - 根因：没有按 Markdown 章节和表头定位，只用工具名匹配任意表格行，导致同名工具在非版本表格中也被当成版本记录。
-- 修复：立即用精确补丁恢复非版本表格，只保留版本监控表、Graphify 当前关注版本和当前版本汇总中的版本更新。
+- 修复：立即用精确补丁恢复非版本表格，只保留版本监控表、工具当前关注版本和当前版本汇总中的版本更新。
 - 预防：后续写回 `ENTRYPOINT.md` 时必须先按章节标题和表头定位目标表，再按列名更新“当前使用版本”或“当前版本记录”；不要对全文表格做工具名全局替换。
 
 ## 展示型任务中的参考配置不得直接写入当前仓库
@@ -72,9 +72,9 @@
 
 ## GitHub blob 页面不得作为唯一最新版本依据
 
-- 问题：每日版本检查中，GitHub blob 页面和网页搜索片段一度显示 Graphify 最新仍停在 `0.8.26`，但 GitHub Releases 与 raw changelog 已发布 `0.8.27`。
+- 问题：每日版本检查中，GitHub blob 页面和网页搜索片段一度显示某工具最新版本仍停在旧版本，但 GitHub Releases 与 raw changelog 已发布新版本。
 - 根因：只看渲染后的 changelog blob 或搜索片段会受页面缓存、折叠和抓取结果影响，无法保证覆盖最新 release 条目。
-- 修复：改用 GitHub Releases 页面和 raw changelog 交叉确认，校正本次区间为 `v0.8.26 -> v0.8.27`。
+- 修复：改用 GitHub Releases 页面和 raw changelog 交叉确认，校正本次版本区间。
 - 预防：后续每日版本检查遇到 changelog / release 信息不一致时，至少交叉检查 GitHub Releases、raw changelog 或 tags；不要把 GitHub blob 渲染页或搜索片段当作唯一最新版本依据。
 
 ## 合并远程分支后仍需校验仓库硬规则
@@ -83,3 +83,10 @@
 - 根因：合并远程分支时只关注 Git 历史推进，容易忽略远程已有提交也可能与当前仓库硬规则冲突。
 - 修复：推送前重新校验 `.gitignore` 精确内容，删除 `.pi/` 并保留 `.DS_Store`、`.gitnexus/`、`.trellis/` 三行。
 - 预防：后续在 `main` 合并、快进或推送前，都要运行 `.gitignore` 精确三行检查；即使变更来自远程已有提交，也不能跳过本仓库规则验证。
+
+## rtk 包装器失败后必须原生命令复验
+
+- 问题：每日版本检查中，`rtk git diff -- AGENTS.md ...` 会把 pathspec 误解析成 revision，`rtk test -d` / `rtk test -f` 也会输出 shell usage 并失败，容易被误读成仓库文件或目录状态异常。
+- 根因：`rtk` 包装器对部分带 `--` pathspec 或 POSIX `test` 参数的命令解析不等价于原生命令；失败来自包装器参数处理，而不一定来自 Git 或文件系统事实。
+- 修复：保持先尝试 `rtk` 的仓库规则；当 `rtk` 输出明显是包装器/参数解析错误时，立即用对应原生命令复验同一事实，并在最终输出说明 fallback。
+- 预防：后续验证脚本和自动化总结中，要区分“rtk 包装器失败”和“底层验证失败”；只有原生命令或结构化脚本也失败时，才判定验证事实未通过。

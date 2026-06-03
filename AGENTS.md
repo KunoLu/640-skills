@@ -57,12 +57,6 @@
 3. 不归档 `UPDATE.md`。
 4. 不提交或推送变更。
 
-## Agent Harness 瘦身规则
-
-本配置集后续不再接入 agentmemory。不要调用或配置 agentmemory，也不要把 agentmemory 写回 `ENTRYPOINT.md`、AGENTS 模板、Skill 模板或自动化规则。
-
-Graphify 降级为可选架构可视化工具。只有用户明确要求 Graphify 或输入 `$graphify`，且当前环境已确认安装并可执行时，才使用 Graphify；否则跳过 Graphify，不得阻塞任务流程。
-
 mattpocock/skills 默认按官方文件原样使用，本仓库只在 AGENTS 模板中维护本地使用边界。不要在本仓库内安装、fork 或改写这些官方 Skill。
 
 ## 每日版本检查自动化

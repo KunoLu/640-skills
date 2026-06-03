@@ -1303,7 +1303,7 @@
         <div class="hero-grid">
           <div class="hero-tile"><b>Agent 模板</b><span>全局规则与项目级规则的职责拆分。</span></div>
           <div class="hero-tile"><b>Trellis</b><span>native / tdd workflow 与编码执行流。</span></div>
-          <div class="hero-tile"><b>工具链</b><span>GitNexus、TestSprite、Graphify 的启用边界。</span></div>
+          <div class="hero-tile"><b>工具链</b><span>GitNexus、TestSprite 的启用边界。</span></div>
           <div class="hero-tile"><b>Skills</b><span>仓库内 Skill 与模板引用 Skill 的用途。</span></div>
         </div>
       </article>
@@ -1342,8 +1342,8 @@
         </header>
         <div class="body toc">
           <div class="toc-item"><div class="toc-num">01</div><div><b>模板层级</b><span>全局规则、项目级规则、仓库内 Skill。</span></div></div>
-          <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite、Graphify。</span></div></div>
-          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>ui-ux-pro-max 与 mattpocock/skills 九件套。</span></div></div>
+          <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite。</span></div></div>
+          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>ui-ux-pro-max、impeccable 与 mattpocock/skills 九件套。</span></div></div>
           <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、实际编码流程。</span></div></div>
           <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation 与 TestSprite 端到端测试辅助。</span></div></div>
           <div class="toc-item"><div class="toc-num">06</div><div><b>Git 参考规则</b><span>ignore 和 attributes 的项目落地建议。</span></div></div>
@@ -1437,10 +1437,6 @@
               <h3>GitNexus</h3>
               <p>只有 MCP 可用且项目已有索引时使用，用于影响分析和变更检测。</p>
             </div>
-            <div class="card warn">
-              <h3>Graphify</h3>
-              <p>可选架构可视化工具，不进入默认主流程。</p>
-            </div>
             <div class="card">
               <h3>目录规则</h3>
               <p>保留 Trellis spec 和 task artifacts；默认不提交 runtime、cache、worktrees、channels。</p>
@@ -1465,41 +1461,11 @@
               <tr><td><strong>Trellis</strong></td><td>任务生命周期、workflow、task artifacts。</td><td>存在 <code>.trellis/</code>、workflow、命令或项目规则声明。</td><td>没有强证据时不启用。</td></tr>
               <tr><td><strong>GitNexus</strong></td><td>影响分析、变更检测、探索辅助。</td><td>MCP 可用且当前项目已有索引。</td><td>MCP 不可用或没有项目索引。</td></tr>
               <tr><td><strong>TestSprite</strong></td><td>测试计划、UI/E2E、API 和回归验证辅助。</td><td>涉及端到端流程、UI、API 集成、测试计划或回归验证。</td><td>无需 E2E 或 MCP/环境未配置时。</td></tr>
-              <tr><td><strong>Graphify</strong></td><td>可选知识图谱和架构可视化。</td><td>用户明确要求 Graphify/图谱，且环境可执行。</td><td>默认跳过；复杂任务也不自动启用。</td></tr>
               <tr><td><strong>Skills</strong></td><td>场景化执行规范。</td><td>任务明确匹配 Skill 描述。</td><td>不匹配、不可用或弱关联时。</td></tr>
             </tbody>
           </table>
         </div>
         <footer class="footer-note"><span>工具输出只能辅助判断，不能替代源码、项目文档、测试和实际 diff。</span><span>Slide 07</span></footer>
-      </article>
-
-      <article class="slide" data-title="Graphify 可选">
-        <header class="section-head">
-          <div class="eyebrow">Graphify</div>
-          <h2>Graphify 是可选项，不是必选配置</h2>
-          <p>它适合架构可视化和知识图谱分析，但模板明确要求它不进入默认 Agent Harness 主流程。</p>
-        </header>
-        <div class="body split">
-          <div class="card accent">
-            <h3>什么时候使用</h3>
-            <ul>
-              <li>用户明确提到 <code>Graphify</code>、<code>$graphify</code>、知识图谱或图谱可视化。</li>
-              <li>当前环境已确认安装并可执行。</li>
-              <li>需要局部架构 query、path 或 explain 作为辅助线索。</li>
-            </ul>
-          </div>
-          <div class="card danger">
-            <h3>什么时候不使用</h3>
-            <ul>
-              <li>仅因为任务复杂、文件多或影响范围不清。</li>
-              <li>仅因为项目里存在 <code>graphify-out/</code>。</li>
-              <li>没有安装或命令不可执行。</li>
-              <li>需要确定调用关系时，不能只依赖 inferred 边。</li>
-            </ul>
-          </div>
-        </div>
-        <div class="callout">推荐表述：Graphify 可以作为项目架构可视化增强项；如果团队不需要图谱能力，可以完全不配置，不影响 Trellis、GitNexus、TestSprite 或基础验证流程。</div>
-        <footer class="footer-note"><span>Graphify 结论必须回到源码、测试或工具输出交叉验证。</span><span>Slide 08</span></footer>
       </article>
 
       <article class="slide" data-title="TestSprite 定位">
@@ -1515,7 +1481,7 @@
           <div class="metric"><div class="num">04</div><div class="label"><strong>反馈修复</strong><br>输出结果、日志、报告和修复建议。</div></div>
         </div>
         <div class="callout cyan">TestSprite 不是普通单元测试的替代品。项目自己的 lint、test、build 仍然是基础验证；TestSprite 用于补充端到端和回归视角。</div>
-        <footer class="footer-note"><span>官方文档强调通过 MCP server 与 IDE/Agent 集成。</span><span>Slide 09</span></footer>
+        <footer class="footer-note"><span>官方文档强调通过 MCP server 与 IDE/Agent 集成。</span><span>Slide 08</span></footer>
       </article>
 
       <article class="slide" data-title="TestSprite 配置流程">
@@ -1532,7 +1498,7 @@
           <div class="flow-step"><div class="step-num">5</div><h3>测试范围</h3><p>选择 frontend/backend，codebase/diff，是否需要登录。</p></div>
           <div class="flow-step"><div class="step-num">6</div><h3>执行与报告</h3><p>生成计划、运行测试、查看报告并回传修复建议。</p></div>
         </div>
-        <footer class="footer-note"><span>凭据不应硬编码进测试文件或仓库。</span><span>Slide 10</span></footer>
+        <footer class="footer-note"><span>凭据不应硬编码进测试文件或仓库。</span><span>Slide 09</span></footer>
       </article>
 
       <article class="slide" data-title="TestSprite MCP 工具链">
@@ -1555,7 +1521,7 @@
             </tbody>
           </table>
         </div>
-        <footer class="footer-note"><span>测试产物通常落在 testsprite_tests/ 下，是否提交需按项目策略决定。</span><span>Slide 11</span></footer>
+        <footer class="footer-note"><span>测试产物通常落在 testsprite_tests/ 下，是否提交需按项目策略决定。</span><span>Slide 10</span></footer>
       </article>
 
       <article class="slide" data-title="仓库内 Skills">
@@ -1586,31 +1552,36 @@
             <div class="badge-row"><span class="badge">按需沉淀</span></div>
           </div>
         </div>
-        <footer class="footer-note"><span>Skill 不替代项目规范、任务产物、测试和人工判断。</span><span>Slide 12</span></footer>
+        <footer class="footer-note"><span>Skill 不替代项目规范、任务产物、测试和人工判断。</span><span>Slide 11</span></footer>
       </article>
 
       <article class="slide" data-title="模板引用 Skills">
         <header class="section-head">
           <div class="eyebrow">Referenced Skills</div>
-          <h2>模板中引用的 UI/UX Skill</h2>
+          <h2>模板中引用的 UI/UX Skills</h2>
           <p>这一页只保留视觉、交互、布局和前端可用性相关的外部 Skill，避免与下一页的官方 Skill 清单重复。</p>
         </header>
-        <div class="body split split-60">
+        <div class="body grid-3">
           <div class="card accent">
             <h3>ui-ux-pro-max</h3>
-            <p>只在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。适合在实际编码前对设计和交互方案做质量判断。</p>
+            <p>UI/UX 任务的默认设计智能入口，用于判断产品类型、目标用户、风格、配色、字体、布局和可访问性基线。</p>
             <div class="badge-row"><span class="badge cyan">UI/UX</span><span class="badge cyan">before-dev 前</span></div>
           </div>
           <div class="card">
-            <h3>使用边界</h3>
+            <h3>impeccable</h3>
+            <p>作为下游塑形与质检 Skill，用于 shape、audit、critique、polish，以及排版、颜色、响应式和可访问性收尾。</p>
+            <div class="badge-row"><span class="badge amber">可选下游</span><span class="badge amber">audit / polish</span></div>
+          </div>
+          <div class="card">
+            <h3>编排边界</h3>
             <ul>
-              <li>用于页面结构、组件层级、排版密度、响应式和可访问性检查。</li>
-              <li>适合在 UI 任务进入实现前，先确认设计方向和布局风险。</li>
-              <li>修改后仍需通过浏览器检查小屏、窄屏和内容溢出情况。</li>
+              <li>新页面或大改版：先用 <code>ui-ux-pro-max</code> 判断方向。</li>
+              <li><code>impeccable</code> 可用时再形成 brief、审计或 polish backlog。</li>
+              <li>最终仍以项目设计系统、浏览器检查和验证结果为准。</li>
             </ul>
           </div>
         </div>
-        <footer class="footer-note"><span>外部 Skill 不自动触发，必须与任务场景明确匹配。</span><span>Slide 13</span></footer>
+        <footer class="footer-note"><span>外部 Skill 不自动触发，必须与任务场景明确匹配。</span><span>Slide 12</span></footer>
       </article>
 
       <article class="slide" data-title="mattpocock Skills 九件套">
@@ -1630,7 +1601,7 @@
           <div class="card"><h3>to-prd</h3><p>将需求和代码库理解整理成 Markdown PRD。</p></div>
           <div class="card"><h3>to-issues</h3><p>把 PRD 或 plan 拆成 Trellis-ready vertical slices。</p></div>
         </div>
-        <footer class="footer-note"><span>to-prd 和 to-issues 默认不发布到 issue tracker，除非用户明确要求。</span><span>Slide 14</span></footer>
+        <footer class="footer-note"><span>to-prd 和 to-issues 默认不发布到 issue tracker，除非用户明确要求。</span><span>Slide 13</span></footer>
       </article>
 
       <article class="slide" data-title="Trellis 启用条件">
@@ -1660,7 +1631,7 @@
           </div>
         </div>
         <div class="callout cyan">一旦 Trellis 可用，实际生效的依据是项目中的 <code>.trellis/workflow.md</code>，不是模板中的抽象描述。</div>
-        <footer class="footer-note"><span>复杂度决定是否进入 planning，协作形态决定是否启用 Channel。</span><span>Slide 15</span></footer>
+        <footer class="footer-note"><span>复杂度决定是否进入 planning，协作形态决定是否启用 Channel。</span><span>Slide 14</span></footer>
       </article>
 
       <article class="slide" data-title="Trellis native workflow">
@@ -1676,7 +1647,7 @@
           <div class="flow-step"><div class="step-num">4</div><h3>check / finish</h3><p>执行 <code>$trellis-check</code>，验证通过后 <code>$trellis-finish-work</code>。</p></div>
         </div>
         <div class="callout">native 不禁止 <code>tdd</code> Skill。bug 修复、核心业务逻辑、算法、数据同步、导入导出或高风险修改，仍可按需使用测试先行。</div>
-        <footer class="footer-note"><span>简单文案、样式、配置说明或纯文档修改不强制 TDD。</span><span>Slide 16</span></footer>
+        <footer class="footer-note"><span>简单文案、样式、配置说明或纯文档修改不强制 TDD。</span><span>Slide 15</span></footer>
       </article>
 
       <article class="slide" data-title="Trellis tdd workflow">
@@ -1705,7 +1676,7 @@
             </ul>
           </div>
         </div>
-        <footer class="footer-note"><span>仅用户明确要求 TDD 或项目已采用测试驱动流程时切换到 tdd workflow。</span><span>Slide 17</span></footer>
+        <footer class="footer-note"><span>仅用户明确要求 TDD 或项目已采用测试驱动流程时切换到 tdd workflow。</span><span>Slide 16</span></footer>
       </article>
 
       <article class="slide" data-title="实际编码流程">
@@ -1721,7 +1692,7 @@
           </div>
           <div class="lane">
             <div class="lane-label"><b>开发前</b><span>冻结边界</span></div>
-            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务可用 ui-ux-pro-max</span></div>
+            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务先 ui-ux-pro-max</span><span class="pill">polish 可用 impeccable</span></div>
           </div>
           <div class="lane">
             <div class="lane-label"><b>实现中</b><span>最小修改</span></div>
@@ -1732,7 +1703,7 @@
             <div class="lane-body"><span class="pill cyan">project-validation</span><span class="pill">项目 tests/build</span><span class="pill">UI/E2E 时 TestSprite</span><span class="pill cyan">$trellis-check</span><span class="pill amber">需要时 update-spec</span><span class="pill cyan">$trellis-finish-work</span></div>
           </div>
         </div>
-        <footer class="footer-note"><span>finish-work 只能在 check 和验证通过后执行。</span><span>Slide 18</span></footer>
+        <footer class="footer-note"><span>finish-work 只能在 check 和验证通过后执行。</span><span>Slide 17</span></footer>
       </article>
 
       <article class="slide" data-title="Trellis Channel">
@@ -1770,7 +1741,7 @@
             </ul>
           </div>
         </div>
-        <footer class="footer-note"><span>Channel 不替代 before-dev、check 或 finish-work。</span><span>Slide 19</span></footer>
+        <footer class="footer-note"><span>Channel 不替代 before-dev、check 或 finish-work。</span><span>Slide 18</span></footer>
       </article>
 
       <article class="slide" data-title="项目验证">
@@ -1803,7 +1774,7 @@ go vet ./...</code></pre>
             <p>仅依赖变化时运行 <code>go mod tidy</code>。</p>
           </div>
         </div>
-        <footer class="footer-note"><span>无法执行完整验证时，必须说明尝试命令、失败原因、替代检查和剩余风险。</span><span>Slide 20</span></footer>
+        <footer class="footer-note"><span>无法执行完整验证时，必须说明尝试命令、失败原因、替代检查和剩余风险。</span><span>Slide 19</span></footer>
       </article>
 
       <article class="slide" data-title="Lessons 记录">
@@ -1834,7 +1805,7 @@ go vet ./...</code></pre>
             <p>优先记录到项目可审查位置，例如 <code>.trellis/spec/lessons.md</code>、<code>docs/lessons.md</code> 或 <code>.codex/lessons.md</code>。</p>
           </div>
         </div>
-        <footer class="footer-note"><span>普通任务总结不等于 lesson。</span><span>Slide 21</span></footer>
+        <footer class="footer-note"><span>普通任务总结不等于 lesson。</span><span>Slide 20</span></footer>
       </article>
 
       <article class="slide" data-title="Git Ignore 参考">
@@ -1893,13 +1864,13 @@ CLAUDE.md
             <div class="callout">不要把参考配置机械复制到所有项目。先确认项目是否需要提交某些生成物或本地工具配置。</div>
           </div>
         </div>
-        <footer class="footer-note"><span>这页是参考内容，不是当前仓库配置变更。</span><span>Slide 22</span></footer>
+        <footer class="footer-note"><span>这页是参考内容，不是当前仓库配置变更。</span><span>Slide 21</span></footer>
       </article>
 
       <article class="slide" data-title="AI 工具 Git 参考">
         <header class="section-head">
           <div class="eyebrow">AI Tooling Git Rules</div>
-          <h2>Trellis、GitNexus、Graphify、TestSprite 的参考忽略策略</h2>
+          <h2>Trellis、GitNexus、Impeccable、TestSprite 的参考忽略策略</h2>
           <p>核心思路：保留人类需要审查的规范和任务产物，忽略 runtime、cache、worktree 和大体量机器生成物。</p>
         </header>
         <div class="body code-split">
@@ -1923,13 +1894,11 @@ CLAUDE.md
 # ---------- GitNexus ----------
 .gitnexus/
 
-# ---------- Graphify ----------
-.graphify_*
-graphify-out/.graphify_*
-graphify-out/manifest.json
-graphify-out/cost.json
-graphify-out/cache/
-graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+# ---------- Impeccable ----------
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/annotations/
+.impeccable/critique/
 
 # ---------- TestSprite ----------
 testsprite_tests/**
@@ -1947,39 +1916,13 @@ testsprite_tests/**
             <ul>
               <li>Trellis：保留 spec、workflow 和核心 task artifacts。</li>
               <li>GitNexus：本地索引默认不提交。</li>
-              <li>Graphify：缓存、manifest、成本文件和日期输出通常不提交。</li>
+              <li>Impeccable：live session、annotation 和 critique 输出默认作为本地工作态处理。</li>
               <li>TestSprite：可保留 test plan / PRD，执行代码和报告按团队策略。</li>
             </ul>
             <div class="callout cyan">如果团队希望保留 TestSprite 的具体测试代码，可以按需打开 <code>TC*</code> 相关规则。</div>
           </div>
         </div>
-        <footer class="footer-note"><span>规则应与 CI、审查流程和安全策略一起确定。</span><span>Slide 23</span></footer>
-      </article>
-
-      <article class="slide" data-title="Git Attributes 参考">
-        <header class="section-head">
-          <div class="eyebrow">Git Attributes Reference</div>
-          <h2>Graphify 产物可以参考配置 <code>-diff</code></h2>
-          <p>Graphify 输出的 JSON / HTML 往往体积大、机器生成、review 噪音高。可以按项目需要降低 diff 干扰。</p>
-        </header>
-        <div class="body split">
-          <div class="card accent">
-            <h3>参考片段</h3>
-            <pre><code>graphify-out/*.json -diff
-graphify-out/**/*.json -diff
-graphify-out/*.html -diff
-graphify-out/**/*.html -diff</code></pre>
-          </div>
-          <div class="card">
-            <h3>适用判断</h3>
-            <ul>
-              <li>适合机器生成、人工不逐行 review 的 Graphify 输出。</li>
-              <li>不适合需要审查语义变化的手写 JSON / HTML。</li>
-              <li>与 <code>.gitignore</code> 搭配使用，先判断是否提交，再判断如何 diff。</li>
-            </ul>
-          </div>
-        </div>
-        <footer class="footer-note"><span>这页同样是参考内容，不是当前仓库配置变更。</span><span>Slide 24</span></footer>
+        <footer class="footer-note"><span>规则应与 CI、审查流程和安全策略一起确定。</span><span>Slide 22</span></footer>
       </article>
 
       <article class="slide" data-title="落地检查清单">
@@ -2003,7 +1946,6 @@ graphify-out/**/*.html -diff</code></pre>
               <li>Trellis 只有强证据时启用。</li>
               <li>GitNexus 只有索引存在时启用。</li>
               <li>TestSprite 只在测试场景需要时启用。</li>
-              <li>Graphify 明确标注为可选。</li>
             </ul>
           </div>
           <div class="card">
@@ -2016,7 +1958,7 @@ graphify-out/**/*.html -diff</code></pre>
             </ul>
           </div>
         </div>
-        <footer class="footer-note"><span>最终标准：可理解、可验证、可维护、可回滚。</span><span>Slide 25</span></footer>
+        <footer class="footer-note"><span>最终标准：可理解、可验证、可维护、可回滚。</span><span>Slide 23</span></footer>
       </article>
 
       <article class="slide" data-title="参考来源">
@@ -2030,7 +1972,7 @@ graphify-out/**/*.html -diff</code></pre>
             <h3>仓库内来源</h3>
             <div class="repo-source-list">
               <div class="repo-source-item"><b>agents/AGENTS.global.md</b><span>全局优先级、命令执行、工具可用性、Skills 调用和验证最低要求。</span></div>
-              <div class="repo-source-item"><b>agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / Graphify / TestSprite 边界。</span></div>
+              <div class="repo-source-item"><b>agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / TestSprite 边界。</span></div>
               <div class="repo-source-item"><b>skills/trellis-workflow/SKILL.md</b><span>Trellis native / tdd workflow、before-dev、check、finish-work 和 update-spec。</span></div>
               <div class="repo-source-item"><b>skills/project-validation、trellis-channel、lessons-record</b><span>修改后验证、显式协作运行时和长期经验记录规则。</span></div>
             </div>
@@ -2042,7 +1984,7 @@ graphify-out/**/*.html -diff</code></pre>
             <a href="https://docs.testsprite.com/mcp/maintenance/security-compliance">Security &amp; Compliance<span>凭据、artifact、PII 和测试账户建议。</span></a>
           </div>
         </div>
-        <footer class="footer-note"><span>演示文件为静态 HTML，可直接在浏览器打开。</span><span>Slide 26</span></footer>
+        <footer class="footer-note"><span>演示文件为静态 HTML，可直接在浏览器打开。</span><span>Slide 24</span></footer>
       </article>
     </section>
   </main>
