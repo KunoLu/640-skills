@@ -1,6 +1,6 @@
 ---
 name: trellis-workflow
-description: Use for Trellis workflow tasks, including reading .trellis/workflow.md, task artifacts, before-dev, check, finish-work, update-spec, workflow template handling, and parent/child task handling. Do not use for non-Trellis projects.
+description: Use for Trellis workflow tasks, including requirement clarification handoff, reading .trellis/workflow.md, task artifacts, before-dev, check, finish-work, update-spec, workflow template handling, and parent/child task handling. Do not use for non-Trellis projects.
 ---
 
 # Trellis 工作流 Skill
@@ -23,6 +23,28 @@ description: Use for Trellis workflow tasks, including reading .trellis/workflow
 
 `.trellis/workflow.md` 是当前项目实际生效的 workflow。  
 所有 Trellis 阶段判断必须以该文件为准。
+
+## 需求澄清与 PRD 入口
+
+Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或 PRD 生成。
+
+当用户只给出初始需求，且需求涉及项目领域模型、业务术语、长期规则、现有文档或架构决策时：
+
+1. 在创建或改写 Trellis task artifacts 前，优先使用 `grill-with-docs`。
+2. 先读取项目已有文档与相关代码，例如 `docs/CONTEXT.md`、`docs/contexts/<context>/CONTEXT.md`、`docs/adr/`、`.trellis/spec`、README 和相关实现；如果项目已采用根目录 `CONTEXT.md` 或 `CONTEXT-MAP.md`，也一并读取；能从项目事实回答的问题，不要反问用户。
+3. 按 `grill-with-docs` 的节奏一次只问一个关键问题，并给出推荐答案。
+4. 术语达成长期共识时，才写入项目指定的 context 文档；默认使用 `docs/CONTEXT.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目规则明确指定；不要把 CONTEXT 写成临时规格书。
+5. 只有决策同时满足“难回滚、缺少背景会令人意外、有真实取舍”时，才建议写 ADR；默认写入 `docs/adr/*.md`，多上下文项目写入 `docs/contexts/<context>/adr/*.md`。
+6. 达成共识后，先输出需求确认摘要，覆盖目标、用户 / 场景、范围内外、术语、约束、验收标准和未决问题。
+7. 用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
+8. PRD 确认后，再使用 `to-issues` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
+9. 最后按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
+
+如果需求只是通用方案质询、没有项目文档或领域术语约束，可使用 `grill-me` 替代 `grill-with-docs`。
+
+`$trellis-brainstorm` 可用于 Trellis 内澄清不明确需求，但当需求需要对照项目文档、领域语言或 ADR 时，不替代 `grill-with-docs`。
+
+在需求确认摘要、PRD 或 task artifacts 尚未稳定前，不要执行 `$trellis-before-dev` 或开始实现。
 
 ## Workflow 模板规则
 
@@ -90,7 +112,7 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 - `$trellis-check`：代码修改后执行
 - `$trellis-finish-work`：验证通过后执行
 - `$trellis-update-spec`：更新长期项目规范
-- `$trellis-brainstorm`：澄清不明确需求
+- `$trellis-brainstorm`：澄清 Trellis 任务内的不明确需求；需要项目文档和领域术语对齐时，先使用 `grill-with-docs`
 
 ## Codex Sub-agent 生成文件排障
 

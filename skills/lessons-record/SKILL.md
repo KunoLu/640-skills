@@ -7,11 +7,13 @@ description: Use when a durable lesson should be recorded after bug fixes, rollb
 
 当需要记录长期经验教训时，使用本 Skill。
 
-## 优先记录路径
+## 默认记录路径
 
-1. `.trellis/spec/lessons.md`
-2. `docs/lessons.md`
-3. `.codex/lessons.md`
+所有 lesson 默认记录到：
+
+- `.trellis/spec/lessons.md`
+
+除非用户明确指定其他路径，否则不写入 `docs/lessons.md` 或其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
 
 ## 必须记录的场景
 

@@ -108,21 +108,21 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `zoom-out` | 陌生模块、系统上下文、调用方地图和抽象层级提升 | 修改不熟悉代码区域前或上下文不清时 |
 | `to-prd` | 将当前对话和代码库理解整理为 Markdown PRD | 需求需要沉淀为 PRD 时 |
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
-| `ui-ux-pro-max` | UI/UX 修改 | before-dev 前 |
-| `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确设计方向后，或实现后的 audit / polish 阶段；仅在 Skill 可用且上下文可用时 |
+| `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
+| `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确初稿方向后按条件前置 `shape` / `craft`，或实现后的 `audit` / `critique` / `polish` 阶段；仅在 Skill 可用且上下文可用时 |
 
 ### 自定义 Skills 使用边界
 
-- `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认设计智能入口，用于产品类型、目标用户、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
-- `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先给设计系统和领域建议，`impeccable` 再把具体界面收敛为 brief、实现检查项或 polish backlog。
+- `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
+- `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
 - 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
 - `impeccable` 上下文文件必须避免多源冲突：如果项目根目录、`.agents/context/`、`docs/` 中同时存在 `PRODUCT.md` 或 `DESIGN.md`，以项目 `AGENTS.md` 指定路径为准；在读取和写入前先确认实际采用的上下文目录，避免同名文件分散在多个位置。
 - UI/UX Skill 编排：
-    - 新页面 / 新组件 / 大幅改版：先用 `ui-ux-pro-max` 判断产品类型、目标用户、风格、配色、字体、布局和可访问性基线；再在 `impeccable` 可用时使用 `shape` 形成任务级 design brief，获得用户确认后再实现。
-    - 端到端高质量视觉实现：`ui-ux-pro-max` 输出设计系统方向；`impeccable craft` 只在 brief 已确认且需要完整设计执行时使用，并遵守其中的用户确认 gate。
+    - 初始需求 / 初稿计划：先用 `ui-ux-pro-max` 判断产品类型、目标用户、信息架构、交互模型、风格、配色、字体、布局、响应式策略和可访问性基线；如果任务进入 Trellis，将结论写入任务级 `prd.md`、`design.md` 或 `implement.md`。
+    - 前置设计升级：只有在新视觉方向、高保真页面、大幅改版、品牌 / 营销强视觉页面、方向不清或用户明确要求时，才在实现前使用 `impeccable shape`；`impeccable craft` 只在 brief 已确认且需要完整设计执行时使用，并遵守其中的用户确认 gate。
     - 既有 UI 审查：先用 `ui-ux-pro-max` 的优先级清单覆盖可访问性、交互、性能、响应式、排版和颜色；再在 `impeccable` 可用时用 `audit` / `critique` 生成问题 backlog。
-    - 实现后收尾：运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
+    - 实现后收尾：功能完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
     - 冲突处理：项目 `AGENTS.md`、设计系统、tokens、组件库和已确认品牌规范优先；可访问性、响应式和项目验证不可降级。`impeccable` 的硬性反模板化规则可否决 `ui-ux-pro-max` 的泛化风格建议，除非项目既有品牌规范明确要求该设计语言。
 - **mattpocock/skills** 仅纳入 `diagnose`、`tdd`、`grill-me`、`grill-with-docs`、`handoff`、`write-a-skill`、`zoom-out`、`to-prd`、`to-issues`。
 - **mattpocock/skills** 优先原样使用官方 Skill；除非用户明确要求，不 fork、不改写官方 Skill 文件。
@@ -130,12 +130,12 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - `diagnose` 用于系统化排障；代码级问题根因不清时结合 GitNexus debugging，修复前有风险时结合 GitNexus impact-analysis，并补充或更新回归测试。
     - `tdd` 适用于 bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑和高风险修改；不要强制用于简单文案、样式、配置说明或一次性脚本。
     - `grill-me` 用于通用计划、设计和决策的质询；如果问题可通过读取当前项目文件回答，先探索项目文件。
-    - `grill-with-docs` 用于项目内需求澄清、领域术语对齐、CONTEXT.md 或 ADR 沉淀；不要把 CONTEXT.md 写成临时规格书。
+    - `grill-with-docs` 用于项目内需求澄清、领域术语对齐、CONTEXT.md 或 ADR 沉淀；需求进入 PRD / Trellis 前优先使用；先读项目文档和代码，能从项目事实回答的问题不要反问用户；长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目级规则明确指定；不要把 CONTEXT.md 写成临时规格书。
     - `handoff` 交接内容应包含当前目标、已完成工作、关键决策、文件 / 产物、已尝试命令、开放问题、建议下一步 Skill、不要重复事项和敏感信息脱敏说明。
     - `write-a-skill` 创建的新 Skill 默认使用 `SKILL.md` 作为入口，长内容拆到 reference，确定性操作优先脚本化，description 必须写清触发场景。
     - `zoom-out` 用于先看模块边界、调用方和系统上下文；如果进入实现，再结合 GitNexus exploring / impact-analysis。
-    - `to-prd` 默认输出 Markdown PRD；不要发布到 GitHub、Linear 或任何 issue tracker，除非用户明确要求。
-    - `to-issues` 中的 issue 视为通用实现任务；默认输出 Trellis-ready Markdown vertical slices，标注 AFK / HITL、依赖顺序、验收标准和测试策略，不自动发布到 issue tracker。
+    - `to-prd` 默认输出 Markdown PRD；在 Trellis 项目中，最终 PRD 应写入或更新 `.trellis/tasks/<task>/prd.md`，未确定 task 路径前只保留为对话草稿或用户明确指定的临时文件；不要发布到 GitHub、Linear 或任何 issue tracker，除非用户明确要求。
+    - `to-issues` 中的 issue 视为通用实现任务；在 Trellis 项目中，vertical slices 应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts，标注 AFK / HITL、依赖顺序、验收标准和测试策略；不要默认在 `docs/` 下维护最终 issue / task Markdown，也不要自动发布到 issue tracker。
 
 ### Skill 不可用时
 
@@ -229,6 +229,8 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - 验证失败
 - GitNexus 影响分析不匹配
 - Channel / worker 上下文丢失
+
+默认写入 `.trellis/spec/lessons.md`。除非用户明确指定或项目级规则改写，不写入 `docs/lessons.md` 或其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
 
 不要在普通任务中滥写 lesson。
 

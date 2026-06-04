@@ -17,6 +17,13 @@
 - 不要在项目根目录、`.agents/context/`、`docs/` 中维护多份同名上下文文件。
 - 如果 `docs/` 会被文档站公开发布，先确认这些设计上下文是否允许公开；不允许公开时，按项目发布配置排除，或由项目 `AGENTS.md` 指定其他路径。
 
+UI/UX 任务编排：
+
+- 涉及 UI、交互、布局、视觉、组件体验或前端可用性时，初稿计划默认先使用 `ui-ux-pro-max`，明确产品类型、目标用户、信息架构、交互模型、响应式策略、可访问性基线和项目设计系统约束。
+- `impeccable shape` / `impeccable craft` 只在新视觉方向、高保真页面、大幅改版、品牌 / 营销强视觉页面、方向不清或用户明确要求时前置使用；其 brief 必须经用户确认后再进入实现。
+- 常规 UI 实现完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，再使用 `audit` / `critique` / `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做打磨。
+- 如果 UI/UX 任务进入 Trellis，任务级设计结论写入 `prd.md`、`design.md` 或 `implement.md`；长期设计系统规则才写入 `docs/DESIGN.md` 或 `.trellis/spec`。
+
 ---
 
 ## Trellis
@@ -36,6 +43,16 @@
 - 如果存在当前活跃任务，优先读取 `prd.md`、`design.md`、`implement.md`。
 - 不要绕过 `.trellis/workflow.md` 或手动跳过 Trellis phase。
 - 不要把一次性任务计划写入 `.trellis/spec`；长期规范、架构决策、业务规则变化才应沉淀到 `.trellis/spec`。
+
+需求进入 PRD / Trellis task 前：
+
+- 如果用户只给出初始需求，且需求涉及本项目领域模型、业务术语、长期规则、已有文档或架构决策，先使用 `grill-with-docs` 澄清。
+- `grill-with-docs` 阶段应先读取项目文档和相关代码；能从项目事实回答的问题，不要反问用户。
+- 一次只问一个关键问题，并给出推荐答案；达成共识后输出需求确认摘要。
+- 长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非本项目已采用该路径或更深层 `AGENTS.md` 明确指定。
+- 需求确认摘要经用户确认后，再使用 `to-prd` 生成 Markdown PRD，并用 `to-issues` 拆成 Trellis-ready vertical slices。
+- 在 Trellis 项目中，PRD 终稿应写入 `.trellis/tasks/<task>/prd.md`；拆解后的 parent / child tasks 和实现切片应落到 `.trellis/tasks/<task>/...` 下的 task artifacts。未确定 task 路径前，不要把最终 PRD 或 issue 清单长期落到 `docs/`。
+- 如果需求不依赖项目文档或领域术语，只是通用方案质询，可使用 `grill-me`。
 
 ---
 
@@ -77,13 +94,14 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 普通 bug、测试失败或运行时异常：`diagnose` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnose` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型需求：`grill-me` 或 `grill-with-docs` → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite。
+- 中大型项目内需求：`grill-with-docs` → 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite。
+- 不依赖项目文档或领域术语的通用方案质询：`grill-me` → 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
 - 高风险后端逻辑、算法或数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：`zoom-out` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
 - 需要创建或维护 Skill 时：`write-a-skill`。
 
-`to-prd` 默认输出 Markdown PRD；`to-issues` 默认输出 vertical-slice Markdown tasks。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
+`to-prd` 默认输出 Markdown PRD；`to-issues` 默认输出 vertical-slice Markdown tasks。在 Trellis 项目中，这些产物最终应进入 `.trellis/tasks/<task>/prd.md`、`design.md`、`implement.md` 或 parent / child task artifacts。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
 
 ---
 
@@ -154,8 +172,6 @@ rtk go test ./...
 
 出现 bug 修复、回滚、工具判断错误、工作流阶段错误、验证失败、GitNexus 影响分析不匹配或 Channel / worker 上下文丢失时，调用 `lessons-record` Skill。
 
-优先记录到当前项目内可审查的位置，例如：
+默认记录到 `.trellis/spec/lessons.md`。
 
-- `.trellis/spec/lessons.md`
-- `docs/lessons.md`
-- `.codex/lessons.md`
+除非用户明确指定或更深层 `AGENTS.md` 改写，不写入 `docs/lessons.md`、`.codex/lessons.md` 或其他位置。
