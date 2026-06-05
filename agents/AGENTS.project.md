@@ -174,4 +174,4 @@ rtk go test ./...
 
 默认记录到 `.trellis/spec/lessons.md`。
 
-除非用户明确指定或更深层 `AGENTS.md` 改写，不写入 `docs/lessons.md`、`.codex/lessons.md` 或其他位置。
+除非用户明确指定或更深层 `AGENTS.md` 改写，否则不写入 `docs/lessons.md` 或其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
