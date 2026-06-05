@@ -9,7 +9,7 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.136.0 | stable-only | 是 | 核心 Coding Agent |
+| Codex | openai/codex | v0.137.0 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.0-beta.22 | same-prerelease-channel | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | V1.6.5 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | TestSprite | 待明确 | latest | manual | 否 | 测试计划、E2E、自动化测试辅助 |
@@ -196,7 +196,7 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.136.0 |
+| Coding Agent | Codex | v0.137.0 |
 | Agent Harness | Trellis | v0.6.0-beta.22 |
 | 代码理解 | GitNexus | V1.6.5 |
 | 自动化测试 | TestSprite | latest |
