@@ -83,6 +83,25 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 不假设索引存在。
 - 仅在该判断影响任务风险时，在最终输出中说明已跳过。
 
+### TestSprite
+
+TestSprite 作为测试计划、UI/E2E、API 集成和回归验证辅助工具使用，不替代项目自己的 lint / test / build、浏览器检查或人工测试评审。
+
+仅当存在以下强证据时，才认为 TestSprite 可用：
+
+- 当前 MCP 工具列表中存在 TestSprite 相关工具。
+- 当前 IDE / Agent 环境已明确配置 TestSprite MCP server 和 API Key。
+- 项目级 `AGENTS.md` 或测试文档明确说明使用 TestSprite，且当前环境能调用对应 MCP 工具。
+
+使用规则：
+
+- 涉及端到端流程、UI、API 集成、测试计划生成或回归验证时，可以调用 TestSprite；无需 E2E 或 MCP / 环境未配置时跳过。
+- 使用前先准备可测试需求：读取现有 PRD / task artifacts / README / API 文档，或整理一份 PRD 草稿、测试范围、登录需求、环境 URL、`projectPath`、`localPort`、`type`、`testScope` 和补充测试说明。
+- 当前官方流程中，`testsprite_bootstrap_tests` 会打开 TestSprite Testing Configuration / Configuration Portal；不要把测试配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过的步骤。
+- Codex 可以准备 PRD 文件、测试需求摘要、端口和 MCP 参数；只有用户明确授权浏览器自动化且不涉及敏感真实凭据时，才可以协助在本地页面中填写非敏感配置。真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。
+- 如果 TestSprite 配置门户未完成、登录凭据缺失、PRD 未上传、测试环境不可访问或 MCP 工具不可用，只输出阻塞说明、已准备材料和剩余配置项，不强行声称已完成 TestSprite 测试。
+- TestSprite 产物是否入库按项目策略决定；默认只倾向保留测试计划和 PRD 类产物，具体测试执行代码、报告、截图、trace 和临时结果按团队审查策略处理。
+
 ## Skills 调用规则
 
 **规则**：相关 Skill 可用且任务场景明确匹配时，优先调用对应 Skill；不可用时直接跳过，不阻塞任务。
@@ -110,12 +129,23 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
 | `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确初稿方向后按条件前置 `shape` / `craft`，或实现后的 `audit` / `critique` / `polish` 阶段；仅在 Skill 可用且上下文可用时 |
+| `web-ui-autotest-generator` | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 | 用户明确要求生成 Web UI 自动化测试、Playwright / E2E suite，或需要把关键 Web UI 回归路径固化到项目仓库时 |
+| `React Bits Pro Skill` | React / shadcn UI 项目中接入 React Bits Pro components、blocks 或 landing page sections | 前端 UI 开发任务明确需要 React Bits Pro，且技术栈、registry、项目内 Skill 和可读取 license key 条件均满足时 |
 
 ### 自定义 Skills 使用边界
 
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
+- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成或审计可入库测试资产时调用。优先沿用项目已有 Playwright / Cypress / 测试目录和 CI 约定；没有稳定测试环境、账号、数据准备或业务规则时，只生成清单、缺口和阻塞说明，不强行生成脆弱测试。
+- `web-ui-autotest-generator` 为可选 Skill；如果 Skill 不可用、脚本不可执行，或项目不是 Web UI 场景，直接跳过，不阻塞项目验证。它不替代 TestSprite、项目自己的 lint / test / build、浏览器检查或人工测试评审。
+- 使用 `web-ui-autotest-generator` 时，先复核 `ui-test-manifest.json` 和选择器审计结果，再生成大量测试。不要写入真实生产账号、密钥或生产数据；只有用户明确同意修改产品代码时，才补充 `data-testid` 等测试选择器。
+- `web-ui-autotest-generator` 产物默认策略：可维护的 `tests/e2e/`、必要 fixture、Page Object、Playwright 配置和 npm scripts 可按项目策略入库；Playwright HTML report、trace、video、screenshot、一次性 failure repair plan 默认不入库；`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json` 是否入库按团队审查策略决定。
+- `React Bits Pro Skill`：仅在前端 UI 开发任务中作为 React Bits Pro components / blocks / landing page sections 的接入辅助使用。使用前必须先判定项目技术栈：项目应是 React 技术栈，例如 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等；已初始化 shadcn/ui，Node.js 18+ 可用，项目根目录存在 `components.json`。TanStack 的 Vue / Solid / Svelte 等非 React adapter 不满足该前提。
+- 使用 `React Bits Pro Skill` 还必须确认授权和安装证据：`components.json` 已配置 `@reactbits-starter` registry；如需 blocks，再确认 `@reactbits-pro` registry；执行 `shadcn` 或 Agent 的当前环境能读取到 `REACTBITS_LICENSE_KEY` 的值；项目中已安装对应 React Bits Pro Skill，例如由 `npx shadcn@latest add @reactbits-starter/skill` 在项目根目录安装生成的 `SKILL.md`。
+- 如果技术栈、registry 和可读取 `REACTBITS_LICENSE_KEY` 等其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，可以先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill`。只有安装成功、项目中出现 React Bits Pro `SKILL.md`，且当前环境仍能读取 `REACTBITS_LICENSE_KEY` 后，才允许使用该 Skill。
+- 如果任一前提不满足，跳过 `React Bits Pro Skill`，继续使用项目现有组件库、设计系统、`ui-ux-pro-max`、`impeccable` 或普通实现流程。不要因为用户要求前端 UI 就默认安装或调用 React Bits Pro。
+- 使用 `React Bits Pro Skill` 时，先读取项目内已安装的 React Bits Pro `SKILL.md`，再选择 component / block slug 和 Tailwind / CSS 变体。不要读取、输出、提交 license key；不要覆盖既有 `components.json` 字段，只能合并 registry 配置；不要把授权 `SKILL.md` 复制进本配置摘录仓库；不要把 `npx shadcn@latest add @reactbits-starter/skill` 误认为全局安装。
 - 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
 - `impeccable` 上下文文件必须避免多源冲突：如果项目根目录、`.agents/context/`、`docs/` 中同时存在 `PRODUCT.md` 或 `DESIGN.md`，以项目 `AGENTS.md` 指定路径为准；在读取和写入前先确认实际采用的上下文目录，避免同名文件分散在多个位置。
 - UI/UX Skill 编排：

@@ -2,6 +2,8 @@
 
 > 本文件记录个人 Codex Agent Harness 的模板化工具定位、版本监控基线和 Skill 编排规则。
 > 当前主流程已收敛为 `Codex + GitNexus + Trellis + TestSprite`。
+> `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成的可选专项分支，不替代 TestSprite。
+> `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
 
 ## 0. 版本监控配置
 
@@ -13,6 +15,8 @@
 | Trellis | mindfold-ai/trellis | v0.6.0-beta.22 | same-prerelease-channel | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | V1.6.5 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | TestSprite | 待明确 | latest | manual | 否 | 测试计划、E2E、自动化测试辅助 |
+| web-ui-autotest-generator | Cheryl-station/web-ui-autotest | main | manual | 否 | Web UI Playwright 测试资产生成 Skill |
+| React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
 
 ---
@@ -34,7 +38,10 @@ flowchart TD
     H --> I{是否涉及 UI / E2E / 端到端业务流程?}
     I -- 是 --> J[TestSprite 测试计划 / E2E 辅助]
     I -- 否 --> K[Review / PR / 发布]
-    J --> K
+    J --> L{是否需要固化 Web UI Playwright 测试资产?}
+    L -- 是 --> M[web-ui-autotest-generator 生成 tests/e2e / 覆盖率报告]
+    L -- 否 --> K
+    M --> K
 ```
 
 ### 1.2 工具定位
@@ -44,7 +51,9 @@ flowchart TD
 | Codex | 主 coding agent | 是 | 默认执行代码理解、修改、调试、测试、文档生成等任务 |
 | GitNexus | 代码理解 / 影响分析 / debug / refactor 辅助 | 是 | 代码结构、影响范围、Bug 根因或重构风险不清时调用 |
 | Trellis | 复杂任务编排 / 多阶段任务 / TDD workflow | 按场景启用 | 中大型任务、高风险任务、跨模块任务、长期任务启用；小任务不强制使用 |
-| TestSprite | 测试计划 / E2E / 自动化测试辅助 | 测试阶段启用 | 涉及 UI/E2E、端到端业务流程、测试计划生成或回归验证时启用 |
+| TestSprite | 测试计划 / E2E / 自动化测试辅助 | 测试阶段启用 | 涉及 UI/E2E、端到端业务流程、测试计划生成或回归验证，且 TestSprite MCP 已配置、配置门户可完成时启用 |
+| web-ui-autotest-generator | Web UI Playwright 测试资产生成 / 覆盖率审计 | 按需启用 | 需要把 Web UI/E2E 回归用例固化到项目仓库时启用；不替代项目已有测试体系 |
+| React Bits Pro Skill | React Bits Pro 组件 / blocks / landing page section 集成辅助 | 按需启用 | 仅在前端 UI 开发、项目为 React 技术栈（如 Next.js、Vite React、Remix、TanStack Start React、TanStack Router React 应用）+ shadcn/ui，且项目环境已安装对应 React Bits Pro Skill 并能读取 `REACTBITS_LICENSE_KEY` 时启用 |
 
 ---
 
@@ -106,7 +115,8 @@ diagnose
   → GitNexus debugging（涉及代码根因时）
   → Codex fix or mitigation
   → tdd regression test
-  → TestSprite（涉及 UI/E2E 时）
+  → TestSprite（涉及 UI/E2E 且 MCP / 配置门户可用时）
+  → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
 ```
 
 中大型功能开发：
@@ -118,7 +128,9 @@ grill-me / grill-with-docs
   → Trellis workflow
   → GitNexus impact-analysis
   → Codex implementation
-  → TestSprite / project tests
+  → project tests / TestSprite（MCP / 配置门户可用时）
+  → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
+  → React Bits Pro Skill（React / shadcn UI、项目内 Skill 与 license key 前提都满足时）
 ```
 
 高风险后端逻辑 / 算法 / 数据同步：
@@ -189,10 +201,47 @@ handoff
 | 本地生成目录 | `testsprite_tests/` |
 | 建议入库文件 | 末尾为 `test_plan.json` 和 `_prd.json` 的文件倾向保留 |
 | 不建议入库文件 | `TC` 开头的具体测试用例文件倾向不 push，除非团队后续明确需要固化 |
+| 官方配置边界 | `testsprite_bootstrap_tests` 会打开 Testing Configuration / Configuration Portal；当前模板不要描述为可后台跳过 |
+| Codex 可代办 | 准备 PRD 草稿、定位 `projectPath` / `localPort` / `type` / `testScope`、整理测试需求和 `additionalInstruction`，并在配置完成后继续编排 MCP 工具 |
+| 需要门户确认 | 测试类型 / 范围、应用 URL、测试账号或认证方式、PRD 上传等按 TestSprite 配置页面完成 |
+| 凭据安全 | 不把真实账号、密钥、PII 或生产数据写入仓库、PRD、测试代码或报告；需要凭据时走配置门户、环境变量或团队 secret 流程 |
 
 ---
 
-## 6. 当前版本汇总
+## 6. web-ui-autotest-generator 当前使用要点
+
+| 项目 | 当前结论 |
+|---|---|
+| 当前定位 | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 |
+| 上游仓库 | `Cheryl-station/web-ui-autotest` |
+| 启用条件 | 用户明确要求生成 Web UI 自动化测试、Playwright / E2E suite，或需要把关键 Web UI 回归路径固化到项目仓库 |
+| 默认产物 | `tests/e2e/`、`playwright.config.ts`、`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`、中文测试报告 |
+| 与 TestSprite 关系 | TestSprite 继续负责测试计划、E2E 和回归验证辅助；本 Skill 只在需要 repo-resident Playwright 测试资产时补充 |
+| 使用原则 | 优先沿用项目已有 Playwright / Cypress 体系；脚本扫描结果必须复核；不要自动写入真实账号、密钥或生产数据 |
+| 提交策略 | 测试代码和必要配置可按项目策略入库；HTML report、trace、video、screenshot、一次性 repair plan 默认不入库 |
+| 同步策略 | 当前不进入本仓库 `同步` 目标；只有实际安装为全局 Skill 后再另行纳入同步范围 |
+
+---
+
+## 7. React Bits Pro Skill 当前使用要点
+
+| 项目 | 当前结论 |
+|---|---|
+| 当前定位 | React / shadcn UI 项目的 React Bits Pro 组件、blocks 和 landing page section 集成辅助 |
+| 官方配置入口 | `https://pro.reactbits.dev/docs/skills`、`https://pro.reactbits.dev/docs/installation` |
+| Skill 安装方式 | 在项目根目录运行 `npx shadcn@latest add @reactbits-starter/skill`，将 React Bits Pro `SKILL.md` 安装到当前项目；这是项目级安装，不是全局安装 |
+| 技术栈前提 | React 项目，包括 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等；已初始化 shadcn/ui；Node.js 18+；项目根目录存在 `components.json` |
+| Registry 前提 | `components.json` 中存在 React Bits Pro registries：`@reactbits-starter` 用于 components，`@reactbits-pro` 用于 Pro / Ultimate blocks |
+| 凭据前提 | 执行 `shadcn` 或 Agent 的当前环境必须能读取到 `REACTBITS_LICENSE_KEY` 的值；Agent 不打印、不输出、不提交 license key |
+| Skill 可用性前提 | 项目中已存在由官方 shadcn registry 安装的 React Bits Pro `SKILL.md`；如果其他前提都满足但项目未安装该 Skill，先在项目根目录执行安装命令，安装成功且 key 可读后才使用 |
+| 启用条件 | 前端 UI 开发任务需要接入 React Bits Pro components / blocks / templates，且技术栈、registry、项目内 Skill、可读取 license key 条件同时满足 |
+| 跳过条件 | 非 React 前端、TanStack 的 Vue / Solid / Svelte 等非 React adapter、未使用 shadcn/ui、项目内 Skill 未安装且无法安装或安装失败、无法读取 `REACTBITS_LICENSE_KEY`、缺少 registry、普通业务逻辑修改、纯后端 / 测试 / 文档任务 |
+| 使用原则 | 优先读项目内已安装的 React Bits Pro Skill；沿用项目组件路径、别名、Tailwind / CSS 变体和设计系统；不把 React Bits Pro 作为默认 UI 方案强推 |
+| 同步策略 | 当前不把 React Bits Pro Skill 纳入本仓库 `同步` 目标；其 `SKILL.md` 属于授权内容，应由具体项目自行安装 |
+
+---
+
+## 8. 当前版本汇总
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
@@ -200,10 +249,12 @@ handoff
 | Agent Harness | Trellis | v0.6.0-beta.22 |
 | 代码理解 | GitNexus | V1.6.5 |
 | 自动化测试 | TestSprite | latest |
+| Web UI 测试资产 | web-ui-autotest-generator | main |
+| 前端 UI 组件辅助 | React Bits Pro Skill | manual |
 
 ---
 
-## 7. 精简结论
+## 9. 精简结论
 
 当前 AI Tools 的主线调整为：
 
@@ -212,6 +263,8 @@ Codex 作为核心开发入口
 GitNexus 负责当前代码理解和影响分析
 Trellis 负责复杂任务编排和 TDD workflow
 TestSprite 负责测试计划、E2E 和回归验证
+web-ui-autotest-generator 仅在需要固化 Web UI Playwright 测试资产时启用
+React Bits Pro Skill 仅在 React / shadcn UI、项目内 Skill 已安装且 license key 可读取时辅助接入组件和 blocks
 ```
 
 辅助策略：

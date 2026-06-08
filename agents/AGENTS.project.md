@@ -20,9 +20,40 @@
 UI/UX 任务编排：
 
 - 涉及 UI、交互、布局、视觉、组件体验或前端可用性时，初稿计划默认先使用 `ui-ux-pro-max`，明确产品类型、目标用户、信息架构、交互模型、响应式策略、可访问性基线和项目设计系统约束。
+- 需要接入 React Bits Pro components、blocks 或 landing page sections 时，只有在项目为 React 技术栈（包括 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等）、已初始化 shadcn/ui、registry 已配置、当前环境能读取 `REACTBITS_LICENSE_KEY`，并且项目环境已安装对应 React Bits Pro Skill 的前提下，才使用 React Bits Pro Skill。
 - `impeccable shape` / `impeccable craft` 只在新视觉方向、高保真页面、大幅改版、品牌 / 营销强视觉页面、方向不清或用户明确要求时前置使用；其 brief 必须经用户确认后再进入实现。
 - 常规 UI 实现完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，再使用 `audit` / `critique` / `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做打磨。
 - 如果 UI/UX 任务进入 Trellis，任务级设计结论写入 `prd.md`、`design.md` 或 `implement.md`；长期设计系统规则才写入 `docs/DESIGN.md` 或 `.trellis/spec`。
+
+### React Bits Pro Skill
+
+React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只有同时满足以下条件时才使用：
+
+- 当前任务是前端 UI 开发，且明确需要 React Bits Pro components、blocks、templates 或类似高级动画组件。
+- 项目技术栈是 React 项目，包括 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等，并已初始化 shadcn/ui。
+- 本地 Node.js 18+ 可用，项目根目录存在 `components.json`。
+- `components.json` 已配置或用户明确要求配置 React Bits Pro registry：`@reactbits-starter` 用于 components；需要 Pro / Ultimate blocks 时再使用 `@reactbits-pro`。
+- 执行 `shadcn` 或 Agent 的当前环境能读取到 `REACTBITS_LICENSE_KEY` 的值；Agent 不打印、不输出、不提交该 key。
+- 项目环境已安装对应 React Bits Pro Skill，例如项目中存在由 `npx shadcn@latest add @reactbits-starter/skill` 在项目根目录安装生成的 React Bits Pro `SKILL.md`。
+
+配置要求：
+
+- 如缺少 shadcn/ui，先让项目完成 `npx shadcn@latest init` 或遵循项目既有 shadcn 初始化流程。
+- 在 `components.json` 中只合并 `registries`，不要覆盖 `$schema`、`style`、`tailwind`、`aliases` 等既有字段。
+- `@reactbits-starter` registry URL 使用 `https://pro.reactbits.dev/api/r/starter/{name}.json`，Authorization header 使用 `Bearer ${REACTBITS_LICENSE_KEY}`。
+- `@reactbits-pro` registry URL 使用 `https://pro.reactbits.dev/api/r/pro/{name}.json`，仅在需要 Pro / Ultimate blocks 时配置。
+- 如果其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill`。该命令是项目级安装，不是全局安装。
+- 只有 React Bits Pro Skill 安装成功、项目中出现对应 `SKILL.md`，且当前环境能读取 `REACTBITS_LICENSE_KEY` 后，才读取该 Skill 并继续安装 components / blocks。
+- 安装组件时优先使用 shadcn CLI；组件按项目样式栈选择 Tailwind `-tw` 或 CSS `-css` 变体，blocks 使用 `@reactbits-pro/<name>`。
+
+跳过条件：
+
+- 非 React 前端、TanStack 的 Vue / Solid / Svelte 等非 React adapter、Vue / Svelte / Angular / 原生 HTML 项目、后端任务、测试任务、文档任务。
+- 项目未使用 shadcn/ui，且用户没有要求引入 shadcn。
+- 当前环境无法读取 `REACTBITS_LICENSE_KEY`，缺少 registry，或 React Bits Pro Skill 未安装且无法安装 / 安装失败。
+- 项目已有明确组件库 / design system 且需求不要求 React Bits Pro。
+
+如果跳过 React Bits Pro Skill，应说明具体缺失前提，并继续使用项目已有组件库、`ui-ux-pro-max`、`impeccable` 或普通前端实现流程。
 
 ---
 
@@ -94,7 +125,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 普通 bug、测试失败或运行时异常：`diagnose` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnose` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs` → 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite。
+- 中大型项目内需求：`grill-with-docs` → 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
 - 不依赖项目文档或领域术语的通用方案质询：`grill-me` → 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
 - 高风险后端逻辑、算法或数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：`zoom-out` → GitNexus exploring / impact-analysis → Codex implementation。
@@ -140,6 +171,57 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 - `.trellis/channels/`
 - `~/.trellis/channels/`
 - `.gitnexus/`
+
+---
+
+## TestSprite / E2E 验证辅助
+
+TestSprite 用于测试计划、UI/E2E、API 集成和回归验证辅助，不替代项目已有 lint、unit test、integration test、build、浏览器检查或人工测试评审。
+
+启用条件：
+
+- 当前环境已配置 TestSprite MCP server 和 API Key，且 MCP 工具可调用。
+- 需求涉及端到端业务流程、UI、API 集成、测试计划生成、回归验证或 Trellis 验收需要 TestSprite 辅助。
+- 本地应用、测试环境或 API 服务可访问，并能确认 `projectPath`、`localPort`、测试类型和测试范围。
+
+使用规则：
+
+- 使用前先读取项目 PRD、Trellis task artifacts、README、API 文档和现有测试；必要时先整理 PRD 草稿、测试范围、登录需求、环境 URL、测试账号需求和补充执行说明。
+- 当前官方流程中，`testsprite_bootstrap_tests` 会打开 Testing Configuration / Configuration Portal。不要把配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过。
+- Codex 可以准备 PRD 文件、测试需求摘要、端口、MCP 参数和 `additionalInstruction`；配置门户中的测试类型 / 范围、应用 URL、PRD 上传、测试账号或认证方式仍需按 TestSprite 页面完成。
+- 只有用户明确授权浏览器自动化且不涉及敏感真实凭据时，才可协助填写本地配置页面中的非敏感信息。真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。
+- 如果 TestSprite MCP 不可用、配置门户未完成、登录凭据缺失、PRD 未上传或测试环境不可访问，只输出阻塞说明、已准备材料和剩余配置项，不强行声称已完成 TestSprite 测试。
+- TestSprite 产物默认按项目策略处理：`test_plan.json` 和 `_prd.json` 倾向保留；具体测试执行代码、报告、截图、trace、video 和临时结果默认不提交，除非团队明确要固化。
+
+---
+
+## Web UI / E2E 测试资产
+
+普通 UI 检查优先使用项目已有验证、浏览器 / 截图检查和 TestSprite 辅助；只有需要把 Web UI 回归路径固化到项目仓库时，才启用 `web-ui-autotest-generator`。
+
+启用条件：
+
+- 用户明确要求生成 Web UI 自动化测试、Playwright、E2E suite 或 UI 回归测试代码。
+- 关键 Web UI 业务流需要长期回归，例如登录后流程、CRUD、表单校验、权限、跨页面流转、下载 / 上传。
+- 项目已有 Playwright，需要扩展可维护测试覆盖。
+- Trellis 任务验收标准明确包含 Web UI/E2E 且需要可重复运行的入库测试资产。
+
+使用规则：
+
+- 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定；不要因为默认模板存在就切换测试框架。
+- 先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再扩展 Page Object 和 spec；清单错误时先修清单。
+- 没有稳定测试账号、测试环境、数据准备、清理策略或业务规则时，只输出阻塞说明和覆盖缺口，不强行生成脆弱测试。
+- 不写入真实生产账号、密钥、PII 或生产数据。需要测试账号和环境变量时，只写占位说明。
+- 只有用户明确同意修改产品代码时，才补充 `data-testid`、`data-cy` 或可访问名称等测试选择器。
+- 生成后必须运行可用的项目验证和 E2E 命令；无法运行时说明尝试命令、阻塞原因、替代检查和剩余风险。
+
+产物策略：
+
+- 可按项目策略提交：`tests/e2e/`、Page Object、fixture、必要 mock、`playwright.config.*`、必要 package scripts 和 CI 配置。
+- 按团队审查策略决定是否提交：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`、`tests/e2e/reports/summary.md`。
+- 默认不要提交：`playwright-report/`、`test-results/`、trace、video、screenshot、HTML report、一次性 `ui-test-repair-plan.json`。
+
+`web-ui-autotest-generator` 不替代 TestSprite。TestSprite 继续作为测试计划、E2E 和回归验证辅助；`web-ui-autotest-generator` 只在需要 repo-resident Playwright 测试资产时补充。
 
 ---
 

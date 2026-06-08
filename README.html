@@ -1303,7 +1303,7 @@
         <div class="hero-grid">
           <div class="hero-tile"><b>Agent 模板</b><span>全局规则与项目级规则的职责拆分。</span></div>
           <div class="hero-tile"><b>Trellis</b><span>native / tdd workflow 与编码执行流。</span></div>
-          <div class="hero-tile"><b>工具链</b><span>GitNexus、TestSprite 的启用边界。</span></div>
+          <div class="hero-tile"><b>工具链</b><span>GitNexus、TestSprite、React Bits Pro 与测试资产边界。</span></div>
           <div class="hero-tile"><b>Skills</b><span>仓库内 Skill 与模板引用 Skill 的用途。</span></div>
         </div>
       </article>
@@ -1342,10 +1342,10 @@
         </header>
         <div class="body toc">
           <div class="toc-item"><div class="toc-num">01</div><div><b>模板层级</b><span>全局规则、项目级规则、仓库内 Skill。</span></div></div>
-          <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite。</span></div></div>
-          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>ui-ux-pro-max、impeccable 与 mattpocock/skills 九件套。</span></div></div>
+          <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite、React Bits Pro、web-ui-autotest-generator。</span></div></div>
+          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>ui-ux-pro-max、impeccable、React Bits Pro 与 mattpocock/skills 九件套。</span></div></div>
           <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、实际编码流程。</span></div></div>
-          <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation 与 TestSprite 端到端测试辅助。</span></div></div>
+          <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation、TestSprite 与 Web UI Playwright 测试资产。</span></div></div>
           <div class="toc-item"><div class="toc-num">06</div><div><b>Git 参考规则</b><span>ignore 和 attributes 的项目落地建议。</span></div></div>
         </div>
         <footer class="footer-note"><span>键盘左右键或空格翻页，底部按钮打开目录。</span><span>Slide 03</span></footer>
@@ -1460,7 +1460,9 @@
             <tbody>
               <tr><td><strong>Trellis</strong></td><td>任务生命周期、workflow、task artifacts。</td><td>存在 <code>.trellis/</code>、workflow、命令或项目规则声明。</td><td>没有强证据时不启用。</td></tr>
               <tr><td><strong>GitNexus</strong></td><td>影响分析、变更检测、探索辅助。</td><td>MCP 可用且当前项目已有索引。</td><td>MCP 不可用或没有项目索引。</td></tr>
-              <tr><td><strong>TestSprite</strong></td><td>测试计划、UI/E2E、API 和回归验证辅助。</td><td>涉及端到端流程、UI、API 集成、测试计划或回归验证。</td><td>无需 E2E 或 MCP/环境未配置时。</td></tr>
+              <tr><td><strong>TestSprite</strong></td><td>测试计划、UI/E2E、API 和回归验证辅助。</td><td>涉及端到端流程、UI、API 集成、测试计划或回归验证，且 MCP 已配置。</td><td>无需 E2E、MCP/环境未配置、配置门户未完成或凭据缺失时。</td></tr>
+              <tr><td><strong>React Bits Pro Skill</strong></td><td>React / shadcn UI 组件、blocks 和 landing sections 集成辅助。</td><td>前端 UI 开发，Next.js / Vite React / Remix / TanStack Start React / TanStack Router React 等 React 技术栈，项目内 Skill 已安装且 key 可读。</td><td>非 React、TanStack 非 React adapter、未使用 shadcn、项目内 Skill 安装失败或 key 不可读。</td></tr>
+              <tr><td><strong>web-ui-autotest-generator</strong></td><td>Web UI Playwright 测试资产、选择器审计和覆盖率报告。</td><td>需要把 Web UI 回归路径固化为入库测试代码。</td><td>非 Web UI、无稳定测试环境或已有框架不需扩展时。</td></tr>
               <tr><td><strong>Skills</strong></td><td>场景化执行规范。</td><td>任务明确匹配 Skill 描述。</td><td>不匹配、不可用或弱关联时。</td></tr>
             </tbody>
           </table>
@@ -1472,33 +1474,33 @@
         <header class="section-head">
           <div class="eyebrow">TestSprite</div>
           <h2>TestSprite 负责测试计划、E2E 和回归验证辅助</h2>
-          <p>在模板编排中，它通常位于编码后验证阶段，尤其适合 UI、端到端业务流程、API 集成和回归检查。</p>
+          <p>在模板编排中，它通常位于编码后验证阶段，尤其适合 UI、端到端业务流程、API 集成和回归检查；当前官方 bootstrap 流程仍需要配置门户确认。</p>
         </header>
         <div class="body grid-4">
-          <div class="metric"><div class="num">01</div><div class="label"><strong>理解需求</strong><br>读取 PRD 或从代码推导标准化 PRD。</div></div>
+          <div class="metric"><div class="num">01</div><div class="label"><strong>理解需求</strong><br>读取 PRD 或准备可上传 PRD 草稿。</div></div>
           <div class="metric"><div class="num">02</div><div class="label"><strong>生成计划</strong><br>生成 frontend 或 backend test plan。</div></div>
           <div class="metric"><div class="num">03</div><div class="label"><strong>执行测试</strong><br>生成可执行测试并在环境中运行。</div></div>
           <div class="metric"><div class="num">04</div><div class="label"><strong>反馈修复</strong><br>输出结果、日志、报告和修复建议。</div></div>
         </div>
-        <div class="callout cyan">TestSprite 不是普通单元测试的替代品。项目自己的 lint、test、build 仍然是基础验证；TestSprite 用于补充端到端和回归视角。</div>
+        <div class="callout cyan">TestSprite 不是普通单元测试的替代品，也不是可无条件后台跳过配置门户的工具。项目自己的 lint、test、build 仍然是基础验证；web-ui-autotest-generator 只在需要 repo-resident Playwright 测试资产时启用。</div>
         <footer class="footer-note"><span>官方文档强调通过 MCP server 与 IDE/Agent 集成。</span><span>Slide 08</span></footer>
       </article>
 
       <article class="slide" data-title="TestSprite 配置流程">
         <header class="section-head">
           <div class="eyebrow">TestSprite Setup</div>
-          <h2>TestSprite 的典型 MCP 配置流程</h2>
-          <p>实际配置依 IDE 而异，但核心步骤一致：账号、API Key、Node、MCP server、本地应用和测试范围。</p>
+          <h2>TestSprite 的 MCP 与配置门户流程</h2>
+          <p>Codex 可以准备 PRD、端口和 MCP 参数；测试类型、范围、账号和 PRD 上传仍按官方配置页面完成。</p>
         </header>
         <div class="body flow flow-6">
           <div class="flow-step"><div class="step-num">1</div><h3>账号与 Key</h3><p>注册 TestSprite，创建 API Key，按团队密钥策略保存。</p></div>
-          <div class="flow-step"><div class="step-num">2</div><h3>运行环境</h3><p>确认 Node.js 版本满足 MCP server 要求。</p></div>
-          <div class="flow-step"><div class="step-num">3</div><h3>IDE MCP</h3><p>在 Cursor、Claude Code、VS Code 等配置 MCP server。</p></div>
-          <div class="flow-step"><div class="step-num">4</div><h3>本地服务</h3><p>启动 frontend dev server 或 backend API，并确认端口。</p></div>
-          <div class="flow-step"><div class="step-num">5</div><h3>测试范围</h3><p>选择 frontend/backend，codebase/diff，是否需要登录。</p></div>
+          <div class="flow-step"><div class="step-num">2</div><h3>本地服务</h3><p>启动 frontend dev server 或 backend API，并确认端口。</p></div>
+          <div class="flow-step"><div class="step-num">3</div><h3>Bootstrap</h3><p>传入 projectPath、localPort、type 和 testScope。</p></div>
+          <div class="flow-step"><div class="step-num">4</div><h3>配置门户</h3><p>在 Testing Configuration 页面确认类型、范围和 URL。</p></div>
+          <div class="flow-step"><div class="step-num">5</div><h3>PRD 与账号</h3><p>按页面上传 PRD，并通过安全渠道提供测试账号。</p></div>
           <div class="flow-step"><div class="step-num">6</div><h3>执行与报告</h3><p>生成计划、运行测试、查看报告并回传修复建议。</p></div>
         </div>
-        <footer class="footer-note"><span>凭据不应硬编码进测试文件或仓库。</span><span>Slide 09</span></footer>
+        <footer class="footer-note"><span>凭据不应硬编码进测试文件、PRD、日志或仓库。</span><span>Slide 09</span></footer>
       </article>
 
       <article class="slide" data-title="TestSprite MCP 工具链">
@@ -1513,15 +1515,16 @@
               <tr><th>阶段</th><th>MCP 工具示例</th><th>产物</th><th>说明</th></tr>
             </thead>
             <tbody>
-              <tr><td>启动配置</td><td><code>testsprite_bootstrap_tests</code></td><td>测试配置</td><td>检测项目类型、端口、测试范围。</td></tr>
+              <tr><td>启动配置</td><td><code>testsprite_bootstrap_tests</code></td><td>测试配置门户</td><td>打开配置页面，并传入项目路径、端口、类型和范围。</td></tr>
               <tr><td>代码分析</td><td><code>testsprite_generate_code_summary</code></td><td><code>code_summary.json</code></td><td>识别框架、入口、功能和架构。</td></tr>
-              <tr><td>需求归一</td><td><code>testsprite_generate_standardized_prd</code></td><td><code>standard_prd.json</code></td><td>把需求和代码理解转成可测规格。</td></tr>
+              <tr><td>需求归一</td><td><code>testsprite_generate_standardized_prd</code></td><td><code>standard_prd.json</code></td><td>把配置后的需求和代码理解转成可测规格。</td></tr>
               <tr><td>测试计划</td><td><code>testsprite_generate_frontend_test_plan</code> / backend</td><td>test plan JSON</td><td>生成 UI、业务流、API 或集成测试场景。</td></tr>
               <tr><td>生成执行</td><td><code>testsprite_generate_code_and_execute</code></td><td>测试代码、结果、报告</td><td>生成可执行测试并收集日志、截图和建议。</td></tr>
             </tbody>
           </table>
+          <div class="callout cyan">当前官方 MCP 工具参数没有提供直接上传 PRD 或填写登录凭据的后台接口；配置门户未完成时，只输出阻塞项和已准备材料。</div>
         </div>
-        <footer class="footer-note"><span>测试产物通常落在 testsprite_tests/ 下，是否提交需按项目策略决定。</span><span>Slide 10</span></footer>
+        <footer class="footer-note"><span>TestSprite 产物通常落在 testsprite_tests/ 下；Web UI Playwright 资产按项目策略进入 tests/e2e/。</span><span>Slide 10</span></footer>
       </article>
 
       <article class="slide" data-title="仓库内 Skills">
@@ -1559,9 +1562,9 @@
         <header class="section-head">
           <div class="eyebrow">Referenced Skills</div>
           <h2>模板中引用的 UI/UX Skills</h2>
-          <p>这一页只保留视觉、交互、布局和前端可用性相关的外部 Skill，避免与下一页的官方 Skill 清单重复。</p>
+          <p>这一页只保留视觉、交互、布局、组件接入和前端可用性相关的外部 Skill，避免与下一页的官方 Skill 清单重复。</p>
         </header>
-        <div class="body grid-3">
+        <div class="body grid-4">
           <div class="card accent">
             <h3>ui-ux-pro-max</h3>
             <p>UI/UX 任务的默认设计智能入口，用于判断产品类型、目标用户、风格、配色、字体、布局和可访问性基线。</p>
@@ -1573,10 +1576,16 @@
             <div class="badge-row"><span class="badge amber">可选下游</span><span class="badge amber">audit / polish</span></div>
           </div>
           <div class="card">
+            <h3>React Bits Pro</h3>
+            <p>只在 React / shadcn UI 项目中使用；Next.js、Vite React、Remix、TanStack Start React 和 TanStack Router React 应用可包含，TanStack 非 React adapter 不包含。</p>
+            <div class="badge-row"><span class="badge">React</span><span class="badge">shadcn</span><span class="badge amber">项目内 Skill</span><span class="badge amber">key 可读</span></div>
+          </div>
+          <div class="card">
             <h3>编排边界</h3>
             <ul>
               <li>新页面或大改版：先用 <code>ui-ux-pro-max</code> 判断方向。</li>
               <li><code>impeccable</code> 可用时再形成 brief、审计或 polish backlog。</li>
+              <li><code>React Bits Pro</code> 只在技术栈、项目内 Skill 和 key 可读都满足时启用。</li>
               <li>最终仍以项目设计系统、浏览器检查和验证结果为准。</li>
             </ul>
           </div>
@@ -1692,7 +1701,7 @@
           </div>
           <div class="lane">
             <div class="lane-label"><b>开发前</b><span>冻结边界</span></div>
-            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务先 ui-ux-pro-max</span><span class="pill">polish 可用 impeccable</span></div>
+            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务先 ui-ux-pro-max</span><span class="pill">React/shadcn + 项目 Skill + key 可读时 React Bits Pro</span><span class="pill">polish 可用 impeccable</span></div>
           </div>
           <div class="lane">
             <div class="lane-label"><b>实现中</b><span>最小修改</span></div>
@@ -1700,7 +1709,7 @@
           </div>
           <div class="lane">
             <div class="lane-label"><b>开发后</b><span>验证闭环</span></div>
-            <div class="lane-body"><span class="pill cyan">project-validation</span><span class="pill">项目 tests/build</span><span class="pill">UI/E2E 时 TestSprite</span><span class="pill cyan">$trellis-check</span><span class="pill amber">需要时 update-spec</span><span class="pill cyan">$trellis-finish-work</span></div>
+            <div class="lane-body"><span class="pill cyan">project-validation</span><span class="pill">项目 tests/build</span><span class="pill">MCP/门户可用时 TestSprite</span><span class="pill">需入库 Playwright 时 web-ui-autotest-generator</span><span class="pill cyan">$trellis-check</span><span class="pill amber">需要时 update-spec</span><span class="pill cyan">$trellis-finish-work</span></div>
           </div>
         </div>
         <footer class="footer-note"><span>finish-work 只能在 check 和验证通过后执行。</span><span>Slide 17</span></footer>
@@ -1870,7 +1879,7 @@ CLAUDE.md
       <article class="slide" data-title="AI 工具 Git 参考">
         <header class="section-head">
           <div class="eyebrow">AI Tooling Git Rules</div>
-          <h2>Trellis、GitNexus、Impeccable、TestSprite 的参考忽略策略</h2>
+          <h2>Trellis、GitNexus、Impeccable、TestSprite、React Bits Pro 和 Web UI 测试资产的参考忽略策略</h2>
           <p>核心思路：保留人类需要审查的规范和任务产物，忽略 runtime、cache、worktree 和大体量机器生成物。</p>
         </header>
         <div class="body code-split">
@@ -1908,6 +1917,17 @@ testsprite_tests/**
 # !testsprite_tests/**/TC*
 .playwright-mcp/
 
+# ---------- React Bits Pro ----------
+.env.local
+
+# ---------- Web UI Autotest / Playwright ----------
+playwright-report/
+test-results/
+tests/e2e/reports/html/
+tests/e2e/reports/results.json
+tests/e2e/reports/junit.xml
+ui-test-repair-plan.json
+
 # ---------- AI Tools ----------
 .agents/
 .worktrees/</code></pre>
@@ -1918,8 +1938,10 @@ testsprite_tests/**
               <li>GitNexus：本地索引默认不提交。</li>
               <li>Impeccable：live session、annotation 和 critique 输出默认作为本地工作态处理。</li>
               <li>TestSprite：可保留 test plan / PRD，执行代码和报告按团队策略。</li>
+              <li>React Bits Pro：license key 只放环境变量或 <code>.env.local</code>，项目内 Skill 由具体项目安装；不要提交授权 Skill 或凭据到配置摘录仓库。</li>
+              <li>Web UI Autotest：<code>tests/e2e/</code> 可按项目策略入库，HTML report、trace、video、screenshot 默认忽略。</li>
             </ul>
-            <div class="callout cyan">如果团队希望保留 TestSprite 的具体测试代码，可以按需打开 <code>TC*</code> 相关规则。</div>
+            <div class="callout cyan">如果团队希望保留 TestSprite 的具体测试代码，可以按需打开 <code>TC*</code> 相关规则；<code>ui-test-*.json</code> 是否入库按审查策略决定。</div>
           </div>
         </div>
         <footer class="footer-note"><span>规则应与 CI、审查流程和安全策略一起确定。</span><span>Slide 22</span></footer>
@@ -1945,7 +1967,9 @@ testsprite_tests/**
             <ul>
               <li>Trellis 只有强证据时启用。</li>
               <li>GitNexus 只有索引存在时启用。</li>
-              <li>TestSprite 只在测试场景需要时启用。</li>
+              <li>TestSprite 只在测试场景需要、MCP 已配置且配置门户可完成时启用。</li>
+              <li>React Bits Pro Skill 只在 React/shadcn、registry、项目内 Skill 和 key 可读证据齐全时启用。</li>
+              <li>web-ui-autotest-generator 只在需要入库 Web UI 测试资产时启用。</li>
             </ul>
           </div>
           <div class="card">
@@ -1965,23 +1989,27 @@ testsprite_tests/**
         <header class="section-head">
           <div class="eyebrow">Sources</div>
           <h2>内容来源与外部参考</h2>
-          <p>模板与 Skill 内容来自当前仓库文件；TestSprite 配置流程补充自官方文档。</p>
+          <p>模板与 Skill 内容来自当前仓库文件；TestSprite 与 React Bits Pro 配置流程补充自官方文档，Web UI 测试资产流程参考 web-ui-autotest-generator。</p>
         </header>
         <div class="body source-layout">
           <div class="card accent repo-source">
             <h3>仓库内来源</h3>
             <div class="repo-source-list">
               <div class="repo-source-item"><b>agents/AGENTS.global.md</b><span>全局优先级、命令执行、工具可用性、Skills 调用和验证最低要求。</span></div>
-              <div class="repo-source-item"><b>agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / TestSprite 边界。</span></div>
+              <div class="repo-source-item"><b>agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / TestSprite / React Bits Pro / Web UI 测试资产边界。</span></div>
               <div class="repo-source-item"><b>skills/trellis-workflow/SKILL.md</b><span>Trellis native / tdd workflow、before-dev、check、finish-work 和 update-spec。</span></div>
               <div class="repo-source-item"><b>skills/project-validation、trellis-channel、lessons-record</b><span>修改后验证、显式协作运行时和长期经验记录规则。</span></div>
             </div>
           </div>
           <div class="source-list featured">
             <a href="https://docs.testsprite.com/mcp/getting-started/installation">TestSprite Installation<span>MCP server 安装、API Key、IDE 配置与验证。</span></a>
+            <a href="https://docs.testsprite.com/mcp/getting-started/first-test">First MCP Test<span>bootstrap、Testing Configuration 页面、PRD 与测试账号配置。</span></a>
             <a href="https://docs.testsprite.com/mcp/core/create-tests-new-project">Create Tests for New Projects<span>新项目测试生成 workflow 与产物。</span></a>
             <a href="https://docs.testsprite.com/mcp/core/tools">MCP Tools References<span>TestSprite MCP 工具链和产物说明。</span></a>
             <a href="https://docs.testsprite.com/mcp/maintenance/security-compliance">Security &amp; Compliance<span>凭据、artifact、PII 和测试账户建议。</span></a>
+            <a href="https://pro.reactbits.dev/docs/skills">React Bits Pro Skills<span>付费解锁 Agent Skill，用于指导 Agent 集成 components 和 blocks。</span></a>
+            <a href="https://pro.reactbits.dev/docs/installation">React Bits Pro Installation<span>shadcn registry、license key、components.json 和安装前提。</span></a>
+            <a href="https://github.com/Cheryl-station/web-ui-autotest">web-ui-autotest-generator<span>Web UI Playwright 测试资产生成、选择器审计和覆盖率报告。</span></a>
           </div>
         </div>
         <footer class="footer-note"><span>演示文件为静态 HTML，可直接在浏览器打开。</span><span>Slide 24</span></footer>
