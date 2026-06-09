@@ -58,6 +58,7 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 - `channel-driven-subagent-dispatch` 仅在用户明确要求 Channel / 多 Agent / sub-agent 分发流程时使用。
 - 即使存在 `channel-driven-subagent-dispatch` 模板，也不得仅因任务复杂就自动切换或启用该模板。
 - 切换 workflow 后，必须重新读取 `.trellis/workflow.md`，并以新文件为准。
+- 如果 workflow 引用 `.trellis/agents/<name>.md` 但文件不存在，先运行 `trellis update` 生成缺失的 channel runtime agent 定义，再继续 Channel workflow。
 
 判断原则：
 
@@ -113,6 +114,15 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 - `$trellis-finish-work`：验证通过后执行
 - `$trellis-update-spec`：更新长期项目规范
 - `$trellis-brainstorm`：澄清 Trellis 任务内的不明确需求；需要项目文档和领域术语对齐时，先使用 `grill-with-docs`
+
+## Trellis 更新与迁移
+
+升级 Trellis、切换模板或发现生成文件缺失时，优先运行 `trellis update`，并在运行后重新读取 `.trellis/workflow.md`、相关 `.trellis/spec` 和当前 task artifacts。
+
+- 如果上游 migration manifest 建议迁移，或项目中存在拼写错误的 `trellis-spec-bootstarp/` skill 目录，运行 `trellis update --migrate`，让 Trellis 处理跨平台目录重命名。
+- `trellis update` 可能安装新的 bundled skills、平台模板或 `.trellis/agents/{check,implement}.md` channel runtime 文件；这些是生成的 Trellis workflow 资产，不等同于 channel runtime 日志。
+- 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
+- 如果命令提示 workflow 引用的 `.trellis/agents/<name>.md` 缺失，先运行 `trellis update`，再重试 workflow 或 Channel 操作。
 
 ## Codex Sub-agent 生成文件排障
 

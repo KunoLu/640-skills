@@ -74,6 +74,7 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 - 如果存在当前活跃任务，优先读取 `prd.md`、`design.md`、`implement.md`。
 - 不要绕过 `.trellis/workflow.md` 或手动跳过 Trellis phase。
 - 不要把一次性任务计划写入 `.trellis/spec`；长期规范、架构决策、业务规则变化才应沉淀到 `.trellis/spec`。
+- 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
 
 需求进入 PRD / Trellis task 前：
 
@@ -103,6 +104,10 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 - 修改代码前，优先通过 GitNexus MCP 执行影响分析。
 - 修改代码后，优先通过 GitNexus MCP 执行变更检测。
 - GitNexus 结果必须与实际 diff、测试结果、Trellis 任务产物和项目规范交叉核对。
+- 如果项目存在 `.gitnexusrc` 或需要指定默认分支，遵循项目配置；必要时使用 `gitnexus analyze --default-branch <branch>` 重新分析。
+- 当影响分析结果存在同名符号、跨文件歧义或输出过大时，优先使用 GitNexus 的 `uid` / `file` / `kind` 约束和分页 / summary-only 能力缩小范围。
+- 对跨服务 API、HTTP route / consumer、gRPC 或前后端调用链的结论，必须回到实际路由、客户端调用和 diff 交叉核对。
+- 大仓库分析中出现 skipped large files、内存墙、FTS 损坏或 repair 提示时，把这些作为索引完整性风险；需要时运行 GitNexus 提供的修复或重建命令后再依赖结果。
 - 如果 GitNexus 不可用或当前项目未建立索引，跳过 GitNexus，不阻塞任务。
 
 ---
@@ -146,6 +151,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 调用 `trellis-channel` Skill。
 - 不要仅因任务复杂、文件多或跨模块就启用 Channel。
+- 如果 channel workflow 或 `trellis channel spawn` 提示缺少 `.trellis/agents/<name>.md`，先运行 `trellis update` 生成 channel runtime agent 定义，再继续。
 - Channel 结论必须整理回 task artifacts 或 `.trellis/spec`。
 - Channel runtime、events、forum、thread、原始 worker 日志默认不要提交到远程仓库。
 
@@ -156,6 +162,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 按项目策略保留或提交：
 
 - `.trellis/spec/`
+- `.trellis/agents/`
 - `.trellis/workflow.md`
 - `.trellis/tasks/<task>/prd.md`
 - `.trellis/tasks/<task>/design.md`

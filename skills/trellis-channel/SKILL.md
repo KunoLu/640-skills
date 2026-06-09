@@ -65,6 +65,8 @@ description: Use only when the user explicitly requests Trellis Channel, multi-a
 - Channel 结论不会自动成为 `.trellis/spec`。
 - Channel runtime / events / forum / thread 记录默认属于本地协作日志。
 - Channel 运行时文件默认不要提交到远程仓库。
+- `.trellis/agents/<name>.md` 是 Channel agent 定义文件，不是 runtime 日志；如果 workflow 依赖这些定义，应按项目策略保留或提交。
+- 如果 `trellis channel spawn` 报告 `Agent '<name>' not found`，或 workflow 引用缺失的 `.trellis/agents/<name>.md`，先运行 `trellis update` 生成 agent 定义，再继续。
 
 长期结论必须整理进入以下位置之一：
 
