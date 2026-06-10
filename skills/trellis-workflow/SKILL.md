@@ -36,13 +36,22 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 4. 术语达成长期共识时，才写入项目指定的 context 文档；默认使用 `docs/CONTEXT.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目规则明确指定；不要把 CONTEXT 写成临时规格书。
 5. 只有决策同时满足“难回滚、缺少背景会令人意外、有真实取舍”时，才建议写 ADR；默认写入 `docs/adr/*.md`，多上下文项目写入 `docs/contexts/<context>/adr/*.md`。
 6. 达成共识后，先输出需求确认摘要，覆盖目标、用户 / 场景、范围内外、术语、约束、验收标准和未决问题。
-7. 用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
-8. PRD 确认后，再使用 `to-issues` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
-9. 最后按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
+7. 输出需求确认摘要、PRD / design / implement review gate 或 `task.py start` 前，必须说明 `grill-with-docs` 使用状态；未完整调用时，说明原因并询问用户是否需要先用该 Skill 再评估一次。
+8.用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
+9. PRD 确认后，再使用 `to-issues` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
+10. 最后按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
 
 如果需求只是通用方案质询、没有项目文档或领域术语约束，可使用 `grill-me` 替代 `grill-with-docs`。
 
 `$trellis-brainstorm` 可用于 Trellis 内澄清不明确需求，但当需求需要对照项目文档、领域语言或 ADR 时，不替代 `grill-with-docs`。
+
+### grill-with-docs 使用状态透明度
+
+在 Phase 1 planning、需求确认摘要、PRD / design / implement review gate、或 `task.py start` 前，必须明确说明是否完整调用了 `grill-with-docs`。
+
+- 完整执行逐问题澄清流程时，说明已调用，并简述已解决的关键领域 / 产品边界。
+- 只读取 Skill 文件、只借用 evidence-first 原则、或仅通过代码 / 文档判断时，不得声称已调用；必须说明未完整调用及具体原因。
+- 未完整调用时，在最终确认或进入实现前主动询问用户是否需要先用 `grill-with-docs` 再评估一次。
 
 在需求确认摘要、PRD 或 task artifacts 尚未稳定前，不要执行 `$trellis-before-dev` 或开始实现。
 

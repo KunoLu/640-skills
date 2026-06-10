@@ -119,6 +119,15 @@ TestSprite 作为测试计划、UI/E2E、API 集成和回归验证辅助工具�
 Skill 不替代项目规范、任务产物、测试和人工判断。  
 如果 Skill 与项目 `AGENTS.md`、`.trellis/workflow.md` 或 `.trellis/spec` 冲突，以项目规则为准。
 
+### grill-with-docs 使用状态透明度
+
+在准备开始开发需求、进入 PRD / Trellis task、需求最终确认、PRD / design / implement review gate、或询问是否开始实现前，必须对 `grill-with-docs` 的使用状态做用户可见说明：
+
+- 如果已完整执行 `grill-with-docs` 的逐问题澄清流程，明确说明“已调用 `grill-with-docs`”，并简述已解决的关键产品 / 领域边界。
+- 如果只读取了 `grill-with-docs` Skill 文件、只借用了其中 evidence-first 原则，或仅通过代码 / 文档自行判断，不得声称已调用；必须明确说明“未完整调用 `grill-with-docs`”。
+- 未完整调用时，必须给出具体原因，例如：需求不涉及项目领域模型或长期术语；问题可完全由现有文档 / 代码回答；只是 Trellis 启动实现的 review gate；Skill 不可用 / 不可读取；用户明确要求跳过。
+- 在每次需求最终确认、PRD / design / implement review gate、或询问是否开始实现前，如果未完整调用 `grill-with-docs`，必须主动询问用户是否需要先用 `grill-with-docs` 再评估一次。
+
 | Skill | 使用场景 | 调用时机 |
 |---|---|---|
 | `trellis-workflow` | Trellis 生命周期、任务产物、阶段检查 | 发现项目使用 Trellis 后 |
@@ -167,7 +176,9 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - `diagnose` 用于系统化排障；代码级问题根因不清时结合 GitNexus debugging，修复前有风险时结合 GitNexus impact-analysis，并补充或更新回归测试。
     - `tdd` 适用于 bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑和高风险修改；不要强制用于简单文案、样式、配置说明或一次性脚本。
     - `grill-me` 用于通用计划、设计和决策的质询；如果问题可通过读取当前项目文件回答，先探索项目文件。
-    - `grill-with-docs` 用于项目内需求澄清、领域术语对齐、CONTEXT.md 或 ADR 沉淀；需求进入 PRD / Trellis 前优先使用；先读项目文档和代码，能从项目事实回答的问题不要反问用户；长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目级规则明确指定；不要把 CONTEXT.md 写成临时规格书。
+    - `grill-with-docs`：
+        - 用于项目内需求澄清、领域术语对齐、CONTEXT.md 或 ADR 沉淀；需求进入 PRD / Trellis 前优先使用；先读项目文档和代码，能从项目事实回答的问题不要反问用户；长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目级规则明确指定；不要把 CONTEXT.md 写成临时规格书。
+        - 使用状态必须遵守上文“grill-with-docs 使用状态透明度”；读取 Skill 文件或只按 evidence-first 原则自行判断，不等于完整调用。
     - `handoff` 交接内容应包含当前目标、已完成工作、关键决策、文件 / 产物、已尝试命令、开放问题、建议下一步 Skill、不要重复事项和敏感信息脱敏说明。
     - `write-a-skill` 创建的新 Skill 默认使用 `SKILL.md` 作为入口，长内容拆到 reference，确定性操作优先脚本化，description 必须写清触发场景。
     - `zoom-out` 用于先看模块边界、调用方和系统上下文；如果进入实现，再结合 GitNexus exploring / impact-analysis。
