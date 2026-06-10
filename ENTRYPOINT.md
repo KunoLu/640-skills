@@ -11,9 +11,9 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.138.0 | stable-only | 是 | 核心 Coding Agent |
+| Codex | openai/codex | v0.139.0 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.0-beta.23 | same-prerelease-channel | 是 | 复杂任务编排 / TDD workflow |
-| GitNexus | abhigyanpatwari/GitNexus | v1.6.6 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
+| GitNexus | abhigyanpatwari/GitNexus | v1.6.7 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | TestSprite | 待明确 | latest | manual | 否 | 测试计划、E2E、自动化测试辅助 |
 | web-ui-autotest-generator | Cheryl-station/web-ui-autotest | main | manual | 否 | Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
@@ -245,9 +245,9 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.138.0 |
+| Coding Agent | Codex | v0.139.0 |
 | Agent Harness | Trellis | v0.6.0-beta.23 |
-| 代码理解 | GitNexus | v1.6.6 |
+| 代码理解 | GitNexus | v1.6.7 |
 | 自动化测试 | TestSprite | latest |
 | Web UI 测试资产 | web-ui-autotest-generator | main |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |
