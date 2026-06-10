@@ -1,16 +1,18 @@
 # AI Tools 项目规则
 
-本仓库是 Codex 配置文件与 Skill 的摘录/同步源，不代表一个真实业务项目结构。本文件只保留本配置摘录仓库自身直接生效的补充规则；通用规则已迁移到 `agents/AGENTS.global.md`，真实项目根目录模板维护在 `agents/AGENTS.project.md`。
+本仓库是 Codex 配置文件与 Skill 的摘录/同步源，不代表一个真实业务项目结构。本文件只保留本配置摘录仓库自身直接生效的补充规则；可复用的全局规则、项目级规则和全局 Skill 模板集中维护在 `kuno-workflow-onboard-skills/`。
 
 ## Agent 规则文件路径
 
 本配置集维护的 agent 规则文件路径如下：
 
 - 根目录 `AGENTS.md`：保存本配置摘录仓库自身直接生效的补充规则，包括每日版本检查自动化和 `更新` / `update` 指令。
-- `agents/AGENTS.global.md`：保存迁移后的全局规则文档。
-- `agents/AGENTS.project.md`：保存迁移后的项目规则文档。
+- `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md`：保存迁移后的全局规则文档。
+- `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`：保存迁移后的项目规则文档。
+- `kuno-workflow-onboard-skills/templates/skills/**/SKILL.md`：保存迁移后的全局 Skill 模板。
+- `kuno-workflow-onboard-skills/SKILL.md`、`kuno-workflow-onboard-skills/REFERENCE.md`、`kuno-workflow-onboard-skills/scripts/onboard.py`：保存 onboard Skill 自身的说明和安装 / 重置自动化。
 
-每日版本检查自动化如需读取、评估或修改 agent 规则，只能使用上述路径。不要再读取或修改根目录旧路径 `AGENTS.global.md` 和 `AGENTS.project.md`。
+每日版本检查自动化如需读取、评估或修改 agent 规则，只能使用上述路径。不要再读取或修改已删除的旧路径 `agents/`、`skills/`、根目录旧路径 `AGENTS.global.md` 和 `AGENTS.project.md`。
 
 ## Lessons 读取规则
 
@@ -29,11 +31,11 @@
 
 | 源文件 | 本地目标路径 |
 |---|---|
-| `agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
-| `skills/trellis-workflow/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-workflow/SKILL.md` |
-| `skills/trellis-channel/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-channel/SKILL.md` |
-| `skills/project-validation/SKILL.md` | `/Users/lusonglin/.agent/skills/project-validation/SKILL.md` |
-| `skills/lessons-record/SKILL.md` | `/Users/lusonglin/.agent/skills/lessons-record/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
+| `kuno-workflow-onboard-skills/templates/skills/trellis-workflow/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-workflow/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/trellis-channel/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-channel/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/project-validation/SKILL.md` | `/Users/lusonglin/.agent/skills/project-validation/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/lessons-record/SKILL.md` | `/Users/lusonglin/.agent/skills/lessons-record/SKILL.md` |
 
 同步要求：
 
@@ -44,9 +46,9 @@
 
 不要同步：
 
-- `agents/AGENTS.project.md`
+- `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`
 
-`agents/AGENTS.project.md` 是用于复制到真实项目仓库根目录 `AGENTS.md` 的项目级模板，只在具体项目需要时由用户手动落地或明确要求同步。
+`kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 是用于复制到真实项目仓库根目录 `AGENTS.md` 的项目级模板，只在具体项目需要时由用户手动落地、通过 `kuno-workflow-onboard-skills` 安装，或由用户明确要求同步。
 
 ### 同步指令
 
@@ -75,9 +77,12 @@ Codex 每日版本检查自动化必须遵守：
    - npm 包 metadata、tarball 内容、发布文件结构或本地包结构推断。
 6. 评估是否需要修改本仓库规则时，不要只检查是否存在与上游同名的模板或配置文件；还必须用 release 中出现的关键概念、命令、配置项和兼容性关键词扫描以下本地文件，并在 `UPDATE.md` 的影响分析中说明命中结果和处理决定：
    - `AGENTS.md`
-   - `agents/AGENTS.global.md`
-   - `agents/AGENTS.project.md`
-   - `skills/**/SKILL.md`
+   - `kuno-workflow-onboard-skills/SKILL.md`
+   - `kuno-workflow-onboard-skills/REFERENCE.md`
+   - `kuno-workflow-onboard-skills/scripts/onboard.py`
+   - `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md`
+   - `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`
+   - `kuno-workflow-onboard-skills/templates/skills/**/SKILL.md`
 7. 如果 release 改动影响某个工具的使用边界、命令建议、配置禁用项、兼容性风险或迁移步骤，即使本仓库没有对应模板文件，也要最小化更新相关 AGENTS 或 Skill 规则。
 8. 由 release 触发的 AGENTS 或 Skill 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。只有当规则本身必须表达明确兼容边界时，才允许写最低/最高版本要求。
 9. 除非用户手动输入 `更新` 或 `update`，否则不要把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`。

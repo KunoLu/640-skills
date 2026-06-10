@@ -4,6 +4,7 @@
 > 当前主流程已收敛为 `Codex + GitNexus + Trellis + TestSprite`。
 > `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成的可选专项分支，不替代 TestSprite。
 > `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
+> 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `kuno-workflow-onboard-skills/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
 
 ## 0. 版本监控配置
 
@@ -18,6 +19,21 @@
 | web-ui-autotest-generator | Cheryl-station/web-ui-autotest | main | manual | 否 | Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
+
+---
+
+## 0.1 本仓库模板源路径
+
+当前源路径以 `kuno-workflow-onboard-skills/` 为唯一承载目录：
+
+| 内容 | 当前源路径 | 用途 |
+|---|---|---|
+| Codex 全局规则模板 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.codex/AGENTS.md`，也可由 onboard Skill 安装 |
+| 项目级规则模板 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` | 由具体项目手动落地，或通过 onboard Skill 在确认项目根目录后安装 |
+| 全局 Skill 模板 | `kuno-workflow-onboard-skills/templates/skills/*/SKILL.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.agent/skills/<skill>/SKILL.md`，目标路径保持不变 |
+| Onboard Skill | `kuno-workflow-onboard-skills/` | 初始化或重置本地 Codex 全局 AGENTS、项目 AGENTS 和 Kuno workflow skills |
+
+每日版本检查自动化评估规则影响时，应扫描根 `AGENTS.md` 和 `kuno-workflow-onboard-skills/` 下的 Skill 入口、参考文档、安装脚本与 bundled templates；不要再扫描已删除的旧 `agents/` 或 `skills/` 顶层目录。
 
 ---
 

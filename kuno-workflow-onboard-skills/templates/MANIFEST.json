@@ -1,0 +1,95 @@
+{
+  "name": "kuno-workflow-onboard-skills",
+  "templates": [
+    {
+      "source": "templates/agents/AGENTS.global.md",
+      "targetRole": "codex-global-agents"
+    },
+    {
+      "source": "templates/agents/AGENTS.project.md",
+      "targetRole": "project-agents"
+    },
+    {
+      "source": ".",
+      "targetRole": "skill:kuno-workflow-onboard-skills"
+    },
+    {
+      "source": "templates/skills/trellis-workflow/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/trellis-channel/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/project-validation/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/lessons-record/SKILL.md",
+      "targetRole": "skill"
+    }
+  ],
+  "externalSkillRepositories": [
+    {
+      "skills": [
+        "diagnose",
+        "tdd",
+        "grill-me",
+        "grill-with-docs",
+        "handoff",
+        "write-a-skill",
+        "zoom-out",
+        "to-prd",
+        "to-issues"
+      ],
+      "repository": "https://github.com/mattpocock/skills.git"
+    },
+    {
+      "skills": [
+        "impeccable"
+      ],
+      "repository": "https://github.com/pbakaus/impeccable.git"
+    },
+    {
+      "skills": [
+        "ui-ux-pro-max"
+      ],
+      "repository": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git"
+    },
+    {
+      "skills": [
+        "web-ui-autotest-generator"
+      ],
+      "repository": "https://github.com/Cheryl-station/web-ui-autotest.git"
+    }
+  ],
+  "toolRepositories": [
+    {
+      "tool": "rtk",
+      "repository": "https://github.com/rtk-ai/rtk",
+      "installScript": "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh",
+      "verify": [
+        "rtk --version",
+        "rtk gain"
+      ]
+    },
+    {
+      "tool": "nvm",
+      "repository": "https://github.com/nvm-sh/nvm",
+      "installScript": "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh",
+      "verify": [
+        "command -v nvm",
+        "node --version",
+        "npm --version"
+      ]
+    }
+  ],
+  "excluded": [
+    "AGENTS.md",
+    "ENTRYPOINT.md",
+    "README.html",
+    "archive/",
+    "docs/lessons.md"
+  ]
+}
