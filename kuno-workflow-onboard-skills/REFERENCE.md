@@ -6,6 +6,7 @@ This Skill installs only these bundled templates:
 
 - `templates/agents/AGENTS.global.md` -> Codex global `AGENTS.md`
 - `templates/agents/AGENTS.project.md` -> target project root `AGENTS.md`
+- `templates/project/.gitignore` -> target project root `.gitignore`, when `--project-root` is provided
 - `.` -> `kuno-workflow-onboard-skills` skill directory, when source and target differ
 - `templates/skills/trellis-workflow/SKILL.md`
 - `templates/skills/trellis-channel/SKILL.md`
@@ -22,15 +23,15 @@ Use this sequence when the Skill is invoked:
 2. Ask whether they want `init` or `reset`.
 3. Ask: "Is the current working directory `<cwd>` the target project root for project-level `AGENTS.md`?"
 4. If the answer is no, ask for the project root path, or offer to skip project-level `AGENTS.md`.
-5. If skipped, show the absolute path to `templates/agents/AGENTS.project.md` in this Skill directory and ask the user to confirm that they will handle it manually.
+5. If skipped, show the absolute path to `templates/agents/AGENTS.project.md` in this Skill directory and ask the user to confirm that they will handle it manually. If the user still provides a project root, continue to update project `.gitignore`.
 6. Explain that skills install globally by default. Only use project-level skills if the user explicitly requests that and provides a project path or skills directory.
 7. Run `check` and show the completed checklist.
 8. If npm is missing, confirm the platform with the user, ask permission to install nvm + latest Node.js LTS, then run `ensure-npm`.
 9. Rerun `check`; only then evaluate CLI tools such as `rtk`, `trellis`, and `gitnexus`.
 10. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable.
 11. Install only user-approved missing items. Network or filesystem writes outside the workspace may require explicit approval.
-12. Rerun `check`; report installed, still missing, failed, and intentionally skipped items.
-13. Run `plan` and show the target paths.
+12. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
+13. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
 14. Run `init` or `reset` only after the user has confirmed the plan.
 
 ## Preflight Check
@@ -57,6 +58,7 @@ The check reports:
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories.
 - Referenced Skill presence for `diagnose`, `tdd`, `grill-me`, `grill-with-docs`, `handoff`, `write-a-skill`, `zoom-out`, `to-prd`, `to-issues`, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
+- A structured `installationReport` containing installed, skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
 
@@ -83,6 +85,35 @@ Manual checks:
 ```
 
 Do not claim missing items were installed until a follow-up `check` confirms them or the relevant installer command reports success and the expected files / commands exist.
+
+## Final Installation Report
+
+Every `check` text output includes an installation report. `install-external-skills`, `init`, and `reset` also print a final installation report after their post-operation check in normal text mode. In JSON mode, `check --json` returns the same data under `installationReport`; `install-external-skills --json` also includes `postCheck` and `installationReport`.
+
+The report is the user-facing completion summary and must include:
+
+- Installed runtime items, CLI tools, and skills, including version, path, and scope when known.
+- Already-installed runtime items, CLI tools, and skills that should be skipped for installation unless the user requests reinstall, reset, replace, upgrade, or project-local installation.
+- Failed or missing runtime items, CLI tools, and skills.
+- A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
+- A next step for every failed or missing item, including the suggested install command or repair path.
+- Not-checked items, especially CLI tools skipped because npm is not usable yet.
+- Manual configuration items, including GitNexus MCP, TestSprite MCP, and React Bits Pro project skill prerequisites.
+
+Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
+
+## Operation Report
+
+`init` and `reset` print an operation report after file writes and verification. This report is separate from the tool installation report and records each target file or directory operation.
+
+When `--project-root` is provided, the operation report must include `project .gitignore` with:
+
+- Target path: `<project-root>/.gitignore`.
+- Action: `created`, `updated`, or `skipped-already-present`.
+- Status: `success`, `skipped`, or `failed`.
+- Failure reason when the write, append, or verification step fails.
+
+Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring the full template block exists in the target file. Existing project rules are preserved. If the template block already exists, the operation is skipped as already present. In `init`, an existing `.gitignore` does not count as an overwrite conflict because it is updated in place; in `reset`, it is also updated in place rather than backed up and replaced.
 
 ## Installation Decisions
 
@@ -231,23 +262,28 @@ MCP items are not installed by `install-external-skills`, `init`, or `reset`. Th
 
 For GitNexus MCP:
 
-1. Confirm `gitnexus` CLI is installed.
-2. Confirm the active Agent environment exposes GitNexus MCP tools.
-3. Confirm the target project has a GitNexus index before using analysis results.
-4. If any step is missing, guide the user through the current GitNexus install/config command for their environment, then re-check.
+1. Confirm the GitNexus CLI works, for example with `npx gitnexus status` in the target project.
+2. Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using the current GitNexus setup instructions.
+3. Restart or reload the Agent environment so the MCP server is discovered.
+4. Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.
+5. If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.
 
 For TestSprite MCP:
 
-1. Confirm the IDE or Agent MCP config contains the TestSprite server.
-2. Confirm required API key or local auth is available without printing or storing secrets.
-3. If the setup opens a local configuration portal, tell the user which fields they must complete.
-4. Do not claim TestSprite testing is complete until the portal/configuration and environment access are confirmed.
+1. Add or enable the TestSprite MCP server in the active IDE or Agent MCP configuration.
+2. Provide the TestSprite API key or local auth through a secret store, environment variable, or MCP config; do not write secrets into the repository.
+3. Run the TestSprite bootstrap/check command from the Agent environment.
+4. Complete any TestSprite configuration portal fields, including project path, local URL or port, app type, test scope, PRD upload, and non-sensitive test account details when required.
+5. Rerun the MCP check and only treat TestSprite as usable after the MCP tools and target test environment are reachable.
 
 For React Bits Pro Skill:
 
 1. Treat it as a conditional project skill, not a global default.
-2. Confirm the target project is React with shadcn/ui, `components.json`, registry configuration, and readable `REACTBITS_LICENSE_KEY`.
-3. If prerequisites are missing, skip it and state what remains to configure.
+2. Confirm the target project is React with shadcn/ui initialized and `components.json` present.
+3. Confirm `components.json` contains the required React Bits registry entries and the current environment can read `REACTBITS_LICENSE_KEY` without printing it.
+4. If prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root.
+5. Confirm the React Bits Pro `SKILL.md` exists in the project and rerun the onboard check.
+6. Skip this item for non-React projects, projects without a license key, or projects that do not need React Bits Pro.
 
 ## Path Detection
 
@@ -274,6 +310,12 @@ Project AGENTS path:
 2. Project-level AGENTS is skipped when `--skip-project-agents` is passed.
 3. `--project-root` must point to an existing directory; the script does not create a new project root.
 
+Project `.gitignore` path:
+
+1. `<project-root>/.gitignore` whenever `--project-root` is provided.
+2. The template block is appended when the file exists and the block is not already present.
+3. The file is created when it does not exist.
+
 Project skills path:
 
 1. `--project-skills-dir`, if provided.
@@ -281,13 +323,14 @@ Project skills path:
 
 ## Init vs Reset
 
-`init` is conservative. If any target already exists, it exits without changing files and tells the user to run `reset`.
+`init` is conservative. If any overwrite-style target already exists, it exits without changing files and tells the user to run `reset`. Project `.gitignore` is an update-in-place target, so an existing `.gitignore` does not make `init` fail.
 
 `reset` backs up existing targets before copying:
 
 - Existing `AGENTS.md` files become `AGENTS.md.yyyy-mm-dd-index`.
 - Existing bundled skill directories become `<skill-name>.yyyy-mm-dd-index`.
 - If the onboard Skill is already running from the same target directory it would install to, that self-install operation is treated as a no-op to avoid self-overwrite.
+- Project `.gitignore` is updated in place by ensuring the template block exists; it is not backed up and replaced.
 
 The index starts at `1` and increments within the same directory until a free backup path is found.
 
@@ -315,6 +358,12 @@ Install only global AGENTS and global skills:
 
 ```bash
 python scripts/onboard.py init --skip-project-agents --yes
+```
+
+Skip project AGENTS but still update project `.gitignore`:
+
+```bash
+python scripts/onboard.py init --project-root /path/to/project --skip-project-agents --yes
 ```
 
 Install skills into a project:

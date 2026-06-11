@@ -10,6 +10,10 @@
       "targetRole": "project-agents"
     },
     {
+      "source": "templates/project/.gitignore",
+      "targetRole": "project-gitignore"
+    },
+    {
       "source": ".",
       "targetRole": "skill:kuno-workflow-onboard-skills"
     },

@@ -17,6 +17,7 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = SKILL_DIR / "templates"
+PROJECT_GITIGNORE_TEMPLATE = TEMPLATE_DIR / "project" / ".gitignore"
 NVM_INSTALL_URL = "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh"
 RTK_INSTALL_URL = "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh"
 SKILL_SOURCES = {
@@ -106,16 +107,37 @@ MANUAL_CHECKS = (
         "name": "GitNexus MCP",
         "category": "mcp",
         "advice": "After GitNexus CLI is installed, confirm the current Agent environment exposes GitNexus MCP tools and that the target project has an index before relying on GitNexus analysis.",
+        "steps": (
+            "Confirm the GitNexus CLI works, for example with `npx gitnexus status` in the target project.",
+            "Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using the current GitNexus setup instructions.",
+            "Restart or reload the Agent environment so the MCP server is discovered.",
+            "Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.",
+            "If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.",
+        ),
     },
     {
         "name": "TestSprite MCP",
         "category": "mcp",
         "advice": "Confirm the IDE/Agent MCP configuration and API key. TestSprite setup may require its local configuration portal and should not be treated as a background-only install.",
+        "steps": (
+            "Add or enable the TestSprite MCP server in the active IDE or Agent MCP configuration.",
+            "Provide the TestSprite API key or local auth through a secret store, environment variable, or MCP config; do not write secrets into the repository.",
+            "Run the TestSprite bootstrap/check command from the Agent environment.",
+            "Complete any TestSprite configuration portal fields, including project path, local URL or port, app type, test scope, PRD upload, and non-sensitive test account details when required.",
+            "Rerun the MCP check and only treat TestSprite as usable after the MCP tools and target test environment are reachable.",
+        ),
     },
     {
         "name": "React Bits Pro Skill",
         "category": "conditional-project-skill",
         "advice": "Only install in React/shadcn projects with registry configuration and REACTBITS_LICENSE_KEY available. Do not print or store the license key.",
+        "steps": (
+            "Confirm the target project is a React project with shadcn/ui initialized and `components.json` present.",
+            "Confirm `components.json` contains the required React Bits registry entries and the current environment can read `REACTBITS_LICENSE_KEY` without printing it.",
+            "If prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root.",
+            "Confirm the React Bits Pro `SKILL.md` exists in the project and rerun the onboard check.",
+            "Skip this item for non-React projects, projects without a license key, or projects that do not need React Bits Pro.",
+        ),
     },
 )
 
@@ -347,6 +369,237 @@ def check_skill(name: str, group: str, global_dir: Path, project_dir: Path | Non
     }
 
 
+def report_entry(
+    name: str,
+    status: str,
+    *,
+    path: str | None = None,
+    version: str | None = None,
+    scope: str | None = None,
+    reason: str | None = None,
+    next_step: str | None = None,
+    source_repo: str | None = None,
+) -> dict[str, object]:
+    entry: dict[str, object] = {"name": name, "status": status}
+    optional = {
+        "path": path,
+        "version": version,
+        "scope": scope,
+        "reason": reason,
+        "nextStep": next_step,
+        "sourceRepo": source_repo,
+    }
+    for key, value in optional.items():
+        if value:
+            entry[key] = value
+    return entry
+
+
+def cli_failure_reason(item: dict[str, object]) -> str:
+    name = str(item["name"])
+    if item.get("wrongPackageSuspected"):
+        reason = f"`{name}` exists at {item.get('path')}, but `{item.get('verifyCommand')}` failed; it may be a different same-name package."
+    elif item.get("verificationFailed"):
+        reason = f"`{name}` exists at {item.get('path')}, but `{item.get('verifyCommand')}` failed."
+    elif not item.get("path"):
+        reason = f"`{name}` command was not found in PATH."
+    elif not item.get("version"):
+        reason = f"`{name}` exists at {item.get('path')}, but the version command returned no usable output."
+    else:
+        reason = f"`{name}` did not pass the installer verification checks."
+
+    verify_output = item.get("verifyOutput")
+    if verify_output:
+        reason += f" First verification output: {verify_output}"
+    return reason
+
+
+def cli_next_step(item: dict[str, object]) -> str:
+    commands = [f"global: {item['globalInstall']}"]
+    if item.get("projectInstall"):
+        commands.append(f"project: {item['projectInstall']}")
+    return "Confirm the desired scope with the user, then install or repair it. Suggested command(s): " + "; ".join(commands)
+
+
+def skill_failure_reason(item: dict[str, object]) -> str:
+    targets = [str(item["globalTarget"])]
+    if item.get("projectTarget"):
+        targets.append(str(item["projectTarget"]))
+    return "No `SKILL.md` was found at the checked target path(s): " + ", ".join(targets)
+
+
+def skill_next_step(item: dict[str, object]) -> str:
+    name = str(item["name"])
+    if item.get("sourceRepo"):
+        return (
+            "After user confirmation, install from the configured repository with "
+            f"`python scripts/onboard.py install-external-skills --skills {name} --scope global|project --yes`."
+        )
+    return "Run `init` or `reset` with the confirmed skills scope, then rerun `check`."
+
+
+def skipped_already_installed_entry(
+    entry: dict[str, object],
+    reason: str,
+    next_step: str,
+) -> dict[str, object]:
+    skipped = dict(entry)
+    skipped["status"] = "skipped-already-installed"
+    skipped["reason"] = reason
+    skipped["nextStep"] = next_step
+    return skipped
+
+
+def build_installation_report(results: dict[str, object]) -> dict[str, object]:
+    runtime = results["runtime"]
+    installed: dict[str, list[dict[str, object]]] = {"runtime": [], "tools": [], "skills": []}
+    skipped_already_installed: dict[str, list[dict[str, object]]] = {"runtime": [], "tools": [], "skills": []}
+    failed_or_missing: dict[str, list[dict[str, object]]] = {"runtime": [], "tools": [], "skills": []}
+    not_checked: dict[str, list[dict[str, object]]] = {"tools": []}
+
+    for name in ("npm", "node"):
+        item = runtime[name]
+        entry = report_entry(
+            name,
+            "installed" if item["installed"] else "missing",
+            path=item.get("path"),
+            version=item.get("version"),
+        )
+        if item["installed"]:
+            installed["runtime"].append(entry)
+            skipped_already_installed["runtime"].append(
+                skipped_already_installed_entry(
+                    entry,
+                    f"`{name}` is already available in PATH.",
+                    "Skip bootstrap installation unless the user explicitly requests a reinstall or version change.",
+                )
+            )
+        else:
+            entry["reason"] = f"`{name}` is not available in PATH."
+            entry["nextStep"] = runtime["advice"] if name == "npm" else "Install Node.js through nvm or the platform package manager, then rerun `check`."
+            failed_or_missing["runtime"].append(entry)
+
+    nvm = runtime["nvm"]
+    nvm_entry = report_entry(
+        "nvm",
+        "installed" if nvm["installed"] else "missing",
+        path=nvm.get("path"),
+        version=nvm.get("version"),
+    )
+    if nvm["installed"]:
+        installed["runtime"].append(nvm_entry)
+        skipped_already_installed["runtime"].append(
+            skipped_already_installed_entry(
+                nvm_entry,
+                "`nvm` is already available.",
+                "Skip nvm bootstrap unless the user explicitly requests a reinstall or version manager change.",
+            )
+        )
+    elif not runtime["npm"]["installed"]:
+        nvm_entry["reason"] = "npm is missing and nvm is not available for bootstrap."
+        nvm_entry["nextStep"] = nvm["advice"]
+        failed_or_missing["runtime"].append(nvm_entry)
+
+    if results["cliChecksSkipped"]:
+        for spec in CLI_TOOLS:
+            not_checked["tools"].append(
+                report_entry(
+                    str(spec["name"]),
+                    "not-checked",
+                    reason="npm is not usable yet, so CLI verification was skipped.",
+                    next_step="Run `python scripts/onboard.py ensure-npm --yes` after user confirmation, then rerun `check`.",
+                )
+            )
+    else:
+        for item in results["tools"]:
+            entry = report_entry(
+                str(item["name"]),
+                "installed" if item["installed"] else "missing",
+                path=item.get("path"),
+                version=item.get("version"),
+            )
+            if item["installed"]:
+                installed["tools"].append(entry)
+                skipped_already_installed["tools"].append(
+                    skipped_already_installed_entry(
+                        entry,
+                        f"`{item['name']}` is already installed and passed the current verification checks.",
+                        "Skip CLI installation unless the user explicitly requests reinstall, upgrade, replacement, or project-local installation.",
+                    )
+                )
+            else:
+                if item.get("wrongPackageSuspected"):
+                    entry["status"] = "wrong-package-suspected"
+                elif item.get("verificationFailed"):
+                    entry["status"] = "verification-failed"
+                entry["reason"] = cli_failure_reason(item)
+                entry["nextStep"] = cli_next_step(item)
+                failed_or_missing["tools"].append(entry)
+
+    for item in results["skills"]:
+        locations = item["locations"]
+        if item["installed"]:
+            for location in locations:
+                installed["skills"].append(
+                    report_entry(
+                        str(item["name"]),
+                        "installed",
+                        path=location["path"],
+                        scope=location["scope"],
+                        source_repo=item.get("sourceRepo"),
+                    )
+                )
+                skipped_already_installed["skills"].append(
+                    skipped_already_installed_entry(
+                        installed["skills"][-1],
+                        f"`{item['name']}` already has a `SKILL.md` at the checked target location.",
+                        "Skip skill installation for this location unless the user explicitly requests reset or replace.",
+                    )
+                )
+            continue
+
+        failed_or_missing["skills"].append(
+            report_entry(
+                str(item["name"]),
+                "missing",
+                reason=skill_failure_reason(item),
+                next_step=skill_next_step(item),
+                source_repo=item.get("sourceRepo"),
+            )
+        )
+
+    manual_configuration = [
+        {
+            "name": item["name"],
+            "category": item["category"],
+            "status": "manual-required",
+            "reason": "This item cannot be proven or completed safely by the installer alone.",
+            "advice": item["advice"],
+            "steps": item["steps"],
+        }
+        for item in results["manualChecks"]
+    ]
+
+    installed_count = sum(len(items) for items in installed.values())
+    skipped_count = sum(len(items) for items in skipped_already_installed.values())
+    failed_count = sum(len(items) for items in failed_or_missing.values())
+    not_checked_count = sum(len(items) for items in not_checked.values())
+    return {
+        "summary": {
+            "installed": installed_count,
+            "skippedAlreadyInstalled": skipped_count,
+            "failedOrMissing": failed_count,
+            "notChecked": not_checked_count,
+            "manualConfiguration": len(manual_configuration),
+        },
+        "installed": installed,
+        "skippedAlreadyInstalled": skipped_already_installed,
+        "failedOrMissing": failed_or_missing,
+        "notChecked": not_checked,
+        "manualConfiguration": manual_configuration,
+    }
+
+
 def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     project_root = resolve_project_root(args)
     global_skills_dir = expand_path(getattr(args, "global_skills_dir", None)) or default_global_skills_dir()
@@ -369,7 +622,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "skills": [item["name"] for item in skills if not item["installed"]],
     }
 
-    return {
+    results = {
         "mode": "check",
         "platform": platform.system() or sys.platform,
         "paths": {
@@ -384,6 +637,79 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "manualChecks": MANUAL_CHECKS,
         "missing": missing,
     }
+    results["installationReport"] = build_installation_report(results)
+    return results
+
+
+def print_report_entries(entries: list[dict[str, object]], empty_message: str = "- none") -> None:
+    if not entries:
+        print(empty_message)
+        return
+    for item in entries:
+        detail = []
+        if item.get("scope"):
+            detail.append(f"scope={item['scope']}")
+        if item.get("path"):
+            detail.append(f"path={item['path']}")
+        if item.get("version"):
+            detail.append(f"version={item['version']}")
+        suffix = f" ({', '.join(detail)})" if detail else ""
+        print(f"- {item['name']}: {item['status']}{suffix}")
+        if item.get("sourceRepo"):
+            print(f"  source repo: {item['sourceRepo']}")
+        if item.get("reason"):
+            print(f"  reason: {item['reason']}")
+        if item.get("nextStep"):
+            print(f"  next: {item['nextStep']}")
+
+
+def print_installation_report(report: dict[str, object], heading: str = "Installation report") -> None:
+    print(f"\n{heading}:")
+    summary = report["summary"]
+    print(
+        "Summary: "
+        f"installed={summary['installed']}, "
+        f"skipped_already_installed={summary['skippedAlreadyInstalled']}, "
+        f"failed_or_missing={summary['failedOrMissing']}, "
+        f"not_checked={summary['notChecked']}, "
+        f"manual_configuration={summary['manualConfiguration']}"
+    )
+
+    print("\nInstalled runtime:")
+    print_report_entries(report["installed"]["runtime"])
+    print("\nInstalled CLI tools:")
+    print_report_entries(report["installed"]["tools"])
+    print("\nInstalled skills:")
+    print_report_entries(report["installed"]["skills"])
+
+    print("\nSkipped because already installed - runtime:")
+    print_report_entries(report["skippedAlreadyInstalled"]["runtime"])
+    print("\nSkipped because already installed - CLI tools:")
+    print_report_entries(report["skippedAlreadyInstalled"]["tools"])
+    print("\nSkipped because already installed - skills:")
+    print_report_entries(report["skippedAlreadyInstalled"]["skills"])
+
+    print("\nFailed or missing runtime:")
+    print_report_entries(report["failedOrMissing"]["runtime"])
+    print("\nFailed or missing CLI tools:")
+    print_report_entries(report["failedOrMissing"]["tools"])
+    print("\nFailed or missing skills:")
+    print_report_entries(report["failedOrMissing"]["skills"])
+
+    print("\nNot checked:")
+    print_report_entries(report["notChecked"]["tools"])
+
+    print("\nManual configuration required:")
+    manual_items = report["manualConfiguration"]
+    if not manual_items:
+        print("- none")
+    for item in manual_items:
+        print(f"- {item['name']} [{item['category']}]: {item['status']}")
+        print(f"  reason: {item['reason']}")
+        print(f"  advice: {item['advice']}")
+        print("  steps:")
+        for index, step in enumerate(item["steps"], start=1):
+            print(f"  {index}. {step}")
 
 
 def print_check_results(results: dict[str, object], as_json: bool) -> None:
@@ -465,6 +791,8 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     else:
         print("\nMissing summary: none")
 
+    print_installation_report(results["installationReport"])
+
 
 def backup_path(target: Path) -> Path:
     today = dt.date.today().isoformat()
@@ -495,19 +823,50 @@ def compare_tree(source: Path, target: Path, ignored_names: set[str] | None = No
     return failures
 
 
-def copy_operation(operation: Operation) -> None:
+def ensure_file_contains(source: Path, target: Path) -> str:
+    source_text = source.read_text(encoding="utf-8")
+    if not source_text.endswith("\n"):
+        source_text += "\n"
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        target.write_text(source_text, encoding="utf-8")
+        return "created"
+
+    existing = target.read_text(encoding="utf-8")
+    if source_text.strip() in existing:
+        return "skipped-already-present"
+
+    prefix = "" if not existing or existing.endswith("\n") else "\n"
+    separator = "\n" if existing.strip() else ""
+    target.write_text(f"{existing}{prefix}{separator}{source_text}", encoding="utf-8")
+    return "updated"
+
+
+def copy_operation(operation: Operation) -> str:
     if operation.same_location:
-        return
+        return "skipped-same-location"
     operation.target.parent.mkdir(parents=True, exist_ok=True)
+    if operation.kind == "ensure-file-block":
+        return ensure_file_contains(operation.source, operation.target)
     if operation.kind == "file":
         shutil.copy2(operation.source, operation.target)
-        return
+        return "copied"
     shutil.copytree(operation.source, operation.target)
+    return "copied"
 
 
 def verify_operation(operation: Operation) -> list[str]:
     if operation.same_location:
         return []
+    if operation.kind == "ensure-file-block":
+        if not operation.target.is_file():
+            return [operation.label]
+        source_text = operation.source.read_text(encoding="utf-8").strip()
+        target_text = operation.target.read_text(encoding="utf-8")
+        if source_text and source_text in target_text:
+            return []
+        return [operation.label]
     if operation.kind == "file":
         if operation.target.is_file() and filecmp.cmp(operation.source, operation.target, shallow=False):
             return []
@@ -757,6 +1116,9 @@ def install_external_skills(args: argparse.Namespace) -> int:
         "plan": plan,
         "results": results,
     }
+    post_check = build_check_results(args)
+    payload["postCheck"] = post_check
+    payload["installationReport"] = post_check["installationReport"]
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
@@ -769,7 +1131,7 @@ def install_external_skills(args: argparse.Namespace) -> int:
                 print(f"  backup: {item['backup']}")
             if item.get("error"):
                 print(f"  note: {item['error']}")
-        print("Rerun `check` after installation and report anything still missing.")
+        print_installation_report(payload["installationReport"], "Final installation report")
 
     return 1 if any(item["status"] == "failed" for item in results) else 0
 
@@ -1031,6 +1393,16 @@ def build_operations(args: argparse.Namespace) -> list[Operation]:
             )
         )
 
+    if project_root:
+        operations.append(
+            Operation(
+                "project .gitignore",
+                PROJECT_GITIGNORE_TEMPLATE,
+                project_root / ".gitignore",
+                "ensure-file-block",
+            )
+        )
+
     if args.skills_scope != "none":
         if args.skills_scope == "project":
             explicit = expand_path(args.project_skills_dir)
@@ -1089,6 +1461,47 @@ def print_plan(mode: str, operations: list[Operation], as_json: bool) -> None:
         print(f"- {item['label']}: {item['target']} ({exists})")
 
 
+def operation_allows_existing_target(operation: Operation) -> bool:
+    return operation.kind == "ensure-file-block"
+
+
+def operation_result(
+    operation: Operation,
+    status: str,
+    action: str,
+    *,
+    backup: Path | None = None,
+    reason: str | None = None,
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "label": operation.label,
+        "target": str(operation.target),
+        "kind": operation.kind,
+        "status": status,
+        "action": action,
+    }
+    if backup:
+        result["backup"] = str(backup)
+    if reason:
+        result["reason"] = reason
+    return result
+
+
+def print_operation_report(results: list[dict[str, object]], heading: str = "Operation report") -> None:
+    print(f"\n{heading}:")
+    if not results:
+        print("- none")
+        return
+    for item in results:
+        print(f"- {item['label']}: {item['status']}")
+        print(f"  target: {item['target']}")
+        print(f"  action: {item['action']}")
+        if item.get("backup"):
+            print(f"  backup: {item['backup']}")
+        if item.get("reason"):
+            print(f"  reason: {item['reason']}")
+
+
 def ensure_confirmed(args: argparse.Namespace, mode: str) -> None:
     if mode == "plan":
         return
@@ -1119,41 +1532,97 @@ def run(mode: str, args: argparse.Namespace) -> int:
     ensure_confirmed(args, mode)
 
     active_operations = [op for op in operations if not op.same_location]
-    conflicts = [op for op in active_operations if op.target.exists()]
+    conflicts = [
+        op
+        for op in active_operations
+        if op.target.exists() and not operation_allows_existing_target(op)
+    ]
     if mode == "init" and conflicts:
         print("Init refused because targets already exist:", file=sys.stderr)
         for op in conflicts:
             print(f"- {op.label}: {op.target}", file=sys.stderr)
         print("Use reset to back up and replace existing targets.", file=sys.stderr)
+        if not args.json:
+            print_operation_report(
+                [
+                    operation_result(
+                        op,
+                        "failed",
+                        "not-run",
+                        reason="target exists; init refuses to overwrite existing targets",
+                    )
+                    for op in conflicts
+                ]
+            )
         return 2
 
     backups: list[tuple[Path, Path]] = []
+    backup_by_target: dict[Path, Path] = {}
     if mode == "reset":
         for op in conflicts:
             backup = backup_path(op.target)
             op.target.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(op.target), str(backup))
             backups.append((op.target, backup))
+            backup_by_target[op.target] = backup
 
+    operation_results: list[dict[str, object]] = []
     for op in active_operations:
-        copy_operation(op)
+        try:
+            action = copy_operation(op)
+            failures = verify_operation(op)
+            if failures:
+                operation_results.append(
+                    operation_result(
+                        op,
+                        "failed",
+                        action,
+                        backup=backup_by_target.get(op.target),
+                        reason="verification failed: " + ", ".join(failures[:20]),
+                    )
+                )
+                continue
 
-    failures: list[str] = []
-    for op in active_operations:
-        failures.extend(f"{op.label}: {item}" for item in verify_operation(op))
+            status = "skipped" if action.startswith("skipped") else "success"
+            operation_results.append(
+                operation_result(
+                    op,
+                    status,
+                    action,
+                    backup=backup_by_target.get(op.target),
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - report each file operation failure with context.
+            operation_results.append(
+                operation_result(
+                    op,
+                    "failed",
+                    "error",
+                    backup=backup_by_target.get(op.target),
+                    reason=str(exc),
+                )
+            )
+
+    failed_operations = [item for item in operation_results if item["status"] == "failed"]
 
     if backups:
         print("Backups:")
         for original, backup in backups:
             print(f"- {original} -> {backup}")
 
-    if failures:
+    if not args.json:
+        print_operation_report(operation_results)
+
+    if failed_operations:
         print("Verification failed:", file=sys.stderr)
-        for item in failures:
-            print(f"- {item}", file=sys.stderr)
+        for item in failed_operations:
+            print(f"- {item['label']}: {item.get('reason', 'unknown failure')}", file=sys.stderr)
         return 3
 
     print("Verification passed.")
+    if not args.json:
+        final_check = build_check_results(args)
+        print_installation_report(final_check["installationReport"], "Final installation report")
     return 0
 
 
