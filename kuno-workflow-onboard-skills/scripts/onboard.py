@@ -795,6 +795,13 @@ def backup_path(target: Path) -> Path:
         index += 1
 
 
+def remove_existing_target(target: Path) -> None:
+    if target.is_dir() and not target.is_symlink():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+
+
 def compare_tree(source: Path, target: Path, ignored_names: set[str] | None = None) -> list[str]:
     failures: list[str] = []
     ignored = ignored_names or set()
@@ -843,8 +850,13 @@ def copy_operation(operation: Operation) -> str:
     if operation.kind == "file":
         shutil.copy2(operation.source, operation.target)
         return "copied"
+    if operation.target.exists():
+        remove_existing_target(operation.target)
+        action = "overwritten-without-backup"
+    else:
+        action = "copied"
     shutil.copytree(operation.source, operation.target)
-    return "copied"
+    return action
 
 
 def verify_operation(operation: Operation) -> list[str]:
@@ -905,6 +917,7 @@ def external_install_plan(args: argparse.Namespace, selected: list[str], target_
         "scope": args.scope,
         "targetDir": str(target_dir),
         "forceOverwriteExisting": True,
+        "backupExistingTargets": False,
         "replaceFlagProvided": bool(args.replace),
         "skills": [
             {
@@ -926,7 +939,7 @@ def print_external_install_plan(plan: dict[str, object], as_json: bool) -> None:
     print("External skill install plan")
     print(f"Scope: {plan['scope']}")
     print(f"Target skills dir: {plan['targetDir']}")
-    print("Force overwrite existing: yes, existing targets are backed up first")
+    print("Force overwrite existing: yes, existing targets are removed first without backup")
     for item in plan["skills"]:
         status = "exists" if item["targetExists"] else "missing"
         print(f"- {item['name']}: {item['target']} ({status})")
@@ -1016,24 +1029,25 @@ def clone_repo(repo: str, destination: Path) -> tuple[bool, str]:
     return False, message or f"git clone exited with {completed.returncode}"
 
 
-def copy_external_skill(source: Path, target: Path) -> tuple[str, Path | None, str | None]:
-    backup: Path | None = None
+def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | None]:
+    replaced_existing = target.exists()
     if target.exists():
-        backup = backup_path(target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(target), str(backup))
+        remove_existing_target(target)
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(
-        source,
-        target,
-        ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
-    )
+    try:
+        shutil.copytree(
+            source,
+            target,
+            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+        )
+    except OSError as exc:
+        return "failed", replaced_existing, str(exc)
 
     failures = compare_tree(source, target, {".git", "__pycache__"})
     if failures:
-        return "failed", backup, "verification failed: " + ", ".join(failures[:20])
-    return ("replaced" if backup else "installed"), backup, None
+        return "failed", replaced_existing, "verification failed: " + ", ".join(failures[:20])
+    return ("replaced" if replaced_existing else "installed"), replaced_existing, None
 
 
 def install_external_skills(args: argparse.Namespace) -> int:
@@ -1075,7 +1089,7 @@ def install_external_skills(args: argparse.Namespace) -> int:
                 target = target_dir / name
                 try:
                     source = source_dir_for_external_skill(repo_root, name)
-                    status, backup, error = copy_external_skill(source, target)
+                    status, replaced_existing, error = copy_external_skill(source, target)
                     results.append(
                         {
                             "name": name,
@@ -1083,7 +1097,7 @@ def install_external_skills(args: argparse.Namespace) -> int:
                             "source": str(source),
                             "target": str(target),
                             "status": status,
-                            "backup": str(backup) if backup else None,
+                            "replacedExisting": replaced_existing,
                             "error": error,
                         }
                     )
@@ -1103,6 +1117,7 @@ def install_external_skills(args: argparse.Namespace) -> int:
         "scope": args.scope,
         "targetDir": str(target_dir),
         "forceOverwriteExisting": True,
+        "backupExistingTargets": False,
         "replaceFlagProvided": bool(args.replace),
         "plan": plan,
         "results": results,
@@ -1118,8 +1133,8 @@ def install_external_skills(args: argparse.Namespace) -> int:
             print(f"- {item['name']}: {item['status']}")
             if item.get("target"):
                 print(f"  target: {item['target']}")
-            if item.get("backup"):
-                print(f"  backup: {item['backup']}")
+            if item.get("replacedExisting"):
+                print("  replaced existing target without backup")
             if item.get("error"):
                 print(f"  note: {item['error']}")
         print_installation_report(payload["installationReport"], "Final installation report")
@@ -1532,6 +1547,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
     backups: list[tuple[Path, Path]] = []
     backup_by_target: dict[Path, Path] = {}
     for op in conflicts:
+        if op.kind != "file":
+            continue
         backup = backup_path(op.target)
         op.target.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(op.target), str(backup))
@@ -1636,7 +1653,7 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument(
         "--replace",
         action="store_true",
-        help="Compatibility flag; external skill installs always back up and overwrite existing targets.",
+        help="Compatibility flag; external skill installs always overwrite existing targets without backup.",
     )
     install.add_argument("--yes", action="store_true", help="Allow external skill installation.")
     install.add_argument("--json", action="store_true", help="Print machine-readable plan and results.")

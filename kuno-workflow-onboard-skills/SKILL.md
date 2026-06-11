@@ -31,7 +31,7 @@ python scripts/onboard.py check --project-root <project-root>
 
 Summarize the runtime, CLI tool, bundled skill, referenced skill, and manual MCP / conditional project checks. The output must include the installation report with installed items, already-installed runtime / CLI tools skipped for install, failed or missing items, reasons, and manual configuration steps. If npm is missing, ask for confirmation and run `python scripts/onboard.py ensure-npm --yes` before any CLI tool check or install. Do not proceed to `init` or `reset` until the user confirms install or explicitly chooses to skip missing optional items.
 
-2. Install any user-approved missing tools or skills, then rerun `check`. External referenced skills must be pulled from their configured GitHub repositories only after confirmation. Skills are force-installed: existing bundled or external skill targets are backed up and overwritten instead of skipped.
+2. Install any user-approved missing tools or skills, then rerun `check`. External referenced skills must be pulled from their configured GitHub repositories only after confirmation. Skills are force-installed: existing bundled or external skill targets are overwritten without backup instead of skipped.
 
 ```bash
 python scripts/onboard.py install-external-skills --skills diagnose,tdd --scope global --yes
@@ -45,13 +45,13 @@ For missing RTK, confirm with the user and run `python scripts/onboard.py instal
 python scripts/onboard.py plan --project-root <project-root>
 ```
 
-4. For a new setup, run `init`. Existing AGENTS and bundled skill targets are backed up and overwritten; project `.gitignore` is updated in place:
+4. For a new setup, run `init`. Existing AGENTS targets are backed up and overwritten; existing bundled skill targets are overwritten without backup; project `.gitignore` is updated in place:
 
 ```bash
 python scripts/onboard.py init --project-root <project-root> --yes
 ```
 
-5. For a reset, run `reset`. It uses the same backup-and-overwrite behavior for AGENTS and bundled skills:
+5. For a reset, run `reset`. It uses the same behavior: AGENTS are backed up and overwritten, while bundled skills are overwritten without backup:
 
 ```bash
 python scripts/onboard.py reset --project-root <project-root> --yes
@@ -71,7 +71,7 @@ To skip project-level `AGENTS.md` but still update project `.gitignore`, include
 python scripts/onboard.py init --project-root <project-root> --skills-scope project --yes
 ```
 
-Every `check`, external Skill install, `init`, or `reset` run must end with the installation report so the user sees all installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items. Skills are not skipped because already installed; selected skills are backed up and overwritten.
+Every `check`, external Skill install, `init`, or `reset` run must end with the installation report so the user sees all installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items. Skills are not skipped because already installed; selected skills are overwritten without backup.
 
 ## Preflight Scope
 
@@ -93,4 +93,4 @@ The script detects the current platform and uses these defaults:
 - Project `.gitignore`: `<project-root>/.gitignore`, when `--project-root` is provided.
 - Project skills: `<project-root>/.agent/skills`.
 
-All paths can be overridden with script flags. See [REFERENCE.md](REFERENCE.md) for exact commands, backup behavior, and troubleshooting.
+All paths can be overridden with script flags. See [REFERENCE.md](REFERENCE.md) for exact commands, overwrite behavior, backup behavior for AGENTS, and troubleshooting.

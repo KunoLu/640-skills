@@ -94,7 +94,7 @@ The report is the user-facing completion summary and must include:
 
 - Installed runtime items, CLI tools, and skills, including version, path, and scope when known.
 - Already-installed runtime items and npm-installed CLI tools that should be skipped for installation unless the user requests reinstall, upgrade, replacement, or project-local installation.
-- Installed skills as detected facts only. Selected bundled and external skills are not skipped because already installed; their existing targets are backed up and overwritten.
+- Installed skills as detected facts only. Selected bundled and external skills are not skipped because already installed; their existing targets are overwritten without backup.
 - Failed or missing runtime items, CLI tools, and skills.
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
@@ -116,7 +116,9 @@ When `--project-root` is provided, the operation report must include `project .g
 
 Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring the full template block exists in the target file. Existing project rules are preserved. If the template block already exists, the operation is skipped as already present. In `init`, an existing `.gitignore` does not count as an overwrite conflict because it is updated in place; in `reset`, it is also updated in place rather than backed up and replaced.
 
-AGENTS and skill targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md`, project `AGENTS.md`, bundled skill directory, or external skill directory is present, it is first renamed with the dated backup rule, then the template or cloned skill is copied into the target path.
+AGENTS targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md` or project `AGENTS.md` is present, it is first renamed with the dated backup rule, then the template is copied into the target path.
+
+Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path.
 
 ## Installation Decisions
 
@@ -127,7 +129,7 @@ When an item is missing, ask the user before installing:
 - Install `trellis` globally or project-level?
 - Install `gitnexus` globally or project-level?
 - Install bundled Kuno workflow skills globally or project-level?
-- Install referenced optional skills now, leave them for a later task, or skip them intentionally? If selected, existing skill targets are backed up and overwritten.
+- Install referenced optional skills now, leave them for a later task, or skip them intentionally? If selected, existing skill targets are overwritten without backup.
 
 Common CLI install commands are surfaced by `check` as suggestions:
 
@@ -245,7 +247,7 @@ python scripts/onboard.py install-external-skills \
   --yes
 ```
 
-External skills always back up and overwrite existing target directories after user confirmation. The `--replace` flag is accepted for older commands but is no longer required:
+External skills always overwrite existing target directories without backup after user confirmation. The `--replace` flag is accepted for older commands but is no longer required:
 
 ```bash
 python scripts/onboard.py install-external-skills \
@@ -254,7 +256,7 @@ python scripts/onboard.py install-external-skills \
   --yes
 ```
 
-The installer clones each repository into a temporary directory, discovers the matching `SKILL.md` directory by folder name or frontmatter `name`, backs up an existing target directory when present, copies that whole skill directory, and verifies the copied files.
+The installer clones each repository into a temporary directory, discovers the matching `SKILL.md` directory by folder name or frontmatter `name`, removes an existing target directory when present, copies that whole skill directory, and verifies the copied files.
 
 If external skill installation fails, usually continue with AGENTS / bundled skill setup and report the failed external item separately. Common causes are missing `git`, network restrictions, repository access failures, no matching `SKILL.md`, ambiguous `SKILL.md` candidates, or filesystem permissions.
 
@@ -325,16 +327,16 @@ Project skills path:
 
 ## Init vs Reset
 
-`init` and `reset` both back up and overwrite existing AGENTS files and bundled skill directories. Project `.gitignore` is an update-in-place target, so an existing `.gitignore` does not get backed up or replaced.
+`init` and `reset` both back up and overwrite existing AGENTS files. Existing bundled skill directories are overwritten without backup. Project `.gitignore` is an update-in-place target, so an existing `.gitignore` does not get backed up or replaced.
 
-Existing overwrite targets are backed up before copying:
+Existing AGENTS targets are backed up before copying:
 
 - Existing `AGENTS.md` files become `AGENTS.md.yyyy-mm-dd-index`.
-- Existing bundled skill directories become `<skill-name>.yyyy-mm-dd-index`.
 - If the onboard Skill is already running from the same target directory it would install to, that self-install operation is treated as a no-op to avoid self-overwrite.
 - Project `.gitignore` is updated in place by ensuring the template block exists; it is not backed up and replaced.
+- Existing bundled skill directories are removed and copied again at the same path; no `<skill-name>.yyyy-mm-dd-index` backup is created.
 
-The index starts at `1` and increments within the same directory until a free backup path is found.
+The AGENTS backup index starts at `1` and increments within the same directory until a free backup path is found.
 
 ## Common Commands
 
@@ -350,7 +352,7 @@ Initialize global AGENTS, project AGENTS, and global skills:
 python scripts/onboard.py init --project-root /path/to/project --yes
 ```
 
-Reset the same targets with backups:
+Reset the same targets:
 
 ```bash
 python scripts/onboard.py reset --project-root /path/to/project --yes
