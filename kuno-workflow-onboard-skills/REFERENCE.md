@@ -58,7 +58,7 @@ The check reports:
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories.
 - Referenced Skill presence for `diagnose`, `tdd`, `grill-me`, `grill-with-docs`, `handoff`, `write-a-skill`, `zoom-out`, `to-prd`, `to-issues`, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
-- A structured `installationReport` containing installed, skipped because already installed, failed or missing, not-checked, and manual-configuration items.
+- A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
 
@@ -93,7 +93,8 @@ Every `check` text output includes an installation report. `install-external-ski
 The report is the user-facing completion summary and must include:
 
 - Installed runtime items, CLI tools, and skills, including version, path, and scope when known.
-- Already-installed runtime items, CLI tools, and skills that should be skipped for installation unless the user requests reinstall, reset, replace, upgrade, or project-local installation.
+- Already-installed runtime items and npm-installed CLI tools that should be skipped for installation unless the user requests reinstall, upgrade, replacement, or project-local installation.
+- Installed skills as detected facts only. Selected bundled and external skills are not skipped because already installed; their existing targets are backed up and overwritten.
 - Failed or missing runtime items, CLI tools, and skills.
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
@@ -115,6 +116,8 @@ When `--project-root` is provided, the operation report must include `project .g
 
 Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring the full template block exists in the target file. Existing project rules are preserved. If the template block already exists, the operation is skipped as already present. In `init`, an existing `.gitignore` does not count as an overwrite conflict because it is updated in place; in `reset`, it is also updated in place rather than backed up and replaced.
 
+AGENTS and skill targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md`, project `AGENTS.md`, bundled skill directory, or external skill directory is present, it is first renamed with the dated backup rule, then the template or cloned skill is copied into the target path.
+
 ## Installation Decisions
 
 When an item is missing, ask the user before installing:
@@ -124,7 +127,7 @@ When an item is missing, ask the user before installing:
 - Install `trellis` globally or project-level?
 - Install `gitnexus` globally or project-level?
 - Install bundled Kuno workflow skills globally or project-level?
-- Install referenced optional skills now, skip them, or leave them for a later task?
+- Install referenced optional skills now, leave them for a later task, or skip them intentionally? If selected, existing skill targets are backed up and overwritten.
 
 Common CLI install commands are surfaced by `check` as suggestions:
 
@@ -242,17 +245,16 @@ python scripts/onboard.py install-external-skills \
   --yes
 ```
 
-For overwrite or reset-style installation, back up existing skill directories first:
+External skills always back up and overwrite existing target directories after user confirmation. The `--replace` flag is accepted for older commands but is no longer required:
 
 ```bash
 python scripts/onboard.py install-external-skills \
   --skills web-ui-autotest-generator \
   --scope global \
-  --replace \
   --yes
 ```
 
-The installer clones each repository into a temporary directory, discovers the matching `SKILL.md` directory by folder name or frontmatter `name`, copies that whole skill directory, and verifies the copied files. Existing targets are skipped unless `--replace` is passed.
+The installer clones each repository into a temporary directory, discovers the matching `SKILL.md` directory by folder name or frontmatter `name`, backs up an existing target directory when present, copies that whole skill directory, and verifies the copied files.
 
 If external skill installation fails, usually continue with AGENTS / bundled skill setup and report the failed external item separately. Common causes are missing `git`, network restrictions, repository access failures, no matching `SKILL.md`, ambiguous `SKILL.md` candidates, or filesystem permissions.
 
@@ -323,9 +325,9 @@ Project skills path:
 
 ## Init vs Reset
 
-`init` is conservative. If any overwrite-style target already exists, it exits without changing files and tells the user to run `reset`. Project `.gitignore` is an update-in-place target, so an existing `.gitignore` does not make `init` fail.
+`init` and `reset` both back up and overwrite existing AGENTS files and bundled skill directories. Project `.gitignore` is an update-in-place target, so an existing `.gitignore` does not get backed up or replaced.
 
-`reset` backs up existing targets before copying:
+Existing overwrite targets are backed up before copying:
 
 - Existing `AGENTS.md` files become `AGENTS.md.yyyy-mm-dd-index`.
 - Existing bundled skill directories become `<skill-name>.yyyy-mm-dd-index`.
