@@ -84,7 +84,7 @@ The `check` command inspects:
 The script detects the current platform and uses these defaults:
 
 - Codex global AGENTS: `$CODEX_HOME/AGENTS.md`, otherwise `~/.codex/AGENTS.md`.
-- Global skills: `$AGENT_SKILLS_DIR`, otherwise `$AGENT_HOME/skills`, otherwise `~/.agent/skills`.
+- Global skills: `$AGENT_SKILLS_DIR`, otherwise platform default `~/.codex/skills` on macOS/Linux or `%USERPROFILE%\.codex\skills` on Windows. Use `--global-skills-dir` for legacy paths such as `~/.agent/skills`.
 - Project AGENTS: `<project-root>/AGENTS.md`.
 - Project skills: `<project-root>/.agent/skills`.
 

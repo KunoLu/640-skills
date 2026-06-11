@@ -146,10 +146,11 @@ def default_global_skills_dir() -> Path:
     skills_dir = os.environ.get("AGENT_SKILLS_DIR")
     if skills_dir:
         return Path(skills_dir).expanduser().resolve()
-    agent_home = os.environ.get("AGENT_HOME")
-    if agent_home:
-        return (Path(agent_home).expanduser() / "skills").resolve()
-    return (Path.home() / ".agent" / "skills").resolve()
+    if platform.system() == "Windows":
+        user_profile = os.environ.get("USERPROFILE")
+        home = Path(user_profile).expanduser() if user_profile else Path.home()
+        return (home / ".codex" / "skills").resolve()
+    return (Path.home() / ".codex" / "skills").resolve()
 
 
 def resolve_project_root(args: argparse.Namespace, required: bool = False) -> Path | None:

@@ -263,8 +263,10 @@ Global skills path:
 
 1. `--global-skills-dir`, if provided.
 2. `$AGENT_SKILLS_DIR`, if set.
-3. `$AGENT_HOME/skills`, if `AGENT_HOME` is set.
-4. `~/.agent/skills`.
+3. macOS / Linux fallback: `~/.codex/skills`.
+4. Windows fallback: `%USERPROFILE%\.codex\skills`.
+
+Legacy paths such as `~/.agent/skills` are not used as automatic fallbacks. Use `--global-skills-dir ~/.agent/skills` or set `$AGENT_SKILLS_DIR` when a local machine intentionally uses that directory.
 
 Project AGENTS path:
 
