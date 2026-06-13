@@ -49,6 +49,8 @@ CLAUDE.md
 
 !.trellis/spec/
 !.trellis/spec/**
+!.trellis/lessons/
+!.trellis/lessons/**
 !.trellis/workflow.md
 !.trellis/workspace/
 !.trellis/workspace/**

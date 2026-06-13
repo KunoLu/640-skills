@@ -15,8 +15,9 @@ description: Use for Trellis workflow tasks, including requirement clarification
 
 1. 检查是否存在 `.trellis/`。
 2. 读取 `.trellis/workflow.md`。
-3. 读取相关 `.trellis/spec`。
-4. 如果存在当前活跃任务，读取：
+3. 读取相关 `.trellis/spec`；其中 `.trellis/spec/lessons.md` 是短入口和高优先级摘要。
+4. 不要默认读取完整 `.trellis/lessons/**`；先通过 `.trellis/lessons/index.md`、tags、错误信息或当前任务主题按需检索，再读取命中的 topic / archive 文件。
+5. 如果存在当前活跃任务，读取：
    - `prd.md`
    - `design.md`，如果存在
    - `implement.md`，如果存在
@@ -106,6 +107,14 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 
 `.trellis/spec` 只保存长期项目规则。
 
+`.trellis/spec/lessons.md` 是 lessons 的必读短入口，不是完整历史库。完整 lesson 默认保存在：
+
+- `.trellis/lessons/index.md`
+- `.trellis/lessons/topics/<topic>.md`
+- `.trellis/lessons/archive/YYYY-QN.md`
+
+不要默认全文读取 `.trellis/lessons/**`；根据当前任务、错误信息、工具名、语言、tags 或 index 的 `read_when` 命中后，再读取对应 topic 或 archive。
+
 不要把以下内容直接写入 `.trellis/spec`：
 
 - 一次性 checklist
@@ -170,6 +179,7 @@ $trellis-check
 - `prd.md`
 - `design.md` / `implement.md`，如果存在
 - `.trellis/spec`
+- `.trellis/spec/lessons.md` 和按需命中的 `.trellis/lessons` topic / archive
 - 实际代码 diff
 - 验证命令结果
 

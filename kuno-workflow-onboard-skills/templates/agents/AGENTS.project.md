@@ -70,7 +70,8 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 
 - 调用 `trellis-workflow` Skill。
 - 读取 `.trellis/workflow.md`。
-- 读取相关 `.trellis/spec`。
+- 读取相关 `.trellis/spec`；其中 `.trellis/spec/lessons.md` 只作为短入口和高优先级摘要。
+- 不要默认读取完整 `.trellis/lessons/**`；先通过 `.trellis/lessons/index.md`、tags、错误信息或当前任务主题按需检索，再读取命中的 topic / archive 文件。
 - 如果存在当前活跃任务，优先读取 `prd.md`、`design.md`、`implement.md`。
 - 不要绕过 `.trellis/workflow.md` 或手动跳过 Trellis phase。
 - 不要把一次性任务计划写入 `.trellis/spec`；长期规范、架构决策、业务规则变化才应沉淀到 `.trellis/spec`。
@@ -165,6 +166,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 按项目策略保留或提交：
 
 - `.trellis/spec/`
+- `.trellis/lessons/`
 - `.trellis/agents/`
 - `.trellis/workflow.md`
 - `.trellis/tasks/<task>/prd.md`
@@ -264,6 +266,13 @@ rtk go test ./...
 
 出现 bug 修复、回滚、工具判断错误、工作流阶段错误、验证失败、GitNexus 影响分析不匹配或 Channel / worker 上下文丢失时，调用 `lessons-record` Skill。
 
-默认记录到 `.trellis/spec/lessons.md`。
+Trellis 项目默认采用分层 lessons 结构：
 
-除非用户明确指定或更深层 `AGENTS.md` 改写，否则不写入 `docs/lessons.md` 或其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
+- `.trellis/spec/lessons.md`：必读短入口，只保存高优先级摘要、读取协议和索引指引。
+- `.trellis/lessons/index.md`：按 `id`、tags、适用场景和详情路径维护索引。
+- `.trellis/lessons/topics/<topic>.md`：保存分主题 lesson 详情。
+- `.trellis/lessons/archive/YYYY-QN.md`：保存低频历史归档，默认不读。
+
+记录 lesson 时，默认写入 `.trellis/lessons/topics/<topic>.md` 并更新 `.trellis/lessons/index.md`；只有跨任务高频、缺失会反复导致错误的摘要才同步到 `.trellis/spec/lessons.md`。不要把完整 lesson 历史长期堆在 `.trellis/spec/lessons.md`。
+
+除非用户明确指定或更深层 `AGENTS.md` 改写，否则不写入其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。

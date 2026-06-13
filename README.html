@@ -1811,7 +1811,7 @@ go vet ./...</code></pre>
 - 根因：
 - 修复：
 - 预防：</code></pre>
-            <p>优先记录到项目可审查位置，例如 <code>.trellis/spec/lessons.md</code>、<code>docs/lessons.md</code> 或 <code>.codex/lessons.md</code>。</p>
+            <p>Trellis 项目使用 <code>.trellis/spec/lessons.md</code> 作为短入口，完整内容进入 <code>.trellis/lessons/index.md</code> 与 topic / archive 文件；非 Trellis 项目可使用 <code>docs/lessons.md</code>。</p>
           </div>
         </div>
         <footer class="footer-note"><span>普通任务总结不等于 lesson。</span><span>Slide 20</span></footer>
@@ -1887,6 +1887,8 @@ CLAUDE.md
 .trellis/*
 !.trellis/spec/
 !.trellis/spec/**
+!.trellis/lessons/
+!.trellis/lessons/**
 !.trellis/workflow.md
 !.trellis/tasks/
 !.trellis/tasks/*/
