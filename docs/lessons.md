@@ -125,3 +125,17 @@
 - 根因：动态导入流程只创建了模块对象并执行 `exec_module()`，但没有模拟正常 import 机制中的 `sys.modules[name] = module` 注册步骤。
 - 修复：在 `spec.loader.exec_module(module)` 前先执行 `sys.modules[name] = module`，重新运行外部 Skill 覆盖安装断言并确认通过。
 - 预防：后续用 `importlib` 在一次性校验中加载带 dataclass、枚举注册、运行时注解或模块级反射的文件时，先注册到 `sys.modules`；如果只验证 CLI 行为，优先通过子进程调用脚本入口，减少动态导入差异。
+
+## Skill Markdown 校验必须允许 frontmatter
+
+- 问题：每日版本检查的结构化 Node 校验脚本要求所有 Markdown 文件必须以 H1 开头，误判带 YAML frontmatter 的 `SKILL.md` 不可读。
+- 根因：验证脚本把普通文档规则套用到 Skill 入口文件，忽略了 Skill 文件标准格式通常先包含 `---` frontmatter，再进入正文标题。
+- 修复：将 Markdown 可读性校验改为同时接受 H1 开头和 YAML frontmatter 开头，并继续检查非空内容与代码围栏配对。
+- 预防：后续校验 `SKILL.md` 时先识别文件类型；对 Skill 入口校验 frontmatter + 正文结构，不要强制套用普通项目文档的 H1 起始规则。
+
+## ENTRYPOINT 详情章节校验不得硬编码行名
+
+- 问题：手动 `update` 后的结构化验证脚本硬编码检查 GitNexus 详情章节必须存在 `当前关注版本` 行，但 `ENTRYPOINT.md` 的 GitNexus 章节并不使用该行名，导致校验脚本误报失败。
+- 根因：校验脚本没有继续沿用“以版本监控表和当前版本汇总表为主数据源”的规则，而是对单个详情章节写了脆弱的文本包含断言。
+- 修复：把验证改回按 Markdown 表格语义解析 `## 0. 版本监控配置`、归档文件区间和 `## 8. 当前版本汇总`，只对确实存在且有稳定结构的字段做断言。
+- 预防：后续验证 `ENTRYPOINT.md` 写回结果时，以章节标题、表头和列名为准；不要为某个工具详情章节硬编码一整行文案或假设所有工具章节都有同名字段。
