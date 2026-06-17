@@ -20,6 +20,8 @@ This Skill installs only these bundled templates:
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
+There are no bundled MCP configuration templates. GitNexus MCP and TestSprite MCP are reported as manual setup checks only.
+
 ## Conversation Flow
 
 Use this sequence when the Skill is invoked:
@@ -62,7 +64,7 @@ The check reports:
 - `gitnexus` CLI availability and version output when available.
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills and bundled book-derived skills.
 - Referenced Skill presence for `diagnose`, `tdd`, `grill-me`, `grill-with-docs`, `handoff`, `write-a-skill`, `zoom-out`, `to-prd`, `to-issues`, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
-- Manual checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
+- Manual setup checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
@@ -104,7 +106,7 @@ The report is the user-facing completion summary and must include:
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
 - Not-checked items, especially CLI tools skipped because npm is not usable yet.
-- Manual configuration items, including GitNexus MCP, TestSprite MCP, and React Bits Pro project skill prerequisites.
+- Manual configuration items, including GitNexus MCP setup, TestSprite MCP setup, and React Bits Pro project skill prerequisites.
 
 Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
 
@@ -281,7 +283,7 @@ If external skill installation fails, usually continue with AGENTS / bundled ski
 
 ## MCP Setup Boundary
 
-MCP items are not installed by `install-external-skills`, `init`, or `reset`. They are checked and reported, then configured with explicit user participation.
+MCP items are not installed by `install-external-skills`, `init`, or `reset`, and this bundle does not include MCP configuration templates. They are checked and reported, then configured with explicit user participation.
 
 For GitNexus MCP:
 

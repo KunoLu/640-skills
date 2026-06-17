@@ -95,23 +95,15 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 
 TestSprite 作为测试计划、UI/E2E、API 集成和回归验证辅助工具使用，不替代项目自己的 lint / test / build、浏览器检查或人工测试评审。
 
-仅当存在以下强证据时，才认为 TestSprite 可用：
+仅当存在强证据时，才认为 TestSprite 可用：
 
 - 当前 MCP 工具列表中存在 TestSprite 相关工具。
 - 当前 IDE / Agent 环境已明确配置 TestSprite MCP server 和 API Key。
 - 项目级 `AGENTS.md` 或测试文档明确说明使用 TestSprite，且当前环境能调用对应 MCP 工具。
 
-使用规则：
+涉及端到端流程、UI/API 集成、测试计划、回归验证、发布前 smoke 或 Trellis 验收时，必须主动判定 TestSprite 状态：`run` / `blocked` / `skipped`。调用会打开外部 UI 的 TestSprite bootstrap / 配置工具前，先准备本次测试范围对应的 PRD、`projectPath`、`localPort`、`type` 和 `testScope`；配置门户、PRD 上传、测试账号、认证方式或服务不可用时，只能输出 `blocked` 和剩余配置项。
 
-- 涉及端到端流程、UI、API 集成、测试计划生成、回归验证、发布前 smoke 或 Trellis 验收时，必须主动判定是否调用 TestSprite，并在最终输出中说明 `run` / `blocked` / `skipped` 及原因。
-- 如果当前环境可调用 TestSprite MCP，且本地服务或测试环境可访问，优先使用 TestSprite 辅助测试计划、E2E/API 集成验证或回归验证；无需 E2E、MCP 不可用或环境未配置时跳过但要说明。
-- 使用前先准备可测试需求：读取现有 PRD / task artifacts / README / API 文档，或整理一份 PRD 草稿、测试范围、登录需求、环境 URL、`projectPath`、`localPort`、`type`、`testScope` 和补充测试说明。
-- 调用会打开外部 UI 的 TestSprite 初始化 / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并在用户可见输出中给出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`；如果没有可上传的 PRD 文件，不要先打开外部 UI。
-- 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、重跑测试或修改测试而重新 bootstrap；直接使用测试计划生成、执行或结果面板相关工具。
-- 当前官方流程中，`testsprite_bootstrap` 会打开 TestSprite Testing Configuration / Configuration Portal；不要把测试配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过的步骤。
-- Codex 可以准备 PRD 文件、测试需求摘要、端口和 MCP 参数；只有用户明确授权浏览器自动化且不涉及敏感真实凭据时，才可以协助在本地页面中填写非敏感配置。真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。
-- 如果 TestSprite 配置门户未完成、登录凭据缺失、PRD 未上传、测试环境不可访问或 MCP 工具不可用，只输出阻塞说明、已准备材料和剩余配置项，不强行声称已完成 TestSprite 测试。
-- TestSprite 产物是否入库按项目策略决定；默认只倾向保留测试计划和 PRD 类产物，具体测试执行代码、报告、截图、trace 和临时结果按团队审查策略处理。
+真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。TestSprite 产物是否入库按项目策略决定。
 
 ## Skills 调用规则
 
@@ -162,11 +154,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
-- `web-ui-autotest-generator`：在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。
-- `web-ui-autotest-generator` 为可选 Skill；如果 Skill 不可用、脚本不可执行，或项目不是 Web UI 场景，直接跳过，不阻塞项目验证。它不替代 TestSprite、项目自己的 lint / test / build、浏览器检查或人工测试评审。
-- 使用 `web-ui-autotest-generator` 时，先复核或生成 `ui-test-manifest.json` 和 `ui-selector-audit.json`，再决定是否生成 Page Object 和大量 spec；清单或选择器不稳定时，先输出覆盖缺口和阻塞说明。
-- 不要写入真实生产账号、密钥或生产数据；只有用户明确同意修改产品代码时，才补充 `data-testid` 等测试选择器。
-- `web-ui-autotest-generator` 产物默认策略：可维护的 `tests/e2e/`、必要 fixture、Page Object、Playwright 配置和 npm scripts 可按项目策略入库；`playwright-report/`、`test-results/`、trace、video、screenshot、HTML report、一次性 `ui-test-repair-plan.json` 默认不入库；`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json` 是否入库按团队审查策略决定。
+- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。具体执行与产物策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
 - `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、TestSprite 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
 - `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
 - `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnose`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。
@@ -174,11 +162,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `book-ddia-data-design`：仅在存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流变更时使用。重点检查 source of truth、一致性模型、幂等、乱序、重试、回放、迁移 / 回滚、观测和修复路径。
 - `book-release-readiness`：仅在生产路径相关的服务、API、任务、队列、外部集成或部署敏感变更后使用，通常位于项目验证后或 `$trellis-check` 阶段。重点检查 timeout、retry、fallback、隔离、backpressure、观测、告警、rollout 和 rollback；不阻塞与当前项目无关的理论风险。
 - `trellis-channel` 可以被项目级规则主动用于高风险代码 review / 验证覆盖 preflight，但 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 spawn worker。
-- `React Bits Pro Skill`：仅在前端 UI 开发任务中作为 React Bits Pro components / blocks / landing page sections 的接入辅助使用。使用前必须先判定项目技术栈：项目应是 React 技术栈，例如 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等；已初始化 shadcn/ui，Node.js 18+ 可用，项目根目录存在 `components.json`。TanStack 的 Vue / Solid / Svelte 等非 React adapter 不满足该前提。
-- 使用 `React Bits Pro Skill` 还必须确认授权和安装证据：`components.json` 已配置 `@reactbits-starter` registry；如需 blocks，再确认 `@reactbits-pro` registry；执行 `shadcn` 或 Agent 的当前环境能读取到 `REACTBITS_LICENSE_KEY` 的值；项目中已安装对应 React Bits Pro Skill，例如由 `npx shadcn@latest add @reactbits-starter/skill` 在项目根目录安装生成的 `SKILL.md`。
-- 如果技术栈、registry 和可读取 `REACTBITS_LICENSE_KEY` 等其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，可以先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill`。只有安装成功、项目中出现 React Bits Pro `SKILL.md`，且当前环境仍能读取 `REACTBITS_LICENSE_KEY` 后，才允许使用该 Skill。
-- 如果任一前提不满足，跳过 `React Bits Pro Skill`，继续使用项目现有组件库、设计系统、`ui-ux-pro-max`、`impeccable` 或普通实现流程。不要因为用户要求前端 UI 就默认安装或调用 React Bits Pro。
-- 使用 `React Bits Pro Skill` 时，先读取项目内已安装的 React Bits Pro `SKILL.md`，再选择 component / block slug 和 Tailwind / CSS 变体。不要读取、输出、提交 license key；不要覆盖既有 `components.json` 字段，只能合并 registry 配置；不要把授权 `SKILL.md` 复制进本配置摘录仓库；不要把 `npx shadcn@latest add @reactbits-starter/skill` 误认为全局安装。
+- `React Bits Pro Skill`：仅在前端 UI 任务明确需要 React Bits Pro，且项目是 React + shadcn/ui、`components.json` 存在、registry / `REACTBITS_LICENSE_KEY` / 项目内 React Bits Pro Skill 均可用时调用。任一前提不满足则跳过并说明原因；不要读取、输出、提交 license key。具体 registry 和安装细节由项目级 `AGENTS.md` 约束。
 - 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
 - `impeccable` 上下文文件必须避免多源冲突：如果项目根目录、`.agents/context/`、`docs/` 中同时存在 `PRODUCT.md` 或 `DESIGN.md`，以项目 `AGENTS.md` 指定路径为准；在读取和写入前先确认实际采用的上下文目录，避免同名文件分散在多个位置。
 - UI/UX Skill 编排：
@@ -295,18 +279,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - GitNexus 影响分析不匹配
 - Channel / worker 上下文丢失
 
-Trellis 项目默认采用分层 lessons 结构：
-
-- `.trellis/spec/lessons.md`：必读短入口，只保存高优先级摘要、读取协议和索引指引。
-- `.trellis/lessons/index.md`：按 `id`、tags、适用场景和详情路径维护索引。
-- `.trellis/lessons/topics/<topic>.md`：保存分主题 lesson 详情。
-- `.trellis/lessons/archive/YYYY-QN.md`：保存低频历史归档，默认不读。
-
-记录 lesson 时，默认写入 `.trellis/lessons/topics/<topic>.md` 并更新 `.trellis/lessons/index.md`；只有跨任务高频、缺失会反复导致错误的摘要才同步到 `.trellis/spec/lessons.md`。不要把完整 lesson 历史长期堆在 `.trellis/spec/lessons.md`。
-
-除非用户明确指定或项目级规则改写，不写入其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
-
-不要在普通任务中滥写 lesson。
+Trellis 项目默认采用 `lessons-record` Skill 定义的分层结构：`.trellis/spec/lessons.md` 只作为短入口，完整内容进入 `.trellis/lessons/index.md`、`topics/` 或按需归档。只有确认项目没有使用 Trellis 时，才默认写入 `docs/lessons.md`。不要在普通任务中滥写 lesson。
 
 ---
 

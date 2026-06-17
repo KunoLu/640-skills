@@ -7,7 +7,7 @@ description: Checks, installs, or resets Kuno Codex workflow tools, AGENTS templ
 
 Use this Skill to onboard a local machine or project to the Kuno Codex workflow templates bundled in this Skill.
 
-The bundled install templates are self-contained under `templates/`, including `templates/project/.gitignore` for project roots. The installer can also install this onboard Skill directory itself as a global or project skill when source and target differ. Do not read or install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target configuration templates.
+The bundled install templates are self-contained under `templates/`, including `templates/project/.gitignore` for project roots. MCP items are manual setup checks only; this Skill does not copy MCP configuration templates. The installer can also install this onboard Skill directory itself as a global or project skill when source and target differ. Do not read or install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target configuration templates.
 
 ## Required Questions
 
@@ -29,7 +29,7 @@ If the user provides a project root, `init` or `reset` also ensures the bundled 
 python scripts/onboard.py check --project-root <project-root>
 ```
 
-Summarize the runtime, CLI tool, bundled skill, referenced skill, and manual MCP / conditional project checks. The output must include the installation report with installed items, already-installed runtime / CLI tools skipped for install, failed or missing items, reasons, and manual configuration steps. If npm is missing, ask for confirmation and run `python scripts/onboard.py ensure-npm --yes` before any CLI tool check or install. Do not proceed to `init` or `reset` until the user confirms install or explicitly chooses to skip missing optional items.
+Summarize the runtime, CLI tool, bundled skill, referenced skill, manual MCP setup checks, and conditional project checks. The output must include the installation report with installed items, already-installed runtime / CLI tools skipped for install, failed or missing items, reasons, and manual configuration steps. If npm is missing, ask for confirmation and run `python scripts/onboard.py ensure-npm --yes` before any CLI tool check or install. Do not proceed to `init` or `reset` until the user confirms install or explicitly chooses to skip missing optional items.
 
 2. Install any user-approved missing tools or skills, then rerun `check`. External referenced skills must be pulled from their configured GitHub repositories only after confirmation. Skills are force-installed: existing bundled or external skill targets are overwritten without backup instead of skipped.
 
@@ -81,7 +81,7 @@ The `check` command inspects:
 - CLI tools: `rtk`, `trellis`, `gitnexus`.
 - Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
 - Referenced skills from the bundled templates, including mattpocock skills, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
-- Manual checks that cannot be fully proven by filesystem inspection, including GitNexus MCP, TestSprite MCP, and React Bits Pro project skill prerequisites.
+- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, TestSprite MCP, and React Bits Pro project skill prerequisites.
 
 ## Target Defaults
 

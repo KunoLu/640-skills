@@ -38,7 +38,7 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 5. 只有决策同时满足“难回滚、缺少背景会令人意外、有真实取舍”时，才建议写 ADR；默认写入 `docs/adr/*.md`，多上下文项目写入 `docs/contexts/<context>/adr/*.md`。
 6. 达成共识后，先输出需求确认摘要，覆盖目标、用户 / 场景、范围内外、术语、约束、验收标准和未决问题。
 7. 输出需求确认摘要、PRD / design / implement review gate 或 `task.py start` 前，必须说明 `grill-with-docs` 使用状态；未完整调用时，说明原因并询问用户是否需要先用该 Skill 再评估一次。
-8.用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
+8. 用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
 9. PRD 确认后，再使用 `to-issues` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
 10. 最后按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
 
@@ -48,11 +48,7 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 
 ### grill-with-docs 使用状态透明度
 
-在 Phase 1 planning、需求确认摘要、PRD / design / implement review gate、或 `task.py start` 前，必须明确说明是否完整调用了 `grill-with-docs`。
-
-- 完整执行逐问题澄清流程时，说明已调用，并简述已解决的关键领域 / 产品边界。
-- 只读取 Skill 文件、只借用 evidence-first 原则、或仅通过代码 / 文档判断时，不得声称已调用；必须说明未完整调用及具体原因。
-- 未完整调用时，在最终确认或进入实现前主动询问用户是否需要先用 `grill-with-docs` 再评估一次。
+在 Phase 1 planning、需求确认摘要、PRD / design / implement review gate、或 `task.py start` 前，按全局规则说明是否完整调用 `grill-with-docs`；未完整调用时说明原因，并询问用户是否需要先用该 Skill 再评估一次。
 
 在需求确认摘要、PRD 或 task artifacts 尚未稳定前，不要执行 `$trellis-before-dev` 或开始实现。
 
@@ -218,33 +214,12 @@ book-derived Skill 的结论优先写入当前 task 的 `prd.md`、`design.md`�
 
 ## 测试工具 Gate
 
-在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果任务涉及 Web UI、API 集成、端到端流程、用户可见 bug 修复、发布前 smoke 或可重复回归验证，必须主动判定 TestSprite 和 `web-ui-autotest-generator` 是否适用。
+在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果任务涉及 Web UI、API 集成、端到端流程、用户可见 bug 修复、发布前 smoke 或可重复回归验证，必须按项目级 `AGENTS.md` 和 `project-validation` Skill 主动判定 TestSprite 与 `web-ui-autotest-generator` 是否适用。
 
-TestSprite 主动判定场景：
+Trellis 阶段只负责以下要求：
 
-- PRD / design / implement / `$trellis-check` 验收标准包含 UI、E2E、API、回归验证或发布前 smoke。
-- 变更影响登录、权限、账号、保存、发布、上传 / 下载、表单、CRUD、跨页面流转或前后端 API contract。
-- 修复用户可见 bug 后需要独立回归验证。
-- GitNexus impact / detect_changes 为 HIGH / CRITICAL，且影响 Web、API 或发布流程。
-
-TestSprite 规则：
-
-- 调用会打开外部 UI 的 TestSprite 初始化 / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并向用户输出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`。
-- 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、修改测试或重跑测试重新 bootstrap。
-- MCP、配置门户、PRD 上传、测试账号、认证方式、测试环境或服务 URL 不可用时，输出 `blocked` 和剩余配置项，不要声称已完成 TestSprite 测试。
-
-`web-ui-autotest-generator` 主动判定场景：
-
-- 关键 Web UI 回归路径需要固化为仓库内可维护测试资产。
-- 项目已有 Playwright / Cypress，需要扩展覆盖。
-- TestSprite、浏览器验证或人工复核发现应进入 CI / 本地 E2E 的覆盖缺口。
-- 用户明确要求 Playwright、E2E suite、Web UI 自动化测试代码或 UI 回归测试。
-
-规则：
-
-- 可以先只做覆盖评估，不必每次生成大量测试。
-- 先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
-- 环境、账号、数据准备、清理策略、业务规则或选择器不稳定时，只输出覆盖缺口和阻塞说明，不强行生成脆弱测试。
+- 不把 TestSprite / Web UI 自动化测试资产当作 `$trellis-check`、项目验证、浏览器检查或人工评审的替代品。
+- MCP、配置门户、PRD 上传、测试账号、认证方式、测试环境或服务 URL 不可用时，记录 `blocked`，不要声称已完成测试。
 - 测试工具结论必须写入当前 task artifacts 或 check summary。
 - Phase 3.4 commit plan 前必须明确 `TestSprite` 与 `Web UI 自动化测试资产` 的状态：`run` / `generated` / `coverage-only` / `blocked` / `skipped` 及原因。
 

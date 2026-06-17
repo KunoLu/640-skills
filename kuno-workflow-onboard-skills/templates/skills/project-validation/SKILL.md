@@ -26,7 +26,7 @@ description: Use after code changes to choose and run validation commands for No
 
 ## Web / E2E 测试工具 Gate
 
-修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程或关键用户路径后，必须主动判定 TestSprite 和 `web-ui-autotest-generator` 是否适用。
+修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程或关键用户路径后，必须按项目级 `AGENTS.md` 主动判定 TestSprite 和 `web-ui-autotest-generator` 是否适用。
 
 TestSprite 适用于：
 
@@ -38,7 +38,7 @@ TestSprite 适用于：
 TestSprite 规则：
 
 - 先确认 TestSprite MCP 是否可调用、服务 URL / `localPort` 是否可访问、`projectPath`、`type`、`testScope` 是否明确。
-- 调用会打开外部 UI 的初始化 / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并向用户输出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`。
+- 调用会打开外部 UI 的 bootstrap / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并向用户输出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`。
 - 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、修改测试或重跑测试重新 bootstrap。
 - 配置门户、PRD 上传、测试账号、认证方式或测试环境缺失时，输出 `blocked` 和剩余配置项，不要声称已完成 TestSprite 测试。
 

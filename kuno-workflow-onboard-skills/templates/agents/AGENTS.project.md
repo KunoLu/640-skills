@@ -20,7 +20,7 @@
 UI/UX 任务编排：
 
 - 涉及 UI、交互、布局、视觉、组件体验或前端可用性时，初稿计划默认先使用 `ui-ux-pro-max`，明确产品类型、目标用户、信息架构、交互模型、响应式策略、可访问性基线和项目设计系统约束。
-- 需要接入 React Bits Pro components、blocks 或 landing page sections 时，只有在项目为 React 技术栈（包括 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等）、已初始化 shadcn/ui、registry 已配置、当前环境能读取 `REACTBITS_LICENSE_KEY`，并且项目环境已安装对应 React Bits Pro Skill 的前提下，才使用 React Bits Pro Skill。
+- 需要接入 React Bits Pro components、blocks 或 landing page sections 时，按下节前提判定；任一前提不满足则跳过并说明原因。
 - `impeccable shape` / `impeccable craft` 只在新视觉方向、高保真页面、大幅改版、品牌 / 营销强视觉页面、方向不清或用户明确要求时前置使用；其 brief 必须经用户确认后再进入实现。
 - 常规 UI 实现完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，再使用 `audit` / `critique` / `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做打磨。
 - 如果 UI/UX 任务进入 Trellis，任务级设计结论写入 `prd.md`、`design.md` 或 `implement.md`；长期设计系统规则才写入 `docs/DESIGN.md` 或 `.trellis/spec`。
@@ -266,10 +266,10 @@ TestSprite 用于测试计划、UI/E2E、API 集成和回归验证辅助，不�
 
 使用规则：
 
-- 使用前先读取项目 PRD、Trellis task artifacts、README、API 文档和现有测试；必要时先整理 PRD 草稿、测试范围、登录需求、环境 URL、测试账号需求和补充执行说明。
-- 调用会打开外部 UI 的 TestSprite 初始化 / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并在用户可见输出中给出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`；如果没有可上传的 PRD 文件，不要先打开外部 UI。
+- 使用前先读取项目 PRD、Trellis task artifacts、README、API 文档和现有测试；必要时整理 PRD 草稿、测试范围、登录需求、环境 URL、测试账号需求和补充执行说明。
+- 调用会打开外部 UI 的 TestSprite bootstrap / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并在用户可见输出中给出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`；如果没有可上传的 PRD 文件，不要先打开外部 UI。
 - 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、修改测试或重跑测试重新 bootstrap；直接使用测试计划生成、执行或结果面板相关工具。
-- 当前官方流程中，`testsprite_bootstrap` 会打开 Testing Configuration / Configuration Portal。不要把配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过。
+- TestSprite bootstrap 通常会打开 Testing Configuration / Configuration Portal。不要把配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过。
 - Codex 可以准备 PRD 文件、测试需求摘要、端口、MCP 参数和 `additionalInstruction`；配置门户中的测试类型 / 范围、应用 URL、PRD 上传、测试账号或认证方式仍需按 TestSprite 页面完成。
 - 只有用户明确授权浏览器自动化且不涉及敏感真实凭据时，才可协助填写本地配置页面中的非敏感信息。真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。
 - 如果 TestSprite MCP 不可用、配置门户未完成、登录凭据缺失、PRD 未上传或测试环境不可访问，只输出阻塞说明、已准备材料和剩余配置项，不强行声称已完成 TestSprite 测试。
@@ -294,7 +294,7 @@ TestSprite 用于测试计划、UI/E2E、API 集成和回归验证辅助，不�
 使用规则：
 
 - 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定；不要因为默认模板存在就切换测试框架。
-- 可以先只做覆盖评估，不必每次生成大量测试；先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec；清单错误时先修清单。
+- 可以先只做覆盖评估，不必每次生成大量测试；先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
 - 没有稳定测试账号、测试环境、数据准备、清理策略或业务规则时，只输出阻塞说明和覆盖缺口，不强行生成脆弱测试。
 - 不写入真实生产账号、密钥、PII 或生产数据。需要测试账号和环境变量时，只写占位说明。
 - 只有用户明确同意修改产品代码时，才补充 `data-testid`、`data-cy` 或可访问名称等测试选择器。
@@ -341,13 +341,4 @@ rtk go test ./...
 
 出现 bug 修复、回滚、工具判断错误、工作流阶段错误、验证失败、GitNexus 影响分析不匹配或 Channel / worker 上下文丢失时，调用 `lessons-record` Skill。
 
-Trellis 项目默认采用分层 lessons 结构：
-
-- `.trellis/spec/lessons.md`：必读短入口，只保存高优先级摘要、读取协议和索引指引。
-- `.trellis/lessons/index.md`：按 `id`、tags、适用场景和详情路径维护索引。
-- `.trellis/lessons/topics/<topic>.md`：保存分主题 lesson 详情。
-- `.trellis/lessons/archive/YYYY-QN.md`：保存低频历史归档，默认不读。
-
-记录 lesson 时，默认写入 `.trellis/lessons/topics/<topic>.md` 并更新 `.trellis/lessons/index.md`；只有跨任务高频、缺失会反复导致错误的摘要才同步到 `.trellis/spec/lessons.md`。不要把完整 lesson 历史长期堆在 `.trellis/spec/lessons.md`。
-
-除非用户明确指定或更深层 `AGENTS.md` 改写，否则不写入其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
+Trellis 项目默认采用 `lessons-record` Skill 定义的分层结构：`.trellis/spec/lessons.md` 只保存短入口和高优先级摘要，完整 lesson 写入 `.trellis/lessons/index.md`、`topics/` 或按需归档。只有确认项目没有使用 Trellis 时，才默认写入 `docs/lessons.md`。
