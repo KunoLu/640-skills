@@ -187,6 +187,80 @@ $trellis-check
 
 ---
 
+## Book-derived Skill Gate
+
+在需求、设计、实现和验证阶段，必须按当前任务主风险主动判定 bundled book-derived skills 是否适用。它们是专项审查视角，不替代 `.trellis/workflow.md`、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目验证、TestSprite 或人工判断。
+
+不要把 5 个 book-derived Skill 当作固定 checklist 全量调用；优先选择当前主风险对应的 1-2 个。
+
+阶段编排：
+
+- 需求 / PRD 阶段：业务术语、领域规则、bounded context 或模型边界不清时，先用 `grill-with-docs` 读取项目事实并澄清，再用 `book-ddd-distilled-modeling` 固化任务级语言，最后进入 `to-prd` / `to-issues`。
+- 设计阶段：存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流发生变化时，在 `design.md` / `implement.md` 稳定前使用 `book-ddia-data-design`。
+- 开发前 / 开发中：既有结构阻碍当前修改、行为变更与结构整理可能混杂时，使用 `book-refactoring-pass` 规划行为保持型小步重构。
+- 遗留代码修复：测试不足、行为不清、隐藏依赖或回归风险高时，在修改前使用 `book-legacy-change-safety`，并优先补 characterization test 或等价安全网。
+- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后、测试工具 gate / Channel preflight 前使用 `book-release-readiness`。
+
+book-derived Skill 的结论优先写入当前 task 的 `prd.md`、`design.md`、`implement.md` 或 check summary。只有长期架构、API、数据模型、权限、业务规则或技术约定才进入 `.trellis/spec`。
+
+---
+
+## 测试工具 Gate
+
+在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果任务涉及 Web UI、API 集成、端到端流程、用户可见 bug 修复、发布前 smoke 或可重复回归验证，必须主动判定 TestSprite 和 `web-ui-autotest-generator` 是否适用。
+
+TestSprite 主动判定场景：
+
+- PRD / design / implement / `$trellis-check` 验收标准包含 UI、E2E、API、回归验证或发布前 smoke。
+- 变更影响登录、权限、账号、保存、发布、上传 / 下载、表单、CRUD、跨页面流转或前后端 API contract。
+- 修复用户可见 bug 后需要独立回归验证。
+- GitNexus impact / detect_changes 为 HIGH / CRITICAL，且影响 Web、API 或发布流程。
+
+TestSprite 规则：
+
+- 调用会打开外部 UI 的 TestSprite 初始化 / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并向用户输出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`。
+- 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、修改测试或重跑测试重新 bootstrap。
+- MCP、配置门户、PRD 上传、测试账号、认证方式、测试环境或服务 URL 不可用时，输出 `blocked` 和剩余配置项，不要声称已完成 TestSprite 测试。
+
+`web-ui-autotest-generator` 主动判定场景：
+
+- 关键 Web UI 回归路径需要固化为仓库内可维护测试资产。
+- 项目已有 Playwright / Cypress，需要扩展覆盖。
+- TestSprite、浏览器验证或人工复核发现应进入 CI / 本地 E2E 的覆盖缺口。
+- 用户明确要求 Playwright、E2E suite、Web UI 自动化测试代码或 UI 回归测试。
+
+规则：
+
+- 可以先只做覆盖评估，不必每次生成大量测试。
+- 先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
+- 环境、账号、数据准备、清理策略、业务规则或选择器不稳定时，只输出覆盖缺口和阻塞说明，不强行生成脆弱测试。
+- 测试工具结论必须写入当前 task artifacts 或 check summary。
+- Phase 3.4 commit plan 前必须明确 `TestSprite` 与 `Web UI 自动化测试资产` 的状态：`run` / `generated` / `coverage-only` / `blocked` / `skipped` 及原因。
+
+---
+
+## 可选 Channel Review Gate
+
+在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果用户明确要求代码 review、测试验证审查、并行评审或交叉验证，或当前任务满足高风险 review / validation 条件，可以调用 `trellis-channel` Skill 做 Channel preflight。
+
+高风险 review / validation 条件包括：
+
+- GitNexus impact / detect_changes 返回 HIGH 或 CRITICAL
+- 验证失败后经过修复，需要独立复核失败原因和覆盖范围
+- 变更跨越前端、后端、数据库、部署、测试资产、外部服务或发布流程
+- PRD / design / implement 与实际 diff、验证结果或回滚策略需要独立一致性检查
+- 多个验收标准、浏览器状态、E2E、API、Docker、Vercel 或 TestSprite 结果需要覆盖率审查
+
+规则：
+
+- 调用 `trellis-channel` Skill 做 preflight 不等于启动 Channel runtime。
+- 除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得 spawn worker。
+- Channel review / validation 不替代 `$trellis-check`、项目验证命令、GitNexus、TestSprite、浏览器检查或人工最终判断。
+- 如果 Channel 发现必须修改代码，主会话应用已接受的修改后，必须重新运行聚焦验证和必要的 `$trellis-check`。
+- Channel 有效结论必须写回当前 task artifacts；只有长期规则才写入 `.trellis/spec` 或 `.trellis/lessons`。
+
+---
+
 ## 完成任务
 
 运行：

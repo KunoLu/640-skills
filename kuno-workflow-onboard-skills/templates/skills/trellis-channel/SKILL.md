@@ -1,13 +1,15 @@
 ---
 name: trellis-channel
-description: Use only when the user explicitly requests Trellis Channel, multi-agent, multi-model, worker, forum, thread, or parallel review collaboration. Do not use for normal single-agent Trellis work.
+description: Use when the user requests Trellis Channel, multi-agent, worker, forum, parallel review, cross-validation, or when project rules require high-risk code review / validation preflight. Do not spawn workers unless the user has requested or confirmed Channel runtime.
 ---
 
 # Trellis Channel Skill
 
-仅当用户明确要求多 Agent、多模型、worker、forum、thread、并行评审，或外部 orchestrator 协作时，使用本 Skill。
+当用户明确要求多 Agent、多模型、worker、forum、thread、并行评审、交叉验证、外部 orchestrator 协作，或项目级规则要求高风险代码 review / 验证 preflight 时，使用本 Skill。
 
 `trellis channel` 是显式协作运行时，不是普通 Trellis 工作流的默认入口。
+
+调用本 Skill 做 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 `spawn` worker。
 
 ---
 
@@ -18,6 +20,7 @@ description: Use only when the user explicitly requests Trellis Channel, multi-a
 - 大任务拆分优先使用 parent / child task trees。
 - 不要因为任务大、文件多、跨模块或复杂，就自动启用 Channel。
 - 不要因为任务复杂就切换到 `channel-driven-subagent-dispatch` workflow。
+- 代码 review / 验证审查可以主动触发 Channel preflight；真正启动 runtime 仍需要用户明确要求或确认。
 
 ---
 
@@ -34,12 +37,24 @@ description: Use only when the user explicitly requests Trellis Channel, multi-a
 - 仅因为文件较多
 - 仅因为任务需要 `prd.md` / `design.md` / `implement.md`
 - 仅因为任务需要 parent / child task
+- 只是运行 lint / test / build / browser check
+- 没有 active Trellis task、没有明确 diff、没有可审查 task artifacts
+- 低风险单文件改动，且项目验证命令已经覆盖
 
 ---
 
-## 可以使用 Channel 的场景
+## 可以主动 Preflight 的场景
 
-仅当用户明确要求以下场景时，才使用 Channel：
+以下场景可以主动调用本 Skill 做 preflight：
+
+- 用户要求 code review、提交前 review、测试验证审查、验证覆盖检查、并行评审、交叉验证或多个 reviewer 视角
+- `$trellis-check` 或项目验证后仍存在高风险验证缺口
+- GitNexus impact / detect_changes 返回 HIGH 或 CRITICAL
+- 变更跨越前端、后端、数据库、部署、测试资产、外部服务或发布流程
+- 验证失败后经过修复，需要独立复核失败原因、覆盖范围和剩余风险
+- Trellis PRD / design / implement 与实际 diff、验证结果或回滚策略需要独立一致性检查
+
+如果用户已明确要求以下协作形态，可以在 preflight 后继续使用 Channel runtime：
 
 - 多 Agent 协作
 - 多模型对比
@@ -56,12 +71,38 @@ description: Use only when the user explicitly requests Trellis Channel, multi-a
 
 ---
 
+## Preflight 输出
+
+启动 Channel runtime 前，必须先输出 preflight：
+
+- Active task
+- Channel goal
+- Trigger reason
+- Why Channel instead of inline / parent-child task
+- Review / validation target
+- Proposed worker roles
+- Read-only workers
+- Writer worker, if any
+- Validation controller, if any
+- Allowed file areas
+- Forbidden actions
+- Required inputs
+- Expected outputs
+- Writeback target
+- Stop condition
+- Cleanup plan
+
+如果用户未明确要求 Channel runtime，preflight 之后必须询问是否启用，不得直接 spawn worker。
+
+---
+
 ## 基本规则
 
 - Channel 不替代 `.trellis/workflow.md`。
 - Channel 不替代 `$trellis-before-dev`。
 - Channel 不替代 `$trellis-check`。
 - Channel 不替代 `$trellis-finish-work`。
+- Channel 不替代项目验证命令、GitNexus、TestSprite、浏览器检查或人工最终判断。
 - Channel 结论不会自动成为 `.trellis/spec`。
 - Channel runtime / events / forum / thread 记录默认属于本地协作日志。
 - Channel 运行时文件默认不要提交到远程仓库。
@@ -74,6 +115,63 @@ description: Use only when the user explicitly requests Trellis Channel, multi-a
 - `.trellis/tasks/<task>/design.md`
 - `.trellis/tasks/<task>/implement.md`
 - `.trellis/spec`，仅当结论属于长期项目规范时
+
+## Review / Validation Runbook
+
+Review Channel 默认只读。适合的 worker 角色包括：
+
+- `architecture-reviewer`
+- `test-coverage-reviewer`
+- `ui-ux-reviewer`
+- `api-data-contract-reviewer`
+- `release-risk-reviewer`
+
+Validation Channel 用于验证计划、覆盖率审查和独立复核，不替代主会话运行项目验证。
+
+规则：
+
+- 主会话负责最终运行或确认验证命令。
+- worker 可以建议命令、审查日志、复核截图、检查报告和指出验证缺口。
+- 同一 checkout 不要并行运行会互相影响的验证命令。
+- Docker、数据库迁移、浏览器 E2E、Vercel deploy 等环境敏感验证应由主会话串行控制。
+- 如果 worker 指出必须修改代码，回到主会话确认后再由唯一 writer 执行。
+
+## Ownership Rules
+
+- Review / validation worker 默认只读。
+- 同一 checkout 同一时间只允许一个 writer worker。
+- 同一验证环境同一时间只允许一个 validation controller。
+- 多个 worker 需要改代码时，优先拆 parent / child tasks 或使用独立 worktree。
+- worker 不得 stage、commit、archive、finish-work、push、deploy，除非用户明确授权且该 worker 是唯一 writer / controller。
+- worker 输出互相冲突时，由主会话裁决并写明采用 / 拒绝理由。
+
+## Worker Prompt Envelope
+
+发送给 worker 的 prompt 必须包含：
+
+- Active task path
+- Current phase
+- Relevant `AGENTS.md` hierarchy
+- Relevant `prd.md` / `design.md` / `implement.md`
+- Relevant `.trellis/spec` 和按需命中的 lessons
+- Role and scope
+- Forbidden actions
+- Output schema
+
+## Worker Output Schema
+
+每个 review / validation worker 必须按以下格式输出：
+
+- Verdict: `pass` / `concerns` / `block`
+- Scope reviewed
+- Evidence
+- Findings
+- Required changes
+- Optional suggestions
+- Validation gaps
+- Files referenced
+- Confidence
+- Should write back to
 
 ## Worker Guard
 

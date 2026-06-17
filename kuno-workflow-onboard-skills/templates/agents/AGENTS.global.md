@@ -103,9 +103,12 @@ TestSprite 作为测试计划、UI/E2E、API 集成和回归验证辅助工具�
 
 使用规则：
 
-- 涉及端到端流程、UI、API 集成、测试计划生成或回归验证时，可以调用 TestSprite；无需 E2E 或 MCP / 环境未配置时跳过。
+- 涉及端到端流程、UI、API 集成、测试计划生成、回归验证、发布前 smoke 或 Trellis 验收时，必须主动判定是否调用 TestSprite，并在最终输出中说明 `run` / `blocked` / `skipped` 及原因。
+- 如果当前环境可调用 TestSprite MCP，且本地服务或测试环境可访问，优先使用 TestSprite 辅助测试计划、E2E/API 集成验证或回归验证；无需 E2E、MCP 不可用或环境未配置时跳过但要说明。
 - 使用前先准备可测试需求：读取现有 PRD / task artifacts / README / API 文档，或整理一份 PRD 草稿、测试范围、登录需求、环境 URL、`projectPath`、`localPort`、`type`、`testScope` 和补充测试说明。
-- 当前官方流程中，`testsprite_bootstrap_tests` 会打开 TestSprite Testing Configuration / Configuration Portal；不要把测试配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过的步骤。
+- 调用会打开外部 UI 的 TestSprite 初始化 / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并在用户可见输出中给出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`；如果没有可上传的 PRD 文件，不要先打开外部 UI。
+- 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、重跑测试或修改测试而重新 bootstrap；直接使用测试计划生成、执行或结果面板相关工具。
+- 当前官方流程中，`testsprite_bootstrap` 会打开 TestSprite Testing Configuration / Configuration Portal；不要把测试配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过的步骤。
 - Codex 可以准备 PRD 文件、测试需求摘要、端口和 MCP 参数；只有用户明确授权浏览器自动化且不涉及敏感真实凭据时，才可以协助在本地页面中填写非敏感配置。真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。
 - 如果 TestSprite 配置门户未完成、登录凭据缺失、PRD 未上传、测试环境不可访问或 MCP 工具不可用，只输出阻塞说明、已准备材料和剩余配置项，不强行声称已完成 TestSprite 测试。
 - TestSprite 产物是否入库按项目策略决定；默认只倾向保留测试计划和 PRD 类产物，具体测试执行代码、报告、截图、trace 和临时结果按团队审查策略处理。
@@ -132,9 +135,14 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | Skill | 使用场景 | 调用时机 |
 |---|---|---|
 | `trellis-workflow` | Trellis 生命周期、任务产物、阶段检查 | 发现项目使用 Trellis 后 |
-| `trellis-channel` | Trellis Channel / 多 Agent / 多模型协作 | 用户明确要求 Channel、worker、forum、thread、并行评审时 |
+| `trellis-channel` | Trellis Channel / 多 Agent / 多模型协作、代码 review / 验证 preflight | 用户明确要求 Channel、worker、forum、thread、并行评审，或项目级高风险 review / validation gate 需要 Channel preflight 时 |
 | `project-validation` | 判断代码修改后的验证策略 | 修改代码后、执行验证前 |
 | `lessons-record` | 记录长期经验教训 | bug 修复、回滚、工具误判、验证失败、上下文丢失后 |
+| `book-refactoring-pass` | 行为保持型重构检查 | 修改既有代码且结构阻碍当前实现、清理与行为变更可能混杂时 |
+| `book-legacy-change-safety` | 遗留 / 弱测试代码安全修改 | 目标代码行为不清、测试不足、依赖隐藏或回归风险高时 |
+| `book-ddd-distilled-modeling` | 轻量领域建模、统一语言和 bounded context 判断 | 需求涉及业务术语、领域规则、上下文边界或模型歧义，进入 PRD / design 前 |
+| `book-ddia-data-design` | 数据密集型设计风险检查 | 修改存储、事件、队列、缓存、迁移、数据所有权或跨服务数据流时 |
+| `book-release-readiness` | 生产就绪与发布风险检查 | 服务、API、任务、队列、外部集成或部署敏感路径实现后 / check 阶段 |
 | `diagnose` | 诊断 bug、测试失败、运行时错误、性能回归、日志异常、线上问题或数据不一致 | 问题根因不清或需要系统化排障时 |
 | `tdd` | 测试先行、回归测试、复杂逻辑验证、高风险修改 | 需要用测试固化行为再实现时 |
 | `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 用户希望先打磨计划、决策或设计时 |
@@ -146,7 +154,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
 | `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确初稿方向后按条件前置 `shape` / `craft`，或实现后的 `audit` / `critique` / `polish` 阶段；仅在 Skill 可用且上下文可用时 |
-| `web-ui-autotest-generator` | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 | 用户明确要求生成 Web UI 自动化测试、Playwright / E2E suite，或需要把关键 Web UI 回归路径固化到项目仓库时 |
+| `web-ui-autotest-generator` | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 | 用户明确要求生成 Web UI 自动化测试，或测试阶段发现关键 Web UI 回归路径需要固化为仓库内可维护测试资产时 |
 | `React Bits Pro Skill` | React / shadcn UI 项目中接入 React Bits Pro components、blocks 或 landing page sections | 前端 UI 开发任务明确需要 React Bits Pro，且技术栈、registry、项目内 Skill 和可读取 license key 条件均满足时 |
 
 ### 自定义 Skills 使用边界
@@ -154,10 +162,18 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
-- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成或审计可入库测试资产时调用。优先沿用项目已有 Playwright / Cypress / 测试目录和 CI 约定；没有稳定测试环境、账号、数据准备或业务规则时，只生成清单、缺口和阻塞说明，不强行生成脆弱测试。
+- `web-ui-autotest-generator`：在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。
 - `web-ui-autotest-generator` 为可选 Skill；如果 Skill 不可用、脚本不可执行，或项目不是 Web UI 场景，直接跳过，不阻塞项目验证。它不替代 TestSprite、项目自己的 lint / test / build、浏览器检查或人工测试评审。
-- 使用 `web-ui-autotest-generator` 时，先复核 `ui-test-manifest.json` 和选择器审计结果，再生成大量测试。不要写入真实生产账号、密钥或生产数据；只有用户明确同意修改产品代码时，才补充 `data-testid` 等测试选择器。
-- `web-ui-autotest-generator` 产物默认策略：可维护的 `tests/e2e/`、必要 fixture、Page Object、Playwright 配置和 npm scripts 可按项目策略入库；Playwright HTML report、trace、video、screenshot、一次性 failure repair plan 默认不入库；`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json` 是否入库按团队审查策略决定。
+- 使用 `web-ui-autotest-generator` 时，先复核或生成 `ui-test-manifest.json` 和 `ui-selector-audit.json`，再决定是否生成 Page Object 和大量 spec；清单或选择器不稳定时，先输出覆盖缺口和阻塞说明。
+- 不要写入真实生产账号、密钥或生产数据；只有用户明确同意修改产品代码时，才补充 `data-testid` 等测试选择器。
+- `web-ui-autotest-generator` 产物默认策略：可维护的 `tests/e2e/`、必要 fixture、Page Object、Playwright 配置和 npm scripts 可按项目策略入库；`playwright-report/`、`test-results/`、trace、video、screenshot、HTML report、一次性 `ui-test-repair-plan.json` 默认不入库；`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json` 是否入库按团队审查策略决定。
+- `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、TestSprite 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
+- `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
+- `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnose`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。
+- `book-ddd-distilled-modeling`：仅在需求涉及业务术语、领域规则、bounded context、上下文边界或模型歧义时使用，通常位于 `grill-with-docs` 之后、`to-prd` / `design.md` 之前。不要把一次性领域推断直接写入长期 context 或 `.trellis/spec`。
+- `book-ddia-data-design`：仅在存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流变更时使用。重点检查 source of truth、一致性模型、幂等、乱序、重试、回放、迁移 / 回滚、观测和修复路径。
+- `book-release-readiness`：仅在生产路径相关的服务、API、任务、队列、外部集成或部署敏感变更后使用，通常位于项目验证后或 `$trellis-check` 阶段。重点检查 timeout、retry、fallback、隔离、backpressure、观测、告警、rollout 和 rollback；不阻塞与当前项目无关的理论风险。
+- `trellis-channel` 可以被项目级规则主动用于高风险代码 review / 验证覆盖 preflight，但 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 spawn worker。
 - `React Bits Pro Skill`：仅在前端 UI 开发任务中作为 React Bits Pro components / blocks / landing page sections 的接入辅助使用。使用前必须先判定项目技术栈：项目应是 React 技术栈，例如 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等；已初始化 shadcn/ui，Node.js 18+ 可用，项目根目录存在 `components.json`。TanStack 的 Vue / Solid / Svelte 等非 React adapter 不满足该前提。
 - 使用 `React Bits Pro Skill` 还必须确认授权和安装证据：`components.json` 已配置 `@reactbits-starter` registry；如需 blocks，再确认 `@reactbits-pro` registry；执行 `shadcn` 或 Agent 的当前环境能读取到 `REACTBITS_LICENSE_KEY` 的值；项目中已安装对应 React Bits Pro Skill，例如由 `npx shadcn@latest add @reactbits-starter/skill` 在项目根目录安装生成的 `SKILL.md`。
 - 如果技术栈、registry 和可读取 `REACTBITS_LICENSE_KEY` 等其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，可以先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill`。只有安装成功、项目中出现 React Bits Pro `SKILL.md`，且当前环境仍能读取 `REACTBITS_LICENSE_KEY` 后，才允许使用该 Skill。
