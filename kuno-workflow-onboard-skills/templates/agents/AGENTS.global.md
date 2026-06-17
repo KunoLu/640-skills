@@ -77,6 +77,11 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 修改代码后，优先通过 GitNexus MCP 执行变更检测。
 - GitNexus 只作为影响分析和变更验证辅助，不替代 Trellis 任务产物、测试或代码评审。
 - 如果项目存在 `.gitnexusrc` 或需要指定默认分支，遵循项目配置；必要时使用 `gitnexus analyze --default-branch <branch>` 重新分析。
+- 当 `gitnexus status`、MCP `list_repos` / `context` / `detect_changes` 或其他 GitNexus 输出提示索引 stale、`commitsBehind > 0`、或“索引落后 HEAD ... 个 commit”时，不要直接依赖过期结果；先按命令执行规则尝试在项目根刷新索引。
+- 刷新索引时优先使用项目约定命令或本地 runner，例如存在 `.gitnexus/run.cjs` 时使用 `node .gitnexus/run.cjs analyze`；否则使用项目文档要求的 `gitnexus analyze` / `npx gitnexus analyze`。如果项目指定默认分支或 `.gitnexusrc`，必须带上相应配置。
+- 如果 `analyze` 因沙箱、网络、native crash、索引损坏、耗时限制或权限问题失败，必须在最终输出中说明尝试的命令、失败原因、GitNexus 结果只能作为 advisory，以及实际用哪些 diff / 测试 / 构建 / 运行时检查替代。
+- 如果 `analyze` 成功但 MCP 仍报告 stale，按 MCP 缓存或会话未刷新处理；重新检查 CLI status，必要时说明需要重启 / reload MCP 或新会话后再依赖 MCP 结果。
+- 不要默认假设 GitNexus hook 会自动刷新索引；除非项目文档或用户明确要求并接受 commit / merge 被阻塞和索引写入风险，否则不要新增自动运行 `gitnexus analyze` 的 Git hook。
 - 当影响分析结果存在同名符号、跨文件歧义或输出过大时，优先使用 GitNexus 提供的 `uid` / `file` / `kind` 约束和分页 / summary-only 能力缩小范围。
 - 通过 GitNexus MCP 枚举已索引仓库时，`list_repos` 可能返回分页对象；使用 `limit` / `offset` 翻页直到 `pagination.hasMore` 为 false，不要把单页结果当作完整仓库列表。
 - 对跨服务 API、HTTP route / consumer、gRPC 或前后端调用链的结论，必须回到实际路由、客户端调用和 diff 交叉核对。
