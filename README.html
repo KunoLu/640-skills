@@ -1876,24 +1876,110 @@ venv/
 .mypy_cache/
 .ty_cache/
 
+# ========================
 # AI / Agent / LLM tooling
+# ========================
+
+# ---------- Claude ----------
 .claude/
 CLAUDE.md
+
+# ---------- Codex ----------
 .codex/cache/
 .codex/tmp/
 .codex/logs/
 .codex/sessions/
 .codex/state/
 .codex/hooks/*.local.*
+
+# ---------- OMX ----------
 .omx/
-.planning/</code></pre>
+
+# ---------- GSD ----------
+.planning/
+
+# ---------- Trellis ----------
+.trellis/*
+
+!.trellis/agents/
+!.trellis/agents/**
+
+!.trellis/spec/
+!.trellis/spec/**
+!.trellis/lessons/
+!.trellis/lessons/**
+!.trellis/workflow.md
+!.trellis/workspace/
+!.trellis/workspace/**
+
+!.trellis/tasks/
+!.trellis/tasks/*/
+# 需要提交归档任务、journal 或 check/implement 记录，则先注释上一行的规则，再使用下面这行规则：
+# !.trellis/tasks/**
+
+# 不需要提交归档任务、journal 或 check/implement 记录，则直接使用：
+!.trellis/tasks/*/prd.md
+!.trellis/tasks/*/design.md
+!.trellis/tasks/*/implement.md
+
+.trellis/.backup-*
+.trellis/worktrees/
+.trellis/.runtime/
+.trellis/.cache/
+.trellis/channels/
+.trellis/.template-hashes.json
+
+# ---------- Impeccable ----------
+.impeccable/live/server.json
+.impeccable/live/sessions/
+.impeccable/live/annotations/
+.impeccable/critique/
+
+# ---------- GitNexus ----------
+.gitnexus/
+
+# ---------- Testing -----------
+# TestSprite generated artifacts
+testsprite_tests/**
+!testsprite_tests/
+!testsprite_tests/**/*_test_plan.json
+!testsprite_tests/**/*_prd.json
+# !testsprite_tests/**/TC*
+
+# TestSprite project/runtime artifacts
+.testsprite/cache/
+.testsprite/tmp/
+.testsprite/runs/
+.testsprite/results/
+.testsprite/reports/
+# .testsprite/config.json
+
+# Playwright runtime artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+blob-report/
+
+# Web UI generated run artifacts
+ui-test-repair-plan.json
+tests/e2e/reports/results.json
+tests/e2e/reports/junit.xml
+tests/e2e/reports/html/
+tests/e2e/**/screenshots/
+tests/e2e/**/videos/
+tests/e2e/**/traces/
+tests/e2e/**/*.trace.zip
+
+# ---------- AI Tools ----------
+.agents/
+.worktrees/</code></pre>
           <div class="mini-panel">
             <h3>说明</h3>
             <ul>
               <li>临时目录、日志、系统文件通常不提交。</li>
               <li>构建目录和依赖目录按技术栈取舍。</li>
               <li>Python cache 和虚拟环境应默认忽略。</li>
-              <li>Claude / Codex / OMX / GSD 本地状态一般不进入远程仓库。</li>
+              <li>Agent runtime、Trellis 临时目录、测试报告和本地索引一般不进入远程仓库。</li>
             </ul>
             <div class="callout">不要把参考配置机械复制到所有项目。先确认项目是否需要提交某些生成物或本地工具配置。</div>
           </div>
@@ -1915,8 +2001,14 @@ CLAUDE.md
 !.trellis/lessons/
 !.trellis/lessons/**
 !.trellis/workflow.md
+!.trellis/workspace/
+!.trellis/workspace/**
 !.trellis/tasks/
 !.trellis/tasks/*/
+# 需要提交归档任务、journal 或 check/implement 记录，则先注释上一行的规则，再使用下面这行规则：
+# !.trellis/tasks/**
+
+# 不需要提交归档任务、journal 或 check/implement 记录，则直接使用：
 !.trellis/tasks/*/prd.md
 !.trellis/tasks/*/design.md
 !.trellis/tasks/*/implement.md
@@ -1942,18 +2034,33 @@ testsprite_tests/**
 !testsprite_tests/**/*_test_plan.json
 !testsprite_tests/**/*_prd.json
 # !testsprite_tests/**/TC*
+
+# TestSprite project/runtime artifacts
+.testsprite/cache/
+.testsprite/tmp/
+.testsprite/runs/
+.testsprite/results/
+.testsprite/reports/
+# .testsprite/config.json
+
+# Playwright runtime artifacts
 .playwright-mcp/
+playwright-report/
+test-results/
+blob-report/
 
 # ---------- React Bits Pro ----------
 .env.local
 
 # ---------- Web UI Autotest / Playwright ----------
-playwright-report/
-test-results/
-tests/e2e/reports/html/
+ui-test-repair-plan.json
 tests/e2e/reports/results.json
 tests/e2e/reports/junit.xml
-ui-test-repair-plan.json
+tests/e2e/reports/html/
+tests/e2e/**/screenshots/
+tests/e2e/**/videos/
+tests/e2e/**/traces/
+tests/e2e/**/*.trace.zip
 
 # ---------- AI Tools ----------
 .agents/

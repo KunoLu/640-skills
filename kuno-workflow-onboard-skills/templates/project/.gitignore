@@ -41,6 +41,12 @@ CLAUDE.md
 .codex/state/
 .codex/hooks/*.local.*
 
+# ---------- OMX ----------
+.omx/
+
+# ---------- GSD ----------
+.planning/
+
 # ---------- Trellis ----------
 .trellis/*
 
@@ -57,6 +63,10 @@ CLAUDE.md
 
 !.trellis/tasks/
 !.trellis/tasks/*/
+# 需要提交归档任务、journal 或 check/implement 记录，则先注释上一行的规则，再使用下面这行规则：
+# !.trellis/tasks/**
+
+# 不需要提交归档任务、journal 或 check/implement 记录，则直接使用：
 !.trellis/tasks/*/prd.md
 !.trellis/tasks/*/design.md
 !.trellis/tasks/*/implement.md
@@ -77,13 +87,37 @@ CLAUDE.md
 # ---------- GitNexus ----------
 .gitnexus/
 
-# ---------- TestSprite ----------
+# ---------- Testing -----------
+# TestSprite generated artifacts
 testsprite_tests/**
 !testsprite_tests/
 !testsprite_tests/**/*_test_plan.json
 !testsprite_tests/**/*_prd.json
 # !testsprite_tests/**/TC*
+
+# TestSprite project/runtime artifacts
+.testsprite/cache/
+.testsprite/tmp/
+.testsprite/runs/
+.testsprite/results/
+.testsprite/reports/
+# .testsprite/config.json
+
+# Playwright runtime artifacts
 .playwright-mcp/
+playwright-report/
+test-results/
+blob-report/
+
+# Web UI generated run artifacts
+ui-test-repair-plan.json
+tests/e2e/reports/results.json
+tests/e2e/reports/junit.xml
+tests/e2e/reports/html/
+tests/e2e/**/screenshots/
+tests/e2e/**/videos/
+tests/e2e/**/traces/
+tests/e2e/**/*.trace.zip
 
 # ---------- AI Tools ----------
 .agents/
