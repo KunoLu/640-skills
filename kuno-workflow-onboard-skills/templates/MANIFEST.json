@@ -32,6 +32,26 @@
     {
       "source": "templates/skills/lessons-record/SKILL.md",
       "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/book-refactoring-pass/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/book-legacy-change-safety/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/book-ddd-distilled-modeling/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/book-ddia-data-design/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/book-release-readiness/SKILL.md",
+      "targetRole": "skill"
     }
   ],
   "externalSkillRepositories": [

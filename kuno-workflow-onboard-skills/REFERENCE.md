@@ -12,6 +12,11 @@ This Skill installs only these bundled templates:
 - `templates/skills/trellis-channel/SKILL.md`
 - `templates/skills/project-validation/SKILL.md`
 - `templates/skills/lessons-record/SKILL.md`
+- `templates/skills/book-refactoring-pass/SKILL.md`
+- `templates/skills/book-legacy-change-safety/SKILL.md`
+- `templates/skills/book-ddd-distilled-modeling/SKILL.md`
+- `templates/skills/book-ddia-data-design/SKILL.md`
+- `templates/skills/book-release-readiness/SKILL.md`
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
@@ -55,7 +60,7 @@ The check reports:
 - `rtk` CLI availability, version output, and `rtk gain` verification to avoid the unrelated same-name package.
 - `trellis` CLI availability and version output when available.
 - `gitnexus` CLI availability and version output when available.
-- Bundled Skill presence in global and, when a project root is provided, project-level skill directories.
+- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills and bundled book-derived skills.
 - Referenced Skill presence for `diagnose`, `tdd`, `grill-me`, `grill-with-docs`, `handoff`, `write-a-skill`, `zoom-out`, `to-prd`, `to-issues`, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
@@ -119,6 +124,20 @@ Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring 
 AGENTS targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md` or project `AGENTS.md` is present, it is first renamed with the dated backup rule, then the template is copied into the target path.
 
 Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path.
+
+## Bundled Book-Derived Skills
+
+The onboard bundle includes five focused skills derived from `agent-rules-books` `mini`-style rules:
+
+| Skill | Primary use |
+|---|---|
+| `book-refactoring-pass` | Behavior-preserving refactoring before or during implementation. |
+| `book-legacy-change-safety` | Safe changes to weakly tested or unclear legacy code. |
+| `book-ddd-distilled-modeling` | Lightweight domain language and bounded context modeling before PRD or design. |
+| `book-ddia-data-design` | Data consistency, schema evolution, event, queue, cache, and cross-service data-flow checks. |
+| `book-release-readiness` | Production-readiness review for services, jobs, queues, integrations, and deployment-sensitive changes. |
+
+These skills are bundled, not installed from an external repository at onboarding time. They are optional on-demand lenses and do not replace project rules, Trellis artifacts, GitNexus, tests, `project-validation`, TestSprite, or human release review.
 
 ## Installation Decisions
 

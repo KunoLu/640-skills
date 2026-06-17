@@ -1322,7 +1322,7 @@
           </div>
           <div class="card accent">
             <h3>Skill 模板</h3>
-            <p>展示 Trellis、Channel、验证、Lessons 这四类仓库内 Skill，以及模板中引用的外部 Skill。</p>
+            <p>展示 Trellis、Channel、验证、Lessons 和 book-derived 仓库内 Skill，以及模板中引用的外部 Skill。</p>
             <div class="badge-row"><span class="badge cyan">kuno-workflow-onboard-skills/templates/skills/*/SKILL.md</span><span class="badge">执行边界</span></div>
           </div>
           <div class="card warn">
@@ -1343,7 +1343,7 @@
         <div class="body toc">
           <div class="toc-item"><div class="toc-num">01</div><div><b>模板层级</b><span>全局规则、项目级规则、仓库内 Skill。</span></div></div>
           <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite、React Bits Pro、web-ui-autotest-generator。</span></div></div>
-          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>ui-ux-pro-max、impeccable、React Bits Pro 与 mattpocock/skills 九件套。</span></div></div>
+          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>仓库内 workflow / book-derived Skills、UI/UX Skills 与 mattpocock/skills 九件套。</span></div></div>
           <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、实际编码流程。</span></div></div>
           <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation、TestSprite 与 Web UI Playwright 测试资产。</span></div></div>
           <div class="toc-item"><div class="toc-num">06</div><div><b>Git 参考规则</b><span>ignore 和 attributes 的项目落地建议。</span></div></div>
@@ -1373,7 +1373,7 @@
           <div class="lane">
             <div class="lane-label"><b>Skills</b><span>场景化执行手册</span></div>
             <div class="lane-body">
-              <span class="pill cyan">trellis-workflow</span><span class="pill cyan">project-validation</span><span class="pill">trellis-channel</span><span class="pill">lessons-record</span><span class="pill amber">外部 Skill 编排</span>
+              <span class="pill cyan">trellis-workflow</span><span class="pill cyan">project-validation</span><span class="pill">trellis-channel</span><span class="pill">lessons-record</span><span class="pill green">book-derived skills</span><span class="pill amber">外部 Skill 编排</span>
             </div>
           </div>
         </div>
@@ -1530,7 +1530,7 @@
       <article class="slide" data-title="仓库内 Skills">
         <header class="section-head">
           <div class="eyebrow">Local Skills</div>
-          <h2>仓库内维护的四个 Skill</h2>
+          <h2>仓库内维护的 workflow 与 book-derived Skills</h2>
           <p>这些 Skill 是模板体系的本地执行手册，直接描述什么时候该做什么，以及什么不能做。</p>
         </header>
         <div class="body grid-4">
@@ -1553,6 +1553,31 @@
             <h3>lessons-record <small>Memory</small></h3>
             <p>在 bug 修复、回滚、工具误判、验证失败等长期有价值场景记录 lesson。</p>
             <div class="badge-row"><span class="badge">按需沉淀</span></div>
+          </div>
+          <div class="tool-card">
+            <h3>book-refactoring-pass <small>Refactor</small></h3>
+            <p>在既有结构阻碍当前实现时，指导行为保持型、小步、可验证的重构。</p>
+            <div class="badge-row"><span class="badge green">结构阻碍时</span></div>
+          </div>
+          <div class="tool-card">
+            <h3>book-legacy-change-safety <small>Legacy</small></h3>
+            <p>在弱测试或行为不清的遗留代码中，先锁定当前行为再做最小修改。</p>
+            <div class="badge-row"><span class="badge green">高回归风险</span></div>
+          </div>
+          <div class="tool-card">
+            <h3>book-ddd-distilled-modeling <small>Domain</small></h3>
+            <p>在 PRD / design 前澄清业务术语、上下文边界和领域规则。</p>
+            <div class="badge-row"><span class="badge green">领域模型</span></div>
+          </div>
+          <div class="tool-card">
+            <h3>book-ddia-data-design <small>Data</small></h3>
+            <p>检查数据所有权、一致性、幂等、迁移、事件流和恢复路径。</p>
+            <div class="badge-row"><span class="badge green">数据风险</span></div>
+          </div>
+          <div class="tool-card">
+            <h3>book-release-readiness <small>Release</small></h3>
+            <p>在生产路径改动后补充 timeout、retry、观测、回滚和发布风险检查。</p>
+            <div class="badge-row"><span class="badge green">发布前</span></div>
           </div>
         </div>
         <footer class="footer-note"><span>Skill 不替代项目规范、任务产物、测试和人工判断。</span><span>Slide 11</span></footer>
@@ -2001,9 +2026,11 @@ ui-test-repair-plan.json
               <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / TestSprite / React Bits Pro / Web UI 测试资产边界。</span></div>
               <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/trellis-workflow/SKILL.md</b><span>Trellis native / tdd workflow、before-dev、check、finish-work 和 update-spec。</span></div>
               <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/project-validation、trellis-channel、lessons-record</b><span>修改后验证、显式协作运行时和长期经验记录规则。</span></div>
+              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/book-*</b><span>重构、遗留代码、轻量领域建模、数据密集型设计和生产就绪专项审查。</span></div>
             </div>
           </div>
           <div class="source-list featured">
+            <a href="https://github.com/ciembor/agent-rules-books">agent-rules-books<span>book-derived Skills 的 mini-style 规则来源。</span></a>
             <a href="https://docs.testsprite.com/mcp/getting-started/installation">TestSprite Installation<span>MCP server 安装、API Key、IDE 配置与验证。</span></a>
             <a href="https://docs.testsprite.com/mcp/getting-started/first-test">First MCP Test<span>bootstrap、Testing Configuration 页面、PRD 与测试账号配置。</span></a>
             <a href="https://docs.testsprite.com/mcp/core/create-tests-new-project">Create Tests for New Projects<span>新项目测试生成 workflow 与产物。</span></a>

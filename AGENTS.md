@@ -36,6 +36,11 @@
 | `kuno-workflow-onboard-skills/templates/skills/trellis-channel/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-channel/SKILL.md` |
 | `kuno-workflow-onboard-skills/templates/skills/project-validation/SKILL.md` | `/Users/lusonglin/.agent/skills/project-validation/SKILL.md` |
 | `kuno-workflow-onboard-skills/templates/skills/lessons-record/SKILL.md` | `/Users/lusonglin/.agent/skills/lessons-record/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/book-refactoring-pass/SKILL.md` | `/Users/lusonglin/.agent/skills/book-refactoring-pass/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/book-legacy-change-safety/SKILL.md` | `/Users/lusonglin/.agent/skills/book-legacy-change-safety/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/book-ddd-distilled-modeling/SKILL.md` | `/Users/lusonglin/.agent/skills/book-ddd-distilled-modeling/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/book-ddia-data-design/SKILL.md` | `/Users/lusonglin/.agent/skills/book-ddia-data-design/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/book-release-readiness/SKILL.md` | `/Users/lusonglin/.agent/skills/book-release-readiness/SKILL.md` |
 
 同步要求：
 

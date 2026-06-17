@@ -26,6 +26,11 @@ SKILL_SOURCES = {
     "trellis-channel": TEMPLATE_DIR / "skills" / "trellis-channel",
     "project-validation": TEMPLATE_DIR / "skills" / "project-validation",
     "lessons-record": TEMPLATE_DIR / "skills" / "lessons-record",
+    "book-refactoring-pass": TEMPLATE_DIR / "skills" / "book-refactoring-pass",
+    "book-legacy-change-safety": TEMPLATE_DIR / "skills" / "book-legacy-change-safety",
+    "book-ddd-distilled-modeling": TEMPLATE_DIR / "skills" / "book-ddd-distilled-modeling",
+    "book-ddia-data-design": TEMPLATE_DIR / "skills" / "book-ddia-data-design",
+    "book-release-readiness": TEMPLATE_DIR / "skills" / "book-release-readiness",
 }
 CLI_TOOLS = (
     {
