@@ -1680,7 +1680,7 @@
           <div class="flow-step"><div class="step-num">3</div><h3>实现与验证</h3><p>按任务产物实现，运行项目验证命令。</p></div>
           <div class="flow-step"><div class="step-num">4</div><h3>check / finish</h3><p>执行 <code>$trellis-check</code>，验证通过后 <code>$trellis-finish-work</code>。</p></div>
         </div>
-        <div class="callout">native 不禁止 <code>tdd</code> Skill。bug 修复、核心业务逻辑、算法、数据同步、导入导出或高风险修改，仍可按需使用测试先行。</div>
+        <div class="callout">native 不禁止 <code>tdd</code> Skill。bug 修复、核心业务逻辑、算法、数据同步、导入导出或需要回归测试的修改，必须主动判定是否使用测试先行。</div>
         <footer class="footer-note"><span>简单文案、样式、配置说明或纯文档修改不强制 TDD。</span><span>Slide 15</span></footer>
       </article>
 
@@ -1697,6 +1697,7 @@
               <li>按 <code>.trellis/workflow.md</code> 执行阶段。</li>
               <li>开发前仍执行 <code>$trellis-before-dev</code>。</li>
               <li>开发后仍执行 <code>$trellis-check</code>。</li>
+              <li>适合权限、计费、状态机、关键数据一致性、复杂算法等高风险行为。</li>
               <li>验证通过后才 <code>$trellis-finish-work</code>。</li>
             </ul>
           </div>
@@ -1710,7 +1711,7 @@
             </ul>
           </div>
         </div>
-        <footer class="footer-note"><span>仅用户明确要求 TDD 或项目已采用测试驱动流程时切换到 tdd workflow。</span><span>Slide 16</span></footer>
+        <footer class="footer-note"><span>默认仍用 native；普通行为风险用 native + tdd Skill，只有高风险行为或项目已采用 TDD 时切换 workflow。</span><span>Slide 16</span></footer>
       </article>
 
       <article class="slide" data-title="实际编码流程">
@@ -1730,7 +1731,7 @@
           </div>
           <div class="lane">
             <div class="lane-label"><b>实现中</b><span>最小修改</span></div>
-            <div class="lane-body"><span class="pill">按任务产物编码</span><span class="pill">必要时 tdd Skill</span><span class="pill">保持范围可回滚</span></div>
+            <div class="lane-body"><span class="pill">按任务产物编码</span><span class="pill">行为风险主动判定 tdd Skill</span><span class="pill">高风险行为才切 Trellis TDD</span><span class="pill">保持范围可回滚</span></div>
           </div>
           <div class="lane">
             <div class="lane-label"><b>开发后</b><span>验证闭环</span></div>

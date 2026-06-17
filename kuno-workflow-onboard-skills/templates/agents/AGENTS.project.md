@@ -136,7 +136,8 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 - 线上问题、日志异常或数据不一致：`diagnose` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
 - 中大型项目内需求：`grill-with-docs` → 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
 - 不依赖项目文档或领域术语的通用方案质询：`grill-me` → 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
-- 高风险后端逻辑、算法或数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` → GitNexus impact-analysis → 回归测试。
+- 需要回归测试的普通行为修改：Trellis `native` workflow → 主动判定 `tdd` Skill → GitNexus impact-analysis → 项目测试。
+- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：`zoom-out` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
 - 需要创建或维护 Skill 时：`write-a-skill`。

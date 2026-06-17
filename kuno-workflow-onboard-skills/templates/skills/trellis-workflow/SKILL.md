@@ -64,7 +64,7 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 
 - 未经用户明确要求，不主动切换 workflow 模板。
 - `native` 可作为默认标准 workflow。
-- `tdd` 仅在用户明确要求 TDD，或项目已经采用测试驱动流程时使用。
+- `tdd` 仅在用户明确要求 TDD、项目已经采用测试驱动流程，或当前任务属于高风险且适合测试先行的行为修改时使用。
 - `channel-driven-subagent-dispatch` 仅在用户明确要求 Channel / 多 Agent / sub-agent 分发流程时使用。
 - 即使存在 `channel-driven-subagent-dispatch` 模板，也不得仅因任务复杂就自动切换或启用该模板。
 - 切换 workflow 后，必须重新读取 `.trellis/workflow.md`，并以新文件为准。
@@ -75,6 +75,16 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 - 复杂度决定是否进入 Trellis planning。
 - 协作形态决定是否启用 Channel 或 channel-driven workflow。
 - 大任务优先考虑 parent / child task，不默认切换到 Channel workflow。
+
+Workflow 选择表：
+
+| 场景 | 推荐方式 |
+|---|---|
+| 文档、配置说明、样式、小模板、低风险局部修改 | `native` workflow |
+| bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、需要回归测试的修改 | `native` workflow + 主动判定 `tdd` Skill |
+| 权限、计费、状态机、关键数据一致性、复杂算法、高风险后端逻辑或项目已明确采用测试驱动流程 | Trellis `tdd` workflow + `tdd` Skill |
+
+不要为了“更重视测试”而把所有任务默认切到 Trellis `tdd` workflow；优先在 `native` 中按需调用 `tdd` Skill。只有任务本身需要把测试先行变成阶段约束时，才切换到 Trellis `tdd` workflow。
 
 ---
 
@@ -92,7 +102,8 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 当项目使用 Trellis `native` workflow 时：
 
 - 不因 `native` workflow 而禁止 `tdd` Skill。
-- 仅在 bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、高风险修改或需要回归测试时按需使用 `tdd`。
+- 在 bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、高风险修改或需要回归测试时，必须主动判定是否使用 `tdd` Skill。
+- 如果主动判定后跳过 `tdd` Skill，最终输出要说明原因，例如缺少可测试接口、项目没有测试框架、修改只是文档 / 配置、或当前风险已由现有测试覆盖。
 - 不为简单文案、样式、配置说明或纯文档修改强制使用 `tdd`。
 
 ---

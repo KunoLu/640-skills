@@ -141,15 +141,16 @@ diagnose
 grill-me / grill-with-docs
   → to-prd
   → to-issues as Trellis-ready Markdown tasks
-  → Trellis workflow
+  → Trellis workflow（默认 native）
   → GitNexus impact-analysis
   → Codex implementation
+  → tdd Skill（行为风险需要回归测试时）
   → project tests / TestSprite（MCP / 配置门户可用时）
   → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
   → React Bits Pro Skill（React / shadcn UI、项目内 Skill 与 license key 前提都满足时）
 ```
 
-高风险后端逻辑 / 算法 / 数据同步：
+高风险后端逻辑 / 算法 / 权限 / 计费 / 状态机 / 数据同步：
 
 ```text
 grill-with-docs
