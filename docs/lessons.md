@@ -160,3 +160,10 @@
 - 根因：编写一次性结构化校验时没有先读取目标配置的实际结构，把其他 manifest 习惯迁移到了当前仓库。
 - 修复：先读取 `templates/MANIFEST.json`，确认顶层字段后，将断言脚本改为读取 `manifest["templates"]`。
 - 预防：后续校验 JSON / TOML / YAML 配置前，先查看目标文件 schema 或用受控解析打印顶层 key；不要在未确认字段名时直接写断言。
+
+## BDD 首个 .feature 语言规则必须有写入前和验证门
+
+- 问题：项目规则和 `gherkin-bdd` Skill 已写明“无既有 `.feature` 时，场景文案默认中文、Gherkin 结构关键词用英语”，但实际新建 `.feature` 时仍生成了全英文文案。
+- 根因：语言要求只作为描述性规则存在，没有在 `gherkin-bdd` 写入流程、Trellis BDD overlay 和 `project-validation` 检查中形成必须报告和验证的 gate；英文 PRD、design、代码标识符和英语 Gherkin 关键词容易把输出带向全英文。
+- 修复：在 `gherkin-bdd` 增加写入前语言决策门，在 `trellis-workflow` 纳入 BDD overlay 阶段要求，并在 `project-validation` 增加 `.feature` 语言一致性检查和 blocked 条件。
+- 预防：后续把“默认规则”沉淀为 Skill 时，必须同时覆盖生成前决策、生成后验证和最终输出状态；特别是语言、路径、source of truth 这类容易被上下文漂移覆盖的规则，不能只写成静态说明。

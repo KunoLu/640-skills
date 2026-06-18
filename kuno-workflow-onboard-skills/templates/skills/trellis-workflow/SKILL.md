@@ -121,14 +121,21 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 - 纯内部重构、依赖 / 工具配置、机械格式化。
 - 不改变行为或语义的 typo、视觉 polish、className / token / CSS 重构、布局清理。
 
+语言规则：
+
+- 已有 `.feature` 或项目级持久 BDD 规格时，沿用同一 bounded context 或功能区的既有语言和关键词风格。
+- 项目没有 `.feature` 且用户未明确要求其他语言时，默认使用中文场景标题、描述和步骤文本，并使用英语 Gherkin 结构关键字。
+- 英文 PRD、design、implement、代码标识符或产品名不能覆盖上述默认语言决策；领域专名可按 glossary / `docs/CONTEXT.md` / `.trellis/spec` 保留。
+
 阶段编排：
 
 1. 需求 / PRD 阶段：`prd.md` 可以草拟 Given/When/Then，但用户可见行为在实现前必须进入持久 `.feature` 或项目级规则指定的持久 BDD 规格路径。
-2. 领域术语不清时：先使用 `grill-with-docs` 和 `book-ddd-distilled-modeling`，再定稿场景文本。
-3. 开发前：运行 `$trellis-before-dev` 前，确认新增 / 修改 / 修复的用户可见行为已有对应 BDD 场景，或明确 BDD 跳过原因。
-4. 开发中：从 BDD 场景派生测试。已有 Gherkin runner 时绑定 step definitions 或 runner 测试；没有 runner 时使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
-5. bug 修复：先写正确行为场景，再写失败回归测试，再修复。
-6. `$trellis-check`：核对 PRD、持久 `.feature`、测试和代码是否一致。
+2. 语言决策：创建或改写 `.feature` 前，先检查既有 `.feature`、BDD runner 配置和项目规则；没有既有 `.feature` 且无用户覆盖时，明确记录“中文场景文本 + 英文 Gherkin 关键词”。
+3. 领域术语不清时：先使用 `grill-with-docs` 和 `book-ddd-distilled-modeling`，再定稿场景文本。
+4. 开发前：运行 `$trellis-before-dev` 前，确认新增 / 修改 / 修复的用户可见行为已有对应 BDD 场景，或明确 BDD 跳过原因；同时确认场景文本符合语言决策。
+5. 开发中：从 BDD 场景派生测试。已有 Gherkin runner 时绑定 step definitions 或 runner 测试；没有 runner 时使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
+6. bug 修复：先写正确行为场景，再写失败回归测试，再修复。
+7. `$trellis-check`：核对 PRD、持久 `.feature`、测试和代码是否一致，并检查 `.feature` 语言状态是否为沿用项目既有风格、默认中文场景文本 + 英文关键词、用户明确覆盖或已阻塞。
 
 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`；新增或触碰的用户可见行为必须补齐。
 

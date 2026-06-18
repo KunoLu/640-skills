@@ -42,6 +42,28 @@ Trellis task artifacts can draft or reference scenarios, but they are not the de
 - Avoid mixing keyword languages inside the same bounded context or feature area.
 - Domain terms must follow the project glossary, `docs/CONTEXT.md`, context docs, `.trellis/spec`, and existing scenario vocabulary.
 
+Before creating or rewriting a `.feature` file, make an explicit language decision:
+
+1. Inspect existing `.feature` files, BDD runner configuration, and project-level BDD rules.
+2. If matching `.feature` files already exist, follow the nearest bounded context or feature area language and keyword style.
+3. If no `.feature` files exist and the user did not request another language, set scenario text language to Simplified Chinese, Gherkin keyword language to English, and omit `# language: zh-CN`.
+4. Report the chosen scenario text language and keyword language before writing or patching the file.
+
+Do not infer English scenario text merely from English Gherkin keywords, English PRD / design documents, code identifiers, package names, or product names. Proper nouns and established domain terms may remain in their project vocabulary inside Chinese sentences.
+
+Default first-file pattern:
+
+```gherkin
+Feature: 用户登录
+  用户需要使用账号进入工作区，以便继续管理自己的配置。
+
+  Scenario: 已注册用户使用正确密码登录
+    Given 用户已经注册账号
+    When 用户提交正确的邮箱和密码
+    Then 用户进入自己的工作区
+    And 页面显示当前登录状态
+```
+
 ## Scenario Rules
 
 Write scenarios as product behavior, not implementation:
@@ -64,13 +86,14 @@ For user-visible wording or UI changes, require scenarios when the change affect
 
 1. Decide whether the change is user-visible. If yes, BDD applies.
 2. Read existing `.feature` files and project vocabulary before drafting.
-3. If domain terms or boundaries are unclear, use `grill-with-docs` and `book-ddd-distilled-modeling` before finalizing scenario wording.
-4. Create or update the persistent `.feature` file before implementation.
-5. Review scenarios for observable behavior, one-behavior focus, vocabulary consistency, realistic examples, and absence of implementation details.
-6. Derive tests from scenarios. If the project has a Gherkin runner, bind scenarios to step definitions or runner tests. Otherwise use the existing test framework and make each test traceable to a scenario by name, comment, file organization, or the project's established convention.
-7. For new behavior or bug fixes, run the derived test first and confirm it fails for the intended behavior before implementation.
-8. Implement the smallest change that makes the scenario-backed tests pass.
-9. During validation, confirm PRD, `.feature`, tests, and code agree.
+3. Run the language decision gate and report the chosen scenario text language and Gherkin keyword language.
+4. If domain terms or boundaries are unclear, use `grill-with-docs` and `book-ddd-distilled-modeling` before finalizing scenario wording.
+5. Create or update the persistent `.feature` file before implementation.
+6. Review scenarios for observable behavior, one-behavior focus, vocabulary consistency, realistic examples, absence of implementation details, and compliance with the language decision.
+7. Derive tests from scenarios. If the project has a Gherkin runner, bind scenarios to step definitions or runner tests. Otherwise use the existing test framework and make each test traceable to a scenario by name, comment, file organization, or the project's established convention.
+8. For new behavior or bug fixes, run the derived test first and confirm it fails for the intended behavior before implementation.
+9. Implement the smallest change that makes the scenario-backed tests pass.
+10. During validation, confirm PRD, `.feature`, tests, and code agree.
 
 If a scenario cannot be automated yet, tag it `@todo` or the project's equivalent marker and add an adjacent comment explaining the blocker and temporary manual verification. Do not silently drop it.
 
@@ -101,6 +124,7 @@ If PRD, Trellis artifacts, `.feature`, tests, and code disagree, do not implemen
 When drafting or updating BDD specs, report:
 
 - Feature files created or updated.
+- BDD language decision: scenario text language, Gherkin keyword language, and whether it follows existing project convention or the first-file default.
 - Scenarios added, changed, removed, or marked `@todo`.
 - How each scenario is or will be traced to automated tests.
 - Any BDD skip decision and reason.
