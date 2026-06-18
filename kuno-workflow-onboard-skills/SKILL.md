@@ -81,7 +81,7 @@ The `check` command inspects:
 
 - Runtime: `npm`, `node`, `nvm`; CLI checks run only after npm is usable.
 - CLI tools: `rtk`, `trellis`, `gitnexus`.
-- Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
+- Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `gherkin-bdd`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
 - Referenced skills from the bundled templates, including mattpocock skills, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, TestSprite MCP, and React Bits Pro project skill prerequisites.
 

@@ -24,6 +24,28 @@ description: Use after code changes to choose and run validation commands for No
 
 这一步只记录当前任务风险、验证缺口和剩余风险；不要因为生产风险审查而新增与任务无关的重构或测试框架。
 
+## BDD / Gherkin 验证补充
+
+当任务新增或修改用户可见行为，或 diff 中包含 `.feature` / 持久 BDD 规格路径时，必须验证 BDD 一致性。
+
+场景编写、审查或回填问题回到 `gherkin-bdd` Skill 处理；本 Skill 只负责修改后的验证选择、执行和风险报告。
+
+检查顺序：
+
+1. 确认用户可见行为是否有对应持久 BDD 场景；纯内部变更或无语义 UI polish 跳过时，记录跳过原因。
+2. 如果项目已有 Gherkin runner（例如 Cucumber、behave、pytest-bdd、cucumber-js）或 package / Makefile / CI 中有 BDD 命令，优先运行项目定义的 BDD 命令。
+3. 如果没有 Gherkin runner，不主动引入新框架；使用项目已有测试框架运行追踪到场景的 unit / integration / E2E 测试。
+4. 确认每个新增或修改场景都能追踪到自动化测试，追踪方式可以是测试名、注释、目录结构或项目约定。
+5. 无法自动化的场景必须有 `@todo` 或项目等价标记、阻塞原因和临时人工验证说明。
+6. 如果 PRD、`.feature`、测试和代码冲突，先回到规格对齐，不要用验证结果掩盖冲突。
+
+最终输出中必须说明：
+
+- `BDD`: `run` / `traceable` / `blocked` / `skipped`。
+- 涉及的 `.feature` 或持久 BDD 规格路径。
+- 运行的 BDD runner 或追踪测试命令。
+- 未自动化场景、阻塞原因和剩余风险。
+
 ## Web / E2E 测试工具 Gate
 
 修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程或关键用户路径后，必须按项目级 `AGENTS.md` 主动判定 TestSprite 和 `web-ui-autotest-generator` 是否适用。

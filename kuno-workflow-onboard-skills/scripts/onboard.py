@@ -25,6 +25,7 @@ SKILL_SOURCES = {
     "trellis-workflow": TEMPLATE_DIR / "skills" / "trellis-workflow",
     "trellis-channel": TEMPLATE_DIR / "skills" / "trellis-channel",
     "project-validation": TEMPLATE_DIR / "skills" / "project-validation",
+    "gherkin-bdd": TEMPLATE_DIR / "skills" / "gherkin-bdd",
     "lessons-record": TEMPLATE_DIR / "skills" / "lessons-record",
     "book-refactoring-pass": TEMPLATE_DIR / "skills" / "book-refactoring-pass",
     "book-legacy-change-safety": TEMPLATE_DIR / "skills" / "book-legacy-change-safety",

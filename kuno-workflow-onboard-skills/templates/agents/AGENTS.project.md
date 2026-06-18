@@ -89,6 +89,46 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 
 ---
 
+## BDD / Gherkin
+
+所有用户可见行为默认需要 BDD 场景。用户可见行为包括 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化，以及外部集成系统能观察到的输入输出或副作用。纯内部实现变化、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可以跳过 BDD，但最终输出必须说明跳过原因。
+
+### 持久规格路径
+
+- 如果本项目已有 `.feature` 文件、`features/` 目录、Cucumber / behave / pytest-bdd / cucumber-js 等 BDD runner 配置，沿用既有路径、命名、语言和关键词。
+- 如果没有既有约定，单应用项目默认使用 `<project-root>/features/<capability-slug>.feature`。
+- 能力较多时可按功能区分组，例如 `features/authentication/login.feature`、`features/orders/order-cancellation.feature`。
+- monorepo / 多应用项目默认落到拥有该用户可见行为的 app / package / service 根目录，例如 `apps/web/features/checkout/cart-update.feature`、`services/billing/features/invoice-export.feature`、`packages/cli/features/project-init.feature`。
+- 跨 package 的行为放在最接近产品入口的 app / service 下，不拆到每个内部 package。
+- Trellis task artifacts 可以草拟或引用 BDD 场景，但默认不作为长期行为 source of truth；项目级规则明确指定其他持久 BDD 规格路径时，以项目规则为准。
+
+### 语言与内容
+
+- 如果项目已有 `.feature`，沿用既有 Gherkin 语言和关键词。
+- 如果没有 `.feature`，默认使用中文场景标题、描述和步骤文本，结构关键词使用英文 `Feature`、`Rule`、`Background`、`Scenario`、`Scenario Outline`、`Examples`、`Given`、`When`、`Then`、`And`、`But`。
+- 默认不添加 `# language: zh-CN`；只有项目既有中文 Gherkin 关键词或用户明确要求中文关键词时才添加。
+- 同一 bounded context 或功能区内尽量不混用中英文关键词。
+- 场景里的领域词汇以项目 glossary、`docs/CONTEXT.md`、context docs、`.trellis/spec` 和既有 `.feature` 词汇为准。
+- 场景描述可观察产品行为，不写 selector、mock、fixture、数据库字段、内部函数名或测试 helper，除非该层本身就是对外行为。
+
+### 工作流规则
+
+- 新增用户可见功能：先创建或更新持久 BDD 场景，再写测试和实现。
+- 修改已有用户可见功能：补齐或更新相关能力的 BDD 场景。
+- 用户可见 bug 修复：先写描述正确行为的场景，再写失败回归测试，再修复。
+- 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`，但新增或触碰的行为必须补齐。
+- 如果已有 Gherkin runner，场景应绑定 step definitions 或 runner 测试；没有 runner 时，使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
+- 不默认引入新的 Gherkin runner；只有用户明确要求、项目已有方向或现有测试框架无法表达验收行为时才建议引入。
+- 无法自动化的场景必须标记 `@todo` 或项目等价标记，并说明阻塞原因和临时人工验证方式。
+
+### Source Of Truth
+
+对已确认的用户可见行为，持久 `.feature` 是行为 source of truth。`prd.md` 负责需求背景、范围、约束、非目标和验收意图；`design.md` / `implement.md` 负责技术方案和实现计划，不覆盖 `.feature` 中的产品行为。
+
+如果 PRD、Trellis artifacts、`.feature`、测试和代码冲突，不要直接实现；先对齐 PRD 与 `.feature`，再更新测试和代码。
+
+---
+
 ## GitNexus
 
 GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
@@ -143,10 +183,10 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 普通 bug、测试失败或运行时异常：`diagnosing-bugs` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnosing-bugs` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
+- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-prd` → `gherkin-bdd`（用户可见行为场景）→ `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
 - 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
-- 需要回归测试的普通行为修改：Trellis `native` workflow → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
-- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
+- 需要回归测试的普通用户可见行为修改：Trellis `native` workflow → `gherkin-bdd` → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
+- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `gherkin-bdd`（外部可观察行为）→ `to-issues` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：代码阅读 / `codebase-design` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
 - 需要创建或维护 Skill 时：`writing-great-skills`。

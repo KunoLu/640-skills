@@ -30,6 +30,10 @@
       "targetRole": "skill"
     },
     {
+      "source": "templates/skills/gherkin-bdd/SKILL.md",
+      "targetRole": "skill"
+    },
+    {
       "source": "templates/skills/lessons-record/SKILL.md",
       "targetRole": "skill"
     },

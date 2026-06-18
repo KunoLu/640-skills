@@ -11,6 +11,7 @@ This Skill installs only these bundled templates:
 - `templates/skills/trellis-workflow/SKILL.md`
 - `templates/skills/trellis-channel/SKILL.md`
 - `templates/skills/project-validation/SKILL.md`
+- `templates/skills/gherkin-bdd/SKILL.md`
 - `templates/skills/lessons-record/SKILL.md`
 - `templates/skills/book-refactoring-pass/SKILL.md`
 - `templates/skills/book-legacy-change-safety/SKILL.md`
@@ -62,7 +63,7 @@ The check reports:
 - `rtk` CLI availability, version output, and `rtk gain` verification to avoid the unrelated same-name package.
 - `trellis` CLI availability and version output when available.
 - `gitnexus` CLI availability and version output when available.
-- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills and bundled book-derived skills.
+- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, and bundled book-derived skills.
 - Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual setup checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
@@ -83,6 +84,7 @@ CLI tools:
 Bundled skills:
 - kuno-workflow-onboard-skills: installed / missing
 - trellis-workflow: installed / missing
+- gherkin-bdd: installed / missing
 
 Referenced skills:
 - diagnosing-bugs: installed / missing
@@ -126,6 +128,18 @@ Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring 
 AGENTS targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md` or project `AGENTS.md` is present, it is first renamed with the dated backup rule, then the template is copied into the target path.
 
 Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or explicitly installed external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path. During `init` / `reset`, mattpocock external skills use detected-only migration: if the target skills root already contains old or current mattpocock skills, legacy directories are backed up to a timestamped backup directory, canonical 1.0+ skills and required dependency skills are installed or updated, and legacy directories such as `diagnose`, `write-a-skill`, and removed `zoom-out` are removed from that target root. If no mattpocock skills are detected, no external mattpocock skills are installed.
+
+## Bundled Workflow Skills
+
+The onboard bundle includes workflow skills that are installed from templates rather than external repositories:
+
+| Skill | Primary use |
+|---|---|
+| `trellis-workflow` | Trellis lifecycle, task artifacts, workflow templates, before-dev, check, finish-work, update-spec, parent / child tasks, and BDD / TDD workflow overlays. |
+| `trellis-channel` | Trellis Channel preflight, worker boundaries, review / validation coordination, and runtime safety rules. |
+| `project-validation` | Validation command selection and reporting, including BDD traceability, TestSprite, and Web UI automation gates. |
+| `gherkin-bdd` | Persistent BDD / Gherkin specs for user-visible behavior, `.feature` path rules, scenario quality, and scenario-to-test traceability. |
+| `lessons-record` | Long-term lesson recording and Trellis lesson storage structure. |
 
 ## Bundled Book-Derived Skills
 

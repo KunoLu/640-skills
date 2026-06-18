@@ -61,6 +61,7 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 - 未经用户明确要求，不主动切换 workflow 模板。
 - `native` 可作为默认标准 workflow。
 - `tdd` 仅在用户明确要求 TDD、项目已经采用测试驱动流程，或当前任务属于高风险且适合测试先行的行为修改时使用。
+- BDD 不是独立 workflow 模板；用户可见行为默认通过 `gherkin-bdd` 作为 workflow overlay 执行。
 - `channel-driven-subagent-dispatch` 仅在用户明确要求 Channel / 多 Agent / sub-agent 分发流程时使用。
 - 即使存在 `channel-driven-subagent-dispatch` 模板，也不得仅因任务复杂就自动切换或启用该模板。
 - 切换 workflow 后，必须重新读取 `.trellis/workflow.md`，并以新文件为准。
@@ -79,6 +80,7 @@ Workflow 选择表：
 | 文档、配置说明、样式、小模板、低风险局部修改 | `native` workflow |
 | bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、需要回归测试的修改 | `native` workflow + 主动判定 `tdd` Skill |
 | 权限、计费、状态机、关键数据一致性、复杂算法、高风险后端逻辑或项目已明确采用测试驱动流程 | Trellis `tdd` workflow + `tdd` Skill |
+| UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化或外部集成可观察行为 | 当前 workflow + `gherkin-bdd` overlay |
 
 不要为了“更重视测试”而把所有任务默认切到 Trellis `tdd` workflow；优先在 `native` 中按需调用 `tdd` Skill。只有任务本身需要把测试先行变成阶段约束时，才切换到 Trellis `tdd` workflow。
 
@@ -101,6 +103,43 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 - 在 bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、高风险修改或需要回归测试时，必须主动判定是否使用 `tdd` Skill。
 - 如果主动判定后跳过 `tdd` Skill，最终输出要说明原因，例如缺少可测试接口、项目没有测试框架、修改只是文档 / 配置、或当前风险已由现有测试覆盖。
 - 不为简单文案、样式、配置说明或纯文档修改强制使用 `tdd`。
+
+---
+
+## BDD Overlay 与 `gherkin-bdd` Skill
+
+BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trellis 管任务生命周期，`gherkin-bdd` 管用户可见行为规格。
+
+适用范围：
+
+- UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成系统可观察行为。
+- 用户可见 bug 修复。
+- Trellis `prd.md`、`design.md`、`implement.md` 或验收标准中出现的用户可见行为。
+
+跳过范围：
+
+- 纯内部重构、依赖 / 工具配置、机械格式化。
+- 不改变行为或语义的 typo、视觉 polish、className / token / CSS 重构、布局清理。
+
+阶段编排：
+
+1. 需求 / PRD 阶段：`prd.md` 可以草拟 Given/When/Then，但用户可见行为在实现前必须进入持久 `.feature` 或项目级规则指定的持久 BDD 规格路径。
+2. 领域术语不清时：先使用 `grill-with-docs` 和 `book-ddd-distilled-modeling`，再定稿场景文本。
+3. 开发前：运行 `$trellis-before-dev` 前，确认新增 / 修改 / 修复的用户可见行为已有对应 BDD 场景，或明确 BDD 跳过原因。
+4. 开发中：从 BDD 场景派生测试。已有 Gherkin runner 时绑定 step definitions 或 runner 测试；没有 runner 时使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
+5. bug 修复：先写正确行为场景，再写失败回归测试，再修复。
+6. `$trellis-check`：核对 PRD、持久 `.feature`、测试和代码是否一致。
+
+既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`；新增或触碰的用户可见行为必须补齐。
+
+默认持久路径：
+
+- 已有 `.feature` / BDD runner / 项目规则时沿用项目约定。
+- 单应用项目默认 `<project-root>/features/<capability-slug>.feature`。
+- monorepo 默认落在 owning workspace 下的 `features/**/*.feature`。
+- `.trellis/tasks/**` 只保存过程产物，不作为默认长期行为 source of truth。
+
+对已确认用户可见行为，持久 `.feature` 是行为 source of truth；PRD 说明背景和意图，`design.md` / `implement.md` 说明技术方案。冲突时先对齐 PRD 与 `.feature`，再实现。
 
 ---
 
@@ -185,6 +224,7 @@ $trellis-check
 检查时必须对照：
 
 - `prd.md`
+- 持久 `.feature` 或项目级规则指定的 BDD 规格路径，适用于用户可见行为
 - `design.md` / `implement.md`，如果存在
 - `.trellis/spec`
 - `.trellis/spec/lessons.md` 和按需命中的 `.trellis/lessons` topic / archive

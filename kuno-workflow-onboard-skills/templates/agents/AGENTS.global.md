@@ -134,6 +134,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `trellis-workflow` | Trellis 生命周期、任务产物、阶段检查 | 发现项目使用 Trellis 后 |
 | `trellis-channel` | Trellis Channel / 多 Agent / 多模型协作、代码 review / 验证 preflight | 用户明确要求 Channel、worker、forum、thread、并行评审，或项目级高风险 review / validation gate 需要 Channel preflight 时 |
 | `project-validation` | 判断代码修改后的验证策略 | 修改代码后、执行验证前 |
+| `gherkin-bdd` | 用户可见行为的 BDD / Gherkin 场景、`.feature`、Given/When/Then 验收规格 | 新增 / 修改 UI、API、CLI、导出文件、通知、权限、错误、状态变化或外部集成可观察行为前 |
 | `lessons-record` | 记录长期经验教训 | bug 修复、回滚、工具误判、验证失败、上下文丢失后 |
 | `book-refactoring-pass` | 行为保持型重构检查 | 修改既有代码且结构阻碍当前实现、清理与行为变更可能混杂时 |
 | `book-legacy-change-safety` | 遗留 / 弱测试代码安全修改 | 目标代码行为不清、测试不足、依赖隐藏或回归风险高时 |
@@ -162,6 +163,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
 - `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。具体执行与产物策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
+- `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、TestSprite 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
 - `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、TestSprite 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
 - `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
 - `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnosing-bugs`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。

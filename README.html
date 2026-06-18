@@ -1524,7 +1524,7 @@
         </div>
         <div class="hero-grid">
           <div class="hero-tile"><b>Agent 模板</b><span>全局规则与项目级规则的职责拆分。</span></div>
-          <div class="hero-tile"><b>Trellis</b><span>native / tdd workflow 与编码执行流。</span></div>
+          <div class="hero-tile"><b>Trellis</b><span>native / tdd workflow、BDD overlay 与编码执行流。</span></div>
           <div class="hero-tile"><b>工具链</b><span>GitNexus、TestSprite、React Bits Pro 与测试资产边界。</span></div>
           <div class="hero-tile"><b>Skills</b><span>仓库内 Skill 与模板引用 Skill 的用途。</span></div>
         </div>
@@ -1544,7 +1544,7 @@
           </div>
           <div class="card accent">
             <h3>Skill 模板</h3>
-            <p>展示 Trellis、Channel、验证、Lessons 和 book-derived 仓库内 Skill，以及模板中引用的外部 Skill。</p>
+            <p>展示 Trellis、Channel、验证、BDD、Lessons 和 book-derived 仓库内 Skill，以及模板中引用的外部 Skill。</p>
             <div class="badge-row"><span class="badge cyan">kuno-workflow-onboard-skills/templates/skills/*/SKILL.md</span><span class="badge">执行边界</span></div>
           </div>
           <div class="card warn">
@@ -1566,7 +1566,7 @@
           <div class="toc-item"><div class="toc-num">01</div><div><b>模板层级</b><span>全局规则、项目级规则、仓库内 Skill。</span></div></div>
           <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite、React Bits Pro、web-ui-autotest-generator。</span></div></div>
           <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>仓库内 workflow / book-derived Skills、UI/UX Skills 与 mattpocock/skills 1.0+ 核心集。</span></div></div>
-          <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、实际编码流程。</span></div></div>
+          <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、BDD overlay、实际编码流程。</span></div></div>
           <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation、TestSprite 与 Web UI Playwright 测试资产。</span></div></div>
           <div class="toc-item"><div class="toc-num">06</div><div><b>Git 参考规则</b><span>ignore 和 attributes 的项目落地建议。</span></div></div>
         </div>
@@ -1595,7 +1595,7 @@
           <div class="lane">
             <div class="lane-label"><b>Skills</b><span>场景化执行手册</span></div>
             <div class="lane-body">
-              <span class="pill cyan">trellis-workflow</span><span class="pill cyan">project-validation</span><span class="pill">trellis-channel</span><span class="pill">lessons-record</span><span class="pill green">book-derived skills</span><span class="pill amber">外部 Skill 编排</span>
+              <span class="pill cyan">trellis-workflow</span><span class="pill cyan">project-validation</span><span class="pill cyan">gherkin-bdd</span><span class="pill">trellis-channel</span><span class="pill">lessons-record</span><span class="pill green">book-derived skills</span><span class="pill amber">外部 Skill 编排</span>
             </div>
           </div>
         </div>
@@ -1684,6 +1684,7 @@
               <tr><td><strong>GitNexus</strong></td><td>影响分析、变更检测、探索辅助。</td><td>MCP 可用且当前项目已有索引。</td><td>MCP 不可用或没有项目索引。</td></tr>
               <tr><td><strong>TestSprite</strong></td><td>测试计划、UI/E2E、API 和回归验证辅助。</td><td>涉及端到端流程、UI、API 集成、测试计划或回归验证，且 MCP 已配置。</td><td>无需 E2E、MCP/环境未配置、配置门户未完成或凭据缺失时。</td></tr>
               <tr><td><strong>React Bits Pro Skill</strong></td><td>React / shadcn UI 组件、blocks 和 landing sections 集成辅助。</td><td>前端 UI 开发，Next.js / Vite React / Remix / TanStack Start React / TanStack Router React 等 React 技术栈，项目内 Skill 已安装且 key 可读。</td><td>非 React、TanStack 非 React adapter、未使用 shadcn、项目内 Skill 安装失败或 key 不可读。</td></tr>
+              <tr><td><strong>gherkin-bdd</strong></td><td>用户可见行为的 BDD / Gherkin 持久规格和场景到测试追踪。</td><td>新增或修改 UI、API、CLI、导出文件、通知、权限、错误、状态变化或外部集成可观察行为。</td><td>纯内部重构、工具配置、机械格式化或无语义 UI polish。</td></tr>
               <tr><td><strong>web-ui-autotest-generator</strong></td><td>Web UI Playwright 测试资产、选择器审计和覆盖率报告。</td><td>需要把 Web UI 回归路径固化为入库测试代码。</td><td>非 Web UI、无稳定测试环境或已有框架不需扩展时。</td></tr>
               <tr><td><strong>Skills</strong></td><td>场景化执行规范。</td><td>任务明确匹配 Skill 描述。</td><td>不匹配、不可用或弱关联时。</td></tr>
             </tbody>
@@ -1768,8 +1769,13 @@
           </div>
           <div class="tool-card">
             <h3>project-validation <small>Checks</small></h3>
-            <p>代码修改后选择 Node、Python、Go 项目的 lint、test、build、typecheck。</p>
+            <p>代码修改后选择 Node、Python、Go 项目的 lint、test、build、typecheck，并检查 BDD 追踪。</p>
             <div class="badge-row"><span class="badge green">修改后使用</span></div>
+          </div>
+          <div class="tool-card">
+            <h3>gherkin-bdd <small>Behavior</small></h3>
+            <p>用户可见行为的持久 .feature 规格、场景质量和场景到自动化测试追踪。</p>
+            <div class="badge-row"><span class="badge cyan">用户可见行为</span></div>
           </div>
           <div class="tool-card">
             <h3>lessons-record <small>Memory</small></h3>
@@ -1904,7 +1910,7 @@
           <div class="flow-step"><div class="step-num">3</div><h3>实现与验证</h3><p>按任务产物实现，运行项目验证命令。</p></div>
           <div class="flow-step"><div class="step-num">4</div><h3>check / finish</h3><p>执行 <code>$trellis-check</code>，验证通过后 <code>$trellis-finish-work</code>。</p></div>
         </div>
-        <div class="callout">native 不禁止 <code>tdd</code> Skill。bug 修复、核心业务逻辑、算法、数据同步、导入导出或需要回归测试的修改，必须主动判定是否使用测试先行。</div>
+        <div class="callout">native 不禁止 <code>tdd</code> Skill，也不跳过 BDD 硬规则。用户可见行为先用 <code>gherkin-bdd</code> 固化场景；bug 修复、核心逻辑、数据同步、导入导出或需要回归测试的修改，再主动判定是否测试先行。</div>
         <footer class="footer-note"><span>简单文案、样式、配置说明或纯文档修改不强制 TDD。</span><span>Slide 15</span></footer>
       </article>
 
@@ -1951,7 +1957,7 @@
           </div>
           <div class="lane">
             <div class="lane-label"><b>开发前</b><span>冻结边界</span></div>
-            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务先 ui-ux-pro-max</span><span class="pill">React/shadcn + 项目 Skill + key 可读时 React Bits Pro</span><span class="pill">polish 可用 impeccable</span></div>
+            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill cyan">用户可见行为先 gherkin-bdd</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务先 ui-ux-pro-max</span><span class="pill">React/shadcn + 项目 Skill + key 可读时 React Bits Pro</span><span class="pill">polish 可用 impeccable</span></div>
           </div>
           <div class="lane">
             <div class="lane-label"><b>实现中</b><span>最小修改</span></div>
@@ -1959,7 +1965,7 @@
           </div>
           <div class="lane">
             <div class="lane-label"><b>开发后</b><span>验证闭环</span></div>
-            <div class="lane-body"><span class="pill cyan">project-validation</span><span class="pill">项目 tests/build</span><span class="pill">MCP/门户可用时 TestSprite</span><span class="pill">需入库 Playwright 时 web-ui-autotest-generator</span><span class="pill cyan">$trellis-check</span><span class="pill amber">需要时 update-spec</span><span class="pill cyan">$trellis-finish-work</span></div>
+            <div class="lane-body"><span class="pill cyan">project-validation</span><span class="pill">BDD 场景测试追踪</span><span class="pill">项目 tests/build</span><span class="pill">MCP/门户可用时 TestSprite</span><span class="pill">需入库 Playwright 时 web-ui-autotest-generator</span><span class="pill cyan">$trellis-check</span><span class="pill amber">需要时 update-spec</span><span class="pill cyan">$trellis-finish-work</span></div>
           </div>
         </div>
         <footer class="footer-note"><span>finish-work 只能在 check 和验证通过后执行。</span><span>Slide 17</span></footer>
@@ -2348,21 +2354,24 @@ tests/e2e/**/*.trace.zip
         <header class="section-head">
           <div class="eyebrow">Sources</div>
           <h2>内容来源与外部参考</h2>
-          <p>模板与 Skill 内容来自当前仓库文件；TestSprite 与 React Bits Pro 配置流程补充自官方文档，Web UI 测试资产流程参考 web-ui-autotest-generator。</p>
+          <p>模板与 Skill 内容来自当前仓库文件；BDD / Gherkin 规则参考已纳入仓库内 gherkin-bdd Skill，TestSprite 与 React Bits Pro 配置流程补充自官方文档，Web UI 测试资产流程参考 web-ui-autotest-generator。</p>
         </header>
         <div class="body source-layout compact-sources">
           <div class="card accent repo-source">
             <h3>仓库内来源</h3>
             <div class="repo-source-list">
               <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md</b><span>全局优先级、命令执行、工具可用性、Skills 调用和验证最低要求。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / TestSprite / React Bits Pro / Web UI 测试资产边界。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/trellis-workflow/SKILL.md</b><span>Trellis native / tdd workflow、before-dev、check、finish-work 和 update-spec。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/project-validation、trellis-channel、lessons-record</b><span>修改后验证、显式协作运行时和长期经验记录规则。</span></div>
+              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / BDD / TestSprite / React Bits Pro / Web UI 测试资产边界。</span></div>
+              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/trellis-workflow/SKILL.md</b><span>Trellis native / tdd workflow、BDD overlay、before-dev、check、finish-work 和 update-spec。</span></div>
+              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/project-validation、gherkin-bdd、trellis-channel、lessons-record</b><span>修改后验证、BDD 场景规格、显式协作运行时和长期经验记录规则。</span></div>
               <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/book-*</b><span>重构、遗留代码、轻量领域建模、数据密集型设计和生产就绪专项审查。</span></div>
             </div>
           </div>
           <div class="source-list featured">
             <a href="https://github.com/ciembor/agent-rules-books">agent-rules-books<span>book-derived Skills 的 mini-style 规则来源。</span></a>
+            <a href="https://github.com/chengdagong/gherkin-bdd">gherkin-bdd<span>BDD 硬规则、.feature 持久规格和 code-to-gherkin 思路参考。</span></a>
+            <a href="https://github.com/AutomationPanda/gherkin-guidelines-for-ai">Gherkin Guidelines for AI<span>Gherkin 场景质量、语言、结构和反模式参考。</span></a>
+            <a href="https://github.com/izgorodin/agent-pack-core">agent-pack-core<span>行为描述、红测、绿码的 BDD/TDD 节奏参考。</span></a>
             <a href="https://docs.testsprite.com/mcp/getting-started/installation">TestSprite Installation<span>MCP server 安装、API Key、IDE 配置与验证。</span></a>
             <a href="https://docs.testsprite.com/mcp/getting-started/first-test">First MCP Test<span>bootstrap、Testing Configuration 页面、PRD 与测试账号配置。</span></a>
             <a href="https://docs.testsprite.com/mcp/core/create-tests-new-project">Create Tests for New Projects<span>新项目测试生成 workflow 与产物。</span></a>
