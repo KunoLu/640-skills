@@ -57,13 +57,15 @@
   "externalSkillRepositories": [
     {
       "skills": [
-        "diagnose",
+        "diagnosing-bugs",
         "tdd",
         "grill-me",
         "grill-with-docs",
+        "grilling",
+        "domain-modeling",
+        "codebase-design",
         "handoff",
-        "write-a-skill",
-        "zoom-out",
+        "writing-great-skills",
         "to-prd",
         "to-issues"
       ],

@@ -7,7 +7,7 @@ description: Guides safe changes to legacy or weakly tested code by characterizi
 
 Use this Skill when the main risk is not the requested change itself, but the uncertainty around existing behavior.
 
-It is derived from the `mini` rule style of `agent-rules-books` and is intended to complement `diagnose`, `tdd`, GitNexus impact analysis, and project validation.
+It is derived from the `mini` rule style of `agent-rules-books` and is intended to complement `diagnosing-bugs`, `tdd`, GitNexus impact analysis, and project validation.
 
 ## When To Use
 

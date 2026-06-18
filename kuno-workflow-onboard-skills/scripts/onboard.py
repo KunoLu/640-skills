@@ -56,39 +56,58 @@ CLI_TOOLS = (
     },
 )
 BUNDLED_SKILLS = tuple(SKILL_SOURCES.keys())
-REFERENCED_SKILLS = (
-    "diagnose",
+MATTPOCOCK_CANONICAL_SKILLS = (
+    "diagnosing-bugs",
     "tdd",
     "grill-me",
     "grill-with-docs",
+    "grilling",
+    "domain-modeling",
+    "codebase-design",
     "handoff",
-    "write-a-skill",
-    "zoom-out",
+    "writing-great-skills",
     "to-prd",
     "to-issues",
+)
+MATTPOCOCK_LEGACY_RENAMES = {
+    "diagnose": "diagnosing-bugs",
+    "write-a-skill": "writing-great-skills",
+}
+MATTPOCOCK_REMOVED_SKILLS = {
+    "zoom-out": "Removed upstream; use repo exploration, GitNexus exploring, codebase-design, or book-refactoring-pass instead.",
+}
+MATTPOCOCK_REQUIRED_DEPENDENCIES = {
+    "tdd": ("codebase-design",),
+    "grill-me": ("grilling",),
+    "grill-with-docs": ("grilling", "domain-modeling"),
+}
+REFERENCED_SKILLS = (
+    *MATTPOCOCK_CANONICAL_SKILLS,
     "ui-ux-pro-max",
     "impeccable",
     "web-ui-autotest-generator",
 )
-MATTPOCOCK_SKILLS = (
-    "diagnose",
-    "tdd",
-    "grill-me",
-    "grill-with-docs",
-    "handoff",
-    "write-a-skill",
-    "zoom-out",
-    "to-prd",
-    "to-issues",
-)
 MATTPOCOCK_REPO = "https://github.com/mattpocock/skills.git"
+MATTPOCOCK_SKILL_SUBPATHS = {
+    "diagnosing-bugs": "skills/engineering/diagnosing-bugs",
+    "tdd": "skills/engineering/tdd",
+    "grill-me": "skills/productivity/grill-me",
+    "grill-with-docs": "skills/engineering/grill-with-docs",
+    "grilling": "skills/productivity/grilling",
+    "domain-modeling": "skills/engineering/domain-modeling",
+    "codebase-design": "skills/engineering/codebase-design",
+    "handoff": "skills/productivity/handoff",
+    "writing-great-skills": "skills/productivity/writing-great-skills",
+    "to-prd": "skills/engineering/to-prd",
+    "to-issues": "skills/engineering/to-issues",
+}
 EXTERNAL_SKILL_SOURCES = {
     **{
         name: {
             "repo": MATTPOCOCK_REPO,
             "aliases": (name,),
         }
-        for name in MATTPOCOCK_SKILLS
+        for name in MATTPOCOCK_CANONICAL_SKILLS
     },
     "impeccable": {
         "repo": "https://github.com/pbakaus/impeccable.git",
@@ -173,11 +192,7 @@ def default_global_skills_dir() -> Path:
     skills_dir = os.environ.get("AGENT_SKILLS_DIR")
     if skills_dir:
         return Path(skills_dir).expanduser().resolve()
-    if platform.system() == "Windows":
-        user_profile = os.environ.get("USERPROFILE")
-        home = Path(user_profile).expanduser() if user_profile else Path.home()
-        return (home / ".codex" / "skills").resolve()
-    return (Path.home() / ".codex" / "skills").resolve()
+    return (default_codex_home() / "skills").resolve()
 
 
 def resolve_project_root(args: argparse.Namespace, required: bool = False) -> Path | None:
@@ -882,9 +897,28 @@ def verify_operation(operation: Operation) -> list[str]:
     return compare_tree(operation.source, operation.target)
 
 
+def canonical_external_skill_name(name: str) -> str:
+    return MATTPOCOCK_LEGACY_RENAMES.get(name, name)
+
+
+def external_skill_dependency_closure(skill_names: list[str]) -> list[str]:
+    selected: list[str] = []
+
+    def add(name: str) -> None:
+        if name in selected:
+            return
+        selected.append(name)
+        for dependency in MATTPOCOCK_REQUIRED_DEPENDENCIES.get(name, ()):
+            add(dependency)
+
+    for skill_name in skill_names:
+        add(skill_name)
+    return selected
+
+
 def parse_skill_names(args: argparse.Namespace) -> list[str]:
     if getattr(args, "all", False):
-        return list(EXTERNAL_SKILL_SOURCES.keys())
+        return external_skill_dependency_closure(list(EXTERNAL_SKILL_SOURCES.keys()))
 
     raw = getattr(args, "skills", None)
     if not raw:
@@ -892,15 +926,22 @@ def parse_skill_names(args: argparse.Namespace) -> list[str]:
 
     requested = [item.strip() for item in raw.split(",") if item.strip()]
     if "all" in requested:
-        return list(EXTERNAL_SKILL_SOURCES.keys())
+        return external_skill_dependency_closure(list(EXTERNAL_SKILL_SOURCES.keys()))
 
-    unknown = [name for name in requested if name not in EXTERNAL_SKILL_SOURCES]
+    removed = [name for name in requested if name in MATTPOCOCK_REMOVED_SKILLS]
+    if removed:
+        details = "; ".join(f"{name}: {MATTPOCOCK_REMOVED_SKILLS[name]}" for name in removed)
+        raise SystemExit(f"Removed external skill(s): {details}")
+
+    canonical_requested = [canonical_external_skill_name(name) for name in requested]
+
+    unknown = [name for name in canonical_requested if name not in EXTERNAL_SKILL_SOURCES]
     if unknown:
         known = ", ".join(EXTERNAL_SKILL_SOURCES.keys())
         raise SystemExit(f"Unknown external skill(s): {', '.join(unknown)}. Known: {known}")
 
     unique: list[str] = []
-    for name in requested:
+    for name in external_skill_dependency_closure(canonical_requested):
         if name not in unique:
             unique.append(name)
     return unique
@@ -985,6 +1026,12 @@ def discover_skill_dirs(repo_root: Path) -> list[Path]:
 
 def source_dir_for_external_skill(repo_root: Path, skill_name: str) -> Path:
     spec = EXTERNAL_SKILL_SOURCES[skill_name]
+    subpath = MATTPOCOCK_SKILL_SUBPATHS.get(skill_name)
+    if subpath:
+        candidate = repo_root / subpath
+        if (candidate / "SKILL.md").is_file():
+            return candidate
+
     aliases = {str(alias) for alias in spec["aliases"]}
     candidates = discover_skill_dirs(repo_root)
     if not candidates:
@@ -1053,6 +1100,165 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
     if failures:
         return "failed", replaced_existing, "verification failed: " + ", ".join(failures[:20])
     return ("replaced" if replaced_existing else "installed"), replaced_existing, None
+
+
+def scoped_skills_root(args: argparse.Namespace, project_root: Path | None) -> Path | None:
+    if args.skills_scope == "none":
+        return None
+    if args.skills_scope == "project":
+        explicit = expand_path(args.project_skills_dir)
+        if explicit:
+            return explicit
+        if not project_root:
+            raise SystemExit("--project-root or --project-skills-dir is required for project skills")
+        return project_root / ".agent" / "skills"
+    return expand_path(args.global_skills_dir) or default_global_skills_dir()
+
+
+def external_migration_timestamp() -> str:
+    return dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def external_migration_backup_root(skills_root: Path) -> Path:
+    return skills_root.with_name(f"{skills_root.name}-backups")
+
+
+def detected_mattpocock_skill_names(skills_root: Path) -> list[str]:
+    candidates = (
+        *MATTPOCOCK_CANONICAL_SKILLS,
+        *MATTPOCOCK_LEGACY_RENAMES.keys(),
+        *MATTPOCOCK_REMOVED_SKILLS.keys(),
+    )
+    detected: list[str] = []
+    for name in candidates:
+        target = skills_root / name
+        if target.exists():
+            detected.append(name)
+    return detected
+
+
+def canonical_migration_targets(detected: list[str]) -> list[str]:
+    selected: list[str] = []
+    for name in detected:
+        if name in MATTPOCOCK_REMOVED_SKILLS:
+            continue
+        selected.append(canonical_external_skill_name(name))
+    return external_skill_dependency_closure(selected)
+
+
+def build_external_migration_plan(args: argparse.Namespace) -> dict[str, object]:
+    project_root = resolve_project_root(args)
+    skills_root = scoped_skills_root(args, project_root)
+    if not skills_root:
+        return {
+            "mode": "mattpocock-external-migration",
+            "status": "skipped",
+            "reason": "skills scope is none",
+        }
+
+    detected = detected_mattpocock_skill_names(skills_root)
+    selected = canonical_migration_targets(detected)
+    legacy = [name for name in detected if name in MATTPOCOCK_LEGACY_RENAMES or name in MATTPOCOCK_REMOVED_SKILLS]
+    canonical = [name for name in detected if name in MATTPOCOCK_CANONICAL_SKILLS]
+    return {
+        "mode": "mattpocock-external-migration",
+        "status": "planned" if detected else "skipped",
+        "reason": None if detected else "no mattpocock skills detected in target skills root",
+        "targetDir": str(skills_root),
+        "detectedLegacy": legacy,
+        "detectedCanonical": canonical,
+        "installOrUpdate": selected,
+        "removeLegacy": legacy,
+        "backupRoot": str(external_migration_backup_root(skills_root)),
+        "autoMode": "detected-only",
+    }
+
+
+def backup_skill_target(target: Path, backup_dir: Path) -> str | None:
+    if not target.exists():
+        return None
+    destination = backup_dir / target.name
+    if destination.exists():
+        remove_existing_target(destination)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    if target.is_dir() and not target.is_symlink():
+        shutil.copytree(target, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    else:
+        shutil.copy2(target, destination)
+    return str(destination)
+
+
+def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
+    if plan["status"] != "planned":
+        return [
+            {
+                "status": "skipped",
+                "reason": plan.get("reason"),
+            }
+        ]
+
+    target_dir = Path(str(plan["targetDir"]))
+    selected = [str(name) for name in plan["installOrUpdate"]]
+    legacy = [str(name) for name in plan["removeLegacy"]]
+    backup_dir = external_migration_backup_root(target_dir) / f"mattpocock-1.0-migration-{external_migration_timestamp()}"
+
+    results: list[dict[str, object]] = []
+    names_to_backup = []
+    for name in (*selected, *legacy):
+        if name not in names_to_backup and (target_dir / name).exists():
+            names_to_backup.append(name)
+
+    for name in names_to_backup:
+        try:
+            backup = backup_skill_target(target_dir / name, backup_dir)
+            results.append({"name": name, "status": "backed-up", "backup": backup})
+        except Exception as exc:  # noqa: BLE001 - keep migration report per target.
+            results.append({"name": name, "status": "failed", "phase": "backup", "error": str(exc)})
+
+    if any(item["status"] == "failed" for item in results):
+        return results
+
+    if selected:
+        with tempfile.TemporaryDirectory(prefix="kuno-onboard-mattpocock-migration-") as tmp:
+            repo_root = Path(tmp) / "mattpocock-skills"
+            ok, clone_error = clone_repo(MATTPOCOCK_REPO, repo_root)
+            if not ok:
+                results.append({"repo": MATTPOCOCK_REPO, "status": "failed", "phase": "clone", "error": clone_error})
+                return results
+
+            for name in selected:
+                try:
+                    source = source_dir_for_external_skill(repo_root, name)
+                    status, replaced_existing, error = copy_external_skill(source, target_dir / name)
+                    results.append(
+                        {
+                            "name": name,
+                            "status": status,
+                            "phase": "install",
+                            "source": str(source),
+                            "target": str(target_dir / name),
+                            "replacedExisting": replaced_existing,
+                            "error": error,
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001 - keep migration report per target.
+                    results.append({"name": name, "status": "failed", "phase": "install", "error": str(exc)})
+
+    if any(item["status"] == "failed" for item in results):
+        return results
+
+    for name in legacy:
+        target = target_dir / name
+        if not target.exists():
+            results.append({"name": name, "status": "already-absent", "phase": "remove-legacy"})
+            continue
+        try:
+            remove_existing_target(target)
+            results.append({"name": name, "status": "removed", "phase": "remove-legacy", "target": str(target)})
+        except Exception as exc:  # noqa: BLE001 - keep migration report per target.
+            results.append({"name": name, "status": "failed", "phase": "remove-legacy", "error": str(exc)})
+
+    return results
 
 
 def install_external_skills(args: argparse.Namespace) -> int:
@@ -1415,16 +1621,9 @@ def build_operations(args: argparse.Namespace) -> list[Operation]:
         )
 
     if args.skills_scope != "none":
-        if args.skills_scope == "project":
-            explicit = expand_path(args.project_skills_dir)
-            if explicit:
-                skills_root = explicit
-            else:
-                if not project_root:
-                    raise SystemExit("--project-root or --project-skills-dir is required for project skills")
-                skills_root = project_root / ".agent" / "skills"
-        else:
-            skills_root = expand_path(args.global_skills_dir) or default_global_skills_dir()
+        skills_root = scoped_skills_root(args, project_root)
+        if not skills_root:
+            raise SystemExit("Unable to resolve target skills directory")
 
         for name, source in SKILL_SOURCES.items():
             target = skills_root / name
@@ -1441,7 +1640,12 @@ def build_operations(args: argparse.Namespace) -> list[Operation]:
     return operations
 
 
-def print_plan(mode: str, operations: list[Operation], as_json: bool) -> None:
+def print_plan(
+    mode: str,
+    operations: list[Operation],
+    as_json: bool,
+    external_migration_plan: dict[str, object] | None = None,
+) -> None:
     payload = {
         "mode": mode,
         "platform": platform.system() or sys.platform,
@@ -1458,6 +1662,8 @@ def print_plan(mode: str, operations: list[Operation], as_json: bool) -> None:
             for op in operations
         ],
     }
+    if external_migration_plan:
+        payload["externalMigration"] = external_migration_plan
     if as_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
@@ -1470,6 +1676,21 @@ def print_plan(mode: str, operations: list[Operation], as_json: bool) -> None:
         else:
             exists = "exists" if item["targetExists"] else "missing"
         print(f"- {item['label']}: {item['target']} ({exists})")
+    if external_migration_plan:
+        print("\nExternal mattpocock migration:")
+        print(f"- status: {external_migration_plan['status']}")
+        if external_migration_plan.get("targetDir"):
+            print(f"- target skills dir: {external_migration_plan['targetDir']}")
+        if external_migration_plan.get("reason"):
+            print(f"- reason: {external_migration_plan['reason']}")
+        if external_migration_plan.get("detectedLegacy"):
+            print("- detected legacy: " + ", ".join(str(name) for name in external_migration_plan["detectedLegacy"]))
+        if external_migration_plan.get("detectedCanonical"):
+            print("- detected canonical: " + ", ".join(str(name) for name in external_migration_plan["detectedCanonical"]))
+        if external_migration_plan.get("installOrUpdate"):
+            print("- install/update: " + ", ".join(str(name) for name in external_migration_plan["installOrUpdate"]))
+        if external_migration_plan.get("removeLegacy"):
+            print("- remove legacy: " + ", ".join(str(name) for name in external_migration_plan["removeLegacy"]))
 
 
 def operation_allows_existing_target(operation: Operation) -> bool:
@@ -1513,6 +1734,26 @@ def print_operation_report(results: list[dict[str, object]], heading: str = "Ope
             print(f"  reason: {item['reason']}")
 
 
+def print_external_migration_report(results: list[dict[str, object]]) -> None:
+    print("\nExternal mattpocock migration report:")
+    if not results:
+        print("- none")
+        return
+    for item in results:
+        label = item.get("name") or item.get("repo") or "migration"
+        print(f"- {label}: {item['status']}")
+        if item.get("phase"):
+            print(f"  phase: {item['phase']}")
+        if item.get("target"):
+            print(f"  target: {item['target']}")
+        if item.get("backup"):
+            print(f"  backup: {item['backup']}")
+        if item.get("error"):
+            print(f"  error: {item['error']}")
+        if item.get("reason"):
+            print(f"  reason: {item['reason']}")
+
+
 def ensure_confirmed(args: argparse.Namespace, mode: str) -> None:
     if mode == "plan":
         return
@@ -1536,7 +1777,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         print("")
 
     operations = build_operations(args)
-    print_plan(mode, operations, args.json)
+    external_migration_plan = build_external_migration_plan(args)
+    print_plan(mode, operations, args.json, external_migration_plan)
     if mode == "plan":
         return 0
 
@@ -1612,6 +1854,17 @@ def run(mode: str, args: argparse.Namespace) -> int:
         for item in failed_operations:
             print(f"- {item['label']}: {item.get('reason', 'unknown failure')}", file=sys.stderr)
         return 3
+
+    migration_results = run_external_migration(external_migration_plan)
+    failed_migrations = [item for item in migration_results if item["status"] == "failed"]
+    if not args.json:
+        print_external_migration_report(migration_results)
+    if failed_migrations:
+        print("External mattpocock migration failed:", file=sys.stderr)
+        for item in failed_migrations:
+            label = item.get("name") or item.get("repo") or "migration"
+            print(f"- {label}: {item.get('error', 'unknown failure')}", file=sys.stderr)
+        return 4
 
     print("Verification passed.")
     if not args.json:

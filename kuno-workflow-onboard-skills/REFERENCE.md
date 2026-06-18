@@ -63,7 +63,7 @@ The check reports:
 - `trellis` CLI availability and version output when available.
 - `gitnexus` CLI availability and version output when available.
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills and bundled book-derived skills.
-- Referenced Skill presence for `diagnose`, `tdd`, `grill-me`, `grill-with-docs`, `handoff`, `write-a-skill`, `zoom-out`, `to-prd`, `to-issues`, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
+- Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual setup checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
@@ -85,7 +85,7 @@ Bundled skills:
 - trellis-workflow: installed / missing
 
 Referenced skills:
-- diagnose: installed / missing
+- diagnosing-bugs: installed / missing
 
 Manual checks:
 - TestSprite MCP: confirm MCP server and API key
@@ -125,7 +125,7 @@ Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring 
 
 AGENTS targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md` or project `AGENTS.md` is present, it is first renamed with the dated backup rule, then the template is copied into the target path.
 
-Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path.
+Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or explicitly installed external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path. During `init` / `reset`, mattpocock external skills use detected-only migration: if the target skills root already contains old or current mattpocock skills, legacy directories are backed up to a timestamped backup directory, canonical 1.0+ skills and required dependency skills are installed or updated, and legacy directories such as `diagnose`, `write-a-skill`, and removed `zoom-out` are removed from that target root. If no mattpocock skills are detected, no external mattpocock skills are installed.
 
 ## Bundled Book-Derived Skills
 
@@ -230,13 +230,15 @@ Referenced external skills are not bundled under `templates/`. When the user con
 
 | Skill | Repository |
 |---|---|
-| `diagnose` | `https://github.com/mattpocock/skills.git` |
+| `diagnosing-bugs` | `https://github.com/mattpocock/skills.git` |
 | `tdd` | `https://github.com/mattpocock/skills.git` |
 | `grill-me` | `https://github.com/mattpocock/skills.git` |
 | `grill-with-docs` | `https://github.com/mattpocock/skills.git` |
+| `grilling` | `https://github.com/mattpocock/skills.git` |
+| `domain-modeling` | `https://github.com/mattpocock/skills.git` |
+| `codebase-design` | `https://github.com/mattpocock/skills.git` |
 | `handoff` | `https://github.com/mattpocock/skills.git` |
-| `write-a-skill` | `https://github.com/mattpocock/skills.git` |
-| `zoom-out` | `https://github.com/mattpocock/skills.git` |
+| `writing-great-skills` | `https://github.com/mattpocock/skills.git` |
 | `to-prd` | `https://github.com/mattpocock/skills.git` |
 | `to-issues` | `https://github.com/mattpocock/skills.git` |
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
@@ -247,10 +249,12 @@ Install approved missing external skills with:
 
 ```bash
 python scripts/onboard.py install-external-skills \
-  --skills diagnose,tdd,grill-me \
+  --skills diagnosing-bugs,tdd,grill-me \
   --scope global \
   --yes
 ```
+
+Legacy input names are handled deliberately: `diagnose` is normalized to `diagnosing-bugs`, `write-a-skill` is normalized to `writing-great-skills`, and removed `zoom-out` is rejected with a migration note. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
 
 Install all known external referenced skills:
 
@@ -324,8 +328,8 @@ Global skills path:
 
 1. `--global-skills-dir`, if provided.
 2. `$AGENT_SKILLS_DIR`, if set.
-3. macOS / Linux fallback: `~/.codex/skills`.
-4. Windows fallback: `%USERPROFILE%\.codex\skills`.
+3. `$CODEX_HOME/skills`, if `CODEX_HOME` is set.
+4. `~/.codex/skills`.
 
 Legacy paths such as `~/.agent/skills` are not used as automatic fallbacks. Use `--global-skills-dir ~/.agent/skills` or set `$AGENT_SKILLS_DIR` when a local machine intentionally uses that directory.
 

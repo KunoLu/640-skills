@@ -34,8 +34,10 @@ Summarize the runtime, CLI tool, bundled skill, referenced skill, manual MCP set
 2. Install any user-approved missing tools or skills, then rerun `check`. External referenced skills must be pulled from their configured GitHub repositories only after confirmation. Skills are force-installed: existing bundled or external skill targets are overwritten without backup instead of skipped.
 
 ```bash
-python scripts/onboard.py install-external-skills --skills diagnose,tdd --scope global --yes
+python scripts/onboard.py install-external-skills --skills diagnosing-bugs,tdd --scope global --yes
 ```
+
+mattpocock/skills 1.0+ uses canonical names. The installer normalizes legacy `diagnose` to `diagnosing-bugs`, legacy `write-a-skill` to `writing-great-skills`, and rejects removed `zoom-out` with a migration note. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
 
 For missing RTK, confirm with the user and run `python scripts/onboard.py install-rtk --yes`; for verification failure, use `--reinstall --yes` only after confirmation. Always verify with `rtk gain`. If installation fails, report the failed item, attempted action, likely cause, and recommended next step. MCP items are check-and-guide only; never claim MCP installation is complete unless the user has completed the listed manual steps and a later check confirms the tools are visible.
 
@@ -51,7 +53,7 @@ python scripts/onboard.py plan --project-root <project-root>
 python scripts/onboard.py init --project-root <project-root> --yes
 ```
 
-5. For a reset, run `reset`. It uses the same behavior: AGENTS are backed up and overwritten, while bundled skills are overwritten without backup:
+5. For a reset, run `reset`. It uses the same behavior: AGENTS are backed up and overwritten, while bundled skills are overwritten without backup. If the target skills root already contains old or current mattpocock skills, reset also runs a detected-only external migration: legacy mattpocock skill directories are backed up, 1.0+ canonical skills and required dependency skills are installed or updated, and legacy directories such as `diagnose`, `write-a-skill`, and removed `zoom-out` are removed from that target root.
 
 ```bash
 python scripts/onboard.py reset --project-root <project-root> --yes
@@ -88,7 +90,7 @@ The `check` command inspects:
 The script detects the current platform and uses these defaults:
 
 - Codex global AGENTS: `$CODEX_HOME/AGENTS.md`, otherwise `~/.codex/AGENTS.md`.
-- Global skills: `$AGENT_SKILLS_DIR`, otherwise platform default `~/.codex/skills` on macOS/Linux or `%USERPROFILE%\.codex\skills` on Windows. Use `--global-skills-dir` for legacy paths such as `~/.agent/skills`.
+- Global skills: `--global-skills-dir`, otherwise `$AGENT_SKILLS_DIR`, otherwise `$CODEX_HOME/skills`, otherwise `~/.codex/skills`. Use `--global-skills-dir` for explicit legacy paths such as `~/.agent/skills`; do not treat `~/.agent/skills` as the portable global default.
 - Project AGENTS: `<project-root>/AGENTS.md`.
 - Project `.gitignore`: `<project-root>/.gitignore`, when `--project-root` is provided.
 - Project skills: `<project-root>/.agent/skills`.

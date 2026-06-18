@@ -75,16 +75,18 @@ flowchart TD
 
 ## 2. mattpocock/skills 接入规则
 
-仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并默认原样使用官方文件：
+仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并默认原样使用官方文件。mattpocock/skills 1.0 后，旧名 `diagnose`、`write-a-skill` 已迁移，`zoom-out` 已从官方仓库移除；本配置只保留 1.0+ canonical Skill：
 
 ```text
-diagnose
+diagnosing-bugs
 tdd
 grill-me
 grill-with-docs
+grilling
+domain-modeling
+codebase-design
 handoff
-write-a-skill
-zoom-out
+writing-great-skills
 to-prd
 to-issues
 ```
@@ -93,13 +95,15 @@ to-issues
 
 | Skill | 使用场景 | 本地适配 |
 |---|---|---|
-| `diagnose` | bug、测试失败、运行时错误、性能回归、线上问题、日志异常、数据不一致 | 结合 GitNexus debugging / impact-analysis；修复后补充回归测试 |
-| `tdd` | bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑、高风险修改 | 不强制用于简单文案、样式、配置说明或一次性脚本 |
-| `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 一次问一个关键问题；能通过读项目文件回答时先读文件 |
-| `grill-with-docs` | 项目内需求澄清、术语对齐、CONTEXT.md / ADR 沉淀 | 不把 CONTEXT.md 写成临时规格书 |
+| `diagnosing-bugs` | bug、测试失败、运行时错误、性能回归、线上问题、日志异常、数据不一致 | 结合 GitNexus debugging / impact-analysis；修复后补充回归测试 |
+| `tdd` | bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑、高风险修改 | 依赖 `codebase-design`；不强制用于简单文案、样式、配置说明或一次性脚本 |
+| `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 依赖 `grilling`；一次问一个关键问题；能通过读项目文件回答时先读文件 |
+| `grill-with-docs` | 项目内需求澄清、术语对齐、CONTEXT.md / ADR 沉淀 | 依赖 `grilling` 和 `domain-modeling`；不把 CONTEXT.md 写成临时规格书 |
+| `grilling` | 可复用逐问题访谈循环 | 作为 `grill-me` / `grill-with-docs` 的底层依赖，不作为默认独立入口 |
+| `domain-modeling` | 项目语言、glossary、CONTEXT.md / ADR 建模辅助 | 遵守本地 `docs/CONTEXT.md`、`docs/adr/*.md` 路径约束 |
+| `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | 作为 `tdd`、陌生模块理解和结构性修改前的设计辅助 |
 | `handoff` | 长会话切换、`/clear`、新会话、Trellis 暂停或多会话交接 | 输出目标、已完成工作、决策、文件、命令、开放问题、下一步和脱敏说明 |
-| `write-a-skill` | 创建或维护自定义 Skill | `SKILL.md` 做入口；长内容拆 reference；确定性操作优先脚本化 |
-| `zoom-out` | 陌生模块、系统上下文、调用方地图、修改前理解边界 | 需要实现时再结合 GitNexus exploring / impact-analysis |
+| `writing-great-skills` | 创建或维护自定义 Skill 的质量规则 | `SKILL.md` 做入口；长内容拆 reference；确定性操作优先脚本化 |
 | `to-prd` | 将当前对话和代码库理解整理为 PRD | 默认输出 Markdown PRD；不自动发布到 issue tracker |
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 默认输出 Trellis-ready Markdown vertical slices；不自动发布到 issue tracker |
 
@@ -116,17 +120,17 @@ Codex
 普通 Bug 修复：
 
 ```text
-diagnose
+diagnosing-bugs
   → GitNexus debugging（根因不清时）
   → Codex fix
-  → tdd（需要回归测试时）
+  → tdd / codebase-design（需要回归测试或测试面设计时）
   → 项目测试
 ```
 
 线上问题 / 客户反馈 / 日志异常：
 
 ```text
-diagnose
+diagnosing-bugs
   → 时间线 / 事实 / 假设 / 排除项
   → GitNexus debugging（涉及代码根因时）
   → Codex fix or mitigation
@@ -138,13 +142,13 @@ diagnose
 中大型功能开发：
 
 ```text
-grill-me / grill-with-docs
+grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用 domain-modeling）
   → to-prd
   → to-issues as Trellis-ready Markdown tasks
   → Trellis workflow（默认 native）
   → GitNexus impact-analysis
   → Codex implementation
-  → tdd Skill（行为风险需要回归测试时）
+  → tdd / codebase-design（行为风险需要回归测试或测试面设计时）
   → project tests / TestSprite（MCP / 配置门户可用时）
   → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
   → React Bits Pro Skill（React / shadcn UI、项目内 Skill 与 license key 前提都满足时）
@@ -154,10 +158,11 @@ grill-me / grill-with-docs
 
 ```text
 grill-with-docs
+  → domain-modeling
   → to-prd
   → to-issues as Trellis-ready Markdown tasks
   → Trellis TDD workflow
-  → tdd
+  → tdd / codebase-design
   → GitNexus impact-analysis
   → Codex implementation
   → regression tests
@@ -166,7 +171,7 @@ grill-with-docs
 陌生模块理解 / 修改前理解上下文：
 
 ```text
-zoom-out
+代码阅读 / codebase-design
   → GitNexus exploring
   → GitNexus impact-analysis
   → Codex implementation

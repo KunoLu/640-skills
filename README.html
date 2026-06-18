@@ -1140,6 +1140,218 @@
       }
     }
 
+    .slide.compact-slide {
+      --gap: clamp(8px, 0.86vw, 12px);
+      --text-card: clamp(10.5px, 0.82vw, 13px);
+      --text-small: clamp(10px, 0.78vw, 12px);
+    }
+
+    .compact-slide .section-head {
+      gap: 6px;
+    }
+
+    .compact-slide h2 {
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1.08;
+    }
+
+    .compact-slide .section-head p {
+      max-width: 100%;
+      font-size: clamp(11.5px, 0.92vw, 14px);
+      line-height: 1.3;
+    }
+
+    .compact-slide .footer-note {
+      font-size: clamp(10px, 0.8vw, 12px);
+      line-height: 1.25;
+      min-height: 14px;
+    }
+
+    .skill-grid-compact {
+      gap: clamp(8px, 0.86vw, 12px);
+    }
+
+    .skill-grid-compact .tool-card {
+      grid-template-rows: auto auto auto;
+      padding: clamp(10px, 0.95vw, 14px);
+      gap: 6px;
+    }
+
+    .skill-grid-compact .tool-card h3 {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      font-size: clamp(12px, 0.98vw, 15px);
+      line-height: 1.12;
+    }
+
+    .skill-grid-compact .tool-card small {
+      font-size: clamp(9.5px, 0.76vw, 11px);
+    }
+
+    .skill-grid-compact .tool-card p {
+      font-size: clamp(10.5px, 0.82vw, 12.5px);
+      line-height: 1.25;
+    }
+
+    .skill-grid-compact .tool-card .badge {
+      min-height: 24px;
+      padding: 4px 6px;
+      font-size: clamp(9.5px, 0.76vw, 11px);
+      line-height: 1.2;
+    }
+
+    .matt-skills-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-auto-rows: minmax(0, 1fr);
+      gap: clamp(8px, 0.84vw, 12px);
+    }
+
+    .matt-skills-grid .card {
+      min-height: 0;
+      align-content: start;
+      padding: clamp(9px, 0.82vw, 13px);
+      gap: 5px;
+    }
+
+    .matt-skills-grid h3 {
+      font-size: clamp(12px, 0.95vw, 14px);
+      line-height: 1.12;
+      overflow-wrap: anywhere;
+    }
+
+    .matt-skills-grid .card p {
+      font-size: clamp(10px, 0.76vw, 12px);
+      line-height: 1.24;
+    }
+
+    .workflow-lanes {
+      gap: clamp(7px, 0.72vw, 10px);
+    }
+
+    .workflow-lanes .lane {
+      min-height: 0;
+      grid-template-columns: minmax(122px, 0.18fr) minmax(0, 1fr);
+    }
+
+    .workflow-lanes .lane-label,
+    .workflow-lanes .lane-body {
+      padding: clamp(9px, 0.9vw, 13px);
+    }
+
+    .workflow-lanes .lane-label {
+      gap: 4px;
+    }
+
+    .workflow-lanes .lane-label b {
+      font-size: clamp(12px, 0.96vw, 15px);
+      line-height: 1.15;
+    }
+
+    .workflow-lanes .lane-label span {
+      font-size: clamp(9.5px, 0.74vw, 11px);
+    }
+
+    .workflow-lanes .lane-body {
+      gap: 6px;
+      align-content: center;
+    }
+
+    .workflow-lanes .pill {
+      padding: 5px 7px;
+      font-size: clamp(9.5px, 0.74vw, 11.5px);
+      line-height: 1.18;
+      white-space: normal;
+    }
+
+    .dense-code-split {
+      grid-template-columns: minmax(0, 1.18fr) minmax(260px, 0.82fr);
+      gap: clamp(8px, 0.86vw, 12px);
+    }
+
+    .dense-code-split pre {
+      padding: 9px 10px;
+      font-size: clamp(8.5px, 0.7vw, 10.5px);
+      line-height: 1.2;
+    }
+
+    .dense-code-split .mini-panel {
+      align-content: start;
+      padding: clamp(10px, 0.95vw, 14px);
+      gap: 7px;
+    }
+
+    .dense-code-split .mini-panel h3 {
+      font-size: clamp(13px, 0.98vw, 15px);
+      line-height: 1.12;
+    }
+
+    .dense-code-split .mini-panel ul {
+      margin: 0;
+      padding-left: 17px;
+      display: grid;
+      gap: 3px;
+    }
+
+    .dense-code-split .mini-panel li {
+      font-size: clamp(9.5px, 0.74vw, 11.5px);
+      line-height: 1.2;
+    }
+
+    .dense-code-split .callout {
+      padding: 7px 9px;
+      font-size: clamp(9.5px, 0.74vw, 11.5px);
+      line-height: 1.22;
+    }
+
+    .source-layout.compact-sources {
+      grid-template-columns: minmax(260px, 0.94fr) minmax(0, 1.06fr);
+      gap: clamp(8px, 0.86vw, 12px);
+    }
+
+    .compact-sources .repo-source {
+      padding: clamp(11px, 0.95vw, 15px);
+      gap: 7px;
+    }
+
+    .compact-sources .repo-source h3 {
+      font-size: clamp(13px, 1vw, 16px);
+      line-height: 1.12;
+    }
+
+    .compact-sources .repo-source-list {
+      grid-template-rows: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .compact-sources .repo-source-item {
+      padding: 7px 8px;
+      gap: 2px;
+    }
+
+    .compact-sources .repo-source-item b,
+    .compact-sources .repo-source-item span {
+      font-size: clamp(9.5px, 0.74vw, 11.5px);
+      line-height: 1.18;
+    }
+
+    .compact-sources .source-list.featured {
+      gap: clamp(6px, 0.62vw, 9px);
+    }
+
+    .compact-sources .source-list.featured a {
+      padding: 8px 9px;
+      align-content: center;
+      font-size: clamp(10px, 0.78vw, 12px);
+      line-height: 1.18;
+      overflow-wrap: anywhere;
+    }
+
+    .compact-sources .source-list span {
+      margin-top: 4px;
+      font-size: clamp(9.5px, 0.74vw, 11px);
+      line-height: 1.18;
+    }
+
     @media (max-width: 900px), (max-height: 620px) {
       .deck-shell {
         padding: 0;
@@ -1234,11 +1446,21 @@
         height: auto;
       }
 
+      .matt-skills-grid,
+      .dense-code-split,
+      .source-layout.compact-sources {
+        grid-template-columns: 1fr;
+      }
+
       .flow-step::after {
         display: none;
       }
 
       .lane {
+        grid-template-columns: 1fr;
+      }
+
+      .workflow-lanes .lane {
         grid-template-columns: 1fr;
       }
 
@@ -1343,7 +1565,7 @@
         <div class="body toc">
           <div class="toc-item"><div class="toc-num">01</div><div><b>模板层级</b><span>全局规则、项目级规则、仓库内 Skill。</span></div></div>
           <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite、React Bits Pro、web-ui-autotest-generator。</span></div></div>
-          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>仓库内 workflow / book-derived Skills、UI/UX Skills 与 mattpocock/skills 九件套。</span></div></div>
+          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>仓库内 workflow / book-derived Skills、UI/UX Skills 与 mattpocock/skills 1.0+ 核心集。</span></div></div>
           <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、实际编码流程。</span></div></div>
           <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation、TestSprite 与 Web UI Playwright 测试资产。</span></div></div>
           <div class="toc-item"><div class="toc-num">06</div><div><b>Git 参考规则</b><span>ignore 和 attributes 的项目落地建议。</span></div></div>
@@ -1527,13 +1749,13 @@
         <footer class="footer-note"><span>TestSprite 产物通常落在 testsprite_tests/ 下；Web UI Playwright 资产按项目策略进入 tests/e2e/。</span><span>Slide 10</span></footer>
       </article>
 
-      <article class="slide" data-title="仓库内 Skills">
+      <article class="slide compact-slide" data-title="仓库内 Skills">
         <header class="section-head">
           <div class="eyebrow">Local Skills</div>
           <h2>仓库内维护的 workflow 与 book-derived Skills</h2>
           <p>这些 Skill 是模板体系的本地执行手册，直接描述什么时候该做什么，以及什么不能做。</p>
         </header>
-        <div class="body grid-4">
+        <div class="body grid-4 skill-grid-compact">
           <div class="tool-card">
             <h3>trellis-workflow <small>Lifecycle</small></h3>
             <p>Trellis 生命周期、task artifacts、before-dev、check、finish-work、update-spec。</p>
@@ -1618,20 +1840,22 @@
         <footer class="footer-note"><span>外部 Skill 不自动触发，必须与任务场景明确匹配。</span><span>Slide 12</span></footer>
       </article>
 
-      <article class="slide" data-title="mattpocock Skills 九件套">
+      <article class="slide compact-slide" data-title="mattpocock Skills 1.0+ 核心集">
         <header class="section-head">
           <div class="eyebrow">mattpocock/skills</div>
-          <h2>接入的 9 个官方 Skill 与作用</h2>
-          <p>模板要求默认原样使用这些官方 Skill，不 fork、不改写，除非用户明确要求。</p>
+          <h2>接入的 1.0+ 官方 Skill 与作用</h2>
+          <p>模板要求默认原样使用这些官方 Skill，不 fork、不改写；旧名会迁移，已移除的 zoom-out 不再接入。</p>
         </header>
-        <div class="body matrix">
-          <div class="card"><h3>diagnose</h3><p>建立事实、复现、假设、排除项和根因分析。</p></div>
-          <div class="card"><h3>tdd</h3><p>通过 red-green-refactor 固化行为，再实现修改。</p></div>
-          <div class="card"><h3>grill-me</h3><p>对计划、设计或决策进行通用质询和压力测试。</p></div>
-          <div class="card"><h3>grill-with-docs</h3><p>结合项目文档澄清需求、术语、领域模型和 ADR。</p></div>
+        <div class="body matrix matt-skills-grid">
+          <div class="card"><h3>diagnosing-bugs</h3><p>建立事实、复现、假设、排除项和根因分析。</p></div>
+          <div class="card"><h3>tdd</h3><p>通过 red-green-refactor 固化行为；依赖 codebase-design 判断测试面。</p></div>
+          <div class="card"><h3>grill-me</h3><p>对计划、设计或决策进行通用质询；依赖 grilling。</p></div>
+          <div class="card"><h3>grill-with-docs</h3><p>结合项目文档澄清需求、术语、领域模型和 ADR；依赖 grilling / domain-modeling。</p></div>
+          <div class="card"><h3>grilling</h3><p>逐问题访谈循环，是 grill-me 和 grill-with-docs 的底层流程。</p></div>
+          <div class="card"><h3>domain-modeling</h3><p>维护项目语言、glossary、CONTEXT.md 和 ADR 决策沉淀。</p></div>
+          <div class="card"><h3>codebase-design</h3><p>梳理模块、接口、seam、adapter 和测试边界。</p></div>
           <div class="card"><h3>handoff</h3><p>长任务暂停、上下文压缩或跨会话交接。</p></div>
-          <div class="card"><h3>write-a-skill</h3><p>创建或维护自定义 Skill，长内容拆 reference，确定性操作脚本化。</p></div>
-          <div class="card"><h3>zoom-out</h3><p>不熟悉模块时先提升抽象层级，理解边界和调用方。</p></div>
+          <div class="card"><h3>writing-great-skills</h3><p>创建或维护自定义 Skill，长内容拆 reference，确定性操作脚本化。</p></div>
           <div class="card"><h3>to-prd</h3><p>将需求和代码库理解整理成 Markdown PRD。</p></div>
           <div class="card"><h3>to-issues</h3><p>把 PRD 或 plan 拆成 Trellis-ready vertical slices。</p></div>
         </div>
@@ -1714,13 +1938,13 @@
         <footer class="footer-note"><span>默认仍用 native；普通行为风险用 native + tdd Skill，只有高风险行为或项目已采用 TDD 时切换 workflow。</span><span>Slide 16</span></footer>
       </article>
 
-      <article class="slide" data-title="实际编码流程">
+      <article class="slide compact-slide" data-title="实际编码流程">
         <header class="section-head">
           <div class="eyebrow">Coding Workflow</div>
           <h2>实际编码过程中的执行流程</h2>
           <p>这是一条推荐的端到端路径，真实项目仍以自己的 workflow、任务产物和验证命令为准。</p>
         </header>
-        <div class="body lane-wrap">
+        <div class="body lane-wrap workflow-lanes">
           <div class="lane">
             <div class="lane-label"><b>进入任务</b><span>读取上下文</span></div>
             <div class="lane-body"><span class="pill cyan">确认 Trellis 证据</span><span class="pill">读取 workflow</span><span class="pill">读取 spec</span><span class="pill">读取 prd/design/implement</span></div>
@@ -1988,13 +2212,13 @@ tests/e2e/**/*.trace.zip
         <footer class="footer-note"><span>这页是参考内容，不是当前仓库配置变更。</span><span>Slide 21</span></footer>
       </article>
 
-      <article class="slide" data-title="AI 工具 Git 参考">
+      <article class="slide compact-slide" data-title="AI 工具 Git 参考">
         <header class="section-head">
           <div class="eyebrow">AI Tooling Git Rules</div>
           <h2>Trellis、GitNexus、Impeccable、TestSprite、React Bits Pro 和 Web UI 测试资产的参考忽略策略</h2>
           <p>核心思路：保留人类需要审查的规范和任务产物，忽略 runtime、cache、worktree 和大体量机器生成物。</p>
         </header>
-        <div class="body code-split">
+        <div class="body code-split dense-code-split">
           <pre><code># ---------- Trellis ----------
 .trellis/*
 !.trellis/spec/
@@ -2120,13 +2344,13 @@ tests/e2e/**/*.trace.zip
         <footer class="footer-note"><span>最终标准：可理解、可验证、可维护、可回滚。</span><span>Slide 23</span></footer>
       </article>
 
-      <article class="slide" data-title="参考来源">
+      <article class="slide compact-slide" data-title="参考来源">
         <header class="section-head">
           <div class="eyebrow">Sources</div>
           <h2>内容来源与外部参考</h2>
           <p>模板与 Skill 内容来自当前仓库文件；TestSprite 与 React Bits Pro 配置流程补充自官方文档，Web UI 测试资产流程参考 web-ui-autotest-generator。</p>
         </header>
-        <div class="body source-layout">
+        <div class="body source-layout compact-sources">
           <div class="card accent repo-source">
             <h3>仓库内来源</h3>
             <div class="repo-source-list">
@@ -2157,7 +2381,7 @@ tests/e2e/**/*.trace.zip
   <nav class="controls" aria-label="Slide navigation">
     <button class="nav-btn" id="prevBtn" type="button" title="上一页" aria-label="上一页">‹</button>
     <button class="index-btn" id="indexBtn" type="button" title="目录" aria-label="目录">☰</button>
-    <div class="counter"><span id="current">01</span>/<span id="total">26</span></div>
+    <div class="counter"><span id="current">01</span>/<span id="total">24</span></div>
     <button class="nav-btn" id="nextBtn" type="button" title="下一页" aria-label="下一页">›</button>
   </nav>
   <aside class="index-panel" id="indexPanel" aria-label="Slide index"></aside>

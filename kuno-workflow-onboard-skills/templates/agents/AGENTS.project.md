@@ -125,27 +125,31 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 本项目只接入以下官方 mattpocock/skills，并默认原样使用：
 
-- `diagnose`
+- `diagnosing-bugs`
 - `tdd`
 - `grill-me`
 - `grill-with-docs`
+- `grilling`
+- `domain-modeling`
+- `codebase-design`
 - `handoff`
-- `write-a-skill`
-- `zoom-out`
+- `writing-great-skills`
 - `to-prd`
 - `to-issues`
 
+旧官方 Skill `diagnose`、`write-a-skill` 已迁移为 `diagnosing-bugs`、`writing-great-skills`；`zoom-out` 已从上游移除，不再作为 mattpocock 官方 Skill 接入。
+
 编排说明：
 
-- 普通 bug、测试失败或运行时异常：`diagnose` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
-- 线上问题、日志异常或数据不一致：`diagnose` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs` → 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
-- 不依赖项目文档或领域术语的通用方案质询：`grill-me` → 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
-- 需要回归测试的普通行为修改：Trellis `native` workflow → 主动判定 `tdd` Skill → GitNexus impact-analysis → 项目测试。
-- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` → GitNexus impact-analysis → 回归测试。
-- 陌生模块或上下文不清：`zoom-out` → GitNexus exploring / impact-analysis → Codex implementation。
+- 普通 bug、测试失败或运行时异常：`diagnosing-bugs` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
+- 线上问题、日志异常或数据不一致：`diagnosing-bugs` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
+- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-prd` → `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
+- 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
+- 需要回归测试的普通行为修改：Trellis `native` workflow → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
+- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `to-issues` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
+- 陌生模块或上下文不清：代码阅读 / `codebase-design` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
-- 需要创建或维护 Skill 时：`write-a-skill`。
+- 需要创建或维护 Skill 时：`writing-great-skills`。
 
 `to-prd` 默认输出 Markdown PRD；`to-issues` 默认输出 vertical-slice Markdown tasks。在 Trellis 项目中，这些产物最终应进入 `.trellis/tasks/<task>/prd.md`、`design.md`、`implement.md` 或 parent / child task artifacts。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
 
@@ -169,8 +173,8 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 需求 / PRD 阶段：涉及业务术语、领域规则或 bounded context 时，`grill-with-docs` → `book-ddd-distilled-modeling` → `to-prd` → `to-issues` → Trellis workflow。
 - 设计阶段：涉及存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流时，`grill-with-docs` / `to-prd` → `book-ddia-data-design` → `design.md` / `implement.md` → Trellis / `tdd` / GitNexus impact-analysis。
-- 开发前 / 开发中：结构性阻碍当前实现或 review 需要判断是否先重构时，`zoom-out` / GitNexus exploring → `book-refactoring-pass` → Codex implementation → 项目验证。
-- 遗留 bug 修复：目标代码测试不足、行为不清或隐藏依赖较多时，`diagnose` → `book-legacy-change-safety` → `tdd` / characterization test → Codex fix → 项目验证。
+- 开发前 / 开发中：结构性阻碍当前实现或 review 需要判断是否先重构时，代码阅读 / `codebase-design` / GitNexus exploring → `book-refactoring-pass` → Codex implementation → 项目验证。
+- 遗留 bug 修复：目标代码测试不足、行为不清或隐藏依赖较多时，`diagnosing-bugs` → `book-legacy-change-safety` → `tdd` / characterization test → Codex fix → 项目验证。
 - 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 TestSprite / `web-ui-autotest-generator` gate；如仍有高风险 review 缺口，再进入 Channel preflight。
 
 同一任务不要默认全量调用 5 个 book-derived Skill；按当前主风险选择最相关的 1-2 个。只有任务横跨需求建模、数据设计、遗留代码和生产发布多个风险面时，才分阶段调用多个。
