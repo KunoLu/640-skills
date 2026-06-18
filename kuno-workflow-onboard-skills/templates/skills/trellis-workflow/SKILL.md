@@ -147,6 +147,7 @@ Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具
 - 如果上游 migration manifest 建议迁移，或项目中存在拼写错误的 `trellis-spec-bootstarp/` skill 目录，运行 `trellis update --migrate`，让 Trellis 处理跨平台目录重命名。
 - `trellis update` 可能安装新的 bundled skills、平台模板或 `.trellis/agents/{check,implement}.md` channel runtime 文件；这些是生成的 Trellis workflow 资产，不等同于 channel runtime 日志。
 - 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
+- 当 Trellis 更新涉及 workflow phase、step 编号、状态路由或 resume / continue 行为时，更新后必须复核生成的 workflow、`/continue` 命令、workflow variants、bundled skill 参考和平台 prompt 是否仍与 `.trellis/workflow.md` 对齐；不要只检查带 `Phase X.Y` 字样的引用，也要检查裸编号路由。
 - 如果命令提示 workflow 引用的 `.trellis/agents/<name>.md` 缺失，先运行 `trellis update`，再重试 workflow 或 Channel 操作。
 
 ## Codex Sub-agent 生成文件排障
