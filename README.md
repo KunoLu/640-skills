@@ -48,6 +48,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
+- AGENTS 模板只承载常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；详细流程、命令参数、检查清单和专项判断优先放入对应 Skill 延迟加载。
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。
 - 任何工具不可用时，要标记 `blocked`、`skipped` 或 `not-needed`，不能声称对应验证已通过。
 
@@ -149,6 +150,22 @@ MCP 配置由 Agent 或 IDE 提供。模板只做检查和引导，不把 MCP �
 - 不准备把测试资产长期维护到仓库。
 - 项目不接受 Playwright CLI 或测试数据、账号、环境暂不可用。
 
+默认沉淀路径：
+
+- `tests/e2e/manifest/ui-test-manifest.json`
+- `tests/e2e/manifest/ui-selector-audit.json`
+- `tests/e2e/manifest/ui-test-coverage.json`
+
+调用 `web-ui-autotest-generator` 的脚本时，模板要求显式传入 `tests/e2e/manifest/` 下的参数路径，不依赖 Skill 示例里的根目录默认值：
+
+```bash
+generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty
+audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pretty
+check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty
+```
+
+失败分析 `ui-test-repair-plan.json` 是运行产物，不是稳定测试资产；如生成，默认放到 `tests/e2e/manifest/ui-test-repair-plan.json` 并通过 `.gitignore` 忽略。验证或 Trellis check 收尾时，必须确认三个可入库 JSON 位于 `tests/e2e/manifest/`，且项目根目录没有残留同名 JSON。
+
 ## 最终验证工具栈
 
 最终验证阶段按以下顺序和风险叠加：
@@ -193,7 +210,7 @@ test-results/
 blob-report/
 
 # Web UI autotest generated run artifacts
-ui-test-repair-plan.json
+tests/e2e/manifest/ui-test-repair-plan.json
 tests/e2e/reports/results.json
 tests/e2e/reports/junit.xml
 tests/e2e/reports/html/

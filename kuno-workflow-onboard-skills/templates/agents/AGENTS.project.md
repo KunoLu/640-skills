@@ -331,11 +331,14 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 项目落地规则：
 
 - 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定；不要因为默认模板存在就切换测试框架。
-- 可以先只做覆盖评估；先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
+- 可以先只做覆盖评估；先生成或复核 manifest 与 selector audit，再决定是否扩展 Page Object 和 spec。
 - 没有稳定测试账号、测试环境、数据准备、清理策略或业务规则时，只输出阻塞说明和覆盖缺口，不强行生成脆弱测试。
 - 只有用户明确同意修改产品代码时，才补充 `data-testid`、`data-cy` 或可访问名称等测试选择器。
+- 除非更深层项目规则明确指定其他 E2E 资产目录，`web-ui-autotest-generator` 的可入库 JSON 资产必须沉淀到 `tests/e2e/manifest/`；执行内置脚本前，加载 `project-validation` Skill 并使用其中定义的 Web UI 测试资产路径契约。
+- `ui-test-repair-plan.json` 是失败分析运行产物，默认不入库；路径和忽略策略遵循 `project-validation` Skill 与项目 `.gitignore`，除非用户明确要求整理为正式任务或报告。
 - 生成后必须运行可用的项目验证和 Playwright E2E 命令；无法运行时说明尝试命令、阻塞原因、替代检查和剩余风险。
 - 测试代码和必要配置是否提交按项目策略决定；Playwright report、trace、video、screenshot、HTML report 和一次性 repair plan 默认不入库。
+- 最终输出或 Trellis check summary 中必须报告三个 JSON 的实际路径；将 `Web UI 测试资产` 标记为 `generated` / `coverage-only` 前，先确认根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 
 `web-ui-autotest-generator` 不替代 Playwright CLI。它只负责生成和审计 repo-resident Playwright 测试资产，执行底座仍是项目内 Playwright CLI。
 

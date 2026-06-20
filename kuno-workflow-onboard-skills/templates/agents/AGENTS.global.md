@@ -126,6 +126,13 @@ Playwright CLI 检测规则：
 - 如果 Web 回归或 `web-ui-autotest-generator` 需要 Playwright，但项目内未安装 Playwright CLI，必须询问用户是否安装到项目 devDependency；用户确认后按项目包管理器安装并继续流程。
 - 用户拒绝安装或安装失败时，不声称 Playwright 测试已运行；可用 Chrome DevTools MCP / Playwright MCP 做诊断，但 `Playwright Web Tests` 必须标记 `blocked` 或 `skipped` 并说明原因。
 
+Web UI 测试资产路径规则：
+
+- 当 `web-ui-autotest-generator` 生成或维护可入库机器可读 JSON 资产时，默认必须写入 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
+- 调用该 Skill 的脚本前，必须加载 `project-validation` Skill 并遵循其中的 Web UI 测试资产路径契约；不要依赖 external Skill 示例或脚本默认输出路径。
+- `ui-test-repair-plan.json` 是失败分析运行产物；默认路径和忽略策略遵循 `project-validation` Skill 与项目 `.gitignore`。
+- 将 `Web UI 测试资产` 报告为 `generated` 或 `coverage-only` 前，必须检查目标 JSON 实际存在于 `tests/e2e/manifest/`，并确认项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`；无法确认时标记 `blocked` 或说明跳过原因。
+
 Maestro 检测规则：
 
 - 需要 Maestro 前先检查 Java 17+，优先 `java --version`，失败时回退 `java -version`。
@@ -150,6 +157,8 @@ MCP 边界：
 
 Skill 不替代项目规范、任务产物、测试和人工判断。  
 如果 Skill 与项目 `AGENTS.md`、`.trellis/workflow.md` 或 `.trellis/spec` 冲突，以项目规则为准。
+
+职责划分：`AGENTS.md` 优先保存常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；可延迟加载的详细流程、命令参数、检查清单和专项判断，应优先放入对应 Skill，并由 `AGENTS.md` 指向何时调用。
 
 ### grill-with-docs 使用状态透明度
 
@@ -193,7 +202,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
-- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。具体执行与产物策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
+- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。机器可读 JSON 资产默认沉淀到 `tests/e2e/manifest/`，具体执行、参数路径和验证策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
 - `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、Playwright、Maestro 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
 - `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
 - `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。

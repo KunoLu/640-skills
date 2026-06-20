@@ -167,3 +167,10 @@
 - 根因：语言要求只作为描述性规则存在，没有在 `gherkin-bdd` 写入流程、Trellis BDD overlay 和 `project-validation` 检查中形成必须报告和验证的 gate；英文 PRD、design、代码标识符和英语 Gherkin 关键词容易把输出带向全英文。
 - 修复：在 `gherkin-bdd` 增加写入前语言决策门，在 `trellis-workflow` 纳入 BDD overlay 阶段要求，并在 `project-validation` 增加 `.feature` 语言一致性检查和 blocked 条件。
 - 预防：后续把“默认规则”沉淀为 Skill 时，必须同时覆盖生成前决策、生成后验证和最终输出状态；特别是语言、路径、source of truth 这类容易被上下文漂移覆盖的规则，不能只写成静态说明。
+
+## Web UI 测试资产路径规则必须有参数和验证门
+
+- 问题：项目规则只写明 `web-ui-autotest-generator` 的 JSON 测试资产应整理到 `tests/e2e/manifest/`，但 Skill 示例脚本默认仍会把 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json` 输出到项目根目录。
+- 根因：只把目标路径写成项目约定，不能保证后续 agent 或人工执行脚本时自动带上 `--out`、`--manifest`、`--selector-audit` 等参数；缺少收尾检查时，根目录残留也可能被误认为完成。
+- 修复：在全局 / 项目 AGENTS 模板中固化 `tests/e2e/manifest/` 目标路径和必须加载 `project-validation` 的路由，在 `project-validation` Skill 中固化完整脚本参数，在 `trellis-workflow`、README 和模板 `.gitignore` 中固化路径契约引用、repair plan 忽略路径和根目录残留检查。
+- 预防：后续沉淀工具输出路径、source of truth 或测试资产目录时，必须同时覆盖脚本调用参数、生成后存在性检查、根目录 / 旧路径残留检查和最终状态报告；不要只写“推荐放到某目录”。

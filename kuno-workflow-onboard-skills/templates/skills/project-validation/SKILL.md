@@ -63,6 +63,14 @@ description: Use after code changes to choose and run validation commands for No
 - Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。
 - Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
 - 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
+- 调用 `web-ui-autotest-generator` 前后，必须遵循本路径契约，避免 external Skill 示例或脚本默认值把 JSON 写到项目根目录：
+  - `generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty`
+  - `audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pretty`
+  - `check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty`
+  - `analyze_failures.py --report tests/e2e/reports/results.json --out tests/e2e/manifest/ui-test-repair-plan.json --pretty`
+- 调用 `web-ui-autotest-generator` 后，必须验证可入库 JSON 资产实际位于 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
+- 如果项目根目录存在 `ui-test-manifest.json`、`ui-selector-audit.json` 或 `ui-test-coverage.json`，验证不能标记为完成；先迁移到 `tests/e2e/manifest/` 并同步引用，或将 `Web UI 测试资产` 标记为 `blocked` 并说明原因。
+- `ui-test-repair-plan.json` 属于失败分析运行产物；如生成，默认检查路径为 `tests/e2e/manifest/ui-test-repair-plan.json`，并确认它不会被误当作长期测试资产提交。
 - Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked` 或 `skipped`，不要声称对应验证已通过。
 
 最终输出按全局 / 项目级 `AGENTS.md` 定义的状态枚举报告相关工具状态、运行命令、失败或阻塞原因、生成文件和剩余风险。

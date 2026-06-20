@@ -391,6 +391,10 @@
           <div class="step"><b>6. 风险</b><span>发布就绪、Channel preflight、剩余风险。</span></div>
           <div class="step"><b>7. 同步</b><span>仅在用户输入 sync / 同步时写入本地生效路径。</span></div>
         </div>
+        <div class="status-list">
+          <div><strong>AGENTS</strong><br>常驻路由、触发条件、硬性安全边界和最终报告要求。</div>
+          <div><strong>Skills</strong><br>详细流程、命令参数、检查清单和专项判断按场景延迟加载。</div>
+        </div>
       </div>
     </section>
 
@@ -519,6 +523,27 @@
       <div class="wrap">
         <div class="section-head">
           <div>
+            <p class="eyebrow">Artifact Contract</p>
+            <h2>Web UI 测试资产路径</h2>
+          </div>
+          <p><code>web-ui-autotest-generator</code> 的可入库 JSON 资产默认沉淀到 <code>tests/e2e/manifest/</code>，脚本调用必须显式传入这些路径，不依赖 Skill 示例中的根目录默认值。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>Manifest</strong><br><code>tests/e2e/manifest/ui-test-manifest.json</code></div>
+          <div><strong>Selector Audit</strong><br><code>tests/e2e/manifest/ui-selector-audit.json</code></div>
+          <div><strong>Coverage</strong><br><code>tests/e2e/manifest/ui-test-coverage.json</code></div>
+          <div><strong>Repair Plan</strong><br><code>tests/e2e/manifest/ui-test-repair-plan.json</code> 是失败分析运行产物，默认忽略。</div>
+        </div>
+        <pre><code>generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty
+audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pretty
+check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
             <p class="eyebrow">Install Gates</p>
             <h2>检测、安装和 fallback</h2>
           </div>
@@ -555,7 +580,7 @@ test-results/
 blob-report/
 
 # Web UI autotest generated run artifacts
-ui-test-repair-plan.json
+tests/e2e/manifest/ui-test-repair-plan.json
 tests/e2e/reports/results.json
 tests/e2e/reports/junit.xml
 tests/e2e/reports/html/
