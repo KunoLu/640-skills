@@ -7,7 +7,7 @@ description: Reviews production readiness for services, APIs, jobs, queues, inte
 
 Use this Skill as a production-readiness pass before considering a service or integration change complete.
 
-It is derived from the `mini` rule style of `agent-rules-books` and complements project validation, TestSprite, Trellis check, and human release review.
+It is derived from the `mini` rule style of `agent-rules-books` and complements project validation, Playwright, Maestro, Chrome DevTools diagnostics, Trellis check, and human release review.
 
 ## When To Use
 

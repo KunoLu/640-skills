@@ -1,8 +1,9 @@
 # AI Tools 项目工具流程精简概要
 
 > 本文件记录个人 Codex Agent Harness 的模板化工具定位、版本监控基线和 Skill 编排规则。
-> 当前主流程已收敛为 `Codex + GitNexus + Trellis + TestSprite`。
-> `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成的可选专项分支，不替代 TestSprite。
+> 当前主流程已收敛为 `Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro`。
+> Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。
+> `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成、选择器审计和覆盖率报告的可选专项分支。
 > `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
 > 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `kuno-workflow-onboard-skills/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
 
@@ -15,7 +16,9 @@
 | Codex | openai/codex | v0.140.0 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.2 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.7 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
-| TestSprite | 待明确 | latest | manual | 否 | 测试计划、E2E、自动化测试辅助 |
+| Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
+| Playwright | microsoft/playwright | latest | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
+| Maestro | mobile-dev-inc/Maestro | latest | stable-only | 是 | Android / iOS / Hybrid App E2E |
 | web-ui-autotest-generator | Cheryl-station/web-ui-autotest | main | manual | 否 | Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
@@ -51,13 +54,19 @@ flowchart TD
     E --> F
     F --> G[Codex implementation]
     G --> H[项目测试 / 回归验证]
-    H --> I{是否涉及 UI / E2E / 端到端业务流程?}
-    I -- 是 --> J[TestSprite 测试计划 / E2E 辅助]
-    I -- 否 --> K[Review / PR / 发布]
-    J --> L{是否需要固化 Web UI Playwright 测试资产?}
-    L -- 是 --> M[web-ui-autotest-generator 生成 tests/e2e / 覆盖率报告]
-    L -- 否 --> K
-    M --> K
+    H --> I{是否涉及 Web 运行时诊断?}
+    I -- 是 --> J[Chrome DevTools MCP 诊断 console / network / trace / screenshot]
+    I -- 否 --> K{是否涉及 Web 回归?}
+    J --> K
+    K -- 是 --> L[Playwright CLI 执行 Web E2E / 回归]
+    K -- 否 --> M{是否涉及移动 App E2E?}
+    L --> N{是否需要固化 Web UI 测试资产?}
+    N -- 是 --> O[web-ui-autotest-generator 生成 Playwright 资产 / 覆盖率报告]
+    N -- 否 --> M
+    O --> M
+    M -- 是 --> P[Maestro CLI / Cloud 执行 Android / iOS / Hybrid E2E]
+    M -- 否 --> Q[Review / PR / 发布]
+    P --> Q
 ```
 
 ### 1.2 工具定位
@@ -67,8 +76,11 @@ flowchart TD
 | Codex | 主 coding agent | 是 | 默认执行代码理解、修改、调试、测试、文档生成等任务 |
 | GitNexus | 代码理解 / 影响分析 / debug / refactor 辅助 | 是 | 代码结构、影响范围、Bug 根因或重构风险不清时调用 |
 | Trellis | 复杂任务编排 / 多阶段任务 / TDD workflow | 按场景启用 | 中大型任务、高风险任务、跨模块任务、长期任务启用；小任务不强制使用 |
-| TestSprite | 测试计划 / E2E / 自动化测试辅助 | 测试阶段启用 | 涉及 UI/E2E、端到端业务流程、测试计划生成或回归验证，且 TestSprite MCP 已配置、配置门户可完成时启用 |
-| web-ui-autotest-generator | Web UI Playwright 测试资产生成 / 覆盖率审计 | 按需启用 | 需要把 Web UI/E2E 回归用例固化到项目仓库时启用；不替代项目已有测试体系 |
+| Chrome DevTools MCP | Web 运行时诊断 / 浏览器现场证据 | 按场景启用 | 页面白屏、console error、network、cookie、storage、性能 trace、截图或临时复现需要真实 Chrome 检查时启用；不替代 Playwright 测试 |
+| Playwright CLI | Web E2E / Web 回归 / CI gate | Web 测试阶段启用 | Web UI、路由、表单、权限、跨页面流程、API 集成或浏览器兼容需要可重复验证时启用；项目内未安装时先询问用户 |
+| Playwright MCP | Agentic Web 探索 / locator 辅助 | 可选启用 | 需要 agent 通过可访问性快照探索页面、辅助生成 locator 或临时检查时启用；不替代项目内 `playwright test` |
+| Maestro | Android / iOS / RN / Flutter / Hybrid App E2E | 移动测试阶段启用 | 移动 App 用户旅程、权限、系统弹窗、深链、跨 App、设备能力或可选跨端 smoke；Web 只做 Chromium smoke，不做 Web 回归主责 |
+| web-ui-autotest-generator | Web UI Playwright 测试资产生成 / 覆盖率审计 | 按需启用 | 需要把 Web UI/E2E 回归用例固化到项目仓库时启用；以 Playwright CLI 作为执行底座 |
 | React Bits Pro Skill | React Bits Pro 组件 / blocks / landing page section 集成辅助 | 按需启用 | 仅在前端 UI 开发、项目为 React 技术栈（如 Next.js、Vite React、Remix、TanStack Start React、TanStack Router React 应用）+ shadcn/ui，且项目环境已安装对应 React Bits Pro Skill 并能读取 `REACTBITS_LICENSE_KEY` 时启用 |
 
 ---
@@ -135,7 +147,9 @@ diagnosing-bugs
   → GitNexus debugging（涉及代码根因时）
   → Codex fix or mitigation
   → tdd regression test
-  → TestSprite（涉及 UI/E2E 且 MCP / 配置门户可用时）
+  → Chrome DevTools MCP（需要 Web 运行时诊断时）
+  → Playwright CLI（涉及 Web 回归时）
+  → Maestro（涉及移动 App E2E 时）
   → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
 ```
 
@@ -149,7 +163,10 @@ grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用
   → GitNexus impact-analysis
   → Codex implementation
   → tdd / codebase-design（行为风险需要回归测试或测试面设计时）
-  → project tests / TestSprite（MCP / 配置门户可用时）
+  → project tests
+  → Chrome DevTools MCP（需要 Web 运行时诊断时）
+  → Playwright CLI（涉及 Web 回归时）
+  → Maestro（涉及移动 App E2E 时）
   → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
   → React Bits Pro Skill（React / shadcn UI、项目内 Skill 与 license key 前提都满足时）
 ```
@@ -212,25 +229,49 @@ handoff
 
 ---
 
-## 5. TestSprite 当前使用要点
+## 5. Chrome DevTools MCP 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前定位 | 测试计划、E2E、自动化测试辅助 |
-| 后端框架 | 已查询 Laravel / PHP 支持情况 |
-| 移动端 | 已查询 Android / iOS / Flutter 支持情况 |
-| Windows 端 | 已查询 Windows 自动化测试支持情况 |
-| 本地生成目录 | `testsprite_tests/` |
-| 建议入库文件 | 末尾为 `test_plan.json` 和 `_prd.json` 的文件倾向保留 |
-| 不建议入库文件 | `TC` 开头的具体测试用例文件倾向不 push，除非团队后续明确需要固化 |
-| 官方配置边界 | `testsprite_bootstrap_tests` 会打开 Testing Configuration / Configuration Portal；当前模板不要描述为可后台跳过 |
-| Codex 可代办 | 准备 PRD 草稿、定位 `projectPath` / `localPort` / `type` / `testScope`、整理测试需求和 `additionalInstruction`，并在配置完成后继续编排 MCP 工具 |
-| 需要门户确认 | 测试类型 / 范围、应用 URL、测试账号或认证方式、PRD 上传等按 TestSprite 配置页面完成 |
-| 凭据安全 | 不把真实账号、密钥、PII 或生产数据写入仓库、PRD、测试代码或报告；需要凭据时走配置门户、环境变量或团队 secret 流程 |
+| 当前定位 | Web 运行时诊断、真实 Chrome 检查、console / network / performance / screenshot 证据 |
+| 启用条件 | 页面白屏、runtime error、network / cookie / storage / CORS、布局错位、性能 trace、临时复现或浏览器现场证据需要真实 Chrome 时 |
+| 与 Playwright 关系 | DevTools MCP 用于诊断和探索；Playwright CLI 用于可重复测试和 CI gate |
+| MCP 边界 | 属于 manual setup check；模板不复制 MCP 配置，不声称自动完成 MCP 安装 |
+| 控制边界 | 同一浏览器上下文同一时间只允许一个 controller，避免与 Playwright MCP / Playwright CLI 互相污染状态 |
+| 凭据安全 | 不把真实账号、密钥、PII、生产数据写入日志、截图、trace、测试代码或报告 |
 
 ---
 
-## 6. web-ui-autotest-generator 当前使用要点
+## 6. Playwright 当前使用要点
+
+| 项目 | 当前结论 |
+|---|---|
+| 当前定位 | Web E2E、Web 回归、CI gate、浏览器报告和 trace |
+| CLI 定位 | `@playwright/test` / Playwright CLI 是项目内 Web 测试执行器；需要可重复 Web 回归时必须项目级安装 |
+| MCP 定位 | Playwright MCP 是 agentic Web 探索、可访问性快照和 locator 辅助；不替代 `playwright test` |
+| 检测顺序 | 先检查 `package.json`、`playwright.config.*`、package scripts 和既有测试目录；缺失时询问是否安装到项目 devDependency |
+| 安装边界 | 用户确认后按项目包管理器安装；会修改 `package.json` 和 lockfile，不做静默安装 |
+| 缺失 fallback | 用户拒绝安装时，`Playwright CLI` 标记 `skipped-by-user`，`Playwright Web Tests` 标记 `blocked`；可使用 Chrome DevTools MCP / Playwright MCP 做诊断但不算 E2E 通过 |
+| 默认状态 | `Playwright CLI`: `available` / `installed` / `missing` / `skipped-by-user` / `blocked`；`Playwright Web Tests`: `run` / `failed` / `blocked` / `skipped` |
+
+---
+
+## 7. Maestro 当前使用要点
+
+| 项目 | 当前结论 |
+|---|---|
+| 当前定位 | Android / iOS / React Native / Flutter / Hybrid App E2E；Web 仅作为可选 Chromium smoke |
+| Java 前提 | Maestro CLI 前必须检查 Java 17+；缺失或版本低于 17 时先询问是否安装 JDK |
+| 默认 JDK | 默认安装 OpenJDK Temurin 21 最新 JDK；用户指定版本时只接受 Java 17+，拒绝任何低于 17 的版本 |
+| CLI 定位 | Maestro CLI 是执行 `.maestro/*.yaml` flow、输出 JUnit / HTML / artifacts 的必需执行器 |
+| MCP 定位 | Maestro MCP 依赖 `maestro mcp`，是 agent 交互式检查设备、view hierarchy、截图和辅助 flow 的增强入口；不单独安装 |
+| 检测顺序 | Java Gate → Maestro CLI Gate → Maestro MCP Gate → Device / Simulator / Emulator Gate → app binary / appId / bundleId / flow Gate |
+| 缺失 fallback | CLI 缺失且用户拒绝安装时，`Maestro Mobile` 标记 `blocked`；MCP 缺失但 CLI 可用时继续用 `maestro test` 跑 flow |
+| 默认状态 | `Maestro CLI`: `available` / `installed` / `missing` / `skipped-by-user` / `blocked`；`Maestro MCP`: `available` / `configured` / `unavailable` / `blocked` / `skipped` |
+
+---
+
+## 8. web-ui-autotest-generator 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -238,14 +279,14 @@ handoff
 | 上游仓库 | `Cheryl-station/web-ui-autotest` |
 | 启用条件 | 用户明确要求生成 Web UI 自动化测试、Playwright / E2E suite，或需要把关键 Web UI 回归路径固化到项目仓库 |
 | 默认产物 | `tests/e2e/`、`playwright.config.ts`、`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`、中文测试报告 |
-| 与 TestSprite 关系 | TestSprite 继续负责测试计划、E2E 和回归验证辅助；本 Skill 只在需要 repo-resident Playwright 测试资产时补充 |
+| 与 Playwright 关系 | 本 Skill 生成和审计 Playwright 测试资产；执行底座仍是项目内 Playwright CLI |
 | 使用原则 | 优先沿用项目已有 Playwright / Cypress 体系；脚本扫描结果必须复核；不要自动写入真实账号、密钥或生产数据 |
 | 提交策略 | 测试代码和必要配置可按项目策略入库；HTML report、trace、video、screenshot、一次性 repair plan 默认不入库 |
 | 同步策略 | 当前不进入本仓库 `同步` 目标；只有实际安装为全局 Skill 后再另行纳入同步范围 |
 
 ---
 
-## 7. React Bits Pro Skill 当前使用要点
+## 9. React Bits Pro Skill 当前使用要点
 
 | 项目 | 当前结论 |
 |---|---|
@@ -263,20 +304,22 @@ handoff
 
 ---
 
-## 8. 当前版本汇总
+## 10. 当前版本汇总
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
 | Coding Agent | Codex | v0.140.0 |
 | Agent Harness | Trellis | v0.6.2 |
 | 代码理解 | GitNexus | v1.6.7 |
-| 自动化测试 | TestSprite | latest |
+| Web 诊断 | Chrome DevTools MCP | latest |
+| Web 回归测试 | Playwright | latest |
+| 移动 E2E | Maestro | latest |
 | Web UI 测试资产 | web-ui-autotest-generator | main |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |
 
 ---
 
-## 9. 精简结论
+## 11. 精简结论
 
 当前 AI Tools 的主线调整为：
 
@@ -284,8 +327,11 @@ handoff
 Codex 作为核心开发入口
 GitNexus 负责当前代码理解和影响分析
 Trellis 负责复杂任务编排和 TDD workflow
-TestSprite 负责测试计划、E2E 和回归验证
-web-ui-autotest-generator 仅在需要固化 Web UI Playwright 测试资产时启用
+Chrome DevTools MCP 负责 Web 运行时诊断和现场证据
+Playwright CLI 负责 Web E2E / 回归 / CI gate
+Playwright MCP 负责 agentic Web 探索和 locator 辅助
+Maestro 负责移动 App E2E 和可选跨端 smoke
+web-ui-autotest-generator 仅在需要固化 Web UI Playwright 测试资产时启用，执行底座为 Playwright CLI
 React Bits Pro Skill 仅在 React / shadcn UI、项目内 Skill 已安装且 license key 可读取时辅助接入组件和 blocks
 ```
 

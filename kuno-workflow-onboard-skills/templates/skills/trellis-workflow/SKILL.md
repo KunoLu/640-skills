@@ -192,6 +192,8 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 
 - 如果上游 migration manifest 建议迁移，或项目中存在拼写错误的 `trellis-spec-bootstarp/` skill 目录，运行 `trellis update --migrate`，让 Trellis 处理跨平台目录重命名。
 - `trellis update` 可能安装新的 bundled skills、平台模板或 `.trellis/agents/{check,implement}.md` channel runtime 文件；这些是生成的 Trellis workflow 资产，不等同于 channel runtime 日志。
+- 当 Trellis 新增或重命名 AI 平台时，复核生成的 commands、skills、agents、shared skills 目录和项目 `.gitignore` / 提交策略；不要把可复用的平台模板目录、runtime 日志和本地缓存混为一类。
+- 对可选平台 hooks、statusline 或状态栏类增强，不要假设 `trellis update` 会强制安装、删除或改写；只有在用户选择对应 init/update flag、项目已有配置或 manifest 明确要求时才启用，并复核生成 diff。
 - 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
 - 当 Trellis 更新涉及 workflow phase、step 编号、状态路由或 resume / continue 行为时，更新后必须复核生成的 workflow、`/continue` 命令、workflow variants、bundled skill 参考和平台 prompt 是否仍与 `.trellis/workflow.md` 对齐；不要只检查带 `Phase X.Y` 字样的引用，也要检查裸编号路由。
 - 如果命令提示 workflow 引用的 `.trellis/agents/<name>.md` 缺失，先运行 `trellis update`，再重试 workflow 或 Channel 操作。
@@ -244,7 +246,7 @@ $trellis-check
 
 ## Book-derived Skill Gate
 
-在需求、设计、实现和验证阶段，必须按当前任务主风险主动判定 bundled book-derived skills 是否适用。它们是专项审查视角，不替代 `.trellis/workflow.md`、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目验证、TestSprite 或人工判断。
+在需求、设计、实现和验证阶段，必须按当前任务主风险主动判定 bundled book-derived skills 是否适用。它们是专项审查视角，不替代 `.trellis/workflow.md`、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目验证、Playwright、Maestro、Chrome DevTools MCP 或人工判断。
 
 不要把 5 个 book-derived Skill 当作固定 checklist 全量调用；优先选择当前主风险对应的 1-2 个。
 
@@ -262,14 +264,14 @@ book-derived Skill 的结论优先写入当前 task 的 `prd.md`、`design.md`�
 
 ## 测试工具 Gate
 
-在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果任务涉及 Web UI、API 集成、端到端流程、用户可见 bug 修复、发布前 smoke 或可重复回归验证，必须按项目级 `AGENTS.md` 和 `project-validation` Skill 主动判定 TestSprite 与 `web-ui-autotest-generator` 是否适用。
+在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果任务涉及 Web UI、API 集成、端到端流程、移动 App 用户旅程、Hybrid App、用户可见 bug 修复、发布前 smoke 或可重复回归验证，必须按项目级 `AGENTS.md` 和 `project-validation` Skill 主动判定 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro CLI、Maestro MCP 与 `web-ui-autotest-generator` 是否适用。
 
 Trellis 阶段只负责以下要求：
 
-- 不把 TestSprite / Web UI 自动化测试资产当作 `$trellis-check`、项目验证、浏览器检查或人工评审的替代品。
-- MCP、配置门户、PRD 上传、测试账号、认证方式、测试环境或服务 URL 不可用时，记录 `blocked`，不要声称已完成测试。
-- 测试工具结论必须写入当前 task artifacts 或 check summary。
-- Phase 3.4 commit plan 前必须明确 `TestSprite` 与 `Web UI 自动化测试资产` 的状态：`run` / `generated` / `coverage-only` / `blocked` / `skipped` 及原因。
+- 不把 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro、Web UI 自动化测试资产当作 `$trellis-check`、项目验证或人工评审的替代品。
+- Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked`，不要声称已完成测试。
+- Phase 3.4 commit plan 前必须按相关性记录 Chrome DevTools MCP、Playwright MCP / CLI / Web Tests、Java、Maestro CLI / MCP / Mobile / Web Smoke、Web UI 自动化测试资产的状态和原因。
+- 状态取值和工具职责遵循全局 / 项目级 `AGENTS.md` 与 `project-validation` Skill；测试工具结论写入当前 task artifacts 或 check summary。
 
 ---
 
@@ -283,13 +285,13 @@ Trellis 阶段只负责以下要求：
 - 验证失败后经过修复，需要独立复核失败原因和覆盖范围
 - 变更跨越前端、后端、数据库、部署、测试资产、外部服务或发布流程
 - PRD / design / implement 与实际 diff、验证结果或回滚策略需要独立一致性检查
-- 多个验收标准、浏览器状态、E2E、API、Docker、Vercel 或 TestSprite 结果需要覆盖率审查
+- 多个验收标准、浏览器状态、E2E、API、Docker、Vercel、Playwright、Maestro 或 Chrome DevTools MCP 结果需要覆盖率审查
 
 规则：
 
 - 调用 `trellis-channel` Skill 做 preflight 不等于启动 Channel runtime。
 - 除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得 spawn worker。
-- Channel review / validation 不替代 `$trellis-check`、项目验证命令、GitNexus、TestSprite、浏览器检查或人工最终判断。
+- Channel review / validation 不替代 `$trellis-check`、项目验证命令、GitNexus、Playwright、Maestro、Chrome DevTools MCP、浏览器检查或人工最终判断。
 - 如果 Channel 发现必须修改代码，主会话应用已接受的修改后，必须重新运行聚焦验证和必要的 `$trellis-check`。
 - Channel 有效结论必须写回当前 task artifacts；只有长期规则才写入 `.trellis/spec` 或 `.trellis/lessons`。
 

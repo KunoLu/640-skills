@@ -7,10 +7,14 @@ import filecmp
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +24,10 @@ TEMPLATE_DIR = SKILL_DIR / "templates"
 PROJECT_GITIGNORE_TEMPLATE = TEMPLATE_DIR / "project" / ".gitignore"
 NVM_INSTALL_URL = "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh"
 RTK_INSTALL_URL = "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh"
+TEMURIN21_RELEASES_URL = "https://github.com/adoptium/temurin21-binaries/releases"
+TEMURIN_RELEASES_API_TEMPLATE = "https://api.github.com/repos/adoptium/temurin{major}-binaries/releases/latest"
+MAESTRO_INSTALL_URL = "https://get.maestro.mobile.dev"
+JAVA_MIN_MAJOR = 17
 SKILL_SOURCES = {
     "kuno-workflow-onboard-skills": SKILL_DIR,
     "trellis-workflow": TEMPLATE_DIR / "skills" / "trellis-workflow",
@@ -141,15 +149,39 @@ MANUAL_CHECKS = (
         ),
     },
     {
-        "name": "TestSprite MCP",
+        "name": "Chrome DevTools MCP",
         "category": "mcp",
-        "advice": "Confirm the IDE/Agent MCP configuration and API key. TestSprite setup may require its local configuration portal and should not be treated as a background-only install.",
+        "advice": "Confirm the active Agent or IDE exposes Chrome DevTools MCP tools before relying on it for Web runtime diagnostics.",
         "steps": (
-            "Add or enable the TestSprite MCP server in the active IDE or Agent MCP configuration.",
-            "Provide the TestSprite API key or local auth through a secret store, environment variable, or MCP config; do not write secrets into the repository.",
-            "Run the TestSprite bootstrap/check command from the Agent environment.",
-            "Complete any TestSprite configuration portal fields, including project path, local URL or port, app type, test scope, PRD upload, and non-sensitive test account details when required.",
-            "Rerun the MCP check and only treat TestSprite as usable after the MCP tools and target test environment are reachable.",
+            "Configure or enable the Chrome DevTools MCP server in the active Agent or IDE MCP settings.",
+            "Confirm Google Chrome or Chrome for Testing is available when the MCP server requires it.",
+            "Restart or reload the Agent environment so the MCP server is discovered.",
+            "Confirm Chrome DevTools MCP tools are visible before relying on it for console, network, screenshot, or performance diagnostics.",
+            "Treat Chrome DevTools MCP output as diagnostic evidence, not as a replacement for project tests or Playwright E2E.",
+        ),
+    },
+    {
+        "name": "Playwright MCP",
+        "category": "mcp",
+        "advice": "Confirm Playwright MCP tools are visible before relying on them for page exploration, accessibility snapshots, or locator assistance.",
+        "steps": (
+            "Configure or enable the Playwright MCP server in the active Agent or IDE MCP settings.",
+            "Restart or reload the Agent environment so the MCP server is discovered.",
+            "Confirm Playwright MCP tools are visible to the Agent.",
+            "Use Playwright MCP for exploration and locator assistance only; do not treat it as a substitute for project-level Playwright CLI.",
+        ),
+    },
+    {
+        "name": "Maestro MCP",
+        "category": "mcp",
+        "advice": "Maestro MCP depends on Java 17+ and a working Maestro CLI. Configure it only after `maestro` is available.",
+        "steps": (
+            "Confirm Java 17+ is available with `java --version` or `java -version`.",
+            "Confirm the Maestro CLI works, for example with `maestro --help` and `maestro test --help`.",
+            "Configure the active Agent or IDE MCP settings to run `maestro mcp`.",
+            "Restart or reload the Agent environment so the MCP server is discovered.",
+            "Confirm Maestro MCP tools are visible before relying on device inspection, view hierarchy, screenshots, or flow assistance.",
+            "If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.",
         ),
     },
     {
@@ -368,6 +400,161 @@ def check_cli_tool(spec: dict[str, str | tuple[str, ...]]) -> dict[str, object]:
     return result
 
 
+def parse_java_major(output: str | None) -> int | None:
+    if not output:
+        return None
+    match = re.search(r'(?:openjdk|java)?\s*version\s+"?(\d+)(?:\.(\d+))?', output, re.IGNORECASE)
+    if not match:
+        match = re.search(r"\b(\d+)(?:\.(\d+))?\.\d+", output)
+    if not match:
+        return None
+    first = int(match.group(1))
+    second = match.group(2)
+    if first == 1 and second:
+        return int(second)
+    return first
+
+
+def java_version_output() -> tuple[str | None, str | None]:
+    code, output = command_output(("java", "--version"), timeout=5)
+    if code == 0 and output:
+        return output.splitlines()[0], "java --version"
+    code, output = command_output(("java", "-version"), timeout=5)
+    if code == 0 and output:
+        return output.splitlines()[0], "java -version"
+    return None, "java --version"
+
+
+def check_java_for_maestro() -> dict[str, object]:
+    path = shutil.which("java")
+    version, version_command = java_version_output() if path else (None, "java --version")
+    major = parse_java_major(version)
+    installed = bool(path and major and major >= JAVA_MIN_MAJOR)
+    result: dict[str, object] = {
+        "name": "java",
+        "category": "runtime",
+        "installed": installed,
+        "path": path,
+        "version": version,
+        "versionMajor": major,
+        "versionCommand": version_command,
+        "globalInstall": f"Install the latest OpenJDK Temurin 21 JDK from {TEMURIN21_RELEASES_URL}",
+        "projectInstall": None,
+        "advice": "Maestro requires Java 17+. If Java is missing or lower than 17, ask the user before installing a JDK. Default to the latest OpenJDK Temurin 21 JDK; user-selected versions must be 17 or higher.",
+    }
+    if path and major and major < JAVA_MIN_MAJOR:
+        result["incompatibleVersion"] = True
+    return result
+
+
+def check_maestro_cli(java_check: dict[str, object]) -> dict[str, object]:
+    if not java_check.get("installed"):
+        return {
+            "name": "maestro",
+            "category": "cli",
+            "installed": False,
+            "path": None,
+            "version": None,
+            "notChecked": True,
+            "reason": "Java 17+ is required before Maestro CLI can be checked.",
+            "globalInstall": "Install Java 17+ first, then install Maestro CLI with the official Maestro instructions.",
+            "projectInstall": None,
+            "advice": "Resolve the Java 17+ prerequisite first. Maestro MCP is unavailable until Maestro CLI works.",
+        }
+    path = shutil.which("maestro")
+    code, output = command_output(("maestro", "--version"), timeout=10) if path else (None, "")
+    first_line = output.splitlines()[0] if output else None
+    version = first_line if code == 0 and first_line and not first_line.lower().startswith("exception") else None
+    result: dict[str, object] = {
+        "name": "maestro",
+        "category": "cli",
+        "installed": bool(path and version),
+        "path": path,
+        "version": version,
+        "globalInstall": "Install Maestro CLI with the official Maestro installer or Homebrew tap after user confirmation.",
+        "projectInstall": None,
+        "advice": "Install Maestro CLI into the local development environment or CI runner after Java 17+ is available. Then configure Maestro MCP separately if needed.",
+    }
+    if path and not version:
+        result["verificationFailed"] = True
+        result["verifyCommand"] = "maestro --version"
+        result["verifyOutput"] = first_line
+    return result
+
+
+def project_package_json(project_root: Path | None) -> dict[str, object] | None:
+    if not project_root:
+        return None
+    package_json = project_root / "package.json"
+    if not package_json.is_file():
+        return None
+    try:
+        return json.loads(package_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def check_playwright_project(project_root: Path | None) -> dict[str, object]:
+    package_data = project_package_json(project_root)
+    config_paths: list[str] = []
+    e2e_paths: list[str] = []
+    if project_root:
+        for name in (
+            "playwright.config.ts",
+            "playwright.config.js",
+            "playwright.config.mts",
+            "playwright.config.cts",
+        ):
+            candidate = project_root / name
+            if candidate.is_file():
+                config_paths.append(str(candidate))
+        for name in ("tests/e2e", "e2e", "playwright-report", "test-results"):
+            candidate = project_root / name
+            if candidate.exists():
+                e2e_paths.append(str(candidate))
+
+    dependencies: dict[str, object] = {}
+    scripts: dict[str, object] = {}
+    if package_data:
+        for key in ("dependencies", "devDependencies", "optionalDependencies"):
+            value = package_data.get(key)
+            if isinstance(value, dict):
+                dependencies.update(value)
+        value = package_data.get("scripts")
+        if isinstance(value, dict):
+            scripts = value
+
+    has_dependency = "@playwright/test" in dependencies or "playwright" in dependencies
+    playwright_scripts = {
+        key: value
+        for key, value in scripts.items()
+        if isinstance(value, str) and "playwright" in value
+    }
+    installed = bool(has_dependency or config_paths or playwright_scripts)
+    has_project_markers = bool(package_data or config_paths or e2e_paths)
+    not_checked = project_root is None or not has_project_markers
+    reason = None
+    if project_root is None:
+        reason = "No project root was provided, so project-level Playwright readiness was not checked."
+    elif not has_project_markers:
+        reason = "No package.json, Playwright config, or E2E directory was detected under the target project root."
+    return {
+        "name": "Playwright CLI",
+        "category": "project-cli",
+        "installed": installed,
+        "path": str(project_root) if project_root else None,
+        "version": dependencies.get("@playwright/test") or dependencies.get("playwright"),
+        "notChecked": not_checked,
+        "reason": reason,
+        "configPaths": config_paths,
+        "e2ePaths": e2e_paths,
+        "scripts": playwright_scripts,
+        "globalInstall": "Do not install Playwright globally by default.",
+        "projectInstall": "npm init playwright@latest or npm install -D @playwright/test, then npx playwright install",
+        "advice": "Playwright CLI is a project-level Web E2E dependency. If Web regression or web-ui-autotest-generator needs it and it is missing, ask the user before installing it into the target project.",
+    }
+
+
 def check_skill(name: str, group: str, global_dir: Path, project_dir: Path | None) -> dict[str, object]:
     locations: list[dict[str, str]] = []
     global_candidate = global_dir / name / "SKILL.md"
@@ -418,7 +605,13 @@ def report_entry(
 
 def cli_failure_reason(item: dict[str, object]) -> str:
     name = str(item["name"])
-    if item.get("wrongPackageSuspected"):
+    if item.get("category") == "project-cli":
+        reason = f"No project-level Playwright dependency, config, script, or E2E directory was detected under {item.get('path') or 'the target project root'}."
+    elif item.get("incompatibleVersion"):
+        reason = f"`{name}` exists at {item.get('path')}, but version {item.get('version')} is lower than the required Java {JAVA_MIN_MAJOR}+ for Maestro."
+    elif item.get("notChecked") and item.get("reason"):
+        reason = str(item["reason"])
+    elif item.get("wrongPackageSuspected"):
         reason = f"`{name}` exists at {item.get('path')}, but `{item.get('verifyCommand')}` failed; it may be a different same-name package."
     elif item.get("verificationFailed"):
         reason = f"`{name}` exists at {item.get('path')}, but `{item.get('verifyCommand')}` failed."
@@ -436,6 +629,8 @@ def cli_failure_reason(item: dict[str, object]) -> str:
 
 
 def cli_next_step(item: dict[str, object]) -> str:
+    if item.get("notChecked") and item.get("advice"):
+        return str(item["advice"])
     commands = [f"global: {item['globalInstall']}"]
     if item.get("projectInstall"):
         commands.append(f"project: {item['projectInstall']}")
@@ -531,31 +726,42 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
                     next_step="Run `python scripts/onboard.py ensure-npm --yes` after user confirmation, then rerun `check`.",
                 )
             )
-    else:
-        for item in results["tools"]:
-            entry = report_entry(
-                str(item["name"]),
-                "installed" if item["installed"] else "missing",
-                path=item.get("path"),
-                version=item.get("version"),
-            )
-            if item["installed"]:
-                installed["tools"].append(entry)
-                skipped_already_installed["tools"].append(
-                    skipped_already_installed_entry(
-                        entry,
-                        f"`{item['name']}` is already installed and passed the current verification checks.",
-                        "Skip CLI installation unless the user explicitly requests reinstall, upgrade, replacement, or project-local installation.",
-                    )
+    for item in results["tools"]:
+        if item.get("notChecked"):
+            not_checked["tools"].append(
+                report_entry(
+                    str(item["name"]),
+                    "not-checked",
+                    reason=str(item.get("reason") or "Prerequisites are not satisfied yet."),
+                    next_step=cli_next_step(item),
                 )
-            else:
-                if item.get("wrongPackageSuspected"):
-                    entry["status"] = "wrong-package-suspected"
-                elif item.get("verificationFailed"):
-                    entry["status"] = "verification-failed"
-                entry["reason"] = cli_failure_reason(item)
-                entry["nextStep"] = cli_next_step(item)
-                failed_or_missing["tools"].append(entry)
+            )
+            continue
+        entry = report_entry(
+            str(item["name"]),
+            "installed" if item["installed"] else "missing",
+            path=item.get("path"),
+            version=item.get("version"),
+        )
+        if item["installed"]:
+            installed["tools"].append(entry)
+            skipped_already_installed["tools"].append(
+                skipped_already_installed_entry(
+                    entry,
+                    f"`{item['name']}` is already installed and passed the current verification checks.",
+                    "Skip CLI installation unless the user explicitly requests reinstall, upgrade, replacement, or project-local installation.",
+                )
+            )
+        else:
+            if item.get("incompatibleVersion"):
+                entry["status"] = "incompatible"
+            elif item.get("wrongPackageSuspected"):
+                entry["status"] = "wrong-package-suspected"
+            elif item.get("verificationFailed"):
+                entry["status"] = "verification-failed"
+            entry["reason"] = cli_failure_reason(item)
+            entry["nextStep"] = cli_next_step(item)
+            failed_or_missing["tools"].append(entry)
 
     for item in results["skills"]:
         locations = item["locations"]
@@ -630,9 +836,13 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
 
     cli_checks_skipped = not runtime["npm"]["installed"]
     tools = [] if cli_checks_skipped else [check_cli_tool(spec) for spec in CLI_TOOLS]
+    java_check = check_java_for_maestro()
+    tools.append(java_check)
+    tools.append(check_maestro_cli(java_check))
+    tools.append(check_playwright_project(project_root))
     missing = {
         "runtime": [] if runtime["npm"]["installed"] else ["npm"],
-        "tools": [item["name"] for item in tools if not item["installed"]],
+        "tools": [item["name"] for item in tools if not item["installed"] and not item.get("notChecked")],
         "skills": [item["name"] for item in skills if not item["installed"]],
     }
 
@@ -753,25 +963,30 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
 
     print("\nCLI tools:")
     if results["cliChecksSkipped"]:
-        print("- skipped: npm is not usable yet, so CLI tool checks have not run.")
-    else:
-        for item in results["tools"]:
-            status = "installed" if item["installed"] else "missing"
-            if item.get("wrongPackageSuspected"):
-                status = "wrong-package-suspected"
-            elif item.get("verificationFailed"):
-                status = "verification-failed"
-            detail = f" ({item['version']})" if item.get("version") else ""
-            path = f" at {item['path']}" if item.get("path") else ""
-            print(f"- {item['name']}: {status}{path}{detail}")
-            if item.get("verifyCommand"):
-                verified = "passed" if item.get("rtkGainVerified") else "not passed"
-                print(f"  verify: {item['verifyCommand']} ({verified})")
-            if not item["installed"]:
-                print(f"  global: {item['globalInstall']}")
-                if item.get("projectInstall"):
-                    print(f"  project: {item['projectInstall']}")
-                print(f"  advice: {item['advice']}")
+        print("- npm-backed tools skipped: npm is not usable yet, so rtk / trellis / gitnexus checks have not run.")
+    for item in results["tools"]:
+        status = "installed" if item["installed"] else "missing"
+        if item.get("notChecked"):
+            status = "not-checked"
+        elif item.get("incompatibleVersion"):
+            status = "incompatible"
+        elif item.get("wrongPackageSuspected"):
+            status = "wrong-package-suspected"
+        elif item.get("verificationFailed"):
+            status = "verification-failed"
+        detail = f" ({item['version']})" if item.get("version") else ""
+        path = f" at {item['path']}" if item.get("path") else ""
+        print(f"- {item['name']}: {status}{path}{detail}")
+        if item.get("verifyCommand"):
+            verified = "passed" if item.get("rtkGainVerified") else "not passed"
+            print(f"  verify: {item['verifyCommand']} ({verified})")
+        if item.get("reason"):
+            print(f"  reason: {item['reason']}")
+        if not item["installed"]:
+            print(f"  global: {item['globalInstall']}")
+            if item.get("projectInstall"):
+                print(f"  project: {item['projectInstall']}")
+            print(f"  advice: {item['advice']}")
 
     print("\nSkills:")
     for item in results["skills"]:
@@ -1588,6 +1803,420 @@ def install_rtk(args: argparse.Namespace) -> int:
     return 0 if after["installed"] else 1
 
 
+def command_excerpt(completed: subprocess.CompletedProcess[str] | None, limit: int = 20) -> str | None:
+    if completed is None:
+        return None
+    output = "\n".join(part for part in (completed.stdout, completed.stderr) if part)
+    lines = output.strip().splitlines()
+    if not lines:
+        return None
+    return "\n".join(lines[-limit:])
+
+
+def github_json(url: str, timeout: int = 30) -> dict[str, object]:
+    request = urllib.request.Request(url, headers={"User-Agent": "kuno-workflow-onboard-skills"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def download_url(url: str, destination: Path, timeout: int = 900) -> None:
+    request = urllib.request.Request(url, headers={"User-Agent": "kuno-workflow-onboard-skills"})
+    with urllib.request.urlopen(request, timeout=timeout) as response, destination.open("wb") as handle:
+        shutil.copyfileobj(response, handle)
+
+
+def temurin_platform_ids() -> tuple[str | None, str | None, str | None]:
+    system = platform.system() or sys.platform
+    machine = platform.machine().lower()
+    if system == "Darwin":
+        os_id = "mac"
+    elif system == "Linux":
+        os_id = "linux"
+    else:
+        return None, None, f"Temurin tarball auto-install is only supported on macOS and Linux; current platform is {system}."
+
+    if machine in {"x86_64", "amd64"}:
+        arch_id = "x64"
+    elif machine in {"arm64", "aarch64"}:
+        arch_id = "aarch64"
+    else:
+        return None, None, f"Unsupported CPU architecture for Temurin auto-install: {machine}."
+    return os_id, arch_id, None
+
+
+def select_temurin_asset(major: int) -> dict[str, object]:
+    os_id, arch_id, reason = temurin_platform_ids()
+    if reason:
+        raise RuntimeError(reason)
+
+    release = github_json(TEMURIN_RELEASES_API_TEMPLATE.format(major=major))
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        raise RuntimeError("GitHub release payload did not include assets.")
+
+    prefix = f"OpenJDK{major}U-jdk_{arch_id}_{os_id}_hotspot_"
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name") or "")
+        url = str(asset.get("browser_download_url") or "")
+        if (
+            name.startswith(prefix)
+            and name.endswith(".tar.gz")
+            and "debugimage" not in name
+            and "testimage" not in name
+            and "static-libs" not in name
+            and url
+        ):
+            return {
+                "release": release.get("tag_name"),
+                "name": name,
+                "url": url,
+            }
+    raise RuntimeError(f"No matching Temurin {major} JDK tar.gz asset found for {arch_id}/{os_id}.")
+
+
+def safe_extract_tar(archive: Path, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    destination_root = destination.resolve()
+    with tarfile.open(archive, "r:gz") as tar:
+        for member in tar.getmembers():
+            target = (destination / member.name).resolve()
+            if target != destination_root and destination_root not in target.parents:
+                raise RuntimeError(f"Unsafe path in archive: {member.name}")
+        tar.extractall(destination)
+
+
+def find_java_home(root: Path) -> Path:
+    candidates = sorted(root.rglob("bin/java"))
+    for java_bin in candidates:
+        if java_bin.is_file():
+            return java_bin.parent.parent
+    raise RuntimeError("Extracted JDK archive did not contain bin/java.")
+
+
+def activate_java_home(java_home: Path) -> None:
+    os.environ["JAVA_HOME"] = str(java_home)
+    os.environ["PATH"] = f"{java_home / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
+def install_java(args: argparse.Namespace) -> int:
+    major = int(args.major)
+    if major < JAVA_MIN_MAJOR:
+        raise SystemExit(f"Refusing to install Java {major}. Maestro requires Java {JAVA_MIN_MAJOR}+.")
+
+    before = check_java_for_maestro()
+    install_root = expand_path(args.install_root) or (Path.home() / ".local" / "share" / "kuno-workflow" / "jdks")
+    target_home = install_root / f"temurin-{major}"
+    profile = expand_path(args.profile) or default_shell_profile()
+    payload: dict[str, object] = {
+        "mode": "install-java",
+        "platform": platform.system() or sys.platform,
+        "before": before,
+        "major": major,
+        "minimumMajor": JAVA_MIN_MAJOR,
+        "releaseSource": TEMURIN21_RELEASES_URL,
+        "targetJavaHome": str(target_home),
+        "profile": str(profile),
+    }
+
+    if before["installed"] and not args.force:
+        payload["status"] = "already-installed"
+        payload["advice"] = "Java already satisfies Maestro's Java 17+ prerequisite. Use --force only after confirming a version replacement is intended."
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Java already satisfies Maestro's Java 17+ prerequisite.")
+            print(f"java: {before['path']} ({before['version']})")
+            print(payload["advice"])
+        return 0
+
+    os_id, arch_id, platform_reason = temurin_platform_ids()
+    if platform_reason:
+        payload["status"] = "manual-required"
+        payload["reason"] = platform_reason
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(platform_reason)
+            print(f"Download a Java {major}+ JDK manually from {TEMURIN21_RELEASES_URL}.")
+        return 1
+    payload["targetPlatform"] = {"os": os_id, "arch": arch_id}
+
+    payload["actions"] = [
+        f"fetch the latest Temurin {major} JDK release asset from {TEMURIN21_RELEASES_URL}",
+        f"extract it into {target_home}",
+        f"write JAVA_HOME and PATH exports into {profile}",
+        "verify `java --version` reports Java 17 or higher",
+    ]
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"Java {JAVA_MIN_MAJOR}+ is missing or a Java {major} install was explicitly requested.")
+            for action in payload["actions"]:
+                print(f"- {action}")
+            print("Rerun with --yes after user confirmation.")
+        return 2
+
+    try:
+        asset = select_temurin_asset(major)
+        payload["selectedAsset"] = asset
+        with tempfile.TemporaryDirectory(prefix="kuno-temurin-") as temp_dir:
+            archive = Path(temp_dir) / str(asset["name"])
+            extracted = Path(temp_dir) / "extracted"
+            download_url(str(asset["url"]), archive)
+            safe_extract_tar(archive, extracted)
+            extracted_java_home = find_java_home(extracted)
+            target_home.parent.mkdir(parents=True, exist_ok=True)
+            if target_home.exists():
+                backup = backup_path(target_home)
+                shutil.move(str(target_home), str(backup))
+                payload["backup"] = str(backup)
+            shutil.move(str(extracted_java_home), str(target_home))
+    except (OSError, RuntimeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        payload["status"] = "failed"
+        payload["error"] = str(exc)
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+        return 1
+
+    activate_java_home(target_home)
+    profile_updated = ensure_profile_line(
+        profile,
+        f'export JAVA_HOME="{target_home}"; export PATH="$JAVA_HOME/bin:$PATH"',
+        f"Added by kuno-workflow-onboard-skills for Temurin {major}",
+    )
+    after = check_java_for_maestro()
+    payload["after"] = after
+    payload["profileUpdated"] = profile_updated
+    payload["status"] = "installed" if after["installed"] else "failed"
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"install-java status: {payload['status']}")
+        if profile_updated:
+            print(f"Updated JAVA_HOME/PATH in {profile}")
+        if after["installed"]:
+            print(f"java: {after['path']} ({after['version']})")
+        else:
+            print("Java was installed but did not pass the Java 17+ verification. Check JAVA_HOME and PATH.")
+    return 0 if after["installed"] else 1
+
+
+def install_maestro(args: argparse.Namespace) -> int:
+    java_before = check_java_for_maestro()
+    before = check_maestro_cli(java_before)
+    profile = expand_path(args.profile) or default_shell_profile()
+    maestro_bin = Path.home() / ".maestro" / "bin"
+    payload: dict[str, object] = {
+        "mode": "install-maestro",
+        "platform": platform.system() or sys.platform,
+        "before": before,
+        "java": java_before,
+        "installUrl": MAESTRO_INSTALL_URL,
+        "profile": str(profile),
+    }
+
+    if before["installed"] and not args.reinstall:
+        payload["status"] = "already-installed"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Maestro CLI is already installed and verified.")
+            print(f"maestro: {before['path']} ({before['version']})")
+        return 0
+
+    if not java_before["installed"]:
+        payload["status"] = "java-required"
+        payload["advice"] = (
+            f"Install Java {JAVA_MIN_MAJOR}+ first. Default command: "
+            "`python scripts/onboard.py install-java --major 21 --yes` after user confirmation."
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"Maestro CLI requires Java {JAVA_MIN_MAJOR}+ before installation.")
+            print(payload["advice"])
+        return 2
+
+    system = platform.system() or sys.platform
+    if system == "Windows":
+        payload["status"] = "manual-required"
+        payload["advice"] = "Use WSL with the official install script, or follow Maestro's regular Windows installation guide manually."
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(payload["advice"])
+        return 1
+
+    if before.get("verificationFailed") and not args.reinstall:
+        payload["status"] = "verification-failed"
+        payload["advice"] = "A maestro command exists but failed verification. Rerun with --reinstall only after confirming replacement is intended."
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(payload["advice"])
+        return 2
+
+    payload["actions"] = [
+        f'run the official Maestro installer: curl -fsSL "{MAESTRO_INSTALL_URL}" | bash',
+        f"ensure {maestro_bin} is in PATH via {profile}",
+        "verify `maestro --version` and `maestro test --help`",
+    ]
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Maestro CLI is missing or not verified.")
+            for action in payload["actions"]:
+                print(f"- {action}")
+            print("Rerun with --yes after user confirmation.")
+        return 2
+
+    if not shutil.which("curl"):
+        payload["status"] = "failed"
+        payload["error"] = "curl is required for the official Maestro install script."
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+        return 1
+
+    install_result = shell_result(f'curl -fsSL "{MAESTRO_INSTALL_URL}" | bash', timeout=600)
+    if not install_result or install_result.returncode != 0:
+        payload["status"] = "failed"
+        payload["error"] = command_excerpt(install_result) or "Unable to run the Maestro installer."
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+        return 1
+
+    os.environ["PATH"] = f"{maestro_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+    profile_updated = ensure_profile_line(
+        profile,
+        'export PATH="$HOME/.maestro/bin:$PATH"',
+        "Added by kuno-workflow-onboard-skills for Maestro CLI",
+    )
+    java_after = check_java_for_maestro()
+    after = check_maestro_cli(java_after)
+    payload["after"] = after
+    payload["profileUpdated"] = profile_updated
+    payload["status"] = "installed" if after["installed"] else "failed"
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"install-maestro status: {payload['status']}")
+        if profile_updated:
+            print(f"Updated PATH in {profile}")
+        if after["installed"]:
+            print(f"maestro: {after['path']} ({after['version']})")
+        else:
+            print("Maestro installer completed but `maestro --version` did not pass. Check PATH, Java, and installer output.")
+    return 0 if after["installed"] else 1
+
+
+def run_project_command(command: tuple[str, ...], cwd: Path, timeout: int = 900) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return subprocess.run(
+            command,
+            cwd=str(cwd),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def install_playwright_cli(args: argparse.Namespace) -> int:
+    project_root = resolve_project_root(args, required=True)
+    runtime = check_npm_runtime()
+    before = check_playwright_project(project_root)
+    package_json = project_root / "package.json"
+    payload: dict[str, object] = {
+        "mode": "install-playwright-cli",
+        "projectRoot": str(project_root),
+        "before": before,
+        "runtime": runtime,
+    }
+
+    if before["installed"] and not args.reinstall:
+        payload["status"] = "already-installed"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Project-level Playwright CLI is already present.")
+            if before.get("version"):
+                print(f"Playwright dependency: {before['version']}")
+        return 0
+
+    if not runtime["npm"]["installed"]:
+        payload["status"] = "npm-required"
+        payload["advice"] = "Install npm first, for example with `python scripts/onboard.py ensure-npm --yes` after user confirmation."
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Playwright CLI is project-level Node tooling, but npm is not usable.")
+            print(payload["advice"])
+        return 2
+
+    if not package_json.is_file():
+        payload["status"] = "not-applicable"
+        payload["reason"] = "No package.json exists at the project root; do not create a Node test stack automatically."
+        payload["fallback"] = "Use Playwright MCP or Chrome DevTools MCP for exploratory Web diagnostics, and add Playwright CLI only after the project accepts a Node test dependency."
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(payload["reason"])
+            print(payload["fallback"])
+        return 2
+
+    payload["actions"] = [
+        "install project dependency: npm install -D @playwright/test",
+        "install Playwright browser binaries: npx playwright install",
+    ]
+    if args.skip_browsers:
+        payload["actions"][-1] = "skip browser binary installation because --skip-browsers was provided"
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Project-level Playwright CLI is missing.")
+            for action in payload["actions"]:
+                print(f"- {action}")
+            print("Rerun with --yes after user confirmation.")
+        return 2
+
+    install_result = run_project_command(("npm", "install", "-D", "@playwright/test"), project_root, timeout=900)
+    payload["npmInstallOutput"] = command_excerpt(install_result)
+    if not install_result or install_result.returncode != 0:
+        payload["status"] = "failed"
+        payload["error"] = command_excerpt(install_result) or "npm install failed."
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+        return 1
+
+    if not args.skip_browsers:
+        browsers_result = run_project_command(("npx", "playwright", "install"), project_root, timeout=1200)
+        payload["browserInstallOutput"] = command_excerpt(browsers_result)
+        if not browsers_result or browsers_result.returncode != 0:
+            payload["status"] = "browser-install-failed"
+            payload["error"] = command_excerpt(browsers_result) or "npx playwright install failed."
+            print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+            return 1
+
+    after = check_playwright_project(project_root)
+    payload["after"] = after
+    payload["status"] = "installed" if after["installed"] else "failed"
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"install-playwright-cli status: {payload['status']}")
+        if after["installed"]:
+            print("Project-level Playwright CLI dependency/config marker is now present.")
+        else:
+            print("Playwright install completed but no dependency/config/script marker was detected.")
+    return 0 if after["installed"] else 1
+
+
 def build_operations(args: argparse.Namespace) -> list[Operation]:
     global_agents = expand_path(args.global_agents_path) or (default_codex_home() / "AGENTS.md")
     project_root = resolve_project_root(args)
@@ -1770,6 +2399,12 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return ensure_npm(args)
     if mode == "install-rtk":
         return install_rtk(args)
+    if mode == "install-java":
+        return install_java(args)
+    if mode == "install-maestro":
+        return install_maestro(args)
+    if mode == "install-playwright-cli":
+        return install_playwright_cli(args)
     if mode == "install-external-skills":
         return install_external_skills(args)
 
@@ -1935,6 +2570,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rtk.add_argument("--profile", help="Shell profile file to update with ~/.local/bin PATH.")
     rtk.add_argument("--json", action="store_true", help="Print machine-readable results.")
+
+    java = subparsers.add_parser("install-java")
+    java.add_argument(
+        "--major",
+        type=int,
+        default=21,
+        help="Temurin JDK major version to install. Must be 17 or higher; defaults to 21.",
+    )
+    java.add_argument("--install-root", help="Directory that should contain the extracted Temurin JDK.")
+    java.add_argument("--profile", help="Shell profile file to update with JAVA_HOME and PATH.")
+    java.add_argument("--force", action="store_true", help="Install even when an existing Java 17+ runtime is already available.")
+    java.add_argument("--yes", action="store_true", help="Download and install the selected Temurin JDK after user confirmation.")
+    java.add_argument("--json", action="store_true", help="Print machine-readable results.")
+
+    maestro = subparsers.add_parser("install-maestro")
+    maestro.add_argument("--profile", help="Shell profile file to update with ~/.maestro/bin PATH.")
+    maestro.add_argument("--reinstall", action="store_true", help="Run the official installer even when a maestro command already exists but fails verification.")
+    maestro.add_argument("--yes", action="store_true", help="Run the official Maestro installer after user confirmation.")
+    maestro.add_argument("--json", action="store_true", help="Print machine-readable results.")
+
+    playwright = subparsers.add_parser("install-playwright-cli")
+    playwright.add_argument("--project-root", required=True, help="Target project root where package.json exists.")
+    playwright.add_argument("--reinstall", action="store_true", help="Run npm install even when Playwright project markers already exist.")
+    playwright.add_argument("--skip-browsers", action="store_true", help="Install @playwright/test but skip `npx playwright install`.")
+    playwright.add_argument("--yes", action="store_true", help="Install Playwright into the target project after user confirmation.")
+    playwright.add_argument("--json", action="store_true", help="Print machine-readable results.")
 
     return parser
 

@@ -53,42 +53,19 @@ description: Use after code changes to choose and run validation commands for No
 - 运行的 BDD runner 或追踪测试命令。
 - 未自动化场景、阻塞原因和剩余风险。
 
-## Web / E2E 测试工具 Gate
+## Web / Mobile 测试工具 Gate
 
-修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程或关键用户路径后，必须按项目级 `AGENTS.md` 主动判定 TestSprite 和 `web-ui-autotest-generator` 是否适用。
+修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程、移动 App 用户旅程、Hybrid App 或关键用户路径后，必须按全局 / 项目级 `AGENTS.md` 的工具职责边界主动判定 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro CLI、Maestro MCP 和 `web-ui-autotest-generator` 是否适用。
 
-TestSprite 适用于：
+本 Skill 只负责验证阶段 gate：
 
-- 端到端业务流程、UI / API 集成、回归验证、测试计划生成或发布前 smoke。
-- Trellis 验收标准要求 UI、E2E、API 或回归验证。
-- 修复用户可见 bug 后需要独立回归验证。
-- GitNexus impact / detect_changes 为 HIGH / CRITICAL，且影响 Web、API 或发布流程。
+- 先按修改范围选择最小有效验证：项目测试、浏览器诊断、Playwright Web 回归、Maestro 移动 / Hybrid flow、或 Web UI 测试资产覆盖评估。
+- Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。
+- Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
+- 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
+- Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked` 或 `skipped`，不要声称对应验证已通过。
 
-TestSprite 规则：
-
-- 先确认 TestSprite MCP 是否可调用、服务 URL / `localPort` 是否可访问、`projectPath`、`type`、`testScope` 是否明确。
-- 调用会打开外部 UI 的 bootstrap / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并向用户输出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`。
-- 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、修改测试或重跑测试重新 bootstrap。
-- 配置门户、PRD 上传、测试账号、认证方式或测试环境缺失时，输出 `blocked` 和剩余配置项，不要声称已完成 TestSprite 测试。
-
-`web-ui-autotest-generator` 适用于：
-
-- 关键 Web UI 回归路径需要固化为仓库内可维护测试资产。
-- 项目已有 Playwright / Cypress，需要扩展覆盖。
-- TestSprite、浏览器验证或人工复核发现应进入 CI / 本地 E2E 的覆盖缺口。
-- 用户明确要求 Playwright、E2E suite、Web UI 自动化测试代码或 UI 回归测试。
-
-`web-ui-autotest-generator` 规则：
-
-- 可以先只做覆盖评估，不必每次生成大量测试。
-- 先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
-- 环境、账号、数据准备、清理策略、业务规则或选择器不稳定时，只输出覆盖缺口和阻塞说明，不强行生成脆弱测试。
-- 只有用户明确同意修改产品代码时，才补充 `data-testid`、`data-cy` 或可访问名称。
-
-最终输出必须包含：
-
-- `TestSprite`: `run` / `blocked` / `skipped`，原因、PRD 上传路径、执行结果或阻塞项。
-- `Web UI 自动化测试资产`: `generated` / `coverage-only` / `blocked` / `skipped`，原因、生成文件、执行命令或剩余风险。
+最终输出按全局 / 项目级 `AGENTS.md` 定义的状态枚举报告相关工具状态、运行命令、失败或阻塞原因、生成文件和剩余风险。
 
 ## Node / JavaScript / TypeScript
 

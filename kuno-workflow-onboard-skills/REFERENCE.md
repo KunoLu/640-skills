@@ -21,7 +21,7 @@ This Skill installs only these bundled templates:
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
-There are no bundled MCP configuration templates. GitNexus MCP and TestSprite MCP are reported as manual setup checks only.
+There are no bundled MCP configuration templates. GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP are reported as manual setup checks only.
 
 ## Conversation Flow
 
@@ -36,7 +36,7 @@ Use this sequence when the Skill is invoked:
 7. Run `check` and show the completed checklist.
 8. If npm is missing, confirm the platform with the user, ask permission to install nvm + latest Node.js LTS, then run `ensure-npm`.
 9. Rerun `check`; only then evaluate CLI tools such as `rtk`, `trellis`, and `gitnexus`.
-10. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable.
+10. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable. Use explicit installer subcommands for approved items: `install-java`, `install-maestro`, `install-playwright-cli`, `install-rtk`, `ensure-npm`, or `install-external-skills`.
 11. Install only user-approved missing items. Network or filesystem writes outside the workspace may require explicit approval.
 12. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
 13. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
@@ -59,13 +59,16 @@ python scripts/onboard.py check --skip-project-agents
 The check reports:
 
 - Runtime availability for `npm`, `node`, and `nvm`.
-- CLI checks are skipped when npm is not usable. Run `ensure-npm` first, then rerun `check`.
+- npm-backed CLI checks are skipped when npm is not usable. Run `ensure-npm` first, then rerun `check`.
 - `rtk` CLI availability, version output, and `rtk gain` verification to avoid the unrelated same-name package.
 - `trellis` CLI availability and version output when available.
 - `gitnexus` CLI availability and version output when available.
+- Java 17+ availability for Maestro. Use `java --version` first and fall back to `java -version`.
+- Maestro CLI availability and version output when Java 17+ is available.
+- Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, and bundled book-derived skills.
 - Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
-- Manual setup checks for GitNexus MCP, TestSprite MCP, and React Bits Pro project-specific prerequisites.
+- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
@@ -80,6 +83,9 @@ CLI tools:
 - rtk: installed / missing / verification-failed / wrong-package-suspected
 - trellis: installed / missing
 - gitnexus: installed / missing
+- java: installed / missing / incompatible
+- maestro: installed / missing / not-checked
+- Playwright CLI: available / missing / project-not-detected
 
 Bundled skills:
 - kuno-workflow-onboard-skills: installed / missing
@@ -90,7 +96,9 @@ Referenced skills:
 - diagnosing-bugs: installed / missing
 
 Manual checks:
-- TestSprite MCP: confirm MCP server and API key
+- Chrome DevTools MCP: confirm MCP server visibility
+- Playwright MCP: confirm MCP server visibility
+- Maestro MCP: confirm MCP server visibility after Maestro CLI works
 ```
 
 Do not claim missing items were installed until a follow-up `check` confirms them or the relevant installer command reports success and the expected files / commands exist.
@@ -108,7 +116,7 @@ The report is the user-facing completion summary and must include:
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
 - Not-checked items, especially CLI tools skipped because npm is not usable yet.
-- Manual configuration items, including GitNexus MCP setup, TestSprite MCP setup, and React Bits Pro project skill prerequisites.
+- Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup, and React Bits Pro project skill prerequisites.
 
 Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
 
@@ -137,7 +145,7 @@ The onboard bundle includes workflow skills that are installed from templates ra
 |---|---|
 | `trellis-workflow` | Trellis lifecycle, task artifacts, workflow templates, before-dev, check, finish-work, update-spec, parent / child tasks, and BDD / TDD workflow overlays. |
 | `trellis-channel` | Trellis Channel preflight, worker boundaries, review / validation coordination, and runtime safety rules. |
-| `project-validation` | Validation command selection and reporting, including BDD traceability, TestSprite, and Web UI automation gates. |
+| `project-validation` | Validation command selection and reporting, including BDD traceability, Chrome DevTools MCP, Playwright, Maestro, and Web UI automation gates. |
 | `gherkin-bdd` | Persistent BDD / Gherkin specs for user-visible behavior, `.feature` path rules, scenario quality, and scenario-to-test traceability. |
 | `lessons-record` | Long-term lesson recording and Trellis lesson storage structure. |
 
@@ -153,7 +161,7 @@ The onboard bundle includes five focused skills derived from `agent-rules-books`
 | `book-ddia-data-design` | Data consistency, schema evolution, event, queue, cache, and cross-service data-flow checks. |
 | `book-release-readiness` | Production-readiness review for services, jobs, queues, integrations, and deployment-sensitive changes. |
 
-These skills are bundled, not installed from an external repository at onboarding time. They are optional on-demand lenses and do not replace project rules, Trellis artifacts, GitNexus, tests, `project-validation`, TestSprite, or human release review.
+These skills are bundled, not installed from an external repository at onboarding time. They are optional on-demand lenses and do not replace project rules, Trellis artifacts, GitNexus, tests, `project-validation`, Playwright, Maestro, Chrome DevTools diagnostics, or human release review.
 
 ## Installation Decisions
 
@@ -163,6 +171,9 @@ When an item is missing, ask the user before installing:
 - Install `rtk` globally from `rtk-ai/rtk`?
 - Install `trellis` globally or project-level?
 - Install `gitnexus` globally or project-level?
+- Install Playwright CLI / `@playwright/test` into the target project after confirming the project needs Web E2E?
+- Install Java 17+ for Maestro? Default is the latest OpenJDK Temurin 21 JDK from `https://github.com/adoptium/temurin21-binaries/releases`; user-selected Java versions must be 17 or higher.
+- Install Maestro CLI into the local development environment or CI runner after Java 17+ is available?
 - Install bundled Kuno workflow skills globally or project-level?
 - Install referenced optional skills now, leave them for a later task, or skip them intentionally? If selected, existing skill targets are overwritten without backup.
 
@@ -171,10 +182,15 @@ Common CLI install commands are surfaced by `check` as suggestions:
 ```bash
 python scripts/onboard.py ensure-npm --yes
 python scripts/onboard.py install-rtk --yes
+python scripts/onboard.py install-java --major 21 --yes
+python scripts/onboard.py install-maestro --yes
+python scripts/onboard.py install-playwright-cli --project-root /path/to/project --yes
 npm install -g @mindfoldhq/trellis
 npm install -g gitnexus
 npm install -D @mindfoldhq/trellis
 npm install -D gitnexus
+npm init playwright@latest
+npm install -D @playwright/test
 ```
 
 Use the user's package manager and project policy when they differ from these suggestions. If install fails, report:
@@ -237,6 +253,102 @@ python scripts/onboard.py install-rtk --reinstall --yes
 For native Windows, use the upstream Windows release zip: extract `rtk.exe` into a PATH directory such as `%USERPROFILE%\.local\bin`, then verify with `rtk --version` and `rtk gain`.
 
 If RTK cannot be installed, it may be skipped, but report the exact failure and next checks: PATH, `~/.local/bin`, `curl`, release download access, Windows PATH setup, data directory permissions, or same-name package collision.
+
+## Playwright Project CLI
+
+Playwright CLI is a project-level Web E2E dependency, not a global default.
+
+When a project root is provided, check for:
+
+- `package.json` containing `@playwright/test` or `playwright`
+- `playwright.config.ts`, `playwright.config.js`, `playwright.config.mts`, or `playwright.config.cts`
+- package scripts containing `playwright test`
+- existing Web E2E directories such as `tests/e2e`, `e2e`, or project-specific equivalents
+
+If Web E2E, Web regression, or `web-ui-autotest-generator` requires Playwright but the project does not have it, ask the user before installing. After confirmation, use the project package manager and project policy.
+
+Common npm commands:
+
+```bash
+python scripts/onboard.py install-playwright-cli --project-root /path/to/project --yes
+npm init playwright@latest
+npm install -D @playwright/test
+npx playwright install
+```
+
+The script command installs `@playwright/test` into the target project and runs `npx playwright install` by default. Use `--skip-browsers` only when the project or CI image already manages browser binaries.
+
+If the user declines installation, report:
+
+- `Playwright CLI`: `skipped-by-user`
+- `Playwright Web Tests`: `blocked`
+
+Chrome DevTools MCP or Playwright MCP may still be used for diagnostics and exploration, but do not claim Web E2E passed without running project Playwright tests.
+
+## Maestro Java, CLI, and MCP
+
+Maestro CLI requires Java 17 or newer. Check Java before checking or installing Maestro CLI:
+
+```bash
+java --version
+java -version
+```
+
+If Java is missing or lower than 17, ask the user before installing a JDK. The default recommendation is the latest OpenJDK Temurin 21 JDK from:
+
+```text
+https://github.com/adoptium/temurin21-binaries/releases
+```
+
+If the user requests another Java major version, only install versions 17 or higher. Refuse versions lower than 17. Install a JDK, not only a JRE, and verify:
+
+- `java --version` or `java -version`
+- `JAVA_HOME` points to the new JDK
+- `PATH` resolves the expected Java
+
+After user confirmation, install the default Temurin 21 JDK with:
+
+```bash
+python scripts/onboard.py install-java --major 21 --yes
+```
+
+If the user explicitly requests another supported major version, pass that major version, for example:
+
+```bash
+python scripts/onboard.py install-java --major 17 --yes
+```
+
+After Java 17+ is available, check Maestro CLI:
+
+```bash
+maestro --help
+maestro test --help
+```
+
+If Maestro CLI is missing, ask the user before installing it into the local development environment or CI runner. If installation is declined, report `Maestro CLI: skipped-by-user` and mark Maestro Mobile / Web Smoke as blocked or skipped as appropriate.
+
+After user confirmation, install Maestro CLI with the official installer through the script:
+
+```bash
+python scripts/onboard.py install-maestro --yes
+```
+
+If a `maestro` command exists but fails verification, do not replace it silently. Troubleshoot Java and PATH first, then use `--reinstall --yes` only after explicit confirmation.
+
+Maestro MCP depends on Maestro CLI and is configured by an MCP client command such as:
+
+```json
+{
+  "mcpServers": {
+    "maestro": {
+      "command": "maestro",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Do not treat Maestro MCP as a separately installed package. If MCP is missing but CLI works, continue with `maestro test` for deterministic flow execution and report the MCP status separately.
 
 ## External Skill Repositories
 
@@ -311,13 +423,28 @@ For GitNexus MCP:
 4. Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.
 5. If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.
 
-For TestSprite MCP:
+For Chrome DevTools MCP:
 
-1. Add or enable the TestSprite MCP server in the active IDE or Agent MCP configuration.
-2. Provide the TestSprite API key or local auth through a secret store, environment variable, or MCP config; do not write secrets into the repository.
-3. Run the TestSprite bootstrap/check command from the Agent environment.
-4. Complete any TestSprite configuration portal fields, including project path, local URL or port, app type, test scope, PRD upload, and non-sensitive test account details when required.
-5. Rerun the MCP check and only treat TestSprite as usable after the MCP tools and target test environment are reachable.
+1. Configure or enable the Chrome DevTools MCP server in the active Agent or IDE MCP settings.
+2. Confirm Google Chrome or Chrome for Testing is available when the MCP server requires it.
+3. Restart or reload the Agent environment so the MCP server is discovered.
+4. Confirm Chrome DevTools MCP tools are visible before relying on it for browser diagnostics.
+5. Treat DevTools MCP output as diagnostic evidence, not as a replacement for project tests or Playwright E2E.
+
+For Playwright MCP:
+
+1. Configure or enable the Playwright MCP server in the active Agent or IDE MCP settings.
+2. Restart or reload the Agent environment so the MCP server is discovered.
+3. Confirm Playwright MCP tools are visible before relying on it for page exploration or locator assistance.
+4. Do not treat Playwright MCP as a substitute for project-level Playwright CLI / `@playwright/test`.
+
+For Maestro MCP:
+
+1. Confirm Java 17+ and Maestro CLI work first.
+2. Configure the MCP client to run `maestro mcp`.
+3. Restart or reload the Agent environment so the MCP server is discovered.
+4. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
+5. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
 
 For React Bits Pro Skill:
 

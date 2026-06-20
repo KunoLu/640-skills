@@ -96,19 +96,50 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 不假设索引存在。
 - 仅在该判断影响任务风险时，在最终输出中说明已跳过。
 
-### TestSprite
+### Web / Mobile 验证工具
 
-TestSprite 作为测试计划、UI/E2E、API 集成和回归验证辅助工具使用，不替代项目自己的 lint / test / build、浏览器检查或人工测试评审。
+Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP 和 `web-ui-autotest-generator` 各自职责不同，不互相替代。
 
-仅当存在强证据时，才认为 TestSprite 可用：
+- Chrome DevTools MCP：Web 运行时诊断、真实 Chrome 检查、console / network / storage / performance trace / screenshot 证据；不作为 CI 测试通过依据。
+- Playwright CLI / `@playwright/test`：项目内 Web E2E、Web 回归和 CI gate 的执行器。
+- Playwright MCP：agentic Web 探索、可访问性快照和 locator 辅助；不替代项目内 `playwright test`。
+- Maestro CLI：Android / iOS / React Native / Flutter / Hybrid App E2E 和可选 Chromium Web smoke 的执行器。
+- Maestro MCP：依赖 `maestro mcp` 的 agent 增强入口，用于设备检查、view hierarchy、截图和 flow 辅助；不单独替代 Maestro CLI。
+- `web-ui-autotest-generator`：Playwright 测试资产生成、选择器审计和覆盖率报告；执行底座仍是项目内 Playwright CLI。
 
-- 当前 MCP 工具列表中存在 TestSprite 相关工具。
-- 当前 IDE / Agent 环境已明确配置 TestSprite MCP server 和 API Key。
-- 项目级 `AGENTS.md` 或测试文档明确说明使用 TestSprite，且当前环境能调用对应 MCP 工具。
+涉及 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、浏览器回归、移动 App E2E、Hybrid App、发布前 smoke 或 Trellis 验收时，必须主动判定相关工具状态：
 
-涉及端到端流程、UI/API 集成、测试计划、回归验证、发布前 smoke 或 Trellis 验收时，必须主动判定 TestSprite 状态：`run` / `blocked` / `skipped`。调用会打开外部 UI 的 TestSprite bootstrap / 配置工具前，先准备本次测试范围对应的 PRD、`projectPath`、`localPort`、`type` 和 `testScope`；配置门户、PRD 上传、测试账号、认证方式或服务不可用时，只能输出 `blocked` 和剩余配置项。
+- `Chrome DevTools MCP`: `diagnosed` / `inspected` / `blocked` / `skipped` / `not-needed`
+- `Playwright MCP`: `explored` / `locator-assisted` / `blocked` / `skipped` / `not-needed`
+- `Playwright CLI`: `available` / `installed` / `missing` / `skipped-by-user` / `blocked`
+- `Playwright Web Tests`: `run` / `failed` / `blocked` / `skipped`
+- `Java`: `available` / `installed` / `missing` / `incompatible` / `blocked` / `skipped-by-user`
+- `Maestro CLI`: `available` / `installed` / `missing` / `skipped-by-user` / `blocked`
+- `Maestro MCP`: `available` / `configured` / `unavailable` / `blocked` / `skipped`
+- `Maestro Mobile`: `run-local` / `run-cloud` / `blocked` / `skipped` / `not-needed`
+- `Maestro Web Smoke`: `run` / `blocked` / `skipped` / `not-needed`
+- `Web UI 测试资产`: `generated` / `coverage-only` / `blocked` / `skipped`
 
-真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。TestSprite 产物是否入库按项目策略决定。
+Playwright CLI 检测规则：
+
+- 先静态检查 `package.json`、`playwright.config.*`、package scripts、`tests/e2e` / `e2e` 等既有约定。
+- 如果 Web 回归或 `web-ui-autotest-generator` 需要 Playwright，但项目内未安装 Playwright CLI，必须询问用户是否安装到项目 devDependency；用户确认后按项目包管理器安装并继续流程。
+- 用户拒绝安装或安装失败时，不声称 Playwright 测试已运行；可用 Chrome DevTools MCP / Playwright MCP 做诊断，但 `Playwright Web Tests` 必须标记 `blocked` 或 `skipped` 并说明原因。
+
+Maestro 检测规则：
+
+- 需要 Maestro 前先检查 Java 17+，优先 `java --version`，失败时回退 `java -version`。
+- Java 缺失或版本低于 17 时，说明 Maestro 需要 Java 17+；默认建议安装 OpenJDK Temurin 21 最新 JDK。用户指定其他版本时，只允许安装 Java 17+，拒绝任何低于 17 的版本。
+- Java 通过后再检查 Maestro CLI；CLI 缺失时询问用户是否安装到开发环境或 CI runner。Maestro CLI 可用后再检查 Maestro MCP。
+- Maestro MCP 缺失但 CLI 可用时，继续用 `maestro test` 跑已有 flow；CLI 缺失时 MCP 也视为不可用。
+
+MCP 边界：
+
+- MCP items 是 check-and-guide，不复制 MCP 配置，不声称自动完成安装。
+- 只有用户完成配置并在后续检查中确认工具可见，才把 MCP 视为可用。
+- 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
+
+真实账号、密钥、PII、生产数据不得写入仓库、PRD、测试代码、日志、截图、trace、video 或报告。
 
 ## Skills 调用规则
 
@@ -163,8 +194,8 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
 - `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。具体执行与产物策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
-- `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、TestSprite 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
-- `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、TestSprite 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
+- `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、Playwright、Maestro 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
+- `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
 - `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
 - `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnosing-bugs`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。
 - `book-ddd-distilled-modeling`：仅在需求涉及业务术语、领域规则、bounded context、上下文边界或模型歧义时使用，通常位于 `grill-with-docs` 之后、`to-prd` / `design.md` 之前。不要把一次性领域推断直接写入长期 context 或 `.trellis/spec`。

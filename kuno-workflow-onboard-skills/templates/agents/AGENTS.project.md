@@ -183,7 +183,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 
 - 普通 bug、测试失败或运行时异常：`diagnosing-bugs` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnosing-bugs` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-prd` → `gherkin-bdd`（用户可见行为场景）→ `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 / TestSprite（MCP / 配置门户可用时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
+- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-prd` → `gherkin-bdd`（用户可见行为场景）→ `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
 - 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
 - 需要回归测试的普通用户可见行为修改：Trellis `native` workflow → `gherkin-bdd` → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
 - 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `gherkin-bdd`（外部可观察行为）→ `to-issues` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
@@ -205,7 +205,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 - `book-ddia-data-design`
 - `book-release-readiness`
 
-这些 Skill 是按需专项审查视角，不替代项目事实、Trellis workflow、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、TestSprite 或人工评审。
+这些 Skill 是按需专项审查视角，不替代项目事实、Trellis workflow、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。
 
 默认不接入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展；如果具体项目明确需要，由项目级 `AGENTS.md` 或更深层规则单独声明。
 
@@ -215,7 +215,7 @@ GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
 - 设计阶段：涉及存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流时，`grill-with-docs` / `to-prd` → `book-ddia-data-design` → `design.md` / `implement.md` → Trellis / `tdd` / GitNexus impact-analysis。
 - 开发前 / 开发中：结构性阻碍当前实现或 review 需要判断是否先重构时，代码阅读 / `codebase-design` / GitNexus exploring → `book-refactoring-pass` → Codex implementation → 项目验证。
 - 遗留 bug 修复：目标代码测试不足、行为不清或隐藏依赖较多时，`diagnosing-bugs` → `book-legacy-change-safety` → `tdd` / characterization test → Codex fix → 项目验证。
-- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 TestSprite / `web-ui-autotest-generator` gate；如仍有高风险 review 缺口，再进入 Channel preflight。
+- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 Chrome DevTools MCP / Playwright / Maestro / `web-ui-autotest-generator` gate；如仍有高风险 review 缺口，再进入 Channel preflight。
 
 同一任务不要默认全量调用 5 个 book-derived Skill；按当前主风险选择最相关的 1-2 个。只有任务横跨需求建模、数据设计、遗留代码和生产发布多个风险面时，才分阶段调用多个。
 
@@ -244,7 +244,7 @@ preflight 只输出是否推荐启用 Channel、建议 worker 角色、输入、
 
 ### Review / Validation 用法
 
-Channel 适合作为代码 review、测试验证审查和交叉验证层，不替代 `$trellis-check`、项目验证命令、GitNexus、TestSprite、浏览器检查或人工最终判断。
+Channel 适合作为代码 review、测试验证审查和交叉验证层，不替代 `$trellis-check`、项目验证命令、GitNexus、Playwright、Maestro、Chrome DevTools MCP、浏览器检查或人工最终判断。
 
 默认 reviewer / validator worker 只读。推荐角色包括：
 
@@ -294,11 +294,11 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 
 ---
 
-## TestSprite / E2E 验证辅助
+## Web / Mobile 验证工具
 
-TestSprite 用于测试计划、UI/E2E、API 集成和回归验证辅助，不替代项目已有 lint、unit test、integration test、build、浏览器检查或人工测试评审。
+默认继承全局 Web / Mobile 工具边界：Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责项目内 Web 可重复回归，Playwright MCP 负责探索和 locator 辅助，Maestro CLI 负责移动 / Hybrid E2E，Maestro MCP 负责设备检查和 flow 辅助，`web-ui-autotest-generator` 负责可入库 Web UI Playwright 测试资产。
 
-主动判定场景：
+项目级规则只补充触发和落地约束：
 
 - 端到端业务流程变更：登录、注册、权限、账号空间、保存、发布、上传 / 下载、跨页面流转、多步骤流程、CRUD。
 - 前后端 / API 集成变更：前端操作触发后端 API、API route / client contract、数据持久化、表单提交、列表查询、错误态或权限校验。
@@ -307,57 +307,37 @@ TestSprite 用于测试计划、UI/E2E、API 集成和回归验证辅助，不�
 - 合并到 staging、发布 preview 或 release 前，且改动不只是文档。
 - GitNexus impact / detect_changes 为 HIGH / CRITICAL，且影响 Web、API 或发布流程。
 
-可运行条件：
+执行约束：
 
-- 当前环境已配置 TestSprite MCP server 和 API Key，且 MCP 工具可调用。
-- 需求涉及端到端业务流程、UI、API 集成、测试计划生成、回归验证或 Trellis 验收需要 TestSprite 辅助。
-- 本地应用、测试环境或 API 服务可访问，并能确认 `projectPath`、`localPort`、测试类型和测试范围。
-
-使用规则：
-
-- 使用前先读取项目 PRD、Trellis task artifacts、README、API 文档和现有测试；必要时整理 PRD 草稿、测试范围、登录需求、环境 URL、测试账号需求和补充执行说明。
-- 调用会打开外部 UI 的 TestSprite bootstrap / 配置工具前，必须先确认或生成本次测试范围对应的 PRD 文件，并在用户可见输出中给出可上传 PRD 的绝对路径、测试范围、`projectPath`、`localPort`、`type` 和 `testScope`；如果没有可上传的 PRD 文件，不要先打开外部 UI。
-- 如果项目已存在 `.testsprite/config.json`，不要为了新增测试、修改测试或重跑测试重新 bootstrap；直接使用测试计划生成、执行或结果面板相关工具。
-- TestSprite bootstrap 通常会打开 Testing Configuration / Configuration Portal。不要把配置页面、PRD 上传、测试账号或认证信息填写描述成可由 Codex 后台自动跳过。
-- Codex 可以准备 PRD 文件、测试需求摘要、端口、MCP 参数和 `additionalInstruction`；配置门户中的测试类型 / 范围、应用 URL、PRD 上传、测试账号或认证方式仍需按 TestSprite 页面完成。
-- 只有用户明确授权浏览器自动化且不涉及敏感真实凭据时，才可协助填写本地配置页面中的非敏感信息。真实账号、密钥、PII 和生产数据不得写入仓库、PRD、测试代码、日志或报告。
-- 如果 TestSprite MCP 不可用、配置门户未完成、登录凭据缺失、PRD 未上传或测试环境不可访问，只输出阻塞说明、已准备材料和剩余配置项，不强行声称已完成 TestSprite 测试。
-- TestSprite 产物默认按项目策略处理：`test_plan.json` 和 `_prd.json` 倾向保留；具体测试执行代码、报告、截图、trace、video 和临时结果默认不提交，除非团队明确要固化。
-- 最终输出必须说明 TestSprite 状态：`run` / `blocked` / `skipped`、原因、PRD 上传路径、执行或阻塞结果、剩余风险。
+- 需要 Web 回归时，先检查项目已有 Playwright 依赖、配置、scripts 和 E2E 目录；未安装时按全局规则询问是否安装到项目 devDependency。
+- 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
+- MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
+- 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
 
 ---
 
 ## Web UI / E2E 测试资产
 
-普通 UI 检查优先使用项目已有验证、浏览器 / 截图检查和 TestSprite 辅助；测试阶段必须主动判定是否需要把 Web UI 回归路径固化到项目仓库，再决定是否启用 `web-ui-autotest-generator`。
+普通 UI 检查优先使用项目已有验证、Chrome DevTools MCP 诊断和 Playwright CLI 回归。只有需要把 Web UI 回归路径固化到仓库内可维护测试资产时，才启用 `web-ui-autotest-generator`。
 
-主动判定场景：
+启用条件：
 
 - 用户明确要求生成 Web UI 自动化测试、Playwright、E2E suite 或 UI 回归测试代码。
 - 关键 Web UI 业务流需要长期回归，例如登录后流程、CRUD、表单校验、权限、跨页面流转、下载 / 上传。
 - 项目已有 Playwright，需要扩展可维护测试覆盖。
 - Trellis 任务验收标准明确包含 Web UI/E2E 且需要可重复运行的入库测试资产。
-- 修复了用户可见 UI bug，且该 bug 值得进入长期回归资产。
-- TestSprite、浏览器验证或人工复核发现了应进入 CI / 本地 E2E 的覆盖缺口。
+- Chrome DevTools MCP、Playwright MCP、Playwright CLI、浏览器验证或人工复核发现了应进入 CI / 本地 E2E 的覆盖缺口。
 
-使用规则：
+项目落地规则：
 
 - 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定；不要因为默认模板存在就切换测试框架。
-- 可以先只做覆盖评估，不必每次生成大量测试；先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
+- 可以先只做覆盖评估；先生成或复核 `ui-test-manifest.json`、`ui-selector-audit.json`，再决定是否扩展 Page Object 和 spec。
 - 没有稳定测试账号、测试环境、数据准备、清理策略或业务规则时，只输出阻塞说明和覆盖缺口，不强行生成脆弱测试。
-- 不写入真实生产账号、密钥、PII 或生产数据。需要测试账号和环境变量时，只写占位说明。
 - 只有用户明确同意修改产品代码时，才补充 `data-testid`、`data-cy` 或可访问名称等测试选择器。
-- 生成后必须运行可用的项目验证和 E2E 命令；无法运行时说明尝试命令、阻塞原因、替代检查和剩余风险。
-- 最终输出必须说明 Web UI 自动化测试资产状态：`generated` / `coverage-only` / `blocked` / `skipped`、原因、生成文件、运行命令和剩余风险。
+- 生成后必须运行可用的项目验证和 Playwright E2E 命令；无法运行时说明尝试命令、阻塞原因、替代检查和剩余风险。
+- 测试代码和必要配置是否提交按项目策略决定；Playwright report、trace、video、screenshot、HTML report 和一次性 repair plan 默认不入库。
 
-产物策略：
-
-- 可按项目策略提交：`tests/e2e/pages/`、`tests/e2e/specs/`、`tests/e2e/fixtures/`、`tests/e2e/utils/`、必要 mock、`playwright.config.*`、必要 package scripts 和 CI 配置。
-- 按团队审查策略决定是否提交：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`、`tests/e2e/reports/summary.md`、TestSprite 的 `test_plan.json` 和 `_prd.json`。
-- 默认不要提交，并建议加入真实业务项目 `.gitignore`：`playwright-report/`、`test-results/`、`blob-report/`、trace、video、screenshot、HTML report、一次性 `ui-test-repair-plan.json`、`tests/e2e/reports/results.json`、`tests/e2e/reports/junit.xml`、`tests/e2e/reports/html/`、`tests/e2e/**/screenshots/`、`tests/e2e/**/videos/`、`tests/e2e/**/traces/`、`tests/e2e/**/*.trace.zip`。
-- TestSprite 目录不要一刀切忽略；`.testsprite/config.json` 如只包含非敏感项目配置可按项目策略保留，如包含本地路径、账号、token 或私有环境信息则不要提交。可按实际生成情况忽略 `.testsprite/cache/`、`.testsprite/tmp/`、`.testsprite/runs/`、`.testsprite/results/`、`.testsprite/reports/`。
-
-`web-ui-autotest-generator` 不替代 TestSprite。TestSprite 继续作为测试计划、E2E 和回归验证辅助；`web-ui-autotest-generator` 只在需要 repo-resident Playwright 测试资产时补充。
+`web-ui-autotest-generator` 不替代 Playwright CLI。它只负责生成和审计 repo-resident Playwright 测试资产，执行底座仍是项目内 Playwright CLI。
 
 ---
 

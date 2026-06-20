@@ -102,7 +102,7 @@ description: Use when the user requests Trellis Channel, multi-agent, worker, fo
 - Channel 不替代 `$trellis-before-dev`。
 - Channel 不替代 `$trellis-check`。
 - Channel 不替代 `$trellis-finish-work`。
-- Channel 不替代项目验证命令、GitNexus、TestSprite、浏览器检查或人工最终判断。
+- Channel 不替代项目验证命令、GitNexus、Playwright、Maestro、Chrome DevTools MCP、浏览器检查或人工最终判断。
 - Channel 结论不会自动成为 `.trellis/spec`。
 - Channel runtime / events / forum / thread 记录默认属于本地协作日志。
 - Channel 运行时文件默认不要提交到远程仓库。
@@ -131,7 +131,7 @@ Validation Channel 用于验证计划、覆盖率审查和独立复核，不替�
 规则：
 
 - 主会话负责最终运行或确认验证命令。
-- worker 可以建议命令、审查日志、复核截图、检查报告和指出验证缺口。
+- worker 可以建议命令，审查 Playwright report / trace、Maestro artifacts、Chrome DevTools MCP 截图 / trace / network 证据、项目测试日志，并指出验证缺口。
 - 同一 checkout 不要并行运行会互相影响的验证命令。
 - Docker、数据库迁移、浏览器 E2E、Vercel deploy 等环境敏感验证应由主会话串行控制。
 - 如果 worker 指出必须修改代码，回到主会话确认后再由唯一 writer 执行。

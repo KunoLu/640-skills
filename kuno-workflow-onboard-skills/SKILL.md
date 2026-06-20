@@ -39,7 +39,15 @@ python scripts/onboard.py install-external-skills --skills diagnosing-bugs,tdd -
 
 mattpocock/skills 1.0+ uses canonical names. The installer normalizes legacy `diagnose` to `diagnosing-bugs`, legacy `write-a-skill` to `writing-great-skills`, and rejects removed `zoom-out` with a migration note. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
 
-For missing RTK, confirm with the user and run `python scripts/onboard.py install-rtk --yes`; for verification failure, use `--reinstall --yes` only after confirmation. Always verify with `rtk gain`. If installation fails, report the failed item, attempted action, likely cause, and recommended next step. MCP items are check-and-guide only; never claim MCP installation is complete unless the user has completed the listed manual steps and a later check confirms the tools are visible.
+For missing RTK, confirm with the user and run `python scripts/onboard.py install-rtk --yes`; for verification failure, use `--reinstall --yes` only after confirmation. Always verify with `rtk gain`.
+
+For missing or incompatible Java when Maestro is needed, tell the user Maestro requires Java 17+. Default to the latest OpenJDK Temurin 21 JDK and run `python scripts/onboard.py install-java --major 21 --yes` only after confirmation. If the user requests another Java major version, pass that version only when it is 17 or higher; refuse lower versions.
+
+For missing Maestro CLI, confirm Java 17+ first, ask the user, then run `python scripts/onboard.py install-maestro --yes`. If a `maestro` command exists but fails verification, use `--reinstall --yes` only after the user confirms replacement or repair.
+
+For missing project-level Playwright CLI, install it only inside a target project that has `package.json` and needs Web E2E, Web regression, or `web-ui-autotest-generator` output. After confirmation, run `python scripts/onboard.py install-playwright-cli --project-root <project-root> --yes`. If the user declines, continue with Chrome DevTools MCP or Playwright MCP only as diagnostics / exploration fallback and report that project Web E2E was blocked or skipped.
+
+If installation fails, report the failed item, attempted action, likely cause, and recommended next step. MCP items are check-and-guide only; never claim MCP installation is complete unless the user has completed the listed manual steps and a later check confirms the tools are visible.
 
 3. Run a dry-run plan:
 
@@ -79,11 +87,13 @@ Every `check`, external Skill install, `init`, or `reset` run must end with the 
 
 The `check` command inspects:
 
-- Runtime: `npm`, `node`, `nvm`; CLI checks run only after npm is usable.
+- Runtime: `npm`, `node`, `nvm`; npm-backed CLI checks run only after npm is usable.
 - CLI tools: `rtk`, `trellis`, `gitnexus`.
+- Conditional project tooling: Playwright CLI / `@playwright/test`, checked when a project root is provided and Web E2E assets or scripts are present or requested.
+- Mobile E2E tooling: Java 17+ for Maestro, Maestro CLI, and Maestro MCP guidance.
 - Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `gherkin-bdd`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
 - Referenced skills from the bundled templates, including mattpocock skills, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
-- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, TestSprite MCP, and React Bits Pro project skill prerequisites.
+- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project skill prerequisites.
 
 ## Target Defaults
 
