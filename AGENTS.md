@@ -21,6 +21,20 @@
 每次执行本仓库操作前，必须先读取 `docs/lessons.md`，理解其中与当前任务相关的经验后再继续。  
 如果该文件不存在或不可读取，不要假装已读取；必须在最终输出中说明跳过原因。
 
+## README 同步规则
+
+后续每次模板内容有更新，都必须评估根目录 `README.md` 和 `README.html` 是否需要同步更新。
+
+如果模板更新影响以下任一内容，必须在同一轮修改中同步更新 `README.md` 和 `README.html`：
+
+- 工作流主线、工具职责边界或最终验证工具栈。
+- SDD、BDD、TDD、DDD 或 SBTD 的定义、触发条件、产物位置或协作顺序。
+- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP 或 `web-ui-autotest-generator` 的检测、安装、fallback、报告状态或使用时机。
+- `kuno-workflow-onboard-skills/scripts/onboard.py` 的 init、reset、安装或检查行为。
+- 模板 `.gitignore`、同步路径、AGENTS 模板路径、Skill 模板路径或用户可见文档入口。
+
+如果评估后无需更新 README，必须在最终输出中说明跳过原因。
+
 ## 本地同步规则
 
 普通修改任务只更新本配置摘录仓库内的源文件，不要立即同步到本地 PC 的实际生效路径。

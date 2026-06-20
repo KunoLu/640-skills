@@ -1,219 +1,39 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="data:,">
-  <title>Codex Templates &amp; Skills Playbook</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kuno Workflow 模板说明</title>
   <style>
     :root {
-      --bg: #090c10;
-      --panel: #111820;
-      --panel-2: #151f28;
-      --panel-soft: rgba(255, 255, 255, 0.055);
-      --text: #eef4f1;
-      --muted: #aab7b4;
-      --line: rgba(255, 255, 255, 0.14);
-      --cyan: #37d7c2;
-      --amber: #f4b942;
-      --red: #ff6961;
-      --green: #78d77a;
-      --blue: #7fb3ff;
-      --purple: #b79bff;
-      --radius: 8px;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
-      --slide-pad: clamp(30px, 4.2vw, 62px);
-      --text-body: clamp(16px, 1.42vw, 20px);
-      --text-card: clamp(15px, 1.24vw, 18px);
-      --text-small: clamp(13px, 1.05vw, 15px);
-      --gap: clamp(16px, 1.5vw, 24px);
-      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color-scheme: light;
+      --ink: #151719;
+      --muted: #5b6472;
+      --line: #d7dde5;
+      --paper: #ffffff;
+      --soft: #f6f8fb;
+      --blue: #1d4ed8;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --teal: #0f766e;
+      --violet: #6d28d9;
     }
 
     * {
       box-sizing: border-box;
     }
 
-    html,
     body {
-      width: 100%;
-      height: 100%;
       margin: 0;
-      background:
-        radial-gradient(circle at 10% 10%, rgba(55, 215, 194, 0.11), transparent 34%),
-        linear-gradient(135deg, #090c10 0%, #0f1419 52%, #11110d 100%);
-      color: var(--text);
-      font-family: var(--font);
-      overflow: hidden;
-    }
-
-    button {
-      font: inherit;
-    }
-
-    .progress {
-      position: fixed;
-      inset: 0 auto auto 0;
-      width: 0;
-      height: 4px;
-      background: linear-gradient(90deg, var(--cyan), var(--amber));
-      z-index: 20;
-      transition: width 260ms ease;
-    }
-
-    .deck-shell {
-      position: fixed;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      padding: 22px;
-    }
-
-    .deck {
-      position: relative;
-      width: min(100vw - 44px, calc((100vh - 44px) * 16 / 9));
-      height: min(100vh - 44px, calc((100vw - 44px) * 9 / 16));
-      min-width: 320px;
-      min-height: 180px;
-      background: rgba(9, 12, 16, 0.92);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .slide {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      gap: var(--gap);
-      padding: var(--slide-pad);
-      opacity: 0;
-      visibility: hidden;
-      transform: translateY(12px);
-      transition: opacity 260ms ease, transform 260ms ease, visibility 260ms ease;
-      overflow: hidden;
-    }
-
-    .slide.active {
-      opacity: 1;
-      visibility: visible;
-      transform: translateY(0);
-    }
-
-    .slide::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background:
-        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-      background-size: 44px 44px;
-      mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), rgba(0,0,0,0.18));
-    }
-
-    .slide > * {
-      position: relative;
-      z-index: 1;
-    }
-
-    .eyebrow {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--muted);
-      font-size: clamp(13px, 1.08vw, 15px);
-      letter-spacing: 0;
-      text-transform: uppercase;
-    }
-
-    .eyebrow::before {
-      content: "";
-      width: 38px;
-      height: 2px;
-      background: var(--cyan);
-    }
-
-    h1,
-    h2,
-    h3,
-    p {
-      margin: 0;
-    }
-
-    h1 {
-      max-width: 980px;
-      font-size: clamp(44px, 6.8vw, 88px);
-      line-height: 0.98;
-      letter-spacing: 0;
-    }
-
-    h2 {
-      max-width: 960px;
-      font-size: clamp(34px, 4.6vw, 62px);
-      line-height: 1.04;
-      letter-spacing: 0;
-    }
-
-    h3 {
-      font-size: clamp(19px, 1.9vw, 26px);
-      line-height: 1.18;
-    }
-
-    p,
-    li {
-      color: var(--muted);
-      font-size: var(--text-body);
-      line-height: 1.54;
-    }
-
-    ul {
-      margin: 0;
-      padding-left: 1.1em;
-    }
-
-    strong {
-      color: var(--text);
-      font-weight: 700;
-    }
-
-    code {
-      font-family: var(--mono);
-      color: #d6f9f3;
-      background: rgba(55, 215, 194, 0.09);
-      border: 1px solid rgba(55, 215, 194, 0.18);
-      border-radius: 5px;
-      padding: 0.08em 0.35em;
-      white-space: nowrap;
-    }
-
-    pre {
-      margin: 0;
-      padding: 16px 18px;
-      background: #071015;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: var(--radius);
-      overflow: auto;
-      max-height: 100%;
-      color: #d9ece8;
-      font-family: var(--mono);
-      font-size: clamp(12px, 1vw, 14px);
-      line-height: 1.48;
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.24);
-    }
-
-    pre code {
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      white-space: pre;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.65;
     }
 
     a {
-      color: var(--cyan);
+      color: var(--blue);
       text-decoration: none;
     }
 
@@ -221,1977 +41,520 @@
       text-decoration: underline;
     }
 
-    .title-slide {
-      grid-template-rows: 1fr auto;
-      padding: clamp(38px, 6.2vw, 78px);
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--soft);
     }
 
-    .title-stack {
-      align-self: center;
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .hero {
       display: grid;
-      gap: 24px;
-      max-width: 1030px;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 32px;
+      align-items: center;
+      min-height: 78vh;
+      padding: 56px 0 44px;
     }
 
-    .title-kicker {
-      color: var(--cyan);
-      font-family: var(--mono);
-      font-size: clamp(15px, 1.36vw, 19px);
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
     }
 
-    .title-subtitle {
-      max-width: 830px;
-      font-size: clamp(20px, 1.8vw, 26px);
-      color: #c9d6d3;
+    h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: 58px;
+      line-height: 1.08;
+      letter-spacing: 0;
     }
 
-    .hero-grid {
-      align-self: end;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: var(--gap);
+    h2 {
+      margin: 0 0 14px;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: 0;
     }
 
-    .hero-tile {
-      min-height: 108px;
-      padding: 20px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-soft);
+    h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.3;
+      letter-spacing: 0;
     }
 
-    .hero-tile b {
-      display: block;
-      margin-bottom: 6px;
-      font-size: clamp(16px, 1.35vw, 20px);
+    p {
+      margin: 0 0 14px;
     }
 
-    .hero-tile span {
+    .lead {
+      margin-top: 18px;
+      max-width: 780px;
       color: var(--muted);
-      font-size: var(--text-small);
-      line-height: 1.42;
+      font-size: 18px;
     }
 
-    .body {
-      min-height: 0;
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .hero-map {
+      padding: 0;
+    }
+
+    .map-grid {
       display: grid;
-      align-items: stretch;
-      align-content: stretch;
-      gap: var(--gap);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .map-cell {
+      min-height: 92px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+
+    .map-cell strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--ink);
+    }
+
+    .map-cell span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    main section {
+      padding: 48px 0;
+      border-bottom: 1px solid var(--line);
     }
 
     .section-head {
       display: grid;
-      gap: 10px;
-      align-self: start;
+      grid-template-columns: minmax(220px, 0.36fr) minmax(0, 0.64fr);
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 24px;
     }
 
     .section-head p {
-      max-width: 1020px;
+      color: var(--muted);
+      font-size: 16px;
     }
 
-    .split {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--gap);
-      min-height: 0;
-    }
-
-    .split-40 {
-      grid-template-columns: 0.85fr 1.15fr;
-    }
-
-    .split-60 {
-      grid-template-columns: 1.15fr 0.85fr;
-    }
-
-    .grid-2,
-    .grid-3,
     .grid-4 {
       display: grid;
-      gap: var(--gap);
-      min-height: 0;
-    }
-
-    .grid-2 {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
     }
 
     .grid-3 {
-      grid-template-columns: repeat(3, 1fr);
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
     }
 
-    .grid-4 {
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    .card,
-    .metric,
-    .tool-card,
-    .flow-step,
-    .lane,
-    .mini-panel {
+    .panel {
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(17, 24, 32, 0.72);
+      border-radius: 8px;
+      background: var(--paper);
+      padding: 16px;
     }
 
-    .card {
-      padding: clamp(20px, 1.9vw, 28px);
-      display: grid;
-      align-content: center;
-      gap: clamp(12px, 1.15vw, 18px);
-      min-width: 0;
-      min-height: 100%;
-    }
-
-    .card.accent {
-      border-color: rgba(55, 215, 194, 0.38);
-      background: linear-gradient(180deg, rgba(55, 215, 194, 0.1), rgba(17, 24, 32, 0.68));
-    }
-
-    .card.warn {
-      border-color: rgba(244, 185, 66, 0.45);
-      background: linear-gradient(180deg, rgba(244, 185, 66, 0.12), rgba(17, 24, 32, 0.68));
-    }
-
-    .card.danger {
-      border-color: rgba(255, 105, 97, 0.42);
-      background: linear-gradient(180deg, rgba(255, 105, 97, 0.1), rgba(17, 24, 32, 0.68));
-    }
-
-    .card p,
-    .card li {
-      font-size: var(--text-card);
-      line-height: 1.5;
-    }
-
-    .card code,
-    .mini-panel code,
-    .flow-step code,
-    .lane code {
-      white-space: normal;
-      overflow-wrap: anywhere;
-    }
-
-    .badge-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 30px;
-      padding: 5px 10px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.06);
-      color: #cbd7d4;
-      font-size: clamp(12px, 0.98vw, 14px);
-      line-height: 1.1;
-    }
-
-    .badge.green {
-      border-color: rgba(120, 215, 122, 0.32);
-      color: #c8f0c9;
-    }
-
-    .badge.amber {
-      border-color: rgba(244, 185, 66, 0.35);
-      color: #f9df9a;
-    }
-
-    .badge.cyan {
-      border-color: rgba(55, 215, 194, 0.35);
-      color: #c5fbf4;
-    }
-
-    .metric {
-      padding: clamp(20px, 1.8vw, 26px);
-      display: grid;
-      align-content: center;
-      gap: 12px;
-      min-height: 100%;
-    }
-
-    .metric .num {
-      color: var(--cyan);
-      font-size: clamp(42px, 5vw, 68px);
-      line-height: 1;
-      font-weight: 800;
-    }
-
-    .metric .label {
+    .panel p,
+    .panel li {
       color: var(--muted);
-      font-size: clamp(15px, 1.2vw, 18px);
-      line-height: 1.45;
+      font-size: 14px;
     }
 
-    .tool-card {
-      padding: clamp(20px, 1.8vw, 26px);
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      align-content: stretch;
-      gap: 12px;
-      min-width: 0;
-      min-height: 100%;
-    }
-
-    .tool-card h3 {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .tool-card small {
-      color: var(--muted);
-      font-family: var(--mono);
-      font-size: clamp(12px, 0.98vw, 14px);
-    }
-
-    .tool-card p {
-      align-self: start;
-    }
-
-    .tool-card .badge-row {
-      width: 100%;
-      align-self: end;
-    }
-
-    .tool-card .badge {
-      width: 100%;
-      min-height: 42px;
-      justify-content: center;
-      border-radius: 6px;
-      text-align: center;
-    }
-
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(17, 24, 32, 0.7);
-    }
-
-    .table th,
-    .table td {
-      padding: clamp(11px, 1vw, 15px) clamp(12px, 1.1vw, 18px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
-      vertical-align: top;
-      text-align: left;
-      color: var(--muted);
-      font-size: clamp(14px, 1.08vw, 16px);
-      line-height: 1.43;
-    }
-
-    .table th {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.06);
-      font-size: clamp(13px, 1.02vw, 15px);
-    }
-
-    .table tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .table code {
-      font-size: 0.95em;
-      white-space: normal;
-      overflow-wrap: anywhere;
-    }
+    .accent-blue { border-top: 4px solid var(--blue); }
+    .accent-green { border-top: 4px solid var(--green); }
+    .accent-amber { border-top: 4px solid var(--amber); }
+    .accent-red { border-top: 4px solid var(--red); }
+    .accent-teal { border-top: 4px solid var(--teal); }
+    .accent-violet { border-top: 4px solid var(--violet); }
 
     .flow {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: var(--gap);
-      align-items: stretch;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 6px;
     }
 
-    .flow.flow-4 {
-      grid-template-columns: repeat(4, 1fr);
-    }
-
-    .flow.flow-6 {
-      grid-template-columns: repeat(3, 1fr);
-    }
-
-    .flow-step {
+    .step {
       position: relative;
-      padding: clamp(18px, 1.6vw, 24px);
-      display: grid;
-      align-content: center;
-      gap: 12px;
-      min-height: 150px;
-    }
-
-    .flow-step::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      right: -10px;
-      width: 10px;
-      height: 2px;
-      background: rgba(55, 215, 194, 0.5);
-    }
-
-    .flow-step:last-child::after {
-      content: none;
-    }
-
-    .flow-step .step-num {
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: rgba(55, 215, 194, 0.14);
-      color: var(--cyan);
-      font-family: var(--mono);
-      font-size: 14px;
-    }
-
-    .flow-step h3 {
-      font-size: clamp(17px, 1.42vw, 21px);
-    }
-
-    .flow-step p {
-      font-size: clamp(14px, 1.08vw, 16px);
-      line-height: 1.44;
-    }
-
-    .lane-wrap {
-      display: grid;
-      gap: var(--gap);
-    }
-
-    .lane {
-      display: grid;
-      grid-template-columns: minmax(150px, 0.22fr) 1fr;
-      overflow: hidden;
-      min-height: clamp(96px, 10.5vh, 128px);
-    }
-
-    .lane-label {
-      padding: clamp(18px, 1.45vw, 24px);
-      background: rgba(255, 255, 255, 0.06);
-      border-right: 1px solid var(--line);
-      display: grid;
-      align-content: center;
-      gap: 7px;
-    }
-
-    .lane-label b {
-      color: var(--text);
-      font-size: clamp(16px, 1.26vw, 19px);
-    }
-
-    .lane-label span {
-      color: var(--muted);
-      font-size: clamp(12px, 1vw, 14px);
-    }
-
-    .lane-body {
-      padding: clamp(18px, 1.45vw, 24px);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .pill {
-      padding: 10px 13px;
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.05);
-      color: #dbe7e4;
-      font-size: clamp(13px, 1.06vw, 15px);
-      line-height: 1.22;
-      white-space: nowrap;
-    }
-
-    .pill.cyan {
-      border-color: rgba(55, 215, 194, 0.35);
-      background: rgba(55, 215, 194, 0.08);
-    }
-
-    .pill.amber {
-      border-color: rgba(244, 185, 66, 0.35);
-      background: rgba(244, 185, 66, 0.08);
-    }
-
-    .pill.red {
-      border-color: rgba(255, 105, 97, 0.35);
-      background: rgba(255, 105, 97, 0.08);
-    }
-
-    .matrix {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--gap);
-    }
-
-    .matrix .card {
-      min-height: 128px;
-      padding: clamp(16px, 1.35vw, 22px);
-      gap: 9px;
-    }
-
-    .callout {
-      padding: 16px 20px;
-      border-left: 4px solid var(--amber);
-      background: rgba(244, 185, 66, 0.1);
-      border-radius: 0 var(--radius) var(--radius) 0;
-      color: #f8e7b3;
-      font-size: clamp(15px, 1.14vw, 17px);
-      line-height: 1.5;
-    }
-
-    .callout.cyan {
-      border-left-color: var(--cyan);
-      background: rgba(55, 215, 194, 0.1);
-      color: #c9faf4;
-    }
-
-    .code-split {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: var(--gap);
-      min-height: 0;
-    }
-
-    .code-split pre {
-      min-height: 0;
-    }
-
-    .mini-panel {
-      padding: clamp(20px, 1.65vw, 26px);
-      display: grid;
-      align-content: center;
-      gap: 14px;
-    }
-
-    .toc {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--gap);
-      align-content: stretch;
-      grid-auto-rows: 1fr;
-    }
-
-    .toc-item {
-      display: grid;
-      grid-template-columns: 34px 1fr;
-      align-items: center;
-      gap: 14px;
-      padding: 18px;
+      min-width: 120px;
+      min-height: 96px;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(255, 255, 255, 0.045);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--soft);
     }
 
-    .toc-num {
-      width: 30px;
-      height: 30px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: rgba(55, 215, 194, 0.1);
-      color: var(--cyan);
-      font-family: var(--mono);
+    .step b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
       font-size: 14px;
     }
 
-    .toc-item b {
-      font-size: clamp(16px, 1.28vw, 19px);
-    }
-
-    .toc-item span {
-      display: block;
-      margin-top: 3px;
+    .step span {
       color: var(--muted);
-      font-size: clamp(13px, 1.02vw, 15px);
-    }
-
-    .footer-note {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      color: rgba(238, 244, 241, 0.58);
-      font-size: clamp(12px, 0.96vw, 14px);
-      min-height: 18px;
-      align-self: end;
-    }
-
-    .slide-titleline {
-      display: grid;
-      gap: 6px;
-    }
-
-    .grid-2 > *,
-    .grid-3 > *,
-    .grid-4 > *,
-    .split > *,
-    .flow > *,
-    .code-split > * {
-      min-height: 100%;
-    }
-
-    .body > .table {
-      align-self: stretch;
-      height: 100%;
-    }
-
-    .controls {
-      position: fixed;
-      left: 50%;
-      bottom: 22px;
-      transform: translateX(-50%);
-      z-index: 30;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 10px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 999px;
-      background: rgba(9, 12, 16, 0.76);
-      backdrop-filter: blur(12px);
-    }
-
-    .nav-btn,
-    .index-btn {
-      width: 34px;
-      height: 34px;
-      display: grid;
-      place-items: center;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text);
-      cursor: pointer;
-    }
-
-    .nav-btn:hover,
-    .index-btn:hover {
-      border-color: rgba(55, 215, 194, 0.45);
-      background: rgba(55, 215, 194, 0.12);
-    }
-
-    .counter {
-      min-width: 72px;
-      text-align: center;
-      color: var(--muted);
-      font-family: var(--mono);
       font-size: 12px;
     }
 
-    .index-panel {
-      position: fixed;
-      right: 22px;
-      bottom: 78px;
-      z-index: 35;
-      width: min(360px, calc(100vw - 44px));
-      max-height: min(560px, calc(100vh - 120px));
-      overflow: auto;
-      padding: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      border-radius: var(--radius);
-      background: rgba(9, 12, 16, 0.94);
-      box-shadow: var(--shadow);
-      display: none;
-    }
-
-    .index-panel.open {
-      display: grid;
-      gap: 6px;
-    }
-
-    .index-panel button {
+    table {
       width: 100%;
-      padding: 9px 10px;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
       text-align: left;
-      border: 1px solid transparent;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
       font-size: 14px;
     }
 
-    .index-panel button:hover,
-    .index-panel button.active {
-      border-color: rgba(55, 215, 194, 0.32);
-      background: rgba(55, 215, 194, 0.1);
-      color: var(--text);
+    th {
+      background: var(--soft);
+      color: var(--ink);
+      font-weight: 700;
     }
 
-    .source-list {
-      display: grid;
-      gap: 12px;
+    td {
+      color: var(--muted);
     }
 
-    .source-list.featured {
-      grid-template-columns: repeat(2, 1fr);
-      grid-auto-rows: 1fr;
-      gap: var(--gap);
-      height: 100%;
-      align-content: stretch;
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #eef2f7;
+      color: #111827;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
     }
 
-    .source-list a {
-      display: block;
-      padding: 16px 18px;
+    pre {
+      overflow-x: auto;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: rgba(255, 255, 255, 0.045);
-      color: var(--text);
+      border-radius: 8px;
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 16px;
+      line-height: 1.5;
     }
 
-    .source-list.featured a {
+    pre code {
+      padding: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 13px;
+    }
+
+    .status-list {
       display: grid;
-      align-content: center;
-      height: 100%;
-      padding: clamp(22px, 2vw, 32px);
-      background: linear-gradient(180deg, rgba(55, 215, 194, 0.08), rgba(255, 255, 255, 0.045));
-    }
-
-    .source-list span {
-      display: block;
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: clamp(13px, 1.02vw, 15px);
-    }
-
-    .source-layout {
-      display: grid;
-      grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
-      gap: var(--gap);
-      min-height: 0;
-    }
-
-    .repo-source {
-      grid-template-rows: auto minmax(0, 1fr);
-      align-content: stretch;
-    }
-
-    .repo-source-list {
-      display: grid;
-      grid-template-rows: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
-      min-height: 0;
-      height: 100%;
     }
 
-    .repo-source-item {
-      display: grid;
-      align-content: center;
-      gap: 4px;
-      padding: 11px 12px;
-      min-height: 0;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .repo-source-item b {
-      color: var(--text);
-      font-family: var(--mono);
-      font-size: clamp(12px, 1vw, 14px);
-      overflow-wrap: anywhere;
-    }
-
-    .repo-source-item span {
+    .status-list div {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--soft);
       color: var(--muted);
-      font-size: clamp(12px, 0.98vw, 14px);
-      line-height: 1.34;
+      font-size: 14px;
     }
 
-    @media (min-width: 901px) {
-      .body.grid-2,
-      .body.grid-3,
-      .body.grid-4,
-      .body.split,
-      .body.flow,
-      .body.source-list,
-      .body.code-split,
-      .body.toc,
-      .body.matrix,
-      .body.source-layout {
-        height: 100%;
-      }
-
-      .body.grid-2,
-      .body.grid-3,
-      .body.grid-4,
-      .body.split,
-      .body.flow,
-      .body.matrix {
-        grid-auto-rows: 1fr;
-      }
-
-      .body.grid-3,
-      .body.grid-4,
-      .body.matrix,
-      .body.flow {
-        align-items: stretch;
-      }
+    .status-list strong {
+      color: var(--ink);
     }
 
-    @media (max-width: 1180px), (max-height: 720px) {
-      :root {
-        --slide-pad: clamp(22px, 3vw, 34px);
-        --gap: clamp(10px, 1.1vw, 14px);
-        --text-body: clamp(13px, 1.08vw, 16px);
-        --text-card: clamp(12px, 1vw, 15px);
-        --text-small: clamp(11px, 0.92vw, 13px);
+    footer {
+      padding: 28px 0 40px;
+      color: var(--muted);
+      background: var(--soft);
+    }
+
+    @media (max-width: 900px) {
+      .hero,
+      .section-head {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+        padding-top: 40px;
+      }
+
+      .grid-4,
+      .grid-3,
+      .status-list {
+        grid-template-columns: 1fr;
       }
 
       h1 {
-        font-size: clamp(34px, 5.2vw, 58px);
-      }
-
-      h2 {
-        font-size: clamp(24px, 3.55vw, 40px);
-        line-height: 1.08;
-      }
-
-      h3 {
-        font-size: clamp(15px, 1.45vw, 19px);
-      }
-
-      .eyebrow {
-        font-size: clamp(10px, 0.95vw, 12px);
-      }
-
-      .section-head {
-        gap: 6px;
-      }
-
-      p,
-      li {
-        line-height: 1.42;
-      }
-
-      pre {
-        padding: 10px 12px;
-        font-size: clamp(9.5px, 0.9vw, 12px);
-        line-height: 1.34;
-      }
-
-      .card,
-      .metric,
-      .tool-card,
-      .mini-panel {
-        padding: clamp(12px, 1.25vw, 18px);
-        gap: 8px;
-      }
-
-      .card {
-        align-content: center;
-      }
-
-      .badge {
-        min-height: 24px;
-        padding: 4px 8px;
-        font-size: clamp(10.5px, 0.9vw, 12px);
-      }
-
-      .table th,
-      .table td {
-        padding: 7px 8px;
-        font-size: clamp(10.5px, 0.9vw, 13px);
-        line-height: 1.28;
-      }
-
-      .table th {
-        font-size: clamp(10.5px, 0.88vw, 12px);
-      }
-
-      .lane-wrap {
-        gap: 8px;
-      }
-
-      .lane {
-        grid-template-columns: minmax(116px, 0.2fr) 1fr;
-        min-height: clamp(62px, 8.4vh, 82px);
-      }
-
-      .lane-label,
-      .lane-body {
-        padding: 10px 12px;
-      }
-
-      .lane-label {
-        gap: 4px;
-      }
-
-      .lane-label b {
-        font-size: clamp(12px, 1.08vw, 15px);
-      }
-
-      .lane-label span {
-        font-size: clamp(10px, 0.86vw, 11px);
-      }
-
-      .pill {
-        padding: 6px 8px;
-        font-size: clamp(10.5px, 0.9vw, 12px);
-        white-space: normal;
-      }
-
-      .flow {
-        gap: 10px;
-      }
-
-      .flow-step {
-        min-height: 90px;
-        padding: 12px;
-        gap: 7px;
-      }
-
-      .flow-step::after {
-        display: none;
-      }
-
-      .flow-step .step-num {
-        width: 24px;
-        height: 24px;
-        font-size: 11px;
-      }
-
-      .flow-step h3 {
-        font-size: clamp(13px, 1.05vw, 15px);
-      }
-
-      .flow-step p {
-        font-size: clamp(10.5px, 0.9vw, 12px);
-        line-height: 1.3;
-      }
-
-      .matrix {
-        gap: 10px;
-      }
-
-      .matrix .card {
-        min-height: 84px;
-        padding: 10px 12px;
-        gap: 5px;
-      }
-
-      .matrix .card p {
-        font-size: clamp(10.5px, 0.92vw, 12px);
-        line-height: 1.3;
-      }
-
-      .callout {
-        padding: 10px 12px;
-        font-size: clamp(11px, 0.95vw, 13px);
-        line-height: 1.34;
-      }
-
-      .code-split {
-        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-      }
-
-      .mini-panel {
-        align-content: center;
-      }
-
-      .mini-panel h3 {
-        font-size: clamp(14px, 1.15vw, 16px);
-      }
-
-      .mini-panel li {
-        font-size: clamp(10.5px, 0.92vw, 12px);
-        line-height: 1.32;
-      }
-
-      .source-list.featured a {
-        padding: 16px 18px;
-      }
-
-      .source-list span {
-        font-size: clamp(11px, 0.95vw, 13px);
-      }
-
-      .repo-source-list {
-        gap: 7px;
-      }
-
-      .repo-source-item {
-        padding: 8px 10px;
-        gap: 2px;
-      }
-
-      .repo-source-item b,
-      .repo-source-item span {
-        font-size: clamp(10.5px, 0.9vw, 12px);
-        line-height: 1.25;
-      }
-
-      .footer-note {
-        font-size: clamp(10px, 0.9vw, 12px);
-        min-height: 16px;
-      }
-    }
-
-    .slide.compact-slide {
-      --gap: clamp(8px, 0.86vw, 12px);
-      --text-card: clamp(10.5px, 0.82vw, 13px);
-      --text-small: clamp(10px, 0.78vw, 12px);
-    }
-
-    .compact-slide .section-head {
-      gap: 6px;
-    }
-
-    .compact-slide h2 {
-      font-size: clamp(24px, 3vw, 36px);
-      line-height: 1.08;
-    }
-
-    .compact-slide .section-head p {
-      max-width: 100%;
-      font-size: clamp(11.5px, 0.92vw, 14px);
-      line-height: 1.3;
-    }
-
-    .compact-slide .footer-note {
-      font-size: clamp(10px, 0.8vw, 12px);
-      line-height: 1.25;
-      min-height: 14px;
-    }
-
-    .skill-grid-compact {
-      gap: clamp(8px, 0.86vw, 12px);
-    }
-
-    .skill-grid-compact .tool-card {
-      grid-template-rows: auto auto auto;
-      padding: clamp(10px, 0.95vw, 14px);
-      gap: 6px;
-    }
-
-    .skill-grid-compact .tool-card h3 {
-      align-items: flex-start;
-      flex-wrap: wrap;
-      font-size: clamp(12px, 0.98vw, 15px);
-      line-height: 1.12;
-    }
-
-    .skill-grid-compact .tool-card small {
-      font-size: clamp(9.5px, 0.76vw, 11px);
-    }
-
-    .skill-grid-compact .tool-card p {
-      font-size: clamp(10.5px, 0.82vw, 12.5px);
-      line-height: 1.25;
-    }
-
-    .skill-grid-compact .tool-card .badge {
-      min-height: 24px;
-      padding: 4px 6px;
-      font-size: clamp(9.5px, 0.76vw, 11px);
-      line-height: 1.2;
-    }
-
-    .matt-skills-grid {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      grid-auto-rows: minmax(0, 1fr);
-      gap: clamp(8px, 0.84vw, 12px);
-    }
-
-    .matt-skills-grid .card {
-      min-height: 0;
-      align-content: start;
-      padding: clamp(9px, 0.82vw, 13px);
-      gap: 5px;
-    }
-
-    .matt-skills-grid h3 {
-      font-size: clamp(12px, 0.95vw, 14px);
-      line-height: 1.12;
-      overflow-wrap: anywhere;
-    }
-
-    .matt-skills-grid .card p {
-      font-size: clamp(10px, 0.76vw, 12px);
-      line-height: 1.24;
-    }
-
-    .workflow-lanes {
-      gap: clamp(7px, 0.72vw, 10px);
-    }
-
-    .workflow-lanes .lane {
-      min-height: 0;
-      grid-template-columns: minmax(122px, 0.18fr) minmax(0, 1fr);
-    }
-
-    .workflow-lanes .lane-label,
-    .workflow-lanes .lane-body {
-      padding: clamp(9px, 0.9vw, 13px);
-    }
-
-    .workflow-lanes .lane-label {
-      gap: 4px;
-    }
-
-    .workflow-lanes .lane-label b {
-      font-size: clamp(12px, 0.96vw, 15px);
-      line-height: 1.15;
-    }
-
-    .workflow-lanes .lane-label span {
-      font-size: clamp(9.5px, 0.74vw, 11px);
-    }
-
-    .workflow-lanes .lane-body {
-      gap: 6px;
-      align-content: center;
-    }
-
-    .workflow-lanes .pill {
-      padding: 5px 7px;
-      font-size: clamp(9.5px, 0.74vw, 11.5px);
-      line-height: 1.18;
-      white-space: normal;
-    }
-
-    .dense-code-split {
-      grid-template-columns: minmax(0, 1.18fr) minmax(260px, 0.82fr);
-      gap: clamp(8px, 0.86vw, 12px);
-    }
-
-    .dense-code-split pre {
-      padding: 9px 10px;
-      font-size: clamp(8.5px, 0.7vw, 10.5px);
-      line-height: 1.2;
-    }
-
-    .dense-code-split .mini-panel {
-      align-content: start;
-      padding: clamp(10px, 0.95vw, 14px);
-      gap: 7px;
-    }
-
-    .dense-code-split .mini-panel h3 {
-      font-size: clamp(13px, 0.98vw, 15px);
-      line-height: 1.12;
-    }
-
-    .dense-code-split .mini-panel ul {
-      margin: 0;
-      padding-left: 17px;
-      display: grid;
-      gap: 3px;
-    }
-
-    .dense-code-split .mini-panel li {
-      font-size: clamp(9.5px, 0.74vw, 11.5px);
-      line-height: 1.2;
-    }
-
-    .dense-code-split .callout {
-      padding: 7px 9px;
-      font-size: clamp(9.5px, 0.74vw, 11.5px);
-      line-height: 1.22;
-    }
-
-    .source-layout.compact-sources {
-      grid-template-columns: minmax(260px, 0.94fr) minmax(0, 1.06fr);
-      gap: clamp(8px, 0.86vw, 12px);
-    }
-
-    .compact-sources .repo-source {
-      padding: clamp(11px, 0.95vw, 15px);
-      gap: 7px;
-    }
-
-    .compact-sources .repo-source h3 {
-      font-size: clamp(13px, 1vw, 16px);
-      line-height: 1.12;
-    }
-
-    .compact-sources .repo-source-list {
-      grid-template-rows: repeat(5, minmax(0, 1fr));
-      gap: 6px;
-    }
-
-    .compact-sources .repo-source-item {
-      padding: 7px 8px;
-      gap: 2px;
-    }
-
-    .compact-sources .repo-source-item b,
-    .compact-sources .repo-source-item span {
-      font-size: clamp(9.5px, 0.74vw, 11.5px);
-      line-height: 1.18;
-    }
-
-    .compact-sources .source-list.featured {
-      gap: clamp(6px, 0.62vw, 9px);
-    }
-
-    .compact-sources .source-list.featured a {
-      padding: 8px 9px;
-      align-content: center;
-      font-size: clamp(10px, 0.78vw, 12px);
-      line-height: 1.18;
-      overflow-wrap: anywhere;
-    }
-
-    .compact-sources .source-list span {
-      margin-top: 4px;
-      font-size: clamp(9.5px, 0.74vw, 11px);
-      line-height: 1.18;
-    }
-
-    @media (max-width: 900px), (max-height: 620px) {
-      .deck-shell {
-        padding: 0;
-      }
-
-      .deck {
-        width: 100vw;
-        height: 100vh;
-        border: 0;
-      }
-
-      .slide {
-        padding: 28px 20px 88px;
-        overflow: auto;
-      }
-
-      .body {
-        min-height: auto;
-      }
-
-      .body > .table,
-      .source-list.featured {
-        height: auto;
-      }
-
-      .source-list.featured {
-        grid-auto-rows: auto;
-      }
-
-      .grid-2 > *,
-      .grid-3 > *,
-      .grid-4 > *,
-      .split > *,
-      .flow > *,
-      .code-split > * {
-        min-height: auto;
-      }
-
-      h1,
-      h2,
-      h3,
-      p,
-      li,
-      b,
-      span {
-        overflow-wrap: anywhere;
-      }
-
-      pre code {
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-
-      p,
-      li {
-        font-size: 16px;
-      }
-
-      code,
-      .source-list a,
-      .source-list span {
-        white-space: normal;
-        overflow-wrap: anywhere;
-      }
-
-      h2 {
-        font-size: clamp(28px, 8vw, 38px);
-      }
-
-      h3 {
-        font-size: clamp(19px, 5vw, 24px);
-      }
-
-      .hero-grid,
-      .grid-3,
-      .grid-4,
-      .matrix,
-      .flow,
-      .flow.flow-4,
-      .flow.flow-6,
-      .split,
-      .split-40,
-      .split-60,
-      .code-split,
-      .toc,
-      .source-layout,
-      .source-list.featured {
-        grid-template-columns: 1fr;
-      }
-
-      .source-list.featured a {
-        height: auto;
-      }
-
-      .matt-skills-grid,
-      .dense-code-split,
-      .source-layout.compact-sources {
-        grid-template-columns: 1fr;
-      }
-
-      .flow-step::after {
-        display: none;
-      }
-
-      .lane {
-        grid-template-columns: 1fr;
-      }
-
-      .workflow-lanes .lane {
-        grid-template-columns: 1fr;
-      }
-
-      .lane-label {
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-      }
-
-      .controls {
-        bottom: 12px;
-      }
-    }
-
-    @media print {
-      body {
-        overflow: visible;
-        background: #fff;
-      }
-
-      .deck-shell {
-        position: static;
-        display: block;
-        padding: 0;
-      }
-
-      .deck {
-        width: auto;
-        height: auto;
-        border: 0;
-        box-shadow: none;
-        background: #fff;
-      }
-
-      .slide {
-        position: relative;
-        visibility: visible;
-        opacity: 1;
-        transform: none;
-        page-break-after: always;
-        width: 100vw;
-        height: 56.25vw;
-      }
-
-      .controls,
-      .progress,
-      .index-panel {
-        display: none;
+        font-size: 42px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="progress" id="progress"></div>
-  <main class="deck-shell">
-    <section class="deck" id="deck">
-      <article class="slide title-slide active" data-title="封面">
-        <div class="title-stack">
-          <div class="title-kicker">Repository Template Playbook</div>
-          <h1>Codex Templates &amp; Skills 配置展示</h1>
-          <p class="title-subtitle">面向其他代码仓库的 Agent 规则模板、Trellis workflow、工具边界、测试配置与参考 Git 规则。</p>
+  <header>
+    <div class="wrap hero">
+      <div>
+        <p class="eyebrow">AI Tools Workflow</p>
+        <h1>Kuno Workflow 模板说明</h1>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路。</p>
+        <div class="meta-row" aria-label="核心能力">
+          <span class="pill">SDD</span>
+          <span class="pill">BDD</span>
+          <span class="pill">TDD</span>
+          <span class="pill">DDD</span>
+          <span class="pill">Web + Mobile 验证</span>
         </div>
-        <div class="hero-grid">
-          <div class="hero-tile"><b>Agent 模板</b><span>全局规则与项目级规则的职责拆分。</span></div>
-          <div class="hero-tile"><b>Trellis</b><span>native / tdd workflow、BDD overlay 与编码执行流。</span></div>
-          <div class="hero-tile"><b>工具链</b><span>GitNexus、TestSprite、React Bits Pro 与测试资产边界。</span></div>
-          <div class="hero-tile"><b>Skills</b><span>仓库内 Skill 与模板引用 Skill 的用途。</span></div>
-        </div>
-      </article>
-
-      <article class="slide" data-title="展示范围">
-        <header class="section-head">
-          <div class="eyebrow">Scope</div>
-          <h2>这份 HTML 只讲“给其他仓库复用”的模板内容</h2>
-          <p>重点是如何把规则、工具和 Skill 落到真实代码仓库。仓库自身的版本检查、同步流程和自动化记录不作为展示主体。</p>
-        </header>
-        <div class="body grid-3">
-          <div class="card accent">
-            <h3>Agent 规则模板</h3>
-            <p>说明全局规则和项目级规则如何分工：优先级、命令执行、工具可用性、验证、最终输出。</p>
-            <div class="badge-row"><span class="badge cyan">kuno-workflow-onboard-skills/templates/agents/*.md</span><span class="badge">可复用模板</span></div>
+      </div>
+      <aside class="hero-map" aria-label="工具职责概览">
+        <div class="map-grid">
+          <div class="map-cell">
+            <strong>Trellis</strong>
+            <span>任务阶段、PRD、design、implement、check、finish。</span>
           </div>
-          <div class="card accent">
-            <h3>Skill 模板</h3>
-            <p>展示 Trellis、Channel、验证、BDD、Lessons 和 book-derived 仓库内 Skill，以及模板中引用的外部 Skill。</p>
-            <div class="badge-row"><span class="badge cyan">kuno-workflow-onboard-skills/templates/skills/*/SKILL.md</span><span class="badge">执行边界</span></div>
+          <div class="map-cell">
+            <strong>GitNexus</strong>
+            <span>可用且索引有效时执行影响分析和变更检测。</span>
           </div>
-          <div class="card warn">
-            <h3>参考配置</h3>
-            <p><code>.gitignore</code> 和 <code>.gitattributes</code> 片段只作为其他仓库可调整的参考，不代表必须写入本仓库。</p>
-            <div class="badge-row"><span class="badge amber">按技术栈裁剪</span><span class="badge amber">按团队策略调整</span></div>
+          <div class="map-cell">
+            <strong>Playwright</strong>
+            <span>CLI 负责 Web E2E 和回归，MCP 负责探索和 locator 辅助。</span>
+          </div>
+          <div class="map-cell">
+            <strong>Maestro</strong>
+            <span>负责 Android、iOS、RN、Flutter、Hybrid App E2E。</span>
           </div>
         </div>
-        <footer class="footer-note"><span>原则：最小、可验证、可回滚。</span><span>Slide 02</span></footer>
-      </article>
+      </aside>
+    </div>
+  </header>
 
-      <article class="slide" data-title="目录">
-        <header class="section-head">
-          <div class="eyebrow">Navigation</div>
-          <h2>演示结构</h2>
-          <p>从模板职责开始，逐步进入工具配置、Skill 编排、Trellis 实际 workflow 和 Git 参考规则。</p>
-        </header>
-        <div class="body toc">
-          <div class="toc-item"><div class="toc-num">01</div><div><b>模板层级</b><span>全局规则、项目级规则、仓库内 Skill。</span></div></div>
-          <div class="toc-item"><div class="toc-num">02</div><div><b>工具边界</b><span>Trellis、GitNexus、TestSprite、React Bits Pro、web-ui-autotest-generator。</span></div></div>
-          <div class="toc-item"><div class="toc-num">03</div><div><b>Skills 全景</b><span>仓库内 workflow / book-derived Skills、UI/UX Skills 与 mattpocock/skills 1.0+ 核心集。</span></div></div>
-          <div class="toc-item"><div class="toc-num">04</div><div><b>Trellis Workflow</b><span>native、tdd、BDD overlay、实际编码流程。</span></div></div>
-          <div class="toc-item"><div class="toc-num">05</div><div><b>测试与验证</b><span>project-validation、TestSprite 与 Web UI Playwright 测试资产。</span></div></div>
-          <div class="toc-item"><div class="toc-num">06</div><div><b>Git 参考规则</b><span>ignore 和 attributes 的项目落地建议。</span></div></div>
+  <main>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Workflow</p>
+            <h2>当前模板主线</h2>
+          </div>
+          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。</p>
         </div>
-        <footer class="footer-note"><span>键盘左右键或空格翻页，底部按钮打开目录。</span><span>Slide 03</span></footer>
-      </article>
-
-      <article class="slide" data-title="模板层级">
-        <header class="section-head">
-          <div class="eyebrow">Template Layers</div>
-          <h2>三层配置：默认行为、项目事实、任务工具</h2>
-          <p>真实代码仓库落地时，模板不是替代项目事实，而是规定 Agent 如何读取事实、选择工具、执行验证。</p>
-        </header>
-        <div class="body lane-wrap">
-          <div class="lane">
-            <div class="lane-label"><b>Global</b><span>跨仓库默认约束</span></div>
-            <div class="lane-body">
-              <span class="pill cyan">优先级</span><span class="pill cyan">rtk 命令规则</span><span class="pill">工具可用性证据</span><span class="pill">Skills 调用规则</span><span class="pill">验证最低要求</span>
-            </div>
-          </div>
-          <div class="lane">
-            <div class="lane-label"><b>Project</b><span>真实项目补充</span></div>
-            <div class="lane-body">
-              <span class="pill cyan">项目事实源</span><span class="pill">Trellis 证据</span><span class="pill">GitNexus 索引</span><span class="pill">目录提交策略</span><span class="pill">项目验证命令</span>
-            </div>
-          </div>
-          <div class="lane">
-            <div class="lane-label"><b>Skills</b><span>场景化执行手册</span></div>
-            <div class="lane-body">
-              <span class="pill cyan">trellis-workflow</span><span class="pill cyan">project-validation</span><span class="pill cyan">gherkin-bdd</span><span class="pill">trellis-channel</span><span class="pill">lessons-record</span><span class="pill green">book-derived skills</span><span class="pill amber">外部 Skill 编排</span>
-            </div>
-          </div>
+        <div class="flow" aria-label="主流程">
+          <div class="step"><b>1. 需求</b><span>读取规则、lessons、项目文档，必要时澄清。</span></div>
+          <div class="step"><b>2. SBTD</b><span>规格、行为、测试、领域语言对齐。</span></div>
+          <div class="step"><b>3. 影响</b><span>GitNexus 可用时做影响分析。</span></div>
+          <div class="step"><b>4. 实现</b><span>按项目规范和 Skill 边界改动。</span></div>
+          <div class="step"><b>5. 验证</b><span>项目测试、BDD、Web、Mobile。</span></div>
+          <div class="step"><b>6. 风险</b><span>发布就绪、Channel preflight、剩余风险。</span></div>
+          <div class="step"><b>7. 同步</b><span>仅在用户输入 sync / 同步时写入本地生效路径。</span></div>
         </div>
-        <footer class="footer-note"><span>越靠近项目目录的规则优先级越高。</span><span>Slide 04</span></footer>
-      </article>
+      </div>
+    </section>
 
-      <article class="slide" data-title="全局规则模板">
-        <header class="section-head">
-          <div class="eyebrow">Global Rules</div>
-          <h2>全局模板负责“默认怎么做”</h2>
-          <p>它定义 Agent 的默认工程纪律，但明确让位于当前项目已有规范、测试、配置和工作流。</p>
-        </header>
-        <div class="body grid-3">
-          <div class="card accent">
-            <h3>优先级</h3>
-            <ul>
-              <li>更深层 <code>AGENTS.md</code> 优先。</li>
-              <li>项目文件和工具输出优先。</li>
-              <li>不假设可选工具一定可用。</li>
-            </ul>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">SBTD</p>
+            <h2>四个驱动开发概念</h2>
           </div>
-          <div class="card">
-            <h3>命令执行</h3>
-            <ul>
-              <li>优先使用 <code>rtk</code> 前缀。</li>
-              <li><code>rtk</code> 不可用时回退原生命令。</li>
-              <li>不因 wrapper 不可用中止任务。</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>验证最低要求</h3>
-            <ul>
-              <li>修改代码后必须验证。</li>
-              <li>优先项目定义命令。</li>
-              <li>无法执行时说明原因、替代检查和风险。</li>
-            </ul>
-          </div>
+          <p>SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是新框架，而是用于约束 Codex 工作流的协作顺序：先明确意图和语言，再固化可观察行为，最后用测试推动实现和回归。</p>
         </div>
-        <div class="callout cyan">全局规则的目标不是增加流程负担，而是保证每次修改都能解释清楚：依据是什么、改了什么、怎么验证、风险在哪里。</div>
-        <footer class="footer-note"><span>适用对象：所有继承该模板的代码仓库。</span><span>Slide 05</span></footer>
-      </article>
-
-      <article class="slide" data-title="项目级规则模板">
-        <header class="section-head">
-          <div class="eyebrow">Project Rules</div>
-          <h2>项目级模板负责“这个仓库如何落地”</h2>
-          <p>它把全局默认约束落到真实项目：事实源、工具证据、目录提交策略、验证命令和长期 lessons。</p>
-        </header>
-        <div class="body split split-60">
-          <div class="card accent">
-            <h3>项目事实源</h3>
-            <p>当前项目的代码、配置、测试、README、CI、任务产物和工具输出优先于通用假设。</p>
-            <div class="badge-row"><span class="badge cyan">代码</span><span class="badge cyan">测试</span><span class="badge cyan">CI</span><span class="badge cyan">任务产物</span></div>
-          </div>
-          <div class="grid-2">
-            <div class="card">
-              <h3>Trellis</h3>
-              <p>只有存在强证据才启用，并必须读取实际 <code>.trellis/workflow.md</code>。</p>
-            </div>
-            <div class="card">
-              <h3>GitNexus</h3>
-              <p>只有 MCP 可用且项目已有索引时使用，用于影响分析和变更检测。</p>
-            </div>
-            <div class="card">
-              <h3>目录规则</h3>
-              <p>保留 Trellis spec 和 task artifacts；默认不提交 runtime、cache、worktrees、channels。</p>
-            </div>
-          </div>
+        <div class="grid-4">
+          <article class="panel accent-blue">
+            <h3>SDD</h3>
+            <p>Specification-Driven Development。用 PRD、design、implement、验收标准和长期规则说明要做什么、为什么做、怎么验证。</p>
+          </article>
+          <article class="panel accent-green">
+            <h3>BDD</h3>
+            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，优先使用 Given / When / Then 和项目已有 Gherkin 约定。</p>
+          </article>
+          <article class="panel accent-amber">
+            <h3>TDD</h3>
+            <p>Test-Driven Development。适用于 bug 修复、核心逻辑、高风险改动和回归敏感路径，用红测、绿码、重构推进。</p>
+          </article>
+          <article class="panel accent-red">
+            <h3>DDD</h3>
+            <p>Domain-Driven Design。通过统一语言、bounded context、CONTEXT 和 ADR 降低业务术语和模型边界的不确定性。</p>
+          </article>
         </div>
-        <footer class="footer-note"><span>项目级模板应复制到真实项目根目录后按项目实际补充。</span><span>Slide 06</span></footer>
-      </article>
+      </div>
+    </section>
 
-      <article class="slide" data-title="工具启用矩阵">
-        <header class="section-head">
-          <div class="eyebrow">Tool Matrix</div>
-          <h2>工具不是全开，而是按证据启用</h2>
-          <p>模板的核心是避免“因为工具存在就使用”。每个工具都有启用条件、跳过条件和输出责任。</p>
-        </header>
-        <div class="body">
-          <table class="table">
-            <thead>
-              <tr><th>工具</th><th>主要用途</th><th>启用条件</th><th>跳过条件</th></tr>
-            </thead>
-            <tbody>
-              <tr><td><strong>Trellis</strong></td><td>任务生命周期、workflow、task artifacts。</td><td>存在 <code>.trellis/</code>、workflow、命令或项目规则声明。</td><td>没有强证据时不启用。</td></tr>
-              <tr><td><strong>GitNexus</strong></td><td>影响分析、变更检测、探索辅助。</td><td>MCP 可用且当前项目已有索引。</td><td>MCP 不可用或没有项目索引。</td></tr>
-              <tr><td><strong>TestSprite</strong></td><td>测试计划、UI/E2E、API 和回归验证辅助。</td><td>涉及端到端流程、UI、API 集成、测试计划或回归验证，且 MCP 已配置。</td><td>无需 E2E、MCP/环境未配置、配置门户未完成或凭据缺失时。</td></tr>
-              <tr><td><strong>React Bits Pro Skill</strong></td><td>React / shadcn UI 组件、blocks 和 landing sections 集成辅助。</td><td>前端 UI 开发，Next.js / Vite React / Remix / TanStack Start React / TanStack Router React 等 React 技术栈，项目内 Skill 已安装且 key 可读。</td><td>非 React、TanStack 非 React adapter、未使用 shadcn、项目内 Skill 安装失败或 key 不可读。</td></tr>
-              <tr><td><strong>gherkin-bdd</strong></td><td>用户可见行为的 BDD / Gherkin 持久规格和场景到测试追踪。</td><td>新增或修改 UI、API、CLI、导出文件、通知、权限、错误、状态变化或外部集成可观察行为。</td><td>纯内部重构、工具配置、机械格式化或无语义 UI polish。</td></tr>
-              <tr><td><strong>web-ui-autotest-generator</strong></td><td>Web UI Playwright 测试资产、选择器审计和覆盖率报告。</td><td>需要把 Web UI 回归路径固化为入库测试代码。</td><td>非 Web UI、无稳定测试环境或已有框架不需扩展时。</td></tr>
-              <tr><td><strong>Skills</strong></td><td>场景化执行规范。</td><td>任务明确匹配 Skill 描述。</td><td>不匹配、不可用或弱关联时。</td></tr>
-            </tbody>
-          </table>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Boundaries</p>
+            <h2>工具职责边界</h2>
+          </div>
+          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP 和 <code>web-ui-autotest-generator</code> 不互相替代。模板要求在最终输出中显式报告相关状态，避免把诊断、探索和可重复测试混在一起。</p>
         </div>
-        <footer class="footer-note"><span>工具输出只能辅助判断，不能替代源码、项目文档、测试和实际 diff。</span><span>Slide 07</span></footer>
-      </article>
+        <table>
+          <thead>
+            <tr>
+              <th>工具</th>
+              <th>主责</th>
+              <th>边界</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Chrome DevTools MCP</td>
+              <td>真实 Chrome 中的 console、network、storage、performance trace、screenshot 诊断。</td>
+              <td>提供现场证据，不作为 CI 或 E2E 通过依据。</td>
+            </tr>
+            <tr>
+              <td>Playwright CLI</td>
+              <td>项目内 Web E2E、Web 回归和 CI gate。</td>
+              <td>需要项目级安装；缺失时先询问用户，拒绝后只可降级为诊断。</td>
+            </tr>
+            <tr>
+              <td>Playwright MCP</td>
+              <td>Agentic Web 探索、可访问性快照、locator 辅助。</td>
+              <td>不替代 <code>playwright test</code>。</td>
+            </tr>
+            <tr>
+              <td>Maestro CLI</td>
+              <td>Android、iOS、React Native、Flutter、Hybrid App E2E 和可选 Web smoke。</td>
+              <td>Web 只适合 smoke，不作为 Web 回归主责。</td>
+            </tr>
+            <tr>
+              <td>Maestro MCP</td>
+              <td>设备检查、view hierarchy、截图和 flow 辅助。</td>
+              <td>依赖 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</td>
+            </tr>
+            <tr>
+              <td>web-ui-autotest-generator</td>
+              <td>生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率。</td>
+              <td>执行底座仍是项目内 Playwright CLI。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-      <article class="slide" data-title="TestSprite 定位">
-        <header class="section-head">
-          <div class="eyebrow">TestSprite</div>
-          <h2>TestSprite 负责测试计划、E2E 和回归验证辅助</h2>
-          <p>在模板编排中，它通常位于编码后验证阶段，尤其适合 UI、端到端业务流程、API 集成和回归检查；当前官方 bootstrap 流程仍需要配置门户确认。</p>
-        </header>
-        <div class="body grid-4">
-          <div class="metric"><div class="num">01</div><div class="label"><strong>理解需求</strong><br>读取 PRD 或准备可上传 PRD 草稿。</div></div>
-          <div class="metric"><div class="num">02</div><div class="label"><strong>生成计划</strong><br>生成 frontend 或 backend test plan。</div></div>
-          <div class="metric"><div class="num">03</div><div class="label"><strong>执行测试</strong><br>生成可执行测试并在环境中运行。</div></div>
-          <div class="metric"><div class="num">04</div><div class="label"><strong>反馈修复</strong><br>输出结果、日志、报告和修复建议。</div></div>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Validation</p>
+            <h2>最终验证工具栈</h2>
+          </div>
+          <p>最终验证按风险从项目原生命令开始，再叠加 BDD、Web、Mobile 和发布就绪检查。无法执行时必须说明尝试命令、失败原因、替代检查和剩余风险。</p>
         </div>
-        <div class="callout cyan">TestSprite 不是普通单元测试的替代品，也不是可无条件后台跳过配置门户的工具。项目自己的 lint、test、build 仍然是基础验证；web-ui-autotest-generator 只在需要 repo-resident Playwright 测试资产时启用。</div>
-        <footer class="footer-note"><span>官方文档强调通过 MCP server 与 IDE/Agent 集成。</span><span>Slide 08</span></footer>
-      </article>
-
-      <article class="slide" data-title="TestSprite 配置流程">
-        <header class="section-head">
-          <div class="eyebrow">TestSprite Setup</div>
-          <h2>TestSprite 的 MCP 与配置门户流程</h2>
-          <p>Codex 可以准备 PRD、端口和 MCP 参数；测试类型、范围、账号和 PRD 上传仍按官方配置页面完成。</p>
-        </header>
-        <div class="body flow flow-6">
-          <div class="flow-step"><div class="step-num">1</div><h3>账号与 Key</h3><p>注册 TestSprite，创建 API Key，按团队密钥策略保存。</p></div>
-          <div class="flow-step"><div class="step-num">2</div><h3>本地服务</h3><p>启动 frontend dev server 或 backend API，并确认端口。</p></div>
-          <div class="flow-step"><div class="step-num">3</div><h3>Bootstrap</h3><p>传入 projectPath、localPort、type 和 testScope。</p></div>
-          <div class="flow-step"><div class="step-num">4</div><h3>配置门户</h3><p>在 Testing Configuration 页面确认类型、范围和 URL。</p></div>
-          <div class="flow-step"><div class="step-num">5</div><h3>PRD 与账号</h3><p>按页面上传 PRD，并通过安全渠道提供测试账号。</p></div>
-          <div class="flow-step"><div class="step-num">6</div><h3>执行与报告</h3><p>生成计划、运行测试、查看报告并回传修复建议。</p></div>
+        <div class="grid-3">
+          <article class="panel accent-blue">
+            <h3>项目原生验证</h3>
+            <p>优先运行项目级 AGENTS、README、package scripts、Makefile 或 CI 中定义的 lint、typecheck、unit、integration、build。</p>
+          </article>
+          <article class="panel accent-green">
+            <h3>行为和测试追踪</h3>
+            <p>用户可见行为检查 BDD 场景和测试追踪；高风险逻辑优先使用 TDD 固化回归。</p>
+          </article>
+          <article class="panel accent-amber">
+            <h3>Web 验证</h3>
+            <p>Chrome DevTools MCP 诊断现场问题，Playwright CLI 执行可重复 Web 回归，Playwright MCP 辅助探索。</p>
+          </article>
+          <article class="panel accent-red">
+            <h3>Mobile 验证</h3>
+            <p>Java 17+ 通过后使用 Maestro CLI 执行移动 flow；Maestro MCP 作为交互检查增强。</p>
+          </article>
+          <article class="panel accent-teal">
+            <h3>测试资产</h3>
+            <p>只有需要把 Web UI 回归固化进仓库时，才调用 <code>web-ui-autotest-generator</code>。</p>
+          </article>
+          <article class="panel accent-violet">
+            <h3>发布风险</h3>
+            <p>生产路径、外部集成和部署敏感变更进入 release-readiness；高风险 review 可做 Channel preflight。</p>
+          </article>
         </div>
-        <footer class="footer-note"><span>凭据不应硬编码进测试文件、PRD、日志或仓库。</span><span>Slide 09</span></footer>
-      </article>
+      </div>
+    </section>
 
-      <article class="slide" data-title="TestSprite MCP 工具链">
-        <header class="section-head">
-          <div class="eyebrow">TestSprite Tools</div>
-          <h2>从代码分析到测试报告的工具链</h2>
-          <p>TestSprite MCP server 提供一组工具，由 Agent 在测试请求中编排调用。</p>
-        </header>
-        <div class="body">
-          <table class="table">
-            <thead>
-              <tr><th>阶段</th><th>MCP 工具示例</th><th>产物</th><th>说明</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>启动配置</td><td><code>testsprite_bootstrap_tests</code></td><td>测试配置门户</td><td>打开配置页面，并传入项目路径、端口、类型和范围。</td></tr>
-              <tr><td>代码分析</td><td><code>testsprite_generate_code_summary</code></td><td><code>code_summary.json</code></td><td>识别框架、入口、功能和架构。</td></tr>
-              <tr><td>需求归一</td><td><code>testsprite_generate_standardized_prd</code></td><td><code>standard_prd.json</code></td><td>把配置后的需求和代码理解转成可测规格。</td></tr>
-              <tr><td>测试计划</td><td><code>testsprite_generate_frontend_test_plan</code> / backend</td><td>test plan JSON</td><td>生成 UI、业务流、API 或集成测试场景。</td></tr>
-              <tr><td>生成执行</td><td><code>testsprite_generate_code_and_execute</code></td><td>测试代码、结果、报告</td><td>生成可执行测试并收集日志、截图和建议。</td></tr>
-            </tbody>
-          </table>
-          <div class="callout cyan">当前官方 MCP 工具参数没有提供直接上传 PRD 或填写登录凭据的后台接口；配置门户未完成时，只输出阻塞项和已准备材料。</div>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Install Gates</p>
+            <h2>检测、安装和 fallback</h2>
+          </div>
+          <p>模板不默认假设工具存在。CLI 或 MCP 缺失时，先按证据检测，再根据用户确认安装或降级；降级不能冒充完整验证。</p>
         </div>
-        <footer class="footer-note"><span>TestSprite 产物通常落在 testsprite_tests/ 下；Web UI Playwright 资产按项目策略进入 tests/e2e/。</span><span>Slide 10</span></footer>
-      </article>
-
-      <article class="slide compact-slide" data-title="仓库内 Skills">
-        <header class="section-head">
-          <div class="eyebrow">Local Skills</div>
-          <h2>仓库内维护的 workflow 与 book-derived Skills</h2>
-          <p>这些 Skill 是模板体系的本地执行手册，直接描述什么时候该做什么，以及什么不能做。</p>
-        </header>
-        <div class="body grid-4 skill-grid-compact">
-          <div class="tool-card">
-            <h3>trellis-workflow <small>Lifecycle</small></h3>
-            <p>Trellis 生命周期、task artifacts、before-dev、check、finish-work、update-spec。</p>
-            <div class="badge-row"><span class="badge cyan">Trellis 项目</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>trellis-channel <small>Collab</small></h3>
-            <p>显式多 Agent / worker / forum / 并行评审协作，不用于普通单 Agent 任务。</p>
-            <div class="badge-row"><span class="badge amber">用户明确要求</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>project-validation <small>Checks</small></h3>
-            <p>代码修改后选择 Node、Python、Go 项目的 lint、test、build、typecheck，并检查 BDD 追踪。</p>
-            <div class="badge-row"><span class="badge green">修改后使用</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>gherkin-bdd <small>Behavior</small></h3>
-            <p>用户可见行为的持久 .feature 规格、场景质量和场景到自动化测试追踪。</p>
-            <div class="badge-row"><span class="badge cyan">用户可见行为</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>lessons-record <small>Memory</small></h3>
-            <p>在 bug 修复、回滚、工具误判、验证失败等长期有价值场景记录 lesson。</p>
-            <div class="badge-row"><span class="badge">按需沉淀</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>book-refactoring-pass <small>Refactor</small></h3>
-            <p>在既有结构阻碍当前实现时，指导行为保持型、小步、可验证的重构。</p>
-            <div class="badge-row"><span class="badge green">结构阻碍时</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>book-legacy-change-safety <small>Legacy</small></h3>
-            <p>在弱测试或行为不清的遗留代码中，先锁定当前行为再做最小修改。</p>
-            <div class="badge-row"><span class="badge green">高回归风险</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>book-ddd-distilled-modeling <small>Domain</small></h3>
-            <p>在 PRD / design 前澄清业务术语、上下文边界和领域规则。</p>
-            <div class="badge-row"><span class="badge green">领域模型</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>book-ddia-data-design <small>Data</small></h3>
-            <p>检查数据所有权、一致性、幂等、迁移、事件流和恢复路径。</p>
-            <div class="badge-row"><span class="badge green">数据风险</span></div>
-          </div>
-          <div class="tool-card">
-            <h3>book-release-readiness <small>Release</small></h3>
-            <p>在生产路径改动后补充 timeout、retry、观测、回滚和发布风险检查。</p>
-            <div class="badge-row"><span class="badge green">发布前</span></div>
-          </div>
+        <div class="status-list">
+          <div><strong>Playwright CLI</strong><br>检测 <code>package.json</code>、Playwright 配置、E2E 目录和脚本。需要 Web 回归但缺失时询问是否安装到项目 devDependency。</div>
+          <div><strong>Playwright MCP</strong><br>只作为 MCP 可见性检查和探索能力；不可见时不阻塞 Playwright CLI。</div>
+          <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。默认引导安装 OpenJDK Temurin 21 最新 JDK；用户指定版本必须大于等于 17。</div>
+          <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</div>
+          <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集。</div>
+          <div><strong>状态报告</strong><br>最终输出要列明各工具是 run、blocked、skipped、not-needed、available、installed 或对应模板状态。</div>
         </div>
-        <footer class="footer-note"><span>Skill 不替代项目规范、任务产物、测试和人工判断。</span><span>Slide 11</span></footer>
-      </article>
+      </div>
+    </section>
 
-      <article class="slide" data-title="模板引用 Skills">
-        <header class="section-head">
-          <div class="eyebrow">Referenced Skills</div>
-          <h2>模板中引用的 UI/UX Skills</h2>
-          <p>这一页只保留视觉、交互、布局、组件接入和前端可用性相关的外部 Skill，避免与下一页的官方 Skill 清单重复。</p>
-        </header>
-        <div class="body grid-4">
-          <div class="card accent">
-            <h3>ui-ux-pro-max</h3>
-            <p>UI/UX 任务的默认设计智能入口，用于判断产品类型、目标用户、风格、配色、字体、布局和可访问性基线。</p>
-            <div class="badge-row"><span class="badge cyan">UI/UX</span><span class="badge cyan">before-dev 前</span></div>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Artifacts</p>
+            <h2>测试产物忽略规则</h2>
           </div>
-          <div class="card">
-            <h3>impeccable</h3>
-            <p>作为下游塑形与质检 Skill，用于 shape、audit、critique、polish，以及排版、颜色、响应式和可访问性收尾。</p>
-            <div class="badge-row"><span class="badge amber">可选下游</span><span class="badge amber">audit / polish</span></div>
-          </div>
-          <div class="card">
-            <h3>React Bits Pro</h3>
-            <p>只在 React / shadcn UI 项目中使用；Next.js、Vite React、Remix、TanStack Start React 和 TanStack Router React 应用可包含，TanStack 非 React adapter 不包含。</p>
-            <div class="badge-row"><span class="badge">React</span><span class="badge">shadcn</span><span class="badge amber">项目内 Skill</span><span class="badge amber">key 可读</span></div>
-          </div>
-          <div class="card">
-            <h3>编排边界</h3>
-            <ul>
-              <li>新页面或大改版：先用 <code>ui-ux-pro-max</code> 判断方向。</li>
-              <li><code>impeccable</code> 可用时再形成 brief、审计或 polish backlog。</li>
-              <li><code>React Bits Pro</code> 只在技术栈、项目内 Skill 和 key 可读都满足时启用。</li>
-              <li>最终仍以项目设计系统、浏览器检查和验证结果为准。</li>
-            </ul>
-          </div>
+          <p>项目模板保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
         </div>
-        <footer class="footer-note"><span>外部 Skill 不自动触发，必须与任务场景明确匹配。</span><span>Slide 12</span></footer>
-      </article>
-
-      <article class="slide compact-slide" data-title="mattpocock Skills 1.0+ 核心集">
-        <header class="section-head">
-          <div class="eyebrow">mattpocock/skills</div>
-          <h2>接入的 1.0+ 官方 Skill 与作用</h2>
-          <p>模板要求默认原样使用这些官方 Skill，不 fork、不改写；旧名会迁移，已移除的 zoom-out 不再接入。</p>
-        </header>
-        <div class="body matrix matt-skills-grid">
-          <div class="card"><h3>diagnosing-bugs</h3><p>建立事实、复现、假设、排除项和根因分析。</p></div>
-          <div class="card"><h3>tdd</h3><p>通过 red-green-refactor 固化行为；依赖 codebase-design 判断测试面。</p></div>
-          <div class="card"><h3>grill-me</h3><p>对计划、设计或决策进行通用质询；依赖 grilling。</p></div>
-          <div class="card"><h3>grill-with-docs</h3><p>结合项目文档澄清需求、术语、领域模型和 ADR；依赖 grilling / domain-modeling。</p></div>
-          <div class="card"><h3>grilling</h3><p>逐问题访谈循环，是 grill-me 和 grill-with-docs 的底层流程。</p></div>
-          <div class="card"><h3>domain-modeling</h3><p>维护项目语言、glossary、CONTEXT.md 和 ADR 决策沉淀。</p></div>
-          <div class="card"><h3>codebase-design</h3><p>梳理模块、接口、seam、adapter 和测试边界。</p></div>
-          <div class="card"><h3>handoff</h3><p>长任务暂停、上下文压缩或跨会话交接。</p></div>
-          <div class="card"><h3>writing-great-skills</h3><p>创建或维护自定义 Skill，长内容拆 reference，确定性操作脚本化。</p></div>
-          <div class="card"><h3>to-prd</h3><p>将需求和代码库理解整理成 Markdown PRD。</p></div>
-          <div class="card"><h3>to-issues</h3><p>把 PRD 或 plan 拆成 Trellis-ready vertical slices。</p></div>
-        </div>
-        <footer class="footer-note"><span>to-prd 和 to-issues 默认不发布到 issue tracker，除非用户明确要求。</span><span>Slide 13</span></footer>
-      </article>
-
-      <article class="slide" data-title="Trellis 启用条件">
-        <header class="section-head">
-          <div class="eyebrow">Trellis Evidence</div>
-          <h2>只有存在强证据时，才进入 Trellis</h2>
-          <p>模板把 Trellis 视为项目生命周期工具，而不是默认所有仓库都必须启用的组件。</p>
-        </header>
-        <div class="body grid-2">
-          <div class="card accent">
-            <h3>强证据</h3>
-            <ul>
-              <li>存在 <code>.trellis/</code>。</li>
-              <li>存在 <code>.trellis/workflow.md</code>。</li>
-              <li>存在 <code>$trellis-*</code> 命令。</li>
-              <li>项目规则明确说明使用 Trellis。</li>
-            </ul>
-          </div>
-          <div class="card danger">
-            <h3>最低禁令</h3>
-            <ul>
-              <li>未读 workflow 不改变任务状态。</li>
-              <li>未读相关 spec 不改长期规则。</li>
-              <li>不绕过 workflow 或手动跳 phase。</li>
-              <li>不把一次性计划写入 spec。</li>
-            </ul>
-          </div>
-        </div>
-        <div class="callout cyan">一旦 Trellis 可用，实际生效的依据是项目中的 <code>.trellis/workflow.md</code>，不是模板中的抽象描述。</div>
-        <footer class="footer-note"><span>复杂度决定是否进入 planning，协作形态决定是否启用 Channel。</span><span>Slide 14</span></footer>
-      </article>
-
-      <article class="slide" data-title="Trellis native workflow">
-        <header class="section-head">
-          <div class="eyebrow">Trellis Workflow</div>
-          <h2><code>native</code> 是默认标准 workflow</h2>
-          <p>native 以 Trellis 阶段、任务产物和项目验证为中心，不强制所有修改都测试先行。</p>
-        </header>
-        <div class="body flow flow-4">
-          <div class="flow-step"><div class="step-num">1</div><h3>读取事实</h3><p>读取 workflow、spec、prd/design/implement。</p></div>
-          <div class="flow-step"><div class="step-num">2</div><h3>before-dev</h3><p>执行 <code>$trellis-before-dev</code>，确认可以开始实现。</p></div>
-          <div class="flow-step"><div class="step-num">3</div><h3>实现与验证</h3><p>按任务产物实现，运行项目验证命令。</p></div>
-          <div class="flow-step"><div class="step-num">4</div><h3>check / finish</h3><p>执行 <code>$trellis-check</code>，验证通过后 <code>$trellis-finish-work</code>。</p></div>
-        </div>
-        <div class="callout">native 不禁止 <code>tdd</code> Skill，也不跳过 BDD 硬规则。用户可见行为先用 <code>gherkin-bdd</code> 固化场景；bug 修复、核心逻辑、数据同步、导入导出或需要回归测试的修改，再主动判定是否测试先行。</div>
-        <footer class="footer-note"><span>简单文案、样式、配置说明或纯文档修改不强制 TDD。</span><span>Slide 15</span></footer>
-      </article>
-
-      <article class="slide" data-title="Trellis tdd workflow">
-        <header class="section-head">
-          <div class="eyebrow">Trellis TDD</div>
-          <h2><code>tdd</code> workflow 是生命周期编排，不等于 <code>tdd</code> Skill</h2>
-          <p>两者可以组合，但不能互相替代：Trellis 管阶段，Skill 管具体测试先行方法。</p>
-        </header>
-        <div class="body split">
-          <div class="card accent">
-            <h3>Trellis tdd workflow</h3>
-            <ul>
-              <li>按 <code>.trellis/workflow.md</code> 执行阶段。</li>
-              <li>开发前仍执行 <code>$trellis-before-dev</code>。</li>
-              <li>开发后仍执行 <code>$trellis-check</code>。</li>
-              <li>适合权限、计费、状态机、关键数据一致性、复杂算法等高风险行为。</li>
-              <li>验证通过后才 <code>$trellis-finish-work</code>。</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>tdd Skill</h3>
-            <ul>
-              <li>用于具体 red-green-refactor。</li>
-              <li>先写失败测试，再实现最小代码。</li>
-              <li>重构时保持测试通过。</li>
-              <li>适合复杂逻辑和高风险行为。</li>
-            </ul>
-          </div>
-        </div>
-        <footer class="footer-note"><span>默认仍用 native；普通行为风险用 native + tdd Skill，只有高风险行为或项目已采用 TDD 时切换 workflow。</span><span>Slide 16</span></footer>
-      </article>
-
-      <article class="slide compact-slide" data-title="实际编码流程">
-        <header class="section-head">
-          <div class="eyebrow">Coding Workflow</div>
-          <h2>实际编码过程中的执行流程</h2>
-          <p>这是一条推荐的端到端路径，真实项目仍以自己的 workflow、任务产物和验证命令为准。</p>
-        </header>
-        <div class="body lane-wrap workflow-lanes">
-          <div class="lane">
-            <div class="lane-label"><b>进入任务</b><span>读取上下文</span></div>
-            <div class="lane-body"><span class="pill cyan">确认 Trellis 证据</span><span class="pill">读取 workflow</span><span class="pill">读取 spec</span><span class="pill">读取 prd/design/implement</span></div>
-          </div>
-          <div class="lane">
-            <div class="lane-label"><b>开发前</b><span>冻结边界</span></div>
-            <div class="lane-body"><span class="pill cyan">$trellis-before-dev</span><span class="pill cyan">用户可见行为先 gherkin-bdd</span><span class="pill">GitNexus impact-analysis</span><span class="pill">UI 任务先 ui-ux-pro-max</span><span class="pill">React/shadcn + 项目 Skill + key 可读时 React Bits Pro</span><span class="pill">polish 可用 impeccable</span></div>
-          </div>
-          <div class="lane">
-            <div class="lane-label"><b>实现中</b><span>最小修改</span></div>
-            <div class="lane-body"><span class="pill">按任务产物编码</span><span class="pill">行为风险主动判定 tdd Skill</span><span class="pill">高风险行为才切 Trellis TDD</span><span class="pill">保持范围可回滚</span></div>
-          </div>
-          <div class="lane">
-            <div class="lane-label"><b>开发后</b><span>验证闭环</span></div>
-            <div class="lane-body"><span class="pill cyan">project-validation</span><span class="pill">BDD 场景测试追踪</span><span class="pill">项目 tests/build</span><span class="pill">MCP/门户可用时 TestSprite</span><span class="pill">需入库 Playwright 时 web-ui-autotest-generator</span><span class="pill cyan">$trellis-check</span><span class="pill amber">需要时 update-spec</span><span class="pill cyan">$trellis-finish-work</span></div>
-          </div>
-        </div>
-        <footer class="footer-note"><span>finish-work 只能在 check 和验证通过后执行。</span><span>Slide 17</span></footer>
-      </article>
-
-      <article class="slide" data-title="Trellis Channel">
-        <header class="section-head">
-          <div class="eyebrow">Trellis Channel</div>
-          <h2>Channel 是显式协作运行时，不是普通 Trellis 默认入口</h2>
-          <p>只有用户明确要求多 Agent、多模型、worker、forum、thread、并行评审或外部 orchestrator 协作时才启用。</p>
-        </header>
-        <div class="body grid-3">
-          <div class="card danger">
-            <h3>不要因为这些原因启用</h3>
-            <ul>
-              <li>任务复杂或文件多。</li>
-              <li>普通 bug 修复。</li>
-              <li>常规重构或添加测试。</li>
-              <li>普通 Trellis 任务。</li>
-            </ul>
-          </div>
-          <div class="card accent">
-            <h3>可以启用的场景</h3>
-            <ul>
-              <li>用户要求多 Agent 协作。</li>
-              <li>需要 worker 并行评审。</li>
-              <li>需要 forum / thread 讨论。</li>
-              <li>需要外部 orchestrator。</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>使用后必须整理</h3>
-            <ul>
-              <li>说明 channel 和 worker。</li>
-              <li>整理结论到 task artifacts 或 spec。</li>
-              <li>说明是否有未清理 worker。</li>
-              <li>runtime 默认不提交。</li>
-            </ul>
-          </div>
-        </div>
-        <footer class="footer-note"><span>Channel 不替代 before-dev、check 或 finish-work。</span><span>Slide 18</span></footer>
-      </article>
-
-      <article class="slide" data-title="项目验证">
-        <header class="section-head">
-          <div class="eyebrow">Validation</div>
-          <h2>project-validation 负责修改后的验证策略</h2>
-          <p>模板要求优先使用项目已有命令，只有缺少项目定义时才按语言生态回退。</p>
-        </header>
-        <div class="body grid-3">
-          <div class="card accent">
-            <h3>Node / JS / TS</h3>
-            <pre><code>rtk npm run lint
-rtk npm run test
-rtk npm run build</code></pre>
-            <p>涉及类型、DTO、API 返回值、组件 props、状态结构时补 typecheck。</p>
-          </div>
-          <div class="card">
-            <h3>Python</h3>
-            <pre><code>rtk ruff check .
-rtk ruff format .
-rtk ty check .
-rtk pytest</code></pre>
-            <p>按修改范围选择格式、类型和业务测试。</p>
-          </div>
-          <div class="card">
-            <h3>Go</h3>
-            <pre><code>rtk go test ./...
-gofmt
-go vet ./...</code></pre>
-            <p>仅依赖变化时运行 <code>go mod tidy</code>。</p>
-          </div>
-        </div>
-        <footer class="footer-note"><span>无法执行完整验证时，必须说明尝试命令、失败原因、替代检查和剩余风险。</span><span>Slide 19</span></footer>
-      </article>
-
-      <article class="slide" data-title="Lessons 记录">
-        <header class="section-head">
-          <div class="eyebrow">Lessons</div>
-          <h2>lesson 是长期经验，不是普通过程日志</h2>
-          <p>只有出现长期复用价值的错误、修复或流程偏差时才记录，避免把临时噪音写进项目长期文档。</p>
-        </header>
-        <div class="body split">
-          <div class="card accent">
-            <h3>必须考虑记录的场景</h3>
-            <ul>
-              <li>bug 修复或回滚。</li>
-              <li>工具判断错误或验证失败。</li>
-              <li>Trellis 阶段错误。</li>
-              <li>GitNexus 影响分析不匹配。</li>
-              <li>Channel / worker 上下文丢失。</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>推荐格式</h3>
-            <pre><code>## &lt;简短标题&gt;
-
-- 问题：
-- 根因：
-- 修复：
-- 预防：</code></pre>
-            <p>Trellis 项目使用 <code>.trellis/spec/lessons.md</code> 作为短入口，完整内容进入 <code>.trellis/lessons/index.md</code> 与 topic / archive 文件；非 Trellis 项目可使用 <code>docs/lessons.md</code>。</p>
-          </div>
-        </div>
-        <footer class="footer-note"><span>普通任务总结不等于 lesson。</span><span>Slide 20</span></footer>
-      </article>
-
-      <article class="slide" data-title="Git Ignore 参考">
-        <header class="section-head">
-          <div class="eyebrow">Git Ignore Reference</div>
-          <h2>其他代码仓库可参考的 <code>.gitignore</code> 规则</h2>
-          <p>这是一份说明性模板。实际项目应按技术栈、CI、测试产物保留策略和团队 review 习惯调整。</p>
-        </header>
-        <div class="body code-split">
-          <pre><code># 其他临时目录和文件
-.tmp/
-.cache/
-*.log
-*.tmp
-.DS_Store
-Thumbs.db
-
-# 构建和依赖目录（根据项目技术栈保留或删除不需要的）
-node_modules/
-dist/
-build/
-.next/
-out/
-.env.local
-.env.*.local
-
-# Python 相关
-__pycache__/
-*.pyc
-.venv/
-venv/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.ty_cache/
-
-# ========================
-# AI / Agent / LLM tooling
-# ========================
-
-# ---------- Claude ----------
-.claude/
-CLAUDE.md
-
-# ---------- Codex ----------
-.codex/cache/
-.codex/tmp/
-.codex/logs/
-.codex/sessions/
-.codex/state/
-.codex/hooks/*.local.*
-
-# ---------- OMX ----------
-.omx/
-
-# ---------- GSD ----------
-.planning/
-
-# ---------- Trellis ----------
-.trellis/*
-
-!.trellis/agents/
-!.trellis/agents/**
-
-!.trellis/spec/
-!.trellis/spec/**
-!.trellis/lessons/
-!.trellis/lessons/**
-!.trellis/workflow.md
-!.trellis/workspace/
-!.trellis/workspace/**
-
-!.trellis/tasks/
-!.trellis/tasks/*/
-# 需要提交归档任务、journal 或 check/implement 记录，则先注释上一行的规则，再使用下面这行规则：
-# !.trellis/tasks/**
-
-# 不需要提交归档任务、journal 或 check/implement 记录，则直接使用：
-!.trellis/tasks/*/prd.md
-!.trellis/tasks/*/design.md
-!.trellis/tasks/*/implement.md
-
-.trellis/.backup-*
-.trellis/worktrees/
-.trellis/.runtime/
-.trellis/.cache/
-.trellis/channels/
-.trellis/.template-hashes.json
-
-# ---------- Impeccable ----------
-.impeccable/live/server.json
-.impeccable/live/sessions/
-.impeccable/live/annotations/
-.impeccable/critique/
-
-# ---------- GitNexus ----------
-.gitnexus/
-
-# ---------- Testing -----------
-# TestSprite generated artifacts
-testsprite_tests/**
-!testsprite_tests/
-!testsprite_tests/**/*_test_plan.json
-!testsprite_tests/**/*_prd.json
-# !testsprite_tests/**/TC*
-
-# TestSprite project/runtime artifacts
-.testsprite/cache/
-.testsprite/tmp/
-.testsprite/runs/
-.testsprite/results/
-.testsprite/reports/
-# .testsprite/config.json
+        <pre><code># ---------- Testing -----------
+# MCP / browser controller local state
+.chrome-devtools-mcp/
+.playwright-mcp/
 
 # Playwright runtime artifacts
-.playwright-mcp/
 playwright-report/
 test-results/
 blob-report/
 
-# Web UI generated run artifacts
+# Web UI autotest generated run artifacts
 ui-test-repair-plan.json
 tests/e2e/reports/results.json
 tests/e2e/reports/junit.xml
@@ -2201,284 +564,64 @@ tests/e2e/**/videos/
 tests/e2e/**/traces/
 tests/e2e/**/*.trace.zip
 
-# ---------- AI Tools ----------
-.agents/
-.worktrees/</code></pre>
-          <div class="mini-panel">
-            <h3>说明</h3>
-            <ul>
-              <li>临时目录、日志、系统文件通常不提交。</li>
-              <li>构建目录和依赖目录按技术栈取舍。</li>
-              <li>Python cache 和虚拟环境应默认忽略。</li>
-              <li>Agent runtime、Trellis 临时目录、测试报告和本地索引一般不进入远程仓库。</li>
-            </ul>
-            <div class="callout">不要把参考配置机械复制到所有项目。先确认项目是否需要提交某些生成物或本地工具配置。</div>
+# Maestro runtime artifacts
+# Keep .maestro/*.yaml flows versioned; ignore only local runtime output.
+.maestro/cache/
+.maestro/tmp/
+.maestro/runs/
+.maestro/reports/
+maestro-report/
+maestro-results/
+maestro-artifacts/</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Repository</p>
+            <h2>源文件和同步规则</h2>
           </div>
+          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。</p>
         </div>
-        <footer class="footer-note"><span>这页是参考内容，不是当前仓库配置变更。</span><span>Slide 21</span></footer>
-      </article>
+        <table>
+          <thead>
+            <tr>
+              <th>路径</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>ENTRYPOINT.md</code></td><td>版本监控和工作流总入口。</td></tr>
+            <tr><td><code>AGENTS.md</code></td><td>本仓库直接生效规则，包括 README 同步规范。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/templates/agents/</code></td><td>全局规则和项目级规则模板。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/templates/project/.gitignore</code></td><td>新项目模板忽略规则。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/scripts/onboard.py</code></td><td>安装、重置、检测和引导配置自动化。</td></tr>
+            <tr><td><code>README.md</code> / <code>README.html</code></td><td>工作流说明文档，模板更新后必须评估同步。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-      <article class="slide compact-slide" data-title="AI 工具 Git 参考">
-        <header class="section-head">
-          <div class="eyebrow">AI Tooling Git Rules</div>
-          <h2>Trellis、GitNexus、Impeccable、TestSprite、React Bits Pro 和 Web UI 测试资产的参考忽略策略</h2>
-          <p>核心思路：保留人类需要审查的规范和任务产物，忽略 runtime、cache、worktree 和大体量机器生成物。</p>
-        </header>
-        <div class="body code-split dense-code-split">
-          <pre><code># ---------- Trellis ----------
-.trellis/*
-!.trellis/spec/
-!.trellis/spec/**
-!.trellis/lessons/
-!.trellis/lessons/**
-!.trellis/workflow.md
-!.trellis/workspace/
-!.trellis/workspace/**
-!.trellis/tasks/
-!.trellis/tasks/*/
-# 需要提交归档任务、journal 或 check/implement 记录，则先注释上一行的规则，再使用下面这行规则：
-# !.trellis/tasks/**
-
-# 不需要提交归档任务、journal 或 check/implement 记录，则直接使用：
-!.trellis/tasks/*/prd.md
-!.trellis/tasks/*/design.md
-!.trellis/tasks/*/implement.md
-.trellis/.backup-*
-.trellis/worktrees/
-.trellis/.runtime/
-.trellis/.cache/
-.trellis/.template-hashes.json
-.trellis/channels/
-
-# ---------- GitNexus ----------
-.gitnexus/
-
-# ---------- Impeccable ----------
-.impeccable/live/server.json
-.impeccable/live/sessions/
-.impeccable/live/annotations/
-.impeccable/critique/
-
-# ---------- TestSprite ----------
-testsprite_tests/**
-!testsprite_tests/
-!testsprite_tests/**/*_test_plan.json
-!testsprite_tests/**/*_prd.json
-# !testsprite_tests/**/TC*
-
-# TestSprite project/runtime artifacts
-.testsprite/cache/
-.testsprite/tmp/
-.testsprite/runs/
-.testsprite/results/
-.testsprite/reports/
-# .testsprite/config.json
-
-# Playwright runtime artifacts
-.playwright-mcp/
-playwright-report/
-test-results/
-blob-report/
-
-# ---------- React Bits Pro ----------
-.env.local
-
-# ---------- Web UI Autotest / Playwright ----------
-ui-test-repair-plan.json
-tests/e2e/reports/results.json
-tests/e2e/reports/junit.xml
-tests/e2e/reports/html/
-tests/e2e/**/screenshots/
-tests/e2e/**/videos/
-tests/e2e/**/traces/
-tests/e2e/**/*.trace.zip
-
-# ---------- AI Tools ----------
-.agents/
-.worktrees/</code></pre>
-          <div class="mini-panel">
-            <h3>审查策略</h3>
-            <ul>
-              <li>Trellis：保留 spec、workflow 和核心 task artifacts。</li>
-              <li>GitNexus：本地索引默认不提交。</li>
-              <li>Impeccable：live session、annotation 和 critique 输出默认作为本地工作态处理。</li>
-              <li>TestSprite：可保留 test plan / PRD，执行代码和报告按团队策略。</li>
-              <li>React Bits Pro：license key 只放环境变量或 <code>.env.local</code>，项目内 Skill 由具体项目安装；不要提交授权 Skill 或凭据到配置摘录仓库。</li>
-              <li>Web UI Autotest：<code>tests/e2e/</code> 可按项目策略入库，HTML report、trace、video、screenshot 默认忽略。</li>
-            </ul>
-            <div class="callout cyan">如果团队希望保留 TestSprite 的具体测试代码，可以按需打开 <code>TC*</code> 相关规则；<code>ui-test-*.json</code> 是否入库按审查策略决定。</div>
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Maintenance</p>
+            <h2>README 同步规范</h2>
           </div>
+          <p>后续任何模板内容更新，如果影响工作流、工具职责、安装检测、SBTD、验证策略、忽略规则、同步流程或用户可见路径，必须同时评估并更新 <code>README.md</code> 和 <code>README.html</code>。如果判断无需更新，最终输出要说明原因。</p>
         </div>
-        <footer class="footer-note"><span>规则应与 CI、审查流程和安全策略一起确定。</span><span>Slide 22</span></footer>
-      </article>
-
-      <article class="slide" data-title="落地检查清单">
-        <header class="section-head">
-          <div class="eyebrow">Adoption Checklist</div>
-          <h2>给其他仓库落地前的检查清单</h2>
-          <p>目标不是把所有工具都装上，而是让项目拥有清晰的事实源、可验证的流程和明确的工具边界。</p>
-        </header>
-        <div class="body grid-3">
-          <div class="card accent">
-            <h3>规则模板</h3>
-            <ul>
-              <li>项目根目录有清晰的 Agent 规则。</li>
-              <li>项目事实源和验证命令已补充。</li>
-              <li>目录提交策略符合团队需求。</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>工具配置</h3>
-            <ul>
-              <li>Trellis 只有强证据时启用。</li>
-              <li>GitNexus 只有索引存在时启用。</li>
-              <li>TestSprite 只在测试场景需要、MCP 已配置且配置门户可完成时启用。</li>
-              <li>React Bits Pro Skill 只在 React/shadcn、registry、项目内 Skill 和 key 可读证据齐全时启用。</li>
-              <li>web-ui-autotest-generator 只在需要入库 Web UI 测试资产时启用。</li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>执行闭环</h3>
-            <ul>
-              <li>修改前知道读取哪些产物。</li>
-              <li>修改后知道跑哪些验证。</li>
-              <li>失败和跳过检查必须说明风险。</li>
-              <li>长期经验才记录 lesson。</li>
-            </ul>
-          </div>
-        </div>
-        <footer class="footer-note"><span>最终标准：可理解、可验证、可维护、可回滚。</span><span>Slide 23</span></footer>
-      </article>
-
-      <article class="slide compact-slide" data-title="参考来源">
-        <header class="section-head">
-          <div class="eyebrow">Sources</div>
-          <h2>内容来源与外部参考</h2>
-          <p>模板与 Skill 内容来自当前仓库文件；BDD / Gherkin 规则参考已纳入仓库内 gherkin-bdd Skill，TestSprite 与 React Bits Pro 配置流程补充自官方文档，Web UI 测试资产流程参考 web-ui-autotest-generator。</p>
-        </header>
-        <div class="body source-layout compact-sources">
-          <div class="card accent repo-source">
-            <h3>仓库内来源</h3>
-            <div class="repo-source-list">
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md</b><span>全局优先级、命令执行、工具可用性、Skills 调用和验证最低要求。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md</b><span>真实项目级模板、事实源、Trellis / GitNexus / BDD / TestSprite / React Bits Pro / Web UI 测试资产边界。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/trellis-workflow/SKILL.md</b><span>Trellis native / tdd workflow、BDD overlay、before-dev、check、finish-work 和 update-spec。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/project-validation、gherkin-bdd、trellis-channel、lessons-record</b><span>修改后验证、BDD 场景规格、显式协作运行时和长期经验记录规则。</span></div>
-              <div class="repo-source-item"><b>kuno-workflow-onboard-skills/templates/skills/book-*</b><span>重构、遗留代码、轻量领域建模、数据密集型设计和生产就绪专项审查。</span></div>
-            </div>
-          </div>
-          <div class="source-list featured">
-            <a href="https://github.com/ciembor/agent-rules-books">agent-rules-books<span>book-derived Skills 的 mini-style 规则来源。</span></a>
-            <a href="https://github.com/chengdagong/gherkin-bdd">gherkin-bdd<span>BDD 硬规则、.feature 持久规格和 code-to-gherkin 思路参考。</span></a>
-            <a href="https://github.com/AutomationPanda/gherkin-guidelines-for-ai">Gherkin Guidelines for AI<span>Gherkin 场景质量、语言、结构和反模式参考。</span></a>
-            <a href="https://github.com/izgorodin/agent-pack-core">agent-pack-core<span>行为描述、红测、绿码的 BDD/TDD 节奏参考。</span></a>
-            <a href="https://docs.testsprite.com/mcp/getting-started/installation">TestSprite Installation<span>MCP server 安装、API Key、IDE 配置与验证。</span></a>
-            <a href="https://docs.testsprite.com/mcp/getting-started/first-test">First MCP Test<span>bootstrap、Testing Configuration 页面、PRD 与测试账号配置。</span></a>
-            <a href="https://docs.testsprite.com/mcp/core/create-tests-new-project">Create Tests for New Projects<span>新项目测试生成 workflow 与产物。</span></a>
-            <a href="https://docs.testsprite.com/mcp/core/tools">MCP Tools References<span>TestSprite MCP 工具链和产物说明。</span></a>
-            <a href="https://docs.testsprite.com/mcp/maintenance/security-compliance">Security &amp; Compliance<span>凭据、artifact、PII 和测试账户建议。</span></a>
-            <a href="https://pro.reactbits.dev/docs/skills">React Bits Pro Skills<span>付费解锁 Agent Skill，用于指导 Agent 集成 components 和 blocks。</span></a>
-            <a href="https://pro.reactbits.dev/docs/installation">React Bits Pro Installation<span>shadcn registry、license key、components.json 和安装前提。</span></a>
-            <a href="https://github.com/Cheryl-station/web-ui-autotest">web-ui-autotest-generator<span>Web UI Playwright 测试资产生成、选择器审计和覆盖率报告。</span></a>
-          </div>
-        </div>
-        <footer class="footer-note"><span>演示文件为静态 HTML，可直接在浏览器打开。</span><span>Slide 24</span></footer>
-      </article>
+      </div>
     </section>
   </main>
 
-  <nav class="controls" aria-label="Slide navigation">
-    <button class="nav-btn" id="prevBtn" type="button" title="上一页" aria-label="上一页">‹</button>
-    <button class="index-btn" id="indexBtn" type="button" title="目录" aria-label="目录">☰</button>
-    <div class="counter"><span id="current">01</span>/<span id="total">24</span></div>
-    <button class="nav-btn" id="nextBtn" type="button" title="下一页" aria-label="下一页">›</button>
-  </nav>
-  <aside class="index-panel" id="indexPanel" aria-label="Slide index"></aside>
-
-  <script>
-    const slides = Array.from(document.querySelectorAll(".slide"));
-    const progress = document.getElementById("progress");
-    const currentEl = document.getElementById("current");
-    const totalEl = document.getElementById("total");
-    const prevBtn = document.getElementById("prevBtn");
-    const nextBtn = document.getElementById("nextBtn");
-    const indexBtn = document.getElementById("indexBtn");
-    const indexPanel = document.getElementById("indexPanel");
-    let current = 0;
-
-    function pad(n) {
-      return String(n).padStart(2, "0");
-    }
-
-    function showSlide(index) {
-      current = Math.max(0, Math.min(index, slides.length - 1));
-      slides.forEach((slide, i) => {
-        slide.classList.toggle("active", i === current);
-      });
-      currentEl.textContent = pad(current + 1);
-      totalEl.textContent = pad(slides.length);
-      progress.style.width = ((current + 1) / slides.length * 100) + "%";
-      document.querySelectorAll(".index-panel button").forEach((button, i) => {
-        button.classList.toggle("active", i === current);
-      });
-      const title = slides[current].dataset.title || "Slide";
-      document.title = title + " | Codex Templates & Skills Playbook";
-    }
-
-    function nextSlide() {
-      showSlide(current + 1);
-    }
-
-    function prevSlide() {
-      showSlide(current - 1);
-    }
-
-    slides.forEach((slide, i) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = pad(i + 1) + "  " + (slide.dataset.title || "Slide");
-      button.addEventListener("click", () => {
-        showSlide(i);
-        indexPanel.classList.remove("open");
-      });
-      indexPanel.appendChild(button);
-    });
-
-    prevBtn.addEventListener("click", prevSlide);
-    nextBtn.addEventListener("click", nextSlide);
-    indexBtn.addEventListener("click", () => {
-      indexPanel.classList.toggle("open");
-    });
-
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "ArrowRight" || event.key === " ") {
-        event.preventDefault();
-        nextSlide();
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        prevSlide();
-      }
-      if (event.key === "Home") {
-        event.preventDefault();
-        showSlide(0);
-      }
-      if (event.key === "End") {
-        event.preventDefault();
-        showSlide(slides.length - 1);
-      }
-      if (event.key === "Escape") {
-        indexPanel.classList.remove("open");
-      }
-    });
-
-    document.addEventListener("click", (event) => {
-      if (!event.target.closest(".controls") && !event.target.closest(".index-panel")) {
-        indexPanel.classList.remove("open");
-      }
-    });
-
-    showSlide(0);
-  </script>
+  <footer>
+    <div class="wrap">
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 只在需要沉淀 Web UI Playwright 测试资产时启用。</p>
+    </div>
+  </footer>
 </body>
 </html>
