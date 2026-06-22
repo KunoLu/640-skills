@@ -418,7 +418,7 @@ MCP items are not installed by `install-external-skills`, `init`, or `reset`, an
 For GitNexus MCP:
 
 1. Confirm the GitNexus CLI works, for example with `npx gitnexus status` in the target project.
-2. Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using the current GitNexus setup instructions.
+2. Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using the current GitNexus setup instructions. Choose the transport supported by that client, such as stdio, Streamable HTTP, or legacy SSE; do not copy a transport-specific config unless the user has selected it.
 3. Restart or reload the Agent environment so the MCP server is discovered.
 4. Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.
 5. If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.

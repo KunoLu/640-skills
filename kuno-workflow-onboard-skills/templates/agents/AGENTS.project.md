@@ -131,33 +131,22 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 
 ## GitNexus
 
-GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理。
+本项目默认继承全局 GitNexus 规则：GitNexus 通过全局 `gitnexus-mcp` 提供能力，不作为 Skill 管理；只有 MCP 可用且当前项目已建立索引时才使用。stale index、分页、PDG / taint / trace、MCP transport、hook、optional grammar 和大仓库风险等细则以全局 `AGENTS.md` 为准。
 
-仅当 GitNexus MCP 可用且当前项目已建立索引时使用 GitNexus。强证据包括：
+项目级强证据包括：
 
 - 当前项目存在 `.gitnexus/`
 - `gitnexus status` 显示已有索引
 - GitNexus MCP 的已索引仓库列表包含当前项目路径
 - 本项目更深层 `AGENTS.md` 明确说明 GitNexus 已启用
 
-使用规则：
+项目级使用要求：
 
 - 修改代码前，优先通过 GitNexus MCP 执行影响分析。
 - 修改代码后，优先通过 GitNexus MCP 执行变更检测。
 - GitNexus 结果必须与实际 diff、测试结果、Trellis 任务产物和项目规范交叉核对。
-- 如果项目存在 `.gitnexusrc` 或需要指定默认分支，遵循项目配置；必要时使用 `gitnexus analyze --default-branch <branch>` 重新分析。
-- 当 `gitnexus status`、MCP `list_repos` / `context` / `detect_changes` 或其他 GitNexus 输出提示索引 stale、`commitsBehind > 0`、或“索引落后 HEAD ... 个 commit”时，不要直接依赖过期结果；先按命令执行规则尝试在项目根刷新索引。
-- 刷新索引时优先使用项目约定命令或本地 runner，例如存在 `.gitnexus/run.cjs` 时使用 `node .gitnexus/run.cjs analyze`；否则使用项目文档要求的 `gitnexus analyze` / `npx gitnexus analyze`。如果项目指定默认分支或 `.gitnexusrc`，必须带上相应配置。
-- 如果 `analyze` 因沙箱、网络、native crash、索引损坏、耗时限制或权限问题失败，必须在最终输出中说明尝试的命令、失败原因、GitNexus 结果只能作为 advisory，以及实际用哪些 diff / 测试 / 构建 / 运行时检查替代。
-- 如果 `analyze` 成功但 MCP 仍报告 stale，按 MCP 缓存或会话未刷新处理；重新检查 CLI status，必要时说明需要重启 / reload MCP 或新会话后再依赖 MCP 结果。
-- 不要默认假设 GitNexus hook 会自动刷新索引；除非项目文档或用户明确要求并接受 commit / merge 被阻塞和索引写入风险，否则不要新增自动运行 `gitnexus analyze` 的 Git hook。
-- 当影响分析结果存在同名符号、跨文件歧义或输出过大时，优先使用 GitNexus 的 `uid` / `file` / `kind` 约束和分页 / summary-only 能力缩小范围。
-- 通过 GitNexus MCP 枚举已索引仓库时，`list_repos` 可能返回分页对象；使用 `limit` / `offset` 翻页直到 `pagination.hasMore` 为 false，不要把单页结果当作完整仓库列表。
-- 对跨服务 API、HTTP route / consumer、gRPC 或前后端调用链的结论，必须回到实际路由、客户端调用和 diff 交叉核对。
-- 如果需要移除 GitNexus 集成，优先使用 `gitnexus uninstall` 的 dry-run 查看将删除的 MCP 配置、Skill 和 hooks；只有用户明确确认后才加 `--force`，并复核配置 diff。
-- 可选 tree-sitter grammar 缺失、跳过或回退构建不一定代表 `gitnexus analyze` 失败；若输出提示 optional grammar、prebuild / toolchain fallback 或 `GITNEXUS_SKIP_OPTIONAL_GRAMMARS`，把相关语言覆盖作为风险记录，并结合实际源码和查询结果复核。
-- 大仓库分析中出现 skipped large files、内存墙、FTS 损坏或 repair 提示时，把这些作为索引完整性风险；需要时运行 GitNexus 提供的修复或重建命令后再依赖结果。
-- 如果 GitNexus 不可用或当前项目未建立索引，跳过 GitNexus，不阻塞任务。
+- 跨服务 API、HTTP route / consumer、gRPC 或前后端调用链结论，必须回到实际路由、客户端调用和 diff 复核。
+- 如果全局 GitNexus 细则不可见，最低遵守：MCP + 当前项目索引同时可用才使用；stale 先按项目约定刷新；刷新失败时把 GitNexus 结果降级为 advisory；不静默新增 hook 或改写 MCP transport；不可用时跳过且不阻塞任务。
 
 ---
 

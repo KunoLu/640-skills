@@ -84,6 +84,9 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 不要默认假设 GitNexus hook 会自动刷新索引；除非项目文档或用户明确要求并接受 commit / merge 被阻塞和索引写入风险，否则不要新增自动运行 `gitnexus analyze` 的 Git hook。
 - 当影响分析结果存在同名符号、跨文件歧义或输出过大时，优先使用 GitNexus 提供的 `uid` / `file` / `kind` 约束和分页 / summary-only 能力缩小范围。
 - 通过 GitNexus MCP 枚举已索引仓库时，`list_repos` 可能返回分页对象；使用 `limit` / `offset` 翻页直到 `pagination.hasMore` 为 false，不要把单页结果当作完整仓库列表。
+- 如果项目启用了多分支索引，分析、查询和变更检测必须明确目标 branch / 默认分支，不要混用不同分支的索引结果；跨分支结论必须回到实际 diff 或对应分支源码复核。
+- PDG-backed impact、taint analysis、`trace` 等高级图分析能力只作为显式 opt-in 辅助。使用前确认索引已用对应能力生成，记录采用的是默认 call-graph 模式还是 PDG / taint / trace 模式，并把结论与源码、测试和路由 / 调用链交叉核对。
+- GitNexus MCP 可通过不同 transport 暴露；是否使用 stdio、Streamable HTTP 或 legacy SSE 由当前 Agent / IDE 配置决定。不要因为上游支持新的 MCP transport 就静默改写项目或用户级 MCP 配置。
 - 对跨服务 API、HTTP route / consumer、gRPC 或前后端调用链的结论，必须回到实际路由、客户端调用和 diff 交叉核对。
 - 如果需要移除 GitNexus 集成，优先使用 `gitnexus uninstall` 的 dry-run 查看将删除的 MCP 配置、Skill 和 hooks；只有用户明确确认后才加 `--force`，并复核配置 diff。
 - 可选 tree-sitter grammar 缺失、跳过或回退构建不一定代表 `gitnexus analyze` 失败；若输出提示 optional grammar、prebuild / toolchain fallback 或 `GITNEXUS_SKIP_OPTIONAL_GRAMMARS`，把相关语言覆盖作为风险记录，并结合实际源码和查询结果复核。
