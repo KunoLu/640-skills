@@ -193,6 +193,8 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 - 如果上游 migration manifest 建议迁移，或项目中存在拼写错误的 `trellis-spec-bootstarp/` skill 目录，运行 `trellis update --migrate`，让 Trellis 处理跨平台目录重命名。
 - `trellis update` 可能安装新的 bundled skills、平台模板或 `.trellis/agents/{check,implement}.md` channel runtime 文件；这些是生成的 Trellis workflow 资产，不等同于 channel runtime 日志。
 - 当 Trellis 新增或重命名 AI 平台时，复核生成的 commands、skills、agents、shared skills 目录和项目 `.gitignore` / 提交策略；不要把可复用的平台模板目录、runtime 日志和本地缓存混为一类。
+- 对 agent-capable 但没有 session-start / per-turn hooks 的平台，更新后必须确认仍有显式的 workflow 启动入口，例如 `trellis-start` skill 或 `/trellis:start` command；不要仅因为平台支持 agent 就假设启动上下文会自动注入。
+- 对同时支持 CLI agent hooks 和 IDE hook 文件的平台，更新后分别复核主会话 agent、sub-agent、per-turn prompt hook、session-start hook 和 workflow resource 注入；不要只检查 sub-agent hook 或只检查 IDE 配置。
 - 对可选平台 hooks、statusline 或状态栏类增强，不要假设 `trellis update` 会强制安装、删除或改写；只有在用户选择对应 init/update flag、项目已有配置或 manifest 明确要求时才启用，并复核生成 diff。
 - 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
 - 当 Trellis 更新涉及 workflow phase、step 编号、状态路由或 resume / continue 行为时，更新后必须复核生成的 workflow、`/continue` 命令、workflow variants、bundled skill 参考和平台 prompt 是否仍与 `.trellis/workflow.md` 对齐；不要只检查带 `Phase X.Y` 字样的引用，也要检查裸编号路由。
