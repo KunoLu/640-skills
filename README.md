@@ -19,6 +19,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
 | `docs/lessons.md` | 本仓库长期经验记录，执行仓库操作前必须先读取。 |
+| `kuno-workflow-onboard-skills/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。 |
 | `kuno-workflow-onboard-skills/SKILL.md` | onboard Skill 入口说明。 |
 | `kuno-workflow-onboard-skills/REFERENCE.md` | onboard、安装、检测和工具配置参考。 |
 | `kuno-workflow-onboard-skills/scripts/onboard.py` | init、reset、安装和检测自动化脚本。 |
@@ -268,11 +269,12 @@ MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检�
 
 1. 读取同步源文件并确认路径正确。
 2. 只同步根 `AGENTS.md` 中允许列表里的全局规则和全局 Skill；Skill 必须按目录整体同步，不能只复制 `SKILL.md`。
-3. 不同步 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`。
-4. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致。
-5. 不修改 `ENTRYPOINT.md` 版本号。
-6. 不归档 `UPDATE.md`。
-7. 不提交或推送变更。
+3. `kuno-workflow-onboard-skills/` 也作为完整 Skill 目录同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。
+4. 不把 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 作为独立项目级 `AGENTS.md` 同步；它只会随 onboard Skill 作为模板资产保留。
+5. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致。
+6. 不修改 `ENTRYPOINT.md` 版本号。
+7. 不归档 `UPDATE.md`。
+8. 不提交或推送变更。
 
 ## README 同步规范
 

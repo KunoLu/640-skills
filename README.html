@@ -629,7 +629,7 @@ tests/e2e/**/*.trace.zip
             <p class="eyebrow">Repository</p>
             <h2>源文件和同步规则</h2>
           </div>
-          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径；Skill 必须按目录整体同步。</p>
+          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径；Skill 必须按目录整体同步，包含 <code>kuno-workflow-onboard-skills/</code> 自身。</p>
         </div>
         <table>
           <thead>
@@ -641,6 +641,7 @@ tests/e2e/**/*.trace.zip
           <tbody>
             <tr><td><code>ENTRYPOINT.md</code></td><td>版本监控和工作流总入口。</td></tr>
             <tr><td><code>AGENTS.md</code></td><td>本仓库直接生效规则，包括 README 同步规范。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/</code></td><td>onboard Skill 完整目录；普通 sync 时同步到 <code>/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/</code>。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/agents/</code></td><td>全局规则和项目级规则模板。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板目录，包含 <code>SKILL.md</code>、<code>references/</code>、<code>scripts/</code>、<code>assets/</code> 等。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/project/.gitignore</code></td><td>新项目模板忽略规则。</td></tr>

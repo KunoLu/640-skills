@@ -46,6 +46,7 @@
 | 源文件 | 本地目标路径 |
 |---|---|
 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
+| `kuno-workflow-onboard-skills/` | `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/` |
 | `kuno-workflow-onboard-skills/templates/skills/trellis-workflow/` | `/Users/lusonglin/.agent/skills/trellis-workflow/` |
 | `kuno-workflow-onboard-skills/templates/skills/trellis-channel/` | `/Users/lusonglin/.agent/skills/trellis-channel/` |
 | `kuno-workflow-onboard-skills/templates/skills/project-validation/` | `/Users/lusonglin/.agent/skills/project-validation/` |
@@ -70,6 +71,7 @@
 - `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`
 
 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 是用于复制到真实项目仓库根目录 `AGENTS.md` 的项目级模板，只在具体项目需要时由用户手动落地、通过 `kuno-workflow-onboard-skills` 安装，或由用户明确要求同步。
+当 `kuno-workflow-onboard-skills/` 作为 Skill 目录整体同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/` 时，其中携带的 `templates/agents/AGENTS.project.md` 只作为该 Skill 的模板资产保留，不视为把项目级模板同步到任何真实项目。
 
 ### 同步指令
 
