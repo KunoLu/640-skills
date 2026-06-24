@@ -91,6 +91,7 @@ For user-visible wording or UI changes, require scenarios when the change affect
 5. Create or update the persistent `.feature` file before implementation.
 6. Review scenarios for observable behavior, one-behavior focus, vocabulary consistency, realistic examples, absence of implementation details, and compliance with the language decision.
 7. Derive tests from scenarios. If the project has a Gherkin runner, bind scenarios to step definitions or runner tests. Otherwise use the existing test framework and make each test traceable to a scenario by name, comment, file organization, or the project's established convention.
+   For Mobile / Hybrid E2E scenarios, use `maestro-mobile-e2e` to derive repo-resident Maestro flows when device-level coverage is needed.
 8. For new behavior or bug fixes, run the derived test first and confirm it fails for the intended behavior before implementation.
 9. Implement the smallest change that makes the scenario-backed tests pass.
 10. During validation, confirm PRD, `.feature`, tests, and code agree.

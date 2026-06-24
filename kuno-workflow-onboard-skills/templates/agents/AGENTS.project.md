@@ -119,6 +119,7 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 - 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`，但新增或触碰的行为必须补齐。
 - 如果已有 Gherkin runner，场景应绑定 step definitions 或 runner 测试；没有 runner 时，使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
 - 不默认引入新的 Gherkin runner；只有用户明确要求、项目已有方向或现有测试框架无法表达验收行为时才建议引入。
+- Mobile / Hybrid E2E 场景需要设备级覆盖时，可通过 `maestro-mobile-e2e` 从对应 `.feature` 派生 Maestro flow；`.feature` 仍是行为 source of truth，Maestro flow 是可执行测试资产。
 - 无法自动化的场景必须标记 `@todo` 或项目等价标记，并说明阻塞原因和临时人工验证方式。
 
 ### Source Of Truth
@@ -300,8 +301,26 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 
 - 需要 Web 回归时，先检查项目已有 Playwright 依赖、配置、scripts 和 E2E 目录；未安装时按全局规则询问是否安装到项目 devDependency。
 - 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
+- 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
+
+---
+
+## Mobile / Hybrid E2E 测试资产
+
+Maestro flow 是可入库测试资产，不是 Maestro CLI 运行产物。只有 Mobile / Hybrid 用户旅程需要设备级回归时，才从 BDD 场景生成或维护 Maestro flow。
+
+项目落地规则：
+
+- 默认目录为 `maestro/flow/`。
+- Flow 文件使用 `.yml` 扩展名。
+- 文件名和 YAML `name` 字段使用英文业务场景名；文件名使用 lower-kebab-case，例如 `login-success.yml`。
+- 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
+- 每个生成的 flow 必须追踪到源 `.feature` 路径和场景名称。
+- 没有稳定选择器、测试账号、测试环境、设备、app binary、appId / bundleId、数据准备或清理策略时，不强行生成脆弱 flow；标记 `Maestro Flow Assets: blocked` 并说明缺口。
+- Maestro CLI 执行生成 JUnit 或 HTML report 时，默认输出到项目根目录 `.maestro/reports/`；JUnit 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`，HTML 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或已知 Maestro 版本问题时，按 `maestro-mobile-e2e` 的 lesson index 通过标签 / 关键字懒加载对应方案；未命中时不要预先应用临时补丁。
 
 ---
 

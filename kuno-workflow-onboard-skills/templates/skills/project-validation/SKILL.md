@@ -1,6 +1,6 @@
 ---
 name: project-validation
-description: Use after code changes to choose and run validation commands for Node, JavaScript, TypeScript, Python, or Go projects. Prefer project-defined commands and report skipped checks and risks.
+description: Use after code changes to choose and run validation commands for Node, JavaScript, TypeScript, Python, Go, Dart, Java, Kotlin, C++, Swift, or Objective-C projects. Prefer project-defined commands and report skipped checks and risks.
 ---
 
 # 项目验证 Skill
@@ -62,6 +62,9 @@ description: Use after code changes to choose and run validation commands for No
 - 先按修改范围选择最小有效验证：项目测试、浏览器诊断、Playwright Web 回归、Maestro 移动 / Hybrid flow、或 Web UI 测试资产覆盖评估。
 - Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。
 - Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
+- 需要从 BDD 场景生成或维护 Mobile / Hybrid Maestro flow 时，调用 `maestro-mobile-e2e`，并确认可入库 flow 资产位于 `maestro/flow/`。
+- Maestro JUnit / HTML report 生成时，必须写入项目根目录 `.maestro/reports/`；JUnit 使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`，HTML 使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- iOS 真机 Maestro 执行遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，先由 `maestro-mobile-e2e` 按标签 / 关键字懒加载 lesson 并修复，再重跑最小失败 flow。
 - 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
 - 调用 `web-ui-autotest-generator` 前后，必须遵循本路径契约，避免 external Skill 示例或脚本默认值把 JSON 写到项目根目录：
   - `generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty`
@@ -75,12 +78,27 @@ description: Use after code changes to choose and run validation commands for No
 
 最终输出按全局 / 项目级 `AGENTS.md` 定义的状态枚举报告相关工具状态、运行命令、失败或阻塞原因、生成文件和剩余风险。
 
+## 语言验证通用规则
+
+所有语言都优先继承项目已有 CI、README、Makefile、package scripts、Gradle / Maven wrapper、Xcode scheme、CMake preset 或更深层 `AGENTS.md` 定义的命令。下面命令只是缺少项目明确约定时的候选项。
+
+验证时同时说明：
+
+- 代码规范 / lint / format 检查是否运行。
+- unit test 是否运行。
+- integration / API / E2E 是否与本次改动相关。
+- 报告路径是否由项目配置生成；模板不为 unit test 强制统一报告目录。
+- 跳过或阻塞的原因。
+
 ## Node / JavaScript / TypeScript
+
+优先使用项目包管理器和 CI scripts，不切换包管理器。常见命令：
 
 优先：
 
 ```bash
 rtk npm run lint
+rtk npm run typecheck
 rtk npm run test
 rtk npm run build
 ```
@@ -89,6 +107,7 @@ rtk npm run build
 
 ```bash
 npm run lint
+npm run typecheck
 npm run test
 npm run build
 ```
@@ -102,7 +121,7 @@ npm run build
 - 状态结构
 - 共享接口
 
-除非任务需要，不切换包管理器。
+如果项目没有 `typecheck` script，不要凭空新增；记录为未定义并运行项目实际可用的类型检查或构建命令。
 
 ---
 
@@ -133,6 +152,7 @@ uv run pytest
 - 修改类型、函数签名或返回结构时，运行 `ty check`。
 - 修改业务逻辑、数据处理、API 或 bug 修复时，运行 `pytest`。
 - 不绕过 `pyproject.toml`、`uv.lock`、`pytest.ini` 或 `ruff.toml`。
+- 如果项目使用 `mypy`、`pyright`、`tox`、`nox`、`coverage` 或 CI 定义的 test matrix，优先继承项目命令。
 
 ---
 
@@ -156,3 +176,145 @@ go test ./...
 - 修改并发、错误处理、反射或格式化字符串时，运行 `go vet ./...`。
 - 仅当依赖变化时，运行 `go mod tidy`。
 - 不无故修改 `go.mod` 或 `go.sum`。
+- 如果项目有 Makefile、CI matrix、race test、coverage 或 package 子集约定，优先继承项目命令。
+
+---
+
+## Dart / Flutter
+
+优先继承项目的 Flutter / Dart CI、Melos、Makefile 或 package scripts。
+
+常见候选：
+
+```bash
+rtk dart format --set-exit-if-changed .
+rtk dart analyze
+rtk dart test
+```
+
+Flutter 项目常见候选：
+
+```bash
+rtk flutter analyze
+rtk flutter test
+```
+
+规则：
+
+- 修改 Dart 代码后，运行项目约定的 format / analyze。
+- 修改业务逻辑、状态管理、数据转换、widget 行为或 bug 修复时，运行 unit test / widget test。
+- Flutter integration test、Maestro Mobile E2E 或平台构建只在改动触及对应用户旅程、平台能力或发布风险时运行。
+
+---
+
+## Java
+
+优先使用项目 wrapper 和 CI tasks，不绕过 Gradle / Maven 配置。
+
+Gradle 常见候选：
+
+```bash
+rtk ./gradlew test
+rtk ./gradlew check
+```
+
+Maven 常见候选：
+
+```bash
+rtk mvn test
+rtk mvn verify
+```
+
+规则：
+
+- 修改 Java 代码后，运行项目配置的 Checkstyle、Spotless、PMD、Error Prone 或等价 lint / format gate。
+- 修改业务逻辑、API、持久化、并发或 bug 修复时，运行 unit test。
+- 涉及集成、容器、数据库或外部服务时，按项目 CI 运行 integration test profile；不可用时说明阻塞原因。
+
+---
+
+## Kotlin
+
+优先使用项目 Gradle wrapper、Android Gradle Plugin、Kotlin Multiplatform 或 CI 任务。
+
+常见候选：
+
+```bash
+rtk ./gradlew test
+rtk ./gradlew check
+```
+
+Android 项目常见候选：
+
+```bash
+rtk ./gradlew testDebugUnitTest
+```
+
+规则：
+
+- 修改 Kotlin 代码后，运行项目配置的 ktlint、detekt、Spotless 或等价 lint / format gate。
+- 修改业务逻辑、ViewModel、repository、domain layer、serialization 或 bug 修复时，运行 unit test。
+- Android instrumentation test、Compose UI test、Maestro Mobile E2E 只在改动触及设备行为或用户旅程时运行。
+
+---
+
+## C++
+
+优先继承项目 CMake preset、Makefile、Bazel、Ninja、CTest 或 CI 命令；不要为验证临时重构构建系统。
+
+常见候选：
+
+```bash
+rtk cmake --build build
+rtk ctest --test-dir build --output-on-failure
+```
+
+规则：
+
+- 修改 C++ 代码后，运行项目配置的 `clang-format`、`clang-tidy`、`cppcheck` 或等价静态检查。
+- 修改核心逻辑、内存所有权、并发、ABI/API、序列化或 bug 修复时，运行 unit test。
+- 如果项目没有已配置 build 目录，按 README / CI 创建或选择 build 目录；无法确定时先询问或记录阻塞，不随意生成长期构建配置。
+
+---
+
+## Swift
+
+优先继承 SwiftPM、Xcode scheme、xcodebuild、XcodeBuildMCP 或 CI 配置。
+
+SwiftPM 常见候选：
+
+```bash
+rtk swift test
+```
+
+Xcode 常见候选：
+
+```bash
+rtk xcodebuild test -scheme <scheme> -destination <destination>
+```
+
+规则：
+
+- 修改 Swift 代码后，运行项目配置的 SwiftFormat、SwiftLint、`swift format` 或等价 lint / format gate。
+- 修改业务逻辑、model、service、view model、App Intents、serialization 或 bug 修复时，运行 XCTest / Swift Testing unit test。
+- iOS UI test、device test 或 Maestro Mobile E2E 只在改动触及真实设备行为、权限、相机、上传、深链、系统弹窗或用户旅程时运行。
+- 如果 Xcode scheme、destination、simulator 或 signing 不明确，记录阻塞；不要假装测试已运行。
+
+---
+
+## Objective-C
+
+优先继承 Xcode workspace / project、scheme、xcodebuild、XcodeBuildMCP 或 CI 配置。
+
+常见候选：
+
+```bash
+rtk xcodebuild test -scheme <scheme> -destination <destination>
+```
+
+规则：
+
+- 修改 Objective-C / Objective-C++ 代码后，运行项目配置的 clang-format、clang-tidy、OCLint 或等价 lint / static analysis gate。
+- 修改业务逻辑、runtime、category、delegate、桥接层、内存管理、C++ interop 或 bug 修复时，运行 XCTest unit test。
+- 涉及真机能力、系统权限、Hybrid bridge 或跨页面移动流程时，按项目约定运行 Xcode UI test 或 Maestro Mobile E2E。
+- 如果 workspace、scheme、destination、provisioning 或 signing 不明确，记录阻塞并说明需要的项目事实。

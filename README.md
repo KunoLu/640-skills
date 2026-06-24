@@ -6,7 +6,7 @@
 Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 ```
 
-其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用。
+其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。
 
 ## 仓库定位
 
@@ -24,7 +24,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 | `kuno-workflow-onboard-skills/scripts/onboard.py` | init、reset、安装和检测自动化脚本。 |
 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | 全局 Agent 规则模板。 |
 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` | 项目级 Agent 规则模板，不在普通 sync 中同步。 |
-| `kuno-workflow-onboard-skills/templates/skills/**/SKILL.md` | 全局 Skill 模板。 |
+| `kuno-workflow-onboard-skills/templates/skills/**` | 全局 Skill 模板目录，包含 `SKILL.md`、`references/`、`scripts/`、`assets/` 等。 |
 | `kuno-workflow-onboard-skills/templates/project/.gitignore` | 新项目模板 `.gitignore`。 |
 
 普通修改任务只更新本仓库内的源文件。只有用户明确输入 `sync` 或 `同步` 时，才把允许列表中的全局规则和 Skill 同步到本地生效路径；`AGENTS.project.md` 不在普通 sync 范围内。
@@ -81,6 +81,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | Maestro CLI | Android、iOS、React Native、Flutter、Hybrid App E2E，以及可选 Chromium Web smoke。 | 不作为 Web 回归主责；Web 只做 smoke。 |
 | Maestro MCP | 依赖 `maestro mcp` 的增强入口，用于设备检查、view hierarchy、截图和 flow 辅助。 | 不单独替代 Maestro CLI。 |
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
+| `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
 
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
 
@@ -122,6 +123,19 @@ Fallback：
 - Maestro MCP 缺失但 CLI 可用时，继续使用 `maestro test` 执行已有 flow，并单独报告 MCP 状态。
 - Maestro CLI 缺失且用户拒绝安装时，`Maestro Mobile` 标记 `blocked` 或 `skipped`。
 - 设备、模拟器、app binary、appId、bundleId、测试账号或环境不可用时，必须记录阻塞原因。
+
+Maestro flow 资产和报告规则：
+
+- 需要从 Mobile / Hybrid BDD 场景生成或维护 Maestro flow 时，调用 `maestro-mobile-e2e`。
+- Flow 固定写入 `maestro/flow/`，使用 `.yml` 扩展名。
+- 文件名和 YAML `name` 使用英文业务场景名；文件名使用 lower-kebab-case，例如 `maestro/flow/login-success.yml`。
+- 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
+- 每个 flow 必须追踪到源 `.feature` 路径和场景名称。
+- Maestro CLI 生成的 JUnit / HTML report 固定写入项目根目录 `.maestro/reports/`。
+- JUnit report 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`。
+- HTML report 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- Maestro 官方默认运行 artifacts 仍在用户 home 下的 `~/.maestro/tests`；它不是仓库内测试资产。
+- iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，`maestro-mobile-e2e` 按标签 / 关键字懒加载对应 lesson；未命中时不预先套用临时补丁。
 
 ## Chrome DevTools MCP 和 Playwright MCP
 
@@ -182,6 +196,8 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 | Mobile / Hybrid E2E | Java 17+、Maestro CLI、Maestro MCP | Android、iOS、RN、Flutter、Hybrid App 用户旅程 | `Maestro Mobile`: `run-local` / `run-cloud` / `blocked` / `skipped` / `not-needed` |
 | 发布风险 | `book-release-readiness`、Channel preflight | 生产路径、外部集成、部署敏感或高风险变更 | 记录风险、fallback、rollback |
 
+`project-validation` 覆盖 Node / JavaScript / TypeScript、Python、Go、Dart / Flutter、Java、Kotlin、C++、Swift 和 Objective-C 的代码规范检查、typecheck / static analysis、unit test 与项目 CI 继承规则；unit test 报告路径默认继承项目配置，不由模板统一硬编码。
+
 全局工具状态建议在最终输出中集中列明：
 
 - `Chrome DevTools MCP`: `diagnosed` / `inspected` / `blocked` / `skipped` / `not-needed`
@@ -193,6 +209,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 - `Maestro MCP`: `available` / `configured` / `unavailable` / `blocked` / `skipped`
 - `Maestro Mobile`: `run-local` / `run-cloud` / `blocked` / `skipped` / `not-needed`
 - `Maestro Web Smoke`: `run` / `blocked` / `skipped` / `not-needed`
+- `Maestro Flow Assets`: `generated` / `reused` / `blocked` / `skipped`
 - `Web UI 测试资产`: `generated` / `coverage-only` / `blocked` / `skipped`
 
 ## 模板 `.gitignore` 测试产物策略
@@ -221,24 +238,21 @@ tests/e2e/**/traces/
 tests/e2e/**/*.trace.zip
 
 # Maestro runtime artifacts
-# Keep .maestro/*.yaml flows versioned; ignore only local runtime output.
+# Keep maestro/flow/*.yml flows versioned; ignore only local runtime output and reports.
 .maestro/cache/
 .maestro/tmp/
 .maestro/runs/
 .maestro/reports/
-maestro-report/
-maestro-results/
-maestro-artifacts/
 ```
 
-`.maestro/*.yaml` flow 默认应可入库维护；运行时 cache、runs、reports 和 artifacts 不入库。Playwright report、trace、video、screenshot 和一次性 repair plan 默认不入库。
+`maestro/flow/*.yml` flow 默认应可入库维护；`.maestro/reports/` 只保存 Maestro JUnit / HTML report 运行产物，默认不入库。Playwright report、trace、video、screenshot 和一次性 repair plan 默认不入库。
 
 ## onboard / reset 检查范围
 
 `kuno-workflow-onboard-skills` 的 init / reset / check 逻辑需要覆盖：
 
 - 全局 Agent 规则和项目级 Agent 模板。
-- Trellis、project-validation、gherkin-bdd、lessons、book-derived skills 等模板 Skill。
+- Trellis、project-validation、gherkin-bdd、maestro-mobile-e2e、lessons、book-derived skills 等模板 Skill。
 - GitNexus MCP 手动配置检查。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
@@ -253,9 +267,9 @@ MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检�
 当用户输入 `sync` 或 `同步` 时：
 
 1. 读取同步源文件并确认路径正确。
-2. 只同步根 `AGENTS.md` 中允许列表里的全局规则和全局 Skill。
+2. 只同步根 `AGENTS.md` 中允许列表里的全局规则和全局 Skill；Skill 必须按目录整体同步，不能只复制 `SKILL.md`。
 3. 不同步 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`。
-4. 用 `cmp -s` 或等价方式确认源文件与目标文件一致。
+4. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致。
 5. 不修改 `ENTRYPOINT.md` 版本号。
 6. 不归档 `UPDATE.md`。
 7. 不提交或推送变更。

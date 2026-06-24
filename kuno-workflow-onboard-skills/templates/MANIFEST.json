@@ -18,43 +18,47 @@
       "targetRole": "skill:kuno-workflow-onboard-skills"
     },
     {
-      "source": "templates/skills/trellis-workflow/SKILL.md",
+      "source": "templates/skills/trellis-workflow",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/trellis-channel/SKILL.md",
+      "source": "templates/skills/trellis-channel",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/project-validation/SKILL.md",
+      "source": "templates/skills/project-validation",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/gherkin-bdd/SKILL.md",
+      "source": "templates/skills/gherkin-bdd",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/lessons-record/SKILL.md",
+      "source": "templates/skills/maestro-mobile-e2e",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/book-refactoring-pass/SKILL.md",
+      "source": "templates/skills/lessons-record",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/book-legacy-change-safety/SKILL.md",
+      "source": "templates/skills/book-refactoring-pass",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/book-ddd-distilled-modeling/SKILL.md",
+      "source": "templates/skills/book-legacy-change-safety",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/book-ddia-data-design/SKILL.md",
+      "source": "templates/skills/book-ddd-distilled-modeling",
       "targetRole": "skill"
     },
     {
-      "source": "templates/skills/book-release-readiness/SKILL.md",
+      "source": "templates/skills/book-ddia-data-design",
+      "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/book-release-readiness",
       "targetRole": "skill"
     }
   ],

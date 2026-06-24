@@ -91,7 +91,7 @@ The `check` command inspects:
 - CLI tools: `rtk`, `trellis`, `gitnexus`.
 - Conditional project tooling: Playwright CLI / `@playwright/test`, checked when a project root is provided and Web E2E assets or scripts are present or requested.
 - Mobile E2E tooling: Java 17+ for Maestro, Maestro CLI, and Maestro MCP guidance.
-- Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `gherkin-bdd`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
+- Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `gherkin-bdd`, `maestro-mobile-e2e`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
 - Referenced skills from the bundled templates, including mattpocock skills, `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project skill prerequisites.
 

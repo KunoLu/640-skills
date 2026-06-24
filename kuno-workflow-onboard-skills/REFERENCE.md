@@ -8,16 +8,17 @@ This Skill installs only these bundled templates:
 - `templates/agents/AGENTS.project.md` -> target project root `AGENTS.md`
 - `templates/project/.gitignore` -> target project root `.gitignore`, when `--project-root` is provided
 - `.` -> `kuno-workflow-onboard-skills` skill directory, when source and target differ
-- `templates/skills/trellis-workflow/SKILL.md`
-- `templates/skills/trellis-channel/SKILL.md`
-- `templates/skills/project-validation/SKILL.md`
-- `templates/skills/gherkin-bdd/SKILL.md`
-- `templates/skills/lessons-record/SKILL.md`
-- `templates/skills/book-refactoring-pass/SKILL.md`
-- `templates/skills/book-legacy-change-safety/SKILL.md`
-- `templates/skills/book-ddd-distilled-modeling/SKILL.md`
-- `templates/skills/book-ddia-data-design/SKILL.md`
-- `templates/skills/book-release-readiness/SKILL.md`
+- `templates/skills/trellis-workflow/`
+- `templates/skills/trellis-channel/`
+- `templates/skills/project-validation/`
+- `templates/skills/gherkin-bdd/`
+- `templates/skills/maestro-mobile-e2e/`
+- `templates/skills/lessons-record/`
+- `templates/skills/book-refactoring-pass/`
+- `templates/skills/book-legacy-change-safety/`
+- `templates/skills/book-ddd-distilled-modeling/`
+- `templates/skills/book-ddia-data-design/`
+- `templates/skills/book-release-readiness/`
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
@@ -66,7 +67,7 @@ The check reports:
 - Java 17+ availability for Maestro. Use `java --version` first and fall back to `java -version`.
 - Maestro CLI availability and version output when Java 17+ is available.
 - Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
-- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, and bundled book-derived skills.
+- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, and bundled book-derived skills.
 - Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
 - Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
@@ -147,6 +148,7 @@ The onboard bundle includes workflow skills that are installed from templates ra
 | `trellis-channel` | Trellis Channel preflight, worker boundaries, review / validation coordination, and runtime safety rules. |
 | `project-validation` | Validation command selection and reporting, including BDD traceability, Chrome DevTools MCP, Playwright, Maestro, and Web UI automation gates. |
 | `gherkin-bdd` | Persistent BDD / Gherkin specs for user-visible behavior, `.feature` path rules, scenario quality, and scenario-to-test traceability. |
+| `maestro-mobile-e2e` | Maestro Mobile / Hybrid flow generation from BDD scenarios, repo flow asset paths, report naming, and lazy-loaded real-device troubleshooting lessons. |
 | `lessons-record` | Long-term lesson recording and Trellis lesson storage structure. |
 
 ## Bundled Book-Derived Skills

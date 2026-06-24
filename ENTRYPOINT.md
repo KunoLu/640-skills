@@ -17,7 +17,7 @@
 | Trellis | mindfold-ai/trellis | v0.6.4 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.8 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
-| Playwright | microsoft/playwright | v1.61.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
+| Playwright | microsoft/playwright | v1.61.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.6.1 | stable-only | 是 | Android / iOS / Hybrid App E2E |
 | web-ui-autotest-generator | Cheryl-station/web-ui-autotest | main | manual | 否 | Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
@@ -312,7 +312,7 @@ handoff
 | Agent Harness | Trellis | v0.6.4 |
 | 代码理解 | GitNexus | v1.6.8 |
 | Web 诊断 | Chrome DevTools MCP | latest |
-| Web 回归测试 | Playwright | v1.61.0 |
+| Web 回归测试 | Playwright | v1.61.1 |
 | 移动 E2E | Maestro | cli-2.6.1 |
 | Web UI 测试资产 | web-ui-autotest-generator | main |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |

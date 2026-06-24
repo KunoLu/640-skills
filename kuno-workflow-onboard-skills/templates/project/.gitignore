@@ -41,12 +41,6 @@ CLAUDE.md
 .codex/state/
 .codex/hooks/*.local.*
 
-# ---------- OMX ----------
-.omx/
-
-# ---------- GSD ----------
-.planning/
-
 # ---------- Trellis ----------
 .trellis/*
 
@@ -108,14 +102,10 @@ tests/e2e/**/traces/
 tests/e2e/**/*.trace.zip
 
 # Maestro runtime artifacts
-# Keep .maestro/*.yaml flows versioned; ignore only local runtime output.
 .maestro/cache/
 .maestro/tmp/
 .maestro/runs/
 .maestro/reports/
-maestro-report/
-maestro-results/
-maestro-artifacts/
 
 # ---------- AI Tools ----------
 .agents/

@@ -340,7 +340,7 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>Kuno Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路。</p>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；<code>maestro-mobile-e2e</code> 将 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
@@ -365,7 +365,7 @@
           </div>
           <div class="map-cell">
             <strong>Maestro</strong>
-            <span>负责 Android、iOS、RN、Flutter、Hybrid App E2E。</span>
+            <span>负责 Android、iOS、RN、Flutter、Hybrid App E2E；flow 资产落到 maestro/flow。</span>
           </div>
         </div>
       </aside>
@@ -476,6 +476,11 @@
               <td>生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率。</td>
               <td>执行底座仍是项目内 Playwright CLI。</td>
             </tr>
+            <tr>
+              <td>maestro-mobile-e2e</td>
+              <td>从 BDD 场景生成和维护 repo-resident Maestro Mobile / Hybrid flow，并约束报告路径。</td>
+              <td>不替代 BDD、项目验证或 Maestro CLI。</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -493,7 +498,7 @@
         <div class="grid-3">
           <article class="panel accent-blue">
             <h3>项目原生验证</h3>
-            <p>优先运行项目级 AGENTS、README、package scripts、Makefile 或 CI 中定义的 lint、typecheck、unit、integration、build。</p>
+            <p>优先运行项目级 AGENTS、README、package scripts、Makefile 或 CI 中定义的 lint、typecheck、static analysis、unit、integration、build；覆盖 Node、Python、Go、Dart、Java、Kotlin、C++、Swift 和 Objective-C。</p>
           </article>
           <article class="panel accent-green">
             <h3>行为和测试追踪</h3>
@@ -505,7 +510,7 @@
           </article>
           <article class="panel accent-red">
             <h3>Mobile 验证</h3>
-            <p>Java 17+ 通过后使用 Maestro CLI 执行移动 flow；Maestro MCP 作为交互检查增强。</p>
+            <p>Java 17+ 通过后使用 Maestro CLI 执行移动 flow；需要设备级资产时由 <code>maestro-mobile-e2e</code> 从 BDD 生成 <code>maestro/flow/*.yml</code>。</p>
           </article>
           <article class="panel accent-teal">
             <h3>测试资产</h3>
@@ -537,6 +542,25 @@
         <pre><code>generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty
 audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pretty
 check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Mobile E2E Contract</p>
+            <h2>Maestro flow 和报告路径</h2>
+          </div>
+          <p>Mobile / Hybrid BDD 场景需要设备级覆盖时，使用 <code>maestro-mobile-e2e</code> 生成或维护 Maestro flow。Flow 是可入库测试资产；Maestro CLI 运行报告是本地/CI 产物。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>Flow Assets</strong><br><code>maestro/flow/&lt;english-scenario&gt;.yml</code>，文件名 lower-kebab-case，YAML <code>name</code> 使用英文业务场景名。</div>
+          <div><strong>Smoke</strong><br>全量回归 / smoke flow 固定为 <code>maestro/flow/smoke.yml</code>。</div>
+          <div><strong>JUnit</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml</code></div>
+          <div><strong>HTML</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html</code></div>
+        </div>
+        <p>Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。iOS 真机 driver、transport、view hierarchy 或 tap crash 问题由 <code>maestro-mobile-e2e</code> 按标签 / 关键字懒加载对应 lesson。</p>
       </div>
     </section>
 
@@ -590,14 +614,11 @@ tests/e2e/**/traces/
 tests/e2e/**/*.trace.zip
 
 # Maestro runtime artifacts
-# Keep .maestro/*.yaml flows versioned; ignore only local runtime output.
+# Keep maestro/flow/*.yml flows versioned; ignore only local runtime output and reports.
 .maestro/cache/
 .maestro/tmp/
 .maestro/runs/
-.maestro/reports/
-maestro-report/
-maestro-results/
-maestro-artifacts/</code></pre>
+.maestro/reports/</code></pre>
       </div>
     </section>
 
@@ -608,7 +629,7 @@ maestro-artifacts/</code></pre>
             <p class="eyebrow">Repository</p>
             <h2>源文件和同步规则</h2>
           </div>
-          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。</p>
+          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径；Skill 必须按目录整体同步。</p>
         </div>
         <table>
           <thead>
@@ -621,7 +642,7 @@ maestro-artifacts/</code></pre>
             <tr><td><code>ENTRYPOINT.md</code></td><td>版本监控和工作流总入口。</td></tr>
             <tr><td><code>AGENTS.md</code></td><td>本仓库直接生效规则，包括 README 同步规范。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/agents/</code></td><td>全局规则和项目级规则模板。</td></tr>
-            <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板目录，包含 <code>SKILL.md</code>、<code>references/</code>、<code>scripts/</code>、<code>assets/</code> 等。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/project/.gitignore</code></td><td>新项目模板忽略规则。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/scripts/onboard.py</code></td><td>安装、重置、检测和引导配置自动化。</td></tr>
             <tr><td><code>README.md</code> / <code>README.html</code></td><td>工作流说明文档，模板更新后必须评估同步。</td></tr>
@@ -645,7 +666,7 @@ maestro-artifacts/</code></pre>
 
   <footer>
     <div class="wrap">
-      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 只在需要沉淀 Web UI Playwright 测试资产时启用。</p>
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用。</p>
     </div>
   </footer>
 </body>

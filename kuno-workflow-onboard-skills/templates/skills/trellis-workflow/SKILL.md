@@ -272,6 +272,9 @@ Trellis 阶段只负责以下要求：
 
 - 不把 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro、Web UI 自动化测试资产当作 `$trellis-check`、项目验证或人工评审的替代品。
 - Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked`，不要声称已完成测试。
+- 如果 Mobile / Hybrid E2E 需要从 BDD 场景生成或维护 Maestro flow，Phase 3.4 commit plan 前必须确认已按 `maestro-mobile-e2e` 生成 / 复用 `maestro/flow/*.yml`，全量回归 flow 固定为 `maestro/flow/smoke.yml`，并记录 `Maestro Flow Assets` 状态。
+- 如果 Maestro 执行生成 JUnit 或 HTML report，Phase 3.4 commit plan 前必须确认报告位于 `.maestro/reports/`，且命名符合 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- 如果 iOS 真机 Maestro 运行遇到 driver、transport、view hierarchy、tap crash 或版本已知问题，先按 `maestro-mobile-e2e` 的懒加载 lesson 处理，再重跑最小失败 flow。
 - 如果启用 `web-ui-autotest-generator`，Phase 3.4 commit plan 前必须确认脚本调用遵循全局 / 项目级 `AGENTS.md` 的 Web UI 测试资产路径契约，且可入库 JSON 资产位于 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 - `$trellis-check` 中必须核对项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。如发现残留，先迁移到 `tests/e2e/manifest/` 并同步引用；如无法迁移或确认，`Web UI 测试资产` 标记为 `blocked`，不得标记为 `generated`。
 - 如生成失败分析 `ui-test-repair-plan.json`，默认路径为 `tests/e2e/manifest/ui-test-repair-plan.json`，并按项目 `.gitignore` 策略作为运行产物处理；除非用户明确要求整理为正式任务或报告，不把 repair plan 作为长期测试资产提交。

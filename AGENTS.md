@@ -9,7 +9,7 @@
 - 根目录 `AGENTS.md`：保存本配置摘录仓库自身直接生效的补充规则，包括每日版本检查自动化和 `更新` / `update` 指令。
 - `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md`：保存迁移后的全局规则文档。
 - `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`：保存迁移后的项目规则文档。
-- `kuno-workflow-onboard-skills/templates/skills/**/SKILL.md`：保存迁移后的全局 Skill 模板。
+- `kuno-workflow-onboard-skills/templates/skills/**`：保存迁移后的全局 Skill 模板及其 references / scripts / assets。
 - `kuno-workflow-onboard-skills/SKILL.md`、`kuno-workflow-onboard-skills/REFERENCE.md`、`kuno-workflow-onboard-skills/scripts/onboard.py`：保存 onboard Skill 自身的说明和安装 / 重置自动化。
 
 每日版本检查自动化如需读取、评估或修改 agent 规则，只能使用上述路径。不要再读取或修改已删除的旧路径 `agents/`、`skills/`、根目录旧路径 `AGENTS.global.md` 和 `AGENTS.project.md`。
@@ -46,22 +46,23 @@
 | 源文件 | 本地目标路径 |
 |---|---|
 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
-| `kuno-workflow-onboard-skills/templates/skills/trellis-workflow/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-workflow/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/trellis-channel/SKILL.md` | `/Users/lusonglin/.agent/skills/trellis-channel/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/project-validation/SKILL.md` | `/Users/lusonglin/.agent/skills/project-validation/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/gherkin-bdd/SKILL.md` | `/Users/lusonglin/.agent/skills/gherkin-bdd/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/lessons-record/SKILL.md` | `/Users/lusonglin/.agent/skills/lessons-record/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/book-refactoring-pass/SKILL.md` | `/Users/lusonglin/.agent/skills/book-refactoring-pass/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/book-legacy-change-safety/SKILL.md` | `/Users/lusonglin/.agent/skills/book-legacy-change-safety/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/book-ddd-distilled-modeling/SKILL.md` | `/Users/lusonglin/.agent/skills/book-ddd-distilled-modeling/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/book-ddia-data-design/SKILL.md` | `/Users/lusonglin/.agent/skills/book-ddia-data-design/SKILL.md` |
-| `kuno-workflow-onboard-skills/templates/skills/book-release-readiness/SKILL.md` | `/Users/lusonglin/.agent/skills/book-release-readiness/SKILL.md` |
+| `kuno-workflow-onboard-skills/templates/skills/trellis-workflow/` | `/Users/lusonglin/.agent/skills/trellis-workflow/` |
+| `kuno-workflow-onboard-skills/templates/skills/trellis-channel/` | `/Users/lusonglin/.agent/skills/trellis-channel/` |
+| `kuno-workflow-onboard-skills/templates/skills/project-validation/` | `/Users/lusonglin/.agent/skills/project-validation/` |
+| `kuno-workflow-onboard-skills/templates/skills/gherkin-bdd/` | `/Users/lusonglin/.agent/skills/gherkin-bdd/` |
+| `kuno-workflow-onboard-skills/templates/skills/maestro-mobile-e2e/` | `/Users/lusonglin/.agent/skills/maestro-mobile-e2e/` |
+| `kuno-workflow-onboard-skills/templates/skills/lessons-record/` | `/Users/lusonglin/.agent/skills/lessons-record/` |
+| `kuno-workflow-onboard-skills/templates/skills/book-refactoring-pass/` | `/Users/lusonglin/.agent/skills/book-refactoring-pass/` |
+| `kuno-workflow-onboard-skills/templates/skills/book-legacy-change-safety/` | `/Users/lusonglin/.agent/skills/book-legacy-change-safety/` |
+| `kuno-workflow-onboard-skills/templates/skills/book-ddd-distilled-modeling/` | `/Users/lusonglin/.agent/skills/book-ddd-distilled-modeling/` |
+| `kuno-workflow-onboard-skills/templates/skills/book-ddia-data-design/` | `/Users/lusonglin/.agent/skills/book-ddia-data-design/` |
+| `kuno-workflow-onboard-skills/templates/skills/book-release-readiness/` | `/Users/lusonglin/.agent/skills/book-release-readiness/` |
 
 同步要求：
 
-1. 先读取源文件，确认路径正确。
-2. 将源文件复制到对应本地目标路径。
-3. 使用 `cmp -s` 或等价方式确认源文件与目标文件一致。
+1. 先读取源文件 / 目录，确认路径正确。
+2. 文件目标按文件复制；Skill 目录目标必须复制整个目录，包括 `SKILL.md`、`references/`、`scripts/`、`assets/` 等子内容。
+3. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致。
 4. 在最终输出中说明已同步的文件和校验结果。
 
 不要同步：
@@ -102,7 +103,7 @@ Codex 每日版本检查自动化必须遵守：
    - `kuno-workflow-onboard-skills/scripts/onboard.py`
    - `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md`
    - `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`
-   - `kuno-workflow-onboard-skills/templates/skills/**/SKILL.md`
+   - `kuno-workflow-onboard-skills/templates/skills/**`
 7. 如果 release 改动影响某个工具的使用边界、命令建议、配置禁用项、兼容性风险或迁移步骤，即使本仓库没有对应模板文件，也要最小化更新相关 AGENTS 或 Skill 规则。
 8. 由 release 触发的 AGENTS 或 Skill 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。只有当规则本身必须表达明确兼容边界时，才允许写最低/最高版本要求。
 9. 除非用户手动输入 `更新` 或 `update`，否则不要把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`。
