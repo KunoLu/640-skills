@@ -40,7 +40,9 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 7. 输出需求确认摘要、PRD / design / implement review gate 或 `task.py start` 前，必须说明 `grill-with-docs` 使用状态；未完整调用时，说明原因并询问用户是否需要先用该 Skill 再评估一次。
 8. 用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
 9. PRD 确认后，再使用 `to-issues` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
-10. 最后按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
+10. 运行 PRD convergence pass 后，再按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
+
+PRD convergence pass 必须是无损整理：把临时 brainstorm 小节、已解决问题、重复事实和并列 bug / requirement 列表合并进稳定的 goal、requirements、technical notes、acceptance criteria 或 out-of-scope；不得丢弃已有需求、证据、严重性、验收标准或用户明确范围决定。
 
 如果需求只是通用方案质询、没有项目文档或领域术语约束，可使用 `grill-me` 替代 `grill-with-docs`。
 
@@ -155,8 +157,11 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 - `prd.md`：需求、约束、验收标准
 - `design.md`：技术设计
 - `implement.md`：实现计划
+- `implement.jsonl` / `check.jsonl`：面向 sub-agent-capable 平台的实现 / 检查上下文清单
 
 当前任务产物优先于通用假设。
+
+如果当前 workflow 或平台会分发到 sub-agent-capable worker，`implement.jsonl` 和 `check.jsonl` 在 `task.py start` 或开始分发前必须包含真实 spec / research / task artifact 条目；初始化时的 seed / `_example` 行不算可用上下文。清单缺少真实条目时，先在 planning 阶段补齐或明确转为 inline workflow，不要把 seed-only task 当成 implementation-ready。
 
 `.trellis/spec` 只保存长期项目规则。
 
@@ -195,6 +200,9 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 - 当 Trellis 新增或重命名 AI 平台时，复核生成的 commands、skills、agents、shared skills 目录和项目 `.gitignore` / 提交策略；不要把可复用的平台模板目录、runtime 日志和本地缓存混为一类。
 - 对 agent-capable 但没有 session-start / per-turn hooks 的平台，更新后必须确认仍有显式的 workflow 启动入口，例如 `trellis-start` skill 或 `/trellis:start` command；不要仅因为平台支持 agent 就假设启动上下文会自动注入。
 - 对同时支持 CLI agent hooks 和 IDE hook 文件的平台，更新后分别复核主会话 agent、sub-agent、per-turn prompt hook、session-start hook 和 workflow resource 注入；不要只检查 sub-agent hook 或只检查 IDE 配置。
+- 对使用 pull-based sub-agent prelude 的 class-2 平台，implement / check 分发必须保留在 pull-based 路由中；不要把这类平台归入 hook auto-handles 分支。更新后复核对应 agent 定义仍会主动读取 task artifacts、`implement.jsonl` / `check.jsonl` 和 active task。
+- 当 Trellis 新增平台支持时，复核 `init` / `update` / `uninstall` 涉及的 commands、skills、agents、hooks、settings 或等价配置是否成套管理；如果主会话 hooks 和 sub-agent context loading 采用不同机制，两条路径都要验证。
+- 对 Pi 这类 session-start 只能通知、不能直接注入模型上下文的平台，更新后必须确认启动上下文仍有有效注入路径和手动 fallback，例如 agent-start 扩展注入、start prompt、agent tools frontmatter、工具名大小写规范等；不要只检查 `session_start` 配置是否存在。
 - 对可选平台 hooks、statusline 或状态栏类增强，不要假设 `trellis update` 会强制安装、删除或改写；只有在用户选择对应 init/update flag、项目已有配置或 manifest 明确要求时才启用，并复核生成 diff。
 - 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
 - 当 Trellis 更新涉及 workflow phase、step 编号、状态路由或 resume / continue 行为时，更新后必须复核生成的 workflow、`/continue` 命令、workflow variants、bundled skill 参考和平台 prompt 是否仍与 `.trellis/workflow.md` 对齐；不要只检查带 `Phase X.Y` 字样的引用，也要检查裸编号路由。

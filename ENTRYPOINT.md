@@ -13,8 +13,8 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.142.0 | stable-only | 是 | 核心 Coding Agent |
-| Trellis | mindfold-ai/trellis | v0.6.4 | stable-only | 是 | 复杂任务编排 / TDD workflow |
+| Codex | openai/codex | v0.142.2 | stable-only | 是 | 核心 Coding Agent |
+| Trellis | mindfold-ai/trellis | v0.6.5 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.8 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.61.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
@@ -207,7 +207,7 @@ handoff
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.6.4 |
+| 当前关注版本 | v0.6.5 |
 | 当前定位 | 复杂任务编排 / 多阶段任务 / TDD workflow |
 | 启用条件 | 存在 Trellis 强证据，或任务复杂度需要 Trellis |
 | Native Workflow | 普通功能开发、文档修改、小型 bug 修复、工具配置调整 |
@@ -308,8 +308,8 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.142.0 |
-| Agent Harness | Trellis | v0.6.4 |
+| Coding Agent | Codex | v0.142.2 |
+| Agent Harness | Trellis | v0.6.5 |
 | 代码理解 | GitNexus | v1.6.8 |
 | Web 诊断 | Chrome DevTools MCP | latest |
 | Web 回归测试 | Playwright | v1.61.1 |

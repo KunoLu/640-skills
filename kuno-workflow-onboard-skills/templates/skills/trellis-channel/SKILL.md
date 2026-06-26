@@ -200,6 +200,15 @@ Validation Channel 用于验证计划、覆盖率审查和独立复核，不替�
 - 潜在资源风险
 - 是否已清理 worker
 
+## Windows Worker Spawn
+
+在 Windows 上运行 Channel worker 时，npm CLI 可能通过 `.cmd` shim 暴露实际 provider 可执行文件。若 `trellis channel spawn`、`run` 或 supervisor 启动失败，并出现 `.cmd`、`.exe`、`spawn`、`ENOENT`、`EACCES`、provider path 或 shell 执行相关错误：
+
+- 先确认 Trellis CLI 已升级，并在项目中运行 `trellis update` 以刷新 Channel runtime / agent 定义。
+- 复核 provider CLI 本身可直接执行，例如 `codex --version` 或 `claude --version`，并记录 PATH 中解析到的实际可执行文件。
+- 不要为了绕过 `.cmd` shim 问题而把 worker 启动改成任意 `shell: true` 或手写 shell wrapper；优先使用 Trellis 已提供的可 spawn executable 解析能力。
+- 如果仍失败，把 provider、Trellis 版本、PATH 解析结果、spawn 错误和 worker config 记录到 task artifacts 或 Channel check summary，再决定是否降级为 inline review / validation。
+
 ---
 
 ## Message Routing
