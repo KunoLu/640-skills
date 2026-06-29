@@ -207,7 +207,7 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 - 设计阶段：涉及存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流时，`grill-with-docs` / `to-prd` → `book-ddia-data-design` → `design.md` / `implement.md` → Trellis / `tdd` / GitNexus impact-analysis。
 - 开发前 / 开发中：结构性阻碍当前实现或 review 需要判断是否先重构时，代码阅读 / `codebase-design` / GitNexus exploring → `book-refactoring-pass` → Codex implementation → 项目验证。
 - 遗留 bug 修复：目标代码测试不足、行为不清或隐藏依赖较多时，`diagnosing-bugs` → `book-legacy-change-safety` → `tdd` / characterization test → Codex fix → 项目验证。
-- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 Chrome DevTools MCP / Playwright / Maestro / `web-ui-autotest-generator` gate；如仍有高风险 review 缺口，再进入 Channel preflight。
+- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 Chrome DevTools MCP / Playwright / Maestro / `web-ui-autotest-generator` gate；如涉及公开网站、落地页、文档站、产品页或营销页的搜索可见性，再按 `seo-geo` gate 检查 SEO/GEO；如仍有高风险 review 缺口，再进入 Channel preflight。
 
 同一任务不要默认全量调用 5 个 book-derived Skill；按当前主风险选择最相关的 1-2 个。只有任务横跨需求建模、数据设计、遗留代码和生产发布多个风险面时，才分阶段调用多个。
 
@@ -358,6 +358,33 @@ Maestro flow 是可入库测试资产，不是 Maestro CLI 运行产物。只有
 - 最终输出或 Trellis check summary 中必须报告三个 JSON 的实际路径；将 `Web UI 测试资产` 标记为 `generated` / `coverage-only` 前，先确认根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 
 `web-ui-autotest-generator` 不替代 Playwright CLI。它只负责生成和审计 repo-resident Playwright 测试资产，执行底座仍是项目内 Playwright CLI。
+
+---
+
+## SEO / GEO 发布检查
+
+`seo-geo` 是公开 Web 资产的可选搜索可见性专项 Skill，不替代项目原生验证、Chrome DevTools MCP、Playwright CLI、发布检查或人工内容评审。
+
+启用条件：
+
+- 用户明确要求 SEO、GEO、AI search visibility、ChatGPT / Perplexity / Google AI Overview 可见性、schema、JSON-LD、meta tags、robots.txt、sitemap.xml、canonical 或关键词研究。
+- 当前变更影响公开网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面。
+- 发布前验收标准明确包含搜索引擎、AI 搜索引用、社交分享预览、结构化数据或 crawl/indexing 检查。
+
+跳过条件：
+
+- 内部后台、登录后页面、API、CLI、移动 App、纯后端、测试资产、文档内部重排或无公开 URL 的一次性 UI 调整。
+- 只需要 Web 运行时诊断、截图、console / network 证据或 Playwright 回归。
+- `seo-geo` Skill 未安装且当前任务不以搜索可见性为主要目标；跳过时报告具体原因。
+
+执行约束：
+
+- 优先确认目标 URL、preview URL、生产 / staging 环境、是否允许抓取、是否已有 sitemap / robots / schema 约定。
+- 没有公网 URL 或 preview URL 时，只做源码 / HTML 静态检查；最终报告 `SEO/GEO: static-only` 或 `blocked`，不要声称线上 SEO/GEO 已验证。
+- 基础 audit 不要求 DataForSEO；DataForSEO 只作为关键词、SERP、backlink、domain overview 等增强分析的可选凭据。
+- 需要当前搜索结果、关键词量、AI 搜索可见性或平台抓取规则时，必须使用当前可用来源核对；不要依赖陈旧常识。
+- 不得把 DataForSEO login / password、Search Console 数据、付费报告、真实账号、密钥、PII 或生产敏感 URL 写入仓库、日志、截图、测试或正式报告。
+- 最终输出或 Trellis check summary 必须报告 `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`。
 
 ---
 

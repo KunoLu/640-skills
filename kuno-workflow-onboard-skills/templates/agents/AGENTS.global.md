@@ -133,6 +133,7 @@ Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MC
 - `Run Summary MD`: `generated` / `blocked` / `not-needed`
 - `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`
 - `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`
+- `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`
 
 跨仓、mock 与报告规则：
 
@@ -222,6 +223,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
 | `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确初稿方向后按条件前置 `shape` / `craft`，或实现后的 `audit` / `critique` / `polish` 阶段；仅在 Skill 可用且上下文可用时 |
 | `web-ui-autotest-generator` | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 | 用户明确要求生成 Web UI 自动化测试，或测试阶段发现关键 Web UI 回归路径需要固化为仓库内可维护测试资产时 |
+| `seo-geo` | 公开网站 / 落地页 / 文档站 SEO 与 GEO 可见性专项检查 | 用户明确要求 SEO、GEO、AI search visibility、schema、meta tags、robots / sitemap 或公开 Web 发布前搜索可见性检查时；仅在 Skill 可用时 |
 | `React Bits Pro Skill` | React / shadcn UI 项目中接入 React Bits Pro components、blocks 或 landing page sections | 前端 UI 开发任务明确需要 React Bits Pro，且技术栈、registry、项目内 Skill 和可读取 license key 条件均满足时 |
 
 ### 自定义 Skills 使用边界
@@ -230,6 +232,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
 - `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。机器可读 JSON 资产默认沉淀到 `tests/e2e/manifest/`，正式 Web E2E 报告和 Markdown 汇总默认进入 `tests/e2e/reports/`，具体执行、参数路径和验证策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
+- `seo-geo`：仅在公开 Web 资产需要搜索可见性检查时调用，包括网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面。普通内部 UI、API、CLI、移动 App、后台管理页、一次性浏览器诊断或纯 Web 回归不要触发 `seo-geo`。基础页面 audit、meta / schema / robots / sitemap 检查不要求 DataForSEO；DataForSEO 账号只作为关键词、SERP、backlink、domain overview 等增强分析的可选凭据。没有公网 URL 或 preview URL 时，只能做源码 / HTML 静态检查并将 `SEO/GEO` 标记为 `static-only` 或 `blocked`，不能声称线上 SEO/GEO 已验证。关键词、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须通过当前可用来源核对；不要把外部账号、API login / password、真实搜索控制台数据或付费报告写入仓库、测试、日志、截图或报告。
 - `maestro-mobile-e2e`：仅在 Mobile / Hybrid E2E 需要生成、维护或执行 Maestro flow，或 Maestro iOS 真机运行出现 driver / transport / view hierarchy / tap crash 等排障信号时调用。BDD `.feature` 仍是行为 source of truth；Maestro flow 默认沉淀到 `maestro/flow/`，平台差异明显时可拆到 `maestro/flow/ios/` 和 `maestro/flow/android/`；最终正式 report 和 Markdown 汇总默认进入 `.maestro/reports/`；已知问题 lesson 必须按标签 / 关键字懒加载，不预先套用临时补丁。
 - `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。前后端分仓、跨服务、Mobile + API 或 Hybrid 链路必须先确认 contract、环境、账号、数据、设备和选择器事实；缺关键事实时标记 blocked 或 `@todo`，不要把猜测写成 source of truth。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、Playwright、Maestro 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
 - `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。

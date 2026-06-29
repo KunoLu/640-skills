@@ -29,7 +29,7 @@
 
 - 工作流主线、工具职责边界或最终验证工具栈。
 - SDD、BDD、TDD、DDD 或 SBTD 的定义、触发条件、产物位置或协作顺序。
-- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP 或 `web-ui-autotest-generator` 的检测、安装、fallback、报告状态或使用时机。
+- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、`web-ui-autotest-generator` 或 `seo-geo` 的检测、安装、fallback、报告状态或使用时机。
 - `kuno-workflow-onboard-skills/scripts/onboard.py` 的 init、reset、安装或检查行为。
 - 模板 `.gitignore`、同步路径、AGENTS 模板路径、Skill 模板路径或用户可见文档入口。
 

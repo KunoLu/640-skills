@@ -6,7 +6,7 @@
 Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 ```
 
-其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
+其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`seo-geo` 是公开网站、落地页、文档站和营销页的可选 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
 
 ## 仓库定位
 
@@ -52,6 +52,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
 - AGENTS 模板只承载常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；详细流程、命令参数、检查清单和专项判断优先放入对应 Skill 延迟加载。
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。
+- SEO/GEO 只面向公开 Web 搜索可见性，不替代 Web 运行时诊断、Playwright 回归、发布检查或人工内容评审。
 - 跨仓或链路不完整时，mock 只能基于 contract、schema、真实响应样例、既有 fixture 或用户明确确认；mock-backed 不能冒充 full-stack 通过。
 - API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；最后一次计划范围内全量通过后，才生成一份正式原生报告和同目录同 stem 的 Markdown 汇总。
 - 任何工具不可用时，要标记 `blocked`、`skipped` 或 `not-needed`，不能声称对应验证已通过。
@@ -84,6 +85,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | Maestro CLI | Android、iOS、React Native、Flutter、Hybrid App E2E，以及可选 Chromium Web smoke。 | 不作为 Web 回归主责；Web 只做 smoke。 |
 | Maestro MCP | 依赖 `maestro mcp` 的增强入口，用于设备检查、view hierarchy、截图和 flow 辅助。 | 不单独替代 Maestro CLI。 |
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
+| `seo-geo` | 公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。 | 不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。 |
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
 
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
@@ -196,6 +198,31 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 
 失败分析 `ui-test-repair-plan.json` 是运行产物，不是稳定测试资产；如生成，默认放到 `tests/e2e/manifest/ui-test-repair-plan.json` 并通过 `.gitignore` 忽略。验证或 Trellis check 收尾时，必须确认三个可入库 JSON 位于 `tests/e2e/manifest/`，且项目根目录没有残留同名 JSON。
 
+## `seo-geo` 使用边界
+
+`seo-geo` 只在公开 Web 资产需要搜索可见性检查时启用。
+
+适用场景：
+
+- 用户明确要求 SEO、GEO、AI search visibility、ChatGPT / Perplexity / Google AI Overview 可见性、schema、JSON-LD、meta tags、robots.txt、sitemap.xml、canonical 或关键词研究。
+- 当前变更影响公开网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面。
+- 发布前验收标准明确包含搜索引擎、AI 搜索引用、社交分享预览、结构化数据或 crawl / indexing 检查。
+
+不适用场景：
+
+- 内部后台、登录后页面、API、CLI、移动 App、纯后端、测试资产、文档内部重排或无公开 URL 的一次性 UI 调整。
+- 只需要 Web 运行时诊断、截图、console / network 证据或 Playwright 回归。
+- `seo-geo` Skill 未安装且当前任务不以搜索可见性为主要目标。
+
+执行和报告规则：
+
+- 优先确认目标 URL、preview URL、生产 / staging 环境、是否允许抓取、是否已有 sitemap / robots / schema 约定。
+- 没有公网 URL 或 preview URL 时，只做源码 / HTML 静态检查；最终报告 `SEO/GEO: static-only` 或 `blocked`，不能声称线上 SEO/GEO 已验证。
+- 基础 audit 不要求 DataForSEO；DataForSEO login / password 只作为关键词、SERP、backlink、domain overview 等增强分析的可选凭据。
+- 关键词量、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须用当前可用来源核对。
+- 不得把 DataForSEO login / password、Search Console 数据、付费报告、真实账号、密钥、PII 或生产敏感 URL 写入仓库、日志、截图、测试或正式报告。
+- 最终输出或 Trellis check summary 必须报告 `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`。
+
 ## 跨仓测试模式和报告闭环
 
 API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时，先选择测试模式：
@@ -232,6 +259,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 | Web 诊断 | Chrome DevTools MCP | 需要真实浏览器现场证据 | `diagnosed` / `inspected` / `blocked` / `skipped` / `not-needed` |
 | Web 回归 | Playwright CLI | Web UI、路由、表单、权限、跨页面流程、API 集成、浏览器兼容 | `Playwright Web Tests`: `run` / `failed` / `blocked` / `skipped` |
 | Web 测试资产 | `web-ui-autotest-generator` | 需要把 Web UI 回归固化入仓库 | `generated` / `coverage-only` / `blocked` / `skipped` |
+| SEO/GEO | `seo-geo` | 公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 或 AI 搜索引用检查 | `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed` |
 | Mobile / Hybrid E2E | Java 17+、Maestro CLI、Maestro MCP | Android、iOS、RN、Flutter、Hybrid App 用户旅程 | `Maestro Mobile`: `run-local` / `run-cloud` / `blocked` / `skipped` / `not-needed` |
 | 发布风险 | `book-release-readiness`、Channel preflight | 生产路径、外部集成、部署敏感或高风险变更 | 记录风险、fallback、rollback |
 
@@ -259,6 +287,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - `Run Summary MD`: `generated` / `blocked` / `not-needed`
 - `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`
 - `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`
+- `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`
 
 ## 模板 `.gitignore` 测试产物策略
 
@@ -305,7 +334,7 @@ tests/e2e/**/*.trace.zip
 - Playwright MCP 手动配置检查。
 - Playwright CLI 项目级检测和安装引导。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导。
-- `web-ui-autotest-generator`、`ui-ux-pro-max`、`impeccable` 等可选 Skill 的存在性检查。
+- `web-ui-autotest-generator`、`seo-geo`、`ui-ux-pro-max`、`impeccable` 等可选 Skill 的存在性检查。
 
 MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检查和配置指引。CLI 安装必须遵循用户确认和 fallback 规则。
 
@@ -330,7 +359,7 @@ MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检�
 
 - 工作流主线、工具职责或边界发生变化。
 - SDD、BDD、TDD、DDD 或 SBTD 的定义、触发条件、产物位置发生变化。
-- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP 或 `web-ui-autotest-generator` 的检测、安装、fallback 或报告状态发生变化。
+- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、`web-ui-autotest-generator` 或 `seo-geo` 的检测、安装、fallback 或报告状态发生变化。
 - `kuno-workflow-onboard-skills/scripts/onboard.py` 的 init、reset、安装或检查行为发生变化。
 - 模板 `.gitignore`、同步路径、AGENTS 模板路径或 Skill 模板路径发生用户可见变化。
 - 最终验证阶段的工具栈或报告格式发生变化。

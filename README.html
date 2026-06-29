@@ -340,13 +340,14 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>Kuno Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，跨仓或链路不完整时先确认 contract、环境、账号、数据、设备和选择器事实。</p>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，公开网站、落地页和文档站按需进入 <code>seo-geo</code> 搜索可见性检查。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
           <span class="pill">TDD</span>
           <span class="pill">DDD</span>
           <span class="pill">Web + Mobile 验证</span>
+          <span class="pill">SEO / GEO</span>
         </div>
       </div>
       <aside class="hero-map" aria-label="工具职责概览">
@@ -366,6 +367,10 @@
           <div class="map-cell">
             <strong>Maestro</strong>
             <span>负责 Android、iOS、RN、Flutter、Hybrid App E2E；flow 资产落到 maestro/flow。</span>
+          </div>
+          <div class="map-cell">
+            <strong>seo-geo</strong>
+            <span>公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 检查时才启用。</span>
           </div>
         </div>
       </aside>
@@ -387,7 +392,7 @@
           <div class="step"><b>2. SBTD</b><span>规格、行为、测试、领域语言对齐。</span></div>
           <div class="step"><b>3. 影响</b><span>GitNexus 可用时做影响分析。</span></div>
           <div class="step"><b>4. 实现</b><span>按项目规范和 Skill 边界改动。</span></div>
-          <div class="step"><b>5. 验证</b><span>项目测试、BDD、Web、Mobile。</span></div>
+          <div class="step"><b>5. 验证</b><span>项目测试、BDD、Web、Mobile、SEO/GEO。</span></div>
           <div class="step"><b>6. 风险</b><span>发布就绪、Channel preflight、剩余风险。</span></div>
           <div class="step"><b>7. 同步</b><span>仅在用户输入 sync / 同步时写入本地生效路径。</span></div>
         </div>
@@ -435,7 +440,7 @@
             <p class="eyebrow">Boundaries</p>
             <h2>工具职责边界</h2>
           </div>
-          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP 和 <code>web-ui-autotest-generator</code> 不互相替代。模板要求在最终输出中显式报告相关状态，避免把诊断、探索和可重复测试混在一起。</p>
+          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。模板要求在最终输出中显式报告相关状态，避免把诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
         </div>
         <table>
           <thead>
@@ -477,6 +482,11 @@
               <td>执行底座仍是项目内 Playwright CLI。</td>
             </tr>
             <tr>
+              <td>seo-geo</td>
+              <td>公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。</td>
+              <td>不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。</td>
+            </tr>
+            <tr>
               <td>maestro-mobile-e2e</td>
               <td>从 BDD 场景生成和维护 repo-resident Maestro Mobile / Hybrid flow，并约束报告路径。</td>
               <td>不替代 BDD、项目验证或 Maestro CLI。</td>
@@ -516,6 +526,10 @@
             <h3>测试资产</h3>
             <p>只有需要把 Web UI 回归固化进仓库时，才调用 <code>web-ui-autotest-generator</code>。</p>
           </article>
+          <article class="panel accent-green">
+            <h3>SEO / GEO</h3>
+            <p>公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 或 AI 搜索引用检查时，才调用 <code>seo-geo</code>。</p>
+          </article>
           <article class="panel accent-violet">
             <h3>发布风险</h3>
             <p>生产路径、外部集成和部署敏感变更进入 release-readiness；高风险 review 可做 Channel preflight。</p>
@@ -542,6 +556,25 @@
         <pre><code>generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty
 audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pretty
 check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">SEO / GEO</p>
+            <h2>公开 Web 搜索可见性检查</h2>
+          </div>
+          <p><code>seo-geo</code> 是可选外部 Skill，只在公开网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面需要搜索可见性检查时启用。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>启用条件</strong><br>用户要求 SEO、GEO、AI search visibility、schema、JSON-LD、meta tags、robots.txt、sitemap.xml、canonical、关键词研究或发布前 crawl / indexing 检查。</div>
+          <div><strong>跳过条件</strong><br>内部后台、登录后页面、API、CLI、移动 App、纯后端、测试资产、文档内部重排或只需要 Web 运行时诊断 / Playwright 回归。</div>
+          <div><strong>URL Gate</strong><br>没有公网 URL 或 preview URL 时，只做源码 / HTML 静态检查；报告 <code>SEO/GEO: static-only</code> 或 <code>blocked</code>。</div>
+          <div><strong>Credentials</strong><br>基础 audit 不要求 DataForSEO；DataForSEO login / password 只作为关键词、SERP、backlink、domain overview 增强分析的可选凭据，不能写入仓库或报告。</div>
+        </div>
+        <p>关键词量、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须用当前可用来源核对。最终输出或 Trellis check summary 必须报告 <code>SEO/GEO</code>: <code>audited</code> / <code>static-only</code> / <code>blocked</code> / <code>skipped</code> / <code>not-needed</code>。</p>
       </div>
     </section>
 
@@ -598,6 +631,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。默认引导安装 OpenJDK Temurin 21 最新 JDK；用户指定版本必须大于等于 17。</div>
           <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集。</div>
+          <div><strong>seo-geo</strong><br>作为 referenced external Skill 检查存在性；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
           <div><strong>状态报告</strong><br>最终输出要列明各工具是 run、blocked、skipped、not-needed、available、installed 或对应模板状态。</div>
         </div>
       </div>
@@ -685,7 +719,7 @@ tests/e2e/**/*.trace.zip
 
   <footer>
     <div class="wrap">
-      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用。</p>
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，<code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用。</p>
     </div>
   </footer>
 </body>

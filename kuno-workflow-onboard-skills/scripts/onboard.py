@@ -96,6 +96,7 @@ REFERENCED_SKILLS = (
     "ui-ux-pro-max",
     "impeccable",
     "web-ui-autotest-generator",
+    "seo-geo",
 )
 MATTPOCOCK_REPO = "https://github.com/mattpocock/skills.git"
 MATTPOCOCK_SKILL_SUBPATHS = {
@@ -130,6 +131,10 @@ EXTERNAL_SKILL_SOURCES = {
     "web-ui-autotest-generator": {
         "repo": "https://github.com/Cheryl-station/web-ui-autotest.git",
         "aliases": ("web-ui-autotest-generator", "web-ui-autotest"),
+    },
+    "seo-geo": {
+        "repo": "https://github.com/ReScienceLab/opc-skills.git",
+        "aliases": ("seo-geo",),
     },
 }
 EXTERNAL_REPO_TO_SKILLS: dict[str, tuple[str, ...]] = {}

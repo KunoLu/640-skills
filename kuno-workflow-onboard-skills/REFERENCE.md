@@ -68,7 +68,7 @@ The check reports:
 - Maestro CLI availability and version output when Java 17+ is available.
 - Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, and bundled book-derived skills.
-- Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, and `web-ui-autotest-generator`.
+- Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `seo-geo`.
 - Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
@@ -372,6 +372,7 @@ Referenced external skills are not bundled under `templates/`. When the user con
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `web-ui-autotest-generator` | `https://github.com/Cheryl-station/web-ui-autotest.git` |
+| `seo-geo` | `https://github.com/ReScienceLab/opc-skills.git` |
 
 Install approved missing external skills with:
 
@@ -383,6 +384,8 @@ python scripts/onboard.py install-external-skills \
 ```
 
 Legacy input names are handled deliberately: `diagnose` is normalized to `diagnosing-bugs`, `write-a-skill` is normalized to `writing-great-skills`, and removed `zoom-out` is rejected with a migration note. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
+
+`seo-geo` is an optional public Web visibility Skill. Basic SEO/GEO audit does not require DataForSEO credentials; DataForSEO login/password only unlock enhanced keyword, SERP, backlink, and domain overview analysis. Treat those credentials and any paid search data as secrets and never write them to repositories, logs, screenshots, tests, or reports.
 
 Install all known external referenced skills:
 

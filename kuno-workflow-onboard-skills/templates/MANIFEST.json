@@ -96,6 +96,12 @@
         "web-ui-autotest-generator"
       ],
       "repository": "https://github.com/Cheryl-station/web-ui-autotest.git"
+    },
+    {
+      "skills": [
+        "seo-geo"
+      ],
+      "repository": "https://github.com/ReScienceLab/opc-skills.git"
     }
   ],
   "toolRepositories": [
