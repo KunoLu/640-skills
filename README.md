@@ -6,7 +6,7 @@
 Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 ```
 
-其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。
+其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
 
 ## 仓库定位
 
@@ -52,6 +52,8 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
 - AGENTS 模板只承载常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；详细流程、命令参数、检查清单和专项判断优先放入对应 Skill 延迟加载。
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。
+- 跨仓或链路不完整时，mock 只能基于 contract、schema、真实响应样例、既有 fixture 或用户明确确认；mock-backed 不能冒充 full-stack 通过。
+- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；最后一次计划范围内全量通过后，才生成一份正式原生报告和同目录同 stem 的 Markdown 汇总。
 - 任何工具不可用时，要标记 `blocked`、`skipped` 或 `not-needed`，不能声称对应验证已通过。
 
 ## SBTD：SDD、BDD、TDD、DDD
@@ -61,7 +63,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | 概念 | 全称 | 在模板中的作用 |
 |---|---|---|
 | SDD | Specification-Driven Development | 用 PRD、design、implement、验收标准和长期规则说明“要做什么、为什么做、怎么验证”。在 Trellis 项目中，对应任务产物和 `.trellis/spec` 的长期规则。 |
-| BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景。 |
+| BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。 |
 | TDD | Test-Driven Development | 对 bug 修复、核心业务逻辑、算法、数据转换、高风险路径和回归敏感模块采用测试先行。BDD 固化可观察行为，TDD 把它转成可执行测试和红绿重构循环。 |
 | DDD | Domain-Driven Design | 在业务术语、规则、bounded context 或模型边界不清时，用统一语言、CONTEXT、ADR 和 `book-ddd-distilled-modeling` 降低歧义。 |
 
@@ -104,6 +106,12 @@ Fallback：
 - 可使用 Playwright MCP 做页面探索、可访问性快照或 locator 辅助。
 - 不能声称 Web E2E 或回归测试已通过。
 
+Web E2E 报告规则：
+
+- 完整环境可用时跑 full-stack Playwright E2E；只有 contract 或 mock 环境时标记 `contract-backed` 或 `mock-backed`。
+- 最终正式报告默认写入 `tests/e2e/reports/`，并生成同 stem 的 Markdown 汇总。
+- 调试轮次失败后先重跑失败 spec，再跑受影响子集，最后跑计划范围内全量验证；只有最后全量通过才生成正式报告。
+
 ## Maestro 集成策略
 
 Maestro 面向移动 App 和 Hybrid App E2E。模板不推荐用 Maestro 主做 Web 回归；Web 场景只适合做少量 Chromium smoke，主责仍在 Playwright CLI。
@@ -130,13 +138,19 @@ Maestro flow 资产和报告规则：
 - 需要从 Mobile / Hybrid BDD 场景生成或维护 Maestro flow 时，调用 `maestro-mobile-e2e`。
 - Flow 固定写入 `maestro/flow/`，使用 `.yml` 扩展名。
 - 文件名和 YAML `name` 使用英文业务场景名；文件名使用 lower-kebab-case，例如 `maestro/flow/login-success.yml`。
+- iOS 和 Android 需要明显不同 flow 时，可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；平台 smoke 可使用 `maestro/flow/ios/smoke.yml` 和 `maestro/flow/android/smoke.yml`。
 - 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
-- 每个 flow 必须追踪到源 `.feature` 路径和场景名称。
-- Maestro CLI 生成的 JUnit / HTML report 固定写入项目根目录 `.maestro/reports/`。
-- JUnit report 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`。
-- HTML report 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- 每个 flow 必须追踪到源 `.feature` 路径、场景名称、平台范围和测试模式。
+- Maestro CLI 最终正式 report 固定写入项目根目录 `.maestro/reports/`。
+- 报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的 `.md` 运行汇总。
 - Maestro 官方默认运行 artifacts 仍在用户 home 下的 `~/.maestro/tests`；它不是仓库内测试资产。
 - iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，`maestro-mobile-e2e` 按标签 / 关键字懒加载对应 lesson；未命中时不预先套用临时补丁。
+
+移动端上下文 gate：
+
+- 生成或运行 flow 前确认平台、app artifact、bundleId / appId、设备 / 模拟器 / 云测、后端依赖、base URL / launch args / deep link、账号、数据、权限、稳定 selector 和系统 UI。
+- 缺少关键事实时，`Maestro Flow Assets` 标记 `blocked`，不生成脆弱 flow。
+- contract-backed 或 app-mocked flow 只能证明对应 contract / mock 假设成立，不能报告为 full-stack Mobile E2E 通过。
 
 ## Chrome DevTools MCP 和 Playwright MCP
 
@@ -182,6 +196,29 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 
 失败分析 `ui-test-repair-plan.json` 是运行产物，不是稳定测试资产；如生成，默认放到 `tests/e2e/manifest/ui-test-repair-plan.json` 并通过 `.gitignore` 忽略。验证或 Trellis check 收尾时，必须确认三个可入库 JSON 位于 `tests/e2e/manifest/`，且项目根目录没有残留同名 JSON。
 
+## 跨仓测试模式和报告闭环
+
+API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时，先选择测试模式：
+
+| 模式 | 含义 | 报告边界 |
+|---|---|---|
+| `full-stack` | 真实前后端 / app / 环境 / 数据可用。 | 可报告完整链路通过。 |
+| `contract-backed` | 完整链路不可用，但有可靠 API contract、schema、fixture 或真实响应样例。 | 只证明符合 contract。 |
+| `mock-backed` / `app-mocked` | 使用 mock backend、fixture、launch args 或 app test mode。 | 只证明 mock 假设下的客户端 / app 行为。 |
+| `backend-only` | 只验证 API provider 或服务端集成。 | 不等于 Web / Mobile E2E。 |
+| `smoke-only` | 只验证启动、登录页、主导航等低依赖路径。 | 不等于完整回归。 |
+| `blocked` | contract、环境、账号、数据、设备、artifact 或 selector 缺失。 | 不生成通过报告。 |
+
+正式报告和 Markdown 汇总：
+
+- API / integration 默认目录：`tests/api/reports/`。
+- Web E2E 默认目录：`tests/e2e/reports/`。
+- Maestro 默认目录：`.maestro/reports/`。
+- 调试轮次不沉淀多份正式报告；最后一次计划范围内全量通过后，生成一份正式原生报告和一份同目录同 stem 的 `.md` 汇总。
+- `.md` 汇总记录总轮次、每轮命令、失败 case / spec / flow、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险。
+- 失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。
+- 汇总和报告不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
+
 ## 最终验证工具栈
 
 最终验证阶段按以下顺序和风险叠加：
@@ -190,6 +227,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 |---|---|---|---|
 | 项目原生验证 | lint、typecheck、unit、integration、build、项目 README / Makefile / CI 命令 | 修改代码后默认执行可用的最小有效验证 | 记录命令和结果 |
 | BDD 追踪 | `gherkin-bdd`、`.feature`、BDD runner 或测试名追踪 | 新增或修改用户可见行为 | `BDD`: `run` / `traceable` / `blocked` / `skipped` |
+| 跨仓上下文 | contract、环境、账号、数据、设备、selector、app artifact | API / Web / Mobile / Hybrid 链路不完整 | `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing` |
 | GitNexus | MCP 影响分析、变更检测 | GitNexus MCP 可用且项目索引有效 | 成功使用或说明跳过原因 |
 | Web 诊断 | Chrome DevTools MCP | 需要真实浏览器现场证据 | `diagnosed` / `inspected` / `blocked` / `skipped` / `not-needed` |
 | Web 回归 | Playwright CLI | Web UI、路由、表单、权限、跨页面流程、API 集成、浏览器兼容 | `Playwright Web Tests`: `run` / `failed` / `blocked` / `skipped` |
@@ -212,6 +250,15 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 - `Maestro Web Smoke`: `run` / `blocked` / `skipped` / `not-needed`
 - `Maestro Flow Assets`: `generated` / `reused` / `blocked` / `skipped`
 - `Web UI 测试资产`: `generated` / `coverage-only` / `blocked` / `skipped`
+- `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing` / `not-needed`
+- `API Contract`: `verified` / `user-provided` / `stale` / `missing` / `not-needed`
+- `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked` / `not-needed`
+- `Mobile Platform Scope`: `ios` / `android` / `both` / `hybrid` / `not-needed`
+- `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked` / `not-needed`
+- `Final Test Report`: `generated` / `blocked` / `not-supported` / `not-needed`
+- `Run Summary MD`: `generated` / `blocked` / `not-needed`
+- `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`
+- `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`
 
 ## 模板 `.gitignore` 测试产物策略
 
@@ -230,9 +277,8 @@ blob-report/
 
 # Web UI autotest generated run artifacts
 tests/e2e/manifest/ui-test-repair-plan.json
-tests/e2e/reports/results.json
-tests/e2e/reports/junit.xml
-tests/e2e/reports/html/
+tests/api/reports/
+tests/e2e/reports/
 tests/e2e/**/screenshots/
 tests/e2e/**/videos/
 tests/e2e/**/traces/
@@ -246,7 +292,7 @@ tests/e2e/**/*.trace.zip
 .maestro/reports/
 ```
 
-`maestro/flow/*.yml` flow 默认应可入库维护；`.maestro/reports/` 只保存 Maestro JUnit / HTML report 运行产物，默认不入库。Playwright report、trace、video、screenshot 和一次性 repair plan 默认不入库。
+`maestro/flow/*.yml` flow 默认应可入库维护；`tests/api/reports/`、`tests/e2e/reports/` 和 `.maestro/reports/` 只保存最终正式报告、Markdown 汇总和本地 / CI 运行产物，默认不入库。Playwright report、trace、video、screenshot 和一次性 repair plan 默认不入库。
 
 ## onboard / reset 检查范围
 

@@ -117,6 +117,8 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 - 修改已有用户可见功能：补齐或更新相关能力的 BDD 场景。
 - 用户可见 bug 修复：先写描述正确行为的场景，再写失败回归测试，再修复。
 - 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`，但新增或触碰的行为必须补齐。
+- 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先确认 `Cross-repo context`: contract、环境、账号、数据、选择器、设备和 app artifact；缺关键事实时标记 blocked 或 `@todo`，不要把猜测写成 source of truth。
+- mock 只能基于 API contract、schema、真实响应样例、既有 fixture、launch arguments 或用户明确确认；mock-backed / app-mocked / contract-backed 测试不能报告为 full-stack 通过。
 - 如果已有 Gherkin runner，场景应绑定 step definitions 或 runner 测试；没有 runner 时，使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
 - 不默认引入新的 Gherkin runner；只有用户明确要求、项目已有方向或现有测试框架无法表达验收行为时才建议引入。
 - Mobile / Hybrid E2E 场景需要设备级覆盖时，可通过 `maestro-mobile-e2e` 从对应 `.feature` 派生 Maestro flow；`.feature` 仍是行为 source of truth，Maestro flow 是可执行测试资产。
@@ -302,6 +304,11 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要 Web 回归时，先检查项目已有 Playwright 依赖、配置、scripts 和 E2E 目录；未安装时按全局规则询问是否安装到项目 devDependency。
 - 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
+- API、Web E2E、Mobile E2E 或 Hybrid E2E 必须记录 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`，以及 `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`。
+- 调试轮次不沉淀多份正式测试报告；只有最后一次计划范围内全量通过后，生成一份正式原生报告和同目录同 stem 的 Markdown 汇总。API 默认目录 `tests/api/reports/`，Web E2E 默认目录 `tests/e2e/reports/`，Maestro 默认目录 `.maestro/reports/`。
+- 验证失败且修复当前任务范围内问题后，先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。
+- Markdown 汇总必须记录总轮次、每轮失败 case、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险；不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
+- 最终输出或 Trellis check summary 必须报告 `Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
 
@@ -316,10 +323,11 @@ Maestro flow 是可入库测试资产，不是 Maestro CLI 运行产物。只有
 - 默认目录为 `maestro/flow/`。
 - Flow 文件使用 `.yml` 扩展名。
 - 文件名和 YAML `name` 字段使用英文业务场景名；文件名使用 lower-kebab-case，例如 `login-success.yml`。
+- iOS 和 Android 需要明显不同 flow 时，可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；平台 smoke 可使用 `maestro/flow/ios/smoke.yml` 和 `maestro/flow/android/smoke.yml`。
 - 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
-- 每个生成的 flow 必须追踪到源 `.feature` 路径和场景名称。
+- 每个生成的 flow 必须追踪到源 `.feature` 路径、场景名称、平台范围和测试模式。
 - 没有稳定选择器、测试账号、测试环境、设备、app binary、appId / bundleId、数据准备或清理策略时，不强行生成脆弱 flow；标记 `Maestro Flow Assets: blocked` 并说明缺口。
-- Maestro CLI 执行生成 JUnit 或 HTML report 时，默认输出到项目根目录 `.maestro/reports/`；JUnit 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`，HTML 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- Maestro CLI 最终正式报告默认输出到项目根目录 `.maestro/reports/`；报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的 `.md` 运行汇总。
 - iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或已知 Maestro 版本问题时，按 `maestro-mobile-e2e` 的 lesson index 通过标签 / 关键字懒加载对应方案；未命中时不要预先应用临时补丁。
 
 ---
@@ -345,7 +353,8 @@ Maestro flow 是可入库测试资产，不是 Maestro CLI 运行产物。只有
 - 除非更深层项目规则明确指定其他 E2E 资产目录，`web-ui-autotest-generator` 的可入库 JSON 资产必须沉淀到 `tests/e2e/manifest/`；执行内置脚本前，加载 `project-validation` Skill 并使用其中定义的 Web UI 测试资产路径契约。
 - `ui-test-repair-plan.json` 是失败分析运行产物，默认不入库；路径和忽略策略遵循 `project-validation` Skill 与项目 `.gitignore`，除非用户明确要求整理为正式任务或报告。
 - 生成后必须运行可用的项目验证和 Playwright E2E 命令；无法运行时说明尝试命令、阻塞原因、替代检查和剩余风险。
-- 测试代码和必要配置是否提交按项目策略决定；Playwright report、trace、video、screenshot、HTML report 和一次性 repair plan 默认不入库。
+- 最终正式 Web E2E report 和 Markdown 汇总默认进入 `tests/e2e/reports/`；Playwright trace、video、screenshot、HTML report 运行产物和一次性 repair plan 默认不入库。
+- 测试代码和必要配置是否提交按项目策略决定。
 - 最终输出或 Trellis check summary 中必须报告三个 JSON 的实际路径；将 `Web UI 测试资产` 标记为 `generated` / `coverage-only` 前，先确认根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 
 `web-ui-autotest-generator` 不替代 Playwright CLI。它只负责生成和审计 repo-resident Playwright 测试资产，执行底座仍是项目内 Playwright CLI。

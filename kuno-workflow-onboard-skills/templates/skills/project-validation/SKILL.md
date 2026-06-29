@@ -44,6 +44,8 @@ description: Use after code changes to choose and run validation commands for No
 6. 确认每个新增或修改场景都能追踪到自动化测试，追踪方式可以是测试名、注释、目录结构或项目约定。
 7. 无法自动化的场景必须有 `@todo` 或项目等价标记、阻塞原因和临时人工验证说明。
 8. 如果 PRD、`.feature`、测试和代码冲突，先回到规格对齐，不要用验证结果掩盖冲突。
+9. 对前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路，检查是否已记录上下文完整性：`Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`。
+10. 需要 mock 时，确认 mock 行为来自 API contract、schema、真实响应样例、既有 fixture 或用户确认；否则将 `Mock Strategy` 标记为 `blocked`，不要用猜测的 mock 生成测试。
 
 最终输出中必须说明：
 
@@ -51,6 +53,9 @@ description: Use after code changes to choose and run validation commands for No
 - 涉及的 `.feature` 或持久 BDD 规格路径。
 - BDD 语言状态：沿用项目既有风格、默认中文场景文本 + 英文关键词、用户明确覆盖，或 `blocked` 的原因。
 - 运行的 BDD runner 或追踪测试命令。
+- `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`，如不相关则说明 `not-needed`。
+- `API Contract`: `verified` / `user-provided` / `stale` / `missing` / `not-needed`。
+- `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`。
 - 未自动化场景、阻塞原因和剩余风险。
 
 ## Web / Mobile 测试工具 Gate
@@ -60,10 +65,13 @@ description: Use after code changes to choose and run validation commands for No
 本 Skill 只负责验证阶段 gate：
 
 - 先按修改范围选择最小有效验证：项目测试、浏览器诊断、Playwright Web 回归、Maestro 移动 / Hybrid flow、或 Web UI 测试资产覆盖评估。
+- 对 API / Web / Mobile / Hybrid 链路，先判定 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试只能证明对应 contract / mock 假设成立，不能报告为 full-stack 通过。
+- API / integration 测试优先继承项目既有测试框架和报告配置；没有项目约定且需要本轮正式报告时，默认报告目录为 `tests/api/reports/`。
 - Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。
+- Web E2E 最终正式报告默认进入 `tests/e2e/reports/`，除非项目 Playwright 配置已有更强约定。
 - Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
 - 需要从 BDD 场景生成或维护 Mobile / Hybrid Maestro flow 时，调用 `maestro-mobile-e2e`，并确认可入库 flow 资产位于 `maestro/flow/`。
-- Maestro JUnit / HTML report 生成时，必须写入项目根目录 `.maestro/reports/`；JUnit 使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`，HTML 使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- Maestro 最终正式报告必须写入项目根目录 `.maestro/reports/`；默认只生成一个项目需要的原生报告格式，命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
 - iOS 真机 Maestro 执行遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，先由 `maestro-mobile-e2e` 按标签 / 关键字懒加载 lesson 并修复，再重跑最小失败 flow。
 - 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
 - 调用 `web-ui-autotest-generator` 前后，必须遵循本路径契约，避免 external Skill 示例或脚本默认值把 JSON 写到项目根目录：
@@ -77,6 +85,44 @@ description: Use after code changes to choose and run validation commands for No
 - Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked` 或 `skipped`，不要声称对应验证已通过。
 
 最终输出按全局 / 项目级 `AGENTS.md` 定义的状态枚举报告相关工具状态、运行命令、失败或阻塞原因、生成文件和剩余风险。
+
+## 测试报告与重跑闭环
+
+API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时，执行以下报告和重跑规则。项目已有 CI / reporter 配置优先；模板只定义缺省行为和最终报告语义。
+
+报告规则：
+
+- 调试轮次不要沉淀多份正式测试报告。失败后的定点重跑可以使用 stdout、runner 临时目录或项目默认临时产物排障，但最终正式报告只保留最后一次计划范围内全量通过的报告。
+- 最终全量通过后，在同一报告目录生成一份 Markdown 汇总，文件名与正式报告共享同一时间戳和 stem，仅扩展名为 `.md`。
+- 默认目录：API / integration 使用 `tests/api/reports/`，Web E2E 使用 `tests/e2e/reports/`，Maestro 使用 `.maestro/reports/`。
+- 命名示例：`api-report-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{YYYY_mm_dd}-{HH_MM_SS}.md`，`e2e-report-{YYYY_mm_dd}-{HH_MM_SS}.html` + `e2e-report-{YYYY_mm_dd}-{HH_MM_SS}.md`，`maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。
+- 如果项目配置强制多个 reporter，只把最后一次全量通过运行生成的 reporter 集合视为正式报告；Markdown 汇总仍只生成一份。
+- 未最终全量通过时，不生成或声明“全量通过”正式报告；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
+
+失败处理与重跑顺序：
+
+1. 首轮失败后，分类根因：产品代码、测试代码、BDD / 规格、mock / contract drift、环境 / 账号 / 数据 / 设备、flaky / timing、或任务外失败。
+2. 当前任务范围内可修复时，修复后先重跑失败 case / failed spec / failed flow。
+3. 定点重跑通过后，运行受影响子集，例如同 `.feature`、同 API endpoint、同页面流、同测试文件、同 Maestro flow 或同平台 smoke。
+4. 最后运行计划范围内的全量验证；只有该轮通过才生成正式原生报告和 Markdown 汇总。
+5. 如果 runner 因 fail-fast 停在第一个失败，修复并定点通过后，必须继续运行未覆盖的后续测试，或直接重跑计划范围内全量验证。
+6. 不默认从中间 resume 一个已污染的测试环境；只有项目 runner 明确支持可靠 resume 时才使用。
+
+Markdown 汇总必须记录：
+
+- 测试范围、`E2E Mode`、`Mock Strategy`、`.feature` 路径和场景名。
+- 最终正式报告路径、总执行轮次、每轮命令。
+- 每轮失败 case / spec / flow、失败原因分类、修复动作和修改文件摘要。
+- 定点重跑、受影响子集重跑和最终全量重跑结果。
+- 未执行项、跳过原因、剩余风险，以及 contract / mock / 环境 / 账号 / 设备说明。
+- 不写入真实账号、密钥、PII、生产数据、完整 token、敏感请求头或生产截图。
+
+最终输出中额外报告：
+
+- `Final Test Report`: `generated` / `blocked` / `not-supported` / `not-needed`。
+- `Run Summary MD`: `generated` / `blocked` / `not-needed`。
+- `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`。
+- `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`。
 
 ## 语言验证通用规则
 

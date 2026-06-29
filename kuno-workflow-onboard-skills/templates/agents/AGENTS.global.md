@@ -109,7 +109,7 @@ Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MC
 - Maestro CLI：Android / iOS / React Native / Flutter / Hybrid App E2E 和可选 Chromium Web smoke 的执行器。
 - Maestro MCP：依赖 `maestro mcp` 的 agent 增强入口，用于设备检查、view hierarchy、截图和 flow 辅助；不单独替代 Maestro CLI。
 - `web-ui-autotest-generator`：Playwright 测试资产生成、选择器审计和覆盖率报告；执行底座仍是项目内 Playwright CLI。
-- `maestro-mobile-e2e`：从 BDD `.feature` 场景生成或维护可入库 Maestro Mobile / Hybrid flow 资产，并处理 Maestro 报告路径和按需排障 lesson；执行底座仍是 Maestro CLI。
+- `maestro-mobile-e2e`：从 BDD `.feature` 场景生成或维护可入库 Maestro Mobile / Hybrid flow 资产，并处理 Maestro 报告路径、最终运行汇总和按需排障 lesson；执行底座仍是 Maestro CLI。
 
 涉及 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、浏览器回归、移动 App E2E、Hybrid App、发布前 smoke 或 Trellis 验收时，必须主动判定相关工具状态：
 
@@ -124,6 +124,23 @@ Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MC
 - `Maestro Web Smoke`: `run` / `blocked` / `skipped` / `not-needed`
 - `Maestro Flow Assets`: `generated` / `reused` / `blocked` / `skipped`
 - `Web UI 测试资产`: `generated` / `coverage-only` / `blocked` / `skipped`
+- `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing` / `not-needed`
+- `API Contract`: `verified` / `user-provided` / `stale` / `missing` / `not-needed`
+- `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked` / `not-needed`
+- `Mobile Platform Scope`: `ios` / `android` / `both` / `hybrid` / `not-needed`
+- `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked` / `not-needed`
+- `Final Test Report`: `generated` / `blocked` / `not-supported` / `not-needed`
+- `Run Summary MD`: `generated` / `blocked` / `not-needed`
+- `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`
+- `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`
+
+跨仓、mock 与报告规则：
+
+- 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先确认 contract、环境、账号、数据、选择器、设备和 app artifact；缺关键事实时标记 `missing` 或 `blocked`，不要生成猜测型 `.feature`、mock 或测试。
+- mock 只能基于 API contract、schema、真实响应样例、既有 fixture、launch arguments 或用户明确确认；mock-backed / app-mocked / contract-backed 测试不能报告为 full-stack 通过。
+- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；只有最后一次计划范围内全量通过后，生成一份正式原生报告和同目录同 stem 的 Markdown 汇总。
+- 失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量验证。
+- Markdown 汇总记录总轮次、每轮失败 case、失败原因、修复动作、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险；不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
 
 Playwright CLI 检测规则：
 
@@ -145,8 +162,8 @@ Maestro 检测规则：
 - Java 通过后再检查 Maestro CLI；CLI 缺失时询问用户是否安装到开发环境或 CI runner。Maestro CLI 可用后再检查 Maestro MCP。
 - Maestro MCP 缺失但 CLI 可用时，继续用 `maestro test` 跑已有 flow；CLI 缺失时 MCP 也视为不可用。
 - Mobile / Hybrid E2E 需要从 BDD 场景生成或维护 Maestro flow 时，调用 `maestro-mobile-e2e` Skill；没有 BDD 场景时先回到 `gherkin-bdd`。
-- Maestro flow 作为仓库内测试资产默认写入 `maestro/flow/`，文件名和 YAML `name` 使用英文业务场景名；全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
-- Maestro 执行生成的 JUnit / HTML report 默认写入项目根目录 `.maestro/reports/`；JUnit 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml`，HTML 命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- Maestro flow 作为仓库内测试资产默认写入 `maestro/flow/`，文件名和 YAML `name` 使用英文业务场景名；平台差异明显时可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml` 或平台 smoke flow。
+- Maestro 最终正式报告默认写入项目根目录 `.maestro/reports/`；报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的 `.md` 运行汇总。
 - iOS 真机 Maestro 运行遇到 driver、transport、view hierarchy、tap crash 或版本已知问题时，先由 `maestro-mobile-e2e` 按标签 / 关键字懒加载对应 lesson；未命中时不要预先套用临时补丁。
 
 MCP 边界：
@@ -212,9 +229,9 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
-- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。机器可读 JSON 资产默认沉淀到 `tests/e2e/manifest/`，具体执行、参数路径和验证策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
-- `maestro-mobile-e2e`：仅在 Mobile / Hybrid E2E 需要生成、维护或执行 Maestro flow，或 Maestro iOS 真机运行出现 driver / transport / view hierarchy / tap crash 等排障信号时调用。BDD `.feature` 仍是行为 source of truth；Maestro flow 默认沉淀到 `maestro/flow/`，JUnit / HTML report 默认进入 `.maestro/reports/`；已知问题 lesson 必须按标签 / 关键字懒加载，不预先套用临时补丁。
-- `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、Playwright、Maestro 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
+- `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。机器可读 JSON 资产默认沉淀到 `tests/e2e/manifest/`，正式 Web E2E 报告和 Markdown 汇总默认进入 `tests/e2e/reports/`，具体执行、参数路径和验证策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
+- `maestro-mobile-e2e`：仅在 Mobile / Hybrid E2E 需要生成、维护或执行 Maestro flow，或 Maestro iOS 真机运行出现 driver / transport / view hierarchy / tap crash 等排障信号时调用。BDD `.feature` 仍是行为 source of truth；Maestro flow 默认沉淀到 `maestro/flow/`，平台差异明显时可拆到 `maestro/flow/ios/` 和 `maestro/flow/android/`；最终正式 report 和 Markdown 汇总默认进入 `.maestro/reports/`；已知问题 lesson 必须按标签 / 关键字懒加载，不预先套用临时补丁。
+- `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。前后端分仓、跨服务、Mobile + API 或 Hybrid 链路必须先确认 contract、环境、账号、数据、设备和选择器事实；缺关键事实时标记 blocked 或 `@todo`，不要把猜测写成 source of truth。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、Playwright、Maestro 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
 - `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
 - `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
 - `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnosing-bugs`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。

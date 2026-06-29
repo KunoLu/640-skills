@@ -82,19 +82,35 @@ Write scenarios as product behavior, not implementation:
 
 For user-visible wording or UI changes, require scenarios when the change affects meaning, decisions, validation, status, permissions, flow, defaults, or accessibility semantics. Skip scenarios for typos, spacing, color polish, token/class rewrites, or layout cleanup that does not change behavior or meaning.
 
+## Split-Repository Gate
+
+When the behavior crosses repositories, services, clients, or mobile app boundaries, do not let `.feature` become a guess. Before drafting or finalizing scenarios, classify the available evidence:
+
+- `complete`: product behavior, contract, environment, account, data setup, and observable outcomes are known.
+- `contract-only`: a reliable API contract, schema, fixture, or real response sample exists, but the full chain cannot run locally.
+- `environment-only`: a runnable environment exists, but contract details, ownership, or expected side effects are incomplete.
+- `missing`: key behavior, contract, environment, account, device, selector, data, or side-effect facts are absent.
+
+For API behavior, confirm request shape, authentication, roles, status codes, response body, error codes, persistence side effects, emitted events, and external integrations from OpenAPI / Swagger, proto, GraphQL schema, backend docs, real samples, or user confirmation.
+
+For Web, Mobile, or Hybrid journeys, confirm page or screen flow, stable selectors or accessibility names, backend dependency, test account, data setup and cleanup, base URL or environment switching, and platform-specific prerequisites. For iOS / Android, also confirm app artifact, bundle id / app id, simulator / emulator / device, permissions, deep links, launch arguments, and system UI requirements.
+
+If evidence is `missing`, ask for the smallest missing fact that blocks a truthful scenario. If a scenario must be kept as a placeholder, tag it `@todo` or the project's equivalent marker and add an adjacent blocker comment. Mock-backed or app-mocked scenarios are allowed only when the mock behavior comes from a contract, real sample, existing fixture, launch argument, or explicit user confirmation; mark them as contract-backed, mock-backed, or app-mocked in the related test trace, and do not present them as full-chain verification.
+
 ## Workflow
 
 1. Decide whether the change is user-visible. If yes, BDD applies.
 2. Read existing `.feature` files and project vocabulary before drafting.
 3. Run the language decision gate and report the chosen scenario text language and Gherkin keyword language.
-4. If domain terms or boundaries are unclear, use `grill-with-docs` and `book-ddd-distilled-modeling` before finalizing scenario wording.
-5. Create or update the persistent `.feature` file before implementation.
-6. Review scenarios for observable behavior, one-behavior focus, vocabulary consistency, realistic examples, absence of implementation details, and compliance with the language decision.
-7. Derive tests from scenarios. If the project has a Gherkin runner, bind scenarios to step definitions or runner tests. Otherwise use the existing test framework and make each test traceable to a scenario by name, comment, file organization, or the project's established convention.
+4. For split-repository or incomplete-chain behavior, run the split-repository gate and record the evidence class before treating the scenario as confirmed.
+5. If domain terms or boundaries are unclear, use `grill-with-docs` and `book-ddd-distilled-modeling` before finalizing scenario wording.
+6. Create or update the persistent `.feature` file before implementation.
+7. Review scenarios for observable behavior, one-behavior focus, vocabulary consistency, realistic examples, absence of implementation details, and compliance with the language decision.
+8. Derive tests from scenarios. If the project has a Gherkin runner, bind scenarios to step definitions or runner tests. Otherwise use the existing test framework and make each test traceable to a scenario by name, comment, file organization, or the project's established convention.
    For Mobile / Hybrid E2E scenarios, use `maestro-mobile-e2e` to derive repo-resident Maestro flows when device-level coverage is needed.
-8. For new behavior or bug fixes, run the derived test first and confirm it fails for the intended behavior before implementation.
-9. Implement the smallest change that makes the scenario-backed tests pass.
-10. During validation, confirm PRD, `.feature`, tests, and code agree.
+9. For new behavior or bug fixes, run the derived test first and confirm it fails for the intended behavior before implementation when the project test setup supports red runs.
+10. Implement the smallest change that makes the scenario-backed tests pass.
+11. During validation, confirm PRD, `.feature`, tests, code, and any contract / mock assumptions agree.
 
 If a scenario cannot be automated yet, tag it `@todo` or the project's equivalent marker and add an adjacent comment explaining the blocker and temporary manual verification. Do not silently drop it.
 
@@ -126,7 +142,10 @@ When drafting or updating BDD specs, report:
 
 - Feature files created or updated.
 - BDD language decision: scenario text language, Gherkin keyword language, and whether it follows existing project convention or the first-file default.
+- Split-repository evidence class when relevant: `complete` / `contract-only` / `environment-only` / `missing`.
 - Scenarios added, changed, removed, or marked `@todo`.
 - How each scenario is or will be traced to automated tests.
+- Whether any derived test is `full-stack`, `contract-backed`, `mock-backed`, `app-mocked`, `smoke-only`, or `blocked`.
+- `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`, when a derived test cannot run against the complete real chain.
 - Any BDD skip decision and reason.
 - Any conflict found between PRD, existing `.feature`, tests, and code.

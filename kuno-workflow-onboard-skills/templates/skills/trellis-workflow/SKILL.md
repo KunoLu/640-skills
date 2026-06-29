@@ -133,11 +133,12 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 
 1. 需求 / PRD 阶段：`prd.md` 可以草拟 Given/When/Then，但用户可见行为在实现前必须进入持久 `.feature` 或项目级规则指定的持久 BDD 规格路径。
 2. 语言决策：创建或改写 `.feature` 前，先检查既有 `.feature`、BDD runner 配置和项目规则；没有既有 `.feature` 且无用户覆盖时，明确记录“中文场景文本 + 英文 Gherkin 关键词”。
-3. 领域术语不清时：先使用 `grill-with-docs` 和 `book-ddd-distilled-modeling`，再定稿场景文本。
-4. 开发前：运行 `$trellis-before-dev` 前，确认新增 / 修改 / 修复的用户可见行为已有对应 BDD 场景，或明确 BDD 跳过原因；同时确认场景文本符合语言决策。
-5. 开发中：从 BDD 场景派生测试。已有 Gherkin runner 时绑定 step definitions 或 runner 测试；没有 runner 时使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
-6. bug 修复：先写正确行为场景，再写失败回归测试，再修复。
-7. `$trellis-check`：核对 PRD、持久 `.feature`、测试和代码是否一致，并检查 `.feature` 语言状态是否为沿用项目既有风格、默认中文场景文本 + 英文关键词、用户明确覆盖或已阻塞。
+3. 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先记录 `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`；契约、账号、环境、设备、选择器或数据事实缺失时，不把场景当成已确认。
+4. 领域术语不清时：先使用 `grill-with-docs` 和 `book-ddd-distilled-modeling`，再定稿场景文本。
+5. 开发前：运行 `$trellis-before-dev` 前，确认新增 / 修改 / 修复的用户可见行为已有对应 BDD 场景，或明确 BDD 跳过原因；同时确认场景文本符合语言决策。
+6. 开发中：从 BDD 场景派生测试。已有 Gherkin runner 时绑定 step definitions 或 runner 测试；没有 runner 时使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
+7. bug 修复：先写正确行为场景，再写失败回归测试，再修复。
+8. `$trellis-check`：核对 PRD、持久 `.feature`、测试和代码是否一致，并检查 `.feature` 语言状态是否为沿用项目既有风格、默认中文场景文本 + 英文关键词、用户明确覆盖或已阻塞。
 
 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`；新增或触碰的用户可见行为必须补齐。
 
@@ -280,13 +281,19 @@ Trellis 阶段只负责以下要求：
 
 - 不把 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro、Web UI 自动化测试资产当作 `$trellis-check`、项目验证或人工评审的替代品。
 - Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked`，不要声称已完成测试。
+- 对 API、Web E2E、Mobile E2E 或 Hybrid E2E，Phase 3.4 commit plan 前必须记录 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试不能作为 full-stack 通过结论。
+- 需要 mock 时，确认 mock 行为来自 contract、schema、真实响应、既有 fixture 或用户确认；否则将 `Mock Strategy` 标记为 `blocked`。
 - 如果 Mobile / Hybrid E2E 需要从 BDD 场景生成或维护 Maestro flow，Phase 3.4 commit plan 前必须确认已按 `maestro-mobile-e2e` 生成 / 复用 `maestro/flow/*.yml`，全量回归 flow 固定为 `maestro/flow/smoke.yml`，并记录 `Maestro Flow Assets` 状态。
-- 如果 Maestro 执行生成 JUnit 或 HTML report，Phase 3.4 commit plan 前必须确认报告位于 `.maestro/reports/`，且命名符合 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- 如果 iOS / Android 需要不同 flow，可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；每个 flow 必须追踪源 `.feature`、Scenario、平台和测试模式。
+- 如果 Maestro 执行生成最终正式报告，Phase 3.4 commit plan 前必须确认报告位于 `.maestro/reports/`，且命名符合 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的 `.md` 运行汇总。
 - 如果 iOS 真机 Maestro 运行遇到 driver、transport、view hierarchy、tap crash 或版本已知问题，先按 `maestro-mobile-e2e` 的懒加载 lesson 处理，再重跑最小失败 flow。
 - 如果启用 `web-ui-autotest-generator`，Phase 3.4 commit plan 前必须确认脚本调用遵循全局 / 项目级 `AGENTS.md` 的 Web UI 测试资产路径契约，且可入库 JSON 资产位于 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 - `$trellis-check` 中必须核对项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。如发现残留，先迁移到 `tests/e2e/manifest/` 并同步引用；如无法迁移或确认，`Web UI 测试资产` 标记为 `blocked`，不得标记为 `generated`。
 - 如生成失败分析 `ui-test-repair-plan.json`，默认路径为 `tests/e2e/manifest/ui-test-repair-plan.json`，并按项目 `.gitignore` 策略作为运行产物处理；除非用户明确要求整理为正式任务或报告，不把 repair plan 作为长期测试资产提交。
+- API、Web E2E、Mobile E2E 或 Hybrid E2E 调试轮次不要沉淀多份正式报告；只有最后一次计划范围内全量通过后，才生成正式原生报告和同目录同 stem 的 Markdown 汇总。Markdown 汇总记录总轮次、每轮失败 case / spec / flow、失败原因、修复动作、定点重跑、影响范围重跑和最终全量重跑结果。
+- 验证失败后如果修复了当前任务范围内的问题，先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续执行未覆盖的后续测试或重跑计划范围内全量验证。
 - Phase 3.4 commit plan 前必须按相关性记录 Chrome DevTools MCP、Playwright MCP / CLI / Web Tests、Java、Maestro CLI / MCP / Mobile / Web Smoke、Web UI 自动化测试资产的状态和原因。
+- Phase 3.4 commit plan 前必须记录 `Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态；不能最终全量通过时，不得执行 `$trellis-finish-work`。
 - 状态取值和工具职责遵循全局 / 项目级 `AGENTS.md` 与 `project-validation` Skill；测试工具结论写入当前 task artifacts 或 check summary。
 
 ---

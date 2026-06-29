@@ -340,7 +340,7 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>Kuno Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；<code>maestro-mobile-e2e</code> 将 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow。</p>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，跨仓或链路不完整时先确认 contract、环境、账号、数据、设备和选择器事实。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
@@ -414,7 +414,7 @@
           </article>
           <article class="panel accent-green">
             <h3>BDD</h3>
-            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，优先使用 Given / When / Then 和项目已有 Gherkin 约定。</p>
+            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，分仓或跨端链路先做上下文完整性 gate。</p>
           </article>
           <article class="panel accent-amber">
             <h3>TDD</h3>
@@ -502,7 +502,7 @@
           </article>
           <article class="panel accent-green">
             <h3>行为和测试追踪</h3>
-            <p>用户可见行为检查 BDD 场景和测试追踪；高风险逻辑优先使用 TDD 固化回归。</p>
+            <p>用户可见行为检查 BDD 场景和测试追踪；跨仓链路记录 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。</p>
           </article>
           <article class="panel accent-amber">
             <h3>Web 验证</h3>
@@ -549,18 +549,37 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
       <div class="wrap">
         <div class="section-head">
           <div>
+            <p class="eyebrow">Cross Repo Testing</p>
+            <h2>跨仓测试模式和报告闭环</h2>
+          </div>
+          <p>API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时，先判定链路事实是否完整。mock 只能基于 contract、schema、真实响应样例、既有 fixture 或用户确认；mock-backed 不能冒充 full-stack 通过。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>测试模式</strong><br><code>full-stack</code> / <code>contract-backed</code> / <code>mock-backed</code> / <code>app-mocked</code> / <code>backend-only</code> / <code>smoke-only</code> / <code>blocked</code>。</div>
+          <div><strong>默认报告目录</strong><br>API: <code>tests/api/reports/</code>；Web: <code>tests/e2e/reports/</code>；Maestro: <code>.maestro/reports/</code>。</div>
+          <div><strong>最终报告</strong><br>调试轮次不沉淀多份正式报告；最后一次计划范围内全量通过后生成一份正式原生报告。</div>
+          <div><strong>Markdown 汇总</strong><br>同目录同 stem 的 <code>.md</code> 记录总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑。</div>
+        </div>
+        <p>失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
             <p class="eyebrow">Mobile E2E Contract</p>
             <h2>Maestro flow 和报告路径</h2>
           </div>
-          <p>Mobile / Hybrid BDD 场景需要设备级覆盖时，使用 <code>maestro-mobile-e2e</code> 生成或维护 Maestro flow。Flow 是可入库测试资产；Maestro CLI 运行报告是本地/CI 产物。</p>
+          <p>Mobile / Hybrid BDD 场景需要设备级覆盖时，使用 <code>maestro-mobile-e2e</code> 生成或维护 Maestro flow。Flow 是可入库测试资产；最终正式报告和 Markdown 汇总是本地/CI 产物。</p>
         </div>
         <div class="status-list">
           <div><strong>Flow Assets</strong><br><code>maestro/flow/&lt;english-scenario&gt;.yml</code>，文件名 lower-kebab-case，YAML <code>name</code> 使用英文业务场景名。</div>
-          <div><strong>Smoke</strong><br>全量回归 / smoke flow 固定为 <code>maestro/flow/smoke.yml</code>。</div>
-          <div><strong>JUnit</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml</code></div>
-          <div><strong>HTML</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html</code></div>
+          <div><strong>Platform Flow</strong><br>平台差异明显时可使用 <code>maestro/flow/ios/*.yml</code> 和 <code>maestro/flow/android/*.yml</code>。</div>
+          <div><strong>Final Report</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml</code> 或 <code>.html</code>。</div>
+          <div><strong>Run Summary MD</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md</code></div>
         </div>
-        <p>Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。iOS 真机 driver、transport、view hierarchy 或 tap crash 问题由 <code>maestro-mobile-e2e</code> 按标签 / 关键字懒加载对应 lesson。</p>
+        <p>生成或运行 flow 前确认平台、app artifact、bundleId / appId、设备 / 模拟器 / 云测、后端依赖、base URL / launch args / deep link、账号、数据、权限、稳定 selector 和系统 UI。Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。</p>
       </div>
     </section>
 
@@ -605,9 +624,8 @@ blob-report/
 
 # Web UI autotest generated run artifacts
 tests/e2e/manifest/ui-test-repair-plan.json
-tests/e2e/reports/results.json
-tests/e2e/reports/junit.xml
-tests/e2e/reports/html/
+tests/api/reports/
+tests/e2e/reports/
 tests/e2e/**/screenshots/
 tests/e2e/**/videos/
 tests/e2e/**/traces/
