@@ -16,6 +16,9 @@
 - 执行 shell / terminal 命令时，优先使用 `rtk` 前缀。
 - 如果 `rtk` 不可用，则回退到原生命令。
 - 不要因为 `rtk` 不可用而中止任务。
+- 当工作流检查、onboard 或首次执行命令时确认用户电脑没有可用 `rtk`，主动说明：`rtk` 用于压缩 terminal 命令输出、减少上下文占用，不改变底层命令语义。
+- 说明后询问用户是否协助安装；用户确认后再执行安装。安装成功后复验 `rtk --version` 和 `rtk gain`，再继续任务。
+- 用户拒绝安装或安装失败时，继续使用原生命令，并在最终输出说明 `rtk` 已回退或阻塞原因。
 
 示例：
 
@@ -25,6 +28,24 @@ rtk npm run test
 rtk pytest
 rtk go test ./...
 ```
+
+---
+
+## 交互压缩工具
+
+`rtk` 和 `caveman` 都用于降低上下文 / token 压力，但作用层不同：
+
+- `rtk` 是命令输出压缩工具，作用于 shell / terminal 命令执行层，默认按“命令执行规则”优先使用。
+- `caveman` 是 Agent 回复压缩 Skill，作用于对话输出层；安装后默认只表示可用，不代表每轮自动启用。
+
+### caveman
+
+- 如果工作流检查或 onboard 发现用户级全局 Skill 中没有 `caveman`，主动说明：`caveman` 用于压缩 Agent 回复、减少输出 token，不改变代码、测试、验证、Trellis 阶段、GitNexus 分析或工作流决策。
+- 说明后询问用户是否协助安装；用户确认后安装到用户级全局 Skill 环境，安装后重新检查 `caveman/SKILL.md` 是否可见。
+- 默认不自动切换到 caveman 输出模式。只有用户说 `/caveman`、`use caveman`、`caveman mode`、`少说一点`、`减少 token`、`压缩输出` 或同等明确请求时才启用。
+- 长任务、频繁状态更新、重复验证摘要、上下文压力较大或用户明确希望低 token 时，可以建议用户启用 `caveman-lite` 或 `caveman`，但不要替用户静默开启。
+- 安装确认、权限确认、破坏性操作确认、安全 / 隐私 / 密钥 / 生产数据风险、需求最终确认、PRD / design / implement review gate、BDD / PRD / ADR / Trellis task artifacts、README、AGENTS 模板正文和最终验证报告，优先保持清晰完整，不为压缩牺牲可读性。
+- `caveman-compress` 等会改写长期文档或记忆文件的能力只在用户明确要求压缩文档时使用，不作为默认工作流步骤。
 
 ---
 

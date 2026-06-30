@@ -8,6 +8,8 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 
 其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`seo-geo` 是公开网站、落地页、文档站和营销页的可选 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
 
+`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，默认优先作为命令前缀；`caveman` 作用于 Agent 回复输出，安装后只表示可用，不自动开启，只有用户明确要求低 token 或触发 caveman 时才启用。
+
 ## 仓库定位
 
 本仓库维护以下源文件：
@@ -87,6 +89,8 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
 | `seo-geo` | 公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。 | 不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。 |
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
+| `rtk` | 用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。 | 不改变底层命令语义；不可用时回退原生命令。 |
+| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启。 |
 
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
 
@@ -335,8 +339,9 @@ tests/e2e/**/*.trace.zip
 - Playwright CLI 项目级检测和安装引导。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导。
 - `web-ui-autotest-generator`、`seo-geo`、`ui-ux-pro-max`、`impeccable` 等可选 Skill 的存在性检查。
+- `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 
-MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检查和配置指引。CLI 安装必须遵循用户确认和 fallback 规则。
+MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检查和配置指引。CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则；`caveman` 安装后不自动启用压缩对话模式。
 
 ## 同步规则
 

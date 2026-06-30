@@ -37,7 +37,7 @@ Use this sequence when the Skill is invoked:
 7. Run `check` and show the completed checklist.
 8. If npm is missing, confirm the platform with the user, ask permission to install nvm + latest Node.js LTS, then run `ensure-npm`.
 9. Rerun `check`; only then evaluate CLI tools such as `rtk`, `trellis`, and `gitnexus`.
-10. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable. Use explicit installer subcommands for approved items: `install-java`, `install-maestro`, `install-playwright-cli`, `install-rtk`, `ensure-npm`, or `install-external-skills`.
+10. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable. Use explicit installer subcommands for approved items: `install-java`, `install-maestro`, `install-playwright-cli`, `install-rtk`, `install-caveman`, `ensure-npm`, or `install-external-skills`.
 11. Install only user-approved missing items. Network or filesystem writes outside the workspace may require explicit approval.
 12. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
 13. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
@@ -69,6 +69,7 @@ The check reports:
 - Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, and bundled book-derived skills.
 - Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `seo-geo`.
+- Interaction compression Skill presence for `caveman`, checked only in the user-level global skills directory.
 - Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
@@ -95,6 +96,9 @@ Bundled skills:
 
 Referenced skills:
 - diagnosing-bugs: installed / missing
+
+Interaction compression skills:
+- caveman: installed / missing
 
 Manual checks:
 - Chrome DevTools MCP: confirm MCP server visibility
@@ -171,6 +175,7 @@ When an item is missing, ask the user before installing:
 
 - Install npm first through nvm + latest Node.js LTS?
 - Install `rtk` globally from `rtk-ai/rtk`?
+- Install `caveman` as a user-level global Codex / Agent Skill?
 - Install `trellis` globally or project-level?
 - Install `gitnexus` globally or project-level?
 - Install Playwright CLI / `@playwright/test` into the target project after confirming the project needs Web E2E?
@@ -184,6 +189,7 @@ Common CLI install commands are surfaced by `check` as suggestions:
 ```bash
 python scripts/onboard.py ensure-npm --yes
 python scripts/onboard.py install-rtk --yes
+python scripts/onboard.py install-caveman --yes
 python scripts/onboard.py install-java --major 21 --yes
 python scripts/onboard.py install-maestro --yes
 python scripts/onboard.py install-playwright-cli --project-root /path/to/project --yes
@@ -255,6 +261,36 @@ python scripts/onboard.py install-rtk --reinstall --yes
 For native Windows, use the upstream Windows release zip: extract `rtk.exe` into a PATH directory such as `%USERPROFILE%\.local\bin`, then verify with `rtk --version` and `rtk gain`.
 
 If RTK cannot be installed, it may be skipped, but report the exact failure and next checks: PATH, `~/.local/bin`, `curl`, release download access, Windows PATH setup, data directory permissions, or same-name package collision.
+
+## Caveman Installation
+
+`caveman` is an Agent reply compression Skill. It reduces token use in status updates, command-result summaries, code-reading notes, and other conversational output. It does not change code, tests, validation, Trellis stages, GitNexus analysis, or workflow decisions.
+
+Check only the user-level global skills directory for:
+
+```text
+caveman/SKILL.md
+```
+
+When missing, explain its role and ask the user before installing:
+
+```bash
+python scripts/onboard.py install-caveman --yes
+```
+
+The command runs the official Codex skill installer:
+
+```bash
+npx --yes skills add JuliusBrussee/caveman -a codex
+```
+
+After installation, rerun:
+
+```bash
+python scripts/onboard.py check
+```
+
+Installing caveman only makes the Skill available. Do not automatically enable caveman mode after installation. Use it only when the user asks with `/caveman`, `use caveman`, `caveman mode`, `少说一点`, `减少 token`, `压缩输出`, or an equivalent request. Prefer clear prose for install confirmations, destructive actions, security warnings, PRD / design / implement review gates, long-lived project documents, and final validation reports.
 
 ## Playwright Project CLI
 

@@ -27,6 +27,7 @@ RTK_INSTALL_URL = "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/maste
 TEMURIN21_RELEASES_URL = "https://github.com/adoptium/temurin21-binaries/releases"
 TEMURIN_RELEASES_API_TEMPLATE = "https://api.github.com/repos/adoptium/temurin{major}-binaries/releases/latest"
 MAESTRO_INSTALL_URL = "https://get.maestro.mobile.dev"
+CAVEMAN_INSTALL_SPEC = "JuliusBrussee/caveman"
 JAVA_MIN_MAJOR = 17
 SKILL_SOURCES = {
     "kuno-workflow-onboard-skills": SKILL_DIR,
@@ -97,6 +98,9 @@ REFERENCED_SKILLS = (
     "impeccable",
     "web-ui-autotest-generator",
     "seo-geo",
+)
+INTERACTION_SKILLS = (
+    "caveman",
 )
 MATTPOCOCK_REPO = "https://github.com/mattpocock/skills.git"
 MATTPOCOCK_SKILL_SUBPATHS = {
@@ -644,6 +648,8 @@ def cli_next_step(item: dict[str, object]) -> str:
 
 
 def skill_failure_reason(item: dict[str, object]) -> str:
+    if item["name"] == "caveman":
+        return "No `caveman/SKILL.md` was found in the checked global skills directory: " + str(item["globalTarget"])
     targets = [str(item["globalTarget"])]
     if item.get("projectTarget"):
         targets.append(str(item["projectTarget"]))
@@ -652,6 +658,8 @@ def skill_failure_reason(item: dict[str, object]) -> str:
 
 def skill_next_step(item: dict[str, object]) -> str:
     name = str(item["name"])
+    if name == "caveman":
+        return "After user confirmation, install the Codex skill with `python scripts/onboard.py install-caveman --yes`, then rerun `check`."
     if item.get("sourceRepo"):
         return (
             "After user confirmation, install from the configured repository with "
@@ -838,6 +846,10 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     skills.extend(
         check_skill(name, "referenced", global_skills_dir, project_skills_dir)
         for name in REFERENCED_SKILLS
+    )
+    skills.extend(
+        check_skill(name, "interaction", global_skills_dir, None)
+        for name in INTERACTION_SKILLS
     )
 
     cli_checks_skipped = not runtime["npm"]["installed"]
@@ -1809,6 +1821,83 @@ def install_rtk(args: argparse.Namespace) -> int:
     return 0 if after["installed"] else 1
 
 
+def install_caveman(args: argparse.Namespace) -> int:
+    global_skills_dir = expand_path(args.global_skills_dir) or default_global_skills_dir()
+    before = check_skill("caveman", "interaction", global_skills_dir, None)
+    install_command = ("npx", "--yes", "skills", "add", CAVEMAN_INSTALL_SPEC, "-a", args.agent)
+    payload: dict[str, object] = {
+        "mode": "install-caveman",
+        "agent": args.agent,
+        "before": before,
+        "installSpec": CAVEMAN_INSTALL_SPEC,
+        "installCommand": " ".join(install_command),
+        "globalSkillsDir": str(global_skills_dir),
+    }
+
+    if before["installed"]:
+        payload["status"] = "already-installed"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("caveman is already installed as a global interaction skill.")
+            for location in before["locations"]:
+                print(f"{location['scope']}: {location['path']}")
+        return 0
+
+    runtime = check_npm_runtime()
+    payload["runtime"] = runtime
+    if not runtime["npm"]["installed"] or not shutil.which("npx"):
+        payload["status"] = "runtime-missing"
+        payload["advice"] = "caveman installation uses `npx skills add`; install npm/npx first with `python scripts/onboard.py ensure-npm --yes` after user confirmation."
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("caveman is missing, and npm/npx is not usable yet.")
+            print(payload["advice"])
+        return 2
+
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        payload["actions"] = [
+            "install the caveman Codex skill into the user-level Agent/Codex skill environment",
+            f"run `{' '.join(install_command)}`",
+            "rerun `python scripts/onboard.py check` and confirm `caveman/SKILL.md` is visible",
+        ]
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("caveman is missing.")
+            print("caveman compresses Agent replies for lower token use; it does not change code, tests, validation, or workflow decisions.")
+            for action in payload["actions"]:
+                print(f"- {action}")
+            print("Rerun with --yes after user confirmation.")
+        return 2
+
+    install_result = run_command(install_command, timeout=600)
+    payload["installOutput"] = command_excerpt(install_result)
+    if not install_result or install_result.returncode != 0:
+        payload["status"] = "failed"
+        payload["error"] = command_excerpt(install_result) or "Unable to run the caveman skill installer."
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+        return 1
+
+    after = check_skill("caveman", "interaction", global_skills_dir, None)
+    payload["after"] = after
+    payload["status"] = "installed" if after["installed"] else "failed"
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"install-caveman status: {payload['status']}")
+        if after["installed"]:
+            for location in after["locations"]:
+                print(f"{location['scope']}: {location['path']}")
+            print("Verification passed: caveman/SKILL.md is visible in the checked global skills directory.")
+        else:
+            print("The caveman installer completed, but `caveman/SKILL.md` was not found in the checked global skills directory.")
+            print("If you use a custom skills root, set AGENT_SKILLS_DIR or rerun check with --global-skills-dir.")
+    return 0 if after["installed"] else 1
+
+
 def command_excerpt(completed: subprocess.CompletedProcess[str] | None, limit: int = 20) -> str | None:
     if completed is None:
         return None
@@ -2405,6 +2494,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return ensure_npm(args)
     if mode == "install-rtk":
         return install_rtk(args)
+    if mode == "install-caveman":
+        return install_caveman(args)
     if mode == "install-java":
         return install_java(args)
     if mode == "install-maestro":
@@ -2576,6 +2667,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rtk.add_argument("--profile", help="Shell profile file to update with ~/.local/bin PATH.")
     rtk.add_argument("--json", action="store_true", help="Print machine-readable results.")
+
+    caveman = subparsers.add_parser("install-caveman")
+    caveman.add_argument("--agent", default="codex", help="Target agent for `npx skills add`; defaults to codex.")
+    caveman.add_argument("--global-skills-dir", help="Override global skills directory used for post-install verification.")
+    caveman.add_argument("--yes", action="store_true", help="Install the caveman Codex skill after user confirmation.")
+    caveman.add_argument("--json", action="store_true", help="Print machine-readable results.")
 
     java = subparsers.add_parser("install-java")
     java.add_argument(

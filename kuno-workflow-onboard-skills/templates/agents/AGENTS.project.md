@@ -187,6 +187,18 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 
 ---
 
+## 交互压缩工具项目级边界
+
+本项目继承全局 `rtk` / `caveman` 规则：
+
+- `rtk` 是用户电脑上的命令输出压缩 CLI，优先用于 shell / terminal 命令；不可用时回退项目原生命令。
+- `caveman` 是用户级全局 Agent 回复压缩 Skill，不是项目依赖、测试工具、设计工具或验证工具。
+- 不要把 `caveman` 写入 BDD、TDD、GitNexus、Trellis、发布验证或项目运行时链路；它只影响 Agent 给用户的对话表达。
+- 长任务状态更新、命令结果摘要、代码阅读中间结论和上下文压力较大时，可以建议用户启用 `caveman-lite` 或 `caveman` 压缩后续沟通。
+- 需求最终确认、review gate、安装 / 权限 / 破坏性操作确认、最终验证报告和长期项目文档，默认保持清晰完整。
+
+---
+
 ## agent-rules-books 派生 Skill 编排
 
 本项目默认只接入以下 bundled book-derived skills：

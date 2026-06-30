@@ -340,7 +340,7 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>Kuno Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，公开网站、落地页和文档站按需进入 <code>seo-geo</code> 搜索可见性检查。</p>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，公开网站、落地页和文档站按需进入 <code>seo-geo</code> 搜索可见性检查。<code>rtk</code> 和 <code>caveman</code> 是上下文 / token 效率层，不是验证工具：前者压缩 terminal 输出，后者压缩 Agent 回复且不自动开启。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
@@ -348,6 +348,7 @@
           <span class="pill">DDD</span>
           <span class="pill">Web + Mobile 验证</span>
           <span class="pill">SEO / GEO</span>
+          <span class="pill">Token 效率层</span>
         </div>
       </div>
       <aside class="hero-map" aria-label="工具职责概览">
@@ -371,6 +372,10 @@
           <div class="map-cell">
             <strong>seo-geo</strong>
             <span>公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 检查时才启用。</span>
+          </div>
+          <div class="map-cell">
+            <strong>rtk / caveman</strong>
+            <span>rtk 压缩命令输出；caveman 只在用户明确要求时压缩对话输出。</span>
           </div>
         </div>
       </aside>
@@ -440,7 +445,7 @@
             <p class="eyebrow">Boundaries</p>
             <h2>工具职责边界</h2>
           </div>
-          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。模板要求在最终输出中显式报告相关状态，避免把诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
+          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。<code>rtk</code> 与 <code>caveman</code> 只负责压缩命令或对话输出。模板要求在最终输出中显式报告相关状态，避免把诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
         </div>
         <table>
           <thead>
@@ -490,6 +495,16 @@
               <td>maestro-mobile-e2e</td>
               <td>从 BDD 场景生成和维护 repo-resident Maestro Mobile / Hybrid flow，并约束报告路径。</td>
               <td>不替代 BDD、项目验证或 Maestro CLI。</td>
+            </tr>
+            <tr>
+              <td>rtk</td>
+              <td>用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。</td>
+              <td>不改变底层命令语义；不可用时回退原生命令。</td>
+            </tr>
+            <tr>
+              <td>caveman</td>
+              <td>用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。</td>
+              <td>不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启。</td>
             </tr>
           </tbody>
         </table>
@@ -623,7 +638,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Install Gates</p>
             <h2>检测、安装和 fallback</h2>
           </div>
-          <p>模板不默认假设工具存在。CLI 或 MCP 缺失时，先按证据检测，再根据用户确认安装或降级；降级不能冒充完整验证。</p>
+          <p>模板不默认假设工具存在。CLI、MCP 或用户级全局 Skill 缺失时，先按证据检测，再根据用户确认安装或降级；降级不能冒充完整验证。</p>
         </div>
         <div class="status-list">
           <div><strong>Playwright CLI</strong><br>检测 <code>package.json</code>、Playwright 配置、E2E 目录和脚本。需要 Web 回归但缺失时询问是否安装到项目 devDependency。</div>
@@ -632,6 +647,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集。</div>
           <div><strong>seo-geo</strong><br>作为 referenced external Skill 检查存在性；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
+          <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，安装后不自动启用。</div>
           <div><strong>状态报告</strong><br>最终输出要列明各工具是 run、blocked、skipped、not-needed、available、installed 或对应模板状态。</div>
         </div>
       </div>
@@ -719,7 +735,7 @@ tests/e2e/**/*.trace.zip
 
   <footer>
     <div class="wrap">
-      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，<code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用。</p>
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，<code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层。</p>
     </div>
   </footer>
 </body>
