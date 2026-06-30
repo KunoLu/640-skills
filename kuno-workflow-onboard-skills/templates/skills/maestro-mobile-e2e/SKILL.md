@@ -83,7 +83,7 @@ tags:
 
 ## Report Contract
 
-When the final planned Maestro validation passes, write one formal native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Debugging and targeted rerun output may use stdout or temporary artifacts, but do not create multiple formal reports for intermediate failed rounds.
+When a planned Maestro validation run executes and Maestro produces a native report, write one named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Do this for the final attempted run even when the flow fails or the final full rerun is blocked by environment. Debugging and targeted rerun output may use stdout or temporary artifacts, but do not create multiple formal reports for intermediate failed rounds.
 
 Use this timestamp shape in local time:
 
@@ -111,9 +111,9 @@ stamp=$(date +%Y_%m_%d-%H_%M_%S)
 maestro test --format junit --output ".maestro/reports/maestro-report-${flow_name}-${stamp}.xml" "$flow"
 ```
 
-Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. If project configuration forces multiple reporters, treat them as one final report set from the same final passing run, and still generate only one Markdown summary.
+Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. If project configuration forces multiple reporters, treat them as one final report set from the same final attempted run, and still generate only one Markdown summary. If Maestro CLI never produces a native report because prerequisites are blocked or the runner crashes before reporting, mark the report and summary as blocked instead of claiming generation.
 
-The Markdown summary must include platform scope, run mode, mock strategy, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
+The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
 
 ## Failure Rerun Loop
 
@@ -123,7 +123,7 @@ On failure:
 2. If the issue is in scope and fixable, apply the smallest fix.
 3. Rerun the failed flow first.
 4. After the failed flow passes, rerun the affected platform subset, such as the same platform smoke flow or related business flow.
-5. Run the planned final full validation before generating the formal report and Markdown summary.
+5. Run the planned final full validation attempt, then generate the named native report and Chinese Markdown summary from that final attempted run whenever Maestro produced a native report, even if the flow failed.
 6. If fail-fast stopped on the first failure, do not assume later flows passed; continue with unrun flows or rerun the planned final validation.
 
 Maestro runtime artifacts still default outside the repository under `~/.maestro/tests` on macOS / Linux unless the command or project config overrides the output directory. Do not treat `~/.maestro/tests` as a repo asset.
@@ -151,7 +151,7 @@ Report:
 - Maestro CLI / MCP / Java / device status.
 - Commands run and whether reports were generated.
 - Report paths under `.maestro/reports/`.
-- `Run Summary MD`: Markdown run summary path under `.maestro/reports/`.
+- `Run Summary MD`: Chinese Markdown run summary path under `.maestro/reports/`.
 - Targeted rerun, affected subset rerun, and final full rerun results.
 - Runtime artifact location, usually `~/.maestro/tests`.
 - Known issue reference loaded, fix applied, restore command if a tool patch was made, and rerun result.

@@ -174,3 +174,10 @@
 - 根因：只把目标路径写成项目约定，不能保证后续 agent 或人工执行脚本时自动带上 `--out`、`--manifest`、`--selector-audit` 等参数；缺少收尾检查时，根目录残留也可能被误认为完成。
 - 修复：在全局 / 项目 AGENTS 模板中固化 `tests/e2e/manifest/` 目标路径和必须加载 `project-validation` 的路由，在 `project-validation` Skill 中固化完整脚本参数，在 `trellis-workflow`、README 和模板 `.gitignore` 中固化路径契约引用、repair plan 忽略路径和根目录残留检查。
 - 预防：后续沉淀工具输出路径、source of truth 或测试资产目录时，必须同时覆盖脚本调用参数、生成后存在性检查、根目录 / 旧路径残留检查和最终状态报告；不要只写“推荐放到某目录”。
+
+## E2E 报告文件生成与测试通过状态必须解耦
+
+- 问题：Playwright 已生成 `index.html`、`results.json` 和 `junit.xml` 时，Agent 因最终全量 rerun 未全绿而报告“未生成正式报告”，没有把 HTML 重命名为模板要求的 `playwright-report-{feature_file_name}-{stamp}.html`，也没有生成同 stem 的 Markdown 汇总。
+- 根因：模板规则把“最终全量通过后才能生成正式报告”和“最后一次运行必须留下命名报告产物”混在一起，导致失败运行已有 runner 产物时仍可能跳过报告归档；同时没有强制 Markdown 汇总使用中文。
+- 修复：将 `Final Test Report` 定义为报告文件是否实际生成，将 `Final Full Rerun` 定义为最终全量是否通过；只要 Playwright 或 Maestro 产生原生 runner 报告，就必须生成命名报告和同 stem 中文 Markdown 汇总，失败状态写入汇总而不是跳过文件。
+- 预防：后续修改测试报告规则时，必须分别检查“报告产物存在性”和“测试结论状态”，最终输出前用文件存在性校验确认命名报告和同 stem `.md` 都存在；不要把 `Run Summary MD` 标记为 `not-needed` 来绕过失败运行的汇总。

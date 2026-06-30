@@ -317,10 +317,11 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
 - API、Web E2E、Mobile E2E 或 Hybrid E2E 必须记录 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`，以及 `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`。
-- 调试轮次不沉淀多份正式测试报告；只有最后一次计划范围内全量通过后，生成一份正式原生报告和同目录同 stem 的 Markdown 汇总。API 默认目录 `tests/api/reports/`，Playwright HTML 正式报告默认目录 `tests/e2e/reports/html/`，Maestro 默认目录 `.maestro/reports/`。
+- 调试轮次不沉淀多份正式测试报告；一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在收尾前把最后一次相关运行提升 / 复制为命名报告，并生成同目录同 stem 的 Markdown 汇总。API 默认目录 `tests/api/reports/`，Playwright HTML 正式报告默认目录 `tests/e2e/reports/html/`，Maestro 默认目录 `.maestro/reports/`。
 - Playwright HTML 正式报告命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的 `.md` 汇总；命名后的 HTML 是正式报告，是否保留 Playwright 默认 `index.html` 由项目配置决定。`feature_file_name` 取关联 BDD `.feature` 文件名去掉扩展名，smoke test 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
+- 如果 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价 runner 产物，最终输出前必须确认命名后的 HTML 和同 stem `.md` 实际存在；缺失时先补生成，不能把 `Run Summary MD` 标记为 `not-needed`。`Final Test Report` 表示报告文件是否已生成，`Final Full Rerun` 才表示最终全量是否通过。
 - 验证失败且修复当前任务范围内问题后，先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。
-- Markdown 汇总必须记录运行 case 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮失败 case、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险；不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
+- Markdown 汇总必须使用中文撰写，只有状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文。汇总必须记录运行 case 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮失败 case、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险；不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
 - 最终输出或 Trellis check summary 必须报告 `Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
@@ -340,7 +341,7 @@ Maestro flow 是可入库测试资产，不是 Maestro CLI 运行产物。只有
 - 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
 - 每个生成的 flow 必须追踪到源 `.feature` 路径、场景名称、平台范围和测试模式。
 - 没有稳定选择器、测试账号、测试环境、设备、app binary、appId / bundleId、数据准备或清理策略时，不强行生成脆弱 flow；标记 `Maestro Flow Assets: blocked` 并说明缺口。
-- Maestro CLI 最终正式报告默认输出到项目根目录 `.maestro/reports/`；报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的 `.md` 运行汇总；`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，是否生成 HTML 遵循项目或用户对人类可读报告的需要。
+- Maestro CLI 最终正式报告默认输出到项目根目录 `.maestro/reports/`；报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的中文 `.md` 运行汇总；`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，是否生成 HTML 遵循项目或用户对人类可读报告的需要。只要 Maestro 运行产生原生报告，失败运行也必须保留命名报告和同 stem `.md`。
 - iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或已知 Maestro 版本问题时，按 `maestro-mobile-e2e` 的 lesson index 通过标签 / 关键字懒加载对应方案；未命中时不要预先应用临时补丁。
 
 ---

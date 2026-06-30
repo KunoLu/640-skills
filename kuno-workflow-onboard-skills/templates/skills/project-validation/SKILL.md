@@ -92,27 +92,29 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 报告规则：
 
-- 调试轮次不要沉淀多份正式测试报告。失败后的定点重跑可以使用 stdout、runner 临时目录或项目默认临时产物排障，但最终正式报告只保留最后一次计划范围内全量通过的报告。
-- 最终全量通过后，在同一报告目录生成一份 Markdown 汇总，文件名与正式报告共享同一时间戳和 stem，仅扩展名为 `.md`。
+- 调试轮次不要沉淀多份正式测试报告。失败后的定点重跑可以使用 stdout、runner 临时目录或项目默认临时产物排障，但收尾时必须只保留最后一次相关运行或最终计划运行对应的一组命名报告。
+- 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在同一报告目录生成命名后的原生报告和同 stem Markdown 汇总。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
 - 默认目录：API / integration 使用 `tests/api/reports/`，Playwright HTML 正式报告使用 `tests/e2e/reports/html/`，Maestro 使用 `.maestro/reports/`。
 - Playwright 命名：`playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。如果不是 smoke 且无法追踪到 BDD `.feature`，不要编造文件名，先将 BDD 追踪标记为 `blocked`。
 - Maestro 命名：`maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
-- Playwright 默认 HTML reporter 生成 `index.html` 时，可在最终全量通过后将其移动或复制为上述正式报告名；命名后的 HTML 是正式报告，是否保留 `index.html` 由项目配置决定。
+- Playwright 默认 HTML reporter 生成 `index.html` 时，在最后一次相关运行结束后必须将其移动或复制为上述正式报告名；命名后的 HTML 是正式报告，是否保留 `index.html` 由项目配置决定。如果 Playwright 已产生 `results.json`、`junit.xml` 或等价结果但没有 `index.html`，先按项目配置重跑或补启用 HTML reporter，不能在缺少命名 HTML 和同 stem `.md` 时结束任务。
 - API 命名示例：`api-report-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{YYYY_mm_dd}-{HH_MM_SS}.md`。
-- 如果项目配置强制多个 reporter，只把最后一次全量通过运行生成的 reporter 集合视为正式报告；Markdown 汇总仍只生成一份。
-- 未最终全量通过时，不生成或声明“全量通过”正式报告；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
+- 如果项目配置强制多个 reporter，只把最后一次相关运行或最终计划运行生成的 reporter 集合视为最终报告集合；Markdown 汇总仍只生成一份。
+- 未最终全量通过时，仍生成最后一次相关运行的命名报告和同 stem Markdown 汇总，但不得声明“全量通过”或“full-stack 通过”；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
+- 如果 CLI 未安装、环境预检阻塞或 runner 崩溃到没有任何原生报告产物，`Final Test Report` 和 `Run Summary MD` 标记为 `blocked`，并说明缺失原因；只要 runner 已有原生产物，就不得把 `Run Summary MD` 标记为 `not-needed`。
 
 失败处理与重跑顺序：
 
 1. 首轮失败后，分类根因：产品代码、测试代码、BDD / 规格、mock / contract drift、环境 / 账号 / 数据 / 设备、flaky / timing、或任务外失败。
 2. 当前任务范围内可修复时，修复后先重跑失败 case / failed spec / failed flow。
 3. 定点重跑通过后，运行受影响子集，例如同 `.feature`、同 API endpoint、同页面流、同测试文件、同 Maestro flow 或同平台 smoke。
-4. 最后运行计划范围内的全量验证；只有该轮通过才生成正式原生报告和 Markdown 汇总。
+4. 最后运行计划范围内的全量验证；该轮通过才能声明最终全量通过，但只要 runner 产出原生报告，无论通过或失败都必须生成命名报告和 Markdown 汇总。
 5. 如果 runner 因 fail-fast 停在第一个失败，修复并定点通过后，必须继续运行未覆盖的后续测试，或直接重跑计划范围内全量验证。
 6. 不默认从中间 resume 一个已污染的测试环境；只有项目 runner 明确支持可靠 resume 时才使用。
 
 Markdown 汇总必须记录：
 
+- 汇总正文必须使用中文撰写；只有状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文。
 - 测试范围、运行 case / spec / flow 列表、`E2E Mode`、`Mock Strategy`、`.feature` 路径和场景名。
 - 最终正式报告路径、总执行轮次、每轮命令。
 - 每轮失败 case / spec / flow、失败原因分类、修复动作和修改文件摘要。

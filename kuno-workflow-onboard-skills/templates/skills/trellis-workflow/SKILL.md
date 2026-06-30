@@ -285,13 +285,13 @@ Trellis 阶段只负责以下要求：
 - 需要 mock 时，确认 mock 行为来自 contract、schema、真实响应、既有 fixture 或用户确认；否则将 `Mock Strategy` 标记为 `blocked`。
 - 如果 Mobile / Hybrid E2E 需要从 BDD 场景生成或维护 Maestro flow，Phase 3.4 commit plan 前必须确认已按 `maestro-mobile-e2e` 生成 / 复用 `maestro/flow/*.yml`，全量回归 flow 固定为 `maestro/flow/smoke.yml`，并记录 `Maestro Flow Assets` 状态。
 - 如果 iOS / Android 需要不同 flow，可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；每个 flow 必须追踪源 `.feature`、Scenario、平台和测试模式。
-- 如果 Playwright 执行生成最终正式 HTML 报告，Phase 3.4 commit plan 前必须确认报告位于 `tests/e2e/reports/html/`，且命名符合 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的 `.md` 运行汇总；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
-- 如果 Maestro 执行生成最终正式报告，Phase 3.4 commit plan 前必须确认报告位于 `.maestro/reports/`，且命名符合 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的 `.md` 运行汇总。
+- 如果 Playwright 执行并产生 `index.html`、`results.json`、`junit.xml` 或等价 runner 产物，Phase 3.4 commit plan 前必须确认命名报告位于 `tests/e2e/reports/html/`，且命名符合 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的中文 `.md` 运行汇总；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。即使 `Final Full Rerun` 是 `failed`、`blocked` 或 `skipped-with-risk`，也必须保留最后一次相关运行的命名报告和汇总。
+- 如果 Maestro 执行并产生原生报告，Phase 3.4 commit plan 前必须确认报告位于 `.maestro/reports/`，且命名符合 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的中文 `.md` 运行汇总。即使最终 flow 失败，也必须保留最后一次相关运行的命名报告和汇总。
 - 如果 iOS 真机 Maestro 运行遇到 driver、transport、view hierarchy、tap crash 或版本已知问题，先按 `maestro-mobile-e2e` 的懒加载 lesson 处理，再重跑最小失败 flow。
 - 如果启用 `web-ui-autotest-generator`，Phase 3.4 commit plan 前必须确认脚本调用遵循全局 / 项目级 `AGENTS.md` 的 Web UI 测试资产路径契约，且可入库 JSON 资产位于 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 - `$trellis-check` 中必须核对项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。如发现残留，先迁移到 `tests/e2e/manifest/` 并同步引用；如无法迁移或确认，`Web UI 测试资产` 标记为 `blocked`，不得标记为 `generated`。
 - 如生成失败分析 `ui-test-repair-plan.json`，默认路径为 `tests/e2e/manifest/ui-test-repair-plan.json`，并按项目 `.gitignore` 策略作为运行产物处理；除非用户明确要求整理为正式任务或报告，不把 repair plan 作为长期测试资产提交。
-- API、Web E2E、Mobile E2E 或 Hybrid E2E 调试轮次不要沉淀多份正式报告；只有最后一次计划范围内全量通过后，才生成正式原生报告和同目录同 stem 的 Markdown 汇总。Markdown 汇总记录运行 case / spec / flow 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮失败 case / spec / flow、失败原因、修复动作、定点重跑、影响范围重跑和最终全量重跑结果。
+- API、Web E2E、Mobile E2E 或 Hybrid E2E 调试轮次不要沉淀多份正式报告；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，最后一次相关运行必须生成命名报告和同目录同 stem 的中文 Markdown 汇总。Markdown 汇总记录运行 case / spec / flow 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮失败 case / spec / flow、失败原因、修复动作、定点重跑、影响范围重跑和最终全量重跑结果；状态枚举值、命令、文件路径、case / spec / flow 名称和错误原文可以保留英文。
 - 验证失败后如果修复了当前任务范围内的问题，先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续执行未覆盖的后续测试或重跑计划范围内全量验证。
 - Phase 3.4 commit plan 前必须按相关性记录 Chrome DevTools MCP、Playwright MCP / CLI / Web Tests、Java、Maestro CLI / MCP / Mobile / Web Smoke、Web UI 自动化测试资产的状态和原因。
 - Phase 3.4 commit plan 前必须记录 `Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态；不能最终全量通过时，不得执行 `$trellis-finish-work`。
