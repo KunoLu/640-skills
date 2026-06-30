@@ -68,10 +68,10 @@ description: Use after code changes to choose and run validation commands for No
 - 对 API / Web / Mobile / Hybrid 链路，先判定 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试只能证明对应 contract / mock 假设成立，不能报告为 full-stack 通过。
 - API / integration 测试优先继承项目既有测试框架和报告配置；没有项目约定且需要本轮正式报告时，默认报告目录为 `tests/api/reports/`。
 - Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。
-- Web E2E 最终正式报告默认进入 `tests/e2e/reports/`，除非项目 Playwright 配置已有更强约定。
+- Web E2E 最终正式 HTML 报告默认进入 `tests/e2e/reports/html/`，除非项目 Playwright 配置已有更强约定；Playwright 默认生成的 `index.html` 可作为中间产物或工具兼容产物，命名后的 HTML 才是正式报告。
 - Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
 - 需要从 BDD 场景生成或维护 Mobile / Hybrid Maestro flow 时，调用 `maestro-mobile-e2e`，并确认可入库 flow 资产位于 `maestro/flow/`。
-- Maestro 最终正式报告必须写入项目根目录 `.maestro/reports/`；默认只生成一个项目需要的原生报告格式，命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。
+- Maestro 最终正式报告必须写入项目根目录 `.maestro/reports/`；默认只生成一个项目需要的原生报告格式，命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`；HTML 只在项目或用户需要人类可读报告时生成。
 - iOS 真机 Maestro 执行遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，先由 `maestro-mobile-e2e` 按标签 / 关键字懒加载 lesson 并修复，再重跑最小失败 flow。
 - 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
 - 调用 `web-ui-autotest-generator` 前后，必须遵循本路径契约，避免 external Skill 示例或脚本默认值把 JSON 写到项目根目录：
@@ -94,8 +94,11 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 - 调试轮次不要沉淀多份正式测试报告。失败后的定点重跑可以使用 stdout、runner 临时目录或项目默认临时产物排障，但最终正式报告只保留最后一次计划范围内全量通过的报告。
 - 最终全量通过后，在同一报告目录生成一份 Markdown 汇总，文件名与正式报告共享同一时间戳和 stem，仅扩展名为 `.md`。
-- 默认目录：API / integration 使用 `tests/api/reports/`，Web E2E 使用 `tests/e2e/reports/`，Maestro 使用 `.maestro/reports/`。
-- 命名示例：`api-report-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{YYYY_mm_dd}-{HH_MM_SS}.md`，`e2e-report-{YYYY_mm_dd}-{HH_MM_SS}.html` + `e2e-report-{YYYY_mm_dd}-{HH_MM_SS}.md`，`maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。
+- 默认目录：API / integration 使用 `tests/api/reports/`，Playwright HTML 正式报告使用 `tests/e2e/reports/html/`，Maestro 使用 `.maestro/reports/`。
+- Playwright 命名：`playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。如果不是 smoke 且无法追踪到 BDD `.feature`，不要编造文件名，先将 BDD 追踪标记为 `blocked`。
+- Maestro 命名：`maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
+- Playwright 默认 HTML reporter 生成 `index.html` 时，可在最终全量通过后将其移动或复制为上述正式报告名；命名后的 HTML 是正式报告，是否保留 `index.html` 由项目配置决定。
+- API 命名示例：`api-report-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{YYYY_mm_dd}-{HH_MM_SS}.md`。
 - 如果项目配置强制多个 reporter，只把最后一次全量通过运行生成的 reporter 集合视为正式报告；Markdown 汇总仍只生成一份。
 - 未最终全量通过时，不生成或声明“全量通过”正式报告；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
 
@@ -110,7 +113,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 Markdown 汇总必须记录：
 
-- 测试范围、`E2E Mode`、`Mock Strategy`、`.feature` 路径和场景名。
+- 测试范围、运行 case / spec / flow 列表、`E2E Mode`、`Mock Strategy`、`.feature` 路径和场景名。
 - 最终正式报告路径、总执行轮次、每轮命令。
 - 每轮失败 case / spec / flow、失败原因分类、修复动作和修改文件摘要。
 - 定点重跑、受影响子集重跑和最终全量重跑结果。

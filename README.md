@@ -115,7 +115,9 @@ Fallback：
 Web E2E 报告规则：
 
 - 完整环境可用时跑 full-stack Playwright E2E；只有 contract 或 mock 环境时标记 `contract-backed` 或 `mock-backed`。
-- 最终正式报告默认写入 `tests/e2e/reports/`，并生成同 stem 的 Markdown 汇总。
+- 最终正式 Playwright HTML 报告默认写入 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的 Markdown 汇总。
+- `feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用 suite 名，否则使用 `multi-feature`。
+- 命名后的 HTML 是正式报告；是否保留 Playwright 默认 `index.html` 作为工具兼容产物由项目配置决定。
 - 调试轮次失败后先重跑失败 spec，再跑受影响子集，最后跑计划范围内全量验证；只有最后全量通过才生成正式报告。
 
 ## Maestro 集成策略
@@ -148,7 +150,7 @@ Maestro flow 资产和报告规则：
 - 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
 - 每个 flow 必须追踪到源 `.feature` 路径、场景名称、平台范围和测试模式。
 - Maestro CLI 最终正式 report 固定写入项目根目录 `.maestro/reports/`。
-- 报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的 `.md` 运行汇总。
+- 报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的 `.md` 运行汇总；`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，是否生成 HTML 遵循项目或用户对人类可读报告的需要。
 - Maestro 官方默认运行 artifacts 仍在用户 home 下的 `~/.maestro/tests`；它不是仓库内测试资产。
 - iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，`maestro-mobile-e2e` 按标签 / 关键字懒加载对应 lesson；未命中时不预先套用临时补丁。
 
@@ -243,10 +245,12 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 正式报告和 Markdown 汇总：
 
 - API / integration 默认目录：`tests/api/reports/`。
-- Web E2E 默认目录：`tests/e2e/reports/`。
+- Playwright HTML 正式报告默认目录：`tests/e2e/reports/html/`。
 - Maestro 默认目录：`.maestro/reports/`。
 - 调试轮次不沉淀多份正式报告；最后一次计划范围内全量通过后，生成一份正式原生报告和一份同目录同 stem 的 `.md` 汇总。
-- `.md` 汇总记录总轮次、每轮命令、失败 case / spec / flow、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险。
+- Playwright 报告命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
+- Maestro 报告继续使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}` stem；`flow_name` 取 flow 文件名，不改成 `feature_file_name`。
+- `.md` 汇总记录运行 case / spec / flow 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮命令、失败 case / spec / flow、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险。
 - 失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。
 - 汇总和报告不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
 

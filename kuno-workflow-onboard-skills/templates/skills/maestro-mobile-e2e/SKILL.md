@@ -99,7 +99,7 @@ Report file names:
 .maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md
 ```
 
-`flow_name` is the flow file stem, such as `login-success` or `smoke`.
+`flow_name` is the flow file stem, such as `login-success` or `smoke`. Keep `flow_name` in the report file name even when the flow is derived from a BDD `.feature`; the Markdown summary records the source `.feature` path and scenario name.
 
 Example commands:
 
@@ -113,7 +113,7 @@ maestro test --format junit --output ".maestro/reports/maestro-report-${flow_nam
 
 Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. If project configuration forces multiple reporters, treat them as one final report set from the same final passing run, and still generate only one Markdown summary.
 
-The Markdown summary must include platform scope, run mode, mock strategy, source `.feature` path and scenario name, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
+The Markdown summary must include platform scope, run mode, mock strategy, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
 
 ## Failure Rerun Loop
 
