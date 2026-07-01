@@ -604,9 +604,9 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
         </div>
         <div class="status-list">
           <div><strong>测试模式</strong><br><code>full-stack</code> / <code>contract-backed</code> / <code>mock-backed</code> / <code>app-mocked</code> / <code>backend-only</code> / <code>smoke-only</code> / <code>blocked</code>。</div>
-          <div><strong>默认报告目录</strong><br>API: <code>tests/api/reports/</code>；Playwright HTML: <code>tests/e2e/reports/html/</code>；Maestro: <code>.maestro/reports/</code>。</div>
+          <div><strong>默认报告目录</strong><br>API: <code>tests/api/reports/</code>；Playwright 临时 HTML: <code>tests/e2e/reports/.playwright-html-current/</code>；Playwright 正式快照: <code>tests/e2e/reports/html/</code>；Maestro: <code>.maestro/reports/</code>。</div>
           <div><strong>Playwright Report</strong><br><code>playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html</code>；smoke 使用 <code>smoke</code>，多 feature 优先 suite 名，否则 <code>multi-feature</code>。</div>
-          <div><strong>最终报告</strong><br>调试轮次不沉淀多份正式报告；只要 Playwright 或 Maestro 产生 runner 原生报告，无论最终是否全绿，都生成最后一次相关运行的命名报告。命名后的 Playwright HTML 是正式报告，是否保留 <code>index.html</code> 由项目配置决定。</div>
+          <div><strong>最终报告</strong><br>调试轮次可以保留多份带业务名和时间戳的本地快照；只要 Playwright 或 Maestro 产生 runner 原生报告，无论最终是否全绿，都生成该次运行的命名报告。命名后的 Playwright HTML 是正式报告，默认 <code>index.html</code> 只作为 <code>.playwright-html-current/</code> 中的复制源。</div>
           <div><strong>Markdown 汇总</strong><br>Playwright 的 <code>.md</code> 必须与命名 HTML 同 stem，不能用 <code>results.json</code> / <code>junit.xml</code> / 默认 <code>index.html</code> 的 stem；中文汇总记录运行 case、关联 BDD feature、总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑。</div>
         </div>
         <p>失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。</p>

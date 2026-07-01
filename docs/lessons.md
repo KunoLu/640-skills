@@ -27,6 +27,7 @@
 - 编写一次性验证脚本前，先对照本入口和命中的 topic，避免重复使用已记录的问题写法；Markdown 解析优先按标题层级和表头语义，不要按裸 `---` 或脆弱正则切割。
 - 校验脚本必须按目标文件职责断言，先确认实际 schema；不要用同一 expected 列表无差别扫描所有文件。
 - Web UI 测试资产和 Playwright 报告路径必须有参数和验证门；Playwright 正式报告以命名 HTML 为主轴，`results.json` / `junit.xml` / 默认 `index.html` 不能决定最终 Markdown stem。
+- Playwright HTML reporter 的 `outputFolder` 必须和正式命名报告快照目录分离；默认 runner 临时目录用 `tests/e2e/reports/.playwright-html-current/`，正式快照进入 `tests/e2e/reports/html/`。
 - 新增或修改用户可见 BDD `.feature` 场景时，首个 `.feature` 默认中文场景文案 + 英文 Gherkin 关键词，并在写入前和验证阶段确认语言规则。
 
 ## Topic 路由

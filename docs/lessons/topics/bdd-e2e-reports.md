@@ -53,3 +53,15 @@
 - 根因：模板虽然要求“命名 HTML + 同 stem Markdown”，但没有明确排除 `results.json` / `junit.xml` 这类 reporter 产物作为 Markdown stem；Agent 把“同 stem”错误绑定到 JSON reporter，而不是绑定到正式 HTML 报告。
 - 修复：在全局 / 项目 AGENTS 模板、`project-validation`、`trellis-workflow` 和 README 中明确 Playwright 的 canonical stem 只能来自命名后的 HTML 报告；`results.md`、`result.md`、`junit.md` 或 `index.md` 不能满足 `Run Summary MD: generated`。
 - 预防：以后只要 Playwright 产生 runner 原生报告，收尾 gate 必须检查 `tests/e2e/reports/html/playwright-report-*.html` 与同名 `.md` 成对存在；`results.json`、`junit.xml` 和默认 `index.html` 只能作为辅助产物或复制源，不能替代正式报告。
+
+## LESSON-20260701-playwright-runner-output-dir-separate: Playwright Runner Output Dir Separate
+
+- 日期：2026-07-01
+- 标签：e2e, playwright, reports, output-dir
+- 适用场景：Playwright HTML 报告被下一轮运行清空，或设计正式报告保存目录
+- 严重级别：high
+- 来源：会话 `019f1c83-9275-7591-be9c-0f5ea71800ea` 发现 `tests/e2e/reports/html` 中前一轮命名报告被下一轮 Playwright CLI 运行清空
+- 问题：模板要求把 Playwright 默认 `index.html` 复制为 `playwright-report-{feature}-{timestamp}.html` 和同 stem `.md`，但同时把 Playwright HTML reporter 的 `outputFolder` 和正式命名报告目录都设为 `tests/e2e/reports/html/`。下一轮 Playwright 运行重建 reporter 输出目录时，会把上一轮已经重命名的正式报告一起删除。
+- 根因：没有区分 runner 管理的临时输出目录和需要保留的正式报告快照目录；`.gitignore` 忽略 `tests/e2e/reports/` 只表示报告不入库，不会阻止 Playwright 清理自己的 `outputFolder`。
+- 修复：将模板默认改为双目录：Playwright HTML reporter 的临时 `outputFolder` 使用 `tests/e2e/reports/.playwright-html-current/`；正式命名报告快照保存到 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` 和同 stem `.md`。多轮调试可以保留多份本地快照，最终通过状态仍由 `Final Full Rerun` 表示。
+- 预防：后续配置 Playwright 报告时，永远不要把需要保留的 `playwright-report-*` 放进 Playwright 的 `outputFolder`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，复制完整资源目录，或生成 `playwright-report-{feature}-{timestamp}/index.html` 形式的完整快照目录，并让 Markdown 汇总指向该入口。

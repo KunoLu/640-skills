@@ -160,8 +160,8 @@ Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MC
 
 - 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先确认 contract、环境、账号、数据、选择器、设备和 app artifact；缺关键事实时标记 `missing` 或 `blocked`，不要生成猜测型 `.feature`、mock 或测试。
 - mock 只能基于 API contract、schema、真实响应样例、既有 fixture、launch arguments 或用户明确确认；mock-backed / app-mocked / contract-backed 测试不能报告为 full-stack 通过。
-- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在收尾前把最后一次相关运行提升 / 复制为命名报告，并生成同目录同 stem 的 Markdown 汇总。`Final Test Report` 表示报告文件是否已生成，`Final Full Rerun` 才表示最终全量是否通过；不要因最终未全绿而跳过报告文件。
-- Playwright HTML 正式报告默认位于 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的 `.md` 汇总；命名后的 HTML 是正式报告，是否保留 Playwright 默认 `index.html` 由项目配置决定。
+- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次可以保留多份带业务名和时间戳的本地报告快照；最终结论仍以最后一次计划范围内运行记录 `Final Full Rerun`。一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在收尾前把该次运行提升 / 复制为命名报告，并生成同目录同 stem 的 Markdown 汇总。`Final Test Report` 表示报告文件是否已生成，`Final Full Rerun` 才表示最终全量是否通过；不要因最终未全绿而跳过报告文件。
+- Playwright HTML reporter 的 `outputFolder` 是 runner 管理的临时目录，默认使用 `tests/e2e/reports/.playwright-html-current/`；Playwright 每次运行可能清空该目录，不得把需要保留的正式命名报告放在这里。Playwright HTML 正式报告快照默认位于 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的 `.md` 汇总；命名后的 HTML 是正式报告，默认 `index.html` 只作为临时复制源或工具兼容产物。
 - 对 Playwright，Markdown 汇总的 stem 必须与命名后的 HTML 报告完全一致；`results.json`、`junit.xml`、`test-results/` 和 Playwright 默认 `index.html` 都只是 runner / 兼容产物，不能作为正式 Markdown stem。不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`；这些文件即使存在也只能作为辅助材料，最终报告 gate 必须检查 `playwright-report-*.html` 与同名 `playwright-report-*.md` 成对存在。
 - 如果 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价 runner 产物，最终输出前必须确认命名后的 HTML 和同 stem `.md` 实际存在；缺失时先补生成，不能把 `Run Summary MD` 标记为 `not-needed`。
 - `feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。
