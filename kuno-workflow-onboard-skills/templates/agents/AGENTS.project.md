@@ -1,5 +1,7 @@
 # Codex 项目级规则
 
+本文件只保存项目级补充、项目默认路径和硬性 gate。通用工具边界、状态枚举、报告细则和专项执行步骤由全局 `AGENTS.md` 与对应 Skill 承接；除非本项目需要覆盖默认行为，不在本文件重复展开。
+
 ## 项目事实源
 
 - 当前项目的代码、配置、测试、README、CI、任务产物和工具输出优先于通用假设。
@@ -189,9 +191,8 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 
 ## 交互压缩工具项目级边界
 
-本项目继承全局 `rtk` / `caveman` 规则：
+本项目继承全局 `rtk` / `caveman` 规则；项目级只保留运行时边界：
 
-- `rtk` 是用户电脑上的命令输出压缩 CLI，优先用于 shell / terminal 命令；不可用时回退项目原生命令。
 - `caveman` 是用户级全局 Agent 回复压缩 Skill，不是项目依赖、测试工具、设计工具或验证工具。
 - 不要把 `caveman` 写入 BDD、TDD、GitNexus、Trellis、发布验证或项目运行时链路；它只影响 Agent 给用户的对话表达。
 - 长任务状态更新、命令结果摘要、代码阅读中间结论和上下文压力较大时，可以建议用户启用 `caveman-lite` 或 `caveman` 压缩后续沟通。
@@ -316,13 +317,10 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要 Web 回归时，先检查项目已有 Playwright 依赖、配置、scripts 和 E2E 目录；未安装时按全局规则询问是否安装到项目 devDependency。
 - 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
-- API、Web E2E、Mobile E2E 或 Hybrid E2E 必须记录 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`，以及 `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`。
-- 调试轮次不沉淀多份正式测试报告；一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在收尾前把最后一次相关运行提升 / 复制为命名报告，并生成同目录同 stem 的 Markdown 汇总。API 默认目录 `tests/api/reports/`，Playwright HTML 正式报告默认目录 `tests/e2e/reports/html/`，Maestro 默认目录 `.maestro/reports/`。
-- Playwright HTML 正式报告命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的 `.md` 汇总；命名后的 HTML 是正式报告，是否保留 Playwright 默认 `index.html` 由项目配置决定。`feature_file_name` 取关联 BDD `.feature` 文件名去掉扩展名，smoke test 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
-- 如果 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价 runner 产物，最终输出前必须确认命名后的 HTML 和同 stem `.md` 实际存在；缺失时先补生成，不能把 `Run Summary MD` 标记为 `not-needed`。`Final Test Report` 表示报告文件是否已生成，`Final Full Rerun` 才表示最终全量是否通过。
-- 验证失败且修复当前任务范围内问题后，先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。
-- Markdown 汇总必须使用中文撰写，只有状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文。汇总必须记录运行 case 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮失败 case、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险；不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。
-- 最终输出或 Trellis check summary 必须报告 `Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
+- API、Web E2E、Mobile E2E 或 Hybrid E2E 的模式、mock、重跑顺序、报告命名、Markdown 汇总内容和状态枚举默认遵循全局 AGENTS 与 `project-validation` Skill。
+- 项目级最低报告门禁：只要 Playwright 或 Maestro 产生 runner 原生报告，就必须保留最后一次相关运行的命名报告和同 stem 中文 Markdown 汇总；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。
+- Playwright 的正式报告目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。
+- 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
 
@@ -330,74 +328,42 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 
 ## Mobile / Hybrid E2E 测试资产
 
-Maestro flow 是可入库测试资产，不是 Maestro CLI 运行产物。只有 Mobile / Hybrid 用户旅程需要设备级回归时，才从 BDD 场景生成或维护 Maestro flow。
+Maestro flow 是可入库测试资产；详细生成、命名、报告和真机排障流程由 `maestro-mobile-e2e` Skill 承接。
 
-项目落地规则：
+项目级 gate：
 
-- 默认目录为 `maestro/flow/`。
-- Flow 文件使用 `.yml` 扩展名。
-- 文件名和 YAML `name` 字段使用英文业务场景名；文件名使用 lower-kebab-case，例如 `login-success.yml`。
-- iOS 和 Android 需要明显不同 flow 时，可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；平台 smoke 可使用 `maestro/flow/ios/smoke.yml` 和 `maestro/flow/android/smoke.yml`。
-- 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
-- 每个生成的 flow 必须追踪到源 `.feature` 路径、场景名称、平台范围和测试模式。
-- 没有稳定选择器、测试账号、测试环境、设备、app binary、appId / bundleId、数据准备或清理策略时，不强行生成脆弱 flow；标记 `Maestro Flow Assets: blocked` 并说明缺口。
-- Maestro CLI 最终正式报告默认输出到项目根目录 `.maestro/reports/`；报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的中文 `.md` 运行汇总；`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，是否生成 HTML 遵循项目或用户对人类可读报告的需要。只要 Maestro 运行产生原生报告，失败运行也必须保留命名报告和同 stem `.md`。
-- iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或已知 Maestro 版本问题时，按 `maestro-mobile-e2e` 的 lesson index 通过标签 / 关键字懒加载对应方案；未命中时不要预先应用临时补丁。
+- 只有 Mobile / Hybrid 用户旅程需要设备级回归时，才从 BDD 场景生成或维护 Maestro flow。
+- 默认 flow 根目录为 `maestro/flow/`；平台差异明显时使用 `maestro/flow/ios/` 和 `maestro/flow/android/`；全量回归 / smoke flow 固定使用 `smoke.yml`。
+- 每个 flow 必须追踪源 `.feature`、场景名、平台范围和测试模式。
+- 缺少稳定选择器、账号、环境、设备、app binary、appId / bundleId、数据准备或清理策略时，不生成脆弱 flow；标记 `Maestro Flow Assets: blocked`。
+- Maestro 原生报告和同 stem 中文 Markdown 汇总按全局规则与 `maestro-mobile-e2e` 写入 `.maestro/reports/`。
 
 ---
 
 ## Web UI / E2E 测试资产
 
-普通 UI 检查优先使用项目已有验证、Chrome DevTools MCP 诊断和 Playwright CLI 回归。只有需要把 Web UI 回归路径固化到仓库内可维护测试资产时，才启用 `web-ui-autotest-generator`。
+普通 UI 检查优先使用项目已有验证、Chrome DevTools MCP 诊断和 Playwright CLI 回归；只有需要把 Web UI 回归路径固化为仓库内可维护测试资产时，才启用 `web-ui-autotest-generator`。
 
-启用条件：
+项目级 gate：
 
-- 用户明确要求生成 Web UI 自动化测试、Playwright、E2E suite 或 UI 回归测试代码。
-- 关键 Web UI 业务流需要长期回归，例如登录后流程、CRUD、表单校验、权限、跨页面流转、下载 / 上传。
-- 项目已有 Playwright，需要扩展可维护测试覆盖。
-- Trellis 任务验收标准明确包含 Web UI/E2E 且需要可重复运行的入库测试资产。
-- Chrome DevTools MCP、Playwright MCP、Playwright CLI、浏览器验证或人工复核发现了应进入 CI / 本地 E2E 的覆盖缺口。
-
-项目落地规则：
-
-- 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定；不要因为默认模板存在就切换测试框架。
-- 可以先只做覆盖评估；先生成或复核 manifest 与 selector audit，再决定是否扩展 Page Object 和 spec。
-- 没有稳定测试账号、测试环境、数据准备、清理策略或业务规则时，只输出阻塞说明和覆盖缺口，不强行生成脆弱测试。
-- 只有用户明确同意修改产品代码时，才补充 `data-testid`、`data-cy` 或可访问名称等测试选择器。
-- 除非更深层项目规则明确指定其他 E2E 资产目录，`web-ui-autotest-generator` 的可入库 JSON 资产必须沉淀到 `tests/e2e/manifest/`；执行内置脚本前，加载 `project-validation` Skill 并使用其中定义的 Web UI 测试资产路径契约。
-- `ui-test-repair-plan.json` 是失败分析运行产物，默认不入库；路径和忽略策略遵循 `project-validation` Skill 与项目 `.gitignore`，除非用户明确要求整理为正式任务或报告。
-- 生成后必须运行可用的项目验证和 Playwright E2E 命令；无法运行时说明尝试命令、阻塞原因、替代检查和剩余风险。
-- 最终正式 Playwright HTML report 和 Markdown 汇总默认进入 `tests/e2e/reports/html/`；Playwright trace、video、screenshot、默认 `index.html`、HTML report 运行产物和一次性 repair plan 默认不入库。
-- 测试代码和必要配置是否提交按项目策略决定。
-- 最终输出或 Trellis check summary 中必须报告三个 JSON 的实际路径；将 `Web UI 测试资产` 标记为 `generated` / `coverage-only` 前，先确认根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
-
-`web-ui-autotest-generator` 不替代 Playwright CLI。它只负责生成和审计 repo-resident Playwright 测试资产，执行底座仍是项目内 Playwright CLI。
+- 启用前先加载 `project-validation`，并使用其中的 Web UI 测试资产路径契约。
+- 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定，不为默认模板切换测试框架。
+- 可入库 JSON 资产必须位于 `tests/e2e/manifest/`；标记 `generated` / `coverage-only` 前，确认项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
+- 没有稳定账号、环境、数据准备、清理策略或业务规则时，只输出阻塞说明，不生成脆弱测试；只有用户明确同意时才补充产品代码选择器。
+- Playwright 正式 HTML report 和 Markdown 汇总遵循全局规则，默认进入 `tests/e2e/reports/html/`；trace、video、screenshot、默认 `index.html` 和 repair plan 默认不入库。
 
 ---
 
 ## SEO / GEO 发布检查
 
-`seo-geo` 是公开 Web 资产的可选搜索可见性专项 Skill，不替代项目原生验证、Chrome DevTools MCP、Playwright CLI、发布检查或人工内容评审。
+`seo-geo` 是公开 Web 资产的可选搜索可见性专项 Skill；详细 audit 流程由该 Skill 承接，不替代项目原生验证、Chrome DevTools MCP、Playwright CLI、发布检查或人工内容评审。
 
-启用条件：
+项目级 gate：
 
-- 用户明确要求 SEO、GEO、AI search visibility、ChatGPT / Perplexity / Google AI Overview 可见性、schema、JSON-LD、meta tags、robots.txt、sitemap.xml、canonical 或关键词研究。
-- 当前变更影响公开网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面。
-- 发布前验收标准明确包含搜索引擎、AI 搜索引用、社交分享预览、结构化数据或 crawl/indexing 检查。
-
-跳过条件：
-
-- 内部后台、登录后页面、API、CLI、移动 App、纯后端、测试资产、文档内部重排或无公开 URL 的一次性 UI 调整。
-- 只需要 Web 运行时诊断、截图、console / network 证据或 Playwright 回归。
-- `seo-geo` Skill 未安装且当前任务不以搜索可见性为主要目标；跳过时报告具体原因。
-
-执行约束：
-
-- 优先确认目标 URL、preview URL、生产 / staging 环境、是否允许抓取、是否已有 sitemap / robots / schema 约定。
-- 没有公网 URL 或 preview URL 时，只做源码 / HTML 静态检查；最终报告 `SEO/GEO: static-only` 或 `blocked`，不要声称线上 SEO/GEO 已验证。
-- 基础 audit 不要求 DataForSEO；DataForSEO 只作为关键词、SERP、backlink、domain overview 等增强分析的可选凭据。
-- 需要当前搜索结果、关键词量、AI 搜索可见性或平台抓取规则时，必须使用当前可用来源核对；不要依赖陈旧常识。
-- 不得把 DataForSEO login / password、Search Console 数据、付费报告、真实账号、密钥、PII 或生产敏感 URL 写入仓库、日志、截图、测试或正式报告。
+- 仅在用户明确要求 SEO/GEO/AI search visibility，或变更影响公开网站、落地页、文档站、产品页、营销页、公开博客 / README，或验收标准包含 crawl/indexing/schema/meta 时启用。
+- 内部后台、登录后页面、API、CLI、移动 App、纯后端、测试资产、文档内部重排或纯 Web 回归不触发 `seo-geo`。
+- 没有公网 URL 或 preview URL 时，只能做源码 / HTML 静态检查，并报告 `SEO/GEO: static-only` 或 `blocked`。
+- 不得把 DataForSEO、Search Console、付费报告、真实账号、密钥、PII 或生产敏感 URL 写入仓库、日志、截图、测试或报告。
 - 最终输出或 Trellis check summary 必须报告 `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`。
 
 ---
@@ -431,4 +397,4 @@ rtk go test ./...
 
 出现 bug 修复、回滚、工具判断错误、工作流阶段错误、验证失败、GitNexus 影响分析不匹配或 Channel / worker 上下文丢失时，调用 `lessons-record` Skill。
 
-Trellis 项目默认采用 `lessons-record` Skill 定义的分层结构：`.trellis/spec/lessons.md` 只保存短入口和高优先级摘要，完整 lesson 写入 `.trellis/lessons/index.md`、`topics/` 或按需归档。只有确认项目没有使用 Trellis 时，才默认写入 `docs/lessons.md`。
+Trellis 项目默认采用 `lessons-record` Skill 定义的分层结构：`.trellis/spec/lessons.md` 只保存短入口和高优先级摘要，完整 lesson 写入 `.trellis/lessons/index.md`、`topics/` 或按需归档。非 Trellis 项目若已在 `AGENTS.md`、`docs/lessons.md` 或 README 声明分层 lessons 结构，则遵循项目结构；否则才默认写入 `docs/lessons.md`。

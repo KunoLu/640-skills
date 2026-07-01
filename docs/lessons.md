@@ -1,183 +1,40 @@
 # Lessons
 
-## 每日版本检查不得推进 ENTRYPOINT 当前版本
+本文件是当前配置摘录仓库的 lessons 必读短入口，不再保存完整历史库。每次执行本仓库操作前仍必须先读取本文件，再按当前任务主题、错误信息、工具名或 tags 读取命中的详情。
 
-- 问题：每日版本检查自动化在发现 Codex 新版本后，把 `ENTRYPOINT.md` 中的当前版本从 `v0.131.0` 自动更新到了 `v0.132.0`，且 `UPDATE.md` 使用了英文内容。
-- 根因：automation prompt 没有明确区分“每日检查”和用户手动输入 `更新` / `update` 后的写回动作，也没有要求 `UPDATE.md` 必须使用中文。
-- 修复：每日自动化只读取 `ENTRYPOINT.md` 当前版本作为固定比对起点，只用中文刷新 `UPDATE.md`，不得写回 `ENTRYPOINT.md`；只有用户手动输入 `更新` / `update` 时才允许更新版本号并归档。
-- 预防：后续涉及自动化写入项目基线文件时，必须在 prompt 和 `AGENTS.md` 中同时明确“只读基线”和“手动确认写回”的边界。
+完整 lessons 结构：
 
-## 配置摘录仓库不得按真实业务项目判断
+- `docs/lessons/index.md`：按 `id`、tags、适用场景和详情路径维护索引。
+- `docs/lessons/topics/<topic>.md`：保存分主题完整 lesson 详情。
+- `docs/lessons/archive/YYYY-QN.md`：低频历史归档；默认不读，只有 index 明确指向或用户要求追溯时再读。
 
-- 问题：维护 Codex 配置摘录时，容易把仓库内的 `AGENTS.md`、`skills/`、`ENTRYPOINT.md` 当成真实业务项目结构来解释，从而引入“当前仓库直接生效”“当前仓库事实源”等误导措辞。
-- 根因：配置摘录仓库同时保存全局规则、项目级规则模板和 Skill 镜像，外观类似项目根目录，但其目标是为后续同步和复用配置，不代表正在开发的业务仓库。
-- 修复：将相关文档改为“配置文件与 Skill 的摘录/同步源”，避免把配置摘录仓库误写成真实工作项目的事实源。
-- 预防：后续修改本仓库时，先区分“配置摘录源”和“真实工作项目”；不要因为缺少 `.trellis/`、`.gitnexus/` 等目录就改写模板规则的适用边界。
+写入新 lesson 时：
 
-## 项目级 AGENTS 模板不得镜像配置仓库根 AGENTS
+1. 先判断是否属于长期 lesson；普通任务总结和临时调研不要写入。
+2. 将完整记录写入对应 `docs/lessons/topics/<topic>.md`。
+3. 同步更新 `docs/lessons/index.md`。
+4. 只有跨任务高频、缺失会反复导致错误的规则，才把一句话摘要补到本短入口。
+5. 不要把完整 lesson 历史重新堆回本文件。
 
-- 问题：`agents/AGENTS.project.md` 被错误改成了与本配置仓库根 `AGENTS.md` 基本相同的内容，丢失了它作为真实项目仓库根目录 `AGENTS.md` 模板的角色。
-- 根因：没有区分三类文件：`agents/AGENTS.global.md` 是 Codex 全局规则模板，`agents/AGENTS.project.md` 是真实项目级规则模板，本仓库根 `AGENTS.md` 只是配置摘录仓库自身规则。
-- 修复：重新将 `agents/AGENTS.project.md` 调整为真实项目级模板，承接全局规则并补充项目事实源、Trellis、GitNexus、Channel、验证和 Lessons 的项目级约束。
-- 预防：后续同步规则时，不能把本仓库根 `AGENTS.md` 复制到 `agents/AGENTS.project.md`；两者加载位置、适用对象和内容职责不同。
+## 高频摘要
 
-## 本地配置同步必须显式触发
+- 当前仓库是 Codex 配置文件与 Skill 的摘录 / 同步源，不是真实业务项目；修改时先区分“配置源文件”和“真实项目模板”。
+- 每日版本检查自动化只能读取 `ENTRYPOINT.md` 当前版本作为比对基线，不能自动写回版本号；只有用户手动输入 `更新` / `update` 才执行写回和归档。
+- 普通修改任务不得同步到本机生效路径；只有用户主动输入 `同步` / `sync` 才执行本地同步。
+- 自动化专用规则只能写入本仓库根 `AGENTS.md` 或相关自动化说明，不要污染可复用的全局 / 项目 AGENTS 模板。
+- 展示型或文档型任务中的参考配置，默认先视为展示内容；只有用户明确要求修改当前仓库配置时才落地到仓库根。
+- 使用 `rtk` 后遇到明显包装器参数解析异常时，必须用原生命令复验同一事实。
+- 编写一次性验证脚本前，先对照本入口和命中的 topic，避免重复使用已记录的问题写法；Markdown 解析优先按标题层级和表头语义，不要按裸 `---` 或脆弱正则切割。
+- 校验脚本必须按目标文件职责断言，先确认实际 schema；不要用同一 expected 列表无差别扫描所有文件。
+- Web UI 测试资产和 Playwright 报告路径必须有参数和验证门；Playwright 正式报告以命名 HTML 为主轴，`results.json` / `junit.xml` / 默认 `index.html` 不能决定最终 Markdown stem。
+- 新增或修改用户可见 BDD `.feature` 场景时，首个 `.feature` 默认中文场景文案 + 英文 Gherkin 关键词，并在写入前和验证阶段确认语言规则。
 
-- 问题：本地同步规则曾写成全局规则或全局 Skill 发生修改后“还应同步到本地 PC”，容易导致普通编辑任务立即覆盖实际生效的本地 Codex 配置。
-- 根因：没有区分“维护仓库源文件”和“落地到本地实际路径”两个动作，触发语义不够明确。
-- 修复：将同步逻辑改为只有用户主动输入 `同步` 或 `sync` 时才执行；普通修改任务只更新仓库源文件。
-- 预防：后续新增同步目标或同步规则时，必须明确触发词、同步范围、校验方式，并保持项目级模板 `agents/AGENTS.project.md` 不自动同步。
+## Topic 路由
 
-## 自动化规则不得写入可复用模板
+| topic | read_when | detail |
+|---|---|---|
+| repository-workflow | 版本检查、同步、配置摘录仓库定位、AGENTS / ENTRYPOINT / README 规则、GitHub release 依据、合并远程分支或展示型任务 | `docs/lessons/topics/repository-workflow.md` |
+| validation-scripts | 一次性校验脚本、Markdown 解析、shell quoting、Node / Python 脚本、动态导入、结构化断言、schema 检查 | `docs/lessons/topics/validation-scripts.md` |
+| bdd-e2e-reports | BDD 语言、Web UI 测试资产、Playwright / Maestro 报告、E2E 报告与测试状态解耦 | `docs/lessons/topics/bdd-e2e-reports.md` |
 
-- 问题：每日版本更新中，为了约束本仓库自动化如何把 release 结论沉淀为通用规则，曾把该要求误写入 `agents/AGENTS.global.md` 和 `agents/AGENTS.project.md`，污染了给其他项目直接复用的全局/项目级模板。
-- 根因：没有先判断规则的适用主体，把“本配置摘录仓库的自动化运行逻辑”和“真实项目会继承的长期 agent 行为规范”混为一谈。
-- 修复：撤回两份 agents 模板中的自动化专用规则，只在根 `AGENTS.md` 保留每日版本检查自动化约束；`skills/trellis-channel/SKILL.md` 仅保留与 Trellis Channel 实际使用边界相关的通用规则。
-- 预防：后续根据 release notes 修改规则时，先分类目标文件角色：根 `AGENTS.md` 可写本仓库自动化流程，`agents/AGENTS.global.md` / `agents/AGENTS.project.md` 只写对真实项目普遍成立的行为规范，`skills/**/SKILL.md` 只写该 Skill 自身长期有效的使用规则。
-
-## 验证脚本枚举 Skill 时必须过滤目录
-
-- 问题：每日版本检查的 Node 验证脚本直接遍历 `skills/` 并拼接 `SKILL.md`，把 macOS 产生的 `.DS_Store` 当成目录读取，导致验证脚本自身失败。
-- 根因：验证脚本假设 `skills/` 下只有 Skill 目录，没有使用 `Dirent.isDirectory()` 或等价方式过滤文件。
-- 修复：重新运行验证时只枚举目录，并保留 `.gitignore` 三行校验，确认 `.DS_Store` 仍被忽略。
-- 预防：后续所有针对 `skills/**/SKILL.md` 的自动化检查都应先过滤目录或直接使用 `rg --files skills -g SKILL.md`，不要手写无类型的路径拼接。
-
-## 解析 Markdown 章节不得按裸分隔线切割
-
-- 问题：每日版本检查的 Node 验证脚本用 `split("---")` 截取 `ENTRYPOINT.md` 版本监控章节，误把 Markdown 表格的 `|---|` 分隔行当作章节边界，导致脚本自身误报启用工具为空。
-- 根因：验证脚本使用了过宽的字符串分隔，没有按 Markdown 标题层级或行首完整分隔线解析。
-- 修复：改为按下一个二级标题截取章节，再解析表格行。
-- 预防：后续解析 Markdown 章节时优先按标题层级、行首锚点或 Markdown parser 处理；不要用裸 `---` 这类会命中表格分隔行的字符串切割。
-
-## Node 验证脚本不要使用非 JS 正则锚点
-
-- 问题：每日版本检查的 Node 验证脚本用 `\z` 作为文末锚点，JavaScript 正则不支持该语义，导致最后一个 Markdown 章节匹配失败；随后用 `^...|$` 搭配 `m` 模式时，`$` 又匹配到行尾，导致章节被截成空段。
-- 根因：把其他正则方言中的文末锚点直接移植到 Node.js，且没有意识到 JavaScript 正则 `m` 模式会改变 `$` 的匹配语义。
-- 修复：校验脚本改用行扫描和标题索引截取 Markdown 章节，避免依赖跨行 lookahead 的文末锚点。
-- 预防：后续一次性 Node 校验脚本只使用 JavaScript 正则明确支持的语法；复杂章节解析优先用行扫描或标题索引，避免跨语言正则习惯迁移。
-
-## ENTRYPOINT 版本写回必须限定表格语义
-
-- 问题：手动 `update` 写回 `ENTRYPOINT.md` 时，脚本用“第一列等于工具名”的宽泛表格正则替换版本，误改了“工具定位”表里的“是否进入主流程”列，并把“当前版本汇总”表压成一行。
-- 根因：没有按 Markdown 章节和表头定位，只用工具名匹配任意表格行，导致同名工具在非版本表格中也被当成版本记录。
-- 修复：立即用精确补丁恢复非版本表格，只保留版本监控表、工具当前关注版本和当前版本汇总中的版本更新。
-- 预防：后续写回 `ENTRYPOINT.md` 时必须先按章节标题和表头定位目标表，再按列名更新“当前使用版本”或“当前版本记录”；不要对全文表格做工具名全局替换。
-
-## 展示型任务中的参考配置不得直接写入当前仓库
-
-- 问题：在规划模板/Skill 展示 HTML 时，用户提供 `.gitignore` 和 `.gitattributes` 参考规则，本应作为 HTML 中给其他代码仓库使用的配置说明，却被误写入当前配置摘录仓库。
-- 根因：没有先确认用户提供的配置片段属于“展示内容”还是“当前仓库变更”，忽略了本仓库是配置摘录源且用户正在讨论 HTML 展示内容的上下文。
-- 修复：立即恢复当前仓库 `.gitignore` 原内容，并删除误新增的 `.gitattributes`。
-- 预防：后续展示型、文档型任务中，用户给出的配置片段默认先视为文档内容候选；只有用户明确要求修改当前仓库配置文件时，才落地到仓库根配置。
-
-## GitHub blob 页面不得作为唯一最新版本依据
-
-- 问题：每日版本检查中，GitHub blob 页面和网页搜索片段一度显示某工具最新版本仍停在旧版本，但 GitHub Releases 与 raw changelog 已发布新版本。
-- 根因：只看渲染后的 changelog blob 或搜索片段会受页面缓存、折叠和抓取结果影响，无法保证覆盖最新 release 条目。
-- 修复：改用 GitHub Releases 页面和 raw changelog 交叉确认，校正本次版本区间。
-- 预防：后续每日版本检查遇到 changelog / release 信息不一致时，至少交叉检查 GitHub Releases、raw changelog 或 tags；不要把 GitHub blob 渲染页或搜索片段当作唯一最新版本依据。
-
-## 合并远程分支后仍需校验仓库硬规则
-
-- 问题：将远程 `main` 快进到本地后，远程历史中的 `.gitignore` 第四行 `.pi/` 被带入本地，违反本仓库 `.gitignore` 必须严格三行的规则。
-- 根因：合并远程分支时只关注 Git 历史推进，容易忽略远程已有提交也可能与当前仓库硬规则冲突。
-- 修复：推送前重新校验 `.gitignore` 精确内容，删除 `.pi/` 并保留 `.DS_Store`、`.gitnexus/`、`.trellis/` 三行。
-- 预防：后续在 `main` 合并、快进或推送前，都要运行 `.gitignore` 精确三行检查；即使变更来自远程已有提交，也不能跳过本仓库规则验证。
-
-## rtk 包装器失败后必须原生命令复验
-
-- 问题：每日版本检查中，`rtk git diff -- AGENTS.md ...` 会把 pathspec 误解析成 revision，`rtk test -d` / `rtk test -f` 也会输出 shell usage 并失败，容易被误读成仓库文件或目录状态异常。
-- 根因：`rtk` 包装器对部分带 `--` pathspec 或 POSIX `test` 参数的命令解析不等价于原生命令；失败来自包装器参数处理，而不一定来自 Git 或文件系统事实。
-- 修复：保持先尝试 `rtk` 的仓库规则；当 `rtk` 输出明显是包装器/参数解析错误时，立即用对应原生命令复验同一事实，并在最终输出说明 fallback。
-- 预防：后续验证脚本和自动化总结中，要区分“rtk 包装器失败”和“底层验证失败”；只有原生命令或结构化脚本也失败时，才判定验证事实未通过。
-
-## Markdown 反引号搜索必须安全引用
-
-- 问题：验证模板是否残留旧文案时，`rg` 搜索模式包含 Markdown inline code 反引号，命令用双引号包裹后被 zsh 当成命令替换，出现 `command not found`，导致验证命令自身失败。
-- 根因：双引号不会阻止 shell 对反引号执行命令替换；包含 `` `code` ``、`$` 等 shell 元字符的 Markdown 搜索模式不能直接放在双引号里。
-- 修复：改用单引号包裹 `rg` 搜索模式，并用结构化 Node 断言补充验证，区分“命令引用失败”和“模板内容失败”。
-- 预防：后续验证 Markdown 文档中含反引号、`$`、`!` 等 shell 元字符的文本时，优先使用单引号、转义字符或 Node 结构化检查；最终报告中说明失败来自命令写法还是内容事实。
-
-## 一次性验证脚本必须对照已读 Lessons
-
-- 问题：每日版本检查已经读取 `docs/lessons.md`，但结构化 Node 验证脚本仍重复使用了 JavaScript 不支持的 `\z` 文末锚点，导致验证脚本自身失败。
-- 根因：读取 lessons 后没有把其中的脚本编写禁忌转化为当次验证脚本约束，只在事后依赖 rerun 纠正。
-- 修复：改用行扫描和标题索引截取 Markdown 章节，避免跨语言正则锚点；重新执行结构化验证确认内容事实通过。
-- 预防：后续编写一次性验证脚本前，先把已读 lessons 中与脚本、shell quoting、Markdown 解析相关的条目作为 checklist 核对；不要重复使用已明确记录为失败原因的写法。
-
-## 复杂 Node one-liner 校验必须降低语法风险
-
-- 问题：每日版本检查的结构化 Node 校验脚本写成过长 one-liner，手工嵌套 `for` / `if` 块时多写了一个闭合大括号，导致验证脚本先于内容检查失败。
-- 根因：为了避免临时文件，把多段 Markdown 解析、表格解析和断言逻辑压缩进单条 `node -e`，缺少缩进和局部函数边界，语法错误不易肉眼发现。
-- 修复：将脚本拆成更小的函数和更少的嵌套，重新运行结构化校验，区分“验证脚本语法失败”和“仓库内容事实失败”。
-- 预防：后续一次性 Node 校验脚本应优先使用短函数、行扫描和早返回；如果逻辑超过几段断言，先拆成多个命令或清晰的多行脚本字符串，不要把复杂控制流压成不可审查的一行。
-
-## Python one-liner 校验避免嵌套 f-string 转义
-
-- 问题：一次性 Python 结构化断言脚本在 shell `python -c` 中嵌套 f-string、引号和反斜杠转义，导致脚本先发生 `SyntaxError`，没有执行到内容校验。
-- 根因：为了把多分支断言压成一条命令，在 f-string 表达式里继续嵌套带转义的字符串字面量，触发 Python 对 f-string 表达式的语法限制。
-- 修复：将嵌套表达式拆成普通变量赋值和字符串拼接，重新运行结构化断言并确认内容事实通过。
-- 预防：后续 Python one-liner 校验只保留简单表达式；涉及条件分支、嵌套引号或多段断言时，先拆成局部变量和多行脚本字符串，不要在 f-string 表达式内继续写转义字符串。
-
-## importlib 动态导入 dataclass 模块需先注册 sys.modules
-
-- 问题：一次性 Python 校验脚本用 `importlib.util.module_from_spec()` 动态导入包含 `@dataclass` 的模块时，没有先写入 `sys.modules`，导致 dataclasses 处理类型注解时取不到模块命名空间并抛出 `AttributeError`。
-- 根因：动态导入流程只创建了模块对象并执行 `exec_module()`，但没有模拟正常 import 机制中的 `sys.modules[name] = module` 注册步骤。
-- 修复：在 `spec.loader.exec_module(module)` 前先执行 `sys.modules[name] = module`，重新运行外部 Skill 覆盖安装断言并确认通过。
-- 预防：后续用 `importlib` 在一次性校验中加载带 dataclass、枚举注册、运行时注解或模块级反射的文件时，先注册到 `sys.modules`；如果只验证 CLI 行为，优先通过子进程调用脚本入口，减少动态导入差异。
-
-## Skill Markdown 校验必须允许 frontmatter
-
-- 问题：每日版本检查的结构化 Node 校验脚本要求所有 Markdown 文件必须以 H1 开头，误判带 YAML frontmatter 的 `SKILL.md` 不可读。
-- 根因：验证脚本把普通文档规则套用到 Skill 入口文件，忽略了 Skill 文件标准格式通常先包含 `---` frontmatter，再进入正文标题。
-- 修复：将 Markdown 可读性校验改为同时接受 H1 开头和 YAML frontmatter 开头，并继续检查非空内容与代码围栏配对。
-- 预防：后续校验 `SKILL.md` 时先识别文件类型；对 Skill 入口校验 frontmatter + 正文结构，不要强制套用普通项目文档的 H1 起始规则。
-
-## ENTRYPOINT 详情章节校验不得硬编码行名
-
-- 问题：手动 `update` 后的结构化验证脚本硬编码检查 GitNexus 详情章节必须存在 `当前关注版本` 行，但 `ENTRYPOINT.md` 的 GitNexus 章节并不使用该行名，导致校验脚本误报失败。
-- 根因：校验脚本没有继续沿用“以版本监控表和当前版本汇总表为主数据源”的规则，而是对单个详情章节写了脆弱的文本包含断言。
-- 修复：把验证改回按 Markdown 表格语义解析 `## 0. 版本监控配置`、归档文件区间和 `## 8. 当前版本汇总`，只对确实存在且有稳定结构的字段做断言。
-- 预防：后续验证 `ENTRYPOINT.md` 写回结果时，以章节标题、表头和列名为准；不要为某个工具详情章节硬编码一整行文案或假设所有工具章节都有同名字段。
-
-## ast.literal_eval 不适合解析含调用表达式的配置常量
-
-- 问题：结构化校验 `onboard.py` 中 `SKILL_SOURCES` 时，用 `ast.literal_eval()` 直接解析包含 `TEMPLATE_DIR / "skills" / ...` 表达式的字典，验证脚本先抛出 `ValueError`，没有执行到内容一致性检查。
-- 根因：`ast.literal_eval()` 只接受纯 Python 字面量；当字典值包含变量名、路径拼接、函数调用或其他表达式时，应改用 AST 遍历提取 key，或用源码文本 / 运行时导入的方式校验。
-- 修复：改为遍历 AST 字典键，只提取字符串 key 来确认 Skill 名称登记情况，再用文件系统和 manifest 做交叉校验。
-- 预防：后续一次性 Python 结构化校验中，只有目标表达式确认为纯字面量时才使用 `ast.literal_eval()`；否则优先做 AST 节点级提取、受控导入或直接文本/JSON 校验。
-
-## 结构化校验必须按目标文件职责断言
-
-- 问题：校验 5 个 book-derived Skill 接入时，脚本要求每个 Skill 名称都必须出现在 `project-validation/SKILL.md`，但该文件只负责修改后验证策略，合理范围只需要提到验证后相关的 `book-release-readiness` / `book-ddia-data-design`。
-- 根因：一致性校验把“全局登记文件”和“阶段性职责文件”混为一类，过度要求所有目标文件都完整枚举全部 Skill。
-- 修复：按文件职责拆分断言：manifest、安装脚本、全局 / 项目 AGENTS、onboard 文档和展示页必须覆盖全部新增 Skill；`trellis-workflow` 覆盖阶段编排；`project-validation` 只校验验证后相关 Skill。
-- 预防：后续编写结构化校验时，先定义每个文件的责任面，再为不同责任面设置不同断言，不要用同一个 expected 列表无差别扫描所有文件。
-
-## 结构化配置校验前必须确认实际 schema
-
-- 问题：校验 `templates/MANIFEST.json` 时，断言脚本凭记忆读取顶层 `files` 字段，但实际 schema 使用 `templates` 字段，导致脚本抛出 `KeyError`，没有执行到内容事实校验。
-- 根因：编写一次性结构化校验时没有先读取目标配置的实际结构，把其他 manifest 习惯迁移到了当前仓库。
-- 修复：先读取 `templates/MANIFEST.json`，确认顶层字段后，将断言脚本改为读取 `manifest["templates"]`。
-- 预防：后续校验 JSON / TOML / YAML 配置前，先查看目标文件 schema 或用受控解析打印顶层 key；不要在未确认字段名时直接写断言。
-
-## BDD 首个 .feature 语言规则必须有写入前和验证门
-
-- 问题：项目规则和 `gherkin-bdd` Skill 已写明“无既有 `.feature` 时，场景文案默认中文、Gherkin 结构关键词用英语”，但实际新建 `.feature` 时仍生成了全英文文案。
-- 根因：语言要求只作为描述性规则存在，没有在 `gherkin-bdd` 写入流程、Trellis BDD overlay 和 `project-validation` 检查中形成必须报告和验证的 gate；英文 PRD、design、代码标识符和英语 Gherkin 关键词容易把输出带向全英文。
-- 修复：在 `gherkin-bdd` 增加写入前语言决策门，在 `trellis-workflow` 纳入 BDD overlay 阶段要求，并在 `project-validation` 增加 `.feature` 语言一致性检查和 blocked 条件。
-- 预防：后续把“默认规则”沉淀为 Skill 时，必须同时覆盖生成前决策、生成后验证和最终输出状态；特别是语言、路径、source of truth 这类容易被上下文漂移覆盖的规则，不能只写成静态说明。
-
-## Web UI 测试资产路径规则必须有参数和验证门
-
-- 问题：项目规则只写明 `web-ui-autotest-generator` 的 JSON 测试资产应整理到 `tests/e2e/manifest/`，但 Skill 示例脚本默认仍会把 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json` 输出到项目根目录。
-- 根因：只把目标路径写成项目约定，不能保证后续 agent 或人工执行脚本时自动带上 `--out`、`--manifest`、`--selector-audit` 等参数；缺少收尾检查时，根目录残留也可能被误认为完成。
-- 修复：在全局 / 项目 AGENTS 模板中固化 `tests/e2e/manifest/` 目标路径和必须加载 `project-validation` 的路由，在 `project-validation` Skill 中固化完整脚本参数，在 `trellis-workflow`、README 和模板 `.gitignore` 中固化路径契约引用、repair plan 忽略路径和根目录残留检查。
-- 预防：后续沉淀工具输出路径、source of truth 或测试资产目录时，必须同时覆盖脚本调用参数、生成后存在性检查、根目录 / 旧路径残留检查和最终状态报告；不要只写“推荐放到某目录”。
-
-## E2E 报告文件生成与测试通过状态必须解耦
-
-- 问题：Playwright 已生成 `index.html`、`results.json` 和 `junit.xml` 时，Agent 因最终全量 rerun 未全绿而报告“未生成正式报告”，没有把 HTML 重命名为模板要求的 `playwright-report-{feature_file_name}-{stamp}.html`，也没有生成同 stem 的 Markdown 汇总。
-- 根因：模板规则把“最终全量通过后才能生成正式报告”和“最后一次运行必须留下命名报告产物”混在一起，导致失败运行已有 runner 产物时仍可能跳过报告归档；同时没有强制 Markdown 汇总使用中文。
-- 修复：将 `Final Test Report` 定义为报告文件是否实际生成，将 `Final Full Rerun` 定义为最终全量是否通过；只要 Playwright 或 Maestro 产生原生 runner 报告，就必须生成命名报告和同 stem 中文 Markdown 汇总，失败状态写入汇总而不是跳过文件。
-- 预防：后续修改测试报告规则时，必须分别检查“报告产物存在性”和“测试结论状态”，最终输出前用文件存在性校验确认命名报告和同 stem `.md` 都存在；不要把 `Run Summary MD` 标记为 `not-needed` 来绕过失败运行的汇总。
+完整索引见 `docs/lessons/index.md`。

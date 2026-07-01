@@ -93,11 +93,11 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 报告规则：
 
 - 调试轮次不要沉淀多份正式测试报告。失败后的定点重跑可以使用 stdout、runner 临时目录或项目默认临时产物排障，但收尾时必须只保留最后一次相关运行或最终计划运行对应的一组命名报告。
-- 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在同一报告目录生成命名后的原生报告和同 stem Markdown 汇总。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
+- 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在同一报告目录生成命名后的原生报告和同 stem Markdown 汇总。对 Playwright，“同一报告目录”固定指 HTML 正式报告目录，默认是 `tests/e2e/reports/html/`，不是 `results.json` 所在上级目录。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
 - 默认目录：API / integration 使用 `tests/api/reports/`，Playwright HTML 正式报告使用 `tests/e2e/reports/html/`，Maestro 使用 `.maestro/reports/`。
 - Playwright 命名：`playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。如果不是 smoke 且无法追踪到 BDD `.feature`，不要编造文件名，先将 BDD 追踪标记为 `blocked`。
 - Maestro 命名：`maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
-- Playwright 默认 HTML reporter 生成 `index.html` 时，在最后一次相关运行结束后必须将其移动或复制为上述正式报告名；命名后的 HTML 是正式报告，是否保留 `index.html` 由项目配置决定。如果 Playwright 已产生 `results.json`、`junit.xml` 或等价结果但没有 `index.html`，先按项目配置重跑或补启用 HTML reporter，不能在缺少命名 HTML 和同 stem `.md` 时结束任务。
+- Playwright 默认 HTML reporter 生成 `index.html` 时，在最后一次相关运行结束后必须将其移动或复制为上述正式报告名；命名后的 HTML 是正式报告，是否保留 `index.html` 由项目配置决定。Markdown 汇总必须与命名后的 HTML 完全同 stem；不得把 `results.json`、`junit.xml`、`test-results/` 或默认 `index.html` 的 stem 用作最终 Markdown 文件名，`results.md`、`result.md`、`junit.md`、`index.md` 均不能满足 `Run Summary MD: generated`。如果 Playwright 已产生 `results.json`、`junit.xml` 或等价结果但没有 `index.html`，先按项目配置重跑或补启用 HTML reporter，不能用 JSON / JUnit 报告替代命名 HTML 和同 stem `.md`。
 - API 命名示例：`api-report-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{YYYY_mm_dd}-{HH_MM_SS}.md`。
 - 如果项目配置强制多个 reporter，只把最后一次相关运行或最终计划运行生成的 reporter 集合视为最终报告集合；Markdown 汇总仍只生成一份。
 - 未最终全量通过时，仍生成最后一次相关运行的命名报告和同 stem Markdown 汇总，但不得声明“全量通过”或“full-stack 通过”；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。

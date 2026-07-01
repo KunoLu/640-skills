@@ -393,7 +393,7 @@
           <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。</p>
         </div>
         <div class="flow" aria-label="主流程">
-          <div class="step"><b>1. 需求</b><span>读取规则、lessons、项目文档，必要时澄清。</span></div>
+          <div class="step"><b>1. 需求</b><span>读取规则、lessons 短入口，并按需读取 index / topic。</span></div>
           <div class="step"><b>2. SBTD</b><span>规格、行为、测试、领域语言对齐。</span></div>
           <div class="step"><b>3. 影响</b><span>GitNexus 可用时做影响分析。</span></div>
           <div class="step"><b>4. 实现</b><span>按项目规范和 Skill 边界改动。</span></div>
@@ -607,7 +607,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>默认报告目录</strong><br>API: <code>tests/api/reports/</code>；Playwright HTML: <code>tests/e2e/reports/html/</code>；Maestro: <code>.maestro/reports/</code>。</div>
           <div><strong>Playwright Report</strong><br><code>playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html</code>；smoke 使用 <code>smoke</code>，多 feature 优先 suite 名，否则 <code>multi-feature</code>。</div>
           <div><strong>最终报告</strong><br>调试轮次不沉淀多份正式报告；只要 Playwright 或 Maestro 产生 runner 原生报告，无论最终是否全绿，都生成最后一次相关运行的命名报告。命名后的 Playwright HTML 是正式报告，是否保留 <code>index.html</code> 由项目配置决定。</div>
-          <div><strong>Markdown 汇总</strong><br>同目录同 stem 的中文 <code>.md</code> 记录运行 case、关联 BDD feature、总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑；状态枚举、命令、路径和错误原文可保留英文。</div>
+          <div><strong>Markdown 汇总</strong><br>Playwright 的 <code>.md</code> 必须与命名 HTML 同 stem，不能用 <code>results.json</code> / <code>junit.xml</code> / 默认 <code>index.html</code> 的 stem；中文汇总记录运行 case、关联 BDD feature、总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑。</div>
         </div>
         <p>失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。</p>
       </div>
@@ -710,6 +710,9 @@ tests/e2e/**/*.trace.zip
           <tbody>
             <tr><td><code>ENTRYPOINT.md</code></td><td>版本监控和工作流总入口。</td></tr>
             <tr><td><code>AGENTS.md</code></td><td>本仓库直接生效规则，包括 README 同步规范。</td></tr>
+            <tr><td><code>docs/lessons.md</code></td><td>Lessons 必读短入口；执行仓库操作前必须先读取。</td></tr>
+            <tr><td><code>docs/lessons/index.md</code></td><td>Lessons 完整索引，按 tags、适用场景和详情路径检索。</td></tr>
+            <tr><td><code>docs/lessons/topics/**</code></td><td>Lessons 完整详情，按当前任务命中后读取。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/</code></td><td>onboard Skill 完整目录；普通 sync 时同步到 <code>/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/</code>。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/agents/</code></td><td>全局规则和项目级规则模板。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板目录，包含 <code>SKILL.md</code>、<code>references/</code>、<code>scripts/</code>、<code>assets/</code> 等。</td></tr>

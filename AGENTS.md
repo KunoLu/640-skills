@@ -16,10 +16,18 @@
 
 ## Lessons 读取规则
 
-本仓库的长期经验记录维护在 `docs/lessons.md`。
+本仓库的长期经验记录采用 `lessons-record` 的分层结构，但保留 `docs/lessons.md` 作为每次操作前的必读短入口：
 
-每次执行本仓库操作前，必须先读取 `docs/lessons.md`，理解其中与当前任务相关的经验后再继续。  
-如果该文件不存在或不可读取，不要假装已读取；必须在最终输出中说明跳过原因。
+- `docs/lessons.md`：必读短入口，只保存读取协议、topic 路由和高频摘要，不保存完整历史库。
+- `docs/lessons/index.md`：完整索引，按 `id`、tags、适用场景和详情路径维护。
+- `docs/lessons/topics/<topic>.md`：完整 lesson 详情。
+- `docs/lessons/archive/YYYY-QN.md`：低频历史归档，默认不读。
+
+每次执行本仓库操作前，必须先读取 `docs/lessons.md`，理解其中与当前任务相关的高频规则后再继续。
+如果当前任务、错误信息、工具名或 tags 命中 `docs/lessons.md` 的 topic 路由或 `docs/lessons/index.md`，再读取对应 topic / archive；不要默认全文读取 `docs/lessons/topics/**`。
+如果 `docs/lessons.md` 不存在或不可读取，不要假装已读取；必须在最终输出中说明跳过原因。
+
+写入新 lesson 时，必须将完整记录写入对应 `docs/lessons/topics/<topic>.md` 并同步更新 `docs/lessons/index.md`；只有跨任务高频、缺失会反复导致错误的摘要才同步到 `docs/lessons.md`。不要把完整 lesson 历史重新堆回 `docs/lessons.md`。
 
 ## 本仓库 BDD 产物边界
 
@@ -119,7 +127,7 @@ Codex 每日版本检查自动化必须遵守：
 
 当用户输入 `更新` 或 `update` 时：
 
-1. 先读取 `docs/lessons.md`，再继续执行更新流程。
+1. 先读取 `docs/lessons.md`，并按命中情况读取 `docs/lessons/index.md` 或相关 topic，再继续执行更新流程。
 2. 检查项目根目录 `archive/` 下已有的 `UPDATED-yyyy-mm-dd-index.md` 文件：
    - 以文件名中的 `yyyy-mm-dd` 作为归档日期。
    - 删除归档日期早于当前本地日期 14 天前的文件。

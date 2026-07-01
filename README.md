@@ -20,7 +20,9 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 | `AGENTS.md` | 本仓库自身直接生效的补充规则。 |
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
-| `docs/lessons.md` | 本仓库长期经验记录，执行仓库操作前必须先读取。 |
+| `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
+| `docs/lessons/index.md` | Lessons 完整索引，按 tags、适用场景和详情路径检索。 |
+| `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
 | `kuno-workflow-onboard-skills/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。 |
 | `kuno-workflow-onboard-skills/SKILL.md` | onboard Skill 入口说明。 |
 | `kuno-workflow-onboard-skills/REFERENCE.md` | onboard、安装、检测和工具配置参考。 |
@@ -37,7 +39,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 模板遵循“项目事实优先、工具强证据启用、修改最小可验证”的原则。
 
 ```text
-读取规则和 lessons
+读取 `docs/lessons.md` 短入口，并按需读取 lessons index / topic
   -> 澄清需求与 SBTD 判断
   -> Trellis / GitNexus / Skill 按证据启用
   -> 实现或配置修改
@@ -56,7 +58,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。
 - SEO/GEO 只面向公开 Web 搜索可见性，不替代 Web 运行时诊断、Playwright 回归、发布检查或人工内容评审。
 - 跨仓或链路不完整时，mock 只能基于 contract、schema、真实响应样例、既有 fixture 或用户明确确认；mock-backed 不能冒充 full-stack 通过。
-- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，无论最终全量是否通过，都要生成最后一次相关运行的命名报告和同目录同 stem 的中文 Markdown 汇总。
+- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，无论最终全量是否通过，都要生成最后一次相关运行的命名报告和同目录同 stem 的中文 Markdown 汇总。Playwright 的同 stem 以命名后的 HTML 为准，不以 `results.json` 为准。
 - 任何工具不可用时，要标记 `blocked`、`skipped` 或 `not-needed`，不能声称对应验证已通过。
 
 ## SBTD：SDD、BDD、TDD、DDD
@@ -117,6 +119,7 @@ Web E2E 报告规则：
 - 完整环境可用时跑 full-stack Playwright E2E；只有 contract 或 mock 环境时标记 `contract-backed` 或 `mock-backed`。
 - 最终正式 Playwright HTML 报告默认写入 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的中文 Markdown 汇总。
 - `feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用 suite 名，否则使用 `multi-feature`。
+- Playwright Markdown 汇总必须与命名后的 HTML 报告完全同 stem；`results.json`、`junit.xml`、`test-results/` 和默认 `index.html` 不能决定正式 Markdown 文件名。`results.md`、`result.md`、`junit.md` 或 `index.md` 不能满足最终 `Run Summary MD`。
 - 命名后的 HTML 是正式报告；是否保留 Playwright 默认 `index.html` 作为工具兼容产物由项目配置决定。只要 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价产物，最终输出前必须确认命名后的 HTML 和同 stem 中文 `.md` 实际存在。
 - 调试轮次失败后先重跑失败 spec，再跑受影响子集，最后跑计划范围内全量验证；最终全量是否通过由 `Final Full Rerun` 表达，不能用“未全绿”跳过报告文件。
 
@@ -249,6 +252,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - Maestro 默认目录：`.maestro/reports/`。
 - 调试轮次不沉淀多份正式报告；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，无论最终全量是否通过，都生成最后一次相关运行的命名报告和一份同目录同 stem 的中文 `.md` 汇总。
 - Playwright 报告命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
+- Playwright `.md` 汇总必须使用命名 HTML 的同 stem，不得使用 `results.json` / `junit.xml` / 默认 `index.html` 的 stem。
 - Maestro 报告继续使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}` stem；`flow_name` 取 flow 文件名，不改成 `feature_file_name`。
 - `.md` 汇总使用中文撰写，状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文；内容记录运行 case / spec / flow 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮命令、失败 case / spec / flow、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险。
 - 失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。

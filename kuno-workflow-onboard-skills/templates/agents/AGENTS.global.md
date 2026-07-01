@@ -162,6 +162,7 @@ Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MC
 - mock 只能基于 API contract、schema、真实响应样例、既有 fixture、launch arguments 或用户明确确认；mock-backed / app-mocked / contract-backed 测试不能报告为 full-stack 通过。
 - API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次不沉淀多份正式报告；一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在收尾前把最后一次相关运行提升 / 复制为命名报告，并生成同目录同 stem 的 Markdown 汇总。`Final Test Report` 表示报告文件是否已生成，`Final Full Rerun` 才表示最终全量是否通过；不要因最终未全绿而跳过报告文件。
 - Playwright HTML 正式报告默认位于 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的 `.md` 汇总；命名后的 HTML 是正式报告，是否保留 Playwright 默认 `index.html` 由项目配置决定。
+- 对 Playwright，Markdown 汇总的 stem 必须与命名后的 HTML 报告完全一致；`results.json`、`junit.xml`、`test-results/` 和 Playwright 默认 `index.html` 都只是 runner / 兼容产物，不能作为正式 Markdown stem。不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`；这些文件即使存在也只能作为辅助材料，最终报告 gate 必须检查 `playwright-report-*.html` 与同名 `playwright-report-*.md` 成对存在。
 - 如果 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价 runner 产物，最终输出前必须确认命名后的 HTML 和同 stem `.md` 实际存在；缺失时先补生成，不能把 `Run Summary MD` 标记为 `not-needed`。
 - `feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。
 - 失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量验证。
@@ -203,10 +204,10 @@ MCP 边界：
 
 **规则**：相关 Skill 可用且任务场景明确匹配时，优先调用对应 Skill；不可用时直接跳过，不阻塞任务。
 
-不要因为任务简单就跳过已明确匹配的 Skill。  
+不要因为任务简单就跳过已明确匹配的 Skill。
 如果任务场景与 Skill 的使用场景不匹配，或仅存在弱关联，则不要强行调用 Skill。
 
-Skill 不替代项目规范、任务产物、测试和人工判断。  
+Skill 不替代项目规范、任务产物、测试和人工判断。
 如果 Skill 与项目 `AGENTS.md`、`.trellis/workflow.md` 或 `.trellis/spec` 冲突，以项目规则为准。
 
 职责划分：`AGENTS.md` 优先保存常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；可延迟加载的详细流程、命令参数、检查清单和专项判断，应优先放入对应 Skill，并由 `AGENTS.md` 指向何时调用。

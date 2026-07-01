@@ -20,6 +20,15 @@ Trellis 项目默认采用分层 lessons 结构：
 
 除非用户明确指定其他路径，否则不写入其他位置。只有确认项目没有使用 Trellis 时，才默认写入到 `docs/lessons.md`。
 
+如果项目没有使用 Trellis，但项目级 `AGENTS.md`、`docs/lessons.md` 或 README 明确采用分层 lessons 结构，则遵循项目结构，不退回单文件写入。常见非 Trellis 分层结构是：
+
+- `docs/lessons.md`：必读短入口，只保存读取协议、topic 路由和高频摘要。
+- `docs/lessons/index.md`：按 `id`、tags、适用场景和详情路径维护索引。
+- `docs/lessons/topics/<topic>.md`：保存完整 lesson 详情。
+- `docs/lessons/archive/YYYY-QN.md`：低频历史归档，默认不读。
+
+在这种结构下，写入新 lesson 时必须更新 topic 详情和 index；只有跨任务高频摘要才同步到 `docs/lessons.md`。
+
 ## 必须记录的场景
 
 出现以下情况时，需要记录 lesson：
