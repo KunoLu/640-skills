@@ -94,6 +94,7 @@ blob-report/
 # Web UI autotest generated run artifacts
 tests/e2e/manifest/ui-test-repair-plan.json
 tests/api/reports/
+tests/unit/reports/
 tests/e2e/reports/
 tests/e2e/**/screenshots/
 tests/e2e/**/videos/

@@ -83,7 +83,9 @@ tags:
 
 ## Report Contract
 
-When a planned Maestro validation run executes and Maestro produces a native report, write one named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Do this for the final attempted run even when the flow fails or the final full rerun is blocked by environment. Debugging and targeted rerun output may use stdout or temporary artifacts, but do not create multiple formal reports for intermediate failed rounds.
+When a planned Maestro validation run executes and Maestro produces a native report, write a named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Do this even when the flow fails or the final full rerun is blocked by environment.
+
+Debugging and targeted reruns may use stdout only. If a debugging or targeted rerun does produce a native report, preserve it as a timestamped report snapshot before running another Maestro command that might overwrite or clean the same output. Multiple local report snapshots are allowed across rounds; the final result is still the last planned full rerun status.
 
 Use this timestamp shape in local time:
 
@@ -111,7 +113,9 @@ stamp=$(date +%Y_%m_%d-%H_%M_%S)
 maestro test --format junit --output ".maestro/reports/maestro-report-${flow_name}-${stamp}.xml" "$flow"
 ```
 
-Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. If project configuration forces multiple reporters, treat them as one final report set from the same final attempted run, and still generate only one Markdown summary. If Maestro CLI never produces a native report because prerequisites are blocked or the runner crashes before reporting, mark the report and summary as blocked instead of claiming generation.
+Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. Prefer writing directly to the timestamped report file. If a project wrapper can only emit into a fixed or runner-managed output directory, use `.maestro/reports/.maestro-current/` as the temporary output and copy or rename the result to `maestro-report-{flow_name}-{timestamp}` before the next Maestro run. Do not treat `~/.maestro/tests`, `.maestro-current/`, or a fixed `report.xml` / `report.html` path as the formal preserved report.
+
+If project configuration forces multiple reporters, treat them as one report set from the same run, and still generate only one Markdown summary for that report set. If Maestro CLI never produces a native report because prerequisites are blocked or the runner crashes before reporting, mark the report and summary as blocked instead of claiming generation.
 
 The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
 

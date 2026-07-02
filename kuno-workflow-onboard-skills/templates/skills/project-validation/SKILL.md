@@ -66,12 +66,12 @@ description: Use after code changes to choose and run validation commands for No
 
 - 先按修改范围选择最小有效验证：项目测试、浏览器诊断、Playwright Web 回归、Maestro 移动 / Hybrid flow、或 Web UI 测试资产覆盖评估。
 - 对 API / Web / Mobile / Hybrid 链路，先判定 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试只能证明对应 contract / mock 假设成立，不能报告为 full-stack 通过。
-- API / integration 测试优先继承项目既有测试框架和报告配置；没有项目约定且需要本轮正式报告时，默认报告目录为 `tests/api/reports/`。
+- API / integration 测试优先继承项目既有测试框架和报告配置；没有项目约定且需要本轮正式报告时，默认正式快照目录为 `tests/api/reports/`。如果 runner 需要会被下一轮清空或覆盖的临时输出目录，默认使用 `tests/api/reports/.api-current/`，运行结束后再复制 / 提升为时间戳报告。
 - Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。
 - Web E2E 正式 HTML 报告快照默认进入 `tests/e2e/reports/html/`，除非项目 Playwright 配置已有更强约定；Playwright HTML reporter 的 `outputFolder` 默认使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`。该目录可能被每次 Playwright 运行清空，只能作为中间产物或工具兼容产物来源；命名后的 HTML 才是正式报告。
 - Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
 - 需要从 BDD 场景生成或维护 Mobile / Hybrid Maestro flow 时，调用 `maestro-mobile-e2e`，并确认可入库 flow 资产位于 `maestro/flow/`。
-- Maestro 最终正式报告必须写入项目根目录 `.maestro/reports/`；默认只生成一个项目需要的原生报告格式，命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`；HTML 只在项目或用户需要人类可读报告时生成。
+- Maestro 正式报告必须写入项目根目录 `.maestro/reports/`；默认只生成一个项目需要的原生报告格式，命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`；HTML 只在项目或用户需要人类可读报告时生成。优先让 Maestro 直接输出到时间戳文件；如项目包装命令只能输出到会被重建的目录，使用 `.maestro/reports/.maestro-current/` 作为临时目录，再复制 / 提升到正式报告名。
 - iOS 真机 Maestro 执行遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，先由 `maestro-mobile-e2e` 按标签 / 关键字懒加载 lesson 并修复，再重跑最小失败 flow。
 - 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
 - 调用 `web-ui-autotest-generator` 前后，必须遵循本路径契约，避免 external Skill 示例或脚本默认值把 JSON 写到项目根目录：
@@ -92,13 +92,15 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 报告规则：
 
-- 调试轮次可以沉淀多份本地命名测试报告快照，以便后续对比失败、修复和最终运行；不要删除同一任务中已有的 `playwright-report-*` 或 `maestro-report-*` 快照。最终状态只以最后一次计划范围内的运行记录 `Final Full Rerun`。
-- 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在正式报告快照目录生成命名后的原生报告和同 stem Markdown 汇总。对 Playwright，“正式报告快照目录”默认是 `tests/e2e/reports/html/`，不是 `results.json` 所在上级目录，也不是 Playwright HTML reporter 的临时 `outputFolder`。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
-- 默认目录：API / integration 使用 `tests/api/reports/`，Playwright HTML reporter 临时输出使用 `tests/e2e/reports/.playwright-html-current/`，Playwright HTML 正式报告快照使用 `tests/e2e/reports/html/`，Maestro 使用 `.maestro/reports/`。
+- 调试轮次可以沉淀多份本地命名测试报告快照，以便后续对比失败、修复和最终运行；不要删除同一任务中已有的 `playwright-report-*`、`maestro-report-*`、`api-report-*` 或 `unit-report-*` 快照。最终状态只以最后一次计划范围内的运行记录 `Final Full Rerun`。
+- 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在正式报告快照目录生成命名后的原生报告和同 stem Markdown 汇总。API / integration 和 unit test 如果本轮生成了需要作为证据保留的原生报告，也适用同一规则。对 Playwright，“正式报告快照目录”默认是 `tests/e2e/reports/html/`，不是 `results.json` 所在上级目录，也不是 Playwright HTML reporter 的临时 `outputFolder`。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
+- 默认目录：API / integration 正式快照使用 `tests/api/reports/`，API 临时输出使用 `tests/api/reports/.api-current/`；Playwright HTML reporter 临时输出使用 `tests/e2e/reports/.playwright-html-current/`，Playwright HTML 正式报告快照使用 `tests/e2e/reports/html/`；Maestro 正式快照使用 `.maestro/reports/`，必要时临时输出使用 `.maestro/reports/.maestro-current/`；unit test 正式报告默认继承项目配置，缺少约定但需要本地证据时使用 `tests/unit/reports/`，必要时临时输出使用 `tests/unit/reports/.unit-current/`。
+- 通用防覆盖规则：`coverage/`、`test-results/`、固定 `junit.xml`、runner 的 `current` / `latest` 目录、以及上述点号临时目录都视为 runner 托管输出。它们可能在下一次运行前被清空、覆盖或重建；需要保留时，必须先复制 / 提升到正式快照目录和时间戳 stem，再启动下一次会改写同一 runner 输出的命令。
 - Playwright 命名：`playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。如果不是 smoke 且无法追踪到 BDD `.feature`，不要编造文件名，先将 BDD 追踪标记为 `blocked`。
 - Maestro 命名：`maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
 - Playwright 默认 HTML reporter 生成 `index.html` 时，在每次需要保留的运行结束后必须从 `tests/e2e/reports/.playwright-html-current/` 将其复制为上述正式报告名；命名后的 HTML 是正式报告。正式报告不得保存在 `.playwright-html-current/` 中，因为下一次 Playwright 运行可能清空该目录。Markdown 汇总必须与命名后的 HTML 完全同 stem；不得把 `results.json`、`junit.xml`、`test-results/` 或默认 `index.html` 的 stem 用作最终 Markdown 文件名，`results.md`、`result.md`、`junit.md`、`index.md` 均不能满足 `Run Summary MD: generated`。如果 Playwright 已产生 `results.json`、`junit.xml` 或等价结果但没有 `index.html`，先按项目配置重跑或补启用 HTML reporter，不能用 JSON / JUnit 报告替代命名 HTML 和同 stem `.md`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，必须同时复制完整资源目录，或生成以 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}/index.html` 为入口的完整快照目录，并让 Markdown 汇总指向该入口。
-- API 命名示例：`api-report-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{YYYY_mm_dd}-{HH_MM_SS}.md`。
+- API 命名示例：`api-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` + `api-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`；没有明确 suite 时使用 `api-report-{YYYY_mm_dd}-{HH_MM_SS}` stem。
+- Unit 命名示例：`unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.html` / `.lcov` + `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。unit test 不强制每轮生成正式报告；但一旦项目命令或 CI 兼容命令已经产生本轮要保留的报告，就不能只依赖会被下一轮重写的 coverage 或 JUnit 固定路径。
 - 如果项目配置强制多个 reporter，每次需要保留的运行只生成一组命名报告和一份 Markdown 汇总；最终结论仍以最后一次计划范围内运行判断。
 - 未最终全量通过时，仍生成该次运行的命名报告和同 stem Markdown 汇总，但不得声明“全量通过”或“full-stack 通过”；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
 - 如果 CLI 未安装、环境预检阻塞或 runner 崩溃到没有任何原生报告产物，`Final Test Report` 和 `Run Summary MD` 标记为 `blocked`，并说明缺失原因；只要 runner 已有原生产物，就不得把 `Run Summary MD` 标记为 `not-needed`。
@@ -138,7 +140,7 @@ Markdown 汇总必须记录：
 - 代码规范 / lint / format 检查是否运行。
 - unit test 是否运行。
 - integration / API / E2E 是否与本次改动相关。
-- 报告路径是否由项目配置生成；模板不为 unit test 强制统一报告目录。
+- 报告路径是否由项目配置生成；模板不为 unit test 强制统一报告目录，但会被 runner 清空 / 覆盖的报告必须先归档到项目约定目录或 `tests/unit/reports/` 的时间戳快照后再作为证据引用。
 - 跳过或阻塞的原因。
 
 ## Node / JavaScript / TypeScript

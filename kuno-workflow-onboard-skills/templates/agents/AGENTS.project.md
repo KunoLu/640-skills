@@ -318,8 +318,9 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
 - API、Web E2E、Mobile E2E 或 Hybrid E2E 的模式、mock、重跑顺序、报告命名、Markdown 汇总内容和状态枚举默认遵循全局 AGENTS 与 `project-validation` Skill。
-- 项目级最低报告门禁：只要 Playwright 或 Maestro 产生 runner 原生报告，就必须保留该次运行的命名报告和同 stem 中文 Markdown 汇总；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。多轮调试可以保留多份本地命名报告快照，但最终结论只以最后一次计划范围内运行判断。
+- 项目级最低报告门禁：只要 Playwright、Maestro、API / integration 或 unit test runner 产生了需要作为本轮证据保留的原生报告，就必须在下一次可能清空输出的运行前保留该次运行的命名报告和同 stem 中文 Markdown 汇总；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。多轮调试可以保留多份本地命名报告快照，但最终结论只以最后一次计划范围内运行判断。
 - Playwright 的正式报告快照目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。Playwright HTML reporter 的 `outputFolder` 应使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`，不要把需要保留的正式命名报告放进该目录，因为下一次 Playwright 运行可能清空它。
+- API / integration 默认正式快照目录为 `tests/api/reports/`，unit test 报告默认继承项目配置；如果 runner 使用会重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 `current` 输出目录，必须先复制 / 提升到项目归档目录或 `tests/unit/reports/` 的时间戳快照，不能把 runner 托管目录当作正式报告。
 - 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
