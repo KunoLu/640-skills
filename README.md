@@ -51,6 +51,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 关键边界：
 
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
+- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；因为初始化包含交互式操作，不代用户执行，只给出命令 `trellis init -u your-name` 让用户在命令行自行运行。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
 - GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。

@@ -55,6 +55,15 @@ rtk go test ./...
 
 ### Trellis
 
+高优先级未初始化提示：
+
+- 如果已经确认当前目录是目标项目根目录，且项目根目录存在项目级 `AGENTS.md`，但项目根目录不存在 `.trellis/`，必须告诉用户：当前项目还没有进行 `trellis init` 操作。
+- 不要替用户执行 `trellis init`。必须说明该命令包含交互式操作，请用户自行在命令行中执行：
+
+```bash
+trellis init -u your-name
+```
+
 满足以下任一条件时，认为 Trellis 可用：
 
 - 存在 `.trellis/`
