@@ -170,3 +170,15 @@
 - 根因：编写一次性结构化校验时没有先读取目标配置的实际结构，把其他 manifest 习惯迁移到了当前仓库。
 - 修复：先读取 `templates/MANIFEST.json`，确认顶层字段后，将断言脚本改为读取 `manifest["templates"]`。
 - 预防：后续校验 JSON / TOML / YAML 配置前，先查看目标文件 schema 或用受控解析打印顶层 key；不要在未确认字段名时直接写断言。
+
+## LESSON-20260702-chinese-markdown-validation-ignore-code: Chinese Markdown Validation Ignore Code
+
+- 日期：2026-07-02
+- 标签：validation, markdown, i18n
+- 适用场景：校验中文 Markdown 文档、`UPDATE.md`、运行报告或含大量 URL / 版本号 / 技术标识符的中文说明
+- 严重级别：medium
+- 来源：每日版本检查自动化校验脚本误判
+- 问题：校验 `UPDATE.md` 是否使用中文时，脚本用全文件 CJK 字符数与 Latin 字符数粗略比较。文档虽然正文为中文，但包含大量 GitHub URL、工具名、版本号、release tag、英文 API 名和技术标识符，导致脚本误报 `UPDATE.md does not look primarily Chinese`。
+- 根因：中文文档校验把代码、URL、命令、版本号和专有英文标识符当成普通英文正文计数，没有按 Markdown 行角色和字段语义区分自然语言内容与技术标识。
+- 修复：将校验改为按章节和段落检查：忽略 URL、代码围栏、inline code-heavy 行和纯技术列表后，要求每个工具章节的说明性正文包含中文，并继续用结构化断言校验标题、区间和字段。
+- 预防：后续校验中文 Markdown 时，不要用全文件 CJK/Latin 总量比作为唯一依据；应先过滤 URL、代码、命令、版本号和技术标识符，再按必需章节或说明性字段判断中文可读性。
