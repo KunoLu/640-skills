@@ -15,7 +15,7 @@
 |---|---|---:|---|---|---|
 | Codex | openai/codex | v0.142.5 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.5 | stable-only | 是 | 复杂任务编排 / TDD workflow |
-| GitNexus | abhigyanpatwari/GitNexus | v1.6.8 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
+| GitNexus | abhigyanpatwari/GitNexus | v1.6.9 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.61.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.6.1 | stable-only | 是 | Android / iOS / Hybrid App E2E |
@@ -310,7 +310,7 @@ handoff
 |---|---|---:|
 | Coding Agent | Codex | v0.142.5 |
 | Agent Harness | Trellis | v0.6.5 |
-| 代码理解 | GitNexus | v1.6.8 |
+| 代码理解 | GitNexus | v1.6.9 |
 | Web 诊断 | Chrome DevTools MCP | latest |
 | Web 回归测试 | Playwright | v1.61.1 |
 | 移动 E2E | Maestro | cli-2.6.1 |

@@ -107,6 +107,7 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 修改代码后，优先通过 GitNexus MCP 执行变更检测。
 - GitNexus 只作为影响分析和变更验证辅助，不替代 Trellis 任务产物、测试或代码评审。
 - 如果项目存在 `.gitnexusrc` 或需要指定默认分支，遵循项目配置；必要时使用 `gitnexus analyze --default-branch <branch>` 重新分析。
+- 手工检查 GitNexus 索引元数据时，优先查看 `.gitnexus/gitnexus.json`；`.gitnexus/meta.json` 是兼容镜像，分支索引下也可能存在 `branches/<branch>/gitnexus.json` 和 `branches/<branch>/meta.json`。不要仅因其中一个文件缺失就判断索引不存在；优先用 `gitnexus status`、MCP 输出和实际 metadata 内容交叉确认。
 - 当 `gitnexus status`、MCP `list_repos` / `context` / `detect_changes` 或其他 GitNexus 输出提示索引 stale、`commitsBehind > 0`、或“索引落后 HEAD ... 个 commit”时，不要直接依赖过期结果；先按命令执行规则尝试在项目根刷新索引。
 - 刷新索引时优先使用项目约定命令或本地 runner，例如存在 `.gitnexus/run.cjs` 时使用 `node .gitnexus/run.cjs analyze`；否则使用项目文档要求的 `gitnexus analyze` / `npx gitnexus analyze`。如果项目指定默认分支或 `.gitnexusrc`，必须带上相应配置。
 - 如果 `analyze` 因沙箱、网络、native crash、索引损坏、耗时限制或权限问题失败，必须在最终输出中说明尝试的命令、失败原因、GitNexus 结果只能作为 advisory，以及实际用哪些 diff / 测试 / 构建 / 运行时检查替代。
