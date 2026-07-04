@@ -24,10 +24,12 @@
 - 自动化专用规则只能写入本仓库根 `AGENTS.md` 或相关自动化说明，不要污染可复用的全局 / 项目 AGENTS 模板。
 - 展示型或文档型任务中的参考配置，默认先视为展示内容；只有用户明确要求修改当前仓库配置时才落地到仓库根。
 - 使用 `rtk` 后遇到明显包装器参数解析异常时，必须用原生命令复验同一事实。
+- unit / API / Playwright / Maestro 报告型测试在使用 `rtk` 前必须评估缓存 / 回放和文件写入风险；报告缺失、陈旧或不可证明时用原生命令复验。
 - 编写一次性验证脚本前，先对照本入口和命中的 topic，避免重复使用已记录的问题写法；Markdown 解析优先按标题层级和表头语义，不要按裸 `---` 或脆弱正则切割。
 - 校验脚本必须按目标文件职责断言，先确认实际 schema；不要用同一 expected 列表无差别扫描所有文件。
 - Web UI 测试资产和 Playwright 报告路径必须有参数和验证门；Playwright 正式报告以命名 HTML 为主轴，`results.json` / `junit.xml` / 默认 `index.html` 不能决定最终 Markdown stem。
 - Playwright HTML reporter 的 `outputFolder` 必须和正式命名报告快照目录分离；默认 runner 临时目录用 `tests/e2e/reports/.playwright-html-current/`，正式快照进入 `tests/e2e/reports/html/`。
+- API / Web E2E / Mobile E2E / Hybrid E2E 正式验证不能只停在 stdout-only、terminal-only 或诊断 reporter；Playwright `--reporter=list`、API 自定义脚本终端输出、Maestro stdout-only 都必须补正式 reporter、捕获 raw report 或标记 blocked。
 - 新增或修改用户可见 BDD `.feature` 场景时，首个 `.feature` 默认中文场景文案 + 英文 Gherkin 关键词，并在写入前和验证阶段确认语言规则。
 
 ## Topic 路由

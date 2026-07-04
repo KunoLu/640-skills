@@ -18,10 +18,11 @@ This Skill does not replace `gherkin-bdd`, `project-validation`, Trellis, projec
 5. Classify the run mode: `full-stack`, `contract-backed`, `app-mocked`, `smoke-only`, or `blocked`.
 6. Generate or update flow assets under `maestro/flow/`.
 7. Before running Maestro, confirm Java 17+, Maestro CLI, target device / simulator, app binary or installed app, bundle id / app id, test account, and environment.
-8. Run the smallest relevant flow first. Expand to platform smoke or full regression only after the targeted flow is stable.
-9. If an iOS real-device failure matches the known issue index, load the matching reference and apply only the relevant fix before rerunning the smallest failing flow.
-10. After failures are fixed and targeted reruns pass, run the planned final full validation and generate one final passing report plus one Markdown run summary.
-11. Report flow asset paths, commands, report files, artifacts location, blocked items, and remaining risk.
+8. Before any Maestro command that must generate a report, decide whether to use `rtk`. Formal report-producing runs default to native `maestro test` unless the project proves `rtk` is no-cache / report-safe for that command.
+9. Run the smallest relevant flow first. Expand to platform smoke or full regression only after the targeted flow is stable.
+10. If an iOS real-device failure matches the known issue index, load the matching reference and apply only the relevant fix before rerunning the smallest failing flow.
+11. After failures are fixed and targeted reruns pass, run the planned final full validation and generate one final passing report plus one Markdown run summary.
+12. Report flow asset paths, commands, `rtk` decision, report files, artifacts location, blocked items, and remaining risk.
 
 ## Mobile Context Gate
 
@@ -83,9 +84,11 @@ tags:
 
 ## Report Contract
 
-When a planned Maestro validation run executes and Maestro produces a native report, write a named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Do this even when the flow fails or the final full rerun is blocked by environment.
+When a planned Maestro validation run executes, it must request a native report with `--format` / `--output` or the project's equivalent reporter unless prerequisites are blocked before the runner can start. Write a named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Do this even when the flow fails or the final full rerun is blocked by environment.
 
-Debugging and targeted reruns may use stdout only. If a debugging or targeted rerun does produce a native report, preserve it as a timestamped report snapshot before running another Maestro command that might overwrite or clean the same output. Multiple local report snapshots are allowed across rounds; the final result is still the last planned full rerun status.
+Because Maestro report generation depends on file side effects, formal Mobile / Hybrid E2E runs must not blindly use `rtk`. Prefer native `maestro test` for any run that writes `.xml`, `.html`, trace, artifact, or Markdown evidence. If `rtk` was used for a Maestro command, verify that the expected report file exists, its mtime / size changed during this run, and the contents match the flow that just executed. If the file is missing, stale, empty, mismatched, or `rtk` output suggests cache hit / replay / skipped write, rerun the same scope with native `maestro test` and treat the native result as authoritative.
+
+Debugging and targeted reruns may use stdout only, but stdout-only runs never satisfy the final formal report gate. If a debugging or targeted rerun does produce a native report, preserve it as a timestamped report snapshot before running another Maestro command that might overwrite or clean the same output. Multiple local report snapshots are allowed across rounds; the final result is still the last planned full rerun status. If the last useful run was stdout-only and Mobile / Hybrid E2E remains in formal validation scope, rerun the planned scope with a native reporter or mark `Final Test Report` and `Run Summary MD` as blocked.
 
 Use this timestamp shape in local time:
 
@@ -115,7 +118,7 @@ maestro test --format junit --output ".maestro/reports/maestro-report-${flow_nam
 
 Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. Prefer writing directly to the timestamped report file. If a project wrapper can only emit into a fixed or runner-managed output directory, use `.maestro/reports/.maestro-current/` as the temporary output and copy or rename the result to `maestro-report-{flow_name}-{timestamp}` before the next Maestro run. Do not treat `~/.maestro/tests`, `.maestro-current/`, or a fixed `report.xml` / `report.html` path as the formal preserved report.
 
-If project configuration forces multiple reporters, treat them as one report set from the same run, and still generate only one Markdown summary for that report set. If Maestro CLI never produces a native report because prerequisites are blocked or the runner crashes before reporting, mark the report and summary as blocked instead of claiming generation.
+If project configuration forces multiple reporters, treat them as one report set from the same run, and still generate only one Markdown summary for that report set. If Maestro CLI never produces a native report because prerequisites are blocked, the runner crashes before reporting, or the only executed command was stdout-only, mark the report and summary as blocked instead of claiming generation.
 
 The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
 
@@ -154,6 +157,7 @@ Report:
 - Source `.feature` paths and scenario names traced by each flow.
 - Maestro CLI / MCP / Java / device status.
 - Commands run and whether reports were generated.
+- `rtk`: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`, with reason.
 - Report paths under `.maestro/reports/`.
 - `Run Summary MD`: Chinese Markdown run summary path under `.maestro/reports/`.
 - Targeted rerun, affected subset rerun, and final full rerun results.

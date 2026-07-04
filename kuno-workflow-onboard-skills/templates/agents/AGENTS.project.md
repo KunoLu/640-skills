@@ -205,6 +205,7 @@ trellis init -u your-name
 
 - `caveman` 是用户级全局 Agent 回复压缩 Skill，不是项目依赖、测试工具、设计工具或验证工具。
 - 不要把 `caveman` 写入 BDD、TDD、GitNexus、Trellis、发布验证或项目运行时链路；它只影响 Agent 给用户的对话表达。
+- `rtk` 是命令输出压缩层，不是测试 runner；unit / API / Playwright / Maestro 等报告型测试先按全局 `rtk` 与报告型测试 Gate 判断，必要时使用原生命令或 fallback-native。
 - 长任务状态更新、命令结果摘要、代码阅读中间结论和上下文压力较大时，可以建议用户启用 `caveman-lite` 或 `caveman` 压缩后续沟通。
 - 需求最终确认、review gate、安装 / 权限 / 破坏性操作确认、最终验证报告和长期项目文档，默认保持清晰完整。
 
@@ -329,6 +330,7 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
 - API、Web E2E、Mobile E2E 或 Hybrid E2E 的模式、mock、重跑顺序、报告命名、Markdown 汇总内容和状态枚举默认遵循全局 AGENTS 与 `project-validation` Skill。
 - 项目级最低报告门禁：只要 Playwright、Maestro、API / integration 或 unit test runner 产生了需要作为本轮证据保留的原生报告，就必须在下一次可能清空输出的运行前保留该次运行的命名报告和同 stem 中文 Markdown 汇总；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。多轮调试可以保留多份本地命名报告快照，但最终结论只以最后一次计划范围内运行判断。
+- 项目级 spec 可以允许诊断轮次使用 stdout-only、terminal-only 或轻量 reporter，但不得把这类命令当作最终正式验证证据。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，收尾前必须使用项目 reporter 生成命名报告；没有原生 reporter 的 API 自定义脚本必须捕获 stdout / stderr / exit code 为 `tests/api/reports/` 下的时间戳 raw report 并生成同 stem 中文 Markdown 汇总；Playwright `--reporter=list` 和 stdout-only Maestro run 只能算诊断或定点重跑。
 - Playwright 的正式报告快照目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。Playwright HTML reporter 的 `outputFolder` 应使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`，不要把需要保留的正式命名报告放进该目录，因为下一次 Playwright 运行可能清空它。
 - API / integration 默认正式快照目录为 `tests/api/reports/`，unit test 报告默认继承项目配置；如果 runner 使用会重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 `current` 输出目录，必须先复制 / 提升到项目归档目录或 `tests/unit/reports/` 的时间戳快照，不能把 runner 托管目录当作正式报告。
 - 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
@@ -391,16 +393,18 @@ Maestro flow 是可入库测试资产；详细生成、命名、报告和真机�
 
 ```bash
 rtk npm run lint
-rtk npm run test
 rtk npm run build
 rtk ruff check .
 rtk ruff format .
 rtk ty check .
-rtk pytest
-rtk go test ./...
+
+# 测试命令先按全局 rtk 与报告型测试 Gate 判断；需要报告落地时优先原生命令
+npm run test
+uv run pytest
+go test ./...
 ```
 
-如果 `rtk` 不可用，回退为项目原生命令。
+如果 `rtk` 不可用，回退为项目原生命令；如果报告型测试使用 `rtk` 后报告缺失、陈旧或不可证明，立即用原生命令复验。
 
 ---
 

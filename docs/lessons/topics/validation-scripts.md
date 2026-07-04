@@ -54,6 +54,18 @@
 - 修复：保持先尝试 `rtk` 的仓库规则；当 `rtk` 输出明显是包装器/参数解析错误时，立即用对应原生命令复验同一事实，并在最终输出说明 fallback。
 - 预防：后续验证脚本和自动化总结中，要区分“rtk 包装器失败”和“底层验证失败”；只有原生命令或结构化脚本也失败时，才判定验证事实未通过。
 
+## LESSON-20260704-rtk-report-producing-test-gate: RTK Report Producing Test Gate
+
+- 日期：2026-07-04
+- 标签：rtk, validation, reports, tests
+- 适用场景：unit test、API / integration test、Playwright Web E2E、Maestro Mobile / Hybrid E2E 需要生成 coverage、JUnit、HTML、JSON、trace、raw report 或 Markdown 汇总时
+- 严重级别：high
+- 来源：用户指出 `rtk` 命中缓存后，测试执行内容可能没有写入落地报告文件，原生命令才能正常生成报告。
+- 问题：默认用 `rtk` 包裹测试命令时，Agent 可能只看到缓存 / 回放 / 压缩后的终端结果，却没有刷新本轮需要保留的报告文件，最终把缺失或陈旧报告误判为已生成。
+- 根因：旧规则把 `rtk` 作为所有 shell 命令的默认前缀，没有区分“只需要终端事实”的检查命令与“必须产生文件副作用”的报告型测试命令。
+- 修复：对 unit / API / Playwright / Maestro 报告型测试先评估是否使用 `rtk`；需要报告落地时优先原生命令或项目明确的 no-cache / report-safe 命令。若已用 `rtk`，必须校验报告文件存在、mtime / size、本轮命令内容匹配；缺失、陈旧、空文件、内容不匹配或输出显示 cache hit / replay / skipped 写入时，立即原生命令重跑。
+- 预防：最终输出或 check summary 必须记录 `rtk`: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`，不能只凭 `rtk` 输出声明测试通过或报告生成。
+
 ## LESSON-20260701-markdown-backtick-shell-quoting: Markdown Backtick Shell Quoting
 
 - 日期：历史记录迁移，原始日期未记录

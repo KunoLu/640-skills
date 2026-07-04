@@ -65,3 +65,15 @@
 - 根因：没有区分 runner 管理的临时输出目录和需要保留的正式报告快照目录；`.gitignore` 忽略 `tests/e2e/reports/` 只表示报告不入库，不会阻止 Playwright 清理自己的 `outputFolder`。
 - 修复：将模板默认改为双目录：Playwright HTML reporter 的临时 `outputFolder` 使用 `tests/e2e/reports/.playwright-html-current/`；正式命名报告快照保存到 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` 和同 stem `.md`。多轮调试可以保留多份本地快照，最终通过状态仍由 `Final Full Rerun` 表示。
 - 预防：后续配置 Playwright 报告时，永远不要把需要保留的 `playwright-report-*` 放进 Playwright 的 `outputFolder`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，复制完整资源目录，或生成 `playwright-report-{feature}-{timestamp}/index.html` 形式的完整快照目录，并让 Markdown 汇总指向该入口。
+
+## LESSON-20260704-diagnostic-run-formal-report-gate: Diagnostic Run Formal Report Gate
+
+- 日期：2026-07-04
+- 标签：e2e, reports, api, playwright, maestro, validation
+- 适用场景：API / Web E2E / Mobile E2E / Hybrid E2E 使用 stdout-only、terminal-only、`--reporter=list` 或未启用 reporter 的诊断命令后收尾
+- 严重级别：high
+- 来源：会话 `019f2cb3-f162-7521-a072-0dfab44738ae` 中 Playwright focused run 使用 `--reporter=list`，最终先只报告终端测试结果，未生成正式 HTML / Markdown 报告
+- 问题：模板虽然要求 Playwright / Maestro / API runner 产生原生报告后必须提升为命名报告，但没有覆盖“正式验证范围内只跑了不产报告的诊断命令”这一缝隙。API 自定义脚本 stdout-only、Playwright `--reporter=list`、Maestro stdout-only 都可能让最终状态停留在终端输出。
+- 根因：旧规则以“runner 已产物”为触发条件，缺少“正式验证范围本身必须产出报告或 blocked”的前置 gate；项目级 spec 允许诊断命令时，也没有强制收尾前补正式 reporter。
+- 修复：将模板规则改为正式验证范围驱动：diagnostic-only 命令只能算诊断或定点重跑；正式收尾必须补跑启用项目 reporter 的计划范围验证，或把 API stdout / stderr / exit code 捕获并提升为 `api-report-*` raw report，或将 `Final Test Report` / `Run Summary MD` 标记为 `blocked`。
+- 预防：以后新增测试报告规则时，必须同时覆盖“已有 runner 产物如何归档”和“正式验证只跑了不产物命令时如何补跑 / 捕获 / blocked”；不要让 terminal output 成为 API、Playwright 或 Maestro 的最终正式报告替代品。

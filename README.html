@@ -340,7 +340,7 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>Kuno Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，公开网站、落地页和文档站按需进入 <code>seo-geo</code> 搜索可见性检查。<code>rtk</code> 和 <code>caveman</code> 是上下文 / token 效率层，不是验证工具：前者压缩 terminal 输出，后者压缩 Agent 回复且不自动开启。</p>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，公开网站、落地页和文档站按需进入 <code>seo-geo</code> 搜索可见性检查。<code>rtk</code> 和 <code>caveman</code> 是上下文 / token 效率层，不是验证工具：前者压缩 terminal 输出，但报告型测试先评估缓存与文件写入风险；后者压缩 Agent 回复且不自动开启。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
@@ -375,7 +375,7 @@
           </div>
           <div class="map-cell">
             <strong>rtk / caveman</strong>
-            <span>rtk 压缩命令输出；caveman 只在用户明确要求时压缩对话输出。</span>
+            <span>rtk 压缩命令输出，但报告型测试先评估缓存与文件写入风险；caveman 只在用户明确要求时压缩对话输出。</span>
           </div>
         </div>
       </aside>
@@ -445,7 +445,7 @@
             <p class="eyebrow">Boundaries</p>
             <h2>工具职责边界</h2>
           </div>
-          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。<code>rtk</code> 与 <code>caveman</code> 只负责压缩命令或对话输出。模板要求在最终输出中显式报告相关状态，避免把诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
+          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。<code>rtk</code> 与 <code>caveman</code> 只负责压缩命令或对话输出；unit / API / Playwright / Maestro 报告型测试要先评估 <code>rtk</code> 缓存或回放是否会跳过文件写入。模板要求在最终输出中显式报告相关状态，避免把诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
         </div>
         <table>
           <thead>
@@ -499,7 +499,7 @@
             <tr>
               <td>rtk</td>
               <td>用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。</td>
-              <td>不改变底层命令语义；不可用时回退原生命令。</td>
+              <td>不替代测试 runner；报告型 unit / API / Playwright / Maestro 命令先评估缓存与文件写入风险，必要时使用原生命令或 fallback-native。</td>
             </tr>
             <tr>
               <td>caveman</td>
@@ -606,7 +606,8 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>测试模式</strong><br><code>full-stack</code> / <code>contract-backed</code> / <code>mock-backed</code> / <code>app-mocked</code> / <code>backend-only</code> / <code>smoke-only</code> / <code>blocked</code>。</div>
           <div><strong>默认报告目录</strong><br>API 正式快照: <code>tests/api/reports/</code>；API 临时输出: <code>tests/api/reports/.api-current/</code>；Playwright 临时 HTML: <code>tests/e2e/reports/.playwright-html-current/</code>；Playwright 正式快照: <code>tests/e2e/reports/html/</code>；Maestro: <code>.maestro/reports/</code>；unit 需要本地证据时使用 <code>tests/unit/reports/</code>。</div>
           <div><strong>Playwright Report</strong><br><code>playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html</code>；smoke 使用 <code>smoke</code>，多 feature 优先 suite 名，否则 <code>multi-feature</code>。</div>
-          <div><strong>最终报告</strong><br>调试轮次可以保留多份带业务名和时间戳的本地快照；只要 Playwright 或 Maestro 产生 runner 原生报告，或 API / integration / unit runner 生成了本轮要保留的报告，无论最终是否全绿，都先生成该次运行的命名报告，再进入下一次可能清空输出的运行。<code>coverage/</code>、<code>test-results/</code>、固定 <code>junit.xml</code> 和 <code>current</code> 目录都不是正式快照。</div>
+          <div><strong>rtk Gate</strong><br>unit / API / Playwright / Maestro 报告型测试先记录 <code>rtk</code>: <code>used</code> / <code>skipped-for-report</code> / <code>fallback-native</code> / <code>not-available</code> / <code>not-needed</code>；缺报、旧报、空报或 cache hit / replay 时原生命令重跑。</div>
+          <div><strong>最终报告</strong><br>调试轮次可以保留多份带业务名和时间戳的本地快照；只要 Playwright 或 Maestro 产生 runner 原生报告，或 API / integration / unit runner 生成了本轮要保留的报告，无论最终是否全绿，都先生成该次运行的命名报告，再进入下一次可能清空输出的运行。正式验证范围不能由 runner 是否已经产出报告倒推决定；API stdout-only 必须捕获 raw report，Playwright <code>--reporter=list</code> 和 Maestro stdout-only 都只能算诊断，收尾前必须补正式 reporter 或标记 blocked。<code>coverage/</code>、<code>test-results/</code>、固定 <code>junit.xml</code> 和 <code>current</code> 目录都不是正式快照。</div>
           <div><strong>Markdown 汇总</strong><br>Playwright 的 <code>.md</code> 必须与命名 HTML 同 stem，不能用 <code>results.json</code> / <code>junit.xml</code> / 默认 <code>index.html</code> 的 stem；中文汇总记录运行 case、关联 BDD feature、总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑。</div>
         </div>
         <p>失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。</p>
@@ -628,7 +629,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>Final Report</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml</code> 或 <code>.html</code>；<code>flow_name</code> 取 flow 文件名 stem，smoke flow 使用 <code>smoke</code>。</div>
           <div><strong>Run Summary MD</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md</code></div>
         </div>
-        <p>生成或运行 flow 前确认平台、app artifact、bundleId / appId、设备 / 模拟器 / 云测、后端依赖、base URL / launch args / deep link、账号、数据、权限、稳定 selector 和系统 UI。Maestro 优先直接输出到带时间戳的报告文件；如项目 wrapper 只能输出到固定目录，使用 <code>.maestro/reports/.maestro-current/</code> 后再提升为正式快照。Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。</p>
+        <p>生成或运行 flow 前确认平台、app artifact、bundleId / appId、设备 / 模拟器 / 云测、后端依赖、base URL / launch args / deep link、账号、数据、权限、稳定 selector 和系统 UI。Maestro 优先直接输出到带时间戳的报告文件；如项目 wrapper 只能输出到固定目录，使用 <code>.maestro/reports/.maestro-current/</code> 后再提升为正式快照。stdout-only Maestro run 只用于诊断或定点重跑，不能满足正式 Mobile / Hybrid E2E 报告 gate。Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。</p>
       </div>
     </section>
 
@@ -648,7 +649,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集。</div>
           <div><strong>seo-geo</strong><br>作为 referenced external Skill 检查存在性；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
-          <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，安装后不自动启用。</div>
+          <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；报告型测试可能因缓存 / 回放跳过文件写入，必要时直接使用原生命令；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，安装后不自动启用。</div>
           <div><strong>状态报告</strong><br>最终输出要列明各工具是 run、blocked、skipped、not-needed、available、installed 或对应模板状态。</div>
         </div>
       </div>
@@ -740,7 +741,7 @@ tests/e2e/**/*.trace.zip
 
   <footer>
     <div class="wrap">
-      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，<code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层。</p>
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，<code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层，报告型测试需先评估 <code>rtk</code> 文件写入风险。</p>
     </div>
   </footer>
 </body>
