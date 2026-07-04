@@ -424,7 +424,7 @@
           </article>
           <article class="panel accent-green">
             <h3>BDD</h3>
-            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，分仓或跨端链路先做上下文完整性 gate。</p>
+            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，分仓或跨端链路先做上下文完整性 gate；<code>gherkin-bdd</code> 携带 <code>sync</code> / <code>同步</code> 时，全量扫描当前工作树与 <code>features/</code>，多仓先确认其他仓库更新状态再同步。</p>
           </article>
           <article class="panel accent-amber">
             <h3>TDD</h3>

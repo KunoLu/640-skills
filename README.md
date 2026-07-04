@@ -69,7 +69,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | 概念 | 全称 | 在模板中的作用 |
 |---|---|---|
 | SDD | Specification-Driven Development | 用 PRD、design、implement、验收标准和长期规则说明“要做什么、为什么做、怎么验证”。在 Trellis 项目中，对应任务产物和 `.trellis/spec` 的长期规则。 |
-| BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。 |
+| BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。主动使用 `gherkin-bdd` 且请求包含 `sync` / `同步` 时，进入 BDD Sync Mode，全量扫描当前工作树与 `features/`，多仓时先确认其他仓库更新状态再同步 `.feature`。 |
 | TDD | Test-Driven Development | 对 bug 修复、核心业务逻辑、算法、数据转换、高风险路径和回归敏感模块采用测试先行。BDD 固化可观察行为，TDD 把它转成可执行测试和红绿重构循环。 |
 | DDD | Domain-Driven Design | 在业务术语、规则、bounded context 或模型边界不清时，用统一语言、CONTEXT、ADR 和 `book-ddd-distilled-modeling` 降低歧义。 |
 

@@ -128,6 +128,7 @@ trellis init -u your-name
 - 修改已有用户可见功能：补齐或更新相关能力的 BDD 场景。
 - 用户可见 bug 修复：先写描述正确行为的场景，再写失败回归测试，再修复。
 - 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`，但新增或触碰的行为必须补齐。
+- 当主动使用 `gherkin-bdd` 且用户请求包含 `sync` 或 `同步` 时，进入 BDD Sync Mode：全量扫描当前工作树（包含未提交内容）、项目 `features/` 目录和所有能定义用户可见行为的代码 / docs / tests，检查 `.feature` 是否与最新代码逻辑同步。多仓、前后端分离或 feature 汇总到前端入口仓库时，先确认其他端仓库是否有更新；有更新必须让用户提供路径并一起扫描，无更新则记录确认后只按当前仓库同步。同步报告必须列出更新、新建、删除、未变和候选删除的 feature 文件及概要。
 - 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先确认 `Cross-repo context`: contract、环境、账号、数据、选择器、设备和 app artifact；缺关键事实时标记 blocked 或 `@todo`，不要把猜测写成 source of truth。
 - mock 只能基于 API contract、schema、真实响应样例、既有 fixture、launch arguments 或用户明确确认；mock-backed / app-mocked / contract-backed 测试不能报告为 full-stack 通过。
 - 如果已有 Gherkin runner，场景应绑定 step definitions 或 runner 测试；没有 runner 时，使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。

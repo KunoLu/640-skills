@@ -125,6 +125,30 @@ For existing projects, use `no new uncovered behavior`:
 
 When backfilling from code, record what the code does today in product language. If behavior appears suspicious or contradicts docs, names, comments, tests, or obvious user expectation, ask whether it is intended. If it is a defect, write the intended behavior as the scenario and let the derived test go red.
 
+## BDD Sync Mode
+
+When this Skill is actively used and the user's request includes either `sync` or `同步`, enter BDD Sync Mode. This mode syncs project `.feature` files with current product behavior; it does not mean local Codex configuration sync and does not copy this repository's templates to any global path.
+
+BDD Sync Mode is a full repository behavior audit, not a diff-only update:
+
+1. Build a whole-repository inventory with the current working tree, including uncommitted changes. Check `git status --short`, relevant `git diff` output, and a complete file list such as `rg --files`. Do not rely only on committed `HEAD` or only on changed files.
+2. Locate every project `features/` directory and existing `.feature` file under the project's conventions, including workspace-level paths such as `apps/web/features/`, `services/*/features/`, or the product entry repository's `features/`.
+3. Scan the code and durable project facts that can define user-visible behavior: routes, pages/screens, API schemas, controllers, services, permission checks, validation rules, CLI commands, exported file formats, notifications, integration adapters, tests, PRD/design artifacts, `.trellis/spec`, context docs, and README / runbooks that describe externally observable behavior.
+4. Before updating existing `.feature` files, decide whether the current repository contains enough evidence for a truthful full sync. If behavior depends on another repository, service, app, or backend/frontend split that is not present locally, treat the scope as multi-repository.
+5. For multi-repository scope, ask the user whether the other repositories have changed. If yes, request the local paths and scan those repositories together before updating `.feature` files. If the user confirms the other repositories have no relevant changes, record that confirmation and sync only from the current repository's current working tree. If the user cannot confirm or provide required paths, mark the affected features `blocked` or `@todo` instead of guessing.
+6. Compare code behavior to existing scenarios and decide, per feature area, whether to update, create, delete, or leave files unchanged. Create new `.feature` files for newly discovered user-visible capabilities that lack coverage. Delete stale `.feature` files only when the audited behavior clearly no longer exists or has been intentionally superseded; when uncertain, report a deletion candidate instead of deleting.
+7. Preserve the language and naming style for each bounded context. If a new `.feature` file is needed and no local convention exists, use the default language rules from this Skill.
+8. After editing, verify that PRD / `.feature` / tests / code agree as far as the available repositories allow, and report any remaining `contract-only`, `environment-only`, `missing`, `blocked`, or `@todo` areas.
+
+BDD Sync Mode output must include:
+
+- `BDD Sync Mode`: `run` / `blocked`.
+- Scan scope: current repository path, additional repository paths scanned, and whether uncommitted changes were included.
+- Multi-repository decision: current repository sufficient, user confirmed other repositories unchanged, extra paths scanned, or blocked waiting for paths / confirmation.
+- Feature files updated, created, deleted, unchanged, and deletion candidates, each with a short behavior summary.
+- Conflicts found between code, PRD, existing `.feature`, tests, or cross-repository contracts.
+- Remaining gaps, `@todo` scenarios, and any user confirmation used to limit the scan.
+
 ## Source Of Truth
 
 For confirmed user-visible behavior, the persistent `.feature` file is the behavior source of truth.
@@ -140,7 +164,9 @@ If PRD, Trellis artifacts, `.feature`, tests, and code disagree, do not implemen
 
 When drafting or updating BDD specs, report:
 
+- Whether BDD Sync Mode was requested and, if so, the scan scope and multi-repository decision.
 - Feature files created or updated.
+- Feature files deleted, unchanged, or proposed for deletion when BDD Sync Mode is used.
 - BDD language decision: scenario text language, Gherkin keyword language, and whether it follows existing project convention or the first-file default.
 - Split-repository evidence class when relevant: `complete` / `contract-only` / `environment-only` / `missing`.
 - Scenarios added, changed, removed, or marked `@todo`.
