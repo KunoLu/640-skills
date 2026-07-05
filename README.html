@@ -479,7 +479,7 @@
             <tr>
               <td>Maestro MCP</td>
               <td>设备检查、view hierarchy、截图和 flow 辅助。</td>
-              <td>依赖 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</td>
+              <td>依赖 Java 17+ 和 Maestro CLI；当前 Agent / IDE 的 MCP 配置需包含 <code>JAVA_HOME</code> / <code>PATH</code> env，MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</td>
             </tr>
             <tr>
               <td>web-ui-autotest-generator</td>
@@ -645,8 +645,8 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
         <div class="status-list">
           <div><strong>Playwright CLI</strong><br>检测 <code>package.json</code>、Playwright 配置、E2E 目录和脚本。需要 Web 回归但缺失时询问是否安装到项目 devDependency。</div>
           <div><strong>Playwright MCP</strong><br>只作为 MCP 可见性检查和探索能力；不可见时不阻塞 Playwright CLI。</div>
-          <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。默认引导安装 OpenJDK Temurin 21 最新 JDK；用户指定版本必须大于等于 17。</div>
-          <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</div>
+          <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。当前 JDK 满足 17+ 时优先使用当前 JDK；否则先扫描本机已有 17+ JDK。只有本机没有可用 JDK 且用户确认后，才引导安装 OpenJDK Temurin 21。</div>
+          <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP，并引导当前 Agent / IDE 的 MCP 配置同时包含 <code>command</code>、<code>args</code>、<code>JAVA_HOME</code> 和 <code>PATH</code>。MCP 缺失或 env 未配置但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集。</div>
           <div><strong>seo-geo</strong><br>作为 referenced external Skill 检查存在性；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
           <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；报告型测试可能因缓存 / 回放跳过文件写入，必要时直接使用原生命令；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，安装后不自动启用。</div>

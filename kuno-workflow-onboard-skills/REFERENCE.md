@@ -22,7 +22,7 @@ This Skill installs only these bundled templates:
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
-There are no bundled MCP configuration templates. GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP are reported as manual setup checks only.
+There are no bundled MCP configuration templates. GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP are reported as manual setup checks only. The Maestro MCP manual check generates generic server config values and JSON / TOML examples with `JAVA_HOME` and `PATH`, but the user must still adapt them to the active Agent or IDE MCP config format.
 
 ## Conversation Flow
 
@@ -70,7 +70,7 @@ The check reports:
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, and bundled book-derived skills.
 - Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `seo-geo`.
 - Interaction compression Skill presence for `caveman`, checked only in the user-level global skills directory.
-- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites.
+- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
@@ -103,7 +103,7 @@ Interaction compression skills:
 Manual checks:
 - Chrome DevTools MCP: confirm MCP server visibility
 - Playwright MCP: confirm MCP server visibility
-- Maestro MCP: confirm MCP server visibility after Maestro CLI works
+- Maestro MCP: confirm MCP server visibility after Java 17+, Maestro CLI, `JAVA_HOME`, and MCP `PATH` are configured
 ```
 
 Do not claim missing items were installed until a follow-up `check` confirms them or the relevant installer command reports success and the expected files / commands exist.
@@ -121,7 +121,7 @@ The report is the user-facing completion summary and must include:
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
 - Not-checked items, especially CLI tools skipped because npm is not usable yet.
-- Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup, and React Bits Pro project skill prerequisites.
+- Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, and React Bits Pro project skill prerequisites.
 
 Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
 
@@ -332,7 +332,7 @@ java --version
 java -version
 ```
 
-If Java is missing or lower than 17, ask the user before installing a JDK. The default recommendation is the latest OpenJDK Temurin 21 JDK from:
+Prefer the local machine's current JDK when it is 17 or newer. If the current `java` is missing or lower than 17, scan the local machine for another installed JDK that is 17 or newer and use that path for Maestro before proposing a new install. If no suitable installed JDK is found, ask the user before installing a JDK. The default recommendation is the latest OpenJDK Temurin 21 JDK from:
 
 ```text
 https://github.com/adoptium/temurin21-binaries/releases
@@ -341,7 +341,7 @@ https://github.com/adoptium/temurin21-binaries/releases
 If the user requests another Java major version, only install versions 17 or higher. Refuse versions lower than 17. Install a JDK, not only a JRE, and verify:
 
 - `java --version` or `java -version`
-- `JAVA_HOME` points to the new JDK
+- `JAVA_HOME` points to the selected JDK
 - `PATH` resolves the expected Java
 
 After user confirmation, install the default Temurin 21 JDK with:
@@ -355,6 +355,8 @@ If the user explicitly requests another supported major version, pass that major
 ```bash
 python scripts/onboard.py install-java --major 17 --yes
 ```
+
+Without `--yes`, `install-java` only prints `needs-confirmation` plus the planned actions. The onboard flow must not silently download or install Java.
 
 After Java 17+ is available, check Maestro CLI:
 
@@ -373,18 +375,32 @@ python scripts/onboard.py install-maestro --yes
 
 If a `maestro` command exists but fails verification, do not replace it silently. Troubleshoot Java and PATH first, then use `--reinstall --yes` only after explicit confirmation.
 
-Maestro MCP depends on Maestro CLI and is configured by an MCP client command such as:
+Maestro MCP depends on Maestro CLI and must be configured in the active Agent or IDE MCP client with the server command, args, and explicit environment variables. The required config values are:
 
 ```json
 {
-  "mcpServers": {
-    "maestro": {
-      "command": "maestro",
-      "args": ["mcp"]
-    }
+  "command": "maestro",
+  "args": ["mcp"],
+  "env": {
+    "JAVA_HOME": "/path/to/jdk/Contents/Home",
+    "PATH": "/Users/<user>/.maestro/bin:/path/to/jdk/Contents/Home/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
   }
 }
 ```
+
+For TOML-based MCP clients, the same values may be represented as:
+
+```toml
+[mcp_servers.maestro]
+command = "maestro"
+args = ["mcp"]
+
+[mcp_servers.maestro.env]
+JAVA_HOME = "/path/to/jdk/Contents/Home"
+PATH = "/Users/<user>/.maestro/bin:/path/to/jdk/Contents/Home/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+```
+
+Build `JAVA_HOME` from the selected local JDK in this order: the current `java` executable's JDK home when it is 17+, existing `JAVA_HOME` when it is 17+, platform-discovered JDK homes such as macOS `/usr/libexec/java_home`, and known local JDK directories. If none satisfy Java 17+, ask before installing a new JDK. Build `PATH` with the Maestro bin directory first, the selected JDK `bin` directory second, and safe system directories after that. Do not configure Maestro MCP with only `command` and `args`; the MCP server process may not inherit the interactive shell environment.
 
 Do not treat Maestro MCP as a separately installed package. If MCP is missing but CLI works, continue with `maestro test` for deterministic flow execution and report the MCP status separately.
 
@@ -482,10 +498,11 @@ For Playwright MCP:
 For Maestro MCP:
 
 1. Confirm Java 17+ and Maestro CLI work first.
-2. Configure the MCP client to run `maestro mcp`.
-3. Restart or reload the Agent environment so the MCP server is discovered.
-4. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
-5. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
+2. Use the generated generic MCP server config from `check` or `install-maestro` as the starting point.
+3. Adapt the values to the active Agent or IDE MCP config format, including `command = maestro`, `args = [mcp]`, `JAVA_HOME`, and a `PATH` that contains the Maestro bin directory and the JDK `bin` directory.
+4. Restart or reload the Agent environment so the MCP server is discovered.
+5. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
+6. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
 
 For React Bits Pro Skill:
 

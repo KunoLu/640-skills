@@ -145,7 +145,7 @@ EXTERNAL_REPO_TO_SKILLS: dict[str, tuple[str, ...]] = {}
 for _skill_name, _source_spec in EXTERNAL_SKILL_SOURCES.items():
     _repo = str(_source_spec["repo"])
     EXTERNAL_REPO_TO_SKILLS[_repo] = (*EXTERNAL_REPO_TO_SKILLS.get(_repo, ()), _skill_name)
-MANUAL_CHECKS = (
+BASE_MANUAL_CHECKS = (
     {
         "name": "GitNexus MCP",
         "category": "mcp",
@@ -179,19 +179,6 @@ MANUAL_CHECKS = (
             "Restart or reload the Agent environment so the MCP server is discovered.",
             "Confirm Playwright MCP tools are visible to the Agent.",
             "Use Playwright MCP for exploration and locator assistance only; do not treat it as a substitute for project-level Playwright CLI.",
-        ),
-    },
-    {
-        "name": "Maestro MCP",
-        "category": "mcp",
-        "advice": "Maestro MCP depends on Java 17+ and a working Maestro CLI. Configure it only after `maestro` is available.",
-        "steps": (
-            "Confirm Java 17+ is available with `java --version` or `java -version`.",
-            "Confirm the Maestro CLI works, for example with `maestro --help` and `maestro test --help`.",
-            "Configure the active Agent or IDE MCP settings to run `maestro mcp`.",
-            "Restart or reload the Agent environment so the MCP server is discovered.",
-            "Confirm Maestro MCP tools are visible before relying on device inspection, view hierarchy, screenshots, or flow assistance.",
-            "If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.",
         ),
     },
     {
@@ -435,25 +422,268 @@ def java_version_output() -> tuple[str | None, str | None]:
     return None, "java --version"
 
 
+def usable_java_home(candidate: str | Path | None) -> Path | None:
+    if not candidate:
+        return None
+    path = Path(candidate).expanduser()
+    if (path / "bin" / "java").is_file():
+        return path.resolve()
+    return None
+
+
+def java_binary_version(java_binary: Path) -> tuple[str | None, str | None]:
+    code, output = command_output((str(java_binary), "--version"), timeout=5)
+    if code == 0 and output:
+        return output.splitlines()[0], f"{java_binary} --version"
+    code, output = command_output((str(java_binary), "-version"), timeout=5)
+    if code == 0 and output:
+        return output.splitlines()[0], f"{java_binary} -version"
+    return None, f"{java_binary} --version"
+
+
+def java_home_major(java_home: Path) -> int | None:
+    version, _ = java_binary_version(java_home / "bin" / "java")
+    return parse_java_major(version)
+
+
+def macos_java_home(major: int | None = None) -> Path | None:
+    if platform.system() != "Darwin":
+        return None
+    helper = Path("/usr/libexec/java_home")
+    if not helper.is_file():
+        return None
+    command = (str(helper), "-v", str(major)) if major else (str(helper),)
+    code, output = command_output(command, timeout=5)
+    if code != 0 or not output:
+        return None
+    return usable_java_home(output.splitlines()[0].strip())
+
+
+def infer_java_home_from_path(java_path: str | None) -> Path | None:
+    if java_path:
+        java_bin = Path(java_path).expanduser().resolve()
+        if platform.system() == "Darwin" and java_bin == Path("/usr/bin/java"):
+            return None
+        if java_bin.name == "java" and java_bin.parent.name == "bin":
+            inferred = usable_java_home(java_bin.parent.parent)
+            if inferred:
+                return inferred
+    return None
+
+
+def java_home_candidates(java_path: str | None) -> list[Path]:
+    candidates: list[Path] = []
+
+    def add(candidate: str | Path | None) -> None:
+        java_home = usable_java_home(candidate)
+        if java_home and java_home not in candidates:
+            candidates.append(java_home)
+
+    add(infer_java_home_from_path(java_path))
+    add(os.environ.get("JAVA_HOME"))
+    add(macos_java_home())
+    add(macos_java_home(JAVA_MIN_MAJOR))
+
+    patterns = (
+        Path.home() / "JDK" / "*" / "Contents" / "Home",
+        Path.home() / "JDK" / "*",
+        Path.home() / "Library" / "Java" / "JavaVirtualMachines" / "*" / "Contents" / "Home",
+        Path("/Library/Java/JavaVirtualMachines") / "*" / "Contents" / "Home",
+        Path("/usr/lib/jvm") / "*",
+    )
+    for pattern in patterns:
+        for candidate in pattern.parent.glob(pattern.name):
+            add(candidate)
+
+    return candidates
+
+
+def select_java_home(java_path: str | None) -> tuple[Path | None, int | None, str | None]:
+    candidates = java_home_candidates(java_path)
+    candidate_info: list[tuple[Path, int | None]] = [
+        (candidate, java_home_major(candidate)) for candidate in candidates
+    ]
+    if candidate_info and candidate_info[0][1] and candidate_info[0][1] >= JAVA_MIN_MAJOR:
+        return candidate_info[0][0], candidate_info[0][1], "current-java-home"
+    for candidate, major in (candidate_info[1:] if candidate_info else []):
+        if major and major >= JAVA_MIN_MAJOR:
+            return candidate, major, "alternate-installed-jdk"
+    return None, None, None
+
+
+def unique_path_entries(entries: list[str | None]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not entry or entry in seen:
+            continue
+        seen.add(entry)
+        result.append(entry)
+    return result
+
+
+def maestro_bin_dir(maestro_path: str | None) -> str:
+    if maestro_path:
+        return str(Path(maestro_path).expanduser().parent)
+    return str(Path.home() / ".maestro" / "bin")
+
+
+def mcp_path_value(java_home: str | None, maestro_path: str | None) -> str:
+    java_bin = f"{java_home}/bin" if java_home else "<JAVA_HOME>/bin"
+    return os.pathsep.join(
+        unique_path_entries(
+            [
+                maestro_bin_dir(maestro_path),
+                java_bin,
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+                "/usr/bin",
+                "/bin",
+                "/usr/sbin",
+                "/sbin",
+            ]
+        )
+    )
+
+
+def toml_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def maestro_mcp_environment(java_check: dict[str, object], maestro_check: dict[str, object]) -> dict[str, str]:
+    java_home = str(java_check.get("javaHome") or "<JAVA_HOME>")
+    path_value = mcp_path_value(
+        str(java_check.get("javaHome")) if java_check.get("javaHome") else None,
+        str(maestro_check.get("path")) if maestro_check.get("path") else None,
+    )
+    return {"JAVA_HOME": java_home, "PATH": path_value}
+
+
+def maestro_mcp_server_config(java_check: dict[str, object], maestro_check: dict[str, object]) -> dict[str, object]:
+    return {
+        "command": "maestro",
+        "args": ["mcp"],
+        "env": maestro_mcp_environment(java_check, maestro_check),
+    }
+
+
+def maestro_mcp_toml_example(java_check: dict[str, object], maestro_check: dict[str, object]) -> str:
+    env = maestro_mcp_environment(java_check, maestro_check)
+    return "\n".join(
+        [
+            "[mcp_servers.maestro]",
+            'command = "maestro"',
+            'args = ["mcp"]',
+            "",
+            "[mcp_servers.maestro.env]",
+            f'JAVA_HOME = "{toml_string(env["JAVA_HOME"])}"',
+            f'PATH = "{toml_string(env["PATH"])}"',
+        ]
+    )
+
+
+def maestro_mcp_json_example(java_check: dict[str, object], maestro_check: dict[str, object]) -> str:
+    return json.dumps(
+        {"mcpServers": {"maestro": maestro_mcp_server_config(java_check, maestro_check)}},
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+def maestro_mcp_config_examples(java_check: dict[str, object], maestro_check: dict[str, object]) -> dict[str, str]:
+    return {
+        "genericJson": maestro_mcp_json_example(java_check, maestro_check),
+        "toml": maestro_mcp_toml_example(java_check, maestro_check),
+    }
+
+
+def maestro_cli_env(java_check: dict[str, object]) -> dict[str, str] | None:
+    java_home = java_check.get("javaHome")
+    if not java_home:
+        return None
+    env = os.environ.copy()
+    env["JAVA_HOME"] = str(java_home)
+    env["PATH"] = os.pathsep.join(
+        unique_path_entries([f"{java_home}/bin", os.environ.get("PATH")])
+    )
+    return env
+
+
+def build_maestro_mcp_manual_check(
+    java_check: dict[str, object],
+    maestro_check: dict[str, object],
+) -> dict[str, object]:
+    java_home = java_check.get("javaHome")
+    maestro_ready = bool(maestro_check.get("installed"))
+    server_config = maestro_mcp_server_config(java_check, maestro_check)
+    config_examples = maestro_mcp_config_examples(java_check, maestro_check)
+    readiness = (
+        "Detected Java 17+ and Maestro CLI; adapt the generated command, args, and env values to the active Agent or IDE MCP configuration format."
+        if java_home and maestro_ready
+        else "Complete Java 17+ and Maestro CLI setup first, then replace any placeholder values before enabling Maestro MCP in the active Agent or IDE."
+    )
+    return {
+        "name": "Maestro MCP",
+        "category": "mcp",
+        "advice": "Maestro MCP depends on Java 17+, a working Maestro CLI, and explicit MCP environment variables for JAVA_HOME and PATH.",
+        "mcpServerConfig": server_config,
+        "environment": server_config["env"],
+        "configExample": config_examples["genericJson"],
+        "configExamples": config_examples,
+        "steps": (
+            "Confirm Java 17+ is available with `java --version` or `java -version`; prefer the JDK currently used by the local machine when it is 17+, otherwise choose an installed JDK that is 17 or higher before installing a new JDK.",
+            "Confirm the Maestro CLI works, for example with `maestro --help` and `maestro test --help`; ensure the MCP PATH includes the directory that contains the `maestro` binary.",
+            readiness,
+            "Configure the active Agent or IDE MCP settings with `command = maestro`, `args = [mcp]`, and the generated env values. Do not configure only command and args; include `JAVA_HOME` and `PATH` so `maestro mcp` can find Java and Maestro in the MCP server process environment.",
+            "Restart or reload the Agent environment so the MCP server is discovered.",
+            "Confirm Maestro MCP tools are visible before relying on device inspection, view hierarchy, screenshots, or flow assistance.",
+            "If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.",
+        ),
+    }
+
+
+def build_manual_checks(
+    java_check: dict[str, object],
+    maestro_check: dict[str, object],
+) -> tuple[dict[str, object], ...]:
+    checks = list(BASE_MANUAL_CHECKS)
+    checks.insert(3, build_maestro_mcp_manual_check(java_check, maestro_check))
+    return tuple(checks)
+
+
 def check_java_for_maestro() -> dict[str, object]:
     path = shutil.which("java")
-    version, version_command = java_version_output() if path else (None, "java --version")
-    major = parse_java_major(version)
-    installed = bool(path and major and major >= JAVA_MIN_MAJOR)
+    current_version, current_version_command = java_version_output() if path else (None, "java --version")
+    current_major = parse_java_major(current_version)
+    java_home, java_home_major_value, java_home_source = select_java_home(path)
+    if java_home:
+        selected_version, selected_version_command = java_binary_version(java_home / "bin" / "java")
+        selected_major = parse_java_major(selected_version) or java_home_major_value
+    else:
+        selected_version, selected_version_command, selected_major = current_version, current_version_command, current_major
+    installed = bool(java_home and selected_major and selected_major >= JAVA_MIN_MAJOR)
     result: dict[str, object] = {
         "name": "java",
         "category": "runtime",
         "installed": installed,
-        "path": path,
-        "version": version,
-        "versionMajor": major,
-        "versionCommand": version_command,
+        "path": str(java_home / "bin" / "java") if installed and java_home else path,
+        "currentPath": path,
+        "currentVersion": current_version,
+        "currentVersionMajor": current_major,
+        "currentVersionCommand": current_version_command,
+        "javaHome": str(java_home) if java_home else None,
+        "javaHomeSource": java_home_source,
+        "version": selected_version,
+        "versionMajor": selected_major,
+        "versionCommand": selected_version_command,
         "globalInstall": f"Install the latest OpenJDK Temurin 21 JDK from {TEMURIN21_RELEASES_URL}",
         "projectInstall": None,
-        "advice": "Maestro requires Java 17+. If Java is missing or lower than 17, ask the user before installing a JDK. Default to the latest OpenJDK Temurin 21 JDK; user-selected versions must be 17 or higher.",
+        "advice": "Maestro requires Java 17+. Prefer the local machine's current JDK when it is 17+; if it is missing or lower than 17, use another installed JDK that is 17+ before asking to install a new JDK. Default new installs to the latest OpenJDK Temurin 21 JDK; user-selected versions must be 17 or higher.",
     }
-    if path and major and major < JAVA_MIN_MAJOR:
+    if not installed and path and current_major and current_major < JAVA_MIN_MAJOR:
         result["incompatibleVersion"] = True
+    if installed and current_major and current_major < JAVA_MIN_MAJOR and java_home_source == "alternate-installed-jdk":
+        result["reason"] = "The current `java` is lower than 17, but another installed JDK satisfies Maestro's Java prerequisite."
     return result
 
 
@@ -472,7 +702,8 @@ def check_maestro_cli(java_check: dict[str, object]) -> dict[str, object]:
             "advice": "Resolve the Java 17+ prerequisite first. Maestro MCP is unavailable until Maestro CLI works.",
         }
     path = shutil.which("maestro")
-    code, output = command_output(("maestro", "--version"), timeout=10) if path else (None, "")
+    env = maestro_cli_env(java_check)
+    code, output = command_output(("maestro", "--version"), timeout=10, env=env) if path else (None, "")
     first_line = output.splitlines()[0] if output else None
     version = first_line if code == 0 and first_line and not first_line.lower().startswith("exception") else None
     result: dict[str, object] = {
@@ -480,6 +711,7 @@ def check_maestro_cli(java_check: dict[str, object]) -> dict[str, object]:
         "category": "cli",
         "installed": bool(path and version),
         "path": path,
+        "binDir": maestro_bin_dir(path),
         "version": version,
         "globalInstall": "Install Maestro CLI with the official Maestro installer or Homebrew tap after user confirmation.",
         "projectInstall": None,
@@ -802,8 +1034,9 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
             )
         )
 
-    manual_configuration = [
-        {
+    manual_configuration = []
+    for item in results["manualChecks"]:
+        manual_item = {
             "name": item["name"],
             "category": item["category"],
             "status": "manual-required",
@@ -811,8 +1044,10 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
             "advice": item["advice"],
             "steps": item["steps"],
         }
-        for item in results["manualChecks"]
-    ]
+        for key in ("mcpServerConfig", "environment", "configExample", "configExamples"):
+            if item.get(key):
+                manual_item[key] = item[key]
+        manual_configuration.append(manual_item)
 
     installed_count = sum(len(items) for items in installed.values())
     skipped_count = sum(len(items) for items in skipped_already_installed.values())
@@ -855,9 +1090,11 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     cli_checks_skipped = not runtime["npm"]["installed"]
     tools = [] if cli_checks_skipped else [check_cli_tool(spec) for spec in CLI_TOOLS]
     java_check = check_java_for_maestro()
+    maestro_check = check_maestro_cli(java_check)
     tools.append(java_check)
-    tools.append(check_maestro_cli(java_check))
+    tools.append(maestro_check)
     tools.append(check_playwright_project(project_root))
+    manual_checks = build_manual_checks(java_check, maestro_check)
     missing = {
         "runtime": [] if runtime["npm"]["installed"] else ["npm"],
         "tools": [item["name"] for item in tools if not item["installed"] and not item.get("notChecked")],
@@ -876,7 +1113,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "cliChecksSkipped": cli_checks_skipped,
         "tools": tools,
         "skills": skills,
-        "manualChecks": MANUAL_CHECKS,
+        "manualChecks": manual_checks,
         "missing": missing,
     }
     results["installationReport"] = build_installation_report(results)
@@ -903,6 +1140,26 @@ def print_report_entries(entries: list[dict[str, object]], empty_message: str = 
             print(f"  reason: {item['reason']}")
         if item.get("nextStep"):
             print(f"  next: {item['nextStep']}")
+
+
+def print_indented_block(value: object, indent: int = 4) -> None:
+    prefix = " " * indent
+    for line in str(value).splitlines():
+        print(f"{prefix}{line}")
+
+
+def print_config_examples(item: dict[str, object]) -> None:
+    examples = item.get("configExamples")
+    if isinstance(examples, dict) and examples:
+        print("  config examples:")
+        for name, example in examples.items():
+            label = "generic MCP JSON" if name == "genericJson" else name
+            print(f"  {label}:")
+            print_indented_block(example)
+        return
+    if item.get("configExample"):
+        print("  config example:")
+        print_indented_block(item["configExample"])
 
 
 def print_installation_report(report: dict[str, object], heading: str = "Installation report") -> None:
@@ -947,6 +1204,7 @@ def print_installation_report(report: dict[str, object], heading: str = "Install
         print(f"- {item['name']} [{item['category']}]: {item['status']}")
         print(f"  reason: {item['reason']}")
         print(f"  advice: {item['advice']}")
+        print_config_examples(item)
         print("  steps:")
         for index, step in enumerate(item["steps"], start=1):
             print(f"  {index}. {step}")
@@ -1022,6 +1280,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     print("\nManual checks:")
     for item in results["manualChecks"]:
         print(f"- {item['name']} [{item['category']}]: {item['advice']}")
+        print_config_examples(item)
 
     missing = results["missing"]
     if missing["runtime"] or missing["tools"] or missing["skills"]:
@@ -2017,12 +2276,14 @@ def install_java(args: argparse.Namespace) -> int:
 
     if before["installed"] and not args.force:
         payload["status"] = "already-installed"
-        payload["advice"] = "Java already satisfies Maestro's Java 17+ prerequisite. Use --force only after confirming a version replacement is intended."
+        payload["advice"] = "An installed JDK already satisfies Maestro's Java 17+ prerequisite. Use --force only after confirming a version replacement is intended."
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         else:
-            print("Java already satisfies Maestro's Java 17+ prerequisite.")
+            print("An installed JDK already satisfies Maestro's Java 17+ prerequisite.")
             print(f"java: {before['path']} ({before['version']})")
+            if before.get("javaHome"):
+                print(f"JAVA_HOME: {before['javaHome']}")
             print(payload["advice"])
         return 0
 
@@ -2111,6 +2372,8 @@ def install_maestro(args: argparse.Namespace) -> int:
         "java": java_before,
         "installUrl": MAESTRO_INSTALL_URL,
         "profile": str(profile),
+        "maestroMcpConfig": maestro_mcp_server_config(java_before, before),
+        "maestroMcpConfigExamples": maestro_mcp_config_examples(java_before, before),
     }
 
     if before["installed"] and not args.reinstall:
@@ -2120,6 +2383,8 @@ def install_maestro(args: argparse.Namespace) -> int:
         else:
             print("Maestro CLI is already installed and verified.")
             print(f"maestro: {before['path']} ({before['version']})")
+            print("Maestro MCP configuration:")
+            print_config_examples({"configExamples": payload["maestroMcpConfigExamples"]})
         return 0
 
     if not java_before["installed"]:
@@ -2167,6 +2432,8 @@ def install_maestro(args: argparse.Namespace) -> int:
             print("Maestro CLI is missing or not verified.")
             for action in payload["actions"]:
                 print(f"- {action}")
+            print("Maestro MCP configuration after CLI installation:")
+            print_config_examples({"configExamples": payload["maestroMcpConfigExamples"]})
             print("Rerun with --yes after user confirmation.")
         return 2
 
@@ -2192,6 +2459,8 @@ def install_maestro(args: argparse.Namespace) -> int:
     java_after = check_java_for_maestro()
     after = check_maestro_cli(java_after)
     payload["after"] = after
+    payload["maestroMcpConfig"] = maestro_mcp_server_config(java_after, after)
+    payload["maestroMcpConfigExamples"] = maestro_mcp_config_examples(java_after, after)
     payload["profileUpdated"] = profile_updated
     payload["status"] = "installed" if after["installed"] else "failed"
     if args.json:
@@ -2202,6 +2471,8 @@ def install_maestro(args: argparse.Namespace) -> int:
             print(f"Updated PATH in {profile}")
         if after["installed"]:
             print(f"maestro: {after['path']} ({after['version']})")
+            print("Maestro MCP configuration:")
+            print_config_examples({"configExamples": payload["maestroMcpConfigExamples"]})
         else:
             print("Maestro installer completed but `maestro --version` did not pass. Check PATH, Java, and installer output.")
     return 0 if after["installed"] else 1

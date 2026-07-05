@@ -43,9 +43,9 @@ For missing RTK, confirm with the user and run `python scripts/onboard.py instal
 
 For missing caveman, explain that caveman compresses Agent replies for lower token use without changing code, tests, validation, or workflow decisions. Confirm with the user and run `python scripts/onboard.py install-caveman --yes`. Installing caveman only makes the Skill available; do not enable caveman mode unless the user explicitly asks for it.
 
-For missing or incompatible Java when Maestro is needed, tell the user Maestro requires Java 17+. Default to the latest OpenJDK Temurin 21 JDK and run `python scripts/onboard.py install-java --major 21 --yes` only after confirmation. If the user requests another Java major version, pass that version only when it is 17 or higher; refuse lower versions.
+For missing or incompatible Java when Maestro is needed, tell the user Maestro requires Java 17+. Prefer the local machine's current JDK when it is 17+; if the current JDK is missing or lower than 17, use another installed JDK that is 17+ before suggesting a new install. Do not install Java automatically. Default new installs to the latest OpenJDK Temurin 21 JDK and run `python scripts/onboard.py install-java --major 21 --yes` only after user confirmation. If the user requests another Java major version, pass that version only when it is 17 or higher; refuse lower versions.
 
-For missing Maestro CLI, confirm Java 17+ first, ask the user, then run `python scripts/onboard.py install-maestro --yes`. If a `maestro` command exists but fails verification, use `--reinstall --yes` only after the user confirms replacement or repair.
+For missing Maestro CLI, confirm Java 17+ first, ask the user, then run `python scripts/onboard.py install-maestro --yes`. If a `maestro` command exists but fails verification, use `--reinstall --yes` only after the user confirms replacement or repair. After Maestro CLI is available, use the generated Maestro MCP server config from `check` or `install-maestro`; every Agent or IDE config format must include `command = maestro`, `args = [mcp]`, and env values for `JAVA_HOME` and `PATH` containing the Maestro bin directory and JDK `bin` directory.
 
 For missing project-level Playwright CLI, install it only inside a target project that has `package.json` and needs Web E2E, Web regression, or `web-ui-autotest-generator` output. After confirmation, run `python scripts/onboard.py install-playwright-cli --project-root <project-root> --yes`. If the user declines, continue with Chrome DevTools MCP or Playwright MCP only as diagnostics / exploration fallback and report that project Web E2E was blocked or skipped.
 
@@ -92,11 +92,11 @@ The `check` command inspects:
 - Runtime: `npm`, `node`, `nvm`; npm-backed CLI checks run only after npm is usable.
 - CLI tools: `rtk`, `trellis`, `gitnexus`.
 - Conditional project tooling: Playwright CLI / `@playwright/test`, checked when a project root is provided and Web E2E assets or scripts are present or requested.
-- Mobile E2E tooling: Java 17+ for Maestro, Maestro CLI, and Maestro MCP guidance.
+- Mobile E2E tooling: Java 17+ for Maestro, Maestro CLI, and Maestro MCP guidance, including generated generic MCP server config examples with `JAVA_HOME` and `PATH`.
 - Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `gherkin-bdd`, `maestro-mobile-e2e`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`.
 - Referenced skills from the bundled templates, including mattpocock skills, `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `seo-geo`.
 - Interaction compression skills: `caveman`, checked only in the user-level global skills directory.
-- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project skill prerequisites.
+- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP with explicit `JAVA_HOME` / `PATH` config guidance, and React Bits Pro project skill prerequisites.
 
 ## Target Defaults
 

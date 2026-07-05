@@ -89,7 +89,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | Playwright CLI / `@playwright/test` | 项目内 Web E2E、Web 回归、跨浏览器检查和 CI gate。 | 不默认全局安装；项目未安装时必须先询问。 |
 | Playwright MCP | Agentic Web 探索、可访问性快照、locator 辅助和临时页面检查。 | 不替代项目内 `playwright test`。 |
 | Maestro CLI | Android、iOS、React Native、Flutter、Hybrid App E2E，以及可选 Chromium Web smoke。 | 不作为 Web 回归主责；Web 只做 smoke。 |
-| Maestro MCP | 依赖 `maestro mcp` 的增强入口，用于设备检查、view hierarchy、截图和 flow 辅助。 | 不单独替代 Maestro CLI。 |
+| Maestro MCP | 依赖 `maestro mcp` 的增强入口，用于设备检查、view hierarchy、截图和 flow 辅助。 | 不单独替代 Maestro CLI；当前 Agent / IDE 的 MCP 配置需包含 `JAVA_HOME` / `PATH` env。 |
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
 | `seo-geo` | 公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。 | 不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。 |
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
@@ -135,17 +135,20 @@ Maestro 面向移动 App 和 Hybrid App E2E。模板不推荐用 Maestro 主做 
 
 1. 需要 Maestro 前先检查 Java 17+。
 2. 优先执行 `java --version`，失败时回退 `java -version`。
-3. Java 缺失或低于 17 时，说明 Maestro 需要 Java 17+。
-4. 默认建议安装 OpenJDK Temurin 21 最新 JDK，下载来源为 `https://github.com/adoptium/temurin21-binaries/releases`。
-5. 用户指定其他 Java 版本时，只允许安装 Java 17 或更高版本，拒绝任何低于 17 的版本。
-6. Java 通过后检查 Maestro CLI。
-7. Maestro CLI 缺失时询问用户是否安装到开发环境或 CI runner。
-8. Maestro CLI 可用后再检查 Maestro MCP。
+3. 当前 JDK 满足 17+ 时优先使用当前 JDK。
+4. Java 缺失或低于 17 时，先扫描本机已有 JDK，优先选择已安装且满足 17+ 的 JDK。
+5. 只有本机没有可用 17+ JDK 且用户确认后，才引导安装 JDK；默认建议安装 OpenJDK Temurin 21 最新 JDK，下载来源为 `https://github.com/adoptium/temurin21-binaries/releases`。
+6. 用户指定其他 Java 版本时，只允许安装 Java 17 或更高版本，拒绝任何低于 17 的版本。
+7. Java 通过后检查 Maestro CLI。
+8. Maestro CLI 缺失时询问用户是否安装到开发环境或 CI runner。
+9. Maestro CLI 可用后再检查 Maestro MCP，并引导当前 Agent / IDE 的 MCP 配置同时包含 `command`、`args` 和 env。
+10. Maestro MCP 的 `JAVA_HOME` 使用选定的 JDK home，`PATH` 必须优先包含 Maestro bin 目录和 JDK `bin` 目录，再包含系统基础路径。
 
 Fallback：
 
-- Maestro MCP 缺失但 CLI 可用时，继续使用 `maestro test` 执行已有 flow，并单独报告 MCP 状态。
+- Maestro MCP 缺失或 MCP env 未配置但 CLI 可用时，继续使用 `maestro test` 执行已有 flow，并单独报告 MCP 状态和缺失配置。
 - Maestro CLI 缺失且用户拒绝安装时，`Maestro Mobile` 标记 `blocked` 或 `skipped`。
+- Java 17+ 缺失且用户未确认安装时，只报告阻塞和安装引导，不自动安装。
 - 设备、模拟器、app binary、appId、bundleId、测试账号或环境不可用时，必须记录阻塞原因。
 
 Maestro flow 资产和报告规则：
@@ -360,7 +363,7 @@ tests/e2e/**/*.trace.zip
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
 - Playwright CLI 项目级检测和安装引导。
-- Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导。
+- Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导，包含 Maestro MCP 的通用 `command` / `args` / `JAVA_HOME` / `PATH` 配置示例。
 - `web-ui-autotest-generator`、`seo-geo`、`ui-ux-pro-max`、`impeccable` 等可选 Skill 的存在性检查。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 
