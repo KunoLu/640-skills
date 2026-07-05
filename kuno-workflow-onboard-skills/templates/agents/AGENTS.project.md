@@ -400,11 +400,17 @@ rtk ty check .
 
 # 测试命令先按全局 rtk 与报告型测试 Gate 判断；需要报告落地时优先原生命令
 npm run test
+pytest
+# uv 管理的项目才使用：
 uv run pytest
+# Poetry / PDM 等项目按项目脚本或工具链执行，例如：
+poetry run pytest
+pdm run pytest
+
 go test ./...
 ```
 
-如果 `rtk` 不可用，回退为项目原生命令；如果报告型测试使用 `rtk` 后报告缺失、陈旧或不可证明，立即用原生命令复验。
+如果 `rtk` 不可用，回退为项目原生命令；如果报告型测试使用 `rtk` 后报告缺失、陈旧或不可证明，立即用原生命令复验。Python 项目应按实际包管理器选择 `pytest`、`uv run pytest`、`poetry run pytest`、`pdm run pytest` 或项目脚本。
 
 ---
 
