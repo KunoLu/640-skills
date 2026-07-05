@@ -90,6 +90,7 @@ CLAUDE.md
 playwright-report/
 test-results/
 blob-report/
+output/
 
 # Web UI autotest generated run artifacts
 tests/e2e/manifest/ui-test-repair-plan.json
