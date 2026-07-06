@@ -84,7 +84,7 @@ tags:
 
 ## Report Contract
 
-When a planned Maestro validation run executes, it must request a native report with `--format` / `--output` or the project's equivalent reporter unless prerequisites are blocked before the runner can start. Write a named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem and timestamp. Do this even when the flow fails or the final full rerun is blocked by environment.
+When a planned Maestro validation run executes, it must request a native report with `--format` / `--output` or the project's equivalent reporter unless prerequisites are blocked before the runner can start. Write a named native report under `.maestro/reports/` in the project root, plus one Markdown run summary with the same stem, branch slug, and timestamp. Do this even when the flow fails or the final full rerun is blocked by environment.
 
 Because Maestro report generation depends on file side effects, formal Mobile / Hybrid E2E runs must not blindly use `rtk`. Prefer native `maestro test` for any run that writes `.xml`, `.html`, trace, artifact, or Markdown evidence. If `rtk` was used for a Maestro command, verify that the expected report file exists, its mtime / size changed during this run, and the contents match the flow that just executed. If the file is missing, stale, empty, mismatched, or `rtk` output suggests cache hit / replay / skipped write, rerun the same scope with native `maestro test` and treat the native result as authoritative.
 
@@ -96,12 +96,14 @@ Use this timestamp shape in local time:
 YYYY_mm_dd-HH_MM_SS
 ```
 
+Use `branch_slug` for the current branch segment in report file names. Prefer the current git branch or the project / CI branch ref; use `detached-{short_sha}` for detached HEAD and `unknown-branch` when no git context exists. Preserve only letters, digits, `.`, `_`, and `-`; replace `/`, spaces, and other special characters with `_`. Record the raw branch and `branch_slug` in the Markdown summary.
+
 Report file names:
 
 ```text
-.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml
-.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.html
-.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md
+.maestro/reports/maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml
+.maestro/reports/maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html
+.maestro/reports/maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md
 ```
 
 `flow_name` is the flow file stem, such as `login-success` or `smoke`. Keep `flow_name` in the report file name even when the flow is derived from a BDD `.feature`; the Markdown summary records the source `.feature` path and scenario name.
@@ -112,15 +114,29 @@ Example commands:
 mkdir -p .maestro/reports
 flow=maestro/flow/login-success.yml
 flow_name=$(basename "$flow" .yml)
+raw_branch=${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-}}
+if [ -z "$raw_branch" ]; then
+  raw_branch=$(git branch --show-current 2>/dev/null || true)
+fi
+if [ -z "$raw_branch" ]; then
+  short_sha=$(git rev-parse --short HEAD 2>/dev/null || true)
+  if [ -n "$short_sha" ]; then
+    raw_branch="detached-${short_sha}"
+  else
+    raw_branch="unknown-branch"
+  fi
+fi
+branch_slug=$(printf "%s" "$raw_branch" | LC_ALL=C tr -cs 'A-Za-z0-9._-' '_' | sed 's/^_*//; s/_*$//')
+branch_slug=${branch_slug:-unknown-branch}
 stamp=$(date +%Y_%m_%d-%H_%M_%S)
-maestro test --format junit --output ".maestro/reports/maestro-report-${flow_name}-${stamp}.xml" "$flow"
+maestro test --format junit --output ".maestro/reports/maestro-report-${flow_name}-${branch_slug}-${stamp}.xml" "$flow"
 ```
 
-Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. Prefer writing directly to the timestamped report file. If a project wrapper can only emit into a fixed or runner-managed output directory, use `.maestro/reports/.maestro-current/` as the temporary output and copy or rename the result to `maestro-report-{flow_name}-{timestamp}` before the next Maestro run. Do not treat `~/.maestro/tests`, `.maestro-current/`, or a fixed `report.xml` / `report.html` path as the formal preserved report.
+Use the project-required native reporter. Default to JUnit when CI needs machine-readable output; use HTML only when the project or user asks for human-readable local reports. Prefer writing directly to the branch-and-timestamped report file. If a project wrapper can only emit into a fixed or runner-managed output directory, use `.maestro/reports/.maestro-current/` as the temporary output and copy or rename the result to `maestro-report-{flow_name}-{branch_slug}-{timestamp}` before the next Maestro run. Do not treat `~/.maestro/tests`, `.maestro-current/`, or a fixed `report.xml` / `report.html` path as the formal preserved report.
 
 If project configuration forces multiple reporters, treat them as one report set from the same run, and still generate only one Markdown summary for that report set. If Maestro CLI never produces a native report because prerequisites are blocked, the runner crashes before reporting, or the only executed command was stdout-only, mark the report and summary as blocked instead of claiming generation.
 
-The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
+The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, raw branch, `branch_slug`, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
 
 ## Failure Rerun Loop
 

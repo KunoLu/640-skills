@@ -60,7 +60,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 - SEO/GEO 只面向公开 Web 搜索可见性，不替代 Web 运行时诊断、Playwright 回归、发布检查或人工内容评审。
 - 跨仓或链路不完整时，mock 只能基于 contract、schema、真实响应样例、既有 fixture 或用户明确确认；mock-backed 不能冒充 full-stack 通过。
 - `rtk` 是命令输出压缩层，不是测试 runner。unit test、API / integration test、Playwright Web E2E、Maestro Mobile / Hybrid E2E 或任何需要落地报告的命令，必须先评估缓存 / 回放是否会跳过文件写入；报告型正式验证默认使用原生命令或项目明确的 no-cache / report-safe 命令，缺报或旧报时原生命令复验。
-- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次可以保留多份带业务名和时间戳的本地报告快照；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，或 API / integration / unit runner 生成了本轮需要保留的报告，无论最终全量是否通过，都要在下一次可能清空输出的运行前生成该次运行的命名报告和同目录同 stem 的中文 Markdown 汇总。Playwright 的同 stem 以命名后的 HTML 为准，不以 `results.json` 为准。
+- API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次可以保留多份带业务名、分支名和时间戳的本地报告快照；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，或 API / integration / unit runner 生成了本轮需要保留的报告，无论最终全量是否通过，都要在下一次可能清空输出的运行前生成该次运行的命名报告和同目录同 stem 的中文 Markdown 汇总。Playwright 的同 stem 以命名后的 HTML 为准，不以 `results.json` 为准。
 - 任何工具不可用时，要标记 `blocked`、`skipped` 或 `not-needed`，不能声称对应验证已通过。
 
 ## SBTD：SDD、BDD、TDD、DDD
@@ -121,7 +121,7 @@ Web E2E 报告规则：
 - 完整环境可用时跑 full-stack Playwright E2E；只有 contract 或 mock 环境时标记 `contract-backed` 或 `mock-backed`。
 - `--reporter=list` 只用于诊断或定点重跑；Web E2E 进入正式验证范围时，最终收尾必须再跑不覆盖项目 reporter 的计划范围命令，生成命名 HTML 和同 stem 中文 Markdown 汇总。
 - Playwright HTML reporter 的 `outputFolder` 默认使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`；该目录可能被每次 Playwright 运行清空，不保存正式命名报告。
-- 最终正式 Playwright HTML 报告快照默认写入 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的中文 Markdown 汇总。多轮调试可以保留多份带业务名和时间戳的本地快照，最终是否通过仍由 `Final Full Rerun` 表达。
+- 最终正式 Playwright HTML 报告快照默认写入 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成同 stem 的中文 Markdown 汇总。`branch_slug` 取当前分支，`/`、空格和特殊字符替换为 `_`。多轮调试可以保留多份带业务名、分支名和时间戳的本地快照，最终是否通过仍由 `Final Full Rerun` 表达。
 - `feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用 suite 名，否则使用 `multi-feature`。
 - Playwright Markdown 汇总必须与命名后的 HTML 报告完全同 stem；`results.json`、`junit.xml`、`test-results/` 和默认 `index.html` 不能决定正式 Markdown 文件名。`results.md`、`result.md`、`junit.md` 或 `index.md` 不能满足最终 `Run Summary MD`。
 - 命名后的 HTML 是正式报告；Playwright 默认 `index.html` 只作为 `.playwright-html-current/` 中的复制源或工具兼容产物。只要 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价产物，最终输出前必须确认命名后的 HTML 和同 stem 中文 `.md` 实际存在。
@@ -160,8 +160,8 @@ Maestro flow 资产和报告规则：
 - 全量回归 / smoke flow 固定为 `maestro/flow/smoke.yml`。
 - 每个 flow 必须追踪到源 `.feature` 路径、场景名称、平台范围和测试模式。
 - Maestro CLI 最终正式 report 固定写入项目根目录 `.maestro/reports/`。
-- 报告命名为 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的中文 `.md` 运行汇总；`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，是否生成 HTML 遵循项目或用户对人类可读报告的需要。
-- 优先让 Maestro 直接输出到时间戳文件；如果项目 wrapper 只能输出到固定目录或固定文件，使用 `.maestro/reports/.maestro-current/` 作为临时输出，再复制 / 提升为 `maestro-report-{flow_name}-{timestamp}`。`~/.maestro/tests`、`.maestro-current/`、固定 `report.xml` / `report.html` 都不是正式保留报告。
+- 报告命名为 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `.html`，并生成同 stem 的中文 `.md` 运行汇总；`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，是否生成 HTML 遵循项目或用户对人类可读报告的需要。
+- 优先让 Maestro 直接输出到带分支名和时间戳的文件；如果项目 wrapper 只能输出到固定目录或固定文件，使用 `.maestro/reports/.maestro-current/` 作为临时输出，再复制 / 提升为 `maestro-report-{flow_name}-{branch_slug}-{timestamp}`。`~/.maestro/tests`、`.maestro-current/`、固定 `report.xml` / `report.html` 都不是正式保留报告。
 - stdout-only Maestro run 只用于诊断或定点重跑，不能满足正式 Mobile / Hybrid E2E 报告 gate；正式验证收尾必须补跑 `--format` / `--output` 或项目等价 reporter，无法产出时标记 blocked。
 - Maestro 官方默认运行 artifacts 仍在用户 home 下的 `~/.maestro/tests`；它不是仓库内测试资产。
 - iOS 真机遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，`maestro-mobile-e2e` 按标签 / 关键字懒加载对应 lesson；未命中时不预先套用临时补丁。
@@ -263,13 +263,13 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - Maestro 默认目录：`.maestro/reports/`。
 - Unit test 报告默认继承项目配置；缺少项目约定但需要本地正式证据时，使用 `tests/unit/reports/`，临时输出使用 `tests/unit/reports/.unit-current/`。
 - 执行 unit / API / Playwright / Maestro 报告型测试前先记录 `rtk` 决策：`used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`。如果 `rtk` 后报告文件缺失、mtime / size 未变化、内容不对应本轮命令，或输出显示 cache hit / replay / skipped 写入，必须原生命令重跑并以原生结果为准。
-- 调试轮次可以保留多份本地命名报告快照；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，或 API / integration / unit runner 生成了本轮需要保留的报告，无论最终全量是否通过，都生成该次运行的命名报告和一份同目录同 stem 的中文 `.md` 汇总。
-- 正式验证范围不能由 runner 是否已经产出报告倒推决定。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，stdout-only、terminal-only 或 diagnostic-only 命令不能满足最终报告 gate：API 自定义脚本必须捕获 stdout / stderr / exit code 为 `api-report-*.txt` / `.json` raw report，Playwright `--reporter=list` 后必须补跑正式 reporter，Maestro stdout-only 后必须补跑 `--format` / `--output` 或项目等价 reporter；无法产出时标记 `Final Test Report: blocked` 和 `Run Summary MD: blocked`。
+- 调试轮次可以保留多份本地命名报告快照；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，或 API / integration / unit runner 生成了本轮需要保留的报告，无论最终全量是否通过，都生成该次运行的命名报告和一份同目录同 stem 的中文 `.md` 汇总。API、Playwright 和 Maestro 的正式报告 stem 必须包含 `branch_slug`；`branch_slug` 取当前 git / CI 分支，detached HEAD 使用 `detached-{short_sha}`，非 git 环境使用 `unknown-branch`，并将 `/`、空格和特殊字符替换为 `_`。
+- 正式验证范围不能由 runner 是否已经产出报告倒推决定。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，stdout-only、terminal-only 或 diagnostic-only 命令不能满足最终报告 gate：API 自定义脚本必须捕获 stdout / stderr / exit code 为 `api-report-*-{branch_slug}-*.txt` / `.json` raw report，Playwright `--reporter=list` 后必须补跑正式 reporter，Maestro stdout-only 后必须补跑 `--format` / `--output` 或项目等价 reporter；无法产出时标记 `Final Test Report: blocked` 和 `Run Summary MD: blocked`。
 - 通用防覆盖规则：`coverage/`、`test-results/`、固定 `junit.xml`、runner 的 `current` / `latest` 目录和各工具临时输出目录都可能被下一轮运行清空、覆盖或重建；需要保留时，先复制 / 提升到正式快照目录和时间戳 stem，再启动下一轮会改写同一输出的命令。
-- Playwright 报告命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html`；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
+- Playwright 报告命名为 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
 - Playwright `.md` 汇总必须使用命名 HTML 的同 stem，不得使用 `results.json` / `junit.xml` / 默认 `index.html` 的 stem。
-- Maestro 报告继续使用 `maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}` stem；`flow_name` 取 flow 文件名，不改成 `feature_file_name`。
-- API 报告使用 `api-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}` stem；unit 报告使用 `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}` stem。缺少明确 suite 时可以省略 `{suite_name}`，但不能使用会被下一轮覆盖的固定文件名作为正式报告。没有原生 reporter 的 API 正式验证至少保留 `.txt` / `.json` raw report 和同 stem `.md`。
+- Maestro 报告继续使用 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}` stem；`flow_name` 取 flow 文件名，不改成 `feature_file_name`。
+- API 报告使用 `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}` stem；unit 报告使用 `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}` stem。缺少明确 suite 时可以省略 `{suite_name}`，但不能省略 `{branch_slug}`，也不能使用会被下一轮覆盖的固定文件名作为正式报告。没有原生 reporter 的 API 正式验证至少保留 `.txt` / `.json` raw report 和同 stem `.md`。
 - `.md` 汇总使用中文撰写，状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文；内容记录运行 case / spec / flow 列表、关联 BDD `.feature` 路径和场景名、总轮次、每轮命令、失败 case / spec / flow、失败原因、修复动作、修改文件摘要、定点重跑、影响范围重跑、最终全量重跑、跳过项和剩余风险。
 - 失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证；fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。
 - 汇总和报告不得写入真实账号、密钥、PII、生产数据、完整 token 或敏感请求头。

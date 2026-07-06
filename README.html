@@ -605,9 +605,9 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
         <div class="status-list">
           <div><strong>测试模式</strong><br><code>full-stack</code> / <code>contract-backed</code> / <code>mock-backed</code> / <code>app-mocked</code> / <code>backend-only</code> / <code>smoke-only</code> / <code>blocked</code>。</div>
           <div><strong>默认报告目录</strong><br>API 正式快照: <code>tests/api/reports/</code>；API 临时输出: <code>tests/api/reports/.api-current/</code>；Playwright 临时 HTML: <code>tests/e2e/reports/.playwright-html-current/</code>；Playwright 正式快照: <code>tests/e2e/reports/html/</code>；Maestro: <code>.maestro/reports/</code>；unit 需要本地证据时使用 <code>tests/unit/reports/</code>。</div>
-          <div><strong>Playwright Report</strong><br><code>playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html</code>；smoke 使用 <code>smoke</code>，多 feature 优先 suite 名，否则 <code>multi-feature</code>。</div>
+          <div><strong>Playwright Report</strong><br><code>playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html</code>；<code>branch_slug</code> 取当前分支，<code>/</code>、空格和特殊字符替换为 <code>_</code>；smoke 使用 <code>smoke</code>，多 feature 优先 suite 名，否则 <code>multi-feature</code>。</div>
           <div><strong>rtk Gate</strong><br>unit / API / Playwright / Maestro 报告型测试先记录 <code>rtk</code>: <code>used</code> / <code>skipped-for-report</code> / <code>fallback-native</code> / <code>not-available</code> / <code>not-needed</code>；缺报、旧报、空报或 cache hit / replay 时原生命令重跑。</div>
-          <div><strong>最终报告</strong><br>调试轮次可以保留多份带业务名和时间戳的本地快照；只要 Playwright 或 Maestro 产生 runner 原生报告，或 API / integration / unit runner 生成了本轮要保留的报告，无论最终是否全绿，都先生成该次运行的命名报告，再进入下一次可能清空输出的运行。正式验证范围不能由 runner 是否已经产出报告倒推决定；API stdout-only 必须捕获 raw report，Playwright <code>--reporter=list</code> 和 Maestro stdout-only 都只能算诊断，收尾前必须补正式 reporter 或标记 blocked。<code>coverage/</code>、<code>test-results/</code>、固定 <code>junit.xml</code> 和 <code>current</code> 目录都不是正式快照。</div>
+          <div><strong>最终报告</strong><br>调试轮次可以保留多份带业务名、分支名和时间戳的本地快照；API、Playwright 和 Maestro 的正式报告 stem 必须包含 <code>branch_slug</code>，detached HEAD 使用 <code>detached-{short_sha}</code>，非 git 环境使用 <code>unknown-branch</code>。只要 Playwright 或 Maestro 产生 runner 原生报告，或 API / integration / unit runner 生成了本轮要保留的报告，无论最终是否全绿，都先生成该次运行的命名报告，再进入下一次可能清空输出的运行。正式验证范围不能由 runner 是否已经产出报告倒推决定；API stdout-only 必须捕获 <code>api-report-*-{branch_slug}-*.txt</code> / <code>.json</code> raw report，Playwright <code>--reporter=list</code> 和 Maestro stdout-only 都只能算诊断，收尾前必须补正式 reporter 或标记 blocked。<code>coverage/</code>、<code>test-results/</code>、固定 <code>junit.xml</code> 和 <code>current</code> 目录都不是正式快照。</div>
           <div><strong>Markdown 汇总</strong><br>Playwright 的 <code>.md</code> 必须与命名 HTML 同 stem，不能用 <code>results.json</code> / <code>junit.xml</code> / 默认 <code>index.html</code> 的 stem；中文汇总记录运行 case、关联 BDD feature、总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑。</div>
         </div>
         <p>失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。</p>
@@ -626,10 +626,10 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
         <div class="status-list">
           <div><strong>Flow Assets</strong><br><code>maestro/flow/&lt;english-scenario&gt;.yml</code>，文件名 lower-kebab-case，YAML <code>name</code> 使用英文业务场景名。</div>
           <div><strong>Platform Flow</strong><br>平台差异明显时可使用 <code>maestro/flow/ios/*.yml</code> 和 <code>maestro/flow/android/*.yml</code>。</div>
-          <div><strong>Final Report</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml</code> 或 <code>.html</code>；<code>flow_name</code> 取 flow 文件名 stem，smoke flow 使用 <code>smoke</code>。</div>
-          <div><strong>Run Summary MD</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{YYYY_mm_dd}-{HH_MM_SS}.md</code></div>
+          <div><strong>Final Report</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml</code> 或 <code>.html</code>；<code>flow_name</code> 取 flow 文件名 stem，smoke flow 使用 <code>smoke</code>。</div>
+          <div><strong>Run Summary MD</strong><br><code>.maestro/reports/maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md</code></div>
         </div>
-        <p>生成或运行 flow 前确认平台、app artifact、bundleId / appId、设备 / 模拟器 / 云测、后端依赖、base URL / launch args / deep link、账号、数据、权限、稳定 selector 和系统 UI。Maestro 优先直接输出到带时间戳的报告文件；如项目 wrapper 只能输出到固定目录，使用 <code>.maestro/reports/.maestro-current/</code> 后再提升为正式快照。stdout-only Maestro run 只用于诊断或定点重跑，不能满足正式 Mobile / Hybrid E2E 报告 gate。Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。</p>
+        <p>生成或运行 flow 前确认平台、app artifact、bundleId / appId、设备 / 模拟器 / 云测、后端依赖、base URL / launch args / deep link、账号、数据、权限、稳定 selector 和系统 UI。Maestro 优先直接输出到带分支名和时间戳的报告文件；如项目 wrapper 只能输出到固定目录，使用 <code>.maestro/reports/.maestro-current/</code> 后再提升为正式快照。stdout-only Maestro run 只用于诊断或定点重跑，不能满足正式 Mobile / Hybrid E2E 报告 gate。Maestro 官方默认运行 artifacts 位于用户 home 下的 <code>~/.maestro/tests</code>，不是仓库内测试资产。</p>
       </div>
     </section>
 

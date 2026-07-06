@@ -329,10 +329,10 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要 Maestro 时，按全局 Java 17+ -> Maestro CLI -> Maestro MCP 顺序检查；本项目已有移动测试文档、设备矩阵、appId / bundleId、模拟器或云测策略时，以项目事实为准。
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
 - API、Web E2E、Mobile E2E 或 Hybrid E2E 的模式、mock、重跑顺序、报告命名、Markdown 汇总内容和状态枚举默认遵循全局 AGENTS 与 `project-validation` Skill。
-- 项目级最低报告门禁：只要 Playwright、Maestro、API / integration 或 unit test runner 产生了需要作为本轮证据保留的原生报告，就必须在下一次可能清空输出的运行前保留该次运行的命名报告和同 stem 中文 Markdown 汇总；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。多轮调试可以保留多份本地命名报告快照，但最终结论只以最后一次计划范围内运行判断。
+- 项目级最低报告门禁：只要 Playwright、Maestro、API / integration 或 unit test runner 产生了需要作为本轮证据保留的原生报告，就必须在下一次可能清空输出的运行前保留该次运行的命名报告和同 stem 中文 Markdown 汇总；API、Playwright 和 Maestro 的正式报告文件名必须包含当前分支的 `branch_slug`，其中 `/`、空格和特殊字符统一替换为 `_`；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。多轮调试可以保留多份本地命名报告快照，但最终结论只以最后一次计划范围内运行判断。
 - 项目级 spec 可以允许诊断轮次使用 stdout-only、terminal-only 或轻量 reporter，但不得把这类命令当作最终正式验证证据。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，收尾前必须使用项目 reporter 生成命名报告；没有原生 reporter 的 API 自定义脚本必须捕获 stdout / stderr / exit code 为 `tests/api/reports/` 下的时间戳 raw report 并生成同 stem 中文 Markdown 汇总；Playwright `--reporter=list` 和 stdout-only Maestro run 只能算诊断或定点重跑。
-- Playwright 的正式报告快照目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。Playwright HTML reporter 的 `outputFolder` 应使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`，不要把需要保留的正式命名报告放进该目录，因为下一次 Playwright 运行可能清空它。
-- API / integration 默认正式快照目录为 `tests/api/reports/`，unit test 报告默认继承项目配置；如果 runner 使用会重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 `current` 输出目录，必须先复制 / 提升到项目归档目录或 `tests/unit/reports/` 的时间戳快照，不能把 runner 托管目录当作正式报告。
+- Playwright 的正式报告快照目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*-{branch_slug}-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。Playwright HTML reporter 的 `outputFolder` 应使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`，不要把需要保留的正式命名报告放进该目录，因为下一次 Playwright 运行可能清空它。
+- API / integration 默认正式快照目录为 `tests/api/reports/`，正式报告 stem 使用 `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`；unit test 报告默认继承项目配置。如果 runner 使用会重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 `current` 输出目录，必须先复制 / 提升到项目归档目录或 `tests/unit/reports/` 的时间戳快照，不能把 runner 托管目录当作正式报告。
 - 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
@@ -349,7 +349,7 @@ Maestro flow 是可入库测试资产；详细生成、命名、报告和真机�
 - 默认 flow 根目录为 `maestro/flow/`；平台差异明显时使用 `maestro/flow/ios/` 和 `maestro/flow/android/`；全量回归 / smoke flow 固定使用 `smoke.yml`。
 - 每个 flow 必须追踪源 `.feature`、场景名、平台范围和测试模式。
 - 缺少稳定选择器、账号、环境、设备、app binary、appId / bundleId、数据准备或清理策略时，不生成脆弱 flow；标记 `Maestro Flow Assets: blocked`。
-- Maestro 原生报告和同 stem 中文 Markdown 汇总按全局规则与 `maestro-mobile-e2e` 写入 `.maestro/reports/`。
+- Maestro 原生报告和同 stem 中文 Markdown 汇总按全局规则与 `maestro-mobile-e2e` 写入 `.maestro/reports/`，正式报告 stem 使用 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`。
 
 ---
 
@@ -363,7 +363,7 @@ Maestro flow 是可入库测试资产；详细生成、命名、报告和真机�
 - 优先沿用项目已有 Playwright / Cypress / 测试目录 / fixture / mock / CI 约定，不为默认模板切换测试框架。
 - 可入库 JSON 资产必须位于 `tests/e2e/manifest/`；标记 `generated` / `coverage-only` 前，确认项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
 - 没有稳定账号、环境、数据准备、清理策略或业务规则时，只输出阻塞说明，不生成脆弱测试；只有用户明确同意时才补充产品代码选择器。
-- Playwright 正式 HTML report 和 Markdown 汇总遵循全局规则，默认进入 `tests/e2e/reports/html/`；Playwright reporter 临时输出目录默认使用 `tests/e2e/reports/.playwright-html-current/`；trace、video、screenshot、默认 `index.html` 和 repair plan 默认不入库。
+- Playwright 正式 HTML report 和 Markdown 汇总遵循全局规则，默认进入 `tests/e2e/reports/html/`，正式报告 stem 使用 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`；Playwright reporter 临时输出目录默认使用 `tests/e2e/reports/.playwright-html-current/`；trace、video、screenshot、默认 `index.html` 和 repair plan 默认不入库。
 
 ---
 

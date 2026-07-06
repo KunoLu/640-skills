@@ -36,7 +36,7 @@
 - 严重级别：high
 - 来源：迁移自 `docs/lessons.md`
 - 原始标题：E2E 报告文件生成与测试通过状态必须解耦
-- 问题：Playwright 已生成 `index.html`、`results.json` 和 `junit.xml` 时，Agent 因最终全量 rerun 未全绿而报告“未生成正式报告”，没有把 HTML 重命名为模板要求的 `playwright-report-{feature_file_name}-{stamp}.html`，也没有生成同 stem 的 Markdown 汇总。
+- 问题：Playwright 已生成 `index.html`、`results.json` 和 `junit.xml` 时，Agent 因最终全量 rerun 未全绿而报告“未生成正式报告”，没有把 HTML 重命名为当时模板要求的 `playwright-report-{feature_file_name}-{stamp}.html`，也没有生成同 stem 的 Markdown 汇总。
 - 根因：模板规则把“最终全量通过后才能生成正式报告”和“最后一次运行必须留下命名报告产物”混在一起，导致失败运行已有 runner 产物时仍可能跳过报告归档；同时没有强制 Markdown 汇总使用中文。
 - 修复：将 `Final Test Report` 定义为报告文件是否实际生成，将 `Final Full Rerun` 定义为最终全量是否通过；只要 Playwright 或 Maestro 产生原生 runner 报告，就必须生成命名报告和同 stem 中文 Markdown 汇总，失败状态写入汇总而不是跳过文件。
 - 预防：后续修改测试报告规则时，必须分别检查“报告产物存在性”和“测试结论状态”，最终输出前用文件存在性校验确认命名报告和同 stem `.md` 都存在；不要把 `Run Summary MD` 标记为 `not-needed` 来绕过失败运行的汇总。
@@ -61,10 +61,10 @@
 - 适用场景：Playwright HTML 报告被下一轮运行清空，或设计正式报告保存目录
 - 严重级别：high
 - 来源：会话 `019f1c83-9275-7591-be9c-0f5ea71800ea` 发现 `tests/e2e/reports/html` 中前一轮命名报告被下一轮 Playwright CLI 运行清空
-- 问题：模板要求把 Playwright 默认 `index.html` 复制为 `playwright-report-{feature}-{timestamp}.html` 和同 stem `.md`，但同时把 Playwright HTML reporter 的 `outputFolder` 和正式命名报告目录都设为 `tests/e2e/reports/html/`。下一轮 Playwright 运行重建 reporter 输出目录时，会把上一轮已经重命名的正式报告一起删除。
+- 问题：当时模板要求把 Playwright 默认 `index.html` 复制为 `playwright-report-{feature}-{timestamp}.html` 和同 stem `.md`，但同时把 Playwright HTML reporter 的 `outputFolder` 和正式命名报告目录都设为 `tests/e2e/reports/html/`。下一轮 Playwright 运行重建 reporter 输出目录时，会把上一轮已经重命名的正式报告一起删除。
 - 根因：没有区分 runner 管理的临时输出目录和需要保留的正式报告快照目录；`.gitignore` 忽略 `tests/e2e/reports/` 只表示报告不入库，不会阻止 Playwright 清理自己的 `outputFolder`。
-- 修复：将模板默认改为双目录：Playwright HTML reporter 的临时 `outputFolder` 使用 `tests/e2e/reports/.playwright-html-current/`；正式命名报告快照保存到 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{YYYY_mm_dd}-{HH_MM_SS}.html` 和同 stem `.md`。多轮调试可以保留多份本地快照，最终通过状态仍由 `Final Full Rerun` 表示。
-- 预防：后续配置 Playwright 报告时，永远不要把需要保留的 `playwright-report-*` 放进 Playwright 的 `outputFolder`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，复制完整资源目录，或生成 `playwright-report-{feature}-{timestamp}/index.html` 形式的完整快照目录，并让 Markdown 汇总指向该入口。
+- 修复：将模板默认改为双目录：Playwright HTML reporter 的临时 `outputFolder` 使用 `tests/e2e/reports/.playwright-html-current/`；正式命名报告快照保存到 `tests/e2e/reports/html/`，命名为 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html` 和同 stem `.md`，其中 `branch_slug` 使用 `_` 替换 `/`、空格和特殊字符。多轮调试可以保留多份本地快照，最终通过状态仍由 `Final Full Rerun` 表示。
+- 预防：后续配置 Playwright 报告时，永远不要把需要保留的 `playwright-report-*` 放进 Playwright 的 `outputFolder`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，复制完整资源目录，或生成 `playwright-report-{feature}-{branch_slug}-{timestamp}/index.html` 形式的完整快照目录，并让 Markdown 汇总指向该入口。
 
 ## LESSON-20260704-diagnostic-run-formal-report-gate: Diagnostic Run Formal Report Gate
 
