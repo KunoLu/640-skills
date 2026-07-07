@@ -20,6 +20,8 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 | `AGENTS.md` | 本仓库自身直接生效的补充规则。 |
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
+| `install.sh` | macOS / Linux 交互式安装入口，直接以 `kuno-workflow-onboard-skills` 目录作为 `source-root`。 |
+| `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
 | `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
 | `docs/lessons/index.md` | Lessons 完整索引，按 tags、适用场景和详情路径检索。 |
 | `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
@@ -179,7 +181,7 @@ Maestro flow 资产和报告规则：
 - Chrome DevTools MCP：用于真实 Chrome 运行时诊断，适合白屏、console error、network、cookie、storage、性能 trace、截图和临时复现。
 - Playwright MCP：用于 Agentic Web 探索、可访问性快照、locator 生成辅助和页面结构理解。
 
-MCP 配置由 Agent 或 IDE 提供。模板只做检查和引导，不把 MCP 配置文件复制进业务项目。
+MCP 配置由 Agent 或 IDE 提供。`scripts/onboard.py` 只做检查和引导，不把 MCP 配置文件复制进业务项目；根目录安装脚本在用户明确选择平台和 MCP server 后，可以执行平台 CLI 配置或写入 Oh My Pi 的 `mcp.json`。
 
 ## `web-ui-autotest-generator` 使用边界
 
@@ -367,7 +369,24 @@ tests/e2e/**/*.trace.zip
 - `web-ui-autotest-generator`、`seo-geo`、`ui-ux-pro-max`、`impeccable` 等可选 Skill 的存在性检查。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 
-MCP 配置通常无法仅通过仓库文件完全证明，模板只做状态检查和配置指引。CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则；`caveman` 安装后不自动启用压缩对话模式。
+`scripts/onboard.py` 本身仍只做 MCP 状态检查和配置指引，不直接写 Agent / IDE 的 MCP 设置。仓库根目录的 `install.sh` 和 `install.ps1` 是面向用户的交互式安装入口，会在用户选择单一目标平台并确认 MCP 选项后，调用对应平台命令或写入对应配置文件：
+
+- `codex`：执行 `codex mcp add ...`。
+- `claude`：执行 `claude mcp add ...`，全局对应 `--scope user`，项目级对应 `--scope project`。
+- `kimi`：执行 `kimi mcp add ...`。
+- `oh-my-pi` / `omp`：写入 `~/.omp/agent/mcp.json` 或 `<project-root>/.omp/mcp.json`。
+
+两个安装脚本的 `source-root` 都直接指向 `kuno-workflow-onboard-skills` 目录，而不是仓库根目录。默认值是当前执行目录下的 `./kuno-workflow-onboard-skills`；如果该目录不存在或缺少 `SKILL.md`、`REFERENCE.md`、`scripts/onboard.py` 或 `templates/`，脚本会直接输出未找到 Onboard skill 并结束安装。脚本可以被复制到其他目录独立使用，但必须能通过默认值或显式参数定位完整的 `kuno-workflow-onboard-skills`：
+
+```bash
+./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills --platform codex
+```
+
+```powershell
+.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills -Platform codex
+```
+
+CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则；`caveman` 安装后不自动启用压缩对话模式。绑定的 bundled skills 按用户选择的 scope 作为整体安装，已有目标目录会被覆盖且不备份；外部 referenced skills 会先展示缺失项，用户选择推荐安装、自定义安装或跳过后才从外部仓库拉取，已有目标目录同样覆盖且不备份。
 
 ## 同步规则
 

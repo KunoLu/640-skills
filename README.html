@@ -412,6 +412,24 @@
       <div class="wrap">
         <div class="section-head">
           <div>
+            <p class="eyebrow">Installer CLI</p>
+            <h2>交互式安装入口</h2>
+          </div>
+          <p><code>install.sh</code> 面向 macOS / Linux，<code>install.ps1</code> 面向 Windows PowerShell。两个入口都把 <code>source-root</code> 定义为完整的 <code>kuno-workflow-onboard-skills</code> 目录，而不是仓库根目录；默认值是当前执行目录下的 <code>./kuno-workflow-onboard-skills</code>。如果缺少 <code>SKILL.md</code>、<code>REFERENCE.md</code>、<code>scripts/onboard.py</code> 或 <code>templates/</code>，安装会直接停止。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>平台选择</strong><br><code>--platform codex</code>、<code>claude</code>、<code>kimi</code>、<code>oh-my-pi</code> 或 <code>omp</code>；<code>omp</code> 与 <code>oh-my-pi</code> 等价。未传参数时先单选目标工具，不支持一次配置多个 Agent。</div>
+          <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills</code></div>
+          <div><strong>Skills</strong><br>绑定的 bundled skills 按用户选择的全局或项目 scope 整体安装；外部 referenced skills 先展示缺失项，再由用户选择推荐安装、自定义安装或跳过。</div>
+          <div><strong>MCP</strong><br><code>scripts/onboard.py</code> 仍只负责检查和示例；根安装脚本会在用户确认后用 Codex / Claude / Kimi CLI 或 Oh My Pi <code>mcp.json</code> 直接配置选中的 MCP。</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
             <p class="eyebrow">SBTD</p>
             <h2>四个驱动开发概念</h2>
           </div>
@@ -640,14 +658,14 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Install Gates</p>
             <h2>检测、安装和 fallback</h2>
           </div>
-          <p>模板不默认假设工具存在。CLI、MCP 或用户级全局 Skill 缺失时，先按证据检测，再根据用户确认安装或降级；降级不能冒充完整验证。</p>
+          <p>模板不默认假设工具存在。CLI、MCP 或用户级全局 Skill 缺失时，先按证据检测，再根据用户确认安装、配置或降级；降级不能冒充完整验证。<code>scripts/onboard.py</code> 只报告 MCP 状态，根安装脚本才会在用户确认后执行平台 MCP 配置。</p>
         </div>
         <div class="status-list">
           <div><strong>Playwright CLI</strong><br>检测 <code>package.json</code>、Playwright 配置、E2E 目录和脚本。需要 Web 回归但缺失时询问是否安装到项目 devDependency。</div>
           <div><strong>Playwright MCP</strong><br>只作为 MCP 可见性检查和探索能力；不可见时不阻塞 Playwright CLI。</div>
           <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。当前 JDK 满足 17+ 时优先使用当前 JDK；否则先扫描本机已有 17+ JDK。只有本机没有可用 JDK 且用户确认后，才引导安装 OpenJDK Temurin 21。</div>
-          <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP，并引导当前 Agent / IDE 的 MCP 配置同时包含 <code>command</code>、<code>args</code>、<code>JAVA_HOME</code> 和 <code>PATH</code>。MCP 缺失或 env 未配置但 CLI 可用时继续 <code>maestro test</code>。</div>
-          <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集。</div>
+          <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。根安装脚本可把 <code>command</code>、<code>args</code>、<code>JAVA_HOME</code> 和 <code>PATH</code> 写入选定平台；MCP 缺失或 env 未配置但 CLI 可用时继续 <code>maestro test</code>。</div>
+          <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集；根安装脚本可为选定平台添加 <code>chrome-devtools-mcp</code>。</div>
           <div><strong>seo-geo</strong><br>作为 referenced external Skill 检查存在性；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
           <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；报告型测试可能因缓存 / 回放跳过文件写入，必要时直接使用原生命令；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，安装后不自动启用。</div>
           <div><strong>状态报告</strong><br>最终输出要列明各工具是 run、blocked、skipped、not-needed、available、installed 或对应模板状态。</div>

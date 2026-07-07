@@ -7,19 +7,44 @@ description: Checks, installs, or resets Kuno Codex workflow tools, AGENTS templ
 
 Use this Skill to onboard a local machine or project to the Kuno Codex workflow templates bundled in this Skill.
 
-The bundled install templates are self-contained under `templates/`, including `templates/project/.gitignore` for project roots. MCP items are manual setup checks only; this Skill does not copy MCP configuration templates. The installer can also install this onboard Skill directory itself as a global or project skill when source and target differ. Do not read or install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target configuration templates.
+The bundled install templates are self-contained under `templates/`, including `templates/project/.gitignore` for project roots. `scripts/onboard.py` reports MCP items as manual setup checks and does not copy MCP configuration templates by itself. The repository root CLI installers, `install.sh` and `install.ps1`, can use those checks to configure selected MCP servers directly for a single target platform after explicit user confirmation. The installer can also install this onboard Skill directory itself as a global or project skill when source and target differ. Do not read or install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target configuration templates.
 
 ## Required Questions
 
 Before installing or resetting, ask and resolve these points:
 
-1. Is the action `init` or `reset`?
-2. Is the current working directory the target project root for project-level `AGENTS.md`?
-3. If not, what is the target project root path, or should project-level `AGENTS.md` be skipped?
-4. Should skills be installed globally, or as project-level skills? Default is global.
-5. If project-level skills are requested, what is the target project root or explicit project skills directory?
+1. If using `install.sh` or `install.ps1`, which target platform should be configured: `codex`, `claude`, `kimi`, or `oh-my-pi` / `omp`? If `--platform` / `-Platform` is provided, do not ask again.
+2. Is the action `init` or `reset`?
+3. Is the current working directory the target project root for project-level `AGENTS.md`?
+4. If not, what is the target project root path, or should project-level `AGENTS.md` be skipped?
+5. Should skills be installed globally, or as project-level skills? Default is global.
+6. If project-level skills are requested, what is the target project root or explicit project skills directory?
 
 If the user provides a project root, `init` or `reset` also ensures the bundled `templates/project/.gitignore` content exists in `<project-root>/.gitignore` and reports success, skip, or failure. If the user skips project-level `AGENTS.md`, provide the bundled template path `templates/agents/AGENTS.project.md` and ask them to confirm that this is the file they will use for manual setup.
+
+## Root CLI Installers
+
+The repository root provides two user-facing CLI installers:
+
+```bash
+./install.sh --platform codex
+```
+
+```powershell
+.\install.ps1 -Platform codex
+```
+
+Both scripts are portable wrappers around this Skill directory and require `source-root` to point directly to `kuno-workflow-onboard-skills`, not to the repository root. If omitted, the default source root is `./kuno-workflow-onboard-skills` from the current working directory. If that directory is missing or incomplete, the script must print that the Kuno Onboard skill was not found and exit without installing anything.
+
+Supported platform values are `codex`, `claude`, `kimi`, `oh-my-pi`, and `omp`; `omp` is an alias for `oh-my-pi`. The platform choice is single-select only.
+
+The root installers keep these paths separate:
+
+- `source-root`: the complete `kuno-workflow-onboard-skills` directory containing `SKILL.md`, `REFERENCE.md`, `scripts/onboard.py`, and `templates/`.
+- `project-root`: the user's target project root.
+- current working directory: only the default project-root candidate and the base for the default `./kuno-workflow-onboard-skills`.
+
+The scripts first validate `source-root`, then run the same preflight, tool installation, bundled skill, external skill, plan, and `init` / `reset` flow described below. They also offer direct MCP configuration for the selected platform. `scripts/onboard.py` remains the source of truth for checks and template writes; the root scripts own the interactive platform UI and MCP client-specific configuration commands.
 
 ## Workflow
 
@@ -49,7 +74,7 @@ For missing Maestro CLI, confirm Java 17+ first, ask the user, then run `python 
 
 For missing project-level Playwright CLI, install it only inside a target project that has `package.json` and needs Web E2E, Web regression, or `web-ui-autotest-generator` output. After confirmation, run `python scripts/onboard.py install-playwright-cli --project-root <project-root> --yes`. If the user declines, continue with Chrome DevTools MCP or Playwright MCP only as diagnostics / exploration fallback and report that project Web E2E was blocked or skipped.
 
-If installation fails, report the failed item, attempted action, likely cause, and recommended next step. MCP items are check-and-guide only; never claim MCP installation is complete unless the user has completed the listed manual steps and a later check confirms the tools are visible.
+If installation fails, report the failed item, attempted action, likely cause, and recommended next step. When using `scripts/onboard.py` directly, MCP items are check-and-guide only. When using `install.sh` or `install.ps1`, MCP items can be configured directly after user confirmation; never claim MCP configuration is complete unless the platform command or config-file write succeeds and the final platform-specific list/check step is run or explicitly reported as unavailable.
 
 3. Run a dry-run plan:
 

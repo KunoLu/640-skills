@@ -22,26 +22,78 @@ This Skill installs only these bundled templates:
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
-There are no bundled MCP configuration templates. GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP are reported as manual setup checks only. The Maestro MCP manual check generates generic server config values and JSON / TOML examples with `JAVA_HOME` and `PATH`, but the user must still adapt them to the active Agent or IDE MCP config format.
+There are no bundled MCP configuration templates. `scripts/onboard.py` reports GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP as manual setup checks only. The repository root installers, `install.sh` and `install.ps1`, can turn those checks into direct platform configuration after the user selects one target platform and confirms the MCP servers to add. The Maestro MCP manual check generates generic server config values and JSON / TOML examples with `JAVA_HOME` and `PATH`; the root installers adapt those values to the selected client where supported.
+
+## Root Installers
+
+The repository root installer scripts are:
+
+```bash
+./install.sh
+```
+
+```powershell
+.\install.ps1
+```
+
+They are CLI wrappers around this Skill directory. Their `source-root` parameter points directly to `kuno-workflow-onboard-skills`, not to the repository root:
+
+```bash
+./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills
+```
+
+```powershell
+.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills
+```
+
+If `source-root` is omitted, the default is `./kuno-workflow-onboard-skills` relative to the current working directory. At startup the scripts must verify:
+
+- `SKILL.md`
+- `REFERENCE.md`
+- `scripts/onboard.py`
+- `templates/agents/AGENTS.global.md`
+- `templates/agents/AGENTS.project.md`
+- `templates/skills/`
+
+If any required path is missing, print that the Kuno Onboard skill was not found or is incomplete, then exit before running checks, installs, or MCP configuration.
+
+Supported platform values are:
+
+- `codex`
+- `claude`
+- `kimi`
+- `oh-my-pi`
+- `omp`, an alias for `oh-my-pi`
+
+If `--platform` / `-Platform` is provided, skip platform selection. If omitted, ask the user to pick exactly one platform. Do not configure more than one Agent tool in one run.
+
+The scripts separate three locations:
+
+- `source-root`: complete Onboard Skill directory used as the template and script source.
+- `project-root`: user target project for project AGENTS, project `.gitignore`, project skills, and project-level MCP files when supported.
+- current working directory: only the default `project-root` candidate and the base for default `./kuno-workflow-onboard-skills`.
 
 ## Conversation Flow
 
 Use this sequence when the Skill is invoked:
 
-1. Tell the user that the Skill will install or reset local Codex workflow configuration from bundled templates.
-2. Ask whether they want `init` or `reset`.
-3. Ask: "Is the current working directory `<cwd>` the target project root for project-level `AGENTS.md`?"
-4. If the answer is no, ask for the project root path, or offer to skip project-level `AGENTS.md`.
-5. If skipped, show the absolute path to `templates/agents/AGENTS.project.md` in this Skill directory and ask the user to confirm that they will handle it manually. If the user still provides a project root, continue to update project `.gitignore`.
-6. Explain that skills install globally by default. Only use project-level skills if the user explicitly requests that and provides a project path or skills directory.
-7. Run `check` and show the completed checklist.
-8. If npm is missing, confirm the platform with the user, ask permission to install nvm + latest Node.js LTS, then run `ensure-npm`.
-9. Rerun `check`; only then evaluate CLI tools such as `rtk`, `trellis`, and `gitnexus`.
-10. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable. Use explicit installer subcommands for approved items: `install-java`, `install-maestro`, `install-playwright-cli`, `install-rtk`, `install-caveman`, `ensure-npm`, or `install-external-skills`.
-11. Install only user-approved missing items. Network or filesystem writes outside the workspace may require explicit approval.
-12. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
-13. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
-14. Run `init` or `reset` only after the user has confirmed the plan.
+1. Tell the user that the Skill will install or reset local workflow configuration from bundled templates.
+2. If using a root installer and no platform flag was provided, ask which single Agent platform to configure.
+3. Ask whether they want `init` or `reset`.
+4. Ask: "Is the current working directory `<cwd>` the target project root for project-level `AGENTS.md`?"
+5. If the answer is no, ask for the project root path, or offer to skip project-level `AGENTS.md`.
+6. If skipped, show the absolute path to `templates/agents/AGENTS.project.md` in this Skill directory and ask the user to confirm that they will handle it manually. If the user still provides a project root, continue to update project `.gitignore`.
+7. Explain that bundled skills install globally by default. Only use project-level skills if the user explicitly requests that and provides a project path or skills directory.
+8. Run `check` and show the completed checklist.
+9. If npm is missing, confirm the platform with the user, ask permission to install nvm + latest Node.js LTS, then run `ensure-npm`.
+10. Rerun `check`; only then evaluate CLI tools such as `rtk`, `trellis`, and `gitnexus`.
+11. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable. Use explicit installer subcommands for approved items: `install-java`, `install-maestro`, `install-playwright-cli`, `install-rtk`, `install-caveman`, `ensure-npm`, or `install-external-skills`.
+12. Install only user-approved missing items. Network or filesystem writes outside the workspace may require explicit approval.
+13. For bundled skills, ask once for scope and install the bundle as a unit through `init` or `reset`; existing bundled skill targets are overwritten without backup. For external skills, show missing referenced skills and ask whether to install recommended missing skills, custom selected skills, or skip them. External skill dependencies are added automatically by `install-external-skills`; existing external skill targets are overwritten without backup after confirmation.
+14. If using a root installer, ask whether to configure MCP servers for the selected platform. Show Chrome DevTools MCP, Playwright MCP, Maestro MCP, GitNexus custom MCP, and custom stdio MCP options. Configure only the selected items.
+15. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
+16. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
+17. Run `init` or `reset` only after the user has confirmed the plan.
 
 ## Preflight Check
 
@@ -124,6 +176,13 @@ The report is the user-facing completion summary and must include:
 - Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, and React Bits Pro project skill prerequisites.
 
 Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
+
+For root installer runs, MCP configuration is tracked separately from `installationReport` because `scripts/onboard.py` does not write Agent MCP settings. After selected MCP configuration commands or JSON writes complete, run the platform's list/check command when available:
+
+- Codex: `codex mcp list`
+- Claude Code: `claude mcp list`
+- Kimi Code: `kimi mcp list`
+- Oh My Pi: report the written `mcp.json` path
 
 ## Operation Report
 
@@ -470,7 +529,24 @@ If external skill installation fails, usually continue with AGENTS / bundled ski
 
 ## MCP Setup Boundary
 
-MCP items are not installed by `install-external-skills`, `init`, or `reset`, and this bundle does not include MCP configuration templates. They are checked and reported, then configured with explicit user participation.
+MCP items are not installed by `install-external-skills`, `init`, or `reset`, and this bundle does not include MCP configuration templates. `scripts/onboard.py` checks and reports them. The root installers can configure selected MCP servers directly after explicit user participation.
+
+Platform-specific root installer commands:
+
+- Codex stdio: `codex mcp add <name> [--env KEY=VALUE ...] -- <command> [args...]`
+- Claude Code stdio: `claude mcp add --transport stdio --scope user|project [--env KEY=value ...] <name> -- <command> [args...]`
+- Kimi Code stdio: `kimi mcp add --transport stdio [--env KEY=VALUE ...] <name> -- <command> [args...]`
+- Oh My Pi stdio: merge the server into `~/.omp/agent/mcp.json` for global scope or `<project-root>/.omp/mcp.json` for project scope.
+
+The built-in MCP options are:
+
+- Chrome DevTools MCP: `npx -y chrome-devtools-mcp@latest`
+- Playwright MCP: `npx -y @playwright/mcp@latest`
+- Maestro MCP: `maestro mcp` with explicit `JAVA_HOME` and `PATH`
+- GitNexus MCP: custom command / args / env until the local GitNexus setup provides a stable server command
+- Custom stdio MCP: user-provided command / args / env
+
+Do not write real tokens, passwords, PII, production data, or sensitive headers into repository files, screenshots, logs, test reports, or Markdown summaries. When env values are needed, prompt for them and avoid echoing sensitive-looking values.
 
 For GitNexus MCP:
 
@@ -498,11 +574,13 @@ For Playwright MCP:
 For Maestro MCP:
 
 1. Confirm Java 17+ and Maestro CLI work first.
-2. Use the generated generic MCP server config from `check` or `install-maestro` as the starting point.
-3. Adapt the values to the active Agent or IDE MCP config format, including `command = maestro`, `args = [mcp]`, `JAVA_HOME`, and a `PATH` that contains the Maestro bin directory and the JDK `bin` directory.
-4. Restart or reload the Agent environment so the MCP server is discovered.
-5. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
-6. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
+2. If Java 17+ is missing on macOS or Linux and the user confirms installation, run `python scripts/onboard.py install-java --major 21 --yes`. Native Windows Java auto-install is not enabled by the root installer; install Java 17+ manually and rerun.
+3. If Maestro CLI is missing on macOS or Linux and the user confirms installation, run `python scripts/onboard.py install-maestro --yes`. Native Windows Maestro install is manual-required or WSL-based; rerun after the CLI is available.
+4. Use the generated generic MCP server config from `check` or `install-maestro` as the starting point.
+5. Adapt the values to the active Agent or IDE MCP config format, including `command = maestro`, `args = [mcp]`, `JAVA_HOME`, and a `PATH` that contains the Maestro bin directory and the JDK `bin` directory.
+6. Restart or reload the Agent environment when the platform requires it so the MCP server is discovered.
+7. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
+8. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
 
 For React Bits Pro Skill:
 
