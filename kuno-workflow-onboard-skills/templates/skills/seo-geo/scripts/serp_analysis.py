@@ -21,13 +21,13 @@ def main():
         "language_code": "en",
         "depth": args.depth
     }]
-    
+
     response = api_post("serp/google/organic/live/advanced", data)
     results = get_result(response)
-    
+
     print(f"keyword: {args.keyword}")
     print(f"location: {args.location}")
-    
+
     if results:
         result = results[0]
         print(f"total_results: {format_count(result.get('se_results_count'))}")

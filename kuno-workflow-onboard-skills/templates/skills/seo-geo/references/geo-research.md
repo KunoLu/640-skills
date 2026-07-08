@@ -2,10 +2,10 @@
 
 ## Paper Overview
 
-**Title:** GEO: Generative Engine Optimization  
-**Authors:** Princeton University, IIT Delhi, Georgia Tech, Allen Institute for AI  
-**Published:** November 2023 (arXiv:2311.09735)  
-**Accepted:** KDD 2024 (30th ACM SIGKDD Conference)  
+**Title:** GEO: Generative Engine Optimization
+**Authors:** Princeton University, IIT Delhi, Georgia Tech, Allen Institute for AI
+**Published:** November 2023 (arXiv:2311.09735)
+**Accepted:** KDD 2024 (30th ACM SIGKDD Conference)
 **Link:** https://arxiv.org/abs/2311.09735
 
 ---
@@ -50,7 +50,7 @@ Unlike traditional SEO (ranking in search results), GEO focuses on **being cited
 "Studies show that AI improves productivity."
 
 # After
-"According to a 2024 Stanford University study, AI tools improve developer 
+"According to a 2024 Stanford University study, AI tools improve developer
 productivity by 55% on average (Chen et al., 2024)."
 ```
 
@@ -70,7 +70,7 @@ productivity by 55% on average (Chen et al., 2024)."
 "Many companies use AI for customer service."
 
 # After
-"67% of Fortune 500 companies now use AI chatbots for customer service, 
+"67% of Fortune 500 companies now use AI chatbots for customer service,
 handling an average of 85% of routine inquiries without human intervention."
 ```
 
@@ -90,8 +90,8 @@ handling an average of 85% of routine inquiries without human intervention."
 "AI will transform the workforce."
 
 # After
-"'We're likely to see the first one-person billion-dollar company in the 
-next few years,' predicts Sam Altman, CEO of OpenAI. 'AI will be the 
+"'We're likely to see the first one-person billion-dollar company in the
+next few years,' predicts Sam Altman, CEO of OpenAI. 'AI will be the
 great equalizer for small businesses.'"
 ```
 
@@ -111,8 +111,8 @@ great equalizer for small businesses.'"
 "This might help with SEO, I think."
 
 # After
-"This strategy demonstrably improves SEO performance. Based on our 
-analysis of 10,000 websites, implementing structured data increases 
+"This strategy demonstrably improves SEO performance. Based on our
+analysis of 10,000 websites, implementing structured data increases
 organic traffic by an average of 30%."
 ```
 
@@ -129,12 +129,12 @@ organic traffic by an average of 30%."
 **How to apply:**
 ```markdown
 # Before
-"The RAG architecture utilizes vector embeddings for semantic retrieval 
+"The RAG architecture utilizes vector embeddings for semantic retrieval
 in conjunction with LLM-based generation."
 
 # After
-"RAG (Retrieval-Augmented Generation) works like a research assistant: 
-it first searches for relevant information, then uses AI to write a 
+"RAG (Retrieval-Augmented Generation) works like a research assistant:
+it first searches for relevant information, then uses AI to write a
 coherent answer based on what it found."
 ```
 
@@ -154,8 +154,8 @@ coherent answer based on what it found."
 "The website loads slowly."
 
 # After
-"The website suffers from poor Core Web Vitals: LCP (Largest Contentful 
-Paint) exceeds 4 seconds, and CLS (Cumulative Layout Shift) scores 0.3, 
+"The website suffers from poor Core Web Vitals: LCP (Largest Contentful
+Paint) exceeds 4 seconds, and CLS (Cumulative Layout Shift) scores 0.3,
 indicating significant layout instability."
 ```
 
@@ -205,12 +205,12 @@ indicating significant layout instability."
 **Avoid:**
 ```markdown
 # BAD - Keyword stuffing
-"SEO optimization for SEO is the best SEO strategy. Our SEO experts 
+"SEO optimization for SEO is the best SEO strategy. Our SEO experts
 provide SEO services for all your SEO needs. SEO is important for SEO."
 
 # GOOD - Natural writing
-"Search engine optimization is essential for online visibility. Our 
-experts help businesses improve their search rankings through strategic 
+"Search engine optimization is essential for online visibility. Our
+experts help businesses improve their search rankings through strategic
 content development and technical improvements."
 ```
 

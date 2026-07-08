@@ -21,13 +21,13 @@ def main():
         "language_code": "en",
         "limit": args.limit
     }]
-    
+
     response = api_post("keywords_data/google_ads/keywords_for_keywords/live", data)
     results = get_result(response)
-    
+
     print(f"keyword: {args.keyword}")
     print(f"location: {args.location}")
-    
+
     if results:
         print_keywords_list(results[:args.limit])
     else:

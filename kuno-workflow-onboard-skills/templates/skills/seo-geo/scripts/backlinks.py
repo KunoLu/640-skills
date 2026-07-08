@@ -18,12 +18,12 @@ def main():
         "limit": args.limit,
         "order_by": ["rank,desc"]
     }]
-    
+
     response = api_post("backlinks/backlinks/live", data)
     results = get_result(response)
-    
+
     print(f"target: {args.target}")
-    
+
     if results:
         result = results[0]
         print(f"total_backlinks: {format_count(result.get('total_count'))}")

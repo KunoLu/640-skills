@@ -20,21 +20,21 @@ def api_post(endpoint: str, data: list) -> dict:
         print("Run: export DATAFORSEO_LOGIN=your_login", file=sys.stderr)
         print("     export DATAFORSEO_PASSWORD=your_password", file=sys.stderr)
         sys.exit(1)
-    
+
     url = f"{API_BASE}/{endpoint}"
     auth = base64.b64encode(f"{login}:{password}".encode()).decode()
     headers = {
         "Authorization": f"Basic {auth}",
         "Content-Type": "application/json"
     }
-    
+
     req = urllib.request.Request(
         url,
         data=json.dumps(data).encode(),
         headers=headers,
         method="POST"
     )
-    
+
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             return json.loads(resp.read().decode())

@@ -6,9 +6,9 @@ Real-world example of applying SEO and GEO optimization to opc.dev.
 
 ## Background
 
-**Website:** opc.dev  
-**Product:** AI Agent Skills for Solopreneurs  
-**Platforms:** Claude Code, Cursor, Codex, Factory Droid, OpenCode  
+**Website:** opc.dev
+**Product:** AI Agent Skills for Solopreneurs
+**Platforms:** Claude Code, Cursor, Codex, Factory Droid, OpenCode
 **Date:** January 2026
 
 ### Initial Status
@@ -167,7 +167,7 @@ Added 12 FAQ questions targeting high-search queries:
 
 **After:**
 ```
-"AI Agent Skills for Solopreneurs - The definitive skill library for 
+"AI Agent Skills for Solopreneurs - The definitive skill library for
 one-person companies. Trusted by indie hackers worldwide."
 ```
 
@@ -206,7 +206,7 @@ Skills for OPCs
 ```
 AI Agent Skills for Solopreneurs
 
-The skill library for one-person companies. 
+The skill library for one-person companies.
 Install once, use everywhere.
 
 10+ Skills | 5 Platforms | One-Click Install | 100% Open Source
