@@ -51,7 +51,12 @@ maestro test --format junit --output ".maestro/reports/maestro-report-smoke-${br
 - 如果工作流检查或 onboard 发现用户级全局 Skill 中没有 `caveman`，主动说明：`caveman` 用于压缩 Agent 回复、减少输出 token，不改变代码、测试、验证、Trellis 阶段、GitNexus 分析或工作流决策。
 - 说明后询问用户是否协助安装；用户确认后安装到用户级全局 Skill 环境，安装后重新检查 `caveman/SKILL.md` 是否可见。
 - 默认不自动切换到 caveman 输出模式。只有用户说 `/caveman`、`use caveman`、`caveman mode`、`少说一点`、`减少 token`、`压缩输出` 或同等明确请求时才启用。
-- 长任务、频繁状态更新、重复验证摘要、上下文压力较大或用户明确希望低 token 时，可以建议用户启用 `caveman-lite` 或 `caveman`，但不要替用户静默开启。
+- 满足以下任一可观察条件时，在下一次非阻塞状态更新中建议用户后续切到 `caveman-lite` 或 `caveman`，并说明可随时恢复完整输出；用户未明确同意时不要替用户切换：
+  - 同一任务已经产生 3 次或以上中间状态更新，且后续仍需要继续探索、读取、验证或修复。
+  - 同一任务中已经连续汇总 5 个或以上命令、diff、日志或文件阅读结果，且后续输出主要是重复状态或验证摘要。
+  - 长任务预计还要继续较久，或者上下文压力较大，需要降低中间沟通 token。
+  - 自动化、daily check、大型 review 或验证排障进入重复轮次；中间状态可建议压缩，最终报告仍保持完整。
+- caveman 建议只影响后续对话表达，不改变代码、工具、测试、验证、Trellis、GitNexus 或 workflow 决策。
 - 安装确认、权限确认、破坏性操作确认、安全 / 隐私 / 密钥 / 生产数据风险、需求最终确认、PRD / design / implement review gate、BDD / PRD / ADR / Trellis task artifacts、README、AGENTS 模板正文和最终验证报告，优先保持清晰完整，不为压缩牺牲可读性。
 - `caveman-compress` 等会改写长期文档或记忆文件的能力只在用户明确要求压缩文档时使用，不作为默认工作流步骤。
 
@@ -60,6 +65,18 @@ maestro test --format junit --output ".maestro/reports/maestro-report-smoke-${br
 ## 工具可用性判断
 
 只有存在直接或强证据时，才认为某个工具可用。
+
+### Codex 插件 / Connector / 延迟工具发现
+
+Codex 可能通过本地插件、remote plugins、connectors、MCP 或 `tool_search` 暴露延迟加载工具。工具可用性仍以当前会话的强证据为准：
+
+- 只有当前工具列表、`tool_search` 结果、MCP 可见性检查或项目文档明确暴露了对应 callable tool，才认为该 plugin / connector / MCP 能力可用。
+- 如果用户要求使用某个库、框架、云服务、插件或 connector 的专门能力，且当前会话存在 `tool_search`，优先用 `tool_search` 发现延迟工具；未发现时再按任务需要使用项目文件、官方文档或普通检索。
+- Remote plugin catalog、marketplace 行、已安装提示或本地 / 远端版本展示只说明候选能力存在，不等于当前会话已授权、已安装或已可调用。
+- 只有用户明确要求使用某个具体 plugin / connector，且安装工具返回精确匹配时，才请求安装；不要为相邻能力、宽泛推荐或“看起来有用”的工具静默安装。
+- ChatGPT-hosted MCP、OAuth、session authentication、connector token、cookies 和账号状态只能通过当前 Agent / connector 的受控工具使用；不要复制、打印、持久化或写入仓库、日志、截图、报告和 MCP 配置示例。
+- Codex 可能通过系统代理处理认证和 API 流量；除非用户明确要求，不要替用户改操作系统代理、PAC、WPAD 或企业网络配置。网络失败时按可见错误诊断，并区分 runtime 代理行为和项目代码问题。
+- 不要因为上游支持新的 remote plugin、connector、MCP transport 或 session auth 能力，就静默改写项目配置、用户级 MCP 配置、CI 配置或 hooks。
 
 ### Trellis
 
@@ -267,15 +284,17 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
 | `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确初稿方向后按条件前置 `shape` / `craft`，或实现后的 `audit` / `critique` / `polish` 阶段；仅在 Skill 可用且上下文可用时 |
+| `shadcn` | shadcn/ui 项目组件、registry、preset、CLI 和组件组合规则 | 项目存在 `components.json`、使用 / 初始化 shadcn/ui，或需要 `shadcn init/add/search/view/docs/diff/info/migrate/preset`、registry 组件、preset、Base / Radix 差异、表单 / 图标 / chat primitives 等 shadcn 规则时 |
 | `web-ui-autotest-generator` | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 | 用户明确要求生成 Web UI 自动化测试，或测试阶段发现关键 Web UI 回归路径需要固化为仓库内可维护测试资产时 |
 | `seo-geo` | 公开网站 / 落地页 / 文档站 SEO 与 GEO 可见性专项检查 | 用户明确要求 SEO、GEO、AI search visibility、schema、meta tags、robots / sitemap 或公开 Web 发布前搜索可见性检查时；仅在 Skill 可用时 |
-| `React Bits Pro Skill` | React / shadcn UI 项目中接入 React Bits Pro components、blocks 或 landing page sections | 前端 UI 开发任务明确需要 React Bits Pro，且技术栈、registry、项目内 Skill 和可读取 license key 条件均满足时 |
+| `React Bits tier / Pro Skill` | React / shadcn UI 项目中选择 React Bits Free 或付费 components、blocks、landing page sections | 目标项目已确认 React + shadcn/ui 后，用户明确需要 React Bits；Free 和付费 Starter / Pro / Ultimate 都需确认，付费还需 registry、项目内 Skill 和可读取 license key |
 
 ### 自定义 Skills 使用边界
 
 - `ui-ux-pro-max`：仅在涉及 UI、交互、布局、视觉、组件体验、前端可用性时调用。作为 UI/UX 任务的默认初稿计划入口，用于产品类型、目标用户、信息架构、交互模型、风格、配色、字体、可访问性、栈约束和设计系统方向判断；不替代项目已有 design system、tokens、组件库和品牌规范。
 - `impeccable`：仅在前端 UI/UX 任务需要塑形、审计、批判、打磨、反模板化、视觉层级、排版、配色、动效、响应式、可访问性或最终 polish 时调用。默认作为 `ui-ux-pro-max` 的下游执行与质检 Skill：`ui-ux-pro-max` 先形成初稿计划和设计系统方向，`impeccable` 再按条件形成高保真 brief、实现检查项或 polish backlog。
 - `impeccable` 为可选 Skill；如果未出现在可用 Skill 列表、Skill 文件不可读取、引用脚本不可执行，或其 setup 需要初始化项目上下文但用户未明确要求初始化，则跳过 `impeccable`，继续使用 `ui-ux-pro-max`、项目设计规范和浏览器验证，不阻塞任务。
+- `shadcn`：仅在 shadcn/ui 相关任务中调用，包括项目存在 `components.json`、使用或初始化 shadcn/ui、执行 shadcn CLI、配置或使用 registry / preset、安装 / 更新 / diff 组件、修复 shadcn 组件组合、表单、图标、Tailwind token、Base UI vs Radix API、chat primitives 或 registry import path 问题。UI/UX 任务中默认先由 `ui-ux-pro-max` 明确产品方向和设计约束，再用 `shadcn` 处理组件来源、CLI、registry 和实现规则；`shadcn` 不替代通用 UI 设计判断、`impeccable` 视觉打磨、项目设计系统，也不替代 React Bits Free / 付费 tier 判定。
 - `web-ui-autotest-generator`：仅在 Web UI / E2E 测试需要生成、审计或评估可入库测试资产时调用。测试阶段如果改动关键 Web UI 业务流、修复用户可见 UI 回归、项目已有 Playwright / Cypress 需扩展覆盖、或 Trellis 验收要求可重复 UI 回归，必须主动判定是否调用；不需要长期测试资产时可跳过但要说明。机器可读 JSON 资产默认沉淀到 `tests/e2e/manifest/`，正式 Playwright HTML 报告和 Markdown 汇总默认进入 `tests/e2e/reports/html/`，具体执行、参数路径和验证策略遵循项目级 `AGENTS.md` 和 `project-validation` Skill。
 - `seo-geo`：仅在公开 Web 资产需要搜索可见性检查时调用，包括网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面。普通内部 UI、API、CLI、移动 App、后台管理页、一次性浏览器诊断或纯 Web 回归不要触发 `seo-geo`。基础页面 audit、meta / schema / robots / sitemap 检查不要求 DataForSEO；DataForSEO 账号只作为关键词、SERP、backlink、domain overview 等增强分析的可选凭据。没有公网 URL 或 preview URL 时，只能做源码 / HTML 静态检查并将 `SEO/GEO` 标记为 `static-only` 或 `blocked`，不能声称线上 SEO/GEO 已验证。关键词、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须通过当前可用来源核对；不要把外部账号、API login / password、真实搜索控制台数据或付费报告写入仓库、测试、日志、截图或报告。
 - `maestro-mobile-e2e`：仅在 Mobile / Hybrid E2E 需要生成、维护或执行 Maestro flow，或 Maestro iOS 真机运行出现 driver / transport / view hierarchy / tap crash 等排障信号时调用。BDD `.feature` 仍是行为 source of truth；Maestro flow 默认沉淀到 `maestro/flow/`，平台差异明显时可拆到 `maestro/flow/ios/` 和 `maestro/flow/android/`；最终正式 report 和 Markdown 汇总默认进入 `.maestro/reports/`；已知问题 lesson 必须按标签 / 关键字懒加载，不预先套用临时补丁。
@@ -287,12 +306,13 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `book-ddia-data-design`：仅在存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流变更时使用。重点检查 source of truth、一致性模型、幂等、乱序、重试、回放、迁移 / 回滚、观测和修复路径。
 - `book-release-readiness`：仅在生产路径相关的服务、API、任务、队列、外部集成或部署敏感变更后使用，通常位于项目验证后或 `$trellis-check` 阶段。重点检查 timeout、retry、fallback、隔离、backpressure、观测、告警、rollout 和 rollback；不阻塞与当前项目无关的理论风险。
 - `trellis-channel` 可以被项目级规则主动用于高风险代码 review / 验证覆盖 preflight，但 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 spawn worker。
-- `React Bits Pro Skill`：仅在前端 UI 任务明确需要 React Bits Pro，且项目是 React + shadcn/ui、`components.json` 存在、registry / `REACTBITS_LICENSE_KEY` / 项目内 React Bits Pro Skill 均可用时调用。任一前提不满足则跳过并说明原因；不要读取、输出、提交 license key。具体 registry 和安装细节由项目级 `AGENTS.md` 约束。
+- `React Bits tier / Pro Skill`：普通安装和 reset 默认保持 shadcn/ui only，不询问也不安装 React Bits。只有在目标项目已确认是 React + shadcn/ui、项目根目录存在 `components.json`，且前端 UI 任务明确需要 React Bits 风格组件、blocks 或 landing page sections 时，才询问用户选择 shadcn/ui only、React Bits Free 或付费 Starter / Pro / Ultimate。React Bits Free 只有在免费 source / registry 已明确配置且用户确认后才安装；付费 tier 必须确认 registry / `REACTBITS_LICENSE_KEY` / 项目内 React Bits Pro Skill 均可用，且不得读取、输出、提交 license key。reset 时保留检测到的既有 tier 和 registry，未经确认不使用默认免费版覆盖。
 - 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
 - `impeccable` 上下文文件必须避免多源冲突：如果项目根目录、`.agents/context/`、`docs/` 中同时存在 `PRODUCT.md` 或 `DESIGN.md`，以项目 `AGENTS.md` 指定路径为准；在读取和写入前先确认实际采用的上下文目录，避免同名文件分散在多个位置。
 - UI/UX Skill 编排：
     - 初始需求 / 初稿计划：先用 `ui-ux-pro-max` 判断产品类型、目标用户、信息架构、交互模型、风格、配色、字体、布局、响应式策略和可访问性基线；如果任务进入 Trellis，将结论写入任务级 `prd.md`、`design.md` 或 `implement.md`。
     - 前置设计升级：只有在新视觉方向、高保真页面、大幅改版、品牌 / 营销强视觉页面、方向不清或用户明确要求时，才在实现前使用 `impeccable shape`；`impeccable craft` 只在 brief 已确认且需要完整设计执行时使用，并遵守其中的用户确认 gate。
+    - shadcn/ui 实现：目标项目存在 `components.json`、已使用或准备初始化 shadcn/ui，或任务涉及 shadcn registry / preset / CLI / 组件组合时，在 `ui-ux-pro-max` 明确方向后调用 `shadcn`；先确认项目 package runner、`npx shadcn@latest info` / `docs` / `search` / `view` 结果和已安装组件，再执行 add / diff / preset / registry 操作。registry 未明确时先询问，不默认替用户选择第三方 registry。
     - 既有 UI 审查：先用 `ui-ux-pro-max` 的优先级清单覆盖可访问性、交互、性能、响应式、排版和颜色；再在 `impeccable` 可用时用 `audit` / `critique` 生成问题 backlog。
     - 实现后收尾：功能完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
     - 冲突处理：项目 `AGENTS.md`、设计系统、tokens、组件库和已确认品牌规范优先；可访问性、响应式和项目验证不可降级。`impeccable` 的硬性反模板化规则可否决 `ui-ux-pro-max` 的泛化风格建议，除非项目既有品牌规范明确要求该设计语言。

@@ -22,23 +22,53 @@
 UI/UX 任务编排：
 
 - 涉及 UI、交互、布局、视觉、组件体验或前端可用性时，初稿计划默认先使用 `ui-ux-pro-max`，明确产品类型、目标用户、信息架构、交互模型、响应式策略、可访问性基线和项目设计系统约束。
-- 需要接入 React Bits Pro components、blocks 或 landing page sections 时，按下节前提判定；任一前提不满足则跳过并说明原因。
+- 如果项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务涉及 shadcn CLI、registry、preset、组件安装 / 更新 / diff、组件组合、表单、图标、Tailwind token、Base UI vs Radix 差异或 chat primitives，初稿方向确认后调用 `shadcn` Skill 处理组件来源和实现规则。
+- 只有在目标项目已检测为 React + shadcn/ui（项目根目录存在 `components.json`）且任务需要 React Bits 风格组件、blocks 或 landing page sections 时，才询问 React Bits tier；默认保持 shadcn/ui only，React Bits Free 或付费 Starter / Pro / Ultimate 都需要用户明确确认。
 - `impeccable shape` / `impeccable craft` 只在新视觉方向、高保真页面、大幅改版、品牌 / 营销强视觉页面、方向不清或用户明确要求时前置使用；其 brief 必须经用户确认后再进入实现。
 - 常规 UI 实现完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，再使用 `audit` / `critique` / `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做打磨。
 - 如果 UI/UX 任务进入 Trellis，任务级设计结论写入 `prd.md`、`design.md` 或 `implement.md`；长期设计系统规则才写入 `docs/DESIGN.md` 或 `.trellis/spec`。
 
-### React Bits Pro Skill
+### shadcn Skill
 
-React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只有同时满足以下条件时才使用：
+`shadcn` 是官方 shadcn/ui 工作流 Skill，不是通用 UI 设计 Skill，也不是 React Bits Free / 付费 tier 的子集或替代品。
 
-- 当前任务是前端 UI 开发，且明确需要 React Bits Pro components、blocks、templates 或类似高级动画组件。
+使用场景：
+
+- 项目根目录存在 `components.json`，或用户要求初始化 / 维护 shadcn/ui。
+- 需要执行或评估 `shadcn init/add/search/view/docs/diff/info/migrate/preset`、preset code、registry item、第三方 / 私有 / 付费 registry 或 shadcn MCP 配置。
+- 需要修复 shadcn 组件组合、forms、icons、semantic tokens、Tailwind v3 / v4、Base UI vs Radix API、chat primitives、registry import path rewrite 或已安装组件更新策略。
+
+执行规则：
+
+- 在 UI/UX 任务中，先用 `ui-ux-pro-max` 明确产品方向、信息架构和设计系统约束，再用 `shadcn` 处理组件来源、CLI、registry 和具体实现规则。
+- 按项目 package manager 选择 `npx shadcn@latest`、`pnpm dlx shadcn@latest` 或 `bunx --bun shadcn@latest`。
+- 添加或更新组件前先检查 `components.json`、`shadcn info`、已安装组件和项目别名；涉及组件 API 时先查 `shadcn docs`。
+- registry 未明确时先询问用户；更新已有组件时先用 `--dry-run` / `--diff`，未经用户明确确认不使用覆盖式更新。
+
+跳过条件：
+
+- 非 shadcn/ui 项目，且用户没有要求引入 shadcn。
+- 只是通用 UI 设计判断、视觉 polish、后端、测试、文档或非 React UI 栈任务。
+- React Bits Free / 付费 tier、付费 Skill 安装或 key 可用性判定；这些按 React Bits tier 规则单独处理。
+
+### React Bits Tier 和 Pro Skill
+
+React Bits 是可选前端 UI 增强，不是默认设计系统，也不是 shadcn/ui 的必装依赖。安装或重置工作流默认保持 shadcn/ui only；只有在目标项目已确认是 React + shadcn/ui 后，才向用户确认是否需要 React Bits Free 或付费 tier。
+
+先决条件：
+
+- 当前任务是前端 UI 开发，且明确需要 React Bits 风格 components、blocks、templates 或类似高级动画组件。
 - 项目技术栈是 React 项目，包括 Next.js、Vite React、Remix、TanStack Start React、使用 TanStack Router 的 React 应用等，并已初始化 shadcn/ui。
 - 本地 Node.js 18+ 可用，项目根目录存在 `components.json`。
-- `components.json` 已配置或用户明确要求配置 React Bits Pro registry：`@reactbits-starter` 用于 components；需要 Pro / Ultimate blocks 时再使用 `@reactbits-pro`。
-- 执行 `shadcn` 或 Agent 的当前环境能读取到 `REACTBITS_LICENSE_KEY` 的值；Agent 不打印、不输出、不提交该 key。
-- 项目环境已安装对应 React Bits Pro Skill，例如项目中存在由 `npx shadcn@latest add @reactbits-starter/skill` 在项目根目录安装生成的 React Bits Pro `SKILL.md`。
 
-配置要求：
+Tier 确认：
+
+- 简短说明：shadcn/ui 提供常规应用组件；React Bits Free / 付费 tier 只用于更强视觉表达、动画组件、blocks 或 landing sections。
+- 询问用户选择：继续 shadcn/ui only、安装 React Bits Free，或使用已有付费 Starter / Pro / Ultimate。
+- React Bits Free 只有在本工作流已有明确免费 source / registry / 安装命令时才安装；未配置时说明暂不可自动安装，不要退而使用付费 registry。
+- Starter / Pro / Ultimate 属于付费路径；必须由用户确认，且执行 `shadcn` 或 Agent 的当前环境能读取 `REACTBITS_LICENSE_KEY`。Agent 不打印、不输出、不提交该 key。
+
+付费配置要求：
 
 - 如缺少 shadcn/ui，先让项目完成 `npx shadcn@latest init` 或遵循项目既有 shadcn 初始化流程。
 - 在 `components.json` 中只合并 `registries`，不要覆盖 `$schema`、`style`、`tailwind`、`aliases` 等既有字段。
@@ -47,15 +77,16 @@ React Bits Pro Skill 是可选前端 UI 辅助，不是默认设计系统。只�
 - 如果其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill`。该命令是项目级安装，不是全局安装。
 - 只有 React Bits Pro Skill 安装成功、项目中出现对应 `SKILL.md`，且当前环境能读取 `REACTBITS_LICENSE_KEY` 后，才读取该 Skill 并继续安装 components / blocks。
 - 安装组件时优先使用 shadcn CLI；组件按项目样式栈选择 Tailwind `-tw` 或 CSS `-css` 变体，blocks 使用 `@reactbits-pro/<name>`。
+- 在 `reset` 中如果检测到既有 React Bits Free、Starter、Pro 或 Ultimate registry / Skill，必须保留并输出检测到的 tier；未经用户确认，不用默认免费版覆盖已存在 tier。
 
 跳过条件：
 
 - 非 React 前端、TanStack 的 Vue / Solid / Svelte 等非 React adapter、Vue / Svelte / Angular / 原生 HTML 项目、后端任务、测试任务、文档任务。
 - 项目未使用 shadcn/ui，且用户没有要求引入 shadcn。
-- 当前环境无法读取 `REACTBITS_LICENSE_KEY`，缺少 registry，或 React Bits Pro Skill 未安装且无法安装 / 安装失败。
-- 项目已有明确组件库 / design system 且需求不要求 React Bits Pro。
+- 当前环境无法满足所选 tier 的 source / registry / key 条件，或 React Bits Pro Skill 未安装且无法安装 / 安装失败。
+- 项目已有明确组件库 / design system 且需求不要求 React Bits。
 
-如果跳过 React Bits Pro Skill，应说明具体缺失前提，并继续使用项目已有组件库、`ui-ux-pro-max`、`impeccable` 或普通前端实现流程。
+如果跳过 React Bits，应说明具体缺失前提，并继续使用项目已有组件库、`shadcn`、`ui-ux-pro-max`、`impeccable` 或普通前端实现流程。
 
 ---
 
@@ -206,7 +237,7 @@ trellis init -u your-name
 - `caveman` 是用户级全局 Agent 回复压缩 Skill，不是项目依赖、测试工具、设计工具或验证工具。
 - 不要把 `caveman` 写入 BDD、TDD、GitNexus、Trellis、发布验证或项目运行时链路；它只影响 Agent 给用户的对话表达。
 - `rtk` 是命令输出压缩层，不是测试 runner；unit / API / Playwright / Maestro 等报告型测试先按全局 `rtk` 与报告型测试 Gate 判断，必要时使用原生命令或 fallback-native。
-- 长任务状态更新、命令结果摘要、代码阅读中间结论和上下文压力较大时，可以建议用户启用 `caveman-lite` 或 `caveman` 压缩后续沟通。
+- 建议启用 `caveman-lite` 或 `caveman` 的具体阈值继承全局规则：同一任务 3 次或以上中间状态更新、5 个或以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大，或自动化 / 大型 review / 验证排障进入重复轮次时，只在非阻塞状态更新中建议，不替用户静默开启。
 - 需求最终确认、review gate、安装 / 权限 / 破坏性操作确认、最终验证报告和长期项目文档，默认保持清晰完整。
 
 ---

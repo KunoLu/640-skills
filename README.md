@@ -6,9 +6,11 @@
 Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 ```
 
-其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`seo-geo` 是公开网站、落地页、文档站和营销页的可选 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
+其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`shadcn` 是 shadcn/ui 项目的可选 external Skill，用于组件、registry、preset 和 CLI 工作流；`seo-geo` 是 bundled 的公开网站、落地页、文档站和营销页 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
 
-`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，普通非报告型命令默认优先作为命令前缀；unit / API / Playwright / Maestro 等报告型测试先评估缓存与文件写入风险。`caveman` 作用于 Agent 回复输出，安装后只表示可用，不自动开启，只有用户明确要求低 token 或触发 caveman 时才启用。
+Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search` 属于 Agent 侧工具发现和授权能力，不是项目依赖。模板要求先确认当前会话实际暴露 callable tool，再依赖对应能力；catalog / marketplace / 本地远端版本展示只作为候选信号，session auth、OAuth、cookies 和 tokens 不写入仓库、日志、截图、报告或示例配置。
+
+`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，普通非报告型命令默认优先作为命令前缀；unit / API / Playwright / Maestro 等报告型测试先评估缓存与文件写入风险。`caveman` 作用于 Agent 回复输出，安装后只表示可用，不自动开启；同一任务出现 3 次以上状态更新、5 个以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大或自动化 / 大型 review / 验证排障进入重复轮次时，只建议用户切换，不静默启用。
 
 ## 仓库定位
 
@@ -54,6 +56,7 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
 - 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；因为初始化包含交互式操作，不代用户执行，只给出命令 `trellis init -u your-name` 让用户在命令行自行运行。
+- Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
 - GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
@@ -87,16 +90,18 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 
 | 工具 | 主责 | 不负责 |
 |---|---|---|
+| Codex `tool_search` / Plugin / Connector | 发现延迟加载工具、remote / local plugin、connector 和 ChatGPT-hosted MCP 能力。 | Catalog 或 marketplace 展示不等于已授权 / 已可调用；安装需用户明确请求，session auth / OAuth / cookies / tokens 不写入项目。 |
 | Chrome DevTools MCP | Web 运行时诊断、真实 Chrome 检查、console、network、storage、performance trace、screenshot 证据。 | 不作为 CI gate，不替代 Playwright E2E。 |
 | Playwright CLI / `@playwright/test` | 项目内 Web E2E、Web 回归、跨浏览器检查和 CI gate。 | 不默认全局安装；项目未安装时必须先询问。 |
 | Playwright MCP | Agentic Web 探索、可访问性快照、locator 辅助和临时页面检查。 | 不替代项目内 `playwright test`。 |
 | Maestro CLI | Android、iOS、React Native、Flutter、Hybrid App E2E，以及可选 Chromium Web smoke。 | 不作为 Web 回归主责；Web 只做 smoke。 |
 | Maestro MCP | 依赖 `maestro mcp` 的增强入口，用于设备检查、view hierarchy、截图和 flow 辅助。 | 不单独替代 Maestro CLI；当前 Agent / IDE 的 MCP 配置需包含 `JAVA_HOME` / `PATH` env。 |
+| `shadcn` | shadcn/ui 项目的组件、registry、preset、CLI、docs / diff 和组件组合规则。 | 不替代通用 UI/UX 设计判断、`impeccable` 视觉打磨或 React Bits Free / 付费 tier 判定。 |
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
 | `seo-geo` | 公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。 | 不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。 |
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
 | `rtk` | 用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。 | 不替代测试 runner；报告型 unit / API / Playwright / Maestro 命令先评估缓存与文件写入风险，必要时使用原生命令或 fallback-native。 |
-| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启。 |
+| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装；达到全局阈值时只建议用户后续切换。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启，最终报告保持完整。 |
 
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
 
@@ -181,7 +186,7 @@ Maestro flow 资产和报告规则：
 - Chrome DevTools MCP：用于真实 Chrome 运行时诊断，适合白屏、console error、network、cookie、storage、性能 trace、截图和临时复现。
 - Playwright MCP：用于 Agentic Web 探索、可访问性快照、locator 生成辅助和页面结构理解。
 
-MCP 配置由 Agent 或 IDE 提供。`scripts/onboard.py` 只做检查和引导，不把 MCP 配置文件复制进业务项目；根目录安装脚本在用户明确选择平台和 MCP server 后，可以执行平台 CLI 配置或写入 Oh My Pi 的 `mcp.json`。
+MCP 配置由 Agent 或 IDE 提供。`scripts/onboard.py` 只做检查和引导，不把 MCP 配置文件复制进业务项目；根目录安装脚本在用户明确选择平台和 MCP server 后，可以执行平台 CLI 配置或写入 Oh My Pi 的 `mcp.json`。Codex plugin / connector 与 ChatGPT-hosted MCP 也遵循同一边界：先确认当前会话可见 callable tool，授权状态由 Agent / connector 管理，不把 session auth 材料写入项目。
 
 ## `web-ui-autotest-generator` 使用边界
 
@@ -217,6 +222,41 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 ```
 
 失败分析 `ui-test-repair-plan.json` 是运行产物，不是稳定测试资产；如生成，默认放到 `tests/e2e/manifest/ui-test-repair-plan.json` 并通过 `.gitignore` 忽略。验证或 Trellis check 收尾时，必须确认三个可入库 JSON 位于 `tests/e2e/manifest/`，且项目根目录没有残留同名 JSON。
+
+## `shadcn` Skill 使用边界
+
+`shadcn` 只在 shadcn/ui 项目、组件 registry、preset 或 CLI 工作流需要时启用。
+
+适用场景：
+
+- 项目存在 `components.json`，或用户要求初始化 / 维护 shadcn/ui。
+- 需要执行或评估 `shadcn init/add/search/view/docs/diff/info/migrate/preset`、preset code、registry item、第三方 / 私有 / 付费 registry 或 shadcn MCP 配置。
+- 需要修复 shadcn 组件组合、forms、icons、semantic tokens、Tailwind v3 / v4、Base UI vs Radix API、chat primitives、registry import path rewrite 或已安装组件更新策略。
+
+执行和报告规则：
+
+- UI/UX 任务中先用 `ui-ux-pro-max` 明确产品方向、信息架构、可访问性和设计系统约束，再用 `shadcn` 处理组件来源、CLI、registry 和具体实现规则。
+- 按项目 package manager 选择 `npx shadcn@latest`、`pnpm dlx shadcn@latest` 或 `bunx --bun shadcn@latest`。
+- 添加或更新组件前先检查 `components.json`、`shadcn info`、已安装组件和项目别名；涉及组件 API 时先查 `shadcn docs`。
+- registry 未明确时先询问用户；更新已有组件时先用 `--dry-run` / `--diff`，未经用户明确确认不使用覆盖式更新。
+
+不适用场景：
+
+- 非 shadcn/ui 项目，且用户没有要求引入 shadcn。
+- 只是通用 UI 设计判断、视觉 polish、后端、测试、文档或非 React UI 栈任务。
+- React Bits Free / 付费 tier、付费 Skill 安装或 key 可用性判定；这些按 React Bits tier 规则单独处理。
+
+## React Bits tier 选择边界
+
+React Bits 不是 shadcn/ui 的必装依赖。安装和 reset 默认保持 shadcn/ui only；只有检测到目标项目是 React + shadcn/ui（存在 `components.json`），且任务需要更强视觉表达、动画组件、blocks 或 landing sections 时，才询问用户是否启用 React Bits。
+
+确认顺序：
+
+- 先说明 shadcn/ui 提供常规应用组件，React Bits Free / 付费 tier 只是可选增强。
+- 询问用户选择继续 shadcn/ui only、安装 React Bits Free，或使用已有付费 Starter / Pro / Ultimate。
+- React Bits Free 只有在本工作流已有明确免费 source / registry / 安装命令时才安装；未配置时说明暂不可自动安装。
+- 付费 Starter / Pro / Ultimate 必须由用户确认，且当前环境能读取 `REACTBITS_LICENSE_KEY`；不打印、不输出、不提交该 key。
+- reset 时保留检测到的既有 React Bits Free、Starter、Pro 或 Ultimate tier / registry，不用默认免费版覆盖。
 
 ## `seo-geo` 使用边界
 
@@ -366,7 +406,9 @@ tests/e2e/**/*.trace.zip
 - Playwright MCP 手动配置检查。
 - Playwright CLI 项目级检测和安装引导。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导，包含 Maestro MCP 的通用 `command` / `args` / `JAVA_HOME` / `PATH` 配置示例。
-- `web-ui-autotest-generator`、`seo-geo`、`ui-ux-pro-max`、`impeccable` 等可选 Skill 的存在性检查。
+- bundled `seo-geo` Skill 的存在性检查。
+- `web-ui-autotest-generator`、`shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
+- React Bits tier 选择只在目标项目被检测为 React + shadcn/ui 时作为条件 manual guidance 输出；普通 onboarding 不询问、不安装 React Bits。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 
 `scripts/onboard.py` 本身仍只做 MCP 状态检查和配置指引，不直接写 Agent / IDE 的 MCP 设置。仓库根目录的 `install.sh` 和 `install.ps1` 是面向用户的交互式安装入口，会在用户选择单一目标平台并确认 MCP 选项后，调用对应平台命令或写入对应配置文件：
@@ -386,7 +428,7 @@ tests/e2e/**/*.trace.zip
 .\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills -Platform codex
 ```
 
-CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则；`caveman` 安装后不自动启用压缩对话模式。绑定的 bundled skills 按用户选择的 scope 作为整体安装，已有目标目录会被覆盖且不备份；外部 referenced skills 会先展示缺失项，用户选择推荐安装、自定义安装或跳过后才从外部仓库拉取，已有目标目录同样覆盖且不备份。
+CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则；`caveman` 安装后不自动启用压缩对话模式，只在同一任务 3 次以上状态更新、5 个以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大或自动化 / 大型 review / 验证排障重复轮次中建议用户后续切换。`install-caveman` 会按 PC 平台选择官方安装命令：macOS / Linux 使用 `curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash`，native Windows 使用 `irm https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.ps1 | iex`。绑定的 bundled skills 按用户选择的 scope 作为整体安装，已有目标目录会被覆盖且不备份；外部 referenced skills 会先展示缺失项，用户选择推荐安装、自定义安装或跳过后才从外部仓库拉取，当前包含 `shadcn` 等外部 Skill，已有目标目录同样覆盖且不备份。`seo-geo` 已转为 bundled skill，随模板内置安装，不再从 external repository 拉取。
 
 ## 同步规则
 
@@ -409,7 +451,7 @@ CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则�
 
 - 工作流主线、工具职责或边界发生变化。
 - SDD、BDD、TDD、DDD 或 SBTD 的定义、触发条件、产物位置发生变化。
-- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、`web-ui-autotest-generator` 或 `seo-geo` 的检测、安装、fallback 或报告状态发生变化。
+- Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、`shadcn`、`web-ui-autotest-generator` 或 `seo-geo` 的检测、安装、fallback 或报告状态发生变化。
 - `kuno-workflow-onboard-skills/scripts/onboard.py` 的 init、reset、安装或检查行为发生变化。
 - 模板 `.gitignore`、同步路径、AGENTS 模板路径或 Skill 模板路径发生用户可见变化。
 - 最终验证阶段的工具栈或报告格式发生变化。

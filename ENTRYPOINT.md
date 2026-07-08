@@ -4,6 +4,7 @@
 > 当前主流程已收敛为 `Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro`。
 > Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。
 > `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成、选择器审计和覆盖率报告的可选专项分支。
+> `shadcn Skill` 作为 shadcn/ui 项目组件、registry、preset 和 CLI 工作流的可选辅助，必须先确认项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务明确涉及 shadcn registry / preset / CLI。
 > `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
 > 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `kuno-workflow-onboard-skills/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
 
@@ -81,6 +82,7 @@ flowchart TD
 | Playwright MCP | Agentic Web 探索 / locator 辅助 | 可选启用 | 需要 agent 通过可访问性快照探索页面、辅助生成 locator 或临时检查时启用；不替代项目内 `playwright test` |
 | Maestro | Android / iOS / RN / Flutter / Hybrid App E2E | 移动测试阶段启用 | 移动 App 用户旅程、权限、系统弹窗、深链、跨 App、设备能力或可选跨端 smoke；Web 只做 Chromium smoke，不做 Web 回归主责 |
 | web-ui-autotest-generator | Web UI Playwright 测试资产生成 / 覆盖率审计 | 按需启用 | 需要把 Web UI/E2E 回归用例固化到项目仓库时启用；以 Playwright CLI 作为执行底座 |
+| shadcn Skill | shadcn/ui 组件、registry、preset、CLI、docs / diff 和组件组合规则 | 按需启用 | 仅在项目存在 `components.json`、使用 / 初始化 shadcn/ui，或任务涉及 shadcn CLI、registry、preset、组件安装 / 更新 / diff、表单、图标、Tailwind token、Base / Radix 差异或 chat primitives 时启用；不替代通用 UI/UX 判断或 React Bits Pro license / tier 判定 |
 | React Bits Pro Skill | React Bits Pro 组件 / blocks / landing page section 集成辅助 | 按需启用 | 仅在前端 UI 开发、项目为 React 技术栈（如 Next.js、Vite React、Remix、TanStack Start React、TanStack Router React 应用）+ shadcn/ui，且项目环境已安装对应 React Bits Pro Skill 并能读取 `REACTBITS_LICENSE_KEY` 时启用 |
 
 ---
@@ -168,6 +170,7 @@ grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用
   → Playwright CLI（涉及 Web 回归时）
   → Maestro（涉及移动 App E2E 时）
   → web-ui-autotest-generator（需要固化 Web UI Playwright 用例时）
+  → shadcn Skill（shadcn/ui 组件、registry、preset 或 CLI 工作流需要时）
   → React Bits Pro Skill（React / shadcn UI、项目内 Skill 与 license key 前提都满足时）
 ```
 

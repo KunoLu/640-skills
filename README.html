@@ -340,14 +340,16 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>Kuno Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，公开网站、落地页和文档站按需进入 <code>seo-geo</code> 搜索可见性检查。<code>rtk</code> 和 <code>caveman</code> 是上下文 / token 效率层，不是验证工具：前者压缩 terminal 输出，但报告型测试先评估缓存与文件写入风险；后者压缩 Agent 回复且不自动开启。</p>
+        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，shadcn/ui 项目按需使用 <code>shadcn</code> Skill 处理组件、registry、preset 和 CLI 工作流，公开网站、落地页和文档站按需进入 bundled <code>seo-geo</code> 搜索可见性检查。Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 <code>tool_search</code> 是 Agent 侧工具发现和授权能力，必须先确认当前会话实际暴露 callable tool。<code>rtk</code> 和 <code>caveman</code> 是上下文 / token 效率层，不是验证工具：前者压缩 terminal 输出，但报告型测试先评估缓存与文件写入风险；后者压缩 Agent 回复且不自动开启。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
           <span class="pill">TDD</span>
           <span class="pill">DDD</span>
           <span class="pill">Web + Mobile 验证</span>
+          <span class="pill">shadcn/ui</span>
           <span class="pill">SEO / GEO</span>
+          <span class="pill">Tool Discovery</span>
           <span class="pill">Token 效率层</span>
         </div>
       </div>
@@ -362,6 +364,10 @@
             <span>索引有效时做影响分析；PDG、taint、trace 和多分支查询需显式 opt-in。</span>
           </div>
           <div class="map-cell">
+            <strong>Tool Discovery</strong>
+            <span>tool_search / plugin / connector 先确认 callable tool；catalog 只作为候选信号。</span>
+          </div>
+          <div class="map-cell">
             <strong>Playwright</strong>
             <span>CLI 负责 Web E2E 和回归，MCP 负责探索和 locator 辅助。</span>
           </div>
@@ -370,12 +376,16 @@
             <span>负责 Android、iOS、RN、Flutter、Hybrid App E2E；flow 资产落到 maestro/flow。</span>
           </div>
           <div class="map-cell">
+            <strong>shadcn</strong>
+            <span>shadcn/ui 项目的组件、registry、preset、docs / diff 和 CLI 工作流。</span>
+          </div>
+          <div class="map-cell">
             <strong>seo-geo</strong>
-            <span>公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 检查时才启用。</span>
+            <span>bundled Skill；公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 检查时才启用。</span>
           </div>
           <div class="map-cell">
             <strong>rtk / caveman</strong>
-            <span>rtk 压缩命令输出，但报告型测试先评估缓存与文件写入风险；caveman 只在用户明确要求时压缩对话输出。</span>
+        <span>rtk 压缩命令输出，但报告型测试先评估缓存与文件写入风险；caveman 安装后不自动启用，达到长任务阈值时只建议用户切换。</span>
           </div>
         </div>
       </aside>
@@ -463,7 +473,7 @@
             <p class="eyebrow">Boundaries</p>
             <h2>工具职责边界</h2>
           </div>
-          <p>Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。<code>rtk</code> 与 <code>caveman</code> 只负责压缩命令或对话输出；unit / API / Playwright / Maestro 报告型测试要先评估 <code>rtk</code> 缓存或回放是否会跳过文件写入。模板要求在最终输出中显式报告相关状态，避免把诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
+          <p>Codex <code>tool_search</code> / plugin / connector、Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、<code>shadcn</code>、<code>web-ui-autotest-generator</code> 和 <code>seo-geo</code> 不互相替代。<code>rtk</code> 与 <code>caveman</code> 只负责压缩命令或对话输出；unit / API / Playwright / Maestro 报告型测试要先评估 <code>rtk</code> 缓存或回放是否会跳过文件写入。模板要求在最终输出中显式报告相关状态，避免把候选工具、授权能力、诊断、探索、可重复测试和搜索可见性检查混在一起。</p>
         </div>
         <table>
           <thead>
@@ -474,6 +484,11 @@
             </tr>
           </thead>
           <tbody>
+            <tr>
+              <td>Codex tool_search / Plugin / Connector</td>
+              <td>发现延迟加载工具、remote / local plugin、connector 和 ChatGPT-hosted MCP 能力。</td>
+              <td>Catalog 或 marketplace 展示不等于已授权 / 已可调用；安装需用户明确请求，session auth / OAuth / cookies / tokens 不写入项目。</td>
+            </tr>
             <tr>
               <td>Chrome DevTools MCP</td>
               <td>真实 Chrome 中的 console、network、storage、performance trace、screenshot 诊断。</td>
@@ -500,6 +515,11 @@
               <td>依赖 Java 17+ 和 Maestro CLI；当前 Agent / IDE 的 MCP 配置需包含 <code>JAVA_HOME</code> / <code>PATH</code> env，MCP 缺失但 CLI 可用时继续 <code>maestro test</code>。</td>
             </tr>
             <tr>
+              <td>shadcn</td>
+              <td>shadcn/ui 项目的组件、registry、preset、CLI、docs / diff 和组件组合规则。</td>
+              <td>不替代通用 UI/UX 设计判断、<code>impeccable</code> 视觉打磨或 React Bits Free / 付费 tier 判定。</td>
+            </tr>
+            <tr>
               <td>web-ui-autotest-generator</td>
               <td>生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率。</td>
               <td>执行底座仍是项目内 Playwright CLI。</td>
@@ -521,8 +541,8 @@
             </tr>
             <tr>
               <td>caveman</td>
-              <td>用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。</td>
-              <td>不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启。</td>
+              <td>用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装；达到全局阈值时只建议用户后续切换。</td>
+              <td>不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启，最终报告保持完整。</td>
             </tr>
           </tbody>
         </table>
@@ -596,10 +616,47 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
       <div class="wrap">
         <div class="section-head">
           <div>
+            <p class="eyebrow">shadcn/ui</p>
+            <h2>shadcn Skill 使用边界</h2>
+          </div>
+          <p><code>shadcn</code> 是 optional external Skill，只在 shadcn/ui 项目、组件 registry、preset 或 CLI 工作流需要时启用。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>启用条件</strong><br>项目存在 <code>components.json</code>，或用户要求初始化 / 维护 shadcn/ui，执行 <code>init/add/search/view/docs/diff/info/migrate/preset</code>，使用 preset code、registry item、第三方 / 私有 / 付费 registry 或 shadcn MCP 配置。</div>
+          <div><strong>实现顺序</strong><br>UI/UX 任务中先用 <code>ui-ux-pro-max</code> 明确产品方向、信息架构、可访问性和设计系统约束，再用 <code>shadcn</code> 处理组件来源、CLI、registry 和具体实现规则。</div>
+          <div><strong>组件规则</strong><br>添加或更新组件前先检查 <code>components.json</code>、<code>shadcn info</code>、已安装组件和项目别名；涉及组件 API 时先查 <code>shadcn docs</code>，更新已有组件先用 <code>--dry-run</code> / <code>--diff</code>。</div>
+          <div><strong>跳过条件</strong><br>非 shadcn/ui 项目且用户没有要求引入 shadcn；通用 UI 设计判断、视觉 polish、后端、测试、文档或非 React UI 栈任务；React Bits Free / 付费 tier、付费 Skill 安装或 key 可用性判定。</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">React Bits</p>
+            <h2>React Bits tier 选择边界</h2>
+          </div>
+          <p>React Bits 不是 shadcn/ui 的必装依赖。安装和 reset 默认保持 shadcn/ui only；只有检测到目标项目是 React + shadcn/ui（存在 <code>components.json</code>），且任务需要更强视觉表达、动画组件、blocks 或 landing sections 时，才询问用户是否启用 React Bits。</p>
+        </div>
+        <div class="status-list">
+          <div><strong>默认选择</strong><br>先说明 shadcn/ui 提供常规应用组件，React Bits Free / 付费 tier 只是可选增强。</div>
+          <div><strong>确认选项</strong><br>询问用户继续 shadcn/ui only、安装 React Bits Free，或使用已有付费 Starter / Pro / Ultimate。</div>
+          <div><strong>Free</strong><br>只有在本工作流已有明确免费 source / registry / 安装命令时才安装；未配置时说明暂不可自动安装。</div>
+          <div><strong>Paid</strong><br>Starter / Pro / Ultimate 必须由用户确认，且当前环境能读取 <code>REACTBITS_LICENSE_KEY</code>；不打印、不输出、不提交该 key。</div>
+          <div><strong>Reset</strong><br>保留检测到的既有 React Bits Free、Starter、Pro 或 Ultimate tier / registry，不用默认免费版覆盖。</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
             <p class="eyebrow">SEO / GEO</p>
             <h2>公开 Web 搜索可见性检查</h2>
           </div>
-          <p><code>seo-geo</code> 是可选外部 Skill，只在公开网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面需要搜索可见性检查时启用。</p>
+          <p><code>seo-geo</code> 是 bundled Skill，只在公开网站、落地页、文档站、产品页、营销页、公开博客或公开 README 页面需要搜索可见性检查时启用。</p>
         </div>
         <div class="status-list">
           <div><strong>启用条件</strong><br>用户要求 SEO、GEO、AI search visibility、schema、JSON-LD、meta tags、robots.txt、sitemap.xml、canonical、关键词研究或发布前 crawl / indexing 检查。</div>
@@ -658,16 +715,19 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Install Gates</p>
             <h2>检测、安装和 fallback</h2>
           </div>
-          <p>模板不默认假设工具存在。CLI、MCP 或用户级全局 Skill 缺失时，先按证据检测，再根据用户确认安装、配置或降级；降级不能冒充完整验证。<code>scripts/onboard.py</code> 只报告 MCP 状态，根安装脚本才会在用户确认后执行平台 MCP 配置。</p>
+          <p>模板不默认假设工具存在。CLI、MCP、plugin、connector 或用户级全局 Skill 缺失时，先按证据检测，再根据用户确认安装、配置或降级；降级不能冒充完整验证。<code>scripts/onboard.py</code> 只报告 MCP 状态，根安装脚本才会在用户确认后执行平台 MCP 配置。</p>
         </div>
         <div class="status-list">
+          <div><strong>Codex plugin / connector</strong><br>使用 <code>tool_search</code>、当前工具列表或 MCP 可见性确认 callable tool；catalog / marketplace / 版本展示只作为候选信号，session auth 材料不写入项目。</div>
           <div><strong>Playwright CLI</strong><br>检测 <code>package.json</code>、Playwright 配置、E2E 目录和脚本。需要 Web 回归但缺失时询问是否安装到项目 devDependency。</div>
           <div><strong>Playwright MCP</strong><br>只作为 MCP 可见性检查和探索能力；不可见时不阻塞 Playwright CLI。</div>
           <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。当前 JDK 满足 17+ 时优先使用当前 JDK；否则先扫描本机已有 17+ JDK。只有本机没有可用 JDK 且用户确认后，才引导安装 OpenJDK Temurin 21。</div>
           <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。根安装脚本可把 <code>command</code>、<code>args</code>、<code>JAVA_HOME</code> 和 <code>PATH</code> 写入选定平台；MCP 缺失或 env 未配置但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集；根安装脚本可为选定平台添加 <code>chrome-devtools-mcp</code>。</div>
-          <div><strong>seo-geo</strong><br>作为 referenced external Skill 检查存在性；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
-          <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；报告型测试可能因缓存 / 回放跳过文件写入，必要时直接使用原生命令；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，安装后不自动启用。</div>
+          <div><strong>shadcn</strong><br>作为 referenced external Skill 检查存在性；用户选择安装后从 <code>shadcn-ui/ui</code> 的 <code>skills/shadcn</code> 拉取，macOS / Linux / Windows 都走同一 Python installer 逻辑。</div>
+          <div><strong>React Bits</strong><br>tier 选择只在目标项目被检测为 React + shadcn/ui 时作为条件 manual guidance 输出；普通 onboarding 不询问、不安装 React Bits。</div>
+          <div><strong>seo-geo</strong><br>作为 bundled Skill 随模板安装；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
+          <div><strong>rtk / caveman</strong><br><code>rtk</code> 缺失时询问是否安装全局 CLI；报告型测试可能因缓存 / 回放跳过文件写入，必要时直接使用原生命令；<code>caveman</code> 缺失时询问是否安装用户级全局 Skill，macOS / Linux 使用 <code>curl ... install.sh | bash</code>，Windows 使用 <code>irm ... install.ps1 | iex</code>，安装后不自动启用，只在 3 次以上状态更新、5 个以上重复摘要、上下文压力或自动化 / review / 验证排障重复轮次中建议用户后续切换。</div>
           <div><strong>状态报告</strong><br>最终输出要列明各工具是 run、blocked、skipped、not-needed、available、installed 或对应模板状态。</div>
         </div>
       </div>
@@ -759,7 +819,7 @@ tests/e2e/**/*.trace.zip
 
   <footer>
     <div class="wrap">
-      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，<code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层，报告型测试需先评估 <code>rtk</code> 文件写入风险。</p>
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Codex <code>tool_search</code> / plugin / connector 负责 Agent 侧工具发现和授权边界，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>shadcn</code> 只在 shadcn/ui 组件、registry、preset 和 CLI 工作流中启用，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，bundled <code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层，报告型测试需先评估 <code>rtk</code> 文件写入风险。</p>
     </div>
   </footer>
 </body>
