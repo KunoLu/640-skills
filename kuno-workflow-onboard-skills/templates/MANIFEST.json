@@ -60,6 +60,10 @@
     {
       "source": "templates/skills/book-release-readiness",
       "targetRole": "skill"
+    },
+    {
+      "source": "templates/skills/seo-geo",
+      "targetRole": "skill"
     }
   ],
   "externalSkillRepositories": [
@@ -99,9 +103,10 @@
     },
     {
       "skills": [
-        "seo-geo"
+        "shadcn"
       ],
-      "repository": "https://github.com/ReScienceLab/opc-skills.git"
+      "repository": "https://github.com/shadcn-ui/ui.git",
+      "subpath": "skills/shadcn"
     }
   ],
   "toolRepositories": [

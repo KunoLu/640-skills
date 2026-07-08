@@ -19,6 +19,7 @@ This Skill installs only these bundled templates:
 - `templates/skills/book-ddd-distilled-modeling/`
 - `templates/skills/book-ddia-data-design/`
 - `templates/skills/book-release-readiness/`
+- `templates/skills/seo-geo/`
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
@@ -119,10 +120,10 @@ The check reports:
 - Java 17+ availability for Maestro. Use `java --version` first and fall back to `java -version`.
 - Maestro CLI availability and version output when Java 17+ is available.
 - Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
-- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, and bundled book-derived skills.
-- Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `seo-geo`.
+- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, bundled book-derived skills, and `seo-geo`.
+- Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `shadcn`.
 - Interaction compression Skill presence for `caveman`, checked only in the user-level global skills directory.
-- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and React Bits Pro project-specific prerequisites. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
+- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and conditional React Bits tier selection in detected React + shadcn/ui projects. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
@@ -145,9 +146,11 @@ Bundled skills:
 - kuno-workflow-onboard-skills: installed / missing
 - trellis-workflow: installed / missing
 - gherkin-bdd: installed / missing
+- seo-geo: installed / missing
 
 Referenced skills:
 - diagnosing-bugs: installed / missing
+- shadcn: installed / missing
 
 Interaction compression skills:
 - caveman: installed / missing
@@ -173,7 +176,7 @@ The report is the user-facing completion summary and must include:
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
 - Not-checked items, especially CLI tools skipped because npm is not usable yet.
-- Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, and React Bits Pro project skill prerequisites.
+- Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, plus React Bits tier-selection guidance only when the target project is detected as React + shadcn/ui.
 
 Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
 
@@ -213,6 +216,7 @@ The onboard bundle includes workflow skills that are installed from templates ra
 | `gherkin-bdd` | Persistent BDD / Gherkin specs for user-visible behavior, `.feature` path rules, scenario quality, and scenario-to-test traceability. |
 | `maestro-mobile-e2e` | Maestro Mobile / Hybrid flow generation from BDD scenarios, repo flow asset paths, report naming, and lazy-loaded real-device troubleshooting lessons. |
 | `lessons-record` | Long-term lesson recording and Trellis lesson storage structure. |
+| `seo-geo` | Public Web SEO / GEO visibility checks, schema / meta / robots / sitemap audit, and AI search visibility guidance. |
 
 ## Bundled Book-Derived Skills
 
@@ -337,10 +341,16 @@ When missing, explain its role and ask the user before installing:
 python scripts/onboard.py install-caveman --yes
 ```
 
-The command runs the official Codex skill installer:
+On macOS and Linux, the command runs the official caveman installer:
 
 ```bash
-npx --yes skills add JuliusBrussee/caveman -a codex
+curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash
+```
+
+On native Windows, the command runs the official PowerShell installer:
+
+```powershell
+irm https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.ps1 | iex
 ```
 
 After installation, rerun:
@@ -349,7 +359,11 @@ After installation, rerun:
 python scripts/onboard.py check
 ```
 
-Installing caveman only makes the Skill available. Do not automatically enable caveman mode after installation. Use it only when the user asks with `/caveman`, `use caveman`, `caveman mode`, `少说一点`, `减少 token`, `压缩输出`, or an equivalent request. Prefer clear prose for install confirmations, destructive actions, security warnings, PRD / design / implement review gates, long-lived project documents, and final validation reports.
+Installing caveman only makes the Skill available. Do not automatically enable caveman mode after installation. Use it only when the user asks with `/caveman`, `use caveman`, `caveman mode`, `少说一点`, `减少 token`, `压缩输出`, or an equivalent request.
+
+During long work, suggest `caveman-lite` or `caveman` only from a non-blocking status update when the global AGENTS thresholds are met: 3 or more intermediate updates in the same task, 5 or more repetitive command / diff / log / file summaries, obvious context pressure, or repeated automation / review / validation-debug loops. The suggestion affects only later conversational output, not code, tools, tests, validation, Trellis, GitNexus, or workflow decisions.
+
+Prefer clear prose for install confirmations, destructive actions, security warnings, PRD / design / implement review gates, long-lived project documents, and final validation reports.
 
 ## Playwright Project CLI
 
@@ -483,7 +497,7 @@ Referenced external skills are not bundled under `templates/`. When the user con
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `web-ui-autotest-generator` | `https://github.com/Cheryl-station/web-ui-autotest.git` |
-| `seo-geo` | `https://github.com/ReScienceLab/opc-skills.git` |
+| `shadcn` | `https://github.com/shadcn-ui/ui.git` (`skills/shadcn`) |
 
 Install approved missing external skills with:
 
@@ -496,7 +510,9 @@ python scripts/onboard.py install-external-skills \
 
 Legacy input names are handled deliberately: `diagnose` is normalized to `diagnosing-bugs`, `write-a-skill` is normalized to `writing-great-skills`, and removed `zoom-out` is rejected with a migration note. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
 
-`seo-geo` is an optional public Web visibility Skill. Basic SEO/GEO audit does not require DataForSEO credentials; DataForSEO login/password only unlock enhanced keyword, SERP, backlink, and domain overview analysis. Treat those credentials and any paid search data as secrets and never write them to repositories, logs, screenshots, tests, or reports.
+`shadcn` is an optional external Skill for projects that use shadcn/ui, component registries, presets, or a `components.json` file. It is installed from `skills/shadcn` in the official `shadcn-ui/ui` repository.
+
+`seo-geo` is now bundled with this onboard Skill and maintained from `templates/skills/seo-geo/`, not pulled from an external repository during onboarding. Basic SEO/GEO audit does not require DataForSEO credentials; DataForSEO login/password only unlock enhanced keyword, SERP, backlink, and domain overview analysis. Treat those credentials and any paid search data as secrets and never write them to repositories, logs, screenshots, tests, or reports.
 
 Install all known external referenced skills:
 
@@ -548,6 +564,18 @@ The built-in MCP options are:
 
 Do not write real tokens, passwords, PII, production data, or sensitive headers into repository files, screenshots, logs, test reports, or Markdown summaries. When env values are needed, prompt for them and avoid echoing sensitive-looking values.
 
+## Codex Plugin / Connector Discovery Boundary
+
+Codex may expose local plugins, remote plugins, connectors, ChatGPT-hosted MCP servers, and lazily discovered tools. The onboard scripts do not install or configure Codex remote plugins or connectors.
+
+Operational rules:
+
+1. Treat `tool_search`, the active tool list, MCP visibility checks, and explicit project documentation as the sources of truth for whether a tool is callable in the current session.
+2. Treat remote plugin catalogs, marketplace rows, local / remote version displays, and installed-looking metadata as candidate discovery signals only; confirm the callable tool before relying on it.
+3. Install or enable a plugin / connector only when the user explicitly asks for that specific tool or confirms it after you explain the effect.
+4. Keep connector tokens, OAuth/session authentication state, cookies, and account identifiers inside the Agent or connector-managed auth flow. Do not write them into AGENTS files, MCP examples, reports, screenshots, logs, or tests.
+5. If Codex uses the operating system proxy, PAC, or WPAD for authentication/API traffic, treat that as runtime environment behavior. Do not change OS proxy settings, CI networking, or repository configuration unless the user explicitly requests it.
+
 For GitNexus MCP:
 
 1. Confirm the GitNexus CLI works, for example with `npx gitnexus status` in the target project.
@@ -582,14 +610,22 @@ For Maestro MCP:
 7. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
 8. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
 
-For React Bits Pro Skill:
+For shadcn Skill:
 
-1. Treat it as a conditional project skill, not a global default.
-2. Confirm the target project is React with shadcn/ui initialized and `components.json` present.
-3. Confirm `components.json` contains the required React Bits registry entries and the current environment can read `REACTBITS_LICENSE_KEY` without printing it.
-4. If prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root.
-5. Confirm the React Bits Pro `SKILL.md` exists in the project and rerun the onboard check.
-6. Skip this item for non-React projects, projects without a license key, or projects that do not need React Bits Pro.
+1. Treat it as a shadcn/ui workflow Skill, not a generic UI design Skill and not a React Bits license / tier substitute.
+2. Use it when the target project has `components.json`, is initializing or maintaining shadcn/ui, needs `shadcn init/add/search/view/docs/diff/info/migrate/preset`, or uses official, community, private, or paid shadcn registries.
+3. In UI work, call it after `ui-ux-pro-max` has clarified product direction and before adding, updating, or composing shadcn components.
+4. Use it when debugging shadcn component composition, forms, icons, Tailwind token usage, Base UI vs Radix API differences, chat UI primitives, or registry import rewrites.
+5. Skip it for non-shadcn projects, generic visual planning, non-React UI stacks unless the user is explicitly initializing shadcn, pure backend / testing / documentation tasks, or React Bits Free / paid license / tier decisions.
+
+For React Bits tier selection:
+
+1. Do not ask during generic onboarding. Show this guidance only after `check` receives a target project root and detects a React project with shadcn/ui initialized through `components.json`.
+2. Explain the choice briefly: shadcn/ui covers normal application components; React Bits Free and paid tiers are optional sources for more expressive animated components, blocks, or landing sections.
+3. Ask whether the project should stay with shadcn/ui only, add React Bits Free, or use an existing paid Starter / Pro / Ultimate entitlement.
+4. For React Bits Free, install only after the user confirms and a free source or registry has been explicitly configured for this workflow.
+5. For paid tiers, confirm the current environment can read `REACTBITS_LICENSE_KEY` without printing it. If prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root, confirm the React Bits Skill `SKILL.md` exists, and rerun the onboard check.
+6. During reset, preserve the detected React Bits tier and registry. Do not replace Free, Starter, Pro, or Ultimate with a different default tier without confirmation.
 
 ## Path Detection
 

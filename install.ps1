@@ -34,7 +34,7 @@ $ExternalSkills = @(
   "impeccable",
   "ui-ux-pro-max",
   "web-ui-autotest-generator",
-  "seo-geo"
+  "shadcn"
 )
 
 function Show-Usage {
@@ -107,12 +107,11 @@ function Write-Colored {
 
 function Show-Logo {
   if (Use-Color) {
-    Write-Host "    ██╗  ██╗" -ForegroundColor DarkMagenta
-    Write-Host "    ██║ ██╔╝" -ForegroundColor DarkMagenta
-    Write-Host "    █████╔╝ " -ForegroundColor Magenta
-    Write-Host "    ██╔═██╗ " -ForegroundColor Magenta
-    Write-Host "    ██║  ██╗" -ForegroundColor Magenta
-    Write-Host "    ╚═╝  ╚═╝" -ForegroundColor Magenta
+    Write-Host "    K  K" -ForegroundColor DarkMagenta
+    Write-Host "    K K " -ForegroundColor DarkMagenta
+    Write-Host "    KK  " -ForegroundColor Magenta
+    Write-Host "    K K " -ForegroundColor Magenta
+    Write-Host "    K  K" -ForegroundColor Magenta
   }
   else {
     Write-Host "    K  K"

@@ -71,6 +71,7 @@
 | `kuno-workflow-onboard-skills/templates/skills/book-ddd-distilled-modeling/` | `/Users/lusonglin/.agent/skills/book-ddd-distilled-modeling/` |
 | `kuno-workflow-onboard-skills/templates/skills/book-ddia-data-design/` | `/Users/lusonglin/.agent/skills/book-ddia-data-design/` |
 | `kuno-workflow-onboard-skills/templates/skills/book-release-readiness/` | `/Users/lusonglin/.agent/skills/book-release-readiness/` |
+| `kuno-workflow-onboard-skills/templates/skills/seo-geo/` | `/Users/lusonglin/.agent/skills/seo-geo/` |
 
 同步要求：
 

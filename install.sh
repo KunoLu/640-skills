@@ -31,7 +31,7 @@ EXTERNAL_SKILLS=(
   impeccable
   ui-ux-pro-max
   web-ui-autotest-generator
-  seo-geo
+  shadcn
 )
 
 usage() {

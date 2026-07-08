@@ -28,6 +28,8 @@ TEMURIN21_RELEASES_URL = "https://github.com/adoptium/temurin21-binaries/release
 TEMURIN_RELEASES_API_TEMPLATE = "https://api.github.com/repos/adoptium/temurin{major}-binaries/releases/latest"
 MAESTRO_INSTALL_URL = "https://get.maestro.mobile.dev"
 CAVEMAN_INSTALL_SPEC = "JuliusBrussee/caveman"
+CAVEMAN_INSTALL_SH_URL = "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh"
+CAVEMAN_INSTALL_PS1_URL = "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.ps1"
 JAVA_MIN_MAJOR = 17
 SKILL_SOURCES = {
     "kuno-workflow-onboard-skills": SKILL_DIR,
@@ -42,6 +44,7 @@ SKILL_SOURCES = {
     "book-ddd-distilled-modeling": TEMPLATE_DIR / "skills" / "book-ddd-distilled-modeling",
     "book-ddia-data-design": TEMPLATE_DIR / "skills" / "book-ddia-data-design",
     "book-release-readiness": TEMPLATE_DIR / "skills" / "book-release-readiness",
+    "seo-geo": TEMPLATE_DIR / "skills" / "seo-geo",
 }
 CLI_TOOLS = (
     {
@@ -97,7 +100,7 @@ REFERENCED_SKILLS = (
     "ui-ux-pro-max",
     "impeccable",
     "web-ui-autotest-generator",
-    "seo-geo",
+    "shadcn",
 )
 INTERACTION_SKILLS = (
     "caveman",
@@ -136,9 +139,10 @@ EXTERNAL_SKILL_SOURCES = {
         "repo": "https://github.com/Cheryl-station/web-ui-autotest.git",
         "aliases": ("web-ui-autotest-generator", "web-ui-autotest"),
     },
-    "seo-geo": {
-        "repo": "https://github.com/ReScienceLab/opc-skills.git",
-        "aliases": ("seo-geo",),
+    "shadcn": {
+        "repo": "https://github.com/shadcn-ui/ui.git",
+        "subpath": "skills/shadcn",
+        "aliases": ("shadcn",),
     },
 }
 EXTERNAL_REPO_TO_SKILLS: dict[str, tuple[str, ...]] = {}
@@ -179,18 +183,6 @@ BASE_MANUAL_CHECKS = (
             "Restart or reload the Agent environment so the MCP server is discovered.",
             "Confirm Playwright MCP tools are visible to the Agent.",
             "Use Playwright MCP for exploration and locator assistance only; do not treat it as a substitute for project-level Playwright CLI.",
-        ),
-    },
-    {
-        "name": "React Bits Pro Skill",
-        "category": "conditional-project-skill",
-        "advice": "Only install in React/shadcn projects with registry configuration and REACTBITS_LICENSE_KEY available. Do not print or store the license key.",
-        "steps": (
-            "Confirm the target project is a React project with shadcn/ui initialized and `components.json` present.",
-            "Confirm `components.json` contains the required React Bits registry entries and the current environment can read `REACTBITS_LICENSE_KEY` without printing it.",
-            "If prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root.",
-            "Confirm the React Bits Pro `SKILL.md` exists in the project and rerun the onboard check.",
-            "Skip this item for non-React projects, projects without a license key, or projects that do not need React Bits Pro.",
         ),
     },
 )
@@ -642,12 +634,73 @@ def build_maestro_mcp_manual_check(
     }
 
 
+REACT_PROJECT_DEPENDENCY_MARKERS = (
+    "react",
+    "react-dom",
+    "next",
+    "@vitejs/plugin-react",
+    "@vitejs/plugin-react-swc",
+    "@remix-run/react",
+    "@tanstack/react-router",
+    "@tanstack/react-start",
+)
+
+
+def project_dependencies(package_data: dict[str, object] | None) -> dict[str, object]:
+    dependencies: dict[str, object] = {}
+    if not package_data:
+        return dependencies
+    for key in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+        value = package_data.get(key)
+        if isinstance(value, dict):
+            dependencies.update(value)
+    return dependencies
+
+
+def is_react_project(project_root: Path | None) -> bool:
+    dependencies = project_dependencies(project_package_json(project_root))
+    return any(marker in dependencies for marker in REACT_PROJECT_DEPENDENCY_MARKERS)
+
+
+def has_shadcn_components_config(project_root: Path | None) -> bool:
+    return bool(project_root and (project_root / "components.json").is_file())
+
+
+def should_check_react_bits_tier(project_root: Path | None) -> bool:
+    return bool(project_root and is_react_project(project_root) and has_shadcn_components_config(project_root))
+
+
+def build_react_bits_tier_manual_check(project_root: Path) -> dict[str, object]:
+    components_json = project_root / "components.json"
+    return {
+        "name": "React Bits tier selection",
+        "category": "conditional-project-skill",
+        "advice": "A React + shadcn/ui project was detected. Keep the default as shadcn/ui only; ask before adding React Bits Free, Starter, Pro, or Ultimate. Do not print or store any React Bits license key.",
+        "detected": {
+            "projectRoot": str(project_root),
+            "componentsJson": str(components_json),
+            "reactProject": True,
+        },
+        "steps": (
+            "Tell the user that shadcn/ui covers normal application components, while React Bits Free or paid tiers are optional sources for more expressive animated components, blocks, or landing sections.",
+            "Ask whether this project should stay with shadcn/ui only, add React Bits Free, or use an existing paid Starter / Pro / Ultimate entitlement.",
+            "For React Bits Free, install only after the user confirms and a free source or registry has been explicitly configured for this workflow.",
+            "For paid tiers, require explicit user confirmation and verify the current environment can read `REACTBITS_LICENSE_KEY` without printing it.",
+            "If paid prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root, then confirm the React Bits Skill `SKILL.md` exists before using it.",
+            "During reset, preserve the detected React Bits tier and registry; do not replace Free, Starter, Pro, or Ultimate with a different default tier without confirmation.",
+        ),
+    }
+
+
 def build_manual_checks(
     java_check: dict[str, object],
     maestro_check: dict[str, object],
+    project_root: Path | None,
 ) -> tuple[dict[str, object], ...]:
     checks = list(BASE_MANUAL_CHECKS)
     checks.insert(3, build_maestro_mcp_manual_check(java_check, maestro_check))
+    if project_root and should_check_react_bits_tier(project_root):
+        checks.append(build_react_bits_tier_manual_check(project_root))
     return tuple(checks)
 
 
@@ -1094,7 +1147,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     tools.append(java_check)
     tools.append(maestro_check)
     tools.append(check_playwright_project(project_root))
-    manual_checks = build_manual_checks(java_check, maestro_check)
+    manual_checks = build_manual_checks(java_check, maestro_check, project_root)
     missing = {
         "runtime": [] if runtime["npm"]["installed"] else ["npm"],
         "tools": [item["name"] for item in tools if not item["installed"] and not item.get("notChecked")],
@@ -1519,6 +1572,13 @@ def discover_skill_dirs(repo_root: Path) -> list[Path]:
 
 def source_dir_for_external_skill(repo_root: Path, skill_name: str) -> Path:
     spec = EXTERNAL_SKILL_SOURCES[skill_name]
+    configured_subpath = spec.get("subpath")
+    if configured_subpath:
+        candidate = repo_root / str(configured_subpath)
+        if (candidate / "SKILL.md").is_file():
+            return candidate
+        raise RuntimeError(f"configured subpath for {skill_name} does not contain SKILL.md: {configured_subpath}")
+
     subpath = MATTPOCOCK_SKILL_SUBPATHS.get(skill_name)
     if subpath:
         candidate = repo_root / subpath
@@ -2080,16 +2140,50 @@ def install_rtk(args: argparse.Namespace) -> int:
     return 0 if after["installed"] else 1
 
 
+def caveman_platform_install_command() -> tuple[str, tuple[str, ...] | None, str | None]:
+    system = platform.system() or sys.platform
+    if system == "Windows":
+        display = f"irm {CAVEMAN_INSTALL_PS1_URL} | iex"
+        powershell = shutil.which("pwsh") or shutil.which("powershell")
+        if not powershell:
+            return display, None, "PowerShell is required to run the caveman Windows installer."
+        return (
+            display,
+            (powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", display),
+            None,
+        )
+
+    if system in {"Darwin", "Linux"}:
+        display = f"curl -fsSL {CAVEMAN_INSTALL_SH_URL} | bash"
+        if not shutil.which("curl"):
+            return display, None, "curl is required to download the caveman macOS/Linux installer."
+        bash = shutil.which("bash")
+        if not bash:
+            return display, None, "bash is required to run the caveman macOS/Linux installer."
+        return display, (bash, "-lc", display), None
+
+    return (
+        f"curl -fsSL {CAVEMAN_INSTALL_SH_URL} | bash",
+        None,
+        f"Automatic caveman installation is not configured for platform: {system}.",
+    )
+
+
 def install_caveman(args: argparse.Namespace) -> int:
     global_skills_dir = expand_path(args.global_skills_dir) or default_global_skills_dir()
     before = check_skill("caveman", "interaction", global_skills_dir, None)
-    install_command = ("npx", "--yes", "skills", "add", CAVEMAN_INSTALL_SPEC, "-a", args.agent)
+    display_command, install_command, unavailable_reason = caveman_platform_install_command()
     payload: dict[str, object] = {
         "mode": "install-caveman",
         "agent": args.agent,
+        "platform": platform.system() or sys.platform,
         "before": before,
         "installSpec": CAVEMAN_INSTALL_SPEC,
-        "installCommand": " ".join(install_command),
+        "installCommand": display_command,
+        "installCommands": {
+            "macosLinux": f"curl -fsSL {CAVEMAN_INSTALL_SH_URL} | bash",
+            "windows": f"irm {CAVEMAN_INSTALL_PS1_URL} | iex",
+        },
         "globalSkillsDir": str(global_skills_dir),
     }
 
@@ -2103,23 +2197,22 @@ def install_caveman(args: argparse.Namespace) -> int:
                 print(f"{location['scope']}: {location['path']}")
         return 0
 
-    runtime = check_npm_runtime()
-    payload["runtime"] = runtime
-    if not runtime["npm"]["installed"] or not shutil.which("npx"):
-        payload["status"] = "runtime-missing"
-        payload["advice"] = "caveman installation uses `npx skills add`; install npm/npx first with `python scripts/onboard.py ensure-npm --yes` after user confirmation."
+    if unavailable_reason or install_command is None:
+        payload["status"] = "manual-required"
+        payload["advice"] = unavailable_reason or "Run the platform-specific caveman installer manually, then rerun check."
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         else:
-            print("caveman is missing, and npm/npx is not usable yet.")
+            print("caveman is missing, but automatic installation is not available on this platform.")
             print(payload["advice"])
-        return 2
+            print(f"Suggested command: {display_command}")
+        return 1
 
     if not args.yes:
         payload["status"] = "needs-confirmation"
         payload["actions"] = [
             "install the caveman Codex skill into the user-level Agent/Codex skill environment",
-            f"run `{' '.join(install_command)}`",
+            f"run `{display_command}`",
             "rerun `python scripts/onboard.py check` and confirm `caveman/SKILL.md` is visible",
         ]
         if args.json:
@@ -2132,7 +2225,9 @@ def install_caveman(args: argparse.Namespace) -> int:
             print("Rerun with --yes after user confirmation.")
         return 2
 
-    install_result = run_command(install_command, timeout=600)
+    install_env = os.environ.copy()
+    install_env["AGENT_SKILLS_DIR"] = str(global_skills_dir)
+    install_result = run_command(install_command, timeout=600, env=install_env)
     payload["installOutput"] = command_excerpt(install_result)
     if not install_result or install_result.returncode != 0:
         payload["status"] = "failed"
@@ -2940,7 +3035,7 @@ def build_parser() -> argparse.ArgumentParser:
     rtk.add_argument("--json", action="store_true", help="Print machine-readable results.")
 
     caveman = subparsers.add_parser("install-caveman")
-    caveman.add_argument("--agent", default="codex", help="Target agent for `npx skills add`; defaults to codex.")
+    caveman.add_argument("--agent", default="codex", help="Retained for compatibility; the official caveman installer selects the platform-specific install path.")
     caveman.add_argument("--global-skills-dir", help="Override global skills directory used for post-install verification.")
     caveman.add_argument("--yes", action="store_true", help="Install the caveman Codex skill after user confirmation.")
     caveman.add_argument("--json", action="store_true", help="Print machine-readable results.")
