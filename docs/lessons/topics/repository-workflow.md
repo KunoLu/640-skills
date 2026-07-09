@@ -131,3 +131,15 @@
 - 根因：校验脚本没有继续沿用“以版本监控表和当前版本汇总表为主数据源”的规则，而是对单个详情章节写了脆弱的文本包含断言。
 - 修复：把验证改回按 Markdown 表格语义解析 `## 0. 版本监控配置`、归档文件区间和 `## 8. 当前版本汇总`，只对确实存在且有稳定结构的字段做断言。
 - 预防：后续验证 `ENTRYPOINT.md` 写回结果时，以章节标题、表头和列名为准；不要为某个工具详情章节硬编码一整行文案或假设所有工具章节都有同名字段。
+
+## LESSON-20260709-installer-mcp-generated-config: Installer MCP Generated Config
+
+- 日期：2026-07-09
+- 标签：installer, mcp, workflow
+- 适用场景：修改根安装脚本、`onboard.py` manualChecks 或已知 MCP server 配置
+- 严重级别：medium
+- 来源：用户在另一台 Mac 运行 `bash install.sh` 时选择 GitNexus MCP 后，脚本要求手动输入已可从全局 `gitnexus` CLI 推断的 MCP 命令。
+- 问题：GitNexus CLI 已经全局安装，MCP 配置实际只需要本机 `gitnexus` 可执行文件路径和 `mcp` 参数，但安装器仍把 GitNexus 当作完全自定义 stdio server，让用户手输命令。
+- 根因：`onboard.py check` 没有为 GitNexus MCP 产出结构化 `mcpServerConfig`，根安装脚本也只对 Maestro MCP 读取生成配置，导致已知 server 的配置事实和交互式安装流程脱节。
+- 修复：让 `onboard.py check` 在检测到本机 `gitnexus` CLI 路径时生成 `command = <detected path>`、`args = ["mcp"]` 和 JSON / TOML 示例；`install.sh` / `install.ps1` 消费这份配置，只有路径缺失时才回退到人工输入。
+- 预防：后续新增或维护已知 MCP server 时，优先在 `onboard.py` 的 manual check 中沉淀 `mcpServerConfig`，根安装器只适配选定 platform；不要把可检测的 command / args / env 重新变成人工输入。

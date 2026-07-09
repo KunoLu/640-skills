@@ -603,12 +603,33 @@ function Ensure-MaestroReady {
 }
 
 function Get-MaestroEnv {
-  foreach ($item in $script:Check.manualChecks) {
-    if ($item.name -eq "Maestro MCP") {
-      return $item.mcpServerConfig.env
-    }
+  $config = Get-ManualMcpConfig "Maestro MCP"
+  if ($config -and $config.env) {
+    return $config.env
   }
   return @{}
+}
+
+function Get-ManualMcpConfig {
+  param([string]$Name)
+  foreach ($item in $script:Check.manualChecks) {
+    if ($item.name -eq $Name -and $item.PSObject.Properties["mcpServerConfig"]) {
+      return $item.mcpServerConfig
+    }
+  }
+  return $null
+}
+
+function Convert-EnvObjectToHash {
+  param($EnvObject)
+  $envHash = @{}
+  if ($null -eq $EnvObject) {
+    return $envHash
+  }
+  foreach ($property in $EnvObject.PSObject.Properties) {
+    $envHash[$property.Name] = [string]$property.Value
+  }
+  return $envHash
 }
 
 function Configure-StdioMcp {
@@ -723,7 +744,7 @@ function Select-AndConfigureMcp {
   Write-Host "  1) Chrome DevTools MCP"
   Write-Host "  2) Playwright MCP"
   Write-Host "  3) Maestro MCP"
-  Write-Host "  4) GitNexus MCP (custom command/env)"
+  Write-Host "  4) GitNexus MCP (auto from gitnexus CLI)"
   Write-Host "  5) Custom stdio MCP server"
   $raw = Read-Host "Select comma-separated options, or blank for none"
   if (-not $raw) { return }
@@ -739,23 +760,34 @@ function Select-AndConfigureMcp {
       "3" {
         if (Ensure-MaestroReady) {
           $envObject = Get-MaestroEnv
-          $envHash = @{}
-          foreach ($property in $envObject.PSObject.Properties) {
-            $envHash[$property.Name] = [string]$property.Value
-          }
+          $envHash = Convert-EnvObjectToHash $envObject
           Configure-StdioMcp "maestro" "maestro" @("mcp") $envHash
         }
       }
       "4" {
-        $command = Prompt-Text "GitNexus MCP command, for example npx"
-        if (-not $command) {
-          Write-Warn "Skipped GitNexus MCP: command is required."
-          continue
+        $config = Get-ManualMcpConfig "GitNexus MCP"
+        if ($config -and $config.command) {
+          $serverArgs = @()
+          if ($config.args) {
+            foreach ($arg in $config.args) {
+              $serverArgs += [string]$arg
+            }
+          }
+          $envHash = Convert-EnvObjectToHash $config.env
+          Configure-StdioMcp "gitnexus" ([string]$config.command) $serverArgs $envHash
         }
-        $argsLine = Prompt-Text "GitNexus MCP args as a simple space-separated list"
-        $serverArgs = if ($argsLine) { $argsLine -split "\s+" } else { @() }
-        $envHash = Prompt-EnvPairs
-        Configure-StdioMcp "gitnexus" $command $serverArgs $envHash
+        else {
+          Write-Warn "GitNexus CLI path was not detected; falling back to manual MCP command input."
+          $command = Prompt-Text "GitNexus MCP command, or blank to skip"
+          if (-not $command) {
+            Write-Warn "Skipped GitNexus MCP: command is required."
+            continue
+          }
+          $argsLine = Prompt-Text "GitNexus MCP args as a simple space-separated list"
+          $serverArgs = if ($argsLine) { $argsLine -split "\s+" } else { @() }
+          $envHash = Prompt-EnvPairs
+          Configure-StdioMcp "gitnexus" $command $serverArgs $envHash
+        }
       }
       "5" {
         $name = Prompt-Text "MCP server name"

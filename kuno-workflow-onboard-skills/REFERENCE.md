@@ -23,7 +23,7 @@ This Skill installs only these bundled templates:
 
 The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
 
-There are no bundled MCP configuration templates. `scripts/onboard.py` reports GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP as manual setup checks only. The repository root installers, `install.sh` and `install.ps1`, can turn those checks into direct platform configuration after the user selects one target platform and confirms the MCP servers to add. The Maestro MCP manual check generates generic server config values and JSON / TOML examples with `JAVA_HOME` and `PATH`; the root installers adapt those values to the selected client where supported.
+There are no bundled MCP configuration templates. `scripts/onboard.py` reports GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP as manual setup checks only. The repository root installers, `install.sh` and `install.ps1`, can turn those checks into direct platform configuration after the user selects one target platform and confirms the MCP servers to add. The GitNexus MCP manual check generates generic server config values and JSON / TOML examples from the detected local `gitnexus` CLI path when available; the Maestro MCP manual check generates generic server config values and JSON / TOML examples with `JAVA_HOME` and `PATH`. The root installers adapt those values to the selected client where supported.
 
 ## Root Installers
 
@@ -134,7 +134,7 @@ The check reports:
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, bundled book-derived skills, and `seo-geo`.
 - Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `shadcn`.
 - Interaction compression Skill presence for `caveman`, checked only in the user-level global skills directory.
-- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and conditional React Bits tier selection in detected React + shadcn/ui projects. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
+- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and conditional React Bits tier selection in detected React + shadcn/ui projects. The GitNexus MCP check includes generic MCP server config values and examples when the local `gitnexus` executable path is detected. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
 
 `init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
@@ -187,7 +187,7 @@ The report is the user-facing completion summary and must include:
 - A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
 - A next step for every failed or missing item, including the suggested install command or repair path.
 - Not-checked items, especially CLI tools skipped because npm is not usable yet.
-- Manual configuration items, including GitNexus MCP setup, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, plus React Bits tier-selection guidance only when the target project is detected as React + shadcn/ui.
+- Manual configuration items, including GitNexus MCP setup with generated `command` and `args` when the local CLI path is detected, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, plus React Bits tier-selection guidance only when the target project is detected as React + shadcn/ui.
 
 Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
 
@@ -585,7 +585,7 @@ The built-in MCP options are:
 - Chrome DevTools MCP: `npx -y chrome-devtools-mcp@latest`
 - Playwright MCP: `npx -y @playwright/mcp@latest`
 - Maestro MCP: `maestro mcp` with explicit `JAVA_HOME` and `PATH`
-- GitNexus MCP: custom command / args / env until the local GitNexus setup provides a stable server command
+- GitNexus MCP: detected local `gitnexus` CLI path with `args = [mcp]`; fall back to custom command / args / env only when the path cannot be detected
 - Custom stdio MCP: user-provided command / args / env
 
 Do not write real tokens, passwords, PII, production data, or sensitive headers into repository files, screenshots, logs, test reports, or Markdown summaries. When env values are needed, prompt for them and avoid echoing sensitive-looking values.
@@ -604,11 +604,12 @@ Operational rules:
 
 For GitNexus MCP:
 
-1. Confirm the GitNexus CLI works, for example with `npx gitnexus status` in the target project.
-2. Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using the current GitNexus setup instructions. Choose the transport supported by that client, such as stdio, Streamable HTTP, or legacy SSE; do not copy a transport-specific config unless the user has selected it.
-3. Restart or reload the Agent environment so the MCP server is discovered.
-4. Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.
-5. If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.
+1. Confirm the GitNexus CLI works, for example with `gitnexus --version` and `gitnexus status` in the target project.
+2. Use the generated MCP server config when `check` detects a local executable path: `command = "<detected-gitnexus-path>"` and `args = ["mcp"]`.
+3. Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using stdio command + args from the generated config. Use other transports only when the user explicitly selected a transport-specific setup.
+4. Restart or reload the Agent environment so the MCP server is discovered.
+5. Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.
+6. If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.
 
 For Chrome DevTools MCP:
 

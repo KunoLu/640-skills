@@ -409,7 +409,7 @@ tests/e2e/**/*.trace.zip
 - 全局 Agent 规则和项目级 Agent 模板。
 - Trellis、project-validation、gherkin-bdd、maestro-mobile-e2e、lessons、book-derived skills 等模板 Skill。
 - `init` / `reset` 在项目根目录缺少 `.trellis/` 时的 Trellis CLI 前置检查、`trellis init -u` username / platform 确认、非交互初始化，以及后置 bootstrap task 检测。
-- GitNexus MCP 手动配置检查。
+- GitNexus MCP 手动配置检查；检测到本机 `gitnexus` CLI 路径时，输出并供安装脚本使用 `command = "<detected-gitnexus-path>"`、`args = ["mcp"]` 的配置。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
 - Playwright CLI 项目级检测和安装引导。
@@ -419,7 +419,7 @@ tests/e2e/**/*.trace.zip
 - React Bits tier 选择只在目标项目被检测为 React + shadcn/ui 时作为条件 manual guidance 输出；普通 onboarding 不询问、不安装 React Bits。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 
-`scripts/onboard.py` 本身仍只做 MCP 状态检查和配置指引，不直接写 Agent / IDE 的 MCP 设置。仓库根目录的 `install.sh` 和 `install.ps1` 是面向用户的交互式安装入口，会在用户选择单一目标平台并确认 MCP 选项后，调用对应平台命令或写入对应配置文件：
+`scripts/onboard.py` 本身仍只做 MCP 状态检查和配置指引，不直接写 Agent / IDE 的 MCP 设置。仓库根目录的 `install.sh` 和 `install.ps1` 是面向用户的交互式安装入口，会在用户选择单一目标平台并确认 MCP 选项后，调用对应平台命令或写入对应配置文件；其中 GitNexus MCP 优先使用 `check` 阶段检测到的本机 `gitnexus` 可执行文件路径和 `mcp` 参数，未检测到路径时才回退到人工输入：
 
 - `codex`：执行 `codex mcp add ...`。
 - `claude`：执行 `claude mcp add ...`，全局对应 `--scope user`，项目级对应 `--scope project`。

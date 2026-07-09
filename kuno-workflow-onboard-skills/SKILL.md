@@ -131,7 +131,7 @@ The `check` command inspects:
 - Bundled skills: `kuno-workflow-onboard-skills`, `trellis-workflow`, `trellis-channel`, `project-validation`, `gherkin-bdd`, `maestro-mobile-e2e`, `lessons-record`, `book-refactoring-pass`, `book-legacy-change-safety`, `book-ddd-distilled-modeling`, `book-ddia-data-design`, `book-release-readiness`, and `seo-geo`.
 - Referenced skills from the bundled templates, including mattpocock skills, `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `shadcn`.
 - Interaction compression skills: `caveman`, checked only in the user-level global skills directory.
-- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP with explicit `JAVA_HOME` / `PATH` config guidance, and React Bits tier-selection guidance only when a target React + shadcn/ui project is detected.
+- Manual setup checks that cannot be fully proven or completed by filesystem inspection, including GitNexus MCP with generated `command` / `args` config when the local CLI path is detected, Chrome DevTools MCP, Playwright MCP, Maestro MCP with explicit `JAVA_HOME` / `PATH` config guidance, and React Bits tier-selection guidance only when a target React + shadcn/ui project is detected.
 
 ## Target Defaults
 

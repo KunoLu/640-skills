@@ -175,18 +175,6 @@ for _skill_name, _source_spec in EXTERNAL_SKILL_SOURCES.items():
     EXTERNAL_REPO_TO_SKILLS[_repo] = (*EXTERNAL_REPO_TO_SKILLS.get(_repo, ()), _skill_name)
 BASE_MANUAL_CHECKS = (
     {
-        "name": "GitNexus MCP",
-        "category": "mcp",
-        "advice": "After GitNexus CLI is installed, confirm the current Agent environment exposes GitNexus MCP tools and that the target project has an index before relying on GitNexus analysis.",
-        "steps": (
-            "Confirm the GitNexus CLI works, for example with `npx gitnexus status` in the target project.",
-            "Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using the current GitNexus setup instructions. Choose the transport supported by that client, such as stdio, Streamable HTTP, or legacy SSE; do not copy a transport-specific config unless the user has selected it.",
-            "Restart or reload the Agent environment so the MCP server is discovered.",
-            "Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.",
-            "If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.",
-        ),
-    },
-    {
         "name": "Chrome DevTools MCP",
         "category": "mcp",
         "advice": "Confirm the active Agent or IDE exposes Chrome DevTools MCP tools before relying on it for Web runtime diagnostics.",
@@ -566,6 +554,80 @@ def toml_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def gitnexus_mcp_server_config(gitnexus_check: dict[str, object]) -> dict[str, object] | None:
+    command = gitnexus_check.get("path")
+    if not gitnexus_check.get("installed") or not command:
+        return None
+    return {
+        "command": str(command),
+        "args": ["mcp"],
+        "env": {},
+    }
+
+
+def gitnexus_mcp_toml_example(gitnexus_check: dict[str, object]) -> str | None:
+    config = gitnexus_mcp_server_config(gitnexus_check)
+    if not config:
+        return None
+    return "\n".join(
+        [
+            "[mcp_servers.gitnexus]",
+            f'command = "{toml_string(str(config["command"]))}"',
+            'args = ["mcp"]',
+        ]
+    )
+
+
+def gitnexus_mcp_json_example(gitnexus_check: dict[str, object]) -> str | None:
+    config = gitnexus_mcp_server_config(gitnexus_check)
+    if not config:
+        return None
+    return json.dumps(
+        {"mcpServers": {"gitnexus": config}},
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+def gitnexus_mcp_config_examples(gitnexus_check: dict[str, object]) -> dict[str, str]:
+    generic_json = gitnexus_mcp_json_example(gitnexus_check)
+    toml = gitnexus_mcp_toml_example(gitnexus_check)
+    if not generic_json or not toml:
+        return {}
+    return {
+        "genericJson": generic_json,
+        "toml": toml,
+    }
+
+
+def build_gitnexus_mcp_manual_check(gitnexus_check: dict[str, object]) -> dict[str, object]:
+    server_config = gitnexus_mcp_server_config(gitnexus_check)
+    config_examples = gitnexus_mcp_config_examples(gitnexus_check)
+    readiness = (
+        "Use the generated MCP server config with the detected local GitNexus CLI path and `args = [mcp]`; for Codex this maps to `codex mcp add gitnexus -- <detected-gitnexus-path> mcp`."
+        if server_config
+        else "Install or repair the GitNexus CLI first, then rerun `check` so the workflow can detect the local executable path before configuring GitNexus MCP."
+    )
+    item: dict[str, object] = {
+        "name": "GitNexus MCP",
+        "category": "mcp",
+        "advice": "After GitNexus CLI is installed, use the detected local GitNexus executable path for stdio MCP config, then confirm the current Agent environment exposes GitNexus MCP tools and that the target project has an index before relying on GitNexus analysis.",
+        "steps": (
+            "Confirm the GitNexus CLI works, for example with `gitnexus --version` and `gitnexus status` in the target project.",
+            readiness,
+            "Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using stdio command + args from the generated config. Use other transports only when the user explicitly selected a transport-specific setup.",
+            "Restart or reload the Agent environment so the MCP server is discovered.",
+            "Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.",
+            "If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.",
+        ),
+    }
+    if server_config:
+        item["mcpServerConfig"] = server_config
+        item["configExample"] = config_examples["genericJson"]
+        item["configExamples"] = config_examples
+    return item
+
+
 def maestro_mcp_environment(java_check: dict[str, object], maestro_check: dict[str, object]) -> dict[str, str]:
     java_home = str(java_check.get("javaHome") or "<JAVA_HOME>")
     path_value = mcp_path_value(
@@ -720,8 +782,9 @@ def build_manual_checks(
     java_check: dict[str, object],
     maestro_check: dict[str, object],
     project_root: Path | None,
+    gitnexus_check: dict[str, object],
 ) -> tuple[dict[str, object], ...]:
-    checks = list(BASE_MANUAL_CHECKS)
+    checks = [build_gitnexus_mcp_manual_check(gitnexus_check), *BASE_MANUAL_CHECKS]
     checks.insert(3, build_maestro_mcp_manual_check(java_check, maestro_check))
     if project_root and should_check_react_bits_tier(project_root):
         checks.append(build_react_bits_tier_manual_check(project_root))
@@ -1166,12 +1229,16 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
 
     cli_checks_skipped = not runtime["npm"]["installed"]
     tools = [] if cli_checks_skipped else [check_cli_tool(spec) for spec in CLI_TOOLS]
+    gitnexus_check = next(
+        (item for item in tools if item.get("name") == "gitnexus"),
+        {},
+    )
     java_check = check_java_for_maestro()
     maestro_check = check_maestro_cli(java_check)
     tools.append(java_check)
     tools.append(maestro_check)
     tools.append(check_playwright_project(project_root))
-    manual_checks = build_manual_checks(java_check, maestro_check, project_root)
+    manual_checks = build_manual_checks(java_check, maestro_check, project_root, gitnexus_check)
     missing = {
         "runtime": [] if runtime["npm"]["installed"] else ["npm"],
         "tools": [item["name"] for item in tools if not item["installed"] and not item.get("notChecked")],

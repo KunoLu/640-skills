@@ -432,7 +432,7 @@
           <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills</code></div>
           <div><strong>Skills</strong><br>绑定的 bundled skills 按用户选择的全局或项目 scope 整体安装；外部 referenced skills 先展示缺失项，再由用户选择推荐安装、自定义安装或跳过。</div>
           <div><strong>Trellis Init</strong><br>项目级 <code>init</code> / <code>reset</code> 后检查 <code>.trellis/</code>；可传 <code>--trellis-user</code> / <code>-TrellisUser</code> 和 <code>--trellis-platform</code> / <code>-TrellisPlatform</code>，缺失时交互询问，再以 <code>--yes --skip-existing</code> 初始化，并检测 bootstrap task。</div>
-          <div><strong>MCP</strong><br><code>scripts/onboard.py</code> 仍只负责检查和示例；根安装脚本会在用户确认后用 Codex / Claude / Kimi CLI 或 Oh My Pi <code>mcp.json</code> 直接配置选中的 MCP。</div>
+          <div><strong>MCP</strong><br><code>scripts/onboard.py</code> 仍只负责检查和示例；根安装脚本会在用户确认后用 Codex / Claude / Kimi CLI 或 Oh My Pi <code>mcp.json</code> 直接配置选中的 MCP。GitNexus MCP 优先使用检测到的本机 <code>gitnexus</code> 可执行文件路径和 <code>mcp</code> 参数，缺失时才回退到人工输入。</div>
         </div>
       </div>
     </section>

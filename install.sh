@@ -400,6 +400,12 @@ def find_skill(name):
             return item
     return {}
 
+def find_manual_check(name):
+    for item in data.get("manualChecks", []):
+        if item.get("name") == name:
+            return item
+    return {}
+
 if mode == "runtime-installed":
     print("true" if data.get("runtime", {}).get(args[0], {}).get("installed") else "false")
 elif mode == "tool-installed":
@@ -416,14 +422,18 @@ elif mode == "missing-external-skills":
         if item.get("name") in external and not item.get("installed")
     ]
     print(",".join(missing))
+elif mode == "mcp-command":
+    config = find_manual_check(args[0]).get("mcpServerConfig") or {}
+    print(config.get("command") or "")
+elif mode == "mcp-args-json":
+    config = find_manual_check(args[0]).get("mcpServerConfig") or {}
+    print(json.dumps(config.get("args") or [], ensure_ascii=False))
+elif mode == "mcp-env-json":
+    config = find_manual_check(args[0]).get("mcpServerConfig") or {}
+    print(json.dumps(config.get("env") or {}, ensure_ascii=False))
 elif mode == "maestro-env-json":
-    for item in data.get("manualChecks", []):
-        if item.get("name") == "Maestro MCP":
-            config = item.get("mcpServerConfig") or {}
-            print(json.dumps(config.get("env") or {}, ensure_ascii=False))
-            break
-    else:
-        print("{}")
+    config = find_manual_check("Maestro MCP").get("mcpServerConfig") or {}
+    print(json.dumps(config.get("env") or {}, ensure_ascii=False))
 elif mode == "tool-field":
     value = find_tool(args[0]).get(args[1])
     if value is None:
@@ -990,7 +1000,7 @@ select_and_configure_mcp() {
   printf '  1) Chrome DevTools MCP\n'
   printf '  2) Playwright MCP\n'
   printf '  3) Maestro MCP\n'
-  printf '  4) GitNexus MCP (custom command/env)\n'
+  printf '  4) GitNexus MCP (auto from gitnexus CLI)\n'
   printf '  5) Custom stdio MCP server\n'
   local raw selections=()
   read -r -p 'Select comma-separated options, or blank for none: ' raw
@@ -1015,15 +1025,23 @@ select_and_configure_mcp() {
         fi
         ;;
       4)
-        local command args_line env_pairs=()
-        command="$(prompt_text 'GitNexus MCP command, for example npx' '')"
-        [[ -n "$command" ]] || { warn "Skipped GitNexus MCP: command is required."; continue; }
-        args_line="$(prompt_text 'GitNexus MCP args as a simple space-separated list' '')"
-        prompt_env_pairs
-        env_pairs=(${ENV_PAIRS_OUT[@]+"${ENV_PAIRS_OUT[@]}"})
-        # shellcheck disable=SC2206
-        local command_args=( $args_line )
-        configure_stdio_mcp "gitnexus" "$command" "$(args_array_to_json ${command_args[@]+"${command_args[@]}"})" "$(env_array_to_json ${env_pairs[@]+"${env_pairs[@]}"})" || true
+        local command args_json env_json args_line env_pairs=()
+        command="$(json_python mcp-command 'GitNexus MCP')"
+        if [[ -n "$command" ]]; then
+          args_json="$(json_python mcp-args-json 'GitNexus MCP')"
+          env_json="$(json_python mcp-env-json 'GitNexus MCP')"
+          configure_stdio_mcp "gitnexus" "$command" "$args_json" "$env_json" || true
+        else
+          warn "GitNexus CLI path was not detected; falling back to manual MCP command input."
+          command="$(prompt_text 'GitNexus MCP command, or blank to skip' '')"
+          [[ -n "$command" ]] || { warn "Skipped GitNexus MCP: command is required."; continue; }
+          args_line="$(prompt_text 'GitNexus MCP args as a simple space-separated list' '')"
+          prompt_env_pairs
+          env_pairs=(${ENV_PAIRS_OUT[@]+"${ENV_PAIRS_OUT[@]}"})
+          # shellcheck disable=SC2206
+          local command_args=( $args_line )
+          configure_stdio_mcp "gitnexus" "$command" "$(args_array_to_json ${command_args[@]+"${command_args[@]}"})" "$(env_array_to_json ${env_pairs[@]+"${env_pairs[@]}"})" || true
+        fi
         ;;
       5)
         local name command args_line env_pairs=()
