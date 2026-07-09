@@ -101,7 +101,7 @@ Tier 确认：
 trellis init -u your-name
 ```
 
-例外：当用户正在执行 `kuno-workflow-onboard-skills` 的 `init` / `reset`，且 Trellis CLI 已安装并通过验证、目标项目根目录没有 `.trellis/`、用户已确认 `trellis init -u` 的 username 和可选 platform flags 时，允许该 onboard workflow 主动执行 `trellis init -u <username> [--codex|--claude|...] --yes --skip-existing`。执行后如果发现 `.trellis/tasks/00-bootstrap-guidelines`，必须继续按 `trellis-workflow` 完成该 bootstrap task；不要把这条例外扩展到普通项目工作流。
+项目级模板不另行放宽 Trellis 初始化边界；只有用户明确进入 `kuno-workflow-onboard-skills` 的 `init` / `reset`，并满足该 Skill / `REFERENCE.md` 的 Trellis CLI、`.trellis/` 缺失、username / platform 确认条件时，才沿用 onboard 例外执行初始化和后置 bootstrap 检查。
 
 仅当当前项目存在 Trellis 强证据时使用 Trellis：
 
