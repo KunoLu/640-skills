@@ -79,6 +79,18 @@
 - 修复：改用单引号包裹 `rg` 搜索模式，并用结构化 Node 断言补充验证，区分“命令引用失败”和“模板内容失败”。
 - 预防：后续验证 Markdown 文档中含反引号、`$`、`!` 等 shell 元字符的文本时，优先使用单引号、转义字符或 Node 结构化检查；最终报告中说明失败来自命令写法还是内容事实。
 
+## LESSON-20260709-bash32-nounset-empty-array: Bash 3.2 Nounset Empty Array
+
+- 日期：2026-07-09
+- 标签：bash, shell, installer, validation
+- 适用场景：修改 macOS 可直接执行的 Bash installer、`set -u` 脚本或数组参数转发
+- 严重级别：high
+- 来源：用户在另一台 Mac 的 skills 仓库直接执行 `bash install.sh` 时，preflight 阶段报 `TRELLIS_PLATFORMS[@]: unbound variable` 和 `COMMON_ARGS_OUT[@]: unbound variable`。
+- 问题：`install.sh` 使用 `set -euo pipefail`，在没有传入 Trellis platform 或 common args 为空的路径上直接展开 `"${array[@]}"`，导致 macOS 默认 Bash 3.2 将已声明但为空的数组当作未绑定变量并中止脚本。
+- 根因：开发验证只覆盖了较新 Bash 或非空数组路径，忽略了 macOS Bash 3.2 在 `nounset` 下的空数组兼容性差异。
+- 修复：对可能为空的数组拷贝、循环、函数参数转发和 append 操作使用 `${array[@]+"${array[@]}"}` 兼容展开；对 NUL 参数输出增加非空计数保护，避免空数组时生成空参数。
+- 预防：后续修改 `install.sh` 或其他面向 macOS 的 Bash installer 时，必须至少运行 `/bin/bash -uc 'a=(); for x in "${a[@]}"; do :; done'` 确认本机 Bash 行为，并用 Bash 3.2 执行无可选数组参数的 dry-run 路径。空数组展开不能只在当前新版 Bash 上验证。
+
 ## LESSON-20260701-validation-script-check-lessons: Validation Script Check Lessons
 
 - 日期：历史记录迁移，原始日期未记录

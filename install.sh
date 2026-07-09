@@ -331,7 +331,7 @@ onboard_common_args() {
     args+=(--trellis-user "$TRELLIS_USER")
   fi
   local trellis_platform
-  for trellis_platform in "${TRELLIS_PLATFORMS[@]}"; do
+  for trellis_platform in ${TRELLIS_PLATFORMS[@]+"${TRELLIS_PLATFORMS[@]}"}; do
     args+=(--trellis-platform "$trellis_platform")
   done
   if [[ "$SKIP_TRELLIS_INIT" -eq 1 ]]; then
@@ -340,7 +340,9 @@ onboard_common_args() {
   if [[ "$SKIP_TRELLIS_BOOTSTRAP" -eq 1 ]]; then
     args+=(--skip-trellis-bootstrap)
   fi
-  printf '%s\0' "${args[@]}"
+  if (( ${#args[@]} > 0 )); then
+    printf '%s\0' "${args[@]}"
+  fi
 }
 
 read_common_args() {
@@ -364,16 +366,16 @@ run_onboard() {
 refresh_check_json() {
   local args=()
   read_common_args
-  args=("${COMMON_ARGS_OUT[@]}")
+  args=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
   CHECK_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-check.XXXXXX")"
-  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check "${args[@]}" --json > "$CHECK_JSON"
+  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check ${args[@]+"${args[@]}"} --json > "$CHECK_JSON"
 }
 
 print_check() {
   local args=()
   read_common_args
-  args=("${COMMON_ARGS_OUT[@]}")
-  run_onboard check "${args[@]}"
+  args=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
+  run_onboard check ${args[@]+"${args[@]}"}
 }
 
 json_python() {
@@ -769,7 +771,7 @@ install_missing_runtime_and_skills() {
           args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
         fi
       fi
-      run_onboard install-external-skills "${args[@]}"
+      run_onboard install-external-skills ${args[@]+"${args[@]}"}
       refresh_check_json
     fi
   fi
@@ -884,18 +886,18 @@ for item in json.loads(sys.argv[1]):
 PY
 )
   json_env_to_array "$env_json"
-  env_pairs=("${ENV_ARRAY_OUT[@]}")
+  env_pairs=(${ENV_ARRAY_OUT[@]+"${ENV_ARRAY_OUT[@]}"})
 
   case "$PLATFORM" in
     codex)
       command -v codex >/dev/null 2>&1 || { warn "codex CLI not found; skipped MCP server $name."; return 1; }
       local cmd=(codex mcp add "$name")
       local pair
-      for pair in "${env_pairs[@]}"; do
+      for pair in ${env_pairs[@]+"${env_pairs[@]}"}; do
         cmd+=(--env "$pair")
       done
       cmd+=(-- "$command")
-      cmd+=("${args[@]}")
+      cmd+=(${args[@]+"${args[@]}"})
       run_cmd "${cmd[@]}"
       ;;
     claude)
@@ -904,22 +906,22 @@ PY
       [[ "$SKILLS_SCOPE" == "project" ]] && scope="project"
       local cmd=(claude mcp add --transport stdio --scope "$scope")
       local pair
-      for pair in "${env_pairs[@]}"; do
+      for pair in ${env_pairs[@]+"${env_pairs[@]}"}; do
         cmd+=(--env "$pair")
       done
       cmd+=("$name" -- "$command")
-      cmd+=("${args[@]}")
+      cmd+=(${args[@]+"${args[@]}"})
       run_cmd "${cmd[@]}"
       ;;
     kimi)
       command -v kimi >/dev/null 2>&1 || { warn "kimi CLI not found; skipped MCP server $name."; return 1; }
       local cmd=(kimi mcp add --transport stdio)
       local pair
-      for pair in "${env_pairs[@]}"; do
+      for pair in ${env_pairs[@]+"${env_pairs[@]}"}; do
         cmd+=(--env "$pair")
       done
       cmd+=("$name" -- "$command")
-      cmd+=("${args[@]}")
+      cmd+=(${args[@]+"${args[@]}"})
       run_cmd "${cmd[@]}"
       ;;
     oh-my-pi)
@@ -993,11 +995,11 @@ select_and_configure_mcp() {
   local raw selections=()
   read -r -p 'Select comma-separated options, or blank for none: ' raw
   split_csv_numbers "$raw" 5 || die "Invalid MCP selection: $raw"
-  selections=("${CSV_SELECTIONS[@]}")
+  selections=(${CSV_SELECTIONS[@]+"${CSV_SELECTIONS[@]}"})
   (( ${#selections[@]} == 0 )) && return 0
 
   local selected
-  for selected in "${selections[@]}"; do
+  for selected in ${selections[@]+"${selections[@]}"}; do
     case "$selected" in
       1)
         configure_stdio_mcp "chrome-devtools" "npx" "$(args_array_to_json -y chrome-devtools-mcp@latest)" "{}" || true
@@ -1018,10 +1020,10 @@ select_and_configure_mcp() {
         [[ -n "$command" ]] || { warn "Skipped GitNexus MCP: command is required."; continue; }
         args_line="$(prompt_text 'GitNexus MCP args as a simple space-separated list' '')"
         prompt_env_pairs
-        env_pairs=("${ENV_PAIRS_OUT[@]}")
+        env_pairs=(${ENV_PAIRS_OUT[@]+"${ENV_PAIRS_OUT[@]}"})
         # shellcheck disable=SC2206
         local command_args=( $args_line )
-        configure_stdio_mcp "gitnexus" "$command" "$(args_array_to_json "${command_args[@]}")" "$(env_array_to_json "${env_pairs[@]}")" || true
+        configure_stdio_mcp "gitnexus" "$command" "$(args_array_to_json ${command_args[@]+"${command_args[@]}"})" "$(env_array_to_json ${env_pairs[@]+"${env_pairs[@]}"})" || true
         ;;
       5)
         local name command args_line env_pairs=()
@@ -1030,10 +1032,10 @@ select_and_configure_mcp() {
         [[ -n "$name" && -n "$command" ]] || { warn "Skipped custom MCP: name and command are required."; continue; }
         args_line="$(prompt_text 'MCP args as a simple space-separated list' '')"
         prompt_env_pairs
-        env_pairs=("${ENV_PAIRS_OUT[@]}")
+        env_pairs=(${ENV_PAIRS_OUT[@]+"${ENV_PAIRS_OUT[@]}"})
         # shellcheck disable=SC2206
         local command_args=( $args_line )
-        configure_stdio_mcp "$name" "$command" "$(args_array_to_json "${command_args[@]}")" "$(env_array_to_json "${env_pairs[@]}")" || true
+        configure_stdio_mcp "$name" "$command" "$(args_array_to_json ${command_args[@]+"${command_args[@]}"})" "$(env_array_to_json ${env_pairs[@]+"${env_pairs[@]}"})" || true
         ;;
     esac
   done
@@ -1042,12 +1044,12 @@ select_and_configure_mcp() {
 show_plan_and_execute() {
   local common=()
   read_common_args
-  common=("${COMMON_ARGS_OUT[@]}")
+  common=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
 
   printf '\n'
   color '1;36' 'Final plan'
   printf '\n'
-  run_onboard plan "${common[@]}"
+  run_onboard plan ${common[@]+"${common[@]}"}
 
   printf '\nTarget platform: %s\n' "$(platform_label "$PLATFORM")"
   printf 'Source root: %s\n' "$SOURCE_ROOT"
@@ -1064,18 +1066,18 @@ show_plan_and_execute() {
   if [[ "$DRY_RUN" -eq 1 ]]; then
     printf '\nDry run: skipped onboard %s writes.\n' "$ACTION"
   else
-    run_onboard "$ACTION" "${common[@]}" --yes
+    run_onboard "$ACTION" ${common[@]+"${common[@]}"} --yes
   fi
 }
 
 final_checks() {
   local common=()
   read_common_args
-  common=("${COMMON_ARGS_OUT[@]}")
+  common=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
   printf '\n'
   color '1;36' 'Final check'
   printf '\n'
-  run_onboard check "${common[@]}"
+  run_onboard check ${common[@]+"${common[@]}"}
 
   case "$PLATFORM" in
     codex)
