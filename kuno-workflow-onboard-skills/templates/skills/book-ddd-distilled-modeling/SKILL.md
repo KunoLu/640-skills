@@ -7,7 +7,7 @@ description: Guides lightweight domain modeling with ubiquitous language, bounde
 
 Use this Skill to sharpen domain language before turning a business request into PRD, issues, design, or code.
 
-It is derived from the `mini` rule style of `agent-rules-books` and should run after project evidence is read. It complements `grill-with-docs`, `to-prd`, and Trellis planning.
+It is derived from the `mini` rule style of `agent-rules-books` and should run after project evidence is read. It complements `grill-with-docs`, `to-spec`, and Trellis planning.
 
 ## When To Use
 

@@ -143,3 +143,15 @@
 - 根因：`onboard.py check` 没有为 GitNexus MCP 产出结构化 `mcpServerConfig`，根安装脚本也只对 Maestro MCP 读取生成配置，导致已知 server 的配置事实和交互式安装流程脱节。
 - 修复：让 `onboard.py check` 在检测到本机 `gitnexus` CLI 路径时生成 `command = <detected path>`、`args = ["mcp"]` 和 JSON / TOML 示例；`install.sh` / `install.ps1` 消费这份配置，只有路径缺失时才回退到人工输入。
 - 预防：后续新增或维护已知 MCP server 时，优先在 `onboard.py` 的 manual check 中沉淀 `mcpServerConfig`，根安装器只适配选定 platform；不要把可检测的 command / args / env 重新变成人工输入。
+
+## LESSON-20260709-external-skill-rename-canonical: External Skill Rename Canonical
+
+- 日期：2026-07-09
+- 标签：installer, skills, workflow, migration
+- 适用场景：维护 external Skill 列表、mattpocock/skills 映射、install/reset 迁移逻辑
+- 严重级别：medium
+- 来源：用户在另一台 Mac 运行 `bash install.sh` 时，`to-prd` 和 `to-issues` 安装失败；上游 mattpocock/skills 已改为 `to-spec` 和 `to-tickets`。
+- 问题：本仓库仍把旧 Skill 名称和旧 subpath 当作 canonical，安装器克隆上游后找不到唯一匹配目录，fallback 扫描列出大量候选并失败。
+- 根因：external Skill 配置没有跟随上游 frontmatter / 目录名更新，也没有把旧名作为 legacy alias 纳入迁移删除流程。
+- 修复：将默认外部 Skill、模板编排和 subpath 映射迁到 `to-spec` / `to-tickets`；`to-prd` / `to-issues` 只作为 legacy alias；`init` / `reset` 和直接 external install 检测到旧目录时先删除，再安装 canonical 新目录。
+- 预防：后续维护 external Skill 时，先用上游仓库当前 `SKILL.md` frontmatter 和目录结构确认 canonical 名称；旧名只能进入 alias / migration，不要继续放在默认安装列表或长期 workflow 主链路中。

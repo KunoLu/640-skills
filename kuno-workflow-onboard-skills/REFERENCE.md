@@ -132,7 +132,7 @@ The check reports:
 - Maestro CLI availability and version output when Java 17+ is available.
 - Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
 - Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, bundled book-derived skills, and `seo-geo`.
-- Referenced Skill presence for mattpocock/skills 1.0+ canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-prd`, `to-issues`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `shadcn`.
+- Referenced Skill presence for mattpocock/skills canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-spec`, `to-tickets`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `shadcn`.
 - Interaction compression Skill presence for `caveman`, checked only in the user-level global skills directory.
 - Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and conditional React Bits tier selection in detected React + shadcn/ui projects. The GitNexus MCP check includes generic MCP server config values and examples when the local `gitnexus` executable path is detected. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
 - A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
@@ -518,8 +518,8 @@ Referenced external skills are not bundled under `templates/`. When the user con
 | `codebase-design` | `https://github.com/mattpocock/skills.git` |
 | `handoff` | `https://github.com/mattpocock/skills.git` |
 | `writing-great-skills` | `https://github.com/mattpocock/skills.git` |
-| `to-prd` | `https://github.com/mattpocock/skills.git` |
-| `to-issues` | `https://github.com/mattpocock/skills.git` |
+| `to-spec` | `https://github.com/mattpocock/skills.git` |
+| `to-tickets` | `https://github.com/mattpocock/skills.git` |
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `web-ui-autotest-generator` | `https://github.com/Cheryl-station/web-ui-autotest.git` |
@@ -534,7 +534,7 @@ python scripts/onboard.py install-external-skills \
   --yes
 ```
 
-Legacy input names are handled deliberately: `diagnose` is normalized to `diagnosing-bugs`, `write-a-skill` is normalized to `writing-great-skills`, and removed `zoom-out` is rejected with a migration note. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
+Legacy input names are handled deliberately: `diagnose` is normalized to `diagnosing-bugs`, `write-a-skill` is normalized to `writing-great-skills`, `to-prd` is normalized to `to-spec`, `to-issues` is normalized to `to-tickets`, and removed `zoom-out` is rejected with a migration note. During `init`, `reset`, and direct external Skill installation, detected legacy target directories are removed before the canonical replacement is installed. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
 
 `shadcn` is an optional external Skill for projects that use shadcn/ui, component registries, presets, or a `components.json` file. It is installed from `skills/shadcn` in the official `shadcn-ui/ui` repository.
 

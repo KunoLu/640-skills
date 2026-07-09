@@ -127,8 +127,8 @@ trellis init -u your-name
 - `grill-with-docs` 阶段应先读取项目文档和相关代码；能从项目事实回答的问题，不要反问用户。
 - 一次只问一个关键问题，并给出推荐答案；达成共识后输出需求确认摘要。
 - 长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非本项目已采用该路径或更深层 `AGENTS.md` 明确指定。
-- 需求确认摘要经用户确认后，再使用 `to-prd` 生成 Markdown PRD，并用 `to-issues` 拆成 Trellis-ready vertical slices。
-- 在 Trellis 项目中，PRD 终稿应写入 `.trellis/tasks/<task>/prd.md`；拆解后的 parent / child tasks 和实现切片应落到 `.trellis/tasks/<task>/...` 下的 task artifacts。未确定 task 路径前，不要把最终 PRD 或 issue 清单长期落到 `docs/`。
+- 需求确认摘要经用户确认后，再使用 `to-spec` 生成 Markdown spec / PRD，并用 `to-tickets` 拆成 Trellis-ready vertical slices。
+- 在 Trellis 项目中，spec / PRD 终稿应写入 `.trellis/tasks/<task>/prd.md`；拆解后的 parent / child tasks 和实现切片应落到 `.trellis/tasks/<task>/...` 下的 task artifacts。未确定 task 路径前，不要把最终 spec / PRD 或 ticket / task 清单长期落到 `docs/`。
 - 如果需求不依赖项目文档或领域术语，只是通用方案质询，可使用 `grill-me`。
 
 ---
@@ -211,8 +211,8 @@ trellis init -u your-name
 - `codebase-design`
 - `handoff`
 - `writing-great-skills`
-- `to-prd`
-- `to-issues`
+- `to-spec`
+- `to-tickets`
 
 旧官方 Skill `diagnose`、`write-a-skill` 已迁移为 `diagnosing-bugs`、`writing-great-skills`；`zoom-out` 已从上游移除，不再作为 mattpocock 官方 Skill 接入。
 
@@ -220,15 +220,15 @@ trellis init -u your-name
 
 - 普通 bug、测试失败或运行时异常：`diagnosing-bugs` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnosing-bugs` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-prd` → `gherkin-bdd`（用户可见行为场景）→ `to-issues` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
-- 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-prd` / `to-issues`（需要时）→ Codex implementation。
+- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-spec` → `gherkin-bdd`（用户可见行为场景）→ `to-tickets` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
+- 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-spec` / `to-tickets`（需要时）→ Codex implementation。
 - 需要回归测试的普通用户可见行为修改：Trellis `native` workflow → `gherkin-bdd` → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
-- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-prd` → `gherkin-bdd`（外部可观察行为）→ `to-issues` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
+- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-spec` → `gherkin-bdd`（外部可观察行为）→ `to-tickets` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：代码阅读 / `codebase-design` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
 - 需要创建或维护 Skill 时：`writing-great-skills`。
 
-`to-prd` 默认输出 Markdown PRD；`to-issues` 默认输出 vertical-slice Markdown tasks。在 Trellis 项目中，这些产物最终应进入 `.trellis/tasks/<task>/prd.md`、`design.md`、`implement.md` 或 parent / child task artifacts。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
+`to-spec` 默认输出 Markdown spec / PRD；`to-tickets` 默认输出 vertical-slice Markdown tasks / tickets。在 Trellis 项目中，这些产物最终应进入 `.trellis/tasks/<task>/prd.md`、`design.md`、`implement.md` 或 parent / child task artifacts。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
 
 ---
 
@@ -260,8 +260,8 @@ trellis init -u your-name
 
 编排说明：
 
-- 需求 / PRD 阶段：涉及业务术语、领域规则或 bounded context 时，`grill-with-docs` → `book-ddd-distilled-modeling` → `to-prd` → `to-issues` → Trellis workflow。
-- 设计阶段：涉及存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流时，`grill-with-docs` / `to-prd` → `book-ddia-data-design` → `design.md` / `implement.md` → Trellis / `tdd` / GitNexus impact-analysis。
+- 需求 / PRD 阶段：涉及业务术语、领域规则或 bounded context 时，`grill-with-docs` → `book-ddd-distilled-modeling` → `to-spec` → `to-tickets` → Trellis workflow。
+- 设计阶段：涉及存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流时，`grill-with-docs` / `to-spec` → `book-ddia-data-design` → `design.md` / `implement.md` → Trellis / `tdd` / GitNexus impact-analysis。
 - 开发前 / 开发中：结构性阻碍当前实现或 review 需要判断是否先重构时，代码阅读 / `codebase-design` / GitNexus exploring → `book-refactoring-pass` → Codex implementation → 项目验证。
 - 遗留 bug 修复：目标代码测试不足、行为不清或隐藏依赖较多时，`diagnosing-bugs` → `book-legacy-change-safety` → `tdd` / characterization test → Codex fix → 项目验证。
 - 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 Chrome DevTools MCP / Playwright / Maestro / `web-ui-autotest-generator` gate；如涉及公开网站、落地页、文档站、产品页或营销页的搜索可见性，再按 `seo-geo` gate 检查 SEO/GEO；如仍有高风险 review 缺口，再进入 Channel preflight。

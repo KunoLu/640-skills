@@ -104,12 +104,14 @@ MATTPOCOCK_CANONICAL_SKILLS = (
     "codebase-design",
     "handoff",
     "writing-great-skills",
-    "to-prd",
-    "to-issues",
+    "to-spec",
+    "to-tickets",
 )
 MATTPOCOCK_LEGACY_RENAMES = {
     "diagnose": "diagnosing-bugs",
     "write-a-skill": "writing-great-skills",
+    "to-prd": "to-spec",
+    "to-issues": "to-tickets",
 }
 MATTPOCOCK_REMOVED_SKILLS = {
     "zoom-out": "Removed upstream; use repo exploration, GitNexus exploring, codebase-design, or book-refactoring-pass instead.",
@@ -140,8 +142,8 @@ MATTPOCOCK_SKILL_SUBPATHS = {
     "codebase-design": "skills/engineering/codebase-design",
     "handoff": "skills/productivity/handoff",
     "writing-great-skills": "skills/productivity/writing-great-skills",
-    "to-prd": "skills/engineering/to-prd",
-    "to-issues": "skills/engineering/to-issues",
+    "to-spec": "skills/engineering/to-spec",
+    "to-tickets": "skills/engineering/to-tickets",
 }
 EXTERNAL_SKILL_SOURCES = {
     **{
@@ -1538,6 +1540,14 @@ def canonical_external_skill_name(name: str) -> str:
     return MATTPOCOCK_LEGACY_RENAMES.get(name, name)
 
 
+def legacy_external_skill_names_for(canonical_name: str) -> list[str]:
+    return [
+        legacy_name
+        for legacy_name, replacement_name in MATTPOCOCK_LEGACY_RENAMES.items()
+        if replacement_name == canonical_name
+    ]
+
+
 def external_skill_dependency_closure(skill_names: list[str]) -> list[str]:
     selected: list[str] = []
 
@@ -1595,6 +1605,17 @@ def resolve_install_skills_dir(args: argparse.Namespace) -> Path:
 
 
 def external_install_plan(args: argparse.Namespace, selected: list[str], target_dir: Path) -> dict[str, object]:
+    legacy_targets = [
+        {
+            "name": legacy_name,
+            "replacement": name,
+            "target": str(target_dir / legacy_name),
+            "targetExists": (target_dir / legacy_name).exists(),
+        }
+        for name in selected
+        for legacy_name in legacy_external_skill_names_for(name)
+        if (target_dir / legacy_name).exists()
+    ]
     return {
         "mode": "install-external-skills",
         "scope": args.scope,
@@ -1602,6 +1623,7 @@ def external_install_plan(args: argparse.Namespace, selected: list[str], target_
         "forceOverwriteExisting": True,
         "backupExistingTargets": False,
         "replaceFlagProvided": bool(args.replace),
+        "removeLegacyBeforeInstall": legacy_targets,
         "skills": [
             {
                 "name": name,
@@ -1623,6 +1645,11 @@ def print_external_install_plan(plan: dict[str, object], as_json: bool) -> None:
     print(f"Scope: {plan['scope']}")
     print(f"Target skills dir: {plan['targetDir']}")
     print("Force overwrite existing: yes, existing targets are removed first without backup")
+    if plan.get("removeLegacyBeforeInstall"):
+        print("Legacy targets removed before install:")
+        for item in plan["removeLegacyBeforeInstall"]:
+            status = "exists" if item["targetExists"] else "missing"
+            print(f"- {item['name']} -> {item['replacement']}: {item['target']} ({status})")
     for item in plan["skills"]:
         status = "exists" if item["targetExists"] else "missing"
         print(f"- {item['name']}: {item['target']} ({status})")
@@ -1746,6 +1773,50 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
     return ("replaced" if replaced_existing else "installed"), replaced_existing, None
 
 
+def remove_legacy_external_targets(
+    target_dir: Path,
+    selected: list[str],
+    extra_legacy_names: list[str] | None = None,
+) -> list[dict[str, object]]:
+    results: list[dict[str, object]] = []
+    legacy_names: list[str] = []
+    for name in selected:
+        for legacy_name in legacy_external_skill_names_for(name):
+            if legacy_name not in legacy_names:
+                legacy_names.append(legacy_name)
+    for legacy_name in extra_legacy_names or []:
+        if legacy_name not in legacy_names:
+            legacy_names.append(legacy_name)
+
+    for legacy_name in legacy_names:
+        target = target_dir / legacy_name
+        if not target.exists():
+            continue
+        try:
+            remove_existing_target(target)
+            results.append(
+                {
+                    "name": legacy_name,
+                    "replacement": canonical_external_skill_name(legacy_name),
+                    "target": str(target),
+                    "status": "removed",
+                    "phase": "remove-legacy",
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 - keep cleanup report per target.
+            results.append(
+                {
+                    "name": legacy_name,
+                    "replacement": canonical_external_skill_name(legacy_name),
+                    "target": str(target),
+                    "status": "failed",
+                    "phase": "remove-legacy",
+                    "error": str(exc),
+                }
+            )
+    return results
+
+
 def scoped_skills_root(args: argparse.Namespace, project_root: Path | None) -> Path | None:
     if args.skills_scope == "none":
         return None
@@ -1862,6 +1933,11 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
     if any(item["status"] == "failed" for item in results):
         return results
 
+    legacy_removals = remove_legacy_external_targets(target_dir, selected, legacy)
+    results.extend(legacy_removals)
+    if any(item["status"] == "failed" for item in legacy_removals):
+        return results
+
     if selected:
         with tempfile.TemporaryDirectory(prefix="kuno-onboard-mattpocock-migration-") as tmp:
             repo_root = Path(tmp) / "mattpocock-skills"
@@ -1888,20 +1964,6 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
                 except Exception as exc:  # noqa: BLE001 - keep migration report per target.
                     results.append({"name": name, "status": "failed", "phase": "install", "error": str(exc)})
 
-    if any(item["status"] == "failed" for item in results):
-        return results
-
-    for name in legacy:
-        target = target_dir / name
-        if not target.exists():
-            results.append({"name": name, "status": "already-absent", "phase": "remove-legacy"})
-            continue
-        try:
-            remove_existing_target(target)
-            results.append({"name": name, "status": "removed", "phase": "remove-legacy", "target": str(target)})
-        except Exception as exc:  # noqa: BLE001 - keep migration report per target.
-            results.append({"name": name, "status": "failed", "phase": "remove-legacy", "error": str(exc)})
-
     return results
 
 
@@ -1922,50 +1984,51 @@ def install_external_skills(args: argparse.Namespace) -> int:
         repo = str(EXTERNAL_SKILL_SOURCES[name]["repo"])
         repo_groups.setdefault(repo, []).append(name)
 
-    results: list[dict[str, object]] = []
-    with tempfile.TemporaryDirectory(prefix="kuno-onboard-external-skills-") as tmp:
-        tmp_root = Path(tmp)
-        for index, (repo, names) in enumerate(repo_groups.items(), start=1):
-            repo_root = tmp_root / f"repo-{index}"
-            ok, clone_error = clone_repo(repo, repo_root)
-            if not ok:
-                for name in names:
-                    results.append(
-                        {
-                            "name": name,
-                            "repo": repo,
-                            "status": "failed",
-                            "error": clone_error,
-                        }
-                    )
-                continue
+    results: list[dict[str, object]] = remove_legacy_external_targets(target_dir, selected)
+    if not any(item["status"] == "failed" for item in results):
+        with tempfile.TemporaryDirectory(prefix="kuno-onboard-external-skills-") as tmp:
+            tmp_root = Path(tmp)
+            for index, (repo, names) in enumerate(repo_groups.items(), start=1):
+                repo_root = tmp_root / f"repo-{index}"
+                ok, clone_error = clone_repo(repo, repo_root)
+                if not ok:
+                    for name in names:
+                        results.append(
+                            {
+                                "name": name,
+                                "repo": repo,
+                                "status": "failed",
+                                "error": clone_error,
+                            }
+                        )
+                    continue
 
-            for name in names:
-                target = target_dir / name
-                try:
-                    source = source_dir_for_external_skill(repo_root, name)
-                    status, replaced_existing, error = copy_external_skill(source, target)
-                    results.append(
-                        {
-                            "name": name,
-                            "repo": repo,
-                            "source": str(source),
-                            "target": str(target),
-                            "status": status,
-                            "replacedExisting": replaced_existing,
-                            "error": error,
-                        }
-                    )
-                except Exception as exc:  # noqa: BLE001 - report per-skill install failures without hiding others.
-                    results.append(
-                        {
-                            "name": name,
-                            "repo": repo,
-                            "target": str(target),
-                            "status": "failed",
-                            "error": str(exc),
-                        }
-                    )
+                for name in names:
+                    target = target_dir / name
+                    try:
+                        source = source_dir_for_external_skill(repo_root, name)
+                        status, replaced_existing, error = copy_external_skill(source, target)
+                        results.append(
+                            {
+                                "name": name,
+                                "repo": repo,
+                                "source": str(source),
+                                "target": str(target),
+                                "status": status,
+                                "replacedExisting": replaced_existing,
+                                "error": error,
+                            }
+                        )
+                    except Exception as exc:  # noqa: BLE001 - report per-skill install failures without hiding others.
+                        results.append(
+                            {
+                                "name": name,
+                                "repo": repo,
+                                "target": str(target),
+                                "status": "failed",
+                                "error": str(exc),
+                            }
+                        )
 
     payload = {
         "mode": "install-external-skills",

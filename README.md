@@ -415,6 +415,7 @@ tests/e2e/**/*.trace.zip
 - Playwright CLI 项目级检测和安装引导。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导，包含 Maestro MCP 的通用 `command` / `args` / `JAVA_HOME` / `PATH` 配置示例。
 - bundled `seo-geo` Skill 的存在性检查。
+- mattpocock external Skill 使用上游 canonical 名称；`to-prd` / `to-issues` 作为 legacy alias 迁移到 `to-spec` / `to-tickets`，`init` / `reset` 和直接 external install 会先删除本地旧目录，再安装新目录。
 - `web-ui-autotest-generator`、`shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
 - React Bits tier 选择只在目标项目被检测为 React + shadcn/ui 时作为条件 manual guidance 输出；普通 onboarding 不询问、不安装 React Bits。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。

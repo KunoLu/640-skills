@@ -30,8 +30,8 @@ EXTERNAL_SKILLS=(
   codebase-design
   handoff
   writing-great-skills
-  to-prd
-  to-issues
+  to-spec
+  to-tickets
   impeccable
   ui-ux-pro-max
   web-ui-autotest-generator

@@ -38,8 +38,8 @@ Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或
 5. 只有决策同时满足“难回滚、缺少背景会令人意外、有真实取舍”时，才建议写 ADR；默认写入 `docs/adr/*.md`，多上下文项目写入 `docs/contexts/<context>/adr/*.md`。
 6. 达成共识后，先输出需求确认摘要，覆盖目标、用户 / 场景、范围内外、术语、约束、验收标准和未决问题。
 7. 输出需求确认摘要、PRD / design / implement review gate 或 `task.py start` 前，必须说明 `grill-with-docs` 使用状态；未完整调用时，说明原因并询问用户是否需要先用该 Skill 再评估一次。
-8. 用户确认摘要后，再使用 `to-prd` 生成 Markdown PRD；在 Trellis 项目中，PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
-9. PRD 确认后，再使用 `to-issues` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
+8. 用户确认摘要后，再使用 `to-spec` 生成 Markdown spec / PRD；在 Trellis 项目中，spec / PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
+9. spec / PRD 确认后，再使用 `to-tickets` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
 10. 运行 PRD convergence pass 后，再按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
 
 PRD convergence pass 必须是无损整理：把临时 brainstorm 小节、已解决问题、重复事实和并列 bug / requirement 列表合并进稳定的 goal、requirements、technical notes、acceptance criteria 或 out-of-scope；不得丢弃已有需求、证据、严重性、验收标准或用户明确范围决定。
@@ -263,7 +263,7 @@ $trellis-check
 
 阶段编排：
 
-- 需求 / PRD 阶段：业务术语、领域规则、bounded context 或模型边界不清时，先用 `grill-with-docs` 读取项目事实并澄清，再用 `book-ddd-distilled-modeling` 固化任务级语言，最后进入 `to-prd` / `to-issues`。
+- 需求 / PRD 阶段：业务术语、领域规则、bounded context 或模型边界不清时，先用 `grill-with-docs` 读取项目事实并澄清，再用 `book-ddd-distilled-modeling` 固化任务级语言，最后进入 `to-spec` / `to-tickets`。
 - 设计阶段：存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流发生变化时，在 `design.md` / `implement.md` 稳定前使用 `book-ddia-data-design`。
 - 开发前 / 开发中：既有结构阻碍当前修改、行为变更与结构整理可能混杂时，使用 `book-refactoring-pass` 规划行为保持型小步重构。
 - 遗留代码修复：测试不足、行为不清、隐藏依赖或回归风险高时，在修改前使用 `book-legacy-change-safety`，并优先补 characterization test 或等价安全网。

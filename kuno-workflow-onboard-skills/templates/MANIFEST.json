@@ -78,8 +78,8 @@
         "codebase-design",
         "handoff",
         "writing-great-skills",
-        "to-prd",
-        "to-issues"
+        "to-spec",
+        "to-tickets"
       ],
       "repository": "https://github.com/mattpocock/skills.git"
     },

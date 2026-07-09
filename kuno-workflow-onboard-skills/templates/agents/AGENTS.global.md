@@ -283,8 +283,8 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | `tdd`、陌生模块理解或结构性修改前 |
 | `handoff` | 长会话交接、上下文压缩、跨会话继续任务 | `/clear`、新会话、Trellis 暂停或多会话交接前 |
 | `writing-great-skills` | 创建或维护自定义 Skill 的质量规则 | 用户要求新增、改造或沉淀 Skill 时 |
-| `to-prd` | 将当前对话和代码库理解整理为 Markdown PRD | 需求需要沉淀为 PRD 时 |
-| `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 需要 Trellis-ready Markdown task 或 vertical slices 时 |
+| `to-spec` | 将当前对话和代码库理解整理为 Markdown spec / PRD | 需求需要沉淀为 spec 或 PRD 时 |
+| `to-tickets` | 将 spec、PRD、plan 拆成实现任务 | 需要 Trellis-ready Markdown task、tickets 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
 | `impeccable` | 前端 UI/UX 塑形、审计、打磨、反模板化和视觉质量收尾 | `ui-ux-pro-max` 明确初稿方向后按条件前置 `shape` / `craft`，或实现后的 `audit` / `critique` / `polish` 阶段；仅在 Skill 可用且上下文可用时 |
 | `shadcn` | shadcn/ui 项目组件、registry、preset、CLI 和组件组合规则 | 项目存在 `components.json`、使用 / 初始化 shadcn/ui，或需要 `shadcn init/add/search/view/docs/diff/info/migrate/preset`、registry 组件、preset、Base / Radix 差异、表单 / 图标 / chat primitives 等 shadcn 规则时 |
@@ -305,7 +305,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
 - `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
 - `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnosing-bugs`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。
-- `book-ddd-distilled-modeling`：仅在需求涉及业务术语、领域规则、bounded context、上下文边界或模型歧义时使用，通常位于 `grill-with-docs` 之后、`to-prd` / `design.md` 之前。不要把一次性领域推断直接写入长期 context 或 `.trellis/spec`。
+- `book-ddd-distilled-modeling`：仅在需求涉及业务术语、领域规则、bounded context、上下文边界或模型歧义时使用，通常位于 `grill-with-docs` 之后、`to-spec` / `design.md` 之前。不要把一次性领域推断直接写入长期 context 或 `.trellis/spec`。
 - `book-ddia-data-design`：仅在存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流变更时使用。重点检查 source of truth、一致性模型、幂等、乱序、重试、回放、迁移 / 回滚、观测和修复路径。
 - `book-release-readiness`：仅在生产路径相关的服务、API、任务、队列、外部集成或部署敏感变更后使用，通常位于项目验证后或 `$trellis-check` 阶段。重点检查 timeout、retry、fallback、隔离、backpressure、观测、告警、rollout 和 rollback；不阻塞与当前项目无关的理论风险。
 - `trellis-channel` 可以被项目级规则主动用于高风险代码 review / 验证覆盖 preflight，但 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 spawn worker。
@@ -319,7 +319,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - 既有 UI 审查：先用 `ui-ux-pro-max` 的优先级清单覆盖可访问性、交互、性能、响应式、排版和颜色；再在 `impeccable` 可用时用 `audit` / `critique` 生成问题 backlog。
     - 实现后收尾：功能完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
     - 冲突处理：项目 `AGENTS.md`、设计系统、tokens、组件库和已确认品牌规范优先；可访问性、响应式和项目验证不可降级。`impeccable` 的硬性反模板化规则可否决 `ui-ux-pro-max` 的泛化风格建议，除非项目既有品牌规范明确要求该设计语言。
-- **mattpocock/skills** 仅纳入 `diagnosing-bugs`、`tdd`、`grill-me`、`grill-with-docs`、`grilling`、`domain-modeling`、`codebase-design`、`handoff`、`writing-great-skills`、`to-prd`、`to-issues`。
+- **mattpocock/skills** 仅纳入 `diagnosing-bugs`、`tdd`、`grill-me`、`grill-with-docs`、`grilling`、`domain-modeling`、`codebase-design`、`handoff`、`writing-great-skills`、`to-spec`、`to-tickets`。
 - **mattpocock/skills** 优先原样使用官方 Skill；除非用户明确要求，不 fork、不改写官方 Skill 文件。
 - **mattpocock/skills** 相关 skill 使用边界说明：
     - `diagnosing-bugs` 用于系统化排障；代码级问题根因不清时结合 GitNexus debugging，修复前有风险时结合 GitNexus impact-analysis，并补充或更新回归测试。
@@ -331,8 +331,8 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - `handoff` 交接内容应包含当前目标、已完成工作、关键决策、文件 / 产物、已尝试命令、开放问题、建议下一步 Skill、不要重复事项和敏感信息脱敏说明。
     - `writing-great-skills` 创建的新 Skill 默认使用 `SKILL.md` 作为入口，长内容拆到 reference，确定性操作优先脚本化，description 必须写清触发场景。
     - `zoom-out` 已从 mattpocock/skills 上游移除；陌生模块理解默认通过代码阅读、`codebase-design`、GitNexus exploring / impact-analysis 和按需 `book-refactoring-pass` 完成。
-    - `to-prd` 默认输出 Markdown PRD；在 Trellis 项目中，最终 PRD 应写入或更新 `.trellis/tasks/<task>/prd.md`，未确定 task 路径前只保留为对话草稿或用户明确指定的临时文件；不要发布到 GitHub、Linear 或任何 issue tracker，除非用户明确要求。
-    - `to-issues` 中的 issue 视为通用实现任务；在 Trellis 项目中，vertical slices 应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts，标注 AFK / HITL、依赖顺序、验收标准和测试策略；不要默认在 `docs/` 下维护最终 issue / task Markdown，也不要自动发布到 issue tracker。
+    - `to-spec` 默认输出 Markdown spec / PRD；在 Trellis 项目中，最终 spec / PRD 应写入或更新 `.trellis/tasks/<task>/prd.md`，未确定 task 路径前只保留为对话草稿或用户明确指定的临时文件；不要发布到 GitHub、Linear 或任何 issue tracker，除非用户明确要求。
+    - `to-tickets` 中的 ticket 视为通用实现任务；在 Trellis 项目中，vertical slices 应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts，标注 AFK / HITL、依赖顺序、验收标准和测试策略；不要默认在 `docs/` 下维护最终 ticket / task Markdown，也不要自动发布到 issue tracker。
 
 ### Skill 不可用时
 
