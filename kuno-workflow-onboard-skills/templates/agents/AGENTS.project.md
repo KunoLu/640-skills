@@ -364,6 +364,7 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 项目级 spec 可以允许诊断轮次使用 stdout-only、terminal-only 或轻量 reporter，但不得把这类命令当作最终正式验证证据。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，收尾前必须使用项目 reporter 生成命名报告；没有原生 reporter 的 API 自定义脚本必须捕获 stdout / stderr / exit code 为 `tests/api/reports/` 下的时间戳 raw report 并生成同 stem 中文 Markdown 汇总；Playwright `--reporter=list` 和 stdout-only Maestro run 只能算诊断或定点重跑。
 - Playwright 的正式报告快照目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*-{branch_slug}-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。Playwright HTML reporter 的 `outputFolder` 应使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`，不要把需要保留的正式命名报告放进该目录，因为下一次 Playwright 运行可能清空它。
 - API / integration 默认正式快照目录为 `tests/api/reports/`，正式报告 stem 使用 `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`；unit test 报告默认继承项目配置。如果 runner 使用会重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 `current` 输出目录，必须先复制 / 提升到项目归档目录或 `tests/unit/reports/` 的时间戳快照，不能把 runner 托管目录当作正式报告。
+- API / integration 的中文 Markdown 汇总必须提供 URI 覆盖矩阵；每条覆盖范围描述都要映射到具体 `method + URI path`、测试脚本 / case、期望状态码或副作用，以及关联 `.feature` / contract / schema。缺少 URI 的覆盖项标记 `blocked` 或 `missing-uri`，不得只用脚本名或业务概括替代 endpoint 证据。
 - 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。

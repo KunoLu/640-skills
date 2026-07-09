@@ -66,6 +66,7 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 - 跨仓或链路不完整时，mock 只能基于 contract、schema、真实响应样例、既有 fixture 或用户明确确认；mock-backed 不能冒充 full-stack 通过。
 - `rtk` 是命令输出压缩层，不是测试 runner。unit test、API / integration test、Playwright Web E2E、Maestro Mobile / Hybrid E2E 或任何需要落地报告的命令，必须先评估缓存 / 回放是否会跳过文件写入；报告型正式验证默认使用原生命令或项目明确的 no-cache / report-safe 命令，缺报或旧报时原生命令复验。
 - API / Web E2E / Mobile E2E / Hybrid E2E 调试轮次可以保留多份带业务名、分支名和时间戳的本地报告快照；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，或 API / integration / unit runner 生成了本轮需要保留的报告，无论最终全量是否通过，都要在下一次可能清空输出的运行前生成该次运行的命名报告和同目录同 stem 的中文 Markdown 汇总。Playwright 的同 stem 以命名后的 HTML 为准，不以 `results.json` 为准。
+- API / integration 的中文 Markdown 汇总必须包含 URI 覆盖矩阵，将每条覆盖范围描述映射到具体 `method + URI path`、测试脚本 / case、预期状态码或副作用，以及 `.feature` / contract / schema 依据。
 - 任何工具不可用时，要标记 `blocked`、`skipped` 或 `not-needed`，不能声称对应验证已通过。
 
 ## SBTD：SDD、BDD、TDD、DDD
@@ -133,6 +134,12 @@ Web E2E 报告规则：
 - Playwright Markdown 汇总必须与命名后的 HTML 报告完全同 stem；`results.json`、`junit.xml`、`test-results/` 和默认 `index.html` 不能决定正式 Markdown 文件名。`results.md`、`result.md`、`junit.md` 或 `index.md` 不能满足最终 `Run Summary MD`。
 - 命名后的 HTML 是正式报告；Playwright 默认 `index.html` 只作为 `.playwright-html-current/` 中的复制源或工具兼容产物。只要 Playwright 已产生 `index.html`、`results.json`、`junit.xml` 或等价产物，最终输出前必须确认命名后的 HTML 和同 stem 中文 `.md` 实际存在。
 - 调试轮次失败后先重跑失败 spec，再跑受影响子集，最后跑计划范围内全量验证；最终全量是否通过由 `Final Full Rerun` 表达，不能用“未全绿”跳过报告文件。
+
+API / integration 报告规则：
+
+- API 正式报告默认写入 `tests/api/reports/`，stem 使用 `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`；自定义 API 脚本如果没有原生 reporter，正式验证时必须捕获 stdout、stderr、exit code、命令和时间戳为 raw report，并生成同 stem 中文 Markdown 汇总。
+- API Markdown 汇总必须包含 URI 覆盖矩阵。每条覆盖范围描述都要映射到具体 `method + URI path`，并记录对应测试脚本 / case、期望状态码或副作用、关联 `.feature` / contract / schema；同一覆盖描述涉及多个 endpoint 时逐行列出。
+- Base URL、环境名或服务名可以单独记录，但不能用脚本名、权限链路概括或业务域名称替代 URI path；无法确定 URI 的覆盖项必须标记 `blocked` 或 `missing-uri`。不要写入真实账号、token、敏感 query/body 或生产数据。
 
 ## Maestro 集成策略
 

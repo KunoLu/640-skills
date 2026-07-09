@@ -78,6 +78,7 @@ description: Use after code changes to choose and run validation commands for No
 - 先按修改范围选择最小有效验证：项目测试、浏览器诊断、Playwright Web 回归、Maestro 移动 / Hybrid flow、或 Web UI 测试资产覆盖评估。
 - 对 API / Web / Mobile / Hybrid 链路，先判定 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试只能证明对应 contract / mock 假设成立，不能报告为 full-stack 通过。
 - API / integration 测试优先继承项目既有测试框架和报告配置；没有项目约定且需要本轮正式报告时，默认正式快照目录为 `tests/api/reports/`。如果 runner 需要会被下一轮清空或覆盖的临时输出目录，默认使用 `tests/api/reports/.api-current/`，运行结束后再复制 / 提升为包含当前分支 `branch_slug` 和时间戳的报告。自定义 API 脚本只向终端输出时只能算诊断；如果它是本轮正式验证，必须捕获 stdout、stderr 和 exit code 为 `tests/api/reports/.api-current/` 下的 raw report，再提升到 `tests/api/reports/` 并生成同 stem 中文 Markdown 汇总。
+- API / integration 的正式 Markdown 汇总必须提供 URI 覆盖矩阵：每条覆盖范围描述都要映射到具体 `method + URI path`，并记录对应测试脚本 / case、期望状态码或副作用、关联 `.feature` / contract / schema 依据。多个 endpoint 支撑同一覆盖范围时逐行列出；Base URL、环境名和服务名可单独记录，但不得只用脚本名、领域名或覆盖概括替代 URI path。不要写入真实账号、token、敏感 query/body 或生产数据。
 - Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。Playwright 的 `--reporter=list` 只能用于诊断或定点重跑；Web E2E 进入正式验证范围时，收尾前必须再运行不覆盖项目 reporter 的计划范围命令，或将报告状态标记为 `blocked`。
 - Web E2E 正式 HTML 报告快照默认进入 `tests/e2e/reports/html/`，除非项目 Playwright 配置已有更强约定；Playwright HTML reporter 的 `outputFolder` 默认使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`。该目录可能被每次 Playwright 运行清空，只能作为中间产物或工具兼容产物来源；命名后的 HTML 才是正式报告。
 - Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
@@ -113,6 +114,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - Maestro 命名：`maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
 - Playwright 默认 HTML reporter 生成 `index.html` 时，在每次需要保留的运行结束后必须从 `tests/e2e/reports/.playwright-html-current/` 将其复制为上述正式报告名；命名后的 HTML 是正式报告。正式报告不得保存在 `.playwright-html-current/` 中，因为下一次 Playwright 运行可能清空该目录。Markdown 汇总必须与命名后的 HTML 完全同 stem；不得把 `results.json`、`junit.xml`、`test-results/` 或默认 `index.html` 的 stem 用作最终 Markdown 文件名，`results.md`、`result.md`、`junit.md`、`index.md` 均不能满足 `Run Summary MD: generated`。如果 Playwright 已产生 `results.json`、`junit.xml` 或等价结果但没有 `index.html`，先按项目配置重跑或补启用 HTML reporter，不能用 JSON / JUnit 报告替代命名 HTML 和同 stem `.md`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，必须同时复制完整资源目录，或生成以 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}/index.html` 为入口的完整快照目录，并让 Markdown 汇总指向该入口。
 - API 命名示例：`api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.txt` + `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`；没有明确 suite 时使用 `api-report-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}` stem。没有原生 reporter 的 API / integration 命令，如果仍是本轮正式验证证据，必须把 stdout、stderr、exit code、运行命令和时间戳捕获为 `.txt` 或 `.json` raw report，不能只在最终回复里粘贴终端结果。
+- API Markdown 汇总必须包含“覆盖范围 -> API URI”映射表。推荐列为：覆盖范围、HTTP 方法、URI path、测试脚本 / case、期望状态码、验证的副作用或响应字段、关联 BDD / contract。没有 route manifest 时从测试源码、OpenAPI / schema、客户端调用或实际请求日志提取；无法确定 URI 时将该覆盖项标记为 `blocked` 或 `missing-uri`，不要用空泛覆盖描述冒充完整报告。
 - Unit 命名示例：`unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.html` / `.lcov` + `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。unit test 不强制每轮生成正式报告；但一旦项目命令或 CI 兼容命令已经产生本轮要保留的报告，就不能只依赖会被下一轮重写的 coverage 或 JUnit 固定路径。
 - 如果项目配置强制多个 reporter，每次需要保留的运行只生成一组命名报告和一份 Markdown 汇总；最终结论仍以最后一次计划范围内运行判断。
 - 未最终全量通过时，仍生成该次运行的命名报告和同 stem Markdown 汇总，但不得声明“全量通过”或“full-stack 通过”；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
@@ -131,6 +133,7 @@ Markdown 汇总必须记录：
 
 - 汇总正文必须使用中文撰写；只有状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文。
 - 测试范围、运行 case / spec / flow 列表、`E2E Mode`、`Mock Strategy`、原始分支名、`branch_slug`、`.feature` 路径和场景名。
+- API / integration 汇总必须包含 URI 覆盖矩阵，逐项映射覆盖范围和 `method + URI path`，并标出对应测试脚本 / case 与 contract / schema / `.feature` 依据。
 - 最终正式报告路径、总执行轮次、每轮命令。
 - 每轮失败 case / spec / flow、失败原因分类、修复动作和修改文件摘要。
 - 定点重跑、受影响子集重跑和最终全量重跑结果。
