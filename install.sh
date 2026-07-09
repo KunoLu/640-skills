@@ -14,6 +14,10 @@ NO_COLOR=0
 GLOBAL_AGENTS_PATH=""
 GLOBAL_SKILLS_DIR=""
 PROJECT_SKILLS_DIR=""
+TRELLIS_USER=""
+TRELLIS_PLATFORMS=()
+SKIP_TRELLIS_INIT=0
+SKIP_TRELLIS_BOOTSTRAP=0
 CHECK_JSON=""
 
 EXTERNAL_SKILLS=(
@@ -61,6 +65,15 @@ Options:
       Override global skills directory.
   --project-skills-dir <path>
       Override project-level skills directory.
+  --trellis-user <name>
+      Developer username for trellis init -u when the project has no .trellis/.
+  --trellis-platform <name[,name...]>
+      Trellis init platform flag without leading dashes. May be repeated.
+      Examples: codex, claude, cursor, opencode, gemini, pi.
+  --skip-trellis-init
+      Skip post-install trellis init for project roots without .trellis/.
+  --skip-trellis-bootstrap
+      Skip post-install bootstrap task detection.
   --no-mcp
       Skip MCP configuration.
   --dry-run
@@ -182,9 +195,9 @@ select_one() {
   shift
   local options=("$@")
   local choice
-  printf '%s\n' "$prompt"
+  printf '%s\n' "$prompt" >&2
   for index in "${!options[@]}"; do
-    printf '  %d) %s\n' "$((index + 1))" "${options[$index]}"
+    printf '  %d) %s\n' "$((index + 1))" "${options[$index]}" >&2
   done
   while true; do
     read -r -p 'Select one: ' choice
@@ -192,7 +205,7 @@ select_one() {
       printf '%s' "${options[$((choice - 1))]}"
       return 0
     fi
-    printf 'Invalid choice.\n'
+    printf 'Invalid choice.\n' >&2
   done
 }
 
@@ -313,6 +326,19 @@ onboard_common_args() {
   fi
   if [[ -n "$PROJECT_SKILLS_DIR" ]]; then
     args+=(--project-skills-dir "$PROJECT_SKILLS_DIR")
+  fi
+  if [[ -n "$TRELLIS_USER" ]]; then
+    args+=(--trellis-user "$TRELLIS_USER")
+  fi
+  local trellis_platform
+  for trellis_platform in "${TRELLIS_PLATFORMS[@]}"; do
+    args+=(--trellis-platform "$trellis_platform")
+  done
+  if [[ "$SKIP_TRELLIS_INIT" -eq 1 ]]; then
+    args+=(--skip-trellis-init)
+  fi
+  if [[ "$SKIP_TRELLIS_BOOTSTRAP" -eq 1 ]]; then
+    args+=(--skip-trellis-bootstrap)
   fi
   printf '%s\0' "${args[@]}"
 }
@@ -492,6 +518,32 @@ parse_args() {
         PROJECT_SKILLS_DIR="${1#*=}"
         shift
         ;;
+      --trellis-user)
+        [[ $# -ge 2 ]] || die "--trellis-user requires a value"
+        TRELLIS_USER="$2"
+        shift 2
+        ;;
+      --trellis-user=*)
+        TRELLIS_USER="${1#*=}"
+        shift
+        ;;
+      --trellis-platform)
+        [[ $# -ge 2 ]] || die "--trellis-platform requires a value"
+        TRELLIS_PLATFORMS+=("$2")
+        shift 2
+        ;;
+      --trellis-platform=*)
+        TRELLIS_PLATFORMS+=("${1#*=}")
+        shift
+        ;;
+      --skip-trellis-init)
+        SKIP_TRELLIS_INIT=1
+        shift
+        ;;
+      --skip-trellis-bootstrap)
+        SKIP_TRELLIS_BOOTSTRAP=1
+        shift
+        ;;
       --no-mcp)
         NO_MCP=1
         shift
@@ -582,6 +634,47 @@ resolve_interactive_inputs() {
     path="$(prompt_text 'Project root is required for project skills. Enter project root' '')"
     [[ -n "$path" ]] || die "Project skills require --project-root or --project-skills-dir"
     normalize_project_root "$path"
+  fi
+}
+
+split_trellis_platforms() {
+  local raw="$1"
+  local item trimmed
+  local -a parts=()
+  raw="${raw// /}"
+  [[ -z "$raw" ]] && return 0
+  IFS=',' read -ra parts <<< "$raw"
+  for item in "${parts[@]}"; do
+    trimmed="${item#--}"
+    [[ -n "$trimmed" ]] && TRELLIS_PLATFORMS+=("$trimmed")
+  done
+}
+
+resolve_trellis_project_setup_inputs() {
+  [[ "$SKIP_TRELLIS_INIT" -eq 1 ]] && return 0
+  [[ -n "$PROJECT_ROOT" ]] || return 0
+  [[ ! -e "$PROJECT_ROOT/.trellis" ]] || return 0
+
+  refresh_check_json
+  if [[ "$(json_python tool-installed trellis)" != "true" ]]; then
+    warn "Trellis CLI is required before project trellis init; onboard.py will report the setup as blocked."
+    return 0
+  fi
+
+  while [[ -z "$TRELLIS_USER" ]]; do
+    TRELLIS_USER="$(prompt_text 'Trellis developer username for trellis init -u' '')"
+    if [[ -z "$TRELLIS_USER" ]]; then
+      if prompt_yes_no "Skip trellis init for this project?" "n"; then
+        SKIP_TRELLIS_INIT=1
+        return 0
+      fi
+    fi
+  done
+
+  if (( ${#TRELLIS_PLATFORMS[@]} == 0 )); then
+    local raw_platforms
+    raw_platforms="$(prompt_text 'Trellis platform flags, comma-separated without --, or blank for none' '')"
+    split_trellis_platforms "$raw_platforms"
   fi
 }
 
@@ -1019,6 +1112,7 @@ main() {
   resolve_interactive_inputs
   install_missing_runtime_and_skills
   select_and_configure_mcp
+  resolve_trellis_project_setup_inputs
   show_plan_and_execute
   final_checks
 }

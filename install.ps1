@@ -10,6 +10,10 @@ param(
   [string]$GlobalAgentsPath = "",
   [string]$GlobalSkillsDir = "",
   [string]$ProjectSkillsDir = "",
+  [string]$TrellisUser = "",
+  [string[]]$TrellisPlatform = @(),
+  [switch]$SkipTrellisInit,
+  [switch]$SkipTrellisBootstrap,
   [switch]$NoMcp,
   [switch]$DryRun,
   [switch]$Yes,
@@ -64,6 +68,15 @@ Options:
       Override global skills directory.
   -ProjectSkillsDir <path>
       Override project-level skills directory.
+  -TrellisUser <name>
+      Developer username for trellis init -u when the project has no .trellis/.
+  -TrellisPlatform <name[,name...]>
+      Trellis init platform flag without leading dashes. May be repeated.
+      Examples: codex, claude, cursor, opencode, gemini, pi.
+  -SkipTrellisInit
+      Skip post-install trellis init for project roots without .trellis/.
+  -SkipTrellisBootstrap
+      Skip post-install bootstrap task detection.
   -NoMcp
       Skip MCP configuration.
   -DryRun
@@ -294,6 +307,12 @@ function Get-CommonArgs {
   if ($GlobalAgentsPath) { $args += @("--global-agents-path", $GlobalAgentsPath) }
   if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
   if ($ProjectSkillsDir) { $args += @("--project-skills-dir", $ProjectSkillsDir) }
+  if ($TrellisUser) { $args += @("--trellis-user", $TrellisUser) }
+  foreach ($platformName in $TrellisPlatform) {
+    if ($platformName) { $args += @("--trellis-platform", $platformName) }
+  }
+  if ($SkipTrellisInit) { $args += "--skip-trellis-init" }
+  if ($SkipTrellisBootstrap) { $args += "--skip-trellis-bootstrap" }
   return $args
 }
 
@@ -508,6 +527,39 @@ function Install-MissingRuntimeAndSkills {
       Invoke-Onboard "install-external-skills" $args
       Update-Check
     }
+  }
+}
+
+function Split-TrellisPlatforms {
+  param([string]$Value)
+  if ([string]::IsNullOrWhiteSpace($Value)) { return @() }
+  return @($Value -replace "\s", "" -split "," | Where-Object { $_ } | ForEach-Object { $_.TrimStart("-") })
+}
+
+function Resolve-TrellisProjectSetupInputs {
+  if ($SkipTrellisInit) { return }
+  if (-not $ProjectRoot) { return }
+  if (Test-Path -LiteralPath (Join-Path $ProjectRoot ".trellis")) { return }
+
+  Update-Check
+  if (-not (Tool-Installed "trellis")) {
+    Write-Warn "Trellis CLI is required before project trellis init; onboard.py will report the setup as blocked."
+    return
+  }
+
+  while ([string]::IsNullOrWhiteSpace($script:TrellisUser)) {
+    $script:TrellisUser = Prompt-Text "Trellis developer username for trellis init -u"
+    if ([string]::IsNullOrWhiteSpace($script:TrellisUser)) {
+      if (Prompt-YesNo "Skip trellis init for this project?" "n") {
+        $script:SkipTrellisInit = $true
+        return
+      }
+    }
+  }
+
+  if ($script:TrellisPlatform.Count -eq 0) {
+    $rawPlatforms = Prompt-Text "Trellis platform flags, comma-separated without --, or blank for none"
+    $script:TrellisPlatform = @(Split-TrellisPlatforms $rawPlatforms)
   }
 }
 
@@ -800,5 +852,6 @@ Show-Logo
 Resolve-InteractiveInputs
 Install-MissingRuntimeAndSkills
 Select-AndConfigureMcp
+Resolve-TrellisProjectSetupInputs
 Show-PlanAndExecute
 Final-Checks
