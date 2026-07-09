@@ -8,6 +8,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -68,6 +69,29 @@ CLI_TOOLS = (
         "projectInstall": "npm install -D gitnexus",
         "advice": "Install GitNexus globally when sharing the MCP/CLI across projects, or as a project dev dependency for project-local usage.",
     },
+)
+TRELLIS_INIT_PLATFORMS = (
+    "cursor",
+    "claude",
+    "opencode",
+    "codex",
+    "kilo",
+    "kiro",
+    "gemini",
+    "antigravity",
+    "devin",
+    "windsurf",
+    "qoder",
+    "codebuddy",
+    "copilot",
+    "droid",
+    "pi",
+    "reasonix",
+    "zcode",
+    "trae",
+)
+TRELLIS_BOOTSTRAP_TASK_CANDIDATES = (
+    ".trellis/tasks/00-bootstrap-guidelines",
 )
 BUNDLED_SKILLS = tuple(SKILL_SOURCES.keys())
 MATTPOCOCK_CANONICAL_SKILLS = (
@@ -2587,6 +2611,179 @@ def run_project_command(command: tuple[str, ...], cwd: Path, timeout: int = 900)
         return None
 
 
+def parse_trellis_platforms(args: argparse.Namespace) -> list[str]:
+    raw_values = getattr(args, "trellis_platform", None) or []
+    platforms: list[str] = []
+    invalid: list[str] = []
+    for raw_value in raw_values:
+        for part in re.split(r"[\s,]+", raw_value):
+            platform_name = part.strip().lower().removeprefix("--")
+            if not platform_name:
+                continue
+            if platform_name not in TRELLIS_INIT_PLATFORMS:
+                invalid.append(platform_name)
+                continue
+            if platform_name not in platforms:
+                platforms.append(platform_name)
+    if invalid:
+        allowed = ", ".join(TRELLIS_INIT_PLATFORMS)
+        raise SystemExit(f"Unsupported Trellis platform(s): {', '.join(invalid)}. Allowed values: {allowed}")
+    return platforms
+
+
+def trellis_init_command(username: str, platforms: list[str]) -> tuple[str, ...]:
+    platform_flags = tuple(f"--{platform_name}" for platform_name in platforms)
+    return ("trellis", "init", "-u", username, *platform_flags, "--yes", "--skip-existing")
+
+
+def command_display(command: tuple[str, ...]) -> str:
+    return shlex.join(command)
+
+
+def find_trellis_bootstrap_task(project_root: Path) -> tuple[Path | None, str | None]:
+    for relative_path in TRELLIS_BOOTSTRAP_TASK_CANDIDATES:
+        candidate = project_root / relative_path
+        if candidate.exists():
+            return candidate, relative_path
+    return None, None
+
+
+def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, object]:
+    project_root = resolve_project_root(args)
+    report: dict[str, object] = {
+        "mode": mode,
+        "status": "skipped",
+        "projectRoot": str(project_root) if project_root else None,
+    }
+    if mode not in {"init", "reset"}:
+        report["reason"] = "Trellis project setup only runs after init/reset."
+        return report
+    if not project_root:
+        report["reason"] = "--project-root was not provided."
+        return report
+    if getattr(args, "skip_trellis_init", False):
+        report["status"] = "skipped"
+        report["reason"] = "--skip-trellis-init was provided."
+        return report
+
+    trellis_check = check_cli_tool(CLI_TOOLS[1])
+    report["cli"] = {
+        "installed": trellis_check.get("installed"),
+        "path": trellis_check.get("path"),
+        "version": trellis_check.get("version"),
+    }
+    if not trellis_check.get("installed"):
+        report["status"] = "blocked"
+        report["init"] = {
+            "status": "blocked-missing-cli",
+            "reason": "trellis CLI must be installed and pass version verification before project initialization.",
+            "nextStep": "Install or repair Trellis, rerun `python scripts/onboard.py check`, then rerun init/reset.",
+        }
+        return report
+
+    trellis_dir = project_root / ".trellis"
+    platforms = parse_trellis_platforms(args)
+    username = (getattr(args, "trellis_user", None) or "").strip()
+    if trellis_dir.exists():
+        report["init"] = {
+            "status": "skipped-existing",
+            "path": str(trellis_dir),
+            "reason": "Target project already has .trellis/.",
+        }
+    elif not username:
+        example = trellis_init_command("your-name", platforms)
+        report["status"] = "needs-user"
+        report["init"] = {
+            "status": "needs-user",
+            "reason": "Target project does not have .trellis/ and --trellis-user was not provided.",
+            "nextStep": "Ask the user for their Trellis developer username and optional platform flags, then rerun init/reset with --trellis-user and --trellis-platform.",
+            "exampleCommand": command_display(example),
+        }
+        return report
+    else:
+        command = trellis_init_command(username, platforms)
+        init_result = run_project_command(command, project_root, timeout=300)
+        init_succeeded = bool(init_result and init_result.returncode == 0 and trellis_dir.exists())
+        report["init"] = {
+            "status": "success" if init_succeeded else "failed",
+            "command": command_display(command),
+            "stdout": command_excerpt(init_result, limit=12),
+        }
+        if not init_succeeded:
+            report["status"] = "failed"
+            report["init"]["stderr"] = command_excerpt(init_result, limit=12)
+            report["init"]["reason"] = "trellis init did not complete successfully or did not create .trellis/."
+            return report
+
+    if getattr(args, "skip_trellis_bootstrap", False):
+        report["status"] = "success"
+        report["bootstrapTask"] = {
+            "status": "skipped",
+            "reason": "--skip-trellis-bootstrap was provided.",
+        }
+        return report
+
+    bootstrap_task, relative_path = find_trellis_bootstrap_task(project_root)
+    if not bootstrap_task:
+        report["status"] = "success"
+        report["bootstrapTask"] = {
+            "status": "not-found",
+            "reason": "No bootstrap task was found at the canonical path.",
+            "checkedPaths": list(TRELLIS_BOOTSTRAP_TASK_CANDIDATES),
+        }
+        return report
+
+    report["status"] = "bootstrap-required"
+    report["bootstrapTask"] = {
+        "status": "found",
+        "path": str(bootstrap_task),
+        "relativePath": relative_path,
+        "requiredAction": (
+            "Use the trellis-workflow Skill to execute this task: read .trellis/workflow.md and task artifacts, "
+            "run $trellis-before-dev, complete the bootstrap guideline work, run $trellis-check, and only then run $trellis-finish-work."
+        ),
+    }
+    return report
+
+
+def print_trellis_project_setup_report(report: dict[str, object]) -> None:
+    print("\nTrellis project setup:")
+    print(f"- status: {report.get('status')}")
+    if report.get("projectRoot"):
+        print(f"  project root: {report['projectRoot']}")
+    if report.get("reason"):
+        print(f"  reason: {report['reason']}")
+    cli = report.get("cli")
+    if isinstance(cli, dict):
+        print(f"  cli: {'installed' if cli.get('installed') else 'missing'}")
+        if cli.get("path"):
+            print(f"  cli path: {cli['path']}")
+        if cli.get("version"):
+            print(f"  cli version: {cli['version']}")
+    init = report.get("init")
+    if isinstance(init, dict):
+        print(f"  init: {init.get('status')}")
+        if init.get("path"):
+            print(f"  init path: {init['path']}")
+        if init.get("command"):
+            print(f"  init command: {init['command']}")
+        if init.get("reason"):
+            print(f"  init reason: {init['reason']}")
+        if init.get("nextStep"):
+            print(f"  init next step: {init['nextStep']}")
+        if init.get("exampleCommand"):
+            print(f"  example: {init['exampleCommand']}")
+    bootstrap = report.get("bootstrapTask")
+    if isinstance(bootstrap, dict):
+        print(f"  bootstrap task: {bootstrap.get('status')}")
+        if bootstrap.get("path"):
+            print(f"  bootstrap path: {bootstrap['path']}")
+        if bootstrap.get("reason"):
+            print(f"  bootstrap reason: {bootstrap['reason']}")
+        if bootstrap.get("requiredAction"):
+            print(f"  required action: {bootstrap['requiredAction']}")
+
+
 def install_playwright_cli(args: argparse.Namespace) -> int:
     project_root = resolve_project_root(args, required=True)
     runtime = check_npm_runtime()
@@ -2965,6 +3162,18 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print(f"- {label}: {item.get('error', 'unknown failure')}", file=sys.stderr)
         return 4
 
+    trellis_report = run_trellis_project_setup(mode, args)
+    if args.json:
+        print(json.dumps({"trellisProjectSetup": trellis_report}, indent=2, ensure_ascii=False))
+    else:
+        print_trellis_project_setup_report(trellis_report)
+    if trellis_report.get("status") in {"blocked", "needs-user"}:
+        return 2
+    if trellis_report.get("status") == "failed":
+        return 5
+    if trellis_report.get("status") == "bootstrap-required":
+        return 6
+
     print("Verification passed.")
     if not args.json:
         final_check = build_check_results(args)
@@ -2991,6 +3200,29 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--project-skills-dir", help="Override project-level skills directory.")
         sub.add_argument("--yes", action="store_true", help="Allow init/reset to write files.")
         sub.add_argument("--json", action="store_true", help="Print machine-readable plan.")
+        sub.add_argument(
+            "--trellis-user",
+            help="Developer username for `trellis init -u` when the target project has no .trellis/.",
+        )
+        sub.add_argument(
+            "--trellis-platform",
+            action="append",
+            default=[],
+            help=(
+                "Trellis init platform flag without leading dashes, repeatable or comma-separated "
+                f"(supported: {', '.join(TRELLIS_INIT_PLATFORMS)})."
+            ),
+        )
+        sub.add_argument(
+            "--skip-trellis-init",
+            action="store_true",
+            help="Do not run the post-install Trellis init check for init/reset.",
+        )
+        sub.add_argument(
+            "--skip-trellis-bootstrap",
+            action="store_true",
+            help="Do not report the post-install Trellis bootstrap task handoff for init/reset.",
+        )
 
     install = subparsers.add_parser("install-external-skills")
     install.add_argument(

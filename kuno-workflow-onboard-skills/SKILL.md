@@ -19,6 +19,8 @@ Before installing or resetting, ask and resolve these points:
 4. If not, what is the target project root path, or should project-level `AGENTS.md` be skipped?
 5. Should skills be installed globally, or as project-level skills? Default is global.
 6. If project-level skills are requested, what is the target project root or explicit project skills directory?
+7. If `init` or `reset` targets a project root and that root has no `.trellis/`, what Trellis developer username should be used for `trellis init -u`?
+8. Which Trellis platform flags, if any, should be passed to `trellis init`? Examples include `codex`, `claude`, `cursor`, `opencode`, `gemini`, and `pi`; multiple platforms are allowed.
 
 If the user provides a project root, `init` or `reset` also ensures the bundled `templates/project/.gitignore` content exists in `<project-root>/.gitignore` and reports success, skip, or failure. If the user skips project-level `AGENTS.md`, provide the bundled template path `templates/agents/AGENTS.project.md` and ask them to confirm that this is the file they will use for manual setup.
 
@@ -44,7 +46,7 @@ The root installers keep these paths separate:
 - `project-root`: the user's target project root.
 - current working directory: only the default project-root candidate and the base for the default `./kuno-workflow-onboard-skills`.
 
-The scripts first validate `source-root`, then run the same preflight, tool installation, bundled skill, external skill, plan, and `init` / `reset` flow described below. They also offer direct MCP configuration for the selected platform. `scripts/onboard.py` remains the source of truth for checks and template writes; the root scripts own the interactive platform UI and MCP client-specific configuration commands.
+The scripts first validate `source-root`, then run the same preflight, tool installation, bundled skill, external skill, plan, and `init` / `reset` flow described below. They also offer direct MCP configuration for the selected platform. `scripts/onboard.py` remains the source of truth for checks and template writes; the root scripts own the interactive platform UI, Trellis username / platform prompts, and MCP client-specific configuration commands.
 
 ## Workflow
 
@@ -55,6 +57,8 @@ python scripts/onboard.py check --project-root <project-root>
 ```
 
 Summarize the runtime, CLI tool, bundled skill, referenced skill, manual MCP setup checks, and conditional project checks. The output must include the installation report with installed items, already-installed runtime / CLI tools skipped for install, failed or missing items, reasons, and manual configuration steps. If npm is missing, ask for confirmation and run `python scripts/onboard.py ensure-npm --yes` before any CLI tool check or install. Do not proceed to `init` or `reset` until the user confirms install or explicitly chooses to skip missing optional items.
+
+When `init` or `reset` targets a project root, Trellis CLI must be installed and pass verification before the final project setup step. If `trellis` is missing or fails verification, ask the user whether to install or repair it before continuing. If the project root has no `.trellis/`, ask for the Trellis developer username and optional platform list before running the write step. Do not invent a username or platform default; if the user gives no platform, run `trellis init` without extra platform flags.
 
 2. Install any user-approved missing tools or skills, then rerun `check`. External referenced skills must be pulled from their configured GitHub repositories only after confirmation. Skills are force-installed: existing bundled or external skill targets are overwritten without backup instead of skipped.
 
@@ -87,14 +91,18 @@ python scripts/onboard.py plan --project-root <project-root>
 4. For a new setup, run `init`. Existing AGENTS targets are backed up and overwritten; existing bundled skill targets are overwritten without backup; project `.gitignore` is updated in place:
 
 ```bash
-python scripts/onboard.py init --project-root <project-root> --yes
+python scripts/onboard.py init --project-root <project-root> --trellis-user <username> --trellis-platform codex --yes
 ```
+
+If the target project already has `.trellis/`, omit `--trellis-user` and `--trellis-platform`; the script reports Trellis init as skipped-existing. If the user selected multiple Trellis platforms, repeat `--trellis-platform` or pass a comma-separated list, for example `--trellis-platform codex --trellis-platform gemini` or `--trellis-platform codex,gemini`. The script runs `trellis init -u <username> ... --yes --skip-existing` only when `.trellis/` is absent, so existing project files are not overwritten by Trellis init.
 
 5. For a reset, run `reset`. It uses the same behavior: AGENTS are backed up and overwritten, while bundled skills are overwritten without backup. If the target skills root already contains old or current mattpocock skills, reset also runs a detected-only external migration: legacy mattpocock skill directories are backed up, 1.0+ canonical skills and required dependency skills are installed or updated, and legacy directories such as `diagnose`, `write-a-skill`, and removed `zoom-out` are removed from that target root.
 
 ```bash
-python scripts/onboard.py reset --project-root <project-root> --yes
+python scripts/onboard.py reset --project-root <project-root> --trellis-user <username> --trellis-platform codex --yes
 ```
+
+After `init` or `reset` finishes template and Skill writes, always check the Trellis project setup report. If it reports `needs-user` or `blocked-missing-cli`, resolve that condition and rerun the same mode. If it reports `bootstrap-required`, treat the non-zero exit as a required Agent handoff rather than a file-copy failure, and do not finish onboarding yet: use the `trellis-workflow` Skill in the target project, read `.trellis/workflow.md` and the `.trellis/tasks/00-bootstrap-guidelines` task artifacts, run `$trellis-before-dev`, complete the bootstrap guideline work, run `$trellis-check`, and only then run `$trellis-finish-work`.
 
 6. If project-level `AGENTS.md` is skipped and no project `.gitignore` update is needed:
 

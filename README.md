@@ -30,7 +30,7 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 | `kuno-workflow-onboard-skills/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。 |
 | `kuno-workflow-onboard-skills/SKILL.md` | onboard Skill 入口说明。 |
 | `kuno-workflow-onboard-skills/REFERENCE.md` | onboard、安装、检测和工具配置参考。 |
-| `kuno-workflow-onboard-skills/scripts/onboard.py` | init、reset、安装和检测自动化脚本。 |
+| `kuno-workflow-onboard-skills/scripts/onboard.py` | init、reset、安装、检测、Trellis init 和 bootstrap 检测自动化脚本。 |
 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | 全局 Agent 规则模板。 |
 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` | 项目级 Agent 规则模板，不在普通 sync 中同步。 |
 | `kuno-workflow-onboard-skills/templates/skills/**` | 全局 Skill 模板目录，包含 `SKILL.md`、`references/`、`scripts/`、`assets/` 等。 |
@@ -55,7 +55,7 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 关键边界：
 
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
-- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；因为初始化包含交互式操作，不代用户执行，只给出命令 `trellis init -u your-name` 让用户在命令行自行运行。
+- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `kuno-workflow-onboard-skills` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 和可选 platform flags 后，onboard 流程可以主动运行 `trellis init -u <username> ... --yes --skip-existing`。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
 - GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。
@@ -408,6 +408,7 @@ tests/e2e/**/*.trace.zip
 
 - 全局 Agent 规则和项目级 Agent 模板。
 - Trellis、project-validation、gherkin-bdd、maestro-mobile-e2e、lessons、book-derived skills 等模板 Skill。
+- `init` / `reset` 在项目根目录缺少 `.trellis/` 时的 Trellis CLI 前置检查、`trellis init -u` username / platform 确认、非交互初始化，以及后置 bootstrap task 检测。
 - GitNexus MCP 手动配置检查。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
@@ -435,7 +436,19 @@ tests/e2e/**/*.trace.zip
 .\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills -Platform codex
 ```
 
+项目级 onboard 可直接传入 Trellis 初始化参数，也可由安装脚本在最终 `plan` + `init` / `reset` 前交互询问：
+
+```bash
+./install.sh --project-root /path/to/project --trellis-user your-name --trellis-platform codex
+```
+
+```powershell
+.\install.ps1 -ProjectRoot C:\path\to\project -TrellisUser your-name -TrellisPlatform codex
+```
+
 CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则；`caveman` 安装后不自动启用压缩对话模式，只在同一任务 3 次以上状态更新、5 个以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大或自动化 / 大型 review / 验证排障重复轮次中建议用户后续切换。`install-caveman` 会按 PC 平台选择官方安装命令：macOS / Linux 使用 `curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash`，native Windows 使用 `irm https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.ps1 | iex`。绑定的 bundled skills 按用户选择的 scope 作为整体安装，已有目标目录会被覆盖且不备份；外部 referenced skills 会先展示缺失项，用户选择推荐安装、自定义安装或跳过后才从外部仓库拉取，当前包含 `shadcn` 等外部 Skill，已有目标目录同样覆盖且不备份。`seo-geo` 已转为 bundled skill，随模板内置安装，不再从 external repository 拉取。
+
+项目级 `init` / `reset` 完成模板写入后会继续做 Trellis 项目 setup：如果 `.trellis/` 不存在且已提供 `--trellis-user`，脚本用用户确认的平台 flags 执行 `trellis init -u <username> ... --yes --skip-existing`；如果缺 username 或 Trellis CLI 不可用，会报告需要补充或阻塞原因。随后脚本只检查 `.trellis/tasks/00-bootstrap-guidelines`；命中时以 `bootstrap-required` 非零状态阻止误报完成，Agent 必须按 `trellis-workflow` 读取 task artifacts、执行 `$trellis-before-dev`、完成 bootstrap guideline、执行 `$trellis-check` 和 `$trellis-finish-work` 后才算 onboarding 完成。
 
 ## 同步规则
 

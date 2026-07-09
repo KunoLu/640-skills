@@ -68,6 +68,15 @@ Supported platform values are:
 
 If `--platform` / `-Platform` is provided, skip platform selection. If omitted, ask the user to pick exactly one platform. Do not configure more than one Agent tool in one run.
 
+Root installers also accept Trellis project setup options and pass them through to `scripts/onboard.py`:
+
+- `--trellis-user <name>` / `-TrellisUser <name>`
+- `--trellis-platform <name[,name...]>` / `-TrellisPlatform <name[,name...]>`
+- `--skip-trellis-init` / `-SkipTrellisInit`
+- `--skip-trellis-bootstrap` / `-SkipTrellisBootstrap`
+
+If these are omitted and the target project root has no `.trellis/`, the installer asks for the Trellis username and optional platform flags after tool installation / MCP configuration and before the final `plan` + `init` / `reset` write step.
+
 The scripts separate three locations:
 
 - `source-root`: complete Onboard Skill directory used as the template and script source.
@@ -94,7 +103,9 @@ Use this sequence when the Skill is invoked:
 14. If using a root installer, ask whether to configure MCP servers for the selected platform. Show Chrome DevTools MCP, Playwright MCP, Maestro MCP, GitNexus custom MCP, and custom stdio MCP options. Configure only the selected items.
 15. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
 16. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
-17. Run `init` or `reset` only after the user has confirmed the plan.
+17. Before project `init` or `reset`, ensure `trellis` CLI is installed and usable. If the project root has no `.trellis/`, ask for the Trellis developer username and optional Trellis platform flags such as `codex`, `claude`, `cursor`, `opencode`, `gemini`, or `pi`.
+18. Run `init` or `reset` only after the user has confirmed the plan and, when needed, the Trellis username / platform choices.
+19. After `init` or `reset`, read the Trellis project setup report. If it reports a bootstrap task, switch into the target project and complete that task through `trellis-workflow` before declaring onboarding complete.
 
 ## Preflight Check
 
@@ -204,6 +215,18 @@ AGENTS targets use backup-and-overwrite semantics. When an existing Codex global
 
 Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or explicitly installed external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path. During `init` / `reset`, mattpocock external skills use detected-only migration: if the target skills root already contains old or current mattpocock skills, legacy directories are backed up to a timestamped backup directory, canonical 1.0+ skills and required dependency skills are installed or updated, and legacy directories such as `diagnose`, `write-a-skill`, and removed `zoom-out` are removed from that target root. If no mattpocock skills are detected, no external mattpocock skills are installed.
 
+After file operations and external skill migration, `init` and `reset` run the Trellis project setup check when `--project-root` is provided. The check requires `trellis` CLI to be installed and verified. If `.trellis/` is missing and `--trellis-user` is provided, the script runs:
+
+```bash
+trellis init -u <username> [--codex] [--gemini] --yes --skip-existing
+```
+
+The Trellis platform flags come from repeatable or comma-separated `--trellis-platform` values. The script does not choose a platform default. If `.trellis/` already exists, Trellis init is skipped as `skipped-existing`.
+
+If the setup report returns `needs-user`, ask for the Trellis username and rerun the same `init` or `reset` command with `--trellis-user`. If it returns `blocked-missing-cli`, install or repair Trellis and rerun `check` before rerunning `init` or `reset`.
+
+After the init check, the script looks for a bootstrap task only at `.trellis/tasks/00-bootstrap-guidelines`. If found, the script reports `bootstrap-required` and exits non-zero so onboarding is not reported as complete; it does not invent a Trellis task CLI command. The Agent must then use `trellis-workflow` in the target project, read `.trellis/workflow.md` and the bootstrap task artifacts, run `$trellis-before-dev`, complete the bootstrap guideline work, run `$trellis-check`, and finally run `$trellis-finish-work`.
+
 ## Bundled Workflow Skills
 
 The onboard bundle includes workflow skills that are installed from templates rather than external repositories:
@@ -240,6 +263,7 @@ When an item is missing, ask the user before installing:
 - Install `rtk` globally from `rtk-ai/rtk`?
 - Install `caveman` as a user-level global Codex / Agent Skill?
 - Install `trellis` globally or project-level?
+- If the target project has no `.trellis/`, which Trellis developer username and optional `trellis init` platform flags should be used?
 - Install `gitnexus` globally or project-level?
 - Install Playwright CLI / `@playwright/test` into the target project after confirming the project needs Web E2E?
 - Install Java 17+ for Maestro? Default is the latest OpenJDK Temurin 21 JDK from `https://github.com/adoptium/temurin21-binaries/releases`; user-selected Java versions must be 17 or higher.
@@ -262,6 +286,8 @@ npm install -D @mindfoldhq/trellis
 npm install -D gitnexus
 npm init playwright@latest
 npm install -D @playwright/test
+python scripts/onboard.py init --project-root /path/to/project --trellis-user your-name --trellis-platform codex --yes
+python scripts/onboard.py reset --project-root /path/to/project --trellis-user your-name --trellis-platform codex,gemini --yes
 ```
 
 Use the user's package manager and project policy when they differ from these suggestions. If install fails, report:

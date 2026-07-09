@@ -95,11 +95,13 @@ Tier 确认：
 高优先级未初始化提示：
 
 - 如果已经确认当前目录是目标项目根目录，且项目根目录存在项目级 `AGENTS.md`，但项目根目录不存在 `.trellis/`，必须告诉用户：当前项目还没有进行 `trellis init` 操作。
-- 不要替用户执行 `trellis init`。必须说明该命令包含交互式操作，请用户自行在命令行中执行：
+- 默认不要替用户执行 `trellis init`。必须说明该命令包含项目初始化操作，请用户自行在命令行中执行，或明确进入 `kuno-workflow-onboard-skills` 的 `init` / `reset` 流程。
 
 ```bash
 trellis init -u your-name
 ```
+
+例外：当用户正在执行 `kuno-workflow-onboard-skills` 的 `init` / `reset`，且 Trellis CLI 已安装并通过验证、目标项目根目录没有 `.trellis/`、用户已确认 `trellis init -u` 的 username 和可选 platform flags 时，允许该 onboard workflow 主动执行 `trellis init -u <username> [--codex|--claude|...] --yes --skip-existing`。执行后如果发现 `.trellis/tasks/00-bootstrap-guidelines`，必须继续按 `trellis-workflow` 完成该 bootstrap task；不要把这条例外扩展到普通项目工作流。
 
 仅当当前项目存在 Trellis 强证据时使用 Trellis：
 

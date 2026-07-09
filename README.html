@@ -400,7 +400,7 @@
             <p class="eyebrow">Workflow</p>
             <h2>当前模板主线</h2>
           </div>
-          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，Agent 只提示用户在命令行执行 <code>trellis init -u your-name</code>，不代跑交互式初始化。</p>
+          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，普通项目操作只提示用户执行 <code>trellis init -u your-name</code>；例外是 onboard <code>init</code> / <code>reset</code>，在 Trellis CLI 已可用且用户确认 username 和 platform flags 后可主动执行 <code>trellis init -u &lt;username&gt; ... --yes --skip-existing</code>。</p>
         </div>
         <div class="flow" aria-label="主流程">
           <div class="step"><b>1. 需求</b><span>读取规则、lessons 短入口，并按需读取 index / topic。</span></div>
@@ -431,6 +431,7 @@
           <div><strong>平台选择</strong><br><code>--platform codex</code>、<code>claude</code>、<code>kimi</code>、<code>oh-my-pi</code> 或 <code>omp</code>；<code>omp</code> 与 <code>oh-my-pi</code> 等价。未传参数时先单选目标工具，不支持一次配置多个 Agent。</div>
           <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills</code></div>
           <div><strong>Skills</strong><br>绑定的 bundled skills 按用户选择的全局或项目 scope 整体安装；外部 referenced skills 先展示缺失项，再由用户选择推荐安装、自定义安装或跳过。</div>
+          <div><strong>Trellis Init</strong><br>项目级 <code>init</code> / <code>reset</code> 后检查 <code>.trellis/</code>；可传 <code>--trellis-user</code> / <code>-TrellisUser</code> 和 <code>--trellis-platform</code> / <code>-TrellisPlatform</code>，缺失时交互询问，再以 <code>--yes --skip-existing</code> 初始化，并检测 bootstrap task。</div>
           <div><strong>MCP</strong><br><code>scripts/onboard.py</code> 仍只负责检查和示例；根安装脚本会在用户确认后用 Codex / Claude / Kimi CLI 或 Oh My Pi <code>mcp.json</code> 直接配置选中的 MCP。</div>
         </div>
       </div>
@@ -725,6 +726,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。当前 JDK 满足 17+ 时优先使用当前 JDK；否则先扫描本机已有 17+ JDK。只有本机没有可用 JDK 且用户确认后，才引导安装 OpenJDK Temurin 21。</div>
           <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。根安装脚本可把 <code>command</code>、<code>args</code>、<code>JAVA_HOME</code> 和 <code>PATH</code> 写入选定平台；MCP 缺失或 env 未配置但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集；根安装脚本可为选定平台添加 <code>chrome-devtools-mcp</code>。</div>
+          <div><strong>Trellis Project Setup</strong><br>onboard <code>init</code> / <code>reset</code> 要先确认 Trellis CLI 可用；缺少 <code>.trellis/</code> 时使用用户确认的 <code>--trellis-user</code> 和 <code>--trellis-platform</code> 执行初始化。只检查 <code>.trellis/tasks/00-bootstrap-guidelines</code>；命中时以 <code>bootstrap-required</code> 非零状态阻止误报完成，并必须继续按 <code>trellis-workflow</code> 完成 bootstrap task。</div>
           <div><strong>shadcn</strong><br>作为 referenced external Skill 检查存在性；用户选择安装后从 <code>shadcn-ui/ui</code> 的 <code>skills/shadcn</code> 拉取，macOS / Linux / Windows 都走同一 Python installer 逻辑。</div>
           <div><strong>React Bits</strong><br>tier 选择只在目标项目被检测为 React + shadcn/ui 时作为条件 manual guidance 输出；普通 onboarding 不询问、不安装 React Bits。</div>
           <div><strong>seo-geo</strong><br>作为 bundled Skill 随模板安装；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
@@ -798,7 +800,7 @@ tests/e2e/**/*.trace.zip
             <tr><td><code>kuno-workflow-onboard-skills/templates/agents/</code></td><td>全局规则和项目级规则模板。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板目录，包含 <code>SKILL.md</code>、<code>references/</code>、<code>scripts/</code>、<code>assets/</code> 等。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/project/.gitignore</code></td><td>新项目模板忽略规则。</td></tr>
-            <tr><td><code>kuno-workflow-onboard-skills/scripts/onboard.py</code></td><td>安装、重置、检测和引导配置自动化。</td></tr>
+            <tr><td><code>kuno-workflow-onboard-skills/scripts/onboard.py</code></td><td>安装、重置、检测、Trellis init / bootstrap 检测和引导配置自动化。</td></tr>
             <tr><td><code>README.md</code> / <code>README.html</code></td><td>工作流说明文档，模板更新后必须评估同步。</td></tr>
           </tbody>
         </table>
