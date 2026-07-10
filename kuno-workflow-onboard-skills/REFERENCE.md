@@ -2,755 +2,345 @@
 
 ## Bundled Templates
 
-This Skill installs only these bundled templates:
+- `templates/agents/AGENTS.global.md` → global Codex `AGENTS.md`
+- `templates/agents/AGENTS.project.md` → each selected project root `AGENTS.md`
+- `templates/project/.gitignore` → each selected project root `.gitignore`
+- `templates/skills/**` → required global bundled Skills
 
-- `templates/agents/AGENTS.global.md` -> Codex global `AGENTS.md`
-- `templates/agents/AGENTS.project.md` -> target project root `AGENTS.md`
-- `templates/project/.gitignore` -> target project root `.gitignore`, when `--project-root` is provided
-- `.` -> `kuno-workflow-onboard-skills` skill directory, when source and target differ
-- `templates/skills/trellis-workflow/`
-- `templates/skills/trellis-channel/`
-- `templates/skills/project-validation/`
-- `templates/skills/gherkin-bdd/`
-- `templates/skills/maestro-mobile-e2e/`
-- `templates/skills/lessons-record/`
-- `templates/skills/book-refactoring-pass/`
-- `templates/skills/book-legacy-change-safety/`
-- `templates/skills/book-ddd-distilled-modeling/`
-- `templates/skills/book-ddia-data-design/`
-- `templates/skills/book-release-readiness/`
-- `templates/skills/seo-geo/`
+AGENTS files are backed up before overwrite. Bundled Skill targets are overwritten without backup. Project `.gitignore` is updated in place by ensuring that the bundled block exists.
 
-The repository root `AGENTS.md` is not an install template. It only governs this configuration excerpt repository.
+## Public Interfaces
 
-There are no bundled MCP configuration templates. `scripts/onboard.py` reports GitNexus MCP, Chrome DevTools MCP, Playwright MCP, and Maestro MCP as manual setup checks only. The repository root installers, `install.sh` and `install.ps1`, can turn those checks into direct platform configuration after the user selects one target platform and confirms the MCP servers to add. The GitNexus MCP manual check generates generic server config values and JSON / TOML examples from the detected local `gitnexus` CLI path when available; the Maestro MCP manual check generates generic server config values and JSON / TOML examples with `JAVA_HOME` and `PATH`. The root installers adapt those values to the selected client where supported.
-
-## Root Installers
-
-The repository root installer scripts are:
+### Bash
 
 ```bash
-./install.sh
+bash install.sh [options]
 ```
+
+Important arguments:
+
+- `--platform <codex|claude|kimi|oh-my-pi|omp>`
+- `--projects-root <abs-path[,abs-path...]>`
+- `--init-projects <abs-path[,abs-path...]>`
+- `--action <init|reset>`
+- `--source-root <path>`
+- `--skip-project-agents`
+- `--global-agents-path <path>`
+- `--global-skills-dir <path>`
+- `--trellis-user <name>`
+- repeatable or comma-separated `--trellis-platform <name>`
+- `--skip-trellis-init`
+- `--skip-trellis-bootstrap`
+- `--no-mcp`, `--dry-run`, `--yes`, `--no-color`
+
+### PowerShell
 
 ```powershell
-.\install.ps1
+.\install.ps1 [options]
 ```
 
-They are CLI wrappers around this Skill directory. Their `source-root` parameter points directly to `kuno-workflow-onboard-skills`, not to the repository root:
+PowerShell uses the equivalent parameters `-Platform`, `-ProjectsRoot`, `-InitProjects`, `-Action`, `-SourceRoot`, `-SkipProjectAgents`, `-GlobalAgentsPath`, `-GlobalSkillsDir`, `-TrellisUser`, `-TrellisPlatform`, `-SkipTrellisInit`, `-SkipTrellisBootstrap`, `-NoMcp`, `-DryRun`, `-Yes`, and `-NoColor`.
+
+`--project-root`, `-ProjectRoot`, `--skills-scope`, `-SkillsScope`, `--project-skills-dir`, and `-ProjectSkillsDir` are no longer public root-installer arguments.
+
+## Project Root Contract
+
+`--projects-root` / `-ProjectsRoot` accepts one or more existing absolute directories separated by English commas. `--init-projects` / `-InitProjects` accepts the same format and activates project-only mode.
+
+Rules:
+
+1. Relative paths are rejected.
+2. Empty CSV elements are ignored.
+3. Paths are resolved to canonical absolute paths.
+4. Duplicates are processed once.
+5. `projects-root` and `init-projects` are mutually exclusive.
+6. `init-projects` cannot be combined with `action`.
+7. A normal root-installer run that receives neither argument asks whether the current working directory is a project root, explains that multiple absolute paths can be supplied with English commas, and otherwise prompts for the CSV list.
+8. A blank interactive project list means global-only onboarding.
+
+When the Onboard Skill receives multiple repository paths without an explicit statement that they should be initialized, it must ask the user to confirm that those paths are the intended project initialization roots.
+
+## Two Execution Modes
+
+### Normal init/reset
+
+Normal onboarding:
+
+1. Resolves the target Agent platform.
+2. Checks and, when required, installs the target Agent CLI globally.
+3. Ensures npm is available because Trellis and GitNexus are mandatory global tools.
+4. Runs the global preflight.
+5. Installs missing global Trellis and GitNexus without a scope prompt.
+6. Preserves the existing optional RTK, caveman, Java, and Maestro decisions.
+7. Installs every missing required external Skill globally without a selection or scope prompt.
+8. Optionally configures selected user/global MCP servers.
+9. Checks project-only Playwright and React Bits conditions for every root.
+10. Writes global AGENTS and all bundled Skills once.
+11. Writes project AGENTS and `.gitignore` for every root.
+12. Runs Trellis initialization and bootstrap detection for every root.
+
+### Project-only init-projects
+
+Project-only mode:
+
+1. Resolves the Agent platform because project workflow and Trellis platform context may need it.
+2. Skips target Agent CLI detection and installation.
+3. Skips npm/Node/nvm, RTK, Trellis/GitNexus global preflight, Java, Maestro, caveman, bundled Skills, external Skills, global AGENTS, and MCP configuration.
+4. Runs `check-projects` for the selected roots.
+5. Offers only applicable project-local Playwright or React Bits decisions.
+6. Writes project AGENTS and `.gitignore`.
+7. Uses an already available global Trellis CLI when initialization is required; if it is unavailable, the affected projects are reported as blocked rather than installing the CLI.
+8. Checks bootstrap guidelines for every root.
+
+## Target Agent CLI Gate
+
+| Platform | Command | Required global npm package |
+|---|---|---|
+| `codex` | `codex --version` | `@openai/codex@latest` |
+| `claude` | `claude --version` | `@anthropic-ai/claude-code@latest` |
+| `kimi` | `kimi --version` | `@moonshot-ai/kimi-code@latest` |
+| `oh-my-pi` / `omp` | `omp --version` | `@oh-my-pi/pi-coding-agent@latest` |
+
+Shared commands:
 
 ```bash
-./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills
+python scripts/onboard.py check-agent-cli --platform codex
+python scripts/onboard.py install-agent-cli --platform codex --yes
 ```
 
-```powershell
-.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills
-```
+Normal onboarding does not collect the action or project list until the required target CLI gate passes. Oh My Pi follows the requested npm path and is accepted only when `omp --version` succeeds.
 
-If `source-root` is omitted, the default is `./kuno-workflow-onboard-skills` relative to the current working directory. At startup the scripts must verify:
+## Required Global Tools
 
-- `SKILL.md`
-- `REFERENCE.md`
-- `scripts/onboard.py`
-- `templates/agents/AGENTS.global.md`
-- `templates/agents/AGENTS.project.md`
-- `templates/skills/`
-
-If any required path is missing, print that the Kuno Onboard skill was not found or is incomplete, then exit before running checks, installs, or MCP configuration.
-
-Supported platform values are:
-
-- `codex`
-- `claude`
-- `kimi`
-- `oh-my-pi`
-- `omp`, an alias for `oh-my-pi`
-
-If `--platform` / `-Platform` is provided, skip platform selection. If omitted, ask the user to pick exactly one platform. Do not configure more than one Agent tool in one run.
-
-Root installers also accept Trellis project setup options and pass them through to `scripts/onboard.py`:
-
-- `--trellis-user <name>` / `-TrellisUser <name>`
-- `--trellis-platform <name[,name...]>` / `-TrellisPlatform <name[,name...]>`
-- `--skip-trellis-init` / `-SkipTrellisInit`
-- `--skip-trellis-bootstrap` / `-SkipTrellisBootstrap`
-
-If these are omitted and the target project root has no `.trellis/`, the installer asks for the Trellis username and optional platform flags after tool installation / MCP configuration and before the final `plan` + `init` / `reset` write step.
-
-The scripts separate three locations:
-
-- `source-root`: complete Onboard Skill directory used as the template and script source.
-- `project-root`: user target project for project AGENTS, project `.gitignore`, project skills, and project-level MCP files when supported.
-- current working directory: only the default `project-root` candidate and the base for default `./kuno-workflow-onboard-skills`.
-
-## Conversation Flow
-
-Use this sequence when the Skill is invoked:
-
-1. Tell the user that the Skill will install or reset local workflow configuration from bundled templates.
-2. If using a root installer and no platform flag was provided, ask which single Agent platform to configure.
-3. Ask whether they want `init` or `reset`.
-4. Ask: "Is the current working directory `<cwd>` the target project root for project-level `AGENTS.md`?"
-5. If the answer is no, ask for the project root path, or offer to skip project-level `AGENTS.md`.
-6. If skipped, show the absolute path to `templates/agents/AGENTS.project.md` in this Skill directory and ask the user to confirm that they will handle it manually. If the user still provides a project root, continue to update project `.gitignore`.
-7. Explain that bundled skills install globally by default. Only use project-level skills if the user explicitly requests that and provides a project path or skills directory.
-8. Run `check` and show the completed checklist.
-9. If npm is missing, confirm the platform with the user, ask permission to install nvm + latest Node.js LTS, then run `ensure-npm`.
-10. Rerun `check`; only then evaluate CLI tools such as `rtk`, `trellis`, and `gitnexus`.
-11. For every missing CLI tool or Skill, ask whether to install it and confirm global vs project-level scope where applicable. Use explicit installer subcommands for approved items: `install-java`, `install-maestro`, `install-playwright-cli`, `install-rtk`, `install-caveman`, `ensure-npm`, or `install-external-skills`.
-12. Install only user-approved missing items. Network or filesystem writes outside the workspace may require explicit approval.
-13. For bundled skills, ask once for scope and install the bundle as a unit through `init` or `reset`; existing bundled skill targets are overwritten without backup. For external skills, show missing referenced skills and ask whether to install recommended missing skills, custom selected skills, or skip them. External skill dependencies are added automatically by `install-external-skills`; existing external skill targets are overwritten without backup after confirmation.
-14. If using a root installer, ask whether to configure MCP servers for the selected platform. Show Chrome DevTools MCP, Playwright MCP, Maestro MCP, GitNexus custom MCP, and custom stdio MCP options. Configure only the selected items.
-15. Rerun `check`; present the final installation report with installed items, already-installed items skipped for install, failed or missing items, failure reasons, not-checked items, and manual configuration steps.
-16. Run `plan` and show the target paths, including project `.gitignore` when a project root is provided.
-17. Before project `init` or `reset`, ensure `trellis` CLI is installed and usable. If the project root has no `.trellis/`, ask for the Trellis developer username and optional Trellis platform flags such as `codex`, `claude`, `cursor`, `opencode`, `gemini`, or `pi`.
-18. Run `init` or `reset` only after the user has confirmed the plan and, when needed, the Trellis username / platform choices.
-19. After `init` or `reset`, read the Trellis project setup report. If it reports a bootstrap task, switch into the target project and complete that task through `trellis-workflow` before declaring onboarding complete.
-
-## Preflight Check
-
-Run this before every `init` and every `reset`:
+Trellis and GitNexus are global-only:
 
 ```bash
-python scripts/onboard.py check --project-root /path/to/project
+npm install -g @mindfoldhq/trellis@latest
+npm install -g gitnexus@latest
 ```
 
-If project-level `AGENTS.md` is skipped, still check global tools and global skills:
+The preflight no longer advertises `npm install -D @mindfoldhq/trellis` or `npm install -D gitnexus`. Project state remains local:
 
-```bash
-python scripts/onboard.py check --skip-project-agents
-```
+- Trellis: `<project-root>/.trellis/`
+- GitNexus: `<project-root>/.gitnexus/`
 
-The check reports:
-
-- Runtime availability for `npm`, `node`, and `nvm`.
-- npm-backed CLI checks are skipped when npm is not usable. Run `ensure-npm` first, then rerun `check`.
-- `rtk` CLI availability, version output, and `rtk gain` verification to avoid the unrelated same-name package.
-- `trellis` CLI availability and version output when available.
-- `gitnexus` CLI availability and version output when available.
-- Java 17+ availability for Maestro. Use `java --version` first and fall back to `java -version`.
-- Maestro CLI availability and version output when Java 17+ is available.
-- Conditional Playwright CLI / `@playwright/test` project readiness when a project root is provided.
-- Bundled Skill presence in global and, when a project root is provided, project-level skill directories, including Kuno workflow skills, `gherkin-bdd`, `maestro-mobile-e2e`, bundled book-derived skills, and `seo-geo`.
-- Referenced Skill presence for mattpocock/skills canonical skills (`diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-spec`, `to-tickets`) plus `ui-ux-pro-max`, `impeccable`, `web-ui-autotest-generator`, and `shadcn`.
-- Interaction compression Skill presence for `caveman`, checked only in the user-level global skills directory.
-- Manual setup checks for GitNexus MCP, Chrome DevTools MCP, Playwright MCP, Maestro MCP, and conditional React Bits tier selection in detected React + shadcn/ui projects. The GitNexus MCP check includes generic MCP server config values and examples when the local `gitnexus` executable path is detected. The Maestro MCP check includes generic MCP server config values and examples that include env values for `JAVA_HOME` and `PATH`.
-- A structured `installationReport` containing installed, runtime / CLI tools skipped because already installed, failed or missing, not-checked, and manual-configuration items.
-
-`init` and `reset` also print this preflight checklist before copying files in normal text mode. For machine-readable automation, run `check --json` explicitly before `init --json` or `reset --json`.
-
-After the check, present a concise checklist to the user:
-
-```text
-Runtime:
-- npm: installed / missing
-
-CLI tools:
-- rtk: installed / missing / verification-failed / wrong-package-suspected
-- trellis: installed / missing
-- gitnexus: installed / missing
-- java: installed / missing / incompatible
-- maestro: installed / missing / not-checked
-- Playwright CLI: available / missing / project-not-detected
-
-Bundled skills:
-- kuno-workflow-onboard-skills: installed / missing
-- trellis-workflow: installed / missing
-- gherkin-bdd: installed / missing
-- seo-geo: installed / missing
-
-Referenced skills:
-- diagnosing-bugs: installed / missing
-- shadcn: installed / missing
-
-Interaction compression skills:
-- caveman: installed / missing
-
-Manual checks:
-- Chrome DevTools MCP: confirm MCP server visibility
-- Playwright MCP: confirm MCP server visibility
-- Maestro MCP: confirm MCP server visibility after Java 17+, Maestro CLI, `JAVA_HOME`, and MCP `PATH` are configured
-```
-
-Do not claim missing items were installed until a follow-up `check` confirms them or the relevant installer command reports success and the expected files / commands exist.
-
-## Final Installation Report
-
-Every `check` text output includes an installation report. `install-external-skills`, `init`, and `reset` also print a final installation report after their post-operation check in normal text mode. In JSON mode, `check --json` returns the same data under `installationReport`; `install-external-skills --json` also includes `postCheck` and `installationReport`.
-
-The report is the user-facing completion summary and must include:
-
-- Installed runtime items, CLI tools, and skills, including version, path, and scope when known.
-- Already-installed runtime items and npm-installed CLI tools that should be skipped for installation unless the user requests reinstall, upgrade, replacement, or project-local installation.
-- Installed skills as detected facts only. Selected bundled and external skills are not skipped because already installed; their existing targets are overwritten without backup.
-- Failed or missing runtime items, CLI tools, and skills.
-- A reason for every failed or missing item, such as command not found, verification failure, wrong-package suspicion, missing `SKILL.md`, or skipped CLI checks because npm is unavailable.
-- A next step for every failed or missing item, including the suggested install command or repair path.
-- Not-checked items, especially CLI tools skipped because npm is not usable yet.
-- Manual configuration items, including GitNexus MCP setup with generated `command` and `args` when the local CLI path is detected, Chrome DevTools MCP setup, Playwright MCP setup, Maestro MCP setup with generated `command`, `args`, and env values, plus React Bits tier-selection guidance only when the target project is detected as React + shadcn/ui.
-
-Manual configuration items are not treated as installed by the script. They remain `manual-required` until the user completes the steps and a later environment check confirms the tool is visible or usable.
-
-For root installer runs, MCP configuration is tracked separately from `installationReport` because `scripts/onboard.py` does not write Agent MCP settings. After selected MCP configuration commands or JSON writes complete, run the platform's list/check command when available:
-
-- Codex: `codex mcp list`
-- Claude Code: `claude mcp list`
-- Kimi Code: `kimi mcp list`
-- Oh My Pi: report the written `mcp.json` path
-
-## Operation Report
-
-`init` and `reset` print an operation report after file writes and verification. This report is separate from the tool installation report and records each target file or directory operation.
-
-When `--project-root` is provided, the operation report must include `project .gitignore` with:
-
-- Target path: `<project-root>/.gitignore`.
-- Action: `created`, `updated`, or `skipped-already-present`.
-- Status: `success`, `skipped`, or `failed`.
-- Failure reason when the write, append, or verification step fails.
-
-Project `.gitignore` is updated with `templates/project/.gitignore` by ensuring the full template block exists in the target file. Existing project rules are preserved. If the template block already exists, the operation is skipped as already present. In `init`, an existing `.gitignore` does not count as an overwrite conflict because it is updated in place; in `reset`, it is also updated in place rather than backed up and replaced.
-
-AGENTS targets use backup-and-overwrite semantics. When an existing Codex global `AGENTS.md` or project `AGENTS.md` is present, it is first renamed with the dated backup rule, then the template is copied into the target path.
-
-Skill targets use overwrite-without-backup semantics. When an existing bundled skill directory or explicitly installed external skill directory is present, it is removed first, then the template or cloned skill is copied into the same target path. During `init` / `reset`, mattpocock external skills use detected-only migration: if the target skills root already contains old or current mattpocock skills, legacy directories are backed up to a timestamped backup directory, canonical 1.0+ skills and required dependency skills are installed or updated, and legacy directories such as `diagnose`, `write-a-skill`, and removed `zoom-out` are removed from that target root. If no mattpocock skills are detected, no external mattpocock skills are installed.
-
-After file operations and external skill migration, `init` and `reset` run the Trellis project setup check when `--project-root` is provided. The check requires `trellis` CLI to be installed and verified. If `.trellis/` is missing and `--trellis-user` is provided, the script runs:
-
-```bash
-trellis init -u <username> [--codex] [--gemini] --yes --skip-existing
-```
-
-The Trellis platform flags come from repeatable or comma-separated `--trellis-platform` values. The script does not choose a platform default. If `.trellis/` already exists, Trellis init is skipped as `skipped-existing`.
-
-If the setup report returns `needs-user`, ask for the Trellis username and rerun the same `init` or `reset` command with `--trellis-user`. If it returns `blocked-missing-cli`, install or repair Trellis and rerun `check` before rerunning `init` or `reset`.
-
-After the init check, the script looks for a bootstrap task only at `.trellis/tasks/00-bootstrap-guidelines`. If found, the script reports `bootstrap-required` and exits non-zero so onboarding is not reported as complete; it does not invent a Trellis task CLI command. The Agent must then use `trellis-workflow` in the target project, read `.trellis/workflow.md` and the bootstrap task artifacts, run `$trellis-before-dev`, complete the bootstrap guideline work, run `$trellis-check`, and finally run `$trellis-finish-work`.
-
-## Bundled Workflow Skills
-
-The onboard bundle includes workflow skills that are installed from templates rather than external repositories:
-
-| Skill | Primary use |
-|---|---|
-| `trellis-workflow` | Trellis lifecycle, task artifacts, workflow templates, before-dev, check, finish-work, update-spec, parent / child tasks, and BDD / TDD workflow overlays. |
-| `trellis-channel` | Trellis Channel preflight, worker boundaries, review / validation coordination, and runtime safety rules. |
-| `project-validation` | Validation command selection and reporting, including BDD traceability, Chrome DevTools MCP, Playwright, Maestro, and Web UI automation gates. |
-| `gherkin-bdd` | Persistent BDD / Gherkin specs for user-visible behavior, `.feature` path rules, scenario quality, and scenario-to-test traceability. |
-| `maestro-mobile-e2e` | Maestro Mobile / Hybrid flow generation from BDD scenarios, repo flow asset paths, report naming, and lazy-loaded real-device troubleshooting lessons. |
-| `lessons-record` | Long-term lesson recording and Trellis lesson storage structure. |
-| `seo-geo` | Public Web SEO / GEO visibility checks, schema / meta / robots / sitemap audit, and AI search visibility guidance. |
-
-## Bundled Book-Derived Skills
-
-The onboard bundle includes five focused skills derived from `agent-rules-books` `mini`-style rules:
-
-| Skill | Primary use |
-|---|---|
-| `book-refactoring-pass` | Behavior-preserving refactoring before or during implementation. |
-| `book-legacy-change-safety` | Safe changes to weakly tested or unclear legacy code. |
-| `book-ddd-distilled-modeling` | Lightweight domain language and bounded context modeling before PRD or design. |
-| `book-ddia-data-design` | Data consistency, schema evolution, event, queue, cache, and cross-service data-flow checks. |
-| `book-release-readiness` | Production-readiness review for services, jobs, queues, integrations, and deployment-sensitive changes. |
-
-These skills are bundled, not installed from an external repository at onboarding time. They are optional on-demand lenses and do not replace project rules, Trellis artifacts, GitNexus, tests, `project-validation`, Playwright, Maestro, Chrome DevTools diagnostics, or human release review.
-
-## Installation Decisions
-
-When an item is missing, ask the user before installing:
-
-- Install npm first through nvm + latest Node.js LTS?
-- Install `rtk` globally from `rtk-ai/rtk`?
-- Install `caveman` as a user-level global Codex / Agent Skill?
-- Install `trellis` globally or project-level?
-- If the target project has no `.trellis/`, which Trellis developer username and optional `trellis init` platform flags should be used?
-- Install `gitnexus` globally or project-level?
-- Install Playwright CLI / `@playwright/test` into the target project after confirming the project needs Web E2E?
-- Install Java 17+ for Maestro? Default is the latest OpenJDK Temurin 21 JDK from `https://github.com/adoptium/temurin21-binaries/releases`; user-selected Java versions must be 17 or higher.
-- Install Maestro CLI into the local development environment or CI runner after Java 17+ is available?
-- Install bundled Kuno workflow skills globally or project-level?
-- Install referenced optional skills now, leave them for a later task, or skip them intentionally? If selected, existing skill targets are overwritten without backup.
-
-Common CLI install commands are surfaced by `check` as suggestions:
-
-```bash
-python scripts/onboard.py ensure-npm --yes
-python scripts/onboard.py install-rtk --yes
-python scripts/onboard.py install-caveman --yes
-python scripts/onboard.py install-java --major 21 --yes
-python scripts/onboard.py install-maestro --yes
-python scripts/onboard.py install-playwright-cli --project-root /path/to/project --yes
-npm install -g @mindfoldhq/trellis
-npm install -g gitnexus
-npm install -D @mindfoldhq/trellis
-npm install -D gitnexus
-npm init playwright@latest
-npm install -D @playwright/test
-python scripts/onboard.py init --project-root /path/to/project --trellis-user your-name --trellis-platform codex --yes
-python scripts/onboard.py reset --project-root /path/to/project --trellis-user your-name --trellis-platform codex,gemini --yes
-```
-
-Use the user's package manager and project policy when they differ from these suggestions. If install fails, report:
-
-- Item name.
-- Scope requested by user.
-- Command or action attempted.
-- Error summary.
-- Suggested next step, such as checking Node/npm availability, network access, package registry access, MCP configuration, license prerequisites, or manual installation docs.
-
-## npm and nvm Bootstrap
-
-CLI tool checks depend on npm being usable. If `check` reports npm missing, stop CLI tool checks and ask the user to confirm npm bootstrap.
-
-For macOS and Linux:
-
-```bash
-python scripts/onboard.py ensure-npm --yes
-```
-
-The command installs or updates nvm with the official nvm install script, loads nvm, runs `nvm install --lts`, sets `nvm alias default 'lts/*'`, runs `nvm use --lts`, and verifies `node --version` and `npm --version`.
-
-For native Windows, the nvm-sh installer is not supported. Guide the user to use WSL with nvm-sh, or a Windows Node version manager such as nvm-windows or nvs, then rerun:
-
-```bash
-python scripts/onboard.py check --project-root /path/to/project
-```
-
-If nvm installs successfully but npm is still unavailable, ask the user to restart the shell or source the profile file, then rerun `check`.
-
-## RTK Installation
-
-RTK must be the Rust Token Killer from `rtk-ai/rtk`. Always verify with:
+RTK remains global but keeps its existing confirmation behavior. Verify the Rust Token Killer implementation with:
 
 ```bash
 rtk --version
 rtk gain
 ```
 
-If `rtk --version` succeeds but `rtk gain` fails, distinguish same-name package collision from an RTK verification failure such as data directory permissions. Do not overwrite or reinstall unless the user explicitly confirms.
+If `rtk gain` fails, distinguish a same-name package collision from a data-directory permission failure before replacing it.
 
-Install on macOS or Linux after confirmation:
+## npm and nvm
 
-```bash
-python scripts/onboard.py install-rtk --yes
-```
-
-The command runs the upstream quick installer, ensures `~/.local/bin` is on PATH via the active shell profile, then verifies `rtk gain`. If replacement of a wrong `rtk` is intended and Cargo is available:
+Normal onboarding requires npm whenever mandatory global Trellis or GitNexus is missing. On macOS and Linux:
 
 ```bash
-python scripts/onboard.py install-rtk --replace-wrong --yes
+python scripts/onboard.py ensure-npm --yes
 ```
 
-If the binary appears to be `rtk-ai/rtk` but `rtk gain` fails, troubleshoot permissions first or reinstall after confirmation:
+The command installs/loads nvm, installs the latest Node.js LTS, sets the default alias, switches to LTS, and verifies Node/npm.
 
-```bash
-python scripts/onboard.py install-rtk --reinstall --yes
-```
+Native Windows remains manual-required because the POSIX nvm-sh installer is not compatible. Use WSL, nvm-windows, nvs, or another approved Node.js installation, then rerun the installer.
 
-For native Windows, use the upstream Windows release zip: extract `rtk.exe` into a PATH directory such as `%USERPROFILE%\.local\bin`, then verify with `rtk --version` and `rtk gain`.
+Project-only mode never bootstraps npm. If a user chooses a project-local Playwright or React Bits action and npm/npx is unavailable, report that project action as blocked.
 
-If RTK cannot be installed, it may be skipped, but report the exact failure and next checks: PATH, `~/.local/bin`, `curl`, release download access, Windows PATH setup, data directory permissions, or same-name package collision.
+## Required Global Skills
 
-## Caveman Installation
+The 13 bundled Skills are always global during normal init/reset:
 
-`caveman` is an Agent reply compression Skill. It reduces token use in status updates, command-result summaries, code-reading notes, and other conversational output. It does not change code, tests, validation, Trellis stages, GitNexus analysis, or workflow decisions.
+1. `kuno-workflow-onboard-skills`
+2. `trellis-workflow`
+3. `trellis-channel`
+4. `project-validation`
+5. `gherkin-bdd`
+6. `maestro-mobile-e2e`
+7. `lessons-record`
+8. `book-refactoring-pass`
+9. `book-legacy-change-safety`
+10. `book-ddd-distilled-modeling`
+11. `book-ddia-data-design`
+12. `book-release-readiness`
+13. `seo-geo`
 
-Check only the user-level global skills directory for:
-
-```text
-caveman/SKILL.md
-```
-
-When missing, explain its role and ask the user before installing:
-
-```bash
-python scripts/onboard.py install-caveman --yes
-```
-
-On macOS and Linux, the command runs the official caveman installer:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash
-```
-
-On native Windows, the command runs the official PowerShell installer:
-
-```powershell
-irm https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.ps1 | iex
-```
-
-After installation, rerun:
-
-```bash
-python scripts/onboard.py check
-```
-
-Installing caveman only makes the Skill available. Do not automatically enable caveman mode after installation. Use it only when the user asks with `/caveman`, `use caveman`, `caveman mode`, `少说一点`, `减少 token`, `压缩输出`, or an equivalent request.
-
-During long work, suggest `caveman-lite` or `caveman` only from a non-blocking status update when the global AGENTS thresholds are met: 3 or more intermediate updates in the same task, 5 or more repetitive command / diff / log / file summaries, obvious context pressure, or repeated automation / review / validation-debug loops. The suggestion affects only later conversational output, not code, tools, tests, validation, Trellis, GitNexus, or workflow decisions.
-
-Prefer clear prose for install confirmations, destructive actions, security warnings, PRD / design / implement review gates, long-lived project documents, and final validation reports.
-
-## Playwright Project CLI
-
-Playwright CLI is a project-level Web E2E dependency, not a global default.
-
-When a project root is provided, check for:
-
-- `package.json` containing `@playwright/test` or `playwright`
-- `playwright.config.ts`, `playwright.config.js`, `playwright.config.mts`, or `playwright.config.cts`
-- package scripts containing `playwright test`
-- existing Web E2E directories such as `tests/e2e`, `e2e`, or project-specific equivalents
-
-If Web E2E, Web regression, or `web-ui-autotest-generator` requires Playwright but the project does not have it, ask the user before installing. After confirmation, use the project package manager and project policy.
-
-Common npm commands:
-
-```bash
-python scripts/onboard.py install-playwright-cli --project-root /path/to/project --yes
-npm init playwright@latest
-npm install -D @playwright/test
-npx playwright install
-```
-
-The script command installs `@playwright/test` into the target project and runs `npx playwright install` by default. Use `--skip-browsers` only when the project or CI image already manages browser binaries.
-
-If the user declines installation, report:
-
-- `Playwright CLI`: `skipped-by-user`
-- `Playwright Web Tests`: `blocked`
-
-Chrome DevTools MCP or Playwright MCP may still be used for diagnostics and exploration, but do not claim Web E2E passed without running project Playwright tests.
-
-## Maestro Java, CLI, and MCP
-
-Maestro CLI requires Java 17 or newer. Check Java before checking or installing Maestro CLI:
-
-```bash
-java --version
-java -version
-```
-
-Prefer the local machine's current JDK when it is 17 or newer. If the current `java` is missing or lower than 17, scan the local machine for another installed JDK that is 17 or newer and use that path for Maestro before proposing a new install. If no suitable installed JDK is found, ask the user before installing a JDK. The default recommendation is the latest OpenJDK Temurin 21 JDK from:
-
-```text
-https://github.com/adoptium/temurin21-binaries/releases
-```
-
-If the user requests another Java major version, only install versions 17 or higher. Refuse versions lower than 17. Install a JDK, not only a JRE, and verify:
-
-- `java --version` or `java -version`
-- `JAVA_HOME` points to the selected JDK
-- `PATH` resolves the expected Java
-
-After user confirmation, install the default Temurin 21 JDK with:
-
-```bash
-python scripts/onboard.py install-java --major 21 --yes
-```
-
-If the user explicitly requests another supported major version, pass that major version, for example:
-
-```bash
-python scripts/onboard.py install-java --major 17 --yes
-```
-
-Without `--yes`, `install-java` only prints `needs-confirmation` plus the planned actions. The onboard flow must not silently download or install Java.
-
-After Java 17+ is available, check Maestro CLI:
-
-```bash
-maestro --help
-maestro test --help
-```
-
-If Maestro CLI is missing, ask the user before installing it into the local development environment or CI runner. If installation is declined, report `Maestro CLI: skipped-by-user` and mark Maestro Mobile / Web Smoke as blocked or skipped as appropriate.
-
-After user confirmation, install Maestro CLI with the official installer through the script:
-
-```bash
-python scripts/onboard.py install-maestro --yes
-```
-
-If a `maestro` command exists but fails verification, do not replace it silently. Troubleshoot Java and PATH first, then use `--reinstall --yes` only after explicit confirmation.
-
-Maestro MCP depends on Maestro CLI and must be configured in the active Agent or IDE MCP client with the server command, args, and explicit environment variables. The required config values are:
-
-```json
-{
-  "command": "maestro",
-  "args": ["mcp"],
-  "env": {
-    "JAVA_HOME": "/path/to/jdk/Contents/Home",
-    "PATH": "/Users/<user>/.maestro/bin:/path/to/jdk/Contents/Home/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-  }
-}
-```
-
-For TOML-based MCP clients, the same values may be represented as:
-
-```toml
-[mcp_servers.maestro]
-command = "maestro"
-args = ["mcp"]
-
-[mcp_servers.maestro.env]
-JAVA_HOME = "/path/to/jdk/Contents/Home"
-PATH = "/Users/<user>/.maestro/bin:/path/to/jdk/Contents/Home/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-```
-
-Build `JAVA_HOME` from the selected local JDK in this order: the current `java` executable's JDK home when it is 17+, existing `JAVA_HOME` when it is 17+, platform-discovered JDK homes such as macOS `/usr/libexec/java_home`, and known local JDK directories. If none satisfy Java 17+, ask before installing a new JDK. Build `PATH` with the Maestro bin directory first, the selected JDK `bin` directory second, and safe system directories after that. Do not configure Maestro MCP with only `command` and `args`; the MCP server process may not inherit the interactive shell environment.
-
-Do not treat Maestro MCP as a separately installed package. If MCP is missing but CLI works, continue with `maestro test` for deterministic flow execution and report the MCP status separately.
-
-## External Skill Repositories
-
-Referenced external skills are not bundled under `templates/`. When the user confirms installation, pull them from these repositories:
+All 15 referenced external Skills are also required globally:
 
 | Skill | Repository |
 |---|---|
-| `diagnosing-bugs` | `https://github.com/mattpocock/skills.git` |
-| `tdd` | `https://github.com/mattpocock/skills.git` |
-| `grill-me` | `https://github.com/mattpocock/skills.git` |
-| `grill-with-docs` | `https://github.com/mattpocock/skills.git` |
-| `grilling` | `https://github.com/mattpocock/skills.git` |
-| `domain-modeling` | `https://github.com/mattpocock/skills.git` |
-| `codebase-design` | `https://github.com/mattpocock/skills.git` |
-| `handoff` | `https://github.com/mattpocock/skills.git` |
-| `writing-great-skills` | `https://github.com/mattpocock/skills.git` |
-| `to-spec` | `https://github.com/mattpocock/skills.git` |
-| `to-tickets` | `https://github.com/mattpocock/skills.git` |
+| `diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-spec`, `to-tickets` | `https://github.com/mattpocock/skills.git` |
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `web-ui-autotest-generator` | `https://github.com/Cheryl-station/web-ui-autotest.git` |
-| `shadcn` | `https://github.com/shadcn-ui/ui.git` (`skills/shadcn`) |
+| `shadcn` | `https://github.com/shadcn-ui/ui.git`, subpath `skills/shadcn` |
 
-Install approved missing external skills with:
-
-```bash
-python scripts/onboard.py install-external-skills \
-  --skills diagnosing-bugs,tdd,grill-me \
-  --scope global \
-  --yes
-```
-
-Legacy input names are handled deliberately: `diagnose` is normalized to `diagnosing-bugs`, `write-a-skill` is normalized to `writing-great-skills`, `to-prd` is normalized to `to-spec`, `to-issues` is normalized to `to-tickets`, and removed `zoom-out` is rejected with a migration note. During `init`, `reset`, and direct external Skill installation, detected legacy target directories are removed before the canonical replacement is installed. Dependency skills are added automatically: `tdd` includes `codebase-design`, `grill-me` includes `grilling`, and `grill-with-docs` includes `grilling` and `domain-modeling`.
-
-`shadcn` is an optional external Skill for projects that use shadcn/ui, component registries, presets, or a `components.json` file. It is installed from `skills/shadcn` in the official `shadcn-ui/ui` repository.
-
-`seo-geo` is now bundled with this onboard Skill and maintained from `templates/skills/seo-geo/`, not pulled from an external repository during onboarding. Basic SEO/GEO audit does not require DataForSEO credentials; DataForSEO login/password only unlock enhanced keyword, SERP, backlink, and domain overview analysis. Treat those credentials and any paid search data as secrets and never write them to repositories, logs, screenshots, tests, or reports.
-
-Install all known external referenced skills:
+Install every missing external Skill:
 
 ```bash
 python scripts/onboard.py install-external-skills --all --scope global --yes
 ```
 
-Install into a project-level skills directory:
+`--scope project` is rejected. Direct normal `init` and `reset` ensure every external Skill exists globally before template writes; the root installers perform the same guarantee before invoking the final mode.
+
+Legacy aliases remain recognized for migration: `diagnose` → `diagnosing-bugs`, `write-a-skill` → `writing-great-skills`, `to-prd` → `to-spec`, and `to-issues` → `to-tickets`. Removed `zoom-out` is not installed. Automatic migration is legacy-only so already canonical external Skills are not cloned twice during every init/reset.
+
+External Skill targets are overwritten without backup when an explicit install/migration is required. Existing canonical Skills that already pass the file check are not re-downloaded merely because a normal init/reset runs.
+
+## Skills That Keep Their Existing Scope
+
+- `caveman`: user-level global only, still requires its existing explicit installation decision; installation does not enable caveman mode.
+- React Bits Free/Starter/Pro/Ultimate: project-only and conditional.
+- Project Playwright CLI / `@playwright/test`: project-only and conditional.
+
+Java 17+ and Maestro CLI remain local development environment prerequisites, not project dependencies. They keep their existing conditional confirmation flow.
+
+## Project Checks
+
+Project-only status is available without global inspection:
 
 ```bash
-python scripts/onboard.py install-external-skills \
-  --skills ui-ux-pro-max,impeccable \
-  --scope project \
-  --project-root /path/to/project \
+python scripts/onboard.py check-projects \
+  --projects-root /abs/project-one,/abs/project-two \
+  --json
+```
+
+The result contains one entry per root:
+
+- `projectRoot`
+- `playwright`
+- `reactBits`
+- `trellis.initialized`
+- `trellis.bootstrapRequired`
+- canonical bootstrap task path when present
+
+Normal `check` includes the same entries under `projectChecks` while global runtime/tools/Skills remain at the top level.
+
+### Playwright
+
+Playwright is applicable when the project already contains a Playwright dependency, config, script, or E2E directory. A generic `package.json` by itself is not enough to install Playwright automatically.
+
+After confirmation:
+
+```bash
+python scripts/onboard.py install-playwright-cli \
+  --project-root /one/project \
   --yes
 ```
 
-External skills always overwrite existing target directories without backup after user confirmation. The `--replace` flag is accepted for older commands but is no longer required:
+This single-project argument belongs only to the project-local Playwright installer; the public root installer still uses plural `projects-root`.
+
+### React Bits
+
+React Bits tier selection is shown only when the root is a React project and contains `components.json`.
+
+- Default: keep shadcn/ui only.
+- Free: require an explicitly configured free registry item before running `npx shadcn@latest add <registry-item>` in that project.
+- Paid: require an existing entitlement and readable `REACTBITS_LICENSE_KEY`; never print or persist it. When prerequisites pass, add `@reactbits-starter/skill` from the project root.
+- Reset: preserve the detected tier and registry.
+
+## Multi-Project Trellis Setup
+
+All selected roots share the provided Trellis username and platform flags, but each root is evaluated independently.
+
+For every root:
+
+1. If `.trellis/` exists, report `skipped-existing`.
+2. If it is missing and no username was provided, report `needs-user` for that root.
+3. Otherwise run:
 
 ```bash
-python scripts/onboard.py install-external-skills \
-  --skills web-ui-autotest-generator \
-  --scope global \
-  --yes
+trellis init -u <username> [--platform-flags] --yes --skip-existing
 ```
 
-The installer clones each repository into a temporary directory, discovers the matching `SKILL.md` directory by folder name or frontmatter `name`, removes an existing target directory when present, copies that whole skill directory, and verifies the copied files.
+4. Confirm `.trellis/` was created.
+5. Unless skipped, check only `.trellis/tasks/00-bootstrap-guidelines`.
+6. If present, report `bootstrap-required` with the root and task path.
 
-If external skill installation fails, usually continue with AGENTS / bundled skill setup and report the failed external item separately. Common causes are missing `git`, network restrictions, repository access failures, no matching `SKILL.md`, ambiguous `SKILL.md` candidates, or filesystem permissions.
+Processing continues for all roots even when an earlier root has a bootstrap task. Aggregate status priority is:
 
-## MCP Setup Boundary
+```text
+failed > blocked > needs-user > bootstrap-required > success > skipped
+```
 
-MCP items are not installed by `install-external-skills`, `init`, or `reset`, and this bundle does not include MCP configuration templates. `scripts/onboard.py` checks and reports them. The root installers can configure selected MCP servers directly after explicit user participation.
+A bootstrap task requires the Agent to enter that project, use `trellis-workflow`, read `.trellis/workflow.md` and the task artifacts, run `$trellis-before-dev`, complete the guideline work, run `$trellis-check`, and finish with `$trellis-finish-work`.
 
-Platform-specific root installer commands:
+## MCP Setup
 
-- Codex stdio: `codex mcp add <name> [--env KEY=VALUE ...] -- <command> [args...]`
-- Claude Code stdio: `claude mcp add --transport stdio --scope user|project [--env KEY=value ...] <name> -- <command> [args...]`
-- Kimi Code stdio: `kimi mcp add --transport stdio [--env KEY=VALUE ...] <name> -- <command> [args...]`
-- Oh My Pi stdio: merge the server into `~/.omp/agent/mcp.json` for global scope or `<project-root>/.omp/mcp.json` for project scope.
+MCP configuration remains optional and interactive in normal mode. Project-only mode skips it.
 
-The built-in MCP options are:
+Built-in choices:
 
 - Chrome DevTools MCP: `npx -y chrome-devtools-mcp@latest`
 - Playwright MCP: `npx -y @playwright/mcp@latest`
-- Maestro MCP: `maestro mcp` with explicit `JAVA_HOME` and `PATH`
-- GitNexus MCP: detected local `gitnexus` CLI path with `args = [mcp]`; fall back to custom command / args / env only when the path cannot be detected
-- Custom stdio MCP: user-provided command / args / env
+- Maestro MCP: `maestro mcp` with `JAVA_HOME` and `PATH`
+- GitNexus MCP: detected global `gitnexus` executable with `args = [mcp]`
+- Custom stdio MCP: user-provided command/args/env
 
-Do not write real tokens, passwords, PII, production data, or sensitive headers into repository files, screenshots, logs, test reports, or Markdown summaries. When env values are needed, prompt for them and avoid echoing sensitive-looking values.
+Fixed platform scopes:
 
-## Codex Plugin / Connector Discovery Boundary
+- Codex: user-level `codex mcp add` behavior.
+- Claude Code: `claude mcp add --transport stdio --scope user ...`.
+- Kimi Code: `kimi mcp add --transport stdio ...` with its default scope behavior.
+- Oh My Pi: merge into `~/.omp/agent/mcp.json` only.
 
-Codex may expose local plugins, remote plugins, connectors, ChatGPT-hosted MCP servers, and lazily discovered tools. The onboard scripts do not install or configure Codex remote plugins or connectors.
+Do not write project-level Claude MCP entries or `<project-root>/.omp/mcp.json`. Do not expose secrets in logs or reports.
 
-Operational rules:
+Maestro MCP is not a separate package. Java 17+ and Maestro CLI must pass first. Native Windows Java/Maestro automatic installation remains unavailable.
 
-1. Treat `tool_search`, the active tool list, MCP visibility checks, and explicit project documentation as the sources of truth for whether a tool is callable in the current session.
-2. Treat remote plugin catalogs, marketplace rows, local / remote version displays, and installed-looking metadata as candidate discovery signals only; confirm the callable tool before relying on it.
-3. Install or enable a plugin / connector only when the user explicitly asks for that specific tool or confirms it after you explain the effect.
-4. Keep connector tokens, OAuth/session authentication state, cookies, and account identifiers inside the Agent or connector-managed auth flow. Do not write them into AGENTS files, MCP examples, reports, screenshots, logs, or tests.
-5. If Codex uses the operating system proxy, PAC, or WPAD for authentication/API traffic, treat that as runtime environment behavior. Do not change OS proxy settings, CI networking, or repository configuration unless the user explicitly requests it.
+## Paths
 
-For GitNexus MCP:
+Global AGENTS:
 
-1. Confirm the GitNexus CLI works, for example with `gitnexus --version` and `gitnexus status` in the target project.
-2. Use the generated MCP server config when `check` detects a local executable path: `command = "<detected-gitnexus-path>"` and `args = ["mcp"]`.
-3. Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using stdio command + args from the generated config. Use other transports only when the user explicitly selected a transport-specific setup.
-4. Restart or reload the Agent environment so the MCP server is discovered.
-5. Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.
-6. If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.
+1. `--global-agents-path`
+2. `$CODEX_HOME/AGENTS.md`
+3. `~/.codex/AGENTS.md`
 
-For Chrome DevTools MCP:
+Global Skills:
 
-1. Configure or enable the Chrome DevTools MCP server in the active Agent or IDE MCP settings.
-2. Confirm Google Chrome or Chrome for Testing is available when the MCP server requires it.
-3. Restart or reload the Agent environment so the MCP server is discovered.
-4. Confirm Chrome DevTools MCP tools are visible before relying on it for browser diagnostics.
-5. Treat DevTools MCP output as diagnostic evidence, not as a replacement for project tests or Playwright E2E.
+1. `--global-skills-dir`
+2. `$AGENT_SKILLS_DIR`
+3. `$CODEX_HOME/skills`
+4. `~/.codex/skills`
 
-For Playwright MCP:
+Project paths, repeated for every selected root:
 
-1. Configure or enable the Playwright MCP server in the active Agent or IDE MCP settings.
-2. Restart or reload the Agent environment so the MCP server is discovered.
-3. Confirm Playwright MCP tools are visible before relying on it for page exploration or locator assistance.
-4. Do not treat Playwright MCP as a substitute for project-level Playwright CLI / `@playwright/test`.
+- `<project-root>/AGENTS.md`
+- `<project-root>/.gitignore`
+- `<project-root>/.trellis/`
+- `<project-root>/.trellis/tasks/00-bootstrap-guidelines`
+- conditional project Playwright dependencies/configuration
+- conditional React Bits Skill/registry
 
-For Maestro MCP:
+Generic bundled/external workflow Skills are never installed under `<project-root>/.agent/skills` by this onboard flow.
 
-1. Confirm Java 17+ and Maestro CLI work first.
-2. If Java 17+ is missing on macOS or Linux and the user confirms installation, run `python scripts/onboard.py install-java --major 21 --yes`. Native Windows Java auto-install is not enabled by the root installer; install Java 17+ manually and rerun.
-3. If Maestro CLI is missing on macOS or Linux and the user confirms installation, run `python scripts/onboard.py install-maestro --yes`. Native Windows Maestro install is manual-required or WSL-based; rerun after the CLI is available.
-4. Use the generated generic MCP server config from `check` or `install-maestro` as the starting point.
-5. Adapt the values to the active Agent or IDE MCP config format, including `command = maestro`, `args = [mcp]`, `JAVA_HOME`, and a `PATH` that contains the Maestro bin directory and the JDK `bin` directory.
-6. Restart or reload the Agent environment when the platform requires it so the MCP server is discovered.
-7. Confirm Maestro MCP tools are visible before relying on it for device inspection, view hierarchy, screenshots, or flow assistance.
-8. If Maestro MCP is unavailable but Maestro CLI works, continue deterministic flow execution through `maestro test` and report MCP separately.
-
-For shadcn Skill:
-
-1. Treat it as a shadcn/ui workflow Skill, not a generic UI design Skill and not a React Bits license / tier substitute.
-2. Use it when the target project has `components.json`, is initializing or maintaining shadcn/ui, needs `shadcn init/add/search/view/docs/diff/info/migrate/preset`, or uses official, community, private, or paid shadcn registries.
-3. In UI work, call it after `ui-ux-pro-max` has clarified product direction and before adding, updating, or composing shadcn components.
-4. Use it when debugging shadcn component composition, forms, icons, Tailwind token usage, Base UI vs Radix API differences, chat UI primitives, or registry import rewrites.
-5. Skip it for non-shadcn projects, generic visual planning, non-React UI stacks unless the user is explicitly initializing shadcn, pure backend / testing / documentation tasks, or React Bits Free / paid license / tier decisions.
-
-For React Bits tier selection:
-
-1. Do not ask during generic onboarding. Show this guidance only after `check` receives a target project root and detects a React project with shadcn/ui initialized through `components.json`.
-2. Explain the choice briefly: shadcn/ui covers normal application components; React Bits Free and paid tiers are optional sources for more expressive animated components, blocks, or landing sections.
-3. Ask whether the project should stay with shadcn/ui only, add React Bits Free, or use an existing paid Starter / Pro / Ultimate entitlement.
-4. For React Bits Free, install only after the user confirms and a free source or registry has been explicitly configured for this workflow.
-5. For paid tiers, confirm the current environment can read `REACTBITS_LICENSE_KEY` without printing it. If prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root, confirm the React Bits Skill `SKILL.md` exists, and rerun the onboard check.
-6. During reset, preserve the detected React Bits tier and registry. Do not replace Free, Starter, Pro, or Ultimate with a different default tier without confirmation.
-
-## Path Detection
-
-The script uses `platform.system()` and `Path.home()` so the same commands work on macOS, Linux, and Windows.
-
-Codex global AGENTS path:
-
-1. `--global-agents-path`, if provided.
-2. `$CODEX_HOME/AGENTS.md`, if `CODEX_HOME` is set.
-3. `~/.codex/AGENTS.md`.
-
-Global skills path:
-
-1. `--global-skills-dir`, if provided.
-2. `$AGENT_SKILLS_DIR`, if set.
-3. `$CODEX_HOME/skills`, if `CODEX_HOME` is set.
-4. `~/.codex/skills`.
-
-Legacy paths such as `~/.agent/skills` are not used as automatic fallbacks. Use `--global-skills-dir ~/.agent/skills` or set `$AGENT_SKILLS_DIR` when a local machine intentionally uses that directory.
-
-Project AGENTS path:
-
-1. `--project-root/AGENTS.md`.
-2. Project-level AGENTS is skipped when `--skip-project-agents` is passed.
-3. `--project-root` must point to an existing directory; the script does not create a new project root.
-
-Project `.gitignore` path:
-
-1. `<project-root>/.gitignore` whenever `--project-root` is provided.
-2. The template block is appended when the file exists and the block is not already present.
-3. The file is created when it does not exist.
-
-Project skills path:
-
-1. `--project-skills-dir`, if provided.
-2. `<project-root>/.agent/skills`.
-
-## Init vs Reset
-
-`init` and `reset` both back up and overwrite existing AGENTS files. Existing bundled skill directories are overwritten without backup. Project `.gitignore` is an update-in-place target, so an existing `.gitignore` does not get backed up or replaced.
-
-Existing AGENTS targets are backed up before copying:
-
-- Existing `AGENTS.md` files become `AGENTS.md.yyyy-mm-dd-index`.
-- If the onboard Skill is already running from the same target directory it would install to, that self-install operation is treated as a no-op to avoid self-overwrite.
-- Project `.gitignore` is updated in place by ensuring the template block exists; it is not backed up and replaced.
-- Existing bundled skill directories are removed and copied again at the same path; no `<skill-name>.yyyy-mm-dd-index` backup is created.
-
-The AGENTS backup index starts at `1` and increments within the same directory until a free backup path is found.
-
-## Common Commands
-
-Plan global onboarding and project AGENTS:
+## Shared Python Commands
 
 ```bash
-python scripts/onboard.py plan --project-root /path/to/project
+python scripts/onboard.py check --projects-root /abs/one,/abs/two
+python scripts/onboard.py check-projects --projects-root /abs/one,/abs/two
+python scripts/onboard.py plan --projects-root /abs/one,/abs/two
+python scripts/onboard.py init --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py reset --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py init-projects --projects-root /abs/one,/abs/two --trellis-user your-name --yes
 ```
 
-Initialize global AGENTS, project AGENTS, and global skills:
-
-```bash
-python scripts/onboard.py init --project-root /path/to/project --yes
-```
-
-Reset the same targets:
-
-```bash
-python scripts/onboard.py reset --project-root /path/to/project --yes
-```
-
-Install only global AGENTS and global skills:
+Global-only onboarding is still supported by omitting `--projects-root` and explicitly skipping project AGENTS when using the Python command directly:
 
 ```bash
 python scripts/onboard.py init --skip-project-agents --yes
 ```
 
-Skip project AGENTS but still update project `.gitignore`:
-
-```bash
-python scripts/onboard.py init --project-root /path/to/project --skip-project-agents --yes
-```
-
-Install skills into a project:
-
-```bash
-python scripts/onboard.py init --project-root /path/to/project --skills-scope project --yes
-```
-
-Override all target paths:
-
-```bash
-python scripts/onboard.py reset \
-  --global-agents-path /custom/codex/AGENTS.md \
-  --global-skills-dir /custom/skills \
-  --project-root /path/to/project \
-  --yes
-```
-
 ## Verification
 
-After a successful `init` or `reset`, the script compares every copied file with its bundled template. Treat any verification failure as incomplete setup and do not claim onboarding succeeded.
+After writes:
+
+1. Verify every copied AGENTS file against its source template.
+2. Verify every bundled global Skill directory recursively.
+3. Verify the project `.gitignore` block exists in every selected root.
+4. Report per-root Trellis init and bootstrap status.
+5. Report per-root Playwright and React Bits decisions without claiming optional installation succeeded unless the command and post-check pass.
+6. Rerun the target Agent CLI and global preflight after normal onboarding.
+7. Rerun only `check-projects` after project-only onboarding.
+
+Network failures, permissions, missing npm/npx, unsupported native Windows bootstrap, failed Trellis initialization, missing React Bits registry/license prerequisites, and bootstrap-required handoffs must remain explicit in the final report.

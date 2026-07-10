@@ -3,9 +3,11 @@ set -euo pipefail
 
 PLATFORM=""
 SOURCE_ROOT="./kuno-workflow-onboard-skills"
-PROJECT_ROOT=""
+PROJECTS_ROOT=""
+INIT_PROJECTS=""
+PROJECTS_ONLY=0
+PROJECT_ROOTS=()
 ACTION=""
-SKILLS_SCOPE=""
 SKIP_PROJECT_AGENTS=0
 NO_MCP=0
 DRY_RUN=0
@@ -13,12 +15,13 @@ YES=0
 NO_COLOR=0
 GLOBAL_AGENTS_PATH=""
 GLOBAL_SKILLS_DIR=""
-PROJECT_SKILLS_DIR=""
 TRELLIS_USER=""
 TRELLIS_PLATFORMS=()
 SKIP_TRELLIS_INIT=0
 SKIP_TRELLIS_BOOTSTRAP=0
 CHECK_JSON=""
+AGENT_CLI_JSON=""
+PROJECTS_JSON=""
 
 EXTERNAL_SKILLS=(
   diagnosing-bugs
@@ -48,23 +51,26 @@ Usage:
 Options:
   --platform <codex|claude|kimi|oh-my-pi|omp>
       Target coding agent tool. "omp" is an alias for "oh-my-pi".
+      The installer verifies this CLI immediately, bootstraps npm when needed,
+      and installs the official npm package globally at @latest when missing.
   --source-root <path>
       Path to the kuno-workflow-onboard-skills directory.
       Defaults to ./kuno-workflow-onboard-skills.
-  --project-root <path>
-      Target project root for project AGENTS.md, .gitignore, and project skills.
+  --projects-root <abs-path[,abs-path...]>
+      One or more absolute project root paths separated by English commas.
+      When omitted, the installer asks interactively for the project roots.
+  --init-projects <abs-path[,abs-path...]>
+      Run only per-project checks and initialization for the listed absolute
+      project roots. Global tools, Skills, Agent CLI, and MCP are not checked,
+      installed, or configured in this mode.
   --action <init|reset>
       Onboard operation to run.
-  --skills-scope <global|project|none>
-      Install bundled skills globally, into the project, or skip them.
   --skip-project-agents
       Do not install project AGENTS.md.
   --global-agents-path <path>
       Override the global AGENTS.md target.
   --global-skills-dir <path>
       Override global skills directory.
-  --project-skills-dir <path>
-      Override project-level skills directory.
   --trellis-user <name>
       Developer username for trellis init -u when the project has no .trellis/.
   --trellis-platform <name[,name...]>
@@ -307,25 +313,28 @@ run_cmd() {
   fi
 }
 
+run_cmd_in_dir() {
+  local directory="$1"
+  shift
+  printf '+ cd %q && %s\n' "$directory" "$(command_string "$@")"
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    (cd "$directory" && "$@")
+  fi
+}
+
 onboard_common_args() {
   local args=()
-  if [[ -n "$PROJECT_ROOT" ]]; then
-    args+=(--project-root "$PROJECT_ROOT")
+  if [[ -n "$PROJECTS_ROOT" ]]; then
+    args+=(--projects-root "$PROJECTS_ROOT")
   fi
   if [[ "$SKIP_PROJECT_AGENTS" -eq 1 ]]; then
     args+=(--skip-project-agents)
-  fi
-  if [[ -n "$SKILLS_SCOPE" ]]; then
-    args+=(--skills-scope "$SKILLS_SCOPE")
   fi
   if [[ -n "$GLOBAL_AGENTS_PATH" ]]; then
     args+=(--global-agents-path "$GLOBAL_AGENTS_PATH")
   fi
   if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
     args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
-  fi
-  if [[ -n "$PROJECT_SKILLS_DIR" ]]; then
-    args+=(--project-skills-dir "$PROJECT_SKILLS_DIR")
   fi
   if [[ -n "$TRELLIS_USER" ]]; then
     args+=(--trellis-user "$TRELLIS_USER")
@@ -355,7 +364,7 @@ read_common_args() {
 run_onboard() {
   local mode="$1"
   shift
-  if [[ "$mode" == "check" || "$mode" == "plan" ]]; then
+  if [[ "$mode" == "check" || "$mode" == "check-projects" || "$mode" == "check-agent-cli" || "$mode" == "plan" ]]; then
     printf '+ %s\n' "$(command_string "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" "$mode" "$@")"
     "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" "$mode" "$@"
   else
@@ -369,6 +378,167 @@ refresh_check_json() {
   args=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
   CHECK_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-check.XXXXXX")"
   "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check ${args[@]+"${args[@]}"} --json > "$CHECK_JSON"
+}
+
+refresh_agent_cli_json() {
+  if [[ -n "$AGENT_CLI_JSON" && -f "$AGENT_CLI_JSON" ]]; then
+    rm -f "$AGENT_CLI_JSON"
+  fi
+  AGENT_CLI_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-agent-cli.XXXXXX")"
+  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check-agent-cli --platform "$PLATFORM" --json > "$AGENT_CLI_JSON"
+}
+
+refresh_projects_json() {
+  [[ -n "$PROJECTS_ROOT" ]] || return 0
+  if [[ -n "$PROJECTS_JSON" && -f "$PROJECTS_JSON" ]]; then
+    rm -f "$PROJECTS_JSON"
+  fi
+  PROJECTS_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-projects.XXXXXX")"
+  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check-projects \
+    --projects-root "$PROJECTS_ROOT" --json > "$PROJECTS_JSON"
+}
+
+project_check_lines() {
+  "$PYTHON_BIN" - "$PROJECTS_JSON" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+for item in data.get("projects", []):
+    playwright = item.get("playwright", {})
+    react_bits = item.get("reactBits", {})
+    print(
+        "\t".join(
+            (
+                str(item.get("projectRoot") or ""),
+                "true" if playwright.get("applicable") else "false",
+                "true" if playwright.get("installed") else "false",
+                "true" if react_bits.get("applicable") else "false",
+            )
+        )
+    )
+PY
+}
+
+configure_project_optional_items() {
+  [[ -n "$PROJECTS_ROOT" ]] || return 0
+  refresh_projects_json
+  local project_root playwright_applicable playwright_installed react_bits_applicable
+  while IFS=$'\t' read -r project_root playwright_applicable playwright_installed react_bits_applicable; do
+    [[ -n "$project_root" ]] || continue
+    if [[ "$playwright_applicable" == "true" && "$playwright_installed" != "true" ]]; then
+      if prompt_yes_no "Playwright project tooling is applicable but missing in $project_root. Install @playwright/test in this project?" "n"; then
+        run_onboard install-playwright-cli --project-root "$project_root" --yes
+      fi
+    fi
+
+    if [[ "$react_bits_applicable" == "true" ]]; then
+      local decision registry_item
+      decision="$(select_one "React Bits decision for $project_root:" \
+        'keep shadcn/ui only' \
+        'configure React Bits Free from an existing registry item' \
+        'configure an existing paid React Bits entitlement')"
+      case "$decision" in
+        'configure React Bits Free from an existing registry item')
+          registry_item="$(prompt_text 'Configured free React Bits shadcn registry item, or blank to skip' '')"
+          if [[ -n "$registry_item" ]]; then
+            run_cmd_in_dir "$project_root" npx shadcn@latest add "$registry_item"
+          else
+            warn "React Bits Free was not installed for $project_root because no configured registry item was provided."
+          fi
+          ;;
+        'configure an existing paid React Bits entitlement')
+          if [[ -z "${REACTBITS_LICENSE_KEY:-}" ]]; then
+            warn "REACTBITS_LICENSE_KEY is unavailable; skipped paid React Bits setup for $project_root."
+          else
+            run_cmd_in_dir "$project_root" npx shadcn@latest add @reactbits-starter/skill
+          fi
+          ;;
+      esac
+    fi
+  done < <(project_check_lines)
+}
+
+agent_cli_json() {
+  "$PYTHON_BIN" - "$AGENT_CLI_JSON" "$1" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+field = sys.argv[2]
+if field == "installed":
+    print("true" if data.get("installed") else "false")
+elif field == "npm-installed":
+    print("true" if data.get("runtime", {}).get("npm", {}).get("installed") else "false")
+elif field == "label":
+    print(data.get("label") or data.get("platform") or "Target Agent")
+elif field == "command":
+    print(data.get("command") or "")
+elif field == "install-command":
+    print(data.get("installCommand") or "")
+else:
+    raise SystemExit(f"unknown Agent CLI query: {field}")
+PY
+}
+
+ensure_target_agent_cli() {
+  refresh_agent_cli_json
+  local installed npm_installed label command install_command
+  installed="$(agent_cli_json installed)"
+  npm_installed="$(agent_cli_json npm-installed)"
+  label="$(agent_cli_json label)"
+  command="$(agent_cli_json command)"
+  install_command="$(agent_cli_json install-command)"
+
+  printf '\n'
+  color '1;36' 'Target Agent CLI check'
+  printf '\n'
+  if [[ "$installed" == "true" ]]; then
+    printf '%s CLI passed verification: %s\n' "$label" "$command"
+    if [[ "$npm_installed" != "true" ]]; then
+      printf 'npm is required for the mandatory global Trellis and GitNexus CLIs; bootstrapping Node.js LTS + npm.\n'
+      run_onboard ensure-npm --yes
+      if [[ "$DRY_RUN" -eq 0 ]]; then
+        refresh_agent_cli_json
+        if [[ "$(agent_cli_json npm-installed)" != "true" ]]; then
+          die "npm bootstrap completed but npm is still unavailable; required global tools cannot be installed."
+        fi
+      fi
+    fi
+    return 0
+  fi
+
+  printf '%s CLI is missing or failed verification.\n' "$label"
+  if [[ -n "$install_command" ]]; then
+    printf 'Required install: %s\n' "$install_command"
+  fi
+  if [[ "$npm_installed" != "true" ]]; then
+    if ! prompt_yes_no "npm is required to install the selected $label CLI. Bootstrap Node.js LTS + npm now?" "n"; then
+      die "$label CLI is required before collecting the remaining onboard inputs."
+    fi
+    run_onboard ensure-npm --yes
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      refresh_agent_cli_json
+      if [[ "$(agent_cli_json npm-installed)" != "true" ]]; then
+        die "npm bootstrap did not make npm available; cannot install $label CLI."
+      fi
+    fi
+  fi
+
+  if ! prompt_yes_no "Install the latest $label CLI globally with npm now?" "n"; then
+    die "$label CLI is required before collecting the remaining onboard inputs."
+  fi
+  run_onboard install-agent-cli --platform "$PLATFORM" --yes
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'Dry run: skipped %s CLI installation verification.\n' "$label"
+    return 0
+  fi
+
+  refresh_agent_cli_json
+  if [[ "$(agent_cli_json installed)" != "true" ]]; then
+    die "$label CLI installation completed but command verification failed."
+  fi
+  printf '%s CLI installation and command verification passed.\n' "$label"
 }
 
 print_check() {
@@ -444,11 +614,35 @@ else:
 PY
 }
 
-normalize_project_root() {
-  local path="$1"
-  [[ -z "$path" ]] && return 0
-  [[ -d "$path" ]] || die "Project root does not exist: $path"
-  PROJECT_ROOT="$(resolve_existing_dir "$path")"
+trim_spaces() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+normalize_projects_root() {
+  local raw="$1"
+  local item path existing joined
+  local -a parts=()
+  PROJECT_ROOTS=()
+  IFS=',' read -ra parts <<< "$raw"
+  for item in "${parts[@]}"; do
+    path="$(trim_spaces "$item")"
+    [[ -n "$path" ]] || continue
+    [[ "$path" == /* ]] || die "Project roots must be absolute paths: $path"
+    [[ -d "$path" ]] || die "Project root does not exist: $path"
+    path="$(resolve_existing_dir "$path")"
+    existing=0
+    local known
+    for known in ${PROJECT_ROOTS[@]+"${PROJECT_ROOTS[@]}"}; do
+      [[ "$known" == "$path" ]] && existing=1
+    done
+    [[ "$existing" -eq 0 ]] && PROJECT_ROOTS+=("$path")
+  done
+  (( ${#PROJECT_ROOTS[@]} > 0 )) || die "At least one absolute project root is required."
+  joined="$(IFS=','; printf '%s' "${PROJECT_ROOTS[*]}")"
+  PROJECTS_ROOT="$joined"
 }
 
 parse_args() {
@@ -472,13 +666,24 @@ parse_args() {
         SOURCE_ROOT="${1#*=}"
         shift
         ;;
-      --project-root)
-        [[ $# -ge 2 ]] || die "--project-root requires a value"
-        PROJECT_ROOT="$2"
+      --projects-root)
+        [[ $# -ge 2 ]] || die "--projects-root requires a value"
+        PROJECTS_ROOT="$2"
         shift 2
         ;;
-      --project-root=*)
-        PROJECT_ROOT="${1#*=}"
+      --projects-root=*)
+        PROJECTS_ROOT="${1#*=}"
+        shift
+        ;;
+      --init-projects)
+        [[ $# -ge 2 ]] || die "--init-projects requires a value"
+        INIT_PROJECTS="$2"
+        PROJECTS_ONLY=1
+        shift 2
+        ;;
+      --init-projects=*)
+        INIT_PROJECTS="${1#*=}"
+        PROJECTS_ONLY=1
         shift
         ;;
       --action)
@@ -488,15 +693,6 @@ parse_args() {
         ;;
       --action=*)
         ACTION="${1#*=}"
-        shift
-        ;;
-      --skills-scope)
-        [[ $# -ge 2 ]] || die "--skills-scope requires a value"
-        SKILLS_SCOPE="$2"
-        shift 2
-        ;;
-      --skills-scope=*)
-        SKILLS_SCOPE="${1#*=}"
         shift
         ;;
       --skip-project-agents)
@@ -519,15 +715,6 @@ parse_args() {
         ;;
       --global-skills-dir=*)
         GLOBAL_SKILLS_DIR="${1#*=}"
-        shift
-        ;;
-      --project-skills-dir)
-        [[ $# -ge 2 ]] || die "--project-skills-dir requires a value"
-        PROJECT_SKILLS_DIR="$2"
-        shift 2
-        ;;
-      --project-skills-dir=*)
-        PROJECT_SKILLS_DIR="${1#*=}"
         shift
         ;;
       --trellis-user)
@@ -581,6 +768,12 @@ parse_args() {
         ;;
     esac
   done
+  if [[ -n "$INIT_PROJECTS" && -n "$PROJECTS_ROOT" ]]; then
+    die "Use either --projects-root or --init-projects, not both."
+  fi
+  if [[ "$PROJECTS_ONLY" -eq 1 && -n "$ACTION" ]]; then
+    die "--init-projects is a standalone mode and cannot be combined with --action."
+  fi
 }
 
 resolve_interactive_inputs() {
@@ -597,55 +790,45 @@ resolve_interactive_inputs() {
     esac
   fi
 
-  if [[ -n "$ACTION" ]]; then
-    case "$ACTION" in
-      init|reset) ;;
-      *) die "--action must be init or reset" ;;
-    esac
+  if [[ "$PROJECTS_ONLY" -eq 1 ]]; then
+    ACTION="init-projects"
+    PROJECTS_ROOT="$INIT_PROJECTS"
   else
-    ACTION="$(select_one 'Onboard action:' 'init' 'reset')"
+    ensure_target_agent_cli
+    if [[ -n "$ACTION" ]]; then
+      case "$ACTION" in
+        init|reset) ;;
+        *) die "--action must be init or reset" ;;
+      esac
+    else
+      ACTION="$(select_one 'Onboard action:' 'init' 'reset')"
+    fi
   fi
 
-  if [[ -n "$PROJECT_ROOT" ]]; then
-    normalize_project_root "$PROJECT_ROOT"
+  if [[ -n "$PROJECTS_ROOT" ]]; then
+    normalize_projects_root "$PROJECTS_ROOT"
   else
     local cwd provided
     cwd="$(pwd -P)"
-    if prompt_yes_no "Is $cwd the target project root?" "y"; then
-      PROJECT_ROOT="$cwd"
+    if prompt_yes_no "Use $cwd as the project root? You may also provide multiple absolute paths separated by English commas." "y"; then
+      normalize_projects_root "$cwd"
     else
-      provided="$(prompt_text 'Enter target project root, or leave blank to skip project AGENTS' '')"
+      provided="$(prompt_text 'Enter one or more absolute project root paths separated by English commas, or leave blank for global-only onboarding' '')"
       if [[ -n "$provided" ]]; then
-        normalize_project_root "$provided"
+        normalize_projects_root "$provided"
       else
         SKIP_PROJECT_AGENTS=1
       fi
     fi
   fi
 
-  if [[ -n "$PROJECT_ROOT" && "$SKIP_PROJECT_AGENTS" -eq 0 ]]; then
-    if ! prompt_yes_no "Install project AGENTS.md into $PROJECT_ROOT?" "y"; then
+  if (( ${#PROJECT_ROOTS[@]} > 0 )) && [[ "$SKIP_PROJECT_AGENTS" -eq 0 ]]; then
+    if ! prompt_yes_no "Install project AGENTS.md into every selected project root?" "y"; then
       SKIP_PROJECT_AGENTS=1
     fi
   fi
-  if [[ -z "$PROJECT_ROOT" ]]; then
+  if (( ${#PROJECT_ROOTS[@]} == 0 )); then
     SKIP_PROJECT_AGENTS=1
-  fi
-
-  if [[ -n "$SKILLS_SCOPE" ]]; then
-    case "$SKILLS_SCOPE" in
-      global|project|none) ;;
-      *) die "--skills-scope must be global, project, or none" ;;
-    esac
-  else
-    SKILLS_SCOPE="$(select_one 'Bundled skills install scope:' 'global' 'project' 'none')"
-  fi
-
-  if [[ "$SKILLS_SCOPE" == "project" && -z "$PROJECT_ROOT" && -z "$PROJECT_SKILLS_DIR" ]]; then
-    local path
-    path="$(prompt_text 'Project root is required for project skills. Enter project root' '')"
-    [[ -n "$path" ]] || die "Project skills require --project-root or --project-skills-dir"
-    normalize_project_root "$path"
   fi
 }
 
@@ -664,19 +847,23 @@ split_trellis_platforms() {
 
 resolve_trellis_project_setup_inputs() {
   [[ "$SKIP_TRELLIS_INIT" -eq 1 ]] && return 0
-  [[ -n "$PROJECT_ROOT" ]] || return 0
-  [[ ! -e "$PROJECT_ROOT/.trellis" ]] || return 0
+  (( ${#PROJECT_ROOTS[@]} > 0 )) || return 0
 
-  refresh_check_json
-  if [[ "$(json_python tool-installed trellis)" != "true" ]]; then
-    warn "Trellis CLI is required before project trellis init; onboard.py will report the setup as blocked."
+  local needs_init=0 project_root
+  for project_root in ${PROJECT_ROOTS[@]+"${PROJECT_ROOTS[@]}"}; do
+    [[ -e "$project_root/.trellis" ]] || needs_init=1
+  done
+  [[ "$needs_init" -eq 1 ]] || return 0
+
+  if ! command -v trellis >/dev/null 2>&1; then
+    warn "The required global Trellis CLI is unavailable; project initialization will be reported as blocked."
     return 0
   fi
 
   while [[ -z "$TRELLIS_USER" ]]; do
     TRELLIS_USER="$(prompt_text 'Trellis developer username for trellis init -u' '')"
     if [[ -z "$TRELLIS_USER" ]]; then
-      if prompt_yes_no "Skip trellis init for this project?" "n"; then
+      if prompt_yes_no "Skip trellis init for all selected projects that do not have .trellis/?" "n"; then
         SKIP_TRELLIS_INIT=1
         return 0
       fi
@@ -697,15 +884,6 @@ install_missing_runtime_and_skills() {
   print_check
   refresh_check_json
 
-  if [[ "$(json_python runtime-installed npm)" != "true" ]]; then
-    if prompt_yes_no "npm is missing. Install nvm + Node.js LTS now?" "n"; then
-      run_onboard ensure-npm --yes
-      refresh_check_json
-    else
-      warn "npm install skipped. npm-backed CLI checks may remain not-checked."
-    fi
-  fi
-
   if [[ "$(json_python tool-installed rtk)" != "true" ]]; then
     local wrong verification
     wrong="$(json_python tool-flag rtk wrongPackageSuspected)"
@@ -725,17 +903,15 @@ install_missing_runtime_and_skills() {
   fi
 
   if [[ "$(json_python tool-installed trellis)" != "true" ]] && [[ "$(json_python runtime-installed npm)" == "true" ]]; then
-    if prompt_yes_no "Trellis CLI is missing. Install @mindfoldhq/trellis globally?" "n"; then
-      run_cmd npm install -g @mindfoldhq/trellis@latest
-      refresh_check_json
-    fi
+    printf 'Trellis CLI is required globally; installing @mindfoldhq/trellis@latest.\n'
+    run_cmd npm install -g @mindfoldhq/trellis@latest
+    refresh_check_json
   fi
 
   if [[ "$(json_python tool-installed gitnexus)" != "true" ]] && [[ "$(json_python runtime-installed npm)" == "true" ]]; then
-    if prompt_yes_no "GitNexus CLI is missing. Install gitnexus globally?" "n"; then
-      run_cmd npm install -g gitnexus
-      refresh_check_json
-    fi
+    printf 'GitNexus CLI is required globally; installing gitnexus@latest.\n'
+    run_cmd npm install -g gitnexus@latest
+    refresh_check_json
   fi
 
   if [[ "$(json_python skill-installed caveman)" != "true" ]]; then
@@ -748,42 +924,13 @@ install_missing_runtime_and_skills() {
   local missing_external
   missing_external="$(json_python missing-external-skills "${EXTERNAL_SKILLS[@]}")"
   if [[ -n "$missing_external" ]]; then
-    printf '\nMissing external skills: %s\n' "$missing_external"
-    if [[ "$SKILLS_SCOPE" == "none" ]]; then
-      warn "Bundled skills scope is none, so external skill installation is skipped."
-      return
+    printf '\nRequired global external skills are missing: %s\n' "$missing_external"
+    local args=(--skills "$missing_external" --scope global --yes)
+    if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
+      args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
     fi
-    local selected mode
-    mode="$(select_one 'External skills install decision:' 'install recommended missing skills' 'custom select skills' 'skip external skills')"
-    case "$mode" in
-      'install recommended missing skills')
-        selected="$missing_external"
-        ;;
-      'custom select skills')
-        printf 'Known missing external skills: %s\n' "$missing_external"
-        selected="$(prompt_text 'Enter comma-separated skill names to install' '')"
-        ;;
-      *)
-        selected=""
-        ;;
-    esac
-    if [[ -n "$selected" ]]; then
-      local args=(--skills "$selected" --scope "$SKILLS_SCOPE" --yes)
-      if [[ "$SKILLS_SCOPE" == "project" ]]; then
-        if [[ -n "$PROJECT_ROOT" ]]; then
-          args+=(--project-root "$PROJECT_ROOT")
-        fi
-        if [[ -n "$PROJECT_SKILLS_DIR" ]]; then
-          args+=(--project-skills-dir "$PROJECT_SKILLS_DIR")
-        fi
-      else
-        if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
-          args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
-        fi
-      fi
-      run_onboard install-external-skills ${args[@]+"${args[@]}"}
-      refresh_check_json
-    fi
+    run_onboard install-external-skills ${args[@]+"${args[@]}"}
+    refresh_check_json
   fi
 }
 
@@ -912,9 +1059,7 @@ PY
       ;;
     claude)
       command -v claude >/dev/null 2>&1 || { warn "claude CLI not found; skipped MCP server $name."; return 1; }
-      local scope="user"
-      [[ "$SKILLS_SCOPE" == "project" ]] && scope="project"
-      local cmd=(claude mcp add --transport stdio --scope "$scope")
+      local cmd=(claude mcp add --transport stdio --scope user)
       local pair
       for pair in ${env_pairs[@]+"${env_pairs[@]}"}; do
         cmd+=(--env "$pair")
@@ -945,13 +1090,7 @@ configure_omp_stdio() {
   local command="$2"
   local args_json="$3"
   local env_json="$4"
-  local target
-  if [[ "$SKILLS_SCOPE" == "project" ]]; then
-    [[ -n "$PROJECT_ROOT" ]] || { warn "Project root is required for project-level Oh My Pi MCP config."; return 1; }
-    target="$PROJECT_ROOT/.omp/mcp.json"
-  else
-    target="$HOME/.omp/agent/mcp.json"
-  fi
+  local target="$HOME/.omp/agent/mcp.json"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
     printf '+ write Oh My Pi MCP server %s to %s\n' "$name" "$target"
@@ -1067,15 +1206,19 @@ show_plan_and_execute() {
   printf '\n'
   color '1;36' 'Final plan'
   printf '\n'
-  run_onboard plan ${common[@]+"${common[@]}"}
+  if [[ "$PROJECTS_ONLY" -eq 0 ]]; then
+    run_onboard plan ${common[@]+"${common[@]}"}
+  else
+    printf 'Project-only mode will run init-projects without global writes.\n'
+  fi
 
   printf '\nTarget platform: %s\n' "$(platform_label "$PLATFORM")"
   printf 'Source root: %s\n' "$SOURCE_ROOT"
   printf 'Action: %s\n' "$ACTION"
-  printf 'Project root: %s\n' "${PROJECT_ROOT:-<none>}"
+  printf 'Project roots: %s\n' "${PROJECTS_ROOT:-<none>}"
   printf 'Project AGENTS: %s\n' "$([[ "$SKIP_PROJECT_AGENTS" -eq 1 ]] && printf 'skip' || printf 'install')"
-  printf 'Skills scope: %s\n' "$SKILLS_SCOPE"
-  printf 'MCP: %s\n' "$([[ "$NO_MCP" -eq 1 ]] && printf 'skip' || printf 'configure interactively')"
+  printf 'Bundled and external Skills: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 ]] && printf 'not touched' || printf 'required global')"
+  printf 'MCP: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 || "$NO_MCP" -eq 1 ]] && printf 'skip' || printf 'configure interactively')"
 
   if [[ "$YES" -eq 0 ]]; then
     prompt_yes_no "Proceed with onboard $ACTION?" "n" || die "Installation cancelled."
@@ -1095,6 +1238,11 @@ final_checks() {
   printf '\n'
   color '1;36' 'Final check'
   printf '\n'
+  if [[ "$PROJECTS_ONLY" -eq 1 ]]; then
+    run_onboard check-projects --projects-root "$PROJECTS_ROOT"
+    return 0
+  fi
+  run_onboard check-agent-cli --platform "$PLATFORM"
   run_onboard check ${common[@]+"${common[@]}"}
 
   case "$PLATFORM" in
@@ -1108,11 +1256,7 @@ final_checks() {
       command -v kimi >/dev/null 2>&1 && run_cmd kimi mcp list || warn "kimi CLI not found; MCP list skipped."
       ;;
     oh-my-pi)
-      if [[ "$SKILLS_SCOPE" == "project" && -n "$PROJECT_ROOT" ]]; then
-        printf 'Oh My Pi MCP config: %s\n' "$PROJECT_ROOT/.omp/mcp.json"
-      else
-        printf 'Oh My Pi MCP config: %s\n' "$HOME/.omp/agent/mcp.json"
-      fi
+      printf 'Oh My Pi MCP config: %s\n' "$HOME/.omp/agent/mcp.json"
       ;;
   esac
 }
@@ -1120,6 +1264,12 @@ final_checks() {
 cleanup() {
   if [[ -n "${CHECK_JSON:-}" && -f "$CHECK_JSON" ]]; then
     rm -f "$CHECK_JSON"
+  fi
+  if [[ -n "${AGENT_CLI_JSON:-}" && -f "$AGENT_CLI_JSON" ]]; then
+    rm -f "$AGENT_CLI_JSON"
+  fi
+  if [[ -n "${PROJECTS_JSON:-}" && -f "$PROJECTS_JSON" ]]; then
+    rm -f "$PROJECTS_JSON"
   fi
 }
 
@@ -1130,8 +1280,13 @@ main() {
   find_python
   print_logo
   resolve_interactive_inputs
-  install_missing_runtime_and_skills
-  select_and_configure_mcp
+  if [[ "$PROJECTS_ONLY" -eq 0 ]]; then
+    install_missing_runtime_and_skills
+    select_and_configure_mcp
+  else
+    printf '\nProject-only mode: skipped all global tool, Skill, Agent CLI, and MCP checks/installations.\n'
+  fi
+  configure_project_optional_items
   resolve_trellis_project_setup_inputs
   show_plan_and_execute
   final_checks

@@ -1,15 +1,13 @@
 param(
   [string]$Platform = "",
   [string]$SourceRoot = "./kuno-workflow-onboard-skills",
-  [string]$ProjectRoot = "",
+  [string]$ProjectsRoot = "",
+  [string]$InitProjects = "",
   [ValidateSet("", "init", "reset")]
   [string]$Action = "",
-  [ValidateSet("", "global", "project", "none")]
-  [string]$SkillsScope = "",
   [switch]$SkipProjectAgents,
   [string]$GlobalAgentsPath = "",
   [string]$GlobalSkillsDir = "",
-  [string]$ProjectSkillsDir = "",
   [string]$TrellisUser = "",
   [string[]]$TrellisPlatform = @(),
   [switch]$SkipTrellisInit,
@@ -22,6 +20,15 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$script:ProjectRoots = @()
+$script:ProjectsOnly = -not [string]::IsNullOrWhiteSpace($InitProjects)
+
+if ($ProjectsRoot -and $InitProjects) {
+  throw "Use either -ProjectsRoot or -InitProjects, not both."
+}
+if ($script:ProjectsOnly -and $Action) {
+  throw "-InitProjects is a standalone mode and cannot be combined with -Action."
+}
 
 $ExternalSkills = @(
   "diagnosing-bugs",
@@ -51,23 +58,25 @@ Usage:
 Options:
   -Platform <codex|claude|kimi|oh-my-pi|omp>
       Target coding agent tool. "omp" is an alias for "oh-my-pi".
+      The installer verifies this CLI immediately, bootstraps npm when needed,
+      and installs the official npm package globally at @latest when missing.
   -SourceRoot <path>
       Path to the kuno-workflow-onboard-skills directory.
       Defaults to ./kuno-workflow-onboard-skills.
-  -ProjectRoot <path>
-      Target project root for project AGENTS.md, .gitignore, and project skills.
+  -ProjectsRoot <abs-path[,abs-path...]>
+      One or more absolute project root paths separated by English commas.
+      When omitted, the installer asks interactively for the project roots.
+  -InitProjects <abs-path[,abs-path...]>
+      Run only per-project checks and initialization. Global tools, Skills,
+      Agent CLI, and MCP are not checked, installed, or configured.
   -Action <init|reset>
       Onboard operation to run.
-  -SkillsScope <global|project|none>
-      Install bundled skills globally, into the project, or skip them.
   -SkipProjectAgents
       Do not install project AGENTS.md.
   -GlobalAgentsPath <path>
       Override the global AGENTS.md target.
   -GlobalSkillsDir <path>
       Override global skills directory.
-  -ProjectSkillsDir <path>
-      Override project-level skills directory.
   -TrellisUser <name>
       Developer username for trellis init -u when the project has no .trellis/.
   -TrellisPlatform <name[,name...]>
@@ -301,12 +310,10 @@ function Get-OnboardPy {
 
 function Get-CommonArgs {
   $args = @()
-  if ($ProjectRoot) { $args += @("--project-root", $ProjectRoot) }
+  if ($ProjectsRoot) { $args += @("--projects-root", $ProjectsRoot) }
   if ($SkipProjectAgents) { $args += "--skip-project-agents" }
-  if ($SkillsScope) { $args += @("--skills-scope", $SkillsScope) }
   if ($GlobalAgentsPath) { $args += @("--global-agents-path", $GlobalAgentsPath) }
   if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
-  if ($ProjectSkillsDir) { $args += @("--project-skills-dir", $ProjectSkillsDir) }
   if ($TrellisUser) { $args += @("--trellis-user", $TrellisUser) }
   foreach ($platformName in $TrellisPlatform) {
     if ($platformName) { $args += @("--trellis-platform", $platformName) }
@@ -322,7 +329,7 @@ function Invoke-Onboard {
     [string[]]$Extra = @()
   )
   $arguments = $PythonPrefix + @((Get-OnboardPy), $Mode) + $Extra
-  if ($Mode -eq "check" -or $Mode -eq "plan") {
+  if ($Mode -eq "check" -or $Mode -eq "check-projects" -or $Mode -eq "check-agent-cli" -or $Mode -eq "plan") {
     Write-Host ("+ " + (@($PythonExe) + $arguments -join " "))
     & $PythonExe @arguments
     if ($LASTEXITCODE -ne 0) {
@@ -342,6 +349,78 @@ function Update-Check {
   }
   & $PythonExe @arguments | Set-Content -LiteralPath $CheckJsonPath -Encoding UTF8
   $script:Check = Get-Content -LiteralPath $CheckJsonPath -Raw | ConvertFrom-Json
+}
+
+function Update-AgentCliCheck {
+  $arguments = $PythonPrefix + @(
+    (Get-OnboardPy),
+    "check-agent-cli",
+    "--platform",
+    $Platform,
+    "--json"
+  )
+  $json = & $PythonExe @arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "Target Agent CLI check failed with exit code $LASTEXITCODE."
+  }
+  $script:AgentCliCheck = $json | ConvertFrom-Json
+}
+
+function Ensure-TargetAgentCli {
+  Update-AgentCliCheck
+  $label = [string]$script:AgentCliCheck.label
+  $command = [string]$script:AgentCliCheck.command
+  $installCommand = [string]$script:AgentCliCheck.installCommand
+  $npmInstalled = [bool]$script:AgentCliCheck.runtime.npm.installed
+
+  Write-Host ""
+  Write-Colored "Target Agent CLI check" Cyan
+  if ($script:AgentCliCheck.installed) {
+    Write-Host "$label CLI passed verification: $command"
+    if (-not $npmInstalled) {
+      Write-Host "npm is required for the mandatory global Trellis and GitNexus CLIs; bootstrapping Node.js LTS + npm."
+      Invoke-Onboard "ensure-npm" @("--yes")
+      if (-not $DryRun) {
+        Update-AgentCliCheck
+        if (-not $script:AgentCliCheck.runtime.npm.installed) {
+          Stop-WithMessage "npm bootstrap completed but npm is still unavailable; required global tools cannot be installed."
+        }
+      }
+    }
+    return
+  }
+
+  Write-Host "$label CLI is missing or failed verification."
+  if ($installCommand) {
+    Write-Host "Required install: $installCommand"
+  }
+  if (-not $npmInstalled) {
+    if (-not (Prompt-YesNo "npm is required to install the selected $label CLI. Bootstrap Node.js LTS + npm now?" "n")) {
+      Stop-WithMessage "$label CLI is required before collecting the remaining onboard inputs."
+    }
+    Invoke-Onboard "ensure-npm" @("--yes")
+    if (-not $DryRun) {
+      Update-AgentCliCheck
+      if (-not $script:AgentCliCheck.runtime.npm.installed) {
+        Stop-WithMessage "npm bootstrap did not make npm available; cannot install $label CLI."
+      }
+    }
+  }
+
+  if (-not (Prompt-YesNo "Install the latest $label CLI globally with npm now?" "n")) {
+    Stop-WithMessage "$label CLI is required before collecting the remaining onboard inputs."
+  }
+  Invoke-Onboard "install-agent-cli" @("--platform", $Platform, "--yes")
+  if ($DryRun) {
+    Write-Host "Dry run: skipped $label CLI installation verification."
+    return
+  }
+
+  Update-AgentCliCheck
+  if (-not $script:AgentCliCheck.installed) {
+    Stop-WithMessage "$label CLI installation completed but command verification failed."
+  }
+  Write-Host "$label CLI installation and command verification passed."
 }
 
 function Show-Check {
@@ -376,13 +455,26 @@ function Skill-Installed {
   return [bool]($item -and $item.installed)
 }
 
-function Resolve-ProjectRoot {
-  param([string]$Path)
-  if ([string]::IsNullOrWhiteSpace($Path)) { return "" }
-  if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
-    Stop-WithMessage "Project root does not exist: $Path"
+function Resolve-ProjectsRoot {
+  param([string]$Value)
+  $resolved = @()
+  foreach ($item in ($Value -split ",")) {
+    $path = $item.Trim()
+    if (-not $path) { continue }
+    if (-not [System.IO.Path]::IsPathRooted($path)) {
+      Stop-WithMessage "Project roots must be absolute paths: $path"
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+      Stop-WithMessage "Project root does not exist: $path"
+    }
+    $canonical = (Resolve-Path -LiteralPath $path).Path
+    if ($resolved -notcontains $canonical) { $resolved += $canonical }
   }
-  return (Resolve-Path -LiteralPath $Path).Path
+  if ($resolved.Count -eq 0) {
+    Stop-WithMessage "At least one absolute project root is required."
+  }
+  $script:ProjectRoots = $resolved
+  $script:ProjectsRoot = $resolved -join ","
 }
 
 function Resolve-InteractiveInputs {
@@ -399,22 +491,29 @@ function Resolve-InteractiveInputs {
     }
   }
 
-  if (-not $Action) {
-    $script:Action = Select-One "Onboard action:" @("init", "reset")
+  if ($script:ProjectsOnly) {
+    $script:Action = "init-projects"
+    $script:ProjectsRoot = $InitProjects
+  }
+  else {
+    Ensure-TargetAgentCli
+    if (-not $Action) {
+      $script:Action = Select-One "Onboard action:" @("init", "reset")
+    }
   }
 
-  if ($ProjectRoot) {
-    $script:ProjectRoot = Resolve-ProjectRoot $ProjectRoot
+  if ($ProjectsRoot) {
+    Resolve-ProjectsRoot $ProjectsRoot
   }
   else {
     $cwd = (Get-Location).Path
-    if (Prompt-YesNo "Is $cwd the target project root?" "y") {
-      $script:ProjectRoot = $cwd
+    if (Prompt-YesNo "Use $cwd as the project root? You may also provide multiple absolute paths separated by English commas." "y") {
+      Resolve-ProjectsRoot $cwd
     }
     else {
-      $provided = Prompt-Text "Enter target project root, or leave blank to skip project AGENTS"
+      $provided = Prompt-Text "Enter one or more absolute project root paths separated by English commas, or leave blank for global-only onboarding"
       if ($provided) {
-        $script:ProjectRoot = Resolve-ProjectRoot $provided
+        Resolve-ProjectsRoot $provided
       }
       else {
         $script:SkipProjectAgents = $true
@@ -422,22 +521,13 @@ function Resolve-InteractiveInputs {
     }
   }
 
-  if ($ProjectRoot -and -not $SkipProjectAgents) {
-    if (-not (Prompt-YesNo "Install project AGENTS.md into $ProjectRoot?" "y")) {
+  if ($script:ProjectRoots.Count -gt 0 -and -not $SkipProjectAgents) {
+    if (-not (Prompt-YesNo "Install project AGENTS.md into every selected project root?" "y")) {
       $script:SkipProjectAgents = $true
     }
   }
-  if (-not $ProjectRoot) {
+  if ($script:ProjectRoots.Count -eq 0) {
     $script:SkipProjectAgents = $true
-  }
-
-  if (-not $SkillsScope) {
-    $script:SkillsScope = Select-One "Bundled skills install scope:" @("global", "project", "none")
-  }
-  if ($SkillsScope -eq "project" -and -not $ProjectRoot -and -not $ProjectSkillsDir) {
-    $path = Prompt-Text "Project root is required for project skills. Enter project root"
-    if (-not $path) { Stop-WithMessage "Project skills require -ProjectRoot or -ProjectSkillsDir" }
-    $script:ProjectRoot = Resolve-ProjectRoot $path
   }
 }
 
@@ -446,16 +536,6 @@ function Install-MissingRuntimeAndSkills {
   Write-Colored "Preflight check" Cyan
   Show-Check
   Update-Check
-
-  if (-not (Runtime-Installed "npm")) {
-    if (Prompt-YesNo "npm is missing. Install nvm + Node.js LTS now?" "n") {
-      Invoke-Onboard "ensure-npm" @("--yes")
-      Update-Check
-    }
-    else {
-      Write-Warn "npm install skipped. npm-backed CLI checks may remain not-checked."
-    }
-  }
 
   if (-not (Tool-Installed "rtk")) {
     $rtk = Tool-ByName "rtk"
@@ -476,17 +556,15 @@ function Install-MissingRuntimeAndSkills {
   }
 
   if (-not (Tool-Installed "trellis") -and (Runtime-Installed "npm")) {
-    if (Prompt-YesNo "Trellis CLI is missing. Install @mindfoldhq/trellis globally?" "n") {
-      Invoke-External "npm" @("install", "-g", "@mindfoldhq/trellis@latest")
-      Update-Check
-    }
+    Write-Host "Trellis CLI is required globally; installing @mindfoldhq/trellis@latest."
+    Invoke-External "npm" @("install", "-g", "@mindfoldhq/trellis@latest")
+    Update-Check
   }
 
   if (-not (Tool-Installed "gitnexus") -and (Runtime-Installed "npm")) {
-    if (Prompt-YesNo "GitNexus CLI is missing. Install gitnexus globally?" "n") {
-      Invoke-External "npm" @("install", "-g", "gitnexus")
-      Update-Check
-    }
+    Write-Host "GitNexus CLI is required globally; installing gitnexus@latest."
+    Invoke-External "npm" @("install", "-g", "gitnexus@latest")
+    Update-Check
   }
 
   if (-not (Skill-Installed "caveman")) {
@@ -501,32 +579,11 @@ function Install-MissingRuntimeAndSkills {
   } | ForEach-Object { $_.name })
   if ($missingExternal.Count -gt 0) {
     Write-Host ""
-    Write-Host ("Missing external skills: " + ($missingExternal -join ","))
-    if ($SkillsScope -eq "none") {
-      Write-Warn "Bundled skills scope is none, so external skill installation is skipped."
-      return
-    }
-    $decision = Select-One "External skills install decision:" @("install recommended missing skills", "custom select skills", "skip external skills")
-    $selected = ""
-    if ($decision -eq "install recommended missing skills") {
-      $selected = $missingExternal -join ","
-    }
-    elseif ($decision -eq "custom select skills") {
-      Write-Host ("Known missing external skills: " + ($missingExternal -join ","))
-      $selected = Prompt-Text "Enter comma-separated skill names to install"
-    }
-    if ($selected) {
-      $args = @("--skills", $selected, "--scope", $SkillsScope, "--yes")
-      if ($SkillsScope -eq "project") {
-        if ($ProjectRoot) { $args += @("--project-root", $ProjectRoot) }
-        if ($ProjectSkillsDir) { $args += @("--project-skills-dir", $ProjectSkillsDir) }
-      }
-      else {
-        if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
-      }
-      Invoke-Onboard "install-external-skills" $args
-      Update-Check
-    }
+    Write-Host ("Required global external skills are missing: " + ($missingExternal -join ","))
+    $args = @("--skills", ($missingExternal -join ","), "--scope", "global", "--yes")
+    if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
+    Invoke-Onboard "install-external-skills" $args
+    Update-Check
   }
 }
 
@@ -538,19 +595,21 @@ function Split-TrellisPlatforms {
 
 function Resolve-TrellisProjectSetupInputs {
   if ($SkipTrellisInit) { return }
-  if (-not $ProjectRoot) { return }
-  if (Test-Path -LiteralPath (Join-Path $ProjectRoot ".trellis")) { return }
+  if ($script:ProjectRoots.Count -eq 0) { return }
+  $needsInit = @($script:ProjectRoots | Where-Object {
+    -not (Test-Path -LiteralPath (Join-Path $_ ".trellis"))
+  })
+  if ($needsInit.Count -eq 0) { return }
 
-  Update-Check
-  if (-not (Tool-Installed "trellis")) {
-    Write-Warn "Trellis CLI is required before project trellis init; onboard.py will report the setup as blocked."
+  if (-not (Get-Command trellis -ErrorAction SilentlyContinue)) {
+    Write-Warn "The required global Trellis CLI is unavailable; project initialization will be reported as blocked."
     return
   }
 
   while ([string]::IsNullOrWhiteSpace($script:TrellisUser)) {
     $script:TrellisUser = Prompt-Text "Trellis developer username for trellis init -u"
     if ([string]::IsNullOrWhiteSpace($script:TrellisUser)) {
-      if (Prompt-YesNo "Skip trellis init for this project?" "n") {
+      if (Prompt-YesNo "Skip trellis init for all selected projects that do not have .trellis/?" "n") {
         $script:SkipTrellisInit = $true
         return
       }
@@ -560,6 +619,83 @@ function Resolve-TrellisProjectSetupInputs {
   if ($script:TrellisPlatform.Count -eq 0) {
     $rawPlatforms = Prompt-Text "Trellis platform flags, comma-separated without --, or blank for none"
     $script:TrellisPlatform = @(Split-TrellisPlatforms $rawPlatforms)
+  }
+}
+
+function Update-ProjectsCheck {
+  if (-not $ProjectsRoot) {
+    $script:ProjectsCheck = [pscustomobject]@{ mode = "check-projects"; projects = @() }
+    return
+  }
+  $arguments = $PythonPrefix + @(
+    (Get-OnboardPy),
+    "check-projects",
+    "--projects-root",
+    $ProjectsRoot,
+    "--json"
+  )
+  $json = & $PythonExe @arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "Project checks failed with exit code $LASTEXITCODE."
+  }
+  $script:ProjectsCheck = $json | ConvertFrom-Json
+}
+
+function Invoke-InProject {
+  param(
+    [string]$ProjectRoot,
+    [string]$FilePath,
+    [string[]]$Arguments
+  )
+  Write-Host "+ cd $ProjectRoot; $FilePath $($Arguments -join ' ')"
+  if ($DryRun) { return }
+  Push-Location $ProjectRoot
+  try {
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+      throw "Command failed with exit code $LASTEXITCODE`: $FilePath $($Arguments -join ' ')"
+    }
+  }
+  finally {
+    Pop-Location
+  }
+}
+
+function Configure-ProjectOptionalItems {
+  if (-not $ProjectsRoot) { return }
+  Update-ProjectsCheck
+  foreach ($project in @($script:ProjectsCheck.projects)) {
+    $projectRoot = [string]$project.projectRoot
+    if ($project.playwright.applicable -and -not $project.playwright.installed) {
+      if (Prompt-YesNo "Playwright project tooling is applicable but missing in $projectRoot. Install @playwright/test in this project?" "n") {
+        Invoke-Onboard "install-playwright-cli" @("--project-root", $projectRoot, "--yes")
+      }
+    }
+
+    if ($project.reactBits.applicable) {
+      $decision = Select-One "React Bits decision for $projectRoot`:" @(
+        "keep shadcn/ui only",
+        "configure React Bits Free from an existing registry item",
+        "configure an existing paid React Bits entitlement"
+      )
+      if ($decision -eq "configure React Bits Free from an existing registry item") {
+        $registryItem = Prompt-Text "Configured free React Bits shadcn registry item, or blank to skip"
+        if ($registryItem) {
+          Invoke-InProject $projectRoot "npx" @("shadcn@latest", "add", $registryItem)
+        }
+        else {
+          Write-Warn "React Bits Free was not installed for $projectRoot because no configured registry item was provided."
+        }
+      }
+      elseif ($decision -eq "configure an existing paid React Bits entitlement") {
+        if (-not $env:REACTBITS_LICENSE_KEY) {
+          Write-Warn "REACTBITS_LICENSE_KEY is unavailable; skipped paid React Bits setup for $projectRoot."
+        }
+        else {
+          Invoke-InProject $projectRoot "npx" @("shadcn@latest", "add", "@reactbits-starter/skill")
+        }
+      }
+    }
   }
 }
 
@@ -658,8 +794,7 @@ function Configure-StdioMcp {
         Write-Warn "claude CLI not found; skipped MCP server $Name."
         return
       }
-      $scope = if ($SkillsScope -eq "project") { "project" } else { "user" }
-      $cmdArgs = @("mcp", "add", "--transport", "stdio", "--scope", $scope)
+      $cmdArgs = @("mcp", "add", "--transport", "stdio", "--scope", "user")
       foreach ($key in $ServerEnv.Keys) {
         $cmdArgs += @("--env", "$key=$($ServerEnv[$key])")
       }
@@ -691,16 +826,7 @@ function Configure-OmpStdio {
     [string[]]$Args,
     [hashtable]$ServerEnv = @{}
   )
-  if ($SkillsScope -eq "project") {
-    if (-not $ProjectRoot) {
-      Write-Warn "Project root is required for project-level Oh My Pi MCP config."
-      return
-    }
-    $target = Join-Path $ProjectRoot ".omp/mcp.json"
-  }
-  else {
-    $target = Join-Path $HOME ".omp/agent/mcp.json"
-  }
+  $target = Join-Path $HOME ".omp/agent/mcp.json"
 
   if ($DryRun) {
     Write-Host "+ write Oh My Pi MCP server $Name to $target"
@@ -812,16 +938,21 @@ function Show-PlanAndExecute {
   $common = Get-CommonArgs
   Write-Host ""
   Write-Colored "Final plan" Cyan
-  Invoke-Onboard "plan" $common
+  if (-not $script:ProjectsOnly) {
+    Invoke-Onboard "plan" $common
+  }
+  else {
+    Write-Host "Project-only mode will run init-projects without global writes."
+  }
 
   Write-Host ""
   Write-Host ("Target platform: " + (Platform-Label $Platform))
   Write-Host "Source root: $SourceRoot"
   Write-Host "Action: $Action"
-  Write-Host ("Project root: " + ($(if ($ProjectRoot) { $ProjectRoot } else { "<none>" })))
+  Write-Host ("Project roots: " + ($(if ($ProjectsRoot) { $ProjectsRoot } else { "<none>" })))
   Write-Host ("Project AGENTS: " + ($(if ($SkipProjectAgents) { "skip" } else { "install" })))
-  Write-Host "Skills scope: $SkillsScope"
-  Write-Host ("MCP: " + ($(if ($NoMcp) { "skip" } else { "configure interactively" })))
+  Write-Host ("Bundled and external Skills: " + ($(if ($script:ProjectsOnly) { "not touched" } else { "required global" })))
+  Write-Host ("MCP: " + ($(if ($script:ProjectsOnly -or $NoMcp) { "skip" } else { "configure interactively" })))
 
   if (-not $Yes) {
     if (-not (Prompt-YesNo "Proceed with onboard $Action?" "n")) {
@@ -841,6 +972,11 @@ function Show-PlanAndExecute {
 function Final-Checks {
   Write-Host ""
   Write-Colored "Final check" Cyan
+  if ($script:ProjectsOnly) {
+    Invoke-Onboard "check-projects" @("--projects-root", $ProjectsRoot)
+    return
+  }
+  Invoke-Onboard "check-agent-cli" @("--platform", $Platform)
   Invoke-Onboard "check" (Get-CommonArgs)
 
   switch ($Platform) {
@@ -863,12 +999,7 @@ function Final-Checks {
       else { Write-Warn "kimi CLI not found; MCP list skipped." }
     }
     "oh-my-pi" {
-      if ($SkillsScope -eq "project" -and $ProjectRoot) {
-        Write-Host "Oh My Pi MCP config: $(Join-Path $ProjectRoot '.omp/mcp.json')"
-      }
-      else {
-        Write-Host "Oh My Pi MCP config: $(Join-Path $HOME '.omp/agent/mcp.json')"
-      }
+      Write-Host "Oh My Pi MCP config: $(Join-Path $HOME '.omp/agent/mcp.json')"
     }
   }
 }
@@ -882,8 +1013,15 @@ Validate-SourceRoot $SourceRoot
 Find-Python
 Show-Logo
 Resolve-InteractiveInputs
-Install-MissingRuntimeAndSkills
-Select-AndConfigureMcp
+if (-not $script:ProjectsOnly) {
+  Install-MissingRuntimeAndSkills
+  Select-AndConfigureMcp
+}
+else {
+  Write-Host ""
+  Write-Host "Project-only mode: skipped all global tool, Skill, Agent CLI, and MCP checks/installations."
+}
+Configure-ProjectOptionalItems
 Resolve-TrellisProjectSetupInputs
 Show-PlanAndExecute
 Final-Checks

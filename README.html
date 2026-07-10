@@ -428,11 +428,13 @@
           <p><code>install.sh</code> 面向 macOS / Linux，<code>install.ps1</code> 面向 Windows PowerShell。两个入口都把 <code>source-root</code> 定义为完整的 <code>kuno-workflow-onboard-skills</code> 目录，而不是仓库根目录；默认值是当前执行目录下的 <code>./kuno-workflow-onboard-skills</code>。如果缺少 <code>SKILL.md</code>、<code>REFERENCE.md</code>、<code>scripts/onboard.py</code> 或 <code>templates/</code>，安装会直接停止。</p>
         </div>
         <div class="status-list">
-          <div><strong>平台选择</strong><br><code>--platform codex</code>、<code>claude</code>、<code>kimi</code>、<code>oh-my-pi</code> 或 <code>omp</code>；<code>omp</code> 与 <code>oh-my-pi</code> 等价。未传参数时先单选目标工具，不支持一次配置多个 Agent。</div>
+          <div><strong>平台与 CLI 前置门</strong><br><code>--platform codex</code>、<code>claude</code>、<code>kimi</code>、<code>oh-my-pi</code> 或 <code>omp</code>。正常 init/reset 会先执行 <code>check-agent-cli</code>，并确保 npm、全局 Trellis 与 GitNexus 可用；<code>--init-projects</code> project-only 模式只记录平台上下文，不执行任何全局检测或安装。</div>
+          <div><strong>多项目参数</strong><br><code>--projects-root /abs/one,/abs/two</code> / <code>-ProjectsRoot "C:\one,C:\two"</code> 接受英语逗号分隔的多个绝对目录。<code>--init-projects</code> / <code>-InitProjects</code> 可独立执行逐项目 AGENTS、.gitignore、Trellis、Playwright 和 React Bits 检查配置。</div>
+          <div><strong>Agent npm 映射</strong><br><code>codex → @openai/codex@latest</code><br><code>claude → @anthropic-ai/claude-code@latest</code><br><code>kimi → @moonshot-ai/kimi-code@latest</code><br><code>omp → @oh-my-pi/pi-coding-agent@latest</code>。</div>
           <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills</code></div>
-          <div><strong>Skills</strong><br>绑定的 bundled skills 按用户选择的全局或项目 scope 整体安装；外部 referenced skills 先展示缺失项，再由用户选择推荐安装、自定义安装或跳过。</div>
-          <div><strong>Trellis Init</strong><br>项目级 <code>init</code> / <code>reset</code> 后检查 <code>.trellis/</code>；可传 <code>--trellis-user</code> / <code>-TrellisUser</code> 和 <code>--trellis-platform</code> / <code>-TrellisPlatform</code>，缺失时交互询问，再以 <code>--yes --skip-existing</code> 初始化，并检测 bootstrap task。</div>
-          <div><strong>MCP</strong><br><code>scripts/onboard.py</code> 仍只负责检查和示例；根安装脚本会在用户确认后用 Codex / Claude / Kimi CLI 或 Oh My Pi <code>mcp.json</code> 直接配置选中的 MCP。GitNexus MCP 优先使用检测到的本机 <code>gitnexus</code> 可执行文件路径和 <code>mcp</code> 参数，缺失时才回退到人工输入。</div>
+          <div><strong>Skills</strong><br>正常 init/reset 强制把 13 个 bundled Skills 和 15 个 external Skills 安装到全局目录，不再提供 project/none scope；caveman 和 React Bits 等原有单一作用域保持不变。</div>
+          <div><strong>Trellis Init</strong><br>全局 Trellis CLI 为必需工具；每个项目分别检查 <code>.trellis/</code>、执行 <code>--yes --skip-existing</code> 初始化并检测 <code>.trellis/tasks/00-bootstrap-guidelines</code>，一个项目需要 bootstrap 不会阻止其余项目继续检查。</div>
+          <div><strong>MCP</strong><br>MCP 仍由用户选择：Codex 使用用户级配置，Claude 固定 <code>--scope user</code>，Kimi 保持 CLI 默认行为，Oh My Pi 固定写入全局 <code>~/.omp/agent/mcp.json</code>；project-only 模式完全跳过 MCP。</div>
         </div>
       </div>
     </section>

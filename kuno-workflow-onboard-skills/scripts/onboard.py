@@ -58,18 +58,60 @@ CLI_TOOLS = (
     {
         "name": "trellis",
         "versionArgs": ("--version",),
-        "globalInstall": "npm install -g @mindfoldhq/trellis",
-        "projectInstall": "npm install -D @mindfoldhq/trellis",
-        "advice": "Install Trellis globally for cross-project workflow use, or as a project dev dependency and run it through npx.",
+        "globalInstall": "npm install -g @mindfoldhq/trellis@latest",
+        "projectInstall": None,
+        "advice": "Install Trellis globally so one verified CLI can initialize every selected project root.",
     },
     {
         "name": "gitnexus",
         "versionArgs": ("--version",),
-        "globalInstall": "npm install -g gitnexus",
-        "projectInstall": "npm install -D gitnexus",
-        "advice": "Install GitNexus globally when sharing the MCP/CLI across projects, or as a project dev dependency for project-local usage.",
+        "globalInstall": "npm install -g gitnexus@latest",
+        "projectInstall": None,
+        "advice": "Install GitNexus globally; each project keeps its own index while sharing the verified CLI and MCP command.",
     },
 )
+AGENT_CLI_SPECS = {
+    "codex": {
+        "label": "Codex",
+        "command": "codex",
+        "npmPackage": "@openai/codex",
+        "versionArgs": ("--version",),
+        "advice": "Install the latest Codex CLI globally from the official @openai/codex npm package.",
+    },
+    "claude": {
+        "label": "Claude Code",
+        "command": "claude",
+        "npmPackage": "@anthropic-ai/claude-code",
+        "versionArgs": ("--version",),
+        "advice": "Install the latest Claude Code CLI globally from the official @anthropic-ai/claude-code npm package.",
+    },
+    "kimi": {
+        "label": "Kimi Code",
+        "command": "kimi",
+        "npmPackage": "@moonshot-ai/kimi-code",
+        "versionArgs": ("--version",),
+        "advice": "Install the latest Kimi Code CLI globally from the official @moonshot-ai/kimi-code npm package. The npm distribution requires a supported Node.js runtime.",
+    },
+    "oh-my-pi": {
+        "label": "Oh My Pi",
+        "command": "omp",
+        "npmPackage": "@oh-my-pi/pi-coding-agent",
+        "versionArgs": ("--version",),
+        "advice": "Install the latest Oh My Pi CLI globally from @oh-my-pi/pi-coding-agent and verify the omp command. Upstream recommends its native or Bun installer, so npm installation must pass the command verification gate.",
+    },
+}
+AGENT_PLATFORM_ALIASES = {
+    "codex": "codex",
+    "claude": "claude",
+    "claude-code": "claude",
+    "claudecode": "claude",
+    "kimi": "kimi",
+    "kimi-code": "kimi",
+    "kimicode": "kimi",
+    "oh-my-pi": "oh-my-pi",
+    "ohmypi": "oh-my-pi",
+    "omp": "oh-my-pi",
+}
 TRELLIS_INIT_PLATFORMS = (
     "cursor",
     "claude",
@@ -232,6 +274,7 @@ def default_global_skills_dir() -> Path:
 
 
 def resolve_project_root(args: argparse.Namespace, required: bool = False) -> Path | None:
+    """Resolve the single-project interface used by project-only tool installers."""
     project_root = expand_path(getattr(args, "project_root", None))
     if project_root and not project_root.is_dir():
         raise SystemExit(f"--project-root must be an existing directory: {project_root}")
@@ -240,13 +283,32 @@ def resolve_project_root(args: argparse.Namespace, required: bool = False) -> Pa
     return project_root
 
 
-def resolve_project_skills_dir(args: argparse.Namespace, project_root: Path | None) -> Path | None:
-    explicit = expand_path(getattr(args, "project_skills_dir", None))
-    if explicit:
-        return explicit
-    if project_root:
-        return project_root / ".agent" / "skills"
-    return None
+def resolve_project_roots(args: argparse.Namespace, required: bool = False) -> list[Path]:
+    raw = (getattr(args, "projects_root", None) or "").strip()
+    if not raw:
+        if required:
+            raise SystemExit("--projects-root is required")
+        return []
+
+    roots: list[Path] = []
+    for value in raw.split(","):
+        candidate_text = value.strip()
+        if not candidate_text:
+            continue
+        candidate = Path(candidate_text).expanduser()
+        if not candidate.is_absolute():
+            raise SystemExit(
+                f"--projects-root only accepts absolute paths: {candidate_text}"
+            )
+        candidate = candidate.resolve()
+        if not candidate.is_dir():
+            raise SystemExit(f"Project root does not exist: {candidate}")
+        if candidate not in roots:
+            roots.append(candidate)
+
+    if required and not roots:
+        raise SystemExit("--projects-root must contain at least one absolute path")
+    return roots
 
 
 def run_command(command: tuple[str, ...], timeout: int = 30, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str] | None:
@@ -401,6 +463,63 @@ def check_cli_tool(spec: dict[str, str | tuple[str, ...]]) -> dict[str, object]:
         result["verificationFailed"] = False
         result["verifyCommand"] = "rtk gain"
     return result
+
+
+def normalize_agent_platform(value: str) -> str:
+    normalized = value.strip().lower().replace("_", "-")
+    platform_name = AGENT_PLATFORM_ALIASES.get(normalized)
+    if not platform_name:
+        allowed = ", ".join(("codex", "claude", "kimi", "oh-my-pi", "omp"))
+        raise SystemExit(f"Unsupported Agent platform: {value}. Allowed values: {allowed}")
+    return platform_name
+
+
+def check_agent_cli(platform_value: str) -> dict[str, object]:
+    platform_name = normalize_agent_platform(platform_value)
+    spec = AGENT_CLI_SPECS[platform_name]
+    command = str(spec["command"])
+    version_args = tuple(str(item) for item in spec["versionArgs"])
+    path = shutil.which(command)
+    code, output = command_output((command, *version_args), timeout=10) if path else (None, "")
+    version = output.splitlines()[0] if code == 0 and output else None
+    npm_package = str(spec["npmPackage"])
+    result: dict[str, object] = {
+        "mode": "check-agent-cli",
+        "platform": platform_name,
+        "label": spec["label"],
+        "command": command,
+        "path": path,
+        "version": version,
+        "installed": bool(path and version),
+        "npmPackage": npm_package,
+        "installCommand": f"npm install -g {npm_package}@latest",
+        "verifyCommand": command_display((command, *version_args)),
+        "advice": spec["advice"],
+        "runtime": check_npm_runtime(),
+    }
+    if path and not version:
+        result["verificationFailed"] = True
+        result["verifyOutput"] = output.splitlines()[0] if output else None
+    return result
+
+
+def print_agent_cli_check(result: dict[str, object], as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    status = "installed" if result["installed"] else "missing"
+    if result.get("verificationFailed"):
+        status = "verification-failed"
+    print(f"Target Agent CLI: {result['label']}")
+    print(f"- status: {status}")
+    print(f"- command: {result['command']}")
+    if result.get("path"):
+        print(f"- path: {result['path']}")
+    if result.get("version"):
+        print(f"- version: {result['version']}")
+    if not result["installed"]:
+        print(f"- install: {result['installCommand']}")
+        print(f"- advice: {result['advice']}")
 
 
 def parse_java_major(output: str | None) -> int | None:
@@ -915,7 +1034,9 @@ def check_playwright_project(project_root: Path | None) -> dict[str, object]:
         if isinstance(value, str) and "playwright" in value
     }
     installed = bool(has_dependency or config_paths or playwright_scripts)
-    has_project_markers = bool(package_data or config_paths or e2e_paths)
+    has_project_markers = bool(
+        has_dependency or config_paths or e2e_paths or playwright_scripts
+    )
     not_checked = project_root is None or not has_project_markers
     reason = None
     if project_root is None:
@@ -926,6 +1047,7 @@ def check_playwright_project(project_root: Path | None) -> dict[str, object]:
         "name": "Playwright CLI",
         "category": "project-cli",
         "installed": installed,
+        "applicable": not not_checked,
         "path": str(project_root) if project_root else None,
         "version": dependencies.get("@playwright/test") or dependencies.get("playwright"),
         "notChecked": not_checked,
@@ -937,6 +1059,82 @@ def check_playwright_project(project_root: Path | None) -> dict[str, object]:
         "projectInstall": "npm init playwright@latest or npm install -D @playwright/test, then npx playwright install",
         "advice": "Playwright CLI is a project-level Web E2E dependency. If Web regression or web-ui-autotest-generator needs it and it is missing, ask the user before installing it into the target project.",
     }
+
+
+def check_react_bits_project(project_root: Path) -> dict[str, object]:
+    applicable = should_check_react_bits_tier(project_root)
+    result: dict[str, object] = {
+        "applicable": applicable,
+        "projectRoot": str(project_root),
+        "componentsJson": str(project_root / "components.json") if applicable else None,
+        "selectionRequired": applicable,
+    }
+    if applicable:
+        result["manualCheck"] = build_react_bits_tier_manual_check(project_root)
+    else:
+        result["reason"] = (
+            "React Bits applies only when the project is React-based and has "
+            "shadcn/ui initialized through components.json."
+        )
+    return result
+
+
+def build_project_check(project_root: Path) -> dict[str, object]:
+    bootstrap_task, relative_path = find_trellis_bootstrap_task(project_root)
+    return {
+        "projectRoot": str(project_root),
+        "playwright": check_playwright_project(project_root),
+        "reactBits": check_react_bits_project(project_root),
+        "trellis": {
+            "initialized": (project_root / ".trellis").is_dir(),
+            "path": str(project_root / ".trellis"),
+            "bootstrapRequired": bootstrap_task is not None,
+            "bootstrapTask": str(bootstrap_task) if bootstrap_task else None,
+            "bootstrapRelativePath": relative_path,
+        },
+    }
+
+
+def build_projects_check_results(args: argparse.Namespace) -> dict[str, object]:
+    project_roots = resolve_project_roots(args, required=True)
+    return {
+        "mode": "check-projects",
+        "projects": [build_project_check(project_root) for project_root in project_roots],
+    }
+
+
+def print_projects_check_results(results: dict[str, object], as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return
+    print("Project checks:")
+    for item in results["projects"]:
+        print(f"- project root: {item['projectRoot']}")
+        playwright = item["playwright"]
+        print(
+            "  Playwright CLI: "
+            + (
+                "installed"
+                if playwright["installed"]
+                else "missing"
+                if playwright["applicable"]
+                else "not-needed"
+            )
+        )
+        react_bits = item["reactBits"]
+        print(
+            "  React Bits tier selection: "
+            + ("required" if react_bits["applicable"] else "not-needed")
+        )
+        trellis = item["trellis"]
+        print(
+            "  Trellis: "
+            + ("initialized" if trellis["initialized"] else "not-initialized")
+        )
+        print(
+            "  Bootstrap guidelines: "
+            + ("required" if trellis["bootstrapRequired"] else "not-found")
+        )
 
 
 def check_skill(name: str, group: str, global_dir: Path, project_dir: Path | None) -> dict[str, object]:
@@ -1015,10 +1213,10 @@ def cli_failure_reason(item: dict[str, object]) -> str:
 def cli_next_step(item: dict[str, object]) -> str:
     if item.get("notChecked") and item.get("advice"):
         return str(item["advice"])
-    commands = [f"global: {item['globalInstall']}"]
-    if item.get("projectInstall"):
-        commands.append(f"project: {item['projectInstall']}")
-    return "Confirm the desired scope with the user, then install or repair it. Suggested command(s): " + "; ".join(commands)
+    return (
+        "Install or repair the required global tool, then rerun the check. "
+        f"Suggested command: {item['globalInstall']}"
+    )
 
 
 def skill_failure_reason(item: dict[str, object]) -> str:
@@ -1036,10 +1234,10 @@ def skill_next_step(item: dict[str, object]) -> str:
         return "After user confirmation, install the Codex skill with `python scripts/onboard.py install-caveman --yes`, then rerun `check`."
     if item.get("sourceRepo"):
         return (
-            "After user confirmation, install from the configured repository with "
-            f"`python scripts/onboard.py install-external-skills --skills {name} --scope global|project --yes`."
+            "Install the required global Skill from the configured repository with "
+            f"`python scripts/onboard.py install-external-skills --skills {name} --scope global --yes`."
         )
-    return "Run `init` or `reset` with the confirmed skills scope, then rerun `check`."
+    return "Run `init` or `reset` to install the required global bundled Skills, then rerun `check`."
 
 
 def skipped_already_installed_entry(
@@ -1212,16 +1410,15 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
 
 
 def build_check_results(args: argparse.Namespace) -> dict[str, object]:
-    project_root = resolve_project_root(args)
+    project_roots = resolve_project_roots(args)
     global_skills_dir = expand_path(getattr(args, "global_skills_dir", None)) or default_global_skills_dir()
-    project_skills_dir = resolve_project_skills_dir(args, project_root)
     runtime = check_npm_runtime()
     skills = [
-        check_skill(name, "bundled", global_skills_dir, project_skills_dir)
+        check_skill(name, "bundled", global_skills_dir, None)
         for name in BUNDLED_SKILLS
     ]
     skills.extend(
-        check_skill(name, "referenced", global_skills_dir, project_skills_dir)
+        check_skill(name, "referenced", global_skills_dir, None)
         for name in REFERENCED_SKILLS
     )
     skills.extend(
@@ -1239,8 +1436,8 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     maestro_check = check_maestro_cli(java_check)
     tools.append(java_check)
     tools.append(maestro_check)
-    tools.append(check_playwright_project(project_root))
-    manual_checks = build_manual_checks(java_check, maestro_check, project_root, gitnexus_check)
+    manual_checks = build_manual_checks(java_check, maestro_check, None, gitnexus_check)
+    project_checks = [build_project_check(project_root) for project_root in project_roots]
     missing = {
         "runtime": [] if runtime["npm"]["installed"] else ["npm"],
         "tools": [item["name"] for item in tools if not item["installed"] and not item.get("notChecked")],
@@ -1252,14 +1449,14 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "platform": platform.system() or sys.platform,
         "paths": {
             "globalSkillsDir": str(global_skills_dir),
-            "projectRoot": str(project_root) if project_root else None,
-            "projectSkillsDir": str(project_skills_dir) if project_skills_dir else None,
+            "projectRoots": [str(project_root) for project_root in project_roots],
         },
         "runtime": runtime,
         "cliChecksSkipped": cli_checks_skipped,
         "tools": tools,
         "skills": skills,
         "manualChecks": manual_checks,
+        "projectChecks": project_checks,
         "missing": missing,
     }
     results["installationReport"] = build_installation_report(results)
@@ -1365,9 +1562,8 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     print(f"Platform: {results['platform']}")
     paths = results["paths"]
     print(f"Global skills: {paths['globalSkillsDir']}")
-    if paths["projectRoot"]:
-        print(f"Project root: {paths['projectRoot']}")
-        print(f"Project skills: {paths['projectSkillsDir']}")
+    for project_root in paths["projectRoots"]:
+        print(f"Project root: {project_root}")
 
     runtime = results["runtime"]
     print("\nRuntime preflight:")
@@ -1428,6 +1624,13 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         print(f"- {item['name']} [{item['category']}]: {item['advice']}")
         print_config_examples(item)
 
+    if results["projectChecks"]:
+        print("")
+        print_projects_check_results(
+            {"mode": "check-projects", "projects": results["projectChecks"]},
+            False,
+        )
+
     missing = results["missing"]
     if missing["runtime"] or missing["tools"] or missing["skills"]:
         print("\nMissing summary:")
@@ -1437,7 +1640,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
             print("- tools: " + ", ".join(missing["tools"]))
         if missing["skills"]:
             print("- skills: " + ", ".join(missing["skills"]))
-        print("Ask the user whether to install missing items and confirm global vs project scope before init/reset.")
+        print("Install required global items before init/reset; project-only items remain conditional per project root.")
     else:
         print("\nMissing summary: none")
 
@@ -1595,12 +1798,6 @@ def parse_skill_names(args: argparse.Namespace) -> list[str]:
 
 
 def resolve_install_skills_dir(args: argparse.Namespace) -> Path:
-    if args.scope == "project":
-        project_root = resolve_project_root(args)
-        project_skills_dir = resolve_project_skills_dir(args, project_root)
-        if not project_skills_dir:
-            raise SystemExit("--project-root or --project-skills-dir is required for project skill installation")
-        return project_skills_dir
     return expand_path(args.global_skills_dir) or default_global_skills_dir()
 
 
@@ -1817,16 +2014,7 @@ def remove_legacy_external_targets(
     return results
 
 
-def scoped_skills_root(args: argparse.Namespace, project_root: Path | None) -> Path | None:
-    if args.skills_scope == "none":
-        return None
-    if args.skills_scope == "project":
-        explicit = expand_path(args.project_skills_dir)
-        if explicit:
-            return explicit
-        if not project_root:
-            raise SystemExit("--project-root or --project-skills-dir is required for project skills")
-        return project_root / ".agent" / "skills"
+def scoped_skills_root(args: argparse.Namespace) -> Path:
     return expand_path(args.global_skills_dir) or default_global_skills_dir()
 
 
@@ -1862,30 +2050,23 @@ def canonical_migration_targets(detected: list[str]) -> list[str]:
 
 
 def build_external_migration_plan(args: argparse.Namespace) -> dict[str, object]:
-    project_root = resolve_project_root(args)
-    skills_root = scoped_skills_root(args, project_root)
-    if not skills_root:
-        return {
-            "mode": "mattpocock-external-migration",
-            "status": "skipped",
-            "reason": "skills scope is none",
-        }
+    skills_root = scoped_skills_root(args)
 
     detected = detected_mattpocock_skill_names(skills_root)
-    selected = canonical_migration_targets(detected)
     legacy = [name for name in detected if name in MATTPOCOCK_LEGACY_RENAMES or name in MATTPOCOCK_REMOVED_SKILLS]
+    selected = canonical_migration_targets(legacy)
     canonical = [name for name in detected if name in MATTPOCOCK_CANONICAL_SKILLS]
     return {
         "mode": "mattpocock-external-migration",
-        "status": "planned" if detected else "skipped",
-        "reason": None if detected else "no mattpocock skills detected in target skills root",
+        "status": "planned" if legacy else "skipped",
+        "reason": None if legacy else "no legacy mattpocock skills detected in global skills root",
         "targetDir": str(skills_root),
         "detectedLegacy": legacy,
         "detectedCanonical": canonical,
         "installOrUpdate": selected,
         "removeLegacy": legacy,
         "backupRoot": str(external_migration_backup_root(skills_root)),
-        "autoMode": "detected-only",
+        "autoMode": "legacy-only",
     }
 
 
@@ -2060,6 +2241,38 @@ def install_external_skills(args: argparse.Namespace) -> int:
     return 1 if any(item["status"] == "failed" for item in results) else 0
 
 
+def missing_required_external_skills(args: argparse.Namespace) -> list[str]:
+    global_skills_dir = (
+        expand_path(getattr(args, "global_skills_dir", None))
+        or default_global_skills_dir()
+    )
+    return [
+        name
+        for name in EXTERNAL_SKILL_SOURCES
+        if not (global_skills_dir / name / "SKILL.md").is_file()
+    ]
+
+
+def install_required_external_skills(args: argparse.Namespace) -> int:
+    missing = missing_required_external_skills(args)
+    if not missing:
+        return 0
+    print(
+        "Required global external Skills are missing and will be installed: "
+        + ", ".join(missing)
+    )
+    install_args = argparse.Namespace(
+        all=False,
+        skills=",".join(missing),
+        scope="global",
+        global_skills_dir=getattr(args, "global_skills_dir", None),
+        replace=False,
+        yes=True,
+        json=False,
+    )
+    return install_external_skills(install_args)
+
+
 def default_shell_profile() -> Path:
     shell_name = Path(os.environ.get("SHELL", "")).name
     if shell_name == "zsh":
@@ -2180,6 +2393,86 @@ def ensure_npm(args: argparse.Namespace) -> int:
         else:
             print("npm still is not available in PATH. Restart the shell or source the profile file, then rerun check.")
     return 0 if after["npm"]["installed"] else 1
+
+
+def install_agent_cli(args: argparse.Namespace) -> int:
+    before = check_agent_cli(args.platform)
+    payload: dict[str, object] = {
+        "mode": "install-agent-cli",
+        "platform": before["platform"],
+        "label": before["label"],
+        "command": before["command"],
+        "npmPackage": before["npmPackage"],
+        "installCommand": before["installCommand"],
+        "verifyCommand": before["verifyCommand"],
+        "runtime": before["runtime"],
+        "before": before,
+    }
+
+    if before["installed"]:
+        payload["status"] = "already-installed"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"{before['label']} CLI is already installed and verified.")
+            print(f"{before['command']}: {before['path']} ({before['version']})")
+        return 0
+
+    runtime = before["runtime"]
+    if not runtime["npm"]["installed"]:
+        payload["status"] = "npm-required"
+        payload["advice"] = (
+            "Install npm first with `python scripts/onboard.py ensure-npm --yes` after user confirmation, "
+            "then rerun install-agent-cli."
+        )
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"{before['label']} CLI is missing and npm is not usable.")
+            print(payload["advice"])
+        return 2
+
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        payload["actions"] = [
+            f"run `{before['installCommand']}`",
+            f"verify `{before['verifyCommand']}`",
+        ]
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"{before['label']} CLI is missing or failed verification.")
+            for action in payload["actions"]:
+                print(f"- {action}")
+            print("Rerun with --yes after user confirmation.")
+        return 2
+
+    npm_package = f"{before['npmPackage']}@latest"
+    install_result = run_command(("npm", "install", "-g", npm_package), timeout=900)
+    payload["installOutput"] = command_excerpt(install_result)
+    if not install_result or install_result.returncode != 0:
+        payload["status"] = "failed"
+        payload["error"] = command_excerpt(install_result) or "npm global install failed."
+        print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else payload["error"])
+        return 1
+
+    after = check_agent_cli(str(before["platform"]))
+    payload["after"] = after
+    payload["status"] = "installed" if after["installed"] else "verification-failed"
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"install-agent-cli status: {payload['status']}")
+        if after["installed"]:
+            print(f"{after['command']}: {after['path']} ({after['version']})")
+        else:
+            print(
+                f"npm completed, but `{after['verifyCommand']}` did not pass. "
+                "Check the npm global bin PATH and the package runtime prerequisites."
+            )
+            if after.get("verifyOutput"):
+                print(f"First verification output: {after['verifyOutput']}")
+    return 0 if after["installed"] else 1
 
 
 def install_rtk(args: argparse.Namespace) -> int:
@@ -2778,25 +3071,25 @@ def find_trellis_bootstrap_task(project_root: Path) -> tuple[Path | None, str | 
     return None, None
 
 
-def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, object]:
-    project_root = resolve_project_root(args)
+def run_trellis_project_setup_for_root(
+    mode: str,
+    args: argparse.Namespace,
+    project_root: Path,
+    trellis_check: dict[str, object],
+) -> dict[str, object]:
     report: dict[str, object] = {
         "mode": mode,
         "status": "skipped",
-        "projectRoot": str(project_root) if project_root else None,
+        "projectRoot": str(project_root),
     }
-    if mode not in {"init", "reset"}:
-        report["reason"] = "Trellis project setup only runs after init/reset."
-        return report
-    if not project_root:
-        report["reason"] = "--project-root was not provided."
+    if mode not in {"init", "reset", "init-projects"}:
+        report["reason"] = "Trellis project setup only runs after init/reset/init-projects."
         return report
     if getattr(args, "skip_trellis_init", False):
         report["status"] = "skipped"
         report["reason"] = "--skip-trellis-init was provided."
         return report
 
-    trellis_check = check_cli_tool(CLI_TOOLS[1])
     report["cli"] = {
         "installed": trellis_check.get("installed"),
         "path": trellis_check.get("path"),
@@ -2807,7 +3100,7 @@ def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, 
         report["init"] = {
             "status": "blocked-missing-cli",
             "reason": "trellis CLI must be installed and pass version verification before project initialization.",
-            "nextStep": "Install or repair Trellis, rerun `python scripts/onboard.py check`, then rerun init/reset.",
+            "nextStep": "Install or repair the required global Trellis CLI, then rerun the project initialization command.",
         }
         return report
 
@@ -2826,7 +3119,7 @@ def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, 
         report["init"] = {
             "status": "needs-user",
             "reason": "Target project does not have .trellis/ and --trellis-user was not provided.",
-            "nextStep": "Ask the user for their Trellis developer username and optional platform flags, then rerun init/reset with --trellis-user and --trellis-platform.",
+            "nextStep": "Ask for the Trellis developer username and optional platform flags, then rerun with --projects-root, --trellis-user, and --trellis-platform.",
             "exampleCommand": command_display(example),
         }
         return report
@@ -2876,42 +3169,82 @@ def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, 
     return report
 
 
+def aggregate_trellis_status(projects: list[dict[str, object]]) -> str:
+    statuses = {str(item.get("status")) for item in projects}
+    for status in ("failed", "blocked", "needs-user", "bootstrap-required"):
+        if status in statuses:
+            return status
+    if "success" in statuses:
+        return "success"
+    return "skipped"
+
+
+def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, object]:
+    project_roots = resolve_project_roots(args)
+    if mode not in {"init", "reset", "init-projects"}:
+        return {
+            "mode": mode,
+            "status": "skipped",
+            "projects": [],
+            "reason": "Trellis project setup only runs after init/reset/init-projects.",
+        }
+    if not project_roots:
+        return {
+            "mode": mode,
+            "status": "skipped",
+            "projects": [],
+            "reason": "--projects-root was not provided.",
+        }
+
+    trellis_check = check_cli_tool(CLI_TOOLS[1])
+    projects = [
+        run_trellis_project_setup_for_root(mode, args, project_root, trellis_check)
+        for project_root in project_roots
+    ]
+    return {
+        "mode": mode,
+        "status": aggregate_trellis_status(projects),
+        "projects": projects,
+    }
+
+
 def print_trellis_project_setup_report(report: dict[str, object]) -> None:
     print("\nTrellis project setup:")
     print(f"- status: {report.get('status')}")
-    if report.get("projectRoot"):
-        print(f"  project root: {report['projectRoot']}")
     if report.get("reason"):
         print(f"  reason: {report['reason']}")
-    cli = report.get("cli")
-    if isinstance(cli, dict):
-        print(f"  cli: {'installed' if cli.get('installed') else 'missing'}")
-        if cli.get("path"):
-            print(f"  cli path: {cli['path']}")
-        if cli.get("version"):
-            print(f"  cli version: {cli['version']}")
-    init = report.get("init")
-    if isinstance(init, dict):
-        print(f"  init: {init.get('status')}")
-        if init.get("path"):
-            print(f"  init path: {init['path']}")
-        if init.get("command"):
-            print(f"  init command: {init['command']}")
-        if init.get("reason"):
-            print(f"  init reason: {init['reason']}")
-        if init.get("nextStep"):
-            print(f"  init next step: {init['nextStep']}")
-        if init.get("exampleCommand"):
-            print(f"  example: {init['exampleCommand']}")
-    bootstrap = report.get("bootstrapTask")
-    if isinstance(bootstrap, dict):
-        print(f"  bootstrap task: {bootstrap.get('status')}")
-        if bootstrap.get("path"):
-            print(f"  bootstrap path: {bootstrap['path']}")
-        if bootstrap.get("reason"):
-            print(f"  bootstrap reason: {bootstrap['reason']}")
-        if bootstrap.get("requiredAction"):
-            print(f"  required action: {bootstrap['requiredAction']}")
+    for project in report.get("projects", []):
+        print(f"- project root: {project['projectRoot']}")
+        print(f"  status: {project.get('status')}")
+        cli = project.get("cli")
+        if isinstance(cli, dict):
+            print(f"  cli: {'installed' if cli.get('installed') else 'missing'}")
+            if cli.get("path"):
+                print(f"  cli path: {cli['path']}")
+            if cli.get("version"):
+                print(f"  cli version: {cli['version']}")
+        init = project.get("init")
+        if isinstance(init, dict):
+            print(f"  init: {init.get('status')}")
+            if init.get("path"):
+                print(f"  init path: {init['path']}")
+            if init.get("command"):
+                print(f"  init command: {init['command']}")
+            if init.get("reason"):
+                print(f"  init reason: {init['reason']}")
+            if init.get("nextStep"):
+                print(f"  init next step: {init['nextStep']}")
+            if init.get("exampleCommand"):
+                print(f"  example: {init['exampleCommand']}")
+        bootstrap = project.get("bootstrapTask")
+        if isinstance(bootstrap, dict):
+            print(f"  bootstrap task: {bootstrap.get('status')}")
+            if bootstrap.get("path"):
+                print(f"  bootstrap path: {bootstrap['path']}")
+            if bootstrap.get("reason"):
+                print(f"  bootstrap reason: {bootstrap['reason']}")
+            if bootstrap.get("requiredAction"):
+                print(f"  required action: {bootstrap['requiredAction']}")
 
 
 def install_playwright_cli(args: argparse.Namespace) -> int:
@@ -3005,55 +3338,53 @@ def install_playwright_cli(args: argparse.Namespace) -> int:
     return 0 if after["installed"] else 1
 
 
-def build_operations(args: argparse.Namespace) -> list[Operation]:
-    global_agents = expand_path(args.global_agents_path) or (default_codex_home() / "AGENTS.md")
-    project_root = resolve_project_root(args)
-    operations = [
-        Operation(
-            "codex global AGENTS.md",
-            TEMPLATE_DIR / "agents" / "AGENTS.global.md",
-            global_agents,
-            "file",
-        )
-    ]
+def build_operations(mode: str, args: argparse.Namespace) -> list[Operation]:
+    project_roots = resolve_project_roots(args)
+    operations: list[Operation] = []
 
-    if not args.skip_project_agents:
-        project_root = resolve_project_root(args, required=True)
+    if mode != "init-projects":
+        global_agents = expand_path(args.global_agents_path) or (
+            default_codex_home() / "AGENTS.md"
+        )
         operations.append(
             Operation(
-                "project AGENTS.md",
-                TEMPLATE_DIR / "agents" / "AGENTS.project.md",
-                project_root / "AGENTS.md",
+                "codex global AGENTS.md",
+                TEMPLATE_DIR / "agents" / "AGENTS.global.md",
+                global_agents,
                 "file",
             )
         )
-
-    if project_root:
-        operations.append(
-            Operation(
-                "project .gitignore",
-                PROJECT_GITIGNORE_TEMPLATE,
-                project_root / ".gitignore",
-                "ensure-file-block",
-            )
-        )
-
-    if args.skills_scope != "none":
-        skills_root = scoped_skills_root(args, project_root)
-        if not skills_root:
-            raise SystemExit("Unable to resolve target skills directory")
-
+        skills_root = scoped_skills_root(args)
         for name, source in SKILL_SOURCES.items():
             target = skills_root / name
             operations.append(
                 Operation(
-                    f"skill {name}",
+                    f"global skill {name}",
                     source,
                     target,
                     "dir",
                     source.resolve() == target.resolve(),
                 )
             )
+
+    for project_root in project_roots:
+        if not args.skip_project_agents:
+            operations.append(
+                Operation(
+                    f"project AGENTS.md [{project_root}]",
+                    TEMPLATE_DIR / "agents" / "AGENTS.project.md",
+                    project_root / "AGENTS.md",
+                    "file",
+                )
+            )
+        operations.append(
+            Operation(
+                f"project .gitignore [{project_root}]",
+                PROJECT_GITIGNORE_TEMPLATE,
+                project_root / ".gitignore",
+                "ensure-file-block",
+            )
+        )
 
     return operations
 
@@ -3183,8 +3514,16 @@ def run(mode: str, args: argparse.Namespace) -> int:
     if mode == "check":
         print_check_results(build_check_results(args), args.json)
         return 0
+    if mode == "check-projects":
+        print_projects_check_results(build_projects_check_results(args), args.json)
+        return 0
+    if mode == "check-agent-cli":
+        print_agent_cli_check(check_agent_cli(args.platform), args.json)
+        return 0
     if mode == "ensure-npm":
         return ensure_npm(args)
+    if mode == "install-agent-cli":
+        return install_agent_cli(args)
     if mode == "install-rtk":
         return install_rtk(args)
     if mode == "install-caveman":
@@ -3202,13 +3541,27 @@ def run(mode: str, args: argparse.Namespace) -> int:
         print_check_results(build_check_results(args), False)
         print("")
 
-    operations = build_operations(args)
-    external_migration_plan = build_external_migration_plan(args)
+    operations = build_operations(mode, args)
+    external_migration_plan = (
+        {
+            "mode": "mattpocock-external-migration",
+            "status": "skipped",
+            "reason": "init-projects does not inspect or modify global skills.",
+        }
+        if mode == "init-projects"
+        else build_external_migration_plan(args)
+    )
     print_plan(mode, operations, args.json, external_migration_plan)
     if mode == "plan":
         return 0
 
     ensure_confirmed(args, mode)
+
+    if mode in {"init", "reset"}:
+        external_install_status = install_required_external_skills(args)
+        if external_install_status != 0:
+            print("Required global external Skill installation failed.", file=sys.stderr)
+            return 4
 
     active_operations = [op for op in operations if not op.same_location]
     conflicts = [
@@ -3306,8 +3659,11 @@ def run(mode: str, args: argparse.Namespace) -> int:
 
     print("Verification passed.")
     if not args.json:
-        final_check = build_check_results(args)
-        print_installation_report(final_check["installationReport"], "Final installation report")
+        if mode == "init-projects":
+            print_projects_check_results(build_projects_check_results(args), False)
+        else:
+            final_check = build_check_results(args)
+            print_installation_report(final_check["installationReport"], "Final installation report")
     return 0
 
 
@@ -3315,19 +3671,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Install or reset Kuno workflow AGENTS and skills.")
     subparsers = parser.add_subparsers(dest="mode", required=True)
 
-    for mode in ("check", "plan", "init", "reset"):
+    for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
-        sub.add_argument("--project-root", help="Target project root for project AGENTS or project skills.")
-        sub.add_argument("--skip-project-agents", action="store_true", help="Do not install project AGENTS.md.")
         sub.add_argument(
-            "--skills-scope",
-            choices=("global", "project", "none"),
-            default="global",
-            help="Install bundled skills globally, into the project, or not at all.",
+            "--projects-root",
+            required=mode == "init-projects",
+            help="Comma-separated absolute project root paths.",
         )
+        sub.add_argument("--skip-project-agents", action="store_true", help="Do not install project AGENTS.md.")
         sub.add_argument("--global-agents-path", help="Override Codex global AGENTS.md path.")
         sub.add_argument("--global-skills-dir", help="Override global skills directory.")
-        sub.add_argument("--project-skills-dir", help="Override project-level skills directory.")
         sub.add_argument("--yes", action="store_true", help="Allow init/reset to write files.")
         sub.add_argument("--json", action="store_true", help="Print machine-readable plan.")
         sub.add_argument(
@@ -3354,6 +3707,16 @@ def build_parser() -> argparse.ArgumentParser:
             help="Do not report the post-install Trellis bootstrap task handoff for init/reset.",
         )
 
+    project_check = subparsers.add_parser("check-projects")
+    project_check.add_argument(
+        "--projects-root",
+        required=True,
+        help="Comma-separated absolute project root paths.",
+    )
+    project_check.add_argument(
+        "--json", action="store_true", help="Print machine-readable project checks."
+    )
+
     install = subparsers.add_parser("install-external-skills")
     install.add_argument(
         "--skills",
@@ -3362,13 +3725,11 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--all", action="store_true", help="Install every known external referenced skill.")
     install.add_argument(
         "--scope",
-        choices=("global", "project"),
+        choices=("global",),
         default="global",
-        help="Install into the global skills directory or a project-level skills directory.",
+        help="Install into the global skills directory.",
     )
-    install.add_argument("--project-root", help="Target project root for project-level skills.")
     install.add_argument("--global-skills-dir", help="Override global skills directory.")
-    install.add_argument("--project-skills-dir", help="Override project-level skills directory.")
     install.add_argument(
         "--replace",
         action="store_true",
@@ -3380,6 +3741,27 @@ def build_parser() -> argparse.ArgumentParser:
     npm = subparsers.add_parser("ensure-npm")
     npm.add_argument("--yes", action="store_true", help="Install nvm and Node.js LTS when npm is missing.")
     npm.add_argument("--json", action="store_true", help="Print machine-readable results.")
+
+    agent_check = subparsers.add_parser("check-agent-cli")
+    agent_check.add_argument(
+        "--platform",
+        required=True,
+        help="Target Agent platform: codex, claude, kimi, oh-my-pi, or omp.",
+    )
+    agent_check.add_argument("--json", action="store_true", help="Print machine-readable results.")
+
+    agent_install = subparsers.add_parser("install-agent-cli")
+    agent_install.add_argument(
+        "--platform",
+        required=True,
+        help="Target Agent platform: codex, claude, kimi, oh-my-pi, or omp.",
+    )
+    agent_install.add_argument(
+        "--yes",
+        action="store_true",
+        help="Install the target Agent CLI globally from its official npm package after user confirmation.",
+    )
+    agent_install.add_argument("--json", action="store_true", help="Print machine-readable results.")
 
     rtk = subparsers.add_parser("install-rtk")
     rtk.add_argument("--yes", action="store_true", help="Install rtk-ai/rtk when missing.")
