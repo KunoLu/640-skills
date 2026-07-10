@@ -338,7 +338,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 | Web 测试资产 | `web-ui-autotest-generator` | 需要把 Web UI 回归固化入仓库 | `generated` / `coverage-only` / `blocked` / `skipped` |
 | SEO/GEO | `seo-geo` | 公开 Web 资产需要搜索可见性、schema、meta、robots / sitemap 或 AI 搜索引用检查 | `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed` |
 | Mobile / Hybrid E2E | Java 17+、Maestro CLI、Maestro MCP | Android、iOS、RN、Flutter、Hybrid App 用户旅程 | `Maestro Mobile`: `run-local` / `run-cloud` / `blocked` / `skipped` / `not-needed` |
-| 发布风险 | `book-release-readiness`、Channel preflight | 生产路径、外部集成、部署敏感或高风险变更 | 记录风险、fallback、rollback |
+| 发布风险 | `book-release-readiness`、Channel preflight | 生产路径、外部集成、部署敏感、高风险变更或高 reasoning 多 worker 并发 | 记录风险、fallback、rollback 和用量风险 |
 
 `project-validation` 覆盖 Node / JavaScript / TypeScript、Python、Go、Dart / Flutter、Java、Kotlin、C++、Swift 和 Objective-C 的代码规范检查、typecheck / static analysis、unit test 与项目 CI 继承规则；unit test 报告路径默认继承项目配置，不由模板统一硬编码，但需要作为本轮证据保留的 unit 报告不能只停留在会被 runner 重写的 coverage / JUnit 固定路径。
 
@@ -459,10 +459,11 @@ CLI 和用户级全局 Skill 安装必须遵循用户确认和 fallback 规则�
 2. 只同步根 `AGENTS.md` 中允许列表里的全局规则和全局 Skill；Skill 必须按目录整体同步，不能只复制 `SKILL.md`。
 3. `kuno-workflow-onboard-skills/` 也作为完整 Skill 目录同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。
 4. 不把 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 作为独立项目级 `AGENTS.md` 同步；它只会随 onboard Skill 作为模板资产保留。
-5. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致。
-6. 不修改 `ENTRYPOINT.md` 版本号。
-7. 不归档 `UPDATE.md`。
-8. 不提交或推送变更。
+5. 在本机实际使用的 `/Users/lusonglin/.agent/skills/` 上执行 mattpocock legacy migration：通过 synced onboard Skill 的 `install-external-skills --skills to-prd,to-issues --scope global --global-skills-dir /Users/lusonglin/.agent/skills --yes` 删除旧 `to-prd` / `to-issues`，并安装 canonical `to-spec` / `to-tickets`；普通 sync 不默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录。
+6. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致；legacy migration 用旧目录不存在且 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在作为校验。
+7. 不修改 `ENTRYPOINT.md` 版本号。
+8. 不归档 `UPDATE.md`。
+9. 不提交或推送变更。
 
 ## README 同步规范
 

@@ -77,8 +77,9 @@
 
 1. 先读取源文件 / 目录，确认路径正确。
 2. 文件目标按文件复制；Skill 目录目标必须复制整个目录，包括 `SKILL.md`、`references/`、`scripts/`、`assets/` 等子内容。
-3. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致。
-4. 在最终输出中说明已同步的文件和校验结果。
+3. 同步完成后，在本机实际使用的 external Skill 根目录 `/Users/lusonglin/.agent/skills` 上执行 mattpocock legacy migration：运行 `kuno-workflow-onboard-skills/scripts/onboard.py install-external-skills --skills to-prd,to-issues --scope global --global-skills-dir /Users/lusonglin/.agent/skills --yes`，让旧 `to-prd` / `to-issues` 目录被删除，并安装 canonical `to-spec` / `to-tickets`。不要默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录，除非用户明确要求。
+4. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致；legacy migration 使用 `test ! -e` 确认旧目录不存在，并检查 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在。
+5. 在最终输出中说明已同步的文件、legacy migration 结果和校验结果。
 
 不要同步：
 
@@ -92,9 +93,10 @@
 当用户输入 `同步` 或 `sync` 时：
 
 1. 执行上面的本地同步流程。
-2. 不修改 `ENTRYPOINT.md` 版本号。
-3. 不归档 `UPDATE.md`。
-4. 不提交或推送变更。
+2. 在本机 `/Users/lusonglin/.agent/skills/` 下执行 legacy migration，将 `to-prd` / `to-issues` 替换为 `to-spec` / `to-tickets`；该步骤使用 synced onboard Skill 的 `install-external-skills` 命令，并明确传入 `--global-skills-dir /Users/lusonglin/.agent/skills`。
+3. 不修改 `ENTRYPOINT.md` 版本号。
+4. 不归档 `UPDATE.md`。
+5. 不提交或推送变更。
 
 mattpocock/skills 默认按官方文件原样使用，本仓库只在 AGENTS 模板中维护本地使用边界。不要在本仓库内安装、fork 或改写这些官方 Skill。
 

@@ -185,6 +185,7 @@ Validation Channel 用于验证计划、覆盖率审查和独立复核，不替�
 - 不要无故关闭、拉长或绕过 `--idle-timeout`。
 - 不要让长期空闲 worker 常驻。
 - mid-turn worker 不应被视为空闲 worker。
+- 如果用户要求高 reasoning / Ultra 级模型并发运行多个 worker，先在 preflight 中说明用量和费用风险，并优先建议降低并发、缩小 worker scope、改为串行 review，或只为关键 worker 使用高 reasoning。
 - 如果 worker 因 idle timeout 被 killed，应在输出中说明。
 
 如需覆盖默认 worker guard，必须有明确理由，例如：

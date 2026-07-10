@@ -586,7 +586,7 @@
           </article>
           <article class="panel accent-violet">
             <h3>发布风险</h3>
-            <p>生产路径、外部集成和部署敏感变更进入 release-readiness；高风险 review 可做 Channel preflight。</p>
+            <p>生产路径、外部集成、部署敏感变更和高 reasoning 多 worker 并发进入风险评估；高风险 review 可做 Channel preflight，并记录用量风险。</p>
           </article>
         </div>
       </div>
@@ -782,7 +782,7 @@ tests/e2e/**/*.trace.zip
             <p class="eyebrow">Repository</p>
             <h2>源文件和同步规则</h2>
           </div>
-          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径；Skill 必须按目录整体同步，包含 <code>kuno-workflow-onboard-skills/</code> 自身。</p>
+          <p>本仓库是配置摘录和模板源，不是真实业务项目。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径；Skill 必须按目录整体同步，包含 <code>kuno-workflow-onboard-skills/</code> 自身。sync 还会在本机实际使用路径 <code>/Users/lusonglin/.agent/skills/</code> 上执行 mattpocock legacy migration，删除 legacy <code>to-prd</code> / <code>to-issues</code> 并安装 canonical <code>to-spec</code> / <code>to-tickets</code>；普通 sync 不默认触碰 <code>/Users/lusonglin/.codex/skills/</code> 下的同名目录。</p>
         </div>
         <table>
           <thead>
@@ -798,6 +798,7 @@ tests/e2e/**/*.trace.zip
             <tr><td><code>docs/lessons/index.md</code></td><td>Lessons 完整索引，按 tags、适用场景和详情路径检索。</td></tr>
             <tr><td><code>docs/lessons/topics/**</code></td><td>Lessons 完整详情，按当前任务命中后读取。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/</code></td><td>onboard Skill 完整目录；普通 sync 时同步到 <code>/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/</code>。</td></tr>
+            <tr><td><code>/Users/lusonglin/.agent/skills/to-prd</code> / <code>to-issues</code></td><td>legacy external Skill 目录；普通 sync 后迁移为 <code>to-spec</code> / <code>to-tickets</code>。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/agents/</code></td><td>全局规则和项目级规则模板。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/skills/</code></td><td>全局 Skill 模板目录，包含 <code>SKILL.md</code>、<code>references/</code>、<code>scripts/</code>、<code>assets/</code> 等。</td></tr>
             <tr><td><code>kuno-workflow-onboard-skills/templates/project/.gitignore</code></td><td>新项目模板忽略规则。</td></tr>
