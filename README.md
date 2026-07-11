@@ -412,7 +412,7 @@ tests/e2e/**/*.trace.zip
 
 - 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
-- 13 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择。
+- 13 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；两个根安装器从 `check` 的 `group=referenced` 获取 canonical 清单，不再各自维护重复数组。
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
@@ -422,7 +422,9 @@ tests/e2e/**/*.trace.zip
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导，包含 Maestro MCP 的通用 `command` / `args` / `JAVA_HOME` / `PATH` 配置示例。
 - bundled `seo-geo` Skill 的存在性检查。
-- mattpocock external Skill 使用上游 canonical 名称；`to-prd` / `to-issues` 作为 legacy alias 迁移到 `to-spec` / `to-tickets`，`init` / `reset` 和直接 external install 会先删除本地旧目录，再安装新目录。
+- External Skill 默认使用 `--source auto`：按上游仓库整组 clone、解析和验证，只有上游获取或源结构验证失败时才延迟加载并整组回退 `kuno-workflow-onboard-skills/assets/external-skills/stable/`；有效上游不依赖 stable manifest。`--source upstream` 和 `--source stable` 提供严格模式。manifest、source subpath 和 license 路径必须被各自声明的根目录包含，拒绝绝对路径、`..` 和 symlink 逃逸。全部 Skill 先暂存和验证，再用临时 rollback backup 事务替换；canonical commit 成功后才删除 legacy 目录。
+- stable External Skills 的 `MANIFEST.json` 记录 stable set、精确上游 commit、subpath、tree SHA-256 和许可证/NOTICE。stable 快照保持上游原样且不得手改；只有显式 `promote-external-skills-stable --repository ... --revision <full-sha> --stable-set ... --yes` 才能整组更新。
+- mattpocock external Skill 使用上游 canonical 名称；`to-prd` / `to-issues` 作为 legacy alias 迁移到 `to-spec` / `to-tickets`，canonical 安装成功后再备份和删除本地旧目录。
 - `web-ui-autotest-generator`、`shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
 - React Bits tier 选择对每个 React + shadcn/ui 项目独立判断；仍保持项目级、可选并保留 license/registry 前置条件。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
@@ -436,7 +438,7 @@ tests/e2e/**/*.trace.zip
 - `kimi`：执行 `kimi mcp add ...`。
 - `oh-my-pi` / `omp`：固定写入全局 `~/.omp/agent/mcp.json`。
 
-两个安装脚本的 `source-root` 都直接指向 `kuno-workflow-onboard-skills` 目录，而不是仓库根目录。默认值是当前执行目录下的 `./kuno-workflow-onboard-skills`；如果该目录不存在或缺少 `SKILL.md`、`REFERENCE.md`、`scripts/onboard.py` 或 `templates/`，脚本会直接输出未找到 Onboard skill 并结束安装。脚本可以被复制到其他目录独立使用，但必须能通过默认值或显式参数定位完整的 `kuno-workflow-onboard-skills`：
+两个安装脚本的 `source-root` 都直接指向 `kuno-workflow-onboard-skills` 目录，而不是仓库根目录。默认值是当前执行目录下的 `./kuno-workflow-onboard-skills`；如果该目录不存在，或缺少 `SKILL.md`、`REFERENCE.md`、`scripts/onboard.py`、`templates/`、`assets/external-skills/stable/MANIFEST.json`，脚本会直接输出未找到或不完整的 Onboard skill 并结束安装。脚本可以被复制到其他目录独立使用，但必须能通过默认值或显式参数定位完整的 `kuno-workflow-onboard-skills`：
 
 ```bash
 ./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills --platform codex
@@ -466,7 +468,7 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装后不自动启用压缩对话模式。13 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 会直接从既定仓库安装到全局目录，bundled Skills 写入全局目录，均不再询问 project scope。已有 bundled 目标会被覆盖且不备份；已有 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装后不自动启用压缩对话模式。13 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
 
@@ -478,7 +480,7 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 2. 只同步根 `AGENTS.md` 中允许列表里的全局规则和全局 Skill；Skill 必须按目录整体同步，不能只复制 `SKILL.md`。
 3. `kuno-workflow-onboard-skills/` 也作为完整 Skill 目录同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。
 4. 不把 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 作为独立项目级 `AGENTS.md` 同步；它只会随 onboard Skill 作为模板资产保留。
-5. 在本机实际使用的 `/Users/lusonglin/.agent/skills/` 上执行 mattpocock legacy migration：通过 synced onboard Skill 的 `install-external-skills --skills to-prd,to-issues --scope global --global-skills-dir /Users/lusonglin/.agent/skills --yes` 删除旧 `to-prd` / `to-issues`，并安装 canonical `to-spec` / `to-tickets`；普通 sync 不默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录。
+5. 在本机实际使用的 `/Users/lusonglin/.agent/skills/` 上执行 mattpocock legacy migration：通过 synced onboard Skill 的 `install-external-skills --skills to-prd,to-issues --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes` 删除旧 `to-prd` / `to-issues`，并安装 canonical `to-spec` / `to-tickets`；普通 sync 不默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录。
 6. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致；legacy migration 用旧目录不存在且 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在作为校验。
 7. 不修改 `ENTRYPOINT.md` 版本号。
 8. 不归档 `UPDATE.md`。

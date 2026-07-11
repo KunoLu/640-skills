@@ -155,3 +155,15 @@
 - 根因：external Skill 配置没有跟随上游 frontmatter / 目录名更新，也没有把旧名作为 legacy alias 纳入迁移删除流程。
 - 修复：将默认外部 Skill、模板编排和 subpath 映射迁到 `to-spec` / `to-tickets`；`to-prd` / `to-issues` 只作为 legacy alias；`init` / `reset` 和直接 external install 检测到旧目录时先删除，再安装 canonical 新目录。
 - 预防：后续维护 external Skill 时，先用上游仓库当前 `SKILL.md` frontmatter 和目录结构确认 canonical 名称；旧名只能进入 alias / migration，不要继续放在默认安装列表或长期 workflow 主链路中。
+
+## LESSON-20260711-external-skill-transaction-path-safety: External Skill Transaction Path Safety
+
+- 日期：2026-07-11
+- 标签：installer, skills, rollback, path-traversal, validation
+- 适用场景：修改 External Skill stable manifest、上游 source promotion、canonical 存在性检查、legacy migration 或事务替换逻辑
+- 严重级别：critical
+- 来源：External Skills stable fallback 实现后的独立 review handoff 与回归测试
+- 问题：stable manifest 和 promotion 配置中的绝对路径或 `..` 可逃逸声明根目录；只有文件存在但 frontmatter 无效的 canonical 会阻止重装并导致有效 legacy 被删除；事务恢复失败后 finally 仍删除 rollback 目录，可能销毁唯一可恢复副本。
+- 根因：路径由多个调用点直接拼接而没有统一 containment seam，canonical 检测只判断 `SKILL.md` 文件存在，rollback 生命周期没有区分“完整恢复”和“恢复仍有错误”。
+- 修复：集中使用解析后 containment 校验拒绝绝对路径、`..` 和 symlink 逃逸；canonical 与安装源使用同一完整 Skill 验证；rollback 仅在 commit 成功或完整恢复后清理，恢复不完整时在结果中返回并保留目录路径；`auto` 仅在上游组失败时延迟加载 stable。
+- 预防：External Skill 安装器新增字段或文件操作时，必须同时验证 source root containment、完整 canonical 语义和最坏情况下的备份所有权；回归测试至少覆盖路径逃逸、无效 canonical + 有效 legacy、上游成功时 stable 不可读，以及 restore 二次失败后备份仍存在。

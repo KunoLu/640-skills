@@ -30,24 +30,6 @@ if ($script:ProjectsOnly -and $Action) {
   throw "-InitProjects is a standalone mode and cannot be combined with -Action."
 }
 
-$ExternalSkills = @(
-  "diagnosing-bugs",
-  "tdd",
-  "grill-me",
-  "grill-with-docs",
-  "grilling",
-  "domain-modeling",
-  "codebase-design",
-  "handoff",
-  "writing-great-skills",
-  "to-spec",
-  "to-tickets",
-  "impeccable",
-  "ui-ux-pro-max",
-  "web-ui-autotest-generator",
-  "shadcn"
-)
-
 function Show-Usage {
   @"
 Kuno workflow installer
@@ -249,7 +231,8 @@ kuno-workflow-onboard-skills directory.
     "scripts/onboard.py",
     "templates/agents/AGENTS.global.md",
     "templates/agents/AGENTS.project.md",
-    "templates/skills"
+    "templates/skills",
+    "assets/external-skills/stable/MANIFEST.json"
   )
   $missing = @()
   foreach ($item in $required) {
@@ -575,12 +558,12 @@ function Install-MissingRuntimeAndSkills {
   }
 
   $missingExternal = @($script:Check.skills | Where-Object {
-    ($ExternalSkills -contains $_.name) -and (-not $_.installed)
+    ($_.group -eq "referenced") -and (-not $_.installed)
   } | ForEach-Object { $_.name })
   if ($missingExternal.Count -gt 0) {
     Write-Host ""
     Write-Host ("Required global external skills are missing: " + ($missingExternal -join ","))
-    $args = @("--skills", ($missingExternal -join ","), "--scope", "global", "--yes")
+    $args = @("--skills", ($missingExternal -join ","), "--scope", "global", "--source", "auto", "--yes")
     if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
     Invoke-Onboard "install-external-skills" $args
     Update-Check
@@ -952,6 +935,7 @@ function Show-PlanAndExecute {
   Write-Host ("Project roots: " + ($(if ($ProjectsRoot) { $ProjectsRoot } else { "<none>" })))
   Write-Host ("Project AGENTS: " + ($(if ($SkipProjectAgents) { "skip" } else { "install" })))
   Write-Host ("Bundled and external Skills: " + ($(if ($script:ProjectsOnly) { "not touched" } else { "required global" })))
+  Write-Host ("External Skill source: " + ($(if ($script:ProjectsOnly) { "not touched" } else { "auto (validated upstream -> vendored stable fallback)" })))
   Write-Host ("MCP: " + ($(if ($script:ProjectsOnly -or $NoMcp) { "skip" } else { "configure interactively" })))
 
   if (-not $Yes) {

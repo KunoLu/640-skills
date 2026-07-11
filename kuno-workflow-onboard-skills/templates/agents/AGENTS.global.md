@@ -320,7 +320,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - 实现后收尾：功能完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
     - 冲突处理：项目 `AGENTS.md`、设计系统、tokens、组件库和已确认品牌规范优先；可访问性、响应式和项目验证不可降级。`impeccable` 的硬性反模板化规则可否决 `ui-ux-pro-max` 的泛化风格建议，除非项目既有品牌规范明确要求该设计语言。
 - **mattpocock/skills** 仅纳入 `diagnosing-bugs`、`tdd`、`grill-me`、`grill-with-docs`、`grilling`、`domain-modeling`、`codebase-design`、`handoff`、`writing-great-skills`、`to-spec`、`to-tickets`。
-- **mattpocock/skills** 优先原样使用官方 Skill；除非用户明确要求，不 fork、不改写官方 Skill 文件。
+- **mattpocock/skills** 优先原样使用官方 Skill；Onboard 从经过 checksum 和来源校验的 stable 镜像回退时仍必须保持上游内容不变。除非用户明确要求，不 fork、不改写官方 Skill 文件。
 - **mattpocock/skills** 相关 skill 使用边界说明：
     - `diagnosing-bugs` 用于系统化排障；代码级问题根因不清时结合 GitNexus debugging，修复前有风险时结合 GitNexus impact-analysis，并补充或更新回归测试。
     - `tdd` 适用于 bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑和高风险修改；这些场景必须主动判定是否使用 `tdd`，跳过时说明原因。不要强制用于简单文案、样式、配置说明或一次性脚本。`tdd` 依赖 `codebase-design`。

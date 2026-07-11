@@ -178,14 +178,39 @@ All 15 referenced external Skills are also required globally:
 Install every missing external Skill:
 
 ```bash
-python scripts/onboard.py install-external-skills --all --scope global --yes
+python scripts/onboard.py install-external-skills --all --scope global --source auto --yes
 ```
 
 `--scope project` is rejected. Direct normal `init` and `reset` ensure every external Skill exists globally before template writes; the root installers perform the same guarantee before invoking the final mode.
 
+Source policies:
+
+- `auto` (default): clone and validate the selected Skills from each upstream repository as one group; if upstream acquisition or source validation fails, lazily load and validate the matching vendored stable group. A valid upstream group does not require the stable manifest to be readable.
+- `upstream`: require the current upstream repository to clone and validate; do not fall back.
+- `stable`: skip Git and require the vendored stable manifest, checksum, frontmatter, and complete Skill tree to validate.
+
+Preparation and commit are separate phases. Every selected Skill is resolved, copied into target-filesystem staging, and verified before any canonical or legacy target changes. Manifest paths, configured upstream subpaths, and license paths must remain relative to and contained by their declared roots; absolute paths, `..` traversal, and symlink escapes are rejected. Commit moves existing targets into a temporary rollback directory, installs every staged canonical target, and only then removes legacy aliases.
+
+Fallback is limited to upstream source acquisition and validation failures: missing Git, clone failure or timeout, an unavailable revision/subpath, invalid Skill frontmatter/structure, or a source tree that contains symlinks. Stable manifest, containment, checksum, license, or snapshot validation failures are fatal whenever stable is required. Target-side staging, permission, disk, commit, and rollback failures never trigger stable fallback. A local commit failure attempts to restore all prior targets; if any restore step fails, the transaction reports and retains the rollback directory path instead of deleting the only remaining backup copy.
+
+The vendored fallback lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them.
+
+Promote a reviewed repository revision explicitly:
+
+```bash
+python scripts/onboard.py promote-external-skills-stable \
+  --repository <manifest-repository-id> \
+  --revision <full-40-character-commit-sha> \
+  --stable-set <yyyy-mm-dd.index> \
+  --yes
+```
+
+Promotion updates every managed Skill from that repository as one group, refreshes its license files and digests, validates the entire candidate stable set, and then swaps the stable directory transactionally. It never runs during normal `init`, `reset`, or external installation.
+If upstream changed canonical names, repository layout, or license paths, first review and update the manifest/configured source contract in the same repository change; promotion intentionally refuses to guess a new subpath.
+
 Legacy aliases remain recognized for migration: `diagnose` → `diagnosing-bugs`, `write-a-skill` → `writing-great-skills`, `to-prd` → `to-spec`, and `to-issues` → `to-tickets`. Removed `zoom-out` is not installed. Automatic migration is legacy-only so already canonical external Skills are not cloned twice during every init/reset.
 
-External Skill targets are overwritten without backup when an explicit install/migration is required. Existing canonical Skills that already pass the file check are not re-downloaded merely because a normal init/reset runs.
+External Skill targets use a temporary rollback backup during an explicit install. The rollback copy is deleted after a successful commit or a complete restore; it is not a persistent user backup. An incomplete restore retains the directory and returns its path for manual recovery. Existing canonical Skills are treated as installed only when their complete source tree and `SKILL.md` frontmatter validate; an invalid canonical target is reinstalled before any valid legacy alias is removed. Legacy migration no longer clones upstream independently: canonical installation uses the shared source policy first, then the migration step backs up and removes remaining legacy directories.
 
 ## Skills That Keep Their Existing Scope
 

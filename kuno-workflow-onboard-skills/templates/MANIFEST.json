@@ -109,6 +109,17 @@
       "subpath": "skills/shadcn"
     }
   ],
+  "stableExternalSkills": {
+    "manifest": "assets/external-skills/stable/MANIFEST.json",
+    "defaultSourcePolicy": "auto",
+    "sourcePolicies": [
+      "auto",
+      "upstream",
+      "stable"
+    ],
+    "transactionalInstall": true,
+    "promotionCommand": "python scripts/onboard.py promote-external-skills-stable"
+  },
   "toolRepositories": [
     {
       "tool": "rtk",

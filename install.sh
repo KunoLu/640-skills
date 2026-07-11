@@ -23,24 +23,6 @@ CHECK_JSON=""
 AGENT_CLI_JSON=""
 PROJECTS_JSON=""
 
-EXTERNAL_SKILLS=(
-  diagnosing-bugs
-  tdd
-  grill-me
-  grill-with-docs
-  grilling
-  domain-modeling
-  codebase-design
-  handoff
-  writing-great-skills
-  to-spec
-  to-tickets
-  impeccable
-  ui-ux-pro-max
-  web-ui-autotest-generator
-  shadcn
-)
-
 usage() {
   cat <<'EOF'
 Kuno workflow installer
@@ -263,6 +245,7 @@ EOF
     "templates/agents/AGENTS.global.md"
     "templates/agents/AGENTS.project.md"
     "templates/skills"
+    "assets/external-skills/stable/MANIFEST.json"
   )
   for item in "${required[@]}"; do
     if [[ ! -e "$resolved/$item" ]]; then
@@ -585,11 +568,10 @@ elif mode == "tool-flag":
 elif mode == "skill-installed":
     print("true" if find_skill(args[0]).get("installed") else "false")
 elif mode == "missing-external-skills":
-    external = set(args)
     missing = [
         item.get("name")
         for item in data.get("skills", [])
-        if item.get("name") in external and not item.get("installed")
+        if item.get("group") == "referenced" and not item.get("installed")
     ]
     print(",".join(missing))
 elif mode == "mcp-command":
@@ -922,10 +904,10 @@ install_missing_runtime_and_skills() {
   fi
 
   local missing_external
-  missing_external="$(json_python missing-external-skills "${EXTERNAL_SKILLS[@]}")"
+  missing_external="$(json_python missing-external-skills)"
   if [[ -n "$missing_external" ]]; then
     printf '\nRequired global external skills are missing: %s\n' "$missing_external"
-    local args=(--skills "$missing_external" --scope global --yes)
+    local args=(--skills "$missing_external" --scope global --source auto --yes)
     if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
       args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
     fi
@@ -1218,6 +1200,7 @@ show_plan_and_execute() {
   printf 'Project roots: %s\n' "${PROJECTS_ROOT:-<none>}"
   printf 'Project AGENTS: %s\n' "$([[ "$SKIP_PROJECT_AGENTS" -eq 1 ]] && printf 'skip' || printf 'install')"
   printf 'Bundled and external Skills: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 ]] && printf 'not touched' || printf 'required global')"
+  printf 'External Skill source: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 ]] && printf 'not touched' || printf 'auto (validated upstream -> vendored stable fallback)')"
   printf 'MCP: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 || "$NO_MCP" -eq 1 ]] && printf 'skip' || printf 'configure interactively')"
 
   if [[ "$YES" -eq 0 ]]; then

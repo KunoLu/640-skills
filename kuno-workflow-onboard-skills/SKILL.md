@@ -110,6 +110,10 @@ All referenced external Skills are also required globally. Install every missing
 
 Dependencies are still expanded automatically: `tdd` includes `codebase-design`; `grill-me` includes `grilling`; `grill-with-docs` includes `grilling` and `domain-modeling`.
 
+External Skill installation uses a validated source policy. The default `auto` policy validates every selected Skill from one upstream repository as a group; if upstream acquisition, path resolution, frontmatter, or structure validation fails, that whole repository group lazily falls back to the vendored stable set under `assets/external-skills/stable/`. A valid upstream group does not need the stable manifest. Manifest, source-subpath, and license paths must stay contained by their declared roots. All selected Skills are staged before any target changes, and target replacement uses a temporary rollback transaction. Target-filesystem failures never trigger source fallback; an incomplete restore retains and reports the rollback directory. Use strict `upstream` for upgrade checks and strict `stable` for deterministic or offline recovery.
+
+The stable set is an unmodified mirror, not a fork. `assets/external-skills/stable/MANIFEST.json` records the exact upstream commit, source subpath, tree digest, and license files. Promote a new repository revision only through `promote-external-skills-stable`; promotion must validate the complete stable set before replacing it.
+
 `caveman` remains a user-level global Skill with its existing explicit installation decision. Java 17+ and Maestro CLI remain local-machine prerequisites installed only after their existing conditional confirmation. RTK remains global with its existing confirmation and `rtk gain` verification behavior.
 
 ## Per-Project Processing
@@ -186,12 +190,29 @@ External Skill installation accepts global scope only:
 python scripts/onboard.py install-external-skills --all --scope global --yes
 ```
 
+Choose an explicit source policy when needed:
+
+```bash
+python scripts/onboard.py install-external-skills --all --scope global --source upstream --yes
+python scripts/onboard.py install-external-skills --all --scope global --source stable --yes
+```
+
+Promote a reviewed upstream repository revision into a new stable set:
+
+```bash
+python scripts/onboard.py promote-external-skills-stable \
+  --repository mattpocock-skills \
+  --revision <full-commit-sha> \
+  --stable-set <yyyy-mm-dd.index> \
+  --yes
+```
+
 ## Reporting
 
 Normal `check`, `init`, and `reset` report global runtime/tools/Skills plus a `projectChecks` entry for every selected root. `check-projects` and `init-projects` report only project-local checks and writes.
 
 Aggregate Trellis status uses this priority: `failed`, `blocked`, `needs-user`, `bootstrap-required`, `success`, `skipped`. A bootstrap task in one project must not stop checks or initialization for the remaining roots.
 
-Every result must identify the affected project root. Do not merge failures, bootstrap tasks, Playwright applicability, or React Bits decisions across projects without preserving the root path.
+Every External Skill install result must report `requestedSource`, `sourceUsed`, `sourceRevision`, `stableSet`, `fallbackReason`, and transaction status when applicable. Every project result must identify the affected project root. Do not merge failures, bootstrap tasks, Playwright applicability, or React Bits decisions across projects without preserving the root path.
 
 See [REFERENCE.md](REFERENCE.md) for exact overwrite, backup, troubleshooting, and platform details.

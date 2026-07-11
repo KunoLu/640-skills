@@ -89,7 +89,7 @@ flowchart TD
 
 ## 2. mattpocock/skills 接入规则
 
-仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并默认原样使用官方文件。mattpocock/skills 1.0 后，旧名 `diagnose`、`write-a-skill` 已迁移，`zoom-out` 已从官方仓库移除；本配置只保留 1.0+ canonical Skill：
+仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并默认原样使用官方文件。Onboard 内部维护带精确 commit、checksum 和许可证的原样 stable 镜像；默认先验证上游，同仓库技能组不兼容时整组回退 stable。本配置沿用既有 canonical 基线；需特别区分：`diagnose`、`write-a-skill` 与 `zoom-out` 属于较早的迁移 / 移除项，而 `to-prd` → `to-spec`、`to-plan` / `to-issues` → `to-tickets` 是 mattpocock/skills v1.1.0 的后续变更。当前只安装最终 canonical Skill：
 
 ```text
 diagnosing-bugs
@@ -101,8 +101,8 @@ domain-modeling
 codebase-design
 handoff
 writing-great-skills
-to-prd
-to-issues
+to-spec
+to-tickets
 ```
 
 ### 2.1 使用边界
@@ -118,8 +118,8 @@ to-issues
 | `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | 作为 `tdd`、陌生模块理解和结构性修改前的设计辅助 |
 | `handoff` | 长会话切换、`/clear`、新会话、Trellis 暂停或多会话交接 | 输出目标、已完成工作、决策、文件、命令、开放问题、下一步和脱敏说明 |
 | `writing-great-skills` | 创建或维护自定义 Skill 的质量规则 | `SKILL.md` 做入口；长内容拆 reference；确定性操作优先脚本化 |
-| `to-prd` | 将当前对话和代码库理解整理为 PRD | 默认输出 Markdown PRD；不自动发布到 issue tracker |
-| `to-issues` | 将 PRD、plan 或 spec 拆成实现任务 | 默认输出 Trellis-ready Markdown vertical slices；不自动发布到 issue tracker |
+| `to-spec` | 将当前对话和代码库理解整理为 spec / PRD | 默认输出 Markdown spec / PRD；不自动发布到 issue tracker |
+| `to-tickets` | 将 PRD、plan 或 spec 拆成实现任务 | 默认输出 Trellis-ready Markdown vertical slices；不自动发布到 issue tracker |
 
 ### 2.2 推荐编排
 
@@ -159,8 +159,8 @@ diagnosing-bugs
 
 ```text
 grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用 domain-modeling）
-  → to-prd
-  → to-issues as Trellis-ready Markdown tasks
+  → to-spec
+  → to-tickets as Trellis-ready Markdown tasks
   → Trellis workflow（默认 native）
   → GitNexus impact-analysis
   → Codex implementation
@@ -179,8 +179,8 @@ grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用
 ```text
 grill-with-docs
   → domain-modeling
-  → to-prd
-  → to-issues as Trellis-ready Markdown tasks
+  → to-spec
+  → to-tickets as Trellis-ready Markdown tasks
   → Trellis TDD workflow
   → tdd / codebase-design
   → GitNexus impact-analysis

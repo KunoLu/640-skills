@@ -57,8 +57,10 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             printf '%s\n' "$*" >> "$FAKE_ONBOARD_ARGS_LOG"
             npm_installed=false
             agent_installed=false
+            external_installed=true
             [ -f "$FAKE_STATE_DIR/npm" ] && npm_installed=true
             [ -f "$FAKE_STATE_DIR/agent" ] && agent_installed=true
+            [ -f "$FAKE_STATE_DIR/external-missing" ] && external_installed=false
 
             case "$mode" in
               check-agent-cli)
@@ -82,10 +84,14 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                   [ "$arg" = "--json" ] && json=true
                 done
                 if [ "$json" = true ]; then
-                  printf '{"runtime":{"npm":{"installed":%s}},"tools":[{"name":"rtk","installed":true},{"name":"trellis","installed":true},{"name":"gitnexus","installed":true},{"name":"java","installed":true},{"name":"maestro","installed":true}],"skills":[{"name":"caveman","installed":true}],"manualChecks":[]}\n' "$npm_installed"
+                  printf '{"runtime":{"npm":{"installed":%s}},"tools":[{"name":"rtk","installed":true},{"name":"trellis","installed":true},{"name":"gitnexus","installed":true},{"name":"java","installed":true},{"name":"maestro","installed":true}],"skills":[{"name":"caveman","installed":true},{"name":"diagnosing-bugs","group":"referenced","installed":%s}],"manualChecks":[]}\n' "$npm_installed" "$external_installed"
                 else
                   printf 'preflight check\n'
                 fi
+                ;;
+              install-external-skills)
+                rm -f "$FAKE_STATE_DIR/external-missing"
+                printf 'external skills installed\n'
                 ;;
               check-projects)
                 printf '{"mode":"check-projects","projects":[]}\n'
@@ -251,13 +257,38 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         ].split("prompt_env_pairs() {", 1)[0]
         self.assertIn("npm install -g @mindfoldhq/trellis@latest", global_stage)
         self.assertIn("npm install -g gitnexus@latest", global_stage)
-        self.assertIn("--scope global --yes", global_stage)
+        self.assertIn("--scope global --source auto --yes", global_stage)
         self.assertNotIn("External skills install decision", global_stage)
         self.assertNotIn("Install @mindfoldhq/trellis globally?", global_stage)
         self.assertNotIn("Install gitnexus globally?", global_stage)
         self.assertIn("claude mcp add --transport stdio --scope user", source)
         self.assertIn('local target="$HOME/.omp/agent/mcp.json"', source)
         self.assertNotIn("$PROJECT_ROOT/.omp/mcp.json", source)
+
+    def test_root_installers_delegate_external_source_selection_to_onboard(self) -> None:
+        bash_source = INSTALL_SH.read_text(encoding="utf-8")
+        powershell_source = INSTALL_PS1.read_text(encoding="utf-8")
+
+        self.assertNotIn("EXTERNAL_SKILLS=(", bash_source)
+        self.assertNotIn("$ExternalSkills = @(", powershell_source)
+        self.assertIn("--source auto", bash_source)
+        self.assertIn('"--source", "auto"', powershell_source)
+
+    def test_bash_installs_missing_referenced_skills_with_auto_source(self) -> None:
+        (self.state_dir / "npm").touch()
+        (self.state_dir / "agent").touch()
+        (self.state_dir / "external-missing").touch()
+
+        completed = self.run_installer()
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        invocation = next(
+            line
+            for line in self.invocation_args()
+            if line.split()[1:2] == ["install-external-skills"]
+        )
+        self.assertIn("--skills diagnosing-bugs", invocation)
+        self.assertIn("--scope global --source auto --yes", invocation)
 
     def test_missing_target_cli_bootstraps_npm_then_installs_agent_before_preflight(
         self,

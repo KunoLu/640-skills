@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import filecmp
+import hashlib
 import json
 import os
 import platform
@@ -18,11 +19,14 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = SKILL_DIR / "templates"
 PROJECT_GITIGNORE_TEMPLATE = TEMPLATE_DIR / "project" / ".gitignore"
+EXTERNAL_STABLE_ROOT = SKILL_DIR / "assets" / "external-skills" / "stable"
+EXTERNAL_STABLE_MANIFEST = EXTERNAL_STABLE_ROOT / "MANIFEST.json"
 NVM_INSTALL_URL = "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh"
 RTK_INSTALL_URL = "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh"
 TEMURIN21_RELEASES_URL = "https://github.com/adoptium/temurin21-binaries/releases"
@@ -191,20 +195,24 @@ EXTERNAL_SKILL_SOURCES = {
     **{
         name: {
             "repo": MATTPOCOCK_REPO,
+            "subpath": MATTPOCOCK_SKILL_SUBPATHS[name],
             "aliases": (name,),
         }
         for name in MATTPOCOCK_CANONICAL_SKILLS
     },
     "impeccable": {
         "repo": "https://github.com/pbakaus/impeccable.git",
+        "subpath": "plugin/skills/impeccable",
         "aliases": ("impeccable",),
     },
     "ui-ux-pro-max": {
         "repo": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git",
+        "subpath": ".claude/skills/ui-ux-pro-max",
         "aliases": ("ui-ux-pro-max", "ui-ux-pro-max-skill"),
     },
     "web-ui-autotest-generator": {
         "repo": "https://github.com/Cheryl-station/web-ui-autotest.git",
+        "subpath": ".",
         "aliases": ("web-ui-autotest-generator", "web-ui-autotest"),
     },
     "shadcn": {
@@ -1140,11 +1148,21 @@ def print_projects_check_results(results: dict[str, object], as_json: bool) -> N
 def check_skill(name: str, group: str, global_dir: Path, project_dir: Path | None) -> dict[str, object]:
     locations: list[dict[str, str]] = []
     global_candidate = global_dir / name / "SKILL.md"
-    if global_candidate.is_file():
+    global_valid = (
+        external_skill_target_is_valid(global_dir, name)
+        if group == "referenced"
+        else global_candidate.is_file()
+    )
+    if global_valid:
         locations.append({"scope": "global", "path": str(global_candidate)})
     if project_dir:
         project_candidate = project_dir / name / "SKILL.md"
-        if project_candidate.is_file():
+        project_valid = (
+            external_skill_target_is_valid(project_dir, name)
+            if group == "referenced"
+            else project_candidate.is_file()
+        )
+        if project_valid:
             locations.append({"scope": "project", "path": str(project_candidate)})
 
     return {
@@ -1235,7 +1253,7 @@ def skill_next_step(item: dict[str, object]) -> str:
     if item.get("sourceRepo"):
         return (
             "Install the required global Skill from the configured repository with "
-            f"`python scripts/onboard.py install-external-skills --skills {name} --scope global --yes`."
+            f"`python scripts/onboard.py install-external-skills --skills {name} --scope global --source auto --yes`."
         )
     return "Run `init` or `reset` to install the required global bundled Skills, then rerun `check`."
 
@@ -1816,11 +1834,13 @@ def external_install_plan(args: argparse.Namespace, selected: list[str], target_
     return {
         "mode": "install-external-skills",
         "scope": args.scope,
+        "requestedSource": args.source,
         "targetDir": str(target_dir),
         "forceOverwriteExisting": True,
-        "backupExistingTargets": False,
+        "backupExistingTargets": "temporary-rollback",
+        "transactionalInstall": True,
         "replaceFlagProvided": bool(args.replace),
-        "removeLegacyBeforeInstall": legacy_targets,
+        "removeLegacyAfterCanonicalCommit": legacy_targets,
         "skills": [
             {
                 "name": name,
@@ -1840,17 +1860,31 @@ def print_external_install_plan(plan: dict[str, object], as_json: bool) -> None:
 
     print("External skill install plan")
     print(f"Scope: {plan['scope']}")
+    print(f"Requested source: {plan['requestedSource']}")
     print(f"Target skills dir: {plan['targetDir']}")
-    print("Force overwrite existing: yes, existing targets are removed first without backup")
-    if plan.get("removeLegacyBeforeInstall"):
-        print("Legacy targets removed before install:")
-        for item in plan["removeLegacyBeforeInstall"]:
-            status = "exists" if item["targetExists"] else "missing"
-            print(f"- {item['name']} -> {item['replacement']}: {item['target']} ({status})")
-    for item in plan["skills"]:
-        status = "exists" if item["targetExists"] else "missing"
-        print(f"- {item['name']}: {item['target']} ({status})")
-        print(f"  source: {item['repo']}")
+    print("Transactional install: yes, existing targets use a temporary rollback backup")
+    legacy_items = plan.get("removeLegacyAfterCanonicalCommit")
+    if isinstance(legacy_items, list) and legacy_items:
+        print("Legacy targets removed after canonical commit:")
+        for item in legacy_items:
+            if not isinstance(item, dict):
+                raise RuntimeError("external install legacy plan entry must be an object")
+            entry = cast(dict[str, object], item)
+            status = "exists" if entry["targetExists"] else "missing"
+            print(
+                f"- {entry['name']} -> {entry['replacement']}: "
+                f"{entry['target']} ({status})"
+            )
+    skill_items = plan.get("skills")
+    if not isinstance(skill_items, list):
+        raise RuntimeError("external install plan skills must be a list")
+    for item in skill_items:
+        if not isinstance(item, dict):
+            raise RuntimeError("external install skill plan entry must be an object")
+        entry = cast(dict[str, object], item)
+        status = "exists" if entry["targetExists"] else "missing"
+        print(f"- {entry['name']}: {entry['target']} ({status})")
+        print(f"  source: {entry['repo']}")
 
 
 def read_skill_frontmatter_name(skill_md: Path) -> str | None:
@@ -1885,18 +1919,38 @@ def discover_skill_dirs(repo_root: Path) -> list[Path]:
     return dirs
 
 
+def resolve_contained_relative_path(root: Path, value: object, field: str) -> Path:
+    raw = str(value or "")
+    relative = Path(raw)
+    if not raw or relative.is_absolute() or ".." in relative.parts:
+        raise RuntimeError(
+            f"{field} must be a non-empty relative path without '..': {raw or '<missing>'}"
+        )
+    resolved_root = root.resolve()
+    candidate = (resolved_root / relative).resolve()
+    try:
+        candidate.relative_to(resolved_root)
+    except ValueError as exc:
+        raise RuntimeError(f"{field} must stay within its declared root: {raw}") from exc
+    return candidate
+
+
 def source_dir_for_external_skill(repo_root: Path, skill_name: str) -> Path:
     spec = EXTERNAL_SKILL_SOURCES[skill_name]
     configured_subpath = spec.get("subpath")
     if configured_subpath:
-        candidate = repo_root / str(configured_subpath)
+        candidate = resolve_contained_relative_path(
+            repo_root, configured_subpath, f"configured subpath for {skill_name}"
+        )
         if (candidate / "SKILL.md").is_file():
             return candidate
         raise RuntimeError(f"configured subpath for {skill_name} does not contain SKILL.md: {configured_subpath}")
 
     subpath = MATTPOCOCK_SKILL_SUBPATHS.get(skill_name)
     if subpath:
-        candidate = repo_root / subpath
+        candidate = resolve_contained_relative_path(
+            repo_root, subpath, f"fallback subpath for {skill_name}"
+        )
         if (candidate / "SKILL.md").is_file():
             return candidate
 
@@ -1927,6 +1981,139 @@ def source_dir_for_external_skill(repo_root: Path, skill_name: str) -> Path:
     raise RuntimeError(f"could not uniquely locate {skill_name}; candidates: {rel_candidates}")
 
 
+def external_tree_sha256(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        if path.is_symlink():
+            raise RuntimeError(f"external Skill contains an unsupported symlink: {path.relative_to(root)}")
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        content = path.read_bytes()
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()
+
+
+def validate_external_skill_source(skill_name: str, source: Path) -> None:
+    if not source.is_dir() or source.is_symlink():
+        raise RuntimeError(f"external Skill source is not a regular directory: {source}")
+    skill_md = source / "SKILL.md"
+    if not skill_md.is_file() or skill_md.is_symlink():
+        raise RuntimeError(f"external Skill {skill_name} does not contain a regular SKILL.md")
+    frontmatter_name = read_skill_frontmatter_name(skill_md)
+    if frontmatter_name != skill_name:
+        raise RuntimeError(
+            f"external Skill {skill_name} frontmatter name is {frontmatter_name or '<missing>'}"
+        )
+    for path in source.rglob("*"):
+        if path.is_symlink():
+            raise RuntimeError(
+                f"external Skill {skill_name} contains an unsupported symlink: {path.relative_to(source)}"
+            )
+
+
+def external_skill_target_is_valid(skills_root: Path, skill_name: str) -> bool:
+    try:
+        validate_external_skill_source(skill_name, skills_root / skill_name)
+    except (OSError, RuntimeError):
+        return False
+    return True
+
+
+def load_external_stable_manifest() -> dict[str, object]:
+    try:
+        manifest = json.loads(EXTERNAL_STABLE_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"cannot read stable External Skills manifest: {exc}") from exc
+    if manifest.get("schemaVersion") != 1:
+        raise RuntimeError("stable External Skills manifest schemaVersion must be 1")
+    repositories = manifest.get("repositories")
+    skills = manifest.get("skills")
+    if not isinstance(repositories, dict) or not isinstance(skills, dict):
+        raise RuntimeError("stable External Skills manifest must contain repositories and skills objects")
+    if set(skills) != set(EXTERNAL_SKILL_SOURCES):
+        missing = sorted(set(EXTERNAL_SKILL_SOURCES) - set(skills))
+        extra = sorted(set(skills) - set(EXTERNAL_SKILL_SOURCES))
+        raise RuntimeError(
+            "stable External Skills manifest does not match the canonical set; "
+            f"missing={missing}, extra={extra}"
+        )
+    validate_external_stable_metadata(manifest, EXTERNAL_STABLE_ROOT)
+    return manifest
+
+
+def validate_external_stable_metadata(
+    manifest: dict[str, object], stable_root: Path
+) -> None:
+    repositories = manifest.get("repositories")
+    if not isinstance(repositories, dict):
+        raise RuntimeError("stable External Skills manifest repositories must be an object")
+    for repository_id, repository in repositories.items():
+        if not isinstance(repository, dict):
+            raise RuntimeError(f"stable repository metadata is invalid: {repository_id}")
+        revision = str(repository.get("revision") or "")
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise RuntimeError(f"stable repository revision is invalid: {repository_id}")
+        license_files = repository.get("licenseFiles")
+        if not isinstance(license_files, list) or not license_files:
+            raise RuntimeError(f"stable repository has no licenseFiles: {repository_id}")
+        for license_entry in license_files:
+            if not isinstance(license_entry, dict):
+                raise RuntimeError(f"stable repository has an invalid license entry: {repository_id}")
+            source = str(license_entry.get("source") or "")
+            stable_path = str(license_entry.get("stablePath") or "")
+            if not source or not stable_path:
+                raise RuntimeError(
+                    f"stable repository license file is missing or invalid: {repository_id}/{stable_path}"
+                )
+            license_path = resolve_contained_relative_path(
+                stable_root,
+                stable_path,
+                f"license stablePath for {repository_id}",
+            )
+            if not license_path.is_file():
+                raise RuntimeError(
+                    f"stable repository license file is missing or invalid: {repository_id}/{stable_path}"
+                )
+
+
+def stable_external_skill_source(
+    manifest: dict[str, object], skill_name: str, stable_root: Path = EXTERNAL_STABLE_ROOT
+) -> tuple[Path, str, str]:
+    skills = manifest["skills"]
+    repositories = manifest["repositories"]
+    assert isinstance(skills, dict)
+    assert isinstance(repositories, dict)
+    skill = skills.get(skill_name)
+    if not isinstance(skill, dict):
+        raise RuntimeError(f"stable manifest has no entry for {skill_name}")
+    repository_id = skill.get("repository")
+    repository = repositories.get(repository_id)
+    if not isinstance(repository_id, str) or not isinstance(repository, dict):
+        raise RuntimeError(f"stable manifest repository is invalid for {skill_name}")
+    source = resolve_contained_relative_path(
+        stable_root,
+        skill.get("stablePath"),
+        f"stablePath for {skill_name}",
+    )
+    validate_external_skill_source(skill_name, source)
+    expected_digest = str(skill.get("treeSha256") or "")
+    actual_digest = external_tree_sha256(source)
+    if not expected_digest or actual_digest != expected_digest:
+        raise RuntimeError(
+            f"stable External Skill checksum mismatch for {skill_name}: "
+            f"expected {expected_digest or '<missing>'}, got {actual_digest}"
+        )
+    revision = str(repository.get("revision") or "")
+    repo = str(repository.get("url") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise RuntimeError(f"stable External Skill revision is invalid for {skill_name}")
+    if repo != str(EXTERNAL_SKILL_SOURCES[skill_name]["repo"]):
+        raise RuntimeError(f"stable External Skill repository does not match configured source for {skill_name}")
+    return source, revision, str(manifest.get("stableSet") or "")
+
+
 def clone_repo(repo: str, destination: Path) -> tuple[bool, str]:
     if not shutil.which("git"):
         return False, "git command not found"
@@ -1949,6 +2136,54 @@ def clone_repo(repo: str, destination: Path) -> tuple[bool, str]:
     return False, message or f"git clone exited with {completed.returncode}"
 
 
+def cloned_repo_revision(repo_root: Path) -> str:
+    try:
+        completed = subprocess.run(
+            ("git", "-C", str(repo_root), "rev-parse", "HEAD"),
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise RuntimeError(f"cannot determine cloned repository revision: {exc}") from exc
+    revision = completed.stdout.strip()
+    if completed.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", revision):
+        message = (completed.stderr or completed.stdout).strip()
+        raise RuntimeError(message or "cloned repository did not return a full commit revision")
+    return revision
+
+
+def clone_repo_at_revision(repo: str, revision: str, destination: Path) -> tuple[bool, str]:
+    if not shutil.which("git"):
+        return False, "git command not found"
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        return False, "revision must be a full 40-character lowercase commit SHA"
+    commands = (
+        ("git", "init", str(destination)),
+        ("git", "-C", str(destination), "remote", "add", "origin", repo),
+        ("git", "-C", str(destination), "fetch", "--depth", "1", "origin", revision),
+        ("git", "-C", str(destination), "checkout", "--detach", "FETCH_HEAD"),
+    )
+    for command in commands:
+        try:
+            completed = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except subprocess.TimeoutExpired:
+            return False, f"command timed out after 180 seconds: {shlex.join(command)}"
+        except OSError as exc:
+            return False, str(exc)
+        if completed.returncode != 0:
+            message = (completed.stderr or completed.stdout).strip()
+            return False, message or f"command failed: {shlex.join(command)}"
+    return True, ""
+
+
 def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | None]:
     replaced_existing = target.exists()
     if target.exists():
@@ -1968,6 +2203,194 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
     if failures:
         return "failed", replaced_existing, "verification failed: " + ", ".join(failures[:20])
     return ("replaced" if replaced_existing else "installed"), replaced_existing, None
+
+
+def resolve_external_install_sources(
+    selected: list[str], requested_source: str, workspace: Path
+) -> dict[str, dict[str, object]]:
+    manifest = load_external_stable_manifest() if requested_source == "stable" else None
+    repo_groups: dict[str, list[str]] = {}
+    for name in selected:
+        repo = str(EXTERNAL_SKILL_SOURCES[name]["repo"])
+        repo_groups.setdefault(repo, []).append(name)
+
+    resolved: dict[str, dict[str, object]] = {}
+    for index, (repo, names) in enumerate(repo_groups.items(), start=1):
+        fallback_reason: str | None = None
+        if requested_source in {"auto", "upstream"}:
+            try:
+                repo_root = workspace / f"repo-{index}"
+                ok, clone_error = clone_repo(repo, repo_root)
+                if not ok:
+                    raise RuntimeError(clone_error)
+                revision = cloned_repo_revision(repo_root)
+                upstream_sources: dict[str, Path] = {}
+                for name in names:
+                    source = source_dir_for_external_skill(repo_root, name)
+                    validate_external_skill_source(name, source)
+                    upstream_sources[name] = source
+                for name, source in upstream_sources.items():
+                    resolved[name] = {
+                        "source": source,
+                        "repo": repo,
+                        "sourceUsed": "upstream",
+                        "sourceRevision": revision,
+                        "stableSet": None,
+                        "fallbackReason": None,
+                    }
+                continue
+            except (OSError, RuntimeError) as exc:
+                fallback_reason = str(exc)
+                if requested_source == "upstream":
+                    raise RuntimeError(f"upstream External Skill group failed for {repo}: {exc}") from exc
+
+        if manifest is None:
+            manifest = load_external_stable_manifest()
+        stable_group: dict[str, tuple[Path, str, str]] = {}
+        for name in names:
+            stable_group[name] = stable_external_skill_source(manifest, name)
+        for name, (source, revision, stable_set) in stable_group.items():
+            resolved[name] = {
+                "source": source,
+                "repo": repo,
+                "sourceUsed": "stable-fallback" if requested_source == "auto" else "stable",
+                "sourceRevision": revision,
+                "stableSet": stable_set,
+                "fallbackReason": fallback_reason,
+            }
+    return resolved
+
+
+def stage_external_skills(
+    selected: list[str], resolved: dict[str, dict[str, object]], target_dir: Path
+) -> Path:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".kuno-external-staging-", dir=target_dir))
+    try:
+        for name in selected:
+            source = Path(str(resolved[name]["source"]))
+            destination = staging / name
+            shutil.copytree(
+                source,
+                destination,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+            )
+            validate_external_skill_source(name, destination)
+            failures = compare_tree(source, destination, {".git", "__pycache__"})
+            if failures:
+                raise RuntimeError(
+                    f"staging verification failed for {name}: " + ", ".join(failures[:20])
+                )
+        return staging
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def commit_external_skill_transaction(
+    selected: list[str],
+    resolved: dict[str, dict[str, object]],
+    target_dir: Path,
+    staging: Path,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    rollback = Path(tempfile.mkdtemp(prefix=".kuno-external-rollback-", dir=target_dir))
+    legacy_names: list[str] = []
+    for name in selected:
+        for legacy_name in legacy_external_skill_names_for(name):
+            if legacy_name not in legacy_names:
+                legacy_names.append(legacy_name)
+
+    existed = {name: (target_dir / name).exists() for name in selected}
+    moved: list[tuple[Path, Path]] = []
+    committed: list[Path] = []
+    results: list[dict[str, object]] = []
+    rollback_errors: list[str] = []
+    retain_rollback = False
+    try:
+        for name in (*selected, *legacy_names):
+            target = target_dir / name
+            if not target.exists():
+                continue
+            backup = rollback / name
+            shutil.move(str(target), str(backup))
+            moved.append((target, backup))
+
+        for name in selected:
+            target = target_dir / name
+            shutil.move(str(staging / name), str(target))
+            committed.append(target)
+            source_info = resolved[name]
+            result = {
+                "name": name,
+                "repo": source_info["repo"],
+                "target": str(target),
+                "status": "replaced" if existed[name] else "installed",
+                "phase": "commit",
+                "replacedExisting": existed[name],
+                "sourceUsed": source_info["sourceUsed"],
+                "sourceRevision": source_info["sourceRevision"],
+                "stableSet": source_info.get("stableSet"),
+                "fallbackReason": source_info.get("fallbackReason"),
+            }
+            results.append(result)
+
+        for legacy_name in legacy_names:
+            if (rollback / legacy_name).exists():
+                results.append(
+                    {
+                        "name": legacy_name,
+                        "replacement": canonical_external_skill_name(legacy_name),
+                        "target": str(target_dir / legacy_name),
+                        "status": "removed",
+                        "phase": "remove-legacy-after-commit",
+                    }
+                )
+        transaction = {
+            "status": "committed",
+            "rolledBack": False,
+            "rollbackErrors": [],
+            "rollbackPath": None,
+        }
+        return results, transaction
+    except Exception as exc:  # noqa: BLE001 - rollback must cover every local commit failure.
+        for target in reversed(committed):
+            try:
+                remove_existing_target(target)
+            except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
+                rollback_errors.append(f"remove {target}: {rollback_exc}")
+        for target, backup in reversed(moved):
+            try:
+                if target.exists():
+                    remove_existing_target(target)
+                shutil.move(str(backup), str(target))
+            except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
+                rollback_errors.append(f"restore {target}: {rollback_exc}")
+        results = [
+            {
+                "name": name,
+                "repo": resolved[name]["repo"],
+                "target": str(target_dir / name),
+                "status": "failed",
+                "phase": "commit",
+                "sourceUsed": resolved[name]["sourceUsed"],
+                "sourceRevision": resolved[name]["sourceRevision"],
+                "stableSet": resolved[name].get("stableSet"),
+                "fallbackReason": resolved[name].get("fallbackReason"),
+                "error": str(exc),
+            }
+            for name in selected
+        ]
+        retain_rollback = bool(rollback_errors)
+        return results, {
+            "status": "rollback-failed" if rollback_errors else "rolled-back",
+            "rolledBack": True,
+            "rollbackErrors": rollback_errors,
+            "rollbackPath": str(rollback) if retain_rollback else None,
+        }
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+        if not retain_rollback:
+            shutil.rmtree(rollback, ignore_errors=True)
 
 
 def remove_legacy_external_targets(
@@ -2063,7 +2486,7 @@ def build_external_migration_plan(args: argparse.Namespace) -> dict[str, object]
         "targetDir": str(skills_root),
         "detectedLegacy": legacy,
         "detectedCanonical": canonical,
-        "installOrUpdate": selected,
+        "requiredCanonical": selected,
         "removeLegacy": legacy,
         "backupRoot": str(external_migration_backup_root(skills_root)),
         "autoMode": "legacy-only",
@@ -2094,17 +2517,40 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
         ]
 
     target_dir = Path(str(plan["targetDir"]))
-    selected = [str(name) for name in plan["installOrUpdate"]]
-    legacy = [str(name) for name in plan["removeLegacy"]]
+    remove_legacy = plan.get("removeLegacy")
+    if not isinstance(remove_legacy, list):
+        raise RuntimeError("external migration removeLegacy must be a list")
+    legacy = [
+        str(name)
+        for name in remove_legacy
+        if (target_dir / str(name)).exists()
+    ]
+    if not legacy:
+        return [
+            {
+                "status": "skipped",
+                "reason": "legacy targets were already handled by canonical installation",
+            }
+        ]
     backup_dir = external_migration_backup_root(target_dir) / f"mattpocock-1.0-migration-{external_migration_timestamp()}"
 
     results: list[dict[str, object]] = []
-    names_to_backup = []
-    for name in (*selected, *legacy):
-        if name not in names_to_backup and (target_dir / name).exists():
-            names_to_backup.append(name)
+    for name in legacy:
+        if name in MATTPOCOCK_LEGACY_RENAMES:
+            replacement = canonical_external_skill_name(name)
+            if not external_skill_target_is_valid(target_dir, replacement):
+                results.append(
+                    {
+                        "name": name,
+                        "status": "failed",
+                        "phase": "preflight",
+                        "error": f"canonical replacement is missing: {replacement}",
+                    }
+                )
+    if results:
+        return results
 
-    for name in names_to_backup:
+    for name in legacy:
         try:
             backup = backup_skill_target(target_dir / name, backup_dir)
             results.append({"name": name, "status": "backed-up", "backup": backup})
@@ -2114,37 +2560,8 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
     if any(item["status"] == "failed" for item in results):
         return results
 
-    legacy_removals = remove_legacy_external_targets(target_dir, selected, legacy)
+    legacy_removals = remove_legacy_external_targets(target_dir, [], legacy)
     results.extend(legacy_removals)
-    if any(item["status"] == "failed" for item in legacy_removals):
-        return results
-
-    if selected:
-        with tempfile.TemporaryDirectory(prefix="kuno-onboard-mattpocock-migration-") as tmp:
-            repo_root = Path(tmp) / "mattpocock-skills"
-            ok, clone_error = clone_repo(MATTPOCOCK_REPO, repo_root)
-            if not ok:
-                results.append({"repo": MATTPOCOCK_REPO, "status": "failed", "phase": "clone", "error": clone_error})
-                return results
-
-            for name in selected:
-                try:
-                    source = source_dir_for_external_skill(repo_root, name)
-                    status, replaced_existing, error = copy_external_skill(source, target_dir / name)
-                    results.append(
-                        {
-                            "name": name,
-                            "status": status,
-                            "phase": "install",
-                            "source": str(source),
-                            "target": str(target_dir / name),
-                            "replacedExisting": replaced_existing,
-                            "error": error,
-                        }
-                    )
-                except Exception as exc:  # noqa: BLE001 - keep migration report per target.
-                    results.append({"name": name, "status": "failed", "phase": "install", "error": str(exc)})
-
     return results
 
 
@@ -2160,66 +2577,50 @@ def install_external_skills(args: argparse.Namespace) -> int:
     if not args.json:
         print_external_install_plan(plan, False)
 
-    repo_groups: dict[str, list[str]] = {}
-    for name in selected:
-        repo = str(EXTERNAL_SKILL_SOURCES[name]["repo"])
-        repo_groups.setdefault(repo, []).append(name)
-
-    results: list[dict[str, object]] = remove_legacy_external_targets(target_dir, selected)
-    if not any(item["status"] == "failed" for item in results):
-        with tempfile.TemporaryDirectory(prefix="kuno-onboard-external-skills-") as tmp:
-            tmp_root = Path(tmp)
-            for index, (repo, names) in enumerate(repo_groups.items(), start=1):
-                repo_root = tmp_root / f"repo-{index}"
-                ok, clone_error = clone_repo(repo, repo_root)
-                if not ok:
-                    for name in names:
-                        results.append(
-                            {
-                                "name": name,
-                                "repo": repo,
-                                "status": "failed",
-                                "error": clone_error,
-                            }
-                        )
-                    continue
-
-                for name in names:
-                    target = target_dir / name
-                    try:
-                        source = source_dir_for_external_skill(repo_root, name)
-                        status, replaced_existing, error = copy_external_skill(source, target)
-                        results.append(
-                            {
-                                "name": name,
-                                "repo": repo,
-                                "source": str(source),
-                                "target": str(target),
-                                "status": status,
-                                "replacedExisting": replaced_existing,
-                                "error": error,
-                            }
-                        )
-                    except Exception as exc:  # noqa: BLE001 - report per-skill install failures without hiding others.
-                        results.append(
-                            {
-                                "name": name,
-                                "repo": repo,
-                                "target": str(target),
-                                "status": "failed",
-                                "error": str(exc),
-                            }
-                        )
+    results: list[dict[str, object]] = []
+    transaction: dict[str, object] = {
+        "status": "not-started",
+        "rolledBack": False,
+        "rollbackErrors": [],
+        "rollbackPath": None,
+    }
+    try:
+        with tempfile.TemporaryDirectory(prefix="kuno-onboard-external-sources-") as tmp:
+            resolved = resolve_external_install_sources(selected, args.source, Path(tmp))
+            staging = stage_external_skills(selected, resolved, target_dir)
+            results, transaction = commit_external_skill_transaction(
+                selected, resolved, target_dir, staging
+            )
+    except Exception as exc:  # noqa: BLE001 - no target is changed before the transaction begins.
+        results = [
+            {
+                "name": name,
+                "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
+                "target": str(target_dir / name),
+                "status": "failed",
+                "phase": "prepare",
+                "error": str(exc),
+            }
+            for name in selected
+        ]
+        transaction = {
+            "status": "aborted-before-commit",
+            "rolledBack": False,
+            "rollbackErrors": [],
+            "rollbackPath": None,
+        }
 
     payload = {
         "mode": "install-external-skills",
         "scope": args.scope,
+        "requestedSource": args.source,
         "targetDir": str(target_dir),
         "forceOverwriteExisting": True,
-        "backupExistingTargets": False,
+        "backupExistingTargets": "temporary-rollback",
         "replaceFlagProvided": bool(args.replace),
         "plan": plan,
         "results": results,
+        "transaction": transaction,
     }
     post_check = build_check_results(args)
     payload["postCheck"] = post_check
@@ -2232,13 +2633,175 @@ def install_external_skills(args: argparse.Namespace) -> int:
             print(f"- {item['name']}: {item['status']}")
             if item.get("target"):
                 print(f"  target: {item['target']}")
-            if item.get("replacedExisting"):
-                print("  replaced existing target without backup")
+            if item.get("sourceUsed"):
+                print(f"  source: {item['sourceUsed']} ({item.get('sourceRevision')})")
+            if item.get("fallbackReason"):
+                print(f"  fallback: {item['fallbackReason']}")
             if item.get("error"):
                 print(f"  note: {item['error']}")
-        print_installation_report(payload["installationReport"], "Final installation report")
+        print(f"Transaction: {transaction['status']}")
+        if transaction.get("rollbackPath"):
+            print(f"Rollback backup retained at: {transaction['rollbackPath']}")
+        rollback_errors = transaction.get("rollbackErrors")
+        if isinstance(rollback_errors, list):
+            for rollback_error in rollback_errors:
+                print(f"  rollback error: {rollback_error}")
+        print_installation_report(
+            cast(dict[str, object], payload["installationReport"]),
+            "Final installation report",
+        )
 
-    return 1 if any(item["status"] == "failed" for item in results) else 0
+    return 1 if transaction["status"] != "committed" else 0
+
+
+def promote_external_skills_stable(args: argparse.Namespace) -> int:
+    manifest = load_external_stable_manifest()
+    repositories = cast(dict[str, object], manifest["repositories"])
+    skills = cast(dict[str, object], manifest["skills"])
+    repository = repositories.get(args.repository)
+    if not isinstance(repository, dict):
+        known = ", ".join(sorted(repositories))
+        raise SystemExit(f"Unknown stable repository: {args.repository}. Known: {known}")
+    selected = [
+        name
+        for name, entry in skills.items()
+        if isinstance(entry, dict) and entry.get("repository") == args.repository
+    ]
+    plan = {
+        "mode": "promote-external-skills-stable",
+        "repository": args.repository,
+        "repo": repository.get("url"),
+        "revision": args.revision,
+        "stableSet": args.stable_set,
+        "skills": selected,
+        "target": str(EXTERNAL_STABLE_ROOT),
+    }
+    if not args.yes:
+        if args.json:
+            print(json.dumps(plan, indent=2, ensure_ascii=False))
+        else:
+            print("Stable External Skills promotion plan")
+            for key, value in plan.items():
+                print(f"- {key}: {value}")
+            print("Refusing to promote without --yes.", file=sys.stderr)
+        return 2
+
+    payload: dict[str, object] = {**plan, "status": "failed"}
+    with tempfile.TemporaryDirectory(prefix="kuno-external-promotion-source-") as tmp:
+        repo_root = Path(tmp) / "repository"
+        ok, error = clone_repo_at_revision(str(repository.get("url") or ""), args.revision, repo_root)
+        if not ok:
+            payload["error"] = error
+            print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else error)
+            return 1
+
+        candidate_container = Path(
+            tempfile.mkdtemp(prefix=".kuno-stable-promotion-", dir=EXTERNAL_STABLE_ROOT.parent)
+        )
+        candidate_root = candidate_container / "stable"
+        previous_root = candidate_container / "previous"
+        retain_candidate_container = False
+        try:
+            shutil.copytree(EXTERNAL_STABLE_ROOT, candidate_root)
+            candidate_manifest = json.loads(json.dumps(manifest))
+            candidate_repositories = cast(
+                dict[str, object], candidate_manifest["repositories"]
+            )
+            candidate_skills = cast(dict[str, object], candidate_manifest["skills"])
+
+            for name in selected:
+                entry = candidate_skills[name]
+                if not isinstance(entry, dict):
+                    raise RuntimeError(f"stable Skill metadata is invalid: {name}")
+                entry = cast(dict[str, object], entry)
+                source = resolve_contained_relative_path(
+                    repo_root,
+                    entry.get("sourceSubpath"),
+                    f"sourceSubpath for {name}",
+                )
+                validate_external_skill_source(name, source)
+                destination = resolve_contained_relative_path(
+                    candidate_root,
+                    entry.get("stablePath"),
+                    f"stablePath for {name}",
+                )
+                if destination.exists():
+                    remove_existing_target(destination)
+                shutil.copytree(
+                    source,
+                    destination,
+                    ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+                )
+                validate_external_skill_source(name, destination)
+                entry["treeSha256"] = external_tree_sha256(destination)
+
+            license_files = repository.get("licenseFiles")
+            if not isinstance(license_files, list):
+                raise RuntimeError(f"stable repository {args.repository} has no licenseFiles list")
+            for license_entry in license_files:
+                if not isinstance(license_entry, dict):
+                    raise RuntimeError(f"stable repository {args.repository} has an invalid license entry")
+                source = resolve_contained_relative_path(
+                    repo_root,
+                    license_entry.get("source"),
+                    f"license source for {args.repository}",
+                )
+                destination = resolve_contained_relative_path(
+                    candidate_root,
+                    license_entry.get("stablePath"),
+                    f"license stablePath for {args.repository}",
+                )
+                if not source.is_file():
+                    raise RuntimeError(f"required upstream license file is missing: {source}")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+
+            candidate_repository = candidate_repositories[args.repository]
+            if not isinstance(candidate_repository, dict):
+                raise RuntimeError(f"stable repository metadata is invalid: {args.repository}")
+            candidate_repository = cast(dict[str, object], candidate_repository)
+            candidate_repository["revision"] = args.revision
+            candidate_manifest["stableSet"] = args.stable_set
+            candidate_manifest["promotedAt"] = dt.date.today().isoformat()
+            (candidate_root / "MANIFEST.json").write_text(
+                json.dumps(candidate_manifest, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+            validate_external_stable_metadata(candidate_manifest, candidate_root)
+            for name in EXTERNAL_SKILL_SOURCES:
+                stable_external_skill_source(candidate_manifest, name, candidate_root)
+
+            shutil.move(str(EXTERNAL_STABLE_ROOT), str(previous_root))
+            try:
+                shutil.move(str(candidate_root), str(EXTERNAL_STABLE_ROOT))
+            except Exception as commit_exc:
+                try:
+                    shutil.move(str(previous_root), str(EXTERNAL_STABLE_ROOT))
+                except Exception as restore_exc:
+                    retain_candidate_container = True
+                    raise RuntimeError(
+                        "stable promotion commit and rollback failed; previous stable set retained at "
+                        f"{previous_root}: commit={commit_exc}; rollback={restore_exc}"
+                    ) from restore_exc
+                raise
+            payload["status"] = "promoted"
+            payload["promotedSkills"] = selected
+        except Exception as exc:  # noqa: BLE001 - promotion keeps the prior stable set on every failure.
+            payload["error"] = str(exc)
+        finally:
+            if not retain_candidate_container:
+                shutil.rmtree(candidate_container, ignore_errors=True)
+
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"Stable External Skills promotion: {payload['status']}")
+        if payload.get("error"):
+            print(f"- error: {payload['error']}")
+        elif payload.get("promotedSkills"):
+            print("- promoted: " + ", ".join(selected))
+    return 0 if payload["status"] == "promoted" else 1
 
 
 def missing_required_external_skills(args: argparse.Namespace) -> list[str]:
@@ -2249,7 +2812,7 @@ def missing_required_external_skills(args: argparse.Namespace) -> list[str]:
     return [
         name
         for name in EXTERNAL_SKILL_SOURCES
-        if not (global_skills_dir / name / "SKILL.md").is_file()
+        if not external_skill_target_is_valid(global_skills_dir, name)
     ]
 
 
@@ -2265,6 +2828,7 @@ def install_required_external_skills(args: argparse.Namespace) -> int:
         all=False,
         skills=",".join(missing),
         scope="global",
+        source="auto",
         global_skills_dir=getattr(args, "global_skills_dir", None),
         replace=False,
         yes=True,
@@ -3436,8 +4000,8 @@ def print_plan(
             print("- detected legacy: " + ", ".join(str(name) for name in external_migration_plan["detectedLegacy"]))
         if external_migration_plan.get("detectedCanonical"):
             print("- detected canonical: " + ", ".join(str(name) for name in external_migration_plan["detectedCanonical"]))
-        if external_migration_plan.get("installOrUpdate"):
-            print("- install/update: " + ", ".join(str(name) for name in external_migration_plan["installOrUpdate"]))
+        if external_migration_plan.get("requiredCanonical"):
+            print("- required canonical: " + ", ".join(str(name) for name in external_migration_plan["requiredCanonical"]))
         if external_migration_plan.get("removeLegacy"):
             print("- remove legacy: " + ", ".join(str(name) for name in external_migration_plan["removeLegacy"]))
 
@@ -3536,6 +4100,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return install_playwright_cli(args)
     if mode == "install-external-skills":
         return install_external_skills(args)
+    if mode == "promote-external-skills-stable":
+        return promote_external_skills_stable(args)
 
     if mode in {"init", "reset"} and not args.json:
         print_check_results(build_check_results(args), False)
@@ -3729,14 +4295,42 @@ def build_parser() -> argparse.ArgumentParser:
         default="global",
         help="Install into the global skills directory.",
     )
+    install.add_argument(
+        "--source",
+        choices=("auto", "upstream", "stable"),
+        default="auto",
+        help=(
+            "External Skill source policy: auto prefers validated upstream and falls back "
+            "to the vendored stable set; upstream and stable are strict modes."
+        ),
+    )
     install.add_argument("--global-skills-dir", help="Override global skills directory.")
     install.add_argument(
         "--replace",
         action="store_true",
-        help="Compatibility flag; external skill installs always overwrite existing targets without backup.",
+        help="Compatibility flag; replacement now uses a temporary transactional rollback backup.",
     )
     install.add_argument("--yes", action="store_true", help="Allow external skill installation.")
     install.add_argument("--json", action="store_true", help="Print machine-readable plan and results.")
+
+    promote = subparsers.add_parser("promote-external-skills-stable")
+    promote.add_argument(
+        "--repository",
+        required=True,
+        help="Repository id from the stable External Skills manifest.",
+    )
+    promote.add_argument(
+        "--revision",
+        required=True,
+        help="Full 40-character lowercase upstream commit SHA to promote.",
+    )
+    promote.add_argument(
+        "--stable-set",
+        required=True,
+        help="New Onboard stable set identifier, for example 2026-07-11.2.",
+    )
+    promote.add_argument("--yes", action="store_true", help="Allow stable snapshot replacement.")
+    promote.add_argument("--json", action="store_true", help="Print machine-readable plan and results.")
 
     npm = subparsers.add_parser("ensure-npm")
     npm.add_argument("--yes", action="store_true", help="Install nvm and Node.js LTS when npm is missing.")

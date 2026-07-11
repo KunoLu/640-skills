@@ -200,7 +200,7 @@ trellis init -u your-name
 
 ## mattpocock/skills 项目级编排
 
-本项目只接入以下官方 mattpocock/skills，并默认原样使用：
+本项目只接入以下官方 mattpocock/skills，并默认原样使用；由 Onboard stable 镜像回退安装时同样不得改写上游内容：
 
 - `diagnosing-bugs`
 - `tdd`
