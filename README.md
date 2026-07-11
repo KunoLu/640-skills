@@ -367,11 +367,15 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`
 - `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`
 
-## 模板 `.gitignore` 测试产物策略
+## 模板 `.gitignore` 工具与测试产物策略
 
-项目模板忽略本地运行态和报告产物，保留可维护测试资产。当前测试相关片段如下：
+项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 `.omp/plugins/`；`trellis init --omp` 生成的 `.omp/agents/`、`.omp/commands/`、`.omp/skills/` 和 `.omp/extensions/` 应由 Git 追踪。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
 
 ```gitignore
+# ---------- OMP ----------
+# Keep Trellis-generated agents, commands, skills, and extensions versioned.
+.omp/plugins/
+
 # ---------- Testing -----------
 # MCP / browser controller local state
 .chrome-devtools-mcp/

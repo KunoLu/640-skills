@@ -41,6 +41,9 @@ CLAUDE.md
 .codex/state/
 .codex/hooks/*.local.*
 
+# ---------- OMP ----------
+.omp/plugins/
+
 # ---------- Trellis ----------
 .trellis/*
 

@@ -744,11 +744,15 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
         <div class="section-head">
           <div>
             <p class="eyebrow">Artifacts</p>
-            <h2>测试产物忽略规则</h2>
+            <h2>工具与测试产物忽略规则</h2>
           </div>
-          <p>项目模板保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
+          <p>项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 <code>.omp/plugins/</code>；<code>trellis init --omp</code> 生成的 <code>.omp/agents/</code>、<code>.omp/commands/</code>、<code>.omp/skills/</code> 和 <code>.omp/extensions/</code> 应由 Git 追踪。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
         </div>
-        <pre><code># ---------- Testing -----------
+        <pre><code># ---------- OMP ----------
+# Keep Trellis-generated agents, commands, skills, and extensions versioned.
+.omp/plugins/
+
+# ---------- Testing -----------
 # MCP / browser controller local state
 .chrome-devtools-mcp/
 .playwright-mcp/
