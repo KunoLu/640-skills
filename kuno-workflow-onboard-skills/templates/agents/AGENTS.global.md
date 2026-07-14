@@ -110,6 +110,8 @@ trellis init -u your-name
 - 不要在未读取相关 `.trellis/spec` 的情况下实现长期规则相关修改；其中 `.trellis/spec/lessons.md` 只作为短入口和高优先级摘要。
 - 不要默认读取完整 `.trellis/lessons/**`；先通过 `.trellis/lessons/index.md`、tags、错误信息或当前任务主题按需检索，再读取命中的 topic / archive 文件。
 - 如果存在当前任务产物，优先读取 `prd.md`、`design.md`、`implement.md`。
+- 升级 Trellis CLI 后，如果项目已有 `.trellis/`，先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard，再依赖 `task.py`、Channel、update 或 uninstall 行为。
+- 对 `trellis uninstall`、`task.py archive`、`trellis channel create/spawn/rm` 等会删除、移动或按名称解析路径的操作，不要用环境变量、手工路径或 shell 绕过 Trellis 的 dirty-data、manifest ownership 和 safe-name guard；guard 拒绝时先报告原因并让用户确认备份、清理或重试方案。
 
 ### GitNexus
 

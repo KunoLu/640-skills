@@ -206,6 +206,8 @@ BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trell
 - 对 Pi 这类 session-start 只能通知、不能直接注入模型上下文的平台，更新后必须确认启动上下文仍有有效注入路径和手动 fallback，例如 agent-start 扩展注入、start prompt、agent tools frontmatter、工具名大小写规范等；不要只检查 `session_start` 配置是否存在。
 - 对可选平台 hooks、statusline 或状态栏类增强，不要假设 `trellis update` 会强制安装、删除或改写；只有在用户选择对应 init/update flag、项目已有配置或 manifest 明确要求时才启用，并复核生成 diff。
 - 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
+- Trellis 更新可能刷新 filesystem-safety 行为，包括 atomic state writes、task archive guard、Channel safe-name guard、uninstall dirty-data guard、AGENTS managed-block scrubber、template overwrite temp-first swap、rename-dir ownership check 和 traces-to-journal non-clobber 迁移；更新后复核生成 diff，再执行会删除、移动、覆盖或按名称解析路径的操作。
+- `trellis uninstall --yes` 或自动化卸载遇到 `.trellis/spec`、`.trellis/tasks`、`.trellis/workspace` 未提交数据 guard 时，不要设置 `TRELLIS_ALLOW_DIRTY_UNINSTALL=1` 绕过，除非用户已明确确认备份和删除范围；优先先跑 dry-run 或让用户手动清理 / 提交相关数据。
 - 当 Trellis 更新涉及 workflow phase、step 编号、状态路由或 resume / continue 行为时，更新后必须复核生成的 workflow、`/continue` 命令、workflow variants、bundled skill 参考和平台 prompt 是否仍与 `.trellis/workflow.md` 对齐；不要只检查带 `Phase X.Y` 字样的引用，也要检查裸编号路由。
 - 如果命令提示 workflow 引用的 `.trellis/agents/<name>.md` 缺失，先运行 `trellis update`，再重试 workflow 或 Channel 操作。
 

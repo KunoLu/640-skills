@@ -400,7 +400,7 @@
             <p class="eyebrow">Workflow</p>
             <h2>当前模板主线</h2>
           </div>
-          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，普通项目操作只提示用户执行 <code>trellis init -u your-name</code>；例外是 onboard <code>init</code> / <code>reset</code>，在 Trellis CLI 已可用且用户确认 username 和 platform flags 后可主动执行 <code>trellis init -u &lt;username&gt; ... --yes --skip-existing</code>。</p>
+          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，普通项目操作只提示用户执行 <code>trellis init -u your-name</code>；例外是 onboard <code>init</code> / <code>reset</code>，在 Trellis CLI 已可用且用户确认 username 和 platform flags 后可主动执行 <code>trellis init -u &lt;username&gt; ... --yes --skip-existing</code>。Trellis CLI 升级后，已有 .trellis/ 的项目先运行 <code>trellis update</code> 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership 和 safe-name guard。</p>
         </div>
         <div class="flow" aria-label="主流程">
           <div class="step"><b>1. 需求</b><span>读取规则、lessons 短入口，并按需读取 index / topic。</span></div>

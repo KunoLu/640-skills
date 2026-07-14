@@ -108,6 +108,7 @@ description: Use when the user requests Trellis Channel, multi-agent, worker, fo
 - Channel 运行时文件默认不要提交到远程仓库。
 - `.trellis/agents/<name>.md` 是 Channel agent 定义文件，不是 runtime 日志；如果 workflow 依赖这些定义，应按项目策略保留或提交。
 - 如果 `trellis channel spawn` 报告 `Agent '<name>' not found`，或 workflow 引用缺失的 `.trellis/agents/<name>.md`，先运行 `trellis update` 生成 agent 定义，再继续。
+- Channel 和 worker 名称必须是安全路径片段，只使用字母、数字、`.`、`_`、`-`，不要包含空格、斜杠、反斜杠、`.` 或 `..`。如果发现旧版本遗留的非法 Channel 目录被跳过，按本地清理 / 迁移问题处理，不要手工拼路径绕过 safe-name guard。
 
 长期结论必须整理进入以下位置之一：
 

@@ -119,6 +119,7 @@ trellis init -u your-name
 - 如果存在当前活跃任务，优先读取 `prd.md`、`design.md`、`implement.md`。
 - 不要绕过 `.trellis/workflow.md` 或手动跳过 Trellis phase。
 - 不要把一次性任务计划写入 `.trellis/spec`；长期规范、架构决策、业务规则变化才应沉淀到 `.trellis/spec`。
+- 本项目继承全局 Trellis filesystem-safety 规则；升级 Trellis CLI 后按全局规则运行 `trellis update`，并不得绕过 dirty-data、manifest ownership 或 safe-name guard。
 - 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
 
 需求进入 PRD / Trellis task 前：
