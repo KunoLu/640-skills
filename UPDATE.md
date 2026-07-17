@@ -1,0 +1,99 @@
+# UPDATE
+
+## Codex
+
+### v0.144.3 -> v0.144.5
+
+#### 版本判定
+
+`ENTRYPOINT.md` 的固定起点为 `v0.144.3`，策略为 `stable-only`。GitHub 最新非预发布 release 为 `rust-v0.144.5`，因此本次终点规范化为 `v0.144.5`；`rust-v0.145.0-alpha.*` 属于预发布通道，按策略不纳入比较。本区间同时汇总 `v0.144.4` 和 `v0.144.5`。
+
+#### Release 汇总
+
+- `v0.144.4`：官方将其标记为维护性发布，并明确说明没有面向用户的变化。补充检查 compare、具体提交和文件列表后，可见实现变化集中在 Guardian 自动审查内部链路：模型目录消息新增 `auto_review.policy`，Guardian 审查会话按“显式 `guardian_policy_config` → 模型目录策略 → 内置策略”的顺序选择提示策略；模型指令覆盖移除普通目录指令模板时，自动审查消息仍会保留。其余可见变化为版本号更新和对应测试。
+- `v0.144.5`：修复危险命令检测。Codex 在 `danger-full-access` 模式下也会执行危险命令检测，扩展了字面 Bash 解析以识别更多强制 `rm` 形式，并在危险命令被拒绝时向模型返回更具体的拒绝原因。官方 PR 说明这是将七个内部提交无冲突回移到 `release/0.144`，且通过了 shell-command 与 exec-policy 聚焦测试。
+
+#### 破坏性变更与迁移
+
+官方没有声明破坏性变更，也没有发布迁移步骤；本区间没有新增需要本仓库执行的命令、配置迁移或兼容性禁用项。`v0.144.5` 强化的是 Codex CLI 内部执行策略，不应通过改写 shell、放宽权限或拆分等方式绕过拒绝。npm 元数据确认 `@openai/codex@0.144.5` 已发布，并继续通过平台可选包分发二进制。
+
+#### Agent Harness Workflow 影响
+
+使用 `dangerous-command`、`danger-full-access`、`is_dangerous_command`、强制 `rm` 和拒绝原因等精确概念扫描了 `AGENTS.md`、onboard Skill 入口 / 参考文档 / 脚本、两份 AGENTS 模板及全部 bundled Skill，未命中。扩大到 `destructive`、破坏性、删除、`rm`、approval 和确认后，命中的是既有破坏性操作确认、Trellis 文件系统安全 guard、受控卸载 / 迁移删除及普通审批语义；这些规则没有依赖 Codex 对危险命令的旧判定范围。`v0.144.5` 没有新增用户配置或命令建议，现有规则也没有鼓励绕过执行策略，因此不修改 AGENTS、Skill、脚本或模板；`ENTRYPOINT.md` 继续保持只读基线。
+
+#### 证据与缺失来源
+
+- GitHub release：<https://github.com/openai/codex/releases/tag/rust-v0.144.4>、<https://github.com/openai/codex/releases/tag/rust-v0.144.5>
+- GitHub compare 与文件列表：<https://github.com/openai/codex/compare/rust-v0.144.3...rust-v0.144.5>
+- `v0.144.5` 修复 PR：<https://github.com/openai/codex/pull/33455>
+- npm 包元数据：<https://registry.npmjs.org/@openai%2Fcodex/0.144.5>
+- 官方版本化 docs / changelog 没有提供本区间独立迁移条目；`v0.144.4` 由 compare、具体提交和文件列表补足实现证据，`v0.144.5` 的 release 与修复 PR 已明确给出行为和验证依据。
+- 没有发现 migration manifest 或 upgrade manifest。跨区间 compare 页面报告 3 个提交、15 个文件；其结果作为 release notes 的实现补充，不改变 `v0.144.4`“无用户可见变化”的官方结论。
+
+## Trellis
+
+### v0.6.7 -> v0.6.7
+
+#### 检查结论
+
+`ENTRYPOINT.md` 的固定起点为 `v0.6.7`，策略为 `stable-only`。仓库没有可用的 GitHub release 对象，tags 列表中的最新稳定版本仍为 `v0.6.7`，所以没有新的稳定版本区间、release notes、破坏性变更或迁移步骤。
+
+#### Agent Harness Workflow 影响
+
+没有新 release 概念、命令或兼容性关键词需要落入本仓库规则；不修改 Trellis 相关 AGENTS、Skill、脚本或模板。
+
+#### 证据
+
+- GitHub tags：<https://github.com/mindfold-ai/trellis/tags>
+- GitHub Releases API 返回 `404`，因此版本判断以 tags 为准。
+
+## GitNexus
+
+### v1.6.9 -> v1.6.9
+
+#### 检查结论
+
+`ENTRYPOINT.md` 的固定起点为 `v1.6.9`，策略为 `stable-only`。GitHub 最新稳定 release 仍为 `v1.6.9`。tags 中出现的 `v1.6.10-rc.*` 属于预发布通道，按策略不纳入比较；没有新的稳定 release notes、破坏性变更或迁移步骤。
+
+#### Agent Harness Workflow 影响
+
+没有新的稳定版命令、索引格式或兼容性要求需要更新本仓库规则；不修改 GitNexus 相关 AGENTS、Skill、脚本或模板。
+
+#### 证据
+
+- GitHub latest release：<https://github.com/abhigyanpatwari/GitNexus/releases/tag/v1.6.9>
+- GitHub tags：<https://github.com/abhigyanpatwari/GitNexus/tags>
+
+## Playwright
+
+### v1.61.1 -> v1.61.1
+
+#### 检查结论
+
+`ENTRYPOINT.md` 的固定起点为 `v1.61.1`，策略为 `stable-only`。GitHub latest release 与 tags 的最新稳定版本均为 `v1.61.1`，所以没有新的版本区间、release notes、破坏性变更或迁移步骤。
+
+#### Agent Harness Workflow 影响
+
+没有新的 Playwright CLI、reporter、浏览器或 Node.js 兼容性变化需要更新本仓库规则；不修改 Playwright 相关 AGENTS、Skill、脚本或模板。
+
+#### 证据
+
+- GitHub latest release：<https://github.com/microsoft/playwright/releases/tag/v1.61.1>
+- GitHub tags：<https://github.com/microsoft/playwright/tags>
+
+## Maestro
+
+### cli-2.6.1 -> cli-2.6.1
+
+#### 检查结论
+
+`ENTRYPOINT.md` 的固定起点为 `cli-2.6.1`，策略为 `stable-only`。GitHub latest release 仍为 `cli-2.6.1`；仓库的 `v2.6.1` tag 与该 CLI release 对应同一稳定版本。没有新的稳定 release notes、破坏性变更或迁移步骤。
+
+#### Agent Harness Workflow 影响
+
+没有新的 Maestro CLI、Java、设备驱动、flow 语法或报告参数变化需要更新本仓库规则；不修改 Maestro 相关 AGENTS、Skill、脚本或模板。
+
+#### 证据
+
+- GitHub latest release：<https://github.com/mobile-dev-inc/Maestro/releases/tag/cli-2.6.1>
+- GitHub tags：<https://github.com/mobile-dev-inc/Maestro/tags>
