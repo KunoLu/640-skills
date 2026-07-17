@@ -27,6 +27,7 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 | `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
 | `docs/lessons/index.md` | Lessons 完整索引，按 tags、适用场景和详情路径检索。 |
 | `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
+| `docs/knowledge-base-integration-prd.md` | P1 / P1.1 已实现能力与 P2 Evidence Store / PR Gate 实施方案。 |
 | `kuno-workflow-onboard-skills/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。 |
 | `kuno-workflow-onboard-skills/SKILL.md` | onboard Skill 入口说明。 |
 | `kuno-workflow-onboard-skills/REFERENCE.md` | onboard、安装、检测和工具配置参考。 |
@@ -77,7 +78,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | 概念 | 全称 | 在模板中的作用 |
 |---|---|---|
 | SDD | Specification-Driven Development | 用 PRD、design、implement、验收标准和长期规则说明“要做什么、为什么做、怎么验证”。在 Trellis 项目中，对应任务产物和 `.trellis/spec` 的长期规则。 |
-| BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。主动使用 `gherkin-bdd` 且请求包含 `sync` / `同步` 时，进入 BDD Sync Mode，全量扫描当前工作树与 `features/`，多仓时先确认其他仓库更新状态再同步 `.feature`。 |
+| BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。主动使用 `gherkin-bdd` 且请求包含 `sync` / `同步` 时，原有 BDD Sync Mode 保持不变：全量扫描当前工作树与 `features/`，多仓时先确认其他仓库更新状态再同步 `.feature`。BDD / 知识库请求具有明确 `read` / `读取` 只读意图且不含变更意图时，进入 Knowledge Ingest，按目标 ref 固定精确 SHA 并生成派生行为目录。 |
 | TDD | Test-Driven Development | 对 bug 修复、核心业务逻辑、算法、数据转换、高风险路径和回归敏感模块采用测试先行。BDD 固化可观察行为，TDD 把它转成可执行测试和红绿重构循环。 |
 | DDD | Domain-Driven Design | 在业务术语、规则、bounded context 或模型边界不清时，用统一语言、CONTEXT、ADR 和 `book-ddd-distilled-modeling` 降低歧义。 |
 
@@ -87,6 +88,28 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 2. 需求需要沉淀时，用 SDD 写清规格、范围和验收。
 3. 有用户可见行为时，用 BDD 固化场景。
 4. 需要高信心实现时，用 TDD 让测试驱动代码变化。
+
+### BDD Knowledge Ingest
+
+`gherkin-bdd` 的 `read / 读取` 是面向知识库的只读入口，与 `sync / 同步` 和普通 BDD 写入请求明确分开。只有请求具有明确只读意图、且不含新增、修改、更新或删除意图时才进入 Knowledge Ingest；“先读取再修改”仍走普通 BDD 工作流：
+
+- 每个仓库由知识库或产品配置指定目标 branch、tag 或 SHA，例如 `staging`。
+- 读取前把目标 ref 解析为精确 commit SHA；ref 表示选择策略，SHA 表示本次不可变快照。
+- 从 Git object 或隔离 worktree 读取仓库自有 `.feature`，不切换开发者活动 worktree。
+- 聚合结果是可重建派生视图；目标 ref 中的 `.feature` 仍是行为 SOT。
+- 不要求或补写 `feature_id`、`scenario_id`、新 tags、owner 字段，也不引入 BDD Runner。
+- 使用 repository key + path + Feature / Rule / Scenario 名称 + 可选 Examples fingerprint + SHA 作为读取 locator；跨仓相似或冲突只生成候选，不自动合并或改写。
+- 输出 `Knowledge Ingest`: `run` / `partial` / `blocked` 和 `Mutation: none`。请求含 `sync` / `同步` 时，仍执行原有可写 BDD Sync Mode。
+
+P1.1 已通过 bundled `knowledge-base-integration` Skill 落地产品注册表、Workspace Mapping、Evidence Policy 决策、目标 ref / Revision Set、完整无 ID Gherkin 目录、静态 / manifest 绑定、跨仓候选、幂等 ingest / smoke、隔离 worktree、分阶段 Smoke、基础设施重试、本地 / 命令式 Runner Adapter、可信环境对齐、artifact manifest、checksums 和 metrics。从本仓库根目录校验随 Skill 提供的示例配置：
+
+```bash
+python kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/scripts/knowledge_base_p1.py validate-config \
+  --product kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/references/product.example.yaml \
+  --workspace kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/references/workspace.local.example.yaml
+```
+
+同一 CLI 还提供 `decision`、`ingest` 和 `smoke` 子命令；各子命令的必需参数以 `--help` 和该 Skill 的说明为准。安装后则先定位 `knowledge-base-integration` Skill 根目录，再运行其 `scripts/knowledge_base_p1.py`。服务器只收集本轮命令新建或刷新的原生报告及同 stem 中文汇总，Mobile 等能力通过 Runner labels 调度。P1.1 只生成 `Evidence Publication: not-configured` 的待发布 bundle，Evidence Store、PR Check、自动失效、quarantine、retention 和远端 Gate 仍属于 P2。完整边界见 [知识库集成 P1 / P2 落地方案](docs/knowledge-base-integration-prd.md)。
 
 ## 工具职责边界
 
@@ -102,6 +125,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
 | `seo-geo` | 公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。 | 不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。 |
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
+| `knowledge-base-integration` | 运行产品级 Knowledge Ingest、Evidence Policy、Revision Set、完整无 ID 行为目录、幂等分阶段 smoke、Runner Adapter 和证据完整性校验。 | 不修改源 `.feature`，不发布 Evidence，不写 PR Check；P2 负责远端治理。 |
 | `rtk` | 用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。 | 不替代测试 runner；报告型 unit / API / Playwright / Maestro 命令先评估缓存与文件写入风险，必要时使用原生命令或 fallback-native。 |
 | `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装；达到全局阈值时只建议用户后续切换。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启，最终报告保持完整。 |
 
@@ -314,6 +338,8 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - Unit test 报告默认继承项目配置；缺少项目约定但需要本地正式证据时，使用 `tests/unit/reports/`，临时输出使用 `tests/unit/reports/.unit-current/`。
 - 执行 unit / API / Playwright / Maestro 报告型测试前先记录 `rtk` 决策：`used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`。如果 `rtk` 后报告文件缺失、mtime / size 未变化、内容不对应本轮命令，或输出显示 cache hit / replay / skipped 写入，必须原生命令重跑并以原生结果为准。
 - 调试轮次可以保留多份本地命名报告快照；一旦 Playwright 或 Maestro 运行产生 runner 原生报告，或 API / integration / unit runner 生成了本轮需要保留的报告，无论最终全量是否通过，都生成该次运行的命名报告和一份同目录同 stem 的中文 `.md` 汇总。API、Playwright 和 Maestro 的正式报告 stem 必须包含 `branch_slug`；`branch_slug` 取当前 git / CI 分支，detached HEAD 使用 `detached-{short_sha}`，非 git 环境使用 `unknown-branch`，并将 `/`、空格和特殊字符替换为 `_`。
+- 正式报告要作为 PR 证据或被知识库读取时，额外生成同 report stem 的 `.evidence.json` 或由跨工具编排器生成聚合 envelope，并按 `project-validation/references/validation-evidence.schema.json` 校验。证据记录 repository key、原始 source ref、完整 commit SHA、worktree state、trigger、evidence source、source revision、environment alignment、publication status、报告与同 stem 汇总的 SHA-256；`branch_slug` 只用于文件名，不是版本身份。
+- `developer-local`、`ci` 和 `knowledge-server` 是三个独立 Evidence Source。dirty developer-local 结果只能是 `local-only`，不能证明 PR head；CI evidence 必须来自 clean checkout；knowledge-server 必须记录完整 Revision Set，且 `smoke-only`、contract 或 mock 结果不得提升为 full-stack。提交前的 evidence 只记录本地状态；创建最终提交后、发布或更新 PR Check 前，必须针对最终 PR head SHA 重新生成或复验并更新 sidecar / envelope，新 commit 使旧证据失效。CI 运行本身不等于已发布，只有目标系统接收后才标记 `published`。普通本地诊断不强制生成 evidence sidecar。
 - 正式验证范围不能由 runner 是否已经产出报告倒推决定。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，stdout-only、terminal-only 或 diagnostic-only 命令不能满足最终报告 gate：API 自定义脚本必须捕获 stdout / stderr / exit code 为 `api-report-*-{branch_slug}-*.txt` / `.json` raw report，Playwright `--reporter=list` 后必须补跑正式 reporter，Maestro stdout-only 后必须补跑 `--format` / `--output` 或项目等价 reporter；无法产出时标记 `Final Test Report: blocked` 和 `Run Summary MD: blocked`。
 - 通用防覆盖规则：`coverage/`、`test-results/`、固定 `junit.xml`、runner 的 `current` / `latest` 目录和各工具临时输出目录都可能被下一轮运行清空、覆盖或重建；需要保留时，先复制 / 提升到正式快照目录和时间戳 stem，再启动下一轮会改写同一输出的命令。
 - Playwright 报告命名为 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。
@@ -356,6 +382,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - `Maestro Web Smoke`: `run` / `blocked` / `skipped` / `not-needed`
 - `Maestro Flow Assets`: `generated` / `reused` / `blocked` / `skipped`
 - `Web UI 测试资产`: `generated` / `coverage-only` / `blocked` / `skipped`
+- `Knowledge Ingest`: `run` / `partial` / `blocked` / `not-needed`
 - `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing` / `not-needed`
 - `API Contract`: `verified` / `user-provided` / `stale` / `missing` / `not-needed`
 - `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked` / `not-needed`
@@ -366,6 +393,10 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - `rtk`: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`
 - `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`
 - `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`
+- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`
+- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`
+- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`
+- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`
 - `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`
 
 ## 模板 `.gitignore` 工具与测试产物策略
@@ -413,7 +444,7 @@ tests/e2e/**/*.trace.zip
 
 - 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
-- 13 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；两个根安装器从 `check` 的 `group=referenced` 获取 canonical 清单，不再各自维护重复数组。
+- 14 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；两个根安装器从 `check` 的 `group=referenced` 获取 canonical 清单，不再各自维护重复数组。
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
@@ -469,7 +500,7 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装后不自动启用压缩对话模式。13 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装后不自动启用压缩对话模式。14 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
 

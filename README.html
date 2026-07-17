@@ -415,6 +415,11 @@
           <div><strong>AGENTS</strong><br>常驻路由、触发条件、硬性安全边界和最终报告要求。</div>
           <div><strong>Skills</strong><br>详细流程、命令参数、检查清单和专项判断按场景延迟加载。</div>
         </div>
+        <p>P1.1 已通过 bundled <code>knowledge-base-integration</code> Skill 落地产品注册表、Workspace Mapping、Evidence Policy 决策、目标 ref / Revision Set、完整无 ID Gherkin 目录、静态 / manifest 绑定、跨仓候选、幂等 ingest / smoke、隔离 worktree、分阶段 Smoke、基础设施重试、本地 / 命令式 Runner Adapter、可信环境对齐、artifact manifest、checksums 和 metrics。从本仓库根目录校验随 Skill 提供的示例配置：</p>
+        <pre><code>python kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/scripts/knowledge_base_p1.py validate-config \
+  --product kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/references/product.example.yaml \
+  --workspace kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/references/workspace.local.example.yaml</code></pre>
+        <p>同一 CLI 还提供 <code>decision</code>、<code>ingest</code> 和 <code>smoke</code> 子命令；各子命令的必需参数以 <code>--help</code> 和该 Skill 的说明为准。安装后先定位该 Skill 根目录，再运行其 <code>scripts/knowledge_base_p1.py</code>。服务器只收集本轮命令新建或刷新的原生报告及同 stem 中文汇总，Mobile 等能力通过 Runner labels 调度。P1.1 只生成 <code>Evidence Publication: not-configured</code> 的待发布 bundle；Evidence Store、PR Check、自动失效、quarantine、retention 和远端 Gate 仍属于 P2。详见 <a href="docs/knowledge-base-integration-prd.md">知识库集成 P1 / P2 落地方案</a>。</p>
       </div>
     </section>
 
@@ -432,7 +437,7 @@
           <div><strong>多项目参数</strong><br><code>--projects-root /abs/one,/abs/two</code> / <code>-ProjectsRoot "C:\one,C:\two"</code> 接受英语逗号分隔的多个绝对目录。<code>--init-projects</code> / <code>-InitProjects</code> 可独立执行逐项目 AGENTS、.gitignore、Trellis、Playwright 和 React Bits 检查配置。</div>
           <div><strong>Agent npm 映射</strong><br><code>codex → @openai/codex@latest</code><br><code>claude → @anthropic-ai/claude-code@latest</code><br><code>kimi → @moonshot-ai/kimi-code@latest</code><br><code>omp → @oh-my-pi/pi-coding-agent@latest</code>。</div>
           <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills</code></div>
-          <div><strong>Skills</strong><br>正常 init/reset 强制把 13 个 bundled Skills 和 15 个 external Skills 安装到全局目录，不再提供 project/none scope。两个根安装器从 check 结果中的 <code>group=referenced</code> 获取 canonical 名单并调用 <code>--source auto</code>，不再各自维护重复数组；caveman 和 React Bits 等原有单一作用域保持不变。</div>
+          <div><strong>Skills</strong><br>正常 init/reset 强制把 14 个 bundled Skills 和 15 个 external Skills 安装到全局目录，不再提供 project/none scope。两个根安装器从 check 结果中的 <code>group=referenced</code> 获取 canonical 名单并调用 <code>--source auto</code>，不再各自维护重复数组；caveman 和 React Bits 等原有单一作用域保持不变。</div>
           <div><strong>External stable fallback</strong><br><code>auto</code> 先按上游仓库整组 clone 和验证，任一 Skill 不兼容时整组回退 Onboard 内置 stable set；<code>upstream</code> / <code>stable</code> 是严格模式。全部 Skill 先暂存验证，再用临时 rollback backup 事务替换，canonical commit 成功后才删除 legacy 目录。</div>
           <div><strong>Trellis Init</strong><br>全局 Trellis CLI 为必需工具；每个项目分别检查 <code>.trellis/</code>、执行 <code>--yes --skip-existing</code> 初始化并检测 <code>.trellis/tasks/00-bootstrap-guidelines</code>，一个项目需要 bootstrap 不会阻止其余项目继续检查。</div>
           <div><strong>MCP</strong><br>MCP 仍由用户选择：Codex 使用用户级配置，Claude 固定 <code>--scope user</code>，Kimi 保持 CLI 默认行为，Oh My Pi 固定写入全局 <code>~/.omp/agent/mcp.json</code>；project-only 模式完全跳过 MCP。</div>
@@ -456,7 +461,7 @@
           </article>
           <article class="panel accent-green">
             <h3>BDD</h3>
-            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，分仓或跨端链路先做上下文完整性 gate；<code>gherkin-bdd</code> 携带 <code>sync</code> / <code>同步</code> 时，全量扫描当前工作树与 <code>features/</code>，多仓先确认其他仓库更新状态再同步。</p>
+            <p>Behavior-Driven Development。用户可见行为默认需要持久场景，分仓或跨端链路先做上下文完整性 gate；<code>sync</code> / <code>同步</code> 保留原有可写 BDD Sync Mode。BDD / 知识库请求具有明确 <code>read</code> / <code>读取</code> 只读意图且不含变更意图时，进入 Knowledge Ingest。</p>
           </article>
           <article class="panel accent-amber">
             <h3>TDD</h3>
@@ -466,6 +471,12 @@
             <h3>DDD</h3>
             <p>Domain-Driven Design。通过统一语言、bounded context、CONTEXT 和 ADR 降低业务术语和模型边界的不确定性。</p>
           </article>
+        </div>
+        <div class="status-list">
+          <div><strong>Knowledge Ingest</strong><br>只有请求具有明确只读意图且不含新增、修改、更新或删除意图时才进入；“先读取再修改”走普通 BDD 工作流，<code>sync / 同步</code> 仍优先进入 BDD Sync Mode。每个仓库按配置的 branch、tag 或 SHA 读取，并先解析为精确 commit SHA；目标 ref 中的仓库自有 <code>.feature</code> 仍是行为 SOT，聚合目录只是可重建派生视图。</div>
+          <div><strong>只读边界</strong><br>不切换开发者活动 worktree，不创建、修改、删除、移动或格式化源 <code>.feature</code>；输出 <code>Knowledge Ingest: run / partial / blocked</code> 和 <code>Mutation: none</code>。</div>
+          <div><strong>不改变 Feature 规范</strong><br>不要求或补写 <code>feature_id</code>、<code>scenario_id</code>、新 tags、owner 字段，也不引入 Gherkin / BDD Runner。</div>
+          <div><strong>无 ID 定位</strong><br>使用 repository key、path、Feature / Rule / Scenario 名称、可选 Examples fingerprint 和 SHA 定位摄取快照；跨仓重叠或冲突只作为人工审查候选。</div>
         </div>
       </div>
     </section>
@@ -537,6 +548,11 @@
               <td>maestro-mobile-e2e</td>
               <td>从 BDD 场景生成和维护 repo-resident Maestro Mobile / Hybrid flow，并约束报告路径。</td>
               <td>不替代 BDD、项目验证或 Maestro CLI。</td>
+            </tr>
+            <tr>
+              <td>knowledge-base-integration</td>
+              <td>运行产品级 Knowledge Ingest、Evidence Policy、Revision Set、完整无 ID 行为目录、幂等分阶段 smoke、Runner Adapter 和证据完整性校验。</td>
+              <td>不修改源 <code>.feature</code>，不发布 Evidence，不写 PR Check；P2 负责远端治理。</td>
             </tr>
             <tr>
               <td>rtk</td>
@@ -687,9 +703,12 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>API URI 覆盖矩阵</strong><br>API / integration Markdown 汇总必须把每条覆盖范围描述映射到具体 <code>method + URI path</code>，并记录测试脚本 / case、期望状态码或副作用、关联 feature / contract / schema；缺 URI 时标记 <code>blocked</code> 或 <code>missing-uri</code>。</div>
           <div><strong>Playwright Report</strong><br><code>playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html</code>；<code>branch_slug</code> 取当前分支，<code>/</code>、空格和特殊字符替换为 <code>_</code>；smoke 使用 <code>smoke</code>，多 feature 优先 suite 名，否则 <code>multi-feature</code>。</div>
           <div><strong>rtk Gate</strong><br>unit / API / Playwright / Maestro 报告型测试先记录 <code>rtk</code>: <code>used</code> / <code>skipped-for-report</code> / <code>fallback-native</code> / <code>not-available</code> / <code>not-needed</code>；缺报、旧报、空报或 cache hit / replay 时原生命令重跑。</div>
+          <div><strong>证据版本身份</strong><br>正式报告作为 PR 或知识库证据时，使用同 report stem 的 <code>.evidence.json</code> 或聚合 envelope，记录 repository key、原始 source ref、完整 commit SHA、worktree state、trigger、报告 checksum 和环境对齐状态。<code>branch_slug</code> 只用于文件名，不是版本身份。</div>
+          <div><strong>Evidence 来源</strong><br><code>developer-local</code>、<code>ci</code> 与 <code>knowledge-server</code> 独立展示。dirty 本地运行只能是 <code>local-only</code>；CI evidence 必须来自 clean checkout；服务器运行必须包含精确 Revision Set。提交前只记录本地 evidence 状态，创建最终提交后、发布或更新 PR Check 前，必须针对最终 PR head SHA 重新生成或复验并更新 sidecar / envelope；CI 运行本身不等于 <code>published</code>。<code>smoke-only</code> 不得冒充完整回归。</div>
           <div><strong>最终报告</strong><br>调试轮次可以保留多份带业务名、分支名和时间戳的本地快照；API、Playwright 和 Maestro 的正式报告 stem 必须包含 <code>branch_slug</code>，detached HEAD 使用 <code>detached-{short_sha}</code>，非 git 环境使用 <code>unknown-branch</code>。只要 Playwright 或 Maestro 产生 runner 原生报告，或 API / integration / unit runner 生成了本轮要保留的报告，无论最终是否全绿，都先生成该次运行的命名报告，再进入下一次可能清空输出的运行。正式验证范围不能由 runner 是否已经产出报告倒推决定；API stdout-only 必须捕获 <code>api-report-*-{branch_slug}-*.txt</code> / <code>.json</code> raw report，Playwright <code>--reporter=list</code> 和 Maestro stdout-only 都只能算诊断，收尾前必须补正式 reporter 或标记 blocked。<code>coverage/</code>、<code>test-results/</code>、固定 <code>junit.xml</code> 和 <code>current</code> 目录都不是正式快照。</div>
           <div><strong>Markdown 汇总</strong><br>Playwright 的 <code>.md</code> 必须与命名 HTML 同 stem，不能用 <code>results.json</code> / <code>junit.xml</code> / 默认 <code>index.html</code> 的 stem；中文汇总记录运行 case、关联 BDD feature、总轮次、失败 case、原因、修复、定点重跑、影响范围重跑和最终全量重跑；API 汇总额外记录 URI 覆盖矩阵。</div>
         </div>
+        <p>证据相关状态为 <code>Evidence Source</code>: <code>developer-local</code> / <code>ci</code> / <code>knowledge-server</code> / <code>not-needed</code>，<code>Source Revision</code>: <code>exact</code> / <code>dirty</code> / <code>unknown</code> / <code>not-needed</code>，<code>Environment Alignment</code>: <code>verified</code> / <code>unverified</code> / <code>mismatch</code> / <code>not-needed</code>，以及 <code>Evidence Publication</code>: <code>local-only</code> / <code>published</code> / <code>blocked</code> / <code>not-configured</code> / <code>not-needed</code>。普通本地诊断不强制生成 evidence sidecar。</p>
         <p>失败修复后先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续跑未覆盖测试或重跑全量。</p>
       </div>
     </section>
