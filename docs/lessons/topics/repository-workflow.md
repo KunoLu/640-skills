@@ -167,3 +167,15 @@
 - 根因：路径由多个调用点直接拼接而没有统一 containment seam，canonical 检测只判断 `SKILL.md` 文件存在，rollback 生命周期没有区分“完整恢复”和“恢复仍有错误”。
 - 修复：集中使用解析后 containment 校验拒绝绝对路径、`..` 和 symlink 逃逸；canonical 与安装源使用同一完整 Skill 验证；rollback 仅在 commit 成功或完整恢复后清理，恢复不完整时在结果中返回并保留目录路径；`auto` 仅在上游组失败时延迟加载 stable。
 - 预防：External Skill 安装器新增字段或文件操作时，必须同时验证 source root containment、完整 canonical 语义和最坏情况下的备份所有权；回归测试至少覆盖路径逃逸、无效 canonical + 有效 legacy、上游成功时 stable 不可读，以及 restore 二次失败后备份仍存在。
+
+## LESSON-20260717-mode-exit-reentry-contract: Mode Exit Must Define Re-entry Lifecycle
+
+- 日期：2026-07-17
+- 标签：agents, workflow, caveman, state-machine, validation
+- 适用场景：修改 Agent 自动模式、手动模式、退出 / 恢复指令、任务级或会话级状态，以及相应文本契约测试
+- 严重级别：medium
+- 来源：Caveman auto-lite 实现后的 Review handoff
+- 问题：通用 `normal mode` 等退出指令只恢复了当前答复，没有禁止已经满足阈值的自动模式在同一任务内再次进入；测试只断言孤立关键词，删除完整资格条件或退出生命周期后仍可能通过。
+- 根因：规则没有把手动模式、任务级自动退出、会话级自动退出和配置 `off` 建模成有优先级的状态；文本契约测试也没有按完整行为子句锁定前置条件、作用域和重入条件。
+- 修复：明确通用退出建立任务级自动退出，会话级退出优先于任务级状态，显式手动启动不清除自动退出，配置 `off` 优先级最高；回归测试改为断言成组资格条件、退出作用域、显式恢复和新任务重算语义。
+- 预防：后续新增任何自动模式或退出命令时，必须同时定义状态作用域、优先级、何时清除、是否允许重入和新任务 / 新会话边界；文本契约测试必须断言完整行为子句，不能只检查模式名或命令词存在。
