@@ -10,7 +10,13 @@ Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 
 Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search` 属于 Agent 侧工具发现和授权能力，不是项目依赖。模板要求先确认当前会话实际暴露 callable tool，再依赖对应能力；catalog / marketplace / 本地远端版本展示只作为候选信号，session auth、OAuth、cookies 和 tokens 不写入仓库、日志、截图、报告或示例配置。
 
-`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，普通非报告型命令默认优先作为命令前缀；unit / API / Playwright / Maestro 等报告型测试先评估缓存与文件写入风险。`caveman` 作用于 Agent 回复输出，安装后只表示可用，不自动开启；同一任务出现 3 次以上状态更新、5 个以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大或自动化 / 大型 review / 验证排障进入重复轮次时，只建议用户切换，不静默启用。
+`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，普通非报告型命令默认优先作为命令前缀；unit / API / Playwright / Maestro 等报告型测试先评估缓存与文件写入风险。`caveman` 作用于 Agent 回复输出，安装后只表示可用，不会立即进入持久压缩模式；同一任务出现 3 次或以上中间状态更新、5 个或以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大或自动化 / 大型 review / 验证排障进入重复轮次时，后续符合资格的重复、非阻塞状态更新会自动使用任务级 `auto-lite`。
+
+自动模式与用户明确启动的手动 caveman 模式相互独立：自动模式不会进入 `full`、`ultra` 等更激进等级，不改变代码、工具、测试、验证和工作流决策，也不会跨任务继承。安装 / 权限 / 破坏性操作确认、安全风险、需求与 review gate、长期文档、失败与剩余风险、最终验证报告和最终答复保持完整输出。
+
+`normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 和 `本任务不要自动压缩` 都会立即恢复正常输出，并在当前任务内禁止自动重入；只有用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` 才清除该任务级退出。用户明确启动 `/caveman` 只进入手动模式，不会清除自动退出；退出手动模式后也不会因阈值已满足而自动重入。`详细说明` / `展开说明` 只要求当前答复完整，不默认关闭本任务的后续自动压缩。
+
+`本会话关闭自动压缩` 是优先于任务级设置的会话级自动退出，只能由 `本会话重新启用自动压缩` 清除。新的用户请求会重置任务级自动状态和任务级退出并重新计算阈值，但不会清除会话级自动退出；已知配置 `off` 的优先级最高。
 
 ## 仓库定位
 
@@ -127,7 +133,7 @@ python kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
 | `knowledge-base-integration` | 运行产品级 Knowledge Ingest、Evidence Policy、Revision Set、完整无 ID 行为目录、幂等分阶段 smoke、Runner Adapter 和证据完整性校验。 | 不修改源 `.feature`，不发布 Evidence，不写 PR Check；P2 负责远端治理。 |
 | `rtk` | 用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。 | 不替代测试 runner；报告型 unit / API / Playwright / Maestro 命令先评估缓存与文件写入风险，必要时使用原生命令或 fallback-native。 |
-| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装；达到全局阈值时只建议用户后续切换。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；安装后不自动开启，最终报告保持完整。 |
+| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装；达到既有阈值后，符合资格的重复中间状态自动进入任务级 `auto-lite`。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；通用退出在当前任务内阻止自动重入，会话级退出优先，手动 `/caveman` 不清除自动退出。 |
 
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
 
@@ -500,7 +506,7 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装后不自动启用压缩对话模式。14 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式，但运行时达到既有阈值后，可对任务内重复、非阻塞的中间状态自动进入 `auto-lite`，手动模式仍需用户明确启动。通用模式退出会在当前任务内禁止自动重入，手动启动不清除该退出；会话级自动退出保持到用户明确重新启用或会话结束。14 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
 

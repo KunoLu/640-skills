@@ -204,6 +204,81 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("P1.1", readme)
         self.assertIn("Runner Adapter", design)
 
+    def test_caveman_auto_lite_is_task_scoped_and_protected(self) -> None:
+        agents_root = (
+            ROOT / "kuno-workflow-onboard-skills" / "templates" / "agents"
+        )
+        global_agents = (agents_root / "AGENTS.global.md").read_text(
+            encoding="utf-8"
+        )
+        project_agents = (agents_root / "AGENTS.project.md").read_text(
+            encoding="utf-8"
+        )
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        reference = (
+            ROOT / "kuno-workflow-onboard-skills" / "REFERENCE.md"
+        ).read_text(encoding="utf-8")
+
+        eligibility_clause = (
+            "只有 `caveman` Skill 当前可见、用户没有明确退出、已知配置不是 "
+            "`off`、当前输出属于重复且非阻塞的中间状态更新、任务范围稳定且没有等待"
+            "用户决定时，才允许自动压缩。"
+        )
+        task_exit_clause = (
+            "无论当前处于手动模式还是自动模式，都立即恢复正常输出，并在当前任务内禁止"
+            "自动重入。"
+        )
+        task_reenable_clause = (
+            "任务级自动退出只有在用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` "
+            "时才清除；用户明确启动 `/caveman` 只进入手动模式，不清除任务级或会话级"
+            "自动退出。"
+        )
+        session_exit_clause = (
+            "会话级自动退出优先于任务级设置，只有用户明确说 `本会话重新启用自动压缩` "
+            "时才清除。"
+        )
+        new_task_clause = (
+            "新的用户请求到来时，任务级自动状态和任务级退出状态都重置，阈值从新任务"
+            "重新计算；会话级自动退出继续有效。"
+        )
+
+        for clause in (
+            eligibility_clause,
+            task_exit_clause,
+            task_reenable_clause,
+            session_exit_clause,
+            new_task_clause,
+        ):
+            self.assertIn(clause, global_agents)
+
+        for phrase in (
+            "auto-lite",
+            "3 次或以上中间状态更新",
+            "5 个或以上命令",
+            "不得自动进入 `full`、`ultra`",
+            "最终答复",
+            "normal mode",
+            "本任务不要自动压缩",
+            "本会话关闭自动压缩",
+            "不得停止或跳过必须的中间状态更新",
+        ):
+            self.assertIn(phrase, global_agents)
+
+        self.assertIn("auto-lite", project_agents)
+        self.assertIn("任务级", project_agents)
+        self.assertIn("会话级自动退出优先于任务级设置", project_agents)
+        self.assertIn("auto-lite", readme)
+        self.assertIn("本任务恢复自动压缩", readme)
+        self.assertIn("auto-lite", readme_html)
+        self.assertIn("本会话重新启用自动压缩", readme_html)
+        self.assertIn(
+            "runtime thresholds may automatically enter task-scoped", reference
+        )
+        self.assertIn("session-level automatic opt-out takes precedence", reference)
+        self.assertNotIn("达到全局阈值时只建议用户后续切换", readme)
+        self.assertNotIn("达到全局阈值时只建议用户后续切换", readme_html)
+
 
 if __name__ == "__main__":
     unittest.main()

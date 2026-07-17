@@ -215,7 +215,7 @@ External Skill targets use a temporary rollback backup during an explicit instal
 
 ## Skills That Keep Their Existing Scope
 
-- `caveman`: user-level global only, still requires its existing explicit installation decision; installation does not enable caveman mode.
+- `caveman`: user-level global only and still requires its existing explicit installation decision. Installation does not immediately enable a persistent reply mode, but runtime thresholds may automatically enter task-scoped `auto-lite` for repetitive intermediate updates. Generic exit commands disable automatic re-entry for the current task, session-level automatic opt-out takes precedence over task-level state, and explicit manual activation does not clear either automatic opt-out.
 - React Bits Free/Starter/Pro/Ultimate: project-only and conditional.
 - Project Playwright CLI / `@playwright/test`: project-only and conditional.
 
