@@ -206,3 +206,39 @@
 - 根因：中文文档校验把代码、URL、命令、版本号和专有英文标识符当成普通英文正文计数，没有按 Markdown 行角色和字段语义区分自然语言内容与技术标识。
 - 修复：将校验改为按章节和段落检查：忽略 URL、代码围栏、inline code-heavy 行和纯技术列表后，要求每个工具章节的说明性正文包含中文，并继续用结构化断言校验标题、区间和字段。
 - 预防：后续校验中文 Markdown 时，不要用全文件 CJK/Latin 总量比作为唯一依据；应先过滤 URL、代码、命令、版本号和技术标识符，再按必需章节或说明性字段判断中文可读性。
+
+## LESSON-20260715-html5-validator-capability: HTML5 Validator Capability
+
+- 日期：2026-07-15
+- 标签：validation, html, tooling
+- 适用场景：校验包含 `header`、`main`、`section`、`article`、`aside`、`footer` 等 HTML5 语义标签的静态说明页
+- 严重级别：low
+- 来源：P0 Knowledge Ingest / evidence 文档同步验证
+- 问题：使用系统 `xmllint --html --noout` 校验 `README.html` 时，legacy HTML parser 把合法的 HTML5 语义标签全部报告为 invalid；随后尝试的 BeautifulSoup/html5lib 和 lxml 在当前环境未安装，额外产生了与页面内容无关的验证失败。
+- 根因：执行前没有先确认 validator 的 HTML 标准覆盖范围和 Python 可选依赖可用性，把“XML/legacy HTML 可解析”误当成“HTML5 结构校验”能力。
+- 修复：使用 Python 标准库 `html.parser` 完成无第三方依赖的语法读取，并用结构化断言检查新增标题、文本和成对容器；将 `xmllint` 的 unknown-tag 输出归类为工具能力限制，而不是页面损坏。
+- 预防：后续校验 HTML5 静态页时，优先使用项目已有 HTML5 validator；没有时先探测依赖，再选择标准库解析 + 结构化断言。不要用 legacy `xmllint --html` 的 HTML5 unknown-tag 报错作为失败结论，也不要在未探测模块前直接依赖 BeautifulSoup、html5lib 或 lxml。
+
+## LESSON-20260717-gate-fixture-preserve-prerequisites: Gate 夹具必须保留前置不变量
+
+- 日期：2026-07-17
+- 标签：validation, tests, fixtures, gates
+- 适用场景：为多层校验、Schema、报告契约或顺序 Gate 编写负向测试
+- 严重级别：medium
+- 来源：P1 knowledge-server Smoke 报告缺失回归测试
+- 问题：测试想验证“正式报告缺失会返回 blocked summary”，但只把 XML 路径改为不存在的 stem，Markdown 仍保留原 stem，实际先命中了“报告与汇总必须同 stem”的更早 Gate。
+- 根因：负向夹具破坏了目标 Gate 之前的前置不变量，使失败信号虽然正确，但没有经过预期代码路径。
+- 修复：同时把报告和 Markdown 改成同一个不存在的 stem，保留同 stem 前置条件，再断言缺失报告的 blocked 原因和 worktree 清理。
+- 预防：为第 N 层 Gate 写负向测试时，先列出并满足 1..N-1 层不变量；断言具体错误原因，避免“任何失败都算通过”的弱测试。
+
+## LESSON-20260717-shell-example-option-list: 可执行命令示例不得用 Shell 元字符枚举选项
+
+- 日期：2026-07-17
+- 标签：docs, shell, commands, validation
+- 适用场景：README、HTML、Skill 或运维文档同时说明多个 CLI 子命令或互斥参数
+- 严重级别：medium
+- 来源：P1.1 未提交变更第二轮 Review
+- 问题：README 把 `validate-config`、`decision`、`ingest`、`smoke` 四个可选子命令写成 `validate-config|decision|ingest|smoke` 并放入可复制的 inline code，POSIX Shell 会把 `|` 当成管道而不是“任选其一”。
+- 根因：文档为了压缩子命令列表，把说明性元语法混入了看起来可以直接执行的命令片段，没有区分“语法枚举”和“可复制示例”。
+- 修复：Markdown 和 HTML 同步改成一条包含必需参数、已经实际执行通过的 `validate-config` 完整示例；其余子命令只在普通正文中列出，并补充回归测试禁止恢复管道形式。
+- 预防：代码围栏或 inline code 一旦呈现完整命令，就必须按目标 Shell 的真实语义可执行；互斥子命令使用普通列表、独立完整命令或明确的非 Shell 语法说明，不使用 `|`、`&&`、`;` 等 Shell 元字符充当自然语言分隔符。

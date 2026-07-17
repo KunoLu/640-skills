@@ -77,3 +77,27 @@
 - 根因：旧规则以“runner 已产物”为触发条件，缺少“正式验证范围本身必须产出报告或 blocked”的前置 gate；项目级 spec 允许诊断命令时，也没有强制收尾前补正式 reporter。
 - 修复：将模板规则改为正式验证范围驱动：diagnostic-only 命令只能算诊断或定点重跑；正式收尾必须补跑启用项目 reporter 的计划范围验证，或把 API stdout / stderr / exit code 捕获并提升为 `api-report-*` raw report，或将 `Final Test Report` / `Run Summary MD` 标记为 `blocked`。
 - 预防：以后新增测试报告规则时，必须同时覆盖“已有 runner 产物如何归档”和“正式验证只跑了不产物命令时如何补跑 / 捕获 / blocked”；不要让 terminal output 成为 API、Playwright 或 Maestro 的最终正式报告替代品。
+
+## LESSON-20260717-readonly-mode-mutation-intent-gate: Read-only Mode Mutation Intent Gate
+
+- 日期：2026-07-17
+- 标签：bdd, knowledge-ingest, routing, skills
+- 适用场景：为 Skill 增加 `read`、inspect、audit、dry-run 等只读模式，或设计多个模式的关键词路由
+- 严重级别：high
+- 来源：P1 Knowledge Ingest 未提交变更 review；请求 `read the existing feature and add a scenario` 会被只读分支吞掉。
+- 问题：Knowledge Ingest 只检查请求包含 `read / 读取` 且不含 `sync / 同步`，没有排除同一句请求里的新增、修改、更新或删除意图，因此“先读再改”会错误进入 `Mutation: none` 模式。
+- 根因：模式路由只使用正向触发词，没有同时定义互斥意图和优先级；只读关键词并不等于整个请求都是只读。
+- 修复：把 Knowledge Ingest 的入口改为“明确只读意图 + 无变更意图”，并保持 `sync / 同步` 优先；带 read 与 mutation 的混合请求进入普通 BDD 写入流程。
+- 预防：以后新增只读模式时，入口必须同时定义正向触发、变更意图排除、与其他模式的优先级，并用混合意图请求做回归测试；不要只按一个关键词切换模式。
+
+## LESSON-20260717-evidence-post-commit-revision-boundary: Evidence Post-commit Revision Boundary
+
+- 日期：2026-07-17
+- 标签：evidence, git, pr, validation, ci
+- 适用场景：正式测试报告、evidence sidecar / envelope、PR Check 或任何需要证明 PR head 的验证流程
+- 严重级别：high
+- 来源：P1 Evidence 契约 review；Phase 3.4 commit plan 前生成的证据无法证明随后创建的新 commit SHA。
+- 问题：工作流要求在 commit plan 前生成 PR evidence，但创建提交会改变版本身份，导致报告记录的 dirty 工作树或旧 SHA 与最终 PR head 不一致。
+- 根因：把“提交前本地验证状态”和“可发布的 PR revision attestation”视为同一生命周期阶段，没有把 Git commit 设为证据版本边界。
+- 修复：提交前只记录本地 evidence 状态和发布计划；创建最终提交后、发布或更新 PR Check 前，针对最终 PR head SHA 重新生成或复验，并更新 sidecar / envelope；旧 head 证据失效。CI evidence 同样要求 clean checkout、exact revision，并与 publication 状态分离。
+- 预防：凡证据声明精确 revision，工作流必须识别所有会改变 revision identity 的动作（commit、rebase、merge、amend），在这些动作之后设置 refresh / invalidation gate；执行成功不等于证据已发布。
