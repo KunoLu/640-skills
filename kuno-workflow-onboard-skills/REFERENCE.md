@@ -149,21 +149,22 @@ Project-only mode never bootstraps npm. If a user chooses a project-local Playwr
 
 ## Required Global Skills
 
-The 13 bundled Skills are always global during normal init/reset:
+The 14 bundled Skills are always global during normal init/reset:
 
 1. `kuno-workflow-onboard-skills`
 2. `trellis-workflow`
 3. `trellis-channel`
 4. `project-validation`
 5. `gherkin-bdd`
-6. `maestro-mobile-e2e`
-7. `lessons-record`
-8. `book-refactoring-pass`
-9. `book-legacy-change-safety`
-10. `book-ddd-distilled-modeling`
-11. `book-ddia-data-design`
-12. `book-release-readiness`
-13. `seo-geo`
+6. `knowledge-base-integration`
+7. `maestro-mobile-e2e`
+8. `lessons-record`
+9. `book-refactoring-pass`
+10. `book-legacy-change-safety`
+11. `book-ddd-distilled-modeling`
+12. `book-ddia-data-design`
+13. `book-release-readiness`
+14. `seo-geo`
 
 All 15 referenced external Skills are also required globally:
 

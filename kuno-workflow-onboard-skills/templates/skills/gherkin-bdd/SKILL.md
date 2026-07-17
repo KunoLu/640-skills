@@ -1,6 +1,6 @@
 ---
 name: gherkin-bdd
-description: Use when adding, changing, reviewing, or testing user-visible behavior with BDD, Gherkin, Given/When/Then scenarios, .feature files, acceptance criteria, or bug-fix behavior specs.
+description: Use when adding, changing, reviewing, testing, synchronizing, or read-only ingesting user-visible behavior with BDD, Gherkin, Given/When/Then scenarios, .feature files, acceptance criteria, knowledge catalogs, or bug-fix behavior specs.
 ---
 
 # Gherkin BDD
@@ -18,6 +18,7 @@ Use this Skill when:
 - A user-visible bug is being fixed.
 - A Trellis task has acceptance criteria that describe user-visible behavior.
 - Existing code needs BDD coverage backfilled for touched behavior.
+- A knowledge system needs to read repository-owned `.feature` files from configured refs without modifying them.
 
 Skip BDD only when the change is not user-visible, such as internal refactoring, dependency or tool configuration, purely mechanical formatting, or visual/text-only polish that does not change behavior or meaning. When skipping after code changes, report the reason.
 
@@ -149,6 +150,32 @@ BDD Sync Mode output must include:
 - Conflicts found between code, PRD, existing `.feature`, tests, or cross-repository contracts.
 - Remaining gaps, `@todo` scenarios, and any user confirmation used to limit the scan.
 
+## Knowledge Ingest Mode
+
+When this Skill is actively used, enter Knowledge Ingest Mode only when the user's BDD or knowledge-base request has explicit read-only intent (`read` / `读取`), does not request `sync` / `同步`, and contains no mutation intent such as `add / change / update / delete` or `写入 / 新增 / 修改 / 更新 / 删除`. A request that asks to read existing behavior and then mutate it follows the normal BDD workflow, not Knowledge Ingest. This mode builds a derived knowledge view from repository-owned `.feature` files without updating source specifications. If the request includes `sync` or `同步`, BDD Sync Mode remains higher priority even when reading is also required.
+
+When `knowledge-base-integration` is available, use its P1.1 runtime for registry validation, ref resolution, Revision Set creation, complete no-ID Gherkin catalog generation, static or manifest binding scan, conflict candidates, idempotency and metrics. This Skill retains the BDD/SOT rules; the integration Skill owns deterministic execution. This addition does not alter BDD Sync Mode.
+
+Knowledge Ingest Mode follows these rules:
+
+1. Read the requested repository paths, configured target refs, and feature roots. A target ref may be a branch, tag, or commit SHA. Prefer the knowledge-base or product registry configuration; otherwise require an explicit ref. Do not silently fall back from a missing configured ref to the current checkout or default branch.
+2. Resolve every requested ref to an exact commit SHA before parsing. Record both the requested ref and the resolved SHA. The configured target branch, such as `staging`, identifies which revision is authoritative; the exact SHA identifies the immutable snapshot that was ingested.
+3. Do not switch branches in a developer's active worktree. Read Git objects directly or use an isolated, disposable worktree or runtime directory when a checked-out tree is required.
+4. Parse the repository-owned `.feature` files without writing to the source repository. Capture repository key, ref, resolved SHA, feature path, Gherkin language, Feature, Rule, Scenario / Scenario Outline, Examples, tags, and source line where available.
+5. Do not require or add Feature IDs, Scenario IDs, ownership tags, new naming conventions, or a Gherkin runner. Existing `.feature` content and project conventions remain unchanged.
+6. Use a composite source locator such as repository key + feature path + Feature / Rule / Scenario name + Examples fingerprint + resolved SHA. Treat it as an ingestion locator, not a new persistent identifier written back to `.feature`.
+7. Treat the aggregated behavior catalog as a derived, rebuildable view. The `.feature` files on each configured target ref remain the behavior source of truth. Similar or conflicting behaviors across repositories are overlap / conflict candidates for human review; do not automatically merge, rewrite, move, or delete them.
+8. Do not create, update, delete, rename, or reformat `.feature` files, tests, reports, manifests, or source code. `Mutation` must remain `none`. If the requested ref, repository, or feature root cannot be read, report `partial` or `blocked` rather than guessing.
+
+Knowledge Ingest Mode output must include:
+
+- `Knowledge Ingest`: `run` / `partial` / `blocked`.
+- For each repository: repository key or path, requested ref, resolved commit SHA, feature roots, parsed file / feature / scenario counts, and read status.
+- Source locators for parsed behavior without requiring persistent Feature or Scenario IDs.
+- Cross-repository overlap or conflict candidates, with evidence and confidence stated as candidates rather than SOT changes.
+- Missing refs, unreadable repositories, parser gaps, unsupported Gherkin constructs, and any resulting coverage limitation.
+- `Mutation`: `none`.
+
 ## Source Of Truth
 
 For confirmed user-visible behavior, the persistent `.feature` file is the behavior source of truth.
@@ -165,6 +192,7 @@ If PRD, Trellis artifacts, `.feature`, tests, and code disagree, do not implemen
 When drafting or updating BDD specs, report:
 
 - Whether BDD Sync Mode was requested and, if so, the scan scope and multi-repository decision.
+- Whether Knowledge Ingest Mode was requested and, if so, the repository / ref / resolved SHA scope, ingestion status, and `Mutation: none`.
 - Feature files created or updated.
 - Feature files deleted, unchanged, or proposed for deletion when BDD Sync Mode is used.
 - BDD language decision: scenario text language, Gherkin keyword language, and whether it follows existing project convention or the first-file default.

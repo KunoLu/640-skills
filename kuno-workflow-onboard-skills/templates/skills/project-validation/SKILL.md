@@ -69,6 +69,30 @@ description: Use after code changes to choose and run validation commands for No
 - `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`。
 - 未自动化场景、阻塞原因和剩余风险。
 
+## 验证证据来源与版本契约
+
+只有正式测试报告需要作为 PR 证据或被知识库读取时，才应用 `references/validation-evidence-contract.md` 和 `references/validation-evidence.schema.json`。普通本地诊断、未发布的调试报告和一次性排障不强制生成 evidence sidecar。
+
+项目已配置产品注册表时，调用 `knowledge-base-integration` 的 `decision` 入口确定 Evidence Contract、Intent 和 Targets；不得再根据报告目录、分支名或任意 CI 环境猜测用途。Knowledge-server smoke 由该 Skill 的 `smoke` 入口生成 P1.1 bundle，本 Skill 继续负责项目原生验证和报告质量 Gate。P1.1 只接收当前命令开始后新建或刷新的 runner report 与同 stem 中文 Markdown，聚合 envelope 必须引用 artifact manifest、checksums 和实际 runner attestation；stale、缺失、非中文、digest 不一致或环境来源不可信时不得把 Evidence 标记为通过。
+
+- 开发者本地证据使用 `Evidence Source: developer-local`；CI runner 生成的证据使用 `Evidence Source: ci`；知识库服务器独立复验使用 `Evidence Source: knowledge-server`。三者不得覆盖或相互冒充。
+- 正式证据必须记录 repository key、原始 source ref、完整 commit SHA、worktree state、trigger 和创建时间。`branch_slug` 只用于文件名，不是代码版本标识。
+- dirty worktree 只能标记 `Source Revision: dirty` 和 `Evidence Publication: local-only`，不能作为 PR head 的正式证明。
+- PR 证据必须与当前 PR head SHA 完全一致；新增 commit 后旧证据自动失效。
+- Phase 3.4 commit plan 或创建提交前产生的结果只能记录为本地 evidence 状态。提交后、发布或更新 PR Check 前，必须针对最终 PR head SHA 重新生成或复验证据，并更新同 stem sidecar / 聚合 envelope；`developer-local` 与 `ci` 都适用。
+- `ci` evidence 必须来自 clean checkout 并使用 `Source Revision: exact`。CI 执行不等于已发布：目标系统接收后才标记 `published`，未配置发布器时为 `not-configured`，要求发布但失败时为 `blocked`；CI evidence 不得标记 `local-only`。
+- 知识库服务器证据必须记录所有参与仓库的精确 revision set，并记录 `Environment Alignment`。指定 `staging` 等目标分支时，先解析到精确 SHA 再运行。
+- 不要求 `.feature` 添加 Feature ID 或 Scenario ID。行为来源用 repository key、feature path、Feature / Rule / Scenario 名称、可选 Examples fingerprint、source ref 和 SHA 定位。
+- 每份正式报告可在同目录生成同 report stem 的 `.evidence.json`；跨工具编排器也可以在隔离 runtime / evidence bundle 中生成一个聚合 envelope。所有 envelope 都必须通过 Schema 校验并引用原生报告、同 stem 中文 Markdown 汇总和 SHA-256。
+- 发布证据前必须脱敏。`published` 只表示证据已被目标系统接收，不表示测试通过，也不得把 `smoke-only`、`contract-backed`、`mock-backed` 或 `app-mocked` 提升为 `full-stack`。
+
+相关任务的最终输出额外报告：
+
+- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`。
+- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`。
+- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`。
+- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`。
+
 ## Web / Mobile 测试工具 Gate
 
 修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程、移动 App 用户旅程、Hybrid App 或关键用户路径后，必须按全局 / 项目级 `AGENTS.md` 的工具职责边界主动判定 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro CLI、Maestro MCP 和 `web-ui-autotest-generator` 是否适用。
@@ -109,6 +133,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在正式报告快照目录生成命名后的原生报告和同 stem Markdown 汇总。API / integration 和 unit test 如果本轮生成了需要作为证据保留的原生报告，也适用同一规则。对 Playwright，“正式报告快照目录”默认是 `tests/e2e/reports/html/`，不是 `results.json` 所在上级目录，也不是 Playwright HTML reporter 的临时 `outputFolder`。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
 - 默认目录：API / integration 正式快照使用 `tests/api/reports/`，API 临时输出使用 `tests/api/reports/.api-current/`；Playwright HTML reporter 临时输出使用 `tests/e2e/reports/.playwright-html-current/`，Playwright HTML 正式报告快照使用 `tests/e2e/reports/html/`；Maestro 正式快照使用 `.maestro/reports/`，必要时临时输出使用 `.maestro/reports/.maestro-current/`；unit test 正式报告默认继承项目配置，缺少约定但需要本地证据时使用 `tests/unit/reports/`，必要时临时输出使用 `tests/unit/reports/.unit-current/`。
 - 分支名必须进入 API、Playwright 和 Maestro 的正式报告 stem。先从当前 git branch 或项目 / CI 明确的 branch ref 获取原始分支名；detached HEAD 使用 `detached-{short_sha}`；非 git 环境使用 `unknown-branch`。生成文件名时使用 `branch_slug`：只保留字母、数字、`.`、`_`、`-`，将 `/`、空格和其他特殊字符替换为 `_`；Markdown 汇总中记录原始分支名和 `branch_slug`。
+- 当报告作为 PR 或知识库证据时，必须同时按验证证据契约记录原始 source ref、完整 commit SHA、worktree state、evidence source、trigger、source revision、environment alignment 和 publication status；不得把 `branch_slug` 当作版本身份。
 - 通用防覆盖规则：`coverage/`、`test-results/`、固定 `junit.xml`、runner 的 `current` / `latest` 目录、以及上述点号临时目录都视为 runner 托管输出。它们可能在下一次运行前被清空、覆盖或重建；需要保留时，必须先复制 / 提升到正式快照目录和时间戳 stem，再启动下一次会改写同一 runner 输出的命令。
 - Playwright 命名：`playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。如果不是 smoke 且无法追踪到 BDD `.feature`，不要编造文件名，先将 BDD 追踪标记为 `blocked`。
 - Maestro 命名：`maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
@@ -133,6 +158,7 @@ Markdown 汇总必须记录：
 
 - 汇总正文必须使用中文撰写；只有状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文。
 - 测试范围、运行 case / spec / flow 列表、`E2E Mode`、`Mock Strategy`、原始分支名、`branch_slug`、`.feature` 路径和场景名。
+- 当报告作为 PR 或知识库证据时，记录 `Evidence Source`、repository key、原始 source ref、完整 commit SHA、worktree state、`Source Revision`、trigger、`Environment Alignment`、`Evidence Publication` 和 evidence sidecar / envelope 路径。
 - API / integration 汇总必须包含 URI 覆盖矩阵，逐项映射覆盖范围和 `method + URI path`，并标出对应测试脚本 / case 与 contract / schema / `.feature` 依据。
 - 最终正式报告路径、总执行轮次、每轮命令。
 - 每轮失败 case / spec / flow、失败原因分类、修复动作和修改文件摘要。
@@ -146,6 +172,10 @@ Markdown 汇总必须记录：
 - `Run Summary MD`: `generated` / `blocked` / `not-needed`。
 - `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`。
 - `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`。
+- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`。
+- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`。
+- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`。
+- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`。
 
 ## 语言验证通用规则
 

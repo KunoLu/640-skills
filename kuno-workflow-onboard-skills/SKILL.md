@@ -92,6 +92,7 @@ All bundled Skills install globally as one required set:
 - `trellis-channel`
 - `project-validation`
 - `gherkin-bdd`
+- `knowledge-base-integration`
 - `maestro-mobile-e2e`
 - `lessons-record`
 - `book-refactoring-pass`

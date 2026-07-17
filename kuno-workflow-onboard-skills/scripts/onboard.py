@@ -42,6 +42,7 @@ SKILL_SOURCES = {
     "trellis-channel": TEMPLATE_DIR / "skills" / "trellis-channel",
     "project-validation": TEMPLATE_DIR / "skills" / "project-validation",
     "gherkin-bdd": TEMPLATE_DIR / "skills" / "gherkin-bdd",
+    "knowledge-base-integration": TEMPLATE_DIR / "skills" / "knowledge-base-integration",
     "maestro-mobile-e2e": TEMPLATE_DIR / "skills" / "maestro-mobile-e2e",
     "lessons-record": TEMPLATE_DIR / "skills" / "lessons-record",
     "book-refactoring-pass": TEMPLATE_DIR / "skills" / "book-refactoring-pass",

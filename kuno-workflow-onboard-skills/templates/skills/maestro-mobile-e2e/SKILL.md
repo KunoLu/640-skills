@@ -136,7 +136,9 @@ Use the project-required native reporter. Default to JUnit when CI needs machine
 
 If project configuration forces multiple reporters, treat them as one report set from the same run, and still generate only one Markdown summary for that report set. If Maestro CLI never produces a native report because prerequisites are blocked, the runner crashes before reporting, or the only executed command was stdout-only, mark the report and summary as blocked instead of claiming generation.
 
-The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, raw branch, `branch_slug`, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
+The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, raw branch, `branch_slug`, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. When the report is intended as PR or knowledge-base evidence, also include evidence source, repository key, raw source ref, full commit SHA, worktree state, source revision, trigger, environment alignment, publication status, and the evidence sidecar / envelope path defined by `project-validation/references/validation-evidence-contract.md`. `branch_slug` is not revision identity. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
+
+For PR or knowledge-base evidence, generate a same-report-stem `.evidence.json` or reference a cross-tool evidence envelope, and validate it with the `project-validation` evidence Schema. A dirty developer worktree remains `local-only`; knowledge-server runs require an exact revision set. Ordinary local Maestro diagnostics do not require an evidence sidecar.
 
 ## Failure Rerun Loop
 
@@ -176,6 +178,11 @@ Report:
 - `rtk`: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`, with reason.
 - Report paths under `.maestro/reports/`.
 - `Run Summary MD`: Chinese Markdown run summary path under `.maestro/reports/`.
+- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`.
+- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`.
+- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`.
+- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`.
+- Evidence sidecar / envelope path when the report is used by a PR or knowledge base.
 - Targeted rerun, affected subset rerun, and final full rerun results.
 - Runtime artifact location, usually `~/.maestro/tests`.
 - Known issue reference loaded, fix applied, restore command if a tool patch was made, and rerun result.

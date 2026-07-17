@@ -163,6 +163,7 @@ trellis init -u your-name
 - 用户可见 bug 修复：先写描述正确行为的场景，再写失败回归测试，再修复。
 - 既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`，但新增或触碰的行为必须补齐。
 - 当主动使用 `gherkin-bdd` 且用户请求包含 `sync` 或 `同步` 时，进入 BDD Sync Mode：全量扫描当前工作树（包含未提交内容）、项目 `features/` 目录和所有能定义用户可见行为的代码 / docs / tests，检查 `.feature` 是否与最新代码逻辑同步。多仓、前后端分离或 feature 汇总到前端入口仓库时，先确认其他端仓库是否有更新；有更新必须让用户提供路径并一起扫描，无更新则记录确认后只按当前仓库同步。同步报告必须列出更新、新建、删除、未变和候选删除的 feature 文件及概要。
+- 当主动使用 `gherkin-bdd` 时，只有请求具有 explicit read-only intent（`read` / `读取`）、不含 `sync` / `同步`，并且不含 `add / change / update / delete` 或 `写入 / 新增 / 修改 / 更新 / 删除` 等变更意图，才调用 `knowledge-base-integration` 进入只读 Knowledge Ingest。要求“先读取再修改”的请求进入普通 BDD 写入流程；请求含有 `sync` / `同步` 时仍优先使用上一条既有 BDD Sync Mode。Knowledge Ingest 按产品注册表和服务器 Workspace Mapping 读取每个仓库的目标 branch / tag / SHA，并先解析为精确 commit SHA；不切换开发者活动工作树。只读取仓库自有 `.feature`，保留 Feature、Rule、Background、Scenario / Outline、Examples、Doc String、Data Table、tags 和 source line，并输出 Revision Set、可重建聚合视图、source locator、静态 / manifest 测试绑定、跨仓冲突候选、metrics 和幂等运行状态；不要求或补写 Feature ID、Scenario ID、新 tags 或 BDD runner；最终报告 `Knowledge Ingest`: `run` / `partial` / `blocked` 和 `Mutation: none`。
 - 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先确认 `Cross-repo context`: contract、环境、账号、数据、选择器、设备和 app artifact；缺关键事实时标记 blocked 或 `@todo`，不要把猜测写成 source of truth。
 - mock 只能基于 API contract、schema、真实响应样例、既有 fixture、launch arguments 或用户明确确认；mock-backed / app-mocked / contract-backed 测试不能报告为 full-stack 通过。
 - 如果已有 Gherkin runner，场景应绑定 step definitions 或 runner 测试；没有 runner 时，使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
@@ -364,11 +365,12 @@ Channel 适合作为代码 review、测试验证审查和交叉验证层，不�
 - 需要根据 BDD 生成或维护 Maestro flow 时，加载 `maestro-mobile-e2e` Skill；flow 资产固定落到 `maestro/flow/`，并在最终输出报告 `Maestro Flow Assets` 状态。
 - API、Web E2E、Mobile E2E 或 Hybrid E2E 的模式、mock、重跑顺序、报告命名、Markdown 汇总内容和状态枚举默认遵循全局 AGENTS 与 `project-validation` Skill。
 - 项目级最低报告门禁：只要 Playwright、Maestro、API / integration 或 unit test runner 产生了需要作为本轮证据保留的原生报告，就必须在下一次可能清空输出的运行前保留该次运行的命名报告和同 stem 中文 Markdown 汇总；API、Playwright 和 Maestro 的正式报告文件名必须包含当前分支的 `branch_slug`，其中 `/`、空格和特殊字符统一替换为 `_`；`Final Test Report` 只表示报告文件是否生成，`Final Full Rerun` 才表示最终是否全绿。多轮调试可以保留多份本地命名报告快照，但最终结论只以最后一次计划范围内运行判断。
+- 正式报告要作为 PR 证据或被知识库读取时，按 `project-validation/references/validation-evidence-contract.md` 记录 `Evidence Source`、repository key、原始 source ref、完整 commit SHA、worktree state、trigger、`Source Revision`、`Environment Alignment` 和 `Evidence Publication`，并用 Schema 校验 `.evidence.json`。`branch_slug` 只用于文件名；dirty 本地结果只能是 `local-only`；CI evidence 使用 `Evidence Source: ci`、clean checkout 和最终 PR head SHA，目标系统接收后才是 `published`；知识库服务器结果必须记录精确 revision set。普通本地诊断不强制生成 evidence sidecar。
 - 项目级 spec 可以允许诊断轮次使用 stdout-only、terminal-only 或轻量 reporter，但不得把这类命令当作最终正式验证证据。API / Web E2E / Mobile E2E / Hybrid E2E 一旦进入正式验证范围，收尾前必须使用项目 reporter 生成命名报告；没有原生 reporter 的 API 自定义脚本必须捕获 stdout / stderr / exit code 为 `tests/api/reports/` 下的时间戳 raw report 并生成同 stem 中文 Markdown 汇总；Playwright `--reporter=list` 和 stdout-only Maestro run 只能算诊断或定点重跑。
 - Playwright 的正式报告快照目录仍是 `tests/e2e/reports/html/`，且 Markdown 汇总必须跟随命名后的 `playwright-report-*-{branch_slug}-*.html` stem；不得用 `results.md`、`result.md`、`junit.md` 或 `index.md` 满足 `Run Summary MD: generated`。Playwright HTML reporter 的 `outputFolder` 应使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`，不要把需要保留的正式命名报告放进该目录，因为下一次 Playwright 运行可能清空它。
 - API / integration 默认正式快照目录为 `tests/api/reports/`，正式报告 stem 使用 `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`；unit test 报告默认继承项目配置。如果 runner 使用会重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 `current` 输出目录，必须先复制 / 提升到项目归档目录或 `tests/unit/reports/` 的时间戳快照，不能把 runner 托管目录当作正式报告。
 - API / integration 的中文 Markdown 汇总必须提供 URI 覆盖矩阵；每条覆盖范围描述都要映射到具体 `method + URI path`、测试脚本 / case、期望状态码或副作用，以及关联 `.feature` / contract / schema。缺少 URI 的覆盖项标记 `blocked` 或 `missing-uri`，不得只用脚本名或业务概括替代 endpoint 证据。
-- 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态。
+- 最终输出或 Trellis check summary 必须报告 `E2E Mode`、`Mock Strategy`、`Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态；涉及 PR / 知识库证据时，额外报告 `Evidence Source`、`Source Revision`、`Environment Alignment` 和 `Evidence Publication`。
 - MCP 项均为 check-and-guide；项目模板不复制 MCP 配置，不把 MCP 诊断当作项目测试通过。
 - 最终输出按全局状态枚举报告相关工具、执行命令、阻塞原因和 fallback。
 

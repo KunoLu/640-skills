@@ -64,6 +64,7 @@
 | `kuno-workflow-onboard-skills/templates/skills/trellis-channel/` | `/Users/lusonglin/.agent/skills/trellis-channel/` |
 | `kuno-workflow-onboard-skills/templates/skills/project-validation/` | `/Users/lusonglin/.agent/skills/project-validation/` |
 | `kuno-workflow-onboard-skills/templates/skills/gherkin-bdd/` | `/Users/lusonglin/.agent/skills/gherkin-bdd/` |
+| `kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/` | `/Users/lusonglin/.agent/skills/knowledge-base-integration/` |
 | `kuno-workflow-onboard-skills/templates/skills/maestro-mobile-e2e/` | `/Users/lusonglin/.agent/skills/maestro-mobile-e2e/` |
 | `kuno-workflow-onboard-skills/templates/skills/lessons-record/` | `/Users/lusonglin/.agent/skills/lessons-record/` |
 | `kuno-workflow-onboard-skills/templates/skills/book-refactoring-pass/` | `/Users/lusonglin/.agent/skills/book-refactoring-pass/` |
