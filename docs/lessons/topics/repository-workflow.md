@@ -229,3 +229,15 @@
 - 根因：混淆了“普通代码改动后评估仓库内版本化 prompt 是否需要维护”“显式 sync 时把版本化 prompt 发布到 Orca”和“update 只推进版本基线并归档”三个独立动作。
 - 修复：普通仓库改动只评估并按需更新 README 两份文件和版本化 prompt；只有显式 `sync` / `同步` 才读取 live automation、比较完整 prompt 并仅在存在差异时同步；`update` / `更新` 不检查、不修改也不同步版本化 prompt 或 live automation。
 - 预防：新增维护或发布规则时，必须分别定义仓库源文件维护触发器、外部系统发布触发器和无关流程，不能用“每次修改后立即同步”把三者合并。
+
+## LESSON-20260718-generated-agent-alias-target: Generated Agent Aliases Need a Live Canonical Target
+
+- 日期：2026-07-18
+- 标签：repository, skills, symlink, claude, discovery
+- 适用场景：运行 Skills CLI、调整 Skill discovery 路径、提交 `.claude/skills` / `.agents/skills` 或迁移 canonical Skill 目录
+- 严重级别：high
+- 来源：`v1.0.0` 发布后检查根 `.claude/` 目录时发现 tracked broken symlink
+- 问题：仓库提交了 `.claude/skills/sbtd-workflow-onboard -> ../../.agents/skills/sbtd-workflow-onboard`，但 `.agents/skills/sbtd-workflow-onboard` 不存在；Claude Code 无法通过该 alias 加载 Skill，且该路径与根目录自包含 Skill 的公开安装边界冲突。
+- 根因：布局迁移时保留了本地 Skills CLI 生成的项目级 Agent alias，却没有验证 symlink target、Git 追踪状态和当前 canonical discovery entrypoint 是否一致。
+- 修复：从仓库删除 `.claude` broken symlink，继续以根 `sbtd-workflow-onboard/SKILL.md` 为唯一公开 discovery entrypoint，并增加仓库契约测试禁止重新提交该 alias。
+- 预防：提交任何 Agent-specific Skill alias 前必须同时验证 link target 存在、target 是当前 canonical source、alias 属于仓库设计而非本地安装副作用；全局安装模式不得把 `.claude/skills`、`.agents/skills` 等项目级生成物加入版本控制。

@@ -34,6 +34,18 @@ npx --yes skills@latest add \
   --copy
 ```
 
+其中 `skills@latest` 只表示使用 npm 上最新的 `skills` CLI；仓库 URL 没有 `#ref` 时，CLI 会读取仓库默认分支（当前是 `main`）的最新 commit，并不会自动选择最新 tag。需要固定 Skill 内容版本时，在仓库 URL 后添加 Git tag：
+
+```bash
+npx --yes skills@latest add \
+  'https://github.com/KunoLu/640-skills#v1.0.0' \
+  --skill sbtd-workflow-onboard \
+  --global \
+  --agent codex \
+  --yes \
+  --copy
+```
+
 安装后检查 Codex 的全局 Skill：
 
 ```bash
@@ -151,6 +163,7 @@ pwsh -File .\install.ps1
 | `AGENTS.md` | 由 Git 追踪的本仓库直接生效补充规则，保证新 clone 可立即恢复仓库操作边界。 |
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
+| `CHANGELOG.md` | 从 `v1.0.0` 起按 Git tag、中文、最新版本在前的顺序维护发布变更。 |
 | `install.sh` | macOS / Linux 交互式安装入口，直接以 `sbtd-workflow-onboard` 目录作为 `source-root`。 |
 | `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
 | `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
