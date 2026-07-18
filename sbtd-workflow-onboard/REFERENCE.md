@@ -17,7 +17,7 @@ Install only the self-contained Onboard Skill from the public repository:
 
 ```bash
 npx --yes skills@latest add \
-  https://github.com/KunoLu/ai-tools-info \
+  https://github.com/KunoLu/640-skills \
   --skill sbtd-workflow-onboard \
   --global \
   --agent codex \

@@ -33,7 +33,7 @@ The official `skills` CLI may install this self-contained directory as the boots
 
 ```bash
 npx --yes skills@latest add \
-  https://github.com/KunoLu/ai-tools-info \
+  https://github.com/KunoLu/640-skills \
   --skill sbtd-workflow-onboard \
   --global \
   --agent codex \

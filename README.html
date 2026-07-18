@@ -432,7 +432,7 @@
           </div>
           <p>公开仓库可通过官方 <code>skills</code> CLI 把自包含的 <code>sbtd-workflow-onboard</code> 安装到用户级全局目录；私有仓库使用本机 Git 已可认证的 <code>git+ssh://</code> source，不在命令、仓库、日志或报告中写凭据。该步骤只 bootstrap Onboard Skill，不执行 <code>scripts/onboard.py</code>，也不安装 Trellis、GitNexus、其余 Skills、写入 AGENTS 或初始化项目。已克隆仓库时，<code>install.sh</code> 和 <code>install.ps1</code> 仍是完整交互式入口，<code>source-root</code> 必须是完整的 <code>sbtd-workflow-onboard</code> 目录。</p>
           <pre><code>npx --yes skills@latest add \
-  https://github.com/KunoLu/ai-tools-info \
+  https://github.com/KunoLu/640-skills \
   --skill sbtd-workflow-onboard \
   --global \
   --agent codex \

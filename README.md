@@ -454,7 +454,7 @@ tests/e2e/**/*.trace.zip
 
 ```bash
 npx --yes skills@latest add \
-  https://github.com/KunoLu/ai-tools-info \
+  https://github.com/KunoLu/640-skills \
   --skill sbtd-workflow-onboard \
   --global \
   --agent codex \

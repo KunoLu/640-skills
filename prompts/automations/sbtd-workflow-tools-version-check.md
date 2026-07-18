@@ -1,4 +1,4 @@
-你在 /Users/lusonglin/github/ai-tools-info 中执行工具版本更新检查。
+你在 /Users/lusonglin/github/640-skills 中执行工具版本更新检查。
 
 仓库定位：
 - 本仓库是 Coding Agent 配置文件与 Skill 的摘录 / 同步源，不是真实业务项目。
