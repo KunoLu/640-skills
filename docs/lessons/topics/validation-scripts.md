@@ -280,3 +280,15 @@
 - 根因：验证脚本把安装态断言延迟到最终结果对象构造时求值，清理动作已经改变了被观察状态。
 - 修复：在 remove / cleanup 前立即快照所有安装态事实，再执行 list、运行时 smoke 和 remove，最后单独断言清理态。
 - 预防：有 teardown 的端到端验证必须按 `setup → capture installed state → exercise → capture runtime state → teardown → capture removed state` 排序；不要用 teardown 后的文件系统代替安装态证据。
+
+## LESSON-20260718-reader-metadata-not-raw-body: Reader Metadata Is Not Raw HTTP Body
+
+- 日期：2026-07-18
+- 标签：validation, http, read, exact-copy, licensing
+- 适用场景：把许可证、校验清单或其他必须逐字一致的远程文本写入仓库
+- 严重级别：medium
+- 来源：新增 Apache License 2.0 时，直接把 eval `read(URL:raw)` 的返回值写入 `LICENSE`。
+- 问题：eval reader 返回值包含 `URL`、`Content-Type`、`Method` 等读取元数据；直接写文件会把包装信息混入要求逐字一致的许可证正文。
+- 根因：把用于 Agent 阅读的结构化 reader 输出误当成裸 HTTP response body，且首次写入前没有检查文件头或 checksum。
+- 修复：改用 HTTP `fetch(...).text()` 获取原始正文，覆盖 `LICENSE`，再比较本地内容与官方 response body 完全一致并固定 SHA-256 契约。
+- 预防：复制必须逐字一致的远程资产时，不直接持久化 reader 展示输出；使用能明确返回 response body 的下载接口，并在完成前校验首行、字节数和可信来源 checksum。

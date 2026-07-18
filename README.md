@@ -164,6 +164,7 @@ pwsh -File .\install.ps1
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
 | `CHANGELOG.md` | 从 `v1.0.0` 起按 Git tag、中文、最新版本在前的顺序维护发布变更。 |
+| `LICENSE` | 本仓库适用的 Apache License 2.0 完整许可文本。 |
 | `install.sh` | macOS / Linux 交互式安装入口，直接以 `sbtd-workflow-onboard` 目录作为 `source-root`。 |
 | `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
 | `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |

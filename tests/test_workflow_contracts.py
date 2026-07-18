@@ -33,13 +33,29 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertFalse(alias.exists())
         self.assertTrue(canonical.is_file())
 
+    def test_repository_uses_canonical_apache_2_license(self) -> None:
+        license_path = ROOT / "LICENSE"
+
+        self.assertTrue(license_path.is_file())
+        self.assertEqual(
+            hashlib.sha256(license_path.read_bytes()).hexdigest(),
+            "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        )
+        for document in ("README.md", "README.html"):
+            self.assertIn(
+                "Apache License 2.0",
+                (ROOT / document).read_text(encoding="utf-8"),
+            )
+
     def test_changelog_orders_tags_newest_first(self) -> None:
         changelog_path = ROOT / "CHANGELOG.md"
 
         self.assertTrue(changelog_path.is_file())
         changelog = changelog_path.read_text(encoding="utf-8")
         self.assertTrue(changelog.startswith("# CHANGELOG\n"))
+        self.assertLess(changelog.index("## v1.0.2"), changelog.index("## v1.0.1"))
         self.assertLess(changelog.index("## v1.0.1"), changelog.index("## v1.0.0"))
+        self.assertIn("## v1.0.2（未发布）", changelog)
         self.assertIn("## v1.0.1（2026-07-18）", changelog)
         self.assertNotIn("## v1.0.1（未发布）", changelog)
         self.assertRegex(changelog, r"[\u4e00-\u9fff]")
