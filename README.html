@@ -448,6 +448,15 @@
   --agent codex \
   --yes \
   --copy</code></pre>
+          <p><code>skills@latest</code> 只表示使用 npm 上最新的 <code>skills</code> CLI；仓库 URL 没有 <code>#ref</code> 时，CLI 会读取仓库默认分支（当前是 <code>main</code>）的最新 commit，并不会自动选择最新 tag。需要固定 Skill 内容版本时，在仓库 URL 后添加 Git tag：</p>
+          <pre><code>npx --yes skills@latest add \
+  'https://github.com/KunoLu/640-skills#v1.0.0' \
+  --skill sbtd-workflow-onboard \
+  --global \
+  --agent codex \
+  --yes \
+  --copy</code></pre>
+          <p>正式 tag 应保持不可变；需要修复时发布新的 patch tag，例如 <code>v1.0.1</code>，不要移动既有 <code>v1.0.0</code>。</p>
           <p>安装后使用 <code>npx skills list --global --agent codex</code> 检查全局 Skill。随后在 Codex 中明确调用该 Skill，并提供目标平台、一个或多个已存在的项目绝对路径和 Trellis 用户名。多个路径使用英语逗号分隔，例如 <code>/abs/project-one,/abs/project-two</code>；重复路径会规范化后只处理一次：</p>
           <pre><code>请使用 sbtd-workflow-onboard Skill，对 /abs/project-one,/abs/project-two 执行 init 初始化。
 目标平台是 codex，Trellis 用户名是 your-name；多个项目路径以英语逗号分隔。
@@ -883,6 +892,7 @@ tests/e2e/**/*.trace.zip
           <tbody>
             <tr><td><code>ENTRYPOINT.md</code></td><td>由 Git 追踪的版本监控和工作流总入口，也是版本检查与更新流程的可恢复基线。</td></tr>
             <tr><td><code>AGENTS.md</code></td><td>由 Git 追踪的仓库直接生效规则，保证新 clone 可恢复操作边界。</td></tr>
+            <tr><td><code>CHANGELOG.md</code></td><td>从 <code>v1.0.0</code> 起按 Git tag、中文、最新版本在前的顺序维护发布变更。</td></tr>
             <tr><td><code>docs/lessons.md</code></td><td>Lessons 必读短入口；执行仓库操作前必须先读取。</td></tr>
             <tr><td><code>docs/lessons/index.md</code></td><td>Lessons 完整索引，按 tags、适用场景和详情路径检索。</td></tr>
             <tr><td><code>docs/lessons/topics/**</code></td><td>Lessons 完整详情，按当前任务命中后读取。</td></tr>

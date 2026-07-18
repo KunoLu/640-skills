@@ -25,6 +25,28 @@ class WorkflowContractTests(unittest.TestCase):
             [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/"],
         )
 
+    def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
+        alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"
+        canonical = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
+
+        self.assertFalse(alias.is_symlink())
+        self.assertFalse(alias.exists())
+        self.assertTrue(canonical.is_file())
+
+    def test_changelog_orders_tags_newest_first(self) -> None:
+        changelog_path = ROOT / "CHANGELOG.md"
+
+        self.assertTrue(changelog_path.is_file())
+        changelog = changelog_path.read_text(encoding="utf-8")
+        self.assertTrue(changelog.startswith("# CHANGELOG\n"))
+        self.assertLess(changelog.index("## v1.0.1"), changelog.index("## v1.0.0"))
+        self.assertIn("## v1.0.1（2026-07-18）", changelog)
+        self.assertNotIn("## v1.0.1（未发布）", changelog)
+        self.assertRegex(changelog, r"[\u4e00-\u9fff]")
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("## CHANGELOG 维护规则", agents)
+        self.assertIn("每个 Git tag 使用一个二级标题章节", agents)
+
     def test_onboard_skill_is_discoverable_and_documents_npx_install(self) -> None:
         skill_path = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
         skill = skill_path.read_text(encoding="utf-8")
@@ -365,6 +387,15 @@ class WorkflowContractTests(unittest.TestCase):
             "  --yes \\\n"
             "  --copy"
         )
+        pinned_bootstrap_command = (
+            "npx --yes skills@latest add \\\n"
+            "  'https://github.com/KunoLu/640-skills#v1.0.0' \\\n"
+            "  --skill sbtd-workflow-onboard \\\n"
+            "  --global \\\n"
+            "  --agent codex \\\n"
+            "  --yes \\\n"
+            "  --copy"
+        )
         plan_command = (
             'python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \\\n'
             "  --projects-root /abs/project-one,/abs/project-two \\\n"
@@ -372,6 +403,10 @@ class WorkflowContractTests(unittest.TestCase):
         )
         for document in (readme, readme_html):
             self.assertIn(bootstrap_command, document)
+            self.assertIn(pinned_bootstrap_command, document)
+            self.assertIn("默认分支", document)
+            self.assertIn("最新 commit", document)
+            self.assertIn("最新 tag", document)
             self.assertIn(plan_command, document)
             self.assertIn("sbtd-workflow-onboard Skill", document)
             self.assertIn("AGENTS.md", document)

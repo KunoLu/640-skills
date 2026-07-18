@@ -27,6 +27,7 @@
 - unit / API / Playwright / Maestro 报告型测试在使用 `rtk` 前必须评估缓存 / 回放和文件写入风险；报告缺失、陈旧或不可证明时用原生命令复验。
 - 修改 macOS 可直接执行的 Bash installer 时，必须用 Bash 3.2 + `set -u` 验证空数组路径；空数组展开要使用 Bash 3.2 兼容写法，避免 `unbound variable`。
 - 根 `.gitignore` 的当前 canonical 内容严格为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；仓库启动必需的 `AGENTS.md` 和 authoritative `ENTRYPOINT.md` 必须由 Git 追踪，或具备受版本控制且可在任何 Gate 前执行的 bootstrap，不能同时设为 ignored / untracked 和全操作前置条件。
+- 通过 Skills CLI 生成的 `.claude/skills`、`.agents/skills` 等项目级 alias 只有在 target 存在且属于当前 canonical 仓库设计时才能追踪；用户级全局安装产生的项目内 alias 或 broken symlink 必须删除。
 - External Skill installer 的 manifest、source subpath 和 license 路径必须受声明根目录约束；canonical 必须完整校验；事务恢复不完整时不得删除唯一 rollback 备份，必须保留并报告路径。
 - 编写一次性验证脚本前，先对照本入口和命中的 topic，避免重复使用已记录的问题写法；Markdown 解析优先按标题层级和表头语义，不要按裸 `---` 或脆弱正则切割。
 - 校验脚本必须按目标文件职责断言，先确认实际 schema；不要用同一 expected 列表无差别扫描所有文件。
