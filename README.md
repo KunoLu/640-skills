@@ -1,4 +1,4 @@
-# Kuno Workflow 模板配置说明
+# SBTD Workflow 模板配置说明
 
 本仓库是 Codex 配置、Agent 规则模板、Skill 模板和 onboard 自动化的摘录/同步源，不代表一个真实业务项目结构。当前主流程收敛为：
 
@@ -28,20 +28,24 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 | `AGENTS.md` | 本仓库自身直接生效的补充规则。 |
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
-| `install.sh` | macOS / Linux 交互式安装入口，直接以 `kuno-workflow-onboard-skills` 目录作为 `source-root`。 |
+| `install.sh` | macOS / Linux 交互式安装入口，直接以 `sbtd-workflow-onboard` 目录作为 `source-root`。 |
 | `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
 | `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
 | `docs/lessons/index.md` | Lessons 完整索引，按 tags、适用场景和详情路径检索。 |
 | `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
 | `docs/knowledge-base-integration-prd.md` | P1 / P1.1 已实现能力与 P2 Evidence Store / PR Gate 实施方案。 |
-| `kuno-workflow-onboard-skills/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。 |
-| `kuno-workflow-onboard-skills/SKILL.md` | onboard Skill 入口说明。 |
-| `kuno-workflow-onboard-skills/REFERENCE.md` | onboard、安装、检测和工具配置参考。 |
-| `kuno-workflow-onboard-skills/scripts/onboard.py` | init、reset、安装、检测、Trellis init 和 bootstrap 检测自动化脚本。 |
-| `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | 全局 Agent 规则模板。 |
-| `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` | 项目级 Agent 规则模板，不在普通 sync 中同步。 |
-| `kuno-workflow-onboard-skills/templates/skills/**` | 全局 Skill 模板目录，包含 `SKILL.md`、`references/`、`scripts/`、`assets/` 等。 |
-| `kuno-workflow-onboard-skills/templates/project/.gitignore` | 新项目模板 `.gitignore`。 |
+| `prompts/automations/sbtd-workflow-tools-version-check.md` | Orca `SBTD Workflow Tools Version Check` 的版本化 prompt 源。 |
+| `sbtd-workflow-onboard/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/sbtd-workflow-onboard/`。 |
+| `sbtd-workflow-onboard/catalog.json` / `catalog.schema.json` | Bundled Skill、external Skill 上游源与模板源路径目录，以及对应 Draft 2020-12 结构契约。 |
+| `sbtd-workflow-onboard/SKILL.md` | onboard Skill 入口说明。 |
+| `sbtd-workflow-onboard/REFERENCE.md` | onboard、安装、检测和工具配置参考。 |
+| `sbtd-workflow-onboard/scripts/onboard.py` | init、reset、安装、检测、Trellis init 和 bootstrap 检测自动化脚本。 |
+| `sbtd-workflow-onboard/templates/agents/AGENTS.global.md` | 全局 Agent 规则模板。 |
+| `sbtd-workflow-onboard/templates/agents/AGENTS.project.md` | 项目级 Agent 规则模板，不在普通 sync 中同步。 |
+| `sbtd-workflow-onboard/templates/skills/**` | 全局 Skill 模板目录，包含 `SKILL.md`、`references/`、`scripts/`、`assets/` 等。 |
+| `sbtd-workflow-onboard/templates/project/.gitignore` | 新项目模板 `.gitignore`。 |
+
+仓库编排参考 `codex-skills` 的按产物类型分层和自包含 Skill 目录：版本化自动化 prompt 位于 `prompts/`，Onboard 运行实现位于 `scripts/`，可安装载荷保留在 `templates/`，第三方 fallback 保留在 `assets/`。`templates/` 不提升到 Onboard 根目录，因为它明确区分“安装器实现”和“将被复制到目标位置的模板载荷”。
 
 普通修改任务只更新本仓库内的源文件。只有用户明确输入 `sync` 或 `同步` 时，才把允许列表中的全局规则和 Skill 同步到本地生效路径；`AGENTS.project.md` 不在普通 sync 范围内。
 
@@ -62,7 +66,7 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 关键边界：
 
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
-- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `kuno-workflow-onboard-skills` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 和可选 platform flags 后，onboard 流程可以主动运行 `trellis init -u <username> ... --yes --skip-existing`。
+- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `sbtd-workflow-onboard` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 和可选 platform flags 后，onboard 流程可以主动运行 `trellis init -u <username> ... --yes --skip-existing`。
 - Trellis CLI 升级后，已有 `.trellis/` 的项目先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership 和 safe-name guard。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
@@ -110,9 +114,9 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 P1.1 已通过 bundled `knowledge-base-integration` Skill 落地产品注册表、Workspace Mapping、Evidence Policy 决策、目标 ref / Revision Set、完整无 ID Gherkin 目录、静态 / manifest 绑定、跨仓候选、幂等 ingest / smoke、隔离 worktree、分阶段 Smoke、基础设施重试、本地 / 命令式 Runner Adapter、可信环境对齐、artifact manifest、checksums 和 metrics。从本仓库根目录校验随 Skill 提供的示例配置：
 
 ```bash
-python kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/scripts/knowledge_base_p1.py validate-config \
-  --product kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/references/product.example.yaml \
-  --workspace kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/references/workspace.local.example.yaml
+python sbtd-workflow-onboard/templates/skills/knowledge-base-integration/scripts/knowledge_base_p1.py validate-config \
+  --product sbtd-workflow-onboard/templates/skills/knowledge-base-integration/references/product.example.yaml \
+  --workspace sbtd-workflow-onboard/templates/skills/knowledge-base-integration/references/workspace.local.example.yaml
 ```
 
 同一 CLI 还提供 `decision`、`ingest` 和 `smoke` 子命令；各子命令的必需参数以 `--help` 和该 Skill 的说明为准。安装后则先定位 `knowledge-base-integration` Skill 根目录，再运行其 `scripts/knowledge_base_p1.py`。服务器只收集本轮命令新建或刷新的原生报告及同 stem 中文汇总，Mobile 等能力通过 Runner labels 调度。P1.1 只生成 `Evidence Publication: not-configured` 的待发布 bundle，Evidence Store、PR Check、自动失效、quarantine、retention 和远端 Gate 仍属于 P2。完整边界见 [知识库集成 P1 / P2 落地方案](docs/knowledge-base-integration-prd.md)。
@@ -444,13 +448,33 @@ tests/e2e/**/*.trace.zip
 
 `maestro/flow/*.yml` flow 默认应可入库维护；`tests/api/reports/`、`tests/unit/reports/`、`tests/e2e/reports/` 和 `.maestro/reports/` 只保存正式报告快照、Markdown 汇总和本地 / CI 运行产物，默认不入库。Playwright report、trace、video、screenshot、coverage、JUnit 固定输出和一次性 repair plan 默认不入库。
 
+## Onboard Skill 安装方式
+
+仓库公开时，可用官方 `skills` CLI 只安装自包含的 Onboard Skill 到用户级全局目录：
+
+```bash
+npx --yes skills@latest add \
+  https://github.com/KunoLu/ai-tools-info \
+  --skill sbtd-workflow-onboard \
+  --global \
+  --agent codex \
+  --yes \
+  --copy
+```
+
+私有仓库使用本机 Git 已可认证的 `git+ssh://` source，不在命令、仓库、日志或报告中写凭据。安装前可用 `npx --yes skills@latest add <source> --list` 查看可发现 Skill；安装后用 `npx skills list -g -a codex` 检查，用 `npx skills remove sbtd-workflow-onboard -g -a codex` 删除。
+
+该命令只 bootstrap `sbtd-workflow-onboard` 目录，不会自动执行 `scripts/onboard.py`，也不会安装 Trellis、GitNexus、其余 bundled/external Skills、写入 AGENTS 或初始化项目。安装完成后由 Agent 调用该 Skill，再按需执行 `scripts/onboard.py plan --json`、`init` 或 `reset`。已克隆仓库时，根目录 `install.sh` / `install.ps1` 仍是完整交互式安装入口。
+
+Onboard 的全局 Skill 目录解析优先级为：显式 `--global-skills-dir` → `$AGENT_SKILLS_DIR` → 已安装 `sbtd-workflow-onboard` 的父目录（仅认可 `~/.agents/skills`、`~/.agent/skills`、`~/.codex/skills`、`~/.claude/skills`、`~/.pi/agent/skills` 或 `$CODEX_HOME/skills`）→ 既有平台默认目录。`plan --json` 和 `check --json` 都输出 `globalSkillsDirSource` 供审计。
+
 ## onboard / reset 检查范围
 
-`kuno-workflow-onboard-skills` 的 init / reset / check 逻辑需要覆盖：
+`sbtd-workflow-onboard` 的 init / reset / check 逻辑需要覆盖：
 
 - 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
-- 14 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；两个根安装器从 `check` 的 `group=referenced` 获取 canonical 清单，不再各自维护重复数组。
+- 14 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
@@ -460,9 +484,10 @@ tests/e2e/**/*.trace.zip
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导，包含 Maestro MCP 的通用 `command` / `args` / `JAVA_HOME` / `PATH` 配置示例。
 - bundled `seo-geo` Skill 的存在性检查。
-- External Skill 默认使用 `--source auto`：按上游仓库整组 clone、解析和验证，只有上游获取或源结构验证失败时才延迟加载并整组回退 `kuno-workflow-onboard-skills/assets/external-skills/stable/`；有效上游不依赖 stable manifest。`--source upstream` 和 `--source stable` 提供严格模式。manifest、source subpath 和 license 路径必须被各自声明的根目录包含，拒绝绝对路径、`..` 和 symlink 逃逸。全部 Skill 先暂存和验证，再用临时 rollback backup 事务替换；canonical commit 成功后才删除 legacy 目录。
+- External Skill 默认使用 `--source auto`：按上游仓库整组 clone、解析和验证，只有上游获取或源结构验证失败时才延迟加载并整组回退 `sbtd-workflow-onboard/assets/external-skills/stable/`；有效上游不依赖 stable manifest。`--source upstream` 和 `--source stable` 提供严格模式。manifest、source subpath 和 license 路径必须被各自声明的根目录包含，拒绝绝对路径、`..` 和 symlink 逃逸。全部 Skill 先暂存和验证，再用临时 rollback backup 事务替换；canonical commit 成功后才删除 legacy 目录。
 - stable External Skills 的 `MANIFEST.json` 记录 stable set、精确上游 commit、subpath、tree SHA-256 和许可证/NOTICE。stable 快照保持上游原样且不得手改；只有显式 `promote-external-skills-stable --repository ... --revision <full-sha> --stable-set ... --yes` 才能整组更新。
 - mattpocock external Skill 使用上游 canonical 名称；`to-prd` / `to-issues` 作为 legacy alias 迁移到 `to-spec` / `to-tickets`，canonical 安装成功后再备份和删除本地旧目录。
+- bundled Onboard rename migration 在 canonical `sbtd-workflow-onboard/SKILL.md` 校验成功，且 legacy `kuno-workflow-onboard-skills/SKILL.md` 的 frontmatter 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会在任何 target 变更前阻断 `init` / `reset` 并保留原内容，删除异常会进入失败报告；`plan` 会报告迁移目标或 identity conflict，`init-projects` 不检查或修改全局 Skill 目录。
 - `web-ui-autotest-generator`、`shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
 - React Bits tier 选择对每个 React + shadcn/ui 项目独立判断；仍保持项目级、可选并保留 license/registry 前置条件。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
@@ -476,14 +501,14 @@ tests/e2e/**/*.trace.zip
 - `kimi`：执行 `kimi mcp add ...`。
 - `oh-my-pi` / `omp`：固定写入全局 `~/.omp/agent/mcp.json`。
 
-两个安装脚本的 `source-root` 都直接指向 `kuno-workflow-onboard-skills` 目录，而不是仓库根目录。默认值是当前执行目录下的 `./kuno-workflow-onboard-skills`；如果该目录不存在，或缺少 `SKILL.md`、`REFERENCE.md`、`scripts/onboard.py`、`templates/`、`assets/external-skills/stable/MANIFEST.json`，脚本会直接输出未找到或不完整的 Onboard skill 并结束安装。脚本可以被复制到其他目录独立使用，但必须能通过默认值或显式参数定位完整的 `kuno-workflow-onboard-skills`：
+两个安装脚本的 `source-root` 都直接指向 `sbtd-workflow-onboard` 目录，而不是仓库根目录。默认值是当前执行目录下的 `./sbtd-workflow-onboard`；如果该目录不存在，或缺少 `SKILL.md`、`REFERENCE.md`、`catalog.json`、`catalog.schema.json`、`scripts/onboard.py`、`templates/`、`assets/external-skills/stable/MANIFEST.json`，脚本会直接输出未找到或不完整的 Onboard skill 并结束安装。脚本可以被复制到其他目录独立使用，但必须能通过默认值或显式参数定位完整的 `sbtd-workflow-onboard`：
 
 ```bash
-./install.sh --source-root /absolute/path/to/kuno-workflow-onboard-skills --platform codex
+./install.sh --source-root /absolute/path/to/sbtd-workflow-onboard --platform codex
 ```
 
 ```powershell
-.\install.ps1 -SourceRoot C:\absolute\path\to\kuno-workflow-onboard-skills -Platform codex
+.\install.ps1 -SourceRoot C:\absolute\path\to\sbtd-workflow-onboard -Platform codex
 ```
 
 正常 onboard 可传入一个或多个逗号分隔的绝对项目根目录；未传时，安装脚本会说明支持多个绝对路径并交互询问：
@@ -506,7 +531,7 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式，但运行时达到既有阈值后，可对任务内重复、非阻塞的中间状态自动进入 `auto-lite`，手动模式仍需用户明确启动。通用模式退出会在当前任务内禁止自动重入，手动启动不清除该退出；会话级自动退出保持到用户明确重新启用或会话结束。14 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式，但运行时达到既有阈值后，可对任务内重复、非阻塞的中间状态自动进入 `auto-lite`，手动模式仍需用户明确启动。通用模式退出会在当前任务内禁止自动重入，手动启动不清除该退出；会话级自动退出保持到用户明确重新启用或会话结束。14 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
 
@@ -516,13 +541,14 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 
 1. 读取同步源文件并确认路径正确。
 2. 只同步根 `AGENTS.md` 中允许列表里的全局规则和全局 Skill；Skill 必须按目录整体同步，不能只复制 `SKILL.md`。
-3. `kuno-workflow-onboard-skills/` 也作为完整 Skill 目录同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`。
-4. 不把 `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 作为独立项目级 `AGENTS.md` 同步；它只会随 onboard Skill 作为模板资产保留。
-5. 在本机实际使用的 `/Users/lusonglin/.agent/skills/` 上执行 mattpocock legacy migration：通过 synced onboard Skill 的 `install-external-skills --skills to-prd,to-issues --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes` 删除旧 `to-prd` / `to-issues`，并安装 canonical `to-spec` / `to-tickets`；普通 sync 不默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录。
-6. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致；legacy migration 用旧目录不存在且 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在作为校验。
-7. 不修改 `ENTRYPOINT.md` 版本号。
-8. 不归档 `UPDATE.md`。
-9. 不提交或推送变更。
+3. `sbtd-workflow-onboard/` 也作为完整 Skill 目录同步到 `/Users/lusonglin/.agent/skills/sbtd-workflow-onboard/`。
+4. 新 Onboard Skill 复制并校验成功后，删除 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/`，不保留旧 alias。
+5. 不把 `sbtd-workflow-onboard/templates/agents/AGENTS.project.md` 作为独立项目级 `AGENTS.md` 同步；它只会随 onboard Skill 作为模板资产保留。
+6. 在本机实际使用的 `/Users/lusonglin/.agent/skills/` 上执行 mattpocock legacy migration：通过 synced onboard Skill 的 `install-external-skills --skills to-prd,to-issues --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes` 删除旧 `to-prd` / `to-issues`，并安装 canonical `to-spec` / `to-tickets`；普通 sync 不默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录。
+7. 文件用 `cmp -s` 或等价方式确认一致；Skill 目录用 `diff -qr`、递归 checksum 或等价方式确认一致；Onboard rename migration 还要确认旧目录不存在且 `sbtd-workflow-onboard/SKILL.md` 存在。
+8. 不修改 `ENTRYPOINT.md` 版本号。
+9. 不归档 `UPDATE.md`。
+10. 不提交或推送变更。
 
 ## README 同步规范
 
@@ -533,7 +559,7 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 - 工作流主线、工具职责或边界发生变化。
 - SDD、BDD、TDD、DDD 或 SBTD 的定义、触发条件、产物位置发生变化。
 - Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、`shadcn`、`web-ui-autotest-generator` 或 `seo-geo` 的检测、安装、fallback 或报告状态发生变化。
-- `kuno-workflow-onboard-skills/scripts/onboard.py` 的 init、reset、安装或检查行为发生变化。
+- `sbtd-workflow-onboard/scripts/onboard.py` 的 init、reset、安装或检查行为发生变化。
 - 模板 `.gitignore`、同步路径、AGENTS 模板路径或 Skill 模板路径发生用户可见变化。
 - 最终验证阶段的工具栈或报告格式发生变化。
 

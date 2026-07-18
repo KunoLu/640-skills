@@ -1,18 +1,26 @@
 # AI Tools 项目规则
 
-本仓库是 Codex 配置文件与 Skill 的摘录/同步源，不代表一个真实业务项目结构。本文件只保留本配置摘录仓库自身直接生效的补充规则；可复用的全局规则、项目级规则和全局 Skill 模板集中维护在 `kuno-workflow-onboard-skills/`。
+本仓库是 Codex 配置文件与 Skill 的摘录/同步源，不代表一个真实业务项目结构。本文件只保留本配置摘录仓库自身直接生效的补充规则；可复用的全局规则、项目级规则和全局 Skill 模板集中维护在 `sbtd-workflow-onboard/`。
 
 ## Agent 规则文件路径
 
 本配置集维护的 agent 规则文件路径如下：
 
 - 根目录 `AGENTS.md`：保存本配置摘录仓库自身直接生效的补充规则，包括每日版本检查自动化和 `更新` / `update` 指令。
-- `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md`：保存迁移后的全局规则文档。
-- `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`：保存迁移后的项目规则文档。
-- `kuno-workflow-onboard-skills/templates/skills/**`：保存迁移后的全局 Skill 模板及其 references / scripts / assets。
-- `kuno-workflow-onboard-skills/SKILL.md`、`kuno-workflow-onboard-skills/REFERENCE.md`、`kuno-workflow-onboard-skills/scripts/onboard.py`：保存 onboard Skill 自身的说明和安装 / 重置自动化。
+- `sbtd-workflow-onboard/templates/agents/AGENTS.global.md`：保存迁移后的全局规则文档。
+- `sbtd-workflow-onboard/templates/agents/AGENTS.project.md`：保存迁移后的项目规则文档。
+- `sbtd-workflow-onboard/templates/skills/**`：保存迁移后的全局 Skill 模板及其 references / scripts / assets。
+- `sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`：保存 onboard Skill 自身的说明和安装 / 重置自动化。
+- `prompts/automations/sbtd-workflow-tools-version-check.md`：保存 Orca `SBTD Workflow Tools Version Check` 的版本化 prompt；修改后必须同步更新同名 live automation 并验证内容一致。
 
-每日版本检查自动化如需读取、评估或修改 agent 规则，只能使用上述路径。不要再读取或修改已删除的旧路径 `agents/`、`skills/`、根目录旧路径 `AGENTS.global.md` 和 `AGENTS.project.md`。
+每日版本检查自动化如需读取、评估或修改 agent 规则，只能使用上述路径和 `prompts/automations/sbtd-workflow-tools-version-check.md`。不要再读取或修改已删除的旧路径 `agents/`、`skills/`、根目录旧路径 `AGENTS.global.md` 和 `AGENTS.project.md`。
+
+## Onboard Skill 公开安装边界
+
+- `sbtd-workflow-onboard/` 必须保持为官方 `skills` CLI 可递归发现和整目录安装的自包含 Skill；根 `SKILL.md` 是唯一 discovery entrypoint，不要把 `templates/skills/**` 提升到仓库根，也不要新增重复 bootstrap Skill。
+- 用户可用 `npx skills add` 把 Onboard Skill bootstrap 到用户级全局目录；该动作只安装 Onboard Skill，不等于执行 `scripts/onboard.py`，不得声称已安装其余 Skills、Trellis、GitNexus、AGENTS 或项目配置。
+- Onboard 运行时的全局 Skill 目录优先级固定为：显式 `--global-skills-dir`、`$AGENT_SKILLS_DIR`、已安装 Onboard Skill 的受信父目录、既有平台默认目录；JSON `plan` / `check` 必须暴露实际路径来源。
+- 本公开安装方式不改变下文仓库维护用 `同步` / `sync` gate；普通修改仍不得自动写入本机生效路径。
 
 ## Lessons 读取规则
 
@@ -43,7 +51,7 @@
 - 工作流主线、工具职责边界或最终验证工具栈。
 - SDD、BDD、TDD、DDD 或 SBTD 的定义、触发条件、产物位置或协作顺序。
 - Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MCP、`web-ui-autotest-generator` 或 `seo-geo` 的检测、安装、fallback、报告状态或使用时机。
-- `kuno-workflow-onboard-skills/scripts/onboard.py` 的 init、reset、安装或检查行为。
+- `sbtd-workflow-onboard/scripts/onboard.py` 的 init、reset、安装或检查行为。
 - 模板 `.gitignore`、同步路径、AGENTS 模板路径、Skill 模板路径或用户可见文档入口。
 
 如果评估后无需更新 README，必须在最终输出中说明跳过原因。
@@ -58,36 +66,37 @@
 
 | 源文件 | 本地目标路径 |
 |---|---|
-| `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
-| `kuno-workflow-onboard-skills/` | `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/` |
-| `kuno-workflow-onboard-skills/templates/skills/trellis-workflow/` | `/Users/lusonglin/.agent/skills/trellis-workflow/` |
-| `kuno-workflow-onboard-skills/templates/skills/trellis-channel/` | `/Users/lusonglin/.agent/skills/trellis-channel/` |
-| `kuno-workflow-onboard-skills/templates/skills/project-validation/` | `/Users/lusonglin/.agent/skills/project-validation/` |
-| `kuno-workflow-onboard-skills/templates/skills/gherkin-bdd/` | `/Users/lusonglin/.agent/skills/gherkin-bdd/` |
-| `kuno-workflow-onboard-skills/templates/skills/knowledge-base-integration/` | `/Users/lusonglin/.agent/skills/knowledge-base-integration/` |
-| `kuno-workflow-onboard-skills/templates/skills/maestro-mobile-e2e/` | `/Users/lusonglin/.agent/skills/maestro-mobile-e2e/` |
-| `kuno-workflow-onboard-skills/templates/skills/lessons-record/` | `/Users/lusonglin/.agent/skills/lessons-record/` |
-| `kuno-workflow-onboard-skills/templates/skills/book-refactoring-pass/` | `/Users/lusonglin/.agent/skills/book-refactoring-pass/` |
-| `kuno-workflow-onboard-skills/templates/skills/book-legacy-change-safety/` | `/Users/lusonglin/.agent/skills/book-legacy-change-safety/` |
-| `kuno-workflow-onboard-skills/templates/skills/book-ddd-distilled-modeling/` | `/Users/lusonglin/.agent/skills/book-ddd-distilled-modeling/` |
-| `kuno-workflow-onboard-skills/templates/skills/book-ddia-data-design/` | `/Users/lusonglin/.agent/skills/book-ddia-data-design/` |
-| `kuno-workflow-onboard-skills/templates/skills/book-release-readiness/` | `/Users/lusonglin/.agent/skills/book-release-readiness/` |
-| `kuno-workflow-onboard-skills/templates/skills/seo-geo/` | `/Users/lusonglin/.agent/skills/seo-geo/` |
+| `sbtd-workflow-onboard/templates/agents/AGENTS.global.md` | `/Users/lusonglin/.codex/AGENTS.md` |
+| `sbtd-workflow-onboard/` | `/Users/lusonglin/.agent/skills/sbtd-workflow-onboard/` |
+| `sbtd-workflow-onboard/templates/skills/trellis-workflow/` | `/Users/lusonglin/.agent/skills/trellis-workflow/` |
+| `sbtd-workflow-onboard/templates/skills/trellis-channel/` | `/Users/lusonglin/.agent/skills/trellis-channel/` |
+| `sbtd-workflow-onboard/templates/skills/project-validation/` | `/Users/lusonglin/.agent/skills/project-validation/` |
+| `sbtd-workflow-onboard/templates/skills/gherkin-bdd/` | `/Users/lusonglin/.agent/skills/gherkin-bdd/` |
+| `sbtd-workflow-onboard/templates/skills/knowledge-base-integration/` | `/Users/lusonglin/.agent/skills/knowledge-base-integration/` |
+| `sbtd-workflow-onboard/templates/skills/maestro-mobile-e2e/` | `/Users/lusonglin/.agent/skills/maestro-mobile-e2e/` |
+| `sbtd-workflow-onboard/templates/skills/lessons-record/` | `/Users/lusonglin/.agent/skills/lessons-record/` |
+| `sbtd-workflow-onboard/templates/skills/book-refactoring-pass/` | `/Users/lusonglin/.agent/skills/book-refactoring-pass/` |
+| `sbtd-workflow-onboard/templates/skills/book-legacy-change-safety/` | `/Users/lusonglin/.agent/skills/book-legacy-change-safety/` |
+| `sbtd-workflow-onboard/templates/skills/book-ddd-distilled-modeling/` | `/Users/lusonglin/.agent/skills/book-ddd-distilled-modeling/` |
+| `sbtd-workflow-onboard/templates/skills/book-ddia-data-design/` | `/Users/lusonglin/.agent/skills/book-ddia-data-design/` |
+| `sbtd-workflow-onboard/templates/skills/book-release-readiness/` | `/Users/lusonglin/.agent/skills/book-release-readiness/` |
+| `sbtd-workflow-onboard/templates/skills/seo-geo/` | `/Users/lusonglin/.agent/skills/seo-geo/` |
 
 同步要求：
 
 1. 先读取源文件 / 目录，确认路径正确。
 2. 文件目标按文件复制；Skill 目录目标必须复制整个目录，包括 `SKILL.md`、`references/`、`scripts/`、`assets/` 等子内容。
-3. 同步完成后，在本机实际使用的 external Skill 根目录 `/Users/lusonglin/.agent/skills` 上执行 mattpocock legacy migration：运行 `kuno-workflow-onboard-skills/scripts/onboard.py install-external-skills --skills to-prd,to-issues --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes`，让旧 `to-prd` / `to-issues` 目录被删除，并安装 canonical `to-spec` / `to-tickets`。不要默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录，除非用户明确要求。
-4. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致；legacy migration 使用 `test ! -e` 确认旧目录不存在，并检查 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在。
-5. 在最终输出中说明已同步的文件、legacy migration 结果和校验结果。
+3. `sbtd-workflow-onboard/` 成功复制并校验后，只有旧路径 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/` 是目录，且其 `SKILL.md` frontmatter 的 `name` 仍为 `kuno-workflow-onboard-skills` 时才删除；同名文件、无效 / 不相关目录或身份不匹配必须停止 rename migration、保留原内容并报告冲突。旧目录只作为迁移输入，不保留 alias 或兼容副本。
+4. 同步完成后，在本机实际使用的 external Skill 根目录 `/Users/lusonglin/.agent/skills` 上执行 mattpocock legacy migration：运行 `sbtd-workflow-onboard/scripts/onboard.py install-external-skills --skills to-prd,to-issues --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes`，让旧 `to-prd` / `to-issues` 目录被删除，并安装 canonical `to-spec` / `to-tickets`。不要默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录，除非用户明确要求。
+5. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致；rename migration 使用旧 Onboard 目录不存在且 `sbtd-workflow-onboard/SKILL.md` 存在作为成功校验，或使用旧路径未变且冲突已报告作为阻断校验；external legacy migration 使用 `test ! -e` 确认旧目录不存在，并检查 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在。
+6. 在最终输出中说明已同步的文件、Onboard rename migration、external legacy migration 和校验结果。
 
 不要同步：
 
-- `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`
+- `sbtd-workflow-onboard/templates/agents/AGENTS.project.md`
 
-`kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` 是用于复制到真实项目仓库根目录 `AGENTS.md` 的项目级模板，只在具体项目需要时由用户手动落地、通过 `kuno-workflow-onboard-skills` 安装，或由用户明确要求同步。
-当 `kuno-workflow-onboard-skills/` 作为 Skill 目录整体同步到 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/` 时，其中携带的 `templates/agents/AGENTS.project.md` 只作为该 Skill 的模板资产保留，不视为把项目级模板同步到任何真实项目。
+`sbtd-workflow-onboard/templates/agents/AGENTS.project.md` 是用于复制到真实项目仓库根目录 `AGENTS.md` 的项目级模板，只在具体项目需要时由用户手动落地、通过 `sbtd-workflow-onboard` 安装，或由用户明确要求同步。
+当 `sbtd-workflow-onboard/` 作为 Skill 目录整体同步到 `/Users/lusonglin/.agent/skills/sbtd-workflow-onboard/` 时，其中携带的 `templates/agents/AGENTS.project.md` 只作为该 Skill 的模板资产保留，不视为把项目级模板同步到任何真实项目。
 
 ### 同步指令
 
@@ -99,7 +108,7 @@
 4. 不归档 `UPDATE.md`。
 5. 不提交或推送变更。
 
-mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `kuno-workflow-onboard-skills/assets/external-skills/stable/` 保存带精确上游 commit、checksum 和许可证的原样 stable 镜像，供上游安装不兼容时回退；该镜像不是 fork，不得手工改写，只能通过 stable promotion 流程整组更新。除该受管 stable 镜像外，不要在本仓库内另行安装、fork 或改写这些官方 Skill。
+mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-workflow-onboard/assets/external-skills/stable/` 保存带精确上游 commit、checksum 和许可证的原样 stable 镜像，供上游安装不兼容时回退；该镜像不是 fork，不得手工改写，只能通过 stable promotion 流程整组更新。除该受管 stable 镜像外，不要在本仓库内另行安装、fork 或改写这些官方 Skill。
 
 ## 每日版本检查自动化
 
@@ -117,12 +126,15 @@ Codex 每日版本检查自动化必须遵守：
    - npm 包 metadata、tarball 内容、发布文件结构或本地包结构推断。
 6. 评估是否需要修改本仓库规则时，不要只检查是否存在与上游同名的模板或配置文件；还必须用 release 中出现的关键概念、命令、配置项和兼容性关键词扫描以下本地文件，并在 `UPDATE.md` 的影响分析中说明命中结果和处理决定：
    - `AGENTS.md`
-   - `kuno-workflow-onboard-skills/SKILL.md`
-   - `kuno-workflow-onboard-skills/REFERENCE.md`
-   - `kuno-workflow-onboard-skills/scripts/onboard.py`
-   - `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md`
-   - `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md`
-   - `kuno-workflow-onboard-skills/templates/skills/**`
+   - `prompts/automations/sbtd-workflow-tools-version-check.md`
+   - `sbtd-workflow-onboard/catalog.json`
+   - `sbtd-workflow-onboard/catalog.schema.json`
+   - `sbtd-workflow-onboard/SKILL.md`
+   - `sbtd-workflow-onboard/REFERENCE.md`
+   - `sbtd-workflow-onboard/scripts/onboard.py`
+   - `sbtd-workflow-onboard/templates/agents/AGENTS.global.md`
+   - `sbtd-workflow-onboard/templates/agents/AGENTS.project.md`
+   - `sbtd-workflow-onboard/templates/skills/**`
 7. 如果 release 改动影响某个工具的使用边界、命令建议、配置禁用项、兼容性风险或迁移步骤，即使本仓库没有对应模板文件，也要最小化更新相关 AGENTS 或 Skill 规则。
 8. 由 release 触发的 AGENTS 或 Skill 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。只有当规则本身必须表达明确兼容边界时，才允许写最低/最高版本要求。
 9. 除非用户手动输入 `更新` 或 `update`，否则不要把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`。

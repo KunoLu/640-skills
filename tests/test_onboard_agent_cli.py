@@ -12,12 +12,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ONBOARD = ROOT / "kuno-workflow-onboard-skills" / "scripts" / "onboard.py"
+ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
 
 
 class AgentCliCommandTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="kuno-agent-cli-test-")
+        self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-agent-cli-test-")
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
         self.bin_dir = self.root / "bin"

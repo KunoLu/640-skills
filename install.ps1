@@ -1,6 +1,6 @@
 param(
   [string]$Platform = "",
-  [string]$SourceRoot = "./kuno-workflow-onboard-skills",
+  [string]$SourceRoot = "./sbtd-workflow-onboard",
   [string]$ProjectsRoot = "",
   [string]$InitProjects = "",
   [ValidateSet("", "init", "reset")]
@@ -32,7 +32,7 @@ if ($script:ProjectsOnly -and $Action) {
 
 function Show-Usage {
   @"
-Kuno workflow installer
+SBTD workflow installer
 
 Usage:
   .\install.ps1 [options]
@@ -43,8 +43,8 @@ Options:
       The installer verifies this CLI immediately, bootstraps npm when needed,
       and installs the official npm package globally at @latest when missing.
   -SourceRoot <path>
-      Path to the kuno-workflow-onboard-skills directory.
-      Defaults to ./kuno-workflow-onboard-skills.
+      Path to the sbtd-workflow-onboard directory.
+      Defaults to ./sbtd-workflow-onboard.
   -ProjectsRoot <abs-path[,abs-path...]>
       One or more absolute project root paths separated by English commas.
       When omitted, the installer asks interactively for the project roots.
@@ -125,7 +125,7 @@ function Show-Logo {
     Write-Host "    K  K"
   }
   Write-Host ""
-  Write-Colored "Kuno Workflow Installer" Magenta
+  Write-Colored "SBTD Workflow Installer" Magenta
   Write-Host ""
 }
 
@@ -213,13 +213,13 @@ function Validate-SourceRoot {
   param([string]$Path)
   if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
     Write-Error @"
-Kuno Onboard skill was not found.
+SBTD Onboard skill was not found.
 
 Expected:
   $Path
 
 This installer requires -SourceRoot to point directly to the
-kuno-workflow-onboard-skills directory.
+sbtd-workflow-onboard directory.
 "@
     exit 1
   }
@@ -228,6 +228,8 @@ kuno-workflow-onboard-skills directory.
   $required = @(
     "SKILL.md",
     "REFERENCE.md",
+    "catalog.json",
+    "catalog.schema.json",
     "scripts/onboard.py",
     "templates/agents/AGENTS.global.md",
     "templates/agents/AGENTS.project.md",
@@ -242,7 +244,7 @@ kuno-workflow-onboard-skills directory.
   }
   if ($missing.Count -gt 0) {
     Write-Error @"
-Kuno Onboard skill was not found or is incomplete.
+SBTD Onboard skill was not found or is incomplete.
 
 Provided:
   $resolved
@@ -250,7 +252,7 @@ Provided:
 Missing:
   $($missing -join "`n  ")
 
-Please pass a valid kuno-workflow-onboard-skills directory.
+Please pass a valid sbtd-workflow-onboard directory.
 "@
     exit 1
   }

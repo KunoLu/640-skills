@@ -26,6 +26,7 @@
 - 使用 `rtk` 后遇到明显包装器参数解析异常时，必须用原生命令复验同一事实。
 - unit / API / Playwright / Maestro 报告型测试在使用 `rtk` 前必须评估缓存 / 回放和文件写入风险；报告缺失、陈旧或不可证明时用原生命令复验。
 - 修改 macOS 可直接执行的 Bash installer 时，必须用 Bash 3.2 + `set -u` 验证空数组路径；空数组展开要使用 Bash 3.2 兼容写法，避免 `unbound variable`。
+- 根 `.gitignore` 的当前 canonical 内容严格为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；不要复用历史三行契约。
 - External Skill installer 的 manifest、source subpath 和 license 路径必须受声明根目录约束；canonical 必须完整校验；事务恢复不完整时不得删除唯一 rollback 备份，必须保留并报告路径。
 - 编写一次性验证脚本前，先对照本入口和命中的 topic，避免重复使用已记录的问题写法；Markdown 解析优先按标题层级和表头语义，不要按裸 `---` 或脆弱正则切割。
 - 校验脚本必须按目标文件职责断言，先确认实际 schema；不要用同一 expected 列表无差别扫描所有文件。

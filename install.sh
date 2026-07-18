@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PLATFORM=""
-SOURCE_ROOT="./kuno-workflow-onboard-skills"
+SOURCE_ROOT="./sbtd-workflow-onboard"
 PROJECTS_ROOT=""
 INIT_PROJECTS=""
 PROJECTS_ONLY=0
@@ -25,7 +25,7 @@ PROJECTS_JSON=""
 
 usage() {
   cat <<'EOF'
-Kuno workflow installer
+SBTD workflow installer
 
 Usage:
   ./install.sh [options]
@@ -36,8 +36,8 @@ Options:
       The installer verifies this CLI immediately, bootstraps npm when needed,
       and installs the official npm package globally at @latest when missing.
   --source-root <path>
-      Path to the kuno-workflow-onboard-skills directory.
-      Defaults to ./kuno-workflow-onboard-skills.
+      Path to the sbtd-workflow-onboard directory.
+      Defaults to ./sbtd-workflow-onboard.
   --projects-root <abs-path[,abs-path...]>
       One or more absolute project root paths separated by English commas.
       When omitted, the installer asks interactively for the project roots.
@@ -118,7 +118,7 @@ print_logo() {
     printf '    K  K\n'
   fi
   printf '\n'
-  color '1;35' 'Kuno Workflow Installer'
+  color '1;35' 'SBTD Workflow Installer'
   printf '\n\n'
 }
 
@@ -224,13 +224,13 @@ validate_source_root() {
   local source="$1"
   if [[ ! -d "$source" ]]; then
     cat >&2 <<EOF
-Kuno Onboard skill was not found.
+SBTD Onboard skill was not found.
 
 Expected:
   $source
 
 This installer requires --source-root to point directly to the
-kuno-workflow-onboard-skills directory.
+sbtd-workflow-onboard directory.
 EOF
     exit 1
   fi
@@ -241,6 +241,8 @@ EOF
   local required=(
     "SKILL.md"
     "REFERENCE.md"
+    "catalog.json"
+    "catalog.schema.json"
     "scripts/onboard.py"
     "templates/agents/AGENTS.global.md"
     "templates/agents/AGENTS.project.md"
@@ -254,7 +256,7 @@ EOF
   done
   if (( ${#missing[@]} > 0 )); then
     cat >&2 <<EOF
-Kuno Onboard skill was not found or is incomplete.
+SBTD Onboard skill was not found or is incomplete.
 
 Provided:
   $resolved
@@ -264,7 +266,7 @@ EOF
     for item in "${missing[@]}"; do
       printf '  %s\n' "$item" >&2
     done
-    printf '\nPlease pass a valid kuno-workflow-onboard-skills directory.\n' >&2
+    printf '\nPlease pass a valid sbtd-workflow-onboard directory.\n' >&2
     exit 1
   fi
   SOURCE_ROOT="$resolved"
@@ -359,7 +361,7 @@ refresh_check_json() {
   local args=()
   read_common_args
   args=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
-  CHECK_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-check.XXXXXX")"
+  CHECK_JSON="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-check.XXXXXX")"
   "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check ${args[@]+"${args[@]}"} --json > "$CHECK_JSON"
 }
 
@@ -367,7 +369,7 @@ refresh_agent_cli_json() {
   if [[ -n "$AGENT_CLI_JSON" && -f "$AGENT_CLI_JSON" ]]; then
     rm -f "$AGENT_CLI_JSON"
   fi
-  AGENT_CLI_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-agent-cli.XXXXXX")"
+  AGENT_CLI_JSON="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-agent-cli.XXXXXX")"
   "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check-agent-cli --platform "$PLATFORM" --json > "$AGENT_CLI_JSON"
 }
 
@@ -376,7 +378,7 @@ refresh_projects_json() {
   if [[ -n "$PROJECTS_JSON" && -f "$PROJECTS_JSON" ]]; then
     rm -f "$PROJECTS_JSON"
   fi
-  PROJECTS_JSON="$(mktemp "${TMPDIR:-/tmp}/kuno-onboard-projects.XXXXXX")"
+  PROJECTS_JSON="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-projects.XXXXXX")"
   "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check-projects \
     --projects-root "$PROJECTS_ROOT" --json > "$PROJECTS_JSON"
 }

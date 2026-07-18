@@ -20,12 +20,12 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ONBOARD = ROOT / "kuno-workflow-onboard-skills" / "scripts" / "onboard.py"
+ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
 
 
 class ExternalSkillInstallTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="kuno-external-skills-test-")
+        self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-external-skills-test-")
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
         self.home = self.root / "home"
@@ -139,19 +139,30 @@ class ExternalSkillInstallTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         payload = json.loads(completed.stdout)
-        result = next(item for item in payload["results"] if item.get("name") == "diagnosing-bugs")
+        result = next(
+            item for item in payload["results"] if item.get("name") == "diagnosing-bugs"
+        )
         self.assertEqual(result["sourceUsed"], "upstream")
-        self.assertEqual(result["sourceRevision"], "1111111111111111111111111111111111111111")
-        self.assertIn("upstream marker", (self.skills_dir / "diagnosing-bugs" / "SKILL.md").read_text())
+        self.assertEqual(
+            result["sourceRevision"], "1111111111111111111111111111111111111111"
+        )
+        self.assertIn(
+            "upstream marker",
+            (self.skills_dir / "diagnosing-bugs" / "SKILL.md").read_text(),
+        )
 
-    def test_auto_falls_back_to_the_vendored_stable_skill_when_clone_fails(self) -> None:
+    def test_auto_falls_back_to_the_vendored_stable_skill_when_clone_fails(
+        self,
+    ) -> None:
         self.write_fake_git(clone_succeeds=False)
 
         completed = self.install("diagnosing-bugs", "auto")
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         payload = json.loads(completed.stdout)
-        result = next(item for item in payload["results"] if item.get("name") == "diagnosing-bugs")
+        result = next(
+            item for item in payload["results"] if item.get("name") == "diagnosing-bugs"
+        )
         self.assertEqual(result["sourceUsed"], "stable-fallback")
         self.assertIn("simulated clone failure", result["fallbackReason"])
         self.assertTrue((self.skills_dir / "diagnosing-bugs" / "SKILL.md").is_file())
@@ -163,11 +174,15 @@ class ExternalSkillInstallTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         payload = json.loads(completed.stdout)
-        result = next(item for item in payload["results"] if item.get("name") == "diagnosing-bugs")
+        result = next(
+            item for item in payload["results"] if item.get("name") == "diagnosing-bugs"
+        )
         self.assertEqual(result["sourceUsed"], "stable")
         self.assertFalse(self.git_log.exists())
 
-    def test_strict_upstream_failure_leaves_every_existing_target_unchanged(self) -> None:
+    def test_strict_upstream_failure_leaves_every_existing_target_unchanged(
+        self,
+    ) -> None:
         self.write_fake_git(clone_succeeds=True)
         self.write_upstream_skill("diagnosing-bugs", "new diagnosing-bugs")
         self.write_existing_skill("diagnosing-bugs", "old diagnosing-bugs")
@@ -231,15 +246,24 @@ class ExternalSkillInstallTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         payload = json.loads(completed.stdout)
-        installed = [item for item in payload["results"] if item.get("phase") == "commit"]
+        installed = [
+            item for item in payload["results"] if item.get("phase") == "commit"
+        ]
         self.assertEqual(len(installed), 15)
         self.assertEqual({item["sourceUsed"] for item in installed}, {"stable"})
-        self.assertTrue(all((self.skills_dir / item["name"] / "SKILL.md").is_file() for item in installed))
+        self.assertTrue(
+            all(
+                (self.skills_dir / item["name"] / "SKILL.md").is_file()
+                for item in installed
+            )
+        )
         self.assertFalse(self.git_log.exists())
 
     def test_rollback_failure_retains_the_only_backup_copy(self) -> None:
         onboard = self.load_onboard_module()
-        self.write_valid_skill(self.skills_dir / "diagnosing-bugs", "diagnosing-bugs", "old")
+        self.write_valid_skill(
+            self.skills_dir / "diagnosing-bugs", "diagnosing-bugs", "old"
+        )
         staging = self.root / "staging"
         self.write_valid_skill(staging / "diagnosing-bugs", "diagnosing-bugs", "new")
         resolved = {
@@ -269,7 +293,9 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertEqual(transaction["status"], "rollback-failed")
         rollback_path = Path(transaction["rollbackPath"])
         self.assertTrue((rollback_path / "diagnosing-bugs" / "SKILL.md").is_file())
-        self.assertIn("old", (rollback_path / "diagnosing-bugs" / "SKILL.md").read_text())
+        self.assertIn(
+            "old", (rollback_path / "diagnosing-bugs" / "SKILL.md").read_text()
+        )
 
     def test_stable_manifest_paths_cannot_escape_the_declared_root(self) -> None:
         onboard = self.load_onboard_module()
@@ -294,7 +320,9 @@ class ExternalSkillInstallTests(unittest.TestCase):
         }
 
         with self.assertRaisesRegex(RuntimeError, "relative path|declared root"):
-            onboard.stable_external_skill_source(manifest, "diagnosing-bugs", stable_root)
+            onboard.stable_external_skill_source(
+                manifest, "diagnosing-bugs", stable_root
+            )
 
         outside_license = self.root / "LICENSE"
         outside_license.write_text("fixture", encoding="utf-8")
@@ -302,16 +330,16 @@ class ExternalSkillInstallTests(unittest.TestCase):
             "repositories": {
                 "fixture": {
                     "revision": "1" * 40,
-                    "licenseFiles": [
-                        {"source": "LICENSE", "stablePath": "../LICENSE"}
-                    ],
+                    "licenseFiles": [{"source": "LICENSE", "stablePath": "../LICENSE"}],
                 }
             }
         }
         with self.assertRaisesRegex(RuntimeError, "relative path|declared root"):
             onboard.validate_external_stable_metadata(metadata, stable_root)
 
-    def test_promotion_rejects_source_subpath_outside_the_cloned_repository(self) -> None:
+    def test_promotion_rejects_source_subpath_outside_the_cloned_repository(
+        self,
+    ) -> None:
         onboard = self.load_onboard_module()
         stable_root = self.root / "stable"
         shutil.copytree(onboard.EXTERNAL_STABLE_ROOT, stable_root)
@@ -323,7 +351,9 @@ class ExternalSkillInstallTests(unittest.TestCase):
             outside,
         )
         manifest["skills"]["web-ui-autotest-generator"]["sourceSubpath"] = str(outside)
-        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
         fake_repo = self.root / "promotion-repo"
         fake_repo.mkdir()
         shutil.copy2(
@@ -345,7 +375,9 @@ class ExternalSkillInstallTests(unittest.TestCase):
         with (
             mock.patch.object(onboard, "EXTERNAL_STABLE_ROOT", stable_root),
             mock.patch.object(onboard, "EXTERNAL_STABLE_MANIFEST", manifest_path),
-            mock.patch.object(onboard, "clone_repo_at_revision", side_effect=fake_clone),
+            mock.patch.object(
+                onboard, "clone_repo_at_revision", side_effect=fake_clone
+            ),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             status = onboard.promote_external_skills_stable(args)
@@ -356,10 +388,45 @@ class ExternalSkillInstallTests(unittest.TestCase):
             "2026-07-11.1",
         )
 
+    def test_bundled_migration_reports_legacy_deletion_failure(self) -> None:
+        onboard = self.load_onboard_module()
+        canonical = self.write_valid_skill(
+            self.skills_dir / "sbtd-workflow-onboard",
+            "sbtd-workflow-onboard",
+        )
+        legacy = self.write_valid_skill(
+            self.skills_dir / "kuno-workflow-onboard-skills",
+            "kuno-workflow-onboard-skills",
+        )
+        plan = {
+            "status": "required",
+            "migrations": [
+                {
+                    "canonicalName": "sbtd-workflow-onboard",
+                    "canonicalTarget": str(canonical),
+                    "legacyTargets": [str(legacy)],
+                }
+            ],
+        }
+
+        with mock.patch.object(
+            onboard,
+            "remove_existing_target",
+            side_effect=OSError("simulated deletion failure"),
+        ):
+            results = onboard.run_bundled_skill_migration(plan)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["status"], "failed")
+        self.assertEqual(results[0]["target"], str(legacy))
+        self.assertIn("simulated deletion failure", results[0]["error"])
+
     def test_invalid_canonical_skill_is_reinstalled_before_legacy_removal(self) -> None:
         onboard = self.load_onboard_module()
         self.write_valid_skill(self.skills_dir / "diagnose", "diagnose", "legacy")
-        self.write_valid_skill(self.skills_dir / "diagnosing-bugs", "wrong-name", "invalid canonical")
+        self.write_valid_skill(
+            self.skills_dir / "diagnosing-bugs", "wrong-name", "invalid canonical"
+        )
         args = argparse.Namespace(global_skills_dir=str(self.skills_dir))
 
         missing = onboard.missing_required_external_skills(args)
@@ -383,7 +450,9 @@ class ExternalSkillInstallTests(unittest.TestCase):
             return True, ""
 
         with (
-            mock.patch.object(onboard, "EXTERNAL_STABLE_MANIFEST", self.root / "missing.json"),
+            mock.patch.object(
+                onboard, "EXTERNAL_STABLE_MANIFEST", self.root / "missing.json"
+            ),
             mock.patch.object(onboard, "clone_repo", side_effect=fake_clone),
             mock.patch.object(onboard, "cloned_repo_revision", return_value="1" * 40),
         ):

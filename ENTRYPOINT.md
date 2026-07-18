@@ -6,7 +6,7 @@
 > `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成、选择器审计和覆盖率报告的可选专项分支。
 > `shadcn Skill` 作为 shadcn/ui 项目组件、registry、preset 和 CLI 工作流的可选辅助，必须先确认项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务明确涉及 shadcn registry / preset / CLI。
 > `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
-> 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `kuno-workflow-onboard-skills/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
+> 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `sbtd-workflow-onboard/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
 
 ## 0. 版本监控配置
 
@@ -28,16 +28,20 @@
 
 ## 0.1 本仓库模板源路径
 
-当前源路径以 `kuno-workflow-onboard-skills/` 为唯一承载目录：
+模板和 bundled Skill 的当前源路径以 `sbtd-workflow-onboard/` 为唯一承载目录；定时任务 prompt 单独版本化在 `prompts/automations/`：
 
 | 内容 | 当前源路径 | 用途 |
 |---|---|---|
-| Codex 全局规则模板 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.global.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.codex/AGENTS.md`，也可由 onboard Skill 安装 |
-| 项目级规则模板 | `kuno-workflow-onboard-skills/templates/agents/AGENTS.project.md` | 由具体项目手动落地，或通过 onboard Skill 在确认项目根目录后安装 |
-| 全局 Skill 模板 | `kuno-workflow-onboard-skills/templates/skills/*/SKILL.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.agent/skills/<skill>/SKILL.md`，目标路径保持不变 |
-| Onboard Skill | `kuno-workflow-onboard-skills/` | 初始化或重置本地 Codex 全局 AGENTS、项目 AGENTS 和 Kuno workflow skills |
+| Codex 全局规则模板 | `sbtd-workflow-onboard/templates/agents/AGENTS.global.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.codex/AGENTS.md`，也可由 onboard Skill 安装 |
+| 项目级规则模板 | `sbtd-workflow-onboard/templates/agents/AGENTS.project.md` | 由具体项目手动落地，或通过 onboard Skill 在确认项目根目录后安装 |
+| 全局 Skill 模板 | `sbtd-workflow-onboard/templates/skills/*/SKILL.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.agent/skills/<skill>/SKILL.md`，目标路径保持不变 |
+| Onboard Skill | `sbtd-workflow-onboard/` | 初始化或重置本地 Codex 全局 AGENTS、项目 AGENTS 和 SBTD workflow skills |
+| Onboard 机器目录 | `sbtd-workflow-onboard/catalog.json`、`catalog.schema.json` | 统一描述 bundled Skill、external Skill 上游源与模板源路径，并提供 Draft 2020-12 校验契约 |
+| Orca 版本检查 prompt | `prompts/automations/sbtd-workflow-tools-version-check.md` | 同步更新 `SBTD Workflow Tools Version Check` live automation，并作为后续审计和恢复来源 |
 
-每日版本检查自动化评估规则影响时，应扫描根 `AGENTS.md` 和 `kuno-workflow-onboard-skills/` 下的 Skill 入口、参考文档、安装脚本与 bundled templates；不要再扫描已删除的旧 `agents/` 或 `skills/` 顶层目录。
+公开仓库也可通过官方 `npx skills add` 只 bootstrap 自包含的 `sbtd-workflow-onboard` 到用户级全局目录；这不是完整 onboarding，不自动执行 `scripts/onboard.py`、安装其余 Skills / Trellis / GitNexus、写入 AGENTS 或初始化项目。安装后由 Agent 调用该 Skill，再执行 `plan` / `init` / `reset`。全局 Skill 目录按显式参数、`$AGENT_SKILLS_DIR`、已安装 Onboard Skill 的受信父目录、平台默认值依次解析，JSON 结果暴露 `globalSkillsDirSource`。
+
+定时版本检查自动化评估规则影响时，应扫描根 `AGENTS.md`、版本化 automation prompt 和 `sbtd-workflow-onboard/` 下的 Skill 入口、参考文档、安装脚本与 bundled templates；不要再扫描已删除的旧 `agents/` 或 `skills/` 顶层目录。
 
 ---
 

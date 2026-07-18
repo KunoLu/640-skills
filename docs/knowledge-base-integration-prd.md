@@ -696,10 +696,10 @@ evidence/<product>/<source>/<repository>/<commit-or-revision-set>/<run-id>/
 后续可实现 CLI：
 
 ```text
-kuno evidence collect
-kuno evidence validate
-kuno evidence publish --target pull-request --pr <number>
-kuno evidence publish --target knowledge-base
+sbtd evidence collect
+sbtd evidence validate
+sbtd evidence publish --target pull-request --pr <number>
+sbtd evidence publish --target knowledge-base
 ```
 
 P2 才实现这些命令；P0 没有提供命令。
