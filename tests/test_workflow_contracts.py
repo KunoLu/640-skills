@@ -4,6 +4,7 @@ import hashlib
 import copy
 import json
 import unittest
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -325,6 +326,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("catalog.schema.json", prompt)
         self.assertIn("`__pycache__/`", prompt)
         self.assertIn("不要修改 `ENTRYPOINT.md`", prompt)
+        self.assertIn("内容严格为四行", prompt)
         self.assertIn(
             "- `prompts/automations/sbtd-workflow-tools-version-check.md`",
             prompt,
@@ -334,8 +336,6 @@ class WorkflowContractTests(unittest.TestCase):
             prompt,
         )
         for document_path in (
-            ROOT / "AGENTS.md",
-            ROOT / "ENTRYPOINT.md",
             ROOT / "README.md",
             ROOT / "README.html",
         ):
@@ -344,6 +344,79 @@ class WorkflowContractTests(unittest.TestCase):
                     "prompts/automations/sbtd-workflow-tools-version-check.md",
                     document_path.read_text(encoding="utf-8"),
                 )
+
+    def test_tracked_controls_and_onboard_usage_are_documented(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        prompt = (
+            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertLess(
+            readme.index("## 安装及使用说明"),
+            readme.index("## 仓库定位"),
+        )
+        bootstrap_command = (
+            "npx --yes skills@latest add \\\n"
+            "  https://github.com/KunoLu/640-skills \\\n"
+            "  --skill sbtd-workflow-onboard \\\n"
+            "  --global \\\n"
+            "  --agent codex \\\n"
+            "  --yes \\\n"
+            "  --copy"
+        )
+        plan_command = (
+            'python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \\\n'
+            "  --projects-root /abs/project-one,/abs/project-two \\\n"
+            "  --json"
+        )
+        for document in (readme, readme_html):
+            self.assertIn(bootstrap_command, document)
+            self.assertIn(plan_command, document)
+            self.assertIn("sbtd-workflow-onboard Skill", document)
+            self.assertIn("AGENTS.md", document)
+            self.assertIn("ENTRYPOINT.md", document)
+            self.assertIn("SBTD Workflow Tools Version Check", document)
+            self.assertIn("英语逗号", document)
+            self.assertIn("--init-projects", document)
+            self.assertIn("install.sh", document)
+            self.assertIn("install.ps1", document)
+
+        self.assertIn("非交互执行必须二选一", readme)
+        self.assertIn(
+            "project-only 模式只记录平台上下文，不执行任何全局检测或安装",
+            readme_html,
+        )
+        self.assertIn("只有用户明确执行 `sync` / `同步` 时", prompt)
+        self.assertIn("`update` / `更新` 与二者无关", prompt)
+        self.assertIn("版本检查自动化不直接读取或写入 Orca live automation", prompt)
+        self.assertNotIn("git check-ignore", prompt)
+        self.assertNotIn("修改后必须同步更新同名 live automation", prompt)
+
+        control_paths = (ROOT / "AGENTS.md", ROOT / "ENTRYPOINT.md")
+        for control_path in control_paths:
+            self.assertTrue(control_path.is_file())
+        tracked = subprocess.run(
+            ["git", "ls-files", "--", "AGENTS.md", "ENTRYPOINT.md"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        self.assertEqual(set(tracked), {"AGENTS.md", "ENTRYPOINT.md"})
+
+        agents = control_paths[0].read_text(encoding="utf-8")
+        entrypoint = control_paths[1].read_text(encoding="utf-8")
+        self.assertIn("必须由 Git 追踪", agents)
+        self.assertNotIn("本地控制文件 Gate", agents)
+        self.assertIn("README 与自动化 Prompt 同步规则", agents)
+        self.assertIn("SBTD Workflow Tools Version Check", agents)
+        self.assertIn("普通代码或文档修改只维护仓库内的版本化 prompt", agents)
+        self.assertIn("只有用户明确执行 `sync` / `同步` 时", agents)
+        self.assertIn("`update` / `更新` 不检查、不修改也不同步", agents)
+        self.assertNotIn("即使本轮 prompt 内容没有变化", agents)
+        self.assertNotIn("每次修改版本化 automation prompt 后", agents)
+        self.assertIn("## 0. 版本监控配置", entrypoint)
 
     def test_readme_knowledge_cli_example_is_shell_executable(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -411,9 +484,9 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_p1_1_documentation_keeps_sync_and_read_separate(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        design = (ROOT / "docs" / "knowledge-base-integration-prd.md").read_text(
-            encoding="utf-8"
-        )
+        design = (
+            ROOT / "docs" / "prd" / "knowledge-base-integration-prd.md"
+        ).read_text(encoding="utf-8")
         for document in (readme, design):
             self.assertIn("sync / 同步", document)
             self.assertIn("read / 读取", document)
@@ -515,6 +588,17 @@ class WorkflowContractTests(unittest.TestCase):
             validation_lesson,
         )
         self.assertIn("状态更新（2026-07-16）", validation_lesson)
+        self.assertIn("状态更新（2026-07-18）", repository_lesson)
+        self.assertIn("状态更新（2026-07-18）", validation_lesson)
+        self.assertIn("恢复为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行", repository_lesson)
+        self.assertIn(
+            "LESSON-20260718-required-controls-tracked-source",
+            repository_lesson,
+        )
+        self.assertIn(
+            "LESSON-20260718-automation-sync-trigger-separation",
+            repository_lesson,
+        )
 
 
 if __name__ == "__main__":
