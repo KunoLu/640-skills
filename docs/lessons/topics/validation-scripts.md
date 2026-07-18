@@ -14,6 +14,8 @@
 - 根因：验证脚本假设 `skills/` 下只有 Skill 目录，没有使用 `Dirent.isDirectory()` 或等价方式过滤文件。
 - 修复：重新运行验证时只枚举目录，并保留 `.gitignore` 三行校验，确认 `.DS_Store` 仍被忽略。
 - 预防：后续所有针对 `skills/**/SKILL.md` 的自动化检查都应先过滤目录或直接使用 `rg --files skills -g SKILL.md`，不要手写无类型的路径拼接。
+- 状态更新（2026-07-16）：Python 验证会生成仓库根或 `tests/` 下的 `__pycache__/`，当前 canonical 契约已调整为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；新验证必须使用当前契约，不得改写上方历史修复字段。
+- 状态更新（2026-07-18）：fresh-clone 审核确认根 `AGENTS.md` 和 `ENTRYPOINT.md` 必须保持可恢复且由 Git 追踪，当前 `.gitignore` canonical 契约恢复为上述四行；验证除断言精确四行外，还必须直接检查两个控制文件存在于 Git 索引。
 
 ## LESSON-20260701-markdown-section-parse-headings: Markdown Section Parse Headings
 
@@ -242,3 +244,39 @@
 - 根因：文档为了压缩子命令列表，把说明性元语法混入了看起来可以直接执行的命令片段，没有区分“语法枚举”和“可复制示例”。
 - 修复：Markdown 和 HTML 同步改成一条包含必需参数、已经实际执行通过的 `validate-config` 完整示例；其余子命令只在普通正文中列出，并补充回归测试禁止恢复管道形式。
 - 预防：代码围栏或 inline code 一旦呈现完整命令，就必须按目标 Shell 的真实语义可执行；互斥子命令使用普通列表、独立完整命令或明确的非 Shell 语法说明，不使用 `|`、`&&`、`;` 等 Shell 元字符充当自然语言分隔符。
+
+## LESSON-20260716-macos-resolved-temp-path: Resolve Expected Paths Before Comparing CLI JSON
+
+- 日期：2026-07-16
+- 标签：validation, python, macos, paths, tempfile
+- 适用场景：测试 CLI 输出的 canonical / resolved 绝对路径，尤其是 `TemporaryDirectory`、`/var` 和 `/private/var`
+- 严重级别：medium
+- 来源：SBTD Onboard bundled rename migration 的 plan JSON 回归测试。
+- 问题：测试把 CLI 输出的 `/private/var/...` 与未解析的 `TemporaryDirectory` 路径 `/var/...` 直接比较，在 macOS 上失败；两者实际指向同一目录。
+- 根因：生产代码对目标路径调用了 `resolve()`，测试期望值只做字符串拼接，忽略 macOS `/var` 到 `/private/var` 的 symlink canonicalization。
+- 修复：所有与 resolved CLI JSON 字段比较的期望路径同样调用 `Path.resolve()`；legacy target 列表也逐项使用 canonical path。
+- 预防：路径契约测试先确认接口返回 logical path 还是 canonical path；canonical 接口的 actual / expected 必须使用相同解析策略，不用原始字符串掩盖或制造平台差异。
+
+## LESSON-20260716-mutating-subcommand-help: Mutating Subcommand Help Must Be Proven Non-Executing
+
+- 日期：2026-07-16
+- 标签：cli, validation, npm, skills, side-effects
+- 适用场景：探查第三方 CLI 的安装、删除、迁移或其他可写子命令参数
+- 严重级别：medium
+- 来源：评估 `npx skills add` 时误以为 `add . --help` 只会显示帮助。
+- 问题：`npx skills add . --help` 没有进入帮助模式，而是执行了项目级安装，创建 `.agents/skills/sbtd-workflow-onboard` 和 `skills-lock.json`；虽已立即删除并确认无残留，但污染了评估工作树。
+- 根因：把常见 CLI 的 `--help` 语义套用到未验证的第三方子命令，没有先确认 parser 是否在解析 source 后仍识别帮助标志。
+- 修复：删除本轮生成的 `.agents/` 与 `skills-lock.json`，使用官方 README / Context7 核对参数，并将真实安装验证放入隔离的临时 `HOME`。
+- 预防：第三方可写子命令的参数探查优先读官方文档；如必须执行，先用无副作用的 `--list` / dry-run，或同时隔离 `cwd`、`HOME` 和配置目录。不要假设 `<mutating-command> ... --help` 不会执行其主动作。
+
+## LESSON-20260716-capture-before-teardown: Capture Validation Evidence Before Teardown
+
+- 日期：2026-07-16
+- 标签：validation, cleanup, tempfile, npm, skills
+- 适用场景：在隔离 `HOME`、临时目录或测试 fixture 中安装、生成并随后删除验证对象
+- 严重级别：medium
+- 来源：验证 `npx skills add` 全局安装、`npx skills list`、Onboard plan 和 remove 闭环。
+- 问题：首轮验证在执行 remove 后才读取 `SKILL.md`、catalog 和脚本存在性，导致安装其实成功但证据字段全部为 false；plan 已成功只能间接证明安装内容曾存在。
+- 根因：验证脚本把安装态断言延迟到最终结果对象构造时求值，清理动作已经改变了被观察状态。
+- 修复：在 remove / cleanup 前立即快照所有安装态事实，再执行 list、运行时 smoke 和 remove，最后单独断言清理态。
+- 预防：有 teardown 的端到端验证必须按 `setup → capture installed state → exercise → capture runtime state → teardown → capture removed state` 排序；不要用 teardown 后的文件系统代替安装态证据。

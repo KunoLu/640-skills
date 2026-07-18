@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = (
     ROOT
-    / "kuno-workflow-onboard-skills"
+    / "sbtd-workflow-onboard"
     / "templates"
     / "skills"
     / "knowledge-base-integration"

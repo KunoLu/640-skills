@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import unittest
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -11,10 +13,194 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS = ROOT / "kuno-workflow-onboard-skills" / "templates" / "skills"
+SKILLS = ROOT / "sbtd-workflow-onboard" / "templates" / "skills"
 
 
 class WorkflowContractTests(unittest.TestCase):
+    def test_repository_gitignore_keeps_canonical_generated_paths(self) -> None:
+        entries = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(
+            entries,
+            [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/"],
+        )
+
+    def test_onboard_skill_is_discoverable_and_documents_npx_install(self) -> None:
+        skill_path = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
+        skill = skill_path.read_text(encoding="utf-8")
+
+        self.assertTrue(skill_path.is_file())
+        self.assertIn("name: sbtd-workflow-onboard", skill)
+        self.assertIn("npx skills add", skill)
+        self.assertIn("--skill sbtd-workflow-onboard", skill)
+        self.assertIn("--global", skill)
+
+    def test_onboard_catalog_is_schema_valid_and_sources_exist(self) -> None:
+        schema = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        example = json.loads(
+            (
+                ROOT / "sbtd-workflow-onboard" / "examples" / "catalog.minimal.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        jsonschema.Draft202012Validator.check_schema(schema)
+        jsonschema.Draft202012Validator(schema).validate(catalog)
+        jsonschema.Draft202012Validator(schema).validate(example)
+        ids = [entry["id"] for entry in catalog["entries"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(
+            [
+                entry["id"]
+                for entry in catalog["entries"]
+                if entry["kind"] == "bundled-skill"
+            ],
+            [
+                "skill:sbtd-workflow-onboard",
+                "skill:trellis-workflow",
+                "skill:trellis-channel",
+                "skill:project-validation",
+                "skill:gherkin-bdd",
+                "skill:knowledge-base-integration",
+                "skill:maestro-mobile-e2e",
+                "skill:lessons-record",
+                "skill:book-refactoring-pass",
+                "skill:book-legacy-change-safety",
+                "skill:book-ddd-distilled-modeling",
+                "skill:book-ddia-data-design",
+                "skill:book-release-readiness",
+                "skill:seo-geo",
+            ],
+        )
+        self.assertEqual(
+            [
+                entry["id"]
+                for entry in catalog["entries"]
+                if entry["kind"] == "external-skill"
+            ],
+            [
+                "skill:diagnosing-bugs",
+                "skill:tdd",
+                "skill:grill-me",
+                "skill:grill-with-docs",
+                "skill:grilling",
+                "skill:domain-modeling",
+                "skill:codebase-design",
+                "skill:handoff",
+                "skill:writing-great-skills",
+                "skill:to-spec",
+                "skill:to-tickets",
+                "skill:ui-ux-pro-max",
+                "skill:impeccable",
+                "skill:web-ui-autotest-generator",
+                "skill:shadcn",
+            ],
+        )
+        onboard_root = ROOT / "sbtd-workflow-onboard"
+        for entry in catalog["entries"]:
+            with self.subTest(entry=entry["id"]):
+                if entry["kind"] == "external-skill":
+                    self.assertTrue(entry["source"]["repo"].startswith("https://"))
+                    self.assertTrue(entry["source"]["subpath"])
+                    self.assertIn(
+                        entry["id"].removeprefix("skill:"),
+                        entry["source"]["aliases"],
+                    )
+                    continue
+                source = (onboard_root / entry["source"]).resolve()
+                self.assertTrue(source.is_relative_to(onboard_root.resolve()))
+                self.assertTrue(source.exists())
+
+    def test_catalog_schema_rejects_escaping_source_paths(self) -> None:
+        schema = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        validator = jsonschema.Draft202012Validator(schema)
+        cases = (
+            ("skill:trellis-workflow", "source", "../outside"),
+            ("skill:trellis-workflow", "source", "/tmp/outside"),
+            ("skill:diagnosing-bugs", "subpath", "../outside"),
+            ("skill:diagnosing-bugs", "subpath", "/tmp/outside"),
+        )
+
+        for entry_id, field, value in cases:
+            with self.subTest(entry_id=entry_id, field=field, value=value):
+                invalid = copy.deepcopy(catalog)
+                entry = next(
+                    item for item in invalid["entries"] if item["id"] == entry_id
+                )
+                if field == "subpath":
+                    entry["source"][field] = value
+                else:
+                    entry[field] = value
+                with self.assertRaises(jsonschema.ValidationError):
+                    validator.validate(invalid)
+
+    def test_catalog_schema_rejects_kind_identity_and_role_mismatches(self) -> None:
+        schema = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        validator = jsonschema.Draft202012Validator(schema)
+        cases = (
+            ("skill:trellis-workflow", "id", "agent:trellis-workflow"),
+            ("skill:trellis-workflow", "targetRole", "project-agents"),
+            ("agent:codex-global", "id", "skill:codex-global"),
+            ("agent:codex-global", "targetRole", "skill"),
+        )
+
+        for entry_id, field, value in cases:
+            with self.subTest(entry_id=entry_id, field=field, value=value):
+                invalid = copy.deepcopy(catalog)
+                entry = next(
+                    item for item in invalid["entries"] if item["id"] == entry_id
+                )
+                entry[field] = value
+                with self.assertRaises(jsonschema.ValidationError):
+                    validator.validate(invalid)
+
+    def test_catalog_schema_rejects_malformed_https_repository_url(self) -> None:
+        schema = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        validator = jsonschema.Draft202012Validator(schema)
+        invalid = copy.deepcopy(catalog)
+        external = next(
+            item for item in invalid["entries"] if item["kind"] == "external-skill"
+        )
+        external["source"]["repo"] = "https://"
+
+        with self.assertRaises(jsonschema.ValidationError):
+            validator.validate(invalid)
+
     def test_knowledge_integration_schemas_are_valid_draft_2020_12(self) -> None:
         schema_paths = list(
             (SKILLS / "knowledge-base-integration" / "references").glob("*.schema.json")
@@ -36,7 +222,7 @@ class WorkflowContractTests(unittest.TestCase):
         gherkin = (SKILLS / "gherkin-bdd" / "SKILL.md").read_text(encoding="utf-8")
         project_agents = (
             ROOT
-            / "kuno-workflow-onboard-skills"
+            / "sbtd-workflow-onboard"
             / "templates"
             / "agents"
             / "AGENTS.project.md"
@@ -119,7 +305,7 @@ class WorkflowContractTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
         repository_script = (
-            "kuno-workflow-onboard-skills/templates/skills/"
+            "sbtd-workflow-onboard/templates/skills/"
             "knowledge-base-integration/scripts/knowledge_base_p1.py"
         )
         self.assertIn(repository_script, readme)
@@ -129,6 +315,109 @@ class WorkflowContractTests(unittest.TestCase):
         parser.feed(readme_html)
         parser.close()
 
+    def test_version_check_prompt_is_versioned_and_documented(self) -> None:
+        prompt_path = (
+            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
+        )
+        prompt = prompt_path.read_text(encoding="utf-8")
+
+        self.assertIn("SBTD Workflow Tools Version Check", prompt)
+        self.assertIn("sbtd-workflow-onboard/catalog.json", prompt)
+        self.assertIn("catalog.schema.json", prompt)
+        self.assertIn("`__pycache__/`", prompt)
+        self.assertIn("不要修改 `ENTRYPOINT.md`", prompt)
+        self.assertIn("内容严格为四行", prompt)
+        self.assertIn(
+            "- `prompts/automations/sbtd-workflow-tools-version-check.md`",
+            prompt,
+        )
+        self.assertIn(
+            "`## <工具名> <起始版本> -> <目标版本>`",
+            prompt,
+        )
+        for document_path in (
+            ROOT / "README.md",
+            ROOT / "README.html",
+        ):
+            with self.subTest(document=document_path.name):
+                self.assertIn(
+                    "prompts/automations/sbtd-workflow-tools-version-check.md",
+                    document_path.read_text(encoding="utf-8"),
+                )
+
+    def test_tracked_controls_and_onboard_usage_are_documented(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        prompt = (
+            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertLess(
+            readme.index("## 安装及使用说明"),
+            readme.index("## 仓库定位"),
+        )
+        bootstrap_command = (
+            "npx --yes skills@latest add \\\n"
+            "  https://github.com/KunoLu/640-skills \\\n"
+            "  --skill sbtd-workflow-onboard \\\n"
+            "  --global \\\n"
+            "  --agent codex \\\n"
+            "  --yes \\\n"
+            "  --copy"
+        )
+        plan_command = (
+            'python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \\\n'
+            "  --projects-root /abs/project-one,/abs/project-two \\\n"
+            "  --json"
+        )
+        for document in (readme, readme_html):
+            self.assertIn(bootstrap_command, document)
+            self.assertIn(plan_command, document)
+            self.assertIn("sbtd-workflow-onboard Skill", document)
+            self.assertIn("AGENTS.md", document)
+            self.assertIn("ENTRYPOINT.md", document)
+            self.assertIn("SBTD Workflow Tools Version Check", document)
+            self.assertIn("英语逗号", document)
+            self.assertIn("--init-projects", document)
+            self.assertIn("install.sh", document)
+            self.assertIn("install.ps1", document)
+
+        self.assertIn("非交互执行必须二选一", readme)
+        self.assertIn(
+            "project-only 模式只记录平台上下文，不执行任何全局检测或安装",
+            readme_html,
+        )
+        self.assertIn("只有用户明确执行 `sync` / `同步` 时", prompt)
+        self.assertIn("`update` / `更新` 与二者无关", prompt)
+        self.assertIn("版本检查自动化不直接读取或写入 Orca live automation", prompt)
+        self.assertNotIn("git check-ignore", prompt)
+        self.assertNotIn("修改后必须同步更新同名 live automation", prompt)
+
+        control_paths = (ROOT / "AGENTS.md", ROOT / "ENTRYPOINT.md")
+        for control_path in control_paths:
+            self.assertTrue(control_path.is_file())
+        tracked = subprocess.run(
+            ["git", "ls-files", "--", "AGENTS.md", "ENTRYPOINT.md"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+        self.assertEqual(set(tracked), {"AGENTS.md", "ENTRYPOINT.md"})
+
+        agents = control_paths[0].read_text(encoding="utf-8")
+        entrypoint = control_paths[1].read_text(encoding="utf-8")
+        self.assertIn("必须由 Git 追踪", agents)
+        self.assertNotIn("本地控制文件 Gate", agents)
+        self.assertIn("README 与自动化 Prompt 同步规则", agents)
+        self.assertIn("SBTD Workflow Tools Version Check", agents)
+        self.assertIn("普通代码或文档修改只维护仓库内的版本化 prompt", agents)
+        self.assertIn("只有用户明确执行 `sync` / `同步` 时", agents)
+        self.assertIn("`update` / `更新` 不检查、不修改也不同步", agents)
+        self.assertNotIn("即使本轮 prompt 内容没有变化", agents)
+        self.assertNotIn("每次修改版本化 automation prompt 后", agents)
+        self.assertIn("## 0. 版本监控配置", entrypoint)
+
     def test_readme_knowledge_cli_example_is_shell_executable(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
@@ -136,7 +425,7 @@ class WorkflowContractTests(unittest.TestCase):
             ("validate-config", "decision", "ingest", "smoke")
         )
         executable_prefix = (
-            "python kuno-workflow-onboard-skills/templates/skills/"
+            "python sbtd-workflow-onboard/templates/skills/"
             "knowledge-base-integration/scripts/knowledge_base_p1.py "
             "validate-config"
         )
@@ -195,9 +484,9 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_p1_1_documentation_keeps_sync_and_read_separate(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        design = (ROOT / "docs" / "knowledge-base-integration-prd.md").read_text(
-            encoding="utf-8"
-        )
+        design = (
+            ROOT / "docs" / "prd" / "knowledge-base-integration-prd.md"
+        ).read_text(encoding="utf-8")
         for document in (readme, design):
             self.assertIn("sync / 同步", document)
             self.assertIn("read / 读取", document)
@@ -205,20 +494,14 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("Runner Adapter", design)
 
     def test_caveman_auto_lite_is_task_scoped_and_protected(self) -> None:
-        agents_root = (
-            ROOT / "kuno-workflow-onboard-skills" / "templates" / "agents"
-        )
-        global_agents = (agents_root / "AGENTS.global.md").read_text(
-            encoding="utf-8"
-        )
-        project_agents = (agents_root / "AGENTS.project.md").read_text(
-            encoding="utf-8"
-        )
+        agents_root = ROOT / "sbtd-workflow-onboard" / "templates" / "agents"
+        global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
+        project_agents = (agents_root / "AGENTS.project.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        reference = (
-            ROOT / "kuno-workflow-onboard-skills" / "REFERENCE.md"
-        ).read_text(encoding="utf-8")
+        reference = (ROOT / "sbtd-workflow-onboard" / "REFERENCE.md").read_text(
+            encoding="utf-8"
+        )
 
         eligibility_clause = (
             "只有 `caveman` Skill 当前可见、用户没有明确退出、已知配置不是 "
@@ -278,6 +561,44 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("session-level automatic opt-out takes precedence", reference)
         self.assertNotIn("达到全局阈值时只建议用户后续切换", readme)
         self.assertNotIn("达到全局阈值时只建议用户后续切换", readme_html)
+
+    def test_gitignore_lessons_preserve_history_and_add_dated_status(self) -> None:
+        repository_lesson = (
+            ROOT / "docs" / "lessons" / "topics" / "repository-workflow.md"
+        ).read_text(encoding="utf-8")
+        validation_lesson = (
+            ROOT / "docs" / "lessons" / "topics" / "validation-scripts.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "违反本仓库 `.gitignore` 必须严格三行的规则",
+            repository_lesson,
+        )
+        self.assertIn(
+            "删除 `.pi/` 并保留 `.DS_Store`、`.gitnexus/`、`.trellis/` 三行",
+            repository_lesson,
+        )
+        self.assertIn(
+            "都要运行 `.gitignore` 精确三行检查",
+            repository_lesson,
+        )
+        self.assertIn("状态更新（2026-07-16）", repository_lesson)
+        self.assertIn(
+            "并保留 `.gitignore` 三行校验，确认 `.DS_Store` 仍被忽略",
+            validation_lesson,
+        )
+        self.assertIn("状态更新（2026-07-16）", validation_lesson)
+        self.assertIn("状态更新（2026-07-18）", repository_lesson)
+        self.assertIn("状态更新（2026-07-18）", validation_lesson)
+        self.assertIn("恢复为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行", repository_lesson)
+        self.assertIn(
+            "LESSON-20260718-required-controls-tracked-source",
+            repository_lesson,
+        )
+        self.assertIn(
+            "LESSON-20260718-automation-sync-trigger-separation",
+            repository_lesson,
+        )
 
 
 if __name__ == "__main__":

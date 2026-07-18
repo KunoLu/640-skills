@@ -13,12 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL_SH = ROOT / "install.sh"
 INSTALL_PS1 = ROOT / "install.ps1"
-SOURCE_ROOT = ROOT / "kuno-workflow-onboard-skills"
+SOURCE_ROOT = ROOT / "sbtd-workflow-onboard"
 
 
 class BashInstallerAgentCliFlowTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="kuno-install-sh-test-")
+        self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-install-sh-test-")
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
         self.bin_dir = self.root / "bin"
@@ -265,7 +265,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertIn('local target="$HOME/.omp/agent/mcp.json"', source)
         self.assertNotIn("$PROJECT_ROOT/.omp/mcp.json", source)
 
-    def test_root_installers_delegate_external_source_selection_to_onboard(self) -> None:
+    def test_root_installers_delegate_external_source_selection_to_onboard(
+        self,
+    ) -> None:
         bash_source = INSTALL_SH.read_text(encoding="utf-8")
         powershell_source = INSTALL_PS1.read_text(encoding="utf-8")
 

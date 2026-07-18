@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,12 +12,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ONBOARD = ROOT / "kuno-workflow-onboard-skills" / "scripts" / "onboard.py"
+ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
 
 
 class MultiProjectOnboardCommandTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory(prefix="kuno-multi-project-test-")
+        self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-multi-project-test-")
         self.addCleanup(self.temp_dir.cleanup)
         self.root = Path(self.temp_dir.name)
         self.home = self.root / "home"
@@ -51,6 +52,175 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             env=self.env,
             timeout=30,
         )
+
+    def copy_onboard(self, name: str = "onboard-copy") -> Path:
+        target = self.root / name
+        shutil.copytree(ROOT / "sbtd-workflow-onboard", target)
+        return target / "scripts" / "onboard.py"
+
+    def run_onboard_script(
+        self, script: Path, *args: str
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            (sys.executable, str(script), *args),
+            check=False,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            timeout=30,
+        )
+
+    def rewrite_catalog_entry(
+        self, script: Path, entry_id: str, field: str, value: object
+    ) -> None:
+        catalog_path = script.parents[1] / "catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        entry = next(item for item in catalog["entries"] if item["id"] == entry_id)
+        if field == "repo":
+            entry["source"]["repo"] = value
+        else:
+            entry[field] = value
+        catalog_path.write_text(
+            json.dumps(catalog, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+    def test_plan_uses_installed_skill_parent_as_global_skills_dir(self) -> None:
+        global_skills = self.home / ".agents" / "skills"
+        skill_root = global_skills / "sbtd-workflow-onboard"
+        shutil.copytree(ROOT / "sbtd-workflow-onboard", skill_root)
+        script = skill_root / "scripts" / "onboard.py"
+        self.env.pop("AGENT_SKILLS_DIR", None)
+
+        completed = self.run_onboard_script(script, "plan", "--json")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["globalSkillsDir"], str(global_skills.resolve()))
+        self.assertEqual(
+            payload["globalSkillsDirSource"],
+            "installed-skill-parent",
+        )
+
+    def test_plan_prefers_explicit_global_skills_dir(self) -> None:
+        explicit = self.root / "explicit-global-skills"
+        self.env["AGENT_SKILLS_DIR"] = str(self.root / "environment-global-skills")
+
+        completed = self.run_onboard(
+            "plan",
+            "--global-skills-dir",
+            str(explicit),
+            "--json",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["globalSkillsDir"], str(explicit.resolve()))
+        self.assertEqual(payload["globalSkillsDirSource"], "argument")
+
+    def test_plan_prefers_environment_global_skills_dir(self) -> None:
+        environment = self.root / "environment-global-skills"
+        self.env["AGENT_SKILLS_DIR"] = str(environment)
+
+        completed = self.run_onboard("plan", "--json")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["globalSkillsDir"], str(environment.resolve()))
+        self.assertEqual(payload["globalSkillsDirSource"], "environment")
+
+    def test_plan_uses_platform_default_outside_installed_skill_root(self) -> None:
+        self.env.pop("AGENT_SKILLS_DIR", None)
+
+        completed = self.run_onboard("plan", "--json")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(
+            payload["globalSkillsDir"],
+            str((self.codex_home / "skills").resolve()),
+        )
+        self.assertEqual(payload["globalSkillsDirSource"], "platform-default")
+
+    def test_plan_rejects_regular_file_as_bundled_skill_source(self) -> None:
+        script = self.copy_onboard()
+        self.rewrite_catalog_entry(
+            script,
+            "skill:trellis-workflow",
+            "source",
+            "templates/project/.gitignore",
+        )
+
+        completed = self.run_onboard_script(script, "plan", "--json")
+
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("bundled-skill source must be a directory", completed.stderr)
+
+    def test_plan_rejects_bundled_skill_frontmatter_name_mismatch(self) -> None:
+        script = self.copy_onboard()
+        self.rewrite_catalog_entry(
+            script,
+            "skill:trellis-workflow",
+            "source",
+            "templates/skills/trellis-channel",
+        )
+
+        completed = self.run_onboard_script(script, "plan", "--json")
+
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("frontmatter name", completed.stderr)
+
+    def test_plan_rejects_absolute_local_catalog_source(self) -> None:
+        script = self.copy_onboard()
+        absolute_source = (
+            script.parents[1] / "templates" / "skills" / "trellis-workflow"
+        ).resolve()
+        self.rewrite_catalog_entry(
+            script,
+            "skill:trellis-workflow",
+            "source",
+            str(absolute_source),
+        )
+
+        completed = self.run_onboard_script(script, "plan", "--json")
+
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("relative path", completed.stderr)
+
+    def test_plan_rejects_malformed_external_repository_url(self) -> None:
+        script = self.copy_onboard()
+        self.rewrite_catalog_entry(
+            script,
+            "skill:diagnosing-bugs",
+            "repo",
+            "https://",
+        )
+
+        completed = self.run_onboard_script(script, "plan", "--json")
+
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("valid HTTPS repository URL", completed.stderr)
+
+    def test_plan_rejects_kind_identity_and_target_role_mismatches(self) -> None:
+        cases = (
+            ("kind-id-mismatch", "id", "agent:trellis-workflow", "does not match kind"),
+            ("role-mismatch", "targetRole", "project-agents", "target role"),
+        )
+
+        for name, field, value, message in cases:
+            with self.subTest(field=field, value=value):
+                script = self.copy_onboard(name)
+                self.rewrite_catalog_entry(
+                    script,
+                    "skill:trellis-workflow",
+                    field,
+                    value,
+                )
+
+                completed = self.run_onboard_script(script, "plan", "--json")
+
+                self.assertNotEqual(completed.returncode, 0, completed.stdout)
+                self.assertIn(message, completed.stderr)
 
     def test_check_projects_reports_each_root_without_global_install_checks(
         self,
@@ -122,6 +292,40 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             str(self.project_two.resolve() / ".agent" / "skills" / "trellis-workflow"),
             targets,
         )
+        self.assertEqual(payload["bundledMigration"]["status"], "not-needed")
+        self.assertEqual(
+            payload["bundledMigration"]["migrations"][0]["canonicalName"],
+            "sbtd-workflow-onboard",
+        )
+
+    def test_plan_reports_legacy_onboard_target_without_mutating_it(self) -> None:
+        global_skills = self.root / "global-skills"
+        legacy_onboard = global_skills / "kuno-workflow-onboard-skills"
+        legacy_onboard.mkdir(parents=True)
+        (legacy_onboard / "SKILL.md").write_text(
+            "---\nname: kuno-workflow-onboard-skills\n---\n",
+            encoding="utf-8",
+        )
+
+        completed = self.run_onboard(
+            "plan",
+            "--global-skills-dir",
+            str(global_skills),
+            "--json",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        migration = json.loads(completed.stdout)["bundledMigration"]
+        self.assertEqual(migration["status"], "required")
+        self.assertEqual(
+            migration["migrations"][0]["canonicalTarget"],
+            str((global_skills / "sbtd-workflow-onboard").resolve()),
+        )
+        self.assertEqual(
+            migration["migrations"][0]["legacyTargets"],
+            [str(legacy_onboard.resolve())],
+        )
+        self.assertTrue(legacy_onboard.is_dir())
 
     def test_init_projects_writes_only_project_files(self) -> None:
         completed = self.run_onboard(
@@ -188,6 +392,13 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
+        legacy_onboard = global_skills / "kuno-workflow-onboard-skills"
+        legacy_onboard.mkdir(parents=True)
+        (legacy_onboard / "SKILL.md").write_text(
+            "---\nname: kuno-workflow-onboard-skills\n---\n",
+            encoding="utf-8",
+        )
+
         completed = self.run_onboard(
             "init",
             "--projects-root",
@@ -202,8 +413,56 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         self.assertTrue((global_skills / "trellis-workflow" / "SKILL.md").is_file())
+        self.assertTrue(
+            (global_skills / "sbtd-workflow-onboard" / "SKILL.md").is_file()
+        )
+        self.assertFalse(legacy_onboard.exists())
         self.assertFalse((self.project_one / ".agent" / "skills").exists())
         self.assertFalse((self.project_two / ".agent" / "skills").exists())
+
+    def test_init_preserves_unrelated_directory_at_legacy_onboard_path(self) -> None:
+        global_skills = self.root / "global-skills"
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for entry in catalog["entries"]:
+            if entry["kind"] != "external-skill":
+                continue
+            name = entry["id"].removeprefix("skill:")
+            target = global_skills / name
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text(
+                f"---\nname: {name}\n---\n",
+                encoding="utf-8",
+            )
+
+        legacy_onboard = global_skills / "kuno-workflow-onboard-skills"
+        legacy_onboard.mkdir(parents=True)
+        unrelated_marker = legacy_onboard / "user-data.txt"
+        unrelated_marker.write_text("keep\n", encoding="utf-8")
+        (legacy_onboard / "SKILL.md").write_text(
+            "---\nname: unrelated-user-skill\n---\n",
+            encoding="utf-8",
+        )
+
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            self.projects_csv,
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(self.root / "global-AGENTS.md"),
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("legacy Skill identity", completed.stderr)
+        self.assertTrue(unrelated_marker.is_file())
+        self.assertEqual(unrelated_marker.read_text(encoding="utf-8"), "keep\n")
 
     def test_init_projects_checks_trellis_and_bootstrap_for_every_root(self) -> None:
         bootstrap = self.project_two / ".trellis" / "tasks" / "00-bootstrap-guidelines"
