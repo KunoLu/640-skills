@@ -119,6 +119,19 @@
 - 修复：推送前重新校验 `.gitignore` 精确内容，删除 `.pi/` 并保留 `.DS_Store`、`.gitnexus/`、`.trellis/` 三行。
 - 预防：后续在 `main` 合并、快进或推送前，都要运行 `.gitignore` 精确三行检查；即使变更来自远程已有提交，也不能跳过本仓库规则验证。
 - 状态更新（2026-07-16）：Python 验证会生成仓库根或 `tests/` 下的 `__pycache__/`，因此当前 canonical 契约已调整为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；自动化和测试必须断言这四行，不得继续套用历史三行规则。
+- 状态更新（2026-07-18）：并行审核确认，把仓库必需的 `AGENTS.md` 和 authoritative `ENTRYPOINT.md` 同时设为 ignored / untracked 会让新 clone 缺少启动规则和版本基线；已恢复二者由 Git 追踪，当前 canonical `.gitignore` 恢复为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行。
+
+## LESSON-20260718-required-controls-tracked-source: Required Controls Need a Tracked Source
+
+- 日期：2026-07-18
+- 标签：repository, controls, gitignore, bootstrap, review
+- 适用场景：调整仓库启动规则、版本基线、根 `AGENTS.md` / `ENTRYPOINT.md` 的追踪或忽略策略
+- 严重级别：high
+- 来源：8-agent 未提交变更审核及 fresh-clone 契约测试复核
+- 问题：将根 `AGENTS.md` 和 `ENTRYPOINT.md` 从索引移除并加入 `.gitignore`，同时又要求每次仓库操作在二者缺失时立即停止；当前工作站保留副本，但新 clone 无法取得规则和版本基线。
+- 根因：只验证了既有工作树的“文件仍存在”，没有验证远程 clone 的可恢复性，也没有提供 tracked canonical source 和先于 Gate 执行的 bootstrap。
+- 修复：恢复 `AGENTS.md` 和 `ENTRYPOINT.md` 由 Git 追踪，`.gitignore` 恢复四行；README、automation prompt 和契约测试同步改为断言 tracked controls，并让测试直接检查 Git 索引。
+- 预防：任何启动前必需文件必须直接受版本控制，或同时提供受版本控制的 canonical source 与可在 Gate 前执行的 bootstrap；不得把文件设为 ignored / untracked 后又把其存在作为所有操作的前置条件。
 
 ## LESSON-20260701-entrypoint-detail-section-contract: ENTRYPOINT Detail Section Contract
 
@@ -204,3 +217,15 @@
 - 根因：把先前查询到的 live id 和假设的文件参数当作稳定接口，没有先用当前 Orca runtime 重新枚举 automation 并检查命令返回的有效参数。
 - 修复：先运行 `orca automations list --json`，按精确名称定位当前 id；再用 `orca automations edit --id <id> --prompt <完整内容> --json` 更新，并用 `show --json` 逐字段确认 prompt、enabled、schedule、timezone、workspace mode 和 workspace path。
 - 预防：每次修改 live automation 都必须在当前 runtime 中按名称重新定位 id，不复用历史会话 id；参数错误时以 CLI 返回的 `validFlags` 为准；修改后必须比较完整 prompt 并复核调度元数据。
+
+## LESSON-20260718-automation-sync-trigger-separation: Separate Prompt Maintenance From Live Sync
+
+- 日期：2026-07-18
+- 标签：automation, prompt, sync, update, workflow
+- 适用场景：修改版本化 automation prompt、普通仓库变更、执行 `sync` / `同步` 或 `update` / `更新`
+- 严重级别：high
+- 来源：用户纠正 automation prompt 的同步触发语义
+- 问题：规则曾要求版本化 prompt 一经修改就立即写入 Orca live automation，并把每次 `update` 也绑定到 live prompt 重同步，超出了用户期望的触发范围。
+- 根因：混淆了“普通代码改动后评估仓库内版本化 prompt 是否需要维护”“显式 sync 时把版本化 prompt 发布到 Orca”和“update 只推进版本基线并归档”三个独立动作。
+- 修复：普通仓库改动只评估并按需更新 README 两份文件和版本化 prompt；只有显式 `sync` / `同步` 才读取 live automation、比较完整 prompt 并仅在存在差异时同步；`update` / `更新` 不检查、不修改也不同步版本化 prompt 或 live automation。
+- 预防：新增维护或发布规则时，必须分别定义仓库源文件维护触发器、外部系统发布触发器和无关流程，不能用“每次修改后立即同步”把三者合并。
