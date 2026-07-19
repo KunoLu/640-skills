@@ -67,7 +67,7 @@ Options:
   --dry-run
       Print commands and MCP writes without making changes.
   --yes
-      Skip the final execution confirmation.
+      Answer yes to every yes/no prompt.
   --no-color
       Disable ANSI color.
   -h, --help
@@ -172,6 +172,9 @@ prompt_yes_no() {
   local prompt="$1"
   local default="${2:-n}"
   local suffix answer
+  if [[ "$YES" -eq 1 ]]; then
+    return 0
+  fi
   if [[ "$default" == "y" ]]; then
     suffix='[Y/n]'
   else

@@ -6,7 +6,7 @@
 .DS_Store
 Thumbs.db
 
-# 构建和依赖目录（根据项目技术栈保留或删除不需要的）
+# 构建和依赖目录
 node_modules/
 dist/
 build/
@@ -33,7 +33,7 @@ venv/
 .claude/
 CLAUDE.md
 
-# ---------- Codex ----------
+# ---------- Codex -----------
 .codex/cache/
 .codex/tmp/
 .codex/logs/

@@ -73,7 +73,7 @@ Options:
   -DryRun
       Print commands and MCP writes without making changes.
   -Yes
-      Skip the final execution confirmation.
+      Answer yes to every yes/no prompt.
   -NoColor
       Disable ANSI color.
   -Help
@@ -169,6 +169,9 @@ function Prompt-YesNo {
     [string]$Prompt,
     [string]$Default = "n"
   )
+  if ($Yes) {
+    return $true
+  }
   $suffix = if ($Default -eq "y") { "[Y/n]" } else { "[y/N]" }
   while ($true) {
     $value = Read-Host "$Prompt $suffix"

@@ -109,7 +109,8 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
 ```bash
 bash install.sh \
   --platform codex \
-  --init-projects /abs/project-one,/abs/project-two
+  --init-projects /abs/project-one,/abs/project-two \
+  --yes
 ```
 
 Windows PowerShell 示例：
@@ -117,7 +118,8 @@ Windows PowerShell 示例：
 ```powershell
 pwsh -File .\install.ps1 `
   -Platform codex `
-  -InitProjects "C:\work\project-one,C:\work\project-two"
+  -InitProjects "C:\work\project-one,C:\work\project-two" `
+  -Yes
 ```
 
 通过已安装 Skill 调用同一 project-only 能力时，可以这样描述：
@@ -149,7 +151,9 @@ bash install.sh
 pwsh -File .\install.ps1
 ```
 
-交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 `Invalid choice.`。非交互执行必须二选一：普通模式使用 `--platform`、`--projects-root`、`--action init|reset` 和 `--yes`；project-only 使用 `--platform`、`--init-projects` 和 `--yes`。
+交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 `Invalid choice.`。
+
+根安装器的 `--yes` / `-Yes` 会对每个 yes/no 提示回答 Yes 并跳过最终执行确认，因此默认会安装 project `AGENTS.md`，也会确认安装流程中出现的可选工具提示。该参数不会猜测无默认值的选项或文本；目标平台、普通模式 action、Trellis 用户名和 React Bits tier / registry 等仍须通过对应参数预先提供或保留交互。非交互执行必须二选一：普通模式提供 `--platform`、`--projects-root`、`--action init|reset` 和其余适用输入；project-only 提供 `--platform`、`--init-projects` 和其余适用输入；最后再加 `--yes` / `-Yes` 消除 yes/no 确认。
 
 ## 仓库定位
 

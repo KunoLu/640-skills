@@ -364,3 +364,4 @@
 - 根因：实现和测试都聚焦主要流程，忽略了脚本解析时机、宿主默认编码、比较视图与写回字节的差异，以及文档化 allowlist / overwrite 语义。
 - 修复：参数解析后再安全复制 stdin 并回退只读 `/dev/null`；PowerShell 保存为 UTF-8 BOM；`.gitignore` 比较时只规范化首行 BOM、写回保留原字节；React Bits 检查始终要求目标覆盖；automation allowlist 包含其实际读取的版本基线与输出文件。
 - 预防：安装器回归必须包含 closed-stdin 命令、PowerShell 编码字节断言、普通与 BOM 文件幂等 fixture、已有目标覆盖和版本化路径 allowlist；比较规范化不得改变持久化字节。
+- 状态更新（2026-07-19）：closed-stdin 回归最初通过显式 `--skip-project-agents` 绕过了 project AGENTS 提示，未证明 `--yes` 本身能够完成非交互执行；后续真实调用因此仍在 `[Y/n]` 提示处失败。非交互 flag 的回归必须保留默认确认和默认拒绝两类提示，验证 `--yes` 对两者都明确回答 Yes，而不是靠额外 skip 参数提前删除提示。

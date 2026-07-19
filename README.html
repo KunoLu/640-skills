@@ -485,16 +485,19 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           <p><code>--init-projects</code> 是根安装脚本的 project-only 模式，只处理指定项目的 AGENTS、模板 <code>.gitignore</code>、Trellis init / bootstrap、Playwright 适用性和 React Bits 条件检查；不检测、安装、更新或配置全局 Agent CLI、Trellis / GitNexus、全局 Skills、全局 AGENTS 或 MCP。它自身接收一个或多个已存在的绝对路径，多个路径同样用英语逗号分隔，并与普通模式的 <code>--projects-root</code> / <code>--action</code> 互斥。</p>
           <pre><code>bash install.sh \
   --platform codex \
-  --init-projects /abs/project-one,/abs/project-two</code></pre>
+  --init-projects /abs/project-one,/abs/project-two \
+  --yes</code></pre>
           <pre><code>pwsh -File .\install.ps1 `
   -Platform codex `
-  -InitProjects "C:\work\project-one,C:\work\project-two"</code></pre>
+  -InitProjects "C:\work\project-one,C:\work\project-two" `
+  -Yes</code></pre>
           <pre><code>python "$SBTD_ONBOARD_DIR/scripts/onboard.py" init-projects \
   --projects-root /abs/project-one,/abs/project-two \
   --trellis-user your-name \
   --yes</code></pre>
           <h3>交互式安装脚本</h3>
           <p>已克隆本仓库时，可运行 <code>bash install.sh</code> 或 <code>pwsh -File .\install.ps1</code>。交互式流程会选择目标 Agent 平台和 init / reset / project-only 模式，收集一个或多个英语逗号分隔的项目路径，按模式检查或安装全局工具与 Skills，写入允许的模板，引导 MCP，并逐项目处理 <code>.gitignore</code>、Trellis、Playwright 和 React Bits 条件项，最后汇总计划、执行状态、阻断原因和验证结果。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 <code>Invalid choice.</code>。</p>
+          <p>根安装器的 <code>--yes</code> / <code>-Yes</code> 会对每个 yes/no 提示回答 Yes 并跳过最终执行确认，因此默认会安装 project <code>AGENTS.md</code>，也会确认安装流程中出现的可选工具提示。该参数不会猜测无默认值的选项或文本；目标平台、普通模式 action、Trellis 用户名和 React Bits tier / registry 等仍须通过对应参数预先提供或保留交互。非交互执行必须二选一：普通模式提供 <code>--platform</code>、<code>--projects-root</code>、<code>--action init|reset</code> 和其余适用输入；project-only 提供 <code>--platform</code>、<code>--init-projects</code> 和其余适用输入；最后再加 <code>--yes</code> / <code>-Yes</code> 消除 yes/no 确认。</p>
           </div>
         </div>
         <div class="status-list">

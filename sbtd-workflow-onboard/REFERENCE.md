@@ -63,6 +63,8 @@ Important arguments:
 
 PowerShell uses the equivalent parameters `-Platform`, `-ProjectsRoot`, `-InitProjects`, `-Action`, `-SourceRoot`, `-SkipProjectAgents`, `-GlobalAgentsPath`, `-GlobalSkillsDir`, `-TrellisUser`, `-TrellisPlatform`, `-SkipTrellisInit`, `-SkipTrellisBootstrap`, `-NoMcp`, `-DryRun`, `-Yes`, and `-NoColor`.
 
+`--yes` / `-Yes` answers yes to every yes/no prompt and skips the final execution confirmation. It does not invent answers for selections or text prompts without defaults; provide the corresponding platform, action, Trellis, and React Bits inputs explicitly when those decisions must be noninteractive.
+
 `--project-root`, `-ProjectRoot`, `--skills-scope`, `-SkillsScope`, `--project-skills-dir`, and `-ProjectSkillsDir` are no longer public root-installer arguments.
 
 ## Project Root Contract

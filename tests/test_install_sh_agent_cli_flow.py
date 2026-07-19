@@ -94,9 +94,14 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 rm -f "$FAKE_STATE_DIR/external-missing"
                 printf 'external skills installed\n'
                 ;;
+              install-playwright-cli)
+                printf 'playwright installed\n'
+                ;;
               check-projects)
                 if [ -f "$FAKE_STATE_DIR/react-bits-applicable" ]; then
                   printf '{"mode":"check-projects","projects":[{"projectRoot":"%s","playwright":{"applicable":false,"installed":false},"reactBits":{"applicable":true}}]}\n' "$FAKE_PROJECT_ROOT"
+                elif [ -f "$FAKE_STATE_DIR/playwright-applicable" ]; then
+                  printf '{"mode":"check-projects","projects":[{"projectRoot":"%s","playwright":{"applicable":true,"installed":false},"reactBits":{"applicable":false}}]}\n' "$FAKE_PROJECT_ROOT"
                 else
                   printf '{"mode":"check-projects","projects":[]}\n'
                 fi
@@ -227,7 +232,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 str(SOURCE_ROOT),
                 "--init-projects",
                 str(self.project_root),
-                "--skip-project-agents",
                 "--skip-trellis-init",
                 "--no-mcp",
                 "--yes",
@@ -258,6 +262,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     completed.stderr or completed.stdout,
                 )
                 self.assertNotIn("Bad file descriptor", completed.stderr)
+        self.assertNotIn("--skip-project-agents", self.invocation_args())
 
 
     def test_existing_target_cli_is_checked_before_general_preflight(self) -> None:
@@ -298,6 +303,15 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertNotIn("install-agent-cli", modes)
         self.assertNotIn("install-external-skills", modes)
 
+    def test_yes_installs_optional_project_tool_without_prompting(self) -> None:
+        (self.state_dir / "playwright-applicable").touch()
+
+        completed = self.run_installer(projects_only=True)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("install-playwright-cli", self.modes())
+
+
     def test_init_projects_react_bits_choice_reads_original_user_input(self) -> None:
         (self.state_dir / "react-bits-applicable").touch()
 
@@ -314,7 +328,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "--yes",
                 "--no-color",
             ),
-            input="1\ny\n1\n",
+            input="1\n1\n",
             check=False,
             capture_output=True,
             text=True,
@@ -405,10 +419,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "--skip-project-agents",
                 "--skip-trellis-init",
                 "--no-mcp",
-                "--yes",
                 "--no-color",
             ),
-            input=f"n\n{projects_csv}\n",
+            input=f"n\n{projects_csv}\ny\n",
             check=False,
             capture_output=True,
             text=True,
@@ -484,7 +497,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
     def test_missing_target_cli_bootstraps_npm_then_installs_agent_before_preflight(
         self,
     ) -> None:
-        completed = self.run_installer("y\ny\n")
+        completed = self.run_installer()
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         modes = self.modes()
@@ -593,6 +606,22 @@ class PowerShellInstallerAgentCliFlowTests(unittest.TestCase):
             'Test-Path -LiteralPath $reactBitsSkill -PathType Leaf',
             source,
         )
+
+    def test_powershell_yes_confirms_yes_no_prompts(self) -> None:
+        source = INSTALL_PS1.read_text(encoding="utf-8")
+        usage = source.split("function Show-Usage", 1)[1].split(
+            "function Stop-WithMessage",
+            1,
+        )[0]
+        prompt = source.split("function Prompt-YesNo", 1)[1].split(
+            "function Select-One",
+            1,
+        )[0]
+
+        self.assertIn("Answer yes to every yes/no prompt.", usage)
+        self.assertIn("if ($Yes)", prompt)
+        self.assertIn("return $true", prompt)
+
 
 
 if __name__ == "__main__":
