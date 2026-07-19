@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import copy
 import json
+import re
 import unittest
 import subprocess
 from html.parser import HTMLParser
@@ -41,11 +42,284 @@ class WorkflowContractTests(unittest.TestCase):
             hashlib.sha256(license_path.read_bytes()).hexdigest(),
             "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
         )
-        for document in ("README.md", "README.html"):
+        license_entries = {
+            "README.md": "`sbtd-workflow-onboard/LICENSE` / `NOTICE`",
+            "README.html": (
+                "<code>sbtd-workflow-onboard/LICENSE</code> / <code>NOTICE</code>"
+            ),
+        }
+        for document, license_entry in license_entries.items():
+            content = (ROOT / document).read_text(encoding="utf-8")
+            self.assertIn("Apache License 2.0", content)
+            self.assertIn("web-ui-autotest-generator/LICENSE", content)
+            self.assertIn("seo-geo/LICENSE", content)
+            self.assertIn("ReScienceLab/opc-skills", content)
+            self.assertIn(license_entry, content)
+            self.assertIn("Copyright 2026 KunoLu", content)
+
+    def test_onboard_and_eligible_bundled_skills_share_kunolu_license(self) -> None:
+        canonical_license = (ROOT / "LICENSE").read_bytes()
+        notice = (
+            "Copyright 2026 KunoLu\n\n"
+            "The original content in this Skill is licensed under the Apache "
+            'License, Version 2.0 (the "License");\n'
+            "you may not use this work except in compliance with the License.\n"
+            "You may obtain a copy of the License at\n\n"
+            "    https://www.apache.org/licenses/LICENSE-2.0\n\n"
+            "Unless required by applicable law or agreed to in writing, software\n"
+            'distributed under the License is distributed on an "AS IS" BASIS,\n'
+            "WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n"
+            "See the License for the specific language governing permissions and\n"
+            "limitations under the License.\n\n"
+            "Third-party components and source-derived material, where present, "
+            "retain their own licenses, notices, and attribution requirements.\n"
+        )
+        excluded = {"web-ui-autotest-generator", "seo-geo"}
+        eligible_skill_roots = sorted(
+            path
+            for path in SKILLS.iterdir()
+            if path.is_dir() and path.name not in excluded
+        )
+        licensed_roots = [ROOT / "sbtd-workflow-onboard", *eligible_skill_roots]
+        tracked_files = set(
+            subprocess.run(
+                ["git", "ls-files"],
+                cwd=ROOT,
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.splitlines()
+        )
+
+        for skill_root in licensed_roots:
+            with self.subTest(skill=skill_root.name):
+                self.assertEqual(
+                    (skill_root / "LICENSE").read_bytes(),
+                    canonical_license,
+                )
+                self.assertEqual(
+                    (skill_root / "NOTICE").read_text(encoding="utf-8"),
+                    notice,
+                )
+                self.assertIn(
+                    (skill_root / "LICENSE").relative_to(ROOT).as_posix(),
+                    tracked_files,
+                )
+                self.assertIn(
+                    (skill_root / "NOTICE").relative_to(ROOT).as_posix(),
+                    tracked_files,
+                )
+
+        self.assertFalse((SKILLS / "web-ui-autotest-generator" / "NOTICE").exists())
+
+    def test_seo_geo_preserves_upstream_provenance_and_scopes_local_modifications(
+        self,
+    ) -> None:
+        skill_root = SKILLS / "seo-geo"
+        self.assertEqual(
+            (skill_root / "LICENSE").read_bytes(),
+            (ROOT / "LICENSE").read_bytes(),
+        )
+
+        notice = (skill_root / "NOTICE").read_text(encoding="utf-8")
+        for expected in (
+            "ReScienceLab/opc-skills",
+            "https://github.com/ReScienceLab/opc-skills",
+            "ab75cf514281af371962c3a8449cb2a3761fd2b9",
+            ".agents/skills/seo-geo",
+            "Apache License, Version 2.0",
+            "Local modifications Copyright 2026 KunoLu",
+            "Adapted the SKILL.md frontmatter",
+            "Removed trailing whitespace",
+            "Bundled the Skill into sbtd-workflow-onboard",
+            "KunoLu claims copyright only in these local modifications",
+        ):
+            with self.subTest(notice_fragment=expected):
+                self.assertIn(expected, notice)
+
+        frontmatter_notice = (
+            "# Modified by KunoLu in 2026: adapted upstream frontmatter "
+            "for model-invoked discovery; see NOTICE."
+        )
+        self.assertIn(
+            frontmatter_notice,
+            (skill_root / "SKILL.md").read_text(encoding="utf-8"),
+        )
+
+        whitespace_notice = (
+            "Modified by KunoLu in 2026: removed upstream trailing whitespace; "
+            "see ../NOTICE."
+        )
+        whitespace_modified_files = (
+            "examples/opc-skills-case-study.md",
+            "references/geo-research.md",
+            "scripts/autocomplete_ideas.py",
+            "scripts/backlinks.py",
+            "scripts/competitor_gap.py",
+            "scripts/dataforseo_api.py",
+            "scripts/domain_overview.py",
+            "scripts/keyword_research.py",
+            "scripts/related_keywords.py",
+            "scripts/seo_audit.py",
+            "scripts/serp_analysis.py",
+        )
+        for relative_path in whitespace_modified_files:
+            with self.subTest(modified_file=relative_path):
+                self.assertIn(
+                    whitespace_notice,
+                    (skill_root / relative_path).read_text(encoding="utf-8"),
+                )
+
+        tracked_files = set(
+            subprocess.run(
+                ["git", "ls-files"],
+                cwd=ROOT,
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.splitlines()
+        )
+        for required_file in ("LICENSE", "NOTICE"):
             self.assertIn(
-                "Apache License 2.0",
-                (ROOT / document).read_text(encoding="utf-8"),
+                (skill_root / required_file).relative_to(ROOT).as_posix(),
+                tracked_files,
             )
+
+    def test_selected_bundled_skill_descriptions_are_english(self) -> None:
+        skill_names = (
+            "lessons-record",
+            "project-validation",
+            "trellis-channel",
+            "trellis-workflow",
+        )
+
+        for skill_name in skill_names:
+            with self.subTest(skill=skill_name):
+                content = (SKILLS / skill_name / "SKILL.md").read_text(
+                    encoding="utf-8"
+                )
+                frontmatter = content.split("---", 2)[1]
+                description = next(
+                    line
+                    for line in frontmatter.splitlines()
+                    if line.startswith("description:")
+                )
+                self.assertNotRegex(description, r"[\u3400-\u9fff]")
+
+    def test_web_ui_skill_is_bundled_with_bilingual_readmes(self) -> None:
+        skill_root = SKILLS / "web-ui-autotest-generator"
+        english = (skill_root / "README.md").read_text(encoding="utf-8")
+        chinese = (skill_root / "README.zh-CN.md").read_text(encoding="utf-8")
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        entry = next(
+            item
+            for item in catalog["entries"]
+            if item["id"] == "skill:web-ui-autotest-generator"
+        )
+        stable_manifest = json.loads(
+            (
+                ROOT
+                / "sbtd-workflow-onboard"
+                / "assets"
+                / "external-skills"
+                / "stable"
+                / "MANIFEST.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(entry["kind"], "bundled-skill")
+        self.assertEqual(
+            entry["source"], "templates/skills/web-ui-autotest-generator"
+        )
+        self.assertTrue((skill_root / "SKILL.md").is_file())
+        skill = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+        description = yaml.safe_load(skill.split("---", 2)[1])["description"]
+        self.assertRegex(description, r"[\u3400-\u9fff]")
+        for keyword in (
+            "frontend",
+            "backend",
+            "pages",
+            "routes",
+            "components",
+            "APIs",
+            "user flows",
+            "Playwright UI tests",
+            "Chinese test reports",
+            "page features",
+            "cross-page logic",
+            "independent test assets",
+        ):
+            with self.subTest(description_keyword=keyword):
+                self.assertIn(keyword, description)
+        bundled_license = skill_root / "LICENSE"
+        self.assertTrue(bundled_license.is_file())
+        self.assertEqual(
+            hashlib.sha256(bundled_license.read_bytes()).hexdigest(),
+            hashlib.sha256((ROOT / "LICENSE").read_bytes()).hexdigest(),
+        )
+        license_text = bundled_license.read_text(encoding="utf-8")
+        self.assertIn("Apache License", license_text)
+        self.assertNotIn("MIT License", license_text)
+        self.assertNotIn("tangyajun", license_text)
+        self.assertIn(
+            "licensed under the Apache License 2.0",
+            english,
+        )
+        self.assertIn("采用 Apache License 2.0", chinese)
+        source_prefix = skill_root.relative_to(ROOT).as_posix() + "/"
+        tracked_sources = set(
+            subprocess.run(
+                ["git", "ls-files", "--", source_prefix],
+                cwd=ROOT,
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.splitlines()
+        )
+        source_files = {
+            path.relative_to(ROOT).as_posix()
+            for path in skill_root.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(source_files, tracked_sources)
+        self.assertRegex(chinese, r"[\u3400-\u9fff]")
+        self.assertNotRegex(english, r"[\u3400-\u9fff]")
+        self.assertEqual(
+            [len(line) - len(line.lstrip("#")) for line in chinese.splitlines() if line.startswith("#")],
+            [len(line) - len(line.lstrip("#")) for line in english.splitlines() if line.startswith("#")],
+        )
+        self.assertEqual(chinese.count("```"), english.count("```"))
+        for code_span in re.findall(r"`([^`\n]+)`", chinese):
+            with self.subTest(code_span=code_span):
+                self.assertIn(f"`{code_span}`", english)
+        self.assertNotIn("web-ui-autotest", stable_manifest["repositories"])
+        self.assertNotIn(
+            "web-ui-autotest-generator", stable_manifest["skills"]
+        )
+        notices = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "assets"
+            / "external-skills"
+            / "stable"
+            / "THIRD_PARTY_NOTICES.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("Cheryl-station/web-ui-autotest", notices)
+        self.assertFalse(
+            (
+                ROOT
+                / "sbtd-workflow-onboard"
+                / "assets"
+                / "external-skills"
+                / "stable"
+                / "licenses"
+                / "web-ui-autotest-LICENSE"
+            ).exists()
+        )
 
     def test_changelog_orders_tags_newest_first(self) -> None:
         changelog_path = ROOT / "CHANGELOG.md"
@@ -106,6 +380,7 @@ class WorkflowContractTests(unittest.TestCase):
                 "skill:trellis-workflow",
                 "skill:trellis-channel",
                 "skill:project-validation",
+                "skill:web-ui-autotest-generator",
                 "skill:gherkin-bdd",
                 "skill:knowledge-base-integration",
                 "skill:maestro-mobile-e2e",
@@ -138,7 +413,6 @@ class WorkflowContractTests(unittest.TestCase):
                 "skill:to-tickets",
                 "skill:ui-ux-pro-max",
                 "skill:impeccable",
-                "skill:web-ui-autotest-generator",
                 "skill:shadcn",
             ],
         )
@@ -373,6 +647,10 @@ class WorkflowContractTests(unittest.TestCase):
             "`## <工具名> <起始版本> -> <目标版本>`",
             prompt,
         )
+        self.assertIn("每个 bundled Skill local source", prompt)
+        self.assertIn("每个 external Skill source", prompt)
+        self.assertNotRegex(prompt, r"\d+ 个 bundled Skill local source")
+        self.assertNotRegex(prompt, r"\d+ 个 external Skill source")
         for document_path in (
             ROOT / "README.md",
             ROOT / "README.html",
@@ -396,8 +674,7 @@ class WorkflowContractTests(unittest.TestCase):
         )
         bootstrap_command = (
             "npx --yes skills@latest add \\\n"
-            "  https://github.com/KunoLu/640-skills \\\n"
-            "  --skill sbtd-workflow-onboard \\\n"
+            "  KunoLu/640-skills@sbtd-workflow-onboard \\\n"
             "  --global \\\n"
             "  --agent codex \\\n"
             "  --yes \\\n"
@@ -405,8 +682,7 @@ class WorkflowContractTests(unittest.TestCase):
         )
         pinned_bootstrap_command = (
             "npx --yes skills@latest add \\\n"
-            "  'https://github.com/KunoLu/640-skills#v1.0.0' \\\n"
-            "  --skill sbtd-workflow-onboard \\\n"
+            "  'KunoLu/640-skills#v1.0.0@sbtd-workflow-onboard' \\\n"
             "  --global \\\n"
             "  --agent codex \\\n"
             "  --yes \\\n"
@@ -417,9 +693,26 @@ class WorkflowContractTests(unittest.TestCase):
             "  --projects-root /abs/project-one,/abs/project-two \\\n"
             "  --json"
         )
+        self.assertIn(
+            "KunoLu/640-skills#<tag>@sbtd-workflow-onboard",
+            readme,
+        )
+        self.assertIn(
+            "KunoLu/640-skills#&lt;tag&gt;@sbtd-workflow-onboard",
+            readme_html,
+        )
+        self.assertNotIn(
+            "KunoLu/640-skills#<tag>@sbtd-workflow-onboard",
+            readme_html,
+        )
         for document in (readme, readme_html):
             self.assertIn(bootstrap_command, document)
             self.assertIn(pinned_bootstrap_command, document)
+            self.assertNotIn(
+                "  https://github.com/KunoLu/640-skills \\\n",
+                document,
+            )
+            self.assertNotIn("  --skill sbtd-workflow-onboard \\\n", document)
             self.assertIn("默认分支", document)
             self.assertIn("最新 commit", document)
             self.assertIn("最新 tag", document)

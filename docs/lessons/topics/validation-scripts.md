@@ -292,3 +292,27 @@
 - 根因：把用于 Agent 阅读的结构化 reader 输出误当成裸 HTTP response body，且首次写入前没有检查文件头或 checksum。
 - 修复：改用 HTTP `fetch(...).text()` 获取原始正文，覆盖 `LICENSE`，再比较本地内容与官方 response body 完全一致并固定 SHA-256 契约。
 - 预防：复制必须逐字一致的远程资产时，不直接持久化 reader 展示输出；使用能明确返回 response body 的下载接口，并在完成前校验首行、字节数和可信来源 checksum。
+
+## LESSON-20260718-fixture-baseline-not-current-version: Failed-Mutation Tests Must Capture Their Fixture Baseline
+
+- 日期：2026-07-18
+- 标签：validation, tests, fixtures, manifest, promotion, inventory
+- 适用场景：验证 manifest promotion / migration 的失败回滚，或检查 catalog 驱动的动态安装集合
+- 严重级别：medium
+- 来源：迁移 bundled Skill 并推进 stable set 后，promotion 失败测试仍硬编码旧 stable set，external stable 安装测试仍硬编码迁移前 Skill 数量。
+- 问题：被测 promotion 正确拒绝了越界 source subpath，external stable 安装也正确安装了 catalog 中全部 Skill，但静态版本和数量断言失败，掩盖了真正要验证的“不变”与“完整集合”契约。
+- 根因：测试把当前仓库版本值和派生库存数量当成行为不变量，既没有从本轮临时 fixture 捕获 mutation 前基线，也没有从 catalog 事实源计算预期集合。
+- 修复：失败 promotion 与操作前捕获的 `stableSet` 比较；完整安装数量从当前 catalog 的 external entries 推导，不再耦合具体发布编号或历史库存规模。
+- 预防：验证失败回滚或 no-mutation 时，expected state 必须来自同一 fixture 的操作前快照；验证 catalog 驱动集合时，从 authoritative catalog 推导预期。只有字面版本或固定数量本身是公共契约时才硬编码。
+
+## LESSON-20260718-readme-dual-format-semantic-assertion: README Dual-format Contracts Must Respect Markup
+
+- 日期：2026-07-18
+- 标签：validation, tests, markdown, html, readme
+- 适用场景：同一用户可见说明同时维护在 `README.md` 和 `README.html`，并为两份文件编写文本契约测试
+- 严重级别：medium
+- 来源：为 Onboard `LICENSE` / `NOTICE` 增加双格式文档契约时，测试错误要求原始 Markdown 和 HTML 都包含同一连续路径字符串；HTML 的两个 `<code>` 元素会自然打断该字符串，导致内容正确但测试失败。
+- 问题：把渲染后的连续可见语义当成两种源格式都应包含的原始连续文本，会让合法 HTML 标记产生假阴性。
+- 根因：契约只定义了显示语义，没有分别定义 Markdown 和 HTML 的源结构，也没有在需要跨标签比较时解析 DOM / text content。
+- 修复：为 `README.md` 和 `README.html` 分别断言符合各自格式的完整片段；浏览器验证继续检查渲染后的可见文本。
+- 预防：双格式文档契约必须选择其一：按格式分别断言源码结构，或解析 Markdown / HTML 后比较规范化语义；不得要求跨标签内容在原始 HTML 中保持连续。

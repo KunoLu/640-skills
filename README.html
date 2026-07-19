@@ -442,16 +442,14 @@
           <div class="section-body">
           <p>只建议通过官方 <code>skills</code> CLI 把自包含的 <code>sbtd-workflow-onboard</code> 安装到用户级全局 Skill 目录，使同一用户下的 Codex 会话都能发现它；不建议安装到单个项目目录，也不要省略 <code>--global</code> 后把 bootstrap Skill 变成项目依赖。私有仓库使用本机 Git 已可认证的 <code>git+ssh://</code> source，不在命令、仓库、日志或报告中写凭据。该步骤只 bootstrap Onboard Skill，不执行 <code>scripts/onboard.py</code>，也不安装 Trellis、GitNexus、其余 Skills、写入项目 AGENTS 或初始化项目。已克隆仓库时，<code>install.sh</code> 和 <code>install.ps1</code> 仍是完整交互式入口。</p>
           <pre><code>npx --yes skills@latest add \
-  https://github.com/KunoLu/640-skills \
-  --skill sbtd-workflow-onboard \
+  KunoLu/640-skills@sbtd-workflow-onboard \
   --global \
   --agent codex \
   --yes \
   --copy</code></pre>
-          <p><code>skills@latest</code> 只表示使用 npm 上最新的 <code>skills</code> CLI；仓库 URL 没有 <code>#ref</code> 时，CLI 会读取仓库默认分支（当前是 <code>main</code>）的最新 commit，并不会自动选择最新 tag。需要固定 Skill 内容版本时，在仓库 URL 后添加 Git tag：</p>
+          <p><code>skills@latest</code> 只表示使用 npm 上最新的 <code>skills</code> CLI；<code>KunoLu/640-skills@sbtd-workflow-onboard</code> source 没有 <code>#ref</code> 时，CLI 会读取仓库默认分支（当前是 <code>main</code>）的最新 commit，并不会自动选择最新 tag。需要固定 Skill 内容版本时，使用 <code>KunoLu/640-skills#&lt;tag&gt;@sbtd-workflow-onboard</code> 格式，把 Git tag 放在 repository shorthand 与 <code>@skill</code> filter 之间：</p>
           <pre><code>npx --yes skills@latest add \
-  'https://github.com/KunoLu/640-skills#v1.0.0' \
-  --skill sbtd-workflow-onboard \
+  'KunoLu/640-skills#v1.0.0@sbtd-workflow-onboard' \
   --global \
   --agent codex \
   --yes \
@@ -505,7 +503,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           <div><strong>Agent npm 映射</strong><br><code>codex → @openai/codex@latest</code><br><code>claude → @anthropic-ai/claude-code@latest</code><br><code>kimi → @moonshot-ai/kimi-code@latest</code><br><code>omp → @oh-my-pi/pi-coding-agent@latest</code>。</div>
           <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/sbtd-workflow-onboard</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\sbtd-workflow-onboard</code></div>
           <div><strong>全局 Skill 目录</strong><br>解析优先级：显式 <code>--global-skills-dir</code> → <code>$AGENT_SKILLS_DIR</code> → 已安装 Onboard Skill 的受信父目录 → 既有平台默认目录。<code>plan --json</code> 和 <code>check --json</code> 输出 <code>globalSkillsDirSource</code> 供审计。</div>
-          <div><strong>Skills</strong><br>正常 init/reset 强制把 14 个 bundled Skills 和 15 个 external Skills 安装到全局目录，不再提供 project/none scope。机器可读 <code>catalog.json</code> 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源；Schema 与运行时在执行命令前共同拒绝绝对路径 / <code>..</code> 逃逸、错误 source 类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。canonical <code>sbtd-workflow-onboard</code> 校验成功，且 legacy <code>kuno-workflow-onboard-skills/SKILL.md</code> 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会阻断 init/reset 并保留原内容，删除异常进入失败报告，不保留 alias；caveman 和 React Bits 等原有单一作用域保持不变。</div>
+          <div><strong>Skills</strong><br>正常 init/reset 强制把 15 个 bundled Skills 和 14 个 external Skills 安装到全局目录，不再提供 project/none scope。机器可读 <code>catalog.json</code> 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源；Schema 与运行时在执行命令前共同拒绝绝对路径 / <code>..</code> 逃逸、错误 source 类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。canonical <code>sbtd-workflow-onboard</code> 校验成功，且 legacy <code>kuno-workflow-onboard-skills/SKILL.md</code> 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会阻断 init/reset 并保留原内容，删除异常进入失败报告，不保留 alias；caveman 和 React Bits 等原有单一作用域保持不变。</div>
           <div><strong>External stable fallback</strong><br><code>auto</code> 先按上游仓库整组 clone 和验证，任一 Skill 不兼容时整组回退 Onboard 内置 stable set；<code>upstream</code> / <code>stable</code> 是严格模式。全部 Skill 先暂存验证，再用临时 rollback backup 事务替换，canonical commit 成功后才删除 legacy 目录。</div>
           <div><strong>Trellis Init</strong><br>全局 Trellis CLI 为必需工具；每个项目分别检查 <code>.trellis/</code>、执行 <code>--yes --skip-existing</code> 初始化并检测 <code>.trellis/tasks/00-bootstrap-guidelines</code>，一个项目需要 bootstrap 不会阻止其余项目继续检查。</div>
           <div><strong>MCP</strong><br>MCP 仍由用户选择：Codex 使用用户级配置，Claude 固定 <code>--scope user</code>，Kimi 保持 CLI 默认行为，Oh My Pi 固定写入全局 <code>~/.omp/agent/mcp.json</code>；project-only 模式完全跳过 MCP。</div>
@@ -821,6 +819,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>External Skills stable set</strong><br><code>assets/external-skills/stable/MANIFEST.json</code> 记录 stable set、精确上游 commit、subpath、tree SHA-256 和许可证/NOTICE。所有 manifest、source subpath 和 license 路径必须被声明根目录包含；拒绝绝对路径、<code>..</code> 和 symlink 逃逸。快照保持上游原样且不得手改；只有显式 <code>promote-external-skills-stable</code> 才能整组更新。</div>
           <div><strong>External Skills transaction</strong><br>全部目标先暂存验证，再事务替换，canonical 成功后才删除 legacy。commit 失败会恢复旧目标；若恢复不完整，唯一 rollback 备份会保留并返回路径，供人工恢复。</div>
           <div><strong>mattpocock Skills</strong><br>external Skill 使用上游 canonical 名称；<code>to-prd</code> / <code>to-issues</code> 作为 legacy alias 迁移到 <code>to-spec</code> / <code>to-tickets</code>，canonical 安装成功后再备份和删除本地旧目录。</div>
+          <div><strong>web-ui-autotest-generator</strong><br>作为 bundled Skill 随模板安装，只在需要把 Web UI 回归固化为仓库内 Playwright 测试资产时调用；执行底座仍是项目内 Playwright CLI。</div>
           <div><strong>shadcn</strong><br>作为 referenced external Skill 检查存在性；用户选择安装后从 <code>shadcn-ui/ui</code> 的 <code>skills/shadcn</code> 拉取，macOS / Linux / Windows 都走同一 Python installer 逻辑。</div>
           <div><strong>React Bits</strong><br>tier 选择只在目标项目被检测为 React + shadcn/ui 时作为条件 manual guidance 输出；普通 onboarding 不询问、不安装 React Bits。</div>
           <div><strong>seo-geo</strong><br>作为 bundled Skill 随模板安装；缺失且任务不以搜索可见性为主时标记 skipped，缺少 URL 时标记 static-only 或 blocked。</div>
@@ -893,7 +892,11 @@ tests/e2e/**/*.trace.zip
             <tr><td><code>ENTRYPOINT.md</code></td><td>由 Git 追踪的版本监控和工作流总入口，也是版本检查与更新流程的可恢复基线。</td></tr>
             <tr><td><code>AGENTS.md</code></td><td>由 Git 追踪的仓库直接生效规则，保证新 clone 可恢复操作边界。</td></tr>
             <tr><td><code>CHANGELOG.md</code></td><td>从 <code>v1.0.0</code> 起按 Git tag、中文、最新版本在前的顺序维护发布变更。</td></tr>
-            <tr><td><code>LICENSE</code></td><td>本仓库适用的 Apache License 2.0 完整许可文本。</td></tr>
+            <tr><td><code>LICENSE</code></td><td>本仓库原创内容适用的 Apache License 2.0 完整许可文本。</td></tr>
+            <tr><td><code>sbtd-workflow-onboard/LICENSE</code> / <code>NOTICE</code></td><td>自包含 Onboard Skill 的原创内容使用与仓库根一致的 Apache License 2.0，并声明 <code>Copyright 2026 KunoLu</code>；文件随公开安装和本地同步一起分发。</td></tr>
+            <tr><td><code>sbtd-workflow-onboard/templates/skills/*/LICENSE</code> / <code>NOTICE</code></td><td>除单独许可的 <code>web-ui-autotest-generator</code> 和第三方衍生的 <code>seo-geo</code> 外，其余 bundled Skill 的原创内容均使用同一 Apache License 2.0 和 <code>Copyright 2026 KunoLu</code> 声明；既有第三方来源说明继续保留。</td></tr>
+            <tr><td><code>sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/LICENSE</code></td><td>个人独立实现的 bundled <code>web-ui-autotest-generator</code> 使用与仓库根一致的 Apache License 2.0；该副本随独立安装的 Skill 一起分发。</td></tr>
+            <tr><td><code>sbtd-workflow-onboard/templates/skills/seo-geo/LICENSE</code> / <code>NOTICE</code></td><td>第三方衍生的 bundled <code>seo-geo</code> 保留 ReScienceLab/opc-skills 的 Apache License 2.0；<code>NOTICE</code> 固定上游 source、revision 和本地修改范围，<code>Copyright 2026 KunoLu</code> 仅适用于本地修改。</td></tr>
             <tr><td><code>docs/lessons.md</code></td><td>Lessons 必读短入口；执行仓库操作前必须先读取。</td></tr>
             <tr><td><code>docs/lessons/index.md</code></td><td>Lessons 完整索引，按 tags、适用场景和详情路径检索。</td></tr>
             <tr><td><code>docs/lessons/topics/**</code></td><td>Lessons 完整详情，按当前任务命中后读取。</td></tr>
@@ -927,7 +930,7 @@ tests/e2e/**/*.trace.zip
 
   <footer>
     <div class="wrap">
-      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Codex <code>tool_search</code> / plugin / connector 负责 Agent 侧工具发现和授权边界，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>shadcn</code> 只在 shadcn/ui 组件、registry、preset 和 CLI 工作流中启用，<code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，bundled <code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层，报告型测试需先评估 <code>rtk</code> 文件写入风险。</p>
+      <p>当前文档与仓库模板源对齐：SBTD 负责开发方法，Codex <code>tool_search</code> / plugin / connector 负责 Agent 侧工具发现和授权边界，Chrome DevTools MCP / Playwright / Maestro 负责分层验证，<code>shadcn</code> 只在 shadcn/ui 组件、registry、preset 和 CLI 工作流中启用，bundled <code>web-ui-autotest-generator</code> 和 <code>maestro-mobile-e2e</code> 只在需要沉淀对应 E2E 测试资产时启用，bundled <code>seo-geo</code> 只在公开 Web 搜索可见性检查时启用，<code>rtk</code> / <code>caveman</code> 只作为上下文效率层，报告型测试需先评估 <code>rtk</code> 文件写入风险。</p>
     </div>
   </footer>
 </body>

@@ -6,7 +6,7 @@
 Codex / OMP + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 ```
 
-其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。`web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`shadcn` 是 shadcn/ui 项目的可选 external Skill，用于组件、registry、preset 和 CLI 工作流；`seo-geo` 是 bundled 的公开网站、落地页、文档站和营销页 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
+其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。bundled `web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`shadcn` 是 shadcn/ui 项目的可选 external Skill，用于组件、registry、preset 和 CLI 工作流；`seo-geo` 是 bundled 的公开网站、落地页、文档站和营销页 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
 
 Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search` 属于 Agent 侧工具发现和授权能力，不是项目依赖。模板要求先确认当前会话实际暴露 callable tool，再依赖对应能力；catalog / marketplace / 本地远端版本展示只作为候选信号，session auth、OAuth、cookies 和 tokens 不写入仓库、日志、截图、报告或示例配置。
 
@@ -26,20 +26,18 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 
 ```bash
 npx --yes skills@latest add \
-  https://github.com/KunoLu/640-skills \
-  --skill sbtd-workflow-onboard \
+  KunoLu/640-skills@sbtd-workflow-onboard \
   --global \
   --agent codex \
   --yes \
   --copy
 ```
 
-其中 `skills@latest` 只表示使用 npm 上最新的 `skills` CLI；仓库 URL 没有 `#ref` 时，CLI 会读取仓库默认分支（当前是 `main`）的最新 commit，并不会自动选择最新 tag。需要固定 Skill 内容版本时，在仓库 URL 后添加 Git tag：
+其中 `skills@latest` 只表示使用 npm 上最新的 `skills` CLI；`KunoLu/640-skills@sbtd-workflow-onboard` source 没有 `#ref` 时，CLI 会读取仓库默认分支（当前是 `main`）的最新 commit，并不会自动选择最新 tag。需要固定 Skill 内容版本时，使用 `KunoLu/640-skills#<tag>@sbtd-workflow-onboard` 格式，把 Git tag 放在 repository shorthand 与 `@skill` filter 之间：
 
 ```bash
 npx --yes skills@latest add \
-  'https://github.com/KunoLu/640-skills#v1.0.0' \
-  --skill sbtd-workflow-onboard \
+  'KunoLu/640-skills#v1.0.0@sbtd-workflow-onboard' \
   --global \
   --agent codex \
   --yes \
@@ -164,7 +162,11 @@ pwsh -File .\install.ps1
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
 | `CHANGELOG.md` | 从 `v1.0.0` 起按 Git tag、中文、最新版本在前的顺序维护发布变更。 |
-| `LICENSE` | 本仓库适用的 Apache License 2.0 完整许可文本。 |
+| `LICENSE` | 本仓库原创内容适用的 Apache License 2.0 完整许可文本。 |
+| `sbtd-workflow-onboard/LICENSE` / `NOTICE` | 自包含 Onboard Skill 的原创内容使用与仓库根一致的 Apache License 2.0，并声明 `Copyright 2026 KunoLu`；文件随公开安装和本地同步一起分发。 |
+| `sbtd-workflow-onboard/templates/skills/*/LICENSE` / `NOTICE` | 除单独许可的 `web-ui-autotest-generator` 和第三方衍生的 `seo-geo` 外，其余 bundled Skill 的原创内容均使用同一 Apache License 2.0 和 `Copyright 2026 KunoLu` 声明；既有第三方来源说明继续保留。 |
+| `sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/LICENSE` | 个人独立实现的 bundled `web-ui-autotest-generator` 使用与仓库根一致的 Apache License 2.0；该副本随独立安装的 Skill 一起分发。 |
+| `sbtd-workflow-onboard/templates/skills/seo-geo/LICENSE` / `NOTICE` | 第三方衍生的 bundled `seo-geo` 保留 ReScienceLab/opc-skills 的 Apache License 2.0；`NOTICE` 固定上游 source、revision 和本地修改范围，`Copyright 2026 KunoLu` 仅适用于本地修改。 |
 | `install.sh` | macOS / Linux 交互式安装入口，直接以 `sbtd-workflow-onboard` 目录作为 `source-root`。 |
 | `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
 | `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
@@ -593,7 +595,7 @@ tests/e2e/**/*.trace.zip
 
 - 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
-- 14 个 bundled Skills 和 15 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
+- 15 个 bundled Skills 和 14 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
@@ -602,12 +604,12 @@ tests/e2e/**/*.trace.zip
 - Playwright MCP 手动配置检查。
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。
 - Java 17+、Maestro CLI 和 Maestro MCP 检测及安装引导，包含 Maestro MCP 的通用 `command` / `args` / `JAVA_HOME` / `PATH` 配置示例。
-- bundled `seo-geo` Skill 的存在性检查。
+- bundled `seo-geo` 和 `web-ui-autotest-generator` Skill 的存在性检查；后者只在需要沉淀 Web UI 回归资产时调用。
 - External Skill 默认使用 `--source auto`：按上游仓库整组 clone、解析和验证，只有上游获取或源结构验证失败时才延迟加载并整组回退 `sbtd-workflow-onboard/assets/external-skills/stable/`；有效上游不依赖 stable manifest。`--source upstream` 和 `--source stable` 提供严格模式。manifest、source subpath 和 license 路径必须被各自声明的根目录包含，拒绝绝对路径、`..` 和 symlink 逃逸。全部 Skill 先暂存和验证，再用临时 rollback backup 事务替换；canonical commit 成功后才删除 legacy 目录。
 - stable External Skills 的 `MANIFEST.json` 记录 stable set、精确上游 commit、subpath、tree SHA-256 和许可证/NOTICE。stable 快照保持上游原样且不得手改；只有显式 `promote-external-skills-stable --repository ... --revision <full-sha> --stable-set ... --yes` 才能整组更新。
 - mattpocock external Skill 使用上游 canonical 名称；`to-prd` / `to-issues` 作为 legacy alias 迁移到 `to-spec` / `to-tickets`，canonical 安装成功后再备份和删除本地旧目录。
 - bundled Onboard rename migration 在 canonical `sbtd-workflow-onboard/SKILL.md` 校验成功，且 legacy `kuno-workflow-onboard-skills/SKILL.md` 的 frontmatter 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会在任何 target 变更前阻断 `init` / `reset` 并保留原内容，删除异常会进入失败报告；`plan` 会报告迁移目标或 identity conflict，`init-projects` 不检查或修改全局 Skill 目录。
-- `web-ui-autotest-generator`、`shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
+- `shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
 - React Bits tier 选择对每个 React + shadcn/ui 项目独立判断；仍保持项目级、可选并保留 license/registry 前置条件。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 
@@ -650,6 +652,6 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式，但运行时达到既有阈值后，可对任务内重复、非阻塞的中间状态自动进入 `auto-lite`，手动模式仍需用户明确启动。通用模式退出会在当前任务内禁止自动重入，手动启动不清除该退出；会话级自动退出保持到用户明确重新启用或会话结束。14 个 bundled Skills 和 15 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式，但运行时达到既有阈值后，可对任务内重复、非阻塞的中间状态自动进入 `auto-lite`，手动模式仍需用户明确启动。通用模式退出会在当前任务内禁止自动重入，手动启动不清除该退出；会话级自动退出保持到用户明确重新启用或会话结束。15 个 bundled Skills 和 14 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
