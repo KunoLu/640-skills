@@ -50,22 +50,25 @@ maestro test --format junit --output ".maestro/reports/maestro-report-smoke-${br
 
 - 如果工作流检查或 onboard 发现用户级全局 Skill 中没有 `caveman`，主动说明：`caveman` 用于压缩 Agent 回复、减少输出 token，不改变代码、测试、验证、Trellis 阶段、GitNexus 分析或工作流决策。
 - 说明后询问用户是否协助安装；用户确认后安装到用户级全局 Skill 环境，安装后重新检查 `caveman/SKILL.md` 是否可见。
-- 手动模式保持 caveman Skill 的原有行为：只有用户说 `/caveman`、`use caveman`、`caveman mode`、`少说一点`、`减少 token`、`压缩输出` 或同等明确请求时才进入；用户未指定等级时使用 `full`，持续到用户说 `normal mode`、`stop caveman` 或会话结束。
-- 自动模式与手动模式分开管理。只有 `caveman` Skill 当前可见、用户没有明确退出、已知配置不是 `off`、当前输出属于重复且非阻塞的中间状态更新、任务范围稳定且没有等待用户决定时，才允许自动压缩。自动状态是任务级临时状态，不写入长期文件，不跨任务继承。
-- 满足以下任一可观察条件时，在下一次符合资格的中间状态更新中自动进入 `auto-lite`；首次进入时用一句短提示说明“后续重复状态更新将自动使用 lite 压缩；说 normal mode 可恢复完整输出并在本任务内停用自动压缩”：
-  - 同一任务已经产生 3 次或以上中间状态更新，且后续仍需要继续探索、读取、验证或修复。
-  - 同一任务中已经连续汇总 5 个或以上命令、diff、日志或文件阅读结果，且后续输出主要是重复状态或验证摘要。
-  - 长任务预计还要继续较久，或者上下文压力较大，需要降低中间沟通 token。
-  - 自动化、daily check、大型 review 或验证排障进入重复轮次；只压缩重复的中间状态，最终报告仍保持完整。
-- 自动模式只能使用 `auto-lite`，不得自动进入 `full`、`ultra`、文言或其他更激进等级；用户明确启动的手动模式不受此限制。
-- `auto-lite` 只影响后续对话表达，不改变代码、工具调用、测试、验证、Trellis 阶段、GitNexus 分析或 workflow 决策；不得停止或跳过必须的中间状态更新，工具调用超过 60 秒时仍要按全局规则向用户报告进度。
+- 手动模式与自动模式分开管理。外部 `caveman` Skill 只负责手动模式的表达风格、强度和手动退出；`auto-lite` 自动生命周期由本全局规则负责，只借用外部 Skill 的 `lite` 表达规则，不把自动状态写回或视为手动模式。
+- 手动模式保持外部 Skill 的原有行为：只有用户说 `/caveman`、`use caveman`、`caveman mode`、`少说一点`、`减少 token`、`压缩输出` 或同等明确请求时才进入；用户未指定等级时使用 `full`，持续到用户说 `normal mode`、`stop caveman` 或会话结束。
+- 自动模式要求 `caveman` Skill 当前可见，且当前回复是重复、非阻塞、无需用户决定的中间状态更新。若 runtime 明确暴露 caveman 配置，则显式 `off` 禁止自动和手动模式；没有暴露配置或配置缺失时按 `auto` 处理，不得把“无法证明不是 off”解释为 `off`。
+- 同一主要目标维护任务级临时状态：`progressUpdateCount` 记录中间进度更新数，`toolResultCount` 记录已汇总的独立命令、diff、日志、文件读取或工具结果数，`autoLiteEligible` 是达到阈值后的单调资格锁存，`autoLiteActive` 记录是否已经自动进入并发送首次提示，`taskAutoExit` 和 `sessionAutoExit` 记录用户退出。状态只存在于当前会话上下文，不写入项目文件。
+- 满足以下任一可观察条件时，必须立即设置 `autoLiteEligible=true`；同一主要目标内不得再改回 `false`，也不得附加“后续仍需继续”或“后续主要是重复状态”等主观条件：
+  - `progressUpdateCount >= 3`；保护区内的中间进度更新也计数。
+  - `toolResultCount >= 5`；结果不要求连续出现，保护区内汇总的结果也计数。
+  - 任务已明确属于长任务或上下文压力较大。
+  - 自动化、daily check、大型 review 或验证排障已经进入重复轮次。
+- `autoLiteEligible=true` 后，下一条非保护区、非阻塞且无需用户决定的重复中间状态更新必须进入 `auto-lite`，设置 `autoLiteActive=true`，并在同一条回复内只提示一次“后续重复状态更新将自动使用 lite 压缩；说 normal mode 可恢复完整输出并在本任务内停用自动压缩”。首次自动进入时的一次性提示是外部 Skill“不宣布模式”规则的唯一例外，不得单独增加一条提示消息。
+- 自动模式只能使用 `auto-lite`，不得自动进入 `full`、`ultra`、文言或其他更激进等级；只影响对话表达，不改变代码、工具调用、测试、验证、Trellis 阶段、GitNexus 分析或 workflow 决策，不得停止或跳过必须的中间状态更新，工具调用超过 60 秒时仍要按全局规则报告进度。
 - 以下内容属于完整输出保护区，必须临时使用正常清晰表达：安装确认、权限确认、破坏性或不可逆操作确认、安全 / 隐私 / 密钥 / 生产数据风险、多步骤顺序或否定语义存在歧义、需求最终确认和用户选择、PRD / design / implement review gate、BDD / PRD / ADR / Trellis task artifacts、README、AGENTS 模板正文、失败原因、剩余风险、最终验证报告和最终答复；用户要求澄清、详细说明或重复提问时也必须完整回答。
-- 保护区结束后，不要无条件恢复压缩；只有仍处于同一任务的重复阶段、没有任务级或会话级自动退出且再次满足自动模式资格时，才继续 `auto-lite`。用户说 `详细说明` 或 `展开说明` 时只把当前答复放入完整输出保护区，不自动建立任务级退出。
-- 用户说 `normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 或 `本任务不要自动压缩` 时，无论当前处于手动模式还是自动模式，都立即恢复正常输出，并在当前任务内禁止自动重入。
-- 任务级自动退出只有在用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` 时才清除；用户明确启动 `/caveman` 只进入手动模式，不清除任务级或会话级自动退出。
-- 用户说 `本会话关闭自动压缩` 时，建立会话级自动退出；会话级自动退出优先于任务级设置，只有用户明确说 `本会话重新启用自动压缩` 时才清除。会话级自动退出不阻止用户在已知配置不是 `off` 时明确启动手动 `/caveman`，但退出手动模式后仍不得自动重入。
-- 新的用户请求到来时，任务级自动状态和任务级退出状态都重置，阈值从新任务重新计算；会话级自动退出继续有效。
-- 自动模式优先级固定为：已知环境或配置 `off` > 会话级自动退出 > 任务级自动退出 > 自动触发阈值。任何阈值都不能覆盖退出状态；已知环境或配置为 `off` 时，自动和手动模式都不得启用，直到外部配置改变。
+- 保护区只覆盖当前回复的表达风格，不得清除计数器、`autoLiteEligible` 或 `autoLiteActive`。保护区结束后，若仍是同一主要目标且没有自动退出，下一条普通重复状态必须恢复 `auto-lite`，不重新计数、不重新判断阈值、不重复首次提示；`详细说明` 或 `展开说明` 只覆盖当前答复。
+- 用户说 `normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 或 `本任务不要自动压缩` 时，无论当前处于手动还是自动模式，都立即恢复正常输出并设置 `taskAutoExit=true`；当前任务内阈值不得触发自动重入。
+- 只有用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` 时才清除 `taskAutoExit`。清除后保留原有计数器和资格锁存；若此前已 eligible 或 active，下一条普通重复状态直接进入或恢复 `auto-lite`。用户明确启动 `/caveman` 只进入手动模式，不清除任务级或会话级自动退出。
+- 用户说 `本会话关闭自动压缩` 时设置 `sessionAutoExit=true`；只有用户明确说 `本会话重新启用自动压缩` 时才清除。会话级退出优先于任务级状态，但不阻止用户在配置不是显式 `off` 时手动启动 `/caveman`；退出手动模式后仍不得自动重入。
+- 只有用户建立新的主要目标时，才重置 `progressUpdateCount`、`toolResultCount`、`autoLiteEligible`、`autoLiteActive` 和 `taskAutoExit`；`sessionAutoExit` 继续有效。`继续`、`确认`、授权、状态询问、故障恢复、回答 Agent 问题、补充同一目标的约束或证据、同一 parent outcome 下增加相关子任务，都属于同一主要目标，不得重置。
+- context compaction、历史 turn 归档、恢复同一 session 或 handoff 不构成新的主要目标。为同一目标生成上下文摘要或 handoff 时，必须保留 `autoLiteEligible`、`autoLiteActive`、`taskAutoExit`、`sessionAutoExit` 和首次提示是否已发送；若摘要已证明任务处于长时间重复阶段但精确计数不可恢复，恢复为 `autoLiteEligible=true`，不得重置为未达阈值。
+- 自动模式优先级固定为：runtime 显式 `off` > `sessionAutoExit` > `taskAutoExit` > `autoLiteEligible` / `autoLiteActive`。阈值不能覆盖退出状态；手动模式生命周期独立，除 runtime 显式 `off` 外不被自动状态改写。
 - `caveman-compress` 等会改写长期文档或记忆文件的能力只在用户明确要求压缩文档时使用，不作为默认工作流步骤。
 
 ---
@@ -277,6 +280,27 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - 未完整调用时，必须给出具体原因，例如：需求不涉及项目领域模型或长期术语；问题可完全由现有文档 / 代码回答；只是 Trellis 启动实现的 review gate；Skill 不可用 / 不可读取；用户明确要求跳过。
 - 在每次需求最终确认、PRD / design / implement review gate、或询问是否开始实现前，如果未完整调用 `grill-with-docs`，必须主动询问用户是否需要先用 `grill-with-docs` 再评估一次。
 
+### grill-with-docs 后置 DDD 边界审核
+
+- 无论是 Agent 自发调用还是用户主动调用，每次完整执行 `grill-with-docs` 结束后，必须立即调用 `book-ddd-distilled-modeling` 做独立的二次边界审核；调用来源和 Agent 是否认为需求已足够清晰都不构成跳过理由。
+- `grill-with-docs` 内嵌的 external `domain-modeling` dependency 已运行也不得替代这次后置审核。前者负责访谈中的主动建模和长期术语沉淀，后者必须重新读取本次澄清结果与项目事实，检查统一语言、bounded context、业务不变量、子域归属、术语混用和未决冲突。
+- 二次审核必须向用户输出独立的 `DDD Boundary Review`，状态只能是 `confirmed` / `needs-clarification` / `blocked`，并列出统一语言、bounded context、业务不变量、子域判断、对 `grill-with-docs` 结果的修正以及未决问题；不得只说“已审核”或把结果隐含在需求摘要中。
+- 状态为 `needs-clarification` 时，必须先回到逐问题澄清，解决发现后重新运行 `book-ddd-distilled-modeling`；Skill 不可用、不可读取或证据不足时输出 `blocked` 和原因。未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。
+- 如果没有调用 `grill-with-docs`，仍按任务自身的业务术语、领域规则和模型歧义判断是否独立调用 `book-ddd-distilled-modeling`；本后置门禁不把所有普通任务强制改为 DDD 流程。
+
+### book-derived 开发阶段强制门禁
+
+- 进入开发任务时，必须先输出任务级 `Book Gate Plan`，逐项记录 5 个 bundled book-derived Skill 是 `required` 还是 `on-demand`、命中的客观事实、计划执行阶段和独立 Gate state。Gate state 只能是 `planned` / `running` / `passed` / `blocked` / `not-required`，合法转换为 `planned` → `running` → `passed` / `blocked`；未选中的 `on-demand` 项为 `not-required`。具体 reviewer status 只在 Skill 实际运行后记录，不能用未来终态填充计划。命中强制触发条件后不得以主观判断降级为按需；只有任务范围或项目证据变化使触发事实消失时才能更新计划，并说明依据。
+- `book-ddia-data-design`：开发任务修改持久化或共享数据、schema / migration、shared / persistent / cross-request / cross-process cache、queue / event / stream / job、ETL / analytics、跨服务数据流、data ownership、source of truth、事务边界、读写路径、backfill / replay / recovery 中任一项时，必须在 design / implement 产物稳定和实现开始前调用，输出 `DDIA Data Design Review`，状态只能是 `confirmed` / `needs-design-change` / `blocked`。
+- `book-legacy-change-safety`：开发任务修复既有行为 bug，或修改的既有代码存在弱 / 缺失测试、行为不清、隐藏依赖或高回归风险任一项时，必须在首次行为修改前调用，输出 `Legacy Change Safety Review`，状态只能是 `characterized` / `needs-safety-net` / `seam-required` / `blocked`。
+- `book-refactoring-pass`：开发任务将修改既有生产代码时，无论 Agent 预判是否需要重构，都必须在首次实现编辑前调用，输出 `Refactoring Review`，状态只能是 `proceed` / `refactor-first` / `blocked`。`proceed` 可以明确结论为无需重构，不得为了通过门禁制造重构。
+- `book-release-readiness`：开发任务修改生产路径中的 service、API、auth、billing、notification、background job、queue、scheduler、external integration、data pipeline 或 deployment behavior 任一项时，必须在所有适用 testing-tool gate 和 project validation 完成后、声明任务完成或进入最终发布决策前调用，输出 `Release Readiness Review`，状态只能是 `ready` / `needs-mitigation` / `blocked`。必需验证未完成只能为 `blocked`；只有 optional check 可由明确 accountable owner 接受为 residual risk。
+- 如果 `Legacy Change Safety Review` 为 `seam-required`，允许先运行 `Refactoring Review` 的 `safety-seam-only` 模式，只实施建立 safety net 所需的最小行为保持 seam 并验证等价性；随后回到 legacy review，建立安全网并达到 `characterized`，再重新运行常规 `Refactoring Review`。除此例外，同时为 `required` 时仍先 legacy 后 refactoring，不得在未锁定行为时开展普通重构。
+- 任一审核为 `needs-*`、`seam-required` 或 `refactor-first` 时，Gate state 保持 `running`，先完成对应修正 / safety net / 受控 seam / 最小重构 / mitigation，再重新运行同一 Skill；通过状态映射为 `passed`，reviewer `blocked` 映射为 Gate state `blocked`。未达到各自通过状态不得越过对应阶段。
+- 强制门禁命中时不得直接跳过；Skill 缺失、不可读取或证据不足必须报告 `blocked`，该规则优先于“Skill 不可用时”的普通按需处理。未命中强制触发条件的其他场景仍保持按需调用，可因用户明确要求或次要风险额外调用，不把 5 个 Skill 机械地全量串联到每个任务。
+
+
+
 | Skill | 使用场景 | 调用时机 |
 |---|---|---|
 | `trellis-workflow` | Trellis 生命周期、任务产物、阶段检查 | 发现项目使用 Trellis 后 |
@@ -286,11 +310,11 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `knowledge-base-integration` | 产品级 Knowledge Ingest、目标 ref 行为目录、Evidence Policy、Revision Set 和服务器 Smoke | BDD / 知识库语境的 `read` / `读取`、多仓知识摄取或 knowledge-server smoke 时 |
 | `maestro-mobile-e2e` | BDD 场景到 Maestro Mobile / Hybrid flow 资产、报告路径和真机排障 lesson | 需要生成 / 维护 / 执行 Maestro flow，或 iOS 真机 Maestro E2E 排障时 |
 | `lessons-record` | 记录长期经验教训 | bug 修复、回滚、工具误判、验证失败、上下文丢失后 |
-| `book-refactoring-pass` | 行为保持型重构检查 | 修改既有代码且结构阻碍当前实现、清理与行为变更可能混杂时 |
-| `book-legacy-change-safety` | 遗留 / 弱测试代码安全修改 | 目标代码行为不清、测试不足、依赖隐藏或回归风险高时 |
-| `book-ddd-distilled-modeling` | 轻量领域建模、统一语言和 bounded context 判断 | 需求涉及业务术语、领域规则、上下文边界或模型歧义，进入 PRD / design 前 |
-| `book-ddia-data-design` | 数据密集型设计风险检查 | 修改存储、事件、队列、缓存、迁移、数据所有权或跨服务数据流时 |
-| `book-release-readiness` | 生产就绪与发布风险检查 | 服务、API、任务、队列、外部集成或部署敏感路径实现后 / check 阶段 |
+| `book-refactoring-pass` | 行为保持型重构检查 | 修改既有生产代码时在首次实现编辑前强制调用；legacy 为 `seam-required` 时可先以 `safety-seam-only` 模式建立安全网所需 seam；其他结构摩擦或 review 场景按需调用 |
+| `book-legacy-change-safety` | 遗留 / 弱测试代码安全修改 | 修复既有行为 bug，或弱测试、行为不清、隐藏依赖、高回归风险任一命中时，在首次行为修改前强制调用；其他场景按需调用 |
+| `book-ddd-distilled-modeling` | 轻量领域建模、统一语言和 bounded context 二次审核 | 每次完整执行 `grill-with-docs` 后强制调用；未调用 `grill-with-docs` 时，需求涉及业务术语、领域规则、上下文边界或模型歧义则在 PRD / design 前调用 |
+| `book-ddia-data-design` | 数据密集型设计风险检查 | 持久化 / 共享数据、schema、migration、shared / persistent / cross-request / cross-process cache、异步或跨服务数据流、数据所有权等客观触发项命中时，在设计稳定前强制调用；其他场景按需调用 |
+| `book-release-readiness` | 生产就绪与发布风险检查 | service / API / job / queue / integration / deployment 等生产路径触发项命中时，在所有适用 testing-tool gate 和 project validation 后、完成或发布前强制调用；其他场景按需调用 |
 | `diagnosing-bugs` | 诊断 bug、测试失败、运行时错误、性能回归、日志异常、线上问题或数据不一致 | 问题根因不清或需要系统化排障时 |
 | `tdd` | 测试先行、回归测试、复杂逻辑验证、高风险修改 | 需要用测试固化行为再实现时；依赖 `codebase-design` |
 | `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 用户希望先打磨计划、决策或设计时；依赖 `grilling` |
@@ -320,12 +344,12 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `maestro-mobile-e2e`：仅在 Mobile / Hybrid E2E 需要生成、维护或执行 Maestro flow，或 Maestro iOS 真机运行出现 driver / transport / view hierarchy / tap crash 等排障信号时调用。BDD `.feature` 仍是行为 source of truth；Maestro flow 默认沉淀到 `maestro/flow/`，平台差异明显时可拆到 `maestro/flow/ios/` 和 `maestro/flow/android/`；最终正式 report 和 Markdown 汇总默认进入 `.maestro/reports/`；已知问题 lesson 必须按标签 / 关键字懒加载，不预先套用临时补丁。
 - `gherkin-bdd`：所有用户可见行为默认需要持久 BDD 场景。覆盖 UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成可观察行为。新项目或无既有约定时默认使用 `.feature` 文件；已有 `.feature`、BDD runner 或项目级规则时沿用项目路径。前后端分仓、跨服务、Mobile + API 或 Hybrid 链路必须先确认 contract、环境、账号、数据、设备和选择器事实；缺关键事实时标记 blocked 或 `@todo`，不要把猜测写成 source of truth。既有项目采用 `no new uncovered behavior`：新增行为先写场景，修改既有行为时补齐 / 更新相关场景，用户可见 bug 修复先写正确行为场景再写失败回归测试。当主动使用 `gherkin-bdd` 且用户请求包含 `sync` 或 `同步` 时，进入 BDD Sync Mode：全量扫描当前工作树（含未提交内容）和项目 `features/`，判断 `.feature` 是否与最新代码行为一致；多仓 / 前后端分离时先确认其他仓库是否有更新，有更新则必须收集路径并一起扫描，无更新则记录确认后只按当前仓库同步；报告更新、新建、删除、未变和候选删除的 feature 文件。该同步功能保持可写行为审计语义不变。仅包含 BDD / 知识读取语境的 `read` 或 `读取`、且不包含 `sync` / `同步` 时，进入只读 Knowledge Ingest：按配置目标 ref 解析精确 commit SHA，读取仓库自有 `.feature` 并生成可重建聚合视图；不得切换活动工作树、修改源仓、要求或补写 Feature / Scenario ID、自动合并跨仓行为，最终报告 `Knowledge Ingest` 和 `Mutation: none`。纯内部重构、依赖 / 工具配置、机械格式化、无语义 UI polish 或 typo 可跳过，但最终输出要说明原因。BDD 不替代 PRD、DDD、TDD、项目验证、Playwright、Maestro 或人工评审；PRD 说明意图，DDD 稳定语言，BDD 固化可观察行为，TDD 将场景转为红测和绿码。
 - `knowledge-base-integration`：执行 P1.1 只读摄取和服务器 Smoke。读取产品注册表与服务器 Workspace Mapping，固定每仓库目标 ref 的完整 SHA，生成 Revision Set、完整无 ID Gherkin 目录、静态 / manifest 绑定和冲突候选；正式运行先生成不可变 Evidence Decision。Smoke 使用 `preflight / prepare / test / cleanup` 阶段，通过本地或命令式 Runner Adapter 执行仓库原生命令，并校验本轮报告、同 stem 中文汇总、artifact manifest、checksums、runner attestation 和环境对齐。重复逻辑运行按幂等键复用，显式重跑增加 attempt；P1 Evidence Publication 固定为 `not-configured`，远端发布和 PR Gate 留给 P2。
-- `agent-rules-books` 派生 Skill 仅作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`；不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。多个 book-derived Skill 同时可能适用时，优先选择当前主风险对应的 1-2 个，不要把 5 个当作固定 checklist 全量调用。
-- `book-refactoring-pass`：仅在既有代码结构阻碍当前修改、行为变更和结构整理可能混杂、或 review 需要判断是否先重构时使用。输出应限定为当前行为边界、最小重构步骤、安全网和验证命令；不要推动任务外的大重写。
-- `book-legacy-change-safety`：仅在遗留代码、测试不足、当前行为不清或隐藏依赖导致修改风险较高时使用。优先配合 `diagnosing-bugs`、`tdd` 和 GitNexus 影响分析，用 characterization test、最小 seam 或聚焦检查锁定行为后再修改。
-- `book-ddd-distilled-modeling`：仅在需求涉及业务术语、领域规则、bounded context、上下文边界或模型歧义时使用，通常位于 `grill-with-docs` 之后、`to-spec` / `design.md` 之前。不要把一次性领域推断直接写入长期 context 或 `.trellis/spec`。
-- `book-ddia-data-design`：仅在存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流变更时使用。重点检查 source of truth、一致性模型、幂等、乱序、重试、回放、迁移 / 回滚、观测和修复路径。
-- `book-release-readiness`：仅在生产路径相关的服务、API、任务、队列、外部集成或部署敏感变更后使用，通常位于项目验证后或 `$trellis-check` 阶段。重点检查 timeout、retry、fallback、隔离、backpressure、观测、告警、rollout 和 rollback；不阻塞与当前项目无关的理论风险。
+- `agent-rules-books` 派生 Skill 通常作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。上述 5 个客观开发门禁命中时转为强制调用；未命中时才按当前主风险选择最相关的 1-2 个，不要把 5 个当作所有任务的固定 checklist。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`，不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。
+- `book-refactoring-pass`：修改既有生产代码时在首次实现编辑前强制输出 `Refactoring Review`；若 legacy review 为 `seam-required`，可先以 `safety-seam-only` 模式建立最小测试 seam，完成 legacy characterization 后必须重跑常规 refactoring review。未修改既有生产代码时，仅在结构阻碍、行为变化与 cleanup 混杂或 review 需要时按需调用。输出限定为当前行为边界、最小重构步骤、安全网和验证命令，不推动任务外重写。
+- `book-legacy-change-safety`：修复既有行为 bug，或既有代码存在弱 / 缺失测试、行为不清、隐藏依赖、高回归风险任一项时，在首次行为修改前强制输出 `Legacy Change Safety Review`。安全网必须先有生产 seam 时输出 `seam-required`，进入受控 seam 回路；其他遗留风险场景按需调用。优先配合 `diagnosing-bugs`、`tdd` 和 GitNexus 影响分析锁定行为后再修改。
+- `book-ddd-distilled-modeling`：每次完整执行 `grill-with-docs` 后都必须作为独立二次审核立即调用，不受调用来源或主观歧义判断影响，且 `domain-modeling` 不得替代；输出 `DDD Boundary Review` 并达到 `confirmed` 后才能继续。未调用 `grill-with-docs` 的任务仍仅在涉及业务术语、领域规则、bounded context、上下文边界或模型歧义时独立使用。不要把一次性领域推断直接写入长期 context 或 `.trellis/spec`。
+- `book-ddia-data-design`：持久化 / 共享数据、schema / migration、shared / persistent / cross-request / cross-process cache、queue / event / stream / job、ETL / analytics、跨服务数据流、data ownership、source of truth、事务边界、读写路径、backfill / replay / recovery 任一项变化时，在设计稳定和实现开始前强制输出 `DDIA Data Design Review`。其他数据风险场景按需调用。重点检查一致性、幂等、乱序、重试、回放、迁移 / 回滚、观测和修复路径。
+- `book-release-readiness`：service、API、auth、billing、notification、background job、queue、scheduler、external integration、data pipeline 或 deployment behavior 任一生产路径发生变化时，在所有适用 testing-tool gate 和 project validation 后、完成或最终发布决策前强制输出 `Release Readiness Review`。必需验证缺失只能 `blocked`，optional check 只有明确 accountable owner 接受后才能作为 residual risk；其他发布风险场景按需调用。
 - `trellis-channel` 可以被项目级规则主动用于高风险代码 review / 验证覆盖 preflight，但 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 spawn worker。
 - `React Bits tier / Pro Skill`：普通安装和 reset 默认保持 shadcn/ui only，不询问也不安装 React Bits。只有在目标项目已确认是 React + shadcn/ui、项目根目录存在 `components.json`，且前端 UI 任务明确需要 React Bits 风格组件、blocks 或 landing page sections 时，才询问用户选择 shadcn/ui only、React Bits Free 或付费 Starter / Pro / Ultimate。React Bits Free 只有在免费 source / registry 已明确配置且用户确认后才安装；付费 tier 必须确认 registry / `REACTBITS_LICENSE_KEY` / 项目内 React Bits Pro Skill 均可用，且不得读取、输出、提交 license key。reset 时保留检测到的既有 tier 和 registry，未经确认不使用默认免费版覆盖。
 - 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
@@ -346,6 +370,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - `grill-with-docs`：
         - 用于项目内需求澄清、领域术语对齐、CONTEXT.md 或 ADR 沉淀；需求进入 PRD / Trellis 前优先使用；先读项目文档和代码，能从项目事实回答的问题不要反问用户；长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目级规则明确指定；不要把 CONTEXT.md 写成临时规格书。`grill-with-docs` 依赖 `grilling` 和 `domain-modeling`。
         - 使用状态必须遵守上文“grill-with-docs 使用状态透明度”；读取 Skill 文件或只按 evidence-first 原则自行判断，不等于完整调用。
+        - 每次完整执行结束后都必须遵守“grill-with-docs 后置 DDD 边界审核”，立即调用 bundled `book-ddd-distilled-modeling` 并向用户输出独立审核结果；`grill-with-docs` 内嵌的 external `domain-modeling` dependency 不构成替代。
     - `handoff` 交接内容应包含当前目标、已完成工作、关键决策、文件 / 产物、已尝试命令、开放问题、建议下一步 Skill、不要重复事项和敏感信息脱敏说明。
     - `writing-great-skills` 创建的新 Skill 默认使用 `SKILL.md` 作为入口，长内容拆到 reference，确定性操作优先脚本化，description 必须写清触发场景。
     - `zoom-out` 已从 mattpocock/skills 上游移除；陌生模块理解默认通过代码阅读、`codebase-design`、GitNexus exploring / impact-analysis 和按需 `book-refactoring-pass` 完成。
@@ -354,13 +379,11 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 
 ### Skill 不可用时
 
-如果相关 Skill 不存在、不可读取或不可执行：
+如果相关 Skill 不存在、不可读取或不可执行，先判断是否已命中“book-derived 开发阶段强制门禁”：
 
-- 直接跳过。
-- 不要阻塞任务。
-- 按当前 `AGENTS.md`、项目文件、`.trellis/workflow.md`、`.trellis/spec` 和已有上下文继续执行。
-- 仅在该 Skill 对任务结果有明显影响时，在最终输出中说明已跳过。
-
+- 已命中强制门禁：不得直接跳过；按对应 reviewer contract 输出 `blocked`、缺失项和解除阻断条件，不得越过对应阶段。
+- 未命中强制门禁的普通按需 Skill：可以跳过且不阻塞任务，按当前 `AGENTS.md`、项目文件、`.trellis/workflow.md`、`.trellis/spec` 和已有上下文继续执行。
+- 仅在 Skill 对结果有明显影响时，在最终输出中说明普通按需跳过；强制门禁的 `blocked` 必须始终报告。
 ---
 
 ## 范围控制

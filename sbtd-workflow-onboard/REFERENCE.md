@@ -200,6 +200,10 @@ All 14 referenced external Skills are also required globally:
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `shadcn` | `https://github.com/shadcn-ui/ui.git`, subpath `skills/shadcn` |
 
+The runtime gate contracts become active only after normal `init` / `reset` successfully writes the global rules and installs the required bundled / external Skills. The public Skills CLI bootstrap and `init-projects` do not activate these runtime gates by themselves. Installed global `AGENTS.md`, project rules, Trellis workflow, and bundled reviewer Skills jointly own the execution contract.
+
+The `Book Gate Plan` uses objective predicates and explicit lifecycle states. Every completed external `grill-with-docs` session invokes bundled `book-ddd-distilled-modeling`; persisted/shared data, shared / persistent / cross-request / cross-process caches, async/cross-service flows, ownership, migrations, or recovery invoke `book-ddia-data-design`; existing-behavior bugs or uncertain existing code invoke `book-legacy-change-safety`; any existing-production-code edit invokes `book-refactoring-pass`; production-path runtime/deployment changes invoke `book-release-readiness` after all applicable testing-tool gates and project validation. Matched gates emit blocking visible statuses until passed; unmatched scenarios remain on demand.
+
 Install every missing external Skill:
 
 ```bash
@@ -239,7 +243,7 @@ External Skill targets use a temporary rollback backup during an explicit instal
 
 ## Skills That Keep Their Existing Scope
 
-- `caveman`: user-level global only and still requires its existing explicit installation decision. Installation does not immediately enable a persistent reply mode, but runtime thresholds may automatically enter task-scoped `auto-lite` for repetitive intermediate updates. Generic exit commands disable automatic re-entry for the current task, session-level automatic opt-out takes precedence over task-level state, and explicit manual activation does not clear either automatic opt-out.
+- `caveman`: user-level global only and still requires its existing explicit installation decision. The external Skill owns manual style and intensity; the global AGENTS template owns automatic lifecycle. Existing thresholds set a monotonic eligibility latch, and the next eligible intermediate update must enter task-scoped `auto-lite`. Only a new primary goal resets task state; continuation, authorization, recovery, context compaction, and handoff preserve it. Full-output protected replies preserve automatic state and resume without recounting. Explicit runtime `off` wins, while a missing configuration defaults to `auto`; task-level and session-level opt-outs retain their existing precedence.
 - React Bits Free/Starter/Pro/Ultimate: project-only and conditional.
 - Project Playwright CLI / `@playwright/test`: project-only and conditional.
 

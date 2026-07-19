@@ -1,6 +1,6 @@
 ---
 name: book-ddia-data-design
-description: Guides data-intensive design checks for consistency, reliability, schema evolution, and data flow risks. Use when changing storage, events, queues, caches, replication, migrations, analytics pipelines, or cross-service data ownership.
+description: Guides data-intensive design checks for consistency, reliability, schema evolution, and data flow risks. Mandatory before design stabilizes or implementation begins when changing persisted/shared data, schemas, migrations, shared/persistent/cross-request/cross-process caches, async or cross-service flows, data ownership, or recovery; otherwise use on demand.
 ---
 
 # Book DDIA Data Design
@@ -9,14 +9,43 @@ Use this Skill when a change can fail because of data semantics, distributed beh
 
 It is derived from the `mini` rule style of `agent-rules-books` and should complement project architecture, Trellis design, GitNexus impact analysis, tests, and production validation.
 
+## Mandatory Development Gate
+
+Run this Skill before design artifacts become stable or implementation begins when a development task changes any of the following:
+
+- Persisted or shared data, databases, schemas, or migrations.
+- shared, persistent, cross-request, or cross-process caches; queues, events, streams, jobs, ETL, or analytics pipelines.
+- Cross-service data flow or API ownership.
+- Data ownership, source of truth, transaction boundaries, or read / write paths.
+- Backfill, replay, rollback, or recovery behavior.
+
+Emit a separate visible review:
+
+```text
+DDIA Data Design Review
+Status: confirmed | needs-design-change | blocked
+Data owner and source of truth: ...
+Write / read / async / failure paths: ...
+Consistency model: ...
+Idempotency / ordering / retry / deduplication: ...
+Schema / migration / backfill / rollback / replay: ...
+Observability and repair: ...
+Required tests: ...
+```
+
+- `confirmed`: the data design and failure / recovery behavior are explicit enough to implement safely.
+- `needs-design-change`: update the design or task artifacts, then rerun this Skill before implementation.
+- `blocked`: required ownership, contract, environment, migration, or Skill evidence is missing; state the blocker and do not stabilize design or implement the data change.
+
 ## When To Use
 
-- A change affects databases, schemas, migrations, caches, queues, streams, jobs, ETL, analytics, or cross-service APIs.
+- Mandatory: every development task matching a persisted/shared-data, shared-cache, async-flow, cross-service-flow, ownership, migration, or recovery trigger above.
+- A change affects databases, schemas, migrations, shared / persistent / cross-request / cross-process caches, queues, streams, jobs, ETL, analytics, or cross-service APIs.
 - The system must handle duplicate messages, retries, partial failure, reordering, eventual consistency, or replay.
 - A feature changes data ownership, source of truth, transactional boundaries, or read/write paths.
 - Backfill, migration, rollback, or recovery behavior matters.
 
-Do not use for purely local UI work, simple in-memory code, or data changes already covered by clear project conventions.
+When no mandatory trigger matches, do not use this Skill for purely local UI work, simple in-memory code, or data changes already covered by clear project conventions unless the user requests it or another concrete data-semantics risk warrants it.
 
 ## Workflow
 
@@ -30,7 +59,7 @@ Do not use for purely local UI work, simple in-memory code, or data changes alre
 
 ## Output
 
-For Trellis tasks, write concise design/check notes:
+Always emit the visible `DDIA Data Design Review` for a mandatory gate. For Trellis tasks, also write concise design/check notes:
 
 - Data owner and source of truth.
 - Consistency model.
@@ -42,4 +71,4 @@ Promote only long-lived data architecture rules to `.trellis/spec`.
 
 ## Guardrails
 
-Do not design a distributed system when a local transaction is enough. Keep the model as simple as the project constraints allow.
+Do not design a distributed system when a local transaction is enough. A mandatory review may confirm that the existing simple model is sufficient; keep the design as simple as project constraints allow.

@@ -126,8 +126,9 @@ trellis init -u your-name
 
 - 如果用户只给出初始需求，且需求涉及本项目领域模型、业务术语、长期规则、已有文档或架构决策，先使用 `grill-with-docs` 澄清。
 - `grill-with-docs` 阶段应先读取项目文档和相关代码；能从项目事实回答的问题，不要反问用户。
-- 一次只问一个关键问题，并给出推荐答案；达成共识后输出需求确认摘要。
+- 一次只问一个关键问题，并给出推荐答案；达成共识后先执行强制 post-grill DDD 二次审核，再输出需求确认摘要。
 - 长期领域上下文默认写入 `docs/CONTEXT.md`，ADR 默认写入 `docs/adr/*.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md` 和 `docs/contexts/<context>/adr/*.md`；不要新建根目录 `CONTEXT.md`，除非本项目已采用该路径或更深层 `AGENTS.md` 明确指定。
+- `grill-with-docs` 完整结束后必须先输出 `DDD Boundary Review`；其内嵌的 external `domain-modeling` dependency 不替代该审核，未达到全局规则定义的 `confirmed` 不得进入需求确认摘要、PRD、design、Trellis task 或实现。
 - 需求确认摘要经用户确认后，再使用 `to-spec` 生成 Markdown spec / PRD，并用 `to-tickets` 拆成 Trellis-ready vertical slices。
 - 在 Trellis 项目中，spec / PRD 终稿应写入 `.trellis/tasks/<task>/prd.md`；拆解后的 parent / child tasks 和实现切片应落到 `.trellis/tasks/<task>/...` 下的 task artifacts。未确定 task 路径前，不要把最终 spec / PRD 或 ticket / task 清单长期落到 `docs/`。
 - 如果需求不依赖项目文档或领域术语，只是通用方案质询，可使用 `grill-me`。
@@ -222,10 +223,10 @@ trellis init -u your-name
 
 - 普通 bug、测试失败或运行时异常：`diagnosing-bugs` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnosing-bugs` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling`，涉及项目语言时使用 `domain-modeling`）→ 需求确认摘要 → `to-spec` → `gherkin-bdd`（用户可见行为场景）→ `to-tickets` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
+- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling` 和 `domain-modeling`）→ `book-ddd-distilled-modeling` 独立二次审核与可见 `DDD Boundary Review` → 需求确认摘要 → `to-spec` → `gherkin-bdd`（用户可见行为场景）→ `to-tickets` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
 - 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-spec` / `to-tickets`（需要时）→ Codex implementation。
 - 需要回归测试的普通用户可见行为修改：Trellis `native` workflow → `gherkin-bdd` → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
-- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `to-spec` → `gherkin-bdd`（外部可观察行为）→ `to-tickets` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
+- 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `book-ddd-distilled-modeling` 独立二次审核与可见 `DDD Boundary Review` → `to-spec` → `gherkin-bdd`（外部可观察行为）→ `to-tickets` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：代码阅读 / `codebase-design` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
 - 需要创建或维护 Skill 时：`writing-great-skills`。
@@ -241,9 +242,9 @@ trellis init -u your-name
 - `caveman` 是用户级全局 Agent 回复压缩 Skill，不是项目依赖、测试工具、设计工具或验证工具。
 - 不要把 `caveman` 写入 BDD、TDD、GitNexus、Trellis、发布验证或项目运行时链路；它只影响 Agent 给用户的对话表达。
 - `rtk` 是命令输出压缩层，不是测试 runner；unit / API / Playwright / Maestro 等报告型测试先按全局 `rtk` 与报告型测试 Gate 判断，必要时使用原生命令或 fallback-native。
-- 自动压缩继承全局 `auto-lite` 规则：同一任务达到既有阈值后，只对重复、非阻塞的中间状态更新进入任务级临时压缩；不得自动进入更激进等级，也不得把自动状态写入项目文件或跨任务继承。
-- 需求最终确认、review gate、安装 / 权限 / 破坏性操作确认、失败与剩余风险、最终验证报告、最终答复和长期项目文档属于完整输出保护区。
-- `normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 和 `本任务不要自动压缩` 都会建立当前任务的自动退出，阈值不得触发重入；手动 `/caveman` 不清除自动退出。会话级自动退出优先于任务级设置，并持续到用户明确重新启用或会话结束；具体恢复指令和配置 `off` 优先级继承全局规则。
+- 自动压缩只引用全局状态机事实源：项目级不复制计数器、资格锁存、任务连续性或重置逻辑；不得自动进入更激进等级，也不得把自动状态写入项目文件。
+- 需求最终确认、review gate、安装 / 权限 / 破坏性操作确认、失败与剩余风险、最终验证报告、最终答复和长期项目文档属于完整输出保护区；保护区只覆盖当前回复，不清除或重置全局任务级自动状态。
+- `normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 和 `本任务不要自动压缩` 建立当前任务的自动退出；手动 `/caveman` 不清除自动退出。会话级退出、重新启用、配置 `off`、新的主要目标和 context compaction / handoff 语义全部继承全局规则。
 
 ---
 
@@ -257,19 +258,21 @@ trellis init -u your-name
 - `book-ddia-data-design`
 - `book-release-readiness`
 
-这些 Skill 是按需专项审查视角，不替代项目事实、Trellis workflow、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。
+这些 Skill 在全局规则定义的客观开发触发条件命中时是强制门禁，未命中时才是按需专项审查；它们不替代项目事实、Trellis workflow、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。
 
 默认不接入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展；如果具体项目明确需要，由项目级 `AGENTS.md` 或更深层规则单独声明。
 
+开发任务在进入对应阶段前必须输出 `Book Gate Plan`，按全局触发矩阵标记每个 Skill 的 `required` / `on-demand`、命中事实、执行阶段和独立 Gate state；Gate state 使用 `planned` / `running` / `passed` / `blocked` / `not-required`，且只能按 `planned` → `running` → `passed` / `blocked` 转换。具体 reviewer status 仅在实际运行后补充，项目级不得复制或放宽全局枚举和阻断语义。
+
 编排说明：
 
-- 需求 / PRD 阶段：涉及业务术语、领域规则或 bounded context 时，`grill-with-docs` → `book-ddd-distilled-modeling` → `to-spec` → `to-tickets` → Trellis workflow。
-- 设计阶段：涉及存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流时，`grill-with-docs` / `to-spec` → `book-ddia-data-design` → `design.md` / `implement.md` → Trellis / `tdd` / GitNexus impact-analysis。
-- 开发前 / 开发中：结构性阻碍当前实现或 review 需要判断是否先重构时，代码阅读 / `codebase-design` / GitNexus exploring → `book-refactoring-pass` → Codex implementation → 项目验证。
-- 遗留 bug 修复：目标代码测试不足、行为不清或隐藏依赖较多时，`diagnosing-bugs` → `book-legacy-change-safety` → `tdd` / characterization test → Codex fix → 项目验证。
-- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后调用 `book-release-readiness`；如涉及 Web / API / E2E，再进入 Chrome DevTools MCP / Playwright / Maestro / `web-ui-autotest-generator` gate；如涉及公开网站、落地页、文档站、产品页或营销页的搜索可见性，再按 `seo-geo` gate 检查 SEO/GEO；如仍有高风险 review 缺口，再进入 Channel preflight。
-
-同一任务不要默认全量调用 5 个 book-derived Skill；按当前主风险选择最相关的 1-2 个。只有任务横跨需求建模、数据设计、遗留代码和生产发布多个风险面时，才分阶段调用多个。
+- 需求 / PRD 阶段：无论是 Agent 自发调用还是用户主动调用，每次 `grill-with-docs` 完整结束后都必须执行 `book-ddd-distilled-modeling` 独立二次审核，向用户输出 `DDD Boundary Review` 并达到 `confirmed`，再进入 `to-spec` → `to-tickets` → Trellis workflow；没有调用 `grill-with-docs` 时，才按业务术语、领域规则或 bounded context 风险独立判断是否调用。
+- 设计阶段——数据密集型变更在设计稳定前强制审核：持久化 / 共享数据、schema / migration、shared / persistent / cross-request / cross-process cache、异步 / 跨服务数据流、数据所有权、事务 / 读写路径或 backfill / replay / rollback / recovery 任一变化时，`book-ddia-data-design` 必须输出 `DDIA Data Design Review` 并达到 `confirmed`，再稳定 `design.md` / `implement.md` 或开始实现。
+- 修改前——遗留 / bug 风险在行为修改前强制审核：修复既有行为 bug，或弱测试、行为不清、隐藏依赖、高回归风险任一命中时，`diagnosing-bugs` / 代码证据 → `book-legacy-change-safety` → safety net，`Legacy Change Safety Review` 达到 `characterized` 后才能修改行为；安全网必须先引入生产 seam 时进入 `seam-required`。
+- 实现前——既有生产代码在首次实现编辑前强制审核：任何既有生产代码修改都必须执行 `book-refactoring-pass`；`Refactoring Review` 为 `refactor-first` 时先完成最小行为保持重构并复审，为 `proceed` 后再实现。legacy 为 `seam-required` 时允许先运行 `safety-seam-only` 模式。
+- 同时命中 legacy 和 refactoring gate 时，正常顺序为 `Legacy Change Safety Review` → `Refactoring Review` → Codex implementation；受控例外为 `seam-required` → `Refactoring Review` (`safety-seam-only`) → 建立 safety net → legacy `characterized` → 常规 `Refactoring Review`，避免测试 seam 死锁且禁止普通重构抢跑。
+- 验证 / 发布前——生产路径变更在项目验证后强制审核：service、API、auth、billing、notification、job、queue、scheduler、external integration、data pipeline 或 deployment behavior 任一变化时，先完成所有适用 testing-tool gate 和 project validation，再执行 `book-release-readiness` → `Release Readiness Review`；达到 `ready` 后再进入可选 Channel preflight 和完成 / 发布决策。必需验证缺失只能 `blocked`，optional check 仅可由明确 accountable owner 接受为 residual risk。
+- 未命中强制触发条件时，5 个 book-derived Skill 继续按主风险选择最相关的 1-2 个；不要把全套门禁机械套入 docs-only、test-only、简单 UI polish、local-only script 或全新隔离代码。
 
 这些 Skill 的结论优先写入当前 task 的 `prd.md`、`design.md`、`implement.md` 或 check summary。只有形成长期架构、API、数据模型、权限、业务规则或技术约定时，才进入 `.trellis/spec`。
 
