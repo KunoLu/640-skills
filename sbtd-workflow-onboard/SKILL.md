@@ -150,7 +150,7 @@ The stable set is an unmodified mirror, not a fork. `assets/external-skills/stab
 For every selected project root, normal `init` / `reset` and project-only `init-projects` independently:
 
 1. Check whether project `AGENTS.md` should be installed.
-2. Ensure the bundled project `.gitignore` block exists.
+2. Ensure every non-empty line from the bundled project `.gitignore` exists, appending only missing lines without reordering or duplicating existing project content.
 3. Check whether `.trellis/` exists.
 4. If missing and not explicitly skipped, require the global Trellis CLI and run `trellis init -u <username> ... --yes --skip-existing` in that project.
 5. Check `.trellis/tasks/00-bootstrap-guidelines` after initialization.
@@ -164,7 +164,7 @@ React Bits remains project-only and optional:
 
 - shadcn/ui-only is the default choice.
 - React Bits Free requires an explicitly configured free registry item.
-- Paid Starter / Pro / Ultimate setup requires an existing entitlement and a readable `REACTBITS_LICENSE_KEY`; never print or persist the key.
+- Paid Starter / Pro / Ultimate setup requires an existing entitlement and a readable `REACTBITS_LICENSE_KEY`; install the Skill at `.agents/skills/react-bits-pro/SKILL.md`, overwriting that target without a backup, and never print or persist the key.
 - Preserve a detected tier/registry during reset.
 
 ## MCP Scope Policy

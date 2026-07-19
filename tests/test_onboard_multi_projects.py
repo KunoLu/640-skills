@@ -248,6 +248,12 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         )
         self.assertTrue(payload["projects"][0]["reactBits"]["applicable"])
         self.assertTrue(payload["projects"][1]["playwright"]["applicable"])
+        paid_steps = " ".join(
+            payload["projects"][0]["reactBits"]["manualCheck"]["steps"]
+        )
+        self.assertIn("even when the target Skill already exists", paid_steps)
+        self.assertNotIn("project Skill is missing", paid_steps)
+
         self.assertNotIn("runtime", payload)
         self.assertNotIn("tools", payload)
         self.assertNotIn("skills", payload)
@@ -343,6 +349,76 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertTrue((self.project_two / ".gitignore").is_file())
         self.assertFalse((self.codex_home / "AGENTS.md").exists())
         self.assertFalse((self.codex_home / "skills").exists())
+
+    def test_init_projects_appends_only_missing_gitignore_lines(self) -> None:
+        gitignore = self.project_one / ".gitignore"
+        gitignore.write_text(
+            "# project-specific\nnode_modules/\n.trellis/*\n",
+            encoding="utf-8",
+        )
+        args = (
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-project-agents",
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        first = self.run_onboard(*args)
+        first_content = gitignore.read_text(encoding="utf-8")
+        second = self.run_onboard(*args)
+        second_content = gitignore.read_text(encoding="utf-8")
+
+        self.assertEqual(first.returncode, 0, first.stderr or first.stdout)
+        self.assertEqual(second.returncode, 0, second.stderr or second.stdout)
+        self.assertIn("# project-specific\n", first_content)
+        self.assertEqual(first_content.count("node_modules/\n"), 1)
+        self.assertEqual(first_content.count(".trellis/*\n"), 1)
+        self.assertEqual(first_content.count(".gitnexus/\n"), 1)
+        template_lines = {
+            line
+            for line in (
+                ROOT
+                / "sbtd-workflow-onboard"
+                / "templates"
+                / "project"
+                / ".gitignore"
+            )
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line
+        }
+        self.assertTrue(template_lines.issubset(set(first_content.splitlines())))
+        self.assertEqual(second_content, first_content)
+
+    def test_init_projects_preserves_complete_utf8_bom_gitignore(self) -> None:
+        gitignore = self.project_one / ".gitignore"
+        template = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "project"
+            / ".gitignore"
+        ).read_text(encoding="utf-8")
+        initial_bytes = b"\xef\xbb\xbf" + template.encode("utf-8")
+        gitignore.write_bytes(initial_bytes)
+        args = (
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-project-agents",
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        first = self.run_onboard(*args)
+        second = self.run_onboard(*args)
+
+        self.assertEqual(first.returncode, 0, first.stderr or first.stdout)
+        self.assertEqual(second.returncode, 0, second.stderr or second.stdout)
+        self.assertEqual(gitignore.read_bytes(), initial_bytes)
+
 
     def test_external_skill_project_scope_is_rejected(self) -> None:
         completed = self.run_onboard(

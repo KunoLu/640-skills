@@ -277,3 +277,39 @@
 - 根因：触发条件、Plan 状态机、reviewer 结果、修正回路、跨 Gate 依赖顺序和安装激活条件没有作为一个完整 contract 设计。
 - 修复：`Book Gate Plan` 独立记录 `planned` / `running` / `passed` / `blocked` / `not-required`，reviewer status 只在实际运行后填写；命中门禁缺 Skill 或证据时一律 `blocked`。legacy 的 `seam-required` 只允许 refactoring 进入 `safety-seam-only`，建立并验证最小行为保持 seam 后回到 characterization，再正常重跑 refactoring。Release Readiness 固定在所有适用 testing-tool gate 与 project validation 后执行，并区分不可豁免的 required validation 与可由 accountable owner 接受的 optional check。Onboard contract 明确只有正常 `init` / `reset` 成功写入全局规则并安装 bundled / external Skills 后才激活，public Skills CLI bootstrap 与 `init-projects` 不单独激活运行时门禁。
 - 预防：强制风险审核必须同时定义 objective trigger、execution stage、Plan lifecycle、visible reviewer result、pass state、retry loop、blocked priority、cross-gate dependency order、missing-Skill semantics、activation boundary 和 unmatched on-demand boundary；测试必须覆盖修正回路与顺序，而不只是静态关键词。
+
+## LESSON-20260718-sync-table-current-source: Sync Tables Must Use Current Tracked Rules
+
+- 日期：2026-07-18
+- 标签：sync, agents, source-of-truth, automation, skills
+- 适用场景：执行本地 sync、增加 bundled Skill、维护同步允许列表或版本检查 automation 的验证范围
+- 严重级别：high
+- 来源：显式 `sync` 已执行时，当前 tracked `AGENTS.md` 的同步表已经包含 bundled `web-ui-autotest-generator`，但执行过程依赖了会话中较早注入的规则副本，实际目标清单漏掉该 Skill。
+- 问题：最终报告把 `web-ui-autotest-generator` 误报为“不在显式同步表”，导致 tracked source 与本地落地行为不一致；版本化 automation prompt 也没有验证同步表覆盖 catalog 中要求全局同步的 bundled Skills。
+- 根因：把会话注入或历史摘要当成当前工作树事实，没有在写入本地目标前重新读取 tracked `AGENTS.md` 的同步表并从表中生成清单。
+- 修复：确认当前同步表已经包含 `web-ui-autotest-generator` 的 source / target 映射，不重复写入；README / HTML 明确该允许列表项，contract test 锁定精确表格行；版本检查 prompt 增加 bundled Skill 同步表覆盖检查，并把最新 CHANGELOG 维护契约纳入评估、验证和最终报告。
+- 预防：每次显式 sync 都必须在 preflight 后读取当前工作树 `AGENTS.md`，从表格生成目标清单，再逐项复制和校验；缓存上下文只用于定位，不能替代 tracked source。新增 bundled Skill 时同步更新 catalog、同步表、README、automation validation 和 contract test。
+
+## LESSON-20260719-orca-automation-detached-agent-pty: Blank Automation Tabs Can Hide a Detached Agent PTY
+
+- 日期：2026-07-19
+- 标签：orca, automation, terminal, pty, renderer, debugging
+- 适用场景：手动执行 Orca automation 后新建了终端标签，但标签只显示旧 shell prompt、空白画面或没有 Agent 进度
+- 严重级别：high
+- 来源：手动执行 `SBTD Workflow Tools Version Check` run 7 时，Orca UI 中的新标签持续空白，但 automation 最终成功完成并生成了完整 output snapshot。
+- 问题：空白标签容易被误判为 prompt 未发送或 Agent 没有启动，进而重复点击运行；本次相邻 run 6 在已有大量 TUI 输出后以 `Automation process exited with code -1` 结束。
+- 根因：同一个 automation tab / leaf 同时关联了两个 live PTY。UI renderer 绑定到空闲 shell PTY，显示 15:06 的旧 prompt；run record 的 `terminalPtyId` 指向另一个实际运行 `omp` 的 PTY。后者的 `terminal show` preview、terminal-history checkpoint 和进程树持续更新，但 `paneRuntimeId` 为 `-1`，没有绑定到可见 pane。
+- 修复：先用 `orca automations runs --id <id> --json` 取得 run 的 `terminalPtyId`，再与 `orca terminal list/show` 的 `ptyId`、`tabId`、`leafId` 和 `paneRuntimeId` 交叉核对；运行中以 run status、agent PTY preview 和最终 `outputSnapshot` 判断真实状态，不修改 prompt，也不因空白标签盲目重跑或终止。只有 run 已完成并确认 output snapshot 后，才可清理重复的空闲 shell pane。可见输出的根治需要 Orca runtime 保证 automation tab 只绑定 Agent PTY，或在检测到重复 PTY 时把 renderer 重新绑定到 run 的 `terminalPtyId`。
+- 预防：排查 automation 空白终端时必须区分“run 未 dispatch”“Agent PTY 无输出”和“Agent PTY 有输出但 renderer 绑定到另一个 shell PTY”三种情况；UI 截图、run record、terminal metadata、terminal-history checkpoint 和进程 TTY 必须互证，不能只看空白 pane。
+
+## LESSON-20260719-installer-output-and-line-merge-contracts: Installer Writes Need Explicit Output And Merge Contracts
+
+- 日期：2026-07-19
+- 标签：installer, skills, gitignore, idempotency, paths, validation
+- 适用场景：第三方 CLI 生成项目文件，或把模板内容增量合并到已有配置文件
+- 严重级别：high
+- 来源：`--init-projects` 把 React Bits Skill 写到项目根，并把 `.gitignore` 模板整段重复追加的用户反馈与回归测试
+- 问题：`npx shadcn add @reactbits-starter/skill` 按 registry 默认 target 在项目根创建 `SKILL.md`，而预期位置是 `.agents/skills/react-bits-pro/SKILL.md`；项目 `.gitignore` 只要与完整模板块不完全相同，安装器就再次追加整个模板，复制已有规则。
+- 根因：安装器把“命令成功”和“目标产物位于正确路径”等同，并把声明型配置的包含关系建模为整段字符串包含，而不是模板原子条目的差集。
+- 修复：React Bits 安装显式传入 `--path .agents/skills/react-bits-pro --overwrite --yes`，随后校验目标 `SKILL.md` 存在；`.gitignore` 按精确非空行求有序差集，只追加缺失行，校验也复用同一差集函数。
+- 预防：第三方生成命令必须显式指定并复验最终产物路径、覆盖和备份语义；增量模板合并必须按配置格式的原子条目比较，并用“部分已有内容 + 连续执行两次”的回归测试证明不删除、不重复和幂等。

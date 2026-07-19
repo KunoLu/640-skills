@@ -74,8 +74,8 @@ Tier 确认：
 - 在 `components.json` 中只合并 `registries`，不要覆盖 `$schema`、`style`、`tailwind`、`aliases` 等既有字段。
 - `@reactbits-starter` registry URL 使用 `https://pro.reactbits.dev/api/r/starter/{name}.json`，Authorization header 使用 `Bearer ${REACTBITS_LICENSE_KEY}`。
 - `@reactbits-pro` registry URL 使用 `https://pro.reactbits.dev/api/r/pro/{name}.json`，仅在需要 Pro / Ultimate blocks 时配置。
-- 如果其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill`。该命令是项目级安装，不是全局安装。
-- 只有 React Bits Pro Skill 安装成功、项目中出现对应 `SKILL.md`，且当前环境能读取 `REACTBITS_LICENSE_KEY` 后，才读取该 Skill 并继续安装 components / blocks。
+- 如果其他前提都满足，但项目环境中没有安装对应 React Bits Pro Skill，先在项目根目录执行 `npx shadcn@latest add @reactbits-starter/skill --path .agents/skills/react-bits-pro --overwrite --yes`。该命令是项目级安装，不是全局安装；已有 `.agents/skills/react-bits-pro/SKILL.md` 直接覆盖，不保留备份。
+- 只有 `.agents/skills/react-bits-pro/SKILL.md` 安装成功，且当前环境能读取 `REACTBITS_LICENSE_KEY` 后，才读取该 Skill 并继续安装 components / blocks。
 - 安装组件时优先使用 shadcn CLI；组件按项目样式栈选择 Tailwind `-tw` 或 CSS `-css` 变体，blocks 使用 `@reactbits-pro/<name>`。
 - 在 `reset` 中如果检测到既有 React Bits Free、Starter、Pro 或 Ultimate registry / Skill，必须保留并输出检测到的 tier；未经用户确认，不用默认免费版覆盖已存在 tier。
 

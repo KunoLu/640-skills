@@ -21,11 +21,16 @@
 - 当前仓库是 Codex 配置文件与 Skill 的摘录 / 同步源，不是真实业务项目；修改时先区分“配置源文件”和“真实项目模板”。
 - 每日版本检查自动化只能读取 `ENTRYPOINT.md` 当前版本作为比对基线，不能自动写回版本号；只有用户手动输入 `更新` / `update` 才执行写回和归档。
 - 普通修改只维护仓库文件并评估 README 两份文件和版本化 automation prompt；只有用户主动输入 `同步` / `sync` 才同步本地配置并按差异同步 Orca live prompt，`更新` / `update` 只处理版本写回和归档。
+- 执行显式 `sync` 时必须重新读取当前工作树 `AGENTS.md` 的同步表并据此生成目标清单；不得用会话注入、历史摘要或缓存列表替代当前 tracked source。
+- Orca automation 新标签空白时先按 run 的 `terminalPtyId` 关联 `terminal list/show`；同一 tab / leaf 下 renderer 绑定空闲 shell、实际 Agent PTY detached 时，任务仍可能正常执行，不能因空白 pane 盲目重跑或终止。
 - 自动化专用规则只能写入本仓库根 `AGENTS.md` 或相关自动化说明，不要污染可复用的全局 / 项目 AGENTS 模板。
 - 展示型或文档型任务中的参考配置，默认先视为展示内容；只有用户明确要求修改当前仓库配置时才落地到仓库根。
 - 使用 `rtk` 后遇到明显包装器参数解析异常时，必须用原生命令复验同一事实。
 - unit / API / Playwright / Maestro 报告型测试在使用 `rtk` 前必须评估缓存 / 回放和文件写入风险；报告缺失、陈旧或不可证明时用原生命令复验。
 - 修改 macOS 可直接执行的 Bash installer 时，必须用 Bash 3.2 + `set -u` 验证空数组路径；空数组展开要使用 Bash 3.2 兼容写法，避免 `unbound variable`。
+- 交互式 Bash installer 在重定向循环、pipeline 或 process substitution 内提示用户时，必须从脚本启动时保留的专用 stdin fd 读取并处理 EOF；不能让项目数据流劫持 prompt 后无限输出 `Invalid choice.`。
+- 第三方 CLI 生成项目文件时必须显式指定并复验最终路径、覆盖和备份语义；模板增量合并按配置原子条目求差集，并用连续执行两次的测试证明幂等。
+- Shell 脚本同时支持 `NO_COLOR` 等标准环境约定和对应 CLI flag 时，外部环境输入与内部解析状态必须使用不同变量名，并用真实 TTY/PTY 覆盖默认和禁用分支。
 - 根 `.gitignore` 的当前 canonical 内容严格为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；仓库启动必需的 `AGENTS.md` 和 authoritative `ENTRYPOINT.md` 必须由 Git 追踪，或具备受版本控制且可在任何 Gate 前执行的 bootstrap，不能同时设为 ignored / untracked 和全操作前置条件。
 - 通过 Skills CLI 生成的 `.claude/skills`、`.agents/skills` 等项目级 alias 只有在 target 存在且属于当前 canonical 仓库设计时才能追踪；用户级全局安装产生的项目内 alias 或 broken symlink 必须删除。
 - External Skill installer 的 manifest、source subpath 和 license 路径必须受声明根目录约束；canonical 必须完整校验；事务恢复不完整时不得删除唯一 rollback 备份，必须保留并报告路径。

@@ -149,7 +149,7 @@ bash install.sh
 pwsh -File .\install.ps1
 ```
 
-交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。非交互执行必须二选一：普通模式使用 `--platform`、`--projects-root`、`--action init|reset` 和 `--yes`；project-only 使用 `--platform`、`--init-projects` 和 `--yes`。
+交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 `Invalid choice.`。非交互执行必须二选一：普通模式使用 `--platform`、`--projects-root`、`--action init|reset` 和 `--yes`；project-only 使用 `--platform`、`--init-projects` 和 `--yes`。
 
 ## 仓库定位
 
@@ -188,7 +188,7 @@ pwsh -File .\install.ps1
 
 `AGENTS.md` 和 `ENTRYPOINT.md` 是必须由 Git 追踪的仓库控制文件：前者保存当前仓库直接生效的补充规则，后者保存版本检查和 `update` / `更新` 使用的 authoritative baseline。新 clone 必须直接取得二者；不要把它们加入 `.gitignore`、移出索引或只保存在单台工作站。
 
-普通修改任务只更新本仓库内的源文件。每次仓库代码或工作流规则改动后，都必须评估 `README.md`、`README.html` 和版本化 automation prompt 是否需要同步调整。只有用户明确输入 `sync` 或 `同步` 时，才把允许列表中的全局规则和 Skill 同步到本地生效路径，并比较版本化 prompt 与 Orca `SBTD Workflow Tools Version Check` 的完整内容；仅在存在差异时同步到 live automation 并报告结果。`update` / `更新` 只处理版本写回和归档，与版本化 prompt 和 live automation 无关；`AGENTS.project.md` 不在普通 sync 范围内。
+普通修改任务只更新本仓库内的源文件。每次仓库代码或工作流规则改动后，都必须评估 `CHANGELOG.md`、`README.md`、`README.html` 和版本化 automation prompt 是否需要同步调整。只有用户明确输入 `sync` 或 `同步` 时，才把允许列表中的全局规则和 Skill 同步到本地生效路径；sync 允许列表明确包含 bundled `web-ui-autotest-generator` 完整目录到 `/Users/lusonglin/.agent/skills/web-ui-autotest-generator/` 的映射。随后比较版本化 prompt 与 Orca `SBTD Workflow Tools Version Check` 的完整内容，仅在存在差异时同步到 live automation 并报告结果。`update` / `更新` 只处理版本写回和归档，与版本化 prompt 和 live automation 无关；`AGENTS.project.md` 不在普通 sync 范围内。
 
 ## 工作流主线
 
@@ -454,7 +454,7 @@ React Bits 不是 shadcn/ui 的必装依赖。安装和 reset 默认保持 shadc
 - 先说明 shadcn/ui 提供常规应用组件，React Bits Free / 付费 tier 只是可选增强。
 - 询问用户选择继续 shadcn/ui only、安装 React Bits Free，或使用已有付费 Starter / Pro / Ultimate。
 - React Bits Free 只有在本工作流已有明确免费 source / registry / 安装命令时才安装；未配置时说明暂不可自动安装。
-- 付费 Starter / Pro / Ultimate 必须由用户确认，且当前环境能读取 `REACTBITS_LICENSE_KEY`；不打印、不输出、不提交该 key。
+- 付费 Starter / Pro / Ultimate 必须由用户确认，且当前环境能读取 `REACTBITS_LICENSE_KEY`；安装器固定把 Skill 写入项目的 `.agents/skills/react-bits-pro/SKILL.md`，已有目标直接覆盖且不保留备份，不打印、不输出、不提交 key。
 - reset 时保留检测到的既有 React Bits Free、Starter、Pro 或 Ultimate tier / registry，不用默认免费版覆盖。
 
 ## `seo-geo` 使用边界
@@ -568,7 +568,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 ## 模板 `.gitignore` 工具与测试产物策略
 
-项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 `.omp/plugins/`；`trellis init --omp` 生成的 `.omp/agents/`、`.omp/commands/`、`.omp/skills/` 和 `.omp/extensions/` 应由 Git 追踪。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
+项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 `.omp/plugins/`；`trellis init --omp` 生成的 `.omp/agents/`、`.omp/commands/`、`.omp/skills/` 和 `.omp/extensions/` 应由 Git 追踪。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
 
 ```gitignore
 # ---------- OMP ----------

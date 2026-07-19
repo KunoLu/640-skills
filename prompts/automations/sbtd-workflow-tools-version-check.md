@@ -11,7 +11,7 @@
 - 先读取项目根目录的 `docs/lessons.md`；如果当前任务命中 repository-workflow、validation-scripts 或其他 topic 路由，再读取对应 `docs/lessons/topics/*.md`。
 - 读取项目根目录的 `AGENTS.md` 和 `ENTRYPOINT.md`。
 - Agent 规则文件路径以 `AGENTS.md` 中“Agent 规则文件路径”章节为准。
-- 当前可读取、评估或修改的本仓库规则 / Skill 源路径仅限：`AGENTS.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/skills/**`、`prompts/automations/sbtd-workflow-tools-version-check.md`。
+- 当前可读取、评估或修改的本仓库版本化规则、文档或 Skill 源路径仅限：`AGENTS.md`、`ENTRYPOINT.md`、`UPDATE.md`、`CHANGELOG.md`、`README.md`、`README.html`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/skills/**`、`prompts/automations/sbtd-workflow-tools-version-check.md`。
 - 不要读取或修改已删除的旧路径：`kuno-workflow-onboard-skills/`、根目录旧 `AGENTS.global.md`、根目录旧 `AGENTS.project.md`、顶层 `agents/`、顶层 `skills/`。
 - `UPDATE.md` 的正文内容必须使用中文。
 - 不要修改 `ENTRYPOINT.md` 中任何工具的当前版本号；`ENTRYPOINT.md` 只作为版本比对基线读取。
@@ -57,13 +57,14 @@
   - 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。
   - 自动化专用规则只能写入本仓库根 `AGENTS.md`、本 prompt 或其他自动化说明，不要污染可复用的全局 / 项目 AGENTS 模板。
   - 不要因为发现新版本就修改 `ENTRYPOINT.md` 的版本字段。
-12. 如果仓库代码、`sbtd-workflow-onboard/`、工作流规则、安装 / reset 行为或用户可见路径有更新，必须在同一轮评估 `README.md`、`README.html` 和本 prompt 是否需要同步调整；只更新实际受影响的版本化文件，无需修改的入口在最终输出说明原因。版本检查自动化不直接读取或写入 Orca live automation。
+12. 如果仓库代码、`sbtd-workflow-onboard/`、工作流规则、安装 / reset 行为或用户可见路径有更新，必须在同一轮评估 `CHANGELOG.md`、`README.md`、`README.html` 和本 prompt 是否需要同步调整；新增用户可见能力、安装方式、兼容性边界、迁移、修复或发布前验证变化时更新 `CHANGELOG.md`，其他入口只更新实际受影响的版本化文件，无需修改时在最终输出说明原因。版本检查自动化不直接读取或写入 Orca live automation。
 13. 运行验证：
   - `git status --short`
-  - 检查 `ENTRYPOINT.md`、`UPDATE.md`、`AGENTS.md`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/skills/**/SKILL.md` 的结构是否可读。
-  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。
+  - 检查 `ENTRYPOINT.md`、`UPDATE.md`、`AGENTS.md`、`CHANGELOG.md`、`README.md`、`README.html`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/skills/**/SKILL.md` 的结构是否可读。
+  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。同步核对 `AGENTS.md` 的“本地同步规则”表：仓库管理且要求全局同步的 bundled Skill 必须具有正确的 source / target 映射，包含 `web-ui-autotest-generator`，同时保持 `AGENTS.project.md` 不在普通 sync 范围内。
   - 验证能从 `ENTRYPOINT.md` 正确解析受监控工具表。
   - 验证 `UPDATE.md` 使用中文，且各工具区间起点等于 `ENTRYPOINT.md` 中该工具当前版本。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。
   - 验证根 `.gitignore` 内容严格为四行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`。
-14. 最终输出必须说明：发现的版本区间、修改的文件、`README.md` / `README.html` / 本 prompt 的维护判断、验证命令和结果、跳过项及原因、剩余风险、`rtk` 使用状态。再次强调：不要 commit，不要 push，不要把最新版本写回 `ENTRYPOINT.md`。
+  - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 按精确非空行只追加模板缺失项，重复执行不产生重复行。
+14. 最终输出必须说明：发现的版本区间、修改的文件、`CHANGELOG.md` / `README.md` / `README.html` / 本 prompt 的维护判断、验证命令和结果、跳过项及原因、剩余风险、`rtk` 使用状态。再次强调：不要 commit，不要 push，不要把最新版本写回 `ENTRYPOINT.md`。

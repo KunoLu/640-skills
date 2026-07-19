@@ -93,6 +93,18 @@
 - 修复：对可能为空的数组拷贝、循环、函数参数转发和 append 操作使用 `${array[@]+"${array[@]}"}` 兼容展开；对 NUL 参数输出增加非空计数保护，避免空数组时生成空参数。
 - 预防：后续修改 `install.sh` 或其他面向 macOS 的 Bash installer 时，必须至少运行 `/bin/bash -uc 'a=(); for x in "${a[@]}"; do :; done'` 确认本机 Bash 行为，并用 Bash 3.2 执行无可选数组参数的 dry-run 路径。空数组展开不能只在当前新版 Bash 上验证。
 
+## LESSON-20260719-bash-prompt-stdin-redirection: Interactive Bash Prompts Need a Dedicated Input FD
+
+- 日期：2026-07-19
+- 标签：bash, installer, stdin, process-substitution, interactive, powershell
+- 适用场景：交互式 Bash 脚本在 `while` / pipeline / process substitution 内调用 `read`，或出现无阻塞重复的 invalid choice / yes-no 提示
+- 严重级别：high
+- 来源：执行 `bash install.sh --init-projects /Users/lusonglin/github/KPi,/Users/lusonglin/github/keyboy-play`，选择 Codex 并确认安装项目 AGENTS 后，脚本无限输出 `Invalid choice.`。
+- 问题：逐项目检查触发 React Bits 选择时，用户无法输入有效选项；循环高速输出错误，必须外部终止进程。
+- 根因：`configure_project_optional_items` 使用 `while ... done < <(project_check_lines)`，整个循环的 fd 0 被项目清单 process substitution 替换。循环内 `select_one` 从项目清单读取下一行而不是从用户终端读取；清单耗尽后 `read` 持续返回 EOF，而选择循环没有检查返回值，遂永久输出 `Invalid choice.`。
+- 修复：脚本启动时用专用 fd 保存原始 stdin，所有交互式 `read` 显式从该 fd 读取；每个交互读取都检查 EOF 并明确失败退出。新增真实 prompt 顺序回归测试，并以两个实际项目的 PTY dry-run 验证 `1`、`y`、React Bits `1`、最终 `y` 可正常完成。PowerShell 版本通过内存对象 `foreach` 和 `Read-Host` 遍历，不存在同一 stdin 重定向。
+- 预防：交互函数不得隐式依赖调用方当前 fd 0；凡是在重定向循环、pipeline 或 process substitution 内调用提示函数，都必须使用启动时保留的输入 fd 或先把数据读入内存，并处理 EOF。测试必须让数据流和用户输入流同时存在，不能只覆盖空项目清单或全部 `--skip-*` 的非交互路径。
+
 ## LESSON-20260701-validation-script-check-lessons: Validation Script Check Lessons
 
 - 日期：历史记录迁移，原始日期未记录
@@ -316,3 +328,39 @@
 - 根因：契约只定义了显示语义，没有分别定义 Markdown 和 HTML 的源结构，也没有在需要跨标签比较时解析 DOM / text content。
 - 修复：为 `README.md` 和 `README.html` 分别断言符合各自格式的完整片段；浏览器验证继续检查渲染后的可见文本。
 - 预防：双格式文档契约必须选择其一：按格式分别断言源码结构，或解析 Markdown / HTML 后比较规范化语义；不得要求跨标签内容在原始 HTML 中保持连续。
+
+## LESSON-20260719-shell-env-and-cli-state-names: Shell Environment Contracts Need Separate Internal State
+
+- 日期：2026-07-19
+- 标签：shell, installer, environment, cli, color, state
+- 适用场景：Shell 脚本同时支持标准环境变量约定和对应 CLI flag
+- 严重级别：high
+- 来源：`install.sh` 同时用 `NO_COLOR` 保存内部数值状态并检查外部 `NO_COLOR` 环境变量，导致默认交互终端永远禁色。
+- 问题：脚本启动时执行 `NO_COLOR=0` 覆盖了外部环境值；`supports_color` 随后同时要求该值数值等于 `0` 且字符串为空，这两个条件不可能同时成立，彩色 banner 分支无法执行。
+- 根因：把外部环境契约和内部解析状态复用为同名变量，形成自覆盖和互斥断言。
+- 修复：内部 CLI 状态改为 `NO_COLOR_REQUESTED`，标准 `NO_COLOR` 仅作为只读环境输入；用真实 PTY smoke 确认默认终端含 ANSI 色码和大型 `KUNO` 字形。
+- 预防：实现 `NO_COLOR`、`CI`、`DEBUG` 等环境约定时，内部 flag 必须使用不同名称；测试同时覆盖默认 TTY、环境变量禁用和 CLI flag 禁用，不能只在 capture pipe 中验证 fallback。
+
+## LESSON-20260719-block-edit-resolved-range: Verify Structural Edit Resolved Ranges Immediately
+
+- 日期：2026-07-19
+- 标签：editing, ast, tests, recovery, validation
+- 适用场景：使用结构化 block edit 替换类中的单个方法或相邻声明
+- 严重级别：high
+- 来源：替换 PowerShell banner 契约测试方法时，`SWAP.BLK` 实际解析并消费了该方法之后的整个剩余类体，连带删除三个无关测试。
+- 问题：编辑请求的语义范围小于工具实际解析范围；若只继续运行定点测试，删除的无关测试可能不会被发现。
+- 根因：对 block resolver 的节点边界做了假设，没有优先使用已知的精确行范围，也没有把工具返回的 `resolved lines` 当成必须立即核对的变更证据。
+- 修复：在编辑结果返回后立即识别异常的 56 行消费范围，停止后续实现，读取类尾并恢复三个测试；随后运行完整测试类确认测试数量和契约恢复。
+- 预防：替换单个方法且结束行已知时优先使用精确 `SWAP N.=M`；使用 block edit 后必须核对 resolved range 是否只覆盖预期声明，范围异常时先恢复再继续，定点测试之外还要运行所属测试类。
+
+## LESSON-20260719-installer-compatibility-contracts: Installer Compatibility Needs Boundary Fixtures
+
+- 日期：2026-07-19
+- 标签：shell, powershell, installer, stdin, encoding, bom, contracts
+- 适用场景：跨 Bash / PowerShell 安装器修改输入、编码、文件合并或外部 CLI 落点
+- 严重级别：high
+- 来源：代码审核发现 Bash 顶层 stdin fd 复制、PowerShell 无 BOM、BOM `.gitignore` 比较、React Bits 已有目标覆盖提示和 automation 路径 allowlist 五类边界缺口。
+- 问题：正常交互 happy path 和普通 UTF-8 fixture 均能通过，但 closed stdin、Windows PowerShell 5.1、UTF-8 BOM、已有目标覆盖和版本基线输出路径没有被同一套回归契约覆盖。
+- 根因：实现和测试都聚焦主要流程，忽略了脚本解析时机、宿主默认编码、比较视图与写回字节的差异，以及文档化 allowlist / overwrite 语义。
+- 修复：参数解析后再安全复制 stdin 并回退只读 `/dev/null`；PowerShell 保存为 UTF-8 BOM；`.gitignore` 比较时只规范化首行 BOM、写回保留原字节；React Bits 检查始终要求目标覆盖；automation allowlist 包含其实际读取的版本基线与输出文件。
+- 预防：安装器回归必须包含 closed-stdin 命令、PowerShell 编码字节断言、普通与 BOM 文件幂等 fixture、已有目标覆盖和版本化路径 allowlist；比较规范化不得改变持久化字节。

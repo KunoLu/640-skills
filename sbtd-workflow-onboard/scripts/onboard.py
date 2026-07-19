@@ -1185,7 +1185,7 @@ def build_react_bits_tier_manual_check(project_root: Path) -> dict[str, object]:
             "Ask whether this project should stay with shadcn/ui only, add React Bits Free, or use an existing paid Starter / Pro / Ultimate entitlement.",
             "For React Bits Free, install only after the user confirms and a free source or registry has been explicitly configured for this workflow.",
             "For paid tiers, require explicit user confirmation and verify the current environment can read `REACTBITS_LICENSE_KEY` without printing it.",
-            "If paid prerequisites are met but the project Skill is missing, run `npx shadcn@latest add @reactbits-starter/skill` from the project root, then confirm the React Bits Skill `SKILL.md` exists before using it.",
+            "When paid prerequisites are met and the user selects a paid tier, run `npx shadcn@latest add @reactbits-starter/skill --path .agents/skills/react-bits-pro --overwrite --yes` from the project root even when the target Skill already exists, then confirm `.agents/skills/react-bits-pro/SKILL.md` exists before using it.",
             "During reset, preserve the detected React Bits tier and registry; do not replace Free, Starter, Pro, or Ultimate with a different default tier without confirmation.",
         ),
     }
@@ -2071,23 +2071,51 @@ def compare_tree(
     return failures
 
 
+def missing_file_lines(source_text: str, target_text: str) -> list[str]:
+    target_lines = target_text.splitlines()
+    if target_lines:
+        target_lines[0] = target_lines[0].removeprefix("\ufeff")
+    existing_lines = set(target_lines)
+    missing_lines: list[str] = []
+    pending_separator = False
+
+    for line in source_text.splitlines():
+        if not line:
+            pending_separator = bool(missing_lines)
+            continue
+        if line in existing_lines:
+            continue
+        if pending_separator and missing_lines[-1] != "":
+            missing_lines.append("")
+        missing_lines.append(line)
+        existing_lines.add(line)
+        pending_separator = False
+
+    return missing_lines
+
+
 def ensure_file_contains(source: Path, target: Path) -> str:
     source_text = source.read_text(encoding="utf-8")
-    if not source_text.endswith("\n"):
-        source_text += "\n"
 
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.exists():
+        if not source_text.endswith("\n"):
+            source_text += "\n"
         target.write_text(source_text, encoding="utf-8")
         return "created"
 
     existing = target.read_text(encoding="utf-8")
-    if source_text.strip() in existing:
+    missing_lines = missing_file_lines(source_text, existing)
+    if not missing_lines:
         return "skipped-already-present"
 
     prefix = "" if not existing or existing.endswith("\n") else "\n"
     separator = "\n" if existing.strip() else ""
-    target.write_text(f"{existing}{prefix}{separator}{source_text}", encoding="utf-8")
+    addition = "\n".join(missing_lines) + "\n"
+    target.write_text(
+        f"{existing}{prefix}{separator}{addition}",
+        encoding="utf-8",
+    )
     return "updated"
 
 
@@ -2115,9 +2143,9 @@ def verify_operation(operation: Operation) -> list[str]:
     if operation.kind == "ensure-file-block":
         if not operation.target.is_file():
             return [operation.label]
-        source_text = operation.source.read_text(encoding="utf-8").strip()
+        source_text = operation.source.read_text(encoding="utf-8")
         target_text = operation.target.read_text(encoding="utf-8")
-        if source_text and source_text in target_text:
+        if not missing_file_lines(source_text, target_text):
             return []
         return [operation.label]
     if operation.kind == "file":

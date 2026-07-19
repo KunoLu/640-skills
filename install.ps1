@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Platform = "",
   [string]$SourceRoot = "./sbtd-workflow-onboard",
   [string]$ProjectsRoot = "",
@@ -110,22 +110,15 @@ function Write-Colored {
 }
 
 function Show-Logo {
-  if (Use-Color) {
-    Write-Host "    K  K" -ForegroundColor DarkMagenta
-    Write-Host "    K K " -ForegroundColor DarkMagenta
-    Write-Host "    KK  " -ForegroundColor Magenta
-    Write-Host "    K K " -ForegroundColor Magenta
-    Write-Host "    K  K" -ForegroundColor Magenta
-  }
-  else {
-    Write-Host "    K  K"
-    Write-Host "    K K"
-    Write-Host "    KK"
-    Write-Host "    K K"
-    Write-Host "    K  K"
-  }
   Write-Host ""
-  Write-Colored "SBTD Workflow Installer" Magenta
+  Write-Colored "╭─── SBTD Workflow Installer ─────────────────────────────────────────────────────────────╮" DarkMagenta
+  Write-Colored "│   ██╗  ██╗██╗   ██╗███╗   ██╗ ██████╗    │  Tips                                        │" DarkMagenta
+  Write-Colored "│   ██║ ██╔╝██║   ██║████╗  ██║██╔═══██╗   │  --platform <agent>       Target Agent       │" DarkMagenta
+  Write-Colored "│   █████╔╝ ██║   ██║██╔██╗ ██║██║   ██║   │  --projects-root <paths>  Set project roots  │" Magenta
+  Write-Colored "│   ██╔═██╗ ██║   ██║██║╚██╗██║██║   ██║   │  --init-projects <paths>  Project-only mode  │" Magenta
+  Write-Colored "│   ██║  ██╗╚██████╔╝██║ ╚████║╚██████╔╝   │  --action <init|reset>    Select workflow    │" Magenta
+  Write-Colored "│   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝    │  --dry-run                Preview changes    │" Magenta
+  Write-Colored "╰──────────────────────────────────────────┴──────────────────────────────────────────────╯" Magenta
   Write-Host ""
 }
 
@@ -677,7 +670,20 @@ function Configure-ProjectOptionalItems {
           Write-Warn "REACTBITS_LICENSE_KEY is unavailable; skipped paid React Bits setup for $projectRoot."
         }
         else {
-          Invoke-InProject $projectRoot "npx" @("shadcn@latest", "add", "@reactbits-starter/skill")
+          $reactBitsSkillDirectory = ".agents/skills/react-bits-pro"
+          Invoke-InProject $projectRoot "npx" @(
+            "shadcn@latest",
+            "add",
+            "@reactbits-starter/skill",
+            "--path",
+            $reactBitsSkillDirectory,
+            "--overwrite",
+            "--yes"
+          )
+          $reactBitsSkill = Join-Path $projectRoot "$reactBitsSkillDirectory/SKILL.md"
+          if (-not $DryRun -and -not (Test-Path -LiteralPath $reactBitsSkill -PathType Leaf)) {
+            throw "React Bits setup did not create $reactBitsSkill"
+          }
         }
       }
     }

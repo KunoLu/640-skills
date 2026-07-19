@@ -290,7 +290,7 @@ React Bits tier selection is shown only when the root is a React project and con
 
 - Default: keep shadcn/ui only.
 - Free: require an explicitly configured free registry item before running `npx shadcn@latest add <registry-item>` in that project.
-- Paid: require an existing entitlement and readable `REACTBITS_LICENSE_KEY`; never print or persist it. When prerequisites pass, add `@reactbits-starter/skill` from the project root.
+- Paid: require an existing entitlement and readable `REACTBITS_LICENSE_KEY`; never print or persist it. When prerequisites pass, add `@reactbits-starter/skill` from the project root with `--path .agents/skills/react-bits-pro --overwrite --yes`, then require `.agents/skills/react-bits-pro/SKILL.md` to exist. An existing target is overwritten without a backup.
 - Reset: preserve the detected tier and registry.
 
 ## Multi-Project Trellis Setup

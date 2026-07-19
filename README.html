@@ -494,7 +494,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
   --trellis-user your-name \
   --yes</code></pre>
           <h3>交互式安装脚本</h3>
-          <p>已克隆本仓库时，可运行 <code>bash install.sh</code> 或 <code>pwsh -File .\install.ps1</code>。交互式流程会选择目标 Agent 平台和 init / reset / project-only 模式，收集一个或多个英语逗号分隔的项目路径，按模式检查或安装全局工具与 Skills，写入允许的模板，引导 MCP，并逐项目处理 <code>.gitignore</code>、Trellis、Playwright 和 React Bits 条件项，最后汇总计划、执行状态、阻断原因和验证结果。</p>
+          <p>已克隆本仓库时，可运行 <code>bash install.sh</code> 或 <code>pwsh -File .\install.ps1</code>。交互式流程会选择目标 Agent 平台和 init / reset / project-only 模式，收集一个或多个英语逗号分隔的项目路径，按模式检查或安装全局工具与 Skills，写入允许的模板，引导 MCP，并逐项目处理 <code>.gitignore</code>、Trellis、Playwright 和 React Bits 条件项，最后汇总计划、执行状态、阻断原因和验证结果。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 <code>Invalid choice.</code>。</p>
           </div>
         </div>
         <div class="status-list">
@@ -736,7 +736,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>默认选择</strong><br>先说明 shadcn/ui 提供常规应用组件，React Bits Free / 付费 tier 只是可选增强。</div>
           <div><strong>确认选项</strong><br>询问用户继续 shadcn/ui only、安装 React Bits Free，或使用已有付费 Starter / Pro / Ultimate。</div>
           <div><strong>Free</strong><br>只有在本工作流已有明确免费 source / registry / 安装命令时才安装；未配置时说明暂不可自动安装。</div>
-          <div><strong>Paid</strong><br>Starter / Pro / Ultimate 必须由用户确认，且当前环境能读取 <code>REACTBITS_LICENSE_KEY</code>；不打印、不输出、不提交该 key。</div>
+          <div><strong>Paid</strong><br>Starter / Pro / Ultimate 必须由用户确认，且当前环境能读取 <code>REACTBITS_LICENSE_KEY</code>；安装器固定写入项目的 <code>.agents/skills/react-bits-pro/SKILL.md</code>，已有目标直接覆盖且不保留备份，不打印、不输出、不提交 key。</div>
           <div><strong>Reset</strong><br>保留检测到的既有 React Bits Free、Starter、Pro 或 Ultimate tier / registry，不用默认免费版覆盖。</div>
         </div>
       </div>
@@ -843,7 +843,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Artifacts</p>
             <h2>工具与测试产物忽略规则</h2>
           </div>
-          <p>项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 <code>.omp/plugins/</code>；<code>trellis init --omp</code> 生成的 <code>.omp/agents/</code>、<code>.omp/commands/</code>、<code>.omp/skills/</code> 和 <code>.omp/extensions/</code> 应由 Git 追踪。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
+          <p>项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 <code>.omp/plugins/</code>；<code>trellis init --omp</code> 生成的 <code>.omp/agents/</code>、<code>.omp/commands/</code>、<code>.omp/skills/</code> 和 <code>.omp/extensions/</code> 应由 Git 追踪。初始化时按精确非空行比较项目原 <code>.gitignore</code> 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
         </div>
         <pre><code># ---------- OMP ----------
 # Keep Trellis-generated agents, commands, skills, and extensions versioned.
@@ -885,9 +885,9 @@ tests/e2e/**/*.trace.zip
             <p class="eyebrow">Repository</p>
             <h2>源文件和同步规则</h2>
           </div>
-          <p>本仓库是配置摘录和模板源，不是真实业务项目。编排按产物类型分层，并保持 Onboard Skill 自包含：automation prompt 位于 <code>prompts/</code>，运行实现位于 <code>scripts/</code>，安装载荷位于 <code>templates/</code>，第三方 fallback 位于 <code>assets/</code>。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。sync 在 canonical Onboard 校验成功后删除 <code>~/.agent/skills/kuno-workflow-onboard-skills/</code>，并在本机实际使用路径 <code>~/.agent/skills/</code> 上以 <code>--source auto</code> 执行 mattpocock legacy migration，删除 legacy <code>to-prd</code> / <code>to-issues</code> 并安装 canonical <code>to-spec</code> / <code>to-tickets</code>；不保留旧 Onboard alias，普通 sync 也不默认触碰 <code>~/.codex/skills/</code> 下的同名 external Skill 目录。</p>
+          <p>本仓库是配置摘录和模板源，不是真实业务项目。编排按产物类型分层，并保持 Onboard Skill 自包含：automation prompt 位于 <code>prompts/</code>，运行实现位于 <code>scripts/</code>，安装载荷位于 <code>templates/</code>，第三方 fallback 位于 <code>assets/</code>。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。sync 允许列表明确包含 bundled <code>web-ui-autotest-generator</code> 完整目录到 <code>/Users/lusonglin/.agent/skills/web-ui-autotest-generator/</code> 的映射。sync 在 canonical Onboard 校验成功后删除 <code>~/.agent/skills/kuno-workflow-onboard-skills/</code>，并在本机实际使用路径 <code>~/.agent/skills/</code> 上以 <code>--source auto</code> 执行 mattpocock legacy migration，删除 legacy <code>to-prd</code> / <code>to-issues</code> 并安装 canonical <code>to-spec</code> / <code>to-tickets</code>；不保留旧 Onboard alias，普通 sync 也不默认触碰 <code>~/.codex/skills/</code> 下的同名 external Skill 目录。</p>
         </div>
-        <p><code>AGENTS.md</code> 和 <code>ENTRYPOINT.md</code> 是必须由 Git 追踪的仓库控制文件：前者保存当前仓库直接生效的补充规则，后者保存版本检查和 <code>update</code> / <code>更新</code> 使用的 authoritative baseline。新 clone 必须直接取得二者；不要把它们加入根 <code>.gitignore</code>、移出索引或只保存在单台工作站。每次仓库代码或工作流规则改动后，都评估 README 两份文件和版本化 automation prompt 是否需要同步调整；只有执行 <code>sync</code> / <code>同步</code> 时才比较版本化 prompt 与 Orca <code>SBTD Workflow Tools Version Check</code>，并仅在存在差异时同步到 live automation。<code>update</code> / <code>更新</code> 与 prompt 和 live automation 无关。</p>
+        <p><code>AGENTS.md</code> 和 <code>ENTRYPOINT.md</code> 是必须由 Git 追踪的仓库控制文件：前者保存当前仓库直接生效的补充规则，后者保存版本检查和 <code>update</code> / <code>更新</code> 使用的 authoritative baseline。新 clone 必须直接取得二者；不要把它们加入根 <code>.gitignore</code>、移出索引或只保存在单台工作站。每次仓库代码或工作流规则改动后，都评估 CHANGELOG、README 两份文件和版本化 automation prompt 是否需要同步调整；只有执行 <code>sync</code> / <code>同步</code> 时才比较版本化 prompt 与 Orca <code>SBTD Workflow Tools Version Check</code>，并仅在存在差异时同步到 live automation。<code>update</code> / <code>更新</code> 与 prompt 和 live automation 无关。</p>
         <table>
           <thead>
             <tr>

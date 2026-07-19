@@ -327,11 +327,13 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertTrue(changelog_path.is_file())
         changelog = changelog_path.read_text(encoding="utf-8")
         self.assertTrue(changelog.startswith("# CHANGELOG\n"))
+        self.assertLess(changelog.index("## v1.0.3"), changelog.index("## v1.0.2"))
         self.assertLess(changelog.index("## v1.0.2"), changelog.index("## v1.0.1"))
         self.assertLess(changelog.index("## v1.0.1"), changelog.index("## v1.0.0"))
-        self.assertIn("## v1.0.2（未发布）", changelog)
+        self.assertIn("## v1.0.3（未发布）", changelog)
+        self.assertIn("## v1.0.2（2026-07-18）", changelog)
         self.assertIn("## v1.0.1（2026-07-18）", changelog)
-        self.assertNotIn("## v1.0.1（未发布）", changelog)
+        self.assertNotIn("## v1.0.2（未发布）", changelog)
         self.assertRegex(changelog, r"[\u4e00-\u9fff]")
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("## CHANGELOG 维护规则", agents)
@@ -651,6 +653,13 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("每个 external Skill source", prompt)
         self.assertNotRegex(prompt, r"\d+ 个 bundled Skill local source")
         self.assertNotRegex(prompt, r"\d+ 个 external Skill source")
+        allowlist = next(
+            line
+            for line in prompt.splitlines()
+            if "当前可读取、评估或修改的本仓库版本化规则" in line
+        )
+        self.assertIn("`ENTRYPOINT.md`", allowlist)
+        self.assertIn("`UPDATE.md`", allowlist)
         for document_path in (
             ROOT / "README.md",
             ROOT / "README.html",
@@ -736,6 +745,12 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("版本检查自动化不直接读取或写入 Orca live automation", prompt)
         self.assertNotIn("git check-ignore", prompt)
         self.assertNotIn("修改后必须同步更新同名 live automation", prompt)
+        self.assertIn(
+            "`CHANGELOG.md`、`README.md`、`README.html` 和本 prompt",
+            prompt,
+        )
+        self.assertIn("包含 `web-ui-autotest-generator`", prompt)
+        self.assertIn("`AGENTS.project.md` 不在普通 sync 范围内", prompt)
 
         control_paths = (ROOT / "AGENTS.md", ROOT / "ENTRYPOINT.md")
         for control_path in control_paths:
@@ -750,6 +765,18 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(set(tracked), {"AGENTS.md", "ENTRYPOINT.md"})
 
         agents = control_paths[0].read_text(encoding="utf-8")
+        web_ui_sync_row = (
+            "| `sbtd-workflow-onboard/templates/skills/"
+            "web-ui-autotest-generator/` | "
+            "`/Users/lusonglin/.agent/skills/web-ui-autotest-generator/` |"
+        )
+        self.assertIn(web_ui_sync_row, agents)
+        for document in (readme, readme_html):
+            self.assertIn("web-ui-autotest-generator", document)
+            self.assertIn(
+                "/Users/lusonglin/.agent/skills/web-ui-autotest-generator/",
+                document,
+            )
         entrypoint = control_paths[1].read_text(encoding="utf-8")
         self.assertIn("必须由 Git 追踪", agents)
         self.assertNotIn("本地控制文件 Gate", agents)

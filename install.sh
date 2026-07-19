@@ -12,7 +12,7 @@ SKIP_PROJECT_AGENTS=0
 NO_MCP=0
 DRY_RUN=0
 YES=0
-NO_COLOR=0
+NO_COLOR_REQUESTED=0
 GLOBAL_AGENTS_PATH=""
 GLOBAL_SKILLS_DIR=""
 TRELLIS_USER=""
@@ -88,8 +88,15 @@ is_tty() {
   [[ -t 0 && -t 1 ]]
 }
 
+initialize_user_input() {
+  if { exec 9<&0; } 2>/dev/null; then
+    return
+  fi
+  exec 9</dev/null
+}
+
 supports_color() {
-  [[ "$NO_COLOR" -eq 0 && -z "${NO_COLOR:-}" && -t 1 ]]
+  [[ "$NO_COLOR_REQUESTED" -eq 0 && -z "${NO_COLOR:-}" && -t 1 ]]
 }
 
 color() {
@@ -103,22 +110,22 @@ color() {
 }
 
 print_logo() {
-  if supports_color; then
-    printf '\033[38;5;141m    ██╗  ██╗\033[0m\n'
-    printf '\033[38;5;141m    ██║ ██╔╝\033[0m\n'
-    printf '\033[38;5;171m    █████╔╝ \033[0m\n'
-    printf '\033[38;5;171m    ██╔═██╗ \033[0m\n'
-    printf '\033[38;5;213m    ██║  ██╗\033[0m\n'
-    printf '\033[38;5;213m    ╚═╝  ╚═╝\033[0m\n'
-  else
-    printf '    K  K\n'
-    printf '    K K\n'
-    printf '    KK\n'
-    printf '    K K\n'
-    printf '    K  K\n'
-  fi
   printf '\n'
-  color '1;35' 'SBTD Workflow Installer'
+  color '38;5;141' '╭─── SBTD Workflow Installer ─────────────────────────────────────────────────────────────╮'
+  printf '\n'
+  color '38;5;141' '│   ██╗  ██╗██╗   ██╗███╗   ██╗ ██████╗    │  Tips                                        │'
+  printf '\n'
+  color '38;5;141' '│   ██║ ██╔╝██║   ██║████╗  ██║██╔═══██╗   │  --platform <agent>       Target Agent       │'
+  printf '\n'
+  color '38;5;171' '│   █████╔╝ ██║   ██║██╔██╗ ██║██║   ██║   │  --projects-root <paths>  Set project roots  │'
+  printf '\n'
+  color '38;5;171' '│   ██╔═██╗ ██║   ██║██║╚██╗██║██║   ██║   │  --init-projects <paths>  Project-only mode  │'
+  printf '\n'
+  color '38;5;213' '│   ██║  ██╗╚██████╔╝██║ ╚████║╚██████╔╝   │  --action <init|reset>    Select workflow    │'
+  printf '\n'
+  color '38;5;213' '│   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝    │  --dry-run                Preview changes    │'
+  printf '\n'
+  color '38;5;213' '╰──────────────────────────────────────────┴──────────────────────────────────────────────╯'
   printf '\n\n'
 }
 
@@ -149,10 +156,14 @@ prompt_text() {
   local default="${2:-}"
   local value
   if [[ -n "$default" ]]; then
-    read -r -p "$prompt [$default]: " value
+    if ! read -r -p "$prompt [$default]: " value <&9; then
+      die "Interactive input closed while waiting for: $prompt"
+    fi
     printf '%s' "${value:-$default}"
   else
-    read -r -p "$prompt: " value
+    if ! read -r -p "$prompt: " value <&9; then
+      die "Interactive input closed while waiting for: $prompt"
+    fi
     printf '%s' "$value"
   fi
 }
@@ -167,7 +178,9 @@ prompt_yes_no() {
     suffix='[y/N]'
   fi
   while true; do
-    read -r -p "$prompt $suffix " answer
+    if ! read -r -p "$prompt $suffix " answer <&9; then
+      die "Interactive input closed while waiting for: $prompt"
+    fi
     answer="${answer:-$default}"
     answer="$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')"
     case "$answer" in
@@ -188,7 +201,9 @@ select_one() {
     printf '  %d) %s\n' "$((index + 1))" "${options[$index]}" >&2
   done
   while true; do
-    read -r -p 'Select one: ' choice
+    if ! read -r -p 'Select one: ' choice <&9; then
+      die "Interactive input closed while waiting for a selection."
+    fi
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
       printf '%s' "${options[$((choice - 1))]}"
       return 0
@@ -436,7 +451,12 @@ configure_project_optional_items() {
           if [[ -z "${REACTBITS_LICENSE_KEY:-}" ]]; then
             warn "REACTBITS_LICENSE_KEY is unavailable; skipped paid React Bits setup for $project_root."
           else
-            run_cmd_in_dir "$project_root" npx shadcn@latest add @reactbits-starter/skill
+            local react_bits_skill_dir=".agents/skills/react-bits-pro"
+            run_cmd_in_dir "$project_root" npx shadcn@latest add @reactbits-starter/skill \
+              --path "$react_bits_skill_dir" --overwrite --yes
+            if [[ "$DRY_RUN" -eq 0 && ! -f "$project_root/$react_bits_skill_dir/SKILL.md" ]]; then
+              die "React Bits setup did not create $project_root/$react_bits_skill_dir/SKILL.md"
+            fi
           fi
           ;;
       esac
@@ -740,7 +760,7 @@ parse_args() {
         shift
         ;;
       --no-color)
-        NO_COLOR=1
+        NO_COLOR_REQUESTED=1
         shift
         ;;
       -h|--help)
@@ -925,7 +945,9 @@ prompt_env_pairs() {
     key="$(prompt_text 'Env key for this MCP server, or blank to finish' '')"
     [[ -z "$key" ]] && break
     if [[ "$key" =~ (TOKEN|PASSWORD|SECRET|KEY) ]]; then
-      read -r -s -p "Value for $key: " value
+      if ! read -r -s -p "Value for $key: " value <&9; then
+        die "Interactive input closed while waiting for: Value for $key"
+      fi
       printf '\n'
     else
       value="$(prompt_text "Value for $key" '')"
@@ -1126,7 +1148,9 @@ select_and_configure_mcp() {
   printf '  4) GitNexus MCP (auto from gitnexus CLI)\n'
   printf '  5) Custom stdio MCP server\n'
   local raw selections=()
-  read -r -p 'Select comma-separated options, or blank for none: ' raw
+  if ! read -r -p 'Select comma-separated options, or blank for none: ' raw <&9; then
+    die "Interactive input closed while waiting for an MCP selection."
+  fi
   split_csv_numbers "$raw" 5 || die "Invalid MCP selection: $raw"
   selections=(${CSV_SELECTIONS[@]+"${CSV_SELECTIONS[@]}"})
   (( ${#selections[@]} == 0 )) && return 0
@@ -1261,6 +1285,7 @@ cleanup() {
 main() {
   trap cleanup EXIT
   parse_args "$@"
+  initialize_user_input
   validate_source_root "$SOURCE_ROOT"
   find_python
   print_logo

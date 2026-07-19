@@ -2,7 +2,19 @@
 
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
-## v1.0.2（未发布）
+## v1.0.3（未发布）
+
+### 修复
+
+- 锁定 bundled `web-ui-autotest-generator` 在仓库本地 sync 允许列表中的完整 source / target 映射，并让版本检查 automation 同时校验 bundled Skill 同步覆盖和最新 `CHANGELOG.md` 维护契约。
+- 修复根 `install.sh` 在逐项目检查触发 React Bits 选择时误从项目清单 process substitution 读取输入、继而无限输出 `Invalid choice.` 的问题；交互提示现在固定读取脚本启动时保留的原始 stdin，并在输入流关闭时明确失败退出。
+- 修复付费 React Bits Skill 被 shadcn CLI 写到项目根 `SKILL.md` 的问题；Bash 与 PowerShell 安装器现在固定写入 `.agents/skills/react-bits-pro/SKILL.md`，已有目标直接覆盖且不留备份，并校验目标实际生成。
+- 修复项目 `.gitignore` 只按完整模板块判断、导致部分已有规则被整段重复追加的问题；现在按精确非空行求差集，只追加缺失内容，重复执行保持幂等。
+- 将 Bash 与 PowerShell 安装器的启动标识升级为带前置空行的 91 列 `KUNO` / `Tips` 双栏欢迎面板，集中展示 `--platform`、`--projects-root`、`--init-projects`、`--action` 和 `--dry-run`；默认 TTY 延续紫色渐变，显式禁色或非 TTY 使用相同布局的无色版本。同时修复 Bash 将内部 `NO_COLOR=0` 状态误判为外部禁色请求、导致交互终端始终退化为无颜色字符画的问题。
+- 修复审核发现的安装器兼容性与契约缺口：Bash 仅在参数解析后初始化交互输入 fd，closed stdin 的 `--help` / 非交互项目模式不再输出 `Bad file descriptor`；PowerShell 脚本恢复 UTF-8 BOM；React Bits 检查提示与自动化版本文件 allowlist 也与实际覆盖、版本基线和输出路径保持一致。
+- 修复 UTF-8 BOM `.gitignore` 的逐行比较：比较时忽略首行 BOM、写回时保留原始字节前缀，完整模板第二次执行不再误追加首条规则。
+
+## v1.0.2（2026-07-18）
 
 ### 许可
 
