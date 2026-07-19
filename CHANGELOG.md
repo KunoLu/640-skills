@@ -17,6 +17,9 @@
 - 将 bundled `lessons-record`、`project-validation`、`trellis-channel` 和 `trellis-workflow` Skill 的中文说明逐句等义翻译为英文，保持触发条件、执行顺序、门禁、状态值和安全边界不变。
 - 将 `web-ui-autotest-generator` 从受管 external stable 镜像迁移为 `sbtd-workflow-onboard/templates/skills/` 下的 bundled Skill，保持原 `SKILL.md`、脚本、references、assets 和功能逻辑不变；从 external stable manifest / notice 移除对应条目，将 bundled 目录的许可统一为 Apache License 2.0，将原中文 `README.md` 原样改名为 `README.zh-CN.md`，并新增逐句等义的英文 `README.md`。
 - 为 bundled `web-ui-autotest-generator` 的 frontmatter `description` 补充与现有中文语义对应的英文触发词，覆盖 frontend / backend、pages、routes、components、APIs、user flows、Playwright UI tests、Chinese test reports 和跨页面覆盖检查。
+- 修正长任务中 `caveman auto-lite` 达到阈值后仍可能不启动的问题：由全局 AGENTS 模板统一自动生命周期，增加单调 eligibility latch、消息级保护区、仅新主要目标重置、配置缺失默认 auto 和 compaction / handoff 状态连续性；external `caveman` Skill 保持上游原样。
+- 强制每次完整执行 `grill-with-docs` 后立即调用 bundled `book-ddd-distilled-modeling` 做独立边界二次审核；`grill-with-docs` 内嵌的 external `domain-modeling` dependency 不再视为替代，必须向用户输出 `DDD Boundary Review`，未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。
+- 为其余 4 个 bundled `book-*` Skill 增加客观开发触发门禁和完整状态机：`Book Gate Plan` 使用 planned / running / passed / blocked / not-required，legacy 与 refactoring 通过受控 safety-seam-only 回路避免死锁，DDIA 只强制 shared / persistent / cross-request / cross-process cache，Release Readiness 位于所有适用测试工具 Gate 和项目验证之后并区分必需验证与可选检查；未命中场景仍保持按需调用。
 
 ## v1.0.1（2026-07-18）
 

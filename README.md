@@ -10,13 +10,13 @@ Codex / OMP + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
 
 Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search` 属于 Agent 侧工具发现和授权能力，不是项目依赖。模板要求先确认当前会话实际暴露 callable tool，再依赖对应能力；catalog / marketplace / 本地远端版本展示只作为候选信号，session auth、OAuth、cookies 和 tokens 不写入仓库、日志、截图、报告或示例配置。
 
-`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，普通非报告型命令默认优先作为命令前缀；unit / API / Playwright / Maestro 等报告型测试先评估缓存与文件写入风险。`caveman` 作用于 Agent 回复输出，安装后只表示可用，不会立即进入持久压缩模式；同一任务出现 3 次或以上中间状态更新、5 个或以上重复命令 / diff / 日志 / 文件摘要、上下文压力较大或自动化 / 大型 review / 验证排障进入重复轮次时，后续符合资格的重复、非阻塞状态更新会自动使用任务级 `auto-lite`。
+`rtk` 和 `caveman` 是上下文 / token 效率层，不是验证工具。`rtk` 作用于 shell / terminal 命令输出，普通非报告型命令默认优先作为命令前缀；unit / API / Playwright / Maestro 等报告型测试先评估缓存与文件写入风险。`caveman` 作用于 Agent 回复输出，安装后只表示可用，不会立即进入持久压缩模式。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存为 true；下一条普通重复状态必须进入任务级 `auto-lite`，不再附加主观资格判断。
 
-自动模式与用户明确启动的手动 caveman 模式相互独立：自动模式不会进入 `full`、`ultra` 等更激进等级，不改变代码、工具、测试、验证和工作流决策，也不会跨任务继承。安装 / 权限 / 破坏性操作确认、安全风险、需求与 review gate、长期文档、失败与剩余风险、最终验证报告和最终答复保持完整输出。
+自动生命周期由全局 AGENTS 规则负责，external `caveman` Skill 只负责手动模式的表达风格、强度和退出。自动模式不会进入 `full`、`ultra` 等更激进等级，也不改变代码、工具、测试、验证和工作流决策。安装 / 权限 / 破坏性操作确认、安全风险、需求与 review gate、长期文档、失败与剩余风险、最终验证报告和最终答复仍保持完整输出；保护区只覆盖当前回复，不清除计数、`autoLiteEligible` 或 `autoLiteActive`，下一条普通重复状态直接恢复且不重复首次提示。
 
-`normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 和 `本任务不要自动压缩` 都会立即恢复正常输出，并在当前任务内禁止自动重入；只有用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` 才清除该任务级退出。用户明确启动 `/caveman` 只进入手动模式，不会清除自动退出；退出手动模式后也不会因阈值已满足而自动重入。`详细说明` / `展开说明` 只要求当前答复完整，不默认关闭本任务的后续自动压缩。
+`normal mode`、`stop caveman`、`恢复完整输出`、`不要压缩` 和 `本任务不要自动压缩` 会立即恢复正常输出并在当前任务内禁止自动重入；只有用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` 才清除任务级退出，原有计数和资格继续保留。手动 `/caveman` 不清除任务级或会话级自动退出；`本会话关闭自动压缩` 只能由 `本会话重新启用自动压缩` 清除。
 
-`本会话关闭自动压缩` 是优先于任务级设置的会话级自动退出，只能由 `本会话重新启用自动压缩` 清除。新的用户请求会重置任务级自动状态和任务级退出并重新计算阈值，但不会清除会话级自动退出；已知配置 `off` 的优先级最高。
+只有用户建立新的主要目标时才重置任务级计数、资格、激活和退出状态；`继续`、`确认`、授权、状态询问、故障恢复和同一目标的补充不得重置。context compaction、历史归档、恢复同一 session 或 handoff 也保持状态。若 runtime 显式配置 `off`，自动和手动模式都禁用；没有配置接口或配置缺失时按 auto 处理。
 
 ## 安装及使用说明
 
@@ -231,7 +231,23 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | SDD | Specification-Driven Development | 用 PRD、design、implement、验收标准和长期规则说明“要做什么、为什么做、怎么验证”。在 Trellis 项目中，对应任务产物和 `.trellis/spec` 的长期规则。 |
 | BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。主动使用 `gherkin-bdd` 且请求包含 `sync` / `同步` 时，原有 BDD Sync Mode 保持不变：全量扫描当前工作树与 `features/`，多仓时先确认其他仓库更新状态再同步 `.feature`。BDD / 知识库请求具有明确 `read` / `读取` 只读意图且不含变更意图时，进入 Knowledge Ingest，按目标 ref 固定精确 SHA 并生成派生行为目录。 |
 | TDD | Test-Driven Development | 对 bug 修复、核心业务逻辑、算法、数据转换、高风险路径和回归敏感模块采用测试先行。BDD 固化可观察行为，TDD 把它转成可执行测试和红绿重构循环。 |
-| DDD | Domain-Driven Design | 在业务术语、规则、bounded context 或模型边界不清时，用统一语言、CONTEXT、ADR 和 `book-ddd-distilled-modeling` 降低歧义。 |
+
+**强制 post-grill 审核**:无论由 Agent 自发调用还是用户主动调用,每次完整执行 `grill-with-docs` 结束后都必须立即调用 bundled `book-ddd-distilled-modeling` 独立二次审核,并单独输出 `DDD Boundary Review`。`grill-with-docs` 内嵌的 external `domain-modeling` dependency 不能替代该二次审核;状态为 `needs-clarification` 时先继续澄清并重审,状态为 `blocked` 时说明阻断。未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。未使用 `grill-with-docs` 时仍按业务术语、领域规则和模型歧义独立判断是否调用 DDD Skill。
+
+
+### Book-derived 开发门禁
+
+进入开发任务时先输出 `Book Gate Plan`，依据项目事实为 5 个 bundled `book-*` Skill 标记 `required` / `on-demand`、命中原因、执行阶段和独立 Gate state。Gate state 只能是 `planned` / `running` / `passed` / `blocked` / `not-required`，并按 `planned` → `running` → `passed` / `blocked` 转换；具体 reviewer status 仅在 Skill 运行后填写。命中以下客观触发条件后必须调用并通过对应审核，不能再由 Agent 主观跳过：
+
+| 审核 | 强制触发场景 | 最适合阶段与通过条件 |
+|---|---|---|
+| `DDD Boundary Review` | 每次完整执行 `grill-with-docs` | 需求确认 / PRD 前；`confirmed` |
+| `DDIA Data Design Review` | 持久化 / 共享数据、schema / migration、shared / persistent / cross-request / cross-process cache、异步 / 跨服务数据流、数据所有权、事务边界、读写路径、backfill / replay / rollback / recovery 任一变化 | `design.md` / `implement.md` 稳定和实现开始前；`confirmed` |
+| `Legacy Change Safety Review` | 修复既有行为 bug，或既有代码存在弱测试、行为不清、隐藏依赖、高回归风险任一项 | 首次行为修改前；`characterized`；安全网必须先有生产 seam 时进入 `seam-required` |
+| `Refactoring Review` | 修改既有生产代码 | 首次实现编辑前；`proceed`，或先完成 `refactor-first` 并复审；legacy 为 `seam-required` 时可先用 `safety-seam-only` |
+| `Release Readiness Review` | service / API / auth / billing / notification / job / queue / scheduler / external integration / data pipeline / deployment 等生产路径变化 | 所有适用 testing-tool gate 和 project validation 后、任务完成或最终发布决策前；`ready` |
+
+同时命中 legacy 与 refactoring gate 时，正常顺序为 legacy `characterized` 后再执行 refactoring；唯一受控例外是 `seam-required` → `Refactoring Review` (`safety-seam-only`) → 最小行为保持测试 seam → legacy `characterized` → 常规 `Refactoring Review`。`needs-*`、`seam-required`、`refactor-first` 或 `blocked` 都会让 Gate state 保持 `running` 或转为 `blocked`，修正后必须重审。Release gate 中必需验证缺失只能 `blocked`，只有 optional check 可由明确 accountable owner 接受为 residual risk。未命中上述强制触发条件的其他场景仍按需调用。
 
 推荐顺序不是死板流程，而是风险驱动：
 
@@ -278,7 +294,7 @@ python sbtd-workflow-onboard/templates/skills/knowledge-base-integration/scripts
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
 | `knowledge-base-integration` | 运行产品级 Knowledge Ingest、Evidence Policy、Revision Set、完整无 ID 行为目录、幂等分阶段 smoke、Runner Adapter 和证据完整性校验。 | 不修改源 `.feature`，不发布 Evidence，不写 PR Check；P2 负责远端治理。 |
 | `rtk` | 用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。 | 不替代测试 runner；报告型 unit / API / Playwright / Maestro 命令先评估缓存与文件写入风险，必要时使用原生命令或 fallback-native。 |
-| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装；达到既有阈值后，符合资格的重复中间状态自动进入任务级 `auto-lite`。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；通用退出在当前任务内阻止自动重入，会话级退出优先，手动 `/caveman` 不清除自动退出。 |
+| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入任务级 `auto-lite`。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；保护区只覆盖当前回复，只有新的主要目标重置。任务级 / 会话级退出按全局状态机处理，手动 `/caveman` 不清除自动退出。 |
 
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
 
@@ -652,6 +668,6 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式，但运行时达到既有阈值后，可对任务内重复、非阻塞的中间状态自动进入 `auto-lite`，手动模式仍需用户明确启动。通用模式退出会在当前任务内禁止自动重入，手动启动不清除该退出；会话级自动退出保持到用户明确重新启用或会话结束。15 个 bundled Skills 和 14 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入 `auto-lite`；保护区只覆盖当前回复，只有新的主要目标重置。任务级和会话级退出、手动模式与重新启用语义继承全局状态机。15 个 bundled Skills 和 14 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认先验证上游，上游获取或验证失败时从 Onboard 内置 stable set 回退安装，bundled Skills 写入全局目录，均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不会被 fallback 掩盖。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复下载，legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。

@@ -241,3 +241,39 @@
 - 根因：布局迁移时保留了本地 Skills CLI 生成的项目级 Agent alias，却没有验证 symlink target、Git 追踪状态和当前 canonical discovery entrypoint 是否一致。
 - 修复：从仓库删除 `.claude` broken symlink，继续以根 `sbtd-workflow-onboard/SKILL.md` 为唯一公开 discovery entrypoint，并增加仓库契约测试禁止重新提交该 alias。
 - 预防：提交任何 Agent-specific Skill alias 前必须同时验证 link target 存在、target 是当前 canonical source、alias 属于仓库设计而非本地安装副作用；全局安装模式不得把 `.claude/skills`、`.agents/skills` 等项目级生成物加入版本控制。
+
+## LESSON-20260718-auto-lite-monotonic-state: Auto-lite Needs Monotonic Task State
+
+- 日期：2026-07-18
+- 标签：caveman, auto-lite, agents, conversation, compaction
+- 适用场景：修改对话自动模式、任务连续性、完整输出保护区、用户退出或 context compaction / handoff 规则
+- 严重级别：high
+- 来源：其他项目使用本仓库 SBTD workflow 执行长时间 G5 任务时，已经超过 3 次中间更新、5 个工具结果并进入重复验证轮次，但整个会话从未自动进入 `auto-lite`。
+- 问题：数字阈值已经满足，外围资格条件仍在每次回复重新主观判断；保护区结束后要求再次满足资格，“新的用户请求”又会把继续、确认、授权和故障恢复误当成任务重置，导致自动模式可以无限推迟。
+- 根因：规则只有触发条件，没有单调 eligibility latch、明确的任务身份和消息级保护覆盖；prompt-level 临时状态也没有定义 compaction / handoff 连续性，且 external Skill 的手动“不宣布模式”语义与全局首次提示没有明确职责 seam。
+- 修复：由全局 AGENTS 模板独立拥有自动生命周期；达到任一阈值即锁存 `autoLiteEligible=true`，下一条 eligible commentary 必须进入；保护区只覆盖当前回复并保留状态，只有新的主要目标重置，配置缺失按 auto 处理，compaction / handoff 保留任务状态。external `caveman` Skill 保持上游原样，只负责手动风格。
+- 预防：任何提示词驱动的自动模式都必须定义单调资格、强制转换、状态保持、精确重置事件和优先级；保护区不得隐式清空状态，静态文本契约之外还要在部署后的真实消费会话中验证触发和恢复证据。
+
+## LESSON-20260718-grill-post-ddd-gate: Composite Skills Need Explicit Post-review Gates
+
+- 日期：2026-07-18
+- 标签：grill-with-docs, domain-modeling, ddd, workflow, review-gate
+- 适用场景：修改需求澄清、PRD / design / Trellis 入口、领域建模或 composite Skill 的后置审核编排
+- 严重级别：high
+- 来源：其他项目使用 SBTD workflow 时，完整执行 `grill-with-docs` 后有时会继续调用 `book-ddd-distilled-modeling`，有时因 `grill-with-docs` 内嵌的 external `domain-modeling` dependency 已运行或 Agent 主观认为边界清晰而直接进入下一阶段。
+- 问题：现有规则只把 `book-ddd-distilled-modeling` 描述为有领域歧义时的按需步骤，没有把它定义为每次完成 `grill-with-docs` 的强制后置条件，也没有规定独立、可见、可阻断的审核输出。
+- 根因：composite Skill 的内部依赖与后置 reviewer 职责没有建立明确 seam；项目模板和 Trellis Skill 仍使用条件式流程，导致 Agent 能把 interview-time modeling 误当成 independent review。
+- 修复：全局规则统一定义 post-grill gate；无论 Agent 自发调用还是用户主动调用，每次完整结束后立即运行 bundled `book-ddd-distilled-modeling`，输出状态为 `confirmed` / `needs-clarification` / `blocked` 的 `DDD Boundary Review`，未确认则回到澄清或阻断后续阶段。external `grill-with-docs` 和 `domain-modeling` 保持上游原样。
+- 预防：任何 composite Skill 要求后置独立审核时，必须同时定义无条件触发事件、内部步骤不可替代、可见输出 schema、失败回路、阻断边界，并在全局规则、项目模板、生命周期 Skill 和 reviewer Skill 中保持一致。
+
+## LESSON-20260718-objective-book-development-gates: Mandatory Risk Gates Need Objective Triggers
+
+- 日期：2026-07-18
+- 标签：book-derived, workflow, development, mandatory-gate, risk
+- 适用场景：修改 book-derived Skill 的开发阶段编排、风险审核、阶段门禁或按需边界
+- 严重级别：high
+- 来源：其余 4 个 bundled `book-*` Skill 起初虽增加了客观触发与通过状态，但交叉审查发现仍缺少可执行 lifecycle、缺 Skill 的阻断优先级、legacy/refactoring 死锁回路、testing-tool gate 顺序和 Onboard 激活边界。
+- 问题：只有 `required` / `on-demand` 与 reviewer 状态会让 Plan 在执行前虚构结论；legacy 要求先装安全网、refactoring 又要求安全网先存在时会互相阻断；release readiness 过早运行会在验证证据尚未完成时给出 `ready`；通用“Skill 不可用直接跳过”还可能覆盖强制门禁。
+- 根因：触发条件、Plan 状态机、reviewer 结果、修正回路、跨 Gate 依赖顺序和安装激活条件没有作为一个完整 contract 设计。
+- 修复：`Book Gate Plan` 独立记录 `planned` / `running` / `passed` / `blocked` / `not-required`，reviewer status 只在实际运行后填写；命中门禁缺 Skill 或证据时一律 `blocked`。legacy 的 `seam-required` 只允许 refactoring 进入 `safety-seam-only`，建立并验证最小行为保持 seam 后回到 characterization，再正常重跑 refactoring。Release Readiness 固定在所有适用 testing-tool gate 与 project validation 后执行，并区分不可豁免的 required validation 与可由 accountable owner 接受的 optional check。Onboard contract 明确只有正常 `init` / `reset` 成功写入全局规则并安装 bundled / external Skills 后才激活，public Skills CLI bootstrap 与 `init-projects` 不单独激活运行时门禁。
+- 预防：强制风险审核必须同时定义 objective trigger、execution stage、Plan lifecycle、visible reviewer result、pass state、retry loop、blocked priority、cross-gate dependency order、missing-Skill semantics、activation boundary 和 unmatched on-demand boundary；测试必须覆盖修正回路与顺序，而不只是静态关键词。
