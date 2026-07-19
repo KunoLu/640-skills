@@ -381,7 +381,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "to-tickets",
             "impeccable",
             "ui-ux-pro-max",
-            "web-ui-autotest-generator",
             "shadcn",
         )
         for name in external_names:
@@ -415,6 +414,9 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertTrue((global_skills / "trellis-workflow" / "SKILL.md").is_file())
         self.assertTrue(
             (global_skills / "sbtd-workflow-onboard" / "SKILL.md").is_file()
+        )
+        self.assertTrue(
+            (global_skills / "web-ui-autotest-generator" / "SKILL.md").is_file()
         )
         self.assertFalse(legacy_onboard.exists())
         self.assertFalse((self.project_one / ".agent" / "skills").exists())

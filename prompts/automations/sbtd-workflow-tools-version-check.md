@@ -61,7 +61,7 @@
 13. 运行验证：
   - `git status --short`
   - 检查 `ENTRYPOINT.md`、`UPDATE.md`、`AGENTS.md`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/skills/**/SKILL.md` 的结构是否可读。
-  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；local source 必须位于 Onboard Skill 根目录内且实际存在，15 个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。
+  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。
   - 验证能从 `ENTRYPOINT.md` 正确解析受监控工具表。
   - 验证 `UPDATE.md` 使用中文，且各工具区间起点等于 `ENTRYPOINT.md` 中该工具当前版本。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。

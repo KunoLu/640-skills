@@ -89,6 +89,7 @@
 | `sbtd-workflow-onboard/templates/skills/trellis-workflow/` | `/Users/lusonglin/.agent/skills/trellis-workflow/` |
 | `sbtd-workflow-onboard/templates/skills/trellis-channel/` | `/Users/lusonglin/.agent/skills/trellis-channel/` |
 | `sbtd-workflow-onboard/templates/skills/project-validation/` | `/Users/lusonglin/.agent/skills/project-validation/` |
+| `sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/` | `/Users/lusonglin/.agent/skills/web-ui-autotest-generator/` |
 | `sbtd-workflow-onboard/templates/skills/gherkin-bdd/` | `/Users/lusonglin/.agent/skills/gherkin-bdd/` |
 | `sbtd-workflow-onboard/templates/skills/knowledge-base-integration/` | `/Users/lusonglin/.agent/skills/knowledge-base-integration/` |
 | `sbtd-workflow-onboard/templates/skills/maestro-mobile-e2e/` | `/Users/lusonglin/.agent/skills/maestro-mobile-e2e/` |

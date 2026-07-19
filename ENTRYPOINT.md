@@ -20,7 +20,7 @@
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.61.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.6.1 | stable-only | 是 | Android / iOS / Hybrid App E2E |
-| web-ui-autotest-generator | Cheryl-station/web-ui-autotest | main | manual | 否 | Web UI Playwright 测试资产生成 Skill |
+| web-ui-autotest-generator | KunoLu/640-skills | bundled | repository-controlled | 否 | 内置 Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
 
@@ -283,13 +283,13 @@ handoff
 | 项目 | 当前结论 |
 |---|---|
 | 当前定位 | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 |
-| 上游仓库 | `Cheryl-station/web-ui-autotest` |
+| 内置模板 | `sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/` |
 | 启用条件 | 用户明确要求生成 Web UI 自动化测试、Playwright / E2E suite，或需要把关键 Web UI 回归路径固化到项目仓库 |
 | 默认产物 | `tests/e2e/`、`playwright.config.ts`、`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`、中文测试报告 |
 | 与 Playwright 关系 | 本 Skill 生成和审计 Playwright 测试资产；执行底座仍是项目内 Playwright CLI |
 | 使用原则 | 优先沿用项目已有 Playwright / Cypress 体系；脚本扫描结果必须复核；不要自动写入真实账号、密钥或生产数据 |
 | 提交策略 | 测试代码和必要配置可按项目策略入库；HTML report、trace、video、screenshot、一次性 repair plan 默认不入库 |
-| 同步策略 | 当前不进入本仓库 `同步` 目标；只有实际安装为全局 Skill 后再另行纳入同步范围 |
+| 同步策略 | 已纳入本仓库 `同步` 目标，整体复制到用户级全局 Skill 目录 |
 
 ---
 
@@ -321,7 +321,7 @@ handoff
 | Web 诊断 | Chrome DevTools MCP | latest |
 | Web 回归测试 | Playwright | v1.61.1 |
 | 移动 E2E | Maestro | cli-2.6.1 |
-| Web UI 测试资产 | web-ui-autotest-generator | main |
+| Web UI 测试资产 | web-ui-autotest-generator | bundled |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |
 
 ---

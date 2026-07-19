@@ -118,6 +118,6 @@ python3 path/to/web-ui-autotest-generator/scripts/analyze_failures.py --report t
 5. 稳定组件属性。
 6. 仅在没有更好方式时使用 CSS 选择器。
 
-## License
+## 许可证
 
-MIT. See [LICENSE](LICENSE).
+此 Skill 为个人独立实现，采用 Apache License 2.0。详见 [LICENSE](LICENSE)。

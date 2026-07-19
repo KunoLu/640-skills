@@ -13,5 +13,4 @@ refreshes the manifest digests and third-party notices.
 | `mattpocock/skills` | MIT | `licenses/mattpocock-skills-LICENSE` |
 | `pbakaus/impeccable` | Apache-2.0 | `licenses/impeccable-LICENSE`, `licenses/impeccable-NOTICE.md` |
 | `nextlevelbuilder/ui-ux-pro-max-skill` | MIT | `licenses/ui-ux-pro-max-skill-LICENSE` |
-| `Cheryl-station/web-ui-autotest` | MIT | `licenses/web-ui-autotest-LICENSE` |
 | `shadcn-ui/ui` | MIT | `licenses/shadcn-ui-LICENSE.md` |

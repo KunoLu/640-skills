@@ -249,7 +249,15 @@ class ExternalSkillInstallTests(unittest.TestCase):
         installed = [
             item for item in payload["results"] if item.get("phase") == "commit"
         ]
-        self.assertEqual(len(installed), 15)
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected_count = sum(
+            entry["kind"] == "external-skill" for entry in catalog["entries"]
+        )
+        self.assertEqual(len(installed), expected_count)
         self.assertEqual({item["sourceUsed"] for item in installed}, {"stable"})
         self.assertTrue(
             all(
@@ -345,19 +353,22 @@ class ExternalSkillInstallTests(unittest.TestCase):
         shutil.copytree(onboard.EXTERNAL_STABLE_ROOT, stable_root)
         manifest_path = stable_root / "MANIFEST.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        outside = self.root / "outside-web-ui"
+        original_stable_set = manifest["stableSet"]
+        outside = self.root / "outside-ui-ux-pro-max"
         shutil.copytree(
-            onboard.EXTERNAL_STABLE_ROOT / "skills" / "web-ui-autotest-generator",
+            onboard.EXTERNAL_STABLE_ROOT / "skills" / "ui-ux-pro-max",
             outside,
         )
-        manifest["skills"]["web-ui-autotest-generator"]["sourceSubpath"] = str(outside)
+        manifest["skills"]["ui-ux-pro-max"]["sourceSubpath"] = str(outside)
         manifest_path.write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
         )
         fake_repo = self.root / "promotion-repo"
         fake_repo.mkdir()
         shutil.copy2(
-            onboard.EXTERNAL_STABLE_ROOT / "licenses" / "web-ui-autotest-LICENSE",
+            onboard.EXTERNAL_STABLE_ROOT
+            / "licenses"
+            / "ui-ux-pro-max-skill-LICENSE",
             fake_repo / "LICENSE",
         )
 
@@ -366,7 +377,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
             return True, ""
 
         args = argparse.Namespace(
-            repository="web-ui-autotest",
+            repository="ui-ux-pro-max-skill",
             revision="2" * 40,
             stable_set="fixture",
             yes=True,
@@ -385,7 +396,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertNotEqual(status, 0)
         self.assertEqual(
             json.loads(manifest_path.read_text(encoding="utf-8"))["stableSet"],
-            "2026-07-11.1",
+            original_stable_set,
         )
 
     def test_bundled_migration_reports_legacy_deletion_failure(self) -> None:

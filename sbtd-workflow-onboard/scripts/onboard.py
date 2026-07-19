@@ -375,7 +375,6 @@ REFERENCED_SKILLS = (
     *MATTPOCOCK_CANONICAL_SKILLS,
     "ui-ux-pro-max",
     "impeccable",
-    "web-ui-autotest-generator",
     "shadcn",
 )
 INTERACTION_SKILLS = ("caveman",)

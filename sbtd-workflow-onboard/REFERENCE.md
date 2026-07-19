@@ -171,33 +171,33 @@ Project-only mode never bootstraps npm. If a user chooses a project-local Playwr
 
 ## Required Global Skills
 
-The 14 bundled Skills are always global during normal init/reset:
+The 15 bundled Skills are always global during normal init/reset:
 
 1. `sbtd-workflow-onboard`
 2. `trellis-workflow`
 3. `trellis-channel`
 4. `project-validation`
-5. `gherkin-bdd`
-6. `knowledge-base-integration`
-7. `maestro-mobile-e2e`
-8. `lessons-record`
-9. `book-refactoring-pass`
-10. `book-legacy-change-safety`
-11. `book-ddd-distilled-modeling`
-12. `book-ddia-data-design`
-13. `book-release-readiness`
-14. `seo-geo`
+5. `web-ui-autotest-generator`
+6. `gherkin-bdd`
+7. `knowledge-base-integration`
+8. `maestro-mobile-e2e`
+9. `lessons-record`
+10. `book-refactoring-pass`
+11. `book-legacy-change-safety`
+12. `book-ddd-distilled-modeling`
+13. `book-ddia-data-design`
+14. `book-release-readiness`
+15. `seo-geo`
 
 The Onboard rename is a bundled migration: normal `plan` reports any detected legacy target, and normal `init` / `reset` removes it only after the canonical `sbtd-workflow-onboard/SKILL.md` exists with matching frontmatter. Project-only `init-projects` never inspects or modifies global Skill directories.
 
-All 15 referenced external Skills are also required globally:
+All 14 referenced external Skills are also required globally:
 
 | Skill | Repository |
 |---|---|
 | `diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-spec`, `to-tickets` | `https://github.com/mattpocock/skills.git` |
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
-| `web-ui-autotest-generator` | `https://github.com/Cheryl-station/web-ui-autotest.git` |
 | `shadcn` | `https://github.com/shadcn-ui/ui.git`, subpath `skills/shadcn` |
 
 Install every missing external Skill:

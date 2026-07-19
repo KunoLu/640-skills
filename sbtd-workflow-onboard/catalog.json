@@ -46,6 +46,12 @@
       "targetRole": "skill"
     },
     {
+      "id": "skill:web-ui-autotest-generator",
+      "kind": "bundled-skill",
+      "source": "templates/skills/web-ui-autotest-generator",
+      "targetRole": "skill"
+    },
+    {
       "id": "skill:gherkin-bdd",
       "kind": "bundled-skill",
       "source": "templates/skills/gherkin-bdd",
@@ -232,16 +238,6 @@
         "repo": "https://github.com/pbakaus/impeccable.git",
         "subpath": "plugin/skills/impeccable",
         "aliases": ["impeccable"]
-      },
-      "targetRole": "external-skill"
-    },
-    {
-      "id": "skill:web-ui-autotest-generator",
-      "kind": "external-skill",
-      "source": {
-        "repo": "https://github.com/Cheryl-station/web-ui-autotest.git",
-        "subpath": ".",
-        "aliases": ["web-ui-autotest-generator", "web-ui-autotest"]
       },
       "targetRole": "external-skill"
     },

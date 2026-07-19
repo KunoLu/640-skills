@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "stableSet": "2026-07-11.1",
-  "promotedAt": "2026-07-11",
+  "stableSet": "2026-07-18.1",
+  "promotedAt": "2026-07-18",
   "repositories": {
     "mattpocock-skills": {
       "url": "https://github.com/mattpocock/skills.git",
@@ -37,17 +37,6 @@
         {
           "source": "LICENSE",
           "stablePath": "licenses/ui-ux-pro-max-skill-LICENSE"
-        }
-      ]
-    },
-    "web-ui-autotest": {
-      "url": "https://github.com/Cheryl-station/web-ui-autotest.git",
-      "revision": "8703d7e0126581597409ad21490bb66159e7b6bf",
-      "license": "MIT",
-      "licenseFiles": [
-        {
-          "source": "LICENSE",
-          "stablePath": "licenses/web-ui-autotest-LICENSE"
         }
       ]
     },
@@ -141,12 +130,6 @@
       "sourceSubpath": ".claude/skills/ui-ux-pro-max",
       "stablePath": "skills/ui-ux-pro-max",
       "treeSha256": "86b62c5a2494e35ff2af0a356369db9d11f8b8a692aa1f62007e42a5cbf7048d"
-    },
-    "web-ui-autotest-generator": {
-      "repository": "web-ui-autotest",
-      "sourceSubpath": ".",
-      "stablePath": "skills/web-ui-autotest-generator",
-      "treeSha256": "c344eb0b5c5f249db1c415f2808908f39f6333429ef39477cd01f80a07be0264"
     },
     "shadcn": {
       "repository": "shadcn-ui",

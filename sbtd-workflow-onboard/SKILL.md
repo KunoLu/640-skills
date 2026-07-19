@@ -112,6 +112,7 @@ All bundled Skills install globally as one required set:
 - `trellis-workflow`
 - `trellis-channel`
 - `project-validation`
+- `web-ui-autotest-generator`
 - `gherkin-bdd`
 - `knowledge-base-integration`
 - `maestro-mobile-e2e`
@@ -130,7 +131,7 @@ All referenced external Skills are also required globally. Install every missing
 - `diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`
 - `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`
 - `to-spec`, `to-tickets`, `ui-ux-pro-max`, `impeccable`
-- `web-ui-autotest-generator`, `shadcn`
+- `shadcn`
 
 Dependencies are still expanded automatically: `tdd` includes `codebase-design`; `grill-me` includes `grilling`; `grill-with-docs` includes `grilling` and `domain-modeling`.
 
