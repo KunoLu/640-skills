@@ -3,197 +3,197 @@ name: project-validation
 description: Use after code changes to choose and run validation commands for Node, JavaScript, TypeScript, Python, Go, Dart, Java, Kotlin, C++, Swift, or Objective-C projects. Prefer project-defined commands and report skipped checks and risks.
 ---
 
-# 项目验证 Skill
+# Project Validation Skill
 
-代码修改后使用本 Skill。
+Use this Skill after code changes.
 
-## 通用规则
+## General Rules
 
-- 优先使用项目已定义的命令。
-- 当 `rtk` 可用时，非报告型命令优先使用 `rtk`；unit test、API / integration test、Playwright Web E2E、Maestro Mobile / Hybrid E2E 或任何需要生成报告文件的命令，先按 `rtk` 与报告型测试 Gate 判断。
-- 不绕过项目配置。
-- 除非任务需要，不修改 lock 文件。
-- 如果完整检查成本较高，先运行聚焦检查。
-- 说明跳过的检查和剩余风险。
+- Prefer commands already defined by the project.
+- When `rtk` is available, prefer `rtk` for non-reporting commands; for unit tests, API / integration tests, Playwright Web E2E, Maestro Mobile / Hybrid E2E, or any command that must generate report files, first apply the `rtk` and reporting-test Gate.
+- Do not bypass project configuration.
+- Do not modify lock files unless required by the task.
+- If full checks are expensive, run focused checks first.
+- State which checks were skipped and the remaining risks.
 
-## `rtk` 与报告型测试 Gate
+## `rtk` and Reporting-Test Gate
 
-`rtk` 是命令输出压缩层，不是测试 runner。执行验证命令前先区分“只需要终端事实”和“必须产生文件副作用”。
+`rtk` is a command-output compression layer, not a test runner. Before executing validation commands, first distinguish between “only terminal facts are needed” and “file side effects must be produced.”
 
-- lint、typecheck、静态分析、build、只读检查或不依赖落地报告的诊断命令，通常可以优先使用 `rtk`。
-- unit test、API / integration test、Playwright Web E2E、Maestro Mobile / Hybrid E2E、Flutter / Xcode / Gradle / Maven 等测试命令如果本轮需要保留 coverage、JUnit、HTML、JSON、trace、raw report 或 Markdown 汇总，默认优先使用项目原生命令，或项目明确提供的 no-cache / report-safe 命令。
-- 只有确认 `rtk` 对该命令不会 cache hit、replay 输出、跳过 runner 写文件副作用，且报告路径可被校验时，才使用 `rtk` 包裹报告型测试命令。
-- 如果已经用 `rtk` 执行了报告型测试，必须校验预期报告文件存在、mtime / size 在本轮运行后变化、内容能对应本轮命令和 case / spec / flow。缺失、陈旧、空文件、内容不匹配、或输出显示 cache hit / replay / skipped 写入时，立即用原生命令重跑，并以原生命令结果和落地报告为准。
-- API 自定义脚本、Playwright、Maestro、unit runner 的 stdout 结果不能替代报告文件 gate；该命令属于正式验证时，必须落地 raw report / 原生报告和同 stem Markdown 汇总，或标记 blocked。
-- 最终输出必须报告 `rtk`: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`，并说明原因。
+- lint, typecheck, static analysis, build, read-only checks, or diagnostic commands that do not depend on persisted reports can generally prefer `rtk`.
+- If unit tests, API / integration tests, Playwright Web E2E, Maestro Mobile / Hybrid E2E, Flutter / Xcode / Gradle / Maven, or similar test commands need to retain coverage, JUnit, HTML, JSON, trace, raw report, or Markdown summaries in the current run, use the project-native command by default, or a no-cache / report-safe command explicitly provided by the project.
+- Wrap a reporting-test command with `rtk` only after confirming that `rtk` will not produce a cache hit, replay output, or skip the runner’s file-writing side effects for that command, and that the report path can be verified.
+- If a reporting test has already been executed with `rtk`, verify that the expected report files exist, that their mtime / size changed after the current run, and that their contents correspond to the current command and case / spec / flow. If a file is missing, stale, empty, has mismatched contents, or the output shows a cache hit / replay / skipped write, immediately rerun with the native command and treat the native-command result and persisted reports as authoritative.
+- stdout results from custom API scripts, Playwright, Maestro, or unit runners cannot replace the report-file gate; when such a command is part of formal validation, it must persist a raw report / native report and a same-stem Markdown summary, or be marked blocked.
+- The final output must report `rtk`: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`, and explain the reason.
 
-## Book-derived 验证补充
+## Book-Derived Validation Supplement
 
-项目验证负责选择并运行 lint / test / build / typecheck 等命令，不替代 book-derived skills。
+Project validation is responsible for selecting and running commands such as lint / test / build / typecheck; it does not replace book-derived skills.
 
-生产路径相关的服务、API、后台任务、队列、外部集成、数据管道或部署敏感变更，在基础项目验证后必须主动判定是否调用 `book-release-readiness`。如果验证暴露了数据一致性、迁移、回放、幂等或跨服务数据流风险，回到 `book-ddia-data-design` 补齐设计 / 检查结论后再完成。
+For production-path-related changes to services, APIs, background jobs, queues, external integrations, data pipelines, or deployment-sensitive components, after basic project validation you must proactively determine whether to invoke `book-release-readiness`. If validation exposes risks involving data consistency, migration, replay, idempotency, or cross-service data flows, return to `book-ddia-data-design` to complete the design / check conclusions before finishing.
 
-这一步只记录当前任务风险、验证缺口和剩余风险；不要因为生产风险审查而新增与任务无关的重构或测试框架。
+This step records only the current task’s risks, validation gaps, and remaining risks; do not add task-unrelated refactoring or test frameworks because of the production risk review.
 
-## BDD / Gherkin 验证补充
+## BDD / Gherkin Validation Supplement
 
-当任务新增或修改用户可见行为，或 diff 中包含 `.feature` / 持久 BDD 规格路径时，必须验证 BDD 一致性。
+When the task adds or modifies user-visible behavior, or the diff contains `.feature` / persistent BDD specification paths, BDD consistency must be validated.
 
-场景编写、审查或回填问题回到 `gherkin-bdd` Skill 处理；本 Skill 只负责修改后的验证选择、执行和风险报告。
+Return scenario authoring, review, or backfilling issues to the `gherkin-bdd` Skill; this Skill is responsible only for selecting and executing post-change validation and reporting risks.
 
-检查顺序：
+Check in this order:
 
-1. 确认用户可见行为是否有对应持久 BDD 场景；纯内部变更或无语义 UI polish 跳过时，记录跳过原因。
-2. 检查 `.feature` / 持久 BDD 规格的语言决策是否被执行并与文件内容一致：
-   - 项目已有 `.feature` 时，新增或修改内容必须沿用同一 bounded context 或功能区的既有 Gherkin 语言和关键词风格。
-   - 项目原本没有 `.feature`，且用户未明确要求其他语言时，新增 `.feature` 的场景标题、描述和步骤文本默认应为中文；Gherkin 结构关键字使用英语。
-   - 英文产品名、代码标识符、领域专名可以保留英文，但不能把整份新 `.feature` 写成英文。
-   - 不要只依赖 `git diff --check` 判断语言正确性；必须人工复核，或使用轻量检查辅助发现明显违例。
-3. 如果项目原本没有 `.feature`，新增 `.feature` 在注释、tag、表格、doc string 和结构关键字之外没有中文字符，且没有用户覆盖说明或项目规则覆盖，将 `BDD` 标记为 `blocked`，先回到 `gherkin-bdd` 修正语言。
-4. 如果项目已有 Gherkin runner（例如 Cucumber、behave、pytest-bdd、cucumber-js）或 package / Makefile / CI 中有 BDD 命令，优先运行项目定义的 BDD 命令。
-5. 如果没有 Gherkin runner，不主动引入新框架；使用项目已有测试框架运行追踪到场景的 unit / integration / E2E 测试。
-6. 确认每个新增或修改场景都能追踪到自动化测试，追踪方式可以是测试名、注释、目录结构或项目约定。
-7. 无法自动化的场景必须有 `@todo` 或项目等价标记、阻塞原因和临时人工验证说明。
-8. 如果 PRD、`.feature`、测试和代码冲突，先回到规格对齐，不要用验证结果掩盖冲突。
-9. 对前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路，检查是否已记录上下文完整性：`Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`。
-10. 需要 mock 时，确认 mock 行为来自 API contract、schema、真实响应样例、既有 fixture 或用户确认；否则将 `Mock Strategy` 标记为 `blocked`，不要用猜测的 mock 生成测试。
+1. Confirm whether the user-visible behavior has a corresponding persistent BDD scenario; when skipping pure internal changes or semantically neutral UI polish, record the reason for skipping.
+2. Check whether the language decision for `.feature` / persistent BDD specifications has been followed and is consistent with the file contents:
+   - If the project already has `.feature` files, additions or modifications must follow the existing Gherkin language and keyword style of the same bounded context or functional area.
+   - If the project previously had no `.feature` files and the user has not explicitly requested another language, scenario titles, descriptions, and step text in new `.feature` files must be in Chinese by default; use English for Gherkin structural keywords.
+   - English product names, code identifiers, and domain-specific names may remain in English, but an entire new `.feature` file must not be written in English.
+   - Do not rely only on `git diff --check` to determine language correctness; manually review it, or use lightweight checks to help identify obvious violations.
+3. If the project previously had no `.feature` files, and a new `.feature` file contains no Chinese characters outside comments, tags, tables, doc strings, and structural keywords, with no user override or project-rule override, mark `BDD` as `blocked` and return to `gherkin-bdd` to correct the language first.
+4. If the project already has a Gherkin runner, such as Cucumber, behave, pytest-bdd, or cucumber-js, or has a BDD command in a package / Makefile / CI configuration, prefer the project-defined BDD command.
+5. If there is no Gherkin runner, do not proactively introduce a new framework; use the project’s existing test framework to run unit / integration / E2E tests traceable to the scenarios.
+6. Confirm that every added or modified scenario is traceable to an automated test. Traceability may use test names, comments, directory structure, or project conventions.
+7. Scenarios that cannot be automated must have `@todo` or a project-equivalent marker, the blocking reason, and temporary manual-validation instructions.
+8. If the PRD, `.feature`, tests, and code conflict, return to specification alignment first; do not use validation results to conceal the conflict.
+9. For separate frontend and backend repositories, cross-service flows, Web + API, Mobile + API, or Hybrid flows, check whether context completeness has been recorded as `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`.
+10. When mocks are needed, confirm that mock behavior comes from an API contract, schema, real response sample, existing fixture, or user confirmation; otherwise mark `Mock Strategy` as `blocked` and do not generate tests using guessed mocks.
 
-最终输出中必须说明：
+The final output must state:
 
-- `BDD`: `run` / `traceable` / `blocked` / `skipped`。
-- 涉及的 `.feature` 或持久 BDD 规格路径。
-- BDD 语言状态：沿用项目既有风格、默认中文场景文本 + 英文关键词、用户明确覆盖，或 `blocked` 的原因。
-- 运行的 BDD runner 或追踪测试命令。
-- `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`，如不相关则说明 `not-needed`。
-- `API Contract`: `verified` / `user-provided` / `stale` / `missing` / `not-needed`。
-- `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`。
-- 未自动化场景、阻塞原因和剩余风险。
+- `BDD`: `run` / `traceable` / `blocked` / `skipped`.
+- The affected `.feature` or persistent BDD specification paths.
+- BDD language status: following the project’s existing style, default Chinese scenario text + English keywords, explicit user override, or the reason for `blocked`.
+- The BDD runner or traceability-test command that was run.
+- `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`; state `not-needed` if not relevant.
+- `API Contract`: `verified` / `user-provided` / `stale` / `missing` / `not-needed`.
+- `Mock Strategy`: `none` / `contract-backed` / `user-approved` / `blocked`.
+- Unautomated scenarios, blocking reasons, and remaining risks.
 
-## 验证证据来源与版本契约
+## Validation Evidence Sources and Version Contract
 
-只有正式测试报告需要作为 PR 证据或被知识库读取时，才应用 `references/validation-evidence-contract.md` 和 `references/validation-evidence.schema.json`。普通本地诊断、未发布的调试报告和一次性排障不强制生成 evidence sidecar。
+Apply `references/validation-evidence-contract.md` and `references/validation-evidence.schema.json` only when formal test reports must serve as PR evidence or be read by the knowledge base. Ordinary local diagnostics, unpublished debugging reports, and one-off troubleshooting do not require an evidence sidecar.
 
-项目已配置产品注册表时，调用 `knowledge-base-integration` 的 `decision` 入口确定 Evidence Contract、Intent 和 Targets；不得再根据报告目录、分支名或任意 CI 环境猜测用途。Knowledge-server smoke 由该 Skill 的 `smoke` 入口生成 P1.1 bundle，本 Skill 继续负责项目原生验证和报告质量 Gate。P1.1 只接收当前命令开始后新建或刷新的 runner report 与同 stem 中文 Markdown，聚合 envelope 必须引用 artifact manifest、checksums 和实际 runner attestation；stale、缺失、非中文、digest 不一致或环境来源不可信时不得把 Evidence 标记为通过。
+When the project has a configured product registry, invoke the `decision` entry point of `knowledge-base-integration` to determine the Evidence Contract, Intent, and Targets; do not infer the purpose from report directories, branch names, or arbitrary CI environments. Knowledge-server smoke is generated by that Skill’s `smoke` entry point as a P1.1 bundle; this Skill remains responsible for project-native validation and the report-quality Gate. P1.1 accepts only runner reports newly created or refreshed after the current command began and same-stem Chinese Markdown; the aggregate envelope must reference the artifact manifest, checksums, and actual runner attestation. Evidence must not be marked as passed when it is stale, missing, not in Chinese, has inconsistent digests, or comes from an untrusted environment.
 
-- 开发者本地证据使用 `Evidence Source: developer-local`；CI runner 生成的证据使用 `Evidence Source: ci`；知识库服务器独立复验使用 `Evidence Source: knowledge-server`。三者不得覆盖或相互冒充。
-- 正式证据必须记录 repository key、原始 source ref、完整 commit SHA、worktree state、trigger 和创建时间。`branch_slug` 只用于文件名，不是代码版本标识。
-- dirty worktree 只能标记 `Source Revision: dirty` 和 `Evidence Publication: local-only`，不能作为 PR head 的正式证明。
-- PR 证据必须与当前 PR head SHA 完全一致；新增 commit 后旧证据自动失效。
-- Phase 3.4 commit plan 或创建提交前产生的结果只能记录为本地 evidence 状态。提交后、发布或更新 PR Check 前，必须针对最终 PR head SHA 重新生成或复验证据，并更新同 stem sidecar / 聚合 envelope；`developer-local` 与 `ci` 都适用。
-- `ci` evidence 必须来自 clean checkout 并使用 `Source Revision: exact`。CI 执行不等于已发布：目标系统接收后才标记 `published`，未配置发布器时为 `not-configured`，要求发布但失败时为 `blocked`；CI evidence 不得标记 `local-only`。
-- 知识库服务器证据必须记录所有参与仓库的精确 revision set，并记录 `Environment Alignment`。指定 `staging` 等目标分支时，先解析到精确 SHA 再运行。
-- 不要求 `.feature` 添加 Feature ID 或 Scenario ID。行为来源用 repository key、feature path、Feature / Rule / Scenario 名称、可选 Examples fingerprint、source ref 和 SHA 定位。
-- 每份正式报告可在同目录生成同 report stem 的 `.evidence.json`；跨工具编排器也可以在隔离 runtime / evidence bundle 中生成一个聚合 envelope。所有 envelope 都必须通过 Schema 校验并引用原生报告、同 stem 中文 Markdown 汇总和 SHA-256。
-- 发布证据前必须脱敏。`published` 只表示证据已被目标系统接收，不表示测试通过，也不得把 `smoke-only`、`contract-backed`、`mock-backed` 或 `app-mocked` 提升为 `full-stack`。
+- Developer-local evidence uses `Evidence Source: developer-local`; evidence generated by a CI runner uses `Evidence Source: ci`; independent revalidation by the knowledge-base server uses `Evidence Source: knowledge-server`. These three must not overwrite or impersonate one another.
+- Formal evidence must record the repository key, original source ref, full commit SHA, worktree state, trigger, and creation time. `branch_slug` is used only for filenames and is not a code-version identifier.
+- A dirty worktree may only be marked `Source Revision: dirty` and `Evidence Publication: local-only`; it cannot serve as formal proof of the PR head.
+- PR evidence must exactly match the current PR head SHA; old evidence automatically becomes invalid after a new commit is added.
+- Results produced before the Phase 3.4 commit plan or before creating a commit may only be recorded as local evidence status. After committing, and before publishing or updating the PR Check, evidence must be regenerated or revalidated against the final PR head SHA, and the same-stem sidecar / aggregate envelope must be updated; this applies to both `developer-local` and `ci`.
+- `ci` evidence must come from a clean checkout and use `Source Revision: exact`. CI execution does not mean the evidence has been published: mark it `published` only after the target system receives it, `not-configured` when no publisher is configured, and `blocked` when publication is required but fails; CI evidence must not be marked `local-only`.
+- Knowledge-base-server evidence must record the exact revision set of all participating repositories and record `Environment Alignment`. When a target branch such as `staging` is specified, resolve it to an exact SHA before running.
+- `.feature` files are not required to add Feature IDs or Scenario IDs. Identify behavior sources using the repository key, feature path, Feature / Rule / Scenario name, optional Examples fingerprint, source ref, and SHA.
+- Each formal report may generate a same-report-stem `.evidence.json` in the same directory; a cross-tool orchestrator may also generate one aggregate envelope in an isolated runtime / evidence bundle. Every envelope must pass Schema validation and reference the native report, same-stem Chinese Markdown summary, and SHA-256.
+- Evidence must be sanitized before publication. `published` only means that the target system has received the evidence; it does not mean the tests passed, and `smoke-only`, `contract-backed`, `mock-backed`, or `app-mocked` must not be promoted to `full-stack`.
 
-相关任务的最终输出额外报告：
+For relevant tasks, additionally report in the final output:
 
-- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`。
-- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`。
-- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`。
-- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`。
+- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`.
+- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`.
+- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`.
+- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`.
 
-## Web / Mobile 测试工具 Gate
+## Web / Mobile Testing-Tool Gate
 
-修改 Web UI、路由、表单、登录态、权限、跨页面流程、API 集成、发布流程、移动 App 用户旅程、Hybrid App 或关键用户路径后，必须按全局 / 项目级 `AGENTS.md` 的工具职责边界主动判定 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro CLI、Maestro MCP 和 `web-ui-autotest-generator` 是否适用。
+After modifying Web UI, routes, forms, login state, permissions, cross-page flows, API integration, release flows, Mobile App user journeys, Hybrid Apps, or critical user paths, you must proactively determine whether Chrome DevTools MCP, Playwright MCP, Playwright CLI, Maestro CLI, Maestro MCP, and `web-ui-autotest-generator` are applicable, according to the tool-responsibility boundaries in the global / project-level `AGENTS.md`.
 
-本 Skill 只负责验证阶段 gate：
+This Skill is responsible only for the validation-stage gate:
 
-- 先按修改范围选择最小有效验证：项目测试、浏览器诊断、Playwright Web 回归、Maestro 移动 / Hybrid flow、或 Web UI 测试资产覆盖评估。
-- 对 API / Web / Mobile / Hybrid 链路，先判定 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试只能证明对应 contract / mock 假设成立，不能报告为 full-stack 通过。
-- API / integration 测试优先继承项目既有测试框架和报告配置；没有项目约定且需要本轮正式报告时，默认正式快照目录为 `tests/api/reports/`。如果 runner 需要会被下一轮清空或覆盖的临时输出目录，默认使用 `tests/api/reports/.api-current/`，运行结束后再复制 / 提升为包含当前分支 `branch_slug` 和时间戳的报告。自定义 API 脚本只向终端输出时只能算诊断；如果它是本轮正式验证，必须捕获 stdout、stderr 和 exit code 为 `tests/api/reports/.api-current/` 下的 raw report，再提升到 `tests/api/reports/` 并生成同 stem 中文 Markdown 汇总。
-- API / integration 的正式 Markdown 汇总必须提供 URI 覆盖矩阵：每条覆盖范围描述都要映射到具体 `method + URI path`，并记录对应测试脚本 / case、期望状态码或副作用、关联 `.feature` / contract / schema 依据。多个 endpoint 支撑同一覆盖范围时逐行列出；Base URL、环境名和服务名可单独记录，但不得只用脚本名、领域名或覆盖概括替代 URI path。不要写入真实账号、token、敏感 query/body 或生产数据。
-- Web 可重复回归必须优先运行项目已有 Playwright CLI 命令；Chrome DevTools MCP / Playwright MCP 只提供诊断、探索或 locator 证据。Playwright 的 `--reporter=list` 只能用于诊断或定点重跑；Web E2E 进入正式验证范围时，收尾前必须再运行不覆盖项目 reporter 的计划范围命令，或将报告状态标记为 `blocked`。
-- Web E2E 正式 HTML 报告快照默认进入 `tests/e2e/reports/html/`，除非项目 Playwright 配置已有更强约定；Playwright HTML reporter 的 `outputFolder` 默认使用 runner 临时目录 `tests/e2e/reports/.playwright-html-current/`。该目录可能被每次 Playwright 运行清空，只能作为中间产物或工具兼容产物来源；命名后的 HTML 才是正式报告。
-- Maestro 相关验证必须先满足 Java 17+ 和 Maestro CLI；MCP 缺失但 CLI 可用时，继续执行已有 `maestro test` flow 并单独报告 MCP 状态。
-- 需要从 BDD 场景生成或维护 Mobile / Hybrid Maestro flow 时，调用 `maestro-mobile-e2e`，并确认可入库 flow 资产位于 `maestro/flow/`。
-- Maestro 正式报告必须写入项目根目录 `.maestro/reports/`；默认只生成一个项目需要的原生报告格式，命名为 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`；HTML 只在项目或用户需要人类可读报告时生成。优先让 Maestro 直接输出到包含分支名和时间戳的文件；如项目包装命令只能输出到会被重建的目录，使用 `.maestro/reports/.maestro-current/` 作为临时目录，再复制 / 提升到正式报告名。stdout-only Maestro run 只能用于诊断或定点重跑；Mobile / Hybrid E2E 进入正式验证范围时，收尾前必须使用 `--format` / `--output` 或项目等价 reporter 产生命名报告，或将报告状态标记为 `blocked`。
-- iOS 真机 Maestro 执行遇到 driver setup、端口转发、view hierarchy、tap crash 或版本已知问题时，先由 `maestro-mobile-e2e` 按标签 / 关键字懒加载 lesson 并修复，再重跑最小失败 flow。
-- 只有需要把 Web UI 回归固化为仓库内测试资产时，才调用 `web-ui-autotest-generator`；环境、账号、数据准备、清理策略或选择器不稳定时，只输出覆盖缺口和阻塞说明。
-- 调用 `web-ui-autotest-generator` 前后，必须遵循本路径契约，避免 external Skill 示例或脚本默认值把 JSON 写到项目根目录：
+- First select the smallest effective validation based on the scope of changes: project tests, browser diagnostics, Playwright Web regression, Maestro Mobile / Hybrid flows, or Web UI test-asset coverage assessment.
+- For API / Web / Mobile / Hybrid flows, first determine `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`. mock-backed, app-mocked, or contract-backed tests prove only that the corresponding contract / mock assumptions hold and must not be reported as passing full-stack validation.
+- API / integration tests should inherit the project’s existing test framework and report configuration. If there is no project convention and a formal report is required for the current run, the default formal snapshot directory is `tests/api/reports/`. If the runner requires a temporary output directory that will be cleared or overwritten by the next run, use `tests/api/reports/.api-current/` by default, then copy / promote the output after the run to a report containing the current branch `branch_slug` and timestamp. If a custom API script only writes to the terminal, it counts only as a diagnostic; if it is part of formal validation for the current run, capture stdout, stderr, and the exit code as a raw report under `tests/api/reports/.api-current/`, then promote it to `tests/api/reports/` and generate a same-stem Chinese Markdown summary.
+- Formal API / integration Markdown summaries must provide a URI coverage matrix: every coverage-scope description must map to a concrete `method + URI path`, and record the corresponding test script / case, expected status code or side effect, and associated `.feature` / contract / schema basis. When multiple endpoints support the same coverage scope, list each on a separate row; Base URL, environment name, and service name may be recorded separately, but script names, domain names, or high-level coverage summaries must not replace the URI path. Do not include real accounts, tokens, sensitive query/body data, or production data.
+- Repeatable Web regression must prefer the project’s existing Playwright CLI command; Chrome DevTools MCP / Playwright MCP provide only diagnostics, exploration, or locator evidence. Playwright’s `--reporter=list` may only be used for diagnostics or targeted reruns; when Web E2E is within the formal validation scope, before finishing you must rerun the planned scope without overriding the project reporter, or mark the report status as `blocked`.
+- Formal Web E2E HTML report snapshots go to `tests/e2e/reports/html/` by default, unless the project’s Playwright configuration has a stronger convention; the default `outputFolder` for the Playwright HTML reporter is the runner temporary directory `tests/e2e/reports/.playwright-html-current/`. That directory may be cleared by each Playwright run and may only serve as an intermediate artifact or source of tool-compatible artifacts; only the named HTML is the formal report.
+- Maestro-related validation must first satisfy Java 17+ and Maestro CLI requirements; if MCP is unavailable but CLI is available, continue running existing `maestro test` flows and report MCP status separately.
+- When Mobile / Hybrid Maestro flows must be generated or maintained from BDD scenarios, invoke `maestro-mobile-e2e` and confirm that committable flow assets are located under `maestro/flow/`.
+- Formal Maestro reports must be written to `.maestro/reports/` at the project root; by default, generate only one native report format required by the project, named `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` or `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`. `flow_name` is the Maestro flow filename stem, and smoke flows use `smoke`; generate HTML only when the project or user needs a human-readable report. Prefer having Maestro write directly to a file containing the branch name and timestamp; if a project wrapper command can only write to a directory that is rebuilt, use `.maestro/reports/.maestro-current/` as a temporary directory, then copy / promote the output to the formal report name. A stdout-only Maestro run may only be used for diagnostics or targeted reruns; when Mobile / Hybrid E2E is within the formal validation scope, before finishing you must use `--format` / `--output` or a project-equivalent reporter to generate a named report, or mark the report status as `blocked`.
+- When Maestro execution on a physical iOS device encounters driver setup, port forwarding, view hierarchy, tap crash, or known-version issues, first have `maestro-mobile-e2e` lazily load the lesson by tag / keyword and apply the fix, then rerun the smallest failing flow.
+- Invoke `web-ui-autotest-generator` only when Web UI regression must be persisted as in-repository test assets; when the environment, account, data preparation, cleanup strategy, or selectors are unstable, output only coverage gaps and blocking explanations.
+- Before and after invoking `web-ui-autotest-generator`, you must follow this path contract to prevent its examples or script defaults from writing JSON to the project root:
   - `generate_manifest.py --root . --out tests/e2e/manifest/ui-test-manifest.json --pretty`
   - `audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pretty`
   - `check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty`
   - `analyze_failures.py --report tests/e2e/reports/results.json --out tests/e2e/manifest/ui-test-repair-plan.json --pretty`
-- 调用 `web-ui-autotest-generator` 后，必须验证可入库 JSON 资产实际位于 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
-- 如果项目根目录存在 `ui-test-manifest.json`、`ui-selector-audit.json` 或 `ui-test-coverage.json`，验证不能标记为完成；先迁移到 `tests/e2e/manifest/` 并同步引用，或将 `Web UI 测试资产` 标记为 `blocked` 并说明原因。
-- `ui-test-repair-plan.json` 属于失败分析运行产物；如生成，默认检查路径为 `tests/e2e/manifest/ui-test-repair-plan.json`，并确认它不会被误当作长期测试资产提交。
-- Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked` 或 `skipped`，不要声称对应验证已通过。
+- After invoking `web-ui-autotest-generator`, verify that the committable JSON assets are actually located under `tests/e2e/manifest/`: `ui-test-manifest.json`, `ui-selector-audit.json`, and `ui-test-coverage.json`.
+- If `ui-test-manifest.json`, `ui-selector-audit.json`, or `ui-test-coverage.json` exists in the project root, validation must not be marked complete; first move it to `tests/e2e/manifest/` and update references, or mark `Web UI test assets` as `blocked` and explain why.
+- `ui-test-repair-plan.json` is a failure-analysis runtime artifact; if generated, the default path to check is `tests/e2e/manifest/ui-test-repair-plan.json`, and confirm that it will not be mistakenly committed as a long-lived test asset.
+- If Playwright CLI, Java, Maestro CLI, MCP configuration, test accounts, authentication methods, test environments, devices, simulators, app binaries, appId / bundleId, or service URLs are unavailable, record `blocked` or `skipped`; do not claim that the corresponding validation passed.
 
-最终输出按全局 / 项目级 `AGENTS.md` 定义的状态枚举报告相关工具状态、运行命令、失败或阻塞原因、生成文件和剩余风险。
+In the final output, report the relevant tool statuses, executed commands, failure or blocking reasons, generated files, and remaining risks using the status enums defined by the global / project-level `AGENTS.md`.
 
-## 测试报告与重跑闭环
+## Test Reports and Rerun Closure
 
-API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时，执行以下报告和重跑规则。项目已有 CI / reporter 配置优先；模板只定义缺省行为和最终报告语义。
+When API, Web E2E, Mobile E2E, Hybrid E2E, or pre-release smoke enters formal validation, follow the report and rerun rules below. Existing project CI / reporter configuration takes precedence; this template defines only default behavior and final report semantics.
 
-报告规则：
+Report rules:
 
-- 调试轮次可以沉淀多份本地命名测试报告快照，以便后续对比失败、修复和最终运行；不要删除同一任务中已有的 `playwright-report-*`、`maestro-report-*`、`api-report-*` 或 `unit-report-*` 快照。stdout-only、terminal-only 和 diagnostic-only 命令不能满足最终报告 gate：Playwright `--reporter=list`、只打印终端输出的 API 自定义脚本、以及未启用 `--format` / `--output` 或项目等价 reporter 的 Maestro run 都只能记录为诊断或定点重跑。最终状态只以最后一次计划范围内的运行记录 `Final Full Rerun`。
-- 报告型测试必须先记录 `rtk` 决策：`skipped-for-report` 表示为保证 runner 写入报告文件而直接使用原生命令；`fallback-native` 表示 `rtk` 输出或缓存行为导致报告缺失、陈旧或不可证明，已改用原生命令复验。不能只凭 `rtk` 的缓存 / 回放输出声明报告生成或测试通过。
-- 一旦执行 Playwright 或 Maestro 运行并产生 runner 原生报告，无论最终全量是否通过，都必须在正式报告快照目录生成命名后的原生报告和同 stem Markdown 汇总。API / integration 和 unit test 如果本轮生成了需要作为证据保留的原生报告，也适用同一规则。对 Playwright，“正式报告快照目录”默认是 `tests/e2e/reports/html/`，不是 `results.json` 所在上级目录，也不是 Playwright HTML reporter 的临时 `outputFolder`。`Final Test Report: generated` 只表示报告文件存在；最终是否全绿由 `Final Full Rerun` 记录。
-- 默认目录：API / integration 正式快照使用 `tests/api/reports/`，API 临时输出使用 `tests/api/reports/.api-current/`；Playwright HTML reporter 临时输出使用 `tests/e2e/reports/.playwright-html-current/`，Playwright HTML 正式报告快照使用 `tests/e2e/reports/html/`；Maestro 正式快照使用 `.maestro/reports/`，必要时临时输出使用 `.maestro/reports/.maestro-current/`；unit test 正式报告默认继承项目配置，缺少约定但需要本地证据时使用 `tests/unit/reports/`，必要时临时输出使用 `tests/unit/reports/.unit-current/`。
-- 分支名必须进入 API、Playwright 和 Maestro 的正式报告 stem。先从当前 git branch 或项目 / CI 明确的 branch ref 获取原始分支名；detached HEAD 使用 `detached-{short_sha}`；非 git 环境使用 `unknown-branch`。生成文件名时使用 `branch_slug`：只保留字母、数字、`.`、`_`、`-`，将 `/`、空格和其他特殊字符替换为 `_`；Markdown 汇总中记录原始分支名和 `branch_slug`。
-- 当报告作为 PR 或知识库证据时，必须同时按验证证据契约记录原始 source ref、完整 commit SHA、worktree state、evidence source、trigger、source revision、environment alignment 和 publication status；不得把 `branch_slug` 当作版本身份。
-- 通用防覆盖规则：`coverage/`、`test-results/`、固定 `junit.xml`、runner 的 `current` / `latest` 目录、以及上述点号临时目录都视为 runner 托管输出。它们可能在下一次运行前被清空、覆盖或重建；需要保留时，必须先复制 / 提升到正式快照目录和时间戳 stem，再启动下一次会改写同一 runner 输出的命令。
-- Playwright 命名：`playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`feature_file_name` 默认取关联 BDD `.feature` 文件名去掉扩展名；smoke test 固定使用 `smoke`；一次运行覆盖多个 `.feature` 时优先使用明确 suite 名，否则使用 `multi-feature`。如果不是 smoke 且无法追踪到 BDD `.feature`，不要编造文件名，先将 BDD 追踪标记为 `blocked`。
-- Maestro 命名：`maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`，并生成 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`。`flow_name` 取 Maestro flow 文件名 stem，smoke flow 使用 `smoke`，不改成 `feature_file_name`；源 `.feature` 路径和场景名写入 Markdown 汇总。
-- Playwright 默认 HTML reporter 生成 `index.html` 时，在每次需要保留的运行结束后必须从 `tests/e2e/reports/.playwright-html-current/` 将其复制为上述正式报告名；命名后的 HTML 是正式报告。正式报告不得保存在 `.playwright-html-current/` 中，因为下一次 Playwright 运行可能清空该目录。Markdown 汇总必须与命名后的 HTML 完全同 stem；不得把 `results.json`、`junit.xml`、`test-results/` 或默认 `index.html` 的 stem 用作最终 Markdown 文件名，`results.md`、`result.md`、`junit.md`、`index.md` 均不能满足 `Run Summary MD: generated`。如果 Playwright 已产生 `results.json`、`junit.xml` 或等价结果但没有 `index.html`，先按项目配置重跑或补启用 HTML reporter，不能用 JSON / JUnit 报告替代命名 HTML 和同 stem `.md`。如果 HTML reporter 目录中存在 `data/`、trace、附件或其他相对资源，必须同时复制完整资源目录，或生成以 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}/index.html` 为入口的完整快照目录，并让 Markdown 汇总指向该入口。
-- API 命名示例：`api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.txt` + `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`；没有明确 suite 时使用 `api-report-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}` stem。没有原生 reporter 的 API / integration 命令，如果仍是本轮正式验证证据，必须把 stdout、stderr、exit code、运行命令和时间戳捕获为 `.txt` 或 `.json` raw report，不能只在最终回复里粘贴终端结果。
-- API Markdown 汇总必须包含“覆盖范围 -> API URI”映射表。推荐列为：覆盖范围、HTTP 方法、URI path、测试脚本 / case、期望状态码、验证的副作用或响应字段、关联 BDD / contract。没有 route manifest 时从测试源码、OpenAPI / schema、客户端调用或实际请求日志提取；无法确定 URI 时将该覆盖项标记为 `blocked` 或 `missing-uri`，不要用空泛覆盖描述冒充完整报告。
-- Unit 命名示例：`unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.html` / `.lcov` + `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`。unit test 不强制每轮生成正式报告；但一旦项目命令或 CI 兼容命令已经产生本轮要保留的报告，就不能只依赖会被下一轮重写的 coverage 或 JUnit 固定路径。
-- 如果项目配置强制多个 reporter，每次需要保留的运行只生成一组命名报告和一份 Markdown 汇总；最终结论仍以最后一次计划范围内运行判断。
-- 未最终全量通过时，仍生成该次运行的命名报告和同 stem Markdown 汇总，但不得声明“全量通过”或“full-stack 通过”；最终输出说明失败 / 阻塞原因、已尝试命令和剩余风险。
-- 如果 CLI 未安装、环境预检阻塞或 runner 崩溃到没有任何原生报告产物，`Final Test Report` 和 `Run Summary MD` 标记为 `blocked`，并说明缺失原因；只要 runner 已有原生产物，就不得把 `Run Summary MD` 标记为 `not-needed`。
+- Debugging rounds may retain multiple named local test-report snapshots for later comparison of failures, fixes, and the final run; do not delete existing `playwright-report-*`, `maestro-report-*`, `api-report-*`, or `unit-report-*` snapshots from the same task. stdout-only, terminal-only, and diagnostic-only commands cannot satisfy the final report gate: Playwright `--reporter=list`, custom API scripts that only print terminal output, and Maestro runs without `--format` / `--output` or a project-equivalent reporter may only be recorded as diagnostics or targeted reruns. The final status is based only on the last planned-scope run recorded as `Final Full Rerun`.
+- Reporting tests must first record the `rtk` decision: `skipped-for-report` means the native command was used directly to ensure the runner wrote report files; `fallback-native` means `rtk` output or cache behavior caused the report to be missing, stale, or unprovable, so the native command was used for revalidation. Do not declare that a report was generated or tests passed solely from `rtk` cache / replay output.
+- Once a Playwright or Maestro run is executed and produces a runner-native report, regardless of whether the final full run passes, a named native report and same-stem Markdown summary must be generated in the formal report snapshot directory. The same rule applies to API / integration and unit tests if the current run generated native reports that must be retained as evidence. For Playwright, the “formal report snapshot directory” is `tests/e2e/reports/html/` by default, not the parent directory containing `results.json`, and not the temporary `outputFolder` of the Playwright HTML reporter. `Final Test Report: generated` only means the report file exists; whether the final result is fully green is recorded by `Final Full Rerun`.
+- Default directories: API / integration formal snapshots use `tests/api/reports/`, and temporary API output uses `tests/api/reports/.api-current/`; temporary Playwright HTML reporter output uses `tests/e2e/reports/.playwright-html-current/`, and formal Playwright HTML report snapshots use `tests/e2e/reports/html/`; formal Maestro snapshots use `.maestro/reports/`, with temporary output using `.maestro/reports/.maestro-current/` when necessary; formal unit-test reports inherit project configuration by default, and when no convention exists but local evidence is required, use `tests/unit/reports/`, with temporary output using `tests/unit/reports/.unit-current/` when necessary.
+- The branch name must be included in the formal API, Playwright, and Maestro report stem. First obtain the original branch name from the current git branch or an explicit project / CI branch ref; use `detached-{short_sha}` for detached HEAD; use `unknown-branch` outside a git environment. Use `branch_slug` when generating filenames: retain only letters, digits, `.`, `_`, and `-`, and replace `/`, spaces, and other special characters with `_`; record the original branch name and `branch_slug` in the Markdown summary.
+- When a report serves as PR or knowledge-base evidence, also record the original source ref, full commit SHA, worktree state, evidence source, trigger, source revision, environment alignment, and publication status according to the validation evidence contract; do not use `branch_slug` as version identity.
+- General overwrite-prevention rule: `coverage/`, `test-results/`, fixed `junit.xml`, runner `current` / `latest` directories, and the dot-prefixed temporary directories above are all considered runner-managed output. They may be cleared, overwritten, or rebuilt before the next run; when they must be retained, first copy / promote them to a formal snapshot directory with a timestamped stem before starting another command that rewrites the same runner output.
+- Playwright naming: `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html` + `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`. By default, `feature_file_name` is the associated BDD `.feature` filename without its extension; smoke tests always use `smoke`; when one run covers multiple `.feature` files, prefer an explicit suite name, otherwise use `multi-feature`. If it is not a smoke test and cannot be traced to a BDD `.feature`, do not invent a filename; first mark BDD traceability as `blocked`.
+- Maestro naming: `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` or `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`, and generate `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`. `flow_name` is the Maestro flow filename stem, smoke flows use `smoke`, and it must not be changed to `feature_file_name`; record the source `.feature` path and scenario name in the Markdown summary.
+- When the Playwright default HTML reporter generates `index.html`, after every run that must be retained, copy it from `tests/e2e/reports/.playwright-html-current/` to the formal report name above; the named HTML is the formal report. Formal reports must not be stored in `.playwright-html-current/`, because the next Playwright run may clear that directory. The Markdown summary must have exactly the same stem as the named HTML; do not use the stem of `results.json`, `junit.xml`, `test-results/`, or the default `index.html` as the final Markdown filename. `results.md`, `result.md`, `junit.md`, and `index.md` do not satisfy `Run Summary MD: generated`. If Playwright has produced `results.json`, `junit.xml`, or an equivalent result but no `index.html`, rerun according to project configuration or enable the HTML reporter; do not substitute JSON / JUnit reports for the named HTML and same-stem `.md`. If the HTML reporter directory contains `data/`, traces, attachments, or other relative resources, copy the complete resource directory as well, or generate a complete snapshot directory with `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}/index.html` as its entry point and have the Markdown summary point to that entry point.
+- API naming example: `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.txt` + `api-report-{suite_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.md`; when there is no explicit suite, use the stem `api-report-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}`. If an API / integration command has no native reporter but still serves as formal validation evidence for the current run, capture stdout, stderr, exit code, executed command, and timestamp as a `.txt` or `.json` raw report; do not merely paste terminal results into the final response.
+- API Markdown summaries must include a “Coverage Scope -> API URI” mapping table. Recommended columns are: coverage scope, HTTP method, URI path, test script / case, expected status code, validated side effect or response field, and associated BDD / contract. When no route manifest exists, extract the information from test source code, OpenAPI / schema, client calls, or actual request logs; if the URI cannot be determined, mark that coverage item as `blocked` or `missing-uri`; do not present vague coverage descriptions as a complete report.
+- Unit naming example: `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.xml` / `.json` / `.html` / `.lcov` + `unit-report-{suite_name}-{YYYY_mm_dd}-{HH_MM_SS}.md`. Unit tests are not required to generate formal reports on every run; however, once a project command or CI-compatible command has generated a report that must be retained for the current run, do not rely only on a fixed coverage or JUnit path that will be rewritten by the next run.
+- If project configuration mandates multiple reporters, each retained run must generate only one set of named reports and one Markdown summary; the final conclusion is still determined by the last planned-scope run.
+- If the final full run does not pass, still generate the named report and same-stem Markdown summary for that run, but do not claim “full pass” or “full-stack pass”; the final output must state the failure / blocking reasons, attempted commands, and remaining risks.
+- If the CLI is not installed, environment prechecks block execution, or the runner crashes without producing any native report artifact, mark `Final Test Report` and `Run Summary MD` as `blocked` and explain the reason they are missing; once the runner has produced a native artifact, `Run Summary MD` must not be marked `not-needed`.
 
-失败处理与重跑顺序：
+Failure handling and rerun order:
 
-1. 首轮失败后，分类根因：产品代码、测试代码、BDD / 规格、mock / contract drift、环境 / 账号 / 数据 / 设备、flaky / timing、或任务外失败。
-2. 当前任务范围内可修复时，修复后先重跑失败 case / failed spec / failed flow。
-3. 定点重跑通过后，运行受影响子集，例如同 `.feature`、同 API endpoint、同页面流、同测试文件、同 Maestro flow 或同平台 smoke。
-4. 最后运行计划范围内的全量验证；该轮通过才能声明最终全量通过，但只要 runner 产出原生报告，无论通过或失败都必须生成命名报告和 Markdown 汇总。
-5. 如果 runner 因 fail-fast 停在第一个失败，修复并定点通过后，必须继续运行未覆盖的后续测试，或直接重跑计划范围内全量验证。
-6. 不默认从中间 resume 一个已污染的测试环境；只有项目 runner 明确支持可靠 resume 时才使用。
+1. After the first failure, classify the root cause: product code, test code, BDD / specification, mock / contract drift, environment / account / data / device, flaky / timing, or an out-of-scope failure.
+2. If it can be fixed within the current task scope, fix it and first rerun the failed case / failed spec / failed flow.
+3. After the targeted rerun passes, run the affected subset, such as the same `.feature`, same API endpoint, same page flow, same test file, same Maestro flow, or same-platform smoke.
+4. Finally, run the full validation within the planned scope; only if that run passes may you claim a final full pass, but whenever the runner produces a native report, a named report and Markdown summary must be generated regardless of pass or failure.
+5. If the runner stops at the first failure because of fail-fast, after fixing it and passing the targeted rerun, continue running the remaining uncovered tests or directly rerun the full planned-scope validation.
+6. Do not resume from the middle of a contaminated test environment by default; do so only when the project runner explicitly supports reliable resume.
 
-Markdown 汇总必须记录：
+The Markdown summary must record:
 
-- 汇总正文必须使用中文撰写；只有状态枚举值、命令、文件路径、case / spec / flow 名称、错误原文和技术标识符可以保留英文。
-- 测试范围、运行 case / spec / flow 列表、`E2E Mode`、`Mock Strategy`、原始分支名、`branch_slug`、`.feature` 路径和场景名。
-- 当报告作为 PR 或知识库证据时，记录 `Evidence Source`、repository key、原始 source ref、完整 commit SHA、worktree state、`Source Revision`、trigger、`Environment Alignment`、`Evidence Publication` 和 evidence sidecar / envelope 路径。
-- API / integration 汇总必须包含 URI 覆盖矩阵，逐项映射覆盖范围和 `method + URI path`，并标出对应测试脚本 / case 与 contract / schema / `.feature` 依据。
-- 最终正式报告路径、总执行轮次、每轮命令。
-- 每轮失败 case / spec / flow、失败原因分类、修复动作和修改文件摘要。
-- 定点重跑、受影响子集重跑和最终全量重跑结果。
-- 未执行项、跳过原因、剩余风险，以及 contract / mock / 环境 / 账号 / 设备说明。
-- 不写入真实账号、密钥、PII、生产数据、完整 token、敏感请求头或生产截图。
+- The summary body must be written in Chinese; only status enum values, commands, file paths, case / spec / flow names, original error text, and technical identifiers may remain in English.
+- Test scope, list of executed cases / specs / flows, `E2E Mode`, `Mock Strategy`, original branch name, `branch_slug`, `.feature` paths, and scenario names.
+- When the report serves as PR or knowledge-base evidence, record `Evidence Source`, repository key, original source ref, full commit SHA, worktree state, `Source Revision`, trigger, `Environment Alignment`, `Evidence Publication`, and the evidence sidecar / envelope path.
+- API / integration summaries must include a URI coverage matrix that maps each coverage scope to `method + URI path`, and identifies the corresponding test script / case and contract / schema / `.feature` basis.
+- Final formal report paths, total number of execution rounds, and the command for each round.
+- Failed cases / specs / flows for each round, failure-cause classification, corrective actions, and a summary of modified files.
+- Results of targeted reruns, affected-subset reruns, and the final full rerun.
+- Unexecuted items, reasons for skipping, remaining risks, and contract / mock / environment / account / device details.
+- Do not include real accounts, secrets, PII, production data, full tokens, sensitive request headers, or production screenshots.
 
-最终输出中额外报告：
+Additionally report in the final output:
 
-- `Final Test Report`: `generated` / `blocked` / `not-supported` / `not-needed`。
-- `Run Summary MD`: `generated` / `blocked` / `not-needed`。
-- `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`。
-- `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`。
-- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`。
-- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`。
-- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`。
-- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`。
+- `Final Test Report`: `generated` / `blocked` / `not-supported` / `not-needed`.
+- `Run Summary MD`: `generated` / `blocked` / `not-needed`.
+- `Targeted Rerun`: `passed` / `failed` / `blocked` / `not-needed`.
+- `Final Full Rerun`: `passed` / `failed` / `blocked` / `skipped-with-risk` / `not-needed`.
+- `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`.
+- `Source Revision`: `exact` / `dirty` / `unknown` / `not-needed`.
+- `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`.
+- `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`.
 
-## 语言验证通用规则
+## General Language-Validation Rules
 
-所有语言都优先继承项目已有 CI、README、Makefile、package scripts、Gradle / Maven wrapper、Xcode scheme、CMake preset 或更深层 `AGENTS.md` 定义的命令。下面命令只是缺少项目明确约定时的候选项。
+For every language, prefer commands defined by the project’s existing CI, README, Makefile, package scripts, Gradle / Maven wrapper, Xcode scheme, CMake preset, or deeper `AGENTS.md`. The commands below are only candidates when the project has no explicit convention.
 
-验证时同时说明：
+During validation, also state:
 
-- 代码规范 / lint / format 检查是否运行。
-- unit test 是否运行。
-- integration / API / E2E 是否与本次改动相关。
-- 报告路径是否由项目配置生成；模板不为 unit test 强制统一报告目录，但会被 runner 清空 / 覆盖的报告必须先归档到项目约定目录或 `tests/unit/reports/` 的时间戳快照后再作为证据引用。
-- 跳过或阻塞的原因。
+- Whether code-style / lint / format checks were run.
+- Whether unit tests were run.
+- Whether integration / API / E2E is relevant to the current changes.
+- Whether report paths were generated by project configuration; the template does not enforce a unified report directory for unit tests, but reports that will be cleared / overwritten by the runner must first be archived to a timestamped snapshot in the project-conventional directory or `tests/unit/reports/` before being referenced as evidence.
+- Reasons for anything skipped or blocked.
 
 ## Node / JavaScript / TypeScript
 
-优先使用项目包管理器和 CI scripts，不切换包管理器。常见命令：
+Prefer the project package manager and CI scripts; do not switch package managers. Common commands:
 
-优先（lint / typecheck / build 等非报告型命令）：
+Preferred for non-reporting commands such as lint / typecheck / build:
 
 ```bash
 rtk npm run lint
@@ -201,13 +201,13 @@ rtk npm run typecheck
 rtk npm run build
 ```
 
-测试命令先按 `rtk` 与报告型测试 Gate 判断；需要报告落地时优先：
+First apply the `rtk` and reporting-test Gate to test commands; when reports must be persisted, prefer:
 
 ```bash
 npm run test
 ```
 
-回退：
+Fallback:
 
 ```bash
 npm run lint
@@ -215,22 +215,22 @@ npm run typecheck
 npm run build
 ```
 
-当修改以下内容时，运行 typecheck：
+Run typecheck when modifying:
 
-- TypeScript 类型
-- DTO
-- API 返回值
-- 组件 props
-- 状态结构
-- 共享接口
+- TypeScript types
+- DTOs
+- API return values
+- Component props
+- State structures
+- Shared interfaces
 
-如果项目没有 `typecheck` script，不要凭空新增；记录为未定义并运行项目实际可用的类型检查或构建命令。
+If the project has no `typecheck` script, do not invent one; record it as undefined and run the type-checking or build command actually available in the project.
 
 ---
 
 ## Python
 
-优先（lint / format / typecheck 等非报告型命令）：
+Preferred for non-reporting commands such as lint / format / typecheck:
 
 ```bash
 rtk ruff check .
@@ -238,13 +238,13 @@ rtk ruff format .
 rtk ty check .
 ```
 
-测试命令先按 `rtk` 与报告型测试 Gate 判断；需要报告落地时优先：
+First apply the `rtk` and reporting-test Gate to test commands; when reports must be persisted, prefer:
 
 ```bash
 uv run pytest
 ```
 
-回退：
+Fallback:
 
 ```bash
 uv run ruff check .
@@ -252,40 +252,40 @@ uv run ruff format .
 uv run ty check .
 ```
 
-规则：
+Rules:
 
-- 修改 Python 代码后，运行 `ruff check`。
-- 涉及格式化时，运行 `ruff format`。
-- 修改类型、函数签名或返回结构时，运行 `ty check`。
-- 修改业务逻辑、数据处理、API 或 bug 修复时，运行 `pytest`。
-- 不绕过 `pyproject.toml`、`uv.lock`、`pytest.ini` 或 `ruff.toml`。
-- 如果项目使用 `mypy`、`pyright`、`tox`、`nox`、`coverage` 或 CI 定义的 test matrix，优先继承项目命令。
+- After modifying Python code, run `ruff check`.
+- When formatting is involved, run `ruff format`.
+- When modifying types, function signatures, or return structures, run `ty check`.
+- When modifying business logic, data processing, APIs, or fixing bugs, run `pytest`.
+- Do not bypass `pyproject.toml`, `uv.lock`, `pytest.ini`, or `ruff.toml`.
+- If the project uses `mypy`, `pyright`, `tox`, `nox`, `coverage`, or a test matrix defined by CI, prefer the project commands.
 
 ---
 
 ## Go
 
-测试命令先按 `rtk` 与报告型测试 Gate 判断；需要报告落地时优先：
+First apply the `rtk` and reporting-test Gate to test commands; when reports must be persisted, prefer:
 
 ```bash
 go test ./...
 ```
 
-规则：
+Rules:
 
-- 涉及格式修改时，运行 `gofmt`。
-- 修改并发、错误处理、反射或格式化字符串时，运行 `go vet ./...`。
-- 仅当依赖变化时，运行 `go mod tidy`。
-- 不无故修改 `go.mod` 或 `go.sum`。
-- 如果项目有 Makefile、CI matrix、race test、coverage 或 package 子集约定，优先继承项目命令。
+- When formatting changes are involved, run `gofmt`.
+- When modifying concurrency, error handling, reflection, or format strings, run `go vet ./...`.
+- Run `go mod tidy` only when dependencies change.
+- Do not modify `go.mod` or `go.sum` without reason.
+- If the project has a Makefile, CI matrix, race-test, coverage, or package-subset convention, prefer the project commands.
 
 ---
 
 ## Dart / Flutter
 
-优先继承项目的 Flutter / Dart CI、Melos、Makefile 或 package scripts。
+Prefer the project’s Flutter / Dart CI, Melos, Makefile, or package scripts.
 
-常见候选（format / analyze 可优先 `rtk`；test 先按 `rtk` 与报告型测试 Gate 判断）：
+Common candidates, where format / analyze may prefer `rtk`, and test must first apply the `rtk` and reporting-test Gate:
 
 ```bash
 rtk dart format --set-exit-if-changed .
@@ -293,129 +293,129 @@ rtk dart analyze
 dart test
 ```
 
-Flutter 项目常见候选：
+Common candidates for Flutter projects:
 
 ```bash
 rtk flutter analyze
 flutter test
 ```
 
-规则：
+Rules:
 
-- 修改 Dart 代码后，运行项目约定的 format / analyze。
-- 修改业务逻辑、状态管理、数据转换、widget 行为或 bug 修复时，运行 unit test / widget test。
-- Flutter integration test、Maestro Mobile E2E 或平台构建只在改动触及对应用户旅程、平台能力或发布风险时运行。
+- After modifying Dart code, run the project-conventional format / analyze commands.
+- When modifying business logic, state management, data conversion, widget behavior, or fixing bugs, run unit tests / widget tests.
+- Run Flutter integration tests, Maestro Mobile E2E, or platform builds only when changes affect the corresponding user journey, platform capability, or release risk.
 
 ---
 
 ## Java
 
-优先使用项目 wrapper 和 CI tasks，不绕过 Gradle / Maven 配置。
+Prefer the project wrapper and CI tasks; do not bypass Gradle / Maven configuration.
 
-Gradle 常见候选（测试命令先按 `rtk` 与报告型测试 Gate 判断；需要报告落地时优先原生命令）：
+Common Gradle candidates, where test commands must first apply the `rtk` and reporting-test Gate and native commands are preferred when reports must be persisted:
 
 ```bash
 ./gradlew test
 ./gradlew check
 ```
 
-Maven 常见候选：
+Common Maven candidates:
 
 ```bash
 mvn test
 mvn verify
 ```
 
-规则：
+Rules:
 
-- 修改 Java 代码后，运行项目配置的 Checkstyle、Spotless、PMD、Error Prone 或等价 lint / format gate。
-- 修改业务逻辑、API、持久化、并发或 bug 修复时，运行 unit test。
-- 涉及集成、容器、数据库或外部服务时，按项目 CI 运行 integration test profile；不可用时说明阻塞原因。
+- After modifying Java code, run the project-configured Checkstyle, Spotless, PMD, Error Prone, or equivalent lint / format gate.
+- When modifying business logic, APIs, persistence, concurrency, or fixing bugs, run unit tests.
+- When integrations, containers, databases, or external services are involved, run the integration-test profile according to project CI; if unavailable, state the blocking reason.
 
 ---
 
 ## Kotlin
 
-优先使用项目 Gradle wrapper、Android Gradle Plugin、Kotlin Multiplatform 或 CI 任务。
+Prefer the project’s Gradle wrapper, Android Gradle Plugin, Kotlin Multiplatform, or CI tasks.
 
-常见候选（测试命令先按 `rtk` 与报告型测试 Gate 判断；需要报告落地时优先原生命令）：
+Common candidates, where test commands must first apply the `rtk` and reporting-test Gate and native commands are preferred when reports must be persisted:
 
 ```bash
 ./gradlew test
 ./gradlew check
 ```
 
-Android 项目常见候选：
+Common candidates for Android projects:
 
 ```bash
 ./gradlew testDebugUnitTest
 ```
 
-规则：
+Rules:
 
-- 修改 Kotlin 代码后，运行项目配置的 ktlint、detekt、Spotless 或等价 lint / format gate。
-- 修改业务逻辑、ViewModel、repository、domain layer、serialization 或 bug 修复时，运行 unit test。
-- Android instrumentation test、Compose UI test、Maestro Mobile E2E 只在改动触及设备行为或用户旅程时运行。
+- After modifying Kotlin code, run the project-configured ktlint, detekt, Spotless, or equivalent lint / format gate.
+- When modifying business logic, ViewModel, repository, domain layer, serialization, or fixing bugs, run unit tests.
+- Run Android instrumentation tests, Compose UI tests, or Maestro Mobile E2E only when changes affect device behavior or user journeys.
 
 ---
 
 ## C++
 
-优先继承项目 CMake preset、Makefile、Bazel、Ninja、CTest 或 CI 命令；不要为验证临时重构构建系统。
+Prefer the project’s CMake preset, Makefile, Bazel, Ninja, CTest, or CI commands; do not temporarily refactor the build system for validation.
 
-常见候选：
+Common candidates:
 
 ```bash
 rtk cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-规则：
+Rules:
 
-- 修改 C++ 代码后，运行项目配置的 `clang-format`、`clang-tidy`、`cppcheck` 或等价静态检查。
-- 修改核心逻辑、内存所有权、并发、ABI/API、序列化或 bug 修复时，运行 unit test。
-- 如果项目没有已配置 build 目录，按 README / CI 创建或选择 build 目录；无法确定时先询问或记录阻塞，不随意生成长期构建配置。
+- After modifying C++ code, run the project-configured `clang-format`, `clang-tidy`, `cppcheck`, or equivalent static checks.
+- When modifying core logic, memory ownership, concurrency, ABI/API, serialization, or fixing bugs, run unit tests.
+- If the project has no configured build directory, create or select one according to the README / CI; if it cannot be determined, ask first or record the blocker, and do not arbitrarily generate long-lived build configuration.
 
 ---
 
 ## Swift
 
-优先继承 SwiftPM、Xcode scheme、xcodebuild、XcodeBuildMCP 或 CI 配置。
+Prefer SwiftPM, Xcode scheme, xcodebuild, XcodeBuildMCP, or CI configuration.
 
-SwiftPM 常见候选（测试命令先按 `rtk` 与报告型测试 Gate 判断；需要报告落地时优先原生命令）：
+Common SwiftPM candidates, where test commands must first apply the `rtk` and reporting-test Gate and native commands are preferred when reports must be persisted:
 
 ```bash
 swift test
 ```
 
-Xcode 常见候选：
+Common Xcode candidates:
 
 ```bash
 xcodebuild test -scheme <scheme> -destination <destination>
 ```
 
-规则：
+Rules:
 
-- 修改 Swift 代码后，运行项目配置的 SwiftFormat、SwiftLint、`swift format` 或等价 lint / format gate。
-- 修改业务逻辑、model、service、view model、App Intents、serialization 或 bug 修复时，运行 XCTest / Swift Testing unit test。
-- iOS UI test、device test 或 Maestro Mobile E2E 只在改动触及真实设备行为、权限、相机、上传、深链、系统弹窗或用户旅程时运行。
-- 如果 Xcode scheme、destination、simulator 或 signing 不明确，记录阻塞；不要假装测试已运行。
+- After modifying Swift code, run the project-configured SwiftFormat, SwiftLint, `swift format`, or equivalent lint / format gate.
+- When modifying business logic, models, services, view models, App Intents, serialization, or fixing bugs, run XCTest / Swift Testing unit tests.
+- Run iOS UI tests, device tests, or Maestro Mobile E2E only when changes affect real-device behavior, permissions, camera, upload, deep links, system dialogs, or user journeys.
+- If the Xcode scheme, destination, simulator, or signing is unclear, record the blocker; do not pretend tests were run.
 
 ---
 
 ## Objective-C
 
-优先继承 Xcode workspace / project、scheme、xcodebuild、XcodeBuildMCP 或 CI 配置。
+Prefer the Xcode workspace / project, scheme, xcodebuild, XcodeBuildMCP, or CI configuration.
 
-常见候选：
+Common candidates:
 
 ```bash
 xcodebuild test -scheme <scheme> -destination <destination>
 ```
 
-规则：
+Rules:
 
-- 修改 Objective-C / Objective-C++ 代码后，运行项目配置的 clang-format、clang-tidy、OCLint 或等价 lint / static analysis gate。
-- 修改业务逻辑、runtime、category、delegate、桥接层、内存管理、C++ interop 或 bug 修复时，运行 XCTest unit test。
-- 涉及真机能力、系统权限、Hybrid bridge 或跨页面移动流程时，按项目约定运行 Xcode UI test 或 Maestro Mobile E2E。
-- 如果 workspace、scheme、destination、provisioning 或 signing 不明确，记录阻塞并说明需要的项目事实。
+- After modifying Objective-C / Objective-C++ code, run the project-configured clang-format, clang-tidy, OCLint, or equivalent lint / static-analysis gate.
+- When modifying business logic, runtime, categories, delegates, bridge layers, memory management, C++ interop, or fixing bugs, run XCTest unit tests.
+- When physical-device capabilities, system permissions, Hybrid bridges, or cross-page mobile flows are involved, run Xcode UI tests or Maestro Mobile E2E according to project conventions.
+- If the workspace, scheme, destination, provisioning, or signing is unclear, record the blocker and state the required project facts.

@@ -3,402 +3,402 @@ name: trellis-workflow
 description: Use for Trellis workflow tasks, including requirement clarification handoff, reading .trellis/workflow.md, task artifacts, before-dev, check, finish-work, update-spec, workflow template handling, and parent/child task handling. Do not use for non-Trellis projects.
 ---
 
-# Trellis 工作流 Skill
+# Trellis Workflow Skill
 
-当仓库使用 Trellis 时，使用本 Skill。
+Use this Skill when the repository uses Trellis.
 
-本 Skill 负责 Trellis 生命周期、任务产物、阶段检查、workflow 模板判断、before-dev、check、finish-work、update-spec，以及 parent / child task 处理。
+This Skill is responsible for the Trellis lifecycle, task artifacts, phase checks, workflow template decisions, before-dev, check, finish-work, update-spec, and parent / child task handling.
 
 ---
 
-## 开始工作前
+## Before Starting Work
 
-1. 检查是否存在 `.trellis/`。
-2. 读取 `.trellis/workflow.md`。
-3. 读取相关 `.trellis/spec`；其中 `.trellis/spec/lessons.md` 是短入口和高优先级摘要。
-4. 不要默认读取完整 `.trellis/lessons/**`；先通过 `.trellis/lessons/index.md`、tags、错误信息或当前任务主题按需检索，再读取命中的 topic / archive 文件。
-5. 如果存在当前活跃任务，读取：
+1. Check whether `.trellis/` exists.
+2. Read `.trellis/workflow.md`.
+3. Read the relevant `.trellis/spec`; among them, `.trellis/spec/lessons.md` is the short entry point and high-priority summary.
+4. Do not read the complete `.trellis/lessons/**` by default; first search as needed through `.trellis/lessons/index.md`, tags, error messages, or the current task topic, then read the matched topic / archive files.
+5. If there is a currently active task, read:
    - `prd.md`
-   - `design.md`，如果存在
-   - `implement.md`，如果存在
+   - `design.md`, if it exists
+   - `implement.md`, if it exists
 
-`.trellis/workflow.md` 是当前项目实际生效的 workflow。
-所有 Trellis 阶段判断必须以该文件为准。
+`.trellis/workflow.md` is the workflow actually in effect for the current project.
+All Trellis phase decisions must be based on this file.
 
-## 需求澄清与 PRD 入口
+## Requirement Clarification and PRD Entry Point
 
-Trellis 负责任务生命周期，不替代需求澄清、领域术语对齐或 PRD 生成。
+Trellis is responsible for the task lifecycle; it does not replace requirement clarification, domain terminology alignment, or PRD generation.
 
-当用户只给出初始需求，且需求涉及项目领域模型、业务术语、长期规则、现有文档或架构决策时：
+When the user provides only an initial requirement, and the requirement involves the project domain model, business terminology, long-term rules, existing documentation, or architectural decisions:
 
-1. 在创建或改写 Trellis task artifacts 前，优先使用 `grill-with-docs`。
-2. 先读取项目已有文档与相关代码，例如 `docs/CONTEXT.md`、`docs/contexts/<context>/CONTEXT.md`、`docs/adr/`、`.trellis/spec`、README 和相关实现；如果项目已采用根目录 `CONTEXT.md` 或 `CONTEXT-MAP.md`，也一并读取；能从项目事实回答的问题，不要反问用户。
-3. 按 `grill-with-docs` 的节奏一次只问一个关键问题，并给出推荐答案。
-4. 术语达成长期共识时，才写入项目指定的 context 文档；默认使用 `docs/CONTEXT.md`，多上下文项目使用 `docs/contexts/<context>/CONTEXT.md`；不要新建根目录 `CONTEXT.md`，除非项目已采用该路径或项目规则明确指定；不要把 CONTEXT 写成临时规格书。
-5. 只有决策同时满足“难回滚、缺少背景会令人意外、有真实取舍”时，才建议写 ADR；默认写入 `docs/adr/*.md`，多上下文项目写入 `docs/contexts/<context>/adr/*.md`。
-6. 达成共识后，先输出需求确认摘要，覆盖目标、用户 / 场景、范围内外、术语、约束、验收标准和未决问题。
-7. 输出需求确认摘要、PRD / design / implement review gate 或 `task.py start` 前，必须说明 `grill-with-docs` 使用状态；未完整调用时，说明原因并询问用户是否需要先用该 Skill 再评估一次。
-8. 用户确认摘要后，再使用 `to-spec` 生成 Markdown spec / PRD；在 Trellis 项目中，spec / PRD 终稿写入或更新 `.trellis/tasks/<task>/prd.md`。
-9. spec / PRD 确认后，再使用 `to-tickets` 拆成 Trellis-ready vertical slices，标注依赖顺序、AFK / HITL、验收标准和测试策略；拆解结果应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts。
-10. 运行 PRD convergence pass 后，再按 `.trellis/workflow.md` 创建或选择 task，并继续 Trellis 阶段。
+1. Before creating or rewriting Trellis task artifacts, preferentially use `grill-with-docs`.
+2. First read the project's existing documentation and relevant code, such as `docs/CONTEXT.md`, `docs/contexts/<context>/CONTEXT.md`, `docs/adr/`, `.trellis/spec`, README, and relevant implementations; if the project already uses root-level `CONTEXT.md` or `CONTEXT-MAP.md`, read those as well; do not ask the user questions that can be answered from project facts.
+3. Following the cadence of `grill-with-docs`, ask only one key question at a time and provide a recommended answer.
+4. Only write terminology into the project's designated context documentation when long-term consensus has been reached; use `docs/CONTEXT.md` by default, and use `docs/contexts/<context>/CONTEXT.md` for multi-context projects; do not create a root-level `CONTEXT.md` unless the project already uses that path or project rules explicitly specify it; do not turn CONTEXT into a temporary specification.
+5. Suggest writing an ADR only when a decision simultaneously meets all three conditions: difficult to roll back, surprising without context, and involving real trade-offs; write to `docs/adr/*.md` by default, and write to `docs/contexts/<context>/adr/*.md` for multi-context projects.
+6. After consensus is reached, first output a requirement confirmation summary covering the goal, users / scenarios, in-scope and out-of-scope items, terminology, constraints, acceptance criteria, and open questions.
+7. Before outputting the requirement confirmation summary, a PRD / design / implement review gate, or `task.py start`, the usage status of `grill-with-docs` must be stated; if it was not fully invoked, explain why and ask whether the user wants to use that Skill first and then reassess.
+8. After the user confirms the summary, use `to-spec` to generate the Markdown spec / PRD; in a Trellis project, write or update the final spec / PRD in `.trellis/tasks/<task>/prd.md`.
+9. After the spec / PRD is confirmed, use `to-tickets` to split it into Trellis-ready vertical slices, marking dependency order, AFK / HITL, acceptance criteria, and testing strategy; the decomposition results should be materialized as parent / child task artifacts under `.trellis/tasks/<task>/...`.
+10. After running the PRD convergence pass, create or select a task according to `.trellis/workflow.md`, then continue through the Trellis phases.
 
-PRD convergence pass 必须是无损整理：把临时 brainstorm 小节、已解决问题、重复事实和并列 bug / requirement 列表合并进稳定的 goal、requirements、technical notes、acceptance criteria 或 out-of-scope；不得丢弃已有需求、证据、严重性、验收标准或用户明确范围决定。
+The PRD convergence pass must be lossless consolidation: merge temporary brainstorm sections, resolved questions, duplicated facts, and parallel bug / requirement lists into stable goals, requirements, technical notes, acceptance criteria, or out-of-scope sections; do not discard existing requirements, evidence, severity, acceptance criteria, or explicit user scope decisions.
 
-如果需求只是通用方案质询、没有项目文档或领域术语约束，可使用 `grill-me` 替代 `grill-with-docs`。
+If the requirement is only a general solution inquiry and has no project documentation or domain terminology constraints, `grill-me` may be used instead of `grill-with-docs`.
 
-`$trellis-brainstorm` 可用于 Trellis 内澄清不明确需求，但当需求需要对照项目文档、领域语言或 ADR 时，不替代 `grill-with-docs`。
+`$trellis-brainstorm` may be used to clarify ambiguous requirements within Trellis, but it does not replace `grill-with-docs` when the requirement needs to be checked against project documentation, domain language, or ADRs.
 
-### grill-with-docs 使用状态透明度
+### Transparency of grill-with-docs Usage Status
 
-在 Phase 1 planning、需求确认摘要、PRD / design / implement review gate、或 `task.py start` 前，按全局规则说明是否完整调用 `grill-with-docs`；未完整调用时说明原因，并询问用户是否需要先用该 Skill 再评估一次。
+During Phase 1 planning, in the requirement confirmation summary, at a PRD / design / implement review gate, or before `task.py start`, state according to the global rules whether `grill-with-docs` was fully invoked; if it was not fully invoked, explain why and ask whether the user wants to use that Skill first and then reassess.
 
-在需求确认摘要、PRD 或 task artifacts 尚未稳定前，不要执行 `$trellis-before-dev` 或开始实现。
+Do not execute `$trellis-before-dev` or begin implementation before the requirement confirmation summary, PRD, or task artifacts are stable.
 
-## Workflow 模板规则
+## Workflow Template Rules
 
-如果 Trellis 支持 workflow templates，可在初始化或后续通过 `trellis workflow` 选择 / 切换 workflow。
+If Trellis supports workflow templates, a workflow may be selected / switched during initialization or later through `trellis workflow`.
 
-默认规则：
+Default rules:
 
-- 未经用户明确要求，不主动切换 workflow 模板。
-- `native` 可作为默认标准 workflow。
-- `tdd` 仅在用户明确要求 TDD、项目已经采用测试驱动流程，或当前任务属于高风险且适合测试先行的行为修改时使用。
-- BDD 不是独立 workflow 模板；用户可见行为默认通过 `gherkin-bdd` 作为 workflow overlay 执行。
-- `channel-driven-subagent-dispatch` 仅在用户明确要求 Channel / 多 Agent / sub-agent 分发流程时使用。
-- 即使存在 `channel-driven-subagent-dispatch` 模板，也不得仅因任务复杂就自动切换或启用该模板。
-- 切换 workflow 后，必须重新读取 `.trellis/workflow.md`，并以新文件为准。
-- 如果 workflow 引用 `.trellis/agents/<name>.md` 但文件不存在，先运行 `trellis update` 生成缺失的 channel runtime agent 定义，再继续 Channel workflow。
+- Do not proactively switch workflow templates without an explicit user request.
+- `native` may be used as the default standard workflow.
+- Use `tdd` only when the user explicitly requests TDD, the project already follows a test-driven process, or the current task is a high-risk behavioral modification suitable for tests-first development.
+- BDD is not an independent workflow template; user-visible behavior is executed by default through `gherkin-bdd` as a workflow overlay.
+- Use `channel-driven-subagent-dispatch` only when the user explicitly requests a Channel / multi-Agent / sub-agent dispatch process.
+- Even if a `channel-driven-subagent-dispatch` template exists, do not automatically switch to or enable that template merely because the task is complex.
+- After switching workflows, `.trellis/workflow.md` must be read again, and the new file must be treated as authoritative.
+- If the workflow references `.trellis/agents/<name>.md` but the file does not exist, first run `trellis update` to generate the missing channel runtime agent definition, then continue the Channel workflow.
 
-判断原则：
+Decision principles:
 
-- 复杂度决定是否进入 Trellis planning。
-- 协作形态决定是否启用 Channel 或 channel-driven workflow。
-- 大任务优先考虑 parent / child task，不默认切换到 Channel workflow。
+- Complexity determines whether to enter Trellis planning.
+- The collaboration model determines whether to enable Channel or a channel-driven workflow.
+- For large tasks, preferentially consider parent / child tasks; do not switch to a Channel workflow by default.
 
-Workflow 选择表：
+Workflow selection table:
 
-| 场景 | 推荐方式 |
+| Scenario | Recommended approach |
 |---|---|
-| 文档、配置说明、样式、小模板、低风险局部修改 | `native` workflow |
-| bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、需要回归测试的修改 | `native` workflow + 主动判定 `tdd` Skill |
-| 权限、计费、状态机、关键数据一致性、复杂算法、高风险后端逻辑或项目已明确采用测试驱动流程 | Trellis `tdd` workflow + `tdd` Skill |
-| UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化或外部集成可观察行为 | 当前 workflow + `gherkin-bdd` overlay |
+| Documentation, configuration explanations, styling, small templates, low-risk localized changes | `native` workflow |
+| Bug fixes, core business logic, algorithms, data transformation, synchronization / import / export, changes requiring regression tests | `native` workflow + proactively assess the `tdd` Skill |
+| Permissions, billing, state machines, critical data consistency, complex algorithms, high-risk backend logic, or projects that have explicitly adopted a test-driven process | Trellis `tdd` workflow + `tdd` Skill |
+| UI, API, CLI, exported files, notifications, permission outcomes, error responses, state changes, or externally observable integration behavior | Current workflow + `gherkin-bdd` overlay |
 
-不要为了“更重视测试”而把所有任务默认切到 Trellis `tdd` workflow；优先在 `native` 中按需调用 `tdd` Skill。只有任务本身需要把测试先行变成阶段约束时，才切换到 Trellis `tdd` workflow。
-
----
-
-## Trellis TDD Workflow 与 `tdd` Skill
-
-Trellis `tdd` workflow 是任务生命周期和阶段编排；`tdd` Skill 是具体实现时的测试先行方法。两者可以组合，但不能互相替代。
-
-当项目实际使用 Trellis TDD workflow，或用户明确要求 Trellis TDD 时：
-
-- 继续按 `.trellis/workflow.md` 执行 Trellis 阶段。
-- 开发前仍执行 `$trellis-before-dev`。
-- 具体实现中，如 `tdd` Skill 可用，使用 `tdd` 指导 red-green-refactor。
-- 开发后仍执行 `$trellis-check` 和项目验证命令。
-
-当项目使用 Trellis `native` workflow 时：
-
-- 不因 `native` workflow 而禁止 `tdd` Skill。
-- 在 bug 修复、核心业务逻辑、算法、数据转换、同步 / 导入 / 导出、高风险修改或需要回归测试时，必须主动判定是否使用 `tdd` Skill。
-- 如果主动判定后跳过 `tdd` Skill，最终输出要说明原因，例如缺少可测试接口、项目没有测试框架、修改只是文档 / 配置、或当前风险已由现有测试覆盖。
-- 不为简单文案、样式、配置说明或纯文档修改强制使用 `tdd`。
+Do not switch every task to the Trellis `tdd` workflow by default merely to “place more emphasis on testing”; preferentially invoke the `tdd` Skill as needed within `native`. Switch to the Trellis `tdd` workflow only when the task itself requires tests-first development to become a phase constraint.
 
 ---
 
-## BDD Overlay 与 `gherkin-bdd` Skill
+## Trellis TDD Workflow and `tdd` Skill
 
-BDD 是用户可见行为的默认硬规则，不替代 Trellis workflow。Trellis 管任务生命周期，`gherkin-bdd` 管用户可见行为规格。
+The Trellis `tdd` workflow is for task lifecycle and phase orchestration; the `tdd` Skill is the tests-first method used during concrete implementation. They can be combined, but neither can replace the other.
 
-适用范围：
+When the project actually uses the Trellis TDD workflow, or the user explicitly requests Trellis TDD:
 
-- UI、API、CLI、导出文件、通知、权限结果、错误响应、状态变化和外部集成系统可观察行为。
-- 用户可见 bug 修复。
-- Trellis `prd.md`、`design.md`、`implement.md` 或验收标准中出现的用户可见行为。
+- Continue executing Trellis phases according to `.trellis/workflow.md`.
+- Still execute `$trellis-before-dev` before development.
+- During concrete implementation, if the `tdd` Skill is available, use `tdd` to guide red-green-refactor.
+- Still execute `$trellis-check` and the project's validation commands after development.
 
-跳过范围：
+When the project uses the Trellis `native` workflow:
 
-- 纯内部重构、依赖 / 工具配置、机械格式化。
-- 不改变行为或语义的 typo、视觉 polish、className / token / CSS 重构、布局清理。
-
-语言规则：
-
-- 已有 `.feature` 或项目级持久 BDD 规格时，沿用同一 bounded context 或功能区的既有语言和关键词风格。
-- 项目没有 `.feature` 且用户未明确要求其他语言时，默认使用中文场景标题、描述和步骤文本，并使用英语 Gherkin 结构关键字。
-- 英文 PRD、design、implement、代码标识符或产品名不能覆盖上述默认语言决策；领域专名可按 glossary / `docs/CONTEXT.md` / `.trellis/spec` 保留。
-
-阶段编排：
-
-1. 需求 / PRD 阶段：`prd.md` 可以草拟 Given/When/Then，但用户可见行为在实现前必须进入持久 `.feature` 或项目级规则指定的持久 BDD 规格路径。
-2. 语言决策：创建或改写 `.feature` 前，先检查既有 `.feature`、BDD runner 配置和项目规则；没有既有 `.feature` 且无用户覆盖时，明确记录“中文场景文本 + 英文 Gherkin 关键词”。
-3. 前后端分仓、跨服务、Web + API、Mobile + API 或 Hybrid 链路不完整时，先记录 `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`；契约、账号、环境、设备、选择器或数据事实缺失时，不把场景当成已确认。
-4. 领域术语不清时：先使用 `grill-with-docs` 和 `book-ddd-distilled-modeling`，再定稿场景文本。
-5. 开发前：运行 `$trellis-before-dev` 前，确认新增 / 修改 / 修复的用户可见行为已有对应 BDD 场景，或明确 BDD 跳过原因；同时确认场景文本符合语言决策。
-6. 开发中：从 BDD 场景派生测试。已有 Gherkin runner 时绑定 step definitions 或 runner 测试；没有 runner 时使用项目已有测试框架，并用测试名、注释、目录结构或项目约定追踪到场景。
-7. bug 修复：先写正确行为场景，再写失败回归测试，再修复。
-8. `$trellis-check`：核对 PRD、持久 `.feature`、测试和代码是否一致，并检查 `.feature` 语言状态是否为沿用项目既有风格、默认中文场景文本 + 英文关键词、用户明确覆盖或已阻塞。
-
-既有项目采用 `no new uncovered behavior`：未触碰的历史行为可以暂时没有 `.feature`；新增或触碰的用户可见行为必须补齐。
-
-默认持久路径：
-
-- 已有 `.feature` / BDD runner / 项目规则时沿用项目约定。
-- 单应用项目默认 `<project-root>/features/<capability-slug>.feature`。
-- monorepo 默认落在 owning workspace 下的 `features/**/*.feature`。
-- `.trellis/tasks/**` 只保存过程产物，不作为默认长期行为 source of truth。
-
-对已确认用户可见行为，持久 `.feature` 是行为 source of truth；PRD 说明背景和意图，`design.md` / `implement.md` 说明技术方案。冲突时先对齐 PRD 与 `.feature`，再实现。
+- Do not prohibit the `tdd` Skill because the workflow is `native`.
+- For bug fixes, core business logic, algorithms, data transformation, synchronization / import / export, high-risk changes, or changes requiring regression tests, you must proactively assess whether to use the `tdd` Skill.
+- If the `tdd` Skill is skipped after proactive assessment, the final output must explain why, for example: no testable interface, no testing framework in the project, the change is only documentation / configuration, or the current risk is already covered by existing tests.
+- Do not require `tdd` for simple copy, styling, configuration explanations, or pure documentation changes.
 
 ---
 
-## 任务产物
+## BDD Overlay and `gherkin-bdd` Skill
 
-- `prd.md`：需求、约束、验收标准
-- `design.md`：技术设计
-- `implement.md`：实现计划
-- `implement.jsonl` / `check.jsonl`：面向 sub-agent-capable 平台的实现 / 检查上下文清单
+BDD is the default hard rule for user-visible behavior and does not replace the Trellis workflow. Trellis manages the task lifecycle; `gherkin-bdd` manages user-visible behavior specifications.
 
-当前任务产物优先于通用假设。
+Applicable scope:
 
-如果当前 workflow 或平台会分发到 sub-agent-capable worker，`implement.jsonl` 和 `check.jsonl` 在 `task.py start` 或开始分发前必须包含真实 spec / research / task artifact 条目；初始化时的 seed / `_example` 行不算可用上下文。清单缺少真实条目时，先在 planning 阶段补齐或明确转为 inline workflow，不要把 seed-only task 当成 implementation-ready。
+- UI, API, CLI, exported files, notifications, permission outcomes, error responses, state changes, and behavior observable by external integration systems.
+- User-visible bug fixes.
+- User-visible behavior appearing in Trellis `prd.md`, `design.md`, `implement.md`, or acceptance criteria.
 
-`.trellis/spec` 只保存长期项目规则。
+Skip scope:
 
-`.trellis/spec/lessons.md` 是 lessons 的必读短入口，不是完整历史库。完整 lesson 默认保存在：
+- Pure internal refactoring, dependency / tooling configuration, and mechanical formatting.
+- Typos, visual polish, className / token / CSS refactoring, or layout cleanup that does not change behavior or semantics.
+
+Language rules:
+
+- When `.feature` files or project-level persistent BDD specifications already exist, follow the existing language and keyword style of the same bounded context or functional area.
+- When the project has no `.feature` files and the user has not explicitly requested another language, use Chinese scenario titles, descriptions, and step text by default, with English Gherkin structural keywords.
+- English PRDs, design documents, implementation documents, code identifiers, or product names must not override the default language decision above; domain-specific names may be preserved according to the glossary / `docs/CONTEXT.md` / `.trellis/spec`.
+
+Phase orchestration:
+
+1. Requirements / PRD phase: `prd.md` may draft Given/When/Then, but user-visible behavior must enter a persistent `.feature` file or a persistent BDD specification path designated by project-level rules before implementation.
+2. Language decision: before creating or rewriting a `.feature` file, first inspect existing `.feature` files, BDD runner configuration, and project rules; if there are no existing `.feature` files and no user override, explicitly record “Chinese scenario text + English Gherkin keywords.”
+3. When frontend and backend are in separate repositories, or a cross-service, Web + API, Mobile + API, or Hybrid chain is incomplete, first record `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing`; when contract, account, environment, device, selector, or data facts are missing, do not treat the scenario as confirmed.
+4. When domain terminology is unclear: first use `grill-with-docs` and `book-ddd-distilled-modeling`, then finalize the scenario text.
+5. Before development: before running `$trellis-before-dev`, confirm that added / modified / fixed user-visible behavior has corresponding BDD scenarios, or explicitly state the reason for skipping BDD; also confirm that scenario text conforms to the language decision.
+6. During development: derive tests from BDD scenarios. When a Gherkin runner exists, bind step definitions or runner tests; when no runner exists, use the project's existing testing framework and trace tests back to scenarios through test names, comments, directory structure, or project conventions.
+7. Bug fixes: first write the correct-behavior scenario, then write a failing regression test, then fix the bug.
+8. `$trellis-check`: verify that the PRD, persistent `.feature` files, tests, and code are consistent, and check whether the `.feature` language status is: following the project's existing style, default Chinese scenario text + English keywords, explicit user override, or blocked.
+
+Existing projects use `no new uncovered behavior`: untouched historical behavior may temporarily have no `.feature`; new or touched user-visible behavior must be covered.
+
+Default persistent paths:
+
+- Follow project conventions when existing `.feature` files / a BDD runner / project rules exist.
+- For a single-application project, default to `<project-root>/features/<capability-slug>.feature`.
+- For a monorepo, default to `features/**/*.feature` under the owning workspace.
+- `.trellis/tasks/**` stores only process artifacts and is not the default long-term behavioral source of truth.
+
+For confirmed user-visible behavior, the persistent `.feature` file is the behavioral source of truth; the PRD explains context and intent, while `design.md` / `implement.md` explain the technical approach. When conflicts exist, first align the PRD and `.feature`, then implement.
+
+---
+
+## Task Artifacts
+
+- `prd.md`: requirements, constraints, acceptance criteria
+- `design.md`: technical design
+- `implement.md`: implementation plan
+- `implement.jsonl` / `check.jsonl`: implementation / check context manifests for sub-agent-capable platforms
+
+Current task artifacts take precedence over general assumptions.
+
+If the current workflow or platform dispatches to a sub-agent-capable worker, `implement.jsonl` and `check.jsonl` must contain real spec / research / task artifact entries before `task.py start` or before dispatch begins; seed / `_example` lines from initialization do not count as usable context. If the manifests lack real entries, first complete them during planning or explicitly switch to an inline workflow; do not treat a seed-only task as implementation-ready.
+
+`.trellis/spec` stores only long-term project rules.
+
+`.trellis/spec/lessons.md` is the required short entry point for lessons, not the complete historical repository. Complete lessons are stored by default in:
 
 - `.trellis/lessons/index.md`
 - `.trellis/lessons/topics/<topic>.md`
 - `.trellis/lessons/archive/YYYY-QN.md`
 
-不要默认全文读取 `.trellis/lessons/**`；根据当前任务、错误信息、工具名、语言、tags 或 index 的 `read_when` 命中后，再读取对应 topic 或 archive。
+Do not read all of `.trellis/lessons/**` by default; only after a match based on the current task, error message, tool name, language, tags, or the index's `read_when`, read the corresponding topic or archive.
 
-不要把以下内容直接写入 `.trellis/spec`：
+Do not write the following directly into `.trellis/spec`:
 
-- 一次性 checklist
-- 临时调研
-- 本地实现笔记
-- 仅当前任务适用的计划
-
----
-
-## 常用命令
-
-- `$trellis-continue`：恢复中断的工作
-- `$trellis-before-dev`：代码修改前执行
-- `$trellis-check`：代码修改后执行
-- `$trellis-finish-work`：验证通过后执行
-- `$trellis-update-spec`：更新长期项目规范
-- `$trellis-brainstorm`：澄清 Trellis 任务内的不明确需求；需要项目文档和领域术语对齐时，先使用 `grill-with-docs`
-
-## Trellis 更新与迁移
-
-升级 Trellis、切换模板或发现生成文件缺失时，优先运行 `trellis update`，并在运行后重新读取 `.trellis/workflow.md`、相关 `.trellis/spec` 和当前 task artifacts。
-
-- 如果上游 migration manifest 建议迁移，或项目中存在拼写错误的 `trellis-spec-bootstarp/` skill 目录，运行 `trellis update --migrate`，让 Trellis 处理跨平台目录重命名。
-- `trellis update` 可能安装新的 bundled skills、平台模板或 `.trellis/agents/{check,implement}.md` channel runtime 文件；这些是生成的 Trellis workflow 资产，不等同于 channel runtime 日志。
-- 当 Trellis 新增或重命名 AI 平台时，复核生成的 commands、skills、agents、shared skills 目录和项目 `.gitignore` / 提交策略；不要把可复用的平台模板目录、runtime 日志和本地缓存混为一类。
-- 对 agent-capable 但没有 session-start / per-turn hooks 的平台，更新后必须确认仍有显式的 workflow 启动入口，例如 `trellis-start` skill 或 `/trellis:start` command；不要仅因为平台支持 agent 就假设启动上下文会自动注入。
-- 对同时支持 CLI agent hooks 和 IDE hook 文件的平台，更新后分别复核主会话 agent、sub-agent、per-turn prompt hook、session-start hook 和 workflow resource 注入；不要只检查 sub-agent hook 或只检查 IDE 配置。
-- 对使用 pull-based sub-agent prelude 的 class-2 平台，implement / check 分发必须保留在 pull-based 路由中；不要把这类平台归入 hook auto-handles 分支。更新后复核对应 agent 定义仍会主动读取 task artifacts、`implement.jsonl` / `check.jsonl` 和 active task。
-- 当 Trellis 新增平台支持时，复核 `init` / `update` / `uninstall` 涉及的 commands、skills、agents、hooks、settings 或等价配置是否成套管理；如果主会话 hooks 和 sub-agent context loading 采用不同机制，两条路径都要验证。
-- 对 Pi 这类 session-start 只能通知、不能直接注入模型上下文的平台，更新后必须确认启动上下文仍有有效注入路径和手动 fallback，例如 agent-start 扩展注入、start prompt、agent tools frontmatter、工具名大小写规范等；不要只检查 `session_start` 配置是否存在。
-- 对可选平台 hooks、statusline 或状态栏类增强，不要假设 `trellis update` 会强制安装、删除或改写；只有在用户选择对应 init/update flag、项目已有配置或 manifest 明确要求时才启用，并复核生成 diff。
-- 使用 registry-backed spec templates 时，`trellis update` 可能刷新 `.trellis/spec`；必须复核 hash / conflict 提示和实际 diff，不要静默覆盖项目长期规范。
-- Trellis 更新可能刷新 filesystem-safety 行为，包括 atomic state writes、task archive guard、Channel safe-name guard、uninstall dirty-data guard、AGENTS managed-block scrubber、template overwrite temp-first swap、rename-dir ownership check 和 traces-to-journal non-clobber 迁移；更新后复核生成 diff，再执行会删除、移动、覆盖或按名称解析路径的操作。
-- `trellis uninstall --yes` 或自动化卸载遇到 `.trellis/spec`、`.trellis/tasks`、`.trellis/workspace` 未提交数据 guard 时，不要设置 `TRELLIS_ALLOW_DIRTY_UNINSTALL=1` 绕过，除非用户已明确确认备份和删除范围；优先先跑 dry-run 或让用户手动清理 / 提交相关数据。
-- 当 Trellis 更新涉及 workflow phase、step 编号、状态路由或 resume / continue 行为时，更新后必须复核生成的 workflow、`/continue` 命令、workflow variants、bundled skill 参考和平台 prompt 是否仍与 `.trellis/workflow.md` 对齐；不要只检查带 `Phase X.Y` 字样的引用，也要检查裸编号路由。
-- 如果命令提示 workflow 引用的 `.trellis/agents/<name>.md` 缺失，先运行 `trellis update`，再重试 workflow 或 Channel 操作。
-
-## Codex Sub-agent 生成文件排障
-
-Codex 平台的 Trellis sub-agent TOML 由模板和 context prelude injector 共同生成。
-
-如果 `.codex/agents/trellis-check.toml` 或 `.codex/agents/trellis-implement.toml` 中重复出现 `Required: Load Trellis Context First`：
-
-- 优先运行 `trellis update` 重新生成 `.codex/agents/`。
-- 不要手工保留或维护重复 prelude。
-- 更新后检查每个相关 agent 文件只保留一份 context-loading prelude，并仍能定位 active task、读取 `check.jsonl` / `implement.jsonl` 和 task artifacts。
+- One-off checklists
+- Temporary research
+- Local implementation notes
+- Plans applicable only to the current task
 
 ---
 
-## 开发前
+## Common Commands
 
-运行：
+- `$trellis-continue`: resume interrupted work
+- `$trellis-before-dev`: execute before code modifications
+- `$trellis-check`: execute after code modifications
+- `$trellis-finish-work`: execute after validation passes
+- `$trellis-update-spec`: update long-term project specifications
+- `$trellis-brainstorm`: clarify ambiguous requirements within a Trellis task; when project documentation and domain terminology alignment are required, use `grill-with-docs` first
+
+## Trellis Updates and Migrations
+
+When upgrading Trellis, switching templates, or discovering missing generated files, preferentially run `trellis update`, then reread `.trellis/workflow.md`, the relevant `.trellis/spec`, and the current task artifacts.
+
+- If the upstream migration manifest recommends migration, or the project contains the misspelled `trellis-spec-bootstarp/` skill directory, run `trellis update --migrate` and let Trellis handle the cross-platform directory rename.
+- `trellis update` may install new bundled skills, platform templates, or `.trellis/agents/{check,implement}.md` channel runtime files; these are generated Trellis workflow assets, not channel runtime logs.
+- When Trellis adds or renames an AI platform, review the generated commands, skills, agents, shared skills directories, and the project's `.gitignore` / commit policy; do not treat reusable platform template directories, runtime logs, and local caches as the same category.
+- For agent-capable platforms without session-start / per-turn hooks, after updating, you must confirm that an explicit workflow startup entry point still exists, such as the `trellis-start` skill or `/trellis:start` command; do not assume startup context will be injected automatically merely because the platform supports agents.
+- For platforms that support both CLI agent hooks and IDE hook files, after updating, separately review the main-session agent, sub-agent, per-turn prompt hook, session-start hook, and workflow resource injection; do not inspect only the sub-agent hook or only the IDE configuration.
+- For class-2 platforms using a pull-based sub-agent prelude, implement / check dispatch must remain in the pull-based routing path; do not place these platforms in the hook auto-handles branch. After updating, verify that the corresponding agent definitions still proactively read task artifacts, `implement.jsonl` / `check.jsonl`, and the active task.
+- When Trellis adds platform support, review whether commands, skills, agents, hooks, settings, or equivalent configurations involved in `init` / `update` / `uninstall` are managed as a complete set; if main-session hooks and sub-agent context loading use different mechanisms, validate both paths.
+- For platforms such as Pi where session-start can only notify and cannot directly inject model context, after updating, you must confirm that startup context still has a valid injection path and manual fallback, such as agent-start extension injection, start prompts, agent tools frontmatter, and tool-name casing conventions; do not inspect only whether `session_start` configuration exists.
+- For optional platform hooks, statusline, or status-bar enhancements, do not assume `trellis update` will forcibly install, delete, or rewrite them; enable them only when the user selects the corresponding init/update flag, the project already has the configuration, or the manifest explicitly requires it, and review the generated diff.
+- When using registry-backed spec templates, `trellis update` may refresh `.trellis/spec`; you must review hash / conflict prompts and the actual diff, and must not silently overwrite long-term project specifications.
+- Trellis updates may refresh filesystem-safety behavior, including atomic state writes, task archive guard, Channel safe-name guard, uninstall dirty-data guard, AGENTS managed-block scrubber, template overwrite temp-first swap, rename-dir ownership check, and traces-to-journal non-clobber migration; after updating, review the generated diff before performing operations that delete, move, overwrite, or resolve paths by name.
+- When `trellis uninstall --yes` or an automated uninstall encounters an uncommitted-data guard for `.trellis/spec`, `.trellis/tasks`, or `.trellis/workspace`, do not set `TRELLIS_ALLOW_DIRTY_UNINSTALL=1` to bypass it unless the user has explicitly confirmed the backup and deletion scope; preferentially run a dry-run first or ask the user to manually clean up / commit the relevant data.
+- When a Trellis update involves workflow phases, step numbering, status routing, or resume / continue behavior, after updating, you must review whether the generated workflow, `/continue` command, workflow variants, bundled skill references, and platform prompts remain aligned with `.trellis/workflow.md`; do not inspect only references containing the words `Phase X.Y`, but also inspect bare numeric routing.
+- If a command reports that `.trellis/agents/<name>.md` referenced by the workflow is missing, first run `trellis update`, then retry the workflow or Channel operation.
+
+## Troubleshooting Codex Sub-agent Generated Files
+
+Trellis sub-agent TOML files for the Codex platform are generated jointly by templates and the context prelude injector.
+
+If `Required: Load Trellis Context First` appears repeatedly in `.codex/agents/trellis-check.toml` or `.codex/agents/trellis-implement.toml`:
+
+- Preferentially run `trellis update` to regenerate `.codex/agents/`.
+- Do not manually preserve or maintain duplicate preludes.
+- After updating, check that each relevant agent file retains only one context-loading prelude and can still locate the active task and read `check.jsonl` / `implement.jsonl` and task artifacts.
+
+---
+
+## Before Development
+
+Run:
 
 ```bash
 $trellis-before-dev
 ```
 
-执行该步骤前，不要开始实现。
+Do not begin implementation before completing this step.
 
 ---
 
-## 开发后
+## After Development
 
-运行：
+Run:
 
 ```bash
 $trellis-check
 ```
 
-检查时必须对照：
+During the check, you must compare against:
 
 - `prd.md`
-- 持久 `.feature` 或项目级规则指定的 BDD 规格路径，适用于用户可见行为
-- `design.md` / `implement.md`，如果存在
+- Persistent `.feature` files or the BDD specification path designated by project-level rules, for user-visible behavior
+- `design.md` / `implement.md`, if they exist
 - `.trellis/spec`
-- `.trellis/spec/lessons.md` 和按需命中的 `.trellis/lessons` topic / archive
-- 实际代码 diff
-- 验证命令结果
+- `.trellis/spec/lessons.md` and the `.trellis/lessons` topic / archive matched as needed
+- The actual code diff
+- Validation command results
 
-不得在未执行 $trellis-check 的情况下完成任务。
+Do not complete the task without executing $trellis-check.
 
 ---
 
 ## Book-derived Skill Gate
 
-在需求、设计、实现和验证阶段，必须按当前任务主风险主动判定 bundled book-derived skills 是否适用。它们是专项审查视角，不替代 `.trellis/workflow.md`、task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目验证、Playwright、Maestro、Chrome DevTools MCP 或人工判断。
+During requirements, design, implementation, and validation phases, you must proactively determine whether bundled book-derived skills apply based on the current task's primary risk. They provide specialized review perspectives and do not replace `.trellis/workflow.md`, task artifacts, `.trellis/spec`, GitNexus, `tdd`, project validation, Playwright, Maestro, Chrome DevTools MCP, or human judgment.
 
-不要把 5 个 book-derived Skill 当作固定 checklist 全量调用；优先选择当前主风险对应的 1-2 个。
+Do not treat the 5 book-derived Skills as a fixed checklist and invoke all of them; preferentially select the 1-2 corresponding to the current primary risk.
 
-阶段编排：
+Phase orchestration:
 
-- 需求 / PRD 阶段：业务术语、领域规则、bounded context 或模型边界不清时，先用 `grill-with-docs` 读取项目事实并澄清，再用 `book-ddd-distilled-modeling` 固化任务级语言，最后进入 `to-spec` / `to-tickets`。
-- 设计阶段：存储、事件、队列、缓存、迁移、schema 演进、数据所有权或跨服务数据流发生变化时，在 `design.md` / `implement.md` 稳定前使用 `book-ddia-data-design`。
-- 开发前 / 开发中：既有结构阻碍当前修改、行为变更与结构整理可能混杂时，使用 `book-refactoring-pass` 规划行为保持型小步重构。
-- 遗留代码修复：测试不足、行为不清、隐藏依赖或回归风险高时，在修改前使用 `book-legacy-change-safety`，并优先补 characterization test 或等价安全网。
-- 验证 / 发布前：生产路径相关的服务、API、后台任务、队列、外部集成或部署敏感变更，在项目验证后、测试工具 gate / Channel preflight 前使用 `book-release-readiness`。
+- Requirements / PRD phase: when business terminology, domain rules, bounded contexts, or model boundaries are unclear, first use `grill-with-docs` to read project facts and clarify them, then use `book-ddd-distilled-modeling` to establish task-level language, and finally proceed to `to-spec` / `to-tickets`.
+- Design phase: when storage, events, queues, caches, migrations, schema evolution, data ownership, or cross-service data flows change, use `book-ddia-data-design` before `design.md` / `implement.md` become stable.
+- Before / during development: when the existing structure obstructs the current change, or behavioral changes and structural cleanup may become mixed, use `book-refactoring-pass` to plan small behavior-preserving refactoring steps.
+- Legacy code fixes: when tests are insufficient, behavior is unclear, hidden dependencies exist, or regression risk is high, use `book-legacy-change-safety` before making changes, and preferentially add a characterization test or equivalent safety net.
+- Before validation / release: for production-path-related services, APIs, background tasks, queues, external integrations, or deployment-sensitive changes, use `book-release-readiness` after project validation and before the testing-tool gate / Channel preflight.
 
-book-derived Skill 的结论优先写入当前 task 的 `prd.md`、`design.md`、`implement.md` 或 check summary。只有长期架构、API、数据模型、权限、业务规则或技术约定才进入 `.trellis/spec`。
-
----
-
-## 测试工具 Gate
-
-在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果任务涉及 Web UI、API 集成、端到端流程、移动 App 用户旅程、Hybrid App、用户可见 bug 修复、发布前 smoke 或可重复回归验证，必须按项目级 `AGENTS.md` 和 `project-validation` Skill 主动判定 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro CLI、Maestro MCP 与 `web-ui-autotest-generator` 是否适用。
-
-Trellis 阶段只负责以下要求：
-
-- 不把 Chrome DevTools MCP、Playwright MCP、Playwright CLI、Maestro、Web UI 自动化测试资产当作 `$trellis-check`、项目验证或人工评审的替代品。
-- Playwright CLI、Java、Maestro CLI、MCP 配置、测试账号、认证方式、测试环境、设备、模拟器、app binary、appId / bundleId 或服务 URL 不可用时，记录 `blocked`，不要声称已完成测试。
-- 对 API、Web E2E、Mobile E2E 或 Hybrid E2E，Phase 3.4 commit plan 前必须记录 `E2E Mode`: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`。mock-backed、app-mocked 或 contract-backed 测试不能作为 full-stack 通过结论。
-- 需要 mock 时，确认 mock 行为来自 contract、schema、真实响应、既有 fixture 或用户确认；否则将 `Mock Strategy` 标记为 `blocked`。
-- 如果 Mobile / Hybrid E2E 需要从 BDD 场景生成或维护 Maestro flow，Phase 3.4 commit plan 前必须确认已按 `maestro-mobile-e2e` 生成 / 复用 `maestro/flow/*.yml`，全量回归 flow 固定为 `maestro/flow/smoke.yml`，并记录 `Maestro Flow Assets` 状态。
-- 如果 iOS / Android 需要不同 flow，可使用 `maestro/flow/ios/*.yml` 和 `maestro/flow/android/*.yml`；每个 flow 必须追踪源 `.feature`、Scenario、平台和测试模式。
-- Phase 3.4 commit plan 前必须记录 unit test、API / integration test、Playwright Web E2E、Maestro Mobile / Hybrid E2E 的 `rtk` 决策：`used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`。凡本轮需要落地 coverage、JUnit、HTML、JSON、trace、raw report 或 Markdown 汇总的测试，默认使用原生命令或项目明确的 no-cache / report-safe 命令；如果曾用 `rtk` 且报告文件缺失、mtime / size 未变化、内容不对应本轮运行，或输出显示 cache hit / replay / skipped 写入，必须原生命令重跑后再判断验证和报告状态。
-- 正式报告要作为 PR 证据或被知识库读取时，Phase 3.4 commit plan 前只记录当前本地 evidence 状态、待发布目标和 sidecar / envelope 计划；dirty developer-local 结果只能是 `local-only`，不能证明 PR head。创建最终提交后、发布或更新 PR Check 前，必须执行 `post-commit evidence refresh`：针对 final PR head SHA 重新生成或复验证据，更新 report sidecar / envelope 中的完整 commit SHA、worktree state、trigger、`Source Revision`、`Environment Alignment` 和 `Evidence Publication`，并使提交前或旧 head 的证据失效。`ci` 证据同样必须绑定 final PR head SHA；knowledge-server 结果必须包含精确 revision set，且 `branch_slug` 不得作为版本身份。
-- Phase 3.4 commit plan 前必须区分诊断运行和正式验证运行。Playwright `--reporter=list`、只打印终端输出的 API 自定义脚本、stdout-only Maestro run，以及任何未启用项目 reporter / output path 的命令，都只能算诊断或定点重跑；如果对应 API / Web E2E / Mobile E2E / Hybrid E2E 在本轮正式验证范围内，必须补跑启用 reporter 的计划范围命令，或把 API stdout / stderr / exit code 捕获并提升为正式 raw report，或将 `Final Test Report` / `Run Summary MD` 标记为 `blocked`。
-- 如果 Playwright 执行并产生 `index.html`、`results.json`、`junit.xml` 或等价 runner 产物，Phase 3.4 commit plan 前必须确认命名报告位于 `tests/e2e/reports/html/`，且命名符合 `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的中文 `.md` 运行汇总；`branch_slug` 来自当前分支，`/`、空格和特殊字符必须替换为 `_`；smoke 使用 `smoke`，多 `.feature` 运行优先使用 suite 名，否则使用 `multi-feature`。这里的同 stem 只指命名后的 HTML 报告；`results.md`、`result.md`、`junit.md` 或 `index.md` 不能作为最终运行汇总。即使 `Final Full Rerun` 是 `failed`、`blocked` 或 `skipped-with-risk`，也必须保留最后一次相关运行的命名报告和汇总。
-- 如果 Maestro 执行并产生原生报告，Phase 3.4 commit plan 前必须确认报告位于 `.maestro/reports/`，且命名符合 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` 或 `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`，同目录存在同 stem 的中文 `.md` 运行汇总。即使最终 flow 失败，也必须保留最后一次相关运行的命名报告和汇总。
-- 如果 API / integration 或 unit test runner 产生了需要作为本轮验证证据保留的 JUnit、coverage、HTML、JSON 或等价报告，Phase 3.4 commit plan 前必须确认它们不只停留在会被下一轮重建的 `coverage/`、`test-results/`、固定 `junit.xml` 或 runner `current` 目录中；需要保留时，必须已经复制 / 提升为项目约定目录或 `tests/api/reports/`、`tests/unit/reports/` 下的分支名和时间戳快照，并生成同 stem 中文 Markdown 汇总。没有原生 reporter 的 API / integration 命令如果属于正式验证，至少要在 `tests/api/reports/` 下保留含 stdout、stderr、exit code、命令和时间戳的 `api-report-*-{branch_slug}-*.txt` / `.json` raw report 与同 stem Markdown 汇总。
-- 如果 API / integration 进入正式验证范围，Phase 3.4 commit plan 前必须确认 API Markdown 汇总含有 URI 覆盖矩阵：每个覆盖范围描述都映射到具体 `method + URI path`、测试脚本 / case、期望状态码或副作用、关联 `.feature` / contract / schema。无法确定 URI 的覆盖项必须标记 `blocked` 或 `missing-uri`，不要把只有脚本名或领域概括的报告视为完整。
-- 如果 iOS 真机 Maestro 运行遇到 driver、transport、view hierarchy、tap crash 或版本已知问题，先按 `maestro-mobile-e2e` 的懒加载 lesson 处理，再重跑最小失败 flow。
-- 如果启用 `web-ui-autotest-generator`，Phase 3.4 commit plan 前必须确认脚本调用遵循全局 / 项目级 `AGENTS.md` 的 Web UI 测试资产路径契约，且可入库 JSON 资产位于 `tests/e2e/manifest/`：`ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。
-- `$trellis-check` 中必须核对项目根目录没有残留 `ui-test-manifest.json`、`ui-selector-audit.json`、`ui-test-coverage.json`。如发现残留，先迁移到 `tests/e2e/manifest/` 并同步引用；如无法迁移或确认，`Web UI 测试资产` 标记为 `blocked`，不得标记为 `generated`。
-- 如生成失败分析 `ui-test-repair-plan.json`，默认路径为 `tests/e2e/manifest/ui-test-repair-plan.json`，并按项目 `.gitignore` 策略作为运行产物处理；除非用户明确要求整理为正式任务或报告，不把 repair plan 作为长期测试资产提交。
-- API、Web E2E、Mobile E2E 或 Hybrid E2E 调试轮次可以沉淀多份带业务名、分支名和时间戳的本地正式报告快照；不要删除同一任务中已有的命名快照。只要 runner 产生了本轮要保留的原生报告，就必须在下一次可能清空 / 覆盖同一 runner 输出的命令前生成命名报告和同目录同 stem 的中文 Markdown 汇总。Playwright 的 Markdown 汇总必须跟随 `playwright-report-*.html` 的 stem，而不是 `results.json`、`junit.xml` 或默认 `index.html`。Markdown 汇总记录运行 case / spec / flow 列表、当前分支、关联 BDD `.feature` 路径和场景名、总轮次、每轮失败 case / spec / flow、失败原因、修复动作、定点重跑、影响范围重跑和最终全量重跑结果；API / integration 汇总还必须记录覆盖范围到 `method + URI path` 的 URI 覆盖矩阵；状态枚举值、命令、文件路径、case / spec / flow 名称和错误原文可以保留英文。
-- 验证失败后如果修复了当前任务范围内的问题，先重跑失败 case / spec / flow，再跑受影响子集，最后跑计划范围内全量验证。fail-fast 停在首个失败时，修复后必须继续执行未覆盖的后续测试或重跑计划范围内全量验证。
-- Phase 3.4 commit plan 前必须按相关性记录 Chrome DevTools MCP、Playwright MCP / CLI / Web Tests、Java、Maestro CLI / MCP / Mobile / Web Smoke、Web UI 自动化测试资产的状态和原因。
-- Phase 3.4 commit plan 前必须记录 `Final Test Report`、`Run Summary MD`、`Targeted Rerun` 和 `Final Full Rerun` 状态；涉及 PR / 知识库证据时同时记录 `Evidence Source`、`Source Revision`、`Environment Alignment` 和 `Evidence Publication`。不能最终全量通过时，不得执行 `$trellis-finish-work`。
-- 状态取值和工具职责遵循全局 / 项目级 `AGENTS.md` 与 `project-validation` Skill；测试工具结论写入当前 task artifacts 或 check summary。
+Conclusions from book-derived Skills should preferentially be written into the current task's `prd.md`, `design.md`, `implement.md`, or check summary. Only long-term architecture, APIs, data models, permissions, business rules, or technical conventions belong in `.trellis/spec`.
 
 ---
 
-## 可选 Channel Review Gate
+## Testing Tool Gate
 
-在 `$trellis-check` 和项目验证后、Phase 3.4 commit plan 前，如果用户明确要求代码 review、测试验证审查、并行评审或交叉验证，或当前任务满足高风险 review / validation 条件，可以调用 `trellis-channel` Skill 做 Channel preflight。
+After `$trellis-check` and project validation, but before the Phase 3.4 commit plan, if the task involves Web UI, API integration, end-to-end flows, mobile App user journeys, Hybrid Apps, user-visible bug fixes, pre-release smoke testing, or repeatable regression validation, you must proactively determine whether Chrome DevTools MCP, Playwright MCP, Playwright CLI, Maestro CLI, Maestro MCP, and `web-ui-autotest-generator` apply, according to project-level `AGENTS.md` and the `project-validation` Skill.
 
-高风险 review / validation 条件包括：
+The Trellis phase is responsible only for the following requirements:
 
-- GitNexus impact / detect_changes 返回 HIGH 或 CRITICAL
-- 验证失败后经过修复，需要独立复核失败原因和覆盖范围
-- 变更跨越前端、后端、数据库、部署、测试资产、外部服务或发布流程
-- PRD / design / implement 与实际 diff、验证结果或回滚策略需要独立一致性检查
-- 多个验收标准、浏览器状态、E2E、API、Docker、Vercel、Playwright、Maestro 或 Chrome DevTools MCP 结果需要覆盖率审查
-
-规则：
-
-- 调用 `trellis-channel` Skill 做 preflight 不等于启动 Channel runtime。
-- 除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得 spawn worker。
-- Channel review / validation 不替代 `$trellis-check`、项目验证命令、GitNexus、Playwright、Maestro、Chrome DevTools MCP、浏览器检查或人工最终判断。
-- 如果 Channel 发现必须修改代码，主会话应用已接受的修改后，必须重新运行聚焦验证和必要的 `$trellis-check`。
-- Channel 有效结论必须写回当前 task artifacts；只有长期规则才写入 `.trellis/spec` 或 `.trellis/lessons`。
+- Do not treat Chrome DevTools MCP, Playwright MCP, Playwright CLI, Maestro, or Web UI automated testing assets as substitutes for `$trellis-check`, project validation, or human review.
+- When Playwright CLI, Java, Maestro CLI, MCP configuration, test accounts, authentication methods, the test environment, devices, simulators, app binary, appId / bundleId, or service URL are unavailable, record `blocked`; do not claim that testing is complete.
+- For API, Web E2E, Mobile E2E, or Hybrid E2E, `E2E Mode` must be recorded before the Phase 3.4 commit plan as one of: `full-stack` / `contract-backed` / `mock-backed` / `app-mocked` / `smoke-only` / `backend-only` / `blocked`. mock-backed, app-mocked, or contract-backed tests must not be reported as a full-stack pass.
+- When mocks are required, confirm that mock behavior comes from a contract, schema, real response, existing fixture, or user confirmation; otherwise mark `Mock Strategy` as `blocked`.
+- If Mobile / Hybrid E2E requires generating or maintaining Maestro flows from BDD scenarios, before the Phase 3.4 commit plan you must confirm that `maestro/flow/*.yml` has been generated / reused according to `maestro-mobile-e2e`, that the full regression flow is fixed as `maestro/flow/smoke.yml`, and that the `Maestro Flow Assets` status has been recorded.
+- If iOS / Android require different flows, `maestro/flow/ios/*.yml` and `maestro/flow/android/*.yml` may be used; each flow must trace its source `.feature`, Scenario, platform, and test mode.
+- Before the Phase 3.4 commit plan, you must record the `rtk` decision for unit tests, API / integration tests, Playwright Web E2E, and Maestro Mobile / Hybrid E2E as: `used` / `skipped-for-report` / `fallback-native` / `not-available` / `not-needed`. For any test in this cycle that must produce coverage, JUnit, HTML, JSON, trace, raw report, or Markdown summary, use the native command or a project-defined no-cache / report-safe command by default; if `rtk` was used and report files are missing, mtime / size did not change, content does not correspond to the current run, or output indicates cache hit / replay / skipped writing, you must rerun with the native command before determining validation and report status.
+- When formal reports will serve as PR evidence or be read by a knowledge base, before the Phase 3.4 commit plan record only the current local evidence status, intended publication target, and sidecar / envelope plan; dirty developer-local results may only be `local-only` and cannot prove the PR head. After creating the final commit and before publishing or updating the PR Check, you must execute `post-commit evidence refresh`: regenerate or revalidate evidence against the final PR head SHA, update the complete commit SHA, worktree state, trigger, `Source Revision`, `Environment Alignment`, and `Evidence Publication` in the report sidecar / envelope, and invalidate evidence from before the commit or from an old head. `ci` evidence must likewise be bound to the final PR head SHA; knowledge-server results must include the exact revision set, and `branch_slug` must not serve as version identity.
+- Before the Phase 3.4 commit plan, you must distinguish diagnostic runs from formal validation runs. Playwright `--reporter=list`, custom API scripts that only print terminal output, stdout-only Maestro runs, and any command that does not enable the project's reporter / output path count only as diagnostics or targeted reruns; if the corresponding API / Web E2E / Mobile E2E / Hybrid E2E is within this cycle's formal validation scope, you must additionally run the planned-scope command with a reporter enabled, or capture API stdout / stderr / exit code and promote it to a formal raw report, or mark `Final Test Report` / `Run Summary MD` as `blocked`.
+- If Playwright executes and produces `index.html`, `results.json`, `junit.xml`, or equivalent runner artifacts, before the Phase 3.4 commit plan you must confirm that the named report is located in `tests/e2e/reports/html/`, that its name follows `playwright-report-{feature_file_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`, and that a Chinese `.md` run summary with the same stem exists in the same directory; `branch_slug` comes from the current branch, and `/`, spaces, and special characters must be replaced with `_`; use `smoke` for smoke tests, and for runs involving multiple `.feature` files, preferentially use the suite name, otherwise use `multi-feature`. Here, the same stem refers only to the named HTML report; `results.md`, `result.md`, `junit.md`, or `index.md` must not be used as the final run summary. Even if `Final Full Rerun` is `failed`, `blocked`, or `skipped-with-risk`, the named report and summary from the latest relevant run must be retained.
+- If Maestro executes and produces a native report, before the Phase 3.4 commit plan you must confirm that the report is located in `.maestro/reports/`, that its name follows `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.xml` or `maestro-report-{flow_name}-{branch_slug}-{YYYY_mm_dd}-{HH_MM_SS}.html`, and that a Chinese `.md` run summary with the same stem exists in the same directory. Even if the final flow fails, the named report and summary from the latest relevant run must be retained.
+- If an API / integration or unit test runner produces JUnit, coverage, HTML, JSON, or equivalent reports that need to be retained as validation evidence for this cycle, before the Phase 3.4 commit plan you must confirm that they do not remain only in `coverage/`, `test-results/`, a fixed `junit.xml`, or a runner `current` directory that will be rebuilt by the next run; when retention is required, they must already have been copied / promoted to the project-designated directory or to branch-named and timestamped snapshots under `tests/api/reports/` or `tests/unit/reports/`, with a Chinese Markdown summary using the same stem. If an API / integration command without a native reporter is part of formal validation, at minimum preserve under `tests/api/reports/` an `api-report-*-{branch_slug}-*.txt` / `.json` raw report containing stdout, stderr, exit code, command, and timestamp, together with a Markdown summary using the same stem.
+- If API / integration enters formal validation scope, before the Phase 3.4 commit plan you must confirm that the API Markdown summary contains a URI coverage matrix: each coverage-scope description must map to a specific `method + URI path`, test script / case, expected status code or side effect, and associated `.feature` / contract / schema. Coverage items whose URI cannot be determined must be marked `blocked` or `missing-uri`; do not treat a report containing only script names or domain-level summaries as complete.
+- If an iOS physical-device Maestro run encounters known driver, transport, view hierarchy, tap crash, or version issues, first handle them according to the lazy-loaded lesson in `maestro-mobile-e2e`, then rerun the minimal failing flow.
+- If `web-ui-autotest-generator` is enabled, before the Phase 3.4 commit plan you must confirm that script invocation follows the Web UI test asset path contract in global / project-level `AGENTS.md`, and that committable JSON assets are located in `tests/e2e/manifest/`: `ui-test-manifest.json`, `ui-selector-audit.json`, `ui-test-coverage.json`.
+- During `$trellis-check`, you must verify that no `ui-test-manifest.json`, `ui-selector-audit.json`, or `ui-test-coverage.json` remains at the project root. If any remain, first migrate them to `tests/e2e/manifest/` and update references accordingly; if migration or confirmation is not possible, mark `Web UI test assets` as `blocked` and do not mark them as `generated`.
+- If failure-analysis output `ui-test-repair-plan.json` is generated, its default path is `tests/e2e/manifest/ui-test-repair-plan.json`, and it must be handled as a runtime artifact according to the project's `.gitignore` policy; unless the user explicitly requests that it be organized into a formal task or report, do not commit the repair plan as a long-term test asset.
+- API, Web E2E, Mobile E2E, or Hybrid E2E debugging cycles may accumulate multiple local formal report snapshots containing business names, branch names, and timestamps; do not delete existing named snapshots from the same task. Whenever a runner produces a native report that must be retained for this cycle, before the next command that may clear / overwrite the same runner output, you must generate a named report and a Chinese Markdown summary in the same directory with the same stem. Playwright's Markdown summary must follow the stem of `playwright-report-*.html`, not `results.json`, `junit.xml`, or the default `index.html`. The Markdown summary records the list of run cases / specs / flows, current branch, associated BDD `.feature` paths and scenario names, total number of rounds, failing cases / specs / flows in each round, failure reasons, fix actions, targeted reruns, affected-scope reruns, and the result of the final full rerun; API / integration summaries must additionally record a URI coverage matrix mapping coverage scope to `method + URI path`; status enum values, commands, file paths, case / spec / flow names, and original error text may remain in English.
+- If an issue within the current task's scope is fixed after validation fails, first rerun the failing case / spec / flow, then run the affected subset, and finally run full validation within the planned scope. If fail-fast stops at the first failure, after fixing it you must continue executing the uncovered subsequent tests or rerun full validation within the planned scope.
+- Before the Phase 3.4 commit plan, you must record the status and reason, as relevant, for Chrome DevTools MCP, Playwright MCP / CLI / Web Tests, Java, Maestro CLI / MCP / Mobile / Web Smoke, and Web UI automated testing assets.
+- Before the Phase 3.4 commit plan, you must record the status of `Final Test Report`, `Run Summary MD`, `Targeted Rerun`, and `Final Full Rerun`; when PR / knowledge-base evidence is involved, also record `Evidence Source`, `Source Revision`, `Environment Alignment`, and `Evidence Publication`. If the final full run does not pass, do not execute `$trellis-finish-work`.
+- Status values and tool responsibilities follow global / project-level `AGENTS.md` and the `project-validation` Skill; write testing-tool conclusions into the current task artifacts or check summary.
 
 ---
 
-## 完成任务
+## Optional Channel Review Gate
 
-运行：
+After `$trellis-check` and project validation, but before the Phase 3.4 commit plan, if the user explicitly requests code review, test-validation review, parallel review, or cross-validation, or if the current task meets high-risk review / validation conditions, the `trellis-channel` Skill may be invoked for Channel preflight.
+
+High-risk review / validation conditions include:
+
+- GitNexus impact / detect_changes returns HIGH or CRITICAL
+- Validation failed and was subsequently fixed, requiring independent verification of the failure cause and coverage scope
+- Changes span frontend, backend, database, deployment, test assets, external services, or the release process
+- PRD / design / implement and the actual diff, validation results, or rollback strategy require an independent consistency check
+- Multiple acceptance criteria, browser states, E2E, API, Docker, Vercel, Playwright, Maestro, or Chrome DevTools MCP results require coverage review
+
+Rules:
+
+- Invoking the `trellis-channel` Skill for preflight does not mean starting the Channel runtime.
+- Do not spawn a worker unless the user has explicitly requested Channel or explicitly confirms it after preflight.
+- Channel review / validation does not replace `$trellis-check`, project validation commands, GitNexus, Playwright, Maestro, Chrome DevTools MCP, browser checks, or final human judgment.
+- If Channel finds that code must be modified, after the main session applies the accepted changes, focused validation and any necessary `$trellis-check` must be rerun.
+- Valid Channel conclusions must be written back into the current task artifacts; only long-term rules belong in `.trellis/spec` or `.trellis/lessons`.
+
+---
+
+## Complete the Task
+
+Run:
 
 ```bash
 $trellis-finish-work
 ```
 
-仅在验证通过后执行。不得在以下情况执行 $trellis-finish-work：
+Execute only after validation passes. Do not execute $trellis-finish-work in any of the following situations:
 
-- $trellis-check 未执行
-- 验证失败
-- task artifacts 与实际实现不一致
-- .trellis/spec 中的长期规则未被满足
+- $trellis-check was not executed
+- Validation failed
+- Task artifacts are inconsistent with the actual implementation
+- Long-term rules in .trellis/spec were not satisfied
 
 ---
 
-## 更新规范
+## Update Specifications
 
-仅当任务改变以下内容时，使用 `$trellis-update-spec`：
+Use `$trellis-update-spec` only when the task changes any of the following:
 
-- 架构
-- API
-- 数据模型
-- 权限
-- 业务规则
-- 长期技术约定
-- 需要跨任务复用的项目规则
+- Architecture
+- APIs
+- Data models
+- Permissions
+- Business rules
+- Long-term technical conventions
+- Project rules that need to be reused across tasks
 
-不要用于：
+Do not use it for:
 
-- 一次性 checklist
-- 临时调研
-- 本地实现笔记
-- 仅当前任务适用的计划
-- 尚未确认的设计想法
+- One-off checklists
+- Temporary research
+- Local implementation notes
+- Plans applicable only to the current task
+- Unconfirmed design ideas
 
 ---
 
 ## Parent / Child Task
 
-当工作过大、跨模块、跨阶段，或无法独立作为单个任务验证时，使用 parent / child task。
+Use parent / child tasks when the work is too large, spans modules or phases, or cannot be independently validated as a single task.
 
-parent task 用于记录：
+The parent task records:
 
-- 整体目标
-- 范围
-- 约束
-- 阶段计划
-- 最终验收策略
+- Overall goal
+- Scope
+- Constraints
+- Phase plan
+- Final acceptance strategy
 
-每个 child task 必须满足：
+Each child task must:
 
-- 可以独立实现
-- 可以独立测试
-- 可以独立检查
-- 有清晰边界
-- 有明确验收标准
+- Be independently implementable
+- Be independently testable
+- Be independently checkable
+- Have clear boundaries
+- Have explicit acceptance criteria
 
-不要创建无法独立验证的 child task。
+Do not create child tasks that cannot be independently validated.
 
-child task 完成后，应根据需要汇总回 parent task。
+After a child task is completed, summarize it back into the parent task as needed.
 
 ---
 
-## 禁止事项
+## Prohibitions
 
-本 Skill 只保留 Trellis workflow 相关的最低禁令；其他约束遵循项目级 `AGENTS.md`。
+This Skill retains only the minimum prohibitions related to the Trellis workflow; other constraints follow project-level `AGENTS.md`.
 
-- 不要绕过 `.trellis/workflow.md` 或手动跳过 Trellis phase。
-- 不要在未执行 `$trellis-before-dev` 的情况下开始实现。
-- 不要在未执行 `$trellis-check` 或验证未通过时执行 `$trellis-finish-work`。
-- 不要把一次性任务计划、临时调研、本地实现笔记写入 `.trellis/spec`。
-- 不要仅因任务复杂就切换 workflow 模板，尤其不要自动切换到 `channel-driven-subagent-dispatch`。
+- Do not bypass `.trellis/workflow.md` or manually skip a Trellis phase.
+- Do not begin implementation without executing `$trellis-before-dev`.
+- Do not execute `$trellis-finish-work` without executing `$trellis-check` or when validation has not passed.
+- Do not write one-off task plans, temporary research, or local implementation notes into `.trellis/spec`.
+- Do not switch workflow templates merely because the task is complex, especially do not automatically switch to `channel-driven-subagent-dispatch`.
