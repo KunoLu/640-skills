@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE.
 """
 Google Autocomplete keyword suggestions using DataForSEO API
 Get real-time search suggestions from Google Autocomplete

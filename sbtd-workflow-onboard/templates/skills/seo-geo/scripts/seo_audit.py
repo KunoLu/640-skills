@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE.
 """
 SEO audit script (no API required)
 Usage: python3 scripts/seo_audit.py "https://example.com"

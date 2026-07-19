@@ -1,3 +1,5 @@
+<!-- Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE. -->
+
 # GEO Research: Princeton Study & Optimization Methods
 
 ## Paper Overview

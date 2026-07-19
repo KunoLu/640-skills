@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE.
 """
 Competitor keyword gap analysis using DataForSEO API
 Finds keywords where competitor ranks but you don't

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE.
 """
 Related keywords from Google "searches related to" using DataForSEO API
 Get up to 4,680 keyword ideas from Google's related searches

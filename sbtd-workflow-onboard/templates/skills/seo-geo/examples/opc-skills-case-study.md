@@ -1,3 +1,5 @@
+<!-- Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE. -->
+
 # Case Study: OPC Skills Website SEO/GEO Optimization
 
 Real-world example of applying SEO and GEO optimization to opc.dev.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Modified by KunoLu in 2026: removed upstream trailing whitespace; see ../NOTICE.
 """
 Keyword research using DataForSEO API
 Usage: python3 scripts/keyword_research.py "seo tools" --limit 20
