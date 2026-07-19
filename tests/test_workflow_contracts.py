@@ -837,7 +837,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("P1.1", readme)
         self.assertIn("Runner Adapter", design)
 
-    def test_caveman_auto_lite_is_task_scoped_and_protected(self) -> None:
+    def test_caveman_auto_lite_has_monotonic_task_state(self) -> None:
         agents_root = ROOT / "sbtd-workflow-onboard" / "templates" / "agents"
         global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
         project_agents = (agents_root / "AGENTS.project.md").read_text(encoding="utf-8")
@@ -847,64 +847,327 @@ class WorkflowContractTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        eligibility_clause = (
-            "只有 `caveman` Skill 当前可见、用户没有明确退出、已知配置不是 "
-            "`off`、当前输出属于重复且非阻塞的中间状态更新、任务范围稳定且没有等待"
-            "用户决定时，才允许自动压缩。"
+        required_global_phrases = (
+            "自动生命周期由本全局规则负责",
+            "外部 `caveman` Skill 只负责手动模式的表达风格、强度和手动退出",
+            "没有暴露配置或配置缺失时按 `auto` 处理",
+            "`progressUpdateCount`",
+            "`toolResultCount`",
+            "`autoLiteEligible`",
+            "`autoLiteActive`",
+            "`taskAutoExit`",
+            "`sessionAutoExit`",
+            "`autoLiteEligible=true` 后",
+            "下一条非保护区、非阻塞且无需用户决定的重复中间状态更新必须进入",
+            "保护区只覆盖当前回复的表达风格",
+            "不得清除计数器、`autoLiteEligible` 或 `autoLiteActive`",
+            "不重新计数",
+            "新的主要目标",
+            "`继续`、`确认`、授权、状态询问、故障恢复",
+            "context compaction",
+            "handoff",
+            "首次自动进入时的一次性提示是外部 Skill“不宣布模式”规则的唯一例外",
+            "不得停止或跳过必须的中间状态更新",
         )
-        task_exit_clause = (
-            "无论当前处于手动模式还是自动模式，都立即恢复正常输出，并在当前任务内禁止"
-            "自动重入。"
-        )
-        task_reenable_clause = (
-            "任务级自动退出只有在用户明确说 `本任务恢复自动压缩` 或 `重新启用自动压缩` "
-            "时才清除；用户明确启动 `/caveman` 只进入手动模式，不清除任务级或会话级"
-            "自动退出。"
-        )
-        session_exit_clause = (
-            "会话级自动退出优先于任务级设置，只有用户明确说 `本会话重新启用自动压缩` "
-            "时才清除。"
-        )
-        new_task_clause = (
-            "新的用户请求到来时，任务级自动状态和任务级退出状态都重置，阈值从新任务"
-            "重新计算；会话级自动退出继续有效。"
-        )
+        for phrase in required_global_phrases:
+            with self.subTest(global_rule=phrase):
+                self.assertIn(phrase, global_agents)
 
-        for clause in (
-            eligibility_clause,
-            task_exit_clause,
-            task_reenable_clause,
-            session_exit_clause,
-            new_task_clause,
+        for obsolete_phrase in (
+            "已知配置不是 `off`",
+            "且后续仍需要继续探索、读取、验证或修复",
+            "且后续输出主要是重复状态或验证摘要",
+            "再次满足自动模式资格",
+            "新的用户请求到来时",
         ):
-            self.assertIn(clause, global_agents)
+            with self.subTest(obsolete_global_rule=obsolete_phrase):
+                self.assertNotIn(obsolete_phrase, global_agents)
+
+        self.assertIn("只引用全局状态机事实源", project_agents)
+        self.assertIn("保护区只覆盖当前回复", project_agents)
+        self.assertNotIn("`progressUpdateCount`", project_agents)
+        self.assertNotIn("`toolResultCount`", project_agents)
+
+        for document in (readme, readme_html):
+            self.assertIn("autoLiteEligible", document)
+            self.assertIn("新的主要目标", document)
+            self.assertIn("保护区只覆盖当前回复", document)
+            self.assertIn("配置缺失时按 auto 处理", document)
+
+        self.assertIn("monotonic eligibility latch", reference)
+        self.assertIn("new primary goal", reference)
+        self.assertIn("protected replies preserve automatic state", reference)
+
+    def test_every_completed_grill_requires_visible_ddd_boundary_review(
+        self,
+    ) -> None:
+        agents_root = ROOT / "sbtd-workflow-onboard" / "templates" / "agents"
+        global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
+        project_agents = (agents_root / "AGENTS.project.md").read_text(encoding="utf-8")
+        trellis = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "skills"
+            / "trellis-workflow"
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        ddd_review = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "skills"
+            / "book-ddd-distilled-modeling"
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        onboard_skill = (
+            ROOT / "sbtd-workflow-onboard" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        reference = (
+            ROOT / "sbtd-workflow-onboard" / "REFERENCE.md"
+        ).read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
 
         for phrase in (
-            "auto-lite",
-            "3 次或以上中间状态更新",
-            "5 个或以上命令",
-            "不得自动进入 `full`、`ultra`",
-            "最终答复",
-            "normal mode",
-            "本任务不要自动压缩",
-            "本会话关闭自动压缩",
-            "不得停止或跳过必须的中间状态更新",
+            "无论是 Agent 自发调用还是用户主动调用",
+            "每次完整执行 `grill-with-docs` 结束后",
+            "`grill-with-docs` 内嵌的 external `domain-modeling` dependency 已运行也不得替代",
+            "必须立即调用 `book-ddd-distilled-modeling`",
+            "`DDD Boundary Review`",
+            "`confirmed` / `needs-clarification` / `blocked`",
+            "未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现",
         ):
-            self.assertIn(phrase, global_agents)
+            with self.subTest(global_rule=phrase):
+                self.assertIn(phrase, global_agents)
 
-        self.assertIn("auto-lite", project_agents)
-        self.assertIn("任务级", project_agents)
-        self.assertIn("会话级自动退出优先于任务级设置", project_agents)
-        self.assertIn("auto-lite", readme)
-        self.assertIn("本任务恢复自动压缩", readme)
-        self.assertIn("auto-lite", readme_html)
-        self.assertIn("本会话重新启用自动压缩", readme_html)
+        self.assertIn("强制 post-grill DDD 二次审核", project_agents)
         self.assertIn(
-            "runtime thresholds may automatically enter task-scoped", reference
+            "`grill-with-docs` 完整结束后必须先输出 `DDD Boundary Review`",
+            project_agents,
         )
-        self.assertIn("session-level automatic opt-out takes precedence", reference)
-        self.assertNotIn("达到全局阈值时只建议用户后续切换", readme)
-        self.assertNotIn("达到全局阈值时只建议用户后续切换", readme_html)
+
+        for phrase in (
+            "Every completed `grill-with-docs` session",
+            "regardless of whether the Agent or the user initiated it",
+            "must be followed immediately by `book-ddd-distilled-modeling`",
+            "`domain-modeling` inside `grill-with-docs` does not satisfy",
+            "`DDD Boundary Review`",
+            "must not advance to requirement confirmation, PRD, design, task creation, or implementation",
+        ):
+            with self.subTest(trellis_rule=phrase):
+                self.assertIn(phrase.lower(), trellis.lower())
+
+        self.assertIn(
+            "Always run after every completed grill-with-docs session",
+            ddd_review,
+        )
+        self.assertIn("## Mandatory Post-grill Review", ddd_review)
+        self.assertIn("Status: confirmed | needs-clarification | blocked", ddd_review)
+        self.assertIn("Corrections to the grill-with-docs result", ddd_review)
+
+        self.assertIn(
+            "Every completed external `grill-with-docs` session",
+            onboard_skill,
+        )
+        self.assertIn("Every completed external `grill-with-docs` session", reference)
+
+        for document in (readme, readme_html):
+            self.assertIn("DDD Boundary Review", document)
+            self.assertIn("每次完整执行", document)
+            self.assertIn("grill-with-docs", document)
+            self.assertIn("external", document)
+            self.assertIn("domain-modeling", document)
+            self.assertIn("不能替代", document)
+            self.assertIn("未达到", document)
+            self.assertIn("confirmed", document)
+
+    def test_other_book_skills_have_mandatory_development_gates(
+        self,
+    ) -> None:
+        onboard_root = ROOT / "sbtd-workflow-onboard"
+        agents_root = onboard_root / "templates" / "agents"
+        skills_root = onboard_root / "templates" / "skills"
+        global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
+        project_agents = (agents_root / "AGENTS.project.md").read_text(encoding="utf-8")
+        trellis = (skills_root / "trellis-workflow" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        skill_contracts = {
+            name: (skills_root / name / "SKILL.md").read_text(encoding="utf-8")
+            for name in (
+                "book-refactoring-pass",
+                "book-legacy-change-safety",
+                "book-ddia-data-design",
+                "book-release-readiness",
+            )
+        }
+        onboard_skill = (onboard_root / "SKILL.md").read_text(encoding="utf-8")
+        reference = (onboard_root / "REFERENCE.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+
+        for phrase in (
+            "`Book Gate Plan`",
+            "命中强制触发条件后不得以主观判断降级为按需",
+            "`DDIA Data Design Review`",
+            "`confirmed` / `needs-design-change` / `blocked`",
+            "`Legacy Change Safety Review`",
+            "`characterized` / `needs-safety-net` / `seam-required` / `blocked`",
+            "`Refactoring Review`",
+            "`proceed` / `refactor-first` / `blocked`",
+            "`Release Readiness Review`",
+            "`ready` / `needs-mitigation` / `blocked`",
+            "未命中强制触发条件的其他场景仍保持按需调用",
+        ):
+            with self.subTest(global_rule=phrase):
+                self.assertIn(phrase, global_agents)
+
+        for phrase in (
+            "数据密集型变更在设计稳定前强制审核",
+            "遗留 / bug 风险在行为修改前强制审核",
+            "既有生产代码在首次实现编辑前强制审核",
+            "生产路径变更在项目验证后强制审核",
+            "Legacy Change Safety Review` → `Refactoring Review",
+        ):
+            with self.subTest(project_rule=phrase):
+                self.assertIn(phrase, project_agents)
+
+        for phrase in (
+            "`Book Gate Plan`",
+            "must not downgrade a matched mandatory gate to on-demand",
+            "`DDIA Data Design Review`",
+            "`Legacy Change Safety Review`",
+            "`Refactoring Review`",
+            "`Release Readiness Review`",
+            "unmatched scenarios remain on-demand",
+        ):
+            with self.subTest(trellis_rule=phrase):
+                self.assertIn(phrase.lower(), trellis.lower())
+
+        required_skill_phrases = {
+            "book-ddia-data-design": (
+                "## Mandatory Development Gate",
+                "Status: confirmed | needs-design-change | blocked",
+                "before design artifacts become stable or implementation begins",
+            ),
+            "book-legacy-change-safety": (
+                "## Mandatory Development Gate",
+                "Status: characterized | needs-safety-net | seam-required | blocked",
+                "before the first behavior-changing edit",
+            ),
+            "book-refactoring-pass": (
+                "## Mandatory Development Gate",
+                "Status: proceed | refactor-first | blocked",
+                "before the first implementation edit to existing production code",
+            ),
+            "book-release-readiness": (
+                "## Mandatory Development Gate",
+                "Status: ready | needs-mitigation | blocked",
+                "after all applicable testing-tool gates and project validation",
+            ),
+        }
+        for skill_name, phrases in required_skill_phrases.items():
+            for phrase in phrases:
+                with self.subTest(skill=skill_name, contract=phrase):
+                    self.assertIn(phrase, skill_contracts[skill_name])
+
+        self.assertIn("normal `init` / `reset`", onboard_skill)
+        self.assertIn("objective predicates", reference)
+        for document in (readme, readme_html):
+            self.assertIn("Book Gate Plan", document)
+            self.assertIn("DDIA Data Design Review", document)
+            self.assertIn("Legacy Change Safety Review", document)
+            self.assertIn("Refactoring Review", document)
+            self.assertIn("Release Readiness Review", document)
+            self.assertIn("其他场景仍按需调用", document)
+
+    def test_book_gate_lifecycle_resolves_review_findings(self) -> None:
+        onboard_root = ROOT / "sbtd-workflow-onboard"
+        agents_root = onboard_root / "templates" / "agents"
+        skills_root = onboard_root / "templates" / "skills"
+        global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
+        project_agents = (agents_root / "AGENTS.project.md").read_text(encoding="utf-8")
+        trellis = (skills_root / "trellis-workflow" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        legacy = (skills_root / "book-legacy-change-safety" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        refactoring = (skills_root / "book-refactoring-pass" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        ddia = (skills_root / "book-ddia-data-design" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        release = (skills_root / "book-release-readiness" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        onboard_skill = (onboard_root / "SKILL.md").read_text(encoding="utf-8")
+        reference = (onboard_root / "REFERENCE.md").read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+
+        lifecycle = "`planned` → `running` → `passed` / `blocked`"
+        gate_states = "`planned` / `running` / `passed` / `blocked` / `not-required`"
+        for document in (global_agents, project_agents, trellis, readme):
+            self.assertIn("Book Gate Plan", document)
+            self.assertIn(gate_states, document)
+            self.assertIn(lifecycle, document)
+        self.assertIn("Book Gate Plan", readme_html)
+        for state in ("planned", "running", "passed", "blocked", "not-required"):
+            self.assertIn(f"<code>{state}</code>", readme_html)
+        self.assertIn("<code>planned</code> → <code>running</code>", readme_html)
+
+        self.assertIn("强制门禁命中时不得直接跳过", global_agents)
+        unavailable_section = global_agents.split("### Skill 不可用时", 1)[1]
+        self.assertIn("book-derived 开发阶段强制门禁", unavailable_section)
+        self.assertIn("`blocked`", unavailable_section)
+        self.assertNotIn("- 直接跳过。\n- 不要阻塞任务。", unavailable_section)
+
+        for document in (global_agents, project_agents, trellis, legacy, refactoring):
+            self.assertIn("`seam-required`", document)
+        self.assertIn("safety-seam-only", legacy)
+        self.assertIn("safety-seam-only", refactoring)
+        self.assertIn(
+            "`seam-required` → `Refactoring Review` (`safety-seam-only`)",
+            project_agents,
+        )
+
+        release_order = "after all applicable testing-tool gates and project validation"
+        for document in (trellis, release, onboard_skill, reference):
+            self.assertIn(release_order, document)
+        self.assertIn("required validation", release)
+        self.assertIn("optional check", release)
+        self.assertIn("accountable owner", release)
+
+        cache_trigger = "shared, persistent, cross-request, or cross-process caches"
+        self.assertIn(cache_trigger, ddia)
+        self.assertNotIn("- Caches, queues", ddia)
+        for document in (global_agents, project_agents, trellis, readme, readme_html):
+            self.assertIn("shared / persistent / cross-request / cross-process cache", document)
+
+        self.assertIn("normal `init` / `reset`", onboard_skill)
+        self.assertIn("bootstrap and `init-projects` do not activate", onboard_skill)
+        self.assertIn("normal `init` / `reset`", reference)
+        self.assertIn("bootstrap and `init-projects` do not activate", reference)
+        self.assertIn("`Book Gate Plan`", onboard_skill)
+
+        self.assertIn("external `domain-modeling` dependency", changelog)
+        self.assertNotIn("内部 `domain-modeling`", changelog)
+
+        for phrase in (
+            "5 个独立工具结果",
+            "`autoLiteEligible` 单调锁存",
+            "只有新的主要目标重置",
+        ):
+            self.assertGreaterEqual(readme.count(phrase), 2)
+
+        html_ddia = (
+            "事务边界、读写路径、backfill / replay / rollback / recovery"
+        )
+        self.assertIn(html_ddia, readme_html)
 
     def test_gitignore_lessons_preserve_history_and_add_dated_status(self) -> None:
         repository_lesson = (
