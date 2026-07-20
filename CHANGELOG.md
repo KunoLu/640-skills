@@ -2,6 +2,12 @@
 
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
+## v1.0.5（未发布）
+
+### 许可
+
+- 为 bundled `web-ui-autotest-generator` 增加 `NOTICE`，声明 `Copyright 2026 KunoLu` 和 Apache License 2.0 适用边界；独立安装和本地同步后的 Skill 现在随目录分发完整许可与版权声明。
+
 ## v1.0.4（2026-07-19）
 
 ### 修复

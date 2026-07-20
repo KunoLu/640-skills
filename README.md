@@ -168,8 +168,8 @@ pwsh -File .\install.ps1
 | `CHANGELOG.md` | 从 `v1.0.0` 起按 Git tag、中文、最新版本在前的顺序维护发布变更。 |
 | `LICENSE` | 本仓库原创内容适用的 Apache License 2.0 完整许可文本。 |
 | `sbtd-workflow-onboard/LICENSE` / `NOTICE` | 自包含 Onboard Skill 的原创内容使用与仓库根一致的 Apache License 2.0，并声明 `Copyright 2026 KunoLu`；文件随公开安装和本地同步一起分发。 |
-| `sbtd-workflow-onboard/templates/skills/*/LICENSE` / `NOTICE` | 除单独许可的 `web-ui-autotest-generator` 和第三方衍生的 `seo-geo` 外，其余 bundled Skill 的原创内容均使用同一 Apache License 2.0 和 `Copyright 2026 KunoLu` 声明；既有第三方来源说明继续保留。 |
-| `sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/LICENSE` | 个人独立实现的 bundled `web-ui-autotest-generator` 使用与仓库根一致的 Apache License 2.0；该副本随独立安装的 Skill 一起分发。 |
+| `sbtd-workflow-onboard/templates/skills/*/LICENSE` / `NOTICE` | 除第三方衍生的 `seo-geo` 外，其余 bundled Skill 的原创内容均使用同一 Apache License 2.0 和 `Copyright 2026 KunoLu` 声明；既有第三方来源说明继续保留。 |
+| `sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/LICENSE` / `NOTICE` | 个人独立实现的 bundled `web-ui-autotest-generator` 使用与仓库根一致的 Apache License 2.0；`NOTICE` 声明 `Copyright 2026 KunoLu`，两份文件随独立安装的 Skill 一起分发。 |
 | `sbtd-workflow-onboard/templates/skills/seo-geo/LICENSE` / `NOTICE` | 第三方衍生的 bundled `seo-geo` 保留 ReScienceLab/opc-skills 的 Apache License 2.0；`NOTICE` 固定上游 source、revision 和本地修改范围，`Copyright 2026 KunoLu` 仅适用于本地修改。 |
 | `install.sh` | macOS / Linux 交互式安装入口，直接以 `sbtd-workflow-onboard` 目录作为 `source-root`。 |
 | `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
