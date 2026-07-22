@@ -14,12 +14,12 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.144.6 | stable-only | 是 | 核心 Coding Agent |
+| Codex | openai/codex | v0.145.0 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.7 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.9 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.61.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
-| Maestro | mobile-dev-inc/Maestro | cli-2.6.1 | stable-only | 是 | Android / iOS / Hybrid App E2E |
+| Maestro | mobile-dev-inc/Maestro | cli-2.7.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
 | web-ui-autotest-generator | KunoLu/640-skills | bundled | repository-controlled | 否 | 内置 Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
