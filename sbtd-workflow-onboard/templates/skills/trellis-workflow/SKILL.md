@@ -201,7 +201,7 @@ Do not write the following directly into `.trellis/spec`:
 
 When upgrading Trellis, switching templates, or discovering missing generated files, preferentially run `trellis update`, then reread `.trellis/workflow.md`, the relevant `.trellis/spec`, and the current task artifacts.
 
-- If the upstream migration manifest recommends migration, or the project contains the misspelled `trellis-spec-bootstarp/` skill directory, run `trellis update --migrate` and let Trellis handle the cross-platform directory rename.
+- Run `trellis update --migrate` if the upstream migration manifest recommends it, the project contains the misspelled `trellis-spec-bootstarp/` skill directory, or a Pi project has legacy `.pi/skills/`; let Trellis perform the cross-platform directory rename rather than moving or deleting these directories manually.
 - `trellis update` may install new bundled skills, platform templates, or `.trellis/agents/{check,implement}.md` channel runtime files; these are generated Trellis workflow assets, not channel runtime logs.
 - When Trellis adds or renames an AI platform, review the generated commands, skills, agents, shared skills directories, and the project's `.gitignore` / commit policy; do not treat reusable platform template directories, runtime logs, and local caches as the same category.
 - For agent-capable platforms without session-start / per-turn hooks, after updating, you must confirm that an explicit workflow startup entry point still exists, such as the `trellis-start` skill or `/trellis:start` command; do not assume startup context will be injected automatically merely because the platform supports agents.
