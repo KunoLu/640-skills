@@ -178,7 +178,7 @@ Chrome DevTools MCP、Playwright CLI、Playwright MCP、Maestro CLI、Maestro MC
 - Playwright CLI / `@playwright/test`：项目内 Web E2E、Web 回归和 CI gate 的执行器。
 - Playwright MCP：agentic Web 探索、可访问性快照和 locator 辅助；不替代项目内 `playwright test`。
 - Maestro CLI：Android / iOS / React Native / Flutter / Hybrid App E2E 和可选 Chromium Web smoke 的执行器。
-- Maestro MCP：依赖 `maestro mcp` 的 agent 增强入口，用于设备检查、view hierarchy、截图和 flow 辅助；不单独替代 Maestro CLI。
+- Maestro MCP：依赖 `maestro mcp` 的 agent 增强入口，用于设备检查、view hierarchy、截图、flow 辅助，以及终态 Cloud per-flow run 的状态与 artifact 诊断；不单独替代 Maestro CLI。
 - `web-ui-autotest-generator`：Playwright 测试资产生成、选择器审计和覆盖率报告；执行底座仍是项目内 Playwright CLI。
 - `maestro-mobile-e2e`：从 BDD `.feature` 场景生成或维护可入库 Maestro Mobile / Hybrid flow 资产，并处理 Maestro 报告路径、最终运行汇总和按需排障 lesson；执行底座仍是 Maestro CLI。
 

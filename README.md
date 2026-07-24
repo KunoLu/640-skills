@@ -291,7 +291,7 @@ python sbtd-workflow-onboard/templates/skills/knowledge-base-integration/scripts
 | Playwright CLI / `@playwright/test` | 项目内 Web E2E、Web 回归、跨浏览器检查和 CI gate。 | 不默认全局安装；项目未安装时必须先询问。 |
 | Playwright MCP | Agentic Web 探索、可访问性快照、locator 辅助和临时页面检查。 | 不替代项目内 `playwright test`。 |
 | Maestro CLI | Android、iOS、React Native、Flutter、Hybrid App E2E，以及可选 Chromium Web smoke。 | 不作为 Web 回归主责；Web 只做 smoke。 |
-| Maestro MCP | 依赖 `maestro mcp` 的增强入口，用于设备检查、view hierarchy、截图和 flow 辅助。 | 不单独替代 Maestro CLI；当前 Agent / IDE 的 MCP 配置需包含 `JAVA_HOME` / `PATH` env。 |
+| Maestro MCP | 设备检查、view hierarchy、截图、flow 辅助，以及终态 Cloud per-flow run 的状态与 artifact 诊断。 | 不单独替代 Maestro CLI；当前 Agent / IDE 的 MCP 配置需包含 `JAVA_HOME` / `PATH` env。 |
 | `shadcn` | shadcn/ui 项目的组件、registry、preset、CLI、docs / diff 和组件组合规则。 | 不替代通用 UI/UX 设计判断、`impeccable` 视觉打磨或 React Bits Free / 付费 tier 判定。 |
 | `web-ui-autotest-generator` | 生成和审计 repo-resident Playwright 测试资产、选择器和覆盖率报告。 | 不执行 E2E；执行底座仍是项目内 Playwright CLI。 |
 | `seo-geo` | 公开网站、落地页、文档站、产品页、营销页的 SEO/GEO、schema、meta、robots / sitemap 和 AI 搜索可见性专项检查。 | 不替代 Chrome DevTools MCP、Playwright CLI、项目发布检查或内容评审；不用于内部后台、API、CLI、移动 App。 |

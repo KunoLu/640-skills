@@ -23,6 +23,7 @@ This Skill does not replace `gherkin-bdd`, `project-validation`, Trellis, projec
 10. If an iOS real-device failure matches the known issue index, load the matching reference and apply only the relevant fix before rerunning the smallest failing flow.
 11. After failures are fixed and targeted reruns pass, run the planned final full validation and generate one final passing report plus one Markdown run summary.
 12. Report flow asset paths, commands, `rtk` decision, report files, artifacts location, blocked items, and remaining risk.
+13. For Cloud runs, wait for `get_cloud_run_status` to reach a terminal state before retrieving a specific per-flow run's diagnostic status or artifacts.
 
 ## Mobile Context Gate
 
@@ -139,6 +140,12 @@ If project configuration forces multiple reporters, treat them as one report set
 The Markdown summary must be written in Chinese. Status enum values, commands, file paths, case / flow names, raw error messages, and technical identifiers may remain in English. The summary must include platform scope, run mode, mock strategy, raw branch, `branch_slug`, executed case / flow list, source `.feature` path and scenario name for each flow, final report path, total rounds, each round command, failed case / flow, failure classification, fix summary, changed files, targeted rerun result, affected subset rerun result, final full rerun result, skipped items, and remaining risk. When the report is intended as PR or knowledge-base evidence, also include evidence source, repository key, raw source ref, full commit SHA, worktree state, source revision, trigger, environment alignment, publication status, and the evidence sidecar / envelope path defined by `project-validation/references/validation-evidence-contract.md`. `branch_slug` is not revision identity. Do not include real accounts, secrets, PII, production data, full tokens, sensitive headers, or production screenshots.
 
 For PR or knowledge-base evidence, generate a same-report-stem `.evidence.json` or reference a cross-tool evidence envelope, and validate it with the `project-validation` evidence Schema. A dirty developer worktree remains `local-only`; knowledge-server runs require an exact revision set. Ordinary local Maestro diagnostics do not require an evidence sidecar.
+
+## Cloud Run Diagnostics
+
+For a Cloud upload, retain the `upload_id` and `project_id` returned by `run_on_cloud`, and poll `get_cloud_run_status` until the upload is terminal. When a failing or warned flow provides its per-flow `run_id`, use `describe_cloud_run` to inspect that run's status and diagnostic artifacts.
+
+Read the default individual artifacts first. Request the complete artifact archive only when screenshots or failed-step view hierarchies are necessary, because archive URLs are short-lived. Record artifact links or paths as diagnostic evidence only; the Cloud result and its artifacts do not replace the planned native report, same-stem Chinese run summary, or final rerun status.
 
 ## Failure Rerun Loop
 
