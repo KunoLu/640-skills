@@ -673,6 +673,24 @@ class WorkflowContractTests(unittest.TestCase):
                     document_path.read_text(encoding="utf-8"),
                 )
 
+    def test_update_archive_names_use_positive_numeric_sequences(self) -> None:
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        archive_names = [
+            path.name for path in (ROOT / "archive").glob("UPDATED-*.md")
+        ]
+
+        self.assertIn("`UPDATED-yyyy-mm-dd-<正整数序号>.md`", agents)
+        self.assertNotIn("UPDATED-yyyy-mm-dd-index.md", agents)
+        self.assertIn("最大正整数序号加一", agents)
+        self.assertIn("从 `1` 开始", agents)
+        self.assertTrue(archive_names)
+        for archive_name in archive_names:
+            with self.subTest(archive_name=archive_name):
+                self.assertRegex(
+                    archive_name,
+                    r"^UPDATED-\d{4}-\d{2}-\d{2}-[1-9]\d*\.md$",
+                )
+
     def test_tracked_controls_and_onboard_usage_are_documented(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")

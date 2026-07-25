@@ -167,7 +167,7 @@ mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-w
 当用户输入 `更新` 或 `update` 时：
 
 1. 读取 `docs/lessons.md`，并按命中情况读取 `docs/lessons/index.md` 或相关 topic，再继续执行更新流程。
-2. 检查项目根目录 `archive/` 下已有的 `UPDATED-yyyy-mm-dd-index.md` 文件：
+2. 检查项目根目录 `archive/` 下已有的 `UPDATED-yyyy-mm-dd-<正整数序号>.md` 文件：
    - 以文件名中的 `yyyy-mm-dd` 作为归档日期。
    - 删除归档日期早于当前本地日期 14 天前的文件。
    - 只删除符合上述命名格式的归档文件；格式不匹配的文件不要删除，并在最终输出中说明。
@@ -175,7 +175,9 @@ mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-w
 4. 以 `ENTRYPOINT.md` 的 `## 0. 版本监控配置` 作为主数据源，将 `UPDATE.md` 中各工具章节记录的最新版本号写回该表格中对应工具的当前使用版本。
 5. 同步更新 `ENTRYPOINT.md` 全文中同一工具对应的当前版本记录，包括“当前版本汇总”和各工具说明章节里的当前版本字段。
 6. 不要误改历史对比版本、曾对比版本、release 区间、归档记录或示例文本中的版本号。
-7. 将 `UPDATE.md` 重命名为 `UPDATED-yyyy-mm-dd-index.md` 并移动到项目根目录下的 `archive/`；如果目录不存在，则先创建。
+7. 将 `UPDATE.md` 重命名为 `UPDATED-yyyy-mm-dd-<正整数序号>.md` 并移动到项目根目录下的 `archive/`；如果目录不存在，则先创建：
+   - 使用当前本地日期作为 `yyyy-mm-dd`。
+   - 扫描当日已有的合规归档文件，使用其最大正整数序号加一；若没有当日归档文件，则从 `1` 开始。
 8. `update` / `更新` 不检查、不修改也不同步 `prompts/automations/sbtd-workflow-tools-version-check.md` 或 Orca `SBTD Workflow Tools Version Check`。
 9. 最终输出必须说明版本写回、归档和 README 维护判断。
 10. 不要自行提交或推送变更；commit 和 push 只允许用户手动执行。
