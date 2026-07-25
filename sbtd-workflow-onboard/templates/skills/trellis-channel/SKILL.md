@@ -178,6 +178,8 @@ Each review / validation worker must output in the following format:
 
 When using `trellis channel spawn`, follow the `channel.worker_guard` settings in `.trellis/config.yaml`.
 
+When Channel context must read a linked worktree, use `channel.trusted_context_dirs` only for the specific resolved external task or workspace directory that the user intends to trust. Do not make a broad parent-directory allowlist, manually dereference nested symlinks, or bypass Trellis containment checks. The default narrow handling of top-level `.trellis/tasks` and `.trellis/workspace` symlinks remains preferable; disabling it requires an explicit compatibility reason.
+
 Default principles:
 
 - Allow idle worker cleanup to take effect.

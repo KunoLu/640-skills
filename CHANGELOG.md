@@ -12,6 +12,7 @@
 
 - 对齐 Trellis 的 Pi shared-skills 迁移边界：当项目仍有 legacy `.pi/skills/` 时，bundled `trellis-workflow` 现在要求使用 `trellis update --migrate` 完成受管重命名，避免手工移动造成双重发现或破坏迁移安全检查。
 - 对齐 Maestro MCP 的 Cloud 诊断能力：全局规则模板和 `maestro-mobile-e2e` 现在明确在 Cloud upload 终态后可读取 per-flow run 的状态与 artifacts；README 两种格式同步说明该能力只用于诊断，不替代 Maestro CLI 的正式 E2E 执行与报告。
+- 对齐 Trellis 的受管更新边界：bundled `trellis-workflow` 和 `trellis-channel` 现在明确子代理上下文注入的默认字节上限、单次跳过关键词、受限的 linked-worktree 信任目录，以及 Codex 子代理模型设置在更新后的保留与复核要求，避免通过无限上下文或宽泛路径信任绕过安全边界。
 
 ## v1.0.4（2026-07-19）
 
