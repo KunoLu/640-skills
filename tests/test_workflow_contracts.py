@@ -74,7 +74,7 @@ class WorkflowContractTests(unittest.TestCase):
             "Third-party components and source-derived material, where present, "
             "retain their own licenses, notices, and attribution requirements.\n"
         )
-        excluded = {"web-ui-autotest-generator", "seo-geo"}
+        excluded = {"seo-geo"}
         eligible_skill_roots = sorted(
             path
             for path in SKILLS.iterdir()
@@ -110,7 +110,6 @@ class WorkflowContractTests(unittest.TestCase):
                     tracked_files,
                 )
 
-        self.assertFalse((SKILLS / "web-ui-autotest-generator" / "NOTICE").exists())
 
     def test_seo_geo_preserves_upstream_provenance_and_scopes_local_modifications(
         self,

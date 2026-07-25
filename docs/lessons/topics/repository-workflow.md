@@ -325,3 +325,15 @@
 - 根因：占位符语义没有写清，也没有针对规则文本和现有归档名的契约测试。
 - 修复：将格式改为 `UPDATED-yyyy-mm-dd-<正整数序号>.md`，规定当日最大序号加一、无当日归档时从 `1` 开始，并更正错误归档名。
 - 预防：任何由 Agent 直接执行的文件命名模板必须区分字面量和占位符，明确生成算法；契约测试同时验证规则文本与受管目录中的实际文件名。
+
+## LESSON-20260726-orca-managed-codex-home: Diagnose MCPs In Active Codex Home
+
+- 日期：2026-07-26
+- 标签：orca, codex, mcp, configuration, debugging
+- 适用场景：OMP / Orca 新会话启动 MCP 失败，或 `codex mcp` 与 `~/.codex/config.toml` 的内容不一致
+- 严重级别：high
+- 来源：新 OMP 会话的 GitNexus transport 与 computer-use spawn 失败排查
+- 问题：先修改了 `~/.codex/config.toml`，但 Orca 会话实际通过 `$CODEX_HOME` 使用受管 home；`codex mcp get` 仍展示旧的 computer-use 相对路径。
+- 根因：把用户默认 home 误当成当前 Orca 会话的 active Codex home，没有先读取 `CODEX_HOME` 并核对 CLI 的有效 MCP 配置。
+- 修复：先读取 `CODEX_HOME`，在该目录的 `config.toml` 修正 MCP 定义，再用 `codex mcp get <name> --json` 和实际 MCP initialize probe 验证。GitNexus transport closed 则直接探测 `gitnexus mcp` 的 stderr，按其安装脚本补齐缺失 native module。
+- 预防：任何 OMP MCP 启动异常都先以 `CODEX_HOME` 和 `codex mcp get` 确认有效配置；不要仅修改 `~/.codex` 或依据文件存在性推断当前会话会加载它。
