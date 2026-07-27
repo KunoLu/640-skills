@@ -419,7 +419,7 @@ BASE_MANUAL_CHECKS = (
         "category": "mcp",
         "advice": "Confirm Playwright MCP tools are visible before relying on them for page exploration, accessibility snapshots, or locator assistance.",
         "steps": (
-            "Configure or enable the Playwright MCP server in the active Agent or IDE MCP settings.",
+            "When the selected Playwright distribution exposes it, prefer its bundled `npx playwright mcp` entrypoint; otherwise configure a compatible dedicated Playwright MCP server.",
             "Restart or reload the Agent environment so the MCP server is discovered.",
             "Confirm Playwright MCP tools are visible to the Agent.",
             "Use Playwright MCP for exploration and locator assistance only; do not treat it as a substitute for project-level Playwright CLI.",

@@ -18,6 +18,7 @@
 - 对齐 Maestro MCP 的 Cloud 诊断能力：全局规则模板和 `maestro-mobile-e2e` 现在明确在 Cloud upload 终态后可读取 per-flow run 的状态与 artifacts；README 两种格式同步说明该能力只用于诊断，不替代 Maestro CLI 的正式 E2E 执行与报告。
 - 对齐 Trellis 的受管更新边界：bundled `trellis-workflow` 和 `trellis-channel` 现在明确子代理上下文注入的默认字节上限、单次跳过关键词、受限的 linked-worktree 信任目录，以及 Codex 子代理模型设置在更新后的保留与复核要求，避免通过无限上下文或宽泛路径信任绕过安全边界。
 
+- 更新 Playwright MCP 的 Onboard 安装引导：当所选 Playwright 发行版提供内置 MCP server 时优先使用 `npx playwright mcp`，否则继续要求选择兼容的专用 server；保留 MCP 可见性确认与项目级 Playwright CLI 不可替代的边界。
 ## v1.0.4（2026-07-19）
 
 ### 修复

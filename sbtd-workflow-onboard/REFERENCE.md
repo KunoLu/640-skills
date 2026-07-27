@@ -328,7 +328,7 @@ MCP configuration remains optional and interactive in normal mode. Project-only 
 Built-in choices:
 
 - Chrome DevTools MCP: `npx -y chrome-devtools-mcp@latest`
-- Playwright MCP: `npx -y @playwright/mcp@latest`
+- Playwright MCP: when the selected Playwright distribution exposes it, use its bundled `npx playwright mcp` entrypoint; otherwise configure a compatible dedicated Playwright MCP server.
 - Maestro MCP: `maestro mcp` with `JAVA_HOME` and `PATH`
 - GitNexus MCP: detected global `gitnexus` executable with `args = [mcp]`
 - Custom stdio MCP: user-provided command/args/env

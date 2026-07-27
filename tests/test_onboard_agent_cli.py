@@ -77,6 +77,33 @@ class AgentCliCommandTests(unittest.TestCase):
                 )
                 (self.bin_dir / command).unlink()
 
+    def test_check_prefers_bundled_playwright_mcp_when_available(self) -> None:
+        self.write_executable(
+            "npm",
+            """
+            #!/bin/sh
+            echo "12.0.1"
+            """,
+        )
+
+        completed = self.run_onboard("check", "--json")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        playwright_mcp = next(
+            check
+            for check in payload["manualChecks"]
+            if check["name"] == "Playwright MCP"
+        )
+        self.assertIn(
+            "bundled `npx playwright mcp` entrypoint",
+            playwright_mcp["steps"][0],
+        )
+        self.assertIn(
+            "compatible dedicated Playwright MCP server",
+            playwright_mcp["steps"][0],
+        )
+
     def test_install_agent_cli_requires_npm_when_command_is_missing(self) -> None:
         completed = self.run_onboard(
             "install-agent-cli",
