@@ -57,7 +57,7 @@ Options:
       Developer username for trellis init -u when the project has no .trellis/.
   --trellis-platform <name[,name...]>
       Trellis init platform flag without leading dashes. May be repeated.
-      Examples: codex, claude, cursor, opencode, gemini, pi.
+      Examples: codex, claude, cursor, opencode, gemini, omp, pi. OMP and Pi are separate flags.
   --skip-trellis-init
       Skip post-install trellis init for project roots without .trellis/.
   --skip-trellis-bootstrap

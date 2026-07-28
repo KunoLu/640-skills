@@ -22,6 +22,7 @@ Resolve these questions in order:
 3. What are the project roots? Accept one or more existing absolute paths separated by English commas.
 4. Should project `AGENTS.md` be installed into every selected project root?
 5. If any selected root has no `.trellis/`, what Trellis developer username and optional Trellis platform flags should be used?
+   Treat Trellis flags as a separate namespace: requested OMP uses `omp` and generates `--omp`; `pi` generates only `--pi`. Never substitute or infer one from the other, including from the Oh My Pi package name.
 
 If multiple paths are supplied to this Skill but the user did not explicitly say they are projects to initialize, ask whether they are the intended initialization roots before running checks or writes. Do not infer that every mentioned repository path should be initialized.
 

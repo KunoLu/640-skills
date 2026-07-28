@@ -573,6 +573,51 @@ exit 1
         self.assertTrue((self.project_one / ".trellis").is_dir())
         self.assertIn(str(bootstrap.resolve()), completed.stdout)
 
+    def test_init_projects_forwards_distinct_omp_and_pi_flags(self) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self.env["TRELIS_ARGS_LOG"] = str(trellis_args_log)
+        self.write_executable(
+            "trellis",
+            """#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "trellis 9.9.9"
+  exit 0
+fi
+if [ "$1" = "init" ]; then
+  printf '%s\n' "$@" > "$TRELIS_ARGS_LOG"
+  mkdir -p .trellis
+  exit 0
+fi
+exit 1
+""",
+        )
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--trellis-platform",
+            "omp,pi,codex",
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(
+            trellis_args_log.read_text(encoding="utf-8").splitlines(),
+            [
+                "init",
+                "-u",
+                "developer",
+                "--omp",
+                "--pi",
+                "--codex",
+                "--yes",
+                "--skip-existing",
+            ],
+        )
 
 if __name__ == "__main__":
     unittest.main()

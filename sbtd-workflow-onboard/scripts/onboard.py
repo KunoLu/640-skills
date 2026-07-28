@@ -337,6 +337,7 @@ TRELLIS_INIT_PLATFORMS = (
     "codebuddy",
     "copilot",
     "droid",
+    "omp",
     "pi",
     "reasonix",
     "zcode",

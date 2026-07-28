@@ -51,6 +51,7 @@ Important arguments:
 - `--global-skills-dir <path>`
 - `--trellis-user <name>`
 - repeatable or comma-separated `--trellis-platform <name>`
+  `omp` and `pi` are separate Trellis flags: `omp` emits `trellis init --omp`, while `pi` emits `--pi`; never translate either value to the other.
 - `--skip-trellis-init`
 - `--skip-trellis-bootstrap`
 - `--no-mcp`, `--dry-run`, `--yes`, `--no-color`

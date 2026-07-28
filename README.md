@@ -212,6 +212,7 @@ pwsh -File .\install.ps1
 
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
 - 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `sbtd-workflow-onboard` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 和可选 platform flags 后，onboard 流程可以主动运行 `trellis init -u <username> ... --yes --skip-existing`。
+  Trellis 平台标志显式且相互独立：`omp` 只生成 `trellis init --omp`，`pi` 只生成 `--pi`，onboard 不得在两者之间替换。
 - Trellis CLI 升级后，已有 `.trellis/` 的项目先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership 和 safe-name guard。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。

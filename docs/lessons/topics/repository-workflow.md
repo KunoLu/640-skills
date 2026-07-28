@@ -337,3 +337,15 @@
 - 根因：把用户默认 home 误当成当前 Orca 会话的 active Codex home，没有先读取 `CODEX_HOME` 并核对 CLI 的有效 MCP 配置。
 - 修复：先读取 `CODEX_HOME`，在该目录的 `config.toml` 修正 MCP 定义，再用 `codex mcp get <name> --json` 和实际 MCP initialize probe 验证。GitNexus transport closed 则直接探测 `gitnexus mcp` 的 stderr，按其安装脚本补齐缺失 native module。
 - 预防：任何 OMP MCP 启动异常都先以 `CODEX_HOME` 和 `codex mcp get` 确认有效配置；不要仅修改 `~/.codex` 或依据文件存在性推断当前会话会加载它。
+
+## LESSON-20260728-trellis-omp-pi-flag-separation: Keep OMP And Pi Trellis Flags Distinct
+
+- 日期：2026-07-28
+- 标签：onboard, trellis, omp, pi, installer, validation
+- 适用场景：维护 Onboard 的 Trellis 平台参数、安装器帮助或全局 Skill 初始化引导
+- 严重级别：high
+- 来源：用户发现要求初始化 OMP 与 Codex 时，实际 Trellis 命令错误使用了 `--pi --codex`。
+- 问题：Onboard 的 Trellis allow-list 只接受 `pi`，虽然当前 Trellis CLI 已提供独立的 `--omp`；Skill 和安装器帮助未明确两者不得替换。
+- 根因：把相近的产品名和包名误当作同一 Trellis 平台标志，且没有在真实 `trellis init` argv seam 上锁定 OMP、Pi 与其他平台的顺序和独立性。
+- 修复：将 `omp` 加入 Trellis allow-list，明确 `omp → --omp` 与 `pi → --pi`，并用记录 fake `trellis` argv 的 `init-projects` 回归测试断言 `--omp --pi --codex`。
+- 预防：平台名跨 Agent CLI、npm 包和下游 CLI 时必须按命名空间分别建模；对相近名称必须查询下游 CLI help，并用 argv 级集成测试同时覆盖各自 flag 和顺序。
