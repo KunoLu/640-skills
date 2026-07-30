@@ -4,6 +4,16 @@
 
 ## v1.0.6（未发布）
 
+### 修复
+
+- 修复项目 `.gitignore` 模板误忽略项目 `AGENTS.md`、`CLAUDE.md`、共享 `.agents/skills/**` 和 Trellis 生成的 `.claude/**` 平台集成：这些受管控制文件与生成资产现在默认可追踪，只保留 `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json`、`.omp/plugins/` 等明确的本地运行态忽略项。
+- 修复根安装器目标平台参数容易被误解为全局规则平台选择器的问题：`--platform` / `-Platform` 只选择 Agent CLI 与 MCP adapter；默认全局 AGENTS 仍使用 Codex 路径，只有显式 global AGENTS path 才覆盖，project-only 不写全局 AGENTS。
+- 修复版本检查自动化的写权限范围：安装器、Onboard 实现、catalog、项目 `.gitignore` 模板与契约测试只可读取、评估或验证；无人值守运行不得修改这些实现和测试资产。
+
+### 迁移
+
+- `init` / `reset` 不会自动删除旧模板已经写入项目 `.gitignore` 的 `.claude/`、`CLAUDE.md`、`.agents/` 或 `/AGENTS.md`；既有项目需要在确认追踪边界后手工移除这些旧行，并用 `git check-ignore` 复核。
+
 ### 变更
 
 - 项目模板选择以无尾随斜杠的 `.trellis/workspace` 忽略目录或顶级 symlink 及其所有内容，包括 workspace `index.md`、开发者 journal 与 trace；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略。
@@ -12,6 +22,8 @@
 - 明确 Trellis 的平台调度边界：共享 `.trellis/**` 只定义 workflow gate，不标识运行平台；当前 host 与 `.codex/**` 或 `.omp/**` 生成资产决定执行机制，二者共存时不得由静态审查强行选择。`codex.dispatch_mode`、Inline 与其 fail-closed fallback 仅属于 Codex；当前 OMP host 使用 OMP `task` worker 和 agent 定义。Channel 保持显式确认的持久协作 runtime；同一变更职责只能有一个写入执行者，用户请求的独立只读复核可以并行。
 - 版本检查新增 stable-tag 配置、workflow、migration manifest 与平台集成的强制证据门；Trellis v0.6.10 的 `SubagentStart` 修复不再被误述为首次启用 Codex subagent。
 - 移除 `sync` / `update` 流程禁止 Agent 提交和推送的限制；在用户明确指示时，Agent 可以提交并推送已验证的仓库变更。
+- `grill-with-docs` 状态透明度不再无条件制造重复确认门：仍必须说明调用状态与原因，但只有调用与跳过存在会改变需求、领域边界或实现决策的实质权衡时才询问用户。
+- 版本检查自动化的允许扫描、影响分析和验证范围扩展到根安装器、项目 `.gitignore` 模板与契约测试，并明确无人值守任务不得通过交互提问升级为 `update`、`sync`、commit 或 push。
 
 
 ### 文档

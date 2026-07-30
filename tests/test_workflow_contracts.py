@@ -118,6 +118,166 @@ class WorkflowContractTests(unittest.TestCase):
             )
             self.assertEqual(ignored_symlink.returncode, 0)
 
+    def test_project_template_tracks_managed_agent_controls(self) -> None:
+        template = (
+            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
+        )
+        entries = template.read_text(encoding="utf-8").splitlines()
+
+        for tracked_path in (".claude/", "CLAUDE.md", ".agents/", "/AGENTS.md"):
+            self.assertNotIn(tracked_path, entries)
+        for local_runtime in (
+            ".claude/projects/",
+            ".claude/worktrees/",
+            ".claude/settings.local.json",
+        ):
+            self.assertIn(local_runtime, entries)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        for document in (readme, readme_html, changelog):
+            self.assertIn("旧模板已经写入", document)
+            self.assertIn("reset", document)
+            self.assertIn("不会自动删除", document)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir)
+            subprocess.run(
+                ["git", "init", "--quiet"],
+                cwd=project,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            shutil.copyfile(template, project / ".gitignore")
+
+            tracked_files = (
+                project / "AGENTS.md",
+                project / "CLAUDE.md",
+                project / ".agents" / "skills" / "trellis-start" / "SKILL.md",
+                project / ".claude" / "agents" / "trellis-implement.md",
+                project / ".claude" / "commands" / "trellis" / "start.md",
+                project / ".claude" / "hooks" / "session-start.py",
+                project / ".claude" / "settings.json",
+            )
+            for tracked_file in tracked_files:
+                tracked_file.parent.mkdir(parents=True, exist_ok=True)
+                tracked_file.touch()
+                result = subprocess.run(
+                    [
+                        "git",
+                        "check-ignore",
+                        "--quiet",
+                        str(tracked_file.relative_to(project)),
+                    ],
+                    cwd=project,
+                )
+                self.assertEqual(result.returncode, 1, tracked_file)
+
+            ignored_files = (
+                project / ".claude" / "projects" / "local-state.json",
+                project / ".claude" / "worktrees" / "local-checkout" / "HEAD",
+                project / ".claude" / "settings.local.json",
+            )
+            for ignored_file in ignored_files:
+                ignored_file.parent.mkdir(parents=True, exist_ok=True)
+                ignored_file.touch()
+                result = subprocess.run(
+                    [
+                        "git",
+                        "check-ignore",
+                        "--quiet",
+                        str(ignored_file.relative_to(project)),
+                    ],
+                    cwd=project,
+                )
+                self.assertEqual(result.returncode, 0, ignored_file)
+
+    def test_platform_option_and_automation_scope_are_explicit(self) -> None:
+        bash_installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        powershell_installer = (ROOT / "install.ps1").read_text(encoding="utf-8")
+        onboard_skill = (ROOT / "sbtd-workflow-onboard" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        onboard_reference = (
+            ROOT / "sbtd-workflow-onboard" / "REFERENCE.md"
+        ).read_text(encoding="utf-8")
+        prompt = (
+            ROOT
+            / "prompts"
+            / "automations"
+            / "sbtd-workflow-tools-version-check.md"
+        ).read_text(encoding="utf-8")
+        root_agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+        for installer in (bash_installer, powershell_installer):
+            self.assertIn("Target Agent CLI and MCP platform.", installer)
+            self.assertIn(
+                "does not change the Codex global AGENTS.md target",
+                installer,
+            )
+        for document in (onboard_skill, onboard_reference):
+            self.assertIn(
+                "The Agent platform selects the CLI and MCP adapter",
+                document,
+            )
+            self.assertIn(
+                "does not select the global AGENTS target",
+                document,
+            )
+        for path in (
+            "`install.sh`",
+            "`install.ps1`",
+            "`sbtd-workflow-onboard/templates/project/.gitignore`",
+            "`tests/**`",
+        ):
+            self.assertIn(path, prompt)
+            self.assertIn(path, root_agents)
+        self.assertIn("无人值守自动化", prompt)
+        self.assertIn("用户在交互会话中明确要求", prompt)
+
+        self.assertIn("无人值守自动化仅可创建或修改", prompt)
+        self.assertIn(
+            "`install.sh`、`install.ps1`、`sbtd-workflow-onboard/scripts/onboard.py`、"
+            "`sbtd-workflow-onboard/catalog.json`、"
+            "`sbtd-workflow-onboard/catalog.schema.json`、"
+            "`sbtd-workflow-onboard/templates/project/.gitignore` 与 `tests/**` "
+            "只能读取、评估或验证，不得由无人值守自动化修改。",
+            prompt,
+        )
+
+    def test_grill_status_does_not_force_redundant_questions(self) -> None:
+        global_agents = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.global.md"
+        ).read_text(encoding="utf-8")
+        workflow = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "skills"
+            / "trellis-workflow"
+            / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("必须主动询问用户是否需要先用", global_agents)
+        self.assertIn(
+            "只有调用与跳过之间存在会实质改变需求、领域边界或实现决策的权衡时，才询问用户",
+            global_agents,
+        )
+        self.assertNotIn(
+            "ask whether the user wants to use that Skill first and then reassess",
+            workflow,
+        )
+        self.assertIn(
+            "Ask only when using versus skipping the Skill presents a material trade-off",
+            workflow,
+        )
+
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
         alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"
         canonical = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
@@ -747,13 +907,33 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("每个 external Skill source", prompt)
         self.assertNotRegex(prompt, r"\d+ 个 bundled Skill local source")
         self.assertNotRegex(prompt, r"\d+ 个 external Skill source")
-        allowlist = next(
+        read_allowlist = next(
             line
             for line in prompt.splitlines()
-            if "当前可读取、评估或修改的本仓库版本化规则" in line
+            if "当前可读取、评估或验证的本仓库版本化规则" in line
         )
-        self.assertIn("`ENTRYPOINT.md`", allowlist)
-        self.assertIn("`UPDATE.md`", allowlist)
+        write_allowlist = next(
+            line
+            for line in prompt.splitlines()
+            if "无人值守自动化仅可创建或修改" in line
+        )
+        self.assertIn("`ENTRYPOINT.md`", read_allowlist)
+        self.assertIn("`UPDATE.md`", read_allowlist)
+        for writable_path in (
+            "`sbtd-workflow-onboard/SKILL.md`",
+            "`sbtd-workflow-onboard/REFERENCE.md`",
+        ):
+            with self.subTest(writable_path=writable_path):
+                self.assertIn(writable_path, write_allowlist)
+        for read_only_path in (
+            "`install.sh`",
+            "`install.ps1`",
+            "`sbtd-workflow-onboard/scripts/onboard.py`",
+            "`sbtd-workflow-onboard/templates/project/.gitignore`",
+            "`tests/**`",
+        ):
+            with self.subTest(read_only_path=read_only_path):
+                self.assertNotIn(read_only_path, write_allowlist)
         for document_path in (
             ROOT / "README.md",
             ROOT / "README.html",

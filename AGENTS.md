@@ -158,6 +158,10 @@ mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-w
    - `sbtd-workflow-onboard/templates/agents/AGENTS.global.md`
    - `sbtd-workflow-onboard/templates/agents/AGENTS.project.md`
    - `sbtd-workflow-onboard/templates/skills/**`
+   - `install.sh`
+   - `install.ps1`
+   - `sbtd-workflow-onboard/templates/project/.gitignore`
+   - `tests/**`
 7. 如果 release 改动影响某个工具的使用边界、命令建议、配置禁用项、兼容性风险或迁移步骤，即使本仓库没有对应模板文件，也要最小化更新相关 AGENTS 或 Skill 规则。
 8. 由 release 触发的 AGENTS 或 Skill 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。只有当规则本身必须表达明确兼容边界时，才允许写最低/最高版本要求。
 9. 除非用户手动输入 `更新` 或 `update`，否则不要把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`。
