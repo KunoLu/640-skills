@@ -21,8 +21,9 @@ venv/
 # ========================
 
 # ---------- Claude ----------
-.claude/
-CLAUDE.md
+.claude/projects/
+.claude/worktrees/
+.claude/settings.local.json
 
 # ---------- Codex -----------
 .codex/cache/
@@ -102,6 +103,4 @@ tests/e2e/**/*.trace.zip
 .maestro/reports/
 
 # ---------- AI Tools ----------
-.agents/
 .worktrees/
-/AGENTS.md

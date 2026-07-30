@@ -304,6 +304,43 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "sbtd-workflow-onboard",
         )
 
+    def test_plan_routes_global_agents_to_codex_default_or_explicit_override(
+        self,
+    ) -> None:
+        default = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(self.project_one),
+            "--json",
+        )
+        override_path = self.root / "custom-global-AGENTS.md"
+        overridden = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(self.project_one),
+            "--global-agents-path",
+            str(override_path),
+            "--json",
+        )
+
+        self.assertEqual(default.returncode, 0, default.stderr)
+        self.assertEqual(overridden.returncode, 0, overridden.stderr)
+        default_operations = json.loads(default.stdout)["operations"]
+        overridden_operations = json.loads(overridden.stdout)["operations"]
+        default_target = next(
+            item["target"]
+            for item in default_operations
+            if item["label"] == "codex global AGENTS.md"
+        )
+        overridden_target = next(
+            item["target"]
+            for item in overridden_operations
+            if item["label"] == "codex global AGENTS.md"
+        )
+
+        self.assertEqual(default_target, str((self.codex_home / "AGENTS.md").resolve()))
+        self.assertEqual(overridden_target, str(override_path.resolve()))
+
     def test_plan_reports_legacy_onboard_target_without_mutating_it(self) -> None:
         global_skills = self.root / "global-skills"
         legacy_onboard = global_skills / "kuno-workflow-onboard-skills"
@@ -391,6 +428,57 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         }
         self.assertTrue(template_lines.issubset(set(first_content.splitlines())))
         self.assertEqual(second_content, first_content)
+
+    def test_init_projects_preserves_legacy_agent_control_ignores(
+        self,
+    ) -> None:
+        gitignore = self.project_one / ".gitignore"
+        legacy_entries = (".claude/", "CLAUDE.md", ".agents/", "/AGENTS.md")
+        gitignore.write_text(
+            "# legacy agent controls\n" + "\n".join(legacy_entries) + "\n",
+            encoding="utf-8",
+        )
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-project-agents",
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        entries = gitignore.read_text(encoding="utf-8").splitlines()
+        for entry in legacy_entries:
+            self.assertIn(entry, entries)
+
+        subprocess.run(
+            ["git", "init", "--quiet"],
+            cwd=self.project_one,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        legacy_control_files = (
+            self.project_one / "AGENTS.md",
+            self.project_one / "CLAUDE.md",
+            self.project_one / ".agents" / "skills" / "trellis-start" / "SKILL.md",
+            self.project_one / ".claude" / "agents" / "trellis-implement.md",
+        )
+        for control_file in legacy_control_files:
+            control_file.parent.mkdir(parents=True, exist_ok=True)
+            control_file.touch()
+            ignored = subprocess.run(
+                [
+                    "git",
+                    "check-ignore",
+                    "--quiet",
+                    str(control_file.relative_to(self.project_one)),
+                ],
+                cwd=self.project_one,
+            )
+            self.assertEqual(ignored.returncode, 0, control_file)
 
     def test_init_projects_preserves_complete_utf8_bom_gitignore(self) -> None:
         gitignore = self.project_one / ".gitignore"

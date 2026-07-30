@@ -125,6 +125,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         user_input: str = "",
         action: str = "init",
         projects_only: bool = False,
+        platform: str = "codex",
     ) -> subprocess.CompletedProcess[str]:
         project_args = (
             ("--init-projects", str(self.project_root))
@@ -141,7 +142,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "/bin/bash",
                 str(INSTALL_SH),
                 "--platform",
-                "codex",
+                platform,
                 "--source-root",
                 str(SOURCE_ROOT),
                 *project_args,
@@ -289,6 +290,22 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertEqual(modes[0], "check-agent-cli")
         self.assertLess(modes.index("check-agent-cli"), modes.index("check"))
         self.assertIn("reset", modes)
+
+    def test_non_codex_platform_is_not_forwarded_to_onboarding_operations(
+        self,
+    ) -> None:
+        (self.state_dir / "npm").touch()
+        (self.state_dir / "agent").touch()
+
+        completed = self.run_installer(platform="claude")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        init_invocation = next(
+            arguments
+            for arguments in self.invocation_args()
+            if arguments.split()[1] == "init"
+        )
+        self.assertNotIn("--platform", init_invocation.split())
 
     def test_init_projects_skips_all_global_checks_and_installers(self) -> None:
         completed = self.run_installer(projects_only=True)
