@@ -21,6 +21,9 @@ Invoking this Skill for preflight does not mean starting the Channel runtime. Do
 - Do not automatically enable Channel merely because a task is large, involves many files, crosses modules, or is complex.
 - Do not switch to the `channel-driven-subagent-dispatch` workflow merely because a task is complex.
 - Code review / validation review may proactively trigger Channel preflight; actually starting the runtime still requires an explicit user request or confirmation.
+- A Trellis-managed platform role sub-agent alone is not a Channel trigger. Platform identity comes from the current host and its generated integration: `.codex/**` for Codex, `.omp/**` for OMP; shared `.trellis/**` files do not identify it. Both integrations may coexist, so static inspection must not choose one. In a current Codex host, auto mode uses a short-lived executor coordinated by the main session; in a current OMP host, it is an OMP `task` worker. Channel remains reserved for durable multi-worker collaboration.
+- Each mutation responsibility has one executor: one platform-native Trellis role sub-agent, the main session, or one Channel worker. Do not combine or recursively dispatch mutation executors for the same responsibility. User-requested independent read-only review and cross-validation workers may run in parallel, but only one writer and one validation controller may operate in the same checkout or validation environment.
+
 
 ---
 
@@ -232,8 +235,9 @@ Interrupts must use the dedicated interrupt flow; do not simulate them through o
 
 ## Codex Multi-Agent
 
-- Prefer `trellis channel` for Trellis Multi-Agent work.
-- Use the Codex inline main session for ordinary Trellis tasks.
+- In a current Codex host with `.codex/**` integration, use shared `.trellis/config.yaml`, `.trellis/workflow.md`, and task artifacts to determine the `native` / `tdd` workflow gates; then apply effective Codex dispatch. In auto mode, the main session coordinates one role executor per responsibility; do not force ordinary Trellis tasks into the Codex Inline main session.
+- `dispatch_mode=inline` is an explicit main-session choice. An invalid explicit Codex dispatch value fails closed to effective Inline; report and repair it before continuing, and do not dispatch role subagents while fallback is active. Effective Trellis-managed role dispatch is distinct from both Inline and Channel.
+- Prefer `trellis channel` only for Trellis Multi-Agent work requiring durable peer workers, multi-round conversation, interruption or waiting, a shared event log, or forum / thread history.
 - Do not rely on Codex's built-in `features.multi_agent_v2` as the primary Trellis workflow.
 - Do not add `[features.multi_agent_v2]` to the project-level `.codex/config.toml`.
 - When Trellis generates or updates Codex project config, it should not generate a `[features.multi_agent_v2]` block; this prevents compatibility differences in structured feature tables across Codex CLI versions from blocking Codex startup.

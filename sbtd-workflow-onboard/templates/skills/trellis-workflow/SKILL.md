@@ -69,7 +69,7 @@ Default rules:
 - `native` may be used as the default standard workflow.
 - Use `tdd` only when the user explicitly requests TDD, the project already follows a test-driven process, or the current task is a high-risk behavioral modification suitable for tests-first development.
 - BDD is not an independent workflow template; user-visible behavior is executed by default through `gherkin-bdd` as a workflow overlay.
-- Use `channel-driven-subagent-dispatch` only when the user explicitly requests a Channel / multi-Agent / sub-agent dispatch process.
+- Use `channel-driven-subagent-dispatch` only when the user explicitly requests a durable Channel / multi-Agent collaboration process; Trellis-managed platform role subagent dispatch remains part of the effective `native` or `tdd` workflow.
 - Even if a `channel-driven-subagent-dispatch` template exists, do not automatically switch to or enable that template merely because the task is complex.
 - After switching workflows, `.trellis/workflow.md` must be read again, and the new file must be treated as authoritative.
 - If the workflow references `.trellis/agents/<name>.md` but the file does not exist, first run `trellis update` to generate the missing channel runtime agent definition, then continue the Channel workflow.
@@ -79,6 +79,15 @@ Decision principles:
 - Complexity determines whether to enter Trellis planning.
 - The collaboration model determines whether to enable Channel or a channel-driven workflow.
 - For large tasks, preferentially consider parent / child tasks; do not switch to a Channel workflow by default.
+
+## Codex Dispatch and Channel Boundary
+
+- Shared `.trellis/config.yaml`, `.trellis/workflow.md`, and task artifacts define workflow gates, not platform identity. The current host and generated integration decide execution: `.codex/**` for Codex and `.omp/**` for OMP. Both may coexist; static inspection must not select a runtime.
+- **Codex only, when the current host is Codex and `.codex/**` integration is available:** in `native` or `tdd`, an effective Codex `dispatch_mode=auto` keeps the main session as phase coordinator and dispatches one Trellis-managed role subagent for each responsibility in the required `trellis-implement` → `trellis-check` sequence. A role subagent executes its assigned responsibility; this is not a `trellis channel` runtime.
+- **Codex only, when the current host is Codex and `.codex/**` integration is available:** `dispatch_mode=inline` is an explicit project or user choice that keeps implementation and checks in the main session. An invalid explicit Codex dispatch value also fails closed to effective Inline: report and repair the invalid setting before continuing, and do not dispatch Codex role subagents while that fallback is active.
+- **OMP, when the current host is OMP and `.omp/**` integration is available:** use the generated OMP `task` workers and `trellis-implement` / `trellis-check` agent definitions. Do not apply or infer `codex.dispatch_mode` or its Inline fallback; read the generated OMP extension and obey its workflow planning gate instead.
+- Channel is a separate durable, multi-round, interruptible collaboration runtime. Start it only after an explicit user request or explicit confirmation following Channel preflight.
+- Each mutation responsibility has exactly one executor: one platform-native Trellis role subagent, the main session, or one Channel worker. Do not double-dispatch or recursively dispatch that mutation responsibility. User-requested independent read-only review and cross-validation may run in parallel, but only one writer and one validation controller may operate in the same checkout or validation environment.
 
 Workflow selection table:
 
@@ -167,7 +176,7 @@ For confirmed user-visible behavior, the persistent `.feature` file is the behav
 
 Current task artifacts take precedence over general assumptions.
 
-If the current workflow or platform dispatches to a sub-agent-capable worker, `implement.jsonl` and `check.jsonl` must contain real spec / research / task artifact entries before `task.py start` or before dispatch begins; seed / `_example` lines from initialization do not count as usable context. If the manifests lack real entries, first complete them during planning or explicitly switch to an inline workflow; do not treat a seed-only task as implementation-ready.
+Where a generated workflow classifies its platform as sub-agent dispatch, `implement.jsonl` and `check.jsonl` must both contain real spec / research / task artifact entries before `task.py start` or dispatch begins; seed / `_example` rows are tolerated by runtime consumers for compatibility but are never planning-ready. Codex effective Inline, including its invalid-config fail-closed fallback, skips JSONL curation; report and repair a Codex invalid dispatch setting instead of treating a seed-only sub-agent task as ready. For OMP, obey the generated workflow's planning gate: its extension may parse role-specific JSONL non-fatally, but that does not relax workflow readiness.
 
 `.trellis/spec` stores only long-term project rules.
 
@@ -204,6 +213,7 @@ When upgrading Trellis, switching templates, or discovering missing generated fi
 - Run `trellis update --migrate` if the upstream migration manifest recommends it, the project contains the misspelled `trellis-spec-bootstarp/` skill directory, or a Pi project has legacy `.pi/skills/`; let Trellis perform the cross-platform directory rename rather than moving or deleting these directories manually.
 - `trellis update` may install new bundled skills, platform templates, or `.trellis/agents/{check,implement}.md` channel runtime files; these are generated Trellis workflow assets, not channel runtime logs.
 - When an update changes sub-agent context injection, preserve the default bounded injection behavior. Review `.trellis/config.yaml` before raising `context_injection` byte limits; treat `0` (unlimited) as an explicit, user-owned trade-off rather than a workaround for missing task artifacts. Binary referenced files may be represented by a notice instead of inlined content, so inspect the referenced path rather than retrying dispatch with copied binary data.
+- For Codex hook-based sub-agents, treat saved `SubagentStart` output as the recovery source when an injected marker is incomplete. After `trellis update`, verify the generated `trellis-{implement,check,research}` agents retain a single context prelude and recover context without manually pasting task data or increasing injection limits.
 - The configured `prompt_injection.skip_keyword` can suppress per-turn workflow-state injection for the matching turn. Do not infer that a skipped breadcrumb disables Trellis task rules, required artifacts, or explicit workflow commands.
 - Treat `channel.trusted_context_dirs` as a narrow allowlist for known linked-worktree locations. Do not broaden it to arbitrary external directories or bypass containment checks; when a top-level `.trellis/tasks` or `.trellis/workspace` symlink is intentional, confirm its resolved destination and review the generated configuration.
 - `trellis update` preserves user-set `model` and `model_reasoning_effort` keys in generated `.codex/agents/trellis-*.toml`. Preserve only these documented user-owned keys; after updating, verify the agent files retain the intended settings and that the generated context prelude remains singular.

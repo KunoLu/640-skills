@@ -129,7 +129,6 @@
 4. 比较版本化 prompt 与 Orca `SBTD Workflow Tools Version Check` 的完整内容；仅在存在差异时同步仓库版本，验证完整内容和调度元数据，并在最终输出中报告“一致无需写入”或同步成功 / 失败。
 5. 不修改 `ENTRYPOINT.md` 版本号。
 6. 不归档 `UPDATE.md`。
-7. 不提交或推送变更。
 
 mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-workflow-onboard/assets/external-skills/stable/` 保存带精确上游 commit、checksum 和许可证的原样 stable 镜像，供上游安装不兼容时回退；该镜像不是 fork，不得手工改写，只能通过 stable promotion 流程整组更新。除该受管 stable 镜像外，不要在本仓库内另行安装、fork 或改写这些官方 Skill。
 
@@ -147,6 +146,7 @@ mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-w
    - 具体 commit diff 和变更文件列表。
    - migration manifest、upgrade manifest 或等价迁移元数据。
    - npm 包 metadata、tarball 内容、发布文件结构或本地包结构推断。
+   - 对 Trellis、Codex dispatch、sub-agent、hook 或 Channel 变更，还必须读取目标 stable tag 的有效配置、workflow 模板和 migration manifest，明确区分功能首次引入、默认值变化与既有能力的 bug fix；不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。`.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台；必须由当前 host 与其专属生成资产判定：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`。两者可共存；纯静态审查不得选择其中一个运行时，证据不足时标记 unknown。若这些平台调度证据中任一项不可取得，必须在 `UPDATE.md` 记录缺失项和不确定性，且不得据此形成或更新平台调度规则。更新规则时，Codex 的 `auto` 必须表述为主会话协调、按职责调度 role subagent；Codex Inline 与其非法值的 fail-closed fallback 不适用于 OMP。当前 OMP host 使用其 `.omp/**` extension 与 worker 机制，单个 platform role subagent 不触发 Channel；同一变更职责只允许一个写入执行者，用户请求的独立只读复核可并行进行。
 6. 评估是否需要修改本仓库规则时，不要只检查是否存在与上游同名的模板或配置文件；还必须用 release 中出现的关键概念、命令、配置项和兼容性关键词扫描以下本地文件，并在 `UPDATE.md` 的影响分析中说明命中结果和处理决定：
    - `AGENTS.md`
    - `prompts/automations/sbtd-workflow-tools-version-check.md`
@@ -180,4 +180,3 @@ mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-w
    - 扫描当日已有的合规归档文件，使用其最大正整数序号加一；若没有当日归档文件，则从 `1` 开始。
 8. `update` / `更新` 不检查、不修改也不同步 `prompts/automations/sbtd-workflow-tools-version-check.md` 或 Orca `SBTD Workflow Tools Version Check`。
 9. 最终输出必须说明版本写回、归档和 README 维护判断。
-10. 不要自行提交或推送变更；commit 和 push 只允许用户手动执行。

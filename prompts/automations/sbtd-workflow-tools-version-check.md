@@ -33,6 +33,7 @@
   - 当前版本是 prerelease 且策略为 same-prerelease-channel 时，只比较同一 prerelease 通道内的新版本，例如 `v0.6.0-beta.18` 只比较 `v0.6.0-beta.x` 中更高 beta 序号，不主动跳到 stable。
   - 如果跨越多个版本，汇总从 `ENTRYPOINT.md` 当前版本到最新版本之间所有 release notes。
 6. 如果 GitHub release body 缺失、为空或明显不足以判断变更，不要直接写成“无可追溯变更”；必须继续从官方 docs / changelog、GitHub compare、具体 commit diff 和变更文件列表、migration / upgrade manifest、npm metadata / tarball / 发布文件结构等来源补充证据，并在 `UPDATE.md` 中说明哪些来源有依据、哪些来源缺失。
+6.1. 对 Trellis、Codex dispatch、sub-agent、hook 或 Channel 的变更，必须额外核验目标 stable tag 的有效配置、workflow 模板和 migration manifest；区分功能首次引入、默认值变化与既有能力的 bug fix。`.trellis/**` 是共享 workflow gate，不是平台身份；若结论涉及平台调度，还必须读取对应生成的平台集成与 agent / worker 定义，并区分“已配置平台目录”与“当前 host”。`.codex/**` 与 `.omp/**` 可共存；静态 tag 工件不得选择运行时。不得把 Codex `codex.dispatch_mode`、Inline 或其 fallback 泛化到 OMP，不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
 7. 创建或刷新 `UPDATE.md`，结构必须为：
  `# UPDATE`
  `## <工具名> <起始版本> -> <目标版本>`
@@ -50,10 +51,10 @@
   - `sbtd-workflow-onboard/templates/agents/AGENTS.global.md`
   - `sbtd-workflow-onboard/templates/agents/AGENTS.project.md`
   - `sbtd-workflow-onboard/templates/skills/**`
-11. 根据 `UPDATE.md` 中有明确 release-note 依据的内容，最小化修改 `AGENTS.md` 或 `sbtd-workflow-onboard/` 下相关模板 / Skill 文件：
+11. 根据 `UPDATE.md` 中可追溯到 release notes 或其他官方 tagged evidence 的内容，最小化修改 `AGENTS.md` 或 `sbtd-workflow-onboard/` 下相关模板 / Skill 文件：
   - 只修改 workflow、命令、配置、兼容性或工具使用规则相关内容。
   - 不做无关重写。
-  - 每处修改都应能追溯到 release notes。
+  - 每处修改都应能追溯到 release notes 或记录在 `UPDATE.md` 中的其他官方 tagged evidence。
   - 规则更新必须沉淀为长期通用规则，不要在长期执行规则里写入具体版本号、一次性版本区间或临时 release 叙述；版本号和依据保留在 `UPDATE.md` 的版本分析段落中。
   - 自动化专用规则只能写入本仓库根 `AGENTS.md`、本 prompt 或其他自动化说明，不要污染可复用的全局 / 项目 AGENTS 模板。
   - 不要因为发现新版本就修改 `ENTRYPOINT.md` 的版本字段。

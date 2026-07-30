@@ -278,6 +278,17 @@ trellis init -u your-name
 
 ---
 
+## Trellis 调度层
+
+- `.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其专属生成资产决定本次执行：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。
+- 以下规则只适用于当前 host 为 Codex 且 `.codex/**` 集成可用的项目：标准 `native` / `tdd` workflow 在有效 `codex.dispatch_mode=auto` 时，由主会话协调 phase，并按 `trellis-implement` → `trellis-check` 顺序为每项职责调度一个 Trellis role subagent；role subagent 只执行分配职责，不等于 Channel runtime。
+- 以下 fallback 只适用于 Codex：`inline` 在项目或用户显式选择时由主会话直接执行；非法显式 Codex dispatch 值也会 fail-closed 到有效 Inline。必须报告并修正非法设置，fallback 生效时不得调度 Codex role subagent。
+- 当前 host 为 OMP 且 `.omp/**` 集成可用时，使用 OMP 自己的 `task` worker 和生成的 Trellis agent 定义；不要把 `codex.dispatch_mode`、Codex Inline fallback 或 Codex role dispatch 套用到 OMP。以该项目生成的 OMP extension 为准。
+- 同一变更职责只能由当前平台的一个 Trellis role subagent、主会话或一个 Channel worker 写入；不得对同一变更职责双重或递归 dispatch，也不得让 Channel worker 与平台 role subagent 并发写入同一 checkout。用户明确请求的独立只读 review / cross-validation 可并行进行，但不得同时充当同一 validation environment 的 controller。单个 platform role subagent 不是启动 Channel 的理由。
+
+---
+
+
 ## Trellis Channel
 
 普通任务不要使用 `trellis channel`。

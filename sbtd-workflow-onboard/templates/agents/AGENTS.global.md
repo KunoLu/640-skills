@@ -115,6 +115,16 @@ trellis init -u your-name
 - 不手动跳过 Trellis 阶段。
 - 不绕过项目级 Trellis 规则。
 
+### Trellis 调度边界
+
+- `.trellis/config.yaml`、`.trellis/workflow.md` 与当前 task artifacts 只定义共享 workflow gate，不标识运行平台。必须由当前 host 与其专属生成资产判定：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。
+- 以下 Codex 规则只适用于当前 host 为 Codex 且 `.codex/**` 集成可用的项目：`native` / `tdd` workflow 在有效 `codex.dispatch_mode=auto` 时，由主会话协调 phase，并按 `trellis-implement` → `trellis-check` 的必经顺序为每项职责调度一个 Trellis role subagent；role subagent 只执行分配职责，不等于启动 `trellis channel`。
+- 以下 Codex fallback 规则不适用于 OMP：`inline` 是项目或用户显式选择的 Codex 主会话模式；非法显式 Codex dispatch 值也会 fail-closed 到有效 Inline。必须报告并修正非法设置，fallback 生效时不得调度 Codex role subagent。
+- 当前 host 为 OMP 且 `.omp/**` 集成可用时，使用 OMP 自己的 `task` worker 和生成的 `trellis-implement` / `trellis-check` agent 定义；不得读取、写入或推断 `codex.dispatch_mode` / Codex Inline fallback，必须以该项目生成的 OMP extension 为准。
+- Channel 是跨平台的持久、多轮、可中断、共享 event log 的协作 runtime；仅在用户明确请求或 Channel preflight 后明确确认时启动。
+- 同一变更职责只能有一个写入执行者：当前平台的一个 Trellis role subagent、主会话或一个 Channel worker；不得对同一变更职责双重或递归 dispatch。用户明确请求的独立只读 review / cross-validation 可并行进行，但不得同时写入或充当同一 validation environment 的 controller。Codex 仅可使用其有效模式的执行者，OMP 仅可使用其生成的 worker 机制。
+
+
 无论 Skill 是否可用，都必须遵守以下最低规则：
 
 - 不要在未读取 `.trellis/workflow.md` 的情况下改变任务状态。
@@ -396,7 +406,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - 不手动跳过 Trellis 阶段。
 - 不创建不必要的 parent / child task。
 - 不把一次性任务计划写入长期项目规范。
-- 不让 Codex 内置 sub-agent dispatcher 替代项目工作流。
+- 不让未受 `.trellis/workflow.md`、task artifacts 和生成 role guard 管理的 Codex sub-agent dispatcher 替代项目工作流；有效 Trellis 调度模式内的 role subagent 仍遵循该工作流。
 
 ---
 

@@ -214,6 +214,7 @@ pwsh -File .\install.ps1
 - 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `sbtd-workflow-onboard` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 和可选 platform flags 后，onboard 流程可以主动运行 `trellis init -u <username> ... --yes --skip-existing`。
   Trellis 平台标志显式且相互独立：`omp` 只生成 `trellis init --omp`，`pi` 只生成 `--pi`，onboard 不得在两者之间替换。
 - Trellis CLI 升级后，已有 `.trellis/` 的项目先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership 和 safe-name guard。
+- `.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其专属生成资产决定本次执行：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 host 为 Codex 且 `.codex/**` 集成可用时解释 `codex.dispatch_mode`：`auto` 由主会话协调并按职责调度 role subagent，显式 Inline 与非法显式值的 fail-closed fallback 也仅属于 Codex。仅当前 host 为 OMP 且 `.omp/**` 集成可用时使用 OMP `task` worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
 - GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。
@@ -573,13 +574,17 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 ## 模板 `.gitignore` 工具与测试产物策略
 
-项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 `.omp/plugins/`；`trellis init --omp` 生成的 `.omp/agents/`、`.omp/commands/`、`.omp/skills/` 和 `.omp/extensions/` 应由 Git 追踪。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
+项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 `.omp/plugins/`；`trellis init --omp` 生成的 `.omp/agents/`、`.omp/commands/`、`.omp/skills/` 和 `.omp/extensions/` 应由 Git 追踪。本项目模板选择用无尾随斜杠的 `.trellis/workspace` 将 Trellis 生成的 `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
 
 ```gitignore
 # ---------- OMP ----------
 # Keep Trellis-generated agents, commands, skills, and extensions versioned.
 .omp/plugins/
 
+
+# ---------- Trellis ----------
+# Ignore generated workspace data and an intentional workspace symlink.
+.trellis/workspace
 # ---------- Testing -----------
 # MCP / browser controller local state
 .chrome-devtools-mcp/

@@ -409,7 +409,7 @@
             <p class="eyebrow">Workflow</p>
             <h2>当前模板主线</h2>
           </div>
-          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，普通项目操作只提示用户执行 <code>trellis init -u your-name</code>；例外是 onboard <code>init</code> / <code>reset</code>，在 Trellis CLI 已可用且用户确认 username 和 platform flags 后可主动执行 <code>trellis init -u &lt;username&gt; ... --yes --skip-existing</code>。Trellis CLI 升级后，已有 .trellis/ 的项目先运行 <code>trellis update</code> 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership 和 safe-name guard。</p>
+          <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，普通项目操作只提示用户执行 <code>trellis init -u your-name</code>；例外是 onboard <code>init</code> / <code>reset</code>，在 Trellis CLI 已可用且用户确认 username 和 platform flags 后可主动执行 <code>trellis init -u &lt;username&gt; ... --yes --skip-existing</code>。Trellis CLI 升级后，已有 .trellis/ 的项目先运行 <code>trellis update</code> 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership 和 safe-name guard。<code>.trellis/config.yaml</code>、<code>.trellis/workflow.md</code> 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其 <code>.codex/**</code> 或 <code>.omp/**</code> 生成资产决定本次执行；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 Codex host 且 <code>.codex/**</code> 集成可用时解释 <code>codex.dispatch_mode</code>：<code>auto</code> 由主会话协调 role subagent；显式 Inline 与非法值的 fail-closed fallback 也仅属于 Codex。仅当前 OMP host 且 <code>.omp/**</code> 集成可用时使用 OMP <code>task</code> worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。</p>
         </div>
         <div class="flow" aria-label="主流程">
           <div class="step"><b>1. 需求</b><span>读取规则、lessons 短入口，并按需读取 index / topic。</span></div>
@@ -846,11 +846,15 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Artifacts</p>
             <h2>工具与测试产物忽略规则</h2>
           </div>
-          <p>项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 <code>.omp/plugins/</code>；<code>trellis init --omp</code> 生成的 <code>.omp/agents/</code>、<code>.omp/commands/</code>、<code>.omp/skills/</code> 和 <code>.omp/extensions/</code> 应由 Git 追踪。初始化时按精确非空行比较项目原 <code>.gitignore</code> 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
+          <p>项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 <code>.omp/plugins/</code>；<code>trellis init --omp</code> 生成的 <code>.omp/agents/</code>、<code>.omp/commands/</code>、<code>.omp/skills/</code> 和 <code>.omp/extensions/</code> 应由 Git 追踪。本项目模板选择用无尾随斜杠的 <code>.trellis/workspace</code> 将 Trellis 生成的 <code>index.md</code>、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 <code>.gitignore</code> 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
         </div>
         <pre><code># ---------- OMP ----------
 # Keep Trellis-generated agents, commands, skills, and extensions versioned.
 .omp/plugins/
+
+# ---------- Trellis ----------
+# Ignore generated workspace data and an intentional workspace symlink.
+.trellis/workspace
 
 # ---------- Testing -----------
 # MCP / browser controller local state

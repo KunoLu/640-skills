@@ -4,6 +4,8 @@ import hashlib
 import copy
 import json
 import re
+import shutil
+import tempfile
 import unittest
 import subprocess
 from html.parser import HTMLParser
@@ -25,6 +27,96 @@ class WorkflowContractTests(unittest.TestCase):
             entries,
             [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/"],
         )
+
+    def test_project_template_ignores_trellis_workspace(self) -> None:
+        template = (
+            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
+        )
+        entries = template.read_text(encoding="utf-8").splitlines()
+
+        self.assertIn(".trellis/workspace", entries)
+        self.assertNotIn("!.trellis/workspace/", entries)
+        self.assertNotIn("!.trellis/workspace/**", entries)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        self.assertIn("无尾随斜杠的 `.trellis/workspace`", readme)
+        self.assertIn(
+            "无尾随斜杠的 <code>.trellis/workspace</code>",
+            readme_html,
+        )
+        self.assertIn(
+            "本项目模板选择用无尾随斜杠的 `.trellis/workspace`",
+            readme,
+        )
+        self.assertIn("有意不同于上游 Trellis 默认会 stage workspace 内容", readme)
+        self.assertIn("本项目模板选择用无尾随斜杠的 <code>.trellis/workspace</code>", readme_html)
+        self.assertIn(
+            "有意不同于上游 Trellis 默认会 stage workspace 内容",
+            readme_html,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir)
+            subprocess.run(
+                ["git", "init", "--quiet"],
+                cwd=project,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            shutil.copyfile(template, project / ".gitignore")
+
+            workspace = project / ".trellis" / "workspace" / "developer"
+            ignored_files = (
+                project / ".trellis" / "workspace" / "index.md",
+                workspace / "journal-1.md",
+                workspace / "index.md",
+                workspace / "trace" / "session.json",
+            )
+            for ignored_file in ignored_files:
+                ignored_file.parent.mkdir(parents=True, exist_ok=True)
+                ignored_file.touch()
+                result = subprocess.run(
+                    [
+                        "git",
+                        "check-ignore",
+                        "--quiet",
+                        str(ignored_file.relative_to(project)),
+                    ],
+                    cwd=project,
+                )
+                self.assertEqual(result.returncode, 0)
+
+    def test_project_template_ignores_trellis_workspace_symlink(self) -> None:
+        template = (
+            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = Path(temp_dir)
+            subprocess.run(
+                ["git", "init", "--quiet"],
+                cwd=project,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            shutil.copyfile(template, project / ".gitignore")
+
+            workspace = project / ".trellis" / "workspace"
+            workspace.parent.mkdir()
+            external_workspace = project / "external-workspace"
+            external_workspace.mkdir()
+            try:
+                workspace.symlink_to(external_workspace, target_is_directory=True)
+            except (NotImplementedError, OSError) as error:
+                self.skipTest(f"workspace symlinks unavailable: {error}")
+
+            ignored_symlink = subprocess.run(
+                ["git", "check-ignore", "--quiet", str(workspace.relative_to(project))],
+                cwd=project,
+            )
+            self.assertEqual(ignored_symlink.returncode, 0)
 
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
         alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"
@@ -1215,6 +1307,113 @@ class WorkflowContractTests(unittest.TestCase):
             "事务边界、读写路径、backfill / replay / rollback / recovery"
         )
         self.assertIn(html_ddia, readme_html)
+
+    def test_trellis_dispatch_layers_remain_distinct(self) -> None:
+        onboard_root = ROOT / "sbtd-workflow-onboard"
+        agents_root = onboard_root / "templates" / "agents"
+        skills_root = onboard_root / "templates" / "skills"
+        global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
+        project_agents = (agents_root / "AGENTS.project.md").read_text(
+            encoding="utf-8"
+        )
+        workflow = (skills_root / "trellis-workflow" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        channel = (skills_root / "trellis-channel" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        _, codex_multi_agent = channel.split("## Codex Multi-Agent", 1)
+        codex_multi_agent = codex_multi_agent.split("\n---", 1)[0]
+        entrypoint = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        root_agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        automation = (
+            ROOT
+            / "prompts"
+            / "automations"
+            / "sbtd-workflow-tools-version-check.md"
+        ).read_text(encoding="utf-8")
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+        self.assertIn("只定义共享 workflow gate，不标识运行平台", global_agents)
+        self.assertIn("当前 host 为 Codex 且 `.codex/**` 集成可用", global_agents)
+        self.assertIn("由主会话协调 phase", global_agents)
+        self.assertIn("非法显式 Codex dispatch 值也会 fail-closed", global_agents)
+        self.assertIn("当前 host 为 OMP 且 `.omp/**` 集成可用", global_agents)
+        self.assertIn("OMP 自己的 `task` worker", global_agents)
+        self.assertIn("不得读取、写入或推断 `codex.dispatch_mode`", global_agents)
+        self.assertIn("同一变更职责只能有一个写入执行者", global_agents)
+        self.assertIn("独立只读 review / cross-validation 可并行进行", global_agents)
+        self.assertIn("当前 host 与其专属生成资产决定本次执行", project_agents)
+        self.assertIn("当前 host 为 Codex 且 `.codex/**` 集成可用", project_agents)
+        self.assertIn("当前 host 为 OMP 且 `.omp/**` 集成可用", project_agents)
+        self.assertIn("OMP 自己的 `task` worker", project_agents)
+        self.assertIn("不要把 `codex.dispatch_mode`", project_agents)
+        self.assertIn("同一变更职责只能由当前平台的一个 Trellis role subagent", project_agents)
+        self.assertIn("独立只读 review / cross-validation 可并行进行", project_agents)
+        self.assertIn("Shared `.trellis/config.yaml`, `.trellis/workflow.md`, and task artifacts define workflow gates, not platform identity.", workflow)
+        self.assertIn("**Codex only, when the current host is Codex", workflow)
+        self.assertIn("**OMP, when the current host is OMP", workflow)
+        self.assertIn("Do not apply or infer `codex.dispatch_mode`", workflow)
+        self.assertIn("obey its workflow planning gate instead", workflow)
+        self.assertIn(
+            "User-requested independent read-only review and cross-validation may run in parallel",
+            workflow,
+        )
+        self.assertIn(
+            "A Trellis-managed platform role sub-agent alone is not a Channel trigger.",
+            channel,
+        )
+        self.assertIn(
+            "User-requested independent read-only review and cross-validation workers may run in parallel",
+            channel,
+        )
+        self.assertNotIn(
+            "Use the Codex inline main session for ordinary Trellis tasks.",
+            codex_multi_agent,
+        )
+        self.assertIn(
+            "In a current Codex host with `.codex/**` integration",
+            codex_multi_agent,
+        )
+        self.assertIn("Codex phase dispatch", entrypoint)
+        self.assertIn("OMP phase dispatch", entrypoint)
+        self.assertIn("Platform identity", entrypoint)
+        self.assertIn("当前 host 与其 `.codex/**` / `.omp/**` 生成资产决定本次执行", entrypoint)
+        self.assertIn("纯静态审查不得选择其中一个运行时", root_agents)
+        self.assertIn("当前 host 与其专属生成资产决定本次执行", readme)
+        self.assertIn("当前 host 与其 <code>.codex/**</code> 或 <code>.omp/**</code> 生成资产决定本次执行", readme_html)
+        self.assertIn("Platform identity comes from the current host and its generated integration", channel)
+        self.assertIn("OMP `task` worker", readme)
+        self.assertIn("OMP <code>task</code> worker", readme_html)
+        self.assertIn(
+            "仅当前 Codex host 且 <code>.codex/**</code> 集成可用时",
+            readme_html,
+        )
+        self.assertIn(
+            "仅当前 OMP host 且 <code>.omp/**</code> 集成可用时",
+            readme_html,
+        )
+        self.assertIn("stable tag 的有效配置、workflow 模板和 migration manifest", root_agents)
+        self.assertIn(
+            "GitHub release body 缺失、为空或明显不足以判断变更",
+            automation,
+        )
+        self.assertIn(
+            "目标 stable tag 的有效配置、workflow 模板和 migration manifest",
+            automation,
+        )
+        self.assertIn(
+            "缺少任一项时不得形成或更新平台调度规则",
+            automation,
+        )
+        self.assertIn("区分“已配置平台目录”与“当前 host”", automation)
+        self.assertIn(
+            "release notes 或其他官方 tagged evidence",
+            automation,
+        )
+        self.assertIn("Trellis 的平台调度边界", changelog)
 
     def test_gitignore_lessons_preserve_history_and_add_dated_status(self) -> None:
         repository_lesson = (
