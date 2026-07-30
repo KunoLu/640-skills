@@ -498,6 +498,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           <h3>交互式安装脚本</h3>
           <p>已克隆本仓库时，可运行 <code>bash install.sh</code> 或 <code>pwsh -File .\install.ps1</code>。交互式流程会选择目标 Agent 平台和 init / reset / project-only 模式，收集一个或多个英语逗号分隔的项目路径，按模式检查或安装全局工具与 Skills，写入允许的模板，引导 MCP，并逐项目处理 <code>.gitignore</code>、Trellis、Playwright 和 React Bits 条件项，最后汇总计划、执行状态、阻断原因和验证结果。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 <code>Invalid choice.</code>。</p>
           <p>根安装器的 <code>--yes</code> / <code>-Yes</code> 会对每个 yes/no 提示回答 Yes 并跳过最终执行确认，因此默认会安装 project <code>AGENTS.md</code>，也会确认安装流程中出现的可选工具提示。该参数不会猜测无默认值的选项或文本；目标平台、普通模式 action、Trellis 用户名和 React Bits tier / registry 等仍须通过对应参数预先提供或保留交互。非交互执行必须二选一：普通模式提供 <code>--platform</code>、<code>--projects-root</code>、<code>--action init|reset</code> 和其余适用输入；project-only 提供 <code>--platform</code>、<code>--init-projects</code> 和其余适用输入；最后再加 <code>--yes</code> / <code>-Yes</code> 消除 yes/no 确认。</p>
+          <p>这里的目标 Agent 平台只选择 CLI 与 MCP adapter，不会选择全局 AGENTS 目标。除非显式传入 <code>--global-agents-path</code> / <code>-GlobalAgentsPath</code>，正常模式始终把 Codex 全局规则模板写入解析后的 <code>$CODEX_HOME/AGENTS.md</code> 或 <code>~/.codex/AGENTS.md</code>；project-only 不写任何全局 AGENTS。</p>
           </div>
         </div>
         <div class="status-list">
@@ -542,7 +543,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           </article>
         </div>
         <div class="status-list">
- <div><strong>DDD Boundary Review</strong><br>无论由 Agent 自发调用还是用户主动调用,每次完整执行 grill-with-docs 后都立即调用 bundled book-ddd-distilled-modeling 并单独输出审核结果。grill-with-docs 内嵌的 external domain-modeling dependency 不能替代该二次审核;needs-clarification 先继续澄清并重审,blocked 明确阻断。未达到 confirmed 不得进入需求确认、PRD、design、Trellis task 或实现。</div>
+          <div><strong>DDD Boundary Review</strong><br>无论由 Agent 自发调用还是用户主动调用，每次完整执行 grill-with-docs 后都立即调用 bundled book-ddd-distilled-modeling 并单独输出审核结果。grill-with-docs 内嵌的 external domain-modeling dependency 不能替代该二次审核；needs-clarification 先继续澄清并重审，blocked 明确阻断。未达到 confirmed 不得进入需求确认、PRD、design、Trellis task 或实现。未完整调用 grill-with-docs 时仍要说明原因；只有调用与跳过存在会改变需求、领域边界或实现决策的实质权衡时才询问，项目事实已消除歧义时直接推进，不制造重复确认门。</div>
           <div><strong>Book Gate Plan</strong><br>进入开发任务时，先按项目客观事实将 5 个 bundled book-* Skill 标记为 required / on-demand，并记录触发依据、执行阶段和独立 Gate state。Gate state 使用 <code>planned</code> / <code>running</code> / <code>passed</code> / <code>blocked</code> / <code>not-required</code>，只允许 <code>planned</code> → <code>running</code> → <code>passed</code> / <code>blocked</code>；reviewer status 在实际运行后填写。</div>
           <div><strong>DDIA Data Design Review</strong><br>持久化 / 共享数据、schema / migration、shared / persistent / cross-request / cross-process cache、异步 / 跨服务数据流、数据所有权、事务边界、读写路径、backfill / replay / rollback / recovery 变化时，在 design / implement 稳定和实现开始前审核，必须达到 confirmed。</div>
           <div><strong>Legacy Change Safety Review</strong><br>修复既有行为 bug，或弱测试、行为不清、隐藏依赖、高回归风险任一命中时，在首次行为修改前审核，必须达到 characterized；安全网必须先引入生产 seam 时进入 seam-required。</div>
@@ -846,11 +847,22 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Artifacts</p>
             <h2>工具与测试产物忽略规则</h2>
           </div>
-          <p>项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 <code>.omp/plugins/</code>；<code>trellis init --omp</code> 生成的 <code>.omp/agents/</code>、<code>.omp/commands/</code>、<code>.omp/skills/</code> 和 <code>.omp/extensions/</code> 应由 Git 追踪。本项目模板选择用无尾随斜杠的 <code>.trellis/workspace</code> 将 Trellis 生成的 <code>index.md</code>、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 <code>.gitignore</code> 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
+          <p>项目模板默认追踪项目级 <code>AGENTS.md</code>、<code>CLAUDE.md</code>、共享 <code>.agents/skills/**</code>，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 <code>.claude/projects/</code>、<code>.claude/worktrees/</code>、<code>.claude/settings.local.json</code> 与 <code>.omp/plugins/</code> 等已确认的本地运行态或机器本地设置。本项目模板选择用无尾随斜杠的 <code>.trellis/workspace</code> 将 Trellis 生成的 <code>index.md</code>、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 <code>.gitignore</code> 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时保留可维护测试资产，忽略本地运行态、报告、trace、video、screenshot 和一次性 repair plan。</p>
+          <p><strong>既有项目迁移：</strong>如果旧模板已经写入 <code>.claude/</code>、<code>CLAUDE.md</code>、<code>.agents/</code> 或 <code>/AGENTS.md</code>，<code>init</code> / <code>reset</code> 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 <code>git check-ignore</code> 复核目标路径。</p>
         </div>
-        <pre><code># ---------- OMP ----------
+        <pre><code># ---------- Claude ----------
+# Keep Trellis-generated agents, commands, skills, hooks, and shared settings versioned.
+.claude/projects/
+.claude/worktrees/
+.claude/settings.local.json
+
+# ---------- OMP ----------
 # Keep Trellis-generated agents, commands, skills, and extensions versioned.
 .omp/plugins/
+
+# ---------- AI Tools ----------
+# Keep project AGENTS.md and shared .agents/skills versioned.
+.worktrees/
 
 # ---------- Trellis ----------
 # Ignore generated workspace data and an intentional workspace symlink.

@@ -32,7 +32,9 @@ Usage:
 
 Options:
   --platform <codex|claude|kimi|oh-my-pi|omp>
-      Target coding agent tool. "omp" is an alias for "oh-my-pi".
+      Target Agent CLI and MCP platform. "omp" is an alias for "oh-my-pi".
+      This option does not change the Codex global AGENTS.md target; override
+      that separately with --global-agents-path.
       The installer verifies this CLI immediately, bootstraps npm when needed,
       and installs the official npm package globally at @latest when missing.
   --source-root <path>

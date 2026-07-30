@@ -24,6 +24,8 @@ Resolve these questions in order:
 5. If any selected root has no `.trellis/`, what Trellis developer username and optional Trellis platform flags should be used?
    Treat Trellis flags as a separate namespace: requested OMP uses `omp` and generates `--omp`; `pi` generates only `--pi`. Never substitute or infer one from the other, including from the Oh My Pi package name.
 
+The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Unless the user explicitly supplies a global AGENTS path, normal onboarding writes the Codex global template to the resolved `$CODEX_HOME/AGENTS.md` / `~/.codex/AGENTS.md` path. Project-only mode does not write any global AGENTS file.
+
 If multiple paths are supplied to this Skill but the user did not explicitly say they are projects to initialize, ask whether they are the intended initialization roots before running checks or writes. Do not infer that every mentioned repository path should be initialized.
 
 Normal `init` / `reset` always installs bundled and external workflow Skills globally. There is no global/project/none Skill scope choice. Project-only initialization must not check, install, update, or configure global Agent CLIs, runtimes, tools, Skills, AGENTS, or MCP.

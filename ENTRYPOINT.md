@@ -36,6 +36,7 @@
 | 项目级规则模板 | `sbtd-workflow-onboard/templates/agents/AGENTS.project.md` | 由具体项目手动落地，或通过 onboard Skill 在确认项目根目录后安装 |
 | 全局 Skill 模板 | `sbtd-workflow-onboard/templates/skills/*/SKILL.md` | `同步` / `sync` 时写入 `/Users/lusonglin/.agent/skills/<skill>/SKILL.md`，目标路径保持不变 |
 | Onboard Skill | `sbtd-workflow-onboard/` | 初始化或重置本地 Codex 全局 AGENTS、项目 AGENTS 和 SBTD workflow skills |
+| Agent platform selector | 根安装器 `--platform` / `-Platform` | 只选择 Agent CLI 与 MCP adapter；默认全局 AGENTS 仍写入 Codex 路径，只有显式 global AGENTS path 才覆盖，project-only 不写全局 AGENTS |
 | Onboard 机器目录 | `sbtd-workflow-onboard/catalog.json`、`catalog.schema.json` | 统一描述 bundled Skill、external Skill 上游源与模板源路径，并提供 Draft 2020-12 校验契约 |
 | Orca 版本检查 prompt | `prompts/automations/sbtd-workflow-tools-version-check.md` | 同步更新 `SBTD Workflow Tools Version Check` live automation，并作为后续审计和恢复来源 |
 
@@ -116,7 +117,7 @@ to-tickets
 | `diagnosing-bugs` | bug、测试失败、运行时错误、性能回归、线上问题、日志异常、数据不一致 | 结合 GitNexus debugging / impact-analysis；修复后补充回归测试 |
 | `tdd` | bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑、高风险修改 | 依赖 `codebase-design`；不强制用于简单文案、样式、配置说明或一次性脚本 |
 | `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 依赖 `grilling`；一次问一个关键问题；能通过读项目文件回答时先读文件 |
-| `grill-with-docs` | 项目内需求澄清、术语对齐、CONTEXT.md / ADR 沉淀 | 依赖 `grilling` 和 `domain-modeling`；不把 CONTEXT.md 写成临时规格书 |
+| `grill-with-docs` | 项目内需求澄清、术语对齐、CONTEXT.md / ADR 沉淀 | 依赖 `grilling` 和 `domain-modeling`；不把 CONTEXT.md 写成临时规格书；未调用时说明原因，仅在调用与跳过存在实质决策权衡时询问 |
 | `grilling` | 可复用逐问题访谈循环 | 作为 `grill-me` / `grill-with-docs` 的底层依赖，不作为默认独立入口 |
 | `domain-modeling` | 项目语言、glossary、CONTEXT.md / ADR 建模辅助 | 遵守本地 `docs/CONTEXT.md`、`docs/adr/*.md` 路径约束 |
 | `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | 作为 `tdd`、陌生模块理解和结构性修改前的设计辅助 |

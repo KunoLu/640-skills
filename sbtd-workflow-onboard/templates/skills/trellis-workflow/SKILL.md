@@ -40,7 +40,7 @@ When the user provides only an initial requirement, and the requirement involves
 7. Output a visible `DDD Boundary Review` with status `confirmed`, `needs-clarification`, or `blocked`, covering ubiquitous language, bounded-context assumptions, invariants, subdomain classification, corrections to the `grill-with-docs` result, and open conflicts.
 8. If the review is not `confirmed`, resolve each finding through one-question-at-a-time clarification and rerun `book-ddd-distilled-modeling`; the workflow must not advance to requirement confirmation, PRD, design, task creation, or implementation.
 9. After the review reaches `confirmed`, output a requirement confirmation summary covering the goal, users / scenarios, in-scope and out-of-scope items, terminology, constraints, acceptance criteria, and open questions.
-10. Before outputting the requirement confirmation summary, a PRD / design / implement review gate, or `task.py start`, the usage status of `grill-with-docs` and the latest `DDD Boundary Review` status must be stated; if `grill-with-docs` was not fully invoked, explain why and ask whether the user wants to use that Skill first and then reassess.
+10. Before outputting the requirement confirmation summary, a PRD / design / implement review gate, or `task.py start`, state the usage status of `grill-with-docs` and the latest `DDD Boundary Review` status. If `grill-with-docs` was not fully invoked, explain why. Ask only when using versus skipping the Skill presents a material trade-off that could change requirements, domain boundaries, or implementation decisions; otherwise proceed from the established project facts without creating a confirmation gate.
 11. After the user confirms the summary, use `to-spec` to generate the Markdown spec / PRD; in a Trellis project, write or update the final spec / PRD in `.trellis/tasks/<task>/prd.md`.
 12. After the spec / PRD is confirmed, use `to-tickets` to split it into Trellis-ready vertical slices, marking dependency order, AFK / HITL, acceptance criteria, and testing strategy; the decomposition results should be materialized as parent / child task artifacts under `.trellis/tasks/<task>/...`.
 13. After running the PRD convergence pass, create or select a task according to `.trellis/workflow.md`, then continue through the Trellis phases.
@@ -53,7 +53,7 @@ If the requirement is only a general solution inquiry and has no project documen
 
 ### Transparency of grill-with-docs Usage Status
 
-During Phase 1 planning, in the requirement confirmation summary, at a PRD / design / implement review gate, or before `task.py start`, state according to the global rules whether `grill-with-docs` was fully invoked; if it was not fully invoked, explain why and ask whether the user wants to use that Skill first and then reassess.
+During Phase 1 planning, in the requirement confirmation summary, at a PRD / design / implement review gate, or before `task.py start`, state according to the global rules whether `grill-with-docs` was fully invoked and explain any omission. Ask only when using versus skipping the Skill presents a material trade-off; otherwise proceed from established project facts.
 
 When `grill-with-docs` was fully completed, also state whether the mandatory `book-ddd-distilled-modeling` second pass ran and output its visible `DDD Boundary Review`. A missing, unreadable, or evidence-blocked reviewer is `blocked`, not a reason to skip the gate.
 

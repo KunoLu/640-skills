@@ -153,6 +153,8 @@ pwsh -File .\install.ps1
 
 交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 `Invalid choice.`。
 
+这里的目标 Agent 平台只选择 CLI 与 MCP adapter，不会选择全局 AGENTS 目标。除非显式传入 `--global-agents-path` / `-GlobalAgentsPath`，正常模式始终把 Codex 全局规则模板写入解析后的 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`；project-only 不写任何全局 AGENTS。
+
 根安装器的 `--yes` / `-Yes` 会对每个 yes/no 提示回答 Yes 并跳过最终执行确认，因此默认会安装 project `AGENTS.md`，也会确认安装流程中出现的可选工具提示。该参数不会猜测无默认值的选项或文本；目标平台、普通模式 action、Trellis 用户名和 React Bits tier / registry 等仍须通过对应参数预先提供或保留交互。非交互执行必须二选一：普通模式提供 `--platform`、`--projects-root`、`--action init|reset` 和其余适用输入；project-only 提供 `--platform`、`--init-projects` 和其余适用输入；最后再加 `--yes` / `-Yes` 消除 yes/no 确认。
 
 ## 仓库定位
@@ -238,7 +240,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 | BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。主动使用 `gherkin-bdd` 且请求包含 `sync` / `同步` 时，原有 BDD Sync Mode 保持不变：全量扫描当前工作树与 `features/`，多仓时先确认其他仓库更新状态再同步 `.feature`。BDD / 知识库请求具有明确 `read` / `读取` 只读意图且不含变更意图时，进入 Knowledge Ingest，按目标 ref 固定精确 SHA 并生成派生行为目录。 |
 | TDD | Test-Driven Development | 对 bug 修复、核心业务逻辑、算法、数据转换、高风险路径和回归敏感模块采用测试先行。BDD 固化可观察行为，TDD 把它转成可执行测试和红绿重构循环。 |
 
-**强制 post-grill 审核**:无论由 Agent 自发调用还是用户主动调用,每次完整执行 `grill-with-docs` 结束后都必须立即调用 bundled `book-ddd-distilled-modeling` 独立二次审核,并单独输出 `DDD Boundary Review`。`grill-with-docs` 内嵌的 external `domain-modeling` dependency 不能替代该二次审核;状态为 `needs-clarification` 时先继续澄清并重审,状态为 `blocked` 时说明阻断。未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。未使用 `grill-with-docs` 时仍按业务术语、领域规则和模型歧义独立判断是否调用 DDD Skill。
+**强制 post-grill 审核**：无论由 Agent 自发调用还是用户主动调用，每次完整执行 `grill-with-docs` 结束后都必须立即调用 bundled `book-ddd-distilled-modeling` 独立二次审核，并单独输出 `DDD Boundary Review`。`grill-with-docs` 内嵌的 external `domain-modeling` dependency 不能替代该二次审核；状态为 `needs-clarification` 时先继续澄清并重审，状态为 `blocked` 时说明阻断。未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。未使用 `grill-with-docs` 时仍按业务术语、领域规则和模型歧义独立判断是否调用 DDD Skill，并说明未调用原因；只有调用与跳过存在会改变需求、领域边界或实现决策的实质权衡时才询问用户，项目事实已消除歧义时直接推进，不制造重复确认门。
 
 
 ### Book-derived 开发门禁
@@ -574,13 +576,25 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 ## 模板 `.gitignore` 工具与测试产物策略
 
-项目模板在 Codex 与 Trellis 规则之间仅忽略 OMP 的本地插件安装目录 `.omp/plugins/`；`trellis init --omp` 生成的 `.omp/agents/`、`.omp/commands/`、`.omp/skills/` 和 `.omp/extensions/` 应由 Git 追踪。本项目模板选择用无尾随斜杠的 `.trellis/workspace` 将 Trellis 生成的 `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
+项目模板默认追踪项目级 `AGENTS.md`、`CLAUDE.md`、共享 `.agents/skills/**`，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json` 与 `.omp/plugins/` 等已确认的本地运行态或机器本地设置。本项目模板选择用无尾随斜杠的 `.trellis/workspace` 将 Trellis 生成的 `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
+
+既有项目迁移：如果旧模板已经写入 `.claude/`、`CLAUDE.md`、`.agents/` 或 `/AGENTS.md`，`init` / `reset` 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 `git check-ignore` 复核目标路径。
 
 ```gitignore
+# ---------- Claude ----------
+# Keep Trellis-generated agents, commands, skills, hooks, and shared settings versioned.
+.claude/projects/
+.claude/worktrees/
+.claude/settings.local.json
+
 # ---------- OMP ----------
 # Keep Trellis-generated agents, commands, skills, and extensions versioned.
 .omp/plugins/
 
+
+# ---------- AI Tools ----------
+# Keep project AGENTS.md and shared .agents/skills versioned.
+.worktrees/
 
 # ---------- Trellis ----------
 # Ignore generated workspace data and an intentional workspace symlink.
