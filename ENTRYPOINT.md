@@ -14,8 +14,8 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.145.0 | stable-only | 是 | 核心 Coding Agent |
-| Trellis | mindfold-ai/trellis | v0.6.9 | stable-only | 是 | 复杂任务编排 / TDD workflow |
+| Codex | openai/codex | v0.146.0 | stable-only | 是 | 核心 Coding Agent |
+| Trellis | mindfold-ai/trellis | v0.6.10 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.9 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.62.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
@@ -214,12 +214,17 @@ handoff
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.6.9 |
+| 当前关注版本 | v0.6.10 |
 | 当前定位 | 复杂任务编排 / 多阶段任务 / TDD workflow |
 | 启用条件 | 存在 Trellis 强证据，或任务复杂度需要 Trellis |
 | Native Workflow | 普通功能开发、文档修改、小型 bug 修复、工具配置调整 |
 | TDD Workflow | 后端算法逻辑、数据处理逻辑、高风险改动、回归敏感模块 |
 | Channel | 仅用户明确要求多 Agent、多模型、worker、forum、thread、并行评审或外部 orchestrator 时启用 |
+| Platform identity | `.trellis/**` 只定义共享 workflow gate；当前 host 与其 `.codex/**` / `.omp/**` 生成资产决定本次执行。二者共存时按当前 host 选择；仅静态文件不足时标记 unknown |
+| Codex phase dispatch | 仅当前 host 为 Codex 且 `.codex/**` 集成可用时：以有效 `codex.dispatch_mode` 为准；`auto` 由主会话协调、按职责调度 role subagent；`inline` 可显式选择，也可作为非法显式值的 fail-closed fallback |
+| OMP phase dispatch | 仅当前 host 为 OMP 且 `.omp/**` 集成可用时：使用 OMP `task` worker 与生成的 agent 定义；不适用 `codex.dispatch_mode` 或 Codex Inline fallback |
+| Channel 边界 | 独立的持久协作 runtime；单个 platform role subagent 不触发 Channel。每项变更职责只允许一个写入执行者；用户请求的独立只读复核可并行 |
+
 
 ---
 
@@ -315,8 +320,8 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.145.0 |
-| Agent Harness | Trellis | v0.6.9 |
+| Coding Agent | Codex | v0.146.0 |
+| Agent Harness | Trellis | v0.6.10 |
 | 代码理解 | GitNexus | v1.6.9 |
 | Web 诊断 | Chrome DevTools MCP | latest |
 | Web 回归测试 | Playwright | v1.62.0 |
