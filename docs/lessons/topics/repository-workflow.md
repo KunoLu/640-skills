@@ -179,8 +179,8 @@
 - 来源：External Skills stable fallback 实现后的独立 review handoff 与回归测试
 - 问题：stable manifest 和 promotion 配置中的绝对路径或 `..` 可逃逸声明根目录；只有文件存在但 frontmatter 无效的 canonical 会阻止重装并导致有效 legacy 被删除；事务恢复失败后 finally 仍删除 rollback 目录，可能销毁唯一可恢复副本。
 - 根因：路径由多个调用点直接拼接而没有统一 containment seam，canonical 检测只判断 `SKILL.md` 文件存在，rollback 生命周期没有区分“完整恢复”和“恢复仍有错误”。
-- 修复：集中使用解析后 containment 校验拒绝绝对路径、`..` 和 symlink 逃逸；canonical 与安装源使用同一完整 Skill 验证；rollback 仅在 commit 成功或完整恢复后清理，恢复不完整时在结果中返回并保留目录路径；`auto` 仅在上游组失败时延迟加载 stable。
-- 预防：External Skill 安装器新增字段或文件操作时，必须同时验证 source root containment、完整 canonical 语义和最坏情况下的备份所有权；回归测试至少覆盖路径逃逸、无效 canonical + 有效 legacy、上游成功时 stable 不可读，以及 restore 二次失败后备份仍存在。
+- 修复：集中使用解析后 containment 校验拒绝绝对路径、`..` 和 symlink 逃逸；canonical 与安装源使用同一完整 Skill 验证；rollback 仅在 commit 成功或完整恢复后清理，恢复不完整时在结果中返回并保留目录路径。
+- 后续策略：External Skill 默认 `auto` 与显式 `stable` 均从受管 stable set 离线安装；只有显式 `upstream` 才获取当前上游，且任一来源验证失败都直接报错，不做自动 fallback。维护安装器时必须同时验证 source root containment、完整 canonical 语义和最坏情况下的备份所有权；回归测试至少覆盖 `auto` 不调用 Git、显式 upstream 独立行为、路径逃逸、无效 canonical + 有效 legacy，以及 restore 二次失败后备份仍存在。
 
 ## LESSON-20260717-mode-exit-reentry-contract: Mode Exit Must Define Re-entry Lifecycle
 

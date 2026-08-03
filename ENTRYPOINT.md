@@ -15,11 +15,11 @@
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
 | Codex | openai/codex | v0.146.0 | stable-only | 是 | 核心 Coding Agent |
-| Trellis | mindfold-ai/trellis | v0.6.10 | stable-only | 是 | 复杂任务编排 / TDD workflow |
+| Trellis | mindfold-ai/trellis | v0.6.12 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.9 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
-| Playwright | microsoft/playwright | v1.62.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
-| Maestro | mobile-dev-inc/Maestro | cli-2.7.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
+| Playwright | microsoft/playwright | v1.62.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
+| Maestro | mobile-dev-inc/Maestro | cli-2.8.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
 | web-ui-autotest-generator | KunoLu/640-skills | bundled | repository-controlled | 否 | 内置 Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
@@ -94,7 +94,7 @@ flowchart TD
 
 ## 2. mattpocock/skills 接入规则
 
-仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并默认原样使用官方文件。Onboard 内部维护带精确 commit、checksum 和许可证的原样 stable 镜像；默认先验证上游，同仓库技能组不兼容时整组回退 stable。本配置沿用既有 canonical 基线；需特别区分：`diagnose`、`write-a-skill` 与 `zoom-out` 属于较早的迁移 / 移除项，而 `to-prd` → `to-spec`、`to-plan` / `to-issues` → `to-tickets` 是 mattpocock/skills v1.1.0 的后续变更。当前只安装最终 canonical Skill：
+仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并保持官方文件原样。Onboard 内部维护带精确 commit、checksum 和许可证的原样 stable 镜像；普通安装默认使用该镜像，只有显式 `--source upstream` 才直接获取当前上游用于评估或升级验证。本配置沿用既有 canonical 基线；需特别区分：`diagnose`、`write-a-skill` 与 `zoom-out` 属于较早的迁移 / 移除项，而 `to-prd` → `to-spec`、`to-plan` / `to-issues` → `to-tickets` 是 mattpocock/skills v1.1.0 的后续变更。当前只安装最终 canonical Skill：
 
 ```text
 diagnosing-bugs
@@ -215,7 +215,7 @@ handoff
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.6.10 |
+| 当前关注版本 | v0.6.12 |
 | 当前定位 | 复杂任务编排 / 多阶段任务 / TDD workflow |
 | 启用条件 | 存在 Trellis 强证据，或任务复杂度需要 Trellis |
 | Native Workflow | 普通功能开发、文档修改、小型 bug 修复、工具配置调整 |
@@ -322,11 +322,11 @@ handoff
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
 | Coding Agent | Codex | v0.146.0 |
-| Agent Harness | Trellis | v0.6.10 |
+| Agent Harness | Trellis | v0.6.12 |
 | 代码理解 | GitNexus | v1.6.9 |
 | Web 诊断 | Chrome DevTools MCP | latest |
-| Web 回归测试 | Playwright | v1.62.0 |
-| 移动 E2E | Maestro | cli-2.7.0 |
+| Web 回归测试 | Playwright | v1.62.1 |
+| 移动 E2E | Maestro | cli-2.8.0 |
 | Web UI 测试资产 | web-ui-autotest-generator | bundled |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |
 

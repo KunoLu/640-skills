@@ -16,6 +16,8 @@
 
 ### 变更
 
+- External Skill 安装改为 stable-first：默认 `auto` 与显式 `stable` 都从 Onboard 内经过 review、精确 revision 和 checksum 固定的 stable set 离线安装；只有显式 `--source upstream` 才直接获取当前上游，失败时不自动回退。
+- 将 14 个受管 external Skills 提升到 stable set `2026-08-03.1`：固定 promotion 时的 mattpocock/skills、impeccable、ui-ux-pro-max-skill 与 shadcn-ui 上游 revision；通过 promotion 流程刷新 tree digest 和许可证文件。
 - 项目模板选择以无尾随斜杠的 `.trellis/workspace` 忽略目录或顶级 symlink 及其所有内容，包括 workspace `index.md`、开发者 journal 与 trace；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略。
 
 - 对齐 Trellis 的 Codex hook 上下文恢复路径：bundled `trellis-workflow` 现在要求升级后保留单一 context prelude，并在注入标记不完整时依赖受管的 saved `SubagentStart` 恢复，而非手工粘贴任务数据或放宽注入上限。
@@ -29,6 +31,10 @@
 ### 文档
 
 - 新增 OMP SBTD 上游提升 PRD 与运行手册，区分 `640-skills` 已提交上游、KPi Kit / Plugin 集成、npm 发布、用户安装和新 Session 生效等状态，并固定 Plan / Apply、证据与回滚边界。
+
+### 验证
+
+- 完整 Python 契约测试增至 121 项并全部通过；额外以默认 `auto` 实际安装全部 14 个 external Skills，确认统一使用 stable set、无需 fallback 且目标 `SKILL.md` 全部存在。
 
 ## v1.0.5（2026-07-28）
 
