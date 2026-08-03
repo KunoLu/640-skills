@@ -131,11 +131,11 @@ class ExternalSkillInstallTests(unittest.TestCase):
             "--json",
         )
 
-    def test_auto_uses_upstream_when_the_repository_contract_is_valid(self) -> None:
+    def test_upstream_uses_repository_when_the_contract_is_valid(self) -> None:
         self.write_fake_git(clone_succeeds=True)
         self.write_upstream_skill("diagnosing-bugs", "upstream marker")
 
-        completed = self.install("diagnosing-bugs", "auto")
+        completed = self.install("diagnosing-bugs", "upstream")
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         payload = json.loads(completed.stdout)
@@ -151,10 +151,9 @@ class ExternalSkillInstallTests(unittest.TestCase):
             (self.skills_dir / "diagnosing-bugs" / "SKILL.md").read_text(),
         )
 
-    def test_auto_falls_back_to_the_vendored_stable_skill_when_clone_fails(
-        self,
-    ) -> None:
-        self.write_fake_git(clone_succeeds=False)
+    def test_auto_uses_vendored_stable_without_accessing_upstream(self) -> None:
+        self.write_fake_git(clone_succeeds=True)
+        self.write_upstream_skill("diagnosing-bugs", "upstream marker")
 
         completed = self.install("diagnosing-bugs", "auto")
 
@@ -163,9 +162,14 @@ class ExternalSkillInstallTests(unittest.TestCase):
         result = next(
             item for item in payload["results"] if item.get("name") == "diagnosing-bugs"
         )
-        self.assertEqual(result["sourceUsed"], "stable-fallback")
-        self.assertIn("simulated clone failure", result["fallbackReason"])
-        self.assertTrue((self.skills_dir / "diagnosing-bugs" / "SKILL.md").is_file())
+        self.assertEqual(result["sourceUsed"], "stable")
+        self.assertIsNone(result["fallbackReason"])
+        self.assertTrue(result["stableSet"])
+        self.assertFalse(self.git_log.exists())
+        self.assertNotIn(
+            "upstream marker",
+            (self.skills_dir / "diagnosing-bugs" / "SKILL.md").read_text(),
+        )
 
     def test_stable_mode_does_not_invoke_git(self) -> None:
         self.write_fake_git(clone_succeeds=False)
@@ -197,9 +201,8 @@ class ExternalSkillInstallTests(unittest.TestCase):
         )
         self.assertEqual((self.skills_dir / "tdd" / "SKILL.md").read_text(), "old tdd")
 
-    def test_auto_falls_back_for_the_whole_repository_group(self) -> None:
+    def test_auto_uses_one_stable_set_for_the_whole_repository_group(self) -> None:
         self.write_fake_git(clone_succeeds=True)
-        self.write_upstream_skill("diagnosing-bugs", "incomplete upstream group")
 
         completed = self.install("diagnosing-bugs,tdd", "auto")
 
@@ -210,8 +213,13 @@ class ExternalSkillInstallTests(unittest.TestCase):
             for item in payload["results"]
             if item.get("name") in {"diagnosing-bugs", "tdd"}
         }
-        self.assertEqual(installed["diagnosing-bugs"]["sourceUsed"], "stable-fallback")
-        self.assertEqual(installed["tdd"]["sourceUsed"], "stable-fallback")
+        self.assertEqual(
+            {item["sourceUsed"] for item in installed.values()}, {"stable"}
+        )
+        self.assertEqual(
+            len({item["stableSet"] for item in installed.values()}), 1
+        )
+        self.assertFalse(self.git_log.exists())
 
     def test_stable_promotion_requires_explicit_confirmation(self) -> None:
         completed = self.run_onboard(
@@ -452,28 +460,26 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertTrue((self.skills_dir / "diagnose" / "SKILL.md").is_file())
         self.assertTrue(any(item.get("phase") == "preflight" for item in results))
 
-    def test_auto_does_not_require_stable_manifest_when_upstream_is_valid(self) -> None:
+    def test_auto_requires_the_stable_manifest_without_cloning_upstream(self) -> None:
         onboard = self.load_onboard_module()
-        self.write_upstream_skill("diagnosing-bugs", "upstream marker")
-
-        def fake_clone(_repo, destination):
-            shutil.copytree(self.fake_repo, destination, dirs_exist_ok=True)
-            return True, ""
+        clone = mock.Mock(side_effect=AssertionError("upstream must not be cloned"))
 
         with (
             mock.patch.object(
                 onboard, "EXTERNAL_STABLE_MANIFEST", self.root / "missing.json"
             ),
-            mock.patch.object(onboard, "clone_repo", side_effect=fake_clone),
-            mock.patch.object(onboard, "cloned_repo_revision", return_value="1" * 40),
+            mock.patch.object(onboard, "clone_repo", clone),
         ):
-            resolved = onboard.resolve_external_install_sources(
-                ["diagnosing-bugs"], "auto", self.root / "workspace"
-            )
+            with self.assertRaisesRegex(
+                RuntimeError, "cannot read stable External Skills manifest"
+            ):
+                onboard.resolve_external_install_sources(
+                    ["diagnosing-bugs"], "auto", self.root / "workspace"
+                )
 
-        self.assertEqual(resolved["diagnosing-bugs"]["sourceUsed"], "upstream")
+        clone.assert_not_called()
 
-    def test_auto_does_not_mask_unexpected_internal_errors_with_stable(self) -> None:
+    def test_upstream_does_not_mask_unexpected_internal_errors_with_stable(self) -> None:
         onboard = self.load_onboard_module()
         stable_loader = mock.Mock(side_effect=RuntimeError("stable should not load"))
 
@@ -489,7 +495,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(AssertionError, "unexpected internal error"):
                 onboard.resolve_external_install_sources(
-                    ["diagnosing-bugs"], "auto", self.root / "workspace"
+                    ["diagnosing-bugs"], "upstream", self.root / "workspace"
                 )
 
         stable_loader.assert_not_called()

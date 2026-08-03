@@ -2648,7 +2648,11 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
 def resolve_external_install_sources(
     selected: list[str], requested_source: str, workspace: Path
 ) -> dict[str, dict[str, object]]:
-    manifest = load_external_stable_manifest() if requested_source == "stable" else None
+    manifest = (
+        load_external_stable_manifest()
+        if requested_source in {"auto", "stable"}
+        else None
+    )
     repo_groups: dict[str, list[str]] = {}
     for name in selected:
         repo = str(EXTERNAL_SKILL_SOURCES[name]["repo"])
@@ -2656,8 +2660,7 @@ def resolve_external_install_sources(
 
     resolved: dict[str, dict[str, object]] = {}
     for index, (repo, names) in enumerate(repo_groups.items(), start=1):
-        fallback_reason: str | None = None
-        if requested_source in {"auto", "upstream"}:
+        if requested_source == "upstream":
             try:
                 repo_root = workspace / f"repo-{index}"
                 ok, clone_error = clone_repo(repo, repo_root)
@@ -2680,14 +2683,11 @@ def resolve_external_install_sources(
                     }
                 continue
             except (OSError, RuntimeError) as exc:
-                fallback_reason = str(exc)
-                if requested_source == "upstream":
-                    raise RuntimeError(
-                        f"upstream External Skill group failed for {repo}: {exc}"
-                    ) from exc
+                raise RuntimeError(
+                    f"upstream External Skill group failed for {repo}: {exc}"
+                ) from exc
 
-        if manifest is None:
-            manifest = load_external_stable_manifest()
+        assert manifest is not None
         stable_group: dict[str, tuple[Path, str, str]] = {}
         for name in names:
             stable_group[name] = stable_external_skill_source(manifest, name)
@@ -2695,12 +2695,10 @@ def resolve_external_install_sources(
             resolved[name] = {
                 "source": source,
                 "repo": repo,
-                "sourceUsed": "stable-fallback"
-                if requested_source == "auto"
-                else "stable",
+                "sourceUsed": "stable",
                 "sourceRevision": revision,
                 "stableSet": stable_set,
-                "fallbackReason": fallback_reason,
+                "fallbackReason": None,
             }
     return resolved
 
@@ -5223,8 +5221,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "upstream", "stable"),
         default="auto",
         help=(
-            "External Skill source policy: auto prefers validated upstream and falls back "
-            "to the vendored stable set; upstream and stable are strict modes."
+            "External Skill source policy: auto and stable use the vendored stable set; "
+            "upstream is an explicit opt-in with no fallback."
         ),
     )
     install.add_argument(
