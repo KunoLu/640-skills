@@ -220,15 +220,15 @@ python scripts/onboard.py install-external-skills --all --scope global --source 
 
 Source policies:
 
-- `auto` (default): clone and validate the selected Skills from each upstream repository as one group; if upstream acquisition or source validation fails, lazily load and validate the matching vendored stable group. A valid upstream group does not require the stable manifest to be readable.
-- `upstream`: require the current upstream repository to clone and validate; do not fall back.
-- `stable`: skip Git and require the vendored stable manifest, checksum, frontmatter, and complete Skill tree to validate.
+- `auto` (default): require and validate the reviewed vendored stable manifest, checksum, frontmatter, and complete Skill tree without accessing Git or the network.
+- `upstream`: explicitly opt into cloning and validating the current upstream repository group; any acquisition or validation failure is fatal and does not fall back.
+- `stable`: use the same deterministic vendored source as `auto`, while recording explicit stable-source intent in `requestedSource`.
 
 Preparation and commit are separate phases. Every selected Skill is resolved, copied into target-filesystem staging, and verified before any canonical or legacy target changes. Manifest paths, configured upstream subpaths, and license paths must remain relative to and contained by their declared roots; absolute paths, `..` traversal, and symlink escapes are rejected. Commit moves existing targets into a temporary rollback directory, installs every staged canonical target, and only then removes legacy aliases.
 
-Fallback is limited to upstream source acquisition and validation failures: missing Git, clone failure or timeout, an unavailable revision/subpath, invalid Skill frontmatter/structure, or a source tree that contains symlinks. Stable manifest, containment, checksum, license, or snapshot validation failures are fatal whenever stable is required. Target-side staging, permission, disk, commit, and rollback failures never trigger stable fallback. A local commit failure attempts to restore all prior targets; if any restore step fails, the transaction reports and retains the rollback directory path instead of deleting the only remaining backup copy.
+No automatic source fallback occurs. Stable manifest, containment, checksum, license, or snapshot validation failures are fatal for `auto` and `stable`; upstream acquisition or validation failures are fatal for `upstream`. Target-side staging, permission, disk, commit, and rollback failures are always fatal. A local commit failure attempts to restore all prior targets; if any restore step fails, the transaction reports and retains the rollback directory path instead of deleting the only remaining backup copy.
 
-The vendored fallback lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them.
+The vendored stable set lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them.
 
 Promote a reviewed repository revision explicitly:
 

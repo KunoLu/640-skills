@@ -133,6 +133,17 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(local_runtime, entries)
 
+        for local_artifact in (
+            "node_modules/",
+            "dist/",
+            "build/",
+            ".next/",
+            "out/",
+            ".env.local",
+            ".env.*.local",
+        ):
+            self.assertIn(local_artifact, entries)
+
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
@@ -179,6 +190,13 @@ class WorkflowContractTests(unittest.TestCase):
                 project / ".claude" / "projects" / "local-state.json",
                 project / ".claude" / "worktrees" / "local-checkout" / "HEAD",
                 project / ".claude" / "settings.local.json",
+                project / "node_modules" / "package.json",
+                project / "dist" / "index.html",
+                project / "build" / "asset.js",
+                project / ".next" / "build-manifest.json",
+                project / "out" / "index.html",
+                project / ".env.local",
+                project / ".env.development.local",
             )
             for ignored_file in ignored_files:
                 ignored_file.parent.mkdir(parents=True, exist_ok=True)
@@ -943,6 +961,52 @@ class WorkflowContractTests(unittest.TestCase):
                     "prompts/automations/sbtd-workflow-tools-version-check.md",
                     document_path.read_text(encoding="utf-8"),
                 )
+
+    def test_external_skill_policy_is_stable_first_across_user_surfaces(
+        self,
+    ) -> None:
+        documents = {
+            path: (ROOT / path).read_text(encoding="utf-8")
+            for path in (
+                "AGENTS.md",
+                "ENTRYPOINT.md",
+                "README.md",
+                "README.html",
+                "install.sh",
+                "install.ps1",
+                "prompts/automations/sbtd-workflow-tools-version-check.md",
+                "sbtd-workflow-onboard/SKILL.md",
+                "sbtd-workflow-onboard/REFERENCE.md",
+                "sbtd-workflow-onboard/scripts/onboard.py",
+                "sbtd-workflow-onboard/templates/agents/AGENTS.global.md",
+            )
+        }
+        combined = "\n".join(documents.values())
+
+        for obsolete in (
+            "validated upstream -> vendored stable fallback",
+            "auto prefers validated upstream",
+            "default `auto` policy validates every selected Skill from one upstream",
+            "`auto` (default): clone and validate",
+            "默认先验证上游",
+            "默认 `auto` 先整组验证上游",
+            "External Skill 默认使用 `--source auto`：按上游仓库整组 clone",
+        ):
+            with self.subTest(obsolete=obsolete):
+                self.assertNotIn(obsolete, combined)
+
+        self.assertIn(
+            "auto and stable use the vendored stable set",
+            documents["sbtd-workflow-onboard/scripts/onboard.py"],
+        )
+        self.assertIn(
+            "auto (vendored stable; upstream is explicit opt-in)",
+            documents["install.sh"],
+        )
+        self.assertIn(
+            "auto (vendored stable; upstream is explicit opt-in)",
+            documents["install.ps1"],
+        )
 
     def test_update_archive_names_use_positive_numeric_sequences(self) -> None:
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")

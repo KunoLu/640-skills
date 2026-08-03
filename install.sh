@@ -1231,7 +1231,7 @@ show_plan_and_execute() {
   printf 'Project roots: %s\n' "${PROJECTS_ROOT:-<none>}"
   printf 'Project AGENTS: %s\n' "$([[ "$SKIP_PROJECT_AGENTS" -eq 1 ]] && printf 'skip' || printf 'install')"
   printf 'Bundled and external Skills: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 ]] && printf 'not touched' || printf 'required global')"
-  printf 'External Skill source: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 ]] && printf 'not touched' || printf 'auto (validated upstream -> vendored stable fallback)')"
+  printf 'External Skill source: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 ]] && printf 'not touched' || printf 'auto (vendored stable; upstream is explicit opt-in)')"
   printf 'MCP: %s\n' "$([[ "$PROJECTS_ONLY" -eq 1 || "$NO_MCP" -eq 1 ]] && printf 'skip' || printf 'configure interactively')"
 
   if [[ "$YES" -eq 0 ]]; then

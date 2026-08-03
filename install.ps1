@@ -948,7 +948,7 @@ function Show-PlanAndExecute {
   Write-Host ("Project roots: " + ($(if ($ProjectsRoot) { $ProjectsRoot } else { "<none>" })))
   Write-Host ("Project AGENTS: " + ($(if ($SkipProjectAgents) { "skip" } else { "install" })))
   Write-Host ("Bundled and external Skills: " + ($(if ($script:ProjectsOnly) { "not touched" } else { "required global" })))
-  Write-Host ("External Skill source: " + ($(if ($script:ProjectsOnly) { "not touched" } else { "auto (validated upstream -> vendored stable fallback)" })))
+  Write-Host ("External Skill source: " + ($(if ($script:ProjectsOnly) { "not touched" } else { "auto (vendored stable; upstream is explicit opt-in)" })))
   Write-Host ("MCP: " + ($(if ($script:ProjectsOnly -or $NoMcp) { "skip" } else { "configure interactively" })))
 
   if (-not $Yes) {

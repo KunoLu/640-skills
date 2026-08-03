@@ -69,7 +69,7 @@
 13. 运行验证：
   - `git status --short`
   - 检查 `ENTRYPOINT.md`、`UPDATE.md`、`AGENTS.md`、`CHANGELOG.md`、`README.md`、`README.html`、`install.sh`、`install.ps1`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/project/.gitignore`、`sbtd-workflow-onboard/templates/skills/**/SKILL.md`、`tests/**` 的结构是否可读。
-  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。同步核对 `AGENTS.md` 的“本地同步规则”表：仓库管理且要求全局同步的 bundled Skill 必须具有正确的 source / target 映射，包含 `web-ui-autotest-generator`，同时保持 `AGENTS.project.md` 不在普通 sync 范围内。
+  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。验证 External Skill 默认 `auto` 与显式 `stable` 均只使用受管 stable set 且不访问网络，只有显式 `upstream` 才直接获取当前上游并在失败时直接报错。同步核对 `AGENTS.md` 的“本地同步规则”表：仓库管理且要求全局同步的 bundled Skill 必须具有正确的 source / target 映射，包含 `web-ui-autotest-generator`，同时保持 `AGENTS.project.md` 不在普通 sync 范围内。
   - 验证能从 `ENTRYPOINT.md` 正确解析受监控工具表。
   - 验证 `UPDATE.md` 使用中文，且各工具区间起点等于 `ENTRYPOINT.md` 中该工具当前版本。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。

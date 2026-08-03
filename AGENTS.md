@@ -130,7 +130,7 @@
 5. 不修改 `ENTRYPOINT.md` 版本号。
 6. 不归档 `UPDATE.md`。
 
-mattpocock/skills 默认按官方文件原样使用。本仓库允许在 `sbtd-workflow-onboard/assets/external-skills/stable/` 保存带精确上游 commit、checksum 和许可证的原样 stable 镜像，供上游安装不兼容时回退；该镜像不是 fork，不得手工改写，只能通过 stable promotion 流程整组更新。除该受管 stable 镜像外，不要在本仓库内另行安装、fork 或改写这些官方 Skill。
+mattpocock/skills 默认从 `sbtd-workflow-onboard/assets/external-skills/stable/` 中带精确上游 commit、checksum 和许可证的原样 stable 镜像安装；只有用户明确选择 `--source upstream` 做上游评估或升级验证时才直接获取上游。该镜像不是 fork，不得手工改写，只能通过 stable promotion 流程整组更新。除该受管 stable 镜像外，不要在本仓库内另行安装、fork 或改写这些官方 Skill。
 
 ## 版本检查自动化
 

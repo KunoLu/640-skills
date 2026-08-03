@@ -6,6 +6,15 @@
 .DS_Store
 Thumbs.db
 
+# 构建和依赖目录
+node_modules/
+dist/
+build/
+.next/
+out/
+.env.local
+.env.*.local
+
 # Python 相关
 __pycache__/
 *.pyc
