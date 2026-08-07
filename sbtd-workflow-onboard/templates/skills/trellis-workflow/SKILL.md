@@ -209,6 +209,7 @@ Do not write the following directly into `.trellis/spec`:
 ## Trellis Updates and Migrations
 
 When upgrading Trellis, switching templates, or discovering missing generated files, preferentially run `trellis update`, then reread `.trellis/workflow.md`, the relevant `.trellis/spec`, and the current task artifacts.
+- When `trellis update` changes SessionStart, PreToolUse, or other hook configuration, restart the affected Agent host or IDE before testing the refreshed hook behavior; an already-running process is not evidence that the new hook configuration loaded.
 
 - Run `trellis update --migrate` if the upstream migration manifest recommends it, the project contains the misspelled `trellis-spec-bootstarp/` skill directory, or a Pi project has legacy `.pi/skills/`; let Trellis perform the cross-platform directory rename rather than moving or deleting these directories manually.
 - `trellis update` may install new bundled skills, platform templates, or `.trellis/agents/{check,implement}.md` channel runtime files; these are generated Trellis workflow assets, not channel runtime logs.
