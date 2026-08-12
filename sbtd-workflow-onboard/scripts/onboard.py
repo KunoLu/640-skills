@@ -354,13 +354,14 @@ MATTPOCOCK_CANONICAL_SKILLS = (
     "domain-modeling",
     "codebase-design",
     "handoff",
-    "writing-great-skills",
+    "writing-for-agents",
     "to-spec",
     "to-tickets",
 )
 MATTPOCOCK_LEGACY_RENAMES = {
     "diagnose": "diagnosing-bugs",
-    "write-a-skill": "writing-great-skills",
+    "write-a-skill": "writing-for-agents",
+    "writing-great-skills": "writing-for-agents",
     "to-prd": "to-spec",
     "to-issues": "to-tickets",
 }
@@ -2169,6 +2170,23 @@ def legacy_external_skill_names_for(canonical_name: str) -> list[str]:
         if replacement_name == canonical_name
     ]
 
+def filesystem_entry_exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+def legacy_external_skill_identity_error(target: Path, legacy_name: str) -> str | None:
+    if not target.is_dir() or target.is_symlink():
+        return f"legacy target is not a regular Skill directory: {target}"
+    skill_md = target / "SKILL.md"
+    if not skill_md.is_file() or skill_md.is_symlink():
+        return f"legacy target has no regular SKILL.md: {target}"
+    actual_name = read_skill_frontmatter_name(skill_md)
+    if actual_name != legacy_name:
+        return (
+            f"legacy Skill identity conflict: expected {legacy_name}, "
+            f"found {actual_name or '<missing>'}"
+        )
+    return None
+
 
 def external_skill_dependency_closure(skill_names: list[str]) -> list[str]:
     selected: list[str] = []
@@ -2399,6 +2417,50 @@ def external_tree_sha256(root: Path) -> str:
         digest.update(len(content).to_bytes(8, "big"))
         digest.update(content)
     return digest.hexdigest()
+
+def prune_unmanaged_stable_skill_directories(
+    manifest: dict[str, object], stable_root: Path
+) -> list[str]:
+    skills = manifest.get("skills")
+    if not isinstance(skills, dict):
+        raise RuntimeError("stable External Skills manifest skills must be an object")
+
+    unresolved_skills_root = stable_root / "skills"
+    if (
+        not unresolved_skills_root.is_dir()
+        or unresolved_skills_root.is_symlink()
+    ):
+        raise RuntimeError("stable External Skills skills directory is invalid")
+    skills_root = unresolved_skills_root.resolve()
+
+    expected: set[str] = set()
+    for skill_name, entry in skills.items():
+        if not isinstance(skill_name, str) or not isinstance(entry, dict):
+            raise RuntimeError("stable External Skills manifest contains invalid skill metadata")
+        target = resolve_contained_relative_path(
+            stable_root,
+            entry.get("stablePath"),
+            f"stablePath for {skill_name}",
+        ).resolve()
+        try:
+            relative = target.relative_to(skills_root)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"stablePath for {skill_name} must be under skills/"
+            ) from exc
+        if len(relative.parts) != 1:
+            raise RuntimeError(
+                f"stablePath for {skill_name} must be a direct child of skills/"
+            )
+        expected.add(relative.name)
+
+    pruned: list[str] = []
+    for candidate in unresolved_skills_root.iterdir():
+        if candidate.name in expected:
+            continue
+        remove_existing_target(candidate)
+        pruned.append(candidate.name)
+    return sorted(pruned)
 
 
 def validate_external_skill_source(skill_name: str, source: Path) -> None:
@@ -2736,14 +2798,43 @@ def commit_external_skill_transaction(
     target_dir: Path,
     staging: Path,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
-    rollback = Path(tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir))
     legacy_names: list[str] = []
     for name in selected:
         for legacy_name in legacy_external_skill_names_for(name):
             if legacy_name not in legacy_names:
                 legacy_names.append(legacy_name)
+    identity_conflicts = [
+        {
+            "name": legacy_name,
+            "replacement": canonical_external_skill_name(legacy_name),
+            "target": str(target_dir / legacy_name),
+            "status": "failed",
+            "phase": "preflight-legacy-identity",
+            "error": identity_error,
+        }
+        for legacy_name in legacy_names
+        if filesystem_entry_exists(target_dir / legacy_name)
+        if (
+            identity_error := legacy_external_skill_identity_error(
+                target_dir / legacy_name, legacy_name
+            )
+        )
+        is not None
+    ]
+    if identity_conflicts:
+        shutil.rmtree(staging, ignore_errors=True)
+        return identity_conflicts, {
+            "status": "aborted-before-commit",
+            "rolledBack": False,
+            "rollbackErrors": [],
+            "rollbackPath": None,
+        }
 
-    existed = {name: (target_dir / name).exists() for name in selected}
+    rollback = Path(
+        tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir)
+    )
+
+    existed = {name: filesystem_entry_exists(target_dir / name) for name in selected}
     moved: list[tuple[Path, Path]] = []
     committed: list[Path] = []
     results: list[dict[str, object]] = []
@@ -2752,7 +2843,7 @@ def commit_external_skill_transaction(
     try:
         for name in (*selected, *legacy_names):
             target = target_dir / name
-            if not target.exists():
+            if not filesystem_entry_exists(target):
                 continue
             backup = rollback / name
             shutil.move(str(target), str(backup))
@@ -2853,7 +2944,20 @@ def remove_legacy_external_targets(
 
     for legacy_name in legacy_names:
         target = target_dir / legacy_name
-        if not target.exists():
+        if not filesystem_entry_exists(target):
+            continue
+        identity_error = legacy_external_skill_identity_error(target, legacy_name)
+        if identity_error is not None:
+            results.append(
+                {
+                    "name": legacy_name,
+                    "replacement": canonical_external_skill_name(legacy_name),
+                    "target": str(target),
+                    "status": "failed",
+                    "phase": "preflight-legacy-identity",
+                    "error": identity_error,
+                }
+            )
             continue
         try:
             remove_existing_target(target)
@@ -2901,7 +3005,7 @@ def detected_mattpocock_skill_names(skills_root: Path) -> list[str]:
     detected: list[str] = []
     for name in candidates:
         target = skills_root / name
-        if target.exists():
+        if filesystem_entry_exists(target):
             detected.append(name)
     return detected
 
@@ -2971,7 +3075,11 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
     remove_legacy = plan.get("removeLegacy")
     if not isinstance(remove_legacy, list):
         raise RuntimeError("external migration removeLegacy must be a list")
-    legacy = [str(name) for name in remove_legacy if (target_dir / str(name)).exists()]
+    legacy = [
+        str(name)
+        for name in remove_legacy
+        if filesystem_entry_exists(target_dir / str(name))
+    ]
     if not legacy:
         return [
             {
@@ -2986,6 +3094,19 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
 
     results: list[dict[str, object]] = []
     for name in legacy:
+        identity_error = legacy_external_skill_identity_error(target_dir / name, name)
+        if identity_error is not None:
+            results.append(
+                {
+                    "name": name,
+                    "replacement": canonical_external_skill_name(name),
+                    "target": str(target_dir / name),
+                    "status": "failed",
+                    "phase": "preflight-legacy-identity",
+                    "error": identity_error,
+                }
+            )
+            continue
         if name in MATTPOCOCK_LEGACY_RENAMES:
             replacement = canonical_external_skill_name(name)
             if not external_skill_target_is_valid(target_dir, replacement):
@@ -3017,6 +3138,150 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
     return results
 
 
+def execute_external_skill_install(
+    args: argparse.Namespace, selected: list[str], target_dir: Path
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    try:
+        with tempfile.TemporaryDirectory(
+            prefix="sbtd-onboard-external-sources-"
+        ) as tmp:
+            resolved = resolve_external_install_sources(
+                selected, args.source, Path(tmp)
+            )
+            staging = stage_external_skills(selected, resolved, target_dir)
+            return commit_external_skill_transaction(
+                selected, resolved, target_dir, staging
+            )
+    except Exception as exc:  # noqa: BLE001 - no target is changed before the transaction begins.
+        return (
+            [
+                {
+                    "name": name,
+                    "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
+                    "target": str(target_dir / name),
+                    "status": "failed",
+                    "phase": "prepare",
+                    "error": str(exc),
+                }
+                for name in selected
+            ],
+            {
+                "status": "aborted-before-commit",
+                "rolledBack": False,
+                "rollbackErrors": [],
+                "rollbackPath": None,
+            },
+        )
+
+
+def external_migration_identity_failures(
+    plan: dict[str, object]
+) -> list[dict[str, object]]:
+    target_dir = Path(str(plan["targetDir"]))
+    remove_legacy = plan.get("removeLegacy")
+    if not isinstance(remove_legacy, list):
+        raise TypeError("external migration removeLegacy must be a list")
+    return [
+        {
+            "name": name,
+            "replacement": canonical_external_skill_name(name),
+            "target": str(target_dir / name),
+            "status": "failed",
+            "phase": "preflight-legacy-identity",
+            "error": identity_error,
+        }
+        for name in (str(name) for name in remove_legacy)
+        if filesystem_entry_exists(target_dir / name)
+        if (
+            identity_error := legacy_external_skill_identity_error(
+                target_dir / name, name
+            )
+        )
+        is not None
+    ]
+
+
+def migrate_external_skills(args: argparse.Namespace) -> int:
+    plan = build_external_migration_plan(args)
+    payload: dict[str, object] = {
+        "mode": "migrate-external-skills",
+        "scope": args.scope,
+        "requestedSource": args.source,
+        "targetDir": plan["targetDir"],
+        "plan": plan,
+        "installationResults": [],
+        "transaction": {
+            "status": "not-required",
+            "rolledBack": False,
+            "rollbackErrors": [],
+            "rollbackPath": None,
+        },
+        "results": [],
+    }
+    if plan["status"] == "skipped":
+        payload["status"] = "skipped"
+        payload["results"] = [
+            {"status": "skipped", "reason": plan.get("reason")}
+        ]
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print_external_migration_report(cast(list[dict[str, object]], payload["results"]))
+        return 0
+
+    identity_failures = external_migration_identity_failures(plan)
+    if identity_failures:
+        payload["status"] = "failed"
+        payload["results"] = identity_failures
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print_external_migration_report(identity_failures)
+        return 1
+
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print_external_migration_report(
+                [{"status": "needs-confirmation", "reason": "rerun with --yes"}]
+            )
+        return 2
+
+    required_canonical = plan["requiredCanonical"]
+    if not isinstance(required_canonical, list):
+        raise TypeError("external migration requiredCanonical must be a list")
+    selected = [str(name) for name in required_canonical]
+    installation_results: list[dict[str, object]] = []
+    if selected:
+        target_dir = Path(str(plan["targetDir"]))
+        installation_results, transaction = execute_external_skill_install(
+            args, selected, target_dir
+        )
+        payload["installationResults"] = installation_results
+        payload["transaction"] = transaction
+        if transaction["status"] != "committed":
+            payload["status"] = "failed"
+            payload["results"] = installation_results
+            if args.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            else:
+                print_external_migration_report(installation_results)
+            return 1
+
+    migration_results = run_external_migration(build_external_migration_plan(args))
+    results = [*installation_results, *migration_results]
+    payload["results"] = results
+    failed = [item for item in results if item["status"] == "failed"]
+    payload["status"] = "failed" if failed else "migrated"
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print_external_migration_report(results)
+    return 1 if failed else 0
+
+
 def install_external_skills(args: argparse.Namespace) -> int:
     selected = parse_skill_names(args)
     target_dir = resolve_install_skills_dir(args)
@@ -3039,35 +3304,7 @@ def install_external_skills(args: argparse.Namespace) -> int:
         "rollbackErrors": [],
         "rollbackPath": None,
     }
-    try:
-        with tempfile.TemporaryDirectory(
-            prefix="sbtd-onboard-external-sources-"
-        ) as tmp:
-            resolved = resolve_external_install_sources(
-                selected, args.source, Path(tmp)
-            )
-            staging = stage_external_skills(selected, resolved, target_dir)
-            results, transaction = commit_external_skill_transaction(
-                selected, resolved, target_dir, staging
-            )
-    except Exception as exc:  # noqa: BLE001 - no target is changed before the transaction begins.
-        results = [
-            {
-                "name": name,
-                "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
-                "target": str(target_dir / name),
-                "status": "failed",
-                "phase": "prepare",
-                "error": str(exc),
-            }
-            for name in selected
-        ]
-        transaction = {
-            "status": "aborted-before-commit",
-            "rolledBack": False,
-            "rollbackErrors": [],
-            "rollbackPath": None,
-        }
+    results, transaction = execute_external_skill_install(args, selected, target_dir)
 
     payload = {
         "mode": "install-external-skills",
@@ -3203,6 +3440,10 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
                 )
                 validate_external_skill_source(name, destination)
                 entry["treeSha256"] = external_tree_sha256(destination)
+
+            payload["prunedStableSkills"] = prune_unmanaged_stable_skill_directories(
+                candidate_manifest, candidate_root
+            )
 
             license_files = repository.get("licenseFiles")
             if not isinstance(license_files, list):
@@ -4954,6 +5195,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return install_playwright_cli(args)
     if mode == "install-external-skills":
         return install_external_skills(args)
+    if mode == "migrate-external-skills":
+        return migrate_external_skills(args)
     if mode == "promote-external-skills-stable":
         return promote_external_skills_stable(args)
 
@@ -5238,6 +5481,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     install.add_argument(
         "--json", action="store_true", help="Print machine-readable plan and results."
+    )
+
+    migrate = subparsers.add_parser("migrate-external-skills")
+    migrate.add_argument(
+        "--scope",
+        choices=("global",),
+        default="global",
+        help="Migrate legacy external Skills in the global skills directory.",
+    )
+    migrate.add_argument(
+        "--source",
+        choices=("auto", "upstream", "stable"),
+        default="auto",
+        help=(
+            "Canonical replacement source: auto and stable use the vendored stable "
+            "set; upstream is an explicit opt-in with no fallback."
+        ),
+    )
+    migrate.add_argument(
+        "--global-skills-dir", help="Override global skills directory."
+    )
+    migrate.add_argument(
+        "--yes", action="store_true", help="Allow external Skill migration."
+    )
+    migrate.add_argument(
+        "--json", action="store_true", help="Print machine-readable migration results."
     )
 
     promote = subparsers.add_parser("promote-external-skills-stable")

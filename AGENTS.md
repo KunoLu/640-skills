@@ -107,8 +107,8 @@
 2. 读取源文件 / 目录，确认路径正确。
 3. 文件目标按文件复制；Skill 目录目标必须复制整个目录，包括 `SKILL.md`、`references/`、`scripts/`、`assets/` 等子内容。
 4. `sbtd-workflow-onboard/` 成功复制并校验后，只有旧路径 `/Users/lusonglin/.agent/skills/kuno-workflow-onboard-skills/` 是目录，且其 `SKILL.md` frontmatter 的 `name` 仍为 `kuno-workflow-onboard-skills` 时才删除；同名文件、无效 / 不相关目录或身份不匹配必须停止 rename migration、保留原内容并报告冲突。旧目录只作为迁移输入，不保留 alias 或兼容副本。
-5. 同步完成后，在本机实际使用的 external Skill 根目录 `/Users/lusonglin/.agent/skills` 上执行 mattpocock legacy migration：运行 `sbtd-workflow-onboard/scripts/onboard.py install-external-skills --skills to-prd,to-issues --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes`，让旧 `to-prd` / `to-issues` 目录被删除，并安装 canonical `to-spec` / `to-tickets`。不要默认清理或安装 `/Users/lusonglin/.codex/skills/` 下的同名目录，除非用户明确要求。
-6. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致；rename migration 使用旧 Onboard 目录不存在且 `sbtd-workflow-onboard/SKILL.md` 存在作为成功校验，或使用旧路径未变且冲突已报告作为阻断校验；external legacy migration 使用 `test ! -e` 确认旧目录不存在，并检查 `to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在。
+5. 同步完成后，在本机实际使用的 external Skill 根目录 `/Users/lusonglin/.agent/skills` 上执行 mattpocock legacy migration：运行 `sbtd-workflow-onboard/scripts/onboard.py migrate-external-skills --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes`，只处理身份校验通过的受管旧目录；`diagnose`、`write-a-skill`、`writing-great-skills`、`to-prd`、`to-issues` 和已删除的 `zoom-out` 会被移除，前五者会先安装并提交 `diagnosing-bugs`、`writing-for-agents`、`to-spec`、`to-tickets`。
+6. 文件使用 `cmp -s` 或等价方式确认一致；目录使用 `diff -qr`、递归 checksum 或等价方式确认源目录与目标目录一致；rename migration 使用旧 Onboard 目录不存在且 `sbtd-workflow-onboard/SKILL.md` 存在作为成功校验，或使用旧路径未变且冲突已报告作为阻断校验；external legacy migration 使用 `test ! -e` 确认每个受管旧目录不存在，并检查 `diagnosing-bugs/SKILL.md`、`writing-for-agents/SKILL.md`、`to-spec/SKILL.md`、`to-tickets/SKILL.md` 存在。
 7. 比较 `prompts/automations/sbtd-workflow-tools-version-check.md` 与刚定位的 live automation prompt 完整内容；仅在存在差异时同步仓库版本，保留既有 enabled、schedule、timezone、workspace mode 和 workspace path，并在同步后复验一致。
 8. 在最终输出中说明已同步的文件、Onboard rename migration、external legacy migration、live automation prompt 的比较 / 同步状态和全部校验结果。
 
@@ -125,7 +125,7 @@
 
 1. 执行 Orca automation preflight。
 2. 执行上面的本地同步流程。
-3. 在本机 `/Users/lusonglin/.agent/skills/` 下执行 legacy migration，将 `to-prd` / `to-issues` 替换为 `to-spec` / `to-tickets`；该步骤使用 synced onboard Skill 的 `install-external-skills` 命令，并明确传入 `--global-skills-dir /Users/lusonglin/.agent/skills`。
+3. 在本机 `/Users/lusonglin/.agent/skills/` 下执行第 5 项的完整 mattpocock legacy migration：使用 synced onboard Skill 的 `migrate-external-skills --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes`，而不是只处理 `to-prd` / `to-issues` 的 `install-external-skills` 调用。
 4. 比较版本化 prompt 与 Orca `SBTD Workflow Tools Version Check` 的完整内容；仅在存在差异时同步仓库版本，验证完整内容和调度元数据，并在最终输出中报告“一致无需写入”或同步成功 / 失败。
 5. 不修改 `ENTRYPOINT.md` 版本号。
 6. 不归档 `UPDATE.md`。

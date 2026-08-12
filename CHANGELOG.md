@@ -8,6 +8,16 @@
 
 - 对齐 Trellis stable 更新后的 hook 生效边界：升级并运行 `trellis update` 后，如更新涉及 SessionStart、PreToolUse 或其他 hook 配置，现要求先重启对应 Agent host / IDE，再验证新会话身份或 hook 行为，避免将既有进程的旧配置误判为更新已生效。
 
+### 修复
+
+- 将 mattpocock/skills stable 镜像提升到 `v1.2.3`，使 `diagnosing-bugs` 的命令、输出和捕获产物先脱敏，并采用跨 Agent harness 的 subagent 表述。
+- 修复 `writing-great-skills` 上游删除后的 reset 迁移：其自身及更早的 `write-a-skill` 目录现在都会在 `writing-for-agents` 完整校验并提交后删除；迁移失败保持 fail-closed 和 rollback 语义。
+
+### 变更
+
+- `grilling` 改为 design tree / frontier 的分轮澄清；每轮只提出前置条件已满足的问题，环境事实可并行调查，用户决策仍需等待用户回答。
+- 新增 `migrate-external-skills` 全局命令：先对所有受管 mattpocock legacy 目录做 frontmatter identity preflight，再安装 canonical replacement，并迁移或删除 `diagnose`、`write-a-skill`、`writing-great-skills`、`to-prd`、`to-issues` 和 `zoom-out`。
+
 ## v1.0.6（2026-08-03）
 
 ### 修复

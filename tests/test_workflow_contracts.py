@@ -682,7 +682,7 @@ class WorkflowContractTests(unittest.TestCase):
                 "skill:domain-modeling",
                 "skill:codebase-design",
                 "skill:handoff",
-                "skill:writing-great-skills",
+                "skill:writing-for-agents",
                 "skill:to-spec",
                 "skill:to-tickets",
                 "skill:ui-ux-pro-max",

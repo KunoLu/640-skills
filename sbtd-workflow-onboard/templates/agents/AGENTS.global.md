@@ -285,7 +285,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 
 在准备开始开发需求、进入 PRD / Trellis task、需求最终确认、PRD / design / implement review gate、或询问是否开始实现前，必须对 `grill-with-docs` 的使用状态做用户可见说明：
 
-- 如果已完整执行 `grill-with-docs` 的逐问题澄清流程，明确说明“已调用 `grill-with-docs`”，并简述已解决的关键产品 / 领域边界。
+- 如果已完整执行 `grill-with-docs` 的按 design tree frontier 分轮澄清流程，明确说明“已调用 `grill-with-docs`”，并简述已解决的关键产品 / 领域边界。
 - 如果只读取了 `grill-with-docs` Skill 文件、只借用了其中 evidence-first 原则，或仅通过代码 / 文档自行判断，不得声称已调用；必须明确说明“未完整调用 `grill-with-docs`”。
 - 未完整调用时，必须给出具体原因，例如：需求不涉及项目领域模型或长期术语；问题可完全由现有文档 / 代码回答；只是 Trellis 启动实现的 review gate；Skill 不可用 / 不可读取；用户明确要求跳过。
 - 只有调用与跳过之间存在会实质改变需求、领域边界或实现决策的权衡时，才询问用户是否先完整调用；如果现有项目事实已消除歧义，说明未调用原因后直接推进，不得仅为状态透明度制造确认门。
@@ -295,7 +295,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - 无论是 Agent 自发调用还是用户主动调用，每次完整执行 `grill-with-docs` 结束后，必须立即调用 `book-ddd-distilled-modeling` 做独立的二次边界审核；调用来源和 Agent 是否认为需求已足够清晰都不构成跳过理由。
 - `grill-with-docs` 内嵌的 external `domain-modeling` dependency 已运行也不得替代这次后置审核。前者负责访谈中的主动建模和长期术语沉淀，后者必须重新读取本次澄清结果与项目事实，检查统一语言、bounded context、业务不变量、子域归属、术语混用和未决冲突。
 - 二次审核必须向用户输出独立的 `DDD Boundary Review`，状态只能是 `confirmed` / `needs-clarification` / `blocked`，并列出统一语言、bounded context、业务不变量、子域判断、对 `grill-with-docs` 结果的修正以及未决问题；不得只说“已审核”或把结果隐含在需求摘要中。
-- 状态为 `needs-clarification` 时，必须先回到逐问题澄清，解决发现后重新运行 `book-ddd-distilled-modeling`；Skill 不可用、不可读取或证据不足时输出 `blocked` 和原因。未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。
+- 状态为 `needs-clarification` 时，必须回到下一轮前置条件已满足的澄清 frontier，解决发现后重新运行 `book-ddd-distilled-modeling`；Skill 不可用、不可读取或证据不足时输出 `blocked` 和原因。未达到 `confirmed` 不得进入需求确认、PRD、design、Trellis task 或实现。
 - 如果没有调用 `grill-with-docs`，仍按任务自身的业务术语、领域规则和模型歧义判断是否独立调用 `book-ddd-distilled-modeling`；本后置门禁不把所有普通任务强制改为 DDD 流程。
 
 ### book-derived 开发阶段强制门禁
@@ -329,11 +329,11 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `tdd` | 测试先行、回归测试、复杂逻辑验证、高风险修改 | 需要用测试固化行为再实现时；依赖 `codebase-design` |
 | `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 用户希望先打磨计划、决策或设计时；依赖 `grilling` |
 | `grill-with-docs` | 结合项目文档澄清需求、术语、领域模型和 ADR / CONTEXT 沉淀 | 项目内需求或方案进入 PRD / Trellis 前；依赖 `grilling` 和 `domain-modeling` |
-| `grilling` | 可复用逐问题访谈循环 | 作为 `grill-me` / `grill-with-docs` 的底层依赖 |
+| `grilling` | 可复用的 design tree / frontier 分轮访谈 | 作为 `grill-me` / `grill-with-docs` 的底层依赖；每轮只问前置条件已满足的问题 |
 | `domain-modeling` | 项目语言、glossary、CONTEXT.md / ADR 建模辅助 | `grill-with-docs` 需要维护项目语言或长期上下文时 |
 | `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | `tdd`、陌生模块理解或结构性修改前 |
 | `handoff` | 长会话交接、上下文压缩、跨会话继续任务 | `/clear`、新会话、Trellis 暂停或多会话交接前 |
-| `writing-great-skills` | 创建或维护自定义 Skill 的质量规则 | 用户要求新增、改造或沉淀 Skill 时 |
+| `writing-for-agents` | 创建或维护 Agent 消费的 Skill、AGENTS、CLAUDE 或指针文档 | 用户要求新增、改造或沉淀这些文档时 |
 | `to-spec` | 将当前对话和代码库理解整理为 Markdown spec / PRD | 需求需要沉淀为 spec 或 PRD 时 |
 | `to-tickets` | 将 spec、PRD、plan 拆成实现任务 | 需要 Trellis-ready Markdown task、tickets 或 vertical slices 时 |
 | `ui-ux-pro-max` | UI/UX 初稿计划、修改前设计判断和体验质量检查 | 涉及 UI/UX 的需求进入实现或 Trellis 任务设计前 |
@@ -371,7 +371,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
     - 既有 UI 审查：先用 `ui-ux-pro-max` 的优先级清单覆盖可访问性、交互、性能、响应式、排版和颜色；再在 `impeccable` 可用时用 `audit` / `critique` 生成问题 backlog。
     - 实现后收尾：功能完成后，先运行项目验证和浏览器 / 截图检查；如 `impeccable` 可用，用 `polish` 或 `layout`、`typeset`、`colorize`、`adapt`、`clarify`、`animate`、`harden`、`optimize` 等针对性命令做最终质量 pass。
     - 冲突处理：项目 `AGENTS.md`、设计系统、tokens、组件库和已确认品牌规范优先；可访问性、响应式和项目验证不可降级。`impeccable` 的硬性反模板化规则可否决 `ui-ux-pro-max` 的泛化风格建议，除非项目既有品牌规范明确要求该设计语言。
-- **mattpocock/skills** 仅纳入 `diagnosing-bugs`、`tdd`、`grill-me`、`grill-with-docs`、`grilling`、`domain-modeling`、`codebase-design`、`handoff`、`writing-great-skills`、`to-spec`、`to-tickets`。
+- **mattpocock/skills** 仅纳入 `diagnosing-bugs`、`tdd`、`grill-me`、`grill-with-docs`、`grilling`、`domain-modeling`、`codebase-design`、`handoff`、`writing-for-agents`、`to-spec`、`to-tickets`。
 - **mattpocock/skills** 默认从 Onboard 中经过 checksum 和来源校验的 stable 镜像安装，并保持上游内容不变；只有用户明确选择 upstream source 做评估或升级验证时才直接获取上游。除非用户明确要求，不 fork、不改写官方 Skill 文件。
 - **mattpocock/skills** 相关 skill 使用边界说明：
     - `diagnosing-bugs` 用于系统化排障；代码级问题根因不清时结合 GitNexus debugging，修复前有风险时结合 GitNexus impact-analysis，并补充或更新回归测试。
@@ -382,7 +382,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
         - 使用状态必须遵守上文“grill-with-docs 使用状态透明度”；读取 Skill 文件或只按 evidence-first 原则自行判断，不等于完整调用。
         - 每次完整执行结束后都必须遵守“grill-with-docs 后置 DDD 边界审核”，立即调用 bundled `book-ddd-distilled-modeling` 并向用户输出独立审核结果；`grill-with-docs` 内嵌的 external `domain-modeling` dependency 不构成替代。
     - `handoff` 交接内容应包含当前目标、已完成工作、关键决策、文件 / 产物、已尝试命令、开放问题、建议下一步 Skill、不要重复事项和敏感信息脱敏说明。
-    - `writing-great-skills` 创建的新 Skill 默认使用 `SKILL.md` 作为入口，长内容拆到 reference，确定性操作优先脚本化，description 必须写清触发场景。
+    - `writing-for-agents` 用于创建或维护 Agent 消费的文档；Skill 使用 `SKILL.md` 作为入口，按需把 Skill 机制拆到 reference，确定性操作优先脚本化，description 和文档指针必须写清触发分支。环境中的配置、命令和目录是事实源，文档只缓存无法直接查到的约定、理由或陷阱。
     - `zoom-out` 已从 mattpocock/skills 上游移除；陌生模块理解默认通过代码阅读、`codebase-design`、GitNexus exploring / impact-analysis 和按需 `book-refactoring-pass` 完成。
     - `to-spec` 默认输出 Markdown spec / PRD；在 Trellis 项目中，最终 spec / PRD 应写入或更新 `.trellis/tasks/<task>/prd.md`，未确定 task 路径前只保留为对话草稿或用户明确指定的临时文件；不要发布到 GitHub、Linear 或任何 issue tracker，除非用户明确要求。
     - `to-tickets` 中的 ticket 视为通用实现任务；在 Trellis 项目中，vertical slices 应落为 `.trellis/tasks/<task>/...` 下的 parent / child task artifacts，标注 AFK / HITL、依赖顺序、验收标准和测试策略；不要默认在 `docs/` 下维护最终 ticket / task Markdown，也不要自动发布到 issue tracker。

@@ -192,12 +192,12 @@
       "targetRole": "external-skill"
     },
     {
-      "id": "skill:writing-great-skills",
+      "id": "skill:writing-for-agents",
       "kind": "external-skill",
       "source": {
         "repo": "https://github.com/mattpocock/skills.git",
-        "subpath": "skills/productivity/writing-great-skills",
-        "aliases": ["writing-great-skills"]
+        "subpath": "skills/productivity/writing-for-agents",
+        "aliases": ["writing-for-agents"]
       },
       "targetRole": "external-skill"
     },

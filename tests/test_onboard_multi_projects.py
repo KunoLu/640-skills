@@ -540,7 +540,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "domain-modeling",
             "codebase-design",
             "handoff",
-            "writing-great-skills",
+            "writing-for-agents",
             "to-spec",
             "to-tickets",
             "impeccable",

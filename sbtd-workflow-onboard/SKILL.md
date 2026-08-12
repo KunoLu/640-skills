@@ -132,7 +132,7 @@ After the canonical `sbtd-workflow-onboard` target is written and its `SKILL.md`
 All referenced external Skills are also required globally. Install every missing item without a scope or selection prompt:
 
 - `diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`
-- `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`
+- `domain-modeling`, `codebase-design`, `handoff`, `writing-for-agents`
 - `to-spec`, `to-tickets`, `ui-ux-pro-max`, `impeccable`
 - `shadcn`
 
@@ -228,6 +228,14 @@ Choose an explicit source policy when needed:
 python scripts/onboard.py install-external-skills --all --scope global --source upstream --yes
 python scripts/onboard.py install-external-skills --all --scope global --source stable --yes
 ```
+
+Migrate every recognized mattpocock legacy directory in a global Skill root:
+
+```bash
+python scripts/onboard.py migrate-external-skills --scope global --source auto --yes
+```
+
+The migration validates each legacy `SKILL.md` identity before it changes any target, installs required canonical replacements transactionally, and then removes the verified legacy directories.
 
 Promote a reviewed upstream repository revision into a new stable set:
 

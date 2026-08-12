@@ -275,6 +275,271 @@ class ExternalSkillInstallTests(unittest.TestCase):
         )
         self.assertFalse(self.git_log.exists())
 
+    def test_stable_reset_install_replaces_retired_writing_skill(self) -> None:
+        self.write_valid_skill(
+            self.skills_dir / "writing-great-skills",
+            "writing-great-skills",
+            "retired canonical",
+        )
+        self.write_valid_skill(
+            self.skills_dir / "write-a-skill",
+            "write-a-skill",
+            "older legacy alias",
+        )
+
+        completed = self.run_onboard(
+            "install-external-skills",
+            "--all",
+            "--source",
+            "stable",
+            "--global-skills-dir",
+            str(self.skills_dir),
+            "--yes",
+            "--json",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        payload = json.loads(completed.stdout)
+        self.assertTrue(
+            (self.skills_dir / "writing-for-agents" / "SKILL.md").is_file()
+        )
+        self.assertFalse((self.skills_dir / "writing-great-skills").exists())
+        self.assertFalse((self.skills_dir / "write-a-skill").exists())
+        self.assertTrue(
+            any(
+                item.get("name") == "writing-great-skills"
+                and item.get("replacement") == "writing-for-agents"
+                and item.get("status") == "removed"
+                for item in payload["results"]
+            )
+        )
+
+    def test_migrate_external_skills_installs_replacements_for_all_legacy_aliases(
+        self,
+    ) -> None:
+        legacy_names = (
+            "diagnose",
+            "write-a-skill",
+            "writing-great-skills",
+            "to-prd",
+            "to-issues",
+            "zoom-out",
+        )
+        for name in legacy_names:
+            self.write_valid_skill(self.skills_dir / name, name, "legacy")
+
+        completed = self.run_onboard(
+            "migrate-external-skills",
+            "--source",
+            "stable",
+            "--global-skills-dir",
+            str(self.skills_dir),
+            "--yes",
+            "--json",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["status"], "migrated")
+        self.assertEqual(
+            {
+                item["name"]
+                for item in payload["results"]
+                if item.get("status") == "removed"
+            },
+            set(legacy_names),
+        )
+        for name in legacy_names:
+            self.assertFalse((self.skills_dir / name).exists(), name)
+        for name in (
+            "diagnosing-bugs",
+            "writing-for-agents",
+            "to-spec",
+            "to-tickets",
+        ):
+            self.assertTrue((self.skills_dir / name / "SKILL.md").is_file(), name)
+
+    def test_migrate_external_skills_aborts_before_installing_on_identity_conflict(
+        self,
+    ) -> None:
+        self.write_valid_skill(self.skills_dir / "diagnose", "diagnose", "legacy")
+        self.write_valid_skill(
+            self.skills_dir / "to-prd",
+            "user-owned-to-prd",
+            "must not be replaced",
+        )
+
+        completed = self.run_onboard(
+            "migrate-external-skills",
+            "--source",
+            "stable",
+            "--global-skills-dir",
+            str(self.skills_dir),
+            "--yes",
+            "--json",
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["status"], "failed")
+        self.assertTrue((self.skills_dir / "diagnose").exists())
+        self.assertTrue((self.skills_dir / "to-prd").exists())
+        self.assertFalse((self.skills_dir / "diagnosing-bugs").exists())
+        self.assertTrue(
+            any(
+                item.get("name") == "to-prd"
+                and item.get("status") == "failed"
+                and item.get("phase") == "preflight-legacy-identity"
+                for item in payload["results"]
+            )
+        )
+
+    def test_migrate_external_skills_requires_confirmation_before_writes(
+        self,
+    ) -> None:
+        self.write_valid_skill(self.skills_dir / "to-prd", "to-prd", "legacy")
+
+        completed = self.run_onboard(
+            "migrate-external-skills",
+            "--source",
+            "stable",
+            "--global-skills-dir",
+            str(self.skills_dir),
+            "--json",
+        )
+
+        self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["status"], "needs-confirmation")
+        self.assertTrue((self.skills_dir / "to-prd").exists())
+        self.assertFalse((self.skills_dir / "to-spec").exists())
+
+    def test_stable_install_preserves_identity_conflicting_legacy_skill(self) -> None:
+        self.write_valid_skill(
+            self.skills_dir / "writing-great-skills",
+            "user-owned-writing-skill",
+            "must not be deleted",
+        )
+
+        completed = self.run_onboard(
+            "install-external-skills",
+            "--all",
+            "--source",
+            "stable",
+            "--global-skills-dir",
+            str(self.skills_dir),
+            "--yes",
+            "--json",
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        payload = json.loads(completed.stdout)
+        self.assertFalse((self.skills_dir / "writing-for-agents").exists())
+        self.assertTrue((self.skills_dir / "writing-great-skills").exists())
+        self.assertTrue(
+            any(
+                item.get("name") == "writing-great-skills"
+                and item.get("status") == "failed"
+                and item.get("phase") == "preflight-legacy-identity"
+                for item in payload["results"]
+            )
+        )
+        self.assertEqual(list(self.skills_dir.glob(".sbtd-external-staging-*")), [])
+
+    def test_reset_migration_removes_retired_writing_skill_when_replacement_exists(
+        self,
+    ) -> None:
+        onboard = self.load_onboard_module()
+        self.write_valid_skill(
+            self.skills_dir / "writing-for-agents",
+            "writing-for-agents",
+            "replacement",
+        )
+        self.write_valid_skill(
+            self.skills_dir / "writing-great-skills",
+            "writing-great-skills",
+            "retired canonical",
+        )
+        self.write_valid_skill(
+            self.skills_dir / "write-a-skill",
+            "write-a-skill",
+            "older legacy alias",
+        )
+
+        plan = onboard.build_external_migration_plan(
+            argparse.Namespace(global_skills_dir=str(self.skills_dir))
+        )
+        results = onboard.run_external_migration(plan)
+
+        self.assertEqual(plan["status"], "planned")
+        self.assertEqual(plan["requiredCanonical"], ["writing-for-agents"])
+        self.assertFalse((self.skills_dir / "writing-great-skills").exists())
+        self.assertFalse((self.skills_dir / "write-a-skill").exists())
+        self.assertEqual(
+            {
+                item["name"]
+                for item in results
+                if item.get("status") == "removed"
+            },
+            {"writing-great-skills", "write-a-skill"},
+        )
+
+    def test_reset_migration_preserves_identity_conflicting_legacy_skill(
+        self,
+    ) -> None:
+        onboard = self.load_onboard_module()
+        self.write_valid_skill(
+            self.skills_dir / "writing-for-agents",
+            "writing-for-agents",
+            "replacement",
+        )
+        self.write_valid_skill(
+            self.skills_dir / "writing-great-skills",
+            "user-owned-writing-skill",
+            "must not be deleted",
+        )
+
+        plan = onboard.build_external_migration_plan(
+            argparse.Namespace(global_skills_dir=str(self.skills_dir))
+        )
+        results = onboard.run_external_migration(plan)
+
+        self.assertTrue((self.skills_dir / "writing-great-skills").exists())
+        self.assertTrue(
+            any(
+                item.get("name") == "writing-great-skills"
+                and item.get("status") == "failed"
+                and item.get("phase") == "preflight-legacy-identity"
+                for item in results
+            )
+        )
+
+    def test_reset_migration_rejects_dangling_legacy_symlink(self) -> None:
+        onboard = self.load_onboard_module()
+        self.write_valid_skill(
+            self.skills_dir / "writing-for-agents",
+            "writing-for-agents",
+            "replacement",
+        )
+        legacy = self.skills_dir / "writing-great-skills"
+        legacy.symlink_to(self.root / "missing-user-owned-skill")
+
+        plan = onboard.build_external_migration_plan(
+            argparse.Namespace(global_skills_dir=str(self.skills_dir))
+        )
+        results = onboard.run_external_migration(plan)
+
+        self.assertEqual(plan["status"], "planned")
+        self.assertTrue(legacy.is_symlink())
+        self.assertTrue(
+            any(
+                item.get("name") == "writing-great-skills"
+                and item.get("status") == "failed"
+                and item.get("phase") == "preflight-legacy-identity"
+                for item in results
+            )
+        )
+
     def test_rollback_failure_retains_the_only_backup_copy(self) -> None:
         onboard = self.load_onboard_module()
         self.write_valid_skill(
@@ -406,6 +671,65 @@ class ExternalSkillInstallTests(unittest.TestCase):
             json.loads(manifest_path.read_text(encoding="utf-8"))["stableSet"],
             original_stable_set,
         )
+
+    def test_promotion_prunes_retired_stable_skill_directory(self) -> None:
+        onboard = self.load_onboard_module()
+        stable_root = self.root / "stable"
+        shutil.copytree(onboard.EXTERNAL_STABLE_ROOT, stable_root)
+        manifest_path = stable_root / "MANIFEST.json"
+        self.write_valid_skill(
+            stable_root / "skills" / "writing-great-skills",
+            "writing-great-skills",
+            "retired stable content",
+        )
+        fake_repo = self.root / "promotion-repo"
+        shutil.copytree(
+            onboard.EXTERNAL_STABLE_ROOT / "skills" / "ui-ux-pro-max",
+            fake_repo / ".claude" / "skills" / "ui-ux-pro-max",
+        )
+        shutil.copy2(
+            onboard.EXTERNAL_STABLE_ROOT
+            / "licenses"
+            / "ui-ux-pro-max-skill-LICENSE",
+            fake_repo / "LICENSE",
+        )
+
+        def fake_clone(_repo, _revision, destination):
+            shutil.copytree(fake_repo, destination, dirs_exist_ok=True)
+            return True, ""
+
+        args = argparse.Namespace(
+            repository="ui-ux-pro-max-skill",
+            revision="2" * 40,
+            stable_set="fixture",
+            yes=True,
+            json=True,
+        )
+        with (
+            mock.patch.object(onboard, "EXTERNAL_STABLE_ROOT", stable_root),
+            mock.patch.object(onboard, "EXTERNAL_STABLE_MANIFEST", manifest_path),
+            mock.patch.object(
+                onboard, "clone_repo_at_revision", side_effect=fake_clone
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            status = onboard.promote_external_skills_stable(args)
+
+        self.assertEqual(status, 0)
+        self.assertFalse((stable_root / "skills" / "writing-great-skills").exists())
+
+    def test_prune_rejects_symlinked_stable_skills_root(self) -> None:
+        onboard = self.load_onboard_module()
+        stable_root = self.root / "stable"
+        stable_root.mkdir()
+        outside = self.root / "outside"
+        outside.mkdir()
+        (stable_root / "skills").symlink_to(outside, target_is_directory=True)
+
+        with self.assertRaisesRegex(RuntimeError, "skills directory is invalid"):
+            onboard.prune_unmanaged_stable_skill_directories(
+                {"skills": {}}, stable_root
+            )
 
     def test_bundled_migration_reports_legacy_deletion_failure(self) -> None:
         onboard = self.load_onboard_module()

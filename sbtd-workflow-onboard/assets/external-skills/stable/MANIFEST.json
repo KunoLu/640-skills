@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "stableSet": "2026-08-03.1",
-  "promotedAt": "2026-08-03",
+  "stableSet": "2026-08-11.1",
+  "promotedAt": "2026-08-11",
   "repositories": {
     "mattpocock-skills": {
       "url": "https://github.com/mattpocock/skills.git",
-      "revision": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+      "revision": "6acc160e4e0cd062dbbbd7a1b26ae92855edf07e",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -57,13 +57,13 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/diagnosing-bugs",
       "stablePath": "skills/diagnosing-bugs",
-      "treeSha256": "224657becc36cee23345dd919d3cfb9e9c9372c0149cb51ca4cbbe21249eda7d"
+      "treeSha256": "dfeef9133561962439463cfdc61ac90e092a10016f69f42d20a589112eb2c9df"
     },
     "tdd": {
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/tdd",
       "stablePath": "skills/tdd",
-      "treeSha256": "38a929d813ead141012377ffc7c95cf7de31462eae973c8c8b81503242cea0c2"
+      "treeSha256": "f7762d76e11000f502a707b08f3ef292cd13c5e752c2d3bb38a66b69ce9c82f2"
     },
     "grill-me": {
       "repository": "mattpocock-skills",
@@ -81,7 +81,7 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/productivity/grilling",
       "stablePath": "skills/grilling",
-      "treeSha256": "1649e3036843d33d6ca0f9aab79269c456e4ae13e14754422c60920eb3cdc0ac"
+      "treeSha256": "0e2a85f20a5f721ab35b9ed5628db478d70634db639e7ab9d5a990dd47d121d5"
     },
     "domain-modeling": {
       "repository": "mattpocock-skills",
@@ -93,7 +93,7 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/codebase-design",
       "stablePath": "skills/codebase-design",
-      "treeSha256": "d0c958f35d77a019f4d63466c218cf73f98fc7f26844bdea53668d7a12f05585"
+      "treeSha256": "6a0038980808e81c1cca62da4fd57b795df8f5f82db971ec291c4b026df19b2b"
     },
     "handoff": {
       "repository": "mattpocock-skills",
@@ -101,17 +101,17 @@
       "stablePath": "skills/handoff",
       "treeSha256": "75b23d67b04e129fb536193e033b1fc8c3caa99f42652077556f051e92f75cfa"
     },
-    "writing-great-skills": {
+    "writing-for-agents": {
       "repository": "mattpocock-skills",
-      "sourceSubpath": "skills/productivity/writing-great-skills",
-      "stablePath": "skills/writing-great-skills",
-      "treeSha256": "2f58131986d6780e5e8cc1254730a4310ae47aa6e2c4028a122aeb3e61a2ef54"
+      "sourceSubpath": "skills/productivity/writing-for-agents",
+      "stablePath": "skills/writing-for-agents",
+      "treeSha256": "c6833cfae282543485ef511867e5798d9cdc9fb2c39a716ee7cb3ff535bedeae"
     },
     "to-spec": {
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/to-spec",
       "stablePath": "skills/to-spec",
-      "treeSha256": "b5c671ceca79e9c5bc5ebaaf9aef3628627de3e14861fad319d59ed507defe38"
+      "treeSha256": "af351b6e88c6af18165deaa55c6f5615333bd06e6004fe512c5c1c3b02550ff7"
     },
     "to-tickets": {
       "repository": "mattpocock-skills",

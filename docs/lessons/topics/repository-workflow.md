@@ -349,3 +349,27 @@
 - 根因：把相近的产品名和包名误当作同一 Trellis 平台标志，且没有在真实 `trellis init` argv seam 上锁定 OMP、Pi 与其他平台的顺序和独立性。
 - 修复：将 `omp` 加入 Trellis allow-list，明确 `omp → --omp` 与 `pi → --pi`，并用记录 fake `trellis` argv 的 `init-projects` 回归测试断言 `--omp --pi --codex`。
 - 预防：平台名跨 Agent CLI、npm 包和下游 CLI 时必须按命名空间分别建模；对相近名称必须查询下游 CLI help，并用 argv 级集成测试同时覆盖各自 flag 和顺序。
+
+## LESSON-20260811-stable-promotion-candidate-prune-safety: Stable Promotion Pruning Must Stay Contained
+
+- 日期：2026-08-11
+- 标签：onboarding, stable-mirror, promotion, symlink, migration, validation
+- 适用场景：修改 external Skill stable promotion、清理上游删除的 Skill 目录或实现 stable prune
+- 严重级别：high
+- 来源：mattpocock/skills `v1.2.3` promotion 删除 `writing-great-skills` 时的安全复核
+- 问题：stable promotion 需要清理已不在 manifest 中的旧 Skill 目录；若直接修改 live mirror，或先对 `stable/skills` 调用 `resolve()` 再检查 symlink，删除可能越过 mirror 边界。
+- 根因：把 candidate tree 的受管清理和 live tree 的直接删除混同，并且忽略 `Path.resolve()` 会隐藏路径本身是 symlink 的事实。
+- 修复：只在 promotion candidate 中计算 manifest 的受管 direct-child Skill 目录并 prune，校验未解析的 `skills/` 是非 symlink 目录后才 resolve；解析后的每个 manifest `stablePath` 必须仍位于该受管根下。通过测试覆盖 retired Skill prune 和 symlink root 拒绝，再原子替换 stable mirror。
+- 预防：任何受管镜像删除都必须先在候选目录完成、验证后 swap；不对 live stable tree 使用直接递归删除。路径安全检查必须在解析前拒绝 symlink，并在解析后重新验证 containment。
+
+## LESSON-20260811-external-skill-legacy-identity: Legacy Skill Deletion Needs Identity Proof
+
+- 日期：2026-08-11
+- 标签：onboarding, skills, migration, safety, data-preservation, validation
+- 适用场景：修改 external Skill rename、legacy cleanup 或 reset migration
+- 严重级别：high
+- 来源：mattpocock/skills `writing-great-skills` → `writing-for-agents` canonical 迁移安全复核
+- 问题：仅按旧目录名识别 predecessor，会把用户在同名目录中维护的不同 Skill 备份并删除；仅以 `Path.exists()` 检测则会忽略 dangling legacy symlink，而 preflight 早退可能留下完整 staging tree。
+- 根因：路径名称被错误视为受管内容的所有权证明，normal install transaction 与 canonical 已存在时的 legacy-only cleanup 都没有校验 `SKILL.md` frontmatter；代码把“可删除 filesystem entry”误建模为“存在且可跟随的路径”，且 cleanup scope 没有覆盖 preflight return。
+- 修复：在所有 predecessor 的 transaction commit、backup 或 delete 前验证其是非 symlink 常规目录、包含非 symlink `SKILL.md`，且 `name` 等于预期 legacy identity；对存在或 symlink 的 entry 都执行该检查，不一致时记录 `preflight-legacy-identity` 失败、清理 staging、保留目标并阻断迁移。
+- 预防：任何迁移删除都必须同时验证路径、文件类型和内部身份；目录名、存在性或 replacement canonical 有效都不能单独授权删除。所有 owned staging 目录必须由覆盖每个 early return 的 cleanup scope 释放；测试必须同时覆盖 matching predecessor 的成功删除、user-owned identity conflict 保留和 dangling symlink 拒绝。

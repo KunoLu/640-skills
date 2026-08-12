@@ -201,7 +201,7 @@ All 14 referenced external Skills are also required globally:
 
 | Skill | Repository |
 |---|---|
-| `diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-great-skills`, `to-spec`, `to-tickets` | `https://github.com/mattpocock/skills.git` |
+| `diagnosing-bugs`, `tdd`, `grill-me`, `grill-with-docs`, `grilling`, `domain-modeling`, `codebase-design`, `handoff`, `writing-for-agents`, `to-spec`, `to-tickets` | `https://github.com/mattpocock/skills.git` |
 | `impeccable` | `https://github.com/pbakaus/impeccable.git` |
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `shadcn` | `https://github.com/shadcn-ui/ui.git`, subpath `skills/shadcn` |
@@ -217,6 +217,16 @@ python scripts/onboard.py install-external-skills --all --scope global --source 
 ```
 
 `--scope project` is rejected. Direct normal `init` and `reset` ensure every external Skill exists globally before template writes; the root installers perform the same guarantee before invoking the final mode.
+
+Migrate all recognized legacy mattpocock directories in a specific global Skill root:
+
+```bash
+python scripts/onboard.py migrate-external-skills \
+  --scope global \
+  --source auto \
+  --global-skills-dir /path/to/global/skills \
+  --yes
+```
 
 Source policies:
 
@@ -243,9 +253,7 @@ python scripts/onboard.py promote-external-skills-stable \
 Promotion updates every managed Skill from that repository as one group, refreshes its license files and digests, validates the entire candidate stable set, and then swaps the stable directory transactionally. It never runs during normal `init`, `reset`, or external installation.
 If upstream changed canonical names, repository layout, or license paths, first review and update the manifest/configured source contract in the same repository change; promotion intentionally refuses to guess a new subpath.
 
-Legacy aliases remain recognized for migration: `diagnose` → `diagnosing-bugs`, `write-a-skill` → `writing-great-skills`, `to-prd` → `to-spec`, and `to-issues` → `to-tickets`. Removed `zoom-out` is not installed. Automatic migration is legacy-only so already canonical external Skills are not cloned twice during every init/reset.
-
-External Skill targets use a temporary rollback backup during an explicit install. The rollback copy is deleted after a successful commit or a complete restore; it is not a persistent user backup. An incomplete restore retains the directory and returns its path for manual recovery. Existing canonical Skills are treated as installed only when their complete source tree and `SKILL.md` frontmatter validate; an invalid canonical target is reinstalled before any valid legacy alias is removed. Legacy migration no longer clones upstream independently: canonical installation uses the shared source policy first, then the migration step backs up and removes remaining legacy directories.
+Legacy aliases remain recognized for migration: `diagnose` → `diagnosing-bugs`, `write-a-skill` and `writing-great-skills` → `writing-for-agents`, `to-prd` → `to-spec`, and `to-issues` → `to-tickets`; removed `zoom-out` has no replacement. `migrate-external-skills` first validates every detected legacy target's directory and `SKILL.md` frontmatter identity. If any identity conflicts, it fail-closes before any canonical install, backup, or deletion. It then installs every required canonical replacement using the chosen source policy and shared transaction. When that transaction commits, its legacy predecessors and temporary rollback directory are deleted; the rollback directory is retained only for an incomplete restore. A legacy-only cleanup that needs no canonical install—because the canonical target is already valid or because the legacy target is `zoom-out`—copies the verified legacy directory into a persistent migration backup before removal. Normal `init` / `reset` retain legacy-only automatic migration so already canonical external Skills are not cloned twice during every run.
 
 ## Skills That Keep Their Existing Scope
 

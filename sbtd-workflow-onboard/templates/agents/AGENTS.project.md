@@ -213,23 +213,23 @@ trellis init -u your-name
 - `domain-modeling`
 - `codebase-design`
 - `handoff`
-- `writing-great-skills`
+- `writing-for-agents`
 - `to-spec`
 - `to-tickets`
 
-旧官方 Skill `diagnose`、`write-a-skill` 已迁移为 `diagnosing-bugs`、`writing-great-skills`；`zoom-out` 已从上游移除，不再作为 mattpocock 官方 Skill 接入。
+旧官方 Skill `diagnose` 已迁移为 `diagnosing-bugs`；`write-a-skill` 与 `writing-great-skills` 已迁移为 `writing-for-agents`；`zoom-out` 已从上游移除，不再作为 mattpocock 官方 Skill 接入。
 
 编排说明：
 
 - 普通 bug、测试失败或运行时异常：`diagnosing-bugs` → GitNexus debugging（根因不清时）→ Codex fix → `tdd` / regression test → 项目测试。
 - 线上问题、日志异常或数据不一致：`diagnosing-bugs` 先建立时间线、事实、假设和排除项，再进入修复或缓解。
-- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling` 和 `domain-modeling`）→ `book-ddd-distilled-modeling` 独立二次审核与可见 `DDD Boundary Review` → 需求确认摘要 → `to-spec` → `gherkin-bdd`（用户可见行为场景）→ `to-tickets` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
-- 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling`）→ 方案确认 → `to-spec` / `to-tickets`（需要时）→ Codex implementation。
+- 中大型项目内需求：`grill-with-docs`（内部使用 `grilling` 的 design tree / frontier 分轮提问和 `domain-modeling`；每轮只问前置条件已满足的问题）→ `book-ddd-distilled-modeling` 独立二次审核与可见 `DDD Boundary Review` → 需求确认摘要 → `to-spec` → `gherkin-bdd`（用户可见行为场景）→ `to-tickets` 输出 Trellis-ready Markdown tasks → Trellis workflow → GitNexus impact-analysis → Codex implementation → 项目测试 → Chrome DevTools MCP（需要 Web 运行时诊断时）→ Playwright CLI（涉及 Web 回归时）→ Maestro（涉及移动 App E2E 时）；如果需要把 Web UI 回归路径固化为入库测试资产，再使用 `web-ui-autotest-generator`。
+- 不依赖项目文档或领域术语的通用方案质询：`grill-me`（内部使用 `grilling` 的 design tree / frontier 分轮提问）→ 方案确认 → `to-spec` / `to-tickets`（需要时）→ Codex implementation。
 - 需要回归测试的普通用户可见行为修改：Trellis `native` workflow → `gherkin-bdd` → 主动判定 `tdd` Skill → `codebase-design`（需要测试面 / seam 判断时）→ GitNexus impact-analysis → 项目测试。
 - 高风险后端逻辑、算法、权限、计费、状态机或关键数据同步：`grill-with-docs` → `book-ddd-distilled-modeling` 独立二次审核与可见 `DDD Boundary Review` → `to-spec` → `gherkin-bdd`（外部可观察行为）→ `to-tickets` → Trellis TDD workflow → `tdd` / `codebase-design` → GitNexus impact-analysis → 回归测试。
 - 陌生模块或上下文不清：代码阅读 / `codebase-design` → GitNexus exploring / impact-analysis → Codex implementation。
 - 长任务暂停、`/clear`、新会话或交接前：`handoff`。
-- 需要创建或维护 Skill 时：`writing-great-skills`。
+- 需要创建或维护 Agent 消费的 Skill、AGENTS、CLAUDE 或指针文档时：`writing-for-agents`。
 
 `to-spec` 默认输出 Markdown spec / PRD；`to-tickets` 默认输出 vertical-slice Markdown tasks / tickets。在 Trellis 项目中，这些产物最终应进入 `.trellis/tasks/<task>/prd.md`、`design.md`、`implement.md` 或 parent / child task artifacts。除非用户明确要求，不自动发布到 GitHub、Linear 或任何 issue tracker。
 
