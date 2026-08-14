@@ -12,6 +12,7 @@
 
 - 将 mattpocock/skills stable 镜像提升到 `v1.2.3`，使 `diagnosing-bugs` 的命令、输出和捕获产物先脱敏，并采用跨 Agent harness 的 subagent 表述。
 - 修复 `writing-great-skills` 上游删除后的 reset 迁移：其自身及更早的 `write-a-skill` 目录现在都会在 `writing-for-agents` 完整校验并提交后删除；迁移失败保持 fail-closed 和 rollback 语义。
+- 修复 `init` / `reset` 在发现 mattpocock legacy 目录身份冲突时仍会先安装 external Skills 并写入全局 / 项目文件的问题：现在在 bundled rename 检查之后、任何写入之前做 identity preflight，冲突时 fail-closed 并保留原目录。
 
 ### 变更
 
