@@ -630,6 +630,62 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertTrue(unrelated_marker.is_file())
         self.assertEqual(unrelated_marker.read_text(encoding="utf-8"), "keep\n")
 
+    def test_init_aborts_before_writes_on_legacy_external_identity_conflict(
+        self,
+    ) -> None:
+        global_skills = self.root / "global-skills"
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for entry in catalog["entries"]:
+            if entry["kind"] != "external-skill":
+                continue
+            name = entry["id"].removeprefix("skill:")
+            if name == "writing-for-agents":
+                continue
+            target = global_skills / name
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text(
+                f"---\nname: {name}\n---\n",
+                encoding="utf-8",
+            )
+
+        conflicting = global_skills / "writing-great-skills"
+        conflicting.mkdir(parents=True)
+        (conflicting / "SKILL.md").write_text(
+            "---\nname: user-owned-writing-skill\n---\nkeep\n",
+            encoding="utf-8",
+        )
+        global_agents = self.root / "global-AGENTS.md"
+        project_agents = self.project_one / "AGENTS.md"
+
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            self.projects_csv,
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(global_agents),
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("legacy Skill identity", completed.stderr)
+        self.assertTrue((conflicting / "SKILL.md").is_file())
+        self.assertEqual(
+            (conflicting / "SKILL.md").read_text(encoding="utf-8"),
+            "---\nname: user-owned-writing-skill\n---\nkeep\n",
+        )
+        self.assertFalse((global_skills / "writing-for-agents").exists())
+        self.assertFalse(global_agents.exists())
+        self.assertFalse(project_agents.exists())
+        self.assertFalse((global_skills / "sbtd-workflow-onboard").exists())
+
+
     def test_init_projects_checks_trellis_and_bootstrap_for_every_root(self) -> None:
         bootstrap = self.project_two / ".trellis" / "tasks" / "00-bootstrap-guidelines"
         bootstrap.mkdir(parents=True)

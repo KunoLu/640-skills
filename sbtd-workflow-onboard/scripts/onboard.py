@@ -5239,6 +5239,22 @@ def run(mode: str, args: argparse.Namespace) -> int:
         )
         return 4
 
+    external_identity_failures = (
+        external_migration_identity_failures(external_migration_plan)
+        if external_migration_plan.get("status") == "planned"
+        else []
+    )
+    if external_identity_failures:
+        print(
+            "External mattpocock migration blocked: legacy Skill identity "
+            "does not match the configured legacy name.",
+            file=sys.stderr,
+        )
+        for item in external_identity_failures:
+            label = item.get("name") or item.get("repo") or "migration"
+            print(f"- {label}: {item.get('error', 'unknown failure')}", file=sys.stderr)
+        return 4
+
     if mode in {"init", "reset"}:
         external_install_status = install_required_external_skills(args)
         if external_install_status != 0:
