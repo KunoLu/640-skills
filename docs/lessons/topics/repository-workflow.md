@@ -373,3 +373,16 @@
 - 根因：路径名称被错误视为受管内容的所有权证明，normal install transaction 与 canonical 已存在时的 legacy-only cleanup 都没有校验 `SKILL.md` frontmatter；代码把“可删除 filesystem entry”误建模为“存在且可跟随的路径”，且 cleanup scope 没有覆盖 preflight return。
 - 修复：在所有 predecessor 的 transaction commit、backup 或 delete 前验证其是非 symlink 常规目录、包含非 symlink `SKILL.md`，且 `name` 等于预期 legacy identity；对存在或 symlink 的 entry 都执行该检查，不一致时记录 `preflight-legacy-identity` 失败、清理 staging、保留目标并阻断迁移。
 - 预防：任何迁移删除都必须同时验证路径、文件类型和内部身份；目录名、存在性或 replacement canonical 有效都不能单独授权删除。所有 owned staging 目录必须由覆盖每个 early return 的 cleanup scope 释放；测试必须同时覆盖 matching predecessor 的成功删除、user-owned identity conflict 保留和 dangling symlink 拒绝。
+
+
+## LESSON-20260814-gitnexus-native-module-transport: GitNexus MCP Needs Its Native Module
+
+- 日期：2026-08-14
+- 标签：gitnexus, mcp, node, native-module, transport
+- 适用场景：GitNexus MCP 报 `Transport closed`、全局 GitNexus 安装或 MCP stdio 启动诊断
+- 严重级别：high
+- 来源：当前 OMP/Codex session 的 GitNexus MCP transport 启动失败
+- 问题：MCP client 显示 `gitnexus: Transport closed`，但 `codex mcp get gitnexus` 仍显示有效 stdio command，容易误判为 MCP 配置或仓库索引问题。
+- 根因：`@ladybugdb/core/lbugjs.node` 未由 GitNexus 全局安装的 lifecycle 产物写入 package directory；进程在 MCP `initialize` 之前退出。
+- 修复：从当前 `CODEX_HOME` 定位生效 MCP command 后，运行该 GitNexus 安装目录内 `node_modules/@ladybugdb/core/install.js`，再以 JSON-RPC `initialize` 握手验证 serverInfo 响应。
+- 预防：先用 `CODEX_HOME` 和 `codex mcp get gitnexus` 确认生效 command；再运行真实 MCP handshake 区分 transport 启动失败与“Repository not indexed”。不要因索引缺失重装或修改 MCP 配置。
