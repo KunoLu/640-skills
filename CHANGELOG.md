@@ -7,6 +7,7 @@
 ### 变更
 
 - 对齐 Trellis stable 更新后的 hook 生效边界：升级并运行 `trellis update` 后，如更新涉及 SessionStart、PreToolUse 或其他 hook 配置，现要求先重启对应 Agent host / IDE，再验证新会话身份或 hook 行为，避免将既有进程的旧配置误判为更新已生效。
+- 对齐 Trellis 的 active-task pointer containment：`task.py start` / `set-*` / subtask 与平台读取器不得跟随解析到项目外的任务路径；升级后不要假设 `trellis update` 会改写既有 session pointer，越权 pointer 按无任务处理。
 
 ### 修复
 
