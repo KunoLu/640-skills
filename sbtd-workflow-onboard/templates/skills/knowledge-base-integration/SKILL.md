@@ -71,6 +71,7 @@ Use `--no-fetch` only when the configured refs are already present locally and t
 - Long-lived clones are fetch caches. Smoke commands run in detached isolated worktrees.
 - Smoke command strings are shell-free argv strings. Use `stage` for preflight, preparation, tests and cleanup; cleanup remains runnable after an earlier stage blocks.
 - Formal report declarations provide an exact relative path or glob for a runner report and its same-stem Chinese Markdown summary. Only pairs created or refreshed by the current command are collected; stale, non-Chinese, missing, unsafe or sensitive artifacts make Evidence `blocked`.
+- Current report-only smoke continues to emit `schemaVersion: 1` with `featureSources: []`. That envelope remains valid generic evidence and must not be treated as BDD scenario coverage. Scenario-backed knowledge evidence requires a separate v2 envelope; do not rewrite v1 smoke into v2 links.
 - Duplicate logical runs reuse their idempotency record. Use a new `--attempt` for an intentional rerun; infrastructure retries stay inside that attempt and assertion failures do not retry automatically.
 - `smoke-only`, contract, mock, app-mocked, and backend-only modes retain their actual meaning.
 - Configuration and artifacts contain no credentials, tokens, PII, production data, or sensitive request content.
