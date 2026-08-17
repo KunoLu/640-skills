@@ -101,7 +101,10 @@ def load_schema(path: Path) -> dict[str, Any]:
 
 def validate_schema(envelope: dict[str, Any], schema_path: Path) -> None:
     if jsonschema is None:
-        raise EvidenceError("SCHEMA_INVALID", "jsonschema is not installed")
+        raise EvidenceError(
+            "VALIDATOR_UNAVAILABLE",
+            "jsonschema is not installed; install project-validation/requirements.txt",
+        )
     schema = load_schema(schema_path)
     jsonschema.Draft202012Validator.check_schema(schema)
     validator = jsonschema.Draft202012Validator(schema)

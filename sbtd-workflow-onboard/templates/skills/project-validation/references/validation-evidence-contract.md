@@ -33,6 +33,12 @@ Do not require Feature IDs or Scenario IDs. Each feature source uses repository 
 
 - `validation-evidence.schema.json` remains schemaVersion 1. Its `featureSources[]` and `reports[]` arrays stay independent. v1 is valid for generic or historical report evidence and for knowledge-base report-only smoke. Co-membership in a v1 envelope is not BDD traceability.
 - Scenario-backed execution evidence must use `validation-evidence.v2.schema.json` (`schemaVersion: 2`) and `scripts/validate_validation_evidence.py`. JSON Schema shape checks are not sufficient.
+
+`scripts/validate_validation_evidence.py` requires the Python package listed in
+`requirements.txt` (`jsonschema`). Missing `jsonschema` is
+`VALIDATOR_UNAVAILABLE` and fail-closed for both v1 and v2. Do not skip schema
+validation. Install with `python3 -m pip install -r requirements.txt` from the
+installed `project-validation` Skill root.
 - Paths in this contract (`references/*.json`, `scripts/validate_validation_evidence.py`) are relative to the `project-validation` Skill root.
 - Shared validator fixtures live in the config-excerpt repo at `tests/fixtures/validation-evidence/validation-evidence-v2/`. They are not Skill runtime assets and must not be copied into installed project or global Skill trees.
 - v1 Schema validation checks digest format only. Generic evidence still requires recomputing each report SHA-256 against file bytes.
