@@ -29,6 +29,46 @@ Do not require Feature IDs or Scenario IDs. Each feature source uses repository 
 - `published` means the envelope and referenced artifacts were accepted by the configured evidence destination. It does not mean the tests passed.
 - CI publication is separate from CI execution: use `published` only after the PR or knowledge destination accepts the evidence, `not-configured` when no publisher exists, and `blocked` when publication was required but failed. CI evidence cannot use `local-only`.
 
+## Schema versions
+
+- `validation-evidence.schema.json` remains schemaVersion 1. Its `featureSources[]` and `reports[]` arrays stay independent. v1 is valid for generic or historical report evidence and for knowledge-base report-only smoke. Co-membership in a v1 envelope is not BDD traceability.
+- Scenario-backed execution evidence must use `validation-evidence.v2.schema.json` (`schemaVersion: 2`) and `scripts/validate_validation_evidence.py`. JSON Schema shape checks are not sufficient.
+- Paths in this contract (`references/*.json`, `scripts/validate_validation_evidence.py`) are relative to the `project-validation` Skill root.
+- Shared validator fixtures live in the config-excerpt repo at `tests/fixtures/validation-evidence/validation-evidence-v2/`. They are not Skill runtime assets and must not be copied into installed project or global Skill trees.
+- v1 Schema validation checks digest format only. Generic evidence still requires recomputing each report SHA-256 against file bytes.
+- Do not upgrade, rewrite, or synthesize v1 envelopes into v2 links. If a producer cannot emit a valid v2 binding, mark scenario execution evidence `blocked`.
+
+## v2 locator and report binding
+
+Canonical `sourceLocatorDigest` is SHA-256 over UTF-8 JSON with `ensure_ascii=False`, `sort_keys=True`, and separators `( ",", ":" )`, using this exact key order after sorting:
+
+`examplesFingerprint`, `feature`, `path`, `repositoryKey`, `rule`, `scenario`, `sourceCommit`, `sourceRef`.
+
+- `path` is a repository-relative POSIX path. Before hashing, replace `\` with `/`, reject absolute / `~` prefixes, drop empty and `.` segments (so `features/./login.feature` becomes `features/login.feature`), and reject `..` or symlink escape outside the repository root.
+- Missing, empty, or omitted optional `rule` / `examplesFingerprint` serialize as JSON `null`, not `""`.
+- `sourceCommit` is stripped and lowercased before hashing; the result must be hex of length 40 or more.
+- The digest hex is lowercase and has no `sha256:` prefix. Producers must hash this normalized payload, not the raw envelope spellings.
+
+A v2 `scenarioLink` binds `sourceLocatorDigest` to `reportSha256`, a versioned `reportFormat`, and a structured `testCaseSelector`. Initial formats that can satisfy scenario traceability:
+
+- `junit-xml-v1`
+- `playwright-json-v1`
+
+HTML, TXT, arbitrary JSON, and other reports may remain as `human-readable` or `generic` artifacts. They cannot appear as the linked `reportFormat` for a v2 scenario link.
+
+The semantic validator must:
+
+1. Recompute every locator digest.
+2. Resolve only regular files inside the repository root.
+3. Hash the linked report bytes and require equality with `reportSha256`.
+4. Parse the SHA-verified report with DTD/external-entity disabled for JUnit.
+5. Match exactly one passed test case with the structured selector.
+6. Extract the case-local `sbtd.sourceLocatorDigest` JUnit property or Playwright annotation and require it to equal the recomputed locator digest.
+
+Reject fabricated labels, real passed cases bound to another locator, missing or duplicate bindings, zero or multiple selector matches, unsupported formats, unsafe paths, declared-SHA mismatches, tampered bytes, and dangling links. The semantic validator compares locator / repository / attestation commit strings; it does not inspect Git HEAD or a trusted source manifest. Stale trees remain a workflow / publication gate: regenerate or revalidate against the attested revision before publication.
+
+KPi `plugins/omp-sbtd` is a consumer of this contract after a reviewed promotion. It must not invent a private mapping that differs from this validator.
+
 ## Required status output
 
 - `Evidence Source`: `developer-local` / `ci` / `knowledge-server` / `not-needed`
@@ -36,4 +76,4 @@ Do not require Feature IDs or Scenario IDs. Each feature source uses repository 
 - `Environment Alignment`: `verified` / `unverified` / `mismatch` / `not-needed`
 - `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`
 
-Validate machine-readable envelopes with `validation-evidence.schema.json`. Storage, publishing commands, PR provider adapters, retention, and server orchestration are outside the P0 contract and belong to later integration phases.
+Validate generic envelopes with `validation-evidence.schema.json`. Validate scenario-backed envelopes with `validation-evidence.v2.schema.json` plus `scripts/validate_validation_evidence.py`. Storage, publishing commands, PR provider adapters, retention, and server orchestration are outside the P0 contract and belong to later integration phases.
