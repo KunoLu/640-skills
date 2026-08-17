@@ -142,7 +142,8 @@ class ValidationEvidenceV2Tests(unittest.TestCase):
         self.assertIn("validation-evidence.v2.schema.json", project)
         self.assertIn("validate_validation_evidence.py", project)
         self.assertIn("co-membership is not BDD traceability", project)
-        self.assertIn("schemaVersion: 2", contract)
+        self.assertIn("VALIDATOR_UNAVAILABLE", contract)
+        self.assertIn("requirements.txt", contract)
         self.assertIn("sbtd.sourceLocatorDigest", contract)
         self.assertIn("drop empty and `.` segments", contract)
         self.assertIn("stripped and lowercased before hashing", contract)
@@ -155,6 +156,18 @@ class ValidationEvidenceV2Tests(unittest.TestCase):
         self.assertTrue(FIXTURES.is_dir())
         self.assertIn("schemaVersion: 1", knowledge)
         self.assertIn("must not be treated as BDD scenario coverage", knowledge)
+
+    def test_missing_jsonschema_is_validator_unavailable(self) -> None:
+        case = FIXTURES / "positive-changed-junit"
+        envelope = json.loads((case / "envelope.json").read_text(encoding="utf-8"))
+        original = validator.jsonschema
+        validator.jsonschema = None
+        try:
+            with self.assertRaises(validator.EvidenceError) as raised:
+                validator.validate_v2(envelope, case)
+            self.assertEqual(raised.exception.code, "VALIDATOR_UNAVAILABLE")
+        finally:
+            validator.jsonschema = original
 
     def test_bundled_skill_copy_excludes_repo_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
