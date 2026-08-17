@@ -4,6 +4,11 @@
 
 ## v1.0.7（未发布）
 
+
+### 新增
+
+- 为 scenario-backed 验证证据新增 `validation-evidence.v2.schema.json`、确定性语义 validator 和仓库级共享 fixtures（`tests/fixtures/validation-evidence/`）。v1 继续服务通用 / 历史 report evidence；BDD 可追溯性必须从 SHA-verified JUnit XML 或 Playwright JSON 中提取唯一 passed case，并要求 case 内 `sbtd.sourceLocatorDigest` 等于重算 locator。
+
 ### 变更
 
 - 对齐 Trellis stable 更新后的 hook 生效边界：升级并运行 `trellis update` 后，如更新涉及 SessionStart、PreToolUse 或其他 hook 配置，现要求先重启对应 Agent host / IDE，再验证新会话身份或 hook 行为，避免将既有进程的旧配置误判为更新已生效。
@@ -12,6 +17,7 @@
 ### 修复
 
 - 将 mattpocock/skills stable 镜像提升到 `v1.2.3`，使 `diagnosing-bugs` 的命令、输出和捕获产物先脱敏，并采用跨 Agent harness 的 subagent 表述。
+- 恢复 v1 报告 checksum / digest 一致性门，并写明 v1 Schema 只校验 digest 形状；补齐 locator 规范化：`ensure_ascii=False`、`./` 段丢弃、commit trim/lower、空 optional→`null`；把 stale-commit 收窄为 declared-SHA 一致性；统一 evidence schema / validator 路径到 `project-validation` Skill root；保留 untrusted environment 拒绝条件；把 v2 fixtures 移出 bundled Skill 树，避免 `init` / `reset` 整目录安装把 JUnit / HTML 样例写入项目。
 - 修复 `writing-great-skills` 上游删除后的 reset 迁移：其自身及更早的 `write-a-skill` 目录现在都会在 `writing-for-agents` 完整校验并提交后删除；迁移失败保持 fail-closed 和 rollback 语义。
 - 修复 `init` / `reset` 在发现 mattpocock legacy 目录身份冲突时仍会先安装 external Skills 并写入全局 / 项目文件的问题：现在在 bundled rename 检查之后、任何写入之前做 identity preflight，冲突时 fail-closed 并保留原目录。
 
