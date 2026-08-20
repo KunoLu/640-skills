@@ -164,7 +164,7 @@ pwsh -File .\install.ps1
 | 路径 | 用途 |
 |---|---|
 | `ENTRYPOINT.md` | 由 Git 追踪的版本监控配置和工作流总入口，也是版本检查与 `update` / `更新` 的可恢复基线。 |
-| `AGENTS.md` | 由 Git 追踪的本仓库直接生效补充规则，保证新 clone 可立即恢复仓库操作边界。 |
+| `AGENTS.md` | 本机可选的仓库补充规则；根 `.gitignore` 忽略，不进入远程 `main`。新 clone 不包含该文件，缺失时不得作为操作前置条件。 |
 | `README.md` | 当前工作流的详细说明文档。 |
 | `README.html` | 当前工作流的静态 HTML 说明页。 |
 | `CHANGELOG.md` | 从 `v1.0.0` 起按 Git tag、中文、最新版本在前的顺序维护发布变更。 |
@@ -192,7 +192,7 @@ pwsh -File .\install.ps1
 
 仓库编排按产物类型分层和自包含 Skill 目录：版本化自动化 prompt 位于 `prompts/`，Onboard 运行实现位于 `scripts/`，可安装载荷保留在 `templates/`，第三方 fallback 保留在 `assets/`。`templates/` 不提升到 Onboard 根目录，因为它明确区分“安装器实现”和“将被复制到目标位置的模板载荷”。
 
-`AGENTS.md` 和 `ENTRYPOINT.md` 是必须由 Git 追踪的仓库控制文件：前者保存当前仓库直接生效的补充规则，后者保存版本检查和 `update` / `更新` 使用的 authoritative baseline。新 clone 必须直接取得二者；不要把它们加入 `.gitignore`、移出索引或只保存在单台工作站。
+`ENTRYPOINT.md` 必须由 Git 追踪，保存版本检查和 `update` / `更新` 使用的 authoritative baseline；新 clone 必须直接取得它。根 `AGENTS.md` 是本机可选补充规则，已加入根 `.gitignore` 并从 Git 索引移除，不进入远程 `main`；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。
 
 普通修改任务只更新本仓库内的源文件。每次仓库代码或工作流规则改动后，都必须评估 `CHANGELOG.md`、`README.md`、`README.html` 和版本化 automation prompt 是否需要同步调整。只有用户明确输入 `sync` 或 `同步` 时，才把允许列表中的全局规则和 Skill 同步到本地生效路径；sync 允许列表明确包含 bundled `web-ui-autotest-generator` 完整目录到 `/Users/lusonglin/.agent/skills/web-ui-autotest-generator/` 的映射。随后比较版本化 prompt 与 Orca `SBTD Workflow Tools Version Check` 的完整内容，仅在存在差异时同步到 live automation 并报告结果。`update` / `更新` 只处理版本写回和归档，与版本化 prompt 和 live automation 无关；`AGENTS.project.md` 不在普通 sync 范围内。
 

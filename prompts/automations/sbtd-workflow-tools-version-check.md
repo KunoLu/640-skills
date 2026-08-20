@@ -4,13 +4,13 @@
 
 - 本仓库是 Coding Agent 配置文件与 Skill 的摘录 / 同步源，不是真实业务项目。
 - 本文件是 Orca 自动化 `SBTD Workflow Tools Version Check` 的版本化 prompt 源；每次仓库代码或工作流规则改动后都要评估是否需要同步调整。只有用户明确执行 `sync` / `同步` 时，才比较本文件与 live automation 并按差异同步；`update` / `更新` 与二者无关。
-- 如发现路径匹配不上情况，以当前仓库文件、本 prompt 和根 `AGENTS.md` 为准。
+- 如发现路径匹配不上情况，以当前仓库已追踪文件和本 prompt 为准；本机若有 `AGENTS.md` 可作补充。
 
 严格遵守：
 
 - 先读取项目根目录的 `docs/lessons.md`；如果当前任务命中 repository-workflow、validation-scripts 或其他 topic 路由，再读取对应 `docs/lessons/topics/*.md`。
-- 读取项目根目录的 `AGENTS.md` 和 `ENTRYPOINT.md`。
-- Agent 规则文件路径以 `AGENTS.md` 中“Agent 规则文件路径”章节为准。
+- 读取项目根目录的 `ENTRYPOINT.md`。若本机存在 `AGENTS.md` 则读取，缺失时跳过并继续，不得把它的存在当作 Gate。
+- Agent 规则文件路径：本机若存在 `AGENTS.md`，以其“Agent 规则文件路径”章节为准；缺失时以本 prompt 与已追踪仓库文件为准。
 - 当前可读取、评估或验证的本仓库版本化规则、文档、安装器、模板、Skill 或契约测试源路径仅限：`AGENTS.md`、`ENTRYPOINT.md`、`UPDATE.md`、`CHANGELOG.md`、`README.md`、`README.html`、`install.sh`、`install.ps1`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/project/.gitignore`、`sbtd-workflow-onboard/templates/skills/**`、`tests/**`、`prompts/automations/sbtd-workflow-tools-version-check.md`。
 - 无人值守自动化仅可创建或修改：`UPDATE.md`；以及在第 11、12 步的证据和范围满足时可修改的 `AGENTS.md`、`CHANGELOG.md`、`README.md`、`README.html`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/templates/agents/**`、`sbtd-workflow-onboard/templates/skills/**`。其余允许路径只能读取、评估或验证。
 - `install.sh`、`install.ps1`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/templates/project/.gitignore` 与 `tests/**` 只能读取、评估或验证，不得由无人值守自动化修改。
@@ -69,11 +69,11 @@
 12. 如果仓库代码、`sbtd-workflow-onboard/`、工作流规则、安装 / reset 行为或用户可见路径有更新，必须在同一轮评估 `CHANGELOG.md`、`README.md`、`README.html` 和本 prompt 是否需要同步调整；新增用户可见能力、安装方式、兼容性边界、迁移、修复或发布前验证变化时更新 `CHANGELOG.md`，其他入口只更新实际受影响的版本化文件，无需修改时在最终输出说明原因。版本检查自动化不直接读取或写入 Orca live automation。
 13. 运行验证：
   - `git status --short`
-  - 检查 `ENTRYPOINT.md`、`UPDATE.md`、`AGENTS.md`、`CHANGELOG.md`、`README.md`、`README.html`、`install.sh`、`install.ps1`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/project/.gitignore`、`sbtd-workflow-onboard/templates/skills/**/SKILL.md`、`tests/**` 的结构是否可读。
-  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。验证 External Skill 默认 `auto` 与显式 `stable` 均只使用受管 stable set 且不访问网络，只有显式 `upstream` 才直接获取当前上游并在失败时直接报错。对任何 external canonical rename，隔离 global Skill 目录中同时预置 predecessor 与更早 legacy alias，执行 reset 等价的 stable install / migration，断言 replacement `SKILL.md` 存在、每个 predecessor 均不存在，且 JSON 结果记录 `removed`；若 canonical 已存在，也必须验证 legacy-only cleanup 同样删除 predecessor。同步核对 `AGENTS.md` 的“本地同步规则”表：仓库管理且要求全局同步的 bundled Skill 必须具有正确的 source / target 映射，包含 `web-ui-autotest-generator`，同时保持 `AGENTS.project.md` 不在普通 sync 范围内。
+  - 检查 `ENTRYPOINT.md`、`UPDATE.md`、`CHANGELOG.md`、`README.md`、`README.html`、`install.sh`、`install.ps1`、`prompts/automations/sbtd-workflow-tools-version-check.md`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/SKILL.md`、`sbtd-workflow-onboard/REFERENCE.md`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/templates/agents/AGENTS.global.md`、`sbtd-workflow-onboard/templates/agents/AGENTS.project.md`、`sbtd-workflow-onboard/templates/project/.gitignore`、`sbtd-workflow-onboard/templates/skills/**/SKILL.md`、`tests/**` 的结构是否可读；本机若存在 `AGENTS.md` 则一并检查，缺失时跳过。
+  - 使用 Draft 2020-12 校验 `sbtd-workflow-onboard/catalog.json` 符合 `catalog.schema.json`，目录 id 唯一；每个 bundled Skill local source 必须位于 Onboard Skill 根目录内且实际存在，每个 external Skill source 必须包含合法的上游 repo、受限相对 subpath 和 canonical alias。验证 External Skill 默认 `auto` 与显式 `stable` 均只使用受管 stable set 且不访问网络，只有显式 `upstream` 才直接获取当前上游并在失败时直接报错。对任何 external canonical rename，隔离 global Skill 目录中同时预置 predecessor 与更早 legacy alias，执行 reset 等价的 stable install / migration，断言 replacement `SKILL.md` 存在、每个 predecessor 均不存在，且 JSON 结果记录 `removed`；若 canonical 已存在，也必须验证 legacy-only cleanup 同样删除 predecessor。若本机存在 `AGENTS.md`，同步核对其“本地同步规则”表：仓库管理且要求全局同步的 bundled Skill 必须具有正确的 source / target 映射，包含 `web-ui-autotest-generator`，同时保持 `AGENTS.project.md` 不在普通 sync 范围内；缺失时以 README 中已记录的 `web-ui-autotest-generator` 映射为准，不得因 `AGENTS.md` 缺失失败。
   - 验证能从 `ENTRYPOINT.md` 正确解析受监控工具表。
   - 验证 `UPDATE.md` 使用中文，且各工具区间起点等于 `ENTRYPOINT.md` 中该工具当前版本。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。
-  - 验证根 `.gitignore` 内容严格为四行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`。
+  - 验证根 `.gitignore` 内容严格为五行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md`。验证 `git ls-files -- AGENTS.md ENTRYPOINT.md` 只包含 `ENTRYPOINT.md`。`AGENTS.md` 若存在可读取、评估或修改；缺失时跳过，不得把它的存在当作 Gate。
   - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 按精确非空行只追加模板缺失项，重复执行不产生重复行；项目 `AGENTS.md`、`CLAUDE.md`、`.agents/**` 与 Trellis 生成的 Agent 集成保持可追踪，只忽略明确的本地运行态和机器本地设置。
 14. 最终输出必须说明：发现的版本区间、修改的文件、`CHANGELOG.md` / `README.md` / `README.html` / 本 prompt 的维护判断、验证命令和结果、跳过项及原因、剩余风险、`rtk` 使用状态。再次强调：不要 commit，不要 push，不要把最新版本写回 `ENTRYPOINT.md`。

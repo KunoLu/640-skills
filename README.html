@@ -907,7 +907,7 @@ tests/e2e/**/*.trace.zip
           </div>
           <p>本仓库是配置摘录和模板源，不是真实业务项目。编排按产物类型分层，并保持 Onboard Skill 自包含：automation prompt 位于 <code>prompts/</code>，运行实现位于 <code>scripts/</code>，安装载荷位于 <code>templates/</code>，第三方 fallback 位于 <code>assets/</code>。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。sync 允许列表明确包含 bundled <code>web-ui-autotest-generator</code> 完整目录到 <code>/Users/lusonglin/.agent/skills/web-ui-autotest-generator/</code> 的映射。sync 在 canonical Onboard 校验成功后删除 <code>~/.agent/skills/kuno-workflow-onboard-skills/</code>，并在本机实际使用路径 <code>~/.agent/skills/</code> 上以 <code>--source auto</code> 执行 mattpocock legacy migration，删除 legacy <code>to-prd</code> / <code>to-issues</code> 并安装 canonical <code>to-spec</code> / <code>to-tickets</code>；不保留旧 Onboard alias，普通 sync 也不默认触碰 <code>~/.codex/skills/</code> 下的同名 external Skill 目录。</p>
         </div>
-        <p><code>AGENTS.md</code> 和 <code>ENTRYPOINT.md</code> 是必须由 Git 追踪的仓库控制文件：前者保存当前仓库直接生效的补充规则，后者保存版本检查和 <code>update</code> / <code>更新</code> 使用的 authoritative baseline。新 clone 必须直接取得二者；不要把它们加入根 <code>.gitignore</code>、移出索引或只保存在单台工作站。每次仓库代码或工作流规则改动后，都评估 CHANGELOG、README 两份文件和版本化 automation prompt 是否需要同步调整；只有执行 <code>sync</code> / <code>同步</code> 时才比较版本化 prompt 与 Orca <code>SBTD Workflow Tools Version Check</code>，并仅在存在差异时同步到 live automation。<code>update</code> / <code>更新</code> 与 prompt 和 live automation 无关。</p>
+        <p><code>ENTRYPOINT.md</code> 必须由 Git 追踪，保存版本检查和 <code>update</code> / <code>更新</code> 使用的 authoritative baseline；新 clone 必须直接取得它。根 <code>AGENTS.md</code> 是本机可选补充规则，已加入根 <code>.gitignore</code> 并从 Git 索引移除，不进入远程 <code>main</code>；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。每次仓库代码或工作流规则改动后，都评估 CHANGELOG、README 两份文件和版本化 automation prompt 是否需要同步调整；只有执行 <code>sync</code> / <code>同步</code> 时才比较版本化 prompt 与 Orca <code>SBTD Workflow Tools Version Check</code>，并仅在存在差异时同步到 live automation。<code>update</code> / <code>更新</code> 与 prompt 和 live automation 无关。</p>
         <table>
           <thead>
             <tr>
@@ -917,7 +917,7 @@ tests/e2e/**/*.trace.zip
           </thead>
           <tbody>
             <tr><td><code>ENTRYPOINT.md</code></td><td>由 Git 追踪的版本监控和工作流总入口，也是版本检查与更新流程的可恢复基线。</td></tr>
-            <tr><td><code>AGENTS.md</code></td><td>由 Git 追踪的仓库直接生效规则，保证新 clone 可恢复操作边界。</td></tr>
+            <tr><td><code>AGENTS.md</code></td><td>本机可选的仓库补充规则；根 <code>.gitignore</code> 忽略，不进入远程 <code>main</code>。新 clone 不包含该文件，缺失时不得作为操作前置条件。</td></tr>
             <tr><td><code>CHANGELOG.md</code></td><td>从 <code>v1.0.0</code> 起按 Git tag、中文、最新版本在前的顺序维护发布变更。</td></tr>
             <tr><td><code>LICENSE</code></td><td>本仓库原创内容适用的 Apache License 2.0 完整许可文本。</td></tr>
             <tr><td><code>sbtd-workflow-onboard/LICENSE</code> / <code>NOTICE</code></td><td>自包含 Onboard Skill 的原创内容使用与仓库根一致的 Apache License 2.0，并声明 <code>Copyright 2026 KunoLu</code>；文件随公开安装和本地同步一起分发。</td></tr>

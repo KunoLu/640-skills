@@ -31,7 +31,7 @@
 - 交互式 Bash installer 在重定向循环、pipeline 或 process substitution 内提示用户时，必须从脚本启动时保留的专用 stdin fd 读取并处理 EOF；不能让项目数据流劫持 prompt 后无限输出 `Invalid choice.`。
 - 第三方 CLI 生成项目文件时必须显式指定并复验最终路径、覆盖和备份语义；模板增量合并按配置原子条目求差集，并用连续执行两次的测试证明幂等。
 - Shell 脚本同时支持 `NO_COLOR` 等标准环境约定和对应 CLI flag 时，外部环境输入与内部解析状态必须使用不同变量名，并用真实 TTY/PTY 覆盖默认和禁用分支。
-- 根 `.gitignore` 的当前 canonical 内容严格为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；仓库启动必需的 `AGENTS.md` 和 authoritative `ENTRYPOINT.md` 必须由 Git 追踪，或具备受版本控制且可在任何 Gate 前执行的 bootstrap，不能同时设为 ignored / untracked 和全操作前置条件。
+- 根 `.gitignore` 的当前 canonical 内容严格为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md` 五行。authoritative `ENTRYPOINT.md` 必须由 Git 追踪。根 `AGENTS.md` 是本机可选文件，不进入远程 `main`，不得作为全操作前置条件；契约测试不得读取被忽略的本地副本去证明 fresh-clone 可恢复。
 - 通过 Skills CLI 生成的 `.claude/skills`、`.agents/skills` 等项目级 alias 只有在 target 存在且属于当前 canonical 仓库设计时才能追踪；用户级全局安装产生的项目内 alias 或 broken symlink 必须删除。
 - External Skill installer 的 manifest、source subpath 和 license 路径必须受声明根目录约束；canonical 必须完整校验；事务恢复不完整时不得删除唯一 rollback 备份，必须保留并报告路径。
 - 编写一次性验证脚本前，先对照本入口和命中的 topic，避免重复使用已记录的问题写法；Markdown 解析优先按标题层级和表头语义，不要按裸 `---` 或脆弱正则切割。

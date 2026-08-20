@@ -16,6 +16,7 @@
 - 预防：后续所有针对 `skills/**/SKILL.md` 的自动化检查都应先过滤目录或直接使用 `rg --files skills -g SKILL.md`，不要手写无类型的路径拼接。
 - 状态更新（2026-07-16）：Python 验证会生成仓库根或 `tests/` 下的 `__pycache__/`，当前 canonical 契约已调整为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；新验证必须使用当前契约，不得改写上方历史修复字段。
 - 状态更新（2026-07-18）：fresh-clone 审核确认根 `AGENTS.md` 和 `ENTRYPOINT.md` 必须保持可恢复且由 Git 追踪，当前 `.gitignore` canonical 契约恢复为上述四行；验证除断言精确四行外，还必须直接检查两个控制文件存在于 Git 索引。
+- 状态更新（2026-08-20）：当前 `.gitignore` canonical 契约为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md` 五行。验证应断言 `AGENTS.md` 不在 Git 索引、`ENTRYPOINT.md` 仍在索引；不得读取被忽略的本地 `AGENTS.md` 证明 fresh-clone 可恢复。
 
 ## LESSON-20260701-markdown-section-parse-headings: Markdown Section Parse Headings
 

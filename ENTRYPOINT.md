@@ -42,7 +42,7 @@
 
 公开仓库也可通过官方 `npx skills add` 只 bootstrap 自包含的 `sbtd-workflow-onboard` 到用户级全局目录；这不是完整 onboarding，不自动执行 `scripts/onboard.py`、安装其余 Skills / Trellis / GitNexus、写入 AGENTS 或初始化项目。安装后由 Agent 调用该 Skill，再执行 `plan` / `init` / `reset`。全局 Skill 目录按显式参数、`$AGENT_SKILLS_DIR`、已安装 Onboard Skill 的受信父目录、平台默认值依次解析，JSON 结果暴露 `globalSkillsDirSource`。
 
-定时版本检查自动化评估规则影响时，应扫描根 `AGENTS.md`、版本化 automation prompt 和 `sbtd-workflow-onboard/` 下的 Skill 入口、参考文档、安装脚本与 bundled templates；不要再扫描已删除的旧 `agents/` 或 `skills/` 顶层目录。
+定时版本检查自动化评估规则影响时，应扫描版本化 automation prompt 和 `sbtd-workflow-onboard/` 下的 Skill 入口、参考文档、安装脚本与 bundled templates；本机若存在根 `AGENTS.md` 则一并扫描，缺失时跳过，不得把它的存在当作 Gate。不要再扫描已删除的旧 `agents/` 或 `skills/` 顶层目录。
 
 ---
 

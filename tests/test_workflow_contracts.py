@@ -25,7 +25,7 @@ class WorkflowContractTests(unittest.TestCase):
 
         self.assertEqual(
             entries,
-            [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/"],
+            [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/", "AGENTS.md"],
         )
 
     def test_project_template_ignores_trellis_workspace(self) -> None:
@@ -227,7 +227,6 @@ class WorkflowContractTests(unittest.TestCase):
             / "automations"
             / "sbtd-workflow-tools-version-check.md"
         ).read_text(encoding="utf-8")
-        root_agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 
         for installer in (bash_installer, powershell_installer):
             self.assertIn("Target Agent CLI and MCP platform.", installer)
@@ -251,7 +250,6 @@ class WorkflowContractTests(unittest.TestCase):
             "`tests/**`",
         ):
             self.assertIn(path, prompt)
-            self.assertIn(path, root_agents)
         self.assertIn("无人值守自动化", prompt)
         self.assertIn("用户在交互会话中明确要求", prompt)
 
@@ -607,9 +605,6 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("## v1.0.2（未发布）", changelog)
         self.assertNotIn("## v1.0.4（未发布）", changelog)
         self.assertRegex(changelog, r"[\u4e00-\u9fff]")
-        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("## CHANGELOG 维护规则", agents)
-        self.assertIn("每个 Git tag 使用一个二级标题章节", agents)
 
     def test_onboard_skill_is_discoverable_and_documents_npx_install(self) -> None:
         skill_path = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
@@ -912,7 +907,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("catalog.schema.json", prompt)
         self.assertIn("`__pycache__/`", prompt)
         self.assertIn("不要修改 `ENTRYPOINT.md`", prompt)
-        self.assertIn("内容严格为四行", prompt)
+        self.assertIn("内容严格为五行", prompt)
         self.assertIn(
             "- `prompts/automations/sbtd-workflow-tools-version-check.md`",
             prompt,
@@ -968,7 +963,6 @@ class WorkflowContractTests(unittest.TestCase):
         documents = {
             path: (ROOT / path).read_text(encoding="utf-8")
             for path in (
-                "AGENTS.md",
                 "ENTRYPOINT.md",
                 "README.md",
                 "README.html",
@@ -1009,15 +1003,10 @@ class WorkflowContractTests(unittest.TestCase):
         )
 
     def test_update_archive_names_use_positive_numeric_sequences(self) -> None:
-        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         archive_names = [
             path.name for path in (ROOT / "archive").glob("UPDATED-*.md")
         ]
 
-        self.assertIn("`UPDATED-yyyy-mm-dd-<正整数序号>.md`", agents)
-        self.assertNotIn("UPDATED-yyyy-mm-dd-index.md", agents)
-        self.assertIn("最大正整数序号加一", agents)
-        self.assertIn("从 `1` 开始", agents)
         self.assertTrue(archive_names)
         for archive_name in archive_names:
             with self.subTest(archive_name=archive_name):
@@ -1108,9 +1097,8 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("包含 `web-ui-autotest-generator`", prompt)
         self.assertIn("`AGENTS.project.md` 不在普通 sync 范围内", prompt)
 
-        control_paths = (ROOT / "AGENTS.md", ROOT / "ENTRYPOINT.md")
-        for control_path in control_paths:
-            self.assertTrue(control_path.is_file())
+        entrypoint_path = ROOT / "ENTRYPOINT.md"
+        self.assertTrue(entrypoint_path.is_file())
         tracked = subprocess.run(
             ["git", "ls-files", "--", "AGENTS.md", "ENTRYPOINT.md"],
             cwd=ROOT,
@@ -1118,32 +1106,24 @@ class WorkflowContractTests(unittest.TestCase):
             capture_output=True,
             text=True,
         ).stdout.splitlines()
-        self.assertEqual(set(tracked), {"AGENTS.md", "ENTRYPOINT.md"})
-
-        agents = control_paths[0].read_text(encoding="utf-8")
-        web_ui_sync_row = (
-            "| `sbtd-workflow-onboard/templates/skills/"
-            "web-ui-autotest-generator/` | "
-            "`/Users/lusonglin/.agent/skills/web-ui-autotest-generator/` |"
+        self.assertEqual(set(tracked), {"ENTRYPOINT.md"})
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", "--", "AGENTS.md"],
+            cwd=ROOT,
         )
-        self.assertIn(web_ui_sync_row, agents)
+        self.assertEqual(ignored.returncode, 0)
+
         for document in (readme, readme_html):
             self.assertIn("web-ui-autotest-generator", document)
             self.assertIn(
                 "/Users/lusonglin/.agent/skills/web-ui-autotest-generator/",
                 document,
             )
-        entrypoint = control_paths[1].read_text(encoding="utf-8")
-        self.assertIn("必须由 Git 追踪", agents)
-        self.assertNotIn("本地控制文件 Gate", agents)
-        self.assertIn("README 与自动化 Prompt 同步规则", agents)
-        self.assertIn("SBTD Workflow Tools Version Check", agents)
-        self.assertIn("普通代码或文档修改只维护仓库内的版本化 prompt", agents)
-        self.assertIn("只有用户明确执行 `sync` / `同步` 时", agents)
-        self.assertIn("`update` / `更新` 不检查、不修改也不同步", agents)
-        self.assertNotIn("即使本轮 prompt 内容没有变化", agents)
-        self.assertNotIn("每次修改版本化 automation prompt 后", agents)
+            self.assertIn("本机可选", document)
+            self.assertIn("不进入远程", document)
+        entrypoint = entrypoint_path.read_text(encoding="utf-8")
         self.assertIn("## 0. 版本监控配置", entrypoint)
+        self.assertIn("本机若存在根 `AGENTS.md` 则一并扫描", entrypoint)
 
     def test_readme_knowledge_cli_example_is_shell_executable(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -1571,7 +1551,6 @@ class WorkflowContractTests(unittest.TestCase):
         entrypoint = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        root_agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         automation = (
             ROOT
             / "prompts"
@@ -1625,7 +1604,6 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("OMP phase dispatch", entrypoint)
         self.assertIn("Platform identity", entrypoint)
         self.assertIn("当前 host 与其 `.codex/**` / `.omp/**` 生成资产决定本次执行", entrypoint)
-        self.assertIn("纯静态审查不得选择其中一个运行时", root_agents)
         self.assertIn("当前 host 与其专属生成资产决定本次执行", readme)
         self.assertIn("当前 host 与其 <code>.codex/**</code> 或 <code>.omp/**</code> 生成资产决定本次执行", readme_html)
         self.assertIn("Platform identity comes from the current host and its generated integration", channel)
@@ -1639,7 +1617,6 @@ class WorkflowContractTests(unittest.TestCase):
             "仅当前 OMP host 且 <code>.omp/**</code> 集成可用时",
             readme_html,
         )
-        self.assertIn("stable tag 的有效配置、workflow 模板和 migration manifest", root_agents)
         self.assertIn(
             "GitHub release body 缺失、为空或明显不足以判断变更",
             automation,
@@ -1694,6 +1671,13 @@ class WorkflowContractTests(unittest.TestCase):
         )
         self.assertIn(
             "LESSON-20260718-automation-sync-trigger-separation",
+            repository_lesson,
+        )
+        self.assertIn("状态更新（2026-08-20）", repository_lesson)
+        self.assertIn("状态更新（2026-08-20）", validation_lesson)
+        self.assertIn("LESSON-20260820-root-agents-local-only", repository_lesson)
+        self.assertIn(
+            "`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md` 五行",
             repository_lesson,
         )
 

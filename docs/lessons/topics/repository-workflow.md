@@ -120,6 +120,7 @@
 - 预防：后续在 `main` 合并、快进或推送前，都要运行 `.gitignore` 精确三行检查；即使变更来自远程已有提交，也不能跳过本仓库规则验证。
 - 状态更新（2026-07-16）：Python 验证会生成仓库根或 `tests/` 下的 `__pycache__/`，因此当前 canonical 契约已调整为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行；自动化和测试必须断言这四行，不得继续套用历史三行规则。
 - 状态更新（2026-07-18）：并行审核确认，把仓库必需的 `AGENTS.md` 和 authoritative `ENTRYPOINT.md` 同时设为 ignored / untracked 会让新 clone 缺少启动规则和版本基线；已恢复二者由 Git 追踪，当前 canonical `.gitignore` 恢复为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/` 四行。
+- 状态更新（2026-08-20）：用户要求根 `AGENTS.md` 加入 `.gitignore` 并从远程 `main` 删除；当前 canonical `.gitignore` 为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md` 五行。`ENTRYPOINT.md` 仍必须追踪。不得把 `AGENTS.md` 的存在当作 Gate。
 
 ## LESSON-20260718-required-controls-tracked-source: Required Controls Need a Tracked Source
 
@@ -132,6 +133,19 @@
 - 根因：只验证了既有工作树的“文件仍存在”，没有验证远程 clone 的可恢复性，也没有提供 tracked canonical source 和先于 Gate 执行的 bootstrap。
 - 修复：恢复 `AGENTS.md` 和 `ENTRYPOINT.md` 由 Git 追踪，`.gitignore` 恢复四行；README、automation prompt 和契约测试同步改为断言 tracked controls，并让测试直接检查 Git 索引。
 - 预防：任何启动前必需文件必须直接受版本控制，或同时提供受版本控制的 canonical source 与可在 Gate 前执行的 bootstrap；不得把文件设为 ignored / untracked 后又把其存在作为所有操作的前置条件。
+- 状态更新（2026-08-20）：用户覆盖“根 `AGENTS.md` 必须追踪”。该文件现为 ignored / 本机可选；`ENTRYPOINT.md` 仍必须追踪。与本 lesson 的预防一致：ignored 文件不得再作为全操作前置条件。详见 LESSON-20260820-root-agents-local-only。
+
+## LESSON-20260820-root-agents-local-only: Root AGENTS.md Is Local-Only
+
+- 日期：2026-08-20
+- 标签：repository, controls, gitignore, agents
+- 适用场景：调整根 `AGENTS.md` 追踪策略、根 `.gitignore` canonical 内容，或编写读取根 `AGENTS.md` 的契约测试
+- 严重级别：high
+- 来源：用户明确要求将 `AGENTS.md` 加入 `.gitignore` 并从远程 `main` 删除，且不写入 CHANGELOG
+- 问题：根 `AGENTS.md` 曾被当作启动必需的 tracked control；若继续让测试和 automation 读取本机忽略副本，会掩盖 fresh-clone 缺失。
+- 根因：把本机工作树文件存在当成远程可恢复性。
+- 修复：根 `.gitignore` 现为 `.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md` 五行；从 Git 索引和远程 `main` 移除 `AGENTS.md`，本机可保留；`ENTRYPOINT.md` 仍必须追踪。测试、README、automation prompt 不得把 `AGENTS.md` 存在当作 Gate。
+- 预防：不要把 ignored 本地文件当作 clone 可恢复证据；不要因旧四行契约把 `AGENTS.md` 重新加入索引。
 
 ## LESSON-20260701-entrypoint-detail-section-contract: ENTRYPOINT Detail Section Contract
 
