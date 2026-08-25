@@ -52,6 +52,8 @@ npx skills list --global --agent codex
 
 这一步只安装自包含的 `sbtd-workflow-onboard` Skill，不会自动执行 `scripts/onboard.py`，也不会安装 Trellis、GitNexus、其余 bundled / external Skills、写入项目 AGENTS 或初始化项目。私有仓库应使用本机 Git 已可认证的 `git+ssh://` source，不要在命令、仓库、日志或报告中写入凭据。
 
+流程判定图：[npx skills 全局安装 Onboard Skill](docs/assets/npx-skills-global-onboard-install.md)。
+
 ### 2. 使用 Onboard Skill 执行 `init`
 
 安装成功后，在 Codex 中明确调用该 Skill，并提供目标平台、一个或多个项目绝对路径和 Trellis 用户名。多个项目路径使用英语逗号 `,` 分隔，例如 `/abs/project-one,/abs/project-two`；每个路径必须已存在且是目录，重复路径会规范化后只处理一次。
@@ -74,6 +76,8 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" init \
   --trellis-user your-name \
   --yes
 ```
+
+流程判定图：[Onboard Skill 执行 init](docs/assets/onboard-skill-init.md)。
 
 ### 3. 使用 Onboard Skill 执行 `reset`
 
@@ -99,6 +103,8 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
 ```
 
 `reset` 不是无条件删除重装：它仍遵守路径 containment、canonical 身份、事务 rollback、legacy migration、Trellis filesystem-safety guard 和用户确认边界。
+
+流程判定图：[Onboard Skill 执行 reset](docs/assets/onboard-skill-reset.md)。
 
 ### 4. 使用 `--init-projects` 只初始化项目
 
@@ -138,6 +144,8 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" init-projects \
   --trellis-user your-name \
   --yes
 ```
+
+流程判定图：[--init-projects 只初始化项目](docs/assets/onboard-init-projects.md)。
 
 ### 5. 使用安装脚本进行交互式安装
 
@@ -179,6 +187,7 @@ pwsh -File .\install.ps1
 | `docs/lessons/index.md` | Lessons 完整索引，按 tags、适用场景和详情路径检索。 |
 | `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
 | `docs/prd/knowledge-base-integration-prd.md` | P1 / P1.1 已实现能力与 P2 Evidence Store / PR Gate 实施方案。 |
+| `docs/assets/npx-skills-global-onboard-install.md` 等 5 份流程判定图 | Onboard 安装 / init / reset / init-projects 与 SBTD 工作路径 mermaid；从「安装及使用说明」和「工作流主线」跳转。 |
 | `prompts/automations/sbtd-workflow-tools-version-check.md` | Orca `SBTD Workflow Tools Version Check` 的版本化 prompt 源；每次仓库代码改动后评估是否需要调整，只有执行 `sync` 时才与 live automation 比较并按需同步。 |
 | `sbtd-workflow-onboard/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/sbtd-workflow-onboard/`。 |
 | `sbtd-workflow-onboard/catalog.json` / `catalog.schema.json` | Bundled Skill、external Skill 上游源与模板源路径目录，以及对应 Draft 2020-12 结构契约。 |
@@ -209,6 +218,8 @@ pwsh -File .\install.ps1
   -> BDD / Web / Mobile / 发布风险补充验证
   -> 最终报告状态、跳过原因、剩余风险
 ```
+
+全路径判定图：[SBTD 支持的工作路径](docs/assets/sbtd-workflow-paths.md)。
 
 关键边界：
 
