@@ -14,7 +14,7 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.148.0 | stable-only | 是 | 核心 Coding Agent |
+| Codex | openai/codex | v0.149.1 | stable-only | 是 | 核心 Coding Agent |
 | Trellis | mindfold-ai/trellis | v0.6.15 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.9 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
@@ -321,7 +321,7 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.148.0 |
+| Coding Agent | Codex | v0.149.1 |
 | Agent Harness | Trellis | v0.6.15 |
 | 代码理解 | GitNexus | v1.6.9 |
 | Web 诊断 | Chrome DevTools MCP | latest |
