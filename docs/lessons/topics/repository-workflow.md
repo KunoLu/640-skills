@@ -400,3 +400,16 @@
 - 根因：`@ladybugdb/core/lbugjs.node` 未由 GitNexus 全局安装的 lifecycle 产物写入 package directory；进程在 MCP `initialize` 之前退出。
 - 修复：从当前 `CODEX_HOME` 定位生效 MCP command 后，运行该 GitNexus 安装目录内 `node_modules/@ladybugdb/core/install.js`，再以 JSON-RPC `initialize` 握手验证 serverInfo 响应。
 - 预防：先用 `CODEX_HOME` 和 `codex mcp get gitnexus` 确认生效 command；再运行真实 MCP handshake 区分 transport 启动失败与“Repository not indexed”。不要因索引缺失重装或修改 MCP 配置。
+- 状态更新（2026-08-24）：全局 `gitnexus@1.6.9` 在当天 09:20 被重装后，`lbugjs.node` 再次从 `@ladybugdb/core` 消失，但 `@ladybugdb/core-darwin-arm64/lbugjs.node` 仍在。`npm config get ignore-scripts` 为 `false`，说明重装仍可能跳过或未持久化 `@ladybugdb/core` 的 `install` 脚本。不要把“已经修过一次”当成模块仍在。
+
+## LESSON-20260824-gitnexus-claude-json-shebang-path: Pin Claude GitNexus MCP To Explicit Node
+
+- 日期：2026-08-24
+- 标签：gitnexus, mcp, claude, omp, path, shebang, transport
+- 适用场景：OMP 报 `Failed: gitnexus [config: ~/.claude.json]: Transport closed`，或 GUI / 干净 PATH 下启动 `gitnexus mcp`
+- 严重级别：high
+- 来源：OMP 从 `~/.claude.json` 导入 GitNexus MCP 失败；同一错误在 2026-08-20 只修了 native module 后又复发
+- 问题：`~/.claude.json` 使用绝对路径 `.../bin/gitnexus` + `args=["mcp"]`，在本机 nvm PATH 下 handshake 成功，但 OMP 仍报 `Transport closed`。
+- 根因：`gitnexus` 是 `#!/usr/bin/env node` 脚本。OMP 导入 Claude 配置时 PATH 往往只有 `/usr/bin:/bin:...`，没有 nvm 的 `node`，进程以 exit 127 / `env: node: No such file or directory` 立即退出，被汇总成 Transport closed。这与缺失 `lbugjs.node` 是独立根因，可同时存在。
+- 修复：把 `~/.claude.json` 的 command 改成 nvm 绝对 `node`，args 改成 GitNexus CLI 绝对路径 + `mcp`，并设置 `env.PATH` 包含该 nvm `bin`。用干净 PATH 复跑 JSON-RPC `initialize`，确认不再依赖 `/usr/bin/env node`。
+- 预防：诊断 OMP `config: ~/.claude.json` 失败时，必须同时做带 nvm PATH 和干净 PATH 的 handshake。不要只在当前 shell 里跑通 `gitnexus mcp` 就认为 Claude 配置对 GUI 启动安全。
