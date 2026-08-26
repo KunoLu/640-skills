@@ -646,7 +646,7 @@ tests/e2e/**/*.trace.zip
 
 - 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
-- 15 个 bundled Skills 和 14 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
+- 15 个 bundled Skills 和 18 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
@@ -661,6 +661,8 @@ tests/e2e/**/*.trace.zip
 - mattpocock external Skill 使用上游 canonical 名称。`migrate-external-skills --scope global --yes` 会先对全部受管旧目录做 identity preflight，再以已选 source 事务安装所需 canonical replacement。需要 canonical replacement 的 legacy predecessor 会在成功 transaction commit 后随临时 rollback 目录删除；只有不需要 canonical install 的 legacy-only cleanup（已有有效 replacement，或无 replacement 的 `zoom-out`）才会在删除前保留 migration backup。任何身份冲突均在安装前 fail-closed。正常 `init` / `reset` 仍只做已发现 legacy 的自动迁移。
 - bundled Onboard rename migration 在 canonical `sbtd-workflow-onboard/SKILL.md` 校验成功，且 legacy `kuno-workflow-onboard-skills/SKILL.md` 的 frontmatter 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会在任何 target 变更前阻断 `init` / `reset` 并保留原内容，删除异常会进入失败报告；`plan` 会报告迁移目标或 identity conflict，`init-projects` 不检查或修改全局 Skill 目录。
 - `shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
+- `ponytail`、`ponytail-review`、`ponytail-audit`、`ponytail-debt` 与其他 external Skills 同为 required：缺失或损坏时不询问、直接从 stable set 补装或修复，失败即阻断。SBTD 统一使用 Onboard stable skill-only provider；`check --json` 输出 `ponytailProvider`，检测到 Codex / OMP 官方 Ponytail plugin 已启用时报告 `provider=conflict`，`check` 失败且 `init` / `reset` 在写 stable copies 前阻断，根安装器同样停止；plugin 已安装但禁用只报告不阻断，CLI 不可用报告 `unknown` 而不伪造状态。Onboard 不安装、启用、禁用、信任或卸载官方 plugin；`ponytail-gain` / `ponytail-help` 只属于官方 plugin，不由 Onboard 管理。
+- 全局 `AGENTS.md` 模板包含 Code Readability canonical 规则：正确性、安全、运行时特性、明确需求和项目约定优先，可读性与可维护性高于源码行数、文件数和最小 diff。编码任务在适用开发门禁通过后、首次实现编辑前主动调用 `ponytail`；非平凡生产 diff 通过定点 smoke 后、最终 `project-validation` 前主动调用 `ponytail-review`，findings 必须经 Code Readability 裁决，随后执行 Code Readability Review；`ponytail-audit` 与 `ponytail-debt` 只按客观触发条件调用。`project-validation` 不承载可读性规则。
 - React Bits tier 选择对每个 React + shadcn/ui 项目独立判断；仍保持项目级、可选并保留 license/registry 前置条件。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 

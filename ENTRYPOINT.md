@@ -6,6 +6,7 @@
 > `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成、选择器审计和覆盖率报告的可选专项分支。
 > `shadcn Skill` 作为 shadcn/ui 项目组件、registry、preset 和 CLI 工作流的可选辅助，必须先确认项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务明确涉及 shadcn registry / preset / CLI。
 > `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
+> `ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` 作为 required external Skills 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；官方 Ponytail plugin 与 Onboard stable provider 不得同时启用，检测到已启用 plugin 时 check / init / reset 阻断并交由人工处理。Ponytail 版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
 > 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `sbtd-workflow-onboard/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
 
 ## 0. 版本监控配置
@@ -168,8 +169,12 @@ grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用
   → to-tickets as Trellis-ready Markdown tasks
   → Trellis workflow（默认 native）
   → GitNexus impact-analysis
+  → ponytail（首次实现编辑前选择最小正确实现）
   → Codex implementation
   → tdd / codebase-design（行为风险需要回归测试或测试面设计时）
+  → 定点 smoke / targeted tests
+  → ponytail-review（非平凡 diff 的删繁 findings，经 Code Readability 裁决）
+  → Code Readability Review（有修改则重跑受影响验证）
   → project tests
   → Chrome DevTools MCP（需要 Web 运行时诊断时）
   → Playwright CLI（涉及 Web 回归时）

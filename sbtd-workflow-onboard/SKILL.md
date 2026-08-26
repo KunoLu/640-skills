@@ -135,8 +135,11 @@ All referenced external Skills are also required globally. Install every missing
 - `domain-modeling`, `codebase-design`, `handoff`, `writing-for-agents`
 - `to-spec`, `to-tickets`, `ui-ux-pro-max`, `impeccable`
 - `shadcn`
+- `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`
 
 Dependencies are still expanded automatically: `tdd` includes `codebase-design`; `grill-me` includes `grilling`; `grill-with-docs` includes `grilling` and `domain-modeling`.
+
+The four Ponytail Skills are required like every other external Skill: `check` only inspects and reports them, while normal `init` / `reset` installs or repairs missing and invalid copies from the vendored stable set without asking, and a failed install fails the run. Onboard uses the stable skill-only provider and never installs, enables, disables, trusts, or removes the official Ponytail plugin. When `check` detects the official Ponytail plugin enabled for Codex or OMP, it reports `ponytailProvider.provider=conflict` and fails; `init` / `reset` block before writing stable copies, and the root installers stop with the same guidance. A plugin that is installed but disabled is reported but does not block. `ponytail-gain` and `ponytail-help` belong only to the official plugin and are never managed by Onboard.
 
 The mandatory runtime gate contracts are owned by the installed global `AGENTS.md`, project template, Trellis workflow, and bundled reviewer Skills. They become active only after normal `init` / `reset` successfully writes the global rules and installs the required bundled / external Skills. The public Skills CLI bootstrap and `init-projects` do not activate these runtime gates by themselves; they only install the Onboard Skill or process project-local assets respectively.
 
@@ -246,6 +249,8 @@ python scripts/onboard.py promote-external-skills-stable \
   --stable-set <yyyy-mm-dd.index> \
   --yes
 ```
+
+First-time registration of a repository that is not yet in the stable manifest additionally requires `--repo`, `--license`, and at least one `--license-file SOURCE=STABLE_PATH` mapping; the promoted Skills are selected from catalog external entries whose `source.repo` matches `--repo` exactly. For a repository that already exists in the manifest, `--repo` may only repeat the recorded URL and `--license` / `--license-file` are rejected, so promotion can never silently rewrite repository metadata.
 
 ## Reporting
 
