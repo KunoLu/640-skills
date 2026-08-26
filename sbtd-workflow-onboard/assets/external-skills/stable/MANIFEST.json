@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "stableSet": "2026-08-11.1",
-  "promotedAt": "2026-08-11",
+  "stableSet": "2026-08-26.1",
+  "promotedAt": "2026-08-26",
   "repositories": {
     "mattpocock-skills": {
       "url": "https://github.com/mattpocock/skills.git",
@@ -48,6 +48,17 @@
         {
           "source": "LICENSE.md",
           "stablePath": "licenses/shadcn-ui-LICENSE.md"
+        }
+      ]
+    },
+    "ponytail": {
+      "url": "https://github.com/DietrichGebert/ponytail.git",
+      "revision": "0a4dd63ad4541f4f655c4108a295916f3c1d8fda",
+      "license": "MIT",
+      "licenseFiles": [
+        {
+          "source": "LICENSE",
+          "stablePath": "licenses/ponytail-LICENSE"
         }
       ]
     }
@@ -136,6 +147,30 @@
       "sourceSubpath": "skills/shadcn",
       "stablePath": "skills/shadcn",
       "treeSha256": "c57e3cc8688fe5f0956c8e91ee02d1ee97fb5b0e8115e2d6ca6447c1ade69686"
+    },
+    "ponytail": {
+      "repository": "ponytail",
+      "sourceSubpath": "skills/ponytail",
+      "stablePath": "skills/ponytail",
+      "treeSha256": "1f70d9e01f5e924aa2328546e32c349df1842ff9ed0979445a31000151c6e5c5"
+    },
+    "ponytail-review": {
+      "repository": "ponytail",
+      "sourceSubpath": "skills/ponytail-review",
+      "stablePath": "skills/ponytail-review",
+      "treeSha256": "ff27a5ed24b6b4cf3959eb98fdba17e936861e76e81d1d3054dec3ed804d25b9"
+    },
+    "ponytail-audit": {
+      "repository": "ponytail",
+      "sourceSubpath": "skills/ponytail-audit",
+      "stablePath": "skills/ponytail-audit",
+      "treeSha256": "def4ae9e8598c66d63fa197d01771c923033da085eb26939333464d61da17ace"
+    },
+    "ponytail-debt": {
+      "repository": "ponytail",
+      "sourceSubpath": "skills/ponytail-debt",
+      "stablePath": "skills/ponytail-debt",
+      "treeSha256": "f9926b4440b0ce1c92008a0a2baff465bd4fdfacf3cbaf7652fe575dacc5345c"
     }
   }
 }
