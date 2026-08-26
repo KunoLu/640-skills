@@ -277,6 +277,44 @@ Do not complete the task without executing $trellis-check.
 
 ---
 
+## Ponytail and Code Readability Sequence
+
+For coding tasks, the implementation phase must follow this order:
+
+```text
+requirements / PRD / BDD / design stable
+→ Book Gate Plan
+→ applicable Legacy / Refactoring / DDIA pre-implementation gates
+→ ponytail
+→ implementation
+→ targeted smoke / targeted tests
+→ ponytail-review
+→ accept or reject simplification findings
+→ Code Readability Review
+→ rerun affected validation when readability edits were applied
+→ project-validation final validation
+→ book-release-readiness (when applicable)
+```
+
+- Invoke `ponytail` proactively after requirements, design, and applicable development gates are settled, and before the first implementation edit. It selects the smallest correct implementation within the confirmed scope; it must not re-question confirmed requirements.
+- Invoke `ponytail-review` proactively after a non-trivial production diff is complete and targeted smoke has passed, and before final `project-validation`. Its findings are complexity candidates only, never correctness, Book Gate, or validation evidence.
+- Every `ponytail-review` delete / inline / merge finding must be decided against the global `AGENTS.md` `Code Readability` rules; readability and maintainability outrank source lines, file count, and minimal diff. Accepted findings require rerunning the affected smoke / tests.
+- Invoke `ponytail-audit` only for explicit whole-repo audit triggers, and `ponytail-debt` only when `ponytail:` markers are added, touched, or explicitly requested; neither expands an ordinary task into a repo-wide cleanup.
+- Code Readability Review covers the modified hand-written production code and tests before final validation and does not modify vendored or generated code. If a finding needs a broad behavior-preserving refactor, stop the cleanup and return to `book-refactoring-pass`; do not silently widen the task at the finish line.
+
+Record the outcome in the task check summary:
+
+```text
+Code Readability Review
+Scope: modified hand-written production code and tests
+Findings: none | <concrete locations and issues>
+Ponytail conflicts resolved: none | <accepted/rejected finding and reason>
+Changes applied: none | <task-scoped readability edits>
+Revalidation required: yes | no
+```
+
+---
+
 ## Book-derived Skill Gate
 
 During requirements, design, implementation, and validation phases, first produce a task-level `Book Gate Plan`. For each bundled book-derived Skill, record `required` or `on-demand`, objective trigger evidence, execution phase, and a separate Gate state: `planned` / `running` / `passed` / `blocked` / `not-required`. A required or selected on-demand gate starts `planned`; an unselected on-demand gate is `not-required`; the only normal transition is `planned` → `running` → `passed` / `blocked`. Record the reviewer-specific status only after that Skill actually runs. The workflow must not downgrade a matched mandatory gate to on-demand because the Agent expects a low-risk result; only changed scope or project evidence may remove the trigger, and that change must be recorded.

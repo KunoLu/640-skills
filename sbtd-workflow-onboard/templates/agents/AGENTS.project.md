@@ -9,6 +9,17 @@
 
 ---
 
+## 代码可读性
+
+项目既有约定优先。正确性、安全、运行时特性和可读性高于源码行数、
+文件数或最小 diff。不要为了满足 Ponytail 的最短实现偏好制造密集表达式、
+模糊命名、浅层包装（shallow wrappers）或移除真实接缝（seam）。最终验证前必须复核所有修改的
+手写代码和测试；广泛重构仍受范围、遗留代码和重构门禁约束。
+
+本节的可读性边界自包含，project-only 安装（不写全局 AGENTS、不装全局 Skills）时同样生效。完整规则由全局 `AGENTS.md` 的 `代码可读性` 一节承接。仅当 Ponytail Skills 已在环境中可见（正常 `init` / `reset` 已安装，或用户另行安装）时：编码任务在首次实现编辑前主动调用 `ponytail`，非平凡 diff 通过定点 smoke 后、最终验证前主动调用 `ponytail-review` 并按可读性规则裁决发现项；Skills 不可见时跳过该路由，不视为已完成 review。
+
+---
+
 ## UI/UX 设计上下文
 
 默认继承全局规则：`impeccable` 的项目上下文文件维护在 `docs/PRODUCT.md` 和 `docs/DESIGN.md`。

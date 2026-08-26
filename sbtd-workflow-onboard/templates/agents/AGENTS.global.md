@@ -341,6 +341,10 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `shadcn` | shadcn/ui 项目组件、registry、preset、CLI 和组件组合规则 | 项目存在 `components.json`、使用 / 初始化 shadcn/ui，或需要 `shadcn init/add/search/view/docs/diff/info/migrate/preset`、registry 组件、preset、Base / Radix 差异、表单 / 图标 / chat primitives 等 shadcn 规则时 |
 | `web-ui-autotest-generator` | Web UI Playwright 测试资产生成、选择器审计和覆盖率报告 | 用户明确要求生成 Web UI 自动化测试，或测试阶段发现关键 Web UI 回归路径需要固化为仓库内可维护测试资产时 |
 | `seo-geo` | 公开网站 / 落地页 / 文档站 SEO 与 GEO 可见性专项检查 | 用户明确要求 SEO、GEO、AI search visibility、schema、meta tags、robots / sitemap 或公开 Web 发布前搜索可见性检查时；仅在 Skill 可用时 |
+| `ponytail` | 编码任务的最小正确实现选择（YAGNI、复用优先、stdlib 优先） | 所有编码任务在需求、设计和适用开发门禁确定后、首次实现编辑前主动调用 |
+| `ponytail-review` | 非平凡生产代码 diff 的过度设计 / 赘余审查 | 完整 diff 形成且定点 smoke 通过后、最终 `project-validation` 前主动调用；findings 必须经 Code Readability 裁决 |
+| `ponytail-audit` | 全仓只读 over-engineering / bloat 候选清单 | 用户明确要求全仓审计、验收明确包含全仓整改或跨模块架构整改需要只读候选清单时 |
+| `ponytail-debt` | `ponytail:` marker 台账收集 | 新增 / 修改或触及 `ponytail:` marker，或用户明确要求列出 shortcuts 台账时；默认不落盘 |
 | `React Bits tier / Pro Skill` | React / shadcn UI 项目中选择 React Bits Free 或付费 components、blocks、landing page sections | 目标项目已确认 React + shadcn/ui 后，用户明确需要 React Bits；Free 和付费 Starter / Pro / Ultimate 都需确认，付费还需 registry、项目内 Skill 和可读取 license key |
 
 ### 自定义 Skills 使用边界
@@ -407,6 +411,53 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - 不创建不必要的 parent / child task。
 - 不把一次性任务计划写入长期项目规范。
 - 不让未受 `.trellis/workflow.md`、task artifacts 和生成 role guard 管理的 Codex sub-agent dispatcher 替代项目工作流；有效 Trellis 调度模式内的 role subagent 仍遵循该工作流。
+
+---
+
+## 代码可读性
+
+正确性、安全、运行时特性、明确需求和项目约定优先。可读性与可维护性优先于减少源码行数、文件数或 diff 体积。
+
+1. 每个函数或模块应有一个内聚职责。不要仅为了让函数更短而拆开内聚逻辑。
+
+2. 当具名辅助函数（helper）能实质降低认知负担、捕获可复用概念、或建立已验证的接缝（seam）时，再抽取它。避免只是把代码挪到别处的浅层包装（shallow wrappers）。
+
+3. 当守卫子句（guard clauses）和提前返回能让主路径更清晰时，优先使用。当结构化清理、对称性或错误聚合更易跟随理解时，不要强行使用它们。
+
+4. 避免巧妙、过度紧凑或依赖运算符优先级的表达式。
+
+5. 当具名中间变量能揭示复杂条件或转换的含义时，引入它们。不要仅为增加行数给平凡值命名。
+
+6. 领域代码使用领域意图命名；基础设施代码使用具体角色命名。
+
+7. 避免 `data`、`info`、`tmp`、`result`、`handle`、`process`、`doSomething` 这类含糊名称，除非在极窄范围内含义已经明确无歧义。
+
+8. 当真实接缝（seam）能改善局部性、可测试性或变更隔离时，把领域决策与 I/O、数据库、HTTP、缓存和日志分开。不要为单一平凡路径引入假想的端口（ports）、适配器（adapters）或服务层（service layers）。
+
+9. 注释应解释理由、不变量、约束、协议要求或非显而易见的权衡。不要复述代码。
+
+10. 仅当抽象能实质改善可读性、集中不变量、消除有意义的重复、隔离易变依赖、或建立已验证的接缝（seam）时，才引入抽象。
+
+11. 在套用通用建议之前，先遵循现有项目的命名、模块、错误处理和结构约定。
+
+12. 最终验证前，专门从可读性角度复核所有已修改的手写代码和测试。不要修改第三方打包或生成代码（vendor / generated code）。
+
+当存在多种正确实现时，选择新维护者能最快理解并安全修改的方案，且不得恶化运行时行为或违反项目约定。
+
+### Ponytail 与代码可读性审查
+
+- `ponytail` 的最小化偏好受本节约束：删繁不能以密集表达式、模糊命名、浅层包装（shallow wrappers）或移除真实接缝（seam）为代价。
+- `ponytail-review` 的每个删除 / 内联 / 合并发现项必须按本节裁决；接受后重跑受影响验证。
+- Code Readability Review 在最终验证前覆盖本轮修改的手写生产代码和测试，不修改第三方打包或生成代码（vendor / generated code）；需要大范围行为保持重构时回到 `book-refactoring-pass`，不在收尾阶段静默扩大任务。
+
+```text
+Code Readability Review
+Scope: modified hand-written production code and tests
+Findings: none | <concrete locations and issues>
+Ponytail conflicts resolved: none | <accepted/rejected finding and reason>
+Changes applied: none | <task-scoped readability edits>
+Revalidation required: yes | no
+```
 
 ---
 
