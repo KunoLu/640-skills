@@ -683,6 +683,10 @@ class WorkflowContractTests(unittest.TestCase):
                 "skill:ui-ux-pro-max",
                 "skill:impeccable",
                 "skill:shadcn",
+                "skill:ponytail",
+                "skill:ponytail-review",
+                "skill:ponytail-audit",
+                "skill:ponytail-debt",
             ],
         )
         onboard_root = ROOT / "sbtd-workflow-onboard"
