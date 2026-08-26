@@ -2,6 +2,12 @@
 
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
+## v1.0.9（未发布）
+
+### 变更
+
+- `sync` / `同步` 在复制 Onboard 后必须用已同步 `onboard.py install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt --scope global --source auto` 从 stable mirror 安装 required Ponytail Skills，并校验 4 个 `SKILL.md`；不得把 `assets/external-skills/stable/skills/ponytail*` 加为同步表拷贝行。
+
 ## v1.0.8（2026-08-26）
 
 ### 新增

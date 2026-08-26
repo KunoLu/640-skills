@@ -1100,6 +1100,15 @@ class WorkflowContractTests(unittest.TestCase):
         )
         self.assertIn("包含 `web-ui-autotest-generator`", prompt)
         self.assertIn("`AGENTS.project.md` 不在普通 sync 范围内", prompt)
+        self.assertIn(
+            "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt",
+            prompt,
+        )
+        self.assertIn("不得把 Ponytail stable 路径列为 cp/rsync 目标", prompt)
+        self.assertNotIn(
+            "templates/skills/ponytail",
+            prompt,
+        )
 
         entrypoint_path = ROOT / "ENTRYPOINT.md"
         self.assertTrue(entrypoint_path.is_file())
@@ -1123,6 +1132,11 @@ class WorkflowContractTests(unittest.TestCase):
                 "/Users/lusonglin/.agent/skills/web-ui-autotest-generator/",
                 document,
             )
+            self.assertIn(
+                "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt",
+                document,
+            )
+            self.assertIn("不得作为同步表", document)
             self.assertIn("本机可选", document)
             self.assertIn("不进入远程", document)
         entrypoint = entrypoint_path.read_text(encoding="utf-8")
