@@ -45,10 +45,12 @@ flowchart TD
   noRb --> plan[输出 plan --json]
   plan --> confirm{确认执行 reset --yes?}
   confirm -->|否| abort[不写文件]
-  confirm -->|是| identity{legacy Skill 身份冲突?}
+  confirm -->|是| provider{官方 Ponytail plugin 已启用?}
+  provider -->|是| providerBlock["阻断: provider=conflict, 人工禁用或移除 plugin 后重跑"]
+  provider -->|否或无法检测| identity{legacy Skill 身份冲突?}
   identity -->|是| failClosed[fail-closed: 原目录不动]
-  identity -->|否| extMiss{缺失的 required external Skills?}
-  extMiss -->|有| installExt[只补缺失项]
+  identity -->|否| extMiss{缺失或损坏的 18 个 required external Skills?}
+  extMiss -->|有| installExt[按 stable transaction 补齐或修复]
   extMiss -->|无| skipExt[已合法: 不重装]
   installExt --> migrate
   skipExt --> migrate[只迁身份匹配的 legacy 目录]
@@ -89,7 +91,7 @@ flowchart TD
 |---|---|---|
 | 行为本质 | 与 `init` 相同的补齐 + 写入 | 检查后把模板回写到已有目标 |
 | Agent CLI / npm / trellis / gitnexus | 缺失才安装 | 已验证则跳过，不强制升级 |
-| external Skills | 只装缺失项 | 已合法则跳过 |
+| 18 个 external Skills（含 4 个 Ponytail） | 缺失或损坏才按 stable transaction 补齐 / 修复；官方 Ponytail plugin 启用时先阻断；Ponytail config 文件 reset 前后字节一致 | 已合法则跳过 |
 | bundled Skills | 复制 | **无备份覆盖** 为当前 Onboard 模板 |
 | 全局 `AGENTS.md` | 复制 | **备份后覆盖** |
 | 项目 `AGENTS.md` | 仅 Q4 同意时复制 | 同意则备份后覆盖 |

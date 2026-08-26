@@ -40,10 +40,12 @@ flowchart TD
   toolsRecheck -->|是| plan[输出 plan --json 后需用户确认]
   plan --> confirm{确认执行 init --yes?}
   confirm -->|否| abort[不写文件]
-  confirm -->|是| identity{legacy Skill 身份冲突?}
+  confirm -->|是| provider{官方 Ponytail plugin 已启用?}
+  provider -->|是| providerBlock["阻断: provider=conflict, 人工禁用或移除 plugin 后重跑"]
+  provider -->|否或无法检测| identity{legacy Skill 身份冲突?}
   identity -->|是| failClosed[fail-closed: 不改任何目标]
-  identity -->|否| extMiss{缺失的 required external Skills?}
-  extMiss -->|有| installExt[只安装缺失项]
+  identity -->|否| extMiss{缺失的 18 个 required external Skills?}
+  extMiss -->|有| installExt[只安装缺失项, 不询问]
   extMiss -->|无| skipExt[已合法: 不重装]
   installExt --> writes[按 operations 写入]
   skipExt --> writes
@@ -89,7 +91,7 @@ flowchart TD
 | npm / node | 缺 npm 才 `ensure-npm` | 已在 PATH 则跳过 |
 | trellis / gitnexus CLI | 强制全局安装 | 已验证则跳过，不升到 `@latest` |
 | rtk / caveman / Java / Maestro | 询问后才装 | 已验证则跳过 |
-| external Skills | 只装缺失且身份合法的项 | 已合法则跳过；不每轮重克隆 |
+| 18 个 external Skills（含 4 个 Ponytail） | 只装缺失且身份合法的项；官方 Ponytail plugin 启用时先阻断 | 已合法则跳过；不每轮重克隆 |
 | 15 个 bundled Skills | 复制到本次解析的全局 Skills 根 | **无备份覆盖** |
 | 全局 `AGENTS.md` | 复制到 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md` | **备份后覆盖**；不写 `~/.omp/agent/AGENTS.md` |
 | 项目 `AGENTS.md` | 仅当 Q4 同意时复制 | 同意写入则备份后覆盖 |

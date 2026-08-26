@@ -57,20 +57,26 @@ flowchart TD
   bddHit -->|否| tddHit
   bdd --> tddHit{高风险行为需要测试先行?}
   tddHit -->|是| tdd[tdd + codebase-design]
-  tddHit -->|否| impl
-  tdd --> impl[实现: 当前 host 的 Trellis 调度或主会话]
+  tddHit -->|否| ponyImpl
+  tdd --> ponyImpl[ponytail: 首次实现编辑前选最小正确实现]
+  ponyImpl --> impl[实现: 当前 host 的 Trellis 调度或主会话]
 
   impl --> uiHit{UI / 组件 / 视觉?}
   uiHit -->|是| ui[ui-ux-pro-max 初稿]
   ui --> shadcnHit{存在 components.json 或要走 shadcn?}
   shadcnHit -->|是| shadcn[shadcn]
-  shadcnHit -->|否| implVerify
+  shadcnHit -->|否| targetedSmoke
   shadcn --> rbHit{React + shadcn 且用户要 React Bits?}
   rbHit -->|是| rb[项目级 React Bits: 须确认]
   rbHit -->|否| polish
   rb --> polish[可选 impeccable audit / polish]
-  polish --> implVerify
-  uiHit -->|否| implVerify[项目验证]
+  polish --> targetedSmoke
+  uiHit -->|否| targetedSmoke[定点 smoke / targeted tests]
+  targetedSmoke --> ponyReview{非平凡生产 diff?}
+  ponyReview -->|是| prReview[ponytail-review: findings 经 Code Readability 裁决]
+  ponyReview -->|否| readability
+  prReview --> readability[Code Readability Review: 有修改则重跑受影响验证]
+  readability --> implVerify[项目验证]
 
   implVerify --> webRt{需要真实 Chrome 诊断?}
   webRt -->|是| cdt[Chrome DevTools MCP]
@@ -119,6 +125,8 @@ flowchart TD
 | Book Gate Plan | 5 个 `book-*` | 无 | 无 | 命中强制触发而 Skill 缺失 → 该 Gate `blocked` |
 | BDD | `gherkin-bdd` | 无 | 无 | 缺 contract / 环境事实 → `@todo` 或 blocked，不写猜测场景 |
 | TDD | `tdd`、`codebase-design` | 项目测试 runner | 无 | 评估后跳过须说明原因 |
+| Ponytail 实现与审查 | `ponytail`、`ponytail-review`（`ponytail-audit` / `ponytail-debt` 仅条件触发） | 无 | 无 | required external Skill；缺失由 Onboard 从 stable 补装；官方 plugin 启用时 `provider=conflict` 阻断 |
+| Code Readability Review | 全局 `AGENTS.md` Code Readability 规则 | 受影响验证命令 | 无 | 大范围重构回到 `book-refactoring-pass`，不在收尾静默扩大任务 |
 | UI 初稿 | `ui-ux-pro-max` | 无 | 无 | 按项目设计系统继续 |
 | shadcn | `shadcn` | 项目包管理器 + `shadcn` CLI | 可选 shadcn MCP | 无 `components.json` 且用户未要求则跳过 |
 | React Bits | 项目内 React Bits Pro Skill | `npx shadcn` | 无 | 无确认 / 无 key / 非 React+shadcn 则跳过 |
