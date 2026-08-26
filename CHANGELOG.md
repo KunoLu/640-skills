@@ -2,6 +2,24 @@
 
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
+## v1.0.8（未发布）
+
+### 新增
+
+- Ponytail 4 个核心 Skills（`ponytail`、`ponytail-review`、`ponytail-audit`、`ponytail-debt`）作为 required external Skills 接入：正常 `check` / `init` / `reset` 检查全部 18 个 required external Skills，缺失或损坏时不询问、直接从 vendored stable set 补装或修复，失败即阻断；stable set 升级为 `2026-08-26.1`，固定 Ponytail `v4.9.0` 上游 commit、MIT license、tree SHA-256 与第三方声明。
+- `promote-external-skills-stable` 支持首次注册 manifest 中尚不存在的新 repository：新增 `--repo`、`--license` 与可重复 `--license-file SOURCE=STABLE_PATH`，从 catalog 选择与 `--repo` 精确匹配的 external entries 生成 candidate tree；既有 repository 只允许 `--repo` 一致性复核并拒绝 license 参数，杜绝静默改写元数据。
+- `check --json` 新增 `ponytailProvider` 只读检测：Codex / OMP 官方 Ponytail plugin 已启用时报告 `provider=conflict`，`check` 失败且 `init` / `reset` 在写 stable copies 前阻断，根安装器同样停止；plugin 已安装但禁用只报告不阻断，CLI 不可用报告 `unknown`。Onboard 不执行任何 plugin 安装、启用、禁用、信任或卸载。
+- 全局 `AGENTS.md` 模板新增 `Code Readability` canonical 规则：正确性、安全、运行时特性、明确需求和项目约定优先，可读性与可维护性高于源码行数、文件数和最小 diff；`AGENTS.project.md` 增加最小 fallback，`trellis-workflow` 明确 ponytail → 定点 smoke → ponytail-review → Code Readability Review → 最终 `project-validation` 的主动调用顺序。
+
+### 变更
+
+- 将全局 `AGENTS.md` 模板的 `Code Readability` 章节改为中文标题「代码可读性」，正文与英文版语义对齐；check summary 仍使用 `Code Readability Review` 协议字段。
+
+### 验证
+
+- 全量 Python unittest 160 项全部通过，其中 Ponytail 集成测试 18 项覆盖 catalog/stable manifest、promotion 首次注册与拒绝路径、provider 检测矩阵和 workflow 文档契约。
+- 隔离 HOME smoke 8 个场景全部通过：Ponytail 缺失 / 完整 / 部分缺失 / 损坏修复、官方 plugin enabled 冲突阻断（check 与 init 均失败且零写入）、plugin disabled 放行、CLI 不可用报告 `unknown`、reset 前后 Ponytail config 文件字节一致。
+
 ## v1.0.7（2026-08-20）
 
 
