@@ -373,11 +373,18 @@ MATTPOCOCK_REQUIRED_DEPENDENCIES = {
     "grill-me": ("grilling",),
     "grill-with-docs": ("grilling", "domain-modeling"),
 }
+PONYTAIL_REQUIRED_SKILLS = (
+    "ponytail",
+    "ponytail-review",
+    "ponytail-audit",
+    "ponytail-debt",
+)
 REFERENCED_SKILLS = (
     *MATTPOCOCK_CANONICAL_SKILLS,
     "ui-ux-pro-max",
     "impeccable",
     "shadcn",
+    *PONYTAIL_REQUIRED_SKILLS,
 )
 INTERACTION_SKILLS = ("caveman",)
 if set(EXTERNAL_SKILL_SOURCES) != set(REFERENCED_SKILLS):
@@ -1771,6 +1778,188 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
     }
 
 
+def normalized_ponytail_repo_identity(value: str) -> str:
+    identity = value.strip().lower().strip("/")
+    for prefix in ("git+ssh://", "ssh://", "https://", "http://", "git://"):
+        if identity.startswith(prefix):
+            identity = identity[len(prefix):]
+            break
+    if identity.startswith("git@"):
+        identity = identity[len("git@"):]
+    elif identity.startswith("git:"):
+        identity = identity[len("git:"):]
+    if ":" in identity.split("/")[0]:
+        identity = identity.replace(":", "/", 1)
+    identity = identity.strip("/").removesuffix(".git").strip("/")
+    return identity
+
+
+def is_official_ponytail_plugin(platform_name: str, record: object) -> bool:
+    if not isinstance(record, dict):
+        return False
+    entry = cast(dict[str, object], record)
+    if platform_name == "codex":
+        canonical = str(entry.get("id") or entry.get("canonical") or "").lower()
+        if canonical == "ponytail@ponytail":
+            return True
+        return (
+            str(entry.get("name") or "") == "ponytail"
+            and str(entry.get("marketplace") or "") == "ponytail"
+        )
+    if platform_name == "omp":
+        if str(entry.get("name") or "") != "ponytail":
+            return False
+        expected = normalized_ponytail_repo_identity(
+            str(EXTERNAL_SKILL_SOURCES["ponytail"]["repo"])
+        )
+        for key in ("source", "installSpec", "install", "url", "repository", "spec"):
+            value = entry.get(key)
+            if isinstance(value, str) and normalized_ponytail_repo_identity(value) == expected:
+                return True
+        return False
+    return False
+
+
+def ponytail_plugin_record_enabled(record: dict[str, object]) -> bool:
+    enabled = record.get("enabled")
+    if isinstance(enabled, bool):
+        return enabled
+    status = str(record.get("status") or record.get("state") or "").lower()
+    return status in {"enabled", "active", "on"}
+
+
+def plugin_records_from_map(mapping: dict[str, object]) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for key, value in mapping.items():
+        if not isinstance(value, dict):
+            continue
+        record = {"name": str(key), **cast(dict[str, object], value)}
+        if "@" in str(key):
+            record.setdefault("id", str(key))
+        records.append(record)
+    return records
+
+
+def list_platform_plugins(platform_name: str) -> tuple[str, list[dict[str, object]]]:
+    executable = shutil.which(platform_name)
+    if executable is None:
+        return "cli-unavailable", []
+    try:
+        completed = subprocess.run(
+            [executable, "plugin", "list", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "cli-unavailable", []
+    if completed.returncode != 0:
+        return "cli-unavailable", []
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return "cli-unavailable", []
+    records: list[dict[str, object]] = []
+    if isinstance(payload, list):
+        candidates: list[object] = payload
+        for candidate in candidates:
+            if isinstance(candidate, dict):
+                records.append(cast(dict[str, object], candidate))
+        return "ok", records
+    if not isinstance(payload, dict):
+        return "cli-unavailable", []
+    body = cast(dict[str, object], payload)
+    for key in ("plugins", "items", "data", "installed"):
+        value = body.get(key)
+        if isinstance(value, list):
+            for candidate in value:
+                if isinstance(candidate, dict):
+                    records.append(cast(dict[str, object], candidate))
+            return "ok", records
+        if isinstance(value, dict):
+            return "ok", plugin_records_from_map(cast(dict[str, object], value))
+    if body and all(isinstance(value, dict) for value in body.values()):
+        records = plugin_records_from_map(body)
+    return "ok", records
+
+
+def detect_ponytail_provider(global_skills_dir: Path) -> dict[str, object]:
+    valid = [
+        name
+        for name in PONYTAIL_REQUIRED_SKILLS
+        if external_skill_target_is_valid(global_skills_dir, name)
+    ]
+    existing = [
+        name
+        for name in PONYTAIL_REQUIRED_SKILLS
+        if filesystem_entry_exists(global_skills_dir / name)
+    ]
+    if len(valid) == len(PONYTAIL_REQUIRED_SKILLS):
+        skill_status = "complete"
+    elif not existing:
+        skill_status = "missing"
+    elif valid:
+        skill_status = "partial"
+    else:
+        skill_status = "invalid"
+
+    platforms: dict[str, object] = {}
+    any_unavailable = False
+    enabled_found = False
+    disabled_found = False
+    for platform_name in ("codex", "omp"):
+        status, records = list_platform_plugins(platform_name)
+        if status != "ok":
+            platforms[platform_name] = {"status": "cli-unavailable"}
+            any_unavailable = True
+            continue
+        official = [
+            record
+            for record in records
+            if is_official_ponytail_plugin(platform_name, record)
+        ]
+        if any(ponytail_plugin_record_enabled(record) for record in official):
+            enabled_found = True
+            platforms[platform_name] = {"status": "installed-enabled"}
+        elif official:
+            disabled_found = True
+            platforms[platform_name] = {"status": "installed-disabled"}
+        else:
+            platforms[platform_name] = {"status": "missing"}
+
+    if enabled_found:
+        provider = "conflict"
+        plugin_status = "installed-enabled"
+    elif any_unavailable:
+        provider = "unknown"
+        plugin_status = "cli-unavailable"
+    elif disabled_found:
+        provider = "onboard-stable"
+        plugin_status = "installed-disabled"
+    else:
+        provider = "onboard-stable"
+        plugin_status = "missing"
+
+    if provider == "conflict":
+        next_step = "disable-or-remove-plugin"
+    elif skill_status == "missing":
+        next_step = "install-required"
+    elif skill_status in {"partial", "invalid"}:
+        next_step = "repair-required"
+    else:
+        next_step = "none"
+
+    return {
+        "provider": provider,
+        "skillStatus": skill_status,
+        "requiredSkills": list(PONYTAIL_REQUIRED_SKILLS),
+        "pluginStatus": plugin_status,
+        "platforms": platforms,
+        "nextStep": next_step,
+    }
+
+
 def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     project_roots = resolve_project_roots(args)
     global_skills_dir, global_skills_dir_source = resolve_global_skills_dir(
@@ -1828,6 +2017,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "manualChecks": manual_checks,
         "projectChecks": project_checks,
         "missing": missing,
+        "ponytailProvider": detect_ponytail_provider(global_skills_dir),
     }
     results["installationReport"] = build_installation_report(results)
     return results
@@ -2009,6 +2199,13 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     for item in results["manualChecks"]:
         print(f"- {item['name']} [{item['category']}]: {item['advice']}")
         print_config_examples(item)
+
+    provider = cast(dict[str, object], results["ponytailProvider"])
+    print("\nPonytail provider:")
+    print(f"- provider: {provider['provider']}")
+    print(f"- skillStatus: {provider['skillStatus']}")
+    print(f"- pluginStatus: {provider['pluginStatus']}")
+    print(f"- nextStep: {provider['nextStep']}")
 
     if results["projectChecks"]:
         print("")
@@ -2493,7 +2690,7 @@ def external_skill_target_is_valid(skills_root: Path, skill_name: str) -> bool:
     return True
 
 
-def load_external_stable_manifest() -> dict[str, object]:
+def load_external_stable_manifest(relaxed: bool = False) -> dict[str, object]:
     try:
         manifest = json.loads(EXTERNAL_STABLE_MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -2508,7 +2705,7 @@ def load_external_stable_manifest() -> dict[str, object]:
         raise RuntimeError(
             "stable External Skills manifest must contain repositories and skills objects"
         )
-    if set(skills) != set(EXTERNAL_SKILL_SOURCES):
+    if not relaxed and set(skills) != set(EXTERNAL_SKILL_SOURCES):
         missing = sorted(set(EXTERNAL_SKILL_SOURCES) - set(skills))
         extra = sorted(set(skills) - set(EXTERNAL_SKILL_SOURCES))
         raise RuntimeError(
@@ -3350,25 +3547,133 @@ def install_external_skills(args: argparse.Namespace) -> int:
     return 1 if transaction["status"] != "committed" else 0
 
 
+def stable_notice_attribution(repository_url: str) -> str:
+    path_parts = [
+        part for part in repository_url.removesuffix(".git").split("/") if part
+    ]
+    if len(path_parts) < 2:
+        raise RuntimeError(
+            f"cannot derive repository attribution from {repository_url}"
+        )
+    return "/".join(path_parts[-2:])
+
+
+def upsert_stable_third_party_notice(
+    notice_path: Path,
+    repository_url: str,
+    license_name: str,
+    license_file_mappings: list[dict[str, str]],
+) -> str:
+    attribution = stable_notice_attribution(repository_url)
+    license_refs = ", ".join(
+        f"`{mapping['stablePath']}`" for mapping in license_file_mappings
+    )
+    row = f"| `{attribution}` | {license_name} | {license_refs} |"
+    text = (
+        notice_path.read_text(encoding="utf-8") if notice_path.is_file() else ""
+    )
+    marker = f"| `{attribution}` |"
+    if marker in text:
+        text = "\n".join(
+            line for line in text.splitlines() if not line.startswith(marker)
+        )
+    if text and not text.endswith("\n"):
+        text += "\n"
+    notice_path.write_text(text + row + "\n", encoding="utf-8")
+    return row
+
+
+def parse_license_file_mappings(values: object) -> list[dict[str, str]]:
+    if values is None:
+        return []
+    mappings: list[dict[str, str]] = []
+    for raw in cast(list[str], values):
+        source, separator, stable_path = str(raw).partition("=")
+        if not separator or not source.strip() or not stable_path.strip():
+            raise SystemExit(
+                "--license-file must use SOURCE=STABLE_PATH, for example "
+                "LICENSE=licenses/ponytail-LICENSE"
+            )
+        mappings.append({"source": source.strip(), "stablePath": stable_path.strip()})
+    return mappings
+
+
 def promote_external_skills_stable(args: argparse.Namespace) -> int:
-    manifest = load_external_stable_manifest()
+    if not re.fullmatch(r"[0-9a-f]{40}", str(args.revision)):
+        raise SystemExit(
+            "--revision must be a full 40-character lowercase commit SHA"
+        )
+    manifest = load_external_stable_manifest(relaxed=True)
     repositories = cast(dict[str, object], manifest["repositories"])
     skills = cast(dict[str, object], manifest["skills"])
-    repository = repositories.get(args.repository)
-    if not isinstance(repository, dict):
-        known = ", ".join(sorted(repositories))
-        raise SystemExit(
-            f"Unknown stable repository: {args.repository}. Known: {known}"
+    existing_repository = repositories.get(args.repository)
+    registration = not isinstance(existing_repository, dict)
+    license_name = ""
+    license_file_mappings: list[dict[str, str]]
+    if registration:
+        if re.fullmatch(r"[a-z0-9][a-z0-9-]*", str(args.repository)) is None:
+            raise SystemExit(f"Invalid stable repository id: {args.repository}")
+        repository_url = str(getattr(args, "repo", None) or "")
+        if not valid_https_repository_url(repository_url):
+            raise SystemExit(
+                "First-time stable repository registration requires --repo with a "
+                "valid HTTPS repository URL."
+            )
+        license_name = str(getattr(args, "license", None) or "").strip()
+        if not license_name:
+            raise SystemExit(
+                "First-time stable repository registration requires --license with "
+                "an SPDX license id."
+            )
+        license_file_mappings = parse_license_file_mappings(
+            getattr(args, "license_files", None)
         )
-    selected = [
-        name
-        for name, entry in skills.items()
-        if isinstance(entry, dict) and entry.get("repository") == args.repository
-    ]
+        if not license_file_mappings:
+            raise SystemExit(
+                "First-time stable repository registration requires at least one "
+                "--license-file SOURCE=STABLE_PATH mapping."
+            )
+        selected = [
+            name
+            for name, source_spec in EXTERNAL_SKILL_SOURCES.items()
+            if str(source_spec["repo"]) == repository_url
+        ]
+        if not selected:
+            raise SystemExit(
+                f"No catalog external Skills match --repo {repository_url}; register "
+                "the catalog entries before promotion."
+            )
+    else:
+        repository = cast(dict[str, object], existing_repository)
+        repository_url = str(repository.get("url") or "")
+        if getattr(args, "repo", None) and str(args.repo) != repository_url:
+            raise SystemExit(
+                f"--repo {args.repo} does not match the stable repository URL "
+                f"{repository_url}; refusing to rewrite repository metadata."
+            )
+        if getattr(args, "license", None) or getattr(args, "license_files", None):
+            raise SystemExit(
+                "--license/--license-file are only valid for first-time repository "
+                "registration; refusing to rewrite existing repository metadata."
+            )
+        existing_license_files = repository.get("licenseFiles")
+        if not isinstance(existing_license_files, list):
+            raise SystemExit(
+                f"stable repository {args.repository} has no licenseFiles list"
+            )
+        license_file_mappings = cast(
+            list[dict[str, str]], existing_license_files
+        )
+        selected = [
+            name
+            for name, entry in skills.items()
+            if isinstance(entry, dict) and entry.get("repository") == args.repository
+        ]
     plan = {
         "mode": "promote-external-skills-stable",
         "repository": args.repository,
-        "repo": repository.get("url"),
+        "repo": repository_url,
+        "registration": registration,
         "revision": args.revision,
         "stableSet": args.stable_set,
         "skills": selected,
@@ -3387,9 +3692,7 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
     payload: dict[str, object] = {**plan, "status": "failed"}
     with tempfile.TemporaryDirectory(prefix="sbtd-external-promotion-source-") as tmp:
         repo_root = Path(tmp) / "repository"
-        ok, error = clone_repo_at_revision(
-            str(repository.get("url") or ""), args.revision, repo_root
-        )
+        ok, error = clone_repo_at_revision(repository_url, args.revision, repo_root)
         if not ok:
             payload["error"] = error
             print(
@@ -3414,6 +3717,21 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
                 dict[str, object], candidate_manifest["repositories"]
             )
             candidate_skills = cast(dict[str, object], candidate_manifest["skills"])
+            if registration:
+                candidate_repositories[args.repository] = {
+                    "url": repository_url,
+                    "revision": args.revision,
+                    "license": license_name,
+                    "licenseFiles": license_file_mappings,
+                }
+                for name in selected:
+                    candidate_skills[name] = {
+                        "repository": args.repository,
+                        "sourceSubpath": str(
+                            EXTERNAL_SKILL_SOURCES[name]["subpath"]
+                        ),
+                        "stablePath": f"skills/{name}",
+                    }
 
             for name in selected:
                 entry = candidate_skills[name]
@@ -3445,16 +3763,7 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
                 candidate_manifest, candidate_root
             )
 
-            license_files = repository.get("licenseFiles")
-            if not isinstance(license_files, list):
-                raise RuntimeError(
-                    f"stable repository {args.repository} has no licenseFiles list"
-                )
-            for license_entry in license_files:
-                if not isinstance(license_entry, dict):
-                    raise RuntimeError(
-                        f"stable repository {args.repository} has an invalid license entry"
-                    )
+            for license_entry in license_file_mappings:
                 source = resolve_contained_relative_path(
                     repo_root,
                     license_entry.get("source"),
@@ -3472,6 +3781,23 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
 
+            if registration:
+                upsert_stable_third_party_notice(
+                    candidate_root / "THIRD_PARTY_NOTICES.md",
+                    repository_url,
+                    license_name,
+                    license_file_mappings,
+                )
+            notice_text = (candidate_root / "THIRD_PARTY_NOTICES.md").read_text(
+                encoding="utf-8"
+            )
+            attribution = stable_notice_attribution(repository_url)
+            if f"| `{attribution}` |" not in notice_text:
+                raise RuntimeError(
+                    "candidate THIRD_PARTY_NOTICES.md has no attribution row for "
+                    f"{attribution}"
+                )
+
             candidate_repository = candidate_repositories[args.repository]
             if not isinstance(candidate_repository, dict):
                 raise RuntimeError(
@@ -3485,6 +3811,21 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
                 json.dumps(candidate_manifest, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
+
+            candidate_skill_names = set(
+                cast(dict[str, object], candidate_manifest["skills"])
+            )
+            if candidate_skill_names != set(EXTERNAL_SKILL_SOURCES):
+                missing_names = sorted(
+                    set(EXTERNAL_SKILL_SOURCES) - candidate_skill_names
+                )
+                extra_names = sorted(
+                    candidate_skill_names - set(EXTERNAL_SKILL_SOURCES)
+                )
+                raise RuntimeError(
+                    "candidate stable manifest does not match the canonical "
+                    f"catalog set; missing={missing_names}, extra={extra_names}"
+                )
 
             validate_external_stable_metadata(candidate_manifest, candidate_root)
             for name in EXTERNAL_SKILL_SOURCES:
@@ -5171,7 +5512,16 @@ def ensure_confirmed(args: argparse.Namespace, mode: str) -> None:
 
 def run(mode: str, args: argparse.Namespace) -> int:
     if mode == "check":
-        print_check_results(build_check_results(args), args.json)
+        results = build_check_results(args)
+        print_check_results(results, args.json)
+        provider = cast(dict[str, object], results["ponytailProvider"])
+        if provider["provider"] == "conflict":
+            print(
+                "Ponytail provider conflict: the official Ponytail plugin is "
+                "enabled; disable or remove it before using Onboard stable Skills.",
+                file=sys.stderr,
+            )
+            return 4
         return 0
     if mode == "check-projects":
         print_projects_check_results(build_projects_check_results(args), args.json)
@@ -5256,6 +5606,15 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return 4
 
     if mode in {"init", "reset"}:
+        ponytail_provider = detect_ponytail_provider(global_skills_dir)
+        if ponytail_provider["provider"] == "conflict":
+            print(
+                "Ponytail provider conflict: the official Ponytail plugin is "
+                "enabled; disable or remove it before init/reset writes Onboard "
+                "stable Skills.",
+                file=sys.stderr,
+            )
+            return 4
         external_install_status = install_required_external_skills(args)
         if external_install_status != 0:
             print(
@@ -5529,7 +5888,14 @@ def build_parser() -> argparse.ArgumentParser:
     promote.add_argument(
         "--repository",
         required=True,
-        help="Repository id from the stable External Skills manifest.",
+        help="Repository id from the stable External Skills manifest, or the new id for first-time registration.",
+    )
+    promote.add_argument(
+        "--repo",
+        help=(
+            "Upstream HTTPS repository URL. Required for first-time repository "
+            "registration; afterwards it may only repeat the manifest URL."
+        ),
     )
     promote.add_argument(
         "--revision",
@@ -5540,6 +5906,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--stable-set",
         required=True,
         help="New Onboard stable set identifier, for example 2026-07-11.2.",
+    )
+    promote.add_argument(
+        "--license",
+        help="SPDX license id; required only for first-time repository registration.",
+    )
+    promote.add_argument(
+        "--license-file",
+        dest="license_files",
+        action="append",
+        help=(
+            "License mapping SOURCE=STABLE_PATH, repeatable; required only for "
+            "first-time repository registration."
+        ),
     )
     promote.add_argument(
         "--yes", action="store_true", help="Allow stable snapshot replacement."

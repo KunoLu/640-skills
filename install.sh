@@ -382,7 +382,14 @@ refresh_check_json() {
   read_common_args
   args=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
   CHECK_JSON="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-check.XXXXXX")"
-  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check ${args[@]+"${args[@]}"} --json > "$CHECK_JSON"
+  # check exits 4 on a Ponytail provider conflict while still printing valid
+  # JSON; assert_ponytail_provider_clear turns that state into a clear error.
+  # Any other non-zero exit is a real check failure and must abort.
+  local rc=0
+  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check ${args[@]+"${args[@]}"} --json > "$CHECK_JSON" || rc=$?
+  if [[ "$rc" -ne 0 && "$rc" -ne 4 ]]; then
+    return "$rc"
+  fi
 }
 
 refresh_agent_cli_json() {
@@ -555,7 +562,12 @@ print_check() {
   local args=()
   read_common_args
   args=(${COMMON_ARGS_OUT[@]+"${COMMON_ARGS_OUT[@]}"})
-  run_onboard check ${args[@]+"${args[@]}"}
+  local rc=0
+  run_onboard check ${args[@]+"${args[@]}"} || rc=$?
+  # Exit 4 means a Ponytail provider conflict; the follow-up assert reports it.
+  if [[ "$rc" -ne 0 && "$rc" -ne 4 ]]; then
+    return "$rc"
+  fi
 }
 
 json_python() {
@@ -601,6 +613,8 @@ elif mode == "missing-external-skills":
         if item.get("group") == "referenced" and not item.get("installed")
     ]
     print(",".join(missing))
+elif mode == "ponytail-provider":
+    print(data.get("ponytailProvider", {}).get("provider", "unknown"))
 elif mode == "mcp-command":
     config = find_manual_check(args[0]).get("mcpServerConfig") or {}
     print(config.get("command") or "")
@@ -886,12 +900,21 @@ resolve_trellis_project_setup_inputs() {
   fi
 }
 
+assert_ponytail_provider_clear() {
+  local provider
+  provider="$(json_python ponytail-provider)"
+  if [[ "$provider" == "conflict" ]]; then
+    die "Ponytail provider conflict: the official Ponytail plugin is enabled. Disable or remove that plugin, then rerun the installer; Onboard installs and manages the vendored stable Ponytail Skills."
+  fi
+}
+
 install_missing_runtime_and_skills() {
   printf '\n'
   color '1;36' 'Preflight check'
   printf '\n'
   print_check
   refresh_check_json
+  assert_ponytail_provider_clear
 
   if [[ "$(json_python tool-installed rtk)" != "true" ]]; then
     local wrong verification
