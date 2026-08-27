@@ -1,6 +1,7 @@
 # Onboard Skill 执行 reset
 
-`reset` 与 `init` 共用同一套 `onboard.py` 写入管线：`check` → `plan` → 补缺失 external Skills → 写全局 / 项目模板 → Trellis setup。它**不是**卸载重装，也不是删除全局工具。
+`reset` 与 `init` 共用同一套 `onboard.py` 写入管线：`check` → `plan` → 从 stable 强制覆盖全部 required external Skills → 写全局 / 项目模板 → Trellis setup。它**不是**卸载重装，也不是删除全局工具。
+
 
 相对 `init` 的语义差：
 
@@ -49,11 +50,9 @@ flowchart TD
   provider -->|是| providerBlock["阻断: provider=conflict, 人工禁用或移除 plugin 后重跑"]
   provider -->|否或无法检测| identity{legacy Skill 身份冲突?}
   identity -->|是| failClosed[fail-closed: 原目录不动]
-  identity -->|否| extMiss{缺失或损坏的 18 个 required external Skills?}
-  extMiss -->|有| installExt[按 stable transaction 补齐或修复]
-  extMiss -->|无| skipExt[已合法: 不重装]
-  installExt --> migrate
-  skipExt --> migrate[只迁身份匹配的 legacy 目录]
+  identity -->|否| installExt[从 stable 强制覆盖全部 18 个 required external Skills]
+  installExt --> migrate[只迁身份匹配的 legacy 目录]
+
   migrate --> writes[同一套 operations 回写]
   writes --> gAgents{全局 AGENTS 目标已存在?}
   gAgents -->|从未写过| copyGlobal[复制到解析后的 Codex 全局 AGENTS 路径]
@@ -91,7 +90,7 @@ flowchart TD
 |---|---|---|
 | 行为本质 | 与 `init` 相同的补齐 + 写入 | 检查后把模板回写到已有目标 |
 | Agent CLI / npm / trellis / gitnexus | 缺失才安装 | 已验证则跳过，不强制升级 |
-| 18 个 external Skills（含 4 个 Ponytail） | 缺失或损坏才按 stable transaction 补齐 / 修复；官方 Ponytail plugin 启用时先阻断；Ponytail config 文件 reset 前后字节一致 | 已合法则跳过 |
+| 18 个 external Skills（含 4 个 Ponytail） | 从 stable 事务安装或覆盖全部 required 项；官方 Ponytail plugin 启用时先阻断 | **强制覆盖** 为当前 stable 快照 |
 | bundled Skills | 复制 | **无备份覆盖** 为当前 Onboard 模板 |
 | 全局 `AGENTS.md` | 复制 Codex 目标；若 `~/.omp` 已存在则另写 `~/.omp/agent/AGENTS.md` | **备份后覆盖**；不创建缺失的 `~/.omp` |
 | 项目 `AGENTS.md` | 仅 Q4 同意时复制 | 同意则备份后覆盖 |

@@ -9,7 +9,8 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-AGENTS files are backed up before overwrite. Bundled Skill targets are overwritten without backup only after their catalog sources pass the startup checks above. After the canonical `sbtd-workflow-onboard` target validates, the legacy `kuno-workflow-onboard-skills` directory is removed without leaving an alias only when its own `SKILL.md` frontmatter confirms the legacy identity. An unrelated or mismatched legacy path blocks `init` / `reset` before target changes and remains untouched; deletion errors are returned as migration failures. Project `.gitignore` is updated in place by ensuring that the bundled block exists.
+AGENTS files are backed up before overwrite. On `reset`, bundled Skill targets are overwritten without backup after their catalog sources pass the startup checks above. On `init`, a bundled Skill target that is already a valid Skill shell is skipped; missing or invalid shells are copied. After the canonical `sbtd-workflow-onboard` target validates, the legacy `kuno-workflow-onboard-skills` directory is removed without leaving an alias only when its own `SKILL.md` frontmatter confirms the legacy identity. An unrelated or mismatched legacy path blocks `init` / `reset` before target changes and remains untouched; deletion errors are returned as migration failures. Project `.gitignore` is updated in place by ensuring that the bundled block exists.
+
 
 ## Official Skills CLI Bootstrap
 
@@ -100,16 +101,18 @@ Normal onboarding:
 4. Runs the global preflight.
 5. Installs missing global Trellis and GitNexus without a scope prompt.
 6. Preserves the existing optional RTK, caveman, Java, and Maestro decisions.
-7. Installs every missing required external Skill globally without a selection or scope prompt.
+7. For `init`, installs only missing or invalid required external Skills globally. For `reset`, force-reinstalls every required external Skill from the current stable snapshot.
 8. Optionally configures selected user/global MCP servers.
 9. Checks project-only Playwright and React Bits conditions for every root.
-10. Writes global AGENTS and all bundled Skills once.
+10. Writes global AGENTS with backup-then-overwrite. For `init`, copies missing or invalid bundled Skills and skips valid Skill shells. For `reset`, overwrites every bundled Skill without backup.
 11. Writes project AGENTS and `.gitignore` for every root.
 12. Runs Trellis initialization and bootstrap detection for every root.
+
 
 ### Project-only init-projects
 
 Project-only mode:
+
 
 1. Resolves the Agent platform because project workflow and Trellis platform context may need it.
 2. Skips target Agent CLI detection and installation.

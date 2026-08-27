@@ -28,7 +28,9 @@ The Agent platform selects the CLI and MCP adapter; it does not select the globa
 
 If multiple paths are supplied to this Skill but the user did not explicitly say they are projects to initialize, ask whether they are the intended initialization roots before running checks or writes. Do not infer that every mentioned repository path should be initialized.
 
-Normal `init` / `reset` always installs bundled and external workflow Skills globally. There is no global/project/none Skill scope choice. Project-only initialization must not check, install, update, or configure global Agent CLIs, runtimes, tools, Skills, AGENTS, or MCP.
+Normal `init` / `reset` always target bundled and required external workflow Skills globally. There is no global/project/none Skill scope choice. `init` skips a bundled or required external Skill whose target is already a valid Skill shell (regular directory, regular `SKILL.md`, matching frontmatter `name`); installing a missing required external Skill does not reinstall already-valid dependencies. `reset` overwrites every bundled Skill without backup and force-reinstalls every required external Skill from the current stable snapshot. Global and project `AGENTS.md` still backup-then-overwrite; project `.gitignore` still appends missing template lines. Project-only initialization must not check, install, update, or configure global Agent CLIs, runtimes, tools, Skills, AGENTS, or MCP.
+
+
 
 ## Skill Installation Modes
 

@@ -55,11 +55,12 @@ flowchart TD
   gAgents -->|已安装| bakGlobal[先备份再覆盖]
   copyGlobal --> bundled[bundled Skills]
   bakGlobal --> bundled
-  bundled --> bExist{bundled Skill 目录已存在?}
-  bExist -->|从未安装| copyBundled[复制到本次解析的全局 Skills 根]
-  bExist -->|已安装| owBundled[无备份整目录覆盖]
+  bundled --> bExist{bundled Skill 壳合法?}
+  bExist -->|缺失或身份无效| copyBundled[复制到本次解析的全局 Skills 根]
+  bExist -->|已合法| skipBundled[跳过, 不覆盖]
   copyBundled --> gitignore[项目 gitignore]
-  owBundled --> gitignore
+  skipBundled --> gitignore
+
   gitignore --> gi{项目 gitignore 已含模板全部非空行?}
   gi -->|从未安装或有缺行| appendGi[只追加缺行]
   gi -->|已安装且行齐全| skipGi[skipped-already-present]
@@ -92,7 +93,7 @@ flowchart TD
 | trellis / gitnexus CLI | 强制全局安装 | 已验证则跳过，不升到 `@latest` |
 | rtk / caveman / Java / Maestro | 询问后才装 | 已验证则跳过 |
 | 18 个 external Skills（含 4 个 Ponytail） | 只装缺失且身份合法的项；官方 Ponytail plugin 启用时先阻断 | 已合法则跳过；不每轮重克隆 |
-| 15 个 bundled Skills | 复制到本次解析的全局 Skills 根 | **无备份覆盖** |
+| 15 个 bundled Skills | 复制到本次解析的全局 Skills 根 | 壳合法（目录 + `SKILL.md` + frontmatter `name`）则跳过；缺失或身份无效才复制 |
 | 全局 `AGENTS.md` | 复制到 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`；若 `~/.omp` 已存在，另备份后覆盖 `~/.omp/agent/AGENTS.md`（Windows 为 `%USERPROFILE%\.omp\agent\AGENTS.md`） | **备份后覆盖**；`~/.omp` 不存在则跳过且不创建 |
 | 项目 `AGENTS.md` | 仅当 Q4 同意时复制 | 同意写入则备份后覆盖 |
 | 项目 `.gitignore` | 追加模板缺行 | 行齐全则 skip |
