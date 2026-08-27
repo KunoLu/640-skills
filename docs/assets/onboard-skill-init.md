@@ -2,7 +2,7 @@
 
 普通 `init`，不是 `--init-projects`。目标 Agent 平台在 Skill 里是**单数**：只选 `codex` / `claude` / `kimi` / `oh-my-pi|omp` 之一。平台只决定 CLI 与 MCP adapter，不决定全局 AGENTS 落点。
 
-`plan --json` 只含 `mode`、OS、`skillDir`、`globalSkillsDir`、`globalSkillsDirSource`、`operations[].targetExists|sameLocation` 和 migration。它**不含** CLI 检查或 Required Questions。
+`plan --json` 含 `mode`、OS、`skillDir`、`globalSkillsDir`、`globalSkillsDirSource`、`operations[]`、migration 和 `trellisInit`（含 `trellisInit.command`）。它**不含** CLI 检查或 Required Questions。
 
 Required Question 4「要不要安装项目 `AGENTS.md`」必须单独确认。「逐项目汇总 AGENTS」只是汇报，不是同意写入。
 
@@ -74,7 +74,7 @@ flowchart TD
   trellis --> tExist{项目已有 .trellis/?}
   tExist -->|从未安装| tCli{全局 trellis CLI 可用?}
   tCli -->|否| tBlock[blocked-missing-cli]
-  tCli -->|是且有 username| tInit[trellis init 带 username 和已声明的平台 flags]
+  tCli -->|是且有 username 和已解析平台 flag| tInit[trellis init 带 username 和至少一个平台 flag]
   tExist -->|已安装| tSkip[skipped-existing: 不按新平台重跑]
   tInit --> boot[检查 bootstrap task]
   tSkip --> boot

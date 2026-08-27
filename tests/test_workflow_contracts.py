@@ -612,10 +612,20 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertTrue(changelog_path.is_file())
         changelog = changelog_path.read_text(encoding="utf-8")
         self.assertTrue(changelog.startswith("# CHANGELOG\n"))
-        self.assertLess(changelog.index("## v1.0.4"), changelog.index("## v1.0.3"))
-        self.assertLess(changelog.index("## v1.0.3"), changelog.index("## v1.0.2"))
-        self.assertLess(changelog.index("## v1.0.2"), changelog.index("## v1.0.1"))
-        self.assertLess(changelog.index("## v1.0.1"), changelog.index("## v1.0.0"))
+
+        def heading_index(version: str) -> int:
+            match = re.search(
+                rf"^## {re.escape(version)}（",
+                changelog,
+                re.MULTILINE,
+            )
+            self.assertIsNotNone(match, version)
+            return int(match.start())
+
+        self.assertLess(heading_index("v1.0.4"), heading_index("v1.0.3"))
+        self.assertLess(heading_index("v1.0.3"), heading_index("v1.0.2"))
+        self.assertLess(heading_index("v1.0.2"), heading_index("v1.0.1"))
+        self.assertLess(heading_index("v1.0.1"), heading_index("v1.0.0"))
         self.assertIn("## v1.0.4（2026-07-19）", changelog)
         self.assertIn("## v1.0.3（2026-07-19）", changelog)
         self.assertIn("## v1.0.2（2026-07-18）", changelog)
@@ -1066,6 +1076,7 @@ class WorkflowContractTests(unittest.TestCase):
         )
         plan_command = (
             'python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \\\n'
+            "  --platform codex \\\n"
             "  --projects-root /abs/project-one,/abs/project-two \\\n"
             "  --json"
         )

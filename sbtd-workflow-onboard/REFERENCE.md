@@ -52,7 +52,7 @@ Important arguments:
 - `--global-skills-dir <path>`
 - `--trellis-user <name>`
 - repeatable or comma-separated `--trellis-platform <name>`
-  `omp` and `pi` are separate Trellis flags: `omp` emits `trellis init --omp`, while `pi` emits `--pi`; never translate either value to the other.
+  When omitted, `plan` / `init` / `reset` / `init-projects` use `--platform` as the Trellis flag if it matches exactly (`codex`, `claude`, `kimi`). Explicit `--trellis-platform` replaces that default. Empty flags are not passed to `trellis init --yes`. `omp` and `pi` are separate Trellis flags: `omp` emits `trellis init --omp`, while `pi` emits `--pi`; `--platform oh-my-pi` does not choose either.
 
 - `--skip-trellis-init`
 - `--skip-trellis-bootstrap`
@@ -342,15 +342,17 @@ For every root:
 
 1. If `.trellis/` exists, report `skipped-existing`.
 2. If it is missing and no username was provided, report `needs-user` for that root.
-3. Otherwise run:
+3. If it is missing and no Trellis platform is resolved, report `needs-user`. Empty flags are not passed to `trellis init --yes`.
+4. Otherwise run:
 
 ```bash
-trellis init -u <username> [--platform-flags] --yes --skip-existing
+trellis init -u <username> --<platform-flag> [--more-platform-flags] --yes --skip-existing
 ```
 
-4. Confirm `.trellis/` was created.
-5. Unless skipped, check only `.trellis/tasks/00-bootstrap-guidelines`.
-6. If present, report `bootstrap-required` with the root and task path.
+`plan --json` includes this command under `trellisInit.command`.
+5. Confirm `.trellis/` was created.
+6. Unless skipped, check only `.trellis/tasks/00-bootstrap-guidelines`.
+7. If present, report `bootstrap-required` with the root and task path.
 
 Processing continues for all roots even when an earlier root has a bootstrap task. Aggregate status priority is:
 
@@ -424,16 +426,16 @@ Generic bundled/external workflow Skills are never installed under `<project-roo
 ```bash
 python scripts/onboard.py check --projects-root /abs/one,/abs/two
 python scripts/onboard.py check-projects --projects-root /abs/one,/abs/two
-python scripts/onboard.py plan --projects-root /abs/one,/abs/two
-python scripts/onboard.py init --projects-root /abs/one,/abs/two --trellis-user your-name --yes
-python scripts/onboard.py reset --projects-root /abs/one,/abs/two --trellis-user your-name --yes
-python scripts/onboard.py init-projects --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --json
+python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py init-projects --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
 ```
 
 Global-only onboarding is still supported by omitting `--projects-root` and explicitly skipping project AGENTS when using the Python command directly:
 
 ```bash
-python scripts/onboard.py init --skip-project-agents --yes
+python scripts/onboard.py init --platform codex --skip-project-agents --yes
 ```
 
 ## Verification

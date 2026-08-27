@@ -3,6 +3,19 @@
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
 
+## v1.0.11（未发布）
+
+### 修复
+
+- `init` / `reset` / `init-projects` 不再把空平台列表交给 `trellis init --yes`（Trellis 会因此默认安装 Claude 和 Cursor）。`--platform codex|claude|kimi` 在未给 `--trellis-platform` 时作为默认 Trellis flag；显式 `--trellis-platform` 覆盖该默认。`oh-my-pi` 仍必须显式给出 `omp` 和/或 `pi`。
+- `plan --json` 增加 `trellisInit`，写出将要执行的完整 `trellis init` 命令。
+- Trellis 平台 allowlist 对齐 CLI 0.6.15：补上 `kimi`、`grok`、`snow`、`dsh`。
+
+### 验证
+
+- 新增 `test_init_projects_defaults_codex_from_agent_platform`、`test_init_projects_rejects_empty_trellis_flags`、`test_plan_json_includes_resolved_trellis_init_command` 与版本化 `TRELLIS_INIT_PLATFORMS` 契约测试；不解析本机 `trellis init --help`。
+
+
 ## v1.0.10（2026-08-27）
 
 

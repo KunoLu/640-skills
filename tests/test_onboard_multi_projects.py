@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
-import stat
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
@@ -690,6 +690,24 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertFalse((global_skills / "sbtd-workflow-onboard").exists())
 
 
+    def _write_trellis_logger(self, log_path: Path) -> None:
+        self.env["TRELIS_ARGS_LOG"] = str(log_path)
+        self.write_executable(
+            "trellis",
+            """#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "trellis 9.9.9"
+  exit 0
+fi
+if [ "$1" = "init" ]; then
+  printf '%s\n' "$@" > "$TRELIS_ARGS_LOG"
+  mkdir -p .trellis
+  exit 0
+fi
+exit 1
+""",
+        )
+
     def test_init_projects_checks_trellis_and_bootstrap_for_every_root(self) -> None:
         bootstrap = self.project_two / ".trellis" / "tasks" / "00-bootstrap-guidelines"
         bootstrap.mkdir(parents=True)
@@ -710,6 +728,8 @@ exit 1
 
         completed = self.run_onboard(
             "init-projects",
+            "--platform",
+            "codex",
             "--projects-root",
             self.projects_csv,
             "--trellis-user",
@@ -723,22 +743,7 @@ exit 1
 
     def test_init_projects_forwards_distinct_omp_and_pi_flags(self) -> None:
         trellis_args_log = self.root / "trellis-args.log"
-        self.env["TRELIS_ARGS_LOG"] = str(trellis_args_log)
-        self.write_executable(
-            "trellis",
-            """#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "trellis 9.9.9"
-  exit 0
-fi
-if [ "$1" = "init" ]; then
-  printf '%s\n' "$@" > "$TRELIS_ARGS_LOG"
-  mkdir -p .trellis
-  exit 0
-fi
-exit 1
-""",
-        )
+        self._write_trellis_logger(trellis_args_log)
 
         completed = self.run_onboard(
             "init-projects",
@@ -766,6 +771,189 @@ exit 1
                 "--skip-existing",
             ],
         )
+
+    def test_init_projects_defaults_codex_from_agent_platform(self) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self._write_trellis_logger(trellis_args_log)
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--platform",
+            "codex",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(
+            trellis_args_log.read_text(encoding="utf-8").splitlines(),
+            [
+                "init",
+                "-u",
+                "developer",
+                "--codex",
+                "--yes",
+                "--skip-existing",
+            ],
+        )
+
+    def test_init_projects_defaults_kimi_from_agent_platform(self) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self._write_trellis_logger(trellis_args_log)
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--platform",
+            "kimi",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("--kimi", trellis_args_log.read_text(encoding="utf-8").splitlines())
+
+    def test_init_projects_explicit_trellis_platform_replaces_agent_default(
+        self,
+    ) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self._write_trellis_logger(trellis_args_log)
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--platform",
+            "codex",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--trellis-platform",
+            "cursor",
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        argv = trellis_args_log.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(
+            argv,
+            [
+                "init",
+                "-u",
+                "developer",
+                "--cursor",
+                "--yes",
+                "--skip-existing",
+            ],
+        )
+        self.assertNotIn("--codex", argv)
+
+    def test_init_projects_rejects_empty_trellis_flags(self) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self._write_trellis_logger(trellis_args_log)
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
+        self.assertFalse((self.project_one / ".trellis").exists())
+        self.assertFalse(trellis_args_log.exists())
+        combined = completed.stdout + completed.stderr
+        self.assertIn("Claude and Cursor", combined)
+
+    def test_init_projects_skips_existing_trellis_without_platform_flags(
+        self,
+    ) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self._write_trellis_logger(trellis_args_log)
+        (self.project_one / ".trellis").mkdir()
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertFalse(trellis_args_log.exists())
+
+    def test_init_projects_oh_my_pi_requires_explicit_trellis_flags(self) -> None:
+        trellis_args_log = self.root / "trellis-args.log"
+        self._write_trellis_logger(trellis_args_log)
+
+        completed = self.run_onboard(
+            "init-projects",
+            "--platform",
+            "oh-my-pi",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--skip-trellis-bootstrap",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
+        self.assertFalse((self.project_one / ".trellis").exists())
+        self.assertFalse(trellis_args_log.exists())
+        combined = completed.stdout + completed.stderr
+        self.assertIn("omp and/or pi", combined)
+
+    def test_plan_json_includes_resolved_trellis_init_command(self) -> None:
+        completed = self.run_onboard(
+            "plan",
+            "--platform",
+            "codex",
+            "--projects-root",
+            str(self.project_one),
+            "--trellis-user",
+            "developer",
+            "--json",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        trellis_init = payload["trellisInit"]
+        self.assertEqual(trellis_init["status"], "planned")
+        self.assertEqual(trellis_init["agentPlatform"], "codex")
+        self.assertEqual(trellis_init["platforms"], ["codex"])
+        self.assertEqual(trellis_init["platformSource"], "agent-platform")
+        self.assertEqual(
+            trellis_init["command"],
+            "trellis init -u developer --codex --yes --skip-existing",
+        )
+
+    def test_trellis_init_capability_map_is_versioned(self) -> None:
+        spec = importlib.util.spec_from_file_location("sbtd_onboard", ONBOARD)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["sbtd_onboard"] = module
+        spec.loader.exec_module(module)
+        self.assertEqual(module.TRELLIS_INIT_CAPABILITY_SET, "0.6.15")
+        self.assertEqual(
+            module.TRELLIS_DEFAULT_FROM_AGENT_PLATFORM,
+            {"codex": "codex", "claude": "claude", "kimi": "kimi"},
+        )
+        self.assertNotIn("oh-my-pi", module.TRELLIS_DEFAULT_FROM_AGENT_PLATFORM)
+        for required in ("kimi", "grok", "snow", "dsh", "omp", "pi", "codex", "claude"):
+            self.assertIn(required, module.TRELLIS_INIT_PLATFORMS)
 
     def _required_external_skill_names(self) -> list[str]:
         catalog = json.loads(

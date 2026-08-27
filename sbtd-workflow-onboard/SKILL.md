@@ -21,8 +21,7 @@ Resolve these questions in order:
 2. Is this a normal `init` / `reset`, or project-only initialization equivalent to `--init-projects`?
 3. What are the project roots? Accept one or more existing absolute paths separated by English commas.
 4. Should project `AGENTS.md` be installed into every selected project root?
-5. If any selected root has no `.trellis/`, what Trellis developer username and optional Trellis platform flags should be used?
-   Treat Trellis flags as a separate namespace: requested OMP uses `omp` and generates `--omp`; `pi` generates only `--pi`. Never substitute or infer one from the other, including from the Oh My Pi package name.
+5. If any selected root has no `.trellis/`, what Trellis developer username should be used? Pass `--platform` to `plan` / `init` / `reset` / `init-projects`. When `--trellis-platform` is omitted, Onboard uses that Agent platform as the Trellis flag if it matches exactly (`codex`, `claude`, `kimi`). Extra or different Trellis integrations are passed with `--trellis-platform` and replace that default. `omp` and `pi` stay explicit: `--platform oh-my-pi` does not choose either. Empty Trellis flags are not passed to `trellis init --yes`.
 
 The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Unless the user explicitly supplies a global AGENTS path, normal onboarding writes the Codex global template to the resolved `$CODEX_HOME/AGENTS.md` / `~/.codex/AGENTS.md` path. If the user-home `.omp` directory already exists (POSIX `~/.omp`, Windows `%USERPROFILE%\.omp`), `init` / `reset` also backup-then-overwrite the same template to `~/.omp/agent/AGENTS.md`. Missing `.omp` is skipped; Onboard does not create `.omp`. `--global-agents-path` overrides only the Codex target and does not cancel the OMP write. If that path or a project `AGENTS.md` resolves to the same file as another AGENTS target, Onboard keeps a single file write. Project-only mode does not write any global AGENTS file.
 
@@ -160,7 +159,7 @@ For every selected project root, normal `init` / `reset` and project-only `init-
 1. Check whether project `AGENTS.md` should be installed.
 2. Ensure every non-empty line from the bundled project `.gitignore` exists, appending only missing lines without reordering or duplicating existing project content.
 3. Check whether `.trellis/` exists.
-4. If missing and not explicitly skipped, require the global Trellis CLI and run `trellis init -u <username> ... --yes --skip-existing` in that project.
+4. If missing and not explicitly skipped, require the global Trellis CLI and run `trellis init -u <username>` with at least one platform flag and `--yes --skip-existing` in that project.
 5. Check `.trellis/tasks/00-bootstrap-guidelines` after initialization.
 6. If the bootstrap task exists, report `bootstrap-required` for that project and require a `trellis-workflow` handoff. Continue checking every other selected root before returning the aggregate status.
 7. Check project Playwright applicability. Only offer project installation when an existing Playwright dependency/config/script or E2E directory makes it applicable.
@@ -207,15 +206,16 @@ python scripts/onboard.py check-projects \
 Normal plan/init/reset:
 
 ```bash
-python scripts/onboard.py plan --projects-root /abs/one,/abs/two
-python scripts/onboard.py init --projects-root /abs/one,/abs/two --trellis-user your-name --yes
-python scripts/onboard.py reset --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --json
+python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
 ```
 
 Project-only initialization:
 
 ```bash
 python scripts/onboard.py init-projects \
+  --platform codex \
   --projects-root /abs/one,/abs/two \
   --trellis-user your-name \
   --yes

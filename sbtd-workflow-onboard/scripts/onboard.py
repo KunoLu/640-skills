@@ -322,6 +322,7 @@ AGENT_PLATFORM_ALIASES = {
     "ohmypi": "oh-my-pi",
     "omp": "oh-my-pi",
 }
+TRELLIS_INIT_CAPABILITY_SET = "0.6.15"
 TRELLIS_INIT_PLATFORMS = (
     "cursor",
     "claude",
@@ -337,12 +338,28 @@ TRELLIS_INIT_PLATFORMS = (
     "codebuddy",
     "copilot",
     "droid",
-    "omp",
+    "dsh",
     "pi",
     "reasonix",
     "zcode",
+    "omp",
     "trae",
+    "grok",
+    "kimi",
+    "snow",
 )
+TRELLIS_DEFAULT_FROM_AGENT_PLATFORM = {
+    "codex": "codex",
+    "claude": "claude",
+    "kimi": "kimi",
+}
+if any(
+    flag not in TRELLIS_INIT_PLATFORMS
+    for flag in TRELLIS_DEFAULT_FROM_AGENT_PLATFORM.values()
+):
+    raise RuntimeError(
+        "SBTD Onboard Agent-to-Trellis defaults must be Trellis init flags"
+    )
 TRELLIS_BOOTSTRAP_TASK_CANDIDATES = (".trellis/tasks/00-bootstrap-guidelines",)
 BUNDLED_SKILLS = tuple(SKILL_SOURCES.keys())
 MATTPOCOCK_CANONICAL_SKILLS = (
@@ -4900,7 +4917,49 @@ def parse_trellis_platforms(args: argparse.Namespace) -> list[str]:
     return platforms
 
 
+def resolve_trellis_init_platforms(args: argparse.Namespace) -> dict[str, object]:
+    explicit = parse_trellis_platforms(args)
+    if explicit:
+        return {
+            "platforms": explicit,
+            "source": "explicit",
+            "status": "resolved",
+        }
+    agent = None
+    raw_platform = getattr(args, "platform", None)
+    if raw_platform and str(raw_platform).strip():
+        agent = normalize_agent_platform(str(raw_platform))
+        default_flag = TRELLIS_DEFAULT_FROM_AGENT_PLATFORM.get(agent)
+        if default_flag:
+            return {
+                "platforms": [default_flag],
+                "source": "agent-platform",
+                "status": "resolved",
+            }
+    if agent == "oh-my-pi":
+        reason = (
+            "Agent platform oh-my-pi does not select a Trellis init flag. "
+            "Pass --trellis-platform omp and/or pi; omp and pi stay independent."
+        )
+    else:
+        reason = (
+            "trellis init --yes without platform flags installs Claude and Cursor. "
+            "Pass --trellis-platform, or pass --platform codex, claude, or kimi."
+        )
+    return {
+        "platforms": [],
+        "source": "missing",
+        "status": "needs-user",
+        "reason": reason,
+    }
+
+
 def trellis_init_command(username: str, platforms: list[str]) -> tuple[str, ...]:
+    if not platforms:
+        raise ValueError(
+            "trellis init requires at least one platform flag; "
+            "empty flags plus --yes would install Claude and Cursor."
+        )
     platform_flags = tuple(f"--{platform_name}" for platform_name in platforms)
     return (
         "trellis",
@@ -4961,7 +5020,10 @@ def run_trellis_project_setup_for_root(
         return report
 
     trellis_dir = project_root / ".trellis"
-    platforms = parse_trellis_platforms(args)
+    resolution = resolve_trellis_init_platforms(args)
+    platforms = [str(item) for item in resolution["platforms"]]
+    report["platforms"] = platforms
+    report["platformSource"] = resolution["source"]
     username = (getattr(args, "trellis_user", None) or "").strip()
     if trellis_dir.exists():
         report["init"] = {
@@ -4970,13 +5032,26 @@ def run_trellis_project_setup_for_root(
             "reason": "Target project already has .trellis/.",
         }
     elif not username:
-        example = trellis_init_command("your-name", platforms)
         report["status"] = "needs-user"
         report["init"] = {
             "status": "needs-user",
             "reason": "Target project does not have .trellis/ and --trellis-user was not provided.",
-            "nextStep": "Ask for the Trellis developer username and optional platform flags, then rerun with --projects-root, --trellis-user, and --trellis-platform.",
-            "exampleCommand": command_display(example),
+            "nextStep": "Ask for the Trellis developer username, then rerun with --projects-root, --trellis-user, --platform, and optional --trellis-platform.",
+        }
+        if platforms:
+            report["init"]["exampleCommand"] = command_display(
+                trellis_init_command("your-name", platforms)
+            )
+        return report
+    elif str(resolution["status"]) == "needs-user":
+        report["status"] = "needs-user"
+        report["init"] = {
+            "status": "needs-user",
+            "reason": resolution["reason"],
+            "nextStep": (
+                "Pass --trellis-platform, or --platform codex, claude, or kimi. "
+                "oh-my-pi requires --trellis-platform omp and/or pi."
+            ),
         }
         return report
     else:
@@ -5065,6 +5140,64 @@ def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, 
         "mode": mode,
         "status": aggregate_trellis_status(projects),
         "projects": projects,
+    }
+
+
+def build_trellis_init_plan(
+    mode: str, args: argparse.Namespace
+) -> dict[str, object]:
+    if mode not in {"plan", "init", "reset", "init-projects"}:
+        return {
+            "status": "skipped",
+            "reason": "Trellis init is not part of this mode.",
+        }
+    if getattr(args, "skip_trellis_init", False):
+        return {
+            "status": "skipped",
+            "reason": "--skip-trellis-init was provided.",
+        }
+    project_roots = resolve_project_roots(args)
+    needing = [
+        str(path) for path in project_roots if not (path / ".trellis").exists()
+    ]
+    agent = None
+    raw_platform = getattr(args, "platform", None)
+    if raw_platform and str(raw_platform).strip():
+        agent = normalize_agent_platform(str(raw_platform))
+    resolution = resolve_trellis_init_platforms(args)
+    username = (getattr(args, "trellis_user", None) or "").strip()
+    command = None
+    if str(resolution["status"]) == "resolved" and username:
+        command = command_display(
+            trellis_init_command(
+                username, [str(item) for item in resolution["platforms"]]
+            )
+        )
+    if not project_roots:
+        status = "skipped"
+        reason: str | None = "--projects-root was not provided."
+    elif not needing:
+        status = "skipped-existing"
+        reason = "Every selected project already has .trellis/."
+    elif not username or str(resolution["status"]) == "needs-user":
+        status = "needs-user"
+        if str(resolution["status"]) == "needs-user":
+            reason = str(resolution.get("reason") or "")
+        else:
+            reason = (
+                "Target project does not have .trellis/ and --trellis-user was not provided."
+            )
+    else:
+        status = "planned"
+        reason = None
+    return {
+        "status": status,
+        "agentPlatform": agent,
+        "platforms": [str(item) for item in resolution["platforms"]],
+        "platformSource": resolution["source"],
+        "command": command,
+        "projectsNeedingInit": needing,
+        "reason": reason,
     }
 
 
@@ -5470,6 +5603,7 @@ def print_plan(
     external_migration_plan: dict[str, object] | None = None,
     global_skills_dir: Path | None = None,
     global_skills_dir_source: str | None = None,
+    trellis_init_plan: dict[str, object] | None = None,
 ) -> None:
     payload = {
         "mode": mode,
@@ -5488,6 +5622,8 @@ def print_plan(
         payload["bundledMigration"] = bundled_migration_plan
     if external_migration_plan:
         payload["externalMigration"] = external_migration_plan
+    if trellis_init_plan:
+        payload["trellisInit"] = trellis_init_plan
     if as_json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
@@ -5560,6 +5696,20 @@ def print_plan(
                     str(name) for name in external_migration_plan["removeLegacy"]
                 )
             )
+    if trellis_init_plan:
+        print("\nTrellis init:")
+        print(f"- status: {trellis_init_plan.get('status')}")
+        if trellis_init_plan.get("agentPlatform"):
+            print(f"- agent platform: {trellis_init_plan['agentPlatform']}")
+        platforms = trellis_init_plan.get("platforms") or []
+        if platforms:
+            print("- platforms: " + ", ".join(str(item) for item in platforms))
+        if trellis_init_plan.get("platformSource"):
+            print(f"- platform source: {trellis_init_plan['platformSource']}")
+        if trellis_init_plan.get("command"):
+            print(f"- command: {trellis_init_plan['command']}")
+        if trellis_init_plan.get("reason"):
+            print(f"- reason: {trellis_init_plan['reason']}")
 
 
 def operation_allows_existing_target(operation: Operation) -> bool:
@@ -5700,6 +5850,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
         external_migration_plan,
         global_skills_dir,
         global_skills_dir_source,
+        build_trellis_init_plan(mode, args),
     )
     if mode == "plan":
         return 0
@@ -5917,6 +6068,10 @@ def build_parser() -> argparse.ArgumentParser:
         )
         sub.add_argument(
             "--json", action="store_true", help="Print machine-readable plan."
+        )
+        sub.add_argument(
+            "--platform",
+            help="Target Agent platform: codex, claude, kimi, oh-my-pi, or omp.",
         )
         sub.add_argument(
             "--trellis-user",

@@ -364,6 +364,18 @@
 - 修复：将 `omp` 加入 Trellis allow-list，明确 `omp → --omp` 与 `pi → --pi`，并用记录 fake `trellis` argv 的 `init-projects` 回归测试断言 `--omp --pi --codex`。
 - 预防：平台名跨 Agent CLI、npm 包和下游 CLI 时必须按命名空间分别建模；对相近名称必须查询下游 CLI help，并用 argv 级集成测试同时覆盖各自 flag 和顺序。
 
+## LESSON-20260827-trellis-init-empty-yes-defaults: Empty Trellis Init Flags Are Not Neutral
+
+- 日期：2026-08-27
+- 标签：onboard, trellis, init, platform, installer, validation
+- 适用场景：维护 Onboard `init` / `plan` 的 Trellis 平台参数、Agent `--platform` 与 `trellis init` 的映射
+- 严重级别：high
+- 来源：demo 项目指定目标平台 Codex 后，`onboard.py init` 生成 `.claude/` / `.cursor/` 而没有 `.codex/`
+- 问题：用户给了 Agent 平台 `codex`，但 `trellis init -u ... --yes --skip-existing` 未带 `--codex`。Trellis 在 `--yes` 且无平台 flag 时默认安装 Claude 和 Cursor。
+- 根因：Skill 把 Trellis flags 写成可选独立命名空间，Agent 因此省略 `--trellis-platform`；Onboard 把空列表原样交给 `trellis init --yes`。`plan --json` 也不展示将要执行的 `trellis init` 命令。
+- 修复：`--platform codex|claude|kimi` 在未给 `--trellis-platform` 时作为默认 Trellis flag；空列表不再交给 `trellis init --yes`；`oh-my-pi` 仍须显式 `omp`/`pi`；`plan --json` 增加 `trellisInit.command`。
+- 预防：不要把“不得从 Oh My Pi 推断 `--pi`”扩成“用户指定 Codex 也不传 `--codex`”。对会改变下游默认安装集的 CLI，空 flag 必须视为危险默认，而不是中性省略。
+
 ## LESSON-20260811-stable-promotion-candidate-prune-safety: Stable Promotion Pruning Must Stay Contained
 
 - 日期：2026-08-11

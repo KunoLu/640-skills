@@ -291,7 +291,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertLess(modes.index("check-agent-cli"), modes.index("check"))
         self.assertIn("reset", modes)
 
-    def test_non_codex_platform_is_not_forwarded_to_onboarding_operations(
+    def test_agent_platform_is_forwarded_to_onboarding_operations(
         self,
     ) -> None:
         (self.state_dir / "npm").touch()
@@ -305,7 +305,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             for arguments in self.invocation_args()
             if arguments.split()[1] == "init"
         )
-        self.assertNotIn("--platform", init_invocation.split())
+        args = init_invocation.split()
+        self.assertIn("--platform", args)
+        self.assertEqual(args[args.index("--platform") + 1], "claude")
 
     def test_init_projects_skips_all_global_checks_and_installers(self) -> None:
         completed = self.run_installer(projects_only=True)

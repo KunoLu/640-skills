@@ -41,12 +41,13 @@
 - API / Web E2E / Mobile E2E / Hybrid E2E 正式验证不能只停在 stdout-only、terminal-only 或诊断 reporter；Playwright `--reporter=list`、API 自定义脚本终端输出、Maestro stdout-only 都必须补正式 reporter、捕获 raw report 或标记 blocked。
 - 新增或修改用户可见 BDD `.feature` 场景时，首个 `.feature` 默认中文场景文案 + 英文 Gherkin 关键词，并在写入前和验证阶段确认语言规则。
 - OMP / Claude 的 GitNexus `Transport closed` 要先跑真实 MCP handshake：缺 `lbugjs.node` 时跑该安装目录的 LadybugDB `install.js`；`~/.claude.json` 还要把 command 钉成 nvm 绝对 `node`，避免干净 PATH 下 `#!/usr/bin/env node` 直接退出。
+- Onboard `init` 不得把空平台列表交给 `trellis init --yes`（Trellis 会默认装 Claude+Cursor）；`--platform codex|claude|kimi` 在未给 `--trellis-platform` 时作为默认 Trellis flag，`oh-my-pi` 必须显式 `omp`/`pi`。
 
 ## Topic 路由
 
 | topic | read_when | detail |
 |---|---|---|
-| repository-workflow | 版本检查、同步、配置摘录仓库定位、AGENTS / ENTRYPOINT / README 规则、GitHub release 依据、合并远程分支或展示型任务、OMP / Claude GitNexus MCP、`Transport closed` | `docs/lessons/topics/repository-workflow.md` |
+| repository-workflow | 版本检查、同步、配置摘录仓库定位、AGENTS / ENTRYPOINT / README 规则、GitHub release 依据、合并远程分支或展示型任务、OMP / Claude GitNexus MCP、`Transport closed`、Onboard Trellis init 平台 | `docs/lessons/topics/repository-workflow.md` |
 | validation-scripts | 一次性校验脚本、Markdown 解析、shell quoting、Node / Python 脚本、动态导入、结构化断言、schema 检查 | `docs/lessons/topics/validation-scripts.md` |
 | bdd-e2e-reports | BDD 语言、Web UI 测试资产、Playwright / Maestro 报告、E2E 报告与测试状态解耦 | `docs/lessons/topics/bdd-e2e-reports.md` |
 

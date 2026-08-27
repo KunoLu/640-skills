@@ -69,9 +69,11 @@ Skill 会定位自身的全局安装目录并运行对应脚本。需要手动�
 ```bash
 SBTD_ONBOARD_DIR="$HOME/.agents/skills/sbtd-workflow-onboard"
 python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \
+  --platform codex \
   --projects-root /abs/project-one,/abs/project-two \
   --json
 python "$SBTD_ONBOARD_DIR/scripts/onboard.py" init \
+  --platform codex \
   --projects-root /abs/project-one,/abs/project-two \
   --trellis-user your-name \
   --yes
@@ -94,9 +96,11 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" init \
 ```bash
 SBTD_ONBOARD_DIR="$HOME/.agents/skills/sbtd-workflow-onboard"
 python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \
+  --platform codex \
   --projects-root /abs/project-one,/abs/project-two \
   --json
 python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
+  --platform codex \
   --projects-root /abs/project-one,/abs/project-two \
   --trellis-user your-name \
   --yes
@@ -140,6 +144,7 @@ pwsh -File .\install.ps1 `
 
 ```bash
 python "$SBTD_ONBOARD_DIR/scripts/onboard.py" init-projects \
+  --platform codex \
   --projects-root /abs/project-one,/abs/project-two \
   --trellis-user your-name \
   --yes
@@ -225,8 +230,8 @@ pwsh -File .\install.ps1
 关键边界：
 
 - Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
-- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `sbtd-workflow-onboard` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 和可选 platform flags 后，onboard 流程可以主动运行 `trellis init -u <username> ... --yes --skip-existing`。
-  Trellis 平台标志显式且相互独立：`omp` 只生成 `trellis init --omp`，`pi` 只生成 `--pi`，onboard 不得在两者之间替换。
+- 如果已确认当前目录是项目根目录，且存在项目级 `AGENTS.md`，但根目录没有 `.trellis/`，Agent 必须提示项目尚未执行 `trellis init`；普通项目操作默认不代用户执行。例外是 `sbtd-workflow-onboard` 的 `init` / `reset`：在 Trellis CLI 已可用、用户确认 username 后，onboard 使用 `--platform` 的精确 Trellis flag（`codex` / `claude` / `kimi`）或显式 `--trellis-platform` 运行 `trellis init -u <username> ... --yes --skip-existing`。空 flag 不会交给 `trellis init --yes`（否则 Trellis 会默认安装 Claude 和 Cursor）。`oh-my-pi` 必须显式给出 `omp` 和/或 `pi`。
+  Trellis 平台标志相互独立：`omp` 只生成 `trellis init --omp`，`pi` 只生成 `--pi`，onboard 不得在两者之间替换。
 - Trellis CLI 升级后，已有 `.trellis/` 的项目先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard；如果更新涉及 SessionStart、PreToolUse 或其他 hook 配置，先重启对应 Agent host / IDE，再验证新会话身份或 hook 行为。对 uninstall、archive、task start / set-*、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership、safe-name 和 active-task pointer containment guard。升级后不要假设 `trellis update` 会改写既有 session pointer；越权任务路径按无任务处理。
 - `.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其专属生成资产决定本次执行：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 host 为 Codex 且 `.codex/**` 集成可用时解释 `codex.dispatch_mode`：`auto` 由主会话协调并按职责调度 role subagent，显式 Inline 与非法显式值的 fail-closed fallback 也仅属于 Codex。仅当前 host 为 OMP 且 `.omp/**` 集成可用时使用 OMP `task` worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
@@ -709,4 +714,4 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 
 `caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入 `auto-lite`；保护区只覆盖当前回复，只有新的主要目标重置。任务级和会话级退出、手动模式与重新启用语义继承全局状态机。15 个 bundled Skills 和 18 个 required external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认从 Onboard 内置、经过 review 和 checksum 固定的 stable set 安装，不访问上游；只有显式 `--source upstream` 才获取并验证当前上游，任何失败都直接报错。bundled Skills 写入全局目录，两类 Skill 均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不存在自动 source fallback。`init` 对已合法 bundled / required external Skill 壳跳过；`reset` 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；legacy migration 只处理旧名称。
 
-逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
+逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username 和已解析平台 flags 的 `trellis init -u <username> --<flag> ... --yes --skip-existing`；`--platform codex|claude|kimi` 在未给 `--trellis-platform` 时提供默认 flag，`plan --json` 的 `trellisInit.command` 会写出完整命令。随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。

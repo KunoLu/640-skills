@@ -60,7 +60,8 @@ Options:
       Developer username for trellis init -u when the project has no .trellis/.
   --trellis-platform <name[,name...]>
       Trellis init platform flag without leading dashes. May be repeated.
-      Examples: codex, claude, cursor, opencode, gemini, omp, pi. OMP and Pi are separate flags.
+      Examples: codex, claude, kimi, cursor, omp, pi. Replaces the Agent
+      platform default. OMP and Pi are separate flags.
   --skip-trellis-init
       Skip post-install trellis init for project roots without .trellis/.
   --skip-trellis-bootstrap
@@ -330,6 +331,9 @@ run_cmd_in_dir() {
 
 onboard_common_args() {
   local args=()
+  if [[ -n "$PLATFORM" ]]; then
+    args+=(--platform "$PLATFORM")
+  fi
   if [[ -n "$PROJECTS_ROOT" ]]; then
     args+=(--projects-root "$PROJECTS_ROOT")
   fi
@@ -896,7 +900,8 @@ resolve_trellis_project_setup_inputs() {
 
   if (( ${#TRELLIS_PLATFORMS[@]} == 0 )); then
     local raw_platforms
-    raw_platforms="$(prompt_text 'Trellis platform flags, comma-separated without --, or blank for none' '')"
+    local prompt='Trellis platform flags, comma-separated without --. Blank uses the Agent platform default for codex, claude, or kimi; Oh My Pi requires omp and/or pi'
+    raw_platforms="$(prompt_text "$prompt" '')"
     split_trellis_platforms "$raw_platforms"
   fi
 }
