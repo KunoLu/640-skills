@@ -2,6 +2,24 @@
 
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
+
+## v1.0.10（2026-08-27）
+
+
+### 变更
+
+- `init` 对已合法的 bundled / required external Skill 壳（普通目录、普通 `SKILL.md`、frontmatter `name` 匹配）跳过，不再无备份覆盖。
+- `init` 安装缺失 required external Skill 时不再经 dependency closure 覆盖已合法依赖；公开 `install-external-skills --skills` 仍展开依赖。
+- `reset` 仍无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。
+- `plan --json` 对 Skill 目录操作输出 `plannedActionOnInit` / `plannedActionOnReset`。
+- 全局和项目 `AGENTS.md` 仍备份后覆盖；项目 `.gitignore` 仍只追加模板缺行；`init-projects` 仍不写全局 Skills。
+
+### 验证
+
+- 新增 / 强化 `test_init_skips_valid_bundled_and_external_skill_shells`、`test_reset_overwrites_valid_bundled_and_external_skills` 与 `plan` 的 Skill 写入动作断言。
+
+
+
 ## v1.0.9（2026-08-27）
 
 ### 变更

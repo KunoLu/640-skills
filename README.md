@@ -159,7 +159,8 @@ bash install.sh
 pwsh -File .\install.ps1
 ```
 
-交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 `Invalid choice.`。
+交互式流程会先选择普通 `init`、`reset` 或 project-only 初始化。普通 `init` / `reset` 会选择目标 Agent 平台并检查对应 CLI / npm，收集一个或多个以英语逗号分隔的项目绝对路径，按需检查或安装全局 Trellis、GitNexus、bundled / external Skills，写入允许的全局和项目模板并引导 MCP 配置；`init` 对已合法的 bundled / required external Skill 壳跳过，`reset` 无备份覆盖全部 bundled Skills 并从 stable 强制重装全部 required external Skills；project-only 只记录平台上下文并跳过所有全局检测、安装和配置。两种模式都会逐项目处理 `.gitignore`、Trellis init / bootstrap、Playwright 和 React Bits 条件项，最后输出计划、执行状态、阻断原因和验证汇总。Bash 安装器会保留脚本启动时的原始交互输入流，逐项目数据读取不会劫持后续用户选择；输入流提前关闭时会明确报错退出，不会无限重复 `Invalid choice.`。
+
 
 这里的目标 Agent 平台只选择 CLI 与 MCP adapter，不会选择全局 AGENTS 目标。除非显式传入 `--global-agents-path` / `-GlobalAgentsPath`，正常模式始终把 Codex 全局规则模板写入解析后的 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`。若用户主目录已存在 `.omp` 目录（POSIX `~/.omp`，Windows `%USERPROFILE%\.omp`），`init` / `reset` 会把同一模板备份后覆盖写入 `~/.omp/agent/AGENTS.md`；不存在则跳过且不创建 `.omp`。`--global-agents-path` 只覆盖 Codex 目标，不取消 OMP 附加写入。project-only 不写任何全局 AGENTS。
 
@@ -646,7 +647,8 @@ tests/e2e/**/*.trace.zip
 
 - 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
-- 15 个 bundled Skills 和 18 个 external Skills 强制安装到全局 Skill 目录，不再提供 project/none scope 选择；`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
+- 15 个 bundled Skills 和 18 个 required external Skills 始终以全局 Skill 目录为目标，不再提供 project/none scope 选择。`init` 对已合法的 Skill 壳（普通目录、普通 `SKILL.md`、frontmatter `name` 匹配）跳过；缺失或身份无效才安装。`reset` 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。
+
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
@@ -705,6 +707,6 @@ bash install.sh --platform codex --init-projects /abs/project-one,/abs/project-t
 .\install.ps1 -Platform codex -InitProjects "C:\work\one,C:\work\two"
 ```
 
-`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入 `auto-lite`；保护区只覆盖当前回复，只有新的主要目标重置。任务级和会话级退出、手动模式与重新启用语义继承全局状态机。15 个 bundled Skills 和 14 个 external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认从 Onboard 内置、经过 review 和 checksum 固定的 stable set 安装，不访问上游；只有显式 `--source upstream` 才获取并验证当前上游，任何失败都直接报错。bundled Skills 写入全局目录，两类 Skill 均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不存在自动 source fallback。已有 bundled 目标会被覆盖且不备份；External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；已有且验证有效的 canonical external Skill 不会在每次 init/reset 中重复安装，legacy migration 只处理旧名称。
+`caveman`、RTK、Java 和 Maestro 保持原来的条件确认规则；`caveman` 安装本身不会立即启用持久压缩对话模式。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入 `auto-lite`；保护区只覆盖当前回复，只有新的主要目标重置。任务级和会话级退出、手动模式与重新启用语义继承全局状态机。15 个 bundled Skills 和 18 个 required external Skills 在正常 `init` / `reset` 中作为必需全局能力处理：缺失 external Skills 默认从 Onboard 内置、经过 review 和 checksum 固定的 stable set 安装，不访问上游；只有显式 `--source upstream` 才获取并验证当前上游，任何失败都直接报错。bundled Skills 写入全局目录，两类 Skill 均不再询问 project scope。`sbtd-workflow-onboard` canonical Skill 写入且 frontmatter 校验通过后，旧 `kuno-workflow-onboard-skills` 目录会被删除，不保留 alias 或兼容副本。stable 自身完整性错误，以及目标侧 staging、权限、磁盘、commit 或 rollback 错误都直接失败，不存在自动 source fallback。`init` 对已合法 bundled / required external Skill 壳跳过；`reset` 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。External Skill 显式替换采用临时事务 rollback，完整恢复后删除临时备份，恢复不完整时保留并返回 rollback 路径；legacy migration 只处理旧名称。
 
 逐项目 `init` / `reset` / `init-projects` 完成模板写入后会继续做 Trellis setup：每个缺少 `.trellis/` 的 root 都执行同一 username/platform 配置的 `trellis init -u <username> ... --yes --skip-existing`，随后分别检查 `.trellis/tasks/00-bootstrap-guidelines`。汇总状态按 `failed > blocked > needs-user > bootstrap-required > success > skipped` 处理；命中的每个项目都必须按 `trellis-workflow` 完成 bootstrap guideline 后才算 onboarding 完成。
