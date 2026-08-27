@@ -45,15 +45,17 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         )
         return target
 
-    def run_onboard(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_onboard(self, *args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+
         return subprocess.run(
             (sys.executable, str(ONBOARD), *args),
             check=False,
             capture_output=True,
             text=True,
             env=self.env,
-            timeout=30,
+            timeout=timeout,
         )
+
 
     def copy_onboard(self, name: str = "onboard-copy") -> Path:
         target = self.root / name
@@ -765,22 +767,194 @@ exit 1
             ],
         )
 
-    def _seed_required_external_skills(self, global_skills: Path) -> None:
+    def _required_external_skill_names(self) -> list[str]:
         catalog = json.loads(
             (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
                 encoding="utf-8"
             )
         )
-        for entry in catalog["entries"]:
-            if entry["kind"] != "external-skill":
-                continue
-            name = entry["id"].removeprefix("skill:")
+        return [
+            entry["id"].removeprefix("skill:")
+            for entry in catalog["entries"]
+            if entry["kind"] == "external-skill"
+        ]
+
+    def _seed_required_external_skills(self, global_skills: Path) -> None:
+        for name in self._required_external_skill_names():
             target = global_skills / name
-            target.mkdir(parents=True)
+            target.mkdir(parents=True, exist_ok=True)
             (target / "SKILL.md").write_text(
                 f"---\nname: {name}\n---\n",
                 encoding="utf-8",
             )
+
+    def test_plan_reports_skill_write_actions_for_valid_shells(self) -> None:
+        global_skills = self.root / "global-skills"
+        bundled = global_skills / "trellis-workflow"
+        bundled.mkdir(parents=True)
+        (bundled / "SKILL.md").write_text(
+            "---\nname: trellis-workflow\n---\n",
+            encoding="utf-8",
+        )
+        completed = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(global_skills),
+            "--json",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(
+            payload["skillWritePolicy"],
+            {"init": "skip-valid-shells", "reset": "overwrite-all"},
+        )
+        entry = next(
+            item
+            for item in payload["operations"]
+            if item["label"] == "global skill trellis-workflow"
+        )
+        self.assertTrue(entry["targetValid"])
+        self.assertEqual(entry["plannedActionOnInit"], "skipped-already-valid")
+        self.assertEqual(
+            entry["plannedActionOnReset"], "overwritten-without-backup"
+        )
+
+    def test_init_skips_valid_bundled_and_external_skill_shells(self) -> None:
+        global_skills = self.root / "global-skills"
+        self._seed_required_external_skills(global_skills)
+        bundled = global_skills / "trellis-workflow"
+        bundled.mkdir(parents=True)
+        valid_bundled = "---\nname: trellis-workflow\n---\nstale-but-valid-bundled\n"
+        (bundled / "SKILL.md").write_text(valid_bundled, encoding="utf-8")
+        (bundled / "keep-init.txt").write_text("keep-bundled\n", encoding="utf-8")
+        invalid_bundled = global_skills / "gherkin-bdd"
+        invalid_bundled.mkdir(parents=True)
+        (invalid_bundled / "SKILL.md").write_text(
+            "---\nname: not-gherkin-bdd\n---\n",
+            encoding="utf-8",
+        )
+        (invalid_bundled / "drop-invalid-bundled.txt").write_text(
+            "stale-invalid-bundled\n",
+            encoding="utf-8",
+        )
+        ponytail = global_skills / "ponytail"
+        valid_ponytail = "---\nname: ponytail\n---\nstale-but-valid-external\n"
+        (ponytail / "SKILL.md").write_text(valid_ponytail, encoding="utf-8")
+        (ponytail / "keep-init.txt").write_text("keep-external\n", encoding="utf-8")
+        dep = global_skills / "codebase-design"
+        valid_dep = "---\nname: codebase-design\n---\nstale-but-valid-dep\n"
+        (dep / "SKILL.md").write_text(valid_dep, encoding="utf-8")
+        (dep / "keep-dep.txt").write_text("keep-dep\n", encoding="utf-8")
+        tdd = global_skills / "tdd"
+        (tdd / "SKILL.md").write_text("---\nname: not-tdd\n---\n", encoding="utf-8")
+        (tdd / "drop-invalid-tdd.txt").write_text(
+            "stale-invalid-tdd\n", encoding="utf-8"
+        )
+
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(self.root / "global-AGENTS.md"),
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(
+            (bundled / "SKILL.md").read_text(encoding="utf-8"), valid_bundled
+        )
+        self.assertEqual(
+            (bundled / "keep-init.txt").read_text(encoding="utf-8"),
+            "keep-bundled\n",
+        )
+        self.assertEqual(
+            (ponytail / "SKILL.md").read_text(encoding="utf-8"), valid_ponytail
+        )
+        self.assertEqual(
+            (ponytail / "keep-init.txt").read_text(encoding="utf-8"),
+            "keep-external\n",
+        )
+        self.assertEqual((dep / "SKILL.md").read_text(encoding="utf-8"), valid_dep)
+        self.assertEqual(
+            (dep / "keep-dep.txt").read_text(encoding="utf-8"), "keep-dep\n"
+        )
+        self.assertFalse((invalid_bundled / "drop-invalid-bundled.txt").exists())
+        self.assertIn(
+            "name: gherkin-bdd",
+            (invalid_bundled / "SKILL.md").read_text(encoding="utf-8"),
+        )
+        self.assertFalse((tdd / "drop-invalid-tdd.txt").exists())
+        self.assertIn("name: tdd", (tdd / "SKILL.md").read_text(encoding="utf-8"))
+        self.assertTrue((self.root / "global-AGENTS.md").is_file())
+
+    def test_reset_overwrites_valid_bundled_and_external_skills(self) -> None:
+        global_skills = self.root / "global-skills"
+        self._seed_required_external_skills(global_skills)
+        bundled = global_skills / "trellis-workflow"
+        bundled.mkdir(parents=True)
+        (bundled / "SKILL.md").write_text(
+            "---\nname: trellis-workflow\n---\n",
+            encoding="utf-8",
+        )
+        (bundled / "drop-reset.txt").write_text("stale-bundled\n", encoding="utf-8")
+        for name in self._required_external_skill_names():
+            (global_skills / name / "drop-reset.txt").write_text(
+                f"stale-{name}\n",
+                encoding="utf-8",
+            )
+
+        completed = self.run_onboard(
+            "reset",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(self.root / "global-AGENTS.md"),
+            "--skip-trellis-init",
+            "--yes",
+            timeout=120,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertFalse((bundled / "drop-reset.txt").exists())
+        bundled_template = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "skills"
+            / "trellis-workflow"
+            / "SKILL.md"
+        )
+        self.assertEqual(
+            (bundled / "SKILL.md").read_text(encoding="utf-8"),
+            bundled_template.read_text(encoding="utf-8"),
+        )
+        stable_root = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "assets"
+            / "external-skills"
+            / "stable"
+            / "skills"
+        )
+        for name in self._required_external_skill_names():
+            target = global_skills / name
+            self.assertFalse((target / "drop-reset.txt").exists(), name)
+            self.assertEqual(
+                (target / "SKILL.md").read_text(encoding="utf-8"),
+                (stable_root / name / "SKILL.md").read_text(encoding="utf-8"),
+                name,
+            )
+
+
+
 
     def test_plan_skips_omp_global_agents_when_omp_root_absent(self) -> None:
         completed = self.run_onboard(

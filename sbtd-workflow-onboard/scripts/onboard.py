@@ -444,6 +444,7 @@ class Operation:
     target: Path
     kind: str
     same_location: bool = False
+    skip_when_valid: bool = False
 
 
 def expand_path(value: str | None) -> Path | None:
@@ -2348,6 +2349,14 @@ def ensure_file_contains(source: Path, target: Path) -> str:
 def copy_operation(operation: Operation) -> str:
     if operation.same_location:
         return "skipped-same-location"
+    if (
+        operation.kind == "dir"
+        and operation.skip_when_valid
+        and external_skill_target_is_valid(
+            operation.target.parent, operation.target.name
+        )
+    ):
+        return "skipped-already-valid"
     operation.target.parent.mkdir(parents=True, exist_ok=True)
     if operation.kind == "ensure-file-block":
         return ensure_file_contains(operation.source, operation.target)
@@ -2363,9 +2372,19 @@ def copy_operation(operation: Operation) -> str:
     return action
 
 
+
 def verify_operation(operation: Operation) -> list[str]:
     if operation.same_location:
         return []
+    if (
+        operation.kind == "dir"
+        and operation.skip_when_valid
+        and external_skill_target_is_valid(
+            operation.target.parent, operation.target.name
+        )
+    ):
+        return []
+
     if operation.kind == "ensure-file-block":
         if not operation.target.is_file():
             return [operation.label]
@@ -2457,11 +2476,15 @@ def parse_skill_names(args: argparse.Namespace) -> list[str]:
             f"Unknown external skill(s): {', '.join(unknown)}. Known: {known}"
         )
 
+    names = canonical_requested
+    if getattr(args, "expand_dependencies", True):
+        names = external_skill_dependency_closure(canonical_requested)
     unique: list[str] = []
-    for name in external_skill_dependency_closure(canonical_requested):
+    for name in names:
         if name not in unique:
             unique.append(name)
     return unique
+
 
 
 def resolve_install_skills_dir(args: argparse.Namespace) -> Path:
@@ -3901,25 +3924,37 @@ def missing_required_external_skills(args: argparse.Namespace) -> list[str]:
     ]
 
 
-def install_required_external_skills(args: argparse.Namespace) -> int:
-    missing = missing_required_external_skills(args)
-    if not missing:
-        return 0
-    print(
-        "Required global external Skills are missing and will be installed: "
-        + ", ".join(missing)
-    )
+def install_required_external_skills(
+    args: argparse.Namespace, *, overwrite: bool = False
+) -> int:
+    if overwrite:
+        selected = list(EXTERNAL_SKILL_SOURCES)
+        print(
+            "Reset will overwrite all required global external Skills: "
+            + ", ".join(selected)
+        )
+    else:
+        selected = missing_required_external_skills(args)
+        if not selected:
+            return 0
+        print(
+            "Required global external Skills are missing and will be installed: "
+            + ", ".join(selected)
+        )
     install_args = argparse.Namespace(
-        all=False,
-        skills=",".join(missing),
+        all=overwrite,
+        skills=None if overwrite else ",".join(selected),
         scope="global",
         source="auto",
         global_skills_dir=getattr(args, "global_skills_dir", None),
         replace=False,
         yes=True,
         json=False,
+        expand_dependencies=overwrite,
     )
+
     return install_external_skills(install_args)
+
 
 
 def default_shell_profile() -> Path:
@@ -5231,6 +5266,7 @@ def build_operations(mode: str, args: argparse.Namespace) -> list[Operation]:
                     target,
                     "dir",
                     source.resolve() == target.resolve(),
+                    skip_when_valid=mode == "init",
                 )
             )
 
@@ -5394,6 +5430,38 @@ def print_bundled_skill_migration_report(results: list[dict[str, object]]) -> No
             print(f"  error: {item['error']}")
 
 
+def operation_plan_entry(operation: Operation) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "label": operation.label,
+        "source": str(operation.source),
+        "target": str(operation.target),
+        "kind": operation.kind,
+        "targetExists": operation.target.exists(),
+        "sameLocation": operation.same_location,
+    }
+    if operation.kind != "dir":
+        return entry
+    valid = external_skill_target_is_valid(
+        operation.target.parent, operation.target.name
+    )
+    entry["targetValid"] = valid
+    if operation.same_location:
+        action = "skipped-same-location"
+        entry["plannedActionOnInit"] = action
+        entry["plannedActionOnReset"] = action
+        return entry
+    if valid:
+        entry["plannedActionOnInit"] = "skipped-already-valid"
+        entry["plannedActionOnReset"] = "overwritten-without-backup"
+        return entry
+    action = (
+        "overwritten-without-backup" if operation.target.exists() else "copied"
+    )
+    entry["plannedActionOnInit"] = action
+    entry["plannedActionOnReset"] = action
+    return entry
+
+
 def print_plan(
     mode: str,
     operations: list[Operation],
@@ -5409,18 +5477,13 @@ def print_plan(
         "skillDir": str(SKILL_DIR),
         "globalSkillsDir": str(global_skills_dir) if global_skills_dir else None,
         "globalSkillsDirSource": global_skills_dir_source,
-        "operations": [
-            {
-                "label": op.label,
-                "source": str(op.source),
-                "target": str(op.target),
-                "kind": op.kind,
-                "targetExists": op.target.exists(),
-                "sameLocation": op.same_location,
-            }
-            for op in operations
-        ],
+        "skillWritePolicy": {
+            "init": "skip-valid-shells",
+            "reset": "overwrite-all",
+        },
+        "operations": [operation_plan_entry(op) for op in operations],
     }
+
     if bundled_migration_plan:
         payload["bundledMigration"] = bundled_migration_plan
     if external_migration_plan:
@@ -5436,7 +5499,13 @@ def print_plan(
             exists = "same source and target"
         else:
             exists = "exists" if item["targetExists"] else "missing"
+        if item.get("plannedActionOnInit"):
+            exists += (
+                f", init={item['plannedActionOnInit']}"
+                f", reset={item['plannedActionOnReset']}"
+            )
         print(f"- {item['label']}: {item['target']} ({exists})")
+
     if bundled_migration_plan:
         print("\nBundled Skill rename migration:")
         print(f"- status: {bundled_migration_plan['status']}")
@@ -5670,7 +5739,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 4
-        external_install_status = install_required_external_skills(args)
+        external_install_status = install_required_external_skills(
+            args, overwrite=mode == "reset"
+        )
+
         if external_install_status != 0:
             print(
                 "Required global external Skill installation failed.", file=sys.stderr
