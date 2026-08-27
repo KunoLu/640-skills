@@ -7,6 +7,16 @@
 ### 变更
 
 - `sync` / `同步` 在复制 Onboard 后必须用已同步 `onboard.py install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt --scope global --source auto` 从 stable mirror 安装 required Ponytail Skills，并校验 4 个 `SKILL.md`；不得把 `assets/external-skills/stable/skills/ponytail*` 加为同步表拷贝行。
+- 正常 `init` / `reset` 与本仓库 `sync`：若用户主目录已存在 `.omp`（POSIX `~/.omp`，Windows `%USERPROFILE%\.omp`），把同一 `AGENTS.global.md` 备份后覆盖写入 `~/.omp/agent/AGENTS.md`；目录不存在则跳过且不创建 `.omp`。`--global-agents-path` 只覆盖 Codex 目标。
+- `--global-agents-path` 指向 `~/.omp/agent/AGENTS.md` 时，`init` / `reset` 只保留一条写入操作，避免对同一文件做两次备份移动。
+- External Skills stable set 升级为 `2026-08-27.1`：通过 `promote-external-skills-stable` 从上游 HEAD 刷新 mattpocock/skills、impeccable、ui-ux-pro-max-skill、shadcn-ui 与 ponytail 五个 repository 的原样快照、tree digest 和许可证文件。
+- `init` / `reset` 对解析后相同路径的 `file` 操作只保留一条并只备份一次，覆盖 `--global-agents-path` 与项目 `AGENTS.md` 撞上 OMP/Codex 目标的情况。版本检查 prompt 的 OMP AGENTS 校验不再依赖被忽略的根 `AGENTS.md`。
+
+### 验证
+
+- 全量 Python unittest `180` 项全部通过（`python3 -m unittest discover -p 'test_*.py'`，97.278s）：`test_workflow_contracts` 37、`test_onboard_multi_projects` 34、`test_onboard_ponytail_integration` 29、`test_onboard_external_skills` 24、`test_install_sh_agent_cli_flow` 24、`test_knowledge_base_p1` 18、`test_validation_evidence_v2` 9、`test_onboard_agent_cli` 5。
+- 本轮新增 OMP AGENTS 路径覆盖已包含在上述 `test_onboard_multi_projects` / `test_workflow_contracts` 中：无 `.omp` 跳过、存在则覆盖写入、`--global-agents-path` 同目标去重、项目根撞 OMP agent 目录只写一次并只备份一次、Windows `USERPROFILE` stub、fresh-clone prompt 不依赖根 `AGENTS.md`。
+
 
 ## v1.0.8（2026-08-26）
 
@@ -27,7 +37,6 @@
 - 隔离 HOME smoke 8 个场景全部通过：Ponytail 缺失 / 完整 / 部分缺失 / 损坏修复、官方 plugin enabled 冲突阻断（check 与 init 均失败且零写入）、plugin disabled 放行、CLI 不可用报告 `unknown`、reset 前后 Ponytail config 文件字节一致。
 
 ## v1.0.7（2026-08-20）
-
 
 ### 新增
 
@@ -67,14 +76,12 @@
 - External Skill 安装改为 stable-first：默认 `auto` 与显式 `stable` 都从 Onboard 内经过 review、精确 revision 和 checksum 固定的 stable set 离线安装；只有显式 `--source upstream` 才直接获取当前上游，失败时不自动回退。
 - 将 14 个受管 external Skills 提升到 stable set `2026-08-03.1`：固定 promotion 时的 mattpocock/skills、impeccable、ui-ux-pro-max-skill 与 shadcn-ui 上游 revision；通过 promotion 流程刷新 tree digest 和许可证文件。
 - 项目模板选择以无尾随斜杠的 `.trellis/workspace` 忽略目录或顶级 symlink 及其所有内容，包括 workspace `index.md`、开发者 journal 与 trace；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略。
-
 - 对齐 Trellis 的 Codex hook 上下文恢复路径：bundled `trellis-workflow` 现在要求升级后保留单一 context prelude，并在注入标记不完整时依赖受管的 saved `SubagentStart` 恢复，而非手工粘贴任务数据或放宽注入上限。
 - 明确 Trellis 的平台调度边界：共享 `.trellis/**` 只定义 workflow gate，不标识运行平台；当前 host 与 `.codex/**` 或 `.omp/**` 生成资产决定执行机制，二者共存时不得由静态审查强行选择。`codex.dispatch_mode`、Inline 与其 fail-closed fallback 仅属于 Codex；当前 OMP host 使用 OMP `task` worker 和 agent 定义。Channel 保持显式确认的持久协作 runtime；同一变更职责只能有一个写入执行者，用户请求的独立只读复核可以并行。
 - 版本检查新增 stable-tag 配置、workflow、migration manifest 与平台集成的强制证据门；Trellis v0.6.10 的 `SubagentStart` 修复不再被误述为首次启用 Codex subagent。
 - 移除 `sync` / `update` 流程禁止 Agent 提交和推送的限制；在用户明确指示时，Agent 可以提交并推送已验证的仓库变更。
 - `grill-with-docs` 状态透明度不再无条件制造重复确认门：仍必须说明调用状态与原因，但只有调用与跳过存在会改变需求、领域边界或实现决策的实质权衡时才询问用户。
 - 版本检查自动化的允许扫描、影响分析和验证范围扩展到根安装器、项目 `.gitignore` 模板与契约测试，并明确无人值守任务不得通过交互提问升级为 `update`、`sync`、commit 或 push。
-
 
 ### 文档
 
@@ -100,8 +107,8 @@
 - 对齐 Trellis 的 Pi shared-skills 迁移边界：当项目仍有 legacy `.pi/skills/` 时，bundled `trellis-workflow` 现在要求使用 `trellis update --migrate` 完成受管重命名，避免手工移动造成双重发现或破坏迁移安全检查。
 - 对齐 Maestro MCP 的 Cloud 诊断能力：全局规则模板和 `maestro-mobile-e2e` 现在明确在 Cloud upload 终态后可读取 per-flow run 的状态与 artifacts；README 两种格式同步说明该能力只用于诊断，不替代 Maestro CLI 的正式 E2E 执行与报告。
 - 对齐 Trellis 的受管更新边界：bundled `trellis-workflow` 和 `trellis-channel` 现在明确子代理上下文注入的默认字节上限、单次跳过关键词、受限的 linked-worktree 信任目录，以及 Codex 子代理模型设置在更新后的保留与复核要求，避免通过无限上下文或宽泛路径信任绕过安全边界。
-
 - 更新 Playwright MCP 的 Onboard 安装引导：当所选 Playwright 发行版提供内置 MCP server 时优先使用 `npx playwright mcp`，否则继续要求选择兼容的专用 server；保留 MCP 可见性确认与项目级 Playwright CLI 不可替代的边界。
+
 ## v1.0.4（2026-07-19）
 
 ### 修复
@@ -181,3 +188,4 @@
 
 - 增加 catalog、安装事务、legacy migration、多项目初始化、Agent CLI、Knowledge Base 和仓库工作流契约测试。
 - 发布前全量 Python 测试共 88 项通过，并完成 README HTML 桌面端和移动端 Chromium smoke 验证。
+
