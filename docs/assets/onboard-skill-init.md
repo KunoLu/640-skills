@@ -93,7 +93,7 @@ flowchart TD
 | rtk / caveman / Java / Maestro | 询问后才装 | 已验证则跳过 |
 | 18 个 external Skills（含 4 个 Ponytail） | 只装缺失且身份合法的项；官方 Ponytail plugin 启用时先阻断 | 已合法则跳过；不每轮重克隆 |
 | 15 个 bundled Skills | 复制到本次解析的全局 Skills 根 | **无备份覆盖** |
-| 全局 `AGENTS.md` | 复制到 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md` | **备份后覆盖**；不写 `~/.omp/agent/AGENTS.md` |
+| 全局 `AGENTS.md` | 复制到 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`；若 `~/.omp` 已存在，另备份后覆盖 `~/.omp/agent/AGENTS.md`（Windows 为 `%USERPROFILE%\.omp\agent\AGENTS.md`） | **备份后覆盖**；`~/.omp` 不存在则跳过且不创建 |
 | 项目 `AGENTS.md` | 仅当 Q4 同意时复制 | 同意写入则备份后覆盖 |
 | 项目 `.gitignore` | 追加模板缺行 | 行齐全则 skip |
 | `.trellis/` | `trellis init` | `skipped-existing` |

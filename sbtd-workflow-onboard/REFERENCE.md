@@ -2,7 +2,7 @@
 
 ## Bundled Templates
 
-- `templates/agents/AGENTS.global.md` → global Codex `AGENTS.md`
+- `templates/agents/AGENTS.global.md` -> global Codex `AGENTS.md`, and `~/.omp/agent/AGENTS.md` when `~/.omp` already exists
 - `templates/agents/AGENTS.project.md` → each selected project root `AGENTS.md`
 - `templates/project/.gitignore` → each selected project root `.gitignore`
 - `templates/skills/**` → required global bundled Skills
@@ -57,7 +57,7 @@ Important arguments:
 - `--skip-trellis-bootstrap`
 - `--no-mcp`, `--dry-run`, `--yes`, `--no-color`
 
-The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Normal onboarding keeps the Codex global AGENTS default shown under [Paths](#paths) unless `--global-agents-path` / `-GlobalAgentsPath` explicitly overrides it. Project-only mode never writes global AGENTS.
+The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Normal onboarding keeps the Codex global AGENTS default shown under [Paths](#paths) unless `--global-agents-path` / `-GlobalAgentsPath` explicitly overrides it. If the user-home `.omp` directory already exists (POSIX `~/.omp`, Windows `%USERPROFILE%\.omp`), `init` / `reset` also backup-then-overwrite the same template to `~/.omp/agent/AGENTS.md`. Missing `.omp` is skipped; Onboard does not create `.omp`. `--global-agents-path` overrides only the Codex target. Project-only mode never writes global AGENTS.
 
 ### PowerShell
 
@@ -387,6 +387,15 @@ Global AGENTS:
 1. `--global-agents-path`
 2. `$CODEX_HOME/AGENTS.md`
 3. `~/.codex/AGENTS.md`
+
+Additional OMP global AGENTS, only when the user-home `.omp` directory already exists:
+
+- POSIX: `~/.omp/agent/AGENTS.md`
+- Windows: `%USERPROFILE%\.omp\agent\AGENTS.md`
+
+Existing OMP `AGENTS.md` is backed up then overwritten. Missing `.omp` is skipped; Onboard does not create `.omp`. `--global-agents-path` does not disable this extra write. If `--global-agents-path` or a project `AGENTS.md` resolves to the same file as the OMP or Codex global target, `init` / `reset` keep a single file write and a single backup.
+
+
 
 Global Skills:
 

@@ -243,6 +243,21 @@ class WorkflowContractTests(unittest.TestCase):
                 "does not select the global AGENTS target",
                 document,
             )
+            self.assertIn("~/.omp/agent/AGENTS.md", document)
+            self.assertIn("does not create `.omp`", document)
+            self.assertIn("single file write", document)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        self.assertIn("~/.omp/agent/AGENTS.md", readme)
+        self.assertIn("~/.omp/agent/AGENTS.md", readme_html)
+        self.assertIn("不存在则跳过且不创建 `.omp`", readme)
+        self.assertIn("不存在则跳过且不创建 <code>.omp</code>", readme_html)
+        init_asset = (
+            ROOT / "docs" / "assets" / "onboard-skill-init.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("不写 `~/.omp/agent/AGENTS.md`", init_asset)
+        self.assertIn("~/.omp/agent/AGENTS.md", init_asset)
+
         for path in (
             "`install.sh`",
             "`install.ps1`",
@@ -250,6 +265,9 @@ class WorkflowContractTests(unittest.TestCase):
             "`tests/**`",
         ):
             self.assertIn(path, prompt)
+        self.assertIn("不依赖根 `AGENTS.md` 是否存在", prompt)
+        self.assertIn("不得创建缺失的 `.omp`", prompt)
+
         self.assertIn("无人值守自动化", prompt)
         self.assertIn("用户在交互会话中明确要求", prompt)
 

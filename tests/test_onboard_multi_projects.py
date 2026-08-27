@@ -30,7 +30,9 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.projects_csv = f"{self.project_one},{self.project_two}"
         self.env = os.environ.copy()
         self.env["HOME"] = str(self.home)
+        self.env["USERPROFILE"] = str(self.home)
         self.env["CODEX_HOME"] = str(self.codex_home)
+
 
     def write_executable(self, name: str, body: str) -> Path:
         bin_dir = self.root / "bin"
@@ -762,6 +764,264 @@ exit 1
                 "--skip-existing",
             ],
         )
+
+    def _seed_required_external_skills(self, global_skills: Path) -> None:
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for entry in catalog["entries"]:
+            if entry["kind"] != "external-skill":
+                continue
+            name = entry["id"].removeprefix("skill:")
+            target = global_skills / name
+            target.mkdir(parents=True)
+            (target / "SKILL.md").write_text(
+                f"---\nname: {name}\n---\n",
+                encoding="utf-8",
+            )
+
+    def test_plan_skips_omp_global_agents_when_omp_root_absent(self) -> None:
+        completed = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(self.project_one),
+            "--json",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        labels = [item["label"] for item in json.loads(completed.stdout)["operations"]]
+        self.assertIn("codex global AGENTS.md", labels)
+        self.assertNotIn("omp global AGENTS.md", labels)
+
+    def test_plan_includes_omp_global_agents_when_omp_root_exists(self) -> None:
+        omp_root = self.home / ".omp"
+        omp_root.mkdir()
+        completed = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(self.project_one),
+            "--global-agents-path",
+            str(self.root / "custom-global-AGENTS.md"),
+            "--json",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        operations = json.loads(completed.stdout)["operations"]
+        omp_op = next(item for item in operations if item["label"] == "omp global AGENTS.md")
+        self.assertEqual(
+            omp_op["target"],
+            str((omp_root / "agent" / "AGENTS.md").resolve()),
+        )
+        self.assertTrue(
+            any(
+                item["label"] == "codex global AGENTS.md"
+                and item["target"] == str((self.root / "custom-global-AGENTS.md").resolve())
+                for item in operations
+            )
+        )
+
+    def test_plan_dedupes_omp_op_when_global_agents_path_is_omp_target(self) -> None:
+        omp_agents = self.home / ".omp" / "agent" / "AGENTS.md"
+        omp_agents.parent.mkdir(parents=True)
+        completed = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(self.project_one),
+            "--global-agents-path",
+            str(omp_agents),
+            "--json",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        operations = json.loads(completed.stdout)["operations"]
+        labels = [item["label"] for item in operations]
+        self.assertIn("codex global AGENTS.md", labels)
+        self.assertNotIn("omp global AGENTS.md", labels)
+        self.assertEqual(
+            sum(1 for item in operations if item["target"] == str(omp_agents.resolve())),
+            1,
+        )
+
+    def test_init_same_global_agents_path_as_omp_target_overwrites_once(self) -> None:
+        global_skills = self.root / "global-skills"
+        self._seed_required_external_skills(global_skills)
+        omp_agents = self.home / ".omp" / "agent" / "AGENTS.md"
+        omp_agents.parent.mkdir(parents=True)
+        omp_agents.write_text("stale omp agents\n", encoding="utf-8")
+        template = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.global.md"
+        ).read_text(encoding="utf-8")
+
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(omp_agents),
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(omp_agents.read_text(encoding="utf-8"), template)
+        backups = [
+            path
+            for path in omp_agents.parent.iterdir()
+            if path.name.startswith("AGENTS.md.") and path != omp_agents
+        ]
+        self.assertEqual(len(backups), 1)
+
+    def test_init_dedupes_project_agents_when_root_is_omp_agent_dir(self) -> None:
+        global_skills = self.root / "global-skills"
+        self._seed_required_external_skills(global_skills)
+        omp_root = self.home / ".omp"
+        project_root = omp_root / "agent"
+        project_root.mkdir(parents=True)
+        omp_agents = project_root / "AGENTS.md"
+        omp_agents.write_text("stale omp agents\n", encoding="utf-8")
+        template = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.global.md"
+        ).read_text(encoding="utf-8")
+
+        planned = self.run_onboard(
+            "plan",
+            "--projects-root",
+            str(project_root),
+            "--json",
+        )
+        self.assertEqual(planned.returncode, 0, planned.stderr)
+        operations = json.loads(planned.stdout)["operations"]
+        matching = [
+            item
+            for item in operations
+            if item["kind"] == "file"
+            and Path(item["target"]).resolve() == omp_agents.resolve()
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["label"], "omp global AGENTS.md")
+
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            str(project_root),
+            "--global-skills-dir",
+            str(global_skills),
+            "--skip-trellis-init",
+            "--yes",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(omp_agents.read_text(encoding="utf-8"), template)
+        backups = [
+            path
+            for path in project_root.iterdir()
+            if path.name.startswith("AGENTS.md.") and path != omp_agents
+        ]
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(encoding="utf-8"), "stale omp agents\n")
+
+
+
+
+    def test_init_overwrites_existing_omp_global_agents(self) -> None:
+        global_skills = self.root / "global-skills"
+        self._seed_required_external_skills(global_skills)
+        omp_agents = self.home / ".omp" / "agent" / "AGENTS.md"
+        omp_agents.parent.mkdir(parents=True)
+        omp_agents.write_text("stale omp agents\n", encoding="utf-8")
+        template = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.global.md"
+        ).read_text(encoding="utf-8")
+
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(self.root / "global-AGENTS.md"),
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertEqual(omp_agents.read_text(encoding="utf-8"), template)
+        self.assertEqual(
+            (self.root / "global-AGENTS.md").read_text(encoding="utf-8"),
+            template,
+        )
+
+    def test_init_projects_does_not_write_omp_global_agents(self) -> None:
+        omp_root = self.home / ".omp"
+        omp_root.mkdir()
+        completed = self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-trellis-init",
+            "--yes",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertFalse((omp_root / "agent" / "AGENTS.md").exists())
+
+    def test_check_json_reports_omp_paths(self) -> None:
+        absent = self.run_onboard("check", "--json")
+        self.assertEqual(absent.returncode, 0, absent.stderr)
+        absent_paths = json.loads(absent.stdout)["paths"]
+        self.assertIsNone(absent_paths["ompRoot"])
+        self.assertIsNone(absent_paths["ompGlobalAgents"])
+
+        omp_root = self.home / ".omp"
+        omp_root.mkdir()
+        present = self.run_onboard("check", "--json")
+        self.assertEqual(present.returncode, 0, present.stderr)
+        present_paths = json.loads(present.stdout)["paths"]
+        self.assertEqual(present_paths["ompRoot"], str(omp_root.resolve()))
+        self.assertEqual(
+            present_paths["ompGlobalAgents"],
+            str((omp_root / "agent" / "AGENTS.md").resolve()),
+        )
+
+
+class OmpHomePathTests(unittest.TestCase):
+    def test_user_home_prefers_windows_userprofile(self) -> None:
+        import importlib.util
+        import sys
+        from types import SimpleNamespace
+
+        spec = importlib.util.spec_from_file_location("sbtd_onboard", ONBOARD)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        original_os = module.os
+        try:
+            module.os = SimpleNamespace(
+                name="nt",
+                environ={"USERPROFILE": r"C:\Users\omp-user"},
+            )
+            self.assertEqual(module.user_home(), Path(r"C:\Users\omp-user"))
+        finally:
+            module.os = original_os
+            sys.modules.pop(spec.name, None)
+
+
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -459,6 +459,27 @@ def default_codex_home() -> Path:
     return (Path.home() / ".codex").resolve()
 
 
+def user_home() -> Path:
+    if os.name == "nt":
+        raw = os.environ.get("USERPROFILE") or os.environ.get("HOME")
+        if raw:
+            return Path(raw).expanduser()
+    return Path.home()
+
+
+def detect_omp_root() -> Path | None:
+    root = user_home() / ".omp"
+    try:
+        resolved = root.resolve()
+    except OSError:
+        return None
+    return resolved if resolved.is_dir() else None
+
+
+def omp_global_agents_path(omp_root: Path) -> Path:
+    return omp_root / "agent" / "AGENTS.md"
+
+
 def known_global_skills_dirs() -> tuple[Path, ...]:
     home = Path.home()
     return tuple(
@@ -2002,6 +2023,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "skills": [item["name"] for item in skills if not item["installed"]],
     }
 
+    omp_root = detect_omp_root()
     results = {
         "mode": "check",
         "platform": platform.system() or sys.platform,
@@ -2009,7 +2031,12 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
             "globalSkillsDir": str(global_skills_dir),
             "globalSkillsDirSource": global_skills_dir_source,
             "projectRoots": [str(project_root) for project_root in project_roots],
+            "ompRoot": str(omp_root) if omp_root else None,
+            "ompGlobalAgents": (
+                str(omp_global_agents_path(omp_root)) if omp_root else None
+            ),
         },
+
         "runtime": runtime,
         "cliChecksSkipped": cli_checks_skipped,
         "tools": tools,
@@ -5180,6 +5207,20 @@ def build_operations(mode: str, args: argparse.Namespace) -> list[Operation]:
                 "file",
             )
         )
+        omp_root = detect_omp_root()
+        if omp_root is not None:
+            omp_agents = omp_global_agents_path(omp_root).resolve()
+            if omp_agents != global_agents.resolve():
+                operations.append(
+                    Operation(
+                        "omp global AGENTS.md",
+                        GLOBAL_AGENTS_TEMPLATE,
+                        omp_agents,
+                        "file",
+                    )
+                )
+
+
         skills_root = scoped_skills_root(args)
         for name, source in SKILL_SOURCES.items():
             target = skills_root / name
@@ -5211,8 +5252,22 @@ def build_operations(mode: str, args: argparse.Namespace) -> list[Operation]:
                 "ensure-file-block",
             )
         )
+    return dedupe_file_operations(operations)
 
-    return operations
+
+def dedupe_file_operations(operations: list[Operation]) -> list[Operation]:
+    seen: set[Path] = set()
+    unique: list[Operation] = []
+    for operation in operations:
+        if operation.kind == "file":
+            target = operation.target.resolve()
+            if target in seen:
+                continue
+            seen.add(target)
+        unique.append(operation)
+    return unique
+
+
 
 
 def build_bundled_skill_migration_plan(
@@ -5631,14 +5686,21 @@ def run(mode: str, args: argparse.Namespace) -> int:
 
     backups: list[tuple[Path, Path]] = []
     backup_by_target: dict[Path, Path] = {}
+    backed_up: set[Path] = set()
     for op in conflicts:
         if op.kind != "file":
+            continue
+        target = op.target.resolve()
+        if target in backed_up or not op.target.exists():
             continue
         backup = backup_path(op.target)
         op.target.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(op.target), str(backup))
         backups.append((op.target, backup))
         backup_by_target[op.target] = backup
+        backup_by_target[target] = backup
+        backed_up.add(target)
+
 
     operation_results: list[dict[str, object]] = []
     for op in active_operations:

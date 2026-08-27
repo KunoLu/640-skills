@@ -34,7 +34,8 @@ Options:
   --platform <codex|claude|kimi|oh-my-pi|omp>
       Target Agent CLI and MCP platform. "omp" is an alias for "oh-my-pi".
       This option does not change the Codex global AGENTS.md target; override
-      that separately with --global-agents-path.
+      that separately with --global-agents-path. If ~/.omp already exists,
+      init/reset also overwrite ~/.omp/agent/AGENTS.md.
       The installer verifies this CLI immediately, bootstraps npm when needed,
       and installs the official npm package globally at @latest when missing.
   --source-root <path>

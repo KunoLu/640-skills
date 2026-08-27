@@ -93,7 +93,7 @@ flowchart TD
 | Agent CLI / npm / trellis / gitnexus | 缺失才安装 | 已验证则跳过，不强制升级 |
 | 18 个 external Skills（含 4 个 Ponytail） | 缺失或损坏才按 stable transaction 补齐 / 修复；官方 Ponytail plugin 启用时先阻断；Ponytail config 文件 reset 前后字节一致 | 已合法则跳过 |
 | bundled Skills | 复制 | **无备份覆盖** 为当前 Onboard 模板 |
-| 全局 `AGENTS.md` | 复制 | **备份后覆盖** |
+| 全局 `AGENTS.md` | 复制 Codex 目标；若 `~/.omp` 已存在则另写 `~/.omp/agent/AGENTS.md` | **备份后覆盖**；不创建缺失的 `~/.omp` |
 | 项目 `AGENTS.md` | 仅 Q4 同意时复制 | 同意则备份后覆盖 |
 | `.gitignore` | 追加缺行 | 行齐全则 skip |
 | `.trellis/` | 缺失才 `trellis init` | **不删不重建** |
