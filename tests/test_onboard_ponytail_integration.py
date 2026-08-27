@@ -28,8 +28,8 @@ TEMPLATES_DIR = SKILL_DIR / "templates"
 
 PONYTAIL_SKILLS = ("ponytail", "ponytail-review", "ponytail-audit", "ponytail-debt")
 PONYTAIL_REPO = "https://github.com/DietrichGebert/ponytail.git"
-PONYTAIL_REVISION = "0a4dd63ad4541f4f655c4108a295916f3c1d8fda"
-PONYTAIL_STABLE_SET = "2026-08-26.1"
+PONYTAIL_REVISION = "2ed6c52c9d7e5e56942508591085fd45dea277d3"
+PONYTAIL_STABLE_SET = "2026-08-27.1"
 
 
 class PonytailModuleTests(unittest.TestCase):
@@ -65,7 +65,7 @@ class PonytailCatalogTests(PonytailModuleTests):
             set(onboard.EXTERNAL_SKILL_SOURCES), set(onboard.REFERENCED_SKILLS)
         )
 
-    def test_stable_manifest_contains_ponytail_v4_9_0_snapshot(self) -> None:
+    def test_stable_manifest_contains_ponytail_snapshot(self) -> None:
         manifest = json.loads(
             (STABLE_ROOT / "MANIFEST.json").read_text(encoding="utf-8")
         )
