@@ -3,6 +3,14 @@
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
 
+## v1.0.12（未发布）
+
+### 变更
+
+- 对齐 Trellis 的空 jsonl 启动门禁：sub-agent-dispatch 平台上 `task.py validate` 对零条 curated 的 `implement.jsonl` / `check.jsonl` 失败，`task.py start` 默认拒绝，只有用户明确要求空上下文启动时才使用 `--allow-empty-context`。
+- 对齐 Trellis 的路径变更与整仓移除命令：`task.py rename`、`trellis ablate` / `trellis restore` 纳入 filesystem-safety 与用户确认边界；`[workflow-state:task_error]` 时先修复现有 `task.json`，不得另建任务。
+- 对齐 Trellis 的 OMP `prompt_injection.skip_keyword`：生成的 OMP extension 与 Python per-turn hook 使用同一配置关键词跳过当轮 workflow-state 注入，跳过不等于关闭 Trellis 规则。
+
 ## v1.0.11（2026-08-27）
 
 ### 修复
