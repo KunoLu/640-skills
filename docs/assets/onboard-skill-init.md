@@ -101,4 +101,4 @@ flowchart TD
 | MCP | 交互配置；提示词没提则不要静默写 | 已有配置不自动改 |
 | Playwright / React Bits | 仅项目适用时询问 | 仍是条件项，不是全量重装 |
 
-`onboard.py init` 本身不装缺失的 Agent CLI / Trellis / GitNexus；那是 Skill / `install.sh` 的 preflight。按 Skill 执行时必须先做这些检查。
+`onboard.py init` 本身不装缺失的 Agent CLI / Trellis / GitNexus；那是 Skill / `install.sh` 的 preflight。按 Skill 执行时必须先做这些检查。<!---->
