@@ -40,9 +40,9 @@ When the user provides only an initial requirement, and the requirement involves
 4. Only write terminology into the project's designated context documentation when long-term consensus has been reached; use `docs/CONTEXT.md` by default, and use `docs/contexts/<context>/CONTEXT.md` for multi-context projects; do not create a root-level `CONTEXT.md` unless the project already uses that path or project rules explicitly specify it; do not turn CONTEXT into a temporary specification.
 5. Suggest writing an ADR only when a decision simultaneously meets all three conditions: difficult to roll back, surprising without context, and involving real trade-offs; write to `docs/adr/*.md` by default, and write to `docs/contexts/<context>/adr/*.md` for multi-context projects.
 6. After consensus is reached, every completed `grill-with-docs` session, regardless of whether the Agent or the user initiated it, must be followed immediately by `book-ddd-distilled-modeling` as an independent second-pass boundary review. `domain-modeling` inside `grill-with-docs` does not satisfy or replace this gate.
-7. Output a visible `DDD Boundary Review` with status `confirmed`, `needs-clarification`, or `blocked`, covering ubiquitous language, bounded-context assumptions, invariants, subdomain classification, corrections to the `grill-with-docs` result, and open conflicts.
-8. If the review is not `confirmed`, resolve each finding through one-question-at-a-time clarification and rerun `book-ddd-distilled-modeling`; the workflow must not advance to requirement confirmation, PRD, design, task creation, or implementation.
-9. After the review reaches `confirmed`, output a requirement confirmation summary covering the goal, users / scenarios, in-scope and out-of-scope items, terminology, constraints, acceptance criteria, and open questions.
+7. Output the visible `DDD Boundary Review` that reviewer Skill defines; `book-ddd-distilled-modeling/SKILL.md` is the sole source for its status vocabulary, output fields, rerun loop, and stop condition.
+8. Until that review reaches its documented passing status, the workflow must not advance to requirement confirmation, PRD, design, task creation, or implementation.
+9. Only after that reviewer reports its own passing status may you output a requirement confirmation summary covering the goal, users / scenarios, in-scope and out-of-scope items, terminology, constraints, acceptance criteria, and open questions.
 10. Before outputting the requirement confirmation summary, a PRD / design / implement review gate, or `task.py start`, state the usage status of `grill-with-docs` and the latest `DDD Boundary Review` status. If `grill-with-docs` was not fully invoked, explain why. Ask only when using versus skipping the Skill presents a material trade-off that could change requirements, domain boundaries, or implementation decisions; otherwise proceed from the established project facts without creating a confirmation gate.
 11. After the user confirms the summary, use `to-spec` to generate the Markdown spec / PRD; in a Trellis project, write or update the final spec / PRD in `.trellis/tasks/<task>/prd.md`.
 12. After the spec / PRD is confirmed, use `to-tickets` to split it into Trellis-ready vertical slices, marking dependency order, AFK / HITL, acceptance criteria, and testing strategy; the decomposition results should be materialized as parent / child task artifacts under `.trellis/tasks/<task>/...`.
@@ -58,7 +58,7 @@ If the requirement is only a general solution inquiry and has no project documen
 
 During Phase 1 planning, in the requirement confirmation summary, at a PRD / design / implement review gate, or before `task.py start`, state according to the global rules whether `grill-with-docs` was fully invoked and explain any omission. Ask only when using versus skipping the Skill presents a material trade-off; otherwise proceed from established project facts.
 
-When `grill-with-docs` was fully completed, also state whether the mandatory `book-ddd-distilled-modeling` second pass ran and output its visible `DDD Boundary Review`. A missing, unreadable, or evidence-blocked reviewer is `blocked`, not a reason to skip the gate.
+When `grill-with-docs` was fully completed, also state whether the mandatory `book-ddd-distilled-modeling` second pass ran and output its visible `DDD Boundary Review`, using that Skill's own status vocabulary. A missing, unreadable, or evidence-blocked reviewer keeps the gate unmet; it is never a reason to skip it.
 
 Do not execute `$trellis-before-dev` or begin implementation before the requirement confirmation summary, PRD, or task artifacts are stable.
 
@@ -321,21 +321,28 @@ Revalidation required: yes | no
 
 ## Book-derived Skill Gate
 
-During requirements, design, implementation, and validation phases, first produce a task-level `Book Gate Plan`. For each bundled book-derived Skill, record `required` or `on-demand`, objective trigger evidence, execution phase, and a separate Gate state: `planned` / `running` / `passed` / `blocked` / `not-required`. A required or selected on-demand gate starts `planned`; an unselected on-demand gate is `not-required`; the only normal transition is `planned` → `running` → `passed` / `blocked`. Record the reviewer-specific status only after that Skill actually runs. The workflow must not downgrade a matched mandatory gate to on-demand because the Agent expects a low-risk result; only changed scope or project evidence may remove the trigger, and that change must be recorded.
+At each task phase, maintain the task-level `Book Gate Plan` defined by the active global AGENTS rules: record `required` / `on-demand`, objective trigger evidence, execution phase, and Gate state. Do not duplicate reviewer-specific status vocabularies in Trellis artifacts.
 
-Do not invoke all 5 Skills mechanically for every task. The following objective development triggers are mandatory; unmatched scenarios remain on-demand and may still invoke a Skill because the user requests it or a secondary risk warrants it.
+Use the global Skill routing table as the objective-trigger source. Load the matched `book-*/SKILL.md` before the gate runs; that reviewer Skill is the sole source for its output schema, pass status, correction loop, and stop condition. Unmatched scenarios remain on-demand; matched mandatory gates cannot be downgraded.
 
-Phase orchestration:
+When the global routing table is not visible, use this self-contained trigger fallback:
 
-- Requirements / PRD phase: every completed `grill-with-docs` session must immediately invoke `book-ddd-distilled-modeling`, emit a visible `DDD Boundary Review`, and reach `confirmed` before `to-spec` / `to-tickets`; this is mandatory even when the embedded `domain-modeling` pass found no ambiguity. When `grill-with-docs` was not used, invoke `book-ddd-distilled-modeling` independently only when business terminology, domain rules, bounded contexts, or model boundaries warrant it.
-- Design phase: when persisted or shared data, schemas / migrations, shared / persistent / cross-request / cross-process cache, queues / events / streams / jobs, ETL / analytics, cross-service data flow, data ownership, source of truth, transaction boundaries, read / write paths, backfill, replay, rollback, or recovery changes, invoke `book-ddia-data-design` before design artifacts become stable or implementation begins. Emit `DDIA Data Design Review` with status `confirmed`, `needs-design-change`, or `blocked`; do not advance until `confirmed`.
-- Before behavior changes: for every existing-behavior bug fix, or when existing code has weak / missing tests, unclear behavior, hidden dependencies, or high regression risk, invoke `book-legacy-change-safety` before the first behavior-changing edit. Emit `Legacy Change Safety Review` with status `characterized`, `needs-safety-net`, `seam-required`, or `blocked`. Use `seam-required` only when current behavior and preserved behavior are established but the safety net requires a production seam.
-- Before implementation edits: whenever the task modifies existing production code, invoke `book-refactoring-pass` before the first implementation edit to existing production code. Emit `Refactoring Review` with status `proceed`, `refactor-first`, or `blocked`; `proceed` may explicitly conclude that no refactoring is needed, while `refactor-first` requires the smallest behavior-preserving refactor and a rerun before feature or fix edits.
-- After validation / before completion: when production-path services, APIs, auth, billing, notifications, background jobs, queues, schedulers, external integrations, data pipelines, or deployment behavior changes, invoke `book-release-readiness` after all applicable testing-tool gates and project validation, but before the task is declared complete, the final release decision, or Channel preflight. Emit `Release Readiness Review` with status `ready`, `needs-mitigation`, or `blocked`; required validation that did not run is always `blocked`, while only an optional check may be accepted by an explicit accountable owner as residual risk.
+- `book-ddd-distilled-modeling`: every completed `grill-with-docs` session; otherwise business terminology, domain rules, context boundaries, or model ambiguity.
+- `book-ddia-data-design`: persisted / shared data, schema / migration, shared / persistent / cross-request / cross-process cache, queue / event / stream / job, ETL / analytics, cross-service data flow, API ownership, data ownership, source of truth, transaction boundaries, read / write paths, or backfill / replay / rollback / recovery changes, before the design is stable.
+- `book-legacy-change-safety`: existing-behavior bug fixes, weak / missing tests, unclear behavior, hidden dependencies, or high regression risk, before the first behavior change.
+- `book-refactoring-pass`: any edit to existing production code, before the first implementation edit.
+- `book-release-readiness`: service / API / auth / billing / notification / background job / queue / scheduler / external integration / data-pipeline / deployment / rollout / migration / runtime operational behavior changes, after testing-tool gates and `project-validation`.
 
-If the legacy and refactoring gates both match, normally complete `Legacy Change Safety Review` first, then `Refactoring Review`. Controlled exception: `seam-required` → `Refactoring Review` (`safety-seam-only`) → implement and validate only the smallest behavior-preserving test seam → rerun legacy to `characterized` → rerun the normal refactoring gate. No feature / fix behavior or unrelated cleanup is allowed in `safety-seam-only` mode. For any `needs-*`, `seam-required`, or `refactor-first` result, keep Gate state `running`, complete the correction, and rerun the relevant Skill. A missing Skill or missing evidence is `blocked` for a matched mandatory gate rather than a skip.
+These fallback rows decide only whether a reviewer is mandatory; load that bundled reviewer Skill for its status vocabulary and completion rules. Missing required reviewer evidence or Skill remains `blocked`.
 
-Conclusions from book-derived Skills should preferentially be written into the current task's `prd.md`, `design.md`, `implement.md`, or check summary. Only long-term architecture, APIs, data models, permissions, business rules, or technical conventions belong in `.trellis/spec`.
+Phase orchestration remains:
+
+- requirements / PRD: post-`grill-with-docs` DDD review before requirement confirmation or `to-spec`;
+- design: applicable DDIA review before design becomes stable;
+- behavior change / implementation: applicable legacy review, then refactoring review; follow their documented safety-seam exception when required;
+- completion: applicable release-readiness review after all testing-tool gates and `project-validation`, before completion or Channel preflight.
+
+A matched gate with a missing Skill or insufficient evidence is `blocked`, not skipped. Record task-specific conclusions in `prd.md`, `design.md`, `implement.md`, or the check summary; only durable rules belong in `.trellis/spec`.
 
 ---
 

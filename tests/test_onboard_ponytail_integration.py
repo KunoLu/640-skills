@@ -503,6 +503,8 @@ class PonytailProviderTests(unittest.TestCase):
         return target
 
     def write_fake_plugin_cli(self, name: str, payload: str, exit_code: int = 0) -> None:
+        if name == "omp":
+            (self.home / ".omp").mkdir(exist_ok=True)
         self.write_executable(
             name,
             f"""
@@ -576,6 +578,37 @@ class PonytailProviderTests(unittest.TestCase):
         self.assertEqual(provider["pluginStatus"], "installed-disabled")
         self.assertEqual(provider["skillStatus"], "missing")
         self.assertEqual(provider["nextStep"], "install-required")
+
+    def test_check_never_invokes_omp_cli_when_omp_root_absent(self) -> None:
+        """`check` must stay read-only on a machine that never configured OMP.
+
+        `omp plugin list --json` creates `~/.omp` as a side effect, so a probe
+        that runs before checking the directory silently converts "OMP is not
+        installed" into "OMP is installed but empty" -- and leaves state behind
+        in the user's home directory.
+        """
+        marker = self.root / "omp-invoked"
+        self.write_executable(
+            "omp",
+            f"""
+            #!/bin/sh
+            : > '{marker}'
+            mkdir -p '{self.home}/.omp'
+            printf '%s\n' '[]'
+            exit 0
+            """,
+        )
+        self.assertFalse((self.home / ".omp").exists())
+
+        returncode, payload = self.run_check()
+
+        self.assertEqual(returncode, 0)
+        self.assertFalse(marker.exists(), "check invoked the OMP CLI")
+        self.assertFalse((self.home / ".omp").exists(), "check created ~/.omp")
+        self.assertEqual(
+            payload["ponytailProvider"]["platforms"]["omp"]["status"],
+            "not-configured",
+        )
 
     def test_check_reports_unknown_when_plugin_cli_unavailable(self) -> None:
         returncode, payload = self.run_check()

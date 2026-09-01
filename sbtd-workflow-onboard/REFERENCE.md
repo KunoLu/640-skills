@@ -123,6 +123,8 @@ Project-only mode:
 7. Uses an already available global Trellis CLI when initialization is required; if it is unavailable, the affected projects are reported as blocked rather than installing the CLI.
 8. Checks bootstrap guidelines for every root.
 
+Because no global AGENTS or bundled Skills are installed, the project `AGENTS.md` written in step 6 carries its own minimum rules: it restates the safety-bearing boundaries (destructive Trellis operations, single writer per change, secret handling, report retention) and lists objective triggers for the book-derived gates. Those triggers are evaluated from the change itself, so a run still has to report a conclusion for every gate it hits. When the corresponding Skill is absent the gate is `blocked` — never `passed` and never silently skipped — so a project-only install cannot claim a reviewer ran.
+
 ## Target Agent CLI Gate
 
 | Platform | Command | Required global npm package |
@@ -214,7 +216,7 @@ All 18 referenced external Skills are also required globally:
 
 The four Ponytail Skills are ordinary required external Skills: no install confirmation, no optional group, and a missing or invalid copy is installed or repaired from the vendored stable set with the same transaction semantics as every other required Skill. Onboard is the stable skill-only provider and never installs, enables, disables, trusts, or removes the official Ponytail plugin; `ponytail-gain` and `ponytail-help` belong only to that plugin and are never Onboard-managed.
 
-`check --json` reports `ponytailProvider` with `provider` (`onboard-stable` / `conflict` / `unknown`), `skillStatus` (`complete` / `partial` / `missing` / `invalid`), `pluginStatus` (`installed-enabled` / `installed-disabled` / `missing` / `cli-unavailable`), per-platform detail, and `nextStep`. Detection is read-only: Codex uses `codex plugin list --json` and matches only the canonical `ponytail@ponytail` identity (or plugin name `ponytail` with marketplace `ponytail`); OMP uses `omp plugin list --json` and matches plugin name `ponytail` only when its source / install spec normalizes to the official `github.com/DietrichGebert/ponytail` repository. Same-named third-party packages never count as the official plugin.
+`check --json` reports `ponytailProvider` with `provider` (`onboard-stable` / `conflict` / `unknown`), `skillStatus` (`complete` / `partial` / `missing` / `invalid`), `pluginStatus` (`installed-enabled` / `installed-disabled` / `missing` / `cli-unavailable`), per-platform detail, and `nextStep`. Detection is read-only: Codex uses `codex plugin list --json`; OMP uses `omp plugin list --json` only when `~/.omp` already exists, because merely starting an unconfigured OMP CLI may create that directory. A missing `~/.omp` reports OMP as `not-configured` without invoking the CLI. Codex matches only canonical `ponytail@ponytail` (or name `ponytail` with marketplace `ponytail`); OMP matches name `ponytail` only when its source / install spec normalizes to the official `github.com/DietrichGebert/ponytail` repository. Same-named third-party packages never count.
 
 An enabled official plugin is `provider=conflict`: `check` exits non-zero and `init` / `reset` block before writing stable copies; the root installers stop with the same guidance. The remedy is manual — disable or remove the plugin with the platform's own CLI, then rerun. An installed-but-disabled plugin is reported without blocking. When any platform CLI cannot be queried or its output cannot be parsed (and no enabled plugin was proven on the other platform), `provider=unknown`: Onboard neither fabricates a clean state nor blocks on unproven conflict.
 
@@ -431,6 +433,8 @@ python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/tw
 python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
 python scripts/onboard.py init-projects --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
 ```
+
+`--json` prints exactly one JSON document on stdout and suppresses all human-readable prose, including on non-zero exits. Write modes reuse the plan payload as the root object and add their results to it: `init`, `reset`, and `init-projects` append `backups`, `trellisProjectSetup`, and `unverifiedChecks` next to the planned `operations`, `bundledMigration`, `externalMigration`, and `trellisInit`. Read-only `plan`, `check`, and `check-projects` payloads are unchanged.
 
 Global-only onboarding is still supported by omitting `--projects-root` and explicitly skipping project AGENTS when using the Python command directly:
 

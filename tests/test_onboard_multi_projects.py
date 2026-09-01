@@ -433,6 +433,280 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertTrue(template_lines.issubset(set(first_content.splitlines())))
         self.assertEqual(second_content, first_content)
 
+    def init_project_one_gitignore(self) -> subprocess.CompletedProcess[str]:
+        return self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-project-agents",
+            "--skip-trellis-init",
+            "--yes",
+        )
+
+    def git_init_project_one(self) -> None:
+        subprocess.run(
+            ("git", "init", "--quiet"),
+            cwd=self.project_one,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_init_projects_rejects_gitignore_reinclusion_conflict(self) -> None:
+        """A pre-existing broad `.trellis/` exclusion defeats every
+        `!.trellis/...` re-inclusion regardless of order, and append-only
+        merging cannot see that. Onboarding must fail loudly instead of leaving
+        the spec/tasks files silently untracked."""
+        self.git_init_project_one()
+        gitignore = self.project_one / ".gitignore"
+        gitignore.write_text("# local\n.trellis/\n", encoding="utf-8")
+
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertNotEqual(result.returncode, 0, output)
+        # The operator has to know which line to edit, so the failure must name
+        # the deciding record -- file, line number, pattern. A bare `.trellis/`
+        # substring check also passes on the re-inclusion lines the template
+        # itself appends, so it would survive a message that lost the origin.
+        self.assertIn(
+            ".gitignore:2:.trellis/ ignores paths that must stay trackable:",
+            output,
+        )
+
+    def test_init_projects_accepts_gitignore_in_clean_git_repo(self) -> None:
+        self.git_init_project_one()
+
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 0, output)
+        self.assertNotIn("must stay trackable", output)
+
+    def test_init_projects_skips_gitignore_probe_without_git_repo(self) -> None:
+        """Outside a work tree the git-backed probe must degrade to a no-op
+        rather than block onboarding."""
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 0, output)
+        self.assertFalse((self.project_one / ".git").exists())
+        self.assertIn("verification skipped", output)
+
+    def test_init_projects_rejects_reinclusion_that_exposes_env_secrets(self) -> None:
+        """A pre-existing `!.env*` outlives the appended `.env` rule because the
+        template is appended before it in match order only when the user file is
+        shorter; either way the merged file must not leave secrets trackable,
+        and the report must name the deciding line."""
+        self.git_init_project_one()
+        gitignore = self.project_one / ".gitignore"
+        gitignore.write_text("# local\n.env\n", encoding="utf-8")
+
+        first = self.init_project_one_gitignore()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+
+        gitignore.write_text(
+            gitignore.read_text(encoding="utf-8") + "!.env*\n", encoding="utf-8"
+        )
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("must stay ignored", output)
+        self.assertIn("!.env*", output)
+        self.assertIn(".env", output)
+
+    def test_init_projects_detects_reinclusion_whose_pattern_contains_a_colon(
+        self,
+    ) -> None:
+        """`!.en[v:]` re-includes `.env` just as plainly as `!.env*`, and the
+        verdict must not depend on the pattern being colon-free.
+
+        git reports the deciding pattern as `source:linenum:pattern`, so reading
+        the pattern by splitting that text truncates `!.en[v:]` to `]`. The lost
+        `!` flips the verdict to "ignored" and onboarding signs off on a merged
+        file that leaves secrets trackable -- the precise failure this probe
+        exists to catch."""
+        self.git_init_project_one()
+        gitignore = self.project_one / ".gitignore"
+        gitignore.write_text("# local\n.env\n", encoding="utf-8")
+
+        merged = self.init_project_one_gitignore()
+        self.assertEqual(merged.returncode, 0, merged.stdout + merged.stderr)
+
+        gitignore.write_text(
+            gitignore.read_text(encoding="utf-8") + "!.en[v:]\n", encoding="utf-8"
+        )
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("must stay ignored", output)
+        self.assertIn("!.en[v:]", output)
+
+    def test_init_projects_json_success_output_is_a_single_document(self) -> None:
+        """`--json` promises a machine-readable stdout, which means exactly one
+        document -- and the success path is where that promise was broken.
+
+        A write mode used to print the plan document and then a second document
+        for the trellis report, so `json.loads` raised `Extra data` on every
+        successful run. Only `plan` and `check` were parsed by tests, so the
+        break stayed invisible. Parsing stdout here also pins the prose out of
+        the payload, and pins `mode` at the root so a consumer reads it the same
+        way for every mode."""
+        self.git_init_project_one()
+
+        result = self.run_onboard(
+            "init-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-project-agents",
+            "--skip-trellis-init",
+            "--yes",
+            "--json",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["mode"], "init-projects")
+        self.assertIn("operations", payload)
+        self.assertIn("backups", payload)
+        self.assertIn("trellisProjectSetup", payload)
+        self.assertIn("unverifiedChecks", payload)
+        self.assertNotIn("Verification passed", result.stdout)
+        self.assertNotIn("Backups:", result.stdout)
+
+    def test_init_projects_probes_every_trellis_runtime_category(self) -> None:
+        """Each runtime category needs its own probe: a negation appended after
+        the template re-exposes exactly one category, so probing workspace alone
+        would let the others leak silently."""
+        self.git_init_project_one()
+        gitignore = self.project_one / ".gitignore"
+        merged = self.init_project_one_gitignore()
+        self.assertEqual(merged.returncode, 0, merged.stdout + merged.stderr)
+        baseline = gitignore.read_text(encoding="utf-8")
+
+        categories = (
+            ("!.trellis/workspace\n!.trellis/workspace/**\n", ".trellis/workspace/index.md"),
+            ("!.trellis/worktrees/\n!.trellis/worktrees/**\n", ".trellis/worktrees/feature/notes.md"),
+            ("!.trellis/channels/\n!.trellis/channels/**\n", ".trellis/channels/main/message.json"),
+            ("!.trellis/.runtime/\n!.trellis/.runtime/**\n", ".trellis/.runtime/state.json"),
+            ("!.trellis/.cache/\n!.trellis/.cache/**\n", ".trellis/.cache/index.json"),
+            ("!.trellis/.backup/\n!.trellis/.backup/**\n", ".trellis/.backup/spec.md"),
+            ("!.trellis/.template-hashes.json\n", ".trellis/.template-hashes.json"),
+        )
+        for negation, leaked in categories:
+            with self.subTest(leaked=leaked):
+                gitignore.write_text(baseline + negation, encoding="utf-8")
+                result = self.init_project_one_gitignore()
+                output = result.stdout + result.stderr
+
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn("must stay ignored", output)
+                self.assertIn(leaked, output)
+
+    def test_init_projects_fails_when_git_cannot_evaluate_gitignore(self) -> None:
+        """A git that errors out is not a licence to pass: an unverified
+        .gitignore must block instead of reporting success."""
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        self.write_executable(
+            "git",
+            "#!/bin/sh\n"
+            'if [ "$1" = "check-ignore" ]; then\n'
+            '  echo "fatal: simulated check-ignore failure" >&2\n'
+            "  exit 2\n"
+            "fi\n"
+            f'exec {real_git} "$@"\n',
+        )
+        self.git_init_project_one()
+
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("could not evaluate", output)
+
+    def test_init_projects_reports_gitignore_check_as_unverified_without_git(
+        self,
+    ) -> None:
+        """No git means no ignore semantics to query, which is a skipped check
+        rather than a failure -- but the run must not sign off with a bare
+        "Verification passed" that reads as "the merged rules were verified"."""
+        self.write_executable(
+            "git",
+            "#!/bin/sh\n"
+            'echo "fatal: not a git repository" >&2\n'
+            "exit 128\n",
+        )
+
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("verification skipped", output)
+        self.assertIn(
+            "Verification passed, except for checks that could not be evaluated:",
+            result.stdout,
+        )
+        self.assertNotIn("Verification passed.", result.stdout)
+
+    def test_init_projects_reports_gitignore_check_as_unverified_without_any_git(
+        self,
+    ) -> None:
+        """`git` missing from PATH must degrade the same way as `git` refusing.
+
+        `gitignore_verdicts` folds two different failures into one verdict:
+        `run_project_command` returns `None` when the executable cannot be
+        spawned at all, and returns exit 128 when git runs but rejects the
+        directory. A stub that exits 128 only exercises the second, so the
+        `None` branch -- the one taken on a machine without git -- would keep
+        passing if it started raising or silently reporting success."""
+        empty_bin = self.root / "empty-bin"
+        empty_bin.mkdir()
+        self.env["PATH"] = str(empty_bin)
+        self.assertIsNone(shutil.which("git", path=str(empty_bin)))
+
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("verification skipped", output)
+        self.assertIn(
+            "Verification passed, except for checks that could not be evaluated:",
+            result.stdout,
+        )
+        self.assertNotIn("Verification passed.", result.stdout)
+
+    def test_init_projects_fails_when_git_answers_only_some_probes(self) -> None:
+        """A truncated `check-ignore` answer must not be read as a pass for the
+        probes git never mentioned: an unanswered probe is unverified, and every
+        probe it covers is safety-bearing.
+
+        The stub answers in the `-z` wire format -- four NUL-terminated fields
+        for a single probe -- so the run fails because the other probes went
+        unanswered. A textual answer would instead be rejected as malformed
+        output, passing this test for the wrong reason and leaving the
+        short-answer path untested."""
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        self.write_executable(
+            "git",
+            "#!/bin/sh\n"
+            'if [ "$1" = "check-ignore" ]; then\n'
+            "  printf '.gitignore\\0001\\000.env\\000.env\\000'\n"
+            "  exit 0\n"
+            "fi\n"
+            f'exec {real_git} "$@"\n',
+        )
+        self.git_init_project_one()
+
+        result = self.init_project_one_gitignore()
+        output = result.stdout + result.stderr
+
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("could not evaluate", output)
+
     def test_init_projects_preserves_legacy_agent_control_ignores(
         self,
     ) -> None:

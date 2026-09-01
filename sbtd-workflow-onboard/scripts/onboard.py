@@ -17,6 +17,7 @@ import tarfile
 import tempfile
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -1948,6 +1949,9 @@ def detect_ponytail_provider(global_skills_dir: Path) -> dict[str, object]:
     enabled_found = False
     disabled_found = False
     for platform_name in ("codex", "omp"):
+        if platform_name == "omp" and detect_omp_root() is None:
+            platforms[platform_name] = {"status": "not-configured"}
+            continue
         status, records = list_platform_plugins(platform_name)
         if status != "ok":
             platforms[platform_name] = {"status": "cli-unavailable"}
@@ -2294,6 +2298,40 @@ def remove_existing_target(target: Path) -> None:
         target.unlink()
 
 
+EXTERNAL_TREE_DIGEST_EXCLUDED_DIRS = frozenset(
+    {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
+)
+EXTERNAL_TREE_DIGEST_EXCLUDED_SUFFIXES = frozenset({".pyc", ".pyo"})
+EXTERNAL_TREE_COMPARE_EXCLUDED_DIRS = {".git", *EXTERNAL_TREE_DIGEST_EXCLUDED_DIRS}
+
+
+def external_copy_ignore(*extra: str) -> Callable[[str, list[str]], set[str]]:
+    """Copies drop exactly what the pinned digest drops; otherwise unauthenticated
+    cache files reach installed Skills without changing treeSha256."""
+
+    match_names = shutil.ignore_patterns(
+        *extra, *sorted(EXTERNAL_TREE_DIGEST_EXCLUDED_DIRS)
+    )
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        ignored = set(match_names(directory, names))
+        # The digest drops cache entries by file suffix and never rejects a
+        # directory for its name, so a directory called `pkg.pyc` must still be
+        # copied; a bare glob would drop that whole subtree while its files kept
+        # counting toward treeSha256.
+        for name in names:
+            if name in ignored:
+                continue
+            if Path(name).suffix not in EXTERNAL_TREE_DIGEST_EXCLUDED_SUFFIXES:
+                continue
+            if Path(directory, name).is_dir():
+                continue
+            ignored.add(name)
+        return ignored
+
+    return ignore
+
+
 def compare_tree(
     source: Path, target: Path, ignored_names: set[str] | None = None
 ) -> list[str]:
@@ -2303,7 +2341,7 @@ def compare_tree(
         rel = item.relative_to(source)
         if any(part in ignored for part in rel.parts):
             continue
-        if item.name.endswith(".pyc"):
+        if rel.suffix in EXTERNAL_TREE_DIGEST_EXCLUDED_SUFFIXES and not item.is_dir():
             continue
         other = target / rel
         if item.is_dir():
@@ -2390,6 +2428,161 @@ def copy_operation(operation: Operation) -> str:
 
 
 
+GITIGNORE_MUST_TRACK_PROBES = (
+    ".trellis/workflow.md",
+    ".trellis/spec/spec.md",
+    ".trellis/agents/agent.md",
+    ".trellis/lessons/lessons.md",
+    ".trellis/tasks/sample/prd.md",
+    ".trellis/tasks/sample/design.md",
+    ".trellis/tasks/sample/implement.md",
+)
+
+GITIGNORE_MUST_IGNORE_PROBES = (
+    ".trellis/workspace/index.md",
+    ".trellis/worktrees/feature/notes.md",
+    ".trellis/channels/main/message.json",
+    ".trellis/.runtime/state.json",
+    ".trellis/.cache/index.json",
+    ".trellis/.backup/spec.md",
+    ".trellis/.template-hashes.json",
+    ".env",
+    ".env.local",
+)
+
+GITIGNORE_PROBE_UNAVAILABLE = "unavailable"
+GITIGNORE_PROBE_ERROR = "error"
+
+# Checks that could not be evaluated. They are not failures, but the final
+# summary must not read as "everything was verified" once one is recorded.
+UNVERIFIED_CHECKS: list[str] = []
+
+
+def note_unverified(message: str) -> None:
+    UNVERIFIED_CHECKS.append(message)
+    print(f"Note: {message}", file=sys.stderr)
+
+
+@dataclass(frozen=True)
+class GitignoreVerdict:
+    ignored: bool
+    origin: str
+
+
+def gitignore_verdicts(
+    project_root: Path, probes: tuple[str, ...]
+) -> dict[str, GitignoreVerdict] | str:
+    """Resolve every probe in one `git check-ignore` pass.
+
+    `-v --non-matching` names the deciding line for both outcomes, so a
+    negation that re-exposes a runtime path is reported as precisely as a broad
+    exclusion that buries a workflow file. The verdict follows git's own rule:
+    the last matching pattern wins and a `!` pattern means "not ignored", which
+    `--quiet` alone cannot distinguish from "no pattern matched".
+
+    `-z --stdin` is what makes that verdict trustworthy. It emits
+    `source NUL linenum NUL pattern NUL pathname NUL`, so the deciding pattern
+    arrives as its own field. Splitting the textual `source:linenum:pattern`
+    form instead truncates any pattern containing a colon: `!.en[v:]` reduces
+    to `]`, which drops the leading `!` and reports a re-included `.env` as
+    ignored -- inverting the verdict for the exact case this check exists to
+    catch.
+    """
+    result = run_project_command(
+        (
+            "git",
+            "check-ignore",
+            "--no-index",
+            "-v",
+            "--non-matching",
+            "-z",
+            "--stdin",
+        ),
+        project_root,
+        timeout=60,
+        stdin_text="".join(f"{probe}\0" for probe in probes),
+    )
+    if result is None or result.returncode == 128:
+        return GITIGNORE_PROBE_UNAVAILABLE
+    if result.returncode not in (0, 1):
+        return GITIGNORE_PROBE_ERROR
+
+    fields = result.stdout.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    if len(fields) % 4:
+        return GITIGNORE_PROBE_ERROR
+
+    verdicts: dict[str, GitignoreVerdict] = {}
+    for index in range(0, len(fields), 4):
+        source, linenum, pattern, path = fields[index : index + 4]
+        verdicts[path] = GitignoreVerdict(
+            ignored=bool(pattern) and not pattern.startswith("!"),
+            origin=f"{source}:{linenum}:{pattern}" if pattern else "",
+        )
+    if set(verdicts) != set(probes):
+        return GITIGNORE_PROBE_ERROR
+    return verdicts
+
+
+def gitignore_effectiveness_failures(target: Path) -> list[str]:
+    """Verify required Trellis paths using git's actual ignore semantics."""
+    project_root = target.parent
+    verdicts = gitignore_verdicts(
+        project_root, GITIGNORE_MUST_TRACK_PROBES + GITIGNORE_MUST_IGNORE_PROBES
+    )
+    if isinstance(verdicts, str):
+        if verdicts == GITIGNORE_PROBE_ERROR:
+            return [
+                "git check-ignore could not evaluate the merged .gitignore --"
+                " resolve the repository error instead of trusting rules that"
+                " were never verified"
+            ]
+        # git is missing or the project is outside a work tree: there is no
+        # ignore semantics to query, so say the check was skipped instead of
+        # letting a silent pass read as "verified effective".
+        note_unverified(
+            ".gitignore effectiveness verification skipped for"
+            f" {project_root} -- git could not evaluate it (no git binary or no"
+            " work tree), so the merged rules remain unverified."
+        )
+        return []
+
+    failures: list[str] = []
+    blocked: dict[str, list[str]] = {}
+    for probe in GITIGNORE_MUST_TRACK_PROBES:
+        verdict = verdicts[probe]
+        if verdict.ignored:
+            key = verdict.origin or "an unknown gitignore pattern"
+            blocked.setdefault(key, []).append(probe)
+    for origin, paths in blocked.items():
+        shown = ", ".join(paths[:3])
+        extra = f" (+{len(paths) - 3} more)" if len(paths) > 3 else ""
+        failures.append(
+            f"{origin} ignores paths that must stay trackable: {shown}{extra}"
+            " -- delete or narrow that pattern; a broad directory exclusion"
+            " defeats every !.trellis/... re-inclusion regardless of order"
+        )
+
+    for probe in GITIGNORE_MUST_IGNORE_PROBES:
+        verdict = verdicts[probe]
+        if verdict.ignored:
+            continue
+        if verdict.origin:
+            failures.append(
+                f"{verdict.origin} re-includes {probe}, which must stay ignored"
+                " -- narrow that re-inclusion so local runtime state and"
+                " secrets cannot be committed"
+            )
+        else:
+            failures.append(
+                f"{probe} must stay ignored but no pattern covers it -- restore"
+                " the removed rule so local runtime state and secrets cannot be"
+                " committed"
+            )
+    return failures
+
+
 def verify_operation(operation: Operation) -> list[str]:
     if operation.same_location:
         return []
@@ -2407,9 +2600,9 @@ def verify_operation(operation: Operation) -> list[str]:
             return [operation.label]
         source_text = operation.source.read_text(encoding="utf-8")
         target_text = operation.target.read_text(encoding="utf-8")
-        if not missing_file_lines(source_text, target_text):
-            return []
-        return [operation.label]
+        if missing_file_lines(source_text, target_text):
+            return [operation.label]
+        return gitignore_effectiveness_failures(operation.target)
     if operation.kind == "file":
         if operation.target.is_file() and filecmp.cmp(
             operation.source, operation.target, shallow=False
@@ -2665,11 +2858,21 @@ def source_dir_for_external_skill(repo_root: Path, skill_name: str) -> Path:
     )
 
 
+def external_tree_digest_excluded(relative: Path) -> bool:
+    """Locally generated caches must not change a pinned Skill's identity."""
+
+    if EXTERNAL_TREE_DIGEST_EXCLUDED_DIRS.intersection(relative.parts):
+        return True
+    return relative.suffix in EXTERNAL_TREE_DIGEST_EXCLUDED_SUFFIXES
+
+
 def external_tree_sha256(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(
         candidate for candidate in root.rglob("*") if candidate.is_file()
     ):
+        if external_tree_digest_excluded(path.relative_to(root)):
+            continue
         if path.is_symlink():
             raise RuntimeError(
                 f"external Skill contains an unsupported symlink: {path.relative_to(root)}"
@@ -2956,12 +3159,12 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
         shutil.copytree(
             source,
             target,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+            ignore=external_copy_ignore(".git"),
         )
     except OSError as exc:
         return "failed", replaced_existing, str(exc)
 
-    failures = compare_tree(source, target, {".git", "__pycache__"})
+    failures = compare_tree(source, target, EXTERNAL_TREE_COMPARE_EXCLUDED_DIRS)
     if failures:
         return (
             "failed",
@@ -3041,10 +3244,10 @@ def stage_external_skills(
             shutil.copytree(
                 source,
                 destination,
-                ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+                ignore=external_copy_ignore(".git"),
             )
             validate_external_skill_source(name, destination)
-            failures = compare_tree(source, destination, {".git", "__pycache__"})
+            failures = compare_tree(source, destination, EXTERNAL_TREE_COMPARE_EXCLUDED_DIRS)
             if failures:
                 raise RuntimeError(
                     f"staging verification failed for {name}: "
@@ -3318,9 +3521,7 @@ def backup_skill_target(target: Path, backup_dir: Path) -> str | None:
         remove_existing_target(destination)
     backup_dir.mkdir(parents=True, exist_ok=True)
     if target.is_dir() and not target.is_symlink():
-        shutil.copytree(
-            target, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
-        )
+        shutil.copytree(target, destination, ignore=external_copy_ignore())
     else:
         shutil.copy2(target, destination)
     return str(destination)
@@ -3778,7 +3979,11 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
         previous_root = candidate_container / "previous"
         retain_candidate_container = False
         try:
-            shutil.copytree(EXTERNAL_STABLE_ROOT, candidate_root)
+            shutil.copytree(
+                EXTERNAL_STABLE_ROOT,
+                candidate_root,
+                ignore=external_copy_ignore(".git"),
+            )
             candidate_manifest = json.loads(json.dumps(manifest))
             candidate_repositories = cast(
                 dict[str, object], candidate_manifest["repositories"]
@@ -3821,7 +4026,7 @@ def promote_external_skills_stable(args: argparse.Namespace) -> int:
                 shutil.copytree(
                     source,
                     destination,
-                    ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"),
+                    ignore=external_copy_ignore(".git"),
                 )
                 validate_external_skill_source(name, destination)
                 entry["treeSha256"] = external_tree_sha256(destination)
@@ -4880,7 +5085,10 @@ def install_maestro(args: argparse.Namespace) -> int:
 
 
 def run_project_command(
-    command: tuple[str, ...], cwd: Path, timeout: int = 900
+    command: tuple[str, ...],
+    cwd: Path,
+    timeout: int = 900,
+    stdin_text: str | None = None,
 ) -> subprocess.CompletedProcess[str] | None:
     try:
         return subprocess.run(
@@ -4890,6 +5098,7 @@ def run_project_command(
             capture_output=True,
             text=True,
             timeout=timeout,
+            input=stdin_text,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -5595,17 +5804,16 @@ def operation_plan_entry(operation: Operation) -> dict[str, object]:
     return entry
 
 
-def print_plan(
+def build_plan_payload(
     mode: str,
     operations: list[Operation],
-    as_json: bool,
     bundled_migration_plan: dict[str, object] | None = None,
     external_migration_plan: dict[str, object] | None = None,
     global_skills_dir: Path | None = None,
     global_skills_dir_source: str | None = None,
     trellis_init_plan: dict[str, object] | None = None,
-) -> None:
-    payload = {
+) -> dict[str, object]:
+    payload: dict[str, object] = {
         "mode": mode,
         "platform": platform.system() or sys.platform,
         "skillDir": str(SKILL_DIR),
@@ -5624,11 +5832,11 @@ def print_plan(
         payload["externalMigration"] = external_migration_plan
     if trellis_init_plan:
         payload["trellisInit"] = trellis_init_plan
-    if as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-        return
+    return payload
 
-    print(f"Mode: {mode}")
+
+def print_plan(payload: dict[str, object]) -> None:
+    print(f"Mode: {payload['mode']}")
     print(f"Platform: {payload['platform']}")
     for item in payload["operations"]:
         if item["sameLocation"]:
@@ -5642,6 +5850,7 @@ def print_plan(
             )
         print(f"- {item['label']}: {item['target']} ({exists})")
 
+    bundled_migration_plan = payload.get("bundledMigration")
     if bundled_migration_plan:
         print("\nBundled Skill rename migration:")
         print(f"- status: {bundled_migration_plan['status']}")
@@ -5661,6 +5870,7 @@ def print_plan(
                 f"{item['path']} (expected {item['expectedName']}, "
                 f"got {item.get('actualName') or '<missing>'})"
             )
+    external_migration_plan = payload.get("externalMigration")
     if external_migration_plan:
         print("\nExternal mattpocock migration:")
         print(f"- status: {external_migration_plan['status']}")
@@ -5696,6 +5906,7 @@ def print_plan(
                     str(name) for name in external_migration_plan["removeLegacy"]
                 )
             )
+    trellis_init_plan = payload.get("trellisInit")
     if trellis_init_plan:
         print("\nTrellis init:")
         print(f"- status: {trellis_init_plan.get('status')}")
@@ -5785,6 +5996,9 @@ def ensure_confirmed(args: argparse.Namespace, mode: str) -> None:
 
 
 def run(mode: str, args: argparse.Namespace) -> int:
+    # One process may run several modes; a note left by an earlier run would
+    # make a later one report checks it never skipped.
+    UNVERIFIED_CHECKS.clear()
     if mode == "check":
         results = build_check_results(args)
         print_check_results(results, args.json)
@@ -5842,17 +6056,33 @@ def run(mode: str, args: argparse.Namespace) -> int:
         if mode == "init-projects"
         else build_external_migration_plan(args)
     )
-    print_plan(
+    plan_payload = build_plan_payload(
         mode,
         operations,
-        args.json,
         bundled_migration_plan,
         external_migration_plan,
         global_skills_dir,
         global_skills_dir_source,
         build_trellis_init_plan(mode, args),
     )
+    plan_json_emitted = False
+
+    def emit_plan_json() -> None:
+        """Release the held-back plan as this run's single `--json` document.
+
+        Write modes fold the plan into one merged document at the end of the
+        run, so any path that returns before that has to emit the plan itself
+        or `--json` would leave stdout empty.
+        """
+        nonlocal plan_json_emitted
+        if args.json and not plan_json_emitted:
+            plan_json_emitted = True
+            print(json.dumps(plan_payload, indent=2, ensure_ascii=False))
+
+    if not args.json:
+        print_plan(plan_payload)
     if mode == "plan":
+        emit_plan_json()
         return 0
 
     ensure_confirmed(args, mode)
@@ -5862,6 +6092,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
             "does not match the configured legacy name.",
             file=sys.stderr,
         )
+        emit_plan_json()
         return 4
 
     external_identity_failures = (
@@ -5878,6 +6109,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
         for item in external_identity_failures:
             label = item.get("name") or item.get("repo") or "migration"
             print(f"- {label}: {item.get('error', 'unknown failure')}", file=sys.stderr)
+        emit_plan_json()
         return 4
 
     if mode in {"init", "reset"}:
@@ -5889,6 +6121,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 "stable Skills.",
                 file=sys.stderr,
             )
+            emit_plan_json()
             return 4
         external_install_status = install_required_external_skills(
             args, overwrite=mode == "reset"
@@ -5898,6 +6131,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print(
                 "Required global external Skill installation failed.", file=sys.stderr
             )
+            emit_plan_json()
             return 4
 
     active_operations = [op for op in operations if not op.same_location]
@@ -5966,7 +6200,9 @@ def run(mode: str, args: argparse.Namespace) -> int:
         item for item in operation_results if item["status"] == "failed"
     ]
 
-    if backups:
+    if backups and not args.json:
+        # `--json` keeps stdout to a single document, and that document carries
+        # `backups`, so the prose list would only corrupt the payload here.
         print("Backups:")
         for original, backup in backups:
             print(f"- {original} -> {backup}")
@@ -5981,6 +6217,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 f"- {item['label']}: {item.get('reason', 'unknown failure')}",
                 file=sys.stderr,
             )
+        emit_plan_json()
         return 3
 
     bundled_migration_results = run_bundled_skill_migration(bundled_migration_plan)
@@ -5996,6 +6233,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 f"- {item['name']}: {item.get('error', 'unknown failure')}",
                 file=sys.stderr,
             )
+        emit_plan_json()
         return 4
 
     migration_results = run_external_migration(external_migration_plan)
@@ -6009,13 +6247,33 @@ def run(mode: str, args: argparse.Namespace) -> int:
         for item in failed_migrations:
             label = item.get("name") or item.get("repo") or "migration"
             print(f"- {label}: {item.get('error', 'unknown failure')}", file=sys.stderr)
+        emit_plan_json()
         return 4
 
     trellis_report = run_trellis_project_setup(mode, args)
     if args.json:
+        # One run, one root object. The plan was held back above so it can be
+        # merged here; flushing it earlier made stdout two concatenated
+        # documents, which `json.loads` rejects on every successful write mode.
+        #
+        # The plan keys stay at the root so `mode` sits in the same place for
+        # every mode -- `plan` and the check modes already answer there, and
+        # nesting only write modes would make `--json` a different contract
+        # depending on which mode produced it.
+        plan_json_emitted = True
         print(
             json.dumps(
-                {"trellisProjectSetup": trellis_report}, indent=2, ensure_ascii=False
+                {
+                    **plan_payload,
+                    "backups": [
+                        {"target": str(target), "backup": str(backup)}
+                        for target, backup in backups
+                    ],
+                    "trellisProjectSetup": trellis_report,
+                    "unverifiedChecks": list(UNVERIFIED_CHECKS),
+                },
+                indent=2,
+                ensure_ascii=False,
             )
         )
     else:
@@ -6027,8 +6285,19 @@ def run(mode: str, args: argparse.Namespace) -> int:
     if trellis_report.get("status") == "bootstrap-required":
         return 6
 
-    print("Verification passed.")
     if not args.json:
+        # `--json` promises one machine-readable document on stdout. Each note
+        # already went to stderr when it was recorded, and the JSON document
+        # carries `unverifiedChecks`, so nothing is lost by staying quiet here.
+        if UNVERIFIED_CHECKS:
+            print(
+                "Verification passed, except for checks that could not be"
+                " evaluated:"
+            )
+            for item in UNVERIFIED_CHECKS:
+                print(f"- {item}")
+        else:
+            print("Verification passed.")
         if mode == "init-projects":
             print_projects_check_results(build_projects_check_results(args), False)
         else:
