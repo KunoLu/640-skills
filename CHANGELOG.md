@@ -3,6 +3,35 @@
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
 
+## v1.0.13（2026-09-01）
+
+### 修复
+
+- `check --json` 在用户尚无 `~/.omp` 时不再执行 `omp plugin list`，避免只读检查创建 `.omp`；已配置 OMP 时仍完整检测官方 Ponytail plugin 冲突。
+- 项目 `.gitignore` 增量合并后使用原生 `git check-ignore` 验证 Trellis 必须追踪 / 必须忽略路径；既有 `.trellis/` 等宽泛父目录排除会给出具体来源行并阻断，而非文本齐全却语义失效的假绿。探针按 NUL 分隔字段读取 git 给出的判定模式，`!.en[v:]` 这类含冒号模式的反向包含不会被反读成“已忽略”。
+- `init` / `reset` / `init-projects` 等写入模式的 `--json` 现在只向 stdout 输出单个 JSON 文档。此前会先输出计划文档、再输出 Trellis 报告文档，并夹杂 `Backups:`、`Verification passed.` 等散文，`json.loads` 在每次成功运行上都会失败；计划字段仍留在根层，`mode` 与 `plan` / `check` 位置一致。
+- 项目 `.gitignore` 模板补上裸 `.env`。此前只忽略 `.env.local` 和 `.env.*.local`，最常见的 `.env` 反而可被提交。
+- External Skill 目录校验和不再把本地生成的 `__pycache__`、`*.pyc` 和工具缓存计入指纹。此前在仓库根运行一次 pytest 会在受管 stable 快照内写入字节码缓存，使后续安装与 promotion 报告校验和不匹配；干净快照的既有 pin 不受影响。
+- book 门禁路由行补回被改写丢掉的触发词。`book-ddia-data-design` 的三处路由此前都漏掉规范中的 API 所有权，`book-release-readiness` 把「deployment / rollout / migration / runtime 运维行为」压缩成只剩 deployment，Trellis fallback 还把 background job 写成 job；只命中被丢掉那一段的改动会静默跳过强制 reviewer。全局路由表、project-only fallback 与 Trellis fallback 现在逐条覆盖各 `book-*/SKILL.md` 自己列出的触发词。
+- `onboard.py` 每次 `run()` 开始时重置 `UNVERIFIED_CHECKS`。此前该模块级列表跨调用累积，同进程内连续运行多个模式时，后一次会报告自己从未跳过的检查。
+- External Skill 目录的拷贝、指纹与比对现在对 `*.pyc` / `*.pyo` 采用一致的排除语义：只排除文件，不排除同名目录。此前名为 `pkg.pyc` 的目录会被拷贝阶段整棵丢弃，其中的文件却仍计入 `treeSha256`，导致拷贝结果与校验和互相矛盾。
+
+### 变更
+
+- 对齐 GitNexus 升级后必须用 CLI 重新 analyze 的索引语义。MCP repository allowlist 未覆盖时 GitNexus MCP 对该仓库不可用，不得当作 MCP 可读；fail-closed 只读不走 MCP 写入；二者均不阻止 CLI 刷新。同时对齐已移除的非功能 group matching 旋钮、`--self-commit` 与 Codex plugin marketplace 不能替代全局 `gitnexus-mcp` 的使用边界。
+- 对齐 Codex 可选 MCP 启动宽限期、项目级 plugin catalog 合并，以及 extension 可在模型前检查或替换 MCP tool result 的可用性判断。
+- `AGENTS.project.md` 收敛为 project-only fallback、项目路径和硬性边界，删除全局工具 / reviewer 状态的重复副本；正常 `init` / `reset` 与 project-only 的激活边界现在明确区分。
+- book-derived 门禁改为单一事实源：全局 AGENTS 维护客观触发与 Gate lifecycle，各 `book-*/SKILL.md` 独占 reviewer 状态、输出 schema、修正回路和 stop condition；Trellis 负责编排，并保留全局路由不可见时可自举的最小 objective-trigger fallback。
+- 精简项目 `.gitignore` 中已被 `.trellis/*` 覆盖的运行时重复行，并移除同样冗余的 `.trellis/workspace` 条目；目录 / symlink 语义改由无尾随斜杠的 `.trellis/*` 本身提供，workspace 目录、workspace 内容与顶级 workspace symlink 的忽略结果不变。报告目录仍保持本地忽略，不要求提交 Git。
+- 项目 `.gitignore` 的 `output/` 收窄为 `/output/`，只忽略仓库根的构建输出目录；同名嵌套源码目录（例如 `src/output/`）不再被连带忽略。
+
+### 验证
+
+- 新增 `git check-ignore` 语义探针测试、`check --json` 不创建 `~/.omp` 的回归测试，以及 External Skill 目录指纹忽略字节码 / 工具缓存的回归测试；契约测试同步断言 book 门禁的单一事实源归属，并按各 `book-*/SKILL.md` 的规范 bullet 数量逐 token 校验三处路由行的触发词覆盖，新增规范触发词时未同步路由会直接失败。每个 token 只在承载该 gate 谓词的那一行内计命中，因此 `API`、`queue`、`migration` 这类短词不会被文件其他位置的无关提及满足；此前按 bullet 取单个代表短语的写法漏检 `queue / event / stream / job`、`ETL / analytics` 与 `data pipeline`，删掉这三段不会失败。
+- 新增含冒号反向包含模式（`!.en[v:]`）必须判定为“未忽略”的回归测试，以及 `init-projects --json` 成功路径解析为单个 JSON 文档的回归测试；两者均以重新引入原缺陷的方式确认会失败。
+- 收紧既有断言的判定力：宽泛父目录排除的失败信息按 `文件:行号:模式` 断言具体来源记录，不再用 `.trellis/` 子串（模板自身追加的反向包含行同样含该子串，会放过丢失来源的信息）；`git` 完全不在 PATH 时的降级单独覆盖，与既有 exit 128 桩分属 `run_project_command` 的两条分支；External Skill 缓存回归测试改为枚举全部 6 项排除（`__pycache__`、`.pytest_cache`、`.ruff_cache`、`.mypy_cache`、`*.pyc`、`*.pyo`）并断言拷贝与指纹丢弃同一集合，同时覆盖名为 `pkg.pyc` 的目录必须保留——该拷贝 / 指纹一致性此前无回归测试；reviewer `Status:` 枚举归属改为按成员集合精确比对并禁止委托文档出现任何枚举形声明，此前的子串断言在枚举新增状态或委托文档抄录截断前缀时均不会失败。
+- book 门禁 lifecycle 的跨文档断言拆为逐文档独立子测试。此前全部集中在一条断言链上，首个失败即中止，一份文档漂移会掩盖同批其余文档的状态；现在每份文档、每项主题单独判定并单独报告。
+
 ## v1.0.12（2026-08-28）
 
 ### 变更
