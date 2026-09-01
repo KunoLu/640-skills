@@ -234,9 +234,9 @@ pwsh -File .\install.ps1
   Trellis 平台标志相互独立：`omp` 只生成 `trellis init --omp`，`pi` 只生成 `--pi`，onboard 不得在两者之间替换。
 - Trellis CLI 升级后，已有 `.trellis/` 的项目先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard；如果更新涉及 SessionStart、PreToolUse 或其他 hook 配置，先重启对应 Agent host / IDE，再验证新会话身份或 hook 行为。对 uninstall、archive、task start / set-*、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership、safe-name 和 active-task pointer containment guard。升级后不要假设 `trellis update` 会改写既有 session pointer；越权任务路径按无任务处理。
 - `.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其专属生成资产决定本次执行：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 host 为 Codex 且 `.codex/**` 集成可用时解释 `codex.dispatch_mode`：`auto` 由主会话协调并按职责调度 role subagent，显式 Inline 与非法显式值的 fail-closed fallback 也仅属于 Codex。仅当前 host 为 OMP 且 `.omp/**` 集成可用时使用 OMP `task` worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。
-- Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。
+- Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。项目级 marketplace 无效不得否定其余有效 plugin；可选 MCP 首轮工具缺失可能只是启动宽限期。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
-- GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。
+- GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。CLI 升级若改变 receiver / import / interface 解析，必须重新 `gitnexus analyze` 后再依赖索引。MCP allowlist 未覆盖时 GitNexus MCP 对该仓库不可用，不得当作 MCP 可读；fail-closed 只读时不走 MCP 写入；二者都不跳过 CLI 重新 analyze。
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
 - AGENTS 模板只承载常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；详细流程、命令参数、检查清单和专项判断优先放入对应 Skill 延迟加载。
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。
@@ -593,7 +593,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 ## 模板 `.gitignore` 工具与测试产物策略
 
-项目模板默认追踪项目级 `AGENTS.md`、`CLAUDE.md`、共享 `.agents/skills/**`，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json` 与 `.omp/plugins/` 等已确认的本地运行态或机器本地设置。本项目模板选择用无尾随斜杠的 `.trellis/workspace` 将 Trellis 生成的 `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 作为本地数据忽略；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。模板同时忽略本地运行态和报告产物，保留可维护测试资产。当前相关片段如下：
+项目模板默认追踪项目级 `AGENTS.md`、`CLAUDE.md`、共享 `.agents/skills/**`，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json` 与 `.omp/plugins/` 等已确认的本地运行态或机器本地设置。本项目模板用无尾随斜杠的 `.trellis/*` 覆盖 `.trellis` 下所有直接子项，因此 Trellis 生成的 workspace `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 都作为本地数据被忽略（无尾随斜杠同时匹配目录与指向目录的 symlink），再由 `!` 规则逐项放回需要追踪的 spec / agents / lessons / task 产物；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。写入后若目标是 Git worktree，Onboard 用 `git check-ignore` 验证 `.trellis/spec` / agents / lessons / task 产物确实可追踪，workspace / runtime 确实被忽略；既有 `.trellis/` 等宽泛父目录排除会给出具体来源行并使操作失败，不能以“模板文本已存在”冒充语义有效。模板同时忽略本地运行态和报告产物，报告默认本地留存而非 Git 入库。当前相关片段如下：
 
 既有项目迁移：如果旧模板已经写入 `.claude/`、`CLAUDE.md`、`.agents/` 或 `/AGENTS.md`，`init` / `reset` 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 `git check-ignore` 复核目标路径。
 
@@ -614,8 +614,9 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 .worktrees/
 
 # ---------- Trellis ----------
-# Ignore generated workspace data and an intentional workspace symlink.
-.trellis/workspace
+# Ignore every direct child, including generated workspace data and an
+# intentional workspace symlink; re-include tracked spec / agents / tasks.
+.trellis/*
 # ---------- Testing -----------
 # MCP / browser controller local state
 .chrome-devtools-mcp/
@@ -657,6 +658,7 @@ tests/e2e/**/*.trace.zip
 - Trellis CLI 和 GitNexus CLI 强制全局安装，不再提供项目内 CLI 安装；`.trellis/` 与 `.gitnexus/` 状态仍属于各项目。
 - `init` / `reset` 对每个项目根目录独立检查 `.trellis/`，执行 `trellis init -u`，并检查 `.trellis/tasks/00-bootstrap-guidelines`；一个项目需要 bootstrap 不会阻止其余项目继续检查。
 - `--init-projects` / `-InitProjects` 提供独立的 project-only 模式，只执行逐项目 AGENTS、`.gitignore`、Trellis、Playwright 和 React Bits 检查配置，不检测或安装任何全局 Agent CLI、runtime、tool、Skill 或 MCP。
+- `AGENTS.project.md` 只保存 project-only fallback、项目路径和项目级硬边界；正常 `init` / `reset` 由全局 AGENTS + Skills 激活完整路由，public bootstrap / `init-projects` 不单独激活 book-derived 门禁。全局 AGENTS 维护客观触发和 Gate lifecycle，各 reviewer `SKILL.md` 独占状态、输出 schema、修正回路与 stop condition；`trellis-workflow` 只额外保留在全局路由不可见时可自举的最小 objective-trigger fallback，不复制 reviewer 状态。
 - GitNexus MCP 手动配置检查；检测到本机 `gitnexus` CLI 路径时，输出并供安装脚本使用 `command = "<detected-gitnexus-path>"`、`args = ["mcp"]` 的配置。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
@@ -668,7 +670,7 @@ tests/e2e/**/*.trace.zip
 - mattpocock external Skill 使用上游 canonical 名称。`migrate-external-skills --scope global --yes` 会先对全部受管旧目录做 identity preflight，再以已选 source 事务安装所需 canonical replacement。需要 canonical replacement 的 legacy predecessor 会在成功 transaction commit 后随临时 rollback 目录删除；只有不需要 canonical install 的 legacy-only cleanup（已有有效 replacement，或无 replacement 的 `zoom-out`）才会在删除前保留 migration backup。任何身份冲突均在安装前 fail-closed。正常 `init` / `reset` 仍只做已发现 legacy 的自动迁移。
 - bundled Onboard rename migration 在 canonical `sbtd-workflow-onboard/SKILL.md` 校验成功，且 legacy `kuno-workflow-onboard-skills/SKILL.md` 的 frontmatter 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会在任何 target 变更前阻断 `init` / `reset` 并保留原内容，删除异常会进入失败报告；`plan` 会报告迁移目标或 identity conflict，`init-projects` 不检查或修改全局 Skill 目录。
 - `shadcn`、`ui-ux-pro-max`、`impeccable` 等 referenced external Skill 的存在性检查。
-- `ponytail`、`ponytail-review`、`ponytail-audit`、`ponytail-debt` 与其他 external Skills 同为 required：缺失或损坏时不询问、直接从 stable set 补装或修复，失败即阻断。SBTD 统一使用 Onboard stable skill-only provider；`check --json` 输出 `ponytailProvider`，检测到 Codex / OMP 官方 Ponytail plugin 已启用时报告 `provider=conflict`，`check` 失败且 `init` / `reset` 在写 stable copies 前阻断，根安装器同样停止；plugin 已安装但禁用只报告不阻断，CLI 不可用报告 `unknown` 而不伪造状态。Onboard 不安装、启用、禁用、信任或卸载官方 plugin；`ponytail-gain` / `ponytail-help` 只属于官方 plugin，不由 Onboard 管理。
+- `ponytail`、`ponytail-review`、`ponytail-audit`、`ponytail-debt` 与其他 external Skills 同为 required：缺失或损坏时不询问、直接从 stable set 补装或修复，失败即阻断。SBTD 统一使用 Onboard stable skill-only provider；`check --json` 输出 `ponytailProvider`，检测到 Codex / OMP 官方 Ponytail plugin 已启用时报告 `provider=conflict`，`check` 失败且 `init` / `reset` 在写 stable copies 前阻断，根安装器同样停止。OMP 只在 `~/.omp` 已存在时执行 `omp plugin list`；缺失目录报告 `not-configured`，不得由只读检查创建。plugin 已安装但禁用只报告不阻断，CLI 不可用报告 `unknown` 而不伪造状态。Onboard 不安装、启用、禁用、信任或卸载官方 plugin；`ponytail-gain` / `ponytail-help` 只属于官方 plugin，不由 Onboard 管理。
 - 全局 `AGENTS.md` 模板包含 Code Readability canonical 规则：正确性、安全、运行时特性、明确需求和项目约定优先，可读性与可维护性高于源码行数、文件数和最小 diff。编码任务在适用开发门禁通过后、首次实现编辑前主动调用 `ponytail`；非平凡生产 diff 通过定点 smoke 后、最终 `project-validation` 前主动调用 `ponytail-review`，findings 必须经 Code Readability 裁决，随后执行 Code Readability Review；`ponytail-audit` 与 `ponytail-debt` 只按客观触发条件调用。`project-validation` 不承载可读性规则。
 - React Bits tier 选择对每个 React + shadcn/ui 项目独立判断；仍保持项目级、可选并保留 license/registry 前置条件。
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。

@@ -425,3 +425,15 @@
 - 根因：`gitnexus` 是 `#!/usr/bin/env node` 脚本。OMP 导入 Claude 配置时 PATH 往往只有 `/usr/bin:/bin:...`，没有 nvm 的 `node`，进程以 exit 127 / `env: node: No such file or directory` 立即退出，被汇总成 Transport closed。这与缺失 `lbugjs.node` 是独立根因，可同时存在。
 - 修复：把 `~/.claude.json` 的 command 改成 nvm 绝对 `node`，args 改成 GitNexus CLI 绝对路径 + `mcp`，并设置 `env.PATH` 包含该 nvm `bin`。用干净 PATH 复跑 JSON-RPC `initialize`，确认不再依赖 `/usr/bin/env node`。
 - 预防：诊断 OMP `config: ~/.claude.json` 失败时，必须同时做带 nvm PATH 和干净 PATH 的 handshake。不要只在当前 shell 里跑通 `gitnexus mcp` 就认为 Claude 配置对 GUI 启动安全。
+
+## LESSON-20260831-readonly-cli-probe-side-effect: Read-only Checks Must Not Bootstrap CLI State
+
+- 日期：2026-08-31
+- 标签：onboard, cli, omp, side-effect, validation, read-only
+- 适用场景：`check` / preflight / provider detection 调用第三方 CLI 查询版本、plugin 或配置
+- 严重级别：high
+- 来源：`onboard.py check --json` 在隔离 HOME 下探测 OMP Ponytail provider
+- 问题：只读 `check --json` 在用户尚无 `~/.omp` 时执行 `omp plugin list --json`；OMP CLI 启动即创建 `.omp`，违反“缺失则跳过且不得创建”的契约，现有回归测试以 `FileExistsError` 暴露副作用。
+- 根因：把语义上只读的子命令当成进程级无副作用，没有先检查平台配置根是否存在，也没有在检测契约中验证 HOME 字节状态。
+- 修复：OMP provider 探测仅在 `~/.omp` 已存在时执行 CLI；缺失时报告 per-platform `not-configured`。保留 configured OMP 的官方 plugin 冲突检测，并用隔离 HOME 聚焦测试覆盖。
+- 预防：调用第三方 CLI 的 read-only 子命令前，先验证它不会 bootstrap 配置 / cache；无法证明时先检查既有配置根或在隔离 HOME 运行。check/preflight 测试必须断言目标 HOME 没有新增路径。
