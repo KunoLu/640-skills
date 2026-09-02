@@ -3,6 +3,13 @@
 本文件按 Git tag 记录用户可见变更，最新版本位于最上方。未发布章节在创建对应 tag 后补充发布日期。
 
 
+## v1.0.14（未发布）
+
+### 变更
+
+- 对齐 Codex 内置 planning / `update_plan` 默认关闭：只有当前会话工具列表明确暴露时才可使用，不得静默写入 `tools.update_plan.enabled`。
+- 对齐 Codex MCP 服务器名允许 package-style（`:`, `@`, `/`, `.`）；不要把这类名称当成非法并改写配置，也不要静默写入各 MCP tool 的 `output_token_limit`。
+
 ## v1.0.13（2026-09-01）
 
 ### 修复

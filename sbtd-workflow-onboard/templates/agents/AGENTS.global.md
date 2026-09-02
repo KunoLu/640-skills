@@ -91,6 +91,8 @@ Codex 可能通过本地插件、remote plugins、connectors、MCP 或 `tool_sea
 - 项目级 plugin / marketplace 配置会并入 catalog；某个 project marketplace 无效时，不得据此把其余有效 plugin 判定为不可用。
 - 可选 MCP 服务器的工具发现可能受启动宽限期约束；首轮工具列表缺少某个已配置 optional MCP 不等于该 server 未安装，应再做一次可见性检查后再判定 missing。不要静默改写 `mcp_optional_startup_grace` 或 MCP server 配置。
 - Codex extension 可能在 MCP tool result 到达模型前检查或替换结果；不要把 MCP 原始响应当作模型一定看到的内容，也不要因 extension 存在就静默改写 MCP 配置。
+- 内置 planning / `update_plan` 工具默认关闭；只有当前会话工具列表明确暴露时才可使用。不要静默写入 `tools.update_plan.enabled`。
+- MCP 服务器名可以包含 `:`, `@`, `/`, `.` 的 package-style 写法；不要把这类名称当成非法并改写配置。不要静默写入各 MCP tool 的 `output_token_limit`。
 
 ### Trellis
 
