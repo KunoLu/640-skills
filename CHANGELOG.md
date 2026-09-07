@@ -9,6 +9,8 @@
 
 - 对齐 Codex 内置 planning / `update_plan` 默认关闭：只有当前会话工具列表明确暴露时才可使用，不得静默写入 `tools.update_plan.enabled`。
 - 对齐 Codex MCP 服务器名允许 package-style（`:`, `@`, `/`, `.`）；不要把这类名称当成非法并改写配置，也不要静默写入各 MCP tool 的 `output_token_limit`。
+- 对齐 GitNexus 的 watch 命令边界：`gitnexus watch` 是保留入口，只说明 `analyze --watch` 与 `gitnexus auto-sync` 的分工且不启动任一者；不要默认启动长期 watcher，索引刷新仍用一次性 `gitnexus analyze`。
+- 仓库内新增 OMP 版本监控，infra 优化。
 
 ## v1.0.13（2026-09-01）
 

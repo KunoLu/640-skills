@@ -170,6 +170,7 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 如果 `analyze` 因沙箱、网络、native crash、索引损坏、耗时限制或权限问题失败，必须在最终输出中说明尝试的命令、失败原因、GitNexus 结果只能作为 advisory，以及实际用哪些 diff / 测试 / 构建 / 运行时检查替代。
 - 如果 `analyze` 成功但 MCP 仍报告 stale，按 MCP 缓存或会话未刷新处理；重新检查 CLI status，必要时说明需要重启 / reload MCP 或新会话后再依赖 MCP 结果。
 - 不要默认假设 GitNexus hook 会自动刷新索引；除非项目文档或用户明确要求并接受 commit / merge 被阻塞和索引写入风险，否则不要新增自动运行 `gitnexus analyze` 的 Git hook。
+- 不要把 `gitnexus watch` 当成会启动索引 watcher 的命令；该入口只说明 `analyze --watch`（本地增量）与 `gitnexus auto-sync`（远程定时 clone/pull）的分工，两者都不由 `watch` 启动。不要默认启动长期 `analyze --watch` 或 `auto-sync`；索引刷新仍按项目约定的一次性 `gitnexus analyze`。
 - 当影响分析结果存在同名符号、跨文件歧义或输出过大时，优先使用 GitNexus 提供的 `uid` / `file` / `kind` 约束和分页 / summary-only 能力缩小范围。
 - 通过 GitNexus MCP 枚举已索引仓库时，`list_repos` 可能返回分页对象；使用 `limit` / `offset` 翻页直到 `pagination.hasMore` 为 false，不要把单页结果当作完整仓库列表。
 - 如果项目启用了多分支索引，分析、查询和变更检测必须明确目标 branch / 默认分支，不要混用不同分支的索引结果；跨分支结论必须回到实际 diff 或对应分支源码复核。

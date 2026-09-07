@@ -29,7 +29,16 @@
 1. 读取 `ENTRYPOINT.md`，并优先解析“## 0. 版本监控配置”表格中“是否启用监控”为“是”的工具。
 2. 每个工具至少读取这些字段：工具、GitHub 仓库、当前使用版本、版本通道策略、备注。
 3. 将 `ENTRYPOINT.md` 中的“当前使用版本”作为该工具本次比对的固定起始版本；即使 `UPDATE.md` 里已有旧的更新区间，也不要把起始版本推进到 `UPDATE.md` 里的目标版本。
-4. 对每个启用工具，从对应 GitHub 仓库获取 releases 或 tags，找出应比较的最新版本。
+4. 对每个启用工具，按该工具备注和本 prompt 的专用规则找出应比较的最新版本。默认从对应 GitHub 仓库获取 releases 或 tags。OMP 按第 4.1 步以 npm `@oh-my-pi/pi-coding-agent` 为监控对象。
+4.1. OMP 的监控对象是 npm 包 `@oh-my-pi/pi-coding-agent`（CLI `omp`），不是 `can1357/oh-my-pi` monorepo 的任意 release。判定顺序：
+  - 从 `ENTRYPOINT.md` 读取 OMP 当前基线，格式必须是 `v<semver>`。
+  - 查询 npm `@oh-my-pi/pi-coding-agent` 的 `dist-tags.latest`，先校验其为不含 `v` 前缀的 stable semver。
+  - 通过该校验后，把 canonical OMP 目标定义为 `v<package-version>`。比较 `ENTRYPOINT.md` 基线、`UPDATE.md` 标题的目标版本、以及后续 `update` / `更新` 写回版本监控表和“当前版本汇总”，都必须使用该形式；不得把裸 `18.1.14`、`omp/18.1.14` 或未加 `v` 的 npm latest 写入任何版本字段。
+  - 验证 GitHub `can1357/oh-my-pi` 存在对应 `v<package-version>` tag/Release。
+  - 读取该 tag 的 `packages/coding-agent/package.json`，确认 `name=@oh-my-pi/pi-coding-agent` 且 `version=<package-version>`。
+  - 用该 tag 的 Release body、tagged source 和 compare 补证据；只分析进入 OMP CLI/runtime 的变化，不得把 monorepo 中其他包的任意 release 当作 OMP CLI 更新。
+  - 本机 `omp --version` 只核验安装状态，解析时去掉 `omp/` 前缀，不得覆盖 `ENTRYPOINT.md` 基线，也不得写入 `UPDATE.md` 标题。
+  - npm latest、tagged `packages/coding-agent/package.json` 与 GitHub tag/Release 不一致时报告证据冲突，不得静默推进目标版本。
 5. 版本规范化要求：
   - `v` / `V` 前缀大小写不影响比较。
   - 当前版本是 stable 且策略为 stable-only 时，只比较更新的 stable 版本。
@@ -37,10 +46,10 @@
   - 如果跨越多个版本，汇总从 `ENTRYPOINT.md` 当前版本到最新版本之间所有 release notes。
 6. 如果 GitHub release body 缺失、为空或明显不足以判断变更，不要直接写成“无可追溯变更”；必须继续从官方 docs / changelog、GitHub compare、具体 commit diff 和变更文件列表、migration / upgrade manifest、npm metadata / tarball / 发布文件结构等来源补充证据，并在 `UPDATE.md` 中说明哪些来源有依据、哪些来源缺失。
 6.1. 对 Trellis、Codex dispatch、sub-agent、hook 或 Channel 的变更，必须额外核验目标 stable tag 的有效配置、workflow 模板和 migration manifest；区分功能首次引入、默认值变化与既有能力的 bug fix。`.trellis/**` 是共享 workflow gate，不是平台身份；若结论涉及平台调度，还必须读取对应生成的平台集成与 agent / worker 定义，并区分“已配置平台目录”与“当前 host”。`.codex/**` 与 `.omp/**` 可共存；静态 tag 工件不得选择运行时。不得把 Codex `codex.dispatch_mode`、Inline 或其 fallback 泛化到 OMP，不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
-7. 创建或刷新 `UPDATE.md`，结构必须为：
+7. 若本次至少有一个启用工具检测到可分析新版本，才创建或刷新 `UPDATE.md`；否则不要改 `UPDATE.md`。结构必须为：
  `# UPDATE`
  `## <工具名> <起始版本> -> <目标版本>`
- 其中起始版本必须等于 `ENTRYPOINT.md` 中当前版本，目标版本必须等于最新检测并完成比对分析的版本；然后用中文写入 release 汇总、破坏性变更、迁移说明、对 agent harness workflow 的影响分析。
+  其中起始版本必须等于 `ENTRYPOINT.md` 中当前版本，目标版本必须等于最新检测并完成比对分析的版本；然后用中文写入 release 汇总、破坏性变更、迁移说明、对 agent harness workflow 的影响分析。本步骤只适用于本次版本检查运行。仅为检测到可分析新版本的启用工具创建或刷新区间章节，每个这样的工具只保留一个章节。无新版本则不新建章节，不要为补齐 OMP 或其他新监控工具而写 `当前版本 -> 当前版本`。普通仓库修改不得改 `UPDATE.md`。
 8. 如果 `UPDATE.md` 中已有同一工具、同一起始版本的旧区间，例如 `## Codex v0.1.0 -> v0.1.5`，而本次最新版本为 `v0.1.6`，则把该二级标题更新为 `## Codex v0.1.0 -> v0.1.6`，并用中文替换该段落正文，不新增重复区间。
 9. 如果 `ENTRYPOINT.md` 中的工具当前版本一直没有被用户手动更新，则无论自动化执行多少次，该工具在 `UPDATE.md` 中的区间起点都必须保持为 `ENTRYPOINT.md` 中的当前版本，终点为最新检测并完成比对分析的版本。
 10. 评估是否需要修改本仓库规则时，不要只检查是否存在与上游同名的模板或配置文件；还必须用 release 中出现的关键概念、命令、配置项和兼容性关键词扫描以下本地文件，并在 `UPDATE.md` 的影响分析中说明命中结果和处理决定：
@@ -78,6 +87,10 @@
 
   - 验证能从 `ENTRYPOINT.md` 正确解析受监控工具表。
   - 验证 `UPDATE.md` 使用中文，且各工具区间起点等于 `ENTRYPOINT.md` 中该工具当前版本。
+  - 验证 OMP 行可按表头语义解析：GitHub 仓库 `can1357/oh-my-pi`，备注含 `@oh-my-pi/pi-coding-agent`，通道 `stable-only`，启用监控为“是”，当前版本为 `v<semver>` 且不含 `omp/` 前缀。
+  - 验证“当前版本汇总”中的 OMP 版本与版本监控表相同。
+  - 验证 `UPDATE.md` 中已有区间章节的起点等于 `ENTRYPOINT.md` 中该工具当前版本。无新版本的启用工具可以没有章节；不得仅因新加入监控而补写 `当前版本 -> 当前版本`。
+  - 验证 OMP 若已有 `UPDATE.md` 章节，起点和终点都是 `v<semver>`；该终点是后续写回 ENTRYPOINT 的唯一目标格式。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。
   - 验证根 `.gitignore` 内容严格为五行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md`。验证 `git ls-files -- AGENTS.md ENTRYPOINT.md` 只包含 `ENTRYPOINT.md`。`AGENTS.md` 若存在可读取、评估或修改；缺失时跳过，不得把它的存在当作 Gate。
   - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 重复执行不产生重复行，并用原生 Git 语义确认项目 `AGENTS.md`、`CLAUDE.md`、`.agents/**`、Trellis spec / agents / lessons / task artifacts 可追踪，workspace / runtime 保持忽略；冲突路径必须返回具体来源行；无任何规则覆盖某必须忽略路径时，报告该路径与缺失规则而非来源行。报告目录默认本地留存并忽略，不推断为 Git 入库要求。

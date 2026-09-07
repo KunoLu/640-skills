@@ -1246,6 +1246,82 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("## 0. 版本监控配置", entrypoint)
         self.assertIn("本机若存在根 `AGENTS.md` 则一并扫描", entrypoint)
 
+
+    def test_omp_version_monitoring_contract(self) -> None:
+        def markdown_table(text: str, heading: str) -> list[dict[str, str]]:
+            section = text.split(heading, 1)[1]
+            section = section.split("\n## ", 1)[0]
+            header: list[str] | None = None
+            rows: list[dict[str, str]] = []
+            for line in section.splitlines():
+                if not line.startswith("|"):
+                    continue
+                cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                if header is None:
+                    header = cells
+                    continue
+                if all(set(cell) <= set("-:") for cell in cells):
+                    continue
+                rows.append(dict(zip(header, cells, strict=True)))
+            return rows
+
+        entrypoint = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
+        omp_rows = [
+            row
+            for row in markdown_table(entrypoint, "## 0. 版本监控配置")
+            if row["工具"] == "OMP"
+        ]
+        self.assertEqual(len(omp_rows), 1)
+        omp = omp_rows[0]
+        self.assertEqual(omp["GitHub 仓库"], "can1357/oh-my-pi")
+        self.assertEqual(omp["版本通道策略"], "stable-only")
+        self.assertEqual(omp["是否启用监控"], "是")
+        self.assertRegex(omp["当前使用版本"], r"^v\d+\.\d+\.\d+$")
+        self.assertNotIn("omp/", omp["当前使用版本"])
+        self.assertIn("@oh-my-pi/pi-coding-agent", omp["备注"])
+
+        summary_omp = [
+            row
+            for row in markdown_table(entrypoint, "## 10. 当前版本汇总")
+            if row["工具"] == "OMP"
+        ]
+        self.assertEqual(len(summary_omp), 1)
+        self.assertEqual(summary_omp[0]["当前版本记录"], omp["当前使用版本"])
+
+        prompt = (
+            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
+        ).read_text(encoding="utf-8")
+        for phrase in (
+            "npm 包 `@oh-my-pi/pi-coding-agent`",
+            "dist-tags.latest",
+            "packages/coding-agent/package.json",
+            "不得把 monorepo 中其他包的任意 release 当作 OMP CLI 更新",
+            "解析时去掉 `omp/` 前缀",
+            "把 canonical OMP 目标定义为 `v<package-version>`",
+            "后续 `update` / `更新` 写回",
+            "存在对应 `v<package-version>` tag/Release",
+            "`name=@oh-my-pi/pi-coding-agent` 且 `version=<package-version>`",
+            "报告证据冲突，不得静默推进目标版本",
+            "无新版本则不新建章节",
+            "否则不要改 `UPDATE.md`",
+        ):
+            with self.subTest(prompt_phrase=phrase):
+                self.assertIn(phrase, prompt)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        parser = HTMLParser()
+        parser.feed(readme_html)
+        parser.close()
+        for label, document in (
+            ("README.md", readme),
+            ("README.html", readme_html),
+        ):
+            with self.subTest(document=label):
+                self.assertIn("@oh-my-pi/pi-coding-agent", document)
+                self.assertIn("can1357/oh-my-pi", document)
+                self.assertIn("只作交叉校验", document)
+
     def test_readme_knowledge_cli_example_is_shell_executable(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")

@@ -209,6 +209,8 @@ pwsh -File .\install.ps1
 
 `ENTRYPOINT.md` 必须由 Git 追踪，保存版本检查和 `update` / `更新` 使用的 authoritative baseline；新 clone 必须直接取得它。根 `AGENTS.md` 是本机可选补充规则，已加入根 `.gitignore` 并从 Git 索引移除，不进入远程 `main`；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。
 
+`ENTRYPOINT.md` 的版本监控表启用 OMP：监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`），GitHub 源为 `can1357/oh-my-pi` 的对应 `v<package-version>` tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 `UPDATE.md` 区间，无新版本不写 `当前版本 -> 当前版本`；只有手动 `update` / `更新` 才写回基线。本机 `omp --version` 只作交叉校验，不得覆盖表格版本。
+
 普通修改任务只更新本仓库内的源文件。每次仓库代码或工作流规则改动后，都必须评估 `CHANGELOG.md`、`README.md`、`README.html` 和版本化 automation prompt 是否需要同步调整。只有用户明确输入 `sync` 或 `同步` 时，才把允许列表中的全局规则和 Skill 同步到本地生效路径；sync 允许列表明确包含 bundled `web-ui-autotest-generator` 完整目录到 `/Users/lusonglin/.agent/skills/web-ui-autotest-generator/` 的映射。required Ponytail Skills（`ponytail`、`ponytail-review`、`ponytail-audit`、`ponytail-debt`）不得作为同步表 `cp` / `rsync` 行；sync 在复制 Onboard 后必须用已同步的 `scripts/onboard.py install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes` 从 stable mirror 安装，并确认 4 个 `SKILL.md` 存在。随后比较版本化 prompt 与 Orca `SBTD Workflow Tools Version Check` 的完整内容，仅在存在差异时同步到 live automation 并报告结果。`update` / `更新` 只处理版本写回和归档，与版本化 prompt 和 live automation 无关；`AGENTS.project.md` 不在普通 sync 范围内。
 
 ## 工作流主线
@@ -236,7 +238,7 @@ pwsh -File .\install.ps1
 - `.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其专属生成资产决定本次执行：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 host 为 Codex 且 `.codex/**` 集成可用时解释 `codex.dispatch_mode`：`auto` 由主会话协调并按职责调度 role subagent，显式 Inline 与非法显式值的 fail-closed fallback 也仅属于 Codex。仅当前 host 为 OMP 且 `.omp/**` 集成可用时使用 OMP `task` worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。项目级 marketplace 无效不得否定其余有效 plugin；可选 MCP 首轮工具缺失可能只是启动宽限期。内置 planning / `update_plan` 默认关闭，以当前会话工具列表为准。package-style MCP 名称（含 `:`, `@`, `/`, `.`）合法，不要改写。
 - GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
-- GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。CLI 升级若改变 receiver / import / interface 解析，必须重新 `gitnexus analyze` 后再依赖索引。MCP allowlist 未覆盖时 GitNexus MCP 对该仓库不可用，不得当作 MCP 可读；fail-closed 只读时不走 MCP 写入；二者都不跳过 CLI 重新 analyze。
+- GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。CLI 升级若改变 receiver / import / interface 解析，必须重新 `gitnexus analyze` 后再依赖索引。不要把 `gitnexus watch` 当成会启动 watcher 的命令，也不要默认启动 `analyze --watch` 或 `auto-sync`。MCP allowlist 未覆盖时 GitNexus MCP 对该仓库不可用，不得当作 MCP 可读；fail-closed 只读时不走 MCP 写入；二者都不跳过 CLI 重新 analyze。
 - Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
 - AGENTS 模板只承载常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；详细流程、命令参数、检查清单和专项判断优先放入对应 Skill 延迟加载。
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。

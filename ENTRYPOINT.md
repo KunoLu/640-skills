@@ -1,7 +1,7 @@
 # AI Tools 项目工具流程精简概要
 
-> 本文件记录个人 Codex Agent Harness 的模板化工具定位、版本监控基线和 Skill 编排规则。
-> 当前主流程已收敛为 `Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro`。
+> 本文件记录个人 Codex / OMP Agent Harness 的模板化工具定位、版本监控基线和 Skill 编排规则。
+> 当前主流程已收敛为 `Codex / OMP + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro`。
 > Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。
 > `web-ui-autotest-generator` 作为 Web UI Playwright 测试资产生成、选择器审计和覆盖率报告的可选专项分支。
 > `shadcn Skill` 作为 shadcn/ui 项目组件、registry、preset 和 CLI 工作流的可选辅助，必须先确认项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务明确涉及 shadcn registry / preset / CLI。
@@ -12,10 +12,13 @@
 ## 0. 版本监控配置
 
 > 自动化任务优先读取本章节。后续如需新增指定工具，在下表继续追加即可。
+>
+> 自动化必须处理所有“是否启用监控”为“是”的工具。`update` / `更新` 必须把 `UPDATE.md` 对应章节的目标版本写回本表和“当前版本汇总”。OMP 监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`）；版本字段使用 GitHub tag 格式 `v<semver>`。
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
 | Codex | openai/codex | v0.153.2 | stable-only | 是 | 核心 Coding Agent |
+| OMP | can1357/oh-my-pi | v18.1.13 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
 | Trellis | mindfold-ai/trellis | v0.6.16 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.10 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
@@ -53,13 +56,13 @@
 
 ```mermaid
 flowchart TD
-    A[PRD / 需求输入] --> B[Codex]
+    A[PRD / 需求输入] --> B[Codex / OMP]
     B --> C{任务是否复杂 / 高风险 / 跨模块?}
     C -- 是 --> D[Trellis workflow]
     C -- 否 --> E[直接实现或聚焦修改]
     D --> F[GitNexus 代码理解 / 影响分析]
     E --> F
-    F --> G[Codex implementation]
+    F --> G[Codex / OMP implementation]
     G --> H[项目测试 / 回归验证]
     H --> I{是否涉及 Web 运行时诊断?}
     I -- 是 --> J[Chrome DevTools MCP 诊断 console / network / trace / screenshot]
@@ -81,6 +84,7 @@ flowchart TD
 | 工具 | 当前定位 | 是否进入主流程 | 使用边界 |
 |---|---|---:|---|
 | Codex | 主 coding agent | 是 | 默认执行代码理解、修改、调试、测试、文档生成等任务 |
+| OMP | Oh My Pi coding agent | 是 | 当前 host 为 OMP 时作为主 coding agent；CLI 为 `omp`，npm 包为 `@oh-my-pi/pi-coding-agent` |
 | GitNexus | 代码理解 / 影响分析 / debug / refactor 辅助 | 是 | 代码结构、影响范围、Bug 根因或重构风险不清时调用 |
 | Trellis | 复杂任务编排 / 多阶段任务 / TDD workflow | 按场景启用 | 中大型任务、高风险任务、跨模块任务、长期任务启用；小任务不强制使用 |
 | Chrome DevTools MCP | Web 运行时诊断 / 浏览器现场证据 | 按场景启用 | 页面白屏、console error、network、cookie、storage、性能 trace、截图或临时复现需要真实 Chrome 检查时启用；不替代 Playwright 测试 |
@@ -327,6 +331,7 @@ handoff
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
 | Coding Agent | Codex | v0.153.2 |
+| Coding Agent | OMP | v18.1.13 |
 | Agent Harness | Trellis | v0.6.16 |
 | 代码理解 | GitNexus | v1.6.10 |
 | Web 诊断 | Chrome DevTools MCP | latest |
@@ -342,7 +347,7 @@ handoff
 当前 AI Tools 的主线调整为：
 
 ```text
-Codex 作为核心开发入口
+Codex / OMP 作为核心开发入口
 GitNexus 负责当前代码理解和影响分析
 Trellis 负责复杂任务编排和 TDD workflow
 Chrome DevTools MCP 负责 Web 运行时诊断和现场证据
