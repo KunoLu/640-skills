@@ -140,6 +140,6 @@ flowchart TD
 | Channel | `trellis-channel` | `trellis` | 无 | preflight 不等于启动；未确认不得 spawn |
 | 发布审核 | `book-release-readiness` | 已完成的验证命令 | 无 | 必需验证缺失只能 `blocked` |
 | 压缩层 | 可选 `caveman` | 可选 `rtk` | 无 | 缺失先说明再询问；不改变工作流判定 |
-| Lessons | `lessons-record` | 无 | 无 | Trellis 项目写入 `.trellis/lessons/**` |
+| Lessons | `lessons-record` | 无 | 无 | Trellis 项目写入 `.trellis/lessons/**`；先解析 lessons 分隔名，只写自己的 `<!-- lessons:<name>:start -->` 块 |
 
 调度边界：`.trellis/**` 不标识平台。当前 host 为 Codex 且存在 `.codex/**` 时用 Codex role dispatch；当前 host 为 OMP 且存在 `.omp/**` 时用 OMP `task` worker。二者共存时不得靠静态文件选一个。Channel 与 platform role 都不是默认可叠加的第二个写入者。

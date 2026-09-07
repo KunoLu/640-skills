@@ -191,6 +191,8 @@ Where a generated workflow classifies its platform as sub-agent dispatch, `imple
 
 Do not read all of `.trellis/lessons/**` by default; only after a match based on the current task, error message, tool name, language, tags, or the index's `read_when`, read the corresponding topic or archive.
 
+Writes into lessons files are scoped by a split name. Resolve it from `<repo-root>/.trellis/.developer`, falling back to the main checkout's `.trellis/.developer` for a linked worktree, and stop to ask the user when neither resolves; then append only inside `<!-- lessons:<name>:start -->` / `<!-- lessons:<name>:end -->`. See `lessons-record` for the full rule. Reads are not scoped: read every name's blocks in a matched file.
+
 Do not write the following directly into `.trellis/spec`:
 
 - One-off checklists

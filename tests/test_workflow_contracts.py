@@ -2269,6 +2269,249 @@ class WorkflowContractTests(unittest.TestCase):
             repository_lesson,
         )
 
+    def _run_git(
+        self,
+        repo: Path,
+        *args: str,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Lessons Test",
+                "-c",
+                "user.email=lessons@example.com",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "init.defaultBranch=main",
+                *args,
+            ],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if check:
+            self.assertEqual(
+                0,
+                result.returncode,
+                f"git {' '.join(args)} failed: {result.stdout}{result.stderr}",
+            )
+        return result
+
+    def _merge_two_appends(
+        self,
+        repo: Path,
+        base: str,
+        ours: str,
+        theirs: str,
+        gitattributes: str | None = None,
+    ) -> tuple[int, list[str], str]:
+        """Diverge one lessons file two ways, merge, and report the outcome."""
+        target = repo / "topics" / "workflow.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self._run_git(repo, "init", "-q", ".")
+        if gitattributes is not None:
+            (repo / ".gitattributes").write_text(gitattributes, encoding="utf-8")
+        target.write_text(base, encoding="utf-8")
+        self._run_git(repo, "add", "-A")
+        self._run_git(repo, "commit", "-qm", "base")
+        self._run_git(repo, "switch", "-qc", "theirs")
+        target.write_text(theirs, encoding="utf-8")
+        self._run_git(repo, "commit", "-qam", "theirs")
+        self._run_git(repo, "switch", "-q", "main")
+        self._run_git(repo, "switch", "-qc", "ours")
+        target.write_text(ours, encoding="utf-8")
+        self._run_git(repo, "commit", "-qam", "ours")
+
+        merge = self._run_git(repo, "merge", "--no-edit", "theirs", check=False)
+        conflicts = self._run_git(
+            repo, "diff", "--name-only", "--diff-filter=U"
+        ).stdout.split()
+        return merge.returncode, conflicts, target.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _lessons_block(name: str, *items: str) -> str:
+        body = "".join(f"- {item}\n" for item in items)
+        return f"<!-- lessons:{name}:start -->\n{body}<!-- lessons:{name}:end -->\n"
+
+    def test_lessons_split_name_resolution_is_documented_per_file_role(self) -> None:
+        skill = (SKILLS / "lessons-record" / "SKILL.md").read_text(encoding="utf-8")
+
+        # The owning Skill carries the complete rule: resolution order, the
+        # closed list of automatic sources, path safety, and the report.
+        for phrase in (
+            "## Lessons Split Name",
+            "1. Read `name=` from `<repo-root>/.trellis/.developer`.",
+            "read `name=` from the main checkout's `.trellis/.developer`",
+            "linked git worktree",
+            "Otherwise stop and ask the user for a split name. Do not proceed on a guess.",
+            "No other automatic source is permitted.",
+            "Do not derive the name from `TRELLIS_DEVELOPER`, `git config user.name`, "
+            "commit authors, or the directory names under `.trellis/workspace/`.",
+            "none of them marks who is writing now",
+            "non-empty, and containing no `/`, `\\`, or `..`",
+            "never silently rewrite it into a different name",
+            "python3 ./.trellis/scripts/init_developer.py <name>",
+            "Lessons split name: <name>",
+            "Source: .developer | main-worktree | user-provided",
+            "<!-- lessons:<name>:start -->",
+            "<!-- lessons:<name>:end -->",
+            "Never reorder, edit, or delete another name's block",
+            "Marker blocks scope writes, not reads.",
+            "Each block carries its own header row",
+            ".trellis/lessons/**/*.md merge=union",
+            "This is opt-in and not the default.",
+        ):
+            self.assertIn(phrase, skill)
+
+        # The residual first-creation conflict is disclosed rather than claimed away.
+        self.assertIn(
+            "The first time two developers each create their own block in the same "
+            "file, that conflicts once",
+            skill,
+        )
+
+        # Resolving the split name precedes any lesson write.
+        self.assertIn(
+            "2. Resolve the lessons split name and report it. Stop and ask the user "
+            "if it cannot be resolved.",
+            skill,
+        )
+
+        agents_global = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.global.md"
+        ).read_text(encoding="utf-8")
+        for phrase in (
+            "分隔名的自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`",
+            "读主 checkout 的 `.trellis/.developer`",
+            "都读不到就停下来问用户，不得猜测",
+            "不得用 `TRELLIS_DEVELOPER`、`git config user.name`、提交作者或 "
+            "`.trellis/workspace/` 下的目录名推断分隔名",
+            "不含 `/`、`\\`、`..`",
+            "<!-- lessons:<name>:start -->",
+            "标记块只约束写入，不约束读取",
+        ):
+            self.assertIn(phrase, agents_global)
+
+        agents_project = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.project.md"
+        ).read_text(encoding="utf-8")
+        for phrase in (
+            "自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`",
+            "linked worktree 时读主 checkout 的同名文件",
+            "都读不到就停下来问用户",
+            "<!-- lessons:<name>:start -->",
+        ):
+            self.assertIn(phrase, agents_project)
+
+        # trellis-workflow only orchestrates: it points at the owning Skill and
+        # keeps the read side unscoped.
+        workflow = (SKILLS / "trellis-workflow" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Writes into lessons files are scoped by a split name.", workflow)
+        self.assertIn("See `lessons-record` for the full rule.", workflow)
+        self.assertIn(
+            "Reads are not scoped: read every name's blocks in a matched file.",
+            workflow,
+        )
+
+        paths = (ROOT / "docs" / "assets" / "sbtd-workflow-paths.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("先解析 lessons 分隔名", paths)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        self.assertIn("## Lessons 分片与冲突边界", readme)
+        self.assertIn("<h2>Lessons 分片与冲突边界</h2>", readme_html)
+        for text in (readme, readme_html):
+            self.assertIn("merge=union", text)
+            self.assertIn("不代表当前写入者", text)
+        self.assertIn("<!-- lessons:<name>:start -->", readme)
+        self.assertIn("lessons:&lt;name&gt;:start", readme_html)
+
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("按 lessons 分隔名分片写入", changelog)
+
+    def test_lessons_marker_blocks_remove_concurrent_append_conflicts(self) -> None:
+        shared = "# Workflow Lessons\n\nShared reading protocol.\n"
+        alice = self._lessons_block("alice", "alice L1")
+        bob = self._lessons_block("bob", "bob L1")
+        alice_grown = self._lessons_block("alice", "alice L1", "alice L2")
+        bob_grown = self._lessons_block("bob", "bob L1", "bob L2")
+
+        # The mechanism: both blocks already exist, so two developers appending
+        # in their own block land in separate hunks and merge cleanly.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, merged = self._merge_two_appends(
+                Path(temp_dir),
+                base=f"{shared}\n{alice}\n{bob}",
+                ours=f"{shared}\n{alice_grown}\n{bob}",
+                theirs=f"{shared}\n{alice}\n{bob_grown}",
+            )
+            self.assertEqual(0, code, f"expected a clean merge, conflicts={conflicts}")
+            self.assertEqual([], conflicts)
+            self.assertIn("- alice L2", merged)
+            self.assertIn("- bob L2", merged)
+            self.assertNotIn("<<<<<<<", merged)
+
+        # The problem being solved: without blocks, the same two appends collide.
+        # If this ever merges cleanly, the feature's premise no longer holds.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, _ = self._merge_two_appends(
+                Path(temp_dir),
+                base=f"{shared}\n- old lesson\n",
+                ours=f"{shared}\n- old lesson\n- alice L2\n",
+                theirs=f"{shared}\n- old lesson\n- bob L2\n",
+            )
+            self.assertNotEqual(0, code)
+            self.assertEqual(["topics/workflow.md"], conflicts)
+
+        # The disclosed residual: creating the first two blocks still collides
+        # once, because both insertions land at the same end-of-file position.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, _ = self._merge_two_appends(
+                Path(temp_dir),
+                base=shared,
+                ours=f"{shared}\n{alice}",
+                theirs=f"{shared}\n{bob}",
+            )
+            self.assertNotEqual(0, code)
+            self.assertEqual(["topics/workflow.md"], conflicts)
+
+        # The documented opt-in resolves that residual and keeps both blocks
+        # intact, which is what makes it safe to offer for append-only files.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, merged = self._merge_two_appends(
+                Path(temp_dir),
+                base=shared,
+                ours=f"{shared}\n{alice}",
+                theirs=f"{shared}\n{bob}",
+                gitattributes="topics/*.md merge=union\n",
+            )
+            self.assertEqual(0, code, f"expected union merge, conflicts={conflicts}")
+            self.assertEqual([], conflicts)
+            self.assertIn("- alice L1", merged)
+            self.assertIn("- bob L1", merged)
+            self.assertEqual(1, merged.count("<!-- lessons:alice:start -->"))
+            self.assertEqual(1, merged.count("<!-- lessons:bob:start -->"))
+            self.assertEqual(
+                merged.count(":start -->"),
+                merged.count(":end -->"),
+                "union merge must not orphan a marker",
+            )
 
 if __name__ == "__main__":
     unittest.main()

@@ -593,6 +593,12 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 - `Evidence Publication`: `local-only` / `published` / `blocked` / `not-configured` / `not-needed`
 - `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`
 
+## Lessons 分片与冲突边界
+
+多人对同一仓库开发时，lessons 是被追踪且所有人都往里追加的文件，因此 `lessons-record` 要求按 lessons 分隔名分片写入。分隔名的自动来源只有当前仓库 `<repo-root>/.trellis/.developer` 的 `name=`；该文件缺失且当前是 linked worktree 时读主 checkout 的同一文件（`.developer` 被 Trellis 有意 gitignore，新建 worktree 天然没有它）；两处都读不到就停下来请用户给名字，不得猜测。不得用 `TRELLIS_DEVELOPER`、`git config user.name`、提交作者或 `.trellis/workspace/` 下的目录名推断——那些目录只说明历史上谁 init 过，不代表当前写入者。分隔名必须非空且不含 `/`、`\`、`..`，不合规就报告并停止。
+
+追加内容一律包在 `<!-- lessons:<name>:start -->` 与 `<!-- lessons:<name>:end -->` 之间，只写自己的块，不得重排或改动他人块；标记块只约束写入，读取时仍读所有人的块。`index.md` 中每个块自带表头，各自是完整表格，避免标记落在同一张表的行之间导致表格中断。已实测的收益边界：双方在各自已存在的块内追加可干净合并；两人首次在同一文件各建一个块仍会冲突一次，因为两处插入都落在文件末尾同一位置，解法是保留两个块。项目若要连这一次也自动消掉，可在 `.gitattributes` 中对 `.trellis/lessons/**/*.md` 选择性启用 `merge=union`；该项非默认，因为 union 会把同一行的并发改动双份保留。
+
 ## 模板 `.gitignore` 工具与测试产物策略
 
 项目模板默认追踪项目级 `AGENTS.md`、`CLAUDE.md`、共享 `.agents/skills/**`，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json` 与 `.omp/plugins/` 等已确认的本地运行态或机器本地设置。本项目模板用无尾随斜杠的 `.trellis/*` 覆盖 `.trellis` 下所有直接子项，因此 Trellis 生成的 workspace `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 都作为本地数据被忽略（无尾随斜杠同时匹配目录与指向目录的 symlink），再由 `!` 规则逐项放回需要追踪的 spec / agents / lessons / task 产物；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。写入后若目标是 Git worktree，Onboard 用 `git check-ignore` 验证 `.trellis/spec` / agents / lessons / task 产物确实可追踪，workspace / runtime 确实被忽略；既有 `.trellis/` 等宽泛父目录排除会给出具体来源行并使操作失败，不能以“模板文本已存在”冒充语义有效。模板同时忽略本地运行态和报告产物，报告默认本地留存而非 Git 入库。当前相关片段如下：

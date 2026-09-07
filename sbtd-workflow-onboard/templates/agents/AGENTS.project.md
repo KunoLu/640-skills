@@ -169,3 +169,5 @@ go test ./...
 ## Lessons
 
 bug 修复、回滚、工具误判、工作流错误、验证失败、GitNexus 不匹配或 Channel 上下文丢失时，加载 `lessons-record`。Trellis 项目中 `.trellis/spec/lessons.md` 只作短入口，完整 lesson 进入 `.trellis/lessons/index.md` 与 topic；非 Trellis 项目沿用已有分层结构，否则使用 `docs/lessons.md`。
+
+写入前先确定 lessons 分隔名：自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`，缺失且当前为 linked worktree 时读主 checkout 的同名文件，都读不到就停下来问用户。分隔名必须非空且不含 `/`、`\`、`..`。追加内容一律放进 `<!-- lessons:<name>:start -->` 与 `<!-- lessons:<name>:end -->` 之间，只写自己的块；读取时读所有人的块。

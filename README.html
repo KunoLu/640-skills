@@ -860,6 +860,19 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
       <div class="wrap">
         <div class="section-head">
           <div>
+            <p class="eyebrow">Lessons</p>
+            <h2>Lessons 分片与冲突边界</h2>
+          </div>
+          <p>多人对同一仓库开发时，lessons 是被追踪且所有人都往里追加的文件，因此 <code>lessons-record</code> 要求按 lessons 分隔名分片写入。分隔名的自动来源只有当前仓库 <code>&lt;repo-root&gt;/.trellis/.developer</code> 的 <code>name=</code>；该文件缺失且当前是 linked worktree 时读主 checkout 的同一文件（<code>.developer</code> 被 Trellis 有意 gitignore，新建 worktree 天然没有它）；两处都读不到就停下来请用户给名字，不得猜测。不得用 <code>TRELLIS_DEVELOPER</code>、<code>git config user.name</code>、提交作者或 <code>.trellis/workspace/</code> 下的目录名推断——那些目录只说明历史上谁 init 过，不代表当前写入者。分隔名必须非空且不含 <code>/</code>、<code>\</code>、<code>..</code>，不合规就报告并停止。</p>
+          <p>追加内容一律包在 <code>&lt;!-- lessons:&lt;name&gt;:start --&gt;</code> 与 <code>&lt;!-- lessons:&lt;name&gt;:end --&gt;</code> 之间，只写自己的块，不得重排或改动他人块；标记块只约束写入，读取时仍读所有人的块。<code>index.md</code> 中每个块自带表头，各自是完整表格，避免标记落在同一张表的行之间导致表格中断。已实测的收益边界：双方在各自已存在的块内追加可干净合并；两人首次在同一文件各建一个块仍会冲突一次，因为两处插入都落在文件末尾同一位置，解法是保留两个块。项目若要连这一次也自动消掉，可在 <code>.gitattributes</code> 中对 <code>.trellis/lessons/**/*.md</code> 选择性启用 <code>merge=union</code>；该项非默认，因为 union 会把同一行的并发改动双份保留。</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
             <p class="eyebrow">Artifacts</p>
             <h2>工具与测试产物忽略规则</h2>
           </div>
