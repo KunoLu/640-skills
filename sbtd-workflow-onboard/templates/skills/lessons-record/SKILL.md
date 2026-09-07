@@ -41,9 +41,13 @@ Lessons files are tracked and every developer appends to them, so appended conte
 
 No other automatic source is permitted. Do not derive the name from `TRELLIS_DEVELOPER`, `git config user.name`, commit authors, or the directory names under `.trellis/workspace/`. A repository accumulates one `workspace/<name>/` directory for every developer who ever ran `trellis init`, and those directories are peers: none of them marks who is writing now.
 
-The resolved name must be a single path-safe token: non-empty, and containing no `/`, `\`, or `..`. Report a value that violates this and stop; never silently rewrite it into a different name.
+The resolved name must match `^[a-z0-9]+$`: non-empty, lowercase letters and digits only, with no separators of any kind. This is stricter than path safety, which it also satisfies. Report a name that violates it, saying what was read and why it was rejected, and ask the user for a conforming split name. Never rewrite a non-conforming name into a conforming one.
 
-When no name can be resolved, list the existing directory names under `.trellis/workspace/` as candidates, point at `python3 ./.trellis/scripts/init_developer.py <name>` for establishing a local identity, and wait for the user.
+Rewriting is what would break uniqueness. Lowercasing `Alice` and folding `a_b` each map two distinct developers onto one ID segment, so on the same day with the same slug the two would emit a byte-identical lesson ID, which is the collision the ID is meant to prevent. Excluding `-` from the name serves the same end: it holds the name to exactly one `-`-delimited field of the ID, so a name and a slug cannot trade characters across their boundary and reach one ID from two different pairs.
+
+A `.developer` file that was found but holds a non-conforming `name=`, such as `Alice`, `alice.wang`, `zhang_san`, or a CJK name, does not yield a split name; stop and ask as above. Point at `python3 ./.trellis/scripts/init_developer.py <name>` for aligning `.developer` with a conforming name so later writes resolve without asking.
+
+When no name can be resolved, list the conforming directory names under `.trellis/workspace/` as candidates, point at `python3 ./.trellis/scripts/init_developer.py <name>` for establishing a local identity, and wait for the user.
 
 Report the outcome with every lesson write:
 
@@ -105,8 +109,9 @@ Marker blocks isolate writes, not the ID namespace. Two developers can reach for
 LESSON-YYYYMMDD-<name>-<slug>
 ```
 
-- `<name>` is the resolved split name, lowercased, with every run of characters outside `[a-z0-9]` replaced by `-`. For the usual short lowercase name that is the name verbatim. The marker block keeps the raw name.
-- Nothing parses the ID back into its parts, and both `<name>` and `<slug>` may contain `-`. Ownership comes from the enclosing marker block; the name in the ID is there for uniqueness and readability.
+- `<name>` is the resolved split name verbatim. It is already `[a-z0-9]+`, so there is nothing to transform, and no transformation is permitted: the marker block and the ID must carry the same characters. A rule that folded the name into the ID would hand two distinct names one ID segment and reinstate the collision.
+- `<slug>` is lowercase and may contain `-`; `<name>` may not. That is what keeps the ID unambiguous. `<name>` is the single field between the date and the first `-` of the slug, so one date, name and slug yield one ID, and no other name and slug pair yields that same ID.
+- Nothing parses the ID back into its parts. Ownership comes from the enclosing marker block; the name is in the ID for uniqueness and readability.
 - Do not rename a lesson ID that already exists. Renaming rewrites the heading, which breaks every `detail` anchor and cross-reference already pointing at it. This rule applies to newly recorded lessons.
 
 ## Scenarios That Must Be Recorded

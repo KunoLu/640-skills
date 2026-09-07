@@ -2352,8 +2352,8 @@ class WorkflowContractTests(unittest.TestCase):
             "Do not derive the name from `TRELLIS_DEVELOPER`, `git config user.name`, "
             "commit authors, or the directory names under `.trellis/workspace/`.",
             "none of them marks who is writing now",
-            "non-empty, and containing no `/`, `\\`, or `..`",
-            "never silently rewrite it into a different name",
+            "non-empty, lowercase letters and digits only",
+            "Never rewrite a non-conforming name into a conforming one.",
             "python3 ./.trellis/scripts/init_developer.py <name>",
             "Lessons split name: <name>",
             "Source: .developer | main-worktree | user-provided",
@@ -2390,6 +2390,15 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("## LESSON-YYYYMMDD-<slug>:", skill)
         self.assertNotIn("| LESSON-YYYYMMDD-<slug> |", skill)
 
+        # The name reaching the ID must be the name that was resolved. A folding
+        # rule would map two distinct names onto one ID segment, which is the
+        # collision the split name in the ID exists to prevent.
+        self.assertIn("The resolved name must match `^[a-z0-9]+$`", skill)
+        self.assertIn("Never rewrite a non-conforming name into a conforming one.", skill)
+        self.assertIn("`<name>` is the resolved split name verbatim.", skill)
+        self.assertNotIn("with every run of characters outside `[a-z0-9]` replaced", skill)
+        self.assertNotIn("both `<name>` and `<slug>` may contain `-`", skill)
+
         agents_global = (
             ROOT
             / "sbtd-workflow-onboard"
@@ -2403,7 +2412,8 @@ class WorkflowContractTests(unittest.TestCase):
             "都读不到就停下来问用户，不得猜测",
             "不得用 `TRELLIS_DEVELOPER`、`git config user.name`、提交作者或 "
             "`.trellis/workspace/` 下的目录名推断分隔名",
-            "不含 `/`、`\\`、`..`",
+            "分隔名必须匹配 `^[a-z0-9]+$`",
+            "不得把不合规的名字改写成合规的",
             "<!-- lessons:<name>:start -->",
             "标记块只约束写入，不约束读取",
             "lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`",
@@ -2424,6 +2434,7 @@ class WorkflowContractTests(unittest.TestCase):
             "都读不到就停下来问用户",
             "<!-- lessons:<name>:start -->",
             "lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`",
+            "分隔名必须匹配 `^[a-z0-9]+$`",
         ):
             self.assertIn(phrase, agents_project)
 
@@ -2510,6 +2521,47 @@ class WorkflowContractTests(unittest.TestCase):
                 anchor.startswith(lesson_id.lower()),
                 f"anchor {anchor} must be derived from id {lesson_id}",
             )
+
+    def test_lessons_split_name_charset_keeps_ids_collision_free(self) -> None:
+        # This repository ships rules rather than code, so the ID rule is checked
+        # here in executable form: the charset is read back out of the Skill and
+        # applied to the names that a folding rule used to merge.
+        skill = (SKILLS / "lessons-record" / "SKILL.md").read_text(encoding="utf-8")
+        documented = re.search(
+            r"The resolved name must match `\^(\[a-z0-9\]\+)\$`", skill
+        )
+        self.assertIsNotNone(documented, "SKILL.md must state the split name charset")
+        charset = re.compile(documented.group(1))
+
+        def accepts(name: str) -> bool:
+            return charset.fullmatch(name) is not None
+
+        for name in ("alice", "bob", "640", "a1"):
+            self.assertTrue(accepts(name), f"{name} must be a usable split name")
+
+        # Each rejected value is one a lowercasing or folding rule would have
+        # quietly rewritten onto an ID segment another developer already owns.
+        for name in ("", "Alice", "a-b", "a_b", "alice.wang", "张三", "a/b", ".."):
+            self.assertFalse(accepts(name), f"{name!r} must be rejected outright")
+
+        def lesson_id(name: str, slug: str) -> str:
+            self.assertTrue(accepts(name))
+            return f"LESSON-20260907-{name}-{slug}"
+
+        # Two distinct names can no longer meet inside one ID. Folding is gone,
+        # and a name can no longer absorb the head of another name's slug,
+        # because the pair that would do so is not a legal name.
+        self.assertFalse(accepts("alice-my"))
+        ids = {
+            lesson_id(name, slug)
+            for name in ("alice", "bob", "640")
+            for slug in ("my-slug", "slug")
+        }
+        self.assertEqual(6, len(ids))
+
+        # The name occupies exactly one field, so the ID decomposes one way only.
+        for name in ("alice", "640"):
+            self.assertEqual(name, lesson_id(name, "my-slug").split("-")[2])
 
     def test_lessons_marker_blocks_remove_concurrent_append_conflicts(self) -> None:
         shared = "# Workflow Lessons\n\nShared reading protocol.\n"
