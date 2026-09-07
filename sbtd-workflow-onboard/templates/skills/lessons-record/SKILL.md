@@ -77,13 +77,13 @@ In `index.md`, give each name a complete table of its own inside its block rathe
 <!-- lessons:alice:start -->
 | id | tags | read_when | summary | detail |
 |---|---|---|---|---|
-| LESSON-20260101-example | tag-a | When to read details | One-sentence summary | topics/workflow.md#lesson-20260101-example |
+| LESSON-20260101-alice-example | tag-a | When to read details | One-sentence summary | topics/workflow.md#lesson-20260101-alice-example |
 <!-- lessons:alice:end -->
 
 <!-- lessons:bob:start -->
 | id | tags | read_when | summary | detail |
 |---|---|---|---|---|
-| LESSON-20260102-example | tag-b | When to read details | One-sentence summary | topics/validation.md#lesson-20260102-example |
+| LESSON-20260102-bob-example | tag-b | When to read details | One-sentence summary | topics/validation.md#lesson-20260102-bob-example |
 <!-- lessons:bob:end -->
 ```
 
@@ -96,6 +96,18 @@ A project that wants the residual first-creation conflict resolved automatically
 ```
 
 This is opt-in and not the default. A union merge keeps both sides of every concurrent change in that file, which suits append-only blocks but silently duplicates content when two developers genuinely edit the same shared line.
+
+## Lesson IDs
+
+Marker blocks isolate writes, not the ID namespace. Two developers can reach for the same date and the same slug on the same day, and nothing in the block protocol stops them: the two `## LESSON-...` headings land in one topic file as byte-identical text, and both index rows carry a byte-identical `detail` value. The index can then no longer say which lesson a link points at. Put the split name in the ID so it is unique across the whole repository:
+
+```text
+LESSON-YYYYMMDD-<name>-<slug>
+```
+
+- `<name>` is the resolved split name, lowercased, with every run of characters outside `[a-z0-9]` replaced by `-`. For the usual short lowercase name that is the name verbatim. The marker block keeps the raw name.
+- Nothing parses the ID back into its parts, and both `<name>` and `<slug>` may contain `-`. Ownership comes from the enclosing marker block; the name in the ID is there for uniqueness and readability.
+- Do not rename a lesson ID that already exists. Renaming rewrites the heading, which breaks every `detail` anchor and cross-reference already pointing at it. This rule applies to newly recorded lessons.
 
 ## Scenarios That Must Be Recorded
 
@@ -122,7 +134,7 @@ A lesson must be recorded when any of the following occurs:
 Use the following format for each lesson in a topic file:
 
 ```md
-## LESSON-YYYYMMDD-<slug>: <short title>
+## LESSON-YYYYMMDD-<name>-<slug>: <short title>
 
 - Date:
 - Tags:
@@ -140,7 +152,7 @@ Use the following format for `index.md`:
 ```md
 | id | tags | read_when | summary | detail |
 |---|---|---|---|---|
-| LESSON-YYYYMMDD-<slug> | tag-a, tag-b | When to read details | One-sentence summary | topics/<topic>.md#lesson-yyyymmdd-slug-short-title |
+| LESSON-YYYYMMDD-<name>-<slug> | tag-a, tag-b | When to read details | One-sentence summary | topics/<topic>.md#lesson-yyyymmdd-name-slug-short-title |
 ```
 
 `.trellis/spec/lessons.md` stores only short summaries and the reading protocol, and should preferably remain within 150-200 lines. When it exceeds this range, first move infrequently accessed content into a topic or archive, then retain the index guidance.
@@ -150,7 +162,7 @@ Use the following format for `index.md`:
 1. Determine whether it truly qualifies as a durable lesson; do not record ordinary task summaries, one-off implementation details, or temporary research.
 2. Resolve the lessons split name and report it. Stop and ask the user if it cannot be resolved.
 3. Select a topic, such as `workflow`, `validation`, `shell`, `markdown`, `gitnexus`, `trellis-channel`, `ui`, or a project domain name.
-4. Append the complete lesson to `.trellis/lessons/topics/<topic>.md`, inside your own marker block.
+4. Append the complete lesson to `.trellis/lessons/topics/<topic>.md`, inside your own marker block, under a `LESSON-YYYYMMDD-<name>-<slug>` ID.
 5. Add or update an index row inside your own marker block in `.trellis/lessons/index.md`, ensuring that the tags, `read_when`, and detail path are searchable.
 6. Only when the lesson represents a frequently occurring risk across tasks should a one-sentence prevention rule be synchronized to `.trellis/spec/lessons.md`, inside your own marker block.
 7. When a topic file becomes too long or its content is infrequently accessed, retain the summary and index, and move the old details into your own marker block in `.trellis/lessons/archive/YYYY-QN.md`.

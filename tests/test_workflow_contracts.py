@@ -2364,6 +2364,11 @@ class WorkflowContractTests(unittest.TestCase):
             "Each block carries its own header row",
             ".trellis/lessons/**/*.md merge=union",
             "This is opt-in and not the default.",
+            "## Lesson IDs",
+            "Marker blocks isolate writes, not the ID namespace.",
+            "## LESSON-YYYYMMDD-<name>-<slug>: <short title>",
+            "topics/<topic>.md#lesson-yyyymmdd-name-slug-short-title",
+            "Do not rename a lesson ID that already exists.",
         ):
             self.assertIn(phrase, skill)
 
@@ -2381,6 +2386,10 @@ class WorkflowContractTests(unittest.TestCase):
             skill,
         )
 
+        # The bare form is gone: documenting it would document a colliding anchor.
+        self.assertNotIn("## LESSON-YYYYMMDD-<slug>:", skill)
+        self.assertNotIn("| LESSON-YYYYMMDD-<slug> |", skill)
+
         agents_global = (
             ROOT
             / "sbtd-workflow-onboard"
@@ -2397,6 +2406,8 @@ class WorkflowContractTests(unittest.TestCase):
             "不含 `/`、`\\`、`..`",
             "<!-- lessons:<name>:start -->",
             "标记块只约束写入，不约束读取",
+            "lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`",
+            "不隔离 ID 命名空间",
         ):
             self.assertIn(phrase, agents_global)
 
@@ -2412,6 +2423,7 @@ class WorkflowContractTests(unittest.TestCase):
             "linked worktree 时读主 checkout 的同名文件",
             "都读不到就停下来问用户",
             "<!-- lessons:<name>:start -->",
+            "lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`",
         ):
             self.assertIn(phrase, agents_project)
 
@@ -2426,11 +2438,16 @@ class WorkflowContractTests(unittest.TestCase):
             "Reads are not scoped: read every name's blocks in a matched file.",
             workflow,
         )
+        self.assertIn(
+            "Lesson IDs carry the split name as `LESSON-YYYYMMDD-<name>-<slug>`.",
+            workflow,
+        )
 
         paths = (ROOT / "docs" / "assets" / "sbtd-workflow-paths.md").read_text(
             encoding="utf-8"
         )
         self.assertIn("先解析 lessons 分隔名", paths)
+        self.assertIn("lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`", paths)
 
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
@@ -2441,9 +2458,58 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("不代表当前写入者", text)
         self.assertIn("<!-- lessons:<name>:start -->", readme)
         self.assertIn("lessons:&lt;name&gt;:start", readme_html)
+        self.assertIn("lesson ID 改为 `LESSON-YYYYMMDD-<name>-<slug>`", readme)
+        self.assertIn(
+            "lesson ID 改为 <code>LESSON-YYYYMMDD-&lt;name&gt;-&lt;slug&gt;</code>",
+            readme_html,
+        )
+        for text in (readme, readme_html):
+            self.assertIn("不隔离 ID 命名空间", text)
 
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         self.assertIn("按 lessons 分隔名分片写入", changelog)
+        self.assertIn("lesson ID 同步改为 `LESSON-YYYYMMDD-<name>-<slug>`", changelog)
+
+    def test_lessons_index_examples_carry_unique_split_name_ids(self) -> None:
+        # Marker blocks scope writes but share one ID namespace, so the documented
+        # examples must show IDs that stay distinct across blocks and anchors that
+        # follow their own ID.
+        skill = (SKILLS / "lessons-record" / "SKILL.md").read_text(encoding="utf-8")
+
+        owner: str | None = None
+        rows: list[tuple[str, str, str]] = []
+        for line in skill.splitlines():
+            stripped = line.strip()
+            start = re.fullmatch(r"<!-- lessons:([^:]+):start -->", stripped)
+            if start:
+                owner = start.group(1)
+                continue
+            if owner and stripped == f"<!-- lessons:{owner}:end -->":
+                owner = None
+                continue
+            row = re.fullmatch(
+                r"\|\s*(LESSON-\d{8}-\S+?)\s*\|.*\|\s*(topics/\S+\.md#\S+?)\s*\|",
+                stripped,
+            )
+            if owner and row:
+                rows.append((owner, row.group(1), row.group(2)))
+
+        self.assertGreaterEqual(len(rows), 2, "expected per-block index examples")
+
+        ids = [lesson_id for _, lesson_id, _ in rows]
+        self.assertEqual(len(ids), len(set(ids)), f"duplicate example ids: {ids}")
+
+        for block_owner, lesson_id, detail in rows:
+            self.assertIn(
+                f"-{block_owner}-",
+                lesson_id,
+                f"id {lesson_id} must carry its own block's split name",
+            )
+            anchor = detail.split("#", 1)[1]
+            self.assertTrue(
+                anchor.startswith(lesson_id.lower()),
+                f"anchor {anchor} must be derived from id {lesson_id}",
+            )
 
     def test_lessons_marker_blocks_remove_concurrent_append_conflicts(self) -> None:
         shared = "# Workflow Lessons\n\nShared reading protocol.\n"

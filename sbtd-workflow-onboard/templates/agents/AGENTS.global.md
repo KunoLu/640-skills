@@ -543,6 +543,7 @@ Trellis 项目默认采用 `lessons-record` Skill 定义的分层结构：`.trel
 - 不得用 `TRELLIS_DEVELOPER`、`git config user.name`、提交作者或 `.trellis/workspace/` 下的目录名推断分隔名；那些目录只说明历史上谁 init 过，不代表当前写入者。
 - 分隔名必须是路径安全的单个 token：非空，且不含 `/`、`\`、`..`；不合规就报告并停止，不得静默改写。
 - 追加内容用 `<!-- lessons:<name>:start -->` 和 `<!-- lessons:<name>:end -->` 包裹，只写自己的块，不得重排或改动他人块（包括解冲突时）。
+- lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`，把分隔名写进 ID。标记块只隔离写入，不隔离 ID 命名空间：两人同日写出同一个 `LESSON-YYYYMMDD-<slug>` 会在同一 topic 文件里留下逐字相同的 heading，index 的 `detail` 锚点也逐字相同，无法再区分。既有 lesson ID 不得重命名。
 - 标记块只约束写入，不约束读取；读取命中的文件时要读所有人的块。
 
 ---
