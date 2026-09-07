@@ -17,12 +17,12 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.153.2 | stable-only | 是 | 核心 Coding Agent |
+| Codex | openai/codex | v0.153.4 | stable-only | 是 | 核心 Coding Agent |
 | OMP | can1357/oh-my-pi | v18.1.13 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
 | Trellis | mindfold-ai/trellis | v0.6.16 | stable-only | 是 | 复杂任务编排 / TDD workflow |
-| GitNexus | abhigyanpatwari/GitNexus | v1.6.10 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
+| GitNexus | abhigyanpatwari/GitNexus | v1.6.11 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
-| Playwright | microsoft/playwright | v1.62.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
+| Playwright | microsoft/playwright | v1.63.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.10.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
 | web-ui-autotest-generator | KunoLu/640-skills | bundled | repository-controlled | 否 | 内置 Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
@@ -330,12 +330,12 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.153.2 |
+| Coding Agent | Codex | v0.153.4 |
 | Coding Agent | OMP | v18.1.13 |
 | Agent Harness | Trellis | v0.6.16 |
-| 代码理解 | GitNexus | v1.6.10 |
+| 代码理解 | GitNexus | v1.6.11 |
 | Web 诊断 | Chrome DevTools MCP | latest |
-| Web 回归测试 | Playwright | v1.62.1 |
+| Web 回归测试 | Playwright | v1.63.0 |
 | 移动 E2E | Maestro | cli-2.10.0 |
 | Web UI 测试资产 | web-ui-autotest-generator | bundled |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |
