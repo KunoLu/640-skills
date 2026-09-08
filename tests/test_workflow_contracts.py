@@ -2269,6 +2269,604 @@ class WorkflowContractTests(unittest.TestCase):
             repository_lesson,
         )
 
+    def _run_git(
+        self,
+        repo: Path,
+        *args: str,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Lessons Test",
+                "-c",
+                "user.email=lessons@example.com",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "init.defaultBranch=main",
+                *args,
+            ],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if check:
+            self.assertEqual(
+                0,
+                result.returncode,
+                f"git {' '.join(args)} failed: {result.stdout}{result.stderr}",
+            )
+        return result
+
+    def _merge_two_appends(
+        self,
+        repo: Path,
+        base: str,
+        ours: str,
+        theirs: str,
+        gitattributes: str | None = None,
+    ) -> tuple[int, list[str], str]:
+        """Diverge one lessons file two ways, merge, and report the outcome."""
+        target = repo / "topics" / "workflow.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self._run_git(repo, "init", "-q", ".")
+        if gitattributes is not None:
+            (repo / ".gitattributes").write_text(gitattributes, encoding="utf-8")
+        target.write_text(base, encoding="utf-8")
+        self._run_git(repo, "add", "-A")
+        self._run_git(repo, "commit", "-qm", "base")
+        self._run_git(repo, "switch", "-qc", "theirs")
+        target.write_text(theirs, encoding="utf-8")
+        self._run_git(repo, "commit", "-qam", "theirs")
+        self._run_git(repo, "switch", "-q", "main")
+        self._run_git(repo, "switch", "-qc", "ours")
+        target.write_text(ours, encoding="utf-8")
+        self._run_git(repo, "commit", "-qam", "ours")
+
+        merge = self._run_git(repo, "merge", "--no-edit", "theirs", check=False)
+        conflicts = self._run_git(
+            repo, "diff", "--name-only", "--diff-filter=U"
+        ).stdout.split()
+        return merge.returncode, conflicts, target.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _lessons_block(name: str, *items: str) -> str:
+        body = "".join(f"- {item}\n" for item in items)
+        return f"<!-- lessons:{name}:start -->\n{body}<!-- lessons:{name}:end -->\n"
+
+    def _assert_blocks_own_their_content(
+        self, merged: str, expected: dict[str, list[str]]
+    ) -> None:
+        """Assert every lesson sits inside its own owner's start-to-end region.
+
+        Counting markers is not enough. A layout that emits `start`, then `end`,
+        then the body balances every count and keeps each start marker unique
+        while leaving all content outside the block that is supposed to own it.
+        """
+        regions = re.findall(
+            r"<!-- lessons:([a-z0-9]+):start -->\n(.*?)<!-- lessons:\1:end -->",
+            merged,
+            flags=re.DOTALL,
+        )
+        owners = [owner for owner, _ in regions]
+        self.assertEqual(sorted(expected), sorted(owners), f"block owners in {merged!r}")
+        self.assertEqual(len(owners), len(set(owners)), f"duplicate blocks: {owners}")
+
+        for owner, body in regions:
+            for line in expected[owner]:
+                self.assertIn(line, body, f"{owner}'s block must hold {line!r}")
+            for other, other_lines in expected.items():
+                if other == owner:
+                    continue
+                for line in other_lines:
+                    self.assertNotIn(
+                        line, body, f"{owner}'s block must not hold {other}'s {line!r}"
+                    )
+
+        # Strip every region: no lesson line may survive outside a block.
+        outside = re.sub(
+            r"<!-- lessons:[a-z0-9]+:start -->\n.*?<!-- lessons:[a-z0-9]+:end -->",
+            "",
+            merged,
+            flags=re.DOTALL,
+        )
+        for owner, owner_lines in expected.items():
+            for line in owner_lines:
+                self.assertNotIn(
+                    line, outside, f"{line!r} must not sit outside {owner}'s block"
+                )
+
+    def test_lessons_split_name_resolution_is_documented_per_file_role(self) -> None:
+        skill = (SKILLS / "lessons-record" / "SKILL.md").read_text(encoding="utf-8")
+
+        # The owning Skill carries the complete rule: resolution order, the
+        # closed list of automatic sources, path safety, and the report.
+        for phrase in (
+            "## Lessons Split Name",
+            "1. Read `name=` from `<repo-root>/.trellis/.developer`.",
+            "read `name=` from the main checkout's `.trellis/.developer`",
+            "linked git worktree",
+            "Otherwise stop and ask the user for a split name. Do not proceed on a guess.",
+            "No other automatic source is permitted.",
+            (
+                "Do not derive the name from `TRELLIS_DEVELOPER`, "
+                "`git config user.name`, commit authors, or the directory names "
+                "under `.trellis/workspace/`."
+            ),
+            "none of them marks who is writing now",
+            "non-empty, lowercase letters and digits only",
+            "Never rewrite a non-conforming name into a conforming one.",
+            "python3 ./.trellis/scripts/init_developer.py <name>",
+            "Lessons split name: <name>",
+            "Source: .developer | main-worktree | user-provided",
+            "<!-- lessons:<name>:start -->",
+            "<!-- lessons:<name>:end -->",
+            "Never reorder, edit, or delete another name's block",
+            "Marker blocks scope writes, not reads.",
+            "Each block carries its own header row",
+            ".trellis/lessons/**/*.md merge=union",
+            "This is opt-in and not the default.",
+            # The union pattern cannot reach `.trellis/spec/lessons.md`, which
+            # also carries blocks. The skill must say so rather than leave the
+            # reader to assume every marked file is covered.
+            "That pattern covers the index, topic, and archive files only.",
+            "deliberately excludes `.trellis/spec/lessons.md`",
+            "stays manual",
+            "## Lesson IDs",
+            "Marker blocks isolate writes, not the ID namespace.",
+            "## LESSON-YYYYMMDD-<name>-<slug>: <short title>",
+            "topics/<topic>.md#lesson-yyyymmdd-name-slug-short-title",
+            "Do not rename a lesson ID that already exists.",
+            # The format alone cannot claim repository-wide uniqueness while
+            # legacy IDs are retained: a legacy `LESSON-YYYYMMDD-<word>-<rest>`
+            # is byte-identical to a new ID whose name is `<word>`. The skill
+            # must scope the guarantee and require a pre-write lookup.
+            (
+                "The name separates new IDs from each other, not from every ID "
+                "already recorded."
+            ),
+            "search the lessons tree for the exact ID and its derived anchor",
+            "Uniqueness rests on that check, not on the format alone.",
+        ):
+            self.assertIn(phrase, skill)
+
+        # And it must not restate the discredited repository-wide claim.
+        self.assertNotIn("unique across the whole repository", skill)
+
+        # Precedence, not merely presence. The steps are read back as an ordered
+        # list, so inverting them, or turning the main checkout into a peer
+        # source rather than a fallback guarded on step 1 being absent, fails
+        # here. Asserting the phrases alone survives both mutations.
+        split_section = skill.split("## Lessons Split Name", 1)[1].split("\n## ", 1)[0]
+        steps = re.findall(r"^\d+\. (.+)$", split_section, flags=re.MULTILINE)
+        self.assertEqual(3, len(steps), f"resolution order must have 3 steps: {steps}")
+        self.assertEqual(
+            "Read `name=` from `<repo-root>/.trellis/.developer`.",
+            steps[0],
+            "step 1 must be the current repository's own `.developer`",
+        )
+        self.assertNotIn("main checkout", steps[0])
+        self.assertTrue(
+            steps[1].startswith(
+                "If that file is absent and the checkout is a linked git worktree, "
+                "read `name=` from the main checkout's `.trellis/.developer`."
+            ),
+            f"step 2 must guard the fallback on step 1 being absent: {steps[1]}",
+        )
+        self.assertTrue(
+            steps[2].startswith("Otherwise stop and ask the user for a split name."),
+            f"step 3 must be the terminal stop-and-ask case: {steps[2]}",
+        )
+
+        # The residual first-creation conflict is disclosed rather than claimed away.
+        self.assertIn(
+            "The first time two developers each create their own block in the same "
+            "file, that conflicts once",
+            skill,
+        )
+
+        # Resolving the split name precedes any lesson write.
+        self.assertIn(
+            "2. Resolve the lessons split name and report it. Stop and ask the user "
+            "if it cannot be resolved.",
+            skill,
+        )
+
+        # The bare form is gone: documenting it would document a colliding anchor.
+        self.assertNotIn("## LESSON-YYYYMMDD-<slug>:", skill)
+        self.assertNotIn("| LESSON-YYYYMMDD-<slug> |", skill)
+
+        # The name reaching the ID must be the name that was resolved. A folding
+        # rule would map two distinct names onto one ID segment, which is the
+        # collision the split name in the ID exists to prevent.
+        self.assertIn("The resolved name must match `^[a-z0-9]+$`", skill)
+        self.assertIn("Never rewrite a non-conforming name into a conforming one.", skill)
+        self.assertIn("`<name>` is the resolved split name verbatim.", skill)
+        self.assertNotIn("with every run of characters outside `[a-z0-9]` replaced", skill)
+        self.assertNotIn("both `<name>` and `<slug>` may contain `-`", skill)
+
+        agents_global = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.global.md"
+        ).read_text(encoding="utf-8")
+        for phrase in (
+            "分隔名的自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`",
+            "读主 checkout 的 `.trellis/.developer`",
+            "都读不到就停下来问用户，不得猜测",
+            (
+                "不得用 `TRELLIS_DEVELOPER`、`git config user.name`、提交作者或 "
+                "`.trellis/workspace/` 下的目录名推断分隔名"
+            ),
+            "分隔名必须匹配 `^[a-z0-9]+$`",
+            "不得把不合规的名字改写成合规的",
+            "<!-- lessons:<name>:start -->",
+            "标记块只约束写入，不约束读取",
+            "lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`",
+            "不隔离 ID 命名空间",
+        ):
+            self.assertIn(phrase, agents_global)
+
+        agents_project = (
+            ROOT
+            / "sbtd-workflow-onboard"
+            / "templates"
+            / "agents"
+            / "AGENTS.project.md"
+        ).read_text(encoding="utf-8")
+        for phrase in (
+            "自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`",
+            "linked worktree 时读主 checkout 的同名文件",
+            "都读不到就停下来问用户",
+            "<!-- lessons:<name>:start -->",
+            "lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`",
+            "分隔名必须匹配 `^[a-z0-9]+$`",
+        ):
+            self.assertIn(phrase, agents_project)
+
+        # The Agent rules carry the same precedence, on one line each: the local
+        # `.developer` is named before the fallback, and the fallback is guarded
+        # on that file being absent in a linked worktree.
+        for template, label in (
+            (agents_global, "AGENTS.global.md"),
+            (agents_project, "AGENTS.project.md"),
+        ):
+            source_line = next(
+                line for line in template.splitlines() if "自动来源只有" in line
+            )
+            self.assertLess(
+                source_line.index("`<repo-root>/.trellis/.developer`"),
+                source_line.index("主 checkout"),
+                f"{label} must name the local `.developer` before the fallback",
+            )
+            self.assertRegex(
+                source_line,
+                r"缺失且当前.{0,4}linked worktree 时",
+                f"{label} must guard the main-checkout fallback on absence",
+            )
+
+        # trellis-workflow only orchestrates: it points at the owning Skill and
+        # keeps the read side unscoped.
+        workflow = (SKILLS / "trellis-workflow" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Writes into lessons files are scoped by a split name.", workflow)
+        self.assertIn("See `lessons-record` for the full rule.", workflow)
+        self.assertIn(
+            "Reads are not scoped: read every name's blocks in a matched file.",
+            workflow,
+        )
+        self.assertIn(
+            "Lesson IDs carry the split name as `LESSON-YYYYMMDD-<name>-<slug>`.",
+            workflow,
+        )
+
+        paths = (ROOT / "docs" / "assets" / "sbtd-workflow-paths.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("先解析 lessons 分隔名", paths)
+        self.assertIn("lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`", paths)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        self.assertIn("## Lessons 分片与冲突边界", readme)
+        self.assertIn("<h2>Lessons 分片与冲突边界</h2>", readme_html)
+        for text in (readme, readme_html):
+            self.assertIn("merge=union", text)
+            self.assertIn("不代表当前写入者", text)
+        self.assertIn("<!-- lessons:<name>:start -->", readme)
+        self.assertIn("lessons:&lt;name&gt;:start", readme_html)
+        self.assertIn("lesson ID 改为 `LESSON-YYYYMMDD-<name>-<slug>`", readme)
+        self.assertIn(
+            "lesson ID 改为 <code>LESSON-YYYYMMDD-&lt;name&gt;-&lt;slug&gt;</code>",
+            readme_html,
+        )
+        for text in (readme, readme_html):
+            self.assertIn("不隔离 ID 命名空间", text)
+
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("按 lessons 分隔名分片写入", changelog)
+        self.assertIn("lesson ID 同步改为 `LESSON-YYYYMMDD-<name>-<slug>`", changelog)
+
+    def test_lessons_index_examples_carry_unique_split_name_ids(self) -> None:
+        # Marker blocks scope writes but share one ID namespace, so the documented
+        # examples must show IDs that stay distinct across blocks and anchors that
+        # follow their own ID.
+        skill = (SKILLS / "lessons-record" / "SKILL.md").read_text(encoding="utf-8")
+
+        owner: str | None = None
+        rows: list[tuple[str, str, str]] = []
+        for line in skill.splitlines():
+            stripped = line.strip()
+            start = re.fullmatch(r"<!-- lessons:([^:]+):start -->", stripped)
+            if start:
+                owner = start.group(1)
+                continue
+            if owner and stripped == f"<!-- lessons:{owner}:end -->":
+                owner = None
+                continue
+            row = re.fullmatch(
+                r"\|\s*(LESSON-\d{8}-\S+?)\s*\|.*\|\s*(topics/\S+\.md#\S+?)\s*\|",
+                stripped,
+            )
+            if owner and row:
+                rows.append((owner, row.group(1), row.group(2)))
+
+        self.assertGreaterEqual(len(rows), 2, "expected per-block index examples")
+
+        ids = [lesson_id for _, lesson_id, _ in rows]
+        self.assertEqual(len(ids), len(set(ids)), f"duplicate example ids: {ids}")
+
+        for block_owner, lesson_id, detail in rows:
+            # The name occupies exactly one `-`-delimited field, so it is
+            # checked positionally. A substring test also passes when the owner's
+            # name merely appears inside the slug, which would admit an ID that
+            # names the wrong owner, or the right owner in the wrong place.
+            parts = lesson_id.split("-")
+            self.assertGreaterEqual(
+                len(parts),
+                4,
+                f"id {lesson_id} must carry a date, a name and a slug",
+            )
+            self.assertEqual("LESSON", parts[0], f"{lesson_id} must be a LESSON id")
+            self.assertRegex(parts[1], r"\A\d{8}\Z", f"{lesson_id} needs YYYYMMDD")
+            self.assertEqual(
+                block_owner,
+                parts[2],
+                f"id {lesson_id} must carry its own block's split name in the "
+                "field right after the date, not anywhere in the slug",
+            )
+            self.assertTrue(
+                "-".join(parts[3:]),
+                f"id {lesson_id} must keep a non-empty slug after the name",
+            )
+            anchor = detail.split("#", 1)[1]
+            self.assertTrue(
+                anchor.startswith(lesson_id.lower()),
+                f"anchor {anchor} must be derived from id {lesson_id}",
+            )
+
+    def test_lessons_split_name_charset_keeps_ids_collision_free(self) -> None:
+        # This repository ships rules rather than code, so the ID rule is checked
+        # here in executable form: the charset is read back out of the Skill and
+        # applied to the names that a folding rule used to merge.
+        skill = (SKILLS / "lessons-record" / "SKILL.md").read_text(encoding="utf-8")
+        documented = re.search(
+            r"The resolved name must match `\^(\[a-z0-9\]\+)\$`", skill
+        )
+        self.assertIsNotNone(documented, "SKILL.md must state the split name charset")
+        charset = re.compile(documented.group(1))
+
+        def accepts(name: str) -> bool:
+            return charset.fullmatch(name) is not None
+
+        for name in ("alice", "bob", "640", "a1"):
+            self.assertTrue(accepts(name), f"{name} must be a usable split name")
+
+        # Each rejected value is one a lowercasing or folding rule would have
+        # quietly rewritten onto an ID segment another developer already owns.
+        for name in ("", "Alice", "a-b", "a_b", "alice.wang", "张三", "a/b", ".."):
+            self.assertFalse(accepts(name), f"{name!r} must be rejected outright")
+
+        def lesson_id(name: str, slug: str) -> str:
+            self.assertTrue(accepts(name))
+            return f"LESSON-20260907-{name}-{slug}"
+
+        # Two distinct names can no longer meet inside one ID. Folding is gone,
+        # and a name can no longer absorb the head of another name's slug,
+        # because the pair that would do so is not a legal name.
+        self.assertFalse(accepts("alice-my"))
+        ids = {
+            lesson_id(name, slug)
+            for name in ("alice", "bob", "640")
+            for slug in ("my-slug", "slug")
+        }
+        self.assertEqual(6, len(ids))
+
+        # The name occupies exactly one field, so the ID decomposes one way only.
+        for name in ("alice", "640"):
+            self.assertEqual(name, lesson_id(name, "my-slug").split("-")[2])
+
+    # The split-name rule took effect on this date. Records dated before it keep
+    # their pre-split IDs and stay outside blocks; every write dated on or after
+    # it must sit inside its owner's block.
+    LESSONS_SPLIT_NAME_CUTOVER = "20260907"
+
+    @staticmethod
+    def _lessons_block_owner(
+        regions: list[tuple[int, int, str]], position: int
+    ) -> str | None:
+        for body_start, body_end, owner in regions:
+            if body_start < position < body_end:
+                return owner
+        return None
+
+    def test_repository_own_lessons_obey_the_block_and_id_rules(self) -> None:
+        """This repository routes its own `docs/lessons` through the
+        `lessons-record` structure it ships, so every write dated on or after
+        the cutover must sit inside its owner's marker block and name that
+        owner in its ID. Inspecting only the content already inside a block
+        would admit a lesson or status line appended at a file tail, which is
+        the concurrent-append path the blocks exist to close.
+        """
+        cutover = self.LESSONS_SPLIT_NAME_CUTOVER
+        start = re.compile(r"<!-- lessons:([a-z0-9]+):start -->")
+        end = re.compile(r"<!-- lessons:([a-z0-9]+):end -->")
+        # Every write carrying its own date: lesson headings, index rows, and
+        # the dated status bullets appended to existing lessons.
+        identifiers = re.compile(
+            r"^(?:#{2,3} |\| *)(LESSON-(\d{8})-[a-z0-9-]+)", re.MULTILINE
+        )
+        statuses = re.compile(r"^- 状态更新（(\d{4})-(\d{2})-(\d{2})）", re.MULTILINE)
+        blocks = 0
+        checked = 0
+        unblocked: set[str] = set()
+
+        for path in sorted((ROOT / "docs" / "lessons").rglob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            rel = path.relative_to(ROOT)
+            opens = [(m.end(), m.group(1)) for m in start.finditer(text)]
+            closes = [(m.start(), m.group(1)) for m in end.finditer(text)]
+            self.assertEqual(
+                len(opens), len(closes), f"{rel}: unbalanced lessons markers"
+            )
+
+            regions: list[tuple[int, int, str]] = []
+            for (body_start, owner), (body_end, closing_owner) in zip(
+                opens, closes, strict=True
+            ):
+                blocks += 1
+                # A block that closes before it opens, or closes under another
+                # owner's marker, is not a block. Both would leave content
+                # outside its own region while the markers still look present.
+                self.assertEqual(owner, closing_owner, f"{rel}: crossed markers")
+                self.assertLess(
+                    body_start, body_end, f"{rel}: {owner} block is inverted"
+                )
+                regions.append((body_start, body_end, owner))
+
+            for match in identifiers.finditer(text):
+                lesson_id, date = match.group(1), match.group(2)
+                owner = self._lessons_block_owner(regions, match.start(1))
+                if date < cutover:
+                    if owner is None:
+                        unblocked.add(lesson_id)
+                    continue
+                checked += 1
+                self.assertIsNotNone(
+                    owner,
+                    f"{rel}: {lesson_id} is dated on or after the {cutover} "
+                    f"split-name cutover but sits outside every marker block",
+                )
+                fields = lesson_id.split("-")
+                self.assertEqual(
+                    owner,
+                    fields[2],
+                    f"{rel}: {lesson_id} sits in {owner}'s block but names "
+                    f"{fields[2]!r} as its split name",
+                )
+                self.assertTrue(fields[3:], f"{rel}: {lesson_id} has an empty slug")
+
+            for match in statuses.finditer(text):
+                date = "".join(match.group(1, 2, 3))
+                if date < cutover:
+                    continue
+                checked += 1
+                self.assertIsNotNone(
+                    self._lessons_block_owner(regions, match.start()),
+                    f"{rel}: the status line dated {date} sits outside every "
+                    f"marker block",
+                )
+
+        self.assertTrue(blocks, "this repository must carry lessons marker blocks")
+        self.assertTrue(
+            checked,
+            f"no lessons write is dated on or after {cutover}, so the "
+            f"post-cutover rule went unexercised",
+        )
+        # Every ID outside a block predates the rule. Freezing that count closes
+        # the one path the date filter cannot see: a new record that skips its
+        # block and backdates its ID below the cutover. Archiving a lesson moves
+        # its heading without changing this set. Do not raise the number to let
+        # an unmarked write pass; put the write in its owner's block instead.
+        self.assertEqual(
+            73,
+            len(unblocked),
+            "the set of lesson IDs outside every marker block changed; records "
+            "predating the split-name rule are the only ones allowed there",
+        )
+
+    def test_lessons_marker_blocks_remove_concurrent_append_conflicts(self) -> None:
+        shared = "# Workflow Lessons\n\nShared reading protocol.\n"
+        alice = self._lessons_block("alice", "alice L1")
+        bob = self._lessons_block("bob", "bob L1")
+        alice_grown = self._lessons_block("alice", "alice L1", "alice L2")
+        bob_grown = self._lessons_block("bob", "bob L1", "bob L2")
+
+        # The mechanism: both blocks already exist, so two developers appending
+        # in their own block land in separate hunks and merge cleanly.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, merged = self._merge_two_appends(
+                Path(temp_dir),
+                base=f"{shared}\n{alice}\n{bob}",
+                ours=f"{shared}\n{alice_grown}\n{bob}",
+                theirs=f"{shared}\n{alice}\n{bob_grown}",
+            )
+            self.assertEqual(0, code, f"expected a clean merge, conflicts={conflicts}")
+            self.assertEqual([], conflicts)
+            self._assert_blocks_own_their_content(
+                merged,
+                {
+                    "alice": ["- alice L1", "- alice L2"],
+                    "bob": ["- bob L1", "- bob L2"],
+                },
+            )
+            self.assertNotIn("<<<<<<<", merged)
+
+        # The problem being solved: without blocks, the same two appends collide.
+        # If this ever merges cleanly, the feature's premise no longer holds.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, _ = self._merge_two_appends(
+                Path(temp_dir),
+                base=f"{shared}\n- old lesson\n",
+                ours=f"{shared}\n- old lesson\n- alice L2\n",
+                theirs=f"{shared}\n- old lesson\n- bob L2\n",
+            )
+            self.assertNotEqual(0, code)
+            self.assertEqual(["topics/workflow.md"], conflicts)
+
+        # The disclosed residual: creating the first two blocks still collides
+        # once, because both insertions land at the same end-of-file position.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, _ = self._merge_two_appends(
+                Path(temp_dir),
+                base=shared,
+                ours=f"{shared}\n{alice}",
+                theirs=f"{shared}\n{bob}",
+            )
+            self.assertNotEqual(0, code)
+            self.assertEqual(["topics/workflow.md"], conflicts)
+
+        # The documented opt-in resolves that residual and keeps both blocks
+        # intact, which is what makes it safe to offer for append-only files.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code, conflicts, merged = self._merge_two_appends(
+                Path(temp_dir),
+                base=shared,
+                ours=f"{shared}\n{alice}",
+                theirs=f"{shared}\n{bob}",
+                gitattributes="topics/*.md merge=union\n",
+            )
+            self.assertEqual(0, code, f"expected union merge, conflicts={conflicts}")
+            self.assertEqual([], conflicts)
+            self._assert_blocks_own_their_content(
+                merged, {"alice": ["- alice L1"], "bob": ["- bob L1"]}
+            )
 
 if __name__ == "__main__":
     unittest.main()

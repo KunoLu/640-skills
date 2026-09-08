@@ -5,12 +5,17 @@
 
 ## v1.0.14（未发布）
 
+### 修复
+
+- 修正 `lessons-record` 把新 ID 格式写成仓库内全局唯一的声明：该格式只保证新 ID 之间互不相同，与保留的既有 ID 共用命名空间；写入前必须搜索 ID 及其派生锚点，命中则换 slug。可选 `merge=union` 只覆盖 index / topic / archive，刻意排除会被裁剪改写的 `.trellis/spec/lessons.md`。契约测试堵住分隔名解析顺序可被颠倒仍绿、owner 只作为 ID 子串命中、以及本仓库 post-cutover 记录落在标记块外等空转路径。
+
 ### 变更
 
 - 对齐 Codex 内置 planning / `update_plan` 默认关闭：只有当前会话工具列表明确暴露时才可使用，不得静默写入 `tools.update_plan.enabled`。
 - 对齐 Codex MCP 服务器名允许 package-style（`:`, `@`, `/`, `.`）；不要把这类名称当成非法并改写配置，也不要静默写入各 MCP tool 的 `output_token_limit`。
 - 对齐 GitNexus 的 watch 命令边界：`gitnexus watch` 是保留入口，只说明 `analyze --watch` 与 `gitnexus auto-sync` 的分工且不启动任一者；不要默认启动长期 watcher，索引刷新仍用一次性 `gitnexus analyze`。
 - 仓库内新增 OMP 版本监控，infra 优化。
+- `lessons-record` 改为按 lessons 分隔名分片写入：分隔名只取当前仓库 `.trellis/.developer` 的 `name=`（必须匹配 `^[a-z0-9]+$`，读到不合规值同样停下询问而非改写），linked worktree 回读主 checkout，读不到则停下询问；追加内容包进 `<!-- lessons:<name>:start -->` / `<!-- lessons:<name>:end -->`，只写自己的块，显著减少多人 PR 合并时的 lessons 冲突；lesson ID 同步改为 `LESSON-YYYYMMDD-<name>-<slug>`，分隔名原样入 ID，避免两人同日同 slug 撞 ID。
 
 ## v1.0.13（2026-09-01）
 

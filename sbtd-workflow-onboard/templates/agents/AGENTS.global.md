@@ -537,6 +537,16 @@ Revalidation required: yes | no
 
 Trellis 项目默认采用 `lessons-record` Skill 定义的分层结构：`.trellis/spec/lessons.md` 只作为短入口，完整内容进入 `.trellis/lessons/index.md`、`topics/` 或按需归档。只有确认项目没有使用 Trellis 时，才默认写入 `docs/lessons.md`。不要在普通任务中滥写 lesson。
 
+写入 lesson 前必须先确定 lessons 分隔名，并把内容写在该名字的标记块内：
+
+- 分隔名的自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`；该文件缺失且当前是 linked worktree 时，读主 checkout 的 `.trellis/.developer`；都读不到就停下来问用户，不得猜测。
+- 不得用 `TRELLIS_DEVELOPER`、`git config user.name`、提交作者或 `.trellis/workspace/` 下的目录名推断分隔名；那些目录只说明历史上谁 init 过，不代表当前写入者。
+- 分隔名必须匹配 `^[a-z0-9]+$`：非空、仅小写字母与数字、不含任何分隔符（严于路径安全，也已覆盖路径安全）。不合规就报告读到的值与拒绝原因并停止，向用户要一个合规分隔名；不得把不合规的名字改写成合规的。改写正是破坏唯一性的原因：把 `Alice` 转小写、把 `a_b` 折成 `a-b`，都会让两个不同开发者落到同一个 ID 段，同日同 slug 时生成逐字相同的 lesson ID。
+- 找到了 `.developer` 但 `name=` 不合规（如 `Alice`、`alice.wang`、`zhang_san` 或中文名）同样得不到分隔名，仍要停下来问用户；可提示用 `python3 ./.trellis/scripts/init_developer.py <name>` 把 `.developer` 对齐成合规值。
+- 追加内容用 `<!-- lessons:<name>:start -->` 和 `<!-- lessons:<name>:end -->` 包裹，只写自己的块，不得重排或改动他人块（包括解冲突时）。
+- lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`，`<name>` 取分隔名原样（本身已是 `[a-z0-9]+`，无需也不得转换）。标记块只隔离写入，不隔离 ID 命名空间：两人同日写出同一个 `LESSON-YYYYMMDD-<slug>` 会在同一 topic 文件里留下逐字相同的 heading，index 的 `detail` 锚点也逐字相同，无法再区分。`<slug>` 可含 `-` 而 `<name>` 不可，因此 `<name>` 恰是日期后的单个字段，名字与 slug 不会跨边界互换字符而凑出同一个 ID。既有 lesson ID 不得重命名。该格式只保证新 ID 之间互不相同：保留的既有 ID 与新格式共用同一命名空间，形如 `LESSON-YYYYMMDD-<word>-<rest>` 的既有 ID 与 `<name>` 为 `<word>` 的新 ID 逐字相同。写入前必须在 lessons 树中搜索该 ID 及其派生锚点，命中则换 slug；唯一性靠这次查重，不靠格式本身。
+- 标记块只约束写入，不约束读取；读取命中的文件时要读所有人的块。
+
 ---
 
 ## 最终目标

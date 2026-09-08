@@ -169,3 +169,7 @@ go test ./...
 ## Lessons
 
 bug 修复、回滚、工具误判、工作流错误、验证失败、GitNexus 不匹配或 Channel 上下文丢失时，加载 `lessons-record`。Trellis 项目中 `.trellis/spec/lessons.md` 只作短入口，完整 lesson 进入 `.trellis/lessons/index.md` 与 topic；非 Trellis 项目沿用已有分层结构，否则使用 `docs/lessons.md`。
+
+写入前先确定 lessons 分隔名：自动来源只有 `<repo-root>/.trellis/.developer` 的 `name=`，缺失且当前为 linked worktree 时读主 checkout 的同名文件，都读不到就停下来问用户。分隔名必须匹配 `^[a-z0-9]+$`（非空、仅小写字母与数字）；不合规就报告并停止、向用户要合规名字，不得改写——转小写或折叠分隔符会让两个不同开发者落到同一 ID 段。找到 `.developer` 但 `name=` 不合规时同样要问用户。追加内容一律放进 `<!-- lessons:<name>:start -->` 与 `<!-- lessons:<name>:end -->` 之间，只写自己的块；读取时读所有人的块。
+
+lesson ID 用 `LESSON-YYYYMMDD-<name>-<slug>`，`<name>` 取分隔名原样，不得转换：标记块只隔离写入，不隔离 ID 命名空间，两人同日同 slug 会在同一 topic 文件产生重复 heading 与歧义的 index `detail` 锚点。`<slug>` 可含 `-` 而 `<name>` 不可，ID 中名字与 slug 的边界因此唯一。既有 ID 不重命名。该格式只保证新 ID 互不相同，不覆盖保留的既有 ID；写入前在 lessons 树搜索该 ID 与锚点，命中则换 slug。
