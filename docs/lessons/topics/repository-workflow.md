@@ -438,7 +438,8 @@
 - 修复：OMP provider 探测仅在 `~/.omp` 已存在时执行 CLI；缺失时报告 per-platform `not-configured`。保留 configured OMP 的官方 plugin 冲突检测，并用隔离 HOME 聚焦测试覆盖。
 - 预防：调用第三方 CLI 的 read-only 子命令前，先验证它不会 bootstrap 配置 / cache；无法证明时先检查既有配置根或在隔离 HOME 运行。check/preflight 测试必须断言目标 HOME 没有新增路径。
 
-## LESSON-20260907-write-partition-vs-id-namespace: Partitioning Writes Does Not Partition Identifiers
+<!-- lessons:kuno:start -->
+## LESSON-20260907-kuno-write-partition-vs-id-namespace: Partitioning Writes Does Not Partition Identifiers
 
 - 日期：2026-09-07
 - 标签：lessons, markdown, anchors, concurrency, identifiers, review
@@ -450,3 +451,4 @@
 - 修复：把分隔名纳入 ID（`LESSON-YYYYMMDD-<name>-<slug>`），同步 index 示例与契约测试；既有 ID 不重命名，因为改 heading 会打断已有的 `detail` 锚点与交叉引用。
 - 预防：设计任何分片写入方案时分别验证两件事——并发写是否还冲突，以及分片内生成的标识符（ID、锚点、slug、文件名）是否仍落在共享命名空间。后者只能由 ID 组成规则解决，不能靠分片边界自动消除。
 - 状态更新（2026-09-07）：把分隔名纳入 ID 并不足够，那个映射还必须是单射。首版规则把 `<name>` 小写化、并把非 `[a-z0-9]` 的连续字符折成 `-`，于是 `Alice`/`alice` 与 `a-b`/`a_b` 仍落到同一 ID 段，同日同 slug 照旧撞号；该折叠同时与同一份文档里“不得静默改写名字”的规则自相矛盾。另有第二类撞号来自字段边界：`<name>` 与 `<slug>` 都允许 `-` 时，`(alice, my-slug)` 与 `(alice-my, slug)` 拼出同一个 ID。最终把分区键校验收紧为 `^[a-z0-9]+$`、拒绝非规范值（而非改写），并在 ID 中原样使用。判据：分区键到标识符的映射必须单射，拼接后每个字段的边界必须唯一可定；任何“规范化”步骤都要先自问它是否把两个合法分区键合成了一个。
+<!-- lessons:kuno:end -->

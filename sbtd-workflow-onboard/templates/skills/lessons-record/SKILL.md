@@ -101,9 +101,11 @@ A project that wants the residual first-creation conflict resolved automatically
 
 This is opt-in and not the default. A union merge keeps both sides of every concurrent change in that file, which suits append-only blocks but silently duplicates content when two developers genuinely edit the same shared line.
 
+That pattern covers the index, topic, and archive files only. It deliberately excludes `.trellis/spec/lessons.md`, which also carries marker blocks but is not append-only: summaries there get rewritten and pruned back under the line budget, and a union merge would silently duplicate them. A first-creation conflict in that file stays manual.
+
 ## Lesson IDs
 
-Marker blocks isolate writes, not the ID namespace. Two developers can reach for the same date and the same slug on the same day, and nothing in the block protocol stops them: the two `## LESSON-...` headings land in one topic file as byte-identical text, and both index rows carry a byte-identical `detail` value. The index can then no longer say which lesson a link points at. Put the split name in the ID so it is unique across the whole repository:
+Marker blocks isolate writes, not the ID namespace. Two developers can reach for the same date and the same slug on the same day, and nothing in the block protocol stops them: the two `## LESSON-...` headings land in one topic file as byte-identical text, and both index rows carry a byte-identical `detail` value. The index can then no longer say which lesson a link points at. Put the split name in the ID so that two developers writing on the same day about the same subject no longer collide:
 
 ```text
 LESSON-YYYYMMDD-<name>-<slug>
@@ -113,6 +115,7 @@ LESSON-YYYYMMDD-<name>-<slug>
 - `<slug>` is lowercase and may contain `-`; `<name>` may not. That is what keeps the ID unambiguous. `<name>` is the single field between the date and the first `-` of the slug, so one date, name and slug yield one ID, and no other name and slug pair yields that same ID.
 - Nothing parses the ID back into its parts. Ownership comes from the enclosing marker block; the name is in the ID for uniqueness and readability.
 - Do not rename a lesson ID that already exists. Renaming rewrites the heading, which breaks every `detail` anchor and cross-reference already pointing at it. This rule applies to newly recorded lessons.
+- The name separates new IDs from each other, not from every ID already recorded. Retained legacy IDs share this namespace, and a legacy ID shaped `LESSON-YYYYMMDD-<word>-<rest>` is indistinguishable from a new ID whose name is `<word>`. Before writing, search the lessons tree for the exact ID and its derived anchor; if either already exists, choose a different slug. Uniqueness rests on that check, not on the format alone.
 
 ## Scenarios That Must Be Recorded
 

@@ -5,6 +5,10 @@
 
 ## v1.0.14（未发布）
 
+### 修复
+
+- 修正 `lessons-record` 把新 ID 格式写成仓库内全局唯一的声明：该格式只保证新 ID 之间互不相同，与保留的既有 ID 共用命名空间；写入前必须搜索 ID 及其派生锚点，命中则换 slug。可选 `merge=union` 只覆盖 index / topic / archive，刻意排除会被裁剪改写的 `.trellis/spec/lessons.md`。契约测试堵住分隔名解析顺序可被颠倒仍绿、owner 只作为 ID 子串命中、以及本仓库 post-cutover 记录落在标记块外等空转路径。
+
 ### 变更
 
 - 对齐 Codex 内置 planning / `update_plan` 默认关闭：只有当前会话工具列表明确暴露时才可使用，不得静默写入 `tools.update_plan.enabled`。

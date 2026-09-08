@@ -77,4 +77,9 @@
 | LESSON-20260824-gitnexus-claude-json-shebang-path | gitnexus, mcp, claude, omp, path, shebang, transport | OMP 报 `Failed: gitnexus [config: ~/.claude.json]: Transport closed`，或 GUI / 干净 PATH 启动 gitnexus | `gitnexus` shebang 依赖 PATH 上的 `node`；Claude MCP 配置必须钉死 nvm 绝对 `node` + CLI 路径。 | topics/repository-workflow.md#lesson-20260824-gitnexus-claude-json-shebang-path-pin-claude-gitnexus-mcp-to-explicit-node |
 | LESSON-20260831-readonly-cli-probe-side-effect | onboard, cli, omp, side-effect, validation, read-only | `check` / preflight / provider detection 调用第三方 CLI 查询版本、plugin 或配置 | 第三方 CLI 的只读子命令也可能 bootstrap 配置；缺失配置根时不得启动会产生状态的 CLI。 | topics/repository-workflow.md#lesson-20260831-readonly-cli-probe-side-effect-read-only-checks-must-not-bootstrap-cli-state |
 | LESSON-20260831-paginated-edit-source-truncation | editing, tools, pagination, truncation, tests, recovery | 编辑超长文件且读取结果含分页 / elision / `Showing lines` footer | 分页展示不得作为整文件写回来源；大文件编辑后立即检查行数、语法、diff stat 和 footer。 | topics/validation-scripts.md#lesson-20260831-paginated-edit-source-truncation-never-rewrite-large-files-from-paginated-tool-output |
-| LESSON-20260907-write-partition-vs-id-namespace | lessons, markdown, anchors, concurrency, identifiers | 用标记块 / 分片消除并发写冲突，且分片内记录共享 ID 或锚点 | 写入隔离不等于命名空间隔离；分片内生成的 ID / 锚点必须自带分片标识。 | topics/repository-workflow.md#lesson-20260907-write-partition-vs-id-namespace-partitioning-writes-does-not-partition-identifiers |
+
+<!-- lessons:kuno:start -->
+| id | tags | read_when | summary | detail |
+|---|---|---|---|---|
+| LESSON-20260907-kuno-write-partition-vs-id-namespace | lessons, markdown, anchors, concurrency, identifiers | 用标记块 / 分片消除并发写冲突，且分片内记录共享 ID 或锚点 | 写入隔离不等于命名空间隔离；分片内生成的 ID / 锚点必须自带分片标识。 | topics/repository-workflow.md#lesson-20260907-kuno-write-partition-vs-id-namespace-partitioning-writes-does-not-partition-identifiers |
+<!-- lessons:kuno:end -->
