@@ -1,4 +1,4 @@
-# Codex 项目级规则
+# 项目级规则
 
 本文件只保存项目事实、默认路径、project-only fallback 和项目级硬性 gate。全局工具边界、Skill 触发矩阵、reviewer 状态与执行细节由已安装的全局 `AGENTS.md` 和对应 `SKILL.md` 承接，不在此复制。
 
