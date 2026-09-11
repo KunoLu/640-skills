@@ -8,6 +8,15 @@
 ### 变更
 
 - 将 `AGENTS.project.md` 标题从「Codex 项目级规则」改为「项目级规则」，避免把项目级模板误绑到 Codex host。
+- 项目 `.gitignore` 模板增加 `/AGENTS.md.*`，忽略 Onboard backup-then-overwrite 留在仓库根的 `AGENTS.md.YYYY-MM-DD-N` 备份；活的 `AGENTS.md` 与共享 `.agents/skills/**`（含 React Bits）仍默认可追踪，未重新加入会覆盖该目录的 `.agents/`。
+
+### 文档
+
+- `README.md` / `README.html` 的项目 `.gitignore` 示例同步 `/AGENTS.md.*`。
+
+### 验证
+
+- 契约测试确认模板含 `/AGENTS.md.*`、不含 `.agents/`，并用 `git check-ignore` 证明根备份被忽略、`.agents/skills/**` 仍可追踪。
 
 ## v1.0.14（2026-09-08）
 

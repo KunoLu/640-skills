@@ -200,6 +200,7 @@ class WorkflowContractTests(unittest.TestCase):
 
         for tracked_path in (".claude/", "CLAUDE.md", ".agents/", "/AGENTS.md"):
             self.assertNotIn(tracked_path, entries)
+        self.assertIn("/AGENTS.md.*", entries)
         for local_runtime in (
             ".claude/projects/",
             ".claude/worktrees/",
@@ -261,6 +262,7 @@ class WorkflowContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, tracked_file)
 
             ignored_files = (
+                project / "AGENTS.md.2026-09-11-1",
                 project / ".claude" / "projects" / "local-state.json",
                 project / ".claude" / "worktrees" / "local-checkout" / "HEAD",
                 project / ".claude" / "settings.local.json",

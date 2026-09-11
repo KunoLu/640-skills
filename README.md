@@ -622,6 +622,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 # ---------- AI Tools ----------
 # Keep project AGENTS.md and shared .agents/skills versioned.
 .worktrees/
+/AGENTS.md.*
 
 # ---------- Trellis ----------
 # Ignore every direct child, including generated workspace data and an
