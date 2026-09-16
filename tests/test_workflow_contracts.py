@@ -791,6 +791,7 @@ class WorkflowContractTests(unittest.TestCase):
                 "skill:ponytail-review",
                 "skill:ponytail-audit",
                 "skill:ponytail-debt",
+                "skill:i-have-adhd",
             ],
         )
         onboard_root = ROOT / "sbtd-workflow-onboard"
@@ -1206,10 +1207,13 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("包含 `web-ui-autotest-generator`", prompt)
         self.assertIn("`AGENTS.project.md` 不在普通 sync 范围内", prompt)
         self.assertIn(
-            "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt",
+            "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd",
             prompt,
         )
-        self.assertIn("不得把 Ponytail stable 路径列为 cp/rsync 目标", prompt)
+        self.assertIn(
+            "不得把 Ponytail stable 路径或 i-have-adhd stable 路径列为 cp/rsync 目标",
+            prompt,
+        )
         self.assertNotIn(
             "templates/skills/ponytail",
             prompt,
@@ -1238,7 +1242,7 @@ class WorkflowContractTests(unittest.TestCase):
                 document,
             )
             self.assertIn(
-                "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt",
+                "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd",
                 document,
             )
             self.assertIn("不得作为同步表", document)
@@ -1459,6 +1463,56 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("monotonic eligibility latch", reference)
         self.assertIn("new primary goal", reference)
         self.assertIn("protected replies preserve automatic state", reference)
+
+
+    def test_i_have_adhd_required_external_contract(self) -> None:
+        agents_root = ROOT / "sbtd-workflow-onboard" / "templates" / "agents"
+        global_agents = (agents_root / "AGENTS.global.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
+        reference = (ROOT / "sbtd-workflow-onboard" / "REFERENCE.md").read_text(
+            encoding="utf-8"
+        )
+        onboard_skill = (ROOT / "sbtd-workflow-onboard" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        entrypoint = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
+
+        for phrase in (
+            "### i-have-adhd",
+            "第 19 个 required external Skill",
+            "stable 镜像离线自动安装",
+            "行动优先的可扫读结构",
+            "`normal mode` 与 caveman 共享，同时退出两者",
+            "没有自动模式，不得自动激活",
+            "输出契约保护区优先于 `i-have-adhd` 规则",
+            "服从 harness",
+            "不得把推测写成确定原因",
+            "| `i-have-adhd` |",
+            "纯展示层输出塑形",
+        ):
+            with self.subTest(global_rule=phrase):
+                self.assertIn(phrase, global_agents)
+        self.assertNotIn("install-i-have-adhd", global_agents)
+
+        self.assertIn("第 19 个 required external Skill", readme)
+        self.assertIn("stable 镜像离线自动安装", readme)
+        self.assertIn("行动优先的可扫读结构", readme)
+        self.assertNotIn("install-i-have-adhd", readme)
+        row_start = readme_html.index("<td>i-have-adhd</td>")
+        row_end = readme_html.index("</tr>", row_start)
+        i_have_adhd_row = readme_html[row_start:row_end]
+        self.assertIn("第 19 个 required external Skill", i_have_adhd_row)
+        self.assertNotIn("install-i-have-adhd", readme_html)
+
+        self.assertIn("All 19 referenced external Skills", reference)
+        self.assertIn("ayghri/i-have-adhd", reference)
+        self.assertIn("- `i-have-adhd`", onboard_skill)
+        self.assertIn(
+            "`i-have-adhd` 同为 required external Skill 由 Onboard stable set 统一安装和管理",
+            entrypoint,
+        )
+        self.assertNotIn("| i-have-adhd | ayghri/i-have-adhd |", entrypoint)
 
     def test_every_completed_grill_requires_visible_ddd_boundary_review(
         self,

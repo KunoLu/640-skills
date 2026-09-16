@@ -39,17 +39,19 @@ maestro test --format junit --output ".maestro/reports/maestro-report-smoke-${br
 
 ---
 
-## 交互压缩工具
+## 交互与输出工具
 
-`rtk` 和 `caveman` 都用于降低上下文 / token 压力，但作用层不同：
+`rtk`、`caveman` 和 `i-have-adhd` 都作用于交互与输出层，但职责不同：
 
 - `rtk` 是命令输出压缩工具，作用于 shell / terminal 命令执行层，默认按“命令执行规则”优先使用。
-- `caveman` 是 Agent 回复压缩 Skill，作用于对话输出层；安装后默认只表示可用，不代表每轮自动启用。
+- `caveman` 是 Agent 回复压缩 Skill，作用于对话输出层（压缩强度）；安装后默认只表示可用，不代表每轮自动启用。
+- `i-have-adhd` 是输出结构塑形 Skill，作用于对话输出层（可行动性结构：行动先行、编号步骤、状态重述）；作为 required external Skill 必装，但默认不启用，只有用户显式启用才生效。
 
 ### caveman
 
 - 如果工作流检查或 onboard 发现用户级全局 Skill 中没有 `caveman`，主动说明：`caveman` 用于压缩 Agent 回复、减少输出 token，不改变代码、测试、验证、Trellis 阶段、GitNexus 分析或工作流决策。
-- 说明后询问用户是否协助安装；用户确认后安装到用户级全局 Skill 环境，安装后重新检查 `caveman/SKILL.md` 是否可见。
+- 说明后询问用户是否协助安装；用户确认后 `install-caveman` 只将钉版 `caveman*` / `cavecrew*` workflow Skill payload 写入 Onboard 全局 Skill 目录，安装后重新检查 `caveman/SKILL.md` 是否可见；不安装或升级 hooks、statusline、plugin、extension。
+- 正常 `init` / `reset` 仅维护已存在的 workflow Skill payload：`current` 不动，已知较老 hash 备份后升级，缺失 / `unknown-drift` 不触碰，`abnormal` 中可替换的非 symlink payload 备份后修复，symlink fail-closed 报告；`check` 只读报告 `maintenanceState` 与 pin，未知漂移只提示人工审查；不要在会话内手工升级维护基线。
 - 手动模式与自动模式分开管理。外部 `caveman` Skill 只负责手动模式的表达风格、强度和手动退出；`auto-lite` 自动生命周期由本全局规则负责，只借用外部 Skill 的 `lite` 表达规则，不把自动状态写回或视为手动模式。
 - 手动模式保持外部 Skill 的原有行为：只有用户说 `/caveman`、`use caveman`、`caveman mode`、`少说一点`、`减少 token`、`压缩输出` 或同等明确请求时才进入；用户未指定等级时使用 `full`，持续到用户说 `normal mode`、`stop caveman` 或会话结束。
 - 自动模式要求 `caveman` Skill 当前可见，且当前回复是重复、非阻塞、无需用户决定的中间状态更新。若 runtime 明确暴露 caveman 配置，则显式 `off` 禁止自动和手动模式；没有暴露配置或配置缺失时按 `auto` 处理，不得把“无法证明不是 off”解释为 `off`。
@@ -70,6 +72,16 @@ maestro test --format junit --output ".maestro/reports/maestro-report-smoke-${br
 - context compaction、历史 turn 归档、恢复同一 session 或 handoff 不构成新的主要目标。为同一目标生成上下文摘要或 handoff 时，必须保留 `autoLiteEligible`、`autoLiteActive`、`taskAutoExit`、`sessionAutoExit` 和首次提示是否已发送；若摘要已证明任务处于长时间重复阶段但精确计数不可恢复，恢复为 `autoLiteEligible=true`，不得重置为未达阈值。
 - 自动模式优先级固定为：runtime 显式 `off` > `sessionAutoExit` > `taskAutoExit` > `autoLiteEligible` / `autoLiteActive`。阈值不能覆盖退出状态；手动模式生命周期独立，除 runtime 显式 `off` 外不被自动状态改写。
 - `caveman-compress` 等会改写长期文档或记忆文件的能力只在用户明确要求压缩文档时使用，不作为默认工作流步骤。
+
+### i-have-adhd
+
+- `i-have-adhd` 是第 19 个 required external Skill：正常 `init` / `reset` 从 stable 镜像离线自动安装 / 重装到 Onboard 解析出的全局 Skill 目录，不经询问，也不安装上游 plugin / hook / extension；它把 Agent 回复塑形成行动优先的可扫读结构（首行即下一步行动、多步任务编号、每轮重述状态、结尾一个具体下一步、列表不超过 5 项），不改变代码、测试、验证、Trellis 阶段、GitNexus 分析或工作流决策。
+- `check` 只报告其缺失并提示用 Onboard 子命令 `install-external-skills --skills i-have-adhd --scope global --source auto --yes` 修复，不阻断 check 退出码；不要手工从上游下载安装，也不要在会话内手工升级。
+- 只有用户说 `/i-have-adhd`、`adhd mode`、`ADHD 输出` 或明确声明 ADHD 输出偏好时才启用，会话内持久；用户说 `stop adhd mode` 或 `normal mode` 时立即退出。`normal mode` 与 caveman 共享，同时退出两者。没有自动模式，不得自动激活。
+- 与 caveman 叠加时分工固定：caveman 管压缩强度，`i-have-adhd` 管输出结构；`auto-lite` 的中间状态更新在 `i-have-adhd` 激活时同时遵守其结构（编号、状态重述、一个具体下一步）。
+- 输出契约保护区优先于 `i-have-adhd` 规则：最终输出（结论、修改的文件、验证命令和结果、跳过的检查及原因、风险或回滚说明）、安装确认、权限确认、破坏性或不可逆操作确认、安全 / 隐私 / 密钥 / 生产数据风险、多步骤顺序或否定语义存在歧义、需求最终确认和用户选择、PRD / design / implement review gate、BDD / PRD / ADR / Trellis task artifacts、README、AGENTS 模板正文、失败原因、剩余风险和最终验证报告必须保持完整结构，用户要求澄清、详细说明或重复提问时也必须完整回答；其“无复盘”规则不得删除这些强制字段；“行动 / 结论先行”与最终输出契约的结论先行天然一致。
+- 时间估计规则服从 harness：当前 harness 或项目规则禁止 effort estimate 时压制该条。
+- 错误原因必须 evidence-first：证据不足时明确标注“假设”并按 `diagnosing-bugs` 流程求证，不得把推测写成确定原因。
 
 ---
 
@@ -153,7 +165,7 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 强证据包括：
 
 - MCP 工具列表中存在 GitNexus 相关工具。
-- 存在 `.gitnexus/`。
+- 默认：checkout 内存在 `.gitnexus/`。若已配置 `GITNEXUS_STORAGE_PATH` 或 `GITNEXUS_STORAGE_ROOT`，用 `gitnexus status --repo <已注册仓库别名或路径> --json` 的 `storagePath` 核对解析后的绝对路径（文本模式的 `Index storage` 只在带 `--repo` 时输出；checkout 内的 `gitnexus status --json` 成功响应不含 `storagePath`）；该路径必须实际存在且含索引产物，才构成外部存储强证据。仅环境变量被设置、路径缺失或未含索引，不构成已建立索引。已验证外部存储时，不要因 checkout 内没有 `.gitnexus/` 判定无索引。
 - `gitnexus status` 显示已有索引。
 - `gitnexus index` 已经成功执行过。
 - 项目级 `AGENTS.md` 明确说明 GitNexus 已启用。
@@ -164,11 +176,12 @@ GitNexus 通过全局安装的 `gitnexus-mcp` 提供能力，不作为 Skill 管
 - 修改代码后，优先通过 GitNexus MCP 执行变更检测。
 - GitNexus 只作为影响分析和变更验证辅助，不替代 Trellis 任务产物、测试或代码评审。
 - 如果项目存在 `.gitnexusrc` 或需要指定默认分支，遵循项目配置；必要时使用 `gitnexus analyze --default-branch <branch>` 重新分析。
-- 手工检查 GitNexus 索引元数据时，优先查看 `.gitnexus/gitnexus.json`；`.gitnexus/meta.json` 是兼容镜像，分支索引下也可能存在 `branches/<branch>/gitnexus.json` 和 `branches/<branch>/meta.json`。不要仅因其中一个文件缺失就判断索引不存在；优先用 `gitnexus status`、MCP 输出和实际 metadata 内容交叉确认。
-- 当 `gitnexus status`、MCP `list_repos` / `context` / `detect_changes` 或其他 GitNexus 输出提示索引 stale、`commitsBehind > 0`、或“索引落后 HEAD ... 个 commit”时，不要直接依赖过期结果；先按命令执行规则尝试在项目根刷新索引。
-- 刷新索引时优先使用项目约定命令或本地 runner，例如存在 `.gitnexus/run.cjs` 时使用 `node .gitnexus/run.cjs analyze`；否则使用项目文档要求的 `gitnexus analyze` / `npx gitnexus analyze`。如果项目指定默认分支或 `.gitnexusrc`，必须带上相应配置。
+- 手工检查 GitNexus 索引元数据时，优先运行 `gitnexus status --repo <已注册仓库别名或路径> --json`：其 JSON `storagePath` 与文本 `Index storage` 给出实际存储位置（文本 `Index storage` 只在带 `--repo` 时输出）。`status --repo` 只确认注册索引与存储位置，不证明 checkout 新鲜度；工作树新鲜度要用 checkout 内的 `gitnexus status --json`（`status` 为 `up-to-date` / `stale`）单独判定。默认产物仍在 checkout 内 `.gitnexus/gitnexus.json`；`.gitnexus/meta.json` 是兼容镜像，分支索引下也可能存在 `branches/<branch>/gitnexus.json` 和 `branches/<branch>/meta.json`。`GITNEXUS_STORAGE_PATH` / `GITNEXUS_STORAGE_ROOT` 可将 graph、metadata、parse caches、locks 和 branch indexes 写到 checkout 外。在 `status --repo` 指向的目录核对这些文件，不要仅因 checkout 内缺文件就判断无索引；再用 CLI status、MCP 输出和实际 metadata 交叉确认。
+- checkout 内 `gitnexus status --json` 的 `status` 只有 `up-to-date` / `stale`：`up-to-date` 表示索引新鲜，不要触发刷新或重建；`stale` 时不要直接依赖过期结果，先按命令执行规则尝试在项目根刷新索引。MCP `list_repos` / `context` / `detect_changes` 的索引状态是 `current` / `behind` / `diverged` / `unknown`，与 CLI 新鲜度判定分开：`behind`、`diverged`、`unknown`、`commitsBehind > 0` 或“索引落后 HEAD ... 个 commit”都不要直接依赖过期结果；`unknown` 不是 `current`，同样先刷新索引。
+- 刷新索引时优先使用项目约定命令或本地 runner，例如存在 `.gitnexus/run.cjs` 时使用 `node .gitnexus/run.cjs analyze`；否则使用项目文档要求的 `gitnexus analyze` / `npx gitnexus analyze`。如果项目指定默认分支或 `.gitnexusrc`，必须带上相应配置。向已有索引补向量且不重建结构图时，使用 `gitnexus embeddings`；成功 batch 可续跑。不要把它当成 `gitnexus analyze --embeddings` 的别名去强制全量重建。
+- 若 CLI / MCP / HTTP API / UI 明确说明 content retention 或缺失 checkout 正在隐藏文件正文，不得把空白正文当成源码为空。
 - 如果 `analyze` 因沙箱、网络、native crash、索引损坏、耗时限制或权限问题失败，必须在最终输出中说明尝试的命令、失败原因、GitNexus 结果只能作为 advisory，以及实际用哪些 diff / 测试 / 构建 / 运行时检查替代。
-- 如果 `analyze` 成功但 MCP 仍报告 stale，按 MCP 缓存或会话未刷新处理；重新检查 CLI status，必要时说明需要重启 / reload MCP 或新会话后再依赖 MCP 结果。
+- 如果 `analyze` 成功但 MCP 仍报告索引不是 `current`，按 MCP 缓存或会话未刷新处理；重新检查 CLI status，必要时说明需要重启 / reload MCP 或新会话后再依赖 MCP 结果。
 - 不要默认假设 GitNexus hook 会自动刷新索引；除非项目文档或用户明确要求并接受 commit / merge 被阻塞和索引写入风险，否则不要新增自动运行 `gitnexus analyze` 的 Git hook。
 - 不要把 `gitnexus watch` 当成会启动索引 watcher 的命令；该入口只说明 `analyze --watch`（本地增量）与 `gitnexus auto-sync`（远程定时 clone/pull）的分工，两者都不由 `watch` 启动。不要默认启动长期 `analyze --watch` 或 `auto-sync`；索引刷新仍按项目约定的一次性 `gitnexus analyze`。
 - 当影响分析结果存在同名符号、跨文件歧义或输出过大时，优先使用 GitNexus 提供的 `uid` / `file` / `kind` 约束和分页 / summary-only 能力缩小范围。
@@ -357,6 +370,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 | `ponytail-audit` | 全仓只读 over-engineering / bloat 候选清单 | 用户明确要求全仓审计、验收明确包含全仓整改或跨模块架构整改需要只读候选清单时 |
 | `ponytail-debt` | `ponytail:` marker 台账收集 | 新增 / 修改或触及 `ponytail:` marker，或用户明确要求列出 shortcuts 台账时；默认不落盘 |
 | `React Bits tier / Pro Skill` | React / shadcn UI 项目中选择 React Bits Free 或付费 components、blocks、landing page sections | 目标项目已确认 React + shadcn/ui 后，用户明确需要 React Bits；Free 和付费 Starter / Pro / Ultimate 都需确认，付费还需 registry、项目内 Skill 和可读取 license key |
+| `i-have-adhd` | ADHD-friendly 输出塑形：行动先行、编号步骤、每轮状态重述的可扫读回复 | 用户显式启用（`/i-have-adhd`、`adhd mode`、`ADHD 输出`）或声明 ADHD 输出偏好时；required 必装但默认不启用，无自动模式 |
 
 ### 自定义 Skills 使用边界
 
@@ -372,6 +386,7 @@ Skill 不替代项目规范、任务产物、测试和人工判断。
 - `agent-rules-books` 派生 Skill 通常作为按需专项审查视角，不替代项目规范、Trellis task artifacts、`.trellis/spec`、GitNexus、`tdd`、项目测试、`project-validation`、Playwright、Maestro 或人工评审。上述 5 个客观开发门禁命中时转为强制调用；未命中时才按当前主风险选择最相关的 1-2 个，不要把 5 个当作所有任务的固定 checklist。默认只纳入 `book-refactoring-pass`、`book-legacy-change-safety`、`book-ddd-distilled-modeling`、`book-ddia-data-design`、`book-release-readiness`，不默认纳入 APoSD、Clean Architecture、PoEAA 等项目风格更强的扩展。
 - `trellis-channel` 可以被项目级规则主动用于高风险代码 review / 验证覆盖 preflight，但 preflight 不等于启动 Channel runtime。除非用户已明确要求 Channel，或在 preflight 后明确确认，否则不得静默 spawn worker。
 - `React Bits tier / Pro Skill`：普通安装和 reset 默认保持 shadcn/ui only，不询问也不安装 React Bits。只有在目标项目已确认是 React + shadcn/ui、项目根目录存在 `components.json`，且前端 UI 任务明确需要 React Bits 风格组件、blocks 或 landing page sections 时，才询问用户选择 shadcn/ui only、React Bits Free 或付费 Starter / Pro / Ultimate。React Bits Free 只有在免费 source / registry 已明确配置且用户确认后才安装；付费 tier 必须确认 registry / `REACTBITS_LICENSE_KEY` / 项目内 React Bits Pro Skill 均可用，且不得读取、输出、提交 license key。reset 时保留检测到的既有 tier 和 registry，未经确认不使用默认免费版覆盖。
+- `i-have-adhd`：仅在用户显式启用 adhd mode 或声明 ADHD 输出偏好时生效，是纯展示层输出塑形，不是 workflow gate，不改变代码、测试、验证、Trellis 阶段或工作流决策；与 `caveman` 叠加时 caveman 管压缩强度、`i-have-adhd` 管输出结构；最终输出契约、review gate、失败原因和最终验证报告等保护区保持完整结构，不受其“无复盘”规则影响；证据不足的错误原因必须标注“假设”并走 `diagnosing-bugs` 求证。
 - 如果使用 `impeccable` 生成或维护项目上下文，默认将 `PRODUCT.md` 和 `DESIGN.md` 放在项目根目录的 `docs/` 下，即 `docs/PRODUCT.md` 和 `docs/DESIGN.md`；不要在项目根目录创建重复副本。`.impeccable/design.json` sidecar 仍按 `impeccable` 默认保留在项目根目录 `.impeccable/` 下。
 - `impeccable` 上下文文件必须避免多源冲突：如果项目根目录、`.agents/context/`、`docs/` 中同时存在 `PRODUCT.md` 或 `DESIGN.md`，以项目 `AGENTS.md` 指定路径为准；在读取和写入前先确认实际采用的上下文目录，避免同名文件分散在多个位置。
 - UI/UX Skill 编排：
