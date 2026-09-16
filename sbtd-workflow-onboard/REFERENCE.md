@@ -202,7 +202,7 @@ The 15 bundled Skills are always global during normal init/reset:
 
 The Onboard rename is a bundled migration: normal `plan` reports any detected legacy target, and normal `init` / `reset` removes it only after the canonical `sbtd-workflow-onboard/SKILL.md` exists with matching frontmatter. Project-only `init-projects` never inspects or modifies global Skill directories.
 
-All 18 referenced external Skills are also required globally:
+All 19 referenced external Skills are also required globally:
 
 | Skill | Repository |
 |---|---|
@@ -211,6 +211,7 @@ All 18 referenced external Skills are also required globally:
 | `ui-ux-pro-max` | `https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git` |
 | `shadcn` | `https://github.com/shadcn-ui/ui.git`, subpath `skills/shadcn` |
 | `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt` | `https://github.com/DietrichGebert/ponytail.git`, subpaths `skills/<name>` |
+| `i-have-adhd` | `https://github.com/ayghri/i-have-adhd.git`, subpath `skills/i-have-adhd` |
 
 ### Ponytail Provider Boundary
 
@@ -252,6 +253,8 @@ Preparation and commit are separate phases. Every selected Skill is resolved, co
 
 No automatic source fallback occurs. Stable manifest, containment, checksum, license, or snapshot validation failures are fatal for `auto` and `stable`; upstream acquisition or validation failures are fatal for `upstream`. Target-side staging, permission, disk, commit, and rollback failures are always fatal. A local commit failure attempts to restore all prior targets; if any restore step fails, the transaction reports and retains the rollback directory path instead of deleting the only remaining backup copy.
 
+`init` / `reset --json` embed the required installation report under `requiredExternalInstall` in the single root document, including when installation fails before template writes. Per-Skill source metadata and `transaction` recovery fields remain available; the field is `null` when no required installation ran. Existing root plan fields and exit-code semantics are unchanged.
+
 The vendored stable set lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them.
 
 Promote a reviewed repository revision explicitly:
@@ -286,7 +289,7 @@ Legacy aliases remain recognized for migration: `diagnose` → `diagnosing-bugs`
 
 ## Skills That Keep Their Existing Scope
 
-- `caveman`: user-level global only and still requires its existing explicit installation decision. The external Skill owns manual style and intensity; the global AGENTS template owns automatic lifecycle. Existing thresholds set a monotonic eligibility latch, and the next eligible intermediate update must enter task-scoped `auto-lite`. Only a new primary goal resets task state; continuation, authorization, recovery, context compaction, and handoff preserve it. Full-output protected replies preserve automatic state and resume without recounting. Explicit runtime `off` wins, while a missing configuration defaults to `auto`; task-level and session-level opt-outs retain their existing precedence.
+- `caveman`: user-level global and still requires its existing explicit installation decision when missing. Replacement and backup cover only `caveman`, `caveman-*`, `cavecrew`, and `cavecrew-*`; broader `caveman*` / `cavecrew*` prefix matching is detection-only for the fail-closed symlink guard, which also covers nested symlinks at any depth inside an abnormal core. A known version requires the complete mutable family directory set and payload fingerprints to match a reviewed snapshot, using the existing generated-cache exclusions. Matching the core alone never authorizes replacement: partial, mixed, or customized payloads are reported as unknown drift, and an abnormal core cannot authorize replacing unrecognized companions. The staged source must match the pinned full family, and the live target is rechecked before replacement. Known older payloads are backed up before upgrade; replaceable non-symlink abnormal cores may be repaired when no unknown companion exists. Human `plan`, `install-caveman`, `init`, and `reset` reports include refusal reasons, retained backup paths, and restore errors. Caveman maintenance remains optional and does not turn a successful required installation into failure. Hooks, statusline, plugins, and extensions remain user-managed. Monitoring only reports drift; changing the maintenance baseline requires reviewing the complete family and installer / hook behavior and updating ref, revision, core hash, family fingerprints, and tests together. The external Skill owns manual style and intensity; the global AGENTS template owns automatic lifecycle with a monotonic eligibility latch. Only a new primary goal resets it, and protected replies preserve automatic state.
 - React Bits Free/Starter/Pro/Ultimate: project-only and conditional.
 - Project Playwright CLI / `@playwright/test`: project-only and conditional.
 

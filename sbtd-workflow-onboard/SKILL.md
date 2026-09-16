@@ -137,6 +137,7 @@ All referenced external Skills are also required globally. Install every missing
 - `to-spec`, `to-tickets`, `ui-ux-pro-max`, `impeccable`
 - `shadcn`
 - `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`
+- `i-have-adhd`
 
 Dependencies are still expanded automatically: `tdd` includes `codebase-design`; `grill-me` includes `grilling`; `grill-with-docs` includes `grilling` and `domain-modeling`.
 
@@ -150,7 +151,7 @@ External Skill installation uses a validated, stable-first source policy. The de
 
 The stable set is an unmodified mirror, not a fork. `assets/external-skills/stable/MANIFEST.json` records the exact upstream commit, source subpath, tree digest, and license files. Promote a new repository revision only through `promote-external-skills-stable`; promotion must validate the complete stable set before replacing it.
 
-`caveman` remains a user-level global Skill with its existing explicit installation decision. Java 17+ and Maestro CLI remain local-machine prerequisites installed only after their existing conditional confirmation. RTK remains global with its existing confirmation and `rtk gain` verification behavior.
+`caveman` remains a user-level global Skill with its existing explicit installation decision. Normal `init` / `reset` preserves a missing copy, but maintains an installed workflow skill payload against the reviewed pinned v* installer / skill baseline: known older payloads are backed up then upgraded, replaceable non-symlink abnormal payloads are repaired, symlinked payloads fail closed and are reported, and newer or customized payloads are reported without replacement. This scope is `caveman*` / `cavecrew*` Skills only; hooks, statusline, plugins, and extensions remain user-managed. ENTRYPOINT monitoring only reports v* tag drift; a human-reviewed change must update the pinned ref, revision, hashes, and tests together. Java 17+ and Maestro CLI remain local-machine prerequisites installed only after their existing conditional confirmation. RTK remains global with its existing confirmation and `rtk gain` verification behavior.
 
 ## Per-Project Processing
 
@@ -261,5 +262,7 @@ Normal `check`, `init`, and `reset` report global runtime/tools/Skills plus a `p
 Aggregate Trellis status uses this priority: `failed`, `blocked`, `needs-user`, `bootstrap-required`, `success`, `skipped`. A bootstrap task in one project must not stop checks or initialization for the remaining roots.
 
 Every External Skill install result must report `requestedSource`, `sourceUsed`, `sourceRevision`, `stableSet`, `fallbackReason`, and transaction status when applicable. Every project result must identify the affected project root. Do not merge failures, bootstrap tasks, Playwright applicability, or React Bits decisions across projects without preserving the root path.
+
+`init` / `reset --json` keep one root document. When required external installation runs, `requiredExternalInstall` contains its complete result, including per-Skill provenance and `transaction.rollbackPath` / `rollbackErrors` on failed recovery; it is `null` when installation was unnecessary. Preserve this result on early failure returns as well as successful runs. Human Caveman reports include refusal reasons, retained backup paths, and restore errors.
 
 See [REFERENCE.md](REFERENCE.md) for exact overwrite, backup, troubleshooting, and platform details.

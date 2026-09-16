@@ -290,6 +290,16 @@
         "aliases": ["ponytail-debt"]
       },
       "targetRole": "external-skill"
+    },
+    {
+      "id": "skill:i-have-adhd",
+      "kind": "external-skill",
+      "source": {
+        "repo": "https://github.com/ayghri/i-have-adhd.git",
+        "subpath": "skills/i-have-adhd",
+        "aliases": ["i-have-adhd"]
+      },
+      "targetRole": "external-skill"
     }
   ]
 }
