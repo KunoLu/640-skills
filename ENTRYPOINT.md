@@ -7,6 +7,7 @@
 > `shadcn Skill` 作为 shadcn/ui 项目组件、registry、preset 和 CLI 工作流的可选辅助，必须先确认项目存在 `components.json`、使用或准备初始化 shadcn/ui，或任务明确涉及 shadcn registry / preset / CLI。
 > `React Bits Pro Skill` 仅作为 React / shadcn UI 项目的可选前端组件与 blocks 集成辅助，必须先确认技术栈、项目内 Skill 安装状态和可读取的 license key。
 > `ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` 作为 required external Skills 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；官方 Ponytail plugin 与 Onboard stable provider 不得同时启用，检测到已启用 plugin 时 check / init / reset 阻断并交由人工处理。Ponytail 版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
+> `i-have-adhd` 同为 required external Skill 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
 > 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `sbtd-workflow-onboard/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
 
 ## 0. 版本监控配置
@@ -18,9 +19,10 @@
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
 | Codex | openai/codex | v0.154.0 | stable-only | 是 | 核心 Coding Agent |
-| OMP | can1357/oh-my-pi | v18.1.17 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
-| Trellis | mindfold-ai/trellis | v0.6.16 | stable-only | 是 | 复杂任务编排 / TDD workflow |
-| GitNexus | abhigyanpatwari/GitNexus | v1.6.11 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
+| OMP | can1357/oh-my-pi | v18.2.0 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
+| Caveman Skill Installer | JuliusBrussee/caveman | v2.7.0 | stable-only | 是 | 仅监控 `v*` installer / skill tags，忽略 `bin-v*` engine binary releases；`更新` 只回写 ENTRYPOINT 的 Caveman 版本记录（本表与“当前版本汇总”），不得改 `CAVEMAN_PINNED_REF` / revision / hash。payload 维护由正常 `init` / `reset` 按受管 family 的完整目录集合与内容指纹判定 `current` / `outdated`，已知旧版备份后升级；非 symlink 异常核心在不存在未知 companion 时修复，嵌套或顶层 symlink 一律 fail-closed 只报告；替换 / 备份仅限 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测。 |
+| Trellis | mindfold-ai/trellis | v0.6.17 | stable-only | 是 | 复杂任务编排 / TDD workflow |
+| GitNexus | abhigyanpatwari/GitNexus | v1.6.12 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.63.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.10.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
@@ -224,7 +226,7 @@ handoff
 
 | 项目 | 当前结论 |
 |---|---|
-| 当前关注版本 | v0.6.16 |
+| 当前关注版本 | v0.6.17 |
 | 当前定位 | 复杂任务编排 / 多阶段任务 / TDD workflow |
 | 启用条件 | 存在 Trellis 强证据，或任务复杂度需要 Trellis |
 | Native Workflow | 普通功能开发、文档修改、小型 bug 修复、工具配置调整 |
@@ -331,9 +333,10 @@ handoff
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
 | Coding Agent | Codex | v0.154.0 |
-| Coding Agent | OMP | v18.1.17 |
-| Agent Harness | Trellis | v0.6.16 |
-| 代码理解 | GitNexus | v1.6.11 |
+| Coding Agent | OMP | v18.2.0 |
+| Agent Output | Caveman Skill Installer | v2.7.0 |
+| Agent Harness | Trellis | v0.6.17 |
+| 代码理解 | GitNexus | v1.6.12 |
 | Web 诊断 | Chrome DevTools MCP | latest |
 | Web 回归测试 | Playwright | v1.63.0 |
 | 移动 E2E | Maestro | cli-2.10.0 |

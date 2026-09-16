@@ -5,18 +5,40 @@
 
 ## v1.0.15（未发布）
 
+### 新增
+
+- 新增第 19 个 required external Skill `i-have-adhd`：catalog 注册 `skill:i-have-adhd`（`ayghri/i-have-adhd`，subpath `skills/i-have-adhd`），经 `promote-external-skills-stable` 以 pin commit（`4092de07…`，MIT）冻存进 stable set；`init` / `reset` 从 stable 镜像离线自动安装 / 重装，`check` 报告缺失并提示 `install-external-skills` 修复（不阻断退出码）；安装完整 i-have-adhd Skill 目录（SKILL.md + agent metadata），不安装上游 plugin / hook / extension。全局 AGENTS 模板含使用规则（显式启用、`normal mode` 与 caveman 同时退出、输出契约保护区优先、时间估计服从 harness、错误原因 evidence-first）。此前的 opt-in 交互 Skill 方案与 `install-i-have-adhd` 子命令已按决策整体移除。
+- `caveman` 增加钉版 workflow Skill payload 维护：缺失仍保持 opt-in，已安装 payload 按 v2.6.0 基线判定 `current` / `outdated` / `unknown-drift` / `abnormal`；已知较老副本备份后升级，可替换的非 symlink 异常副本修复（symlink fail-closed 报告），更新或自定义副本只报告不覆盖。替换 / 备份范围只含 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测；不触碰 hooks、statusline、plugin、extension；监控仅跟踪 `v*` installer / skill tag，基线升级需人工评审后同步 ref、revision、hash 与测试。
+- 将 stable set 全量刷新到 2026-09-14.6：mattpocock/skills、impeccable、ui-ux-pro-max-skill、shadcn-ui、ponytail 与 i-have-adhd 均固定到当日 main revision；其中 impeccable 自 4.1.2 整体替换为 4.3.1，原脚本树由统一 `impeccable` CLI 启动器（随 `VERSION` 发布，按需下载或使用缓存 engine）取代，浏览器侧 `live-browser*.js` 保留；promotion 同步更新目录树 digest、LICENSE / NOTICE 与第三方归属。
+
+### 修复
+
+- 修复 `init` / `reset --json` 的嵌套安装报告丢失：安装事务与展示分离，父流程在单份根 JSON 的 `requiredExternalInstall` 中保留来源、transaction 状态、`rollbackPath` 与恢复错误；失败提前返回也不丢弃恢复信息，原退出码不变。
+- Caveman symlink fail-closed 补全：`caveman/SKILL.md`、任意 `caveman*` / `cavecrew*` 前缀兄弟条目（含 `caveman.local` 这类非 `-` 分隔名、含 dangling）为 symlink 时统一判 `abnormal`，异常 core 内任意深度的嵌套 symlink 同样阻断修复；symlink 侦测用前缀匹配，替换 / 备份范围仍只限 `caveman` / `caveman-*` / `cavecrew` / `cavecrew-*`；staging 目录、staged 读取与源扫描阶段的文件系统错误也返回结构化 `failed`，`plan` 输出 `plannedAction: blocked` 与 `blockedReason`，`init` / `reset` / 显式 `install-caveman --yes` 均拒绝替换且不 clone；人类可读 `check` 现渲染 maintenance 状态、pinned ref、planned action 与 blocked reason。备份决策以 clone 后重算的 family 为准：clone 期间出现的已知旧版或可修复副本同样先备份再替换。
+- `check` / preflight 的修复提示（`install-external-skills`、`install-caveman`、`ensure-npm`、`install-java`）改为通过 `onboard_command()` 生成已安装脚本的绝对路径命令，POSIX 用 `shlex.join` 使空格、`$`、反引号、glob 等元字符保持字面量；Windows 仅支持 PowerShell：普通参数不加引号，仅含特殊字符的参数用单引号包裹（`'` 翻倍），需要引用 argv[0] 时才以 `&` 调用，并在提示前标注 “Run in PowerShell:”，不承诺 cmd.exe；此前的 `python scripts/onboard.py …` 相对路径只能在 Skill 目录内执行。
+- Caveman 版本识别增加完整受管 family 的目录集合与内容指纹校验：已知核心配自定义 sibling、部分安装或混合版本均停止覆盖；异常核心不能授权覆盖未知 companion，非 symlink 异常核心仅在不存在未知 companion 时可修复，任意顶层或嵌套 symlink 均保持 fail-closed 报告。staged source 校验完整 pin，下载后、替换前重新检查本地漂移，保留原备份 / 回滚机制与可选维护边界。
+- 修复 Caveman 版本识别的 partial family 漏判：core `caveman/` 缺失但 companion 命中已知 family 时，不再判为普通缺失安装（`missing` 仅保留给完全无 family 内容的布局），统一归入 `unknown-drift` 并进入 `attention-required`，只报告不覆盖；新增回归测试覆盖该布局。
+- 修复 impeccable stable 副本内 5 组问题（按用户决定在本仓直接修复，与 pinned 上游形成有意差异，建议上游修复后重新 pin）：`live-browser.js` 三处用户可见 `live-poll.mjs` 文案改为 `impeccable live-poll`，五处指向已删除模块的维护注释改为引用 compiled engine；Svelte 会话 reset 只清理当前会话的 handled 记录，不再清空全部历史；`impeccable.cmd` 在 delayed-expansion 子例程内校验 `IMPECCABLE_DOWNLOAD_BASE`（仅放行 URL 字符），并为 `.part` / `.sha256` 暂存文件加入进程唯一后缀。MANIFEST 的 impeccable `treeSha256` 同步重算。
+- Caveman 文本 `plan`、显式安装及 `init` / `reset` 维护报告展示拒绝原因、备份路径和恢复错误，不再只给出笼统失败状态。
+
 ### 变更
 
 - 将 `AGENTS.project.md` 标题从「Codex 项目级规则」改为「项目级规则」，避免把项目级模板误绑到 Codex host。
+- `sync` / `同步` 的 required external Skill 安装步骤扩展到 `i-have-adhd`：sync 在复制 Onboard 后用已同步 `onboard.py install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd` 从 stable mirror 安装并校验 5 个 `SKILL.md`；`i-have-adhd` stable 路径同样不得作为同步表 `cp` / `rsync` 行。README 两份文件与版本化 automation prompt 同步更新。
+- 对齐 GitNexus 可迁移索引存储、content retention 隐藏正文及 `gitnexus embeddings` 原地补向量边界。外部存储通过 `gitnexus status --repo <registered-target> --json` 的 `storagePath`（或带 `--repo` 的文本 `Index storage`）确认；该命令不证明工作树新鲜度。工作树 CLI `status --json` 使用 `up-to-date` / `stale`，与 MCP 的 `current` / `behind` / `diverged` / `unknown` 分开判断，不能因健康状态不是字面 `current` 而反复重建。
 - 项目 `.gitignore` 模板增加 `/AGENTS.md.*`，忽略 Onboard backup-then-overwrite 留在仓库根的 `AGENTS.md.YYYY-MM-DD-N` 备份；活的 `AGENTS.md` 与共享 `.agents/skills/**`（含 React Bits）仍默认可追踪，未重新加入会覆盖该目录的 `.agents/`。
 
 ### 文档
 
 - `README.md` / `README.html` 的项目 `.gitignore` 示例同步 `/AGENTS.md.*`。
+- README 两份入口明确 Caveman 替换白名单与更宽的 symlink 侦测范围，并补充完整 family 身份和 JSON 恢复结果契约；版本化 automation prompt 将 family 指纹纳入人工 pin 评审边界，不同步 live automation。
+- 修正恢复与验证 lessons：私有目录保存完整文件快照，备用 patch 包含 staged + unstaged 并另存未追踪文件；恢复不改用户索引。管道示例立即保存并返回 runner 退出码，而不是只打印状态。
 
 ### 验证
 
 - 契约测试确认模板含 `/AGENTS.md.*`、不含 `.agents/`，并用 `git check-ignore` 证明根备份被忽略、`.agents/skills/**` 仍可追踪。
+- 契约测试锁定 catalog 条目、stable manifest 仓库 / Skill 条目、冻存字节 SHA-256 == 已评审基线（`3170b16a…`）、LICENSE 存在与 `REFERENCED_SKILLS` 成员；`python -m unittest discover -s tests` 全量通过；隔离目录 `install-external-skills --skills i-have-adhd --source auto` 离线安装冒烟通过。
+- Caveman 维护回归套件覆盖 family 指纹识别与 fail-closed 边界：嵌套 symlink（含异常 core 组合）、未知 companion、post-clone 漂移复查、备份 / 回滚恢复、以及 `run(init)` 与显式 `install-caveman` 从缺失状态的 JSON 派发路径（升级成功且保留备份）；i-have-adhd 套件覆盖缺失 / 部分安装的自动重装与 stable 镜像 checksum 拒绝。
 
 ## v1.0.14（2026-09-08）
 
