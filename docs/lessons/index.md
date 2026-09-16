@@ -78,8 +78,12 @@
 | LESSON-20260831-readonly-cli-probe-side-effect | onboard, cli, omp, side-effect, validation, read-only | `check` / preflight / provider detection 调用第三方 CLI 查询版本、plugin 或配置 | 第三方 CLI 的只读子命令也可能 bootstrap 配置；缺失配置根时不得启动会产生状态的 CLI。 | topics/repository-workflow.md#lesson-20260831-readonly-cli-probe-side-effect-read-only-checks-must-not-bootstrap-cli-state |
 | LESSON-20260831-paginated-edit-source-truncation | editing, tools, pagination, truncation, tests, recovery | 编辑超长文件且读取结果含分页 / elision / `Showing lines` footer | 分页展示不得作为整文件写回来源；大文件编辑后立即检查行数、语法、diff stat 和 footer。 | topics/validation-scripts.md#lesson-20260831-paginated-edit-source-truncation-never-rewrite-large-files-from-paginated-tool-output |
 
-<!-- lessons:kuno:start -->
+<!-- lessons:640:start -->
 | id | tags | read_when | summary | detail |
 |---|---|---|---|---|
-| LESSON-20260907-kuno-write-partition-vs-id-namespace | lessons, markdown, anchors, concurrency, identifiers | 用标记块 / 分片消除并发写冲突，且分片内记录共享 ID 或锚点 | 写入隔离不等于命名空间隔离；分片内生成的 ID / 锚点必须自带分片标识。 | topics/repository-workflow.md#lesson-20260907-kuno-write-partition-vs-id-namespace-partitioning-writes-does-not-partition-identifiers |
-<!-- lessons:kuno:end -->
+| LESSON-20260914-640-piped-backgrounded-test-exit-code | rtk, validation, shell, exit-code, background | 测试 / 验证命令经管道或后台执行并据其判定通过 | 优先无管道；管道后按 shell 立即保存并返回 runner 状态，不能只 echo；后台任务须等最终结果。 | topics/validation-scripts.md#lesson-20260914-640-piped-backgrounded-test-exit-code-piped-and-backgrounded-runs-hide-the-real-exit-code |
+| LESSON-20260914-640-assertion-survives-line-wrapping | validation, tests, assertions, text-contract | 对源码 / 文档写文本包含断言 | 断言目标必须是源文件单行内的短串或结构化事实，跨行长短语会在重排后假失败。 | topics/validation-scripts.md#lesson-20260914-640-assertion-survives-line-wrapping-text-assertions-must-survive-source-line-wrapping |
+| LESSON-20260914-640-str-replace-tail-truncation-recovery | editing, truncation, templates, utf-8, git, recovery | 用字符串替换工具编辑含超长行的大 Markdown 模板，或发现文件行数骤降 | 私有目录保存完整文件快照；备用 patch 记录基线并包含 staged + unstaged，另存未追踪内容；恢复只改工作树、不改索引。 | topics/validation-scripts.md#lesson-20260914-640-str-replace-tail-truncation-recovery-string-replace-edits-can-truncate-long-line-templates-recover-from-pre-edit-byte-snapshot |
+| LESSON-20260915-640-install-family-and-reporting | onboard, caveman, identity, rollback, json, reporting | 批量替换 Skill family 或在外层 CLI 组合安装结果 | 身份校验覆盖整个替换集合；安装结果直接返回结构化数据，外层失败响应保留事务恢复路径。 | topics/validation-scripts.md#lesson-20260915-640-install-family-and-reporting-bulk-install-identity-and-recovery-reports |
+| LESSON-20260916-640-full-suite-timeout-window | validation, pytest, timeout, full-suite | 全量 pytest 超时或作为验证证据 | 窗口须覆盖时长波动（≥600s 或拆分），timeout 须充足窗口重跑取证，不等于失败。 | topics/validation-scripts.md#lesson-20260916-640-full-suite-timeout-window-full-suite-validation-windows-must-cover-duration-variance |
+<!-- lessons:640:end -->

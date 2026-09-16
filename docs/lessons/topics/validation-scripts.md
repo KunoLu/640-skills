@@ -78,7 +78,7 @@
 - 来源：迁移自 `docs/lessons.md`
 - 原始标题：Markdown 反引号搜索必须安全引用
 - 问题：验证模板是否残留旧文案时，`rg` 搜索模式包含 Markdown inline code 反引号，命令用双引号包裹后被 zsh 当成命令替换，出现 `command not found`，导致验证命令自身失败。
-- 根因：双引号不会阻止 shell 对反引号执行命令替换；包含 `` `code` ``、`$` 等 shell 元字符的 Markdown 搜索模式不能直接放在双引号里。
+- 根因：双引号不会阻止 shell 对反引号执行命令替换；包含 ``code``、`$` 等 shell 元字符的 Markdown 搜索模式不能直接放在双引号里。
 - 修复：改用单引号包裹 `rg` 搜索模式，并用结构化 Node 断言补充验证，区分“命令引用失败”和“模板内容失败”。
 - 预防：后续验证 Markdown 文档中含反引号、`$`、`!` 等 shell 元字符的文本时，优先使用单引号、转义字符或 Node 结构化检查；最终报告中说明失败来自命令写法还是内容事实。
 
@@ -378,7 +378,72 @@
 - 根因：在未取得完整、未省略 source 的情况下执行 whole-file / fuzzy replacement，且没有把返回后的行数、footer 搜索和语法解析作为即时 gate。
 - 修复：从 Git 恢复未预期改动；后续大文件仅使用行锚定小补丁，或使用带唯一 anchor / match-count 断言的一次性脚本，并在执行后立即删除脚本。
 - 预防：任何读取含分页 / elision 标记的文件都不得作为整文件写回来源。每次大文件编辑后立即运行 `wc -l`、语法解析、`git diff --stat` 和 footer 搜索；行数异常先恢复，再运行所属完整测试文件而非只跑定点测试。
-<!-- lessons:kuno:start -->
+<!-- lessons:640:start -->
 - 状态更新（2026-09-07）：同类截断在 475 行文件上复现，且插入的新内容完全正确、只有文件尾部 174 行被静默删除，因此“替换看起来成功”不构成完整性证据。判定必须看 `git diff --numstat` 的删除列：纯插入型编辑的删除数应与实际替换行数一致，出现意料外的大额删除立即 `git checkout --` 恢复。
 - 状态更新（2026-09-07）：同一会话中，字符串匹配类编辑 / 搜索工具在含 967 字符长行的 UTF-8 文件上无法命中已确认存在的 CJK 文本。对确认存在的内容反复匹配失败时不要继续重试或放宽匹配，改用行锚定的一次性脚本（读取后断言目标行前缀 / 后缀再插入），并在执行后核对 numstat 与文件尾部。
-<!-- lessons:kuno:end -->
+<!-- lessons:640:end -->
+
+<!-- lessons:640:start -->
+
+## LESSON-20260914-640-piped-backgrounded-test-exit-code: Piped and Backgrounded Runs Hide the Real Exit Code
+
+- 日期：2026-09-14
+- 标签：rtk, validation, shell, exit-code, background
+- 适用场景：测试 / 验证命令经管道（如 `| tail`）或后台 job 执行，并据其输出或退出码判定通过
+- 严重级别：high
+- 来源：i-have-adhd opt-in 集成任务的全量 unittest 验证
+- 问题：`rtk python3 -m unittest discover -s tests 2>&1 | tail -6` 没有 `pipefail`，shell 只返回 `tail` 的 0；命令被后台化后也只能看到进行中的局部输出。两种形态下“测试通过”都没有真实 exit code 支撑。
+- 根因：把管道末端命令的退出码和后台交付的过程输出当成了 runner 的最终判定；`rtk` 层还可能叠加缓存 / 回放风险（见 LESSON-20260704-rtk-report-producing-test-gate）。
+- 修复：权威验证优先使用无管道原生命令并取得真实 exit code。确需管道时，在独立脚本或子 shell 内运行完整管道，紧接着保存 runner 状态，中间不得插入其他命令：Bash 用 `rc=${PIPESTATUS[0]}`，zsh 用 `rc=${pipestatus[1]}`；随后可打印该值，但必须以 `exit "$rc"` 返回它（函数中用 `return "$rc"`）。只执行 `echo` 会把整个命令的退出状态重新变为 0。后台 job 必须等待最终 summary，不得把中途快照当结论。
+- 预防：作为通过证据的命令必须保持完整退出码链路：优先无管道；需要管道时明确使用 `pipefail`，或按当前 shell 保存并返回 runner 状态。Bash 的 `PIPESTATUS[0]` 与 zsh 的 `pipestatus[1]` 不可互换；报告文件仍需核验本轮写入，后台化只用于等待。
+
+## LESSON-20260914-640-assertion-survives-line-wrapping: Text Assertions Must Survive Source Line Wrapping
+
+- 日期：2026-09-14
+- 标签：validation, tests, assertions, text-contract
+- 适用场景：对源码注释、文档或模板写 `assertIn` 类文本包含断言
+- 严重级别：medium
+- 来源：i-have-adhd opt-in 集成任务的契约测试首跑失败
+- 问题：断言 `"update BOTH the pinned commit and this hash"` 失败——该短语在源码注释里被换行打断为两行，文本包含永远不可能命中。
+- 根因：按“读起来通顺的整句”写断言，没有核对目标字符串在源文件中是单行存在；断行位置是作者可自由重排的非契约细节。
+- 修复：把断言改为同一物理行内的短串（`"pinned commit and this hash; changing only one"`）；结构化事实（常量形态、正则、解析结果）优先于自然语言整句。
+- 预防：写文本断言前先 grep 目标文件确认候选串单行存在；长句拆成各自单行独立的多个短断言；行宽重排不应能让契约测试变红。
+
+## LESSON-20260914-640-str-replace-tail-truncation-recovery: String-Replace Edits Can Truncate Long-Line Templates; Recover From Pre-Edit Byte Snapshot
+
+- 日期：2026-09-14
+- 标签：editing, truncation, templates, utf-8, git, recovery
+- 适用场景：用字符串替换类编辑工具修改含超长 CJK 行的大 Markdown 模板（如 `AGENTS.global.md`）
+- 严重级别：high
+- 来源：i-have-adhd 集成 review 修复：两次 `StrReplace` 命中正确，但文件从 569 行静默截断到 301 行，`## Skills 调用规则` 之后全部丢失；reviewer 复查才发现
+- 问题：`LESSON-20260831-paginated-edit-source-truncation` 描述的尾部截断第三次复现；替换命中且内容正确不构成完整性证据，定点测试也不覆盖模板尾部
+- 根因：编辑工具在含近千字符 UTF-8 长行的文件上写回不完整；未在每次编辑后立即核对 `wc -l` / `git diff --numstat`
+- 修复：优先从编辑前保存的逐字节文件快照恢复工作树文件，保留文件模式且不修改 Git 索引，再用锚定编辑重放本轮目标修改。只有已保存完整基线差异时才使用备用方案：在隔离目录重建记录的 base commit 文件，再应用相对该 commit 保存的完整 staged + unstaged patch；不得把仅有 `git diff -- <path>` 的补丁套到 HEAD 上。未追踪文件必须从文件快照恢复；缺少完整快照时停止，不猜测或丢弃原有工作。
+- 预防：编辑前用 `mktemp -d` 或 `tempfile.mkdtemp` 创建私有备份目录，保存文件当前全部字节及模式，确认成功后再编辑；符号链接应保存链接身份而非追读目标。备份覆盖编辑、校验和恢复全过程，仅在验证成功且不再需要恢复后清理，失败时保留并报告路径。可另外保存 `git diff --binary HEAD -- <path>` 及对应 base commit SHA，但该补丁不包含未追踪文件，不能替代原始快照。禁止覆盖固定 `/tmp/<name>.patch`。编辑后立即核对行数、删除范围与文件尾部，异常时只恢复工作树，保持用户原有暂存区不变。
+
+## LESSON-20260915-640-install-family-and-reporting: Bulk Install Identity And Recovery Reports
+
+- 日期：2026-09-15
+- 标签：onboard, caveman, identity, rollback, json, reporting
+- 适用场景：按一个核心文件识别并批量替换多个目录，或在外层 CLI 中组合安装结果
+- 严重级别：high
+- 来源：本仓库安装器审查与回归修复
+- 问题：核心文件属于已知旧版时，自定义 sibling 仍可能被批量覆盖；外层为保持单份 JSON 而丢弃子安装器 stdout，会同时丢弃失败恢复路径。
+- 根因：身份验证的范围小于实际替换范围；事务结果只存在于展示副作用中，组合调用方拿不到结构化恢复信息。
+- 修复：校验所有受管目录及 payload 指纹，未知或自定义 family 停止覆盖，staged source 与替换前目标都要检查；安装结果直接返回结构化数据，由独立展示函数渲染，外层成功和失败响应都保留 transaction 与恢复路径。
+- 预防：回归使用已知核心与自定义 sibling 的混合状态，以及外层 init/reset 的真实回滚失败路径；检查文件保留和可读取的备份，不用只回显 mock 消息的测试证明恢复契约。
+
+## LESSON-20260916-640-full-suite-timeout-window: Full-Suite Validation Windows Must Cover Duration Variance
+
+- 日期：2026-09-16
+- 标签：validation, pytest, timeout, full-suite
+- 适用场景：本仓全量 pytest（267 tests + 450 subtests）作为修改后验证证据，或出现验证超时
+- 严重级别：medium
+- 来源：impeccable stable 修复后全量复跑，首次在 300s 窗口超时（停在 47% 中段，非失败测试），充足窗口下 343s 全绿
+- 问题：按基线时长设定固定验证窗口会偶发超时；若据超时直接判定验证失败，属证据误用
+- 根因：本仓全量 suite 时长波动大（125s → 343s），波动原因未证实（疑环境争抢，无 tight loop 可复现），按单次基线时长设定窗口必然偶发不足
+- 修复：验证窗口按 ≥600s 设定或按文件拆分跑；任何 timeout 一律以充足窗口重跑取证后再下结论
+- 预防：全量验证先估算当前实际时长再上窗口上限；timeout 必须记录最后进度点与真实 runner 输出，不得作为 pass/fail 证据；时长波动原因未证实前不得归因为“环境问题”
+
+  <!-- lessons:640:end -->
+

@@ -54,3 +54,10 @@
 | bdd-e2e-reports | BDD 语言、Web UI 测试资产、Playwright / Maestro 报告、E2E 报告与测试状态解耦 | `docs/lessons/topics/bdd-e2e-reports.md` |
 
 完整索引见 `docs/lessons/index.md`。
+
+<!-- lessons:640:start -->
+- 作为通过证据的测试 / 验证命令优先无管道；若使用管道，按当前 shell 立即保存并返回 runner 状态（Bash `PIPESTATUS[0]` / zsh `pipestatus[1]`），仅打印退出码不够；后台 job 须等最终 summary。
+- 编辑长行模板前先在私有临时目录保存完整文件快照；备用 Git patch 必须相对记录的 base commit 包含 staged + unstaged 差异，并另存未追踪内容。截断恢复只改工作树，不动用户暂存区；不得用仅含 unstaged 的 patch 从 HEAD 重建。
+- 批量安装的身份校验必须覆盖整个替换集合，不能仅凭核心文件授权覆盖 sibling；外层组合安装结果时直接保留结构化 transaction 与恢复路径，不通过丢弃 stdout 维持 JSON 整洁。
+- 全量验证（267 tests + 450 subtests）时长波动大：窗口 ≥600s 或按文件拆分；timeout 一律充足窗口重跑取证并记录最后进度点，不得直接当 pass/fail 证据，原因未证实前不归因为“环境问题”。
+<!-- lessons:640:end -->
