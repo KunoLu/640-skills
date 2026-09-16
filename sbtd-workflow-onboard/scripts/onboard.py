@@ -22,9 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL_ENTRY_DIR = Path(__file__).absolute().parents[1]
+ONBOARD_SCRIPT_PATH = Path(__file__).absolute()
 CATALOG_PATH = SKILL_DIR / "catalog.json"
 EXTERNAL_STABLE_ROOT = SKILL_DIR / "assets" / "external-skills" / "stable"
 EXTERNAL_STABLE_MANIFEST = EXTERNAL_STABLE_ROOT / "MANIFEST.json"
@@ -32,11 +32,17 @@ EXTERNAL_STABLE_MANIFEST = EXTERNAL_STABLE_ROOT / "MANIFEST.json"
 
 def read_skill_frontmatter_name(skill_md: Path) -> str | None:
     try:
-        lines = skill_md.read_text(encoding="utf-8").splitlines()
-    except UnicodeDecodeError:
-        lines = skill_md.read_text(errors="ignore").splitlines()
+        content = skill_md.read_bytes()
     except OSError:
         return None
+    return skill_frontmatter_name_from_bytes(content)
+
+
+def skill_frontmatter_name_from_bytes(content: bytes) -> str | None:
+    try:
+        lines = content.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        lines = content.decode("utf-8", errors="ignore").splitlines()
 
     if not lines or lines[0].strip() != "---":
         return None
@@ -247,13 +253,57 @@ TEMURIN_RELEASES_API_TEMPLATE = (
     "https://api.github.com/repos/adoptium/temurin{major}-binaries/releases/latest"
 )
 MAESTRO_INSTALL_URL = "https://get.maestro.mobile.dev"
-CAVEMAN_INSTALL_SPEC = "JuliusBrussee/caveman"
-CAVEMAN_INSTALL_SH_URL = (
-    "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh"
+CAVEMAN_SOURCE_REPO = "https://github.com/JuliusBrussee/caveman.git"
+CAVEMAN_PINNED_REF = "v2.6.0"
+CAVEMAN_PINNED_REVISION = "b82c0ad42c2bedc1f2cd78e414dadfaffbaaeec3"
+CAVEMAN_CORE_SKILL_SHA256 = "c4d7354b4b063d54601fcdd5097a5b1713d1a1a2e386ac39efa438aa1ffef8ce"
+CAVEMAN_KNOWN_CORE_SKILL_SHA256 = {
+    "v2.6.0": CAVEMAN_CORE_SKILL_SHA256,
+    "v2.5.0": "fec5718a391dd9d8c89746d39e0cc0fa7aa5b50447669a15e44c3244167828c0",
+}
+CAVEMAN_KNOWN_FAMILY_SHA256 = {
+    # Reviewed at f9a039a93d249f3fcdb47a9e02544cd1ce37ba4a.
+    "v2.5.0": {
+        "cavecrew": "673643f8c42f06f0904eb975a56923583c2cd47ce4bf5a5ac1e5e49b8e4b2c66",
+        "caveman": "cfe5ad82c6b43421624d20dd30dc83100bb9516f889b0b2a8bb2cdd0dbd2a6be",
+        "caveman-commit": "68fce6cc3c50050e8ede6df99d4f478582d9b5952782c441acf2477b16d706db",
+        "caveman-compress": "3d618a06313658b3f108bf82c2f97591643e7fee83cb5990c30e5a044e9a0587",
+        "caveman-discover": "0a52f133aef4d3b81e9554cc43132bcf1accedb1154f6ac8e75df24f5f58f537",
+        "caveman-evidence-review": "fc5959727ef2f822d756c7e837abea51be91c32e0ca87758c1b77f68c98d5552",
+        "caveman-explore": "81c49c489e8d94ffb4cf47e05632235a88d125c4a05e6d2cf64bc0535aa87895",
+        "caveman-help": "63b42410962891586b7a5317391e39b8b0a90370144be4d7281e43c68b140947",
+        "caveman-learn": "9c1442a0b61945e1bc37240d9a494be4658768e56e61b76943fb0cbc18d805cd",
+        "caveman-manage": "e6ad788986936cbe49bdf12cf122fa966dd9e20c0ea7716397e0049d9f833d5a",
+        "caveman-optimize": "35dd36fa4b6fe800e9c1db8818b5e79ee18448372f33bd48ee593516d131a947",
+        "caveman-review": "d50a54e5b5a5bae7fcac1a4472cfd34ce47c9a8183d1357928eac4c2bd8322db",
+        "caveman-setup": "546eb697be5b87cec06117c4eb6d3e9eac55331cb860d2743c2d7b6f45c261b4",
+        "caveman-stats": "652eaffb8f6c635431ed238fa7ae2126e138ad7b1d26fae7390f8edc1af17bb0",
+    },
+    # Reviewed at CAVEMAN_PINNED_REVISION.
+    "v2.6.0": {
+        "cavecrew": "673643f8c42f06f0904eb975a56923583c2cd47ce4bf5a5ac1e5e49b8e4b2c66",
+        "caveman": "26b5e133a79a0251dad5e57acaa22ef601731fe59fb4637f9f150d7dfc250bad",
+        "caveman-commit": "68fce6cc3c50050e8ede6df99d4f478582d9b5952782c441acf2477b16d706db",
+        "caveman-compress": "3d618a06313658b3f108bf82c2f97591643e7fee83cb5990c30e5a044e9a0587",
+        "caveman-discover": "0a52f133aef4d3b81e9554cc43132bcf1accedb1154f6ac8e75df24f5f58f537",
+        "caveman-evidence-review": "fc5959727ef2f822d756c7e837abea51be91c32e0ca87758c1b77f68c98d5552",
+        "caveman-explore": "81c49c489e8d94ffb4cf47e05632235a88d125c4a05e6d2cf64bc0535aa87895",
+        "caveman-help": "63b42410962891586b7a5317391e39b8b0a90370144be4d7281e43c68b140947",
+        "caveman-learn": "9c1442a0b61945e1bc37240d9a494be4658768e56e61b76943fb0cbc18d805cd",
+        "caveman-manage": "e6ad788986936cbe49bdf12cf122fa966dd9e20c0ea7716397e0049d9f833d5a",
+        "caveman-optimize": "35dd36fa4b6fe800e9c1db8818b5e79ee18448372f33bd48ee593516d131a947",
+        "caveman-review": "d50a54e5b5a5bae7fcac1a4472cfd34ce47c9a8183d1357928eac4c2bd8322db",
+        "caveman-setup": "546eb697be5b87cec06117c4eb6d3e9eac55331cb860d2743c2d7b6f45c261b4",
+        "caveman-stats": "652eaffb8f6c635431ed238fa7ae2126e138ad7b1d26fae7390f8edc1af17bb0",
+    },
+}
+CAVEMAN_DRIFT_ADVICE = (
+    "Local caveman family payload is newer or customized; "
+    "review it before replacing the pinned baseline."
 )
-CAVEMAN_INSTALL_PS1_URL = (
-    "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.ps1"
-)
+# Monitoring the v* installer/skill tag line only reports drift. A baseline
+# bump requires a human review of SKILL.md and installer behavior, then updates
+# ref, revision, hashes, and tests together in one change.
 JAVA_MIN_MAJOR = 17
 BUNDLED_SKILL_LEGACY_NAMES = {
     "sbtd-workflow-onboard": ("kuno-workflow-onboard-skills",),
@@ -403,6 +453,7 @@ REFERENCED_SKILLS = (
     "impeccable",
     "shadcn",
     *PONYTAIL_REQUIRED_SKILLS,
+    "i-have-adhd",
 )
 INTERACTION_SKILLS = ("caveman",)
 if set(EXTERNAL_SKILL_SOURCES) != set(REFERENCED_SKILLS):
@@ -592,7 +643,10 @@ def resolve_project_roots(
 
 
 def run_command(
-    command: tuple[str, ...], timeout: int = 30, env: dict[str, str] | None = None
+    command: tuple[str, ...],
+    timeout: int = 30,
+    env: dict[str, str] | None = None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str] | None:
     try:
         return subprocess.run(
@@ -602,6 +656,7 @@ def run_command(
             text=True,
             timeout=timeout,
             env=env,
+            cwd=str(cwd) if cwd else None,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -716,7 +771,7 @@ def check_npm_runtime() -> dict[str, object]:
         },
         "nvm": nvm,
         "requiredBeforeCliChecks": True,
-        "advice": "CLI tool checks run only after npm is usable. If npm is missing, run `python scripts/onboard.py ensure-npm --yes` after user confirmation.",
+        "advice": f"CLI tool checks run only after npm is usable. If npm is missing, {shell_prefix()}run `{onboard_command('ensure-npm', '--yes')}` after user confirmation.",
     }
 
 
@@ -1614,14 +1669,73 @@ def skill_failure_reason(item: dict[str, object]) -> str:
     )
 
 
+def _powershell_quote(part: str) -> str:
+    """Quote one token for PowerShell, only when it actually needs quoting.
+
+    A conservative whitelist of characters passes through unquoted (same idea
+    as `shlex.join` on POSIX); anything else is wrapped in a single-quoted
+    literal, where `'` is the only character requiring escape (doubling) and
+    `$`, `%VAR%`, `!VAR!` stay literal. cmd.exe is not a supported target.
+    """
+    if re.fullmatch(r"[A-Za-z0-9_./:\\=-]+", part):
+        return part
+    return "'" + part.replace("'", "''") + "'"
+
+
+def shell_quote_path(path: Path) -> str:
+    """Quote one path for the shell that `onboard_command()` targets.
+
+    POSIX hosts get `shlex.quote`, so whitespace, `$`, backticks and glob
+    characters stay literal in sh / bash / zsh. Windows hosts get PowerShell
+    quoting via `_powershell_quote()`.
+    """
+    text = str(path)
+    if os.name == "nt":
+        return _powershell_quote(text)
+    return shlex.quote(text)
+
+
+def render_shell_command(argv: list[str]) -> str:
+    """Render argv as one runnable command for the host shell.
+
+    POSIX: `shlex.join`. Windows: tokens that need it get PowerShell single
+    quoting; the call operator `&` is only prefixed when the program name had
+    to be quoted, because a leading quoted string is otherwise evaluated as an
+    expression instead of being executed.
+    """
+    if os.name == "nt":
+        quoted = [_powershell_quote(part) for part in argv]
+        command = " ".join(quoted)
+        return ("& " + command) if quoted[0].startswith("'") else command
+    return shlex.join(argv)
+
+
+def onboard_command(*args: str) -> str:
+    """Build a cwd-independent `python <onboard.py> ...` command string.
+
+    Repair hints are read from arbitrary project directories, so the script
+    path must be the installed absolute path rather than `scripts/onboard.py`.
+    On Windows the rendered command is PowerShell-only; see `shell_prefix()`.
+    """
+    return render_shell_command(["python", str(ONBOARD_SCRIPT_PATH), *args])
+
+
+def shell_prefix() -> str:
+    """Human-readable lead-in naming the shell a hint is rendered for."""
+    return "Run in PowerShell: " if os.name == "nt" else ""
+
+
 def skill_next_step(item: dict[str, object]) -> str:
     name = str(item["name"])
     if name == "caveman":
-        return "After user confirmation, install the Codex skill with `python scripts/onboard.py install-caveman --yes`, then rerun `check`."
+        return (
+            f"{shell_prefix()}After user confirmation, install the Codex skill with "
+            f"`{onboard_command('install-caveman', '--yes')}`, then rerun `check`."
+        )
     if item.get("sourceRepo"):
         return (
-            "Install the required global Skill from the configured repository with "
-            f"`python scripts/onboard.py install-external-skills --skills {name} --scope global --source auto --yes`."
+            f"{shell_prefix()}Install the required global Skill from the configured repository with "
+            f"`{onboard_command('install-external-skills', '--skills', name, '--scope', 'global', '--source', 'auto', '--yes')}`."
         )
     return "Run `init` or `reset` to install the required global bundled Skills, then rerun `check`."
 
@@ -1711,7 +1825,7 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
                     str(spec["name"]),
                     "not-checked",
                     reason="npm is not usable yet, so CLI verification was skipped.",
-                    next_step="Run `python scripts/onboard.py ensure-npm --yes` after user confirmation, then rerun `check`.",
+                    next_step=f"{shell_prefix()}Run `{onboard_command('ensure-npm', '--yes')}` after user confirmation, then rerun `check`.",
                 )
             )
     for item in results["tools"]:
@@ -2020,6 +2134,15 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         check_skill(name, "interaction", global_skills_dir, None)
         for name in INTERACTION_SKILLS
     )
+    for item in skills:
+        if item["name"] == "caveman":
+            maintenance = caveman_maintenance_plan(global_skills_dir)
+            item["maintenanceState"] = maintenance["state"]
+            item["pinnedRef"] = maintenance["pinnedRef"]
+            item["maintenanceScope"] = maintenance["scope"]
+            item["maintenancePlannedAction"] = maintenance["plannedAction"]
+            if maintenance.get("blockedReason"):
+                item["maintenanceBlockedReason"] = maintenance["blockedReason"]
 
     cli_checks_skipped = not runtime["npm"]["installed"]
     tools = [] if cli_checks_skipped else [check_cli_tool(spec) for spec in CLI_TOOLS]
@@ -2199,7 +2322,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     )
     if not npm["installed"]:
         print(
-            "  action: ask the user to install npm via nvm, then run `python scripts/onboard.py ensure-npm --yes`."
+            f"  action: ask the user to install npm via nvm, then {shell_prefix()}run `{onboard_command('ensure-npm', '--yes')}`."
         )
 
     print("\nCLI tools:")
@@ -2243,6 +2366,15 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
                 print(f"  project target: {item['projectTarget']}")
             if item.get("sourceRepo"):
                 print(f"  source repo: {item['sourceRepo']}")
+        if item.get("maintenanceState"):
+            print(
+                f"  maintenance: {item['maintenanceState']}"
+                f" (pinned {item.get('pinnedRef')}, {item.get('maintenanceScope')})"
+            )
+            if item.get("maintenancePlannedAction"):
+                print(f"  planned action: {item['maintenancePlannedAction']}")
+            if item.get("maintenanceBlockedReason"):
+                print(f"  blocked: {item['maintenanceBlockedReason']}")
 
     print("\nManual checks:")
     for item in results["manualChecks"]:
@@ -3747,31 +3879,16 @@ def migrate_external_skills(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
-def install_external_skills(args: argparse.Namespace) -> int:
-    selected = parse_skill_names(args)
-    target_dir = resolve_install_skills_dir(args)
-    plan = external_install_plan(args, selected, target_dir)
-
-    if not args.yes:
-        print_external_install_plan(plan, args.json)
-        print(
-            "Refusing to install external skills without --yes. Confirm with the user, then rerun with --yes.",
-            file=sys.stderr,
-        )
-        return 2
-    if not args.json:
-        print_external_install_plan(plan, False)
-
-    results: list[dict[str, object]] = []
-    transaction: dict[str, object] = {
-        "status": "not-started",
-        "rolledBack": False,
-        "rollbackErrors": [],
-        "rollbackPath": None,
-    }
+def perform_external_skill_install(
+    args: argparse.Namespace,
+    selected: list[str],
+    target_dir: Path,
+    plan: dict[str, object],
+) -> dict[str, object]:
+    """Install one transaction and return its report without printing."""
     results, transaction = execute_external_skill_install(args, selected, target_dir)
-
-    payload = {
+    post_check = build_check_results(args)
+    return {
         "mode": "install-external-skills",
         "scope": args.scope,
         "requestedSource": args.source,
@@ -3782,36 +3899,59 @@ def install_external_skills(args: argparse.Namespace) -> int:
         "plan": plan,
         "results": results,
         "transaction": transaction,
+        "postCheck": post_check,
+        "installationReport": post_check["installationReport"],
     }
-    post_check = build_check_results(args)
-    payload["postCheck"] = post_check
-    payload["installationReport"] = post_check["installationReport"]
-    if args.json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-    else:
-        print("\nExternal skill install results")
-        for item in results:
-            print(f"- {item['name']}: {item['status']}")
-            if item.get("target"):
-                print(f"  target: {item['target']}")
-            if item.get("sourceUsed"):
-                print(f"  source: {item['sourceUsed']} ({item.get('sourceRevision')})")
-            if item.get("fallbackReason"):
-                print(f"  fallback: {item['fallbackReason']}")
-            if item.get("error"):
-                print(f"  note: {item['error']}")
-        print(f"Transaction: {transaction['status']}")
-        if transaction.get("rollbackPath"):
-            print(f"Rollback backup retained at: {transaction['rollbackPath']}")
-        rollback_errors = transaction.get("rollbackErrors")
-        if isinstance(rollback_errors, list):
-            for rollback_error in rollback_errors:
-                print(f"  rollback error: {rollback_error}")
-        print_installation_report(
-            cast(dict[str, object], payload["installationReport"]),
-            "Final installation report",
-        )
 
+
+def print_external_skill_install_result(
+    payload: dict[str, object], as_json: bool
+) -> None:
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    results = cast(list[dict[str, object]], payload["results"])
+    transaction = cast(dict[str, object], payload["transaction"])
+    print("\nExternal skill install results")
+    for item in results:
+        print(f"- {item['name']}: {item['status']}")
+        if item.get("target"):
+            print(f"  target: {item['target']}")
+        if item.get("sourceUsed"):
+            print(f"  source: {item['sourceUsed']} ({item.get('sourceRevision')})")
+        if item.get("fallbackReason"):
+            print(f"  fallback: {item['fallbackReason']}")
+        if item.get("error"):
+            print(f"  note: {item['error']}")
+    print(f"Transaction: {transaction['status']}")
+    if transaction.get("rollbackPath"):
+        print(f"Rollback backup retained at: {transaction['rollbackPath']}")
+    rollback_errors = transaction.get("rollbackErrors")
+    if isinstance(rollback_errors, list):
+        for rollback_error in rollback_errors:
+            print(f"  rollback error: {rollback_error}")
+    print_installation_report(
+        cast(dict[str, object], payload["installationReport"]),
+        "Final installation report",
+    )
+
+
+def install_external_skills(args: argparse.Namespace) -> int:
+    selected = parse_skill_names(args)
+    target_dir = resolve_install_skills_dir(args)
+    plan = external_install_plan(args, selected, target_dir)
+    if not args.yes:
+        print_external_install_plan(plan, args.json)
+        print(
+            "Refusing to install external skills without --yes. Confirm with the user, then rerun with --yes.",
+            file=sys.stderr,
+        )
+        return 2
+    if not args.json:
+        print_external_install_plan(plan, False)
+    payload = perform_external_skill_install(args, selected, target_dir, plan)
+    print_external_skill_install_result(payload, args.json)
+    transaction = cast(dict[str, object], payload["transaction"])
     return 1 if transaction["status"] != "committed" else 0
 
 
@@ -4148,21 +4288,23 @@ def missing_required_external_skills(args: argparse.Namespace) -> list[str]:
 
 def install_required_external_skills(
     args: argparse.Namespace, *, overwrite: bool = False
-) -> int:
+) -> dict[str, object] | None:
     if overwrite:
         selected = list(EXTERNAL_SKILL_SOURCES)
-        print(
-            "Reset will overwrite all required global external Skills: "
-            + ", ".join(selected)
-        )
+        if not args.json:
+            print(
+                "Reset will overwrite all required global external Skills: "
+                + ", ".join(selected)
+            )
     else:
         selected = missing_required_external_skills(args)
         if not selected:
-            return 0
-        print(
-            "Required global external Skills are missing and will be installed: "
-            + ", ".join(selected)
-        )
+            return None
+        if not args.json:
+            print(
+                "Required global external Skills are missing and will be installed: "
+                + ", ".join(selected)
+            )
     install_args = argparse.Namespace(
         all=overwrite,
         skills=None if overwrite else ",".join(selected),
@@ -4171,12 +4313,18 @@ def install_required_external_skills(
         global_skills_dir=getattr(args, "global_skills_dir", None),
         replace=False,
         yes=True,
-        json=False,
+        json=args.json,
         expand_dependencies=overwrite,
     )
-
-    return install_external_skills(install_args)
-
+    selected = parse_skill_names(install_args)
+    target_dir = resolve_install_skills_dir(install_args)
+    plan = external_install_plan(install_args, selected, target_dir)
+    if not args.json:
+        print_external_install_plan(plan, False)
+    payload = perform_external_skill_install(install_args, selected, target_dir, plan)
+    if not args.json:
+        print_external_skill_install_result(payload, False)
+    return payload
 
 
 def default_shell_profile() -> Path:
@@ -4356,7 +4504,7 @@ def install_agent_cli(args: argparse.Namespace) -> int:
     if not runtime["npm"]["installed"]:
         payload["status"] = "npm-required"
         payload["advice"] = (
-            "Install npm first with `python scripts/onboard.py ensure-npm --yes` after user confirmation, "
+            f"{shell_prefix()}Install npm first with `{onboard_command('ensure-npm', '--yes')}` after user confirmation, "
             "then rerun install-agent-cli."
         )
         if args.json:
@@ -4549,131 +4697,444 @@ def install_rtk(args: argparse.Namespace) -> int:
     return 0 if after["installed"] else 1
 
 
-def caveman_platform_install_command() -> tuple[
-    str, tuple[str, ...] | None, str | None
-]:
-    system = platform.system() or sys.platform
-    if system == "Windows":
-        display = f"irm {CAVEMAN_INSTALL_PS1_URL} | iex"
-        powershell = shutil.which("pwsh") or shutil.which("powershell")
-        if not powershell:
-            return (
-                display,
-                None,
-                "PowerShell is required to run the caveman Windows installer.",
-            )
-        return (
-            display,
-            (
-                powershell,
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                display,
-            ),
-            None,
-        )
-
-    if system in {"Darwin", "Linux"}:
-        display = f"curl -fsSL {CAVEMAN_INSTALL_SH_URL} | bash"
-        if not shutil.which("curl"):
-            return (
-                display,
-                None,
-                "curl is required to download the caveman macOS/Linux installer.",
-            )
-        bash = shutil.which("bash")
-        if not bash:
-            return (
-                display,
-                None,
-                "bash is required to run the caveman macOS/Linux installer.",
-            )
-        return display, (bash, "-lc", display), None
-
+def is_caveman_family_name(name: str) -> bool:
+    """Narrow matcher: entries Onboard may back up or replace."""
     return (
-        f"curl -fsSL {CAVEMAN_INSTALL_SH_URL} | bash",
-        None,
-        f"Automatic caveman installation is not configured for platform: {system}.",
+        name == "caveman"
+        or name.startswith("caveman-")
+        or name == "cavecrew"
+        or name.startswith("cavecrew-")
     )
+
+
+def is_caveman_family_prefix_name(name: str) -> bool:
+    """Broad, detection-only matcher for the fail-closed symlink guard.
+
+    Anything named `caveman*` / `cavecrew*` (for example `caveman.local`)
+    blocks maintenance when symlinked, but is never selected for mutation.
+    """
+    return name.startswith("caveman") or name.startswith("cavecrew")
+
+
+def caveman_family_dirs(skills_dir: Path) -> list[Path]:
+    if not skills_dir.is_dir():
+        return []
+    return sorted(
+        (
+            entry
+            for entry in skills_dir.iterdir()
+            if (entry.is_dir() or entry.is_symlink() or entry.is_file())
+            and is_caveman_family_name(entry.name)
+        ),
+        key=lambda entry: entry.name,
+    )
+
+
+def caveman_family_fingerprints(skills_dir: Path) -> dict[str, str | None]:
+    fingerprints: dict[str, str | None] = {}
+    for entry in caveman_family_dirs(skills_dir):
+        try:
+            validate_external_skill_source(entry.name, entry)
+        except RuntimeError:
+            fingerprints[entry.name] = None
+        else:
+            fingerprints[entry.name] = external_tree_sha256(entry)
+    return fingerprints
+
+
+def copy_caveman_entry(source: Path, destination: Path) -> None:
+    if source.is_symlink():
+        destination.symlink_to(source.readlink())
+    elif source.is_dir():
+        shutil.copytree(source, destination, symlinks=True)
+    else:
+        shutil.copy2(source, destination)
+
+
+def remove_caveman_entry(target: Path) -> None:
+    if target.is_symlink() or not target.is_dir():
+        target.unlink()
+    else:
+        shutil.rmtree(target)
+
+
+def caveman_payload_symlink_error(global_skills_dir: Path) -> str | None:
+    """Return a fail-closed reason when any caveman family payload is a symlink.
+
+    Covers the top-level `caveman` directory, its core `caveman/SKILL.md`
+    (including dangling links), and every sibling `caveman*` / `cavecrew*`
+    entry. Symlinked payloads are reported and never replaced.
+    """
+    skill_dir = global_skills_dir / "caveman"
+    if skill_dir.is_symlink():
+        return "Refusing to replace a symlinked caveman skill directory"
+    if (skill_dir / "SKILL.md").is_symlink():
+        return "Refusing to replace a symlinked caveman/SKILL.md core payload"
+    if caveman_family_has_sibling_symlink(global_skills_dir):
+        return "Refusing to touch a caveman family that contains a symlinked sibling entry"
+    return None
+
+
+def classify_caveman_state(global_skills_dir: Path) -> str:
+    skill_dir = global_skills_dir / "caveman"
+    skill_md = skill_dir / "SKILL.md"
+    if caveman_payload_symlink_error(global_skills_dir) is not None:
+        return "abnormal"
+    try:
+        fingerprints = caveman_family_fingerprints(global_skills_dir)
+    except (OSError, RuntimeError):
+        return "unknown-drift"
+    companions = {
+        name: digest for name, digest in fingerprints.items() if name != "caveman"
+    }
+    if companions and not any(
+        companions
+        == {name: digest for name, digest in family.items() if name != "caveman"}
+        for family in CAVEMAN_KNOWN_FAMILY_SHA256.values()
+    ):
+        return "unknown-drift"
+    if not skill_dir.exists():
+        # Partial family (surviving companions without the core) is drift:
+        # only a fully absent family is an ordinary missing install.
+        return "missing" if not fingerprints else "unknown-drift"
+    if not skill_md.is_file():
+        return "abnormal"
+    try:
+        core_bytes = skill_md.read_bytes()
+    except OSError:
+        return "abnormal"
+    if skill_frontmatter_name_from_bytes(core_bytes) != "caveman":
+        return "abnormal"
+    digest = hashlib.sha256(core_bytes).hexdigest()
+    for ref, core_digest in CAVEMAN_KNOWN_CORE_SKILL_SHA256.items():
+        if digest == core_digest and fingerprints == CAVEMAN_KNOWN_FAMILY_SHA256.get(
+            ref
+        ):
+            return "current" if ref == CAVEMAN_PINNED_REF else "outdated"
+    return "unknown-drift"
+
+
+def caveman_maintenance_plan(global_skills_dir: Path) -> dict[str, object]:
+    state = classify_caveman_state(global_skills_dir)
+    symlink_error = caveman_payload_symlink_error(global_skills_dir)
+    blocked_reason = symlink_error or caveman_family_nested_symlink_reason(
+        global_skills_dir
+    )
+    if state == "abnormal" and blocked_reason is not None:
+        action = "blocked"
+    else:
+        action = {
+            "outdated": "upgrade",
+            "abnormal": "repair",
+        }.get(state, "none")
+    plan: dict[str, object] = {
+        "state": state,
+        "plannedAction": action,
+        "pinnedRef": CAVEMAN_PINNED_REF,
+        "pinnedRevision": CAVEMAN_PINNED_REVISION,
+        "scope": "workflow-skill-payload-only",
+    }
+    if blocked_reason is not None and action == "blocked":
+        plan["blockedReason"] = blocked_reason
+    return plan
+
+
+def restore_caveman_family(global_skills_dir: Path, backup_dir: Path | None) -> str | None:
+    try:
+        for target in caveman_family_dirs(global_skills_dir):
+            remove_caveman_entry(target)
+        if backup_dir:
+            for source in backup_dir.iterdir():
+                copy_caveman_entry(source, global_skills_dir / source.name)
+    except (OSError, shutil.Error) as exc:
+        return str(exc)
+    return None
+
+def caveman_family_has_sibling_symlink(global_skills_dir: Path) -> bool:
+    if not global_skills_dir.is_dir():
+        return False
+    try:
+        return any(
+            entry.is_symlink()
+            for entry in global_skills_dir.iterdir()
+            if entry.name != "caveman" and is_caveman_family_prefix_name(entry.name)
+        )
+    except OSError:
+        # Cannot prove there is no symlink -> fail closed.
+        return True
+
+def caveman_family_nested_symlink_reason(global_skills_dir: Path) -> str | None:
+    """Return a fail-closed reason when a family payload nests a symlink.
+
+    Recursively covers every path inside the broad ``caveman*`` / ``cavecrew*``
+    prefix entries; a valid core with a nested link already lands in
+    ``unknown-drift`` through the fingerprint scan, so this guard exists to
+    stop an *abnormal* core containing a nested link from being repaired.
+    Top-level links themselves are reported by
+    ``caveman_payload_symlink_error`` and skipped here.
+    """
+    if not global_skills_dir.is_dir():
+        return None
+    try:
+        entries = sorted(global_skills_dir.iterdir())
+    except OSError:
+        # Cannot prove there is no nested symlink -> fail closed.
+        return "Refusing to repair a caveman payload whose entries cannot be read"
+    for entry in entries:
+        if not is_caveman_family_prefix_name(entry.name):
+            continue
+        if entry.is_symlink() or not entry.is_dir():
+            continue
+        walk_errors: list[OSError] = []
+        try:
+            has_nested = any(
+                os.path.islink(os.path.join(dirpath, name))
+                for dirpath, dirnames, filenames in os.walk(
+                    entry, followlinks=False, onerror=walk_errors.append
+                )
+                for name in (*dirnames, *filenames)
+            )
+        except OSError:
+            has_nested = True  # Cannot prove clean -> fail closed.
+        if walk_errors:
+            # Unreadable descendants can hide a symlink -> fail closed.
+            has_nested = True
+        if has_nested:
+            return (
+                "Refusing to repair a caveman payload that contains a nested "
+                f"symlink under {entry.name}"
+            )
+    return None
+
+
+
+def install_caveman_payload(global_skills_dir: Path) -> dict[str, object]:
+    result = caveman_maintenance_plan(global_skills_dir)
+    result["status"] = "pending"
+    result["sourceRepo"] = CAVEMAN_SOURCE_REPO
+    result["familyScope"] = "caveman, caveman-*, cavecrew, cavecrew-* only"
+
+    symlink_error = caveman_payload_symlink_error(global_skills_dir)
+    if symlink_error is not None:
+        result["status"] = "failed"
+        result["error"] = symlink_error
+        return result
+    if result["state"] == "unknown-drift":
+        result["status"] = "attention-required"
+        result["advice"] = CAVEMAN_DRIFT_ADVICE
+        return result
+    if result["plannedAction"] == "blocked":
+        result["status"] = "failed"
+        result["error"] = str(
+            result.get(
+                "blockedReason",
+                "Refusing to replace a caveman payload containing a symlink",
+            )
+        )
+        return result
+
+
+    try:
+        return _install_caveman_payload_staged(global_skills_dir, result)
+    except (OSError, shutil.Error) as exc:
+        # Staging-directory creation/cleanup, staged reads and the source scan
+        # sit outside the transactional backup/replace block; keep the
+        # structured JSON contract instead of surfacing a traceback.
+        result["status"] = "failed"
+        result["error"] = f"Caveman staging failed: {exc}"
+        return result
+
+
+def _install_caveman_payload_staged(
+    global_skills_dir: Path, result: dict[str, object]
+) -> dict[str, object]:
+    with tempfile.TemporaryDirectory(prefix="sbtd-caveman-stage-") as temp_dir:
+        stage_root = Path(temp_dir)
+        repository = stage_root / "repository"
+        cloned, clone_error = clone_repo_at_revision(
+            CAVEMAN_SOURCE_REPO, CAVEMAN_PINNED_REVISION, repository
+        )
+        if not cloned:
+            result["status"] = "blocked"
+            result["error"] = clone_error
+            return result
+
+        source_skills_dir = repository / "skills"
+        source_core = source_skills_dir / "caveman" / "SKILL.md"
+        if (
+            not source_core.is_file()
+            or read_skill_frontmatter_name(source_core) != "caveman"
+        ):
+            result["status"] = "blocked"
+            result["error"] = "Pinned caveman source has no valid caveman/SKILL.md"
+            return result
+        if (
+            hashlib.sha256(source_core.read_bytes()).hexdigest()
+            != CAVEMAN_CORE_SKILL_SHA256
+        ):
+            result["status"] = "blocked"
+            result["error"] = (
+                "Pinned caveman source does not match the reviewed core hash"
+            )
+            return result
+        source_family = caveman_family_dirs(source_skills_dir)
+        if (
+            caveman_family_fingerprints(source_skills_dir)
+            != CAVEMAN_KNOWN_FAMILY_SHA256[CAVEMAN_PINNED_REF]
+        ):
+            result["status"] = "blocked"
+            result["error"] = (
+                "Pinned caveman family does not match the reviewed payload"
+            )
+            return result
+
+        try:
+            global_skills_dir.parent.mkdir(parents=True, exist_ok=True)
+            global_skills_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            result["status"] = "failed"
+            result["error"] = f"Unable to create global skills directory: {exc}"
+            return result
+
+        target_family = caveman_family_dirs(global_skills_dir)
+        symlink_error = caveman_payload_symlink_error(global_skills_dir)
+        if symlink_error is not None or any(
+            target.is_symlink() for target in target_family
+        ):
+            result["status"] = "failed"
+            result["error"] = (
+                symlink_error
+                or "Refusing to replace a symlinked caveman skill directory"
+            )
+            return result
+        latest_plan = caveman_maintenance_plan(global_skills_dir)
+        if latest_plan["state"] == "unknown-drift":
+            result.update(latest_plan)
+            result["status"] = "attention-required"
+            result["advice"] = CAVEMAN_DRIFT_ADVICE
+            return result
+        if latest_plan["plannedAction"] == "blocked":
+            result.update(latest_plan)
+            result["status"] = "failed"
+            result["error"] = str(
+                latest_plan.get(
+                    "blockedReason",
+                    "Refusing to replace a caveman payload containing a symlink",
+                )
+            )
+            return result
+
+        # Back up whenever a family payload exists at mutation time. Anything
+        # computed before the clone cannot see a family that appeared during
+        # staging, so the recomputed `target_family` is the only safe
+        # decision point.
+        backup_dir: Path | None = None
+        if target_family:
+            try:
+                timestamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
+                backup_dir = Path(
+                    tempfile.mkdtemp(
+                        prefix=f"{global_skills_dir.name}.caveman.bak-{timestamp}-",
+                        dir=global_skills_dir.parent,
+                    )
+                )
+                for target in target_family:
+                    copy_caveman_entry(target, backup_dir / target.name)
+            except (OSError, shutil.Error) as exc:
+                result["status"] = "failed"
+                result["error"] = (
+                    f"Unable to back up caveman workflow skill payload: {exc}"
+                )
+                if backup_dir:
+                    result["backup"] = str(backup_dir)
+                return result
+
+        mutation_started = False
+        try:
+            mutation_started = True
+            for target in target_family:
+                remove_caveman_entry(target)
+            for source in source_family:
+                copy_caveman_entry(source, global_skills_dir / source.name)
+        except (OSError, shutil.Error) as exc:
+            restore_error = (
+                restore_caveman_family(global_skills_dir, backup_dir)
+                if mutation_started
+                else None
+            )
+            result["status"] = "failed"
+            result["error"] = f"Unable to sync caveman workflow skill payload: {exc}"
+            if restore_error:
+                result["restoreError"] = restore_error
+            if backup_dir:
+                result["backup"] = str(backup_dir)
+            return result
+
+        after_state = classify_caveman_state(global_skills_dir)
+        if after_state != "current":
+            restore_error = (
+                restore_caveman_family(global_skills_dir, backup_dir)
+                if mutation_started
+                else None
+            )
+            result["status"] = "failed"
+            result["error"] = "Caveman workflow skill payload did not verify after sync"
+            result["afterState"] = after_state
+            if restore_error:
+                result["restoreError"] = restore_error
+            if backup_dir:
+                result["backup"] = str(backup_dir)
+            return result
+
+        result["status"] = "success"
+        result["afterState"] = after_state
+        result["familySkills"] = [source.name for source in source_family]
+        if backup_dir:
+            result["backup"] = str(backup_dir)
+        return result
+
+
+def maintain_caveman_payload(global_skills_dir: Path) -> dict[str, object]:
+    plan = caveman_maintenance_plan(global_skills_dir)
+    if plan["state"] == "unknown-drift":
+        return {
+            **plan,
+            "status": "attention-required",
+            "advice": CAVEMAN_DRIFT_ADVICE,
+        }
+    if plan["plannedAction"] == "blocked":
+        return {
+            **plan,
+            "status": "failed",
+            "error": plan.get(
+                "blockedReason", "Refusing to replace a symlinked caveman payload"
+            ),
+        }
+    if plan["plannedAction"] == "none":
+        return {**plan, "status": "skipped"}
+    return install_caveman_payload(global_skills_dir)
+
+
+def print_caveman_maintenance_details(maintenance: dict[str, object]) -> None:
+    for label, value in (
+        ("reason", maintenance.get("error") or maintenance.get("blockedReason")),
+        ("backup", maintenance.get("backup")),
+        ("restore error", maintenance.get("restoreError")),
+        ("advice", maintenance.get("advice")),
+    ):
+        if value:
+            print(f"- {label}: {value}")
 
 
 def install_caveman(args: argparse.Namespace) -> int:
-    global_skills_dir = resolve_global_skills_dir(args.global_skills_dir)[0]
-    before = check_skill("caveman", "interaction", global_skills_dir, None)
-    display_command, install_command, unavailable_reason = (
-        caveman_platform_install_command()
-    )
-    payload: dict[str, object] = {
-        "mode": "install-caveman",
-        "agent": args.agent,
-        "platform": platform.system() or sys.platform,
-        "before": before,
-        "installSpec": CAVEMAN_INSTALL_SPEC,
-        "installCommand": display_command,
-        "installCommands": {
-            "macosLinux": f"curl -fsSL {CAVEMAN_INSTALL_SH_URL} | bash",
-            "windows": f"irm {CAVEMAN_INSTALL_PS1_URL} | iex",
-        },
-        "globalSkillsDir": str(global_skills_dir),
-    }
-
-    if before["installed"]:
-        payload["status"] = "already-installed"
-        if args.json:
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print("caveman is already installed as a global interaction skill.")
-            for location in before["locations"]:
-                print(f"{location['scope']}: {location['path']}")
-        return 0
-
-    if unavailable_reason or install_command is None:
-        payload["status"] = "manual-required"
-        payload["advice"] = (
-            unavailable_reason
-            or "Run the platform-specific caveman installer manually, then rerun check."
-        )
-        if args.json:
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print(
-                "caveman is missing, but automatic installation is not available on this platform."
-            )
-            print(payload["advice"])
-            print(f"Suggested command: {display_command}")
-        return 1
-
-    if not args.yes:
-        payload["status"] = "needs-confirmation"
-        payload["actions"] = [
-            "install the caveman Codex skill into the user-level Agent/Codex skill environment",
-            f"run `{display_command}`",
-            "rerun `python scripts/onboard.py check` and confirm `caveman/SKILL.md` is visible",
-        ]
-        if args.json:
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print("caveman is missing.")
-            print(
-                "caveman compresses Agent replies for lower token use; it does not change code, tests, validation, or workflow decisions."
-            )
-            for action in payload["actions"]:
-                print(f"- {action}")
-            print("Rerun with --yes after user confirmation.")
-        return 2
-
-    install_env = os.environ.copy()
-    install_env["AGENT_SKILLS_DIR"] = str(global_skills_dir)
-    install_result = run_command(install_command, timeout=600, env=install_env)
-    payload["installOutput"] = command_excerpt(install_result)
-    if not install_result or install_result.returncode != 0:
-        payload["status"] = "failed"
-        payload["error"] = (
-            command_excerpt(install_result)
-            or "Unable to run the caveman skill installer."
-        )
+    try:
+        global_skills_dir = resolve_global_skills_dir(args.global_skills_dir)[0]
+    except (OSError, RuntimeError) as exc:
+        payload = {
+            "mode": "install-caveman",
+            "status": "failed",
+            "error": f"Unable to resolve the global skills directory: {exc}",
+        }
         print(
             json.dumps(payload, indent=2, ensure_ascii=False)
             if args.json
@@ -4681,27 +5142,74 @@ def install_caveman(args: argparse.Namespace) -> int:
         )
         return 1
 
+    before = check_skill("caveman", "interaction", global_skills_dir, None)
+    maintenance = caveman_maintenance_plan(global_skills_dir)
+    payload: dict[str, object] = {
+        "mode": "install-caveman",
+        "agent": args.agent,
+        "platform": platform.system() or sys.platform,
+        "before": before,
+        "maintenance": maintenance,
+        "globalSkillsDir": str(global_skills_dir),
+        "scope": "workflow-skill-payload-only",
+    }
+    if maintenance["state"] == "current":
+        payload["status"] = "already-installed"
+        print(
+            json.dumps(payload, indent=2, ensure_ascii=False)
+            if args.json
+            else "caveman workflow skill payload is already current."
+        )
+        return 0
+    if not args.yes:
+        payload["status"] = "needs-confirmation"
+        payload["actions"] = [
+            f"stage pinned caveman {CAVEMAN_PINNED_REF} skill payload",
+            f"sync caveman, caveman-*, cavecrew, cavecrew-* into {global_skills_dir}",
+            "preserve plugins, hooks, statusline, and extensions unchanged",
+        ]
+        print(
+            json.dumps(payload, indent=2, ensure_ascii=False)
+            if args.json
+            else "caveman workflow skill payload needs confirmation; rerun with --yes."
+        )
+        if not args.json:
+            print_caveman_maintenance_details(maintenance)
+        return 2
+
+    if maintenance["state"] == "unknown-drift":
+        payload["status"] = "attention-required"
+        payload["advice"] = CAVEMAN_DRIFT_ADVICE
+        print(
+            json.dumps(payload, indent=2, ensure_ascii=False)
+            if args.json
+            else payload["advice"]
+        )
+        return 2
+    try:
+        result = install_caveman_payload(global_skills_dir)
+    except Exception as exc:  # noqa: BLE001 - preserve the install JSON/text failure contract.
+        result = {
+            **maintenance,
+            "status": "failed",
+            "error": str(exc),
+        }
+    payload["maintenance"] = result
     after = check_skill("caveman", "interaction", global_skills_dir, None)
     payload["after"] = after
-    payload["status"] = "installed" if after["installed"] else "failed"
-    if args.json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-    else:
-        print(f"install-caveman status: {payload['status']}")
-        if after["installed"]:
-            for location in after["locations"]:
-                print(f"{location['scope']}: {location['path']}")
-            print(
-                "Verification passed: caveman/SKILL.md is visible in the checked global skills directory."
-            )
-        else:
-            print(
-                "The caveman installer completed, but `caveman/SKILL.md` was not found in the checked global skills directory."
-            )
-            print(
-                "If you use a custom skills root, set AGENT_SKILLS_DIR or rerun check with --global-skills-dir."
-            )
-    return 0 if after["installed"] else 1
+    payload["status"] = (
+        "installed"
+        if result["status"] == "success" and after["installed"]
+        else result["status"]
+    )
+    print(
+        json.dumps(payload, indent=2, ensure_ascii=False)
+        if args.json
+        else f"install-caveman status: {payload['status']}"
+    )
+    if not args.json:
+        print_caveman_maintenance_details(result)
+    return 0 if payload["status"] == "installed" else 1
 
 
 def command_excerpt(
@@ -4975,7 +5483,7 @@ def install_maestro(args: argparse.Namespace) -> int:
         payload["status"] = "java-required"
         payload["advice"] = (
             f"Install Java {JAVA_MIN_MAJOR}+ first. Default command: "
-            "`python scripts/onboard.py install-java --major 21 --yes` after user confirmation."
+            f"{shell_prefix()}`{onboard_command('install-java', '--major', '21', '--yes')}` after user confirmation."
         )
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -5474,7 +5982,7 @@ def install_playwright_cli(args: argparse.Namespace) -> int:
     if not runtime["npm"]["installed"]:
         payload["status"] = "npm-required"
         payload["advice"] = (
-            "Install npm first, for example with `python scripts/onboard.py ensure-npm --yes` after user confirmation."
+            f"{shell_prefix()}Install npm first, for example with `{onboard_command('ensure-npm', '--yes')}` after user confirmation."
         )
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -5832,6 +6340,8 @@ def build_plan_payload(
         payload["externalMigration"] = external_migration_plan
     if trellis_init_plan:
         payload["trellisInit"] = trellis_init_plan
+    if global_skills_dir and mode in {"plan", "init", "reset"}:
+        payload["cavemanMaintenance"] = caveman_maintenance_plan(global_skills_dir)
     return payload
 
 
@@ -5849,6 +6359,15 @@ def print_plan(payload: dict[str, object]) -> None:
                 f", reset={item['plannedActionOnReset']}"
             )
         print(f"- {item['label']}: {item['target']} ({exists})")
+    caveman_maintenance = payload.get("cavemanMaintenance")
+    if caveman_maintenance:
+        print("\nCaveman maintenance:")
+        print(
+            f"- state: {caveman_maintenance['state']}, "
+            f"action: {caveman_maintenance['plannedAction']}, "
+            f"pinned: {caveman_maintenance['pinnedRef']}"
+        )
+        print_caveman_maintenance_details(cast(dict[str, object], caveman_maintenance))
 
     bundled_migration_plan = payload.get("bundledMigration")
     if bundled_migration_plan:
@@ -6065,6 +6584,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         global_skills_dir_source,
         build_trellis_init_plan(mode, args),
     )
+    if mode in {"init", "reset"}:
+        plan_payload["requiredExternalInstall"] = None
     plan_json_emitted = False
 
     def emit_plan_json() -> None:
@@ -6123,11 +6644,16 @@ def run(mode: str, args: argparse.Namespace) -> int:
             )
             emit_plan_json()
             return 4
-        external_install_status = install_required_external_skills(
+        external_install = install_required_external_skills(
             args, overwrite=mode == "reset"
         )
+        plan_payload["requiredExternalInstall"] = external_install
 
-        if external_install_status != 0:
+        if (
+            external_install is not None
+            and cast(dict[str, object], external_install["transaction"])["status"]
+            != "committed"
+        ):
             print(
                 "Required global external Skill installation failed.", file=sys.stderr
             )
@@ -6250,6 +6776,32 @@ def run(mode: str, args: argparse.Namespace) -> int:
         emit_plan_json()
         return 4
 
+    caveman_maintenance: dict[str, object] = {
+        "status": "skipped",
+        "scope": "workflow-skill-payload-only",
+    }
+    if mode in {"init", "reset"}:
+        try:
+            caveman_maintenance = maintain_caveman_payload(global_skills_dir)
+        except Exception as exc:  # noqa: BLE001 - optional payload maintenance must not abort init/reset.
+            caveman_maintenance = {
+                "state": "abnormal",
+                "plannedAction": "repair",
+                "pinnedRef": CAVEMAN_PINNED_REF,
+                "pinnedRevision": CAVEMAN_PINNED_REVISION,
+                "scope": "workflow-skill-payload-only",
+                "status": "failed",
+                "error": str(exc),
+            }
+        if not args.json:
+            print("\nCaveman maintenance:")
+            print(
+                f"- state: {caveman_maintenance['state']}, "
+                f"action: {caveman_maintenance['plannedAction']}, "
+                f"status: {caveman_maintenance['status']}"
+            )
+            print_caveman_maintenance_details(caveman_maintenance)
+
     trellis_report = run_trellis_project_setup(mode, args)
     if args.json:
         # One run, one root object. The plan was held back above so it can be
@@ -6270,6 +6822,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                         for target, backup in backups
                     ],
                     "trellisProjectSetup": trellis_report,
+                    "cavemanMaintenance": caveman_maintenance,
                     "unverifiedChecks": list(UNVERIFIED_CHECKS),
                 },
                 indent=2,
