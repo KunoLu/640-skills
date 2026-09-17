@@ -487,7 +487,7 @@ done 任务不生成未完成恢复提示；不预读所有交接历史，不扫
 | 用户明确要求 grill | 进入澄清，不重复询问是否使用 |
 | 用户拒绝正式 grill | 根据已明确需求继续；必要的关键问题仍要问，不把拒绝方法解释为可以猜业务要求 |
 
-不得编造“预计 N 轮”或时间估计。完整 grill 后三种模式均保留独立的 DDD 边界审核，不能把访谈内 domain-modeling 当替代：strict 遵守完整 reviewer gate；default/lite 以可用方法完成同类独立检查，准确说明没有调用缺失 Skill，不因安装包缺失机械停工；真实领域歧义未消除时仍不得盲目执行相关危险／不可逆决定。
+不得编造“预计 N 轮”或时间估计。完整 grill-with-docs 后三种模式都必须调用 book-ddd-distilled-modeling，输出独立可见的 DDD Boundary Review，按该 Skill 的状态及修正回路完成；confirmed 前不进入需求确认或设计，needs-clarification 返回澄清，Skill 不可用／不可读取或必要证据缺失均 blocked。访谈内 domain-modeling 或非正式替代检查不能满足此后置门禁。未触发完整grill后置门禁的default/lite领域分析仍可按需选择可用方法；该门禁不取消无关可选工具的正常降级，未决领域歧义仍阻断相关决定。此边界收紧见实施调整记录 D-IMP-06。
 
 本会话没有完整执行 grill-with-docs；通过用户逐轮提问和项目事实完成澄清，最终由用户要求统一落地。不得把此记录写成“已完整调用 grill”。
 
@@ -1134,7 +1134,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-06 | AC-11；完整候选移入正式目录并命名SKILL.md，与两旧entry/源目录退役、新sbtd-task entry及引用迁移同一变更；隔离真实安装目标正确，14 bundled／19 external，无候选副本 | AFK | planned | — |
 | P0-08 | P0 | 项目 ignore 的保留／删除／四条新增规则 | P0-03、P0-06 | AC-12/26；default 本地忽略、共享资产可追踪，规则根锚定且不误伤业务子目录 | AFK | planned | — |
 | P0-09 | P0 | 源仓库根七行 ignore、维护说明与精确测试 | R-09 | AC-12/16；保护 .sbtd/handoff/Graft，旧残留安全处理，不复制项目模板 | AFK | planned | — |
-| P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[26项路由场景](sbtd-workflow-v2-mode-routing-contract.md)，文档结构／依赖检查通过；P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；仅契约完成，P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
+| P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[路由场景](sbtd-workflow-v2-mode-routing-contract.md) 的原26项由P0-10验收，后加MR-27归P0-04/D-IMP-06；文档结构／依赖检查通过，P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
 
 ### 14.4 P1：安装器、迁移能力与仓库交付
 
@@ -1375,6 +1375,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T15:54:39+08:00 | P0-04 实施 | 从 main `4dbcba1…` 建分支；现有契约清楚，未完整调用grill。D-IMP-05解决逐任务合并与原子catalog切换的冲突；候选入口和strict/state/handoff已编写，schema原样迁移后9项回归及Ruff/ty通过。待候选完整性、正式验证与review，不提前激活Skill。 |
 | 2026-09-17T16:08:36+08:00 | P0-04 checking | 候选7项资产自包含，临时最终入口8条链接可达，schema字节保持；9项迁移回归、Ruff/ty、原生全量276 tests/58.368s通过，本地报告配对保存。未取得目标tokenizer计数，不冒充AC-20收益证明；待精确HEAD复验与独立review。 |
 | 2026-09-17T16:23:52+08:00 | P0-04 第一轮review修复 | 补齐缺失／冲突blocked历史在用户选择恢复阶段后的解除事件、原因说明、blocked_reason清理及原子状态/时间更新；只读不落盘，不伪造旧ingress。维持原PRD语义，保持checking待精确HEAD复验与全范围复审。 |
+| 2026-09-17T16:37:04+08:00 | P0-04 第二轮review修复 | 公共入口明确完整grill后调用可用的book-ddd-distilled-modeling、独立可见DDD Boundary Review及状态/修正回路；不可用时区分strict阻断与default/lite如实替代检查，不冒充Skill通过。保持checking待最终提交复验与完整复审。 |
+| 2026-09-17T16:39:00+08:00 | P0-04 advisor／D-IMP-06 | 依据完整grill后的强制DDD门禁，撤回上一草稿中default/lite缺Skill替代放行；三模式均须具名reviewer可见通过，缺失均blocked。同步§8.2、保留清单与新增MR-27；旧P0-10的26项验收历史不追认为新边界已验收，保持P0-04 checking。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
