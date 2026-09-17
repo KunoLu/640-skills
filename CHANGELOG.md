@@ -7,6 +7,7 @@
 ### 文档
 
 - 交付 P0-03 任务数据契约与声明式 schema，明确本地／共享任务的唯一事实源、active 引用、父子关系、状态历史及跨文件恢复边界；这是实施前协议资产，不代表 Onboard 已提供 v2 任务读写或迁移能力。
+- 准备 P0-04 `sbtd-task` 公共／lite 入口及 strict、状态、handoff 按需 references；候选使用非 discovery 文件名，正式入口与 catalog 在 P0-07 原子切换，不提前宣称已安装或激活。
 
 ### 验证
 

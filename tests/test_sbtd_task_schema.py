@@ -8,7 +8,9 @@ from pathlib import Path
 import jsonschema
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = ROOT / "docs" / "prd" / "sbtd-task-v1.schema.json"
+SCHEMA_PATH = (
+    ROOT / "docs" / "prd" / "sbtd-task-candidate" / "references" / "task-data.schema.json"
+)
 
 
 class TaskDataSchemaTests(unittest.TestCase):
