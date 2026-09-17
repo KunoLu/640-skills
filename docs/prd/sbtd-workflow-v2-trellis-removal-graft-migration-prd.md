@@ -567,7 +567,9 @@ Graft 还存在版本变化后的自动 wiring reconciliation；必须验证原 
 
 ### 9.5 多仓、worktree 与跨服务
 
-逐项目 setup 是默认。**2026-09-17 用户确认：禁止对含未选子仓的父目录调用 Graft；P1 只对明确的单个仓库根调用。** 多个项目共父目录并不授权遍历整个父目录，也不能用 `graft init <parent>` 当联邦入口——上游会接线该父目录下全部 git 子仓。联邦仅在用户明确选择父目录、完整子仓清单与实际扫描集一致、且实现不走「对父目录 init」时才启用；否则保留逐仓查询，并在任务中汇总 contract。
+逐项目 setup 是默认。**2026-09-17 用户确认：禁止对含未选子仓的父目录调用 Graft；P1 只对明确的单个仓库根调用。** 不得对父目录执行 `graft init`／`build`／MCP。多个项目共父目录不授权扫描或接线兄弟仓。
+
+若任务需要同时理解多个已授权仓：对每个仓根**独立**调用 Graft，再在任务里做**只读汇总**。这不是 `graft init <parent>`：上游对父目录 init 会接线其下全部 git 子仓，无法只接已选清单。本次不把「选父目录 + 清单一致」做成联邦入口。
 
 `--follow-nested-repos`、`--follow-submodules` 默认关闭，各自独立授权；不能为了补一条边扩大到所有嵌套仓库。linked worktree、不同 branch、同名 symbol、从子目录查询均需 fixture 验证。跨服务因果关系最终依赖 routes/client/contract/Revision Set，不依赖图排名。
 
@@ -1137,7 +1139,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P1-03 | P1 | Graft CLI 检测／确认安装／遥测与版本约束 | P0-01、P1-01 | AC-07/10/13；只读无副作用，安装前 DNT，失败不报成功 | AFK | planned | — |
 | P1-04 | P1 | Codex接线、显式opt-in hooks及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；共享去重、默认无hooks、模板后接线；隔离真实执行init上下文及累计证据续作/保存 | AFK | planned | — |
 | P1-05 | P1 | OMP接线、CLI分析及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；继承资源去重、无Codex hooks；隔离握手/query及init上下文累计证据生产 | AFK | planned | — |
-| P1-06 | P1 | 多项目／联邦授权／worktree 隔离 | P1-02、P1-04、P1-05 | AC-09/13；未选项目零写入，逐项目结果，父目录扫描集可证明 | AFK | planned | — |
+| P1-06 | P1 | 多项目／worktree 隔离；禁止父目录 Graft 入口 | P1-02、P1-04、P1-05 | AC-09/13；只对显式仓根调用；未选 sibling 零写入；多仓理解=逐仓调用后只读汇总，证明未对父目录 init/build/MCP | AFK | planned | — |
 | P1-07 | P1 | Bash installer 及迁移／recovery 转发 | P1-01、P1-03、P1-06、P1-20 | AC-13/29/35；只转发统一接口，独立确认，不实现另一套恢复或处置逻辑 | AFK | planned | — |
 | P1-08 | P1 | PowerShell installer 及迁移／recovery 对等转发 | P1-01、P1-03、P1-06、P1-20 | AC-13/29/35；Windows 真执行与统一输入／结果，不绕过资源授权 | AFK | planned | — |
 | P1-09 | P1 | 全部 bundled 旧路由清理与强制触发按模式裁决 | P0-05、P0-06、P1-01 | AC-02/14/16/23；不只改 router；Book/BDD 按模式，Knowledge/evidence 和 external mirror 保持 | AFK | planned | — |
@@ -1348,6 +1350,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T10:14:26+08:00 | P0-01／文档 2.4 | 隔离 HOME 实测 `@nanonets/graft@0.18.0`。当时误标 done。父目录 init 联邦未选 sibling 为 unsupported／安全失败；无正向 hooks flag；npm 12 需显式 allow-scripts。不是 AC 全通过。 |
 | 2026-09-17T10:30:55+08:00 | P0-01 done→blocked | AC-09 未通过不能标 done，否则会解锁 P0-05。完成时间清空为 `—`；10:14:26 事件保留为 spike 实测记录。 |
 | 2026-09-17T10:33:14+08:00 | P0-01 blocked→done | 用户确认：禁止对含未选子仓的父目录调 Graft，P1 只对明确的单个仓库根调用。AC-09 以此收口；P1-06 仍须证明实现。 |
+| 2026-09-17T10:41:11+08:00 | §9.5 收紧 | 联邦不得再用 `graft init <parent>`。多仓只允许逐仓独立调用后的只读汇总。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
