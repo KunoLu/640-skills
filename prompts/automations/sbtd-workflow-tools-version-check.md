@@ -95,5 +95,5 @@
   - 验证 OMP 若已有 `UPDATE.md` 章节，起点和终点都是 `v<semver>`；该终点是后续写回 ENTRYPOINT 的唯一目标格式。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。
   - 验证根 `.gitignore` 内容严格为五行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md`。验证 `git ls-files -- AGENTS.md ENTRYPOINT.md` 只包含 `ENTRYPOINT.md`。`AGENTS.md` 若存在可读取、评估或修改；缺失时跳过，不得把它的存在当作 Gate。
-  - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 重复执行不产生重复行，并用原生 Git 语义确认项目 `AGENTS.md`、`CLAUDE.md`、`.agents/**`、Trellis spec / agents / lessons / task artifacts 可追踪，workspace / runtime 保持忽略；冲突路径必须返回具体来源行；无任何规则覆盖某必须忽略路径时，报告该路径与缺失规则而非来源行。报告目录默认本地留存并忽略，不推断为 Git 入库要求。
+  - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 重复执行不产生重复行，现有通用保护保持，v2新模板无Trellis/GitNexus旧段。原生Git确认`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`保护根级目录／文件／symlink且不误伤同名业务子目录；AGENTS/CLAUDE、共享`.agents`、ai/tasks含子任务和归档、docs/spec/lessons、CONTEXT/ADR、features、maestro/flow与三个可入库Web manifest可追踪。安装器探针与模板同批对齐；broad ai/docs/tests或重新包含冲突须返回具体来源，无规则覆盖则报告缺失规则，Git不可用不得报已验证。已有项目只追加新保护，不自动删除旧段、untrack数据或证明所有权／迁移完成；真实清理另经授权。报告目录本地留存并忽略，不推断为Git入库要求。
 14. 最终输出必须说明：发现的版本区间、修改的文件、`CHANGELOG.md` / `README.md` / `README.html` / 本 prompt 的维护判断、验证命令和结果、跳过项及原因、剩余风险、`rtk` 使用状态。再次强调：不要 commit，不要 push，不要把最新版本写回 `ENTRYPOINT.md`。

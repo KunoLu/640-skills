@@ -2561,23 +2561,38 @@ def copy_operation(operation: Operation) -> str:
 
 
 GITIGNORE_MUST_TRACK_PROBES = (
-    ".trellis/workflow.md",
-    ".trellis/spec/spec.md",
-    ".trellis/agents/agent.md",
-    ".trellis/lessons/lessons.md",
-    ".trellis/tasks/sample/prd.md",
-    ".trellis/tasks/sample/design.md",
-    ".trellis/tasks/sample/implement.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".agents/skills/example/SKILL.md",
+    "ai/tasks/index.md",
+    "ai/tasks/example/task.md",
+    "ai/tasks/parent/child/task.md",
+    "ai/tasks/archive/2026-Q1/example/task.md",
+    "docs/spec/lessons.md",
+    "docs/lessons/index.md",
+    "docs/lessons/topics/example.md",
+    "docs/lessons/archive/2026-Q1.md",
+    "docs/CONTEXT.md",
+    "docs/adr/example.md",
+    "docs/contexts/example/CONTEXT.md",
+    "features/example.feature",
+    "maestro/flow/smoke.yml",
+    "tests/e2e/manifest/ui-test-manifest.json",
+    "tests/e2e/manifest/ui-selector-audit.json",
+    "tests/e2e/manifest/ui-test-coverage.json",
 )
 
 GITIGNORE_MUST_IGNORE_PROBES = (
-    ".trellis/workspace/index.md",
-    ".trellis/worktrees/feature/notes.md",
-    ".trellis/channels/main/message.json",
-    ".trellis/.runtime/state.json",
-    ".trellis/.cache/index.json",
-    ".trellis/.backup/spec.md",
-    ".trellis/.template-hashes.json",
+    ".sbtd",
+    ".sbtd/developer",
+    ".sbtd/active-task.json",
+    ".sbtd/tasks/example/task.md",
+    "docs/handoffs",
+    "docs/handoffs/session.md",
+    "graft",
+    "graft/index.json",
+    ".graft",
+    ".graft/state.json",
     ".env",
     ".env.local",
 )
@@ -2658,7 +2673,7 @@ def gitignore_verdicts(
 
 
 def gitignore_effectiveness_failures(target: Path) -> list[str]:
-    """Verify required Trellis paths using git's actual ignore semantics."""
+    """Verify shared SBTD paths and local-state protection using Git semantics."""
     project_root = target.parent
     verdicts = gitignore_verdicts(
         project_root, GITIGNORE_MUST_TRACK_PROBES + GITIGNORE_MUST_IGNORE_PROBES
@@ -2692,8 +2707,8 @@ def gitignore_effectiveness_failures(target: Path) -> list[str]:
         extra = f" (+{len(paths) - 3} more)" if len(paths) > 3 else ""
         failures.append(
             f"{origin} ignores paths that must stay trackable: {shown}{extra}"
-            " -- delete or narrow that pattern; a broad directory exclusion"
-            " defeats every !.trellis/... re-inclusion regardless of order"
+            " -- confirm the intended shared paths before narrowing that pattern;"
+            " do not remove unrelated project exclusions automatically"
         )
 
     for probe in GITIGNORE_MUST_IGNORE_PROBES:

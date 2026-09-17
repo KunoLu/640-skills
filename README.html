@@ -900,17 +900,18 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Artifacts</p>
             <h2>工具与测试产物忽略规则</h2>
           </div>
-          <p>项目模板默认追踪项目级 <code>AGENTS.md</code>、<code>CLAUDE.md</code>、共享 <code>.agents/skills/**</code>，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 <code>.claude/projects/</code>、<code>.claude/worktrees/</code>、<code>.claude/settings.local.json</code> 与 <code>.omp/plugins/</code> 等已确认的本地运行态或机器本地设置。本项目模板用无尾随斜杠的 <code>.trellis/*</code> 覆盖 <code>.trellis</code> 下所有直接子项，同时忽略目录与指向目录的 symlink（含有意配置为 symlink 的 workspace），再由 <code>!</code> 规则放回需要追踪的 spec / agents / lessons / task 产物；这有意不同于上游 Trellis 默认会 stage workspace 内容。初始化仍按精确非空行追加缺失项并保持重复执行字节幂等；写入 Git worktree 后再用 <code>git check-ignore</code> 验证 spec / agents / lessons / task 文件确实可追踪、workspace / runtime 确实被忽略。既有 <code>.trellis/</code> 等宽泛父目录排除会给出具体来源行并阻断，不能以文本齐全冒充语义有效。报告目录默认本地留存并由 Git 忽略；PR / 知识库 evidence publication 是独立流程，不等于提交报告文件。</p>
+          <p>项目v2模板保留现有临时文件、构建／依赖、环境秘密、Python缓存、Agent本地状态和测试报告规则，不因缓存规则而自动接入平台。新增四条根锚定、无尾随斜杠规则：<code>/.sbtd</code>、<code>/docs/handoffs</code>、<code>/graft</code>、<code>/.graft</code>，覆盖目录、同名文件和symlink路径，不误伤<code>packages/graft</code>等业务子目录。项目AGENTS／CLAUDE、共享<code>.agents/skills</code>、<code>ai/tasks</code>（含子任务／归档）、<code>docs/spec</code>、<code>docs/lessons</code>、CONTEXT／ADR、features、maestro/flow和三个可入库Web manifest保持可追踪；修复计划与报告保留本地忽略。初始化只追加缺失非空行，重复执行保持字节幂等；原生<code>git check-ignore</code>检查新本地根和共享路径，宽泛排除或重新包含给出具体来源，缺保护明确报告，Git不可用标未验证。规则检查不会自动取消tracked状态，也不证明数据所有权或迁移完成。</p>
           <p><strong>既有项目迁移：</strong>如果旧模板已经写入 <code>.claude/</code>、<code>CLAUDE.md</code>、<code>.agents/</code> 或 <code>/AGENTS.md</code>，<code>init</code> / <code>reset</code> 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 <code>git check-ignore</code> 复核目标路径。</p>
+          <p>v2新模板删除旧Trellis／GitNexus段，但已有项目必须在显式迁移中先加新保护、保留旧规则；数据搬迁／验证及旧目录处置完成后，再单独确认清理已证明受管的旧段，未知自定义内容保留。<code>init</code>／<code>reset</code>不会自动完成清理；业务保留路径和已tracked本地数据须另取授权。P0模板／探针交付不是P1所有权／迁移门禁完成，不应将过渡生命周期用于真实项目。</p>
         </div>
         <pre><code># ---------- Claude ----------
-# Keep Trellis-generated agents, commands, skills, hooks, and shared settings versioned.
+# Keep shared agents, commands, skills, hooks, and settings versioned.
 .claude/projects/
 .claude/worktrees/
 .claude/settings.local.json
 
 # ---------- OMP ----------
-# Keep Trellis-generated agents, commands, skills, and extensions versioned.
+# Keep shared agents, commands, skills, and extensions versioned.
 .omp/plugins/
 
 # ---------- AI Tools ----------
@@ -918,10 +919,13 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 .worktrees/
 /AGENTS.md.*
 
-# ---------- Trellis ----------
-# Ignore every direct child, including generated workspace data and an
-# intentional workspace symlink; re-include tracked spec / agents / tasks.
-.trellis/*
+# ---------- SBTD ----------
+/.sbtd
+/docs/handoffs
+
+# ---------- Graft ----------
+/graft
+/.graft
 
 # ---------- Testing -----------
 # MCP / browser controller local state

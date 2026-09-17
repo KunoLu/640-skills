@@ -394,7 +394,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
     def test_init_projects_appends_only_missing_gitignore_lines(self) -> None:
         gitignore = self.project_one / ".gitignore"
         gitignore.write_text(
-            "# project-specific\nnode_modules/\n.trellis/*\n",
+            "# project-specific\nnode_modules/\n.trellis/*\n.gitnexus/\ncustom-private/\n",
             encoding="utf-8",
         )
         args = (
@@ -417,6 +417,9 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertEqual(first_content.count("node_modules/\n"), 1)
         self.assertEqual(first_content.count(".trellis/*\n"), 1)
         self.assertEqual(first_content.count(".gitnexus/\n"), 1)
+        self.assertEqual(first_content.count("custom-private/\n"), 1)
+        for local_rule in ("/.sbtd", "/docs/handoffs", "/graft", "/.graft"):
+            self.assertEqual(first_content.splitlines().count(local_rule), 1)
         template_lines = {
             line
             for line in (
@@ -448,27 +451,27 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             text=True,
         )
 
-    def test_init_projects_rejects_gitignore_reinclusion_conflict(self) -> None:
-        """A pre-existing broad `.trellis/` exclusion defeats every
-        `!.trellis/...` re-inclusion regardless of order, and append-only
-        merging cannot see that. Onboarding must fail loudly instead of leaving
-        the spec/tasks files silently untracked."""
+    def test_init_projects_reports_broad_shared_path_conflicts(self) -> None:
         self.git_init_project_one()
         gitignore = self.project_one / ".gitignore"
-        gitignore.write_text("# local\n.trellis/\n", encoding="utf-8")
-
-        result = self.init_project_one_gitignore()
-        output = result.stdout + result.stderr
-
-        self.assertNotEqual(result.returncode, 0, output)
-        # The operator has to know which line to edit, so the failure must name
-        # the deciding record -- file, line number, pattern. A bare `.trellis/`
-        # substring check also passes on the re-inclusion lines the template
-        # itself appends, so it would survive a message that lost the origin.
-        self.assertIn(
-            ".gitignore:2:.trellis/ ignores paths that must stay trackable:",
-            output,
-        )
+        for pattern, hidden in (
+            ("ai/", "ai/tasks/index.md"),
+            ("docs/", "docs/spec/lessons.md"),
+            ("tests/", "tests/e2e/manifest/ui-test-manifest.json"),
+        ):
+            with self.subTest(pattern=pattern):
+                gitignore.write_text("# local\n" + pattern + "\n", encoding="utf-8")
+                result = self.init_project_one_gitignore()
+                output = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn(
+                    f".gitignore:2:{pattern} ignores paths that must stay trackable:",
+                    output,
+                )
+                self.assertIn(hidden, output)
+                self.assertIn(
+                    pattern, gitignore.read_text(encoding="utf-8").splitlines()
+                )
 
     def test_init_projects_accepts_gitignore_in_clean_git_repo(self) -> None:
         self.git_init_project_one()
@@ -478,6 +481,53 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, output)
         self.assertNotIn("must stay trackable", output)
+
+    def test_init_projects_protects_sbtd_local_state_and_shared_artifacts(self) -> None:
+        self.git_init_project_one()
+        installed = self.init_project_one_gitignore()
+        self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
+
+        ignored = (
+            ".sbtd/developer",
+            ".sbtd/active-task.json",
+            ".sbtd/tasks/local/task.md",
+            "docs/handoffs/session.md",
+            "graft/index.json",
+            ".graft/state.json",
+        )
+        trackable = (
+            "AGENTS.md",
+            "ai/tasks/shared/task.md",
+            "ai/tasks/parent/child/task.md",
+            "ai/tasks/archive/2026-Q1/shared/task.md",
+            "docs/spec/lessons.md",
+            "docs/lessons/index.md",
+            "docs/CONTEXT.md",
+            "docs/adr/decision.md",
+            "features/example.feature",
+            "maestro/flow/smoke.yml",
+            "tests/e2e/manifest/ui-test-manifest.json",
+            "tests/e2e/manifest/ui-selector-audit.json",
+            "tests/e2e/manifest/ui-test-coverage.json",
+            "packages/graft/index.ts",
+            "packages/.graft/model.json",
+            "packages/.sbtd/model.md",
+            "packages/docs/handoffs/guide.md",
+        )
+        for paths, expected in ((ignored, 0), (trackable, 1)):
+            for path in paths:
+                with self.subTest(path=path):
+                    verdict = subprocess.run(
+                        ["git", "check-ignore", "--no-index", "--quiet", path],
+                        cwd=self.project_one,
+                        env=self.env,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(
+                        verdict.returncode, expected, path + verdict.stderr
+                    )
 
     def test_init_projects_skips_gitignore_probe_without_git_repo(self) -> None:
         """Outside a work tree the git-backed probe must degrade to a no-op
@@ -572,43 +622,24 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertNotIn("Verification passed", result.stdout)
         self.assertNotIn("Backups:", result.stdout)
 
-    def test_init_projects_probes_every_trellis_runtime_category(self) -> None:
-        """Each runtime category needs its own probe: a negation appended after
-        the template re-exposes exactly one category, so probing workspace alone
-        would let the others leak silently."""
+    def test_init_projects_probes_every_sbtd_local_root(self) -> None:
         self.git_init_project_one()
         gitignore = self.project_one / ".gitignore"
         merged = self.init_project_one_gitignore()
         self.assertEqual(merged.returncode, 0, merged.stdout + merged.stderr)
         baseline = gitignore.read_text(encoding="utf-8")
-
-        categories = (
-            (
-                "!.trellis/workspace\n!.trellis/workspace/**\n",
-                ".trellis/workspace/index.md",
-            ),
-            (
-                "!.trellis/worktrees/\n!.trellis/worktrees/**\n",
-                ".trellis/worktrees/feature/notes.md",
-            ),
-            (
-                "!.trellis/channels/\n!.trellis/channels/**\n",
-                ".trellis/channels/main/message.json",
-            ),
-            (
-                "!.trellis/.runtime/\n!.trellis/.runtime/**\n",
-                ".trellis/.runtime/state.json",
-            ),
-            ("!.trellis/.cache/\n!.trellis/.cache/**\n", ".trellis/.cache/index.json"),
-            ("!.trellis/.backup/\n!.trellis/.backup/**\n", ".trellis/.backup/spec.md"),
-            ("!.trellis/.template-hashes.json\n", ".trellis/.template-hashes.json"),
-        )
-        for negation, leaked in categories:
-            with self.subTest(leaked=leaked):
-                gitignore.write_text(baseline + negation, encoding="utf-8")
+        for root, leaked in (
+            (".sbtd", ".sbtd/developer"),
+            ("docs/handoffs", "docs/handoffs/session.md"),
+            ("graft", "graft/index.json"),
+            (".graft", ".graft/state.json"),
+        ):
+            with self.subTest(root=root):
+                gitignore.write_text(
+                    baseline + f"!/{root}\n!/{root}/**\n", encoding="utf-8"
+                )
                 result = self.init_project_one_gitignore()
                 output = result.stdout + result.stderr
-
                 self.assertNotEqual(result.returncode, 0, output)
                 self.assertIn("must stay ignored", output)
                 self.assertIn(leaked, output)

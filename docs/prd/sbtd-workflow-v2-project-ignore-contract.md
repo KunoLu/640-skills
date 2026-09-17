@@ -1,0 +1,58 @@
+# P0-08 项目 ignore 规则与安装检查对齐
+
+## 交付范围
+
+从`main @ 15a4049ac521729b07732598d9ea23f6681b1cbd`建立`p0-08-project-ignore`，落实主[PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md) §11.7／AC-12/26的模板、Git语义及直接消费者子项。
+
+- [项目模板](../../sbtd-workflow-onboard/templates/project/.gitignore)保留全部通用规则，移除旧Trellis/GitNexus段及失效注释，新增且仅新增四个根保护：`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`。
+- 根锚定避免误伤同名业务子目录；无尾随斜杠覆盖保留路径的目录、普通文件和symlink。忽略某路径不授权安装器使用异常文件类型或隐藏用户业务内容。
+- 安装器`GITIGNORE_MUST_TRACK_PROBES`／`GITIGNORE_MUST_IGNORE_PROBES`与模板同批切换，检查SBTD共享路径、新本地根及既有环境秘密；不再拿已退役Trellis路径验收新模板。
+- 继续使用原生Git的NUL四字段结果；不改冒号／否定规则解析、缺Git未验证、Git错误／不完整结果阻断的语义。
+- `ensure_file_contains`仍只追加缺失行。旧项目保留旧保护和未知自定义规则，重复执行字节幂等；本项不做旧段清理、untrack或真实项目迁移。
+- 源仓根`.gitignore`保持原五行，P0-09另行处理；不以项目模板覆盖本仓根。
+
+项目规则应使AGENTS/CLAUDE、共享.agents、ai/tasks含子任务／归档、docs/spec/lessons、CONTEXT/ADR、features、maestro/flow和三个可入库Web manifest保持可追踪；报告／repair plan继续本地忽略。宽泛ai/docs/tests排除必须提示真实来源，不能自动撤销用户规则。
+
+## Gate与实现选择
+
+| Skill | 选择／触发事实 | 阶段 | Gate state |
+|---|---|---|---|
+| book-legacy-change-safety | required：ignore保护与既有安装检查有隐藏耦合 | 首次生产编辑前 | passed |
+| book-refactoring-pass | required：生产探针集合／提示调整 | legacy刻画后 | passed |
+| book-ddia-data-design | required：本地／共享数据保护和规则事实源 | 设计稳定前 | passed |
+| book-release-readiness | required：安装器可观察验收改变 | 适用验证后 | planned |
+| book-ddd-distilled-modeling | on-demand：目录与数据归属已确认，无新领域歧义 | 不触发 | not-required |
+
+Legacy Change Safety Review：characterized。移前19个原生Git probe证明旧Trellis/GitNexus保护、环境秘密和报告保护有效，而四个新本地根未被保护。现有追加／NUL解析／错误来源是保留行为。
+
+Refactoring Review：proceed，normal。使用现有`init-projects`与真实Git seam，无新解析器或规则框架；只换探针、过时提示及相关fixtures。测试复用已有Git helper并关闭fixture的用户全局excludes文件影响，生产检查仍尊重项目实际规则。
+
+DDIA Data Design Review：confirmed。模板定义新规则，Git提供实际判定；旧数据、已有规则和索引不自动改写。普通init/reset不承担迁移清理；规则语义检查不证明保留路径的业务归属，也不证明已有本地文件已退出索引。实际所有权／tracked检测／迁移写入门禁仍属P1对应任务，不把P0交付用于真实项目的完整迁移。
+
+未完整调用grill-with-docs：PRD已明确精确规则和阶段边界。TDD采用已确认的真实CLI安装与Git判定seam；不写测试专用ignore算法，不以源码词串代替Git行为。
+
+## 行为检查面
+
+| 场景 | 期望 | 证明 |
+|---|---|---|
+| fresh模板／CLI安装 | 四根本地数据被忽略，共享资产可追踪 | 真实CLI＋git check-ignore |
+| 文件／symlink保留路径 | 四条规则均覆盖；不把忽略当文件类型授权 | 原生Git实际文件／symlink fixture |
+| 嵌套业务路径 | packages/graft、packages/.graft、packages/.sbtd、packages/docs/handoffs不被新规则误伤 | 原生Git负向匹配 |
+| 既有旧规则与自定义内容 | 追加新保护但旧段不删除，重复执行字节相同 | 现有CLI幂等fixture迁移 |
+| broad ai/docs/tests | 非零并报告具体.gitignore来源与被隐藏路径，原规则保留 | 真实Git冲突fixture |
+| 本地根被重新包含 | 每个根独立发现泄漏并报告来源 | 真实Git否定规则fixture |
+| 环境秘密／冒号模式／短响应 | 保留既有失败／解析边界 | 既有回归不删除 |
+| 无Git／非Git仓 | 明确未验证，不虚称语义通过 | 既有CLI回归 |
+| 通用缓存／报告保护 | 相对次序和规则内容保留，Git判定保持 | 模板保留集合核对与原生probe |
+
+## 已观察的开发证据
+
+首个tracer在生产修改前运行1test/6个失败subtest：`.sbtd`下三路径、handoff、graft与.graft均可追踪，正好命中缺保护。修改模板及探针后，同一test在2.331s内通过；红测报告保留。相关18项子集在40.256s内通过，覆盖新Git边界、共享冲突、追加/BOM、缺Git／错误Git；冒号否定和NUL短响应仍须后续完整模块／全量复验，不能算作该18项已执行。
+
+报告位于本地`tests/unit/reports/unit-report-project-ignore-{red,green,subset}-p0-08-project-ignore-*`，这些开发快照为dirty，不冒充最终PR head。最终提交后重新运行计划范围并生成精确head证据。
+
+## 文档与安全边界
+
+README.md、README.html和版本化automation prompt同步新模板／探针、旧保护保留和Git语义边界；不改根五行验证要求，不操作live automation。Onboard SKILL/REFERENCE的通用“追加缺失行”说明仍准确，不作无意义改写。CHANGELOG记录新规则和实际验收变化。
+
+修改前Git基线的受管源备份在私有临时目录保存，保留到最终head验证、独立review和任务PR合并之后；不提前清理，也不处理任何真实迁移备份。当前过渡CLI的完整v2初始化／数据所有权与迁移能力仍待P1，本项不会静默把这些未完成部分标成通过。

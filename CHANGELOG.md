@@ -16,11 +16,13 @@
 
 - P0-07将完整sbtd-task、全局／项目规则及lessons-record候选移入正式安装源，catalog由15个bundled调整为14个，19个required external保持；删除两旧Trellis Skill源目录，不保留alias或包内旧入口副本。
 - 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。
+- P0-08项目ignore模板保留56条通用规则、移除14条旧Trellis/GitNexus规则并新增`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`；安装器语义探针与模板同批对齐。共享任务／规范／lessons和manifest保持可追踪，旧项目规则仍仅追加不自动清理，不改源仓根ignore。
 
 ### 验证
 
 - 增加任务 schema 的模式来源、阻塞原因、完成时间、入阻塞、路径形状、版本类型和日期边界回归；区分历史元数据事件与新入阻塞，显式配置日期断言，避免把可选格式检查缺失当成通过。
 - 增加完整sbtd-task安装回归，核对references/schema/许可证及两旧目录在fresh安装中的缺席；保留存续公共文档合同、实际provider与Git marker检查，任务schema测试改读正式源。原生catalog smoke逐字验证已审查载荷到正式源及安装副本，不把安装层通过扩大为完整v2或host通过。
+- 项目ignore增加真实CLI＋Git红绿验证、根级普通文件／symlink保护、同名业务子目录不误伤及共享路径冲突来源检查；原有NUL解析、环境秘密、追加幂等和未验证状态边界继续保留。
 
 
 ## v1.0.15（2026-09-16）
