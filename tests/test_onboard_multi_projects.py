@@ -454,10 +454,42 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
     def test_init_projects_reports_broad_shared_path_conflicts(self) -> None:
         self.git_init_project_one()
         gitignore = self.project_one / ".gitignore"
+        for pattern in ("ai/", "docs/", "tests/"):
+            with self.subTest(pattern=pattern):
+                gitignore.write_text("# local\n" + pattern + "\n", encoding="utf-8")
+                result = self.init_project_one_gitignore()
+                output = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn(
+                    f".gitignore:2:{pattern} ignores paths that must stay trackable:",
+                    output,
+                )
+                self.assertIn(
+                    pattern, gitignore.read_text(encoding="utf-8").splitlines()
+                )
+
+    def test_init_projects_reports_supported_shared_branch_conflicts(self) -> None:
+        self.git_init_project_one()
+        gitignore = self.project_one / ".gitignore"
         for pattern, hidden in (
-            ("ai/", "ai/tasks/index.md"),
-            ("docs/", "docs/spec/lessons.md"),
-            ("tests/", "tests/e2e/manifest/ui-test-manifest.json"),
+            ("/docs/lessons.md", "docs/lessons.md"),
+            ("docs/contexts/*/adr/", "docs/contexts/example/adr/example.md"),
+            ("ai/tasks/archive/undated/", "ai/tasks/archive/undated/example/task.md"),
+            ("maestro/flow/ios/", "maestro/flow/ios/smoke.yml"),
+            ("maestro/flow/android/", "maestro/flow/android/smoke.yml"),
+            (".agents/skills/react-bits-pro/", ".agents/skills/react-bits-pro/SKILL.md"),
+            ("/.gitignore", ".gitignore"),
+            ("/.gitattributes", ".gitattributes"),
+            ("ai/tasks/*/legacy-task.json", "ai/tasks/example/legacy-task.json"),
+            ("ai/tasks/*/prd.md", "ai/tasks/example/prd.md"),
+            ("ai/tasks/*/design.md", "ai/tasks/example/design.md"),
+            ("ai/tasks/*/implement.md", "ai/tasks/example/implement.md"),
+            ("ai/tasks/00-bootstrap-guidelines/", "ai/tasks/00-bootstrap-guidelines/task.md"),
+            ("/docs/PRODUCT.md", "docs/PRODUCT.md"),
+            ("/docs/DESIGN.md", "docs/DESIGN.md"),
+            ("tests/unit/", "tests/unit/test_example.py"),
+            ("tests/api/", "tests/api/test_example.py"),
+            ("tests/e2e/*.spec.ts", "tests/e2e/example.spec.ts"),
         ):
             with self.subTest(pattern=pattern):
                 gitignore.write_text("# local\n" + pattern + "\n", encoding="utf-8")

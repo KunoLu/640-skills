@@ -96,4 +96,5 @@
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。
   - 验证根 `.gitignore` 内容严格为五行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md`。验证 `git ls-files -- AGENTS.md ENTRYPOINT.md` 只包含 `ENTRYPOINT.md`。`AGENTS.md` 若存在可读取、评估或修改；缺失时跳过，不得把它的存在当作 Gate。
   - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 重复执行不产生重复行，现有通用保护保持，v2新模板无Trellis/GitNexus旧段。原生Git确认`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`保护根级目录／文件／symlink且不误伤同名业务子目录；AGENTS/CLAUDE、共享`.agents`、ai/tasks含子任务和归档、docs/spec/lessons、CONTEXT/ADR、features、maestro/flow与三个可入库Web manifest可追踪。安装器探针与模板同批对齐；broad ai/docs/tests或重新包含冲突须返回具体来源，无规则覆盖则报告缺失规则，Git不可用不得报已验证。已有项目只追加新保护，不自动删除旧段、untrack数据或证明所有权／迁移完成；真实清理另经授权。报告目录本地留存并忽略，不推断为Git入库要求。
+  - 共享路径验证还须覆盖公开固定分支：`docs/lessons.md`旧短入口、context ADR、季度／undated任务归档、任务附属产物及bootstrap、PRODUCT/DESIGN、测试源码、iOS／Android flow、受管React Bits Skill、根Git控制文件。精确排除这些分支也须返回真实规则来源并保留用户内容；代表性probe不是自定义路径穷举，也不授权恢复退役平台集成。
 14. 最终输出必须说明：发现的版本区间、修改的文件、`CHANGELOG.md` / `README.md` / `README.html` / 本 prompt 的维护判断、验证命令和结果、跳过项及原因、剩余风险、`rtk` 使用状态。再次强调：不要 commit，不要 push，不要把最新版本写回 `ENTRYPOINT.md`。

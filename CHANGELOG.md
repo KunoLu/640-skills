@@ -17,6 +17,7 @@
 - P0-07将完整sbtd-task、全局／项目规则及lessons-record候选移入正式安装源，catalog由15个bundled调整为14个，19个required external保持；删除两旧Trellis Skill源目录，不保留alias或包内旧入口副本。
 - 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。
 - P0-08项目ignore模板保留56条通用规则、移除14条旧Trellis/GitNexus规则并新增`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`；安装器语义探针与模板同批对齐。共享任务／规范／lessons和manifest保持可追踪，旧项目规则仍仅追加不自动清理，不改源仓根ignore。
+- 共享规则验收覆盖公开固定分支，避免精确忽略旧lessons入口、context ADR、undated归档、平台flow、React Bits、任务附属产物、UI上下文、测试源码或Git控制文件时误报通过；继续保留用户规则并报告来源，不恢复旧平台生成集成的无条件探针。
 
 ### 验证
 

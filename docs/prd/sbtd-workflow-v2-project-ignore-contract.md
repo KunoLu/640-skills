@@ -72,3 +72,13 @@ Release Readiness Review：ready，仅限P0-08模板和直接规则检查消费�
 ## 首轮独立 review 修正
 
 `P008ReviewOne`在完整冻结diff中指出一处P2矛盾：版本化automation prompt前面的init/reset段仍要求验证旧Trellis ignore路径，与下方已更新的project-only SBTD/Graft探针契约不一致。已把前者改为引用下方同一共享／本地探针集，保留其他安装、JSON和根仓库五行契约，不同步live automation。该问题修复前的`71478ed76bf2deff7b46d217207041fee6f29343`全量265 tests/391.213s与原生smoke均通过，但不能据此把后续修复head直接标成已验证；修复后重新绑定报告并独立复审。
+
+## 第二轮 review 与 advisor 修正
+
+`P008ReviewTwo`的正式结果和后续advisor合计九组已采纳问题：支持的固定共享路径被精确忽略时，原代表性探针集合不完整。覆盖旧`docs/lessons.md`入口、context ADR、undated归档、iOS/Android flow、受管React Bits Skill、任务附属产物/bootstrap、UI上下文、测试源码、根Git控制文件。新增一个真实CLI回归，共18个独立契约反例：第一批6项在补生产前全部red、补后green；后补12项也在对应生产修复前全部red，最终18项1.598s全部green。生产仍只有同一探针集合扩展，不新增解析器或检查框架；共享探针由19增至37，本地12项不变。
+
+补查的第十条建议（强制所有项目追踪旧Claude生成集成）经PRD§11.7及README条件说明复核撤回：保留旧缓存不代表接入平台，人工移除旧`.claude/`排除以项目确实需要追踪为前提。README两入口明确此边界；不把旧Trellis集成恢复成v2必需条件。代表性探针保证已声明固定分支，不能声称穷举任意自定义文件名或替代P1实际迁移清单。
+
+同轮local-only API汇总曾宣称TMPDIR隔离，但raw未记录可独立核验证据；已缩窄为脚本显式HOME/CODEX_HOME/USERPROFILE/XDG隔离及HOME空态，不改raw/时间/退出码/SHA。该报告由`.git/info/exclude`忽略，未追踪；修正后envelope再次通过，不存在重标源提交。新增生产探针将另提交并重跑最终head全量与扩展原生smoke，然后独立复审。
+
+扩展后的影响范围重跑出现1个测试失败：broad `tests/`冲突诊断只预览前三个路径，旧测试把某个manifest是否出现在预览里当成契约。删除该偶然成员断言，而非换钉另一个路径；保留非零退出、具体规则来源、用户规则不删除。失败case定点通过后，原18项子集在5.363s全部通过；扩展原生smoke的21场景通过，fresh/legacy各检查12本地与37共享／嵌套路径，另含19条冲突。未提交阶段报告保持dirty标识，最终head全量和scope readiness须在冻结后复验。
