@@ -9,6 +9,7 @@ The legacy input is `<project>/.trellis/.developer`; the current identity is `<p
 - Authorized project and exact operation scope are known. Preserve original data in the migration's private backup, with the manifest/evidence/repair constraints owned by Onboard's migration contract.
 - Relevant roots, parents and files have verified containment/type/readability; a symlink, dangling link, directory or unsafe reserved path is not a missing file. Parse one clear `name=` value safely; a normal inherited name must match `^[a-z0-9]+$` verbatim.
 - Inspect the current local identity first. Only if it is genuinely absent and its local parent path is safe may a linked worktree read the verified main checkout's current identity. A valid main identity is used in place, not copied; it prevents a local legacy-to-new identity copy. Invalid/uncertain current or main-checkout identity cannot be bypassed through the legacy file.
+- When local identity is absent, verify the checkout classification before choosing a main-source or no-main-source branch. Verified non-linked includes a verified non-Git project; missing Git tooling or ambiguous metadata is not that proof and stops identity creation/migration.
 - Before creating current identity, actual local ignore/tracked protection and narrow write authority must hold. A migration authorization is not permission to hide user business content, untrack data or remove legacy ignore protection prematurely.
 
 ## Decision table

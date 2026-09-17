@@ -26,7 +26,7 @@ Read the short entry first, then the index/tags/error/topic needed for this task
 
 1. Identify the authorized project root and inspect its `.sbtd/developer` and relevant parent paths. A usable identity is a normal, safely contained readable UTF-8 file with one unambiguous `name=` value. Duplicate declarations, empty/invalid content, wrong file type, unreadability, symlink or containment uncertainty are conflicts, not absence.
 2. A valid local identity wins. Only when the local file is genuinely absent and the current checkout is a verified linked worktree may you read the main checkout's `.sbtd/developer`. Identify that checkout from actual Git worktree metadata, not the branch called main or a guessed sibling. Verify it belongs to this repository. Read in place; do not copy its identity into this worktree.
-3. A present abnormal local file blocks this resolution; do not bypass it with the main checkout or another source. An abnormal main-checkout candidate likewise needs resolution. If the allowed sources are absent, ask the user for a split name and explain the exact local path that would be created.
+3. A present abnormal local file blocks this resolution; do not bypass it with the main checkout or another source. A present abnormal main-checkout candidate also stops resolution. First-write is eligible only after proving the local file genuinely absent with safe parents and either (a) the project is verified non-linked, including a verified non-Git project, or (b) it is a verified linked worktree whose main current file is genuinely absent with safe parents. Unavailable/ambiguous Git or worktree metadata is not proof of non-linked status: stop this resolution rather than create a local identity. Only an eligible first-write may ask for a name and explain the local path to create.
 
 A split name matches `^[a-z0-9]+$`: nonempty lowercase letters/digits, no separator. Use it verbatim. Never lowercase, trim punctuation or transliterate a rejected value; that can merge distinct authors into the same ID. Explain the rejection and request a conforming identifier. Avoid reproducing personal or secret data from malformed content in shared artifacts.
 
@@ -34,7 +34,7 @@ Do not infer identity from Git user.name, commit authors, OS usernames, environm
 
 ### First lesson without onboarding
 
-When no identity exists, ordinary work continues until an actual lesson write needs it. Ask for a legal identifier, state `<project>/.sbtd/developer`, and obtain the needed write/protection authorization. Before creating it:
+Use this branch only after the resolution above has proved first-write eligible; absence of a usable value alone is insufficient. Ordinary work can continue without identity until an actual lesson write needs it. Ask for a legal identifier, state `<project>/.sbtd/developer`, and obtain the needed write/protection authorization. Before creating it:
 
 - Verify `.sbtd` is a safe reserved local path, not user business content, a tracked payload, a directory/type conflict at developer, or a symlink route.
 - Check actual ignore and tracked state. If protection is missing, request only the necessary root-anchored `/.sbtd` rule; preserve all unrelated/legacy rules. Do not automatically untrack user files or expand a broad ignore. Explicit read-only scope prevents identity/ignore writes.
