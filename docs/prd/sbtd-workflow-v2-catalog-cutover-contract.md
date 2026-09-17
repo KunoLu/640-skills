@@ -58,7 +58,7 @@ DDIA Data Design Review：confirmed。catalog与源树／调用方以同一Git�
 
 ## 收尾范围
 
-README.md、README.html和版本化automation prompt在本项需要更新，因为实际分发目录与路由改变；不执行live automation或workflow sync。CHANGELOG记录未发布分发变更。临时脚本不进入产品；私有移动备份在最终smoke和验证证明资产完整后清理，不触碰任何真实项目备份。P0-07状态只在真实review／PR合并后更新为done。
+README.md、README.html和版本化automation prompt在本项需要更新，因为实际分发目录与路由改变；不执行live automation或workflow sync。CHANGELOG记录未发布分发变更。临时脚本不进入产品；私有编辑／重建备份仅在最终head的计划验证、独立review和任务PR合并均已确认完成后清理，不触碰任何真实项目备份。P0-07状态只在真实review／PR合并后更新为done。
 
 ## Surviving contract 承接与 advisor 处理
 
@@ -94,3 +94,7 @@ Release Readiness Review：ready，仅限本项已确认的source/catalog安装�
 上述报告属于该中间提交快照；本验证记录提交后，必须在最终head重跑计划全量与原生安装smoke、生成对应envelope，再进入独立review。不得把旧报告改写成新head原生执行结果。
 
 清理偏差：曾在中间head的smoke与全量通过后删除29个私有编辑快照，但最终head复验／review尚未结束，早于本契约的最终清理门禁。已从切换前`f1cb580…`重建29个tracked源文件的私有备份并逐字校验，另保存摘要manifest，保留至最终head验证、独立review和任务PR合并之后。恢复的是Git基线，不包含已删除的未提交README中间稿；当前已提交改动、Git旧源和全部正式／失败报告仍保留。没有删除用户数据、用户安装、真实迁移备份或用户浏览器页面；不声称原清理时序已合规。
+
+## 首轮独立 review 修正
+
+P007ReviewOne确认catalog、14/19、完整资产、schema、复制策略和最终`1371d2e…`证据一致，提出两项文档冲突：早段备份清理条件未包含review／PR合并；README两份仍将Ponytail旧全局强制序列写为现行规则。已统一备份保留至任务PR合并，并将方法归属与模式范围对齐sbtd-task/methods和strict。实际provider／安装规则不改，已审查的16个payload资产不变。修正后提交新的完整head，再运行计划全量和安装smoke并复审；`1371d2e…`报告保留为前一快照，不改标新head。
