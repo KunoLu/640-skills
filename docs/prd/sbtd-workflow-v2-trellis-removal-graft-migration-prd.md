@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.3（pre-manifest责任与授权前置补强后，R-09重开并经完整复审重新收口） |
-| 文档状态 | 产品与流程决策已确认，待实施；源码能力结论与未执行的运行验收明确分开 |
+| 文档版本 | 2.5（PR #8 复审：§9.3 剩余接线安全改挂 P1-04；§1／§16.4 划出隔离 P0-01 spike） |
+| 文档状态 | 产品与流程决策已确认；P0-01 done；P0-05 仍待 P0-04；其余实施任务 planned |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
 | 代码基线 | `KunoLu/640-skills`，`v1.0.15`，完整 commit `bc8eec1549928fb0966254751b96b611b6334183` |
@@ -13,9 +13,9 @@
 | 初次审核工作树 | 初次审核时 clean；本文件在本会话创建并持续修订，不将初次状态冒充最终实现状态 |
 | 原始输入 | 用户提供《SBTD去Trellis化与Graft替换改造方案.md》，方案版本 v2.0，2026-09-16 |
 | 输入 SHA-256 | `eeefc2d47eb53c0df1094adcd02f983a0b5dbcd74f6af8c5d34038b7a7ba2fcf` |
-| Graft 审核候选 | npm `@nanonets/graft@0.18.0`，npm `gitHead=de8456e892bad5aeee11403e47fb2227773eb27e`；候选不等于已经通过本项目兼容验证 |
-| 本轮交付 | 全会话最终决策、三模式路由、跨会话恢复、目录与身份、迁移／ignore 契约、实施台账、验收及决策覆盖矩阵 |
-| 本轮不执行 | 生产代码改造、工具安装／卸载、真实项目迁移、本机 sync、live automation 修改、commit／tag／push |
+| Graft 审核候选 | npm `@nanonets/graft@0.18.0`，registry `gitHead=de8456e892bad5aeee11403e47fb2227773eb27e`；已在 darwin/arm64 Node v24.15.0 隔离 HOME 实测，见第 9.8 节 |
+| 本轮交付 | 全会话最终决策、三模式路由、跨会话恢复、目录与身份、迁移／ignore 契约、实施台账、验收及决策覆盖矩阵；隔离 HOME 的 P0-01 Graft capability spike（见 9.8，local-only） |
+| 本轮不执行 | 生产代码改造、真实 HOME／host 的工具安装卸载、真实项目迁移、本机 sync、live automation 修改、tag／发布。隔离 spike 的临时安装不是生产安装 |
 | 实施跟踪事实源 | 本文第 14 节任务台账；每完成一项立即同步状态、实际完成时间和证据 |
 
 **结论：接受总体方向，不能原样照搬输入方案。** 去 Trellis、引入 `sbtd-task`、使用 Graft 结构图是可实施方向；“完整对等”“永不 stale”“零联网”“Git tag 可完整回滚”“CI 已经兜底”均不能作为已证实前提。本文已将这些表述改为明确边界、缺口和发布门禁。
@@ -47,7 +47,7 @@ default 的最小任务记录默认在本地忽略的 `.sbtd/tasks/`；lite／st
 
 依照 [SemVer](https://semver.org/lang/zh-CN/)，上述任意一项不兼容公开契约变更已足以采用 major。**推荐从 v1.0.15 直接进入 v2.0.0；不推荐 v1.1.0。** 只有保留全部旧契约、将新流程作为可选增量时才适合 minor，但那与本次干净切换目标冲突。
 
-版本区分：本文版本 `2.3`、产品 tag `v2.0.0`、Graft 候选 `0.18.0`、未来 task frontmatter 的 `schema_version: 1` 是不同命名空间，不能互相替代。
+版本区分：本文版本 `2.5`、产品 tag `v2.0.0`、Graft 候选 `0.18.0`、未来 task frontmatter 的 `schema_version: 1` 是不同命名空间，不能互相替代。
 
 正常发布顺序：P0 契约／验证 → P1 实现及候选验证 → 可选 rc → P2 授权切换 → P3 观察／发布验收 → v2.0.0；备份处置 P3-04 在发布回滚窗口结束后，或按第 11.8 节明确终止分支独立授权执行，不反向阻塞发布。rc 不是双工作流并行期；既有 v1.0.15 tag 和已发布 CHANGELOG 不覆写。
 
@@ -110,7 +110,7 @@ default 的最小任务记录默认在本地忽略的 `.sbtd/tasks/`；lite／st
 | A09 | OMP 可直接继承 Codex MCP | 不作前提 | 从 active host 配置解析并握手；必要时显式 OMP stdio 配置，不翻译 hooks |
 | A10 | 无 hooks 功能完全不降级 | 需限定 | 主动查询可刷新结构图，但被动 markdown projections 不随每次 query 全量刷新 |
 | A11 | 六个 Graft MCP 工具与 GitNexus MCP 对等 | 不成立 | 仅覆盖核心结构查询；无直接 blast MCP、route_map、taint、PDG、rename 等对等承诺 |
-| A12 | 共同父目录自动 build | 有越权扫描风险 | 逐项目默认；仅获授权且子仓集合准确时才构建联邦，不因共父目录扫描兄弟项目 |
+| A12 | 共同父目录自动 build | 有越权扫描风险 | 逐项目默认。禁止对父目录 `graft init`／`build`／MCP。多仓=对每个已授权仓根独立调用后只读汇总，不因共父目录扫描或接线兄弟项目 |
 | A13 | `--deep` 不启用 | 接受并补齐 | 同时禁止 `blast --name`、brain connect 等其他 LLM/cloud 路径 |
 | A14 | 三张检查清单、原生独立复核 | strict 保留，其他模式按需 | 不声称保留 Channel 持久协作语义；共同安全边界不因模式变轻而消失 |
 | A15 | handoff 沿用 caveman 3／5 阈值 | 最终取消计数绑定 | 主动交接改为暂停／切会话／真实上下文压力等事件，仅有实际信息变化才更新 |
@@ -517,7 +517,7 @@ done 任务不生成未完成恢复提示；不预读所有交接历史，不扫
 | 改前影响分析 | 读取相关 symbol 的 callers 与实际源码 | 不用未发生的 diff 冒充改前 blast |
 | 改后影响分析 | 显式 diff 基线 + `blast` CLI + 源码／测试 | 六个 MCP 工具中没有直接 blast，check_freshness 不能替代 |
 | 新鲜度 | `check`／MCP check_freshness | 只报告漂移，不修复、不检测业务正确性 |
-| 多仓理解 | 授权父目录联邦查询 | 分裂图不自动形成跨服务调用边 |
+| 多仓理解 | 对每个已授权仓根独立 `ask`／`map`／MCP，任务内只读汇总 | 禁止父目录 Graft 入口；不自动形成跨服务调用边 |
 | PDG／taint／route map／group／rename | 本次不提供；使用原生源码／LSP／contract 分析 | 不做工具名或返回结构兼容 shim |
 
 基础 Graft 解析并不覆盖本仓库所有 Markdown／YAML／Shell／PowerShell／JSON 文本契约；广泛扫描依然使用文件检索和真实消费者检查。`graft grep` 的“全部”仅针对已索引文件，不是仓库所有文本。
@@ -543,7 +543,7 @@ done 任务不生成未完成恢复提示；不预读所有交接历史，不扫
 
 上游 `init --agents agents` 的 explicit 列表优先于 `--yes`，不会固定安装 Claude。然而该 host 可能因已检测到 OpenCode 而附带写入 `opencode.json`；全局 Codex 路径也不能假定就是当前 `CODEX_HOME`。
 
-**接线实现要求：** 先通过精确版本 dry-run 和隔离 HOME 快照确认副作用。项目写入可用候选命令 `graft init <project> --agents agents --no-global --no-mcp --no-hooks --no-statusline --no-build`，再按授权显式 build；flags 在 P0 实测通过后固化。MCP 使用现有 installer adapter，仅配置被选 host。Codex 官方 hooks 默认不安装；只有用户单独 opt-in，且 active HOME、实际事件和权限范围均验证通过时才启用。hooks 不可用不影响显式 CLI/MCP 分析，不伪造有效性。
+**接线实现要求：** 先通过精确版本 dry-run 和隔离 HOME 快照确认副作用。项目写入可用候选命令 `graft init <project> --agents agents --no-global --no-mcp --no-hooks --no-statusline --no-build`，再按授权显式 build。P0-01 已证实这些 flag 被接受，且 `--no-hooks` 对独立 `CODEX_HOME` 字节级零写入。上游默认（省略 `--no-hooks`）会写入 `hooks.json` 与 `hooks/graft/graft-hooks.cjs`；**没有正向 `--hooks` flag**。SBTD 必须始终传 `--no-hooks`，除非用户单独授权省略该跳过项。不得把省略 `--no-hooks` 写成显式 opt-in。MCP 使用现有 installer adapter，仅配置被选 host。hooks 不可用不影响显式 CLI/MCP 分析，不伪造有效性。
 
 Codex hook 与 Graft marker、MCP key 的写入者必须唯一，不能 Onboard 合并一次、Graft 隐式再写一次。维护全局配置前保存原内容及 ownership；回滚只还原本次拥有的条目，保留其他 MCP、hook、注释和用户修改。
 
@@ -551,7 +551,7 @@ Codex hook 与 Graft marker、MCP key 的写入者必须唯一，不能 Onboard 
 
 OMP 新会话必须做 `initialize`、`tools/list` 和实际 query；`mcp.json` 存在不是可用证明。对多项目 MCP 必须验证每次调用绑定的 repo root，不能让常驻服务所有查询都落到第一个项目。CLI 和 MCP 都不可用时按失败／降级状态报告。
 
-Graft 还存在版本变化后的自动 wiring reconciliation；必须验证原 `--no-global / --no-hooks / --no-mcp` 限制持续有效。图 cache 丢失、旧 stamp 缺字段和升级都在 P0 测试范围；未证明安全前不能在 project-only/check 中启动这种自维护路径。
+Graft 还存在版本变化后的自动 wiring reconciliation。P0-01 已证候选 init flags 被接受，且 `--no-hooks` 对独立 `CODEX_HOME` 字节级零写入。**版本变化后**原 `--no-global / --no-hooks / --no-mcp` 是否持续有效，以及图 cache 丢失、旧 stamp 缺字段和升级路径，改挂 **P1-04 独占**（OMP 路径由 P1-05 遵守同一禁令，不另起一套测试）。未证明安全前不能在 project-only/check 中启动这种自维护路径。
 
 ### 9.4 新鲜度与 diff
 
@@ -567,7 +567,9 @@ Graft 还存在版本变化后的自动 wiring reconciliation；必须验证原 
 
 ### 9.5 多仓、worktree 与跨服务
 
-逐项目 setup 是默认。多个项目共父目录并不授权遍历整个父目录。联邦仅在用户明确选择父目录、完整子仓清单与实际扫描集一致时启用；否则保留逐仓查询，并在任务中汇总 contract。
+逐项目 setup 是默认。**2026-09-17 用户确认：禁止对含未选子仓的父目录调用 Graft；P1 只对明确的单个仓库根调用。** 不得对父目录执行 `graft init`／`build`／MCP。多个项目共父目录不授权扫描或接线兄弟仓。
+
+若任务需要同时理解多个已授权仓：对每个仓根**独立**调用 Graft，再在任务里做**只读汇总**。这不是 `graft init <parent>`：上游对父目录 init 会接线其下全部 git 子仓，无法只接已选清单。本次不把「选父目录 + 清单一致」做成联邦入口。
 
 `--follow-nested-repos`、`--follow-submodules` 默认关闭，各自独立授权；不能为了补一条边扩大到所有嵌套仓库。linked worktree、不同 branch、同名 symbol、从子目录查询均需 fixture 验证。跨服务因果关系最终依赖 routes/client/contract/Revision Set，不依赖图排名。
 
@@ -588,9 +590,38 @@ Graft 还存在版本变化后的自动 wiring reconciliation；必须验证原 
 - 图缺失可使用已安装依赖尝试本地 build；建图、查询或 MCP 失败，则用源码检索、LSP 等可用方式继续，明确 Graft 未提供的辅助证据。
 - Graft 未安装或 native 依赖缺失时，不反复运行安装命令；无法离线取得完整依赖就报告安装未完成，继续能够安全完成的用户任务。安装状态与任务交付状态分别报告，不把降级说成 Graft 安装成功。
 - 离线首次安装仅在已有完整、经校验且适配目标 OS/arch/Node 的依赖产物时尝试；单个顶层 npm tarball 不保证足够。不新增受管离线镜像产品或维护上游 fork。
-- P0-01／AC-10 加入真实断网验收：完整预装环境的 build/query、版本查询失败、缺图、本地依赖缺失、MCP 不可用及降级结果；禁止伪造通过、自动上传、无限重试或把失败转为隐式全局修改。本轮只确认此策略，尚未运行断网整包测试。
+- P0-01／AC-10：预装后 `graft build`／`ask` 在 `sandbox-exec` 下 exit 0。`graft version` 在同一 sandbox 仍打印 `latest on npm: 0.18.0`（exit 0），故版本探针 fail-closed **仍待验证**，不能当作已断网。`blast --name` 无 key 时 stderr 提示后仍 exit 0、不调用 LLM。
 
-离线策略与三模式共同生效：已安装本地能力优先，工具不可用换方法，无法实际执行的部分如实报告；default/lite 不因缺辅助工具或形式文档冻结普通任务，strict 对其真正必需的证据仍不能虚报通过。未执行整包断网测试的事实保持不变。
+离线策略与三模式共同生效：已安装本地能力优先，工具不可用换方法，无法实际执行的部分如实报告；default/lite 不因缺辅助工具或形式文档冻结普通任务，strict 对其真正必需的证据仍不能虚报通过。
+
+### 9.8 P0-01 隔离 spike 结果（2026-09-17T10:14:26+08:00）
+
+环境：darwin 27 arm64，Node v24.15.0，npm 12.0.2。隔离 `HOME`／`CODEX_HOME`／XDG／npm prefix；开发者 `~/.codex` 配置与仓库 `graft/` 前后摘要一致。完整日志在本机 `/tmp/sbtd-p0-01-graft-spike/`（不入库）。
+
+npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；仅 `ignore-scripts=false` 不够。必须显式 `--allow-scripts`（含 `tree-sitter-cli`）。脚本被挡时 CLI 在 import 期因缺少 `tree-sitter-kotlin` native（Node ABI 137）崩溃，**不得把该次 exit 1 当成命令语义**。
+
+安装后的 `package.json` 无 `gitHead`；registry 元数据仍有 pin。integrity 以 npm dist 为准。
+
+| 能力 | 状态 | 证据要点 | AC |
+|---|---|---|---|
+| `@nanonets/graft@0.18.0` 隔离安装并可运行 `graft --version` | proven | 允许 scripts 后 exit 0，stdout `0.18.0` | AC-01 |
+| 结构 `build`／`ask`／`callers`／`skeleton`／`grep`／`map`／`blast`／`check` | proven | 最小 Python/JS fixture；无 LLM | AC-01、AC-07 |
+| `check` 在编辑后 STALE 且不自动 refresh | proven | 改 `app.py` 后 exit 1，stdout `graph check: STALE` | AC-07 |
+| MCP stdio `initialize`＋`tools/list` | proven | 六工具：`graft_find_code`、`graft_file_api`、`graft_check_freshness`、`graft_trace_calls`、`graft_find_all`、`graft_repo_map`；无 blast 工具 | AC-01、AC-08 |
+| 候选 init flags `--no-global --no-mcp --no-hooks --no-statusline --no-build` | proven | 单仓 exit 0；跳过 HOME 写入 | AC-08 |
+| 上游默认安装 Codex hooks | proven（默认不安全） | 省略 `--no-hooks` 写入隔离 `CODEX_HOME` 的 `hooks.json` 与 `graft-hooks.cjs` | AC-08 |
+| `--no-hooks` 零 hook 写入 | proven | 独立 `CODEX_HOME` 前后 digest 相同，仅占位 `config.toml` | AC-08 |
+| 正向 `--hooks`／显式 opt-in flag | **unsupported** | `graft init --help` 无正向开关；不能把省略 `--no-hooks` 当 opt-in | AC-08 |
+| 预装后离线 build/query | proven | sandbox 下 build/ask exit 0 | AC-10 |
+| 离线 `graft version` fail-closed | still-to-verify（**P1-03 所有**） | sandbox 仍 exit 0 并显示 npm latest。不阻断 P0-01；P1-03 必须用真实断网证明版本探针不可达 | AC-10 |
+| `blast --name` 无 key 不走 LLM | proven（仍须禁该 flag） | stderr `no API key ... keep their symbol names`，exit 0 | AC-10 |
+| 只对选定仓 `build` 时未选 sibling 零写入 | proven | selected-b build 前后 sibling digest 不变 | AC-09 |
+| 父目录 `graft init` 不联邦未选仓 | **unsupported／安全失败**（产品已收口） | 上游 `init <parent>` 会接线全部 git 子仓。用户已确认 SBTD **永不**对含未选子仓的父目录调用 Graft；P1 只对显式单个仓库根调用。P1-06 仍须证明实现遵守此禁令 | AC-09 |
+| 隔离 uninstall dry-run 后 `-y --no-global` | proven | 项目内 Graft 接线移除，开发者 HOME 未改 | AC-01、AC-08 |
+| 开发者真实 HOME／Codex／仓库 graft 路径 | proven | 受管路径摘要一致；newer 文件仅为 OMP session 噪音 | AC-08 |
+| 版本变化后 reconciliation 保持 `--no-global/--no-hooks/--no-mcp`；cache 丢失、缺 stamp、升级 | still-to-verify（**P1-04 所有**） | spike 未覆盖。不阻断 P0-01；未证明前 project-only/check 不启动自维护 | AC-08 |
+
+**P0-01 台账为 `done`。** spike 证据见第 9.8 节。AC-09 不以「上游不再联邦」通过，而以用户确认的调用禁令收口：禁止对含未选子仓的父目录调 Graft，P1 只对明确的单个仓库根调用。Graft 没有正向 `--hooks` flag；SBTD 的 opt-in 是用户确认后持久保存的授权，用来省略 `--no-hooks`。未获该授权必须传 `--no-hooks`。§9.3 剩余升级／cache／stamp／reconciliation 改挂 P1-04，不阻断 P0-01。
 
 ## 10. Onboard、catalog 和公开安装契约
 
@@ -1042,7 +1073,7 @@ P3-04 有两个条件分支，均须无未解决迁移／恢复问题、无使�
 
 **残留策略：** 当前有效入口／模板／普通执行路径不得依赖 Trellis/GitNexus。允许旧词的范围必须明确列出：本 PRD 与既有历史文档、已发布 CHANGELOG／archive、原样 external mirror、迁移器和旧输入 fixture。不能用“全仓零匹配”删除历史；也不能把真实遗留运行调用藏进允许清单。
 
-本轮仅修订 PRD，README.md、README.html、版本化 automation prompt、ENTRYPOINT 与 CHANGELOG 均保持现状：它们仍描述实际 v1 产品，不提前声称 v2 已可用。未来实现任务必须同步这些受影响入口；live automation 仍仅在显式 sync 中发布。
+除 P0-01 隔离 spike 证据写入本文外，本轮仅修订 PRD。README.md、README.html、版本化 automation prompt、ENTRYPOINT 与 CHANGELOG 均保持现状：它们仍描述实际 v1 产品，不提前声称 v2 已可用。未来实现任务必须同步这些受影响入口；live automation 仍仅在显式 sync 中发布。
 
 ## 14. 优先级实施台账
 
@@ -1050,7 +1081,7 @@ P3-04 有两个条件分支，均须无未解决迁移／恢复问题、无使�
 
 这是本次改造的**唯一总进度表**。会话 todo、子任务文件、报告只能提供证据，不代替更新本表。
 
-- 状态枚举：`planned / in-progress / checking / done / blocked`。本轮只有评审任务完成，未来开发任务不预填 done。
+- 状态枚举：`planned / in-progress / checking / done / blocked`。评审任务与 P0-01 已完成；其余实施任务不预填 done。
 - `完成时间` 为实际验收通过且台账同步时的带时区 ISO 8601；未完成使用 `—`，不是预计日期。
 - 每完成一个任务，先核对其验收及依赖，再**同一轮立即**更新状态、完成时间、证据／备注，不等整个 phase 结束。状态变 checking 不是完成。
 - 单行部分完成时保持 in-progress/checking；只有确实可独立交付才拆新稳定 ID，并更新依赖。P2 项目清单确认后逐项目拆行，父项汇总不能冒充每项目证据。
@@ -1089,7 +1120,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | AC-01/07/08/09/10；真实离线、默认无 hooks/显式 opt-in、MCP/query/blast/uninstall，不能仅 mock | AFK | planned | — |
+| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节。spike 实测完成。AC-09 收口：禁止对含未选子仓的父目录调 Graft，P1 只对显式仓根调用。AC-10 已证离线 build/ask 与无 LLM `--name` 降级；版本探针 fail-closed 改挂 P1-03。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | done | 2026-09-17T10:33:14+08:00 |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23；保留真实安全／证据语义，明确 strict 强制与 default/lite 按需，避免旧常驻规则冲突 | AFK | planned | — |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31；唯一事实源、分支冲突、重开完成事件保全及模式恢复契约 | AFK | planned | — |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
@@ -1106,10 +1137,10 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 |---|---|---|---|---|---|---|---|
 | P1-01 | P1 | onboard参数、交换schema与统一envelope基础契约 | P0-07 | AC-13/29接口子项，含批准快照、私有操作、init迁移上下文和deploymentEvidence；只证明解析/校验基础，行为归对应任务 | AFK | planned | — |
 | P1-02 | P1 | 按需脚手架、最小状态校验与 bootstrap 边界 | P1-01、P0-08 | AC-03/12/13/23；不 onboard 也可开展普通任务；reset 保留数据；bootstrap 不强制每项目生成 | AFK | planned | — |
-| P1-03 | P1 | Graft CLI 检测／确认安装／遥测与版本约束 | P0-01、P1-01 | AC-07/10/13；只读无副作用，安装前 DNT，失败不报成功 | AFK | planned | — |
-| P1-04 | P1 | Codex接线、显式opt-in hooks及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；共享去重、默认无hooks、模板后接线；隔离真实执行init上下文及累计证据续作/保存 | AFK | planned | — |
-| P1-05 | P1 | OMP接线、CLI分析及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；继承资源去重、无Codex hooks；隔离握手/query及init上下文累计证据生产 | AFK | planned | — |
-| P1-06 | P1 | 多项目／联邦授权／worktree 隔离 | P1-02、P1-04、P1-05 | AC-09/13；未选项目零写入，逐项目结果，父目录扫描集可证明 | AFK | planned | — |
+| P1-03 | P1 | Graft CLI 检测／确认安装／遥测与版本约束 | P0-01、P1-01 | AC-07/10/13；只读无副作用，安装前 DNT，失败不报成功。**独占** AC-10 剩余：真实断网下 `graft version`／npm 元数据不可达且不循环安装，不得用仍能查出 latest 的 sandbox 冒充 | AFK | planned | — |
+| P1-04 | P1 | Codex接线、显式opt-in hooks及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；共享去重、默认无hooks、模板后接线；隔离真实执行init上下文及累计证据续作/保存。**独占** §9.3 剩余：版本变化后 reconciliation 仍保持 `--no-global/--no-hooks/--no-mcp`；图 cache 丢失、旧 stamp 缺字段、升级路径。未证明前不得在 project-only/check 启动自维护 | AFK | planned | — |
+| P1-05 | P1 | OMP接线、CLI分析及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；继承资源去重、无Codex hooks；隔离握手/query及init上下文累计证据生产。遵守 P1-04 对 Graft 自维护路径的禁令，不另起一套升级／cache／stamp 测试 | AFK | planned | — |
+| P1-06 | P1 | 多项目／worktree 隔离；禁止父目录 Graft 入口 | P1-02、P1-04、P1-05 | AC-09/13；只对显式仓根调用；未选 sibling 零写入；多仓理解=逐仓调用后只读汇总，证明未对父目录 init/build/MCP | AFK | planned | — |
 | P1-07 | P1 | Bash installer 及迁移／recovery 转发 | P1-01、P1-03、P1-06、P1-20 | AC-13/29/35；只转发统一接口，独立确认，不实现另一套恢复或处置逻辑 | AFK | planned | — |
 | P1-08 | P1 | PowerShell installer 及迁移／recovery 对等转发 | P1-01、P1-03、P1-06、P1-20 | AC-13/29/35；Windows 真执行与统一输入／结果，不绕过资源授权 | AFK | planned | — |
 | P1-09 | P1 | 全部 bundled 旧路由清理与强制触发按模式裁决 | P0-05、P0-06、P1-01 | AC-02/14/16/23；不只改 router；Book/BDD 按模式，Knowledge/evidence 和 external mirror 保持 | AFK | planned | — |
@@ -1162,8 +1193,8 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 | AC-06 | lessons 身份与历史资产保全 | 合法/非法/缺失、主 checkout 回退、首次写入询问；不猜名字；marker/ID 不变；全部 detail links 可达 |
 | AC-07 | freshness 和 diff 不夸大 | 修改后 query、check 前后；busy/失败/disabled；same-size+mtime；untracked/deleted/rename/unsupported；basis 明确 |
 | AC-08 | Host 接线顺序、幂等、默认无 hooks 与隔离正确 | 模板后接线、二次 init/reset 单 fence；默认不装 hooks，opt-in 真事件验证；隔离 HOME/Codex/OMP 根，预期外零写入 |
-| AC-09 | 多仓和 worktree 不越界 | 两个选定仓与一个未选 sibling；父目录联邦范围；工作树不同 branch；MCP root 对应 |
-| AC-10 | 联网与完全离线策略均符合用户选择 | 受管入口 DNT、无 LLM/cloud/代码上传；允许 npm 元数据；真实断网验证预装本地分析、版本不可达、缺依赖不循环安装及源码/LSP 降级，安装与任务状态分开 |
+| AC-09 | 多仓和 worktree 不越界 | 两个选定仓与一个未选 sibling **零写入**；证明未对父目录做 `init`／`build`／MCP；工作树不同 branch；MCP root 对应**选定仓根** |
+| AC-10 | 联网与完全离线策略均符合用户选择 | 受管入口 DNT、无 LLM/cloud/代码上传；允许 npm 元数据。P0-01 已证预装后离线 build/ask。**版本不可达／不循环安装**由 P1-03 用真实断网证明 |
 | AC-11 | 可安装 catalog 与全局 Skill cutover 正确 | P0 原子替换两旧 entry 为 sbtd-task；隔离 catalog 安装实际得到完整新 Skill；14 bundled／19 external；完整 init/reset，旧身份冲突保留 |
 | AC-12 | 项目四条新增与源仓库七行 ignore 各自正确 | 保留通用段；根精确断言独立于模板；真实 Git 正反探针、broad ignore 冲突、packages/graft 不误伤、重复构建不变宽 |
 | AC-13 | CLI/JSON/两安装器一致 | Python 命令真实运行；单 JSON；非零错误；Bash3.2/EOF/PTY；Windows PowerShell；project-only 不装全局工具 |
@@ -1236,17 +1267,17 @@ unit 继承项目报告约定；Web／Mobile formal run 继续沿用既有 Playw
 
 ### 16.4 本轮验证范围
 
-本轮只审核并写 PRD。已执行基线读取、差异核对、文件计量、npm metadata／pinned source／Context7 文档交叉检查；随后对本文执行结构、任务 ID、依赖、状态、时间和本地路径检查。
+本轮主体是审核并写 PRD，另已完成隔离 HOME 的 P0-01 Graft 0.18.0 capability spike（见 9.8）。已执行基线读取、差异核对、文件计量、npm metadata／pinned source／Context7 文档交叉检查；随后对本文执行结构、任务 ID、依赖、状态、时间和本地路径检查。
 
-历史版本 2.2 为 45 项任务／34 条 AC。2.3 保留旧 ID 和完成时间，新增 R-09、P1-20、P3-04 及 AC-35～37，当前为 48 项任务、37 条 AC；其中 39 项是未执行的实施／发布后任务。R-09 只有在循环 review 对当前正文无新发现且 advisor 全部处理后才能完成。
+历史版本 2.2 为 45 项任务／34 条 AC。2.3 保留旧 ID 和完成时间，新增 R-09、P1-20、P3-04 及 AC-35～37，当前为 48 项任务、37 条 AC；R-01～R-09 与 P0-01 已完成，其余 **38** 项实施／发布后任务未执行。R-09 只有在循环 review 对当前正文无新发现且 advisor 全部处理后才能完成。
 
 文档 2.0 当时的结构检查与读者复核已通过，详见 R-06 历史记录；随后独立 reviewer 发现的六项契约缺口在本版修订。第 22 节记录本版验证范围，R-07 仅在修订和最终校验通过后标记完成，不能以此前通过的读者检查否定新发现。
 
 本轮在临时 Git 仓库验证 PRD 中的候选规则：项目模板 10 个应忽略／17 个应可追踪路径，源仓库七行规则 8 个应忽略／5 个应可追踪路径，均通过；真实项目模板及根 `.gitignore` 未修改。这是 ignore 语义证明，不是安装器／Graft／三模式运行验证。命令使用原生 `git check-ignore --no-index --stdin -z` 获取准确机器结果，不依赖 rtk 缓存。
 
-未执行生产 unit 全量、Graft 安装／MCP smoke、Codex/OMP 新流程、Playwright 或 Maestro：本轮未改变运行行为且未获真实环境迁移授权。不能报告为 v2 运行时通过。`rtk: used` 用于基线 Git 命令；文档检查用 eval 原生执行，不依赖缓存或报告回放。
+未执行生产 unit 全量、真实 HOME／host 的 Graft 安装／MCP smoke、Codex/OMP 生产接线、Playwright 或 Maestro。隔离 spike 不能报告为 v2 运行时通过。`rtk: used` 用于基线 Git 命令；文档检查用 eval 原生执行，不依赖缓存或报告回放。
 
-Web/Mobile、Knowledge Ingest、API Contract、E2E Mode、Evidence Publication 本轮均 `not-needed`；CI/Graft 运行验证是 P0/P1 待办，不是本轮已生成报告。GitNexus 未参与本轮辅助分析；本地未见索引，本次采用直接源码与静态调用面审计，不声称 GitNexus 无依赖。
+Web/Mobile、Knowledge Ingest、API Contract、E2E Mode、Evidence Publication 本轮均 `not-needed`。P0-01 已有 local-only 报告，不是 published／CI／host 证据。生产 CI/Graft 运行验证仍是 P1 待办。GitNexus 未参与本轮辅助分析；本地未见索引，本次采用直接源码与静态调用面审计，不声称 GitNexus 无依赖。
 
 ## 17. 轻量化目标、成本边界与观察方案
 
@@ -1294,10 +1325,10 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 
 ### 18.2 当前待验证／待授权项
 
-1. P0-01 Graft 真实能力测试尚未执行；不影响本文作为实施需求交付，阻断正式集成放行。
+1. P0-01 **done**（2026-09-17T10:33:14+08:00）。AC-09 产品收口已确认。AC-10 剩余「`graft version` 断网 fail-closed」改挂 **P1-03**。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**，均不阻断 P0-01。P1-06 必须证明未对父目录 init/build/MCP。Graft 无正向 `--hooks` flag；未授权必须传 `--no-hooks`。
 2. P2-01 未提供目标项目清单、真实 HOME 和清理范围；不得猜测或遍历用户项目替代授权。
 3. Windows、Codex/OMP host 环境及正式证据 runner 在对应任务开始前确认；不可用就记录 blocked。
-4. 用户已确认本会话最终产品／模式／存储／身份／ignore 决策，并授权统一修订本 PRD；尚未授权生产代码实施、真实项目迁移、本机 sync、卸载、tag 或发布。上述产品确认不代替以后每次实际迁移及清理授权。
+4. 用户已确认本会话最终产品／模式／存储／身份／ignore 决策。生产 Onboard 代码、真实项目迁移、本机 sync、卸载、tag 或发布仍须另行授权。
 
 ### 18.3 状态事件记录
 
@@ -1317,6 +1348,13 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T00:23:44+08:00 | R-09／文档2.3完成 | 初始3项及循环新增17项发现已处理，第7轮完整review零新发现，advisor全部关闭；48任务/37AC/37决策/29修复映射校验通过，39项实施仍planned，仅修改PRD |
 | 2026-09-17T07:51:40+08:00 | R-09重开 | pre-manifest责任/授权契约补强后，仅做定点检查不足以沿用旧零发现结论；接受advisor blocker，清空当前完成时间，等待当前正文完整复审，历史完成事件保留 |
 | 2026-09-17T08:20:32+08:00 | R-09重新完成 | 重开后修复F-30～F-35，第11轮对新契约全文复审零发现；确认时间与载体一致、授权先落盘、AC-37分层通过，48任务/37AC/35修复映射校验通过；39项实施仍planned |
+| 2026-09-17T10:14:26+08:00 | P0-01／文档 2.4 | 隔离 HOME 实测 `@nanonets/graft@0.18.0`。当时误标 done。父目录 init 联邦未选 sibling 为 unsupported／安全失败；无正向 hooks flag；npm 12 需显式 allow-scripts。不是 AC 全通过。 |
+| 2026-09-17T10:30:55+08:00 | P0-01 done→blocked | AC-09 未通过不能标 done，否则会解锁 P0-05。完成时间清空为 `—`；10:14:26 事件保留为 spike 实测记录。 |
+| 2026-09-17T10:33:14+08:00 | P0-01 blocked→done | 用户确认：禁止对含未选子仓的父目录调 Graft，P1 只对明确的单个仓库根调用。AC-09 以此收口；P1-06 仍须证明实现。 |
+| 2026-09-17T10:41:11+08:00 | §9.5 收紧 | 联邦不得再用 `graft init <parent>`。多仓只允许逐仓独立调用后的只读汇总。 |
+| 2026-09-17T10:56:03+08:00 | PR #8 review 修正 | AC-10 版本探针剩余改挂 P1-03。A12、§9.1、AC-09 删除父目录联邦入口，改为显式仓根＋禁止父目录 init/build/MCP。 |
+| 2026-09-17T11:17:51+08:00 | PR #8 二次 review 修正 | §9.3 剩余接线安全改挂 P1-04。§1／§16.4 划出隔离 P0-01 spike；未执行实施／发布后任务改为 38。 |
+| 2026-09-17T11:31:21+08:00 | PR #8 三次 review 修正 | 本文当前版本引用改为 2.5。§22.2 当前摘要改为 38 项剩余并划出隔离 spike；历史 2.4／39 项事件行不改。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
@@ -1327,7 +1365,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 - 基线 tag 与当前 HEAD：第 1 节两个完整 SHA；本轮读取 `git log`、`git status`、`git diff v1.0.15 --stat`。
 - Onboard 生产代码与测试：第 3 节精确路径；基线与 HEAD 的这些文件相同。
 - 本仓库维护边界：[ENTRYPOINT](../../ENTRYPOINT.md)、[README](../../README.md)、[项目 lessons 短入口](../lessons.md)、[安装及身份 lessons](../lessons/topics/repository-workflow.md)。
-- 既有 PRD 形式参考：[Ponytail PRD](sbtd-workflow-ponytail-integration-remediation-prd.md)。其历史技术结论不替代本 PRD 最新基线。
+- P0-01 隔离 spike 正式快照：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json`、同 stem 中文 `.md`、同 stem `.logs/`（38 个 case 的完整 stdout/stderr/exit）。local-only，未纳入版本库，也未改项目 `.gitignore`（P0-09）。不能证明 PR head。矩阵摘要以第 9.8 节为准。
 
 ### 19.2 Graft 官方证据
 
@@ -1370,7 +1408,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | D-02 | 去 Trellis runtime／jsonl／Channel，不引入 OpenSpec 或替代调度器，不留旧 Skill alias | 4–5、7.7–7.8、10.3 | P0-04、P0-07、P1-09、P1-13 | AC-02、AC-11、AC-16 |
 | D-03 | Graft 结构层接入，明确 freshness/diff/MCP/PDG 等不对等边界，禁止 deep/name/cloud | 3–4、9 | P0-01、P1-03 | AC-01、AC-07、AC-10 |
 | D-04 | 允许安装及 npm 元数据；安装前及持续受管入口 DNT，禁止代码／查询／项目数据上传 | 9.2、9.6 | P1-03、P1-04、P1-05 | AC-08、AC-10 |
-| D-05 | 完全离线用本地版本；版本不可达不阻断；缺图／依赖／MCP 可降级且不循环安装 | 9.7 | P0-01、P1-03 | AC-10、AC-23 |
+| D-05 | 完全离线用本地版本；版本不可达不阻断；缺图／依赖／MCP 可降级且不循环安装 | 9.7、9.8 | P1-03 | AC-10、AC-23 |
 | D-06 | Codex active HOME／OMP 实际来源、GUI PATH、MCP 根绑定；不自动接线未选平台 | 9.3、10 | P1-04、P1-05、P1-06 | AC-08、AC-09、AC-13 |
 | D-07 | OMP 不翻译 Codex hooks；自动提示 hooks 默认关闭，启用需独立 opt-in，原生 OMP 扩展不在范围 | 5.2、9.3、17 | P0-01、P1-04、P1-05 | AC-08、AC-20 |
 | D-08 | default 按需、lite 短清单、strict 完整适用强流程，三者都使用 SBTD | 7.1、7.6、12 | P0-10、P0-04、P1-09 | AC-02、AC-04、AC-23 |
@@ -1494,7 +1532,7 @@ Advisor 处理：nextStep 命名与批次 apply_receipt 的旧意见已在当前
 | 10 | PostAdvisorRecheck | 1c22ef74dec4208be2f0d853f4018a07536e521710d9f360b0f2761def0a5fe8 | 2 | 阶段分层/删除前保存已获确认；F-34/F-35已修订，待新快照全文复审 |
 | 11 | PostAdvisorThirdReview | 9f01be78f9f912785b20c58a9f377ea6184a8f1ea453c4ef1eb2e192af10fc84 | 0 | ready；全文复核确认时间/载体一致、删除前保存及P1/P3验收分层，重开后的契约收敛 |
 
-各行保留当轮状态；第7/8轮结果只覆盖当时快照，第11轮才覆盖之后的pre-manifest契约补强及F-30～F-35修复。新结构检查通过48项任务、37条AC、37项决策、35项修复映射、43张表及5条本地链接。当前R-01～R-09完成，39项实施／发布后任务仍planned；仅修改PRD，不把文档复审冒充运行验证。
+各行保留当轮状态；第7/8轮结果只覆盖当时快照，第11轮才覆盖之后的pre-manifest契约补强及F-30～F-35修复。新结构检查通过48项任务、37条AC、37项决策、35项修复映射、43张表及5条本地链接。当前R-01～R-09与P0-01完成，其余 **38** 项实施／发布后任务仍planned。P0-01隔离spike见第9.8节（local-only），不是生产／host／CI运行验证。不把文档复审冒充v2已交付。
 
 停止条件：每轮先更新当前文件，再创建一个 reviewer 进行完整只读 /review，核对新发现和 advisor；有成立问题就继续修复。只有当前正文 reviewer 无新发现、所有已收到 advisor 已处理、结构／依赖检查通过，才结束。后续代码实现、真实迁移和备份销毁均仍未执行，不作为本轮文档通过的虚假证据。
 
