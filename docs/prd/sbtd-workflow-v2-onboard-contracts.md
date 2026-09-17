@@ -111,3 +111,21 @@ F3补充正向边界实际复现：只有apply阶段证据的合法恢复plan曾
 F5的合法续作边界再次获原reviewer确认并实测：before/after均已知且相等、原件非absent、旧backup_ref/protection_ref为空时，重试可建立首份匹配before的引用；未知状态或已落地变化不能事后补拍所谓原件；任何已有非空原始引用保持不变。三类收据的合法无写入失败曾被拒绝，已取得真实red并修正，unknown/changed负面边界保留。当前协议144项全部通过，最终head全量／安装副本与下一轮独立review仍待执行。
 
 第二轮修复后的提交前验证：parser39项、协议144项及全量449项／61.674s通过；新5个Python文件Ruff、格式与ty通过。可读性复核保留集中不变量的helper，移除临时共享字典和测试中未用状态的提前构造，已纳入该全量。以上是dirty本地证据；不把它重标为后续冻结commit结果，安装副本、诊断隐私及nullable失败smoke须在新head重新执行后再发起第三轮独立review。
+
+## 第三轮独立 review
+
+冻结head `c9c86f3835e8f17a2f0c4d882f132c8299156ac8` 的449项／115.111s全量、精确安装副本、parser隐私和nullable失败各3场景、静态及四份envelope均通过；`P101SurfaceReviewThree`零新发现。Main另以完整来源复现“仅逆cleanup却声明restored/pre-apply，4个资源仍非初态”，已保留失败报告；`P101ProtocolReviewThree`确认该P1并共提出9项finding，当前head仍禁止合并。
+
+本轮修正边界：批准的share/redact候选须关联apply目标／来源及成功后态；planned恢复须覆盖选定资源的已证明变更链并最终到达manifest具体初态，不能空链／省略资源虚报恢复；成功恢复refs绑定plan；change与文件／目录owner类别相容；无产物时当前阶段生成的ID必须为空；恢复项目根唯一；阶段／验收私有资源不能跨项目重复；成功cleanup保留资产与verification快照一致；已提供证据的阶段时间保持因果顺序，重试时间属于本次执行，不倒置于输入收据。
+
+补充领域／数据判断：publication candidate是已批准的完整投影，operation是逻辑操作、resource是一次物理写入的单元，三者不能各自悬空。target pre-apply是恢复终态承诺，不等于“选中的逆向步骤执行完”。当前资源快照与已知无写入／no-op可证明无需动作；未知／无原件的已落地变化不能猜测。字段与ID算法不改，不新增journal/锁/索引，不把声明合法当实际文件／授权／运行时证明。
+
+为避免fixture继续掩盖缺口，required shared-notes补为新的r4：Alpha内的markdown apply-only资源，初态absent、候选和apply后态为同一file checksum；不加入deploy/cleanup删除集合，verification/cleanup保留它，recovery以有保护的apply inverse撤销新文件。现有r1/r2/r3/s1次序及状态向量保持。Fixture与测试分属两个写入者，均禁止自行验证；Main统一运行red/green、静态、全量及安装副本，并在结束后再次独立review。
+
+两个写入者均跳过验证。Main首轮实际执行为15项、30个预期失败及5个fixture错误（不是worker所述17项已通过控制）；修正blocked envelope空诊断、no-action资源错误清空operation_ids、以及ref/head非合法配对后，取得15项／35个预期失败／无fixture错误。错误和原报告保留，不以无关前置拒绝当作目标覆盖。
+
+9项修复后定点15项与全协议159项通过；新增“完整初态快照可无动作／空快照不可猜测”和“只有后续阶段证据不能止于中间态”两条边界。它们在保留的c9安装副本真实codec上均失败，文件hash与该head静态报告一致；未改活动工作树来重现，也未mock返回值。当前实现通过对应定点。原4资源终态反例已在新增r4保留完整apply inverse后重跑，正确返回binding拒绝，不能靠漏r4的无关错误冒充修复。
+
+可读性／Ponytail复核删除了一个仅检查fixture自洽的重复正向测试及field-copy断言，保留真实API正向控制和负面边界；现有144项行为测试未删除，当前协议共160项通过。跨项目唯一性检查使用逐资源集合查找，避免移动到全局集合后产生反复全量相交；阶段／恢复时序只核对声明因果，不证明真实执行或授权。Ruff发现的一处嵌套with及ty发现的可空ID索引／fixture absent哨兵类型已修正，未使用ignore/cast压制；新5个Python文件静态检查通过。
+
+第三轮修复后的提交前全量465项／72.127s通过，parser39项、协议160项；新5个Python文件Ruff／格式／ty通过。该轮为dirty本地证据；冻结新head后仍须重新执行全量、精确安装副本及各实际smoke，再进行第四轮独立review，当前不填写ready／done。

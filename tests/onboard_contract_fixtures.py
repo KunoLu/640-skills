@@ -25,7 +25,7 @@ import hashlib
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 ROOT = Path(__file__).resolve().parents[1]
 _MODULE_PATH = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard_contracts.py"
@@ -92,14 +92,23 @@ RESOURCES = {
         ("apply", "deploy", "cleanup"),
         BOTH,
     ),
+    "r4": (
+        "markdown",
+        "/private/work/alpha/docs/spec/notes.md",
+        ("apply",),
+        [ALPHA],
+    ),
 }
 
-# state digest numbers per resource: orig / after-apply / after-deploy
-STATE_NUMBERS = {
+# state digest numbers per resource: orig / after-apply / after-deploy.
+# "absent" marks a stage where the resource genuinely does not exist (r4 has no
+# pre-apply original); None marks a phase the resource does not declare at all.
+STATE_NUMBERS: dict[str, tuple[int | Literal["absent"], int, int | None]] = {
     "r1": (11, 12, 13),
     "r2": (21, 22, None),
     "r3": (31, 32, 33),
     "s1": (41, 42, 43),
+    "r4": ("absent", 82, None),
 }
 
 
@@ -109,6 +118,8 @@ def resource_state(key: str, stage: str) -> dict[str, Any]:
     number = {"orig": orig, "apply": after_apply, "deploy": after_deploy}[stage]
     if number is None:
         raise ValueError("fixture resource has no state for the requested stage")
+    if number == "absent":
+        return dict(ABSENT)
     if RESOURCES[key][0] == "directory":
         return directory_state(number)
     return file_state(number)
@@ -128,6 +139,11 @@ def backup_ref_of(key: str, stage: str) -> dict[str, Any]:
 
 def _file_ref(path: str, number: int) -> dict[str, Any]:
     return {"path": path, "state": file_state(number)}
+
+
+# Approved shared-notes publication candidate; also the exact r4 apply copy
+# source and template-source ownership reference so both always correspond.
+PUBLICATION_CANDIDATE = _file_ref("/private/candidates/notes.md", 82)
 
 
 def build_operation(key: str, phase: str) -> dict[str, Any]:
@@ -150,6 +166,17 @@ def build_operation(key: str, phase: str) -> dict[str, Any]:
                 },
                 "name": "sbtd-task",
             }
+            selector = "whole-resource"
+        elif owner_kind == "markdown":
+            change = {
+                "kind": "copy-file",
+                "source_ref": copy.deepcopy(PUBLICATION_CANDIDATE),
+            }
+            ownership = {
+                "kind": "template-source",
+                "reference": copy.deepcopy(PUBLICATION_CANDIDATE),
+            }
+            selector = "whole-resource"
         else:
             change = {
                 "kind": "copy-file",
@@ -160,8 +187,8 @@ def build_operation(key: str, phase: str) -> dict[str, Any]:
                 "reference": _file_ref("/private/source/base-config", 72),
                 "key_path": ["sbtd"],
             }
+            selector = "sbtd.managed"
         before = {"kind": "state", "state": resource_state(key, "orig")}
-        selector = "whole-resource" if owner_kind == "directory" else "sbtd.managed"
     elif phase == "deploy":
         change = {
             "kind": "ensure-file-block",
@@ -204,7 +231,7 @@ def operations_of(key: str) -> dict[str, dict[str, Any]]:
 
 def build_publication_items() -> list[dict[str, Any]]:
     share_sources = [_file_ref("/private/work/alpha/docs/notes.md", 81)]
-    share_candidate = _file_ref("/private/candidates/notes.md", 82)
+    share_candidate = copy.deepcopy(PUBLICATION_CANDIDATE)
     local_sources = [_file_ref("/private/work/alpha/cache/local.bin", 83)]
     return [
         {
@@ -254,6 +281,7 @@ def build_manifest_payload() -> dict[str, Any]:
     r3_ops = operations_of("r3")
     s1_ops = operations_of("s1")
     shared_ids = sorted(operation["operation_id"] for operation in s1_ops.values())
+    r4_ops = operations_of("r4")
     return {
         "projects": [
             {
@@ -268,6 +296,7 @@ def build_manifest_payload() -> dict[str, Any]:
                     r1_ops["cleanup"],
                     r2_ops["apply"],
                     r2_ops["cleanup"],
+                    r4_ops["apply"],
                 ],
                 "shared_operation_ids": shared_ids,
             },
@@ -331,7 +360,9 @@ def build_resource_result(
     before = resource_state(key, before_stage)
     after = ABSENT if after_stage == "cleanup" else resource_state(key, after_stage)
     if status == "succeeded":
-        backup = backup_ref_of(key, before_stage)
+        backup = (
+            None if before["type"] == "absent" else backup_ref_of(key, before_stage)
+        )
         error_text = None
     else:
         backup = None
@@ -380,7 +411,7 @@ def build_apply_receipt_payload(manifest: dict[str, Any]) -> dict[str, Any]:
         "previous_receipt_id": None,
         "status": "applied",
         "projects": [
-            _stage_project(ALPHA, "applied", ["r1", "r2"], "apply"),
+            _stage_project(ALPHA, "applied", ["r1", "r2", "r4"], "apply"),
             _stage_project(BETA, "applied", ["r3"], "apply"),
         ],
         "shared_results": [build_resource_result("s1", "apply")],
@@ -453,13 +484,18 @@ def build_cleanup_candidate(key: str, observed_stage: str) -> dict[str, Any]:
     }
 
 
+def retained_asset_of(key: str) -> dict[str, Any]:
+    """Object ref for a published asset retained through verification/cleanup."""
+    return {"path": RESOURCES[key][1], "state": resource_state(key, "apply")}
+
+
 def build_verification_payload(
     manifest: dict[str, Any],
     apply_receipt: dict[str, Any],
     deployment_evidence: dict[str, Any],
 ) -> dict[str, Any]:
     def verified_project(
-        root: str, keys: list[str], stages: list[str]
+        root: str, keys: list[str], stages: list[str], retained: list[str]
     ) -> dict[str, Any]:
         return {
             "root": root,
@@ -468,7 +504,7 @@ def build_verification_payload(
             "status": "verified",
             "reason": "",
             "nextStep": "",
-            "retained_assets": [],
+            "retained_assets": [retained_asset_of(key) for key in retained],
             "cleanup_candidates": [
                 build_cleanup_candidate(key, stage) for key, stage in zip(keys, stages)
             ],
@@ -480,8 +516,8 @@ def build_verification_payload(
         "deployment_evidence_hash": raw_digest_of(deployment_evidence),
         "status": "verified",
         "projects": [
-            verified_project(ALPHA, ["r1", "r2"], ["deploy", "apply"]),
-            verified_project(BETA, ["r3"], ["deploy"]),
+            verified_project(ALPHA, ["r1", "r2"], ["deploy", "apply"], ["r4"]),
+            verified_project(BETA, ["r3"], ["deploy"], []),
         ],
         "shared_cleanup_candidates": [build_cleanup_candidate("s1", "deploy")],
         "verified_at": T5,
@@ -514,12 +550,16 @@ def build_cleanup_receipt_payload(
         "status": "cleaned",
         "projects": [
             _stage_project(
-                ALPHA, "cleaned", ["r1", "r2"], "cleanup", {"retained_assets": []}
+                ALPHA,
+                "cleaned",
+                ["r1", "r2"],
+                "cleanup",
+                {"retained_assets": [retained_asset_of("r4")]},
             ),
             _stage_project(BETA, "cleaned", ["r3"], "cleanup", {"retained_assets": []}),
         ],
         "shared_results": [build_resource_result("s1", "cleanup")],
-        "retained_assets": [],
+        "retained_assets": [retained_asset_of("r4")],
         "started_at": T6,
         "finished_at": T7,
     }
@@ -563,9 +603,10 @@ def build_recovery_step(
     key: str, phase: str, manifest_id: str, depends_on: list[str]
 ) -> dict[str, Any]:
     operation = operations_of(key)[phase]
+    phases = RESOURCES[key][2]
     if phase == "cleanup":
-        inverse_before = ABSENT
-        restore_stage = "deploy" if "deploy" in RESOURCES[key][2] else "apply"
+        inverse_before = dict(ABSENT)
+        restore_stage = "deploy" if "deploy" in phases else "apply"
     elif phase == "deploy":
         inverse_before = resource_state(key, "deploy")
         restore_stage = "apply"
@@ -573,6 +614,10 @@ def build_recovery_step(
         inverse_before = resource_state(key, "apply")
         restore_stage = "orig"
     inverse_after = resource_state(key, restore_stage)
+    if inverse_after["type"] == "absent":
+        backup = None
+    else:
+        backup = backup_ref_of(key, restore_stage)
     return {
         "step_id": contracts.recovery_step_id(
             manifest_id, phase, operation["resource_id"]
@@ -582,7 +627,7 @@ def build_recovery_step(
         "operation_ids": [operation["operation_id"]],
         "dependent_projects": sorted(RESOURCES[key][3]),
         "depends_on": depends_on,
-        "backup_ref": backup_ref_of(key, restore_stage),
+        "backup_ref": backup,
         "expected_current": inverse_before,
         "restore_to": inverse_after,
     }
@@ -590,22 +635,24 @@ def build_recovery_step(
 
 def build_recovery_steps(manifest_id: str) -> list[dict[str, Any]]:
     steps: list[dict[str, Any]] = []
+    previous_inverse: dict[str, str] = {}
     for phase in ("cleanup", "deploy", "apply"):
-        for key in ("r1", "r2", "r3", "s1"):
+        for key in RESOURCES:
             if phase not in RESOURCES[key][2]:
                 continue
-            depends: list[str] = []
-            if phase != "cleanup":
-                previous_inverse = "cleanup" if phase == "deploy" else "deploy"
-                if previous_inverse not in RESOURCES[key][2]:
-                    previous_inverse = "cleanup"
-                depends = [
-                    contracts.recovery_step_id(
-                        manifest_id, previous_inverse, resource_id_of(key)
-                    )
-                ]
-            steps.append(build_recovery_step(key, phase, manifest_id, depends))
+            depends = [previous_inverse[key]] if key in previous_inverse else []
+            step = build_recovery_step(key, phase, manifest_id, depends)
+            previous_inverse[key] = step["step_id"]
+            steps.append(step)
     return steps
+
+
+def _plan_snapshot_state(key: str) -> dict[str, Any]:
+    """Observed resource state when recovery is planned, after its last phase."""
+    phases = RESOURCES[key][2]
+    if "cleanup" in phases:
+        return dict(ABSENT)
+    return resource_state(key, "deploy" if "deploy" in phases else "apply")
 
 
 def build_recovery_plan_payload(
@@ -639,9 +686,9 @@ def build_recovery_plan_payload(
                     for operation in operations_of(key).values()
                 ),
                 "dependent_projects": sorted(RESOURCES[key][3]),
-                "state": ABSENT,
+                "state": _plan_snapshot_state(key),
             }
-            for key in ("r1", "r2", "r3", "s1")
+            for key in RESOURCES
         ],
         "steps": build_recovery_steps(manifest_id),
         "conflicts": [],
