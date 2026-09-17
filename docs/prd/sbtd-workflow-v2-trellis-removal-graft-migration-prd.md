@@ -1108,6 +1108,8 @@ P3-04 有两个条件分支，均须无未解决迁移／恢复问题、无使�
 
 P1 同样区分接口基础与行为完成：P1-01 仅交付参数解析、字段/schema 和统一 envelope 的聚焦契约检查，不拥有可执行恢复或 AC-35 的完成证明；P1-20 是恢复行为实现及 AC-35 的唯一交付所有者，P1-14/15 负责集成复验。P1-01 完成不代表 recovery 已可对用户发布，完整发行仍须全部前置实现与验证就绪。
 
+P1-01的基础接口以内部可调用模块交付，现行公开CLI和两个安装器不做半接线；未实现的migration/recovery handler不注册，也不以占位blocked或伪成功代替。相关行为生产者接入时同批迁移直接调用者并移除被替代参数／字段，最终公开契约仍按第10.2节；依赖在完整隔离安装副本证明，目录复制不等于Python依赖已准备。见实施调整记录[D-IMP-12](sbtd-workflow-v2-implementation-decisions.md#d-imp-12协议基础与可执行入口原子接入分开)。
+
 P1-04/05/12/13 分别验收各自阶段的真实操作及前后态／备份证据，不提前宣称跨阶段恢复完成；AC-18/33 中的完整恢复子项由依赖这些生产者的 P1-20 验收，再交 P1-14/15 集成复验。
 
 P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状态启动实施。台账根依赖随当前审核更新，R-09 重开时暂停尚未开始的实施；不把历史评审完成当当前契约已收敛。
@@ -1147,7 +1149,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P1-01 | P1 | onboard参数、交换schema与统一envelope基础契约 | P0-07 | AC-13/29接口子项，含批准快照、私有操作、init迁移上下文和deploymentEvidence；只证明解析/校验基础，行为归对应任务 | AFK | planned | — |
+| P1-01 | P1 | onboard参数、交换schema与统一envelope基础契约 | P0-07 | AC-13/29接口子项；[协议边界与门禁](sbtd-workflow-v2-onboard-contracts.md)、D-IMP-12。批准快照、私有操作、init迁移上下文及deploymentEvidence已实现为内部纯契约；200项影响范围、提交前425 tests/83.124s及隔离副本缺依赖／实际安装／缺schema三路径通过。待最终head全量与副本复验、独立review；不激活未实现handler、不冒充迁移／恢复行为 | AFK | checking | — |
 | P1-02 | P1 | 按需脚手架、最小状态校验与 bootstrap 边界 | P1-01、P0-08 | AC-03/12/13/23；不 onboard 也可开展普通任务；reset 保留数据；bootstrap 不强制每项目生成 | AFK | planned | — |
 | P1-03 | P1 | Graft CLI 检测／确认安装／遥测与版本约束 | P0-01、P1-01 | AC-07/10/13；只读无副作用，安装前 DNT，失败不报成功。**独占** AC-10 剩余：真实断网下 `graft version`／npm 元数据不可达且不循环安装，不得用仍能查出 latest 的 sandbox 冒充 | AFK | planned | — |
 | P1-04 | P1 | Codex接线、显式opt-in hooks及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；共享去重、默认无hooks、模板后接线；隔离真实执行init上下文及累计证据续作/保存。**独占** §9.3 剩余：版本变化后 reconciliation 仍保持 `--no-global/--no-hooks/--no-mcp`；图 cache 丢失、旧 stamp 缺字段、升级路径。未证明前不得在 project-only/check 启动自维护 | AFK | planned | — |
@@ -1395,6 +1397,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-18T00:07:33+08:00 | P0-08 checking→done | PR #23于00:05:03+08:00合并（`ff920a515c1b714b7651f5fbca08b55f03dae0b5`）；00:05:39确认main同步、任务分支本地／远程删除并prune，完成本项私有临时备份／runner清理后记录本事件。三轮review，第三轮P008ReviewThree零新发现；前两轮及全部有效advisor已处理，旧Claude集成无条件探针建议经边界复核撤回。最终`bba9dfa6d451c558e5772cc62dc4517ed3cec87f`的unit报告`tests/unit/reports/unit-report-project-ignore-complete-p0-08-project-ignore-2026_09_17-23_55_38.json`为266/126.254s/exit0，API报告`tests/api/reports/api-report-project-ignore-complete-p0-08-project-ignore-2026_09_17-23_55_38.json`为21场景通过，均有同stem中文汇总及已验证envelope，local-only不冒充CI。18精确反例先红后绿；预览顺序断言失败后定点、18项影响范围及全量依序通过。33条既有Ruff诊断保留，不声称全绿；历史raw未重标，汇总仅纠正无独立证据的TMPDIR声明。备份仅在最终验证／review／本PR合并后清理；真实迁移备份未动。P0-09、P1/P2/P3不提前完成。 |
 | 2026-09-18T00:21:02+08:00 | P0-09 planned→in-progress | P0-08实施与状态PR均闭环后，从main `cf3f592…`建立`p0-09-root-ignore`。18项原生Git刻画后，精确七行测试先red再green；41项workflow contracts通过。`lstat`及Git索引确认旧两目录与新保留根无残留，docs为普通目录；只替换根旧两条为四个锚定条目，不改项目模板或真实数据。advisor要求保留短入口旧五行摘要，已恢复并确认与base字节一致，历史保留测试未弱化；仅外部现行维护入口说明七行优先于历史记录。无领域歧义，不完整grill；legacy/DDIA已通过，release仅选择源仓隐私边界复核，不代表完整v2发布。 |
 | 2026-09-18T00:41:02+08:00 | P0-09 checking→done | PR #25于00:39:58+08:00合并（`13e2898d1a528ad6a57249cd7cf3969ba6d26be7`）；main已同步，任务分支本地／远程删除并prune，私有源码备份和临时runner在最终验证／review／合并后清理。P009ReviewOne完整diff零新发现，历史lesson不重写的advisor已落实；6个tracked lessons文件字节不变，保留测试未削弱。最终`03b30d65cd1c5b0fbe44435ac36c978d8cbb3b21`的unit报告`tests/unit/reports/unit-report-root-ignore-complete-p0-09-root-ignore-2026_09_18-00_32_02.json`为266/115.347s/exit0，API报告`tests/api/reports/api-report-root-ignore-complete-p0-09-root-ignore-2026_09_18-00_32_02.json`五场景验证目录／文件／symlink、真实git status与两种发布片段；同stem中文汇总和envelope已校验，local-only不冒充CI。根精确断言先红后绿，41项workflow contracts通过；测试Ruff5→5无新增，不称全绿。旧两目录及新保留根的磁盘／索引无残留；回滚前须保全已有新本地数据并保持保护。无真实迁移、全局同步或live automation操作，P1/P2/P3仍待实施。 |
+| 2026-09-18T02:01:52+08:00 | P1-01 planned→in-progress | 从已完成P0闭环的main `9e45e86…`建立`p1-01-interface-contracts`。Mandatory Legacy/Refactoring/DDD/DDIA在首次schema编辑前确认并记录；现有CLI四场景单JSON／stderr+2／旧帮助／零写入刻画通过。D-IMP-12明确内部纯契约与真实入口原子接入分开；schema草拟、参数与codec分工实现，禁止在途统一验证。jsonschema惰性加载并声明依赖，完整安装副本的缺依赖／真实私有venv路径尚待验证，不能以源码环境代替。参数worker擅自scoped测试的结果不计验收；真实执行／部署／恢复仍归各自任务。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 

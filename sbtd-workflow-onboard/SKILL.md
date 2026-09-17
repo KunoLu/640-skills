@@ -11,9 +11,13 @@ The repository root installers are `install.sh` and `install.ps1`. `scripts/onbo
 
 The directory remains self-contained: `catalog.json` is the machine-readable source catalog, `catalog.schema.json` is its Draft 2020-12 contract, `scripts/` is the Onboard implementation, `templates/` is the install payload, and `assets/` contains managed third-party fallback snapshots. Keep this separation when adding catalog entries; do not move install payloads beside runtime code merely to flatten paths.
 
-## P0 Cutover Status (Unreleased)
+## Staged v2 Delivery (Unreleased)
 
 This branch carries an atomic v1 -> v2 payload cutover: the bundled set is now 14 Skills, with `sbtd-task` replacing the retired `trellis-workflow` and `trellis-channel` catalog entries and template directories; required external Skills remain 19. The complete v2 CLI, `init` / `reset` behavior, host integration, and legacy-project migration are still unfinished P1 scope. Every Trellis, bootstrap-detection, and v1 CLI behavior documented below describes the existing transitional implementation, not verified v2 behavior. Do not treat `sbtd-task` as an alias for the retired bootstrap handoff, and do not apply this development branch's mixed legacy lifecycle to real projects. User-global copies of retired Skills are not cleaned up here; that cleanup is owned by P1-13.
+
+P1-01 supplies internal, directly callable argument and exchange-contract modules (`scripts/onboard_arguments.py`, `scripts/onboard_contracts.py`, `onboard-contracts.schema.json`). It does not activate new migration/recovery commands or deployment handlers in the existing CLI. Do not substitute contract fixtures, valid hashes, or a copied directory for executed migration or recovery evidence.
+
+Whole-directory installation and `npx skills add` do not run pip. Before invoking the contract validator, use its actual Python interpreter to run `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. The dependency is loaded lazily: absent jsonschema blocks validation explicitly without breaking the existing CLI or pure argument parsing. Prove availability against the installed copy and interpreter, not the source repository's test environment.
 
 Do not install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target templates.
 
