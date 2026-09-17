@@ -1,145 +1,93 @@
 ---
 name: lessons-record
-description: Use when a durable lesson should be recorded after bug fixes, rollbacks, tool misjudgments, workflow errors, failed validation, GitNexus mismatch, or multi-agent context loss.
+description: Use when a durable lesson is needed after a bug fix, rollback, tool or workflow mistake, structural-analysis mismatch, or lost multi-agent context; resolve the lesson writer identity without initializing the whole project.
 ---
 
-# Lessons Recording Skill
+# Lessons Recording
 
-Use this Skill when durable lessons learned need to be recorded.
+Record reusable prevention knowledge, not a task diary. A bug fix, rollback, incorrect tool judgment, workflow/mode mistake, failed validation, unsuitable task decomposition or lost multi-agent context warrants assessing whether a durable lesson exists. Do not create a lesson just to satisfy a ritual.
 
-## Default Recording Structure
+Project rules and explicit deliverables remain binding. Default/lite may defer a nonessential lesson and continue unrelated safe work; strict leaves a required lesson incomplete until its identity, authority and evidence are available. No mode permits a guessed author, fabricated cause, anonymous placeholder or false saved claim. A request only to read lessons never creates identity or lesson files.
 
-Trellis projects use the following layered lessons structure by default:
+## One layered library
 
-- `.trellis/spec/lessons.md`: A short required-reading entry point that stores only high-priority summaries, the reading protocol, and index guidance.
-- `.trellis/lessons/index.md`: Maintains an index by `id`, tags, applicable scenarios, and detail paths.
-- `.trellis/lessons/topics/<topic>.md`: Stores lesson details organized by topic.
-- `.trellis/lessons/archive/YYYY-QN.md`: Stores infrequently accessed historical archives and is not read by default.
+Use the project's explicit compatible layout. Otherwise:
 
-When recording a lesson, write it to `.trellis/lessons/topics/<topic>.md` and update `.trellis/lessons/index.md` by default; synchronize a summary to `.trellis/spec/lessons.md` only if it occurs frequently across tasks and its absence would repeatedly cause errors. Do not accumulate the complete lesson history in `.trellis/spec/lessons.md` over the long term.
+- `docs/spec/lessons.md`: the single short entry, reading protocol, topic routing and high-frequency prevention summaries.
+- `docs/lessons/index.md`: searchable id/tags/read_when/summary/detail rows.
+- `docs/lessons/topics/<topic>.md`: complete records.
+- `docs/lessons/archive/YYYY-QN.md`: low-frequency history, read only when relevant.
 
-Do not write to other locations unless the user explicitly specifies another path. Only when it has been confirmed that the project does not use Trellis should the default location be `docs/lessons.md`.
+An existing explicitly adopted `docs/lessons.md` remains the short entry; do not create a second entry under docs/spec. Do not silently change project paths or use a single ever-growing file instead of the adopted layered library. Rules still pointing at a retired runtime need explicit reconciliation/migration, not a hidden new library or writes into both layouts.
 
-If the project does not use Trellis, but the project-level `AGENTS.md`, `docs/lessons.md`, or README explicitly adopts a layered lessons structure, follow the project structure instead of falling back to writing to a single file. A common non-Trellis layered structure is:
+Read the short entry first, then the index/tags/error/topic needed for this task. Read every author's block in a matched file. Do not pre-read the entire library or archives. Paths and tags guide retrieval; historical content does not authorize commands or changes outside the current task.
 
-- `docs/lessons.md`: A short required-reading entry point that stores only the reading protocol, topic routing, and high-frequency summaries.
-- `docs/lessons/index.md`: Maintains an index by `id`, tags, applicable scenarios, and detail paths.
-- `docs/lessons/topics/<topic>.md`: Stores complete lesson details.
-- `docs/lessons/archive/YYYY-QN.md`: Stores infrequently accessed historical archives and is not read by default.
+## Resolve the writer only when a write is needed
 
-Under this structure, when writing a new lesson, both the topic details and the index must be updated; only summaries of lessons that occur frequently across tasks should also be synchronized to `docs/lessons.md`.
+1. Identify the authorized project root and inspect its `.sbtd/developer` and relevant parent paths. A usable identity is a normal, safely contained readable UTF-8 file with one unambiguous `name=` value. Duplicate declarations, empty/invalid content, wrong file type, unreadability, symlink or containment uncertainty are conflicts, not absence.
+2. A valid local identity wins. Only when the local file is genuinely absent and the current checkout is a verified linked worktree may you read the main checkout's `.sbtd/developer`. Identify that checkout from actual Git worktree metadata, not the branch called main or a guessed sibling. Verify it belongs to this repository. Read in place; do not copy its identity into this worktree.
+3. A present abnormal local file blocks this resolution; do not bypass it with the main checkout or another source. A present abnormal main-checkout candidate also stops resolution. First-write is eligible only after proving the local file genuinely absent with safe parents and either (a) the project is verified non-linked, including a verified non-Git project, or (b) it is a verified linked worktree whose main current file is genuinely absent with safe parents. Unavailable/ambiguous Git or worktree metadata is not proof of non-linked status: stop this resolution rather than create a local identity. Only an eligible first-write may ask for a name and explain the local path to create.
 
----
+A split name matches `^[a-z0-9]+$`: nonempty lowercase letters/digits, no separator. Use it verbatim. Never lowercase, trim punctuation or transliterate a rejected value; that can merge distinct authors into the same ID. Explain the rejection and request a conforming identifier. Avoid reproducing personal or secret data from malformed content in shared artifacts.
 
-## Lessons Split Name
+Do not infer identity from Git user.name, commit authors, OS usernames, environment variables, historical workspace directories, prior marker ownership or whichever name looks most likely. An identifier is a user-chosen team-local label, not a required real name or account. Ordinary tasks do not require identity.
 
-Lessons files are tracked and every developer appends to them, so appended content must be scoped by a split name. Resolve that name before writing anything:
+### First lesson without onboarding
 
-1. Read `name=` from `<repo-root>/.trellis/.developer`.
-2. If that file is absent and the checkout is a linked git worktree, read `name=` from the main checkout's `.trellis/.developer`. `.developer` is gitignored by design, so a fresh `git worktree add` starts without one; read the main checkout's copy in place and do not copy it into the worktree.
-3. Otherwise stop and ask the user for a split name. Do not proceed on a guess.
+Use this branch only after the resolution above has proved first-write eligible; absence of a usable value alone is insufficient. Ordinary work can continue without identity until an actual lesson write needs it. Ask for a legal identifier, state `<project>/.sbtd/developer`, and obtain the needed write/protection authorization. Before creating it:
 
-No other automatic source is permitted. Do not derive the name from `TRELLIS_DEVELOPER`, `git config user.name`, commit authors, or the directory names under `.trellis/workspace/`. A repository accumulates one `workspace/<name>/` directory for every developer who ever ran `trellis init`, and those directories are peers: none of them marks who is writing now.
+- Verify `.sbtd` is a safe reserved local path, not user business content, a tracked payload, a directory/type conflict at developer, or a symlink route.
+- Check actual ignore and tracked state. If protection is missing, request only the necessary root-anchored `/.sbtd` rule; preserve all unrelated/legacy rules. Do not automatically untrack user files or expand a broad ignore. Explicit read-only scope prevents identity/ignore writes.
+- Create only the required safe directory and `developer` file with `name=<chosen-name>` plus a newline. Use a safe non-overwriting creation primitive and revalidate current state; unexpected existing content is a conflict. Do not overwrite a race winner or claim atomicity the tool cannot provide.
+- Re-read the saved value before using it. A failed/partial operation is not an established identity; report what exists and what remains unsaved, without starting an initializer to repair it implicitly.
 
-The resolved name must match `^[a-z0-9]+$`: non-empty, lowercase letters and digits only, with no separators of any kind. This is stricter than path safety, which it also satisfies. Report a name that violates it, saying what was read and why it was rejected, and ask the user for a conforming split name. Never rewrite a non-conforming name into a conforming one.
+This narrow action does not install tools, generate tasks/spec scaffolding, modify HOME, configure MCP/hooks, migrate old data or invoke a retired initializer. If the user defers the name/permission, do not write the shared lesson. Say it is unsaved; default/lite continue unrelated safe work, and a required strict lesson remains incomplete. User-provided text alone is not a verified saved identity.
 
-Rewriting is what would break uniqueness. Lowercasing `Alice` and folding `a_b` each map two distinct developers onto one ID segment, so on the same day with the same slug the two would emit a byte-identical lesson ID, which is the collision the ID is meant to prevent. Excluding `-` from the name serves the same end: it holds the name to exactly one `-`-delimited field of the ID, so a name and a slug cannot trade characters across their boundary and reach one ID from two different pairs.
+A normal existing identity is read, not rewritten on every use. For explicitly authorized initialization, consult the actual supported Onboard interface for `--developer <name>` rather than assuming an installed version provides it. Resolve differing existing names first, preserve identity on reset, and require confirmation before applying one name to multiple projects. This Skill does not invent an executable command or perform initialization.
 
-A `.developer` file that was found but holds a non-conforming `name=`, such as `Alice`, `alice.wang`, `zhang_san`, or a CJK name, does not yield a split name; stop and ask as above. Point at `python3 ./.trellis/scripts/init_developer.py <name>` for aligning `.developer` with a conforming name so later writes resolve without asking.
+Only an explicitly authorized old-project identity migration may inspect legacy identity sources: read [identity migration](references/identity-migration.md). Ordinary reading, routing, check or global installation does not enter that branch.
 
-When no name can be resolved, list the conforming directory names under `.trellis/workspace/` as candidates, point at `python3 ./.trellis/scripts/init_developer.py <name>` for establishing a local identity, and wait for the user.
-
-Report the outcome with every lesson write:
+Report a successful lesson write with:
 
 ```text
-Lessons split name: <name>
-Source: .developer | main-worktree | user-provided
+Lessons split name: <verified-name>
+Source: .sbtd/developer | main-worktree
+Lesson: <id and actual topic/index paths>
 ```
 
-## Marker Blocks
+If nothing was saved, report the missing requirement and unsaved state instead of this success block. Never label a user answer as saved or a migrated identity as overall project migration complete.
 
-Append only inside the block owned by the resolved name:
+## Marker ownership and IDs
+
+Write only inside the resolved author's block in every touched short-entry, index, topic or archive file:
 
 ```md
 <!-- lessons:<name>:start -->
-- content owned by <name>
+<owned content>
 <!-- lessons:<name>:end -->
 ```
 
-Use these blocks in every file a lesson write touches: the short entry point, `index.md`, and each `topics/<topic>.md`.
+Create that block once; extend the existing block thereafter. Keep shared reading protocol outside blocks and one blank line between neighboring blocks. Preserve other authors' text and ordering, including merge conflicts; a conflict from two first-time blocks is resolved by keeping both. Malformed/duplicated ownership markers require inspection and a safe decision, not guessed ownership.
 
-- Write only inside your own block, and create it once. Later lessons extend the existing block instead of opening a new one.
-- Never reorder, edit, or delete another name's block, including while resolving a merge conflict.
-- Keep shared content, such as the reading protocol, above all blocks.
-- Keep one blank line between adjacent blocks so concurrent appends stay separated by an unchanged line.
+Each author's index block contains its own complete table, including header and separator. A marker inside a shared table terminates the Markdown table, so do not share one table across authors.
 
-This removes the common conflict: when two developers append inside blocks that both already exist, their edits land in separate hunks with unchanged anchor lines between them and merge cleanly. One residual case remains. The first time two developers each create their own block in the same file, that conflicts once, because both insertions land at the same end-of-file position. Resolve it by keeping both blocks.
+New IDs are `LESSON-YYYYMMDD-<name>-<slug>`. The name is verbatim; the lowercase slug may contain hyphens. Ownership comes from the enclosing marker, not reverse-parsing an old ID. Preserve every historical ID and anchor; do not rename old authors or records.
 
-In `index.md`, give each name a complete table of its own inside its block rather than sharing one table:
+Before adding a record, search the entire adopted library for the exact proposed ID and the anchor derived from the actual heading. A collision requires another slug. Marker separation does not separate the ID namespace; legacy IDs can collide with the new format too.
 
-```md
-<!-- lessons:alice:start -->
-| id | tags | read_when | summary | detail |
-|---|---|---|---|---|
-| LESSON-20260101-alice-example | tag-a | When to read details | One-sentence summary | topics/workflow.md#lesson-20260101-alice-example |
-<!-- lessons:alice:end -->
+Optional union merge applies only to append-only index/topic/archive paths and needs separate user opt-in. For the default layout, `docs/lessons/**/*.md merge=union` excludes the mutable short entry under docs/spec. If a custom short entry falls inside a proposed glob, narrow the union paths instead. Do not install attributes automatically or use union for mutable summaries.
 
-<!-- lessons:bob:start -->
-| id | tags | read_when | summary | detail |
-|---|---|---|---|---|
-| LESSON-20260102-bob-example | tag-b | When to read details | One-sentence summary | topics/validation.md#lesson-20260102-bob-example |
-<!-- lessons:bob:end -->
-```
+## Write and verify
 
-Each block carries its own header row so that no marker ever lands between the rows of a single table, where an HTML comment would terminate the table.
+1. Confirm durable value and a supported cause. Unproven causes remain hypotheses; do not convert a failed experiment into established advice.
+2. Resolve identity and write authority. Choose a topic meaningful to the problem, not a retired tool/runtime category by habit.
+3. Inspect existing blocks/IDs and expected current content. Append the complete record to the topic in your own block. Use the observed date, preserve evidence privacy and do not invent a failure history.
+4. Add the matching searchable index row in your own table; derive its detail anchor from the actual heading. Only cross-task high-frequency prevention summaries belong in the short entry, inside your block. Do not create an empty summary entry or rewrite shared protocol for a one-off task.
+5. Re-read touched records and resolve their links. Confirm the ID is unique, the marker is correct and topic/index agree. Report the actual paths and any missing write.
 
-A project that wants the residual first-creation conflict resolved automatically may opt into a union merge for append-only lessons paths in `.gitattributes`:
+A topic/index/entry update is not a cross-file transaction. Use one writer, preserve unexpected concurrent edits and stop on conflicts. If only part succeeded, report it precisely; on retry inspect the existing ID/block/content and complete the missing owned piece rather than appending duplicate records or rolling back another writer. Preserve original data when a safe merge cannot be established.
 
-```text
-.trellis/lessons/**/*.md merge=union
-```
-
-This is opt-in and not the default. A union merge keeps both sides of every concurrent change in that file, which suits append-only blocks but silently duplicates content when two developers genuinely edit the same shared line.
-
-That pattern covers the index, topic, and archive files only. It deliberately excludes `.trellis/spec/lessons.md`, which also carries marker blocks but is not append-only: summaries there get rewritten and pruned back under the line budget, and a union merge would silently duplicate them. A first-creation conflict in that file stays manual.
-
-## Lesson IDs
-
-Marker blocks isolate writes, not the ID namespace. Two developers can reach for the same date and the same slug on the same day, and nothing in the block protocol stops them: the two `## LESSON-...` headings land in one topic file as byte-identical text, and both index rows carry a byte-identical `detail` value. The index can then no longer say which lesson a link points at. Put the split name in the ID so that two developers writing on the same day about the same subject no longer collide:
-
-```text
-LESSON-YYYYMMDD-<name>-<slug>
-```
-
-- `<name>` is the resolved split name verbatim. It is already `[a-z0-9]+`, so there is nothing to transform, and no transformation is permitted: the marker block and the ID must carry the same characters. A rule that folded the name into the ID would hand two distinct names one ID segment and reinstate the collision.
-- `<slug>` is lowercase and may contain `-`; `<name>` may not. That is what keeps the ID unambiguous. `<name>` is the single field between the date and the first `-` of the slug, so one date, name and slug yield one ID, and no other name and slug pair yields that same ID.
-- Nothing parses the ID back into its parts. Ownership comes from the enclosing marker block; the name is in the ID for uniqueness and readability.
-- Do not rename a lesson ID that already exists. Renaming rewrites the heading, which breaks every `detail` anchor and cross-reference already pointing at it. This rule applies to newly recorded lessons.
-- The name separates new IDs from each other, not from every ID already recorded. Retained legacy IDs share this namespace, and a legacy ID shaped `LESSON-YYYYMMDD-<word>-<rest>` is indistinguishable from a new ID whose name is `<word>`. Before writing, search the lessons tree for the exact ID and its derived anchor; if either already exists, choose a different slug. Uniqueness rests on that check, not on the format alone.
-
-## Scenarios That Must Be Recorded
-
-A lesson must be recorded when any of the following occurs:
-
-- bug fixes
-- rollbacks
-- incorrect tool judgments
-- mode-switching errors
-- Trellis stage errors
-- inappropriate parent / child task decomposition
-- child tasks that cannot be independently validated
-- task artifacts omitted during the check stage
-- conflicts between task artifacts and `.trellis/spec`
-- GitNexus impact analysis mismatches
-- Channel / multi-Agent context loss
-- recursive dispatch issues
-- abnormal worker exits
-
----
-
-## Recording Format
-
-Use the following format for each lesson in a topic file:
+A complete topic record normally uses:
 
 ```md
 ## LESSON-YYYYMMDD-<name>-<slug>: <short title>
@@ -155,30 +103,6 @@ Use the following format for each lesson in a topic file:
 - Prevention:
 ```
 
-Use the following format for `index.md`:
+An index table uses `id | tags | read_when | summary | detail`; detail points to the real topic heading. Keep the short entry near its project's line budget (normally 150–200 lines). When it grows, retain important summaries/index guidance and move low-frequency owned details into a topic/archive without breaking links. Archive only your own content and update its index reference; do not silently rewrite other authors' history.
 
-```md
-| id | tags | read_when | summary | detail |
-|---|---|---|---|---|
-| LESSON-YYYYMMDD-<name>-<slug> | tag-a, tag-b | When to read details | One-sentence summary | topics/<topic>.md#lesson-yyyymmdd-name-slug-short-title |
-```
-
-`.trellis/spec/lessons.md` stores only short summaries and the reading protocol, and should preferably remain within 150-200 lines. When it exceeds this range, first move infrequently accessed content into a topic or archive, then retain the index guidance.
-
-## Writing Process
-
-1. Determine whether it truly qualifies as a durable lesson; do not record ordinary task summaries, one-off implementation details, or temporary research.
-2. Resolve the lessons split name and report it. Stop and ask the user if it cannot be resolved.
-3. Select a topic, such as `workflow`, `validation`, `shell`, `markdown`, `gitnexus`, `trellis-channel`, `ui`, or a project domain name.
-4. Append the complete lesson to `.trellis/lessons/topics/<topic>.md`, inside your own marker block, under a `LESSON-YYYYMMDD-<name>-<slug>` ID.
-5. Add or update an index row inside your own marker block in `.trellis/lessons/index.md`, ensuring that the tags, `read_when`, and detail path are searchable.
-6. Only when the lesson represents a frequently occurring risk across tasks should a one-sentence prevention rule be synchronized to `.trellis/spec/lessons.md`, inside your own marker block.
-7. When a topic file becomes too long or its content is infrequently accessed, retain the summary and index, and move the old details into your own marker block in `.trellis/lessons/archive/YYYY-QN.md`.
-
-## Reading Boundaries
-
-- Marker blocks scope writes, not reads. When a file is read, read every name's blocks, not only your own.
-- When starting ordinary Trellis work, read only `.trellis/spec/lessons.md` by default.
-- Do not read all of `.trellis/lessons/**` by default.
-- Read the corresponding topic or archive only after a match is found based on the current task, error message, tool name, language, tags, or `read_when`.
-- Do not read `archive/` by default; read it only for recurring issues, failed troubleshooting, user-requested traceability, or when the index explicitly points to it.
+Never put credentials, account/session identifiers, PII, production payloads, raw graph output or private source fingerprints into shared lessons. Explicit migration preserves original text in private backups and separately validates a safe shared projection; this daily writer is not permission to publish old content.

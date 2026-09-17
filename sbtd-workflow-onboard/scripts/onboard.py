@@ -5814,8 +5814,10 @@ def run_trellis_project_setup_for_root(
         "path": str(bootstrap_task),
         "relativePath": relative_path,
         "requiredAction": (
-            "Use the trellis-workflow Skill to execute this task: read .trellis/workflow.md and task artifacts, "
-            "run $trellis-before-dev, complete the bootstrap guideline work, run $trellis-check, and only then run $trellis-finish-work."
+            "Preserve this legacy bootstrap and request an explicitly authorized "
+            "SBTD migration plan. Do not execute retired workflow gates or "
+            "reinterpret legacy files as SBTD tasks. This result does not "
+            "establish SBTD runtime readiness."
         ),
     }
     return report

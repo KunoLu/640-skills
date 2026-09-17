@@ -11,6 +11,10 @@ The repository root installers are `install.sh` and `install.ps1`. `scripts/onbo
 
 The directory remains self-contained: `catalog.json` is the machine-readable source catalog, `catalog.schema.json` is its Draft 2020-12 contract, `scripts/` is the Onboard implementation, `templates/` is the install payload, and `assets/` contains managed third-party fallback snapshots. Keep this separation when adding catalog entries; do not move install payloads beside runtime code merely to flatten paths.
 
+## P0 Cutover Status (Unreleased)
+
+This branch carries an atomic v1 -> v2 payload cutover: the bundled set is now 14 Skills, with `sbtd-task` replacing the retired `trellis-workflow` and `trellis-channel` catalog entries and template directories; required external Skills remain 19. The complete v2 CLI, `init` / `reset` behavior, host integration, and legacy-project migration are still unfinished P1 scope. Every Trellis, bootstrap-detection, and v1 CLI behavior documented below describes the existing transitional implementation, not verified v2 behavior. Do not treat `sbtd-task` as an alias for the retired bootstrap handoff, and do not apply this development branch's mixed legacy lifecycle to real projects. User-global copies of retired Skills are not cleaned up here; that cleanup is owned by P1-13.
+
 Do not install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target templates.
 
 ## Required Questions
@@ -113,8 +117,7 @@ Project-local Trellis and GitNexus CLI installation is not supported. Trellis st
 All bundled Skills install globally as one required set:
 
 - `sbtd-workflow-onboard`
-- `trellis-workflow`
-- `trellis-channel`
+- `sbtd-task`
 - `project-validation`
 - `web-ui-autotest-generator`
 - `gherkin-bdd`
@@ -143,9 +146,9 @@ Dependencies are still expanded automatically: `tdd` includes `codebase-design`;
 
 The four Ponytail Skills are required like every other external Skill: `check` only inspects and reports them, while normal `init` / `reset` installs or repairs missing and invalid copies from the vendored stable set without asking, and a failed install fails the run. Onboard uses the stable skill-only provider and never installs, enables, disables, trusts, or removes the official Ponytail plugin. When `check` detects the official Ponytail plugin enabled for Codex or OMP, it reports `ponytailProvider.provider=conflict` and fails; `init` / `reset` block before writing stable copies, and the root installers stop with the same guidance. A plugin that is installed but disabled is reported but does not block. `ponytail-gain` and `ponytail-help` belong only to the official plugin and are never managed by Onboard.
 
-The mandatory runtime gate contracts are owned by the installed global `AGENTS.md`, project template, Trellis workflow, and bundled reviewer Skills. They become active only after normal `init` / `reset` successfully writes the global rules and installs the required bundled / external Skills. The public Skills CLI bootstrap and `init-projects` do not activate these runtime gates by themselves; they only install the Onboard Skill or process project-local assets respectively.
+The mandatory runtime gate contracts are owned by the installed global `AGENTS.md`, project template, bundled `sbtd-task`, and bundled reviewer Skills. They become active only after normal `init` / `reset` successfully writes the global rules and installs the required bundled / external Skills. The public Skills CLI bootstrap and `init-projects` do not activate these runtime gates by themselves; they only install the Onboard Skill or process project-local assets respectively.
 
-At runtime, every development task first produces a `Book Gate Plan` with objective predicates and lifecycle states. Every completed external `grill-with-docs` session invokes bundled `book-ddd-distilled-modeling`. Persisted/shared data, shared / persistent / cross-request / cross-process caches, async/cross-service flows, ownership, migrations, or recovery invoke `book-ddia-data-design`; existing-behavior bugs or uncertain existing code invoke `book-legacy-change-safety`; any existing-production-code edit invokes `book-refactoring-pass`; production-path runtime/deployment changes invoke `book-release-readiness` after all applicable testing-tool gates and project validation. Matched gates block their phase until passed; unmatched scenarios remain on demand.
+At runtime, a `strict` development task first produces a `Book Gate Plan` with objective predicates and lifecycle states. `default` / `lite` tasks select methods by actual risk and explicit deliverables and never fake a chosen method's evidence; project requirements remain binding. Every completed external `grill-with-docs` session invokes bundled `book-ddd-distilled-modeling` in all modes. For strict tasks, persisted/shared data, shared / persistent / cross-request / cross-process caches, async/cross-service flows, ownership, migrations, or recovery invoke `book-ddia-data-design`; existing-behavior bugs or uncertain existing code invoke `book-legacy-change-safety`; any existing-production-code edit invokes `book-refactoring-pass`; production-path runtime/deployment changes invoke `book-release-readiness` after all applicable testing-tool gates and project validation. Matched strict gates block their phase until passed; unmatched scenarios remain on demand.
 
 External Skill installation uses a validated, stable-first source policy. The default `auto` policy and explicit `stable` policy both resolve every selected Skill from the reviewed vendored set under `assets/external-skills/stable/` without accessing Git or the network. Only explicit `upstream` opts into cloning and validating the current upstream repository group, and upstream failure does not fall back. Manifest, source-subpath, and license paths must stay contained by their declared roots. All selected Skills are staged before any target changes, and target replacement uses a temporary rollback transaction. Source-integrity and target-filesystem failures are fatal; an incomplete restore retains and reports the rollback directory.
 
@@ -162,7 +165,7 @@ For every selected project root, normal `init` / `reset` and project-only `init-
 3. Check whether `.trellis/` exists.
 4. If missing and not explicitly skipped, require the global Trellis CLI and run `trellis init -u <username>` with at least one platform flag and `--yes --skip-existing` in that project.
 5. Check `.trellis/tasks/00-bootstrap-guidelines` after initialization.
-6. If the bootstrap task exists, report `bootstrap-required` for that project and require a `trellis-workflow` handoff. Continue checking every other selected root before returning the aggregate status.
+6. If the bootstrap task exists, report `bootstrap-required` for that project. The retired `trellis-workflow` Skill no longer ships with this payload; completing the legacy Trellis bootstrap guideline belongs to the explicit v1 -> v2 migration path (P1 scope) and must not be routed into `sbtd-task` as an alias. Continue checking every other selected root before returning the aggregate status.
 7. Check project Playwright applicability. Only offer project installation when an existing Playwright dependency/config/script or E2E directory makes it applicable.
 8. Check React Bits only when the root is a React project and contains `components.json`.
 

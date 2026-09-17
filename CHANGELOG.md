@@ -12,9 +12,15 @@
 - 准备 P0-05 全局／项目公共路由和无全局 Skill 的安全 fallback；方法、工具与输出模式协议按需加载，输出压缩不改变执行模式。AGENTS 与 sbtd-task/catalog 在 P0-07 同批激活，避免先发布悬空调用。
 - 准备 P0-06 lessons 身份与历史保留规则：本地新身份优先、仅缺失时读取主 checkout、首次写入窄授权、异常不绕过、ID／marker不改名；旧身份仅用于显式迁移。完整Skill候选与新路由在P0-07同批替换，不提前创建身份或迁移数据。
 
+### 变更
+
+- P0-07将完整sbtd-task、全局／项目规则及lessons-record候选移入正式安装源，catalog由15个bundled调整为14个，19个required external保持；删除两旧Trellis Skill源目录，不保留alias或包内旧入口副本。
+- 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。
+
 ### 验证
 
 - 增加任务 schema 的模式来源、阻塞原因、完成时间、入阻塞、路径形状、版本类型和日期边界回归；区分历史元数据事件与新入阻塞，显式配置日期断言，避免把可选格式检查缺失当成通过。
+- 增加完整sbtd-task安装回归，核对references/schema/许可证及两旧目录在fresh安装中的缺席；保留存续公共文档合同、实际provider与Git marker检查，任务schema测试改读正式源。原生catalog smoke逐字验证已审查载荷到正式源及安装副本，不把安装层通过扩大为完整v2或host通过。
 
 
 ## v1.0.15（2026-09-16）

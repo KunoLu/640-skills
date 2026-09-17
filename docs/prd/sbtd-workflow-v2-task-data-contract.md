@@ -4,7 +4,7 @@
 
 本契约落实主 [PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md) §7.3～7.5、§8.1 的数据要求，依赖已完成的 P0-02 与 [P0-10 模式路由](sbtd-workflow-v2-mode-routing-contract.md)。开发起点为 `main @ a5bf602f587ab89288e0bcf61820fbea54df6c7f`，任务分支 `p0-03-task-data-contract`。
 
-交付包含 [JSON Schema](sbtd-task-candidate/references/task-data.schema.json)、本语义契约与 `tests/test_sbtd_task_schema.py` 的边界验证。schema 使用项目既有 Draft 2020-12，不新增验证框架。当前只是 P0 的协议／case 设计与声明式数据校验；不宣称 Onboard 已能读写任务或恢复状态。按实施调整记录 D-IMP-05，P0-04 将 schema 原样移入非 discovery 候选 references，P0-07 再与 catalog 一起原子移入正式可安装目录；始终只有一个 canonical 副本。P1-17／P1-18 负责运行行为，P1-14／P1-15 负责集成及真实 host 证明。
+交付包含 [JSON Schema](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/task-data.schema.json)、本语义契约与 `tests/test_sbtd_task_schema.py` 的边界验证。schema 使用项目既有 Draft 2020-12，不新增验证框架。当前只是 P0 的协议／case 设计与声明式数据校验；不宣称 Onboard 已能读写任务或恢复状态。按实施调整记录 D-IMP-05，schema经P0-04非discovery候选进入P0-07正式可安装目录，始终只有一个canonical副本且内容不变。P1-17／P1-18负责运行行为，P1-14／P1-15负责集成及真实host证明。
 
 未完整调用 grill-with-docs：任务字段、事实源与恢复规则已在主 PRD 确认，无新增领域选择。DDD / DDIA Review 均 confirmed：task 拥有 mode/status，引用／索引／handoff 不拥有副本；单 writer；单文件原子更新；跨文件不承诺事务；未知历史保留未知；无锁服务、数据库、journal 或调度器。Legacy／Refactoring／Release Gate 对本项不修改既有生产执行路径的范围为 on-demand／not-required。
 

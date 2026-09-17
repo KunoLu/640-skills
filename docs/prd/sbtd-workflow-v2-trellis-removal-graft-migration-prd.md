@@ -294,7 +294,7 @@ completed_at: null
 
 在允许写入的任务中，模式初定或切换后尽早保存，不能等到 handoff 时才第一次记录。澄清前允许仅保存任务身份与已确认模式的最小恢复记录，但不能虚构 PRD、设计、验收或拆分已完成。显式只读按第 7.3 节不落盘，新模式未获用户确认时不能提前改写。不引入可执行 frontmatter，不写真实凭据／敏感个人信息。
 
-P0-03 的 [数据语义契约](sbtd-workflow-v2-task-data-contract.md) 与 [声明式 schema](sbtd-task-candidate/references/task-data.schema.json) 细化本节；schema 通过不替代路径、父子关系、授权和历史一致性检查。历史 stateEvent 与新入阻塞 blockEntryEvent 的区分见实施调整记录 D-IMP-03，持久表格仍保留原五列。
+P0-03 的 [数据语义契约](sbtd-workflow-v2-task-data-contract.md) 与 [声明式 schema](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/task-data.schema.json) 细化本节；schema 通过不替代路径、父子关系、授权和历史一致性检查。历史 stateEvent 与新入阻塞 blockEntryEvent 的区分见实施调整记录 D-IMP-03，持久表格仍保留原五列。
 
 ### 7.5 状态、父子任务与校验范围
 
@@ -804,6 +804,7 @@ restored 仅证明受管文件对账完成；receipt 另含 `runtime_readiness=n
 - 为同时满足逐任务合并与上述原子边界，P0-04 先交付 `docs/prd/sbtd-task-candidate/entrypoint.md` 及完整 references/schema/LICENSE/NOTICE，不提前出现新的 discovery `SKILL.md`。P0-07 同一次变更将候选移入正式源目录、命名入口并切换 catalog／退役旧目录，移除候选副本及迁移引用；见实施调整记录 D-IMP-05。
 - P0-05 的两份 AGENTS 完整候选保留在 `docs/prd/sbtd-agent-candidates/{global,project}.md`，P0-07 依赖 P0-05 并将其与 sbtd-task/catalog 同批移入正式模板，移除候选副本和迁移引用，避免调用方先于被调用方激活；见 D-IMP-07。
 - P0-06 的完整 lessons-record 候选使用 `docs/prd/lessons-record-candidate/entrypoint.md` 及 references/LICENSE/NOTICE；P0-07 同批替换其正式目录并移除候选，避免同名 Skill 与旧 AGENTS 身份规则混用，bundled计数不变；见 D-IMP-08。
+- P0-07切换后的canonical源为`templates/skills/sbtd-task/`、`templates/skills/lessons-record/`及`templates/agents/AGENTS.{global,project}.md`；前述候选路径仅保留为阶段追溯，目录与有效链接不保留副本。完整CLI／init/reset／host／迁移仍由P1实现，源payload安装验收不能扩大为完整v2发布结论。
 - `catalog.schema.json` 是结构契约，不因 entry 改动无意义升版；确需新增 metadata 才修改 schema 和最小示例。
 - 旧 bundled 目录从有效源树删除；历史由 `v1.0.15` 及 Git history 保存，不在 Onboard 安装目录内部 archive 活的旧入口。
 - 用户全局目录的两个旧 Skill 必须在新 canonical 校验后按身份／内容／symlink 安全策略退役。仅名字匹配不授权删除；unknown drift 保存并报告，需要用户裁决。
@@ -1137,7 +1138,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23 契约子项；[完整候选](sbtd-workflow-v2-skill-entry-contract.md) 按D-IMP-05非discovery交付，D-IMP-06/MR-27共同DDD门禁对齐。最终 `f5a9199…` 276 tests/59.124s，P004ReviewThree零新发现。[PR #15](https://github.com/KunoLu/640-skills/pull/15) 已合入，merge `862cb745bafac2e42416804a7edaed3560bcb595`；正式激活仍归P0-07，host/token运行证明仍归P1 | AFK | done | 2026-09-17T16:59:41+08:00 |
 | P0-05 | P0 | AGENTS 公共路由、恢复、grill 与轻量 fallback | P0-01、P0-04 | AC-04/05/22/23 契约子项；[规则候选](sbtd-workflow-v2-agent-routing-contract.md)，D-IMP-07与P0-07同批激活。最终 `109a225…` 276 tests/63.194s，P005ReviewThree零新发现。[PR #17](https://github.com/KunoLu/640-skills/pull/17) 已合入，merge `e58ecdbc3ac72c0f9316230708790a4b7ac2b9ec`；正式激活／host/token仍归后续任务 | AFK | done | 2026-09-17T18:10:35+08:00 |
 | P0-06 | P0 | lessons-record 新身份来源、首次询问与模式边界 | P0-03 | AC-06/25 契约子项；[身份规则候选](sbtd-workflow-v2-lessons-identity-contract.md)，D-IMP-08/09。最终`87ba2f1…` 276 tests/69.871s，P006ReviewThree零新发现。[PR #19](https://github.com/KunoLu/640-skills/pull/19)已合入，merge `37f0beb5844c4793a718e4e3fe66d2d3a0f1d47f`；P0-07激活、P1-19/P1-12执行证明仍待完成 | AFK | done | 2026-09-17T19:04:02+08:00 |
-| P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-05、P0-06 | AC-11；sbtd-task、AGENTS及lessons-record完整候选同批移入正式源，两旧entry/目录退役、新entry及引用迁移；真实隔离安装14 bundled／19 external，无候选副本 | AFK | planned | — |
+| P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-05、P0-06 | AC-11；[切换契约](sbtd-workflow-v2-catalog-cutover-contract.md)。中间提交原生14/19安装、16资产保真、264 tests通过；存续合同检查保留，Ruff/ty基线无新增但不声称全绿；待最终head复验与独立review | AFK | checking | — |
 | P0-08 | P0 | 项目 ignore 的保留／删除／四条新增规则 | P0-03、P0-06 | AC-12/26；default 本地忽略、共享资产可追踪，规则根锚定且不误伤业务子目录 | AFK | planned | — |
 | P0-09 | P0 | 源仓库根七行 ignore、维护说明与精确测试 | R-09 | AC-12/16；保护 .sbtd/handoff/Graft，旧残留安全处理，不复制项目模板 | AFK | planned | — |
 | P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[路由场景](sbtd-workflow-v2-mode-routing-contract.md) 的原26项由P0-10验收，后加MR-27归P0-04/D-IMP-06；文档结构／依赖检查通过，P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
@@ -1388,6 +1389,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T18:10:35+08:00 | P0-05 checking→done | PR #17于18:10:06+08:00合并（`e58ecdbc3ac72c0f9316230708790a4b7ac2b9ec`）后更新；main已同步，任务分支本地及远端跟踪已清理。三轮review关闭十项遗漏，P005ReviewThree零新发现；最终`tests/unit/reports/unit-report-agent-routing-paths-p0-05-agent-routing-2026_09_17-18_00_11.json`及同stem中文摘要/envelope绑定`109a225…`，276 tests/63.194s/exit0，local-only。顺序advisor已处理，P0-06仍未启动；正式模板／catalog未变，P0-07同批激活。 |
 | 2026-09-17T18:20:16+08:00 | P0-06 planned→in-progress | P0-05实现／状态PR均合入并删除分支后，从main `64f65a5…`建立`p0-06-lessons-identity`；DDIA身份事实源与部分写入评审confirmed。按D-IMP-08准备完整非discovery候选及调用方身份规则，不修改实际身份或现行安装内容。 |
 | 2026-09-17T19:04:02+08:00 | P0-06 checking→done | PR #19于19:03:37+08:00合并（`37f0beb5844c4793a718e4e3fe66d2d3a0f1d47f`）后更新；main已同步，任务分支已删除并prune。三轮review关闭八项歧义，P006ReviewThree零新发现；最终`tests/unit/reports/unit-report-lessons-identity-canonical-p0-06-lessons-identity-2026_09_17-18_57_04.json`及同stem中文摘要/envelope绑定`87ba2f1…`，276 tests/69.871s/exit0，local-only。24项是协议review矩阵，不冒充已运行身份测试；现行资产未切换，P0-07尚未启动。 |
+| 2026-09-17T19:33:04+08:00 | P0-07 planned→in-progress | P0-06实现／状态PR均合入并清理后，从main `f1cb580…`建立`p0-07-catalog-cutover`；移前原生catalog复制基线15 bundled/19 external通过。候选正式入源、catalog/引用同批切换；三个独立写入职责并行且禁止中途交叉验证，主线程负责集成与最终证据。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 

@@ -33,7 +33,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.env["USERPROFILE"] = str(self.home)
         self.env["CODEX_HOME"] = str(self.codex_home)
 
-
     def write_executable(self, name: str, body: str) -> Path:
         bin_dir = self.root / "bin"
         bin_dir.mkdir(exist_ok=True)
@@ -45,7 +44,9 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         )
         return target
 
-    def run_onboard(self, *args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]:
+    def run_onboard(
+        self, *args: str, timeout: int = 120
+    ) -> subprocess.CompletedProcess[str]:
 
         return subprocess.run(
             (sys.executable, str(ONBOARD), *args),
@@ -55,7 +56,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             env=self.env,
             timeout=timeout,
         )
-
 
     def copy_onboard(self, name: str = "onboard-copy") -> Path:
         target = self.root / name
@@ -150,7 +150,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         script = self.copy_onboard()
         self.rewrite_catalog_entry(
             script,
-            "skill:trellis-workflow",
+            "skill:sbtd-task",
             "source",
             "templates/project/.gitignore",
         )
@@ -164,9 +164,9 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         script = self.copy_onboard()
         self.rewrite_catalog_entry(
             script,
-            "skill:trellis-workflow",
+            "skill:sbtd-task",
             "source",
-            "templates/skills/trellis-channel",
+            "templates/skills/gherkin-bdd",
         )
 
         completed = self.run_onboard_script(script, "plan", "--json")
@@ -177,11 +177,11 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
     def test_plan_rejects_absolute_local_catalog_source(self) -> None:
         script = self.copy_onboard()
         absolute_source = (
-            script.parents[1] / "templates" / "skills" / "trellis-workflow"
+            script.parents[1] / "templates" / "skills" / "sbtd-task"
         ).resolve()
         self.rewrite_catalog_entry(
             script,
-            "skill:trellis-workflow",
+            "skill:sbtd-task",
             "source",
             str(absolute_source),
         )
@@ -207,7 +207,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
 
     def test_plan_rejects_kind_identity_and_target_role_mismatches(self) -> None:
         cases = (
-            ("kind-id-mismatch", "id", "agent:trellis-workflow", "does not match kind"),
+            ("kind-id-mismatch", "id", "agent:sbtd-task", "does not match kind"),
             ("role-mismatch", "targetRole", "project-agents", "target role"),
         )
 
@@ -216,7 +216,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
                 script = self.copy_onboard(name)
                 self.rewrite_catalog_entry(
                     script,
-                    "skill:trellis-workflow",
+                    "skill:sbtd-task",
                     field,
                     value,
                 )
@@ -291,15 +291,15 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertIn(str(self.project_one.resolve() / ".gitignore"), targets)
         self.assertIn(str(self.project_two.resolve() / ".gitignore"), targets)
         self.assertIn(
-            str(self.codex_home.resolve() / "skills" / "trellis-workflow"),
+            str(self.codex_home.resolve() / "skills" / "sbtd-task"),
             targets,
         )
         self.assertNotIn(
-            str(self.project_one.resolve() / ".agent" / "skills" / "trellis-workflow"),
+            str(self.project_one.resolve() / ".agent" / "skills" / "sbtd-task"),
             targets,
         )
         self.assertNotIn(
-            str(self.project_two.resolve() / ".agent" / "skills" / "trellis-workflow"),
+            str(self.project_two.resolve() / ".agent" / "skills" / "sbtd-task"),
             targets,
         )
         self.assertEqual(payload["bundledMigration"]["status"], "not-needed")
@@ -420,11 +420,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         template_lines = {
             line
             for line in (
-                ROOT
-                / "sbtd-workflow-onboard"
-                / "templates"
-                / "project"
-                / ".gitignore"
+                ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
             )
             .read_text(encoding="utf-8")
             .splitlines()
@@ -587,10 +583,22 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         baseline = gitignore.read_text(encoding="utf-8")
 
         categories = (
-            ("!.trellis/workspace\n!.trellis/workspace/**\n", ".trellis/workspace/index.md"),
-            ("!.trellis/worktrees/\n!.trellis/worktrees/**\n", ".trellis/worktrees/feature/notes.md"),
-            ("!.trellis/channels/\n!.trellis/channels/**\n", ".trellis/channels/main/message.json"),
-            ("!.trellis/.runtime/\n!.trellis/.runtime/**\n", ".trellis/.runtime/state.json"),
+            (
+                "!.trellis/workspace\n!.trellis/workspace/**\n",
+                ".trellis/workspace/index.md",
+            ),
+            (
+                "!.trellis/worktrees/\n!.trellis/worktrees/**\n",
+                ".trellis/worktrees/feature/notes.md",
+            ),
+            (
+                "!.trellis/channels/\n!.trellis/channels/**\n",
+                ".trellis/channels/main/message.json",
+            ),
+            (
+                "!.trellis/.runtime/\n!.trellis/.runtime/**\n",
+                ".trellis/.runtime/state.json",
+            ),
             ("!.trellis/.cache/\n!.trellis/.cache/**\n", ".trellis/.cache/index.json"),
             ("!.trellis/.backup/\n!.trellis/.backup/**\n", ".trellis/.backup/spec.md"),
             ("!.trellis/.template-hashes.json\n", ".trellis/.template-hashes.json"),
@@ -635,9 +643,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         "Verification passed" that reads as "the merged rules were verified"."""
         self.write_executable(
             "git",
-            "#!/bin/sh\n"
-            'echo "fatal: not a git repository" >&2\n'
-            "exit 128\n",
+            '#!/bin/sh\necho "fatal: not a git repository" >&2\nexit 128\n',
         )
 
         result = self.init_project_one_gitignore()
@@ -761,11 +767,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
     def test_init_projects_preserves_complete_utf8_bom_gitignore(self) -> None:
         gitignore = self.project_one / ".gitignore"
         template = (
-            ROOT
-            / "sbtd-workflow-onboard"
-            / "templates"
-            / "project"
-            / ".gitignore"
+            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
         ).read_text(encoding="utf-8")
         initial_bytes = b"\xef\xbb\xbf" + template.encode("utf-8")
         gitignore.write_bytes(initial_bytes)
@@ -784,7 +786,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr or first.stdout)
         self.assertEqual(second.returncode, 0, second.stderr or second.stdout)
         self.assertEqual(gitignore.read_bytes(), initial_bytes)
-
 
     def test_external_skill_project_scope_is_rejected(self) -> None:
         completed = self.run_onboard(
@@ -853,7 +854,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertTrue((global_skills / "trellis-workflow" / "SKILL.md").is_file())
+        self.assertTrue((global_skills / "sbtd-task" / "SKILL.md").is_file())
         self.assertTrue(
             (global_skills / "sbtd-workflow-onboard" / "SKILL.md").is_file()
         )
@@ -962,7 +963,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertFalse(global_agents.exists())
         self.assertFalse(project_agents.exists())
         self.assertFalse((global_skills / "sbtd-workflow-onboard").exists())
-
 
     def _write_trellis_logger(self, log_path: Path) -> None:
         self.env["TRELIS_ARGS_LOG"] = str(log_path)
@@ -1092,7 +1092,9 @@ exit 1
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn("--kimi", trellis_args_log.read_text(encoding="utf-8").splitlines())
+        self.assertIn(
+            "--kimi", trellis_args_log.read_text(encoding="utf-8").splitlines()
+        )
 
     def test_init_projects_explicit_trellis_platform_replaces_agent_default(
         self,
@@ -1252,10 +1254,10 @@ exit 1
 
     def test_plan_reports_skill_write_actions_for_valid_shells(self) -> None:
         global_skills = self.root / "global-skills"
-        bundled = global_skills / "trellis-workflow"
+        bundled = global_skills / "sbtd-task"
         bundled.mkdir(parents=True)
         (bundled / "SKILL.md").write_text(
-            "---\nname: trellis-workflow\n---\n",
+            "---\nname: sbtd-task\n---\n",
             encoding="utf-8",
         )
         completed = self.run_onboard(
@@ -1275,20 +1277,18 @@ exit 1
         entry = next(
             item
             for item in payload["operations"]
-            if item["label"] == "global skill trellis-workflow"
+            if item["label"] == "global skill sbtd-task"
         )
         self.assertTrue(entry["targetValid"])
         self.assertEqual(entry["plannedActionOnInit"], "skipped-already-valid")
-        self.assertEqual(
-            entry["plannedActionOnReset"], "overwritten-without-backup"
-        )
+        self.assertEqual(entry["plannedActionOnReset"], "overwritten-without-backup")
 
     def test_init_skips_valid_bundled_and_external_skill_shells(self) -> None:
         global_skills = self.root / "global-skills"
         self._seed_required_external_skills(global_skills)
-        bundled = global_skills / "trellis-workflow"
+        bundled = global_skills / "sbtd-task"
         bundled.mkdir(parents=True)
-        valid_bundled = "---\nname: trellis-workflow\n---\nstale-but-valid-bundled\n"
+        valid_bundled = "---\nname: sbtd-task\n---\nstale-but-valid-bundled\n"
         (bundled / "SKILL.md").write_text(valid_bundled, encoding="utf-8")
         (bundled / "keep-init.txt").write_text("keep-bundled\n", encoding="utf-8")
         invalid_bundled = global_skills / "gherkin-bdd"
@@ -1358,10 +1358,10 @@ exit 1
     def test_reset_overwrites_valid_bundled_and_external_skills(self) -> None:
         global_skills = self.root / "global-skills"
         self._seed_required_external_skills(global_skills)
-        bundled = global_skills / "trellis-workflow"
+        bundled = global_skills / "sbtd-task"
         bundled.mkdir(parents=True)
         (bundled / "SKILL.md").write_text(
-            "---\nname: trellis-workflow\n---\n",
+            "---\nname: sbtd-task\n---\n",
             encoding="utf-8",
         )
         (bundled / "drop-reset.txt").write_text("stale-bundled\n", encoding="utf-8")
@@ -1391,7 +1391,7 @@ exit 1
             / "sbtd-workflow-onboard"
             / "templates"
             / "skills"
-            / "trellis-workflow"
+            / "sbtd-task"
             / "SKILL.md"
         )
         self.assertEqual(
@@ -1415,8 +1415,110 @@ exit 1
                 name,
             )
 
+    def test_init_installs_complete_sbtd_task_bundle_without_retired_skills(
+        self,
+    ) -> None:
+        """Package-layer proof for the catalog cutover: a fresh isolated init
+        must install sbtd-task as the full canonical directory -- entry,
+        references, schema and licenses, byte-identical to the declared source
+        -- while the retired trellis-workflow/trellis-channel Skills are gone
+        from the catalog, the package templates and every installed copy."""
+        global_skills = self.root / "global-skills"
+        self._seed_required_external_skills(global_skills)
+        global_agents = self.root / "global-AGENTS.md"
+        args = (
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(global_skills),
+            "--global-agents-path",
+            str(global_agents),
+            "--skip-trellis-init",
+        )
 
+        planned = self.run_onboard("plan", *args, "--json")
+        self.assertEqual(planned.returncode, 0, planned.stderr)
+        contained_roots = (global_skills.resolve(), self.project_one.resolve())
+        for operation in json.loads(planned.stdout)["operations"]:
+            target = Path(operation["target"]).resolve()
+            self.assertTrue(
+                target == global_agents.resolve()
+                or any(target.is_relative_to(root) for root in contained_roots),
+                operation["target"],
+            )
 
+        completed = self.run_onboard("init", *args, "--yes")
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+
+        catalog = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "catalog.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        bundled_entries = [
+            entry for entry in catalog["entries"] if entry["kind"] == "bundled-skill"
+        ]
+        external_entries = [
+            entry for entry in catalog["entries"] if entry["kind"] == "external-skill"
+        ]
+        self.assertEqual(len(bundled_entries), 14)
+        self.assertEqual(len(external_entries), 19)
+        entry_ids = {entry["id"] for entry in catalog["entries"]}
+        self.assertNotIn("skill:trellis-workflow", entry_ids)
+        self.assertNotIn("skill:trellis-channel", entry_ids)
+        sbtd_task_entry = next(
+            entry for entry in bundled_entries if entry["id"] == "skill:sbtd-task"
+        )
+        self.assertEqual(sbtd_task_entry["source"], "templates/skills/sbtd-task")
+        self.assertEqual(sbtd_task_entry["targetRole"], "skill")
+
+        canonical = (
+            ROOT / "sbtd-workflow-onboard" / "templates" / "skills" / "sbtd-task"
+        )
+        canonical_files = sorted(
+            path.relative_to(canonical)
+            for path in canonical.rglob("*")
+            if path.is_file()
+        )
+        for required in (
+            Path("SKILL.md"),
+            Path("LICENSE"),
+            Path("NOTICE"),
+            Path("references") / "task-data.schema.json",
+            Path("references") / "strict.md",
+            Path("references") / "state.md",
+            Path("references") / "handoff.md",
+            Path("references") / "methods.md",
+            Path("references") / "tooling.md",
+            Path("references") / "presentation.md",
+        ):
+            self.assertIn(required, canonical_files)
+        installed = global_skills / "sbtd-task"
+        installed_files = sorted(
+            path.relative_to(installed)
+            for path in installed.rglob("*")
+            if path.is_file()
+        )
+        self.assertEqual(installed_files, canonical_files)
+        for relative in canonical_files:
+            self.assertEqual(
+                (installed / relative).read_bytes(),
+                (canonical / relative).read_bytes(),
+                str(relative),
+            )
+
+        installed_onboard_templates = (
+            global_skills / "sbtd-workflow-onboard" / "templates" / "skills"
+        )
+        for retired in ("trellis-workflow", "trellis-channel"):
+            self.assertFalse(
+                (
+                    ROOT / "sbtd-workflow-onboard" / "templates" / "skills" / retired
+                ).exists(),
+                retired,
+            )
+            self.assertFalse((global_skills / retired).exists(), retired)
+            self.assertFalse((installed_onboard_templates / retired).exists(), retired)
 
     def test_plan_skips_omp_global_agents_when_omp_root_absent(self) -> None:
         completed = self.run_onboard(
@@ -1443,7 +1545,9 @@ exit 1
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         operations = json.loads(completed.stdout)["operations"]
-        omp_op = next(item for item in operations if item["label"] == "omp global AGENTS.md")
+        omp_op = next(
+            item for item in operations if item["label"] == "omp global AGENTS.md"
+        )
         self.assertEqual(
             omp_op["target"],
             str((omp_root / "agent" / "AGENTS.md").resolve()),
@@ -1451,7 +1555,8 @@ exit 1
         self.assertTrue(
             any(
                 item["label"] == "codex global AGENTS.md"
-                and item["target"] == str((self.root / "custom-global-AGENTS.md").resolve())
+                and item["target"]
+                == str((self.root / "custom-global-AGENTS.md").resolve())
                 for item in operations
             )
         )
@@ -1473,7 +1578,9 @@ exit 1
         self.assertIn("codex global AGENTS.md", labels)
         self.assertNotIn("omp global AGENTS.md", labels)
         self.assertEqual(
-            sum(1 for item in operations if item["target"] == str(omp_agents.resolve())),
+            sum(
+                1 for item in operations if item["target"] == str(omp_agents.resolve())
+            ),
             1,
         )
 
@@ -1484,11 +1591,7 @@ exit 1
         omp_agents.parent.mkdir(parents=True)
         omp_agents.write_text("stale omp agents\n", encoding="utf-8")
         template = (
-            ROOT
-            / "sbtd-workflow-onboard"
-            / "templates"
-            / "agents"
-            / "AGENTS.global.md"
+            ROOT / "sbtd-workflow-onboard" / "templates" / "agents" / "AGENTS.global.md"
         ).read_text(encoding="utf-8")
 
         completed = self.run_onboard(
@@ -1521,11 +1624,7 @@ exit 1
         omp_agents = project_root / "AGENTS.md"
         omp_agents.write_text("stale omp agents\n", encoding="utf-8")
         template = (
-            ROOT
-            / "sbtd-workflow-onboard"
-            / "templates"
-            / "agents"
-            / "AGENTS.global.md"
+            ROOT / "sbtd-workflow-onboard" / "templates" / "agents" / "AGENTS.global.md"
         ).read_text(encoding="utf-8")
 
         planned = self.run_onboard(
@@ -1564,9 +1663,6 @@ exit 1
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(encoding="utf-8"), "stale omp agents\n")
 
-
-
-
     def test_init_overwrites_existing_omp_global_agents(self) -> None:
         global_skills = self.root / "global-skills"
         self._seed_required_external_skills(global_skills)
@@ -1574,11 +1670,7 @@ exit 1
         omp_agents.parent.mkdir(parents=True)
         omp_agents.write_text("stale omp agents\n", encoding="utf-8")
         template = (
-            ROOT
-            / "sbtd-workflow-onboard"
-            / "templates"
-            / "agents"
-            / "AGENTS.global.md"
+            ROOT / "sbtd-workflow-onboard" / "templates" / "agents" / "AGENTS.global.md"
         ).read_text(encoding="utf-8")
 
         completed = self.run_onboard(
@@ -1654,9 +1746,6 @@ class OmpHomePathTests(unittest.TestCase):
         finally:
             module.os = original_os
             sys.modules.pop(spec.name, None)
-
-
-
 
 
 if __name__ == "__main__":
