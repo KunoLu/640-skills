@@ -67,3 +67,9 @@ P005ReviewOne 指出七项遗漏，全部纳入规则候选：完整 strict 客�
 对应复审场景：隐藏依赖触发legacy；跨进程cache／migration触发DDIA；可写仓库中的概念问答不新建记录；不同detached SHA必须另行裁决；跨会话读取拒绝理由后不重复建议；关闭自动交接后暂停不写但手动请求仍可执行；请求图报告只产生安全摘要并披露实际结构证据边界。
 
 本轮收到的顺序advisor已处理：review尚未结束时停止P0-06预读，没有创建／修改该任务资产；下一任务只在本任务review、合并、台账更新与分支清理全部结束后开始。
+
+## 第二轮 review 修正
+
+P005ReviewTwo确认首轮七项修正存在，并发现入口间三项遗漏：project-only补齐Graft的持续DNT、deep/name禁令及继承provider/cloud阻断；canonical state明确新建detached记录使用完整SHA；canonical handoff明确任务／会话退出的锁存、匹配范围恢复、会话优先及手动请求不清除退出。修正同时覆盖全局已装但项目模板缺失的真实支持组合，不依赖只在另一入口出现的规则。
+
+同轮将独立fallback的handoff文件名、必要快照、7天主动提示和手动恢复边界显式对齐canonical reference，防止无全局Skill时另造文件布局或扩大自动恢复范围。

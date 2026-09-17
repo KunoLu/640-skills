@@ -33,10 +33,10 @@ task唯一拥有mode/status；`.sbtd/active-task.json`只存schema_version/task_
 ## 路径与工具边界
 
 - 任务：本地`.sbtd/tasks`或共享`ai/tasks`；长期规范`docs/spec`；lesson短入口默认`docs/spec/lessons.md`，已有明确入口则沿用，完整库为`docs/lessons/{index,topics,archive}`。
-- handoff：仅真实暂停／上下文切换／续接需要时写受保护的`docs/handoffs`，完整task ID安全编码，无信息变化不重写；不是3/5次计数触发，不覆盖task模式。用户“本任务不要自动交接”或“本会话关闭自动交接”分别设置对应退出状态；只有明确“本任务恢复自动交接”或“本会话恢复自动交接”才解除相应状态，会话退出优先。续接保留退出状态；直接手动请求仍可满足，但不自动清除退出。只读仅对话。
+- handoff：仅真实暂停／上下文切换／续接需要时写受保护的`docs/handoffs/{YYYY_mm_dd}-{task-key}.md`；task-key安全编码完整task ID，同任务当天更新同一文件，仅信息变化才写，不因跨天或3/5次计数触发。快照保留task路径／模式及拒绝决定、branch／完整HEAD或unknown、时间、目标、进度、文件、实际命令／结果、未决项、下一步、不要重复事项和脱敏／退出状态，不覆盖task。用户“本任务不要自动交接”或“本会话关闭自动交接”分别设置退出；“本任务恢复自动交接”或“本会话恢复自动交接”等明确请求只解除对应范围，会话退出优先，续接保留退出状态，手动请求不自动清除退出。只读仅对话。只主动提示7天内分支匹配的未完成交接，不扫描其他项目；更旧任务仍可手动选择，不承诺无host支持的自动恢复。
 - BDD：沿用项目路径／语言，默认中文场景+英文关键词；本配置源仓库的no-.feature例外不复制到业务项目。按模式/风险及明确交付使用方法，既有项目强制规范仍有效。
 - 测试与报告：沿用项目命令和project-validation；CLI是真实回归执行器，MCP诊断不冒充CI。正式命名报告和同stem中文汇总必须保留，runner current目录不是归档；mock/旧SHA/dirty local不冒充当前full-stack。具体路径与状态词表按实际适用Skill，不为无关工具输出整表。
-- Graft只作可降级结构证据；不对共父目录联邦，不启用LLM/cloud或上传代码，不用空图/exit0证明无影响；未证明只读副作用前不运行其查询。原始graph/blast含源码、diff或作者信息，不上传PR／公网／知识库，报告优先`--no-owners`及最小脱敏摘要。相关时报告used/skipped/blocked/not-available及实际CLI/MCP、授权根、版本、覆盖限制。影响结论回到源码/LSP/contract。
+- Graft只作可降级结构证据；受管CLI/MCP/hook须持续`DO_NOT_TRACK=1`，禁`--deep`、`blast --name`、LLM/cloud和代码／查询上传；继承环境或配置可能启用provider/cloud时阻断接入，不静默断开用户其他用途。无法证明这些保护或只读副作用时用源码/LSP/contract，不冒险调用。不对共父目录联邦，不用空图/exit0证明无影响。原始graph/blast含源码、diff或作者信息，不上传PR／公网／知识库，报告优先`--no-owners`及最小脱敏摘要。相关时报告used/skipped/blocked/not-available及实际CLI/MCP、授权根、版本、覆盖限制；结论仍回到源码核对。
 - UI语境使用已有design system，ui-ux-pro-max初稿、可用impeccable塑形/polish、shadcn处理已用组件；上下文默认docs/PRODUCT.md与docs/DESIGN.md。React Bits仅明确需要时按已确认tier／registry／许可执行，不打印key、不把全局Skill复制进项目。
 
 ## 身份、输出和交付

@@ -4,7 +4,7 @@ Use handoff for a real pause, clear/context switch, branch switch with unfinishe
 
 ## Before saving
 
-1. Honor task- and session-level auto-handoff opt-outs. An explicit manual request can still be fulfilled. `normal mode` is a presentation instruction, not an SBTD execution-mode switch.
+1. Honor task- and session-level auto-handoff opt-outs. “本任务不要自动交接” sets the task opt-out; “本会话关闭自动交接” sets the session opt-out. Keep each latched across continuation until the user explicitly requests “本任务恢复自动交接” or “本会话恢复自动交接” for that scope; clearing the task flag cannot override a session opt-out. Equivalent explicit wording is valid. An explicit manual request can still be fulfilled without clearing either flag. `normal mode` is a presentation instruction, not an SBTD execution-mode or handoff-policy switch.
 2. Explicit read-only scope means the handoff stays in the conversation; do not write even an existing file. State that cross-session restoration was not persisted.
 3. For a writable handoff, first verify the authorized project and real ignore/tracked protection for `docs/handoffs`. Missing protection needs the narrow authorization described in [state.md](state.md), not automatic initialization or broad ignore changes.
 4. Prefer the current task record. Handoff is a snapshot, never the second source of mode/status or a replacement for saving the original mode choice.
