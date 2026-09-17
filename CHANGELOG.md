@@ -18,6 +18,7 @@
 - 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。
 - P0-08项目ignore模板保留56条通用规则、移除14条旧Trellis/GitNexus规则并新增`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`；安装器语义探针与模板同批对齐。共享任务／规范／lessons和manifest保持可追踪，旧项目规则仍仅追加不自动清理，不改源仓根ignore。
 - 共享规则验收覆盖公开固定分支，避免精确忽略旧lessons入口、context ADR、undated归档、平台flow、React Bits、任务附属产物、UI上下文、测试源码或Git控制文件时误报通过；继续保留用户规则并报告来源，不恢复旧平台生成集成的无条件探针。
+- P0-09将配置源仓根ignore独立切换为七行，保护`.sbtd`、handoff和Graft本地产物，保持根AGENTS本地化与ENTRYPOINT可追踪；切换前核对旧工具残留及Git索引，不复制业务项目模板，不执行真实数据迁移或全局同步。现行维护入口同步，历史lesson原文保留。
 
 ### 验证
 

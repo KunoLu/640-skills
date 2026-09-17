@@ -94,7 +94,8 @@
   - 验证 `UPDATE.md` 中已有区间章节的起点等于 `ENTRYPOINT.md` 中该工具当前版本。无新版本的启用工具可以没有章节；不得仅因新加入监控而补写 `当前版本 -> 当前版本`。
   - 验证 OMP 若已有 `UPDATE.md` 章节，起点和终点都是 `v<semver>`；该终点是后续写回 ENTRYPOINT 的唯一目标格式。
   - 验证 `ENTRYPOINT.md` 没有因为定时自动化而更新工具版本号。
-  - 验证根 `.gitignore` 内容严格为五行：`.DS_Store`、`.gitnexus/`、`.trellis/`、`__pycache__/`、`AGENTS.md`。验证 `git ls-files -- AGENTS.md ENTRYPOINT.md` 只包含 `ENTRYPOINT.md`。`AGENTS.md` 若存在可读取、评估或修改；缺失时跳过，不得把它的存在当作 Gate。
+  - 验证根 `.gitignore` 内容严格为七行且顺序一致：`.DS_Store`、`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`、`__pycache__/`、`AGENTS.md`；与业务项目模板独立。用原生Git正反检查本地根、文件／symlink和同名业务子目录，确认共享任务／spec／lessons及ENTRYPOINT可追踪。旧工具根已不受该文件保护；检查磁盘与索引残留，未知或敏感内容先报告并等待授权，不自动删除、untrack或加入提交。保留历史lesson原文，只维护现行规则说明。验证 `git ls-files -- AGENTS.md ENTRYPOINT.md` 只包含 `ENTRYPOINT.md`。`AGENTS.md` 若存在可读取、评估或修改；缺失时跳过，不得把它的存在当作 Gate。
+  - `docs/lessons.md`旧五行摘要和topic中的三／四／五行状态都是历史保留内容，不覆盖上面的现行七行验收。不得把历史字样当作恢复旧根规则的依据，也不为通过新验收改写历史lesson。
   - 验证 project-only 安装契约：付费 React Bits Skill 固定落在 `.agents/skills/react-bits-pro/SKILL.md` 且使用覆盖语义；项目 `.gitignore` 重复执行不产生重复行，现有通用保护保持，v2新模板无Trellis/GitNexus旧段。原生Git确认`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`保护根级目录／文件／symlink且不误伤同名业务子目录；AGENTS/CLAUDE、共享`.agents`、ai/tasks含子任务和归档、docs/spec/lessons、CONTEXT/ADR、features、maestro/flow与三个可入库Web manifest可追踪。安装器探针与模板同批对齐；broad ai/docs/tests或重新包含冲突须返回具体来源，无规则覆盖则报告缺失规则，Git不可用不得报已验证。已有项目只追加新保护，不自动删除旧段、untrack数据或证明所有权／迁移完成；真实清理另经授权。报告目录本地留存并忽略，不推断为Git入库要求。
   - 共享路径验证还须覆盖公开固定分支：`docs/lessons.md`旧短入口、context ADR、季度／undated任务归档、任务附属产物及bootstrap、PRODUCT/DESIGN、测试源码、iOS／Android flow、受管React Bits Skill、根Git控制文件。精确排除这些分支也须返回真实规则来源并保留用户内容；代表性probe不是自定义路径穷举，也不授权恢复退役平台集成。
 14. 最终输出必须说明：发现的版本区间、修改的文件、`CHANGELOG.md` / `README.md` / `README.html` / 本 prompt 的维护判断、验证命令和结果、跳过项及原因、剩余风险、`rtk` 使用状态。再次强调：不要 commit，不要 push，不要把最新版本写回 `ENTRYPOINT.md`。

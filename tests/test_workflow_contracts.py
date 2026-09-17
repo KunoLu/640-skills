@@ -25,7 +25,15 @@ class WorkflowContractTests(unittest.TestCase):
 
         self.assertEqual(
             entries,
-            [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/", "AGENTS.md"],
+            [
+                ".DS_Store",
+                "/.sbtd",
+                "/docs/handoffs",
+                "/graft",
+                "/.graft",
+                "__pycache__/",
+                "AGENTS.md",
+            ],
         )
 
     def test_project_template_protects_local_state_without_hiding_shared_paths(
@@ -915,7 +923,6 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("catalog.schema.json", prompt)
         self.assertIn("`__pycache__/`", prompt)
         self.assertIn("不要修改 `ENTRYPOINT.md`", prompt)
-        self.assertIn("内容严格为五行", prompt)
         self.assertIn(
             "- `prompts/automations/sbtd-workflow-tools-version-check.md`",
             prompt,
