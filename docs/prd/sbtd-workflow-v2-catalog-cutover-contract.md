@@ -31,7 +31,7 @@ README两种格式、Onboard入口／REFERENCE及版本化automation prompt必�
 | book-legacy-change-safety | required：安装目录、discovery和catalog的隐含依赖及回归风险 | 首次切换前 | passed |
 | book-refactoring-pass | required：正式规则／目录迁移及生产bootstrap提示修改 | legacy刻画后、实现前 | passed |
 | book-ddia-data-design | required：catalog安装集合事实源和同批切换一致性 | 设计稳定前 | passed |
-| book-release-readiness | required：安装可见payload改变 | 适用验证后 | planned |
+| book-release-readiness | required：安装可见payload改变 | 适用验证后，限定P0-07源包层 | passed |
 | book-ddd-distilled-modeling | on-demand：沿用已确认领域与模式，无新歧义，未完整grill | 不触发 | not-required |
 
 Legacy Change Safety Review：characterized。移前从精确commit导出tracked包，在启动前隔离HOME/CODEX_HOME/XDG/TMPDIR，真实执行planner/copy；15 bundled／19 external元数据、19个操作、完整树、模板复制、第二次init跳过15个合法包、reset替换受管包且保留不相关Skill均通过。没有调用完整init或第三方CLI。
@@ -40,7 +40,7 @@ Refactoring Review：proceed，normal。整目录移动16个候选资产，schem
 
 DDIA Data Design Review：confirmed。catalog与源树／调用方以同一Git提交发布；临时工作树不是部署事务。安装目标权限／写入策略不变，无新状态服务或journal；失败处理不扩大为真实项目迁移。source rollback是目标范围的Git逆向修改，不是删除用户安装或reset --hard。
 
-未完整调用grill-with-docs：原子路径和阶段职责已由PRD、D-IMP-05/07/08确定。TDD采用现有行为基线及同款移后smoke，不为声明式目录变化建立测试专用实现。新增永久测试只防完整包／引用遗漏和半catalog切换；纯源码文案／顺序断言删除，不重新绑定新措辞。实际新测试是否执行过red必须按真实运行记录说明，不把旧15项快照伪称为新测试红测。
+未完整调用grill-with-docs：原子路径和阶段职责已由PRD、D-IMP-05/07/08确定。TDD采用现有行为基线及同款移后smoke，不为声明式目录变化建立测试专用实现。新增永久测试只防完整包／引用遗漏和半catalog切换；退役旧路径／内部所有权断言，保留未改变的公共发布合同且不将其当作Agent执行证明。实际新测试是否执行过red必须按真实运行记录说明，不把旧15项快照伪称为新测试红测。
 
 ## 验证安排与当前证据
 
@@ -54,7 +54,7 @@ DDIA Data Design Review：confirmed。catalog与源树／调用方以同一Git�
 
 主线程拥有catalog／资产／生产提示／schema定位和docs/prd；契约测试、安装测试、分发文档三个writer文件不重叠。全部worker明确禁止中途测试／build／lint／format。
 
-安装测试worker仍提前运行了定点tests与py_compile，该结果不作为验收证据；已要求停止进一步验证。所有写入静止后，由主线程重新运行受影响范围和最终全量，避免以漂移中的源码结果证明最终head。此偏差不授权其他worker验证或提前开始下一任务。
+两名测试worker仍提前运行了定点tests与py_compile，该结果不作为验收证据；已要求停止进一步验证。所有写入静止后，由主线程重新运行受影响范围和最终全量，避免以漂移中的源码结果证明最终head。此偏差不授权其他worker验证或提前开始下一任务。
 
 ## 收尾范围
 
@@ -76,3 +76,21 @@ README.md、README.html和版本化automation prompt在本项需要更新，因�
 退役的是Trellis调度／旧路径、旧Gate词汇所有权及旧示例布局的断言，不是上表行为。P0-07额外在最终原生smoke中逐字核对`f1cb580…`中16个已审查候选资产、当前canonical与实际安装副本；这是本次搬迁保真，不替代未来回归合同或P1执行验证。
 
 两名测试worker均提前运行了定点检查，已明确不采纳该证据并接管最终验证。worker报告仅刷新忽略的Python缓存并清理其临时fixture；主线程不会引用这些中途结果作为最终head通过依据。
+
+## 主线程验证与 scoped readiness
+
+在`b2967cc9c699f526707a98d1d85fe34694bdfefe`上，主线程原生定点10 tests/1.461s、全量264 tests/75.963s均exit0；正式unit JSON、同stem中文摘要和envelope均通过校验。真实catalog planner/copy smoke验证14 bundled／19 external元数据、14个完整安装树、16个已审查候选与canonical／安装副本逐字一致、第二次init跳过14个合法包、reset保留非受管Skill。新永久测试未在切换前独立执行red；旧基线实测证明当时没有sbtd-task，不能混称为该测试红测。
+
+bootstrap终端指引另通过真实Onboard CLI和既有Trellis mock fixture观察：预期exit6且实际提示保全旧数据／请求显式迁移，不声称v2 runtime已ready。此报告为mock-backed，与无mock的原生catalog复制报告分开。
+
+静态检查不冒充全绿：同配置、按文件／函数／规则／消息比较，Ruff基线43项、当前40项，ty基线124项、当前123项，未观察到新增；原始全文件检查仍非零。只修触及测试文件的导入，不改无关异常类型、类型声明或加ignore来清零。差分报告保留基线与当前诊断及文件摘要；此限制不是完整v2发布证明。
+
+ego-browser通过默认stdin方式完成README.html实际页面检查和截图。此前-e方式超时，未重复创建空间；确认无既有空间后创建16，并在同页修正／复验首屏现状说明。文档首屏、职责卡与未发布边界已一致，观察到无横向溢出；不是Playwright/CI/Web E2E通过。
+
+Code Readability Review：改动的生产代码仅为失效bootstrap指引，安装实现与签名保持；测试直接验证完整目录、路径、安全拒绝和声明格式，没有新框架／依赖。保留存续公共合同与真实provider／Git合并检查，移除真正退役的旧所有权／路径断言。Ponytail pass无额外精简项，未以缩行牺牲不变量。
+
+Release Readiness Review：ready，仅限本项已确认的source/catalog安装层。失效路径、半包、遗漏references、覆盖范围和重复复制均有证据；沿用现有复制复杂度，无新服务、队列或并发控制。以源提交逆向恢复，不自动删除用户安装或真实备份。全文件静态清零、完整CLI／init/reset、真实host和迁移不属于本项已通过结论，仍按P1/P2/P3约束，README显式禁止把本开发分支混合生命周期用于真实项目。
+
+上述报告属于该中间提交快照；本验证记录提交后，必须在最终head重跑计划全量与原生安装smoke、生成对应envelope，再进入独立review。不得把旧报告改写成新head原生执行结果。
+
+清理偏差：曾在中间head的smoke与全量通过后删除29个私有编辑快照，但最终head复验／review尚未结束，早于本契约的最终清理门禁。已从切换前`f1cb580…`重建29个tracked源文件的私有备份并逐字校验，另保存摘要manifest，保留至最终head验证、独立review和任务PR合并之后。恢复的是Git基线，不包含已删除的未提交README中间稿；当前已提交改动、Git旧源和全部正式／失败报告仍保留。没有删除用户数据、用户安装、真实迁移备份或用户浏览器页面；不声称原清理时序已合规。
