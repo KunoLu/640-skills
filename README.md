@@ -636,19 +636,25 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 ## 模板 `.gitignore` 工具与测试产物策略
 
-项目模板默认追踪项目级 `AGENTS.md`、`CLAUDE.md`、共享 `.agents/skills/**`，以及 Trellis 为 Claude / Codex / OMP 等平台生成的 agents、commands、skills、hooks、extensions 和共享 settings；只忽略 `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json` 与 `.omp/plugins/` 等已确认的本地运行态或机器本地设置。本项目模板用无尾随斜杠的 `.trellis/*` 覆盖 `.trellis` 下所有直接子项，因此 Trellis 生成的 workspace `index.md`、开发者 journal / trace，以及有意配置为 symlink 的顶级 workspace 都作为本地数据被忽略（无尾随斜杠同时匹配目录与指向目录的 symlink），再由 `!` 规则逐项放回需要追踪的 spec / agents / lessons / task 产物；这有意不同于上游 Trellis 默认会 stage workspace 内容的策略，并阻止 workspace 内容自动提交。初始化时按精确非空行比较项目原 `.gitignore` 与模板：已有行保持原位且不重复，只把缺失行追加到文件末尾；重复执行必须保持文件字节不变。写入后若目标是 Git worktree，Onboard 用 `git check-ignore` 验证 `.trellis/spec` / agents / lessons / task 产物确实可追踪，workspace / runtime 确实被忽略；既有 `.trellis/` 等宽泛父目录排除会给出具体来源行并使操作失败，不能以“模板文本已存在”冒充语义有效。模板同时忽略本地运行态和报告产物，报告默认本地留存而非 Git 入库。当前相关片段如下：
+项目v2模板保留现有临时文件、构建／依赖、环境秘密、Python缓存、各Agent本地状态和测试报告规则；不因保留某个平台缓存规则而自动接入该平台。新本地保护只有四条根锚定、无尾随斜杠的规则：`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`，覆盖目录、同名文件和symlink路径，但不会忽略`packages/graft`等同名业务子目录。共享的项目`AGENTS.md`、`CLAUDE.md`、`.agents/skills/**`、`ai/tasks/**`（含子任务／归档）、`docs/spec`、`docs/lessons`、CONTEXT／ADR、features、maestro/flow及三个可入库Web manifest保持可追踪；`ui-test-repair-plan.json`和报告仍属本地产物。初始化仍只追加缺失非空行，既有行不重排，重复执行保持字节幂等。写入Git worktree后，Onboard用原生`git check-ignore`验证新本地保护和共享路径规则；`ai/`、`docs/`、`tests/`等宽泛排除或重新包含本地路径时报告具体来源，缺保护时明确指出无匹配规则，Git不可用则标未验证。该检查是规则语义检查，不自动取消tracked状态，也不证明保留路径的数据所有权或迁移已完成。相关片段如下：
+
+共享探针覆盖公开目录的固定分支：既有`docs/lessons.md`短入口、按context分组的ADR、undated任务归档、任务附属产物／bootstrap、UI上下文、测试源码、iOS／Android flow、受管React Bits Skill及根Git控制文件。使用代表性文件验证规则，不声称穷举每个自定义文件名，也不代替实际迁移清单核验。
 
 既有项目迁移：如果旧模板已经写入 `.claude/`、`CLAUDE.md`、`.agents/` 或 `/AGENTS.md`，`init` / `reset` 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 `git check-ignore` 复核目标路径。
 
+这段旧规则建议以项目确实需要追踪相应资产为前提；v2不会因此重新接入旧Claude生成集成，也不会把其agents／commands／hooks设为所有项目必需的共享探针。旧集成是否保留或迁移仍须按实际项目与授权确认。
+
+v2新模板不再含Trellis／GitNexus段。已有项目的旧保护不是按字符串盲删：先在显式迁移中追加新保护并保留旧规则，数据搬迁／验证和旧目录处置完成后，另行确认清理已证明受管的旧段；未知自定义规则保留。`init`／`reset`不会自动完成这项清理。若保留路径其实是业务数据，或已有本地产物被tracked，必须另行核对并取得处理授权；P0模板和探针更新不代表P1的所有权／迁移写入门禁已实现，不应在真实项目使用当前过渡生命周期。
+
 ```gitignore
 # ---------- Claude ----------
-# Keep Trellis-generated agents, commands, skills, hooks, and shared settings versioned.
+# Keep shared agents, commands, skills, hooks, and settings versioned.
 .claude/projects/
 .claude/worktrees/
 .claude/settings.local.json
 
 # ---------- OMP ----------
-# Keep Trellis-generated agents, commands, skills, and extensions versioned.
+# Keep shared agents, commands, skills, and extensions versioned.
 .omp/plugins/
 
 
@@ -657,10 +663,14 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 .worktrees/
 /AGENTS.md.*
 
-# ---------- Trellis ----------
-# Ignore every direct child, including generated workspace data and an
-# intentional workspace symlink; re-include tracked spec / agents / tasks.
-.trellis/*
+# ---------- SBTD ----------
+/.sbtd
+/docs/handoffs
+
+# ---------- Graft ----------
+/graft
+/.graft
+
 # ---------- Testing -----------
 # MCP / browser controller local state
 .chrome-devtools-mcp/

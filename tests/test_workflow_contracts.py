@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -27,95 +28,59 @@ class WorkflowContractTests(unittest.TestCase):
             [".DS_Store", ".gitnexus/", ".trellis/", "__pycache__/", "AGENTS.md"],
         )
 
-    def test_project_template_ignores_trellis_workspace(self) -> None:
+    def test_project_template_protects_local_state_without_hiding_shared_paths(
+        self,
+    ) -> None:
+        self.assert_template_ignore_state(
+            ignored=(
+                ".sbtd/developer",
+                ".sbtd/active-task.json",
+                ".sbtd/tasks/local/task.md",
+                "docs/handoffs/session.md",
+                "graft/index.json",
+                ".graft/state.json",
+            ),
+            trackable=(
+                "ai/tasks/parent/child/task.md",
+                "ai/tasks/archive/2026-Q1/task/task.md",
+                "docs/spec/lessons.md",
+                "docs/lessons/topics/example.md",
+                "packages/graft/index.ts",
+                "packages/.graft/model.json",
+                "packages/.sbtd/module.md",
+                "packages/docs/handoffs/guide.md",
+            ),
+        )
+
+    def test_project_template_ignores_reserved_symlink_paths(self) -> None:
         template = (
             ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
         )
-        entries = template.read_text(encoding="utf-8").splitlines()
-
-        # Coverage comes from the parent wildcard alone. A separate
-        # `.trellis/workspace` entry is a direct child of `.trellis/*` and so
-        # changes no verdict; keeping it contradicts the adjacent comment that
-        # forbids re-listing direct children.
-        self.assertIn(".trellis/*", entries)
-        self.assertNotIn(".trellis/workspace", entries)
-        self.assertNotIn("!.trellis/workspace/", entries)
-        self.assertNotIn("!.trellis/workspace/**", entries)
-
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        self.assertIn("无尾随斜杠的 `.trellis/*`", readme)
-        self.assertIn(
-            "无尾随斜杠的 <code>.trellis/*</code>",
-            readme_html,
-        )
-        self.assertIn("有意不同于上游 Trellis 默认会 stage workspace 内容", readme)
-        self.assertIn(
-            "有意不同于上游 Trellis 默认会 stage workspace 内容",
-            readme_html,
-        )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            project = Path(temp_dir)
-            subprocess.run(
-                ["git", "init", "--quiet"],
-                cwd=project,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            project.mkdir()
+            self._run_git(project, "init", "--quiet")
             shutil.copyfile(template, project / ".gitignore")
-
-            workspace = project / ".trellis" / "workspace" / "developer"
-            ignored_files = (
-                project / ".trellis" / "workspace" / "index.md",
-                workspace / "journal-1.md",
-                workspace / "index.md",
-                workspace / "trace" / "session.json",
-            )
-            for ignored_file in ignored_files:
-                ignored_file.parent.mkdir(parents=True, exist_ok=True)
-                ignored_file.touch()
-                result = subprocess.run(
-                    [
-                        "git",
+            external = root / "external"
+            external.mkdir()
+            for relative in (".sbtd", "docs/handoffs", "graft", ".graft"):
+                with self.subTest(path=relative):
+                    target = project / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        target.symlink_to(external, target_is_directory=True)
+                    except (NotImplementedError, OSError) as error:
+                        self.skipTest(f"directory symlinks unavailable: {error}")
+                    result = self._run_git(
+                        project,
                         "check-ignore",
+                        "--no-index",
                         "--quiet",
-                        str(ignored_file.relative_to(project)),
-                    ],
-                    cwd=project,
-                )
-                self.assertEqual(result.returncode, 0)
-
-    def test_project_template_ignores_trellis_workspace_symlink(self) -> None:
-        template = (
-            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
-        )
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            project = Path(temp_dir)
-            subprocess.run(
-                ["git", "init", "--quiet"],
-                cwd=project,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            shutil.copyfile(template, project / ".gitignore")
-
-            workspace = project / ".trellis" / "workspace"
-            workspace.parent.mkdir()
-            external_workspace = project / "external-workspace"
-            external_workspace.mkdir()
-            try:
-                workspace.symlink_to(external_workspace, target_is_directory=True)
-            except (NotImplementedError, OSError) as error:
-                self.skipTest(f"workspace symlinks unavailable: {error}")
-
-            ignored_symlink = subprocess.run(
-                ["git", "check-ignore", "--quiet", str(workspace.relative_to(project))],
-                cwd=project,
-            )
-            self.assertEqual(ignored_symlink.returncode, 0)
+                        relative,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, relative)
 
     def assert_template_ignore_state(
         self,
@@ -125,55 +90,45 @@ class WorkflowContractTests(unittest.TestCase):
         template = (
             ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
         )
-        with tempfile.TemporaryDirectory() as temp_dir:
-            project = Path(temp_dir)
-            subprocess.run(
-                ["git", "init", "--quiet"],
-                cwd=project,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            self._run_git(project, "init", "--quiet")
             shutil.copyfile(template, project / ".gitignore")
+            for paths, expected in ((ignored, 0), (trackable, 1)):
+                for relative in paths:
+                    with self.subTest(path=relative):
+                        result = self._run_git(
+                            project,
+                            "check-ignore",
+                            "--no-index",
+                            "--quiet",
+                            relative,
+                            check=False,
+                        )
+                        self.assertEqual(result.returncode, expected, relative)
 
-            for relative_path in ignored:
-                result = subprocess.run(
-                    ["git", "check-ignore", "--no-index", "--quiet", relative_path],
-                    cwd=project,
-                )
-                self.assertEqual(
-                    result.returncode, 0, f"{relative_path} must be ignored"
-                )
-            for relative_path in trackable:
-                result = subprocess.run(
-                    ["git", "check-ignore", "--no-index", "--quiet", relative_path],
-                    cwd=project,
-                )
-                self.assertEqual(
-                    result.returncode, 1, f"{relative_path} must stay trackable"
-                )
-
-    def test_project_template_trellis_star_covers_runtime_children(self) -> None:
-        """`.trellis/*` alone covers every runtime child, so the template never
-        needs to re-list `.backup-*`, `worktrees`, `.runtime`, `.cache`,
-        `channels`, or `.template-hashes.json`."""
-        self.assert_template_ignore_state(
-            ignored=(
-                ".trellis/.backup-20260101/spec.md",
-                ".trellis/worktrees/feature/file.md",
-                ".trellis/.runtime/state.json",
-                ".trellis/.cache/index.bin",
-                ".trellis/channels/main.jsonl",
-                ".trellis/.template-hashes.json",
-            ),
-            trackable=(
-                ".trellis/workflow.md",
-                ".trellis/spec/spec.md",
-                ".trellis/agents/agent.md",
-                ".trellis/lessons/lessons.md",
-                ".trellis/tasks/sample/prd.md",
-            ),
+    def test_project_template_ignores_reserved_regular_files(self) -> None:
+        template = (
+            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
         )
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            self._run_git(project, "init", "--quiet")
+            shutil.copyfile(template, project / ".gitignore")
+            for relative in (".sbtd", "docs/handoffs", "graft", ".graft"):
+                with self.subTest(path=relative):
+                    target = project / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("fixture-local-state\n", encoding="utf-8")
+                    result = self._run_git(
+                        project,
+                        "check-ignore",
+                        "--no-index",
+                        "--quiet",
+                        relative,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, relative)
 
     def test_project_template_ignores_env_secrets_but_keeps_example(self) -> None:
         """A bare `.env` holds real credentials and must never be committable,
@@ -1563,6 +1518,8 @@ class WorkflowContractTests(unittest.TestCase):
                 "commit.gpgsign=false",
                 "-c",
                 "init.defaultBranch=main",
+                "-c",
+                f"core.excludesFile={os.devnull}",
                 *args,
             ],
             cwd=repo,
