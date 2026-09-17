@@ -55,7 +55,7 @@ Onboard目录复制／`npx skills add`只交付文件，不执行pip。jsonschem
 - 结构化change只复用当前文件／目录复制、ignore缺行追加与已受管删除四类低层操作：`copy-file/copy-directory/ensure-file-block/remove`；不会解释任意shell文本。后续实际执行器如需要新的受管种类，须以真实实现同批扩展闭集schema与校验，不能用自由字段提前放开。owner_kind是file/directory/markdown/gitignore/json/toml实际资源类别，不以消费Agent给同一物理路径重复命名；真实格式／归属仍在阶段入口确认。
 - manifest补齐未在PRD逐字命名的机器载体：projects中的platforms/sources，shared_roots记录HOME/Skill根与依赖项目；源引用与before_requirement承载源／目标状态；retention只记录正常／明确终止的人工保留要求，不新增生命周期配置或自动处置入口。
 - recovery step_id使用规范JSON数组`["recovery",manifest_id,phase,resource_id]`的SHA-256，保持同一逻辑资源／原阶段稳定；不替代原operation_ids。recovery共享结果仅集中引用同一资源的step_ids，不复制到每个项目。
-- 校验声明的关联与累计字段不代表引用对象已读取／实际状态匹配。绑定函数仅处理调用方明确提供的对象和raw bytes，不扫描文件，也不把缺阶段证据推断成未执行；实际命令须按PRD要求提供并核对完整证据链。
+- 校验声明的关联与累计字段不代表引用对象已读取／实际状态匹配。绑定函数仅处理调用方明确提供的对象和raw bytes，不扫描文件，也不把缺阶段证据推断成未执行；提供recovery plan时，每个inverse步骤必须有非空来源引用及同时提供的对应阶段结果，不能跳过未提供阶段的provenance校验。其他未提供对象不作运行事实推断；实际命令须按PRD要求提供并核对完整证据链。
 
 ## 集成检查与证据边界
 
@@ -93,3 +93,21 @@ Code Readability Review：新模块与测试已按项目Ruff格式整理；去�
 F3补充正向边界实际复现：只有apply阶段证据的合法恢复plan曾被“资源必须列出manifest全部阶段operation”拒绝。资源现在只需列出manifest内已证明步骤的operation子集，步骤本身仍须完整匹配相应phase/resource声明，资源与步骤集合继续精确一致；不补造deploy/cleanup动作。此项定点red/green后，完整协议131项通过，提交前全量435项／61.548s通过。以上均为dirty证据，不能替代修复后冻结head证明。
 
 本轮Code Readability／Ponytail复核：保留原始备份／保护引用这一共享不变量，删除仅单行转发的旧result wrapper；阶段前态绑定与恢复inverse证据保持独立职责，不增加通用validation框架。新修改代码／测试Ruff与ty通过；wrapper删除后纳入最终全量重跑。README.md／README.html及版本化automation prompt无需再次改写：既有内部接口、依赖准备和只读边界不变；CHANGELOG已有未发布协议能力条目，本次为同一未合并能力的关系校验修正，不新增用户可见命令或发布叙述。
+
+## 第二轮独立 review
+
+冻结head `1eaa9878c3b05b5e06feab2ed50ec213b603e3d6` 已取得435项／118.184s全量、精确安装副本、静态和envelope验证，仍因第二轮review不得合并。`P101SurfaceReviewTwo`指出argparse会回显未知token／非法choice／无值flag的显式输入；三分支以合成sentinel复现后统一覆盖error诊断，保留静态usage、退出2和空stdout，parser39项与实际三分支smoke通过。移除47处incidental wording pins，不重钉新文案。该修正只改parser及其测试，协议review范围保持冻结直至其返回。
+
+`P101ProtocolReviewTwo`的11项finding均采纳，进入新修复轮：最新前序阶段衔接、manifest同资源同阶段前态一致、完成状态的ref/HEAD快照绑定、verified候选状态绑定、逐项目verified候选完整性、每步恢复的已提供来源、plan内no-op拒绝、首次already-complete拒绝、累计pending步骤宇宙保全、成功envelope与artifact精确一致、私有／共享ownership反例不被无关containment提前拒绝。新head须重新全量／安装副本验证并独立review，当前不标ready或done。
+
+另一个advisory提出所有failed／blocked的已知before都应强制非空备份，未采纳该扩大限制：原reviewer据PRD727/729/765/788确认，备份／保护创建本身失败时须允许保存真实失败与nullable引用；已提供引用不得矛盾，自动inverse另须完整来源。已用真实函数验证未写入缺备份、已写入缺备份时inverse拒绝、恢复保护创建失败三场景；不会把nullable失败收据当作可恢复证明。
+
+第二轮协议反例先取得10项测试／18个预期失败；pending反例曾因共享可变payload污染旧ID而假绿，已先deepcopy保留旧收据，修正后真实复现丢失pending。ownership两项先通过无冲突scope正向控制，再引入满足containment且具有独立operation ID的重复claim，避免无关拒绝。来源门收紧后同步更新全部受影响恢复测试调用者，补齐实际source stages；单依赖共享恢复另建完整合法证据链及正向控制，不让缺来源门掩盖原来的ownership/state/scope负面场景。
+
+阶段状态索引现在一次构建，供前态、verified候选和恢复inverse复用；manifest先保证同资源同阶段只有一个前态，并按本资源最新已声明阶段衔接。已完成／verified项目同时绑定source_ref/head；failed／blocked诊断仍可记录观察差异。候选状态仅在声明verified的相应项目／共享依赖上要求与已提供前序一致，不阻止失败验收记录真实漂移。累计already-complete须有对应前次成功，恢复completed/pending总集合不得丢失；成功envelope及逐项目摘要不得改写artifact的完成变体。
+
+同一消费边界补充证明：canonical ID合法但无前收据identity的already-complete项目，在load_document中曾仍可进入；三类收据均已复现并把该内在矛盾前置到对象校验，重试时仍核对实际传入的前收据成功状态。恢复receipt另核对completed步骤的全部显式depends_on都已completed；以完整来源复现“deploy inverse仍pending、后置apply inverse却完成”后修复，逐项目归因反例改选叶步骤以避免无关依赖错误造成假绿。
+
+F5的合法续作边界再次获原reviewer确认并实测：before/after均已知且相等、原件非absent、旧backup_ref/protection_ref为空时，重试可建立首份匹配before的引用；未知状态或已落地变化不能事后补拍所谓原件；任何已有非空原始引用保持不变。三类收据的合法无写入失败曾被拒绝，已取得真实red并修正，unknown/changed负面边界保留。当前协议144项全部通过，最终head全量／安装副本与下一轮独立review仍待执行。
+
+第二轮修复后的提交前验证：parser39项、协议144项及全量449项／61.674s通过；新5个Python文件Ruff、格式与ty通过。可读性复核保留集中不变量的helper，移除临时共享字典和测试中未用状态的提前构造，已纳入该全量。以上是dirty本地证据；不把它重标为后续冻结commit结果，安装副本、诊断隐私及nullable失败smoke须在新head重新执行后再发起第三轮独立review。

@@ -328,28 +328,49 @@ class ManifestSemanticTests(unittest.TestCase):
 
         expect_error(self, "id-mismatch", reseal, "manifest", self.manifest, mutate)
 
-    def test_resource_cannot_have_two_private_owners(self) -> None:
-        def mutate(payload):
-            operation = fixtures.build_operation("r1", "apply")
-            operation["selector"] = "second-owner"
-            operation["operation_id"] = contracts.operation_id(
-                "apply", operation["resource_id"], "second-owner"
+    def with_project_root(self, index, root):
+        payload = copy.deepcopy(self.manifest["payload"])
+        project = payload["projects"][index]
+        old_root = project["root"]
+        project["root"] = root
+        for operation in project["private_operations"]:
+            operation["dependent_projects"] = [root]
+        for entry in [*payload["shared_operations"], *payload["shared_roots"]]:
+            entry["dependent_projects"] = sorted(
+                root if dependency == old_root else dependency
+                for dependency in entry["dependent_projects"]
             )
-            operation["dependent_projects"] = [fixtures.BETA]
-            payload["projects"][1]["private_operations"].append(operation)
+        return payload
 
+    def test_resource_cannot_have_two_private_owners(self) -> None:
+        # Nested selected roots both contain r1; containment alone cannot reject it.
+        payload = self.with_project_root(1, "/private/work")
+        contracts.seal_document("manifest", copy.deepcopy(payload))
+        operation = fixtures.build_operation("r1", "apply")
+        operation["selector"] = "second-owner"
+        operation["operation_id"] = contracts.operation_id(
+            "apply", operation["resource_id"], operation["selector"]
+        )
+        operation["dependent_projects"] = [payload["projects"][1]["root"]]
+        payload["projects"][1]["private_operations"].append(operation)
         expect_error(
-            self, "semantic-violation", reseal, "manifest", self.manifest, mutate
+            self, "semantic-violation", contracts.seal_document, "manifest", payload
         )
 
     def test_resource_cannot_be_both_private_and_shared(self) -> None:
-        def mutate(payload):
-            operation = copy.deepcopy(payload["shared_operations"][0])
-            operation["dependent_projects"] = [fixtures.ALPHA]
-            payload["projects"][0]["private_operations"].append(operation)
-
+        payload = self.with_project_root(0, "/private/home")
+        payload["projects"][0]["private_operations"] = []
+        payload["publication_decisions"]["items"] = []
+        contracts.seal_document("manifest", copy.deepcopy(payload))
+        operation = copy.deepcopy(payload["shared_operations"][0])
+        operation["selector"] = "private-claim"
+        operation["operation_id"] = contracts.operation_id(
+            "apply", operation["resource_id"], operation["selector"]
+        )
+        operation["dependent_projects"] = [payload["projects"][0]["root"]]
+        payload["projects"][0]["private_operations"].append(operation)
         expect_error(
-            self, "semantic-violation", reseal, "manifest", self.manifest, mutate
+            self, "semantic-violation", contracts.seal_document, "manifest", payload
         )
 
     def test_duplicate_operation_id_is_rejected(self) -> None:
@@ -843,6 +864,9 @@ class DeclaredBindingTests(unittest.TestCase):
             contracts.validate_declared_bindings,
             self.family["manifest"],
             {
+                "apply_receipt": self.family["apply_receipt"],
+                "deployment_evidence": self.family["deployment_evidence"],
+                "cleanup_receipt": self.family["cleanup_receipt"],
                 "recovery_plan": self.family["recovery_plan"],
                 "recovery_receipt": receipt,
             },
@@ -1507,11 +1531,37 @@ class ExplicitInvariantTests(unittest.TestCase):
             shared_root["dependent_projects"] = [fixtures.ALPHA]
         manifest = contracts.seal_document("manifest", manifest_payload)
         shared_resource = fixtures.resource_id_of("s1")
+        sources = {}
+        for kind in ("apply_receipt", "deployment_evidence", "cleanup_receipt"):
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            payload["manifest_id"] = manifest["manifest_id"]
+            payload["shared_results"][0]["dependent_projects"] = [fixtures.ALPHA]
+            payload["projects"][1]["shared_operation_ids"] = []
+            if kind != "apply_receipt":
+                payload["apply_id"] = sources["apply_receipt"]["apply_id"]
+            if kind == "cleanup_receipt":
+                verification_payload = fixtures.build_verification_payload(
+                    manifest, sources["apply_receipt"], sources["deployment_evidence"]
+                )
+                verification_payload["shared_cleanup_candidates"][0][
+                    "dependent_projects"
+                ] = [fixtures.ALPHA]
+                sources["verification"] = contracts.seal_document(
+                    "verification", verification_payload
+                )
+                payload["verification_id"] = sources["verification"]["verification_id"]
+                payload["deployment_evidence_hash"] = fixtures.raw_digest_of(
+                    sources["deployment_evidence"]
+                )
+            sources[kind] = contracts.seal_document(kind, payload)
 
         plan_payload = copy.deepcopy(self.family["recovery_plan"]["payload"])
         plan_payload["manifest_id"] = manifest["manifest_id"]
-        plan_payload["input_evidence"]["manifest"]["state"]["checksum"] = (
-            hashlib.sha256(contracts.canonical_json_bytes(manifest)).hexdigest()
+        plan_payload["input_evidence"] = fixtures.build_input_evidence(
+            manifest,
+            sources["apply_receipt"],
+            sources["deployment_evidence"],
+            sources["cleanup_receipt"],
         )
         renamed_steps = {
             step["step_id"]: contracts.recovery_step_id(
@@ -1528,12 +1578,17 @@ class ExplicitInvariantTests(unittest.TestCase):
             if step["resource_id"] == shared_resource:
                 step["dependent_projects"] = [fixtures.ALPHA]
         plan = contracts.seal_document("recovery_plan", plan_payload)
+        contracts.validate_declared_bindings(
+            manifest, {**sources, "recovery_plan": plan}
+        )
 
         missing_ownership = copy.deepcopy(plan_payload)
         missing_ownership["shared_operation_ids"] = []
         bad_plan = contracts.seal_document("recovery_plan", missing_ownership)
         with self.assertRaises(ContractError):
-            contracts.validate_declared_bindings(manifest, {"recovery_plan": bad_plan})
+            contracts.validate_declared_bindings(
+                manifest, {**sources, "recovery_plan": bad_plan}
+            )
 
         receipt_payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
         receipt_payload["manifest_id"] = manifest["manifest_id"]
@@ -1548,11 +1603,21 @@ class ExplicitInvariantTests(unittest.TestCase):
         receipt_payload["completed_step_ids"] = [
             renamed_steps[key] for key in receipt_payload["completed_step_ids"]
         ]
+        for shared in receipt_payload["shared_results"]:
+            shared["dependent_projects"] = [fixtures.ALPHA]
+            shared["step_ids"] = [renamed_steps[key] for key in shared["step_ids"]]
+        receipt = contracts.seal_document(
+            "recovery_receipt", copy.deepcopy(receipt_payload)
+        )
+        contracts.validate_declared_bindings(
+            manifest, {**sources, "recovery_plan": plan, "recovery_receipt": receipt}
+        )
         receipt_payload["shared_results"] = []
         bad_receipt = contracts.seal_document("recovery_receipt", receipt_payload)
         with self.assertRaises(ContractError):
             contracts.validate_declared_bindings(
-                manifest, {"recovery_plan": plan, "recovery_receipt": bad_receipt}
+                manifest,
+                {**sources, "recovery_plan": plan, "recovery_receipt": bad_receipt},
             )
 
     def test_recovery_success_requires_preservation_completion_and_reports(
@@ -1719,6 +1784,9 @@ class ExplicitInvariantTests(unittest.TestCase):
             contracts.validate_declared_bindings(
                 self.family["manifest"],
                 {
+                    "apply_receipt": self.family["apply_receipt"],
+                    "deployment_evidence": self.family["deployment_evidence"],
+                    "cleanup_receipt": self.family["cleanup_receipt"],
                     "recovery_plan": self.family["recovery_plan"],
                     "recovery_receipt": changed,
                 },
@@ -1840,7 +1908,13 @@ class IndependentReviewRegressionTests(unittest.TestCase):
                 downstream = contracts.seal_document(
                     "recovery_receipt", receipt_payload
                 )
-                documents = {predecessor: failed, "recovery_receipt": downstream}
+                documents = {
+                    "apply_receipt": self.apply_receipt,
+                    "deployment_evidence": self.deployment,
+                    "cleanup_receipt": self.cleanup,
+                    predecessor: failed,
+                    "recovery_receipt": downstream,
+                }
             with (
                 self.subTest(predecessor=predecessor),
                 self.assertRaises(ContractError),
@@ -1916,7 +1990,8 @@ class IndependentReviewRegressionTests(unittest.TestCase):
                 dependent = next(
                     result
                     for result in payload["results"]
-                    if result["dependent_projects"] == [fixtures.ALPHA]
+                    if result["phase"] == "apply"
+                    and result["dependent_projects"] == [fixtures.ALPHA]
                 )
                 dependent["status"] = "failed"
                 dependent["error"] = "restore failed"
@@ -1931,7 +2006,13 @@ class IndependentReviewRegressionTests(unittest.TestCase):
                 receipt = contracts.seal_document("recovery_receipt", payload)
                 contracts.validate_declared_bindings(
                     self.manifest,
-                    {"recovery_plan": self.plan, "recovery_receipt": receipt},
+                    {
+                        "apply_receipt": self.apply_receipt,
+                        "deployment_evidence": self.deployment,
+                        "cleanup_receipt": self.cleanup,
+                        "recovery_plan": self.plan,
+                        "recovery_receipt": receipt,
+                    },
                 )
 
     def test_failed_project_records_require_explanatory_diagnostics(self) -> None:
@@ -1981,9 +2062,9 @@ class IndependentReviewRegressionTests(unittest.TestCase):
                 result["after"]
             )
             plan_payload["resources"][0]["state"] = copy.deepcopy(result["after"])
-            plan = contracts.seal_document("recovery_plan", plan_payload)
-            documents.update(cleanup_receipt=cleanup, recovery_plan=plan)
             with self.subTest(noop=outcome), self.assertRaises(ContractError):
+                plan = contracts.seal_document("recovery_plan", plan_payload)
+                documents.update(cleanup_receipt=cleanup, recovery_plan=plan)
                 contracts.validate_declared_bindings(self.manifest, documents)
 
     def test_recovery_can_bind_only_the_proven_apply_stage(self) -> None:
@@ -2011,6 +2092,311 @@ class IndependentReviewRegressionTests(unittest.TestCase):
             )["recovery_plan"],
             plan,
         )
+
+
+class SecondReviewRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.family = fixtures.build_fixture_family()
+
+    def test_cleanup_cannot_skip_a_declared_deployment(self) -> None:
+        payload = copy.deepcopy(self.family["manifest"]["payload"])
+        operation = next(
+            op
+            for op in payload["projects"][0]["private_operations"]
+            if op["phase"] == "cleanup"
+            and op["resource_id"] == fixtures.resource_id_of("r1")
+        )
+        operation["before_requirement"]["phase"] = "apply"
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_selectors_of_one_phase_resource_require_one_precondition(self) -> None:
+        payload = copy.deepcopy(self.family["manifest"]["payload"])
+        operation = copy.deepcopy(payload["projects"][0]["private_operations"][0])
+        operation["selector"] = "another-entry"
+        operation["operation_id"] = contracts.operation_id(
+            operation["phase"], operation["resource_id"], operation["selector"]
+        )
+        operation["before_requirement"]["state"] = fixtures.file_state(999)
+        payload["projects"][0]["private_operations"].append(operation)
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_completed_stages_cannot_switch_the_manifest_revision(self) -> None:
+        manifest_payload = copy.deepcopy(self.family["manifest"]["payload"])
+        manifest_payload["projects"][0].update(source_ref="main", head="a" * 40)
+        manifest = contracts.seal_document("manifest", manifest_payload)
+        for kind in (
+            "apply_receipt",
+            "deployment_evidence",
+            "verification",
+            "cleanup_receipt",
+        ):
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            payload["manifest_id"] = manifest["manifest_id"]
+            if kind == "deployment_evidence":
+                payload["status"] = "not-verified"
+                payload["projects"][0]["status"] = "not-verified"
+            payload["projects"][0].update(source_ref="main", head="a" * 40)
+            document = contracts.seal_document(kind, payload)
+            contracts.validate_declared_bindings(manifest, {kind: document})
+            payload["projects"][0]["head"] = "b" * 40
+            document = contracts.seal_document(kind, payload)
+            with self.subTest(kind=kind), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(manifest, {kind: document})
+            payload["status"] = "failed"
+            payload["projects"][0].update(
+                status="failed", reason="revision changed", nextStep="replan"
+            )
+            failed = contracts.seal_document(kind, payload)
+            contracts.validate_declared_bindings(manifest, {kind: failed})
+
+    def test_verified_candidates_must_match_the_supplied_predecessor(self) -> None:
+        for shared in (False, True):
+            payload = copy.deepcopy(self.family["verification"]["payload"])
+            candidates = (
+                payload["shared_cleanup_candidates"]
+                if shared
+                else payload["projects"][0]["cleanup_candidates"]
+            )
+            candidates[0]["state"] = fixtures.file_state(999)
+            document = contracts.seal_document("verification", payload)
+            with self.subTest(shared=shared), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(
+                    self.family["manifest"],
+                    {
+                        "apply_receipt": self.family["apply_receipt"],
+                        "deployment_evidence": self.family["deployment_evidence"],
+                        "verification": document,
+                    },
+                )
+            payload["status"] = "failed"
+            affected = payload["projects"] if shared else payload["projects"][:1]
+            for project in affected:
+                project.update(
+                    status="failed", reason="candidate changed", nextStep="inspect"
+                )
+            failed = contracts.seal_document("verification", payload)
+            contracts.validate_declared_bindings(
+                self.family["manifest"],
+                {
+                    "apply_receipt": self.family["apply_receipt"],
+                    "deployment_evidence": self.family["deployment_evidence"],
+                    "verification": failed,
+                },
+            )
+
+    def test_verified_project_needs_candidates_in_a_failed_batch(self) -> None:
+        for shared in (False, True):
+            payload = copy.deepcopy(self.family["verification"]["payload"])
+            payload["status"] = "failed"
+            payload["projects"][1].update(
+                status="failed", reason="verification failed", nextStep="inspect"
+            )
+            if shared:
+                payload["shared_cleanup_candidates"] = []
+            else:
+                payload["projects"][0]["cleanup_candidates"] = []
+            document = contracts.seal_document("verification", payload)
+            with self.subTest(shared=shared), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(
+                    self.family["manifest"], {"verification": document}
+                )
+
+    def test_recovery_steps_require_supplied_nonnull_stage_evidence(self) -> None:
+        with (
+            self.subTest(boundary="missing document"),
+            self.assertRaises(ContractError),
+        ):
+            contracts.validate_declared_bindings(
+                self.family["manifest"],
+                {
+                    "apply_receipt": self.family["apply_receipt"],
+                    "recovery_plan": self.family["recovery_plan"],
+                },
+            )
+        payload = copy.deepcopy(self.family["recovery_plan"]["payload"])
+        payload["input_evidence"]["cleanup_receipt"] = None
+        with self.subTest(boundary="null evidence"), self.assertRaises(ContractError):
+            plan = contracts.seal_document("recovery_plan", payload)
+            contracts.validate_declared_bindings(
+                self.family["manifest"],
+                {
+                    "apply_receipt": self.family["apply_receipt"],
+                    "deployment_evidence": self.family["deployment_evidence"],
+                    "cleanup_receipt": self.family["cleanup_receipt"],
+                    "recovery_plan": plan,
+                },
+            )
+
+    def test_equal_state_recovery_step_is_not_a_plan_action(self) -> None:
+        payload = copy.deepcopy(self.family["recovery_plan"]["payload"])
+        step = payload["steps"][0]
+        step["expected_current"] = copy.deepcopy(step["restore_to"])
+        payload["resources"][0]["state"] = copy.deepcopy(step["restore_to"])
+        with self.assertRaises(ContractError):
+            contracts.seal_document("recovery_plan", payload)
+
+    def test_already_complete_requires_a_successful_previous_receipt(self) -> None:
+        for kind, id_key in (
+            ("apply_receipt", "apply_id"),
+            ("cleanup_receipt", "cleanup_id"),
+            ("recovery_receipt", "receipt_id"),
+        ):
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            payload["status"] = "already-complete"
+            for project in payload["projects"]:
+                project["status"] = "already-complete"
+            with self.subTest(kind=kind), self.assertRaises(ContractError):
+                document = contracts.seal_document(kind, payload)
+                contracts.validate_cumulative(None, document, kind)
+            payload["previous_receipt_id"] = self.family[kind][id_key]
+            retry = contracts.seal_document(kind, payload)
+            self.assertEqual(
+                contracts.validate_cumulative(self.family[kind], retry, kind), retry
+            )
+            failed_payload = copy.deepcopy(self.family[kind]["payload"])
+            failed_payload["status"] = "failed"
+            for project in failed_payload["projects"]:
+                project.update(
+                    status="failed", reason="phase check failed", nextStep="inspect"
+                )
+            previous = contracts.seal_document(kind, failed_payload)
+            payload["previous_receipt_id"] = previous[id_key]
+            retry = contracts.seal_document(kind, payload)
+            with self.subTest(previous_failed=kind), self.assertRaises(ContractError):
+                contracts.validate_cumulative(previous, retry, kind)
+
+    def test_retry_cannot_discard_pending_steps_without_results(self) -> None:
+        payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+        payload["pending_step_ids"] = list(payload["completed_step_ids"])
+        payload["completed_step_ids"] = []
+        payload["results"] = []
+        payload["shared_results"] = []
+        payload["status"] = "blocked"
+        payload["reason"] = "no write attempted"
+        for project in payload["projects"]:
+            project.update(
+                status="blocked", reason="no write attempted", nextStep="retry"
+            )
+        previous = contracts.seal_document("recovery_receipt", payload)
+        payload = copy.deepcopy(previous["payload"])
+        complete_payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+        complete_payload["previous_receipt_id"] = previous["receipt_id"]
+        complete = contracts.seal_document("recovery_receipt", complete_payload)
+        contracts.validate_cumulative(previous, complete, "recovery_receipt")
+
+        payload["previous_receipt_id"] = previous["receipt_id"]
+        payload["pending_step_ids"] = []
+        payload["status"] = "restored"
+        for project in payload["projects"]:
+            project.update(status="restored", reason="", nextStep="")
+        lost = contracts.seal_document("recovery_receipt", payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_cumulative(previous, lost, "recovery_receipt")
+
+    def test_success_envelope_preserves_artifact_completion_variant(self) -> None:
+        for boundary in ("aggregate", "project"):
+            envelope = copy.deepcopy(self.family["migration_envelope_apply"])
+            if boundary == "aggregate":
+                envelope["status"] = "already-complete"
+            else:
+                envelope["projects"][0]["status"] = "already-complete"
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.validate_document(envelope, "migration_envelope")
+
+    def test_loaded_completion_record_requires_a_predecessor_identity(self) -> None:
+        for kind, id_key in (
+            ("apply_receipt", "apply_id"),
+            ("cleanup_receipt", "cleanup_id"),
+            ("recovery_receipt", "receipt_id"),
+        ):
+            document = copy.deepcopy(self.family[kind])
+            document["payload"]["projects"][0]["status"] = "already-complete"
+            document[id_key] = hashlib.sha256(
+                contracts.canonical_json_bytes(document["payload"])
+            ).hexdigest()
+            with self.subTest(kind=kind), self.assertRaises(ContractError):
+                contracts.load_document(contracts.canonical_json_bytes(document), kind)
+
+    def test_retry_creates_first_backup_only_after_proven_unwritten_failure(
+        self,
+    ) -> None:
+        for kind, id_key, reference_key in (
+            ("apply_receipt", "apply_id", "backup_ref"),
+            ("cleanup_receipt", "cleanup_id", "backup_ref"),
+            ("recovery_receipt", "receipt_id", "protection_ref"),
+        ):
+            for observation in ("unchanged", "unknown", "changed"):
+                payload = copy.deepcopy(self.family[kind]["payload"])
+                if kind == "recovery_receipt":
+                    result = next(
+                        result
+                        for result in payload["results"]
+                        if result["phase"] == "apply"
+                        and result["dependent_projects"] == [fixtures.ALPHA]
+                    )
+                    payload["completed_step_ids"].remove(result["step_id"])
+                    payload["pending_step_ids"].append(result["step_id"])
+                    payload["reason"] = "protection creation failed"
+                else:
+                    result = payload["projects"][0]["private_results"][0]
+                result.update(status="failed", error="original copy failed")
+                result[reference_key] = None
+                if observation == "unchanged":
+                    result["after"] = copy.deepcopy(result["before"])
+                elif observation == "unknown":
+                    result["after"] = None
+                else:
+                    result["after"] = fixtures.file_state(999)
+                payload["status"] = "failed"
+                payload["projects"][0].update(
+                    status="failed", reason="original copy failed", nextStep="inspect"
+                )
+                previous = contracts.seal_document(kind, payload)
+                retry_payload = copy.deepcopy(self.family[kind]["payload"])
+                retry_payload["previous_receipt_id"] = previous[id_key]
+                retry = contracts.seal_document(kind, retry_payload)
+                with self.subTest(kind=kind, observation=observation):
+                    if observation == "unchanged":
+                        self.assertEqual(
+                            contracts.validate_cumulative(previous, retry, kind), retry
+                        )
+                    else:
+                        with self.assertRaises(ContractError):
+                            contracts.validate_cumulative(previous, retry, kind)
+
+    def test_completed_recovery_step_cannot_skip_a_pending_dependency(self) -> None:
+        payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+        missing = next(
+            result["step_id"]
+            for result in payload["results"]
+            if result["phase"] == "deploy"
+            and result["resource_id"] == fixtures.resource_id_of("r1")
+        )
+        payload["results"] = [
+            result for result in payload["results"] if result["step_id"] != missing
+        ]
+        payload["completed_step_ids"].remove(missing)
+        payload["pending_step_ids"].append(missing)
+        payload["status"] = "failed"
+        payload["reason"] = "dependency was not completed"
+        payload["projects"][0].update(
+            status="failed", reason="dependency was not completed", nextStep="inspect"
+        )
+        receipt = contracts.seal_document("recovery_receipt", payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(
+                self.family["manifest"],
+                {
+                    "apply_receipt": self.family["apply_receipt"],
+                    "deployment_evidence": self.family["deployment_evidence"],
+                    "cleanup_receipt": self.family["cleanup_receipt"],
+                    "recovery_plan": self.family["recovery_plan"],
+                    "recovery_receipt": receipt,
+                },
+            )
 
 
 if __name__ == "__main__":

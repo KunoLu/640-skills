@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import re
 from collections.abc import Mapping, Sequence
+from typing import NoReturn
 
 __all__ = ["parse_workflow_args"]
 
@@ -114,6 +115,13 @@ def _developer(value: str) -> str:
     return value
 
 
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> NoReturn:
+        # argparse diagnostics can interpolate private paths and arbitrary tokens.
+        # Usage is built only from this module's fixed program/option declarations.
+        super().error("invalid arguments; use --help for supported syntax")
+
+
 class _Once(argparse.Action):
     """Single-value option that rejects repeats instead of last-value-wins."""
 
@@ -196,7 +204,7 @@ def _add_migration_context(sub: argparse.ArgumentParser) -> None:
 def _build_parser() -> tuple[
     argparse.ArgumentParser, dict[str, argparse.ArgumentParser]
 ]:
-    parser = argparse.ArgumentParser(
+    parser = _ArgumentParser(
         prog=PROG,
         allow_abbrev=False,
         description="Target SBTD workflow CLI grammar (contract; not the live entry point).",
