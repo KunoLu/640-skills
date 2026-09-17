@@ -234,6 +234,8 @@ AGENTS.md
 
 四条新规则仅锚定仓库根，覆盖同名目录、文件和symlink，不影响`packages/graft`等业务子目录。旧`.trellis/`、`.gitnexus/`不再由根文件保护；切换已有checkout前先核对磁盘与Git索引残留，存在未知或敏感内容时先保全并确认处置，不盲删或直接提交。ignore不会取消已tracked状态；这不是业务项目迁移或全局配置同步。
 
+回滚这项规则也要先核对四个新本地根与Git索引；若已产生本地数据，先在仓库外私有保全并确认处置，在安全迁出或授权方案落实前保持保护，不能仅恢复旧文件就让这些内容暴露为可提交文件。
+
 `docs/lessons.md`的旧五行摘要以及topics里的三／四／五行记录保留原文，均按当时状态理解，不覆盖此处现行七行契约；不得为了更新验收规则改写历史lesson。
 
 `ENTRYPOINT.md` 的版本监控表启用 OMP：监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`），GitHub 源为 `can1357/oh-my-pi` 的对应 `v<package-version>` tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 `UPDATE.md` 区间，无新版本不写 `当前版本 -> 当前版本`；只有手动 `update` / `更新` 才写回基线。本机 `omp --version` 只作交叉校验，不得覆盖表格版本。
