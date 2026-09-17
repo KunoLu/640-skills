@@ -4,13 +4,14 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.5（PR #8 复审：§9.3 剩余接线安全改挂 P1-04；§1／§16.4 划出隔离 P0-01 spike） |
+| 文档版本 | 2.6（补记 PR #8 合并、最近核对快照与文档审查结果；实施状态不变） |
 | 文档状态 | 产品与流程决策已确认；P0-01 done；P0-05 仍待 P0-04；其余实施任务 planned |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
 | 代码基线 | `KunoLu/640-skills`，`v1.0.15`，完整 commit `bc8eec1549928fb0966254751b96b611b6334183` |
-| 审核时 HEAD | `3139be4f6b7476f84b2affbd3667bed003119f94`，`main`；相对基线仅 `CHANGELOG.md` 一行日期变更，实施代码相同 |
+| 初次审核 HEAD | `3139be4f6b7476f84b2affbd3667bed003119f94`，`main`；在该初次审核快照，相对基线仅 `CHANGELOG.md` 一行日期变更，实施代码相同 |
 | 初次审核工作树 | 初次审核时 clean；本文件在本会话创建并持续修订，不将初次状态冒充最终实现状态 |
+| 最近核对代码快照 | `main`，`5ad87208167d6cf1ef97444cb84d7cb5fde5f065`；2026-09-17 核对，修订本版前工作区 clean。相对代码基线仅 CHANGELOG、ENTRYPOINT、归档和本 PRD 变化；安装器、模板、catalog 与生产测试未变。此 SHA 是固定核对快照，不表示后续提交的实时 HEAD |
 | 原始输入 | 用户提供《SBTD去Trellis化与Graft替换改造方案.md》，方案版本 v2.0，2026-09-16 |
 | 输入 SHA-256 | `eeefc2d47eb53c0df1094adcd02f983a0b5dbcd74f6af8c5d34038b7a7ba2fcf` |
 | Graft 审核候选 | npm `@nanonets/graft@0.18.0`，registry `gitHead=de8456e892bad5aeee11403e47fb2227773eb27e`；已在 darwin/arm64 Node v24.15.0 隔离 HOME 实测，见第 9.8 节 |
@@ -47,7 +48,7 @@ default 的最小任务记录默认在本地忽略的 `.sbtd/tasks/`；lite／st
 
 依照 [SemVer](https://semver.org/lang/zh-CN/)，上述任意一项不兼容公开契约变更已足以采用 major。**推荐从 v1.0.15 直接进入 v2.0.0；不推荐 v1.1.0。** 只有保留全部旧契约、将新流程作为可选增量时才适合 minor，但那与本次干净切换目标冲突。
 
-版本区分：本文版本 `2.5`、产品 tag `v2.0.0`、Graft 候选 `0.18.0`、未来 task frontmatter 的 `schema_version: 1` 是不同命名空间，不能互相替代。
+版本区分：本文版本 `2.6`、产品 tag `v2.0.0`、Graft 候选 `0.18.0`、未来 task frontmatter 的 `schema_version: 1` 是不同命名空间，不能互相替代。
 
 正常发布顺序：P0 契约／验证 → P1 实现及候选验证 → 可选 rc → P2 授权切换 → P3 观察／发布验收 → v2.0.0；备份处置 P3-04 在发布回滚窗口结束后，或按第 11.8 节明确终止分支独立授权执行，不反向阻塞发布。rc 不是双工作流并行期；既有 v1.0.15 tag 和已发布 CHANGELOG 不覆写。
 
@@ -1273,6 +1274,8 @@ unit 继承项目报告约定；Web／Mobile formal run 继续沿用既有 Playw
 
 文档 2.0 当时的结构检查与读者复核已通过，详见 R-06 历史记录；随后独立 reviewer 发现的六项契约缺口在本版修订。第 22 节记录本版验证范围，R-07 仅在修订和最终校验通过后标记完成，不能以此前通过的读者检查否定新发现。
 
+PR #8 合并前，独立 reviewer `PrdLoopReview1` 对 `68557966f460a92fe5cb84431870f08732ad8691` 相对 `main` 的完整分支差异完成审查，结论为 `APPROVE`、`findings: []`。该结论只覆盖受审文档快照，不是 GitHub 平台 reviewer 批准、CI 或运行时验收，也不自动覆盖本版新增的追溯说明。合并及最近核对事实见第 1、18.3、19.1 节；38 项待实施状态不因审查或合并改变。
+
 本轮在临时 Git 仓库验证 PRD 中的候选规则：项目模板 10 个应忽略／17 个应可追踪路径，源仓库七行规则 8 个应忽略／5 个应可追踪路径，均通过；真实项目模板及根 `.gitignore` 未修改。这是 ignore 语义证明，不是安装器／Graft／三模式运行验证。命令使用原生 `git check-ignore --no-index --stdin -z` 获取准确机器结果，不依赖 rtk 缓存。
 
 未执行生产 unit 全量、真实 HOME／host 的 Graft 安装／MCP smoke、Codex/OMP 生产接线、Playwright 或 Maestro。隔离 spike 不能报告为 v2 运行时通过。`rtk: used` 用于基线 Git 命令；文档检查用 eval 原生执行，不依赖缓存或报告回放。
@@ -1355,6 +1358,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T10:56:03+08:00 | PR #8 review 修正 | AC-10 版本探针剩余改挂 P1-03。A12、§9.1、AC-09 删除父目录联邦入口，改为显式仓根＋禁止父目录 init/build/MCP。 |
 | 2026-09-17T11:17:51+08:00 | PR #8 二次 review 修正 | §9.3 剩余接线安全改挂 P1-04。§1／§16.4 划出隔离 P0-01 spike；未执行实施／发布后任务改为 38。 |
 | 2026-09-17T11:31:21+08:00 | PR #8 三次 review 修正 | 本文当前版本引用改为 2.5。§22.2 当前摘要改为 38 项剩余并划出隔离 spike；历史 2.4／39 项事件行不改。 |
+| 2026-09-17T12:02:48+08:00 | PR #8 合入 main | 用户明确授权 admin 合并后，[PR #8](https://github.com/KunoLu/640-skills/pull/8) 已合并，merge commit 为 `5ad87208167d6cf1ef97444cb84d7cb5fde5f065`。仅合入 PRD／spike 结论，不代表 v2 实现、CI 或发布验收通过。 |
+| 2026-09-17T12:13:17+08:00 | 文档 2.6／最近代码快照核对 | 区分初次审核与最近核对快照，补记 §16.4 的合并前文档审查结论。生产代码未变，台账仍为 48 项：10 done、38 planned；spike 证据仍为 local-only。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
@@ -1362,8 +1367,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 
 ### 19.1 本地证据
 
-- 基线 tag 与当前 HEAD：第 1 节两个完整 SHA；本轮读取 `git log`、`git status`、`git diff v1.0.15 --stat`。
-- Onboard 生产代码与测试：第 3 节精确路径；基线与 HEAD 的这些文件相同。
+- 快照身份：第 1 节分别记录产品代码基线 `bc8eec1549928fb0966254751b96b611b6334183`、初次审核 HEAD `3139be4f6b7476f84b2affbd3667bed003119f94` 与最近核对代码快照 `5ad87208167d6cf1ef97444cb84d7cb5fde5f065`；三者用途不同，不将历史审核 HEAD 当作实时 HEAD。最近核对使用 `git rev-parse HEAD`、`git status --short --branch`、`git diff --stat <代码基线> HEAD` 及源码／配置读取。
+- Onboard 生产代码与测试：第 3 节精确路径；代码基线与最近核对快照中的这些文件相同。ENTRYPOINT 的 OMP 版本记录已由 `v18.2.0` 更新为 `v18.2.2`，另有 CHANGELOG 日期及归档变化；这些不构成 v2 生产集成。
 - 本仓库维护边界：[ENTRYPOINT](../../ENTRYPOINT.md)、[README](../../README.md)、[项目 lessons 短入口](../lessons.md)、[安装及身份 lessons](../lessons/topics/repository-workflow.md)。
 - P0-01 隔离 spike 正式快照：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json`、同 stem 中文 `.md`、同 stem `.logs/`（38 个 case 的完整 stdout/stderr/exit）。local-only，未纳入版本库，也未改项目 `.gitignore`（P0-09）。不能证明 PR head。矩阵摘要以第 9.8 节为准。
 
@@ -1533,6 +1538,8 @@ Advisor 处理：nextStep 命名与批次 apply_receipt 的旧意见已在当前
 | 11 | PostAdvisorThirdReview | 9f01be78f9f912785b20c58a9f377ea6184a8f1ea453c4ef1eb2e192af10fc84 | 0 | ready；全文复核确认时间/载体一致、删除前保存及P1/P3验收分层，重开后的契约收敛 |
 
 各行保留当轮状态；第7/8轮结果只覆盖当时快照，第11轮才覆盖之后的pre-manifest契约补强及F-30～F-35修复。新结构检查通过48项任务、37条AC、37项决策、35项修复映射、43张表及5条本地链接。当前R-01～R-09与P0-01完成，其余 **38** 项实施／发布后任务仍planned。P0-01隔离spike见第9.8节（local-only），不是生产／host／CI运行验证。不把文档复审冒充v2已交付。
+
+以上第 1～11 轮保留 R-09 当时的审查历史。后续 PR #8 分支在 `68557966f460a92fe5cb84431870f08732ad8691` 的独立零发现审查另见 §16.4，合并事实见 §18.3；不改写旧 reviewer 快照或将文档合并视为实施任务完成。
 
 停止条件：每轮先更新当前文件，再创建一个 reviewer 进行完整只读 /review，核对新发现和 advisor；有成立问题就继续修复。只有当前正文 reviewer 无新发现、所有已收到 advisor 已处理、结构／依赖检查通过，才结束。后续代码实现、真实迁移和备份销毁均仍未执行，不作为本轮文档通过的虚假证据。
 
