@@ -1131,7 +1131,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-06 | AC-11；两旧 entry 换 sbtd-task；隔离真实安装目标正确，14 bundled／19 external | AFK | planned | — |
 | P0-08 | P0 | 项目 ignore 的保留／删除／四条新增规则 | P0-03、P0-06 | AC-12/26；default 本地忽略、共享资产可追踪，规则根锚定且不误伤业务子目录 | AFK | planned | — |
 | P0-09 | P0 | 源仓库根七行 ignore、维护说明与精确测试 | R-09 | AC-12/16；保护 .sbtd/handoff/Graft，旧残留安全处理，不复制项目模板 | AFK | planned | — |
-| P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[路由与26项场景](sbtd-workflow-v2-mode-routing-contract.md) 覆盖来源、双向建议、拒绝保持、续作、grill次序及安全边界；P1运行证明另行验收，待独立review／PR合并 | AFK | checking | — |
+| P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[26项路由场景](sbtd-workflow-v2-mode-routing-contract.md)，文档结构／依赖检查通过；P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；仅契约完成，P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
 
 ### 14.4 P1：安装器、迁移能力与仓库交付
 
@@ -1365,6 +1365,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T13:44:48+08:00 | P0-02 checking→done | 确认 PR #9 于 13:44:24+08:00 合并（`50a7e873cfa3224b8c02419b4cb146d5ed88fa6d`）后更新台账。P002FinalReview 已核对 `41a43f3…` 全部任务及精确HEAD报告；unit：`tests/unit/reports/unit-report-sbtd-baseline-p0-02-behavior-baseline-2026_09_17-13_31_16.json`；CLI：`tests/api/reports/api-report-sbtd-cli-smoke-p0-02-behavior-baseline-2026_09_17-13_31_16.json`，各有同stem中文摘要及v1 envelope，均local-only。仅完成P0-02，后续实现仍待办。 |
 | 2026-09-17T13:53:31+08:00 | P0-10 checking | 从已同步 main `f8a7f3a…` 建任务分支；主PRD已消除本项歧义，未完整调用grill；DDD边界confirmed。三模式路由契约与MR-01～MR-24场景完成草案，待文档校验及独立review，不冒充P1运行验收。 |
 | 2026-09-17T14:02:46+08:00 | P0-10 第一轮review修复 | 拆开MR-08的任务选择与模式询问，新增MR-25；MR-19只验grill询问，新增MR-26单独验完整grill后的独立DDD。共26项确定性场景；不改变原PRD语义，保持checking待全文复审。 |
+| 2026-09-17T14:11:21+08:00 | P0-10 checking→done | PR #11 于14:11:11+08:00合并（`f8ccbc9185c97b3c435d6e430ec18576f9689dfb`）后更新台账；P010ReviewTwo 零新发现，计数摘要 advisor 已修正重跑为26。交付仅为路由／场景契约，不记录为模式运行测试通过；历史24项草案与修复记录保留。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
