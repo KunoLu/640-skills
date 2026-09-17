@@ -26,6 +26,8 @@ Use only the supported, verified structural subset and selected repository roots
 
 Managed CLI/MCP/hook entry points keep DO_NOT_TRACK=1 and prevent LLM/cloud enrichment, `--deep`, `blast --name` and automatic code/query uploads. Existing connected cloud/provider state blocks that integration plan; do not disconnect another user use silently. No ordinary task changes global env or prints API keys. If the managed privacy/side-effect safeguards are not available, use source/LSP/contract evidence instead of invoking an unsafe path.
 
+Raw graph/blast output can contain source, diffs and Git author information. Do not upload it to PR artifacts, public viewers or knowledge systems. A requested report uses `--no-owners` where supported and a minimal redacted summary; an output request is not authorization to publish raw project data or personal identifiers.
+
 Default local version detection must be proven read-only; `graft version` includes npm metadata lookup and is not that proof. npm lookup unreachable means unknown/unreachable, not a fabricated latest or an install loop. Authorized downloads/metadata access do not authorize code upload. Missing native dependencies or installation failure is not installation success, though unrelated safe work may continue.
 
 Query refresh can fail, be disabled, be busy or miss unsupported/ignored changes. `check` reports freshness only and does not repair or prove business correctness; exit0/empty blast is not no-risk proof. Record actual diff basis: default blast may use the last commit when clean, and `<base>...HEAD` does not include extra working-tree changes. Account separately for untracked/deleted/renamed/mode-only/unindexed files; preserve pre-change dependency evidence where the current graph lost a deleted symbol. Basic graph grep is not a complete Markdown/YAML/Shell/JSON audit.
@@ -61,5 +63,6 @@ Use only the fields relevant to the task, with accurate exercised scope:
 - Final Test Report: generated/blocked/not-supported/not-needed; Run Summary MD: generated/blocked/not-needed; Targeted Rerun: passed/failed/blocked/not-needed; Final Full Rerun: passed/failed/blocked/skipped-with-risk/not-needed.
 - Evidence Source: developer-local/ci/knowledge-server/not-needed; Source Revision: exact/dirty/unknown/not-needed; Environment Alignment: verified/unverified/mismatch/not-needed; Evidence Publication: local-only/published/blocked/not-configured/not-needed.
 - SEO/GEO: audited/static-only/blocked/skipped/not-needed. Internal apps/APIs and ordinary test runs do not become SEO tasks without the relevant public/search scope.
+- Graft: used/skipped/blocked/not-available, with the actual CLI/MCP surface, authorized root, observed version and coverage/freshness limitations. Report it when used or when unavailability affects the conclusion; omit the row for unrelated work.
 
 These enums describe facts. Missing environment/data/authorization does not become passed through a label, an alternate tool or a lighter execution mode.

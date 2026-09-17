@@ -59,3 +59,11 @@
 本轮未完整调用grill-with-docs：已确认PRD和既有契约消除了实现边界歧义，无需重新访谈。候选尚未激活，不修改现有生产执行逻辑；不以本任务宣称新Onboard安装、Graft集成或Codex/OMP自动恢复已实现。
 
 README.md、README.html、版本化automation prompt本项保持不变：实际安装／运行／监控入口未改变，候选不是可用发布功能；P0-07及后续实际切换任务仍须同步受影响说明。CHANGELOG未发布文档节记录候选交付与激活边界。未执行workflow sync或触碰live automation。
+
+## 首轮 review 修正
+
+P005ReviewOne 指出七项遗漏，全部纳入规则候选：完整 strict 客观触发集合及阶段、纯问答不持久化、不为问答请求ignore改动、detached绑定完整SHA、mode_note保存建议拒绝与理由、handoff任务／会话退出和显式恢复、Graft原始结果禁止发布及最小脱敏、相关时报告Graft状态与根／版本／范围。其中纯问答保护属于同一发现项；本段为修正追溯，不把既有unit通过当作这些语义的执行证明。
+
+对应复审场景：隐藏依赖触发legacy；跨进程cache／migration触发DDIA；可写仓库中的概念问答不新建记录；不同detached SHA必须另行裁决；跨会话读取拒绝理由后不重复建议；关闭自动交接后暂停不写但手动请求仍可执行；请求图报告只产生安全摘要并披露实际结构证据边界。
+
+本轮收到的顺序advisor已处理：review尚未结束时停止P0-06预读，没有创建／修改该任务资产；下一任务只在本任务review、合并、台账更新与分支清理全部结束后开始。
