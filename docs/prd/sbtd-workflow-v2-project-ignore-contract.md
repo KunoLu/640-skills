@@ -20,7 +20,7 @@
 | book-legacy-change-safety | required：ignore保护与既有安装检查有隐藏耦合 | 首次生产编辑前 | passed |
 | book-refactoring-pass | required：生产探针集合／提示调整 | legacy刻画后 | passed |
 | book-ddia-data-design | required：本地／共享数据保护和规则事实源 | 设计稳定前 | passed |
-| book-release-readiness | required：安装器可观察验收改变 | 适用验证后 | planned |
+| book-release-readiness | required：安装器可观察验收改变 | 适用验证后，仅限P0模板／规则检查层 | passed |
 | book-ddd-distilled-modeling | on-demand：目录与数据归属已确认，无新领域歧义 | 不触发 | not-required |
 
 Legacy Change Safety Review：characterized。移前19个原生Git probe证明旧Trellis/GitNexus保护、环境秘密和报告保护有效，而四个新本地根未被保护。现有追加／NUL解析／错误来源是保留行为。
@@ -56,3 +56,15 @@ DDIA Data Design Review：confirmed。模板定义新规则，Git提供实际判
 README.md、README.html和版本化automation prompt同步新模板／探针、旧保护保留和Git语义边界；不改根五行验证要求，不操作live automation。Onboard SKILL/REFERENCE的通用“追加缺失行”说明仍准确，不作无意义改写。CHANGELOG记录新规则和实际验收变化。
 
 修改前Git基线的受管源备份在私有临时目录保存，保留到最终head验证、独立review和任务PR合并之后；不提前清理，也不处理任何真实迁移备份。当前过渡CLI的完整v2初始化／数据所有权与迁移能力仍待P1，本项不会静默把这些未完成部分标成通过。
+
+## 主线程完整验证与 scoped readiness
+
+在中间提交`7a6a51a4712cf1114c3ba9e01aba9c4df4bf9227`上，主线程原生全量265 tests/535.719s/exit0，正式报告及envelope通过校验；包含18项子集之外的冒号否定、NUL短响应和其他安装路径。原生CLI／Git smoke证明fresh与legacy场景的12个本地路径、19个共享／嵌套路径与重复字节幂等；旧完整模板和自定义规则保留；docs/冲突exit3并报告来源、保留用户规则；隔离HOME无新增内容。
+
+两种README实际发布的gitignore代码片段分别通过11个原生Git probe；仅修改说明与配置片段，不改CSS或交互，不把该语义检查称作浏览器视觉／Web E2E通过。没有新增浏览器调用、Web测试框架或live automation操作。
+
+Ruff同配置按函数／诊断比较：生产文件26→26、workflow tests12→5、multi-project tests2→2，无新增；全文件扫描并未清零。不修改函数签名／返回结构，不为本项扩大既有类型债务清理。Code Readability Review无新增结构问题，复用原有Git helper并隔离测试全局excludes影响；Ponytail pass无额外抽象或需要删减的生产层。
+
+Release Readiness Review：ready，仅限P0-08模板和直接规则检查消费者。故障模式由真实Git／CLI覆盖，继续使用原解析与追加策略，没有服务、队列、外部安装或新容量限制；报告保存命令／stdout／stderr／退出码和版本身份。回滚限定受管源提交，用户旧规则、索引和数据未被清理。完整v2初始化、保留路径业务所有权、tracked私有数据识别／处置和迁移仍由P1承担，当前过渡生命周期不能因此用于真实项目。
+
+本记录提交后，必须对新的最终head重跑计划全量及原生smoke，再独立review；不把上述中间提交报告重标为最终head。私有编辑备份和临时验证脚本继续保留，直到最终验证、review及任务PR合并完成。
