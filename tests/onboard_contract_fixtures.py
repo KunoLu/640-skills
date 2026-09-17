@@ -334,7 +334,7 @@ def build_resource_result(
         backup = backup_ref_of(key, before_stage)
         error_text = None
     else:
-        backup = backup_ref_of(key, before_stage)
+        backup = None
         before = None
         after = None
         error_text = error or "recorded stage failure"

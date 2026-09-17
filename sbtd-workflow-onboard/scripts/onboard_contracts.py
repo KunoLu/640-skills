@@ -581,25 +581,47 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "shared_root dependent_projects must reference declared projects",
             )
+    for operation in payload["shared_operations"]:
+        matching_roots = [
+            root
+            for root in payload["shared_roots"]
+            if _path_contains(root["path"], operation["target"])
+        ]
+        if len(matching_roots) != 1 or not set(operation["dependent_projects"]) <= set(
+            matching_roots[0]["dependent_projects"]
+        ):
+            _fail(
+                "semantic-violation",
+                "shared target needs one declared root covering its dependencies",
+            )
 
 
-def _check_resource_result(result: Mapping[str, Any]) -> None:
+def _check_original_reference(result: Mapping[str, Any], reference_key: str) -> None:
     before = result["before"]
-    if (
-        before is not None
-        and before["type"] == "absent"
-        and result["backup_ref"] is not None
+    reference = result[reference_key]
+    if reference is not None and (
+        before is None or before["type"] == "absent" or reference["state"] != before
     ):
         _fail(
-            "semantic-violation",
-            "a result with an absent before-state cannot carry a backup reference",
+            "semantic-violation", "original reference must match a known before-state"
         )
-    if result["status"] == "succeeded" and before["type"] != "absent":
-        backup = result["backup_ref"]
-        if backup is None or backup["state"] != before:
-            _fail(
-                "semantic-violation", "successful result needs a backup matching before"
-            )
+    if (
+        result["status"] == "succeeded"
+        and before["type"] != "absent"
+        and reference is None
+    ):
+        _fail("semantic-violation", "successful write needs its original reference")
+
+
+def _check_project_dependencies(
+    project: Mapping[str, Any], dependencies: list[Mapping[str, Any]]
+) -> None:
+    severity = {"blocked": 1, "failed": 2}
+    if any(
+        severity.get(result["status"], 0) > severity.get(project["status"], 0)
+        for result in dependencies
+    ):
+        _fail("semantic-violation", "project status masks a dependent resource failure")
 
 
 def _parse_timestamp(value: str) -> datetime:
@@ -643,7 +665,7 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
             _fail("semantic-violation", "duplicate shared result for one resource")
         seen_shared.add(result["resource_id"])
         shared_ids.add(result["resource_id"])
-        _check_resource_result(result)
+        _check_original_reference(result, "backup_ref")
     for project in payload["projects"]:
         seen_private: set[str] = set()
         for result in project["private_results"]:
@@ -652,26 +674,21 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
             if result["resource_id"] in seen_private:
                 _fail("semantic-violation", "duplicate private result for one resource")
             seen_private.add(result["resource_id"])
-            _check_resource_result(result)
+            _check_original_reference(result, "backup_ref")
         if seen_private & shared_ids:
             _fail(
                 "semantic-violation",
                 "a resource cannot appear in both private and shared result sets",
             )
-        if project["status"] not in {"failed", "blocked"}:
-            dependencies = [
-                *project["private_results"],
-                *(
-                    result
-                    for result in payload["shared_results"]
-                    if project["root"] in result["dependent_projects"]
-                ),
-            ]
-            if any(result["status"] != "succeeded" for result in dependencies):
-                _fail(
-                    "semantic-violation",
-                    "project status hides a failed or blocked resource",
-                )
+        dependencies = [
+            *project["private_results"],
+            *(
+                result
+                for result in payload["shared_results"]
+                if project["root"] in result["dependent_projects"]
+            ),
+        ]
+        _check_project_dependencies(project, dependencies)
 
     _check_temporal(payload)
     statuses = [project["status"] for project in payload["projects"]]
@@ -873,29 +890,9 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
                 "recovery result step identity does not match",
                 exit_code=3,
             )
-        before = result["before"]
-        if (
-            before is not None
-            and before["type"] == "absent"
-            and result["protection_ref"] is not None
-        ):
-            _fail(
-                "semantic-violation",
-                "a step result with an absent before-state cannot carry a protection reference",
-            )
-        if result["status"] == "succeeded":
-            protection = result["protection_ref"]
-            if before["type"] != "absent" and (
-                protection is None or protection["state"] != before
-            ):
-                _fail(
-                    "semantic-violation",
-                    "successful recovery needs matching original protection",
-                )
-            if result["step_id"] not in completed:
-                _fail(
-                    "semantic-violation", "a succeeded recovery step must be completed"
-                )
+        _check_original_reference(result, "protection_ref")
+        if result["status"] == "succeeded" and result["step_id"] not in completed:
+            _fail("semantic-violation", "a succeeded recovery step must be completed")
     if not set(result_by_step) <= completed | pending:
         _fail(
             "semantic-violation",
@@ -946,6 +943,15 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
     if payload["runtime_readiness"] == "verified" and not payload["report_refs"]:
         _fail(
             "semantic-violation", "verified runtime readiness needs report references"
+        )
+    for project in payload["projects"]:
+        _check_project_dependencies(
+            project,
+            [
+                result
+                for result in results
+                if project["root"] in result["dependent_projects"]
+            ],
         )
 
     _check_temporal(payload)
@@ -1062,6 +1068,15 @@ def validate_document(value: Any, kind: str) -> Any:
         _fail("unexpected-type", f"{kind} document must be a JSON object")
     _check_json_safe(value)
     _schema_validate(value, def_name, kind)
+    record = value.get("payload", value)
+    for project in record.get("projects", []):
+        if project.get("status") in {"failed", "blocked"} and (
+            not project["reason"].strip() or not project["nextStep"].strip()
+        ):
+            _fail(
+                "semantic-violation",
+                "failed or blocked projects need a reason and nextStep",
+            )
     if kind == "publication_decisions":
         _check_publication_items(value["items"])
     elif kind == "manifest":
@@ -1185,6 +1200,66 @@ def _bind_input_evidence(
                 "input evidence file digest does not match the supplied raw bytes",
                 exit_code=3,
             )
+
+
+def _bind_stage_states(
+    manifest_payload: Mapping[str, Any], documents: Mapping[str, Any]
+) -> None:
+    requirements: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for operation in [
+        *manifest_payload["shared_operations"],
+        *(
+            op
+            for project in manifest_payload["projects"]
+            for op in project["private_operations"]
+        ),
+    ]:
+        key = (operation["phase"], operation["resource_id"])
+        requirement = operation["before_requirement"]
+        if requirements.setdefault(key, requirement) != requirement:
+            _fail(
+                "binding-violation",
+                "resource operations disagree on their before requirement",
+            )
+    results: dict[tuple[str, str], Mapping[str, Any]] = {}
+    supplied_phases: set[str] = set()
+    for kind, phase in _STAGE_RECEIPT_PHASES.items():
+        document = documents.get(kind)
+        if document is None:
+            continue
+        supplied_phases.add(phase)
+        for result in _collect_stage_results(document["payload"]).values():
+            results[(phase, result["resource_id"])] = result
+    for key, result in results.items():
+        if result["before"] is None:
+            continue
+        requirement = requirements[key]
+        if requirement["kind"] == "state":
+            expected = requirement["state"]
+        else:
+            if requirement["phase"] not in supplied_phases:
+                continue
+            predecessor = results.get((requirement["phase"], key[1]))
+            if predecessor is None or predecessor["after"] is None:
+                _fail(
+                    "binding-violation",
+                    "supplied predecessor does not prove the required state",
+                )
+            expected = predecessor["after"]
+        if result["before"] != expected:
+            _fail(
+                "binding-violation",
+                "result before-state differs from its declared requirement",
+            )
+
+
+def _bind_success_gate(
+    predecessor: Mapping[str, Any] | None, allowed: set[str]
+) -> None:
+    if predecessor is not None and predecessor["payload"]["status"] not in allowed:
+        _fail(
+            "binding-violation", "supplied predecessor did not pass the required phase"
+        )
 
 
 def _bind_stage_receipt(
@@ -1373,7 +1448,9 @@ def _bind_verification(
 
 
 def _bind_recovery_plan(
-    manifest_payload: Mapping[str, Any], document: Mapping[str, Any]
+    manifest_payload: Mapping[str, Any],
+    document: Mapping[str, Any],
+    documents: Mapping[str, Any],
 ) -> None:
     private, shared, dependents, identity = _declared_resources(manifest_payload)
     for root, resources in private.items():
@@ -1404,7 +1481,7 @@ def _bind_recovery_plan(
                 "binding-violation", "recovery resource is not declared in the manifest"
             )
         declared_ops = {op for op_ids in all_ops[rid].values() for op in op_ids}
-        if set(entry["operation_ids"]) != declared_ops:
+        if not set(entry["operation_ids"]) <= declared_ops:
             _fail(
                 "binding-violation",
                 "recovery resource operation_ids do not match the manifest",
@@ -1419,6 +1496,14 @@ def _bind_recovery_plan(
                 "binding-violation",
                 "recovery resource dependencies differ from the manifest",
             )
+    stage_results = {
+        phase: {
+            result["resource_id"]: result
+            for result in _collect_stage_results(documents[kind]["payload"]).values()
+        }
+        for kind, phase in _STAGE_RECEIPT_PHASES.items()
+        if kind in documents
+    }
     for step in payload["steps"]:
         rid = step["resource_id"]
         declared = all_ops.get(rid, {}).get(step["phase"])
@@ -1427,6 +1512,21 @@ def _bind_recovery_plan(
                 "binding-violation",
                 "recovery step operation_ids do not match the manifest for its phase",
             )
+        if step["phase"] in stage_results:
+            result = stage_results[step["phase"]].get(rid)
+            if (
+                result is None
+                or result["before"] is None
+                or result["after"] is None
+                or result["before"] == result["after"]
+                or step["expected_current"] != result["after"]
+                or step["restore_to"] != result["before"]
+                or step["backup_ref"] != result["backup_ref"]
+            ):
+                _fail(
+                    "binding-violation",
+                    "recovery inverse differs from its supplied stage result",
+                )
     expected_shared = {
         operation_id
         for step in payload["steps"]
@@ -1453,7 +1553,25 @@ def _bind_recovery_receipt(
         return
     if payload["plan_id"] != plan_document["plan_id"]:
         _fail("binding-violation", "recovery receipt plan_id does not match the plan")
+    plan_payload = plan_document["payload"]
+    _bind_success_gate(plan_document, {"planned"})
+    if {project["root"] for project in payload["projects"]} != {
+        project["root"] for project in plan_payload["projects"]
+    } or payload["input_evidence"] != plan_payload["input_evidence"]:
+        _fail(
+            "binding-violation",
+            "recovery receipt scope or evidence differs from its plan",
+        )
     plan_steps = {step["step_id"]: step for step in plan_document["payload"]["steps"]}
+    pending = set(payload["pending_step_ids"])
+    for project in payload["projects"]:
+        if project["status"] in {"restored", "already-complete"} and any(
+            step["step_id"] in pending and project["root"] in step["dependent_projects"]
+            for step in plan_steps.values()
+        ):
+            _fail(
+                "binding-violation", "restored project retains dependent pending steps"
+            )
     recorded = set(payload["completed_step_ids"]) | set(payload["pending_step_ids"])
     if recorded != set(plan_steps):
         _fail(
@@ -1557,6 +1675,7 @@ def validate_declared_bindings(
         _bind_stage_receipt(manifest_payload, apply_document, "apply")
     deployment = supplied.get("deployment_evidence")
     if deployment is not None:
+        _bind_success_gate(apply_document, {"applied", "already-complete"})
         if apply_document is not None and (
             deployment["payload"]["apply_id"] != apply_document["apply_id"]
         ):
@@ -1567,9 +1686,14 @@ def validate_declared_bindings(
         _bind_stage_receipt(manifest_payload, deployment, "deploy")
     verification = supplied.get("verification")
     if verification is not None:
+        _bind_success_gate(apply_document, {"applied", "already-complete"})
+        _bind_success_gate(deployment, {"succeeded"})
         _bind_verification(manifest_payload, verification, apply_document, raw)
     cleanup = supplied.get("cleanup_receipt")
     if cleanup is not None:
+        _bind_success_gate(apply_document, {"applied", "already-complete"})
+        _bind_success_gate(deployment, {"succeeded"})
+        _bind_success_gate(verification, {"verified"})
         if verification is not None and (
             cleanup["payload"]["verification_id"] != verification["verification_id"]
         ):
@@ -1590,9 +1714,10 @@ def validate_declared_bindings(
             raw,
         )
         _bind_stage_receipt(manifest_payload, cleanup, "cleanup")
+    _bind_stage_states(manifest_payload, supplied)
     plan = supplied.get("recovery_plan")
     if plan is not None:
-        _bind_recovery_plan(manifest_payload, plan)
+        _bind_recovery_plan(manifest_payload, plan, supplied)
         _bind_input_evidence(plan["payload"]["input_evidence"], raw)
     receipt = supplied.get("recovery_receipt")
     if receipt is not None:

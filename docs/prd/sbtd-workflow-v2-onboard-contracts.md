@@ -14,7 +14,7 @@
 | book-refactoring-pass | mandatory：已核对现有parser/run/计划与两端消费者，避免半切换 | 首次实现前 | passed |
 | book-ddd-distilled-modeling | required：资源／操作／批准快照／阶段结果的模型边界 | schema稳定前 | passed |
 | book-ddia-data-design | mandatory：持久交换对象、ID、共享归属和累计证据 | schema稳定前 | passed |
-| book-release-readiness | required：新增协议解析／校验／输出语义，仅限接口层 | 提交前全量／副本验证后；最终head仍须复验 | passed |
+| book-release-readiness | required：新增协议解析／校验／输出语义，仅限接口层 | 首轮独立review发现后重新验证／审核 | running |
 
 未完整grill-with-docs：产品边界已由PRD收敛，当前落地机器字段及原子接入时序，不推断新的用户授权或真实环境。
 
@@ -59,7 +59,7 @@ Onboard目录复制／`npx skills add`只交付文件，不执行pip。jsonschem
 
 ## 集成检查与证据边界
 
-参数worker曾违反显式skip-validation要求运行scoped测试，该结果未计入验收。主线程在两个写入者结束后统一验证：参数38项通过；codec首轮因9个类初始化失败只执行62项，不能视为完整覆盖。恢复fixture修复后原文件实际99项；新增声明不变量回归后codec现为121项。
+参数worker曾违反显式skip-validation要求运行scoped测试，该结果未计入验收。主线程在两个写入者结束后统一验证：参数38项通过；codec首轮因9个类初始化失败只执行62项，不能视为完整覆盖。恢复fixture修复后原文件实际99项；首次冻结head的codec为121项，独立review后继续补充关系回归。
 
 主线程修复了实际复现的声明漏洞：成功结果缺失／错配原始备份、恢复保护与计划状态不符、共享单依赖归属丢失、前阶段引用缺失、同目标所有者冲突、私有／备份／发布路径声明越界、raw bytes与对象不一致、失败严重程度被envelope掩盖、累计原始引用或上游证据可替换、成功缺报告及未完成步骤。真实partial允许省略未执行结果，但成功项目不能借整体failed逃避本阶段完整覆盖。各回归保留red/green与定点／影响范围报告；反例曾未真正改变时间字段，已改为显式不同时间及不同ID，不把无效变异当可靠red证明。
 
@@ -71,7 +71,7 @@ Code Readability Review：新模块与测试已按项目Ruff格式整理；去�
 
 ## Scoped Release Readiness Review
 
-- Status：ready，仅限内部协议接口层；不代表公开CLI、部署、迁移或恢复执行就绪。
+- Status：首轮接口readiness已被独立协议review阻断，修正后须重新执行验证／审核；不代表公开CLI、部署、迁移或恢复执行就绪。
 - Production path／影响：新解析、版本化数据及输出函数；现行Python入口／两安装器未激活它们。
 - Failure modes／防护：严格输入、ID／批准／归属／累计／失败状态约束，依赖或副本schema缺失fail-closed；不执行不可信命令，不把合法hash当授权。
 - Capacity／backpressure：无服务、队列或后台任务；仅进程内解析／校验，compiled schema不缓存用户数据。
@@ -79,3 +79,17 @@ Code Readability Review：新模块与测试已按项目Ruff格式整理；去�
 - Rollout／rollback／cleanup：仍按D-IMP-12由对应生产者原子接入，真实引用/权限/别名/授权/报告真实性必须另验；当前只改受管源，源码备份保持至实施PR合并之后，不触碰真实迁移备份。
 - Required validation：新5个Python文件Ruff/ty通过；旧workflow测试Ruff5→5无新增；425项提交前全量与完整副本缺依赖／可用／缺schema三路径通过。最终head在提交后重跑。
 - Optional checks／剩余边界：无本项服务、Web交互或设备链路；未声明Windows真执行、Codex/OMP运行或跨阶段恢复通过，这些归既定P1验证任务，不把缺失证明转成通过。
+
+## 首轮独立 review 与修正
+
+冻结head `db58bae22326fb0a889b89e6ced062b290d3c603` 的425项全量、精确安装副本及静态证据保留为历史。`P101SurfaceReviewOne`在参数／文档／安装证据范围零新发现；`P101ProtocolReviewOne`提出9项协议关系finding，全部采纳。前述冻结head不具备合并许可；新head必须重新完整验证并独立review。
+
+修正范围：阶段结果before与manifest／明确提供的上阶段after相符；部署／验收／清理／恢复执行的已提供前置对象成功门；恢复inverse精确来源于阶段结果；私有／共享失败严重性不能降级；partial备份／保护引用与已知before一致；shared target落入唯一且依赖闭包兼容的shared root；恢复receipt与plan的项目scope及input_evidence一致；项目恢复状态不能掩盖依赖失败／pending；所有failed／blocked逐项目记录必须有reason与nextStep。
+
+红测构造曾发生错位编辑及不相关ID/fixture错误；已恢复提交中的原121项，再逐块追加并语法检查。只计修正后隔离反例：8项测试、20个预期assertion失败、无fixture error。未知before的失败fixture不再携带虚构备份；专用可续作fixture明确提供原始before/backup。首轮修复后这些反例通过，不以损坏或提前失败的反例声称覆盖。
+
+恢复状态边界经原reviewer再次核对PRD §10.2.1／§10.2.3：不要求每个源资源status均为succeeded；failed／blocked但前后态已知、确有变化、原始备份完整的部分写入仍可恢复。inverse必须精确复制after/before/backup，未知状态、备份不完整及before==after不产生可执行逆向动作；真实文件证明仍属执行阶段。额外正向／负向测试先证明合法partial未被拒绝，并复现两种no-op被误接受后修复。
+
+F3补充正向边界实际复现：只有apply阶段证据的合法恢复plan曾被“资源必须列出manifest全部阶段operation”拒绝。资源现在只需列出manifest内已证明步骤的operation子集，步骤本身仍须完整匹配相应phase/resource声明，资源与步骤集合继续精确一致；不补造deploy/cleanup动作。此项定点red/green后，完整协议131项通过，提交前全量435项／61.548s通过。以上均为dirty证据，不能替代修复后冻结head证明。
+
+本轮Code Readability／Ponytail复核：保留原始备份／保护引用这一共享不变量，删除仅单行转发的旧result wrapper；阶段前态绑定与恢复inverse证据保持独立职责，不增加通用validation框架。新修改代码／测试Ruff与ty通过；wrapper删除后纳入最终全量重跑。README.md／README.html及版本化automation prompt无需再次改写：既有内部接口、依赖准备和只读边界不变；CHANGELOG已有未发布协议能力条目，本次为同一未合并能力的关系校验修正，不新增用户可见命令或发布叙述。
