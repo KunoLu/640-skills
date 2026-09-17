@@ -1123,7 +1123,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
 | P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节。spike 实测完成。AC-09 收口：禁止对含未选子仓的父目录调 Graft，P1 只对显式仓根调用。AC-10 已证离线 build/ask 与无 LLM `--name` 降级；版本探针 fail-closed 改挂 P1-03。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | done | 2026-09-17T10:33:14+08:00 |
-| P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23 的基线／契约子项；[行为基线与保留清单](sbtd-workflow-v2-behavior-baseline.md)；正式全量 267 tests、隔离 check-projects smoke 通过，local-only 报告见清单；待独立 review／PR 合并收尾，不宣称 v2 运行 AC 通过 | AFK | checking | — |
+| P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23 基线／契约子项；[保留清单](sbtd-workflow-v2-behavior-baseline.md)。最终提交 `41a43f3…` 原生267 tests/65.741s、隔离CLI smoke及分型报告校验通过；P002FinalReview零发现。[PR #9](https://github.com/KunoLu/640-skills/pull/9) 已合入，merge `50a7e873cfa3224b8c02419b4cb146d5ed88fa6d`；不宣称v2运行AC通过 | AFK | done | 2026-09-17T13:44:48+08:00 |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31；唯一事实源、分支冲突、重开完成事件保全及模式恢复契约 | AFK | planned | — |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
 | P0-05 | P0 | AGENTS 公共路由、恢复、grill 与轻量 fallback | P0-01、P0-04 | AC-04/05/22/23；任何新需求先评估，推荐必须暂停确认，拒绝后不反复劝升 | AFK | planned | — |
@@ -1362,6 +1362,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T12:02:48+08:00 | PR #8 合入 main | 用户明确授权 admin 合并后，[PR #8](https://github.com/KunoLu/640-skills/pull/8) 已合并，merge commit 为 `5ad87208167d6cf1ef97444cb84d7cb5fde5f065`。仅合入 PRD／spike 结论，不代表 v2 实现、CI 或发布验收通过。 |
 | 2026-09-17T12:13:17+08:00 | 文档 2.6／最近代码快照核对 | 区分初次审核与最近核对快照，补记 §16.4 的合并前文档审查结论。生产代码未变，台账仍为 48 项：10 done、38 planned；spike 证据仍为 local-only。 |
 | 2026-09-17T13:21:00+08:00 | 进入实施／P0-02 checking | 用户授权逐任务分支、循环 review、PR 合并及合并后台账更新；边界见实施调整记录。P0-02 已从 main `34a1549…` 建分支，既有 267 项测试及真实只读 CLI smoke 通过，保留清单已形成；正式报告与 review／PR 收尾未完成，不预填 done。 |
+| 2026-09-17T13:44:48+08:00 | P0-02 checking→done | 确认 PR #9 于 13:44:24+08:00 合并（`50a7e873cfa3224b8c02419b4cb146d5ed88fa6d`）后更新台账。P002FinalReview 已核对 `41a43f3…` 全部任务及精确HEAD报告；unit：`tests/unit/reports/unit-report-sbtd-baseline-p0-02-behavior-baseline-2026_09_17-13_31_16.json`；CLI：`tests/api/reports/api-report-sbtd-cli-smoke-p0-02-behavior-baseline-2026_09_17-13_31_16.json`，各有同stem中文摘要及v1 envelope，均local-only。仅完成P0-02，后续实现仍待办。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
