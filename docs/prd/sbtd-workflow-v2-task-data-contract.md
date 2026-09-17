@@ -29,7 +29,7 @@
 | `taskFrontmatter` | 从 task.md 安全解析的 frontmatter 映射 | 核心字段类型、枚举、模式／来源组合、blocked 原因、未完成任务无当前完成时间 |
 | `activeTask` | active-task.json 对象 | 仅三个字段、ID 与根内 task.md 相对路径的词法形状 |
 | `stateEvent` | task.md 状态表的一行映射 | 五列、时间形状、理由／证据非空及允许的状态对；状态不变的元数据事件仍需语义核对 |
-| `blockEntryEvent` | 一次**新进入 blocked** 的事件候选 | 复用 stateEvent，只允许 planned／in-progress／checking → blocked，拒绝 blocked→blocked |
+| `blockEntryEvent` | 一次**新进入 blocked** 的事件候选 | 复用 stateEvent；at 必须是带时区实际时间，from 只允许 planned／in-progress／checking → blocked，拒绝 blocked→blocked |
 
 校验成功不证明文件存在、安全权限、symlink containment、真实授权、父子无环、历史顺序或实际工作已完成。运行消费者必须同时执行下文语义校验；不能以 schema 通过直接落盘或恢复。
 
@@ -38,7 +38,7 @@
 - 文件为 UTF-8 数据。frontmatter 使用 JSON 兼容的安全 YAML 映射；加载过程不执行 tag／对象构造／命令，拒绝重复键、循环引用与非有限数字，不能通过普通字典覆盖掩盖重复键。具体安全解析器由运行任务选择，不在本项引入依赖。
 - `schema_version` 是整数 1，布尔值和未知版本拒绝；不自动补默认或解释未来版本。
 - 时间字符串采用带时区的日期时间：`YYYY-MM-DDTHH:mm:ss[.fraction]Z` 或显式 `±HH:mm`。schema 的 pattern 保证形状，`format: date-time` 只是声明；验证端必须启用真实格式断言，或用标准库日历／时区解析补齐。未注册的 format checker 不能当成校验成功。现有聚焦测试显式用标准库日期解析注册 checker，避免依赖可选格式包是否安装。
-- 新任务必须记录实际时间。历史无法证明时 frontmatter 时间为 null，并在正文写来源；事件时间用 `unknown`。不得用当前时刻补历史。
+- 新任务必须记录实际时间。历史无法证明时 frontmatter 时间为 null，并在正文写来源；只有历史补录的事件时间用 `unknown`，新入阻塞等新操作事件必须有实际时间。不得用当前时刻补历史。
 - 时间先后、完成时间与完成事件相等、恢复事件链与当前状态一致都属于语义检查，不仅比较字符串或相信 schema。
 
 ### frontmatter 不变量
@@ -102,7 +102,7 @@ active 引用只指向本项目 `.sbtd/tasks/` 或 `ai/tasks/` 下的 task.md，
 | 提升中断／用户并发改动 | 操作顺序与失败契约 | P1-17 隔离文件系统的每步失败／重试证明 |
 | 只读、跨分支、mode 立即生效但保存失败 | P0-10 对应 MR 场景 | P1-18／P1-15 机器与真实 host 分层验收 |
 
-`tests/test_sbtd_task_schema.py` 使用项目既有 unittest/jsonschema，通过真实 schema 接口验证边界，不读取源码断言措辞、不创建伪 runtime。模式来源、blocked 原因、当前完成时间、新入阻塞及日期 checker 均有 red→green 记录；路径／未知版本等字段边界额外验证。语义顺序和跨文件失败仍必须在 P1 补运行证明。
+`tests/test_sbtd_task_schema.py` 使用项目既有 unittest/jsonschema，通过真实 schema 接口验证边界，不读取源码断言措辞、不创建伪 runtime。模式来源、blocked 原因、当前完成时间、新入阻塞及日期 checker 均有 red→green 记录；路径、尾随及 DEL/C1 控制字符、未知版本等字段边界额外验证。语义顺序和跨文件失败仍必须在 P1 补运行证明。
 
 本项不修改现行 CLI、安装逻辑或真实项目。README.md、README.html、版本化 automation prompt 暂不改：尚无可使用的 v2 运行能力；CHANGELOG 在本项记录新增协议／验证资产，不把它写成迁移或恢复已可运行。
 

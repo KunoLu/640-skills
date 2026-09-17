@@ -119,6 +119,8 @@ class TaskDataSchemaTests(unittest.TestCase):
         continued = {**event, "from": "blocked"}
         with self.assertRaises(jsonschema.ValidationError):
             self.validate("blockEntryEvent", continued)
+        with self.assertRaises(jsonschema.ValidationError):
+            self.validate("blockEntryEvent", {**event, "at": "unknown"})
         self.validate(
             "stateEvent",
             {**continued, "reason": "用户明确重绑定分支，状态仍为 blocked"},
@@ -145,6 +147,8 @@ class TaskDataSchemaTests(unittest.TestCase):
             "ai\\tasks\\import\\customer-records\\task.md",
             "other-project/tasks/import/customer-records/task.md",
             "ai/tasks/import/customer-records/task.md\n",
+            ".sbtd/tasks/import/customer\u007frecords/task.md",
+            ".sbtd/tasks/import/customer\u0085records/task.md",
         ):
             with self.subTest(path=path), self.assertRaises(jsonschema.ValidationError):
                 self.validate("activeTask", {**pointer, "task_path": path})

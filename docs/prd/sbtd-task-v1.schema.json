@@ -7,7 +7,7 @@
     "schemaVersion": { "type": "integer", "const": 1 },
     "logicalId": {
       "type": "string",
-      "pattern": "^(?![~/])(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/\\\\\u0000-\u001f]+(?:/[^/\\\\\u0000-\u001f]+)*(?![\\s\\S])"
+      "pattern": "^(?![~/])(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/\\\\\u0000-\u001f\u007f-\u009f]+(?:/[^/\\\\\u0000-\u001f\u007f-\u009f]+)*(?![\\s\\S])"
     },
     "status": { "enum": ["planned", "in-progress", "checking", "done", "blocked"] },
     "timestamp": {
@@ -101,6 +101,7 @@
         { "$ref": "#/$defs/stateEvent" },
         {
           "properties": {
+            "at": { "$ref": "#/$defs/timestamp" },
             "from": { "enum": ["planned", "in-progress", "checking"] },
             "to": { "const": "blocked" }
           }
