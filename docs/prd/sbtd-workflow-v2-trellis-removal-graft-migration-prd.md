@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.3（pre-manifest责任与授权前置补强后，R-09重开并经完整复审重新收口） |
-| 文档状态 | 产品与流程决策已确认，待实施；源码能力结论与未执行的运行验收明确分开 |
+| 文档版本 | 2.4（P0-01 隔离 spike 证据已写入；AC-09 父目录联邦为 unsupported，不是验收通过） |
+| 文档状态 | 产品与流程决策已确认；P0-01 能力清单已实测；其余实施任务仍 planned |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
 | 代码基线 | `KunoLu/640-skills`，`v1.0.15`，完整 commit `bc8eec1549928fb0966254751b96b611b6334183` |
@@ -13,7 +13,7 @@
 | 初次审核工作树 | 初次审核时 clean；本文件在本会话创建并持续修订，不将初次状态冒充最终实现状态 |
 | 原始输入 | 用户提供《SBTD去Trellis化与Graft替换改造方案.md》，方案版本 v2.0，2026-09-16 |
 | 输入 SHA-256 | `eeefc2d47eb53c0df1094adcd02f983a0b5dbcd74f6af8c5d34038b7a7ba2fcf` |
-| Graft 审核候选 | npm `@nanonets/graft@0.18.0`，npm `gitHead=de8456e892bad5aeee11403e47fb2227773eb27e`；候选不等于已经通过本项目兼容验证 |
+| Graft 审核候选 | npm `@nanonets/graft@0.18.0`，registry `gitHead=de8456e892bad5aeee11403e47fb2227773eb27e`；已在 darwin/arm64 Node v24.15.0 隔离 HOME 实测，见第 9.8 节 |
 | 本轮交付 | 全会话最终决策、三模式路由、跨会话恢复、目录与身份、迁移／ignore 契约、实施台账、验收及决策覆盖矩阵 |
 | 本轮不执行 | 生产代码改造、工具安装／卸载、真实项目迁移、本机 sync、live automation 修改、commit／tag／push |
 | 实施跟踪事实源 | 本文第 14 节任务台账；每完成一项立即同步状态、实际完成时间和证据 |
@@ -47,7 +47,7 @@ default 的最小任务记录默认在本地忽略的 `.sbtd/tasks/`；lite／st
 
 依照 [SemVer](https://semver.org/lang/zh-CN/)，上述任意一项不兼容公开契约变更已足以采用 major。**推荐从 v1.0.15 直接进入 v2.0.0；不推荐 v1.1.0。** 只有保留全部旧契约、将新流程作为可选增量时才适合 minor，但那与本次干净切换目标冲突。
 
-版本区分：本文版本 `2.3`、产品 tag `v2.0.0`、Graft 候选 `0.18.0`、未来 task frontmatter 的 `schema_version: 1` 是不同命名空间，不能互相替代。
+版本区分：本文版本 `2.4`、产品 tag `v2.0.0`、Graft 候选 `0.18.0`、未来 task frontmatter 的 `schema_version: 1` 是不同命名空间，不能互相替代。
 
 正常发布顺序：P0 契约／验证 → P1 实现及候选验证 → 可选 rc → P2 授权切换 → P3 观察／发布验收 → v2.0.0；备份处置 P3-04 在发布回滚窗口结束后，或按第 11.8 节明确终止分支独立授权执行，不反向阻塞发布。rc 不是双工作流并行期；既有 v1.0.15 tag 和已发布 CHANGELOG 不覆写。
 
@@ -543,7 +543,7 @@ done 任务不生成未完成恢复提示；不预读所有交接历史，不扫
 
 上游 `init --agents agents` 的 explicit 列表优先于 `--yes`，不会固定安装 Claude。然而该 host 可能因已检测到 OpenCode 而附带写入 `opencode.json`；全局 Codex 路径也不能假定就是当前 `CODEX_HOME`。
 
-**接线实现要求：** 先通过精确版本 dry-run 和隔离 HOME 快照确认副作用。项目写入可用候选命令 `graft init <project> --agents agents --no-global --no-mcp --no-hooks --no-statusline --no-build`，再按授权显式 build；flags 在 P0 实测通过后固化。MCP 使用现有 installer adapter，仅配置被选 host。Codex 官方 hooks 默认不安装；只有用户单独 opt-in，且 active HOME、实际事件和权限范围均验证通过时才启用。hooks 不可用不影响显式 CLI/MCP 分析，不伪造有效性。
+**接线实现要求：** 先通过精确版本 dry-run 和隔离 HOME 快照确认副作用。项目写入可用候选命令 `graft init <project> --agents agents --no-global --no-mcp --no-hooks --no-statusline --no-build`，再按授权显式 build。P0-01 已证实这些 flag 被接受，且 `--no-hooks` 对独立 `CODEX_HOME` 字节级零写入。上游默认（省略 `--no-hooks`）会写入 `hooks.json` 与 `hooks/graft/graft-hooks.cjs`；**没有正向 `--hooks` flag**。SBTD 必须始终传 `--no-hooks`，除非用户单独授权省略该跳过项。不得把省略 `--no-hooks` 写成显式 opt-in。MCP 使用现有 installer adapter，仅配置被选 host。hooks 不可用不影响显式 CLI/MCP 分析，不伪造有效性。
 
 Codex hook 与 Graft marker、MCP key 的写入者必须唯一，不能 Onboard 合并一次、Graft 隐式再写一次。维护全局配置前保存原内容及 ownership；回滚只还原本次拥有的条目，保留其他 MCP、hook、注释和用户修改。
 
@@ -588,9 +588,37 @@ Graft 还存在版本变化后的自动 wiring reconciliation；必须验证原 
 - 图缺失可使用已安装依赖尝试本地 build；建图、查询或 MCP 失败，则用源码检索、LSP 等可用方式继续，明确 Graft 未提供的辅助证据。
 - Graft 未安装或 native 依赖缺失时，不反复运行安装命令；无法离线取得完整依赖就报告安装未完成，继续能够安全完成的用户任务。安装状态与任务交付状态分别报告，不把降级说成 Graft 安装成功。
 - 离线首次安装仅在已有完整、经校验且适配目标 OS/arch/Node 的依赖产物时尝试；单个顶层 npm tarball 不保证足够。不新增受管离线镜像产品或维护上游 fork。
-- P0-01／AC-10 加入真实断网验收：完整预装环境的 build/query、版本查询失败、缺图、本地依赖缺失、MCP 不可用及降级结果；禁止伪造通过、自动上传、无限重试或把失败转为隐式全局修改。本轮只确认此策略，尚未运行断网整包测试。
+- P0-01／AC-10：预装后 `graft build`／`ask` 在 `sandbox-exec` 下 exit 0。`graft version` 在同一 sandbox 仍打印 `latest on npm: 0.18.0`（exit 0），故版本探针 fail-closed **仍待验证**，不能当作已断网。`blast --name` 无 key 时 stderr 提示后仍 exit 0、不调用 LLM。
 
-离线策略与三模式共同生效：已安装本地能力优先，工具不可用换方法，无法实际执行的部分如实报告；default/lite 不因缺辅助工具或形式文档冻结普通任务，strict 对其真正必需的证据仍不能虚报通过。未执行整包断网测试的事实保持不变。
+离线策略与三模式共同生效：已安装本地能力优先，工具不可用换方法，无法实际执行的部分如实报告；default/lite 不因缺辅助工具或形式文档冻结普通任务，strict 对其真正必需的证据仍不能虚报通过。
+
+### 9.8 P0-01 隔离 spike 结果（2026-09-17T10:14:26+08:00）
+
+环境：darwin 27 arm64，Node v24.15.0，npm 12.0.2。隔离 `HOME`／`CODEX_HOME`／XDG／npm prefix；开发者 `~/.codex` 配置与仓库 `graft/` 前后摘要一致。完整日志在本机 `/tmp/sbtd-p0-01-graft-spike/`（不入库）。
+
+npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；仅 `ignore-scripts=false` 不够。必须显式 `--allow-scripts`（含 `tree-sitter-cli`）。脚本被挡时 CLI 在 import 期因缺少 `tree-sitter-kotlin` native（Node ABI 137）崩溃，**不得把该次 exit 1 当成命令语义**。
+
+安装后的 `package.json` 无 `gitHead`；registry 元数据仍有 pin。integrity 以 npm dist 为准。
+
+| 能力 | 状态 | 证据要点 | AC |
+|---|---|---|---|
+| `@nanonets/graft@0.18.0` 隔离安装并可运行 `graft --version` | proven | 允许 scripts 后 exit 0，stdout `0.18.0` | AC-01 |
+| 结构 `build`／`ask`／`callers`／`skeleton`／`grep`／`map`／`blast`／`check` | proven | 最小 Python/JS fixture；无 LLM | AC-01、AC-07 |
+| `check` 在编辑后 STALE 且不自动 refresh | proven | 改 `app.py` 后 exit 1，stdout `graph check: STALE` | AC-07 |
+| MCP stdio `initialize`＋`tools/list` | proven | 六工具：`graft_find_code`、`graft_file_api`、`graft_check_freshness`、`graft_trace_calls`、`graft_find_all`、`graft_repo_map`；无 blast 工具 | AC-01、AC-08 |
+| 候选 init flags `--no-global --no-mcp --no-hooks --no-statusline --no-build` | proven | 单仓 exit 0；跳过 HOME 写入 | AC-08 |
+| 上游默认安装 Codex hooks | proven（默认不安全） | 省略 `--no-hooks` 写入隔离 `CODEX_HOME` 的 `hooks.json` 与 `graft-hooks.cjs` | AC-08 |
+| `--no-hooks` 零 hook 写入 | proven | 独立 `CODEX_HOME` 前后 digest 相同，仅占位 `config.toml` | AC-08 |
+| 正向 `--hooks`／显式 opt-in flag | **unsupported** | `graft init --help` 无正向开关；不能把省略 `--no-hooks` 当 opt-in | AC-08 |
+| 预装后离线 build/query | proven | sandbox 下 build/ask exit 0 | AC-10 |
+| 离线 `graft version` fail-closed | still-to-verify | sandbox 仍 exit 0 并显示 npm latest | AC-10 |
+| `blast --name` 无 key 不走 LLM | proven（仍须禁该 flag） | stderr `no API key ... keep their symbol names`，exit 0 | AC-10 |
+| 只对选定仓 `build` 时未选 sibling 零写入 | proven | selected-b build 前后 sibling digest 不变 | AC-09 |
+| 父目录 `graft init` 不联邦未选仓 | **unsupported／安全失败** | `init <parent>` 明确 `wiring ... 3 child repo(s) — selected-a, selected-b, sibling-unselected`，并为 sibling 写 `AGENTS.md`。**禁止对含未选子仓的父目录调用 Graft**，直到集成层只对显式 repo root 调用 | AC-09 |
+| 隔离 uninstall dry-run 后 `-y --no-global` | proven | 项目内 Graft 接线移除，开发者 HOME 未改 | AC-01、AC-08 |
+| 开发者真实 HOME／Codex／仓库 graft 路径 | proven | 受管路径摘要一致；newer 文件仅为 OMP session 噪音 | AC-08 |
+
+**P0-01 是已完成的 capability spike，不是 AC-09 的验收通过。** 父目录联邦失败阻断后续把 Graft 指向未授权兄弟仓；P1 必须逐仓显式 root。Graft 没有正向 `--hooks` flag；SBTD 的 opt-in 是用户确认后持久保存的授权，用来省略 `--no-hooks`。未获该授权必须传 `--no-hooks`。
 
 ## 10. Onboard、catalog 和公开安装契约
 
@@ -1089,7 +1117,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | AC-01/07/08/09/10；真实离线、默认无 hooks/显式 opt-in、MCP/query/blast/uninstall，不能仅 mock | AFK | planned | — |
+| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节矩阵。spike 完成；AC-09 父目录联邦 **unsupported**，不是验收通过。hooks：无上游正向 flag，SBTD opt-in=用户确认后省略 `--no-hooks`。正式报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`（gitignore，local-only） | AFK | done | 2026-09-17T10:14:26+08:00 |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23；保留真实安全／证据语义，明确 strict 强制与 default/lite 按需，避免旧常驻规则冲突 | AFK | planned | — |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31；唯一事实源、分支冲突、重开完成事件保全及模式恢复契约 | AFK | planned | — |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
@@ -1294,10 +1322,10 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 
 ### 18.2 当前待验证／待授权项
 
-1. P0-01 Graft 真实能力测试尚未执行；不影响本文作为实施需求交付，阻断正式集成放行。
+1. P0-01 已执行。AC-09：`graft init <parent>` 会接线全部 git 子仓（含未选 sibling），**unsupported**；集成不得对含未选子仓的父目录调用 Graft。Graft 无正向 `--hooks` flag；SBTD 的 opt-in 是用户确认后持久保存的授权，用以省略 `--no-hooks`，未授权则必须传 `--no-hooks`。离线 `graft version` fail-closed 仍待更强断网证据。这些缺口阻断按原方案做父目录联邦／默认 hooks，不阻断逐仓 CLI/MCP 继续设计。
 2. P2-01 未提供目标项目清单、真实 HOME 和清理范围；不得猜测或遍历用户项目替代授权。
 3. Windows、Codex/OMP host 环境及正式证据 runner 在对应任务开始前确认；不可用就记录 blocked。
-4. 用户已确认本会话最终产品／模式／存储／身份／ignore 决策，并授权统一修订本 PRD；尚未授权生产代码实施、真实项目迁移、本机 sync、卸载、tag 或发布。上述产品确认不代替以后每次实际迁移及清理授权。
+4. 用户已确认本会话最终产品／模式／存储／身份／ignore 决策。生产 Onboard 代码、真实项目迁移、本机 sync、卸载、tag 或发布仍须另行授权。
 
 ### 18.3 状态事件记录
 
@@ -1317,6 +1345,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T00:23:44+08:00 | R-09／文档2.3完成 | 初始3项及循环新增17项发现已处理，第7轮完整review零新发现，advisor全部关闭；48任务/37AC/37决策/29修复映射校验通过，39项实施仍planned，仅修改PRD |
 | 2026-09-17T07:51:40+08:00 | R-09重开 | pre-manifest责任/授权契约补强后，仅做定点检查不足以沿用旧零发现结论；接受advisor blocker，清空当前完成时间，等待当前正文完整复审，历史完成事件保留 |
 | 2026-09-17T08:20:32+08:00 | R-09重新完成 | 重开后修复F-30～F-35，第11轮对新契约全文复审零发现；确认时间与载体一致、授权先落盘、AC-37分层通过，48任务/37AC/35修复映射校验通过；39项实施仍planned |
+| 2026-09-17T10:14:26+08:00 | P0-01／文档 2.4 | 隔离 HOME 实测 `@nanonets/graft@0.18.0`。spike 完成并写入第 9.8 节。父目录 init 联邦未选 sibling 为 unsupported／安全失败；无正向 hooks flag；npm 12 需显式 allow-scripts。不是 AC 全通过。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
@@ -1327,7 +1356,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 - 基线 tag 与当前 HEAD：第 1 节两个完整 SHA；本轮读取 `git log`、`git status`、`git diff v1.0.15 --stat`。
 - Onboard 生产代码与测试：第 3 节精确路径；基线与 HEAD 的这些文件相同。
 - 本仓库维护边界：[ENTRYPOINT](../../ENTRYPOINT.md)、[README](../../README.md)、[项目 lessons 短入口](../lessons.md)、[安装及身份 lessons](../lessons/topics/repository-workflow.md)。
-- 既有 PRD 形式参考：[Ponytail PRD](sbtd-workflow-ponytail-integration-remediation-prd.md)。其历史技术结论不替代本 PRD 最新基线。
+- P0-01 隔离 spike 正式快照：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem 中文 `.md`。目录默认 gitignore、local-only，不能证明 PR head。矩阵摘要以第 9.8 节为准。
 
 ### 19.2 Graft 官方证据
 
