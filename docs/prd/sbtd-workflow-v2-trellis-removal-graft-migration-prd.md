@@ -4,8 +4,8 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.4（P0-01 隔离 spike 证据已写入；AC-09 父目录联邦为 unsupported，不是验收通过） |
-| 文档状态 | 产品与流程决策已确认；P0-01 能力清单已实测；其余实施任务仍 planned |
+| 文档版本 | 2.4（P0-01 spike 已实测；台账为 blocked，AC-09 未通过，不解锁 P0-05） |
+| 文档状态 | 产品与流程决策已确认；P0-01 能力清单已实测但验收 blocked；其余实施任务仍 planned |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
 | 代码基线 | `KunoLu/640-skills`，`v1.0.15`，完整 commit `bc8eec1549928fb0966254751b96b611b6334183` |
@@ -618,7 +618,7 @@ npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；
 | 隔离 uninstall dry-run 后 `-y --no-global` | proven | 项目内 Graft 接线移除，开发者 HOME 未改 | AC-01、AC-08 |
 | 开发者真实 HOME／Codex／仓库 graft 路径 | proven | 受管路径摘要一致；newer 文件仅为 OMP session 噪音 | AC-08 |
 
-**P0-01 是已完成的 capability spike，不是 AC-09 的验收通过。** 父目录联邦失败阻断后续把 Graft 指向未授权兄弟仓；P1 必须逐仓显式 root。Graft 没有正向 `--hooks` flag；SBTD 的 opt-in 是用户确认后持久保存的授权，用来省略 `--no-hooks`。未获该授权必须传 `--no-hooks`。
+**P0-01 台账为 `blocked`，不是 done。** spike 已跑完并留下第 9.8 节证据，但 AC-09 未通过，不能解锁 P0-05／P1-03／P1-10。解除条件：用户确认禁止对含未选子仓的父目录调用 Graft，P1 只对显式 repo root 调用。Graft 没有正向 `--hooks` flag；SBTD 的 opt-in 是用户确认后持久保存的授权，用来省略 `--no-hooks`。未获该授权必须传 `--no-hooks`。
 
 ## 10. Onboard、catalog 和公开安装契约
 
@@ -1117,7 +1117,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节矩阵。spike 完成；AC-09 父目录联邦 **unsupported**，不是验收通过。hooks：无上游正向 flag，SBTD opt-in=用户确认后省略 `--no-hooks`。正式报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json`、同 stem `.md`、同 stem `.logs/`（38 case 全文 stdout/stderr/exit；local-only，未改项目 ignore） | AFK | done | 2026-09-17T10:14:26+08:00 |
+| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | **blocked（AC-09）**。spike 证据见第 9.8 节。阻断：`graft init <parent>` 接线未选 sibling。解除：用户确认「禁止对含未选子仓的父目录调用 Graft，P1 只对显式 repo root 调用」作为本 spike 的 AC-09 收口（不要求上游改 init）。未确认前 P0-05／P1-03／P1-10 不得开工。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | blocked | — |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23；保留真实安全／证据语义，明确 strict 强制与 default/lite 按需，避免旧常驻规则冲突 | AFK | planned | — |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31；唯一事实源、分支冲突、重开完成事件保全及模式恢复契约 | AFK | planned | — |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
@@ -1322,7 +1322,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 
 ### 18.2 当前待验证／待授权项
 
-1. P0-01 已执行。AC-09：`graft init <parent>` 会接线全部 git 子仓（含未选 sibling），**unsupported**；集成不得对含未选子仓的父目录调用 Graft。Graft 无正向 `--hooks` flag；SBTD 的 opt-in 是用户确认后持久保存的授权，用以省略 `--no-hooks`，未授权则必须传 `--no-hooks`。离线 `graft version` fail-closed 仍待更强断网证据。这些缺口阻断按原方案做父目录联邦／默认 hooks，不阻断逐仓 CLI/MCP 继续设计。
+1. P0-01 **blocked**，不是 done。AC-09：`graft init <parent>` 会接线全部 git 子仓（含未选 sibling）。解除条件：用户确认禁止对含未选子仓的父目录调用 Graft、P1 只对显式 repo root 调用。未确认前不得启动依赖 P0-01 的 P0-05／P1-03／P1-10。Graft 无正向 `--hooks` flag；未授权必须传 `--no-hooks`。离线 `graft version` fail-closed 仍待更强断网证据。
 2. P2-01 未提供目标项目清单、真实 HOME 和清理范围；不得猜测或遍历用户项目替代授权。
 3. Windows、Codex/OMP host 环境及正式证据 runner 在对应任务开始前确认；不可用就记录 blocked。
 4. 用户已确认本会话最终产品／模式／存储／身份／ignore 决策。生产 Onboard 代码、真实项目迁移、本机 sync、卸载、tag 或发布仍须另行授权。
@@ -1345,7 +1345,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T00:23:44+08:00 | R-09／文档2.3完成 | 初始3项及循环新增17项发现已处理，第7轮完整review零新发现，advisor全部关闭；48任务/37AC/37决策/29修复映射校验通过，39项实施仍planned，仅修改PRD |
 | 2026-09-17T07:51:40+08:00 | R-09重开 | pre-manifest责任/授权契约补强后，仅做定点检查不足以沿用旧零发现结论；接受advisor blocker，清空当前完成时间，等待当前正文完整复审，历史完成事件保留 |
 | 2026-09-17T08:20:32+08:00 | R-09重新完成 | 重开后修复F-30～F-35，第11轮对新契约全文复审零发现；确认时间与载体一致、授权先落盘、AC-37分层通过，48任务/37AC/35修复映射校验通过；39项实施仍planned |
-| 2026-09-17T10:14:26+08:00 | P0-01／文档 2.4 | 隔离 HOME 实测 `@nanonets/graft@0.18.0`。spike 完成并写入第 9.8 节。父目录 init 联邦未选 sibling 为 unsupported／安全失败；无正向 hooks flag；npm 12 需显式 allow-scripts。不是 AC 全通过。 |
+| 2026-09-17T10:14:26+08:00 | P0-01／文档 2.4 | 隔离 HOME 实测 `@nanonets/graft@0.18.0`。当时误标 done。父目录 init 联邦未选 sibling 为 unsupported／安全失败；无正向 hooks flag；npm 12 需显式 allow-scripts。不是 AC 全通过。 |
+| 2026-09-17T10:30:55+08:00 | P0-01 done→blocked | AC-09 未通过不能标 done，否则会解锁 P0-05。完成时间清空为 `—`；10:14:26 事件保留为 spike 实测记录。解除条件见第 14.3 节。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
