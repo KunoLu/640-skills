@@ -32,7 +32,7 @@
 
 工具可用性靠当前callable／实际检查；catalog、已安装提示或配置文件存在不够。账号、OAuth/cookies只用受控工具，不读取／复制／打印／入库秘密或生产数据；不擅改代理、MCP transport、插件或hooks。Graft仅对授权单仓根调用，DNT和禁LLM/cloud边界不因模式放宽；不安全或不可用则用实际源码／LSP／contract补充，不以空图或exit0证明无影响。
 
-需要写长期lesson才解析`.sbtd/developer`（本地合法优先，缺失且linked worktree才读主checkout）；仍缺询问，不猜名或改写历史ID。调用lessons-record按自己的marker块写真正长期经验，缺身份不冻结default/lite无关安全工作。没有onboard也不强迫先初始化整套环境。
+需要写真正长期lesson才调用lessons-record解析`.sbtd/developer`：正常文件中唯一name须原样匹配`^[a-z0-9]+$`；本地合法优先，仅确实缺失且verified linked worktree才只读主checkout，任一被选中的现存异常身份不能绕过或当作缺失。允许来源确实缺失才说明路径并询问；首次建立先校验ignore/tracked、路径和窄授权，只建身份，不全量onboard或读旧身份猜名。缺名不冻结default/lite无关安全工作，strict必需lesson仍未完成。只写己方marker，新ID查重，历史ID／他人块不改名；详细读写和显式迁移边界由lessons-record负责。
 
 ## 输出与交接
 

@@ -41,7 +41,11 @@ task唯一拥有mode/status；`.sbtd/active-task.json`只存schema_version/task_
 
 ## 身份、输出和交付
 
-只在需要写lesson时解析`.sbtd/developer`的合法name；本地缺失且linked worktree才只读主checkout，否则问用户，不猜名字或改历史ID。首次建立只写必要身份且先满足保护授权；不顺带初始化。只写自己的marker块，完整读取命中主题的所有作者块。
+只有需要写真正长期lesson才解析身份；纯读取不建身份。当前`.sbtd/developer`须为安全可读UTF-8正常文件，唯一name原样匹配`^[a-z0-9]+$`。异常／重复声明／非法本地文件停该解析，不能绕过；仅确实缺失且verified linked worktree才只读同仓主checkout的合法新身份，不复制、不按main分支名猜路径。主checkout候选现存但非法、不可读或路径不安全时也停该解析，不能转为本地新建；只有确实缺失才算缺来源。不从Git／OS／环境／历史workspace／marker推断或规范化名字。
+
+首次建立必须同时满足：（1）当前文件确实缺失且本地父路径安全；（2）已确认非linked（含已确认非Git）无需主来源，或已确认linked且主checkout文件确实缺失、其父路径安全。归属未知或工具不可用不能当作非linked。满足后才说明将建立当前项目`.sbtd/developer`并询问名字；用户同意后核对实际ignore/tracked和窄写权限，缺保护只请求根锚定`/.sbtd`，不隐藏业务内容或自动untrack。只安全非覆盖地建立必要目录与`name=<name>`文件、回读验证；意外已有内容或保存失败则保留原件并报告，不顺带onboard、工具安装或迁移。暂不提供身份时default/lite不写lesson但继续无关安全工作；strict的必需lesson仍未完成。reset不覆盖既有身份，改名／多项目复用须裁决；旧身份只作显式迁移输入。
+
+只写`<!-- lessons:<name>:start -->`／`<!-- lessons:<name>:end -->`自己的块，各作者index块有独立完整表；新ID为`LESSON-YYYYMMDD-<name>-<slug>`，先在完整库查ID及实际heading锚点碰撞。历史ID、引用与他人块保留，读取命中主题的所有作者块；topic/index部分写成要报告并按既有ID补齐，不重复追加。不要将PII、凭据或旧私密原件写入共享lesson。
 
 没有全局输出协议时不猜测caveman自动状态机；手动样式按可用Skill和用户选择，不影响执行模式。normal mode只退出输出样式。最终交付完整列出结论、文件、验证、跳过及原因、风险／恢复限制；账号、密钥、PII、生产数据不进入任务／报告。
 
