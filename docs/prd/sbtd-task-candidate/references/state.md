@@ -28,6 +28,8 @@ Before writing, confirm the operation, authorization, branch and expected old co
 
 Core fields and an event that belongs to this operation must change together in the same task.md. The schema permits some historical unknown values, but a new task or operation needs actual timestamps and evidence. Unknown historical completion time remains null with its source explained; do not use today's time as its old completion time. Preserve the original legacy evidence separately under its migration policy.
 
+Bind `branch` to the actual named Git branch, or `detached:<full-commit-sha>` for a detached checkout; only non-Git projects use null. Do not abbreviate the SHA or use HEAD as the detached identity. If the binding cannot be observed safely, do not invent a value or claim that persistence/recovery is valid.
+
 A status change uses the documented lifecycle: planned → in-progress → checking → done; checking may return to in-progress; unfinished work may block; done reopens to planned. Do not infer completion from a directory name or a successful command unrelated to acceptance.
 
 A completed task records a completion event whose `at` equals `completed_at`. Reopening first preserves the original completion event/time/evidence, then appends done→planned and clears the current completed_at. Reopen completed ancestors before the child; cross-file writes are not a transaction. On partial failure, report the actual completed steps and stop the remaining ones.

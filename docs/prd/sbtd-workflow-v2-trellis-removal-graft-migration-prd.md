@@ -802,6 +802,7 @@ restored 仅证明受管文件对账完成；receipt 另含 `runtime_readiness=n
 - 15 bundled 减去两个 Trellis Skills，加一个 sbtd-task，目标 14；external 仍为19。
 - **P0-07 为原子交付：** 将 `skill:trellis-workflow`、`skill:trellis-channel` 两条 catalog entries 删除，新增 `skill:sbtd-task`（source 为 `templates/skills/sbtd-task`），同时切换源目录、完整 Skill 资产、计数及断言。不得交付“只有新 SKILL、catalog 仍装旧 Skill”或 catalog 指向不存在目录的中间发布包。以隔离目录执行 catalog 驱动的 bundled 安装路径，确认实际目标含完整 sbtd-task 且新安装不产生两个旧目录；这是 P0 可独立验证的安装层断言，不等待 P1 全部 Graft/host 功能。P1 再验证完整 init/reset。
 - 为同时满足逐任务合并与上述原子边界，P0-04 先交付 `docs/prd/sbtd-task-candidate/entrypoint.md` 及完整 references/schema/LICENSE/NOTICE，不提前出现新的 discovery `SKILL.md`。P0-07 同一次变更将候选移入正式源目录、命名入口并切换 catalog／退役旧目录，移除候选副本及迁移引用；见实施调整记录 D-IMP-05。
+- P0-05 的两份 AGENTS 完整候选保留在 `docs/prd/sbtd-agent-candidates/{global,project}.md`，P0-07 依赖 P0-05 并将其与 sbtd-task/catalog 同批移入正式模板，移除候选副本和迁移引用，避免调用方先于被调用方激活；见 D-IMP-07。
 - `catalog.schema.json` 是结构契约，不因 entry 改动无意义升版；确需新增 metadata 才修改 schema 和最小示例。
 - 旧 bundled 目录从有效源树删除；历史由 `v1.0.15` 及 Git history 保存，不在 Onboard 安装目录内部 archive 活的旧入口。
 - 用户全局目录的两个旧 Skill 必须在新 canonical 校验后按身份／内容／symlink 安全策略退役。仅名字匹配不授权删除；unknown drift 保存并报告，需要用户裁决。
@@ -1129,9 +1130,9 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23 基线／契约子项；[保留清单](sbtd-workflow-v2-behavior-baseline.md)。最终提交 `41a43f3…` 原生267 tests/65.741s、隔离CLI smoke及分型报告校验通过；P002FinalReview零发现。[PR #9](https://github.com/KunoLu/640-skills/pull/9) 已合入，merge `50a7e873cfa3224b8c02419b4cb146d5ed88fa6d`；不宣称v2运行AC通过 | AFK | done | 2026-09-17T13:44:48+08:00 |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31 契约子项；[数据契约](sbtd-workflow-v2-task-data-contract.md)。最终 `bab4940…` 276 tests/57.067s、Ruff/ty、报告校验通过；P003ReviewTwo零新发现。[PR #13](https://github.com/KunoLu/640-skills/pull/13) 已合入，merge `148d0216a4ca3bd7c7347570b2de03d7a6ef95d6`；实际读写／恢复仍归P1 | AFK | done | 2026-09-17T15:39:09+08:00 |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23 契约子项；[完整候选](sbtd-workflow-v2-skill-entry-contract.md) 按D-IMP-05非discovery交付，D-IMP-06/MR-27共同DDD门禁对齐。最终 `f5a9199…` 276 tests/59.124s，P004ReviewThree零新发现。[PR #15](https://github.com/KunoLu/640-skills/pull/15) 已合入，merge `862cb745bafac2e42416804a7edaed3560bcb595`；正式激活仍归P0-07，host/token运行证明仍归P1 | AFK | done | 2026-09-17T16:59:41+08:00 |
-| P0-05 | P0 | AGENTS 公共路由、恢复、grill 与轻量 fallback | P0-01、P0-04 | AC-04/05/22/23；任何新需求先评估，推荐必须暂停确认，拒绝后不反复劝升 | AFK | planned | — |
+| P0-05 | P0 | AGENTS 公共路由、恢复、grill 与轻量 fallback | P0-01、P0-04 | AC-04/05/22/23 契约子项；[规则候选](sbtd-workflow-v2-agent-routing-contract.md)，D-IMP-07与P0-07同批激活；隔离布局10个Skill资产／14内部链接及2份规则可达，schema不变，正式模板／catalog未改；待最终验证与review | AFK | checking | — |
 | P0-06 | P0 | lessons-record 新身份来源、首次询问与模式边界 | P0-03 | AC-06/25；ID/marker 不变，无 onboard 项目按需只建身份，缺名不冻结 default/lite 无关工作 | AFK | planned | — |
-| P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-06 | AC-11；完整候选移入正式目录并命名SKILL.md，与两旧entry/源目录退役、新sbtd-task entry及引用迁移同一变更；隔离真实安装目标正确，14 bundled／19 external，无候选副本 | AFK | planned | — |
+| P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-05、P0-06 | AC-11；完整Skill与AGENTS候选移入正式源，与两旧entry/源目录退役、新sbtd-task entry及引用迁移同一变更；隔离真实安装目标正确，14 bundled／19 external，无候选副本 | AFK | planned | — |
 | P0-08 | P0 | 项目 ignore 的保留／删除／四条新增规则 | P0-03、P0-06 | AC-12/26；default 本地忽略、共享资产可追踪，规则根锚定且不误伤业务子目录 | AFK | planned | — |
 | P0-09 | P0 | 源仓库根七行 ignore、维护说明与精确测试 | R-09 | AC-12/16；保护 .sbtd/handoff/Graft，旧残留安全处理，不复制项目模板 | AFK | planned | — |
 | P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[路由场景](sbtd-workflow-v2-mode-routing-contract.md) 的原26项由P0-10验收，后加MR-27归P0-04/D-IMP-06；文档结构／依赖检查通过，P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
@@ -1378,6 +1379,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T16:37:04+08:00 | P0-04 第二轮review修复 | 公共入口明确完整grill后调用可用的book-ddd-distilled-modeling、独立可见DDD Boundary Review及状态/修正回路；不可用时区分strict阻断与default/lite如实替代检查，不冒充Skill通过。保持checking待最终提交复验与完整复审。 |
 | 2026-09-17T16:39:00+08:00 | P0-04 advisor／D-IMP-06 | 依据完整grill后的强制DDD门禁，撤回上一草稿中default/lite缺Skill替代放行；三模式均须具名reviewer可见通过，缺失均blocked。同步§8.2、保留清单与新增MR-27；旧P0-10的26项验收历史不追认为新边界已验收，保持P0-04 checking。 |
 | 2026-09-17T16:59:41+08:00 | P0-04 checking→done | PR #15 于16:59:30+08:00合并（`862cb745bafac2e42416804a7edaed3560bcb595`）后更新台账。三轮review问题与advisor已处理，P004ReviewThree零新发现；最终unit报告 `tests/unit/reports/unit-report-skill-candidate-ddd-p0-04-sbtd-task-skill-2026_09_17-16_49_00.json` 及同stem中文摘要/envelope绑定 `f5a9199…`，276 tests/59.124s/exit0，local-only。候选尚未激活，catalog仍15；P0-07与P1验收不提前完成。 |
+| 2026-09-17T17:27:04+08:00 | P0-05 planned→in-progress | 从最新main `51d7a6d…`建立`p0-05-agent-routing`；按D-IMP-07交付完整路由／fallback候选并与P0-07同批激活。当前模板／catalog不变；真实host／token计量仍归P1。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 

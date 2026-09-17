@@ -51,6 +51,8 @@ A user's explicit PRD, scenarios, tests, report, history or completion-time requ
 
 Read [task state](references/state.md) when persisting, resuming, reopening, resolving blocked history, promoting or archiving a task. Read [handoff](references/handoff.md) only when a real pause/context switch or continuation need warrants it. Do not load all references for an ordinary answer.
 
+For a relevant specialized engineering method, read [method routing](references/methods.md). For tool availability, installation, privacy or formal test evidence, read the applicable section of [tool boundaries](references/tooling.md). For an explicit presentation request or a global-rule-defined automatic style trigger, read [presentation](references/presentation.md); style never changes execution mode. Do not infer a missing global automatic-style state machine from a project-only fallback.
+
 A mid-task mode change takes effect after the user chooses it and is saved where allowed. Switching to strict requires valid evidence for the following gates; it does not fabricate earlier passes. Switching down does not delete shared records or their history.
 
 Before marking done, compare actual results with every requested acceptance condition and the selected mode's obligations. Append the real completion event and timestamp using task-state rules. Do not auto-archive, publish, commit, migrate or delete backups. Report what changed, what was exercised, what remains unverified and any recovery limitations. Never promise automatic session-start restoration without an observed host capability.
