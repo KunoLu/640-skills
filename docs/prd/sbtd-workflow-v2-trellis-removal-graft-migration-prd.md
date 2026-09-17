@@ -1117,7 +1117,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节矩阵。spike 完成；AC-09 父目录联邦 **unsupported**，不是验收通过。hooks：无上游正向 flag，SBTD opt-in=用户确认后省略 `--no-hooks`。正式报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`（gitignore，local-only） | AFK | done | 2026-09-17T10:14:26+08:00 |
+| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节矩阵。spike 完成；AC-09 父目录联邦 **unsupported**，不是验收通过。hooks：无上游正向 flag，SBTD opt-in=用户确认后省略 `--no-hooks`。正式报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`（local-only，未改项目 ignore） | AFK | done | 2026-09-17T10:14:26+08:00 |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23；保留真实安全／证据语义，明确 strict 强制与 default/lite 按需，避免旧常驻规则冲突 | AFK | planned | — |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31；唯一事实源、分支冲突、重开完成事件保全及模式恢复契约 | AFK | planned | — |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
@@ -1356,7 +1356,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 - 基线 tag 与当前 HEAD：第 1 节两个完整 SHA；本轮读取 `git log`、`git status`、`git diff v1.0.15 --stat`。
 - Onboard 生产代码与测试：第 3 节精确路径；基线与 HEAD 的这些文件相同。
 - 本仓库维护边界：[ENTRYPOINT](../../ENTRYPOINT.md)、[README](../../README.md)、[项目 lessons 短入口](../lessons.md)、[安装及身份 lessons](../lessons/topics/repository-workflow.md)。
-- P0-01 隔离 spike 正式快照：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem 中文 `.md`。目录默认 gitignore、local-only，不能证明 PR head。矩阵摘要以第 9.8 节为准。
+- P0-01 隔离 spike 正式快照：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem 中文 `.md`。local-only，未纳入版本库，也未改项目 `.gitignore`（P0-09）。不能证明 PR head。矩阵摘要以第 9.8 节为准。
 
 ### 19.2 Graft 官方证据
 
