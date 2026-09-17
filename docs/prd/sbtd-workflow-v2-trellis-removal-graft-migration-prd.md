@@ -110,7 +110,7 @@ default 的最小任务记录默认在本地忽略的 `.sbtd/tasks/`；lite／st
 | A09 | OMP 可直接继承 Codex MCP | 不作前提 | 从 active host 配置解析并握手；必要时显式 OMP stdio 配置，不翻译 hooks |
 | A10 | 无 hooks 功能完全不降级 | 需限定 | 主动查询可刷新结构图，但被动 markdown projections 不随每次 query 全量刷新 |
 | A11 | 六个 Graft MCP 工具与 GitNexus MCP 对等 | 不成立 | 仅覆盖核心结构查询；无直接 blast MCP、route_map、taint、PDG、rename 等对等承诺 |
-| A12 | 共同父目录自动 build | 有越权扫描风险 | 逐项目默认；仅获授权且子仓集合准确时才构建联邦，不因共父目录扫描兄弟项目 |
+| A12 | 共同父目录自动 build | 有越权扫描风险 | 逐项目默认。禁止对父目录 `graft init`／`build`／MCP。多仓=对每个已授权仓根独立调用后只读汇总，不因共父目录扫描或接线兄弟项目 |
 | A13 | `--deep` 不启用 | 接受并补齐 | 同时禁止 `blast --name`、brain connect 等其他 LLM/cloud 路径 |
 | A14 | 三张检查清单、原生独立复核 | strict 保留，其他模式按需 | 不声称保留 Channel 持久协作语义；共同安全边界不因模式变轻而消失 |
 | A15 | handoff 沿用 caveman 3／5 阈值 | 最终取消计数绑定 | 主动交接改为暂停／切会话／真实上下文压力等事件，仅有实际信息变化才更新 |
@@ -517,7 +517,7 @@ done 任务不生成未完成恢复提示；不预读所有交接历史，不扫
 | 改前影响分析 | 读取相关 symbol 的 callers 与实际源码 | 不用未发生的 diff 冒充改前 blast |
 | 改后影响分析 | 显式 diff 基线 + `blast` CLI + 源码／测试 | 六个 MCP 工具中没有直接 blast，check_freshness 不能替代 |
 | 新鲜度 | `check`／MCP check_freshness | 只报告漂移，不修复、不检测业务正确性 |
-| 多仓理解 | 授权父目录联邦查询 | 分裂图不自动形成跨服务调用边 |
+| 多仓理解 | 对每个已授权仓根独立 `ask`／`map`／MCP，任务内只读汇总 | 禁止父目录 Graft 入口；不自动形成跨服务调用边 |
 | PDG／taint／route map／group／rename | 本次不提供；使用原生源码／LSP／contract 分析 | 不做工具名或返回结构兼容 shim |
 
 基础 Graft 解析并不覆盖本仓库所有 Markdown／YAML／Shell／PowerShell／JSON 文本契约；广泛扫描依然使用文件检索和真实消费者检查。`graft grep` 的“全部”仅针对已索引文件，不是仓库所有文本。
@@ -613,7 +613,7 @@ npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；
 | `--no-hooks` 零 hook 写入 | proven | 独立 `CODEX_HOME` 前后 digest 相同，仅占位 `config.toml` | AC-08 |
 | 正向 `--hooks`／显式 opt-in flag | **unsupported** | `graft init --help` 无正向开关；不能把省略 `--no-hooks` 当 opt-in | AC-08 |
 | 预装后离线 build/query | proven | sandbox 下 build/ask exit 0 | AC-10 |
-| 离线 `graft version` fail-closed | still-to-verify | sandbox 仍 exit 0 并显示 npm latest | AC-10 |
+| 离线 `graft version` fail-closed | still-to-verify（**P1-03 所有**） | sandbox 仍 exit 0 并显示 npm latest。不阻断 P0-01；P1-03 必须用真实断网证明版本探针不可达 | AC-10 |
 | `blast --name` 无 key 不走 LLM | proven（仍须禁该 flag） | stderr `no API key ... keep their symbol names`，exit 0 | AC-10 |
 | 只对选定仓 `build` 时未选 sibling 零写入 | proven | selected-b build 前后 sibling digest 不变 | AC-09 |
 | 父目录 `graft init` 不联邦未选仓 | **unsupported／安全失败**（产品已收口） | 上游 `init <parent>` 会接线全部 git 子仓。用户已确认 SBTD **永不**对含未选子仓的父目录调用 Graft；P1 只对显式单个仓库根调用。P1-06 仍须证明实现遵守此禁令 | AC-09 |
@@ -1119,7 +1119,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 
 | ID | 优先级 | 任务／主要文件 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节。spike 实测完成。AC-09 收口：用户确认禁止对含未选子仓的父目录调 Graft，P1 只对显式单个仓库根调用（不要求上游改 init）。P1-06 负责实现证明。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | done | 2026-09-17T10:33:14+08:00 |
+| P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节。spike 实测完成。AC-09 收口：禁止对含未选子仓的父目录调 Graft，P1 只对显式仓根调用。AC-10 已证离线 build/ask 与无 LLM `--name` 降级；**版本探针 fail-closed 改挂 P1-03**。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | done | 2026-09-17T10:33:14+08:00 |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23；保留真实安全／证据语义，明确 strict 强制与 default/lite 按需，避免旧常驻规则冲突 | AFK | planned | — |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31；唯一事实源、分支冲突、重开完成事件保全及模式恢复契约 | AFK | planned | — |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
@@ -1136,7 +1136,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 |---|---|---|---|---|---|---|---|
 | P1-01 | P1 | onboard参数、交换schema与统一envelope基础契约 | P0-07 | AC-13/29接口子项，含批准快照、私有操作、init迁移上下文和deploymentEvidence；只证明解析/校验基础，行为归对应任务 | AFK | planned | — |
 | P1-02 | P1 | 按需脚手架、最小状态校验与 bootstrap 边界 | P1-01、P0-08 | AC-03/12/13/23；不 onboard 也可开展普通任务；reset 保留数据；bootstrap 不强制每项目生成 | AFK | planned | — |
-| P1-03 | P1 | Graft CLI 检测／确认安装／遥测与版本约束 | P0-01、P1-01 | AC-07/10/13；只读无副作用，安装前 DNT，失败不报成功 | AFK | planned | — |
+| P1-03 | P1 | Graft CLI 检测／确认安装／遥测与版本约束 | P0-01、P1-01 | AC-07/10/13；只读无副作用，安装前 DNT，失败不报成功。**独占** AC-10 剩余：真实断网下 `graft version`／npm 元数据不可达且不循环安装，不得用仍能查出 latest 的 sandbox 冒充 | AFK | planned | — |
 | P1-04 | P1 | Codex接线、显式opt-in hooks及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；共享去重、默认无hooks、模板后接线；隔离真实执行init上下文及累计证据续作/保存 | AFK | planned | — |
 | P1-05 | P1 | OMP接线、CLI分析及部署证据生产 | P1-02、P1-03、P1-12、P0-05 | AC-08/18/29/33/35的部署及恢复输入子项；继承资源去重、无Codex hooks；隔离握手/query及init上下文累计证据生产 | AFK | planned | — |
 | P1-06 | P1 | 多项目／worktree 隔离；禁止父目录 Graft 入口 | P1-02、P1-04、P1-05 | AC-09/13；只对显式仓根调用；未选 sibling 零写入；多仓理解=逐仓调用后只读汇总，证明未对父目录 init/build/MCP | AFK | planned | — |
@@ -1192,8 +1192,8 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 | AC-06 | lessons 身份与历史资产保全 | 合法/非法/缺失、主 checkout 回退、首次写入询问；不猜名字；marker/ID 不变；全部 detail links 可达 |
 | AC-07 | freshness 和 diff 不夸大 | 修改后 query、check 前后；busy/失败/disabled；same-size+mtime；untracked/deleted/rename/unsupported；basis 明确 |
 | AC-08 | Host 接线顺序、幂等、默认无 hooks 与隔离正确 | 模板后接线、二次 init/reset 单 fence；默认不装 hooks，opt-in 真事件验证；隔离 HOME/Codex/OMP 根，预期外零写入 |
-| AC-09 | 多仓和 worktree 不越界 | 两个选定仓与一个未选 sibling；父目录联邦范围；工作树不同 branch；MCP root 对应 |
-| AC-10 | 联网与完全离线策略均符合用户选择 | 受管入口 DNT、无 LLM/cloud/代码上传；允许 npm 元数据；真实断网验证预装本地分析、版本不可达、缺依赖不循环安装及源码/LSP 降级，安装与任务状态分开 |
+| AC-09 | 多仓和 worktree 不越界 | 两个选定仓与一个未选 sibling **零写入**；证明未对父目录做 `init`／`build`／MCP；工作树不同 branch；MCP root 对应**选定仓根** |
+| AC-10 | 联网与完全离线策略均符合用户选择 | 受管入口 DNT、无 LLM/cloud/代码上传；允许 npm 元数据。P0-01 已证预装后离线 build/ask。**版本不可达／不循环安装**由 P1-03 用真实断网证明 |
 | AC-11 | 可安装 catalog 与全局 Skill cutover 正确 | P0 原子替换两旧 entry 为 sbtd-task；隔离 catalog 安装实际得到完整新 Skill；14 bundled／19 external；完整 init/reset，旧身份冲突保留 |
 | AC-12 | 项目四条新增与源仓库七行 ignore 各自正确 | 保留通用段；根精确断言独立于模板；真实 Git 正反探针、broad ignore 冲突、packages/graft 不误伤、重复构建不变宽 |
 | AC-13 | CLI/JSON/两安装器一致 | Python 命令真实运行；单 JSON；非零错误；Bash3.2/EOF/PTY；Windows PowerShell；project-only 不装全局工具 |
@@ -1324,7 +1324,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 
 ### 18.2 当前待验证／待授权项
 
-1. P0-01 **done**（2026-09-17T10:33:14+08:00）。AC-09 产品收口已确认：禁止对含未选子仓的父目录调 Graft，P1 只对明确的单个仓库根调用。上游 `init <parent>` 仍会联邦全部子仓，P1-06 必须证明实现不走该路径。离线 `graft version` fail-closed 仍待更强断网证据，不阻断 P0-01。Graft 无正向 `--hooks` flag；未授权必须传 `--no-hooks`。
+1. P0-01 **done**（2026-09-17T10:33:14+08:00）。AC-09 产品收口已确认。AC-10 剩余「`graft version` 断网 fail-closed」改挂 **P1-03**，不阻断 P0-01。P1-06 必须证明未对父目录 init/build/MCP。Graft 无正向 `--hooks` flag；未授权必须传 `--no-hooks`。
 2. P2-01 未提供目标项目清单、真实 HOME 和清理范围；不得猜测或遍历用户项目替代授权。
 3. Windows、Codex/OMP host 环境及正式证据 runner 在对应任务开始前确认；不可用就记录 blocked。
 4. 用户已确认本会话最终产品／模式／存储／身份／ignore 决策。生产 Onboard 代码、真实项目迁移、本机 sync、卸载、tag 或发布仍须另行授权。
@@ -1351,6 +1351,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T10:30:55+08:00 | P0-01 done→blocked | AC-09 未通过不能标 done，否则会解锁 P0-05。完成时间清空为 `—`；10:14:26 事件保留为 spike 实测记录。 |
 | 2026-09-17T10:33:14+08:00 | P0-01 blocked→done | 用户确认：禁止对含未选子仓的父目录调 Graft，P1 只对明确的单个仓库根调用。AC-09 以此收口；P1-06 仍须证明实现。 |
 | 2026-09-17T10:41:11+08:00 | §9.5 收紧 | 联邦不得再用 `graft init <parent>`。多仓只允许逐仓独立调用后的只读汇总。 |
+| 2026-09-17T10:56:03+08:00 | PR #8 review 修正 | AC-10 版本探针剩余改挂 P1-03。A12、§9.1、AC-09 删除父目录联邦入口，改为显式仓根＋禁止父目录 init/build/MCP。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
@@ -1404,7 +1405,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | D-02 | 去 Trellis runtime／jsonl／Channel，不引入 OpenSpec 或替代调度器，不留旧 Skill alias | 4–5、7.7–7.8、10.3 | P0-04、P0-07、P1-09、P1-13 | AC-02、AC-11、AC-16 |
 | D-03 | Graft 结构层接入，明确 freshness/diff/MCP/PDG 等不对等边界，禁止 deep/name/cloud | 3–4、9 | P0-01、P1-03 | AC-01、AC-07、AC-10 |
 | D-04 | 允许安装及 npm 元数据；安装前及持续受管入口 DNT，禁止代码／查询／项目数据上传 | 9.2、9.6 | P1-03、P1-04、P1-05 | AC-08、AC-10 |
-| D-05 | 完全离线用本地版本；版本不可达不阻断；缺图／依赖／MCP 可降级且不循环安装 | 9.7 | P0-01、P1-03 | AC-10、AC-23 |
+| D-05 | 完全离线用本地版本；版本不可达不阻断；缺图／依赖／MCP 可降级且不循环安装 | 9.7、9.8 | P1-03 | AC-10、AC-23 |
 | D-06 | Codex active HOME／OMP 实际来源、GUI PATH、MCP 根绑定；不自动接线未选平台 | 9.3、10 | P1-04、P1-05、P1-06 | AC-08、AC-09、AC-13 |
 | D-07 | OMP 不翻译 Codex hooks；自动提示 hooks 默认关闭，启用需独立 opt-in，原生 OMP 扩展不在范围 | 5.2、9.3、17 | P0-01、P1-04、P1-05 | AC-08、AC-20 |
 | D-08 | default 按需、lite 短清单、strict 完整适用强流程，三者都使用 SBTD | 7.1、7.6、12 | P0-10、P0-04、P1-09 | AC-02、AC-04、AC-23 |
