@@ -1,0 +1,67 @@
+# P0-06 lessons 身份与历史保留契约
+
+## 范围与交付
+
+依据主 [PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md) §8.3、§8.4、§11.6，交付 AC-06/25 的规则子项，不提前声称 P1 文件系统／worktree 执行已完成。
+
+- [完整入口候选](lessons-record-candidate/entrypoint.md)：按需身份、唯一短入口、marker/ID、写入与部分失败、按需读取。
+- [显式身份迁移分支](lessons-record-candidate/references/identity-migration.md)：只在授权该项目迁移后读取；旧输入不再作为日常身份fallback。
+- LICENSE/NOTICE从现有自有Skill原样保留，候选无SKILL.md，不参与discovery。
+- [全局](sbtd-agent-candidates/global.md)和[项目](sbtd-agent-candidates/project.md)候选同步关键身份保护；无全局Skill的项目仍知道合法值、优先级、首次授权与历史不变量。
+
+按 [D-IMP-08](sbtd-workflow-v2-implementation-decisions.md)，P0-07与其他路由同批替换正式lessons-record完整目录、迁移引用、删除候选目录。当前生效Skill、AGENTS模板、catalog、安装器和用户数据不变；没有双运行入口或兼容alias。
+
+## Book Gate Plan 与 DDIA 结论
+
+| Skill | 选择／触发事实 | 阶段 | Gate state |
+|---|---|---|---|
+| book-ddia-data-design | required：身份持久事实源、读写优先级、部分写入与迁移边界 | 规则设计稳定前 | passed |
+| book-ddd-distilled-modeling | on-demand：沿用已确认split name、任务／身份／历史作者概念，无新领域歧义，未完整grill | 不触发 | not-required |
+| book-legacy-change-safety | on-demand：仅非生效规则候选，不修改现有生产行为或修复运行bug | 不触发 | not-required |
+| book-refactoring-pass | on-demand：无既有生产代码编辑 | 不触发 | not-required |
+| book-release-readiness | on-demand：无当前运行或部署改变 | 不触发 | not-required |
+
+DDIA Data Design Review：confirmed。当前合法文件拥有本地身份；缺失且linked才只读真实主checkout，不复制；异常是冲突，不是fallback条件。首次建立需要名字、保护和窄权限，写后回读；失败保留原件。topic/index不是跨文件事务，重试按已存在ID和己方marker补齐，不重复追加。迁移私有原件与共享安全投影分离，不改历史ID或把新身份成功误报为整项目迁移成功。
+
+未完整调用grill-with-docs：PRD已经明确所有权、优先级、名字限制和授权边界，无须重复访谈。TDD本项不新增：没有新运行代码，不能用文本断言或另写一个测试专用resolver冒充行为证明；P1-19/P1-12负责真实红／绿与负例执行。
+
+## 分支验收矩阵
+
+下列是协议review检查面，不是已经执行的host／迁移结果。
+
+| Case | 条件 | 规则要求 |
+|---|---|---|
+| LI-01 | 本地合法，主checkout可能有不同身份 | 本地优先，不越过它选择其他来源 |
+| LI-02 | 本地确实缺失，linked worktree，主checkout合法 | 验证同仓后只读使用，不复制 |
+| LI-03 | 无允许来源，非linked或无主身份 | 问用户，不从Git／OS／环境／历史目录或marker猜名字 |
+| LI-04 | 本地非法但主checkout合法 | 停该解析，不绕过本地异常 |
+| LI-05 | 本地缺失，主checkout异常 | 保留异常，不退回旧身份 |
+| LI-06 | 未onboard、首次必要lesson、用户给合法名字 | 说明路径、保护检查与窄授权，只建必要身份并回读 |
+| LI-07 | Alice、a_b、带分隔符或其他非法值 | 拒绝并询问，不小写化／去标点／音译 |
+| LI-08 | 只读或仅读取lesson | 身份／ignore／lesson零写入 |
+| LI-09 | reset、改名或多项目复用名字 | 保留现有值；不同名或跨项目复用先裁决 |
+| LI-10 | 保留目录含业务内容、tracked、symlink、同名目录或创建竞态 | 不隐藏、不untrack、不覆盖，停对应写入 |
+| LI-11 | 授权迁移，旧合法、新缺失、无主新身份 | 原名建立并验证，不立即删旧文件 |
+| LI-12 | 旧合法、新合法同名 | 已有一致身份，不重复写 |
+| LI-13 | 旧合法、新合法异名 | 保留两边，用户裁决 |
+| LI-14 | 旧名非法、新缺失 | 问合规新名，不规范化旧名或宣称原名迁移 |
+| LI-15 | 旧缺失、新合法，或两边均缺失 | 分别使用新身份或询问，不生成占位名 |
+| LI-16 | 当前缺失且主checkout有合法新身份，当前有旧身份 | 只读主新身份，不迁／复制本地旧身份 |
+| LI-17 | 新ID与旧格式ID或实际heading锚点碰撞 | 换slug，不改历史ID，不靠marker隔离假设唯一 |
+| LI-18 | topic成功、index失败，或并发内容变化 | 报告部分完成，按己方既有ID补齐；冲突不强盖 |
+| LI-19 | 用户暂不给名字或保护授权 | default/lite暂不写但继续无关安全工作；strict必需项未完成 |
+| LI-20 | 历史原件／marker／ID含不宜公开内容 | 原件私有保全，共享投影过隐私门；不安全就阻断投影 |
+| LI-21 | 唯一name不成立、文件损坏／不可读或路径类型不明 | 视为冲突而非缺失，不自动选其他身份 |
+| LI-22 | 旧名非法、新身份合法 | 保留新值，旧异常交显式迁移计划裁决，不推断旧新映射 |
+
+## 保留与最小化
+
+保留原有marker语法、带名字的新ID格式、全库ID/anchor查重、各作者独立index表、读所有作者块、150–200行短入口建议和仅append-only范围的可选union。旧运行时命令只在明确迁移说明中作为禁止执行的旧输入边界出现；普通入口不要求旧目录或初始化器。
+
+具体工具、执行代码和迁移receipt不在此另起实现。整个候选作为一个完整Skill安装；条件迁移说明放reference，普通写lesson不加载它。现有外部stable镜像不改。
+
+## 验证与文档维护
+
+本项做临时最终包名复制／入口解析／内部链接／license摘要验证、现行资产未改变检查、PRD依赖与案例唯一性检查、现有unit回归及独立review。unit只证明现有套件未回归，不证明候选被真实Agent执行；实际创建／竞态／Git worktree与迁移负例仍由P1负责。
+
+README.md、README.html和版本化automation prompt暂不改：现有安装、运行、同步和检测入口未变化，不能把候选描述成已激活产品。P0-07与后续实际改动仍须同步受影响入口。CHANGELOG未发布文档节记录本次规则准备。未执行workflow sync、live automation修改、HOME写入、身份创建或真实lesson历史迁移。

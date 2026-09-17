@@ -10,6 +10,7 @@
 - 准备 P0-04 `sbtd-task` 公共／lite 入口及 strict、状态、handoff 按需 references；候选使用非 discovery 文件名，正式入口与 catalog 在 P0-07 原子切换，不提前宣称已安装或激活。
 - 明确完整 `grill-with-docs` 后三模式共同执行具名 DDD reviewer 门禁：必须有独立可见通过结果，缺失不可用时阻断相关确认／设计；普通无关工具降级不受影响，不以 default/lite 替代检查绕过。
 - 准备 P0-05 全局／项目公共路由和无全局 Skill 的安全 fallback；方法、工具与输出模式协议按需加载，输出压缩不改变执行模式。AGENTS 与 sbtd-task/catalog 在 P0-07 同批激活，避免先发布悬空调用。
+- 准备 P0-06 lessons 身份与历史保留规则：本地新身份优先、仅缺失时读取主 checkout、首次写入窄授权、异常不绕过、ID／marker不改名；旧身份仅用于显式迁移。完整Skill候选与新路由在P0-07同批替换，不提前创建身份或迁移数据。
 
 ### 验证
 

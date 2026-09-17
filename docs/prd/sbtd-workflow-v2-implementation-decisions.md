@@ -63,3 +63,11 @@
 - 保留边界：不延后需求内容、不把候选包装成已经激活，不提前更新实际运行说明或写入 HOME；P1 仍负责真实 host 与 token 计量。项目独立 fallback 不要求全局 Skill 已安装，但不能替代 strict 必需 reviewer 或完整 grill 后的具名 DDD 门禁。
 - 理由：让调用方、被调用方和 catalog 保持一致，同时满足逐任务 PR 与无兼容 alias 的干净切换。
 - 验证：临时安装布局中检查候选链接／schema／资产完整性，验证正式模板及 catalog 在本任务中未变化；P0-07 必须真实执行更新后的完整安装路径，不以此静态检查代替。
+
+## D-IMP-08：lessons 身份规则与新路由同批切换
+
+- 日期：2026-09-17；任务：P0-06／P0-07。
+- 冲突：当前生效AGENTS仍要求旧身份来源，若P0-06先替换同名lessons-record，会在一次安装中混用旧调用方与新身份路径。
+- 决定：完整新版Skill放在`docs/prd/lessons-record-candidate/entrypoint.md`及references/LICENSE/NOTICE，非discovery；同步补齐P0-05的两份AGENTS候选身份边界。P0-07已有P0-06依赖，在同一原子切换中替换正式lessons-record完整目录、迁移引用并移除候选，不保留alias或双份canonical。bundled计数不因此变化。
+- 保留边界：P0-06交付全部规则内容和分支评审；P0-07验真实安装，P1-19验身份文件／worktree执行，P1-12验迁移。此阶段不创建用户身份、不迁移旧文件、不改当前生效Skill或安装器。
+- 验证：隔离最终包名的完整性与链接、LICENSE/NOTICE逐字一致；当前正式Skill及模板／catalog不变。无需为规则文本制造源码断言测试，语义交由独立review，实际行为验收保留其P1所有者。
