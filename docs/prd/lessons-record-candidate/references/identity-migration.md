@@ -13,14 +13,16 @@ The legacy input is `<project>/.trellis/.developer`; the current identity is `<p
 
 ## Decision table
 
+Resolve the current identity chain before choosing a legacy-name branch. A present invalid/unsafe local or eligible main-checkout file is a conflict, never absence. A valid eligible main identity wins before any legacy-name decision. An "invalid name" below means a safely read, unique but nonconforming value; an unreadable/ambiguous file or unsafe path instead takes the conflict branch. Inspect only the sources needed by that precedence; other legacy inventory remains a separate migration obligation.
+
 | Observed legacy input | Current identity / environment | Decision |
 |---|---|---|
-| Valid name | Current genuinely missing; no valid main-checkout current identity | With the authorized plan, create current identity using the unchanged legacy name; verify saved value. |
+| Valid name | Current genuinely missing; verified non-linked checkout, or linked checkout with genuinely absent main current file and safe parent paths | With the authorized plan, create current identity using the unchanged legacy name; verify saved value. A present invalid main file never enters this branch. |
 | Valid name | Valid current identity with the same name | Identity already matches; do not rewrite or claim a second migration. |
 | Valid name | Valid current identity with a different name | Preserve both, report conflict and ask the user to choose the identity policy. Do not overwrite or rename history. |
-| Invalid name | Current missing | Ask for a conforming user-chosen name; do not normalize the old one or call the new value an unchanged migration. |
+| Invalid name | Current genuinely missing; verified non-linked checkout, or linked checkout with genuinely absent main current file and safe parent paths | Ask for a conforming user-chosen name; do not normalize the old one or call the new value an unchanged migration. A valid main identity wins instead; an invalid main file is a conflict. |
 | Absent | Current valid | Use current identity; no legacy identity copy is needed. |
-| Both absent | No current main-checkout identity | Follow the first-write identity question; do not invent a placeholder. |
+| Both legacy and local current files genuinely absent | Verified non-linked checkout, or linked checkout with genuinely absent main current file and safe parent paths | Follow the first-write identity question; do not invent a placeholder. Present malformed, unreadable or unsafe main files take the conflict branch. |
 | Any legacy state | Current missing, valid current identity in verified main checkout | Read that identity in place; do not migrate/copy the local old identity into this worktree. |
 | Invalid legacy name | Current valid | Preserve the valid current file and report the invalid legacy input for explicit migration-plan resolution; do not infer an old-to-new identity mapping or declare that copy complete. |
 | Any relevant path/type/content is unsafe or ambiguous | Any | Stop the affected identity migration, preserve originals and resolve the conflict; do not fall through to another source. |
