@@ -1126,7 +1126,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 |---|---|---|---|---|---|---|---|
 | P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节。spike 实测完成。AC-09 收口：禁止对含未选子仓的父目录调 Graft，P1 只对显式仓根调用。AC-10 已证离线 build/ask 与无 LLM `--name` 降级；版本探针 fail-closed 改挂 P1-03。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | done | 2026-09-17T10:33:14+08:00 |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23 基线／契约子项；[保留清单](sbtd-workflow-v2-behavior-baseline.md)。最终提交 `41a43f3…` 原生267 tests/65.741s、隔离CLI smoke及分型报告校验通过；P002FinalReview零发现。[PR #9](https://github.com/KunoLu/640-skills/pull/9) 已合入，merge `50a7e873cfa3224b8c02419b4cb146d5ed88fa6d`；不宣称v2运行AC通过 | AFK | done | 2026-09-17T13:44:48+08:00 |
-| P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31 契约子项；[数据契约与分层证明](sbtd-workflow-v2-task-data-contract.md)；9项schema边界测试、Ruff/ty及原生全量276 tests通过，正式本地报告已保存；待精确HEAD复验／独立review／PR，实际读写与恢复归P1 | AFK | checking | — |
+| P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31 契约子项；[数据契约](sbtd-workflow-v2-task-data-contract.md)。最终 `bab4940…` 276 tests/57.067s、Ruff/ty、报告校验通过；P003ReviewTwo零新发现。[PR #13](https://github.com/KunoLu/640-skills/pull/13) 已合入，merge `148d0216a4ca3bd7c7347570b2de03d7a6ef95d6`；实际读写／恢复仍归P1 | AFK | done | 2026-09-17T15:39:09+08:00 |
 | P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
 | P0-05 | P0 | AGENTS 公共路由、恢复、grill 与轻量 fallback | P0-01、P0-04 | AC-04/05/22/23；任何新需求先评估，推荐必须暂停确认，拒绝后不反复劝升 | AFK | planned | — |
 | P0-06 | P0 | lessons-record 新身份来源、首次询问与模式边界 | P0-03 | AC-06/25；ID/marker 不变，无 onboard 项目按需只建身份，缺名不冻结 default/lite 无关工作 | AFK | planned | — |
@@ -1370,6 +1370,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T14:11:21+08:00 | P0-10 checking→done | PR #11 于14:11:11+08:00合并（`f8ccbc9185c97b3c435d6e430ec18576f9689dfb`）后更新台账；P010ReviewTwo 零新发现，计数摘要 advisor 已修正重跑为26。交付仅为路由／场景契约，不记录为模式运行测试通过；历史24项草案与修复记录保留。 |
 | 2026-09-17T14:49:15+08:00 | P0-03 实施 | 从 main `a5bf602…` 建分支；DDD/DDIA confirmed，未完整调用grill（原PRD边界明确）。形成task／active／事件schema及9项聚焦测试；新入阻塞与历史元数据分层、显式时间断言记入D-IMP-03/04。待正式验证与独立review，不预填完成。 |
 | 2026-09-17T15:09:18+08:00 | P0-03 checking | 新增9项测试及276项全量通过，Ruff/ty与schema消费者smoke通过，提交前unit报告／中文摘要／envelope已保存。重复入阻塞advisor经blockEntryEvent红绿回归关闭，时间断言与尾随换行路径问题已修复；待精确HEAD复验与独立review，不预填done。 |
+| 2026-09-17T15:39:09+08:00 | P0-03 checking→done | PR #13 于15:38:58+08:00合并（`148d0216a4ca3bd7c7347570b2de03d7a6ef95d6`）后更新台账。两项review边界已修复，P003ReviewTwo对完整任务及最终证据零新发现；最终unit报告 `tests/unit/reports/unit-report-task-data-contract-final-p0-03-task-data-contract-2026_09_17-15_29_45.json` 及同stem中文摘要/envelope绑定 `bab4940…`，276 tests/57.067s/exit0，local-only。不把schema契约完成当作P1任务运行实现。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
