@@ -4,12 +4,12 @@
 
 本项完成 AC-04/05/22/23 的规则内容，不提前声称真实 host 行为通过。主 [PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md) 与 [模式场景](sbtd-workflow-v2-mode-routing-contract.md) 是验收依据。
 
-- [全局候选](sbtd-agent-candidates/global.md)：共同模式路由、必要确认、只读／数据安全、方法与输出入口、实际验证和交付。
-- [项目候选](sbtd-agent-candidates/project.md)：项目事实优先、同任务恢复、无全局 Skill 的最小可执行 fallback 与受限持久化。
-- [方法](sbtd-task-candidate/references/methods.md)、[工具](sbtd-task-candidate/references/tooling.md)、[输出](sbtd-task-candidate/references/presentation.md)：从常驻规则抽离的条件分支，已由 [Skill入口](sbtd-task-candidate/entrypoint.md) 接入。
-- [状态](sbtd-task-candidate/references/state.md) 与 [handoff](sbtd-task-candidate/references/handoff.md)：继续复用 P0-04 的任务协议，不另造运行时或第二份 task 数据源。
+- [全局规则正式源](../../sbtd-workflow-onboard/templates/agents/AGENTS.global.md)：共同模式路由、必要确认、只读／数据安全、方法与输出入口、实际验证和交付。
+- [项目规则正式源](../../sbtd-workflow-onboard/templates/agents/AGENTS.project.md)：项目事实优先、同任务恢复、无全局 Skill 的最小可执行 fallback 与受限持久化。
+- [方法](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/methods.md)、[工具](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/tooling.md)、[输出](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/presentation.md)：从常驻规则抽离的条件分支，已由 [Skill入口](../../sbtd-workflow-onboard/templates/skills/sbtd-task/SKILL.md) 接入。
+- [状态](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/state.md) 与 [handoff](../../sbtd-workflow-onboard/templates/skills/sbtd-task/references/handoff.md)：继续复用 P0-04 的任务协议，不另造运行时或第二份 task 数据源。
 
-按 [D-IMP-07](sbtd-workflow-v2-implementation-decisions.md)，两份 AGENTS 仍为非生效候选，P0-07 与 Skill/catalog 同批替换正式模板、迁移引用、移除候选目录。当前正式 AGENTS、Onboard 代码、catalog、用户 HOME、live automation 不变。
+按 [D-IMP-07](sbtd-workflow-v2-implementation-decisions.md)，P0-05交付时两份AGENTS为非生效候选；P0-07与Skill/catalog同批移入正式模板并移除候选目录，上述链接跟随canonical路径。P0-05的验证及文档维护判断仍是其历史快照；完整v2运行／真实HOME部署不因源目录切换而完成。
 
 ## 保留与迁移映射
 

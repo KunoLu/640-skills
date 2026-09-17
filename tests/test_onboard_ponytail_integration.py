@@ -7,7 +7,6 @@ import importlib.util
 import io
 import json
 import os
-import re
 import shutil
 import stat
 import subprocess
@@ -18,7 +17,6 @@ import unittest
 from pathlib import Path
 from typing import cast
 from unittest import mock
-
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
@@ -54,9 +52,7 @@ class PonytailCatalogTests(PonytailModuleTests):
     def test_catalog_registers_four_required_ponytail_external_skills(self) -> None:
         onboard = self.load_onboard_module()
 
-        catalog = json.loads(
-            (SKILL_DIR / "catalog.json").read_text(encoding="utf-8")
-        )
+        catalog = json.loads((SKILL_DIR / "catalog.json").read_text(encoding="utf-8"))
         catalog_external = sum(
             1 for entry in catalog["entries"] if entry["kind"] == "external-skill"
         )
@@ -90,9 +86,7 @@ class PonytailCatalogTests(PonytailModuleTests):
             repository["licenseFiles"],
             [{"source": "LICENSE", "stablePath": "licenses/ponytail-LICENSE"}],
         )
-        catalog = json.loads(
-            (SKILL_DIR / "catalog.json").read_text(encoding="utf-8")
-        )
+        catalog = json.loads((SKILL_DIR / "catalog.json").read_text(encoding="utf-8"))
         external_entries = [
             entry for entry in catalog["entries"] if entry["kind"] == "external-skill"
         ]
@@ -188,8 +182,14 @@ class PonytailPromotionSeamTests(PonytailModuleTests):
         values.update(overrides)
         return argparse.Namespace(**values)
 
-    def run_promotion(self, onboard, stable_root: Path, manifest_path: Path,
-                      repo: Path, args: argparse.Namespace) -> tuple[int, dict]:
+    def run_promotion(
+        self,
+        onboard,
+        stable_root: Path,
+        manifest_path: Path,
+        repo: Path,
+        args: argparse.Namespace,
+    ) -> tuple[int, dict]:
         stdout = io.StringIO()
         with (
             mock.patch.object(onboard, "EXTERNAL_STABLE_ROOT", stable_root),
@@ -228,9 +228,7 @@ class PonytailPromotionSeamTests(PonytailModuleTests):
             repository["licenseFiles"],
             [{"source": "LICENSE", "stablePath": "licenses/ponytail-LICENSE"}],
         )
-        catalog = json.loads(
-            (SKILL_DIR / "catalog.json").read_text(encoding="utf-8")
-        )
+        catalog = json.loads((SKILL_DIR / "catalog.json").read_text(encoding="utf-8"))
         self.assertEqual(
             len(manifest["skills"]),
             sum(1 for entry in catalog["entries"] if entry["kind"] == "external-skill"),
@@ -240,9 +238,7 @@ class PonytailPromotionSeamTests(PonytailModuleTests):
             self.assertEqual(entry["sourceSubpath"], f"skills/{name}")
             self.assertEqual(entry["stablePath"], f"skills/{name}")
             self.assertTrue((stable_root / "skills" / name / "SKILL.md").is_file())
-        self.assertTrue(
-            (stable_root / "licenses" / "ponytail-LICENSE").is_file()
-        )
+        self.assertTrue((stable_root / "licenses" / "ponytail-LICENSE").is_file())
         notice_text = (stable_root / "THIRD_PARTY_NOTICES.md").read_text(
             encoding="utf-8"
         )
@@ -434,7 +430,9 @@ class PonytailProviderHelperTests(PonytailModuleTests):
                 side_effect=onboard.subprocess.TimeoutExpired("codex", 10),
             ),
         ):
-            self.assertEqual(onboard.list_platform_plugins("codex"), ("cli-unavailable", []))
+            self.assertEqual(
+                onboard.list_platform_plugins("codex"), ("cli-unavailable", [])
+            )
 
         nonzero = subprocess.CompletedProcess(
             ["codex"], 1, stdout='[{"name": "ponytail"}]', stderr=""
@@ -443,14 +441,20 @@ class PonytailProviderHelperTests(PonytailModuleTests):
             mock.patch.object(onboard.shutil, "which", return_value="/fake/codex"),
             mock.patch.object(onboard.subprocess, "run", return_value=nonzero),
         ):
-            self.assertEqual(onboard.list_platform_plugins("codex"), ("cli-unavailable", []))
+            self.assertEqual(
+                onboard.list_platform_plugins("codex"), ("cli-unavailable", [])
+            )
 
-        malformed = subprocess.CompletedProcess(["codex"], 0, stdout="not json", stderr="")
+        malformed = subprocess.CompletedProcess(
+            ["codex"], 0, stdout="not json", stderr=""
+        )
         with (
             mock.patch.object(onboard.shutil, "which", return_value="/fake/codex"),
             mock.patch.object(onboard.subprocess, "run", return_value=malformed),
         ):
-            self.assertEqual(onboard.list_platform_plugins("codex"), ("cli-unavailable", []))
+            self.assertEqual(
+                onboard.list_platform_plugins("codex"), ("cli-unavailable", [])
+            )
 
     def test_list_platform_plugins_preserves_map_identities(self) -> None:
         onboard = self.load_onboard_module()
@@ -488,9 +492,7 @@ class PonytailProviderHelperTests(PonytailModuleTests):
                 return "ok", [{"id": "ponytail@ponytail", "enabled": True}]
             return "cli-unavailable", []
 
-        with mock.patch.object(
-            onboard, "list_platform_plugins", side_effect=fake_list
-        ):
+        with mock.patch.object(onboard, "list_platform_plugins", side_effect=fake_list):
             provider = onboard.detect_ponytail_provider(Path("/nonexistent-skills"))
         self.assertEqual(provider["provider"], "conflict")
         self.assertEqual(provider["pluginStatus"], "installed-enabled")
@@ -528,7 +530,9 @@ class PonytailProviderTests(unittest.TestCase):
         target.chmod(target.stat().st_mode | stat.S_IXUSR)
         return target
 
-    def write_fake_plugin_cli(self, name: str, payload: str, exit_code: int = 0) -> None:
+    def write_fake_plugin_cli(
+        self, name: str, payload: str, exit_code: int = 0
+    ) -> None:
         if name == "omp":
             (self.home / ".omp").mkdir(exist_ok=True)
         self.write_executable(
@@ -700,9 +704,7 @@ class PonytailProviderTests(unittest.TestCase):
             self.assertFalse((self.skills_dir / name).exists())
 
     def test_check_flags_codex_map_payload_with_enabled_plugin(self) -> None:
-        self.write_fake_plugin_cli(
-            "codex", '{"ponytail@ponytail": {"enabled": true}}'
-        )
+        self.write_fake_plugin_cli("codex", '{"ponytail@ponytail": {"enabled": true}}')
 
         returncode, payload = self.run_check()
 
@@ -771,9 +773,7 @@ class PonytailProviderTests(unittest.TestCase):
         self.write_fake_plugin_cli("codex", "[]")
         self.write_fake_plugin_cli("omp", "[]")
         self.skills_dir.mkdir(parents=True, exist_ok=True)
-        (self.skills_dir / "ponytail").symlink_to(
-            self.skills_dir / "missing-target"
-        )
+        (self.skills_dir / "ponytail").symlink_to(self.skills_dir / "missing-target")
 
         returncode, payload = self.run_check()
 
@@ -781,47 +781,6 @@ class PonytailProviderTests(unittest.TestCase):
         provider = payload["ponytailProvider"]
         self.assertEqual(provider["skillStatus"], "invalid")
         self.assertEqual(provider["nextStep"], "repair-required")
-
-
-class PonytailWorkflowContractTests(unittest.TestCase):
-    def test_global_agents_contains_code_readability_and_ponytail_routing(self) -> None:
-        content = (TEMPLATES_DIR / "agents" / "AGENTS.global.md").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("## 代码可读性", content)
-        self.assertIn("可读性与可维护性优先于减少源码行数", content)
-        self.assertIn("浅层包装（shallow wrappers）", content)
-        self.assertIn("假想的端口（ports）", content)
-        self.assertIn("`ponytail`", content)
-        self.assertIn("`ponytail-review`", content)
-        self.assertIn("`ponytail-audit`", content)
-        self.assertIn("`ponytail-debt`", content)
-
-    def test_project_agents_contains_minimal_readability_fallback(self) -> None:
-        content = (TEMPLATES_DIR / "agents" / "AGENTS.project.md").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("代码可读性", content)
-        self.assertIn("浅层包装（shallow wrappers）", content)
-        self.assertIn("ponytail", content)
-
-    def test_trellis_workflow_contains_ponytail_review_sequence(self) -> None:
-        content = (TEMPLATES_DIR / "skills" / "trellis-workflow" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("ponytail", content)
-        self.assertIn("ponytail-review", content)
-        self.assertIn("Code Readability Review", content)
-
-    def test_project_validation_does_not_carry_readability_rules(self) -> None:
-        content = (
-            TEMPLATES_DIR / "skills" / "project-validation" / "SKILL.md"
-        ).read_text(encoding="utf-8")
-
-        self.assertNotIn("Code Readability", content)
 
 
 if __name__ == "__main__":

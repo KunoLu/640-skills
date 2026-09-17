@@ -4,12 +4,12 @@
 
 依据主 [PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md) §8.3、§8.4、§11.6，交付 AC-06/25 的规则子项，不提前声称 P1 文件系统／worktree 执行已完成。
 
-- [完整入口候选](lessons-record-candidate/entrypoint.md)：按需身份、唯一短入口、marker/ID、写入与部分失败、按需读取。
-- [显式身份迁移分支](lessons-record-candidate/references/identity-migration.md)：只在授权该项目迁移后读取；旧输入不再作为日常身份fallback。
-- LICENSE/NOTICE从现有自有Skill原样保留，候选无SKILL.md，不参与discovery。
-- [全局](sbtd-agent-candidates/global.md)和[项目](sbtd-agent-candidates/project.md)候选同步关键身份保护；无全局Skill的项目仍知道合法值、优先级、首次授权与历史不变量。
+- [完整入口正式源](../../sbtd-workflow-onboard/templates/skills/lessons-record/SKILL.md)：按需身份、唯一短入口、marker/ID、写入与部分失败、按需读取。
+- [显式身份迁移分支](../../sbtd-workflow-onboard/templates/skills/lessons-record/references/identity-migration.md)：只在授权该项目迁移后读取；旧输入不再作为日常身份fallback。
+- LICENSE/NOTICE从现有自有Skill原样保留；P0-06以非discovery候选交付，P0-07才切换正式入口。
+- [全局](../../sbtd-workflow-onboard/templates/agents/AGENTS.global.md)和[项目](../../sbtd-workflow-onboard/templates/agents/AGENTS.project.md)规则同步关键身份保护；无全局Skill的项目仍知道合法值、优先级、首次授权与历史不变量。
 
-按 [D-IMP-08](sbtd-workflow-v2-implementation-decisions.md)，P0-07与其他路由同批替换正式lessons-record完整目录、迁移引用、删除候选目录。当前生效Skill、AGENTS模板、catalog、安装器和用户数据不变；没有双运行入口或兼容alias。
+按 [D-IMP-08](sbtd-workflow-v2-implementation-decisions.md)，P0-07与其他路由同批替换正式lessons-record完整目录并删除候选，上述链接跟随canonical路径。P0-06交付时未改变实际安装内容，其Gate／验证事实保持为历史快照；源目录切换不代表用户数据迁移或身份运行实现已通过。
 
 ## Book Gate Plan 与 DDIA 结论
 

@@ -349,7 +349,7 @@
       <div>
         <p class="eyebrow">AI Tools Workflow</p>
         <h1>SBTD Workflow 模板说明</h1>
-        <p class="lead">本仓库维护 Codex 全局规则、项目级规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前主流程收敛为 <strong>Codex + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro</strong>，并通过 SBTD 把规格、行为、测试和领域语言串成一条可验证链路；API、Web 和 Mobile / Hybrid 测试都以 BDD <code>.feature</code> 作为行为 SOT，shadcn/ui 项目按需使用 <code>shadcn</code> Skill 处理组件、registry、preset 和 CLI 工作流，公开网站、落地页和文档站按需进入 bundled <code>seo-geo</code> 搜索可见性检查。Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 <code>tool_search</code> 是 Agent 侧工具发现和授权能力，必须先确认当前会话实际暴露 callable tool。<code>rtk</code> 和 <code>caveman</code> 是上下文 / token 效率层，不是验证工具：前者压缩 terminal 输出，但报告型测试先评估缓存与文件写入风险；后者在既有长任务阈值触发后，仅对符合资格的重复中间状态自动使用任务级 <code>auto-lite</code>。</p>
+        <p class="lead">本仓库维护 Codex / OMP 规则模板、工作流 Skill、onboard 自动化和静态说明文档。当前处于 <strong>v2未发布切换阶段</strong>：SBTD任务载荷与catalog已切换，完整CLI、host接线及迁移仍待P1实现和验收，不构成真实项目部署完成声明。SBTD把规格、行为、测试和领域语言连接起来；Chrome DevTools MCP负责诊断，Playwright和Maestro承担适用的Web／Mobile验证。shadcn/ui与SEO/GEO按项目需要启用；工具发现以实际callable证据为准。<code>rtk</code>和<code>caveman</code>只影响输出效率，不替代验证或改变执行模式。</p>
         <div class="meta-row" aria-label="核心能力">
           <span class="pill">SDD</span>
           <span class="pill">BDD</span>
@@ -365,12 +365,12 @@
       <aside class="hero-map" aria-label="工具职责概览">
         <div class="map-grid">
           <div class="map-cell">
-            <strong>Trellis</strong>
-            <span>任务阶段、PRD、design、implement、check、finish。</span>
+            <strong>sbtd-task（已入源）</strong>
+            <span>共同路由与default／lite／strict；references按需读取。完整v2运行验收仍待P1。</span>
           </div>
           <div class="map-cell">
-            <strong>GitNexus</strong>
-            <span>索引有效时做影响分析；解析语义升级后需重新 analyze；不要把 gitnexus watch 当成会启动 watcher 的命令，也不要默认启动 analyze --watch 或 auto-sync；MCP allowlist 未覆盖或 fail-closed 只读时该仓库不当作 MCP 可读 / 不走 MCP 写入，但都不跳过 CLI 重新 analyze；PDG、taint、trace 和多分支查询需显式 opt-in。</span>
+            <strong>结构证据</strong>
+            <span>源码／LSP是可用基线；Graft接入和host验证仍属P1，不把旧GitNexus能力或空图结果当成新流程已通过。</span>
           </div>
           <div class="map-cell">
             <strong>Tool Discovery</strong>
@@ -401,30 +401,46 @@
     </div>
   </header>
 
+    <section>
+      <div class="wrap">
+        <div class="status-list">
+          <div><strong>未发布边界（v2 P0 切换中）</strong><br>当前分支正在执行 v1 → v2 的原子切换：Skill 载荷与 <code>catalog.json</code> 已切到 v2 canonical——bundled <code>sbtd-task</code> 取代已退役的 <code>trellis-workflow</code> / <code>trellis-channel</code>，bundled 总数 15 → 14，required external 仍为 19；全局 / 项目 AGENTS 模板与 bundled <code>lessons-record</code> 已换成 v2 路由与身份规则。完整的 v2 CLI、<code>init</code> / <code>reset</code> 行为、host 集成和旧项目迁移仍属于未完成的 P1 范围。本文涉及 Trellis 安装、bootstrap 检测与 v1 CLI 的章节描述现有过渡实现，不是已验证的 v2 行为；不要把本开发分支的混合 legacy 生命周期应用到真实项目，待 P1 / P2 交付并发布后再按发布版本迁移。</div>
+        </div>
+      </div>
+    </section>
+
   <main>
     <section>
       <div class="wrap">
         <div class="section-head">
           <div>
             <p class="eyebrow">Workflow</p>
-            <h2>当前模板主线</h2>
+            <h2>当前规则与旧CLI边界</h2>
           </div>
+          <p><strong>v2 canonical 路由：</strong>任务先通过 bundled <code>sbtd-task</code> 的共同路由，再按 <code>default</code> / <code>lite</code> / <code>strict</code> 执行；其完整 Skill references 决定任务记录、handoff、方法、表现和严格门禁。以下 Trellis 安装、bootstrap、<code>.trellis/**</code> 与 host 行为仅描述现有过渡实现（v1 CLI），不是已验证的 v2 行为。</p>
           <p>模板以项目事实为优先级，只有在存在强证据时才启用可选工具。普通修改保持最小、可验证、可回滚；复杂任务通过 Trellis 和相关 Skill 管理阶段、文档和验证。若已确认当前目录是项目根目录且存在项目级 AGENTS.md，但没有 .trellis/，普通项目操作只提示用户执行 <code>trellis init -u your-name</code>；例外是 onboard <code>init</code> / <code>reset</code>，在 Trellis CLI 已可用且用户确认 username 后，使用 <code>--platform</code> 精确命中的 Trellis flag（<code>codex</code> / <code>claude</code> / <code>kimi</code>）或显式 <code>--trellis-platform</code> 可主动执行 <code>trellis init -u &lt;username&gt; ... --yes --skip-existing</code>。空 flag 不会交给 <code>trellis init --yes</code>。Trellis CLI 升级后，已有 .trellis/ 的项目先运行 <code>trellis update</code> 刷新生成脚本和 filesystem-safety guard；对 uninstall、archive、task start / set-*、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership、safe-name 和 active-task pointer containment guard。升级后不要假设 <code>trellis update</code> 会改写既有 session pointer；越权任务路径按无任务处理。<code>.trellis/config.yaml</code>、<code>.trellis/workflow.md</code> 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其 <code>.codex/**</code> 或 <code>.omp/**</code> 生成资产决定本次执行；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 Codex host 且 <code>.codex/**</code> 集成可用时解释 <code>codex.dispatch_mode</code>：<code>auto</code> 由主会话协调 role subagent；显式 Inline 与非法值的 fail-closed fallback 也仅属于 Codex。仅当前 OMP host 且 <code>.omp/**</code> 集成可用时使用 OMP <code>task</code> worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。</p>
+        <p>本段提及的 Channel 仅记录旧 CLI guard，不构成当前路由或对新项目的执行建议。</p>
         <p>如果 <code>trellis update</code> 更新 SessionStart、PreToolUse 或其他 hook 配置，先重启对应 Agent host 或 IDE，再验证新会话身份或 hook 行为；已运行进程的旧行为不能证明新配置已经加载。</p>
         </div>
         <div class="flow" aria-label="主流程">
           <div class="step"><b>1. 需求</b><span>读取规则、lessons 短入口，并按需读取 index / topic。</span></div>
           <div class="step"><b>2. SBTD</b><span>规格、行为、测试、领域语言对齐。</span></div>
-          <div class="step"><b>3. 影响</b><span>GitNexus 可用时做影响分析。</span></div>
+          <div class="step"><b>3. 影响</b><span>源码／LSP为基础，Graft接入待P1验证。</span></div>
           <div class="step"><b>4. 实现</b><span>按项目规范和 Skill 边界改动。</span></div>
           <div class="step"><b>5. 验证</b><span>项目测试、BDD、Web、Mobile、SEO/GEO。</span></div>
-          <div class="step"><b>6. 风险</b><span>发布就绪、Channel preflight、剩余风险。</span></div>
+          <div class="step"><b>6. 风险</b><span>发布就绪、独立只读复核、剩余风险。</span></div>
           <div class="step"><b>7. 同步</b><span>仅在用户输入 sync / 同步时写入本地生效路径。</span></div>
         </div>
         <p>全路径判定图：<a href="docs/assets/sbtd-workflow-paths.md">SBTD 支持的工作路径</a>。</p>
         <div class="status-list">
           <div><strong>AGENTS</strong><br>常驻路由、触发条件、硬性安全边界和最终报告要求。</div>
           <div><strong>Skills</strong><br>详细流程、命令参数、检查清单和专项判断按场景延迟加载。</div>
+        </div>
+        <div class="status-list">
+          <div><strong>共同路由</strong><br>先识别任务、授权项目根、分支和只读约束；模式优先级为用户当前明确选择 &gt; 同任务有效记录 &gt; 真正新任务的 <code>default</code>。旧记录缺模式、损坏或多候选时询问，不按 mtime 或旧 handoff 猜测；建议切换模式先解释并暂停，纯问答 / 只读不写 task、active、handoff、身份或 ignore。</div>
+          <div><strong>default / lite / strict</strong><br><code>default</code> 按需调查、实现和聚焦验证；<code>lite</code> 使用短清单与共享短任务卡；<code>strict</code> 才加载 <code>references/strict.md</code> 的完整适用 before-dev / check / finish-work。明确交付、项目要求和安全 / 真实性在三种模式都不降级，输出样式不决定执行模式。</div>
+          <div><strong>任务与 handoff</strong><br>普通 default 本地任务位于 <code>.sbtd/tasks/&lt;id&gt;/task.md</code>；lite / strict 或明确共享任务位于 <code>ai/tasks/&lt;id&gt;/task.md</code>；<code>.sbtd/active-task.json</code> 只存引用。只在真实暂停 / 切换时把 handoff 写入 <code>docs/handoffs/</code>；状态、方法、表现和工具边界按需读取 bundled <code>sbtd-task</code> 的 references。</div>
+          <div><strong>Lessons 身份</strong><br>只有真的要写长期 lesson 才解析 <code>.sbtd/developer</code> 中唯一的 <code>name=</code>；本地合法值优先，仅确实缺失且已验证 linked worktree 时才只读主 checkout，异常是冲突不是缺失。名字必须原样匹配 <code>^[a-z0-9]+$</code>，不从 Git / OS / 环境 / 历史目录猜测。旧 <code>.trellis/.developer</code> 只在明确授权的 <code>lessons-record</code> identity migration 中读取。</div>
         </div>
         <p>P1.1 已通过 bundled <code>knowledge-base-integration</code> Skill 落地产品注册表、Workspace Mapping、Evidence Policy 决策、目标 ref / Revision Set、完整无 ID Gherkin 目录、静态 / manifest 绑定、跨仓候选、幂等 ingest / smoke、隔离 worktree、分阶段 Smoke、基础设施重试、本地 / 命令式 Runner Adapter、可信环境对齐、artifact manifest、checksums 和 metrics。从本仓库根目录校验随 Skill 提供的示例配置：</p>
         <pre><code>python sbtd-workflow-onboard/templates/skills/knowledge-base-integration/scripts/knowledge_base_p1.py validate-config \
@@ -516,11 +532,11 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
         <div class="status-list">
           <div><strong>平台与 CLI 前置门</strong><br><code>--platform codex</code>、<code>claude</code>、<code>kimi</code>、<code>oh-my-pi</code> 或 <code>omp</code>。正常 init/reset 会先执行 <code>check-agent-cli</code>，并确保 npm、全局 Trellis 与 GitNexus 可用；<code>--init-projects</code> project-only 模式只记录平台上下文，不执行任何全局检测或安装。</div>
           <div><strong>多项目参数</strong><br><code>--projects-root /abs/one,/abs/two</code> / <code>-ProjectsRoot "C:\one,C:\two"</code> 接受英语逗号分隔的多个绝对目录。<code>--init-projects</code> / <code>-InitProjects</code> 可独立执行逐项目 AGENTS、.gitignore、Trellis、Playwright 和 React Bits 检查配置。</div>
-          <div><strong>Project AGENTS / Skill activation</strong><br><code>AGENTS.project.md</code> 只保存 project-only fallback、项目路径和项目级硬边界。正常 init/reset 由全局 AGENTS + Skills 激活完整路由；public bootstrap / init-projects 不单独激活 book-derived 门禁。全局 AGENTS 维护客观触发和 Gate lifecycle，各 reviewer <code>SKILL.md</code> 独占状态、输出 schema、修正回路与 stop condition；<code>trellis-workflow</code> 仅保留全局路由不可见时的最小 objective-trigger fallback，不复制 reviewer 状态。</div>
+          <div><strong>Project AGENTS / Skill activation</strong><br><code>AGENTS.project.md</code> 保存三模式入口、project-only 最小 fallback、项目路径和项目级硬边界。正常 init/reset 由全局 AGENTS + Skills 激活完整路由；public bootstrap / init-projects 不单独激活 book-derived 门禁。全局 AGENTS 维护共同路由与客观触发，bundled <code>sbtd-task</code> 承载 <code>default</code> / <code>lite</code> / <code>strict</code> 工作契约（strict 才加载完整适用 Gate），项目模板自带全局路由不可见时的最小 objective-trigger fallback（含 Book Gate Plan 触发事实与 Gate lifecycle）；各 reviewer <code>SKILL.md</code> 独占状态、输出 schema、修正回路与 stop condition，模板与 <code>sbtd-task</code> 都不复制 reviewer 状态词表。</div>
           <div><strong>Agent npm 映射</strong><br><code>codex → @openai/codex@latest</code><br><code>claude → @anthropic-ai/claude-code@latest</code><br><code>kimi → @moonshot-ai/kimi-code@latest</code><br><code>omp → @oh-my-pi/pi-coding-agent@latest</code>。</div>
           <div><strong>Source Root</strong><br><code>./install.sh --source-root /absolute/path/to/sbtd-workflow-onboard</code><br><code>.\install.ps1 -SourceRoot C:\absolute\path\to\sbtd-workflow-onboard</code></div>
           <div><strong>全局 Skill 目录</strong><br>解析优先级：显式 <code>--global-skills-dir</code> → <code>$AGENT_SKILLS_DIR</code> → 已安装 Onboard Skill 的受信父目录 → 既有平台默认目录。<code>plan --json</code> 和 <code>check --json</code> 输出 <code>globalSkillsDirSource</code> 供审计。</div>
-          <div><strong>Skills</strong><br>正常 init/reset 始终以全局目录为目标安装 15 个 bundled Skills 和 19 个 required external Skills，不再提供 project/none scope。<code>init</code> 对已合法 Skill 壳（普通目录、普通 <code>SKILL.md</code>、frontmatter <code>name</code> 匹配）跳过；缺失或身份无效才安装。<code>reset</code> 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。机器可读 <code>catalog.json</code> 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源；Schema 与运行时在执行命令前共同拒绝绝对路径 / <code>..</code> 逃逸、错误 source 类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。canonical <code>sbtd-workflow-onboard</code> 校验成功，且 legacy <code>kuno-workflow-onboard-skills/SKILL.md</code> 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会阻断 init/reset 并保留原内容，删除异常进入失败报告，不保留 alias；caveman 和 React Bits 等原有单一作用域保持不变。</div>
+          <div><strong>Skills</strong><br>正常 init/reset 始终以全局目录为目标安装 14 个 bundled Skills 和 19 个 required external Skills，不再提供 project/none scope。<code>init</code> 对已合法 Skill 壳（普通目录、普通 <code>SKILL.md</code>、frontmatter <code>name</code> 匹配）跳过；缺失或身份无效才安装。<code>reset</code> 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。机器可读 <code>catalog.json</code> 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源；Schema 与运行时在执行命令前共同拒绝绝对路径 / <code>..</code> 逃逸、错误 source 类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。canonical <code>sbtd-workflow-onboard</code> 校验成功，且 legacy <code>kuno-workflow-onboard-skills/SKILL.md</code> 仍确认旧身份时才删除旧目录；同名文件、无效 / 不相关目录或身份不匹配会阻断 init/reset 并保留原内容，删除异常进入失败报告，不保留 alias；caveman 和 React Bits 等原有单一作用域保持不变。</div>
 
           <div><strong>External stable default</strong><br><code>auto</code> 默认使用 Onboard 内置、经过 review 且由精确 revision 和 checksum 固定的 stable set，不访问 Git 或网络；<code>stable</code> 使用相同的确定性来源。只有用户显式选择 <code>upstream</code> 才整组 clone 和验证当前上游，失败时不回退。全部 Skill 先暂存验证，再用临时 rollback backup 事务替换，canonical commit 成功后才删除 legacy 目录。</div>
           <div><strong>Trellis Init</strong><br>全局 Trellis CLI 为必需工具；每个项目分别检查 <code>.trellis/</code>。未给 <code>--trellis-platform</code> 时，<code>--platform codex|claude|kimi</code> 作为默认 Trellis flag；空 flag 不会交给 <code>trellis init --yes</code>。<code>oh-my-pi</code> 必须显式给出 <code>omp</code> 和/或 <code>pi</code>。<code>plan --json</code> 的 <code>trellisInit.command</code> 写出完整命令。随后检测 <code>.trellis/tasks/00-bootstrap-guidelines</code>，一个项目需要 bootstrap 不会阻止其余项目继续检查。</div>
@@ -558,8 +574,8 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           </article>
         </div>
         <div class="status-list">
-          <div><strong>DDD Boundary Review</strong><br>无论由 Agent 自发调用还是用户主动调用，每次完整执行 grill-with-docs 后都立即调用 bundled book-ddd-distilled-modeling 并单独输出审核结果。grill-with-docs 内嵌的 external domain-modeling dependency 不能替代该二次审核；needs-clarification 先继续澄清并重审，blocked 明确阻断。未达到 confirmed 不得进入需求确认、PRD、design、Trellis task 或实现。未完整调用 grill-with-docs 时仍要说明原因；只有调用与跳过存在会改变需求、领域边界或实现决策的实质权衡时才询问，项目事实已消除歧义时直接推进，不制造重复确认门。</div>
-          <div><strong>Book Gate Plan</strong><br>进入开发任务时，先按项目客观事实将 5 个 bundled book-* Skill 标记为 required / on-demand，并记录触发依据、执行阶段和独立 Gate state。Gate state 使用 <code>planned</code> / <code>running</code> / <code>passed</code> / <code>blocked</code> / <code>not-required</code>，只允许 <code>planned</code> → <code>running</code> → <code>passed</code> / <code>blocked</code>；reviewer status 在实际运行后填写。</div>
+          <div><strong>DDD Boundary Review</strong><br>无论由 Agent 自发调用还是用户主动调用，每次完整执行 grill-with-docs 后都立即调用 bundled book-ddd-distilled-modeling 并单独输出审核结果。该门禁在 <code>default</code> / <code>lite</code> / <code>strict</code> 三种模式下都没有替代检查：reviewer 不可用、不可读或必要证据缺失时一律 <code>blocked</code>，不得用访谈内建模、非正式替代检查或降模式绕过。grill-with-docs 内嵌的 external domain-modeling dependency 不能替代该二次审核；needs-clarification 先继续澄清并重审，blocked 明确阻断。未达到 confirmed 不得进入需求确认、PRD、design、任务记录或实现。未完整调用 grill-with-docs 时仍要说明原因；只有调用与跳过存在会改变需求、领域边界或实现决策的实质权衡时才询问，项目事实已消除歧义时直接推进，不制造重复确认门。</div>
+          <div><strong>Book Gate Plan</strong><br><code>strict</code> 开发任务先按项目客观事实将 5 个 bundled book-* Skill 标记为 required / on-demand，并记录触发依据、执行阶段和独立 Gate state。Gate state 使用 <code>planned</code> / <code>running</code> / <code>passed</code> / <code>blocked</code> / <code>not-required</code>，只允许 <code>planned</code> → <code>running</code> → <code>passed</code> / <code>blocked</code>；reviewer status 在实际运行后填写。<code>default</code> / <code>lite</code> 不机械输出完整 Gate 表，按实际风险与明确交付选择方法；一旦选用或项目已有要求某方法，不得伪造证据或冒充已通过。完整 grill-with-docs 后的 DDD Boundary Review 是三种模式的共同强制例外；对 <code>strict</code> 任务，命中客观触发条件的审核必须通过。</div>
           <div><strong>DDIA Data Design Review</strong><br>持久化 / 共享数据、schema / migration、shared / persistent / cross-request / cross-process cache、异步 / 跨服务数据流、数据所有权、事务边界、读写路径、backfill / replay / rollback / recovery 变化时，在 design / implement 稳定和实现开始前审核，必须达到 confirmed。</div>
           <div><strong>Legacy Change Safety Review</strong><br>修复既有行为 bug，或弱测试、行为不清、隐藏依赖、高回归风险任一命中时，在首次行为修改前审核，必须达到 characterized；安全网必须先引入生产 seam 时进入 seam-required。</div>
           <div><strong>Refactoring Review</strong><br>修改既有生产代码时，在首次实现编辑前审核；proceed 后继续，refactor-first 则先完成最小行为保持重构并复审。legacy 为 seam-required 时只允许 safety-seam-only 模式建立测试 seam，之后返回 legacy 并重跑常规 refactoring review。</div>
@@ -702,7 +718,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           </article>
           <article class="panel accent-violet">
             <h3>发布风险</h3>
-            <p>生产路径、外部集成、部署敏感变更和高 reasoning 多 worker 并发进入风险评估；高风险 review 可做 Channel preflight，并记录用量风险。</p>
+            <p>生产路径、外部集成、部署敏感或高风险变更进入风险评估；高风险改动可并行原生只读独立复核，并记录 fallback、rollback 和用量风险。</p>
           </article>
         </div>
       </div>
@@ -845,7 +861,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>Java 17+</strong><br>Maestro 前先运行 <code>java --version</code>，失败再用 <code>java -version</code>。当前 JDK 满足 17+ 时优先使用当前 JDK；否则先扫描本机已有 17+ JDK。只有本机没有可用 JDK 且用户确认后，才引导安装 OpenJDK Temurin 21。</div>
           <div><strong>Maestro CLI / MCP</strong><br>Java 通过后检查 CLI，CLI 可用后再检查 MCP。根安装脚本可把 <code>command</code>、<code>args</code>、<code>JAVA_HOME</code> 和 <code>PATH</code> 写入选定平台；MCP 缺失或 env 未配置但 CLI 可用时继续 <code>maestro test</code>。</div>
           <div><strong>Chrome DevTools MCP</strong><br>由 Agent 或 IDE 配置提供，只负责诊断和证据收集；根安装脚本可为选定平台添加 <code>chrome-devtools-mcp</code>。</div>
-          <div><strong>Trellis Project Setup</strong><br>onboard <code>init</code> / <code>reset</code> / <code>init-projects</code> 要先确认 Trellis CLI 可用；缺少 <code>.trellis/</code> 时使用 <code>--trellis-user</code> 和已解析的平台 flags 执行初始化。未给 <code>--trellis-platform</code> 时，<code>--platform codex|claude|kimi</code> 作为默认 Trellis flag；显式 <code>--trellis-platform</code> 覆盖该默认。空 flag 不会交给 <code>trellis init --yes</code>。<code>oh-my-pi</code> 必须显式给出 <code>omp</code> 和/或 <code>pi</code>；<code>omp</code> 与 <code>pi</code> 不得互相替换。只检查 <code>.trellis/tasks/00-bootstrap-guidelines</code>；命中时以 <code>bootstrap-required</code> 非零状态阻止误报完成，并必须继续按 <code>trellis-workflow</code> 完成 bootstrap task。</div>
+          <div><strong>Trellis Project Setup</strong><br>onboard <code>init</code> / <code>reset</code> / <code>init-projects</code> 要先确认 Trellis CLI 可用；缺少 <code>.trellis/</code> 时使用 <code>--trellis-user</code> 和已解析的平台 flags 执行初始化。未给 <code>--trellis-platform</code> 时，<code>--platform codex|claude|kimi</code> 作为默认 Trellis flag；显式 <code>--trellis-platform</code> 覆盖该默认。空 flag 不会交给 <code>trellis init --yes</code>。<code>oh-my-pi</code> 必须显式给出 <code>omp</code> 和/或 <code>pi</code>；<code>omp</code> 与 <code>pi</code> 不得互相替换。只检查 <code>.trellis/tasks/00-bootstrap-guidelines</code>；命中时以 <code>bootstrap-required</code> 非零状态阻止误报完成。旧 bootstrap guideline 的完成只属于显式 v1 → v2 迁移路径（P1 范围）：本分支不再随装 bundled <code>trellis-workflow</code>，也不得把 bootstrap 当作 <code>sbtd-task</code> 任务别名接入新状态。</div>
           <div><strong>External Skills source policy</strong><br>默认 <code>auto</code> 与显式 <code>stable</code> 都要求 stable manifest、checksum、frontmatter 和完整 Skill tree 验证通过，且不访问上游；只有显式 <code>upstream</code> 才访问当前上游，任何获取或验证错误都会直接失败。stable 完整性错误和目标侧 staging、权限、磁盘、commit、rollback 错误同样直接失败，不存在自动 source fallback。</div>
           <div><strong>External Skills stable set</strong><br><code>assets/external-skills/stable/MANIFEST.json</code> 记录 stable set、精确上游 commit、subpath、tree SHA-256 和许可证/NOTICE。所有 manifest、source subpath 和 license 路径必须被声明根目录包含；拒绝绝对路径、<code>..</code> 和 symlink 逃逸。快照保持上游原样且不得手改；只有显式 <code>promote-external-skills-stable</code> 才能整组更新。</div>
           <div><strong>External Skills transaction</strong><br>全部目标先暂存验证，再事务替换，canonical 成功后才删除 legacy。commit 失败会恢复旧目标；若恢复不完整，唯一 rollback 备份会保留并返回路径，供人工恢复。<code>init</code> / <code>reset --json</code> 输出单份根 JSON，<code>requiredExternalInstall</code> 保留安装结果、逐项来源和 <code>transaction</code>（含失败时的 <code>rollbackPath</code> / <code>rollbackErrors</code>），未执行安装时为 <code>null</code>；失败仍返回非零退出码。</div>
@@ -870,8 +886,8 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Lessons</p>
             <h2>Lessons 分片与冲突边界</h2>
           </div>
-          <p>多人对同一仓库开发时，lessons 是被追踪且所有人都往里追加的文件，因此 <code>lessons-record</code> 要求按 lessons 分隔名分片写入。分隔名的自动来源只有当前仓库 <code>&lt;repo-root&gt;/.trellis/.developer</code> 的 <code>name=</code>；该文件缺失且当前是 linked worktree 时读主 checkout 的同一文件（<code>.developer</code> 被 Trellis 有意 gitignore，新建 worktree 天然没有它）；两处都读不到就停下来请用户给名字，不得猜测。不得用 <code>TRELLIS_DEVELOPER</code>、<code>git config user.name</code>、提交作者或 <code>.trellis/workspace/</code> 下的目录名推断——那些目录只说明历史上谁 init 过，不代表当前写入者。分隔名必须匹配 <code>^[a-z0-9]+$</code>（非空、仅小写字母与数字），不合规就报告并停止、向用户要合规名字，不得改写；<code>.developer</code> 存在但 <code>name=</code> 不合规（如 <code>Alice</code>、<code>alice.wang</code>、<code>zhang_san</code>、中文名）也同样要问用户。</p>
-          <p>追加内容一律包在 <code>&lt;!-- lessons:&lt;name&gt;:start --&gt;</code> 与 <code>&lt;!-- lessons:&lt;name&gt;:end --&gt;</code> 之间，只写自己的块，不得重排或改动他人块；标记块只约束写入，读取时仍读所有人的块。<code>index.md</code> 中每个块自带表头，各自是完整表格，避免标记落在同一张表的行之间导致表格中断。已实测的收益边界：双方在各自已存在的块内追加可干净合并；两人首次在同一文件各建一个块仍会冲突一次，因为两处插入都落在文件末尾同一位置，解法是保留两个块。项目若要连这一次也自动消掉，可在 <code>.gitattributes</code> 中对 <code>.trellis/lessons/**/*.md</code> 选择性启用 <code>merge=union</code>；该项非默认，因为 union 会把同一行的并发改动双份保留。该 pattern 只覆盖 index、topic 与 archive；<code>.trellis/spec/lessons.md</code> 虽然也带标记块，但它会被裁剪改写而非纯追加，刻意不纳入 union，其首次冲突仍需手工处理。</p>
+          <p>多人对同一仓库开发时，lessons 是被追踪且所有人都往里追加的文件，因此 <code>lessons-record</code> 要求按 lessons 分隔名分片写入。只有真正需要写入长期 lesson 时才解析写入者身份，纯读取不建立身份。分隔名的自动来源只有当前仓库 <code>&lt;repo-root&gt;/.sbtd/developer</code> 中唯一的 <code>name=</code>：本地合法身份优先；仅当本地文件确实缺失、且当前 checkout 已验证为同仓 linked worktree 时，才只读主 checkout 的同一文件，不复制回本地。现存但异常的身份文件（重复声明、非法内容、错误类型、不可读、symlink 或路径不确定）是冲突而不是缺失，必须停止该解析，不得用主 checkout 或其他来源绕过。允许来源都确实缺失时才说明路径并向用户要名字；不得用 <code>git config user.name</code>、提交作者、OS / 环境变量或历史 workspace 目录名推断。分隔名必须匹配 <code>^[a-z0-9]+$</code>（非空、仅小写字母与数字），不合规就报告并停止、向用户要合规名字，不得改写、小写化或音译。旧 <code>.trellis/.developer</code> 只在用户明确授权旧项目身份迁移时按 <code>lessons-record</code> 的 <code>references/identity-migration.md</code> 处理，不再是日常身份 fallback。</p>
+          <p>追加内容一律包在 <code>&lt;!-- lessons:&lt;name&gt;:start --&gt;</code> 与 <code>&lt;!-- lessons:&lt;name&gt;:end --&gt;</code> 之间，只写自己的块，不得重排或改动他人块；标记块只约束写入，读取时仍读所有人的块。<code>index.md</code> 中每个块自带表头，各自是完整表格，避免标记落在同一张表的行之间导致表格中断。已实测的收益边界：双方在各自已存在的块内追加可干净合并；两人首次在同一文件各建一个块仍会冲突一次，因为两处插入都落在文件末尾同一位置，解法是保留两个块。项目若要连这一次也自动消掉，可在 <code>.gitattributes</code> 中对 <code>docs/lessons/**/*.md</code> 选择性启用 <code>merge=union</code>；该项非默认，因为 union 会把同一行的并发改动双份保留。该 pattern 只覆盖 append-only 的 index、topic 与 archive；短入口 <code>docs/spec/lessons.md</code> 虽然也带标记块，但它会被裁剪改写而非纯追加，刻意不纳入 union，其首次冲突仍需手工处理。</p>
           <p>标记块只隔离写入，不隔离 ID 命名空间：两人同日写出同一个 <code>LESSON-YYYYMMDD-&lt;slug&gt;</code>，会在同一 topic 文件里留下逐字相同的 heading，两条 index 行的 <code>detail</code> 锚点也逐字相同，链接与检索随即失去指向。因此 lesson ID 改为 <code>LESSON-YYYYMMDD-&lt;name&gt;-&lt;slug&gt;</code>，把分隔名原样纳入 ID。不做小写化或折叠是这条规则成立的前提：任何折叠都会把两个不同名字映射到同一 ID 段，撞号照旧；<code>&lt;name&gt;</code> 不含 <code>-</code> 也是同理，它保证名字恰占日期后的单个字段，名字与 slug 不会跨边界凑出同一个 ID。既有 lesson ID 不重命名，因为改 heading 会打断已有的 <code>detail</code> 锚点与交叉引用。该格式只保证新 ID 之间互不相同：保留的既有 ID 与新格式共用一个命名空间，形如 <code>LESSON-YYYYMMDD-&lt;word&gt;-&lt;rest&gt;</code> 的既有 ID 与 <code>&lt;name&gt;</code> 为 <code>&lt;word&gt;</code> 的新 ID 逐字相同，所以写入前要在 lessons 树里搜一次该 ID 和它的锚点，命中就换 slug。</p>
         </div>
       </div>

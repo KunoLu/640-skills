@@ -9,6 +9,8 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
+> **P0 cutover status (unreleased):** the payload and `catalog.json` have switched to the v2 canonical bundled set (14 Skills; `sbtd-task` replaces the retired `trellis-workflow` / `trellis-channel`; external remains 19). The complete v2 CLI, `init` / `reset` behavior, host integration, and legacy-project migration remain P1 scope. All Trellis, bootstrap-detection, and v1 CLI behavior below documents the existing transitional implementation, not verified v2 behavior. User-global copies of retired Skills are not cleaned up by this change; P1-13 owns that cleanup.
+
 AGENTS files are backed up before overwrite. On `reset`, bundled Skill targets are overwritten without backup after their catalog sources pass the startup checks above. On `init`, a bundled Skill target that is already a valid Skill shell is skipped; missing or invalid shells are copied. After the canonical `sbtd-workflow-onboard` target validates, the legacy `kuno-workflow-onboard-skills` directory is removed without leaving an alias only when its own `SKILL.md` frontmatter confirms the legacy identity. An unrelated or mismatched legacy path blocks `init` / `reset` before target changes and remains untouched; deletion errors are returned as migration failures. Project `.gitignore` is updated in place by ensuring that the bundled block exists.
 
 
@@ -182,23 +184,24 @@ Project-only mode never bootstraps npm. If a user chooses a project-local Playwr
 
 ## Required Global Skills
 
-The 15 bundled Skills are always global during normal init/reset:
+The 14 bundled Skills are always global during normal init/reset:
 
 1. `sbtd-workflow-onboard`
-2. `trellis-workflow`
-3. `trellis-channel`
-4. `project-validation`
-5. `web-ui-autotest-generator`
-6. `gherkin-bdd`
-7. `knowledge-base-integration`
-8. `maestro-mobile-e2e`
-9. `lessons-record`
-10. `book-refactoring-pass`
-11. `book-legacy-change-safety`
-12. `book-ddd-distilled-modeling`
-13. `book-ddia-data-design`
-14. `book-release-readiness`
-15. `seo-geo`
+2. `sbtd-task`
+3. `project-validation`
+4. `web-ui-autotest-generator`
+5. `gherkin-bdd`
+6. `knowledge-base-integration`
+7. `maestro-mobile-e2e`
+8. `lessons-record`
+9. `book-refactoring-pass`
+10. `book-legacy-change-safety`
+11. `book-ddd-distilled-modeling`
+12. `book-ddia-data-design`
+13. `book-release-readiness`
+14. `seo-geo`
+
+The retired `trellis-workflow` and `trellis-channel` bundled Skills were removed from the catalog and the template tree in the same atomic change that added `sbtd-task` (source `templates/skills/sbtd-task`); no alias or compatibility copy is installed. User-global copies of the retired directories are deliberately left untouched by this change — their retirement cleanup is owned by P1-13.
 
 The Onboard rename is a bundled migration: normal `plan` reports any detected legacy target, and normal `init` / `reset` removes it only after the canonical `sbtd-workflow-onboard/SKILL.md` exists with matching frontmatter. Project-only `init-projects` never inspects or modifies global Skill directories.
 
@@ -221,9 +224,9 @@ The four Ponytail Skills are ordinary required external Skills: no install confi
 
 An enabled official plugin is `provider=conflict`: `check` exits non-zero and `init` / `reset` block before writing stable copies; the root installers stop with the same guidance. The remedy is manual — disable or remove the plugin with the platform's own CLI, then rerun. An installed-but-disabled plugin is reported without blocking. When any platform CLI cannot be queried or its output cannot be parsed (and no enabled plugin was proven on the other platform), `provider=unknown`: Onboard neither fabricates a clean state nor blocks on unproven conflict.
 
-The runtime gate contracts become active only after normal `init` / `reset` successfully writes the global rules and installs the required bundled / external Skills. The public Skills CLI bootstrap and `init-projects` do not activate these runtime gates by themselves. Installed global `AGENTS.md`, project rules, Trellis workflow, and bundled reviewer Skills jointly own the execution contract.
+The runtime gate contracts become active only after normal `init` / `reset` successfully writes the global rules and installs the required bundled / external Skills. The public Skills CLI bootstrap and `init-projects` do not activate these runtime gates by themselves. Installed global `AGENTS.md`, project rules, bundled `sbtd-task`, and bundled reviewer Skills jointly own the execution contract.
 
-The `Book Gate Plan` uses objective predicates and explicit lifecycle states. Every completed external `grill-with-docs` session invokes bundled `book-ddd-distilled-modeling`; persisted/shared data, shared / persistent / cross-request / cross-process caches, async/cross-service flows, ownership, migrations, or recovery invoke `book-ddia-data-design`; existing-behavior bugs or uncertain existing code invoke `book-legacy-change-safety`; any existing-production-code edit invokes `book-refactoring-pass`; production-path runtime/deployment changes invoke `book-release-readiness` after all applicable testing-tool gates and project validation. Matched gates emit blocking visible statuses until passed; unmatched scenarios remain on demand.
+The `Book Gate Plan` uses objective predicates and explicit lifecycle states and is produced up front by `strict` tasks. `default` / `lite` tasks select methods by actual risk and explicit deliverables and never fake a chosen method's evidence; project requirements remain binding. Every completed external `grill-with-docs` session invokes bundled `book-ddd-distilled-modeling` in all modes. For strict tasks, persisted/shared data, shared / persistent / cross-request / cross-process caches, async/cross-service flows, ownership, migrations, or recovery invoke `book-ddia-data-design`; existing-behavior bugs or uncertain existing code invoke `book-legacy-change-safety`; any existing-production-code edit invokes `book-refactoring-pass`; production-path runtime/deployment changes invoke `book-release-readiness` after all applicable testing-tool gates and project validation. Matched strict gates emit blocking visible statuses until passed; unmatched scenarios remain on demand.
 
 Install every missing external Skill:
 
@@ -365,7 +368,7 @@ Processing continues for all roots even when an earlier root has a bootstrap tas
 failed > blocked > needs-user > bootstrap-required > success > skipped
 ```
 
-A bootstrap task requires the Agent to enter that project, use `trellis-workflow`, read `.trellis/workflow.md` and the task artifacts, run `$trellis-before-dev`, complete the guideline work, run `$trellis-check`, and finish with `$trellis-finish-work`.
+A detected bootstrap task is reported as `bootstrap-required` and blocks reporting onboarding as complete. The retired `trellis-workflow` Skill and its `$trellis-before-dev` / `$trellis-check` / `$trellis-finish-work` route no longer ship with this payload; completing the legacy bootstrap guideline belongs to the explicit v1 -> v2 migration path (P1 scope) and must not be aliased into `sbtd-task`.
 
 ## MCP Setup
 

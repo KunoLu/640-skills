@@ -9,7 +9,13 @@ import jsonschema
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = (
-    ROOT / "docs" / "prd" / "sbtd-task-candidate" / "references" / "task-data.schema.json"
+    ROOT
+    / "sbtd-workflow-onboard"
+    / "templates"
+    / "skills"
+    / "sbtd-task"
+    / "references"
+    / "task-data.schema.json"
 )
 
 
