@@ -19,7 +19,7 @@
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
 | Codex | openai/codex | v0.154.0 | stable-only | 是 | 核心 Coding Agent |
-| OMP | can1357/oh-my-pi | v18.2.0 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
+| OMP | can1357/oh-my-pi | v18.2.2 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
 | Caveman Skill Installer | JuliusBrussee/caveman | v2.7.0 | stable-only | 是 | 仅监控 `v*` installer / skill tags，忽略 `bin-v*` engine binary releases；`更新` 只回写 ENTRYPOINT 的 Caveman 版本记录（本表与“当前版本汇总”），不得改 `CAVEMAN_PINNED_REF` / revision / hash。payload 维护由正常 `init` / `reset` 按受管 family 的完整目录集合与内容指纹判定 `current` / `outdated`，已知旧版备份后升级；非 symlink 异常核心在不存在未知 companion 时修复，嵌套或顶层 symlink 一律 fail-closed 只报告；替换 / 备份仅限 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测。 |
 | Trellis | mindfold-ai/trellis | v0.6.17 | stable-only | 是 | 复杂任务编排 / TDD workflow |
 | GitNexus | abhigyanpatwari/GitNexus | v1.6.12 | stable-only | 是 | 代码理解、依赖关系、影响分析 |
@@ -333,7 +333,7 @@ handoff
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
 | Coding Agent | Codex | v0.154.0 |
-| Coding Agent | OMP | v18.2.0 |
+| Coding Agent | OMP | v18.2.2 |
 | Agent Output | Caveman Skill Installer | v2.7.0 |
 | Agent Harness | Trellis | v0.6.17 |
 | 代码理解 | GitNexus | v1.6.12 |
