@@ -294,7 +294,7 @@ completed_at: null
 
 在允许写入的任务中，模式初定或切换后尽早保存，不能等到 handoff 时才第一次记录。澄清前允许仅保存任务身份与已确认模式的最小恢复记录，但不能虚构 PRD、设计、验收或拆分已完成。显式只读按第 7.3 节不落盘，新模式未获用户确认时不能提前改写。不引入可执行 frontmatter，不写真实凭据／敏感个人信息。
 
-P0-03 的 [数据语义契约](sbtd-workflow-v2-task-data-contract.md) 与 [声明式 schema](sbtd-task-v1.schema.json) 细化本节；schema 通过不替代路径、父子关系、授权和历史一致性检查。历史 stateEvent 与新入阻塞 blockEntryEvent 的区分见实施调整记录 D-IMP-03，持久表格仍保留原五列。
+P0-03 的 [数据语义契约](sbtd-workflow-v2-task-data-contract.md) 与 [声明式 schema](sbtd-task-candidate/references/task-data.schema.json) 细化本节；schema 通过不替代路径、父子关系、授权和历史一致性检查。历史 stateEvent 与新入阻塞 blockEntryEvent 的区分见实施调整记录 D-IMP-03，持久表格仍保留原五列。
 
 ### 7.5 状态、父子任务与校验范围
 
@@ -487,7 +487,7 @@ done 任务不生成未完成恢复提示；不预读所有交接历史，不扫
 | 用户明确要求 grill | 进入澄清，不重复询问是否使用 |
 | 用户拒绝正式 grill | 根据已明确需求继续；必要的关键问题仍要问，不把拒绝方法解释为可以猜业务要求 |
 
-不得编造“预计 N 轮”或时间估计。完整 grill 后三种模式均保留独立的 DDD 边界审核，不能把访谈内 domain-modeling 当替代：strict 遵守完整 reviewer gate；default/lite 以可用方法完成同类独立检查，准确说明没有调用缺失 Skill，不因安装包缺失机械停工；真实领域歧义未消除时仍不得盲目执行相关危险／不可逆决定。
+不得编造“预计 N 轮”或时间估计。完整 grill-with-docs 后三种模式都必须调用 book-ddd-distilled-modeling，输出独立可见的 DDD Boundary Review，按该 Skill 的状态及修正回路完成；confirmed 前不进入需求确认或设计，needs-clarification 返回澄清，Skill 不可用／不可读取或必要证据缺失均 blocked。访谈内 domain-modeling 或非正式替代检查不能满足此后置门禁。未触发完整grill后置门禁的default/lite领域分析仍可按需选择可用方法；该门禁不取消无关可选工具的正常降级，未决领域歧义仍阻断相关决定。此边界收紧见实施调整记录 D-IMP-06。
 
 本会话没有完整执行 grill-with-docs；通过用户逐轮提问和项目事实完成澄清，最终由用户要求统一落地。不得把此记录写成“已完整调用 grill”。
 
@@ -801,6 +801,7 @@ restored 仅证明受管文件对账完成；receipt 另含 `runtime_readiness=n
 
 - 15 bundled 减去两个 Trellis Skills，加一个 sbtd-task，目标 14；external 仍为19。
 - **P0-07 为原子交付：** 将 `skill:trellis-workflow`、`skill:trellis-channel` 两条 catalog entries 删除，新增 `skill:sbtd-task`（source 为 `templates/skills/sbtd-task`），同时切换源目录、完整 Skill 资产、计数及断言。不得交付“只有新 SKILL、catalog 仍装旧 Skill”或 catalog 指向不存在目录的中间发布包。以隔离目录执行 catalog 驱动的 bundled 安装路径，确认实际目标含完整 sbtd-task 且新安装不产生两个旧目录；这是 P0 可独立验证的安装层断言，不等待 P1 全部 Graft/host 功能。P1 再验证完整 init/reset。
+- 为同时满足逐任务合并与上述原子边界，P0-04 先交付 `docs/prd/sbtd-task-candidate/entrypoint.md` 及完整 references/schema/LICENSE/NOTICE，不提前出现新的 discovery `SKILL.md`。P0-07 同一次变更将候选移入正式源目录、命名入口并切换 catalog／退役旧目录，移除候选副本及迁移引用；见实施调整记录 D-IMP-05。
 - `catalog.schema.json` 是结构契约，不因 entry 改动无意义升版；确需新增 metadata 才修改 schema 和最小示例。
 - 旧 bundled 目录从有效源树删除；历史由 `v1.0.15` 及 Git history 保存，不在 Onboard 安装目录内部 archive 活的旧入口。
 - 用户全局目录的两个旧 Skill 必须在新 canonical 校验后按身份／内容／symlink 安全策略退役。仅名字匹配不授权删除；unknown drift 保存并报告，需要用户裁决。
@@ -1054,7 +1055,7 @@ P3-04 有两个条件分支，均须无未解决迁移／恢复问题、无使�
 
 | 范围 | 计划动作 | 说明 |
 |---|---|---|
-| `sbtd-workflow-onboard/templates/skills/sbtd-task/` | 单一任务 Skill，按三模式分层 | 公共恢复／lite 入口轻量，strict 清单按需加载，不造三个重复 Skill |
+| `sbtd-workflow-onboard/templates/skills/sbtd-task/` | 单一任务 Skill，按三模式分层 | P0-04 在 docs/prd 的非 discovery 候选中完成内容，P0-07 原子移入正式目录；公共／lite 轻量，strict 按需加载，不造三个重复 Skill |
 | `templates/skills/trellis-workflow/`、`trellis-channel/` | 退役删除有效目录 | 历史 Git 保存，迁移器只接受旧输入 |
 | `templates/agents/AGENTS.global.md` | 短模式路由、Graft、恢复／grill、共同安全边界 | 默认不全量加载或输出 Gate，用户推荐确认不能省略 |
 | `templates/agents/AGENTS.project.md` | 三模式入口、项目路径和最小 fallback | 全局已装但项目未 onboard 仍可执行，身份只按需建立 |
@@ -1127,13 +1128,13 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P0-01 | P0 | Graft 精确候选 capability spike；隔离 HOME 和最小 Git fixtures | R-09 | 第 9.8 节。spike 实测完成。AC-09 收口：禁止对含未选子仓的父目录调 Graft，P1 只对显式仓根调用。AC-10 已证离线 build/ask 与无 LLM `--name` 降级；版本探针 fail-closed 改挂 P1-03。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**。报告：`tests/api/reports/api-report-sbtd-graft-install-p0-01-graft-capability-spike-2026_09_17-10_14_26.json` 与同 stem `.md`／`.logs/`（local-only） | AFK | done | 2026-09-17T10:33:14+08:00 |
 | P0-02 | P0 | 既有行为基线与按模式保留契约清单 | R-09 | AC-02/14/23 基线／契约子项；[保留清单](sbtd-workflow-v2-behavior-baseline.md)。最终提交 `41a43f3…` 原生267 tests/65.741s、隔离CLI smoke及分型报告校验通过；P002FinalReview零发现。[PR #9](https://github.com/KunoLu/640-skills/pull/9) 已合入，merge `50a7e873cfa3224b8c02419b4cb146d5ed88fa6d`；不宣称v2运行AC通过 | AFK | done | 2026-09-17T13:44:48+08:00 |
 | P0-03 | P0 | 本地／共享 task schema、mode、引用、父子与历史事件 | P0-02、P0-10 | AC-03/24/28/31 契约子项；[数据契约](sbtd-workflow-v2-task-data-contract.md)。最终 `bab4940…` 276 tests/57.067s、Ruff/ty、报告校验通过；P003ReviewTwo零新发现。[PR #13](https://github.com/KunoLu/640-skills/pull/13) 已合入，merge `148d0216a4ca3bd7c7347570b2de03d7a6ef95d6`；实际读写／恢复仍归P1 | AFK | done | 2026-09-17T15:39:09+08:00 |
-| P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23；同一 Skill 按模式加载，不默认创建全任务包或执行 strict 清单 | AFK | planned | — |
+| P0-04 | P0 | sbtd-task 公共／lite 入口与 strict references 分层 | P0-03 | AC-02/04/20/23 契约子项；[候选与验证边界](sbtd-workflow-v2-skill-entry-contract.md)，公共/lite入口与strict/state/handoff分层；按D-IMP-05非discovery交付。schema原样迁移、隔离包装及276 tests通过；待精确HEAD复验／独立review／PR，不提前激活 | AFK | checking | — |
 | P0-05 | P0 | AGENTS 公共路由、恢复、grill 与轻量 fallback | P0-01、P0-04 | AC-04/05/22/23；任何新需求先评估，推荐必须暂停确认，拒绝后不反复劝升 | AFK | planned | — |
 | P0-06 | P0 | lessons-record 新身份来源、首次询问与模式边界 | P0-03 | AC-06/25；ID/marker 不变，无 onboard 项目按需只建身份，缺名不冻结 default/lite 无关工作 | AFK | planned | — |
-| P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-06 | AC-11；两旧 entry 换 sbtd-task；隔离真实安装目标正确，14 bundled／19 external | AFK | planned | — |
+| P0-07 | P0 | 原子切换 catalog entries、源目录和 bundled 安装断言 | P0-04、P0-06 | AC-11；完整候选移入正式目录并命名SKILL.md，与两旧entry/源目录退役、新sbtd-task entry及引用迁移同一变更；隔离真实安装目标正确，14 bundled／19 external，无候选副本 | AFK | planned | — |
 | P0-08 | P0 | 项目 ignore 的保留／删除／四条新增规则 | P0-03、P0-06 | AC-12/26；default 本地忽略、共享资产可追踪，规则根锚定且不误伤业务子目录 | AFK | planned | — |
 | P0-09 | P0 | 源仓库根七行 ignore、维护说明与精确测试 | R-09 | AC-12/16；保护 .sbtd/handoff/Graft，旧残留安全处理，不复制项目模板 | AFK | planned | — |
-| P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[26项路由场景](sbtd-workflow-v2-mode-routing-contract.md)，文档结构／依赖检查通过；P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；仅契约完成，P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
+| P0-10 | P0 | 三模式路由／强制程度／显式交付覆盖契约 | P0-02 | AC-22/23 契约子项；[路由场景](sbtd-workflow-v2-mode-routing-contract.md) 的原26项由P0-10验收，后加MR-27归P0-04/D-IMP-06；文档结构／依赖检查通过，P010ReviewTwo 对 `ecb00e5…` 复审零发现。[PR #11](https://github.com/KunoLu/640-skills/pull/11) 已合入，merge `f8ccbc9185c97b3c435d6e430ec18576f9689dfb`；P1运行证明仍待验收 | AFK | done | 2026-09-17T14:11:21+08:00 |
 
 ### 14.4 P1：安装器、迁移能力与仓库交付
 
@@ -1371,6 +1372,11 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T14:49:15+08:00 | P0-03 实施 | 从 main `a5bf602…` 建分支；DDD/DDIA confirmed，未完整调用grill（原PRD边界明确）。形成task／active／事件schema及9项聚焦测试；新入阻塞与历史元数据分层、显式时间断言记入D-IMP-03/04。待正式验证与独立review，不预填完成。 |
 | 2026-09-17T15:09:18+08:00 | P0-03 checking | 新增9项测试及276项全量通过，Ruff/ty与schema消费者smoke通过，提交前unit报告／中文摘要／envelope已保存。重复入阻塞advisor经blockEntryEvent红绿回归关闭，时间断言与尾随换行路径问题已修复；待精确HEAD复验与独立review，不预填done。 |
 | 2026-09-17T15:39:09+08:00 | P0-03 checking→done | PR #13 于15:38:58+08:00合并（`148d0216a4ca3bd7c7347570b2de03d7a6ef95d6`）后更新台账。两项review边界已修复，P003ReviewTwo对完整任务及最终证据零新发现；最终unit报告 `tests/unit/reports/unit-report-task-data-contract-final-p0-03-task-data-contract-2026_09_17-15_29_45.json` 及同stem中文摘要/envelope绑定 `bab4940…`，276 tests/57.067s/exit0，local-only。不把schema契约完成当作P1任务运行实现。 |
+| 2026-09-17T15:54:39+08:00 | P0-04 实施 | 从 main `4dbcba1…` 建分支；现有契约清楚，未完整调用grill。D-IMP-05解决逐任务合并与原子catalog切换的冲突；候选入口和strict/state/handoff已编写，schema原样迁移后9项回归及Ruff/ty通过。待候选完整性、正式验证与review，不提前激活Skill。 |
+| 2026-09-17T16:08:36+08:00 | P0-04 checking | 候选7项资产自包含，临时最终入口8条链接可达，schema字节保持；9项迁移回归、Ruff/ty、原生全量276 tests/58.368s通过，本地报告配对保存。未取得目标tokenizer计数，不冒充AC-20收益证明；待精确HEAD复验与独立review。 |
+| 2026-09-17T16:23:52+08:00 | P0-04 第一轮review修复 | 补齐缺失／冲突blocked历史在用户选择恢复阶段后的解除事件、原因说明、blocked_reason清理及原子状态/时间更新；只读不落盘，不伪造旧ingress。维持原PRD语义，保持checking待精确HEAD复验与全范围复审。 |
+| 2026-09-17T16:37:04+08:00 | P0-04 第二轮review修复 | 公共入口明确完整grill后调用可用的book-ddd-distilled-modeling、独立可见DDD Boundary Review及状态/修正回路；不可用时区分strict阻断与default/lite如实替代检查，不冒充Skill通过。保持checking待最终提交复验与完整复审。 |
+| 2026-09-17T16:39:00+08:00 | P0-04 advisor／D-IMP-06 | 依据完整grill后的强制DDD门禁，撤回上一草稿中default/lite缺Skill替代放行；三模式均须具名reviewer可见通过，缺失均blocked。同步§8.2、保留清单与新增MR-27；旧P0-10的26项验收历史不追认为新边界已验收，保持P0-04 checking。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
