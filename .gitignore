@@ -1,5 +1,7 @@
 .DS_Store
-.gitnexus/
-.trellis/
+/.sbtd
+/docs/handoffs
+/graft
+/.graft
 __pycache__/
 AGENTS.md
