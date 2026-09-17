@@ -68,3 +68,7 @@ Ruff同配置按函数／诊断比较：生产文件26→26、workflow tests12�
 Release Readiness Review：ready，仅限P0-08模板和直接规则检查消费者。故障模式由真实Git／CLI覆盖，继续使用原解析与追加策略，没有服务、队列、外部安装或新容量限制；报告保存命令／stdout／stderr／退出码和版本身份。回滚限定受管源提交，用户旧规则、索引和数据未被清理。完整v2初始化、保留路径业务所有权、tracked私有数据识别／处置和迁移仍由P1承担，当前过渡生命周期不能因此用于真实项目。
 
 本记录提交后，必须对新的最终head重跑计划全量及原生smoke，再独立review；不把上述中间提交报告重标为最终head。私有编辑备份和临时验证脚本继续保留，直到最终验证、review及任务PR合并完成。
+
+## 首轮独立 review 修正
+
+`P008ReviewOne`在完整冻结diff中指出一处P2矛盾：版本化automation prompt前面的init/reset段仍要求验证旧Trellis ignore路径，与下方已更新的project-only SBTD/Graft探针契约不一致。已把前者改为引用下方同一共享／本地探针集，保留其他安装、JSON和根仓库五行契约，不同步live automation。该问题修复前的`71478ed76bf2deff7b46d217207041fee6f29343`全量265 tests/391.213s与原生smoke均通过，但不能据此把后续修复head直接标成已验证；修复后重新绑定报告并独立复审。
