@@ -1374,6 +1374,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-17T15:39:09+08:00 | P0-03 checking→done | PR #13 于15:38:58+08:00合并（`148d0216a4ca3bd7c7347570b2de03d7a6ef95d6`）后更新台账。两项review边界已修复，P003ReviewTwo对完整任务及最终证据零新发现；最终unit报告 `tests/unit/reports/unit-report-task-data-contract-final-p0-03-task-data-contract-2026_09_17-15_29_45.json` 及同stem中文摘要/envelope绑定 `bab4940…`，276 tests/57.067s/exit0，local-only。不把schema契约完成当作P1任务运行实现。 |
 | 2026-09-17T15:54:39+08:00 | P0-04 实施 | 从 main `4dbcba1…` 建分支；现有契约清楚，未完整调用grill。D-IMP-05解决逐任务合并与原子catalog切换的冲突；候选入口和strict/state/handoff已编写，schema原样迁移后9项回归及Ruff/ty通过。待候选完整性、正式验证与review，不提前激活Skill。 |
 | 2026-09-17T16:08:36+08:00 | P0-04 checking | 候选7项资产自包含，临时最终入口8条链接可达，schema字节保持；9项迁移回归、Ruff/ty、原生全量276 tests/58.368s通过，本地报告配对保存。未取得目标tokenizer计数，不冒充AC-20收益证明；待精确HEAD复验与独立review。 |
+| 2026-09-17T16:23:52+08:00 | P0-04 第一轮review修复 | 补齐缺失／冲突blocked历史在用户选择恢复阶段后的解除事件、原因说明、blocked_reason清理及原子状态/时间更新；只读不落盘，不伪造旧ingress。维持原PRD语义，保持checking待精确HEAD复验与全范围复审。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
