@@ -9,7 +9,7 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-> **Staged v2 delivery (unreleased):** the payload and `catalog.json` have switched to the v2 canonical bundled set (14 Skills; `sbtd-task` replaces the retired `trellis-workflow` / `trellis-channel`; external remains 19). The complete v2 CLI, `init` / `reset` behavior, host integration, and legacy-project migration remain P1 scope. All Trellis, bootstrap-detection, and v1 CLI behavior below documents the existing transitional implementation, not verified v2 behavior. User-global copies of retired Skills are not cleaned up by this change; P1-13 owns that cleanup.
+> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup now uses read-only SBTD checks without Trellis installation or initialization. Graft/host integration, task operations, identity creation and legacy migration remain staged work; this is not a completed v2 release. Existing legacy data is preserved; user-global retirement remains P1-13.
 
 The P1-01 argument/codec modules and `onboard-contracts.schema.json` are internal executable contracts, not a second CLI or an activation of migration/recovery handlers. The existing command reference below remains the active public surface until each runtime/caller cutover. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
@@ -56,12 +56,6 @@ Important arguments:
 - `--skip-project-agents`
 - `--global-agents-path <path>`
 - `--global-skills-dir <path>`
-- `--trellis-user <name>`
-- repeatable or comma-separated `--trellis-platform <name>`
-  When omitted, `plan` / `init` / `reset` / `init-projects` use `--platform` as the Trellis flag if it matches exactly (`codex`, `claude`, `kimi`). Explicit `--trellis-platform` replaces that default. Empty flags are not passed to `trellis init --yes`. `omp` and `pi` are separate Trellis flags: `omp` emits `trellis init --omp`, while `pi` emits `--pi`; `--platform oh-my-pi` does not choose either.
-
-- `--skip-trellis-init`
-- `--skip-trellis-bootstrap`
 - `--no-mcp`, `--dry-run`, `--yes`, `--no-color`
 
 The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Normal onboarding keeps the Codex global AGENTS default shown under [Paths](#paths) unless `--global-agents-path` / `-GlobalAgentsPath` explicitly overrides it. If the user-home `.omp` directory already exists (POSIX `~/.omp`, Windows `%USERPROFILE%\.omp`), `init` / `reset` also backup-then-overwrite the same template to `~/.omp/agent/AGENTS.md`. Missing `.omp` is skipped; Onboard does not create `.omp`. `--global-agents-path` overrides only the Codex target. Project-only mode never writes global AGENTS.
@@ -72,9 +66,9 @@ The Agent platform selects the CLI and MCP adapter; it does not select the globa
 .\install.ps1 [options]
 ```
 
-PowerShell uses the equivalent parameters `-Platform`, `-ProjectsRoot`, `-InitProjects`, `-Action`, `-SourceRoot`, `-SkipProjectAgents`, `-GlobalAgentsPath`, `-GlobalSkillsDir`, `-TrellisUser`, `-TrellisPlatform`, `-SkipTrellisInit`, `-SkipTrellisBootstrap`, `-NoMcp`, `-DryRun`, `-Yes`, and `-NoColor`.
+PowerShell uses `-Platform`, `-ProjectsRoot`, `-InitProjects`, `-Action`, `-SourceRoot`, `-SkipProjectAgents`, `-GlobalAgentsPath`, `-GlobalSkillsDir`, `-NoMcp`, `-DryRun`, `-Yes`, and `-NoColor`. Trellis username/platform/skip options are removed in both installers and Python, without aliases.
 
-`--yes` / `-Yes` answers yes to every yes/no prompt and skips the final execution confirmation. It does not invent answers for selections or text prompts without defaults; provide the corresponding platform, action, Trellis, and React Bits inputs explicitly when those decisions must be noninteractive.
+`--yes` / `-Yes` answers yes/no prompts and skips final execution confirmation. It does not invent platform, action or React Bits text/selection answers, authorize migration, or override project-state conflicts.
 
 `--project-root`, `-ProjectRoot`, `--skills-scope`, `-SkillsScope`, `--project-skills-dir`, and `-ProjectSkillsDir` are no longer public root-installer arguments.
 
@@ -102,17 +96,17 @@ When the Onboard Skill receives multiple repository paths without an explicit st
 Normal onboarding:
 
 1. Resolves the target Agent platform.
-2. Checks and, when required, installs the target Agent CLI globally.
-3. Ensures npm is available because Trellis and GitNexus are mandatory global tools.
-4. Runs the global preflight.
-5. Installs missing global Trellis and GitNexus without a scope prompt.
+2. May inspect the target Agent CLI read-only before collecting the remaining inputs.
+3. Resolves all project roots and AGENTS scope, then runs complete `check-projects` before any installation or configuration write.
+4. Repairs the selected Agent/npm only after project preflight passes, then runs the global preflight.
+5. Installs missing global GitNexus without a scope prompt; no Trellis installation.
 6. Preserves the existing optional RTK, caveman, Java, and Maestro decisions.
 7. For `init`, installs only missing or invalid required external Skills globally. For `reset`, force-reinstalls every required external Skill from the current stable snapshot.
 8. Optionally configures selected user/global MCP servers.
 9. Checks project-only Playwright and React Bits conditions for every root.
 10. Writes global AGENTS with backup-then-overwrite. For `init`, copies missing or invalid bundled Skills and skips valid Skill shells. For `reset`, overwrites every bundled Skill without backup.
-11. Writes project AGENTS and `.gitignore` for every root.
-12. Runs Trellis initialization and bootstrap detection for every root.
+11. Inspects every selected project's minimal SBTD state and scaffold destinations before Python installation writes; conflicts stop the batch.
+12. Writes project AGENTS and `.gitignore`, preserving optional task/identity/spec/lessons data, then reports SBTD checks again.
 
 
 ### Project-only init-projects
@@ -120,16 +114,16 @@ Normal onboarding:
 Project-only mode:
 
 
-1. Resolves the Agent platform because project workflow and Trellis platform context may need it.
+1. Resolves the selected Agent platform for the existing adapter context.
 2. Skips target Agent CLI detection and installation.
 3. Skips npm/Node/nvm, RTK, Trellis/GitNexus global preflight, Java, Maestro, caveman, bundled Skills, external Skills, global AGENTS, and MCP configuration.
-4. Runs `check-projects` for the selected roots.
+4. Runs complete read-only `check-projects` with the actual `--skip-project-agents` scope before any optional project install.
 5. Offers only applicable project-local Playwright or React Bits decisions.
 6. Writes project AGENTS and `.gitignore`.
-7. Uses an already available global Trellis CLI when initialization is required; if it is unavailable, the affected projects are reported as blocked rather than installing the CLI.
-8. Checks bootstrap guidelines for every root.
+7. Requires no Trellis CLI, developer name or pre-existing task state.
+8. Reports an explicitly present unfinished SBTD bootstrap task without creating one.
 
-Because no global AGENTS or bundled Skills are installed, the project `AGENTS.md` written in step 6 carries its own minimum rules: it restates the safety-bearing boundaries (destructive Trellis operations, single writer per change, secret handling, report retention) and lists objective triggers for the book-derived gates. Those triggers are evaluated from the change itself, so a run still has to report a conclusion for every gate it hits. When the corresponding Skill is absent the gate is `blocked` — never `passed` and never silently skipped — so a project-only install cannot claim a reviewer ran.
+The project AGENTS provides the existing minimum routing/safety fallback; project-only mode does not install or claim activation of global Skills. Missing optional tools do not freeze unrelated safe default/lite work, and no missing reviewer may be reported as passed.
 
 ## Target Agent CLI Gate
 
@@ -151,16 +145,13 @@ Normal onboarding does not collect the action or project list until the required
 
 ## Required Global Tools
 
-Trellis and GitNexus are global-only:
+The transitional GitNexus CLI remains global-only until its Graft cutover:
 
 ```bash
-npm install -g @mindfoldhq/trellis@latest
 npm install -g gitnexus@latest
 ```
 
-The preflight no longer advertises `npm install -D @mindfoldhq/trellis` or `npm install -D gitnexus`. Project state remains local:
-
-- Trellis: `<project-root>/.trellis/`
+Project-local CLI installation is not offered. Trellis is no longer installed or invoked; existing legacy state is retained for explicit migration.
 - GitNexus: `<project-root>/.gitnexus/`
 
 RTK remains global but keeps its existing confirmation behavior. Verify the Rust Token Killer implementation with:
@@ -174,7 +165,7 @@ If `rtk gain` fails, distinguish a same-name package collision from a data-direc
 
 ## npm and nvm
 
-Normal onboarding requires npm whenever mandatory global Trellis or GitNexus is missing. On macOS and Linux:
+Normal onboarding requires npm for the selected Agent and remaining GitNexus installation. On macOS and Linux:
 
 ```bash
 python scripts/onboard.py ensure-npm --yes
@@ -346,33 +337,17 @@ React Bits tier selection is shown only when the root is a React project and con
 - Paid: require an existing entitlement and readable `REACTBITS_LICENSE_KEY`; never print or persist it. When prerequisites pass, add `@reactbits-starter/skill` from the project root with `--path .agents/skills/react-bits-pro --overwrite --yes`, then require `.agents/skills/react-bits-pro/SKILL.md` to exist. An existing target is overwritten without a backup.
 - Reset: preserve the detected tier and registry.
 
-## Multi-Project Trellis Setup
+## Multi-Project SBTD Setup
 
-All selected roots share the provided Trellis username and platform flags, but each root is evaluated independently.
+`check` / `check-projects` inspect selected state and scaffold conflicts read-only; `plan` exposes the same result in `sbtdInit`. `check-projects --skip-project-agents` excludes that unselected write target without skipping ignore/state checks. Missing optional state is valid and does not prove installation or create files.
 
-For every root:
+The inspector validates the current active pointer and its selected task, plus `ai/tasks/00-bootstrap-guidelines/task.md` when explicitly present. It uses the bundled task v1 schema, safe JSON-compatible YAML, duplicate/cycle/nonfinite rejection, real timestamp parsing, filesystem containment and pointer/record logical-ID agreement. It does not scan history, infer a newest task, modify state, validate full parent/event history, or authorize branch recovery.
 
-1. If `.trellis/` exists, report `skipped-existing`.
-2. If it is missing and no username was provided, report `needs-user` for that root.
-3. If it is missing and no Trellis platform is resolved, report `needs-user`. Empty flags are not passed to `trellis init --yes`.
-4. Otherwise run:
+An unfinished bootstrap record reports `bootstrap-required`; no bootstrap is created by installation. A done record reports recorded completion only. Legacy `.trellis` yields `needs-user` for explicit migration and stays untouched. Malformed state is `blocked`. Every root retains `status`, `reason` and `nextStep`.
 
-```bash
-trellis init -u <username> --<platform-flag> [--more-platform-flags] --yes --skip-existing
-```
+Both root installers gate all global/optional project mutations on the complete selected-project preflight; Python repeats it before its own installation writes. Reject blocking state, nonregular selected AGENTS/ignore targets, a multiply-linked ignore file, or new rules hiding existing unconfirmed reserved data. All roots retain results and a conflict stops the batch; reset preserves optional data. Read-only Agent detection may precede this gate, but installation/MCP writes may not.
 
-`plan --json` includes this command under `trellisInit.command`.
-5. Confirm `.trellis/` was created.
-6. Unless skipped, check only `.trellis/tasks/00-bootstrap-guidelines`.
-7. If present, report `bootstrap-required` with the root and task path.
-
-Processing continues for all roots even when an earlier root has a bootstrap task. Aggregate status priority is:
-
-```text
-failed > blocked > needs-user > bootstrap-required > success > skipped
-```
-
-A detected bootstrap task is reported as `bootstrap-required` and blocks reporting onboarding as complete. The retired `trellis-workflow` Skill and its `$trellis-before-dev` / `$trellis-check` / `$trellis-finish-work` route no longer ship with this payload; completing the legacy bootstrap guideline belongs to the explicit v1 -> v2 migration path (P1 scope) and must not be aliased into `sbtd-task`.
+Aggregate priority is `failed > blocked > needs-user > bootstrap-required > success > skipped`; exit codes remain 5, 2, 2, 6, 0, 0 respectively. A read-only plan may successfully report a blocked proposed operation without executing it.
 
 ## MCP Setup
 
@@ -426,8 +401,8 @@ Project paths, repeated for every selected root:
 
 - `<project-root>/AGENTS.md`
 - `<project-root>/.gitignore`
-- `<project-root>/.trellis/`
-- `<project-root>/.trellis/tasks/00-bootstrap-guidelines`
+- optional `.sbtd/active-task.json` and its selected task (read-only)
+- optional `ai/tasks/00-bootstrap-guidelines/task.md` (read-only)
 - conditional project Playwright dependencies/configuration
 - conditional React Bits Skill/registry
 
@@ -438,13 +413,13 @@ Generic bundled/external workflow Skills are never installed under `<project-roo
 ```bash
 python scripts/onboard.py check --projects-root /abs/one,/abs/two
 python scripts/onboard.py check-projects --projects-root /abs/one,/abs/two
-python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --json
-python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
-python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
-python scripts/onboard.py init-projects --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --json
+python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --yes
+python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --yes
+python scripts/onboard.py init-projects --platform codex --projects-root /abs/one,/abs/two --yes
 ```
 
-`--json` prints exactly one JSON document on stdout and suppresses all human-readable prose, including on non-zero exits. Write modes reuse the plan payload as the root object and add their results to it: `init`, `reset`, and `init-projects` append `backups`, `trellisProjectSetup`, and `unverifiedChecks` next to the planned `operations`, `bundledMigration`, `externalMigration`, and `trellisInit`. Read-only `plan`, `check`, and `check-projects` payloads are unchanged.
+`--json` emits one stdout JSON document; diagnostics use stderr. Write modes merge plan and results, including `sbtdInit`, `sbtdProjectSetup`, `backups` and `unverifiedChecks` as applicable. Project checks expose `sbtd`, not `trellis`. Removed setup fields have no aliases. Bootstrap/invalid-state results are nonzero; argparse syntax errors retain stderr and exit 2.
 
 Global-only onboarding is still supported by omitting `--projects-root` and explicitly skipping project AGENTS when using the Python command directly:
 
@@ -459,9 +434,9 @@ After writes:
 1. Verify every copied AGENTS file against its source template.
 2. Verify every bundled global Skill directory recursively.
 3. Verify the project `.gitignore` block exists in every selected root.
-4. Report per-root Trellis init and bootstrap status.
+4. Report per-root SBTD state/bootstrap results without claiming task recovery or acceptance proof.
 5. Report per-root Playwright and React Bits decisions without claiming optional installation succeeded unless the command and post-check pass.
 6. Rerun the target Agent CLI and global preflight after normal onboarding.
 7. Rerun only `check-projects` after project-only onboarding.
 
-Network failures, permissions, missing npm/npx, unsupported native Windows bootstrap, failed Trellis initialization, missing React Bits registry/license prerequisites, and bootstrap-required handoffs must remain explicit in the final report.
+Network, permissions, missing dependencies, unsupported platform execution, malformed state, legacy migration requirements and bootstrap-required results remain explicit; no skipped check is a pass.

@@ -15,10 +15,6 @@ YES=0
 NO_COLOR_REQUESTED=0
 GLOBAL_AGENTS_PATH=""
 GLOBAL_SKILLS_DIR=""
-TRELLIS_USER=""
-TRELLIS_PLATFORMS=()
-SKIP_TRELLIS_INIT=0
-SKIP_TRELLIS_BOOTSTRAP=0
 CHECK_JSON=""
 AGENT_CLI_JSON=""
 PROJECTS_JSON=""
@@ -56,16 +52,6 @@ Options:
       Override the global AGENTS.md target.
   --global-skills-dir <path>
       Override global skills directory.
-  --trellis-user <name>
-      Developer username for trellis init -u when the project has no .trellis/.
-  --trellis-platform <name[,name...]>
-      Trellis init platform flag without leading dashes. May be repeated.
-      Examples: codex, claude, kimi, cursor, omp, pi. Replaces the Agent
-      platform default. OMP and Pi are separate flags.
-  --skip-trellis-init
-      Skip post-install trellis init for project roots without .trellis/.
-  --skip-trellis-bootstrap
-      Skip post-install bootstrap task detection.
   --no-mcp
       Skip MCP configuration.
   --dry-run
@@ -346,19 +332,6 @@ onboard_common_args() {
   if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
     args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
   fi
-  if [[ -n "$TRELLIS_USER" ]]; then
-    args+=(--trellis-user "$TRELLIS_USER")
-  fi
-  local trellis_platform
-  for trellis_platform in ${TRELLIS_PLATFORMS[@]+"${TRELLIS_PLATFORMS[@]}"}; do
-    args+=(--trellis-platform "$trellis_platform")
-  done
-  if [[ "$SKIP_TRELLIS_INIT" -eq 1 ]]; then
-    args+=(--skip-trellis-init)
-  fi
-  if [[ "$SKIP_TRELLIS_BOOTSTRAP" -eq 1 ]]; then
-    args+=(--skip-trellis-bootstrap)
-  fi
   if (( ${#args[@]} > 0 )); then
     printf '%s\0' "${args[@]}"
   fi
@@ -411,8 +384,17 @@ refresh_projects_json() {
     rm -f "$PROJECTS_JSON"
   fi
   PROJECTS_JSON="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-projects.XXXXXX")"
+  local rc=0
+  local args=(--projects-root "$PROJECTS_ROOT" --json)
+  if [[ "$SKIP_PROJECT_AGENTS" -eq 1 ]]; then
+    args+=(--skip-project-agents)
+  fi
   "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" check-projects \
-    --projects-root "$PROJECTS_ROOT" --json > "$PROJECTS_JSON"
+    "${args[@]}" > "$PROJECTS_JSON" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    cat "$PROJECTS_JSON" >&2
+    return "$rc"
+  fi
 }
 
 project_check_lines() {
@@ -518,7 +500,7 @@ ensure_target_agent_cli() {
   if [[ "$installed" == "true" ]]; then
     printf '%s CLI passed verification: %s\n' "$label" "$command"
     if [[ "$npm_installed" != "true" ]]; then
-      printf 'npm is required for the mandatory global Trellis and GitNexus CLIs; bootstrapping Node.js LTS + npm.\n'
+      printf 'npm is required for the mandatory global GitNexus CLI; bootstrapping Node.js LTS + npm.\n'
       run_onboard ensure-npm --yes
       if [[ "$DRY_RUN" -eq 0 ]]; then
         refresh_agent_cli_json
@@ -745,32 +727,6 @@ parse_args() {
         GLOBAL_SKILLS_DIR="${1#*=}"
         shift
         ;;
-      --trellis-user)
-        [[ $# -ge 2 ]] || die "--trellis-user requires a value"
-        TRELLIS_USER="$2"
-        shift 2
-        ;;
-      --trellis-user=*)
-        TRELLIS_USER="${1#*=}"
-        shift
-        ;;
-      --trellis-platform)
-        [[ $# -ge 2 ]] || die "--trellis-platform requires a value"
-        TRELLIS_PLATFORMS+=("$2")
-        shift 2
-        ;;
-      --trellis-platform=*)
-        TRELLIS_PLATFORMS+=("${1#*=}")
-        shift
-        ;;
-      --skip-trellis-init)
-        SKIP_TRELLIS_INIT=1
-        shift
-        ;;
-      --skip-trellis-bootstrap)
-        SKIP_TRELLIS_BOOTSTRAP=1
-        shift
-        ;;
       --no-mcp)
         NO_MCP=1
         shift
@@ -822,7 +778,7 @@ resolve_interactive_inputs() {
     ACTION="init-projects"
     PROJECTS_ROOT="$INIT_PROJECTS"
   else
-    ensure_target_agent_cli
+    refresh_agent_cli_json
     if [[ -n "$ACTION" ]]; then
       case "$ACTION" in
         init|reset) ;;
@@ -860,52 +816,6 @@ resolve_interactive_inputs() {
   fi
 }
 
-split_trellis_platforms() {
-  local raw="$1"
-  local item trimmed
-  local -a parts=()
-  raw="${raw// /}"
-  [[ -z "$raw" ]] && return 0
-  IFS=',' read -ra parts <<< "$raw"
-  for item in "${parts[@]}"; do
-    trimmed="${item#--}"
-    [[ -n "$trimmed" ]] && TRELLIS_PLATFORMS+=("$trimmed")
-  done
-}
-
-resolve_trellis_project_setup_inputs() {
-  [[ "$SKIP_TRELLIS_INIT" -eq 1 ]] && return 0
-  (( ${#PROJECT_ROOTS[@]} > 0 )) || return 0
-
-  local needs_init=0 project_root
-  for project_root in ${PROJECT_ROOTS[@]+"${PROJECT_ROOTS[@]}"}; do
-    [[ -e "$project_root/.trellis" ]] || needs_init=1
-  done
-  [[ "$needs_init" -eq 1 ]] || return 0
-
-  if ! command -v trellis >/dev/null 2>&1; then
-    warn "The required global Trellis CLI is unavailable; project initialization will be reported as blocked."
-    return 0
-  fi
-
-  while [[ -z "$TRELLIS_USER" ]]; do
-    TRELLIS_USER="$(prompt_text 'Trellis developer username for trellis init -u' '')"
-    if [[ -z "$TRELLIS_USER" ]]; then
-      if prompt_yes_no "Skip trellis init for all selected projects that do not have .trellis/?" "n"; then
-        SKIP_TRELLIS_INIT=1
-        return 0
-      fi
-    fi
-  done
-
-  if (( ${#TRELLIS_PLATFORMS[@]} == 0 )); then
-    local raw_platforms
-    local prompt='Trellis platform flags, comma-separated without --. Blank uses the Agent platform default for codex, claude, or kimi; Oh My Pi requires omp and/or pi'
-    raw_platforms="$(prompt_text "$prompt" '')"
-    split_trellis_platforms "$raw_platforms"
-  fi
-}
-
 assert_ponytail_provider_clear() {
   local provider
   provider="$(json_python ponytail-provider)"
@@ -937,12 +847,6 @@ install_missing_runtime_and_skills() {
     elif prompt_yes_no "rtk is missing. Install rtk-ai/rtk?" "n"; then
       run_onboard install-rtk --yes
     fi
-    refresh_check_json
-  fi
-
-  if [[ "$(json_python tool-installed trellis)" != "true" ]] && [[ "$(json_python runtime-installed npm)" == "true" ]]; then
-    printf 'Trellis CLI is required globally; installing @mindfoldhq/trellis@latest.\n'
-    run_cmd npm install -g @mindfoldhq/trellis@latest
     refresh_check_json
   fi
 
@@ -1282,7 +1186,11 @@ final_checks() {
   color '1;36' 'Final check'
   printf '\n'
   if [[ "$PROJECTS_ONLY" -eq 1 ]]; then
-    run_onboard check-projects --projects-root "$PROJECTS_ROOT"
+    local project_args=(--projects-root "$PROJECTS_ROOT")
+    if [[ "$SKIP_PROJECT_AGENTS" -eq 1 ]]; then
+      project_args+=(--skip-project-agents)
+    fi
+    run_onboard check-projects "${project_args[@]}"
     return 0
   fi
   run_onboard check-agent-cli --platform "$PLATFORM"
@@ -1324,14 +1232,15 @@ main() {
   find_python
   print_logo
   resolve_interactive_inputs
+  refresh_projects_json
   if [[ "$PROJECTS_ONLY" -eq 0 ]]; then
+    ensure_target_agent_cli
     install_missing_runtime_and_skills
     select_and_configure_mcp
   else
     printf '\nProject-only mode: skipped all global tool, Skill, Agent CLI, and MCP checks/installations.\n'
   fi
   configure_project_optional_items
-  resolve_trellis_project_setup_inputs
   show_plan_and_execute
   final_checks
 }

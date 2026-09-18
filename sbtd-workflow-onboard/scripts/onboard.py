@@ -11,6 +11,7 @@ import platform
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -21,6 +22,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
+
+from sbtd_project import StateInspection, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL_ENTRY_DIR = Path(__file__).absolute().parents[1]
@@ -317,13 +320,6 @@ CLI_TOOLS = (
         "advice": "Install RTK from rtk-ai/rtk and verify with `rtk gain`; do not treat the unrelated Rust Type Kit package as valid.",
     },
     {
-        "name": "trellis",
-        "versionArgs": ("--version",),
-        "globalInstall": "npm install -g @mindfoldhq/trellis@latest",
-        "projectInstall": None,
-        "advice": "Install Trellis globally so one verified CLI can initialize every selected project root.",
-    },
-    {
         "name": "gitnexus",
         "versionArgs": ("--version",),
         "globalInstall": "npm install -g gitnexus@latest",
@@ -373,45 +369,6 @@ AGENT_PLATFORM_ALIASES = {
     "ohmypi": "oh-my-pi",
     "omp": "oh-my-pi",
 }
-TRELLIS_INIT_CAPABILITY_SET = "0.6.15"
-TRELLIS_INIT_PLATFORMS = (
-    "cursor",
-    "claude",
-    "opencode",
-    "codex",
-    "kilo",
-    "kiro",
-    "gemini",
-    "antigravity",
-    "devin",
-    "windsurf",
-    "qoder",
-    "codebuddy",
-    "copilot",
-    "droid",
-    "dsh",
-    "pi",
-    "reasonix",
-    "zcode",
-    "omp",
-    "trae",
-    "grok",
-    "kimi",
-    "snow",
-)
-TRELLIS_DEFAULT_FROM_AGENT_PLATFORM = {
-    "codex": "codex",
-    "claude": "claude",
-    "kimi": "kimi",
-}
-if any(
-    flag not in TRELLIS_INIT_PLATFORMS
-    for flag in TRELLIS_DEFAULT_FROM_AGENT_PLATFORM.values()
-):
-    raise RuntimeError(
-        "SBTD Onboard Agent-to-Trellis defaults must be Trellis init flags"
-    )
-TRELLIS_BOOTSTRAP_TASK_CANDIDATES = (".trellis/tasks/00-bootstrap-guidelines",)
 BUNDLED_SKILLS = tuple(SKILL_SOURCES.keys())
 MATTPOCOCK_CANONICAL_SKILLS = (
     "diagnosing-bugs",
@@ -1499,19 +1456,14 @@ def check_react_bits_project(project_root: Path) -> dict[str, object]:
     return result
 
 
-def build_project_check(project_root: Path) -> dict[str, object]:
-    bootstrap_task, relative_path = find_trellis_bootstrap_task(project_root)
+def build_project_check(
+    project_root: Path, skip_agents: bool = False
+) -> dict[str, object]:
     return {
         "projectRoot": str(project_root),
         "playwright": check_playwright_project(project_root),
         "reactBits": check_react_bits_project(project_root),
-        "trellis": {
-            "initialized": (project_root / ".trellis").is_dir(),
-            "path": str(project_root / ".trellis"),
-            "bootstrapRequired": bootstrap_task is not None,
-            "bootstrapTask": str(bootstrap_task) if bootstrap_task else None,
-            "bootstrapRelativePath": relative_path,
-        },
+        "sbtd": inspect_project_setup(project_root, skip_agents),
     }
 
 
@@ -1520,7 +1472,10 @@ def build_projects_check_results(args: argparse.Namespace) -> dict[str, object]:
     return {
         "mode": "check-projects",
         "projects": [
-            build_project_check(project_root) for project_root in project_roots
+            build_project_check(
+                project_root, bool(getattr(args, "skip_project_agents", False))
+            )
+            for project_root in project_roots
         ],
     }
 
@@ -1548,15 +1503,11 @@ def print_projects_check_results(results: dict[str, object], as_json: bool) -> N
             "  React Bits tier selection: "
             + ("required" if react_bits["applicable"] else "not-needed")
         )
-        trellis = item["trellis"]
-        print(
-            "  Trellis: "
-            + ("initialized" if trellis["initialized"] else "not-initialized")
-        )
-        print(
-            "  Bootstrap guidelines: "
-            + ("required" if trellis["bootstrapRequired"] else "not-found")
-        )
+        sbtd = item["sbtd"]
+        print(f"  SBTD state: {sbtd['status']}")
+        print(f"  Reason: {sbtd['reason']}")
+        if sbtd["nextStep"]:
+            print(f"  Next step: {sbtd['nextStep']}")
 
 
 def check_skill(
@@ -2156,7 +2107,10 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     tools.append(maestro_check)
     manual_checks = build_manual_checks(java_check, maestro_check, None, gitnexus_check)
     project_checks = [
-        build_project_check(project_root) for project_root in project_roots
+        build_project_check(
+            project_root, bool(getattr(args, "skip_project_agents", False))
+        )
+        for project_root in project_roots
     ]
     missing = {
         "runtime": [] if runtime["npm"]["installed"] else ["npm"],
@@ -2181,7 +2135,6 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
                 str(omp_global_agents_path(omp_root)) if omp_root else None
             ),
         },
-
         "runtime": runtime,
         "cliChecksSkipped": cli_checks_skipped,
         "tools": tools,
@@ -2328,7 +2281,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     print("\nCLI tools:")
     if results["cliChecksSkipped"]:
         print(
-            "- npm-backed tools skipped: npm is not usable yet, so rtk / trellis / gitnexus checks have not run."
+            "- npm-backed tools skipped: npm is not usable yet, so rtk / gitnexus checks have not run."
         )
     for item in results["tools"]:
         status = "installed" if item["installed"] else "missing"
@@ -5645,351 +5598,135 @@ def run_project_command(
         return None
 
 
-def parse_trellis_platforms(args: argparse.Namespace) -> list[str]:
-    raw_values = getattr(args, "trellis_platform", None) or []
-    platforms: list[str] = []
-    invalid: list[str] = []
-    for raw_value in raw_values:
-        for part in re.split(r"[\s,]+", raw_value):
-            platform_name = part.strip().lower().removeprefix("--")
-            if not platform_name:
-                continue
-            if platform_name not in TRELLIS_INIT_PLATFORMS:
-                invalid.append(platform_name)
-                continue
-            if platform_name not in platforms:
-                platforms.append(platform_name)
-    if invalid:
-        allowed = ", ".join(TRELLIS_INIT_PLATFORMS)
-        raise SystemExit(
-            f"Unsupported Trellis platform(s): {', '.join(invalid)}. Allowed values: {allowed}"
-        )
-    return platforms
-
-
-def resolve_trellis_init_platforms(args: argparse.Namespace) -> dict[str, object]:
-    explicit = parse_trellis_platforms(args)
-    if explicit:
-        return {
-            "platforms": explicit,
-            "source": "explicit",
-            "status": "resolved",
-        }
-    agent = None
-    raw_platform = getattr(args, "platform", None)
-    if raw_platform and str(raw_platform).strip():
-        agent = normalize_agent_platform(str(raw_platform))
-        default_flag = TRELLIS_DEFAULT_FROM_AGENT_PLATFORM.get(agent)
-        if default_flag:
-            return {
-                "platforms": [default_flag],
-                "source": "agent-platform",
-                "status": "resolved",
-            }
-    if agent == "oh-my-pi":
-        reason = (
-            "Agent platform oh-my-pi does not select a Trellis init flag. "
-            "Pass --trellis-platform omp and/or pi; omp and pi stay independent."
-        )
-    else:
-        reason = (
-            "trellis init --yes without platform flags installs Claude and Cursor. "
-            "Pass --trellis-platform, or pass --platform codex, claude, or kimi."
-        )
-    return {
-        "platforms": [],
-        "source": "missing",
-        "status": "needs-user",
-        "reason": reason,
-    }
-
-
-def trellis_init_command(username: str, platforms: list[str]) -> tuple[str, ...]:
-    if not platforms:
-        raise ValueError(
-            "trellis init requires at least one platform flag; "
-            "empty flags plus --yes would install Claude and Cursor."
-        )
-    platform_flags = tuple(f"--{platform_name}" for platform_name in platforms)
-    return (
-        "trellis",
-        "init",
-        "-u",
-        username,
-        *platform_flags,
-        "--yes",
-        "--skip-existing",
-    )
-
 
 def command_display(command: tuple[str, ...]) -> str:
     return shlex.join(command)
 
 
-def find_trellis_bootstrap_task(project_root: Path) -> tuple[Path | None, str | None]:
-    for relative_path in TRELLIS_BOOTSTRAP_TASK_CANDIDATES:
-        candidate = project_root / relative_path
-        if candidate.exists():
-            return candidate, relative_path
-    return None, None
-
-
-def run_trellis_project_setup_for_root(
-    mode: str,
-    args: argparse.Namespace,
-    project_root: Path,
-    trellis_check: dict[str, object],
-) -> dict[str, object]:
-    report: dict[str, object] = {
-        "mode": mode,
-        "status": "skipped",
-        "projectRoot": str(project_root),
-    }
-    if mode not in {"init", "reset", "init-projects"}:
-        report["reason"] = (
-            "Trellis project setup only runs after init/reset/init-projects."
-        )
-        return report
-    if getattr(args, "skip_trellis_init", False):
-        report["status"] = "skipped"
-        report["reason"] = "--skip-trellis-init was provided."
-        return report
-
-    report["cli"] = {
-        "installed": trellis_check.get("installed"),
-        "path": trellis_check.get("path"),
-        "version": trellis_check.get("version"),
-    }
-    if not trellis_check.get("installed"):
-        report["status"] = "blocked"
-        report["init"] = {
-            "status": "blocked-missing-cli",
-            "reason": "trellis CLI must be installed and pass version verification before project initialization.",
-            "nextStep": "Install or repair the required global Trellis CLI, then rerun the project initialization command.",
-        }
-        return report
-
-    trellis_dir = project_root / ".trellis"
-    resolution = resolve_trellis_init_platforms(args)
-    platforms = [str(item) for item in resolution["platforms"]]
-    report["platforms"] = platforms
-    report["platformSource"] = resolution["source"]
-    username = (getattr(args, "trellis_user", None) or "").strip()
-    if trellis_dir.exists():
-        report["init"] = {
-            "status": "skipped-existing",
-            "path": str(trellis_dir),
-            "reason": "Target project already has .trellis/.",
-        }
-    elif not username:
-        report["status"] = "needs-user"
-        report["init"] = {
-            "status": "needs-user",
-            "reason": "Target project does not have .trellis/ and --trellis-user was not provided.",
-            "nextStep": "Ask for the Trellis developer username, then rerun with --projects-root, --trellis-user, --platform, and optional --trellis-platform.",
-        }
-        if platforms:
-            report["init"]["exampleCommand"] = command_display(
-                trellis_init_command("your-name", platforms)
-            )
-        return report
-    elif str(resolution["status"]) == "needs-user":
-        report["status"] = "needs-user"
-        report["init"] = {
-            "status": "needs-user",
-            "reason": resolution["reason"],
-            "nextStep": (
-                "Pass --trellis-platform, or --platform codex, claude, or kimi. "
-                "oh-my-pi requires --trellis-platform omp and/or pi."
-            ),
-        }
-        return report
-    else:
-        command = trellis_init_command(username, platforms)
-        init_result = run_project_command(command, project_root, timeout=300)
-        init_succeeded = bool(
-            init_result and init_result.returncode == 0 and trellis_dir.exists()
-        )
-        report["init"] = {
-            "status": "success" if init_succeeded else "failed",
-            "command": command_display(command),
-            "stdout": command_excerpt(init_result, limit=12),
-        }
-        if not init_succeeded:
-            report["status"] = "failed"
-            report["init"]["stderr"] = command_excerpt(init_result, limit=12)
-            report["init"]["reason"] = (
-                "trellis init did not complete successfully or did not create .trellis/."
-            )
-            return report
-
-    if getattr(args, "skip_trellis_bootstrap", False):
-        report["status"] = "success"
-        report["bootstrapTask"] = {
-            "status": "skipped",
-            "reason": "--skip-trellis-bootstrap was provided.",
-        }
-        return report
-
-    bootstrap_task, relative_path = find_trellis_bootstrap_task(project_root)
-    if not bootstrap_task:
-        report["status"] = "success"
-        report["bootstrapTask"] = {
-            "status": "not-found",
-            "reason": "No bootstrap task was found at the canonical path.",
-            "checkedPaths": list(TRELLIS_BOOTSTRAP_TASK_CANDIDATES),
-        }
-        return report
-
-    report["status"] = "bootstrap-required"
-    report["bootstrapTask"] = {
-        "status": "found",
-        "path": str(bootstrap_task),
-        "relativePath": relative_path,
-        "requiredAction": (
-            "Preserve this legacy bootstrap and request an explicitly authorized "
-            "SBTD migration plan. Do not execute retired workflow gates or "
-            "reinterpret legacy files as SBTD tasks. This result does not "
-            "establish SBTD runtime readiness."
-        ),
-    }
-    return report
-
-
-def aggregate_trellis_status(projects: list[dict[str, object]]) -> str:
+def aggregate_project_status(projects: list[dict[str, object]]) -> str:
     statuses = {str(item.get("status")) for item in projects}
     for status in ("failed", "blocked", "needs-user", "bootstrap-required"):
         if status in statuses:
             return status
-    if "success" in statuses:
-        return "success"
-    return "skipped"
+    return "success" if projects else "skipped"
 
 
-def run_trellis_project_setup(mode: str, args: argparse.Namespace) -> dict[str, object]:
-    project_roots = resolve_project_roots(args)
-    if mode not in {"init", "reset", "init-projects"}:
-        return {
-            "mode": mode,
-            "status": "skipped",
-            "projects": [],
-            "reason": "Trellis project setup only runs after init/reset/init-projects.",
-        }
-    if not project_roots:
-        return {
-            "mode": mode,
-            "status": "skipped",
-            "projects": [],
-            "reason": "--projects-root was not provided.",
-        }
-
-    trellis_check = check_cli_tool(CLI_TOOLS[1])
-    projects = [
-        run_trellis_project_setup_for_root(mode, args, project_root, trellis_check)
-        for project_root in project_roots
-    ]
-    return {
-        "mode": mode,
-        "status": aggregate_trellis_status(projects),
-        "projects": projects,
-    }
+def project_status_exit_code(status: object) -> int:
+    if status in {"blocked", "needs-user"}:
+        return 2
+    if status == "failed":
+        return 5
+    if status == "bootstrap-required":
+        return 6
+    return 0
 
 
-def build_trellis_init_plan(
-    mode: str, args: argparse.Namespace
-) -> dict[str, object]:
-    if mode not in {"plan", "init", "reset", "init-projects"}:
-        return {
-            "status": "skipped",
-            "reason": "Trellis init is not part of this mode.",
-        }
-    if getattr(args, "skip_trellis_init", False):
-        return {
-            "status": "skipped",
-            "reason": "--skip-trellis-init was provided.",
-        }
-    project_roots = resolve_project_roots(args)
-    needing = [
-        str(path) for path in project_roots if not (path / ".trellis").exists()
-    ]
-    agent = None
-    raw_platform = getattr(args, "platform", None)
-    if raw_platform and str(raw_platform).strip():
-        agent = normalize_agent_platform(str(raw_platform))
-    resolution = resolve_trellis_init_platforms(args)
-    username = (getattr(args, "trellis_user", None) or "").strip()
-    command = None
-    if str(resolution["status"]) == "resolved" and username:
-        command = command_display(
-            trellis_init_command(
-                username, [str(item) for item in resolution["platforms"]]
+def project_scaffold_conflict(project_root: Path, skip_agents: bool) -> str | None:
+    """Reject unsafe destinations and newly hiding existing reserved data."""
+    names = (".gitignore",) if skip_agents else (".gitignore", "AGENTS.md")
+    try:
+        for name in names:
+            target = project_root / name
+            try:
+                metadata = target.lstat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISREG(metadata.st_mode):
+                return f"{name} is not a regular installation target."
+            if name == ".gitignore" and metadata.st_nlink > 1:
+                return ".gitignore has multiple hard links; appending would modify another file."
+
+        target = project_root / ".gitignore"
+        current = target.read_text(encoding="utf-8") if target.exists() else ""
+        missing = set(
+            missing_file_lines(
+                PROJECT_GITIGNORE_TEMPLATE.read_text(encoding="utf-8"), current
             )
         )
-    if not project_roots:
-        status = "skipped"
-        reason: str | None = "--projects-root was not provided."
-    elif not needing:
-        status = "skipped-existing"
-        reason = "Every selected project already has .trellis/."
-    elif not username or str(resolution["status"]) == "needs-user":
-        status = "needs-user"
-        if str(resolution["status"]) == "needs-user":
-            reason = str(resolution.get("reason") or "")
-        else:
-            reason = (
-                "Target project does not have .trellis/ and --trellis-user was not provided."
+        existing: list[str] = []
+        for relative in (".sbtd", "docs/handoffs", "graft", ".graft"):
+            if f"/{relative}" not in missing:
+                continue
+            if "/" in relative:
+                parent = project_root / "docs"
+                if parent.is_symlink():
+                    return "docs is a symlink; reserved handoff ownership is not established."
+            path = project_root / relative
+            try:
+                path.lstat()
+            except FileNotFoundError:
+                continue
+            existing.append(relative)
+        if not existing:
+            return None
+        verdicts = gitignore_verdicts(project_root, tuple(existing))
+        if isinstance(verdicts, str) or any(
+            not verdicts[path].ignored for path in existing
+        ):
+            return "Adding ignore rules would newly hide existing reserved data or its protection is unverified."
+        tracked = run_project_command(
+            ("git", "ls-files", "-z", "--", *existing), project_root, timeout=60
+        )
+        if tracked is None or tracked.returncode != 0 or tracked.stdout:
+            return "Existing reserved data is tracked or its tracked state could not be verified."
+    except (OSError, UnicodeError):
+        return "Project installation targets could not be safely inspected."
+    return None
+
+
+def inspect_project_setup(project_root: Path, skip_agents: bool) -> StateInspection:
+    inspection = inspect_project_state(project_root)
+    if inspection["status"] == "success":
+        conflict = project_scaffold_conflict(project_root, skip_agents)
+        if conflict:
+            inspection.update(
+                status="needs-user",
+                reason=conflict,
+                nextStep="Inspect the existing data and resolve the target or authorize its narrow protection before retrying; Onboard will not hide or replace it.",
             )
-    else:
-        status = "planned"
-        reason = None
+    return inspection
+
+
+def build_sbtd_project_setup(mode: str, args: argparse.Namespace) -> dict[str, object]:
+    projects: list[dict[str, object]] = []
+    for root in resolve_project_roots(args):
+        projects.append(
+            {
+                "projectRoot": str(root),
+                **inspect_project_setup(
+                    root, bool(getattr(args, "skip_project_agents", False))
+                ),
+            }
+        )
+    status = aggregate_project_status(projects)
     return {
+        "mode": mode,
         "status": status,
-        "agentPlatform": agent,
-        "platforms": [str(item) for item in resolution["platforms"]],
-        "platformSource": resolution["source"],
-        "command": command,
-        "projectsNeedingInit": needing,
-        "reason": reason,
+        "projects": projects,
+        "reason": (
+            "Only selected project state is inspected; optional artifacts are not created."
+            if projects
+            else "--projects-root was not provided."
+        ),
+        "nextStep": (
+            "Resolve each reported project condition before installation."
+            if project_status_exit_code(status)
+            else ""
+        ),
     }
 
 
-def print_trellis_project_setup_report(report: dict[str, object]) -> None:
-    print("\nTrellis project setup:")
+def print_sbtd_project_setup_report(report: dict[str, object]) -> None:
+    print("\nSBTD project setup:")
     print(f"- status: {report.get('status')}")
     if report.get("reason"):
         print(f"  reason: {report['reason']}")
-    for project in report.get("projects", []):
+    for project in cast(list[dict[str, object]], report.get("projects", [])):
         print(f"- project root: {project['projectRoot']}")
-        print(f"  status: {project.get('status')}")
-        cli = project.get("cli")
-        if isinstance(cli, dict):
-            print(f"  cli: {'installed' if cli.get('installed') else 'missing'}")
-            if cli.get("path"):
-                print(f"  cli path: {cli['path']}")
-            if cli.get("version"):
-                print(f"  cli version: {cli['version']}")
-        init = project.get("init")
-        if isinstance(init, dict):
-            print(f"  init: {init.get('status')}")
-            if init.get("path"):
-                print(f"  init path: {init['path']}")
-            if init.get("command"):
-                print(f"  init command: {init['command']}")
-            if init.get("reason"):
-                print(f"  init reason: {init['reason']}")
-            if init.get("nextStep"):
-                print(f"  init next step: {init['nextStep']}")
-            if init.get("exampleCommand"):
-                print(f"  example: {init['exampleCommand']}")
-        bootstrap = project.get("bootstrapTask")
-        if isinstance(bootstrap, dict):
-            print(f"  bootstrap task: {bootstrap.get('status')}")
-            if bootstrap.get("path"):
-                print(f"  bootstrap path: {bootstrap['path']}")
-            if bootstrap.get("reason"):
-                print(f"  bootstrap reason: {bootstrap['reason']}")
-            if bootstrap.get("requiredAction"):
-                print(f"  required action: {bootstrap['requiredAction']}")
+        print(f"  status: {project['status']}")
+        print(f"  reason: {project['reason']}")
+        if project["nextStep"]:
+            print(f"  next step: {project['nextStep']}")
 
 
 def install_playwright_cli(args: argparse.Namespace) -> int:
@@ -6354,7 +6091,7 @@ def build_plan_payload(
     external_migration_plan: dict[str, object] | None = None,
     global_skills_dir: Path | None = None,
     global_skills_dir_source: str | None = None,
-    trellis_init_plan: dict[str, object] | None = None,
+    sbtd_init_plan: dict[str, object] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "mode": mode,
@@ -6373,8 +6110,8 @@ def build_plan_payload(
         payload["bundledMigration"] = bundled_migration_plan
     if external_migration_plan:
         payload["externalMigration"] = external_migration_plan
-    if trellis_init_plan:
-        payload["trellisInit"] = trellis_init_plan
+    if sbtd_init_plan:
+        payload["sbtdInit"] = sbtd_init_plan
     if global_skills_dir and mode in {"plan", "init", "reset"}:
         payload["cavemanMaintenance"] = caveman_maintenance_plan(global_skills_dir)
     return payload
@@ -6460,21 +6197,9 @@ def print_plan(payload: dict[str, object]) -> None:
                     str(name) for name in external_migration_plan["removeLegacy"]
                 )
             )
-    trellis_init_plan = payload.get("trellisInit")
-    if trellis_init_plan:
-        print("\nTrellis init:")
-        print(f"- status: {trellis_init_plan.get('status')}")
-        if trellis_init_plan.get("agentPlatform"):
-            print(f"- agent platform: {trellis_init_plan['agentPlatform']}")
-        platforms = trellis_init_plan.get("platforms") or []
-        if platforms:
-            print("- platforms: " + ", ".join(str(item) for item in platforms))
-        if trellis_init_plan.get("platformSource"):
-            print(f"- platform source: {trellis_init_plan['platformSource']}")
-        if trellis_init_plan.get("command"):
-            print(f"- command: {trellis_init_plan['command']}")
-        if trellis_init_plan.get("reason"):
-            print(f"- reason: {trellis_init_plan['reason']}")
+    sbtd_init_plan = payload.get("sbtdInit")
+    if sbtd_init_plan:
+        print_sbtd_project_setup_report(cast(dict[str, object], sbtd_init_plan))
 
 
 def operation_allows_existing_target(operation: Operation) -> bool:
@@ -6564,10 +6289,21 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 4
-        return 0
+        projects = cast(list[dict[str, object]], results["projectChecks"])
+        return project_status_exit_code(
+            aggregate_project_status(
+                [cast(dict[str, object], item["sbtd"]) for item in projects]
+            )
+        )
     if mode == "check-projects":
-        print_projects_check_results(build_projects_check_results(args), args.json)
-        return 0
+        results = build_projects_check_results(args)
+        print_projects_check_results(results, args.json)
+        projects = cast(list[dict[str, object]], results["projects"])
+        return project_status_exit_code(
+            aggregate_project_status(
+                [cast(dict[str, object], item["sbtd"]) for item in projects]
+            )
+        )
     if mode == "check-agent-cli":
         print_agent_cli_check(check_agent_cli(args.platform), args.json)
         return 0
@@ -6617,7 +6353,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
         external_migration_plan,
         global_skills_dir,
         global_skills_dir_source,
-        build_trellis_init_plan(mode, args),
+        build_sbtd_project_setup(mode, args),
     )
     if mode in {"init", "reset"}:
         plan_payload["requiredExternalInstall"] = None
@@ -6642,6 +6378,13 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return 0
 
     ensure_confirmed(args, mode)
+    sbtd_preflight = cast(dict[str, object], plan_payload["sbtdInit"])
+    preflight_exit = project_status_exit_code(sbtd_preflight["status"])
+    if preflight_exit:
+        plan_payload["sbtdProjectSetup"] = sbtd_preflight
+        plan_payload["backups"] = []
+        emit_plan_json()
+        return preflight_exit
     if bundled_migration_plan.get("status") == "blocked":
         print(
             "Bundled Skill rename migration blocked: legacy Skill identity "
@@ -6718,7 +6461,6 @@ def run(mode: str, args: argparse.Namespace) -> int:
         backup_by_target[op.target] = backup
         backup_by_target[target] = backup
         backed_up.add(target)
-
 
     operation_results: list[dict[str, object]] = []
     for op in active_operations:
@@ -6837,7 +6579,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
             )
             print_caveman_maintenance_details(caveman_maintenance)
 
-    trellis_report = run_trellis_project_setup(mode, args)
+    sbtd_report = build_sbtd_project_setup(mode, args)
     if args.json:
         # One run, one root object. The plan was held back above so it can be
         # merged here; flushing it earlier made stdout two concatenated
@@ -6856,7 +6598,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                         {"target": str(target), "backup": str(backup)}
                         for target, backup in backups
                     ],
-                    "trellisProjectSetup": trellis_report,
+                    "sbtdProjectSetup": sbtd_report,
                     "cavemanMaintenance": caveman_maintenance,
                     "unverifiedChecks": list(UNVERIFIED_CHECKS),
                 },
@@ -6865,23 +6607,17 @@ def run(mode: str, args: argparse.Namespace) -> int:
             )
         )
     else:
-        print_trellis_project_setup_report(trellis_report)
-    if trellis_report.get("status") in {"blocked", "needs-user"}:
-        return 2
-    if trellis_report.get("status") == "failed":
-        return 5
-    if trellis_report.get("status") == "bootstrap-required":
-        return 6
+        print_sbtd_project_setup_report(sbtd_report)
+    setup_exit = project_status_exit_code(sbtd_report["status"])
+    if setup_exit:
+        return setup_exit
 
     if not args.json:
         # `--json` promises one machine-readable document on stdout. Each note
         # already went to stderr when it was recorded, and the JSON document
         # carries `unverifiedChecks`, so nothing is lost by staying quiet here.
         if UNVERIFIED_CHECKS:
-            print(
-                "Verification passed, except for checks that could not be"
-                " evaluated:"
-            )
+            print("Verification passed, except for checks that could not be evaluated:")
             for item in UNVERIFIED_CHECKS:
                 print(f"- {item}")
         else:
@@ -6930,29 +6666,6 @@ def build_parser() -> argparse.ArgumentParser:
             "--platform",
             help="Target Agent platform: codex, claude, kimi, oh-my-pi, or omp.",
         )
-        sub.add_argument(
-            "--trellis-user",
-            help="Developer username for `trellis init -u` when the target project has no .trellis/.",
-        )
-        sub.add_argument(
-            "--trellis-platform",
-            action="append",
-            default=[],
-            help=(
-                "Trellis init platform flag without leading dashes, repeatable or comma-separated "
-                f"(supported: {', '.join(TRELLIS_INIT_PLATFORMS)})."
-            ),
-        )
-        sub.add_argument(
-            "--skip-trellis-init",
-            action="store_true",
-            help="Do not run the post-install Trellis init check for init/reset.",
-        )
-        sub.add_argument(
-            "--skip-trellis-bootstrap",
-            action="store_true",
-            help="Do not report the post-install Trellis bootstrap task handoff for init/reset.",
-        )
 
     project_check = subparsers.add_parser("check-projects")
     project_check.add_argument(
@@ -6962,6 +6675,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     project_check.add_argument(
         "--json", action="store_true", help="Print machine-readable project checks."
+    )
+    project_check.add_argument(
+        "--skip-project-agents",
+        action="store_true",
+        help="Exclude project AGENTS.md from installation-target checks.",
     )
 
     install = subparsers.add_parser("install-external-skills")

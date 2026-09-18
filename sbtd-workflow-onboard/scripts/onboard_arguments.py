@@ -231,6 +231,11 @@ def _build_parser() -> tuple[
         action="store_true",
         help="Print machine-readable project checks.",
     )
+    project_check.add_argument(
+        "--skip-project-agents",
+        action="store_true",
+        help="Exclude project AGENTS.md from installation-target checks.",
+    )
     subs["check-projects"] = project_check
 
     migration = subparsers.add_parser("migration", allow_abbrev=False)

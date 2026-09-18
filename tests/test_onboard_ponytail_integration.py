@@ -20,6 +20,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
+sys.path.insert(0, str(ONBOARD.parent))
 SKILL_DIR = ROOT / "sbtd-workflow-onboard"
 STABLE_ROOT = SKILL_DIR / "assets" / "external-skills" / "stable"
 TEMPLATES_DIR = SKILL_DIR / "templates"

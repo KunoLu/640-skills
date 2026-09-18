@@ -7,17 +7,17 @@ description: Checks, installs, or resets SBTD workflow tools, global Skills, AGE
 
 Use this Skill to onboard a local machine and initialize one or more projects with the SBTD workflow templates bundled under `templates/`.
 
-The repository root installers are `install.sh` and `install.ps1`. `scripts/onboard.py` is the shared implementation for checks, plans, template writes, global Skill installation, per-project checks, Trellis initialization, and bootstrap reporting.
+The repository root installers are `install.sh` and `install.ps1`. `scripts/onboard.py` implements checks, plans, template writes, global Skill installation, and read-only per-project SBTD state/bootstrap checks.
 
 The directory remains self-contained: `catalog.json` is the machine-readable source catalog, `catalog.schema.json` is its Draft 2020-12 contract, `scripts/` is the Onboard implementation, `templates/` is the install payload, and `assets/` contains managed third-party fallback snapshots. Keep this separation when adding catalog entries; do not move install payloads beside runtime code merely to flatten paths.
 
 ## Staged v2 Delivery (Unreleased)
 
-This branch carries an atomic v1 -> v2 payload cutover: the bundled set is now 14 Skills, with `sbtd-task` replacing the retired `trellis-workflow` and `trellis-channel` catalog entries and template directories; required external Skills remain 19. The complete v2 CLI, `init` / `reset` behavior, host integration, and legacy-project migration are still unfinished P1 scope. Every Trellis, bootstrap-detection, and v1 CLI behavior documented below describes the existing transitional implementation, not verified v2 behavior. Do not treat `sbtd-task` as an alias for the retired bootstrap handoff, and do not apply this development branch's mixed legacy lifecycle to real projects. User-global copies of retired Skills are not cleaned up here; that cleanup is owned by P1-13.
+This unreleased branch carries the v2 canonical payload (14 bundled Skills, with `sbtd-task` replacing `trellis-workflow` / `trellis-channel`; 19 required external Skills). Project setup no longer installs or invokes Trellis. Full Graft/host integration, task operations, identity creation and legacy migration remain staged P1 work; do not deploy this development branch as a completed v2 release. Existing legacy data is preserved and requires an explicitly authorized migration. P1-13 owns retirement of user-global legacy resources.
 
 P1-01 supplies internal, directly callable argument and exchange-contract modules (`scripts/onboard_arguments.py`, `scripts/onboard_contracts.py`, `onboard-contracts.schema.json`). It does not activate new migration/recovery commands or deployment handlers in the existing CLI. Do not substitute contract fixtures, valid hashes, or a copied directory for executed migration or recovery evidence.
 
-Whole-directory installation and `npx skills add` do not run pip. Before invoking the contract validator, use its actual Python interpreter to run `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. The dependency is loaded lazily: absent jsonschema blocks validation explicitly without breaking the existing CLI or pure argument parsing. Prove availability against the installed copy and interpreter, not the source repository's test environment.
+Whole-directory installation and `npx skills add` do not run pip. Before validating exchange contracts or existing task state, use the actual installed-copy interpreter: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. This declares jsonschema and PyYAML; missing dependencies block the affected validation without breaking help or pure argument parsing. Verify a fresh installed copy, not the source machine's existing packages.
 
 Do not install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target templates.
 
@@ -29,7 +29,6 @@ Resolve these questions in order:
 2. Is this a normal `init` / `reset`, or project-only initialization equivalent to `--init-projects`?
 3. What are the project roots? Accept one or more existing absolute paths separated by English commas.
 4. Should project `AGENTS.md` be installed into every selected project root?
-5. If any selected root has no `.trellis/`, what Trellis developer username should be used? Pass `--platform` to `plan` / `init` / `reset` / `init-projects`. When `--trellis-platform` is omitted, Onboard uses that Agent platform as the Trellis flag if it matches exactly (`codex`, `claude`, `kimi`). Extra or different Trellis integrations are passed with `--trellis-platform` and replace that default. `omp` and `pi` stay explicit: `--platform oh-my-pi` does not choose either. Empty Trellis flags are not passed to `trellis init --yes`.
 
 The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Unless the user explicitly supplies a global AGENTS path, normal onboarding writes the Codex global template to the resolved `$CODEX_HOME/AGENTS.md` / `~/.codex/AGENTS.md` path. If the user-home `.omp` directory already exists (POSIX `~/.omp`, Windows `%USERPROFILE%\.omp`), `init` / `reset` also backup-then-overwrite the same template to `~/.omp/agent/AGENTS.md`. Missing `.omp` is skipped; Onboard does not create `.omp`. `--global-agents-path` overrides only the Codex target and does not cancel the OMP write. If that path or a project `AGENTS.md` resolves to the same file as another AGENTS target, Onboard keeps a single file write. Project-only mode does not write any global AGENTS file.
 
@@ -96,7 +95,7 @@ When normal onboarding omits the `projects-root` argument, explain that multiple
 
 ## Target Agent CLI Gate
 
-Normal onboarding resolves the target Agent first and immediately checks its CLI before collecting the remaining inputs:
+Normal onboarding resolves the Agent first and may inspect its CLI before the remaining questions. Collect all project roots and the project-AGENTS choice, then run the complete read-only `check-projects` preflight before any Agent/runtime/Skill installation, MCP write, or optional project installation. Pass `--skip-project-agents` when that target was explicitly excluded. Recheck immediately before Python writes.
 
 | Platform | Verify | Required global npm package when missing |
 |---|---|---|
@@ -105,7 +104,7 @@ Normal onboarding resolves the target Agent first and immediately checks its CLI
 | `kimi` | `kimi --version` | `@moonshot-ai/kimi-code@latest` |
 | `oh-my-pi` / `omp` | `omp --version` | `@oh-my-pi/pi-coding-agent@latest` |
 
-If the target CLI is missing or broken, ensure npm is available, install the selected package globally, and require the version command to pass. If npm is missing but the target CLI already works, npm is still required because Trellis and GitNexus are mandatory global tools.
+After the selected-project preflight passes, repair a missing/broken target CLI through the existing npm gate and require its version check to pass. The remaining transitional GitNexus tool also requires npm; Graft replacement is separate staged work.
 
 Project-only `--init-projects` asks for or accepts the platform but skips this Agent CLI/npm gate and every other global preflight.
 
@@ -113,10 +112,9 @@ Project-only `--init-projects` asks for or accepts the platform but skips this A
 
 Normal `init` and `reset` require these global tools:
 
-- Trellis CLI: `npm install -g @mindfoldhq/trellis@latest`
 - GitNexus CLI: `npm install -g gitnexus@latest`
 
-Project-local Trellis and GitNexus CLI installation is not supported. Trellis state under `.trellis/` and GitNexus indexes under `.gitnexus/` remain project-specific.
+Project-local GitNexus CLI installation is not supported by the transitional installer. Existing `.trellis/` is preserved for explicit migration; Onboard neither installs nor invokes Trellis.
 
 All bundled Skills install globally as one required set:
 
@@ -162,16 +160,13 @@ The stable set is an unmodified mirror, not a fork. `assets/external-skills/stab
 
 ## Per-Project Processing
 
-For every selected project root, normal `init` / `reset` and project-only `init-projects` independently:
+For every selected root, inspect SBTD state before installation writes. A missing `.sbtd`, identity, task or bootstrap is normal; ordinary work does not require onboarding.
 
-1. Check whether project `AGENTS.md` should be installed.
-2. Ensure every non-empty line from the bundled project `.gitignore` exists, appending only missing lines without reordering or duplicating existing project content.
-3. Check whether `.trellis/` exists.
-4. If missing and not explicitly skipped, require the global Trellis CLI and run `trellis init -u <username>` with at least one platform flag and `--yes --skip-existing` in that project.
-5. Check `.trellis/tasks/00-bootstrap-guidelines` after initialization.
-6. If the bootstrap task exists, report `bootstrap-required` for that project. The retired `trellis-workflow` Skill no longer ships with this payload; completing the legacy Trellis bootstrap guideline belongs to the explicit v1 -> v2 migration path (P1 scope) and must not be routed into `sbtd-task` as an alias. Continue checking every other selected root before returning the aggregate status.
-7. Check project Playwright applicability. Only offer project installation when an existing Playwright dependency/config/script or E2E directory makes it applicable.
-8. Check React Bits only when the root is a React project and contains `components.json`.
+1. Validate only the active bookmark/selected task and an existing `ai/tasks/00-bootstrap-guidelines/task.md`: safe UTF-8 JSON/YAML, bundled v1 schema, real dates, path types/containment and full logical-ID agreement. This is not full event/parent/branch recovery validation.
+2. Report malformed state as blocked, legacy `.trellis` as needs-user for migration, and an explicitly present unfinished bootstrap as bootstrap-required. A done record is recorded state, not independent acceptance evidence. Inspect all selected roots; any blocking result stops installation writes for the batch.
+3. Reject unsafe AGENTS/ignore destinations and newly hiding existing reserved data. Resolve ownership/protection explicitly rather than silently adding ignore coverage.
+4. Install selected project AGENTS and append missing project `.gitignore` lines without reordering existing content. Preserve task, identity, spec, lessons, handoff and legacy data. Do not create those optional artifacts.
+5. Check applicable project-local Playwright and React Bits conditions; retain their existing installation confirmations.
 
 Playwright CLI remains project-only and is installed with `install-playwright-cli --project-root <one-root> --yes` after confirmation.
 
@@ -215,8 +210,8 @@ Normal plan/init/reset:
 
 ```bash
 python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --json
-python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
-python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --trellis-user your-name --yes
+python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --yes
+python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --yes
 ```
 
 Project-only initialization:
@@ -225,7 +220,6 @@ Project-only initialization:
 python scripts/onboard.py init-projects \
   --platform codex \
   --projects-root /abs/one,/abs/two \
-  --trellis-user your-name \
   --yes
 ```
 
@@ -266,7 +260,7 @@ First-time registration of a repository that is not yet in the stable manifest a
 
 Normal `check`, `init`, and `reset` report global runtime/tools/Skills plus a `projectChecks` entry for every selected root. `check-projects` and `init-projects` report only project-local checks and writes.
 
-Aggregate Trellis status uses this priority: `failed`, `blocked`, `needs-user`, `bootstrap-required`, `success`, `skipped`. A bootstrap task in one project must not stop checks or initialization for the remaining roots.
+Aggregate SBTD status priority is `failed`, `blocked`, `needs-user`, `bootstrap-required`, `success`, `skipped`. All selected roots retain individual status/reason/nextStep. Blocking preflight stops the whole installation batch before template or Skill writes.
 
 Every External Skill install result must report `requestedSource`, `sourceUsed`, `sourceRevision`, `stableSet`, `fallbackReason`, and transaction status when applicable. Every project result must identify the affected project root. Do not merge failures, bootstrap tasks, Playwright applicability, or React Bits decisions across projects without preserving the root path.
 

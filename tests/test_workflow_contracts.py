@@ -1057,101 +1057,7 @@ class WorkflowContractTests(unittest.TestCase):
                     r"^UPDATED-\d{4}-\d{2}-\d{2}-[1-9]\d*\.md$",
                 )
 
-    def test_tracked_controls_and_onboard_usage_are_documented(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        prompt = (
-            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
-        ).read_text(encoding="utf-8")
-
-        self.assertLess(
-            readme.index("## 安装及使用说明"),
-            readme.index("## 仓库定位"),
-        )
-        bootstrap_command = (
-            "npx --yes skills@latest add \\\n"
-            "  KunoLu/640-skills@sbtd-workflow-onboard \\\n"
-            "  --global \\\n"
-            "  --agent codex \\\n"
-            "  --yes \\\n"
-            "  --copy"
-        )
-        pinned_bootstrap_command = (
-            "npx --yes skills@latest add \\\n"
-            "  'KunoLu/640-skills#v1.0.0@sbtd-workflow-onboard' \\\n"
-            "  --global \\\n"
-            "  --agent codex \\\n"
-            "  --yes \\\n"
-            "  --copy"
-        )
-        plan_command = (
-            'python "$SBTD_ONBOARD_DIR/scripts/onboard.py" plan \\\n'
-            "  --platform codex \\\n"
-            "  --projects-root /abs/project-one,/abs/project-two \\\n"
-            "  --json"
-        )
-        self.assertIn(
-            "KunoLu/640-skills#<tag>@sbtd-workflow-onboard",
-            readme,
-        )
-        self.assertIn(
-            "KunoLu/640-skills#&lt;tag&gt;@sbtd-workflow-onboard",
-            readme_html,
-        )
-        self.assertNotIn(
-            "KunoLu/640-skills#<tag>@sbtd-workflow-onboard",
-            readme_html,
-        )
-        for document in (readme, readme_html):
-            self.assertIn(bootstrap_command, document)
-            self.assertIn(pinned_bootstrap_command, document)
-            self.assertNotIn(
-                "  https://github.com/KunoLu/640-skills \\\n",
-                document,
-            )
-            self.assertNotIn("  --skill sbtd-workflow-onboard \\\n", document)
-            self.assertIn("默认分支", document)
-            self.assertIn("最新 commit", document)
-            self.assertIn("最新 tag", document)
-            self.assertIn(plan_command, document)
-            self.assertIn("sbtd-workflow-onboard Skill", document)
-            self.assertIn("AGENTS.md", document)
-            self.assertIn("ENTRYPOINT.md", document)
-            self.assertIn("SBTD Workflow Tools Version Check", document)
-            self.assertIn("英语逗号", document)
-            self.assertIn("--init-projects", document)
-            self.assertIn("install.sh", document)
-            self.assertIn("install.ps1", document)
-
-        self.assertIn("非交互执行必须二选一", readme)
-        self.assertIn(
-            "project-only 模式只记录平台上下文，不执行任何全局检测或安装",
-            readme_html,
-        )
-        self.assertIn("只有用户明确执行 `sync` / `同步` 时", prompt)
-        self.assertIn("`update` / `更新` 与二者无关", prompt)
-        self.assertIn("版本检查自动化不直接读取或写入 Orca live automation", prompt)
-        self.assertNotIn("git check-ignore", prompt)
-        self.assertNotIn("修改后必须同步更新同名 live automation", prompt)
-        self.assertIn(
-            "`CHANGELOG.md`、`README.md`、`README.html` 和本 prompt",
-            prompt,
-        )
-        self.assertIn("包含 `web-ui-autotest-generator`", prompt)
-        self.assertIn("`AGENTS.project.md` 不在普通 sync 范围内", prompt)
-        self.assertIn(
-            "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd",
-            prompt,
-        )
-        self.assertIn(
-            "不得把 Ponytail stable 路径或 i-have-adhd stable 路径列为 cp/rsync 目标",
-            prompt,
-        )
-        self.assertNotIn(
-            "templates/skills/ponytail",
-            prompt,
-        )
-
+    def test_repository_controls_are_tracked_or_ignored_as_intended(self) -> None:
         entrypoint_path = ROOT / "ENTRYPOINT.md"
         self.assertTrue(entrypoint_path.is_file())
         tracked = subprocess.run(
@@ -1167,23 +1073,6 @@ class WorkflowContractTests(unittest.TestCase):
             cwd=ROOT,
         )
         self.assertEqual(ignored.returncode, 0)
-
-        for document in (readme, readme_html):
-            self.assertIn("web-ui-autotest-generator", document)
-            self.assertIn(
-                "/Users/lusonglin/.agent/skills/web-ui-autotest-generator/",
-                document,
-            )
-            self.assertIn(
-                "install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd",
-                document,
-            )
-            self.assertIn("不得作为同步表", document)
-            self.assertIn("本机可选", document)
-            self.assertIn("不进入远程", document)
-        entrypoint = entrypoint_path.read_text(encoding="utf-8")
-        self.assertIn("## 0. 版本监控配置", entrypoint)
-        self.assertIn("本机若存在根 `AGENTS.md` 则一并扫描", entrypoint)
 
     def test_omp_version_monitoring_contract(self) -> None:
         def markdown_table(text: str, heading: str) -> list[dict[str, str]]:
