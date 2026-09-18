@@ -3628,5 +3628,222 @@ class FifthReviewRegressionTests(unittest.TestCase):
                 contracts.validate_declared_bindings(self.manifest, {}, invalid)
 
 
+class SixthReviewRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.family = fixtures.build_fixture_family()
+        cls.manifest = cls.family["manifest"]
+
+    def test_concrete_before_state_matches_the_resource_category(self) -> None:
+        for key, state in (
+            ("r1", fixtures.directory_state(999)),
+            ("r2", fixtures.file_state(999)),
+        ):
+            payload = copy.deepcopy(self.manifest["payload"])
+            operation = next(
+                op
+                for op in payload["projects"][0]["private_operations"]
+                if op["resource_id"] == fixtures.resource_id_of(key)
+                and op["phase"] == "apply"
+            )
+            operation["before_requirement"]["state"] = state
+            with self.subTest(resource=key), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+
+    def test_directory_operations_require_complete_ownership(self) -> None:
+        for boundary in ("selector", "proof"):
+            payload = copy.deepcopy(self.manifest["payload"])
+            operation = next(
+                op
+                for op in payload["projects"][0]["private_operations"]
+                if op["resource_id"] == fixtures.resource_id_of("r2")
+                and op["phase"] == "cleanup"
+            )
+            if boundary == "selector":
+                operation["selector"] = "child-entry"
+                operation["operation_id"] = contracts.operation_id(
+                    "cleanup", operation["resource_id"], operation["selector"]
+                )
+            else:
+                operation["ownership"] = copy.deepcopy(
+                    fixtures.build_operation("r1", "cleanup")["ownership"]
+                )
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+
+    def test_managed_parent_directory_cannot_overlap_another_resource(self) -> None:
+        payload = copy.deepcopy(self.manifest["payload"])
+        operation = fixtures.build_operation("r2", "apply")
+        operation["target"] = str(Path(fixtures.RESOURCES["r1"][1]).parent)
+        operation["resource_id"] = contracts.resource_id(
+            "directory", operation["target"]
+        )
+        operation["operation_id"] = contracts.operation_id(
+            "apply", operation["resource_id"], "whole-resource"
+        )
+        payload["projects"][0]["private_operations"].append(operation)
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_backup_objects_cannot_use_parent_child_paths(self) -> None:
+        payload = copy.deepcopy(self.family["apply_receipt"]["payload"])
+        payload["projects"][0]["private_results"][0]["backup_ref"]["path"] = (
+            fixtures.BACKUP_ROOT + "/item"
+        )
+        payload["projects"][1]["private_results"][0]["backup_ref"]["path"] = (
+            fixtures.BACKUP_ROOT + "/item/child"
+        )
+        receipt = contracts.seal_document("apply_receipt", payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(
+                self.manifest, {"apply_receipt": receipt}
+            )
+
+    def test_envelope_identifiers_require_mapping_shape(self) -> None:
+        for invalid in ([], "", b"x", [("manifest_id", None)]):
+            with (
+                self.subTest(kind=type(invalid).__name__),
+                self.assertRaises(ContractError),
+            ):
+                contracts.make_envelope(
+                    "migration",
+                    "plan",
+                    "blocked",
+                    [],
+                    "input unavailable",
+                    "inspect",
+                    identifiers=invalid,
+                )
+
+    def test_one_operation_cannot_belong_to_two_result_resources(self) -> None:
+        for boundary in ("private", "shared"):
+            payload = copy.deepcopy(self.family["apply_receipt"]["payload"])
+            duplicate = list(
+                payload["projects"][0]["private_results"][0]["operation_ids"]
+            )
+            if boundary == "private":
+                payload["projects"][1]["private_results"][0]["operation_ids"] = (
+                    duplicate
+                )
+            else:
+                payload["shared_results"][0]["operation_ids"] = duplicate
+                for project in payload["projects"]:
+                    project["shared_operation_ids"] = list(duplicate)
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("apply_receipt", payload)
+
+    def test_cleanup_cannot_remove_an_approved_publication_target(self) -> None:
+        payload = copy.deepcopy(self.manifest["payload"])
+        operation = fixtures.build_operation("r4", "apply")
+        operation.update(phase="cleanup", change={"kind": "remove"})
+        operation["operation_id"] = contracts.operation_id(
+            "cleanup", operation["resource_id"], operation["selector"]
+        )
+        operation["before_requirement"] = {
+            "kind": "phase-after",
+            "phase": "apply",
+            "resource_id": operation["resource_id"],
+        }
+        payload["projects"][0]["private_operations"].append(operation)
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_downstream_apply_ids_agree_without_the_apply_document(self) -> None:
+        verification_payload = copy.deepcopy(self.family["verification"]["payload"])
+        verification_payload["apply_id"] = fixtures.digest_number(999)
+        verification = contracts.seal_document("verification", verification_payload)
+        with (
+            self.subTest(boundary="deployment and verification"),
+            self.assertRaises(ContractError),
+        ):
+            contracts.validate_declared_bindings(
+                self.manifest,
+                {
+                    "deployment_evidence": self.family["deployment_evidence"],
+                    "verification": verification,
+                },
+            )
+        cleanup_payload = copy.deepcopy(self.family["cleanup_receipt"]["payload"])
+        cleanup_payload.update(
+            apply_id=verification_payload["apply_id"],
+            verification_id=verification["verification_id"],
+        )
+        cleanup = contracts.seal_document("cleanup_receipt", cleanup_payload)
+        with (
+            self.subTest(boundary="full downstream chain"),
+            self.assertRaises(ContractError),
+        ):
+            contracts.validate_declared_bindings(
+                self.manifest,
+                {
+                    "deployment_evidence": self.family["deployment_evidence"],
+                    "verification": verification,
+                    "cleanup_receipt": cleanup,
+                },
+            )
+
+    def test_shared_cleanup_candidates_use_only_cleanup_dependents(self) -> None:
+        payload = copy.deepcopy(self.manifest["payload"])
+        operation = next(
+            op for op in payload["shared_operations"] if op["phase"] == "cleanup"
+        )
+        operation["dependent_projects"] = [fixtures.BETA]
+        payload["projects"][0]["shared_operation_ids"] = [
+            op_id
+            for op_id in payload["projects"][0]["shared_operation_ids"]
+            if op_id != operation["operation_id"]
+        ]
+        manifest = contracts.seal_document("manifest", payload)
+        applied = fixtures.build_apply_receipt(manifest)
+        deployed = fixtures.build_deployment_evidence(manifest, applied)
+        verification_payload = fixtures.build_verification_payload(
+            manifest, applied, deployed
+        )
+        verification_payload["shared_cleanup_candidates"][0]["dependent_projects"] = [
+            fixtures.BETA
+        ]
+        control = contracts.seal_document(
+            "verification", copy.deepcopy(verification_payload)
+        )
+        base = {"apply_receipt": applied, "deployment_evidence": deployed}
+        with self.subTest(boundary="phase-specific closure"):
+            contracts.validate_declared_bindings(
+                manifest, {**base, "verification": control}
+            )
+        wrong_payload = copy.deepcopy(verification_payload)
+        wrong_payload["shared_cleanup_candidates"][0]["dependent_projects"] = list(
+            fixtures.BOTH
+        )
+        wrong = contracts.seal_document("verification", wrong_payload)
+        with (
+            self.subTest(boundary="unrelated phase dependency"),
+            self.assertRaises(ContractError),
+        ):
+            contracts.validate_declared_bindings(
+                manifest, {**base, "verification": wrong}
+            )
+        verification_payload["status"] = "failed"
+        verification_payload["projects"][1].update(
+            status="failed", reason="candidate unavailable", nextStep="inspect"
+        )
+        verification_payload["shared_cleanup_candidates"] = []
+        partial = contracts.seal_document("verification", verification_payload)
+        with self.subTest(boundary="independent verified project"):
+            contracts.validate_declared_bindings(
+                manifest, {**base, "verification": partial}
+            )
+
+    def test_recovery_protection_path_cannot_claim_two_original_states(self) -> None:
+        payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+        protected = [
+            result
+            for result in payload["results"]
+            if result["protection_ref"] is not None
+        ]
+        protected[1]["protection_ref"]["path"] = protected[0]["protection_ref"]["path"]
+        with self.assertRaises(ContractError):
+            contracts.seal_document("recovery_receipt", payload)
+
+
 if __name__ == "__main__":
     unittest.main()

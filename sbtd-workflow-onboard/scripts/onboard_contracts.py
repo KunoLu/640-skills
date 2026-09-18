@@ -490,9 +490,24 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "directory copy requires a directory resource")
     if directory and change_kind in {"copy-file", "ensure-file-block"}:
         _fail("semantic-violation", "file changes cannot target a directory resource")
+    if directory and (
+        operation["selector"] != "whole-resource"
+        or operation["ownership"]["kind"] not in {"template-source", "skill-identity"}
+    ):
+        _fail(
+            "semantic-violation",
+            "directory operations require complete resource ownership",
+        )
     if operation["dependent_projects"] != sorted(operation["dependent_projects"]):
         _fail("semantic-violation", "operation dependent_projects must be sorted")
     requirement = operation["before_requirement"]
+    if requirement["kind"] == "state" and requirement["state"]["type"] != "absent":
+        expected = "directory" if directory else "file"
+        if requirement["state"]["type"] != expected:
+            _fail(
+                "semantic-violation",
+                "concrete before-state conflicts with the resource owner",
+            )
     if requirement["kind"] == "phase-after":
         if requirement["resource_id"] != operation["resource_id"]:
             _fail(
@@ -625,10 +640,11 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "publication candidate must stay outside project roots",
             )
 
-    candidate_paths = [
-        item["candidate_ref"]["path"]
+    protected_publication_paths = [
+        path
         for item in payload["publication_decisions"]["items"]
         if item["candidate_ref"] is not None
+        for path in (item["candidate_ref"]["path"], item["target_path"])
     ]
     seen_operation_ids: set[str] = set()
     resource_owners: dict[str, tuple[str, str | None]] = {}
@@ -643,12 +659,12 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):
             _fail("semantic-violation", "backup_root overlaps a managed target")
         if operation["phase"] == "cleanup" and any(
-            _path_contains(target, candidate) or _path_contains(candidate, target)
-            for candidate in candidate_paths
+            _path_contains(target, protected) or _path_contains(protected, target)
+            for protected in protected_publication_paths
         ):
             _fail(
                 "semantic-violation",
-                "cleanup target overlaps a retained publication candidate",
+                "cleanup target overlaps a protected publication path",
             )
         identity = (operation["resource_id"], owner)
         if target_owners.setdefault(Path(target), identity) != identity:
@@ -687,6 +703,9 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             register(operation, ("private", project["root"]))
     for operation in payload["shared_operations"]:
         register(operation, ("shared", None))
+    for target in target_owners:
+        if any(parent in target_owners for parent in target.parents):
+            _fail("semantic-violation", "managed resource targets overlap")
     for operations in operation_groups.values():
         _check_operation_group(operations)
     for (rid, phase), requirement in requirements.items():
@@ -836,6 +855,20 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
     if len(root_set) != len(roots):
         _fail("semantic-violation", "duplicate project root in stage document")
 
+    operation_resources: dict[str, str] = {}
+    groups = [payload["shared_results"]]
+    groups.extend(project["private_results"] for project in payload["projects"])
+    for results in groups:
+        for result in results:
+            for op_id in result["operation_ids"]:
+                if (
+                    operation_resources.setdefault(op_id, result["resource_id"])
+                    != result["resource_id"]
+                ):
+                    _fail(
+                        "semantic-violation",
+                        "one operation is claimed by multiple resources",
+                    )
     shared_ids: set[str] = set()
     for result in payload["shared_results"]:
         if result["phase"] != phase:
@@ -1107,6 +1140,7 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
 
     results = payload["results"]
     result_by_step: dict[str, Mapping[str, Any]] = {}
+    protections: dict[str, Any] = {}
     for result in results:
         if result["step_id"] in result_by_step:
             _fail("semantic-violation", "duplicate recovery step result")
@@ -1120,8 +1154,21 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
                 exit_code=3,
             )
         _check_original_reference(result, "protection_ref")
+        protection = result["protection_ref"]
+        if (
+            protection is not None
+            and protections.setdefault(protection["path"], protection["state"])
+            != protection["state"]
+        ):
+            _fail(
+                "semantic-violation", "protection path has conflicting original states"
+            )
         if result["status"] == "succeeded" and result["step_id"] not in completed:
             _fail("semantic-violation", "a succeeded recovery step must be completed")
+    protection_paths = {Path(path) for path in protections}
+    for path in protection_paths:
+        if any(parent in protection_paths for parent in path.parents):
+            _fail("semantic-violation", "recovery protection objects overlap")
     if not set(result_by_step) <= completed | pending:
         _fail(
             "semantic-violation",
@@ -1552,6 +1599,10 @@ def _bind_resource_states_and_backups(
                 _fail(
                     "binding-violation", "successful result has the wrong resource type"
                 )
+    backup_paths = {Path(path) for path in backups}
+    for path in backup_paths:
+        if any(parent in backup_paths for parent in path.parents):
+            _fail("binding-violation", "original backup objects overlap")
 
 
 def _bind_stage_receipt(
@@ -1728,6 +1779,12 @@ def _bind_verification(
     shared_cleanup = {
         rid: phases["cleanup"] for rid, phases in shared.items() if "cleanup" in phases
     }
+    cleanup_dependents: dict[str, set[str]] = {}
+    for operation in manifest_payload["shared_operations"]:
+        if operation["phase"] == "cleanup":
+            cleanup_dependents.setdefault(operation["resource_id"], set()).update(
+                operation["dependent_projects"]
+            )
     covered_shared: set[str] = set()
     for candidate in payload["shared_cleanup_candidates"]:
         rid = candidate["resource_id"]
@@ -1738,11 +1795,11 @@ def _bind_verification(
             )
         verified = any(
             project["status"] == "verified"
-            and project["root"] in dependents.get(rid, set())
+            and project["root"] in cleanup_dependents[rid]
             for project in payload["projects"]
         )
         check_candidate(
-            candidate, shared_cleanup[rid], dependents.get(rid, set()), verified
+            candidate, shared_cleanup[rid], cleanup_dependents[rid], verified
         )
         covered_shared.add(rid)
 
@@ -1784,7 +1841,7 @@ def _bind_verification(
                 "a verified record must enumerate every declared cleanup candidate",
             )
         if project["status"] == "verified" and any(
-            root in dependents.get(rid, set()) and rid not in covered_shared
+            root in cleanup_dependents[rid] and rid not in covered_shared
             for rid in shared_cleanup
         ):
             _fail(
@@ -2135,6 +2192,15 @@ def _bind_retained_assets(
 
 def _bind_declared_hashes(documents: Mapping[str, Any]) -> None:
     declared: dict[str, str] = {}
+    apply_ids = {
+        document["payload"]["apply_id"]
+        for kind, document in documents.items()
+        if kind in {"deployment_evidence", "verification", "cleanup_receipt"}
+    }
+    if "apply_receipt" in documents:
+        apply_ids.add(documents["apply_receipt"]["apply_id"])
+    if len(apply_ids) > 1:
+        _fail("binding-violation", "supplied stages reference different apply runs")
 
     def note(kind: str, digest: str) -> None:
         if declared.setdefault(kind, digest) != digest:
@@ -2557,7 +2623,9 @@ def make_envelope(
         _fail("unknown-kind", "mode must be migration or recovery")
     if (mode, phase) not in _ENVELOPE_ARTIFACT:
         _fail("unknown-kind", "phase is not valid for this mode")
-    supplied = dict(identifiers or {})
+    if identifiers is not None and not isinstance(identifiers, Mapping):
+        _fail("unexpected-type", "identifiers must be a mapping or None")
+    supplied = dict(identifiers) if identifiers is not None else {}
     if not set(supplied) <= _ENVELOPE_IDENTIFIER_KEYS[mode]:
         _fail("unknown-kind", "unexpected identifier field for this mode")
     holder, artifact_key, _ = _ENVELOPE_ARTIFACT[(mode, phase)]

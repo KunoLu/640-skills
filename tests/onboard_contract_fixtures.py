@@ -203,11 +203,21 @@ def build_operation(key: str, phase: str) -> dict[str, Any]:
         selector = "sbtd.block"
     else:
         change = {"kind": "remove"}
-        ownership = {
-            "kind": "config-entry",
-            "reference": _file_ref("/private/source/base-config", 72),
-            "key_path": ["sbtd"],
-        }
+        if owner_kind == "directory":
+            ownership = {
+                "kind": "skill-identity",
+                "reference": {
+                    "path": "/private/source/sbtd-task",
+                    "state": directory_state(71),
+                },
+                "name": "sbtd-task",
+            }
+        else:
+            ownership = {
+                "kind": "config-entry",
+                "reference": _file_ref("/private/source/base-config", 72),
+                "key_path": ["sbtd"],
+            }
         earlier = "deploy" if "deploy" in RESOURCES[key][2] else "apply"
         before = {"kind": "phase-after", "phase": earlier, "resource_id": rid}
         selector = "whole-resource" if owner_kind == "directory" else "sbtd.managed"

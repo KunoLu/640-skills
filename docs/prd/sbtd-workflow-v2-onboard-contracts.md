@@ -147,3 +147,11 @@ Main先得到11项／29个预期失败及1个目标缺陷（超大整数ValueErr
 共享路由最初fixture复用了两项目的同一list，已拆开并重跑；raw list-of-pairs改用有效manifest bytes，避免无关schema拒绝。有效red为8项／10个预期失败及2个目标错误（合法共享路由被拒、raw bytes原生TypeError逃逸）。修复后8项及完整179项协议回归通过，实际4场景smoke同时证明安全拒绝和一个共享物理结果下的合法逐操作项目路由；未修改或重标原失败报告。
 
 可读性复核保留明确的摘要一致性与verification观察职责，不加框架；fixture源头为两项目分别复制shared ID列表，序列化内容不变，去掉隐蔽可变别名。新5个Python文件静态通过，提交前全量484项／231.478s通过。当前仍为dirty本地证明；后续冻结head正式验证及独立review未被替代。
+
+## 第六轮独立 review
+
+冻结head `e3bb1ff4c425d06d936c47359e8358296aea002e` 的484项／347.973s、安装副本、六组实际smoke、静态和八份envelope通过；surface零新发现。两路协议共10项全部采纳：发布目标及候选均受cleanup保护；无apply对象时下游apply ID仍一致；共享cleanup候选按cleanup操作依赖而非跨阶段并集；恢复保护路径不可矛盾复用；具体初态类型匹配owner；目录必须完整资源／完整归属；managed目标与备份／保护对象不得父子重叠；identifier先验Mapping；一个operation ID不得属于两个资源结果。
+
+目录cleanup fixture改为完整skill ownership，不再用file config-entry冒充目录归属。Main取得10项／16个预期失败及3个目标错误（非法identifier原生异常、两种合法cleanup-phase依赖场景被拒）；修复后10项及完整189项协议回归通过，实际4场景安全拒绝smoke通过。保留全部历史，不把字段／路径合法当真实文件或授权证明。
+
+验证顺序收敛为定点／影响范围与实际smoke、静态、提交、该最终head一次全量及精确安装副本，再独立review；取消内容相同的提交前全量重复运行，不减少最终完整gate。新head尚未完成正式全量或review前仍不得标ready/done或创建PR。
