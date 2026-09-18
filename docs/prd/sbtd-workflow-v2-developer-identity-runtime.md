@@ -61,3 +61,10 @@
 - Code Readability Review：统一逐项目构造/执行边界，复用字段投影、参数校验、单值action和既有Git/I/O；无浅层双重wrapper或scope外抽象。Ponytail无额外删除建议；接受可读性优先，不为减行密化解析逻辑。
 - README.md/html已同步实际入口和失败结果；REFERENCE/Skill/lessons说明更新，CHANGELOG记录能力与失败语义；versioned automation仅扩充sbtd_identity.py评估库存。live automation/ENTRYPOINT/真实生效路径不动。HTML结构/ID静态检查通过，纯文档正文变化未做视觉验收。
 - Release gate等待精确提交验证与最终独立证据审查；不会在该门前提前标done或展开下一任务。
+
+## 最终复核补记
+
+- 首个clean候选`cb0dcf5221f225e80115c378a3fea1721273300e`已完成fresh venv全量745 tests/184.923s与完整310文件安装副本10原生场景；21份envelope/schema/hash/中文汇总通过。证据review确认local-only，不提升为CI或其他平台证明。
+- 文档review无P0/P1，新增P2：README把写后失败一概描述为exit 5，实际仅failed为5，其他阻断状态为2。按D-IMP-13登记延期，不修文案；累计2 fixed P1、5 deferred P2。
+- 关于checking行仍记录提交前dirty的初步P2，经澄清“实现合入/清理→独立状态PR更新最终exact/done/时间/merge”约定后reviewer撤回；以dismissed保留记录，不提前改成done。
+- 本补记与ledger登记不改生产实现；随后重新固定最终SHA并重跑计划范围。最终精确证据及Release gate结论由正式报告/PR说明与合并后独立状态PR留存，避免文档自指尚未生成的提交或未来合并事实。
