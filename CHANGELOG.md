@@ -7,6 +7,12 @@
 ### 新增
 
 - P1-01增加内部Onboard参数与交换契约层，覆盖严格JSON、批准快照、私有／共享操作、阶段收据、deployment evidence及恢复数据和envelope；它不注册尚未实现的公开迁移／恢复命令。jsonschema按Onboard requirements显式准备并惰性加载，目录复制不代表依赖已安装，缺失时校验fail-closed。
+- P1-02加入只读SBTD最小状态检查与按需bootstrap：未onboard项目不因缺少task／身份而失败；已有指针与选中任务按schema、日期和物理路径检查，异常不重建。PyYAML显式纳入安装依赖。
+
+### 修复
+
+- PowerShell 使用严格参数绑定拒绝已移除参数，内部 project-only 执行模式不再写入公开 `Action` 的受限取值；真实解释器回归覆盖成功与拒绝路径。
+- 两安装器在全局/可选项目安装和 MCP 写入之前执行完整项目前置检查，避免最终拒绝 scaffold 冲突时已经产生副作用；`check-projects` 同步支持实际 `--skip-project-agents` 检查范围。
 
 ### 文档
 
@@ -19,6 +25,7 @@
 ### 变更
 
 - P0-07将完整sbtd-task、全局／项目规则及lessons-record候选移入正式安装源，catalog由15个bundled调整为14个，19个required external保持；删除两旧Trellis Skill源目录，不保留alias或包内旧入口副本。
+- 项目setup停止安装／调用Trellis，Python与两安装器移除旧username／platform／skip参数，结果使用`sbtdInit`／`sbtdProjectSetup`。安装前检查全部所选项目，保全既有task、identity、spec、lessons及旧数据；不默认生成bootstrap或完整目录树。
 - 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。
 - P0-08项目ignore模板保留56条通用规则、移除14条旧Trellis/GitNexus规则并新增`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`；安装器语义探针与模板同批对齐。共享任务／规范／lessons和manifest保持可追踪，旧项目规则仍仅追加不自动清理，不改源仓根ignore。
 - 共享规则验收覆盖公开固定分支，避免精确忽略旧lessons入口、context ADR、undated归档、平台flow、React Bits、任务附属产物、UI上下文、测试源码或Git控制文件时误报通过；继续保留用户规则并报告来源，不恢复旧平台生成集成的无条件探针。

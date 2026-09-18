@@ -17,6 +17,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
+sys.path.insert(0, str(ONBOARD.parent))
 
 # Declared fixture snapshots. Expected family identities are digested from
 # THESE bytes only -- never from the payload under test, which would bless
@@ -793,40 +794,35 @@ class CavemanMaintenanceTests(unittest.TestCase):
         with (
             self.baseline_context(module),
             mock.patch.object(
-                module, "resolve_global_skills_dir",
+                module,
+                "resolve_global_skills_dir",
                 return_value=(self.skills_dir, "explicit"),
             ),
             mock.patch.object(module, "build_operations", return_value=[]),
             mock.patch.object(
-                module, "build_bundled_skill_migration_plan",
+                module,
+                "build_bundled_skill_migration_plan",
                 return_value={"status": "skipped"},
             ),
             mock.patch.object(
-                module, "build_external_migration_plan",
+                module,
+                "build_external_migration_plan",
                 return_value={"status": "skipped"},
-            ),
-            mock.patch.object(module, "build_trellis_init_plan", return_value=None),
-            mock.patch.object(
-                module, "build_plan_payload", return_value={"mode": "init"}
             ),
             mock.patch.object(module, "ensure_confirmed"),
             mock.patch.object(
-                module, "detect_ponytail_provider",
+                module,
+                "detect_ponytail_provider",
                 return_value={"provider": "none"},
             ),
             mock.patch.object(
                 module, "install_required_external_skills", return_value=None
             ),
-            mock.patch.object(
-                module, "run_bundled_skill_migration", return_value=[]
-            ),
+            mock.patch.object(module, "run_bundled_skill_migration", return_value=[]),
             mock.patch.object(module, "run_external_migration", return_value=[]),
             mock.patch.object(
-                module, "run_trellis_project_setup",
-                return_value={"status": "skipped"},
-            ),
-            mock.patch.object(
-                module, "clone_repo_at_revision",
+                module,
+                "clone_repo_at_revision",
                 side_effect=self.fake_clone_from(source_repo),
             ),
             contextlib.redirect_stdout(stdout),

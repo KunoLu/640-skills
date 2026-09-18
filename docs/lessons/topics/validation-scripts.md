@@ -445,5 +445,53 @@
 - 修复：验证窗口按 ≥600s 设定或按文件拆分跑；任何 timeout 一律以充足窗口重跑取证后再下结论
 - 预防：全量验证先估算当前实际时长再上窗口上限；timeout 必须记录最后进度点与真实 runner 输出，不得作为 pass/fail 证据；时长波动原因未证实前不得归因为“环境问题”
 
+## LESSON-20260918-640-powershell-runtime-binding: PowerShell Parameter Contracts Need Runtime Proof
+
+- 日期：2026-09-18
+- 标签：powershell, cli, parameter-binding, validation, positive-control
+- 适用场景：删除 PowerShell 参数、区分公开选项与内部执行模式，或以源码断言验证安装器
+- 严重级别：high
+- 来源：P1-02 的真实 macOS PowerShell 入口验证
+- 问题：删除参数声明后，普通 `param` 仍接受未知参数；源码中不存在旧名字并不证明入口拒绝它。实际 project-only 执行还暴露了把内部 `init-projects` 赋给只允许 `init/reset` 的 `Action` 参数所触发的校验错误。
+- 根因：把声明文本当作参数绑定行为，以及复用公开参数承载更宽的内部状态。
+- 修复：使用高级参数绑定拒绝未知参数，公开 `Action` 与内部执行模式分离；保留实际 PowerShell 帮助正向控制、未知参数负例和 project-only 安装回归。
+- 预防：测试真实解释器和入口，不用源码字符串／调用顺序断言代替行为。负例非零必须伴随有效输入成功，否则语法错误也会造成假阳性；macOS PowerShell 证据不能冒充 Windows 验收。
+
+## LESSON-20260918-640-editing-boundary-and-bom: Editing Tools Can Preserve Hidden Structure
+
+- 日期：2026-09-18
+- 标签：editing, ast, bom, recovery, validation
+- 适用场景：用块编辑修改类内方法，或修改已有 UTF-8 BOM 的 PowerShell 文件首行
+- 严重级别：high
+- 来源：P1-02 的测试区块恢复与 PowerShell 正向控制失败
+- 问题：单方法块替换实际吞掉同类后续方法；首行替换中手工携带 BOM 又被工具保留一次，导致双 BOM 和解析失败。仅看新增正文正确或负例退出非零都未能发现问题。
+- 根因：未把工具返回的实际替换范围、隐藏编码和可执行正向控制作为独立证据。
+- 修复：从原始写入内容恢复相邻三个测试方法，之后使用已读取的精确范围；首行正文不重复加入工具维护的 BOM，验证实际字节仅一个 BOM，再重跑正常帮助与失败参数。
+- 预防：沿用既有完整快照及 resolved-range 规则；编辑类内单方法优先精确结束行。编码类修改验证实际 bytes 和原生解释器；出现 read/edit hash 不一致时重新读取并保留错误证据，不放宽匹配或猜测丢失内容。
+
+## LESSON-20260918-640-parallel-validation-ownership: Parallel Workers Do Not Own Final Validation
+
+- 日期：2026-09-18
+- 标签：agents, parallel, validation, evidence, ownership
+- 适用场景：多个 worker 修改互相依赖的生产代码、调用者或测试
+- 严重级别：medium
+- 来源：P1-02 两个 worker 在明确禁止在途验证的批次中仍自行报告定点运行
+- 问题：worker 自报通过容易被误当作完整集成或最终版本证据，且在途运行可能读到其他写入者尚未完成的文件。
+- 根因：作者局部检查与主线程拥有的统一验证职责没有在结果验收时严格区分。
+- 修复：不采纳这些自报结果作为 gate；等写入切面完成后由主线程生成原生定点、影响范围、全量和实际 CLI 报告。
+- 预防：任务明确全部验证归属、稳定接口和文件所有权；收回结果时检查是否越界执行。违反分工的输出只保留为过程事实，不能替代固定 revision、完整范围和可回读报告。
+
+## LESSON-20260918-640-preflight-before-side-effects: Preflight Must Precede Every Caller Side Effect
+
+- 日期：2026-09-18
+- 标签：installer, preflight, side-effects, cli, validation
+- 适用场景：共享写入器有安全前置检查，但外围安装器还会执行可选安装、全局工具或配置写入
+- 严重级别：high
+- 来源：P1-02 独立审查 P1 与真实 Bash 复现
+- 问题：Python 最终写入器拒绝不安全 `.gitignore`，但 root installer 已调用可选 React Bits 安装；最终退出 2 不能证明此前零写入。
+- 根因：外围 `check-projects` 只检查部分状态，完整 scaffold guard 太晚，且没有覆盖所有写入调用者。
+- 修复：共享完整只读项目前置判定；两安装器在全局安装、MCP 与可选项目安装之前执行，Python 写入前再次复验，并一致传递 `--skip-project-agents` 的已选目标范围。
+- 预防：覆盖每个 caller 的 normal/project-only 分支，使用受控副作用 tracer 与文件保全断言证明冲突时没有 mutation；保留合法正向控制，不能只断言最终非零或只检查核心 writer。
+
   <!-- lessons:640:end -->
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -147,7 +148,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 str(SOURCE_ROOT),
                 *project_args,
                 "--skip-project-agents",
-                "--skip-trellis-init",
                 "--no-mcp",
                 "--yes",
                 "--no-color",
@@ -233,7 +233,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 str(SOURCE_ROOT),
                 "--init-projects",
                 str(self.project_root),
-                "--skip-trellis-init",
                 "--no-mcp",
                 "--yes",
                 "--no-color",
@@ -264,7 +263,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 )
                 self.assertNotIn("Bad file descriptor", completed.stderr)
         self.assertNotIn("--skip-project-agents", self.invocation_args())
-
 
     def test_existing_target_cli_is_checked_before_general_preflight(self) -> None:
         (self.state_dir / "npm").touch()
@@ -330,7 +328,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         self.assertIn("install-playwright-cli", self.modes())
 
-
     def test_init_projects_react_bits_choice_reads_original_user_input(self) -> None:
         (self.state_dir / "react-bits-applicable").touch()
 
@@ -342,7 +339,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 str(SOURCE_ROOT),
                 "--init-projects",
                 str(self.project_root),
-                "--skip-trellis-init",
                 "--no-mcp",
                 "--yes",
                 "--no-color",
@@ -380,11 +376,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             """,
         )
         target = (
-            self.project_root
-            / ".agents"
-            / "skills"
-            / "react-bits-pro"
-            / "SKILL.md"
+            self.project_root / ".agents" / "skills" / "react-bits-pro" / "SKILL.md"
         )
         target.parent.mkdir(parents=True)
         target.write_text("old react bits skill\n", encoding="utf-8")
@@ -397,7 +389,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 str(SOURCE_ROOT),
                 "--init-projects",
                 str(self.project_root),
-                "--skip-trellis-init",
                 "--no-mcp",
                 "--yes",
                 "--no-color",
@@ -436,7 +427,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "--action",
                 "init",
                 "--skip-project-agents",
-                "--skip-trellis-init",
                 "--no-mcp",
                 "--no-color",
             ),
@@ -470,21 +460,252 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertNotIn("--project-root", completed.stdout)
         self.assertNotIn("--skills-scope", completed.stdout)
         self.assertNotIn("--project-skills-dir", completed.stdout)
+        self.assertNotIn("--trellis", completed.stdout)
 
-    def test_bash_enforces_global_tools_skills_and_mcp_scope_policy(self) -> None:
-        source = INSTALL_SH.read_text(encoding="utf-8")
-        global_stage = source.split("install_missing_runtime_and_skills() {", 1)[
-            1
-        ].split("prompt_env_pairs() {", 1)[0]
-        self.assertIn("npm install -g @mindfoldhq/trellis@latest", global_stage)
-        self.assertIn("npm install -g gitnexus@latest", global_stage)
-        self.assertIn("--scope global --source auto --yes", global_stage)
-        self.assertNotIn("External skills install decision", global_stage)
-        self.assertNotIn("Install @mindfoldhq/trellis globally?", global_stage)
-        self.assertNotIn("Install gitnexus globally?", global_stage)
-        self.assertIn("claude mcp add --transport stdio --scope user", source)
-        self.assertIn('local target="$HOME/.omp/agent/mcp.json"', source)
-        self.assertNotIn("$PROJECT_ROOT/.omp/mcp.json", source)
+    def powershell_environment(self) -> tuple[str, dict[str, str]]:
+        runtime = os.environ.get("SBTD_TEST_PWSH") or shutil.which("pwsh")
+        if runtime is None:
+            self.skipTest("PowerShell runtime is not available")
+        home = self.root / "powershell-home"
+        home.mkdir()
+        environment = {
+            **self.env,
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "XDG_CONFIG_HOME": str(home / "config"),
+            "XDG_CACHE_HOME": str(home / "cache"),
+            "XDG_DATA_HOME": str(home / "data"),
+            "DOTNET_CLI_HOME": str(home),
+            "POWERSHELL_TELEMETRY_OPTOUT": "1",
+            "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+        }
+        return runtime, environment
+
+    def test_powershell_rejects_unknown_parameters_before_help(self) -> None:
+        runtime, environment = self.powershell_environment()
+        command = [
+            runtime,
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(INSTALL_PS1),
+            "-Help",
+        ]
+        valid = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        rejected = subprocess.run(
+            [*command, "-TrellisUser", "synthetic"],
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=30,
+            check=False,
+        )
+        self.assertNotEqual(
+            rejected.returncode, 0, "Retired parameter was silently accepted"
+        )
+
+    def test_powershell_project_only_installs_assets_without_global_commands(
+        self,
+    ) -> None:
+        runtime, environment = self.powershell_environment()
+        for name in ("python", "python3"):
+            self.write_executable(
+                self.bin_dir / name,
+                '#!/bin/sh\nexec "$REAL_PYTHON" "$@"\n',
+            )
+        forbidden = self.root / "forbidden-global-commands"
+        environment["FORBIDDEN_COMMANDS"] = str(forbidden)
+        for name in (
+            "npm",
+            "npx",
+            "codex",
+            "omp",
+            "trellis",
+            "gitnexus",
+            "rtk",
+            "maestro",
+        ):
+            self.write_executable(
+                self.bin_dir / name,
+                '#!/bin/sh\nprintf invoked >> "$FORBIDDEN_COMMANDS"\nexit 99\n',
+            )
+        completed = subprocess.run(
+            [
+                runtime,
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(INSTALL_PS1),
+                "-SourceRoot",
+                str(SOURCE_ROOT),
+                "-Platform",
+                "codex",
+                "-InitProjects",
+                str(self.project_root),
+                "-NoMcp",
+                "-NoColor",
+                "-Yes",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(
+            {path.name for path in self.project_root.iterdir()},
+            {"AGENTS.md", ".gitignore"},
+        )
+        self.assertFalse(forbidden.exists())
+        self.assertFalse((Path(environment["HOME"]) / ".codex").exists())
+        self.assertFalse((Path(environment["HOME"]) / ".omp").exists())
+
+    def scaffold_conflict_environment(self) -> dict[str, str]:
+        home = self.root / "preflight-home"
+        home.mkdir()
+        external = self.root / "preserved-ignore"
+        external.write_text("preserve\n", encoding="utf-8")
+        (self.project_root / ".gitignore").symlink_to(external)
+        (self.project_root / "package.json").write_text(
+            '{"dependencies":{"react":"18.3.1"}}', encoding="utf-8"
+        )
+        (self.project_root / "components.json").write_text("{}", encoding="utf-8")
+        environment = {
+            **self.env,
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+            "CODEX_HOME": str(home / ".codex"),
+            "XDG_CONFIG_HOME": str(home / "config"),
+            "XDG_CACHE_HOME": str(home / "cache"),
+            "XDG_DATA_HOME": str(home / "data"),
+            "DOTNET_CLI_HOME": str(home),
+            "POWERSHELL_TELEMETRY_OPTOUT": "1",
+            "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+            "MUTATION_LOG": str(self.root / "unexpected-mutation"),
+        }
+        for name in ("python", "python3"):
+            self.write_executable(
+                self.bin_dir / name,
+                """
+                #!/bin/sh
+                if [ "$1" = "-" ]; then exec "$REAL_PYTHON" "$@"; fi
+                case "$2" in
+                  check|check-projects|check-agent-cli|plan) exec "$REAL_PYTHON" "$@" ;;
+                  *) : > "$MUTATION_LOG"; exit 99 ;;
+                esac
+                """,
+            )
+        for name in (
+            "node",
+            "npm",
+            "codex",
+            "omp",
+            "npx",
+            "rtk",
+            "gitnexus",
+            "maestro",
+            "git",
+        ):
+            self.write_executable(
+                self.bin_dir / name,
+                """
+                #!/bin/sh
+                if [ "$1" = "--version" ]; then printf '22.0.0\\n'; exit 0; fi
+                : > "$MUTATION_LOG"
+                exit 99
+                """,
+            )
+        return environment
+
+    def test_bash_full_preflight_precedes_global_and_optional_mutations(self) -> None:
+        environment = self.scaffold_conflict_environment()
+        for mode in ("normal", "project-only"):
+            with self.subTest(mode=mode):
+                scope = (
+                    ["--projects-root", str(self.project_root), "--action", "init"]
+                    if mode == "normal"
+                    else ["--init-projects", str(self.project_root)]
+                )
+                completed = subprocess.run(
+                    [
+                        "/bin/bash",
+                        str(INSTALL_SH),
+                        "--source-root",
+                        str(SOURCE_ROOT),
+                        "--platform",
+                        "codex",
+                        "--no-mcp",
+                        "--no-color",
+                        "--yes",
+                        *scope,
+                    ],
+                    input="2\nfixture-registry/button\n",
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 2, completed.stderr)
+                self.assertFalse(Path(environment["MUTATION_LOG"]).exists())
+                self.assertTrue((self.project_root / ".gitignore").is_symlink())
+                self.assertFalse((self.project_root / "AGENTS.md").exists())
+                self.assertEqual(
+                    (self.root / "preserved-ignore").read_text(), "preserve\n"
+                )
+
+    def test_powershell_full_preflight_precedes_global_and_optional_mutations(
+        self,
+    ) -> None:
+        runtime = os.environ.get("SBTD_TEST_PWSH") or shutil.which("pwsh")
+        if runtime is None:
+            self.skipTest("PowerShell runtime is not available")
+        environment = self.scaffold_conflict_environment()
+        for mode in ("normal", "project-only"):
+            with self.subTest(mode=mode):
+                scope = (
+                    ["-ProjectsRoot", str(self.project_root), "-Action", "init"]
+                    if mode == "normal"
+                    else ["-InitProjects", str(self.project_root)]
+                )
+                completed = subprocess.run(
+                    [
+                        runtime,
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-File",
+                        str(INSTALL_PS1),
+                        "-SourceRoot",
+                        str(SOURCE_ROOT),
+                        "-Platform",
+                        "codex",
+                        "-NoMcp",
+                        "-NoColor",
+                        "-Yes",
+                        *scope,
+                    ],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 2, completed.stderr)
+                self.assertFalse(Path(environment["MUTATION_LOG"]).exists())
+                self.assertTrue((self.project_root / ".gitignore").is_symlink())
+                self.assertFalse((self.project_root / "AGENTS.md").exists())
+                self.assertEqual(
+                    (self.root / "preserved-ignore").read_text(), "preserve\n"
+                )
 
     def test_root_installers_delegate_external_source_selection_to_onboard(
         self,
@@ -513,25 +734,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertIn("--skills diagnosing-bugs", invocation)
         self.assertIn("--scope global --source auto --yes", invocation)
 
-    def test_missing_target_cli_bootstraps_npm_then_installs_agent_before_preflight(
-        self,
-    ) -> None:
-        completed = self.run_installer()
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        modes = self.modes()
-        first_check = modes.index("check")
-        self.assertEqual(
-            modes[:first_check],
-            [
-                "check-agent-cli",
-                "ensure-npm",
-                "check-agent-cli",
-                "install-agent-cli",
-                "check-agent-cli",
-            ],
-        )
-
     def test_existing_target_cli_bootstraps_required_npm_once_without_legacy_stage(
         self,
     ) -> None:
@@ -543,11 +745,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         modes = self.modes()
         self.assertEqual(modes[0], "check-agent-cli")
         self.assertEqual(modes.count("ensure-npm"), 1)
-        source = INSTALL_SH.read_text(encoding="utf-8")
-        legacy_stage = source.split("install_missing_runtime_and_skills() {", 1)[
-            1
-        ].split("prompt_env_pairs() {", 1)[0]
-        self.assertNotIn("run_onboard ensure-npm", legacy_stage)
 
 
 class PowerShellInstallerAgentCliFlowTests(unittest.TestCase):
@@ -582,34 +779,7 @@ class PowerShellInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertTrue(INSTALL_PS1.read_bytes().startswith(b"\xef\xbb\xbf"))
 
 
-    def test_powershell_checks_target_agent_before_action_and_removes_legacy_npm_stage(
-        self,
-    ) -> None:
-        source = INSTALL_PS1.read_text(encoding="utf-8")
-        self.assertIn("function Ensure-TargetAgentCli", source)
-        interactive = source.split("function Resolve-InteractiveInputs", 1)[1].split(
-            "function Install-MissingRuntimeAndSkills",
-            1,
-        )[0]
-        self.assertLess(
-            interactive.index("Ensure-TargetAgentCli"),
-            interactive.index("if (-not $Action)"),
-        )
-        legacy_stage = source.split("function Install-MissingRuntimeAndSkills", 1)[
-            1
-        ].split("function Split-TrellisPlatforms", 1)[0]
-        self.assertNotIn('Invoke-Onboard "ensure-npm"', legacy_stage)
 
-    def test_powershell_uses_plural_projects_and_fixed_mcp_scopes(self) -> None:
-        source = INSTALL_PS1.read_text(encoding="utf-8")
-        parameter_block = source.split(")\n\n$ErrorActionPreference", 1)[0]
-        self.assertIn("$ProjectsRoot", parameter_block)
-        self.assertIn("$InitProjects", parameter_block)
-        self.assertNotIn("$ProjectRoot", parameter_block)
-        self.assertNotIn("$SkillsScope", parameter_block)
-        self.assertIn('"--scope", "user"', source)
-        self.assertIn('Join-Path $HOME ".omp/agent/mcp.json"', source)
-        self.assertNotIn('Join-Path $ProjectRoot ".omp/mcp.json"', source)
 
     def test_powershell_installs_paid_react_bits_skill_at_agent_path(self) -> None:
         source = INSTALL_PS1.read_text(encoding="utf-8")

@@ -20,6 +20,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
+sys.path.insert(0, str(ONBOARD.parent))
 
 
 class ExternalSkillInstallTests(unittest.TestCase):

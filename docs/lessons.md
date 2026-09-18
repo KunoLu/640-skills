@@ -60,4 +60,5 @@
 - 编辑长行模板前先在私有临时目录保存完整文件快照；备用 Git patch 必须相对记录的 base commit 包含 staged + unstaged 差异，并另存未追踪内容。截断恢复只改工作树，不动用户暂存区；不得用仅含 unstaged 的 patch 从 HEAD 重建。
 - 批量安装的身份校验必须覆盖整个替换集合，不能仅凭核心文件授权覆盖 sibling；外层组合安装结果时直接保留结构化 transaction 与恢复路径，不通过丢弃 stdout 维持 JSON 整洁。
 - 全量验证（267 tests + 450 subtests）时长波动大：窗口 ≥600s 或按文件拆分；timeout 一律充足窗口重跑取证并记录最后进度点，不得直接当 pass/fail 证据，原因未证实前不归因为“环境问题”。
+- CLI 参数或入口改动必须用真实解释器验证合法输入与拒绝输入；源码中删掉名字不等于运行时拒绝，负例非零也可能只是语法／编码错误。平台实测范围分别报告，不以 macOS PowerShell 代替 Windows。
 <!-- lessons:640:end -->

@@ -17,6 +17,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
+sys.path.insert(0, str(ONBOARD.parent))
 CATALOG = ROOT / "sbtd-workflow-onboard" / "catalog.json"
 STABLE = ROOT / "sbtd-workflow-onboard" / "assets" / "external-skills" / "stable"
 

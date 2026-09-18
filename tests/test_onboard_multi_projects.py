@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import shutil
@@ -13,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ONBOARD = ROOT / "sbtd-workflow-onboard" / "scripts" / "onboard.py"
+sys.path.insert(0, str(ONBOARD.parent))
 
 
 class MultiProjectOnboardCommandTests(unittest.TestCase):
@@ -379,7 +379,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "init-projects",
             "--projects-root",
             self.projects_csv,
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -402,7 +401,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "--projects-root",
             str(self.project_one),
             "--skip-project-agents",
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -438,7 +436,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "--projects-root",
             str(self.project_one),
             "--skip-project-agents",
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -627,7 +624,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         document -- and the success path is where that promise was broken.
 
         A write mode used to print the plan document and then a second document
-        for the trellis report, so `json.loads` raised `Extra data` on every
+        for the project report, so `json.loads` raised `Extra data` on every
         successful run. Only `plan` and `check` were parsed by tests, so the
         break stayed invisible. Parsing stdout here also pins the prose out of
         the payload, and pins `mode` at the root so a consumer reads it the same
@@ -639,7 +636,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "--projects-root",
             str(self.project_one),
             "--skip-project-agents",
-            "--skip-trellis-init",
             "--yes",
             "--json",
         )
@@ -649,7 +645,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertEqual(payload["mode"], "init-projects")
         self.assertIn("operations", payload)
         self.assertIn("backups", payload)
-        self.assertIn("trellisProjectSetup", payload)
+        self.assertEqual(payload["sbtdProjectSetup"]["status"], "success")
         self.assertIn("unverifiedChecks", payload)
         self.assertNotIn("Verification passed", result.stdout)
         self.assertNotIn("Backups:", result.stdout)
@@ -791,7 +787,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "--projects-root",
             str(self.project_one),
             "--skip-project-agents",
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -839,7 +834,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "--projects-root",
             str(self.project_one),
             "--skip-project-agents",
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -912,7 +906,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             str(global_skills),
             "--global-agents-path",
             str(self.root / "global-AGENTS.md"),
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -963,7 +956,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             str(global_skills),
             "--global-agents-path",
             str(self.root / "global-AGENTS.md"),
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -1011,7 +1003,6 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             str(global_skills),
             "--global-agents-path",
             str(global_agents),
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -1027,272 +1018,221 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertFalse(project_agents.exists())
         self.assertFalse((global_skills / "sbtd-workflow-onboard").exists())
 
-    def _write_trellis_logger(self, log_path: Path) -> None:
-        self.env["TRELIS_ARGS_LOG"] = str(log_path)
+    def write_task(
+        self, project: Path, relative_path: str, task_id: str, status: str
+    ) -> Path:
+        target = project / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        metadata = {
+            "schema_version": 1,
+            "id": task_id,
+            "workflow_mode": "default",
+            "mode_source": "default",
+            "mode_note": "Synthetic lifecycle fixture.",
+            "status": status,
+            "branch": None,
+            "created_at": "2026-09-18T00:00:00Z",
+            "updated_at": "2026-09-18T00:00:00Z",
+            "completed_at": "2026-09-18T00:00:00Z" if status == "done" else None,
+        }
+        target.write_text(
+            "---\n" + json.dumps(metadata) + "\n---\n\nPreserve this body.\n",
+            encoding="utf-8",
+        )
+        return target
+
+    def test_init_projects_creates_only_install_assets_without_trellis(self) -> None:
+        log = self.root / "unexpected-trellis-call"
+        self.env["TRELIS_ARGS_LOG"] = str(log)
         self.write_executable(
-            "trellis",
-            """#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "trellis 9.9.9"
-  exit 0
-fi
-if [ "$1" = "init" ]; then
-  printf '%s\n' "$@" > "$TRELIS_ARGS_LOG"
-  mkdir -p .trellis
-  exit 0
-fi
-exit 1
-""",
+            "trellis", '#!/bin/sh\nprintf invoked > "$TRELIS_ARGS_LOG"\nexit 99\n'
         )
-
-    def test_init_projects_checks_trellis_and_bootstrap_for_every_root(self) -> None:
-        bootstrap = self.project_two / ".trellis" / "tasks" / "00-bootstrap-guidelines"
-        bootstrap.mkdir(parents=True)
-        self.write_executable(
-            "trellis",
-            """#!/bin/sh
-if [ "$1" = "--version" ]; then
-  echo "trellis 9.9.9"
-  exit 0
-fi
-if [ "$1" = "init" ]; then
-  mkdir -p .trellis
-  exit 0
-fi
-exit 1
-""",
-        )
-
         completed = self.run_onboard(
-            "init-projects",
-            "--platform",
-            "codex",
-            "--projects-root",
-            self.projects_csv,
-            "--trellis-user",
-            "developer",
-            "--yes",
+            "init-projects", "--projects-root", self.projects_csv, "--yes", "--json"
         )
-
-        self.assertEqual(completed.returncode, 6, completed.stderr or completed.stdout)
-        self.assertTrue((self.project_one / ".trellis").is_dir())
-        self.assertIn(str(bootstrap.resolve()), completed.stdout)
-
-    def test_init_projects_forwards_distinct_omp_and_pi_flags(self) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--trellis-platform",
-            "omp,pi,codex",
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertEqual(
-            trellis_args_log.read_text(encoding="utf-8").splitlines(),
-            [
-                "init",
-                "-u",
-                "developer",
-                "--omp",
-                "--pi",
-                "--codex",
-                "--yes",
-                "--skip-existing",
-            ],
-        )
-
-    def test_init_projects_defaults_codex_from_agent_platform(self) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--platform",
-            "codex",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertEqual(
-            trellis_args_log.read_text(encoding="utf-8").splitlines(),
-            [
-                "init",
-                "-u",
-                "developer",
-                "--codex",
-                "--yes",
-                "--skip-existing",
-            ],
-        )
-
-    def test_init_projects_defaults_kimi_from_agent_platform(self) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--platform",
-            "kimi",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertIn(
-            "--kimi", trellis_args_log.read_text(encoding="utf-8").splitlines()
-        )
-
-    def test_init_projects_explicit_trellis_platform_replaces_agent_default(
-        self,
-    ) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--platform",
-            "codex",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--trellis-platform",
-            "cursor",
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        argv = trellis_args_log.read_text(encoding="utf-8").splitlines()
-        self.assertEqual(
-            argv,
-            [
-                "init",
-                "-u",
-                "developer",
-                "--cursor",
-                "--yes",
-                "--skip-existing",
-            ],
-        )
-        self.assertNotIn("--codex", argv)
-
-    def test_init_projects_rejects_empty_trellis_flags(self) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
-        self.assertFalse((self.project_one / ".trellis").exists())
-        self.assertFalse(trellis_args_log.exists())
-        combined = completed.stdout + completed.stderr
-        self.assertIn("Claude and Cursor", combined)
-
-    def test_init_projects_skips_existing_trellis_without_platform_flags(
-        self,
-    ) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-        (self.project_one / ".trellis").mkdir()
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--projects-root",
-            str(self.project_one),
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
-        self.assertFalse(trellis_args_log.exists())
-
-    def test_init_projects_oh_my_pi_requires_explicit_trellis_flags(self) -> None:
-        trellis_args_log = self.root / "trellis-args.log"
-        self._write_trellis_logger(trellis_args_log)
-
-        completed = self.run_onboard(
-            "init-projects",
-            "--platform",
-            "oh-my-pi",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--skip-trellis-bootstrap",
-            "--yes",
-        )
-
-        self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
-        self.assertFalse((self.project_one / ".trellis").exists())
-        self.assertFalse(trellis_args_log.exists())
-        combined = completed.stdout + completed.stderr
-        self.assertIn("omp and/or pi", combined)
-
-    def test_plan_json_includes_resolved_trellis_init_command(self) -> None:
-        completed = self.run_onboard(
-            "plan",
-            "--platform",
-            "codex",
-            "--projects-root",
-            str(self.project_one),
-            "--trellis-user",
-            "developer",
-            "--json",
-        )
-
         self.assertEqual(completed.returncode, 0, completed.stderr)
         payload = json.loads(completed.stdout)
-        trellis_init = payload["trellisInit"]
-        self.assertEqual(trellis_init["status"], "planned")
-        self.assertEqual(trellis_init["agentPlatform"], "codex")
-        self.assertEqual(trellis_init["platforms"], ["codex"])
-        self.assertEqual(trellis_init["platformSource"], "agent-platform")
-        self.assertEqual(
-            trellis_init["command"],
-            "trellis init -u developer --codex --yes --skip-existing",
-        )
+        self.assertEqual(payload["sbtdProjectSetup"]["status"], "success")
+        for project in (self.project_one, self.project_two):
+            self.assertEqual(
+                {path.name for path in project.iterdir()}, {"AGENTS.md", ".gitignore"}
+            )
+        self.assertFalse(log.exists())
+        self.assertEqual(list(self.home.iterdir()), [])
 
-    def test_trellis_init_capability_map_is_versioned(self) -> None:
-        spec = importlib.util.spec_from_file_location("sbtd_onboard", ONBOARD)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules["sbtd_onboard"] = module
-        spec.loader.exec_module(module)
-        self.assertEqual(module.TRELLIS_INIT_CAPABILITY_SET, "0.6.15")
-        self.assertEqual(
-            module.TRELLIS_DEFAULT_FROM_AGENT_PLATFORM,
-            {"codex": "codex", "claude": "claude", "kimi": "kimi"},
+    def test_legacy_state_blocks_batch_before_any_project_write(self) -> None:
+        legacy = self.project_two / ".trellis" / "tasks" / "historical.json"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_bytes(b'{"unrecognized": "preserve exact bytes"}\n')
+        before = legacy.read_bytes()
+        completed = self.run_onboard(
+            "init-projects", "--projects-root", self.projects_csv, "--yes", "--json"
         )
-        self.assertNotIn("oh-my-pi", module.TRELLIS_DEFAULT_FROM_AGENT_PLATFORM)
-        for required in ("kimi", "grok", "snow", "dsh", "omp", "pi", "codex", "claude"):
-            self.assertIn(required, module.TRELLIS_INIT_PLATFORMS)
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        projects = json.loads(completed.stdout)["sbtdProjectSetup"]["projects"]
+        self.assertEqual(
+            [project["status"] for project in projects], ["success", "needs-user"]
+        )
+        for project in (self.project_one, self.project_two):
+            self.assertFalse((project / "AGENTS.md").exists())
+            self.assertFalse((project / ".gitignore").exists())
+        self.assertEqual(legacy.read_bytes(), before)
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_explicit_bootstrap_reports_recorded_status_without_changing_it(
+        self,
+    ) -> None:
+        relative = "ai/tasks/00-bootstrap-guidelines/task.md"
+        task = self.write_task(
+            self.project_one, relative, "00-bootstrap-guidelines", "planned"
+        )
+        before = task.read_bytes()
+        completed = self.run_onboard(
+            "init-projects", "--projects-root", str(self.project_one), "--yes", "--json"
+        )
+        self.assertEqual(completed.returncode, 6, completed.stderr)
+        report = json.loads(completed.stdout)["sbtdProjectSetup"]
+        self.assertEqual(report["status"], "bootstrap-required")
+        self.assertEqual(task.read_bytes(), before)
+        self.assertFalse((self.project_one / "AGENTS.md").exists())
+        self.write_task(self.project_one, relative, "00-bootstrap-guidelines", "done")
+        done_bytes = task.read_bytes()
+        completed = self.run_onboard(
+            "init-projects", "--projects-root", str(self.project_one), "--yes", "--json"
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(task.read_bytes(), done_bytes)
+        self.assertFalse((self.project_one / ".sbtd").exists())
+
+    def test_invalid_active_pointer_blocks_before_global_install(self) -> None:
+        pointer = self.project_one / ".sbtd" / "active-task.json"
+        pointer.parent.mkdir()
+        pointer.write_bytes(b'{"schema_version": 1,')
+        skills = self.root / "global-skills"
+        agents = self.root / "global-AGENTS.md"
+        completed = self.run_onboard(
+            "init",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(skills),
+            "--global-agents-path",
+            str(agents),
+            "--yes",
+            "--json",
+        )
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertEqual(
+            json.loads(completed.stdout)["sbtdProjectSetup"]["status"], "blocked"
+        )
+        self.assertEqual(pointer.read_bytes(), b'{"schema_version": 1,')
+        self.assertFalse(skills.exists())
+        self.assertFalse(agents.exists())
+        self.assertFalse((self.project_one / "AGENTS.md").exists())
+
+    def test_check_and_plan_accept_uninitialized_project_without_writes(self) -> None:
+        for mode in ("check-projects", "plan"):
+            with self.subTest(mode=mode):
+                completed = self.run_onboard(
+                    mode, "--projects-root", str(self.project_one), "--json"
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                payload = json.loads(completed.stdout)
+                report = (
+                    payload["projects"][0]["sbtd"]
+                    if mode == "check-projects"
+                    else payload["sbtdInit"]
+                )
+                self.assertEqual(report["status"], "success")
+                self.assertEqual(list(self.project_one.iterdir()), [])
+                self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_new_ignore_protection_does_not_hide_existing_reserved_data(self) -> None:
+        private = self.project_one / "graft" / "user-content.txt"
+        private.parent.mkdir()
+        private.write_bytes(b"user-owned, not a graph\n")
+        completed = self.run_onboard(
+            "init-projects", "--projects-root", str(self.project_one), "--yes", "--json"
+        )
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertEqual(
+            json.loads(completed.stdout)["sbtdProjectSetup"]["status"], "needs-user"
+        )
+        self.assertEqual(private.read_bytes(), b"user-owned, not a graph\n")
+        self.assertFalse((self.project_one / ".gitignore").exists())
+        self.assertFalse((self.project_one / "AGENTS.md").exists())
+
+    def test_ignore_symlink_cannot_modify_an_external_file(self) -> None:
+        external = self.root / "external-ignore"
+        external.write_bytes(b"private-pattern\n")
+        (self.project_one / ".gitignore").symlink_to(external)
+        completed = self.run_onboard(
+            "init-projects", "--projects-root", str(self.project_one), "--yes", "--json"
+        )
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertEqual(external.read_bytes(), b"private-pattern\n")
+        self.assertTrue((self.project_one / ".gitignore").is_symlink())
+        self.assertFalse((self.project_one / "AGENTS.md").exists())
+
+    def test_project_check_respects_explicitly_skipped_agents_target(self) -> None:
+        external = self.root / "user-agents"
+        external.write_bytes(b"preserve external instructions\n")
+        agents = self.project_one / "AGENTS.md"
+        agents.symlink_to(external)
+        rejected = self.run_onboard(
+            "check-projects", "--projects-root", str(self.project_one), "--json"
+        )
+        self.assertEqual(rejected.returncode, 2, rejected.stderr)
+        allowed = self.run_onboard(
+            "check-projects",
+            "--projects-root",
+            str(self.project_one),
+            "--skip-project-agents",
+            "--json",
+        )
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+        self.assertEqual(
+            json.loads(allowed.stdout)["projects"][0]["sbtd"]["status"], "success"
+        )
+        self.assertTrue(agents.is_symlink())
+        self.assertEqual(external.read_bytes(), b"preserve external instructions\n")
+        self.assertFalse((self.project_one / ".gitignore").exists())
+
+    def test_reset_preserves_existing_project_data_bytes(self) -> None:
+        initial = self.run_onboard(
+            "init-projects", "--projects-root", str(self.project_one), "--yes", "--json"
+        )
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        contents = {
+            ".sbtd/developer": b"name=fixture\n",
+            ".sbtd/tasks/history/task.md": b"unselected historical task\n",
+            "ai/tasks/history/task.md": b"shared history\n",
+            "docs/spec/project.md": b"existing conventions\n",
+            "docs/lessons/topics/history.md": b"existing lessons\n",
+            "docs/handoffs/session.md": b"existing handoff\n",
+        }
+        for relative, content in contents.items():
+            target = self.project_one / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        completed = self.run_onboard(
+            "reset",
+            "--projects-root",
+            str(self.project_one),
+            "--global-skills-dir",
+            str(self.root / "global-skills"),
+            "--global-agents-path",
+            str(self.root / "global-AGENTS.md"),
+            "--yes",
+            "--json",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        for relative, content in contents.items():
+            self.assertEqual((self.project_one / relative).read_bytes(), content)
+        self.assertFalse((self.project_one / ".sbtd" / "active-task.json").exists())
+        self.assertFalse(
+            (self.project_one / "ai/tasks/00-bootstrap-guidelines").exists()
+        )
 
     def _required_external_skill_names(self) -> list[str]:
         catalog = json.loads(
@@ -1386,7 +1326,6 @@ exit 1
             str(global_skills),
             "--global-agents-path",
             str(self.root / "global-AGENTS.md"),
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -1442,7 +1381,6 @@ exit 1
             str(global_skills),
             "--global-agents-path",
             str(self.root / "global-AGENTS.md"),
-            "--skip-trellis-init",
             "--yes",
             timeout=120,
         )
@@ -1496,7 +1434,6 @@ exit 1
             str(global_skills),
             "--global-agents-path",
             str(global_agents),
-            "--skip-trellis-init",
         )
 
         planned = self.run_onboard("plan", *args, "--json")
@@ -1665,7 +1602,6 @@ exit 1
             str(global_skills),
             "--global-agents-path",
             str(omp_agents),
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -1713,7 +1649,6 @@ exit 1
             str(project_root),
             "--global-skills-dir",
             str(global_skills),
-            "--skip-trellis-init",
             "--yes",
         )
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
@@ -1744,7 +1679,6 @@ exit 1
             str(global_skills),
             "--global-agents-path",
             str(self.root / "global-AGENTS.md"),
-            "--skip-trellis-init",
             "--yes",
         )
 
@@ -1762,7 +1696,6 @@ exit 1
             "init-projects",
             "--projects-root",
             str(self.project_one),
-            "--skip-trellis-init",
             "--yes",
         )
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
