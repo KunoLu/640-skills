@@ -710,7 +710,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         for item in payload["publication_decisions"]["items"]
         if item["target_path"] is not None
     ]
-    cleanup_protected_paths = [*candidate_paths, *publication_targets]
+    non_apply_protected_paths = [*candidate_paths, *publication_targets]
     seen_operation_ids: set[str] = set()
     resource_owners: dict[str, tuple[str, str | None]] = {}
     target_owners: dict[Path, tuple[str, tuple[str, str | None]]] = {}
@@ -727,8 +727,8 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):
             _fail("semantic-violation", "backup_root overlaps a managed target")
         protected_paths = candidate_paths
-        if operation["phase"] == "cleanup":
-            protected_paths = cleanup_protected_paths
+        if operation["phase"] != "apply":
+            protected_paths = non_apply_protected_paths
         if any(
             _path_contains(target, protected) or _path_contains(protected, target)
             for protected in protected_paths
@@ -763,20 +763,27 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         operation_groups.setdefault((rid, phase), []).append(operation)
 
     for project in projects:
-        nested_roots = [
+        exclusive_roots = [
             root
             for root in roots
             if root != project["root"] and _path_contains(project["root"], root)
         ]
+        exclusive_roots.extend(
+            root["path"]
+            for root in payload["shared_roots"]
+            if _path_contains(project["root"], root["path"])
+        )
         for operation in project["private_operations"]:
             if operation["target"] == project["root"] or not _path_contains(
                 project["root"], operation["target"]
             ):
                 _fail("semantic-violation", "private target must belong to its project")
-            if any(_path_contains(root, operation["target"]) for root in nested_roots):
+            if any(
+                _path_contains(root, operation["target"]) for root in exclusive_roots
+            ):
                 _fail(
                     "semantic-violation",
-                    "private target belongs to a more-specific selected project",
+                    "private target belongs to another declared project or shared scope",
                 )
             if operation["dependent_projects"] != [project["root"]]:
                 _fail(
@@ -1706,24 +1713,31 @@ def _check_raw_hash(kind: str, expected: str, raw_documents: Mapping[str, Any]) 
         )
 
 
+def _immutable_stage_references(
+    payload: Mapping[str, Any],
+) -> Iterator[Mapping[str, Any]]:
+    for project in payload["projects"]:
+        yield from project.get("report_refs", ())
+    groups = chain(
+        (payload["shared_results"],),
+        (project["private_results"] for project in payload["projects"]),
+    )
+    for results in groups:
+        for result in results:
+            if result["backup_ref"] is not None:
+                yield result["backup_ref"]
+
+
 def _source_object_references(
     kind: str, payload: Mapping[str, Any]
 ) -> Iterator[Mapping[str, Any]]:
     if kind == "manifest":
         yield from _manifest_input_references(payload)
         return
-    for project in payload["projects"]:
-        yield from project.get("report_refs", ())
-        yield from project.get("retained_assets", ())
     if kind in _STAGE_RECEIPT_PHASES:
-        groups = chain(
-            (payload["shared_results"],),
-            (project["private_results"] for project in payload["projects"]),
-        )
-        for results in groups:
-            for result in results:
-                if result["backup_ref"] is not None:
-                    yield result["backup_ref"]
+        yield from _immutable_stage_references(payload)
+    for project in payload["projects"]:
+        yield from project.get("retained_assets", ())
 
 
 def _bind_input_evidence(
@@ -1731,6 +1745,18 @@ def _bind_input_evidence(
     raw_documents: Mapping[str, Any],
     documents: Mapping[str, Any],
 ) -> None:
+    protected_paths = {
+        reference["path"]
+        for kind, document in documents.items()
+        if kind in _STAGE_RECEIPT_PHASES
+        for reference in _immutable_stage_references(document["payload"])
+    }
+    manifest = documents.get("manifest")
+    if manifest is not None:
+        protected_paths.update(
+            reference["path"]
+            for reference in _manifest_input_references(manifest["payload"])
+        )
     for key, reference in input_evidence.items():
         raw = raw_documents.get(key)
         if raw is not None:
@@ -1745,17 +1771,24 @@ def _bind_input_evidence(
                     "input evidence file digest does not match the supplied raw bytes",
                     exit_code=3,
                 )
-        source = documents.get(key)
-        if reference is None or source is None:
+        if reference is None:
             continue
+        source = documents.get(key)
+        nested_refs = (
+            _source_object_references(key, source["payload"])
+            if source is not None
+            else ()
+        )
         if any(
-            _path_contains(reference["path"], nested["path"])
-            or _path_contains(nested["path"], reference["path"])
-            for nested in _source_object_references(key, source["payload"])
+            _path_contains(reference["path"], path)
+            or _path_contains(path, reference["path"])
+            for path in chain(
+                protected_paths, (nested["path"] for nested in nested_refs)
+            )
         ):
             _fail(
                 "binding-violation",
-                "evidence file overlaps an object declared inside that evidence",
+                "evidence file overlaps a protected object in supplied evidence",
             )
 
 
@@ -1804,6 +1837,7 @@ def _bind_success_gate(
 def _bind_resource_states_and_backups(
     manifest_payload: Mapping[str, Any],
     stage_results: Mapping[str, Mapping[str, Any]],
+    source_documents: Mapping[str, Any],
 ) -> None:
     operations = {
         (operation["phase"], operation["resource_id"]): operation
@@ -1813,6 +1847,13 @@ def _bind_resource_states_and_backups(
     source_paths = {
         reference["path"] for reference in _manifest_input_references(manifest_payload)
     }
+    source_paths.update(
+        reference["path"]
+        for kind, document in source_documents.items()
+        if kind in _STAGE_RECEIPT_PHASES
+        for project in document["payload"]["projects"]
+        for reference in project.get("report_refs", ())
+    )
     for phase, results in stage_results.items():
         for rid, result in results.items():
             backup = result["backup_ref"]
@@ -2031,6 +2072,13 @@ def _bind_verification(
                 "cleanup candidate target does not match the manifest resource",
             )
         if verified:
+            owner_kind = identity[candidate["resource_id"]][0]
+            expected_type = "directory" if owner_kind == "directory" else "file"
+            if candidate["state"]["type"] not in {"absent", expected_type}:
+                _fail(
+                    "binding-violation",
+                    "verified candidate has the wrong resource type",
+                )
             expected = _expected_before(
                 requirements[("cleanup", candidate["resource_id"])], stage_results
             )
@@ -2717,7 +2765,7 @@ def validate_declared_bindings(
         _bind_stage_receipt(manifest_payload, cleanup, "cleanup")
         _bind_retained_assets(manifest_payload, verification, cleanup)
     _bind_stage_states(requirements, stage_results)
-    _bind_resource_states_and_backups(manifest_payload, stage_results)
+    _bind_resource_states_and_backups(manifest_payload, stage_results, supplied)
     if "apply" in stage_results:
         _check_publication_links(manifest_payload, stage_results["apply"])
     evidence_documents = {"manifest": manifest, **supplied}
