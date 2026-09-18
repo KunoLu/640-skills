@@ -10,6 +10,8 @@ P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 
 
 P1-17 在 Onboard `scripts/` 内实现任务状态 Python 库（`sbtd_task_document.py`、`sbtd_task_state.py`）：task.md 是唯一状态事实源，`.sbtd/active-task.json` 只是书签；`TaskStore` 的 create／inspect／select／transition／set_mode／resume／reopen／protect_local_state／promote／archive 由 host-native 调用，不注册新全局 CLI、daemon、journal 或 `onboard.py` 子命令。Markdown 结构识别使用声明依赖 markdown-it-py>=4,<5 的 CommonMark token（parse-only、不渲染、不联网，Python>=3.10）。提升／归档为两阶段：先准备并验证目标候选与引用，单独确认后原目录原子退役进 `.sbtd/task-originals/` 保留；候选复制只用受保护临时区并在结束后清理，目录内其他逻辑任务必须 `include_tasks` 逐个授权，路径嵌套不代表所有权。非 Git 项目 branch 为 null，首次窄保护只追加 `/.sbtd/`；部分失败如实报告已完成步骤，helper 或其声明依赖未安装时明确停止写入，不得假装持久化已执行。这不代表 Windows、host 路由、身份建立或真实迁移已完成，也不代表全量验证或发布已通过。
 
+P1-18 在同一 `scripts/` 内增加确定性路由与受保护交接库（`sbtd_task_routing.py`、`sbtd_handoff.py`），同样不注册新全局 CLI、daemon、journal 或 `onboard.py` 子命令。`TaskRouter` 只把 host 已明确的事实（`RouteRequest` 的 `new`／`continue`／`question` 意图、显式 mode、推荐回应 `accept`／`keep`、只读与确认标记）转成确定性的 `RouteDecision`（`ready`／`needs-task-choice`／`needs-mode-choice`／`needs-mode-decision`／`needs-branch-choice`／`needs-persistence-confirmation`／`persistence-failed`／`blocked`），不是自然语言意图分类器；续作先唯一确定 task 再决定 mode，拒绝建议以结构化 `mode_note` 记录并按风险标识去重，保存失败保持会话内选择并如实标记未持久化，不回退旧 mode。`TaskStore` 新增公开的 `current_binding()`／`recovery_candidates()`／`rebind(...)`：跨分支恢复要求正确 worktree、明确重绑定或只读选择；`rebind` 必须携带 `expected_branch`、`reason`、`evidence` 并经确认，只更新绑定及事件，不 checkout、不 stash、不重置 blocked 恢复历史。`HandoffStore` 只在真实 pause／context-switch／branch-switch／context-pressure／manual 续接事件触发，计数或进入 checking 不触发；task／session 自动交接退出独立锁存且 session 优先，手动请求不清除退出；`save` 返回 `saved`／`suppressed`／`conversation-only`／`branch-conflict`／`unprotected`／`unchanged`／`pending-confirmation`／`needs-redaction` 之一，写入前核对 `docs/handoffs/` 整棵窄保护与 tracked 状态且必须显式 `redaction_confirmed` 才落盘；文件名取完整逻辑任务 ID UTF-8 字节的小写 hex（大小写不敏感文件系统上仍无冲突且可逆），同任务同内容快照（仅 `created_at` 除外）不重写、跨日不单独触发；主动提醒只取 7 天内按任务去重、root／分支匹配且未完成任务的快照，旧快照仍可显式手动恢复但绝不改写 task；分支不匹配拒绝写入，handoff 永远不是 mode／status 事实源。Agent 是否真实先推荐暂停、解释风险并按模式执行完整方法仍由既有 Skill 规则与 P1-15 的真实 host 证明负责；本项不代表 Windows、host 接线、自动 SessionStart 恢复、真实迁移、全量验证或发布已通过。
+
 
 下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：
 
@@ -249,7 +251,7 @@ AGENTS.md
 
 本节描述当前模板载荷里的 canonical 规则，来源是 bundled `sbtd-task`（`sbtd-workflow-onboard/templates/skills/sbtd-task/SKILL.md` 及 `references/`）、v2 全局 / 项目 AGENTS 模板和 bundled `lessons-record`。这些规则文本已随载荷切换生效；在真实 host 上的完整运行证明仍属 P1 范围。
 
-**共同路由**：开始工作前先识别任务、授权项目根、分支和只读约束。执行模式优先级：本次明确用户选择 > 同一任务已确认 / 有效记录 > 真正的新任务使用 `default`；旧任务缺模式、记录损坏或有多个合法恢复候选时必须询问，不按 mtime 或旧 handoff 猜测。认为另一模式更合适时，先说明当前模式、建议与原因、以及保持原模式的选项，并暂停实质执行等待用户决定；被拒绝后按原模式继续，没有新实质风险不重复劝升。纯问答和明确只读的任务只在会话中保留模式，不创建或更新 task、active、handoff、身份或 ignore 文件。
+**共同路由**：开始工作前先识别任务、授权项目根、分支和只读约束。执行模式优先级：本次明确用户选择 > 同一任务已确认 / 有效记录 > 真正的新任务使用 `default`；旧任务缺模式、记录损坏或有多个合法恢复候选时必须询问，不按 mtime 或旧 handoff 猜测。认为另一模式更合适时，先说明当前模式、建议与原因、以及保持原模式的选项，并暂停实质执行等待用户决定；被拒绝后按原模式继续，没有新实质风险不重复劝升。纯问答和明确只读的任务只在会话中保留模式，不创建或更新 task、active、handoff、身份或 ignore 文件。P1-18 的 `TaskRouter`（`sbtd-workflow-onboard/scripts/sbtd_task_routing.py`）把这套规则落成确定性库调用：它只接收 host 已明确的意图与选择并返回 `RouteDecision` 状态（含 `needs-task-choice`／`needs-mode-decision`／`needs-branch-choice`／`needs-persistence-confirmation`／`persistence-failed`），不做意图分类；任务分支不匹配时只能选正确 worktree、明确 `rebind`（不 checkout / stash）或只读继续。
 
 **三种执行模式**：
 
@@ -259,7 +261,7 @@ AGENTS.md
 | `lite` | 使用短清单和共享短任务卡，只产生必要产物；不机械补齐 PRD / design / implement 文件。 |
 | `strict` | 加载 `references/strict.md`，完成适用的 before-dev / check / finish-work 义务；真正必需证据缺失时不得报通过。 |
 
-用户明确要求的产物、项目原有规范和安全 / 真实性边界在所有模式都不降级；`default/lite/strict` 与 caveman / ADHD 等输出样式互不相干。任务持久化、恢复、handoff、方法路由、表达样式和工具边界分别按需读取 `references/state.md`、`handoff.md`、`methods.md`、`presentation.md`、`tooling.md`；任务数据结构见 `references/task-data.schema.json`。普通 default 任务的本地记录位于 `.sbtd/tasks/<id>/task.md`，lite / strict 或明确共享任务位于 `ai/tasks/<id>/task.md`；`.sbtd/active-task.json` 只存当前任务引用，handoff 只在真实暂停 / 切换时写入 `docs/handoffs/`。
+用户明确要求的产物、项目原有规范和安全 / 真实性边界在所有模式都不降级；`default/lite/strict` 与 caveman / ADHD 等输出样式互不相干。任务持久化、恢复、handoff、方法路由、表达样式和工具边界分别按需读取 `references/state.md`、`handoff.md`、`methods.md`、`presentation.md`、`tooling.md`；任务数据结构见 `references/task-data.schema.json`。普通 default 任务的本地记录位于 `.sbtd/tasks/<id>/task.md`，lite / strict 或明确共享任务位于 `ai/tasks/<id>/task.md`；`.sbtd/active-task.json` 只存当前任务引用，handoff 只在真实暂停 / 切换 / 上下文压力或手动请求时由 `HandoffStore`（`sbtd-workflow-onboard/scripts/sbtd_handoff.py`）写入受保护的 `docs/handoffs/`，状态计数不触发，旧快照不覆盖当前 task。
 
 **lessons 身份来源**：只有真正要写入长期 lesson 时才解析写入者身份，纯读取不建立身份。唯一自动来源是当前项目 `<repo-root>/.sbtd/developer` 中唯一的 `name=`：本地合法身份优先；仅当本地文件确实缺失、且当前 checkout 已验证为同仓 linked worktree 时，才只读主 checkout 的同一文件，不复制回本地。现存但异常的身份文件（重复声明、非法内容、错误类型、不可读、symlink 或路径不确定）是冲突而不是缺失，必须停止解析，不得绕过。允许来源都确实缺失时，说明将建立的本地路径并向用户要名字；不得从 Git / OS / 环境变量 / 历史 workspace 目录或 marker 推断。分隔名必须匹配 `^[a-z0-9]+$`，原样使用，不小写化、不去标点、不音译。旧 `.trellis/.developer` 只在用户明确授权旧项目身份迁移时按 `lessons-record` 的 `references/identity-migration.md` 处理，不再是日常身份 fallback。
 

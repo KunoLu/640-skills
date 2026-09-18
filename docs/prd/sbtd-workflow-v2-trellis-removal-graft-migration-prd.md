@@ -1167,7 +1167,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P1-15 | P1 | Codex/OMP 三模式 smoke、token 计量及最终验证 | P1-11、P1-14 | AC-04/14/19/20/22/23/24；六个 host×mode 组合含模式拒绝／恢复，真实证据不伪造 | AFK | planned | — |
 | P1-16 | P1 | 候选 release-readiness 与可选 rc 发布 | P1-15 | reviewer ready；用户批准后才创建不可变 rc tag，记录 SHA/日期 | HITL | planned | — |
 | P1-17 | P1 | 最小任务、active 引用、提升与恢复事件 | P1-02、P0-03 | AC-03/24/27/31/32；[实施与验证](sbtd-workflow-v2-task-state-runtime.md)。最终`eb5a272…`原生671 tests/156.971s、完整307文件安装副本及11原生场景通过，62份envelope校验；独立review无剩余P0/P1，16 P2延期。[PR #33](https://github.com/KunoLu/640-skills/pull/33)合入，merge `ea252e44534cf3f104add50d81755e3c5140ac58`。P1累计4项；十项确认门保持 | AFK | done | 2026-09-19T01:45:29+08:00 |
-| P1-18 | P1 | 公共路由、跨分支恢复和只读交接 | P0-05、P1-17 | AC-05/22/24/27/28；分支不符不写，切换／重绑定须选择；只读不建 handoff、旧模式不丢 | AFK | planned | — |
+| P1-18 | P1 | 公共路由、跨分支恢复和只读交接 | P0-05、P1-17 | AC-05/22/24/27/28；[实施与验证](sbtd-workflow-v2-route-recovery-runtime.md)。确定性路由/明确rebind/受保护handoff已实现；707项提交前全量、review修复后137项影响范围及309文件/11原生场景通过；独立复核无剩余P0/P1，9 P2延期。正在固定精确候选，不提前验收host | AFK | checking | — |
 | P1-19 | P1 | developer 按需建立与 worktree 身份解析 | P1-02、P0-06 | AC-06/25；未 onboard 的首次保护与名字询问、本地身份优先、合法/冲突分支、窄写入不全量初始化 | AFK | planned | — |
 | P1-20 | P1 | Manifest-scoped recovery plan／receipt 与恢复执行 | P1-12、P1-04、P1-05、P1-13 | AC-18/35；基于实际各阶段实现证明完整/partial apply/deploy/cleanup恢复与重试，最后后态、共享闭包、无证据blocked | AFK | planned | — |
 
@@ -1410,6 +1410,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-18T23:27:34+08:00 | D-IMP-14 用户确认门 | 用户要求P1完成第10个任务后暂停后续推进，全量评估findings.log，先列出有必要优先修复的问题并等待确认。按累计闭环数量计数；当前3项done，P1-17在实施，现有顺序第10项是P1-06。已在todo第10/11项之间插入暂停/评估/用户确认节点；不自动修复、不将整体目标提前标完成。 |
 | 2026-09-19T01:28:56+08:00 | P1-17 in-progress→checking | 任务库及共享安全parser、单文件更新/父子/历史/传输已实现；90项影响范围、666 tests/176.904s全量后，两路完整review发现3 P1并经红绿、95项影响范围及独立复核关闭。307文件安装副本的10原生多进程smoke与缺Markdown依赖零写入场景通过，8 fixed P1/16 deferred P2记入findings.log；仅dirty/local-only，正固定精确候选。D-IMP-14十项门保持，当前P1仍3项闭环；未开始P1-18。 |
 | 2026-09-19T01:45:29+08:00 | P1-17 checking→done | PR #33于01:44:27+08:00实际合并，merge`ea252e44534cf3f104add50d81755e3c5140ac58`；main与origin/main一致，合并tree等于验证head`eb5a27272f886bc02b57e4fa28b6fa33d1adac29`，任务分支本地/远端清理。最终671 tests/156.971s无skip、307文件完整安装副本及10原生进程+缺依赖零写入场景通过；报告stem为`unit-report-task-exact-full-p1-17-task-state-runtime-2026_09_19-01_38_15`、`api-report-task-exact-native-processes-p1-17-task-state-runtime-2026_09_19-01_39_19`、`api-report-task-exact-missing-markdown-p1-17-task-state-runtime-2026_09_19-01_39_22`。62envelope通过，developer-local/exact/local-only；8fixed P1/16deferred P2，独立源码与metadata review无剩余P0/P1。7份base原件快照核验后清理Main私有验证目录，186报告保留，仅最终unit raw/envelope补实际清理及review记录；P0安装/真实HOME/用户任务/迁移备份未动。Release readiness ready仅本任务；P1累计4项，D-IMP-14十项门不变，独立状态PR闭环前不启动P1-18。 |
+| 2026-09-19T01:54:37+08:00 | P1-18 planned→in-progress | P1-17实现PR #33/状态PR #34闭环并清理后，从main`255c5ce…`建立`p1-18-route-recovery`。fresh venv基线95 tests/5.675s通过；Legacy/Refactoring/DDD/DDIA确认。复用TaskStore，不新增全局CLI/调度器；机器只处理明确选择/权限与持久结果，不冒充LLM路由/方法执行观察。P1累计4，D-IMP-14十项确认门保持；未展开P1-19。 |
+| 2026-09-19T03:34:10+08:00 | P1-18 in-progress→checking | 路由/重绑定/handoff库已实现；707 tests/164.976s提交前全量后，独立review发现4项P1，均经真实红绿、accept/keep分支及partial创建变体、137项影响范围和独立复核关闭。309文件安装副本10原生进程与真实缺PyYAML零写入场景通过；5fixed P1（含advisor）/9deferred P2已记findings.log。当前证据dirty/local-only，正固定精确提交，不提前done；P1累计4项，十项确认门保持。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 
