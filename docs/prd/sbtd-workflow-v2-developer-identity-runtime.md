@@ -68,3 +68,12 @@
 - 文档review无P0/P1，新增P2：README把写后失败一概描述为exit 5，实际仅failed为5，其他阻断状态为2。按D-IMP-13登记延期，不修文案；累计2 fixed P1、5 deferred P2。
 - 关于checking行仍记录提交前dirty的初步P2，经澄清“实现合入/清理→独立状态PR更新最终exact/done/时间/merge”约定后reviewer撤回；以dismissed保留记录，不提前改成done。
 - 本补记与ledger登记不改生产实现；随后重新固定最终SHA并重跑计划范围。最终精确证据及Release gate结论由正式报告/PR说明与合并后独立状态PR留存，避免文档自指尚未生成的提交或未来合并事实。
+
+## 实现合入与完成事实
+
+- 最终head`498a4bd75113a468f2dd11946f57d77e09f3e5bb`，clean/exact/developer-local/local-only：原生745 tests/184.442s、310文件完整安装副本10原生场景均通过；最终报告stem为`unit-report-identity-pr-head-full-p1-19-developer-identity-2026_09_19-05_58_59`与`api-report-identity-pr-head-native-p1-19-developer-identity-2026_09_19-05_58_17`。
+- 23份v1 envelope、raw checksum与同stem中文汇总通过。最终unit raw保留安装manifest、Python/依赖版本、静态结果、独立review与清理事实；只更新附加元数据及对应hash，不改原运行输出或sourceCommit。
+- [实现PR #37](https://github.com/KunoLu/640-skills/pull/37)于2026-09-19T06:04:50+08:00实际合并；merge`4226f29b15de1f2c7378739e00e7bed66633a8f6`。2026-09-19T06:06:25+08:00完成main/origin/tree及本地/远端任务分支清理核对；四份源码快照与base一致后删除Main私有验证目录，69份正式报告保留。
+- 独立实现/文档/证据复核无剩余P0/P1；2 fixed P1、5 deferred P2、1 dismissed P2保持真实。Release Readiness ready仅本任务；无Windows/真实host/旧身份迁移/完整v2发布声明，不自动删除已创建身份。
+- README.md/html、CHANGELOG和versioned automation在实现PR已按真实入口维护；本状态PR只补完成事实，无新用户接口或安装行为，三入口与CHANGELOG均无需重复改写。未操作live automation、ENTRYPOINT、真实HOME、P0安装或用户迁移备份。
+- P1累计6项；此完成事实仍须独立状态PR合入与分支清理后才能展开下一任务。累计10项后的全findings评估/用户确认门不变。
