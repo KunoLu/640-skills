@@ -36,7 +36,7 @@
 - 基线报告：`tests/unit/reports/unit-report-onboard-lifecycle-baseline-p1-02-on-demand-bootstrap-2026_09_18-15_57_18.json`；同 stem 中文汇总与 evidence envelope 已生成。
 - Refactoring：`proceed`，normal；不做前置大重构，新只读检查模块复用 schema，现有编排接入。
 - DDIA：`confirmed`；状态读取无写入、前置冲突阻断、现有数据保全，不新增异步/迁移/恢复子系统。
-- Release readiness：`planned`，在本项适用验证与独立 review 后执行。
+- Release readiness：`ready`，仅针对已验证的 P1-02 候选；完整 v2、Windows、host 与迁移仍由既定后续任务验收，不能提前发布。
 
 ## 验证计划
 
@@ -88,3 +88,11 @@
 - 完整副本／两 fresh venv／13 组实际 CLI 通过，增加两安装器的 skip-project-agents 范围；报告 `tests/api/reports/api-report-preflight-installed-copy-p1-02-on-demand-bootstrap-2026_09_18-19_15_00.json`。已有有效 task fixture 显式具备安装保护条件，缺依赖测试不绕过新增前置条件。
 - Ruff 仍 41→41、ty 123→104，无新增诊断。删除安装器固定调用数组断言，不重钉新的内部顺序；真正的前置屏障与文件保全回归保留。
 - 所有上述证据仍为 dirty/local-only；第二轮完整复审与最终精确提交验证尚待完成。
+
+### 第二轮审查与精确提交证明
+
+- 冻结候选 `bb5e3f2f0c0fde0fb012899c1f2b03c632311225`：`P102PreflightReviewTwo` 确认首轮 P1 关闭、无新 P0/P1；`P102EvidenceReviewTwo` 同样无 P0/P1，新增 4 条 P2 与 1 条 P3。全部入 `findings.log`，本项累计 8 条 P2、1 条 P3 保持 deferred，不按旧零发现门槛继续修复。
+- 同一 clean SHA 原生全量 589 tests / 61.595s / exit 0，13 组实际 CLI 通过；`git archive` 完整 304 文件安装副本、两个 fresh venv、声明依赖与缺失分支全部通过。正式报告 stem 分别为 `unit-report-onboard-exact-p1-02-on-demand-bootstrap-2026_09_18-19_22_18`、`api-report-onboard-exact-cli-p1-02-on-demand-bootstrap-2026_09_18-19_22_18`、`api-report-onboard-exact-installed-p1-02-on-demand-bootstrap-2026_09_18-19_22_18`，位于既有 unit/API reports 目录；raw/中文MD/envelope成套保留。证据是 developer-local / exact / local-only，不是 CI 或 Windows。
+- Code Readability/Ponytail：两路独立复审未发现需继续重构的结构问题；精确结果类型、共享只读 gate 和公开参数/内部模式分离均有实际用途，无新增执行框架。既有 Ruff/ty 诊断保持基线范围，不声称全仓静态全绿。
+- Release Readiness：`ready`，范围仅 P1-02。本地同步 CLI，无新增队列/后台服务；失败早于安装副作用，保留数据并输出逐项目诊断；代码回退不授权删除项目数据。用户 D-IMP-13 已明确低优先级事项留待后续评估；完整 v2 仍不具备发布声明。
+- 本次收尾仅补审查与验证记录，不改变已验证生产代码。若记录产生新 commit，按最终 head 重跑精确验证；不将上述旧 SHA 报告改写成新提交证据。实际完成与 merge 事实只在实施 PR 合并并清理分支后进入独立状态 PR。
