@@ -155,3 +155,17 @@ Main先得到11项／29个预期失败及1个目标缺陷（超大整数ValueErr
 目录cleanup fixture改为完整skill ownership，不再用file config-entry冒充目录归属。Main取得10项／16个预期失败及3个目标错误（非法identifier原生异常、两种合法cleanup-phase依赖场景被拒）；修复后10项及完整189项协议回归通过，实际4场景安全拒绝smoke通过。保留全部历史，不把字段／路径合法当真实文件或授权证明。
 
 验证顺序收敛为定点／影响范围与实际smoke、静态、提交、该最终head一次全量及精确安装副本，再独立review；取消内容相同的提交前全量重复运行，不减少最终完整gate。新head尚未完成正式全量或review前仍不得标ready/done或创建PR。
+
+## 第七轮独立 review
+
+冻结head `c10b2b417b3042012130ba9260d4fc19627dc681` 的494项／473.325s、安装副本、七组实际smoke、静态和九份envelope通过；surface零新发现。两路协议共19项进入修复，涉及whole-resource归属、copy精确后态、retained父子写入冲突、备份／保护／候选与输入证据隔离、独立plan身份与类型、报告／源快照一致性、严格目标子路径、恢复观察时序和累计保全。
+
+授权裁决单独记录：原reviewer已撤回“Beta-only恢复可放宽资源闭包”的建议。PRD741/767/784要求完整共享资源授权，因此resource.dependent_projects及selected-project闭包保持manifest跨阶段并集；step.dependent_projects按本阶段operation来源精确记录，属于resource闭包的子集。不能把修正步骤归因变成扩大写入许可。
+
+copy-file/copy-directory的source_ref明确表示已准备好的完整复制候选，不是尚待渲染的模板；ownership.reference仍可指原模板归属证据。Fixture分开每个候选路径并使source.state等于实际after，保留原before/after向量与5资源/14文档接口；manifest项目sources补为一致的初始快照。保护重叠只检查当前确实提供的目标／原件／输入证据及manifest候选，不编造plan中不存在的候选清单或实际文件权限证明。
+
+第七轮实际红测为208项：原有189项通过，新增19个方法产生38个预期断言失败和1个目标错误（合法阶段依赖被资源级相等判断拒绝），无fixture错误。修复后19项定点及412项Onboard影响范围通过；实际API消费smoke的6场景证明完整链、copy内容拒绝、保护／候选隔离、证据路径唯一、阶段恢复归因与完整授权闭包、absent原件无备份retry。全部为dirty本地证据，保留原始报告，不替代新提交全量。
+
+Code Readability／Ponytail复核：路径快照与operation归属各集中为复用校验，不新增schema字段、执行层或通用框架；共享receipt依赖取其实际记录步骤的并集，资源授权范围不变。Ruff指出累计守卫可化简，使用具名`unprotected_change`说明现有原件丢失风险而不压成密集表达式；未使用ignore/cast。修改后208项协议回归及新5个Python文件Ruff／格式／ty通过。报告汇总曾误传Path给接收raw对象的helper，实际smoke退出0的原始记录未重跑／重标；已按原记录补正同stem中文汇总。
+
+README.md／README.html及版本化automation prompt无需额外改写：内部接口分阶段接入、复制安装后的依赖准备、无真实HOME／迁移授权的边界未变。CHANGELOG既有未发布协议能力覆盖这些尚未合并的语义校验修正，不追加一次性过程日志。Release readiness仍等待新head全量、精确安装副本及下一轮独立review，当前不标ready／done。

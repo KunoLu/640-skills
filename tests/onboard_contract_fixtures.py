@@ -145,17 +145,28 @@ def _file_ref(path: str, number: int) -> dict[str, Any]:
 # source and template-source ownership reference so both always correspond.
 PUBLICATION_CANDIDATE = _file_ref("/private/candidates/notes.md", 82)
 
+# Original shared-notes file later approved for publication; the same ref is
+# listed in the alpha project's initial sources and in publication sources.
+PUBLICATION_ORIGINAL = _file_ref("/private/work/alpha/docs/notes.md", 81)
+
+
+def initial_source_ref(key: str) -> dict[str, Any]:
+    """Plan-time snapshot of a resource's pre-apply original (project.sources)."""
+    return {"path": RESOURCES[key][1], "state": resource_state(key, "orig")}
+
 
 def build_operation(key: str, phase: str) -> dict[str, Any]:
     owner_kind, target, _, dependents = RESOURCES[key]
     rid = resource_id_of(key)
     if phase == "apply":
+        # Copy sources are prepared whole candidates whose state is exactly the
+        # recorded after-apply state, so a successful copy binds to the source.
         if owner_kind == "directory":
             change = {
                 "kind": "copy-directory",
                 "source_ref": {
-                    "path": "/private/source/sbtd-task",
-                    "state": directory_state(71),
+                    "path": "/private/source/r2-apply-candidate",
+                    "state": resource_state(key, "apply"),
                 },
             }
             ownership = {
@@ -180,7 +191,10 @@ def build_operation(key: str, phase: str) -> dict[str, Any]:
         else:
             change = {
                 "kind": "copy-file",
-                "source_ref": _file_ref("/private/source/base-config", 72),
+                "source_ref": {
+                    "path": f"/private/source/{key}-apply-candidate",
+                    "state": resource_state(key, "apply"),
+                },
             }
             ownership = {
                 "kind": "config-entry",
@@ -240,7 +254,7 @@ def operations_of(key: str) -> dict[str, dict[str, Any]]:
 
 
 def build_publication_items() -> list[dict[str, Any]]:
-    share_sources = [_file_ref("/private/work/alpha/docs/notes.md", 81)]
+    share_sources = [copy.deepcopy(PUBLICATION_ORIGINAL)]
     share_candidate = copy.deepcopy(PUBLICATION_CANDIDATE)
     local_sources = [_file_ref("/private/work/alpha/cache/local.bin", 83)]
     return [
@@ -299,7 +313,11 @@ def build_manifest_payload() -> dict[str, Any]:
                 "source_ref": None,
                 "head": None,
                 "platforms": ["codex"],
-                "sources": [],
+                "sources": [
+                    initial_source_ref("r1"),
+                    initial_source_ref("r2"),
+                    copy.deepcopy(PUBLICATION_ORIGINAL),
+                ],
                 "private_operations": [
                     r1_ops["apply"],
                     r1_ops["deploy"],
@@ -315,7 +333,7 @@ def build_manifest_payload() -> dict[str, Any]:
                 "source_ref": None,
                 "head": None,
                 "platforms": ["codex"],
-                "sources": [],
+                "sources": [initial_source_ref("r3")],
                 "private_operations": [
                     r3_ops["apply"],
                     r3_ops["deploy"],
