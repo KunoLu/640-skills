@@ -16,7 +16,7 @@
 - Refactoring proceed：公开复用现有安全frontmatter/schema/日期校验；迁移每个调用方，先保持既有检查行为，不复制parser、不增加浅包装。
 - DDD confirmed：task是唯一有效状态；active只是目录书签，index/handoff不复制权威模式或状态。提升与模式正交，developer只在lesson写入时需要。工作流任务状态是支撑子域，安装/迁移/身份分别授权。无新的领域冲突；没有完整grill结果需要纠正。
 - DDIA confirmed：单writer；单文件候选校验后同目录原子替换；比较预期旧内容并拒绝可检测冲突；不冒充跨文件事务或多进程隔离。提升/祖先重开/归档的跨文件部分成功必须可观察和安全重试。
-- Release readiness planned：全部适用验证及独立审查之后执行。
+- Release readiness ready：最终精确提交671项全量、完整安装副本/原生场景、报告与独立审查后通过；仅P1-17，不提前验收Windows/host/身份/迁移或整体v2。
 
 ## 数据与操作不变量
 
@@ -85,3 +85,13 @@
 - 修复后原生证据：`tests/api/reports/api-report-task-reviewed-native-processes-p1-17-task-state-runtime-2026_09_19-01_27_14.json`及`tests/api/reports/api-report-task-reviewed-missing-markdown-p1-17-task-state-runtime-2026_09_19-01_27_16.json`；同stem中文MD/envelope保留，developer-local/dirty/local-only。早期driver转义失败已留报告，未伪装通过。
 - Ponytail/Code Readability Review覆盖手写模块和测试：无需要引入或删除的框架；保留单一校验/传输实现，目录遍历改为流式，故障fixture隔离callback绑定。新模块/测试Ruff、format和ty通过；既有模块按base比较，不声称全仓静态零诊断。
 - README.md、README.html、Onboard说明、sbtd-task入口/state reference、版本化automation prompt与CHANGELOG已同步实际库/依赖/权限边界；live automation、真实HOME和ENTRYPOINT未操作。D-IMP-14是计划内确认门，不推广到全局规则。
+
+## 最终精确验证与实际合并
+
+- 验证head：`eb5a27272f886bc02b57e4fa28b6fa33d1adac29`，clean；原生671 tests / 156.971s / exit 0，无skip。新模块/测试Ruff、format、ty通过；既有修改范围Ruff26→26、ty93→93，无新增诊断。
+- 最终报告：`tests/unit/reports/unit-report-task-exact-full-p1-17-task-state-runtime-2026_09_19-01_38_15.json`；`tests/api/reports/api-report-task-exact-native-processes-p1-17-task-state-runtime-2026_09_19-01_39_19.json`；`tests/api/reports/api-report-task-exact-missing-markdown-p1-17-task-state-runtime-2026_09_19-01_39_22.json`。同stem中文MD/envelope齐备；本轮62份envelope全通过。全部developer-local/exact/local-only，不冒充CI或远端已发布。
+- 精确git archive完整307文件Skill与fresh venv真实安装requirements；10原生进程场景及真实缺Markdown依赖零写入通过，执行前后source checksums一致。旧报告、失败与red/green不重标；最终unit raw另保留独立review及清理证明。
+- Release Readiness Review：ready，仅本任务。写入需确认、单文件原子、跨文件保留原件并如实报告部分成功；无自动卸载/真实数据回滚。16 P2按用户D-IMP-13延期，单writer不冒充跨进程事务，未来Windows/host/迁移门保持。
+- [PR #33](https://github.com/KunoLu/640-skills/pull/33) 于2026-09-19T01:44:27+08:00实际合并；merge `ea252e44534cf3f104add50d81755e3c5140ac58`。main与origin/main同步，合并tree与精确候选一致，本地/远端任务分支删除并prune。
+- 2026-09-19T01:45:29+08:00完成私有验证清理：7份源码快照先按manifest/base核验，只移除Main拥有的临时环境/副本/runner/合成数据；186正式报告保留，仅最终unit raw/envelope补实际清理和review记录。P0保留安装、真实HOME、用户任务、真实迁移备份与live automation未触碰。
+- 本完成记录通过独立status PR审查/合入；闭环前不启动P1-18。P1累计4项，D-IMP-14累计十项后全量findings评估并等待用户确认的门禁保持。
