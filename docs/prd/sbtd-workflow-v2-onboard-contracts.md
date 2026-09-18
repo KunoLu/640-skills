@@ -181,3 +181,15 @@ README.md／README.html及版本化automation prompt无需额外改写：内部�
 10个新回归方法在未改生产codec时产生18个预期断言失败和2个目标RecursionError（cycle／depth），无fixture错误；修复后10项定点及完整218项协议回归通过。四组实际API smoke确认共享根、矛盾快照、受控递归拒绝和7个恢复输入／scope隔离边界，全部退出0；此前失败报告保留。向reviewer发送一次诊断报告指针时误猜时间戳，已立即以实际路径更正，不以该错误指针作为证据。
 
 Code Readability／Ponytail复核：分别命名manifest只读输入清单与初态快照流，避免把后续状态或可写对象混入同一不变量；复用路径／状态校验，不引入动态路由、schema字段、缓存或通用框架。递归异常仅在公开Python-value边界转换为固定ContractError，不输出输入对象。新5个Python文件Ruff／格式／ty通过，无ignore/cast。README.md／README.html／版本化automation prompt的内部接入与安装边界未变，无需重复改写；CHANGELOG不追加未合并能力的逐轮过程日志。新head正式全量、安装副本和独立review尚待执行，不能预填ready／done。
+
+## 第九轮独立 review
+
+冻结head `564d29908bd95a23ad8717b997c9931449730e89` 的523项／125.983s、精确安装副本、12组实际smoke、静态及14份envelope通过；surface零发现。Intrinsic与Recovery各4项全部纳入：managed目标不能包含已声明scope根；verified清理候选与retained资产隔离；完整RFC3339小数时间比较；所有公开JSON入口的递归错误边界；独立plan的target／backup／evidence空间隔离；恢复报告保护；已提供stage的内嵌报告／retained／backup引用保护；证据文件路径与该证据内部对象不能互相覆盖。
+
+时间格式不通过缩窄合法小数位数规避问题：比较带时区的整秒与保留前导零、去掉尾零的小数字符串，避免microsecond截断和Decimal context舍入限制。递归转换集中在所有JSON入口复用的安全边界，内部walker仅遍历；保留原有非递归错误码与通用writer有限小数行为。
+
+恢复仅索引实际提供（含已解码raw）的源对象，仍不推测缺失阶段；同一状态的可复用备份引用保持允许，但不同角色的target／backup／evidence路径以及父子覆盖拒绝。report与protection作为不同输出共同避开manifest、plan和已提供stage的保留输入。verified scope拒绝清理／保留冲突，failed verification仍能报告冲突诊断。
+
+8个新方法首轮得到24个预期失败和2个目标递归异常；两条证据路径反例曾被无关guard提前挡住，已将native报告放到独立子目录，并让blocked无步骤plan保留合法resource operation IDs。修正后真实red为26个断言失败／2个目标RecursionError，无fixture错误。修复后8项定点与完整226项协议通过；实际消费smoke的9个场景通过，其中小数精度与独立Decimal比较的24组输入及跨时区控制一致。
+
+smoke后的Code Readability／Ponytail复核保留具名输入引用遍历和阶段边界，不新增schema／依赖／缓存／执行框架。旧cleanup保留约束回归改为不传verification，避免新前置校验掩盖cleanup自身的独立约束；调整后226项协议及新5个Python文件Ruff／格式／ty通过。README.md、README.html、版本化automation prompt的内部接入／安装／无真实主机声明不变，无需重复改写；CHANGELOG不记录未合并能力的逐轮过程。新head全量／安装副本／独立review仍须重跑，当前不得标ready／done。

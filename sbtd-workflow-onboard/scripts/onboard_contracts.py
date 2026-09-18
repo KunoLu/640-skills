@@ -25,6 +25,7 @@ import re
 import sys
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import datetime
+from itertools import chain
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -277,6 +278,15 @@ def _decode_strict(raw: bytes | bytearray | str) -> Any:
 
 
 def _check_json_safe(value: Any, *, allow_numbers: bool = False) -> None:
+    try:
+        _walk_json_value(value, allow_numbers=allow_numbers)
+    except RecursionError:
+        raise ContractError(
+            "non-json-value", "value cannot be represented as contract JSON"
+        ) from None
+
+
+def _walk_json_value(value: Any, *, allow_numbers: bool = False) -> None:
     if value is None or isinstance(value, (bool, int)):
         return
     if isinstance(value, float):
@@ -300,7 +310,7 @@ def _check_json_safe(value: Any, *, allow_numbers: bool = False) -> None:
         return
     if isinstance(value, list):
         for item in value:
-            _check_json_safe(item, allow_numbers=allow_numbers)
+            _walk_json_value(item, allow_numbers=allow_numbers)
         return
     if isinstance(value, dict):
         for key, item in value.items():
@@ -308,8 +318,8 @@ def _check_json_safe(value: Any, *, allow_numbers: bool = False) -> None:
                 raise ContractError(
                     "unexpected-type", "JSON object keys must be strings"
                 )
-            _check_json_safe(key, allow_numbers=allow_numbers)
-            _check_json_safe(item, allow_numbers=allow_numbers)
+            _walk_json_value(key, allow_numbers=allow_numbers)
+            _walk_json_value(item, allow_numbers=allow_numbers)
         return
     raise ContractError(
         "unexpected-type", "value is not representable as contract JSON"
@@ -707,10 +717,13 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     phases_by_resource: dict[str, set[str]] = {}
     requirements: dict[tuple[str, str], Mapping[str, Any]] = {}
     operation_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    scope_roots = root_set | {root["path"] for root in payload["shared_roots"]}
 
     def register(operation: Mapping[str, Any], owner: tuple[str, str | None]) -> None:
         _check_operation(operation)
         target = operation["target"]
+        if any(_path_contains(target, root) for root in scope_roots):
+            _fail("semantic-violation", "managed target contains a declared scope root")
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):
             _fail("semantic-violation", "backup_root overlaps a managed target")
         protected_paths = candidate_paths
@@ -825,10 +838,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "shared_root dependent_projects must reference declared projects",
             )
-    shared_root_paths = {root["path"] for root in payload["shared_roots"]}
     for operation in payload["shared_operations"]:
-        if operation["target"] in shared_root_paths:
-            _fail("semantic-violation", "shared target cannot replace a declared root")
         matching_roots = [
             root
             for root in payload["shared_roots"]
@@ -872,8 +882,14 @@ def _check_project_dependencies(
         _fail("semantic-violation", "project status masks a dependent resource failure")
 
 
-def _parse_timestamp(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+def _parse_timestamp(value: str) -> tuple[datetime, str]:
+    timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    fraction = value.partition(".")[2]
+    if fraction:
+        fraction = fraction[:-1] if value.endswith("Z") else fraction[:-6]
+    # Keep leading zeros; trimming trailing zeros makes digit-string ordering
+    # exact without imposing datetime's microsecond or Decimal context limits.
+    return timestamp.replace(microsecond=0), fraction.rstrip("0")
 
 
 def _check_temporal(payload: Mapping[str, Any]) -> None:
@@ -1032,6 +1048,28 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
     root_set = set(roots)
     if len(root_set) != len(roots):
         _fail("semantic-violation", "duplicate project root in verification")
+    retained_paths = {
+        asset["path"]
+        for project in payload["projects"]
+        for asset in project["retained_assets"]
+    }
+    project_statuses = {
+        project["root"]: project["status"] for project in payload["projects"]
+    }
+
+    def check_retention(candidate: Mapping[str, Any]) -> None:
+        if not all(
+            project_statuses[root] == "verified"
+            for root in candidate["dependent_projects"]
+        ):
+            return
+        if any(
+            _path_contains(candidate["target"], path)
+            or _path_contains(path, candidate["target"])
+            for path in retained_paths
+        ):
+            _fail("semantic-violation", "verified cleanup overlaps a retained asset")
+
     shared_ids: set[str] = set()
     for candidate in payload["shared_cleanup_candidates"]:
         if candidate["resource_id"] in shared_ids:
@@ -1042,6 +1080,7 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "shared candidate references an undeclared project",
             )
+        check_retention(candidate)
     seen: set[str] = set()
     for project in payload["projects"]:
         for candidate in project["cleanup_candidates"]:
@@ -1057,6 +1096,7 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
                     "semantic-violation",
                     "private candidate dependencies differ from its owner",
                 )
+            check_retention(candidate)
     statuses = [project["status"] for project in payload["projects"]]
     expected = _aggregate(statuses, ("failed", "blocked"), "verified", None)
     if payload["status"] != expected:
@@ -1090,13 +1130,19 @@ def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
     _check_reference_states(
         reference for group in (evidence_refs, backup_refs) for reference in group
     )
-    for backup in backup_refs:
-        if any(
-            _path_contains(backup["path"], evidence["path"])
-            or _path_contains(evidence["path"], backup["path"])
-            for evidence in evidence_refs
-        ):
-            _fail("semantic-violation", "recovery backup overlaps input evidence")
+    target_paths = {Path(entry["target"]) for entry in payload["resources"]}
+    backup_paths = {Path(reference["path"]) for reference in backup_refs}
+    evidence_paths = {Path(reference["path"]) for reference in evidence_refs}
+    if len(target_paths) != len(payload["resources"]):
+        _fail("semantic-violation", "recovery resources share a target")
+    object_paths = target_paths | backup_paths | evidence_paths
+    if len(object_paths) != len(target_paths) + len(backup_paths) + len(evidence_paths):
+        _fail(
+            "semantic-violation", "recovery target, backup and evidence paths coincide"
+        )
+    for path in object_paths:
+        if any(parent in object_paths for parent in path.parents):
+            _fail("semantic-violation", "recovery targets, backups or evidence overlap")
     for step in steps:
         if step["expected_current"] == step["restore_to"]:
             _fail("semantic-violation", "recovery step must reverse a state transition")
@@ -1292,21 +1338,29 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
             )
         if result["status"] == "succeeded" and result["step_id"] not in completed:
             _fail("semantic-violation", "a succeeded recovery step must be completed")
-    readonly_paths = {reference["path"] for reference in payload["report_refs"]}
-    readonly_paths.update(
-        reference["path"]
+    report_paths = {Path(reference["path"]) for reference in payload["report_refs"]}
+    evidence_paths = {
+        Path(reference["path"])
         for reference in payload["input_evidence"].values()
         if reference is not None
-    )
-    for path in protections:
+    }
+    if report_paths & evidence_paths:
+        _fail("semantic-violation", "recovery reports coincide with input evidence")
+    readonly_paths = report_paths | evidence_paths
+    for path in readonly_paths:
+        if any(parent in readonly_paths for parent in path.parents):
+            _fail(
+                "semantic-violation", "recovery report or evidence file paths overlap"
+            )
+    protection_paths = {Path(path) for path in protections}
+    for path in protection_paths:
         if any(
-            _path_contains(path, readonly) or _path_contains(readonly, path)
+            path.is_relative_to(readonly) or readonly.is_relative_to(path)
             for readonly in readonly_paths
         ):
             _fail(
                 "semantic-violation", "recovery protection overlaps evidence or reports"
             )
-    protection_paths = {Path(path) for path in protections}
     for path in protection_paths:
         if any(parent in protection_paths for parent in path.parents):
             _fail("semantic-violation", "recovery protection objects overlap")
@@ -1511,12 +1565,7 @@ def validate_document(value: Any, kind: str) -> Any:
     def_name, id_key = _kind_info(kind)
     if not isinstance(value, dict):
         _fail("unexpected-type", f"{kind} document must be a JSON object")
-    try:
-        _check_json_safe(value)
-    except RecursionError:
-        raise ContractError(
-            "non-json-value", "document cannot be represented as contract JSON"
-        ) from None
+    _check_json_safe(value)
     _schema_validate(value, def_name, kind)
     record = value.get("payload", value)
     if kind in {"recovery_plan", "recovery_receipt"}:
@@ -1657,23 +1706,56 @@ def _check_raw_hash(kind: str, expected: str, raw_documents: Mapping[str, Any]) 
         )
 
 
+def _source_object_references(
+    kind: str, payload: Mapping[str, Any]
+) -> Iterator[Mapping[str, Any]]:
+    if kind == "manifest":
+        yield from _manifest_input_references(payload)
+        return
+    for project in payload["projects"]:
+        yield from project.get("report_refs", ())
+        yield from project.get("retained_assets", ())
+    if kind in _STAGE_RECEIPT_PHASES:
+        groups = chain(
+            (payload["shared_results"],),
+            (project["private_results"] for project in payload["projects"]),
+        )
+        for results in groups:
+            for result in results:
+                if result["backup_ref"] is not None:
+                    yield result["backup_ref"]
+
+
 def _bind_input_evidence(
-    input_evidence: Mapping[str, Any], raw_documents: Mapping[str, Any]
+    input_evidence: Mapping[str, Any],
+    raw_documents: Mapping[str, Any],
+    documents: Mapping[str, Any],
 ) -> None:
     for key, reference in input_evidence.items():
         raw = raw_documents.get(key)
-        if raw is None:
+        if raw is not None:
+            if reference is None:
+                _fail(
+                    "binding-violation",
+                    "raw evidence was supplied for a slot declared null",
+                )
+            if reference["state"]["checksum"] != _raw_digest(raw):
+                _fail(
+                    "binding-violation",
+                    "input evidence file digest does not match the supplied raw bytes",
+                    exit_code=3,
+                )
+        source = documents.get(key)
+        if reference is None or source is None:
             continue
-        if reference is None:
+        if any(
+            _path_contains(reference["path"], nested["path"])
+            or _path_contains(nested["path"], reference["path"])
+            for nested in _source_object_references(key, source["payload"])
+        ):
             _fail(
                 "binding-violation",
-                "raw evidence was supplied for a slot declared null",
-            )
-        if reference["state"]["checksum"] != _raw_digest(raw):
-            _fail(
-                "binding-violation",
-                "input evidence file digest does not match the supplied raw bytes",
-                exit_code=3,
+                "evidence file overlaps an object declared inside that evidence",
             )
 
 
@@ -2255,6 +2337,7 @@ def _bind_recovery_receipt(
     document: Mapping[str, Any],
     plan_document: Mapping[str, Any] | None,
     manifest_payload: Mapping[str, Any],
+    source_documents: Mapping[str, Any],
 ) -> None:
     payload = document["payload"]
     protected_paths = {
@@ -2263,20 +2346,32 @@ def _bind_recovery_receipt(
     protected_paths.update(
         operation["target"] for operation in _manifest_operations(manifest_payload)
     )
+    protected_paths.update(
+        reference["path"]
+        for kind, source in source_documents.items()
+        if kind in _STAGE_RECEIPT_PHASES or kind == "verification"
+        for reference in _source_object_references(kind, source["payload"])
+    )
     if plan_document is not None:
         protected_paths.update(
             step["backup_ref"]["path"]
             for step in plan_document["payload"]["steps"]
             if step["backup_ref"] is not None
         )
-    for result in payload["results"]:
-        protection = result["protection_ref"]
-        if protection is not None and any(
-            _path_contains(protection["path"], path)
-            or _path_contains(path, protection["path"])
+    output_refs = chain(
+        payload["report_refs"],
+        (
+            result["protection_ref"]
+            for result in payload["results"]
+            if result["protection_ref"] is not None
+        ),
+    )
+    for output in output_refs:
+        if any(
+            _path_contains(output["path"], path) or _path_contains(path, output["path"])
             for path in protected_paths
         ):
-            _fail("binding-violation", "recovery protection overlaps a protected input")
+            _fail("binding-violation", "recovery output overlaps a protected input")
     if plan_document is None:
         return
     if payload["plan_id"] != plan_document["plan_id"]:
@@ -2449,7 +2544,7 @@ def _bind_chronology(
     manifest_payload: Mapping[str, Any], documents: Mapping[str, Any]
 ) -> None:
     created = _parse_timestamp(manifest_payload["created_at"])
-    windows: dict[str, tuple[datetime, datetime]] = {}
+    windows: dict[str, tuple[tuple[datetime, str], tuple[datetime, str]]] = {}
     for kind, document in documents.items():
         payload = document["payload"]
         if kind == "verification":
@@ -2625,16 +2720,19 @@ def validate_declared_bindings(
     _bind_resource_states_and_backups(manifest_payload, stage_results)
     if "apply" in stage_results:
         _check_publication_links(manifest_payload, stage_results["apply"])
+    evidence_documents = {"manifest": manifest, **supplied}
     plan = supplied.get("recovery_plan")
     if plan is not None:
         _bind_recovery_plan(
             manifest_payload, plan, stage_results, resource_observations
         )
-        _bind_input_evidence(plan["payload"]["input_evidence"], raw)
+        _bind_input_evidence(plan["payload"]["input_evidence"], raw, evidence_documents)
     receipt = supplied.get("recovery_receipt")
     if receipt is not None:
-        _bind_recovery_receipt(receipt, plan, manifest_payload)
-        _bind_input_evidence(receipt["payload"]["input_evidence"], raw)
+        _bind_recovery_receipt(receipt, plan, manifest_payload, supplied)
+        _bind_input_evidence(
+            receipt["payload"]["input_evidence"], raw, evidence_documents
+        )
     _bind_declared_hashes(supplied)
     _bind_chronology(manifest_payload, supplied)
     return supplied
