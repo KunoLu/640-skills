@@ -14,7 +14,7 @@
 - Refactoring proceed：复用TaskStore单一状态实现、共享解析和原子I/O；不复制parser或另造状态事实源。新增接口保持无副作用读取和受确认写入分别可测。
 - DDD confirmed：任务选择优先于询问未知模式；当前明确选择优先于同任务有效记录，新独立任务缺省default。推荐不是选择、继续不是重绑定、handoff不是模式源、表达压缩不是执行模式。工作流支撑子域，无新的领域冲突，无完整grill结果需要修正。
 - DDIA confirmed：task是唯一mode/status源，active是书签，handoff是快照；单writer原子文件写，缺少保护或分支选择时零写入。保存失败不撤销当前会话选择，必须标记未持久化/恢复不可靠。快照与task不同步时以有效task为准，不按mtime覆盖。
-- Release readiness planned，全部验证/独立review后执行。
+- Release readiness ready：精确提交713项全量、309文件/11原生场景、报告及独立复核后通过，仅P1-18；不提前验收Windows/host/迁移或整体v2。
 
 ## 决策与持久化不变量
 
@@ -55,3 +55,13 @@
 - 完整309文件Onboard副本：10原生Python进程场景通过；fresh no-YAML解释器实际只有jsonschema，连续创建重试保持strict且项目/HOME零写入。报告`tests/api/reports/api-report-route-reviewed-native-p1-18-route-recovery-2026_09_19-03_29_51.json`、`tests/api/reports/api-report-route-missing-yaml-p1-18-route-recovery-2026_09_19-03_29_53.json`，同stem中文MD/envelope，developer-local/dirty/local-only。
 - Ponytail/Code Readability Review：删除重复JSON递归校验和不必要的fixture参数灵活性；复用既有安全parser/Git/原子writer，无新框架。新模块/测试Ruff、format、ty通过，原有state/parser与base比较Ruff0→0、ty0→0。正式最终门仍在固定提交后重跑。
 - README.md/html、Onboard/Skill文档、versioned automation prompt和CHANGELOG已维护实际库入口；真实HOME、live automation、ENTRYPOINT版本与旧用户数据未动。D-IMP-14累计十项评估/用户确认门保持，当前本任务未完成，P1累计仍4项。
+
+## 最终精确证据与合并
+
+- 验证head `3fbb85db02821b64295af77ca4827583258fe98e`，clean；713 tests /161.141s /exit0，无skip。本轮修改Python代码/测试Ruff、format、ty全通过；既有state/parser与base均0新增。
+- 最终报告：`tests/unit/reports/unit-report-route-exact-full-p1-18-route-recovery-2026_09_19-03_40_16.json`、`tests/api/reports/api-report-route-exact-native-p1-18-route-recovery-2026_09_19-03_41_04.json`、`tests/api/reports/api-report-route-exact-missing-yaml-p1-18-route-recovery-2026_09_19-03_41_06.json`。同stem中文MD/envelope齐全，本轮33份envelope校验通过；developer-local/exact/local-only，不冒充CI/远端publication。
+- 完整git archive309文件安装副本，fresh venv实际安装副本requirements；10原生多进程场景和真正缺PyYAML环境的创建/重试零写入通过，执行前后每文件checksum一致。旧707项dirty全量不重标；修复后精确全量独立保存。
+- 两路独立审查及routing P1修复后复核无剩余P0/P1；5fixed P1/9deferred P2保留原级。Release Readiness ready仅本任务；9项残余风险按用户D-IMP-13延期，不将单writer原子替换夸大为多进程事务。
+- [PR #35](https://github.com/KunoLu/640-skills/pull/35)于2026-09-19T03:45:48+08:00实际合并，merge`a4ae34786af102b263a2c63e8c534593481c9811`。main/origin同步，合并tree与已验证head一致，任务分支本地/远端删除并prune。
+- 2026-09-19T03:46:33+08:00完成Main私有验证清理；7份base源码快照先核验，99正式报告保留，仅最终unit raw/envelope补独立review和实际清理证明。P0保留安装、真实HOME、用户任务/快照、迁移备份与live automation未动。
+- 完成登记走独立status PR，闭环前不展开P1-19。本项闭环后P1累计5项，D-IMP-14第10项闭环后暂停全findings评估并等待用户确认的门保持。
