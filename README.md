@@ -2,7 +2,9 @@
 
 本仓库是 Codex / OMP 配置、Agent 规则模板、Skill 模板和 onboard 自动化的摘录/同步源，不代表一个真实业务项目结构。当前处于v2未发布切换阶段：规则载荷与catalog已切换，完整运行时仍单独实施和验收。
 
-> **未发布边界（v2 P0 切换中）**：当前分支正在执行 v1 → v2 的原子切换：Skill 载荷与 `catalog.json` 已切到 v2 canonical——bundled `sbtd-task` 取代已退役的 `trellis-workflow` / `trellis-channel`，bundled 总数 15 → 14，required external 仍为 19；全局 / 项目 AGENTS 模板与 bundled `lessons-record` 已换成 v2 路由与身份规则。但完整的 v2 CLI、`init` / `reset` 行为、host 集成和旧项目迁移仍属于未完成的 P1 范围：本文涉及 Trellis 安装、bootstrap 检测与 v1 CLI 的章节描述的是**现有过渡实现**，不是已验证的 v2 行为。不要把本开发分支的混合 legacy 生命周期应用到真实项目；真实项目迁移等 P1 / P2 交付并发布后，再按发布版本执行。
+> **未发布边界（v2 分阶段交付中）**：Skill 载荷与 `catalog.json` 已完成 v2 canonical 原子切换——bundled `sbtd-task` 取代已退役的 `trellis-workflow` / `trellis-channel`，bundled 总数 15 → 14，required external 仍为 19；全局 / 项目 AGENTS 模板与 bundled `lessons-record` 已换成 v2 路由与身份规则。但完整的 v2 CLI、`init` / `reset` 行为、host 集成和旧项目迁移仍属于未完成的 P1 范围：本文涉及 Trellis 安装、bootstrap 检测与 v1 CLI 的章节描述的是**现有过渡实现**，不是已验证的 v2 行为。不要把本开发分支的混合 legacy 生命周期应用到真实项目；真实项目迁移等 P1 / P2 交付并发布后，再按发布版本执行。
+
+P1-01 的 `scripts/onboard_arguments.py`、`scripts/onboard_contracts.py` 和 `onboard-contracts.schema.json` 位于自包含 Onboard 目录内，只提供内部可调用的解析／交换契约，不代表现行 `onboard.py` 已开放 migration/recovery 或新部署行为。完整目录安装／`npx skills add` 不会运行 pip；调用契约校验前，用实际运行解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`。依赖惰性加载，缺失时校验明确失败，不影响既有 CLI 或纯参数解析；schema/hash 合法不是授权、文件安全或真实执行证明。
 
 
 下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import fnmatch
 import hashlib
 import json
 import os
@@ -307,14 +308,42 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("用户在交互会话中明确要求", prompt)
 
         self.assertIn("无人值守自动化仅可创建或修改", prompt)
-        self.assertIn(
-            "`install.sh`、`install.ps1`、`sbtd-workflow-onboard/scripts/onboard.py`、"
-            "`sbtd-workflow-onboard/catalog.json`、"
-            "`sbtd-workflow-onboard/catalog.schema.json`、"
-            "`sbtd-workflow-onboard/templates/project/.gitignore` 与 `tests/**` "
-            "只能读取、评估或验证，不得由无人值守自动化修改。",
-            prompt,
-        )
+        # Published scope contract, not proof that an LLM enforces the policy.
+        protected_paths = {
+            "install.sh",
+            "install.ps1",
+            "sbtd-workflow-onboard/scripts/onboard.py",
+            "sbtd-workflow-onboard/scripts/onboard_arguments.py",
+            "sbtd-workflow-onboard/scripts/onboard_contracts.py",
+            "sbtd-workflow-onboard/onboard-contracts.schema.json",
+            "sbtd-workflow-onboard/requirements.txt",
+            "sbtd-workflow-onboard/catalog.json",
+            "sbtd-workflow-onboard/catalog.schema.json",
+            "sbtd-workflow-onboard/templates/project/.gitignore",
+            "tests/**",
+        }
+        read_only_paths = {
+            path
+            for line in prompt.splitlines()
+            if "不得由无人值守自动化修改" in line
+            for path in re.findall(r"`([^`]+)`", line)
+        }
+        writable_patterns = {
+            path
+            for line in prompt.splitlines()
+            if "无人值守自动化仅可创建或修改" in line
+            for path in re.findall(r"`([^`]+)`", line)
+        }
+        self.assertLessEqual(protected_paths, read_only_paths)
+        for path in protected_paths:
+            with self.subTest(path=path):
+                self.assertFalse(
+                    any(
+                        fnmatch.fnmatchcase(path, pattern)
+                        or fnmatch.fnmatchcase(pattern, path)
+                        for pattern in writable_patterns
+                    )
+                )
 
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
         alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"

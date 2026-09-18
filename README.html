@@ -404,7 +404,8 @@
     <section>
       <div class="wrap">
         <div class="status-list">
-          <div><strong>未发布边界（v2 P0 切换中）</strong><br>当前分支正在执行 v1 → v2 的原子切换：Skill 载荷与 <code>catalog.json</code> 已切到 v2 canonical——bundled <code>sbtd-task</code> 取代已退役的 <code>trellis-workflow</code> / <code>trellis-channel</code>，bundled 总数 15 → 14，required external 仍为 19；全局 / 项目 AGENTS 模板与 bundled <code>lessons-record</code> 已换成 v2 路由与身份规则。完整的 v2 CLI、<code>init</code> / <code>reset</code> 行为、host 集成和旧项目迁移仍属于未完成的 P1 范围。本文涉及 Trellis 安装、bootstrap 检测与 v1 CLI 的章节描述现有过渡实现，不是已验证的 v2 行为；不要把本开发分支的混合 legacy 生命周期应用到真实项目，待 P1 / P2 交付并发布后再按发布版本迁移。</div>
+          <div><strong>未发布边界（v2 分阶段交付中）</strong><br>Skill 载荷与 <code>catalog.json</code> 已完成 v2 canonical 原子切换——bundled <code>sbtd-task</code> 取代已退役的 <code>trellis-workflow</code> / <code>trellis-channel</code>，bundled 总数 15 → 14，required external 仍为 19；全局 / 项目 AGENTS 模板与 bundled <code>lessons-record</code> 已换成 v2 路由与身份规则。完整的 v2 CLI、<code>init</code> / <code>reset</code> 行为、host 集成和旧项目迁移仍属于未完成的 P1 范围。本文涉及 Trellis 安装、bootstrap 检测与 v1 CLI 的章节描述现有过渡实现，不是已验证的 v2 行为；不要把本开发分支的混合 legacy 生命周期应用到真实项目，待 P1 / P2 交付并发布后再按发布版本迁移。</div>
+          <div>P1-01的<code>onboard_arguments.py</code>、<code>onboard_contracts.py</code>和<code>onboard-contracts.schema.json</code>只提供内部解析／交换契约，不代表现行CLI已开放migration/recovery或部署行为。目录复制／<code>npx skills add</code>不运行pip；校验依赖须由实际解释器按安装副本的<code>requirements.txt</code>准备。依赖惰性加载，缺失时校验fail-closed，既有CLI及纯参数解析不受影响；schema/hash不证明授权或真实执行。</div>
         </div>
       </div>
     </section>
