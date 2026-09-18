@@ -16,7 +16,7 @@
 | book-refactoring-pass | mandatory：已核对现有parser/run/计划与两端消费者，避免半切换 | 首次实现前 | passed |
 | book-ddd-distilled-modeling | required：资源／操作／批准快照／阶段结果的模型边界 | schema稳定前 | passed |
 | book-ddia-data-design | mandatory：持久交换对象、ID、共享归属和累计证据 | schema稳定前 | passed |
-| book-release-readiness | required：新增协议解析／校验／输出语义，仅限接口层 | 首轮独立review发现后重新验证／审核 | running |
+| book-release-readiness | required：新增协议解析／校验／输出语义，仅限接口层 | 完整验证及按D-IMP-13独立复审 | passed |
 
 未完整grill-with-docs：产品边界已由PRD收敛，当前落地机器字段及原子接入时序，不推断新的用户授权或真实环境。
 
@@ -73,13 +73,13 @@ Code Readability Review：新模块与测试已按项目Ruff格式整理；去�
 
 ## Scoped Release Readiness Review
 
-- Status：首轮接口readiness已被独立协议review阻断，修正后须重新执行验证／审核；不代表公开CLI、部署、迁移或恢复执行就绪。
+- Status：ready（仅P1-01内部接口层）。第十二轮三路独立review均无P0／P1，满足D-IMP-13；4条deferred P2在根目录findings.log留待用户评估，不宣称已修复，也不代表公开CLI、部署、迁移或恢复执行就绪。
 - Production path／影响：新解析、版本化数据及输出函数；现行Python入口／两安装器未激活它们。
 - Failure modes／防护：严格输入、ID／批准／归属／累计／失败状态约束，依赖或副本schema缺失fail-closed；不执行不可信命令，不把合法hash当授权。
 - Capacity／backpressure：无服务、队列或后台任务；仅进程内解析／校验，compiled schema不缓存用户数据。
 - Observability／runbook：ContractError保留明确code/exit_code且不回显被拒绝原值；requirements与缺依赖处理已在实际安装副本验证和文档说明。
 - Rollout／rollback／cleanup：仍按D-IMP-12由对应生产者原子接入，真实引用/权限/别名/授权/报告真实性必须另验；当前只改受管源，源码备份保持至实施PR合并之后，不触碰真实迁移备份。
-- Required validation：新5个Python文件Ruff/ty通过；旧workflow测试Ruff5→5无新增；425项提交前全量与完整副本缺依赖／可用／缺schema三路径通过。最终head在提交后重跑。
+- Required validation：冻结实现提交`2239fcdd777ef28e7c6c30864f346f5e1ca72ae7`原生539 tests／146.737s、新5个Python文件Ruff／格式／ty、精确完整副本三路径、19组实际API smoke及21份unit/API envelope通过；旧workflow测试Ruff5→5。后续审查记录／日志提交不改实现，证据继续明确绑定实际运行revision，不冒充CI。
 - Optional checks／剩余边界：无本项服务、Web交互或设备链路；未声明Windows真执行、Codex/OMP运行或跨阶段恢复通过，这些归既定P1验证任务，不把缺失证明转成通过。
 
 ## 首轮独立 review 与修正
@@ -227,3 +227,9 @@ README.md／README.html／版本化automation prompt的公开接入和安装边�
 两项P1先以3个方法取得9个预期断言失败／零errors，再修复并通过3项定点和234项完整协议。共享操作仍要求唯一匹配shared root，再排除归属于更具体项目的目标；更具体共享根可继续拥有其资源，不自动路由。累计校验保留已提供前次报告的路径与内容，允许相同引用、新的不相交报告及从当前列表移除旧引用，但新备份／保护／报告不能覆盖前次已知报告。
 
 实际API smoke的6个正反场景通过，新5个Python文件Ruff／格式／ty通过。可读性复核将累计报告保留集中为一个有实际复用的检查，不新增历史索引、字段或存储布局；未处理`findings.log`中的P2报告嵌套。下一步只按D-IMP-13要求验证新冻结head并复审P0／P1，不再追求P2清零。
+
+## 第十二轮独立复审结论
+
+冻结实现提交`2239fcdd777ef28e7c6c30864f346f5e1ca72ae7`的539项／146.737s、精确安装副本、19组实际smoke、静态及21份envelope通过。`P101IntrinsicReviewTwelve`、`P101RecoveryReviewTwelve`、`P101SurfaceReviewTwelve`均明确没有P0／P1，按D-IMP-13达到当前推进门槛。
+
+本轮新增低优先级建议已记录到根目录`findings.log`：PRD尾部历史循环措辞、deployment报告与受管目标／manifest输入的隔离、deployment evidence输出与内嵌artifacts的隔离；两名reviewer提出的报告路径问题按同根因合并并保留两个来源。台账共42条P2：38条历史fixed、4条deferred。未修复这些P2，不以登记代替修复或运行证明。当前仍为checking，真实任务合并后才按D-IMP-02更新完成状态和时间。
