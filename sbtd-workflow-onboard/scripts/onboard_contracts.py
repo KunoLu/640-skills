@@ -549,6 +549,32 @@ def _manifest_operations(payload: Mapping[str, Any]) -> Iterator[Mapping[str, An
     yield from payload["shared_operations"]
 
 
+def _manifest_input_references(
+    payload: Mapping[str, Any],
+) -> Iterator[Mapping[str, Any]]:
+    for project in payload["projects"]:
+        yield from project["sources"]
+    for item in payload["publication_decisions"]["items"]:
+        yield from item["sources"]
+        if item["candidate_ref"] is not None:
+            yield item["candidate_ref"]
+    for operation in _manifest_operations(payload):
+        source = operation["change"].get("source_ref")
+        if source is not None:
+            yield source
+        yield operation["ownership"]["reference"]
+
+
+def _manifest_initial_snapshots(
+    payload: Mapping[str, Any],
+) -> Iterator[Mapping[str, Any]]:
+    yield from _manifest_input_references(payload)
+    for operation in _manifest_operations(payload):
+        requirement = operation["before_requirement"]
+        if requirement["kind"] == "state":
+            yield {"path": operation["target"], "state": requirement["state"]}
+
+
 def _check_publication_links(
     payload: Mapping[str, Any],
     apply_results: Mapping[str, Any] | None = None,
@@ -637,9 +663,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     if len(set(roots)) != len(roots):
         _fail("semantic-violation", "duplicate project root in manifest")
     root_set = set(roots)
-    _check_reference_states(
-        reference for project in projects for reference in project["sources"]
-    )
+    _check_reference_states(_manifest_initial_snapshots(payload))
     backup_root = payload["backup_root"]
     for root in roots:
         if _path_contains(root, backup_root) or _path_contains(backup_root, root):
@@ -649,12 +673,13 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             )
     for item in payload["publication_decisions"]["items"]:
         target = item["target_path"]
-        if target is not None and not any(
-            root != target and _path_contains(root, target) for root in roots
+        if target is not None and (
+            target in root_set
+            or not any(_path_contains(root, target) for root in roots)
         ):
             _fail(
                 "semantic-violation",
-                "publication target is outside the selected projects",
+                "publication target must be strictly inside a selected project",
             )
         candidate = item["candidate_ref"]
         if candidate is not None and any(
@@ -725,11 +750,21 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         operation_groups.setdefault((rid, phase), []).append(operation)
 
     for project in projects:
+        nested_roots = [
+            root
+            for root in roots
+            if root != project["root"] and _path_contains(project["root"], root)
+        ]
         for operation in project["private_operations"]:
             if operation["target"] == project["root"] or not _path_contains(
                 project["root"], operation["target"]
             ):
                 _fail("semantic-violation", "private target must belong to its project")
+            if any(_path_contains(root, operation["target"]) for root in nested_roots):
+                _fail(
+                    "semantic-violation",
+                    "private target belongs to a more-specific selected project",
+                )
             if operation["dependent_projects"] != [project["root"]]:
                 _fail(
                     "semantic-violation",
@@ -790,12 +825,14 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "shared_root dependent_projects must reference declared projects",
             )
+    shared_root_paths = {root["path"] for root in payload["shared_roots"]}
     for operation in payload["shared_operations"]:
+        if operation["target"] in shared_root_paths:
+            _fail("semantic-violation", "shared target cannot replace a declared root")
         matching_roots = [
             root
             for root in payload["shared_roots"]
-            if root["path"] != operation["target"]
-            and _path_contains(root["path"], operation["target"])
+            if _path_contains(root["path"], operation["target"])
         ]
         if len(matching_roots) != 1 or not set(operation["dependent_projects"]) <= set(
             matching_roots[0]["dependent_projects"]
@@ -1036,11 +1073,30 @@ def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "a planned recovery plan cannot record conflicts")
 
     roots = [project["root"] for project in payload["projects"]]
-    if len(set(roots)) != len(roots):
+    root_set = set(roots)
+    if len(root_set) != len(roots):
         _fail("semantic-violation", "duplicate project root in recovery plan")
 
     steps = payload["steps"]
     _check_operation_resources(steps)
+    evidence_refs = [
+        reference
+        for reference in payload["input_evidence"].values()
+        if reference is not None
+    ]
+    backup_refs = [
+        step["backup_ref"] for step in steps if step["backup_ref"] is not None
+    ]
+    _check_reference_states(
+        reference for group in (evidence_refs, backup_refs) for reference in group
+    )
+    for backup in backup_refs:
+        if any(
+            _path_contains(backup["path"], evidence["path"])
+            or _path_contains(evidence["path"], backup["path"])
+            for evidence in evidence_refs
+        ):
+            _fail("semantic-violation", "recovery backup overlaps input evidence")
     for step in steps:
         if step["expected_current"] == step["restore_to"]:
             _fail("semantic-violation", "recovery step must reverse a state transition")
@@ -1118,6 +1174,11 @@ def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
     resources = payload["resources"]
     _check_operation_resources(resources)
     for entry in resources:
+        if (
+            payload["status"] == "planned"
+            and not set(entry["dependent_projects"]) <= root_set
+        ):
+            _fail("semantic-violation", "planned recovery omits a dependent project")
         if entry["resource_id"] != resource_id(entry["owner_kind"], entry["target"]):
             _fail(
                 "id-mismatch",
@@ -1189,7 +1250,8 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
             "failed recovery or blocked readiness needs an explanation",
         )
     roots = [project["root"] for project in payload["projects"]]
-    if len(set(roots)) != len(roots):
+    root_set = set(roots)
+    if len(root_set) != len(roots):
         _fail("semantic-violation", "duplicate project root in recovery receipt")
     completed = set(payload["completed_step_ids"])
     pending = set(payload["pending_step_ids"])
@@ -1205,6 +1267,8 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
     result_by_step: dict[str, Mapping[str, Any]] = {}
     protections: dict[str, Any] = {}
     for result in results:
+        if not set(result["dependent_projects"]) <= root_set:
+            _fail("semantic-violation", "recovery result omits a dependent project")
         if result["step_id"] in result_by_step:
             _fail("semantic-violation", "duplicate recovery step result")
         result_by_step[result["step_id"]] = result
@@ -1228,6 +1292,20 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
             )
         if result["status"] == "succeeded" and result["step_id"] not in completed:
             _fail("semantic-violation", "a succeeded recovery step must be completed")
+    readonly_paths = {reference["path"] for reference in payload["report_refs"]}
+    readonly_paths.update(
+        reference["path"]
+        for reference in payload["input_evidence"].values()
+        if reference is not None
+    )
+    for path in protections:
+        if any(
+            _path_contains(path, readonly) or _path_contains(readonly, path)
+            for readonly in readonly_paths
+        ):
+            _fail(
+                "semantic-violation", "recovery protection overlaps evidence or reports"
+            )
     protection_paths = {Path(path) for path in protections}
     for path in protection_paths:
         if any(parent in protection_paths for parent in path.parents):
@@ -1433,7 +1511,12 @@ def validate_document(value: Any, kind: str) -> Any:
     def_name, id_key = _kind_info(kind)
     if not isinstance(value, dict):
         _fail("unexpected-type", f"{kind} document must be a JSON object")
-    _check_json_safe(value)
+    try:
+        _check_json_safe(value)
+    except RecursionError:
+        raise ContractError(
+            "non-json-value", "document cannot be represented as contract JSON"
+        ) from None
     _schema_validate(value, def_name, kind)
     record = value.get("payload", value)
     if kind in {"recovery_plan", "recovery_receipt"}:
@@ -1444,6 +1527,13 @@ def validate_document(value: Any, kind: str) -> Any:
         ]
         if len(evidence_paths) != len(set(evidence_paths)):
             _fail("semantic-violation", "input evidence kinds must use distinct paths")
+        evidence_path_set = {Path(path) for path in evidence_paths}
+        if any(
+            parent in evidence_path_set
+            for path in evidence_path_set
+            for parent in path.parents
+        ):
+            _fail("semantic-violation", "input evidence file paths overlap")
     if kind in _CUMULATIVE_KINDS:
         _, previous_key = _CUMULATIVE_KINDS[kind]
         if record[previous_key] is None and (
@@ -1638,25 +1728,28 @@ def _bind_resource_states_and_backups(
         for operation in _manifest_operations(manifest_payload)
     }
     backups: dict[str, Any] = {}
-    candidate_paths = [
-        item["candidate_ref"]["path"]
-        for item in manifest_payload["publication_decisions"]["items"]
-        if item["candidate_ref"] is not None
-    ]
+    source_paths = {
+        reference["path"] for reference in _manifest_input_references(manifest_payload)
+    }
     for phase, results in stage_results.items():
         for rid, result in results.items():
             backup = result["backup_ref"]
             if backup is not None:
                 path = backup["path"]
                 if any(
-                    _path_contains(path, candidate) or _path_contains(candidate, path)
-                    for candidate in candidate_paths
+                    _path_contains(path, source) or _path_contains(source, path)
+                    for source in source_paths
                 ):
-                    _fail("binding-violation", "original backup overlaps a candidate")
-                if not _path_contains(manifest_payload["backup_root"], path):
                     _fail(
                         "binding-violation",
-                        "original backup is outside the declared backup root",
+                        "original backup overlaps a retained source",
+                    )
+                if path == manifest_payload["backup_root"] or not _path_contains(
+                    manifest_payload["backup_root"], path
+                ):
+                    _fail(
+                        "binding-violation",
+                        "original backup must be below the declared backup root",
                     )
                 if backups.setdefault(path, backup["state"]) != backup["state"]:
                     _fail(
@@ -2165,17 +2258,10 @@ def _bind_recovery_receipt(
 ) -> None:
     payload = document["payload"]
     protected_paths = {
-        reference["path"]
-        for reference in payload["input_evidence"].values()
-        if reference is not None
+        reference["path"] for reference in _manifest_input_references(manifest_payload)
     }
     protected_paths.update(
         operation["target"] for operation in _manifest_operations(manifest_payload)
-    )
-    protected_paths.update(
-        item["candidate_ref"]["path"]
-        for item in manifest_payload["publication_decisions"]["items"]
-        if item["candidate_ref"] is not None
     )
     if plan_document is not None:
         protected_paths.update(

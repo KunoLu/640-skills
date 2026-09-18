@@ -4662,5 +4662,299 @@ class SeventhReviewRegressionTests(unittest.TestCase):
                 contracts.seal_document("recovery_plan", payload)
 
 
+class EighthReviewRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.family = fixtures.build_fixture_family()
+
+    def nested_project_payload(self):
+        payload = copy.deepcopy(self.family["manifest"]["payload"])
+        outer = str(Path(fixtures.ALPHA).parent)
+        payload["projects"][0]["root"] = outer
+        for operation in payload["projects"][0]["private_operations"]:
+            operation["dependent_projects"] = [outer]
+        for operation in payload["shared_operations"]:
+            operation["dependent_projects"] = sorted([outer, fixtures.BETA])
+        for shared_root in payload["shared_roots"]:
+            shared_root["dependent_projects"] = sorted([outer, fixtures.BETA])
+        return payload
+
+    def move_publication(self, payload, target, project_index):
+        operations = payload["projects"][0]["private_operations"]
+        operation = next(
+            op
+            for op in operations
+            if op["resource_id"] == fixtures.resource_id_of("r4")
+        )
+        operations.remove(operation)
+        owner = payload["projects"][project_index]
+        operation["target"] = target
+        operation["resource_id"] = contracts.resource_id("markdown", target)
+        operation["operation_id"] = contracts.operation_id(
+            "apply", operation["resource_id"], operation["selector"]
+        )
+        operation["dependent_projects"] = [owner["root"]]
+        owner["private_operations"].append(operation)
+        item = payload["publication_decisions"]["items"][0]
+        item["target_path"] = target
+        item["approval"]["scope"]["target_path"] = target
+
+    def test_shared_target_cannot_equal_a_nested_declared_root(self) -> None:
+        payload = copy.deepcopy(self.family["manifest"]["payload"])
+        inner = copy.deepcopy(payload["shared_roots"][0])
+        target = inner["path"]
+        outer = {
+            "kind": "home",
+            "path": str(Path(target).parent),
+            "dependent_projects": list(fixtures.BOTH),
+        }
+        operation = copy.deepcopy(fixtures.operations_of("r2")["apply"])
+        operation["target"] = target
+        operation["resource_id"] = contracts.resource_id("directory", target)
+        operation["operation_id"] = contracts.operation_id(
+            "apply", operation["resource_id"], "whole-resource"
+        )
+        operation["dependent_projects"] = list(fixtures.BOTH)
+        operation["ownership"] = {
+            "kind": "template-source",
+            "reference": copy.deepcopy(operation["change"]["source_ref"]),
+        }
+        payload["shared_operations"] = [operation]
+        for project in payload["projects"]:
+            project["shared_operation_ids"] = [operation["operation_id"]]
+        payload["shared_roots"] = [outer]
+        contracts.seal_document("manifest", copy.deepcopy(payload))
+        payload["shared_roots"].append(inner)
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_manifest_snapshots_agree_across_reference_roles(self) -> None:
+        base = self.family["manifest"]["payload"]
+        for boundary in ("publication", "copy source", "ownership"):
+            payload = copy.deepcopy(base)
+            if boundary == "publication":
+                path = payload["publication_decisions"]["items"][0]["sources"][0][
+                    "path"
+                ]
+                reference = next(
+                    ref
+                    for ref in payload["projects"][0]["sources"]
+                    if ref["path"] == path
+                )
+                reference["state"] = fixtures.file_state(999)
+            else:
+                operation = next(
+                    op
+                    for op in payload["projects"][0]["private_operations"]
+                    if op["resource_id"] == fixtures.resource_id_of("r1")
+                    and op["phase"] == "apply"
+                )
+                reference = (
+                    operation["change"]["source_ref"]
+                    if boundary == "copy source"
+                    else operation["ownership"]["reference"]
+                )
+                reference["path"] = operation["target"]
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+        # A source alias is not itself contradictory when it records the same
+        # initial state. Later phase-after states are not initial observations.
+        payload = copy.deepcopy(base)
+        operation = next(
+            op
+            for op in payload["projects"][0]["private_operations"]
+            if op["resource_id"] == fixtures.resource_id_of("r1")
+            and op["phase"] == "apply"
+        )
+        operation["change"]["source_ref"] = {
+            "path": operation["target"],
+            "state": copy.deepcopy(operation["before_requirement"]["state"]),
+        }
+        contracts.seal_document("manifest", payload)
+
+    def test_recursive_python_values_have_a_controlled_error(self) -> None:
+        cycle = copy.deepcopy(self.family["manifest"])
+        cycle["payload"]["recursive-value-sentinel"] = cycle
+        deep = copy.deepcopy(self.family["manifest"])
+        nested = []
+        for _ in range(1500):
+            nested = [nested]
+        deep["payload"]["recursive-value-sentinel"] = nested
+        for boundary, value in (("cycle", cycle), ("depth", deep)):
+            with self.subTest(boundary=boundary):
+                with self.assertRaises(ContractError) as caught:
+                    contracts.validate_document(value, "manifest")
+                self.assertNotIn("recursive-value-sentinel", str(caught.exception))
+
+    def test_private_owner_is_the_most_specific_selected_project(self) -> None:
+        payload = self.nested_project_payload()
+        contracts.seal_document("manifest", copy.deepcopy(payload))
+        target = fixtures.BETA + "/outer-write.md"
+        self.move_publication(payload, target, 0)
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+        payload = self.nested_project_payload()
+        self.move_publication(payload, target, 1)
+        contracts.seal_document("manifest", payload)
+
+    def test_publication_cannot_replace_a_nested_project_root(self) -> None:
+        payload = self.nested_project_payload()
+        # Remove unrelated descendant operations so their overlap check cannot
+        # hide the root-boundary defect.
+        payload["projects"][1]["private_operations"] = []
+        payload["projects"][1]["sources"] = []
+        self.move_publication(payload, fixtures.BETA, 0)
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_recovery_scope_covers_recorded_dependents(self) -> None:
+        for kind in ("recovery_plan", "recovery_receipt"):
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            payload["projects"] = payload["projects"][:1]
+            with self.subTest(kind=kind), self.assertRaises(ContractError):
+                contracts.seal_document(kind, payload)
+        blocked = copy.deepcopy(self.family["recovery_plan"]["payload"])
+        blocked["projects"] = blocked["projects"][:1]
+        blocked["status"] = "blocked"
+        blocked["conflicts"] = ["shared dependency authorization is incomplete"]
+        contracts.seal_document("recovery_plan", blocked)
+
+    def test_recovery_backups_do_not_overlap_input_evidence(self) -> None:
+        base = self.family["recovery_plan"]["payload"]
+        backup = next(
+            step["backup_ref"]
+            for step in base["steps"]
+            if step["backup_ref"] is not None
+            and step["backup_ref"]["state"]["type"] == "directory"
+        )
+        source_documents = {
+            kind: self.family[kind]
+            for kind in (
+                "apply_receipt",
+                "deployment_evidence",
+                "verification",
+                "cleanup_receipt",
+            )
+        }
+        for boundary, evidence_path in (
+            ("equal", backup["path"]),
+            ("inside backup", backup["path"] + "/manifest.json"),
+            ("contains backup", str(Path(backup["path"]).parent)),
+        ):
+            payload = copy.deepcopy(base)
+            payload["input_evidence"]["manifest"]["path"] = evidence_path
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                plan = contracts.seal_document("recovery_plan", payload)
+                contracts.validate_declared_bindings(
+                    self.family["manifest"],
+                    {**source_documents, "recovery_plan": plan},
+                    fixtures.fixture_raw_documents(self.family),
+                )
+
+    def test_recovery_protection_preserves_supplied_sources_and_reports(self) -> None:
+        paths = (
+            fixtures.PUBLICATION_ORIGINAL["path"],
+            fixtures.operations_of("r1")["apply"]["change"]["source_ref"]["path"],
+            fixtures.operations_of("r2")["apply"]["ownership"]["reference"]["path"],
+            fixtures.EVIDENCE_DIR + "/restore-smoke.json",
+        )
+        documents = {
+            kind: self.family[kind]
+            for kind in (
+                "apply_receipt",
+                "deployment_evidence",
+                "verification",
+                "cleanup_receipt",
+                "recovery_plan",
+            )
+        }
+        for path in paths:
+            payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+            result = next(
+                entry
+                for entry in payload["results"]
+                if entry["resource_id"] == fixtures.resource_id_of("r1")
+                and entry["phase"] == "apply"
+            )
+            result["protection_ref"]["path"] = path
+            if path == paths[-1]:
+                payload["runtime_readiness"] = "verified"
+                payload["report_refs"] = [
+                    {"path": path, "state": fixtures.file_state(201)}
+                ]
+            with self.subTest(path=path), self.assertRaises(ContractError):
+                receipt = contracts.seal_document("recovery_receipt", payload)
+                contracts.validate_declared_bindings(
+                    self.family["manifest"],
+                    {**documents, "recovery_receipt": receipt},
+                )
+
+    def test_stage_backups_preserve_all_declared_copy_sources(self) -> None:
+        payload = copy.deepcopy(self.family["manifest"]["payload"])
+        source_path = fixtures.BACKUP_ROOT + "/prepared/copy"
+        operation = next(
+            op
+            for op in payload["projects"][0]["private_operations"]
+            if op["resource_id"] == fixtures.resource_id_of("r1")
+            and op["phase"] == "apply"
+        )
+        operation["change"]["source_ref"]["path"] = source_path
+        manifest = contracts.seal_document("manifest", payload)
+        receipt_payload = fixtures.build_apply_receipt_payload(manifest)
+        contracts.validate_declared_bindings(
+            manifest,
+            {
+                "apply_receipt": contracts.seal_document(
+                    "apply_receipt", copy.deepcopy(receipt_payload)
+                )
+            },
+        )
+        for boundary, backup_path in (
+            ("equal", source_path),
+            ("contains source", str(Path(source_path).parent)),
+        ):
+            payload = copy.deepcopy(receipt_payload)
+            result = next(
+                entry
+                for entry in payload["projects"][0]["private_results"]
+                if entry["resource_id"] == fixtures.resource_id_of("r1")
+            )
+            result["backup_ref"]["path"] = backup_path
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(
+                    manifest,
+                    {
+                        "apply_receipt": contracts.seal_document(
+                            "apply_receipt", payload
+                        )
+                    },
+                )
+
+    def test_backup_object_cannot_be_the_vault_root(self) -> None:
+        payload = copy.deepcopy(self.family["apply_receipt"]["payload"])
+        first = payload["projects"][0]["private_results"][0]
+        for project in payload["projects"]:
+            project.update(
+                status="failed",
+                reason="remaining writes were not attempted",
+                nextStep="inspect",
+            )
+            project["private_results"] = []
+            project["shared_operation_ids"] = []
+        payload["projects"][0]["private_results"] = [first]
+        payload["shared_results"] = []
+        payload["status"] = "failed"
+        control = contracts.seal_document("apply_receipt", copy.deepcopy(payload))
+        contracts.validate_declared_bindings(
+            self.family["manifest"], {"apply_receipt": control}
+        )
+        first["backup_ref"]["path"] = fixtures.BACKUP_ROOT
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(
+                self.family["manifest"],
+                {"apply_receipt": contracts.seal_document("apply_receipt", payload)},
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

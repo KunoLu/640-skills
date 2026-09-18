@@ -169,3 +169,15 @@ copy-file/copy-directory的source_ref明确表示已准备好的完整复制候�
 Code Readability／Ponytail复核：路径快照与operation归属各集中为复用校验，不新增schema字段、执行层或通用框架；共享receipt依赖取其实际记录步骤的并集，资源授权范围不变。Ruff指出累计守卫可化简，使用具名`unprotected_change`说明现有原件丢失风险而不压成密集表达式；未使用ignore/cast。修改后208项协议回归及新5个Python文件Ruff／格式／ty通过。报告汇总曾误传Path给接收raw对象的helper，实际smoke退出0的原始记录未重跑／重标；已按原记录补正同stem中文汇总。
 
 README.md／README.html及版本化automation prompt无需额外改写：内部接口分阶段接入、复制安装后的依赖准备、无真实HOME／迁移授权的边界未变。CHANGELOG既有未发布协议能力覆盖这些尚未合并的语义校验修正，不追加一次性过程日志。Release readiness仍等待新head全量、精确安装副本及下一轮独立review，当前不标ready／done。
+
+## 第八轮独立 review
+
+冻结head `2076d1cd65af5a5ab24e071f2192146eb16c30ba` 的513项／142.508s、精确安装副本、8组实际smoke、静态和10份envelope通过；surface零发现。Intrinsic首份报告3项及其后确认的2项scope问题，与Recovery的5项合为10项，全部纳入修正。新发现不被旧覆盖的全绿结果掩盖；嵌套共享根、manifest矛盾快照和直接Python递归值均先保留独立实际红色报告。
+
+范围裁决：共享目标不得等于任何已声明共享根，不能借外层根绕过内层边界。仍允许选择嵌套项目；私有操作必须显式归属于包含目标的最具体已选项目，不自动改派owner，不增加整批嵌套禁令。发布目标不得等于任何已选项目根。该规则只使用已声明根，不发现或假定未提供的嵌套仓库。
+
+数据／恢复边界：project／publication／operation change／ownership的所有manifest输入引用，以及具体初始目标快照，在同一计划时点按路径保持一致；后续phase-after状态不混入该表。只读输入清单同时供阶段备份和恢复保护隔离复用，不再仅保护publication candidate。恢复计划的原始备份与输入证据不得等同或父子覆盖；保护引用还要避开收据自身的input evidence／report refs。备份对象必须严格位于vault之下，不能是vault本身。planned plan和receipt包含所有已记录依赖；blocked plan仍可记录未满足的授权闭包，但不是可执行计划。
+
+10个新回归方法在未改生产codec时产生18个预期断言失败和2个目标RecursionError（cycle／depth），无fixture错误；修复后10项定点及完整218项协议回归通过。四组实际API smoke确认共享根、矛盾快照、受控递归拒绝和7个恢复输入／scope隔离边界，全部退出0；此前失败报告保留。向reviewer发送一次诊断报告指针时误猜时间戳，已立即以实际路径更正，不以该错误指针作为证据。
+
+Code Readability／Ponytail复核：分别命名manifest只读输入清单与初态快照流，避免把后续状态或可写对象混入同一不变量；复用路径／状态校验，不引入动态路由、schema字段、缓存或通用框架。递归异常仅在公开Python-value边界转换为固定ContractError，不输出输入对象。新5个Python文件Ruff／格式／ty通过，无ignore/cast。README.md／README.html／版本化automation prompt的内部接入与安装边界未变，无需重复改写；CHANGELOG不追加未合并能力的逐轮过程日志。新head正式全量、安装副本和独立review尚待执行，不能预填ready／done。
