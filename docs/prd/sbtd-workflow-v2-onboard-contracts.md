@@ -129,3 +129,13 @@ F5的合法续作边界再次获原reviewer确认并实测：before/after均已�
 可读性／Ponytail复核删除了一个仅检查fixture自洽的重复正向测试及field-copy断言，保留真实API正向控制和负面边界；现有144项行为测试未删除，当前协议共160项通过。跨项目唯一性检查使用逐资源集合查找，避免移动到全局集合后产生反复全量相交；阶段／恢复时序只核对声明因果，不证明真实执行或授权。Ruff发现的一处嵌套with及ty发现的可空ID索引／fixture absent哨兵类型已修正，未使用ignore/cast压制；新5个Python文件静态检查通过。
 
 第三轮修复后的提交前全量465项／72.127s通过，parser39项、协议160项；新5个Python文件Ruff／格式／ty通过。该轮为dirty本地证据；冻结新head后仍须重新执行全量、精确安装副本及各实际smoke，再进行第四轮独立review，当前不填写ready／done。
+
+## 第四轮独立 review
+
+冻结head `7c39776c7d665602754712a4d1a603ef7d8adcd9` 的465项／125.788s、安装副本、四组实际smoke、静态和六份envelope通过；surface零新发现。Intrinsic的8项与Recovery的5项合并去重为11项，全部采纳：selector／合并写入冲突、成功结果类型、备份位置／冲突复用、retained资源完整性／状态／总表、已部分写入或未知结果不可续作、累计恢复结果身份不可变、blocked readiness／失败原因、超大整数错误边界、非JSON key的canonical拒绝。
+
+批次retained语义已与原reviewer核对：是所有项目实际观察的去重并集，不丢弃failed／blocked项目的观察；只有成功项目必须等于verification。恢复按apply→deploy→verification观察→cleanup结果／观察更新最新状态，不能用较早写入结果掩盖后来的资产漂移。原始非空备份和结果身份不变；失败结果已写或未知时原样保留，只有已证明未写入的结果才可推进。
+
+Main先得到11项／29个预期失败及1个目标缺陷（超大整数ValueError逃逸），再修复并转绿。完整协议171项通过；旧多selector反例改为真正不相交的ownership，旧失败恢复补齐root reason，旧retained绑定反例同步项目／总表观察，避免新前置规则造成假绿。canonical有限数兼容保持，非有限值原稳定错误码不重钉；不引入新的真实运行、授权或文件存在证明。
+
+清理后将累计身份／成功态／原件／unsafe partial规则集中为一个转移校验，移除重复成功分支与共享集合；补充原样保留partial及失败→成功时身份不漂移的正向／负向控制。对应3项定点及提交前全量476项／63.725s通过，新5个Python文件Ruff／格式／ty通过。仍为dirty本地证据；冻结新head后重跑正式证明，再进行下一轮独立review。

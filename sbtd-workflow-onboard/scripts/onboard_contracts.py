@@ -160,6 +160,7 @@ class ContractError(Exception):
 def canonical_json_bytes(value: Any) -> bytes:
     """UTF-8 canonical JSON: sorted keys, compact separators, no ASCII escaping."""
     try:
+        _check_json_safe(value, allow_numbers=True)
         text = json.dumps(
             value,
             ensure_ascii=False,
@@ -167,7 +168,13 @@ def canonical_json_bytes(value: Any) -> bytes:
             separators=(",", ":"),
             allow_nan=False,
         )
-    except (TypeError, ValueError) as error:
+    except ContractError as error:
+        if error.code == "malformed-unicode":
+            raise
+        raise ContractError(
+            "non-json-value", "value cannot be serialized as canonical contract JSON"
+        ) from None
+    except (TypeError, ValueError, RecursionError) as error:
         raise ContractError(
             "non-json-value", "value cannot be serialized as canonical contract JSON"
         ) from error
@@ -263,7 +270,7 @@ def _decode_strict(raw: bytes | bytearray | str) -> Any:
             parse_float=_parse_number,
             parse_constant=_reject_constant,
         )
-    except json.JSONDecodeError as error:
+    except (ValueError, RecursionError) as error:
         raise ContractError(
             "invalid-json", "document is not well-formed JSON"
         ) from error
@@ -535,6 +542,43 @@ def _check_publication_links(
         )
 
 
+def _check_operation_group(operations: list[Mapping[str, Any]]) -> None:
+    if len(operations) < 2:
+        return
+    first = operations[0]
+    proof_kind = first["ownership"]["kind"]
+    change_kind = first["change"]["kind"]
+    claims: list[tuple[str, ...]] = []
+    for operation in operations:
+        proof = operation["ownership"]
+        if (
+            operation["selector"] == "whole-resource"
+            or operation["owner_kind"] == "directory"
+            or proof["kind"] not in {"config-entry", "managed-marker"}
+            or proof["kind"] != proof_kind
+            or operation["change"]["kind"] != change_kind
+        ):
+            _fail("semantic-violation", "resource changes cannot be safely merged")
+        if change_kind == "copy-file" and operation["change"] != first["change"]:
+            _fail(
+                "semantic-violation",
+                "resource copy operations disagree on the candidate",
+            )
+        claim = (
+            tuple(proof["key_path"])
+            if proof_kind == "config-entry"
+            else (proof["marker"],)
+        )
+        for previous in claims:
+            overlap = claim == previous
+            if proof_kind == "config-entry":
+                length = min(len(claim), len(previous))
+                overlap = claim[:length] == previous[:length]
+            if overlap:
+                _fail("semantic-violation", "resource ownership selectors overlap")
+        claims.append(claim)
+
+
 def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     projects = payload["projects"]
     roots = [project["root"] for project in projects]
@@ -571,6 +615,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     target_owners: dict[Path, tuple[str, tuple[str, str | None]]] = {}
     phases_by_resource: dict[str, set[str]] = {}
     requirements: dict[tuple[str, str], Mapping[str, Any]] = {}
+    operation_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
 
     def register(operation: Mapping[str, Any], owner: tuple[str, str | None]) -> None:
         _check_operation(operation)
@@ -600,6 +645,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "resource is owned by more than one project or by both private "
                 "and shared operation sets",
             )
+        operation_groups.setdefault((rid, phase), []).append(operation)
 
     for project in projects:
         for operation in project["private_operations"]:
@@ -613,6 +659,8 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             register(operation, ("private", project["root"]))
     for operation in payload["shared_operations"]:
         register(operation, ("shared", None))
+    for operations in operation_groups.values():
+        _check_operation_group(operations)
     for (rid, phase), requirement in requirements.items():
         earlier = [
             prior
@@ -730,6 +778,29 @@ def _aggregate(
     return success
 
 
+def _retained_states(payload: Mapping[str, Any]) -> dict[str, Any]:
+    observations: dict[str, Any] = {}
+    for project in payload["projects"]:
+        seen: set[str] = set()
+        for asset in project["retained_assets"]:
+            path = asset["path"]
+            if path in seen:
+                _fail("semantic-violation", "duplicate retained asset path")
+            seen.add(path)
+            if observations.setdefault(path, asset["state"]) != asset["state"]:
+                _fail("semantic-violation", "retained asset observations conflict")
+    if "retained_assets" in payload:
+        summary = {
+            asset["path"]: asset["state"] for asset in payload["retained_assets"]
+        }
+        if len(summary) != len(payload["retained_assets"]) or summary != observations:
+            _fail(
+                "semantic-violation",
+                "batch retained assets differ from project observations",
+            )
+    return observations
+
+
 def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
     phase = _STAGE_RECEIPT_PHASES[kind]
     roots = [project["root"] for project in payload["projects"]]
@@ -738,13 +809,11 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "duplicate project root in stage document")
 
     shared_ids: set[str] = set()
-    seen_shared: set[str] = set()
     for result in payload["shared_results"]:
         if result["phase"] != phase:
             _fail("semantic-violation", f"{kind} results must record phase {phase}")
-        if result["resource_id"] in seen_shared:
+        if result["resource_id"] in shared_ids:
             _fail("semantic-violation", "duplicate shared result for one resource")
-        seen_shared.add(result["resource_id"])
         shared_ids.add(result["resource_id"])
         if not set(result["dependent_projects"]) <= root_set:
             _fail(
@@ -784,6 +853,7 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
             statuses, ("failed", "blocked"), "applied", "already-complete"
         )
     elif kind == "cleanup_receipt":
+        _retained_states(payload)
         expected = _aggregate(
             statuses, ("failed", "blocked"), "cleaned", "already-complete"
         )
@@ -799,6 +869,7 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
 
 
 def _check_verification_payload(payload: Mapping[str, Any]) -> None:
+    _retained_states(payload)
     roots = [project["root"] for project in payload["projects"]]
     root_set = set(roots)
     if len(root_set) != len(roots):
@@ -970,6 +1041,14 @@ def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
 
 
 def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
+    if (
+        payload["status"] in {"failed", "blocked"}
+        or payload["runtime_readiness"] == "blocked"
+    ) and not payload["reason"].strip():
+        _fail(
+            "semantic-violation",
+            "failed recovery or blocked readiness needs an explanation",
+        )
     roots = [project["root"] for project in payload["projects"]]
     if len(set(roots)) != len(roots):
         _fail("semantic-violation", "duplicate project root in recovery receipt")
@@ -1385,6 +1464,42 @@ def _bind_success_gate(
         )
 
 
+def _bind_resource_states_and_backups(
+    manifest_payload: Mapping[str, Any],
+    stage_results: Mapping[str, Mapping[str, Any]],
+) -> None:
+    operations = {
+        (operation["phase"], operation["resource_id"]): operation
+        for operation in _manifest_operations(manifest_payload)
+    }
+    backups: dict[str, Any] = {}
+    for phase, results in stage_results.items():
+        for rid, result in results.items():
+            backup = result["backup_ref"]
+            if backup is not None:
+                path = backup["path"]
+                if not _path_contains(manifest_payload["backup_root"], path):
+                    _fail(
+                        "binding-violation",
+                        "original backup is outside the declared backup root",
+                    )
+                if backups.setdefault(path, backup["state"]) != backup["state"]:
+                    _fail(
+                        "binding-violation",
+                        "backup path has conflicting original states",
+                    )
+            if result["status"] != "succeeded":
+                continue
+            operation = operations[(phase, rid)]
+            expected = "directory" if operation["owner_kind"] == "directory" else "file"
+            observed = result["after"]["type"]
+            removed = operation["change"]["kind"] == "remove" and observed == "absent"
+            if not removed and observed != expected:
+                _fail(
+                    "binding-violation", "successful result has the wrong resource type"
+                )
+
+
 def _bind_stage_receipt(
     manifest_payload: Mapping[str, Any], document: Mapping[str, Any], phase: str
 ) -> None:
@@ -1572,6 +1687,11 @@ def _bind_verification(
         )
         covered_shared.add(rid)
 
+    publications = {
+        item["target_path"]: item["candidate_ref"]["state"]
+        for item in manifest_payload["publication_decisions"]["items"]
+        if item["decision"] != "private-only"
+    }
     for project in payload["projects"]:
         root = project["root"]
         if project["status"] == "verified" and any(
@@ -1612,6 +1732,50 @@ def _bind_verification(
                 "binding-violation",
                 "verified project is missing a shared cleanup candidate",
             )
+        if project["status"] != "verified":
+            continue
+        retained = {
+            asset["path"]: asset["state"] for asset in project["retained_assets"]
+        }
+        retained_resources = {
+            rid: phases
+            for rid, phases in private.get(root, {}).items()
+            if "cleanup" not in phases or identity[rid][1] in publications
+        }
+        retained_resources.update(
+            {
+                rid: phases
+                for rid, phases in shared.items()
+                if root in dependents[rid]
+                and ("cleanup" not in phases or identity[rid][1] in publications)
+            }
+        )
+        for rid, phases in retained_resources.items():
+            owner_kind, target = identity[rid]
+            state = retained.get(target)
+            expected_type = "directory" if owner_kind == "directory" else "file"
+            if state is None or state["type"] != expected_type:
+                _fail("binding-violation", "verified project omits a retained resource")
+            if target in publications and state != publications[target]:
+                _fail(
+                    "binding-violation",
+                    "retained publication differs from its approved candidate",
+                )
+            last_phase = max(
+                (phase for phase in phases if phase != "cleanup"),
+                key=_PHASE_ORDER.__getitem__,
+            )
+            if last_phase in stage_results:
+                result = stage_results[last_phase].get(rid)
+                if (
+                    result is None
+                    or result["status"] != "succeeded"
+                    or result["after"] != state
+                ):
+                    _fail(
+                        "binding-violation",
+                        "retained resource differs from its successful stage result",
+                    )
     if payload["status"] == "verified" and covered_shared != set(shared_cleanup):
         _fail(
             "binding-violation",
@@ -1624,6 +1788,7 @@ def _check_recovery_goal(
     payload: Mapping[str, Any],
     stage_results: Mapping[str, Mapping[str, Any]],
     dependents: Mapping[str, set[str]],
+    retained_observations: Mapping[str, Mapping[str, Any]],
 ) -> None:
     selected = {project["root"] for project in payload["projects"]}
     required_resources = {rid for rid, roots in dependents.items() if roots & selected}
@@ -1638,14 +1803,16 @@ def _check_recovery_goal(
             "binding-violation", "planned recovery lacks the shared dependency closure"
         )
 
-    initial = {
-        operation["resource_id"]: operation["before_requirement"]["state"]
-        for operation in _manifest_operations(manifest_payload)
-        if operation["before_requirement"]["kind"] == "state"
-    }
+    initial: dict[str, Any] = {}
+    target_resources: dict[str, str] = {}
+    for operation in _manifest_operations(manifest_payload):
+        rid = operation["resource_id"]
+        target_resources[operation["target"]] = rid
+        if operation["before_requirement"]["kind"] == "state":
+            initial[rid] = operation["before_requirement"]["state"]
     latest = {rid: initial[rid] for rid in required_resources}
     required_steps: set[tuple[str, str]] = set()
-    for phase in ("apply", "deploy", "cleanup"):
+    for phase in ("apply", "deploy", "verification", "cleanup"):
         for rid, result in stage_results.get(phase, {}).items():
             if rid not in required_resources:
                 continue
@@ -1664,6 +1831,11 @@ def _check_recovery_goal(
                     "changed selected resource lacks its original backup",
                 )
             required_steps.add((phase, rid))
+        kind = _PHASE_RECEIPTS.get(phase, phase)
+        for path, state in retained_observations.get(kind, {}).items():
+            rid = target_resources.get(path)
+            if rid in required_resources:
+                latest[rid] = state
 
     planned_steps = {(step["phase"], step["resource_id"]) for step in payload["steps"]}
     if planned_steps != required_steps:
@@ -1690,6 +1862,7 @@ def _bind_recovery_plan(
     manifest_payload: Mapping[str, Any],
     document: Mapping[str, Any],
     stage_results: Mapping[str, Mapping[str, Any]],
+    retained_observations: Mapping[str, Mapping[str, Any]],
 ) -> None:
     private, shared, dependents, identity = _declared_resources(manifest_payload)
     for root, resources in private.items():
@@ -1765,7 +1938,9 @@ def _bind_recovery_plan(
     if set(payload["shared_operation_ids"]) != expected_shared:
         _fail("binding-violation", "recovery plan lost declared shared ownership")
     if payload["status"] == "planned":
-        _check_recovery_goal(manifest_payload, payload, stage_results, dependents)
+        _check_recovery_goal(
+            manifest_payload, payload, stage_results, dependents, retained_observations
+        )
 
 
 def _bind_recovery_receipt(
@@ -1862,24 +2037,41 @@ def _bind_recovery_receipt(
 
 
 def _bind_retained_assets(
-    verification: Mapping[str, Any] | None, cleanup: Mapping[str, Any]
+    manifest_payload: Mapping[str, Any],
+    verification: Mapping[str, Any] | None,
+    cleanup: Mapping[str, Any],
 ) -> None:
-    if verification is None:
-        return
-    verified = {
-        project["root"]: {
-            canonical_json_bytes(asset) for asset in project["retained_assets"]
+    verified = (
+        {
+            project["root"]: {
+                asset["path"]: asset["state"] for asset in project["retained_assets"]
+            }
+            for project in verification["payload"]["projects"]
         }
-        for project in verification["payload"]["projects"]
+        if verification is not None
+        else None
+    )
+    targets = {
+        op["resource_id"]: op["target"] for op in _manifest_operations(manifest_payload)
+    }
+    after = {
+        targets[result["resource_id"]]: result["after"]
+        for result in _collect_stage_results(cleanup["payload"]).values()
     }
     for project in cleanup["payload"]["projects"]:
         if project["status"] not in {"cleaned", "already-complete"}:
             continue
-        retained = {canonical_json_bytes(asset) for asset in project["retained_assets"]}
-        if retained != verified[project["root"]]:
+        retained = {
+            asset["path"]: asset["state"] for asset in project["retained_assets"]
+        }
+        if verified is not None and retained != verified[project["root"]]:
             _fail(
                 "binding-violation", "cleanup retained assets differ from verification"
             )
+        if any(
+            path in after and after[path] != state for path, state in retained.items()
+        ):
+            _fail("binding-violation", "cleanup changed an asset declared retained")
 
 
 def _bind_chronology(
@@ -1984,6 +2176,11 @@ def validate_declared_bindings(
         for kind, phase in _STAGE_RECEIPT_PHASES.items()
         if kind in supplied
     }
+    retained_observations = {
+        kind: _retained_states(supplied[kind]["payload"])
+        for kind in ("verification", "cleanup_receipt")
+        if kind in supplied
+    }
     requirements = {
         (op["phase"], op["resource_id"]): op["before_requirement"]
         for project in manifest_payload["projects"]
@@ -2044,13 +2241,16 @@ def validate_declared_bindings(
             raw,
         )
         _bind_stage_receipt(manifest_payload, cleanup, "cleanup")
-        _bind_retained_assets(verification, cleanup)
+        _bind_retained_assets(manifest_payload, verification, cleanup)
     _bind_stage_states(requirements, stage_results)
+    _bind_resource_states_and_backups(manifest_payload, stage_results)
     if "apply" in stage_results:
         _check_publication_links(manifest_payload, stage_results["apply"])
     plan = supplied.get("recovery_plan")
     if plan is not None:
-        _bind_recovery_plan(manifest_payload, plan, stage_results)
+        _bind_recovery_plan(
+            manifest_payload, plan, stage_results, retained_observations
+        )
         _bind_input_evidence(plan["payload"]["input_evidence"], raw)
     receipt = supplied.get("recovery_receipt")
     if receipt is not None:
@@ -2077,9 +2277,26 @@ def _collect_stage_results(payload: Mapping[str, Any]) -> dict[tuple[str, ...], 
     return collected
 
 
-def _preserves_original_reference(
+def _valid_result_transition(
     old: Mapping[str, Any], new: Mapping[str, Any], reference_key: str
 ) -> bool:
+    if (
+        old["phase"] != new["phase"]
+        or old["resource_id"] != new["resource_id"]
+        or set(old["operation_ids"]) != set(new["operation_ids"])
+        or set(old["dependent_projects"]) != set(new["dependent_projects"])
+    ):
+        return False
+    if old["status"] == "succeeded" and (
+        new["status"] != "succeeded" or new["after"] != old["after"]
+    ):
+        return False
+    if (
+        old["status"] != "succeeded"
+        and (old["before"] is None or old["after"] != old["before"])
+        and new != old
+    ):
+        return False
     before = old["before"]
     if new["before"] != before:
         return False
@@ -2206,28 +2423,10 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
             )
         for step_id, old in previous_results.items():
             new = current_results.get(step_id)
-            if new is None or not _preserves_original_reference(
-                old, new, "protection_ref"
-            ):
+            if new is None or not _valid_result_transition(old, new, "protection_ref"):
                 _fail(
                     "cumulative-violation",
-                    "a retry lost an original recovery before-state or protection reference",
-                    exit_code=3,
-                )
-            if old["status"] != "succeeded":
-                continue
-            new = current_results.get(step_id)
-            if (
-                new is None
-                or new["status"] != "succeeded"
-                or new["before"] != old["before"]
-                or new["after"] != old["after"]
-                or new["protection_ref"] != old["protection_ref"]
-            ):
-                _fail(
-                    "cumulative-violation",
-                    "a previously succeeded recovery step lost its original result "
-                    "or protection reference",
+                    "retry changed preserved recovery identity/state or advanced an unsafe partial write",
                     exit_code=3,
                 )
         return current
@@ -2236,27 +2435,10 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
     current_results = _collect_stage_results(current["payload"])
     for key, old in previous_results.items():
         new = current_results.get(key)
-        if new is None or not _preserves_original_reference(old, new, "backup_ref"):
+        if new is None or not _valid_result_transition(old, new, "backup_ref"):
             _fail(
                 "cumulative-violation",
-                "a retry lost an original before-state or backup reference",
-                exit_code=3,
-            )
-        if old["status"] != "succeeded":
-            continue
-        new = current_results.get(key)
-        if (
-            new is None
-            or new["status"] != "succeeded"
-            or new["before"] != old["before"]
-            or new["after"] != old["after"]
-            or new["backup_ref"] != old["backup_ref"]
-            or set(new["operation_ids"]) != set(old["operation_ids"])
-            or set(new["dependent_projects"]) != set(old["dependent_projects"])
-        ):
-            _fail(
-                "cumulative-violation",
-                "a previously succeeded result lost its original before/backup state",
+                "retry changed preserved resource identity/state or advanced an unsafe partial write",
                 exit_code=3,
             )
     return current

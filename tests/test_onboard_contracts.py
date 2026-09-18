@@ -348,6 +348,7 @@ class ManifestSemanticTests(unittest.TestCase):
         contracts.seal_document("manifest", copy.deepcopy(payload))
         operation = fixtures.build_operation("r1", "apply")
         operation["selector"] = "second-owner"
+        operation["ownership"]["key_path"] = ["other"]
         operation["operation_id"] = contracts.operation_id(
             "apply", operation["resource_id"], operation["selector"]
         )
@@ -364,6 +365,7 @@ class ManifestSemanticTests(unittest.TestCase):
         contracts.seal_document("manifest", copy.deepcopy(payload))
         operation = copy.deepcopy(payload["shared_operations"][0])
         operation["selector"] = "private-claim"
+        operation["ownership"]["key_path"] = ["other"]
         operation["operation_id"] = contracts.operation_id(
             "apply", operation["resource_id"], operation["selector"]
         )
@@ -817,6 +819,7 @@ class DeclaredBindingTests(unittest.TestCase):
         def add_second_apply_entry(payload):
             operation = fixtures.build_operation("r1", "apply")
             operation["selector"] = "second-entry"
+            operation["ownership"]["key_path"] = ["other"]
             operation["operation_id"] = contracts.operation_id(
                 "apply", operation["resource_id"], "second-entry"
             )
@@ -1877,6 +1880,7 @@ class IndependentReviewRegressionTests(unittest.TestCase):
         payload["completed_step_ids"].remove(result["step_id"])
         payload["pending_step_ids"].append(result["step_id"])
         payload["status"] = "failed"
+        payload["reason"] = "restore failed"
         for project in payload["projects"]:
             project.update(status="failed", reason="restore failed", nextStep="inspect")
         with self.assertRaises(ContractError):
@@ -2126,6 +2130,7 @@ class SecondReviewRegressionTests(unittest.TestCase):
         payload = copy.deepcopy(self.family["manifest"]["payload"])
         operation = copy.deepcopy(payload["projects"][0]["private_operations"][0])
         operation["selector"] = "another-entry"
+        operation["ownership"]["key_path"] = ["other"]
         operation["operation_id"] = contracts.operation_id(
             operation["phase"], operation["resource_id"], operation["selector"]
         )
@@ -2271,6 +2276,8 @@ class SecondReviewRegressionTests(unittest.TestCase):
             )
             failed_payload = copy.deepcopy(self.family[kind]["payload"])
             failed_payload["status"] = "failed"
+            if kind == "recovery_receipt":
+                failed_payload["reason"] = "phase check failed"
             for project in failed_payload["projects"]:
                 project.update(
                     status="failed", reason="phase check failed", nextStep="inspect"
@@ -2852,7 +2859,7 @@ class ThirdReviewRegressionTests(unittest.TestCase):
     ) -> None:
         contracts.validate_declared_bindings(self.manifest, self.bound_stages())
 
-        for boundary in ("dropped", "changed", "dropped everywhere"):
+        for boundary in ("dropped", "changed"):
             payload = copy.deepcopy(self.cleanup["payload"])
             if boundary == "changed":
                 payload["projects"][0]["retained_assets"][0]["state"] = (
@@ -2860,8 +2867,9 @@ class ThirdReviewRegressionTests(unittest.TestCase):
                 )
             else:
                 payload["projects"][0]["retained_assets"] = []
-                if boundary == "dropped everywhere":
-                    payload["retained_assets"] = []
+            payload["retained_assets"] = copy.deepcopy(
+                payload["projects"][0]["retained_assets"]
+            )
             drifted = contracts.seal_document("cleanup_receipt", payload)
             with self.subTest(boundary=boundary), self.assertRaises(ContractError):
                 contracts.validate_declared_bindings(
@@ -3070,6 +3078,328 @@ class ThirdReviewRegressionTests(unittest.TestCase):
         with self.assertRaises(ContractError):
             contracts.validate_declared_bindings(
                 manifest, {"cleanup_receipt": cleanup, "recovery_plan": plan}
+            )
+
+
+class FourthReviewRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.family = fixtures.build_fixture_family()
+        cls.manifest = cls.family["manifest"]
+
+    def stages(self):
+        return {
+            kind: self.family[kind]
+            for kind in (
+                "apply_receipt",
+                "deployment_evidence",
+                "verification",
+                "cleanup_receipt",
+            )
+        }
+
+    def retry(self, kind, previous):
+        id_key = {
+            "apply_receipt": "apply_id",
+            "deployment_evidence": "deployment_id",
+            "cleanup_receipt": "cleanup_id",
+            "recovery_receipt": "receipt_id",
+        }[kind]
+        previous_key = (
+            "previous_deployment_id"
+            if kind == "deployment_evidence"
+            else "previous_receipt_id"
+        )
+        payload = copy.deepcopy(self.family[kind]["payload"])
+        payload[previous_key] = previous[id_key]
+        payload["started_at"] = previous["payload"]["finished_at"]
+        payload["finished_at"] = previous["payload"]["finished_at"]
+        return contracts.seal_document(kind, payload)
+
+    def test_canonical_json_refuses_non_string_keys_without_losing_finite_numbers(
+        self,
+    ) -> None:
+        self.assertEqual(
+            contracts.canonical_json_bytes({"value": 1.25}), b'{"value":1.25}'
+        )
+        for value in ({1: "x"}, {"nested": [{None: "x"}]}):
+            with self.subTest(value=value), self.assertRaises(ContractError):
+                contracts.canonical_json_bytes(value)
+
+    def test_oversized_integer_uses_the_contract_error_boundary(self) -> None:
+        limit = getattr(sys, "get_int_max_str_digits", lambda: 4300)()
+        raw = '{"schema_version":' + "9" * max(limit + 1, 5000) + ',"items":[]}'
+        with self.assertRaises(ContractError):
+            contracts.load_document(raw, "publication_decisions")
+
+    def test_resource_write_selectors_and_sources_must_be_compatible(self) -> None:
+        for boundary in (
+            "same entry",
+            "ancestor entry",
+            "whole resource",
+            "different copy",
+            "mixed changes",
+        ):
+            payload = copy.deepcopy(self.manifest["payload"])
+            operation = copy.deepcopy(payload["projects"][0]["private_operations"][0])
+            operation["selector"] = "another-selector"
+            operation["ownership"]["key_path"] = ["other"]
+            if boundary == "same entry":
+                operation["ownership"]["key_path"] = ["sbtd"]
+            elif boundary == "ancestor entry":
+                operation["ownership"]["key_path"] = ["sbtd", "nested"]
+            elif boundary == "whole resource":
+                operation["selector"] = "whole-resource"
+            elif boundary == "different copy":
+                operation["change"]["source_ref"] = fixtures._file_ref(
+                    "/private/source/other", 999
+                )
+            else:
+                operation["change"] = {"kind": "remove"}
+            operation["operation_id"] = contracts.operation_id(
+                operation["phase"], operation["resource_id"], operation["selector"]
+            )
+            payload["projects"][0]["private_operations"].append(operation)
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+
+        payload = copy.deepcopy(self.manifest["payload"])
+        operation = copy.deepcopy(payload["projects"][0]["private_operations"][0])
+        operation["selector"] = "disjoint-entry"
+        operation["ownership"]["key_path"] = ["other"]
+        operation["operation_id"] = contracts.operation_id(
+            "apply", operation["resource_id"], operation["selector"]
+        )
+        payload["projects"][0]["private_operations"].append(operation)
+        contracts.seal_document("manifest", payload)
+
+    def test_successful_non_remove_results_leave_the_declared_resource_type(
+        self,
+    ) -> None:
+        for kind, resource, after in (
+            ("apply_receipt", "r1", fixtures.ABSENT),
+            ("deployment_evidence", "r1", fixtures.ABSENT),
+            ("apply_receipt", "r2", fixtures.file_state(999)),
+        ):
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            result = next(
+                r
+                for r in payload["projects"][0]["private_results"]
+                if r["resource_id"] == fixtures.resource_id_of(resource)
+            )
+            result["after"] = copy.deepcopy(after)
+            document = contracts.seal_document(kind, payload)
+            with (
+                self.subTest(kind=kind, resource=resource),
+                self.assertRaises(ContractError),
+            ):
+                contracts.validate_declared_bindings(self.manifest, {kind: document})
+
+    def test_original_backups_stay_in_the_declared_vault_without_conflicting_reuse(
+        self,
+    ) -> None:
+        for path in (fixtures.ALPHA + "/original", "/private/home/.codex/original"):
+            payload = copy.deepcopy(self.family["apply_receipt"]["payload"])
+            payload["projects"][0]["private_results"][0]["backup_ref"]["path"] = path
+            document = contracts.seal_document("apply_receipt", payload)
+            with self.subTest(path=path), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(
+                    self.manifest, {"apply_receipt": document}
+                )
+        payload = copy.deepcopy(self.family["apply_receipt"]["payload"])
+        alpha_backup = payload["projects"][0]["private_results"][0]["backup_ref"]
+        payload["projects"][1]["private_results"][0]["backup_ref"]["path"] = (
+            alpha_backup["path"]
+        )
+        document = contracts.seal_document("apply_receipt", payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(
+                self.manifest, {"apply_receipt": document}
+            )
+
+    def test_blocked_runtime_and_failed_recovery_need_an_explanation(self) -> None:
+        for boundary in ("runtime", "outcome"):
+            payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+            if boundary == "runtime":
+                payload["runtime_readiness"] = "blocked"
+            else:
+                payload["status"] = "failed"
+                payload["projects"][0].update(
+                    status="failed", reason="restore failed", nextStep="inspect"
+                )
+            payload["reason"] = ""
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("recovery_receipt", payload)
+            payload["reason"] = "required runtime or recovery step is unavailable"
+            contracts.seal_document("recovery_receipt", payload)
+
+    def test_known_partial_or_unknown_writes_cannot_advance_on_retry(self) -> None:
+        for kind in (
+            "apply_receipt",
+            "deployment_evidence",
+            "cleanup_receipt",
+            "recovery_receipt",
+        ):
+            for outcome in ("changed", "unknown"):
+                payload = copy.deepcopy(self.family[kind]["payload"])
+                if kind == "recovery_receipt":
+                    result = next(
+                        r
+                        for r in payload["results"]
+                        if r["phase"] == "apply"
+                        and r["resource_id"] == fixtures.resource_id_of("r1")
+                    )
+                    payload["completed_step_ids"].remove(result["step_id"])
+                    payload["pending_step_ids"].append(result["step_id"])
+                    payload["reason"] = "partial write needs recovery"
+                else:
+                    result = payload["projects"][0]["private_results"][0]
+                result.update(status="failed", error="partial write")
+                result["after"] = (
+                    fixtures.file_state(999) if outcome == "changed" else None
+                )
+                payload["status"] = "failed"
+                payload["projects"][0].update(
+                    status="failed", reason="partial write", nextStep="recover"
+                )
+                previous = contracts.seal_document(kind, payload)
+                with (
+                    self.subTest(kind=kind, outcome=outcome),
+                    self.assertRaises(ContractError),
+                ):
+                    contracts.validate_cumulative(
+                        previous, self.retry(kind, previous), kind
+                    )
+                preserved_payload = copy.deepcopy(previous["payload"])
+                previous_key = (
+                    "previous_deployment_id"
+                    if kind == "deployment_evidence"
+                    else "previous_receipt_id"
+                )
+                id_key = {
+                    "apply_receipt": "apply_id",
+                    "deployment_evidence": "deployment_id",
+                    "cleanup_receipt": "cleanup_id",
+                    "recovery_receipt": "receipt_id",
+                }[kind]
+                preserved_payload[previous_key] = previous[id_key]
+                preserved_payload["started_at"] = previous["payload"]["finished_at"]
+                preserved_payload["finished_at"] = previous["payload"]["finished_at"]
+                preserved = contracts.seal_document(kind, preserved_payload)
+                self.assertEqual(
+                    contracts.validate_cumulative(previous, preserved, kind), preserved
+                )
+
+    def test_carried_recovery_results_keep_operation_and_project_identity(self) -> None:
+        for pending in (False, True):
+            previous_payload = copy.deepcopy(self.family["recovery_receipt"]["payload"])
+            if pending:
+                result = next(
+                    result
+                    for result in previous_payload["results"]
+                    if result["phase"] == "apply"
+                    and result["resource_id"] == fixtures.resource_id_of("r1")
+                )
+                result.update(
+                    status="failed",
+                    after=copy.deepcopy(result["before"]),
+                    error="write did not begin",
+                )
+                previous_payload["completed_step_ids"].remove(result["step_id"])
+                previous_payload["pending_step_ids"].append(result["step_id"])
+                previous_payload.update(status="failed", reason="write did not begin")
+                previous_payload["projects"][0].update(
+                    status="failed", reason="write did not begin", nextStep="retry"
+                )
+            previous = contracts.seal_document("recovery_receipt", previous_payload)
+            control = self.retry("recovery_receipt", previous)
+            contracts.validate_cumulative(previous, control, "recovery_receipt")
+            for field, value in (
+                ("operation_ids", [fixtures.digest_number(999)]),
+                ("dependent_projects", [fixtures.BETA]),
+            ):
+                payload = copy.deepcopy(control["payload"])
+                result = next(
+                    result
+                    for result in payload["results"]
+                    if result["phase"] == "apply"
+                    and result["resource_id"] == fixtures.resource_id_of("r1")
+                )
+                result[field] = value
+                current = contracts.seal_document("recovery_receipt", payload)
+                with (
+                    self.subTest(pending=pending, field=field),
+                    self.assertRaises(ContractError),
+                ):
+                    contracts.validate_cumulative(previous, current, "recovery_receipt")
+
+    def test_verification_cannot_drop_or_forge_retained_non_cleanup_resources(
+        self,
+    ) -> None:
+        for boundary in ("missing", "state"):
+            payload = copy.deepcopy(self.family["verification"]["payload"])
+            if boundary == "missing":
+                payload["projects"][0]["retained_assets"] = []
+            else:
+                payload["projects"][0]["retained_assets"][0]["state"] = (
+                    fixtures.file_state(999)
+                )
+            verification = contracts.seal_document("verification", payload)
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(
+                    self.manifest,
+                    {
+                        "apply_receipt": self.family["apply_receipt"],
+                        "deployment_evidence": self.family["deployment_evidence"],
+                        "verification": verification,
+                    },
+                )
+
+    def test_cleanup_batch_summary_is_the_union_of_project_observations(self) -> None:
+        payload = copy.deepcopy(self.family["cleanup_receipt"]["payload"])
+        payload["retained_assets"] = []
+        with self.assertRaises(ContractError):
+            cleanup = contracts.seal_document("cleanup_receipt", payload)
+            contracts.validate_declared_bindings(
+                self.manifest, {**self.stages(), "cleanup_receipt": cleanup}
+            )
+        payload = copy.deepcopy(self.family["cleanup_receipt"]["payload"])
+        payload["status"] = "failed"
+        payload["projects"][0].update(
+            status="failed", reason="asset drift", nextStep="inspect"
+        )
+        payload["projects"][0]["retained_assets"][0]["state"] = fixtures.file_state(999)
+        payload["retained_assets"] = copy.deepcopy(
+            payload["projects"][0]["retained_assets"]
+        )
+        cleanup = contracts.seal_document("cleanup_receipt", payload)
+        contracts.validate_declared_bindings(
+            self.manifest, {**self.stages(), "cleanup_receipt": cleanup}
+        )
+
+    def test_recovery_snapshot_cannot_ignore_later_retained_observations(self) -> None:
+        payload = copy.deepcopy(self.family["cleanup_receipt"]["payload"])
+        payload["status"] = "failed"
+        payload["projects"][0].update(
+            status="failed", reason="asset changed", nextStep="inspect"
+        )
+        payload["projects"][0]["retained_assets"][0]["state"] = fixtures.file_state(999)
+        payload["retained_assets"] = copy.deepcopy(
+            payload["projects"][0]["retained_assets"]
+        )
+        cleanup = contracts.seal_document("cleanup_receipt", payload)
+        plan_payload = copy.deepcopy(self.family["recovery_plan"]["payload"])
+        plan_payload["input_evidence"] = fixtures.build_input_evidence(
+            self.manifest,
+            self.family["apply_receipt"],
+            self.family["deployment_evidence"],
+            cleanup,
+        )
+        plan = contracts.seal_document("recovery_plan", plan_payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(
+                self.manifest,
+                {**self.stages(), "cleanup_receipt": cleanup, "recovery_plan": plan},
             )
 
 
