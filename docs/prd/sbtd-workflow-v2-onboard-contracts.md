@@ -193,3 +193,9 @@ Code Readability／Ponytail复核：分别命名manifest只读输入清单与初
 8个新方法首轮得到24个预期失败和2个目标递归异常；两条证据路径反例曾被无关guard提前挡住，已将native报告放到独立子目录，并让blocked无步骤plan保留合法resource operation IDs。修正后真实red为26个断言失败／2个目标RecursionError，无fixture错误。修复后8项定点与完整226项协议通过；实际消费smoke的9个场景通过，其中小数精度与独立Decimal比较的24组输入及跨时区控制一致。
 
 smoke后的Code Readability／Ponytail复核保留具名输入引用遍历和阶段边界，不新增schema／依赖／缓存／执行框架。旧cleanup保留约束回归改为不传verification，避免新前置校验掩盖cleanup自身的独立约束；调整后226项协议及新5个Python文件Ruff／格式／ty通过。README.md、README.html、版本化automation prompt的内部接入／安装／无真实主机声明不变，无需重复改写；CHANGELOG不记录未合并能力的逐轮过程。新head全量／安装副本／独立review仍须重跑，当前不得标ready／done。
+
+## 第十轮正式验证前检查
+
+`e6200df5ce6915de0fa23e92849bc0a747ef4df0`准备全量前收到“verification候选未进入引用清单”的阻断建议，正式全量尚未启动。该建议经源码与实际调用判定不成立：候选target在verified／failed两种情况下都必须绑定manifest资源，恢复输出已保护全部manifest目标；4个私有／共享候选的24种等同／祖先／后代报告与保护覆盖均被拒绝，另2个脱离manifest的候选也被拒绝。保留此诊断，不重复建立候选清单，也不把诊断当作新head全量结果。
+
+检查同时发现另一项真实条件差异：共享候选原有状态校验按“任一依赖verified”执行，新retention校验却要求“全部verified”。一个依赖failed不能掩盖另一verified依赖的已知保留冲突。实际API红色诊断及1项回归先复现，再将条件统一为any；无冲突partial与全部failed诊断仍可接受。修复后该定点、227项协议、实际API重跑及新5个Python文件静态检查通过。需要冻结新head重新启动全量／安装副本／独立review；`e6200df`没有被冒充为已完成该正式周期。

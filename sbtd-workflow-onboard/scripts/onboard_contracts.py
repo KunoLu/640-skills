@@ -1058,7 +1058,7 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
     }
 
     def check_retention(candidate: Mapping[str, Any]) -> None:
-        if not all(
+        if not any(
             project_statuses[root] == "verified"
             for root in candidate["dependent_projects"]
         ):

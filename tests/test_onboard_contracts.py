@@ -5131,6 +5131,37 @@ class NinthReviewRegressionTests(unittest.TestCase):
             )
             contracts.seal_document("verification", payload)
 
+    def test_shared_retention_blocks_any_verified_dependent(self) -> None:
+        payload = copy.deepcopy(self.family["verification"]["payload"])
+        payload["status"] = "failed"
+        payload["projects"][0].update(
+            status="failed", reason="inspection failed", nextStep="inspect"
+        )
+        sources = {
+            "apply_receipt": self.family["apply_receipt"],
+            "deployment_evidence": self.family["deployment_evidence"],
+        }
+        control = contracts.seal_document("verification", copy.deepcopy(payload))
+        contracts.validate_declared_bindings(
+            self.family["manifest"], {**sources, "verification": control}
+        )
+        candidate = payload["shared_cleanup_candidates"][0]
+        payload["projects"][0]["retained_assets"].append(
+            {"path": candidate["target"], "state": copy.deepcopy(candidate["state"])}
+        )
+        with self.assertRaises(ContractError):
+            verification = contracts.seal_document("verification", payload)
+            contracts.validate_declared_bindings(
+                self.family["manifest"], {**sources, "verification": verification}
+            )
+        payload["projects"][1].update(
+            status="failed", reason="shared retention conflict", nextStep="resolve"
+        )
+        diagnostic = contracts.seal_document("verification", payload)
+        contracts.validate_declared_bindings(
+            self.family["manifest"], {**sources, "verification": diagnostic}
+        )
+
     def test_temporal_comparisons_preserve_submicrosecond_precision(self) -> None:
         early = "2026-09-18T03:00:00.0000001Z"
         late = "2026-09-18T03:00:00.0000002Z"
