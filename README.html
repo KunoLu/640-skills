@@ -407,6 +407,7 @@
           <div><strong>未发布边界（v2 分阶段交付中）</strong><br>canonical payload 为 14 bundled / 19 external Skills。项目 setup 已切换为按需 SBTD 检查，不安装或初始化 Trellis；Graft、host 接线、任务操作、身份和迁移仍分阶段实施，不将开发分支当作完整 v2 发布部署到真实项目。</div>
           <div>P1-01内部契约不代表migration/recovery可执行；P1-02只验证选中状态的形状与containment，不替代恢复或验收。目录复制不安装Python依赖；实际解释器须按安装副本的<code>requirements.txt</code>准备jsonschema和PyYAML。缺失时相关校验明确阻断，帮助与纯参数解析不受影响。</div>
           <div>P1-03提供本地Graft检测和明确确认的<code>install-graft</code>，固定<code>@nanonets/graft@0.18.0</code>与Node &gt;=20。验证完整性/native启动和telemetry持久关闭；不等于graph、MCP、host或完整v2可用。</div>
+          <div>P1-17在Onboard <code>scripts/</code> 内提供任务状态Python库（<code>sbtd_task_document.py</code>、<code>sbtd_task_state.py</code>）：task.md拥有状态，active仅书签；<code>TaskStore</code> 的 create / inspect / select / transition / set_mode / resume / reopen / protect_local_state / promote / archive 由host-native调用，不是新全局CLI、daemon、journal或<code>onboard.py</code>子命令。Markdown结构识别使用声明依赖markdown-it-py&gt;=4,&lt;5的CommonMark token（parse-only、不渲染、不联网，Python&gt;=3.10），缺失时明确停止写入。提升 / 归档两阶段确认，原目录原子退役保留在 <code>.sbtd/task-originals/</code>；候选区受保护且仅本次操作使用，附带任务须 <code>include_tasks</code> 显式授权。非Git项目branch为null，首次窄保护只追加 <code>/.sbtd/</code>；helper未安装不得冒充已持久化。不代表Windows、host路由、身份、迁移、全量验证或发布已通过。</div>
         </div>
       </div>
     </section>

@@ -1103,6 +1103,7 @@ P3-04 有两个条件分支，均须无未解决迁移／恢复问题、无使�
 - 保留既有任务 ID 和历史完成时间，新增任务使用新 ID；同优先级按依赖执行，不按 ID 数值先后强行排序。本文台账维护是用户明确交付，不能因实施中选择 default/lite 而省略，也不复制为所有业务项目的通用必填 PRD。
 - 依赖栏只列无条件前置；P3-04 的正常发布／终止分支由验收栏及第 11.8 节裁决。依赖栏无条目不代表可直接销毁，必须记录所选分支的完整证据和单独授权。
 - 本次逐任务开发按用户要求从最新 main 建任务分支。当前及后续任务循环独立 review 至不再发现有效 P0／P1 问题、其他必需验收通过后即可推进；P2 及更低级别写入根目录 `findings.log`，逐条注明发现任务、级别、来源、问题与状态，留待用户评估，不阻塞推进。advisor 同样按有效性与严重级别裁决，不得随意降级高风险问题。确认 MERGED 后同步 main、清理已合并分支，并立即通过窄范围文档 PR 更新本表的完成状态、实际时间及合并证据。状态 PR 完成前不解锁下一项依赖；执行顺序见 D-IMP-02，review 新门槛见 [D-IMP-13](sbtd-workflow-v2-implementation-decisions.md#d-imp-13审查门槛与低优先级发现台账)。
+- **P1 十项人工确认门（D-IMP-14）：** P1累计10个任务完成实现PR、独立状态PR及清理闭环后，暂停第11项和全部后续推进；全量评估根`findings.log`所有记录，列出有必要优先修复的问题、依据与风险，等待用户明确确认后再决定修复或继续。按当前顺序第10项为P1-06，不是编号P1-10；顺序变动仍按实际完成数量触发。即使没有建议优先修复项，也不能自动越过确认门。详见[十项评估确认门](sbtd-workflow-v2-p1-ten-task-findings-gate.md)。
 
 **AC 引用分层：** P0 模板／协议任务只证明对应契约、模板或 case 设计，不提前宣称 P1 运行 AC 全部通过。例外：P0-01 必须做上游真实能力 spike；P0-02 取得既有行为基线；P0-07 必须实际执行隔离的 catalog/bundled 安装断言；P0-09 必须运行根 ignore 契约及 Git 探针。其余新行为运行证明归属 P1 对应实现任务，P1-15 汇总 P1 范围 AC。真实项目由 P2-04 产生部署／smoke 子项证据，P2-05 完成逐项目迁移集成验收；不会要求前置任务先证明后续阶段尚未产生的结果。
 
@@ -1165,7 +1166,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P1-14 | P1 | 模式／安装／迁移／恢复回归与CI | P0-09、P1-07、P1-08、P1-09、P1-12、P1-13、P1-17、P1-18、P1-19、P1-20 | AC-18/19/22/23/24/25/26/27/28/29/30/31/32/33/34/35/36及AC-37实现期子项；真实producer→verify→cleanup→recovery链及partial续作/缺证据拒绝；AC-37仅保护/阻断与隔离规程演练，不等待真实发布窗口或销毁 | AFK | planned | — |
 | P1-15 | P1 | Codex/OMP 三模式 smoke、token 计量及最终验证 | P1-11、P1-14 | AC-04/14/19/20/22/23/24；六个 host×mode 组合含模式拒绝／恢复，真实证据不伪造 | AFK | planned | — |
 | P1-16 | P1 | 候选 release-readiness 与可选 rc 发布 | P1-15 | reviewer ready；用户批准后才创建不可变 rc tag，记录 SHA/日期 | HITL | planned | — |
-| P1-17 | P1 | 最小任务、active 引用、提升与恢复事件 | P1-02、P0-03 | AC-03/24/27/31/32；blocked 前态跨会话可恢复，重复阻塞不丢原态，未知历史需用户选择；单文件原子更新 | AFK | planned | — |
+| P1-17 | P1 | 最小任务、active 引用、提升与恢复事件 | P1-02、P0-03 | AC-03/24/27/31/32；[实施与验证](sbtd-workflow-v2-task-state-runtime.md)。公开Python任务操作、历史/引用与两阶段传输已实现；666项提交前全量通过，P1修复后95项影响范围及307文件/11原生场景通过；独立审查无剩余P0/P1，16 P2延期。正在固定提交并执行精确最终验证 | AFK | checking | — |
 | P1-18 | P1 | 公共路由、跨分支恢复和只读交接 | P0-05、P1-17 | AC-05/22/24/27/28；分支不符不写，切换／重绑定须选择；只读不建 handoff、旧模式不丢 | AFK | planned | — |
 | P1-19 | P1 | developer 按需建立与 worktree 身份解析 | P1-02、P0-06 | AC-06/25；未 onboard 的首次保护与名字询问、本地身份优先、合法/冲突分支、窄写入不全量初始化 | AFK | planned | — |
 | P1-20 | P1 | Manifest-scoped recovery plan／receipt 与恢复执行 | P1-12、P1-04、P1-05、P1-13 | AC-18/35；基于实际各阶段实现证明完整/partial apply/deploy/cleanup恢复与重试，最后后态、共享闭包、无证据blocked | AFK | planned | — |
@@ -1405,6 +1406,9 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-18T20:19:53+08:00 | P1-03 planned→in-progress | P1-02实施/状态PR均合入并清理后，从main `dc5fe80…`建立`p1-03-graft-cli-runtime`。既有检测5 tests基线、固定包576文件字节核验及6项实际只读/禁网调查通过；Legacy/Refactoring/DDD/DDIA确认。发现既有global check的RTK gain会在空HOME创建history.db，纳入只读边界修复。新Graft模块、直接调用方与主线程集成分工，禁止worker验证；不运行真实全局安装或提前实现host/迁移。 |
 | 2026-09-18T21:25:14+08:00 | P1-03 in-progress→checking | 真实固定版本安装/native/telemetry/幂等与DNT-only独立控制通过；完整check HOME/项目零持久写入。两路独立review发现的执行目标绑定、optional/raw npm绕过两项P1经红绿回归修复并复核关闭；7 P2原级延期，1 P2随P1同根关闭。主线程636 tests/374.554s全量通过，正固定候选提交与完整安装副本证据，不提前写done或启动下个任务。 |
 | 2026-09-18T21:45:28+08:00 | P1-03 checking→done | PR #31于21:44:12+08:00实际合并（`908a8a65952ee82ce0381a5955000c3b26daab15`）；main与origin/main一致，合并tree等于验证候选，任务分支本地/远端删除并prune。最终`01e27cfc75b1c302dbff04b17388a8dff4b185fb`原生636 tests/639.290s无skip；完整305文件Skill、10组真实安装/DNT/只读/禁网场景通过。最终报告stem为`unit-report-graft-exact-full-p1-03-graft-cli-runtime-2026_09_18-21_31_36`、`api-report-graft-exact-install-p1-03-graft-cli-runtime-2026_09_18-21_27_40`、`api-report-graft-exact-offline-p1-03-graft-cli-runtime-2026_09_18-21_30_16`；16份envelope校验通过，developer-local/exact/local-only。独立源码及metadata复核无剩余P0/P1；2 P1修复，7 P2延期，1 P2同根关闭。12份私有源码快照与base核验后清理本任务临时目录，48报告文件保留，仅最终unit raw/envelope补记实际清理证明；P0安装、真实HOME、用户数据和live automation未动。Release readiness ready仅本任务，不冒充Windows/host/v2发布；独立状态PR闭环前不启动下一任务。 |
+| 2026-09-18T21:57:43+08:00 | P1-17 planned→in-progress | P1-03实现PR #31与状态PR #32均合入、main同步且分支清理后，从`c0f2281…`建立`p1-17-task-state-runtime`。原生状态/schema基线60 tests/1.168s通过并保存报告；Legacy/Refactoring/DDD/DDIA确认。遵守现有Skill“不新增CLI”边界，通过Onboard内公开Python任务操作和host-native调用交付；先复用安全parser，再垂直红绿验证文件操作。只读/分支/授权/保护与内容保全不能被模式降级；真实host路由、身份、迁移仍属后续任务。 |
+| 2026-09-18T23:27:34+08:00 | D-IMP-14 用户确认门 | 用户要求P1完成第10个任务后暂停后续推进，全量评估findings.log，先列出有必要优先修复的问题并等待确认。按累计闭环数量计数；当前3项done，P1-17在实施，现有顺序第10项是P1-06。已在todo第10/11项之间插入暂停/评估/用户确认节点；不自动修复、不将整体目标提前标完成。 |
+| 2026-09-19T01:28:56+08:00 | P1-17 in-progress→checking | 任务库及共享安全parser、单文件更新/父子/历史/传输已实现；90项影响范围、666 tests/176.904s全量后，两路完整review发现3 P1并经红绿、95项影响范围及独立复核关闭。307文件安装副本的10原生多进程smoke与缺Markdown依赖零写入场景通过，8 fixed P1/16 deferred P2记入findings.log；仅dirty/local-only，正固定精确候选。D-IMP-14十项门保持，当前P1仍3项闭环；未开始P1-18。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 

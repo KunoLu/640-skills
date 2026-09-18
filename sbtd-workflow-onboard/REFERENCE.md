@@ -348,6 +348,35 @@ Both root installers gate all global/optional project mutations on the complete 
 
 Aggregate priority is `failed > blocked > needs-user > bootstrap-required > success > skipped`; exit codes remain 5, 2, 2, 6, 0, 0 respectively. A read-only plan may successfully report a blocked proposed operation without executing it.
 
+## Task State Library (P1-17)
+
+`scripts/sbtd_task_document.py` and `scripts/sbtd_task_state.py` are a host-native Python library shipped with the installed Onboard Skill. They are not `onboard.py` subcommands and do not register a new global CLI, daemon, journal, or background service. Markdown structure recognition uses the declared dependency markdown-it-py>=4,<5 (CommonMark tokens, parse-only, no rendering, no network; Python >=3.10). When the installed helper copy or its declared dependencies (PyYAML, jsonschema, markdown-it-py) are missing, parsing and task-state writes stop explicitly; callers must report that persistence did not run rather than claiming it.
+
+The task document owns mode, status, timestamps and the single `## 状态事件` table; `.sbtd/active-task.json` is only a bookmark. `TaskDocument.parse` / `updated` preserve frontmatter extensions, body and attachments that do not belong to the current operation.
+
+`TaskStore(root, read_only=False)` public operations:
+
+- `inspect(task_id=None)` — read-only; without an id it resolves the active bookmark and checks it against the logical record.
+- `create(task_id, body=..., mode=None, mode_note=None, parent=None, shared=False, confirmed=False)`
+- `select(task_id, confirmed=False)`
+- `transition(task_id, status, reason=..., evidence=..., confirmed=False)`
+- `set_mode(task_id, mode, note=..., confirmed=False)`
+- `resume(task_id, reason=..., evidence=..., target=None, confirmed=False)`
+- `reopen(task_id, reason=..., evidence=..., confirmed=False)`
+- `protect_local_state(confirmed=False)` — first-time narrow protection appends only `/.sbtd/` to the project `.gitignore`.
+- `promote(task_id, confirmed=False, retire_source=False, include_tasks=())`
+- `archive(task_id, reason=..., evidence=..., confirmed=False, retire_source=False, include_tasks=())`
+
+Unconfirmed calls only report the planned result without writing. `promote` / `archive` return `TaskTransfer(status, task, source_path, target_path, files, retained_original, completed_steps)`; failures report `reason`, `next_step` and the actual `completed_steps`. Engineering boundaries:
+
+- New tasks default to local `.sbtd/tasks/<id>/task.md`; lite/strict or explicit sharing uses `ai/tasks/<id>/task.md`. Mode and storage are orthogonal. Git projects bind the actual branch or `detached:<full-sha>`; non-Git projects record `branch=null`.
+- Promotion/archive are two-phase: the first confirmed call prepares and verifies the complete target candidate, the effective active reference and the necessary shared index; `retire_source=True` requires an already prepared target plus a separate confirmation, then atomically moves the original directory into `.sbtd/task-originals/<generated>/task`. Originals are retained, never recursively deleted.
+- Candidate copies live only in the protected `.sbtd/task-transfer-candidates/` area owned by the current operation and are cleaned up afterwards; they are not a second valid task record, and no journal service exists beside the task document.
+- Other logical `task.md` records inside a task directory must each be authorized via `include_tasks`; path nesting is not ownership.
+- Unknown or conflicting blocked history requires an explicit user phase choice; no ingress is fabricated and a blocked task never returns directly to done.
+- Retries reconcile against recorded state and events instead of appending duplicate completion or release events.
+- Windows support, host routing, identity creation and legacy migration remain later stages; full validation, real-host proof and release are not claimed here.
+
 ## MCP Setup
 
 MCP configuration remains optional and interactive in normal mode. Project-only mode skips it.

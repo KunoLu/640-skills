@@ -21,13 +21,25 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import stat
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, TypedDict
+from typing import Any, BinaryIO, TypedDict
 
-__all__ = ["StateInspection", "TaskSummary", "inspect_project_state"]
+__all__ = [
+    "StateInspection",
+    "TaskDataError",
+    "TaskSummary",
+    "inspect_project_state",
+    "open_regular_file",
+    "parse_active_pointer",
+    "parse_task_frontmatter",
+    "validate_task_data",
+    "validate_task_timestamps",
+]
 
 
 class TaskSummary(TypedDict):
@@ -61,7 +73,7 @@ _POINTER_PATH = ".sbtd/active-task.json"
 _BOOTSTRAP_PATH = "ai/tasks/00-bootstrap-guidelines/task.md"
 _LEGACY_PATH = ".trellis"
 _TASK_ROOTS = (".sbtd/tasks", "ai/tasks")
-_ARCHIVE_PREFIX = "ai/tasks/archive/"
+_ARCHIVE_PREFIXES = tuple(root + "/archive/" for root in _TASK_ROOTS)
 _TASK_MD_SUFFIX = "/task.md"
 _TIMESTAMP_FIELDS = ("created_at", "updated_at", "completed_at")
 
@@ -84,7 +96,7 @@ _DEPENDENCY_NEXT = (
 )
 
 
-class _StateProblem(Exception):
+class TaskDataError(Exception):
     """A fixed, sanitized inspection failure; never carries file content."""
 
     def __init__(self, reason: str, next_step: str) -> None:
@@ -117,7 +129,7 @@ def _require(module_name: str, package: str) -> Any:
     try:
         return __import__(module_name)
     except ImportError:
-        raise _StateProblem(
+        raise TaskDataError(
             f"required dependency {package} is not installed in the onboarding environment",
             _DEPENDENCY_NEXT,
         ) from None
@@ -127,19 +139,19 @@ def _bundled_schema() -> dict[str, Any]:
     try:
         raw = _SCHEMA_PATH.read_bytes()
     except OSError:
-        raise _StateProblem(
+        raise TaskDataError(
             "the bundled task-data schema is missing or unreadable",
             "restore sbtd-workflow-onboard/templates/skills/sbtd-task/references/task-data.schema.json",
         ) from None
     return json.loads(raw.decode("utf-8"))
 
 
-def _validate_schema(data: object, definition: str, label: str) -> dict[str, Any]:
+def validate_task_data(data: object, definition: str, label: str) -> dict[str, Any]:
     jsonschema = _require("jsonschema", "jsonschema")
     schema = {**_bundled_schema(), "$ref": f"#/$defs/{definition}"}
     validator = jsonschema.Draft202012Validator(schema)
     if not isinstance(data, dict) or not validator.is_valid(data):
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} fails the bundled {definition} schema",
             _REPAIR_NEXT,
         )
@@ -177,30 +189,30 @@ def _resolve_contained_file(
         except FileNotFoundError:
             if missing_reason is None:
                 return None
-            raise _StateProblem(missing_reason, _MISSING_TARGET_NEXT) from None
+            raise TaskDataError(missing_reason, _MISSING_TARGET_NEXT) from None
         except PermissionError:
-            raise _StateProblem(
+            raise TaskDataError(
                 f"{label} cannot be inspected (permission denied)", _REPAIR_NEXT
             ) from None
         except OSError:
-            raise _StateProblem(f"{label} cannot be inspected", _REPAIR_NEXT) from None
+            raise TaskDataError(f"{label} cannot be inspected", _REPAIR_NEXT) from None
         if stat.S_ISLNK(mode):
             try:
                 resolved = candidate.resolve(strict=True)
             except FileNotFoundError:
-                raise _StateProblem(
+                raise TaskDataError(
                     f"{label} is a dangling symlink", _CONTAINMENT_NEXT
                 ) from None
             except RuntimeError:
-                raise _StateProblem(
+                raise TaskDataError(
                     f"{label} is a symlink loop", _CONTAINMENT_NEXT
                 ) from None
             except OSError:
-                raise _StateProblem(
+                raise TaskDataError(
                     f"{label} cannot be inspected", _REPAIR_NEXT
                 ) from None
             if not _is_within(resolved, root_real):
-                raise _StateProblem(
+                raise TaskDataError(
                     f"{label} is a symlink that escapes the project root",
                     _CONTAINMENT_NEXT,
                 )
@@ -213,36 +225,54 @@ def _resolve_contained_file(
     except FileNotFoundError:
         if missing_reason is None:
             return None
-        raise _StateProblem(missing_reason, _MISSING_TARGET_NEXT) from None
+        raise TaskDataError(missing_reason, _MISSING_TARGET_NEXT) from None
     except OSError:
-        raise _StateProblem(f"{label} cannot be inspected", _REPAIR_NEXT) from None
+        raise TaskDataError(f"{label} cannot be inspected", _REPAIR_NEXT) from None
     if not _is_within(final, root_real):
-        raise _StateProblem(f"{label} escapes the project root", _CONTAINMENT_NEXT)
+        raise TaskDataError(f"{label} escapes the project root", _CONTAINMENT_NEXT)
     if not stat.S_ISREG(final_mode):
-        raise _StateProblem(f"{label} is not a regular file", _REPAIR_NEXT)
+        raise TaskDataError(f"{label} is not a regular file", _REPAIR_NEXT)
     if allowed_roots is not None and not any(
         _is_within(final, allowed) for allowed in allowed_roots
     ):
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} resolves outside the allowed task roots (.sbtd/tasks or ai/tasks)",
             _CONTAINMENT_NEXT,
         )
     return final
 
 
-def _read_utf8(path: Path, label: str) -> str:
+@contextmanager
+def open_regular_file(path: Path, label: str) -> Iterator[BinaryIO]:
+    """Read only a regular file; special files never block the task writer."""
     try:
-        raw = path.read_bytes()
+        if not stat.S_ISREG(path.lstat().st_mode):
+            raise TaskDataError(f"{label} is not a regular file", _REPAIR_NEXT)
+        flags = (
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        )
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise TaskDataError(
+                    f"{label} changed to a non-regular file", _REPAIR_NEXT
+                )
+            yield handle
     except PermissionError:
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} cannot be read (permission denied)", _REPAIR_NEXT
         ) from None
     except OSError:
-        raise _StateProblem(f"{label} cannot be read", _REPAIR_NEXT) from None
+        raise TaskDataError(f"{label} cannot be read", _REPAIR_NEXT) from None
+
+
+def _read_utf8(path: Path, label: str) -> str:
+    with open_regular_file(path, label) as handle:
+        raw = handle.read()
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
-        raise _StateProblem(f"{label} is not valid UTF-8", _REPAIR_NEXT) from None
+        raise TaskDataError(f"{label} is not valid UTF-8", _REPAIR_NEXT) from None
 
 
 def _reject_json_constant(name: str) -> None:
@@ -268,10 +298,9 @@ def _check_finite(value: object) -> bool:
     return True
 
 
-def _load_pointer(pointer_file: Path) -> dict[str, Any]:
+def parse_active_pointer(text: str) -> dict[str, Any]:
     """Parse the active pointer as strict JSON, then validate its schema."""
     label = "active pointer"
-    text = _read_utf8(pointer_file, label)
     try:
         data = json.loads(
             text,
@@ -279,18 +308,18 @@ def _load_pointer(pointer_file: Path) -> dict[str, Any]:
             parse_constant=_reject_json_constant,
         )
     except (ValueError, RecursionError):
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} is not valid strict JSON "
             "(duplicate keys and nonfinite numbers are rejected)",
             _REPAIR_NEXT,
         ) from None
     if not _check_finite(data):
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} is not valid strict JSON "
             "(duplicate keys and nonfinite numbers are rejected)",
             _REPAIR_NEXT,
         )
-    return _validate_schema(data, "activeTask", label)
+    return validate_task_data(data, "activeTask", label)
 
 
 def _build_safe_loader(yaml: Any) -> type:
@@ -351,7 +380,7 @@ def _check_json_compatible(
         return
     if isinstance(value, float):
         if not math.isfinite(value):
-            raise _StateProblem(
+            raise TaskDataError(
                 f"{label} frontmatter contains a nonfinite number", _REPAIR_NEXT
             )
         return
@@ -359,7 +388,7 @@ def _check_json_compatible(
         active = set() if active is None else active
         marker = id(value)
         if marker in active:
-            raise _StateProblem(
+            raise TaskDataError(
                 f"{label} frontmatter contains a cyclic structure", _REPAIR_NEXT
             )
         active.add(marker)
@@ -368,7 +397,7 @@ def _check_json_compatible(
             if isinstance(value, dict):
                 for key in value:
                     if not isinstance(key, str):
-                        raise _StateProblem(
+                        raise TaskDataError(
                             f"{label} frontmatter contains a value that is not "
                             "JSON-compatible (bytes, sets, objects and "
                             "non-string keys are rejected)",
@@ -379,7 +408,7 @@ def _check_json_compatible(
         finally:
             active.discard(marker)
         return
-    raise _StateProblem(
+    raise TaskDataError(
         f"{label} frontmatter contains a value that is not JSON-compatible "
         "(bytes, sets, objects and non-string keys are rejected)",
         _REPAIR_NEXT,
@@ -391,7 +420,7 @@ def _load_safe_yaml(text: str, label: str) -> Any:
     try:
         data = yaml.load(text, Loader=_build_safe_loader(yaml))
     except (yaml.YAMLError, RecursionError):
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} frontmatter is not parseable as safe YAML "
             "(duplicate keys and unsafe tags are rejected)",
             _REPAIR_NEXT,
@@ -400,28 +429,28 @@ def _load_safe_yaml(text: str, label: str) -> Any:
     return data
 
 
-def _frontmatter(text: str, label: str) -> dict[str, Any]:
+def parse_task_frontmatter(text: str, label: str) -> dict[str, Any]:
     """Parse frontmatter without interpreting or rewriting the Markdown body."""
     text = text.removeprefix("\ufeff")
     lines = text.split("\n")
     if lines[0].rstrip("\r") != "---":
-        raise _StateProblem(f"{label} has no YAML frontmatter block", _REPAIR_NEXT)
+        raise TaskDataError(f"{label} has no YAML frontmatter block", _REPAIR_NEXT)
     end = None
     for index in range(1, len(lines)):
         if lines[index].rstrip("\r") == "---":
             end = index
             break
     if end is None:
-        raise _StateProblem(
+        raise TaskDataError(
             f"{label} frontmatter block is not terminated", _REPAIR_NEXT
         )
     data = _load_safe_yaml("\n".join(lines[1:end]), label)
     if not isinstance(data, dict):
-        raise _StateProblem(f"{label} frontmatter is not a mapping", _REPAIR_NEXT)
+        raise TaskDataError(f"{label} frontmatter is not a mapping", _REPAIR_NEXT)
     return data
 
 
-def _validate_timestamps(record: dict[str, Any], label: str) -> None:
+def validate_task_timestamps(record: dict[str, Any], label: str) -> None:
     """Validate real calendar/timezone values; the schema pattern is not enough."""
     for field in _TIMESTAMP_FIELDS:
         value = record.get(field)
@@ -432,7 +461,7 @@ def _validate_timestamps(record: dict[str, Any], label: str) -> None:
         try:
             datetime.fromisoformat(candidate)
         except ValueError:
-            raise _StateProblem(
+            raise TaskDataError(
                 f"{label} timestamp field {field} is not a real "
                 "calendar/timezone value",
                 _REPAIR_NEXT,
@@ -440,7 +469,7 @@ def _validate_timestamps(record: dict[str, Any], label: str) -> None:
         # fromisoformat normalizes overflowing offset minutes (e.g. +08:60);
         # the schema pattern pins the shape, so reject them lexically.
         if not text.endswith("Z") and int(text[-2:]) > 59:
-            raise _StateProblem(
+            raise TaskDataError(
                 f"{label} timestamp field {field} is not a real "
                 "calendar/timezone value",
                 _REPAIR_NEXT,
@@ -459,9 +488,9 @@ def _read_task_record(
     )
     if task_file is None:
         return None
-    record = _frontmatter(_read_utf8(task_file, label), label)
-    _validate_schema(record, "taskFrontmatter", label)
-    _validate_timestamps(record, label)
+    record = parse_task_frontmatter(_read_utf8(task_file, label), label)
+    validate_task_data(record, "taskFrontmatter", label)
+    validate_task_timestamps(record, label)
     return record
 
 
@@ -491,7 +520,7 @@ def _inspect_active_task(
     )
     if pointer_file is None:
         return None, None
-    pointer = _load_pointer(pointer_file)
+    pointer = parse_active_pointer(_read_utf8(pointer_file, "active pointer"))
     task_relative = str(pointer["task_path"])
     task_id = str(pointer["task_id"])
     record = _read_task_record(
@@ -502,16 +531,16 @@ def _inspect_active_task(
     )
     assert record is not None  # missing_reason guarantees a problem, not None
     if record["id"] != task_id:
-        raise _StateProblem(
+        raise TaskDataError(
             "selected task id does not match the active pointer task_id",
             _REPAIR_NEXT,
         )
     # Archive storage paths need not match the ID spelling; ordinary paths must.
     if (
-        not task_relative.startswith(_ARCHIVE_PREFIX)
+        not task_relative.startswith(_ARCHIVE_PREFIXES)
         and _derived_id(task_relative) != record["id"]
     ):
-        raise _StateProblem(
+        raise TaskDataError(
             "selected task id does not match its storage path", _REPAIR_NEXT
         )
     summary = _summary(task_relative, record)
@@ -527,7 +556,7 @@ def _inspect_bootstrap_task(
     if record is None:
         return None, None
     if record["id"] != _derived_id(_BOOTSTRAP_PATH):
-        raise _StateProblem(
+        raise TaskDataError(
             "bootstrap task id does not match its fixed storage path", _REPAIR_NEXT
         )
     summary = _summary(_BOOTSTRAP_PATH, record)
@@ -540,15 +569,15 @@ def _checked_root(root: Path) -> Path:
     try:
         mode = root.stat().st_mode
     except FileNotFoundError:
-        raise _StateProblem("project root does not exist", _ROOT_NEXT) from None
+        raise TaskDataError("project root does not exist", _ROOT_NEXT) from None
     except OSError:
-        raise _StateProblem("project root cannot be inspected", _ROOT_NEXT) from None
+        raise TaskDataError("project root cannot be inspected", _ROOT_NEXT) from None
     if not stat.S_ISDIR(mode):
-        raise _StateProblem("project root is not a directory", _ROOT_NEXT)
+        raise TaskDataError("project root is not a directory", _ROOT_NEXT)
     try:
         return root.resolve(strict=True)
     except OSError:
-        raise _StateProblem("project root cannot be inspected", _ROOT_NEXT) from None
+        raise TaskDataError("project root cannot be inspected", _ROOT_NEXT) from None
 
 
 def _guard(
@@ -559,10 +588,10 @@ def _guard(
 
     try:
         return inspection(root_real)
-    except _StateProblem:
+    except TaskDataError:
         raise
     except Exception as exc:  # noqa: BLE001 - the result contract always returns.
-        raise _StateProblem(
+        raise TaskDataError(
             f"the state inspection failed unexpectedly ({type(exc).__name__}); "
             "no state was modified",
             _REPAIR_NEXT,
@@ -579,7 +608,7 @@ def inspect_project_state(project_root: Path) -> StateInspection:
     """
     try:
         root_real = _checked_root(Path(project_root))
-    except _StateProblem as exc:
+    except TaskDataError as exc:
         return _result("blocked", exc.reason, exc.next_step)
     try:
         (root_real / _LEGACY_PATH).lstat()
@@ -603,7 +632,7 @@ def inspect_project_state(project_root: Path) -> StateInspection:
             legacy_present=True,
         )
 
-    problems: list[_StateProblem] = []
+    problems: list[TaskDataError] = []
     active_task: TaskSummary | None = None
     bootstrap_task: TaskSummary | None = None
     needs_user = False
@@ -611,7 +640,7 @@ def inspect_project_state(project_root: Path) -> StateInspection:
     for inspection in (_inspect_active_task, _inspect_bootstrap_task):
         try:
             summary, outcome = _guard(inspection, root_real)
-        except _StateProblem as exc:
+        except TaskDataError as exc:
             problems.append(exc)
             continue
         if inspection is _inspect_active_task:
