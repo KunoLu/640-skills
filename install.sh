@@ -499,16 +499,6 @@ ensure_target_agent_cli() {
   printf '\n'
   if [[ "$installed" == "true" ]]; then
     printf '%s CLI passed verification: %s\n' "$label" "$command"
-    if [[ "$npm_installed" != "true" ]]; then
-      printf 'npm is required for the mandatory global GitNexus CLI; bootstrapping Node.js LTS + npm.\n'
-      run_onboard ensure-npm --yes
-      if [[ "$DRY_RUN" -eq 0 ]]; then
-        refresh_agent_cli_json
-        if [[ "$(agent_cli_json npm-installed)" != "true" ]]; then
-          die "npm bootstrap completed but npm is still unavailable; required global tools cannot be installed."
-        fi
-      fi
-    fi
     return 0
   fi
 
@@ -602,15 +592,6 @@ elif mode == "missing-external-skills":
     print(",".join(missing))
 elif mode == "ponytail-provider":
     print(data.get("ponytailProvider", {}).get("provider", "unknown"))
-elif mode == "mcp-command":
-    config = find_manual_check(args[0]).get("mcpServerConfig") or {}
-    print(config.get("command") or "")
-elif mode == "mcp-args-json":
-    config = find_manual_check(args[0]).get("mcpServerConfig") or {}
-    print(json.dumps(config.get("args") or [], ensure_ascii=False))
-elif mode == "mcp-env-json":
-    config = find_manual_check(args[0]).get("mcpServerConfig") or {}
-    print(json.dumps(config.get("env") or {}, ensure_ascii=False))
 elif mode == "maestro-env-json":
     config = find_manual_check("Maestro MCP").get("mcpServerConfig") or {}
     print(json.dumps(config.get("env") or {}, ensure_ascii=False))
@@ -824,6 +805,75 @@ assert_ponytail_provider_clear() {
   fi
 }
 
+# Graft is optional: the read-only `install-graft --json` probe (no --yes,
+# zero writes) is the single source of the real plan — frozen package, actual
+# npm prefix, telemetry target/changes. Only needs-confirmation leads to a
+# prompt and the confirmed `install-graft --yes`; blocked/operational states
+# degrade to a warning and onboarding continues without Graft. A confirmed
+# install failure still aborts the installer with the handler's non-zero exit.
+ensure_graft_cli() {
+  printf '\n'
+  color '1;36' 'Graft CLI (optional)'
+  printf '\n'
+
+  local probe_file probe_rc=0 probe_out status reason
+  probe_file="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-graft-plan.XXXXXX")"
+  printf '+ %s\n' "$(command_string "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" install-graft --json)"
+  "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" install-graft --json >"$probe_file" || probe_rc=$?
+  probe_out="$("$PYTHON_BIN" - "$probe_file" <<'PY'
+import json
+import sys
+
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+except (OSError, ValueError):
+    print("unknown\tprobe did not return valid JSON")
+    raise SystemExit(0)
+
+status = data.get("status") or "unknown"
+reason = str(data.get("reason") or "").replace("\t", " ").replace("\n", " ")
+print(f"{status}\t{reason}")
+if status != "needs-confirmation":
+    raise SystemExit(0)
+plan = data.get("plan") or {}
+telemetry = plan.get("telemetry") or {}
+changes = telemetry.get("changes") or {}
+change_text = ", ".join(f"{key}={value}" for key, value in changes.items()) or "none"
+print(f"  Package: {plan.get('package') or '@nanonets/graft@0.18.0'} (frozen pin; never latest)")
+print(f"  Target: npm global prefix {plan.get('prefix') or '<unresolved>'}")
+print("  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list")
+print(f"  Telemetry: set {change_text} in {telemetry.get('path') or '<unknown>'} (unknown keys preserved)")
+PY
+)"
+  rm -f "$probe_file"
+
+  IFS=$'\t' read -r status reason <<< "$probe_out"
+  case "$status" in
+    already-installed)
+      printf 'Graft CLI is already installed and usable; skipping.\n'
+      return 0
+      ;;
+    blocked)
+      warn "Graft CLI is blocked: ${reason:-unknown reason}. Skipping the optional Graft CLI; existing GitNexus/Graft configuration and data are left untouched."
+      return 0
+      ;;
+    needs-confirmation)
+      printf 'Graft CLI install plan:\n'
+      printf '%s\n' "$probe_out" | sed 1d
+      if ! prompt_yes_no "Install the optional Graft CLI now?" "n"; then
+        printf 'Graft CLI installation declined; continuing without it.\n'
+        return 0
+      fi
+      run_onboard install-graft --yes
+      refresh_check_json
+      ;;
+    *)
+      warn "Graft CLI probe returned status '${status}' (exit $probe_rc): ${reason:-no reason given}. Skipping the optional Graft CLI."
+      return 0
+      ;;
+  esac
+}
+
 install_missing_runtime_and_skills() {
   printf '\n'
   color '1;36' 'Preflight check'
@@ -850,11 +900,7 @@ install_missing_runtime_and_skills() {
     refresh_check_json
   fi
 
-  if [[ "$(json_python tool-installed gitnexus)" != "true" ]] && [[ "$(json_python runtime-installed npm)" == "true" ]]; then
-    printf 'GitNexus CLI is required globally; installing gitnexus@latest.\n'
-    run_cmd npm install -g gitnexus@latest
-    refresh_check_json
-  fi
+  ensure_graft_cli
 
   if [[ "$(json_python skill-installed caveman)" != "true" ]]; then
     if prompt_yes_no "caveman skill is missing. Install it as a user-level global skill?" "n"; then
@@ -1083,13 +1129,12 @@ select_and_configure_mcp() {
   printf '  1) Chrome DevTools MCP\n'
   printf '  2) Playwright MCP\n'
   printf '  3) Maestro MCP\n'
-  printf '  4) GitNexus MCP (auto from gitnexus CLI)\n'
-  printf '  5) Custom stdio MCP server\n'
+  printf '  4) Custom stdio MCP server\n'
   local raw selections=()
   if ! read -r -p 'Select comma-separated options, or blank for none: ' raw <&9; then
     die "Interactive input closed while waiting for an MCP selection."
   fi
-  split_csv_numbers "$raw" 5 || die "Invalid MCP selection: $raw"
+  split_csv_numbers "$raw" 4 || die "Invalid MCP selection: $raw"
   selections=(${CSV_SELECTIONS[@]+"${CSV_SELECTIONS[@]}"})
   (( ${#selections[@]} == 0 )) && return 0
 
@@ -1110,25 +1155,6 @@ select_and_configure_mcp() {
         fi
         ;;
       4)
-        local command args_json env_json args_line env_pairs=()
-        command="$(json_python mcp-command 'GitNexus MCP')"
-        if [[ -n "$command" ]]; then
-          args_json="$(json_python mcp-args-json 'GitNexus MCP')"
-          env_json="$(json_python mcp-env-json 'GitNexus MCP')"
-          configure_stdio_mcp "gitnexus" "$command" "$args_json" "$env_json" || true
-        else
-          warn "GitNexus CLI path was not detected; falling back to manual MCP command input."
-          command="$(prompt_text 'GitNexus MCP command, or blank to skip' '')"
-          [[ -n "$command" ]] || { warn "Skipped GitNexus MCP: command is required."; continue; }
-          args_line="$(prompt_text 'GitNexus MCP args as a simple space-separated list' '')"
-          prompt_env_pairs
-          env_pairs=(${ENV_PAIRS_OUT[@]+"${ENV_PAIRS_OUT[@]}"})
-          # shellcheck disable=SC2206
-          local command_args=( $args_line )
-          configure_stdio_mcp "gitnexus" "$command" "$(args_array_to_json ${command_args[@]+"${command_args[@]}"})" "$(env_array_to_json ${env_pairs[@]+"${env_pairs[@]}"})" || true
-        fi
-        ;;
-      5)
         local name command args_line env_pairs=()
         name="$(prompt_text 'MCP server name' '')"
         command="$(prompt_text 'MCP command' '')"

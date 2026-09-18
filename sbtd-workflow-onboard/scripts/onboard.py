@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from graft_runtime import check_graft, install_graft
 from sbtd_project import StateInspection, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -318,13 +319,6 @@ CLI_TOOLS = (
         "globalInstall": "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh",
         "projectInstall": None,
         "advice": "Install RTK from rtk-ai/rtk and verify with `rtk gain`; do not treat the unrelated Rust Type Kit package as valid.",
-    },
-    {
-        "name": "gitnexus",
-        "versionArgs": ("--version",),
-        "globalInstall": "npm install -g gitnexus@latest",
-        "projectInstall": None,
-        "advice": "Install GitNexus globally; each project keeps its own index while sharing the verified CLI and MCP command.",
     },
 )
 AGENT_CLI_SPECS = {
@@ -727,8 +721,7 @@ def check_npm_runtime() -> dict[str, object]:
             "version": node_version,
         },
         "nvm": nvm,
-        "requiredBeforeCliChecks": True,
-        "advice": f"CLI tool checks run only after npm is usable. If npm is missing, {shell_prefix()}run `{onboard_command('ensure-npm', '--yes')}` after user confirmation.",
+        "advice": "Local tool detection does not require npm. Installing a selected npm-backed tool requires npm and explicit confirmation.",
     }
 
 
@@ -748,7 +741,31 @@ def check_cli_tool(spec: dict[str, str | tuple[str, ...]]) -> dict[str, object]:
         "advice": spec["advice"],
     }
     if name == "rtk" and path:
-        code, output = command_output(("rtk", "gain"), timeout=10)
+        with tempfile.TemporaryDirectory(prefix="sbtd-rtk-probe-") as probe_home:
+            probe_env = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.upper().startswith("RTK_")
+            }
+            probe_env.update(
+                HOME=probe_home,
+                USERPROFILE=probe_home,
+                XDG_CONFIG_HOME=str(Path(probe_home) / "config"),
+                XDG_CACHE_HOME=str(Path(probe_home) / "cache"),
+                XDG_DATA_HOME=str(Path(probe_home) / "data"),
+                XDG_STATE_HOME=str(Path(probe_home) / "state"),
+            )
+            completed = run_command(
+                (str(Path(path).resolve()), "gain"),
+                timeout=10,
+                env=probe_env,
+                cwd=Path(probe_home),
+            )
+            code = completed.returncode if completed else None
+            output = (
+                (completed.stdout or completed.stderr).strip() if completed else ""
+            )
+        result["verificationScope"] = "isolated-probe"
         correct = code == 0
         version_looks_correct = bool(version and version.lower().startswith("rtk "))
         result["installed"] = correct
@@ -763,7 +780,7 @@ def check_cli_tool(spec: dict[str, str | tuple[str, ...]]) -> dict[str, object]:
             )
         elif result["verificationFailed"]:
             result["advice"] = (
-                "The rtk binary looks like rtk-ai/rtk, but `rtk gain` failed. Troubleshoot RTK data directory permissions or reinstall after user confirmation."
+                "The rtk binary looks like rtk-ai/rtk, but its isolated gain probe failed. Inspect the binary and probe error before choosing repair; the user's history directory was not tested."
             )
     elif name == "rtk":
         result["rtkGainVerified"] = False
@@ -1001,82 +1018,6 @@ def toml_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def gitnexus_mcp_server_config(
-    gitnexus_check: dict[str, object],
-) -> dict[str, object] | None:
-    command = gitnexus_check.get("path")
-    if not gitnexus_check.get("installed") or not command:
-        return None
-    return {
-        "command": str(command),
-        "args": ["mcp"],
-        "env": {},
-    }
-
-
-def gitnexus_mcp_toml_example(gitnexus_check: dict[str, object]) -> str | None:
-    config = gitnexus_mcp_server_config(gitnexus_check)
-    if not config:
-        return None
-    return "\n".join(
-        [
-            "[mcp_servers.gitnexus]",
-            f'command = "{toml_string(str(config["command"]))}"',
-            'args = ["mcp"]',
-        ]
-    )
-
-
-def gitnexus_mcp_json_example(gitnexus_check: dict[str, object]) -> str | None:
-    config = gitnexus_mcp_server_config(gitnexus_check)
-    if not config:
-        return None
-    return json.dumps(
-        {"mcpServers": {"gitnexus": config}},
-        indent=2,
-        ensure_ascii=False,
-    )
-
-
-def gitnexus_mcp_config_examples(gitnexus_check: dict[str, object]) -> dict[str, str]:
-    generic_json = gitnexus_mcp_json_example(gitnexus_check)
-    toml = gitnexus_mcp_toml_example(gitnexus_check)
-    if not generic_json or not toml:
-        return {}
-    return {
-        "genericJson": generic_json,
-        "toml": toml,
-    }
-
-
-def build_gitnexus_mcp_manual_check(
-    gitnexus_check: dict[str, object],
-) -> dict[str, object]:
-    server_config = gitnexus_mcp_server_config(gitnexus_check)
-    config_examples = gitnexus_mcp_config_examples(gitnexus_check)
-    readiness = (
-        "Use the generated MCP server config with the detected local GitNexus CLI path and `args = [mcp]`; for Codex this maps to `codex mcp add gitnexus -- <detected-gitnexus-path> mcp`."
-        if server_config
-        else "Install or repair the GitNexus CLI first, then rerun `check` so the workflow can detect the local executable path before configuring GitNexus MCP."
-    )
-    item: dict[str, object] = {
-        "name": "GitNexus MCP",
-        "category": "mcp",
-        "advice": "After GitNexus CLI is installed, use the detected local GitNexus executable path for stdio MCP config, then confirm the current Agent environment exposes GitNexus MCP tools and that the target project has an index before relying on GitNexus analysis.",
-        "steps": (
-            "Confirm the GitNexus CLI works, for example with `gitnexus --version` and `gitnexus status` in the target project.",
-            readiness,
-            "Configure or enable the GitNexus MCP server in the active Agent or IDE MCP settings using stdio command + args from the generated config. Use other transports only when the user explicitly selected a transport-specific setup.",
-            "Restart or reload the Agent environment so the MCP server is discovered.",
-            "Confirm GitNexus MCP tools or resources are visible to the Agent, then check the target project index.",
-            "If the project is not indexed yet, run GitNexus analysis from the project root and re-check MCP visibility.",
-        ),
-    }
-    if server_config:
-        item["mcpServerConfig"] = server_config
-        item["configExample"] = config_examples["genericJson"]
-        item["configExamples"] = config_examples
-    return item
 
 
 def maestro_mcp_environment(
@@ -1256,10 +1197,9 @@ def build_manual_checks(
     java_check: dict[str, object],
     maestro_check: dict[str, object],
     project_root: Path | None,
-    gitnexus_check: dict[str, object],
 ) -> tuple[dict[str, object], ...]:
-    checks = [build_gitnexus_mcp_manual_check(gitnexus_check), *BASE_MANUAL_CHECKS]
-    checks.insert(3, build_maestro_mcp_manual_check(java_check, maestro_check))
+    checks = list(cast(tuple[dict[str, object], ...], BASE_MANUAL_CHECKS))
+    checks.insert(2, build_maestro_mcp_manual_check(java_check, maestro_check))
     if project_root and should_check_react_bits_tier(project_root):
         checks.append(build_react_bits_tier_manual_check(project_root))
     return tuple(checks)
@@ -1769,17 +1709,9 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
         nvm_entry["nextStep"] = nvm["advice"]
         failed_or_missing["runtime"].append(nvm_entry)
 
-    if results["cliChecksSkipped"]:
-        for spec in CLI_TOOLS:
-            not_checked["tools"].append(
-                report_entry(
-                    str(spec["name"]),
-                    "not-checked",
-                    reason="npm is not usable yet, so CLI verification was skipped.",
-                    next_step=f"{shell_prefix()}Run `{onboard_command('ensure-npm', '--yes')}` after user confirmation, then rerun `check`.",
-                )
-            )
     for item in results["tools"]:
+        if item.get("optional"):
+            continue
         if item.get("notChecked"):
             not_checked["tools"].append(
                 report_entry(
@@ -2095,17 +2027,14 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
             if maintenance.get("blockedReason"):
                 item["maintenanceBlockedReason"] = maintenance["blockedReason"]
 
-    cli_checks_skipped = not runtime["npm"]["installed"]
-    tools = [] if cli_checks_skipped else [check_cli_tool(spec) for spec in CLI_TOOLS]
-    gitnexus_check = next(
-        (item for item in tools if item.get("name") == "gitnexus"),
-        {},
-    )
+    tools = [check_cli_tool(spec) for spec in CLI_TOOLS]
+    graft_check = check_graft()
+    tools.append(graft_check)
     java_check = check_java_for_maestro()
     maestro_check = check_maestro_cli(java_check)
     tools.append(java_check)
     tools.append(maestro_check)
-    manual_checks = build_manual_checks(java_check, maestro_check, None, gitnexus_check)
+    manual_checks = build_manual_checks(java_check, maestro_check, None)
     project_checks = [
         build_project_check(
             project_root, bool(getattr(args, "skip_project_agents", False))
@@ -2117,7 +2046,9 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "tools": [
             item["name"]
             for item in tools
-            if not item["installed"] and not item.get("notChecked")
+            if not item["installed"]
+            and not item.get("notChecked")
+            and not item.get("optional")
         ],
         "skills": [item["name"] for item in skills if not item["installed"]],
     }
@@ -2136,7 +2067,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
             ),
         },
         "runtime": runtime,
-        "cliChecksSkipped": cli_checks_skipped,
+        "graft": graft_check,
         "tools": tools,
         "skills": skills,
         "manualChecks": manual_checks,
@@ -2279,11 +2210,9 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         )
 
     print("\nCLI tools:")
-    if results["cliChecksSkipped"]:
-        print(
-            "- npm-backed tools skipped: npm is not usable yet, so rtk / gitnexus checks have not run."
-        )
     for item in results["tools"]:
+        if item.get("optional"):
+            continue
         status = "installed" if item["installed"] else "missing"
         if item.get("notChecked"):
             status = "not-checked"
@@ -2297,8 +2226,10 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         path = f" at {item['path']}" if item.get("path") else ""
         print(f"- {item['name']}: {status}{path}{detail}")
         if item.get("verifyCommand"):
-            verified = "passed" if item.get("rtkGainVerified") else "not passed"
+            verified = "passed" if item.get("installed") else "not passed"
             print(f"  verify: {item['verifyCommand']} ({verified})")
+            if item.get("verificationScope"):
+                print(f"  verification scope: {item['verificationScope']}")
         if item.get("reason"):
             print(f"  reason: {item['reason']}")
         if not item["installed"]:
@@ -2306,6 +2237,15 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
             if item.get("projectInstall"):
                 print(f"  project: {item['projectInstall']}")
             print(f"  advice: {item['advice']}")
+
+    graft = results["graft"]
+    assert isinstance(graft, dict)
+    print("\nOptional Graft CLI:")
+    print(f"- graft: {graft['status']}")
+    if graft.get("reason"):
+        print(f"  reason: {graft['reason']}")
+    if graft.get("nextStep"):
+        print(f"  next: {graft['nextStep']}")
 
     print("\nSkills:")
     for item in results["skills"]:
@@ -2358,7 +2298,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         if missing["skills"]:
             print("- skills: " + ", ".join(missing["skills"]))
         print(
-            "Install required global items before init/reset; project-only items remain conditional per project root."
+            "Resolve required installation prerequisites; optional Graft availability does not block unrelated safe work."
         )
     else:
         print("\nMissing summary: none")
@@ -6114,6 +6054,8 @@ def build_plan_payload(
         payload["sbtdInit"] = sbtd_init_plan
     if global_skills_dir and mode in {"plan", "init", "reset"}:
         payload["cavemanMaintenance"] = caveman_maintenance_plan(global_skills_dir)
+    if mode != "init-projects":
+        payload["graft"] = check_graft()
     return payload
 
 
@@ -6313,6 +6255,14 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return install_agent_cli(args)
     if mode == "install-rtk":
         return install_rtk(args)
+    if mode == "install-graft":
+        payload, code = install_graft(confirmed=bool(args.yes))
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print("Graft installation:")
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return code
     if mode == "install-caveman":
         return install_caveman(args)
     if mode == "install-java":
@@ -6681,6 +6631,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Exclude project AGENTS.md from installation-target checks.",
     )
+    graft_install = subparsers.add_parser("install-graft")
+    graft_install.add_argument(
+        "--yes", action="store_true",
+        help="Confirm the pinned global package/native-script and telemetry-disable plan.",
+    )
+    graft_install.add_argument(
+        "--json", action="store_true", help="Print one machine-readable installation result."
+    )
+
 
     install = subparsers.add_parser("install-external-skills")
     install.add_argument(

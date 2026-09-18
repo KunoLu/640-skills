@@ -8,11 +8,13 @@
 
 - P1-01增加内部Onboard参数与交换契约层，覆盖严格JSON、批准快照、私有／共享操作、阶段收据、deployment evidence及恢复数据和envelope；它不注册尚未实现的公开迁移／恢复命令。jsonschema按Onboard requirements显式准备并惰性加载，目录复制不代表依赖已安装，缺失时校验fail-closed。
 - P1-02加入只读SBTD最小状态检查与按需bootstrap：未onboard项目不因缺少task／身份而失败；已有指针与选中任务按schema、日期和物理路径检查，异常不重建。PyYAML显式纳入安装依赖。
+- P1-03加入固定版本Graft本地检测和显式确认的全局安装入口；检查与npm/latest可达性分离，受管子进程DNT与dotenv/LLM环境隔离，安装后验证native启动及telemetry持久关闭，不提前激活host/MCP或迁移。
 
 ### 修复
 
 - PowerShell 使用严格参数绑定拒绝已移除参数，内部 project-only 执行模式不再写入公开 `Action` 的受限取值；真实解释器回归覆盖成功与拒绝路径。
 - 两安装器在全局/可选项目安装和 MCP 写入之前执行完整项目前置检查，避免最终拒绝 scaffold 冲突时已经产生副作用；`check-projects` 同步支持实际 `--skip-project-agents` 检查范围。
+- RTK真实性检查改在私有probe HOME/cwd执行，避免只读check创建用户history.db；报告明确隔离验证范围，不把结果当作用户历史目录权限证明。
 
 ### 文档
 

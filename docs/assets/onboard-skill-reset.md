@@ -32,17 +32,15 @@ flowchart TD
   cliOk -->|否| repairCli[只修复缺失或校验失败的 CLI]
   skipCli --> preflight
   repairCli --> preflight[check 全局 runtime / tools / Skills]
-  preflight --> toolsOk{npm 与 gitnexus version 都通过?}
-  toolsOk -->|是| preserve
-  toolsOk -->|否| npmForTools{npm 可用?}
-  npmForTools -->|否| ensureNpmTools[ensure-npm]
-  ensureNpmTools --> npmReady{npm 复验通过?}
-  npmReady -->|否| blockTools[阻断: 无法安装强制全局 CLI]
-  npmReady -->|是| installTools
-  npmForTools -->|是| installTools[安装缺失的 gitnexus 并复验]
-  installTools --> toolsRecheck{npm 与 gitnexus 复验都通过?}
-  toolsRecheck -->|否| blockTools
-  toolsRecheck -->|是| preserve{React Bits 已检测到 tier?}
+  preflight --> graftOk{固定 Graft CLI 已验证可用?}
+  graftOk -->|是| preserve
+  graftOk -->|否| graftConsent{展示计划后明确同意安装?}
+  graftConsent -->|否| skipGraft[报告不可用, 不自动升级 npm]
+  skipGraft --> preserve
+  graftConsent -->|是| installGraft[Python install-graft --yes]
+  installGraft --> graftReady{包/native/telemetry 验证通过?}
+  graftReady -->|否| blockTools[失败如实报告, 不循环安装]
+  graftReady -->|是| preserve{React Bits 已检测到 tier?}
   preserve -->|是| keepTier[保留已检测 tier 和 registry]
   preserve -->|否或不适用| noRb[不询问也不安装 React Bits]
   keepTier --> plan
@@ -87,7 +85,7 @@ flowchart TD
 | 对象 | 环境从未装过就直接 reset | 已装过再 reset |
 |---|---|---|
 | 行为本质 | 与 `init` 相同的补齐 + 写入 | 检查后把模板回写到已有目标 |
-| Agent CLI / npm / gitnexus（过渡实现） | 缺失才安装 | 已验证则跳过，不强制升级 |
+| Agent CLI / npm / Graft | 缺失 Agent 按既有授权修复；Graft另行展示计划并确认 | 已验证则不重装，不自动升级 |
 | 19 个 required external Skills | 从 stable 事务安装；官方 Ponytail plugin 启用时阻断 | **强制覆盖** 为当前 stable 快照 |
 | bundled Skills | 复制 | **无备份覆盖** 为当前 Onboard 模板 |
 | 全局 `AGENTS.md` | 复制 Codex 目标；若 `~/.omp` 已存在则另写 `~/.omp/agent/AGENTS.md` | **备份后覆盖**；不创建缺失的 `~/.omp` |

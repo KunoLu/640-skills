@@ -99,7 +99,7 @@ Normal onboarding:
 2. May inspect the target Agent CLI read-only before collecting the remaining inputs.
 3. Resolves all project roots and AGENTS scope, then runs complete `check-projects` before any installation or configuration write.
 4. Repairs the selected Agent/npm only after project preflight passes, then runs the global preflight.
-5. Installs missing global GitNexus without a scope prompt; no Trellis installation.
+5. Offers Graft's pinned global installation after showing its plan; refusal does not install npm/Graft or block unrelated safe work.
 6. Preserves the existing optional RTK, caveman, Java, and Maestro decisions.
 7. For `init`, installs only missing or invalid required external Skills globally. For `reset`, force-reinstalls every required external Skill from the current stable snapshot.
 8. Optionally configures selected user/global MCP servers.
@@ -116,7 +116,7 @@ Project-only mode:
 
 1. Resolves the selected Agent platform for the existing adapter context.
 2. Skips target Agent CLI detection and installation.
-3. Skips npm/Node/nvm, RTK, Trellis/GitNexus global preflight, Java, Maestro, caveman, bundled Skills, external Skills, global AGENTS, and MCP configuration.
+3. Skips global Agent/runtime/tool/Skill/AGENTS/MCP detection and installation, including Graft and HOME telemetry configuration.
 4. Runs complete read-only `check-projects` with the actual `--skip-project-agents` scope before any optional project install.
 5. Offers only applicable project-local Playwright or React Bits decisions.
 6. Writes project AGENTS and `.gitignore`.
@@ -145,27 +145,26 @@ Normal onboarding does not collect the action or project list until the required
 
 ## Required Global Tools
 
-The transitional GitNexus CLI remains global-only until its Graft cutover:
+Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.18.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
 
 ```bash
-npm install -g gitnexus@latest
+python scripts/onboard.py install-graft --json
+python scripts/onboard.py install-graft --yes --json
 ```
 
-Project-local CLI installation is not offered. Trellis is no longer installed or invoked; existing legacy state is retained for explicit migration.
-- GitNexus: `<project-root>/.gitnexus/`
+Without confirmation the handler only reports its package/prefix/telemetry plan. The confirmed path verifies frozen tarball integrity, enables the required native lifecycle scripts, installs at the configured npm global prefix, verifies the installed pinned CLI and atomically persists `~/.graft/telemetry.json` with `enabled=false`. Unknown JSON fields and existing data are preserved; unsafe paths, malformed state or failed readback remain failures, not success.
 
-RTK remains global but keeps its existing confirmation behavior. Verify the Rust Token Killer implementation with:
+All managed Graft children receive `DO_NOT_TRACK=1`, an empty dotenv input and no inherited LLM/cloud activation settings. The installation child also uses `CI=1` to avoid this pin's detached postinstall path; runtime DNT is separately exercised without relying on CI. These child settings do not edit the user's global environment.
 
-```bash
-rtk --version
-rtk gain
-```
+`graft --version` is local-only; `graft version` invokes npm metadata and can return an offline/unreachable message. Check/plan never run the latter. A cached npm answer is not proof of connectivity; offline verification uses a real network control and empty per-case caches.
 
-If `rtk gain` fails, distinguish a same-name package collision from a data-directory permission failure before replacing it.
+GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus resources are left untouched; Graft graph/host/MCP integration is a separate later stage.
+
+RTK remains optional and retains its confirmation flow. Onboard verifies the binary with an isolated `gain` probe, because running it in an empty user HOME creates a history database. `verificationScope=isolated-probe` means actual user-history directory permissions and contents were not verified. Do not interpret probe success as a repair of the user's data directory.
 
 ## npm and nvm
 
-Normal onboarding requires npm for the selected Agent and remaining GitNexus installation. On macOS and Linux:
+Installing a missing selected Agent or an explicitly accepted npm-backed tool requires npm. A working local Graft/Agent is not blocked just because npm/latest lookup is absent. On macOS and Linux, prerequisite installation remains explicit:
 
 ```bash
 python scripts/onboard.py ensure-npm --yes
@@ -358,8 +357,9 @@ Built-in choices:
 - Chrome DevTools MCP: `npx -y chrome-devtools-mcp@latest`
 - Playwright MCP: when the selected Playwright distribution exposes it, use its bundled `npx playwright mcp` entrypoint; otherwise configure a compatible dedicated Playwright MCP server.
 - Maestro MCP: `maestro mcp` with `JAVA_HOME` and `PATH`
-- GitNexus MCP: detected global `gitnexus` executable with `args = [mcp]`
 - Custom stdio MCP: user-provided command/args/env
+
+Graft MCP is not advertised by this CLI-install slice; later host producers must prove their actual environment, ownership and handshake before adding it.
 
 Fixed platform scopes:
 

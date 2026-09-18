@@ -31,18 +31,16 @@ flowchart TD
   npmForCli -->|是| installCli[按平台安装官方全局包并复验]
   skipCli --> preflight
   ensureNpm --> installCli
-  installCli --> preflight[check: npm / node / gitnexus / Skills]
-  preflight --> toolsOk{npm 与 gitnexus version 都通过?}
-  toolsOk -->|是| plan
-  toolsOk -->|否| npmForTools{npm 可用?}
-  npmForTools -->|否| ensureNpmTools[ensure-npm]
-  ensureNpmTools --> npmReady{npm 复验通过?}
-  npmReady -->|否| blockTools[阻断: 无法安装强制全局 CLI]
-  npmReady -->|是| installTools
-  npmForTools -->|是| installTools[安装缺失的 gitnexus 并复验]
-  installTools --> toolsRecheck{npm 与 gitnexus 复验都通过?}
-  toolsRecheck -->|否| blockTools
-  toolsRecheck -->|是| plan[输出 plan --json 后需用户确认]
+  installCli --> preflight[check: 本地工具与 Skills]
+  preflight --> graftOk{固定 Graft CLI 已验证可用?}
+  graftOk -->|是| plan
+  graftOk -->|否| graftConsent{展示安装计划后明确同意?}
+  graftConsent -->|否| skipGraft[记录不可用, 不安装或升级 npm]
+  skipGraft --> plan
+  graftConsent -->|是| installGraft[Python install-graft --yes]
+  installGraft --> graftReady{包/native/telemetry 验证通过?}
+  graftReady -->|否| blockTools[报告实际失败阶段, 不循环安装]
+  graftReady -->|是| plan[输出 plan --json 后需用户确认]
   plan --> confirm{确认执行 init --yes?}
   confirm -->|否| abort[不写文件]
   confirm -->|是| stateCheck[Python 检查所有所选项目状态及安装目标]
@@ -86,8 +84,8 @@ flowchart TD
 | 对象 | 从未安装 | 已安装后再 init |
 |---|---|---|
 | 唯一平台 Agent CLI | 校验失败才安装官方全局包 | version 通过则 `already-installed`，不升级 |
-| npm / node | 缺 npm 才 `ensure-npm` | 已在 PATH 则跳过 |
-| gitnexus CLI（过渡实现） | 全局安装 | 已验证则跳过，不升到 `@latest` |
+| npm / node | 仅缺失的已选 Agent 或明确接受的工具安装需要时处理 | 可用本地工具不因缺 npm 被重装 |
+| Graft CLI | 展示固定包/native/telemetry计划，确认后调用Python安装 | 只读验证；不自动升级或接线 |
 | rtk / caveman / Java / Maestro | 询问后才装 | 已验证则跳过 |
 | 19 个 required external Skills | 安装缺失或身份无效项；官方 Ponytail plugin 启用时阻断 | 已合法则跳过 |
 | 14 个 bundled Skills | 复制到解析后的全局 Skills 根 | 合法壳跳过；缺失或身份无效才复制 |
@@ -98,4 +96,4 @@ flowchart TD
 | MCP | 交互配置；提示词没提则不要静默写 | 已有配置不自动改 |
 | Playwright / React Bits | 仅项目适用时询问 | 仍是条件项，不是全量重装 |
 
-`onboard.py init` 不安装 Agent CLI 或 GitNexus；这些仍由正常 Skill／根安装器 preflight 处理。Trellis 不再安装或调用。项目 bootstrap 只在明确存在且未完成时返回 6；最小状态检查不证明完整任务恢复或验收。
+`onboard.py init` 不代替 Agent/Graft 安装授权。Graft 使用独立 `install-graft`，不提前提供 graph/host/MCP 接线；project-only不进行全局安装。已有旧工具配置保留，不借本项清理。
