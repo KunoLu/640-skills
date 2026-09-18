@@ -21,10 +21,13 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
+if TYPE_CHECKING:
+    from sbtd_identity import IdentityResult
 from graft_runtime import check_graft, install_graft
-from sbtd_project import StateInspection, inspect_project_state
+from onboard_arguments import SingleValueAction, validate_developer_name
+from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 SKILL_ENTRY_DIR = Path(__file__).absolute().parents[1]
@@ -5633,9 +5636,12 @@ def inspect_project_setup(project_root: Path, skip_agents: bool) -> StateInspect
     return inspection
 
 
-def build_sbtd_project_setup(mode: str, args: argparse.Namespace) -> dict[str, object]:
+def build_sbtd_project_setup(
+    mode: str, args: argparse.Namespace, *, project_roots: list[Path] | None = None
+) -> dict[str, object]:
     projects: list[dict[str, object]] = []
-    for root in resolve_project_roots(args):
+    roots = resolve_project_roots(args) if project_roots is None else project_roots
+    for root in roots:
         projects.append(
             {
                 "projectRoot": str(root),
@@ -5673,6 +5679,149 @@ def print_sbtd_project_setup_report(report: dict[str, object]) -> None:
         print(f"  reason: {project['reason']}")
         if project["nextStep"]:
             print(f"  next step: {project['nextStep']}")
+
+# Explicit --developer identity integration. The library is imported lazily
+# inside each function because sbtd_identity -> sbtd_task_state -> onboard is
+# an intentional one-way dependency; a module-level import would be circular.
+_DEVELOPER_BLOCKING_STATUSES = (
+    "failed",
+    "conflict",
+    "blocked",
+    "needs-confirmation",
+    "needs-protection",
+)
+
+
+def _developer_result(
+    root: Path, requested: str, *, create: bool = False, protect: bool = False
+) -> IdentityResult:
+    from sbtd_identity import DeveloperStore, IdentityResult
+
+    try:
+        store = DeveloperStore(root, read_only=not create)
+        if create:
+            return store.ensure(requested, confirmed=True, protect=protect)
+        return store.plan(requested)
+    except (TaskDataError, OSError, RuntimeError) as error:
+        return IdentityResult(
+            "failed" if create else "blocked",
+            path=str(root / ".sbtd/developer"),
+            topology="unknown",
+            reason="developer identity could not be safely inspected or initialized for this project",
+            completed_steps=tuple(getattr(error, "completed_steps", ())),
+        )
+
+
+def _developer_plan_entry(
+    root: Path, requested: str, result: IdentityResult
+) -> dict[str, object]:
+    return {
+        "projectRoot": str(root),
+        "requestedName": requested,
+        "status": result.status,
+        "name": result.name,
+        "source": result.source,
+        "target": result.path,
+        "topology": result.topology,
+        "needsProtection": result.needs_protection,
+        "reason": result.reason,
+        "completedSteps": list(result.completed_steps),
+    }
+
+
+def aggregate_developer_status(projects: list[dict[str, object]]) -> str:
+    statuses = [str(project["status"]) for project in projects]
+    if not statuses:
+        return "blocked"
+    for blocking in _DEVELOPER_BLOCKING_STATUSES:
+        if blocking in statuses:
+            return blocking
+    if "created" in statuses:
+        return "created"
+    if "planned" in statuses:
+        return "planned"
+    return "unchanged"
+
+
+def _developer_plan_payload(
+    requested: str, projects: list[dict[str, object]]
+) -> dict[str, object]:
+    return {
+        "requestedName": requested,
+        "status": aggregate_developer_status(projects),
+        "reason": (
+            None
+            if projects
+            else "--developer requires at least one explicit --projects-root; "
+            "the name is never derived from or written to the cwd or HOME."
+        ),
+        "projects": projects,
+    }
+
+
+def developer_plan_exit_code(developer_plan: dict[str, object]) -> int:
+    status = str(developer_plan["status"])
+    if status == "failed":
+        return 5
+    if status in _DEVELOPER_BLOCKING_STATUSES:
+        return 2
+    return 0
+
+
+def build_developer_plan(args: argparse.Namespace) -> dict[str, object] | None:
+    """Read-only per-project identity plan for an explicit --developer name.
+
+    Only the roots listed via --projects-root are inspected; without them the
+    plan is blocked rather than falling back to the cwd or HOME.
+    """
+    requested = getattr(args, "developer", None)
+    if requested is None:
+        return None
+    projects = [
+        _developer_plan_entry(
+            root, requested, _developer_result(root, requested)
+        )
+        for root in resolve_project_roots(args)
+    ]
+    return _developer_plan_payload(requested, projects)
+
+
+def ensure_developer_identities(
+    developer_plan: dict[str, object],
+) -> dict[str, object]:
+    """Post-scaffold verified identity creation for the preflighted projects.
+
+    Runs after scaffold writes. Only protection explicitly included in the
+    confirmed identity plan may be completed by the shared narrow helper.
+    """
+    requested = str(developer_plan["requestedName"])
+    projects: list[dict[str, object]] = []
+    for entry in cast(list[dict[str, object]], developer_plan["projects"]):
+        root = Path(str(entry["projectRoot"]))
+        result = _developer_result(
+            root, requested, create=True, protect=entry.get("needsProtection") is True
+        )
+        projects.append(_developer_plan_entry(root, requested, result))
+    return _developer_plan_payload(requested, projects)
+
+
+def print_developer_plan(developer_plan: dict[str, object]) -> None:
+    print("\nDeveloper identity:")
+    print(f"- requested name: {developer_plan['requestedName']}")
+    print(f"- status: {developer_plan['status']}")
+    if developer_plan.get("reason"):
+        print(f"  reason: {developer_plan['reason']}")
+    for project in cast(list[dict[str, object]], developer_plan["projects"]):
+        print(f"- project root: {project['projectRoot']}")
+        print(f"  status: {project['status']}")
+        if project.get("name"):
+            print(f"  name: {project['name']} (source: {project.get('source')})")
+        if project.get("target"):
+            print(f"  target: {project['target']}")
+        if project.get("needsProtection"):
+            print("  needs protection: yes")
+        if project.get("reason"):
+            print(f"  reason: {project['reason']}")
 
 
 def install_playwright_cli(args: argparse.Namespace) -> int:
@@ -6228,7 +6377,22 @@ def run(mode: str, args: argparse.Namespace) -> int:
     UNVERIFIED_CHECKS.clear()
     if mode == "check":
         results = build_check_results(args)
+        developer_plan = build_developer_plan(args)
+        if developer_plan is not None:
+            results["developerPlan"] = developer_plan
         print_check_results(results, args.json)
+        if developer_plan is not None:
+            if not args.json:
+                print_developer_plan(developer_plan)
+            developer_exit = developer_plan_exit_code(developer_plan)
+            if developer_exit:
+                print(
+                    "Developer identity preflight failed: resolve each "
+                    "conflicting or blocked project, or pass an explicit "
+                    "--projects-root.",
+                    file=sys.stderr,
+                )
+                return developer_exit
         provider = cast(dict[str, object], results["ponytailProvider"])
         if provider["provider"] == "conflict":
             print(
@@ -6311,6 +6475,9 @@ def run(mode: str, args: argparse.Namespace) -> int:
         global_skills_dir_source,
         build_sbtd_project_setup(mode, args),
     )
+    developer_plan = build_developer_plan(args)
+    if developer_plan is not None:
+        plan_payload["developerPlan"] = developer_plan
     if mode in {"init", "reset"}:
         plan_payload["requiredExternalInstall"] = None
     plan_json_emitted = False
@@ -6329,11 +6496,29 @@ def run(mode: str, args: argparse.Namespace) -> int:
 
     if not args.json:
         print_plan(plan_payload)
+        if developer_plan is not None:
+            print_developer_plan(developer_plan)
     if mode == "plan":
         emit_plan_json()
+        if developer_plan is not None:
+            return developer_plan_exit_code(developer_plan)
         return 0
 
     ensure_confirmed(args, mode)
+    if developer_plan is not None:
+        # Whole-batch identity preflight before any global or project
+        # mutation: a conflict or unknown checkout anywhere stops the run
+        # before the first project is written.
+        developer_exit = developer_plan_exit_code(developer_plan)
+        if developer_exit:
+            print(
+                "Developer identity preflight failed; no files were changed.",
+                file=sys.stderr,
+            )
+            plan_payload["backups"] = []
+            emit_plan_json()
+            return developer_exit
+
     sbtd_preflight = cast(dict[str, object], plan_payload["sbtdInit"])
     preflight_exit = project_status_exit_code(sbtd_preflight["status"])
     if preflight_exit:
@@ -6479,6 +6664,34 @@ def run(mode: str, args: argparse.Namespace) -> int:
         emit_plan_json()
         return 3
 
+    if developer_plan is not None:
+        # Capture completed writes before identity work: its failure must not
+        # leave automation with a plan that hides already-applied changes.
+        plan_payload["operationResults"] = operation_results
+        identity_roots = [
+            Path(str(entry["projectRoot"]))
+            for entry in cast(list[dict[str, object]], developer_plan["projects"])
+        ]
+        developer_plan = ensure_developer_identities(developer_plan)
+        plan_payload["developerPlan"] = developer_plan
+        developer_exit = developer_plan_exit_code(developer_plan)
+        if developer_exit:
+            plan_payload["sbtdProjectSetup"] = build_sbtd_project_setup(
+                mode, args, project_roots=identity_roots
+            )
+            plan_payload["unverifiedChecks"] = list(UNVERIFIED_CHECKS)
+            print(
+                "Developer identity initialization failed; completed project "
+                "writes are kept and reported.",
+                file=sys.stderr,
+            )
+            plan_payload["backups"] = [
+                {"target": str(target), "backup": str(backup)}
+                for target, backup in backups
+            ]
+            emit_plan_json()
+            return developer_exit
+
     bundled_migration_results = run_bundled_skill_migration(bundled_migration_plan)
     failed_bundled_migrations = [
         item for item in bundled_migration_results if item["status"] == "failed"
@@ -6588,6 +6801,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
     return 0
 
 
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Install or reset SBTD workflow AGENTS and skills."
@@ -6600,6 +6815,13 @@ def build_parser() -> argparse.ArgumentParser:
             "--projects-root",
             required=mode == "init-projects",
             help="Comma-separated absolute project root paths.",
+        )
+        sub.add_argument(
+            "--developer",
+            action=SingleValueAction,
+            type=validate_developer_name,
+            help="Developer identity name (lowercase letters and digits) "
+            "applied only to the explicitly listed --projects-root projects.",
         )
         sub.add_argument(
             "--skip-project-agents",

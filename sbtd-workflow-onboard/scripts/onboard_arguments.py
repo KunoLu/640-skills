@@ -20,7 +20,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import NoReturn
 
-__all__ = ["parse_workflow_args"]
+__all__ = ["SingleValueAction", "parse_workflow_args", "validate_developer_name"]
 
 PROG = "onboard.py"
 
@@ -107,7 +107,7 @@ def _option_name(dest: str) -> str:
     return "--" + dest.replace("_", "-")
 
 
-def _developer(value: str) -> str:
+def validate_developer_name(value: str) -> str:
     if not _DEVELOPER_PATTERN.fullmatch(value):
         raise argparse.ArgumentTypeError(
             "developer must match ^[a-z0-9]+$ (lowercase letters and digits only)"
@@ -122,7 +122,7 @@ class _ArgumentParser(argparse.ArgumentParser):
         super().error("invalid arguments; use --help for supported syntax")
 
 
-class _Once(argparse.Action):
+class SingleValueAction(argparse.Action):
     """Single-value option that rejects repeats instead of last-value-wins."""
 
     def __call__(self, parser, namespace, values, option_string=None):
@@ -136,7 +136,7 @@ def _add_common_options(
 ) -> None:
     sub.add_argument(
         "--projects-root",
-        action=_Once,
+        action=SingleValueAction,
         required=projects_root_required,
         help="Comma-separated absolute project root paths.",
     )
@@ -147,12 +147,12 @@ def _add_common_options(
     )
     sub.add_argument(
         "--global-agents-path",
-        action=_Once,
+        action=SingleValueAction,
         help="Override Codex global AGENTS.md path.",
     )
     sub.add_argument(
         "--global-skills-dir",
-        action=_Once,
+        action=SingleValueAction,
         help="Override global skills directory.",
     )
     sub.add_argument(
@@ -167,13 +167,13 @@ def _add_common_options(
     )
     sub.add_argument(
         "--platform",
-        action=_Once,
+        action=SingleValueAction,
         help="Target Agent platform: codex, claude, kimi, oh-my-pi, or omp.",
     )
     sub.add_argument(
         "--developer",
-        action=_Once,
-        type=_developer,
+        action=SingleValueAction,
+        type=validate_developer_name,
         help="Developer identity (lowercase letters and digits).",
     )
 
@@ -181,22 +181,22 @@ def _add_common_options(
 def _add_migration_context(sub: argparse.ArgumentParser) -> None:
     sub.add_argument(
         "--migration-manifest",
-        action=_Once,
+        action=SingleValueAction,
         help="Migration manifest file for a migration-context deployment.",
     )
     sub.add_argument(
         "--migration-apply-receipt",
-        action=_Once,
+        action=SingleValueAction,
         help="Complete apply receipt bound to the migration manifest.",
     )
     sub.add_argument(
         "--previous-deployment-evidence",
-        action=_Once,
+        action=SingleValueAction,
         help="Previous deployment evidence file; required on retry, never alone.",
     )
     sub.add_argument(
         "--deployment-evidence-out",
-        action=_Once,
+        action=SingleValueAction,
         help="Unoccupied private target file for the new deployment evidence.",
     )
 
@@ -222,7 +222,7 @@ def _build_parser() -> tuple[
     project_check = subparsers.add_parser("check-projects", allow_abbrev=False)
     project_check.add_argument(
         "--projects-root",
-        action=_Once,
+        action=SingleValueAction,
         required=True,
         help="Comma-separated absolute project root paths.",
     )
@@ -241,59 +241,59 @@ def _build_parser() -> tuple[
     migration = subparsers.add_parser("migration", allow_abbrev=False)
     migration.add_argument(
         "--phase",
-        action=_Once,
+        action=SingleValueAction,
         required=True,
         choices=_MIGRATION_PHASES,
         help="Migration phase: plan, apply, verify, or cleanup (no deploy phase).",
     )
     migration.add_argument(
         "--projects-root",
-        action=_Once,
+        action=SingleValueAction,
         help="Comma-separated absolute project root paths (plan only).",
     )
     migration.add_argument(
         "--backup-root",
-        action=_Once,
+        action=SingleValueAction,
         help="Private backup directory outside the repositories (plan only).",
     )
     migration.add_argument(
         "--custodian",
-        action=_Once,
+        action=SingleValueAction,
         help="Label of the responsible custodian (plan only).",
     )
     migration.add_argument(
         "--publication-decisions",
-        action=_Once,
+        action=SingleValueAction,
         help="Private publication-decisions file (plan only).",
     )
     migration.add_argument(
         "--manifest",
-        action=_Once,
+        action=SingleValueAction,
         help="Migration manifest file (apply/verify/cleanup).",
     )
     migration.add_argument(
         "--apply-receipt",
-        action=_Once,
+        action=SingleValueAction,
         help="Apply receipt: optional retry input for apply, required evidence for verify/cleanup.",
     )
     migration.add_argument(
         "--deployment-evidence",
-        action=_Once,
+        action=SingleValueAction,
         help="Deployment evidence file (verify/cleanup).",
     )
     migration.add_argument(
         "--verification",
-        action=_Once,
+        action=SingleValueAction,
         help="Verification record file (cleanup only).",
     )
     migration.add_argument(
         "--cleanup-receipt",
-        action=_Once,
+        action=SingleValueAction,
         help="Cleanup receipt for an explicit cleanup retry (cleanup only).",
     )
     migration.add_argument(
         "--confirm-cleanup",
-        action=_Once,
+        action=SingleValueAction,
         help="verification_id confirmed this run; absence stays blocked in the handler.",
     )
     migration.add_argument(
@@ -311,49 +311,49 @@ def _build_parser() -> tuple[
     recovery = subparsers.add_parser("recovery", allow_abbrev=False)
     recovery.add_argument(
         "--phase",
-        action=_Once,
+        action=SingleValueAction,
         required=True,
         choices=_RECOVERY_PHASES,
         help="Recovery phase: plan or apply.",
     )
     recovery.add_argument(
         "--manifest",
-        action=_Once,
+        action=SingleValueAction,
         help="Migration manifest file (plan only).",
     )
     recovery.add_argument(
         "--apply-receipt",
-        action=_Once,
+        action=SingleValueAction,
         help="Apply receipt evidence, possibly partial (plan only).",
     )
     recovery.add_argument(
         "--deployment-evidence",
-        action=_Once,
+        action=SingleValueAction,
         help="Deployment evidence, possibly partial (plan only).",
     )
     recovery.add_argument(
         "--cleanup-receipt",
-        action=_Once,
+        action=SingleValueAction,
         help="Cleanup receipt evidence, possibly partial (plan only).",
     )
     recovery.add_argument(
         "--projects-root",
-        action=_Once,
+        action=SingleValueAction,
         help="Optional manifest project subset for the recovery plan (plan only).",
     )
     recovery.add_argument(
         "--plan",
-        action=_Once,
+        action=SingleValueAction,
         help="Recovery plan file (apply only).",
     )
     recovery.add_argument(
         "--recovery-receipt",
-        action=_Once,
+        action=SingleValueAction,
         help="Recovery receipt for an explicit apply retry (apply only).",
     )
     recovery.add_argument(
         "--confirm-recovery",
-        action=_Once,
+        action=SingleValueAction,
         help="plan_id confirmed this run; absence stays blocked in the handler.",
     )
     recovery.add_argument(

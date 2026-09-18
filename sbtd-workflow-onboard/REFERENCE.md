@@ -9,7 +9,7 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup now uses read-only SBTD checks without Trellis installation or initialization. Graft/host integration, task operations, identity creation and legacy migration remain staged work; this is not a completed v2 release. Existing legacy data is preserved; user-global retirement remains P1-13.
+> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup now uses read-only SBTD checks without Trellis installation or initialization. Graft/host integration, task operations and legacy migration remain staged work; on-demand identity creation is now provided by the P1-19 `DeveloperStore` and the explicit `--developer` entry described below. This is not a completed v2 release. Existing legacy data is preserved; user-global retirement remains P1-13.
 
 The P1-01 argument/codec modules and `onboard-contracts.schema.json` are internal executable contracts, not a second CLI or an activation of migration/recovery handlers. The existing command reference below remains the active public surface until each runtime/caller cutover. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
@@ -378,7 +378,7 @@ Unconfirmed calls only report the planned result without writing. `promote` / `a
 - Other logical `task.md` records inside a task directory must each be authorized via `include_tasks`; path nesting is not ownership.
 - Unknown or conflicting blocked history requires an explicit user phase choice; no ingress is fabricated and a blocked task never returns directly to done.
 - Retries reconcile against recorded state and events instead of appending duplicate completion or release events.
-- Windows support, host routing, identity creation and legacy migration remain later stages; full validation, real-host proof and release are not claimed here.
+- Windows support, host routing and legacy migration remain later stages; on-demand identity creation is covered by the P1-19 section below. Full validation, real-host proof and release are not claimed here.
 
 ## Routing and Handoff Helpers (P1-18)
 
@@ -399,6 +399,26 @@ Unconfirmed calls only report the planned result without writing. `promote` / `a
 - `load(relative_path)` strictly parses only owned snapshots: closed shape with `schema_version` 1, the filename hex must decode to the frontmatter `task_id`, and `project_root` must equal this root; malformed, unowned or foreign files raise `TaskStateError` and are never overwritten. Snapshots of any age load fine and never change the task. `reminders(now=None)` returns only snapshots at most seven days old, latest per task, whose root and current branch binding match and whose task is unfinished; malformed or foreign files are skipped and each returned dict adds its `path`. No automatic session-start claim is made without an observed host capability.
 
 Whether the Agent truly recommends first and pauses, invokes grill/DDD, or executes a mode's full method remains owned by the Skill rules and real-host proof, not by these return values. Windows, host wiring, automatic session-start restoration and legacy migration remain unclaimed.
+
+## Developer Identity (P1-19)
+
+`scripts/sbtd_identity.py` implements the lessons identity chain as a host-native library; it registers no global CLI, daemon, initializer, or identity database, and reuses `TaskStore` containment, protection and atomic writes instead of duplicating them.
+
+`DeveloperStore(root, read_only=False)` operations, each returning a frozen `IdentityResult(status, name, source, path, first_write_eligible, topology, reason, needs_protection, completed_steps)` (exportable via `dataclasses.asdict`):
+
+- `resolve()` — read-only. A valid local `.sbtd/developer` (UTF-8, one unambiguous `name=` line whose value matches `^[a-z0-9]+$` verbatim) returns `ready` with `source="local"` and no Git call. Only when the local file is genuinely absent does it verify the real Git toplevel, the absolute git-dir/common-dir and the NUL-separated worktree registry; a verified linked worktree then reads the same-repo main checkout's current identity in place (`source="main-worktree"`), never copying it. Present-but-abnormal local or main files (duplicate declarations, invalid name, wrong type, symlink, unreadable, unsafe parents) return `conflict`, never missing; unknown or unavailable Git metadata returns `blocked`, never assumed non-linked. A verified absent chain returns `needs-name` with `first_write_eligible=True`.
+- `plan(name)` — read-only. The same existing identity returns `unchanged`; a different existing identity returns `conflict`; a verified missing target returns `planned`, with `needs_protection` reporting whether the narrow `/.sbtd/` ignore rule is still missing. It downloads nothing, writes nothing and creates no task or spec.
+- `ensure(name, confirmed=False, protect=False)` — writes only from a `planned` result: without confirmation it returns `needs-confirmation`; when the required ignore rule is missing and `protect` was not explicitly allowed it returns `needs-protection` (the presence of a name never implies protection authorization). Creation rechecks the chain, writes only `name=<name>\n` non-overwriting, and re-reads before reporting `created`; a concurrent winner is preserved, a same-name retry is `unchanged`, and any failure returns `failed` with the honest `completed_steps`.
+
+`onboard.py` consumes identity only through an explicit `--developer <name>` (validated by the same `validate_developer_name`, accepted at most once):
+
+- `check` / `plan --developer` stay read-only and add a `developerPlan` object to the single JSON document: `requestedName`, aggregate `status`, `reason`, and a `projects` list whose entries carry `projectRoot`, `requestedName`, `status`, `name`, `source` (`local` / `main-worktree` / null), `target` (the `.sbtd/developer` path), `topology`, `needsProtection`, `reason` and `completedSteps`. A conflict, blocked or needs-* aggregate, or an empty project scope, exits 2 — the name is never defaulted to cwd or HOME.
+- `init` / `reset` / `init-projects` apply the name only to the explicitly listed projects together with `--yes`; the full-batch identity plan is checked before any global or project mutation, so an existing conflict is refused before side effects rather than after another project was written. A `planned` entry that still needs protection goes through the existing confirmed scaffold ignore flow first, then `ensure(confirmed=True)` re-verifies; identity ensure never replaces the whole initialization flow nor rewrites `TaskStore` protection. A post-write identity failure exits nonzero with the single JSON document preserving partial results. A same-name inherited main identity is `unchanged` with no local copy.
+  Only an original plan entry with `needsProtection=true` forwards protection authorization to `ensure(protect=True)` after the user confirms that listed initialization scope. This lets a verified non-Git project complete the existing narrow final-root-rule safeguard; an unplanned new protection need remains unauthorized. The helper never initializes Git or broadens the project list.
+- Once identity initialization follows completed scaffold writes, JSON retains their actual `operationResults`. Identity failure also reports post-write `sbtdProjectSetup`, `developerPlan`, backups and unverified checks in that same document; it does not imply rollback. A project root becoming unavailable is a per-project `blocked` preflight or `failed` write result, preserving earlier projects' completed results instead of aborting with a traceback.
+- Without `--developer` nothing changes: no command creates, repairs or requires an identity, and `reset` preserves any existing file.
+
+Ordinary resolve/plan/check/global installation never reads `.trellis/.developer`; authorized legacy identity migration remains the separately gated P1-12 task and is not claimed complete by this helper. The root installers (`install.sh` / `install.ps1`) gain no new flag here; full wrapper forwarding remains P1-07 / P1-08. Windows proof, host wiring, full validation and release remain unclaimed.
 
 ## MCP Setup
 

@@ -33,3 +33,7 @@ A successful new identity write proves only that identity operation, not task/le
 Keep the old identity until the full authorized migration, verification and independently confirmed cleanup have completed. Neither a same-name current file nor an identity-only success authorizes deletion. Historical lesson names, IDs, anchors and other authors' blocks stay unchanged.
 
 Original history remains complete in private backups. Any shared projection requires separate privacy validation of text, markers, IDs and links; if that projection cannot be safe and internally consistent, block it instead of publishing private history or silently rewriting its original ownership.
+
+## Current implementation boundary
+
+The current-chain resolution this reference defers to is implemented by Onboard's `scripts/sbtd_identity.py` (`DeveloperStore.resolve` / `plan` / `ensure`): local valid identity first, verified linked-worktree main read in place without copying, abnormal present files as conflicts, unknown Git or worktree metadata as blocked, and first writes only after verified genuine absence with separately confirmed narrow ignore protection. That helper never opens `.trellis/.developer` during ordinary resolution, and its existence does not implement this migration: reading legacy identity, moving lesson content, rewriting historical IDs and any cleanup remain the separately authorized P1-12 batch-migration task with its own privacy gate and evidence. Do not describe an identity created or verified by the helper as a completed legacy migration.
