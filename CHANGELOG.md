@@ -9,6 +9,7 @@
 - P1-01增加内部Onboard参数与交换契约层，覆盖严格JSON、批准快照、私有／共享操作、阶段收据、deployment evidence及恢复数据和envelope；它不注册尚未实现的公开迁移／恢复命令。jsonschema按Onboard requirements显式准备并惰性加载，目录复制不代表依赖已安装，缺失时校验fail-closed。
 - P1-02加入只读SBTD最小状态检查与按需bootstrap：未onboard项目不因缺少task／身份而失败；已有指针与选中任务按schema、日期和物理路径检查，异常不重建。PyYAML显式纳入安装依赖。
 - P1-03加入固定版本Graft本地检测和显式确认的全局安装入口；检查与npm/latest可达性分离，受管子进程DNT与dotenv/LLM环境隔离，安装后验证native启动及telemetry持久关闭，不提前激活host/MCP或迁移。
+- P1-17加入Onboard内任务状态Python库：`scripts/sbtd_task_document.py`负责task.md解析与候选更新，保留未属本操作的frontmatter扩展／正文并维护唯一状态事件表；`scripts/sbtd_task_state.py`提供`TaskStore`的create／inspect／select／transition／set_mode／resume／reopen／protect_local_state／promote／archive，由host-native调用，不注册新全局CLI、daemon、journal或`onboard.py`子命令。Markdown结构识别使用新增声明依赖markdown-it-py>=4,<5的CommonMark token（parse-only、不渲染、不联网，Python>=3.10与既有语法下限一致），缺失时明确停止写入而不是退回手写扫描。提升／归档两阶段：先准备并验证目标候选、active引用与必要共享index，单独确认后原目录原子退役进`.sbtd/task-originals/`保留且不递归删除；候选复制只用受保护临时区并由本次操作清理，目录内附带逻辑任务须`include_tasks`逐个显式授权。非Git项目branch为null，首次窄保护只追加`/.sbtd/`；部分失败如实返回`completed_steps`，重试不重复追加事件，未知blocked历史必须用户选择恢复相位。不代表Windows、host路由、身份建立、真实迁移、全量验证或发布已通过。
 
 ### 修复
 
@@ -23,6 +24,7 @@
 - 明确完整 `grill-with-docs` 后三模式共同执行具名 DDD reviewer 门禁：必须有独立可见通过结果，缺失不可用时阻断相关确认／设计；普通无关工具降级不受影响，不以 default/lite 替代检查绕过。
 - 准备 P0-05 全局／项目公共路由和无全局 Skill 的安全 fallback；方法、工具与输出模式协议按需加载，输出压缩不改变执行模式。AGENTS 与 sbtd-task/catalog 在 P0-07 同批激活，避免先发布悬空调用。
 - 准备 P0-06 lessons 身份与历史保留规则：本地新身份优先、仅缺失时读取主 checkout、首次写入窄授权、异常不绕过、ID／marker不改名；旧身份仅用于显式迁移。完整Skill候选与新路由在P0-07同批替换，不提前创建身份或迁移数据。
+- P1-17同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`记录任务状态helper的真实调用形态与工程边界；版本化automation prompt把两个新脚本纳入只读评估范围，不同步live automation或真实HOME。
 
 ### 变更
 

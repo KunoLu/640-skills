@@ -2,6 +2,12 @@
 
 Use this reference only when reading or changing persistent task state. Pure questions and explicit read-only work keep state in conversation and perform no task/pointer/handoff/identity/ignore writes.
 
+## Runtime helper
+
+Perform persistent operations with the Python task-state helper installed with `sbtd-workflow-onboard`: use `TaskStore` from `scripts/sbtd_task_state.py` in the installed Onboard Skill copy, with the interpreter dependencies declared in its `requirements.txt` (PyYAML, jsonschema, markdown-it-py>=4,<5). Markdown structure recognition uses markdown-it-py CommonMark tokens and table source ranges, parse-only, with no rendering and no network. It is a host-native library, not a new CLI, daemon, journal, or scheduler. If the installed helper copy or its declared dependencies are unavailable, say that persistence did not run; never claim a write that no helper performed, and do not fall back to hand-rolled scanning.
+
+`TaskStore(root, read_only=False)` exposes `inspect`, `create`, `select`, `transition`, `set_mode`, `resume`, `reopen`, `protect_local_state`, `promote` and `archive` with the semantics in this reference. Unconfirmed calls only report the planned result. `promote` / `archive` return a `TaskTransfer` describing status, source/target paths, files, the retained original location and the steps actually completed; failures carry the real `completed_steps` so a retry reconciles instead of duplicating events.
+
 ## One effective record
 
 The task's `task.md` owns mode, source, status, timestamps, body and events. Ordinary default tasks use `.sbtd/tasks/<logical-id>/task.md`; lite/strict use `ai/tasks/<logical-id>/task.md`. Explicit sharing can promote a default task without changing its mode. Switching down never deletes shared history.
@@ -54,8 +60,8 @@ On a retry, compare actual content and events: an already-completed identical op
 
 ## Promotion, archive and handoff
 
-Promote with the same format and ID: write/validate target candidate, update effective reference and necessary shared index, then retire the old local record only after confirmation. Preserve originals and recovery information until the handover is proven. Do not write both copies or select by mtime; reconcile explicit references and user modifications after interruption.
+Promote with the same format and ID. The first confirmed call writes and validates the complete target candidate, then updates the effective active reference and the necessary shared index. Retiring the original is a separate confirmed step that requires an already prepared target: the original directory is atomically moved into `.sbtd/task-originals/<generated>/task` and retained, never recursively deleted. Candidate copies live only in the protected `.sbtd/task-transfer-candidates/` area owned by the current operation and are cleaned up afterwards; a candidate is never a second valid record. Other logical task records inside the directory must each be explicitly authorized with `include_tasks`; path nesting is not ownership. Preserve originals and recovery information until the handover is proven. Do not write both copies or select by mtime; reconcile explicit references and user modifications after interruption.
 
-Archive only after confirmation, preserving the complete directory/events. Shared completed tasks use `ai/tasks/archive/YYYY-QN/` from a reliable completion date; unknown dates use `undated`. Archiving local data does not authorize publishing it or deleting backups.
+Archive only after confirmation, preserving the complete directory/events, with the same two-phase preparation, explicit `include_tasks` scope and original-retirement rules as promotion. Shared completed tasks use `ai/tasks/archive/YYYY-QN/` from a reliable completion date; unknown dates use `undated`. Archiving local data does not authorize publishing it or deleting backups.
 
 When a real continuation event occurs, use [handoff.md](handoff.md). After a successful status operation, update only the navigation the task needs and report what actually persisted. Damaged state does not justify creating a same-name replacement; default/lite can continue unrelated safe work, while strict required artifacts remain incomplete.

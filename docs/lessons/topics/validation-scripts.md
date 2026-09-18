@@ -503,5 +503,25 @@
 - 验证：两个真实临时可执行文件红测均错误返回 available；修复后包含 post-install 路径的三个 marker 非执行回归通过。RTK/global check 同轮另证完整隔离 HOME 零持久写入；不把第三方查询子命令名称当成只读证明。
 - 预防：正向控制覆盖真实包 CLI，反例覆盖包名注释 wrapper、包内错误目标和安装后旧 binary；报告只允许受管安装入口，不向用户展示绕过安全门的原始包管理命令。
 
+## LESSON-20260919-640-state-event-integrity: Parse and Preserve the Complete Event History
+
+- tags：markdown, state, history, yaml, recovery, validation
+- 适用：Markdown正文承担权威状态事件，且原文允许代码/HTML示例或历史补录。
+- 现象：手写围栏/标题扫描把示例当历史、漏掉无外侧pipe的数据行，或将新事件放入未闭合围栏；只读第一张表还会漏掉同一状态节的后续表。旧完成补录追加在归档事件后，则会形成倒序/断链。
+- 根因：把文本命中、前缀可解析和单行schema通过当作完整文档与事件顺序证明。
+- 修复：使用声明依赖的CommonMark token与显式table规则识别顶层完整区段；拒绝多表歧义；候选必须回读全部旧事件和本次事件。有据旧完成在已有metadata事件前补录，写前再验证完整状态/时间链。
+- 验证：真实文件红/绿覆盖未闭合围栏、缩进/伪closer/HTML示例、可选pipe、多表以及known/null旧完成的archive→reopen→继续工作；原文与历史均保留。不能只断言保存命令退出0。
+- 预防：parser依赖实际安装、缺依赖零写入与完整安装副本同轮证明；解析器不渲染或联网，失败不得退回不安全手写扫描。
+
+## LESSON-20260919-640-private-tree-protection: Prove Privacy for the Whole Transfer Tree
+
+- tags：gitignore, privacy, filesystem, transfer, originals, validation
+- 适用：把整个任务目录复制到私有候选区、本地归档区或原件保留区。
+- 现象：源task.md及目标task.md均被忽略，附带二进制等文件却可能Git可见；只查源文件也不能证明新archive路径受保护。
+- 根因：把单个文件的保护结论扩张为整棵目录的保护；忽略权限必须对实际写入范围成立。
+- 修复：共同保护门核对整个私有父目录的Git排除语义、全部tracked状态和具体路径；不能证明全部后代仍私有时，copy/rename前拒绝并请求窄保护授权。
+- 验证：metadata-only ignore与源目录受保护但archive目标未保护的真实Git反例均零发布；不能用命名为“private”的目录或一个探针返回码代替逐范围证明。
+- 预防：授权scope也按实际逻辑任务闭集核对，路径嵌套不代表另一个task.md的所有权；保留原件不等于授权发布或删除。
+
   <!-- lessons:640:end -->
 

@@ -8,6 +8,8 @@ P1-01 的内部参数／交换契约不代表 migration/recovery 已公开可执
 
 P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 只报告本地能力，`install-graft --json` 展示计划，确认后才使用 `install-graft --yes --json`。固定 `@nanonets/graft@0.18.0`、Node >=20，验证包完整性/native启动及 telemetry 持久关闭；这不代表 graph、MCP、host 接线或完整 v2 已通过。
 
+P1-17 在 Onboard `scripts/` 内实现任务状态 Python 库（`sbtd_task_document.py`、`sbtd_task_state.py`）：task.md 是唯一状态事实源，`.sbtd/active-task.json` 只是书签；`TaskStore` 的 create／inspect／select／transition／set_mode／resume／reopen／protect_local_state／promote／archive 由 host-native 调用，不注册新全局 CLI、daemon、journal 或 `onboard.py` 子命令。Markdown 结构识别使用声明依赖 markdown-it-py>=4,<5 的 CommonMark token（parse-only、不渲染、不联网，Python>=3.10）。提升／归档为两阶段：先准备并验证目标候选与引用，单独确认后原目录原子退役进 `.sbtd/task-originals/` 保留；候选复制只用受保护临时区并在结束后清理，目录内其他逻辑任务必须 `include_tasks` 逐个授权，路径嵌套不代表所有权。非 Git 项目 branch 为 null，首次窄保护只追加 `/.sbtd/`；部分失败如实报告已完成步骤，helper 或其声明依赖未安装时明确停止写入，不得假装持久化已执行。这不代表 Windows、host 路由、身份建立或真实迁移已完成，也不代表全量验证或发布已通过。
+
 
 下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：
 

@@ -51,6 +51,8 @@ A user's explicit PRD, scenarios, tests, report, history or completion-time requ
 
 Read [task state](references/state.md) when persisting, resuming, reopening, resolving blocked history, promoting or archiving a task. Read [handoff](references/handoff.md) only when a real pause/context switch or continuation need warrants it. Do not load all references for an ordinary answer.
 
+Persistent task operations use the Python task-state helper installed with `sbtd-workflow-onboard` (`scripts/sbtd_task_state.py`, with the dependencies declared in its `requirements.txt`); [task state](references/state.md) describes its operations and boundaries. The helper is a host-native library, not a new CLI or daemon. If the installed helper copy or its declared dependencies are unavailable, report that persistence did not run instead of claiming a write, and keep the limitation explicit in the final report.
+
 For a relevant specialized engineering method, read [method routing](references/methods.md). For tool availability, installation, privacy or formal test evidence, read the applicable section of [tool boundaries](references/tooling.md). For an explicit presentation request or a global-rule-defined automatic style trigger, read [presentation](references/presentation.md); style never changes execution mode. Do not infer a missing global automatic-style state machine from a project-only fallback.
 
 A mid-task mode change takes effect after the user chooses it and is saved where allowed. Switching to strict requires valid evidence for the following gates; it does not fabricate earlier passes. Switching down does not delete shared records or their history.

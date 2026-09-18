@@ -2528,7 +2528,10 @@ class GitignoreVerdict:
 
 
 def gitignore_verdicts(
-    project_root: Path, probes: tuple[str, ...]
+    project_root: Path,
+    probes: tuple[str, ...],
+    *,
+    env: dict[str, str] | None = None,
 ) -> dict[str, GitignoreVerdict] | str:
     """Resolve every probe in one `git check-ignore` pass.
 
@@ -2559,6 +2562,7 @@ def gitignore_verdicts(
         project_root,
         timeout=60,
         stdin_text="".join(f"{probe}\0" for probe in probes),
+        env=env,
     )
     if result is None or result.returncode == 128:
         return GITIGNORE_PROBE_UNAVAILABLE
@@ -5523,6 +5527,7 @@ def run_project_command(
     cwd: Path,
     timeout: int = 900,
     stdin_text: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str] | None:
     try:
         return subprocess.run(
@@ -5533,6 +5538,7 @@ def run_project_command(
             text=True,
             timeout=timeout,
             input=stdin_text,
+            env=env,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
