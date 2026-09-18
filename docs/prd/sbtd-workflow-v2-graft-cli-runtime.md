@@ -50,7 +50,7 @@
 - Legacy：characterized。既有5项基线与固定包6项真实调查构成移前证据；不以fixture冒充真实Graft。
 - Refactoring：proceed。内聚 Graft 模块加现有编排/direct callers，不新增通用provider框架。
 - DDIA：confirmed。只读无状态写入、显式安装授权、受管子进程环境、telemetry JSON保全与回读、失败不自动卸载。
-- Release readiness：planned，适用验证完成后运行。
+- Release readiness：ready（仅 P1-03）。2026-09-18 在最终精确提交的全量、真实CLI/安装副本及报告验证后通过；Windows、host和完整v2发布门禁不提前验收。
 
 ## 验证要求
 
@@ -77,3 +77,13 @@
 - 独立审查：`P103RuntimeReviewOne` 与 `P103IntegrationReviewOne` 均确认无剩余P0/P1。`findings.log` 本任务2 fixed P1、7 deferred P2、1随P1同根关闭的fixed P2；不是零问题声明。
 - 修复后全量报告：`tests/unit/reports/unit-report-graft-reviewed-full-p1-03-graft-cli-runtime-2026_09_18-21_18_25.json`，636 tests / 374.554s / exit 0，无skip。新模块/测试Ruff与ty通过，已有范围按base对比而非声称全仓静态全绿。
 - 文档入口维护：README.md/html、Onboard SKILL/REFERENCE、两张安装图及versioned automation prompt均已按本轮Graft边界更新；CHANGELOG新增能力及RTK只读修复。历史deferred文案保持原状，live automation、ENTRYPOINT版本与真实本地配置均未操作。
+
+## 最终精确证据与实际合并
+
+- 最终实现提交：`01e27cfc75b1c302dbff04b17388a8dff4b185fb`。原生636 tests / 639.290s / exit 0，无skip；新模块/测试Ruff、format、ty和Bash语法通过，已有修改范围Ruff30→29、ty96→93，无新增诊断。不是全仓静态零诊断声明。
+- 最终报告：`tests/unit/reports/unit-report-graft-exact-full-p1-03-graft-cli-runtime-2026_09_18-21_31_36.json`；`tests/api/reports/api-report-graft-exact-install-p1-03-graft-cli-runtime-2026_09_18-21_27_40.json`；`tests/api/reports/api-report-graft-exact-offline-p1-03-graft-cli-runtime-2026_09_18-21_30_16.json`。同stem中文MD与envelope齐备，本轮16份envelope全部通过；raw保留实际临时driver源码，删除runner后仍可追溯。
+- git archive的完整305文件Skill包含新模块，执行前后逐文件SHA256一致；五项真实安装/幂等/check/DNT与五项plan/禁网/缺包失败场景全部通过。证据为developer-local / exact / local-only，未发布到CI或知识服务器。
+- Release Readiness Review：ready，仅本任务；探针/下载/安装有时限，失败阶段与partial状态可见，不自动卸载；7项P2按用户D-IMP-13授权延期。回滚源码不等于授权删除真实安装或用户数据，真实环境动作继续独立确认。
+- [PR #31](https://github.com/KunoLu/640-skills/pull/31) 于2026-09-18T21:44:12+08:00实际合并，merge `908a8a65952ee82ce0381a5955000c3b26daab15`。main与origin/main同步，合并tree与验证候选一致，本地/远端任务分支已删除并prune。
+- 2026-09-18T21:45:28+08:00完成私有临时清理：12份源码快照先按manifest/base哈希核验；仅删除Main拥有的P1-03临时runner/包/prefix/HOME/cache/私有PowerShell。48份报告保留，最终unit raw/envelope另记清理事实；保留P0安装、真实HOME、用户数据及真实迁移备份未触碰。此后的完成状态记录通过独立status PR审查/合入，闭环前不启动下一任务。
+- 独立status review无P0/P1；另提出1项metadata复核措辞P2，已按原级记录为`P1-03-R2-P2-001`，未为低级文案扩大修改。实现阶段7项与状态阶段1项合计8项deferred P2；前述7项是实现PR的历史快照，不重写为当时尚未出现的发现数。
