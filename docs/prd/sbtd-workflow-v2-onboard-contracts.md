@@ -139,3 +139,11 @@ F5的合法续作边界再次获原reviewer确认并实测：before/after均已�
 Main先得到11项／29个预期失败及1个目标缺陷（超大整数ValueError逃逸），再修复并转绿。完整协议171项通过；旧多selector反例改为真正不相交的ownership，旧失败恢复补齐root reason，旧retained绑定反例同步项目／总表观察，避免新前置规则造成假绿。canonical有限数兼容保持，非有限值原稳定错误码不重钉；不引入新的真实运行、授权或文件存在证明。
 
 清理后将累计身份／成功态／原件／unsafe partial规则集中为一个转移校验，移除重复成功分支与共享集合；补充原样保留partial及失败→成功时身份不漂移的正向／负向控制。对应3项定点及提交前全量476项／63.725s通过，新5个Python文件Ruff／格式／ty通过。仍为dirty本地证据；冻结新head后重跑正式证明，再进行下一轮独立review。
+
+## 第五轮独立 review
+
+冻结head `e53d623838aaea8094b15292a936015b3810ae01` 的476项／119.757s、安装副本、五组实际smoke、静态和七份envelope通过；surface零新发现。Recovery的2项和Intrinsic的6项全部纳入：重复deployment文件摘要必须一致；verification实际候选状态进入恢复观察；共享物理结果按各逻辑operation的dependent_projects分配项目引用；候选及其父子路径不能被cleanup管理；whole-resource remove成功后必须absent；发布路径复用不能声明矛盾快照；POSIX拒绝双前导斜杠；raw_documents先检查Mapping类型。
+
+共享路由最初fixture复用了两项目的同一list，已拆开并重跑；raw list-of-pairs改用有效manifest bytes，避免无关schema拒绝。有效red为8项／10个预期失败及2个目标错误（合法共享路由被拒、raw bytes原生TypeError逃逸）。修复后8项及完整179项协议回归通过，实际4场景smoke同时证明安全拒绝和一个共享物理结果下的合法逐操作项目路由；未修改或重标原失败报告。
+
+可读性复核保留明确的摘要一致性与verification观察职责，不加框架；fixture源头为两项目分别复制shared ID列表，序列化内容不变，去掉隐蔽可变别名。新5个Python文件静态通过，提交前全量484项／231.478s通过。当前仍为dirty本地证明；后续冻结head正式验证及独立review未被替代。

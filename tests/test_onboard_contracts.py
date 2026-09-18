@@ -3403,5 +3403,230 @@ class FourthReviewRegressionTests(unittest.TestCase):
             )
 
 
+class FifthReviewRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.family = fixtures.build_fixture_family()
+        cls.manifest = cls.family["manifest"]
+
+    def stages(self):
+        return {
+            kind: self.family[kind]
+            for kind in (
+                "apply_receipt",
+                "deployment_evidence",
+                "verification",
+                "cleanup_receipt",
+            )
+        }
+
+    def test_repeated_deployment_digests_agree_without_raw_bytes(self) -> None:
+        for kind in ("cleanup_receipt", "recovery_plan", "recovery_receipt"):
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            if kind == "cleanup_receipt":
+                payload["deployment_evidence_hash"] = fixtures.digest_number(999)
+            else:
+                payload["input_evidence"]["deployment_evidence"]["state"][
+                    "checksum"
+                ] = fixtures.digest_number(999)
+            document = contracts.seal_document(kind, payload)
+            with self.subTest(kind=kind), self.assertRaises(ContractError):
+                contracts.validate_declared_bindings(
+                    self.manifest, {**self.stages(), kind: document}
+                )
+
+    def test_failed_verification_candidates_override_older_recovery_snapshots(
+        self,
+    ) -> None:
+        payload = copy.deepcopy(self.family["recovery_plan"]["payload"])
+        payload["steps"] = [
+            step for step in payload["steps"] if step["phase"] != "cleanup"
+        ]
+        kept = {step["step_id"] for step in payload["steps"]}
+        groups = {}
+        for step in payload["steps"]:
+            step["depends_on"] = [item for item in step["depends_on"] if item in kept]
+            groups.setdefault(step["resource_id"], []).append(step)
+        for entry in payload["resources"]:
+            group = groups[entry["resource_id"]]
+            entry["state"] = copy.deepcopy(group[0]["expected_current"])
+            entry["operation_ids"] = sorted(
+                op for step in group for op in step["operation_ids"]
+            )
+        payload["shared_operation_ids"] = sorted(
+            op
+            for step in payload["steps"]
+            if step["resource_id"] == fixtures.resource_id_of("s1")
+            for op in step["operation_ids"]
+        )
+        payload["input_evidence"]["cleanup_receipt"] = None
+        plan = contracts.seal_document("recovery_plan", payload)
+        verification_payload = copy.deepcopy(self.family["verification"]["payload"])
+        verification_payload["status"] = "failed"
+        verification_payload["projects"][0].update(
+            status="failed", reason="inspection failed", nextStep="inspect"
+        )
+        control = contracts.seal_document(
+            "verification", copy.deepcopy(verification_payload)
+        )
+        documents = {
+            "apply_receipt": self.family["apply_receipt"],
+            "deployment_evidence": self.family["deployment_evidence"],
+            "verification": control,
+            "recovery_plan": plan,
+        }
+        contracts.validate_declared_bindings(self.manifest, documents)
+        verification_payload["projects"][0]["cleanup_candidates"][0]["state"] = (
+            fixtures.file_state(999)
+        )
+        documents["verification"] = contracts.seal_document(
+            "verification", verification_payload
+        )
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(self.manifest, documents)
+
+    def test_grouped_shared_results_preserve_operation_level_project_routes(
+        self,
+    ) -> None:
+        payload = copy.deepcopy(self.manifest["payload"])
+        first = next(
+            op for op in payload["shared_operations"] if op["phase"] == "apply"
+        )
+        second = copy.deepcopy(first)
+        first["dependent_projects"] = [fixtures.ALPHA]
+        second["dependent_projects"] = [fixtures.BETA]
+        second["selector"] = "other-entry"
+        second["ownership"]["key_path"] = ["other"]
+        second["operation_id"] = contracts.operation_id(
+            "apply", second["resource_id"], second["selector"]
+        )
+        payload["shared_operations"].append(second)
+        payload["projects"][1]["shared_operation_ids"] = [
+            op_id
+            for op_id in payload["projects"][1]["shared_operation_ids"]
+            if op_id != first["operation_id"]
+        ] + [second["operation_id"]]
+        manifest = contracts.seal_document("manifest", payload)
+        receipt_payload = fixtures.build_apply_receipt_payload(manifest)
+        receipt_payload["projects"][1]["shared_operation_ids"] = [
+            second["operation_id"]
+        ]
+        receipt_payload["shared_results"][0]["operation_ids"].append(
+            second["operation_id"]
+        )
+        receipt = contracts.seal_document(
+            "apply_receipt", copy.deepcopy(receipt_payload)
+        )
+        contracts.validate_declared_bindings(manifest, {"apply_receipt": receipt})
+        receipt_payload["status"] = "failed"
+        for project in receipt_payload["projects"]:
+            project.update(
+                status="failed", reason="other step failed", nextStep="inspect"
+            )
+            project["shared_operation_ids"] = [
+                first["operation_id"],
+                second["operation_id"],
+            ]
+        wrong = contracts.seal_document("apply_receipt", receipt_payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(manifest, {"apply_receipt": wrong})
+
+    def test_cleanup_cannot_target_a_candidate_or_its_container(self) -> None:
+        candidate = self.manifest["payload"]["publication_decisions"]["items"][0][
+            "candidate_ref"
+        ]
+        for target, owner, state in (
+            (candidate["path"], "file", candidate["state"]),
+            (
+                str(Path(candidate["path"]).parent),
+                "directory",
+                fixtures.directory_state(901),
+            ),
+        ):
+            payload = copy.deepcopy(self.manifest["payload"])
+            rid = contracts.resource_id(owner, target)
+            operation = {
+                "operation_id": contracts.operation_id(
+                    "cleanup", rid, "whole-resource"
+                ),
+                "phase": "cleanup",
+                "resource_id": rid,
+                "owner_kind": owner,
+                "target": target,
+                "selector": "whole-resource",
+                "change": {"kind": "remove"},
+                "ownership": {
+                    "kind": "template-source",
+                    "reference": copy.deepcopy(candidate),
+                },
+                "before_requirement": {"kind": "state", "state": copy.deepcopy(state)},
+                "dependent_projects": list(fixtures.BOTH),
+            }
+            payload["shared_operations"].append(operation)
+            for project in payload["projects"]:
+                project["shared_operation_ids"].append(operation["operation_id"])
+            payload["shared_roots"].append(
+                {
+                    "kind": "home",
+                    "path": str(Path(candidate["path"]).parent),
+                    "dependent_projects": list(fixtures.BOTH),
+                }
+            )
+            with self.subTest(target=target), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+
+    def test_whole_resource_removal_cannot_claim_a_present_after_state(self) -> None:
+        payload = copy.deepcopy(self.family["cleanup_receipt"]["payload"])
+        result = next(
+            r
+            for r in payload["projects"][0]["private_results"]
+            if r["resource_id"] == fixtures.resource_id_of("r2")
+        )
+        result["after"] = fixtures.resource_state("r2", "apply")
+        cleanup = contracts.seal_document("cleanup_receipt", payload)
+        with self.assertRaises(ContractError):
+            contracts.validate_declared_bindings(
+                self.manifest, {"cleanup_receipt": cleanup}
+            )
+
+    def test_shared_publication_paths_have_one_state_snapshot(self) -> None:
+        for boundary in ("sources", "candidate_ref"):
+            document = fixtures.build_publication_decisions()
+            clone = copy.deepcopy(document["items"][0])
+            clone["item_id"] = "another-projection"
+            clone["target_path"] = fixtures.ALPHA + "/docs/spec/another.md"
+            clone["approval"]["scope"]["target_path"] = clone["target_path"]
+            document["items"].append(clone)
+            contracts.validate_document(document, "publication_decisions")
+            if boundary == "sources":
+                clone["sources"][0]["state"] = fixtures.file_state(999)
+            else:
+                clone["candidate_ref"]["state"] = fixtures.file_state(999)
+            clone["approval"]["scope"][boundary] = copy.deepcopy(clone[boundary])
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.validate_document(document, "publication_decisions")
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX normalization boundary")
+    def test_posix_double_leading_slash_is_not_a_distinct_path(self) -> None:
+        document = fixtures.build_publication_decisions()
+        item = document["items"][0]
+        item["sources"][0]["path"] = "/" + item["sources"][0]["path"]
+        item["approval"]["scope"]["sources"] = copy.deepcopy(item["sources"])
+        with self.assertRaises(ContractError):
+            contracts.validate_document(document, "publication_decisions")
+
+    def test_raw_evidence_requires_a_mapping_even_when_empty(self) -> None:
+        for invalid in (
+            [],
+            b"x",
+            [("manifest", contracts.canonical_json_bytes(self.manifest))],
+        ):
+            with (
+                self.subTest(raw_type=type(invalid).__name__),
+                self.assertRaises(ContractError),
+            ):
+                contracts.validate_declared_bindings(self.manifest, {}, invalid)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -339,6 +339,8 @@ def _is_normalized_absolute_path(value: object) -> bool:
         return True
     if not value or "\x00" in value:
         raise ValueError("path must be non-empty and NUL-free")
+    if os.name == "posix" and value.startswith("//"):
+        raise ValueError("POSIX paths must have one leading slash")
     if not os.path.isabs(value):
         raise ValueError("path must be absolute")
     if os.path.normpath(value) != value:
@@ -403,6 +405,7 @@ def _path_contains(parent: str, child: str) -> bool:
 
 def _check_publication_items(items: list[dict[str, Any]]) -> None:
     seen_ids: set[str] = set()
+    path_states: dict[str, Any] = {}
     targets: list[str] = []
     for item in items:
         if item["item_id"] in seen_ids:
@@ -425,6 +428,18 @@ def _check_publication_items(items: list[dict[str, Any]]) -> None:
                 "semantic-violation",
                 "duplicate source path within one publication item",
             )
+        references = list(item["sources"])
+        if item["candidate_ref"] is not None:
+            references.append(item["candidate_ref"])
+        for reference in references:
+            if (
+                path_states.setdefault(reference["path"], reference["state"])
+                != reference["state"]
+            ):
+                _fail(
+                    "semantic-violation",
+                    "publication path has conflicting state snapshots",
+                )
         if item["decision"] == "private-only":
             if item["required"]:
                 _fail(
@@ -610,6 +625,11 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "publication candidate must stay outside project roots",
             )
 
+    candidate_paths = [
+        item["candidate_ref"]["path"]
+        for item in payload["publication_decisions"]["items"]
+        if item["candidate_ref"] is not None
+    ]
     seen_operation_ids: set[str] = set()
     resource_owners: dict[str, tuple[str, str | None]] = {}
     target_owners: dict[Path, tuple[str, tuple[str, str | None]]] = {}
@@ -622,6 +642,14 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         target = operation["target"]
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):
             _fail("semantic-violation", "backup_root overlaps a managed target")
+        if operation["phase"] == "cleanup" and any(
+            _path_contains(target, candidate) or _path_contains(candidate, target)
+            for candidate in candidate_paths
+        ):
+            _fail(
+                "semantic-violation",
+                "cleanup target overlaps a retained publication candidate",
+            )
         identity = (operation["resource_id"], owner)
         if target_owners.setdefault(Path(target), identity) != identity:
             _fail(
@@ -868,8 +896,25 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
         )
 
 
+def _verification_observations(payload: Mapping[str, Any]) -> dict[str, Any]:
+    observations = _retained_states(payload)
+    groups = [payload["shared_cleanup_candidates"]]
+    groups.extend(project["cleanup_candidates"] for project in payload["projects"])
+    for candidates in groups:
+        for candidate in candidates:
+            if (
+                observations.setdefault(candidate["target"], candidate["state"])
+                != candidate["state"]
+            ):
+                _fail(
+                    "semantic-violation",
+                    "verification records conflicting current states",
+                )
+    return observations
+
+
 def _check_verification_payload(payload: Mapping[str, Any]) -> None:
-    _retained_states(payload)
+    _verification_observations(payload)
     roots = [project["root"] for project in payload["projects"]]
     root_set = set(roots)
     if len(root_set) != len(roots):
@@ -1494,6 +1539,15 @@ def _bind_resource_states_and_backups(
             expected = "directory" if operation["owner_kind"] == "directory" else "file"
             observed = result["after"]["type"]
             removed = operation["change"]["kind"] == "remove" and observed == "absent"
+            if (
+                operation["change"]["kind"] == "remove"
+                and operation["selector"] == "whole-resource"
+                and not removed
+            ):
+                _fail(
+                    "binding-violation",
+                    "whole-resource removal must leave the resource absent",
+                )
             if not removed and observed != expected:
                 _fail(
                     "binding-violation", "successful result has the wrong resource type"
@@ -1522,6 +1576,10 @@ def _bind_stage_receipt(
         for operations in shared_phase.values()
         for operation_id in operations
     }
+    shared_operations = {
+        operation["operation_id"]: operation
+        for operation in manifest_payload["shared_operations"]
+    }
     phase_dependents: dict[str, set[str]] = {}
     for operation in manifest_payload["shared_operations"]:
         if operation["phase"] == phase:
@@ -1543,8 +1601,9 @@ def _bind_stage_receipt(
             _fail(
                 "binding-violation", "shared result dependencies differ from this phase"
             )
-        for root in result["dependent_projects"]:
-            observed_shared.setdefault(root, set()).update(result["operation_ids"])
+        for op_id in result["operation_ids"]:
+            for root in shared_operations[op_id]["dependent_projects"]:
+                observed_shared.setdefault(root, set()).add(op_id)
 
     for project in payload["projects"]:
         root = project["root"]
@@ -1788,7 +1847,7 @@ def _check_recovery_goal(
     payload: Mapping[str, Any],
     stage_results: Mapping[str, Mapping[str, Any]],
     dependents: Mapping[str, set[str]],
-    retained_observations: Mapping[str, Mapping[str, Any]],
+    resource_observations: Mapping[str, Mapping[str, Any]],
 ) -> None:
     selected = {project["root"] for project in payload["projects"]}
     required_resources = {rid for rid, roots in dependents.items() if roots & selected}
@@ -1832,7 +1891,7 @@ def _check_recovery_goal(
                 )
             required_steps.add((phase, rid))
         kind = _PHASE_RECEIPTS.get(phase, phase)
-        for path, state in retained_observations.get(kind, {}).items():
+        for path, state in resource_observations.get(kind, {}).items():
             rid = target_resources.get(path)
             if rid in required_resources:
                 latest[rid] = state
@@ -1862,7 +1921,7 @@ def _bind_recovery_plan(
     manifest_payload: Mapping[str, Any],
     document: Mapping[str, Any],
     stage_results: Mapping[str, Mapping[str, Any]],
-    retained_observations: Mapping[str, Mapping[str, Any]],
+    resource_observations: Mapping[str, Mapping[str, Any]],
 ) -> None:
     private, shared, dependents, identity = _declared_resources(manifest_payload)
     for root, resources in private.items():
@@ -1939,7 +1998,7 @@ def _bind_recovery_plan(
         _fail("binding-violation", "recovery plan lost declared shared ownership")
     if payload["status"] == "planned":
         _check_recovery_goal(
-            manifest_payload, payload, stage_results, dependents, retained_observations
+            manifest_payload, payload, stage_results, dependents, resource_observations
         )
 
 
@@ -2074,6 +2133,27 @@ def _bind_retained_assets(
             _fail("binding-violation", "cleanup changed an asset declared retained")
 
 
+def _bind_declared_hashes(documents: Mapping[str, Any]) -> None:
+    declared: dict[str, str] = {}
+
+    def note(kind: str, digest: str) -> None:
+        if declared.setdefault(kind, digest) != digest:
+            _fail(
+                "binding-violation",
+                "supplied records declare conflicting file digests",
+                exit_code=3,
+            )
+
+    for kind, document in documents.items():
+        payload = document["payload"]
+        if kind in {"verification", "cleanup_receipt"}:
+            note("deployment_evidence", payload["deployment_evidence_hash"])
+        if kind in {"recovery_plan", "recovery_receipt"}:
+            for source, reference in payload["input_evidence"].items():
+                if reference is not None:
+                    note(source, reference["state"]["checksum"])
+
+
 def _bind_chronology(
     manifest_payload: Mapping[str, Any], documents: Mapping[str, Any]
 ) -> None:
@@ -2132,7 +2212,9 @@ def validate_declared_bindings(
     validate_document(manifest, "manifest")
     manifest_payload = manifest["payload"]
     manifest_id = manifest["manifest_id"]
-    raw = dict(raw_documents or {})
+    if raw_documents is not None and not isinstance(raw_documents, Mapping):
+        _fail("unexpected-type", "raw_documents must be a mapping or None")
+    raw = dict(raw_documents) if raw_documents is not None else {}
 
     supplied: dict[str, Any] = {}
     if not isinstance(documents, Mapping):
@@ -2176,11 +2258,15 @@ def validate_declared_bindings(
         for kind, phase in _STAGE_RECEIPT_PHASES.items()
         if kind in supplied
     }
-    retained_observations = {
-        kind: _retained_states(supplied[kind]["payload"])
-        for kind in ("verification", "cleanup_receipt")
-        if kind in supplied
-    }
+    resource_observations: dict[str, Mapping[str, Any]] = {}
+    if "verification" in supplied:
+        resource_observations["verification"] = _verification_observations(
+            supplied["verification"]["payload"]
+        )
+    if "cleanup_receipt" in supplied:
+        resource_observations["cleanup_receipt"] = _retained_states(
+            supplied["cleanup_receipt"]["payload"]
+        )
     requirements = {
         (op["phase"], op["resource_id"]): op["before_requirement"]
         for project in manifest_payload["projects"]
@@ -2249,13 +2335,14 @@ def validate_declared_bindings(
     plan = supplied.get("recovery_plan")
     if plan is not None:
         _bind_recovery_plan(
-            manifest_payload, plan, stage_results, retained_observations
+            manifest_payload, plan, stage_results, resource_observations
         )
         _bind_input_evidence(plan["payload"]["input_evidence"], raw)
     receipt = supplied.get("recovery_receipt")
     if receipt is not None:
         _bind_recovery_receipt(receipt, plan)
         _bind_input_evidence(receipt["payload"]["input_evidence"], raw)
+    _bind_declared_hashes(supplied)
     _bind_chronology(manifest_payload, supplied)
     return supplied
 

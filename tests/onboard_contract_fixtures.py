@@ -298,7 +298,7 @@ def build_manifest_payload() -> dict[str, Any]:
                     r2_ops["cleanup"],
                     r4_ops["apply"],
                 ],
-                "shared_operation_ids": shared_ids,
+                "shared_operation_ids": list(shared_ids),
             },
             {
                 "root": BETA,
@@ -311,7 +311,7 @@ def build_manifest_payload() -> dict[str, Any]:
                     r3_ops["deploy"],
                     r3_ops["cleanup"],
                 ],
-                "shared_operation_ids": shared_ids,
+                "shared_operation_ids": list(shared_ids),
             },
         ],
         "shared_roots": [
