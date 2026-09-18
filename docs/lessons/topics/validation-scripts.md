@@ -534,5 +534,15 @@
 - 同轮相关边界：有意义内容比较排除生成时间时，不能在生成正文重复该时间；提醒窗口要排除未来时间，并同时核对快照与当前有效任务的root/branch/path，不让旧快照变成当前模式/状态来源。
 - 限制：该修复关闭可检测的版本混用，不将单writer原子替换描述为对不合作进程的完整CAS或跨文件事务。
 
+## LESSON-20260919-640-identity-absence-and-phase-results: Prove Absence and Retain Phase Results
+
+- tags：identity, git, worktree, preflight, authorization, partial-results
+- 适用：仅在身份真正缺失时首次建立，或把只读计划、脚手架与逐项目写入组合成一次初始化。
+- 现象：损坏的.git仍会产生“not a git repository”；固定拒绝全部保护会让已确认nonGit初始化在脚手架写后失败；身份异常若只保留计划，机器调用者看不到已发生写入，目录中途消失还可能直接traceback。
+- 根因：把无法识别当作已证明不存在；未区分原计划授权与后来新增需求；异常边界只包方法正文而遗漏对象构造，结果没有逐阶段累积。
+- 修复：Git失败后核对本级/祖先marker，未知保持blocked；只有原计划needsProtection严格为true才转发已确认窄保护；先保存实际operationResults，逐项目覆盖构造/执行错误，失败报告写后状态及此前完成项。
+- 验证：损坏.git与真实nonGit CLI红绿；真实文件原子link失败后保留脚手架并回读单份JSON；预检时移走root及批次首项成功、次项root缺失均结构化报告。影响范围129项通过；这不是跨项目事务或完整Windows证明。
+- 预防：正向控制验证非Git首次建立仍可完成，负例验证未知不是缺失；结果与权限均绑定实际阶段，不从最终非零推断零副作用。既有ignore判定和保护helper部分步骤遗漏的P2保留独立findings，不借本修复扩修。
+
   <!-- lessons:640:end -->
 

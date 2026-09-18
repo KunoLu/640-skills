@@ -11,12 +11,14 @@
 - P1-03加入固定版本Graft本地检测和显式确认的全局安装入口；检查与npm/latest可达性分离，受管子进程DNT与dotenv/LLM环境隔离，安装后验证native启动及telemetry持久关闭，不提前激活host/MCP或迁移。
 - P1-17加入Onboard内任务状态Python库：`scripts/sbtd_task_document.py`负责task.md解析与候选更新，保留未属本操作的frontmatter扩展／正文并维护唯一状态事件表；`scripts/sbtd_task_state.py`提供`TaskStore`的create／inspect／select／transition／set_mode／resume／reopen／protect_local_state／promote／archive，由host-native调用，不注册新全局CLI、daemon、journal或`onboard.py`子命令。Markdown结构识别使用新增声明依赖markdown-it-py>=4,<5的CommonMark token（parse-only、不渲染、不联网，Python>=3.10与既有语法下限一致），缺失时明确停止写入而不是退回手写扫描。提升／归档两阶段：先准备并验证目标候选、active引用与必要共享index，单独确认后原目录原子退役进`.sbtd/task-originals/`保留且不递归删除；候选复制只用受保护临时区并由本次操作清理，目录内附带逻辑任务须`include_tasks`逐个显式授权。非Git项目branch为null，首次窄保护只追加`/.sbtd/`；部分失败如实返回`completed_steps`，重试不重复追加事件，未知blocked历史必须用户选择恢复相位。不代表Windows、host路由、身份建立、真实迁移、全量验证或发布已通过。
 - P1-18加入确定性路由与受保护交接库：`scripts/sbtd_task_routing.py`的`TaskRouter`把host已明确的意图（new/continue/question）、显式mode、推荐回应（accept/keep）与只读/确认标记转成确定性`RouteDecision`（ready、needs-task-choice、needs-mode-choice、needs-mode-decision、needs-branch-choice、needs-persistence-confirmation、persistence-failed、blocked），不做自然语言意图分类；续作先唯一确定task再定mode，推荐必须先返回待决定，拒绝以结构化mode_note按风险标识去重保存，保存失败保持会话内选择并如实标记未持久化。`TaskStore`新增公开的current_binding、recovery_candidates与rebind：跨分支不匹配要求正确worktree、明确rebind（expected_branch/reason/evidence/confirmed，只更新绑定与事件，不checkout、不stash、不重置blocked恢复历史）或只读选择。`scripts/sbtd_handoff.py`的`HandoffStore`只在真实pause/context-switch/branch-switch/context-pressure/manual触发，计数或checking不触发；task/session退出独立锁存且手动请求不清除；`save`结果状态为saved/suppressed/conversation-only/branch-conflict/unprotected/unchanged/pending-confirmation/needs-redaction，写入前核对`docs/handoffs/`窄保护与tracked状态并要求显式redaction_confirmed；文件名取完整逻辑任务ID UTF-8字节的小写hex（大小写不敏感文件系统上仍无冲突且可逆），同任务同内容快照（仅created_at除外）不重写、跨日不单独触发；主动提醒只取7天内按任务去重、root/分支匹配且未完成任务的快照，旧快照可显式手动恢复但绝不改写task；分支不匹配拒绝写入，handoff不是mode/status事实源。不代表Windows、host接线、自动SessionStart恢复、真实迁移、全量验证或发布已通过。
+- P1-19加入按需developer身份库与显式CLI消费：`scripts/sbtd_identity.py`的`DeveloperStore(root, read_only=False)`提供只读`resolve()`／`plan(name)`与确认门控的`ensure(name, confirmed=False, protect=False)`，统一返回冻结`IdentityResult`（status／name／source／path／first_write_eligible／topology／reason／needs_protection／completed_steps，可`dataclasses.asdict`导出），不注册新全局CLI、daemon、initializer或身份数据库。本地`.sbtd/developer`合法值（单条`name=`、`^[a-z0-9]+$`原样匹配）直接胜出且不再查Git；仅本地确实缺失后才核验真实Git根、git-dir/common-dir与NUL分隔worktree registry，已验证linked worktree只读同仓主checkout当前身份且不复制回本地；现存异常（重复声明、非法值、错误类型、symlink、不可读或父路径不安全）是conflict而非缺失，Git未知或不可用是blocked而非非Git证明。名字校验复用单一`validate_developer_name`，不trim、不小写化、不从Git／OS／环境／历史目录猜作者；普通resolve/plan不读旧`.trellis/.developer`。首次建立只允许正常缺失目标：窄`/.sbtd/`ignore保护与名字授权分开确认，仅写`name=<name>\n`并回读验证，同名幂等、异名conflict、并发胜者不覆盖、失败如实返回completed_steps。`onboard.py`仅经显式`--developer <name>`消费：`check`／`plan`只读并在单JSON中展示`developerPlan`（requestedName、聚合status／reason及逐项目projectRoot／status／name／source／target／topology／needsProtection／completedSteps），conflict／blocked／needs-*或无项目范围时exit 2、绝不默认cwd或HOME；`init`／`reset`／`init-projects`要求`--developer`与`--yes`同现，在任何全局或项目写入之前完成全批次身份preflight，冲突先于副作用拒绝，写入后身份失败exit 5且保留部分结果。无`--developer`行为完全不变，reset不覆盖既有身份。根安装器本次不加flag（全量转发归P1-07／P1-08）；旧身份真实迁移仍是独立P1-12门。不代表Windows、真实host、全量验证、真实迁移或发布已通过。
 
 ### 修复
 
 - PowerShell 使用严格参数绑定拒绝已移除参数，内部 project-only 执行模式不再写入公开 `Action` 的受限取值；真实解释器回归覆盖成功与拒绝路径。
 - 两安装器在全局/可选项目安装和 MCP 写入之前执行完整项目前置检查，避免最终拒绝 scaffold 冲突时已经产生副作用；`check-projects` 同步支持实际 `--skip-project-agents` 检查范围。
 - RTK真实性检查改在私有probe HOME/cwd执行，避免只读check创建用户history.db；报告明确隔离验证范围，不把结果当作用户历史目录权限证明。
+- 显式developer初始化保留脚手架实际写入结果，身份阶段失败仍返回完整单份JSON；项目根中途消失按项目报告blocked/failed，保留此前成功结果，不冒称批次回滚。
 
 ### 文档
 
@@ -27,6 +29,7 @@
 - 准备 P0-06 lessons 身份与历史保留规则：本地新身份优先、仅缺失时读取主 checkout、首次写入窄授权、异常不绕过、ID／marker不改名；旧身份仅用于显式迁移。完整Skill候选与新路由在P0-07同批替换，不提前创建身份或迁移数据。
 - P1-17同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`记录任务状态helper的真实调用形态与工程边界；版本化automation prompt把两个新脚本纳入只读评估范围，不同步live automation或真实HOME。
 - P1-18同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`、`references/handoff.md`记录路由／重绑定／handoff helper的真实调用形态与工程边界；版本化automation prompt把`sbtd_task_routing.py`、`sbtd_handoff.py`纳入只读评估范围，不同步live automation或真实HOME。
+- P1-19同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`与bundled `lessons-record`的`SKILL.md`／`references/identity-migration.md`记录`DeveloperStore`只读链／plan／ensure与显式`--developer`入口的真实边界；版本化automation prompt把`sbtd_identity.py`纳入只读评估范围，不同步live automation或真实HOME。
 
 ### 变更
 
