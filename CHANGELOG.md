@@ -10,6 +10,7 @@
 - P1-02加入只读SBTD最小状态检查与按需bootstrap：未onboard项目不因缺少task／身份而失败；已有指针与选中任务按schema、日期和物理路径检查，异常不重建。PyYAML显式纳入安装依赖。
 - P1-03加入固定版本Graft本地检测和显式确认的全局安装入口；检查与npm/latest可达性分离，受管子进程DNT与dotenv/LLM环境隔离，安装后验证native启动及telemetry持久关闭，不提前激活host/MCP或迁移。
 - P1-17加入Onboard内任务状态Python库：`scripts/sbtd_task_document.py`负责task.md解析与候选更新，保留未属本操作的frontmatter扩展／正文并维护唯一状态事件表；`scripts/sbtd_task_state.py`提供`TaskStore`的create／inspect／select／transition／set_mode／resume／reopen／protect_local_state／promote／archive，由host-native调用，不注册新全局CLI、daemon、journal或`onboard.py`子命令。Markdown结构识别使用新增声明依赖markdown-it-py>=4,<5的CommonMark token（parse-only、不渲染、不联网，Python>=3.10与既有语法下限一致），缺失时明确停止写入而不是退回手写扫描。提升／归档两阶段：先准备并验证目标候选、active引用与必要共享index，单独确认后原目录原子退役进`.sbtd/task-originals/`保留且不递归删除；候选复制只用受保护临时区并由本次操作清理，目录内附带逻辑任务须`include_tasks`逐个显式授权。非Git项目branch为null，首次窄保护只追加`/.sbtd/`；部分失败如实返回`completed_steps`，重试不重复追加事件，未知blocked历史必须用户选择恢复相位。不代表Windows、host路由、身份建立、真实迁移、全量验证或发布已通过。
+- P1-18加入确定性路由与受保护交接库：`scripts/sbtd_task_routing.py`的`TaskRouter`把host已明确的意图（new/continue/question）、显式mode、推荐回应（accept/keep）与只读/确认标记转成确定性`RouteDecision`（ready、needs-task-choice、needs-mode-choice、needs-mode-decision、needs-branch-choice、needs-persistence-confirmation、persistence-failed、blocked），不做自然语言意图分类；续作先唯一确定task再定mode，推荐必须先返回待决定，拒绝以结构化mode_note按风险标识去重保存，保存失败保持会话内选择并如实标记未持久化。`TaskStore`新增公开的current_binding、recovery_candidates与rebind：跨分支不匹配要求正确worktree、明确rebind（expected_branch/reason/evidence/confirmed，只更新绑定与事件，不checkout、不stash、不重置blocked恢复历史）或只读选择。`scripts/sbtd_handoff.py`的`HandoffStore`只在真实pause/context-switch/branch-switch/context-pressure/manual触发，计数或checking不触发；task/session退出独立锁存且手动请求不清除；`save`结果状态为saved/suppressed/conversation-only/branch-conflict/unprotected/unchanged/pending-confirmation/needs-redaction，写入前核对`docs/handoffs/`窄保护与tracked状态并要求显式redaction_confirmed；文件名取完整逻辑任务ID UTF-8字节的小写hex（大小写不敏感文件系统上仍无冲突且可逆），同任务同内容快照（仅created_at除外）不重写、跨日不单独触发；主动提醒只取7天内按任务去重、root/分支匹配且未完成任务的快照，旧快照可显式手动恢复但绝不改写task；分支不匹配拒绝写入，handoff不是mode/status事实源。不代表Windows、host接线、自动SessionStart恢复、真实迁移、全量验证或发布已通过。
 
 ### 修复
 
@@ -25,6 +26,7 @@
 - 准备 P0-05 全局／项目公共路由和无全局 Skill 的安全 fallback；方法、工具与输出模式协议按需加载，输出压缩不改变执行模式。AGENTS 与 sbtd-task/catalog 在 P0-07 同批激活，避免先发布悬空调用。
 - 准备 P0-06 lessons 身份与历史保留规则：本地新身份优先、仅缺失时读取主 checkout、首次写入窄授权、异常不绕过、ID／marker不改名；旧身份仅用于显式迁移。完整Skill候选与新路由在P0-07同批替换，不提前创建身份或迁移数据。
 - P1-17同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`记录任务状态helper的真实调用形态与工程边界；版本化automation prompt把两个新脚本纳入只读评估范围，不同步live automation或真实HOME。
+- P1-18同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`、`references/handoff.md`记录路由／重绑定／handoff helper的真实调用形态与工程边界；版本化automation prompt把`sbtd_task_routing.py`、`sbtd_handoff.py`纳入只读评估范围，不同步live automation或真实HOME。
 
 ### 变更
 

@@ -37,6 +37,8 @@ __all__ = [
     "open_regular_file",
     "parse_active_pointer",
     "parse_task_frontmatter",
+    "require_dependency",
+    "validate_json_compatible",
     "validate_task_data",
     "validate_task_timestamps",
 ]
@@ -124,7 +126,7 @@ def _result(
     }
 
 
-def _require(module_name: str, package: str) -> Any:
+def require_dependency(module_name: str, package: str) -> Any:
     """Import a declared dependency lazily and report its absence."""
     try:
         return __import__(module_name)
@@ -147,7 +149,7 @@ def _bundled_schema() -> dict[str, Any]:
 
 
 def validate_task_data(data: object, definition: str, label: str) -> dict[str, Any]:
-    jsonschema = _require("jsonschema", "jsonschema")
+    jsonschema = require_dependency("jsonschema", "jsonschema")
     schema = {**_bundled_schema(), "$ref": f"#/$defs/{definition}"}
     validator = jsonschema.Draft202012Validator(schema)
     if not isinstance(data, dict) or not validator.is_valid(data):
@@ -373,7 +375,7 @@ def _build_safe_loader(yaml: Any) -> type:
     return TaskSafeLoader
 
 
-def _check_json_compatible(
+def validate_json_compatible(
     value: object, label: str, active: set[int] | None = None
 ) -> None:
     if value is None or isinstance(value, (str, bool, int)):
@@ -404,7 +406,7 @@ def _check_json_compatible(
                             _REPAIR_NEXT,
                         )
             for child in children:
-                _check_json_compatible(child, label, active)
+                validate_json_compatible(child, label, active)
         finally:
             active.discard(marker)
         return
@@ -416,7 +418,7 @@ def _check_json_compatible(
 
 
 def _load_safe_yaml(text: str, label: str) -> Any:
-    yaml = _require("yaml", "PyYAML")
+    yaml = require_dependency("yaml", "PyYAML")
     try:
         data = yaml.load(text, Loader=_build_safe_loader(yaml))
     except (yaml.YAMLError, RecursionError):
@@ -425,7 +427,7 @@ def _load_safe_yaml(text: str, label: str) -> Any:
             "(duplicate keys and unsafe tags are rejected)",
             _REPAIR_NEXT,
         ) from None
-    _check_json_compatible(data, label)
+    validate_json_compatible(data, label)
     return data
 
 

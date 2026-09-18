@@ -27,6 +27,7 @@ from sbtd_project import (
     TaskDataError,
     open_regular_file,
     parse_active_pointer,
+    require_dependency,
     validate_task_data,
 )
 from sbtd_task_document import TaskDocument
@@ -117,7 +118,7 @@ class TaskStore:
         except (OSError, subprocess.TimeoutExpired):
             raise TaskStateError("Git binding cannot be inspected safely") from None
 
-    def _binding(self) -> str | None:
+    def current_binding(self) -> str | None:
         top = self._git("rev-parse", "--show-toplevel")
         if top.returncode:
             if "not a git repository" in top.stderr:
@@ -185,7 +186,7 @@ class TaskStore:
 
     def protect_local_state(self, *, confirmed: bool = False) -> bool:
         self._authorize(confirmed)
-        binding = self._binding()
+        binding = self.current_binding()
         self._require_untracked_local_state(binding)
         if self._local_protected(binding, (".sbtd/",)):
             return False
@@ -370,7 +371,7 @@ class TaskStore:
         confirmed: bool = False,
     ) -> TaskSnapshot:
         self._authorize(confirmed)
-        binding = self._binding()
+        binding = self.current_binding()
         records = self._catalog()
         previous_pointer, old_pointer = self._pointer()
         selected_mode = mode if mode is not None else "default"
@@ -400,7 +401,7 @@ class TaskStore:
             metadata["created_at"] = existing.document.frontmatter["created_at"]
             metadata["updated_at"] = existing.document.frontmatter["updated_at"]
         validate_task_data(metadata, "taskFrontmatter", "new task")
-        import yaml
+        yaml = require_dependency("yaml", "PyYAML")
 
         document = TaskDocument.parse(
             "---\n"
@@ -457,7 +458,7 @@ class TaskStore:
     def _selected_for_write(self, task_id: str, confirmed: bool) -> TaskSnapshot:
         self._authorize(confirmed)
         selected = self.inspect(task_id)
-        binding = self._binding()
+        binding = self.current_binding()
         if selected.document.frontmatter["branch"] != binding:
             raise TaskStateError(
                 "task belongs to a different branch or repository binding",
@@ -703,7 +704,7 @@ class TaskStore:
             ancestor = records[current]
             lineage.append(ancestor)
             current = ancestor.document.frontmatter.get("parent")
-        binding = self._binding()
+        binding = self.current_binding()
         candidates: list[tuple[TaskSnapshot, TaskDocument]] = []
         for ancestor in reversed(lineage):
             previous = ancestor.document
@@ -1190,7 +1191,7 @@ class TaskStore:
                 "needs-confirmation", selected, source_file, target_file, files
             )
         self._authorize(confirmed)
-        binding = self._binding()
+        binding = self.current_binding()
         if any(
             snapshot.document.frontmatter["branch"] != binding
             for snapshot in moved.values()
@@ -1289,7 +1290,7 @@ class TaskStore:
         selected = self._selected_for_write(task_id, confirmed)
         if self._unfinished_descendants(task_id, self._catalog()):
             raise TaskStateError("select an unfinished child before parent integration")
-        binding = self._binding()
+        binding = self.current_binding()
         if selected.document.frontmatter["branch"] != binding:
             raise TaskStateError("task branch changed before bookmark selection")
         self._require_local_protection(binding, ".sbtd/active-task.json")
@@ -1311,3 +1312,66 @@ class TaskStore:
             original,
         )
         return selected
+
+    def rebind(
+        self,
+        task_id: str,
+        *,
+        expected_branch: str | None,
+        reason: str,
+        evidence: str,
+        confirmed: bool = False,
+    ) -> TaskSnapshot:
+        self._authorize(confirmed)
+        if not reason.strip() or not evidence.strip():
+            raise TaskStateError(
+                "branch rebinding requires its explicit reason and evidence"
+            )
+        selected = self.inspect(task_id)
+        document = selected.document
+        observed = self.current_binding()
+        previous = document.frontmatter["branch"]
+        if previous == observed:
+            return selected
+        if previous != expected_branch:
+            raise TaskStateError("task branch changed since the rebinding decision")
+        if selected.task_path.startswith(".sbtd/"):
+            self._require_local_protection(observed, selected.task_path)
+        _, consistent = self._history(document)
+        if not consistent:
+            raise TaskStateError(
+                "resolve the task history before changing its branch binding"
+            )
+        phase = document.frontmatter["status"]
+        moment = self._now(document)
+        candidate = document.updated(
+            {"branch": observed, "updated_at": moment},
+            event={
+                "at": moment,
+                "from": phase,
+                "to": phase,
+                "reason": (
+                    "Explicit branch rebinding from "
+                    + json.dumps(previous, ensure_ascii=False)
+                    + " to "
+                    + json.dumps(observed, ensure_ascii=False)
+                    + ": "
+                    + reason
+                ),
+                "evidence": evidence,
+            },
+        )
+        if self.current_binding() != observed:
+            raise TaskStateError("checkout changed while preparing the rebinding")
+        return self._save(selected, candidate)
+
+    def recovery_candidates(
+        self, task_id: str | None = None
+    ) -> tuple[TaskSnapshot, ...]:
+        if task_id is not None:
+            return (self.inspect(task_id),)
+        pointer, _ = self._pointer()
+        if pointer is not None:
+            return (self.inspect(),)
+        records = self._catalog()
+        return tuple(records[task_id] for task_id in sorted(records))
