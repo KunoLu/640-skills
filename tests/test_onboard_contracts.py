@@ -5532,5 +5532,171 @@ class NinthReviewRegressionTests(unittest.TestCase):
             )
 
 
+class EleventhReviewRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.family = fixtures.build_fixture_family()
+
+    def linked_payload(self, previous, kind):
+        payload = copy.deepcopy(previous["payload"])
+        id_key, previous_key = (
+            ("deployment_id", "previous_deployment_id")
+            if kind == "deployment_evidence"
+            else ("receipt_id", "previous_receipt_id")
+        )
+        payload[previous_key] = previous[id_key]
+        payload["started_at"] = payload["finished_at"] = previous["payload"][
+            "finished_at"
+        ]
+        return payload
+
+    def test_shared_operation_cannot_intrude_into_a_more_specific_project(self) -> None:
+        payload = copy.deepcopy(self.family["manifest"]["payload"])
+        operation = copy.deepcopy(fixtures.operations_of("s1")["apply"])
+        operation["dependent_projects"] = [fixtures.BETA]
+        payload["shared_operations"] = [operation]
+        payload["shared_roots"] = [
+            {
+                "kind": "home",
+                "path": str(Path(fixtures.ALPHA).parent),
+                "dependent_projects": list(fixtures.BOTH),
+            }
+        ]
+        payload["projects"][0]["shared_operation_ids"] = []
+        for boundary, target in (
+            ("shared control", "/private/work/shared/settings.toml"),
+            ("project intrusion", fixtures.ALPHA + "/.config/settings.toml"),
+        ):
+            operation["target"] = target
+            operation["resource_id"] = contracts.resource_id("toml", target)
+            operation["operation_id"] = contracts.operation_id(
+                "apply", operation["resource_id"], operation["selector"]
+            )
+            payload["projects"][1]["shared_operation_ids"] = [operation["operation_id"]]
+            with self.subTest(boundary=boundary):
+                if boundary == "shared control":
+                    contracts.seal_document("manifest", copy.deepcopy(payload))
+                else:
+                    with self.assertRaises(ContractError):
+                        contracts.seal_document("manifest", payload)
+        payload["shared_roots"][0]["path"] = fixtures.ALPHA + "/.config"
+        contracts.seal_document("manifest", payload)
+
+    def test_retry_reports_preserve_the_previous_file_snapshots(self) -> None:
+        old_report = {
+            "path": fixtures.BACKUP_ROOT + "/prior-report.json",
+            "state": fixtures.file_state(211),
+        }
+        for kind in ("deployment_evidence", "recovery_receipt"):
+            previous_payload = copy.deepcopy(self.family[kind]["payload"])
+            if kind == "deployment_evidence":
+                previous_payload["projects"][0]["report_refs"] = [
+                    copy.deepcopy(old_report)
+                ]
+            else:
+                previous_payload["report_refs"] = [copy.deepcopy(old_report)]
+            previous = contracts.seal_document(kind, previous_payload)
+            control = contracts.seal_document(kind, self.linked_payload(previous, kind))
+            contracts.validate_cumulative(previous, control, kind)
+            for boundary, path, state in (
+                ("changed", old_report["path"], fixtures.file_state(212)),
+                (
+                    "ancestor",
+                    str(Path(old_report["path"]).parent),
+                    fixtures.file_state(213),
+                ),
+                (
+                    "descendant",
+                    old_report["path"] + "/details.json",
+                    fixtures.file_state(214),
+                ),
+                (
+                    "fresh disjoint",
+                    fixtures.EVIDENCE_DIR + "/new-report.json",
+                    fixtures.file_state(215),
+                ),
+            ):
+                payload = self.linked_payload(previous, kind)
+                holder = (
+                    payload["projects"][0] if kind == "deployment_evidence" else payload
+                )
+                holder["report_refs"] = [{"path": path, "state": state}]
+                current = contracts.seal_document(kind, payload)
+                with self.subTest(kind=kind, boundary=boundary):
+                    if boundary == "fresh disjoint":
+                        contracts.validate_cumulative(previous, current, kind)
+                    else:
+                        with self.assertRaises(ContractError):
+                            contracts.validate_cumulative(previous, current, kind)
+
+    def test_new_retry_original_refs_cannot_repurpose_previous_reports(self) -> None:
+        old_report = {
+            "path": fixtures.BACKUP_ROOT + "/prior-report.json",
+            "state": fixtures.file_state(211),
+        }
+        for kind in ("deployment_evidence", "recovery_receipt"):
+            previous_payload = copy.deepcopy(self.family[kind]["payload"])
+            previous_payload["status"] = "failed"
+            if kind == "deployment_evidence":
+                previous_payload["projects"][0]["report_refs"] = [
+                    copy.deepcopy(old_report)
+                ]
+                previous_payload["projects"][1].update(
+                    status="failed",
+                    reason="resource not attempted",
+                    nextStep="retry",
+                    private_results=[],
+                )
+            else:
+                leaf = next(
+                    result
+                    for result in previous_payload["results"]
+                    if result["resource_id"] == fixtures.resource_id_of("r1")
+                    and result["phase"] == "apply"
+                )
+                previous_payload["results"].remove(leaf)
+                previous_payload["completed_step_ids"].remove(leaf["step_id"])
+                previous_payload["pending_step_ids"].append(leaf["step_id"])
+                previous_payload["projects"][0].update(
+                    status="failed",
+                    reason="restore not attempted",
+                    nextStep="retry",
+                )
+                previous_payload["reason"] = "restore not attempted"
+                previous_payload["report_refs"] = [copy.deepcopy(old_report)]
+            previous = contracts.seal_document(kind, previous_payload)
+            payload = copy.deepcopy(self.family[kind]["payload"])
+            if kind == "deployment_evidence":
+                payload["previous_deployment_id"] = previous["deployment_id"]
+                holder = payload["projects"][0]
+                new_original = payload["projects"][1]["private_results"][0][
+                    "backup_ref"
+                ]
+            else:
+                payload["previous_receipt_id"] = previous["receipt_id"]
+                holder = payload
+                new_original = next(
+                    result["protection_ref"]
+                    for result in payload["results"]
+                    if result["resource_id"] == fixtures.resource_id_of("r1")
+                    and result["phase"] == "apply"
+                )
+            payload["started_at"] = payload["finished_at"] = previous_payload[
+                "finished_at"
+            ]
+            holder["report_refs"] = [
+                {
+                    "path": fixtures.EVIDENCE_DIR + "/fresh-retry.json",
+                    "state": fixtures.file_state(216),
+                }
+            ]
+            control = contracts.seal_document(kind, copy.deepcopy(payload))
+            contracts.validate_cumulative(previous, control, kind)
+            new_original["path"] = old_report["path"]
+            current = contracts.seal_document(kind, payload)
+            with self.subTest(kind=kind), self.assertRaises(ContractError):
+                contracts.validate_cumulative(previous, current, kind)
+
+
 if __name__ == "__main__":
     unittest.main()

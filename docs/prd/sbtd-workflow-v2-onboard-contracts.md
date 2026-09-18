@@ -1,5 +1,7 @@
 # P1-01：Onboard 协议基础与接入边界
 
+当前审查门槛以用户更新后的[D-IMP-13](sbtd-workflow-v2-implementation-decisions.md#d-imp-13审查门槛与低优先级发现台账)为准：无有效P0／P1即可推进；P2及以下写入根目录[findings.log](../../findings.log)留待评估。下文历史“零新发现”保留为旧轮次事实，不再要求低优先级问题全部清零。
+
 ## 交付与非目标
 
 本项交付可实际调用的纯Python参数解析、版本化交换对象校验、canonical ID和单JSON输出契约；不是新的迁移执行器。按主PRD §10.2及§14，包含publication-decisions批准快照、manifest的私有／共享操作、阶段收据、deployment-evidence及init迁移上下文、recovery plan／receipt、migration／recovery envelope。
@@ -211,3 +213,17 @@ smoke后的Code Readability／Ponytail复核保留具名输入引用遍历和阶
 三组实际API smoke通过：发布／归属6场景（含宽HOME与absent正向控制）、完整raw源下的跨文档别名、无前序的present候选类型。单独candidate脚本的旧absent说明字段不是该次观测，已在汇总注明并从后续脚本删除；原raw不改。smoke后补充宽HOME项目与failed类型漂移控制，231项协议和新5个Python文件Ruff／格式／ty再次通过。可读性复核保留具名不可变引用流与观察流，不新增执行框架、缓存或锁。
 
 README.md／README.html／版本化automation prompt的公开接入和安装边界不变，不重复改写；CHANGELOG已有未发布能力条目，不加入逐轮过程日志。当前仍待新head全量、精确副本和独立review，不能预填ready／done或创建PR。
+
+## 第十一轮审查与用户门槛调整
+
+冻结head `d424a7b711542417dab917ad33310b64c7e849fd` 的536项／126.571s、精确安装副本、18组实际smoke、静态及20份envelope通过。Surface零发现；Intrinsic最终保留P1“共享写入侵入更具体项目”，并明确撤回改变“唯一shared root”规则的建议。Recovery提出P1“累计重试覆盖前次报告”及P2“deployment报告文件父子嵌套”。
+
+用户在本轮明确修改当前及后续任务的推进门槛：仅P0／P1阻塞；P2及以下记录后由用户评估。P2报告嵌套项已写入`findings.log`为deferred，对应新增但未执行的测试移除，不为该项修改生产代码。当前P1-01已完成轮次的38条P2审查记录同时回填为fixed，保持原级别与来源，不回滚旧修复。两项P1仍须修复、验证并独立复审；不能把低级别问题记账当作跳过必要验收。
+
+累计报告保留按reviewer确认限定为已提供的previous/current：保留前次已知报告路径，允许相同引用继续使用与新的不相交报告，不要求current追加所有历史report_refs，不推测未提供的旧历史。
+
+本次只调整该实施计划的执行门槛及台账，不改变产品接口、安装／reset、公开工具职责或版本监控范围；README.md、README.html、版本化automation prompt和CHANGELOG无需随之重复改写。全局AGENTS、项目模板、live automation均不修改。
+
+两项P1先以3个方法取得9个预期断言失败／零errors，再修复并通过3项定点和234项完整协议。共享操作仍要求唯一匹配shared root，再排除归属于更具体项目的目标；更具体共享根可继续拥有其资源，不自动路由。累计校验保留已提供前次报告的路径与内容，允许相同引用、新的不相交报告及从当前列表移除旧引用，但新备份／保护／报告不能覆盖前次已知报告。
+
+实际API smoke的6个正反场景通过，新5个Python文件Ruff／格式／ty通过。可读性复核将累计报告保留集中为一个有实际复用的检查，不新增历史索引、字段或存储布局；未处理`findings.log`中的P2报告嵌套。下一步只按D-IMP-13要求验证新冻结head并复审P0／P1，不再追求P2清零。

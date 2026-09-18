@@ -858,6 +858,17 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "shared target needs one declared root covering its dependencies",
             )
+        shared_root = matching_roots[0]["path"]
+        if any(
+            root != shared_root
+            and _path_contains(shared_root, root)
+            and _path_contains(root, operation["target"])
+            for root in roots
+        ):
+            _fail(
+                "semantic-violation",
+                "shared target belongs to a more-specific selected project",
+            )
     _check_publication_links(payload)
 
 
@@ -2845,6 +2856,55 @@ def _valid_result_transition(
     )
 
 
+def _check_cumulative_report_artifacts(
+    previous_reports: Iterable[Mapping[str, Any]],
+    current_reports: Iterable[Mapping[str, Any]],
+    previous_originals: Iterable[Mapping[str, Any] | None],
+    current_originals: Iterable[Mapping[str, Any] | None],
+) -> None:
+    reserved = {reference["path"]: reference["state"] for reference in previous_reports}
+    if not reserved:
+        return
+    for reference in current_reports:
+        path = reference["path"]
+        if path in reserved and reference["state"] == reserved[path]:
+            continue
+        if any(
+            _path_contains(path, previous) or _path_contains(previous, path)
+            for previous in reserved
+        ):
+            _fail(
+                "cumulative-violation",
+                "retry report overwrites a previous report artifact",
+                exit_code=3,
+            )
+    existing_originals = {
+        (reference["path"], reference["state"]["type"], reference["state"]["checksum"])
+        for reference in previous_originals
+        if reference is not None
+    }
+    for reference in current_originals:
+        if reference is None:
+            continue
+        identity = (
+            reference["path"],
+            reference["state"]["type"],
+            reference["state"]["checksum"],
+        )
+        if identity in existing_originals:
+            continue
+        if any(
+            _path_contains(reference["path"], previous)
+            or _path_contains(previous, reference["path"])
+            for previous in reserved
+        ):
+            _fail(
+                "cumulative-violation",
+                "retry original reference overwrites a previous report artifact",
+                exit_code=3,
+            )
+
+
 def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
     """Prove a retry receipt preserves prior success and original references.
 
@@ -2852,6 +2912,8 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
     null previous receipt reference. Otherwise the current document must link
     the previous document's ID and carry every previously succeeded result
     forward with its original before/after and backup (or protection) refs.
+    Report files in the supplied previous record stay reserved even when the
+    current report list replaces them with fresh, disjoint report references.
     """
     if kind not in _CUMULATIVE_KINDS:
         _fail("unknown-kind", "kind does not support cumulative validation")
@@ -2961,6 +3023,12 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
                     "retry changed preserved recovery identity/state or advanced an unsafe partial write",
                     exit_code=3,
                 )
+        _check_cumulative_report_artifacts(
+            previous["payload"]["report_refs"],
+            current["payload"]["report_refs"],
+            (result["protection_ref"] for result in previous_results.values()),
+            (result["protection_ref"] for result in current_results.values()),
+        )
         return current
 
     previous_results = _collect_stage_results(previous["payload"])
@@ -2973,6 +3041,21 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
                 "retry changed preserved resource identity/state or advanced an unsafe partial write",
                 exit_code=3,
             )
+    if kind == "deployment_evidence":
+        _check_cumulative_report_artifacts(
+            (
+                reference
+                for project in previous["payload"]["projects"]
+                for reference in project["report_refs"]
+            ),
+            (
+                reference
+                for project in current["payload"]["projects"]
+                for reference in project["report_refs"]
+            ),
+            (result["backup_ref"] for result in previous_results.values()),
+            (result["backup_ref"] for result in current_results.values()),
+        )
     return current
 
 
