@@ -406,6 +406,7 @@
         <div class="status-list">
           <div><strong>未发布边界（v2 分阶段交付中）</strong><br>canonical payload 为 14 bundled / 19 external Skills。项目 setup 已切换为按需 SBTD 检查，不安装或初始化 Trellis；Graft、host 接线、任务操作、身份和迁移仍分阶段实施，不将开发分支当作完整 v2 发布部署到真实项目。</div>
           <div>P1-01内部契约不代表migration/recovery可执行；P1-02只验证选中状态的形状与containment，不替代恢复或验收。目录复制不安装Python依赖；实际解释器须按安装副本的<code>requirements.txt</code>准备jsonschema和PyYAML。缺失时相关校验明确阻断，帮助与纯参数解析不受影响。</div>
+          <div>P1-03提供本地Graft检测和明确确认的<code>install-graft</code>，固定<code>@nanonets/graft@0.18.0</code>与Node &gt;=20。验证完整性/native启动和telemetry持久关闭；不等于graph、MCP、host或完整v2可用。</div>
         </div>
       </div>
     </section>
@@ -528,7 +529,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           </div>
         </div>
         <div class="status-list">
-          <div><strong>平台与 CLI 前置门</strong><br>正常 init/reset 检查所选 Agent、npm 与剩余过渡 GitNexus；project-only 不进行全局检测或安装。Trellis 不再是前置依赖。</div>
+          <div><strong>平台与 CLI 前置门</strong><br>已可用Agent/Graft不因npm缺失被重复安装。Graft先展示固定包、native脚本与HOME telemetry计划，再确认调用Python唯一handler；拒绝不升级Node/npm。project-only跳过全局操作。</div>
           <div><strong>多项目参数</strong><br><code>--projects-root</code> / <code>-ProjectsRoot</code> 接收英语逗号分隔的绝对目录；<code>--init-projects</code> / <code>-InitProjects</code> 独立处理项目安装资产与 SBTD 检查。</div>
           <div><strong>Project AGENTS / Skill activation</strong><br><code>AGENTS.project.md</code> 保存三模式入口、project-only 最小 fallback、项目路径和项目级硬边界。正常 init/reset 由全局 AGENTS + Skills 激活完整路由；public bootstrap / init-projects 不单独激活 book-derived 门禁。全局 AGENTS 维护共同路由与客观触发，bundled <code>sbtd-task</code> 承载 <code>default</code> / <code>lite</code> / <code>strict</code> 工作契约（strict 才加载完整适用 Gate），项目模板自带全局路由不可见时的最小 objective-trigger fallback（含 Book Gate Plan 触发事实与 Gate lifecycle）；各 reviewer <code>SKILL.md</code> 独占状态、输出 schema、修正回路与 stop condition，模板与 <code>sbtd-task</code> 都不复制 reviewer 状态词表。</div>
           <div><strong>Agent npm 映射</strong><br><code>codex → @openai/codex@latest</code><br><code>claude → @anthropic-ai/claude-code@latest</code><br><code>kimi → @moonshot-ai/kimi-code@latest</code><br><code>omp → @oh-my-pi/pi-coding-agent@latest</code>。</div>
@@ -539,6 +540,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           <div><strong>External stable default</strong><br><code>auto</code> 默认使用 Onboard 内置、经过 review 且由精确 revision 和 checksum 固定的 stable set，不访问 Git 或网络；<code>stable</code> 使用相同的确定性来源。只有用户显式选择 <code>upstream</code> 才整组 clone 和验证当前上游，失败时不回退。全部 Skill 先暂存验证，再用临时 rollback backup 事务替换，canonical commit 成功后才删除 legacy 目录。</div>
           <div><strong>按需 SBTD Setup</strong><br>没有可选状态属于正常项目，不创建 task、identity 或 bootstrap。<code>sbtdInit</code> / <code>sbtdProjectSetup</code> 保留逐项目状态、原因和下一步；异常先处理再写入，旧数据只提示明确迁移。</div>
           <div><strong>MCP</strong><br>MCP 仍由用户选择：Codex 使用用户级配置，Claude 固定 <code>--scope user</code>，Kimi 保持 CLI 默认行为，Oh My Pi 固定写入全局 <code>~/.omp/agent/mcp.json</code>；project-only 模式完全跳过 MCP。</div>
+          <div><strong>Graft 安全与离线</strong><br>check/plan只用本地<code>--version</code>，不查latest。受管子进程固定DNT、屏蔽dotenv/LLM/cloud环境；不改用户全局环境。GitNexus专用安装/MCP分支已退役，既有配置不删除；Graft接线不提前提供。</div>
         </div>
       </div>
     </section>

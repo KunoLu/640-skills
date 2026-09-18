@@ -13,7 +13,7 @@ The directory remains self-contained: `catalog.json` is the machine-readable sou
 
 ## Staged v2 Delivery (Unreleased)
 
-This unreleased branch carries the v2 canonical payload (14 bundled Skills, with `sbtd-task` replacing `trellis-workflow` / `trellis-channel`; 19 required external Skills). Project setup no longer installs or invokes Trellis. Full Graft/host integration, task operations, identity creation and legacy migration remain staged P1 work; do not deploy this development branch as a completed v2 release. Existing legacy data is preserved and requires an explicitly authorized migration. P1-13 owns retirement of user-global legacy resources.
+This unreleased branch carries 14 bundled / 19 external Skills and on-demand SBTD project setup. Graft CLI detection and explicitly confirmed pinned installation are separate from graph/host integration, task operations and legacy migration, which remain staged P1 work. Do not deploy the branch as a completed v2 release. Existing legacy data/configuration is preserved; P1-13 owns authorized retirement.
 
 P1-01 supplies internal, directly callable argument and exchange-contract modules (`scripts/onboard_arguments.py`, `scripts/onboard_contracts.py`, `onboard-contracts.schema.json`). It does not activate new migration/recovery commands or deployment handlers in the existing CLI. Do not substitute contract fixtures, valid hashes, or a copied directory for executed migration or recovery evidence.
 
@@ -104,17 +104,21 @@ Normal onboarding resolves the Agent first and may inspect its CLI before the re
 | `kimi` | `kimi --version` | `@moonshot-ai/kimi-code@latest` |
 | `oh-my-pi` / `omp` | `omp --version` | `@oh-my-pi/pi-coding-agent@latest` |
 
-After the selected-project preflight passes, repair a missing/broken target CLI through the existing npm gate and require its version check to pass. The remaining transitional GitNexus tool also requires npm; Graft replacement is separate staged work.
+After project preflight passes, repair the selected Agent CLI when needed and verify it. A working Agent does not require bootstrapping npm just because optional Graft is missing. Graft installation has its own displayed plan and confirmation; a refused or unavailable auxiliary tool is not an authorization to install prerequisites.
 
 Project-only `--init-projects` asks for or accepts the platform but skips this Agent CLI/npm gate and every other global preflight.
 
 ## Mandatory Global Installation Policy
 
-Normal `init` and `reset` require these global tools:
+Normal `init` / `reset` maintains required global Skills. Auxiliary Graft installation is explicitly selected:
 
-- GitNexus CLI: `npm install -g gitnexus@latest`
+- `check` and `plan` report `graft` without querying npm latest or installing anything. Local verification is independent of npm availability.
+- `install-graft` shows the frozen `@nanonets/graft@0.18.0` package/native-script and global telemetry-disable plan; `--yes` authorizes that scope, not host wiring, graph creation or legacy cleanup. Node >=20 and usable npm are prerequisites.
+- The Python handler verifies archive integrity, installed package identity/version, native CLI startup and persisted telemetry opt-out. Any failed phase stays nonzero; npm exit 0 alone is not success.
+- Managed subprocesses use DNT and an empty dotenv source with LLM/cloud activation environment excluded. Installation also uses noninteractive CI to suppress this pin's postinstall background path; that is not a claim of CI validation.
+- GitNexus CLI installation and its dedicated MCP menu are retired; user-owned installations/configs are not removed. Graft host/MCP wiring is not offered until its later producer is complete.
 
-Project-local GitNexus CLI installation is not supported by the transitional installer. Existing `.trellis/` is preserved for explicit migration; Onboard neither installs nor invokes Trellis.
+Readonly RTK authenticity verification runs `gain` in a private probe HOME/cwd. It does not inspect or create the user's history database; `verificationScope=isolated-probe` records that limitation.
 
 All bundled Skills install globally as one required set:
 
@@ -179,7 +183,7 @@ React Bits remains project-only and optional:
 
 ## MCP Scope Policy
 
-MCP selection remains interactive and is skipped entirely in project-only mode. The built-in choices remain Chrome DevTools MCP, Playwright MCP, Maestro MCP, GitNexus MCP, and custom stdio MCP.
+MCP selection remains interactive and project-only skips it. Built-in choices are Chrome DevTools MCP, Playwright MCP, Maestro MCP and custom stdio MCP. No GitNexus fallback/alias or premature Graft wiring entry is provided.
 
 The target scope is fixed by Agent platform:
 
@@ -213,6 +217,15 @@ python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/tw
 python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --yes
 python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --yes
 ```
+
+Inspect and explicitly authorize Graft installation:
+
+```bash
+python scripts/onboard.py install-graft --json
+python scripts/onboard.py install-graft --yes --json
+```
+
+The first command does not write and may exit 2 with a confirmation/prerequisite result. Inspect the returned plan before using `--yes`; it does not authorize migration or graph/host changes.
 
 Project-only initialization:
 

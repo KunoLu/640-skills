@@ -350,16 +350,6 @@ function Ensure-TargetAgentCli {
   Write-Colored "Target Agent CLI check" Cyan
   if ($script:AgentCliCheck.installed) {
     Write-Host "$label CLI passed verification: $command"
-    if (-not $npmInstalled) {
-      Write-Host "npm is required for the mandatory global GitNexus CLI; bootstrapping Node.js LTS + npm."
-      Invoke-Onboard "ensure-npm" @("--yes")
-      if (-not $DryRun) {
-        Update-AgentCliCheck
-        if (-not $script:AgentCliCheck.runtime.npm.installed) {
-          Stop-WithMessage "npm bootstrap completed but npm is still unavailable; required global tools cannot be installed."
-        }
-      }
-    }
     return
   }
 
@@ -514,6 +504,86 @@ function Assert-PonytailProviderClear {
   }
 }
 
+# Graft is optional: the read-only `install-graft --json` probe (no --yes,
+# zero writes) is the single source of the real plan — frozen package, actual
+# npm prefix, telemetry target/changes. Only needs-confirmation leads to a
+# prompt and the confirmed `install-graft --yes`; blocked/operational states
+# degrade to a warning and onboarding continues without Graft. A confirmed
+# install failure still aborts the installer via Invoke-External.
+function Ensure-GraftCli {
+  Write-Host ""
+  Write-Colored "Graft CLI (optional)" Cyan
+
+  $probeArguments = $PythonPrefix + @((Get-OnboardPy), "install-graft", "--json")
+  Write-Host ("+ " + (@($PythonExe) + $probeArguments -join " "))
+  $probeOutput = & $PythonExe @probeArguments
+  $probeExit = $LASTEXITCODE
+  $probe = $null
+  try {
+    $probe = ($probeOutput -join "`n") | ConvertFrom-Json
+  }
+  catch {
+    $probe = $null
+  }
+  if ($null -eq $probe) {
+    Write-Warn "Graft CLI probe did not return a readable plan (exit $probeExit); skipping the optional Graft CLI."
+    return
+  }
+
+  $status = [string]$probe.status
+  $reason = [string]$probe.reason
+  if ($status -eq "already-installed") {
+    Write-Host "Graft CLI is already installed and usable; skipping."
+    return
+  }
+  if ($status -eq "blocked") {
+    if (-not $reason) { $reason = "unknown reason" }
+    Write-Warn "Graft CLI is blocked: $reason. Skipping the optional Graft CLI; existing GitNexus/Graft configuration and data are left untouched."
+    return
+  }
+  if ($status -ne "needs-confirmation") {
+    if (-not $reason) { $reason = "no reason given" }
+    Write-Warn "Graft CLI probe returned status '$status' (exit $probeExit): $reason. Skipping the optional Graft CLI."
+    return
+  }
+
+  $plan = $probe.plan
+  $package = "@nanonets/graft@0.18.0"
+  if ($plan -and $plan.PSObject.Properties["package"] -and $plan.package) {
+    $package = [string]$plan.package
+  }
+  $prefix = "<unresolved>"
+  if ($plan -and $plan.PSObject.Properties["prefix"] -and $plan.prefix) {
+    $prefix = [string]$plan.prefix
+  }
+  $telemetryPath = "<unknown>"
+  $changeText = "none"
+  if ($plan -and $plan.PSObject.Properties["telemetry"] -and $plan.telemetry) {
+    if ($plan.telemetry.PSObject.Properties["path"] -and $plan.telemetry.path) {
+      $telemetryPath = [string]$plan.telemetry.path
+    }
+    if ($plan.telemetry.PSObject.Properties["changes"] -and $plan.telemetry.changes) {
+      $pairs = @()
+      foreach ($property in $plan.telemetry.changes.PSObject.Properties) {
+        $pairs += ("{0}={1}" -f $property.Name, $property.Value)
+      }
+      if ($pairs.Count -gt 0) { $changeText = $pairs -join ", " }
+    }
+  }
+  Write-Host "Graft CLI install plan:"
+  Write-Host "  Package: $package (frozen pin; never latest)"
+  Write-Host "  Target: npm global prefix $prefix"
+  Write-Host "  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list"
+  Write-Host "  Telemetry: set $changeText in $telemetryPath (unknown keys preserved)"
+  if (-not (Prompt-YesNo "Install the optional Graft CLI now?" "n")) {
+    Write-Host "Graft CLI installation declined; continuing without it."
+    return
+  }
+  Invoke-Onboard "install-graft" @("--yes")
+  Update-Check
+}
+
+
 function Install-MissingRuntimeAndSkills {
   Write-Host ""
   Write-Colored "Preflight check" Cyan
@@ -539,11 +609,7 @@ function Install-MissingRuntimeAndSkills {
     Update-Check
   }
 
-  if (-not (Tool-Installed "gitnexus") -and (Runtime-Installed "npm")) {
-    Write-Host "GitNexus CLI is required globally; installing gitnexus@latest."
-    Invoke-External "npm" @("install", "-g", "gitnexus@latest")
-    Update-Check
-  }
+  Ensure-GraftCli
 
   if (-not (Skill-Installed "caveman")) {
     if (Prompt-YesNo "caveman skill is missing. Install it as a user-level global skill?" "n") {
@@ -830,8 +896,7 @@ function Select-AndConfigureMcp {
   Write-Host "  1) Chrome DevTools MCP"
   Write-Host "  2) Playwright MCP"
   Write-Host "  3) Maestro MCP"
-  Write-Host "  4) GitNexus MCP (auto from gitnexus CLI)"
-  Write-Host "  5) Custom stdio MCP server"
+  Write-Host "  4) Custom stdio MCP server"
   $raw = Read-Host "Select comma-separated options, or blank for none"
   if (-not $raw) { return }
   $items = $raw -replace "\s", "" -split ","
@@ -851,31 +916,6 @@ function Select-AndConfigureMcp {
         }
       }
       "4" {
-        $config = Get-ManualMcpConfig "GitNexus MCP"
-        if ($config -and $config.command) {
-          $serverArgs = @()
-          if ($config.args) {
-            foreach ($arg in $config.args) {
-              $serverArgs += [string]$arg
-            }
-          }
-          $envHash = Convert-EnvObjectToHash $config.env
-          Configure-StdioMcp "gitnexus" ([string]$config.command) $serverArgs $envHash
-        }
-        else {
-          Write-Warn "GitNexus CLI path was not detected; falling back to manual MCP command input."
-          $command = Prompt-Text "GitNexus MCP command, or blank to skip"
-          if (-not $command) {
-            Write-Warn "Skipped GitNexus MCP: command is required."
-            continue
-          }
-          $argsLine = Prompt-Text "GitNexus MCP args as a simple space-separated list"
-          $serverArgs = if ($argsLine) { $argsLine -split "\s+" } else { @() }
-          $envHash = Prompt-EnvPairs
-          Configure-StdioMcp "gitnexus" $command $serverArgs $envHash
-        }
-      }
-      "5" {
         $name = Prompt-Text "MCP server name"
         $command = Prompt-Text "MCP command"
         if (-not $name -or -not $command) {

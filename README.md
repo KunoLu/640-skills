@@ -6,6 +6,8 @@
 
 P1-01 的内部参数／交换契约不代表 migration/recovery 已公开可执行。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约或已有 task 校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备 jsonschema 与 PyYAML。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
 
+P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 只报告本地能力，`install-graft --json` 展示计划，确认后才使用 `install-graft --yes --json`。固定 `@nanonets/graft@0.18.0`、Node >=20，验证包完整性/native启动及 telemetry 持久关闭；这不代表 graph、MCP、host 接线或完整 v2 已通过。
+
 
 下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：
 
@@ -725,11 +727,11 @@ tests/e2e/**/*.trace.zip
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
 - 14 个 bundled Skills 和 19 个 required external Skills 始终以全局 Skill 目录为目标，不再提供 project/none scope 选择。`init` 对已合法的 Skill 壳（普通目录、普通 `SKILL.md`、frontmatter `name` 匹配）跳过；缺失或身份无效才安装。`reset` 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。已退役的 `trellis-workflow` / `trellis-channel` 不在 catalog 和模板树中，任务路由由 bundled `sbtd-task` 承担；本变更不清理用户全局目录里的旧 Skill 副本，旧资源退役由 P1-13 负责。
 
-- 过渡安装器仍保留 GitNexus 全局安装；Graft 替换另行实施。Trellis 不再是安装或项目 setup 前置依赖。
+- Graft 仅在展示固定版本、native lifecycle 与 HOME telemetry 变更后明确确认安装；本地检测不依赖 npm latest。拒绝可选安装不触发 Node/npm 升级；project-only 不做全局 Graft/telemetry 写入。旧 GitNexus 安装路径已退役，但用户既有配置不删除。
 - `init` / `reset` 在写入前检查所有所选项目的最小 SBTD 状态。可选状态缺失正常；异常和旧数据需处理，不创建同名替代品。
 - `--init-projects` / `-InitProjects` 只处理逐项目 AGENTS、`.gitignore`、SBTD 检查及适用的 Playwright / React Bits，不进行全局安装。
 - `AGENTS.project.md` 保存三模式入口、project-only 最小 fallback、项目路径和项目级硬边界；正常 `init` / `reset` 由全局 AGENTS + Skills 激活完整路由，public bootstrap / `init-projects` 不单独激活 book-derived 门禁。全局 AGENTS 维护共同路由与客观触发，bundled `sbtd-task` 承载 `default` / `lite` / `strict` 三模式工作契约（strict 才加载完整适用 Gate），项目模板自带全局路由不可见时的最小 objective-trigger fallback（含 Book Gate Plan 触发事实与 Gate lifecycle）；各 reviewer `SKILL.md` 独占状态、输出 schema、修正回路与 stop condition，模板与 `sbtd-task` 都不复制 reviewer 状态词表。
-- GitNexus MCP 手动配置检查；检测到本机 `gitnexus` CLI 路径时，输出并供安装脚本使用 `command = "<detected-gitnexus-path>"`、`args = ["mcp"]` 的配置。
+- 不再提供 GitNexus MCP 自动建议或专用菜单；Graft MCP/host 接线留待相应生产者完成，不用占位配置冒充可用。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。
@@ -747,9 +749,9 @@ tests/e2e/**/*.trace.zip
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 - `i-have-adhd` 第 19 个 required external Skill 的存在性检查；缺失或无效时随 init/reset 或 `install-external-skills` 从 stable 镜像离线安装 / 修复。
 
-`scripts/onboard.py` 本身仍只做 MCP 状态检查和配置指引，不直接写 Agent / IDE 的 MCP 设置。仓库根目录的 `install.sh` 和 `install.ps1` 是面向用户的交互式安装入口，会在用户选择单一目标平台并确认 MCP 选项后，调用对应平台命令或写入对应配置文件；其中 GitNexus MCP 优先使用 `check` 阶段检测到的本机 `gitnexus` 可执行文件路径和 `mcp` 参数，未检测到路径时才回退到人工输入：
+`scripts/onboard.py` 提供检测和唯一 Graft 安装实现，不直接接入 Graft host/MCP。两个根安装器保留其他已实现 MCP 的显式选择与平台 scope；旧 GitNexus 专用分支移除，已有用户配置留存，不能用通用 custom 项静默恢复旧别名。
 
-目标 Agent CLI 映射为：`codex → @openai/codex@latest`、`claude → @anthropic-ai/claude-code@latest`、`kimi → @moonshot-ai/kimi-code@latest`、`oh-my-pi` / `omp → @oh-my-pi/pi-coding-agent@latest`，由 `check-agent-cli` / `install-agent-cli` 承接。正常 onboarding 的 npm 仍供 Agent 与过渡 GitNexus 安装使用；project-only 完全跳过全局门禁，不再要求 Trellis。
+目标 Agent CLI 映射仍为 `codex → @openai/codex@latest`、`claude → @anthropic-ai/claude-code@latest`、`kimi → @moonshot-ai/kimi-code@latest`、`omp → @oh-my-pi/pi-coding-agent@latest`。只在缺失 Agent 或用户明确接受的 npm 工具确需安装时准备 npm；已可用的 Agent/Graft 不因 npm 缺失被重复安装。
 
 - `codex`：执行 `codex mcp add ...`。
 - `claude`：固定执行 `claude mcp add ... --scope user`。

@@ -493,5 +493,15 @@
 - 修复：共享完整只读项目前置判定；两安装器在全局安装、MCP 与可选项目安装之前执行，Python 写入前再次复验，并一致传递 `--skip-project-agents` 的已选目标范围。
 - 预防：覆盖每个 caller 的 normal/project-only 分支，使用受控副作用 tracer 与文件保全断言证明冲突时没有 mutation；保留合法正向控制，不能只断言最终非零或只检查核心 writer。
 
+## LESSON-20260918-640-executable-identity-binding: Bind CLI Identity to the Executed Target
+
+- tags：cli, security, identity, shim, validation, installer
+- 适用：第三方 CLI 检测或安装后校验需要先证明命令属于指定包，且检测不能执行未知命令。
+- 现象：仅凭 wrapper 内出现包名以及邻近 package.json，会把写有包名注释的任意脚本当作官方 CLI；仅限制目标落在包目录内也会接受其他文件。
+- 根因：文本包含和目录相邻不是执行目标绑定；安装后校验若只检查元数据，再直接运行 PATH/prefix 命令，会绕过检测层的身份保护。
+- 修复：解析后命令必须绑定受支持包的实际 CLI 路径，检测与安装后校验复用同一判定；未证明的 shim 不执行。平台适配与平台通过证据独立，不为便利放宽身份判断。
+- 验证：两个真实临时可执行文件红测均错误返回 available；修复后包含 post-install 路径的三个 marker 非执行回归通过。RTK/global check 同轮另证完整隔离 HOME 零持久写入；不把第三方查询子命令名称当成只读证明。
+- 预防：正向控制覆盖真实包 CLI，反例覆盖包名注释 wrapper、包内错误目标和安装后旧 binary；报告只允许受管安装入口，不向用户展示绕过安全门的原始包管理命令。
+
   <!-- lessons:640:end -->
 
