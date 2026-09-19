@@ -44,7 +44,7 @@ _RECOVERY_PHASES = ("plan", "apply")
 _MIGRATION_RULES = {
     "plan": (
         ("projects_root", "backup_root", "custodian"),
-        ("publication_decisions", "json"),
+        ("publication_decisions", "deployment_mode", "graft_hooks", "json"),
     ),
     "apply": (
         ("manifest",),
@@ -64,6 +64,7 @@ _MIGRATION_VALUE_OPTIONS = (
     "backup_root",
     "custodian",
     "publication_decisions",
+    "deployment_mode",
     "manifest",
     "apply_receipt",
     "deployment_evidence",
@@ -71,7 +72,7 @@ _MIGRATION_VALUE_OPTIONS = (
     "cleanup_receipt",
     "confirm_cleanup",
 )
-_MIGRATION_FLAG_OPTIONS = ("yes", "json")
+_MIGRATION_FLAG_OPTIONS = ("yes", "json", "graft_hooks")
 
 _RECOVERY_RULES = {
     "plan": (
@@ -151,7 +152,7 @@ def _add_common_options(
     sub.add_argument(
         "--skip-project-agents",
         action="store_true",
-        help="Do not install project AGENTS.md.",
+        help="Skip the project AGENTS template; explicitly selected Graft wiring still maintains its managed fence.",
     )
     sub.add_argument(
         "--global-agents-path",
@@ -184,6 +185,7 @@ def _add_common_options(
         type=validate_developer_name,
         help="Developer identity (lowercase letters and digits).",
     )
+    sub.add_argument("--graft-hooks", action="store_true", help="Separately authorize the displayed Codex hooks; never grants host trust.")
 
 
 def _add_migration_context(sub: argparse.ArgumentParser) -> None:
@@ -233,6 +235,7 @@ def add_migration_parser(
         "backup_root": "Existing private backup directory outside the repositories.",
         "custodian": "Explicit responsible custodian label.",
         "publication_decisions": "Private approved publication-decisions file.",
+        "deployment_mode": "Declare Codex deployment before apply: init or init-projects.",
         "manifest": "Explicit private migration manifest file.",
         "apply_receipt": "Explicit apply receipt for retry or verification.",
         "deployment_evidence": "Explicit completed deployment evidence file.",
@@ -247,7 +250,11 @@ def add_migration_parser(
         if dest in allowed:
             migration.add_argument(
                 _option_name(dest), action="store_true",
-                help="Authorize this apply attempt." if dest == "yes" else "Emit the private single-JSON exchange document.",
+                help={
+                    "yes": "Authorize this apply attempt.",
+                    "graft_hooks": "Plan explicitly authorized Codex hook definitions for full deployment.",
+                    "json": "Emit the private single-JSON exchange document.",
+                }[dest],
             )
     return migration
 

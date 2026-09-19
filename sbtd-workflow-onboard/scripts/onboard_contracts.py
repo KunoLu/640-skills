@@ -33,6 +33,8 @@ from typing import Any, NoReturn
 SCHEMA_VERSION = 1
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "onboard-contracts.schema.json"
 SCHEMA_ID = "urn:sbtd:onboard-contracts:schema:1"
+GRAFT_BUILD_POLICY_PATH = SCHEMA_PATH.parent / "assets" / "graft-build-policy.json"
+GRAFT_BUILD_POLICY_SHA256 = "9ac91400e76c80f0627ab816448d181ee67a3ac3588e0c1e3566ce3f7461c726"
 
 # kind -> (schema $def name, payload digest key or None)
 _DOCUMENT_KINDS: dict[str, tuple[str, str | None]] = {
@@ -523,6 +525,24 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "directory copy requires a directory resource")
     if directory and change_kind in {"copy-file", "ensure-file-block"}:
         _fail("semantic-violation", "file changes cannot target a directory resource")
+    if change_kind in {"build-graft", "configure-graft"}:
+        if operation["phase"] != "deploy":
+            _fail("semantic-violation", "Graft generation is restricted to deployment")
+        if (change_kind == "build-graft") != directory:
+            _fail("semantic-violation", "Graft generation has an incompatible resource type")
+        config_owners = {"graft-agents": "markdown", "graft-mcp": "toml", "graft-hooks": "json"}
+        if change_kind == "configure-graft" and config_owners.get(operation["selector"]) != operation["owner_kind"]:
+            _fail("semantic-violation", "unknown Graft configuration selector or type")
+        if operation["change"]["source_ref"] != {
+            "path": str(GRAFT_BUILD_POLICY_PATH),
+            "state": {"type": "file", "checksum": GRAFT_BUILD_POLICY_SHA256},
+        }:
+            _fail("semantic-violation", "Graft builds require the installed pinned policy")
+        if operation["ownership"] != {
+            "kind": "template-source",
+            "reference": operation["change"]["source_ref"],
+        }:
+            _fail("semantic-violation", "Graft builds must bind their exact fixed policy")
     if change_kind == "migrate-developer":
         if (
             operation["phase"] != "apply"
@@ -752,6 +772,24 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 != project_root / ".trellis/.developer"
             ):
                 _fail("semantic-violation", "developer extraction must stay in its owning project")
+        if operation["change"]["kind"] == "build-graft" and (
+            owner[0] != "private"
+            or owner[1] is None
+            or Path(target) != Path(owner[1]) / "graft"
+        ):
+            _fail("semantic-violation", "a Graft build owns only its selected project graph")
+        if operation["change"]["kind"] == "configure-graft":
+            selector = operation["selector"]
+            if selector == "graft-agents":
+                if owner[0] != "private" or owner[1] is None or Path(target) != Path(owner[1]) / "AGENTS.md":
+                    _fail("semantic-violation", "Graft instructions belong only to the selected project")
+            else:
+                name = "config.toml" if selector == "graft-mcp" else "hooks.json"
+                if owner[0] != "shared" or not any(
+                    root["kind"] == "codex-home" and Path(target) == Path(root["path"]) / name
+                    for root in payload["shared_roots"]
+                ):
+                    _fail("semantic-violation", "Graft host configuration requires its declared Codex HOME")
         if any(_path_contains(target, root) for root in scope_roots):
             _fail("semantic-violation", "managed target contains a declared scope root")
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):

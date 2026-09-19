@@ -817,6 +817,9 @@ def validate_legacy_inputs(
         )
         _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
     _validate_shared_operations(payload, sorted(str(root) for root in roots))
+    from sbtd_codex_deployment import validate_codex_declarations
+
+    validate_codex_declarations(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1013,7 +1016,8 @@ def _validate_project_operations(
         or sources[0]["state"]["type"] != "directory"
     ):
         _fail("semantic-violation", "a project binds exactly its legacy tree")
-    remaining = list(project["private_operations"])
+    deployment = [operation for operation in project["private_operations"] if operation["phase"] == "deploy"]
+    remaining = [operation for operation in project["private_operations"] if operation["phase"] != "deploy"]
     expected_publications = [
         _publication_operation(root, item)
         for item in sorted(
@@ -1038,7 +1042,7 @@ def _validate_project_operations(
     if identities:
         remaining.remove(identities[0])
         _check_identity_operation(root, identities[0], read_original)
-    if expected_publications or identities:
+    if expected_publications or identities or deployment:
         protection = [
             operation
             for operation in remaining
@@ -1082,6 +1086,8 @@ def _validate_shared_operations(
         ]
         if len(covering) != 1:
             _fail("semantic-violation", "a shared operation leaves its roots")
+        if operation["phase"] == "deploy":
+            continue  # Checked as one complete producer-owned set below.
         change = operation["change"]
         ownership = operation["ownership"]
         if change.get("kind") == "ensure-file-block":
@@ -1745,6 +1751,8 @@ def plan_migration(
     publication_path: Any,
     *,
     tool_versions: Mapping[str, Any],
+    deployment_mode: str | None = None,
+    hooks_authorized: bool = False,
 ) -> dict[str, Any]:
     """Verify the authorized preparation and seal a bound migration manifest.
 
@@ -1754,6 +1762,10 @@ def plan_migration(
     metadata and the identity chain are all validated; any conflict blocks
     the plan with zero writes instead of guessing.
     """
+    if deployment_mode not in {None, "init", "init-projects"}:
+        _fail("invalid-argument", "the deployment mode must be explicitly supported")
+    if hooks_authorized and deployment_mode != "init":
+        _fail("scope-conflict", "global hooks require an explicitly planned full deployment")
     from sbtd_migration import _RETENTION, _project_revision
 
     if (
@@ -1857,14 +1869,6 @@ def plan_migration(
     shared_ids = sorted(operation["operation_id"] for operation in shared_ops)
     for project in projects:
         project["shared_operation_ids"] = list(shared_ids)
-    _check_physical_aliases(
-        [
-            operation
-            for project in projects
-            for operation in project["private_operations"]
-        ]
-        + shared_ops
-    )
     payload = {
         "projects": projects,
         "shared_roots": shared_roots,
@@ -1876,4 +1880,15 @@ def plan_migration(
         "retention": copy.deepcopy(_RETENTION),
         "tool_versions": dict(tool_versions),
     }
+    if deployment_mode is not None:
+        from sbtd_codex_deployment import attach_codex_deployment
+
+        attach_codex_deployment(
+            payload, project_only=deployment_mode == "init-projects",
+            hooks_authorized=hooks_authorized,
+        )
+    _check_physical_aliases(
+        [operation for project in projects for operation in project["private_operations"]]
+        + shared_ops
+    )
     return contracts.seal_document("manifest", payload)
