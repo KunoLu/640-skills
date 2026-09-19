@@ -20,6 +20,8 @@ P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只�
 
 P1-04 在 Python Onboard 的显式 Codex 项目范围接入固定 Graft：先模板后单一 fence，按仓根注册 active Codex HOME MCP；`--graft-hooks` 是独立 opt-in，默认保留既有 hooks 不写入。配置成功不等于 host 已启用／信任或事件已执行。迁移计划可用 `--deployment-mode init|init-projects` 预先封存部署资源，再由带完整迁移上下文的现有 init 入口执行并保存累计证据；不从 apply 隐式部署。普通安装原件位置随计划展示，迁移原件留在外部私有 vault。详见[Codex 接线与部署](sbtd-workflow-onboard/REFERENCE.md#codex-wiring-and-deployment)。OMP 接线、两安装器转发、cleanup/recovery、Windows 原生及完整 v2 发布仍由对应任务验收。
 
+P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
+
 
 下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：
 

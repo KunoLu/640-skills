@@ -13,9 +13,14 @@ Exports (the complete public surface):
   into Codex ``config.toml`` bytes, preserving foreign tables and comments
   through tomlkit. Every bound repository root gets exactly one deterministic
   server key ``sbtd-graft-<sha256(canonical root UTF-8)[:16]>`` whose
-  ``command`` is the absolute Python, whose ``args`` are the absolute managed
-  launcher followed by ``mcp --root <root> --node <node> --entry <cli>``, and
-  whose ``cwd`` is the bound root. The entry is never a plain ``npx``/``graft``
+  ``command`` is the absolute Python and whose ``args`` start with ``-E -s``
+  (ignore the caller's PYTHON* startup environment, disable the user-site
+  directory — no caller-controlled ``json.py``/``sitecustomize`` shadow or
+  PYTHONHOME redirect runs before the launcher's own guard imports, while
+  the launcher's script directory stays importable, unlike ``-I``) followed
+  by the absolute managed launcher and ``mcp --root <root> --node <node>
+  --entry <cli>``, and whose ``cwd`` is the bound root. The entry is never a
+  plain ``npx``/``graft``
   command. ``env`` declares DO_NOT_TRACK/DNT explicitly; the managed launcher
   still scrubs the rest of the inherited environment itself. The key hash
   covers the root string verbatim, so callers must pass the canonical
@@ -27,8 +32,9 @@ Exports (the complete public surface):
 - ``codex_hooks_candidate(before, bindings, *, authorized)`` — merge managed
   Codex hook groups into ``hooks.json`` bytes. ``authorized=False`` returns
   the original bytes exactly and installs/removes nothing. When authorized,
-  each bound root gets four entries pointing at the absolute Python plus the
-  managed launcher ``hook`` invocation with explicit
+  each bound root gets four entries pointing at the absolute Python with the
+  same ``-E -s`` startup hardening plus the managed launcher ``hook``
+  invocation with explicit
   ``--root/--node/--entry/--event`` flags: SessionStart (matcher
   ``startup|resume|compact``, 10s), UserPromptSubmit (15s), PostToolUse
   (matcher ``apply_patch|Write|Edit|MultiEdit``, 10s) and Stop (130s — the
@@ -94,6 +100,17 @@ __all__ = [
 _KEY_PREFIX = "sbtd-graft-"
 _BINDING_KEYS = ("root", "node", "cli", "python", "launcher")
 _MCP_ENV = (("DO_NOT_TRACK", "1"), ("DNT", "1"))
+# Interpreter flags rendered between the pinned Python and the managed
+# launcher in every owned command: ``-E`` ignores the caller's PYTHON*
+# startup environment (PYTHONPATH/PYTHONHOME/…), ``-s`` disables the
+# user-site directory. Together they keep hostile ``json.py``/
+# ``sitecustomize.py``/``usercustomize.py`` shadows and an invalid
+# PYTHONHOME from running or breaking the interpreter before the launcher's
+# own guard imports execute. Unlike ``-I`` (isolated), the launcher's script
+# directory stays on ``sys.path``, so its trusted sibling modules still
+# import. The ownership parser accepts exactly this argv shape.
+_PYTHON_STARTUP_FLAGS = ("-E", "-s")
+
 
 # Codex 0.154 executes hook commands through the host shell: ``$SHELL -lc``
 # (fallback ``/bin/sh -lc``) on Unix, ``cmd.exe /C "<command>"`` on Windows
@@ -211,6 +228,7 @@ def _desired_server(paths: dict[str, str]) -> dict[str, Any]:
     return {
         "command": paths["python"],
         "args": [
+            *_PYTHON_STARTUP_FLAGS,
             paths["launcher"],
             "mcp",
             "--root",
@@ -347,6 +365,7 @@ def _split_hook_command(command: str) -> list[str] | None:
 def _hook_command(paths: dict[str, str], event_flag: str) -> str:
     argv = [
         paths["python"],
+        *_PYTHON_STARTUP_FLAGS,
         paths["launcher"],
         "hook",
         "--root",
@@ -376,17 +395,26 @@ def _hook_command(paths: dict[str, str], event_flag: str) -> str:
 def _owned_hook_flags(command: str, launcher: str) -> dict[str, str] | None:
     """Exact owned-flag parse: our launcher argv with the known flag vocabulary.
 
-    Anything that does not parse in the host shell dialect to exactly
-    ``<any interpreter> <launcher> hook --root R --node N --entry C --event E``
-    (each flag once, no extras, known event value) is foreign and must be
-    preserved.
+    The current isolated argv is executable only after its full identity
+    matches. The exact former unisolated shape is recognized solely so
+    authorized reconciliation can reject it, never to leave it active as a
+    foreign handler beside a new command.
     """
     argv = _split_hook_command(command)
     if argv is None:
         return None
-    if len(argv) < 3 or argv[1] != launcher or argv[2] != "hook":
+    if (
+        len(argv) >= 5
+        and argv[1:3] == list(_PYTHON_STARTUP_FLAGS)
+        and argv[3:5] == [launcher, "hook"]
+    ):
+        tokens = argv[5:]
+        startup = "isolated"
+    elif len(argv) >= 3 and argv[1:3] == [launcher, "hook"]:
+        tokens = argv[3:]
+        startup = "unisolated"
+    else:
         return None
-    tokens = argv[3:]
     if not tokens or len(tokens) % 2:
         return None
     flags: dict[str, str] = {}
@@ -398,6 +426,7 @@ def _owned_hook_flags(command: str, launcher: str) -> dict[str, str] | None:
     if set(flags) != set(_HOOK_FLAGS) or flags["--event"] not in _EVENT_FLAGS:
         return None
     flags["interpreter"] = argv[0]
+    flags["startup"] = startup
     return flags
 
 
@@ -431,6 +460,11 @@ def _merge_hook_event(
                 continue
             if flags["--root"] != paths["root"] or flags["--event"] != event_flag:
                 continue
+            if flags["startup"] != "isolated":
+                _fail(
+                    "ownership-conflict",
+                    "a prior unisolated managed hook requires explicit reconciliation",
+                )
             if (
                 flags["interpreter"] != paths["python"]
                 or flags["--node"] != paths["node"]

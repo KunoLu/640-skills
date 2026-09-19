@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -82,6 +83,28 @@ class CodexCandidateTests(unittest.TestCase):
                         wiring.codex_hooks_candidate(
                             changed, [binding], authorized=True
                         )
+
+    def test_pre_hardening_owned_hook_is_not_preserved_as_foreign(self):
+        import sbtd_codex_wiring as wiring
+        from onboard_contracts import ContractError
+
+        with tempfile.TemporaryDirectory() as directory:
+            binding = self.binding(Path(directory).resolve())
+            with mock.patch.object(wiring, "_WINDOWS", False):
+                original = wiring.codex_hooks_candidate(b"", [binding], authorized=True)
+                document = json.loads(original)
+                handler = document["hooks"]["SessionStart"][0]["hooks"][0]
+                arguments = shlex.split(handler["command"])
+                del arguments[1:3]
+                handler["command"] = shlex.join(arguments)
+                previous = json.dumps(document).encode()
+                self.assertEqual(
+                    wiring.codex_hooks_candidate(previous, [binding], authorized=False),
+                    previous,
+                )
+                with self.assertRaises(ContractError) as failure:
+                    wiring.codex_hooks_candidate(previous, [binding], authorized=True)
+                self.assertEqual(failure.exception.code, "ownership-conflict")
 
     def test_agents_fence_update_preserves_non_owned_bytes(self):
         from onboard_contracts import ContractError
@@ -182,6 +205,8 @@ class CodexCandidateTests(unittest.TestCase):
             binding = self.binding(base)
             foreign_argv = [
                 binding["python"],
+                "-E",
+                "-s",
                 binding["launcher"],
                 "hook",
                 "--root",
@@ -254,7 +279,8 @@ class CodexCandidateTests(unittest.TestCase):
                 rendered = wiring.codex_hooks_candidate(b"", [binding], authorized=True)
             command = json.loads(rendered)["hooks"]["Stop"][0]["hooks"][0]["command"]
             self.assertIn("'", command)
-            self.assertEqual(shlex.split(command)[4], binding["root"])
+            arguments = shlex.split(command)
+            self.assertEqual(arguments[arguments.index("--root") + 1], binding["root"])
 
     def test_windows_modified_managed_executable_paths_are_not_silently_replaced(self):
         from onboard_contracts import ContractError
@@ -283,6 +309,122 @@ class CodexCandidateTests(unittest.TestCase):
                         wiring.codex_hooks_candidate(
                             changed, [binding], authorized=True
                         )
+
+    def test_rendered_commands_ignore_caller_python_startup_environment(self):
+        import sbtd_codex_wiring as wiring
+        import tomlkit
+
+        if os.name == "nt":
+            self.skipTest("POSIX host-shell execution probe")
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            hostile = base / "hostile-pythonpath"
+            hostile.mkdir()
+            sentinels = base / "sentinels"
+            sentinels.mkdir()
+            # Caller-controlled startup injection: the json.py shadow would
+            # execute on the guard's own stdlib imports, the sitecustomize
+            # hook at interpreter startup — but only if PYTHONPATH were
+            # honored.
+            for name in ("json.py", "sitecustomize.py"):
+                (hostile / name).write_text(
+                    "import os\n"
+                    "open(os.path.join(os.environ['P104_SENTINELS'], "
+                    + repr(name)
+                    + "), 'w').write('ran')\n",
+                    encoding="utf-8",
+                )
+            trusted = base / "trusted"
+            trusted.mkdir()
+            (trusted / "trusted_sibling.py").write_text(
+                "MARKER = 'sibling-import-ok'\n", encoding="utf-8"
+            )
+            # Startup-boundary double only: it records how the interpreter
+            # launched it. It is not the real guard launcher and proves
+            # nothing about native Graft.
+            (trusted / "fake_launcher.py").write_text(
+                "import json, os, sys\n"
+                "import trusted_sibling\n"
+                "json.dump("
+                "{'argv': sys.argv[1:], 'json_module': json.__file__, "
+                "'sibling': trusted_sibling.MARKER}, "
+                "open(os.environ['P104_RESULT'], 'w'))\n",
+                encoding="utf-8",
+            )
+            binding = self.binding(base)
+            binding["python"] = sys.executable
+            binding["launcher"] = str(trusted / "fake_launcher.py")
+            result = base / "result.json"
+            env = {
+                "PYTHONPATH": str(hostile),
+                "PYTHONHOME": str(base / "not-a-python-home"),
+                "P104_RESULT": str(result),
+                "P104_SENTINELS": str(sentinels),
+            }
+
+            def observe():
+                observed = json.loads(result.read_text(encoding="utf-8"))
+                # The launcher's script directory stays importable under
+                # -E -s (unlike -I), so trusted siblings still load…
+                self.assertEqual(observed["sibling"], "sibling-import-ok")
+                # …while the PYTHONPATH shadow never became json.
+                self.assertNotIn(str(hostile), observed["json_module"])
+                self.assertEqual(list(sentinels.iterdir()), [])
+                return observed["argv"]
+
+            # MCP form: exactly the argv Codex spawns — command plus args.
+            mcp_candidate = wiring.codex_mcp_candidate(b"", [binding])
+            servers = tomlkit.parse(mcp_candidate.decode())["mcp_servers"]
+            server = next(iter(servers.values()))
+            completed = subprocess.run(
+                [server["command"], *server["args"]],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(
+                observe(),
+                [
+                    "mcp",
+                    "--root",
+                    binding["root"],
+                    "--node",
+                    binding["node"],
+                    "--entry",
+                    binding["cli"],
+                ],
+            )
+
+            # Hook form: Codex 0.154 runs hook commands through the host
+            # shell ($SHELL -lc); /bin/sh -c exercises the same rendered
+            # POSIX quoting dialect without login-profile noise.
+            hooks = json.loads(
+                wiring.codex_hooks_candidate(b"", [binding], authorized=True)
+            )
+            command = hooks["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+            result.unlink()
+            completed = subprocess.run(
+                ["/bin/sh", "-c", command],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(
+                observe(),
+                [
+                    "hook",
+                    "--root",
+                    binding["root"],
+                    "--node",
+                    binding["node"],
+                    "--entry",
+                    binding["cli"],
+                    "--event",
+                    "session-start",
+                ],
+            )
 
 
 if __name__ == "__main__":

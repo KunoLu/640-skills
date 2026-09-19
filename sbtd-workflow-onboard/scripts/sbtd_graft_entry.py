@@ -53,14 +53,29 @@ check/plan)::
     sbtd_graft_entry.py hook --root ABS --node ABS --entry ABS \
         --event {session-start,prompt,post-edit,stop}
 
-``mcp`` spawns exactly ``[node, cli, "mcp", root]`` with cwd=root and
-inherited stdio (stdout carries the JSON-RPC protocol only; this wrapper
-never prints to stdout). ``hook`` reads the event payload once, and when the
-payload's ``cwd`` is not inside the explicitly bound root it exits 0 without
-validating or launching anything — the single explicit no-op, required
-because global hook entries fire in every project the host opens. Any other
-payload problem is a fixed failure, never a fallback. A matching event is
-forwarded as the original stdin bytes to the owned bridge
+``mcp`` spawns exactly ``[node, cli, "mcp", root]`` with cwd=root behind
+scoped stdio forwarding. The pinned native server speaks newline-delimited
+JSON-RPC 2.0 on stdout only, and every host request line is gated through a
+FRESH ``validate_project`` before native receives it: startup validation
+alone cannot cover the graph the running child reloads when an explicit
+build or the Stop hook's detached sync build replaces it on disk
+(``GRAFT_NO_REFRESH`` suppresses only the child's own rebuild, not its
+mtime-keyed reload of the file). A request that fails the fresh guard is
+never forwarded — the host receives one fixed sanitized JSON-RPC error for
+that request id, the native child is closed and terminated, and the
+launcher exits 2. Native replies, notifications and request ids pass
+through untouched, forwarded lines and refusal lines never share a partial
+line on stdout, and host EOF, a dead child or a closed host pipe end the
+session without orphaning the child or dropping a completed reply. ``hook``
+reads the event payload once, and when the payload's ``cwd`` is provably
+outside the declared absolute binding it exits 0 without demanding the
+bound root, validating or launching anything — the single explicit no-op,
+required because global hook entries fire in every project the host opens,
+even after the bound project was deleted (an existing payload cwd can never
+physically sit inside a missing bound root). A potentially related event
+keeps the strict canonical/existing root, runtime and project proofs. Any
+other payload problem is a fixed failure, never a fallback. A matching
+event is forwarded as the original stdin bytes to the owned bridge
 (``assets/graft-hook-entry.mjs``), which imports only the exact validated
 ``dist/claude/hooks.js`` and calls ``main(event)``.
 
@@ -95,6 +110,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -1218,9 +1234,9 @@ def _serve_child(
 ) -> int:
     """Spawn the validated native child with inherited protocol stdio.
 
-    stdin/stdout/stderr default to inheritance: stdout carries the MCP
-    JSON-RPC protocol or the hook's JSON output untouched. A hook payload is
-    written to the child's stdin exactly as received. The child's exit status
+    stdin/stdout/stderr default to inheritance: stdout carries the hook's
+    JSON output untouched, and a hook payload is written to the child's
+    stdin exactly as received. The child's exit status
     is propagated (128+n when it dies by signal n); a spawn failure is a
     fixed launch error, never a retry.
     """
@@ -1245,6 +1261,215 @@ def _serve_child(
             # The child already exited; its own status carries the truth.
             pass
     returncode = _wait_with_signal_forwarding(proc)
+    if returncode < 0:
+        return 128 + (-returncode)
+    return returncode
+
+
+# Native MCP stdio framing (pinned dist/mcp/server.js): newline-delimited
+# JSON-RPC 2.0, one message per line in each direction, no Content-Length
+# headers; native exits 0 on stdin EOF and answers unparseable lines itself
+# with id null / -32700. These are the only protocol errors this wrapper
+# ever emits on its own.
+_MCP_RPC_PARSE_ERROR = -32700
+_MCP_RPC_INVALID_REQUEST = -32600
+_MCP_RPC_REFUSED = -32603
+# Fixed sanitized refusal text: never echoes request bytes, config values or
+# path detail; the failing rule name rides only on the stderr line.
+_MCP_REFUSAL_MESSAGE = (
+    "the managed Graft wiring state failed validation; the request was refused"
+)
+
+
+def _terminate_child(proc: subprocess.Popen[bytes]) -> None:
+    """Best-effort SIGTERM of the native child and its own posix group.
+
+    The group target mirrors _wait_with_signal_forwarding: the child was
+    spawned in a new session, so the stop reaches the same processes a
+    forwarded host signal would.
+    """
+    if os.name == "posix":
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            return
+        except (ProcessLookupError, OSError):
+            pass
+    try:
+        proc.terminate()
+    except OSError:
+        pass
+
+
+def _mcp_error_line(request_id: Any, code: int, message: str) -> bytes:
+    """One fixed sanitized JSON-RPC error line for a refused host request."""
+    payload = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": code, "message": message},
+        },
+        separators=(",", ":"),
+    )
+    return payload.encode("utf-8") + b"\n"
+
+
+def _gate_host_line(
+    line: bytes, root_real: Path
+) -> tuple[int, str, Any, ContractError] | None:
+    """Gate one host-native protocol line through a FRESH project validation.
+
+    Returns None when the line may be forwarded verbatim. Only a request
+    object (a strict JSON object with a string ``method`` and an ``id``) can
+    make native dispatch a tool, so notifications, responses and blank lines
+    pass ungated; every request is validated against the CURRENT on-disk
+    wiring state, because the running child reloads a replaced graph on
+    mtime even with ``GRAFT_NO_REFRESH`` set. Any other return value is a
+    refusal — the JSON-RPC error code/message to answer with, the request id
+    to address (None when the line never proved one) and the sanitized
+    ContractError for the fixed stderr line — the line is never forwarded
+    and the session stops. A line the guard cannot classify safely is
+    refused rather than passed to the native parser, whose duplicate-key
+    last-wins semantics could otherwise smuggle an unvalidated method past
+    the gate.
+    """
+    if not line.strip():
+        return None  # blank lines carry no request; native ignores them
+    try:
+        message = _strict_json(
+            line,
+            code="protocol-invalid",
+            message="the host protocol line is not strict unambiguous JSON",
+        )
+    except ContractError as error:
+        return (_MCP_RPC_PARSE_ERROR, "the host line is not strict JSON", None, error)
+    if not isinstance(message, dict):
+        return (
+            _MCP_RPC_INVALID_REQUEST,
+            "the host line is not a JSON-RPC request object",
+            None,
+            ContractError(
+                "protocol-invalid",
+                "the host protocol line is not a JSON-RPC request object",
+            ),
+        )
+    if not isinstance(message.get("method"), str) or "id" not in message:
+        return None  # notification or response: no tool dispatch, no answer
+    try:
+        validate_project(root_real)
+    except ContractError as error:
+        return (_MCP_RPC_REFUSED, _MCP_REFUSAL_MESSAGE, message["id"], error)
+    return None
+
+
+def _serve_mcp_child(
+    argv: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    root_real: Path,
+) -> int:
+    """Spawn the validated native MCP server behind the per-request guard.
+
+    Two daemon pump threads forward the JSON-lines protocol in both
+    directions; every stdout write (forwarded native reply or fixed refusal)
+    is serialized under one lock so a line is never torn. Host EOF closes
+    the child's stdin and native exits on its own; a refusal or a dead host
+    terminates the child; a dead child ends the wait and any completed
+    replies still in the pipe are drained before the exit status is decided
+    — the fixed failure exit on refusal, otherwise the child's own status
+    (128+n when it dies by signal n). The host remains the single lifetime
+    controller: no retry, no scheduler, and signals received while waiting
+    are still forwarded to the child group by the shared wait helper.
+    """
+    try:
+        proc = subprocess.Popen(
+            argv,
+            cwd=str(cwd),
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            start_new_session=os.name == "posix",
+        )
+    except OSError:
+        raise ContractError(
+            "launch-failed", "the validated native runtime could not be started"
+        ) from None
+    assert proc.stdin is not None and proc.stdout is not None
+    native_input, native_output = proc.stdin, proc.stdout
+    write_lock = threading.Lock()
+    stopping = threading.Event()
+    refusal_exit: list[int] = []
+
+    def _emit_host(line: bytes) -> None:
+        with write_lock:
+            remaining = memoryview(line)
+            while remaining:
+                written = os.write(sys.stdout.fileno(), remaining)
+                remaining = remaining[written:]
+
+    def _host_to_native() -> None:
+        try:
+            # A daemon may remain blocked when native exits first. Keep its
+            # BufferedReader separate from sys.stdin: Python finalization
+            # must never wait for the standard stream's buffered I/O lock.
+            with os.fdopen(os.dup(sys.stdin.fileno()), "rb") as host_input:
+                for line in host_input:
+                    if stopping.is_set():
+                        break
+                    refusal = _gate_host_line(line, root_real)
+                    if refusal is not None:
+                        code, text, request_id, error = refusal
+                        refusal_exit.append(error.exit_code)
+                        stopping.set()
+                        try:
+                            _emit_host(_mcp_error_line(request_id, code, text))
+                        except (BrokenPipeError, OSError):
+                            pass
+                        os.write(
+                            sys.stderr.fileno(),
+                            f"sbtd-graft-entry: {error.message}\n".encode(),
+                        )
+                        break
+                    native_input.write(line)
+                    native_input.flush()
+        except (OSError, ValueError, ContractError):
+            refusal_exit.append(2)
+            stopping.set()
+        finally:
+            try:
+                native_input.close()
+            except (BrokenPipeError, OSError):
+                pass
+            if stopping.is_set():
+                _terminate_child(proc)
+
+    def _native_to_host() -> None:
+        while True:
+            line = native_output.readline()
+            if not line:
+                return  # child closed stdout: every completed reply is drained
+            try:
+                _emit_host(line)
+            except (BrokenPipeError, OSError):
+                stopping.set()
+                _terminate_child(proc)  # the host is gone; the child is useless
+                return
+
+    stdin_pump = threading.Thread(
+        target=_host_to_native, name="graft-host-in", daemon=True
+    )
+    stdout_pump = threading.Thread(
+        target=_native_to_host, name="graft-native-out", daemon=True
+    )
+    stdout_pump.start()
+    stdin_pump.start()
+    returncode = _wait_with_signal_forwarding(proc)
+    stopping.set()
+    # Backpressure is not EOF: preserve pending native bytes until the host
+    # reads or closes its pipe rather than truncating a response on a timer.
+    stdout_pump.join()
+    if refusal_exit:
+        return refusal_exit[0]
     if returncode < 0:
         return 128 + (-returncode)
     return returncode
@@ -1289,18 +1514,26 @@ def _run_mcp(args: argparse.Namespace) -> int:
         env = managed_environment(root_real, home)
         _seed_update_cache(home)
         argv = [runtime["node"], runtime["cli"], "mcp", project["root"]]
-        return _serve_child(argv, cwd=root_real, env=env, stdin_bytes=None)
+        return _serve_mcp_child(argv, cwd=root_real, env=env, root_real=root_real)
     finally:
         shutil.rmtree(home, ignore_errors=True)
 
 
 def _run_hook(args: argparse.Namespace) -> int:
-    root_real = _canonical_root(Path(args.root))
     payload = sys.stdin.buffer.read()
     cwd_real = _payload_cwd(payload)
-    if not graft_runtime._is_within(cwd_real, root_real):
+    declared = Path(args.root)
+    if not declared.is_absolute():
+        raise ContractError(
+            "invalid-argument", "the selected project root must be an absolute path"
+        )
+    bound = Path(os.path.realpath(declared))
+    if not graft_runtime._is_within(cwd_real, bound):
         # Global hook entries run in every project the host opens; an event
-        # belonging to another project is the single explicit no-op.
+        # belonging to another project is the single explicit no-op. The
+        # comparison never demands the bound root: a deleted bound project
+        # cannot contain an existing payload cwd, so the no-op stays safe
+        # and unrelated projects are never disrupted by the missing root.
         return 0
     runtime = validate_runtime(Path(args.node), Path(args.entry))
     project = validate_project(Path(args.root))
