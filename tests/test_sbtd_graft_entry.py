@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import select
+import shutil
 import subprocess
 import stat
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -486,6 +490,449 @@ class BuildScopeGuardTests(unittest.TestCase):
             self.assert_refused_readonly(base, lambda: validate_build_scope(root))
             manifest.write_text(json.dumps({"files": [{"path": "src/a.ts"}]}))
             self.assertIsNone(validate_build_scope(root))
+
+
+def fake_runtime_fixture(base):
+    """A fake pinned runtime: the real python as node, a graft package shell."""
+    package = base / "node_modules/@nanonets/graft"
+    (package / "dist/claude").mkdir(parents=True)
+    (package / "dist/cli.js").write_text("// pinned cli placeholder\n")
+    (package / "package.json").write_text(
+        '{"name":"@nanonets/graft","version":"0.18.0"}'
+    )
+    (package / "dist/claude/hooks.js").write_text("// pinned hook module\n")
+    return package
+
+
+def launch_env(base):
+    """Subprocess env with controlled HOME and TMPDIR (tmp must stay clean)."""
+    home = base / "home"
+    home.mkdir(mode=0o700)
+    tmp = base / "tmp"
+    tmp.mkdir()
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "TMPDIR": str(tmp),
+    }
+    return env, tmp
+
+
+# A controlled "native" MCP server speaking the pinned framing: one JSON
+# object per line on stdin, one reply per request on stdout, EOF exits 0.
+# Every consumed message is appended to a marker log inside the root so the
+# test can prove exactly which lines native ever saw.
+FAKE_MCP_SERVER = (
+    "import json, sys\n"
+    "marker = sys.argv[2] + '/consumed.log'\n"
+    "for line in sys.stdin:\n"
+    "    text = line.strip()\n"
+    "    if not text:\n"
+    "        continue\n"
+    "    msg = json.loads(text)\n"
+    "    with open(marker, 'a') as handle:\n"
+    "        handle.write(json.dumps({'id': msg.get('id'), 'method': msg.get('method')}) + '\\n')\n"
+    "    if 'id' not in msg:\n"
+    "        continue\n"
+    "    sys.stdout.write(json.dumps({'jsonrpc': '2.0', 'id': msg['id'], 'result': {'seen': msg.get('method')}}) + '\\n')\n"
+    "    sys.stdout.flush()\n"
+)
+
+
+def launch_mcp(root, cli, env):
+    return subprocess.Popen(
+        [
+            str(Path(sys.executable).resolve()),
+            "-B",
+            str(SCRIPTS / "sbtd_graft_entry.py"),
+            "mcp",
+            "--root",
+            str(root),
+            "--node",
+            str(Path(sys.executable).resolve()),
+            "--entry",
+            str(cli),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+    )
+
+
+def send_line(proc, message):
+    proc.stdin.write(
+        message if isinstance(message, bytes) else json.dumps(message).encode()
+    )
+    proc.stdin.write(b"\n")
+    proc.stdin.flush()
+
+
+def read_reply(proc, timeout=10.0):
+    ready, _, _ = select.select([proc.stdout], [], [], timeout)
+    if not ready:
+        proc.kill()
+        raise AssertionError("timed out waiting for a protocol line")
+    line = proc.stdout.readline()
+    if not line:
+        proc.kill()
+        raise AssertionError("the launcher closed its protocol stdout")
+    return json.loads(line)
+
+
+def consumed_requests(root):
+    marker = root / "consumed.log"
+    if not marker.exists():
+        return []
+    return [json.loads(line) for line in marker.read_text().splitlines()]
+
+
+def close_pipes(proc):
+    for stream in (proc.stdin, proc.stdout, proc.stderr):
+        try:
+            stream.close()
+        except (BrokenPipeError, OSError):
+            pass
+
+
+class ScopedMcpForwardingTests(unittest.TestCase):
+    def test_accepted_then_poisoned_graph_blocked_before_consumed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            env, tmp = launch_env(base)
+            proc = launch_mcp(root, cli, env)
+            try:
+                send_line(
+                    proc,
+                    {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}},
+                )
+                reply = read_reply(proc)
+                self.assertEqual(reply["id"], 0)
+                self.assertEqual(reply["result"], {"seen": "initialize"})
+                # A notification is forwarded and answered with silence.
+                send_line(
+                    proc, {"jsonrpc": "2.0", "method": "notifications/initialized"}
+                )
+                send_line(
+                    proc,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "graft_find_code", "arguments": {}},
+                    },
+                )
+                reply = read_reply(proc)
+                self.assertEqual(reply["id"], 1)
+                self.assertEqual(reply["result"], {"seen": "tools/call"})
+                # A graph replaced behind the running child (explicit build or
+                # the Stop hook's sync build) was never validated at startup:
+                # the next request must meet the fresh guard, not the graph.
+                write_graph(root, {"nodes": [graph_node("../evil.ts")]})
+                send_line(
+                    proc,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "graft_find_code",
+                            "arguments": {"query": "needle-b42c1-secret"},
+                        },
+                    },
+                )
+                reply = read_reply(proc)
+                self.assertEqual(reply["id"], 2)
+                self.assertNotIn("result", reply)
+                self.assertEqual(reply["error"]["code"], -32603)
+                self.assertIsInstance(reply["error"]["message"], str)
+                # The refusal is fixed and sanitized: no request bytes, no
+                # graph content, no path detail.
+                self.assertNotIn("needle-b42c1-secret", json.dumps(reply))
+                self.assertNotIn("evil", json.dumps(reply))
+                self.assertEqual(proc.wait(timeout=10), 2)
+                stderr = proc.stderr.read().decode()
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+            close_pipes(proc)
+            self.assertTrue(stderr.startswith("sbtd-graft-entry:"), stderr)
+            self.assertNotIn("evil", stderr)
+            # The poisoned request was never consumed by native; the earlier
+            # accepted requests and the notification were.
+            consumed = consumed_requests(root)
+            self.assertEqual([entry["id"] for entry in consumed], [0, None, 1])
+            self.assertEqual(
+                [entry["method"] for entry in consumed],
+                ["initialize", "notifications/initialized", "tools/call"],
+            )
+            # The scoped temporary HOME was removed even on the failure path.
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_ambiguous_line_never_reaches_native_parser(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            env, _tmp = launch_env(base)
+            proc = launch_mcp(root, cli, env)
+            try:
+                # Duplicate keys: a last-wins parser would dispatch the second
+                # method; the guard must refuse instead of forwarding.
+                send_line(
+                    proc,
+                    b'{"jsonrpc":"2.0","id":9,"method":"ping","method":"tools/call"}',
+                )
+                reply = read_reply(proc)
+                self.assertIsNone(reply["id"])
+                self.assertEqual(reply["error"]["code"], -32700)
+                self.assertNotIn("result", reply)
+                self.assertEqual(proc.wait(timeout=10), 2)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+            close_pipes(proc)
+            self.assertEqual(consumed_requests(root), [])
+
+    def test_native_exit_does_not_wait_for_host_stdin_or_abort_interpreter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(
+                "import time\nprint('native-final-line', flush=True)\ntime.sleep(0.1)\nraise SystemExit(7)\n"
+            )
+            env, tmp = launch_env(base)
+            proc = launch_mcp(root, cli, env)
+            try:
+                # Host intentionally leaves stdin open while native exits.
+                code = proc.wait(timeout=10)
+                errors = proc.stderr.read()
+                self.assertEqual(code, 7, errors.decode())
+                self.assertEqual(proc.stdout.read(), b"native-final-line\n")
+                self.assertNotIn(b"Fatal Python error", errors)
+                self.assertEqual(list(tmp.iterdir()), [])
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+                close_pipes(proc)
+
+    def test_slow_host_drains_complete_native_reply_without_shutdown_truncation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(
+                "import json\nprint(json.dumps({'jsonrpc':'2.0','id':1,'result':'x'*1048576}),flush=True)\n"
+            )
+            env, _tmp = launch_env(base)
+            proc = launch_mcp(root, cli, env)
+            try:
+                ready, _, _ = select.select([proc.stdout], [], [], 10)
+                self.assertTrue(ready, "native never produced output")
+                time.sleep(6)
+                self.assertIsNone(
+                    proc.poll(), "host backpressure must not discard native output"
+                )
+                reply = json.loads(proc.stdout.readline())
+                self.assertEqual(reply["result"], "x" * 1048576)
+                self.assertEqual(proc.wait(timeout=10), 0)
+                self.assertNotIn(b"Fatal Python error", proc.stderr.read())
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+                close_pipes(proc)
+
+    def test_host_eof_lets_native_exit_cleanly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            env, tmp = launch_env(base)
+            proc = launch_mcp(root, cli, env)
+            try:
+                send_line(
+                    proc,
+                    {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}},
+                )
+                reply = read_reply(proc)
+                self.assertEqual(reply["result"], {"seen": "initialize"})
+                proc.stdin.close()
+                self.assertEqual(proc.wait(timeout=10), 0)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+            close_pipes(proc)
+            self.assertEqual(
+                [entry["method"] for entry in consumed_requests(root)],
+                ["initialize"],
+            )
+            self.assertEqual(list(tmp.iterdir()), [])
+
+
+def fake_node_fixture(base):
+    """An executable fake node that records its argv and stdin digest."""
+    marker = base / "hook-marker.json"
+    node = base / "fake-node"
+    node.write_text(
+        f"#!{Path(sys.executable).resolve()}\n"
+        "import hashlib, json, sys\n"
+        "payload = sys.stdin.buffer.read()\n"
+        f"with open({str(marker)!r}, 'w') as handle:\n"
+        "    json.dump({'argv': sys.argv[1:], 'sha256': hashlib.sha256(payload).hexdigest()}, handle)\n"
+    )
+    node.chmod(0o755)
+    return node, marker
+
+
+class HookScopingTests(unittest.TestCase):
+    def run_hook(self, root_arg, payload, env, node, entry):
+        return subprocess.run(
+            [
+                str(Path(sys.executable).resolve()),
+                "-B",
+                str(SCRIPTS / "sbtd_graft_entry.py"),
+                "hook",
+                "--root",
+                str(root_arg),
+                "--node",
+                str(node),
+                "--entry",
+                str(entry),
+                "--event",
+                "stop",
+            ],
+            input=payload,
+            env=env,
+            capture_output=True,
+            timeout=20,
+        )
+
+    def test_unrelated_cwd_noops_even_when_bound_root_deleted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            elsewhere = base / "elsewhere"
+            elsewhere.mkdir()
+            absent = base / "absent-runtime"
+            shutil.rmtree(root)
+            env, tmp = launch_env(base)
+            completed = self.run_hook(
+                root,
+                json.dumps({"cwd": str(elsewhere)}).encode(),
+                env,
+                absent,
+                absent,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, b"")
+            self.assertFalse((base / "hook-marker.json").exists())
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_unrelated_cwd_noops_before_any_runtime_or_project_proof(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            elsewhere = base / "elsewhere"
+            elsewhere.mkdir()
+            absent = base / "absent-runtime"
+            env, tmp = launch_env(base)
+            completed = self.run_hook(
+                root,
+                json.dumps({"cwd": str(elsewhere)}).encode(),
+                env,
+                absent,
+                absent,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, b"")
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_related_event_on_deleted_root_still_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            node, marker = fake_node_fixture(base)
+            shutil.rmtree(root)
+            env, tmp = launch_env(base)
+            completed = self.run_hook(
+                root,
+                json.dumps({"cwd": str(root)}).encode(),
+                env,
+                node,
+                package / "dist/cli.js",
+            )
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertFalse(marker.exists())
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_malformed_payload_fails_before_scoping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            absent = base / "absent-runtime"
+            env, tmp = launch_env(base)
+            completed = self.run_hook(root, b"not even json{", env, absent, absent)
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertEqual(list(tmp.iterdir()), [])
+            shutil.rmtree(root)
+            completed = self.run_hook(root, b"not even json{", env, absent, absent)
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_related_event_launches_bridge_with_original_payload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            node, marker = fake_node_fixture(base)
+            payload = json.dumps(
+                {"cwd": str(root), "hook_event_name": "Stop", "extra": "vérbatim"}
+            ).encode()
+            env, tmp = launch_env(base)
+            completed = self.run_hook(root, payload, env, node, package / "dist/cli.js")
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            observed = json.loads(marker.read_text())
+            self.assertEqual(observed["sha256"], hashlib.sha256(payload).hexdigest())
+            self.assertEqual(observed["argv"][-1], "stop")
+            self.assertTrue(
+                observed["argv"][0].endswith("assets/graft-hook-entry.mjs"),
+                observed["argv"],
+            )
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_relative_binding_is_rejected_not_defaulted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            elsewhere = base / "elsewhere"
+            elsewhere.mkdir()
+            absent = base / "absent-runtime"
+            env, _tmp = launch_env(base)
+            completed = self.run_hook(
+                "relative/project",
+                json.dumps({"cwd": str(elsewhere)}).encode(),
+                env,
+                absent,
+                absent,
+            )
+            self.assertEqual(completed.returncode, 2, completed.stderr)
 
 
 if __name__ == "__main__":

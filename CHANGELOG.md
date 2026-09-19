@@ -21,6 +21,7 @@
 - 两安装器在全局/可选项目安装和 MCP 写入之前执行完整项目前置检查，避免最终拒绝 scaffold 冲突时已经产生副作用；`check-projects` 同步支持实际 `--skip-project-agents` 检查范围。
 - RTK真实性检查改在私有probe HOME/cwd执行，避免只读check创建用户history.db；报告明确隔离验证范围，不把结果当作用户历史目录权限证明。
 - 显式developer初始化保留脚手架实际写入结果，身份阶段失败仍返回完整单份JSON；项目根中途消失按项目报告blocked/failed，保留此前成功结果，不冒称批次回滚。
+- P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
 

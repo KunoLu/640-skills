@@ -51,3 +51,21 @@
 - 普通 `init→init→reset→reset→init-projects --skip-project-agents` 首轮执行到末尾；最后的临时测试按原始TOML子串计数，误把env子表计为第二个server。报告 `api-report-codex-normal-native-first-p1-04-codex-wiring-2026_09_19-15_46_54` 保留为失败，不算通过；已改用结构解析，待完整重跑。
 - 独立review确认五项P1：workspace索引／父目录扩大native范围、生成树链接越界写、图／extract缓存／span指针越界、Stop预算低于真实同步build、Windows命令被POSIX quoting破坏。全部阻断，修复与原生复验前不得关闭本任务。候选合并的四项P2原级延期，见ledger。
 - `README.md`、`README.html`、Onboard Skill／REFERENCE、CHANGELOG及版本化automation范围同步描述实际新入口；不改live automation、ENTRYPOINT、两wrapper或真实HOME。原生Graft结构smoke和真实Codex事件证明分别记录，不能相互替代；Windows／OMP／完整workflow仍由相应任务验收。
+
+## PR #41 后补救范围
+
+- PR #41已合入`747b27024556a1c284b955883f9635ec93e5a3f0`；精确head`11b00a3a680def23aba3f14958194537203d18ac`全量886 tests/768.439s/exit0（6 skip）。其证明仅属于该快照，不代表后续修复版本。
+- 后置复核发现4项P1，P1-04不done、不推进P1-05；从最新main建立`p1-04-codex-runtime-hardening`修复。GitHub分支规则`REVIEW_REQUIRED`与已执行三路独立源码复核是不同状态，用户明确允许admin；不虚构“未review”的归因，也不隐藏后置新发现。
+- 图消费者改为每个MCP请求先复验当前图再转发，保留`GRAFT_NO_REFRESH=1`；Stop／显式部署生成的新图不能仅靠长连接启动时证明被读取。拒绝请求不泄露正文；仍是单controller边界，不宣称OS沙箱或任意并发写入隔离。
+- Python生成命令使用`-E -s`，在脚本加载前禁用环境与user-site注入，保持受信脚本目录邻接模块。全局hook先判断payload所属范围，无关事件不因已删除绑定仓根失败；相关事件继续严格校验。
+- Legacy characterized、Refactoring proceed/normal、DDIA confirmed；无新领域歧义，不重新完整grill；Release仍需最终全部适用验证后运行。补救产物不向真实HOME同步，不执行真实迁移或cleanup。
+
+## 补救验证与复核（提交前）
+
+- `unit-report-codex-hardening-full-p1-04-codex-runtime-hardening-2026_09_19-19_52_58`：899 tests/899.483s/exit0，6 skip（PowerShell runtime缺失5项、Windows ACL专用1项），实际结束`2026-09-19T20:08:00.457612+08:00`。这是dirty源树结果，不重标为最终PR head。
+- `api-report-codex-hardening-native-all-p1-04-codex-runtime-hardening-2026_09_19-20_00_08`：12个独立私有原生driver均通过；包含新旧stamp/cache拒绝及明确重建、完整／project-only部署与retry、无Graft降级、catalog漂移拒绝、bootstrap删除后的installed MCP、长连接Stop／失败build图替换拒绝。driver源码和每例真实输出保留于raw；不是Windows或模型成功证明。
+- 长连接两条baseline原生红测实际返回仓外合成secret；修复后两条均拒绝且不返回该内容。native先退出时主进程SIGABRT已通过dup输入fd/raw输出修复；1MiB慢读响应不再按5秒计时截断。先前不安全hook命令只识别用于拒绝，不作为兼容alias继续执行。
+- `api-report-codex-hardening-real-host-p1-04-codex-runtime-hardening-2026_09_19-19_52_35`：真实Codex0.154的untrusted不执行、精确hash信任、SessionStart/UserPromptSubmit通过；`api-report-codex-hardening-missing-deps-p1-04-codex-runtime-hardening-2026_09_19-20_01_51`证明新bare解释器help正常、接线缺依赖写前拒绝且无HOME／模板变化。
+- P104HardeningProtocolReview及P104HardeningCommandReview在修正后均无剩余P0/P1；累计ledger现有20项P1 fixed、10项P2延期，P3中1项静态债务延期、1项删除建议已撤回（历史行保留）。Code Readability Review：范围为修改的手写生产／测试；无额外阻断结构问题，原生边界保持具名；Ponytail的删除建议撤回，其余P2/P3不扩修。Ruff55项非零如实保留，无E9/F63/F7/F82；ty当前与基线均93项，新增差集为空。
+- worker违反skip-all-validation自行跑测试；其结果不计gate。P104PythonStartupFix承认未隔离`uv run`写入真实`~/.cache/uv`，已向用户披露且不擅删共享缓存；没有全局site-packages/Codex配置/trust写入。另一worker留下未打印精确路径的tmp fixture／可能的临时HOME，无法证明唯一归属则保留，不猜测清理。
+- README两份、Onboard REFERENCE、Graft指令asset、CHANGELOG和版本化automation已同步修复边界；live automation、ENTRYPOINT、真实项目迁移和P0保留环境不变。精确提交、整目录fresh依赖副本、最终release gate、补救PR与状态PR/清理仍未完成；P1累计闭环仍为7。
