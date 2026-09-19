@@ -677,6 +677,24 @@ class GuardedAnalysisTests(unittest.TestCase):
                     self.assertEqual(completed.returncode, 2)
                     self.assertEqual(completed.stdout, "")
 
+    def test_option_shaped_analysis_values_never_become_native_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_ANALYZE_CLI)
+            env, _tmp = launch_env(base)
+            for arguments in (
+                ("ask", "--", "--dir=/tmp/other-graph"),
+                ("callers", "--json"),
+                ("grep", "--fixed"),
+            ):
+                with self.subTest(arguments=arguments):
+                    completed = run_analyze(arguments, root, cli, env)
+                    self.assertEqual(completed.returncode, 2)
+                    self.assertEqual(completed.stdout, "")
+
 
 
 def close_pipes(proc):

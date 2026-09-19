@@ -18,7 +18,7 @@ P1-19 在 `scripts/` 内增加按需 developer 身份库（`sbtd_identity.py`）
 
 P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只读核对仓库外私有准备和批准候选；apply 经 `--yes` 确认后保存原件、发布已批准投影、暂停已证明受管的 Codex/OMP 旧路由，并保存不可变累计回执；verify 只读核对实际资源、原件和绑定部署报告。`share` 的直接复制内容必须逐字保留，改写需 `redact`；混合／未知配置保留并阻断自动处置。后续文件参数接收 envelope 中相应子对象，不接收整个响应。操作说明见[迁移入口](sbtd-workflow-onboard/REFERENCE.md#migration-runtime)。部署 producer、cleanup、recovery 与真实 host／Windows 验收仍分别受后续门禁约束，不能把消费者夹具或本阶段命令当作完整 v2 迁移发布。
 
-P1-04/P1-05 在 Python Onboard 的显式 Codex／OMP 项目范围接入固定 Graft：先模板后单一 fence；Codex按仓根注册 active Codex HOME MCP，OMP仅在完整 `init` 部署 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并将读取的 OMP、Codex、Claude继承源以只读快照封存。已启用等价继承连接不创建空配置；disabled、冲突、动态或漂移来源阻断。`--graft-hooks` 仍是仅 Codex 的独立 opt-in，OMP不写hooks。迁移 plan 使用 `--deployment-mode init|init-projects --deployment-platform codex|omp` 封存host、模式和输入；带完整上下文的现有 init 入口才执行并保存累计证据，apply不隐式部署。内部 `sbtd_graft_entry.py analyze` 只允许固定的图查询子命令，拒绝任意native argv、LLM命名、deep/export与workspace参数。配置成功不等于host信任／模型行为或完整v2发布。
+P1-04/P1-05 在 Python Onboard 的显式 Codex／OMP 项目范围接入固定 Graft：先模板后单一 fence；Codex按仓根注册 active Codex HOME MCP，OMP仅在完整 `init` 部署 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并将读取的 OMP、Codex、Claude继承源以只读快照封存。等价继承按 OMP 的连接字段完整匹配，不创建空配置；disabled、managed前缀冲突、server/extension denylist、动态或漂移来源阻断。`--graft-hooks` 仍是仅 Codex 的独立 opt-in，OMP不写hooks。迁移 plan 使用 `--deployment-mode init|init-projects --deployment-platform codex|omp` 封存host、模式和输入；带完整上下文的现有 init 入口才执行并保存累计证据，apply不隐式部署。内部 `sbtd_graft_entry.py analyze` 只允许固定的图查询子命令，拒绝任意native argv、LLM命名、deep/export与workspace参数。配置成功不等于host信任／模型行为或完整v2发布。
 
 P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
 

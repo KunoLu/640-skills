@@ -1578,6 +1578,13 @@ def _relative_analysis_path(value: str) -> str:
 
 def _analysis_argv(args: argparse.Namespace) -> list[str]:
     command = args.analysis_command
+    for value_name in ("query", "file", "symbol", "pattern"):
+        value = getattr(args, value_name, None)
+        if value is not None and value.startswith("-"):
+            raise ContractError(
+                "invalid-argument",
+                "analysis values must not be parsed as native options",
+            )
     if command == "ask":
         return ["ask", args.query, ".", "--json", "--no-refresh"]
     if command == "map":

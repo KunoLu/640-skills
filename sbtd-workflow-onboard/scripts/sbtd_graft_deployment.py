@@ -319,7 +319,10 @@ def render_configuration(
         if discovered["target"] != str(target):
             _fail("scope-conflict", "the OMP resource leaves the active profile")
         analysis = analyze_omp_configuration(
-            target, bindings, discovered["sources"]
+            target,
+            bindings,
+            discovered["sources"],
+            disabled_extensions=discovered["disabled_extensions"],
         )
         return omp_mcp_candidate(before, analysis)
     if selector == "graft-hooks":
@@ -697,6 +700,10 @@ def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
             "scope-conflict", "shared deployment requires the complete selected batch"
         )
     if platform == "codex":
+        if any(
+            operation["selector"] == "graft-omp-mcp" for operation in all_deploy
+        ):
+            _fail("scope-conflict", "Codex deployment cannot declare OMP resources")
         mcp = [operation for operation in shared if operation["selector"] == "graft-mcp"]
         if len(mcp) != 1:
             _fail(

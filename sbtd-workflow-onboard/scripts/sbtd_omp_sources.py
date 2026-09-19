@@ -124,15 +124,18 @@ def _provider_settings(agent: Path, inputs: dict[str, dict[str, Any]]) -> dict[s
     settings = _yaml_settings(yml_raw if yml_raw is not None else yaml_raw) if (
         yml_raw is not None or yaml_raw is not None
     ) else {}
-    result: dict[str, Any] = {"enabled": set(), "disabled": set()}
+    result: dict[str, Any] = {"enabled": set(), "disabled": set(), "disabled_extensions": set()}
     for source, target in (
         ("enabledProviders", "enabled"),
         ("disabledProviders", "disabled"),
+        ("disabledExtensions", "disabled_extensions"),
     ):
         value = settings.get(source, [])
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
             _fail("invalid-config", "OMP provider settings are malformed")
         result[target] = set(value)
+    if "native" in result["disabled"]:
+        _fail("invalid-config", "the active OMP native provider is disabled")
     return result
 
 
@@ -141,6 +144,8 @@ def _guard_dynamic_sources(
     agent: Path,
     inputs: dict[str, dict[str, Any]],
     environ: Mapping[str, str],
+    *,
+    claude_user_settings: Path | None,
 ) -> None:
     if environ.get("PI_CONFIG_FILES", "").strip():
         _fail("invalid-config", "OMP configuration overlays cannot be safely analyzed")
@@ -148,11 +153,23 @@ def _guard_dynamic_sources(
         _fail("invalid-config", "the active OMP agent environment is dynamic")
     if _read_snapshot(agent / "settings.json", inputs) is not None:
         _fail("invalid-config", "legacy OMP settings cannot be safely analyzed")
+    if claude_user_settings is not None:
+        raw = _read_snapshot(claude_user_settings, inputs)
+        if raw is not None:
+            settings = _strict_json(raw, "Claude user settings")
+            if not isinstance(settings, dict):
+                _fail("invalid-config", "Claude user settings must be an object")
+            if "disabledExtensions" in settings:
+                _fail(
+                    "invalid-config",
+                    "Claude user extension settings cannot be safely analyzed",
+                )
     for root in roots:
         for path, parser in (
             (root / ".omp/config.yml", "yaml"),
             (root / ".omp/config.yaml", "yaml"),
             (root / ".omp/settings.json", "json"),
+            (root / ".claude/settings.json", "json"),
         ):
             raw = _read_snapshot(path, inputs)
             if raw is None:
@@ -164,7 +181,7 @@ def _guard_dynamic_sources(
             )
             if not isinstance(settings, dict):
                 _fail("invalid-config", "OMP project settings must be an object")
-            if {"enabledProviders", "disabledProviders"} & settings.keys():
+            if {"enabledProviders", "disabledProviders", "disabledExtensions"} & settings.keys():
                 _fail(
                     "invalid-config",
                     "OMP project provider settings cannot be safely analyzed",
@@ -196,7 +213,6 @@ def _json_servers(raw: bytes, label: str) -> dict[str, Mapping[str, Any]]:
         if enabled is not None and not isinstance(enabled, bool):
             _fail("invalid-config", f"the {label} MCP enabled flag is malformed")
         converted = dict(server)
-        converted["type"] = converted.get("type", "stdio")
         result[name] = {**converted, "enabled": enabled is not False}
     return result
 
@@ -296,9 +312,25 @@ def discover_omp_sources(
     assert isinstance(agent, Path)
     target = paths["target"]
     assert isinstance(target, Path)
-    _guard_dynamic_sources(roots, agent, inputs, environ)
     settings = _provider_settings(agent, inputs)
+    claude_override = environ.get("CLAUDE_CONFIG_DIR", "").strip()
+    claude_dir = (
+        Path(claude_override).expanduser().resolve() if claude_override else home / ".claude"
+    )
+    claude_json = (
+        claude_dir / ".claude.json" if claude_override else home / ".claude.json"
+    )
+    claude_enabled = _user_enabled("claude", settings, environ)
+    _guard_dynamic_sources(
+        roots,
+        agent,
+        inputs,
+        environ,
+        claude_user_settings=claude_dir / "settings.json" if claude_enabled else None,
+    )
 
+    codex_project_enabled = "codex" not in settings["disabled"]
+    claude_project_enabled = "claude" not in settings["disabled"]
     codex_user = home / ".codex/config.toml"
     codex_raw = None
     if _user_enabled("codex", settings, environ):
@@ -311,29 +343,32 @@ def discover_omp_sources(
         raw=codex_raw,
         parser="toml",
     )
-
-    claude_override = environ.get("CLAUDE_CONFIG_DIR", "").strip()
-    claude_dir = (
-        Path(claude_override).expanduser().resolve() if claude_override else home / ".claude"
-    )
-    claude_json = (
-        claude_dir / ".claude.json" if claude_override else home / ".claude.json"
-    )
     claude_raw: dict[Path, bytes | None] = {}
-    if _user_enabled("claude", settings, environ):
+    if claude_enabled:
         claude_raw = {
             path: _read_snapshot(path, inputs)
             for path in (claude_json, claude_dir / "mcp.json")
         }
+    user_alternate_raw = _read_snapshot(agent / ".mcp.json", inputs)
+    if user_alternate_raw is not None:
+        _append_source(
+            sources,
+            name="native-user-alternate",
+            path=agent / ".mcp.json",
+            enabled=True,
+            raw=user_alternate_raw,
+            parser="json",
+        )
     for name, path in (
         ("claude-user-json", claude_json),
         ("claude-user", claude_dir / "mcp.json"),
     ):
         raw = claude_raw.get(path)
-        if raw is not None:
-            _append_source(
-                sources, name=name, path=path, enabled=True, raw=raw, parser="json"
-            )
+        added = len(sources)
+        _append_source(
+            sources, name=name, path=path, enabled=True, raw=raw, parser="json"
+        )
+        if len(sources) != added:
             break
 
     for root in roots:
@@ -343,7 +378,7 @@ def discover_omp_sources(
             sources,
             name="codex-project",
             path=codex_project,
-            enabled=True,
+            enabled=codex_project_enabled,
             raw=_read_snapshot(codex_project, inputs),
             parser="toml",
         )
@@ -352,15 +387,16 @@ def discover_omp_sources(
             (path, _read_snapshot(path, inputs)) for path in claude_project
         ]
         for path, raw in project_raw:
-            if raw is not None:
-                _append_source(
-                    sources,
-                    name="claude-project",
-                    path=path,
-                    enabled=True,
-                    raw=raw,
-                    parser="json",
-                )
+            added = len(sources)
+            _append_source(
+                sources,
+                name="claude-project",
+                path=path,
+                enabled=claude_project_enabled,
+                raw=raw,
+                parser="json",
+            )
+            if len(sources) != added:
                 break
         for name, path in (
             ("native-project", root / ".omp/mcp.json"),
@@ -381,6 +417,7 @@ def discover_omp_sources(
         "agent_dir": str(agent),
         "inputs": [inputs[key] for key in sorted(inputs)],
         "sources": sources,
+        "disabled_extensions": sorted(settings["disabled_extensions"]),
     }
 
 
@@ -394,6 +431,9 @@ def analyze_omp_sources(
     """Return source discovery plus the desired-binding target analysis."""
     discovered = discover_omp_sources(roots, home=home, environ=environ)
     discovered["analysis"] = analyze_omp_configuration(
-        Path(discovered["target"]), bindings, discovered["sources"]
+        Path(discovered["target"]),
+        bindings,
+        discovered["sources"],
+        disabled_extensions=discovered["disabled_extensions"],
     )
     return discovered

@@ -13,6 +13,7 @@
 - Refactoring proceed/normal：共享部署模块改为host-neutral命名、迁移全部调用方，不保留旧module alias；复用P1-04守卫／候选／累计证据执行，不复制迁移引擎。
 - DDD on-demand/not-required：未完整grill，无新业务术语或上下文歧义。
 - DDIA confirmed：读依赖与写资源分开声明，host／模式明确绑定；共享配置一次备份／一次资源结果，漂移先拒绝，不扩大源配置写权限。
+- Review 后收紧：等价继承按 OMP 完整连接身份判定；active `mcp.json` 与 `.mcp.json`、server denylist 与 settings `disabledExtensions` 均纳入阻断；provider disable 对所有级别生效；agent `.env`、legacy settings、overlay 和 project provider settings fail-closed。
 - Release planned：实际host、CLI分析、迁移生产者、Codex回归、安装副本和最终head证明完成后再判断ready。
 
 ## 已确认原生事实

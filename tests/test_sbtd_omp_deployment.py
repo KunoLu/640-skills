@@ -214,6 +214,42 @@ class OmpDeploymentPlanTests(unittest.TestCase):
             self.assertEqual(server["cwd"], str(root))
             self.assertEqual(server["env"], {"DO_NOT_TRACK": "1", "DNT": "1"})
 
+    def test_omp_render_rejects_disabled_generated_extension_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            root = legacy_project(base, "project")
+            agent = home / ".omp/agent"
+            agent.mkdir(parents=True)
+            target = agent / "mcp.json"
+            binding = {
+                "root": str(root),
+                "node": "/fixture/node",
+                "cli": "/fixture/graft/dist/cli.js",
+                "python": "/fixture/python",
+                "launcher": str(
+                    Path(__file__).resolve().parents[1]
+                    / "sbtd-workflow-onboard/scripts/sbtd_graft_entry.py"
+                ),
+            }
+            name = "sbtd-graft-" + hashlib.sha256(str(root).encode()).hexdigest()[:16]
+            (agent / "config.yml").write_text(
+                f"disabledExtensions: [mcp:{name}]\n", encoding="utf-8"
+            )
+            operation = {"selector": "graft-omp-mcp", "target": str(target)}
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                from sbtd_graft_deployment import render_configuration
+
+                with self.assertRaises(ContractError) as failure:
+                    render_configuration(operation, b"", [binding])
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            self.assertFalse(target.exists())
+
     def test_inherited_equivalent_connection_leaves_absent_omp_config_unwritten(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

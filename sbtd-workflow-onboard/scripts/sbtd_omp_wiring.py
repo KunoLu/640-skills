@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
@@ -99,7 +100,7 @@ def _strict_json(raw: bytes, label: str) -> Any:
 
 def _reject_dynamic(value: Any) -> None:
     if isinstance(value, str):
-        if value.startswith("${"):
+        if re.search(r"\$\{[^}:]+(?::-[^}]*)?\}", value):
             _fail("invalid-config", "OMP configuration contains unsupported dynamic values")
         return
     if isinstance(value, list):
@@ -124,16 +125,207 @@ def _servers(document: Any, label: str) -> dict[str, Mapping[str, Any]]:
     return servers
 
 
+def _literal_env_keys(server: Mapping[str, Any]) -> list[str] | None:
+    env = server.get("env", {})
+    if not isinstance(env, Mapping):
+        return None
+    policy = server.get("envPolicy")
+    if policy == "literal":
+        return sorted(key for key in env if isinstance(key, str))
+    if policy is not None:
+        return None
+    literal = server.get("envLiteralKeys", [])
+    if not isinstance(literal, list) or any(
+        not isinstance(key, str) for key in literal
+    ):
+        return None
+    return sorted(literal)
+
+
 def _equivalent(actual: Mapping[str, Any], desired: Mapping[str, Any]) -> bool:
     env = actual.get("env", {})
+    actual_type = actual.get("type", "stdio")
+    actual_literals = _literal_env_keys(actual)
+    desired_literals = _literal_env_keys(desired)
     return (
-        actual.get("type", "stdio") == desired["type"]
+        actual.get("auth") == desired.get("auth")
+        and actual.get("oauth") == desired.get("oauth")
+        and actual.get("requestIdFormat", "number")
+        == desired.get("requestIdFormat", "number")
+        and actual_type == desired["type"]
         and actual.get("command") == desired["command"]
         and actual.get("args") == desired["args"]
         and actual.get("cwd") == desired["cwd"]
         and isinstance(env, Mapping)
-        and all(env.get(name) == value for name, value in _TELEMETRY_ENV.items())
+        and dict(env) == desired["env"]
+        and actual_literals is not None
+        and actual_literals == desired_literals
     )
+def _source_order(source: Mapping[str, Any]) -> int:
+    provider = source["source"].split("-", 1)[0]
+    try:
+        return {"native": 0, "claude": 1, "codex": 2}[provider]
+    except KeyError:
+        _fail("invalid-argument", "inherited source providers are unsupported")
+
+
+def _string_set(value: Any, label: str) -> set[str]:
+    if value is None:
+        return set()
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        _fail("invalid-config", f"the active OMP {label} list is malformed")
+    return set(value)
+
+
+def _entry_enabled(server: Mapping[str, Any]) -> bool:
+    enabled = server.get("enabled")
+    if isinstance(enabled, str):
+        lowered = enabled.lower()
+        if lowered in {"false", "0"}:
+            return False
+        if lowered in {"true", "1"}:
+            return True
+    if enabled is None:
+        return True
+    if isinstance(enabled, bool):
+        return enabled
+    _fail("invalid-config", "an active OMP MCP enabled flag is malformed")
+
+
+def analyze_omp_configuration(
+    target: Path,
+    bindings: Sequence[Mapping[str, Any]],
+    inherited: Sequence[Mapping[str, Any]],
+    *,
+    disabled_extensions: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Analyze the active OMP target and explicit inherited records.
+
+    ``inherited`` is the caller's observed source set, already honoring profile
+    and provider gates. This function does not rediscover or execute it.
+    """
+    if not isinstance(target, Path) or not target.is_absolute():
+        _fail("invalid-argument", "the OMP MCP target must be an absolute path")
+    if isinstance(disabled_extensions, (str, bytes)) or any(
+        not isinstance(item, str) for item in disabled_extensions
+    ):
+        _fail("invalid-argument", "disabled OMP extension identities are malformed")
+    paths = _bindings(bindings)
+    desired = {_server_name(item["root"]): desired_omp_server(item) for item in paths}
+    sources = sorted(_normalized_inherited(inherited), key=_source_order)
+    raw = b""
+    document: dict[str, Any] = {"mcpServers": {}}
+    existing: dict[str, Mapping[str, Any]] = {}
+    if target.exists():
+        raw = target.read_bytes()
+        document = _strict_json(raw, "active OMP MCP configuration")
+        existing = _servers(document, "active OMP MCP configuration")
+    disabled_servers = _string_set(document.get("disabledServers"), "disabledServers")
+    forced_enabled = _string_set(document.get("enabledServers"), "enabledServers")
+    blocked_extensions = set(disabled_extensions)
+    def blocked_name(name: str) -> bool:
+        return name in disabled_servers or f"mcp:{name}" in blocked_extensions
+
+    blocked_names = {name for name in desired if blocked_name(name)}
+    if blocked_names:
+        _fail(
+            "ownership-conflict",
+            "the active OMP configuration disables a generated Graft identity",
+        )
+    for active_name, active in existing.items():
+        enabled = _entry_enabled(active) or active_name in forced_enabled
+        managed_shape = active_name == _SERVER_PREFIX or active_name.startswith(
+            _SERVER_PREFIX + "-"
+        )
+        if blocked_name(active_name):
+            if managed_shape:
+                _fail(
+                    "ownership-conflict",
+                    "an active sbtd-graft OMP entry is explicitly disabled",
+                )
+            continue
+        if not managed_shape:
+            continue
+        equivalent_names = {
+            desired_name
+            for desired_name, desired_server in desired.items()
+            if _equivalent(active, desired_server)
+        }
+        if not enabled or not equivalent_names:
+            _fail(
+                "ownership-conflict",
+                "an active sbtd-graft OMP entry differs or is disabled",
+            )
+    matches: list[dict[str, str]] = []
+    writes: list[dict[str, Any]] = []
+    for source in sources:
+        for name, server in source["servers"].items():
+            server_enabled = source["enabled"] and server.get("enabled", True) is not False
+            managed_shape = name == _SERVER_PREFIX or name.startswith(_SERVER_PREFIX + "-")
+            if blocked_name(name):
+                if managed_shape:
+                    _fail(
+                        "ownership-conflict",
+                        "an inherited sbtd-graft connection is explicitly disabled",
+                    )
+                continue
+            equivalent_names = {
+                desired_name
+                for desired_name, desired_server in desired.items()
+                if _equivalent(server, desired_server)
+            }
+            if managed_shape and (not server_enabled or not equivalent_names):
+                _fail(
+                    "ownership-conflict",
+                    "an inherited sbtd-graft connection differs or is disabled",
+                )
+            if not server_enabled:
+                continue
+            for desired_name in equivalent_names:
+                matches.append(
+                    {
+                        "source": source["source"],
+                        "name": name,
+                        "server": desired_name,
+                    }
+                )
+    active_candidates = {
+        name: server
+        for name, server in existing.items()
+        if not blocked_name(name)
+        and (_entry_enabled(server) or name in forced_enabled)
+    }
+    for name, server in desired.items():
+        if any(match["server"] == name for match in matches):
+            continue
+        current = active_candidates.get(name)
+        if current is not None:
+            if _equivalent(current, server):
+                matches.append({"source": "active", "name": name, "server": name})
+                continue
+            _fail(
+                "ownership-conflict",
+                "an existing sbtd-graft OMP entry differs and cannot be claimed",
+            )
+        equivalent_active = [
+            active_name
+            for active_name, active in active_candidates.items()
+            if _equivalent(active, server)
+        ]
+        if equivalent_active:
+            matches.append(
+                {"source": "active", "name": equivalent_active[0], "server": name}
+            )
+            continue
+        writes.append({"name": name, "server": server})
+    return {
+        "target": str(target),
+        "servers": existing,
+        "writes": writes,
+        "inherited_matches": matches,
+    }
+
+
 
 
 def _normalized_inherited(
@@ -166,79 +358,6 @@ def _normalized_inherited(
     return normalized
 
 
-def analyze_omp_configuration(
-    target: Path,
-    bindings: Sequence[Mapping[str, Any]],
-    inherited: Sequence[Mapping[str, Any]],
-) -> dict[str, Any]:
-    """Analyze the active OMP target and explicit inherited records.
-
-    ``inherited`` is the caller's observed source set, already honoring profile
-    and provider gates. This function does not rediscover or execute it.
-    """
-    if not isinstance(target, Path) or not target.is_absolute():
-        _fail("invalid-argument", "the OMP MCP target must be an absolute path")
-    paths = _bindings(bindings)
-    desired = {_server_name(item["root"]): desired_omp_server(item) for item in paths}
-    sources = _normalized_inherited(inherited)
-    raw = b""
-    document: dict[str, Any] = {"mcpServers": {}}
-    existing: dict[str, Mapping[str, Any]] = {}
-    if target.exists():
-        raw = target.read_bytes()
-        document = _strict_json(raw, "active OMP MCP configuration")
-        existing = _servers(document, "active OMP MCP configuration")
-    matches: list[dict[str, str]] = []
-    writes: list[dict[str, Any]] = []
-    for source in sources:
-        for name, server in source["servers"].items():
-            server_enabled = source["enabled"] and server.get("enabled", True) is not False
-            managed_shape = name == _SERVER_PREFIX or name.startswith(_SERVER_PREFIX + "-")
-            if not server_enabled and managed_shape:
-                _fail(
-                    "ownership-conflict",
-                    "a disabled inherited Graft connection occupies this batch",
-                )
-            if not server_enabled:
-                continue
-            for desired_name, desired_server in desired.items():
-                if _equivalent(server, desired_server):
-                    matches.append(
-                        {
-                            "source": source["source"],
-                            "name": name,
-                            "server": desired_name,
-                        }
-                    )
-    for name, server in desired.items():
-        if any(match["server"] == name for match in matches):
-            continue
-        current = existing.get(name)
-        if current is not None:
-            if _equivalent(current, server):
-                matches.append({"source": "active", "name": name, "server": name})
-                continue
-            _fail(
-                "ownership-conflict",
-                "an existing sbtd-graft OMP entry differs and cannot be claimed",
-            )
-        equivalent_active = [
-            active_name
-            for active_name, active in existing.items()
-            if _equivalent(active, server)
-        ]
-        if equivalent_active:
-            matches.append(
-                {"source": "active", "name": equivalent_active[0], "server": name}
-            )
-            continue
-        writes.append({"name": name, "server": server})
-    return {
-        "target": str(target),
-        "servers": existing,
-        "writes": writes,
-        "inherited_matches": matches,
-    }
 
 
 def omp_mcp_candidate(before: bytes, analysis: Mapping[str, Any]) -> bytes:
