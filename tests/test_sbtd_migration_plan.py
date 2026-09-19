@@ -17,7 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 from onboard_contracts import ContractError
 import onboard_contracts as contracts
 
-from sbtd_migration_files import snapshot
+from sbtd_migration_files import read_file, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
 
 from tests.test_sbtd_migration_legacy import (
@@ -424,6 +424,113 @@ class MigrationPlanReviewRegressions(unittest.TestCase):
             with self.assertRaises(ContractError):
                 _plan(project, vault, None, home)
             self.assertEqual(_tree_bytes(base), before)
+
+
+class MigrationWorkflowOwnershipTests(unittest.TestCase):
+    def test_unowned_workflow_requires_explicit_private_only_approval(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, decisions = _full_fixture(Path(directory).resolve())
+            workflow = project / ".trellis/workflow.md"
+            workflow.write_bytes(b"# Custom workflow\nPreserve this user policy.\n")
+            before = _tree_bytes(project)
+            with self.assertRaises(ContractError):
+                _plan(project, vault, decisions, home)
+            self.assertEqual(_tree_bytes(project), before)
+            items = json.loads(decisions.read_text())["items"]
+            items.append(
+                _item(
+                    "custom-workflow",
+                    [_ref(workflow)],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                )
+            )
+            _decisions(vault, items)
+            manifest = _plan(project, vault, decisions, home)
+            with _home_env(home):
+                validate_legacy_inputs(manifest, _reader)
+            self.assertEqual(_tree_bytes(project), before)
+            self.assertEqual(
+                manifest["payload"]["projects"][0]["sources"][0]["state"],
+                snapshot(project / ".trellis"),
+            )
+
+    def test_resealed_manifest_cannot_drop_custom_workflow_approval(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, decisions = _full_fixture(Path(directory).resolve())
+            workflow = project / ".trellis/workflow.md"
+            workflow.write_bytes(b"# Custom workflow\nPreserve this user policy.\n")
+            items = json.loads(decisions.read_text())["items"]
+            items.append(
+                _item(
+                    "custom-workflow",
+                    [_ref(workflow)],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                )
+            )
+            _decisions(vault, items)
+            manifest = _plan(project, vault, decisions, home)
+            payload = json.loads(json.dumps(manifest["payload"]))
+            payload["publication_decisions"]["items"] = [
+                item
+                for item in payload["publication_decisions"]["items"]
+                if item["item_id"] != "custom-workflow"
+            ]
+            changed = contracts.seal_document("manifest", payload)
+            before = _tree_bytes(project)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(changed, _reader)
+            self.assertEqual(_tree_bytes(project), before)
+
+    def test_original_inventory_uses_only_an_exact_private_backup(self):
+        from sbtd_migration import _backup_sources, _source_backup_paths
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            source_root = project / ".trellis"
+            workflow = source_root / "workflow.md"
+            workflow.write_bytes(b"# Custom workflow\nPreserve this user policy.\n")
+            (source_root / "tasks/.gitkeep").write_bytes(b"")
+            items = json.loads(decisions.read_text())["items"]
+            items.append(
+                _item(
+                    "custom-workflow",
+                    [_ref(workflow)],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                )
+            )
+            _decisions(vault, items)
+            manifest = _plan(project, vault, decisions, home)
+            backup = _source_backup_paths(manifest)[str(source_root)]
+            with _home_env(home):
+                _backup_sources(manifest)
+                source_root.rename(base / "retired-source")
+
+                def original(reference):
+                    path = Path(reference["path"])
+                    if path.is_relative_to(source_root):
+                        path = backup / path.relative_to(source_root)
+                    return read_file(path, reference["state"])
+
+                before = snapshot(base)
+                validate_legacy_inputs(manifest, original)
+                self.assertEqual(snapshot(base), before)
+                (backup / "workflow.md").write_bytes(b"changed private original\n")
+                with self.assertRaises(ContractError):
+                    validate_legacy_inputs(manifest, original)
+                self.assertEqual(
+                    (base / "retired-source/workflow.md").read_bytes(),
+                    b"# Custom workflow\nPreserve this user policy.\n",
+                )
 
 
 class MigrationPlanBatchTests(unittest.TestCase):

@@ -88,3 +88,11 @@ Main独占计划/阶段编排、CLI、schema/codec接入及共享文档，worker
 - 配套证明：`api-report-migration-reviewed-dependencies-p1-12-migration-runtime-2026_09_19-11_37_05`的fresh无四项依赖／同输入正常解释器正向控制；`api-report-migration-reviewed-structure-p1-12-migration-runtime-2026_09_19-11_39_41`的schema/catalog、Python AST、HTML/链接、自动化只读库存与lesson索引；副本逐文件checksum执行后未变。
 - README.md、README.html及版本化automation prompt均已维护实际入口/范围；CHANGELOG补未发布能力与安全边界；lessons使用既有用户提供的640（主PRD既有授权事件可核对），只追加本owner块，不创建身份。live automation、ENTRYPOINT版本和真实生效路径均未动。
 - 下一门：固定提交、从git archive复制完整Skill并用fresh解释器按副本requirements准备依赖，重新执行精确head全量和原生证明；随后独立证据核对、Release gate、实现PR/admin合并、main/分支/归属明确临时文件清理及独立状态PR。此结论不能代替这些尚未执行步骤。
+
+## 收尾新增P1与候选失效
+
+- `b810ef0da419f9c741705590000e2c8be49c71cd`的精确全量854 tests/603.307s和318文件git-archive/fresh依赖/原生证明真实通过，58组174文件schema/checksum/中文配对审计通过；这仅证明该快照，不能被重标为后续修正提交的证据。
+- 固定旧`configurators/workflow.ts:65-70`明确non-native workflow.md会移除template hash并成为用户内容。收尾发现该文件未进入未知runtime裁决门；只补plan仍可被重封装manifest删除private-only批准绕过。
+- 现复用同一完整库存覆盖门：所有generated-runtime类别含workflow.md都必须有模板所有权或逐项明确裁决；apply/verify语义重验在操作/闭包校验后读取精确匹配的live原目录或确定性私有原件，整目录摘要相等才取库存，metadata按该库存条目摘要读取，空.gitkeep亦来自同一库存。不新增wire字段、索引、服务或cleanup/recovery行为。
+- 红测：未批plan／重封装漏批2项，以及修改前冻结源码接受腐坏私有workflow原件1项。当前3项回归和66项plan/apply/verify/codec影响范围通过，ty通过。P112DocsExactReview与P112SecurityFinal只读复核关闭，固定P1共13；原22 P2/6 P3不变。
+- 新候选仍处checking；必须重新固定提交并执行精确全量与原生证明，再进入实现PR/admin合并和清理/状态PR。此前报告原样保留，不把旧候选通过冒充新head。

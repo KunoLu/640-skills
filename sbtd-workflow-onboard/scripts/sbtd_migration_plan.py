@@ -786,11 +786,36 @@ def validate_legacy_inputs(
     private_strings = _private_strings(Path(payload["backup_root"]))
     for project in payload["projects"]:
         root = Path(project["root"])
-        closures, documents, _optional = _classify_project_items(root, assigned[root])
-        _validate_project_closures(
+        closures, documents, optional = _classify_project_items(root, assigned[root])
+        _projections, forms = _validate_project_closures(
             root, closures, documents, read_original, private_strings
         )
         _validate_project_operations(root, project, assigned[root], read_original)
+        original = project["sources"][0]
+        inventory_root = Path(original["path"])
+        if snapshot(inventory_root) != original["state"]:
+            from sbtd_migration import _source_backup_paths
+
+            require_private_directory(Path(payload["backup_root"]))
+            inventory_root = _source_backup_paths(manifest)[original["path"]]
+        state, entries = directory_snapshot(inventory_root)
+        if state != original["state"]:
+            _fail("state-conflict", "the complete original inventory is unavailable")
+        metadata = next(
+            (entry for entry in entries if entry["path"] == _TEMPLATE_HASHES), None
+        )
+        if metadata is None or metadata["type"] != "file":
+            _fail("invalid-config", "the original ownership metadata is unavailable")
+        hashes = _parse_template_hashes(
+            _json_object(
+                read_file(
+                    inventory_root / _TEMPLATE_HASHES,
+                    {"type": "file", "checksum": metadata["checksum"]},
+                ),
+                "the original ownership metadata",
+            )
+        )
+        _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
     _validate_shared_operations(payload, sorted(str(root) for root in roots))
 
 
@@ -1358,9 +1383,15 @@ def _inventory_coverage(
     hashes: Mapping[str, str],
 ) -> None:
     """Exact bijection between the physical legacy inventory and approvals."""
+    empty_task_placeholder = False
     for entry in entries:
         if entry["path"].split("/", 1)[0] not in _KNOWN_LEGACY_TOP:
             _fail("unknown-content", "the legacy directory holds unclassified content")
+        if entry["path"] == "tasks/.gitkeep":
+            empty_task_placeholder = (
+                entry["type"] == "file"
+                and entry["checksum"] == hashlib.sha256(b"").hexdigest()
+            )
     files = sorted(entry["path"] for entry in entries if entry["type"] == "file")
     folder_names: set[str] = set()
     for name in files:
@@ -1371,10 +1402,7 @@ def _inventory_coverage(
     for name in files:
         if not name.startswith("tasks/"):
             continue
-        if name == "tasks/.gitkeep" and snapshot(root / _LEGACY_DIR / name) == {
-            "type": "file",
-            "checksum": hashlib.sha256(b"").hexdigest(),
-        }:
+        if name == "tasks/.gitkeep" and empty_task_placeholder:
             continue
         matches = [folder for folder in folder_names if name.startswith(folder + "/")]
         if len(matches) != 1:
@@ -1426,7 +1454,7 @@ def _inventory_coverage(
             _fail("approval-required", "a legacy task has no approved projections")
     for name in files:
         top = name.split("/", 1)[0]
-        if top in {"scripts", "agents", "config.yaml"} and (
+        if top in _GENERATED_LEGACY_TOP and (
             f"{_LEGACY_DIR}/{name}" not in hashes and coverage.get(name, 0) != 1
         ):
             _fail("unknown-content", "unowned legacy runtime content requires approval")
