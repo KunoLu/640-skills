@@ -7,10 +7,11 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_sbtd_migration_apply import file_contents, legacy_project
-from tests.test_sbtd_migration_plan import _reader
 from onboard_contracts import ContractError, operation_id, resource_id, seal_document
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
+
+from tests.test_sbtd_migration_apply import file_contents, legacy_project
+from tests.test_sbtd_migration_plan import _reader
 
 
 class CodexDeploymentPlanTests(unittest.TestCase):
@@ -40,6 +41,10 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                 validate_legacy_inputs(manifest, _reader)
                 self.assertEqual(file_contents(base), before)
                 payload = manifest["payload"]
+                self.assertEqual(
+                    payload["deployment"],
+                    {"mode": "init-projects", "platform": "codex", "inputs": []},
+                )
                 operations = payload["projects"][0]["private_operations"]
                 self.assertEqual(
                     {
@@ -105,6 +110,12 @@ class CodexDeploymentPlanTests(unittest.TestCase):
                 before = file_contents(base)
                 with self.assertRaises(ContractError):
                     validate_legacy_inputs(seal_document("manifest", payload), _reader)
+                mismatched = copy.deepcopy(manifest["payload"])
+                mismatched["deployment"]["platform"] = "omp"
+                with self.assertRaises(ContractError):
+                    validate_legacy_inputs(
+                        seal_document("manifest", mismatched), _reader
+                    )
                 self.assertEqual(file_contents(base), before)
 
 

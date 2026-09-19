@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.onboard_contract_fixtures import build_manifest_payload, contracts
 from tests import onboard_contract_fixtures as fixtures
+from tests.onboard_contract_fixtures import build_manifest_payload, contracts
 
 
 class MigrationIdentityContractTests(unittest.TestCase):
@@ -69,6 +69,7 @@ class MigrationIdentityContractTests(unittest.TestCase):
                 "created_at": "2026-09-19T00:00:00Z",
                 "retention": copy.deepcopy(build_manifest_payload()["retention"]),
                 "tool_versions": {"onboard": "fixture", "graft": "0.18.0"},
+                "deployment": None,
             }
             sealed = contracts.seal_document("manifest", payload)
             self.assertEqual(

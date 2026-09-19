@@ -370,6 +370,7 @@ def build_manifest_payload() -> dict[str, Any]:
             "disposal_authorization": "separate-manual-confirmation",
         },
         "tool_versions": {"onboard": "2.0.0", "graft": "1.0.0"},
+        "deployment": {"mode": "init", "platform": "codex", "inputs": []},
     }
 
 

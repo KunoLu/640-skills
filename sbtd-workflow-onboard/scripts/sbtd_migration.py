@@ -85,8 +85,10 @@ def runtime_versions() -> dict[str, str]:
         "scripts/onboard.py",
         "scripts/onboard_arguments.py",
         "scripts/onboard_contracts.py",
-        "scripts/sbtd_codex_deployment.py",
+        "scripts/sbtd_graft_deployment.py",
         "scripts/sbtd_codex_wiring.py",
+        "scripts/sbtd_omp_wiring.py",
+        "scripts/sbtd_omp_sources.py",
         "scripts/sbtd_graft_entry.py",
         "scripts/sbtd_identity.py",
         "scripts/sbtd_migration.py",
@@ -989,6 +991,7 @@ def run_migration(args: Any) -> int:
                 else None,
                 tool_versions=runtime_versions(),
                 deployment_mode=getattr(args, "deployment_mode", None),
+                deployment_platform=getattr(args, "deployment_platform", None) or "codex",
                 hooks_authorized=bool(getattr(args, "graft_hooks", False)),
             )
             projects = [

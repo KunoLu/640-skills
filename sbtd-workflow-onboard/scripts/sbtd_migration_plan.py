@@ -817,9 +817,9 @@ def validate_legacy_inputs(
         )
         _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
     _validate_shared_operations(payload, sorted(str(root) for root in roots))
-    from sbtd_codex_deployment import validate_codex_declarations
+    from sbtd_graft_deployment import validate_deployment_declarations
 
-    validate_codex_declarations(payload)
+    validate_deployment_declarations(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1753,6 +1753,7 @@ def plan_migration(
     tool_versions: Mapping[str, Any],
     deployment_mode: str | None = None,
     hooks_authorized: bool = False,
+    deployment_platform: str = "codex",
 ) -> dict[str, Any]:
     """Verify the authorized preparation and seal a bound migration manifest.
 
@@ -1766,6 +1767,8 @@ def plan_migration(
         _fail("invalid-argument", "the deployment mode must be explicitly supported")
     if hooks_authorized and deployment_mode != "init":
         _fail("scope-conflict", "global hooks require an explicitly planned full deployment")
+    if deployment_platform not in {"codex", "omp"}:
+        _fail("invalid-argument", "the deployment platform must be explicitly supported")
     from sbtd_migration import _RETENTION, _project_revision
 
     if (
@@ -1879,13 +1882,15 @@ def plan_migration(
         "created_at": datetime.now().astimezone().isoformat(timespec="microseconds"),
         "retention": copy.deepcopy(_RETENTION),
         "tool_versions": dict(tool_versions),
+        "deployment": None,
     }
     if deployment_mode is not None:
-        from sbtd_codex_deployment import attach_codex_deployment
+        from sbtd_graft_deployment import attach_deployment
 
-        attach_codex_deployment(
+        attach_deployment(
             payload, project_only=deployment_mode == "init-projects",
             hooks_authorized=hooks_authorized,
+            platform=deployment_platform,
         )
     _check_physical_aliases(
         [operation for project in projects for operation in project["private_operations"]]
