@@ -73,13 +73,21 @@ def runtime_versions() -> dict[str, str]:
     names = [
         "onboard-contracts.schema.json",
         "requirements.txt",
+        "catalog.json",
+        "catalog.schema.json",
         "assets/migration-local-ignore.txt",
         "assets/migration-legacy-ownership.json",
         "assets/migration-paused-agents.txt",
+        "assets/graft-build-policy.json",
+        "assets/graft-instructions.txt",
+        "assets/graft-hook-entry.mjs",
         "scripts/graft_runtime.py",
         "scripts/onboard.py",
         "scripts/onboard_arguments.py",
         "scripts/onboard_contracts.py",
+        "scripts/sbtd_codex_deployment.py",
+        "scripts/sbtd_codex_wiring.py",
+        "scripts/sbtd_graft_entry.py",
         "scripts/sbtd_identity.py",
         "scripts/sbtd_migration.py",
         "scripts/sbtd_migration_files.py",
@@ -90,11 +98,17 @@ def runtime_versions() -> dict[str, str]:
         "scripts/sbtd_task_document.py",
         "scripts/sbtd_task_state.py",
         "templates/agents/AGENTS.global.md",
+        "templates/agents/AGENTS.project.md",
         "templates/skills/sbtd-task/references/task-data.schema.json",
         "templates/skills/project-validation/scripts/validate_validation_evidence.py",
         "templates/skills/project-validation/references/validation-evidence.schema.json",
         "templates/skills/project-validation/references/validation-evidence.v2.schema.json",
     ]
+    from onboard import PROJECT_AGENTS_TEMPLATE
+
+    selected_template = PROJECT_AGENTS_TEMPLATE.relative_to(_PACKAGE).as_posix()
+    if selected_template not in names:
+        names.append(selected_template)
     hashes: list[list[Any]] = [[name, snapshot(_PACKAGE / name)] for name in names]
     if any(state["type"] != "file" for _, state in hashes):
         _fail("runtime-unavailable", "the installed migration runtime is incomplete")
@@ -974,6 +988,8 @@ def run_migration(args: Any) -> int:
                 if args.publication_decisions
                 else None,
                 tool_versions=runtime_versions(),
+                deployment_mode=getattr(args, "deployment_mode", None),
+                hooks_authorized=bool(getattr(args, "graft_hooks", False)),
             )
             projects = [
                 {

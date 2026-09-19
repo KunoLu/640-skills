@@ -9,9 +9,9 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup now uses read-only SBTD checks without Trellis installation or initialization. Graft/host integration, task operations and legacy migration remain staged work; on-demand identity creation is now provided by the P1-19 `DeveloperStore` and the explicit `--developer` entry described below. This is not a completed v2 release. Existing legacy data is preserved; user-global retirement remains P1-13.
+> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex project wiring, task libraries, developer identity and migration plan/apply/verify have stage-owned implementations. OMP wiring, complete wrapper forwarding, Windows-native proof, cleanup/recovery and full v2 release remain separately gated. Existing legacy data is preserved.
 
-The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 now exposes only the migration plan/apply/verify phases described below; cleanup, recovery and migration-context deployment producers remain separate staged work. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
+The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 exposes migration plan/apply/verify; P1-04 supplies Codex wiring and the migration-context deployment producer below. Cleanup, recovery and OMP deployment remain separately staged. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
 For validation, install the declared dependency with the interpreter that will load the installed Skill: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. A Skill directory copy does not perform this step. Imports remain lazy, missing dependencies fail closed, and availability must be checked from the installed copy rather than inferred from source-tree CI.
 
@@ -116,12 +116,13 @@ Project-only mode:
 
 1. Resolves the selected Agent platform for the existing adapter context.
 2. Skips target Agent CLI detection and installation.
-3. Skips global Agent/runtime/tool/Skill/AGENTS/MCP detection and installation, including Graft and HOME telemetry configuration.
+3. Skips global installation and user configuration. Explicit Python Codex project setup may detect the already-installed fixed Graft/Node locally; it never installs them or writes HOME telemetry.
 4. Runs complete read-only `check-projects` with the actual `--skip-project-agents` scope before any optional project install.
 5. Offers only applicable project-local Playwright or React Bits decisions.
 6. Writes project AGENTS and `.gitignore`.
 7. Requires no Trellis CLI, developer name or pre-existing task state.
 8. Reports an explicitly present unfinished SBTD bootstrap task without creating one.
+9. For explicit Codex projects with fixed Graft available, maintains the project fence and graph; otherwise reports not-available and continues unrelated setup. No HOME, user-level MCP or hook writes.
 
 The project AGENTS provides the existing minimum routing/safety fallback; project-only mode does not install or claim activation of global Skills. Missing optional tools do not freeze unrelated safe default/lite work, and no missing reviewer may be reported as passed.
 
@@ -158,7 +159,7 @@ All managed Graft children receive `DO_NOT_TRACK=1`, an empty dotenv input and n
 
 `graft --version` is local-only; `graft version` invokes npm metadata and can return an offline/unreachable message. Check/plan never run the latter. A cached npm answer is not proof of connectivity; offline verification uses a real network control and empty per-case caches.
 
-GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus resources are left untouched; Graft graph/host/MCP integration is a separate later stage.
+GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus resources remain untouched. Explicit Codex graph/MCP wiring is described below; OMP integration remains a later task.
 
 RTK remains optional and retains its confirmation flow. Onboard verifies the binary with an isolated `gain` probe, because running it in an empty user HOME creates a history database. `verificationScope=isolated-probe` means actual user-history directory permissions and contents were not verified. Do not interpret probe success as a repair of the user's data directory.
 
@@ -453,6 +454,33 @@ Native report schemas remain unchanged. Outer migration `source_ref` stays null 
 
 `tool_versions` binds installed migration source/assets, declared dependency versions and Python, plus the selected Graft target pin; it is not proof that Graft or a host was executed. Consumer fixtures demonstrate acceptance/rejection rules only, not actual deployment. Windows ACL execution and real host deployment need their own environment proof. Pending lower-severity limitations are tracked in the repository findings ledger; no valid hash or task status waives them.
 
+## Codex Wiring and Deployment
+
+Explicit `--platform codex --projects-root <absolute-roots>` selects project wiring in Python `init`, `reset` and `init-projects`. Setup never installs or upgrades Graft/Node implicitly. When the pinned runtime is unavailable, normal setup without hooks reports `graftWiring.status=not-available` and still permits unrelated rules/Skill installation with source/LSP fallback. Explicit hooks and sealed migration deployment require the runtime and remain blocked. Ownership/configuration/scope failures are not downgraded. Project templates precede the Graft fence; `--skip-project-agents` preserves existing project instructions while maintaining the fence. Normal setup returns actual wiring results; an attempted wiring failure prevents project setup success.
+
+Full setup merges one active Codex `config.toml` with a stable per-root `sbtd-graft-<hash>` server, absolute runtime/launcher arguments and explicit cwd. It preserves foreign servers and rejects conflicting managed definitions. Project-only setup writes no HOME, global Skill or MCP/hook configuration. Existing full-init global rules/Skill selection remains the canonical installer policy, including the common AGENTS mirror for an already present `.omp`; that mirror is not OMP MCP/event wiring. Migration lists every such shared write before confirmation.
+
+Full installation binds MCP/hooks to the canonical installed Onboard Skill, not a disposable bootstrap checkout. That package is installed and verified before dependent host configuration is published. If ordinary init would retain a merely-valid but different older Skill shell, wiring preflight requests an explicitly confirmed reset instead of running the old guard. Project-only uses its existing executing package because it installs no global Skill.
+
+Hooks are absent from the default write set. `--graft-hooks` is separate consent to install the managed definitions, not host trust or execution proof. The host must support and enable hooks and trust the exact configured hashes; Onboard never edits trust state or bypasses it. Preserve all foreign handlers. Host-event acceptance is a separate real-host check. Root installers do not yet forward this new option; wrapper parity belongs to P1-07/P1-08.
+
+The launcher uses the pinned native package with an ephemeral HOME, DNT and dotenv/LLM/cloud environment isolation. Missing/old/incomplete stamps or unsafe graph state stop native startup without automatic reconciliation. Explicit managed setup can rebuild safe derived state; preserve originals and resolve unsafe ownership first. This is a scoped adapter, not an OS sandbox or a claim that arbitrary Graft commands are safe. Do not invoke upstream init, dynamic hook shims or parent-directory federation as substitutes.
+
+Normal wiring exposes `backupRoots` in the plan and retains existing resource originals in a private `<scope>/.sbtd/installation-originals/<run>/` directory. Existing installer template backups keep their original policy. Migration deployment instead uses the manifest's external private `backup_root`; its deployment evidence and native raw/Chinese-summary/envelope reports are new files within the manifest's private directory.
+
+For a migration, include the deployment choice in the original read-only plan:
+
+```text
+python <installed-onboard.py> migration --phase plan --projects-root <absolute-roots> --backup-root <external-private-vault> --custodian <actual-label> --deployment-mode init [--graft-hooks] --json
+python <installed-onboard.py> init --platform codex --projects-root <same-roots> --migration-manifest <manifest-file> --migration-apply-receipt <successful-apply-file> --deployment-evidence-out <new-private-file> [--graft-hooks] --yes --json
+```
+
+Use `--deployment-mode init-projects` and the `init-projects` entry only for a batch without shared-HOME operations; it cannot install global hooks. The plan seals canonical template sources plus narrowly typed `build-graft` / `configure-graft` operations bound to the installed fixed policy. Unrecognized customized global installation targets block; the current lower-severity limitation concerning unrelated existing Skill-root consumers is recorded in the repository findings ledger, not bypassed here.
+
+Deployment validates the entire manifest/apply/runtime/scope and output path before ordinary installation side effects, then executes only declared resources. It does not run unrelated external installers, migration apply/cleanup or sync. Actual native `graft check` is `smoke-only`, not host-event, full-stack or business-behavior proof.
+
+On retry, explicitly pass `--previous-deployment-evidence <previous-file>` and a new `--deployment-evidence-out`; completed resources retain original before/backup references and are not rewritten. Drift or unknown partial writes stop automatic continuation. The single JSON response contains `deploymentEvidence: {path, evidence}` only for this context; an unsaved/invalid result is null and nonzero, with observed writes retained. The bare saved evidence file is the input to migration verify. Ordinary init has no `deploymentEvidence` field.
+
 ## MCP Setup
 
 MCP configuration remains optional and interactive in normal mode. Project-only mode skips it.
@@ -464,9 +492,9 @@ Built-in choices:
 - Maestro MCP: `maestro mcp` with `JAVA_HOME` and `PATH`
 - Custom stdio MCP: user-provided command/args/env
 
-Graft MCP is not advertised by this CLI-install slice; later host producers must prove their actual environment, ownership and handshake before adding it.
+The generic MCP menu is separate from the Codex Graft producer described above. The producer binds the verified installed launcher and selected root directly; installation alone does not prove host trust or event execution.
 
-Fixed platform scopes:
+Fixed platform scopes for the generic MCP menu:
 
 - Codex: user-level `codex mcp add` behavior.
 - Claude Code: `claude mcp add --transport stdio --scope user ...`.

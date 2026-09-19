@@ -23,12 +23,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+if __name__ == "__main__":
+    # Installed source directories can themselves be sealed deployment inputs.
+    # CLI imports must not mutate those inputs by adding bytecode caches.
+    sys.dont_write_bytecode = True
+
 if TYPE_CHECKING:
     from sbtd_identity import IdentityResult
 from graft_runtime import check_graft, install_graft
 from onboard_arguments import (
     SingleValueAction,
     WorkflowArgumentParser,
+    _add_migration_context,
+    _check_migration_context,
     add_migration_parser,
     validate_developer_name,
     validate_migration_args,
@@ -6385,12 +6392,22 @@ def run(mode: str, args: argparse.Namespace) -> int:
         from sbtd_migration import run_migration
 
         return run_migration(args)
+    if mode in {"init", "init-projects"} and getattr(args, "migration_manifest", None):
+        from sbtd_codex_deployment import run_migration_init
+
+        return run_migration_init(mode, args)
     if mode == "check":
         results = build_check_results(args)
+        if getattr(args, "platform", None) == "codex" or getattr(args, "graft_hooks", False):
+            from sbtd_codex_deployment import plan_normal_wiring
+
+            results["graftWiring"] = plan_normal_wiring(mode, args)
         developer_plan = build_developer_plan(args)
         if developer_plan is not None:
             results["developerPlan"] = developer_plan
         print_check_results(results, args.json)
+        if cast(dict[str, object], results.get("graftWiring", {})).get("status") == "blocked":
+            return 2
         if developer_plan is not None:
             if not args.json:
                 print_developer_plan(developer_plan)
@@ -6485,6 +6502,11 @@ def run(mode: str, args: argparse.Namespace) -> int:
         global_skills_dir_source,
         build_sbtd_project_setup(mode, args),
     )
+    from sbtd_codex_deployment import plan_normal_wiring
+
+    wiring_plan = plan_normal_wiring(mode, args)
+    if wiring_plan["status"] != "skipped":
+        plan_payload["graftWiring"] = wiring_plan
     developer_plan = build_developer_plan(args)
     if developer_plan is not None:
         plan_payload["developerPlan"] = developer_plan
@@ -6510,11 +6532,16 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print_developer_plan(developer_plan)
     if mode == "plan":
         emit_plan_json()
+        if wiring_plan["status"] == "blocked":
+            return 2
         if developer_plan is not None:
             return developer_plan_exit_code(developer_plan)
         return 0
 
     ensure_confirmed(args, mode)
+    if wiring_plan["status"] == "blocked":
+        emit_plan_json()
+        return 2
     if developer_plan is not None:
         # Whole-batch identity preflight before any global or project
         # mutation: a conflict or unknown checkout anywhere stops the run
@@ -6759,6 +6786,18 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print_caveman_maintenance_details(caveman_maintenance)
 
     sbtd_report = build_sbtd_project_setup(mode, args)
+    from sbtd_codex_deployment import execute_normal_wiring
+
+    wiring_result, wiring_exit = execute_normal_wiring(
+        wiring_plan, template_written=not bool(getattr(args, "skip_project_agents", False)),
+    )
+    if wiring_plan["status"] != "skipped":
+        plan_payload["graftWiring"] = wiring_result
+        plan_payload["operationResults"] = operation_results
+        if wiring_exit:
+            for project in cast(list[dict[str, object]], sbtd_report["projects"]):
+                project.update(status="failed", reason="Codex wiring did not complete", nextStep="Inspect the preserved wiring results and originals.")
+            sbtd_report["status"] = "failed"
     if args.json:
         # One run, one root object. The plan was held back above so it can be
         # merged here; flushing it earlier made stdout two concatenated
@@ -6787,6 +6826,11 @@ def run(mode: str, args: argparse.Namespace) -> int:
         )
     else:
         print_sbtd_project_setup_report(sbtd_report)
+        if wiring_plan["status"] != "skipped":
+            print("Codex wiring: " + str(wiring_result["status"]))
+            if wiring_result.get("hooks") == "configured-needs-host-trust":
+                print("Hooks configured only: enable supported Codex hooks and trust their exact hashes in the host before use.")
+            print("Host-event acceptance is separate from file and graph verification.")
     setup_exit = project_status_exit_code(sbtd_report["status"])
     if setup_exit:
         return setup_exit
@@ -6822,6 +6866,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
+        if mode in {"init", "init-projects"}:
+            _add_migration_context(sub)
+        sub.add_argument("--graft-hooks", action="store_true", help="Separately authorize the displayed Codex hooks; does not grant host trust.")
         sub.add_argument(
             "--projects-root",
             required=mode == "init-projects",
@@ -6837,7 +6884,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument(
             "--skip-project-agents",
             action="store_true",
-            help="Do not install project AGENTS.md.",
+            help="Skip the project AGENTS template; explicitly selected Graft wiring still maintains its managed fence.",
         )
         sub.add_argument(
             "--global-agents-path", help="Override Codex global AGENTS.md path."
@@ -7143,6 +7190,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.mode == "migration":
         validate_migration_args(args, parser=parser)
+    elif args.mode in {"init", "init-projects"}:
+        _check_migration_context(parser, args)
     return run(args.mode, args)
 
 

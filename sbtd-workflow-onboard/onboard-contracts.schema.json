@@ -446,6 +446,15 @@
         {
           "type": "object",
           "additionalProperties": false,
+          "required": ["kind", "source_ref"],
+          "properties": {
+            "kind": {"enum": ["build-graft", "configure-graft"]},
+            "source_ref": {"$ref": "#/$defs/file_ref"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
           "required": [
             "kind"
           ],
