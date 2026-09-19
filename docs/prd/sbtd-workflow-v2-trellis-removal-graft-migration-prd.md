@@ -659,7 +659,7 @@ npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；
 
 
 plan 可接收 `--publication-decisions <private-file>`：在运行 plan **之前**，用户或其授权 Agent 经明确的私有准备授权，在仓库外准备 share/redact 的安全候选并逐项裁决，记录源 checksum、目标、批准依据及已存在候选的路径／checksum；private-only 可选内容不要求共享候选。plan 只读验证并嵌入 manifest.payload.publication_decisions，必要项缺候选／批准则 blocked。私有准备不写项目或 HOME，纳入同一责任人和备份保留范围；apply 只复验已绑定候选，不新增裁决。
-以下是 v2 必须实现的公开契约，当前 CLI 尚未提供。沿用现有 `--projects-root` 的逗号分隔绝对路径输入约定；路径规范化／去重、containment 和冲突校验完成后才形成计划。
+以下是 v2 公开契约：P1-12 提供 plan/apply/verify，cleanup 仍由 P1-13 独立实施；不把阶段性消费者交付当作完整迁移发布。沿用现有 `--projects-root` 的逗号分隔绝对路径输入约定；路径规范化／去重、containment 和冲突校验完成后才形成计划。
 
 下文“migration apply／verify／cleanup”均为 `migration --phase <阶段>` 的简称，不另增同义子命令或兼容 alias。
 
@@ -682,6 +682,7 @@ plan/apply/verify的stdout均为单JSON对象；诊断走stderr。调用者只�
 - apply 的 --apply-receipt 只在同 manifest 的续作／完成核对时使用；初次仍验证全部前态。完整成功记录且后态未变返回 already-complete；合法部分记录先核对累计已完成后态，跳过这些操作，再核对未完成项前态并续作。无可信收据且当前不再是初始前态时 blocked，不自动发现收据或按目标恰好相同猜成功。
 - apply／cleanup 每次成功或可处理失败均输出一份**自包含累计收据**：保留前次已完成结果、该阶段原始 before 和 backup_ref，合入本次结果及尚未完成项；不能只返回本次增量。payload.previous_receipt_id 初次为 null、续作为输入收据 ID，用于关联而非索引扫描；最新收据本身足以供 verify/recovery 消费。新收据原子保存为新文件，旧收据不可改写，不能因重试以中间状态覆盖原备份。
 - P2-04 生成迁移外层 deployment evidence，绑定 manifest_id、同一项目／共享 HOME 范围、实际 ref/HEAD、累计部署操作及原始before/backup_ref、当前结果／配置checksum和真实验证报告引用。正常或可处理失败均原子保存到manifest私有目录；尚无smoke时只记录实际操作和未验证状态，不能声明部署验收通过。重试保留已完成操作及原始备份，最新单份外层记录足以供recovery使用；原生验证证据schema不变，资源改变后旧smoke不得冒充当前成功。计划、mock或合法哈希不代替真实证据。
+- 原生报告schema保持不变。外层迁移source_ref为null时，原生repository.sourceRef与raw sourceRef使用明确的无分支标签：detached Git为`HEAD`并绑定实际完整OID，非Git为`non-git`、null commit及unknown sourceRevision；不伪造分支，外层值不改写。首轮报告时间仍落在该部署窗口；累计重试可保留同一绑定apply批次内的成功报告，时间下界为该apply_receipt.finished_at、上界为最新deployment.finished_at，且仍复验实际报告字节、项目/ref/OID、环境、模式与进程结果。
 - verification payload 绑定 manifest_id、apply_id、deployment evidence 文件的原始 bytes SHA-256、验收时 refs、被保留的新资产状态，以及实际 cleanup 候选的路径／类型／操作／当前内容 checksum；输出 verification_id。共享配置按受管条目清理，保留 foreign entries。
 - 首次 cleanup 必须读取命令中传入的 manifest、apply_receipt、deployment evidence、verification，重算各 ID／文件哈希并核对相互绑定、项目范围、成功状态与实际候选。只给哈希而没有可读取证据对象不得清理。每个破坏性操作前复验预期状态；内容变化或证据缺失返回 blocked，要求重新核对／verify 并再次确认。plan 源／目标前态变化不能按旧 manifest 初次 apply。
 - --confirm-cleanup 必须等于本次展示且用户刚确认的 verification_id；缺失、错误或未绑定当前清单的旧 ID 返回 blocked。合法 partial receipt 可继续绑定同一 verification_id，但须重新展示已完成／剩余范围并取得本次确认，Agent／wrapper 不得复用旧同意或自动填参。cleanup 正常成功或可处理失败都原子保存累计 cleanup_receipt 再返回；payload 绑定 manifest_id、verification_id、apply_id、deployment evidence 哈希、实际操作、保留资产和实际 refs／路径／checksum／不存在状态。
@@ -1161,7 +1162,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P1-09 | P1 | 全部 bundled 旧路由清理与强制触发按模式裁决 | P0-05、P0-06、P1-01 | AC-02/14/16/23；不只改 router；Book/BDD 按模式，Knowledge/evidence 和 external mirror 保持 | AFK | planned | — |
 | P1-10 | P1 | ENTRYPOINT 监控与可恢复 sync source | P0-01、P0-07、P1-01 | AC-15/16；Graft pin/源明确，update 不变成迁移或 live sync | AFK | planned | — |
 | P1-11 | P1 | README.md/html、Onboard docs、prompt、CHANGELOG 同步 | P1-07、P1-08、P1-09、P1-10、P1-12、P1-13、P1-17、P1-18、P1-19、P1-20 | AC-15/37；记录恢复能力及证据不足边界，备份保留／人工销毁规程，不提前声称发布 | AFK | planned | — |
-| P1-12 | P1 | 批次私有/共享资源、隐私门、迁移及verify消费 | P1-02、P1-19、P0-06、P0-08 | AC-17/18/25/26/29/30/33/34/35/36相应子项；批准快照/闭集校验，verify拒绝错误部署ID/scope/status/report；累计receipt原子保存，无journal/锁 | AFK | planned | — |
+| P1-12 | P1 | 批次私有/共享资源、隐私门、迁移及verify消费 | P1-02、P1-19、P0-06、P0-08 | AC-17/18/25/26/29/30/33/34/35/36相应子项；[实施与验证](sbtd-workflow-v2-migration-runtime.md)。854项全量重跑及318文件安装副本、双host旧全局路由/原生CLI、缺依赖/结构检查通过；12 P1独立复核关闭，22 P2/6 P3延期。正在固定精确提交及PR闭环，不冒称真实部署 | AFK | checking | — |
 | P1-13 | P1 | 受管旧资源退役及cleanup证据消费 | P1-04、P1-05、P1-12 | AC-11/18/29/33/35清理及恢复输入子项；cleanup核对部署ID/scope/报告/资源完整链，共享清理一次，保留前后态及备份；完整恢复归P1-20 | AFK | planned | — |
 | P1-14 | P1 | 模式／安装／迁移／恢复回归与CI | P0-09、P1-07、P1-08、P1-09、P1-12、P1-13、P1-17、P1-18、P1-19、P1-20 | AC-18/19/22/23/24/25/26/27/28/29/30/31/32/33/34/35/36及AC-37实现期子项；真实producer→verify→cleanup→recovery链及partial续作/缺证据拒绝；AC-37仅保护/阻断与隔离规程演练，不等待真实发布窗口或销毁 | AFK | planned | — |
 | P1-15 | P1 | Codex/OMP 三模式 smoke、token 计量及最终验证 | P1-11、P1-14 | AC-04/14/19/20/22/23/24；六个 host×mode 组合含模式拒绝／恢复，真实证据不伪造 | AFK | planned | — |
@@ -1416,6 +1417,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-19T04:02:24+08:00 | P1-19 planned→in-progress | P1-18实现PR #35/状态PR #36闭环并清理后，从main`45e9f36…`建立`p1-19-developer-identity`。fresh venv基线97 tests/5.701s通过；Legacy/Refactoring/DDD/DDIA确认。沿已批准LI链区分合法/确实缺失/冲突/拓扑未知，复用现有安全I/O并激活真实--developer消费；不猜Git/OS作者，不把会话lesson分隔名640写为真实项目身份。P1累计5，十项确认门保持。 |
 | 2026-09-19T05:46:49+08:00 | P1-19 in-progress→checking | DeveloperStore本地/同仓主checkout只读链及--developer初始化已落地；损坏.git不能冒充nonGit，保护只转发原计划明确需求。独立CLI两P1经三条真实文件/I/O红测、129项影响范围与独立复核关闭，identity审查无P0/P1；2fixed P1/4deferred P2已入findings.log。最后dirty全量745 tests/183.192s无skip、310文件完整副本10原生场景通过；正在固定精确提交，尚不done。P1累计5，十项确认门保持。 |
 | 2026-09-19T06:06:25+08:00 | P1-19 checking→done | PR #37于06:04:50+08:00实际合并，merge`4226f29b15de1f2c7378739e00e7bed66633a8f6`；main/origin/tree及任务分支本地/远端清理已核对。最终head`498a4bd75113a468f2dd11946f57d77e09f3e5bb`原生745 tests/184.442s无skip、310文件完整安装副本10原生Git/worktree/CLI场景通过；报告stem为`unit-report-identity-pr-head-full-p1-19-developer-identity-2026_09_19-05_58_59`、`api-report-identity-pr-head-native-p1-19-developer-identity-2026_09_19-05_58_17`，23envelope通过，developer-local/exact/local-only。独立源码/文档/证据review无剩余P0/P1；2fixed P1、5deferred P2、1dismissed P2如实入ledger。4份base源码快照核验后清理Main私有验证目录，69报告保留；最终unit raw/中文汇总补充review/清理事实，envelope重算hash。P0安装、真实HOME、用户身份与迁移备份/live automation未动。Release readiness ready仅P1-19。P1累计6项，十项暂停评估门保持；独立状态PR闭环前不开P1-12。 |
+| 2026-09-19T06:44:30+08:00 | P1-12 planned→in-progress | P1-19实现PR #37/状态PR #38闭环并清理后，从main`7940592…`建立`p1-12-migration-runtime`。fresh venv基线400 tests/22.016s、真实CLI检查/未接入迁移拒绝且零持久写入；Legacy/Refactoring/DDD/DDIA确认。固定Trellis v0.6.17源码核对旧task/身份/平台ownership，发现旧身份含initialized_at须显式提取，不直接复制或放宽普通新身份解析。Main拥有编排/验证；不执行真实迁移、部署、cleanup或恢复，不扩修P2。P1累计6，十项确认门保持。 |
+| 2026-09-19T11:47:07+08:00 | P1-12 in-progress→checking | plan/apply/verify真实入口、私有原件/批准投影及累计回执已接线。12项P1经真实红绿和独立复核关闭；22 P2/6 P3保留原级延期。最后dirty全量854 tests/574.542s通过（1 Windows专用skip），318文件安装副本双host固定旧router备份/暂停、11场景原生CLI及缺依赖/结构检查通过；原生报告schema不改。ty/关键Ruff/format通过，完整Ruff样式诊断如实延期。精确head、PR/admin合并及清理/状态PR未完成，不提前done；P1累计6，十项确认门保持。 |
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 

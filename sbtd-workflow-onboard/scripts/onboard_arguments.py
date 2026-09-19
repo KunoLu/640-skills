@@ -5,8 +5,9 @@ workflow CLI: the existing check/check-projects/plan/init/reset/init-projects
 modes without the removed Trellis flags, plus the full ``migration`` and
 ``recovery`` phase grammar from the PRD (sections 10.2.1 and 10.2.3).
 
-The parser only validates argument combinations. It never reads or writes user
-paths, never loads referenced artifacts, and is not wired into ``onboard.py``.
+``parse_workflow_args`` remains the full target grammar. The shared migration
+parser helpers also serve the live CLI's implemented phase subset; parsing
+never reads or writes user paths or loads referenced artifacts.
 Authorization is never synthesized here: absent ``--yes``/``--confirm-cleanup``/
 ``--confirm-recovery`` tokens still parse so the owning handler can answer with
 its blocked envelope, and confirmation IDs pass through unexamined because the
@@ -20,7 +21,14 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import NoReturn
 
-__all__ = ["SingleValueAction", "parse_workflow_args", "validate_developer_name"]
+__all__ = [
+    "SingleValueAction",
+    "WorkflowArgumentParser",
+    "add_migration_parser",
+    "parse_workflow_args",
+    "validate_developer_name",
+    "validate_migration_args",
+]
 
 PROG = "onboard.py"
 
@@ -115,7 +123,7 @@ def validate_developer_name(value: str) -> str:
     return value
 
 
-class _ArgumentParser(argparse.ArgumentParser):
+class WorkflowArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         # argparse diagnostics can interpolate private paths and arbitrary tokens.
         # Usage is built only from this module's fixed program/option declarations.
@@ -201,10 +209,53 @@ def _add_migration_context(sub: argparse.ArgumentParser) -> None:
     )
 
 
+def add_migration_parser(
+    subparsers: argparse._SubParsersAction,
+    *,
+    phases: Sequence[str] = _MIGRATION_PHASES,
+) -> argparse.ArgumentParser:
+    """Share phase declarations without advertising unimplemented phases."""
+    if not phases or any(phase not in _MIGRATION_RULES for phase in phases):
+        raise ValueError("unsupported migration parser phase set")
+    migration = subparsers.add_parser("migration", allow_abbrev=False)
+    migration.add_argument(
+        "--phase", action=SingleValueAction, required=True, choices=tuple(phases),
+        help="Explicit migration phase; deployment remains a separate operation.",
+    )
+    allowed = {
+        option
+        for phase in phases
+        for options in _MIGRATION_RULES[phase]
+        for option in options
+    }
+    descriptions = {
+        "projects_root": "Comma-separated absolute project roots.",
+        "backup_root": "Existing private backup directory outside the repositories.",
+        "custodian": "Explicit responsible custodian label.",
+        "publication_decisions": "Private approved publication-decisions file.",
+        "manifest": "Explicit private migration manifest file.",
+        "apply_receipt": "Explicit apply receipt for retry or verification.",
+        "deployment_evidence": "Explicit completed deployment evidence file.",
+        "verification": "Explicit verification record for cleanup.",
+        "cleanup_receipt": "Explicit cumulative cleanup receipt for retry.",
+        "confirm_cleanup": "The verification_id confirmed for this cleanup attempt.",
+    }
+    for dest in _MIGRATION_VALUE_OPTIONS:
+        if dest in allowed:
+            migration.add_argument(_option_name(dest), action=SingleValueAction, help=descriptions[dest])
+    for dest in _MIGRATION_FLAG_OPTIONS:
+        if dest in allowed:
+            migration.add_argument(
+                _option_name(dest), action="store_true",
+                help="Authorize this apply attempt." if dest == "yes" else "Emit the private single-JSON exchange document.",
+            )
+    return migration
+
+
 def _build_parser() -> tuple[
     argparse.ArgumentParser, dict[str, argparse.ArgumentParser]
 ]:
-    parser = _ArgumentParser(
+    parser = WorkflowArgumentParser(
         prog=PROG,
         allow_abbrev=False,
         description="Target SBTD workflow CLI grammar (contract; not the live entry point).",
@@ -238,75 +289,7 @@ def _build_parser() -> tuple[
     )
     subs["check-projects"] = project_check
 
-    migration = subparsers.add_parser("migration", allow_abbrev=False)
-    migration.add_argument(
-        "--phase",
-        action=SingleValueAction,
-        required=True,
-        choices=_MIGRATION_PHASES,
-        help="Migration phase: plan, apply, verify, or cleanup (no deploy phase).",
-    )
-    migration.add_argument(
-        "--projects-root",
-        action=SingleValueAction,
-        help="Comma-separated absolute project root paths (plan only).",
-    )
-    migration.add_argument(
-        "--backup-root",
-        action=SingleValueAction,
-        help="Private backup directory outside the repositories (plan only).",
-    )
-    migration.add_argument(
-        "--custodian",
-        action=SingleValueAction,
-        help="Label of the responsible custodian (plan only).",
-    )
-    migration.add_argument(
-        "--publication-decisions",
-        action=SingleValueAction,
-        help="Private publication-decisions file (plan only).",
-    )
-    migration.add_argument(
-        "--manifest",
-        action=SingleValueAction,
-        help="Migration manifest file (apply/verify/cleanup).",
-    )
-    migration.add_argument(
-        "--apply-receipt",
-        action=SingleValueAction,
-        help="Apply receipt: optional retry input for apply, required evidence for verify/cleanup.",
-    )
-    migration.add_argument(
-        "--deployment-evidence",
-        action=SingleValueAction,
-        help="Deployment evidence file (verify/cleanup).",
-    )
-    migration.add_argument(
-        "--verification",
-        action=SingleValueAction,
-        help="Verification record file (cleanup only).",
-    )
-    migration.add_argument(
-        "--cleanup-receipt",
-        action=SingleValueAction,
-        help="Cleanup receipt for an explicit cleanup retry (cleanup only).",
-    )
-    migration.add_argument(
-        "--confirm-cleanup",
-        action=SingleValueAction,
-        help="verification_id confirmed this run; absence stays blocked in the handler.",
-    )
-    migration.add_argument(
-        "--yes",
-        action="store_true",
-        help="Authorize migration apply writes; never a cleanup consent.",
-    )
-    migration.add_argument(
-        "--json",
-        action="store_true",
-        help="Print the single machine-readable envelope.",
-    )
-    subs["migration"] = migration
+    subs["migration"] = add_migration_parser(subparsers)
 
     recovery = subparsers.add_parser("recovery", allow_abbrev=False)
     recovery.add_argument(
@@ -376,14 +359,22 @@ def _check_phase(
     required, optional = rules[args.phase]
     allowed = set(required) | set(optional)
     for dest in value_options:
-        if getattr(args, dest) is not None and dest not in allowed:
+        if getattr(args, dest, None) is not None and dest not in allowed:
             sub.error(f"{_option_name(dest)} is not valid for phase {args.phase!r}")
     for dest in flag_options:
-        if getattr(args, dest) and dest not in allowed:
+        if getattr(args, dest, False) and dest not in allowed:
             sub.error(f"{_option_name(dest)} is not valid for phase {args.phase!r}")
     for dest in required:
-        if getattr(args, dest) is None:
+        if getattr(args, dest, None) is None:
             sub.error(f"{_option_name(dest)} is required for phase {args.phase!r}")
+
+
+def validate_migration_args(
+    args: argparse.Namespace, *, parser: argparse.ArgumentParser
+) -> None:
+    _check_phase(
+        parser, args, _MIGRATION_VALUE_OPTIONS, _MIGRATION_FLAG_OPTIONS, _MIGRATION_RULES
+    )
 
 
 def _check_migration_context(
@@ -415,13 +406,7 @@ def parse_workflow_args(argv: Sequence[str]) -> argparse.Namespace:
     parser, subs = _build_parser()
     args = parser.parse_args(argv)
     if args.mode == "migration":
-        _check_phase(
-            subs["migration"],
-            args,
-            _MIGRATION_VALUE_OPTIONS,
-            _MIGRATION_FLAG_OPTIONS,
-            _MIGRATION_RULES,
-        )
+        validate_migration_args(args, parser=subs["migration"])
     elif args.mode == "recovery":
         _check_phase(
             subs["recovery"],

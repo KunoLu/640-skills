@@ -853,8 +853,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "--yes",
         )
 
-        self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("invalid choice", completed.stderr)
+        self.assertEqual(completed.returncode, 2)
 
     def test_onboard_public_flags_remove_project_skill_scope(self) -> None:
         completed = self.run_onboard("plan", "--help")

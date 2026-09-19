@@ -26,7 +26,13 @@ from typing import TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from sbtd_identity import IdentityResult
 from graft_runtime import check_graft, install_graft
-from onboard_arguments import SingleValueAction, validate_developer_name
+from onboard_arguments import (
+    SingleValueAction,
+    WorkflowArgumentParser,
+    add_migration_parser,
+    validate_developer_name,
+    validate_migration_args,
+)
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -6375,6 +6381,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
     # One process may run several modes; a note left by an earlier run would
     # make a later one report checks it never skipped.
     UNVERIFIED_CHECKS.clear()
+    if mode == "migration":
+        from sbtd_migration import run_migration
+
+        return run_migration(args)
     if mode == "check":
         results = build_check_results(args)
         developer_plan = build_developer_plan(args)
@@ -6804,10 +6814,11 @@ def run(mode: str, args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = WorkflowArgumentParser(
         description="Install or reset SBTD workflow AGENTS and skills."
     )
     subparsers = parser.add_subparsers(dest="mode", required=True)
+    add_migration_parser(subparsers, phases=("plan", "apply", "verify"))
 
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
@@ -7130,6 +7141,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    if args.mode == "migration":
+        validate_migration_args(args, parser=parser)
     return run(args.mode, args)
 
 
