@@ -816,6 +816,61 @@
         }
       }
     },
+    "deployment_declaration": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "platform",
+            "inputs"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "init",
+                "init-projects"
+              ]
+            },
+            "platform": {
+              "enum": [
+                "codex",
+                "omp"
+              ]
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/snapshot"
+                  },
+                  {
+                    "properties": {
+                      "state": {
+                        "properties": {
+                          "type": {
+                            "enum": [
+                              "absent",
+                              "file"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "minItems": 0
+            }
+          }
+        }
+      ]
+    },
     "retention": {
       "type": "object",
       "additionalProperties": false,
@@ -862,7 +917,8 @@
         "backup_root",
         "created_at",
         "retention",
-        "tool_versions"
+        "tool_versions",
+        "deployment"
       ],
       "properties": {
         "projects": {
@@ -916,6 +972,9 @@
               "$ref": "#/$defs/nonblank"
             }
           }
+        },
+        "deployment": {
+          "$ref": "#/$defs/deployment_declaration"
         }
       }
     },

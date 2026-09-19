@@ -303,6 +303,64 @@ class ManifestSemanticTests(unittest.TestCase):
     def test_valid_manifest_passes(self) -> None:
         contracts.validate_document(self.manifest, "manifest")
 
+    def test_deployment_declaration_is_required_and_null_only_without_deploy(self) -> None:
+        payload = fixtures.build_manifest_payload()
+        payload.pop("deployment")
+        with self.assertRaises(contracts.ContractError):
+            contracts.seal_document("manifest", payload)
+        for project in payload["projects"]:
+            project["private_operations"] = [
+                operation
+                for operation in project["private_operations"]
+                if operation["phase"] == "apply"
+            ]
+        payload["shared_operations"] = [
+            operation
+            for operation in payload["shared_operations"]
+            if operation["phase"] == "apply"
+        ]
+        shared_ids = [
+            operation["operation_id"] for operation in payload["shared_operations"]
+        ]
+        for project in payload["projects"]:
+            project["shared_operation_ids"] = list(shared_ids)
+        payload["deployment"] = None
+        contracts.seal_document("manifest", payload)
+        payload["deployment"] = {
+            "mode": "init",
+            "platform": "codex",
+            "inputs": [],
+        }
+        with self.assertRaises(contracts.ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_omp_deployment_binds_host_mode_and_readonly_inputs(self) -> None:
+        payload = fixtures.build_manifest_payload()
+        payload["deployment"] = {
+            "mode": "init",
+            "platform": "omp",
+            "inputs": [
+                {
+                    "path": "/private/home/.codex/inherited.toml",
+                    "state": fixtures.file_state(91),
+                },
+                {
+                    "path": "/private/work/alpha/.omp/mcp.json",
+                    "state": dict(fixtures.ABSENT),
+                },
+            ],
+        }
+        contracts.seal_document("manifest", payload)
+        payload["deployment"]["inputs"].append(
+            {
+                "path": "/private/home/.codex/inherited.toml",
+                "state": fixtures.file_state(92),
+            }
+        )
+        with self.assertRaises(contracts.ContractError):
+            contracts.seal_document("manifest", payload)
+
+
     def test_forged_manifest_id_is_rejected_with_exit_three(self) -> None:
         document = copy.deepcopy(self.manifest)
         document["manifest_id"] = ZERO_DIGEST
@@ -3069,6 +3127,7 @@ class ThirdReviewRegressionTests(unittest.TestCase):
         project["shared_operation_ids"] = []
         manifest_payload["shared_operations"] = []
         manifest_payload["shared_roots"] = []
+        manifest_payload["deployment"] = None
         manifest_payload["publication_decisions"]["items"] = []
         manifest = contracts.seal_document("manifest", manifest_payload)
 

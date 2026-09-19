@@ -530,7 +530,12 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
             _fail("semantic-violation", "Graft generation is restricted to deployment")
         if (change_kind == "build-graft") != directory:
             _fail("semantic-violation", "Graft generation has an incompatible resource type")
-        config_owners = {"graft-agents": "markdown", "graft-mcp": "toml", "graft-hooks": "json"}
+        config_owners = {
+            "graft-agents": "markdown",
+            "graft-mcp": "toml",
+            "graft-hooks": "json",
+            "graft-omp-mcp": "json",
+        }
         if change_kind == "configure-graft" and config_owners.get(operation["selector"]) != operation["owner_kind"]:
             _fail("semantic-violation", "unknown Graft configuration selector or type")
         if operation["change"]["source_ref"] != {
@@ -604,6 +609,9 @@ def _manifest_input_references(
 ) -> Iterator[Mapping[str, Any]]:
     for project in payload["projects"]:
         yield from project["sources"]
+    deployment = payload["deployment"]
+    if deployment is not None:
+        yield from deployment["inputs"]
     for item in payload["publication_decisions"]["items"]:
         yield from item["sources"]
         if item["candidate_ref"] is not None:
@@ -714,6 +722,43 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "duplicate project root in manifest")
     root_set = set(roots)
     _check_reference_states(_manifest_initial_snapshots(payload))
+    deploy_operations = [
+        operation
+        for operation in _manifest_operations(payload)
+        if operation["phase"] == "deploy"
+    ]
+    deployment = payload["deployment"]
+    if deployment is None:
+        if deploy_operations:
+            _fail(
+                "semantic-violation",
+                "deployment operations require an explicit deployment declaration",
+            )
+    else:
+        if not deploy_operations:
+            _fail(
+                "semantic-violation",
+                "a deployment declaration requires declared deployment operations",
+            )
+        if deployment["mode"] == "init-projects" and any(
+            operation in payload["shared_operations"] for operation in deploy_operations
+        ):
+            _fail(
+                "semantic-violation",
+                "project-only deployment cannot declare shared operations",
+            )
+        input_paths = [reference["path"] for reference in deployment["inputs"]]
+        if len(set(input_paths)) != len(input_paths):
+            _fail(
+                "semantic-violation",
+                "deployment read-only inputs must not repeat a source",
+            )
+        operation_targets = {operation["target"] for operation in deploy_operations}
+        if any(path in operation_targets for path in input_paths):
+            _fail(
+                "semantic-violation",
+                "deployment read-only inputs cannot own a writable target",
+            )
     backup_root = payload["backup_root"]
     for root in roots:
         if _path_contains(root, backup_root) or _path_contains(backup_root, root):
@@ -783,6 +828,14 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             if selector == "graft-agents":
                 if owner[0] != "private" or owner[1] is None or Path(target) != Path(owner[1]) / "AGENTS.md":
                     _fail("semantic-violation", "Graft instructions belong only to the selected project")
+            elif selector == "graft-omp-mcp":
+                if owner[0] != "shared" or not any(
+                    root["kind"] == "omp-home"
+                    and _path_contains(root["path"], target)
+                    and Path(target).name == "mcp.json"
+                    for root in payload["shared_roots"]
+                ):
+                    _fail("semantic-violation", "Graft OMP configuration requires its declared OMP HOME")
             else:
                 name = "config.toml" if selector == "graft-mcp" else "hooks.json"
                 if owner[0] != "shared" or not any(

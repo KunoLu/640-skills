@@ -44,7 +44,7 @@ _RECOVERY_PHASES = ("plan", "apply")
 _MIGRATION_RULES = {
     "plan": (
         ("projects_root", "backup_root", "custodian"),
-        ("publication_decisions", "deployment_mode", "graft_hooks", "json"),
+        ("publication_decisions", "deployment_mode", "deployment_platform", "graft_hooks", "json"),
     ),
     "apply": (
         ("manifest",),
@@ -65,6 +65,7 @@ _MIGRATION_VALUE_OPTIONS = (
     "custodian",
     "publication_decisions",
     "deployment_mode",
+    "deployment_platform",
     "manifest",
     "apply_receipt",
     "deployment_evidence",
@@ -236,6 +237,7 @@ def add_migration_parser(
         "custodian": "Explicit responsible custodian label.",
         "publication_decisions": "Private approved publication-decisions file.",
         "deployment_mode": "Declare Codex deployment before apply: init or init-projects.",
+        "deployment_platform": "Declare the deployment host: codex or omp.",
         "manifest": "Explicit private migration manifest file.",
         "apply_receipt": "Explicit apply receipt for retry or verification.",
         "deployment_evidence": "Explicit completed deployment evidence file.",
@@ -244,8 +246,12 @@ def add_migration_parser(
         "confirm_cleanup": "The verification_id confirmed for this cleanup attempt.",
     }
     for dest in _MIGRATION_VALUE_OPTIONS:
-        if dest in allowed:
-            migration.add_argument(_option_name(dest), action=SingleValueAction, help=descriptions[dest])
+        if dest not in allowed:
+            continue
+        option_kwargs = {"action": SingleValueAction, "help": descriptions[dest]}
+        if dest == "deployment_platform":
+            option_kwargs["choices"] = ("codex", "omp")
+        migration.add_argument(_option_name(dest), **option_kwargs)
     for dest in _MIGRATION_FLAG_OPTIONS:
         if dest in allowed:
             migration.add_argument(

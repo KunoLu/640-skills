@@ -6,12 +6,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from tests.test_sbtd_migration_apply import legacy_project
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_codex_deployment import execute_migration_deployment, load_deployment_context
+from sbtd_graft_deployment import execute_migration_deployment, load_deployment_context
 from sbtd_migration import apply_migration, runtime_versions
 from sbtd_migration_files import snapshot
 from sbtd_migration_plan import plan_migration
+
+from tests.test_sbtd_migration_apply import legacy_project
 
 
 class DeploymentContextTests(unittest.TestCase):
@@ -88,7 +89,7 @@ class DeploymentContextTests(unittest.TestCase):
                             hooks_authorized=hooks,
                         )
                     self.assertEqual(snapshot(base), before)
-                with mock.patch("sbtd_codex_deployment.datetime") as clock:
+                with mock.patch("sbtd_graft_deployment.datetime") as clock:
                     clock.now.return_value.isoformat.return_value = (
                         "2000-01-01T00:00:00+00:00"
                     )
@@ -163,10 +164,10 @@ class DeploymentContextTests(unittest.TestCase):
                 }
                 with (
                     mock.patch(
-                        "sbtd_codex_deployment.verified_runtime", return_value=runtime
+                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
                     ),
                     mock.patch(
-                        "sbtd_codex_deployment.build_project_graph",
+                        "sbtd_graft_deployment.build_project_graph",
                         side_effect=isolated_native_boundary,
                     ),
                     mock.patch.object(Path, "mkdir", deny_active_home),
@@ -200,16 +201,16 @@ class DeploymentContextTests(unittest.TestCase):
                 )
                 with (
                     mock.patch(
-                        "sbtd_codex_deployment.verified_runtime", return_value=runtime
+                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
                     ),
                     mock.patch(
-                        "sbtd_codex_deployment.build_project_graph",
+                        "sbtd_graft_deployment.build_project_graph",
                         side_effect=AssertionError(
                             "completed graph must not be rebuilt"
                         ),
                     ),
                     mock.patch(
-                        "sbtd_codex_deployment.run_project_smoke",
+                        "sbtd_graft_deployment.run_project_smoke",
                         side_effect=OSError("synthetic smoke failure"),
                     ),
                 ):
@@ -224,7 +225,7 @@ class DeploymentContextTests(unittest.TestCase):
                 self.assertEqual(snapshot(root), before_retry)
                 self.assertTrue((active / "config.toml").is_file())
                 self.assertTrue((home / ".agent/skills/sbtd-task/SKILL.md").is_file())
-                with mock.patch("sbtd_codex_deployment.datetime") as clock:
+                with mock.patch("sbtd_graft_deployment.datetime") as clock:
                     clock.now.return_value.isoformat.return_value = receipt["payload"][
                         "finished_at"
                     ]
@@ -253,14 +254,14 @@ class DeploymentContextTests(unittest.TestCase):
                 )
                 with (
                     mock.patch(
-                        "sbtd_codex_deployment.verified_runtime", return_value=runtime
+                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
                     ),
                     mock.patch(
-                        "sbtd_codex_deployment.run_project_smoke",
+                        "sbtd_graft_deployment.run_project_smoke",
                         side_effect=OSError("synthetic smoke failure"),
                     ),
                     mock.patch(
-                        "sbtd_codex_deployment.save_document",
+                        "sbtd_graft_deployment.save_document",
                         side_effect=OSError("synthetic evidence write failure"),
                     ),
                 ):
