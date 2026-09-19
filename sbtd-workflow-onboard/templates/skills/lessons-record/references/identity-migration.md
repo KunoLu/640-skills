@@ -1,8 +1,10 @@
 # Explicit legacy identity migration
 
-Read only after the user authorizes migration of this specific project. Ordinary lesson reading/writing, mode routing, check or global Skill installation never uses legacy identity as an automatic source. This reference defines decisions, not an implemented migration command.
+Read only after the user authorizes migration of this specific project. Ordinary lesson reading/writing, mode routing, check or global Skill installation never uses legacy identity as an automatic source. This reference defines the identity policy; it does not itself execute migration.
 
 The legacy input is `<project>/.trellis/.developer`; the current identity is `<project>/.sbtd/developer`. Do not invoke `trellis init` or an old init_developer script. Do not derive identity from historical workspace directory names, Git/OS/environment values or old lesson markers.
+
+The installed Onboard provides the separately authorized `migration --phase plan|apply|verify` batch interface. Use its actual installed script and Migration Runtime reference: plan validates private preparation, apply explicitly extracts the old name while preserving the full original, and verify consumes deployment evidence. Do not call this from a daily lesson write, invent a standalone identity-migration CLI, or treat this interface as completed deployment/cleanup/recovery.
 
 ## Preconditions
 
@@ -36,4 +38,4 @@ Original history remains complete in private backups. Any shared projection requ
 
 ## Current implementation boundary
 
-The current-chain resolution this reference defers to is implemented by Onboard's `scripts/sbtd_identity.py` (`DeveloperStore.resolve` / `plan` / `ensure`): local valid identity first, verified linked-worktree main read in place without copying, abnormal present files as conflicts, unknown Git or worktree metadata as blocked, and first writes only after verified genuine absence with separately confirmed narrow ignore protection. That helper never opens `.trellis/.developer` during ordinary resolution, and its existence does not implement this migration: reading legacy identity, moving lesson content, rewriting historical IDs and any cleanup remain the separately authorized P1-12 batch-migration task with its own privacy gate and evidence. Do not describe an identity created or verified by the helper as a completed legacy migration.
+The current-chain resolution this reference defers to is implemented by Onboard's `scripts/sbtd_identity.py` (`DeveloperStore.resolve` / `plan` / `ensure`): local valid identity first, verified linked-worktree main read in place without copying, abnormal present files as conflicts, unknown Git or worktree metadata as blocked, and first writes only after verified genuine absence with separately confirmed narrow ignore protection. That helper never opens `.trellis/.developer` during ordinary resolution. Explicit batch migration separately handles legacy reads and approved safe lesson projections; historical IDs and markers remain unchanged, and cleanup stays separately gated. Do not describe an identity created or verified by the ordinary helper as a completed legacy migration.

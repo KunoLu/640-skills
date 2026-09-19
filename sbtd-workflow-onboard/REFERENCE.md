@@ -11,7 +11,7 @@
 
 > **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup now uses read-only SBTD checks without Trellis installation or initialization. Graft/host integration, task operations and legacy migration remain staged work; on-demand identity creation is now provided by the P1-19 `DeveloperStore` and the explicit `--developer` entry described below. This is not a completed v2 release. Existing legacy data is preserved; user-global retirement remains P1-13.
 
-The P1-01 argument/codec modules and `onboard-contracts.schema.json` are internal executable contracts, not a second CLI or an activation of migration/recovery handlers. The existing command reference below remains the active public surface until each runtime/caller cutover. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
+The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 now exposes only the migration plan/apply/verify phases described below; cleanup, recovery and migration-context deployment producers remain separate staged work. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
 For validation, install the declared dependency with the interpreter that will load the installed Skill: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. A Skill directory copy does not perform this step. Imports remain lazy, missing dependencies fail closed, and availability must be checked from the installed copy rather than inferred from source-tree CI.
 
@@ -419,6 +419,39 @@ Whether the Agent truly recommends first and pauses, invokes grill/DDD, or execu
 - Without `--developer` nothing changes: no command creates, repairs or requires an identity, and `reset` preserves any existing file.
 
 Ordinary resolve/plan/check/global installation never reads `.trellis/.developer`; authorized legacy identity migration remains the separately gated P1-12 task and is not claimed complete by this helper. The root installers (`install.sh` / `install.ps1`) gain no new flag here; full wrapper forwarding remains P1-07 / P1-08. Windows proof, host wiring, full validation and release remain unclaimed.
+
+## Migration Runtime
+
+The installed Onboard script exposes `migration --phase plan`, `apply`, and `verify`. This is not a second CLI, and there is no positional `migration plan` alias. The full target grammar still describes future cleanup/recovery contracts, but those handlers are not registered here. Do not use this unreleased stage to perform a real-project cutover before its separately owned deployment, cleanup and recovery gates are available and accepted.
+
+### Authorized preparation and plan
+
+- Resolve the actual selected project roots, whole shared HOME/host batch, custodian and private storage explicitly. Never infer authorization from a valid checksum or a sample label.
+- Prepare an existing owner-private vault outside every selected project. Publication decisions and approved candidates must already exist inside that vault; plan never creates them. POSIX owner/mode and Windows ACL checks are separate; unproven privacy, links, aliases or unknown types block.
+- `publication-decisions` is the schema's bare `{schema_version, items}` document. Every mandatory task/spec/lesson source must be covered. A task projects to `task.md` plus `legacy-task.json`, with its existing attachments. Task conversion is structured; direct `share` copies of attachments/spec/lessons must preserve exact source bytes. Any rewritten direct-copy candidate requires `redact` and its explicit approval.
+- The characterized legacy input is Trellis v0.6.17. Generated runtime files remain in the private-preserved legacy tree until later cleanup. Unknown ownership or customized/mixed shared configuration blocks for reconciliation; a mutable legacy hash alone cannot authorize deleting foreign entries. Old configuration pins are compatibility facts, not a latest-version update target.
+
+Command shapes below require actual authorized values in place of angle-bracket arguments:
+
+```text
+python <installed-onboard.py> migration --phase plan --projects-root <comma-separated-absolute-roots> --backup-root <external-private-vault> --custodian <actual-label> [--publication-decisions <private-file>] --json
+python <installed-onboard.py> migration --phase apply --manifest <private-manifest-file> [--apply-receipt <prior-private-receipt>] --yes --json
+python <installed-onboard.py> migration --phase verify --manifest <private-manifest-file> --apply-receipt <complete-private-receipt> --deployment-evidence <private-deployment-file> --json
+```
+
+Each command returns one envelope. Subsequent file arguments require the corresponding bare subobject: `response.migration.manifest`, `response.migration.apply_receipt`, or `response.migration.verification`; the whole response envelope is not a manifest/receipt. Store output only in the authorized private location. Explicit caller-side saving does not make plan/verify writable.
+
+### Apply, retry and verification
+
+Apply first checks the complete batch and current runtime/input bindings, retains full original bytes and empty directories, then installs only approved projections and required local protection. Legacy identity is explicitly extracted into a genuinely missing current identity; ordinary identity lookup is unchanged. Proven owned Codex and existing OMP global routers receive the maintenance pause, with one shared result and full declared dependent-project closure. An absent OMP root is not created.
+
+Successful or handled partial applies atomically save a new `apply-<apply_id>.json` beside the manifest before returning its copy. Retry must explicitly supply that receipt; completed unchanged resources and their original backups are preserved, only legal unfinished work resumes, and unattempted shared operations cannot be reported as observed. There is no implicit receipt discovery, cross-resource transaction, guessed rollback, or deletion of old data. If receipt persistence or preservation fails, stop and retain all private artifacts; do not retry from guessed state.
+
+Verify requires complete successful apply plus bound deployment evidence and actual native report files; it never invokes deployment or smoke. It rechecks source/revision/runtime, originals/backups, approved publications, report digests and scope, actual retained resources and future cleanup candidates. A route whose latest bound successful operation proves `after=absent` is not a retained present asset; missing publications or an unproven disappearance still fail.
+
+Native report schemas remain unchanged. Outer migration `source_ref` stays null for a detached or non-Git project. Native report `sourceRef` is the explicit label `HEAD` for detached Git with the exact OID, or `non-git` with null commit and unknown source revision outside Git; these labels are not invented branch names. Ordinary named refs remain exact. First-deployment report times must lie inside that deployment attempt. A cumulative retry may retain successful report bytes only within the same bound apply epoch, from the supplied apply receipt's `finished_at` through the latest deployment finish. Reports still require exact root/ref/OID, verified environment, non-mock smoke mode, command, captured stdout/stderr and clean exit; an optional `processExitCode`, when present, must also be integer zero.
+
+`tool_versions` binds installed migration source/assets, declared dependency versions and Python, plus the selected Graft target pin; it is not proof that Graft or a host was executed. Consumer fixtures demonstrate acceptance/rejection rules only, not actual deployment. Windows ACL execution and real host deployment need their own environment proof. Pending lower-severity limitations are tracked in the repository findings ledger; no valid hash or task status waives them.
 
 ## MCP Setup
 

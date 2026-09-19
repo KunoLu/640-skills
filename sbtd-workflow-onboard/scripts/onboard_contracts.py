@@ -29,6 +29,7 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, NoReturn
 
+
 SCHEMA_VERSION = 1
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "onboard-contracts.schema.json"
 SCHEMA_ID = "urn:sbtd:onboard-contracts:schema:1"
@@ -522,6 +523,25 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "directory copy requires a directory resource")
     if directory and change_kind in {"copy-file", "ensure-file-block"}:
         _fail("semantic-violation", "file changes cannot target a directory resource")
+    if change_kind == "migrate-developer":
+        if (
+            operation["phase"] != "apply"
+            or operation["owner_kind"] != "file"
+            or operation["selector"] != "name"
+        ):
+            _fail("semantic-violation", "developer extraction is a private apply operation")
+        if operation["before_requirement"] != {
+            "kind": "state",
+            "state": {"type": "absent", "checksum": None},
+        }:
+            _fail("semantic-violation", "developer extraction requires a missing target")
+        ownership = operation["ownership"]
+        if (
+            ownership["kind"] != "config-entry"
+            or ownership["key_path"] != ["name"]
+            or ownership["reference"] != operation["change"]["source_ref"]
+        ):
+            _fail("semantic-violation", "developer extraction must bind its legacy name source")
     if (directory and operation["selector"] != "whole-resource") or (
         operation["selector"] == "whole-resource"
         and operation["ownership"]["kind"] not in {"template-source", "skill-identity"}
@@ -722,6 +742,16 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     def register(operation: Mapping[str, Any], owner: tuple[str, str | None]) -> None:
         _check_operation(operation)
         target = operation["target"]
+        if operation["change"]["kind"] == "migrate-developer":
+            if owner[0] != "private" or owner[1] is None:
+                _fail("semantic-violation", "developer extraction cannot own shared resources")
+            project_root = Path(owner[1])
+            if (
+                Path(target) != project_root / ".sbtd/developer"
+                or Path(operation["change"]["source_ref"]["path"])
+                != project_root / ".trellis/.developer"
+            ):
+                _fail("semantic-violation", "developer extraction must stay in its owning project")
         if any(_path_contains(target, root) for root in scope_roots):
             _fail("semantic-violation", "managed target contains a declared scope root")
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):
@@ -1900,6 +1930,14 @@ def _bind_resource_states_and_backups(
                 result["after"] != operation["change"]["source_ref"]["state"]
             ):
                 _fail("binding-violation", "successful copy differs from its source")
+            if operation["change"]["kind"] == "migrate-developer":
+                content = f"name={operation['change']['name']}\n".encode("utf-8")
+                expected_identity = {
+                    "type": "file",
+                    "checksum": hashlib.sha256(content).hexdigest(),
+                }
+                if result["after"] != expected_identity:
+                    _fail("binding-violation", "developer extraction differs from its declared name")
             observed = result["after"]["type"]
             removed = operation["change"]["kind"] == "remove" and observed == "absent"
             if (
@@ -2192,6 +2230,21 @@ def _bind_verification(
         for rid, phases in retained_resources.items():
             owner_kind, target = identity[rid]
             state = retained.get(target)
+            last_phase = max(
+                (phase for phase in phases if phase != "cleanup"),
+                key=_PHASE_ORDER.__getitem__,
+            )
+            result = stage_results.get(last_phase, {}).get(rid)
+            if (
+                state is None
+                and target not in publications
+                and result is not None
+                and result["status"] == "succeeded"
+                and result["after"] == {"type": "absent", "checksum": None}
+            ):
+                # An explicitly retired route is not a present retained asset.
+                # Missing publications and unproven absences still fail below.
+                continue
             expected_type = "directory" if owner_kind == "directory" else "file"
             if state is None or state["type"] != expected_type:
                 _fail("binding-violation", "verified project omits a retained resource")
@@ -2200,12 +2253,7 @@ def _bind_verification(
                     "binding-violation",
                     "retained publication differs from its approved candidate",
                 )
-            last_phase = max(
-                (phase for phase in phases if phase != "cleanup"),
-                key=_PHASE_ORDER.__getitem__,
-            )
             if last_phase in stage_results:
-                result = stage_results[last_phase].get(rid)
                 if (
                     result is None
                     or result["status"] != "succeeded"

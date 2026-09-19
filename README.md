@@ -4,7 +4,7 @@
 
 > **未发布边界（v2 分阶段交付中）**：canonical payload 已切换为 14 bundled / 19 external Skills；项目 setup 已改为按需 SBTD 状态检查，不安装或初始化 Trellis。Graft、host 接线、任务操作和旧项目迁移仍在 P1 分阶段实施；developer 身份按需建立已由 P1-19 的显式 `--developer` 入口提供（见下），旧身份迁移仍须另行明确授权。不把本开发分支当作完整 v2 发布部署到真实项目。旧数据保留，迁移必须另行明确授权。
 
-P1-01 的内部参数／交换契约不代表 migration/recovery 已公开可执行。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约或已有 task 校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备 jsonschema 与 PyYAML。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
+P1-01 本身只提供内部参数／交换契约；P1-12 的实际迁移入口见下，cleanup/recovery 尚未公开可执行。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约、任务或迁移校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备全部声明依赖。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
 
 P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 只报告本地能力，`install-graft --json` 展示计划，确认后才使用 `install-graft --yes --json`。固定 `@nanonets/graft@0.18.0`、Node >=20，验证包完整性/native启动及 telemetry 持久关闭；这不代表 graph、MCP、host 接线或完整 v2 已通过。
 
@@ -15,6 +15,8 @@ P1-18 在同一 `scripts/` 内增加确定性路由与受保护交接库（`sbtd
 P1-19 在 `scripts/` 内增加按需 developer 身份库（`sbtd_identity.py`），同样不注册新全局 CLI、daemon、initializer 或身份数据库。`DeveloperStore(root, read_only=False)` 提供只读 `resolve()`／`plan(name)` 与确认门控的 `ensure(name, confirmed=False, protect=False)`，统一返回冻结 `IdentityResult`（status／name／source／path／first_write_eligible／topology／reason／needs_protection／completed_steps，可 `dataclasses.asdict` 导出）。本地 `.sbtd/developer` 合法值（UTF-8、单条 `name=`、`^[a-z0-9]+$` 原样匹配单一 `validate_developer_name`）直接胜出且不再查 Git；仅本地确实缺失后才核验真实 Git 根、git-dir/common-dir 与 NUL 分隔 worktree registry，已验证 linked worktree 只读同仓主 checkout 当前身份、不复制回本地；现存异常（重复声明、非法值、错误类型、symlink、不可读或父路径不安全）是 conflict 而非缺失，Git 未知或不可用是 blocked 而非非 Git 证明；不从 Git／OS／环境／历史目录猜作者，普通 resolve/plan 不读旧 `.trellis/.developer`。首次建立只允许正常缺失目标：窄 `/.sbtd/` ignore 保护与名字授权分开确认，仅写 `name=<name>\n` 并回读验证，同名幂等、异名 conflict、并发胜者不覆盖、失败如实返回 completed_steps。`onboard.py` 仅经显式 `--developer <name>` 消费：`check`／`plan` 只读并在单 JSON 中展示逐项目 `developerPlan`（请求名、来源、目标、状态、needsProtection 等），conflict／blocked／needs-* 或无项目范围时 exit 2、绝不默认 cwd 或 HOME；`init`／`reset`／`init-projects` 要求 `--developer` 与 `--yes` 同现，在任何全局或项目写入之前完成全批次身份 preflight，冲突先于副作用拒绝，写入后身份失败 exit 5 且保留部分结果；无 `--developer` 行为完全不变，reset 不覆盖既有身份。根安装器本次不加 flag，全量转发仍归 P1-07／P1-08；旧身份真实迁移仍是独立 P1-12 门，不因本 helper 宣称迁移完成。这不代表 Windows、真实 host、全量验证或发布已通过。
 
 显式身份初始化在脚手架完成后保留实际 `operationResults`；后续身份失败仍以单份 JSON 报告逐项目结果、写后 `sbtdProjectSetup`、备份和未验证项，不冒称回滚。项目目录中途不可用会结构化报告，不丢弃此前已成功的项目。
+
+P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只读核对仓库外私有准备和批准候选；apply 经 `--yes` 确认后保存原件、发布已批准投影、暂停已证明受管的 Codex/OMP 旧路由，并保存不可变累计回执；verify 只读核对实际资源、原件和绑定部署报告。`share` 的直接复制内容必须逐字保留，改写需 `redact`；混合／未知配置保留并阻断自动处置。后续文件参数接收 envelope 中相应子对象，不接收整个响应。操作说明见[迁移入口](sbtd-workflow-onboard/REFERENCE.md#migration-runtime)。部署 producer、cleanup、recovery 与真实 host／Windows 验收仍分别受后续门禁约束，不能把消费者夹具或本阶段命令当作完整 v2 迁移发布。
 
 
 下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：

@@ -436,6 +436,16 @@
         {
           "type": "object",
           "additionalProperties": false,
+          "required": ["kind", "source_ref", "name"],
+          "properties": {
+            "kind": {"const": "migrate-developer"},
+            "source_ref": {"$ref": "#/$defs/file_ref"},
+            "name": {"type": "string", "pattern": "^[a-z0-9]+(?![\\s\\S])"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
           "required": [
             "kind"
           ],
