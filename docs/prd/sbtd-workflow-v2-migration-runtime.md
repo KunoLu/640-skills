@@ -14,7 +14,7 @@
 - Refactoring proceed/normal：复用既有codec、TaskDocument、DeveloperStore及nofollow读取；只增加外部私有vault所需内聚文件操作，不重写原安装器或扩修延期P2。
 - DDD confirmed：resource为物理资源、operation为阶段/selector操作；私有原件与批准共享投影分离；批准快照不认证操作者；plan/apply/部署/verify/cleanup/recovery职责分离。迁移是支撑子域，JSON/文件操作为通用能力，无新增业务术语冲突。
 - DDIA confirmed：完整前置核对、单controller、每资源备份/写入、不可变自包含累计receipt；无跨资源事务、journal、锁或自动发现收据。漂移、未知来源或不可证明后态阻断，不推断成功/恢复可用。
-- Release planned：适用项目验证、实际安装副本及独立复核后才判断本任务ready。
+- Release ready（仅P1-12合并范围）：适用原生验证、精确安装副本及独立复核已通过；完整Ruff非阻断样式项按用户D-IMP-13延期，Windows／真实host／完整v2发布不在本结论内。
 - 报告：`unit-report-migration-baseline-p1-12-migration-runtime-2026_09_19-06_19_36`与API修改前刻画均为真实基线。sidecar初次遗漏status/mode，按真实schema补齐后通过；原运行结果不重写。后续runner必须沿用完整report-entry结构。
 
 ## 固定旧格式依据
@@ -96,3 +96,14 @@ Main独占计划/阶段编排、CLI、schema/codec接入及共享文档，worker
 - 现复用同一完整库存覆盖门：所有generated-runtime类别含workflow.md都必须有模板所有权或逐项明确裁决；apply/verify语义重验在操作/闭包校验后读取精确匹配的live原目录或确定性私有原件，整目录摘要相等才取库存，metadata按该库存条目摘要读取，空.gitkeep亦来自同一库存。不新增wire字段、索引、服务或cleanup/recovery行为。
 - 红测：未批plan／重封装漏批2项，以及修改前冻结源码接受腐坏私有workflow原件1项。当前3项回归和66项plan/apply/verify/codec影响范围通过，ty通过。P112DocsExactReview与P112SecurityFinal只读复核关闭，固定P1共13；原22 P2/6 P3不变。
 - 新候选仍处checking；必须重新固定提交并执行精确全量与原生证明，再进入实现PR/admin合并和清理/状态PR。此前报告原样保留，不把旧候选通过冒充新head。
+
+## 最终精确证明与实际合并
+
+- 最终验证head：`a6f45574754357b12c17ebc022323f44104fac69`，clean。原生全量857 tests/605.698s，exit0；1项Windows ACL专用skip。实际运行未被重标；此前b810及所有红／失败轮次均保留。
+- 最终报告stem：`unit-report-migration-final-head-full-p1-12-migration-runtime-2026_09_19-12_29_23`；`api-report-migration-final-head-native-p1-12-migration-runtime-2026_09_19-12_29_23`；同时间戳的`migration-final-head-dependencies`与`migration-final-head-structure`。66组198文件schema／raw SHA-256／同stem中文汇总审计通过，developer-local/exact/local-only，environment alignment为unverified，不冒充CI或远端publication。
+- git archive完整318文件安装副本与实际提交匹配；本任务新建的隔离解释器与前候选requirements逐字相同，按修正副本再次准备。真实双host旧router原件/暂停、11场景CLI、缺依赖与同输入正向控制、结构检查均通过；部署输入始终明确为contract-backed消费者夹具。原生报告schema保持原字节。
+- 独立源码／文件安全／旧格式／plan／runtime／verifier／最终文档与证据复核无剩余P0/P1。共13 fixed P1、22 deferred P2、6 deferred P3；ty、关键Ruff、format通过，完整Ruff59项新文件样式及3项既有文件增量未被抑制或写成全绿。
+- 实现[PR #39](https://github.com/KunoLu/640-skills/pull/39)于`2026-09-19T12:45:45+08:00`实际admin合并，merge `4360305c7eeb3acc4fa030ddc392bd27aad82288`。main与origin/main一致，merge tree等于最终验证head；实现分支本地及远端均已删除并prune。
+- `2026-09-19T12:51:01+08:00`在上述合并/分支核验及临时文件清理后记录done：5份移前源码与base逐字一致，冻结原始/最终318文件副本hash复验后清理Main私有验证workspace、确认归属的worker目录及本任务生成字节码；未动共享旧缓存。1处归属不明临时目录保留，不凭相似内容猜删。P0 spike环境、真实HOME/用户项目/迁移原件和live automation未动。
+- 本地旁证：最终unit报告同stem的`.closure.json`保留精确安装manifest、静态检查、合并与清理事实；它不是新的运行结果，原raw/evidence校验和未改。README.md/html、versioned automation prompt与CHANGELOG已在实现PR维护；本状态PR只记录完成事实，无新的公开行为，不额外改写它们。
+- P1计数为第7项；只有本独立状态PR亦完成review/admin合并及清理后才进入P1-04。D-IMP-14仍在累计第10项P1-06完整闭环后暂停，评估全部findings并等待用户确认。
