@@ -69,3 +69,16 @@
 - P104HardeningProtocolReview及P104HardeningCommandReview在修正后均无剩余P0/P1；累计ledger现有20项P1 fixed、10项P2延期，P3中1项静态债务延期、1项删除建议已撤回（历史行保留）。Code Readability Review：范围为修改的手写生产／测试；无额外阻断结构问题，原生边界保持具名；Ponytail的删除建议撤回，其余P2/P3不扩修。Ruff55项非零如实保留，无E9/F63/F7/F82；ty当前与基线均93项，新增差集为空。
 - worker违反skip-all-validation自行跑测试；其结果不计gate。P104PythonStartupFix承认未隔离`uv run`写入真实`~/.cache/uv`，已向用户披露且不擅删共享缓存；没有全局site-packages/Codex配置/trust写入。另一worker留下未打印精确路径的tmp fixture／可能的临时HOME，无法证明唯一归属则保留，不猜测清理。
 - README两份、Onboard REFERENCE、Graft指令asset、CHANGELOG和版本化automation已同步修复边界；live automation、ENTRYPOINT、真实项目迁移和P0保留环境不变。精确提交、整目录fresh依赖副本、最终release gate、补救PR与状态PR/清理仍未完成；P1累计闭环仍为7。
+
+## 最终交付与保留风险
+
+- 原实现PR #41、补救PR #42均已合入；最终merge为`daa191115ff5830ab11f74e2b53e2ccfa77d82d6`，tree与精确验证head`0da6015144d57f928cef77c71d671d0088c62374`一致。两个实现分支均已本地／远端删除。Main明确归属的workspace及两个新bytecode已清理，完成时间`2026-09-19T20:32:06+08:00`。
+- 最终全量：`unit-report-codex-hardening-pr-head-full-p1-04-codex-runtime-hardening-2026_09_19-20_11_54`，899 tests/970.721s/exit0，6 skip。配套`.closure.json`保留324文件安装manifest、编辑前6文件摘要、完整静态结果和清理事实。
+- 同时间戳`api-report-codex-hardening-pr-head-native-*`和`api-report-codex-hardening-pr-head-dependencies-*`通过；实际解释器为fresh `exact-venv`，源为git-archive全部324文件。`api-report-codex-hardening-pr-head-host-*-2026_09_19-20_12_10`证明实际隔离CLI（通过固定`@openai/codex@0.154.0`安装）的两个事件及精确hook hash信任；不声明Codex二进制hash身份、模型成功或真实Stop/PostToolUse事件。
+- 状态复核要求补齐清理后的来源证明，已从Main内核保留的原始archive bytes、实际副本摘要及原始pip/npm进程结果追加到同一closure：`sourceArchive`与`installedCopy`为独立且相等的324文件manifest，另存venv创建命令／exit0及pip输出。Codex版本依据是实际成功的`@openai/codex@0.154.0`私有安装记录和同路径CLI使用，不声称已保留或校验Codex二进制hash（`binaryDigest=null`）。这些是清理前已观察数据的补存，不是重新运行或补造过去状态。
+- 该状态证据P1于`2026-09-19T20:46:26+08:00`复核关闭，为任务最终完成时间；`20:32:06`仅是实现分支／Main临时文件清理完成时间。累计关闭21项P1（20实现、1证据），不将来源证明缺口隐含为早已完成。
+- `api-report-codex-hardening-final-evidence-audit-*-2026_09_19-20_28_25`核对81组既有报告，audit自身另保留。报告均developer-local/exact或其原始dirty状态/local-only，不冒称CI或已发布证据；所有失败轮次和先前版本报告保留，不重标。
+- P104ExactRuntimeReview、P104ExactDocsReview对冻结head无新P0/P1；Release Readiness ready仅当前源码交付。三模式完整host执行、OMP、Windows、两wrapper转发、cleanup/recovery和真实项目迁移仍按原PRD后续任务，不被本结论覆盖。
+- README.md、README.html、REFERENCE、指令asset、CHANGELOG和版本化automation已同步；Skill入口已有REFERENCE指针，本次补救不重复新增路由。ENTRYPOINT与live automation不改。Ruff55项非零和ty93项基线诊断如实保留；无新增类型或关键runtime诊断，不禁用规则。10项P2及静态P3按用户指令延期。
+- worker未隔离uv造成共享cache写入已披露，不擅删；另一worker未记录精确路径的fixture／可能临时HOME保留。不能将“明确归属已清理”写成“所有tmp均删除”。本次没有真实HOME配置、trust或生产数据写入。
+- P1累计实现闭环8项；本状态记录的独立PR完成并清理后才可开始P1-05。P1-06成为第10项后暂停评估全部findings并等待用户确认，不能自动进入P1-13。
