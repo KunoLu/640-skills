@@ -433,12 +433,13 @@ def _original_reference(
     manifest: Mapping[str, Any],
     previous: Mapping[str, Any] | None = None,
     deployment: Mapping[str, Any] | None = None,
+    cleanup: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
     if snapshot(Path(reference["path"])) == reference["state"]:
         return reference
     stages = [
         _result_index(document)
-        for document in (previous, deployment)
+        for document in (previous, deployment, cleanup)
         if document is not None
     ]
     latest: dict[str, Mapping[str, Any]] = {}
@@ -493,6 +494,7 @@ def _validate_context(
     manifest: Mapping[str, Any],
     previous: Mapping[str, Any] | None = None,
     deployment: Mapping[str, Any] | None = None,
+    cleanup: Mapping[str, Any] | None = None,
 ) -> None:
     if manifest["payload"]["tool_versions"] != runtime_versions():
         _fail(
@@ -529,13 +531,13 @@ def _validate_context(
                     "managed resources have ambiguous physical ownership",
                 )
     for reference in _all_input_references(manifest):
-        _original_reference(reference, manifest, previous, deployment)
+        _original_reference(reference, manifest, previous, deployment, cleanup)
     from sbtd_migration_plan import validate_legacy_inputs
 
     validate_legacy_inputs(
         manifest,
         lambda reference: _read_reference(
-            _original_reference(reference, manifest, previous, deployment)
+            _original_reference(reference, manifest, previous, deployment, cleanup)
         ),
     )
 
@@ -577,6 +579,17 @@ def _check_source_backups(manifest: Mapping[str, Any]) -> None:
     for project in manifest["payload"]["projects"]:
         for reference in project["sources"]:
             if snapshot(locations[reference["path"]]) != reference["state"]:
+                _fail(
+                    "original-unavailable",
+                    "a retained original is incomplete or unavailable",
+                    3,
+                )
+
+def _check_stage_backups(stage_results: Mapping[str, Any]) -> None:
+    for results in stage_results.values():
+        for result in results.values():
+            backup = result["backup_ref"]
+            if backup is not None and snapshot(Path(backup["path"])) != backup["state"]:
                 _fail(
                     "original-unavailable",
                     "a retained original is incomplete or unavailable",
@@ -953,6 +966,431 @@ def apply_migration(
     )
     return envelope, 5 if status == "failed" else 2 if status == "blocked" else 0
 
+def _cleanup_candidates(
+    verification: Mapping[str, Any],
+) -> dict[str, Mapping[str, Any]]:
+    candidates = {
+        candidate["resource_id"]: candidate
+        for candidate in verification["payload"]["shared_cleanup_candidates"]
+    }
+    for project in verification["payload"]["projects"]:
+        candidates.update(
+            (candidate["resource_id"], candidate)
+            for candidate in project["cleanup_candidates"]
+        )
+    return candidates
+
+
+def _latest_backup_ref(
+    resource_id: str, *documents: Mapping[str, Any] | None
+) -> Mapping[str, Any] | None:
+    for document in documents:
+        result = _result_index(document).get(resource_id)
+        if result is not None and result["backup_ref"] is not None:
+            return result["backup_ref"]
+    return None
+
+
+def _cleanup_resource(
+    manifest: Mapping[str, Any],
+    operations: Sequence[Mapping[str, Any]],
+    candidate: Mapping[str, Any],
+    backup_ref: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    first = operations[0]
+    target = Path(first["target"])
+    before = snapshot(target)
+    result = {
+        "phase": "cleanup",
+        "resource_id": first["resource_id"],
+        "operation_ids": sorted(operation["operation_id"] for operation in operations),
+        "dependent_projects": sorted(
+            {
+                root
+                for operation in operations
+                for root in operation["dependent_projects"]
+            }
+        ),
+        "status": "failed",
+        "backup_ref": backup_ref,
+        "before": before,
+        "after": before,
+        "error": None,
+    }
+    try:
+        if before != candidate["state"]:
+            _fail("state-conflict", "a cleanup candidate changed after verification")
+        scope = _resource_scope(manifest, first)
+        action = "remove"
+        value = None
+        if before["type"] != "absent":
+            if backup_ref is None:
+                _fail(
+                    "original-unavailable",
+                    "a cleanup target lacks its retained original backup",
+                    3,
+                )
+            _check_reference(backup_ref, 3)
+            action, value = _render_resource(operations, before)
+            if action == "reference" or action == "identity":
+                _fail(
+                    "unsupported-operation",
+                    "this declared cleanup operation cannot be safely rendered",
+                )
+            if action != "remove":
+                _prepare_target_parents(target, scope)
+            if action == "remove":
+                remove_reference(target, before, scope=scope)
+            else:
+                write_file(target, value, before, scope=scope)
+        result["after"] = snapshot(target)
+        wanted_after = (
+            _ABSENT
+            if action == "remove"
+            else {
+                "type": "file",
+                "checksum": hashlib.sha256(value).hexdigest(),
+            }
+        )
+        if result["after"] != wanted_after:
+            _fail(
+                "post-state-conflict",
+                "the resource's current outcome is not its authorized post-state",
+            )
+        result["status"] = "succeeded"
+    except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
+        try:
+            result["after"] = snapshot(target)
+        except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
+            result["after"] = None
+        result["error"] = (
+            error.code
+            if isinstance(error, contracts.ContractError)
+            else "operation-io-failed"
+        )
+        if isinstance(error, RetainedObjectError):
+            result["error"] += "; retained=" + contracts.canonical_json_bytes(
+                error.retained_refs
+            ).decode("utf-8")
+    return result
+
+
+def _cleanup_projects(
+    manifest: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    results: Mapping[str, Mapping[str, Any]],
+    previous: Mapping[str, Any] | None,
+    global_error: str | None,
+) -> list[dict[str, Any]]:
+    previous_projects = (
+        {project["root"]: project for project in previous["payload"]["projects"]}
+        if previous is not None
+        else {}
+    )
+    verification_projects = {
+        project["root"]: project for project in verification["payload"]["projects"]
+    }
+    shared = manifest["payload"]["shared_operations"]
+    projects = []
+    for project in manifest["payload"]["projects"]:
+        root = project["root"]
+        private = [
+            operation
+            for operation in project["private_operations"]
+            if operation["phase"] == "cleanup"
+        ]
+        dependencies = private + [
+            operation
+            for operation in shared
+            if operation["phase"] == "cleanup"
+            and root in operation["dependent_projects"]
+        ]
+        resource_ids = {operation["resource_id"] for operation in dependencies}
+        statuses = {results[rid]["status"] for rid in resource_ids if rid in results}
+        complete = resource_ids <= results.keys() and statuses <= {"succeeded"}
+        if "failed" in statuses:
+            status = "failed"
+        elif not complete or "blocked" in statuses:
+            status = "blocked"
+        else:
+            old = previous_projects.get(root)
+            status = (
+                "already-complete"
+                if old and old["status"] in {"cleaned", "already-complete"}
+                else "cleaned"
+            )
+        private_ids = {operation["resource_id"] for operation in private}
+        projects.append(
+            {
+                "root": root,
+                "source_ref": project["source_ref"],
+                "head": project["head"],
+                "status": status,
+                "reason": (
+                    "a declared cleanup resource failed"
+                    if status == "failed"
+                    else global_error or "not every declared cleanup resource completed"
+                )
+                if status in {"failed", "blocked"}
+                else "",
+                "nextStep": "Inspect the retained private receipt and resolve the failure before retrying."
+                if status in {"failed", "blocked"}
+                else "",
+                "private_results": [
+                    dict(results[rid]) for rid in sorted(private_ids) if rid in results
+                ],
+                "shared_operation_ids": sorted(
+                    operation["operation_id"]
+                    for operation in shared
+                    if operation["phase"] == "cleanup"
+                    and operation["resource_id"] in results
+                    and root in operation["dependent_projects"]
+                ),
+                "retained_assets": [
+                    dict(asset)
+                    for asset in verification_projects[root]["retained_assets"]
+                ],
+            }
+        )
+    return projects
+
+
+def cleanup_migration(
+    manifest_path: Path,
+    apply_receipt_path: Path,
+    deployment_evidence_path: Path,
+    verification_path: Path,
+    *,
+    previous_receipt_path: Path | None = None,
+    confirm_cleanup: str | None = None,
+) -> tuple[dict[str, Any], int]:
+    manifest_path = Path(manifest_path)
+    manifest, manifest_raw = _private_document(manifest_path, "manifest")
+    apply_document, apply_raw = _private_document(
+        Path(apply_receipt_path), "apply_receipt"
+    )
+    deployment, deployment_raw = _private_document(
+        Path(deployment_evidence_path), "deployment_evidence"
+    )
+    verification, verification_raw = _private_document(
+        Path(verification_path), "verification"
+    )
+    previous = None
+    previous_raw = None
+    if previous_receipt_path is not None:
+        previous, previous_raw = _private_document(
+            Path(previous_receipt_path), "cleanup_receipt"
+        )
+        if (
+            contracts._parse_timestamp(previous["payload"]["finished_at"])
+            > contracts._parse_timestamp(_now())
+        ):
+            _fail(
+                "future-evidence",
+                "a previous receipt is later than the current operation",
+            )
+    documents = {
+        "apply_receipt": apply_document,
+        "deployment_evidence": deployment,
+        "verification": verification,
+    }
+    raw_documents = {
+        "manifest": manifest_raw,
+        "apply_receipt": apply_raw,
+        "deployment_evidence": deployment_raw,
+        "verification": verification_raw,
+    }
+    if previous is not None:
+        documents["cleanup_receipt"] = previous
+        raw_documents["cleanup_receipt"] = previous_raw
+    contracts.validate_declared_bindings(manifest, documents, raw_documents)
+    if confirm_cleanup != verification["verification_id"]:
+        _fail(
+            "confirmation-required",
+            "migration cleanup requires this verification's explicit confirmation",
+        )
+    _validate_context(
+        manifest_path,
+        manifest,
+        previous=apply_document,
+        deployment=deployment,
+        cleanup=previous,
+    )
+    _check_source_backups(manifest)
+    source_backups = _source_backup_paths(manifest)
+    stage_results = {
+        "apply": _result_index(apply_document),
+        "deploy": _result_index(deployment),
+    }
+    _check_stage_backups(stage_results)
+    if previous is not None:
+        _check_stage_backups({"cleanup": _result_index(previous)})
+    candidates = _cleanup_candidates(verification)
+    requirements = {
+        (operation["phase"], operation["resource_id"]): operation[
+            "before_requirement"
+        ]
+        for operation in _operations(manifest)
+    }
+    for project in verification["payload"]["projects"]:
+        for asset in project["retained_assets"]:
+            if snapshot(Path(asset["path"])) != asset["state"]:
+                _fail(
+                    "state-conflict",
+                    "a retained asset changed after verification",
+                )
+    groups = _groups(manifest, "cleanup")
+    results = dict(_result_index(previous))
+    for group in groups:
+        first = group[0]
+        rid = first["resource_id"]
+        candidate = candidates.get(rid)
+        if candidate is None:
+            _fail("missing-input", "a declared cleanup candidate is unavailable")
+        old = results.get(rid)
+        current = snapshot(Path(first["target"]))
+        if old is not None and old["status"] == "succeeded":
+            if old["after"] is None or current != old["after"]:
+                _fail(
+                    "retry-conflict",
+                    "a previously cleaned resource no longer matches its outcome",
+                )
+            continue
+        expected = contracts._expected_before(
+            requirements[("cleanup", rid)], stage_results
+        )
+        if expected is not None and current != expected:
+            _fail("state-conflict", "a cleanup target changed after its prior stage")
+        if current != candidate["state"]:
+            _fail("state-conflict", "a cleanup candidate changed after verification")
+        if old is not None:
+            if (old["error"] or "").startswith(
+                ("foreign-content-conflict", "post-state-conflict")
+            ):
+                _fail(
+                    "unsafe-retry",
+                    "unapproved changed objects require explicit manual reconciliation",
+                )
+            if old["before"] is None or old["before"] != old["after"]:
+                _fail(
+                    "unsafe-retry",
+                    "a partial or unknown cleanup requires explicit recovery or manual reconciliation",
+                )
+    started = _now()
+    global_error = None
+    try:
+        for group in groups:
+            first = group[0]
+            rid = first["resource_id"]
+            old = results.get(rid)
+            if old is not None and old["status"] == "succeeded":
+                continue
+            backup_ref = _latest_backup_ref(
+                rid, previous, deployment, apply_document
+            )
+            if backup_ref is None:
+                backup_path = source_backups.get(str(Path(first["target"])))
+                if backup_path is not None:
+                    backup_ref = {
+                        "path": str(backup_path),
+                        "state": snapshot(backup_path),
+                    }
+            results[rid] = _cleanup_resource(
+                manifest, group, candidates[rid], backup_ref
+            )
+            if results[rid]["status"] != "succeeded":
+                global_error = (
+                    "a cleanup resource failed; later resources were not attempted"
+                )
+                break
+    except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
+        global_error = "cleanup resource execution failed"
+    projects = _cleanup_projects(
+        manifest, verification, results, previous, global_error
+    )
+    statuses = [project["status"] for project in projects]
+    status = contracts._aggregate(
+        statuses, ("failed", "blocked"), "cleaned", "already-complete"
+    )
+    retained: dict[str, Mapping[str, Any]] = {}
+    for project in verification["payload"]["projects"]:
+        for asset in project["retained_assets"]:
+            retained[asset["path"]] = asset
+    shared_ids = {
+        operation["resource_id"]
+        for operation in manifest["payload"]["shared_operations"]
+        if operation["phase"] == "cleanup"
+    }
+    payload = {
+        "manifest_id": manifest["manifest_id"],
+        "verification_id": verification["verification_id"],
+        "apply_id": apply_document["apply_id"],
+        "deployment_evidence_hash": hashlib.sha256(
+            bytes(deployment_raw)
+        ).hexdigest(),
+        "previous_receipt_id": previous["cleanup_id"] if previous is not None else None,
+        "status": status,
+        "projects": projects,
+        "shared_results": [
+            dict(results[rid]) for rid in sorted(shared_ids) if rid in results
+        ],
+        "retained_assets": [dict(retained[path]) for path in sorted(retained)],
+        "started_at": started,
+        "finished_at": _now(),
+    }
+    receipt = contracts.seal_document("cleanup_receipt", payload)
+    contracts.validate_cumulative(previous, receipt, "cleanup_receipt")
+    contracts.validate_declared_bindings(
+        manifest,
+        {**documents, "cleanup_receipt": receipt},
+    )
+    destination = manifest_path.parent / f"cleanup-{receipt['cleanup_id']}.json"
+    try:
+        save_document(destination, receipt, private_root=manifest_path.parent)
+    except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
+        summaries = []
+        for project in projects:
+            diagnostics = [
+                result["error"]
+                for result in results.values()
+                if project["root"] in result["dependent_projects"] and result["error"]
+            ]
+            summaries.append(
+                {
+                    "root": project["root"],
+                    "status": "failed",
+                    "reason": "cumulative receipt could not be saved; "
+                    + "; ".join(diagnostics),
+                    "nextStep": "Preserve originals and all reported retained objects; do not claim automatic recovery.",
+                }
+            )
+        return contracts.make_envelope(
+            "migration",
+            "cleanup",
+            "failed",
+            summaries,
+            "cumulative evidence persistence failed",
+            "Inspect the declared private evidence directory and reconcile before proceeding.",
+            identifiers={
+                "manifest_id": manifest["manifest_id"],
+                "verification_id": verification["verification_id"],
+            },
+        ), 5
+    envelope = contracts.make_envelope(
+        "migration",
+        "cleanup",
+        status,
+        _summary_projects(receipt),
+        global_error or "",
+        f"Cumulative receipt saved privately at {destination}.",
+        receipt,
+        {
+            "manifest_id": manifest["manifest_id"],
+            "verification_id": verification["verification_id"],
+        },
+    )
+    return envelope, 5 if status == "failed" else 2 if status == "blocked" else 0
+
 
 def _argument_path(value: str) -> Path:
     candidate = Path(value)
@@ -1029,6 +1467,17 @@ def run_migration(args: Any) -> int:
                 _argument_path(args.manifest),
                 _argument_path(args.apply_receipt),
                 _argument_path(args.deployment_evidence),
+            )
+        elif args.phase == "cleanup":
+            envelope, code = cleanup_migration(
+                _argument_path(args.manifest),
+                _argument_path(args.apply_receipt),
+                _argument_path(args.deployment_evidence),
+                _argument_path(args.verification),
+                previous_receipt_path=_argument_path(args.cleanup_receipt)
+                if args.cleanup_receipt
+                else None,
+                confirm_cleanup=args.confirm_cleanup,
             )
         else:
             _fail(
