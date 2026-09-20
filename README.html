@@ -404,12 +404,12 @@
     <section>
       <div class="wrap">
         <div class="status-list">
-          <div><strong>未发布边界（v2 分阶段交付中）</strong><br>canonical payload为14 bundled / 19 external Skills。项目setup采用按需SBTD检查，不初始化Trellis；Graft检测／安装、显式Codex／OMP接线、任务库、身份与migration plan/apply/verify已分项实现。两安装器完整转发、Windows原生、cleanup/recovery和完整v2发布仍待对应任务。真实项目部署与旧数据处置须独立授权。</div>
-          <div>P1-01本身只提供内部契约；P1-12实际迁移入口见下，cleanup/recovery尚未公开可执行。P1-02只验证选中状态的形状与containment，不替代恢复或验收。目录复制不安装Python依赖；实际解释器须按安装副本的<code>requirements.txt</code>准备全部声明依赖。缺失时相关校验明确阻断，帮助与纯参数解析不受影响。</div>
+          <div><strong>未发布边界（v2 分阶段交付中）</strong><br>canonical payload为14 bundled / 19 external Skills。项目setup采用按需SBTD检查，不初始化Trellis；Graft检测／安装、显式Codex／OMP接线、任务库、身份、migration plan/apply/verify、cleanup/recovery与两安装器对应参数转发已分项实现。Windows原生和完整v2发布仍待对应任务。真实项目部署与旧数据处置须独立授权。</div>
+          <div>P1-01本身只提供内部契约；P1-12实际迁移入口见下，cleanup/recovery已按对应任务分项实现。P1-02只验证选中状态的形状与containment，不替代恢复或验收。目录复制不安装Python依赖；实际解释器须按安装副本的<code>requirements.txt</code>准备全部声明依赖。缺失时相关校验明确阻断，帮助与纯参数解析不受影响。</div>
           <div>P1-03提供本地Graft检测和明确确认的<code>install-graft</code>，固定<code>@nanonets/graft@0.18.0</code>与Node &gt;=20。验证完整性/native启动和telemetry持久关闭；不等于graph、MCP、host或完整v2可用。</div>
           <div>P1-17在Onboard <code>scripts/</code> 内提供任务状态Python库（<code>sbtd_task_document.py</code>、<code>sbtd_task_state.py</code>）：task.md拥有状态，active仅书签；<code>TaskStore</code> 的 create / inspect / select / transition / set_mode / resume / reopen / protect_local_state / promote / archive 由host-native调用，不是新全局CLI、daemon、journal或<code>onboard.py</code>子命令。Markdown结构识别使用声明依赖markdown-it-py&gt;=4,&lt;5的CommonMark token（parse-only、不渲染、不联网，Python&gt;=3.10），缺失时明确停止写入。提升 / 归档两阶段确认，原目录原子退役保留在 <code>.sbtd/task-originals/</code>；候选区受保护且仅本次操作使用，附带任务须 <code>include_tasks</code> 显式授权。非Git项目branch为null，首次窄保护只追加 <code>/.sbtd/</code>；helper未安装不得冒充已持久化。不代表Windows、host路由、身份、迁移、全量验证或发布已通过。</div>
           <div>P1-18在同一 <code>scripts/</code> 内增加确定性路由与受保护交接库（<code>sbtd_task_routing.py</code>、<code>sbtd_handoff.py</code>），同样不注册新全局CLI、daemon、journal或 <code>onboard.py</code> 子命令。<code>TaskRouter</code> 只把host已明确的意图与选择转成确定性 <code>RouteDecision</code>（ready / needs-task-choice / needs-mode-choice / needs-mode-decision / needs-branch-choice / needs-persistence-confirmation / persistence-failed / blocked），不是意图分类器；续作先确定task再定mode，拒绝建议以结构化mode_note按风险标识去重，保存失败保持会话选择并标记未持久化。<code>TaskStore</code> 新增 current_binding / recovery_candidates / rebind：跨分支恢复要求正确worktree、明确rebind（带expected_branch/reason/evidence并经确认，不checkout、不stash、不重置blocked历史）或只读选择。<code>HandoffStore</code> 只在真实pause / context-switch / branch-switch / context-pressure / manual触发，计数或checking不触发；task/session退出独立锁存，手动不清除退出；<code>save</code> 返回 saved / suppressed / conversation-only / branch-conflict / unprotected / unchanged / pending-confirmation / needs-redaction，写入前核对 <code>docs/handoffs/</code> 窄保护与tracked状态并须显式redaction确认；文件名取完整任务ID的小写hex（大小写不敏感文件系统亦无冲突、可逆），同内容快照除created_at外不重写；提醒只取7天内按任务去重的未完成匹配快照，旧快照手动恢复但不改写task；分支不匹配拒绝写入，handoff不是mode/status事实源。不代表Windows、host接线、自动SessionStart恢复、迁移、全量验证或发布已通过。</div>
-          <div>P1-19在同一 <code>scripts/</code> 内增加按需 developer 身份库（<code>sbtd_identity.py</code>），不注册新全局 CLI、daemon、initializer 或身份数据库。<code>DeveloperStore</code> 提供只读 <code>resolve()</code> / <code>plan(name)</code> 与确认门控的 <code>ensure(name, confirmed=False, protect=False)</code>，统一返回冻结 <code>IdentityResult</code>（status / name / source / path / first_write_eligible / topology / reason / needs_protection / completed_steps）。本地 <code>.sbtd/developer</code> 合法值直接胜出且不查 Git；仅确实缺失后才核验真实 Git 根、git-dir/common-dir 与 NUL worktree registry，已验证 linked worktree 只读同仓主 checkout、不复制；现存异常是 conflict 而非缺失，Git 未知是 blocked 而非非 Git 证明；名字只过单一 <code>validate_developer_name</code>（<code>^[a-z0-9]+$</code> 原样），不猜作者，普通解析不读旧 <code>.trellis/.developer</code>。首次建立只写 <code>name=&lt;name&gt;</code> 并回读，窄 <code>/.sbtd/</code> 保护与名字分开确认，同名幂等、并发不覆盖。CLI 仅经显式 <code>--developer &lt;name&gt;</code> 消费：<code>check</code> / <code>plan</code> 只读并在单 JSON 展示逐项目 <code>developerPlan</code>，conflict / blocked / needs-* 或无项目范围 exit 2、绝不默认 cwd 或 HOME；<code>init</code> / <code>reset</code> / <code>init-projects</code> 须与 <code>--yes</code> 同现并在任何写入前完成全批次 preflight，写后身份失败 exit 5 保留部分结果；无 <code>--developer</code> 行为不变，reset 不覆盖身份。根安装器不加 flag（转发归 P1-07 / P1-08），旧身份迁移仍是独立 P1-12 门。不代表 Windows、真实 host、全量验证或发布已通过。</div>
+          <div>P1-19在同一 <code>scripts/</code> 内增加按需 developer 身份库（<code>sbtd_identity.py</code>），不注册新全局 CLI、daemon、initializer 或身份数据库。<code>DeveloperStore</code> 提供只读 <code>resolve()</code> / <code>plan(name)</code> 与确认门控的 <code>ensure(name, confirmed=False, protect=False)</code>，统一返回冻结 <code>IdentityResult</code>（status / name / source / path / first_write_eligible / topology / reason / needs_protection / completed_steps）。本地 <code>.sbtd/developer</code> 合法值直接胜出且不查 Git；仅确实缺失后才核验真实 Git 根、git-dir/common-dir 与 NUL worktree registry，已验证 linked worktree 只读同仓主 checkout、不复制；现存异常是 conflict 而非缺失，Git 未知是 blocked 而非非 Git 证明；名字只过单一 <code>validate_developer_name</code>（<code>^[a-z0-9]+$</code> 原样），不猜作者，普通解析不读旧 <code>.trellis/.developer</code>。首次建立只写 <code>name=&lt;name&gt;</code> 并回读，窄 <code>/.sbtd/</code> 保护与名字分开确认，同名幂等、并发不覆盖。CLI 仅经显式 <code>--developer &lt;name&gt;</code> 消费：<code>check</code> / <code>plan</code> 只读并在单 JSON 展示逐项目 <code>developerPlan</code>，conflict / blocked / needs-* 或无项目范围 exit 2、绝不默认 cwd 或 HOME；<code>init</code> / <code>reset</code> / <code>init-projects</code> 须与 <code>--yes</code> 同现并在任何写入前完成全批次 preflight，写后身份失败 exit 5 保留部分结果；无 <code>--developer</code> 行为不变，reset 不覆盖身份。根安装器不新增 developer 专属 flag，已实现公开参数转发；旧身份迁移仍是独立 P1-12 门。不代表 Windows、真实 host、全量验证或发布已通过。</div>
           <div>显式身份初始化在脚手架完成后保留实际 <code>operationResults</code>；后续身份失败仍以单份 JSON 报告逐项目结果、写后 <code>sbtdProjectSetup</code>、备份和未验证项，不冒称回滚。项目目录中途不可用会结构化报告，不丢弃此前已成功的项目。</div>
           <div>P1-12提供真实 <code>onboard.py migration --phase plan|apply|verify</code>：plan只读核对仓库外私有准备和批准候选；apply经 <code>--yes</code> 确认后保存原件、发布已批准投影、暂停已证明受管的Codex/OMP旧路由，并保存不可变累计回执；verify只读核对实际资源、原件和绑定部署报告。<code>share</code>的直接复制内容必须逐字保留，改写需 <code>redact</code>；混合／未知配置保留并阻断自动处置。后续文件参数接收envelope的相应子对象，不接收整个响应。详见 <a href="sbtd-workflow-onboard/REFERENCE.md#migration-runtime">迁移入口</a>。部署producer、cleanup、recovery及真实host／Windows验收仍有独立门禁；消费者夹具和本阶段命令不等于完整v2迁移发布。</div>
           <div>P1-04/P1-05在Python Onboard的显式Codex／OMP范围接入固定Graft：先模板后单一fence；Codex注册active Codex HOME MCP，OMP只在完整init写入active profile／<code>PI_CODING_AGENT_DIR</code>的user MCP JSON，并封存OMP、Codex、Claude继承源快照。等价继承按完整连接字段匹配；disabled、managed前缀冲突、server/extension denylist、动态或漂移阻断。<code>--graft-hooks</code>仅适用于Codex。迁移plan以<code>--deployment-mode</code>和<code>--deployment-platform codex|omp</code>封存host与输入；apply不隐式部署。内部analysis入口只允许固定图查询，不接收任意native argv。</div>
@@ -429,8 +429,7 @@
           </div>
           <p><strong>v2 canonical 路由：</strong>任务先通过 bundled <code>sbtd-task</code> 共同路由，再按 <code>default</code> / <code>lite</code> / <code>strict</code> 执行；references 决定状态、方法和门禁。普通工作不以 onboard、developer 或 bootstrap 为前置条件。</p>
           <p>Onboard 不安装或调用 Trellis，不接受旧 username/platform/skip 参数。旧项目数据保全并等待明确迁移；缺少 <code>.trellis</code> 不代表需要初始化。旧部署的历史维护边界见 <a href="README.md">README 历史工具说明</a>，不构成新项目执行建议。</p>
-        <p>本段提及的 Channel 仅记录旧 CLI guard，不构成当前路由或对新项目的执行建议。</p>
-        <p>如果 <code>trellis update</code> 更新 SessionStart、PreToolUse 或其他 hook 配置，先重启对应 Agent host 或 IDE，再验证新会话身份或 hook 行为；已运行进程的旧行为不能证明新配置已经加载。</p>
+        <p>旧 Trellis 升级、hook、dispatch 与 Channel guard 仅作为历史迁移输入保留，不构成当前路由或对新项目的执行建议；任何恢复旧平台集成都需独立授权。</p>
         </div>
         <div class="flow" aria-label="主流程">
           <div class="step"><b>1. 需求</b><span>读取规则、lessons 短入口，并按需读取 index / topic。</span></div>
@@ -515,7 +514,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           <p><code>reset</code> 保留 task、developer、spec、lessons、handoff 和旧数据，不是迁移或清理操作，也不默认创建可选目录树。</p>
           <p>流程判定图：<a href="docs/assets/onboard-skill-reset.md">Onboard Skill 执行 reset</a>。</p>
           <h3>使用 <code>--init-projects</code> 只初始化项目</h3>
-          <p><code>--init-projects</code>处理项目AGENTS、<code>.gitignore</code>、只读SBTD状态/bootstrap及适用的Playwright / React Bits。Python显式Codex／OMP范围在固定Graft/Node可用时维护项目fence和图；缺少工具报告not-available，不阻断无关步骤。该模式不写HOME、用户级MCP或hooks。根安装器的新参数完整转发仍归P1-07/P1-08。</p>
+          <p><code>--init-projects</code>处理项目AGENTS、<code>.gitignore</code>、只读SBTD状态/bootstrap及适用的Playwright / React Bits。Python显式Codex／OMP范围在固定Graft/Node可用时维护项目fence和图；缺少工具报告not-available，不阻断无关步骤。该模式不写HOME、用户级MCP或hooks。两安装器已实现对应参数转发。</p>
           <pre><code>bash install.sh \
   --platform codex \
   --init-projects /abs/project-one,/abs/project-two \
@@ -548,7 +547,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
           <div><strong>External stable default</strong><br><code>auto</code> 默认使用 Onboard 内置、经过 review 且由精确 revision 和 checksum 固定的 stable set，不访问 Git 或网络；<code>stable</code> 使用相同的确定性来源。只有用户显式选择 <code>upstream</code> 才整组 clone 和验证当前上游，失败时不回退。全部 Skill 先暂存验证，再用临时 rollback backup 事务替换，canonical commit 成功后才删除 legacy 目录。</div>
           <div><strong>按需 SBTD Setup</strong><br>没有可选状态属于正常项目，不创建 task、identity 或 bootstrap。<code>sbtdInit</code> / <code>sbtdProjectSetup</code> 保留逐项目状态、原因和下一步；异常先处理再写入，旧数据只提示明确迁移。</div>
           <div><strong>MCP</strong><br>MCP仍由用户选择：Codex使用用户级配置，Claude固定<code>--scope user</code>，Kimi保持CLI默认行为；Oh My Pi只在完整Python部署写入当前profile或<code>PI_CODING_AGENT_DIR</code>的user <code>mcp.json</code>，project-only完全跳过。</div>
-          <div><strong>Graft 安全与离线</strong><br>check/plan仅检测本地固定能力，不查latest；受管子进程DNT、dotenv/LLM/cloud环境隔离。GitNexus专用分支退役但旧配置保留。Python Codex／OMP producer封存继承输入并拒绝动态、冲突或漂移；hooks须独立Codex opt-in和host信任，wrapper与Windows原生仍有后续门禁。</div>
+          <div><strong>Graft 安全与离线</strong><br>check/plan仅检测本地固定能力，不查latest；受管子进程DNT、dotenv/LLM/cloud环境隔离。GitNexus专用分支退役但旧配置保留。Python Codex／OMP producer封存继承输入并拒绝动态、冲突或漂移；hooks须独立Codex opt-in和host信任，Windows原生仍有后续门禁。</div>
         </div>
       </div>
     </section>
@@ -678,7 +677,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
             <tr>
               <td>caveman</td>
               <td>用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。自动生命周期由全局 AGENTS 规则负责，external Skill 只负责手动表达风格、强度和退出；达到阈值后 <code>autoLiteEligible</code> 单调锁存。</td>
-              <td>保护区只覆盖当前回复，不清除 <code>autoLiteEligible</code> 或 <code>autoLiteActive</code>；只有新的主要目标重置任务级状态，配置缺失时按 auto 处理。自动模式不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告。</td>
+              <td>保护区只覆盖当前回复，不清除 <code>autoLiteEligible</code> 或 <code>autoLiteActive</code>；只有新的主要目标重置任务级状态，配置缺失时按 auto 处理。自动模式不替代项目 Skill、BDD、TDD、验证、Graft、任务路由或最终报告。</td>
             </tr>
             <tr>
               <td>i-have-adhd</td>
@@ -805,7 +804,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
           <div><strong>URL Gate</strong><br>没有公网 URL 或 preview URL 时，只做源码 / HTML 静态检查；报告 <code>SEO/GEO: static-only</code> 或 <code>blocked</code>。</div>
           <div><strong>Credentials</strong><br>基础 audit 不要求 DataForSEO；DataForSEO login / password 只作为关键词、SERP、backlink、domain overview 增强分析的可选凭据，不能写入仓库或报告。</div>
         </div>
-        <p>关键词量、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须用当前可用来源核对。最终输出或 Trellis check summary 必须报告 <code>SEO/GEO</code>: <code>audited</code> / <code>static-only</code> / <code>blocked</code> / <code>skipped</code> / <code>not-needed</code>。</p>
+        <p>关键词量、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须用当前可用来源核对。最终输出或 check summary 必须报告 <code>SEO/GEO</code>: <code>audited</code> / <code>static-only</code> / <code>blocked</code> / <code>skipped</code> / <code>not-needed</code>。</p>
       </div>
     </section>
 

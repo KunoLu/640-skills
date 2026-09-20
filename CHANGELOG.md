@@ -16,6 +16,8 @@
 - P1-04加入Codex项目接线与独立opt-in hooks：固定本地Node/Graft、按仓根MCP、模板后marker、保留foreign配置，不自动启用或信任host hooks；受管入口使用临时HOME并拒绝不安全自维护状态。迁移plan声明窄部署闭包，init/init-projects消费完整上下文并保存实际累计资源／原件／smoke证据，部分失败不丢弃此前写入；不新增migration阶段，也不提前提供cleanup/recovery。
 - P1-05加入 OMP 接线与闭集图分析：完整部署按 active profile／`PI_CODING_AGENT_DIR` 写入 user MCP JSON，读取的 OMP、Codex、Claude来源及provider gate以只读快照绑定；等价继承按完整连接字段匹配且不制造空配置，disabled、managed前缀冲突、server/extension denylist、动态或漂移拒绝。manifest显式封存 deployment mode/platform/inputs，迁移支持 `--deployment-platform codex|omp`；OMP不声明Codex hooks。受管 `analyze` 仅映射 ask/map/skeleton/callers/check/grep/blast 的固定安全参数，不允许任意native argv、workspace、deep、LLM命名或export。
 - P1-06加入多项目／worktree隔离守卫：普通Codex／OMP接线在固定runtime验证和任何root-scoped probe前拒绝嵌套或相互包含的已选仓根；多个显式根分别构建图并以各自`cwd`／`--root`写入MCP binding，父目录和未选sibling不写入。linked worktree不同branch可分别接线；仍不支持父目录联邦。
+- P1-07在Bash安装器中完整转发Codex／OMP Graft接线、独立`--graft-hooks`、迁移deployment封存输入与显式developer参数；project-only继续保持不写HOME、用户级MCP或hooks，未知参数仍严格拒绝。
+- P1-08在PowerShell安装器中提供对等转发与恢复参数，覆盖`--yes`／help和迁移deployment／developer输入；严格参数绑定继续拒绝已退役Trellis选项，不把内部project-only模式写入公开Action。
 
 ### 修复
 
@@ -35,6 +37,7 @@
 - P1-17同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`记录任务状态helper的真实调用形态与工程边界；版本化automation prompt把两个新脚本纳入只读评估范围，不同步live automation或真实HOME。
 - P1-18同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、bundled `sbtd-task`的`SKILL.md`与`references/state.md`、`references/handoff.md`记录路由／重绑定／handoff helper的真实调用形态与工程边界；版本化automation prompt把`sbtd_task_routing.py`、`sbtd_handoff.py`纳入只读评估范围，不同步live automation或真实HOME。
 - P1-19同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`与bundled `lessons-record`的`SKILL.md`／`references/identity-migration.md`记录`DeveloperStore`只读链／plan／ensure与显式`--developer`入口的真实边界；版本化automation prompt把`sbtd_identity.py`纳入只读评估范围，不同步live automation或真实HOME。
+- P1-11同步README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、版本化automation prompt与CHANGELOG：当前主线改为`Codex / OMP + sbtd-task + Graft + Chrome DevTools MCP + Playwright + Maestro`，版本检查专用规则从Trellis监控改为Graft固定pin/source、native lifecycle、telemetry、MCP/hooks与平台接线核验；REFERENCE补充备份保留／人工授权销毁规程与恢复可用／证据不足边界，明确cleanup、恢复成功、任务完成均不删除备份，pre-manifest终止分支删除前须先保存并回读custodian、候选归属、精确范围、本次独立授权和实际确认时间，缺任一项或保存/回读失败均blocked、零删除、不得done。旧Trellis／GitNexus仅保留迁移与历史边界，不同步live automation或真实HOME。
 - P1-12同步README两份入口、Onboard使用说明、身份迁移指针及版本化automation只读范围；明确私有子对象文件输入、同一apply批次内累计报告时间窗、已证明不存在的退役资源不属于保留资产，以及不改原生报告schema的无分支ref表示。声明tomlkit依赖及已安装副本的准备边界；不触碰真实HOME或live automation。
 
 ### 变更
@@ -43,6 +46,8 @@
 - 项目setup停止安装／调用Trellis，Python与两安装器移除旧username／platform／skip参数，结果使用`sbtdInit`／`sbtdProjectSetup`。安装前检查全部所选项目，保全既有task、identity、spec、lessons及旧数据；不默认生成bootstrap或完整目录树。
 - 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。
 - P0-08项目ignore模板保留56条通用规则、移除14条旧Trellis/GitNexus规则并新增`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`；安装器语义探针与模板同批对齐。共享任务／规范／lessons和manifest保持可追踪，旧项目规则仍仅追加不自动清理，不改源仓根ignore。
+- P1-09完成bundled旧路由清理与模式分层：templates移除identity-migration reference外显Trellis/GitNexus/`$trellis-check`/Channel preflight与trellis匹配，book-*与BDD改为strict强制、default/lite按风险或项目规则明确交付；保留退役Skill仅作历史边界，不恢复旧路由。
+- P1-10将ENTRYPOINT版本监控与可恢复sync source切到`Codex / OMP + sbtd-task + Graft`：新增Graft `v0.18.0`固定监控行，Trellis/GitNexus不再保留当前监控或使用要点；README、Onboard文档和版本化prompt的当前主线同步更新，旧内容仅保留迁移边界。
 - 共享规则验收覆盖公开固定分支，避免精确忽略旧lessons入口、context ADR、undated归档、平台flow、React Bits、任务附属产物、UI上下文、测试源码或Git控制文件时误报通过；继续保留用户规则并报告来源，不恢复旧平台生成集成的无条件探针。
 - P0-09将配置源仓根ignore独立切换为七行，保护`.sbtd`、handoff和Graft本地产物，保持根AGENTS本地化与ENTRYPOINT可追踪；切换前核对旧工具残留及Git索引，不复制业务项目模板，不执行真实数据迁移或全局同步。现行维护入口同步，历史lesson原文保留。
 
