@@ -285,7 +285,13 @@ function Invoke-WorkflowMode {
       continue
     }
     if ($arg -like "--source-root=*") {
-      $source = $arg.Substring(14)
+      $source = $arg.Substring("--source-root=".Length)
+      $next = if (($index + 1) -lt $WorkflowArgs.Count) { $WorkflowArgs[$index + 1] } else { $null }
+      if ($null -ne $next -and $next.StartsWith('\') -and $source -match '^[A-Za-z]:?$') {
+        if ($source.Length -eq 1) { $source += ':' }
+        $source += $next
+        $index++
+      }
       continue
     }
     $forwarded += $arg

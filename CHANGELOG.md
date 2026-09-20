@@ -23,6 +23,7 @@
 ### 修复
 
 - PowerShell 使用严格参数绑定拒绝已移除参数，内部 project-only 执行模式不再写入公开 `Action` 的受限取值；真实解释器回归覆盖成功与拒绝路径。
+- PowerShell workflow forwarding 把 Windows 拆开的 `--source-root=D:` / `--source-root=D` 与后续 `\\path` 重新拼成完整路径，避免 `D:\\...` 被解析成盘符 `D`。
 - 两安装器在全局/可选项目安装和 MCP 写入之前执行完整项目前置检查，避免最终拒绝 scaffold 冲突时已经产生副作用；`check-projects` 同步支持实际 `--skip-project-agents` 检查范围。
 - RTK真实性检查改在私有probe HOME/cwd执行，避免只读check创建用户history.db；报告明确隔离验证范围，不把结果当作用户历史目录权限证明。
 - 显式developer初始化保留脚手架实际写入结果，身份阶段失败仍返回完整单份JSON；项目根中途消失按项目报告blocked/failed，保留此前成功结果，不冒称批次回滚。
