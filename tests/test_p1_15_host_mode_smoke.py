@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +77,73 @@ def _extract_mode_report(text: str) -> dict[str, object] | None:
         if isinstance(parsed, dict) and "mode" in parsed:
             return parsed
     return None
+
+
+def _usage_from_stdout(text: str) -> dict[str, object] | None:
+    for line in text.splitlines():
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and parsed.get("type") == "turn.completed":
+            usage = parsed.get("usage")
+            if isinstance(usage, dict):
+                return usage
+    return None
+
+
+def _write_host_report(results: list[dict[str, object]]) -> None:
+    stamp = datetime.now().astimezone().strftime("%Y_%m_%d-%H_%M_%S")
+    stem = f"api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-{stamp}"
+    directory = ROOT / "tests" / "api" / "reports"
+    directory.mkdir(parents=True, exist_ok=True)
+    body = {
+        "ok": True,
+        "cells": [
+            {
+                "host": item["host"],
+                "mode": item["mode"],
+                "status": item["status"],
+                "usage": item.get("usage"),
+                "report": item.get("report"),
+            }
+            for item in results
+        ],
+    }
+    raw = directory / f"{stem}.json"
+    raw.write_text(json.dumps(body, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        "# P1-15 Codex/OMP 三模式 host smoke",
+        "",
+        "本报告记录隔离 HOME 下六个 host×mode 会话。usage 来自主机 JSON，不是字数换算。",
+        "不得把本报告当成 AC-20 公共核心 2k 已达标。",
+        "",
+        "| host | mode | 状态 | usage |",
+        "|---|---|---|---|",
+    ]
+    for item in results:
+        lines.append(
+            f"| {item['host']} | {item['mode']} | {item['status']} | {item.get('usage')} |"
+        )
+    (directory / f"{stem}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    digest = hashlib.sha256(raw.read_bytes()).hexdigest()
+    (directory / f"{stem}.evidence.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "evidenceSource": "developer-local",
+                "publication": "local-only",
+                "sourceRevision": "dirty",
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+                "report": raw.name,
+                "sha256": digest,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _auth_blocked(stdout: str, stderr: str, returncode: int) -> bool:
@@ -154,6 +223,7 @@ class HostModeSmokeTests(unittest.TestCase):
         passed = [item for item in results if item["status"] == "passed"]
         if len(passed) != 6:
             self.skipTest(f"host matrix is not AC-04 pass: {results!r}")
+        _write_host_report(results)
 
     def _run_host_mode(self, host: str, binary: str, mode: str) -> dict[str, object]:
         temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-{host}-{mode}-")
@@ -188,6 +258,7 @@ class HostModeSmokeTests(unittest.TestCase):
                 "host": host,
                 "mode": mode,
                 "returncode": completed.returncode,
+                "usage": _usage_from_stdout(stdout),
                 "stdout": stdout[-4000:],
                 "stderr": stderr[-2000:],
             }

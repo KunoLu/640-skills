@@ -44,6 +44,14 @@
 - 优先使用 host JSON 中的实际 usage。没有 usage 时不得把字数换算成 token 并宣称达标。
 - 可选 tokenizer 仅作并列观察，须写明编码名。
 
+## 本轮实测
+
+- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 5 tests / 1 skip / OK。
+- `SBTD_P115_HOST=1` 六格全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`。
+- Codex JSON usage 约 3.9 万 input tokens／格，含大量 cache；OMP 无 usage 字段。
+- 这只证明隔离会话能读 MODE 并返回 JSON。不是 AC-20 达标，也不是完整 grill／strict Gate／跨会话恢复。
+- `evidenceSource=developer-local`，`publication=local-only`。
+
 ## 报告
 
 - 正式 raw + 同 stem 中文 Markdown 写入 `tests/api/reports/`。
