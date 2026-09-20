@@ -486,6 +486,20 @@ def _check_reference_states(references: Iterable[Mapping[str, Any]]) -> None:
             _fail("semantic-violation", "one referenced path has conflicting states")
 
 
+def _check_nested_reference_paths(references: Iterable[Mapping[str, Any]]) -> None:
+    paths = [reference["path"] for reference in references]
+    for index, path in enumerate(paths):
+        if any(
+            path != other
+            and (_path_contains(path, other) or _path_contains(other, path))
+            for other in paths[index + 1 :]
+        ):
+            _fail(
+                "semantic-violation",
+                "deployment report references overlap lexically (parent/child)",
+            )
+
+
 def _check_operation_resources(records: Iterable[Mapping[str, Any]]) -> None:
     owners: dict[str, tuple[str, str | None]] = {}
     for record in records:
@@ -1087,11 +1101,13 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
     groups.extend(project["private_results"] for project in payload["projects"])
     _check_operation_resources(result for results in groups for result in results)
     if kind == "deployment_evidence":
-        _check_reference_states(
+        report_refs = [
             reference
             for project in payload["projects"]
             for reference in project["report_refs"]
-        )
+        ]
+        _check_nested_reference_paths(report_refs)
+        _check_reference_states(report_refs)
     shared_ids: set[str] = set()
     for result in payload["shared_results"]:
         if result["phase"] != phase:
@@ -1922,6 +1938,32 @@ def _bind_input_evidence(
                 "binding-violation",
                 "evidence file overlaps a protected object in supplied evidence",
             )
+
+
+def _bind_stage_report_scope(
+    manifest_payload: Mapping[str, Any], supplied: Mapping[str, Any]
+) -> None:
+    protected = {
+        reference["path"] for reference in _manifest_input_references(manifest_payload)
+    }
+    protected.update(
+        operation["target"] for operation in _manifest_operations(manifest_payload)
+    )
+    for kind in _STAGE_RECEIPT_PHASES:
+        document = supplied.get(kind)
+        if document is None:
+            continue
+        for project in document["payload"]["projects"]:
+            for reference in project.get("report_refs", ()):
+                if any(
+                    _path_contains(reference["path"], protected_path)
+                    or _path_contains(protected_path, reference["path"])
+                    for protected_path in protected
+                ):
+                    _fail(
+                        "binding-violation",
+                        "a stage report reference overlaps a manifest-managed path",
+                    )
 
 
 def _expected_before(
@@ -2862,6 +2904,7 @@ def validate_declared_bindings(
         requirements[(operation["phase"], operation["resource_id"])] = operation[
             "before_requirement"
         ]
+    _bind_stage_report_scope(manifest_payload, supplied)
     apply_document = supplied.get("apply_receipt")
     if apply_document is not None:
         _bind_stage_receipt(manifest_payload, apply_document, "apply")
@@ -3259,6 +3302,15 @@ def validate_deployment_result(value: Any) -> Any:
     _check_json_safe(value)
     _schema_validate(value, "deployment_result", "deployment_result")
     validate_document(value["evidence"], "deployment_evidence")
+    if any(
+        _path_contains(value["path"], reference["path"])
+        or _path_contains(reference["path"], value["path"])
+        for reference in _immutable_stage_references(value["evidence"]["payload"])
+    ):
+        _fail(
+            "semantic-violation",
+            "deployment result path overlaps its embedded evidence references",
+        )
     return value
 
 

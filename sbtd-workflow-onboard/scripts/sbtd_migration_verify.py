@@ -127,7 +127,11 @@ def _decode_report(content: bytes) -> Any:
 
 def _attempt_time(container: Mapping[str, Any], key: str) -> Any:
     try:
-        return contracts._parse_timestamp(container[key])
+        parsed = contracts._parse_timestamp(container[key])
+        timestamp, _fraction = parsed
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("timestamp must carry an explicit UTC offset")
+        return parsed
     except (KeyError, TypeError, ValueError, AttributeError):
         _fail("unexpected-type", "deployment scope fields are missing or invalid")
 
@@ -171,6 +175,7 @@ def _bound_reports(project_record: Mapping[str, Any]) -> dict[str, bytes]:
 def _accept_raw_smoke(
     content: bytes,
     report: Mapping[str, Any],
+    envelope: Mapping[str, Any],
     *,
     started: Any,
     finished: Any,
@@ -243,10 +248,31 @@ def _accept_raw_smoke(
             "an API smoke raw run is not a verified non-mock smoke",
             3,
         )
+    repository = envelope["repository"]
+    provenance = {
+        "repositoryKey": repository.get("repositoryKey"),
+        "sourceRef": repository.get("sourceRef"),
+        "sourceCommit": repository.get("sourceCommit"),
+        "worktreeState": repository.get("worktreeState"),
+        "sourceRevision": envelope.get("sourceRevision"),
+        "evidenceSource": envelope.get("evidenceSource"),
+        "trigger": envelope.get("trigger"),
+        "environmentAlignment": envelope.get("environmentAlignment"),
+        "evidencePublication": envelope.get("evidencePublication"),
+        "e2eMode": envelope.get("e2eMode"),
+        "mockStrategy": envelope.get("mockStrategy"),
+    }
+    if any(value.get(key) != expected for key, expected in provenance.items()):
+        _fail(
+            "report-acceptance",
+            "an API smoke raw run is not bound to the enclosing envelope",
+            3,
+        )
 
 
 def _accept_report(
     report: Any,
+    envelope: Mapping[str, Any],
     *,
     started: Any,
     finished: Any,
@@ -258,12 +284,13 @@ def _accept_report(
     """One native report entry; returns True for a genuine API smoke."""
     if not isinstance(report, Mapping):
         _fail("unexpected-type", "deployment report entries are missing or invalid")
-    if report.get("status") != "passed" or report.get("mode") not in _GENUINE_MODES:
+    if report.get("status") != "passed":
         _fail(
             "report-acceptance",
-            "a deployment report did not pass a genuine non-mock run",
+            "a deployment report did not pass its declared run",
             3,
         )
+
     content = bound.get(str(_report_path(root, report.get("path"))))
     if content is None:
         _fail(
@@ -277,15 +304,26 @@ def _accept_report(
         or hashlib.sha256(content).hexdigest() != sha256.lower()
     ):
         _fail("report-acceptance", "a deployment report digest does not match", 3)
-    try:
-        read_file(_report_path(root, report.get("summaryMd")))
-    except contracts.ContractError:
-        _fail("report-unavailable", "a deployment report summary is unavailable", 3)
+    summary_path = str(_report_path(root, report.get("summaryMd")))
+    if bound.get(summary_path) is None:
+        _fail(
+            "report-unavailable",
+            "a deployment report summary is not a declared bound reference",
+            3,
+        )
+
     if report.get("testType") != "api":
         return False
+    if report.get("mode") not in _GENUINE_MODES:
+        _fail(
+            "report-acceptance",
+            "an API deployment report did not pass a genuine non-mock run",
+            3,
+        )
     _accept_raw_smoke(
         content,
         report,
+        envelope,
         started=started,
         finished=finished,
         root=root,
@@ -353,6 +391,7 @@ def _accept_envelope(
     for report in envelope["reports"]:
         api_smoke |= _accept_report(
             report,
+            envelope,
             started=started,
             finished=finished,
             root=root,
@@ -396,10 +435,7 @@ def validate_deployment_reports(
     if deployment_payload.get("previous_deployment_id") is not None:
         if not isinstance(epoch_started, str):
             _fail("unexpected-type", "the bound apply epoch is missing or invalid")
-        try:
-            started = contracts._parse_timestamp(epoch_started)
-        except (TypeError, ValueError, AttributeError):
-            _fail("unexpected-type", "the bound apply epoch is missing or invalid")
+        started = _attempt_time({"epoch_started": epoch_started}, "epoch_started")
         if started > finished:
             _fail("unexpected-type", "the bound apply epoch is invalid")
     try:
