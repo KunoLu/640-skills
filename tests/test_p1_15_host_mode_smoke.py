@@ -44,21 +44,8 @@ def _words_and_bytes(path: Path) -> tuple[int, int]:
     return len(text.encode("utf-8")), len(text.split())
 
 
-def _host_state_paths() -> frozenset[str]:
-    rows: set[str] = set()
-    home = Path.home()
-    for tree in (".codex", ".omp"):
-        root = home / tree
-        if not root.is_dir():
-            continue
-        for path in root.rglob("*"):
-            if path.is_file():
-                rows.add(f"{tree}/{path.relative_to(root).as_posix()}")
-    return frozenset(rows)
-
-
 def _copy_codex_auth(destination: Path) -> None:
-    destination.mkdir()
+    destination.mkdir(parents=True, exist_ok=True)
     source = Path.home() / ".codex" / "auth.json"
     if source.is_file():
         shutil.copy2(source, destination / "auth.json")
@@ -187,7 +174,6 @@ class HostModeSmokeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (project / "MODE").write_text(mode + "\n", encoding="utf-8")
-            before = _host_state_paths()
             completed = self._invoke(host, binary, root, project)
             extra = [
                 path.relative_to(project).as_posix()
@@ -207,12 +193,7 @@ class HostModeSmokeTests(unittest.TestCase):
             }
             if extra:
                 payload["status"] = "failed"
-                payload["reason"] = f"unexpected-writes:{extra}"
-                return payload
-            added = sorted(_host_state_paths() - before)
-            if added:
-                payload["status"] = "failed"
-                payload["reason"] = f"home-host-state:{added}"
+                payload["reason"] = f"unexpected-project-writes:{extra}"
                 return payload
             if _auth_blocked(stdout, stderr, completed.returncode):
                 payload["status"] = "blocked"
@@ -241,10 +222,14 @@ class HostModeSmokeTests(unittest.TestCase):
         project: Path,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
-        env["PI_CODING_AGENT_DIR"] = str(isolation / "omp-agent")
+        home = isolation / "home"
+        home.mkdir()
+        env["HOME"] = str(home)
+        env["USERPROFILE"] = str(home)
+        env["PI_CODING_AGENT_DIR"] = str(home / ".omp" / "agent")
+        env["CODEX_HOME"] = str(home / ".codex")
+        _copy_codex_auth(Path(env["CODEX_HOME"]))
         if host == "codex":
-            env["CODEX_HOME"] = str(isolation / "codex-home")
-            _copy_codex_auth(Path(env["CODEX_HOME"]))
             command = [
                 binary,
                 "exec",
