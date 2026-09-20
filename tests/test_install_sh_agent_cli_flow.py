@@ -33,7 +33,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.log_path = self.root / "onboard-modes.log"
         self.args_log_path = self.root / "onboard-args.log"
         self.env = os.environ.copy()
-        self.env["PATH"] = os.pathsep.join((str(self.bin_dir), "/usr/bin", "/bin"))
+        self.env["PATH"] = os.pathsep.join(
+            (str(self.bin_dir), os.environ.get("PATH", ""))
+        )
         self.env["REAL_PYTHON"] = sys.executable
         self.env["FAKE_STATE_DIR"] = str(self.state_dir)
         self.env["FAKE_ONBOARD_LOG"] = str(self.log_path)
@@ -44,6 +46,15 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
     def write_executable(self, path: Path, body: str) -> None:
         path.write_text(textwrap.dedent(body).lstrip(), encoding="utf-8")
         path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        if os.name != "nt":
+            return
+        bash = shutil.which("bash")
+        if bash is None:
+            return
+        path.with_name(f"{path.name}.cmd").write_text(
+            f'@echo off\r\n"{bash}" "{path}" %*\r\n',
+            encoding="ascii",
+        )
 
     def fake_onboard_python_body(self) -> str:
         return """
@@ -222,6 +233,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
 
     def invocation_args(self) -> list[str]:
         return self.args_log_path.read_text(encoding="utf-8").splitlines()
+
 
 
     def run_workflow_mode(self, mode: str, *args: str) -> subprocess.CompletedProcess[str]:
@@ -604,6 +616,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             "DOTNET_CLI_HOME": str(home),
             "POWERSHELL_TELEMETRY_OPTOUT": "1",
             "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+            "PYTHONUTF8": "1",
+            "PYTHONIOENCODING": "utf-8",
         }
         return runtime, environment
 
@@ -621,6 +635,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             command,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=environment,
             timeout=30,
             check=False,
@@ -630,6 +646,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             [*command, "-TrellisUser", "synthetic"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             env=environment,
             timeout=30,
             check=False,
@@ -692,6 +710,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             env=environment,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
         )
@@ -754,8 +774,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 self.bin_dir / name,
                 """
                 #!/bin/sh
-                if [ "$1" = "--version" ]; then printf '22.0.0\\n'; exit 0; fi
-                : > "$MUTATION_LOG"
+                if [ "$1" = "--version" ] || [ "$1" = "-v" ]; then printf '22.0.0\\n'; exit 0; fi
+                printf '%s\\n' "$0 $*" > "$MUTATION_LOG"
                 exit 99
                 """,
             )
@@ -791,7 +811,13 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(completed.returncode, 2, completed.stderr)
-                self.assertFalse(Path(environment["MUTATION_LOG"]).exists())
+                mutation_log = Path(environment["MUTATION_LOG"])
+                self.assertFalse(
+                    mutation_log.exists(),
+                    mutation_log.read_text(encoding="utf-8")
+                    if mutation_log.exists()
+                    else "",
+                )
                 self.assertTrue((self.project_root / ".gitignore").is_symlink())
                 self.assertFalse((self.project_root / "AGENTS.md").exists())
                 self.assertEqual(
@@ -831,11 +857,19 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     env=environment,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=60,
                     check=False,
                 )
                 self.assertEqual(completed.returncode, 2, completed.stderr)
-                self.assertFalse(Path(environment["MUTATION_LOG"]).exists())
+                mutation_log = Path(environment["MUTATION_LOG"])
+                self.assertFalse(
+                    mutation_log.exists(),
+                    mutation_log.read_text(encoding="utf-8")
+                    if mutation_log.exists()
+                    else "",
+                )
                 self.assertTrue((self.project_root / ".gitignore").is_symlink())
                 self.assertFalse((self.project_root / "AGENTS.md").exists())
                 self.assertEqual(
@@ -1017,6 +1051,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             env=environment,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             check=False,
         )
@@ -1055,6 +1091,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             env=environment,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             check=False,
         )
@@ -1113,6 +1151,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             env=environment,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
             check=False,
         )
