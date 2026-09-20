@@ -9,9 +9,9 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex/OMP project wiring, task libraries, developer identity and migration plan/apply/verify have stage-owned implementations. Complete wrapper forwarding, Windows-native proof, cleanup/recovery and full v2 release remain separately gated. Existing legacy data is preserved.
+> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex/OMP project wiring, task libraries, developer identity, migration plan/apply/verify, cleanup/recovery and the corresponding root-installer forwarding have stage-owned implementations. Windows-native proof and full v2 release remain separately gated. Existing legacy data is preserved.
 
-The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 exposes migration plan/apply/verify; P1-04/P1-05 supply Codex/OMP wiring and the migration-context deployment producer below. Cleanup and recovery remain separately staged. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
+The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 exposes migration plan/apply/verify; P1-04/P1-05 supply Codex/OMP wiring and the migration-context deployment producer below; cleanup and recovery are implemented by their owning tasks. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
 For validation, install the declared dependency with the interpreter that will load the installed Skill: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. A Skill directory copy does not perform this step. Imports remain lazy, missing dependencies fail closed, and availability must be checked from the installed copy rather than inferred from source-tree CI.
 
@@ -159,7 +159,7 @@ All managed Graft children receive `DO_NOT_TRACK=1`, an empty dotenv input and n
 
 `graft --version` is local-only; `graft version` invokes npm metadata and can return an offline/unreachable message. Check/plan never run the latter. A cached npm answer is not proof of connectivity; offline verification uses a real network control and empty per-case caches.
 
-GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus resources remain untouched. Explicit Codex graph/MCP wiring is described below; OMP integration remains a later task.
+GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus resources remain untouched. Explicit Codex/OMP graph/MCP wiring is described below.
 
 RTK remains optional and retains its confirmation flow. Onboard verifies the binary with an isolated `gain` probe, because running it in an empty user HOME creates a history database. `verificationScope=isolated-probe` means actual user-history directory permissions and contents were not verified. Do not interpret probe success as a repair of the user's data directory.
 
@@ -308,9 +308,9 @@ The result contains one entry per root:
 - `projectRoot`
 - `playwright`
 - `reactBits`
-- `trellis.initialized`
-- `trellis.bootstrapRequired`
-- canonical bootstrap task path when present
+- `sbtd`: the selected-state inspection with `status`, `reason`, `nextStep`, `validationScope`, `activeTask`, `bootstrapTask` and `legacyPresent`; a present bootstrap record appears under `sbtd.bootstrapTask.relativePath`
+
+Removed `trellis.*` setup fields have no aliases.
 
 Normal `check` includes the same entries under `projectChecks` while global runtime/tools/Skills remain at the top level.
 
@@ -419,11 +419,11 @@ Whether the Agent truly recommends first and pauses, invokes grill/DDD, or execu
 - Once identity initialization follows completed scaffold writes, JSON retains their actual `operationResults`. Identity failure also reports post-write `sbtdProjectSetup`, `developerPlan`, backups and unverified checks in that same document; it does not imply rollback. A project root becoming unavailable is a per-project `blocked` preflight or `failed` write result, preserving earlier projects' completed results instead of aborting with a traceback.
 - Without `--developer` nothing changes: no command creates, repairs or requires an identity, and `reset` preserves any existing file.
 
-Ordinary resolve/plan/check/global installation never reads `.trellis/.developer`; authorized legacy identity migration remains the separately gated P1-12 task and is not claimed complete by this helper. The root installers (`install.sh` / `install.ps1`) gain no new flag here; full wrapper forwarding remains P1-07 / P1-08. Windows proof, host wiring, full validation and release remain unclaimed.
+Ordinary resolve/plan/check/global installation never reads `.trellis/.developer`; authorized legacy identity migration remains the separately gated P1-12 task and is not claimed complete by this helper. The root installers forward the implemented public flags without adding a developer-specific option. Windows proof, full validation and release remain unclaimed.
 
 ## Migration Runtime
 
-The installed Onboard script exposes `migration --phase plan`, `apply`, and `verify`. This is not a second CLI, and there is no positional `migration plan` alias. The full target grammar still describes future cleanup/recovery contracts, but those handlers are not registered here. Do not use this unreleased stage to perform a real-project cutover before its separately owned deployment, cleanup and recovery gates are available and accepted.
+The installed Onboard script exposes `migration --phase plan`, `apply`, `verify` and `cleanup`, plus the separate `recovery --phase plan|apply` mode. This is not a second CLI, and there is no positional `migration plan` alias. Cleanup consumes the bound verification record and an explicitly confirmed `verification_id`; recovery consumes the manifest-scoped evidence chain and an explicitly confirmed `plan_id`. Do not use this unreleased stage to perform a real-project cutover before the remaining integration validation, Windows-native proof and release gates are available and accepted.
 
 ### Authorized preparation and plan
 
@@ -438,9 +438,12 @@ Command shapes below require actual authorized values in place of angle-bracket 
 python <installed-onboard.py> migration --phase plan --projects-root <comma-separated-absolute-roots> --backup-root <external-private-vault> --custodian <actual-label> [--publication-decisions <private-file>] --json
 python <installed-onboard.py> migration --phase apply --manifest <private-manifest-file> [--apply-receipt <prior-private-receipt>] --yes --json
 python <installed-onboard.py> migration --phase verify --manifest <private-manifest-file> --apply-receipt <complete-private-receipt> --deployment-evidence <private-deployment-file> --json
+python <installed-onboard.py> migration --phase cleanup --manifest <private-manifest-file> --apply-receipt <complete-private-receipt> --deployment-evidence <private-deployment-file> --verification <private-verification-file> [--cleanup-receipt <prior-private-cleanup-receipt>] --confirm-cleanup <current-verification-id> --json
+python <installed-onboard.py> recovery --phase plan --manifest <private-manifest-file> [--apply-receipt <partial-apply-receipt>] [--deployment-evidence <partial-deployment-evidence>] [--cleanup-receipt <partial-cleanup-receipt>] [--projects-root <comma-separated-absolute-roots>] --json
+python <installed-onboard.py> recovery --phase apply --plan <private-recovery-plan-file> [--recovery-receipt <prior-private-recovery-receipt>] --confirm-recovery <current-plan-id> --json
 ```
 
-Each command returns one envelope. Subsequent file arguments require the corresponding bare subobject: `response.migration.manifest`, `response.migration.apply_receipt`, or `response.migration.verification`; the whole response envelope is not a manifest/receipt. Store output only in the authorized private location. Explicit caller-side saving does not make plan/verify writable.
+Each command returns one envelope. Subsequent file arguments require the corresponding bare subobject: `response.migration.manifest`, `response.migration.apply_receipt`, `response.migration.verification`, `response.migration.cleanup_receipt`, `response.recovery.plan`, or `response.recovery.receipt`; the whole response envelope is not a manifest/receipt. Store output only in the authorized private location. Explicit caller-side saving does not make plan/verify writable.
 
 ### Apply, retry and verification
 
@@ -454,6 +457,16 @@ Native report schemas remain unchanged. Outer migration `source_ref` stays null 
 
 `tool_versions` binds installed migration source/assets, declared dependency versions and Python, plus the selected Graft target pin; it is not proof that Graft or a host was executed. Consumer fixtures demonstrate acceptance/rejection rules only, not actual deployment. Windows ACL execution and real host deployment need their own environment proof. Pending lower-severity limitations are tracked in the repository findings ledger; no valid hash or task status waives them.
 
+### Backup retention and manual destruction
+
+Backups are retained independently of migration cleanup, Graft uninstall, task completion and recovery success. No phase in this Onboard runtime deletes original backups, approved candidates, manifests, stage receipts or registered copies, and no new disposal CLI, lifecycle file, journal, lock, scheduler or evidence index is added. A manifest records the non-sensitive custodian, the explicit external private `backup_root`, the managed backup inventory and the minimum retention requirement; the normal release path keeps backups through the P3 two-week observation and at least 14 days after formal release, whichever ends later, unless the project explicitly extends it or a stricter privacy/legal requirement forces a different preservation plan before migration proceeds.
+
+Recovery is available only while the bound manifest, stage/recovery receipts, actual backups and registered copies still prove ownership, exact scope and current state. A legal partial apply/deploy/cleanup may be recovered only for the proven writes; missing, incomplete or conflicting evidence, unknown files, symlink escape, changed targets or resources in use are evidence-insufficient and stay blocked with zero deletion and no done claim. Recovery success restores the managed comparison state but never authorizes backup destruction.
+
+Manual destruction is a custodian operation outside cleanup. Both the normal-release branch and the explicit migration-abandonment / release-cancellation branch require unresolved migration/recovery issues to be closed, no operation using the backups, no audit retention requirement, and a separate destruction authorization. The normal branch also requires the completed release readiness decision and the retention window to have ended; the termination branch requires the recorded termination decision, accepted necessary recovery and an explicit custodian close-out of remaining rollback needs. If P2-01 has not completed and no manifest exists, the termination branch may only process preparation artifacts whose ownership is proven by private publication-decision candidates and preparation authorization or an existing migration report.
+
+Before any deletion, the custodian or an explicitly authorized Agent must save and reread, in an existing private preparation record or migration report outside the deletion scope, the non-sensitive custodian label, candidate ownership, exact destruction scope, this independent authorization and the actual confirmation time. The record location must first be verified private, writable and able to retain the note in its existing format; closed publication-decision schemas are not extended arbitrarily. Any missing item, including confirmation time, or any save/reread failure is blocked, deletes nothing and is not done. Destruction then rechecks each unchanged listed object in the same controlled window, deletes only listed objects, records actual deleted/failed/remaining results in the same record, and leaves unresolved paths privately retained for review. Interruption or failure preserves real results; retry rechecks the remaining list and obtains confirmation again, never treating a later same-name file as the old backup.
+
 ## Codex and OMP Wiring and Deployment
 
 Explicit `--platform codex --projects-root <absolute-roots>` selects project wiring in Python `init`, `reset` and `init-projects`. Setup never installs or upgrades Graft/Node implicitly. When the pinned runtime is unavailable, normal setup without hooks reports `graftWiring.status=not-available` and still permits unrelated rules/Skill installation with source/LSP fallback. Explicit hooks and sealed migration deployment require the runtime and remain blocked. Ownership/configuration/scope failures are not downgraded. Project templates precede the Graft fence; `--skip-project-agents` preserves existing project instructions while maintaining the fence. Normal setup returns actual wiring results; an attempted wiring failure prevents project setup success.
@@ -466,7 +479,7 @@ Batch wiring rejects nested or mutually containing selected roots before pinned-
 
 Full installation binds MCP/hooks to the canonical installed Onboard Skill, not a disposable bootstrap checkout. That package is installed and verified before dependent host configuration is published. If ordinary init would retain a merely-valid but different older Skill shell, wiring preflight requests an explicitly confirmed reset instead of running the old guard. Project-only uses its existing executing package because it installs no global Skill.
 
-Hooks are absent from the default write set. `--graft-hooks` is separate consent to install the managed definitions, not host trust or execution proof. The host must support and enable hooks and trust the exact configured hashes; Onboard never edits trust state or bypasses it. Preserve all foreign handlers. Host-event acceptance is a separate real-host check. Root installers do not yet forward this new option; wrapper parity belongs to P1-07/P1-08.
+Hooks are absent from the default write set. `--graft-hooks` is separate consent to install the managed definitions, not host trust or execution proof. The host must support and enable hooks and trust the exact configured hashes; Onboard never edits trust state or bypasses it. Preserve all foreign handlers. Host-event acceptance is a separate real-host check. The root installers forward this option through the implemented deployment flags.
 
 The generated Python commands use `-E -s` before the installed script: caller `PYTHONHOME`/`PYTHONPATH` and user-site startup cannot run ahead of the guard, while trusted sibling modules remain importable. The launcher uses pinned native code, an ephemeral HOME, DNT and dotenv/LLM/cloud environment isolation. It validates current graph state before every MCP request; native automatic refresh stays disabled. A graph replaced by Stop or explicit deployment is rechecked before the running MCP receives another request. Invalid state returns a sanitized protocol error and stops that session rather than forwarding the request. Missing/old/incomplete stamps are never automatically reconciled. This is a single-controller adapter, not an OS sandbox or arbitrary concurrent-writer isolation.
 

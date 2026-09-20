@@ -2,9 +2,9 @@
 
 本仓库是 Codex / OMP 配置、Agent 规则模板、Skill 模板和 onboard 自动化的摘录/同步源，不代表一个真实业务项目结构。当前处于v2未发布切换阶段：规则载荷与catalog已切换，完整运行时仍单独实施和验收。
 
-> **未发布边界（v2 分阶段交付中）**：canonical payload 为 14 bundled / 19 external Skills；项目 setup 为按需 SBTD 状态检查，不安装或初始化 Trellis。Graft 检测／安装、显式 Codex／OMP 项目接线、任务库、developer 身份与 migration plan/apply/verify 已分项实现；两安装器完整转发、Windows 原生证明、cleanup/recovery 和完整 v2 发布仍待对应任务。真实项目部署与旧数据处置仍须独立授权。
+> **未发布边界（v2 分阶段交付中）**：canonical payload 为 14 bundled / 19 external Skills；项目 setup 为按需 SBTD 状态检查，不安装或初始化 Trellis。Graft 检测／安装、显式 Codex／OMP 项目接线、任务库、developer 身份、migration plan/apply/verify、cleanup/recovery 与两安装器对应参数转发已分项实现；Windows 原生证明和完整 v2 发布仍待对应任务。真实项目部署与旧数据处置仍须独立授权。
 
-P1-01 本身只提供内部参数／交换契约；P1-12 的实际迁移入口见下，cleanup/recovery 尚未公开可执行。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约、任务或迁移校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备全部声明依赖。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
+P1-01 本身只提供内部参数／交换契约；P1-12 的实际迁移入口见下，cleanup/recovery 已按对应任务分项实现。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约、任务或迁移校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备全部声明依赖。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
 
 P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 只报告本地能力，`install-graft --json` 展示计划，确认后才使用 `install-graft --yes --json`。固定 `@nanonets/graft@0.18.0`、Node >=20，验证包完整性/native启动及 telemetry 持久关闭；这不代表 graph、MCP、host 接线或完整 v2 已通过。
 
@@ -12,7 +12,7 @@ P1-17 在 Onboard `scripts/` 内实现任务状态 Python 库（`sbtd_task_docum
 
 P1-18 在同一 `scripts/` 内增加确定性路由与受保护交接库（`sbtd_task_routing.py`、`sbtd_handoff.py`），同样不注册新全局 CLI、daemon、journal 或 `onboard.py` 子命令。`TaskRouter` 只把 host 已明确的事实（`RouteRequest` 的 `new`／`continue`／`question` 意图、显式 mode、推荐回应 `accept`／`keep`、只读与确认标记）转成确定性的 `RouteDecision`（`ready`／`needs-task-choice`／`needs-mode-choice`／`needs-mode-decision`／`needs-branch-choice`／`needs-persistence-confirmation`／`persistence-failed`／`blocked`），不是自然语言意图分类器；续作先唯一确定 task 再决定 mode，拒绝建议以结构化 `mode_note` 记录并按风险标识去重，保存失败保持会话内选择并如实标记未持久化，不回退旧 mode。`TaskStore` 新增公开的 `current_binding()`／`recovery_candidates()`／`rebind(...)`：跨分支恢复要求正确 worktree、明确重绑定或只读选择；`rebind` 必须携带 `expected_branch`、`reason`、`evidence` 并经确认，只更新绑定及事件，不 checkout、不 stash、不重置 blocked 恢复历史。`HandoffStore` 只在真实 pause／context-switch／branch-switch／context-pressure／manual 续接事件触发，计数或进入 checking 不触发；task／session 自动交接退出独立锁存且 session 优先，手动请求不清除退出；`save` 返回 `saved`／`suppressed`／`conversation-only`／`branch-conflict`／`unprotected`／`unchanged`／`pending-confirmation`／`needs-redaction` 之一，写入前核对 `docs/handoffs/` 整棵窄保护与 tracked 状态且必须显式 `redaction_confirmed` 才落盘；文件名取完整逻辑任务 ID UTF-8 字节的小写 hex（大小写不敏感文件系统上仍无冲突且可逆），同任务同内容快照（仅 `created_at` 除外）不重写、跨日不单独触发；主动提醒只取 7 天内按任务去重、root／分支匹配且未完成任务的快照，旧快照仍可显式手动恢复但绝不改写 task；分支不匹配拒绝写入，handoff 永远不是 mode／status 事实源。Agent 是否真实先推荐暂停、解释风险并按模式执行完整方法仍由既有 Skill 规则与 P1-15 的真实 host 证明负责；本项不代表 Windows、host 接线、自动 SessionStart 恢复、真实迁移、全量验证或发布已通过。
 
-P1-19 在 `scripts/` 内增加按需 developer 身份库（`sbtd_identity.py`），同样不注册新全局 CLI、daemon、initializer 或身份数据库。`DeveloperStore(root, read_only=False)` 提供只读 `resolve()`／`plan(name)` 与确认门控的 `ensure(name, confirmed=False, protect=False)`，统一返回冻结 `IdentityResult`（status／name／source／path／first_write_eligible／topology／reason／needs_protection／completed_steps，可 `dataclasses.asdict` 导出）。本地 `.sbtd/developer` 合法值（UTF-8、单条 `name=`、`^[a-z0-9]+$` 原样匹配单一 `validate_developer_name`）直接胜出且不再查 Git；仅本地确实缺失后才核验真实 Git 根、git-dir/common-dir 与 NUL 分隔 worktree registry，已验证 linked worktree 只读同仓主 checkout 当前身份、不复制回本地；现存异常（重复声明、非法值、错误类型、symlink、不可读或父路径不安全）是 conflict 而非缺失，Git 未知或不可用是 blocked 而非非 Git 证明；不从 Git／OS／环境／历史目录猜作者，普通 resolve/plan 不读旧 `.trellis/.developer`。首次建立只允许正常缺失目标：窄 `/.sbtd/` ignore 保护与名字授权分开确认，仅写 `name=<name>\n` 并回读验证，同名幂等、异名 conflict、并发胜者不覆盖、失败如实返回 completed_steps。`onboard.py` 仅经显式 `--developer <name>` 消费：`check`／`plan` 只读并在单 JSON 中展示逐项目 `developerPlan`（请求名、来源、目标、状态、needsProtection 等），conflict／blocked／needs-* 或无项目范围时 exit 2、绝不默认 cwd 或 HOME；`init`／`reset`／`init-projects` 要求 `--developer` 与 `--yes` 同现，在任何全局或项目写入之前完成全批次身份 preflight，冲突先于副作用拒绝，写入后身份失败 exit 5 且保留部分结果；无 `--developer` 行为完全不变，reset 不覆盖既有身份。根安装器本次不加 flag，全量转发仍归 P1-07／P1-08；旧身份真实迁移仍是独立 P1-12 门，不因本 helper 宣称迁移完成。这不代表 Windows、真实 host、全量验证或发布已通过。
+P1-19 在 `scripts/` 内增加按需 developer 身份库（`sbtd_identity.py`），同样不注册新全局 CLI、daemon、initializer 或身份数据库。`DeveloperStore(root, read_only=False)` 提供只读 `resolve()`／`plan(name)` 与确认门控的 `ensure(name, confirmed=False, protect=False)`，统一返回冻结 `IdentityResult`（status／name／source／path／first_write_eligible／topology／reason／needs_protection／completed_steps，可 `dataclasses.asdict` 导出）。本地 `.sbtd/developer` 合法值（UTF-8、单条 `name=`、`^[a-z0-9]+$` 原样匹配单一 `validate_developer_name`）直接胜出且不再查 Git；仅本地确实缺失后才核验真实 Git 根、git-dir/common-dir 与 NUL 分隔 worktree registry，已验证 linked worktree 只读同仓主 checkout 当前身份、不复制回本地；现存异常（重复声明、非法值、错误类型、symlink、不可读或父路径不安全）是 conflict 而非缺失，Git 未知或不可用是 blocked 而非非 Git 证明；不从 Git／OS／环境／历史目录猜作者，普通 resolve/plan 不读旧 `.trellis/.developer`。首次建立只允许正常缺失目标：窄 `/.sbtd/` ignore 保护与名字授权分开确认，仅写 `name=<name>\n` 并回读验证，同名幂等、异名 conflict、并发胜者不覆盖、失败如实返回 completed_steps。`onboard.py` 仅经显式 `--developer <name>` 消费：`check`／`plan` 只读并在单 JSON 中展示逐项目 `developerPlan`（请求名、来源、目标、状态、needsProtection 等），conflict／blocked／needs-* 或无项目范围时 exit 2、绝不默认 cwd 或 HOME；`init`／`reset`／`init-projects` 要求 `--developer` 与 `--yes` 同现，在任何全局或项目写入之前完成全批次身份 preflight，冲突先于副作用拒绝，写入后身份失败 exit 5 且保留部分结果；无 `--developer` 行为完全不变，reset 不覆盖既有身份。根安装器不新增 developer 专属 flag，已实现公开参数转发；旧身份真实迁移仍是独立 P1-12 门，不因本 helper 宣称迁移完成。这不代表 Windows、真实 host、全量验证或发布已通过。
 
 显式身份初始化在脚手架完成后保留实际 `operationResults`；后续身份失败仍以单份 JSON 报告逐项目结果、写后 `sbtdProjectSetup`、备份和未验证项，不冒称回滚。项目目录中途不可用会结构化报告，不丢弃此前已成功的项目。
 
@@ -25,13 +25,13 @@ P1-06 明确多项目 Graft 隔离：普通 Codex／OMP 接线在固定 runtime 
 P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
 
 
-下面是旧v1工具基线，仅用于理解本文标注的过渡实现，不是v2已完成清单：
+当前工具主线（v2 分阶段交付中）：
 
 ```text
-Codex / OMP + GitNexus + Trellis + Chrome DevTools MCP + Playwright + Maestro
+Codex / OMP + sbtd-task + Graft + Chrome DevTools MCP + Playwright + Maestro
 ```
 
-其中 Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。bundled `web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`shadcn` 是 shadcn/ui 项目的可选 external Skill，用于组件、registry、preset 和 CLI 工作流；`seo-geo` 是 bundled 的公开网站、落地页、文档站和营销页 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
+其中 bundled `sbtd-task` 负责 `default` / `lite` / `strict` 三模式任务路由、状态与 handoff 契约；Graft 负责固定版本的结构图和影响分析辅助；Chrome DevTools MCP 负责 Web 运行时诊断，Playwright CLI 负责 Web 可重复回归，Maestro 负责移动 App E2E 和可选跨端 smoke。旧 GitNexus / Trellis 仅保留迁移与历史边界，不再作为当前监控或工作流主责。bundled `web-ui-autotest-generator` 是可选专项分支，只在需要把 Web UI 回归路径固化为仓库内 Playwright 测试资产时启用；`shadcn` 是 shadcn/ui 项目的可选 external Skill，用于组件、registry、preset 和 CLI 工作流；`seo-geo` 是 bundled 的公开网站、落地页、文档站和营销页 SEO/GEO 搜索可见性检查分支；`maestro-mobile-e2e` 负责把 Mobile / Hybrid BDD 场景固化为仓库内 Maestro flow 资产。API、Web 和 Mobile / Hybrid 测试都以 BDD `.feature` 作为行为 SOT；前后端分仓或链路不完整时，先确认 contract、环境、账号、数据、设备和选择器事实，再决定 full-stack、contract-backed、mock-backed、app-mocked、smoke-only 或 blocked。
 
 Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search` 属于 Agent 侧工具发现和授权能力，不是项目依赖。模板要求先确认当前会话实际暴露 callable tool，再依赖对应能力；catalog / marketplace / 本地远端版本展示只作为候选信号，session auth、OAuth、cookies 和 tokens 不写入仓库、日志、截图、报告或示例配置。
 
@@ -141,7 +141,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
 
 ### 4. 使用 `--init-projects` 只初始化项目
 
-`--init-projects` 是 project-only 模式：处理所选项目的 AGENTS、模板 `.gitignore`、只读 SBTD 状态/bootstrap 检查，以及适用的 Playwright / React Bits 条件项。Python `init-projects --platform codex|omp` 在固定本地 Graft/Node 可用时维护项目内 fence 并构建 `graft/` 图；该模式不写用户级 MCP 或 hooks。缺少工具时报告 not-available，继续不依赖它的步骤。根安装器的新参数完整转发仍归 P1-07/P1-08。
+`--init-projects` 是 project-only 模式：处理所选项目的 AGENTS、模板 `.gitignore`、只读 SBTD 状态/bootstrap 检查，以及适用的 Playwright / React Bits 条件项。Python `init-projects --platform codex|omp` 在固定本地 Graft/Node 可用时维护项目内 fence 并构建 `graft/` 图；该模式不写用户级 MCP 或 hooks。缺少工具时报告 not-available，继续不依赖它的步骤。两安装器已实现对应参数转发。
 
 `--init-projects` 自身接收一个或多个已存在的项目绝对路径，多个路径同样用英语逗号分隔；它与普通模式的 `--projects-root` / `--action` 互斥。macOS / Linux 示例：
 
@@ -281,13 +281,13 @@ AGENTS.md
 
 模板遵循“项目事实优先、工具强证据启用、修改最小可验证”的原则。
 
-以下流程与「关键边界」中涉及 Trellis 安装、bootstrap 检测、`.trellis/**` 和 host 集成的内容描述的是**现有过渡实现**（v1 CLI 行为），不是已验证的 v2 行为；canonical 模板的任务路由见上一节，完整 v2 切换由 P1 交付。其中提及的 Channel 仅记录旧 CLI guard，不构成当前路由或对新项目的执行建议。
+当前主线以 `sbtd-task` 共同路由和 Graft 影响分析辅助为准；旧 Trellis / GitNexus 内容仅保留迁移边界和历史说明，不作为新项目执行建议。
 
 
 ```text
 读取 `docs/lessons.md` 短入口，并按需读取 lessons index / topic
   -> 澄清需求与 SBTD 判断
-  -> Trellis / GitNexus / Skill 按证据启用
+  -> sbtd-task / Graft / Skill 按证据启用
   -> 实现或配置修改
   -> 项目原生验证
   -> BDD / Web / Mobile / 发布风险补充验证
@@ -298,14 +298,13 @@ AGENTS.md
 
 关键边界：
 
-- Trellis 负责复杂任务生命周期、任务产物和阶段门禁，不强制用于所有小任务。
+- `sbtd-task` 承载 `default` / `lite` / `strict` 三模式工作契约、任务状态和 handoff；普通小任务不强制走完整 strict 生命周期。
 - 当前 Onboard 不安装／调用 Trellis，也不再接受其 username、platform 或 skip 参数；没有 `.trellis/` 不构成初始化缺失。已有旧数据需显式迁移，不能当作 SBTD task 直接接管。
-- Trellis CLI 升级后，已有 `.trellis/` 的项目先运行 `trellis update` 刷新生成脚本和 filesystem-safety guard；如果更新涉及 SessionStart、PreToolUse 或其他 hook 配置，先重启对应 Agent host / IDE，再验证新会话身份或 hook 行为。对 uninstall、archive、task start / set-*、Channel 名称等删除 / 移动 / 路径解析操作，不绕过 dirty-data、manifest ownership、safe-name 和 active-task pointer containment guard。升级后不要假设 `trellis update` 会改写既有 session pointer；越权任务路径按无任务处理。
-- `.trellis/config.yaml`、`.trellis/workflow.md` 和 task artifacts 只定义共享 workflow gate，不标识运行平台。当前 host 与其专属生成资产决定本次执行：Codex 使用 `.codex/**`，OMP 使用 `.omp/**`；二者共存时按当前 host 选择，纯静态文件不足时标记 unknown。仅当前 host 为 Codex 且 `.codex/**` 集成可用时解释 `codex.dispatch_mode`：`auto` 由主会话协调并按职责调度 role subagent，显式 Inline 与非法显式值的 fail-closed fallback 也仅属于 Codex。仅当前 host 为 OMP 且 `.omp/**` 集成可用时使用 OMP `task` worker 和生成的 agent 定义，不得套用 Codex dispatch。单个 platform role subagent 不构成 Channel 触发，Channel 仍须用户明确请求或 preflight 后确认；每项变更职责只允许一个写入执行者，用户请求的独立只读复核可并行。
+- 旧 Trellis 升级、hook、dispatch、Channel 等规则仅保留为迁移审核输入，不构成当前新项目路由；任何恢复旧平台集成都需独立授权。
 - Codex remote plugins、connectors 和延迟加载工具以当前会话的 `tool_search`、工具列表或 MCP 可见性检查为准；候选 catalog 不等于已授权或已可调用。项目级 marketplace 无效不得否定其余有效 plugin；可选 MCP 首轮工具缺失可能只是启动宽限期。内置 planning / `update_plan` 默认关闭，以当前会话工具列表为准。package-style MCP 名称（含 `:`, `@`, `/`, `.`）合法，不要改写。
-- GitNexus 只有在 MCP 可用且项目索引有效时使用，作为影响分析和变更检测辅助。
-- GitNexus 的 PDG、taint、trace、多分支索引和不同 MCP transport 属于显式 opt-in 能力；使用时必须记录模式 / 分支并回到源码与测试复核。CLI 升级若改变 receiver / import / interface 解析，必须重新 `gitnexus analyze` 后再依赖索引。不要把 `gitnexus watch` 当成会启动 watcher 的命令，也不要默认启动 `analyze --watch` 或 `auto-sync`。MCP allowlist 未覆盖时 GitNexus MCP 对该仓库不可用，不得当作 MCP 可读；fail-closed 只读时不走 MCP 写入；二者都不跳过 CLI 重新 analyze。
-- Skill 按场景调用，不替代项目规范、Trellis 产物、测试或人工判断。
+- Graft 只有在固定版本可用且项目范围明确时使用，作为影响分析和变更检测辅助。
+- Graft 的固定 pin、source、native refresh、hook 与 MCP 边界必须按当前实现保持；跨仓、动态来源、禁用项或漂移配置要阻断而不是静默恢复旧别名。任何 graph 结论仍须回到源码、LSP / contract 定位和测试复核。
+- Skill 按场景调用，不替代项目规范、任务产物、测试或人工判断。
 - AGENTS 模板只承载常驻上下文必须知道的路由、触发条件、硬性安全边界和最终报告要求；详细流程、命令参数、检查清单和专项判断优先放入对应 Skill 延迟加载。
 - Web 和 Mobile 验证工具分工明确，不把诊断、探索和可重复测试混为一谈。
 - SEO/GEO 只面向公开 Web 搜索可见性，不替代 Web 运行时诊断、Playwright 回归、发布检查或人工内容评审。
@@ -321,7 +320,7 @@ SBTD 是本模板对 SDD、BDD、TDD、DDD 的组合简称。它不是单独的�
 
 | 概念 | 全称 | 在模板中的作用 |
 |---|---|---|
-| SDD | Specification-Driven Development | 用 PRD、design、implement、验收标准和长期规则说明“要做什么、为什么做、怎么验证”。在 Trellis 项目中，对应任务产物和 `.trellis/spec` 的长期规则。 |
+| SDD | Specification-Driven Development | 用 PRD、design、implement、验收标准和长期规则说明“要做什么、为什么做、怎么验证”。在当前 SBTD 任务中，对应 `sbtd-task` 任务文档、`docs/spec` 与 `docs/lessons` 的长期规则；旧 `.trellis/spec` 只作为迁移输入。 |
 | BDD | Behavior-Driven Development | 用 Given / When / Then 或项目已有 Gherkin 约定固化用户可见行为。新增或修改 UI、API、CLI、权限、错误、状态变化和外部集成可观察行为时，默认需要持久 BDD 场景；分仓或跨端链路先做上下文完整性 gate。主动使用 `gherkin-bdd` 且请求包含 `sync` / `同步` 时，原有 BDD Sync Mode 保持不变：全量扫描当前工作树与 `features/`，多仓时先确认其他仓库更新状态再同步 `.feature`。BDD / 知识库请求具有明确 `read` / `读取` 只读意图且不含变更意图时，进入 Knowledge Ingest，按目标 ref 固定精确 SHA 并生成派生行为目录。 |
 | TDD | Test-Driven Development | 对 bug 修复、核心业务逻辑、算法、数据转换、高风险路径和回归敏感模块采用测试先行。BDD 固化可观察行为，TDD 把它转成可执行测试和红绿重构循环。 |
 
@@ -387,9 +386,8 @@ python sbtd-workflow-onboard/templates/skills/knowledge-base-integration/scripts
 | `maestro-mobile-e2e` | 从 BDD `.feature` 派生和维护 repo-resident Maestro Mobile / Hybrid flow，约束报告路径，并按需加载真机排障 lesson。 | 不替代 BDD、项目验证或 Maestro CLI。 |
 | `knowledge-base-integration` | 运行产品级 Knowledge Ingest、Evidence Policy、Revision Set、完整无 ID 行为目录、幂等分阶段 smoke、Runner Adapter 和证据完整性校验。 | 不修改源 `.feature`，不发布 Evidence，不写 PR Check；P2 负责远端治理。 |
 | `rtk` | 用户级全局 CLI，用于压缩 terminal 命令输出，降低上下文占用；缺失时先说明作用并询问是否协助安装。 | 不替代测试 runner；报告型 unit / API / Playwright / Maestro 命令先评估缓存与文件写入风险，必要时使用原生命令或 fallback-native。 |
-| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入任务级 `auto-lite`。 | 不替代项目 Skill、BDD、TDD、验证、GitNexus、Trellis 或最终报告；保护区只覆盖当前回复，只有新的主要目标重置。任务级 / 会话级退出按全局状态机处理，手动 `/caveman` 不清除自动退出。 |
-| `i-have-adhd` | 第 19 个 required external Skill，把回复塑形成行动优先的可扫读结构；init/reset 从 stable 镜像离线自动安装 / 重装完整 Skill 目录（check 报告缺失并提示修复，不阻断退出码），不装上游 plugin / hook / extension。 | 不是 workflow gate，不改变代码、测试、验证、Trellis 或工作流决策；无自动模式；输出契约保护区优先；错误原因证据不足时标注“假设”。 |
-
+| `caveman` | 用户级全局 Agent Skill，用于压缩 Agent 回复和长任务状态更新；缺失时先说明作用并询问是否协助安装。同一主要目标达到 3 次中间状态更新、5 个独立工具结果、长任务 / 上下文压力或重复自动化 / review / 验证轮次中的任一条件时，`autoLiteEligible` 单调锁存，下一条普通重复状态必须进入任务级 `auto-lite`。 | 不替代项目 Skill、BDD、TDD、验证、Graft、任务路由或最终报告；保护区只覆盖当前回复，只有新的主要目标重置。任务级 / 会话级退出按全局状态机处理，手动 `/caveman` 不清除自动退出。 |
+| `i-have-adhd` | 第 19 个 required external Skill，把回复塑形成行动优先的可扫读结构；init/reset 从 stable 镜像离线自动安装 / 重装完整 Skill 目录（check 报告缺失并提示修复，不阻断退出码），不装上游 plugin / hook / extension。 | 不是 workflow gate，不改变代码、测试、验证、Graft、任务路由或工作流决策；无自动模式；输出契约保护区优先；错误原因证据不足时标注“假设”。 |
 同一浏览器上下文同一时间只允许一个 controller，避免 Chrome DevTools MCP、Playwright MCP 和 Playwright CLI 互相污染状态。
 
 ## Playwright 集成策略
@@ -490,7 +488,7 @@ MCP 配置由 Agent 或 IDE 提供。`scripts/onboard.py` 只做检查和引导�
 - 用户明确要求生成 Web UI 自动化测试、Playwright、E2E suite 或 UI 回归测试代码。
 - 关键 Web UI 用户路径需要进入仓库长期维护。
 - 项目已有 Playwright，需要扩展可维护覆盖。
-- Trellis 验收要求可重复 UI 回归。
+- 任务验收要求可重复 UI 回归。
 - Chrome DevTools MCP、Playwright MCP、Playwright CLI 或人工复核发现了应进入 CI / 本地 E2E 的覆盖缺口。
 
 不适用场景：
@@ -514,7 +512,7 @@ audit_selectors.py --root . --out tests/e2e/manifest/ui-selector-audit.json --pr
 check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json --selector-audit tests/e2e/manifest/ui-selector-audit.json --tests-dir tests/e2e --out tests/e2e/manifest/ui-test-coverage.json --pretty
 ```
 
-失败分析 `ui-test-repair-plan.json` 是运行产物，不是稳定测试资产；如生成，默认放到 `tests/e2e/manifest/ui-test-repair-plan.json` 并通过 `.gitignore` 忽略。验证或 Trellis check 收尾时，必须确认三个可入库 JSON 位于 `tests/e2e/manifest/`，且项目根目录没有残留同名 JSON。
+失败分析 `ui-test-repair-plan.json` 是运行产物，不是稳定测试资产；如生成，默认放到 `tests/e2e/manifest/ui-test-repair-plan.json` 并通过 `.gitignore` 忽略。验证或 check 收尾时，必须确认三个可入库 JSON 位于 `tests/e2e/manifest/`，且项目根目录没有残留同名 JSON。
 
 ## `shadcn` Skill 使用边界
 
@@ -574,7 +572,7 @@ React Bits 不是 shadcn/ui 的必装依赖。安装和 reset 默认保持 shadc
 - 基础 audit 不要求 DataForSEO；DataForSEO login / password 只作为关键词、SERP、backlink、domain overview 等增强分析的可选凭据。
 - 关键词量、SERP、AI 搜索可见性和平台抓取规则具有时效性，必须用当前可用来源核对。
 - 不得把 DataForSEO login / password、Search Console 数据、付费报告、真实账号、密钥、PII 或生产敏感 URL 写入仓库、日志、截图、测试或正式报告。
-- 最终输出或 Trellis check summary 必须报告 `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`。
+- 最终输出或 check summary 必须报告 `SEO/GEO`: `audited` / `static-only` / `blocked` / `skipped` / `not-needed`。
 
 ## 跨仓测试模式和报告闭环
 
@@ -620,7 +618,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 | 项目原生验证 | lint、typecheck、unit、integration、build、项目 README / Makefile / CI 命令 | 修改代码后默认执行可用的最小有效验证 | 记录命令和结果 |
 | BDD 追踪 | `gherkin-bdd`、`.feature`、BDD runner 或测试名追踪 | 新增或修改用户可见行为 | `BDD`: `run` / `traceable` / `blocked` / `skipped` |
 | 跨仓上下文 | contract、环境、账号、数据、设备、selector、app artifact | API / Web / Mobile / Hybrid 链路不完整 | `Cross-repo context`: `complete` / `contract-only` / `environment-only` / `missing` |
-| GitNexus | MCP 影响分析、变更检测 | GitNexus MCP 可用且项目索引有效 | 成功使用或说明跳过原因 |
+| Graft | 固定 pin/source 的结构图影响分析、变更检测辅助 | Graft 固定版本可用且项目范围明确 | 成功使用或说明跳过原因；结论仍回源码／LSP/contract 复核 |
 | Web 诊断 | Chrome DevTools MCP | 需要真实浏览器现场证据 | `diagnosed` / `inspected` / `blocked` / `skipped` / `not-needed` |
 | Web 回归 | Playwright CLI | Web UI、路由、表单、权限、跨页面流程、API 集成、浏览器兼容 | `Playwright Web Tests`: `run` / `failed` / `blocked` / `skipped` |
 | Web 测试资产 | `web-ui-autotest-generator` | 需要把 Web UI 回归固化入仓库 | `generated` / `coverage-only` / `blocked` / `skipped` |
@@ -747,7 +745,7 @@ tests/e2e/**/*.trace.zip
 - `init` / `reset` 在写入前检查所有所选项目的最小 SBTD 状态。可选状态缺失正常；异常和旧数据需处理，不创建同名替代品。
 - project-only 不进行全局安装；Python 显式 Codex／OMP 项目范围在已有固定 Graft 可用时还维护项目 fence/图，不写 HOME、全局 Skill、MCP 或 hooks。
 - `AGENTS.project.md` 保存三模式入口、project-only 最小 fallback、项目路径和项目级硬边界；正常 `init` / `reset` 由全局 AGENTS + Skills 激活完整路由，public bootstrap / `init-projects` 不单独激活 book-derived 门禁。全局 AGENTS 维护共同路由与客观触发，bundled `sbtd-task` 承载 `default` / `lite` / `strict` 三模式工作契约（strict 才加载完整适用 Gate），项目模板自带全局路由不可见时的最小 objective-trigger fallback（含 Book Gate Plan 触发事实与 Gate lifecycle）；各 reviewer `SKILL.md` 独占状态、输出 schema、修正回路与 stop condition，模板与 `sbtd-task` 都不复制 reviewer 状态词表。
-- 不再提供 GitNexus MCP 自动建议或专用菜单；Python host producer 已提供逐仓 Codex／OMP MCP 接线，Codex hooks仍须独立opt-in和host信任；两安装器新参数转发仍由对应任务完成。
+- 不再提供 GitNexus MCP 自动建议或专用菜单；Python host producer 已提供逐仓 Codex／OMP MCP 接线，Codex hooks仍须独立opt-in和host信任；两安装器已实现对应参数转发。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。
@@ -765,8 +763,7 @@ tests/e2e/**/*.trace.zip
 - `caveman` 用户级全局交互压缩 Skill 的存在性检查和安装引导。
 - `i-have-adhd` 第 19 个 required external Skill 的存在性检查；缺失或无效时随 init/reset 或 `install-external-skills` 从 stable 镜像离线安装 / 修复。
 
-`scripts/onboard.py` 提供 Graft 检测、唯一安装实现及显式 Codex 接线 producer。两个根安装器的新 hooks／迁移部署参数转发尚待 P1-07/P1-08，其他已实现 MCP 保留显式选择与平台 scope；旧 GitNexus 专用分支移除，已有用户配置留存，不能用 custom 项静默恢复旧别名。
-
+`scripts/onboard.py` 提供 Graft 检测、唯一安装实现及显式 Codex／OMP 接线 producer。两个根安装器已实现对应 hooks／迁移部署参数转发；其他 MCP 保留显式选择与平台 scope。旧 GitNexus 专用分支移除，已有用户配置留存，不能用 custom 项静默恢复旧别名。
 目标 Agent CLI 映射仍为 `codex → @openai/codex@latest`、`claude → @anthropic-ai/claude-code@latest`、`kimi → @moonshot-ai/kimi-code@latest`、`omp → @oh-my-pi/pi-coding-agent@latest`。只在缺失 Agent 或用户明确接受的 npm 工具确需安装时准备 npm；已可用的 Agent/Graft 不因 npm 缺失被重复安装。
 
 - `codex`：执行 `codex mcp add ...`。

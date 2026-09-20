@@ -16,7 +16,7 @@
 - `install.sh`、`install.ps1`、`sbtd-workflow-onboard/scripts/onboard.py`、`sbtd-workflow-onboard/scripts/onboard_arguments.py`、`sbtd-workflow-onboard/scripts/onboard_contracts.py`、`sbtd-workflow-onboard/scripts/graft_runtime.py`、`sbtd-workflow-onboard/scripts/sbtd_task_document.py`、`sbtd-workflow-onboard/scripts/sbtd_task_state.py`、`sbtd-workflow-onboard/scripts/sbtd_task_routing.py`、`sbtd-workflow-onboard/scripts/sbtd_handoff.py`、`sbtd-workflow-onboard/scripts/sbtd_identity.py`、`sbtd-workflow-onboard/scripts/sbtd_migration.py`、`sbtd-workflow-onboard/scripts/sbtd_migration_files.py`、`sbtd-workflow-onboard/scripts/sbtd_migration_legacy.py`、`sbtd-workflow-onboard/scripts/sbtd_migration_plan.py`、`sbtd-workflow-onboard/scripts/sbtd_migration_verify.py`、`sbtd-workflow-onboard/assets/migration-local-ignore.txt`、`sbtd-workflow-onboard/assets/migration-paused-agents.txt`、`sbtd-workflow-onboard/assets/migration-legacy-ownership.json`、`sbtd-workflow-onboard/onboard-contracts.schema.json`、`sbtd-workflow-onboard/requirements.txt`、`sbtd-workflow-onboard/catalog.json`、`sbtd-workflow-onboard/catalog.schema.json`、`sbtd-workflow-onboard/templates/project/.gitignore` 与 `tests/**` 只能读取、评估或验证，不得由无人值守自动化修改。
 - 上述只读源清单另包含 `sbtd-workflow-onboard/scripts/sbtd_graft_deployment.py`、`sbtd-workflow-onboard/scripts/sbtd_codex_wiring.py`、`sbtd-workflow-onboard/scripts/sbtd_omp_wiring.py`、`sbtd-workflow-onboard/scripts/sbtd_omp_sources.py`、`sbtd-workflow-onboard/scripts/sbtd_graft_entry.py`、`sbtd-workflow-onboard/assets/graft-build-policy.json`、`sbtd-workflow-onboard/assets/graft-instructions.txt`、`sbtd-workflow-onboard/assets/graft-hook-entry.mjs`；它们不得由无人值守版本检查修改或执行host接线。
 - 除验证 P0-07 目录确实缺失的只读存在性断言外，不要读取、修改或复活已删除的旧路径：`kuno-workflow-onboard-skills/`、根目录旧 `AGENTS.global.md`、根目录旧 `AGENTS.project.md`、顶层 `agents/`、顶层 `skills/`、`sbtd-workflow-onboard/templates/skills/trellis-workflow/`、`sbtd-workflow-onboard/templates/skills/trellis-channel/`。任务路由由 bundled `sbtd-task` 承担；不得在任何规则、模板或文档中恢复 `trellis-workflow` / `trellis-channel` / Trellis Channel 运行路由，也不得把旧 bootstrap 当作 `sbtd-task` 别名。
-- P0-07 只证明 catalog 与 bundled 载荷的原子切换，不证明完整 v2 CLI、`init` / `reset`、host 集成或旧项目 / 用户全局迁移完成；这些仍属 P1。评估或更新文档时，保留现有 Trellis / v1 CLI 行为的「过渡实现」边界，不把 `sbtd-task` 写成旧 bootstrap 或 Channel 路由的 alias，也不建议把本开发分支的混合 legacy 生命周期应用到真实项目。
+- P0-07 只证明 catalog 与 bundled 载荷的原子切换，不证明完整 v2 CLI、`init` / `reset`、host 集成或旧项目 / 用户全局迁移完成；这些仍属 P1。评估或更新文档时，旧 Trellis / GitNexus 只保留已退役的迁移与历史边界，不把 `sbtd-task` 写成旧 bootstrap 或 Channel 路由的 alias，也不建议把本开发分支的混合 legacy 生命周期应用到真实项目。
 - `UPDATE.md` 的正文内容必须使用中文。
 - 不要修改 `ENTRYPOINT.md` 中任何工具的当前版本号；`ENTRYPOINT.md` 只作为版本比对基线读取。
 - 只有用户在交互中手动输入“更新”或“update”时，才允许把 `UPDATE.md` 中的最新版本写回 `ENTRYPOINT.md`；定时自动化任务绝不执行这个写回动作。
@@ -24,7 +24,7 @@
 - 不要自行提交或推送变更；自动化完成后保留工作区 diff，等待用户手动确认。
 - 无人值守自动化不得通过提问请求 `update` / `sync` / commit / push 授权，也不得把未回答的确认当作继续依据；这些动作只有用户在交互会话中明确要求时才属于独立工作流，定时任务本身不得升级权限。
 - 执行 shell 命令时优先使用 `rtk` 前缀；`rtk` 不可用时再回退原生命令。若 `rtk` 出现包装器参数解析异常，必须用原生命令复验同一事实。
-- 如果 `.trellis/` 不存在或 `.trellis/workflow.md` 不存在，不要假装 Trellis 阶段已执行；记录为跳过原因。
+- `.trellis/`、`.trellis/workflow.md`、Trellis 阶段和 GitNexus 索引不再是本自动化的现行监控或执行前置；相关内容只作为历史迁移输入读取，不得据此恢复旧监控规则。
 
 任务流程：
 
@@ -48,7 +48,7 @@
   - 当前版本是 prerelease 且策略为 same-prerelease-channel 时，只比较同一 prerelease 通道内的新版本，例如 `v0.6.0-beta.18` 只比较 `v0.6.0-beta.x` 中更高 beta 序号，不主动跳到 stable。
   - 如果跨越多个版本，汇总从 `ENTRYPOINT.md` 当前版本到最新版本之间所有 release notes。
 6. 如果 GitHub release body 缺失、为空或明显不足以判断变更，不要直接写成“无可追溯变更”；必须继续从官方 docs / changelog、GitHub compare、具体 commit diff 和变更文件列表、migration / upgrade manifest、npm metadata / tarball / 发布文件结构等来源补充证据，并在 `UPDATE.md` 中说明哪些来源有依据、哪些来源缺失。
-6.1. 对 Trellis、Codex dispatch、sub-agent、hook 或 Channel 的变更，必须额外核验目标 stable tag 的有效配置、workflow 模板和 migration manifest；区分功能首次引入、默认值变化与既有能力的 bug fix。`.trellis/**` 是共享 workflow gate，不是平台身份；若结论涉及平台调度，还必须读取对应生成的平台集成与 agent / worker 定义，并区分“已配置平台目录”与“当前 host”。`.codex/**` 与 `.omp/**` 可共存；静态 tag 工件不得选择运行时。不得把 Codex `codex.dispatch_mode`、Inline 或其 fallback 泛化到 OMP，不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
+6.1. 对 Graft、Codex dispatch、sub-agent、hook 或平台接线的变更，必须额外核验目标 stable tag 的固定包版本、native lifecycle、telemetry、MCP/hooks 边界与部署 producer 行为；区分功能首次引入、默认值变化与既有能力的 bug fix。Graft 结论必须回到固定 pin/source、源码、LSP / contract 定位或真实 host 证据，不得用 latest、缓存元数据或旧 GitNexus 规则替代。`.trellis/**` 与旧平台 dispatch 只作为历史迁移输入，不是现行平台身份；若结论涉及平台调度，还必须读取当前 host 与其专属生成资产，并区分“已配置平台目录”与“当前 host”。不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
 7. 若本次至少有一个启用工具检测到可分析新版本，才创建或刷新 `UPDATE.md`；否则不要改 `UPDATE.md`。结构必须为：
  `# UPDATE`
  `## <工具名> <起始版本> -> <目标版本>`
