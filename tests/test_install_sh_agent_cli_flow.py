@@ -659,10 +659,19 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             "rtk",
             "maestro",
         ):
-            self.write_executable(
-                self.bin_dir / name,
-                '#!/bin/sh\nprintf invoked >> "$FORBIDDEN_COMMANDS"\nexit 99\n',
-            )
+            body = '#!/bin/sh\nprintf invoked >> "$FORBIDDEN_COMMANDS"\nexit 99\n'
+            if name == "npm":
+                body = (
+                    '#!/bin/sh\n'
+                    'if [ "$1" = "root" ] && [ "$2" = "-g" ]; then\n'
+                    '  mkdir -p "$FAKE_STATE_DIR/npm-global"\n'
+                    '  printf "%s\\n" "$FAKE_STATE_DIR/npm-global"\n'
+                    '  exit 0\n'
+                    'fi\n'
+                    'printf invoked >> "$FORBIDDEN_COMMANDS"\n'
+                    'exit 99\n'
+                )
+            self.write_executable(self.bin_dir / name, body)
         completed = subprocess.run(
             [
                 runtime,
@@ -985,6 +994,98 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             self.fake_onboard_python_body(),
         )
         return runtime, environment
+
+    def test_powershell_workflow_mode_forwards_without_onboarding(self) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        completed = subprocess.run(
+            [
+                runtime,
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(INSTALL_PS1),
+                "-WorkflowMode",
+                "migration",
+                "--source-root",
+                str(SOURCE_ROOT),
+                "--phase",
+                "cleanup",
+                "--confirm-cleanup",
+                "abc123",
+                "--json",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stderr, "")
+        self.assertEqual(
+            completed.stdout, '{"mode":"migration","status":"forwarded"}\n'
+        )
+        self.assertEqual(self.modes(), ["migration"])
+        forwarded = self.invocation_args()[-1]
+        self.assertIn("onboard.py migration", forwarded)
+        self.assertIn("--json", forwarded)
+        self.assertNotIn("--source-root", forwarded)
+
+    def test_powershell_workflow_forwarding_preserves_yes_and_exit_code(self) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        environment["FAKE_FORWARD_RC"] = "7"
+        completed = subprocess.run(
+            [
+                runtime,
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(INSTALL_PS1),
+                "-WorkflowMode",
+                "MIGRATION",
+                f"--source-root={SOURCE_ROOT}",
+                "--phase",
+                "apply",
+                "--manifest",
+                str(self.root / "manifest.json"),
+                "--yes",
+                "--json",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 7, completed.stderr)
+        self.assertEqual(
+            completed.stdout, '{"mode":"migration","status":"forwarded"}\n'
+        )
+        forwarded = self.invocation_args()[-1]
+        self.assertIn("onboard.py migration", forwarded)
+        self.assertIn("--yes", forwarded)
+        self.assertIn("--json", forwarded)
+        self.assertNotIn("--source-root", forwarded)
+
+    def test_powershell_workflow_forwarding_source_contract(self) -> None:
+        source = INSTALL_PS1.read_text(encoding="utf-8")
+        self.assertIn('[ValidateSet("", "migration", "recovery")]', source)
+        self.assertIn("ValueFromRemainingArguments=$true", source)
+        self.assertIn("function Invoke-WorkflowMode", source)
+        self.assertLess(
+            source.index("if ($WorkflowMode) {\n  Invoke-WorkflowMode"),
+            source.index("if ($Help) {\n  Show-Usage"),
+        )
+        workflow = source[
+            source.index("function Invoke-WorkflowMode") : source.index(
+                "function Invoke-External"
+            )
+        ]
+        self.assertNotIn("Invoke-Onboard", workflow)
+        self.assertIn("exit $LASTEXITCODE", workflow)
+        self.assertIn("ToLowerInvariant()", workflow)
 
     def run_powershell_installer(
         self, runtime: str, environment: dict[str, str]

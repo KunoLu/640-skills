@@ -13,7 +13,11 @@ param(
   [switch]$DryRun,
   [switch]$Yes,
   [switch]$NoColor,
-  [switch]$Help
+  [switch]$Help,
+  [ValidateSet("", "migration", "recovery")]
+  [string]$WorkflowMode = "",
+  [Parameter(ValueFromRemainingArguments=$true)]
+  [string[]]$WorkflowArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,6 +73,11 @@ Options:
       Disable ANSI color.
   -Help
       Show this help.
+  -WorkflowMode <migration|recovery>
+      Forward directly to scripts/onboard.py without onboarding. Remaining
+      arguments are passed through unchanged, except --source-root.
+      PowerShell-bound --yes and --help are forwarded explicitly; the `--`
+      end-of-options marker is not supported on this forwarding path.
 "@
 }
 
@@ -260,6 +269,39 @@ function Find-Python {
     return
   }
   Stop-WithMessage "python or py is required to run $SourceRoot\scripts\onboard.py"
+}
+
+function Invoke-WorkflowMode {
+  $source = $SourceRoot
+  $forwarded = @()
+  for ($index = 0; $index -lt $WorkflowArgs.Count; $index++) {
+    $arg = $WorkflowArgs[$index]
+    if ($arg -eq "--source-root") {
+      if (($index + 1) -ge $WorkflowArgs.Count) {
+        Stop-WithMessage "--source-root requires a value"
+      }
+      $source = $WorkflowArgs[$index + 1]
+      $index++
+      continue
+    }
+    if ($arg -like "--source-root=*") {
+      $source = $arg.Substring(14)
+      continue
+    }
+    $forwarded += $arg
+  }
+  if ($Yes) {
+    $forwarded += "--yes"
+  }
+  if ($Help) {
+    $forwarded += "--help"
+  }
+  $WorkflowMode = $WorkflowMode.ToLowerInvariant()
+  Validate-SourceRoot $source
+  Find-Python
+  $arguments = $PythonPrefix + @((Get-OnboardPy), $WorkflowMode) + $forwarded
+  & $PythonExe @arguments
+  exit $LASTEXITCODE
 }
 
 function Invoke-External {
@@ -1008,6 +1050,12 @@ function Final-Checks {
   }
 }
 
+if ($WorkflowMode) {
+  Invoke-WorkflowMode
+}
+if ($WorkflowArgs.Count -gt 0) {
+  Stop-WithMessage "Unknown option: $($WorkflowArgs[0])"
+}
 if ($Help) {
   Show-Usage
   exit 0
