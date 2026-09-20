@@ -90,6 +90,28 @@ class MigrationCliTests(unittest.TestCase):
             self.assertNotIn(private_token, rejected.stderr)
             self.assertEqual(list(home.iterdir()), [])
 
+    def test_migration_help_advertises_the_cleanup_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory).resolve()
+            environment = os.environ.copy()
+            environment.update(
+                HOME=str(home),
+                USERPROFILE=str(home),
+                CODEX_HOME=str(home / ".codex"),
+                PYTHONDONTWRITEBYTECODE="1",
+            )
+            result = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "migration", "--help"],
+                capture_output=True,
+                text=True,
+                env=environment,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("--phase {plan,apply,verify,cleanup}", result.stdout)
+            self.assertEqual(list(home.iterdir()), [])
+
 
 if __name__ == "__main__":
     unittest.main()

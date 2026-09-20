@@ -490,18 +490,6 @@ def _stage_results(*documents: Mapping[str, Any]) -> dict[str, Any]:
     return results
 
 
-def _check_stage_backups(stage_results: Mapping[str, Any]) -> None:
-    for results in stage_results.values():
-        for result in results.values():
-            backup = result["backup_ref"]
-            if backup is not None and snapshot(Path(backup["path"])) != backup["state"]:
-                _fail(
-                    "original-unavailable",
-                    "a retained original is incomplete or unavailable",
-                    3,
-                )
-
-
 def verify_migration(
     manifest_path: Path,
     apply_receipt_path: Path,
@@ -536,7 +524,7 @@ def verify_migration(
     )
     migration._check_source_backups(manifest)
     stage_results = _stage_results(apply_document, deployment)
-    _check_stage_backups(stage_results)
+    migration._check_stage_backups(stage_results)
 
     epoch_started = None
     if deployment["payload"].get("previous_deployment_id") is not None:
