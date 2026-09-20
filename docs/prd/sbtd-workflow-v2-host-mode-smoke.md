@@ -29,12 +29,12 @@
 
 ## Host 会话约定
 
-- 隔离项目根、`CODEX_HOME` / OMP `--profile`+`--session-dir` 均在临时目录。
-- Codex：`exec --ephemeral --ignore-user-config --sandbox read-only --skip-git-repo-check --json`。
-- OMP：`--print --no-session --no-extensions --approval-mode always-ask`。
-- 提示只要求读 `AGENTS.md` 并报告当前模式，禁止写文件。
-- 模式拒绝：default 任务上建议升 strict，检查回复是否暂停并保留 default 选项。
-- HOME / 用户 Codex / OMP 配置目录前后 snapshot；预期外路径必须失败。
+- 隔离项目根；OMP 只用临时 `PI_CODING_AGENT_DIR`，不设持久 `--profile`。
+- Codex：`exec --ephemeral --sandbox read-only --skip-git-repo-check --json`。
+- OMP：`--print --no-session --no-extensions --tools read`，避免 `always-ask` 挂起。
+- 提示只要求读 `AGENTS.md` 与 `MODE` 并返回 JSON；提示正文不含 default/lite/strict。
+- 从输出解析 JSON `mode`，不得用提示回声或裸子串匹配冒充读到了模式。
+- 只比较 `~/.codex` 与 `~/.omp` 下非 sessions/cache 的新增路径；缺登录记 `blocked`，不记 fail。
 
 ## Token 计量
 
