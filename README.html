@@ -413,6 +413,7 @@
           <div>显式身份初始化在脚手架完成后保留实际 <code>operationResults</code>；后续身份失败仍以单份 JSON 报告逐项目结果、写后 <code>sbtdProjectSetup</code>、备份和未验证项，不冒称回滚。项目目录中途不可用会结构化报告，不丢弃此前已成功的项目。</div>
           <div>P1-12提供真实 <code>onboard.py migration --phase plan|apply|verify</code>：plan只读核对仓库外私有准备和批准候选；apply经 <code>--yes</code> 确认后保存原件、发布已批准投影、暂停已证明受管的Codex/OMP旧路由，并保存不可变累计回执；verify只读核对实际资源、原件和绑定部署报告。<code>share</code>的直接复制内容必须逐字保留，改写需 <code>redact</code>；混合／未知配置保留并阻断自动处置。后续文件参数接收envelope的相应子对象，不接收整个响应。详见 <a href="sbtd-workflow-onboard/REFERENCE.md#migration-runtime">迁移入口</a>。部署producer、cleanup、recovery及真实host／Windows验收仍有独立门禁；消费者夹具和本阶段命令不等于完整v2迁移发布。</div>
           <div>P1-04/P1-05在Python Onboard的显式Codex／OMP范围接入固定Graft：先模板后单一fence；Codex注册active Codex HOME MCP，OMP只在完整init写入active profile／<code>PI_CODING_AGENT_DIR</code>的user MCP JSON，并封存OMP、Codex、Claude继承源快照。等价继承按完整连接字段匹配；disabled、managed前缀冲突、server/extension denylist、动态或漂移阻断。<code>--graft-hooks</code>仅适用于Codex。迁移plan以<code>--deployment-mode</code>和<code>--deployment-platform codex|omp</code>封存host与输入；apply不隐式部署。内部analysis入口只允许固定图查询，不接收任意native argv。</div>
+          <div>P1-06明确多项目Graft隔离：Codex／OMP接线在固定runtime验证和任何root-scoped probe前拒绝嵌套或相互包含的已选仓根；每个显式根独立构建图，MCP的cwd与--root逐项绑定实际根，父目录和未选sibling零写入。linked worktree按实际checkout root/branch分别处理，不支持父目录联邦。</div>
           <div>P1-04补救逐次验证MCP请求所读当前图，禁用native自动refresh；Python命令用<code>-E -s</code>阻止启动环境注入。失效仓根的全局hook忽略无关事件，旧未隔离受管命令按ownership冲突阻断，不与新命令并存冒充升级。</div>
         </div>
       </div>

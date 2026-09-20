@@ -20,6 +20,8 @@ P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只�
 
 P1-04/P1-05 在 Python Onboard 的显式 Codex／OMP 项目范围接入固定 Graft：先模板后单一 fence；Codex按仓根注册 active Codex HOME MCP，OMP仅在完整 `init` 部署 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并将读取的 OMP、Codex、Claude继承源以只读快照封存。等价继承按 OMP 的连接字段完整匹配，不创建空配置；disabled、managed前缀冲突、server/extension denylist、动态或漂移来源阻断。`--graft-hooks` 仍是仅 Codex 的独立 opt-in，OMP不写hooks。迁移 plan 使用 `--deployment-mode init|init-projects --deployment-platform codex|omp` 封存host、模式和输入；带完整上下文的现有 init 入口才执行并保存累计证据，apply不隐式部署。内部 `sbtd_graft_entry.py analyze` 只允许固定的图查询子命令，拒绝任意native argv、LLM命名、deep/export与workspace参数。配置成功不等于host信任／模型行为或完整v2发布。
 
+P1-06 明确多项目 Graft 隔离：普通 Codex／OMP 接线在固定 runtime 验证和任何 root-scoped probe 前拒绝嵌套或相互包含的已选仓根；多个显式仓根各自构建 `graft/`，MCP 的 `cwd` 与 `--root` 分别绑定实际根，父目录和未选 sibling 不产生 Graft 写入。linked worktree 按实际 checkout root/branch 分别处理，不支持父目录联邦。真实运行证明仍是隔离环境证据，不扩展到跨仓依赖图。
+
 P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
 
 
