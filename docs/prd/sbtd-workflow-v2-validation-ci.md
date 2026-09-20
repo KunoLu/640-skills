@@ -15,4 +15,5 @@
 - `tests.test_workflow_contracts`：纳入上述定点套件。
 - CI YAML 静态解析：workflow-ok。
 - 当前工作树最终全量：999 tests / 658.267s / OK（1 项 Windows ACL 既有 skip）。
-- fresh clone 全量：待提交后从 clone 自身目录重跑。
+- fresh clone `7ac428d` 目录内全量：999 tests / 608.123s / OK（1 项 Windows ACL 既有 skip）；compileall 通过。
+- GitHub Actions 三平台首跑：随本 PR 触发，不把本地 macOS 全量冒充 Linux/Windows CI。
