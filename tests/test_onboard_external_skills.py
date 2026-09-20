@@ -359,6 +359,14 @@ class ExternalSkillInstallTests(unittest.TestCase):
         ):
             self.assertTrue((self.skills_dir / name / "SKILL.md").is_file(), name)
 
+    def test_removed_zoom_out_recommendation_uses_current_route(self) -> None:
+        completed = self.install("zoom-out", "stable")
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("Removed external skill", completed.stderr)
+        self.assertIn("codebase-design", completed.stderr)
+        self.assertNotIn("GitNexus", completed.stderr)
+
     def test_migrate_external_skills_aborts_before_installing_on_identity_conflict(
         self,
     ) -> None:

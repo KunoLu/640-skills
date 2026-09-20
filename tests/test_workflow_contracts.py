@@ -345,6 +345,46 @@ class WorkflowContractTests(unittest.TestCase):
                     )
                 )
 
+    def test_bundled_templates_do_not_route_to_retired_workflows(self) -> None:
+        allowed = {
+            SKILLS / "lessons-record" / "references" / "identity-migration.md",
+        }
+        retired = re.compile(
+            r"\$trellis|trellis[-_ ]?(?:workflow|channel|check)|Trellis|"
+            r"git[-_ ]?nexus|channel[-_ ]preflight|\.trellis",
+            re.IGNORECASE,
+        )
+        offenders = []
+        for path in (ROOT / "sbtd-workflow-onboard" / "templates").rglob("*"):
+            if not path.is_file() or path in allowed:
+                continue
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except UnicodeDecodeError:
+                continue
+            for number, line in enumerate(lines, 1):
+                if retired.search(line):
+                    offenders.append(f"{path.relative_to(ROOT)}:{number}:{line.strip()}")
+        self.assertEqual(offenders, [])
+
+    def test_bundled_method_gates_are_layered_by_mode(self) -> None:
+        gated = {
+            "book-ddia-data-design",
+            "book-legacy-change-safety",
+            "book-refactoring-pass",
+            "book-release-readiness",
+        }
+        for name in sorted(gated):
+            with self.subTest(skill=name):
+                document = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+                self.assertIn("## Strict Development Gate", document)
+                self.assertIn("default/lite", document)
+                self.assertNotIn("## Mandatory Development Gate", document)
+        bdd = (SKILLS / "gherkin-bdd" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("In strict tasks", bdd)
+        self.assertIn("default/lite", bdd)
+        self.assertNotIn("default hard rule", bdd)
+
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
         alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"
         canonical = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
@@ -1308,29 +1348,29 @@ class WorkflowContractTests(unittest.TestCase):
             ):
                 self.assertIn(term, document)
 
-    def test_other_book_skills_have_mandatory_development_gates(self) -> None:
-        """Check the unchanged public reviewer result contracts."""
+    def test_other_book_skills_have_strict_development_gates(self) -> None:
+        """Check the unchanged public reviewer result contracts with mode layering."""
         required_skill_phrases = {
             "book-ddia-data-design": (
-                "## Mandatory Development Gate",
+                "## Strict Development Gate",
                 "DDIA Data Design Review",
                 "Status: confirmed | needs-design-change | blocked",
                 "before design artifacts become stable or implementation begins",
             ),
             "book-legacy-change-safety": (
-                "## Mandatory Development Gate",
+                "## Strict Development Gate",
                 "Legacy Change Safety Review",
                 "Status: characterized | needs-safety-net | seam-required | blocked",
                 "before the first behavior-changing edit",
             ),
             "book-refactoring-pass": (
-                "## Mandatory Development Gate",
+                "## Strict Development Gate",
                 "Refactoring Review",
                 "Status: proceed | refactor-first | blocked",
                 "before the first implementation edit to existing production code",
             ),
             "book-release-readiness": (
-                "## Mandatory Development Gate",
+                "## Strict Development Gate",
                 "Release Readiness Review",
                 "Status: ready | needs-mitigation | blocked",
                 "after all applicable testing-tool gates and project validation",
