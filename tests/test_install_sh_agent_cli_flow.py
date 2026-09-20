@@ -153,6 +153,12 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
               init|reset|init-projects)
                 printf '%s complete\n' "$mode"
                 ;;
+              migration|recovery)
+                printf '{"mode":"%s","status":"forwarded"}\n' "$mode"
+                if [ -n "${FAKE_FORWARD_RC:-}" ]; then
+                  exit "$FAKE_FORWARD_RC"
+                fi
+                ;;
               *)
                 printf 'unexpected fake mode: %s\n' "$mode" >&2
                 exit 1
@@ -216,6 +222,77 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
 
     def invocation_args(self) -> list[str]:
         return self.args_log_path.read_text(encoding="utf-8").splitlines()
+
+
+    def run_workflow_mode(self, mode: str, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            (
+                "/bin/bash",
+                str(INSTALL_SH),
+                mode,
+                "--source-root",
+                str(SOURCE_ROOT),
+                *args,
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            timeout=30,
+        )
+
+    def test_migration_and_recovery_forward_without_installer_side_effects(self) -> None:
+        for mode in ("migration", "recovery"):
+            with self.subTest(mode=mode):
+                self.log_path.write_text("", encoding="utf-8")
+                self.args_log_path.write_text("", encoding="utf-8")
+                completed = self.run_workflow_mode(
+                    mode,
+                    "--phase",
+                    "plan" if mode == "recovery" else "cleanup",
+                    "--confirm-recovery" if mode == "recovery" else "--confirm-cleanup",
+                    "abc123",
+                    "--json",
+                )
+
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stderr, "")
+                self.assertEqual(
+                    completed.stdout,
+                    '{"mode":"' + mode + '","status":"forwarded"}\n',
+                )
+                self.assertEqual(self.modes(), [mode])
+                forwarded = self.invocation_args()[-1]
+                self.assertIn(f"onboard.py {mode}", forwarded)
+                self.assertIn("--json", forwarded)
+                self.assertNotIn("--source-root", forwarded)
+
+    def test_workflow_forwarding_supports_equals_source_root_and_exit_code(self) -> None:
+        self.env["FAKE_FORWARD_RC"] = "3"
+        completed = subprocess.run(
+            (
+                "/bin/bash",
+                str(INSTALL_SH),
+                "migration",
+                f"--source-root={SOURCE_ROOT}",
+                "--phase",
+                "plan",
+                "--json",
+            ),
+            check=False,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            timeout=30,
+        )
+
+        self.assertEqual(completed.returncode, 3, completed.stderr)
+        self.assertEqual(
+            completed.stdout, '{"mode":"migration","status":"forwarded"}\n'
+        )
+        forwarded = self.invocation_args()[-1]
+        self.assertIn("onboard.py migration", forwarded)
+        self.assertNotIn("--source-root", forwarded)
 
     def test_startup_banner_displays_kuno_welcome_panel_after_blank_line(self) -> None:
         completed = self.run_installer(projects_only=True)
