@@ -16,4 +16,4 @@
 - CI YAML 静态解析：workflow-ok。
 - 当前工作树最终全量：999 tests / 658.267s / OK（1 项 Windows ACL 既有 skip）。
 - fresh clone `7ac428d` 目录内全量：999 tests / 608.123s / OK（1 项 Windows ACL 既有 skip）；compileall 通过。
-- GitHub Actions 三平台首跑：随本 PR 触发，不把本地 macOS 全量冒充 Linux/Windows CI。
+- GitHub Actions 三平台：run `35519194036` 全绿（linux-full 3m4s、macos-bash-installer 59s、windows-powershell-installer 39s，含 Windows `test_workflow_contracts` 与 `-k powershell` 真实安装器子集）。CI 通过不代表真实 host 或发布完成。
