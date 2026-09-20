@@ -755,7 +755,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 """
                 #!/bin/sh
                 if [ "$1" = "--version" ]; then printf '22.0.0\\n'; exit 0; fi
-                : > "$MUTATION_LOG"
+                printf '%s\\n' "$0 $*" > "$MUTATION_LOG"
                 exit 99
                 """,
             )
@@ -791,7 +791,13 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(completed.returncode, 2, completed.stderr)
-                self.assertFalse(Path(environment["MUTATION_LOG"]).exists())
+                mutation_log = Path(environment["MUTATION_LOG"])
+                self.assertFalse(
+                    mutation_log.exists(),
+                    mutation_log.read_text(encoding="utf-8")
+                    if mutation_log.exists()
+                    else "",
+                )
                 self.assertTrue((self.project_root / ".gitignore").is_symlink())
                 self.assertFalse((self.project_root / "AGENTS.md").exists())
                 self.assertEqual(
@@ -835,7 +841,13 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(completed.returncode, 2, completed.stderr)
-                self.assertFalse(Path(environment["MUTATION_LOG"]).exists())
+                mutation_log = Path(environment["MUTATION_LOG"])
+                self.assertFalse(
+                    mutation_log.exists(),
+                    mutation_log.read_text(encoding="utf-8")
+                    if mutation_log.exists()
+                    else "",
+                )
                 self.assertTrue((self.project_root / ".gitignore").is_symlink())
                 self.assertFalse((self.project_root / "AGENTS.md").exists())
                 self.assertEqual(

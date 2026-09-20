@@ -628,7 +628,7 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 `project-validation` 覆盖 Node / JavaScript / TypeScript、Python、Go、Dart / Flutter、Java、Kotlin、C++、Swift 和 Objective-C 的代码规范检查、typecheck / static analysis、unit test 与项目 CI 继承规则；unit test 报告路径默认继承项目配置，不由模板统一硬编码，但需要作为本轮证据保留的 unit 报告不能只停留在会被 runner 重写的 coverage / JUnit 固定路径。
 
-本仓库自身 CI 固定为 `.github/workflows/validation.yml`：`actions/checkout` / `actions/setup-python` 按 commit SHA 固定并指定 Python `3.12.10`，PR 事件显式 checkout PR head SHA；Linux job 安装 `sbtd-workflow-onboard/requirements.txt` 后执行 `compileall`、`bash -n install.sh` 与全量 `unittest discover`，macOS job 运行 Bash installer / 多项目 / workflow contracts 聚焦套件，Windows job 运行 PowerShell installer / workflow contracts 聚焦套件并在 pwsh 可用时运行 `-k powershell` 真实安装器子集；三个 job 都要求运行后 `git status --porcelain` 为空。该 gate 证明 clean SHA 可复现，不证明完整 Windows 原生或发布已完成。
+本仓库自身 CI 固定为 `.github/workflows/validation.yml`：`actions/checkout` / `actions/setup-python` 按 commit SHA 固定并指定 Python `3.12.10`，PR 事件显式 checkout PR head SHA；Linux job 安装 `sbtd-workflow-onboard/requirements.txt` 后执行 `compileall`、`bash -n install.sh` 与全量 `unittest discover`，macOS job 运行 Bash installer / 多项目 / workflow contracts 聚焦套件，Windows job 运行 PowerShell installer 静态契约、`test_workflow_contracts` 与 pwsh 可用时的 `-k powershell` 真实安装器子集；三个 job 都要求运行后 `git status --porcelain` 为空。该 gate 证明 clean SHA 可复现，不证明完整 Windows 原生或发布已完成。
 
 全局工具状态建议在最终输出中集中列明：
 

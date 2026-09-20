@@ -7,7 +7,7 @@
 - 新增 `.github/workflows/validation.yml`：`actions/checkout` / `actions/setup-python` 按 commit SHA 固定并指定 Python `3.12.10`，PR 事件显式 checkout PR head SHA；Linux 全量、macOS Bash installer／多项目／contracts、Windows PowerShell installer／contracts 分工，Windows 另在 pwsh 可用时运行 `-k powershell` 真实安装器子集，三 job 均断言 checkout 干净；CI 不证明真实 host、完整 Windows 原生或发布完成。
 - `tests.test_workflow_contracts` 新增 CI 工作流契约测试，固定 pin、平台分工和 clean SHA 验证命令。
 - `README.md`、`README.html` 与 `CHANGELOG.md` 记录 CI gate、集成回归和 AC-37 实现期门禁边界。
-- 残余风险：`sbtd-workflow-onboard/requirements.txt` 保持既有声明范围（jsonschema/PyYAML/markdown-it-py/tomlkit），P1-14 不新增 pip lock；CI 已固定 actions commit SHA、Python `3.12.10` 和 PR head SHA checkout，但 pip 解析仍随上游 minor 漂移。该风险由本任务 accountable owner 接受为 clean-SHA gate 的残余风险，不改变 Onboard 运行时依赖声明。
+- 残余风险：`sbtd-workflow-onboard/requirements.txt` 保持既有声明范围（jsonschema/PyYAML/markdown-it-py/tomlkit），P1-14 不新增 pip lock；CI 已固定 actions commit SHA、Python `3.12.10` 和 PR head SHA checkout，但 pip 解析仍随上游 minor 漂移。Windows `test_workflow_contracts` 使用仓库外空 `core.excludesFile` 与 LICENSE SHA-256 的 CRLF→LF 规范化，避免 `nul` exclude 与 checkout 换行；不把该规范化当成许可证内容变更。该风险由本任务 accountable owner 接受为 clean-SHA gate 的残余风险，不改变 Onboard 运行时依赖声明。
 
 ## 验证
 

@@ -466,6 +466,7 @@ class WorkflowContractTests(unittest.TestCase):
                         "python -B -m unittest -k powershell tests.test_install_sh_agent_cli_flow",
                         commands,
                     )
+                    self.assertIn("tests.test_workflow_contracts", commands)
                 self.assertIn('test -z "$(git status --porcelain)"', commands)
 
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
@@ -481,7 +482,9 @@ class WorkflowContractTests(unittest.TestCase):
 
         self.assertTrue(license_path.is_file())
         self.assertEqual(
-            hashlib.sha256(license_path.read_bytes()).hexdigest(),
+            hashlib.sha256(
+                license_path.read_bytes().replace(b"\r\n", b"\n")
+            ).hexdigest(),
             "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
         )
         license_entries = {
@@ -1555,6 +1558,9 @@ class WorkflowContractTests(unittest.TestCase):
         *args: str,
         check: bool = True,
     ) -> subprocess.CompletedProcess:
+        empty_excludes = repo.parent / "empty-excludes"
+        if not empty_excludes.exists():
+            empty_excludes.write_bytes(b"")
         result = subprocess.run(
             [
                 "git",
@@ -1567,7 +1573,7 @@ class WorkflowContractTests(unittest.TestCase):
                 "-c",
                 "init.defaultBranch=main",
                 "-c",
-                f"core.excludesFile={os.devnull}",
+                f"core.excludesFile={empty_excludes}",
                 *args,
             ],
             cwd=repo,

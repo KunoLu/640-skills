@@ -99,10 +99,7 @@ jobs:
         run: python -m compileall -q sbtd-workflow-onboard/scripts tests
 
       - name: Run Windows PowerShell installer and workflow contracts
-        run: >-
-          python -B -m unittest
-          tests.test_install_sh_agent_cli_flow.PowerShellInstallerAgentCliFlowTests
-          tests.test_workflow_contracts
+        run: python -B -m unittest tests.test_install_sh_agent_cli_flow.PowerShellInstallerAgentCliFlowTests tests.test_workflow_contracts
 
       - name: Run the real pwsh installer subset when available
         run: python -B -m unittest -k powershell tests.test_install_sh_agent_cli_flow
