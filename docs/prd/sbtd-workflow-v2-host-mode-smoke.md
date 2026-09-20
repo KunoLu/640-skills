@@ -29,12 +29,14 @@
 
 ## Host 会话约定
 
-- 隔离项目根；OMP 只用临时 `PI_CODING_AGENT_DIR`，不设持久 `--profile`。
+- 隔离项目根；Codex 使用临时 `CODEX_HOME`，只复制 `auth.json`，不复用真实 sessions/rollouts。
+- OMP 只用临时 `PI_CODING_AGENT_DIR`，不设持久 `--profile`。
 - Codex：`exec --ephemeral --sandbox read-only --skip-git-repo-check --json`。
 - OMP：`--print --no-session --no-extensions --tools read`，避免 `always-ask` 挂起。
 - 提示只要求读 `AGENTS.md` 与 `MODE` 并返回 JSON；提示正文不含 default/lite/strict。
 - 从输出解析 JSON `mode`，不得用提示回声或裸子串匹配冒充读到了模式。
-- 只比较 `~/.codex` 与 `~/.omp` 下非 sessions/cache 的新增路径；缺登录记 `blocked`，不记 fail。
+- 真实 `~/.codex` 与 `~/.omp` 的新增路径（含 sessions）视为污染失败。
+- 缺登录或 CLI 记 `blocked`；live 矩阵未满 6 个 passed 则 skip，不当 AC-04 绿。
 
 ## Token 计量
 

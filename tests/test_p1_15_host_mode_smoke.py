@@ -47,19 +47,21 @@ def _words_and_bytes(path: Path) -> tuple[int, int]:
 def _host_state_paths() -> frozenset[str]:
     rows: set[str] = set()
     home = Path.home()
-    skip = {"sessions", "rollouts", "cache", "logs", "tmp"}
     for tree in (".codex", ".omp"):
         root = home / tree
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if not path.is_file():
-                continue
-            relative = path.relative_to(root)
-            if any(part in skip for part in relative.parts):
-                continue
-            rows.add(f"{tree}/{relative.as_posix()}")
+            if path.is_file():
+                rows.add(f"{tree}/{path.relative_to(root).as_posix()}")
     return frozenset(rows)
+
+
+def _copy_codex_auth(destination: Path) -> None:
+    destination.mkdir()
+    source = Path.home() / ".codex" / "auth.json"
+    if source.is_file():
+        shutil.copy2(source, destination / "auth.json")
 
 
 def _extract_mode_report(text: str) -> dict[str, object] | None:
@@ -162,7 +164,9 @@ class HostModeSmokeTests(unittest.TestCase):
         failed = [item for item in results if item["status"] == "failed"]
         self.assertFalse(failed, failed)
         self.assertEqual(len(results), 6, results)
-        # blocked rows are recorded, not treated as AC-04 pass.
+        passed = [item for item in results if item["status"] == "passed"]
+        if len(passed) != 6:
+            self.skipTest(f"host matrix is not AC-04 pass: {results!r}")
 
     def _run_host_mode(self, host: str, binary: str, mode: str) -> dict[str, object]:
         temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-{host}-{mode}-")
@@ -239,6 +243,8 @@ class HostModeSmokeTests(unittest.TestCase):
         env = os.environ.copy()
         env["PI_CODING_AGENT_DIR"] = str(isolation / "omp-agent")
         if host == "codex":
+            env["CODEX_HOME"] = str(isolation / "codex-home")
+            _copy_codex_auth(Path(env["CODEX_HOME"]))
             command = [
                 binary,
                 "exec",
