@@ -96,6 +96,7 @@ def runtime_versions() -> dict[str, str]:
         "scripts/sbtd_migration_legacy.py",
         "scripts/sbtd_migration_plan.py",
         "scripts/sbtd_migration_verify.py",
+        "scripts/sbtd_recovery.py",
         "scripts/sbtd_project.py",
         "scripts/sbtd_task_document.py",
         "scripts/sbtd_task_state.py",

@@ -110,6 +110,27 @@ class MigrationCliTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("--phase {plan,apply,verify,cleanup}", result.stdout)
+
+    def test_recovery_help_advertises_plan_and_apply(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory).resolve()
+            environment = os.environ.copy()
+            environment.update(
+                HOME=str(home),
+                USERPROFILE=str(home),
+                CODEX_HOME=str(home / ".codex"),
+                PYTHONDONTWRITEBYTECODE="1",
+            )
+            result = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "recovery", "--help"],
+                capture_output=True,
+                text=True,
+                env=environment,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("--phase {plan,apply}", result.stdout)
             self.assertEqual(list(home.iterdir()), [])
 
 

@@ -19,15 +19,17 @@ from __future__ import annotations
 import argparse
 import re
 from collections.abc import Mapping, Sequence
-from typing import NoReturn
+from typing import Any, NoReturn
 
 __all__ = [
     "SingleValueAction",
     "WorkflowArgumentParser",
     "add_migration_parser",
+    "add_recovery_parser",
     "parse_workflow_args",
     "validate_developer_name",
     "validate_migration_args",
+    "validate_recovery_args",
 ]
 
 PROG = "onboard.py"
@@ -44,7 +46,13 @@ _RECOVERY_PHASES = ("plan", "apply")
 _MIGRATION_RULES = {
     "plan": (
         ("projects_root", "backup_root", "custodian"),
-        ("publication_decisions", "deployment_mode", "deployment_platform", "graft_hooks", "json"),
+        (
+            "publication_decisions",
+            "deployment_mode",
+            "deployment_platform",
+            "graft_hooks",
+            "json",
+        ),
     ),
     "apply": (
         ("manifest",),
@@ -186,7 +194,11 @@ def _add_common_options(
         type=validate_developer_name,
         help="Developer identity (lowercase letters and digits).",
     )
-    sub.add_argument("--graft-hooks", action="store_true", help="Separately authorize the displayed Codex hooks; never grants host trust.")
+    sub.add_argument(
+        "--graft-hooks",
+        action="store_true",
+        help="Separately authorize the displayed Codex hooks; never grants host trust.",
+    )
 
 
 def _add_migration_context(sub: argparse.ArgumentParser) -> None:
@@ -222,7 +234,10 @@ def add_migration_parser(
         raise ValueError("unsupported migration parser phase set")
     migration = subparsers.add_parser("migration", allow_abbrev=False)
     migration.add_argument(
-        "--phase", action=SingleValueAction, required=True, choices=tuple(phases),
+        "--phase",
+        action=SingleValueAction,
+        required=True,
+        choices=tuple(phases),
         help="Explicit migration phase; deployment remains a separate operation.",
     )
     allowed = {
@@ -255,7 +270,8 @@ def add_migration_parser(
     for dest in _MIGRATION_FLAG_OPTIONS:
         if dest in allowed:
             migration.add_argument(
-                _option_name(dest), action="store_true",
+                _option_name(dest),
+                action="store_true",
                 help={
                     "yes": "Authorize this apply attempt.",
                     "graft_hooks": "Plan explicitly authorized Codex hook definitions for full deployment.",
@@ -265,45 +281,7 @@ def add_migration_parser(
     return migration
 
 
-def _build_parser() -> tuple[
-    argparse.ArgumentParser, dict[str, argparse.ArgumentParser]
-]:
-    parser = WorkflowArgumentParser(
-        prog=PROG,
-        allow_abbrev=False,
-        description="Target SBTD workflow CLI grammar (contract; not the live entry point).",
-    )
-    subparsers = parser.add_subparsers(dest="mode", required=True)
-    subs: dict[str, argparse.ArgumentParser] = {}
-
-    for mode in ("check", "plan", "init", "reset", "init-projects"):
-        sub = subparsers.add_parser(mode, allow_abbrev=False)
-        _add_common_options(sub, projects_root_required=mode == "init-projects")
-        if mode in ("init", "init-projects"):
-            _add_migration_context(sub)
-        subs[mode] = sub
-
-    project_check = subparsers.add_parser("check-projects", allow_abbrev=False)
-    project_check.add_argument(
-        "--projects-root",
-        action=SingleValueAction,
-        required=True,
-        help="Comma-separated absolute project root paths.",
-    )
-    project_check.add_argument(
-        "--json",
-        action="store_true",
-        help="Print machine-readable project checks.",
-    )
-    project_check.add_argument(
-        "--skip-project-agents",
-        action="store_true",
-        help="Exclude project AGENTS.md from installation-target checks.",
-    )
-    subs["check-projects"] = project_check
-
-    subs["migration"] = add_migration_parser(subparsers)
-
+def add_recovery_parser(subparsers: Any) -> argparse.ArgumentParser:
     recovery = subparsers.add_parser("recovery", allow_abbrev=False)
     recovery.add_argument(
         "--phase",
@@ -357,7 +335,57 @@ def _build_parser() -> tuple[
         action="store_true",
         help="Print the single machine-readable envelope.",
     )
-    subs["recovery"] = recovery
+    return recovery
+
+
+def validate_recovery_args(
+    args: argparse.Namespace, *, parser: argparse.ArgumentParser
+) -> None:
+    _check_phase(
+        parser, args, _RECOVERY_VALUE_OPTIONS, _RECOVERY_FLAG_OPTIONS, _RECOVERY_RULES
+    )
+
+
+def _build_parser() -> tuple[
+    argparse.ArgumentParser, dict[str, argparse.ArgumentParser]
+]:
+    parser = WorkflowArgumentParser(
+        prog=PROG,
+        allow_abbrev=False,
+        description="Target SBTD workflow CLI grammar (contract; not the live entry point).",
+    )
+    subparsers = parser.add_subparsers(dest="mode", required=True)
+    subs: dict[str, argparse.ArgumentParser] = {}
+
+    for mode in ("check", "plan", "init", "reset", "init-projects"):
+        sub = subparsers.add_parser(mode, allow_abbrev=False)
+        _add_common_options(sub, projects_root_required=mode == "init-projects")
+        if mode in ("init", "init-projects"):
+            _add_migration_context(sub)
+        subs[mode] = sub
+
+    project_check = subparsers.add_parser("check-projects", allow_abbrev=False)
+    project_check.add_argument(
+        "--projects-root",
+        action=SingleValueAction,
+        required=True,
+        help="Comma-separated absolute project root paths.",
+    )
+    project_check.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable project checks.",
+    )
+    project_check.add_argument(
+        "--skip-project-agents",
+        action="store_true",
+        help="Exclude project AGENTS.md from installation-target checks.",
+    )
+    subs["check-projects"] = project_check
+
+    subs["migration"] = add_migration_parser(subparsers)
+
+    subs["recovery"] = add_recovery_parser(subparsers)
 
     return parser, subs
 
@@ -386,7 +414,11 @@ def validate_migration_args(
     args: argparse.Namespace, *, parser: argparse.ArgumentParser
 ) -> None:
     _check_phase(
-        parser, args, _MIGRATION_VALUE_OPTIONS, _MIGRATION_FLAG_OPTIONS, _MIGRATION_RULES
+        parser,
+        args,
+        _MIGRATION_VALUE_OPTIONS,
+        _MIGRATION_FLAG_OPTIONS,
+        _MIGRATION_RULES,
     )
 
 
