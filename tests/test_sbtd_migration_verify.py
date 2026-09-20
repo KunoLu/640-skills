@@ -40,7 +40,10 @@ class DeploymentReportTests(unittest.TestCase):
                 "sourceCommit": head,
                 "worktreeState": "clean",
                 "sourceRevision": "exact",
+                "evidenceSource": "developer-local",
+                "trigger": "manual",
                 "environmentAlignment": "verified",
+                "evidencePublication": "local-only",
                 "e2eMode": "smoke-only",
                 "mockStrategy": "none",
                 "startedAt": "2026-09-19T00:01:00Z",
@@ -107,7 +110,7 @@ class DeploymentReportTests(unittest.TestCase):
                             "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
                         },
                     }
-                    for path in (evidence_path, report_path)
+                    for path in (evidence_path, report_path, summary)
                 ]
 
             save()
@@ -138,7 +141,10 @@ class ReportFixture:
             "sourceCommit": self.head,
             "worktreeState": "clean",
             "sourceRevision": "exact",
+            "evidenceSource": "developer-local",
+            "trigger": "manual",
             "environmentAlignment": "verified",
+            "evidencePublication": "local-only",
             "e2eMode": "smoke-only",
             "mockStrategy": "none",
             "startedAt": "2026-09-19T00:01:00Z",
@@ -208,7 +214,7 @@ class ReportFixture:
                     "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
                 },
             }
-            for path in (self.evidence_path, self.report_path)
+            for path in (self.evidence_path, self.report_path, self.summary)
         ]
 
 
@@ -327,6 +333,72 @@ class DeploymentReportAcceptanceTests(unittest.TestCase):
             with self.assertRaises(ContractError):
                 validate_deployment_reports(fixture.deployment, fixture.project)
 
+    def test_an_auxiliary_report_with_a_non_smoke_mode_is_allowed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = self.build(base)
+            unit_report = fixture.private / "unit-report.json"
+            unit_summary = fixture.private / "unit-report.md"
+            unit_report.write_text(json.dumps({"synthetic": "unit evidence"}))
+            unit_summary.write_text("合成辅助报告；不证明 smoke。\n")
+            fixture.envelope["reports"].append(
+                {
+                    "testType": "unit",
+                    "path": str(unit_report),
+                    "summaryMd": str(unit_summary),
+                    "sha256": hashlib.sha256(unit_report.read_bytes()).hexdigest(),
+                    "status": "passed",
+                    "mode": "not-needed",
+                }
+            )
+            fixture.evidence_path.write_text(json.dumps(fixture.envelope))
+            fixture.refresh_refs()
+            fixture.project["report_refs"].extend(
+                {
+                    "path": str(path),
+                    "state": {
+                        "type": "file",
+                        "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    },
+                }
+                for path in (unit_report, unit_summary)
+            )
+
+            self.assertIsNone(
+                validate_deployment_reports(fixture.deployment, fixture.project)
+            )
+
+    def test_a_summary_must_be_a_declared_bound_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = self.build(base)
+            fixture.project["report_refs"] = [
+                reference
+                for reference in fixture.project["report_refs"]
+                if reference["path"] != str(fixture.summary)
+            ]
+            fixture.summary.write_text("changed without a bound reference\n")
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(fixture.deployment, fixture.project)
+
+    def test_a_naive_report_timestamp_is_refused_as_contract_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = self.build(base)
+            fixture.raw["startedAt"] = "2026-09-19T00:01:00"
+            fixture.save()
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(fixture.deployment, fixture.project)
+
+    def test_raw_run_provenance_must_match_the_envelope(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = self.build(base)
+            fixture.raw["sourceRevision"] = "dirty"
+            fixture.save()
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(fixture.deployment, fixture.project)
+
     def test_a_missing_raw_report_is_refused(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -437,6 +509,20 @@ class DeploymentReportAcceptanceTests(unittest.TestCase):
             with self.assertRaises(ContractError):
                 validate_deployment_reports(
                     fixture.deployment, fixture.project, epoch_started=epoch_started
+                )
+
+    def test_a_naive_apply_epoch_is_refused_as_contract_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = self.build(base)
+            fixture.deployment["previous_deployment_id"] = "f" * 64
+            fixture.deployment["started_at"] = "2026-09-19T00:05:00Z"
+            fixture.deployment["finished_at"] = "2026-09-19T00:06:00Z"
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(
+                    fixture.deployment,
+                    fixture.project,
+                    epoch_started="2026-09-19T00:00:30",
                 )
 
     def test_a_raw_run_without_a_command_is_refused(self):
@@ -578,7 +664,10 @@ class MigrationVerifyPathTests(unittest.TestCase):
                     "sourceCommit": None,
                     "worktreeState": "unknown",
                     "sourceRevision": "unknown",
+                    "evidenceSource": "developer-local",
+                    "trigger": "manual",
                     "environmentAlignment": "verified",
+                    "evidencePublication": "local-only",
                     "e2eMode": "smoke-only",
                     "mockStrategy": "none",
                     "startedAt": moment,
@@ -644,6 +733,7 @@ class MigrationVerifyPathTests(unittest.TestCase):
                                 "report_refs": [
                                     _file_ref(evidence_path),
                                     _file_ref(report_path),
+                                    _file_ref(summary),
                                 ],
                             }
                         ],

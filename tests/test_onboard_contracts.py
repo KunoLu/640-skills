@@ -942,6 +942,90 @@ class DeclaredBindingTests(unittest.TestCase):
             {"manifest": self.family["manifest"]},
         )
 
+    def test_deployment_report_refs_cannot_be_parent_and_child(self) -> None:
+        payload = fixtures.build_deployment_evidence_payload(
+            self.family["manifest"], self.family["apply_receipt"]
+        )
+        payload["projects"][0]["report_refs"].append(
+            {
+                "path": f"{fixtures.EVIDENCE_DIR}/alpha-smoke.json/details.json",
+                "state": fixtures.file_state(103),
+            }
+        )
+
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.seal_document,
+            "deployment_evidence",
+            payload,
+        )
+
+    def test_deployment_report_refs_cannot_nest_across_projects(self) -> None:
+        payload = fixtures.build_deployment_evidence_payload(
+            self.family["manifest"], self.family["apply_receipt"]
+        )
+        payload["projects"][0]["report_refs"] = [
+            {
+                "path": f"{fixtures.EVIDENCE_DIR}/reports/run.json",
+                "state": fixtures.file_state(103),
+            }
+        ]
+        payload["projects"][1]["report_refs"] = [
+            {
+                "path": f"{fixtures.EVIDENCE_DIR}/reports/run.json/details.json",
+                "state": fixtures.file_state(104),
+            }
+        ]
+
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.seal_document,
+            "deployment_evidence",
+            payload,
+        )
+
+    def test_stage_report_refs_cannot_overlap_manifest_targets(self) -> None:
+        payload = fixtures.build_deployment_evidence_payload(
+            self.family["manifest"], self.family["apply_receipt"]
+        )
+        payload["projects"][0]["report_refs"] = [
+            {
+                "path": fixtures.RESOURCES["r1"][1],
+                "state": fixtures.file_state(103),
+            }
+        ]
+        deployment = contracts.seal_document("deployment_evidence", payload)
+
+        expect_error(
+            self,
+            "binding-violation",
+            contracts.validate_declared_bindings,
+            self.family["manifest"],
+            {"deployment_evidence": deployment},
+        )
+
+    def test_stage_report_refs_cannot_overlap_manifest_inputs(self) -> None:
+        payload = fixtures.build_deployment_evidence_payload(
+            self.family["manifest"], self.family["apply_receipt"]
+        )
+        payload["projects"][0]["report_refs"] = [
+            {
+                "path": f"{fixtures.PUBLICATION_ORIGINAL['path']}/report.json",
+                "state": fixtures.file_state(103),
+            }
+        ]
+        deployment = contracts.seal_document("deployment_evidence", payload)
+
+        expect_error(
+            self,
+            "binding-violation",
+            contracts.validate_declared_bindings,
+            self.family["manifest"],
+            {"deployment_evidence": deployment},
+        )
+
 
 class CumulativeTests(unittest.TestCase):
     @classmethod
@@ -1250,6 +1334,28 @@ class DeploymentResultTests(unittest.TestCase):
             "id-mismatch",
             contracts.validate_deployment_result,
             {"path": "/private/migration/e.json", "evidence": broken},
+        )
+
+    def test_result_path_cannot_overlap_an_embedded_report(self) -> None:
+        report_path = self.family["deployment_evidence"]["payload"]["projects"][0][
+            "report_refs"
+        ][0]["path"]
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.validate_deployment_result,
+            {"path": report_path, "evidence": self.family["deployment_evidence"]},
+        )
+
+    def test_result_path_cannot_overlap_an_embedded_backup(self) -> None:
+        backup_path = self.family["deployment_evidence"]["payload"]["projects"][0][
+            "private_results"
+        ][0]["backup_ref"]["path"]
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.validate_deployment_result,
+            {"path": backup_path, "evidence": self.family["deployment_evidence"]},
         )
 
 
