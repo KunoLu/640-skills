@@ -403,7 +403,7 @@ MATTPOCOCK_LEGACY_RENAMES = {
     "to-issues": "to-tickets",
 }
 MATTPOCOCK_REMOVED_SKILLS = {
-    "zoom-out": "Removed upstream; use repo exploration, GitNexus exploring, codebase-design, or book-refactoring-pass instead.",
+    "zoom-out": "Removed upstream; use repo exploration, codebase-design, or book-refactoring-pass instead.",
 }
 MATTPOCOCK_REQUIRED_DEPENDENCIES = {
     "tdd": ("codebase-design",),

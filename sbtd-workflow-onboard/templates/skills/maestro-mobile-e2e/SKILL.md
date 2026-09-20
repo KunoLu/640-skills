@@ -7,7 +7,7 @@ description: Use when generating or running Maestro Mobile/Hybrid E2E flows, der
 
 Use this Skill for Mobile / Hybrid E2E work that uses Maestro.
 
-This Skill does not replace `gherkin-bdd`, `project-validation`, Trellis, project tests, or human review. BDD `.feature` files are the behavior source of truth; Maestro flow YAML files are executable Mobile / Hybrid E2E assets derived from selected BDD scenarios.
+This Skill does not replace `gherkin-bdd`, `project-validation`, task workflows, project tests, or human review. BDD `.feature` files are the behavior source of truth; Maestro flow YAML files are executable Mobile / Hybrid E2E assets derived from selected BDD scenarios.
 
 ## Workflow
 
