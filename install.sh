@@ -25,6 +25,7 @@ SBTD workflow installer
 
 Usage:
   ./install.sh [options]
+  ./install.sh migration|recovery [options]
 
 Options:
   --platform <codex|claude|kimi|oh-my-pi|omp>
@@ -60,6 +61,10 @@ Options:
       Answer yes to every yes/no prompt.
   --no-color
       Disable ANSI color.
+  migration --phase <phase> [migration options]
+      Forward directly to scripts/onboard.py migration without onboarding.
+  recovery --phase <phase> [recovery options]
+      Forward directly to scripts/onboard.py recovery without onboarding.
   -h, --help
       Show this help.
 EOF
@@ -288,6 +293,33 @@ find_python() {
   else
     die "python3 or python is required to run $SOURCE_ROOT/scripts/onboard.py"
   fi
+}
+
+forward_workflow_mode() {
+  local mode="$1"
+  shift
+  local source="$SOURCE_ROOT"
+  local forwarded=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --source-root)
+        [[ $# -ge 2 ]] || die "--source-root requires a value"
+        source="$2"
+        shift 2
+        ;;
+      --source-root=*)
+        source="${1#*=}"
+        shift
+        ;;
+      *)
+        forwarded+=("$1")
+        shift
+        ;;
+    esac
+  done
+  validate_source_root "$source"
+  find_python
+  exec "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" "$mode" ${forwarded[@]+"${forwarded[@]}"}
 }
 
 command_string() {
@@ -1252,6 +1284,9 @@ cleanup() {
 
 main() {
   trap cleanup EXIT
+  if [[ $# -gt 0 && ( "$1" == "migration" || "$1" == "recovery" ) ]]; then
+    forward_workflow_mode "$@"
+  fi
   parse_args "$@"
   initialize_user_input
   validate_source_root "$SOURCE_ROOT"
