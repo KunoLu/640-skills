@@ -1,7 +1,8 @@
-"""Codex deployment resources and fixed-policy native graph generation.
+"""Shared host deployment resources and fixed-policy native graph generation.
 
 The public installer owns confirmation and dispatch. This module owns only the
-selected deployment resources; migration data/apply/cleanup are separate stages.
+selected Codex or OMP deployment resources; migration data/apply/cleanup are
+separate stages.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn
-
 
 import onboard_contracts as contracts
 from graft_runtime import GRAFT_PINNED_VERSION, _locate_package, check_graft
@@ -84,22 +84,21 @@ def _operation(
     }
 
 
-def codex_deployment_operations(
+def deployment_operations(
     projects: Sequence[Mapping[str, Any]],
     *,
-    codex_home: Path | None,
-    hooks_authorized: bool,
+    codex_home: Path | None = None,
+    omp_home: Path | None = None,
+    platform: str = "codex",
+    hooks_authorized: bool = False,
     shared_operations: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     """Read-only declarations; no package execution or authorization inference."""
+    if platform not in {"codex", "omp"}:
+        _fail("invalid-argument", "the deployment platform must be explicitly supported")
     private: dict[str, list[dict[str, Any]]] = {}
     roots = sorted(project["root"] for project in projects)
     for project in projects:
-        if project["platforms"] != ["codex"]:
-            _fail(
-                "scope-conflict",
-                "this deployment producer requires an explicitly Codex-only batch",
-            )
         root = Path(project["root"])
         prior = project["private_operations"]
         private[str(root)] = [
@@ -121,7 +120,7 @@ def codex_deployment_operations(
             ),
         ]
     shared = []
-    if codex_home is not None:
+    if platform == "codex" and codex_home is not None:
         shared.append(
             _operation(
                 codex_home / "config.toml",
@@ -138,6 +137,20 @@ def codex_deployment_operations(
                     codex_home / "hooks.json",
                     "json",
                     "graft-hooks",
+                    "configure-graft",
+                    roots,
+                    shared_operations,
+                )
+            )
+    elif platform == "omp":
+        if hooks_authorized:
+            _fail("scope-conflict", "OMP deployment does not include Codex hooks")
+        if omp_home is not None:
+            shared.append(
+                _operation(
+                    omp_home / "mcp.json",
+                    "json",
+                    "graft-omp-mcp",
                     "configure-graft",
                     roots,
                     shared_operations,
@@ -295,6 +308,23 @@ def render_configuration(
         return project_agents_candidate(before)
     if selector == "graft-mcp":
         return codex_mcp_candidate(before, bindings)
+    if selector == "graft-omp-mcp":
+        from onboard import user_home
+        from sbtd_omp_sources import discover_omp_sources
+        from sbtd_omp_wiring import analyze_omp_configuration, omp_mcp_candidate
+
+        target = Path(operation["target"])
+        roots = [Path(binding["root"]) for binding in bindings]
+        discovered = discover_omp_sources(roots, home=user_home(), environ=os.environ)
+        if discovered["target"] != str(target):
+            _fail("scope-conflict", "the OMP resource leaves the active profile")
+        analysis = analyze_omp_configuration(
+            target,
+            bindings,
+            discovered["sources"],
+            disabled_extensions=discovered["disabled_extensions"],
+        )
+        return omp_mcp_candidate(before, analysis)
     if selector == "graft-hooks":
         return codex_hooks_candidate(before, bindings, authorized=True)
     _fail("unsupported-operation", "the deployment selector is not supported")
@@ -341,14 +371,18 @@ def execute_resource(
                 "the deployment policy does not match this runtime",
             )
         candidate = None
+        before_bytes = b""
         if operation["change"]["kind"] == "configure-graft":
+            before_bytes = (
+                b"" if before["type"] == "absent" else read_file(target, before)
+            )
             candidate = render_configuration(
                 operation,
-                b"" if before["type"] == "absent" else read_file(target, before),
+                before_bytes,
                 bindings,
                 install_template=install_template,
             )
-        if operation["selector"] in {"graft-mcp", "graft-hooks"}:
+        if operation["selector"] in {"graft-mcp", "graft-hooks", "graft-omp-mcp"}:
             installed_package = Path(bindings[0]["launcher"]).parents[1]
             if snapshot(installed_package) != launcher_state:
                 _fail(
@@ -375,8 +409,9 @@ def execute_resource(
             )
         started = True
         if candidate is not None:
-            _prepare_target_parents(target, root)
-            write_file(target, candidate, before, scope=root)
+            if candidate != before_bytes:
+                _prepare_target_parents(target, root)
+                write_file(target, candidate, before, scope=root)
         elif operation["change"]["kind"] == "build-graft":
             build_project_graph(root, runtime)
         elif kind in {"copy-file", "copy-directory"}:
@@ -404,6 +439,7 @@ def execute_resource(
 def _installation_templates(roots: Sequence[str]) -> list[Any]:
     """Reuse the installer's canonical source/target selection, not a second catalog."""
     from argparse import Namespace
+
     from onboard import build_operations
 
     arguments = Namespace(
@@ -422,13 +458,26 @@ def _installation_templates(roots: Sequence[str]) -> list[Any]:
     ]
 
 
-def attach_codex_deployment(
-    payload: dict[str, Any], *, project_only: bool, hooks_authorized: bool
+def attach_deployment(
+    payload: dict[str, Any],
+    *,
+    project_only: bool,
+    hooks_authorized: bool,
+    platform: str = "codex",
 ) -> None:
     """Declare every write before the migration manifest is sealed."""
-    from onboard import default_codex_home, detect_omp_root, resolve_global_skills_dir
+    from onboard import (
+        default_codex_home,
+        detect_omp_root,
+        resolve_global_skills_dir,
+        user_home,
+    )
     from sbtd_migration_plan import _ignore_operation
 
+    if platform not in {"codex", "omp"}:
+        _fail("invalid-argument", "the deployment platform must be explicitly supported")
+    if platform != "codex" and hooks_authorized:
+        _fail("scope-conflict", "OMP deployment does not include Codex hooks")
     roots = sorted(project["root"] for project in payload["projects"])
     if project_only and payload["shared_operations"]:
         _fail(
@@ -436,12 +485,28 @@ def attach_codex_deployment(
             "project-only deployment cannot consume a shared-HOME batch",
         )
     codex_home = None if project_only else default_codex_home()
-    private, shared = codex_deployment_operations(
+    discovery = None
+    omp_home = None
+    if platform == "omp" and not project_only:
+        from sbtd_omp_sources import discover_omp_sources
+
+        discovery = discover_omp_sources(
+            [Path(root) for root in roots], home=user_home(), environ=os.environ
+        )
+        omp_home = Path(discovery["agent_dir"])
+    private, shared = deployment_operations(
         payload["projects"],
-        codex_home=codex_home,
+        codex_home=codex_home if platform == "codex" else None,
+        omp_home=omp_home,
+        platform=platform,
         hooks_authorized=hooks_authorized,
         shared_operations=payload["shared_operations"],
     )
+    payload["deployment"] = {
+        "mode": "init-projects" if project_only else "init",
+        "platform": platform,
+        "inputs": list(discovery["inputs"]) if discovery is not None else [],
+    }
     for project in payload["projects"]:
         if not any(
             operation["owner_kind"] == "gitignore"
@@ -463,12 +528,27 @@ def attach_codex_deployment(
                 }
             )
         omp_root = detect_omp_root()
-        if omp_root is not None and not any(
-            record["path"] == str(omp_root) for record in payload["shared_roots"]
-        ):
-            payload["shared_roots"].append(
-                {"kind": "omp-home", "path": str(omp_root), "dependent_projects": roots}
-            )
+        if platform == "codex":
+            if omp_root is not None and not any(
+                record["path"] == str(omp_root) for record in payload["shared_roots"]
+            ):
+                payload["shared_roots"].append(
+                    {"kind": "omp-home", "path": str(omp_root), "dependent_projects": roots}
+                )
+        elif omp_home is not None:
+            if omp_root is not None and not any(
+                record["path"] == str(omp_root) for record in payload["shared_roots"]
+            ):
+                payload["shared_roots"].append(
+                    {"kind": "omp-home", "path": str(omp_root), "dependent_projects": roots}
+                )
+            if not any(
+                omp_home.is_relative_to(Path(record["path"]))
+                for record in payload["shared_roots"]
+            ):
+                payload["shared_roots"].append(
+                    {"kind": "omp-home", "path": str(omp_home), "dependent_projects": roots}
+                )
         skills_root, _source = resolve_global_skills_dir()
         if not any(
             Path(skills_root).is_relative_to(Path(record["path"]))
@@ -535,7 +615,7 @@ def attach_codex_deployment(
         )
 
 
-def validate_codex_declarations(payload: Mapping[str, Any]) -> None:
+def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
     """Re-derive the closed deploy write set without trusting a resealed list."""
     from onboard import default_codex_home
 
@@ -550,11 +630,36 @@ def validate_codex_declarations(payload: Mapping[str, Any]) -> None:
         for operation in payload["shared_operations"]
         if operation["phase"] == "deploy"
     ]
+    shared_deploy = [
+        operation
+        for operation in payload["shared_operations"]
+        if operation["phase"] == "deploy"
+    ]
+    declaration = payload["deployment"]
     if not all_deploy:
+        if declaration is not None:
+            _fail(
+                "semantic-violation",
+                "a deployment declaration requires declared deployment operations",
+            )
         return
+    if declaration is None:
+        _fail(
+            "semantic-violation",
+            "deployment operations require an explicit deployment declaration",
+        )
+    expected_mode = "init" if shared_deploy else "init-projects"
+    if declaration["mode"] != expected_mode:
+        _fail("scope-conflict", "the deployment mode does not match its operation set")
+    platform = declaration["platform"]
+    if platform not in {"codex", "omp"}:
+        _fail("invalid-argument", "the deployment platform must be explicitly supported")
+    if platform == "codex" and declaration["inputs"]:
+        _fail(
+            "scope-conflict",
+            "the sealed deployment does not match the Codex producer",
+        )
     for project in payload["projects"]:
-        if project["platforms"] != ["codex"]:
-            _fail("scope-conflict", "Codex deployment cannot select another host")
         expected = {
             (
                 str(Path(project["root"]) / "AGENTS.md"),
@@ -571,12 +676,13 @@ def validate_codex_declarations(payload: Mapping[str, Any]) -> None:
         if actual != expected:
             _fail(
                 "semantic-violation",
-                "the complete private Codex deployment set is missing or altered",
+                "the complete private deployment set is missing or altered",
             )
     for operation in all_deploy:
-        if operation["change"]["kind"] in {"build-graft", "configure-graft"}:
-            if operation["change"]["source_ref"] != policy_reference():
-                _fail("ownership-conflict", "a generated deployment policy was altered")
+        if operation["change"]["kind"] in {"build-graft", "configure-graft"} and operation[
+            "change"
+        ]["source_ref"] != policy_reference():
+            _fail("ownership-conflict", "a generated deployment policy was altered")
     shared = [
         operation
         for operation in payload["shared_operations"]
@@ -593,30 +699,62 @@ def validate_codex_declarations(payload: Mapping[str, Any]) -> None:
         _fail(
             "scope-conflict", "shared deployment requires the complete selected batch"
         )
-    mcp = [operation for operation in shared if operation["selector"] == "graft-mcp"]
-    if len(mcp) != 1:
-        _fail(
-            "semantic-violation",
-            "shared Codex deployment requires one complete MCP resource",
+    if platform == "codex":
+        if any(
+            operation["selector"] == "graft-omp-mcp" for operation in all_deploy
+        ):
+            _fail("scope-conflict", "Codex deployment cannot declare OMP resources")
+        mcp = [operation for operation in shared if operation["selector"] == "graft-mcp"]
+        if len(mcp) != 1:
+            _fail(
+                "semantic-violation",
+                "shared Codex deployment requires one complete MCP resource",
+            )
+        active_home = default_codex_home()
+        codex_roots = [
+            record for record in payload["shared_roots"] if record["kind"] == "codex-home"
+        ]
+        if len(codex_roots) != 1 or codex_roots[0]["path"] != str(active_home):
+            _fail("scope-conflict", "deployment must bind the current active Codex HOME")
+        expected_mcp = active_home / "config.toml"
+        if mcp[0]["target"] != str(expected_mcp):
+            _fail("scope-conflict", "the MCP resource leaves the current active Codex HOME")
+        hooks = [
+            operation for operation in shared if operation["selector"] == "graft-hooks"
+        ]
+        if len(hooks) > 1 or any(
+            operation["target"] != str(active_home / "hooks.json") for operation in hooks
+        ):
+            _fail(
+                "scope-conflict", "the hook resource leaves the current active Codex HOME"
+            )
+    else:
+        from onboard import user_home
+        from sbtd_omp_sources import discover_omp_sources
+
+        if any(
+            operation["selector"] in {"graft-mcp", "graft-hooks"}
+            for operation in shared
+        ):
+            _fail("scope-conflict", "OMP deployment cannot declare Codex resources")
+        mcp = [
+            operation for operation in shared if operation["selector"] == "graft-omp-mcp"
+        ]
+        if len(mcp) != 1:
+            _fail(
+                "semantic-violation",
+                "shared OMP deployment requires one complete MCP resource",
+            )
+        discovered = discover_omp_sources(
+            [Path(root) for root in roots], home=user_home(), environ=os.environ
         )
-    active_home = default_codex_home()
-    codex_roots = [
-        record for record in payload["shared_roots"] if record["kind"] == "codex-home"
-    ]
-    if len(codex_roots) != 1 or codex_roots[0]["path"] != str(active_home):
-        _fail("scope-conflict", "deployment must bind the current active Codex HOME")
-    expected_mcp = active_home / "config.toml"
-    if mcp[0]["target"] != str(expected_mcp):
-        _fail("scope-conflict", "the MCP resource leaves the current active Codex HOME")
-    hooks = [
-        operation for operation in shared if operation["selector"] == "graft-hooks"
-    ]
-    if len(hooks) > 1 or any(
-        operation["target"] != str(active_home / "hooks.json") for operation in hooks
-    ):
-        _fail(
-            "scope-conflict", "the hook resource leaves the current active Codex HOME"
-        )
+        if declaration["inputs"] != discovered["inputs"]:
+            _fail(
+                "state-conflict",
+                "the sealed OMP configuration sources have drifted",
+            )
+        if mcp[0]["target"] != discovered["target"]:
+            _fail("scope-conflict", "the MCP resource leaves the active OMP profile")
     templates = {
         str(operation.target): operation for operation in _installation_templates(roots)
     }
@@ -776,14 +914,20 @@ def load_deployment_context(
             "scope-conflict",
             "project-only deployment cannot execute shared-HOME operations",
         )
+    declaration = manifest["payload"]["deployment"]
+    if declaration is None or declaration["mode"] != mode:
+        _fail("scope-conflict", "the init entry must match the sealed deployment scope")
     full_deployment = any(
-        operation["selector"] == "graft-mcp" for operation in operations
+        operation["selector"] in {"graft-mcp", "graft-omp-mcp"}
+        for operation in operations
     )
     if full_deployment != (mode == "init"):
         _fail("scope-conflict", "the init entry must match the sealed deployment scope")
     planned_hooks = any(
         operation["selector"] == "graft-hooks" for operation in operations
     )
+    if declaration["platform"] != "codex" and hooks_authorized:
+        _fail("scope-conflict", "OMP deployment does not include Codex hooks")
     if planned_hooks != hooks_authorized:
         _fail(
             "authorization-conflict",
@@ -1053,15 +1197,15 @@ def execute_migration_deployment(
     context: DeploymentContext,
 ) -> tuple[dict[str, Any], int]:
     """Execute only the sealed deploy closure and save truthful cumulative results."""
-    from sbtd_migration import _result_index
     from onboard import resolve_global_skills_dir
+    from sbtd_migration import _result_index
 
     manifest = context.manifest
     runtime = verified_runtime()
     projects = manifest["payload"]["projects"]
     roots = [Path(project["root"]) for project in projects]
     full_installation = any(
-        operation["selector"] == "graft-mcp"
+        operation["selector"] in {"graft-mcp", "graft-omp-mcp"}
         for operation in manifest["payload"]["shared_operations"]
     )
     launcher_package = (
@@ -1083,7 +1227,8 @@ def execute_migration_deployment(
     ]
     # Active host configuration must never precede its installed launcher.
     operations.sort(
-        key=lambda operation: operation["selector"] in {"graft-mcp", "graft-hooks"}
+        key=lambda operation: operation["selector"]
+        in {"graft-mcp", "graft-hooks", "graft-omp-mcp"}
     )
     prior = _result_index(context.previous)
     results = {resource: dict(value) for resource, value in prior.items()}
@@ -1212,10 +1357,13 @@ def run_migration_init(mode: str, args: Any) -> int:
                 "confirmation-required",
                 "migration deployment requires its own explicit confirmation",
             )
-        if getattr(args, "platform", None) not in {None, "codex"}:
+        selected_platform = getattr(args, "platform", None)
+        if selected_platform == "oh-my-pi":
+            selected_platform = "omp"
+        if selected_platform not in {None, "codex", "omp"}:
             _fail(
                 "scope-conflict",
-                "this deployment context supports only its declared Codex host",
+                "this deployment context supports only its declared host",
             )
         if getattr(args, "developer", None) is not None:
             _fail(
@@ -1251,6 +1399,13 @@ def run_migration_init(mode: str, args: Any) -> int:
             roots=resolve_project_roots(args),
             hooks_authorized=bool(getattr(args, "graft_hooks", False)),
         )
+        if selected_platform is not None and selected_platform != context.manifest[
+            "payload"
+        ]["deployment"]["platform"]:
+            _fail(
+                "scope-conflict",
+                "the selected host must match the sealed deployment manifest",
+            )
         production, code = execute_migration_deployment(context)
         payload.update(production)
     except contracts.ContractError as error:
@@ -1270,7 +1425,7 @@ def run_migration_init(mode: str, args: Any) -> int:
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, allow_nan=False))
     else:
-        print("Codex deployment: " + str(payload["status"]))
+        print("Host deployment: " + str(payload["status"]))
         print(
             "Detailed artifacts remain private; use --json only with authorized private storage."
         )
@@ -1284,12 +1439,15 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
         external_skill_target_is_valid,
         resolve_project_roots,
         scoped_skills_root,
+        user_home,
     )
     from sbtd_graft_entry import validate_build_scope
 
     roots = resolve_project_roots(args)
     authorized = bool(getattr(args, "graft_hooks", False))
-    if getattr(args, "platform", None) != "codex" or not roots:
+    selected = getattr(args, "platform", None)
+    platform = "omp" if selected in {"omp", "oh-my-pi"} else selected
+    if platform not in {"codex", "omp"} or not roots:
         if authorized:
             return {
                 "status": "blocked",
@@ -1300,6 +1458,11 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
         return {
             "status": "blocked",
             "reason": "project-only setup cannot install global hooks",
+        }
+    if platform != "codex" and authorized:
+        return {
+            "status": "blocked",
+            "reason": "OMP wiring does not include Codex hooks",
         }
     try:
         try:
@@ -1325,18 +1488,35 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
             records.append(
                 {"root": str(root), "platforms": ["codex"], "private_operations": []}
             )
-        home = None if mode == "init-projects" else default_codex_home()
-        private, shared = codex_deployment_operations(
-            records, codex_home=home, hooks_authorized=authorized
+        codex_home = None
+        omp_home = None
+        discovered = None
+        if mode != "init-projects":
+            if platform == "codex":
+                codex_home = default_codex_home()
+            else:
+                from sbtd_omp_sources import discover_omp_sources
+
+                discovered = discover_omp_sources(
+                    roots, home=user_home(), environ=os.environ
+                )
+                omp_home = Path(discovered["agent_dir"])
+        private, shared = deployment_operations(
+            records,
+            codex_home=codex_home,
+            omp_home=omp_home,
+            platform=platform,
+            hooks_authorized=authorized,
         )
+        host_home = codex_home if codex_home is not None else omp_home
         launcher_package = (
             scoped_skills_root(args) / "sbtd-workflow-onboard"
-            if home is not None
+            if host_home is not None
             else _PACKAGE
         )
         launcher_state = snapshot(_PACKAGE)
         if (
-            home is not None
+            host_home is not None
             and mode != "reset"
             and external_skill_target_is_valid(
                 launcher_package.parent, launcher_package.name
@@ -1362,12 +1542,15 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
                 bindings,
             )
         moment = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
-        backup_scopes = roots + ([home] if home is not None else [])
+        backup_scopes = roots + ([host_home] if host_home is not None else [])
         return {
             "status": "planned",
             "reason": "",
             "roots": [str(root) for root in roots],
-            "codexHome": str(home) if home is not None else None,
+            "codexHome": str(codex_home) if codex_home is not None else None,
+            "ompHome": str(omp_home) if omp_home is not None else None,
+            "deploymentPlatform": platform,
+            "ompInputs": list(discovered["inputs"]) if discovered is not None else [],
             "hooksAuthorized": authorized,
             "runtime": runtime,
             "privateOperations": private,
@@ -1385,7 +1568,7 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
     except (OSError, RuntimeError, ValueError, ImportError):
         return {
             "status": "blocked",
-            "reason": "the selected Codex wiring could not be safely planned",
+            "reason": "the selected host wiring could not be safely planned",
         }
 
 
@@ -1419,13 +1602,21 @@ def execute_normal_wiring(
         for root, group in plan["privateOperations"].items()
         for operation in group
     }
-    if plan["codexHome"] is not None:
+    host_home = plan.get("codexHome") or plan.get("ompHome")
+    if host_home is not None:
         scope_by_resource.update(
             {
-                operation["resource_id"]: Path(plan["codexHome"])
+                operation["resource_id"]: Path(host_home)
                 for operation in plan["sharedOperations"]
             }
         )
+    for reference in plan.get("ompInputs", []):
+        if snapshot(Path(reference["path"])) != reference["state"]:
+            return {
+                "status": "blocked",
+                "reason": "an OMP configuration source changed since its displayed plan",
+                "operationResults": [],
+            }, 2
     for operation in operations:
         scope = scope_by_resource[operation["resource_id"]]
         expected = operation["before_requirement"]["state"]

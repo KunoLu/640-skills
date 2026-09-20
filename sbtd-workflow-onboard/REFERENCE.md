@@ -9,9 +9,9 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex project wiring, task libraries, developer identity and migration plan/apply/verify have stage-owned implementations. OMP wiring, complete wrapper forwarding, Windows-native proof, cleanup/recovery and full v2 release remain separately gated. Existing legacy data is preserved.
+> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex/OMP project wiring, task libraries, developer identity and migration plan/apply/verify have stage-owned implementations. Complete wrapper forwarding, Windows-native proof, cleanup/recovery and full v2 release remain separately gated. Existing legacy data is preserved.
 
-The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 exposes migration plan/apply/verify; P1-04 supplies Codex wiring and the migration-context deployment producer below. Cleanup, recovery and OMP deployment remain separately staged. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
+The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 exposes migration plan/apply/verify; P1-04/P1-05 supply Codex/OMP wiring and the migration-context deployment producer below. Cleanup and recovery remain separately staged. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
 For validation, install the declared dependency with the interpreter that will load the installed Skill: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. A Skill directory copy does not perform this step. Imports remain lazy, missing dependencies fail closed, and availability must be checked from the installed copy rather than inferred from source-tree CI.
 
@@ -116,13 +116,13 @@ Project-only mode:
 
 1. Resolves the selected Agent platform for the existing adapter context.
 2. Skips target Agent CLI detection and installation.
-3. Skips global installation and user configuration. Explicit Python Codex project setup may detect the already-installed fixed Graft/Node locally; it never installs them or writes HOME telemetry.
+3. Skips global installation and user configuration. Explicit Python Codex/OMP project setup may detect the already-installed fixed Graft/Node locally; it never installs them or writes HOME telemetry.
 4. Runs complete read-only `check-projects` with the actual `--skip-project-agents` scope before any optional project install.
 5. Offers only applicable project-local Playwright or React Bits decisions.
 6. Writes project AGENTS and `.gitignore`.
 7. Requires no Trellis CLI, developer name or pre-existing task state.
 8. Reports an explicitly present unfinished SBTD bootstrap task without creating one.
-9. For explicit Codex projects with fixed Graft available, maintains the project fence and graph; otherwise reports not-available and continues unrelated setup. No HOME, user-level MCP or hook writes.
+9. For explicit Codex or OMP projects with fixed Graft available, maintains the project fence and graph; otherwise reports not-available and continues unrelated setup. No HOME, user-level MCP or hook writes.
 
 The project AGENTS provides the existing minimum routing/safety fallback; project-only mode does not install or claim activation of global Skills. Missing optional tools do not freeze unrelated safe default/lite work, and no missing reviewer may be reported as passed.
 
@@ -454,11 +454,13 @@ Native report schemas remain unchanged. Outer migration `source_ref` stays null 
 
 `tool_versions` binds installed migration source/assets, declared dependency versions and Python, plus the selected Graft target pin; it is not proof that Graft or a host was executed. Consumer fixtures demonstrate acceptance/rejection rules only, not actual deployment. Windows ACL execution and real host deployment need their own environment proof. Pending lower-severity limitations are tracked in the repository findings ledger; no valid hash or task status waives them.
 
-## Codex Wiring and Deployment
+## Codex and OMP Wiring and Deployment
 
 Explicit `--platform codex --projects-root <absolute-roots>` selects project wiring in Python `init`, `reset` and `init-projects`. Setup never installs or upgrades Graft/Node implicitly. When the pinned runtime is unavailable, normal setup without hooks reports `graftWiring.status=not-available` and still permits unrelated rules/Skill installation with source/LSP fallback. Explicit hooks and sealed migration deployment require the runtime and remain blocked. Ownership/configuration/scope failures are not downgraded. Project templates precede the Graft fence; `--skip-project-agents` preserves existing project instructions while maintaining the fence. Normal setup returns actual wiring results; an attempted wiring failure prevents project setup success.
 
 Full setup merges one active Codex `config.toml` with a stable per-root `sbtd-graft-<hash>` server, absolute runtime/launcher arguments and explicit cwd. It preserves foreign servers and rejects conflicting managed definitions. Project-only setup writes no HOME, global Skill or MCP/hook configuration. Existing full-init global rules/Skill selection remains the canonical installer policy, including the common AGENTS mirror for an already present `.omp`; that mirror is not OMP MCP/event wiring. Migration lists every such shared write before confirmation.
+
+For `--platform omp`, full `init` writes only the active OMP user MCP target: default `~/.omp/agent/mcp.json`, named-profile `~/.omp/profiles/<profile>/agent/mcp.json`, or default-profile `PI_CODING_AGENT_DIR`. It never writes hooks. Plan/execute snapshots every static OMP, Codex and Claude source it reads; inherited equivalence follows OMP's complete connection identity, not just command shape. Existing enabled equivalent connections leave an absent OMP target absent, while disabled managed entries, conflicting definitions, server/extension denylists, dynamic overlays, agent `.env`, legacy settings and provider-setting project files block rather than infer an effective host state. Migration plan selects this producer with `--deployment-platform omp`; `init-projects` declares only project fence/graph resources and has no shared MCP operation.
 
 Full installation binds MCP/hooks to the canonical installed Onboard Skill, not a disposable bootstrap checkout. That package is installed and verified before dependent host configuration is published. If ordinary init would retain a merely-valid but different older Skill shell, wiring preflight requests an explicitly confirmed reset instead of running the old guard. Project-only uses its existing executing package because it installs no global Skill.
 
@@ -473,8 +475,8 @@ Normal wiring exposes `backupRoots` in the plan and retains existing resource or
 For a migration, include the deployment choice in the original read-only plan:
 
 ```text
-python <installed-onboard.py> migration --phase plan --projects-root <absolute-roots> --backup-root <external-private-vault> --custodian <actual-label> --deployment-mode init [--graft-hooks] --json
-python <installed-onboard.py> init --platform codex --projects-root <same-roots> --migration-manifest <manifest-file> --migration-apply-receipt <successful-apply-file> --deployment-evidence-out <new-private-file> [--graft-hooks] --yes --json
+python <installed-onboard.py> migration --phase plan --projects-root <absolute-roots> --backup-root <external-private-vault> --custodian <actual-label> --deployment-mode init --deployment-platform codex|omp [--graft-hooks] --json
+python <installed-onboard.py> init --platform codex|omp --projects-root <same-roots> --migration-manifest <manifest-file> --migration-apply-receipt <successful-apply-file> --deployment-evidence-out <new-private-file> [--graft-hooks] --yes --json
 ```
 
 Use `--deployment-mode init-projects` and the `init-projects` entry only for a batch without shared-HOME operations; it cannot install global hooks. The plan seals canonical template sources plus narrowly typed `build-graft` / `configure-graft` operations bound to the installed fixed policy. Unrecognized customized global installation targets block; the current lower-severity limitation concerning unrelated existing Skill-root consumers is recorded in the repository findings ledger, not bypassed here.

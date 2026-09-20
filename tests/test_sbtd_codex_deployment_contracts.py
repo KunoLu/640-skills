@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import copy
 import hashlib
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from tests import onboard_contract_fixtures as fixtures
 
@@ -134,6 +134,61 @@ class CodexDeploymentContractTests(unittest.TestCase):
                 self.assertRaises(contracts.ContractError),
             ):
                 contracts.seal_document("manifest", broken)
+    def test_omp_mcp_configuration_binds_the_declared_omp_home(self):
+        payload = fixtures.build_manifest_payload()
+        target = "/private/home/.omp/mcp.json"
+        resource = contracts.resource_id("json", target)
+        policy_path = (
+            Path(__file__).resolve().parents[1]
+            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
+        )
+        policy = {
+            "path": str(policy_path),
+            "state": {
+                "type": "file",
+                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
+            },
+        }
+        payload["shared_roots"].append(
+            {
+                "kind": "omp-home",
+                "path": "/private/home/.omp",
+                "dependent_projects": list(fixtures.BOTH),
+            }
+        )
+        payload["deployment"] = {
+            "mode": "init",
+            "platform": "omp",
+            "inputs": [],
+        }
+        operation = {
+            "phase": "deploy",
+            "resource_id": resource,
+            "operation_id": contracts.operation_id(
+                "deploy", resource, "graft-omp-mcp"
+            ),
+            "owner_kind": "json",
+            "target": target,
+            "selector": "graft-omp-mcp",
+            "change": {"kind": "configure-graft", "source_ref": policy},
+            "ownership": {"kind": "template-source", "reference": policy},
+            "before_requirement": {"kind": "state", "state": fixtures.ABSENT},
+            "dependent_projects": list(fixtures.BOTH),
+        }
+        payload["shared_operations"].append(operation)
+        for project in payload["projects"]:
+            project["shared_operation_ids"].append(operation["operation_id"])
+        contracts.seal_document("manifest", payload)
+        broken = copy.deepcopy(payload)
+        candidate = broken["shared_operations"][-1]
+        candidate["target"] = "/private/home/.codex/mcp.json"
+        candidate["resource_id"] = contracts.resource_id("json", candidate["target"])
+        candidate["operation_id"] = contracts.operation_id(
+            "deploy", candidate["resource_id"], candidate["selector"]
+        )
+        with self.assertRaises(contracts.ContractError):
+            contracts.seal_document("manifest", broken)
+
 
 
 if __name__ == "__main__":

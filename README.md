@@ -2,7 +2,7 @@
 
 本仓库是 Codex / OMP 配置、Agent 规则模板、Skill 模板和 onboard 自动化的摘录/同步源，不代表一个真实业务项目结构。当前处于v2未发布切换阶段：规则载荷与catalog已切换，完整运行时仍单独实施和验收。
 
-> **未发布边界（v2 分阶段交付中）**：canonical payload 为 14 bundled / 19 external Skills；项目 setup 为按需 SBTD 状态检查，不安装或初始化 Trellis。Graft 检测／安装、显式 Codex 项目接线、任务库、developer 身份与 migration plan/apply/verify 已分项实现；OMP 接线、两安装器完整转发、Windows 原生证明、cleanup/recovery 和完整 v2 发布仍待对应任务。真实项目部署与旧数据处置仍须独立授权。
+> **未发布边界（v2 分阶段交付中）**：canonical payload 为 14 bundled / 19 external Skills；项目 setup 为按需 SBTD 状态检查，不安装或初始化 Trellis。Graft 检测／安装、显式 Codex／OMP 项目接线、任务库、developer 身份与 migration plan/apply/verify 已分项实现；两安装器完整转发、Windows 原生证明、cleanup/recovery 和完整 v2 发布仍待对应任务。真实项目部署与旧数据处置仍须独立授权。
 
 P1-01 本身只提供内部参数／交换契约；P1-12 的实际迁移入口见下，cleanup/recovery 尚未公开可执行。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约、任务或迁移校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备全部声明依赖。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
 
@@ -18,7 +18,7 @@ P1-19 在 `scripts/` 内增加按需 developer 身份库（`sbtd_identity.py`）
 
 P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只读核对仓库外私有准备和批准候选；apply 经 `--yes` 确认后保存原件、发布已批准投影、暂停已证明受管的 Codex/OMP 旧路由，并保存不可变累计回执；verify 只读核对实际资源、原件和绑定部署报告。`share` 的直接复制内容必须逐字保留，改写需 `redact`；混合／未知配置保留并阻断自动处置。后续文件参数接收 envelope 中相应子对象，不接收整个响应。操作说明见[迁移入口](sbtd-workflow-onboard/REFERENCE.md#migration-runtime)。部署 producer、cleanup、recovery 与真实 host／Windows 验收仍分别受后续门禁约束，不能把消费者夹具或本阶段命令当作完整 v2 迁移发布。
 
-P1-04 在 Python Onboard 的显式 Codex 项目范围接入固定 Graft：先模板后单一 fence，按仓根注册 active Codex HOME MCP；`--graft-hooks` 是独立 opt-in，默认保留既有 hooks 不写入。配置成功不等于 host 已启用／信任或事件已执行。迁移计划可用 `--deployment-mode init|init-projects` 预先封存部署资源，再由带完整迁移上下文的现有 init 入口执行并保存累计证据；不从 apply 隐式部署。普通安装原件位置随计划展示，迁移原件留在外部私有 vault。详见[Codex 接线与部署](sbtd-workflow-onboard/REFERENCE.md#codex-wiring-and-deployment)。OMP 接线、两安装器转发、cleanup/recovery、Windows 原生及完整 v2 发布仍由对应任务验收。
+P1-04/P1-05 在 Python Onboard 的显式 Codex／OMP 项目范围接入固定 Graft：先模板后单一 fence；Codex按仓根注册 active Codex HOME MCP，OMP仅在完整 `init` 部署 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并将读取的 OMP、Codex、Claude继承源以只读快照封存。等价继承按 OMP 的连接字段完整匹配，不创建空配置；disabled、managed前缀冲突、server/extension denylist、动态或漂移来源阻断。`--graft-hooks` 仍是仅 Codex 的独立 opt-in，OMP不写hooks。迁移 plan 使用 `--deployment-mode init|init-projects --deployment-platform codex|omp` 封存host、模式和输入；带完整上下文的现有 init 入口才执行并保存累计证据，apply不隐式部署。内部 `sbtd_graft_entry.py analyze` 只允许固定的图查询子命令，拒绝任意native argv、LLM命名、deep/export与workspace参数。配置成功不等于host信任／模型行为或完整v2发布。
 
 P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
 
@@ -139,7 +139,7 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
 
 ### 4. 使用 `--init-projects` 只初始化项目
 
-`--init-projects` 是 project-only 模式：处理所选项目的 AGENTS、模板 `.gitignore`、只读 SBTD 状态/bootstrap 检查，以及适用的 Playwright / React Bits 条件项。Python `init-projects --platform codex` 在固定本地 Graft/Node 可用时还维护项目内 fence 并构建 `graft/` 图；缺少工具时报告 not-available，继续不依赖它的步骤。不安装全局 Agent CLI、工具、Skills，不写用户级 AGENTS/MCP/hooks 或 HOME telemetry。根安装器的新参数完整转发仍归 P1-07/P1-08。
+`--init-projects` 是 project-only 模式：处理所选项目的 AGENTS、模板 `.gitignore`、只读 SBTD 状态/bootstrap 检查，以及适用的 Playwright / React Bits 条件项。Python `init-projects --platform codex|omp` 在固定本地 Graft/Node 可用时维护项目内 fence 并构建 `graft/` 图；该模式不写用户级 MCP 或 hooks。缺少工具时报告 not-available，继续不依赖它的步骤。根安装器的新参数完整转发仍归 P1-07/P1-08。
 
 `--init-projects` 自身接收一个或多个已存在的项目绝对路径，多个路径同样用英语逗号分隔；它与普通模式的 `--projects-root` / `--action` 互斥。macOS / Linux 示例：
 
@@ -743,9 +743,9 @@ tests/e2e/**/*.trace.zip
 
 - Graft 仅在展示固定版本、native lifecycle 与 HOME telemetry 变更后明确确认安装；本地检测不依赖 npm latest。拒绝可选安装不触发 Node/npm 升级；project-only 不做全局 Graft/telemetry 写入。旧 GitNexus 安装路径已退役，但用户既有配置不删除。
 - `init` / `reset` 在写入前检查所有所选项目的最小 SBTD 状态。可选状态缺失正常；异常和旧数据需处理，不创建同名替代品。
-- project-only 不进行全局安装；Python 显式 Codex 项目范围在已有固定 Graft 可用时还维护项目 fence/图，不写 HOME、全局 Skill、MCP 或 hooks。
+- project-only 不进行全局安装；Python 显式 Codex／OMP 项目范围在已有固定 Graft 可用时还维护项目 fence/图，不写 HOME、全局 Skill、MCP 或 hooks。
 - `AGENTS.project.md` 保存三模式入口、project-only 最小 fallback、项目路径和项目级硬边界；正常 `init` / `reset` 由全局 AGENTS + Skills 激活完整路由，public bootstrap / `init-projects` 不单独激活 book-derived 门禁。全局 AGENTS 维护共同路由与客观触发，bundled `sbtd-task` 承载 `default` / `lite` / `strict` 三模式工作契约（strict 才加载完整适用 Gate），项目模板自带全局路由不可见时的最小 objective-trigger fallback（含 Book Gate Plan 触发事实与 Gate lifecycle）；各 reviewer `SKILL.md` 独占状态、输出 schema、修正回路与 stop condition，模板与 `sbtd-task` 都不复制 reviewer 状态词表。
-- 不再提供 GitNexus MCP 自动建议或专用菜单；Python Codex producer 已提供逐仓 MCP 接线，hooks 需独立 opt-in 和 host 信任。OMP 接线与两安装器新参数转发仍由对应任务完成。
+- 不再提供 GitNexus MCP 自动建议或专用菜单；Python host producer 已提供逐仓 Codex／OMP MCP 接线，Codex hooks仍须独立opt-in和host信任；两安装器新参数转发仍由对应任务完成。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。

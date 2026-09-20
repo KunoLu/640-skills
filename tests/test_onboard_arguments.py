@@ -188,6 +188,41 @@ class MigrationPhaseTests(ParseErrorAssertions):
         self.assertEqual(args.custodian, "release-owner")
         self.assertIsNone(args.publication_decisions)
 
+    def test_plan_phase_accepts_only_explicit_deployment_platforms(self) -> None:
+        args = parse_workflow_args(
+            [
+                "migration",
+                "--phase",
+                "plan",
+                "--projects-root",
+                "/repo/one",
+                "--backup-root",
+                "/private/backup",
+                "--custodian",
+                "release-owner",
+                "--deployment-mode",
+                "init",
+                "--deployment-platform",
+                "omp",
+            ]
+        )
+        self.assertEqual(args.deployment_platform, "omp")
+        self.assert_parse_error(
+            [
+                "migration",
+                "--phase",
+                "plan",
+                "--projects-root",
+                "/repo/one",
+                "--backup-root",
+                "/private/backup",
+                "--custodian",
+                "release-owner",
+                "--deployment-platform",
+                "claude",
+            ]
+        )
+
     def test_plan_phase_accepts_publication_decisions(self) -> None:
         args = parse_workflow_args(
             [

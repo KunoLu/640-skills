@@ -6393,13 +6393,13 @@ def run(mode: str, args: argparse.Namespace) -> int:
 
         return run_migration(args)
     if mode in {"init", "init-projects"} and getattr(args, "migration_manifest", None):
-        from sbtd_codex_deployment import run_migration_init
+        from sbtd_graft_deployment import run_migration_init
 
         return run_migration_init(mode, args)
     if mode == "check":
         results = build_check_results(args)
-        if getattr(args, "platform", None) == "codex" or getattr(args, "graft_hooks", False):
-            from sbtd_codex_deployment import plan_normal_wiring
+        if getattr(args, "platform", None) in {"codex", "omp", "oh-my-pi"} or getattr(args, "graft_hooks", False):
+            from sbtd_graft_deployment import plan_normal_wiring
 
             results["graftWiring"] = plan_normal_wiring(mode, args)
         developer_plan = build_developer_plan(args)
@@ -6502,7 +6502,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
         global_skills_dir_source,
         build_sbtd_project_setup(mode, args),
     )
-    from sbtd_codex_deployment import plan_normal_wiring
+    from sbtd_graft_deployment import plan_normal_wiring
 
     wiring_plan = plan_normal_wiring(mode, args)
     if wiring_plan["status"] != "skipped":
@@ -6786,7 +6786,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
             print_caveman_maintenance_details(caveman_maintenance)
 
     sbtd_report = build_sbtd_project_setup(mode, args)
-    from sbtd_codex_deployment import execute_normal_wiring
+    from sbtd_graft_deployment import execute_normal_wiring
 
     wiring_result, wiring_exit = execute_normal_wiring(
         wiring_plan, template_written=not bool(getattr(args, "skip_project_agents", False)),
@@ -6796,7 +6796,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
         plan_payload["operationResults"] = operation_results
         if wiring_exit:
             for project in cast(list[dict[str, object]], sbtd_report["projects"]):
-                project.update(status="failed", reason="Codex wiring did not complete", nextStep="Inspect the preserved wiring results and originals.")
+                project.update(status="failed", reason="host wiring did not complete", nextStep="Inspect the preserved wiring results and originals.")
             sbtd_report["status"] = "failed"
     if args.json:
         # One run, one root object. The plan was held back above so it can be

@@ -52,9 +52,15 @@ check/plan)::
     sbtd_graft_entry.py mcp  --root ABS --node ABS --entry ABS
     sbtd_graft_entry.py hook --root ABS --node ABS --entry ABS \
         --event {session-start,prompt,post-edit,stop}
+    sbtd_graft_entry.py analyze --root ABS --node ABS --entry ABS \
+        {ask,map,skeleton,callers,check,grep,blast} [VALUE]
 
 ``mcp`` spawns exactly ``[node, cli, "mcp", root]`` with cwd=root behind
-scoped stdio forwarding. The pinned native server speaks newline-delimited
+scoped stdio forwarding. ``analyze`` admits only the seven pinned read-only
+commands above, always selects the selected root as the positional project,
+forces JSON and no-refresh where native offers those flags, and has no option
+surface for workspace-wide ``--dir``, LLM naming, deep builds, exports or
+arbitrary native argv. The pinned native server speaks newline-delimited
 JSON-RPC 2.0 on stdout only, and every host request line is gated through a
 FRESH ``validate_project`` before native receives it: startup validation
 alone cannot cover the graph the running child reloads when an explicit
@@ -703,8 +709,7 @@ def _concept_frontmatter(text: str, *, code: str, message: str) -> dict[str, Any
     block ends at the next `\\n---` or EOF; a blank/comment-only block is
     empty data. A non-mapping result has no `sources`/`slug` to prove.
     """
-    if text.startswith("\ufeff"):
-        text = text[1:]
+    text = text.removeprefix("\ufeff")
     if not text.startswith("---") or text.startswith("----"):
         return {}
     rest = text[3:]
@@ -1556,6 +1561,67 @@ def _run_hook(args: argparse.Namespace) -> int:
     finally:
         shutil.rmtree(home, ignore_errors=True)
 
+def _relative_analysis_path(value: str) -> str:
+    candidate = Path(value)
+    if (
+        not value
+        or candidate.is_absolute()
+        or "\\" in value
+        or ".." in candidate.parts
+    ):
+        raise ContractError(
+            "invalid-argument",
+            "analysis file arguments must stay inside the selected project",
+        )
+    return value
+
+
+def _analysis_argv(args: argparse.Namespace) -> list[str]:
+    command = args.analysis_command
+    for value_name in ("query", "file", "symbol", "pattern"):
+        value = getattr(args, value_name, None)
+        if value is not None and value.startswith("-"):
+            raise ContractError(
+                "invalid-argument",
+                "analysis values must not be parsed as native options",
+            )
+    if command == "ask":
+        return ["ask", args.query, ".", "--json", "--no-refresh"]
+    if command == "map":
+        return ["map", ".", "--json", "--no-refresh"]
+    if command == "skeleton":
+        return [
+            "skeleton",
+            _relative_analysis_path(args.file),
+            ".",
+            "--json",
+            "--no-refresh",
+        ]
+    if command == "callers":
+        return ["callers", args.symbol, ".", "--json", "--no-refresh"]
+    if command == "check":
+        return ["check", ".", "--json"]
+    if command == "grep":
+        return ["grep", args.pattern, ".", "--fixed", "--json", "--no-refresh"]
+    if command == "blast":
+        return ["blast", ".", "--format", "json", "--no-refresh"]
+    raise ContractError("invalid-argument", "unsupported analysis command")
+
+
+def _run_analyze(args: argparse.Namespace) -> int:
+    argv_tail = _analysis_argv(args)
+    runtime = validate_runtime(Path(args.node), Path(args.entry))
+    project = validate_project(Path(args.root))
+    root_real = Path(project["root"])
+    home = Path(tempfile.mkdtemp(prefix=_TEMP_HOME_PREFIX))
+    try:
+        env = managed_environment(root_real, home)
+        _seed_update_cache(home)
+        argv = [runtime["node"], runtime["cli"], *argv_tail]
+        return _serve_child(argv, cwd=root_real, env=env, stdin_bytes=None)
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -1582,6 +1648,18 @@ def _parser() -> argparse.ArgumentParser:
         choices=HOOK_EVENTS,
         help="native hook sub-command for this Codex event",
     )
+    analyze = modes.add_parser(
+        "analyze", help="run one closed read-only Graft analysis command"
+    )
+    _bind_launch_arguments(analyze)
+    analyses = analyze.add_subparsers(dest="analysis_command", required=True)
+    analyses.add_parser("ask").add_argument("query")
+    analyses.add_parser("map")
+    analyses.add_parser("skeleton").add_argument("file")
+    analyses.add_parser("callers").add_argument("symbol")
+    analyses.add_parser("check")
+    analyses.add_parser("grep").add_argument("pattern")
+    analyses.add_parser("blast")
     return parser
 
 
@@ -1604,7 +1682,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.mode == "mcp":
             return _run_mcp(args)
-        return _run_hook(args)
+        if args.mode == "hook":
+            return _run_hook(args)
+        return _run_analyze(args)
     except ContractError as error:
         print(f"sbtd-graft-entry: {error.message}", file=sys.stderr)
         return error.exit_code

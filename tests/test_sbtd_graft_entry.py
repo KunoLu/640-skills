@@ -5,8 +5,8 @@ import json
 import os
 import select
 import shutil
-import subprocess
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -111,6 +111,7 @@ class GuardedLaunchTests(unittest.TestCase):
                 env=environment,
                 text=True,
                 capture_output=True,
+                check=False,
                 timeout=20,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
@@ -587,6 +588,114 @@ def consumed_requests(root):
         return []
     return [json.loads(line) for line in marker.read_text().splitlines()]
 
+FAKE_ANALYZE_CLI = (
+    "import json, os, sys\n"
+    "print(json.dumps({'argv': sys.argv[1:], 'cwd': os.getcwd(), "
+    "'refresh': os.environ.get('GRAFT_NO_REFRESH')}))\n"
+)
+
+
+def run_analyze(arguments, root, cli, env):
+    return subprocess.run(
+        [
+            str(Path(sys.executable).resolve()),
+            "-B",
+            str(SCRIPTS / "sbtd_graft_entry.py"),
+            "analyze",
+            "--root",
+            str(root),
+            "--node",
+            str(Path(sys.executable).resolve()),
+            "--entry",
+            str(cli),
+            *arguments,
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+
+
+class GuardedAnalysisTests(unittest.TestCase):
+    def test_closed_analysis_commands_map_to_json_no_refresh_native_calls(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_ANALYZE_CLI)
+            env, tmp = launch_env(base)
+            cases = {
+                ("ask", "where is validation"): [
+                    "ask", "where is validation", ".", "--json", "--no-refresh"
+                ],
+                ("map",): ["map", ".", "--json", "--no-refresh"],
+                ("skeleton", "src/app.py"): [
+                    "skeleton", "src/app.py", ".", "--json", "--no-refresh"
+                ],
+                ("callers", "validate_project"): [
+                    "callers", "validate_project", ".", "--json", "--no-refresh"
+                ],
+                ("check",): ["check", ".", "--json"],
+                ("grep", "needle text"): [
+                    "grep", "needle text", ".", "--fixed", "--json", "--no-refresh"
+                ],
+                ("blast",): [
+                    "blast", ".", "--format", "json", "--no-refresh"
+                ],
+            }
+            for arguments, expected in cases.items():
+                with self.subTest(command=arguments[0]):
+                    completed = run_analyze(arguments, root, cli, env)
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    observed = json.loads(completed.stdout)
+                    self.assertEqual(observed["argv"], expected)
+                    self.assertEqual(observed["cwd"], str(root))
+                    self.assertEqual(observed["refresh"], "1")
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    def test_forbidden_analysis_options_and_paths_never_launch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_ANALYZE_CLI)
+            env, _tmp = launch_env(base)
+            for arguments in (
+                ("blast", "--name"),
+                ("blast", "--export-viz", str(base / "viz")),
+                ("ask", "query", "--deep"),
+                ("map", "--dir", str(base)),
+                ("skeleton", "../outside.py"),
+                ("skeleton", str(base / "outside.py")),
+            ):
+                with self.subTest(arguments=arguments):
+                    completed = run_analyze(arguments, root, cli, env)
+                    self.assertEqual(completed.returncode, 2)
+                    self.assertEqual(completed.stdout, "")
+
+    def test_option_shaped_analysis_values_never_become_native_options(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_ANALYZE_CLI)
+            env, _tmp = launch_env(base)
+            for arguments in (
+                ("ask", "--", "--dir=/tmp/other-graph"),
+                ("callers", "--json"),
+                ("grep", "--fixed"),
+            ):
+                with self.subTest(arguments=arguments):
+                    completed = run_analyze(arguments, root, cli, env)
+                    self.assertEqual(completed.returncode, 2)
+                    self.assertEqual(completed.stdout, "")
+
+
 
 def close_pipes(proc):
     for stream in (proc.stdin, proc.stdout, proc.stderr):
@@ -822,6 +931,7 @@ class HookScopingTests(unittest.TestCase):
             env=env,
             capture_output=True,
             timeout=20,
+            check=False,
         )
 
     def test_unrelated_cwd_noops_even_when_bound_root_deleted(self):
