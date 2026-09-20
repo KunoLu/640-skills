@@ -385,6 +385,30 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("default/lite", bdd)
         self.assertNotIn("default hard rule", bdd)
 
+    def test_entrypoint_tracks_current_workflow_and_graft_monitoring(self) -> None:
+        document = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
+        self.assertIn("Codex / OMP + sbtd-task + Graft", document)
+        self.assertIn("| Graft | nanonets/graft | v0.18.0 | stable-only | 是 |", document)
+        self.assertIn("| 任务路由 | sbtd-task | bundled |", document)
+        self.assertIn("| 结构分析 | Graft | v0.18.0 |", document)
+        self.assertIn("## 3. sbtd-task 当前使用要点", document)
+        self.assertIn("## 4. Graft 当前使用要点", document)
+        self.assertNotIn("| Trellis | mindfold-ai/trellis |", document)
+        self.assertNotIn("| GitNexus | abhigyanpatwari/GitNexus |", document)
+        self.assertNotIn("## 3. Trellis 当前使用要点", document)
+        self.assertNotIn("## 4. GitNexus 当前使用要点", document)
+        self.assertIn("| `tdd` |", document)
+        self.assertIn("| `writing-great-skills` |", document)
+        self.assertIn("→ ponytail（首次实现编辑前选择最小正确实现）", document)
+        high_start = document.index("高风险后端逻辑 / 算法")
+        high_risk = document[
+            high_start : document.index("长任务切换", high_start)
+        ]
+        self.assertIn("→ tdd / codebase-design", high_risk)
+        self.assertIn("→ Codex implementation", high_risk)
+        self.assertNotIn("Trellis workflow", document)
+        self.assertNotRegex(document, r"GitNexus (?:debugging|exploring|impact-analysis)")
+
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
         alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"
         canonical = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
