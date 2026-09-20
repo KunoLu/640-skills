@@ -18,6 +18,7 @@
 - P1-06加入多项目／worktree隔离守卫：普通Codex／OMP接线在固定runtime验证和任何root-scoped probe前拒绝嵌套或相互包含的已选仓根；多个显式根分别构建图并以各自`cwd`／`--root`写入MCP binding，父目录和未选sibling不写入。linked worktree不同branch可分别接线；仍不支持父目录联邦。
 - P1-07在Bash安装器中完整转发Codex／OMP Graft接线、独立`--graft-hooks`、迁移deployment封存输入与显式developer参数；project-only继续保持不写HOME、用户级MCP或hooks，未知参数仍严格拒绝。
 - P1-08在PowerShell安装器中提供对等转发与恢复参数，覆盖`--yes`／help和迁移deployment／developer输入；严格参数绑定继续拒绝已退役Trellis选项，不把内部project-only模式写入公开Action。
+- P1-14新增仓库级 GitHub Actions `validation` 工作流：`actions/checkout` / `actions/setup-python` 按 commit SHA 固定并指定 Python `3.12.10`，PR 事件显式 checkout PR head SHA；Linux 运行全量 unittest/contract 与语法检查，macOS 运行 Bash installer／多项目／workflow contracts，Windows 运行 PowerShell installer／workflow contracts 并在 pwsh 可用时运行 `-k powershell` 真实安装器子集，三个 job 均断言 checkout 运行后干净。新增 `sbtd_backup_retention` 授权记录 helper：仅对删除范围外的既有私有准备记录或迁移报告读-改-写-回读，写入 custodian、候选归属、精确范围、本次独立授权和实际确认时间，逐项缺失、目标不存在、封闭 publication-decisions 任意加字段、写入失败或回读不一致均 blocked、零删除、不得 done；禁止新建处置文件，不注册处置 CLI，也不替代 P3-04 人工规程。CI 通过不代表真实 host、完整 Windows 原生或发布完成。
 
 ### 修复
 
@@ -56,6 +57,7 @@
 - 增加任务 schema 的模式来源、阻塞原因、完成时间、入阻塞、路径形状、版本类型和日期边界回归；区分历史元数据事件与新入阻塞，显式配置日期断言，避免把可选格式检查缺失当成通过。
 - 增加完整sbtd-task安装回归，核对references/schema/许可证及两旧目录在fresh安装中的缺席；保留存续公共文档合同、实际provider与Git marker检查，任务schema测试改读正式源。原生catalog smoke逐字验证已审查载荷到正式源及安装副本，不把安装层通过扩大为完整v2或host通过。
 - 项目ignore增加真实CLI＋Git红绿验证、根级普通文件／symlink保护、同名业务子目录不误伤及共享路径冲突来源检查；原有NUL解析、环境秘密、追加幂等和未验证状态边界继续保留。
+- P1-14增加 producer→verify→cleanup→recovery 集成回归：完整链恢复旧树且 cleanup/recovery 均保留原始备份；部分 cleanup 可从累计收据续作，缺 cleanup 证据的 recovery plan 为 blocked、零删除且不生成收据。新增 CI 工作流契约测试固定 clean SHA 验证命令。
 
 
 ## v1.0.15（2026-09-16）

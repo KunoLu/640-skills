@@ -409,6 +409,65 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("Trellis workflow", document)
         self.assertNotRegex(document, r"GitNexus (?:debugging|exploring|impact-analysis)")
 
+    def test_ci_workflow_reproduces_clean_sha_validation(self) -> None:
+        workflow = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / "validation.yml").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(
+            set(workflow["jobs"]),
+            {"linux-full", "macos-bash-installer", "windows-powershell-installer"},
+        )
+        expected_commands = {
+            "linux-full": "python -B -m unittest discover -s tests -p 'test_*.py'",
+            "macos-bash-installer": "tests.test_install_sh_agent_cli_flow.BashInstallerAgentCliFlowTests",
+            "windows-powershell-installer": "tests.test_install_sh_agent_cli_flow.PowerShellInstallerAgentCliFlowTests",
+        }
+        for name, job in workflow["jobs"].items():
+            with self.subTest(job=name):
+                uses = [step.get("uses", "") for step in job["steps"]]
+                self.assertIn(
+                    "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                    uses,
+                )
+                self.assertIn(
+                    "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+                    uses,
+                )
+                checkout = next(
+                    step
+                    for step in job["steps"]
+                    if step.get("uses", "").startswith("actions/checkout@")
+                )
+                self.assertEqual(
+                    checkout["with"]["ref"],
+                    "${{ github.event.pull_request.head.sha || github.sha }}",
+                )
+                setup = next(
+                    step
+                    for step in job["steps"]
+                    if step.get("uses", "").startswith("actions/setup-python@")
+                )
+                self.assertEqual(setup["with"]["python-version"], "3.12.10")
+                commands = "\n".join(step.get("run", "") for step in job["steps"])
+                self.assertIn(
+                    "python -m pip install -r sbtd-workflow-onboard/requirements.txt",
+                    commands,
+                )
+                self.assertIn(
+                    "python -m compileall -q sbtd-workflow-onboard/scripts tests",
+                    commands,
+                )
+                self.assertIn(expected_commands[name], commands)
+                if name == "windows-powershell-installer":
+                    self.assertIn(
+                        "python -B -m unittest -k powershell tests.test_install_sh_agent_cli_flow",
+                        commands,
+                    )
+                self.assertIn('test -z "$(git status --porcelain)"', commands)
+
     def test_repository_does_not_track_generated_agent_skill_aliases(self) -> None:
         alias = ROOT / ".claude" / "skills" / "sbtd-workflow-onboard"
         canonical = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
