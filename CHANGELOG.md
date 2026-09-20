@@ -15,6 +15,7 @@
 - P1-12公开`migration --phase plan|apply|verify`：只读计划绑定已批准的私有候选；确认apply完整保留原件、发布投影、暂停受管旧路由并保存不可变累计回执；verify只读消费实际资源和部署报告。新增闭集旧身份提取、完整平面目录摘要、来源／暂存区先验证后发布、按真实已观察共享结果保存部分失败及显式重试。旧任务数字无损校验，直接share逐字保留；标准旧生成树与现存Codex/OMP全局路由均入清单，混合共享配置不因可变旧hash匹配而被整文件删除。部署producer、cleanup和recovery不在本项注册，合成部署证据不代表真实host通过。
 - P1-04加入Codex项目接线与独立opt-in hooks：固定本地Node/Graft、按仓根MCP、模板后marker、保留foreign配置，不自动启用或信任host hooks；受管入口使用临时HOME并拒绝不安全自维护状态。迁移plan声明窄部署闭包，init/init-projects消费完整上下文并保存实际累计资源／原件／smoke证据，部分失败不丢弃此前写入；不新增migration阶段，也不提前提供cleanup/recovery。
 - P1-05加入 OMP 接线与闭集图分析：完整部署按 active profile／`PI_CODING_AGENT_DIR` 写入 user MCP JSON，读取的 OMP、Codex、Claude来源及provider gate以只读快照绑定；等价继承按完整连接字段匹配且不制造空配置，disabled、managed前缀冲突、server/extension denylist、动态或漂移拒绝。manifest显式封存 deployment mode/platform/inputs，迁移支持 `--deployment-platform codex|omp`；OMP不声明Codex hooks。受管 `analyze` 仅映射 ask/map/skeleton/callers/check/grep/blast 的固定安全参数，不允许任意native argv、workspace、deep、LLM命名或export。
+- P1-06加入多项目／worktree隔离守卫：普通Codex／OMP接线在固定runtime验证和任何root-scoped probe前拒绝嵌套或相互包含的已选仓根；多个显式根分别构建图并以各自`cwd`／`--root`写入MCP binding，父目录和未选sibling不写入。linked worktree不同branch可分别接线；仍不支持父目录联邦。
 
 ### 修复
 

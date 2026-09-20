@@ -160,6 +160,17 @@ def deployment_operations(
         _fail("scope-conflict", "project-only deployment cannot authorize global hooks")
     return private, shared
 
+def _validate_selected_root_batch(roots: Sequence[Path]) -> None:
+    """Reject nested selected roots before any runtime probe or deployment write."""
+    ordered = sorted(roots)
+    for index, root in enumerate(ordered):
+        for other in ordered[index + 1 :]:
+            if root.is_relative_to(other) or other.is_relative_to(root):
+                _fail(
+                    "scope-conflict",
+                    "selected Graft roots must not overlap or contain another selected root",
+                )
+
 
 def verified_runtime() -> dict[str, str]:
     """Resolve the existing verified installation; never install or upgrade."""
@@ -1465,6 +1476,7 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
             "reason": "OMP wiring does not include Codex hooks",
         }
     try:
+        _validate_selected_root_batch(roots)
         try:
             runtime = verified_runtime()
         except contracts.ContractError as error:
