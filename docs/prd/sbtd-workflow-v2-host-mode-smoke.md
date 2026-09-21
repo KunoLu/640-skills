@@ -57,7 +57,8 @@
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。
 - `SBTD_P115_HOST=1` Gate 约 200s：六格 smoke passed。报告 `…-2026_09_21-10_41_50`（exclude）。不是完整 Book/BDD，不是 AC-20。
-- `SBTD_P115_HOST=1` AC-24 跨会话/保存失败约 193s：**FAIL，不是 AC-24**。Codex 与 OMP 都是 `missing-lite-mode` / `missing-strict-session`（`observed=None`）。助手回复已有 `Current execution mode: **lite**` / `` `lite` ``，但当时只认 JSON。本轮只补助手散文解析单测，**不重跑 live**。
+- `SBTD_P115_HOST=1` AC-24 再跑约 172s：跨会话 restore **两 host passed**（散文 lite）。save-failure **FAIL**：Codex `observed=None` / `missing-strict-session`。不是 AC-24。
+
 
 
 
@@ -79,7 +80,8 @@
 | AC-20 | **measured-not-met**：Gate Codex 约 6.5–8.7 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON | `test_sbtd_task_routing` + live refuse |
 | AC-23 | **partial**：default/lite 有工具读且未开 `strict.md`；strict 有 `strict.md` 工具读。不是完整弱流程验收 | live Gate 200s |
-| AC-24 | **not-met**：live 未抽出 mode；两 host 都 failed。解析已改但未复跑 | live 193s；unit 覆盖 live 字符串 |
+| AC-24 | **not-met**：restore live 已过；save 仍缺会话 strict JSON/散文 | restore 172s；save Codex failed |
+
 
 
 
