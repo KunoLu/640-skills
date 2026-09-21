@@ -46,10 +46,11 @@
 
 ## 本轮实测
 
-- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 5 tests / 1 skip / OK。
-- `SBTD_P115_HOST=1` 六格全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`。
-- Codex JSON usage 约 3.9 万 input tokens／格，含大量 cache；OMP 无 usage 字段。
-- 这只证明隔离会话能读 MODE 并返回 JSON。不是 AC-20 达标，也不是完整 grill／strict Gate／跨会话恢复。
+- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 7 tests / 2 skip / OK。
+- `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
+- `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。`recommended` 取首词模式，`keep_option` 允许非空字符串。
+- Codex JSON usage 约 3.9 万 input tokens／格，含大量 cache；OMP 无 usage 字段。AC-20 仍为 measured-not-met，不是 2k 达标。
+- 这只证明隔离会话能读 MODE 回 JSON，以及推荐时暂停并保留当前模式。不是完整 grill／strict Gate／跨会话恢复。
 - `evidenceSource=developer-local`，`publication=local-only`。
 
 ## AC 缺口与本轮口径
