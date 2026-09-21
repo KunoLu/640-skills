@@ -758,7 +758,29 @@ class MigrationFileTests(unittest.TestCase):
     def test_windows_private_directory_acl_gateway(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            made = require_private_directory(root / "made", create=True)
+            try:
+                made = require_private_directory(root / "made", create=True)
+            except ContractError as error:
+                diagnostics = sbtd_migration_files._run_privacy_script(
+                    """
+$ErrorActionPreference = 'Stop'
+$acl = Get-Acl -LiteralPath $env:SBTD_PRIVATE_PATH
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+$rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+$trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
+[Console]::Out.Write((@{
+  ownerMatchesCurrent = ($owner -eq $me)
+  ownerIsAdministrators = ($owner -eq 'S-1-5-32-544')
+  protected = $acl.AreAccessRulesProtected
+  ruleCount = $rules.Count
+  foreignRules = @($rules | Where-Object { $trusted -notcontains $_.IdentityReference.Value }).Count
+  denyRules = @($rules | Where-Object { $_.AccessControlType.ToString() -ne 'Allow' }).Count
+} | ConvertTo-Json -Compress))
+""",
+                    root / "made",
+                )
+                self.fail(f"{error.code}; sanitized ACL evidence: {diagnostics}")
             self.assertTrue(made.is_dir())
             require_private_directory(made)
 
