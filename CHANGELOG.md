@@ -31,6 +31,8 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
+
 
 - 交付 P0-03 任务数据契约与声明式 schema，明确本地／共享任务的唯一事实源、active 引用、父子关系、状态历史及跨文件恢复边界；这是实施前协议资产，不代表 Onboard 已提供 v2 任务读写或迁移能力。
 - 准备 P0-04 `sbtd-task` 公共／lite 入口及 strict、状态、handoff 按需 references；候选使用非 discovery 文件名，正式入口与 catalog 在 P0-07 原子切换，不提前宣称已安装或激活。

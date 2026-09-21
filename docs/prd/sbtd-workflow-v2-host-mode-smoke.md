@@ -1,5 +1,8 @@
 # P1-15：Codex / OMP 三模式 smoke 与 token 计量
 
+操作说明：[Codex / OMP 三模式 host smoke 验证手册](../assets/codex-omp-host-mode-smoke.md)。
+
+
 ## 范围与边界
 
 - 基线 `main` merge `bf996395d3fa034b64ce624417c352288ee4ba8f`（PR #63）。分支 `p1-15-codex-omp-mode-smoke`。

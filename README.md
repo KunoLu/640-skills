@@ -222,6 +222,8 @@ pwsh -File .\install.ps1
 | `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
 | `docs/prd/knowledge-base-integration-prd.md` | P1 / P1.1 已实现能力与 P2 Evidence Store / PR Gate 实施方案。 |
 | `docs/assets/npx-skills-global-onboard-install.md` 等 5 份流程判定图 | Onboard 安装 / init / reset / init-projects 与 SBTD 工作路径 mermaid；从「安装及使用说明」和「工作流主线」跳转。 |
+| `docs/assets/codex-omp-host-mode-smoke.md` | Codex / OMP 三模式 host smoke 验证手册：opt-in live、skip≠绿、读事件 / 助手回复 / persist 口径；不进 CI，不把 usage 当 AC-20 达标。 |
+
 | `prompts/automations/sbtd-workflow-tools-version-check.md` | Orca `SBTD Workflow Tools Version Check` 的版本化 prompt 源；每次仓库代码改动后评估是否需要调整，只有执行 `sync` 时才与 live automation 比较并按需同步。 |
 | `sbtd-workflow-onboard/` | onboard Skill 目录；普通 `sync` 时会作为完整 Skill 同步到 `/Users/lusonglin/.agent/skills/sbtd-workflow-onboard/`。 |
 | `sbtd-workflow-onboard/catalog.json` / `catalog.schema.json` | Bundled Skill、external Skill 上游源与模板源路径目录，以及对应 Draft 2020-12 结构契约。 |
