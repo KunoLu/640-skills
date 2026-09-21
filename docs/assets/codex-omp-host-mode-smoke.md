@@ -107,7 +107,8 @@ flowchart TD
   both -->|否| classify{blocked / skip / failed?}
   classify -->|blocked/skip| noGreen[不当 AC 绿]
   classify -->|failed| reason[只看 reason 与助手回复]
-  reason --> trap{是否命令 stdout / 假 401 / 裸 path?}
+  reason --> trap{是否扫命令 aggregated_output / 假 401 / 非工具裸 path?}
+
   trap -->|是| noScan[禁止当证据, 补单测后再跑]
   trap -->|否| fixPrompt[改提示词或标记表]
   fixPrompt --> unit
@@ -145,14 +146,21 @@ RESTORE 必须要求说出 current execution mode。检测只认 `Current execut
 
 ### 1. 读事件
 
-只认工具 **kind / name**：
+分两层，不要写成「JSON 里的 `path` / `command` 一律不算」。
+
+**有没有读（`_has_tool_trace`）**  
+记录必须是工具 **kind / name**，才算有读：
 
 - kind：`command_execution`、`file_read`、`tool_call`、`function_call`、`mcp_tool_call`、`tool`、`tool_use`
 - name：`read`、`bash`、`grep`、`glob`
 
-JSON 里随便一个 `path` / `command` 字段 **不算**读过。否则 OMP 会假绿。
+非工具记录上的裸 `path` / `command` **不算**有读。否则 OMP 会假绿。
 
 无 tool-trace → `blocked` / `no-read-trace`，**不是** default/lite 的 AC-23 通过。
+
+**有没有打开 `strict.md`（`_strict_ref_loaded`）**  
+先确认该记录是工具 item，再在它的 `command` / `path` / `file` / `arguments` / `input` 里找 `references/strict.md`。工具上的 path **要算**。
+
 
 ### 2. 登录失败
 
