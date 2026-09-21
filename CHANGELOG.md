@@ -25,6 +25,7 @@
 
 - 将完整 findings 台账归档为 `docs/archive/sbtd-workflow-v2-findings.md` 的问题／状态表和完整字段表：保留 199 项问题、22 条策略与审查记录、全部原级别与历史；用户确认的 16 项闭环后为 195 fixed、4 dismissed，移除旧 `findings.log` 并更新文档入口。
 - 补充 Linux 大小写敏感路径与原生 Windows 私有目录 ACL 的明确 CI 步骤，保留 Windows junction 拒绝测试；平台条件 skip 不作为该平台验证通过。
+- 原生 Windows ACL 补测发现新建私有目录仍可能保留显式非受信规则；改为仅对本次创建的目录构造干净 DACL、设置当前 owner。已有目录仍只校验、不自动修改权限；测试覆盖权限变宽后的拒绝与内容保全。
 - 修复延期项中的遥测并发覆盖风险：不存在时原子创建，已关闭配置只读；需要修改的已有配置明确阻断，保留所有未知字段，不以本进程锁冒充跨进程CAS。
 - 迁移未完成workspace/session上下文要求绑定已批准的私有handoff；复用既有摘要格式、保护规则及复制／恢复链，不自动选任务或生成批准。辅助报告补类型化内容及来源校验，仍不能替代真实API smoke。
 - 补齐迁移 Markdown 链接/图片的 Windows 盘符相对路径拒绝：`C:secret.md` 不再被误当外部 scheme 放行，含编码形式同样校验；保留既有协议安全策略和退出码分类，不混入 HTTPS-only 或禁止全部 data URI 的策略变更。

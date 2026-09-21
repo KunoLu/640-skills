@@ -758,29 +758,7 @@ class MigrationFileTests(unittest.TestCase):
     def test_windows_private_directory_acl_gateway(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            try:
-                made = require_private_directory(root / "made", create=True)
-            except ContractError as error:
-                diagnostics = sbtd_migration_files._run_privacy_script(
-                    """
-$ErrorActionPreference = 'Stop'
-$acl = Get-Acl -LiteralPath $env:SBTD_PRIVATE_PATH
-$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
-$rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
-$trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
-[Console]::Out.Write((@{
-  ownerMatchesCurrent = ($owner -eq $me)
-  ownerIsAdministrators = ($owner -eq 'S-1-5-32-544')
-  protected = $acl.AreAccessRulesProtected
-  ruleCount = $rules.Count
-  foreignRules = @($rules | Where-Object { $trusted -notcontains $_.IdentityReference.Value }).Count
-  denyRules = @($rules | Where-Object { $_.AccessControlType.ToString() -ne 'Allow' }).Count
-} | ConvertTo-Json -Compress))
-""",
-                    root / "made",
-                )
-                self.fail(f"{error.code}; sanitized ACL evidence: {diagnostics}")
+            made = require_private_directory(root / "made", create=True)
             self.assertTrue(made.is_dir())
             require_private_directory(made)
 
@@ -790,6 +768,27 @@ $trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
             saved = backup_reference(reference, made / "backup.txt", private_root=made)
             self.assertEqual((made / "backup.txt").read_bytes(), b"private")
             self.assertEqual(saved["state"], snapshot(made / "backup.txt"))
+
+            # Existing scopes are inspection-only, even when create=True.
+            widened = sbtd_migration_files._run_privacy_script(
+                """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = Get-Acl -LiteralPath $path
+$everyone = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0')
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+$acl.AddAccessRule($rule)
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+""",
+                made,
+            )
+            self.assertEqual(widened, "ok")
+            with self.assertRaises(ContractError) as rejected:
+                require_private_directory(made, create=True)
+            self.assertEqual(rejected.exception.code, "privacy-unproven")
+            self.assertFalse(sbtd_migration_files._windows_acl_proven(made))
+            self.assertEqual((made / "backup.txt").read_bytes(), b"private")
 
 
 if __name__ == "__main__":

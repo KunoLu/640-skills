@@ -8,6 +8,10 @@
 - 本轮修复的验证为 developer-local / dirty / local-only。归档不代表 PR 已合并、跨平台 CI 已通过或 SBTD v2 已发布。
 - 更新前 JSONL SHA-256：`10910a3cdf44b9490d552421c27f58a747294a2d2415bfedae1ae06554219d85`。
 
+## 补充 CI 的后续修正
+
+PR #68 的原生 Windows ACL 步骤在 `563abb9` 失败；`9846200` 的脱敏诊断证明 owner 已为当前用户、继承已关闭，但仍有 1 条非受信主体规则。后续修复仅对本次创建的目录使用干净 `DirectorySecurity` 并设置当前 owner；预先存在的目录继续只读拒绝，回归同时覆盖私有备份和权限变宽后不修写。原生复验结论以 PR 精确 head 的 CI 为准，不将 macOS 的 skip 当作 Windows 通过；本段不改写下方原始 199 项和 22 条历史记录。
+
 ## 问题与当前状态
 
 | 序号 | ID | 任务 | 原级别 | 当前状态 | 问题 | 完整记录 |

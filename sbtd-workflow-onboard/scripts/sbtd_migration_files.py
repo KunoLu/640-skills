@@ -355,9 +355,10 @@ foreach ($ace in $acl.Access) {
 _PRIVACY_CREATE_SCRIPT = """
 $ErrorActionPreference = 'Stop'
 $path = $env:SBTD_PRIVATE_PATH
-$acl = Get-Acl -LiteralPath $path
+$acl = New-Object System.Security.AccessControl.DirectorySecurity
 $acl.SetAccessRuleProtection($true, $false)
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$acl.SetOwner($me)
 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
 $acl.SetAccessRule($rule)
 Set-Acl -LiteralPath $path -AclObject $acl

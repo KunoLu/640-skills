@@ -590,6 +590,7 @@
 - 问题：历史“未使用”依赖后来已有生产消费者；read/compare/replace 无法保护不遵守本地锁的外部 writer；PowerShell 函数内的 `$PSBoundParameters` 不包含脚本入口的绑定。
 - 修复：按当前调用方保留 tomlkit、仅删真正不可达迁移分支；经用户确认，对已有可变遥测配置拒绝覆盖，缺失文件采用 no-clobber 创建；从实际 switch 值转发确认，真实解释器验证 true／false。
 - 预防：历史 finding 是调查线索，不是删除授权证明。运行报告使用显式隔离解释器及声明依赖；新增测试先证明失败原因来自目标行为，不能把错误入口、遗漏 import、缺依赖或残留空目录造成的失败当作红测。
+- Windows 原生补测：关闭 ACL 继承并替换当前用户规则，并不保证已清除新目录中的显式非受信规则。安全诊断只输出 owner 是否匹配、继承开关与规则类别计数，不输出账号／SID；仅对本次创建的目录构造干净 DACL，已有目录只校验不修写。macOS 上跳过的 Windows ACL 用例必须在 Windows runner 实际执行。
 
   <!-- lessons:640:end -->
 
