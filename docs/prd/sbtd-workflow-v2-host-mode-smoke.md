@@ -35,7 +35,8 @@
 - OMP：`--print --no-session --no-extensions --tools read`。`--no-extensions` 只关 extension 发现，**不**关 Skill（`--no-skills` 才关）。保存失败格改 `--tools read,write`。
 - Mode JSON / refuse 提示不含 default/lite/strict。Gate / 跨会话提示同样不点名模式，也不点名 `book_gate_plan` / `loaded_strict_ref`。
 - Gate 格用根目录 `MODE`，**不**写 `task.md`。跨会话 / 保存失败格**不**写 `MODE`：default → `.sbtd/tasks/<id>/task.md`，lite/strict → `ai/tasks/<id>/task.md`，外加 `.sbtd/active-task.json`；过期 handoff 单独放 `docs/handoffs/`。
-- Gate：Codex 只解析 JSONL `agent_message` 与读文件 path/command。OMP `--print` 无 JSONL 时把 stdout 当回复。bundled `sbtd-task` `copytree` 到隔离 `CODEX_HOME/skills/`、`AGENT_SKILLS_DIR`、`PI_CODING_AGENT_DIR/skills/`；OMP Gate 加 `--skills sbtd-task`。AC-14/23 要两个 host 共 6 格 passed。
+- Gate：Codex 只解析 JSONL 读事件与 `agent_message`。无 tool-trace（OMP 纯 `--print`）记 `no-read-trace` blocked，**不算** default/lite AC-23 通过。OMP Gate/跨会话加 `--mode json` 尝试给出读路径。AC-14/23 要两个 host 共 6 格 passed。
+
 
 - 只断言临时项目树；不 rglob 真实 `~/.codex`。缺登录或 CLI 记 `blocked`；两 host 未齐或跨会话未观察到 `lite` 则 skip，不当对应 AC 绿。
 
@@ -63,11 +64,11 @@
 | AC | 口径 | 证据 |
 |---|---|---|
 | AC-04 | **partial**：六格隔离会话能读 MODE 并返回 JSON。不是完整澄清／实现验证／strict Gate | live matrix；`SBTD_P115_HOST=1` |
-| AC-14 | **harness-ready**：两 host×三模式才算。OMP Gate 不再因 `--no-extensions` 直接 blocked。live 未跑满格 | `test_live_host_gate_layering` |
+| AC-14 | **harness-ready**：两 host×三模式才算。无读事件不得把 OMP 沉默当绿。live 未跑满格 | `test_live_host_gate_layering` |
 | AC-19 | **inherited**：仓库 CI 可复现归 P1-14。本项 opt-in host 不进 CI | 无 host unittest |
 | AC-20 | **measured-not-met**：Codex 约 3.9 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON（current≠recommended、paused、keep_option） | `test_sbtd_task_routing` + live refuse |
-| AC-23 | **harness-ready**：default/lite 不得加载 `strict.md` 或在回复出 Gate 表；live 未跑满格 | `test_live_host_gate_layering` |
+| AC-23 | **harness-ready**：default/lite 须有 tool-trace 且未打开 `strict.md`、回复无 Gate 表。空 print 不是通过 | `test_live_host_gate_layering` |
 | AC-24 | **harness-ready**：跨会话必须观察到 mode=lite，stale handoff 的 strict 为失败；保存失败磁盘仍 default 且会话仍 strict。live 未跑满格 | `test_live_host_cross_session` / `test_live_host_save_failure` |
 
 

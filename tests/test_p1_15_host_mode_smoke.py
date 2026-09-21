@@ -350,6 +350,23 @@ def _strict_ref_loaded(text: str) -> bool:
                     return True
     return False
 
+def _has_tool_trace(text: str) -> bool:
+    for record in _jsonl_records(text):
+        item = _record_item(record) or record
+        kind = str(item.get("type") or "")
+        if kind in {
+            "command_execution",
+            "file_read",
+            "tool_call",
+            "function_call",
+            "mcp_tool_call",
+        }:
+            return True
+        if isinstance(item.get("command"), str) or isinstance(item.get("path"), str):
+            return True
+    return False
+
+
 
 def _emits_gate_table(text: str) -> bool:
     reply = _assistant_replies(text)
@@ -358,8 +375,9 @@ def _emits_gate_table(text: str) -> bool:
     elif _jsonl_records(text):
         return False
     else:
-        haystack = text
+        haystack = _reply_for_mode(text)
     return "| Gate |" in haystack and "book-refactoring-pass" in haystack
+
 
 
 
@@ -512,6 +530,22 @@ class HostModeSmokeTests(unittest.TestCase):
                 )
             )
         )
+        self.assertFalse(_has_tool_trace("Follow the light checklist only.\n"))
+        self.assertFalse(_strict_ref_loaded("Follow the light checklist only.\n"))
+        self.assertTrue(
+            _has_tool_trace(
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "cat AGENTS.md",
+                        },
+                    }
+                )
+            )
+        )
+
         self.assertTrue(
             _strict_ref_loaded(
                 json.dumps(
@@ -911,6 +945,10 @@ class HostModeSmokeTests(unittest.TestCase):
                 payload["status"] = "failed"
                 payload["reason"] = "nonzero-exit"
                 return payload
+            if not _has_tool_trace(text):
+                payload["status"] = "blocked"
+                payload["reason"] = "no-read-trace"
+                return payload
             if mode in ("default", "lite") and (loaded or table):
                 payload["status"] = "failed"
                 payload["reason"] = "unexpected-strict-gate"
@@ -921,6 +959,7 @@ class HostModeSmokeTests(unittest.TestCase):
                 return payload
             payload["status"] = "passed"
             return payload
+
         finally:
             temporary.cleanup()
 
@@ -1075,6 +1114,7 @@ class HostModeSmokeTests(unittest.TestCase):
         plant_skill: bool = False,
         writable: bool = False,
     ) -> subprocess.CompletedProcess[str]:
+
         env = os.environ.copy()
         home = isolation / "home"
         home.mkdir()
@@ -1110,7 +1150,8 @@ class HostModeSmokeTests(unittest.TestCase):
                 "--no-extensions",
             ]
             if plant_skill:
-                command.extend(["--skills", "sbtd-task"])
+                command.extend(["--mode", "json", "--skills", "sbtd-task"])
+
             command.extend(
                 ["--tools", "read,write"] if writable else ["--tools", "read"]
             )
