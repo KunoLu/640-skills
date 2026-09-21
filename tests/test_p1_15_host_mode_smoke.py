@@ -379,6 +379,13 @@ def _save_failed_signal(text: str) -> bool:
     )
 
 
+def _both_hosts_passed(results: list[dict[str, object]], *, cells: int) -> bool:
+    passed = [item for item in results if item.get("status") == "passed"]
+    hosts = {item.get("host") for item in passed}
+    return len(passed) == cells and hosts == set(HOSTS)
+
+
+
 
 
 class HostModeSmokeTests(unittest.TestCase):
@@ -532,6 +539,21 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertTrue(_save_failed_signal('{"mode":"strict"} 未持久化'))
         self.assertFalse(_save_failed_signal('{"mode":"default","persisted":true}'))
 
+    def test_gate_ac_requires_both_hosts(self) -> None:
+        codex_only = [
+            {"host": "codex", "mode": mode, "status": "passed"} for mode in MODES
+        ] + [
+            {"host": "omp", "mode": mode, "status": "blocked"} for mode in MODES
+        ]
+        self.assertFalse(_both_hosts_passed(codex_only, cells=6))
+        both = [
+            {"host": host, "mode": mode, "status": "passed"}
+            for host in HOSTS
+            for mode in MODES
+        ]
+        self.assertTrue(_both_hosts_passed(both, cells=6))
+
+
 
     def test_save_fixture_rejects_replace_without_host(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sbtd-p115-save-") as name:
@@ -625,13 +647,12 @@ class HostModeSmokeTests(unittest.TestCase):
                 results.append(self._run_host_gate(host, binary, mode))
         failed = [item for item in results if item["status"] == "failed"]
         self.assertFalse(failed, failed)
-        passed = [
-            item
-            for item in results
-            if item["host"] == "codex" and item["status"] == "passed"
-        ]
-        if len(passed) != 3:
-            self.skipTest(f"host Gate layering is not AC-14/23 pass: {results!r}")
+        if not _both_hosts_passed(results, cells=6):
+            self.skipTest(
+                "host Gate needs 6 host×mode passed; "
+                f"Codex-only is not AC-14/23: {results!r}"
+            )
+
 
         _write_host_report(results)
 
@@ -654,9 +675,9 @@ class HostModeSmokeTests(unittest.TestCase):
             results.append(self._run_host_restore(host, binary))
         failed = [item for item in results if item["status"] == "failed"]
         self.assertFalse(failed, failed)
-        passed = [item for item in results if item["status"] == "passed"]
-        if len(passed) != 2:
+        if not _both_hosts_passed(results, cells=2):
             self.skipTest(f"host restore is not AC-24 pass: {results!r}")
+
         _write_host_report(results)
 
     def test_live_host_save_failure(self) -> None:
@@ -678,9 +699,9 @@ class HostModeSmokeTests(unittest.TestCase):
             results.append(self._run_host_save(host, binary))
         failed = [item for item in results if item["status"] == "failed"]
         self.assertFalse(failed, failed)
-        passed = [item for item in results if item["status"] == "passed"]
-        if len(passed) != 2:
+        if not _both_hosts_passed(results, cells=2):
             self.skipTest(f"host save-failure is not AC-24 pass: {results!r}")
+
         _write_host_report(results)
 
 

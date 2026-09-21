@@ -35,8 +35,9 @@
 - OMP：`--print --no-session --no-extensions --tools read`，避免 `always-ask` 挂起。保存失败格改 `--tools read,write`。
 - Mode JSON / refuse 提示不含 default/lite/strict。Gate / 跨会话提示同样不点名模式，也不点名 `book_gate_plan` / `loaded_strict_ref`。
 - Gate 格用根目录 `MODE`，**不**写 `task.md`。跨会话 / 保存失败格**不**写 `MODE`：default → `.sbtd/tasks/<id>/task.md`，lite/strict → `ai/tasks/<id>/task.md`，外加 `.sbtd/active-task.json`；过期 handoff 单独放 `docs/handoffs/`。
-- Gate 只解析 Codex JSONL：`agent_message` 是否自发 `| Gate |` 表；读文件事件的 path/command 是否打开 `references/strict.md`。不在整段 stdout 或 tool 读出的 AGENTS 正文上搜这些词。bundled `sbtd-task` 用 `copytree` 种进隔离 `CODEX_HOME/skills/`。OMP `--no-extensions` 不加载 Skill，Gate 格记 `blocked`。
-- 只断言临时项目树；不 rglob 真实 `~/.codex`。缺登录或 CLI 记 `blocked`；Codex Gate 未满 3 格或跨会话未观察到 `lite` 则 skip，不当对应 AC 绿。
+- Gate 只解析 Codex JSONL：`agent_message` 是否自发 `| Gate |` 表；读文件事件的 path/command 是否打开 `references/strict.md`。不在整段 stdout 或 tool 读出的 AGENTS 正文上搜这些词。bundled `sbtd-task` 用 `copytree` 种进隔离 `CODEX_HOME/skills/`。OMP `--no-extensions` 不加载 Skill，Gate 格记 `blocked`。AC-14/23 要两个 host 共 6 格 passed；Codex 三格 passed 不算绿，整项 skip。
+- 只断言临时项目树；不 rglob 真实 `~/.codex`。缺登录或 CLI 记 `blocked`；两 host 未齐或跨会话未观察到 `lite` 则 skip，不当对应 AC 绿。
+
 
 
 
@@ -48,7 +49,7 @@
 
 ## 本轮实测
 
-- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 16 tests / 5 skip / OK。
+- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 17 tests / 5 skip / OK。
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。`recommended` 取首词模式，`keep_option` 允许非空字符串。
 - Gate / 跨会话 / 保存失败 live 格已入库，仍须 `SBTD_P115_HOST=1`；本轮无 host 下 5 skip，不当 AC-14/23/24 host 绿。
@@ -61,7 +62,7 @@
 | AC | 口径 | 证据 |
 |---|---|---|
 | AC-04 | **partial**：六格隔离会话能读 MODE 并返回 JSON。不是完整澄清／实现验证／strict Gate | live matrix；`SBTD_P115_HOST=1` |
-| AC-14 | **harness-ready**：Codex JSONL 读 `strict.md` 或 assistant 自发 Gate 表。OMP Gate blocked。live 未跑满格 | `test_live_host_gate_layering` |
+| AC-14 | **harness-ready**：两 host×三模式才算。OMP Gate 因 `--no-extensions` blocked，故整项 skip，不以 Codex 三格冒充 | `test_live_host_gate_layering` |
 | AC-19 | **inherited**：仓库 CI 可复现归 P1-14。本项 opt-in host 不进 CI | 无 host unittest |
 | AC-20 | **measured-not-met**：Codex 约 3.9 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON（current≠recommended、paused、keep_option） | `test_sbtd_task_routing` + live refuse |
