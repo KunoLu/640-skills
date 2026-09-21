@@ -253,9 +253,15 @@ def _write_stale_handoff(project: Path, task_id: str) -> str:
 
 
 def _plant_task_skill(home: Path) -> None:
-    target = home / ".codex" / "skills" / "sbtd-task"
-    if not target.exists():
-        shutil.copytree(TASK_SKILL_DIR, target)
+    for relative in (
+        Path(".codex/skills/sbtd-task"),
+        Path(".agent/skills/sbtd-task"),
+        Path(".omp/agent/skills/sbtd-task"),
+    ):
+        target = home / relative
+        if not target.exists():
+            shutil.copytree(TASK_SKILL_DIR, target)
+
 
 
 def _init_git(project: Path) -> None:
@@ -347,7 +353,14 @@ def _strict_ref_loaded(text: str) -> bool:
 
 def _emits_gate_table(text: str) -> bool:
     reply = _assistant_replies(text)
-    return "| Gate |" in reply and "book-refactoring-pass" in reply
+    if reply:
+        haystack = reply
+    elif _jsonl_records(text):
+        return False
+    else:
+        haystack = text
+    return "| Gate |" in haystack and "book-refactoring-pass" in haystack
+
 
 
 def _observed_mode(text: str) -> str | None:
@@ -514,6 +527,25 @@ class HostModeSmokeTests(unittest.TestCase):
             )
         )
         self.assertFalse(_strict_ref_loaded("Load [strict gates](references/strict.md)"))
+        self.assertTrue(
+            _emits_gate_table("| Skill | Gate |\n| book-refactoring-pass | required |\n")
+        )
+
+    def test_plant_copies_real_sbtd_task_tree(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sbtd-p115-plant-") as name:
+            home = Path(name)
+            _plant_task_skill(home)
+            for relative in (
+                ".codex/skills/sbtd-task/references/strict.md",
+                ".agent/skills/sbtd-task/references/strict.md",
+                ".omp/agent/skills/sbtd-task/references/strict.md",
+            ):
+                self.assertTrue((home / relative).is_file(), relative)
+            self.assertEqual(
+                (home / ".codex/skills/sbtd-task/SKILL.md").read_bytes(),
+                TASK_SKILL.read_bytes(),
+            )
+
 
     def test_restore_and_save_need_observed_mode(self) -> None:
         listed = "ai/tasks/p115-restore/task.md\ndocs/handoffs/stale.md\n"
@@ -840,13 +872,6 @@ class HostModeSmokeTests(unittest.TestCase):
             temporary.cleanup()
 
     def _run_host_gate(self, host: str, binary: str, mode: str) -> dict[str, object]:
-        if host == "omp":
-            return {
-                "host": host,
-                "mode": mode,
-                "status": "blocked",
-                "reason": "omp-no-extensions",
-            }
         temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-gate-{host}-{mode}-")
         try:
             root = Path(temporary.name)
@@ -1084,6 +1109,8 @@ class HostModeSmokeTests(unittest.TestCase):
                 str(project),
                 "--no-extensions",
             ]
+            if plant_skill:
+                command.extend(["--skills", "sbtd-task"])
             command.extend(
                 ["--tools", "read,write"] if writable else ["--tools", "read"]
             )
