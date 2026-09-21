@@ -31,12 +31,13 @@
 
 - 隔离 `HOME` / `USERPROFILE`；Graft 走 `HOME/.codex`，与 `CODEX_HOME` 同指临时目录。只复制 `auth.json`。
 - OMP 的 `PI_CODING_AGENT_DIR` 也在该临时 HOME 下，不设持久 `--profile`。
-- Codex：`exec --ephemeral --sandbox read-only --skip-git-repo-check --json`。
-- OMP：`--print --no-session --no-extensions --tools read`，避免 `always-ask` 挂起。
-- 提示只要求读 `AGENTS.md` 与 `MODE` 并返回 JSON；提示正文不含 default/lite/strict。
-- 从输出解析 JSON `mode`，不得用提示回声或裸子串匹配冒充读到了模式。
-- 只断言临时项目树（`.git` / `AGENTS.md` / `MODE`）；不 rglob 真实 `~/.codex`。
-- 缺登录或 CLI 记 `blocked`；live 矩阵未满 6 个 passed 则 skip，不当 AC-04 绿。
+- Codex：`exec --ephemeral --sandbox read-only --skip-git-repo-check --json`。保存失败格改 `workspace-write`。
+- OMP：`--print --no-session --no-extensions --tools read`，避免 `always-ask` 挂起。保存失败格改 `--tools read,write`。
+- Mode JSON / refuse 提示不含 default/lite/strict。Gate / 跨会话提示同样不点名模式，也不点名 `book_gate_plan` / `loaded_strict_ref`。
+- Gate 格用根目录 `MODE`，**不**写 `task.md`。跨会话 / 保存失败格**不**写 `MODE`：default → `.sbtd/tasks/<id>/task.md`，lite/strict → `ai/tasks/<id>/task.md`，外加 `.sbtd/active-task.json`；过期 handoff 单独放 `docs/handoffs/`。
+- Gate 观察自发 `| Gate |` 表或 JSONL 是否读取 `sbtd-task/references/strict.md`。bundled `sbtd-task` 只种进隔离 HOME 的 Codex/OMP/agent Skill 根。
+- 只断言临时项目树；不 rglob 真实 `~/.codex`。缺登录或 CLI 记 `blocked`；live 未满格则 skip，不当对应 AC 绿。
+
 
 ## Token 计量
 
@@ -46,11 +47,11 @@
 
 ## 本轮实测
 
-- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 7 tests / 2 skip / OK。
+- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 15 tests / 5 skip / OK。
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。`recommended` 取首词模式，`keep_option` 允许非空字符串。
+- Gate / 跨会话 / 保存失败 live 格已入库，仍须 `SBTD_P115_HOST=1`；本轮无 host 下 5 skip，不当 AC-14/23/24 host 绿。
 - Codex JSON usage 约 3.9 万 input tokens／格，含大量 cache；OMP 无 usage 字段。AC-20 仍为 measured-not-met，不是 2k 达标。
-- 这只证明隔离会话能读 MODE 回 JSON，以及推荐时暂停并保留当前模式。不是完整 grill／strict Gate／跨会话恢复。
 - `evidenceSource=developer-local`，`publication=local-only`。
 
 ## AC 缺口与本轮口径
@@ -58,12 +59,13 @@
 | AC | 口径 | 证据 |
 |---|---|---|
 | AC-04 | **partial**：六格隔离会话能读 MODE 并返回 JSON。不是完整澄清／实现验证／strict Gate | live matrix；`SBTD_P115_HOST=1` |
-| AC-14 | **machine-only**：模式分层仍由 bundled 规则与 P1-09 测试覆盖。host 未跑 Book/BDD | 不把 JSON smoke 当成 Gate 执行 |
+| AC-14 | **harness-ready**：host Gate 观察 `| Gate |` 表或 `strict.md` 读取。live 未跑满格 | `test_live_host_gate_layering` |
 | AC-19 | **inherited**：仓库 CI 可复现归 P1-14。本项 opt-in host 不进 CI | 无 host unittest |
 | AC-20 | **measured-not-met**：Codex 约 3.9 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON（current≠recommended、paused、keep_option） | `test_sbtd_task_routing` + live refuse |
-| AC-23 | **not-met for host**：未证明 default/lite 少加载 Gate | 如实记录 |
-| AC-24 | **machine-only**：保存失败不冒充恢复由 TaskRouter 测试覆盖 | 无 host 跨会话 |
+| AC-23 | **harness-ready**：default/lite 不得加载 `strict.md` 或输出 Gate 表；live 未跑满格 | `test_live_host_gate_layering` |
+| AC-24 | **harness-ready**：跨会话读 `task.md` 不跟手 stale handoff；保存失败先 workspace-write 再锁文件。live 未跑满格 | `test_live_host_cross_session` / `test_live_host_save_failure` |
+
 
 ## 报告
 

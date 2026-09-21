@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GLOBAL_AGENTS = ROOT / "sbtd-workflow-onboard/templates/agents/AGENTS.global.md"
 PROJECT_AGENTS = ROOT / "sbtd-workflow-onboard/templates/agents/AGENTS.project.md"
 TASK_SKILL = ROOT / "sbtd-workflow-onboard/templates/skills/sbtd-task/SKILL.md"
-STRICT_REF = ROOT / "sbtd-workflow-onboard/templates/skills/sbtd-task/references/strict.md"
+TASK_SKILL_DIR = TASK_SKILL.parent
+STRICT_REF = TASK_SKILL_DIR / "references/strict.md"
 HOST_OPT_IN = "SBTD_P115_HOST"
 MODES = ("default", "lite", "strict")
 HOSTS = ("codex", "omp")
@@ -29,6 +30,19 @@ REFUSE_PROMPT = (
     "You believe a stronger process would fit. Follow AGENTS.md. "
     "Reply with one JSON object whose keys are current, recommended, "
     "paused, and keep_option. Do not create or edit files."
+)
+GATE_PROMPT = (
+    "Read AGENTS.md. A small existing-file bug fix is in scope. "
+    "Follow the current execution mode. Do not create or edit files. "
+    "Reply with what this mode requires before you would start editing."
+)
+RESTORE_PROMPT = (
+    "Continue this task. Do not create or edit files. "
+    "State the current execution mode and whether a handoff file was used."
+)
+SAVE_PROMPT = (
+    "The user confirmed switching this task to strict. "
+    "Persist that choice. Do not otherwise edit the project."
 )
 _JSON_OBJECT = re.compile(r"\{[^{}]*\}")
 _AUTH_MARKERS = (
@@ -172,6 +186,131 @@ def _auth_blocked(stdout: str, stderr: str, returncode: int) -> bool:
     return returncode != 0 and "login" in haystack
 
 
+def _task_relative(mode: str, task_id: str) -> str:
+    root = ".sbtd/tasks" if mode == "default" else "ai/tasks"
+    return f"{root}/{task_id}/task.md"
+
+
+def _task_markdown(task_id: str, mode: str) -> str:
+    return (
+        "---\n"
+        "schema_version: 1\n"
+        f"id: {task_id}\n"
+        f"workflow_mode: {mode}\n"
+        "mode_source: user\n"
+        "mode_note: recorded explicitly\n"
+        "status: in-progress\n"
+        "branch: main\n"
+        "created_at: 2026-09-18T10:00:00Z\n"
+        "updated_at: 2026-09-18T10:00:00Z\n"
+        "completed_at: null\n"
+        "---\n\n# Task body\n\nContinue the recorded task.\n"
+    )
+
+
+def _write_task_bundle(project: Path, task_id: str, mode: str) -> str:
+    relative = _task_relative(mode, task_id)
+    path = project / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_task_markdown(task_id, mode), encoding="utf-8")
+    pointer = project / ".sbtd" / "active-task.json"
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text(
+        json.dumps(
+            {"schema_version": 1, "task_id": task_id, "task_path": relative},
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (project / ".gitignore").write_text("/.sbtd/\n/docs/handoffs/\n", encoding="utf-8")
+    return relative
+
+
+def _write_stale_handoff(project: Path, task_id: str) -> str:
+    relative = f"docs/handoffs/2026-01-01-{task_id}.md"
+    path = project / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        f"task_id: {task_id}\n"
+        "workflow_mode: strict\n"
+        "branch: main\n"
+        "---\n\nStale snapshot. Not the mode source.\n",
+        encoding="utf-8",
+    )
+    return relative
+
+
+def _plant_task_skill(home: Path) -> None:
+    for relative in (
+        Path(".codex/skills/sbtd-task"),
+        Path(".agent/skills/sbtd-task"),
+        Path(".omp/agent/skills/sbtd-task"),
+    ):
+        target = home / relative
+        if not target.exists():
+            shutil.copytree(TASK_SKILL_DIR, target)
+
+
+def _init_git(project: Path) -> None:
+    subprocess.run(
+        ["git", "init", "-b", "main", str(project)],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _write_agents(project: Path, mode: str | None) -> None:
+    prefix = f"当前任务执行模式: {mode}\n\n" if mode else ""
+    (project / "AGENTS.md").write_text(
+        prefix
+        + GLOBAL_AGENTS.read_text(encoding="utf-8")
+        + "\n\n"
+        + PROJECT_AGENTS.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+
+def _unexpected_writes(project: Path, allowed: set[str]) -> list[str]:
+    extra = []
+    for path in project.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(project).as_posix()
+        if relative.startswith(".git/") or relative in allowed:
+            continue
+        extra.append(relative)
+    return extra
+
+
+def _strict_ref_loaded(text: str) -> bool:
+    return "sbtd-task/references/strict.md" in text.replace("\\", "/")
+
+
+def _emits_gate_table(text: str) -> bool:
+    return "| Gate |" in text and "book-refactoring-pass" in text
+
+
+def _save_failed_signal(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "not persisted",
+            "unpersisted",
+            "could not save",
+            "cannot save",
+            "permission denied",
+            "read-only",
+            "未持久化",
+            "无法保存",
+            "保存失败",
+        )
+    )
+
+
+
 class HostModeSmokeTests(unittest.TestCase):
     def test_entry_file_sizes_are_observations_not_token_claims(self) -> None:
         public_core = (GLOBAL_AGENTS, TASK_SKILL)
@@ -197,10 +336,11 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertGreater(core_words, 0)
 
     def test_host_prompt_does_not_name_a_mode(self) -> None:
-        for prompt in (HOST_PROMPT, REFUSE_PROMPT):
+        for prompt in (HOST_PROMPT, REFUSE_PROMPT, GATE_PROMPT, RESTORE_PROMPT):
             lowered = prompt.lower()
             for mode in MODES:
                 self.assertNotIn(mode, lowered, prompt)
+
 
     def test_extract_mode_report_from_json_and_jsonl(self) -> None:
         self.assertEqual(
@@ -222,6 +362,64 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertEqual(_leading_mode(report["recommended"]), "strict")
         self.assertTrue(report["paused"])
         self.assertTrue(_keep_option_present(report["keep_option"]))
+
+    def test_gate_and_restore_prompts_do_not_name_observables(self) -> None:
+        blob = f"{GATE_PROMPT}\n{RESTORE_PROMPT}".lower()
+        for token in ("book_gate_plan", "loaded_strict_ref", "strict.md"):
+            self.assertNotIn(token, blob)
+        self.assertIn("strict", SAVE_PROMPT)
+
+    def test_task_paths_follow_state_reference(self) -> None:
+        self.assertEqual(
+            _task_relative("default", "p115-save"), ".sbtd/tasks/p115-save/task.md"
+        )
+        self.assertEqual(
+            _task_relative("lite", "p115-restore"), "ai/tasks/p115-restore/task.md"
+        )
+        self.assertEqual(_task_relative("strict", "x"), "ai/tasks/x/task.md")
+
+    def test_restore_fixture_has_task_not_mode_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sbtd-p115-fixture-") as name:
+            project = Path(name) / "project"
+            project.mkdir()
+            relative = _write_task_bundle(project, "p115-restore", "lite")
+            handoff = _write_stale_handoff(project, "p115-restore")
+            self.assertEqual(relative, "ai/tasks/p115-restore/task.md")
+            self.assertTrue((project / relative).is_file())
+            self.assertTrue((project / ".sbtd/active-task.json").is_file())
+            self.assertTrue((project / handoff).is_file())
+            self.assertFalse((project / "MODE").exists())
+            self.assertIn("workflow_mode: lite", (project / relative).read_text())
+            self.assertIn("workflow_mode: strict", (project / handoff).read_text())
+
+    def test_gate_signals_ignore_agents_prose(self) -> None:
+        agents = GLOBAL_AGENTS.read_text() + PROJECT_AGENTS.read_text()
+        self.assertFalse(_emits_gate_table(agents))
+        self.assertFalse(_strict_ref_loaded(agents))
+        self.assertTrue(
+            _emits_gate_table("| Skill | Gate |\n| book-refactoring-pass | required |\n")
+        )
+        self.assertTrue(
+            _strict_ref_loaded(
+                '{"command":"cat /tmp/home/.codex/skills/sbtd-task/references/strict.md"}'
+            )
+        )
+        self.assertFalse(_strict_ref_loaded("Load [strict gates](references/strict.md)"))
+
+    def test_save_fixture_rejects_replace_without_host(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sbtd-p115-save-") as name:
+            project = Path(name) / "project"
+            project.mkdir()
+            relative = _write_task_bundle(project, "p115-save", "default")
+            path = project / relative
+            path.chmod(0o444)
+            path.parent.chmod(0o555)
+            with self.assertRaises(OSError):
+                path.write_text("changed\n", encoding="utf-8")
+            path.parent.chmod(0o755)
+            path.chmod(0o644)
+            self.assertIn("workflow_mode: default", path.read_text())
+
 
     def test_host_matrix_requires_explicit_opt_in(self) -> None:
         if os.environ.get(HOST_OPT_IN) == "1":
@@ -278,6 +476,81 @@ class HostModeSmokeTests(unittest.TestCase):
         if len(passed) != 2:
             self.skipTest(f"host refuse is not AC-22 pass: {results!r}")
         _write_host_report(results)
+
+    def test_live_host_gate_layering(self) -> None:
+        if os.environ.get(HOST_OPT_IN) != "1":
+            self.skipTest(f"set {HOST_OPT_IN}=1 to run real Codex/OMP sessions")
+        results = []
+        for host in HOSTS:
+            binary = shutil.which(host)
+            if binary is None:
+                for mode in MODES:
+                    results.append(
+                        {
+                            "host": host,
+                            "mode": mode,
+                            "status": "blocked",
+                            "reason": "cli-missing",
+                        }
+                    )
+                continue
+            for mode in MODES:
+                results.append(self._run_host_gate(host, binary, mode))
+        failed = [item for item in results if item["status"] == "failed"]
+        self.assertFalse(failed, failed)
+        passed = [item for item in results if item["status"] == "passed"]
+        if len(passed) != 6:
+            self.skipTest(f"host Gate layering is not AC-14/23 pass: {results!r}")
+        _write_host_report(results)
+
+    def test_live_host_cross_session(self) -> None:
+        if os.environ.get(HOST_OPT_IN) != "1":
+            self.skipTest(f"set {HOST_OPT_IN}=1 to run real Codex/OMP sessions")
+        results = []
+        for host in HOSTS:
+            binary = shutil.which(host)
+            if binary is None:
+                results.append(
+                    {
+                        "host": host,
+                        "mode": "restore",
+                        "status": "blocked",
+                        "reason": "cli-missing",
+                    }
+                )
+                continue
+            results.append(self._run_host_restore(host, binary))
+        failed = [item for item in results if item["status"] == "failed"]
+        self.assertFalse(failed, failed)
+        passed = [item for item in results if item["status"] == "passed"]
+        if len(passed) != 2:
+            self.skipTest(f"host restore is not AC-24 pass: {results!r}")
+        _write_host_report(results)
+
+    def test_live_host_save_failure(self) -> None:
+        if os.environ.get(HOST_OPT_IN) != "1":
+            self.skipTest(f"set {HOST_OPT_IN}=1 to run real Codex/OMP sessions")
+        results = []
+        for host in HOSTS:
+            binary = shutil.which(host)
+            if binary is None:
+                results.append(
+                    {
+                        "host": host,
+                        "mode": "save-failure",
+                        "status": "blocked",
+                        "reason": "cli-missing",
+                    }
+                )
+                continue
+            results.append(self._run_host_save(host, binary))
+        failed = [item for item in results if item["status"] == "failed"]
+        self.assertFalse(failed, failed)
+        passed = [item for item in results if item["status"] == "passed"]
+        if len(passed) != 2:
+            self.skipTest(f"host save-failure is not AC-24 pass: {results!r}")
+        _write_host_report(results)
+
 
     def _run_host_mode(self, host: str, binary: str, mode: str) -> dict[str, object]:
         temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-{host}-{mode}-")
@@ -413,6 +686,196 @@ class HostModeSmokeTests(unittest.TestCase):
         finally:
             temporary.cleanup()
 
+    def _run_host_gate(self, host: str, binary: str, mode: str) -> dict[str, object]:
+        temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-gate-{host}-{mode}-")
+        try:
+            root = Path(temporary.name)
+            project = root / "project"
+            project.mkdir()
+            _init_git(project)
+            _write_agents(project, mode)
+            (project / "MODE").write_text(mode + "\n", encoding="utf-8")
+            completed = self._invoke(
+                host, binary, root, project, GATE_PROMPT, plant_skill=True
+            )
+            extra = _unexpected_writes(project, {"AGENTS.md", "MODE"})
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
+            text = f"{stdout}\n{stderr}"
+            loaded = _strict_ref_loaded(text)
+            table = _emits_gate_table(stdout)
+            payload: dict[str, object] = {
+                "host": host,
+                "mode": mode,
+                "returncode": completed.returncode,
+                "usage": _usage_from_stdout(stdout),
+                "loaded_strict_ref": loaded,
+                "gate_table": table,
+                "stdout": stdout[-4000:],
+                "stderr": stderr[-2000:],
+            }
+            if extra:
+                payload["status"] = "failed"
+                payload["reason"] = f"unexpected-project-writes:{extra}"
+                return payload
+            if _auth_blocked(stdout, stderr, completed.returncode):
+                payload["status"] = "blocked"
+                payload["reason"] = "auth"
+                return payload
+            if completed.returncode != 0:
+                payload["status"] = "failed"
+                payload["reason"] = "nonzero-exit"
+                return payload
+            if mode in ("default", "lite") and (loaded or table):
+                payload["status"] = "failed"
+                payload["reason"] = f"unexpected-strict-gate:{payload}"
+                return payload
+            if mode == "strict" and not loaded and not table:
+                payload["status"] = "failed"
+                payload["reason"] = "missing-strict-gate"
+                return payload
+            payload["status"] = "passed"
+            return payload
+        finally:
+            temporary.cleanup()
+
+    def _run_host_restore(self, host: str, binary: str) -> dict[str, object]:
+        temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-restore-{host}-")
+        try:
+            root = Path(temporary.name)
+            project = root / "project"
+            project.mkdir()
+            _init_git(project)
+            _write_agents(project, None)
+            relative = _write_task_bundle(project, "p115-restore", "lite")
+            handoff = _write_stale_handoff(project, "p115-restore")
+            completed = self._invoke(
+                host, binary, root, project, RESTORE_PROMPT, plant_skill=True
+            )
+            extra = _unexpected_writes(
+                project,
+                {
+                    "AGENTS.md",
+                    ".gitignore",
+                    relative,
+                    ".sbtd/active-task.json",
+                    handoff,
+                },
+            )
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
+            text = f"{stdout}\n{stderr}".replace("\\", "/")
+            report = _extract_mode_report(stdout)
+            observed = None
+            if report:
+                for key in ("mode", "current", "workflow_mode"):
+                    observed = _leading_mode(report.get(key))
+                    if observed:
+                        break
+            payload: dict[str, object] = {
+                "host": host,
+                "mode": "restore",
+                "returncode": completed.returncode,
+                "usage": _usage_from_stdout(stdout),
+                "observed": observed,
+                "task_read": relative in text,
+                "stdout": stdout[-4000:],
+                "stderr": stderr[-2000:],
+            }
+            if extra:
+                payload["status"] = "failed"
+                payload["reason"] = f"unexpected-project-writes:{extra}"
+                return payload
+            if _auth_blocked(stdout, stderr, completed.returncode):
+                payload["status"] = "blocked"
+                payload["reason"] = "auth"
+                return payload
+            if completed.returncode != 0:
+                payload["status"] = "failed"
+                payload["reason"] = "nonzero-exit"
+                return payload
+            if observed == "strict":
+                payload["status"] = "failed"
+                payload["reason"] = f"handoff-override:{report}"
+                return payload
+            if observed == "lite" or relative in text:
+                payload["status"] = "passed"
+                payload["report"] = report
+                return payload
+            payload["status"] = "failed"
+            payload["reason"] = "missing-task-restore"
+            return payload
+        finally:
+            temporary.cleanup()
+
+    def _run_host_save(self, host: str, binary: str) -> dict[str, object]:
+        temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-save-{host}-")
+        path: Path | None = None
+        try:
+            root = Path(temporary.name)
+            project = root / "project"
+            project.mkdir()
+            _init_git(project)
+            _write_agents(project, None)
+            relative = _write_task_bundle(project, "p115-save", "default")
+            path = project / relative
+            before = path.read_bytes()
+            path.chmod(0o444)
+            path.parent.chmod(0o555)
+            completed = self._invoke(
+                host,
+                binary,
+                root,
+                project,
+                SAVE_PROMPT,
+                plant_skill=True,
+                writable=True,
+            )
+            path.parent.chmod(0o755)
+            path.chmod(0o644)
+            extra = _unexpected_writes(
+                project,
+                {"AGENTS.md", ".gitignore", relative, ".sbtd/active-task.json"},
+            )
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
+            payload: dict[str, object] = {
+                "host": host,
+                "mode": "save-failure",
+                "returncode": completed.returncode,
+                "usage": _usage_from_stdout(stdout),
+                "stdout": stdout[-4000:],
+                "stderr": stderr[-2000:],
+            }
+            if path.read_bytes() != before:
+                payload["status"] = "failed"
+                payload["reason"] = "disk-changed"
+                return payload
+            if extra:
+                payload["status"] = "failed"
+                payload["reason"] = f"unexpected-project-writes:{extra}"
+                return payload
+            if _auth_blocked(stdout, stderr, completed.returncode):
+                payload["status"] = "blocked"
+                payload["reason"] = "auth"
+                return payload
+            if completed.returncode != 0:
+                payload["status"] = "failed"
+                payload["reason"] = "nonzero-exit"
+                return payload
+            if not _save_failed_signal(f"{stdout}\n{stderr}"):
+                payload["status"] = "failed"
+                payload["reason"] = "missing-unpersisted-signal"
+                return payload
+            payload["status"] = "passed"
+            return payload
+        finally:
+            if path is not None and path.exists():
+                path.parent.chmod(0o755)
+                path.chmod(0o644)
+            temporary.cleanup()
+
+
     def _invoke(
         self,
         host: str,
@@ -420,6 +883,9 @@ class HostModeSmokeTests(unittest.TestCase):
         isolation: Path,
         project: Path,
         prompt: str,
+        *,
+        plant_skill: bool = False,
+        writable: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         home = isolation / "home"
@@ -428,14 +894,18 @@ class HostModeSmokeTests(unittest.TestCase):
         env["USERPROFILE"] = str(home)
         env["PI_CODING_AGENT_DIR"] = str(home / ".omp" / "agent")
         env["CODEX_HOME"] = str(home / ".codex")
+        env["AGENT_SKILLS_DIR"] = str(home / ".agent" / "skills")
+        if plant_skill:
+            _plant_task_skill(home)
         _copy_codex_auth(Path(env["CODEX_HOME"]))
+        sandbox = "workspace-write" if writable else "read-only"
         if host == "codex":
             command = [
                 binary,
                 "exec",
                 "--ephemeral",
                 "--sandbox",
-                "read-only",
+                sandbox,
                 "--skip-git-repo-check",
                 "--json",
                 "-C",
@@ -450,10 +920,11 @@ class HostModeSmokeTests(unittest.TestCase):
                 "--cwd",
                 str(project),
                 "--no-extensions",
-                "--tools",
-                "read",
-                prompt,
             ]
+            command.extend(
+                ["--tools", "read,write"] if writable else ["--tools", "read"]
+            )
+            command.append(prompt)
         return subprocess.run(
             command,
             env=env,
@@ -464,6 +935,7 @@ class HostModeSmokeTests(unittest.TestCase):
             timeout=180,
             check=False,
         )
+
 
 
 if __name__ == "__main__":
