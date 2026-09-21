@@ -49,7 +49,6 @@ _AUTH_PHRASES = (
     "not logged in",
     "please log in",
     "please login",
-    "authentication",
     "unauthenticated",
     "missing api",
     "api key",
@@ -57,6 +56,7 @@ _AUTH_PHRASES = (
     "auth required",
     "not authenticated",
 )
+
 
 
 
@@ -316,25 +316,41 @@ def _jsonl_records(text: str) -> list[dict[str, object]]:
 
 
 def _event_records(text: str) -> list[dict[str, object]]:
-    records = _jsonl_records(text)
-    if records:
-        return records
-    stripped = text.strip()
-    if not stripped:
-        return []
-    try:
-        parsed = json.loads(stripped)
-    except json.JSONDecodeError:
-        return []
-    if isinstance(parsed, list):
-        return [item for item in parsed if isinstance(item, dict)]
-    if not isinstance(parsed, dict):
-        return []
-    for key in ("events", "items", "messages", "records"):
-        nested = parsed.get(key)
+    seeds: list[dict[str, object]] = _jsonl_records(text)
+    if not seeds:
+        stripped = text.strip()
+        if not stripped:
+            return []
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return []
+        if isinstance(parsed, list):
+            seeds = [item for item in parsed if isinstance(item, dict)]
+        elif isinstance(parsed, dict):
+            seeds = [parsed]
+        else:
+            return []
+    records: list[dict[str, object]] = []
+    for seed in seeds:
+        records.extend(_expand_events(seed, 0))
+    return records
+
+
+def _expand_events(record: dict[str, object], depth: int) -> list[dict[str, object]]:
+    found = [record]
+    if depth >= 4:
+        return found
+    for key in ("events", "items", "messages", "records", "content"):
+        nested = record.get(key)
         if isinstance(nested, list):
-            return [item for item in nested if isinstance(item, dict)]
-    return [parsed]
+            for item in nested:
+                if isinstance(item, dict):
+                    found.extend(_expand_events(item, depth + 1))
+    inner = record.get("item")
+    if isinstance(inner, dict):
+        found.extend(_expand_events(inner, depth + 1))
+    return found
 
 
 def _record_item(record: dict[str, object]) -> dict[str, object] | None:
@@ -363,22 +379,40 @@ def _trace_item(record: dict[str, object]) -> dict[str, object]:
     return _record_item(record) or record
 
 
+_REPLY_KINDS = {"agent_message", "message", "text", "summary_text"}
+_TRACE_KINDS = {
+    "command_execution",
+    "file_read",
+    "tool_call",
+    "function_call",
+    "mcp_tool_call",
+    "tool",
+    "tool_use",
+}
+_TRACE_NAMES = {"read", "bash", "grep", "glob"}
+
+
+def _path_in_value(value: object, needle: str) -> bool:
+    if isinstance(value, str):
+        return needle in value.replace("\\", "/")
+    if isinstance(value, dict):
+        return any(_path_in_value(item, needle) for item in value.values())
+    return False
+
+
 def _strict_ref_loaded(text: str) -> bool:
     needle = "references/strict.md"
     for record in _event_records(text):
         item = _trace_item(record)
-        kind = item.get("type")
-        if kind in {"agent_message", "message"}:
+        kind = str(item.get("type") or "")
+        if kind in _REPLY_KINDS:
             continue
         for key in ("command", "path", "file"):
-            value = item.get(key)
-            if isinstance(value, str) and needle in value.replace("\\", "/"):
+            if _path_in_value(item.get(key), needle):
                 return True
-        arguments = item.get("arguments")
-        if isinstance(arguments, dict):
-            for value in arguments.values():
-                if isinstance(value, str) and needle in value.replace("\\", "/"):
-                    return True
+        for key in ("arguments", "input"):
+            if _path_in_value(item.get(key), needle):
+                return True
     return False
 
 
@@ -386,17 +420,17 @@ def _has_tool_trace(text: str) -> bool:
     for record in _event_records(text):
         item = _trace_item(record)
         kind = str(item.get("type") or "")
-        if kind in {
-            "command_execution",
-            "file_read",
-            "tool_call",
-            "function_call",
-            "mcp_tool_call",
-        }:
+        if kind in _REPLY_KINDS:
+            continue
+        if kind in _TRACE_KINDS:
+            return True
+        name = str(item.get("name") or item.get("tool") or "").lower()
+        if name in _TRACE_NAMES:
             return True
         if isinstance(item.get("command"), str) or isinstance(item.get("path"), str):
             return True
     return False
+
 
 
 
@@ -507,6 +541,14 @@ class HostModeSmokeTests(unittest.TestCase):
     def test_auth_ignores_401_inside_json_stdout(self) -> None:
         blob = '{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxx401yyyy403zzzz"}'
         self.assertFalse(_auth_blocked(blob, "", 0))
+        self.assertFalse(
+            _auth_blocked(
+                "verify root, task, branch, and authentication details",
+                "",
+                0,
+            )
+        )
+
         self.assertTrue(_auth_blocked("", "please log in", 1))
         self.assertTrue(_auth_blocked("", "HTTP 401 unauthorized", 1))
 
@@ -595,6 +637,38 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertTrue(_has_tool_trace(pretty))
         self.assertTrue(_strict_ref_loaded(pretty))
         self.assertFalse(_has_tool_trace(json.dumps({"mode": "lite", "writes": False})))
+        nested = json.dumps(
+            {
+                "items": [
+                    {
+                        "type": "text",
+                        "text": "do not open references/strict.md",
+                    },
+                    {
+                        "type": "function_call",
+                        "name": "read",
+                        "arguments": {
+                            "path": "/x/.omp/agent/skills/sbtd-task/references/strict.md"
+                        },
+                    },
+                ]
+            }
+        )
+        self.assertTrue(_has_tool_trace(nested))
+        self.assertTrue(_strict_ref_loaded(nested))
+        text_only = json.dumps(
+            {
+                "items": [
+                    {
+                        "type": "text",
+                        "text": "Current mode default. references/strict.md not loaded.",
+                    }
+                ]
+            }
+        )
+        self.assertFalse(_has_tool_trace(text_only))
+        self.assertFalse(_strict_ref_loaded(text_only))
+
 
 
         self.assertTrue(
