@@ -32,10 +32,11 @@ flowchart TD
   cliOk -->|否| repairCli[只修复缺失或校验失败的 CLI]
   skipCli --> preflight
   repairCli --> preflight[check 全局 runtime / tools / Skills]
-  preflight --> graftOk{固定 Graft CLI 已验证可用?}
-  graftOk -->|是| preserve
-  graftOk -->|否| graftConsent{展示计划后明确同意安装?}
-  graftConsent -->|否| skipGraft[报告不可用, 不自动升级 npm]
+  preflight --> graftProbe[install-graft --json 只读探测]
+  graftProbe -->|already-installed| preserve
+  graftProbe -->|blocked / 其他失败| skipGraft[说明原因, 不覆盖冲突内容, 继续不依赖 Graft 的步骤]
+  graftProbe -->|needs-confirmation| graftConsent{展示安装或仅 telemetry 计划后明确同意?}
+  graftConsent -->|否| skipGraft
   skipGraft --> preserve
   graftConsent -->|是| installGraft[Python install-graft --yes]
   installGraft --> graftReady{包/native/telemetry 验证通过?}

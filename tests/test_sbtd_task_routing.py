@@ -131,6 +131,84 @@ class TaskRoutingTests(unittest.TestCase):
         )
         self.assertEqual(changed_risk.status, "needs-mode-decision")
 
+    def test_accepting_a_previously_kept_recommendation_clears_its_refusal(
+        self,
+    ) -> None:
+        from sbtd_task_routing import ModeRecommendation
+
+        store = TaskStore(self.root)
+        store.create("reconsider", mode="lite", body="Task\n", confirmed=True)
+        recommendation = ModeRecommendation("strict", "new risk", "risk-1")
+        kept = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="reconsider",
+                recommendation=recommendation,
+                recommendation_response="keep",
+                refusal_reason="retain lite",
+                confirmed=True,
+            )
+        )
+        self.assertEqual(kept.status, "ready")
+        accepted = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="reconsider",
+                recommendation=recommendation,
+                recommendation_response="accept",
+                confirmed=True,
+            )
+        )
+        self.assertEqual(accepted.status, "ready")
+        self.assertEqual(accepted.mode, "strict")
+        changed = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="reconsider",
+                explicit_mode="lite",
+                confirmed=True,
+            )
+        )
+        self.assertEqual(changed.status, "ready")
+        prompted = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue", task_id="reconsider", recommendation=recommendation
+            )
+        )
+        self.assertEqual(prompted.status, "needs-mode-decision")
+
+    def test_replayed_keep_decision_needs_no_persistence_confirmation(self) -> None:
+        from sbtd_task_routing import ModeRecommendation
+
+        store = TaskStore(self.root)
+        task = store.create("keep-replay", mode="lite", body="Task\n", confirmed=True)
+        recommendation = ModeRecommendation("strict", "new risk", "risk-1")
+        saved = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="keep-replay",
+                recommendation=recommendation,
+                recommendation_response="keep",
+                refusal_reason="retain lite",
+                confirmed=True,
+            )
+        )
+        self.assertEqual(saved.status, "ready")
+        before = (self.root / task.task_path).read_bytes()
+        replayed = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="keep-replay",
+                recommendation=recommendation,
+                recommendation_response="keep",
+                refusal_reason="retain lite",
+            )
+        )
+        self.assertEqual(replayed.status, "ready")
+        self.assertTrue(replayed.persisted)
+        self.assertEqual((self.root / task.task_path).read_bytes(), before)
+
+
     def test_failed_mode_save_keeps_session_choice_without_claiming_recovery(
         self,
     ) -> None:
@@ -530,6 +608,78 @@ class TaskRoutingTests(unittest.TestCase):
             )
         )
         self.assertEqual(repeated.status, "ready")
+
+    def test_new_task_without_an_id_asks_for_that_choice_before_confirmation(
+        self,
+    ) -> None:
+        decision = TaskRouter(TaskStore(self.root)).route(
+            RouteRequest(intent="new", explicit_mode="strict", body="Task\n")
+        )
+        self.assertEqual(decision.status, "needs-task-choice")
+        self.assertFalse(decision.persisted)
+        self.assertFalse((self.root / ".sbtd").exists())
+
+    def test_mode_note_with_decision_prefix_is_valid_free_text(self) -> None:
+        store = TaskStore(self.root)
+        task = store.create(
+            "prefix-note",
+            mode="lite",
+            mode_note="SBTD mode decisions: ordinary user explanation",
+            body="Task\n",
+            confirmed=True,
+        )
+        decision = TaskRouter(store).route(
+            RouteRequest(intent="continue", task_id="prefix-note")
+        )
+        self.assertEqual(decision.status, "ready")
+        self.assertEqual(decision.mode, "lite")
+        self.assertEqual(
+            store.inspect("prefix-note").document.frontmatter["mode_note"],
+            task.document.frontmatter["mode_note"],
+        )
+
+    def test_accepted_recommendation_persists_its_reason_and_risk(self) -> None:
+        from sbtd_task_routing import ModeRecommendation
+
+        store = TaskStore(self.root)
+        store.create("accept-note", mode="lite", body="Task\n", confirmed=True)
+        decision = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="accept-note",
+                recommendation=ModeRecommendation(
+                    "strict", "cross-service mutation", "risk-42"
+                ),
+                recommendation_response="accept",
+                confirmed=True,
+            )
+        )
+        self.assertEqual(decision.status, "ready")
+        persisted_note = store.inspect("accept-note").document.frontmatter["mode_note"]
+        self.assertIn("cross-service mutation", persisted_note)
+        self.assertIn("risk-42", persisted_note)
+
+    def test_identical_explicit_user_choice_does_not_reconfirm_or_rewrite(self) -> None:
+        store = TaskStore(self.root)
+        task = store.create(
+            "same-choice",
+            mode="lite",
+            mode_note="user kept lite",
+            body="Task\n",
+            confirmed=True,
+        )
+        before = (self.root / task.task_path).read_bytes()
+        decision = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="same-choice",
+                explicit_mode="lite",
+                mode_note="user kept lite",
+            )
+        )
+        self.assertEqual(decision.status, "ready")
+        self.assertTrue(decision.persisted)
+        self.assertEqual((self.root / task.task_path).read_bytes(), before)
 
     def test_partial_new_task_creation_retries_with_the_original_explicit_mode(
         self,

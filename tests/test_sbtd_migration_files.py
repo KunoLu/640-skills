@@ -4,6 +4,7 @@ import hashlib
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import sbtd_migration_files
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration_files import (
     RetainedObjectError,
@@ -463,6 +465,65 @@ class MigrationFileTests(unittest.TestCase):
             (tree / "link").symlink_to(tree / "empty")
             with self.assertRaises(ContractError):
                 directory_snapshot(tree)
+
+    def test_reparse_directory_is_rejected_by_snapshot_and_copy_walks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            tree = root / "legacy"
+            tree.mkdir()
+            reparse_directory = type(
+                "ReparseDirectory",
+                (),
+                {
+                    "name": "junction",
+                    "path": str(tree / "junction"),
+                    "stat": lambda self, follow_symlinks: type(
+                        "Info",
+                        (),
+                        {
+                            "st_mode": stat.S_IFDIR,
+                            "st_file_attributes": getattr(
+                                stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400
+                            ),
+                        },
+                    )(),
+                },
+            )()
+            with mock.patch(
+                "sbtd_migration_files._list_children", return_value=[reparse_directory]
+            ):
+                with self.assertRaises(ContractError):
+                    directory_snapshot(tree)
+                with self.assertRaises(ContractError):
+                    sbtd_migration_files._tree_entries(tree)
+
+
+    @unittest.skipUnless(os.name == "nt", "Windows junction semantics")
+    def test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source, outside = root / "source", root / "outside"
+            source.mkdir()
+            outside.mkdir()
+            (outside / "private.txt").write_bytes(b"outside tree")
+            junction = source / "junction"
+            subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(outside)],
+                check=True,
+                capture_output=True,
+            )
+            try:
+                with mock.patch(
+                    "sbtd_migration_files._hash_file",
+                    side_effect=AssertionError("junction target must not be read"),
+                ):
+                    with self.assertRaises(ContractError):
+                        snapshot(source)
+                    with self.assertRaises(ContractError):
+                        sbtd_migration_files._tree_entries(source)
+            finally:
+                junction.rmdir()
+            self.assertEqual((outside / "private.txt").read_bytes(), b"outside tree")
 
     def test_write_file_commits_only_against_the_expected_before_state(self):
         with tempfile.TemporaryDirectory() as directory:

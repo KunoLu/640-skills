@@ -543,6 +543,73 @@ class HandoffTests(unittest.TestCase):
             tasks.inspect("task").document.frontmatter["status"], "in-progress"
         )
 
+    def test_newest_snapshot_wins_when_context_returns_to_an_older_value(self) -> None:
+        tasks = self._make_task(self.root)
+        handoffs = HandoffStore(tasks)
+        first = self._save(handoffs, content=self._content(goal="context A"))
+        self.assertEqual(first.status, "saved")
+        self._age_snapshot(first.path, days=2)
+        middle = self._save(handoffs, content=self._content(goal="context B"))
+        self.assertEqual(middle.status, "saved")
+        self._age_snapshot(middle.path, days=1)
+        latest = self._save(handoffs, content=self._content(goal="context A"))
+        self.assertEqual(latest.status, "saved")
+        reminders = handoffs.reminders()
+        self.assertEqual(len(reminders), 1)
+        self.assertEqual(reminders[0]["path"], latest.path)
+        self.assertEqual(reminders[0]["content"]["goal"], "context A")
+
+    def test_non_git_protection_uses_the_last_relevant_rule(self) -> None:
+        root = Path(self.temporary.name).resolve() / "nogit-rule-order"
+        root.mkdir()
+        (root / ".gitignore").write_text(
+            "/docs/handoffs/\n!/docs/handoffs/\n/.sbtd/\n", encoding="utf-8"
+        )
+        tasks = self._make_task(root)
+        handoffs = HandoffStore(tasks)
+        self.assertTrue(handoffs.protect(confirmed=True))
+        self.assertEqual(
+            (root / ".gitignore").read_text(encoding="utf-8"),
+            "/docs/handoffs/\n!/docs/handoffs/\n/docs/handoffs/\n/.sbtd/\n",
+        )
+        self.assertEqual(
+            self._save(handoffs).status,
+            "saved",
+        )
+
+    def test_non_git_leading_space_rule_does_not_claim_protection(self) -> None:
+        root = Path(self.temporary.name).resolve() / "nogit-leading-space"
+        root.mkdir()
+        (root / ".gitignore").write_text(
+            " /docs/handoffs/\n/.sbtd/\n", encoding="utf-8"
+        )
+        handoffs = HandoffStore(self._make_task(root))
+        self.assertEqual(self._save(handoffs).status, "unprotected")
+
+    def test_long_legal_task_id_uses_a_bounded_handoff_filename(self) -> None:
+        task_id = "a" * 121
+        tasks = self._make_task(self.root, task_id)
+        saved = self._save(HandoffStore(tasks), task_id)
+        self.assertEqual(saved.status, "saved")
+        assert saved.path is not None
+        self.assertLessEqual(len(Path(saved.path).name.encode("utf-8")), 255)
+        self.assertEqual(HandoffStore(tasks).load(saved.path)["task_id"], task_id)
+
+    def test_existing_reversible_hex_handoff_name_remains_loadable(self) -> None:
+        task_id = "legacy/name"
+        handoffs = HandoffStore(self._make_task(self.root, task_id))
+        saved = self._save(handoffs, task_id)
+        assert saved.path is not None
+        original = self.root / saved.path
+        legacy_name = (
+            original.name[:11] + task_id.encode("utf-8").hex() + original.suffix
+        )
+        legacy = original.with_name(legacy_name)
+        original.rename(legacy)
+        self.assertEqual(
+            handoffs.load(f"docs/handoffs/{legacy.name}")["task_id"], task_id
+        )
+
     def test_future_snapshot_is_not_a_recent_unfinished_reminder(self) -> None:
         tasks = self._make_task(self.root)
         handoffs = HandoffStore(tasks)

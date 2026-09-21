@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -410,6 +411,22 @@ class TaskRecordTests(ProjectStateTestCase):
 
                 self.assertEqual(result["status"], "blocked")
 
+    def test_shared_alias_dag_is_checked_once_per_call(self) -> None:
+        shared: list[object] = [1]
+        for _ in range(10):
+            shared = [shared, shared]
+        data = {"first": shared, "second": shared}
+        checker = sbtd_project.validate_json_compatible
+        with mock.patch.object(
+            sbtd_project, "validate_json_compatible", wraps=checker
+        ) as checked:
+            sbtd_project.validate_json_compatible(data, "task")
+        self.assertLess(checked.call_count, 30)
+
+        shared.append(object())
+        with self.assertRaises(sbtd_project.TaskDataError):
+            sbtd_project.validate_json_compatible(data, "task")
+
     def test_cyclic_yaml_aliases_are_blocked(self) -> None:
         self.prepare(task_text("example", extra_frontmatter="loop: &loop\n  - *loop\n"))
 
@@ -486,6 +503,65 @@ class TaskRecordTests(ProjectStateTestCase):
         result = self.inspect()
 
         self.assertEqual(result["status"], "blocked")
+
+    def test_windows_reparse_metadata_is_rejected_for_selected_path_components(
+        self,
+    ) -> None:
+        self.write_pointer()
+        self.write_task(".sbtd/tasks/example/task.md")
+        reparse = (self.project / ".sbtd" / "tasks").resolve()
+        native_lstat = Path.lstat
+
+        def lstat(path: Path):
+            metadata = native_lstat(path)
+            if path == reparse:
+                return SimpleNamespace(
+                    st_mode=metadata.st_mode,
+                    st_file_attributes=0x400,
+                )
+            return metadata
+
+        with (
+            mock.patch.object(
+                sbtd_project.stat,
+                "FILE_ATTRIBUTE_REPARSE_POINT",
+                0x400,
+                create=True,
+            ),
+            mock.patch.object(Path, "lstat", new=lstat),
+        ):
+            result = self.inspect()
+
+        self.assertEqual(result["status"], "blocked")
+
+    def test_open_regular_file_rejects_reparse_ancestor_metadata(self) -> None:
+        parent = self.project / "junction"
+        parent.mkdir()
+        target = parent / "task.md"
+        target.write_text("safe content", encoding="utf-8")
+        native_lstat = Path.lstat
+
+        def lstat(path: Path):
+            metadata = native_lstat(path)
+            if path == parent:
+                return SimpleNamespace(
+                    st_mode=metadata.st_mode,
+                    st_file_attributes=0x400,
+                )
+            return metadata
+
+        with (
+            mock.patch.object(
+                sbtd_project.stat,
+                "FILE_ATTRIBUTE_REPARSE_POINT",
+                0x400,
+                create=True,
+            ),
+            mock.patch.object(Path, "lstat", new=lstat),
+            self.assertRaises(sbtd_project.TaskDataError),
+            sbtd_project.open_regular_file(target, "task"),
+        ):
+            pass
 
     def test_errors_never_echo_body_or_private_extension_values(self) -> None:
         secret = "hunter2-private-token"
@@ -752,5 +828,65 @@ class PriorityTests(ProjectStateTestCase):
         self.assertEqual(tree_snapshot(self.project), before)
 
 
+    def test_unused_unresolvable_task_root_does_not_block_selected_state(self) -> None:
+        self.write_pointer(task_path="ai/tasks/example/task.md")
+        self.write_task(
+            "ai/tasks/example/task.md", workflow_mode="lite", mode_source="user"
+        )
+        (self.project / ".sbtd" / "tasks").symlink_to("tasks")
+
+        result = self.inspect()
+
+        self.assertEqual(result["status"], "success")
+
+    def test_uninspectable_root_marks_legacy_presence_unknown(self) -> None:
+        with mock.patch.object(
+            sbtd_project,
+            "_checked_root",
+            side_effect=sbtd_project.TaskDataError("root unavailable", "repair root"),
+        ):
+            result = self.inspect()
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIsNone(result["legacyPresent"])
+
+    def test_invalid_bundled_schema_directs_repair_to_the_bundle(self) -> None:
+        self.write_pointer()
+        self.write_task(".sbtd/tasks/example/task.md")
+        invalid = self.root / "invalid-task-data.schema.json"
+
+        for content in (b"\xff", b'{"type": 1}'):
+            with self.subTest(content=content):
+                invalid.write_bytes(content)
+                with mock.patch.object(sbtd_project, "_SCHEMA_PATH", invalid):
+                    result = self.inspect()
+                self.assertEqual(result["status"], "blocked")
+                self.assertIn("task-data.schema.json", result["nextStep"])
+
+    def test_dangling_bundled_schema_reference_directs_repair_to_bundle(self) -> None:
+        self.write_pointer()
+        self.write_task(".sbtd/tasks/example/task.md")
+        dangling = self.root / "dangling-task-data.schema.json"
+        schema = json.loads(sbtd_project._SCHEMA_PATH.read_text(encoding="utf-8"))
+        del schema["$defs"]["activeTask"]
+        dangling.write_text(json.dumps(schema), encoding="utf-8")
+
+        with mock.patch.object(sbtd_project, "_SCHEMA_PATH", dangling):
+            result = self.inspect()
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("task-data.schema.json", result["nextStep"])
+
+
+    def test_cross_root_task_symlink_remains_contained(self) -> None:
+        target = self.write_task("ai/tasks/example/task.md")
+        local = self.project / ".sbtd" / "tasks" / "example"
+        local.mkdir(parents=True)
+        (local / "task.md").symlink_to(target)
+        self.write_pointer()
+
+        result = self.inspect()
+
+        self.assertEqual(result["status"], "success")
 if __name__ == "__main__":
     unittest.main()

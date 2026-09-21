@@ -104,5 +104,10 @@ jobs:
       - name: Run the real pwsh installer subset when available
         run: python -B -m unittest -k powershell tests.test_install_sh_agent_cli_flow
 
+      - name: Reject native Windows migration junction traversal
+        run: >-
+          python -B -m unittest
+          tests.test_sbtd_migration_files.MigrationFileTests.test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target
+
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"

@@ -377,6 +377,84 @@ class CleanupMigrationTests(unittest.TestCase):
             self.assertFalse((fixture.roots[0] / ".trellis").exists())
             self.assertTrue((fixture.roots[1] / ".trellis").is_dir())
 
+    def test_shared_pinned_skill_cleanup_runs_once_for_the_full_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
+            skill = fixture.home / ".agent/skills/trellis-workflow"
+            (skill / "SKILL.md").parent.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# pinned\n")
+            import sbtd_migration_plan
+            from sbtd_migration_files import snapshot
+
+            pins = sbtd_migration_plan._ownership_pins()
+            pins["skills"] = {"trellis-workflow": snapshot(skill)}
+            with mock.patch.object(
+                sbtd_migration_plan, "_ownership_pins", return_value=pins
+            ):
+                fixture.build()
+                envelope, code = fixture.cleanup(
+                    confirm_cleanup=fixture.verification["verification_id"]
+                )
+            self.assertEqual(code, 0, envelope)
+            receipt = envelope["migration"]["cleanup_receipt"]["payload"]
+            self.assertEqual(len(receipt["shared_results"]), 1)
+            shared = receipt["shared_results"][0]
+            self.assertEqual(shared["dependent_projects"], sorted(map(str, fixture.roots)))
+            self.assertFalse(skill.exists())
+            for project in receipt["projects"]:
+                self.assertEqual(project["shared_operation_ids"], shared["operation_ids"])
+
+    def test_shared_pinned_skill_failure_marks_every_dependent_and_keeps_the_skill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
+            skill = fixture.home / ".agent/skills/trellis-workflow"
+            (skill / "SKILL.md").parent.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# pinned\n")
+            import sbtd_migration_plan
+            from sbtd_migration_files import remove_reference as real_remove
+            from sbtd_migration_files import snapshot
+
+            pins = sbtd_migration_plan._ownership_pins()
+            pins["skills"] = {"trellis-workflow": snapshot(skill)}
+            with mock.patch.object(
+                sbtd_migration_plan, "_ownership_pins", return_value=pins
+            ):
+                fixture.build()
+
+            def refuse_skill(path, expected, *, scope):
+                if Path(path) == skill:
+                    raise ContractError("state-conflict", "injected shared refusal")
+                return real_remove(path, expected, scope=scope)
+
+            with (
+                mock.patch.object(sbtd_migration_plan, "_ownership_pins", return_value=pins),
+                mock.patch("sbtd_migration.remove_reference", side_effect=refuse_skill),
+            ):
+                envelope, code = fixture.cleanup(
+                    confirm_cleanup=fixture.verification["verification_id"]
+                )
+            self.assertEqual(code, 5, envelope)
+            self.assertTrue(skill.is_dir())
+            receipt = envelope["migration"]["cleanup_receipt"]["payload"]
+            self.assertEqual(len(receipt["shared_results"]), 1)
+            self.assertEqual(
+                {project["status"] for project in receipt["projects"]}, {"failed"}
+            )
+
+    def test_resource_preservation_failure_keeps_exit_three(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            with mock.patch(
+                "sbtd_migration.remove_reference",
+                side_effect=ContractError("checksum-mismatch", "synthetic readback failure", exit_code=3),
+            ):
+                response, code = fixture.cleanup(
+                    confirm_cleanup=fixture.verification["verification_id"]
+                )
+            self.assertEqual(code, 3, response)
+            self.assertEqual(response["status"], "failed")
+            self.assertTrue((fixture.roots[0] / ".trellis").is_dir())
+
     def test_a_receipt_save_failure_is_failed_and_does_not_claim_recovery(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.build(Path(directory).resolve())

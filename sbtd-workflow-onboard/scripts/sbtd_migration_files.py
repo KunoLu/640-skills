@@ -98,6 +98,13 @@ def _fail(code: str, message: str, *, exit_code: int = 2) -> NoReturn:
 # ---------------------------------------------------------------------------
 
 
+def _is_reparse(info: os.stat_result) -> bool:
+    return bool(
+        getattr(info, "st_file_attributes", 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    )
+
+
 def _canonical(path: Path) -> Path:
     """Require a physical absolute path without resolving untrusted links."""
     candidate = Path(path)
@@ -109,10 +116,7 @@ def _canonical(path: Path) -> Path:
         info = _lstat(current)
         if info is None:
             continue
-        if stat.S_ISLNK(info.st_mode) or (
-            getattr(info, "st_file_attributes", 0)
-            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-        ):
+        if stat.S_ISLNK(info.st_mode) or _is_reparse(info):
             _fail(
                 "unsafe-path", "migration paths do not follow symbolic or reparse links"
             )
@@ -184,6 +188,8 @@ def _scan_into(directory: Path, prefix: str, entries: list[dict[str, Any]]) -> N
         except OSError:
             _fail("read-failed", "directory entry cannot be inspected")
         child_path = Path(child.path)
+        if _is_reparse(info):
+            _fail("unsafe-path", "directory contains a link or special entry")
         if stat.S_ISDIR(info.st_mode):
             entries.append({"path": relative, "type": "directory", "checksum": None})
             _scan_into(child_path, relative, entries)
@@ -539,6 +545,8 @@ def _tree_entries(root: Path) -> list[tuple[str, str, Path]]:
                 _fail("read-failed", "directory entry cannot be inspected")
             child_path = Path(child.path)
             relative = child_path.relative_to(root).as_posix()
+            if _is_reparse(info):
+                _fail("unsafe-path", "directory contains a link or special entry")
             if stat.S_ISDIR(info.st_mode):
                 entries.append((relative, "directory", child_path))
                 stack.append(child_path)

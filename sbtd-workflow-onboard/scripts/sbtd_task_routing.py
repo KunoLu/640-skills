@@ -78,12 +78,10 @@ class TaskRouter:
                     for item in parsed["refusals"]
                 )
             ):
-                raise ValueError("invalid decision record")
+                return note, []
             return parsed["note"], parsed["refusals"]
         except (ValueError, TypeError):
-            raise ValueError(
-                "recorded mode decisions are malformed; preserve the existing note"
-            ) from None
+            return note, []
 
     def route(self, request: RouteRequest) -> RouteDecision:
         if request.intent not in ("new", "continue", "question"):
@@ -150,6 +148,13 @@ class TaskRouter:
                 else None
             )
             mode = mode or (pending[0] if pending is not None else "default")
+        if request.intent == "new" and request.task_id is None and not read_only:
+            return RouteDecision(
+                "needs-task-choice",
+                mode,
+                False,
+                reason="choose a logical ID before creating persistent state",
+            )
         key = request.task_id or (
             task.document.frontmatter["id"] if task is not None else None
         )
@@ -159,11 +164,9 @@ class TaskRouter:
             if task is not None
             else request.mode_note,
         )
-        try:
-            prior_note, refusals = self._note_parts(note)
-        except ValueError as error:
-            return RouteDecision("blocked", mode, False, task, str(error))
+        prior_note, refusals = self._note_parts(note)
         save_choice = request.explicit_mode is not None
+        accepted_note: str | None = None
         needs_recommendation = False
         if recommendation is not None and recommendation.mode != mode:
             refused = any(
@@ -175,6 +178,15 @@ class TaskRouter:
                 needs_recommendation = True
             if request.recommendation_response == "accept":
                 mode = recommendation.mode
+                refusals = [
+                    item for item in refusals
+                    if (item["mode"], item["risk_id"])
+                    != (recommendation.mode, recommendation.risk_id)
+                ]
+                accepted_note = (
+                    f"accepted recommendation {recommendation.mode} "
+                    f"({recommendation.risk_id}): {recommendation.reason}"
+                )
                 save_choice = True
             elif request.recommendation_response == "keep":
                 if request.refusal_reason is None or not request.refusal_reason.strip():
@@ -192,7 +204,7 @@ class TaskRouter:
                     ]
                 save_choice = True
         if save_choice:
-            note = (
+            note = accepted_note or (
                 request.mode_note if request.explicit_mode is not None else prior_note
             )
             if refusals:
@@ -201,7 +213,12 @@ class TaskRouter:
                     ensure_ascii=False,
                     separators=(",", ":"),
                 )
-            if key is not None:
+            if (
+                task is not None
+                and self._mode_stamp(task) == (mode, "user", note)
+            ):
+                save_choice = False
+            if save_choice and key is not None:
                 self._session_notes[key] = note
                 self._session_modes[key] = (
                     mode,
@@ -254,13 +271,7 @@ class TaskRouter:
                     task.document.frontmatter["id"], mode, note=note, confirmed=True
                 )
             else:
-                if request.task_id is None:
-                    return RouteDecision(
-                        "needs-task-choice",
-                        mode,
-                        False,
-                        reason="choose a logical ID before creating persistent state",
-                    )
+                assert request.task_id is not None
                 saved = self.store.create(
                     request.task_id,
                     body=request.body,

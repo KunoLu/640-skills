@@ -40,7 +40,8 @@ import stat
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
+from urllib.parse import unquote, urlsplit
 
 import onboard_contracts as contracts
 from onboard_contracts import ContractError
@@ -326,6 +327,58 @@ def _check_shared_text(
         if pattern.search(text):
             _fail("privacy-violation", "a shared projection carries an obvious secret")
 
+def _check_markdown_links(
+    data: bytes, target: Path, root: Path, approved_targets: set[Path]
+) -> None:
+    try:
+        from markdown_it import MarkdownIt
+    except ImportError:
+        _fail(
+            "dependency-unavailable",
+            "Markdown link validation requires the declared Markdown parser",
+        )
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return
+    parser = MarkdownIt("commonmark")
+    safe_link = parser.validateLink
+    # Parse unsafe destinations too so the migration gate can reject them;
+    # this parser only inspects tokens and never renders or opens a link.
+    cast(Any, parser).validateLink = lambda _url: True
+    inline_tokens = (
+        child for block in parser.parse(text) for child in (block.children or ())
+    )
+    for token in inline_tokens:
+        if token.type not in {"link_open", "image"}:
+            continue
+        href = token.attrGet("href" if token.type == "link_open" else "src")
+        if href is None:
+            continue
+        if not isinstance(href, str) or not safe_link(href):
+            _fail("target-conflict", "a shared Markdown link uses an unsafe destination")
+        if re.match(r"^[A-Za-z]:[\\/]", unquote(href)):
+            _fail("target-conflict", "a shared Markdown link cannot name a drive path")
+        try:
+            parsed = urlsplit(href)
+        except ValueError:
+            _fail("target-conflict", "a shared Markdown link has an invalid destination")
+        if parsed.scheme == "file":
+            _fail("target-conflict", "a shared Markdown link cannot name a local file URL")
+        if parsed.scheme or parsed.netloc or not parsed.path:
+            continue
+        path = unquote(parsed.path)
+        if path.startswith("/") or "\\" in path:
+            _fail("target-conflict", "a shared Markdown link is not project-relative")
+        resolved = Path(os.path.normpath(target.parent / path))
+        if not resolved.is_relative_to(root) or resolved not in approved_targets:
+            _fail(
+                "target-conflict",
+                "a shared Markdown link does not resolve to an approved publication",
+            )
+
+
+
 
 def _check_lessons_preserved(source_raw: bytes, candidate_raw: bytes) -> None:
     try:
@@ -369,6 +422,36 @@ def _candidate_bytes(candidate: Mapping[str, Any], member: str | None) -> bytes:
     if snapshot(path) != state:
         _fail("state-conflict", "an approved candidate changed after approval")
     return read_file(path.joinpath(*parts))
+
+def _approved_target_files(
+    closures: Mapping[
+        tuple[str, ...], Sequence[tuple[Mapping[str, Any], list[tuple[str, ...]]]]
+    ],
+    documents: Sequence[tuple[str, Mapping[str, Any], list[tuple[str, ...]]]],
+) -> set[Path]:
+    targets: set[Path] = set()
+    for records in closures.values():
+        for item, _rels in records:
+            if item["decision"] == "private-only":
+                continue
+            candidate = item["candidate_ref"]
+            target = Path(item["target_path"])
+            if candidate["state"]["type"] == "file":
+                targets.add(target)
+            else:
+                targets.update(target / member for member in _candidate_files(candidate))
+    for _category, item, _rels in documents:
+        if item["decision"] == "private-only":
+            continue
+        candidate = item["candidate_ref"]
+        target = Path(item["target_path"])
+        if candidate["state"]["type"] == "file":
+            targets.add(target)
+        else:
+            targets.update(target / member for member in _candidate_files(candidate))
+    return targets
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -461,20 +544,32 @@ def _classify_project_items(
                 len(rel) > len(folder) and rel[: len(folder)] == folder for rel in rels
             )
         ]
-        if len(matches) != 1:
+        if item["decision"] == "private-only":
+            if item["required"]:
+                _fail(
+                    "approval-conflict",
+                    "a private task attachment must be explicitly optional",
+                )
+            optional.append(item)
+            continue
+        if len(matches) == 0:
             _fail(
                 "approval-conflict",
                 "a task attachment has no unique approved task",
             )
-        folder = matches[0]
+        folder = max(matches, key=len)
         primaries[folder].append((item, [rel[len(folder) :] for rel in rels]))
     return primaries, documents, optional
 
 
-def _check_task_target(root: Path, target: Path) -> None:
-    rel = _parts_relative(target, root / "ai" / "tasks")
-    if not rel:
-        _fail("target-conflict", "a migrated task must live below ai/tasks")
+def _check_task_target(root: Path, target: Path, projection: Any) -> None:
+    tasks = root / "ai" / "tasks"
+    if projection.archive_bucket is None:
+        expected = tasks / projection.legacy_id
+    else:
+        expected = tasks / "archive" / projection.archive_bucket / projection.legacy_id
+    if target != expected:
+        _fail("target-conflict", "a migrated task must use its derived task location")
 
 
 def _check_task_closure(
@@ -483,6 +578,7 @@ def _check_task_closure(
     records: Sequence[tuple[Mapping[str, Any], list[tuple[str, ...]]]],
     read_source: ReadOriginal,
     private_strings: tuple[str, ...],
+    approved_targets: set[Path],
 ) -> tuple[Any, str]:
     items = [record[0] for record in records]
     decisions = {item["decision"] for item in items}
@@ -586,7 +682,6 @@ def _check_task_closure(
                 record_item["candidate_ref"], None
             )
         form = "file"
-    _check_task_target(root, target)
     source_raw = read_source(source_map[_TASK_JSON])
     source_path = PurePosixPath(*folder, _TASK_JSON).as_posix()
     projection = validate_task_projection(
@@ -596,11 +691,7 @@ def _check_task_closure(
         source_path=source_path,
         decision=decision,
     )
-    if target.name != projection.legacy_id:
-        _fail(
-            "target-conflict",
-            "the migrated task directory must carry the legacy logical identity",
-        )
+    _check_task_target(root, target, projection)
     sibling_sources = {
         rel: read_source(reference)
         for rel, reference in source_map.items()
@@ -611,6 +702,7 @@ def _check_task_closure(
     _check_shared_text(
         task_raw, private_strings=private_strings, private_digests=digests
     )
+    _check_markdown_links(task_raw, target / _TASK_DOCUMENT, root, approved_targets)
     for relative, candidate_raw in sibling_candidates.items():
         if decision == "share" and candidate_raw != sibling_sources[relative]:
             _fail(
@@ -619,6 +711,7 @@ def _check_task_closure(
         _check_shared_text(
             candidate_raw, private_strings=private_strings, private_digests=digests
         )
+        _check_markdown_links(candidate_raw, target / relative, root, approved_targets)
     _check_shared_text(
         sidecar_raw,
         private_strings=private_strings,
@@ -644,6 +737,10 @@ def _common_directory_prefix(paths: Sequence[tuple[str, ...]]) -> tuple[str, ...
     return prefix
 
 
+
+
+
+
 def _check_document_item(
     root: Path,
     category: str,
@@ -651,6 +748,7 @@ def _check_document_item(
     rels: Sequence[tuple[str, ...]],
     read_source: ReadOriginal,
     private_strings: tuple[str, ...],
+    approved_targets: set[Path],
 ) -> None:
     if item["decision"] not in {"share", "redact"} or not item["required"]:
         _fail(
@@ -660,7 +758,7 @@ def _check_document_item(
     candidate = item["candidate_ref"]
     target = Path(item["target_path"])
     documents_root = root.joinpath(*_DOC_TARGETS[category])
-    pairs: list[tuple[str, bytes, bytes]] = []
+    pairs: list[tuple[str, bytes, bytes, Path]] = []
     if candidate["state"]["type"] == "file":
         if len(rels) != 1:
             _fail(
@@ -677,6 +775,7 @@ def _check_document_item(
                 rels[0][-1],
                 read_source(item["sources"][0]),
                 _candidate_bytes(candidate, None),
+                target,
             )
         )
     else:
@@ -696,15 +795,21 @@ def _check_document_item(
         for rel, reference in zip(rels, item["sources"]):
             member = PurePosixPath(*rel[len(common) :]).as_posix()
             pairs.append(
-                (member, read_source(reference), _candidate_bytes(candidate, member))
+                (
+                    member,
+                    read_source(reference),
+                    _candidate_bytes(candidate, member),
+                    target / member,
+                )
             )
-    digests = {hashlib.sha256(source_raw).hexdigest() for _, source_raw, _ in pairs}
-    for member, source_raw, candidate_raw in pairs:
+    digests = {hashlib.sha256(source_raw).hexdigest() for _, source_raw, _, _ in pairs}
+    for member, source_raw, candidate_raw, output in pairs:
         if item["decision"] == "share" and candidate_raw != source_raw:
             _fail("candidate-conflict", "a shared document must preserve source bytes")
         _check_shared_text(
             candidate_raw, private_strings=private_strings, private_digests=digests
         )
+        _check_markdown_links(candidate_raw, output, root, approved_targets)
         if category == "lessons" and member.endswith(".md"):
             _check_lessons_preserved(source_raw, candidate_raw)
 
@@ -719,17 +824,22 @@ def _validate_project_closures(
     private_strings: tuple[str, ...],
 ) -> tuple[dict[str, Any], dict[tuple[str, ...], str]]:
     """Validate one project's closures; return projections and task forms."""
+    approved_targets = _approved_target_files(closures, documents)
     projections: dict[str, Any] = {}
     forms: dict[tuple[str, ...], str] = {}
     for folder, records in closures.items():
         projection, form = _check_task_closure(
-            root, folder, records, read_source, private_strings
+            root, folder, records, read_source, private_strings, approved_targets
         )
+        if projection.legacy_id in projections:
+            _fail("graph-conflict", "legacy task identities must be unique")
         projections[projection.legacy_id] = projection
         forms[folder] = form
     validate_projection_graph(projections)
     for category, item, rels in documents:
-        _check_document_item(root, category, item, rels, read_source, private_strings)
+        _check_document_item(
+            root, category, item, rels, read_source, private_strings, approved_targets
+        )
     return projections, forms
 
 
@@ -754,8 +864,7 @@ def _assign_items(
         if len(covering) != 1:
             _fail(
                 "scope-conflict",
-                "a publication item's sources do not belong to exactly one "
-                "selected project",
+                "a publication item's sources do not belong to exactly one selected project",
             )
         root = covering[0]
         target = item["target_path"]
@@ -872,7 +981,9 @@ def _check_identity_operation(
         )
 
 
-def _check_ignore_operation(root: Path, operation: Mapping[str, Any]) -> None:
+def _check_ignore_operation(
+    root: Path, operation: Mapping[str, Any], read_original: ReadOriginal
+) -> None:
     if (
         operation["phase"] != "apply"
         or operation["owner_kind"] != "gitignore"
@@ -887,6 +998,24 @@ def _check_ignore_operation(root: Path, operation: Mapping[str, Any]) -> None:
         _fail("semantic-violation", "the ignore protection content was altered")
     if operation["ownership"] != {"kind": "template-source", "reference": asset}:
         _fail("semantic-violation", "the ignore protection ownership was altered")
+    from onboard import missing_file_lines
+
+    before = operation["before_requirement"]
+    if before["kind"] != "state" or before["state"]["type"] not in {"file", "absent"}:
+        _fail("semantic-violation", "ignore protection needs a fixed original file state")
+    original = (
+        b"" if before["state"]["type"] == "absent"
+        else read_original({"path": operation["target"], "state": before["state"]})
+    )
+    try:
+        needed = missing_file_lines(
+            read_file(_IGNORE_ASSET, asset["state"]).decode("utf-8"),
+            original.decode("utf-8"),
+        )
+    except UnicodeDecodeError:
+        _fail("invalid-config", "managed ignore content is not UTF-8 text")
+    if not needed:
+        _fail("semantic-violation", "ignore protection was already complete before apply")
 
 
 def _check_cleanup_operation(
@@ -1042,19 +1171,19 @@ def _validate_project_operations(
     if identities:
         remaining.remove(identities[0])
         _check_identity_operation(root, identities[0], read_original)
-    if expected_publications or identities or deployment:
-        protection = [
-            operation
-            for operation in remaining
-            if operation["owner_kind"] == "gitignore"
-        ]
-        if len(protection) != 1:
-            _fail(
-                "semantic-violation",
-                "the required ignore protection is missing or duplicated",
-            )
+    needs_protection = bool(expected_publications or identities or deployment)
+    protection = [
+        operation for operation in remaining if operation["owner_kind"] == "gitignore"
+    ]
+    if protection:
+        if not needs_protection or len(protection) != 1:
+            _fail("semantic-violation", "the ignore protection scope was altered")
+        # Later phases see the applied file. Validate the frozen operation,
+        # not whether its pre-apply change is still needed in today's file.
+        _check_ignore_operation(root, protection[0], read_original)
         remaining.remove(protection[0])
-        _check_ignore_operation(root, protection[0])
+    elif needs_protection and _ignore_operation(root) is not None:
+        _fail("semantic-violation", "the required ignore protection is missing")
     cleanups = [operation for operation in remaining if operation["phase"] == "cleanup"]
     if len(cleanups) != 1:
         _fail(
@@ -1411,9 +1540,10 @@ def _inventory_coverage(
         if name == "tasks/.gitkeep" and empty_task_placeholder:
             continue
         matches = [folder for folder in folder_names if name.startswith(folder + "/")]
-        if len(matches) != 1:
+        if not matches:
             _fail("unknown-content", "loose legacy task data cannot be classified")
-        folder_members[matches[0]].append(name[len(matches[0]) + 1 :])
+        folder = max(matches, key=len)
+        folder_members[folder].append(name[len(folder) + 1 :])
     coverage: dict[str, int] = {}
 
     def cover(key: str) -> None:
@@ -1484,29 +1614,20 @@ def _inventory_coverage(
 def _identity_operation(root: Path) -> dict[str, Any] | None:
     legacy_path = root / _LEGACY_DIR / _DEVELOPER_NAME
     legacy_state = snapshot(legacy_path)
-    legacy_name: str | None = None
-    if legacy_state["type"] == "file":
-        legacy_name = read_legacy_identity(read_file(legacy_path, legacy_state))
-    elif legacy_state["type"] != "absent":
-        _fail("identity-conflict", "the legacy identity path is not a normal file")
     store = DeveloperStore(root, read_only=True)
     resolved = store.resolve()
     if resolved.status == "ready":
-        if resolved.source == "main-worktree":
-            # A verified linked main identity is adopted read-only; the old
-            # name is never copied regardless of its own validity.
-            return None
-        if legacy_name is not None and resolved.name != legacy_name:
-            _fail(
-                "identity-conflict",
-                "the existing developer identity differs from the legacy name",
-            )
         return None
     if resolved.status != "needs-name" or not resolved.first_write_eligible:
         _fail(
             "identity-conflict",
             "the current developer identity state cannot host a migration",
         )
+    legacy_name: str | None = None
+    if legacy_state["type"] == "file":
+        legacy_name = read_legacy_identity(read_file(legacy_path, legacy_state))
+    elif legacy_state["type"] != "absent":
+        _fail("identity-conflict", "the legacy identity path is not a normal file")
     if legacy_name is None:
         # No old or new identity: the runtime asks on first use; a migration
         # never invents or guesses a name.
@@ -1668,14 +1789,8 @@ def _shared_operations(
                     "customized legacy global routing requires explicit reconciliation",
                 )
     skills_root, _source = resolve_global_skills_dir()
-    if snapshot(skills_root)["type"] == "directory":
-        _skills_state, skill_entries = directory_snapshot(skills_root)
-        consumers = {entry["path"].split("/", 1)[0] for entry in skill_entries}
-        if not consumers <= set(pins["skills"]):
-            _fail(
-                "unknown-consumers",
-                "unselected legacy skill consumers prevent retirement",
-            )
+    if _lineage_probe(skills_root) == "directory":
+        _physical_root(skills_root)
         for name in sorted(pins["skills"]):
             target = skills_root / name
             state = snapshot(target)
@@ -1800,8 +1915,8 @@ def plan_migration(
         _fail("scope-conflict", "duplicate project root in the selected batch")
     for index, root in enumerate(roots):
         for other in roots[index + 1 :]:
-            if root.is_relative_to(other) or other.is_relative_to(root):
-                _fail("scope-conflict", "selected project roots must not overlap")
+            if root.samefile(other) or root.is_relative_to(other) or other.is_relative_to(root):
+                _fail("scope-conflict", "selected project roots must not overlap or alias")
     vault = _private_vault(backup_root)
     for root in roots:
         if vault.is_relative_to(root) or root.is_relative_to(vault):

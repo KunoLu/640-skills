@@ -23,6 +23,9 @@
 
 ### 修复
 
+- 全量复核 `findings.log` 后修正现存任务状态、迁移、Graft 接线及 CLI 报告缺陷；逐项保留原严重级别和历史，并记录本轮核验依据，不将历史已修复项重复计为新修复。
+- 任务路由在持久化前先选择新任务 ID，保存已接受推荐的理由和风险，相同已持久化选择不再重复确认；handoff 仅与最新快照去重，新名称使用定长任务 ID 摘要，旧 hex 名称仍可读取。
+- 安装器源完整性检查补齐状态模块；仅 telemetry 变更使用对应确认文案。迁移模块缺失返回脱敏 blocked JSON，文本 plan/check 展示 Graft 阻断原因，身份初始化展示实际写后结果，接线 blocked 保留退出码 2。
 - PowerShell 使用严格参数绑定拒绝已移除参数，内部 project-only 执行模式不再写入公开 `Action` 的受限取值；真实解释器回归覆盖成功与拒绝路径。
 - PowerShell workflow forwarding 把 Windows 拆开的 `--source-root=D:` / `--source-root=D` 与后续 `\\path` 重新拼成完整路径，避免 `D:\\...` 被解析成盘符 `D`。
 - 两安装器在全局/可选项目安装和 MCP 写入之前执行完整项目前置检查，避免最终拒绝 scaffold 冲突时已经产生副作用；`check-projects` 同步支持实际 `--skip-project-agents` 检查范围。

@@ -61,6 +61,34 @@ def file_contents(root: Path) -> dict[str, bytes]:
 
 
 class MigrationApplyTests(unittest.TestCase):
+    def test_resource_preservation_failure_keeps_exit_three(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = legacy_project(base, "project")
+            home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            environment = {
+                "HOME": str(home), "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [project], vault, "fixture", None, tool_versions=runtime_versions()
+                )
+                path = evidence / "manifest.json"
+                path.write_bytes(canonical_json_bytes(manifest))
+                before = (project / ".gitignore").read_bytes()
+                with mock.patch(
+                    "sbtd_migration.write_file",
+                    side_effect=ContractError("checksum-mismatch", "synthetic readback failure", exit_code=3),
+                ):
+                    response, code = apply_migration(path, confirmed=True)
+            self.assertEqual(code, 3, response)
+            self.assertEqual(response["status"], "failed")
+            self.assertEqual((project / ".gitignore").read_bytes(), before)
+
     def test_batch_preflight_rejects_drift_before_any_project_write(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -412,6 +440,41 @@ class MigrationApplyTests(unittest.TestCase):
                 self.assertEqual(retried["status"], "already-complete")
                 self.assertEqual(file_contents(root), before_retry)
             self.assertEqual(list(home.iterdir()), [])
+
+    def test_retry_preserves_original_unavailable_exit_code(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = legacy_project(base, "project")
+            home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [root], vault, "fixture", None, tool_versions=runtime_versions()
+                )
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(manifest))
+                first, first_code = apply_migration(manifest_path, confirmed=True)
+                self.assertEqual(first_code, 0, first)
+                receipt_path = next(
+                    path
+                    for path in evidence.glob("apply-*.json")
+                    if json.loads(path.read_text()).get("apply_id")
+                    == first["migration"]["apply_receipt"]["apply_id"]
+                )
+                backup = next(vault.rglob("journal-1.md"))
+                backup.unlink()
+                retried, code = apply_migration(
+                    manifest_path, previous_receipt_path=receipt_path, confirmed=True
+                )
+            self.assertEqual(code, 3, retried)
+            self.assertEqual(retried["status"], "failed")
 
 
 if __name__ == "__main__":

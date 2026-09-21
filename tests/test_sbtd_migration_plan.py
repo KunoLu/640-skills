@@ -4,19 +4,18 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-import sys
-
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from onboard_contracts import ContractError
 import onboard_contracts as contracts
-
+import sbtd_migration_plan
+from onboard_contracts import ContractError
 from sbtd_migration_files import read_file, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
 
@@ -1045,20 +1044,18 @@ class MigrationPlanClosureTests(unittest.TestCase):
                         tool_versions={"onboard": "f", "graft": "0.18.0"},
                     )
 
-    def test_identity_conflicts_block_planning(self):
+    def test_existing_current_identity_precedes_legacy_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
             _write(project / ".sbtd/developer", b"name=other9\n")
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            manifest = _plan(project, vault, decisions, home)
+            self.assertFalse(
+                any(
+                    op["change"]["kind"] == "migrate-developer"
+                    for op in manifest["payload"]["projects"][0]["private_operations"]
+                )
+            )
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
@@ -1226,6 +1223,242 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                     )
 
 
+class MigrationPlanCurrentFindingsTests(unittest.TestCase):
+    def test_archived_tasks_require_the_derived_archive_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            items = []
+            _add_task(
+                project,
+                vault,
+                items,
+                folder="archive/2026-09/09-01-alpha",
+                source_overrides={"status": "completed", "completedAt": "2026-09-05"},
+                task_md_kwargs={"status": "done", "events": [{"at": "unknown", "from": "unknown", "to": "done", "reason": "legacy completion fact", "evidence": "legacy task.json status"}]},
+            )
+            decisions = _decisions(vault, items)
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project], vault, "c", decisions, tool_versions={"onboard": "f", "graft": "0.18.0"}
+                )
+            archive = project / "ai/tasks/archive/2026-Q3/alpha"
+            for item in items:
+                item["target_path"] = str(archive / Path(item["target_path"]).name)
+                item["approval"]["scope"]["target_path"] = item["target_path"]
+            decisions = _decisions(vault, items)
+            manifest = _plan(project, vault, decisions, home)
+            copies = [
+                operation["target"]
+                for operation in manifest["payload"]["projects"][0]["private_operations"]
+                if operation["change"]["kind"].startswith("copy-")
+            ]
+            self.assertEqual(copies, [str(archive / "legacy-task.json"), str(archive / "task.md")])
+
+    def test_unknown_completion_time_requires_the_undated_archive_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            items = []
+            _add_task(
+                project,
+                vault,
+                items,
+                folder="archive/unknown/09-01-alpha",
+                source_overrides={"status": "completed"},
+                task_md_kwargs={"status": "done", "events": [{"at": "unknown", "from": "unknown", "to": "done", "reason": "legacy completion fact", "evidence": "legacy task.json status"}]},
+            )
+            archive = project / "ai/tasks/archive/undated/alpha"
+            for item in items:
+                item["target_path"] = str(archive / Path(item["target_path"]).name)
+                item["approval"]["scope"]["target_path"] = item["target_path"]
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            self.assertIn(
+                str(archive / "task.md"),
+                [op["target"] for op in manifest["payload"]["projects"][0]["private_operations"]],
+            )
+
+    def test_completed_active_task_is_not_implicitly_archived(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            items = []
+            _add_task(
+                project, vault, items,
+                source_overrides={"status": "completed"},
+                task_md_kwargs={
+                    "status": "done",
+                    "events": [{
+                        "at": "unknown", "from": "unknown", "to": "done",
+                        "reason": "legacy completion fact",
+                        "evidence": "legacy task.json status",
+                    }],
+                },
+            )
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            targets = [
+                op["target"]
+                for op in manifest["payload"]["projects"][0]["private_operations"]
+                if op["change"]["kind"].startswith("copy-")
+            ]
+            self.assertIn(str(project / "ai/tasks/alpha/task.md"), targets)
+            self.assertFalse(any("/ai/tasks/archive/" in target for target in targets))
+
+    def test_duplicate_logical_legacy_ids_block_before_projection_overwrite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            items = []
+            _add_task(project, vault, items, folder="09-01-alpha")
+            _add_task(
+                project, vault, items, folder="archive/unknown/09-02-alpha",
+                source_overrides={"status": "completed"},
+                task_md_kwargs={
+                    "status": "done",
+                    "events": [{
+                        "at": "unknown", "from": "unknown", "to": "done",
+                        "reason": "legacy completion fact",
+                        "evidence": "legacy task.json status",
+                    }],
+                },
+            )
+            for item in items[2:]:
+                item["target_path"] = str(
+                    project / "ai/tasks/archive/undated/alpha" / Path(item["target_path"]).name
+                )
+                item["approval"]["scope"]["target_path"] = item["target_path"]
+            with _home_env(home), self.assertRaises(ContractError) as caught:
+                plan_migration(
+                    [project], vault, "c", _decisions(vault, items), tool_versions={"onboard": "f", "graft": "0.18.0"}
+                )
+            self.assertEqual(caught.exception.code, "graph-conflict")
+
+    def test_nested_task_files_belong_to_the_deepest_task_folder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            items = []
+            _add_task(
+                project,
+                vault,
+                items,
+                task_id="parent",
+                folder="09-parent",
+                source_overrides={"children": ["09-parent/10-child"]},
+            )
+            _add_task(
+                project,
+                vault,
+                items,
+                task_id="child",
+                folder="09-parent/10-child",
+                source_overrides={"parent": "09-parent"},
+                task_md_kwargs={"parent": "parent"},
+            )
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(len(manifest["payload"]["publication_decisions"]["items"]), 4)
+
+    def test_optional_private_task_attachment_is_covered_without_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            items = json.loads(decisions.read_text())["items"]
+            attachment = next(item for item in items if item["item_id"].endswith("-prd"))
+            attachment.update(required=False, decision="private-only", target_path=None, candidate_ref=None)
+            attachment["approval"]["scope"].update(
+                decision="private-only", target_path=None, candidate_ref=None
+            )
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            copied = {
+                operation["target"]
+                for operation in manifest["payload"]["projects"][0]["private_operations"]
+                if operation["change"]["kind"].startswith("copy-")
+            }
+            self.assertNotIn(str(project / "ai/tasks/alpha/prd.md"), copied)
+
+    def test_shared_markdown_links_need_a_planned_local_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+
+            def update_spec(body):
+                source = project / ".trellis/spec/auth.md"
+                candidate = vault / "cand-spec/auth.md"
+                _write(source, body)
+                _write(candidate, body)
+                items = json.loads(decisions.read_text())["items"]
+                index = next(i for i, item in enumerate(items) if item["item_id"] == "spec-auth")
+                items[index] = _item(
+                    "spec-auth", [_ref(source)], project / "docs/spec/auth.md", "share", candidate
+                )
+                return _decisions(vault, items)
+
+            manifest = _plan(
+                project,
+                vault,
+                update_spec(b"[lesson](../lessons/index.md) [web](https://example.test)\n"),
+                home,
+            )
+            self.assertEqual(manifest["payload"]["projects"][0]["root"], str(project))
+            for body in (
+                b"[missing](missing.md)\n",
+                b"[escape](../../outside.md)\n",
+                b"[file](file:///outside.md)\n",
+                b"[unsafe](javascript:alert%281%29)\n",
+                b"![missing](missing.png)\n",
+                b"[drive](C:/outside.md)\n",
+                b"[encoded-drive](C%3A%2Foutside.md)\n",
+            ):
+                with self.subTest(body=body):
+                    with _home_env(home), self.assertRaises(ContractError):
+                        plan_migration(
+                            [project], vault, "c", update_spec(body), tool_versions={"onboard": "f", "graft": "0.18.0"}
+                        )
+
+    def test_current_identity_precedes_malformed_legacy_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            _write(project / ".sbtd/developer", b"name=current9\n")
+            _write(project / ".trellis/.developer", b"name=broken\nname=broken\n")
+            manifest = _plan(project, vault, decisions, home)
+            self.assertFalse(
+                any(
+                    op["change"]["kind"] == "migrate-developer"
+                    for op in manifest["payload"]["projects"][0]["private_operations"]
+                )
+            )
+
+    def test_existing_complete_ignore_protection_needs_no_duplicate_operation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            _write(project / ".gitignore", sbtd_migration_plan._IGNORE_ASSET.read_bytes())
+            manifest = _plan(project, vault, decisions, home)
+            project_record = dict(manifest["payload"]["projects"][0])
+            project_record["private_operations"] = [
+                *project_record["private_operations"], {"phase": "deploy"}
+            ]
+            sbtd_migration_plan._validate_project_operations(
+                project, project_record, manifest["payload"]["publication_decisions"]["items"], _strict_reader
+            )
+
+
 class MigrationPlanSharedTests(unittest.TestCase):
     def test_drifted_shared_resources_are_preserved_without_operations(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1242,7 +1475,7 @@ class MigrationPlanSharedTests(unittest.TestCase):
             self.assertEqual(manifest["payload"]["shared_operations"], [])
             self.assertEqual(_tree_bytes(base), before)
 
-    def test_unknown_shared_consumers_block_retirement(self):
+    def test_unrelated_shared_skills_are_preserved_without_blocking_retirement(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project = _base_tree(base)
@@ -1250,16 +1483,14 @@ class MigrationPlanSharedTests(unittest.TestCase):
             vault.mkdir(mode=0o700)
             home = base / "home"
             home.mkdir(mode=0o700)
-            _write(home / ".agent/skills/unknown-skill/SKILL.md", b"name: other\n")
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        None,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            unrelated = home / ".agent/skills/unknown-skill/SKILL.md"
+            _write(unrelated, b"name: other\n")
+            outside = base / "unrelated-target"
+            outside.mkdir()
+            (home / ".agent/skills/unrelated-link").symlink_to(outside, target_is_directory=True)
+            manifest = _plan(project, vault, None, home)
+            self.assertEqual(manifest["payload"]["shared_operations"], [])
+            self.assertEqual(unrelated.read_bytes(), b"name: other\n")
 
 
 def _strict_reader(reference):
@@ -1283,6 +1514,24 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
         with _home_env(home):
             self.assertIsNone(validate_legacy_inputs(manifest, _strict_reader))
         return project, vault, home, manifest
+
+    def test_resealed_redundant_ignore_operation_is_rejected_from_original_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, _vault, home, manifest = self._planned(base)
+            _write(project / ".gitignore", sbtd_migration_plan._IGNORE_ASSET.read_bytes())
+
+            def make_redundant(payload):
+                operation = next(
+                    op for op in payload["projects"][0]["private_operations"]
+                    if op["owner_kind"] == "gitignore"
+                )
+                operation["before_requirement"]["state"] = snapshot(project / ".gitignore")
+
+            tampered = _reseal(manifest, make_redundant)
+            with _home_env(home), self.assertRaises(ContractError) as caught:
+                validate_legacy_inputs(tampered, _strict_reader)
+            self.assertEqual(caught.exception.code, "semantic-violation")
 
     def test_invented_private_operation_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -107,6 +107,7 @@ CLI creates the temporary HOME and launches children.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import re
@@ -1437,7 +1438,16 @@ def _serve_mcp_child(
                         break
                     native_input.write(line)
                     native_input.flush()
-        except (OSError, ValueError, ContractError):
+        except BrokenPipeError:
+            # The native child closed stdin; its exit status remains authoritative.
+            pass
+        except OSError as error:
+            if error.errno == errno.EPIPE:
+                pass
+            else:
+                refusal_exit.append(2)
+                stopping.set()
+        except (ValueError, ContractError):
             refusal_exit.append(2)
             stopping.set()
         finally:

@@ -51,6 +51,8 @@ class GraftRuntimeTests(unittest.TestCase):
             "ANTHROPIC_API_KEY": "secret-anthropic",
             "NODE_OPTIONS": "--require /tmp/evil.js",
             "NODE_PATH": "/tmp/evil",
+            "DOTENV_CONFIG_DEBUG": "true",
+            "DOTENV_CONFIG_QUIET": "false",
         }
         self.env_patch = mock.patch.dict(os.environ, self.env, clear=True)
         self.env_patch.start()
@@ -341,6 +343,24 @@ class GraftRuntimeTests(unittest.TestCase):
         self.assertTrue(result["packagePresent"])
         self.assertEqual(Path(str(result["path"])).name, "graft")
 
+    def test_check_blocks_verified_pinned_cli_on_unsupported_node(self) -> None:
+        self.make_node("v18.20.0")
+        self.make_package_layout()
+        result = graft_runtime.check_graft()
+        self.assertFalse(result["installed"])
+        self.assertEqual(result["status"], "blocked")
+        self.assertFalse(result["node"]["compatible"])
+        self.assertIn("Node", str(result["reason"]))
+
+    def test_check_forces_dotenv_quiet_mode_for_version_probe(self) -> None:
+        capture = self.root / "check-cli-env.log"
+        self.make_package_layout(env_capture=capture)
+        result = graft_runtime.check_graft()
+        self.assertTrue(result["installed"])
+        probe_env = self.read_env_capture(capture)
+        self.assertNotIn("DOTENV_CONFIG_DEBUG", probe_env)
+        self.assertEqual(probe_env.get("DOTENV_CONFIG_QUIET"), "true")
+
     def test_check_distinguishes_package_present_from_usable_cli(self) -> None:
         pkg_dir = self.prefix / "lib" / "node_modules" / "@nanonets" / "graft"
         pkg_dir.mkdir(parents=True)
@@ -470,6 +490,19 @@ class GraftRuntimeTests(unittest.TestCase):
         self.assertEqual(
             target.read_bytes(), original, "unconfirmed probe must not write"
         )
+
+    def test_telemetry_only_confirmation_fails_closed_after_cli_disappears(self) -> None:
+        argv_log, _ = self.make_npm()
+        payload = b"fixture-tarball"
+        with self.fake_fetch(payload) as fetch, self.patch_integrity_for(payload):
+            result, code = graft_runtime.install_graft(
+                confirmed=True, telemetry_only=True
+            )
+        self.assertEqual(code, 2)
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["stage"], "telemetry-only")
+        self.assertEqual(self.npm_install_calls(argv_log), [])
+        fetch.assert_not_called()
 
     def test_npm_probes_use_isolated_cache_and_leave_home_unchanged(self) -> None:
         self.make_node()

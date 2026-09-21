@@ -837,6 +837,34 @@ class ScopedMcpForwardingTests(unittest.TestCase):
                     proc.wait()
                 close_pipes(proc)
 
+    def test_native_epipe_preserves_child_exit_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(
+                "import os, time\n"
+                "os.close(0)\n"
+                "print('stdin-closed', flush=True)\n"
+                "time.sleep(0.2)\n"
+                "raise SystemExit(7)\n"
+            )
+            env, _tmp = launch_env(base)
+            proc = launch_mcp(root, cli, env)
+            try:
+                self.assertEqual(proc.stdout.readline(), b"stdin-closed\n")
+                send_line(
+                    proc,
+                    {"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+                )
+                self.assertEqual(proc.wait(timeout=10), 7, proc.stderr.read().decode())
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
+                close_pipes(proc)
+
     def test_slow_host_drains_complete_native_reply_without_shutdown_truncation(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

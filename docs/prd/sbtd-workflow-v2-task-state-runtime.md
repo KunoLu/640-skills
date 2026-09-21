@@ -61,7 +61,7 @@
 - `promote(task_id, confirmed=False, retire_source=False, include_tasks=())`
 - `archive(task_id, reason=..., evidence=..., confirmed=False, retire_source=False, include_tasks=())`
 
-未确认的调用只返回只读计划/结果，不产生写入。`promote` / `archive`返回`TaskTransfer(status, task, source_path, target_path, files, retained_original, completed_steps)`；其余操作返回`TaskSnapshot`或更新后的`TaskSnapshot`。失败以`TaskStateError(reason, next_step, completed_steps)`如实报告。
+未确认的 `promote` / `archive` 返回只读计划；其他写操作（包括 `rebind`、`protect_local_state`）缺少确认时抛出 `TaskStateError`，不写入。`promote` / `archive` 返回 `TaskTransfer(status, task, source_path, target_path, files, retained_original, completed_steps)`；`protect_local_state` 返回是否新增保护的布尔值；任务创建与更新操作返回 `TaskSnapshot`。失败以 `TaskStateError(reason, next_step, completed_steps)` 如实报告，包含底层任务解析错误。
 
 ### 相对原稿的工程边界
 
