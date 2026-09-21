@@ -506,10 +506,13 @@ def _save_failed_signal(text: str) -> bool:
             "cannot save",
             "permission denied",
             "read-only",
+            "save persisted: **no**",
+            "save persisted: no",
             "未持久化",
             "无法保存",
             "保存失败",
         )
+
     )
 
 
@@ -851,6 +854,14 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertTrue(_save_failed_signal(live_save))
         self.assertTrue(_save_failed_signal('{"mode":"strict"} 未持久化'))
         self.assertFalse(_save_failed_signal('{"mode":"default","persisted":true}'))
+        live_save_no = (
+            "Current execution mode: **strict**\n"
+            "Save persisted: **No**\n"
+        )
+        self.assertEqual(_observed_mode(live_save_no), "strict")
+        self.assertTrue(_save_failed_signal(live_save_no))
+        self.assertFalse(_save_failed_signal("Save persisted: **Yes**\n"))
+
 
     def test_gate_ac_requires_both_hosts(self) -> None:
         codex_only = [
