@@ -42,8 +42,10 @@ RESTORE_PROMPT = (
 )
 SAVE_PROMPT = (
     "The user confirmed switching this task to strict. "
-    "Persist that choice. Do not otherwise edit the project."
+    "Persist that choice. Do not otherwise edit the project. "
+    "Reply with the current session mode and whether the save persisted."
 )
+
 _JSON_OBJECT = re.compile(r"\{[^{}]*\}")
 _AUTH_PHRASES = (
     "not logged in",
@@ -591,6 +593,10 @@ class HostModeSmokeTests(unittest.TestCase):
         for token in ("book_gate_plan", "loaded_strict_ref", "strict.md"):
             self.assertNotIn(token, blob)
         self.assertIn("strict", SAVE_PROMPT)
+        lowered_save = SAVE_PROMPT.lower()
+        self.assertIn("session mode", lowered_save)
+        self.assertIn("persist", lowered_save)
+
 
     def test_task_paths_follow_state_reference(self) -> None:
         self.assertEqual(

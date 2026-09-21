@@ -57,7 +57,8 @@
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。
 - `SBTD_P115_HOST=1` Gate 约 200s：六格 smoke passed。报告 `…-2026_09_21-10_41_50`（exclude）。不是完整 Book/BDD，不是 AC-20。
-- `SBTD_P115_HOST=1` AC-24 再跑约 172s：跨会话 restore **两 host passed**（散文 lite）。save-failure **FAIL**：Codex `observed=None` / `missing-strict-session`。不是 AC-24。
+- `SBTD_P115_HOST=1` AC-24 再跑约 172s：跨会话 restore **两 host passed**（散文 lite）。save-failure **FAIL**：Codex `observed=None` / `missing-strict-session`。不是 AC-24。原因：SAVE_PROMPT 没要求说出当前会话 mode。已补「Reply with the current session mode and whether the save persisted.」**不重跑 live**。
+
 
 
 
