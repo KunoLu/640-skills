@@ -43,8 +43,9 @@ RESTORE_PROMPT = (
 SAVE_PROMPT = (
     "The user confirmed switching this task to strict. "
     "Persist that choice. Do not otherwise edit the project. "
-    "Reply with the current session mode and whether the save persisted."
+    "State the current execution mode and whether the save persisted."
 )
+
 
 _JSON_OBJECT = re.compile(r"\{[^{}]*\}")
 _AUTH_PHRASES = (
@@ -518,6 +519,17 @@ def _both_hosts_passed(results: list[dict[str, object]], *, cells: int) -> bool:
     return len(passed) == cells and hosts == set(HOSTS)
 
 
+def _cell_public(item: dict[str, object]) -> dict[str, object]:
+    return {
+        "host": item.get("host"),
+        "mode": item.get("mode"),
+        "status": item.get("status"),
+        "reason": item.get("reason"),
+        "observed": item.get("observed"),
+    }
+
+
+
 
 
 
@@ -594,8 +606,9 @@ class HostModeSmokeTests(unittest.TestCase):
             self.assertNotIn(token, blob)
         self.assertIn("strict", SAVE_PROMPT)
         lowered_save = SAVE_PROMPT.lower()
-        self.assertIn("session mode", lowered_save)
+        self.assertIn("current execution mode", lowered_save)
         self.assertIn("persist", lowered_save)
+
 
 
     def test_task_paths_follow_state_reference(self) -> None:
@@ -974,7 +987,8 @@ class HostModeSmokeTests(unittest.TestCase):
                 continue
             results.append(self._run_host_restore(host, binary))
         failed = [item for item in results if item["status"] == "failed"]
-        self.assertFalse(failed, failed)
+        self.assertFalse(failed, [_cell_public(item) for item in failed])
+
         if not _both_hosts_passed(results, cells=2):
             self.skipTest(f"host restore is not AC-24 pass: {results!r}")
 
@@ -998,7 +1012,8 @@ class HostModeSmokeTests(unittest.TestCase):
                 continue
             results.append(self._run_host_save(host, binary))
         failed = [item for item in results if item["status"] == "failed"]
-        self.assertFalse(failed, failed)
+        self.assertFalse(failed, [_cell_public(item) for item in failed])
+
         if not _both_hosts_passed(results, cells=2):
             self.skipTest(f"host save-failure is not AC-24 pass: {results!r}")
 
