@@ -357,7 +357,7 @@ def _check_markdown_links(
             continue
         if not isinstance(href, str) or not safe_link(href):
             _fail("target-conflict", "a shared Markdown link uses an unsafe destination")
-        if re.match(r"^[A-Za-z]:[\\/]", unquote(href)):
+        if re.match(r"^[A-Za-z]:", unquote(href)):
             _fail("target-conflict", "a shared Markdown link cannot name a drive path")
         try:
             parsed = urlsplit(href)

@@ -456,6 +456,10 @@ The unreleased v2 candidate validator binds mapped state to the preserved `task.
 
 Candidates prepared under the earlier permissive grammar must be regenerated in the private preparation area and reapproved; do not rewrite an already sealed manifest or its approved bytes. Historical archive positions map to the proven quarter or `undated`; an ordinary completed task is not automatically archived. Local Markdown links/images must resolve to approved publication targets; escaping paths, local file URLs and unsafe schemes are rejected.
 
+**Link-policy boundary:** reject any Windows drive prefix (`C:secret.md`, `C:/secret.md`, or `C:\secret.md`, including percent-encoded spellings) before treating a URI scheme as external. Ordinary project-relative links still need an approved target. Other protocols keep the existing markdown-it safety policy: this is not HTTPS-only and does not ban every data URI; HTTP, mailto and parser-approved image data URIs remain supported, while unsafe destinations remain rejected. Validation never fetches the link.
+
+**Exit-policy boundary:** a rejected link remains a pre-publication `target-conflict` (the CLI reports blocked/2). This repair does not change execution-phase status aggregation, preservation failures or partial-receipt semantics. Any broader 2/3/5 reclassification must separately define preflight refusals versus failures after writes and update the matching status/retry contracts; it is not bundled with this path fix.
+
 **Open migration boundary (PLAN-008):** workspace journals and `.current-task` still remain private-only. Automatic unfinished-context handoff projection is not implemented; the pinned pointer uses session JSON, not a guessed path line. Before selecting a real migration involving unfinished workspace context, resolve its private handoff format, explicit approval and recovery evidence in P2 preparation. A successful current plan is not proof of that missing handoff capability.
 
 Command shapes below require actual authorized values in place of angle-bracket arguments:
