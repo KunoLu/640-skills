@@ -52,12 +52,14 @@
 
 ## 本轮实测
 
-- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 18 tests / 5 skip / OK。
+- 无 host：`python -B -m unittest tests.test_p1_15_host_mode_smoke` → 19 tests / 5 skip / OK。
+
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。`recommended` 取首词模式，`keep_option` 允许非空字符串。
-- Gate / 跨会话 / 保存失败 live 格已入库，仍须 `SBTD_P115_HOST=1`；本轮无 host 下 5 skip，不当 AC-14/23/24 host 绿。
-- Codex JSON usage 约 3.9 万 input tokens／格，含大量 cache；OMP 无 usage 字段。AC-20 仍为 measured-not-met，不是 2k 达标。
+- `SBTD_P115_HOST=1` Gate 六格约 197s：**skip，不是 AC-14/23**。Codex default/lite/strict 均 passed（strict 打开了 `strict.md`）。OMP default 当时标 `auth`，但是 `--mode json` 大段 JWT/base64 里的 `401` 子串，**不能当未登录**；lite/strict 为诚实 `no-read-trace`。两 host 未齐。
+- Codex JSON usage mode JSON 约 3.9 万、Gate 约 6–8.6 万 input tokens／格，含大量 cache；OMP 无 usage 字段。AC-20 仍为 measured-not-met。
 - `evidenceSource=developer-local`，`publication=local-only`。
+
 
 
 ## AC 缺口与本轮口径
@@ -65,11 +67,11 @@
 | AC | 口径 | 证据 |
 |---|---|---|
 | AC-04 | **partial**：六格隔离会话能读 MODE 并返回 JSON。不是完整澄清／实现验证／strict Gate | live matrix；`SBTD_P115_HOST=1` |
-| AC-14 | **harness-ready**：两 host×三模式才算。无读事件不得把 OMP 沉默当绿。live 未跑满格 | `test_live_host_gate_layering` |
+| AC-14 | **skip**：Codex 三格有证据；OMP 无读痕迹。不以 Codex 三格或 OMP 假 auth 冒充 | live Gate 197s |
 | AC-19 | **inherited**：仓库 CI 可复现归 P1-14。本项 opt-in host 不进 CI | 无 host unittest |
 | AC-20 | **measured-not-met**：Codex 约 3.9 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON（current≠recommended、paused、keep_option） | `test_sbtd_task_routing` + live refuse |
-| AC-23 | **harness-ready**：default/lite 须有 tool-trace 且未打开 `strict.md`、回复无 Gate 表。空 print 不是通过 | `test_live_host_gate_layering` |
+| AC-23 | **skip**：Codex default/lite 有 tool-trace 且未开 `strict.md`。OMP 无读事件 | live Gate |
 | AC-24 | **harness-ready**：跨会话必须观察到 mode=lite，stale handoff 的 strict 为失败；保存失败磁盘仍 default 且会话仍 strict。live 未跑满格 | `test_live_host_cross_session` / `test_live_host_save_failure` |
 
 

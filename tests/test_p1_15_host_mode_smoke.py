@@ -45,7 +45,7 @@ SAVE_PROMPT = (
     "Persist that choice. Do not otherwise edit the project."
 )
 _JSON_OBJECT = re.compile(r"\{[^{}]*\}")
-_AUTH_MARKERS = (
+_AUTH_PHRASES = (
     "not logged in",
     "please log in",
     "please login",
@@ -54,11 +54,10 @@ _AUTH_MARKERS = (
     "missing api",
     "api key",
     "no api key",
-    "401",
-    "403",
     "auth required",
     "not authenticated",
 )
+
 
 
 def _words_and_bytes(path: Path) -> tuple[int, int]:
@@ -190,10 +189,16 @@ def _write_host_report(results: list[dict[str, object]]) -> None:
 
 
 def _auth_blocked(stdout: str, stderr: str, returncode: int) -> bool:
+    err = stderr.lower()
+    if any(marker in err for marker in _AUTH_PHRASES):
+        return True
+    if "401" in err or "403" in err:
+        return True
     haystack = f"{stdout}\n{stderr}".lower()
-    if any(marker in haystack for marker in _AUTH_MARKERS):
+    if any(marker in haystack for marker in _AUTH_PHRASES):
         return True
     return returncode != 0 and "login" in haystack
+
 
 
 def _task_relative(mode: str, task_id: str) -> str:
@@ -498,6 +503,13 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertEqual(_leading_mode(report["recommended"]), "strict")
         self.assertTrue(report["paused"])
         self.assertTrue(_keep_option_present(report["keep_option"]))
+
+    def test_auth_ignores_401_inside_json_stdout(self) -> None:
+        blob = '{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxx401yyyy403zzzz"}'
+        self.assertFalse(_auth_blocked(blob, "", 0))
+        self.assertTrue(_auth_blocked("", "please log in", 1))
+        self.assertTrue(_auth_blocked("", "HTTP 401 unauthorized", 1))
+
 
     def test_gate_and_restore_prompts_do_not_name_observables(self) -> None:
         blob = f"{GATE_PROMPT}\n{RESTORE_PROMPT}".lower()
