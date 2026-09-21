@@ -368,16 +368,25 @@ def _assistant_replies(text: str) -> str:
     return "\n".join(parts)
 
 
+def _is_event_jsonl(text: str) -> bool:
+    for record in _jsonl_records(text):
+        kind = str(record.get("type") or "")
+        if kind.startswith("item.") or kind in {"agent_message", "message"}:
+            return True
+        item = _record_item(record)
+        if item is None:
+            continue
+        inner = str(item.get("type") or "")
+        if inner in _REPLY_KINDS or inner in _TRACE_KINDS:
+            return True
+    return False
+
+
 def _reply_for_mode(text: str) -> str:
-    records = _jsonl_records(text)
-    if not records:
+    if not _is_event_jsonl(text):
         return text
-    replies = _assistant_replies(text)
-    if replies:
-        return replies
-    if any(_is_tool_item(_trace_item(record)) for record in records):
-        return ""
-    return text
+    return _assistant_replies(text)
+
 
 
 
