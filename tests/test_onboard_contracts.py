@@ -4,6 +4,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -296,6 +297,82 @@ class PublicationDecisionTests(unittest.TestCase):
         expect_error(self, "schema-violation", self.decisions_with, mutate)
 
 
+class PathAliasContainmentTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-contract-paths-")
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+
+    def decisions_with_targets(self, first: Path, second: Path) -> dict:
+        items = fixtures.build_publication_items()
+        items[0]["target_path"] = str(first)
+        items[0]["approval"]["scope"]["target_path"] = str(first)
+        clone = copy.deepcopy(items[0])
+        clone["item_id"] = "alias-target"
+        clone["target_path"] = str(second)
+        clone["approval"]["scope"]["target_path"] = str(second)
+        items.append(clone)
+        return {"schema_version": 1, "items": items}
+
+    def test_public_contract_rejects_symlinked_parent_child_targets(self) -> None:
+        real = self.root / "real"
+        real.mkdir()
+        alias = self.root / "alias"
+        try:
+            alias.symlink_to(real, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"symlinks are unavailable: {error}")
+
+        payload = self.decisions_with_targets(
+            real / "reports", alias / "reports" / "detail.json"
+        )
+
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.validate_document,
+            payload,
+            "publication_decisions",
+        )
+
+    def test_public_contract_rejects_case_aliases_when_filesystem_identifies_them(
+        self,
+    ) -> None:
+        lower = self.root / "case"
+        upper = self.root / "CASE"
+        lower.mkdir()
+        if not upper.exists() or not os.path.samefile(lower, upper):
+            self.skipTest("filesystem is case-sensitive")
+
+        payload = self.decisions_with_targets(
+            lower / "reports", upper / "reports" / "detail.json"
+        )
+
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.validate_document,
+            payload,
+            "publication_decisions",
+        )
+
+    def test_public_contract_keeps_distinct_case_sensitive_targets_separate(
+        self,
+    ) -> None:
+        lower = self.root / "case"
+        upper = self.root / "CASE"
+        lower.mkdir()
+        if upper.exists() and os.path.samefile(lower, upper):
+            self.skipTest("filesystem is case-insensitive")
+        upper.mkdir()
+
+        payload = self.decisions_with_targets(
+            lower / "report.json", upper / "report.json"
+        )
+
+        contracts.validate_document(payload, "publication_decisions")
+
+
 class ManifestSemanticTests(unittest.TestCase):
     def setUp(self) -> None:
         self.manifest = fixtures.build_manifest()
@@ -303,7 +380,9 @@ class ManifestSemanticTests(unittest.TestCase):
     def test_valid_manifest_passes(self) -> None:
         contracts.validate_document(self.manifest, "manifest")
 
-    def test_deployment_declaration_is_required_and_null_only_without_deploy(self) -> None:
+    def test_deployment_declaration_is_required_and_null_only_without_deploy(
+        self,
+    ) -> None:
         payload = fixtures.build_manifest_payload()
         payload.pop("deployment")
         with self.assertRaises(contracts.ContractError):
@@ -359,7 +438,6 @@ class ManifestSemanticTests(unittest.TestCase):
         )
         with self.assertRaises(contracts.ContractError):
             contracts.seal_document("manifest", payload)
-
 
     def test_forged_manifest_id_is_rejected_with_exit_three(self) -> None:
         document = copy.deepcopy(self.manifest)
@@ -978,6 +1056,30 @@ class DeclaredBindingTests(unittest.TestCase):
             }
         ]
 
+        expect_error(
+            self,
+            "semantic-violation",
+            contracts.seal_document,
+            "deployment_evidence",
+            payload,
+        )
+
+    def test_projects_may_share_one_state_consistent_report(self) -> None:
+        payload = fixtures.build_deployment_evidence_payload(
+            self.family["manifest"], self.family["apply_receipt"]
+        )
+        shared = {
+            "path": f"{fixtures.EVIDENCE_DIR}/reports/batch.json",
+            "state": fixtures.file_state(103),
+        }
+        for project in payload["projects"]:
+            project["report_refs"] = [copy.deepcopy(shared)]
+        document = contracts.seal_document("deployment_evidence", payload)
+        self.assertEqual(
+            document["payload"]["projects"][0]["report_refs"],
+            document["payload"]["projects"][1]["report_refs"],
+        )
+        payload["projects"][1]["report_refs"][0]["state"] = fixtures.file_state(104)
         expect_error(
             self,
             "semantic-violation",

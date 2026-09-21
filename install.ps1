@@ -275,6 +275,7 @@ function Find-Python {
 function Invoke-WorkflowMode {
   $source = $SourceRoot
   $forwarded = @()
+  $explicitYes = $Yes.IsPresent
   for ($index = 0; $index -lt $WorkflowArgs.Count; $index++) {
     $arg = $WorkflowArgs[$index]
     if ($arg -eq "--source-root") {
@@ -295,15 +296,25 @@ function Invoke-WorkflowMode {
       }
       continue
     }
+    if ($arg -ieq '--yes:$true') {
+      $explicitYes = $true
+      continue
+    }
+    if ($arg -ieq '--yes:$false') {
+      $explicitYes = $false
+      continue
+    }
     $forwarded += $arg
   }
-  if ($Yes) {
+  if ($explicitYes) {
     $forwarded += "--yes"
   }
   if ($Help) {
     $forwarded += "--help"
   }
-  $WorkflowMode = $WorkflowMode.ToLowerInvariant()
+  if ($WorkflowMode -cne $WorkflowMode.ToLowerInvariant()) {
+    Stop-WithMessage "WorkflowMode must be lowercase: migration or recovery"
+  }
   Validate-SourceRoot $source
   Find-Python
   $arguments = $PythonPrefix + @((Get-OnboardPy), $WorkflowMode) + $forwarded

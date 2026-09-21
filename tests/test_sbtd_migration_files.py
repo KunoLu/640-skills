@@ -98,11 +98,13 @@ class MigrationFileTests(unittest.TestCase):
                     changed = True
                 return actual_snapshot(path)
 
-            with mock.patch(
-                "sbtd_migration_files.snapshot", side_effect=edit_after_copy
+            with (
+                mock.patch(
+                    "sbtd_migration_files.snapshot", side_effect=edit_after_copy
+                ),
+                self.assertRaises(ContractError),
             ):
-                with self.assertRaises(ContractError):
-                    install_reference(reference, destination, ABSENT, scope=project)
+                install_reference(reference, destination, ABSENT, scope=project)
 
             self.assertTrue(changed)
             self.assertEqual((destination / "owned.txt").read_bytes(), b"user-edit")
@@ -159,11 +161,13 @@ class MigrationFileTests(unittest.TestCase):
                     Path(destination).write_bytes(b"captured-user-version")
                     target.write_bytes(b"later-user-version")
 
-            with mock.patch(
-                "sbtd_migration_files.os.rename", side_effect=competing_writer
+            with (
+                mock.patch(
+                    "sbtd_migration_files.os.rename", side_effect=competing_writer
+                ),
+                self.assertRaises(RetainedObjectError) as caught,
             ):
-                with self.assertRaises(RetainedObjectError) as caught:
-                    remove_reference(target, before, scope=root)
+                remove_reference(target, before, scope=root)
 
             self.assertEqual(target.read_bytes(), b"later-user-version")
             retained = caught.exception.retained_refs[0]
@@ -190,11 +194,14 @@ class MigrationFileTests(unittest.TestCase):
                     target.write_bytes(b"new-user-content")
                 return observed
 
-            with mock.patch(
-                "sbtd_migration_files.snapshot", side_effect=change_after_observation
+            with (
+                mock.patch(
+                    "sbtd_migration_files.snapshot",
+                    side_effect=change_after_observation,
+                ),
+                self.assertRaises(ContractError),
             ):
-                with self.assertRaises(ContractError):
-                    remove_reference(target, expected, scope=root)
+                remove_reference(target, expected, scope=root)
 
             self.assertTrue(changed)
             self.assertEqual(target.read_bytes(), b"new-user-content")
@@ -256,13 +263,15 @@ class MigrationFileTests(unittest.TestCase):
                     retired_paths.append(destination)
                     (destination / "user-added.txt").write_bytes(b"new-user-content")
 
-            with mock.patch(
-                "sbtd_migration_files.os.rename", side_effect=change_after_move
+            with (
+                mock.patch(
+                    "sbtd_migration_files.os.rename", side_effect=change_after_move
+                ),
+                self.assertRaises(ContractError),
             ):
-                with self.assertRaises(ContractError):
-                    install_reference(
-                        reference, target, before, scope=project, backup_ref=backup
-                    )
+                install_reference(
+                    reference, target, before, scope=project, backup_ref=backup
+                )
 
             self.assertTrue(retired_paths)
             preserved = [path / "user-added.txt" for path in [target, *retired_paths]]
@@ -496,7 +505,6 @@ class MigrationFileTests(unittest.TestCase):
                     directory_snapshot(tree)
                 with self.assertRaises(ContractError):
                     sbtd_migration_files._tree_entries(tree)
-
 
     @unittest.skipUnless(os.name == "nt", "Windows junction semantics")
     def test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target(self):
@@ -760,6 +768,27 @@ class MigrationFileTests(unittest.TestCase):
             saved = backup_reference(reference, made / "backup.txt", private_root=made)
             self.assertEqual((made / "backup.txt").read_bytes(), b"private")
             self.assertEqual(saved["state"], snapshot(made / "backup.txt"))
+
+            # Existing scopes are inspection-only, even when create=True.
+            widened = sbtd_migration_files._run_privacy_script(
+                """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = Get-Acl -LiteralPath $path
+$everyone = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0')
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+$acl.AddAccessRule($rule)
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+""",
+                made,
+            )
+            self.assertEqual(widened, "ok")
+            with self.assertRaises(ContractError) as rejected:
+                require_private_directory(made, create=True)
+            self.assertEqual(rejected.exception.code, "privacy-unproven")
+            self.assertFalse(sbtd_migration_files._windows_acl_proven(made))
+            self.assertEqual((made / "backup.txt").read_bytes(), b"private")
 
 
 if __name__ == "__main__":

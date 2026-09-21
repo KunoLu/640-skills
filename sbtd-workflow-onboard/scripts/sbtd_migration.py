@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-import os
 import re
 import stat
 from collections.abc import Mapping, Sequence
@@ -20,7 +18,6 @@ from sbtd_identity import DeveloperStore
 from sbtd_migration_files import (
     RetainedObjectError,
     backup_reference,
-    directory_snapshot,
     install_reference,
     read_file,
     remove_reference,
@@ -31,15 +28,11 @@ from sbtd_migration_files import (
 )
 from sbtd_migration_legacy import (
     read_legacy_identity,
-    validate_projection_graph,
-    validate_task_projection,
 )
-from sbtd_project import TaskDataError, _check_finite, _reject_json_duplicates
-from sbtd_task_state import TaskStateError
+from sbtd_project import TaskDataError
 
 _PACKAGE = Path(__file__).resolve().parents[1]
 _ABSENT = {"type": "absent", "checksum": None}
-_PHASE_ORDER = {"apply": 0, "deploy": 1, "cleanup": 2}
 _RETENTION = {
     "normal_observation_days": 14,
     "normal_disposal_gates": [
@@ -90,6 +83,7 @@ def runtime_versions() -> dict[str, str]:
         "scripts/sbtd_omp_wiring.py",
         "scripts/sbtd_omp_sources.py",
         "scripts/sbtd_graft_entry.py",
+        "scripts/sbtd_handoff.py",
         "scripts/sbtd_identity.py",
         "scripts/sbtd_migration.py",
         "scripts/sbtd_migration_files.py",
@@ -132,13 +126,6 @@ def runtime_versions() -> dict[str, str]:
     }
     digest = hashlib.sha256(contracts.canonical_json_bytes(identity)).hexdigest()
     return {"onboard": f"runtime-sha256:{digest}", "graft": GRAFT_PINNED_VERSION}
-
-
-def _file_reference(path: Path) -> dict[str, Any]:
-    state = snapshot(path)
-    if state["type"] != "file":
-        _fail("missing-input", "a required ordinary input file is unavailable")
-    return {"path": str(path), "state": state}
 
 
 def _read_reference(reference: Mapping[str, Any]) -> bytes:
@@ -222,86 +209,6 @@ def _resource_scope(manifest: Mapping[str, Any], operation: Mapping[str, Any]) -
     return max(matches, key=lambda root: len(root.parts))
 
 
-def _json_object(raw: bytes) -> dict[str, Any]:
-    try:
-        value = json.loads(
-            raw.decode("utf-8-sig"), object_pairs_hook=_reject_json_duplicates
-        )
-        if not isinstance(value, dict) or not _check_finite(value):
-            raise ValueError
-        return value
-    except (ValueError, RecursionError, UnicodeError):
-        _fail("invalid-config", "a structured configuration is not unambiguous JSON")
-
-
-def _toml_document(raw: bytes) -> Any:
-    try:
-        import tomlkit
-        from tomlkit.exceptions import TOMLKitError
-    except ImportError:
-        _fail(
-            "validator-unavailable",
-            "install the declared TOML editing dependency before this operation",
-        )
-    try:
-        return tomlkit.parse(raw.decode("utf-8"))
-    except (ValueError, UnicodeError, TOMLKitError):
-        _fail("invalid-config", "a structured configuration is not valid TOML")
-
-
-def _config_member(document: Any, keys: Sequence[str]) -> Any:
-    value = document
-    try:
-        for key in keys:
-            value = value[int(key)] if isinstance(value, list) else value[key]
-        return value
-    except (KeyError, IndexError, TypeError, ValueError):
-        _fail("ownership-conflict", "a declared configuration entry cannot be resolved")
-
-
-def _remove_config_members(
-    raw: bytes, owner_kind: str, operations: Sequence[Mapping[str, Any]]
-) -> bytes:
-    document = _toml_document(raw) if owner_kind == "toml" else _json_object(raw)
-    removals: list[tuple[Any, str]] = []
-    for operation in operations:
-        ownership = operation["ownership"]
-        if ownership["kind"] != "config-entry":
-            _fail(
-                "ownership-conflict",
-                "configuration removal requires exact entry ownership",
-            )
-        reference_raw = _read_reference(ownership["reference"])
-        reference = (
-            _toml_document(reference_raw)
-            if owner_kind == "toml"
-            else _json_object(reference_raw)
-        )
-        keys = ownership["key_path"]
-        current = _config_member(document, keys)
-        original = _config_member(reference, keys)
-        if type(current) is not type(original) or current != original:
-            _fail("ownership-conflict", "the owned configuration entry has changed")
-        removals.append((_config_member(document, keys[:-1]), keys[-1]))
-    # Removing array members in descending order preserves every original index.
-    for container, key in sorted(
-        removals,
-        key=lambda item: int(item[1]) if isinstance(item[0], list) else -1,
-        reverse=True,
-    ):
-        if isinstance(container, list):
-            del container[int(key)]
-        else:
-            del container[key]
-    if owner_kind == "toml":
-        import tomlkit
-
-        return tomlkit.dumps(document).encode("utf-8")
-    return (
-        json.dumps(document, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
-    ).encode("utf-8")
-
-
 def _marker_bounds(text: str, marker: str) -> tuple[int, int]:
     start = f"<!-- {marker}:START -->"
     end = f"<!-- {marker}:END -->"
@@ -380,8 +287,6 @@ def _render_resource(
     )
     if kind == "ensure-file-block":
         return "bytes", _append_blocks(raw, operations)
-    if kind == "remove" and first["owner_kind"] in {"json", "toml"}:
-        return "bytes", _remove_config_members(raw, first["owner_kind"], operations)
     if kind == "remove" and first["owner_kind"] in {"file", "markdown"}:
         return "bytes", _remove_markers(raw, operations)
     _fail(
@@ -391,30 +296,15 @@ def _render_resource(
 
 
 def _source_backup_paths(manifest: Mapping[str, Any]) -> dict[str, Path]:
-    sources = {
-        reference["path"]: reference
-        for project in manifest["payload"]["projects"]
-        for reference in project["sources"]
-    }
-    top = [
-        path
-        for path in sources
-        if not any(
-            other != path and Path(path).is_relative_to(Path(other))
-            for other in sources
-        )
-    ]
     base = (
         Path(manifest["payload"]["backup_root"]) / manifest["manifest_id"] / "originals"
     )
-    locations: dict[str, Path] = {}
-    for path in sources:
-        ancestor = next(
-            parent for parent in top if Path(path).is_relative_to(Path(parent))
-        )
-        slot = hashlib.sha256(ancestor.encode("utf-8")).hexdigest()
-        locations[path] = base / slot / Path(path).relative_to(Path(ancestor))
-    return locations
+    return {
+        reference["path"]: base
+        / hashlib.sha256(reference["path"].encode("utf-8")).hexdigest()
+        for project in manifest["payload"]["projects"]
+        for reference in project["sources"]
+    }
 
 
 def _result_index(document: Mapping[str, Any] | None) -> dict[str, Mapping[str, Any]]:
@@ -554,25 +444,17 @@ def _prepare_backup_parent(destination: Path, vault: Path) -> None:
 
 def _backup_sources(manifest: Mapping[str, Any]) -> None:
     locations = _source_backup_paths(manifest)
-    sources = {
-        reference["path"]: reference
-        for project in manifest["payload"]["projects"]
-        for reference in project["sources"]
-    }
-    for path, reference in sources.items():
-        if any(
-            other != path and Path(path).is_relative_to(Path(other))
-            for other in sources
-        ):
-            continue
-        _prepare_backup_parent(
-            locations[path], Path(manifest["payload"]["backup_root"])
-        )
-        backup_reference(
-            reference,
-            locations[path],
-            private_root=Path(manifest["payload"]["backup_root"]),
-        )
+    for project in manifest["payload"]["projects"]:
+        for reference in project["sources"]:
+            destination = locations[reference["path"]]
+            _prepare_backup_parent(
+                destination, Path(manifest["payload"]["backup_root"])
+            )
+            backup_reference(
+                reference,
+                destination,
+                private_root=Path(manifest["payload"]["backup_root"]),
+            )
 
 
 def _check_source_backups(manifest: Mapping[str, Any]) -> None:
@@ -585,6 +467,7 @@ def _check_source_backups(manifest: Mapping[str, Any]) -> None:
                     "a retained original is incomplete or unavailable",
                     3,
                 )
+
 
 def _check_stage_backups(stage_results: Mapping[str, Any]) -> None:
     for results in stage_results.values():
@@ -785,7 +668,7 @@ def _apply_resource(
         if action == "reference":
             wanted_after = value["state"]
         elif action in {"bytes", "identity"}:
-            content = value if action == "bytes" else f"name={value}\n".encode("utf-8")
+            content = value if action == "bytes" else f"name={value}\n".encode()
             wanted_after = {
                 "type": "file",
                 "checksum": hashlib.sha256(content).hexdigest(),
@@ -799,7 +682,11 @@ def _apply_resource(
             )
         result["status"] = "succeeded"
     except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
-        exit_code = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
+        exit_code = (
+            3
+            if isinstance(error, contracts.ContractError) and error.exit_code == 3
+            else 5
+        )
         try:
             result["after"] = snapshot(target)
         except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
@@ -902,7 +789,11 @@ def apply_migration(
                 global_error = "a resource failed; later resources were not attempted"
                 break
     except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
-        failure_exit = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
+        failure_exit = (
+            3
+            if isinstance(error, contracts.ContractError) and error.exit_code == 3
+            else 5
+        )
         global_error = "private original preparation or resource execution failed"
     projects = _apply_projects(
         manifest, results, previous, global_error, originals_ready
@@ -969,7 +860,11 @@ def apply_migration(
         receipt,
         {"manifest_id": manifest["manifest_id"]},
     )
-    return envelope, failure_exit if status == "failed" else 2 if status == "blocked" else 0
+    return (
+        envelope,
+        failure_exit if status == "failed" else 2 if status == "blocked" else 0,
+    )
+
 
 def _cleanup_candidates(
     verification: Mapping[str, Any],
@@ -1027,8 +922,7 @@ def _cleanup_resource(
         if before != candidate["state"]:
             _fail("state-conflict", "a cleanup candidate changed after verification")
         scope = _resource_scope(manifest, first)
-        action = "remove"
-        value = None
+        wanted_after = _ABSENT
         if before["type"] != "absent":
             if backup_ref is None:
                 if any(
@@ -1044,7 +938,9 @@ def _cleanup_resource(
                 # A cleanup-only resource has not been changed by an earlier
                 # phase. Preserve its verified original before its first write.
                 vault = Path(manifest["payload"]["backup_root"])
-                backup_path = vault / manifest["manifest_id"] / "cleanup" / first["resource_id"]
+                backup_path = (
+                    vault / manifest["manifest_id"] / "cleanup" / first["resource_id"]
+                )
                 _prepare_backup_parent(backup_path, vault)
                 backup_ref = backup_reference(
                     {"path": str(target), "state": before},
@@ -1064,16 +960,14 @@ def _cleanup_resource(
             if action == "remove":
                 remove_reference(target, before, scope=scope)
             else:
+                if not isinstance(value, bytes):
+                    _fail("unsupported-operation", "cleanup did not render file bytes")
+                wanted_after = {
+                    "type": "file",
+                    "checksum": hashlib.sha256(value).hexdigest(),
+                }
                 write_file(target, value, before, scope=scope)
         result["after"] = snapshot(target)
-        wanted_after = (
-            _ABSENT
-            if action == "remove"
-            else {
-                "type": "file",
-                "checksum": hashlib.sha256(value).hexdigest(),
-            }
-        )
         if result["after"] != wanted_after:
             _fail(
                 "post-state-conflict",
@@ -1081,7 +975,11 @@ def _cleanup_resource(
             )
         result["status"] = "succeeded"
     except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
-        exit_code = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
+        exit_code = (
+            3
+            if isinstance(error, contracts.ContractError) and error.exit_code == 3
+            else 5
+        )
         try:
             result["after"] = snapshot(target)
         except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
@@ -1204,10 +1102,9 @@ def cleanup_migration(
         previous, previous_raw = _private_document(
             Path(previous_receipt_path), "cleanup_receipt"
         )
-        if (
-            contracts._parse_timestamp(previous["payload"]["finished_at"])
-            > contracts._parse_timestamp(_now())
-        ):
+        if contracts._parse_timestamp(
+            previous["payload"]["finished_at"]
+        ) > contracts._parse_timestamp(_now()):
             _fail(
                 "future-evidence",
                 "a previous receipt is later than the current operation",
@@ -1251,9 +1148,7 @@ def cleanup_migration(
         _check_stage_backups({"cleanup": _result_index(previous)})
     candidates = _cleanup_candidates(verification)
     requirements = {
-        (operation["phase"], operation["resource_id"]): operation[
-            "before_requirement"
-        ]
+        (operation["phase"], operation["resource_id"]): operation["before_requirement"]
         for operation in _operations(manifest)
     }
     for project in verification["payload"]["projects"]:
@@ -1310,9 +1205,7 @@ def cleanup_migration(
             old = results.get(rid)
             if old is not None and old["status"] == "succeeded":
                 continue
-            backup_ref = _latest_backup_ref(
-                rid, previous, deployment, apply_document
-            )
+            backup_ref = _latest_backup_ref(rid, previous, deployment, apply_document)
             if backup_ref is None:
                 backup_path = source_backups.get(str(Path(first["target"])))
                 if backup_path is not None:
@@ -1329,7 +1222,11 @@ def cleanup_migration(
                 )
                 break
     except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
-        failure_exit = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
+        failure_exit = (
+            3
+            if isinstance(error, contracts.ContractError) and error.exit_code == 3
+            else 5
+        )
         global_error = "cleanup resource execution failed"
     projects = _cleanup_projects(
         manifest, verification, results, previous, global_error
@@ -1351,9 +1248,7 @@ def cleanup_migration(
         "manifest_id": manifest["manifest_id"],
         "verification_id": verification["verification_id"],
         "apply_id": apply_document["apply_id"],
-        "deployment_evidence_hash": hashlib.sha256(
-            bytes(deployment_raw)
-        ).hexdigest(),
+        "deployment_evidence_hash": hashlib.sha256(bytes(deployment_raw)).hexdigest(),
         "previous_receipt_id": previous["cleanup_id"] if previous is not None else None,
         "status": status,
         "projects": projects,
@@ -1415,7 +1310,10 @@ def cleanup_migration(
             "verification_id": verification["verification_id"],
         },
     )
-    return envelope, failure_exit if status == "failed" else 2 if status == "blocked" else 0
+    return (
+        envelope,
+        failure_exit if status == "failed" else 2 if status == "blocked" else 0,
+    )
 
 
 def _argument_path(value: str) -> Path:
@@ -1455,7 +1353,8 @@ def run_migration(args: Any) -> int:
                 else None,
                 tool_versions=runtime_versions(),
                 deployment_mode=getattr(args, "deployment_mode", None),
-                deployment_platform=getattr(args, "deployment_platform", None) or "codex",
+                deployment_platform=getattr(args, "deployment_platform", None)
+                or "codex",
                 hooks_authorized=bool(getattr(args, "graft_hooks", False)),
             )
             projects = [

@@ -1,5 +1,7 @@
 # P1-18：公共路由、跨分支恢复与只读交接
 
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
 ## 范围与基线
 
 - 基线main `255c5ce7535c55339726b8b52b5119bcfbea2ace`；分支`p1-18-route-recovery`。P1-17实现/状态PR #33/#34已闭环，P1当前累计4项。

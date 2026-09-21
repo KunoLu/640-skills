@@ -1,5 +1,7 @@
 # P1-03：Graft CLI 检测、安装与离线边界
 
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
 ## 范围与事实源
 
 - 实时任务状态以主 PRD 为准；基线 `dc5fe800e573232237ddd1e3e923bb327972e755`，分支 `p1-03-graft-cli-runtime`。

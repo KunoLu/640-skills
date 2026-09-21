@@ -91,6 +91,7 @@ _KNOWN_LEGACY_TOP = frozenset(
         "workflow.md",
         ".gitignore",
         ".current-task",
+        ".runtime",
         "config.yaml",
         "scripts",
         "agents",
@@ -327,6 +328,7 @@ def _check_shared_text(
         if pattern.search(text):
             _fail("privacy-violation", "a shared projection carries an obvious secret")
 
+
 def _check_markdown_links(
     data: bytes, target: Path, root: Path, approved_targets: set[Path]
 ) -> None:
@@ -356,15 +358,21 @@ def _check_markdown_links(
         if href is None:
             continue
         if not isinstance(href, str) or not safe_link(href):
-            _fail("target-conflict", "a shared Markdown link uses an unsafe destination")
+            _fail(
+                "target-conflict", "a shared Markdown link uses an unsafe destination"
+            )
         if re.match(r"^[A-Za-z]:", unquote(href)):
             _fail("target-conflict", "a shared Markdown link cannot name a drive path")
         try:
             parsed = urlsplit(href)
         except ValueError:
-            _fail("target-conflict", "a shared Markdown link has an invalid destination")
+            _fail(
+                "target-conflict", "a shared Markdown link has an invalid destination"
+            )
         if parsed.scheme == "file":
-            _fail("target-conflict", "a shared Markdown link cannot name a local file URL")
+            _fail(
+                "target-conflict", "a shared Markdown link cannot name a local file URL"
+            )
         if parsed.scheme or parsed.netloc or not parsed.path:
             continue
         path = unquote(parsed.path)
@@ -376,8 +384,6 @@ def _check_markdown_links(
                 "target-conflict",
                 "a shared Markdown link does not resolve to an approved publication",
             )
-
-
 
 
 def _check_lessons_preserved(source_raw: bytes, candidate_raw: bytes) -> None:
@@ -423,6 +429,7 @@ def _candidate_bytes(candidate: Mapping[str, Any], member: str | None) -> bytes:
         _fail("state-conflict", "an approved candidate changed after approval")
     return read_file(path.joinpath(*parts))
 
+
 def _approved_target_files(
     closures: Mapping[
         tuple[str, ...], Sequence[tuple[Mapping[str, Any], list[tuple[str, ...]]]]
@@ -439,7 +446,9 @@ def _approved_target_files(
             if candidate["state"]["type"] == "file":
                 targets.add(target)
             else:
-                targets.update(target / member for member in _candidate_files(candidate))
+                targets.update(
+                    target / member for member in _candidate_files(candidate)
+                )
     for _category, item, _rels in documents:
         if item["decision"] == "private-only":
             continue
@@ -450,8 +459,6 @@ def _approved_target_files(
         else:
             targets.update(target / member for member in _candidate_files(candidate))
     return targets
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -473,6 +480,7 @@ def _classify_project_items(
     attachments: list[tuple[Mapping[str, Any], list[tuple[str, ...]]]] = []
     documents: list[tuple[str, Mapping[str, Any], list[tuple[str, ...]]]] = []
     optional: list[Mapping[str, Any]] = []
+    handoff_root = root / "docs" / "handoffs"
     for item in items:
         rels: list[tuple[str, ...]] = []
         for reference in item["sources"]:
@@ -483,6 +491,12 @@ def _classify_project_items(
                     "a publication source is not legacy project data",
                 )
             rels.append(rel)
+        target = item["target_path"]
+        if target is not None and Path(target).parent == handoff_root:
+            if any(rel[1] not in {"workspace", ".runtime"} for rel in rels):
+                _fail("approval-conflict", "handoff sources must be legacy context")
+            optional.append(item)
+            continue
         top = rels[0][1]
         if any(rel[1] != top for rel in rels):
             _fail("approval-conflict", "one publication item mixes legacy categories")
@@ -737,10 +751,6 @@ def _common_directory_prefix(paths: Sequence[tuple[str, ...]]) -> tuple[str, ...
     return prefix
 
 
-
-
-
-
 def _check_document_item(
     root: Path,
     category: str,
@@ -896,7 +906,7 @@ def validate_legacy_inputs(
     for project in payload["projects"]:
         root = Path(project["root"])
         closures, documents, optional = _classify_project_items(root, assigned[root])
-        _projections, forms = _validate_project_closures(
+        projections, forms = _validate_project_closures(
             root, closures, documents, read_original, private_strings
         )
         _validate_project_operations(root, project, assigned[root], read_original)
@@ -925,6 +935,16 @@ def validate_legacy_inputs(
             )
         )
         _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
+        _check_context_handoffs(
+            root,
+            entries,
+            closures,
+            projections,
+            assigned[root],
+            read_original,
+            project["source_ref"],
+            project["head"],
+        )
     _validate_shared_operations(payload, sorted(str(root) for root in roots))
     from sbtd_graft_deployment import validate_deployment_declarations
 
@@ -1002,9 +1022,12 @@ def _check_ignore_operation(
 
     before = operation["before_requirement"]
     if before["kind"] != "state" or before["state"]["type"] not in {"file", "absent"}:
-        _fail("semantic-violation", "ignore protection needs a fixed original file state")
+        _fail(
+            "semantic-violation", "ignore protection needs a fixed original file state"
+        )
     original = (
-        b"" if before["state"]["type"] == "absent"
+        b""
+        if before["state"]["type"] == "absent"
         else read_original({"path": operation["target"], "state": before["state"]})
     )
     try:
@@ -1015,7 +1038,9 @@ def _check_ignore_operation(
     except UnicodeDecodeError:
         _fail("invalid-config", "managed ignore content is not UTF-8 text")
     if not needed:
-        _fail("semantic-violation", "ignore protection was already complete before apply")
+        _fail(
+            "semantic-violation", "ignore protection was already complete before apply"
+        )
 
 
 def _check_cleanup_operation(
@@ -1145,8 +1170,16 @@ def _validate_project_operations(
         or sources[0]["state"]["type"] != "directory"
     ):
         _fail("semantic-violation", "a project binds exactly its legacy tree")
-    deployment = [operation for operation in project["private_operations"] if operation["phase"] == "deploy"]
-    remaining = [operation for operation in project["private_operations"] if operation["phase"] != "deploy"]
+    deployment = [
+        operation
+        for operation in project["private_operations"]
+        if operation["phase"] == "deploy"
+    ]
+    remaining = [
+        operation
+        for operation in project["private_operations"]
+        if operation["phase"] != "deploy"
+    ]
     expected_publications = [
         _publication_operation(root, item)
         for item in sorted(
@@ -1358,17 +1391,14 @@ def _parse_template_hashes(document: Any) -> dict[str, str]:
             _fail("invalid-config", "ownership metadata cannot claim legacy user data")
         if not isinstance(digest, str) or _HEX64.fullmatch(digest) is None:
             _fail("invalid-config", "the legacy ownership metadata is malformed")
-        if len(parts) == 2 and parts[1] in {
-            "config.toml",
-            "hooks.json",
-            "settings.json",
-        }:
-            # A mutable legacy hash proves recorded bytes, not sole ownership
-            # of a shared configuration. Mixed entries need reconciliation.
-            if digest not in configuration_pins.get(relative, ()):
-                _fail(
-                    "ownership-conflict", "shared configuration ownership is unproven"
-                )
+        # A mutable legacy hash proves recorded bytes, not sole ownership
+        # of a shared configuration. Mixed entries need reconciliation.
+        if (
+            len(parts) == 2
+            and parts[1] in {"config.toml", "hooks.json", "settings.json"}
+            and digest not in configuration_pins.get(relative, ())
+        ):
+            _fail("ownership-conflict", "shared configuration ownership is unproven")
         hashes[PurePosixPath(*parts).as_posix()] = digest
     return hashes
 
@@ -1558,6 +1588,10 @@ def _inventory_coverage(
         for rel in rels:
             cover(category + "/" + PurePosixPath(*rel).as_posix())
     for item in optional:
+        if item["target_path"] is not None:
+            # Handoffs may bind the same private journals for several tasks;
+            # this is provenance, not duplicate publication of the originals.
+            continue
         for reference in item["sources"]:
             rel = _parts_relative(Path(reference["path"]), root / _LEGACY_DIR)
             if rel is not None:
@@ -1609,6 +1643,259 @@ def _inventory_coverage(
 # ---------------------------------------------------------------------------
 # Identity, protection and legacy-tree operations
 # ---------------------------------------------------------------------------
+
+
+def _check_context_handoffs(
+    root: Path,
+    entries: Sequence[Mapping[str, Any]],
+    closures: Mapping[tuple[str, ...], Any],
+    projections: Mapping[str, Any],
+    items: Sequence[Mapping[str, Any]],
+    read_source: ReadOriginal,
+    source_ref: str | None,
+    head: str | None,
+) -> None:
+    """Bind private continuation summaries to the entire original context.
+
+    Trellis 0.6.17 stores current_task in .runtime/sessions/*.json, not
+    .current-task. Journals have no machine-readable task ownership: when
+    present, explicitly approved summaries must cover every unfinished task.
+    Nothing here selects an active task or manufactures a summary.
+    """
+    from sbtd_handoff import _REDACTION_DECLARATION, HandoffStore
+    from sbtd_task_state import TaskStateError, TaskStore
+
+    context: dict[str, Mapping[str, Any]] = {}
+    active_folders: set[tuple[str, ...]] = set()
+    has_journal = False
+    for entry in entries:
+        if entry["type"] != "file":
+            continue
+        parts = PurePosixPath(entry["path"]).parts
+        reference = {
+            "path": str(root / _LEGACY_DIR / entry["path"]),
+            "state": {"type": "file", "checksum": entry["checksum"]},
+        }
+        if parts == (".current-task",):
+            if read_source(reference).strip():
+                _fail(
+                    "invalid-config",
+                    "legacy path-line pointers need explicit reconciliation",
+                )
+            continue
+        session = len(parts) == 3 and parts[:2] == (".runtime", "sessions")
+        if parts[0] != "workspace" and not session:
+            if parts[0] == ".runtime":
+                approved = any(
+                    item["decision"] == "private-only" and reference in item["sources"]
+                    for item in items
+                )
+                if not approved:
+                    _fail(
+                        "approval-required",
+                        "unknown runtime context needs private approval",
+                    )
+            continue
+        raw = read_source(reference)
+        if parts[-1] == ".gitkeep" and not raw:
+            continue
+        context[reference["path"]] = reference
+        if not session:
+            has_journal = True
+            continue
+        if not parts[-1].endswith(".json"):
+            _fail("invalid-config", "legacy session records must be JSON")
+        record = _json_object(raw, "the legacy session")
+        metadata = {
+            "platform",
+            "last_seen_at",
+            "current_task",
+            "current_run",
+            "session_id",
+            "sessionId",
+            "sessionID",
+            "conversation_id",
+            "conversationId",
+            "conversationID",
+            "transcript_path",
+            "transcriptPath",
+            "transcript",
+        }
+        if not isinstance(record, dict) or set(record) - metadata:
+            _fail("invalid-config", "legacy session has an unknown structure")
+        task_ref = record.get("current_task")
+        if task_ref is None:
+            if record.get("current_run") is not None:
+                _fail("graph-conflict", "a legacy run has no associated task")
+            continue
+        if not isinstance(task_ref, str) or not task_ref.strip():
+            _fail("invalid-config", "legacy current_task must be a nonblank reference")
+        task_path = Path(task_ref)
+        if task_path.is_absolute():
+            relative = _parts_relative(task_path, root)
+        else:
+            normalized = task_ref.replace("\\", "/")
+            while normalized.startswith("./"):
+                normalized = normalized[2:]
+            relative = PurePosixPath(normalized).parts
+            if relative and relative[0] == "tasks":
+                relative = (_LEGACY_DIR, *relative)
+            elif relative and relative[0] != _LEGACY_DIR:
+                relative = (_LEGACY_DIR, "tasks", *relative)
+        if relative is None or ".." in relative or relative not in closures:
+            _fail(
+                "graph-conflict",
+                "legacy session task has no unique approved projection",
+            )
+        active_folders.add(relative)
+
+    needed = {
+        projection.legacy_id
+        for projection in projections.values()
+        if projection.document.frontmatter["status"] != "done"
+        and (
+            has_journal
+            or any(
+                folder[-1] in projection.aliases or folder[-1] == projection.legacy_id
+                for folder in active_folders
+            )
+        )
+    }
+    handoff_items = [
+        item
+        for item in items
+        if item["target_path"] is not None
+        and Path(item["target_path"]).parent == root / "docs" / "handoffs"
+    ]
+    if not needed and not handoff_items:
+        return
+    if not context or not needed:
+        _fail(
+            "approval-conflict",
+            "a handoff requires identified unfinished legacy context",
+        )
+    store = HandoffStore(TaskStore(root, read_only=True))
+    covered: set[str] = set()
+    for item in handoff_items:
+        if item["decision"] != "redact" or not item["required"]:
+            _fail(
+                "approval-required",
+                "a continuation handoff needs required redact approval",
+            )
+        if {ref["path"]: ref for ref in item["sources"]} != context:
+            _fail(
+                "approval-conflict",
+                "handoff approval must bind the complete private context",
+            )
+        candidate = item["candidate_ref"]
+        if candidate["state"]["type"] != "file":
+            _fail("candidate-conflict", "a handoff candidate must be a Markdown file")
+        try:
+            text = _candidate_bytes(candidate, None).decode("utf-8")
+            handoff = store._parse_text(text)
+        except (UnicodeError, TaskStateError):
+            _fail("candidate-conflict", "the handoff snapshot is invalid")
+        task_id = handoff["task_id"]
+        if task_id not in needed or task_id in covered:
+            _fail("graph-conflict", "handoff task identity is unexpected or duplicated")
+        fields = projections[task_id].document.frontmatter
+        expected = {
+            "task_id": task_id,
+            "task_path": f"ai/tasks/{task_id}/task.md",
+            "project_root": str(root),
+            "branch": fields["branch"],
+            "head": head,
+            "task_status": fields["status"],
+            "workflow_mode": fields["workflow_mode"],
+            "mode_source": fields["mode_source"],
+            "mode_note": fields["mode_note"],
+            "redaction": _REDACTION_DECLARATION,
+        }
+        if fields["branch"] != source_ref or any(
+            handoff[key] != value for key, value in expected.items()
+        ):
+            _fail(
+                "candidate-conflict",
+                "handoff identity, revision or task state does not match",
+            )
+        content = handoff["content"]
+        if (
+            not content["goal"].strip()
+            or not content["next_action"].strip()
+            or not any(value.strip() for value in content["remaining"])
+        ):
+            _fail(
+                "candidate-conflict",
+                "handoff must state its goal, remaining work and next action",
+            )
+        target = Path(item["target_path"])
+        date = datetime.fromisoformat(handoff["created_at"].replace("Z", "+00:00"))
+        expected_name = f"{date:%Y_%m_%d}-{store._task_key(task_id)}.md"
+        if target.name != expected_name:
+            _fail(
+                "target-conflict",
+                "handoff filename must bind its task and snapshot date",
+            )
+        snapshot_fields = {
+            key: value for key, value in handoff.items() if key != "summary"
+        }
+        if store._render(snapshot_fields) != text:
+            _fail("candidate-conflict", "handoff body must match its approved snapshot")
+        covered.add(task_id)
+    if covered != needed:
+        _fail(
+            "approval-required",
+            "unfinished workspace context requires approved handoffs",
+        )
+    tracked = store.tasks._git("ls-files", "-z", "--", "docs/handoffs")
+    if head is not None and tracked.returncode:
+        _fail("private-scope", "handoff tracked state cannot be verified")
+    if tracked.returncode == 0 and tracked.stdout:
+        _fail("private-scope", "handoff storage must not be tracked")
+    _check_handoff_ignore(root, [Path(item["target_path"]) for item in handoff_items])
+
+
+def _check_handoff_ignore(root: Path, targets: Sequence[Path]) -> None:
+    """Evaluate planned ignore bytes without changing the selected project."""
+    import tempfile
+
+    from onboard import gitignore_verdicts
+    from sbtd_migration import _append_blocks
+    from sbtd_task_state import TaskStore
+
+    ignore_path = root / ".gitignore"
+    state = snapshot(ignore_path)
+    current = b"" if state["type"] == "absent" else read_file(ignore_path, state)
+    operation = _ignore_operation(root)
+    planned = _append_blocks(current, [operation]) if operation is not None else current
+    with tempfile.TemporaryDirectory(prefix="sbtd-handoff-ignore-") as directory:
+        sandbox = Path(directory)
+        git = TaskStore(sandbox)
+        initialized = git._git("init", "--quiet")
+        if initialized.returncode:
+            _fail("private-scope", "handoff ignore protection cannot be verified")
+        (sandbox / ".gitignore").write_bytes(planned)
+        for relative in ("docs/.gitignore", "docs/handoffs/.gitignore"):
+            source = root / relative
+            source_state = snapshot(source)
+            if source_state["type"] == "absent":
+                continue
+            content = read_file(source, source_state)
+            target = sandbox / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        probes = (
+            "docs/handoffs/",
+            *(path.relative_to(root).as_posix() for path in targets),
+        )
+        verdicts = gitignore_verdicts(sandbox, probes, env=git._git_environment())
+        if isinstance(verdicts, str) or not all(
+            verdict.ignored for verdict in verdicts.values()
+        ):
+            _fail(
+                "private-scope",
+                "planned ignore rules do not protect every private handoff",
+            )
 
 
 def _identity_operation(root: Path) -> dict[str, Any] | None:
@@ -1881,9 +2168,14 @@ def plan_migration(
     if deployment_mode not in {None, "init", "init-projects"}:
         _fail("invalid-argument", "the deployment mode must be explicitly supported")
     if hooks_authorized and deployment_mode != "init":
-        _fail("scope-conflict", "global hooks require an explicitly planned full deployment")
+        _fail(
+            "scope-conflict",
+            "global hooks require an explicitly planned full deployment",
+        )
     if deployment_platform not in {"codex", "omp"}:
-        _fail("invalid-argument", "the deployment platform must be explicitly supported")
+        _fail(
+            "invalid-argument", "the deployment platform must be explicitly supported"
+        )
     from sbtd_migration import _RETENTION, _project_revision
 
     if (
@@ -1915,8 +2207,14 @@ def plan_migration(
         _fail("scope-conflict", "duplicate project root in the selected batch")
     for index, root in enumerate(roots):
         for other in roots[index + 1 :]:
-            if root.samefile(other) or root.is_relative_to(other) or other.is_relative_to(root):
-                _fail("scope-conflict", "selected project roots must not overlap or alias")
+            if (
+                root.samefile(other)
+                or root.is_relative_to(other)
+                or other.is_relative_to(root)
+            ):
+                _fail(
+                    "scope-conflict", "selected project roots must not overlap or alias"
+                )
     vault = _private_vault(backup_root)
     for root in roots:
         if vault.is_relative_to(root) or root.is_relative_to(vault):
@@ -1950,10 +2248,20 @@ def plan_migration(
         hashes, hashes_reference = _template_hashes(root)
         platforms, platform_ops = _platform_operations(root, hashes, hashes_reference)
         closures, documents, optional = _classify_project_items(root, project_items)
-        _projections, forms = _validate_project_closures(
+        projections, forms = _validate_project_closures(
             root, closures, documents, read_current, private_strings
         )
         _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
+        _check_context_handoffs(
+            root,
+            entries,
+            closures,
+            projections,
+            project_items,
+            read_current,
+            source_ref,
+            head,
+        )
         identity_op = _identity_operation(root)
         publication_ops = [
             _publication_operation(root, item)
@@ -2003,12 +2311,17 @@ def plan_migration(
         from sbtd_graft_deployment import attach_deployment
 
         attach_deployment(
-            payload, project_only=deployment_mode == "init-projects",
+            payload,
+            project_only=deployment_mode == "init-projects",
             hooks_authorized=hooks_authorized,
             platform=deployment_platform,
         )
     _check_physical_aliases(
-        [operation for project in projects for operation in project["private_operations"]]
+        [
+            operation
+            for project in projects
+            for operation in project["private_operations"]
+        ]
         + shared_ops
     )
     return contracts.seal_document("manifest", payload)

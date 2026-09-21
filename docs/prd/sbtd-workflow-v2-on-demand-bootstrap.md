@@ -1,5 +1,7 @@
 # P1-02：按需脚手架与 bootstrap 边界
 
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
 ## 状态与范围
 
 - 实时状态以主 PRD 为准；完成时间与 merge SHA 只在实际合入后回填，不维护第二份完成状态。

@@ -1,5 +1,7 @@
 # P1 累计十项完成后的 findings 评估确认门
 
+> 台账路径迁移：原根目录 `findings.log` 已由 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md) 接替。下文历史授权、原级别和当时状态不改写；后续读取与记录使用新路径。
+
 ## 用户决定
 
 - 记录时间：2026-09-18T23:27:34+08:00。

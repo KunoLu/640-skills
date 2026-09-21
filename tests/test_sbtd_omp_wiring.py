@@ -53,9 +53,7 @@ class OmpMcpCandidateTests(unittest.TestCase):
             inherited.write_text(
                 "[mcp_servers.sbtd-graft]\n"
                 f'command = "{desired["command"]}"\n'
-                "args = "
-                + json.dumps(desired["args"])
-                + "\n"
+                "args = " + json.dumps(desired["args"]) + "\n"
                 f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
@@ -110,6 +108,7 @@ class OmpMcpCandidateTests(unittest.TestCase):
                     b'{"mcpServers": {"sbtd-graft": "not-object"}}',
                     b'{"mcpServers": {"sbtd-graft": {"command": "${SBTD_LAUNCHER}"}}}',
                     b'{"mcpServers": {"sbtd-graft": {"command": "prefix-${HOME}/launcher"}}}',
+                    b'{"mcpServers": {"foreign": "not-object"}}',
                 )
             ):
                 target = base / str(index) / ".omp/mcp.json"
@@ -128,6 +127,18 @@ class OmpMcpCandidateTests(unittest.TestCase):
                     if path.is_file()
                 }
                 self.assertEqual(after, before)
+
+    def test_candidate_rechecks_the_active_disabled_server_denylist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            analysis = analyze_omp_configuration(target, [BINDING], [])
+            name = analysis["writes"][0]["name"]
+            before = json.dumps({"mcpServers": {}, "disabledServers": [name]}).encode(
+                "utf-8"
+            )
+            with self.assertRaises(ContractError) as failure:
+                omp_mcp_candidate(before, analysis)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
 
 
 class OmpSourceAnalysisTests(unittest.TestCase):
@@ -180,9 +191,7 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             (codex / "config.toml").write_text(
                 "[mcp_servers.sbtd-graft]\n"
                 f'command = "{desired["command"]}"\n'
-                "args = "
-                + json.dumps(desired["args"])
-                + "\n"
+                "args = " + json.dumps(desired["args"]) + "\n"
                 f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
@@ -225,7 +234,6 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 analyze_omp_sources([root], [BINDING], home=home, environ={})
             self.assertEqual(failure.exception.code, "ownership-conflict")
             self.assertEqual(config.read_bytes(), before)
-
 
     def test_dynamic_overlay_or_project_provider_settings_block_analysis(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -322,6 +330,37 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 result["analysis"]["inherited_matches"][0]["source"], "claude-project"
             )
 
+    def test_claude_enabled_override_preserves_equivalent_cwd(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            root = base / "project"
+            agent = home / ".omp/agent"
+            claude = root / ".claude"
+            for path in (agent, claude):
+                path.mkdir(parents=True)
+            desired = desired_omp_server(BINDING)
+            (agent / "mcp.json").write_text(
+                json.dumps({"mcpServers": {}, "enabledServers": ["foreign"]}),
+                encoding="utf-8",
+            )
+            (claude / "mcp.json").write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "foreign": {**desired, "enabled": False},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = analyze_omp_sources([root], [BINDING], home=home, environ={})
+            self.assertEqual(result["analysis"]["writes"], [])
+            self.assertEqual(
+                result["analysis"]["inherited_matches"][0]["source"],
+                "claude-project",
+            )
+
     def test_enabled_non_equivalent_managed_inherited_entry_conflicts(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -372,7 +411,7 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             self.assertEqual(result["analysis"]["writes"], [])
             self.assertFalse(target.exists())
 
-    def test_inherited_timeout_difference_does_not_suppress_native_write(self):
+    def test_inherited_non_equivalent_environment_does_not_suppress_native_write(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             home = base / "home"
@@ -389,16 +428,13 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             (codex / "config.toml").write_text(
                 "[mcp_servers.other]\n"
                 f'command = "{desired["command"]}"\n'
-                "args = "
-                + json.dumps(desired["args"])
-                + "\n"
+                "args = " + json.dumps(desired["args"]) + "\n"
                 f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.other.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\nEXTRA = "x"\n',
                 encoding="utf-8",
             )
             result = analyze_omp_sources([root], [BINDING], home=home, environ={})
             self.assertEqual(len(result["analysis"]["writes"]), 1)
-
 
     def test_inherited_transport_key_is_ignored_by_pinned_omp(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -410,11 +446,7 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             desired = desired_omp_server(BINDING)
             (root / ".omp/mcp.json").write_text(
                 json.dumps(
-                    {
-                        "mcpServers": {
-                            "sbtd-graft": {**desired, "transport": "http"}
-                        }
-                    }
+                    {"mcpServers": {"sbtd-graft": {**desired, "transport": "http"}}}
                 ),
                 encoding="utf-8",
             )
@@ -432,13 +464,12 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             desired = desired_omp_server(BINDING)
             import hashlib
 
-            name = "sbtd-graft-" + hashlib.sha256(
-                BINDING["root"].encode()
-            ).hexdigest()[:16]
+            name = (
+                "sbtd-graft-"
+                + hashlib.sha256(BINDING["root"].encode()).hexdigest()[:16]
+            )
             (agent / "mcp.json").write_text(
-                json.dumps(
-                    {"mcpServers": {name: {"enabled": False, **desired}}}
-                ),
+                json.dumps({"mcpServers": {name: {"enabled": False, **desired}}}),
                 encoding="utf-8",
             )
             (root / ".omp").mkdir()
@@ -455,9 +486,10 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             base = Path(directory).resolve()
             import hashlib
 
-            name = "sbtd-graft-" + hashlib.sha256(
-                BINDING["root"].encode()
-            ).hexdigest()[:16]
+            name = (
+                "sbtd-graft-"
+                + hashlib.sha256(BINDING["root"].encode()).hexdigest()[:16]
+            )
             for label, settings, config in (
                 (
                     "server",
@@ -502,9 +534,7 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             (codex / "config.toml").write_text(
                 "[mcp_servers.sbtd-graft]\n"
                 f'command = "{desired["command"]}"\n'
-                "args = "
-                + json.dumps(desired["args"])
-                + "\n"
+                "args = " + json.dumps(desired["args"]) + "\n"
                 f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
@@ -562,12 +592,15 @@ class OmpSourceAnalysisTests(unittest.TestCase):
 
     def test_project_and_claude_disabled_extensions_block_analysis(self):
         cases = (
-            (".omp/config.yml", 'disabledExtensions: [mcp:sbtd-graft]\n'),
+            (".omp/config.yml", "disabledExtensions: [mcp:sbtd-graft]\n"),
             (".omp/settings.json", '{"disabledExtensions":["mcp:sbtd-graft"]}'),
             (".claude/settings.json", '{"disabledExtensions":["mcp:sbtd-graft"]}'),
         )
         for index, (relative, content) in enumerate(cases):
-            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(relative=relative),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 base = Path(directory).resolve()
                 home = base / "home"
                 root = base / "project"
@@ -599,6 +632,83 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 analyze_omp_sources([root], [BINDING], home=home, environ={})
             self.assertEqual(failure.exception.code, "invalid-config")
 
-if __name__ == "__main__":
+    def test_enabled_claude_plugin_sources_block_without_rewriting_them(self):
+        for provider in ("claude", "omp"):
+            with (
+                self.subTest(provider=provider),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                base = Path(directory).resolve()
+                home = base / "home"
+                root = base / "project"
+                agent = home / ".omp/agent"
+                plugins = (
+                    home / ".claude/plugins/installed_plugins.json"
+                    if provider == "claude"
+                    else home / ".omp/plugins/installed_plugins.json"
+                )
+                agent.mkdir(parents=True)
+                root.mkdir()
+                (agent / "config.yml").write_text(
+                    "enabledProviders: [claude-plugins]\n", encoding="utf-8"
+                )
+                plugins.parent.mkdir(parents=True)
+                original = b'{"plugins": {"fixture": []}}\n'
+                plugins.write_bytes(original)
+                with self.assertRaises(ContractError) as failure:
+                    analyze_omp_sources([root], [BINDING], home=home, environ={})
+                self.assertEqual(failure.exception.code, "invalid-config")
+                self.assertEqual(plugins.read_bytes(), original)
 
+    def test_plugin_discovery_covers_default_override_xdg_and_project_registries(self):
+        for source in (
+            "default",
+            "claude",
+            "override",
+            "xdg",
+            "profile",
+            "project",
+            "ancestor",
+        ):
+            with (
+                self.subTest(source=source),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                base = Path(directory).resolve()
+                home = base / "home"
+                root = base / "project"
+                agent = home / ".omp/agent"
+                agent.mkdir(parents=True)
+                root.mkdir()
+                environment = {}
+                plugins = home / ".omp/plugins/installed_plugins.json"
+                if source == "claude":
+                    (agent / "config.yml").write_text("enabledProviders: [claude]\n")
+                    plugins = home / ".claude/plugins/installed_plugins.json"
+                elif source == "override":
+                    environment["CLAUDE_CONFIG_DIR"] = str(base / "claude-home")
+                    plugins = base / "claude-home/plugins/installed_plugins.json"
+                elif source == "xdg":
+                    environment["XDG_DATA_HOME"] = str(base / "xdg")
+                    plugins = base / "xdg/omp/plugins/installed_plugins.json"
+                elif source == "profile":
+                    environment["OMP_PROFILE"] = "work"
+                    plugins = home / ".omp/profiles/work/plugins/installed_plugins.json"
+                elif source == "project":
+                    plugins = root / ".omp/plugins/installed_plugins.json"
+                elif source == "ancestor":
+                    plugins = base / ".omp/plugins/installed_plugins.json"
+                plugins.parent.mkdir(parents=True)
+                original = b'{"plugins":{"fixture@marketplace":[{"installPath":"/synthetic/plugin"}]}}'
+                plugins.write_bytes(original)
+                with self.assertRaises(ContractError) as failure:
+                    analyze_omp_sources(
+                        [root], [BINDING], home=home, environ=environment
+                    )
+                self.assertEqual(failure.exception.code, "invalid-config")
+                self.assertEqual(plugins.read_bytes(), original)
+                self.assertFalse((agent / "mcp.json").exists())
+
+
+if __name__ == "__main__":
     unittest.main()

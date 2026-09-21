@@ -1,5 +1,7 @@
 # SBTD v2 实施调整记录
 
+> 台账路径迁移：原根目录 `findings.log` 已由 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md) 接替。下文历史授权、原级别和当时状态不改写；后续读取与记录使用新路径。
+
 本文件记录主 [PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md) 在实施中经过判断的逻辑、边界或执行协议调整。任务状态、完成时间及依赖仍以主 PRD §14 为唯一事实源；本文件不复制第二份台账。没有记录的产品边界仍按主 PRD 执行。
 
 ## D-IMP-01：从规划授权进入逐任务实施

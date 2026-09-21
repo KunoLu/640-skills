@@ -37,6 +37,11 @@ jobs:
       - name: Run the full unit and contract suite
         run: python -B -m unittest discover -s tests -p 'test_*.py'
 
+      - name: Verify native Linux case-sensitive paths
+        run: >-
+          python -B -m unittest -v
+          tests.test_onboard_contracts.PathAliasContainmentTests.test_public_contract_keeps_distinct_case_sensitive_targets_separate
+
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"
 
@@ -108,6 +113,11 @@ jobs:
         run: >-
           python -B -m unittest
           tests.test_sbtd_migration_files.MigrationFileTests.test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target
+
+      - name: Verify native Windows private-directory ACLs
+        run: >-
+          python -B -m unittest -v
+          tests.test_sbtd_migration_files.MigrationFileTests.test_windows_private_directory_acl_gateway
 
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"

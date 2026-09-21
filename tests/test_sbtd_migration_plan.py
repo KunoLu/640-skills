@@ -198,8 +198,8 @@ def _add_task(
     source_raw = _json_bytes(source)
     folder_path = project / ".trellis/tasks" / folder
     _write(folder_path / "task.json", source_raw)
-    source_rel = ".trellis/tasks/{}/task.json".format(folder)
-    candidate = vault / "cand-{}".format(folder)
+    source_rel = f".trellis/tasks/{folder}/task.json"
+    candidate = vault / f"cand-{folder}"
     target_dir = project / "ai/tasks" / task_id
     document_kwargs = {"identity": task_id}
     document_kwargs.update(task_md_kwargs or {})
@@ -647,9 +647,8 @@ class MigrationPlanBatchTests(unittest.TestCase):
                     return data + b" "
                 return data
 
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(manifest, tampered_source)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(manifest, tampered_source)
 
             def tampered_identity(reference):
                 data = _reader(reference)
@@ -657,15 +656,13 @@ class MigrationPlanBatchTests(unittest.TestCase):
                     return b"name=other9\n"
                 return data
 
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(manifest, tampered_identity)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(manifest, tampered_identity)
             # A candidate mutated after approval breaks the recorded state.
             target = vault / "cand-spec/auth.md"
             target.write_bytes(b"changed after approval\n")
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(manifest, _reader)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(manifest, _reader)
 
 
 class MigrationPlanVaultTests(unittest.TestCase):
@@ -755,15 +752,14 @@ class MigrationPlanVaultTests(unittest.TestCase):
             home.mkdir(mode=0o700)
             outside = base / "decisions.json"
             outside.write_bytes(b'{"schema_version": 1, "items": []}')
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        outside,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    outside,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
             self.assertEqual(
                 _tree_bytes(base)[str(outside.relative_to(base))],
                 b'{"schema_version": 1, "items": []}',
@@ -828,15 +824,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
                 candidate,
             )
             decisions = _decisions(vault, [item])
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
             # An unknown extra member is just as unacceptable.
             _write(candidate / "prd.md", b"# migrated prd\n")
             _write(candidate / "smuggled.md", b"extra\n")
@@ -848,15 +843,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
                 candidate,
             )
             decisions = _decisions(vault, [item])
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_missing_approval_never_substitutes_scan_results(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -878,15 +872,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
             vault2 = base / "vault2"
             vault2.mkdir(mode=0o700, exist_ok=True)
             partial = _decisions(vault2, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault2,
-                        "c",
-                        partial,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault2,
+                    "c",
+                    partial,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_private_only_cannot_cover_mandatory_projections(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -908,15 +901,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
                 )
             ]
             decisions = _decisions(vault, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_malformed_scope_and_duplicate_candidates_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -926,15 +918,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
             # Approval scope no longer matches the declared item fields.
             document["items"][0]["approval"]["scope"]["decision"] = "redact"
             decisions.write_bytes(json.dumps(document).encode("utf-8"))
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
             document = json.loads(
                 _decisions(
                     vault,
@@ -945,30 +936,28 @@ class MigrationPlanClosureTests(unittest.TestCase):
                 "candidate_ref"
             ]
             decisions.write_bytes(json.dumps(document).encode("utf-8"))
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_unknown_legacy_content_and_platform_drift_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
             _write(project / ".trellis/mystery.txt", b"unknown\n")
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
@@ -990,15 +979,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
             (project / PLATFORM_REL).unlink()
             drifted = b'name = "trellis-implement"\n# drifted\n'
             _write(project / PLATFORM_REL, drifted)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_graph_conflicts_and_stale_targets_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1020,29 +1008,27 @@ class MigrationPlanClosureTests(unittest.TestCase):
                 task_md_kwargs={"parent": None},
             )
             decisions = _decisions(vault, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
             # An approved target already exists: apply could not prove safety.
             _write(project / "ai/tasks/alpha/task.md", b"occupied\n")
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_existing_current_identity_precedes_legacy_identity(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1060,15 +1046,14 @@ class MigrationPlanClosureTests(unittest.TestCase):
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
             (project / ".trellis/.developer").write_bytes(b"name=a\nname=b\n")
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
 
 class MigrationPlanPrivacyTests(unittest.TestCase):
@@ -1124,15 +1109,14 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                 sidecar_kwargs={"redacted": ["/meta"]},
             )
             decisions = _decisions(vault, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_shared_projection_never_embeds_private_digest_or_layout(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1167,15 +1151,14 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                 ),
             ]
             decisions = _decisions(vault, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
             # A candidate still pointing at the retired layout is not a safe
             # rewritten link either.
             _write(candidate / "task.md", _task_md() + b"see .trellis/tasks\n")
@@ -1187,15 +1170,14 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                 candidate / "task.md",
             )
             decisions = _decisions(vault, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
     def test_lessons_marker_preservation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1212,15 +1194,14 @@ class MigrationPlanPrivacyTests(unittest.TestCase):
                     item["decision"] = "redact"
                     item["approval"]["scope"]["decision"] = "redact"
             decisions = _decisions(vault, items)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    plan_migration(
-                        [project],
-                        vault,
-                        "c",
-                        decisions,
-                        tool_versions={"onboard": "f", "graft": "0.18.0"},
-                    )
+            with _home_env(home), self.assertRaises(ContractError):
+                plan_migration(
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
+                )
 
 
 class MigrationPlanCurrentFindingsTests(unittest.TestCase):
@@ -1238,12 +1219,27 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 items,
                 folder="archive/2026-09/09-01-alpha",
                 source_overrides={"status": "completed", "completedAt": "2026-09-05"},
-                task_md_kwargs={"status": "done", "events": [{"at": "unknown", "from": "unknown", "to": "done", "reason": "legacy completion fact", "evidence": "legacy task.json status"}]},
+                task_md_kwargs={
+                    "status": "done",
+                    "events": [
+                        {
+                            "at": "unknown",
+                            "from": "unknown",
+                            "to": "done",
+                            "reason": "legacy completion fact",
+                            "evidence": "legacy task.json status",
+                        }
+                    ],
+                },
             )
             decisions = _decisions(vault, items)
             with _home_env(home), self.assertRaises(ContractError):
                 plan_migration(
-                    [project], vault, "c", decisions, tool_versions={"onboard": "f", "graft": "0.18.0"}
+                    [project],
+                    vault,
+                    "c",
+                    decisions,
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
                 )
             archive = project / "ai/tasks/archive/2026-Q3/alpha"
             for item in items:
@@ -1253,10 +1249,14 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
             manifest = _plan(project, vault, decisions, home)
             copies = [
                 operation["target"]
-                for operation in manifest["payload"]["projects"][0]["private_operations"]
+                for operation in manifest["payload"]["projects"][0][
+                    "private_operations"
+                ]
                 if operation["change"]["kind"].startswith("copy-")
             ]
-            self.assertEqual(copies, [str(archive / "legacy-task.json"), str(archive / "task.md")])
+            self.assertEqual(
+                copies, [str(archive / "legacy-task.json"), str(archive / "task.md")]
+            )
 
     def test_unknown_completion_time_requires_the_undated_archive_target(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1272,7 +1272,18 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 items,
                 folder="archive/unknown/09-01-alpha",
                 source_overrides={"status": "completed"},
-                task_md_kwargs={"status": "done", "events": [{"at": "unknown", "from": "unknown", "to": "done", "reason": "legacy completion fact", "evidence": "legacy task.json status"}]},
+                task_md_kwargs={
+                    "status": "done",
+                    "events": [
+                        {
+                            "at": "unknown",
+                            "from": "unknown",
+                            "to": "done",
+                            "reason": "legacy completion fact",
+                            "evidence": "legacy task.json status",
+                        }
+                    ],
+                },
             )
             archive = project / "ai/tasks/archive/undated/alpha"
             for item in items:
@@ -1281,7 +1292,10 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
             manifest = _plan(project, vault, _decisions(vault, items), home)
             self.assertIn(
                 str(archive / "task.md"),
-                [op["target"] for op in manifest["payload"]["projects"][0]["private_operations"]],
+                [
+                    op["target"]
+                    for op in manifest["payload"]["projects"][0]["private_operations"]
+                ],
             )
 
     def test_completed_active_task_is_not_implicitly_archived(self):
@@ -1293,15 +1307,21 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
             home.mkdir(mode=0o700)
             items = []
             _add_task(
-                project, vault, items,
+                project,
+                vault,
+                items,
                 source_overrides={"status": "completed"},
                 task_md_kwargs={
                     "status": "done",
-                    "events": [{
-                        "at": "unknown", "from": "unknown", "to": "done",
-                        "reason": "legacy completion fact",
-                        "evidence": "legacy task.json status",
-                    }],
+                    "events": [
+                        {
+                            "at": "unknown",
+                            "from": "unknown",
+                            "to": "done",
+                            "reason": "legacy completion fact",
+                            "evidence": "legacy task.json status",
+                        }
+                    ],
                 },
             )
             manifest = _plan(project, vault, _decisions(vault, items), home)
@@ -1323,25 +1343,38 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
             items = []
             _add_task(project, vault, items, folder="09-01-alpha")
             _add_task(
-                project, vault, items, folder="archive/unknown/09-02-alpha",
+                project,
+                vault,
+                items,
+                folder="archive/unknown/09-02-alpha",
                 source_overrides={"status": "completed"},
                 task_md_kwargs={
                     "status": "done",
-                    "events": [{
-                        "at": "unknown", "from": "unknown", "to": "done",
-                        "reason": "legacy completion fact",
-                        "evidence": "legacy task.json status",
-                    }],
+                    "events": [
+                        {
+                            "at": "unknown",
+                            "from": "unknown",
+                            "to": "done",
+                            "reason": "legacy completion fact",
+                            "evidence": "legacy task.json status",
+                        }
+                    ],
                 },
             )
             for item in items[2:]:
                 item["target_path"] = str(
-                    project / "ai/tasks/archive/undated/alpha" / Path(item["target_path"]).name
+                    project
+                    / "ai/tasks/archive/undated/alpha"
+                    / Path(item["target_path"]).name
                 )
                 item["approval"]["scope"]["target_path"] = item["target_path"]
             with _home_env(home), self.assertRaises(ContractError) as caught:
                 plan_migration(
-                    [project], vault, "c", _decisions(vault, items), tool_versions={"onboard": "f", "graft": "0.18.0"}
+                    [project],
+                    vault,
+                    "c",
+                    _decisions(vault, items),
+                    tool_versions={"onboard": "f", "graft": "0.18.0"},
                 )
             self.assertEqual(caught.exception.code, "graph-conflict")
 
@@ -1371,22 +1404,33 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 task_md_kwargs={"parent": "parent"},
             )
             manifest = _plan(project, vault, _decisions(vault, items), home)
-            self.assertEqual(len(manifest["payload"]["publication_decisions"]["items"]), 4)
+            self.assertEqual(
+                len(manifest["payload"]["publication_decisions"]["items"]), 4
+            )
 
     def test_optional_private_task_attachment_is_covered_without_publication(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
             items = json.loads(decisions.read_text())["items"]
-            attachment = next(item for item in items if item["item_id"].endswith("-prd"))
-            attachment.update(required=False, decision="private-only", target_path=None, candidate_ref=None)
+            attachment = next(
+                item for item in items if item["item_id"].endswith("-prd")
+            )
+            attachment.update(
+                required=False,
+                decision="private-only",
+                target_path=None,
+                candidate_ref=None,
+            )
             attachment["approval"]["scope"].update(
                 decision="private-only", target_path=None, candidate_ref=None
             )
             manifest = _plan(project, vault, _decisions(vault, items), home)
             copied = {
                 operation["target"]
-                for operation in manifest["payload"]["projects"][0]["private_operations"]
+                for operation in manifest["payload"]["projects"][0][
+                    "private_operations"
+                ]
                 if operation["change"]["kind"].startswith("copy-")
             }
             self.assertNotIn(str(project / "ai/tasks/alpha/prd.md"), copied)
@@ -1402,9 +1446,15 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 _write(source, body)
                 _write(candidate, body)
                 items = json.loads(decisions.read_text())["items"]
-                index = next(i for i, item in enumerate(items) if item["item_id"] == "spec-auth")
+                index = next(
+                    i for i, item in enumerate(items) if item["item_id"] == "spec-auth"
+                )
                 items[index] = _item(
-                    "spec-auth", [_ref(source)], project / "docs/spec/auth.md", "share", candidate
+                    "spec-auth",
+                    [_ref(source)],
+                    project / "docs/spec/auth.md",
+                    "share",
+                    candidate,
                 )
                 return _decisions(vault, items)
 
@@ -1435,7 +1485,11 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 with self.subTest(body=body):
                     with _home_env(home), self.assertRaises(ContractError) as caught:
                         plan_migration(
-                            [project], vault, "c", update_spec(body), tool_versions={"onboard": "f", "graft": "0.18.0"}
+                            [project],
+                            vault,
+                            "c",
+                            update_spec(body),
+                            tool_versions={"onboard": "f", "graft": "0.18.0"},
                         )
                     self.assertEqual(caught.exception.code, "target-conflict")
                     self.assertEqual(caught.exception.exit_code, 2)
@@ -1458,14 +1512,20 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, vault, home, decisions = _full_fixture(base)
-            _write(project / ".gitignore", sbtd_migration_plan._IGNORE_ASSET.read_bytes())
+            _write(
+                project / ".gitignore", sbtd_migration_plan._IGNORE_ASSET.read_bytes()
+            )
             manifest = _plan(project, vault, decisions, home)
             project_record = dict(manifest["payload"]["projects"][0])
             project_record["private_operations"] = [
-                *project_record["private_operations"], {"phase": "deploy"}
+                *project_record["private_operations"],
+                {"phase": "deploy"},
             ]
             sbtd_migration_plan._validate_project_operations(
-                project, project_record, manifest["payload"]["publication_decisions"]["items"], _strict_reader
+                project,
+                project_record,
+                manifest["payload"]["publication_decisions"]["items"],
+                _strict_reader,
             )
 
 
@@ -1497,7 +1557,9 @@ class MigrationPlanSharedTests(unittest.TestCase):
             _write(unrelated, b"name: other\n")
             outside = base / "unrelated-target"
             outside.mkdir()
-            (home / ".agent/skills/unrelated-link").symlink_to(outside, target_is_directory=True)
+            (home / ".agent/skills/unrelated-link").symlink_to(
+                outside, target_is_directory=True
+            )
             manifest = _plan(project, vault, None, home)
             self.assertEqual(manifest["payload"]["shared_operations"], [])
             self.assertEqual(unrelated.read_bytes(), b"name: other\n")
@@ -1529,14 +1591,19 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project, _vault, home, manifest = self._planned(base)
-            _write(project / ".gitignore", sbtd_migration_plan._IGNORE_ASSET.read_bytes())
+            _write(
+                project / ".gitignore", sbtd_migration_plan._IGNORE_ASSET.read_bytes()
+            )
 
             def make_redundant(payload):
                 operation = next(
-                    op for op in payload["projects"][0]["private_operations"]
+                    op
+                    for op in payload["projects"][0]["private_operations"]
                     if op["owner_kind"] == "gitignore"
                 )
-                operation["before_requirement"]["state"] = snapshot(project / ".gitignore")
+                operation["before_requirement"]["state"] = snapshot(
+                    project / ".gitignore"
+                )
 
             tampered = _reseal(manifest, make_redundant)
             with _home_env(home), self.assertRaises(ContractError) as caught:
@@ -1546,7 +1613,7 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
     def test_invented_private_operation_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            project, vault, home, manifest = self._planned(base)
+            _project, _vault, home, manifest = self._planned(base)
             hashes_ref = None
             for op in manifest["payload"]["projects"][0]["private_operations"]:
                 if (
@@ -1584,14 +1651,13 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
                 )
 
             tampered = _reseal(manifest, mutate)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(tampered, _strict_reader)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(tampered, _strict_reader)
 
     def test_missing_protection_or_output_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            project, vault, home, manifest = self._planned(base)
+            _project, _vault, home, manifest = self._planned(base)
 
             def drop_protection(payload):
                 ops = payload["projects"][0]["private_operations"]
@@ -1600,9 +1666,8 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
                 ]
 
             tampered = _reseal(manifest, drop_protection)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(tampered, _strict_reader)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(tampered, _strict_reader)
 
             def drop_output(payload):
                 ops = payload["projects"][0]["private_operations"]
@@ -1617,7 +1682,7 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
     def test_altered_identity_or_platform_ownership_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            project, vault, home, manifest = self._planned(base)
+            _project, _vault, home, manifest = self._planned(base)
 
             def rename_identity(payload):
                 for op in payload["projects"][0]["private_operations"]:
@@ -1625,9 +1690,8 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
                         op["change"]["name"] = "other9"
 
             tampered = _reseal(manifest, rename_identity)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(tampered, _strict_reader)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(tampered, _strict_reader)
 
             def fake_platform_state(payload):
                 for op in payload["projects"][0]["private_operations"]:
@@ -1638,14 +1702,13 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
                         }
 
             tampered = _reseal(manifest, fake_platform_state)
-            with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(tampered, _strict_reader)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(tampered, _strict_reader)
 
     def test_invented_shared_operation_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            project, vault, home, manifest = self._planned(base)
+            _project, _vault, home, manifest = self._planned(base)
 
             def mutate(payload):
                 root = payload["projects"][0]["root"]
@@ -1694,9 +1757,249 @@ class MigrationPlanOperationGateTests(unittest.TestCase):
                 payload["projects"][0]["shared_operation_ids"] = [operation_id]
 
             tampered = _reseal(manifest, mutate)
+            with _home_env(home), self.assertRaises(ContractError):
+                validate_legacy_inputs(tampered, _strict_reader)
+
+
+class MigrationContextHandoffTests(unittest.TestCase):
+    def fixture(self, base):
+        project = _base_tree(base)
+        vault = base / "vault"
+        vault.mkdir(mode=0o700)
+        home = base / "home"
+        home.mkdir(mode=0o700)
+        items = []
+        _add_task(project, vault, items)
+        journal = project / ".trellis/workspace/dev01/journal-1.md"
+        session = project / ".trellis/.runtime/sessions/codex_fixture.json"
+        _write(journal, b"# Work remaining\nFinish alpha validation.\n")
+        _write(
+            session,
+            _json_bytes(
+                {
+                    "platform": "codex",
+                    "last_seen_at": "2026-09-21T10:00:00Z",
+                    "current_task": ".trellis/tasks/09-01-alpha",
+                    "current_run": None,
+                }
+            ),
+        )
+        return project, vault, home, items, [journal, session]
+
+    def approve(self, project, vault, items, sources, *, task_id="alpha"):
+        from sbtd_handoff import _REDACTION_DECLARATION, HandoffStore
+        from sbtd_task_state import TaskStore
+
+        handoff = {
+            "schema_version": 1,
+            "task_id": task_id,
+            "task_path": f"ai/tasks/{task_id}/task.md",
+            "task_status": "planned",
+            "workflow_mode": None,
+            "mode_source": "migration-unknown",
+            "mode_note": "legacy Trellis task without mode proof",
+            "project_root": str(project),
+            "branch": None,
+            "head": None,
+            "created_at": "2026-09-21T10:00:00+00:00",
+            "content": {
+                "goal": "Complete the migrated task",
+                "decisions": ["Keep migration approval separate from continuation"],
+                "completed": ["Implementation"],
+                "remaining": ["Run validation"],
+                "changed_files": [],
+                "verification": [],
+                "do_not_repeat": ["Do not restore retired routing"],
+                "next_action": "Inspect the task and run its validation",
+                "limitations": "Legacy mode is unproven",
+            },
+            "policy": {"task_opt_out": False, "session_opt_out": False},
+            "redaction": _REDACTION_DECLARATION,
+        }
+        store = HandoffStore(TaskStore(project, read_only=True))
+        name = "2026_09_21-" + hashlib.sha256(task_id.encode()).hexdigest() + ".md"
+        candidate = vault / f"handoff-{task_id}.md"
+        candidate.write_text(store._render(handoff), encoding="utf-8")
+        target = project / "docs/handoffs" / name
+        items.append(
+            _item(
+                f"handoff-{task_id}",
+                [_ref(path) for path in sources],
+                target,
+                "redact",
+                candidate,
+            )
+        )
+        return target, candidate
+
+    def test_negated_handoff_protection_blocks_plan_without_writes(self):
+        for nested in (False, True):
+            with (
+                self.subTest(nested=nested),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                base = Path(directory).resolve()
+                project, vault, home, items, sources = self.fixture(base)
+                (project / ".gitignore").write_text("/docs/handoffs\n")
+                if nested:
+                    _write(project / "docs/.gitignore", b"!handoffs/\n")
+                else:
+                    (project / ".gitignore").write_text(
+                        "/docs/handoffs\n!/docs/handoffs\n"
+                    )
+                self.approve(project, vault, items, sources)
+                decisions = _decisions(vault, items)
+                before = _tree_bytes(base)
+                with self.assertRaises(ContractError) as error:
+                    _plan(project, vault, decisions, home)
+                self.assertEqual(error.exception.code, "private-scope")
+                self.assertEqual(_tree_bytes(base), before)
+
+    def test_unfinished_context_requires_approved_handoff_without_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, items, _ = self.fixture(base)
+            decisions = _decisions(vault, items)
+            before = _tree_bytes(base)
+            with self.assertRaises(ContractError) as error:
+                _plan(project, vault, decisions, home)
+            self.assertEqual(error.exception.code, "approval-required")
+            self.assertEqual(_tree_bytes(base), before)
+
+    def test_approved_handoff_is_readable_after_apply_and_originals_are_recoverable(
+        self,
+    ):
+        from sbtd_handoff import HandoffStore
+        from sbtd_migration import apply_migration, runtime_versions
+        from sbtd_task_state import TaskStore
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, items, sources = self.fixture(base)
+            originals = {path: path.read_bytes() for path in sources}
+            target, candidate = self.approve(project, vault, items, sources)
+            decisions = _decisions(vault, items)
             with _home_env(home):
-                with self.assertRaises(ContractError):
-                    validate_legacy_inputs(tampered, _strict_reader)
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture-custodian",
+                    decisions,
+                    tool_versions=runtime_versions(),
+                )
+                manifest_path = vault / "manifest.json"
+                manifest_path.write_bytes(contracts.canonical_json_bytes(manifest))
+                receipt, code = apply_migration(manifest_path, confirmed=True)
+                self.assertEqual(code, 0, receipt)
+                receipt_path = vault / "apply.json"
+                receipt_path.write_bytes(
+                    contracts.canonical_json_bytes(
+                        receipt["migration"]["apply_receipt"]
+                    )
+                )
+                repeated, code = apply_migration(
+                    manifest_path,
+                    previous_receipt_path=receipt_path,
+                    confirmed=True,
+                )
+                self.assertEqual(code, 0, repeated)
+                loaded = HandoffStore(TaskStore(project, read_only=True)).load(
+                    target.relative_to(project).as_posix()
+                )
+            self.assertEqual(loaded["content"]["remaining"], ["Run validation"])
+            self.assertEqual(target.read_bytes(), candidate.read_bytes())
+            self.assertFalse((project / ".sbtd/active-task.json").exists())
+            self.assertIn("/docs/handoffs", (project / ".gitignore").read_text())
+            from sbtd_migration import _source_backup_paths
+
+            backup = _source_backup_paths(manifest)[str(project / ".trellis")]
+            for path, raw in originals.items():
+                self.assertEqual(path.read_bytes(), raw)
+                self.assertEqual(
+                    (backup / path.relative_to(project / ".trellis")).read_bytes(), raw
+                )
+
+    def test_handoff_approval_must_cover_every_original_context_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, items, sources = self.fixture(
+                Path(directory).resolve()
+            )
+            self.approve(project, vault, items, sources[:1])
+            with self.assertRaises(ContractError) as error:
+                _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(error.exception.code, "approval-conflict")
+
+    def test_invalid_session_reference_is_not_guessed_from_journal(self):
+        for reference in ("../../outside", ".trellis/tasks/missing"):
+            with (
+                self.subTest(reference=reference),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                project, vault, home, items, sources = self.fixture(
+                    Path(directory).resolve()
+                )
+                sources[1].write_bytes(_json_bytes({"current_task": reference}))
+                self.approve(project, vault, items, sources)
+                with self.assertRaises(ContractError) as error:
+                    _plan(project, vault, _decisions(vault, items), home)
+                self.assertEqual(error.exception.code, "graph-conflict")
+
+    def test_session_only_context_requires_its_task_handoff(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, items, sources = self.fixture(
+                Path(directory).resolve()
+            )
+            sources[0].unlink()
+            with self.assertRaises(ContractError) as error:
+                _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(error.exception.code, "approval-required")
+            self.approve(project, vault, items, sources[1:])
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            self.assertTrue(
+                any(
+                    "/docs/handoffs/" in operation["target"]
+                    for operation in manifest["payload"]["projects"][0][
+                        "private_operations"
+                    ]
+                )
+            )
+
+    def test_journals_require_each_unfinished_task_without_selecting_one(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, items, sources = self.fixture(
+                Path(directory).resolve()
+            )
+            _add_task(project, vault, items, task_id="beta", folder="09-02-beta")
+            self.approve(project, vault, items, sources)
+            with self.assertRaises(ContractError) as error:
+                _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(error.exception.code, "approval-required")
+            self.approve(project, vault, items, sources, task_id="beta")
+            _plan(project, vault, _decisions(vault, items), home)
+            self.assertFalse((project / ".sbtd/active-task.json").exists())
+
+    def test_unknown_session_structure_and_legacy_path_line_fail_closed(self):
+        for path_line in (False, True):
+            with (
+                self.subTest(path_line=path_line),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                project, vault, home, items, sources = self.fixture(
+                    Path(directory).resolve()
+                )
+                if path_line:
+                    _write(
+                        project / ".trellis/.current-task",
+                        b".trellis/tasks/09-01-alpha\n",
+                    )
+                else:
+                    sources[1].write_bytes(
+                        _json_bytes({"future_task_pointer": "alpha"})
+                    )
+                self.approve(project, vault, items, sources)
+                with self.assertRaises(ContractError) as error:
+                    _plan(project, vault, _decisions(vault, items), home)
+                self.assertEqual(error.exception.code, "invalid-config")
 
 
 if __name__ == "__main__":
