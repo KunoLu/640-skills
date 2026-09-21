@@ -369,8 +369,17 @@ def _assistant_replies(text: str) -> str:
 
 
 def _reply_for_mode(text: str) -> str:
+    records = _jsonl_records(text)
+    if not records:
+        return text
     replies = _assistant_replies(text)
-    return replies if replies else text
+    if replies:
+        return replies
+    if any(_is_tool_item(_trace_item(record)) for record in records):
+        return ""
+    return text
+
+
 
 
 def _trace_item(record: dict[str, object]) -> dict[str, object]:
@@ -441,15 +450,37 @@ def _emits_gate_table(text: str) -> bool:
 
 
 
-def _observed_mode(text: str) -> str | None:
-    report = _extract_mode_report(_reply_for_mode(text))
-    if report is None:
-        return None
-    for key in ("mode", "current", "session_mode", "workflow_mode"):
-        found = _leading_mode(report.get(key))
-        if found:
-            return found
+_PROSE_MODE = (
+    re.compile(r"current execution mode:\s*\**`?(\w+)`?\**", re.I),
+    re.compile(r"current mode(?: is)?:\s*\**`?(\w+)`?\**", re.I),
+)
+
+
+def _mode_from_prose(text: str) -> str | None:
+    for pattern in _PROSE_MODE:
+        match = pattern.search(text)
+        if match:
+            found = _leading_mode(match.group(1))
+            if found:
+                return found
+    ticks = [token.lower() for token in re.findall(r"`(default|lite|strict)`", text, re.I)]
+    if len(set(ticks)) == 1:
+        return ticks[0]
     return None
+
+
+def _observed_mode(text: str) -> str | None:
+    source = _reply_for_mode(text)
+    if not source:
+        return None
+    report = _extract_mode_report(source)
+    if report is not None:
+        for key in ("mode", "current", "session_mode", "workflow_mode"):
+            found = _leading_mode(report.get(key))
+            if found:
+                return found
+    return _mode_from_prose(source)
+
 
 
 def _save_failed_signal(text: str) -> bool:
@@ -748,6 +779,48 @@ class HostModeSmokeTests(unittest.TestCase):
             _observed_mode('{"session_mode":"strict","persisted":false}'),
             "strict",
         )
+        tool_stdout = json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "aggregated_output": (
+                        "workflow_mode: lite\n"
+                        "handoff workflow_mode: strict\n"
+                    ),
+                },
+            }
+        )
+        self.assertIsNone(_observed_mode(tool_stdout))
+        live_restore = (
+            tool_stdout
+            + "\n"
+            + json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "type": "agent_message",
+                        "text": "Current execution mode: **lite**\n",
+                    },
+                }
+            )
+        )
+        self.assertEqual(_observed_mode(live_restore), "lite")
+        self.assertEqual(_observed_mode("The current mode is `lite`.\n"), "lite")
+        live_save = json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "agent_message",
+                    "text": (
+                        "Current execution mode: **strict**\n"
+                        "Disk remains default. not persisted.\n"
+                    ),
+                },
+            }
+        )
+        self.assertEqual(_observed_mode(live_save), "strict")
+        self.assertTrue(_save_failed_signal(live_save))
         self.assertTrue(_save_failed_signal('{"mode":"strict"} 未持久化'))
         self.assertFalse(_save_failed_signal('{"mode":"default","persisted":true}'))
 
