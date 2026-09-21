@@ -2,6 +2,11 @@
 
 操作说明：[Codex / OMP 三模式 host smoke 验证手册](../assets/codex-omp-host-mode-smoke.md)。
 
+## 收口
+
+用户确认本项收口并走 PR #64 合并。接受 AC-20 measured-not-met、AC-14/23 仅为 Gate 分层 smoke、AC-24 live harness 已过。不启动 P1-16 / P2 / P3。
+
+
 
 ## 范围与边界
 
