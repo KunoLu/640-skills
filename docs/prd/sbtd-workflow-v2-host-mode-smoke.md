@@ -56,7 +56,10 @@
 
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。
-- `SBTD_P115_HOST=1` Gate 约 200s：**六格 passed**（`40693c5` 收紧 trace 后）。报告 `tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-10_41_50`（exclude，不入库）。这是分层 smoke（有无 `strict.md` 工具读），**不是**完整 Book/BDD，也不是 AC-20。
+- `SBTD_P115_HOST=1` Gate 约 200s：六格 smoke passed。报告 `…-2026_09_21-10_41_50`（exclude）。不是完整 Book/BDD，不是 AC-20。
+- `SBTD_P115_HOST=1` AC-24 跨会话/保存失败约 193s：**FAIL，不是 AC-24**。Codex restore/save `observed=None`（回复无 mode JSON）。未把散文 lite/strict 当过。
+
+
 
 
 
@@ -75,7 +78,8 @@
 | AC-20 | **measured-not-met**：Gate Codex 约 6.5–8.7 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON | `test_sbtd_task_routing` + live refuse |
 | AC-23 | **partial**：default/lite 有工具读且未开 `strict.md`；strict 有 `strict.md` 工具读。不是完整弱流程验收 | live Gate 200s |
-| AC-24 | **harness-ready**：跨会话必须观察到 mode=lite；保存失败磁盘仍 default 且会话仍 strict。live 未跑 | `test_live_host_cross_session` / `test_live_host_save_failure` |
+| AC-24 | **not-met**：live 未抽出 mode JSON；Codex restore/save failed `missing-lite-mode` / `missing-strict-session` | live 193s |
+
 
 
 
