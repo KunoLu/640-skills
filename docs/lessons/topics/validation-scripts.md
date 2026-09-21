@@ -580,5 +580,16 @@
 - 修复：按固定版本实际sink证明完整有效指针，拒绝未支持的可强制转换值，核对拼接后路径与fallback；完整生成树拒绝链接／硬链接／特殊文件，workspace索引不授权扫描其他仓。
 - 预防：负例覆盖转换链而非仅`../`原串；使用真实native图验证启动拒绝、原件不变，再单独证明正常查询与hook执行。安装返回成功不等于host信任，原生payload调用不等于真实host事件；不声称OS沙箱或并发隔离。
 
+## LESSON-20260921-640-deferred-repair-proof: Revalidate Deferred Findings Against Current Consumers
+
+- 日期：2026-09-21
+- 标签：findings, concurrency, dependencies, powershell, validation
+- 适用场景：修复历史延期项，尤其涉及第三方共享文件、依赖删除及安装器参数转发。
+- 严重级别：high
+- 来源：延期项修复；分隔名沿用主 PRD 记录的用户明确授权 640。
+- 问题：历史“未使用”依赖后来已有生产消费者；read/compare/replace 无法保护不遵守本地锁的外部 writer；PowerShell 函数内的 `$PSBoundParameters` 不包含脚本入口的绑定。
+- 修复：按当前调用方保留 tomlkit、仅删真正不可达迁移分支；经用户确认，对已有可变遥测配置拒绝覆盖，缺失文件采用 no-clobber 创建；从实际 switch 值转发确认，真实解释器验证 true／false。
+- 预防：历史 finding 是调查线索，不是删除授权证明。运行报告使用显式隔离解释器及声明依赖；新增测试先证明失败原因来自目标行为，不能把错误入口、遗漏 import、缺依赖或残留空目录造成的失败当作红测。
+
   <!-- lessons:640:end -->
 

@@ -1,5 +1,7 @@
 # P1-19：developer 按需建立与身份解析
 
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
 ## 基线与范围
 
 - 基线main `45e9f363e6ef2a8716957f457e87e21ab8e210dd`；分支`p1-19-developer-identity`。P1-18实现/状态PR #35/#36已闭环，P1累计5项。

@@ -24,12 +24,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Mapping
+from typing import Any
 
 from onboard_arguments import validate_developer_name
 from onboard_contracts import ContractError
@@ -95,11 +97,22 @@ _LEGACY_ONLY_KEYS = frozenset(
     }
 )
 
-_CURRENT_FRONTMATTER_FIELDS = frozenset({
-    "schema_version", "id", "workflow_mode", "mode_source", "mode_note",
-    "status", "parent", "branch", "created_at", "updated_at", "completed_at",
-    "blocked_reason",
-})
+_CURRENT_FRONTMATTER_FIELDS = frozenset(
+    {
+        "schema_version",
+        "id",
+        "workflow_mode",
+        "mode_source",
+        "mode_note",
+        "status",
+        "parent",
+        "branch",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "blocked_reason",
+    }
+)
 
 
 _IDENTITY_KEY = re.compile(r"^[a-z][a-z0-9_]*=")
@@ -374,7 +387,7 @@ def _apply_redactions(source: Any, redacted_paths: list[Any]) -> Any:
     redacted = copy.deepcopy(source)
     segments = [_pointer_segments(pointer) for pointer in redacted_paths]
     canonical = sorted(segments)
-    for earlier, later in zip(canonical, canonical[1:]):
+    for earlier, later in itertools.pairwise(canonical):
         if earlier == later:
             raise ContractError(
                 "invalid-redaction", "redacted_paths contains a duplicate pointer"
@@ -431,7 +444,7 @@ def _legacy_timestamp(source: dict[str, Any], field: str) -> str | None:
         )
     if _DATE_ONLY.fullmatch(value):
         try:
-            datetime.strptime(value, "%Y-%m-%d")
+            date.fromisoformat(value)
         except ValueError:
             raise ContractError(
                 "invalid-legacy-task", f"legacy task {field} is not a real date"
@@ -451,6 +464,7 @@ def _legacy_timestamp(source: dict[str, Any], field: str) -> str | None:
         "invalid-legacy-task", f"legacy task {field} has unknown time semantics"
     )
 
+
 def _archive_bucket(source: dict[str, Any], status: str) -> str | None:
     if status != "done":
         return None
@@ -463,8 +477,6 @@ def _archive_bucket(source: dict[str, Any], status: str) -> str | None:
         return "undated"
     month = int(timestamp[5:7])
     return f"{timestamp[:4]}-Q{(month - 1) // 3 + 1}"
-
-
 
 
 def _legacy_parent(source: dict[str, Any]) -> str | None:
@@ -649,7 +661,6 @@ class TaskProjection:
     archive_bucket: str | None = None
 
 
-
 def _check_time_provenance(document: TaskDocument) -> None:
     from markdown_it import MarkdownIt
 
@@ -671,9 +682,11 @@ def _check_time_provenance(document: TaskDocument) -> None:
         for field, source in sources.items()
         if document.frontmatter[field] is None
     }
-    if len(blocks) != 1 or _decode_legacy(
-        blocks[0].encode("utf-8"), "legacy timestamp provenance"
-    ) != expected:
+    if (
+        len(blocks) != 1
+        or _decode_legacy(blocks[0].encode("utf-8"), "legacy timestamp provenance")
+        != expected
+    ):
         raise ContractError(
             "invalid-task-document",
             "unproven legacy times need the source-bound timestamp provenance block",
@@ -841,13 +854,13 @@ def validate_task_projection(
     _check_document(document, source, identity, status, parent, branch)
     folder = parts[-2]
     relative_folder = "/".join(parts[2:-1])
-    aliases = tuple(dict.fromkeys(
-        name for name in (folder, relative_folder) if name and name != identity
-    ))
+    aliases = tuple(
+        dict.fromkeys(
+            name for name in (folder, relative_folder) if name and name != identity
+        )
+    )
     bucket = (
-        _archive_bucket(source, status)
-        if _ARCHIVE_SEGMENT in parts[2:-1]
-        else None
+        _archive_bucket(source, status) if _ARCHIVE_SEGMENT in parts[2:-1] else None
     )
     return TaskProjection(identity, parent, children, document, aliases, bucket)
 

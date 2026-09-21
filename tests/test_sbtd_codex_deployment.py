@@ -28,7 +28,10 @@ class DeploymentContextTests(unittest.TestCase):
             roots = [str(root)]
             payload = {
                 "projects": [
-                    {"root": str(root), "private_operations": [{"owner_kind": "gitignore"}]}
+                    {
+                        "root": str(root),
+                        "private_operations": [{"owner_kind": "gitignore"}],
+                    }
                 ],
                 "shared_operations": [],
                 "shared_roots": [
@@ -54,9 +57,7 @@ class DeploymentContextTests(unittest.TestCase):
                     "sbtd_graft_deployment._installation_templates", return_value=[]
                 ),
             ):
-                attach_deployment(
-                    payload, project_only=False, hooks_authorized=False
-                )
+                attach_deployment(payload, project_only=False, hooks_authorized=False)
             self.assertEqual(
                 payload["shared_roots"],
                 [
@@ -80,7 +81,10 @@ class DeploymentContextTests(unittest.TestCase):
             roots = [str(root)]
             payload = {
                 "projects": [
-                    {"root": str(root), "private_operations": [{"owner_kind": "gitignore"}]}
+                    {
+                        "root": str(root),
+                        "private_operations": [{"owner_kind": "gitignore"}],
+                    }
                 ],
                 "shared_operations": [],
                 "shared_roots": [
@@ -134,7 +138,6 @@ class DeploymentContextTests(unittest.TestCase):
                     },
                 ],
             )
-
 
     def test_context_validates_scope_and_unused_private_output_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:

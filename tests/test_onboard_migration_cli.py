@@ -37,6 +37,7 @@ class MigrationCliTests(unittest.TestCase):
                     str(home / "manifest.json"),
                     "--json",
                 ],
+                check=False,
                 capture_output=True,
                 text=True,
                 env=environment,
@@ -60,6 +61,7 @@ class MigrationCliTests(unittest.TestCase):
             )
             help_result = subprocess.run(
                 [sys.executable, "-B", str(SCRIPT), "migration", "--help"],
+                check=False,
                 capture_output=True,
                 text=True,
                 env=environment,
@@ -80,6 +82,7 @@ class MigrationCliTests(unittest.TestCase):
                     "--unknown",
                     private_token,
                 ],
+                check=False,
                 capture_output=True,
                 text=True,
                 env=environment,

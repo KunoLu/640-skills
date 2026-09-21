@@ -90,7 +90,12 @@ _SCRUBBED_PREFIXES = (
     "OPENAI_",
     "ANTHROPIC_",
 )
-_SCRUBBED_VARS = ("NODE_OPTIONS", "NODE_PATH", "DOTENV_CONFIG_DEBUG", "DOTENV_CONFIG_QUIET")
+_SCRUBBED_VARS = (
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "DOTENV_CONFIG_DEBUG",
+    "DOTENV_CONFIG_QUIET",
+)
 
 _ADVICE_MISSING = (
     "Install the pinned Graft CLI with the managed install-graft flow after "
@@ -442,12 +447,9 @@ def _check_graft(env: dict[str, str]) -> dict[str, object]:
                 "the detected Node version is incompatible"
             )
             result["advice"] = (
-                "Install a compatible Node runtime before using the pinned "
-                "Graft CLI."
+                "Install a compatible Node runtime before using the pinned Graft CLI."
             )
-            result["nextStep"] = (
-                f"Install Node >= {NODE_MIN_MAJOR}, then rerun check."
-            )
+            result["nextStep"] = f"Install Node >= {NODE_MIN_MAJOR}, then rerun check."
             return result
 
         result["installed"] = True
@@ -584,13 +586,13 @@ def _inspect_telemetry(home: Path) -> dict[str, object]:
 
 
 def _persist_telemetry_disabled(home: Path) -> dict[str, object]:
-    """Set ``enabled: false`` in ~/.graft/telemetry.json, conservatively.
+    """Create ``enabled: false`` telemetry state without overwriting Graft.
 
-    Read/merge (unknown keys preserved), atomic same-directory replace with
-    the original file mode, concurrent-change rejection, and a readback
-    verification. Never invokes the telemetry CLI (it triggers the updater).
-    Raises _TelemetryConflict for unsafe or concurrently-changing state and
-    _TelemetryPersistError for operational failures.
+    Graft's own ``patchState`` read-modify-write is explicitly uncoordinated
+    across processes. An existing mutable state therefore belongs to Graft:
+    changing it here could lose fields written after any Python-side read.
+    A missing state is published with a same-directory hard link, whose
+    no-clobber semantics safely reject a concurrent creator.
     """
     inspection = _inspect_telemetry(home)
     target = Path(str(inspection["path"]))
@@ -604,46 +606,26 @@ def _persist_telemetry_disabled(home: Path) -> dict[str, object]:
             "preservedKeys": [],
             "created": False,
         }
+    if inspection["exists"]:
+        raise _TelemetryConflict(
+            "telemetry.json already exists and needs a Graft-owned update; "
+            "refusing to overwrite it without a shared writer protocol"
+        )
 
     parent = target.parent
     try:
         if not os.path.lexists(parent):
             parent.mkdir(mode=0o700)
+    except FileExistsError as exc:
+        raise _TelemetryConflict(
+            "~/.graft was created concurrently; refusing to overwrite Graft-owned state"
+        ) from exc
     except OSError as exc:
         raise _TelemetryPersistError(
             f"cannot create ~/.graft: {exc.strerror or exc}"
         ) from exc
 
-    original: bytes | None = None
-    if os.path.lexists(target):
-        try:
-            original = _read_file_bytes(target)
-        except OSError as exc:
-            raise _TelemetryPersistError(
-                f"cannot read telemetry.json: {exc.strerror or exc}"
-            ) from exc
-
-    data: dict[str, object] = {}
-    if original is not None:
-        try:
-            data = dict(_parse_telemetry_json(original))
-        except (TypeError, ValueError, UnicodeDecodeError) as exc:
-            raise _TelemetryConflict(
-                f"telemetry.json is not valid JSON: {exc}"
-            ) from exc
-    data["enabled"] = False
-    new_bytes = (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
-
-    if original is not None:
-        try:
-            mode = stat.S_IMODE(os.stat(target).st_mode)
-        except OSError as exc:
-            raise _TelemetryPersistError(
-                f"cannot stat telemetry.json: {exc.strerror or exc}"
-            ) from exc
-    else:
-        mode = 0o600
-
+    new_bytes = b'{\n  "enabled": false\n}\n'
     temp_path: str | None = None
     try:
         fd, temp_path = tempfile.mkstemp(
@@ -651,25 +633,20 @@ def _persist_telemetry_disabled(home: Path) -> dict[str, object]:
         )
         with os.fdopen(fd, "wb") as handle:
             handle.write(new_bytes)
-        os.chmod(temp_path, mode)
-        # Reject concurrent changes: the file must be byte-identical to what
-        # we merged (or still absent) before we atomically replace it.
-        if os.path.lexists(target):
-            current: bytes | None = _read_file_bytes(target)
-        else:
-            current = None
-        if current != original:
-            raise _TelemetryConflict(
-                "telemetry.json changed while the update was being prepared; "
-                "refusing to overwrite concurrent modifications"
-            )
-        os.replace(temp_path, target)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_path, 0o600)
+        os.link(temp_path, target)
+        os.unlink(temp_path)
         temp_path = None
-    except _TelemetryConflict:
-        raise
+    except FileExistsError as exc:
+        raise _TelemetryConflict(
+            "telemetry.json was created or updated concurrently; refusing to "
+            "overwrite the Graft-owned state"
+        ) from exc
     except OSError as exc:
         raise _TelemetryPersistError(
-            f"cannot write telemetry.json: {exc.strerror or exc}"
+            f"cannot create telemetry.json: {exc.strerror or exc}"
         ) from exc
     finally:
         if temp_path is not None:
@@ -678,23 +655,12 @@ def _persist_telemetry_disabled(home: Path) -> dict[str, object]:
             except OSError:
                 pass
 
-    try:
-        readback = _parse_telemetry_json(_read_file_bytes(target))
-    except (TypeError, ValueError, UnicodeDecodeError, OSError) as exc:
-        raise _TelemetryPersistError(
-            f"telemetry.json readback failed after replace: {exc}"
-        ) from exc
-    if readback.get("enabled") is not False:
-        raise _TelemetryPersistError("telemetry.json readback shows enabled != false")
-    for key, value in (data or {}).items():
-        if key != "enabled" and readback.get(key) != value:
-            raise _TelemetryPersistError(f"telemetry.json readback lost key {key!r}")
     return {
         "path": str(target),
         "changed": True,
         "enabled": False,
-        "preservedKeys": sorted(key for key in data if key != "enabled"),
-        "created": original is None,
+        "preservedKeys": [],
+        "created": True,
     }
 
 
@@ -975,9 +941,7 @@ def install_graft(
     prerequisite/conflict blocked, 1 operational failure.
     """
     env = dict(os.environ)
-    return _install_graft(
-        env, confirmed=confirmed, telemetry_only=telemetry_only
-    )
+    return _install_graft(env, confirmed=confirmed, telemetry_only=telemetry_only)
 
 
 def _install_graft(

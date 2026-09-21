@@ -107,3 +107,17 @@ Main独占计划/阶段编排、CLI、schema/codec接入及共享文档，worker
 - `2026-09-19T12:51:01+08:00`在上述合并/分支核验及临时文件清理后记录done：5份移前源码与base逐字一致，冻结原始/最终318文件副本hash复验后清理Main私有验证workspace、确认归属的worker目录及本任务生成字节码；未动共享旧缓存。1处归属不明临时目录保留，不凭相似内容猜删。P0 spike环境、真实HOME/用户项目/迁移原件和live automation未动。
 - 本地旁证：最终unit报告同stem的`.closure.json`保留精确安装manifest、静态检查、合并与清理事实；它不是新的运行结果，原raw/evidence校验和未改。README.md/html、versioned automation prompt与CHANGELOG已在实现PR维护；本状态PR只记录完成事实，无新的公开行为，不额外改写它们。
 - P1计数为第7项；只有本独立状态PR亦完成review/admin合并及清理后才进入P1-04。D-IMP-14仍在累计第10项P1-06完整闭环后暂停，评估全部findings并等待用户确认。
+
+## 后续修复：未完成上下文交接验收
+
+以下补充当前运行契约，不改写上面的历史验证快照。固定旧 `common/active_task.py` 实际使用 `.trellis/.runtime/sessions/*.json` 的 `current_task`；`.current-task` 非空路径行不作为该版本的有效指针。
+
+| 场景 | Given | When | Then | 验证入口 |
+|---|---|---|---|---|
+| 缺交接批准 | journal 存在且迁移任务未完成 | 执行 plan | 返回 approval-required、零写入；仅备份不能替代交接 | `MigrationContextHandoffTests.test_unfinished_context_requires_approved_handoff_without_writes` |
+| 批准的恢复入口 | 私有候选采用既有 HandoffStore 格式，批准绑定完整 context 和具体 task | 执行 apply 并读取摘要 | docs/handoffs 中可读取剩余工作；原件仍在私有备份；不创建 active-task | `MigrationContextHandoffTests.test_approved_handoff_is_readable_after_apply_and_originals_are_recoverable` |
+| 多任务不猜选 | journal 及多个未完成任务 | 仅批准一个摘要后 plan | 缺失任务仍阻断；逐个批准后才通过，不按 mtime 或 session 顺序自动选任务 | `MigrationContextHandoffTests.test_journals_require_each_unfinished_task_without_selecting_one` |
+| 异常旧指针 | session 指向范围外、未知任务或未知 JSON 结构 | 执行 plan | graph-conflict／invalid-config，不从 journal 猜测关联 | `MigrationContextHandoffTests.test_invalid_session_reference_is_not_guessed_from_journal`、`test_unknown_session_structure_and_legacy_path_line_fail_closed` |
+| 审批缺来源 | 摘要只绑定部分原始 journal/session | 执行 plan | approval-conflict；批准不能遗漏上下文输入 | `MigrationContextHandoffTests.test_handoff_approval_must_cover_every_original_context_file` |
+
+摘要内容仍由有权限的调用者审查并批准；机器仅验证格式、来源、任务状态、分支／HEAD 和精确候选，不承诺自动理解 journal 或生成摘要。原任务 mode 未证明时继续为 null，摘要不能选择 mode。恢复、清理和真实项目迁移仍遵守独立授权门。

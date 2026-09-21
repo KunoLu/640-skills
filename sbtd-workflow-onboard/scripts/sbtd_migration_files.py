@@ -895,12 +895,14 @@ def _stage_copy(source: Path, parent: Path) -> str:
     temporary: str | None = None
     try:
         descriptor, temporary = tempfile.mkstemp(prefix=".sbtd-migration-", dir=parent)
-        with open_regular_file(source, "migration file") as source_handle:
-            with os.fdopen(descriptor, "wb") as target_handle:
-                while chunk := source_handle.read(_CHUNK):
-                    target_handle.write(chunk)
-                target_handle.flush()
-                os.fsync(target_handle.fileno())
+        with (
+            open_regular_file(source, "migration file") as source_handle,
+            os.fdopen(descriptor, "wb") as target_handle,
+        ):
+            while chunk := source_handle.read(_CHUNK):
+                target_handle.write(chunk)
+            target_handle.flush()
+            os.fsync(target_handle.fileno())
     except TaskDataError:
         if temporary is not None:
             _unlink_quiet(Path(temporary))

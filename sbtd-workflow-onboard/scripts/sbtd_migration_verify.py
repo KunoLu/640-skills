@@ -19,8 +19,11 @@ Boundary (docs/prd/sbtd-workflow-v2-migration-runtime.md, main PRD 10.2/11):
   attempt. A passing native envelope alone is not acceptance: the current
   attempt window, the raw API smoke exit status, the project root/ref/HEAD
   binding, the verified environment and the non-mock mode are all checked.
-  JSON shape or hash equality is never execution or host authenticity proof,
-  and fixture-based checks never prove a real deployment happened.
+  Non-API reports remain non-acceptance-bearing but must be v2 typed reports
+  with a passed locator-bound case; v1/untyped auxiliary formats are rejected
+  rather than parsed generically. JSON shape or hash equality is never
+  execution or host authenticity proof, and fixture-based checks never prove
+  a real deployment happened.
 """
 
 from __future__ import annotations
@@ -270,9 +273,90 @@ def _accept_raw_smoke(
         )
 
 
+def _accept_auxiliary_report(
+    content: bytes,
+    report: Mapping[str, Any],
+    envelope: Mapping[str, Any],
+    validator: Any,
+) -> None:
+    """Require a v2 typed report and locator-bound passing case, not a smoke."""
+    if envelope.get("schemaVersion") != 2:
+        _fail(
+            "report-acceptance",
+            "an auxiliary deployment report has no typed format contract",
+            3,
+        )
+    report_format = report.get("reportFormat")
+    if report_format not in {"junit-xml-v1", "playwright-json-v1"}:
+        _fail(
+            "report-acceptance",
+            "an auxiliary deployment report does not declare a supported typed format",
+            3,
+        )
+    report_sha = report["sha256"].lower()
+    links = [
+        link
+        for link in envelope["scenarioLinks"]
+        if link["reportSha256"].lower() == report_sha
+    ]
+    if not links:
+        _fail(
+            "report-acceptance",
+            "an auxiliary deployment report has no source locator provenance",
+            3,
+        )
+    try:
+        cases = (
+            validator.parse_junit(content)
+            if report_format == "junit-xml-v1"
+            else validator.parse_playwright(content)
+        )
+        locators = {
+            locator["sourceLocatorDigest"]: locator
+            for locator in envelope["sourceLocators"]
+        }
+        for link in links:
+            locator = locators[link["sourceLocatorDigest"]]
+            if any(
+                locator.get(key) != envelope["repository"].get(key)
+                for key in ("repositoryKey", "sourceRef")
+            ):
+                _fail(
+                    "report-acceptance",
+                    "an auxiliary source locator belongs to another repository or revision",
+                    3,
+                )
+            matched = (
+                validator.match_junit(cases, link["testCaseSelector"])
+                if report_format == "junit-xml-v1"
+                else validator.match_playwright(cases, link["testCaseSelector"])
+            )
+            if len(matched) != 1 or matched[0]["outcome"] != "passed":
+                _fail(
+                    "report-acceptance",
+                    "an auxiliary deployment report does not prove its passed case",
+                    3,
+                )
+            if validator.unique_binding(matched[0]) != validator.source_locator_digest(
+                locator
+            ):
+                _fail(
+                    "report-acceptance",
+                    "an auxiliary deployment report is bound to another source locator",
+                    3,
+                )
+    except (KeyError, TypeError, validator.EvidenceError):
+        _fail(
+            "report-acceptance",
+            "an auxiliary deployment report failed typed content or provenance validation",
+            3,
+        )
+
+
 def _accept_report(
     report: Any,
     envelope: Mapping[str, Any],
+    validator: Any,
     *,
     started: Any,
     finished: Any,
@@ -313,6 +397,7 @@ def _accept_report(
         )
 
     if report.get("testType") != "api":
+        _accept_auxiliary_report(content, report, envelope, validator)
         return False
     if report.get("mode") not in _GENUINE_MODES:
         _fail(
@@ -392,6 +477,7 @@ def _accept_envelope(
         api_smoke |= _accept_report(
             report,
             envelope,
+            validator,
             started=started,
             finished=finished,
             root=root,
@@ -483,13 +569,6 @@ def validate_deployment_reports(
         )
 
 
-def _stage_results(*documents: Mapping[str, Any]) -> dict[str, Any]:
-    results = {}
-    for phase, document in zip(("apply", "deploy"), documents):
-        results[phase] = migration._result_index(document)
-    return results
-
-
 def verify_migration(
     manifest_path: Path,
     apply_receipt_path: Path,
@@ -523,7 +602,10 @@ def verify_migration(
         manifest_path, manifest, previous=apply_document, deployment=deployment
     )
     migration._check_source_backups(manifest)
-    stage_results = _stage_results(apply_document, deployment)
+    stage_results = {
+        "apply": migration._result_index(apply_document),
+        "deploy": migration._result_index(deployment),
+    }
     migration._check_stage_backups(stage_results)
 
     epoch_started = None

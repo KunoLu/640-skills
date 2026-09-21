@@ -1,5 +1,7 @@
 # P1-04：Codex 接线、hooks opt-in 与部署证据
 
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
 ## 基线与边界
 
 - 基线main `61be864ba6dfb5ad26a9246c972790c4fd6c880a`；分支`p1-04-codex-wiring`。P1-12实现PR #39及状态PR #40已闭环，P1累计7项；累计第10项P1-06完整闭环后暂停评估findings并等待用户确认。

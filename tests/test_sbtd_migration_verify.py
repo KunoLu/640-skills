@@ -20,106 +20,7 @@ from sbtd_migration_files import snapshot
 from sbtd_migration_plan import plan_migration
 from sbtd_migration_verify import validate_deployment_reports, verify_migration
 
-
-class DeploymentReportTests(unittest.TestCase):
-    def test_a_passing_envelope_cannot_hide_a_failed_raw_run(self):
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory).resolve()
-            root = base / "project"
-            root.mkdir()
-            private = base / "private"
-            private.mkdir(mode=0o700)
-            report_path = private / "smoke.json"
-            summary = private / "smoke.md"
-            summary.write_text("合成契约夹具；不证明真实host部署。\n")
-            head = "1" * 40
-            raw = {
-                "repositoryKey": "fixture/project",
-                "projectRoot": str(root),
-                "sourceRef": "main",
-                "sourceCommit": head,
-                "worktreeState": "clean",
-                "sourceRevision": "exact",
-                "evidenceSource": "developer-local",
-                "trigger": "manual",
-                "environmentAlignment": "verified",
-                "evidencePublication": "local-only",
-                "e2eMode": "smoke-only",
-                "mockStrategy": "none",
-                "startedAt": "2026-09-19T00:01:00Z",
-                "finishedAt": "2026-09-19T00:02:00Z",
-                "command": ["fixture"],
-                "stdout": "synthetic contract data",
-                "stderr": "",
-                "exitCode": 0,
-                "timedOut": False,
-            }
-            envelope: dict[str, Any] = {
-                "schemaVersion": 1,
-                "runId": "fixture-smoke",
-                "createdAt": "2026-09-19T00:02:00Z",
-                "evidenceSource": "developer-local",
-                "trigger": "manual",
-                "repository": {
-                    "repositoryKey": "fixture/project",
-                    "sourceRef": "main",
-                    "sourceCommit": head,
-                    "worktreeState": "clean",
-                },
-                "sourceRevision": "exact",
-                "environmentAlignment": "verified",
-                "e2eMode": "smoke-only",
-                "mockStrategy": "none",
-                "featureSources": [],
-                "reports": [
-                    {
-                        "testType": "api",
-                        "path": str(report_path),
-                        "summaryMd": str(summary),
-                        "sha256": "",
-                        "status": "passed",
-                        "mode": "smoke-only",
-                    }
-                ],
-                "evidencePublication": "local-only",
-                "secretsRedacted": True,
-            }
-            evidence_path = private / "smoke.evidence.json"
-            project = {
-                "root": str(root),
-                "source_ref": "main",
-                "head": head,
-                "report_refs": [],
-            }
-            deployment = {
-                "started_at": "2026-09-19T00:00:00Z",
-                "finished_at": "2026-09-19T00:03:00Z",
-            }
-
-            def save():
-                report_path.write_text(json.dumps(raw))
-                envelope["reports"][0]["sha256"] = hashlib.sha256(
-                    report_path.read_bytes()
-                ).hexdigest()
-                evidence_path.write_text(json.dumps(envelope))
-                project["report_refs"] = [
-                    {
-                        "path": str(path),
-                        "state": {
-                            "type": "file",
-                            "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
-                        },
-                    }
-                    for path in (evidence_path, report_path, summary)
-                ]
-
-            save()
-            validate_deployment_reports(deployment, project)
-            raw["exitCode"] = 1
-            save()
-            with self.assertRaises(ContractError):
-                validate_deployment_reports(deployment, project)
-            self.assertEqual(json.loads(report_path.read_text())["exitCode"], 1)
+from tests.test_sbtd_migration_apply import legacy_project
 
 
 class ReportFixture:
@@ -197,15 +98,109 @@ class ReportFixture:
             "finished_at": "2026-09-19T00:03:00Z",
         }
 
+    def enable_typed_auxiliary(self, mode: str = "mock-backed") -> None:
+        reports = self.root / "reports"
+        reports.mkdir()
+        feature = self.root / "features/auxiliary.feature"
+        feature.parent.mkdir()
+        feature.write_text("Feature: auxiliary evidence\n")
+        self.report_path = reports / "smoke.json"
+        self.summary = reports / "smoke.md"
+        self.summary.write_text("合成 API 摘要；不证明真实host部署。\n")
+        self.auxiliary_path = reports / "unit.xml"
+        self.auxiliary_summary = reports / "unit.md"
+        self.auxiliary_summary.write_text("合成辅助报告；不证明 smoke。\n")
+        locator = {
+            "repositoryKey": "fixture/project",
+            "path": "features/auxiliary.feature",
+            "feature": "Auxiliary",
+            "scenario": "typed evidence",
+            "sourceRef": "main",
+            "sourceCommit": self.head,
+        }
+        digest = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "examplesFingerprint": None,
+                    "feature": locator["feature"],
+                    "path": locator["path"],
+                    "repositoryKey": locator["repositoryKey"],
+                    "rule": None,
+                    "scenario": locator["scenario"],
+                    "sourceCommit": locator["sourceCommit"],
+                    "sourceRef": locator["sourceRef"],
+                }
+            )
+        ).hexdigest()
+        locator["sourceLocatorDigest"] = digest
+        self.envelope.update(
+            {
+                "schemaVersion": 2,
+                "sourceLocators": [locator],
+                "scenarioLinks": [
+                    {
+                        "sourceLocatorDigest": digest,
+                        "reportSha256": "",
+                        "reportFormat": "junit-xml-v1",
+                        "testCaseSelector": {
+                            "suites": ["auxiliary"],
+                            "classname": "fixture.auxiliary",
+                            "name": "typed evidence",
+                            "file": "features/auxiliary.feature",
+                        },
+                    }
+                ],
+            }
+        )
+        self.envelope["reports"][0].update(
+            {
+                "path": "reports/smoke.json",
+                "summaryMd": "reports/smoke.md",
+                "reportFormat": "generic",
+            }
+        )
+        self.envelope["reports"].append(
+            {
+                "testType": "unit",
+                "path": "reports/unit.xml",
+                "summaryMd": "reports/unit.md",
+                "sha256": "",
+                "status": "passed",
+                "mode": mode,
+                "reportFormat": "junit-xml-v1",
+            }
+        )
+
+    def _auxiliary_xml(self) -> str:
+        return (
+            '<testsuite name="auxiliary"><testcase '
+            'classname="fixture.auxiliary" name="typed evidence" '
+            'file="features/auxiliary.feature"><properties><property '
+            'name="sbtd.sourceLocatorDigest" value="'
+            + self.envelope["sourceLocators"][0]["sourceLocatorDigest"]
+            + '"/></properties></testcase></testsuite>'
+        )
+
     def save(self) -> None:
         self.report_path.write_text(json.dumps(self.raw))
         self.envelope["reports"][0]["sha256"] = hashlib.sha256(
             self.report_path.read_bytes()
         ).hexdigest()
+        if hasattr(self, "auxiliary_path"):
+            self.auxiliary_path.write_text(self._auxiliary_xml())
+            self.envelope["reports"][1]["sha256"] = hashlib.sha256(
+                self.auxiliary_path.read_bytes()
+            ).hexdigest()
+            self.envelope["scenarioLinks"][0]["reportSha256"] = self.envelope[
+                "reports"
+            ][1]["sha256"]
         self.evidence_path.write_text(json.dumps(self.envelope))
         self.refresh_refs()
 
     def refresh_refs(self) -> None:
+        paths = [self.evidence_path, self.report_path, self.summary]
+        if hasattr(self, "auxiliary_path"):
+            paths.extend((self.auxiliary_path, self.auxiliary_summary))
         self.project["report_refs"] = [
             {
                 "path": str(path),
@@ -214,8 +209,21 @@ class ReportFixture:
                     "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
                 },
             }
-            for path in (self.evidence_path, self.report_path, self.summary)
+            for path in paths
         ]
+
+
+class DeploymentReportTests(unittest.TestCase):
+    def test_a_passing_envelope_cannot_hide_a_failed_raw_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = ReportFixture(Path(directory).resolve())
+            fixture.save()
+            validate_deployment_reports(fixture.deployment, fixture.project)
+            fixture.raw["exitCode"] = 1
+            fixture.save()
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(fixture.deployment, fixture.project)
+            self.assertEqual(json.loads(fixture.report_path.read_text())["exitCode"], 1)
 
 
 def _tree_bytes(base: Path) -> dict[str, bytes]:
@@ -333,40 +341,119 @@ class DeploymentReportAcceptanceTests(unittest.TestCase):
             with self.assertRaises(ContractError):
                 validate_deployment_reports(fixture.deployment, fixture.project)
 
-    def test_an_auxiliary_report_with_a_non_smoke_mode_is_allowed(self):
+    def test_a_typed_mock_backed_auxiliary_report_is_allowed(self):
         with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory).resolve()
-            fixture = self.build(base)
-            unit_report = fixture.private / "unit-report.json"
-            unit_summary = fixture.private / "unit-report.md"
-            unit_report.write_text(json.dumps({"synthetic": "unit evidence"}))
-            unit_summary.write_text("合成辅助报告；不证明 smoke。\n")
-            fixture.envelope["reports"].append(
-                {
-                    "testType": "unit",
-                    "path": str(unit_report),
-                    "summaryMd": str(unit_summary),
-                    "sha256": hashlib.sha256(unit_report.read_bytes()).hexdigest(),
-                    "status": "passed",
-                    "mode": "not-needed",
-                }
-            )
-            fixture.evidence_path.write_text(json.dumps(fixture.envelope))
-            fixture.refresh_refs()
-            fixture.project["report_refs"].extend(
-                {
-                    "path": str(path),
-                    "state": {
-                        "type": "file",
-                        "checksum": hashlib.sha256(path.read_bytes()).hexdigest(),
-                    },
-                }
-                for path in (unit_report, unit_summary)
-            )
+            fixture = ReportFixture(Path(directory).resolve())
+            fixture.enable_typed_auxiliary("mock-backed")
+            fixture.save()
 
             self.assertIsNone(
                 validate_deployment_reports(fixture.deployment, fixture.project)
             )
+
+    def test_a_forged_auxiliary_case_binding_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = ReportFixture(Path(directory).resolve())
+            fixture.enable_typed_auxiliary()
+            fixture.save()
+            fixture.auxiliary_path.write_text(
+                fixture._auxiliary_xml().replace(
+                    fixture.envelope["sourceLocators"][0]["sourceLocatorDigest"],
+                    "0" * 64,
+                )
+            )
+            fixture.envelope["reports"][1]["sha256"] = hashlib.sha256(
+                fixture.auxiliary_path.read_bytes()
+            ).hexdigest()
+            fixture.envelope["scenarioLinks"][0]["reportSha256"] = fixture.envelope[
+                "reports"
+            ][1]["sha256"]
+            fixture.evidence_path.write_text(json.dumps(fixture.envelope))
+            fixture.refresh_refs()
+
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(fixture.deployment, fixture.project)
+
+    def test_stale_auxiliary_provenance_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = ReportFixture(Path(directory).resolve())
+            fixture.enable_typed_auxiliary()
+            fixture.save()
+            locator = fixture.envelope["sourceLocators"][0]
+            locator["sourceCommit"] = "2" * 40
+            locator["sourceLocatorDigest"] = hashlib.sha256(
+                canonical_json_bytes(
+                    {
+                        "examplesFingerprint": None,
+                        "feature": locator["feature"],
+                        "path": locator["path"],
+                        "repositoryKey": locator["repositoryKey"],
+                        "rule": None,
+                        "scenario": locator["scenario"],
+                        "sourceCommit": locator["sourceCommit"],
+                        "sourceRef": locator["sourceRef"],
+                    }
+                )
+            ).hexdigest()
+            fixture.envelope["scenarioLinks"][0]["sourceLocatorDigest"] = locator[
+                "sourceLocatorDigest"
+            ]
+            fixture.auxiliary_path.write_text(fixture._auxiliary_xml())
+            fixture.envelope["reports"][1]["sha256"] = hashlib.sha256(
+                fixture.auxiliary_path.read_bytes()
+            ).hexdigest()
+            fixture.envelope["scenarioLinks"][0]["reportSha256"] = fixture.envelope[
+                "reports"
+            ][1]["sha256"]
+            fixture.evidence_path.write_text(json.dumps(fixture.envelope))
+            fixture.refresh_refs()
+
+            with self.assertRaises(ContractError):
+                validate_deployment_reports(fixture.deployment, fixture.project)
+
+    def test_auxiliary_commit_hex_case_does_not_change_identity(self):
+        from sbtd_migration_verify import _evidence_validator
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = ReportFixture(Path(directory).resolve())
+            fixture.head = "a" * 40
+            fixture.project["head"] = fixture.head
+            fixture.raw["sourceCommit"] = fixture.head
+            fixture.envelope["repository"]["sourceCommit"] = fixture.head
+            fixture.enable_typed_auxiliary()
+            locator = fixture.envelope["sourceLocators"][0]
+            locator["sourceCommit"] = fixture.head.upper()
+            locator["sourceLocatorDigest"] = (
+                _evidence_validator().source_locator_digest(locator)
+            )
+            fixture.envelope["scenarioLinks"][0]["sourceLocatorDigest"] = locator[
+                "sourceLocatorDigest"
+            ]
+            fixture.save()
+            validate_deployment_reports(fixture.deployment, fixture.project)
+
+    def test_auxiliary_locator_cannot_claim_another_repository_or_ref(self):
+        from sbtd_migration_verify import _evidence_validator
+
+        for key, value in (
+            ("repositoryKey", "foreign/project"),
+            ("sourceRef", "foreign-branch"),
+        ):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as directory:
+                fixture = ReportFixture(Path(directory).resolve())
+                fixture.enable_typed_auxiliary()
+                locator = fixture.envelope["sourceLocators"][0]
+                locator[key] = value
+                locator["sourceLocatorDigest"] = (
+                    _evidence_validator().source_locator_digest(locator)
+                )
+                fixture.envelope["scenarioLinks"][0]["sourceLocatorDigest"] = locator[
+                    "sourceLocatorDigest"
+                ]
+                fixture.save()
+                with self.assertRaises(ContractError) as error:
+                    validate_deployment_reports(fixture.deployment, fixture.project)
+                self.assertEqual(error.exception.code, "report-acceptance")
 
     def test_a_summary_must_be_a_declared_bound_reference(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -570,41 +657,6 @@ class DeploymentReportAcceptanceTests(unittest.TestCase):
                 validate_deployment_reports(fixture.deployment, fixture.project)
 
 
-def _legacy_project(base: Path, name: str) -> Path:
-    root = base / name
-    (root / ".trellis/workspace/dev01").mkdir(parents=True)
-    (root / ".codex/agents").mkdir(parents=True)
-    (root / ".trellis/.developer").write_bytes(
-        b"name=dev01\ninitialized_at=2026-09-01T12:00:00\n"
-    )
-    (root / ".trellis/.version").write_text("0.6.17\n")
-    (root / ".trellis/workspace/dev01/journal-1.md").write_text(
-        "Synthetic private legacy journal.\n"
-    )
-    (root / ".trellis/workspace/dev01/untracked.bin").write_bytes(
-        b"\x00retained-private-fixture\xff"
-    )
-    (root / ".gitignore").write_text(".trellis/\n.gitnexus/\n")
-    owned = {
-        ".codex/agents/trellis-implement.toml": b'name = "trellis-implement"\n',
-        "AGENTS.md": b"Foreign project rule.\n<!-- TRELLIS:START -->\nLegacy route.\n<!-- TRELLIS:END -->\n",
-    }
-    for filename, content in owned.items():
-        (root / filename).write_bytes(content)
-    (root / ".trellis/.template-hashes.json").write_text(
-        json.dumps(
-            {
-                "__version": 2,
-                "hashes": {
-                    filename: hashlib.sha256(content).hexdigest()
-                    for filename, content in owned.items()
-                },
-            }
-        )
-    )
-    return root
-
-
 def _file_ref(path: Path) -> dict:
     return {
         "path": str(path),
@@ -621,7 +673,7 @@ class MigrationVerifyPathTests(unittest.TestCase):
     def test_a_complete_migration_verifies_without_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            root = _legacy_project(base, "project")
+            root = legacy_project(base, "project")
             home, vault, evidence = (
                 base / name for name in ("home", "vault", "evidence")
             )

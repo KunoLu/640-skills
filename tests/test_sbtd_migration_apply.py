@@ -37,8 +37,8 @@ def legacy_project(base: Path, name: str) -> Path:
         ".codex/agents/trellis-implement.toml": b'name = "trellis-implement"\n',
         "AGENTS.md": b"Foreign project rule.\n<!-- TRELLIS:START -->\nLegacy route.\n<!-- TRELLIS:END -->\n",
     }
-    for name, raw in owned.items():
-        (root / name).write_bytes(raw)
+    for relative_name, raw in owned.items():
+        (root / relative_name).write_bytes(raw)
     (root / ".trellis/.template-hashes.json").write_text(
         json.dumps(
             {
@@ -65,11 +65,14 @@ class MigrationApplyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             project = legacy_project(base, "project")
-            home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
+            home, vault, evidence = (
+                base / name for name in ("home", "vault", "evidence")
+            )
             for path in (home, vault, evidence):
                 path.mkdir(mode=0o700)
             environment = {
-                "HOME": str(home), "USERPROFILE": str(home),
+                "HOME": str(home),
+                "USERPROFILE": str(home),
                 "CODEX_HOME": str(home / ".codex"),
                 "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
             }
@@ -82,7 +85,9 @@ class MigrationApplyTests(unittest.TestCase):
                 before = (project / ".gitignore").read_bytes()
                 with mock.patch(
                     "sbtd_migration.write_file",
-                    side_effect=ContractError("checksum-mismatch", "synthetic readback failure", exit_code=3),
+                    side_effect=ContractError(
+                        "checksum-mismatch", "synthetic readback failure", exit_code=3
+                    ),
                 ):
                     response, code = apply_migration(path, confirmed=True)
             self.assertEqual(code, 3, response)
@@ -445,7 +450,9 @@ class MigrationApplyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = legacy_project(base, "project")
-            home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
+            home, vault, evidence = (
+                base / name for name in ("home", "vault", "evidence")
+            )
             for path in (home, vault, evidence):
                 path.mkdir(mode=0o700)
             environment = {

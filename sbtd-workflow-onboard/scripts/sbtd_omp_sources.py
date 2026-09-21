@@ -36,7 +36,11 @@ def _fail(code: str, message: str) -> NoReturn:
 
 
 def _profile(environ: Mapping[str, str]) -> str | None:
-    raw = environ.get("OMP_PROFILE") if "OMP_PROFILE" in environ else environ.get("PI_PROFILE")
+    raw = (
+        environ.get("OMP_PROFILE")
+        if "OMP_PROFILE" in environ
+        else environ.get("PI_PROFILE")
+    )
     value = (raw or "").strip()
     if not value or value == "default":
         return None
@@ -58,7 +62,11 @@ def active_omp_paths(
         _fail("invalid-argument", "the user home must be absolute")
     profile = _profile(environ)
     config_name = environ.get("PI_CONFIG_DIR") or ".omp"
-    if not config_name or Path(config_name).is_absolute() or ".." in Path(config_name).parts:
+    if (
+        not config_name
+        or Path(config_name).is_absolute()
+        or ".." in Path(config_name).parts
+    ):
         _fail("invalid-config", "the OMP config directory override is invalid")
     config_root = home / config_name
     if profile is not None:
@@ -116,22 +124,29 @@ def _yaml_settings(raw: bytes) -> dict[str, Any]:
     return value
 
 
-def _provider_settings(agent: Path, inputs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _provider_settings(
+    agent: Path, inputs: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     yml = agent / "config.yml"
     yaml_path = agent / "config.yaml"
     yml_raw = _read_snapshot(yml, inputs)
     yaml_raw = _read_snapshot(yaml_path, inputs)
-    settings = _yaml_settings(yml_raw if yml_raw is not None else yaml_raw) if (
-        yml_raw is not None or yaml_raw is not None
-    ) else {}
-    result: dict[str, Any] = {"enabled": set(), "disabled": set(), "disabled_extensions": set()}
+    selected_raw = yml_raw if yml_raw is not None else yaml_raw
+    settings = _yaml_settings(selected_raw) if selected_raw is not None else {}
+    result: dict[str, Any] = {
+        "enabled": set(),
+        "disabled": set(),
+        "disabled_extensions": set(),
+    }
     for source, target in (
         ("enabledProviders", "enabled"),
         ("disabledProviders", "disabled"),
         ("disabledExtensions", "disabled_extensions"),
     ):
         value = settings.get(source, [])
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) for item in value
+        ):
             _fail("invalid-config", "OMP provider settings are malformed")
         result[target] = set(value)
     if "native" in result["disabled"]:
@@ -181,7 +196,11 @@ def _guard_dynamic_sources(
             )
             if not isinstance(settings, dict):
                 _fail("invalid-config", "OMP project settings must be an object")
-            if {"enabledProviders", "disabledProviders", "disabledExtensions"} & settings.keys():
+            if {
+                "enabledProviders",
+                "disabledProviders",
+                "disabledExtensions",
+            } & settings.keys():
                 _fail(
                     "invalid-config",
                     "OMP project provider settings cannot be safely analyzed",
@@ -237,8 +256,14 @@ def _toml_servers(raw: bytes, path: Path) -> dict[str, Mapping[str, Any]]:
     for name, server in servers.items():
         if not isinstance(name, str) or not isinstance(server, dict):
             _fail("invalid-config", "an inherited Codex MCP server is malformed")
-        if any(key in server for key in ("env_vars", "env_http_headers", "bearer_token_env_var")):
-            _fail("invalid-config", "an inherited Codex MCP server uses dynamic environment input")
+        if any(
+            key in server
+            for key in ("env_vars", "env_http_headers", "bearer_token_env_var")
+        ):
+            _fail(
+                "invalid-config",
+                "an inherited Codex MCP server uses dynamic environment input",
+            )
         cwd = server.get("cwd")
         if cwd is not None and not isinstance(cwd, str):
             _fail("invalid-config", "an inherited Codex MCP cwd is malformed")
@@ -259,7 +284,10 @@ def _toml_servers(raw: bytes, path: Path) -> dict[str, Mapping[str, Any]]:
             not isinstance(args, list)
             or any(not isinstance(item, str) for item in args)
             or not isinstance(env, dict)
-            or any(not isinstance(key, str) or not isinstance(value, str) for key, value in env.items())
+            or any(
+                not isinstance(key, str) or not isinstance(value, str)
+                for key, value in env.items()
+            )
         ):
             _fail("invalid-config", "an inherited Codex MCP server is malformed")
         enabled = server.get("enabled")
@@ -287,15 +315,53 @@ def _append_source(
 ) -> None:
     if raw is None:
         return
-    servers = (
-        _json_servers(raw, name)
-        if parser == "json"
-        else _toml_servers(raw, path)
-    )
+    servers = _json_servers(raw, name) if parser == "json" else _toml_servers(raw, path)
     if servers:
         sources.append(
             {"source": name, "path": str(path), "enabled": enabled, "servers": servers}
         )
+
+
+def _guard_claude_plugin_sources(
+    roots: Sequence[Path],
+    home: Path,
+    environ: Mapping[str, str],
+    paths: Mapping[str, Path | str | None],
+    inputs: dict[str, dict[str, Any]],
+) -> None:
+    # Pinned OMP discovers project and OMP-origin plugins without a user
+    # provider opt-in. Until manifests are modeled, a registry is a conflict.
+    config_name = environ.get("PI_CONFIG_DIR") or ".omp"
+    override = environ.get("CLAUDE_CONFIG_DIR", "").strip()
+    claude_root = (
+        Path(override).expanduser().resolve() if override else home / ".claude"
+    )
+    config_root = paths["config_root"]
+    assert isinstance(config_root, Path)
+    registries = {
+        claude_root / "plugins/installed_plugins.json",
+        home / config_name / "plugins/installed_plugins.json",
+        config_root / "plugins/installed_plugins.json",
+    }
+    xdg = environ.get("XDG_DATA_HOME", "")
+    if xdg:
+        xdg_root = Path(xdg).expanduser().resolve() / "omp"
+        profile = paths["profile"]
+        if isinstance(profile, str):
+            xdg_root = xdg_root / "profiles" / profile
+        registries.add(xdg_root / "plugins/installed_plugins.json")
+    for root in roots:
+        ancestry = (root, *root.parents)
+        anchor = next(
+            (path for path in ancestry if (path / config_name).is_dir()), None
+        )
+        if anchor is None:
+            anchor = next((path for path in ancestry if (path / ".git").exists()), None)
+        if anchor is not None:
+            registries.add(anchor / config_name / "plugins/installed_plugins.json")
+    for path in sorted(registries):
+        if _read_snapshot(path, inputs) is not None:
+            _fail("invalid-config", "Plugin MCP sources cannot be safely analyzed")
 
 
 def discover_omp_sources(
@@ -313,9 +379,12 @@ def discover_omp_sources(
     target = paths["target"]
     assert isinstance(target, Path)
     settings = _provider_settings(agent, inputs)
+    _guard_claude_plugin_sources(roots, home, environ, paths, inputs)
     claude_override = environ.get("CLAUDE_CONFIG_DIR", "").strip()
     claude_dir = (
-        Path(claude_override).expanduser().resolve() if claude_override else home / ".claude"
+        Path(claude_override).expanduser().resolve()
+        if claude_override
+        else home / ".claude"
     )
     claude_json = (
         claude_dir / ".claude.json" if claude_override else home / ".claude.json"
@@ -383,9 +452,7 @@ def discover_omp_sources(
             parser="toml",
         )
         claude_project = (root / ".claude/.mcp.json", root / ".claude/mcp.json")
-        project_raw = [
-            (path, _read_snapshot(path, inputs)) for path in claude_project
-        ]
+        project_raw = [(path, _read_snapshot(path, inputs)) for path in claude_project]
         for path, raw in project_raw:
             added = len(sources)
             _append_source(

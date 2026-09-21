@@ -1,6 +1,8 @@
 # P1-01：Onboard 协议基础与接入边界
 
-当前审查门槛以用户更新后的[D-IMP-13](sbtd-workflow-v2-implementation-decisions.md#d-imp-13审查门槛与低优先级发现台账)为准：无有效P0／P1即可推进；P2及以下写入根目录[findings.log](../../findings.log)留待评估。下文历史“零新发现”保留为旧轮次事实，不再要求低优先级问题全部清零。
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
+当前审查门槛以用户更新后的[D-IMP-13](sbtd-workflow-v2-implementation-decisions.md#d-imp-13审查门槛与低优先级发现台账)为准：无有效P0／P1即可推进；P2及以下记入[findings 台账](../archive/sbtd-workflow-v2-findings.md)留待评估。下文历史“零新发现”保留为旧轮次事实，不再要求低优先级问题全部清零。
 
 ## 交付与非目标
 

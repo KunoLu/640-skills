@@ -9,6 +9,7 @@ import stat
 import sys
 import tempfile
 import textwrap
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -491,7 +492,9 @@ class GraftRuntimeTests(unittest.TestCase):
             target.read_bytes(), original, "unconfirmed probe must not write"
         )
 
-    def test_telemetry_only_confirmation_fails_closed_after_cli_disappears(self) -> None:
+    def test_telemetry_only_confirmation_fails_closed_after_cli_disappears(
+        self,
+    ) -> None:
         argv_log, _ = self.make_npm()
         payload = b"fixture-tarball"
         with self.fake_fetch(payload) as fetch, self.patch_integrity_for(payload):
@@ -746,30 +749,23 @@ class GraftRuntimeTests(unittest.TestCase):
         self.assertFalse(result["telemetry"]["changed"])
         self.assertEqual(target.read_bytes(), original)
 
-    def test_already_installed_persists_telemetry_preserving_keys_and_mode(
+    def test_existing_mutable_telemetry_blocks_without_overwriting_keys_or_mode(
         self,
     ) -> None:
         self.make_package_layout()
         graft_dir = self.home / ".graft"
         graft_dir.mkdir()
         target = graft_dir / "telemetry.json"
-        target.write_text(
-            '{"installId": "abc-123", "enabled": true, "noticeShown": true}\n',
-            encoding="utf-8",
-        )
+        original = b'{"installId": "abc-123", "enabled": true, "noticeShown": true}\n'
+        target.write_bytes(original)
         os.chmod(target, 0o640)
         result, code = graft_runtime.install_graft(confirmed=True)
-        self.assertEqual(code, 0)
-        self.assertEqual(result["status"], "already-installed")
-        self.assertTrue(result["telemetry"]["changed"])
-        data = json.loads(target.read_text(encoding="utf-8"))
-        self.assertIs(data["enabled"], False)
-        self.assertEqual(data["installId"], "abc-123")
-        self.assertIs(data["noticeShown"], True)
+        self.assertEqual(code, 2)
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["stage"], "telemetry")
+        self.assertIn("Graft-owned", str(result["reason"]))
+        self.assertEqual(target.read_bytes(), original)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
-        self.assertEqual(
-            set(result["telemetry"]["preservedKeys"]), {"installId", "noticeShown"}
-        )
 
     # -- telemetry safety ----------------------------------------------------
 
@@ -829,39 +825,38 @@ class GraftRuntimeTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(result["stage"], "telemetry")
 
-    def test_telemetry_persist_failure_reports_real_stage(self) -> None:
+    def test_telemetry_create_failure_reports_real_stage(self) -> None:
         self._usable_cli_install()
-        graft_dir = self.home / ".graft"
-        target = graft_dir / "telemetry.json"
-        target.write_bytes(b'{"enabled": true}\n')
-        os.chmod(graft_dir, 0o555)
-        self.addCleanup(os.chmod, graft_dir, 0o755)
-        result, code = graft_runtime.install_graft(confirmed=True)
+        target = self.home / ".graft" / "telemetry.json"
+        with mock.patch.object(
+            graft_runtime.os, "link", side_effect=OSError("disk full")
+        ):
+            result, code = graft_runtime.install_graft(confirmed=True)
         self.assertEqual(code, 1)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["stage"], "telemetry-persist")
-        self.assertEqual(target.read_bytes(), b'{"enabled": true}\n')
+        self.assertFalse(target.exists())
 
-    def test_telemetry_concurrent_change_is_rejected(self) -> None:
+    def test_telemetry_concurrent_creator_is_rejected_without_overwrite(self) -> None:
         self._usable_cli_install()
         target = self.home / ".graft" / "telemetry.json"
-        original = b'{"enabled": true, "installId": "abc"}\n'
-        target.write_bytes(original)
-        real_read = graft_runtime._read_file_bytes
-        calls: list[int] = []
+        foreign = b'{"enabled": true, "installId": "someone-else"}\n'
+        real_link = graft_runtime.os.link
 
-        def racing_read(path: Path) -> bytes:
-            calls.append(1)
-            if len(calls) >= 2:
-                return b'{"enabled": true, "installId": "someone-else"}\n'
-            return real_read(path)
+        def publish_after_foreign_write(source: str, destination: Path) -> None:
+            writer = threading.Thread(target=target.write_bytes, args=(foreign,))
+            writer.start()
+            writer.join()
+            real_link(source, destination)
 
-        with mock.patch.object(graft_runtime, "_read_file_bytes", racing_read):
+        with mock.patch.object(
+            graft_runtime.os, "link", side_effect=publish_after_foreign_write
+        ):
             result, code = graft_runtime.install_graft(confirmed=True)
         self.assertEqual(code, 2)
         self.assertEqual(result["status"], "blocked")
-        self.assertIn("concurrent", str(result["reason"]))
-        self.assertEqual(target.read_bytes(), original)
+        self.assertIn("concurrently", str(result["reason"]))
+        self.assertEqual(target.read_bytes(), foreign)
         leftover = list((self.home / ".graft").glob(".telemetry-*.tmp"))
         self.assertEqual(leftover, [], "failed persist must clean its temp file")
 

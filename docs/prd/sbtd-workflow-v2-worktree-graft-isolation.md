@@ -1,5 +1,7 @@
 # P1-06：多项目／worktree 与 Graft 隔离
 
+> 台账路径迁移：本文所述 `findings.log` 已完整归档至 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md)。下文保留当时的状态与证据，当前处置以归档表为准。
+
 ## 基线、范围与澄清
 
 - 基线为 P1-05 状态合并后的 main `20fe332d4f1acf42046203b9753e3a9201ea09d7`；分支 `p1-06-worktree-graft-isolation`。

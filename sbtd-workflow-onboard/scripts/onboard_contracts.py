@@ -2,9 +2,10 @@
 
 Boundary (docs/prd/sbtd-workflow-v2-onboard-contracts.md, main PRD section 10.2):
 
-- Pure functions over caller-provided Python values and raw bytes. This module
-  never reads ``object_ref`` targets, never scans directories, never performs
-  network or mutation, and never infers that a stage whose document was not
+- Pure functions over caller-provided Python values and raw bytes, except that
+  containment checks may read filesystem identity metadata for existing path
+  aliases. The module never opens object-ref targets, scans directories,
+  performs network or mutation, or infers that a stage whose document was not
   supplied was unexecuted.
 - Schema validity, canonical IDs and declared bindings prove structure and
   declared relationships only. They are not filesystem safety, authorization,
@@ -29,12 +30,13 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, NoReturn
 
-
 SCHEMA_VERSION = 1
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "onboard-contracts.schema.json"
 SCHEMA_ID = "urn:sbtd:onboard-contracts:schema:1"
 GRAFT_BUILD_POLICY_PATH = SCHEMA_PATH.parent / "assets" / "graft-build-policy.json"
-GRAFT_BUILD_POLICY_SHA256 = "9ac91400e76c80f0627ab816448d181ee67a3ac3588e0c1e3566ce3f7461c726"
+GRAFT_BUILD_POLICY_SHA256 = (
+    "9ac91400e76c80f0627ab816448d181ee67a3ac3588e0c1e3566ce3f7461c726"
+)
 
 # kind -> (schema $def name, payload digest key or None)
 _DOCUMENT_KINDS: dict[str, tuple[str, str | None]] = {
@@ -413,7 +415,56 @@ def _fail(code: str, message: str, *, exit_code: int = 2) -> NoReturn:
 
 
 def _path_contains(parent: str, child: str) -> bool:
-    return Path(child).is_relative_to(Path(parent))
+    """Return whether child is inside parent, resolving only provable live aliases."""
+    parent_path = Path(parent)
+    child_path = Path(child)
+    try:
+        parent_path = parent_path.resolve(strict=False)
+        child_path = child_path.resolve(strict=False)
+    except (OSError, RuntimeError):
+        pass
+    if child_path.is_relative_to(parent_path):
+        return True
+
+    def existing_ancestors(path: Path) -> Iterator[Path]:
+        for ancestor in (path, *path.parents):
+            try:
+                ancestor.stat()
+            except OSError:
+                continue
+            yield ancestor
+
+    parent_ancestors = tuple(existing_ancestors(parent_path))
+    for child_ancestor in existing_ancestors(child_path):
+        child_tail = child_path.relative_to(child_ancestor).parts
+        for parent_ancestor in parent_ancestors:
+            try:
+                if not os.path.samefile(parent_ancestor, child_ancestor):
+                    continue
+            except OSError:
+                continue
+            parent_tail = parent_path.relative_to(parent_ancestor).parts
+            if child_tail[: len(parent_tail)] == parent_tail:
+                return True
+    return False
+
+
+def _paths_overlap(paths: Iterable[str]) -> bool:
+    values = list(paths)
+    return any(
+        _path_contains(path, other) or _path_contains(other, path)
+        for index, path in enumerate(values)
+        for other in values[index + 1 :]
+    )
+
+
+def _paths_identify_same(paths: Iterable[str]) -> bool:
+    values = list(paths)
+    return any(
+        _path_contains(path, other) and _path_contains(other, path)
+        for index, path in enumerate(values)
+        for other in values[index + 1 :]
+    )
 
 
 def _check_publication_items(items: list[dict[str, Any]]) -> None:
@@ -465,15 +516,11 @@ def _check_publication_items(items: list[dict[str, Any]]) -> None:
                 )
         elif item["target_path"] is not None:
             targets.append(item["target_path"])
-    target_paths = {Path(target) for target in targets}
-    if len(target_paths) != len(targets):
-        _fail("semantic-violation", "duplicate publication target_path")
-    for target in target_paths:
-        if any(parent in target_paths for parent in target.parents):
-            _fail(
-                "semantic-violation",
-                "publication target paths overlap lexically (parent/child)",
-            )
+    if _paths_overlap(targets):
+        _fail(
+            "semantic-violation",
+            "publication target paths overlap lexically (parent/child)",
+        )
 
 
 def _check_reference_states(references: Iterable[Mapping[str, Any]]) -> None:
@@ -487,17 +534,22 @@ def _check_reference_states(references: Iterable[Mapping[str, Any]]) -> None:
 
 
 def _check_nested_reference_paths(references: Iterable[Mapping[str, Any]]) -> None:
-    paths = [reference["path"] for reference in references]
-    for index, path in enumerate(paths):
-        if any(
-            path != other
-            and (_path_contains(path, other) or _path_contains(other, path))
-            for other in paths[index + 1 :]
-        ):
-            _fail(
-                "semantic-violation",
-                "deployment report references overlap lexically (parent/child)",
-            )
+    records = list(references)
+    for index, reference in enumerate(records):
+        for other in records[index + 1 :]:
+            contains = _path_contains(reference["path"], other["path"])
+            contained = _path_contains(other["path"], reference["path"])
+            if contains and contained:
+                if reference["state"] != other["state"]:
+                    _fail(
+                        "semantic-violation",
+                        "one report resource has conflicting states",
+                    )
+            elif contains or contained:
+                _fail(
+                    "semantic-violation",
+                    "deployment report references overlap (parent/child)",
+                )
 
 
 def _check_operation_resources(records: Iterable[Mapping[str, Any]]) -> None:
@@ -543,44 +595,62 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
         if operation["phase"] != "deploy":
             _fail("semantic-violation", "Graft generation is restricted to deployment")
         if (change_kind == "build-graft") != directory:
-            _fail("semantic-violation", "Graft generation has an incompatible resource type")
+            _fail(
+                "semantic-violation",
+                "Graft generation has an incompatible resource type",
+            )
         config_owners = {
             "graft-agents": "markdown",
             "graft-mcp": "toml",
             "graft-hooks": "json",
             "graft-omp-mcp": "json",
         }
-        if change_kind == "configure-graft" and config_owners.get(operation["selector"]) != operation["owner_kind"]:
+        if (
+            change_kind == "configure-graft"
+            and config_owners.get(operation["selector"]) != operation["owner_kind"]
+        ):
             _fail("semantic-violation", "unknown Graft configuration selector or type")
         if operation["change"]["source_ref"] != {
             "path": str(GRAFT_BUILD_POLICY_PATH),
             "state": {"type": "file", "checksum": GRAFT_BUILD_POLICY_SHA256},
         }:
-            _fail("semantic-violation", "Graft builds require the installed pinned policy")
+            _fail(
+                "semantic-violation", "Graft builds require the installed pinned policy"
+            )
         if operation["ownership"] != {
             "kind": "template-source",
             "reference": operation["change"]["source_ref"],
         }:
-            _fail("semantic-violation", "Graft builds must bind their exact fixed policy")
+            _fail(
+                "semantic-violation", "Graft builds must bind their exact fixed policy"
+            )
     if change_kind == "migrate-developer":
         if (
             operation["phase"] != "apply"
             or operation["owner_kind"] != "file"
             or operation["selector"] != "name"
         ):
-            _fail("semantic-violation", "developer extraction is a private apply operation")
+            _fail(
+                "semantic-violation",
+                "developer extraction is a private apply operation",
+            )
         if operation["before_requirement"] != {
             "kind": "state",
             "state": {"type": "absent", "checksum": None},
         }:
-            _fail("semantic-violation", "developer extraction requires a missing target")
+            _fail(
+                "semantic-violation", "developer extraction requires a missing target"
+            )
         ownership = operation["ownership"]
         if (
             ownership["kind"] != "config-entry"
             or ownership["key_path"] != ["name"]
             or ownership["reference"] != operation["change"]["source_ref"]
         ):
-            _fail("semantic-violation", "developer extraction must bind its legacy name source")
+            _fail(
+                "semantic-violation",
+                "developer extraction must bind its legacy name source",
+            )
     if (directory and operation["selector"] != "whole-resource") or (
         operation["selector"] == "whole-resource"
         and operation["ownership"]["kind"] not in {"template-source", "skill-identity"}
@@ -732,7 +802,7 @@ def _check_operation_group(operations: list[Mapping[str, Any]]) -> None:
 def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     projects = payload["projects"]
     roots = [project["root"] for project in projects]
-    if len(set(roots)) != len(roots):
+    if _paths_identify_same(roots):
         _fail("semantic-violation", "duplicate project root in manifest")
     root_set = set(roots)
     _check_reference_states(_manifest_initial_snapshots(payload))
@@ -782,9 +852,9 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             )
     for item in payload["publication_decisions"]["items"]:
         target = item["target_path"]
-        if target is not None and (
-            target in root_set
-            or not any(_path_contains(root, target) for root in roots)
+        if target is not None and not any(
+            _path_contains(root, target) and not _path_contains(target, root)
+            for root in roots
         ):
             _fail(
                 "semantic-violation",
@@ -812,7 +882,7 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
     non_apply_protected_paths = [*candidate_paths, *publication_targets]
     seen_operation_ids: set[str] = set()
     resource_owners: dict[str, tuple[str, str | None]] = {}
-    target_owners: dict[Path, tuple[str, tuple[str, str | None]]] = {}
+    target_owners: dict[str, tuple[str, tuple[str, str | None]]] = {}
     phases_by_resource: dict[str, set[str]] = {}
     requirements: dict[tuple[str, str], Mapping[str, Any]] = {}
     operation_groups: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
@@ -823,25 +893,41 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
         target = operation["target"]
         if operation["change"]["kind"] == "migrate-developer":
             if owner[0] != "private" or owner[1] is None:
-                _fail("semantic-violation", "developer extraction cannot own shared resources")
+                _fail(
+                    "semantic-violation",
+                    "developer extraction cannot own shared resources",
+                )
             project_root = Path(owner[1])
             if (
                 Path(target) != project_root / ".sbtd/developer"
                 or Path(operation["change"]["source_ref"]["path"])
                 != project_root / ".trellis/.developer"
             ):
-                _fail("semantic-violation", "developer extraction must stay in its owning project")
+                _fail(
+                    "semantic-violation",
+                    "developer extraction must stay in its owning project",
+                )
         if operation["change"]["kind"] == "build-graft" and (
             owner[0] != "private"
             or owner[1] is None
             or Path(target) != Path(owner[1]) / "graft"
         ):
-            _fail("semantic-violation", "a Graft build owns only its selected project graph")
+            _fail(
+                "semantic-violation",
+                "a Graft build owns only its selected project graph",
+            )
         if operation["change"]["kind"] == "configure-graft":
             selector = operation["selector"]
             if selector == "graft-agents":
-                if owner[0] != "private" or owner[1] is None or Path(target) != Path(owner[1]) / "AGENTS.md":
-                    _fail("semantic-violation", "Graft instructions belong only to the selected project")
+                if (
+                    owner[0] != "private"
+                    or owner[1] is None
+                    or Path(target) != Path(owner[1]) / "AGENTS.md"
+                ):
+                    _fail(
+                        "semantic-violation",
+                        "Graft instructions belong only to the selected project",
+                    )
             elif selector == "graft-omp-mcp":
                 if owner[0] != "shared" or not any(
                     root["kind"] == "omp-home"
@@ -849,14 +935,21 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                     and Path(target).name == "mcp.json"
                     for root in payload["shared_roots"]
                 ):
-                    _fail("semantic-violation", "Graft OMP configuration requires its declared OMP HOME")
+                    _fail(
+                        "semantic-violation",
+                        "Graft OMP configuration requires its declared OMP HOME",
+                    )
             else:
                 name = "config.toml" if selector == "graft-mcp" else "hooks.json"
                 if owner[0] != "shared" or not any(
-                    root["kind"] == "codex-home" and Path(target) == Path(root["path"]) / name
+                    root["kind"] == "codex-home"
+                    and Path(target) == Path(root["path"]) / name
                     for root in payload["shared_roots"]
                 ):
-                    _fail("semantic-violation", "Graft host configuration requires its declared Codex HOME")
+                    _fail(
+                        "semantic-violation",
+                        "Graft host configuration requires its declared Codex HOME",
+                    )
         if any(_path_contains(target, root) for root in scope_roots):
             _fail("semantic-violation", "managed target contains a declared scope root")
         if _path_contains(target, backup_root) or _path_contains(backup_root, target):
@@ -873,11 +966,17 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "managed target overlaps a protected publication path",
             )
         identity = (operation["resource_id"], owner)
-        if target_owners.setdefault(Path(target), identity) != identity:
+        if any(
+            _path_contains(target, owned_target)
+            and _path_contains(owned_target, target)
+            and existing != identity
+            for owned_target, existing in target_owners.items()
+        ):
             _fail(
                 "semantic-violation",
                 "one target cannot have conflicting resource owners",
             )
+        target_owners.setdefault(target, identity)
         rid, phase = operation["resource_id"], operation["phase"]
         phases_by_resource.setdefault(rid, set()).add(phase)
         requirement = operation["before_requirement"]
@@ -909,8 +1008,9 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             if _path_contains(project["root"], root["path"])
         )
         for operation in project["private_operations"]:
-            if operation["target"] == project["root"] or not _path_contains(
-                project["root"], operation["target"]
+            if not (
+                _path_contains(project["root"], operation["target"])
+                and not _path_contains(operation["target"], project["root"])
             ):
                 _fail("semantic-violation", "private target must belong to its project")
             if any(
@@ -928,9 +1028,8 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
             register(operation, ("private", project["root"]))
     for operation in payload["shared_operations"]:
         register(operation, ("shared", None))
-    for target in target_owners:
-        if any(parent in target_owners for parent in target.parents):
-            _fail("semantic-violation", "managed resource targets overlap")
+    if _paths_overlap(target_owners):
+        _fail("semantic-violation", "managed resource targets overlap")
     for operations in operation_groups.values():
         _check_operation_group(operations)
     for (rid, phase), requirement in requirements.items():
@@ -1094,7 +1193,7 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
     phase = _STAGE_RECEIPT_PHASES[kind]
     roots = [project["root"] for project in payload["projects"]]
     root_set = set(roots)
-    if len(root_set) != len(roots):
+    if _paths_identify_same(roots):
         _fail("semantic-violation", "duplicate project root in stage document")
 
     groups = [payload["shared_results"]]
@@ -1201,7 +1300,7 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
     _verification_observations(payload)
     roots = [project["root"] for project in payload["projects"]]
     root_set = set(roots)
-    if len(root_set) != len(roots):
+    if _paths_identify_same(roots):
         _fail("semantic-violation", "duplicate project root in verification")
     retained_paths = {
         asset["path"]
@@ -1269,7 +1368,7 @@ def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
 
     roots = [project["root"] for project in payload["projects"]]
     root_set = set(roots)
-    if len(root_set) != len(roots):
+    if _paths_identify_same(roots):
         _fail("semantic-violation", "duplicate project root in recovery plan")
 
     steps = payload["steps"]
@@ -1285,19 +1384,13 @@ def _check_recovery_plan_payload(payload: Mapping[str, Any]) -> None:
     _check_reference_states(
         reference for group in (evidence_refs, backup_refs) for reference in group
     )
-    target_paths = {Path(entry["target"]) for entry in payload["resources"]}
-    backup_paths = {Path(reference["path"]) for reference in backup_refs}
-    evidence_paths = {Path(reference["path"]) for reference in evidence_refs}
-    if len(target_paths) != len(payload["resources"]):
+    target_paths = [entry["target"] for entry in payload["resources"]]
+    backup_paths = [reference["path"] for reference in backup_refs]
+    evidence_paths = [reference["path"] for reference in evidence_refs]
+    if _paths_overlap(target_paths):
         _fail("semantic-violation", "recovery resources share a target")
-    object_paths = target_paths | backup_paths | evidence_paths
-    if len(object_paths) != len(target_paths) + len(backup_paths) + len(evidence_paths):
-        _fail(
-            "semantic-violation", "recovery target, backup and evidence paths coincide"
-        )
-    for path in object_paths:
-        if any(parent in object_paths for parent in path.parents):
-            _fail("semantic-violation", "recovery targets, backups or evidence overlap")
+    if _paths_overlap((*target_paths, *backup_paths, *evidence_paths)):
+        _fail("semantic-violation", "recovery targets, backups or evidence overlap")
     for step in steps:
         if step["expected_current"] == step["restore_to"]:
             _fail("semantic-violation", "recovery step must reverse a state transition")
@@ -1452,7 +1545,7 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
         )
     roots = [project["root"] for project in payload["projects"]]
     root_set = set(roots)
-    if len(root_set) != len(roots):
+    if _paths_identify_same(roots):
         _fail("semantic-violation", "duplicate project root in recovery receipt")
     completed = set(payload["completed_step_ids"])
     pending = set(payload["pending_step_ids"])
@@ -1493,32 +1586,24 @@ def _check_recovery_receipt_payload(payload: Mapping[str, Any]) -> None:
             )
         if result["status"] == "succeeded" and result["step_id"] not in completed:
             _fail("semantic-violation", "a succeeded recovery step must be completed")
-    report_paths = {Path(reference["path"]) for reference in payload["report_refs"]}
-    evidence_paths = {
-        Path(reference["path"])
+    report_paths = [reference["path"] for reference in payload["report_refs"]]
+    evidence_paths = [
+        reference["path"]
         for reference in payload["input_evidence"].values()
         if reference is not None
-    }
-    if report_paths & evidence_paths:
-        _fail("semantic-violation", "recovery reports coincide with input evidence")
-    readonly_paths = report_paths | evidence_paths
-    for path in readonly_paths:
-        if any(parent in readonly_paths for parent in path.parents):
-            _fail(
-                "semantic-violation", "recovery report or evidence file paths overlap"
-            )
-    protection_paths = {Path(path) for path in protections}
-    for path in protection_paths:
-        if any(
-            path.is_relative_to(readonly) or readonly.is_relative_to(path)
-            for readonly in readonly_paths
-        ):
-            _fail(
-                "semantic-violation", "recovery protection overlaps evidence or reports"
-            )
-    for path in protection_paths:
-        if any(parent in protection_paths for parent in path.parents):
-            _fail("semantic-violation", "recovery protection objects overlap")
+    ]
+    readonly_paths = [*report_paths, *evidence_paths]
+    if _paths_overlap(readonly_paths):
+        _fail("semantic-violation", "recovery report or evidence file paths overlap")
+    protection_paths = list(protections)
+    if any(
+        _paths_overlap((path, readonly))
+        for path in protection_paths
+        for readonly in readonly_paths
+    ):
+        _fail("semantic-violation", "recovery protection overlaps evidence or reports")
+    if _paths_overlap(protection_paths):
+        _fail("semantic-violation", "recovery protection objects overlap")
     if not set(result_by_step) <= completed | pending:
         _fail(
             "semantic-violation",
@@ -1598,7 +1683,7 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
     mode = value["mode"]
     phase = value["phase"]
     roots = [project["root"] for project in value["projects"]]
-    if len(set(roots)) != len(roots):
+    if _paths_identify_same(roots):
         _fail("semantic-violation", "duplicate project root in envelope")
     allowed = _ENVELOPE_PROJECT_STATUSES[(mode, phase)]
     severity = {"blocked": 1, "failed": 2}
@@ -1729,14 +1814,7 @@ def validate_document(value: Any, kind: str) -> Any:
             for reference in record["input_evidence"].values()
             if reference is not None
         ]
-        if len(evidence_paths) != len(set(evidence_paths)):
-            _fail("semantic-violation", "input evidence kinds must use distinct paths")
-        evidence_path_set = {Path(path) for path in evidence_paths}
-        if any(
-            parent in evidence_path_set
-            for path in evidence_path_set
-            for parent in path.parents
-        ):
+        if _paths_overlap(evidence_paths):
             _fail("semantic-violation", "input evidence file paths overlap")
     if kind in _CUMULATIVE_KINDS:
         _, previous_key = _CUMULATIVE_KINDS[kind]
@@ -2041,9 +2119,9 @@ def _bind_resource_states_and_backups(
                         "binding-violation",
                         "original backup overlaps a retained source",
                     )
-                if path == manifest_payload["backup_root"] or not _path_contains(
-                    manifest_payload["backup_root"], path
-                ):
+                if _path_contains(
+                    path, manifest_payload["backup_root"]
+                ) or not _path_contains(manifest_payload["backup_root"], path):
                     _fail(
                         "binding-violation",
                         "original backup must be below the declared backup root",
@@ -2064,13 +2142,16 @@ def _bind_resource_states_and_backups(
             ):
                 _fail("binding-violation", "successful copy differs from its source")
             if operation["change"]["kind"] == "migrate-developer":
-                content = f"name={operation['change']['name']}\n".encode("utf-8")
+                content = f"name={operation['change']['name']}\n".encode()
                 expected_identity = {
                     "type": "file",
                     "checksum": hashlib.sha256(content).hexdigest(),
                 }
                 if result["after"] != expected_identity:
-                    _fail("binding-violation", "developer extraction differs from its declared name")
+                    _fail(
+                        "binding-violation",
+                        "developer extraction differs from its declared name",
+                    )
             observed = result["after"]["type"]
             removed = operation["change"]["kind"] == "remove" and observed == "absent"
             if (
@@ -2086,10 +2167,8 @@ def _bind_resource_states_and_backups(
                 _fail(
                     "binding-violation", "successful result has the wrong resource type"
                 )
-    backup_paths = {Path(path) for path in backups}
-    for path in backup_paths:
-        if any(parent in backup_paths for parent in path.parents):
-            _fail("binding-violation", "original backup objects overlap")
+    if _paths_overlap(backups):
+        _fail("binding-violation", "original backup objects overlap")
 
 
 def _bind_stage_receipt(
@@ -2386,16 +2465,15 @@ def _bind_verification(
                     "binding-violation",
                     "retained publication differs from its approved candidate",
                 )
-            if last_phase in stage_results:
-                if (
-                    result is None
-                    or result["status"] != "succeeded"
-                    or result["after"] != state
-                ):
-                    _fail(
-                        "binding-violation",
-                        "retained resource differs from its successful stage result",
-                    )
+            if last_phase in stage_results and (
+                result is None
+                or result["status"] != "succeeded"
+                or result["after"] != state
+            ):
+                _fail(
+                    "binding-violation",
+                    "retained resource differs from its successful stage result",
+                )
     if payload["status"] == "verified" and covered_shared != set(shared_cleanup):
         _fail(
             "binding-violation",

@@ -1,5 +1,7 @@
 # SBTD Workflow v2：去 Trellis 化与 Graft 替换实施 PRD
 
+> 台账路径迁移：原根目录 `findings.log` 已由 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md) 接替。下文历史授权、原级别和当时状态不改写；后续读取与记录使用新路径。
+
 ## 1. 文档状态与执行边界
 
 | 项目 | 内容 |
@@ -1448,6 +1450,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-21T18:35:15+08:00 | PLAN-004盘符边界补修／PR #66补记 | [PR #66](https://github.com/KunoLu/640-skills/pull/66)于`2026-09-21T10:04:24Z`实际合并，merge `d133367dbe27832b28db68a4da3bdddc736e243e`。补拒绝Windows盘符相对Markdown链接/图片，保留编码兼容性用例与target-conflict/2断言；42项迁移计划测试通过，精确head `453eeb422cf3e451b442b2e9d63ebdb5bd77ef4f`的[PR CI](https://github.com/KunoLu/640-skills/actions/runs/35583671020)及[合并提交CI](https://github.com/KunoLu/640-skills/actions/runs/35586748978)三平台均通过。PLAN-004重新打开后修复并保留旧证据；不改变协议允许范围或全局退出码分类。main已同步，修复分支本地/远程已删除；这些是该修复闭环，不代表v2全局任务完成。 |
 
 本次仅补齐状态与历史证据；P1-16、P2及P3仍为planned。此状态PR合并前不推进下一项依赖，也不新增真实迁移、同步、清理、tag或发布授权。
+
+**P1-03 审查对象澄清（P1-03-R2-P2-001）：** 21:45:28 历史事件中的“独立源码及metadata复核”分别指实现候选的源码审查和该候选报告／安装副本元数据的核对，不表示当时尚未闭环的独立状态 PR 已审查通过。状态 PR 的审查与合并属于后续步骤；原始时间、候选 SHA、验证结果及阶段状态均保持不变。
 
 后续仅追加有意义的状态事件：完成、阻断、重开、验收范围变化和用户授权。不把每条工具调用写成流水账。任务当前状态仍以第 14 节为准。
 

@@ -101,7 +101,10 @@ def _strict_json(raw: bytes, label: str) -> Any:
 def _reject_dynamic(value: Any) -> None:
     if isinstance(value, str):
         if re.search(r"\$\{[^}:]+(?::-[^}]*)?\}", value):
-            _fail("invalid-config", "OMP configuration contains unsupported dynamic values")
+            _fail(
+                "invalid-config",
+                "OMP configuration contains unsupported dynamic values",
+            )
         return
     if isinstance(value, list):
         for item in value:
@@ -161,6 +164,8 @@ def _equivalent(actual: Mapping[str, Any], desired: Mapping[str, Any]) -> bool:
         and actual_literals is not None
         and actual_literals == desired_literals
     )
+
+
 def _source_order(source: Mapping[str, Any]) -> int:
     provider = source["source"].split("-", 1)[0]
     try:
@@ -223,6 +228,7 @@ def analyze_omp_configuration(
     disabled_servers = _string_set(document.get("disabledServers"), "disabledServers")
     forced_enabled = _string_set(document.get("enabledServers"), "enabledServers")
     blocked_extensions = set(disabled_extensions)
+
     def blocked_name(name: str) -> bool:
         return name in disabled_servers or f"mcp:{name}" in blocked_extensions
 
@@ -260,8 +266,12 @@ def analyze_omp_configuration(
     writes: list[dict[str, Any]] = []
     for source in sources:
         for name, server in source["servers"].items():
-            server_enabled = source["enabled"] and server.get("enabled", True) is not False
-            managed_shape = name == _SERVER_PREFIX or name.startswith(_SERVER_PREFIX + "-")
+            server_enabled = source["enabled"] and (
+                _entry_enabled(server) or name in forced_enabled
+            )
+            managed_shape = name == _SERVER_PREFIX or name.startswith(
+                _SERVER_PREFIX + "-"
+            )
             if blocked_name(name):
                 if managed_shape:
                     _fail(
@@ -292,8 +302,7 @@ def analyze_omp_configuration(
     active_candidates = {
         name: server
         for name, server in existing.items()
-        if not blocked_name(name)
-        and (_entry_enabled(server) or name in forced_enabled)
+        if not blocked_name(name) and (_entry_enabled(server) or name in forced_enabled)
     }
     for name, server in desired.items():
         if any(match["server"] == name for match in matches):
@@ -326,8 +335,6 @@ def analyze_omp_configuration(
     }
 
 
-
-
 def _normalized_inherited(
     inherited: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -345,7 +352,10 @@ def _normalized_inherited(
         ):
             _fail("invalid-argument", "inherited source records are malformed")
         servers = record["servers"]
-        if any(not isinstance(name, str) or not isinstance(server, Mapping) for name, server in servers.items()):
+        if any(
+            not isinstance(name, str) or not isinstance(server, Mapping)
+            for name, server in servers.items()
+        ):
             _fail("invalid-argument", "inherited MCP server records are malformed")
         _reject_dynamic(servers)
         normalized.append(
@@ -358,28 +368,34 @@ def _normalized_inherited(
     return normalized
 
 
-
-
 def omp_mcp_candidate(before: bytes, analysis: Mapping[str, Any]) -> bytes:
     """Render the active OMP config candidate, or ``before`` when complete."""
     if not isinstance(before, (bytes, bytearray)):
         _fail("invalid-argument", "input document must be bytes")
     raw = bytes(before)
-    document = _strict_json(raw, "active OMP MCP configuration") if raw else {
-        "mcpServers": {}
-    }
+    document = (
+        _strict_json(raw, "active OMP MCP configuration") if raw else {"mcpServers": {}}
+    )
     existing = _servers(document, "active OMP MCP configuration")
-    if not isinstance(analysis, Mapping) or not isinstance(analysis.get("writes"), list):
+    if not isinstance(analysis, Mapping) or not isinstance(
+        analysis.get("writes"), list
+    ):
         _fail("invalid-argument", "the OMP configuration analysis is malformed")
     writes = analysis["writes"]
     if any(not isinstance(item, Mapping) for item in writes):
         _fail("invalid-argument", "the OMP configuration analysis is malformed")
     servers = dict(existing)
+    disabled_servers = _string_set(document.get("disabledServers"), "disabledServers")
     for item in writes:
         name = item.get("name")
         server = item.get("server")
         if not isinstance(name, str) or not isinstance(server, Mapping):
             _fail("invalid-argument", "the OMP configuration analysis is malformed")
+        if name in disabled_servers:
+            _fail(
+                "ownership-conflict",
+                "the active OMP configuration disables a generated Graft identity",
+            )
         if name in servers:
             _fail(
                 "ownership-conflict",

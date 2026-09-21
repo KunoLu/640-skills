@@ -26,13 +26,14 @@ from sbtd_migration import apply_migration, run_migration, runtime_versions
 from sbtd_migration_files import save_document
 from sbtd_migration_plan import plan_migration
 from sbtd_migration_verify import verify_migration
-from test_sbtd_migration_verify import _file_ref, _legacy_project, _tree_bytes
+from test_sbtd_migration_apply import legacy_project
+from test_sbtd_migration_verify import _file_ref, _tree_bytes
 
 
 class VerifiedMigration:
     def __init__(self, base: Path, names: tuple[str, ...] = ("project",)) -> None:
         self.base = base
-        self.roots = [_legacy_project(base, name) for name in names]
+        self.roots = [legacy_project(base, name) for name in names]
         self.root = self.roots[0]
         self.home = base / "home"
         self.vault = base / "vault"
@@ -261,7 +262,9 @@ class CleanupMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.build(Path(directory).resolve())
             retained = fixture.root / "AGENTS.md"
-            retained.write_text(retained.read_text() + "\nuser edit after verification\n")
+            retained.write_text(
+                retained.read_text() + "\nuser edit after verification\n"
+            )
             before = _tree_bytes(fixture.base)
             with self.assertRaises(ContractError):
                 fixture.cleanup(confirm_cleanup=fixture.verification["verification_id"])
@@ -333,12 +336,9 @@ class CleanupMigrationTests(unittest.TestCase):
                 first_receipt["cleanup_id"],
             )
 
-
     def test_a_failed_cleanup_project_does_not_fail_an_unaffected_project(self):
         with tempfile.TemporaryDirectory() as directory:
-            fixture = VerifiedMigration(
-                Path(directory).resolve(), names=("one", "two")
-            )
+            fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
             fixture.build()
             from sbtd_migration_files import remove_reference as real_remove
 
@@ -399,12 +399,18 @@ class CleanupMigrationTests(unittest.TestCase):
             receipt = envelope["migration"]["cleanup_receipt"]["payload"]
             self.assertEqual(len(receipt["shared_results"]), 1)
             shared = receipt["shared_results"][0]
-            self.assertEqual(shared["dependent_projects"], sorted(map(str, fixture.roots)))
+            self.assertEqual(
+                shared["dependent_projects"], sorted(map(str, fixture.roots))
+            )
             self.assertFalse(skill.exists())
             for project in receipt["projects"]:
-                self.assertEqual(project["shared_operation_ids"], shared["operation_ids"])
+                self.assertEqual(
+                    project["shared_operation_ids"], shared["operation_ids"]
+                )
 
-    def test_shared_pinned_skill_failure_marks_every_dependent_and_keeps_the_skill(self):
+    def test_shared_pinned_skill_failure_marks_every_dependent_and_keeps_the_skill(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as directory:
             fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
             skill = fixture.home / ".agent/skills/trellis-workflow"
@@ -427,7 +433,9 @@ class CleanupMigrationTests(unittest.TestCase):
                 return real_remove(path, expected, scope=scope)
 
             with (
-                mock.patch.object(sbtd_migration_plan, "_ownership_pins", return_value=pins),
+                mock.patch.object(
+                    sbtd_migration_plan, "_ownership_pins", return_value=pins
+                ),
                 mock.patch("sbtd_migration.remove_reference", side_effect=refuse_skill),
             ):
                 envelope, code = fixture.cleanup(
@@ -446,7 +454,9 @@ class CleanupMigrationTests(unittest.TestCase):
             fixture = self.build(Path(directory).resolve())
             with mock.patch(
                 "sbtd_migration.remove_reference",
-                side_effect=ContractError("checksum-mismatch", "synthetic readback failure", exit_code=3),
+                side_effect=ContractError(
+                    "checksum-mismatch", "synthetic readback failure", exit_code=3
+                ),
             ):
                 response, code = fixture.cleanup(
                     confirm_cleanup=fixture.verification["verification_id"]
