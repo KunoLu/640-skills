@@ -310,6 +310,28 @@ def _jsonl_records(text: str) -> list[dict[str, object]]:
     return records
 
 
+def _event_records(text: str) -> list[dict[str, object]]:
+    records = _jsonl_records(text)
+    if records:
+        return records
+    stripped = text.strip()
+    if not stripped:
+        return []
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if not isinstance(parsed, dict):
+        return []
+    for key in ("events", "items", "messages", "records"):
+        nested = parsed.get(key)
+        if isinstance(nested, list):
+            return [item for item in nested if isinstance(item, dict)]
+    return [parsed]
+
+
 def _record_item(record: dict[str, object]) -> dict[str, object] | None:
     item = record.get("item")
     return item if isinstance(item, dict) else None
@@ -332,10 +354,14 @@ def _reply_for_mode(text: str) -> str:
     return replies if replies else text
 
 
+def _trace_item(record: dict[str, object]) -> dict[str, object]:
+    return _record_item(record) or record
+
+
 def _strict_ref_loaded(text: str) -> bool:
     needle = "references/strict.md"
-    for record in _jsonl_records(text):
-        item = _record_item(record) or record
+    for record in _event_records(text):
+        item = _trace_item(record)
         kind = item.get("type")
         if kind in {"agent_message", "message"}:
             continue
@@ -350,9 +376,10 @@ def _strict_ref_loaded(text: str) -> bool:
                     return True
     return False
 
+
 def _has_tool_trace(text: str) -> bool:
-    for record in _jsonl_records(text):
-        item = _record_item(record) or record
+    for record in _event_records(text):
+        item = _trace_item(record)
         kind = str(item.get("type") or "")
         if kind in {
             "command_execution",
@@ -365,6 +392,7 @@ def _has_tool_trace(text: str) -> bool:
         if isinstance(item.get("command"), str) or isinstance(item.get("path"), str):
             return True
     return False
+
 
 
 
@@ -545,6 +573,17 @@ class HostModeSmokeTests(unittest.TestCase):
                 )
             )
         )
+        pretty = json.dumps(
+            {
+                "type": "tool_call",
+                "path": "/tmp/.omp/agent/skills/sbtd-task/references/strict.md",
+            },
+            indent=2,
+        )
+        self.assertTrue(_has_tool_trace(pretty))
+        self.assertTrue(_strict_ref_loaded(pretty))
+        self.assertFalse(_has_tool_trace(json.dumps({"mode": "lite", "writes": False})))
+
 
         self.assertTrue(
             _strict_ref_loaded(
@@ -889,6 +928,8 @@ class HostModeSmokeTests(unittest.TestCase):
                 return payload
             current = report.get("current")
             recommended = _leading_mode(report.get("recommended"))
+
+
             if current != "default" or recommended is None or recommended == current:
                 payload["status"] = "failed"
                 payload["reason"] = f"refuse-mismatch:{report}"
@@ -915,8 +956,15 @@ class HostModeSmokeTests(unittest.TestCase):
             _write_agents(project, mode)
             (project / "MODE").write_text(mode + "\n", encoding="utf-8")
             completed = self._invoke(
-                host, binary, root, project, GATE_PROMPT, plant_skill=True
+                host,
+                binary,
+                root,
+                project,
+                GATE_PROMPT,
+                plant_skill=True,
+                json_mode=True,
             )
+
             extra = _unexpected_writes(project, {"AGENTS.md", "MODE"})
             stdout = completed.stdout or ""
             stderr = completed.stderr or ""
@@ -1102,7 +1150,6 @@ class HostModeSmokeTests(unittest.TestCase):
                 path.chmod(0o644)
             temporary.cleanup()
 
-
     def _invoke(
         self,
         host: str,
@@ -1113,8 +1160,8 @@ class HostModeSmokeTests(unittest.TestCase):
         *,
         plant_skill: bool = False,
         writable: bool = False,
+        json_mode: bool = False,
     ) -> subprocess.CompletedProcess[str]:
-
         env = os.environ.copy()
         home = isolation / "home"
         home.mkdir()
@@ -1149,9 +1196,10 @@ class HostModeSmokeTests(unittest.TestCase):
                 str(project),
                 "--no-extensions",
             ]
+            if json_mode:
+                command.extend(["--mode", "json"])
             if plant_skill:
-                command.extend(["--mode", "json", "--skills", "sbtd-task"])
-
+                command.extend(["--skills", "sbtd-task"])
             command.extend(
                 ["--tools", "read,write"] if writable else ["--tools", "read"]
             )
@@ -1166,6 +1214,7 @@ class HostModeSmokeTests(unittest.TestCase):
             timeout=180,
             check=False,
         )
+
 
 
 

@@ -35,7 +35,8 @@
 - OMP：`--print --no-session --no-extensions --tools read`。`--no-extensions` 只关 extension 发现，**不**关 Skill（`--no-skills` 才关）。保存失败格改 `--tools read,write`。
 - Mode JSON / refuse 提示不含 default/lite/strict。Gate / 跨会话提示同样不点名模式，也不点名 `book_gate_plan` / `loaded_strict_ref`。
 - Gate 格用根目录 `MODE`，**不**写 `task.md`。跨会话 / 保存失败格**不**写 `MODE`：default → `.sbtd/tasks/<id>/task.md`，lite/strict → `ai/tasks/<id>/task.md`，外加 `.sbtd/active-task.json`；过期 handoff 单独放 `docs/handoffs/`。
-- Gate：Codex 只解析 JSONL 读事件与 `agent_message`。无 tool-trace（OMP 纯 `--print`）记 `no-read-trace` blocked，**不算** default/lite AC-23 通过。OMP Gate/跨会话加 `--mode json` 尝试给出读路径。AC-14/23 要两个 host 共 6 格 passed。
+- Gate：Codex 只解析 JSONL 读事件与 `agent_message`。无 tool-trace 记 `no-read-trace` blocked，**不算** default/lite AC-23。OMP **仅 Gate** 加 `--mode json`（restore/save 仍用文本回复抽 mode）。单对象 JSON 也当读事件。AC-14/23 要两个 host 共 6 格 passed。
+
 
 
 - 只断言临时项目树；不 rglob 真实 `~/.codex`。缺登录或 CLI 记 `blocked`；两 host 未齐或跨会话未观察到 `lite` 则 skip，不当对应 AC 绿。
