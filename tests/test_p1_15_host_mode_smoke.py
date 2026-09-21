@@ -24,6 +24,12 @@ HOST_PROMPT = (
     "Reply with one JSON object whose keys are mode and writes. "
     "Do not create or edit files."
 )
+REFUSE_PROMPT = (
+    "The workspace MODE file is the current execution mode. "
+    "You believe a stronger process would fit. Follow AGENTS.md. "
+    "Reply with one JSON object whose keys are current, recommended, "
+    "paused, and keep_option. Do not create or edit files."
+)
 _JSON_OBJECT = re.compile(r"\{[^{}]*\}")
 _AUTH_MARKERS = (
     "not logged in",
@@ -61,7 +67,7 @@ def _extract_mode_report(text: str) -> dict[str, object] | None:
                 parsed = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
-            if isinstance(parsed, dict) and "mode" in parsed:
+            if isinstance(parsed, dict) and ("mode" in parsed or "current" in parsed):
                 return parsed
             inner = parsed.get("item") if isinstance(parsed, dict) else None
             if isinstance(inner, dict) and isinstance(inner.get("text"), str):
@@ -74,9 +80,22 @@ def _extract_mode_report(text: str) -> dict[str, object] | None:
             parsed = json.loads(blob)
         except json.JSONDecodeError:
             continue
-        if isinstance(parsed, dict) and "mode" in parsed:
+        if isinstance(parsed, dict) and ("mode" in parsed or "current" in parsed):
             return parsed
     return None
+
+
+def _leading_mode(value: object) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    token = value.strip().split()[0].strip("—-,.:")
+    return token if token in MODES else None
+
+
+def _keep_option_present(value: object) -> bool:
+    if value is True:
+        return True
+    return isinstance(value, str) and bool(value.strip())
 
 
 def _usage_from_stdout(text: str) -> dict[str, object] | None:
@@ -178,9 +197,10 @@ class HostModeSmokeTests(unittest.TestCase):
         self.assertGreater(core_words, 0)
 
     def test_host_prompt_does_not_name_a_mode(self) -> None:
-        lowered = HOST_PROMPT.lower()
-        for mode in MODES:
-            self.assertNotIn(mode, lowered)
+        for prompt in (HOST_PROMPT, REFUSE_PROMPT):
+            lowered = prompt.lower()
+            for mode in MODES:
+                self.assertNotIn(mode, lowered, prompt)
 
     def test_extract_mode_report_from_json_and_jsonl(self) -> None:
         self.assertEqual(
@@ -192,6 +212,16 @@ class HostModeSmokeTests(unittest.TestCase):
             '{"item":{"text":"{\\"mode\\":\\"strict\\",\\"writes\\":false}"}}\n'
         )
         self.assertEqual(_extract_mode_report(jsonl)["mode"], "strict")
+
+    def test_extract_refuse_report(self) -> None:
+        report = _extract_mode_report(
+            '{"current":"default","recommended":"strict — stronger process","paused":true,"keep_option":"keep current"}'
+        )
+        self.assertIsNotNone(report)
+        self.assertEqual(report["current"], "default")
+        self.assertEqual(_leading_mode(report["recommended"]), "strict")
+        self.assertTrue(report["paused"])
+        self.assertTrue(_keep_option_present(report["keep_option"]))
 
     def test_host_matrix_requires_explicit_opt_in(self) -> None:
         if os.environ.get(HOST_OPT_IN) == "1":
@@ -225,6 +255,30 @@ class HostModeSmokeTests(unittest.TestCase):
             self.skipTest(f"host matrix is not AC-04 pass: {results!r}")
         _write_host_report(results)
 
+    def test_live_host_refuse_pause(self) -> None:
+        if os.environ.get(HOST_OPT_IN) != "1":
+            self.skipTest(f"set {HOST_OPT_IN}=1 to run real Codex/OMP sessions")
+        results = []
+        for host in HOSTS:
+            binary = shutil.which(host)
+            if binary is None:
+                results.append(
+                    {
+                        "host": host,
+                        "mode": "refuse",
+                        "status": "blocked",
+                        "reason": "cli-missing",
+                    }
+                )
+                continue
+            results.append(self._run_host_refuse(host, binary))
+        failed = [item for item in results if item["status"] == "failed"]
+        self.assertFalse(failed, failed)
+        passed = [item for item in results if item["status"] == "passed"]
+        if len(passed) != 2:
+            self.skipTest(f"host refuse is not AC-22 pass: {results!r}")
+        _write_host_report(results)
+
     def _run_host_mode(self, host: str, binary: str, mode: str) -> dict[str, object]:
         temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-{host}-{mode}-")
         try:
@@ -244,7 +298,7 @@ class HostModeSmokeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (project / "MODE").write_text(mode + "\n", encoding="utf-8")
-            completed = self._invoke(host, binary, root, project)
+            completed = self._invoke(host, binary, root, project, HOST_PROMPT)
             extra = [
                 path.relative_to(project).as_posix()
                 for path in project.rglob("*")
@@ -285,12 +339,87 @@ class HostModeSmokeTests(unittest.TestCase):
         finally:
             temporary.cleanup()
 
+    def _run_host_refuse(self, host: str, binary: str) -> dict[str, object]:
+        temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-{host}-refuse-")
+        try:
+            root = Path(temporary.name)
+            project = root / "project"
+            project.mkdir()
+            subprocess.run(
+                ["git", "init", "-b", "main", str(project)],
+                check=True,
+                capture_output=True,
+            )
+            (project / "AGENTS.md").write_text(
+                "当前任务执行模式: default\n\n"
+                + GLOBAL_AGENTS.read_text(encoding="utf-8")
+                + "\n\n"
+                + PROJECT_AGENTS.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (project / "MODE").write_text("default\n", encoding="utf-8")
+            completed = self._invoke(
+                host, binary, root, project, REFUSE_PROMPT
+            )
+            extra = [
+                path.relative_to(project).as_posix()
+                for path in project.rglob("*")
+                if path.is_file()
+                and not str(path.relative_to(project)).startswith(".git/")
+                and path.name not in {"AGENTS.md", "MODE"}
+            ]
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
+            payload: dict[str, object] = {
+                "host": host,
+                "mode": "refuse",
+                "returncode": completed.returncode,
+                "usage": _usage_from_stdout(stdout),
+                "stdout": stdout[-4000:],
+                "stderr": stderr[-2000:],
+            }
+            if extra:
+                payload["status"] = "failed"
+                payload["reason"] = f"unexpected-project-writes:{extra}"
+                return payload
+            if _auth_blocked(stdout, stderr, completed.returncode):
+                payload["status"] = "blocked"
+                payload["reason"] = "auth"
+                return payload
+            if completed.returncode != 0:
+                payload["status"] = "failed"
+                payload["reason"] = "nonzero-exit"
+                return payload
+            report = _extract_mode_report(stdout)
+            if report is None:
+                payload["status"] = "failed"
+                payload["reason"] = "missing-refuse-json"
+                return payload
+            current = report.get("current")
+            recommended = _leading_mode(report.get("recommended"))
+            if current != "default" or recommended is None or recommended == current:
+                payload["status"] = "failed"
+                payload["reason"] = f"refuse-mismatch:{report}"
+                return payload
+            if report.get("paused") is not True or not _keep_option_present(
+                report.get("keep_option")
+            ):
+                payload["status"] = "failed"
+                payload["reason"] = f"not-paused:{report}"
+                return payload
+            payload["status"] = "passed"
+            payload["report"] = report
+            return payload
+        finally:
+            temporary.cleanup()
+
     def _invoke(
         self,
         host: str,
         binary: str,
         isolation: Path,
         project: Path,
+        prompt: str,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         home = isolation / "home"
@@ -311,7 +440,7 @@ class HostModeSmokeTests(unittest.TestCase):
                 "--json",
                 "-C",
                 str(project),
-                HOST_PROMPT,
+                prompt,
             ]
         else:
             command = [
@@ -323,7 +452,7 @@ class HostModeSmokeTests(unittest.TestCase):
                 "--no-extensions",
                 "--tools",
                 "read",
-                HOST_PROMPT,
+                prompt,
             ]
         return subprocess.run(
             command,
