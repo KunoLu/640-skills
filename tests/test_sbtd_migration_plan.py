@@ -1411,7 +1411,11 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
             manifest = _plan(
                 project,
                 vault,
-                update_spec(b"[lesson](../lessons/index.md) [web](https://example.test)\n"),
+                update_spec(
+                    b"[lesson](../lessons/index.md) [web](https://example.test)\n"
+                    b"[http](http://example.test/x) [mail](mailto:dev@example.test)\n"
+                    b"![inline](data:image/png;base64,AAAA)\n"
+                ),
                 home,
             )
             self.assertEqual(manifest["payload"]["projects"][0]["root"], str(project))
@@ -1420,15 +1424,20 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 b"[escape](../../outside.md)\n",
                 b"[file](file:///outside.md)\n",
                 b"[unsafe](javascript:alert%281%29)\n",
+                b"[unsafe-data](data:text/html,test)\n",
                 b"![missing](missing.png)\n",
                 b"[drive](C:/outside.md)\n",
                 b"[encoded-drive](C%3A%2Foutside.md)\n",
+                b"[drive-relative](C:secret.md)\n",
+                b"![drive-relative](c:secret.png)\n",
             ):
                 with self.subTest(body=body):
-                    with _home_env(home), self.assertRaises(ContractError):
+                    with _home_env(home), self.assertRaises(ContractError) as caught:
                         plan_migration(
                             [project], vault, "c", update_spec(body), tool_versions={"onboard": "f", "graft": "0.18.0"}
                         )
+                    self.assertEqual(caught.exception.code, "target-conflict")
+                    self.assertEqual(caught.exception.exit_code, 2)
 
     def test_current_identity_precedes_malformed_legacy_identity(self):
         with tempfile.TemporaryDirectory() as directory:
