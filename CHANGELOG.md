@@ -19,6 +19,7 @@
 - P1-07在Bash安装器中完整转发Codex／OMP Graft接线、独立`--graft-hooks`、迁移deployment封存输入与显式developer参数；project-only继续保持不写HOME、用户级MCP或hooks，未知参数仍严格拒绝。
 - P1-08在PowerShell安装器中提供对等转发与恢复参数，覆盖`--yes`／help和迁移deployment／developer输入；严格参数绑定继续拒绝已退役Trellis选项，不把内部project-only模式写入公开Action。
 - P1-14新增仓库级 GitHub Actions `validation` 工作流：`actions/checkout` / `actions/setup-python` 按 commit SHA 固定并指定 Python `3.12.10`，PR 事件显式 checkout PR head SHA；Linux 运行全量 unittest/contract 与语法检查，macOS 运行 Bash installer／多项目／workflow contracts，Windows 运行 PowerShell installer／workflow contracts 并在 pwsh 可用时运行 `-k powershell` 真实安装器子集，三个 job 均断言 checkout 运行后干净。新增 `sbtd_backup_retention` 授权记录 helper：仅对删除范围外的既有私有准备记录或迁移报告读-改-写-回读，写入 custodian、候选归属、精确范围、本次独立授权和实际确认时间，逐项缺失、目标不存在、封闭 publication-decisions 任意加字段、写入失败或回读不一致均 blocked、零删除、不得 done；禁止新建处置文件，不注册处置 CLI，也不替代 P3-04 人工规程。CI 通过不代表真实 host、完整 Windows 原生或发布完成。
+- P1-15 增加 Codex/OMP 三模式 host smoke 入口：默认 CI 跳过真实会话；`SBTD_P115_HOST=1` 才跑六个 host×mode 组合。另含 Gate 分层、跨会话 task 恢复与保存失败格；入口文件规模只作观察，不把字数换算成 AC-20 token 通过。
 
 ### 修复
 
@@ -30,6 +31,8 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
+
 
 - 交付 P0-03 任务数据契约与声明式 schema，明确本地／共享任务的唯一事实源、active 引用、父子关系、状态历史及跨文件恢复边界；这是实施前协议资产，不代表 Onboard 已提供 v2 任务读写或迁移能力。
 - 准备 P0-04 `sbtd-task` 公共／lite 入口及 strict、状态、handoff 按需 references；候选使用非 discovery 文件名，正式入口与 catalog 在 P0-07 原子切换，不提前宣称已安装或激活。
