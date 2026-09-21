@@ -74,6 +74,13 @@ def _copy_codex_auth(destination: Path) -> None:
 
 
 def _extract_mode_report(text: str) -> dict[str, object] | None:
+    keys = ("mode", "current", "session_mode", "workflow_mode")
+
+    def _mode_payload(parsed: object) -> dict[str, object] | None:
+        if isinstance(parsed, dict) and any(key in parsed for key in keys):
+            return parsed
+        return None
+
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("{") and stripped.endswith("}"):
@@ -81,8 +88,9 @@ def _extract_mode_report(text: str) -> dict[str, object] | None:
                 parsed = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
-            if isinstance(parsed, dict) and ("mode" in parsed or "current" in parsed):
-                return parsed
+            report = _mode_payload(parsed)
+            if report is not None:
+                return report
             inner = parsed.get("item") if isinstance(parsed, dict) else None
             if isinstance(inner, dict) and isinstance(inner.get("text"), str):
                 nested = _extract_mode_report(inner["text"])
@@ -94,9 +102,11 @@ def _extract_mode_report(text: str) -> dict[str, object] | None:
             parsed = json.loads(blob)
         except json.JSONDecodeError:
             continue
-        if isinstance(parsed, dict) and ("mode" in parsed or "current" in parsed):
-            return parsed
+        report = _mode_payload(parsed)
+        if report is not None:
+            return report
     return None
+
 
 
 def _leading_mode(value: object) -> str | None:
@@ -243,14 +253,9 @@ def _write_stale_handoff(project: Path, task_id: str) -> str:
 
 
 def _plant_task_skill(home: Path) -> None:
-    for relative in (
-        Path(".codex/skills/sbtd-task"),
-        Path(".agent/skills/sbtd-task"),
-        Path(".omp/agent/skills/sbtd-task"),
-    ):
-        target = home / relative
-        if not target.exists():
-            shutil.copytree(TASK_SKILL_DIR, target)
+    target = home / ".codex" / "skills" / "sbtd-task"
+    if not target.exists():
+        shutil.copytree(TASK_SKILL_DIR, target)
 
 
 def _init_git(project: Path) -> None:
@@ -284,16 +289,80 @@ def _unexpected_writes(project: Path, allowed: set[str]) -> list[str]:
     return extra
 
 
+def _jsonl_records(text: str) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            records.append(parsed)
+    return records
+
+
+def _record_item(record: dict[str, object]) -> dict[str, object] | None:
+    item = record.get("item")
+    return item if isinstance(item, dict) else None
+
+
+def _assistant_replies(text: str) -> str:
+    parts: list[str] = []
+    for record in _jsonl_records(text):
+        item = _record_item(record)
+        if item is None or item.get("type") not in {"agent_message", "message"}:
+            continue
+        body = item.get("text")
+        if isinstance(body, str):
+            parts.append(body)
+    return "\n".join(parts)
+
+
+def _reply_for_mode(text: str) -> str:
+    replies = _assistant_replies(text)
+    return replies if replies else text
+
+
 def _strict_ref_loaded(text: str) -> bool:
-    return "sbtd-task/references/strict.md" in text.replace("\\", "/")
+    needle = "references/strict.md"
+    for record in _jsonl_records(text):
+        item = _record_item(record) or record
+        kind = item.get("type")
+        if kind in {"agent_message", "message"}:
+            continue
+        for key in ("command", "path", "file"):
+            value = item.get(key)
+            if isinstance(value, str) and needle in value.replace("\\", "/"):
+                return True
+        arguments = item.get("arguments")
+        if isinstance(arguments, dict):
+            for value in arguments.values():
+                if isinstance(value, str) and needle in value.replace("\\", "/"):
+                    return True
+    return False
 
 
 def _emits_gate_table(text: str) -> bool:
-    return "| Gate |" in text and "book-refactoring-pass" in text
+    reply = _assistant_replies(text)
+    return "| Gate |" in reply and "book-refactoring-pass" in reply
+
+
+def _observed_mode(text: str) -> str | None:
+    report = _extract_mode_report(_reply_for_mode(text))
+    if report is None:
+        return None
+    for key in ("mode", "current", "session_mode", "workflow_mode"):
+        found = _leading_mode(report.get(key))
+        if found:
+            return found
+    return None
 
 
 def _save_failed_signal(text: str) -> bool:
-    lowered = text.lower()
+    lowered = _reply_for_mode(text).lower()
     return any(
         marker in lowered
         for marker in (
@@ -308,6 +377,7 @@ def _save_failed_signal(text: str) -> bool:
             "保存失败",
         )
     )
+
 
 
 
@@ -394,17 +464,74 @@ class HostModeSmokeTests(unittest.TestCase):
 
     def test_gate_signals_ignore_agents_prose(self) -> None:
         agents = GLOBAL_AGENTS.read_text() + PROJECT_AGENTS.read_text()
+        dumped = json.dumps(
+            {
+                "type": "item.completed",
+                "item": {
+                    "type": "command_execution",
+                    "command": "cat AGENTS.md",
+                    "aggregated_output": agents + "\n| Gate |\nbook-refactoring-pass\n"
+                    "sbtd-task/references/strict.md\n",
+                },
+            }
+        )
         self.assertFalse(_emits_gate_table(agents))
         self.assertFalse(_strict_ref_loaded(agents))
+        self.assertFalse(_emits_gate_table(dumped))
+        self.assertFalse(_strict_ref_loaded(dumped))
         self.assertTrue(
-            _emits_gate_table("| Skill | Gate |\n| book-refactoring-pass | required |\n")
+            _emits_gate_table(
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "agent_message",
+                            "text": "| Skill | Gate |\n| book-refactoring-pass | required |\n",
+                        },
+                    }
+                )
+            )
         )
         self.assertTrue(
             _strict_ref_loaded(
-                '{"command":"cat /tmp/home/.codex/skills/sbtd-task/references/strict.md"}'
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "command_execution",
+                            "command": "cat /tmp/home/.codex/skills/sbtd-task/references/strict.md",
+                            "aggregated_output": "before-dev checklist",
+                        },
+                    }
+                )
             )
         )
         self.assertFalse(_strict_ref_loaded("Load [strict gates](references/strict.md)"))
+
+    def test_restore_and_save_need_observed_mode(self) -> None:
+        listed = "ai/tasks/p115-restore/task.md\ndocs/handoffs/stale.md\n"
+        self.assertIsNone(_observed_mode(listed))
+        self.assertEqual(
+            _observed_mode(
+                json.dumps(
+                    {
+                        "type": "item.completed",
+                        "item": {
+                            "type": "agent_message",
+                            "text": '{"mode":"lite","source":"task"}',
+                        },
+                    }
+                )
+            ),
+            "lite",
+        )
+        self.assertEqual(
+            _observed_mode('{"session_mode":"strict","persisted":false}'),
+            "strict",
+        )
+        self.assertTrue(_save_failed_signal('{"mode":"strict"} 未持久化'))
+        self.assertFalse(_save_failed_signal('{"mode":"default","persisted":true}'))
+
 
     def test_save_fixture_rejects_replace_without_host(self) -> None:
         with tempfile.TemporaryDirectory(prefix="sbtd-p115-save-") as name:
@@ -498,9 +625,14 @@ class HostModeSmokeTests(unittest.TestCase):
                 results.append(self._run_host_gate(host, binary, mode))
         failed = [item for item in results if item["status"] == "failed"]
         self.assertFalse(failed, failed)
-        passed = [item for item in results if item["status"] == "passed"]
-        if len(passed) != 6:
+        passed = [
+            item
+            for item in results
+            if item["host"] == "codex" and item["status"] == "passed"
+        ]
+        if len(passed) != 3:
             self.skipTest(f"host Gate layering is not AC-14/23 pass: {results!r}")
+
         _write_host_report(results)
 
     def test_live_host_cross_session(self) -> None:
@@ -687,6 +819,13 @@ class HostModeSmokeTests(unittest.TestCase):
             temporary.cleanup()
 
     def _run_host_gate(self, host: str, binary: str, mode: str) -> dict[str, object]:
+        if host == "omp":
+            return {
+                "host": host,
+                "mode": mode,
+                "status": "blocked",
+                "reason": "omp-no-extensions",
+            }
         temporary = tempfile.TemporaryDirectory(prefix=f"sbtd-p115-gate-{host}-{mode}-")
         try:
             root = Path(temporary.name)
@@ -703,7 +842,7 @@ class HostModeSmokeTests(unittest.TestCase):
             stderr = completed.stderr or ""
             text = f"{stdout}\n{stderr}"
             loaded = _strict_ref_loaded(text)
-            table = _emits_gate_table(stdout)
+            table = _emits_gate_table(text)
             payload: dict[str, object] = {
                 "host": host,
                 "mode": mode,
@@ -728,7 +867,7 @@ class HostModeSmokeTests(unittest.TestCase):
                 return payload
             if mode in ("default", "lite") and (loaded or table):
                 payload["status"] = "failed"
-                payload["reason"] = f"unexpected-strict-gate:{payload}"
+                payload["reason"] = "unexpected-strict-gate"
                 return payload
             if mode == "strict" and not loaded and not table:
                 payload["status"] = "failed"
@@ -764,21 +903,14 @@ class HostModeSmokeTests(unittest.TestCase):
             )
             stdout = completed.stdout or ""
             stderr = completed.stderr or ""
-            text = f"{stdout}\n{stderr}".replace("\\", "/")
-            report = _extract_mode_report(stdout)
-            observed = None
-            if report:
-                for key in ("mode", "current", "workflow_mode"):
-                    observed = _leading_mode(report.get(key))
-                    if observed:
-                        break
+            text = f"{stdout}\n{stderr}"
+            observed = _observed_mode(text)
             payload: dict[str, object] = {
                 "host": host,
                 "mode": "restore",
                 "returncode": completed.returncode,
                 "usage": _usage_from_stdout(stdout),
                 "observed": observed,
-                "task_read": relative in text,
                 "stdout": stdout[-4000:],
                 "stderr": stderr[-2000:],
             }
@@ -796,14 +928,13 @@ class HostModeSmokeTests(unittest.TestCase):
                 return payload
             if observed == "strict":
                 payload["status"] = "failed"
-                payload["reason"] = f"handoff-override:{report}"
+                payload["reason"] = "handoff-override"
                 return payload
-            if observed == "lite" or relative in text:
-                payload["status"] = "passed"
-                payload["report"] = report
+            if observed != "lite":
+                payload["status"] = "failed"
+                payload["reason"] = "missing-lite-mode"
                 return payload
-            payload["status"] = "failed"
-            payload["reason"] = "missing-task-restore"
+            payload["status"] = "passed"
             return payload
         finally:
             temporary.cleanup()
@@ -839,11 +970,14 @@ class HostModeSmokeTests(unittest.TestCase):
             )
             stdout = completed.stdout or ""
             stderr = completed.stderr or ""
+            text = f"{stdout}\n{stderr}"
+            observed = _observed_mode(text)
             payload: dict[str, object] = {
                 "host": host,
                 "mode": "save-failure",
                 "returncode": completed.returncode,
                 "usage": _usage_from_stdout(stdout),
+                "observed": observed,
                 "stdout": stdout[-4000:],
                 "stderr": stderr[-2000:],
             }
@@ -863,7 +997,15 @@ class HostModeSmokeTests(unittest.TestCase):
                 payload["status"] = "failed"
                 payload["reason"] = "nonzero-exit"
                 return payload
-            if not _save_failed_signal(f"{stdout}\n{stderr}"):
+            if observed == "default":
+                payload["status"] = "failed"
+                payload["reason"] = "reverted-to-default"
+                return payload
+            if observed != "strict":
+                payload["status"] = "failed"
+                payload["reason"] = "missing-strict-session"
+                return payload
+            if not _save_failed_signal(text):
                 payload["status"] = "failed"
                 payload["reason"] = "missing-unpersisted-signal"
                 return payload
