@@ -3,20 +3,21 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
 from unittest import mock
 
+PACKAGE = (Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard").resolve()
+sys.path.insert(0, str(PACKAGE / "scripts"))
+
 from onboard_contracts import ContractError
 from sbtd_graft_deployment import execute_normal_wiring, plan_normal_wiring
 
 from tests.test_sbtd_migration_apply import file_contents, legacy_project
 
-PACKAGE = (
-    Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard"
-).resolve()
 
 
 class OmpNormalWiringTests(unittest.TestCase):
@@ -70,7 +71,7 @@ class OmpNormalWiringTests(unittest.TestCase):
                 "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
             }
 
-            def plan(skip_project_agents):
+            def plan(skip_project_agents, mode="init"):
                 args = Namespace(
                     projects_root=str(root),
                     platform="omp",
@@ -84,10 +85,13 @@ class OmpNormalWiringTests(unittest.TestCase):
                         "sbtd_graft_deployment.verified_runtime", return_value=runtime
                     ),
                 ):
-                    return plan_normal_wiring("init", args)
+                    return plan_normal_wiring(mode, args)
 
             self.assertEqual(plan(False)["status"], "planned")
             self.assertEqual(plan(True)["status"], "blocked")
+            self.assertEqual(plan(False, "check")["status"], "planned")
+            self.assertEqual(plan(True, "check")["status"], "blocked")
+            self.assertEqual((root / "AGENTS.md").read_bytes(), b"\xff<!-- graft:start -->broken")
 
 
     def test_planned_omp_wiring_writes_active_config_without_hooks(self):

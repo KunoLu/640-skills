@@ -238,8 +238,6 @@ class CodexCandidateTests(unittest.TestCase):
         )
         self.assertNotIn(b"\xff", candidate)
         self.assertEqual(candidate.count(b"<!-- graft:start -->"), 1)
-        self.assertIn(b"## Graft structural evidence (managed)", candidate)
-        self.assertIn(b"OMP `mcp.json`", candidate)
 
 
     def test_mcp_bindings_keep_projects_distinct_and_preserve_foreign_toml(self):

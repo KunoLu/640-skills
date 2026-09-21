@@ -1473,7 +1473,7 @@ def run_migration_init(mode: str, args: Any) -> int:
 
 
 def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
-    """Optional selected-host wiring preflight; no new package installation."""
+    """Read-only installation feasibility for the selected host/template scope."""
     from onboard import (
         default_codex_home,
         external_skill_target_is_valid,
@@ -1581,7 +1581,7 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
                 if state["type"] == "absent"
                 else read_file(Path(operation["target"]), state),
                 bindings,
-                install_template=mode != "check" and not bool(
+                install_template=not bool(
                     getattr(args, "skip_project_agents", False)
                 ),
             )
