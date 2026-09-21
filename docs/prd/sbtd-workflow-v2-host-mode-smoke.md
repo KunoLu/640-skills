@@ -56,7 +56,8 @@
 
 - `SBTD_P115_HOST=1` 六格 mode JSON 全 passed（约 67s）。报告：`tests/api/reports/api-report-p1-15-host-mode-smoke-p1-15-codex-omp-mode-smoke-2026_09_21-07_49_31`（本机 exclude，不入库）。
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。
-- `SBTD_P115_HOST=1` Gate 约 188s：**skip，不是 AC-14/23**。Codex 三格 passed；OMP lite/strict passed；OMP default 的 `auth` 是 “authentication details” 误伤，不是未登录。
+- `SBTD_P115_HOST=1` Gate 约 188s：**skip，不是 AC-14/23**。Codex 三格有 `command_execution`。OMP default 的 `auth` 是 “authentication details”。OMP lite/strict 当时 `passed` **不算** AC-23（裸 `path` 可能假绿）；收紧 trace 规则后未复跑 live。
+
 
 - Codex JSON usage mode JSON 约 3.9 万、Gate 约 6–8.6 万 input tokens／格，含大量 cache；OMP 无 usage 字段。AC-20 仍为 measured-not-met。
 - `evidenceSource=developer-local`，`publication=local-only`。
@@ -68,11 +69,11 @@
 | AC | 口径 | 证据 |
 |---|---|---|
 | AC-04 | **partial**：六格隔离会话能读 MODE 并返回 JSON。不是完整澄清／实现验证／strict Gate | live matrix；`SBTD_P115_HOST=1` |
-| AC-14 | **skip**：Codex 三格 + OMP lite/strict 有证据；缺 OMP default。不以 5/6 冒充 | live Gate 188s |
+| AC-14 | **skip**：Codex 三格有 JSONL `command_execution`。OMP 上次 lite/strict `passed` 未验证为 `_TRACE_KINDS`/`_TRACE_NAMES`，不作 AC 证据 | live Gate |
 | AC-19 | **inherited**：仓库 CI 可复现归 P1-14。本项 opt-in host 不进 CI | 无 host unittest |
 | AC-20 | **measured-not-met**：Codex 约 3.9 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON（current≠recommended、paused、keep_option） | `test_sbtd_task_routing` + live refuse |
-| AC-23 | **skip**：Codex default/lite 与 OMP lite 有 tool-trace 且未开 `strict.md`。OMP default 被假 auth 挡住未评 | live Gate |
+| AC-23 | **skip**：Codex default/lite 有 command_execution 且未开 `strict.md`。OMP 格未用收紧后的 trace 规则复跑 | live Gate |
 | AC-24 | **harness-ready**：跨会话必须观察到 mode=lite，stale handoff 的 strict 为失败；保存失败磁盘仍 default 且会话仍 strict。live 未跑满格 | `test_live_host_cross_session` / `test_live_host_save_failure` |
 
 

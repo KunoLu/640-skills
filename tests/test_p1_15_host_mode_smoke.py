@@ -194,10 +194,8 @@ def _auth_blocked(stdout: str, stderr: str, returncode: int) -> bool:
         return True
     if "401" in err or "403" in err:
         return True
-    haystack = f"{stdout}\n{stderr}".lower()
-    if any(marker in haystack for marker in _AUTH_PHRASES):
-        return True
-    return returncode != 0 and "login" in haystack
+    return returncode != 0 and "login" in err
+
 
 
 
@@ -400,36 +398,31 @@ def _path_in_value(value: object, needle: str) -> bool:
     return False
 
 
+def _is_tool_item(item: dict[str, object]) -> bool:
+    kind = str(item.get("type") or "")
+    if kind in _REPLY_KINDS:
+        return False
+    if kind in _TRACE_KINDS:
+        return True
+    name = str(item.get("name") or item.get("tool") or "").lower()
+    return name in _TRACE_NAMES
+
+
 def _strict_ref_loaded(text: str) -> bool:
     needle = "references/strict.md"
     for record in _event_records(text):
         item = _trace_item(record)
-        kind = str(item.get("type") or "")
-        if kind in _REPLY_KINDS:
+        if not _is_tool_item(item):
             continue
-        for key in ("command", "path", "file"):
-            if _path_in_value(item.get(key), needle):
-                return True
-        for key in ("arguments", "input"):
+        for key in ("command", "path", "file", "arguments", "input"):
             if _path_in_value(item.get(key), needle):
                 return True
     return False
 
 
 def _has_tool_trace(text: str) -> bool:
-    for record in _event_records(text):
-        item = _trace_item(record)
-        kind = str(item.get("type") or "")
-        if kind in _REPLY_KINDS:
-            continue
-        if kind in _TRACE_KINDS:
-            return True
-        name = str(item.get("name") or item.get("tool") or "").lower()
-        if name in _TRACE_NAMES:
-            return True
-        if isinstance(item.get("command"), str) or isinstance(item.get("path"), str):
-            return True
-    return False
+    return any(_is_tool_item(_trace_item(record)) for record in _event_records(text))
+
 
 
 
@@ -668,6 +661,34 @@ class HostModeSmokeTests(unittest.TestCase):
         )
         self.assertFalse(_has_tool_trace(text_only))
         self.assertFalse(_strict_ref_loaded(text_only))
+        path_only = json.dumps(
+            {
+                "items": [
+                    {
+                        "path": "/x/sbtd-task/references/strict.md",
+                        "command": "cat AGENTS.md",
+                    }
+                ]
+            }
+        )
+        self.assertFalse(_has_tool_trace(path_only))
+        self.assertFalse(_strict_ref_loaded(path_only))
+        named_read = json.dumps(
+            {
+                "items": [
+                    {"type": "text", "text": "mode default"},
+                    {
+                        "name": "read",
+                        "input": {
+                            "path": "/x/.omp/agent/skills/sbtd-task/references/strict.md"
+                        },
+                    },
+                ]
+            }
+        )
+        self.assertTrue(_has_tool_trace(named_read))
+        self.assertTrue(_strict_ref_loaded(named_read))
+
 
 
 
