@@ -58,7 +58,8 @@
 - `SBTD_P115_HOST=1` refuse/pause：Codex+OMP passed（约 24s）。
 - `SBTD_P115_HOST=1` Gate 约 200s：六格 smoke passed。报告 `…-2026_09_21-10_41_50`（exclude）。不是完整 Book/BDD，不是 AC-20。
 - `SBTD_P115_HOST=1` AC-24 restore 约 172s：两 host passed（散文 lite）。不是单独的 AC-24。
-- `SBTD_P115_HOST=1` save-failure 约 100s：**FAIL，不是 AC-24**。Codex `observed=strict`，`reason=missing-unpersisted-signal`。助手写了 `Save persisted: **No**`，当时标记表不认。已补标记+单测该 live 字符串。**不重跑 live**，不扫命令输出。
+- `SBTD_P115_HOST=1` save-failure 约 64s：两 host **passed**（Codex+OMP）。与 restore 合起来是 AC-24 live harness，不是 AC-20，也不是完整 Book/BDD。
+
 
 
 
@@ -85,7 +86,8 @@
 | AC-20 | **measured-not-met**：Gate Codex 约 6.5–8.7 万 input tokens／格；OMP 无 usage。不是 2k 达标 | 主机 JSON usage |
 | AC-22 | **split**：TaskRouter 已覆盖推荐暂停与拒绝保存；host 增加 refuse/pause JSON | `test_sbtd_task_routing` + live refuse |
 | AC-23 | **partial**：default/lite 有工具读且未开 `strict.md`；strict 有 `strict.md` 工具读。不是完整弱流程验收 | live Gate 200s |
-| AC-24 | **not-met**：restore live 已过；save Codex 已报 strict，persist 信号当时未匹配 `Save persisted: **No**` | restore 172s；save 100s |
+| AC-24 | **passed**：restore 两 host lite；save 两 host 会话 strict 且 persist 失败信号。磁盘未改。不是 token/完整流程 | restore 172s；save 64s |
+
 
 
 
