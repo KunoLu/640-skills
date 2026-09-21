@@ -1430,6 +1430,7 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
                 b"[encoded-drive](C%3A%2Foutside.md)\n",
                 b"[drive-relative](C:secret.md)\n",
                 b"![drive-relative](c:secret.png)\n",
+                b"![encoded-drive-relative](c%3Asecret.png)\n",
             ):
                 with self.subTest(body=body):
                     with _home_env(home), self.assertRaises(ContractError) as caught:
