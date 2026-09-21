@@ -17,7 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "sbtd-workflow-onboard/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from sbtd_graft_deployment import execute_normal_wiring, plan_normal_wiring
+from onboard_contracts import ContractError
+from sbtd_graft_deployment import (
+    _validate_selected_root_batch,
+    execute_normal_wiring,
+    plan_normal_wiring,
+)
 from sbtd_migration_files import snapshot
 
 PACKAGE = (ROOT / "sbtd-workflow-onboard").resolve()
@@ -69,6 +74,16 @@ def _args(roots: list[Path], skills: Path) -> Namespace:
 
 
 class GraftIsolationTests(unittest.TestCase):
+    def test_same_physical_root_aliases_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            first, alias = base / "first", base / "alias"
+            first.mkdir()
+            alias.symlink_to(first, target_is_directory=True)
+            with self.assertRaises(ContractError) as failure:
+                _validate_selected_root_batch([first, alias])
+            self.assertEqual(failure.exception.code, "scope-conflict")
+
     def test_nested_selected_repository_roots_block_before_runtime_wiring(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -230,6 +245,11 @@ class GraftIsolationTests(unittest.TestCase):
                 (home / ".codex/config.toml").read_text(encoding="utf-8")
             )
             self.assertEqual(len(config["mcp_servers"]), 2)
+            observed = {
+                (server["cwd"], server["args"][server["args"].index("--root") + 1])
+                for server in config["mcp_servers"].values()
+            }
+            self.assertEqual(observed, {(str(main), str(main)), (str(linked), str(linked))})
 
     def test_omp_two_roots_keep_mcp_root_bindings_distinct(self):
         with tempfile.TemporaryDirectory() as directory:

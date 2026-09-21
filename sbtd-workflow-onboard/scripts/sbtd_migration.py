@@ -719,7 +719,7 @@ def _apply_resource(
     manifest: Mapping[str, Any],
     operations: Sequence[Mapping[str, Any]],
     previous: Mapping[str, Any] | None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], int]:
     first = operations[0]
     target = Path(first["target"])
     before = snapshot(target)
@@ -744,6 +744,7 @@ def _apply_resource(
         "after": before,
         "error": None,
     }
+    exit_code = 0
     try:
         if before["type"] != "absent" and result["backup_ref"] is None:
             backup_path = (
@@ -798,6 +799,7 @@ def _apply_resource(
             )
         result["status"] = "succeeded"
     except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
+        exit_code = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
         try:
             result["after"] = snapshot(target)
         except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
@@ -811,7 +813,7 @@ def _apply_resource(
             result["error"] += "; retained=" + contracts.canonical_json_bytes(
                 error.retained_refs
             ).decode("utf-8")
-    return result
+    return result, exit_code
 
 
 def apply_migration(
@@ -880,6 +882,7 @@ def apply_migration(
     started = _now()
     global_error = None
     originals_ready = False
+    failure_exit = 5
     try:
         require_private_directory(Path(manifest["payload"]["backup_root"]))
         if previous is None or (
@@ -894,11 +897,12 @@ def apply_migration(
             old = results.get(rid)
             if old is not None and old["status"] == "succeeded":
                 continue
-            results[rid] = _apply_resource(manifest, group, old)
+            results[rid], failure_exit = _apply_resource(manifest, group, old)
             if results[rid]["status"] != "succeeded":
                 global_error = "a resource failed; later resources were not attempted"
                 break
-    except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
+    except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
+        failure_exit = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
         global_error = "private original preparation or resource execution failed"
     projects = _apply_projects(
         manifest, results, previous, global_error, originals_ready
@@ -965,7 +969,7 @@ def apply_migration(
         receipt,
         {"manifest_id": manifest["manifest_id"]},
     )
-    return envelope, 5 if status == "failed" else 2 if status == "blocked" else 0
+    return envelope, failure_exit if status == "failed" else 2 if status == "blocked" else 0
 
 def _cleanup_candidates(
     verification: Mapping[str, Any],
@@ -997,7 +1001,7 @@ def _cleanup_resource(
     operations: Sequence[Mapping[str, Any]],
     candidate: Mapping[str, Any],
     backup_ref: Mapping[str, Any] | None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], int]:
     first = operations[0]
     target = Path(first["target"])
     before = snapshot(target)
@@ -1018,6 +1022,7 @@ def _cleanup_resource(
         "after": before,
         "error": None,
     }
+    exit_code = 0
     try:
         if before != candidate["state"]:
             _fail("state-conflict", "a cleanup candidate changed after verification")
@@ -1026,11 +1031,27 @@ def _cleanup_resource(
         value = None
         if before["type"] != "absent":
             if backup_ref is None:
-                _fail(
-                    "original-unavailable",
-                    "a cleanup target lacks its retained original backup",
-                    3,
+                if any(
+                    operation["resource_id"] == first["resource_id"]
+                    and operation["phase"] != "cleanup"
+                    for operation in _operations(manifest)
+                ):
+                    _fail(
+                        "original-unavailable",
+                        "a cleanup target lacks its retained original backup",
+                        3,
+                    )
+                # A cleanup-only resource has not been changed by an earlier
+                # phase. Preserve its verified original before its first write.
+                vault = Path(manifest["payload"]["backup_root"])
+                backup_path = vault / manifest["manifest_id"] / "cleanup" / first["resource_id"]
+                _prepare_backup_parent(backup_path, vault)
+                backup_ref = backup_reference(
+                    {"path": str(target), "state": before},
+                    backup_path,
+                    private_root=vault,
                 )
+                result["backup_ref"] = backup_ref
             _check_reference(backup_ref, 3)
             action, value = _render_resource(operations, before)
             if action == "reference" or action == "identity":
@@ -1060,6 +1081,7 @@ def _cleanup_resource(
             )
         result["status"] = "succeeded"
     except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
+        exit_code = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
         try:
             result["after"] = snapshot(target)
         except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
@@ -1073,7 +1095,7 @@ def _cleanup_resource(
             result["error"] += "; retained=" + contracts.canonical_json_bytes(
                 error.retained_refs
             ).decode("utf-8")
-    return result
+    return result, exit_code
 
 
 def _cleanup_projects(
@@ -1202,6 +1224,7 @@ def cleanup_migration(
         "verification": verification_raw,
     }
     if previous is not None:
+        assert previous_raw is not None
         documents["cleanup_receipt"] = previous
         raw_documents["cleanup_receipt"] = previous_raw
     contracts.validate_declared_bindings(manifest, documents, raw_documents)
@@ -1279,6 +1302,7 @@ def cleanup_migration(
                 )
     started = _now()
     global_error = None
+    failure_exit = 5
     try:
         for group in groups:
             first = group[0]
@@ -1296,7 +1320,7 @@ def cleanup_migration(
                         "path": str(backup_path),
                         "state": snapshot(backup_path),
                     }
-            results[rid] = _cleanup_resource(
+            results[rid], failure_exit = _cleanup_resource(
                 manifest, group, candidates[rid], backup_ref
             )
             if results[rid]["status"] != "succeeded":
@@ -1304,7 +1328,8 @@ def cleanup_migration(
                     "a cleanup resource failed; later resources were not attempted"
                 )
                 break
-    except (contracts.ContractError, TaskDataError, OSError, RuntimeError):
+    except (contracts.ContractError, TaskDataError, OSError, RuntimeError) as error:
+        failure_exit = 3 if isinstance(error, contracts.ContractError) and error.exit_code == 3 else 5
         global_error = "cleanup resource execution failed"
     projects = _cleanup_projects(
         manifest, verification, results, previous, global_error
@@ -1390,7 +1415,7 @@ def cleanup_migration(
             "verification_id": verification["verification_id"],
         },
     )
-    return envelope, 5 if status == "failed" else 2 if status == "blocked" else 0
+    return envelope, failure_exit if status == "failed" else 2 if status == "blocked" else 0
 
 
 def _argument_path(value: str) -> Path:

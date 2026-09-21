@@ -9,10 +9,10 @@ prints to stdout/stderr; callers own all presentation:
   an unrecognized ``graft`` executable, and works even when npm or network
   access is unavailable (only the local ``graft --version`` probe is used,
   never the network-bound ``graft version`` command).
-- ``install_graft(*, confirmed)`` — plans (always read-only) and, only after
-  explicit confirmation, installs the frozen ``@nanonets/graft@0.18.0``
-  tarball with integrity verification and conservative telemetry opt-out
-  persistence.
+- ``install_graft(*, confirmed, telemetry_only=False)`` — plans (always
+  read-only) and, only after explicit confirmation, installs the frozen
+  ``@nanonets/graft@0.18.0`` tarball with integrity verification and
+  conservative telemetry opt-out persistence.
 
 Pinned facts (registry-verified, do not "upgrade" to latest automatically):
 tarball integrity sha512-sNshNND1Q/qSXiuSh9nW8NniWyaD+m55oJZ6oCGJsLzxot52WSJrdT
@@ -20,8 +20,9 @@ hsQ3NZVTNT+lqivlYkkqN8b/nf22S/Xw==, registry gitHead
 de8456e892bad5aeee11403e47fb2227773eb27e, Node >=20.
 
 Managed subprocesses always run with telemetry/trackable activation
-scrubbed: DO_NOT_TRACK=1, DNT=1, dotenv disabled via DOTENV_CONFIG_PATH,
-and GRAFT_/OPENROUTER_/ORCAROUTER_/OPENAI_/ANTHROPIC_/NODE_OPTIONS/NODE_PATH
+scrubbed: DO_NOT_TRACK=1, DNT=1, dotenv disabled via DOTENV_CONFIG_PATH and
+forced quiet via DOTENV_CONFIG_QUIET=true, and
+GRAFT_/OPENROUTER_/ORCAROUTER_/OPENAI_/ANTHROPIC_/NODE_OPTIONS/NODE_PATH
 removed. Installation adds CI=1 so the pinned postinstall exits instead of
 spawning its detached flush. The telemetry CLI is never invoked (it triggers
 the preAction updater); opt-out is persisted by editing
@@ -89,7 +90,7 @@ _SCRUBBED_PREFIXES = (
     "OPENAI_",
     "ANTHROPIC_",
 )
-_SCRUBBED_VARS = ("NODE_OPTIONS", "NODE_PATH")
+_SCRUBBED_VARS = ("NODE_OPTIONS", "NODE_PATH", "DOTENV_CONFIG_DEBUG", "DOTENV_CONFIG_QUIET")
 
 _ADVICE_MISSING = (
     "Install the pinned Graft CLI with the managed install-graft flow after "
@@ -108,7 +109,7 @@ class _TelemetryPersistError(Exception):
 
 def _managed_env(base: dict[str, str], *, ci: bool) -> dict[str, str]:
     """Subprocess env for Graft/npm children: telemetry off, no LLM/cloud
-    activation variables, no Node preloads, dotenv fed from /dev/null.
+    activation variables, no Node preloads, and a silent dotenv loader.
 
     Only the managed child sees this; the user's real environment is never
     mutated. ``ci=True`` is used for installation so the pinned postinstall
@@ -122,6 +123,7 @@ def _managed_env(base: dict[str, str], *, ci: bool) -> dict[str, str]:
     env["DO_NOT_TRACK"] = "1"
     env["DNT"] = "1"
     env["DOTENV_CONFIG_PATH"] = os.devnull
+    env["DOTENV_CONFIG_QUIET"] = "true"
     if ci:
         env["CI"] = "1"
     return env
@@ -430,6 +432,21 @@ def _check_graft(env: dict[str, str]) -> dict[str, object]:
             result["nextStep"] = (
                 "Ask for confirmation, then install the pinned release with "
                 "the managed install-graft flow."
+            )
+            return result
+
+        if result["node"]["compatible"] is False:
+            result["status"] = "blocked"
+            result["reason"] = (
+                f"the pinned Graft CLI requires Node >= {NODE_MIN_MAJOR}; "
+                "the detected Node version is incompatible"
+            )
+            result["advice"] = (
+                "Install a compatible Node runtime before using the pinned "
+                "Graft CLI."
+            )
+            result["nextStep"] = (
+                f"Install Node >= {NODE_MIN_MAJOR}, then rerun check."
             )
             return result
 
@@ -770,6 +787,7 @@ def _build_plan(env: dict[str, str], before: dict[str, object]) -> dict[str, obj
             "DNT": "1",
             "CI": "1",
             "DOTENV_CONFIG_PATH": os.devnull,
+            "DOTENV_CONFIG_QUIET": "true",
             "scrubbedPrefixes": list(_SCRUBBED_PREFIXES),
             "scrubbedVars": list(_SCRUBBED_VARS),
             "npmProbeCache": "isolated private temp dir, removed after probing",
@@ -926,8 +944,15 @@ def _verify_installation(
     return True, None, True
 
 
-def install_graft(*, confirmed: bool) -> tuple[dict[str, object], int]:
+def install_graft(
+    *, confirmed: bool, telemetry_only: bool = False
+) -> tuple[dict[str, object], int]:
     """Plan or perform the pinned Graft CLI installation.
+
+    ``telemetry_only=True`` authorizes only telemetry persistence for a pinned
+    CLI that remains verified at this invocation; it never falls through to
+    package installation.
+
     Read-only status gates run before the confirmation gate, so an
     unconfirmed probe (``install-graft --json`` without ``--yes``) already
     returns ``already-installed`` (exit 0, only when the telemetry opt-out is
@@ -950,14 +975,27 @@ def install_graft(*, confirmed: bool) -> tuple[dict[str, object], int]:
     prerequisite/conflict blocked, 1 operational failure.
     """
     env = dict(os.environ)
-    return _install_graft(env, confirmed=confirmed)
+    return _install_graft(
+        env, confirmed=confirmed, telemetry_only=telemetry_only
+    )
 
 
 def _install_graft(
-    env: dict[str, str], *, confirmed: bool
+    env: dict[str, str], *, confirmed: bool, telemetry_only: bool = False
 ) -> tuple[dict[str, object], int]:
     home = _home_dir(env)
     before = _check_graft(env)
+    if telemetry_only and not before.get("installed"):
+        return {
+            "mode": "install-graft",
+            "before": before,
+            "status": "blocked",
+            "stage": "telemetry-only",
+            "reason": (
+                "the previously verified pinned Graft CLI is no longer installed; "
+                "telemetry-only confirmation cannot install a package"
+            ),
+        }, 2
     plan = _build_plan(env, before)
     result: dict[str, object] = {
         "mode": "install-graft",

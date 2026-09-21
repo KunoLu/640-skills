@@ -96,6 +96,10 @@ _DEPENDENCY_NEXT = (
     "install the declared sbtd-workflow-onboard requirements "
     "(PyYAML>=6.0.3,<7, jsonschema>=4.20,<5) before running project state checks"
 )
+_SCHEMA_REPAIR_NEXT = (
+    "restore sbtd-workflow-onboard/templates/skills/sbtd-task/references/task-data.schema.json"
+)
+
 
 
 class TaskDataError(Exception):
@@ -143,21 +147,41 @@ def _bundled_schema() -> dict[str, Any]:
     except OSError:
         raise TaskDataError(
             "the bundled task-data schema is missing or unreadable",
-            "restore sbtd-workflow-onboard/templates/skills/sbtd-task/references/task-data.schema.json",
+            _SCHEMA_REPAIR_NEXT,
         ) from None
-    return json.loads(raw.decode("utf-8"))
+    try:
+        loaded = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise TaskDataError(
+            "the bundled task-data schema is invalid", _SCHEMA_REPAIR_NEXT
+        ) from None
+    if not isinstance(loaded, dict):
+        raise TaskDataError(
+            "the bundled task-data schema is invalid", _SCHEMA_REPAIR_NEXT
+        )
+    return loaded
+
 
 
 def validate_task_data(data: object, definition: str, label: str) -> dict[str, Any]:
     jsonschema = require_dependency("jsonschema", "jsonschema")
+    from referencing.exceptions import Unresolvable
     schema = {**_bundled_schema(), "$ref": f"#/$defs/{definition}"}
-    validator = jsonschema.Draft202012Validator(schema)
-    if not isinstance(data, dict) or not validator.is_valid(data):
+    try:
+        jsonschema.Draft202012Validator.check_schema(schema)
+        validator = jsonschema.Draft202012Validator(schema)
+        valid = isinstance(data, dict) and validator.is_valid(data)
+    except (jsonschema.exceptions.SchemaError, Unresolvable):
+        raise TaskDataError(
+            "the bundled task-data schema is invalid", _SCHEMA_REPAIR_NEXT
+        ) from None
+    if not valid:
         raise TaskDataError(
             f"{label} fails the bundled {definition} schema",
             _REPAIR_NEXT,
         )
     return data
+
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -166,6 +190,23 @@ def _is_within(path: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _is_windows_reparse_point(metadata: object) -> bool:
+    flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    return bool(flag and getattr(metadata, "st_file_attributes", 0) & flag)
+
+
+def _reject_windows_reparse_points(path: Path, label: str) -> None:
+    current = path
+    while True:
+        if _is_windows_reparse_point(current.lstat()):
+            raise TaskDataError(
+                f"{label} contains a Windows reparse point", _CONTAINMENT_NEXT
+            )
+        if current.parent == current:
+            return
+        current = current.parent
 
 
 def _resolve_contained_file(
@@ -187,7 +228,8 @@ def _resolve_contained_file(
     for part in PurePosixPath(relative).parts:
         candidate = current / part
         try:
-            mode = candidate.lstat().st_mode
+            metadata = candidate.lstat()
+            mode = metadata.st_mode
         except FileNotFoundError:
             if missing_reason is None:
                 return None
@@ -198,6 +240,10 @@ def _resolve_contained_file(
             ) from None
         except OSError:
             raise TaskDataError(f"{label} cannot be inspected", _REPAIR_NEXT) from None
+        if _is_windows_reparse_point(metadata):
+            raise TaskDataError(
+                f"{label} contains a Windows reparse point", _CONTAINMENT_NEXT
+            )
         if stat.S_ISLNK(mode):
             try:
                 resolved = candidate.resolve(strict=True)
@@ -223,13 +269,18 @@ def _resolve_contained_file(
             current = candidate
     try:
         final = current.resolve(strict=True)
-        final_mode = final.stat().st_mode
+        final_metadata = final.lstat()
+        final_mode = final_metadata.st_mode
     except FileNotFoundError:
         if missing_reason is None:
             return None
         raise TaskDataError(missing_reason, _MISSING_TARGET_NEXT) from None
     except OSError:
         raise TaskDataError(f"{label} cannot be inspected", _REPAIR_NEXT) from None
+    if _is_windows_reparse_point(final_metadata):
+        raise TaskDataError(
+            f"{label} contains a Windows reparse point", _CONTAINMENT_NEXT
+        )
     if not _is_within(final, root_real):
         raise TaskDataError(f"{label} escapes the project root", _CONTAINMENT_NEXT)
     if not stat.S_ISREG(final_mode):
@@ -248,6 +299,7 @@ def _resolve_contained_file(
 def open_regular_file(path: Path, label: str) -> Iterator[BinaryIO]:
     """Read only a regular file; special files never block the task writer."""
     try:
+        _reject_windows_reparse_points(path, label)
         if not stat.S_ISREG(path.lstat().st_mode):
             raise TaskDataError(f"{label} is not a regular file", _REPAIR_NEXT)
         flags = (
@@ -376,7 +428,10 @@ def _build_safe_loader(yaml: Any) -> type:
 
 
 def validate_json_compatible(
-    value: object, label: str, active: set[int] | None = None
+    value: object,
+    label: str,
+    active: set[int] | None = None,
+    seen: set[int] | None = None,
 ) -> None:
     if value is None or isinstance(value, (str, bool, int)):
         return
@@ -388,11 +443,14 @@ def validate_json_compatible(
         return
     if isinstance(value, (list, dict)):
         active = set() if active is None else active
+        seen = set() if seen is None else seen
         marker = id(value)
         if marker in active:
             raise TaskDataError(
                 f"{label} frontmatter contains a cyclic structure", _REPAIR_NEXT
             )
+        if marker in seen:
+            return
         active.add(marker)
         try:
             children = value.values() if isinstance(value, dict) else value
@@ -406,15 +464,17 @@ def validate_json_compatible(
                             _REPAIR_NEXT,
                         )
             for child in children:
-                validate_json_compatible(child, label, active)
+                validate_json_compatible(child, label, active, seen)
         finally:
             active.discard(marker)
+        seen.add(marker)
         return
     raise TaskDataError(
         f"{label} frontmatter contains a value that is not JSON-compatible "
         "(bytes, sets, objects and non-string keys are rejected)",
         _REPAIR_NEXT,
     )
+
 
 
 def _load_safe_yaml(text: str, label: str) -> Any:
@@ -484,16 +544,27 @@ def _read_task_record(
     label: str,
     missing_reason: str | None,
 ) -> dict[str, Any] | None:
-    allowed_roots = tuple((root_real / root).resolve() for root in _TASK_ROOTS)
     task_file = _resolve_contained_file(
-        root_real, relative, label, allowed_roots, missing_reason
+        root_real, relative, label, None, missing_reason
     )
     if task_file is None:
         return None
+    allowed_roots = []
+    for root in _TASK_ROOTS:
+        try:
+            allowed_roots.append((root_real / root).resolve(strict=True))
+        except (OSError, RuntimeError):
+            continue
+    if not any(_is_within(task_file, allowed) for allowed in allowed_roots):
+        raise TaskDataError(
+            f"{label} resolves outside the allowed task roots (.sbtd/tasks or ai/tasks)",
+            _CONTAINMENT_NEXT,
+        )
     record = parse_task_frontmatter(_read_utf8(task_file, label), label)
     validate_task_data(record, "taskFrontmatter", label)
     validate_task_timestamps(record, label)
     return record
+
 
 
 def _derived_id(relative: str) -> str | None:
@@ -611,7 +682,9 @@ def inspect_project_state(project_root: Path) -> StateInspection:
     try:
         root_real = _checked_root(Path(project_root))
     except TaskDataError as exc:
-        return _result("blocked", exc.reason, exc.next_step)
+        return _result(
+            "blocked", exc.reason, exc.next_step, legacy_present=None
+        )
     try:
         (root_real / _LEGACY_PATH).lstat()
     except FileNotFoundError:

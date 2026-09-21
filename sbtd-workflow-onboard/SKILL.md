@@ -123,9 +123,9 @@ Project-only `--init-projects` asks for or accepts the platform but skips this A
 Normal `init` / `reset` maintains required global Skills. Auxiliary Graft installation is explicitly selected:
 
 - `check` and `plan` report `graft` without querying npm latest or installing anything. Local verification is independent of npm availability.
-- `install-graft` shows the frozen `@nanonets/graft@0.18.0` package/native-script and global telemetry-disable plan; `--yes` authorizes that scope, not host wiring, graph creation or legacy cleanup. Node >=20 and usable npm are prerequisites.
+- `install-graft` shows the frozen `@nanonets/graft@0.18.0` package/native-script and telemetry-disable plan; `--yes` authorizes that scope, not host wiring, graph creation or legacy cleanup. Package installation needs Node >=20 and usable npm. When the probe shows a verified installed CLI and only telemetry is selected, confirm with `install-graft --telemetry-only --yes`; if the CLI disappears or becomes unverified, the handler blocks rather than widening consent to package installation.
 - The Python handler verifies archive integrity, installed package identity/version, native CLI startup and persisted telemetry opt-out. Any failed phase stays nonzero; npm exit 0 alone is not success.
-- Managed subprocesses use DNT and an empty dotenv source with LLM/cloud activation environment excluded. Installation also uses noninteractive CI to suppress this pin's postinstall background path; that is not a claim of CI validation.
+- Managed subprocesses use DNT, an empty dotenv source and forced `DOTENV_CONFIG_QUIET=true`, with inherited debug and LLM/cloud activation settings excluded. Installation also uses noninteractive CI to suppress this pin's postinstall background path; that is not a claim of CI validation.
 - GitNexus CLI installation and its dedicated MCP menu are retired; user-owned installations/configs are not removed. Python Codex/OMP wiring and the corresponding root-installer forwarding are available as described below.
 
 Readonly RTK authenticity verification runs `gain` in a private probe HOME/cwd. It does not inspect or create the user's history database; `verificationScope=isolated-probe` records that limitation.

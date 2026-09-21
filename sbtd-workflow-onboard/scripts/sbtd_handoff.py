@@ -16,6 +16,7 @@ task state and no second fact source.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -72,10 +73,9 @@ _LIST_CONTENT_FIELDS = (
 )
 _POLICY_FIELDS = frozenset({"task_opt_out", "session_opt_out"})
 
-# Lowercase hex of the UTF-8 task ID. Percent/base64url encodings preserve
-# case, so IDs that differ only by case collide on case-insensitive
-# filesystems (default APFS/NTFS); hex is collision-free, OS-safe everywhere
-# and reverses with bytes.fromhex.
+# New snapshots use a fixed SHA-256 key so valid logical IDs cannot exceed a
+# filesystem component limit. Readers also accept the original reversible hex
+# key, which remains the source of truth for existing snapshots.
 _FILENAME = re.compile(r"^\d{4}_\d{2}_\d{2}-([0-9a-f]+)\.md$")
 _PATH_SHAPE = re.compile(r"^docs/handoffs/[^/]+\.md$")
 
@@ -162,7 +162,7 @@ class HandoffStore:
 
     @staticmethod
     def _task_key(task_id: str) -> str:
-        return task_id.encode("utf-8").hex()
+        return hashlib.sha256(task_id.encode("utf-8")).hexdigest()
 
     @staticmethod
     def _key_task_id(key: str) -> str:
@@ -170,6 +170,19 @@ class HandoffStore:
             return bytes.fromhex(key).decode("utf-8")
         except (ValueError, UnicodeDecodeError):
             raise TaskStateError("handoff filename does not encode a task ID") from None
+
+    @classmethod
+    def _filename_belongs_to_task(cls, name: str, task_id: str) -> bool:
+        match = _FILENAME.match(name)
+        if match is None:
+            return False
+        key = match.group(1)
+        if key == cls._task_key(task_id):
+            return True
+        try:
+            return cls._key_task_id(key) == task_id
+        except TaskStateError:
+            return False
 
     @staticmethod
     def _render_section(title: str, lines: list[str]) -> str:
@@ -277,8 +290,7 @@ class HandoffStore:
         snapshot = self._parse_text(text)
         if snapshot["project_root"] != str(self.tasks.root):
             raise TaskStateError("handoff snapshot belongs to another project root")
-        match = _FILENAME.match(path.name)
-        if match is None or self._key_task_id(match.group(1)) != snapshot["task_id"]:
+        if not self._filename_belongs_to_task(path.name, snapshot["task_id"]):
             raise TaskStateError("handoff filename does not match its recorded task ID")
         return snapshot, original
 
@@ -316,25 +328,24 @@ class HandoffStore:
             if isinstance(verdicts, str):
                 raise TaskStateError("handoff protection cannot be verified by Git")
             return all(verdicts[relative].ignored for relative in probes)
-        # No Git repository: only an explicit root-anchored rule counts, and a
-        # later negation would silently revoke it, so none may follow.
+        # Without Git, only an exact root-anchored rule counts; the last
+        # matching positive or negation decides whether it is still effective.
         target = self.tasks._path(".gitignore")
         if not target.exists():
             return False
         if not target.is_file():
             raise TaskStateError("handoff protection target is not a regular file")
         try:
-            lines = [
-                line.strip()
-                for line in target.read_text(encoding="utf-8-sig").splitlines()
-                if line.strip() and not line.lstrip().startswith("#")
-            ]
+            lines = target.read_text(encoding="utf-8-sig").splitlines()
         except (OSError, UnicodeError):
             raise TaskStateError("handoff protection cannot be inspected") from None
-        for index, line in enumerate(lines):
+        effective: bool | None = None
+        for line in lines:
             if line in ("/docs/handoffs", IGNORE_RULE):
-                return not any(later.startswith("!") for later in lines[index + 1 :])
-        return False
+                effective = True
+            elif line in ("!/docs/handoffs", "!" + IGNORE_RULE):
+                effective = False
+        return effective is True
 
     def protect(self, *, confirmed: bool = False) -> bool:
         """Add the narrow ``/docs/handoffs/`` ignore rule; never broader.
@@ -517,20 +528,24 @@ class HandoffStore:
                 ),
             )
         meaningful = self._meaningful(snapshot)
+        latest: tuple[str, dict[str, Any], datetime] | None = None
         for relative, existing in self._scan():
             if existing["task_id"] != task_id:
                 continue
-            if self._meaningful(existing) == meaningful:
-                return HandoffResult(
-                    "unchanged",
-                    True,
-                    path=relative,
-                    snapshot=existing,
-                    reason=(
-                        "an identical snapshot is already persisted; crossing a "
-                        "day does not alone require a new handoff"
-                    ),
-                )
+            created = _parse_moment(existing["created_at"])
+            if latest is None or (created, relative) > (latest[2], latest[0]):
+                latest = (relative, existing, created)
+        if latest is not None and self._meaningful(latest[1]) == meaningful:
+            return HandoffResult(
+                "unchanged",
+                True,
+                path=latest[0],
+                snapshot=latest[1],
+                reason=(
+                    "the latest snapshot is unchanged; crossing a day alone "
+                    "does not require a new handoff"
+                ),
+            )
         if not confirmed:
             return HandoffResult(
                 "pending-confirmation",

@@ -165,6 +165,11 @@ def _validate_selected_root_batch(roots: Sequence[Path]) -> None:
     ordered = sorted(roots)
     for index, root in enumerate(ordered):
         for other in ordered[index + 1 :]:
+            if root.samefile(other):
+                _fail(
+                    "scope-conflict",
+                    "selected Graft roots must not identify the same physical repository",
+                )
             if root.is_relative_to(other) or other.is_relative_to(root):
                 _fail(
                     "scope-conflict",
@@ -313,9 +318,9 @@ def render_configuration(
         if install_template:
             from onboard import PROJECT_AGENTS_TEMPLATE
 
-            template = read_file(PROJECT_AGENTS_TEMPLATE)
-            if template not in before:
-                before = before + (b"\n\n" if before else b"") + template
+            # This operation carries explicit replacement authorization, so
+            # obsolete malformed bytes must not block adding the managed fence.
+            before = read_file(PROJECT_AGENTS_TEMPLATE)
         return project_agents_candidate(before)
     if selector == "graft-mcp":
         return codex_mcp_candidate(before, bindings)
@@ -560,9 +565,32 @@ def attach_deployment(
                 payload["shared_roots"].append(
                     {"kind": "omp-home", "path": str(omp_home), "dependent_projects": roots}
                 )
+        obsolete_skills_roots = [
+            record
+            for record in payload["shared_roots"]
+            if record["kind"] == "skills"
+            and any(
+                Path(record["path"]).is_relative_to(Path(scope["path"]))
+                and scope["dependent_projects"] == record["dependent_projects"]
+                for scope in payload["shared_roots"]
+                if scope["kind"] in {"codex-home", "omp-home"}
+            )
+        ]
+        if any(record["dependent_projects"] != roots for record in obsolete_skills_roots):
+            _fail(
+                "scope-conflict",
+                "an existing skills root has different project dependencies",
+            )
+        if obsolete_skills_roots:
+            payload["shared_roots"] = [
+                record
+                for record in payload["shared_roots"]
+                if record not in obsolete_skills_roots
+            ]
         skills_root, _source = resolve_global_skills_dir()
         if not any(
             Path(skills_root).is_relative_to(Path(record["path"]))
+            and record["dependent_projects"] == roots
             for record in payload["shared_roots"]
         ):
             payload["shared_roots"].append(
@@ -1275,6 +1303,7 @@ def execute_migration_deployment(
             if state["type"] == "absent"
             else read_file(Path(operation["target"]), state),
             bindings,
+            install_template=True,
         )
     vault = Path(manifest["payload"]["backup_root"])
     stopped = False
@@ -1552,6 +1581,9 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
                 if state["type"] == "absent"
                 else read_file(Path(operation["target"]), state),
                 bindings,
+                install_template=mode != "check" and not bool(
+                    getattr(args, "skip_project_agents", False)
+                ),
             )
         moment = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
         backup_scopes = roots + ([host_home] if host_home is not None else [])

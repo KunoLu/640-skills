@@ -96,6 +96,21 @@ class OnboardDeveloperTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
+    def test_text_initialization_reports_created_identity_not_only_plan(self) -> None:
+        completed = self.run_onboard(
+            "init-projects",
+            "--projects-root", str(self.project),
+            "--developer", "dev01",
+            "--skip-project-agents", "--yes",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(
+            (self.project / ".sbtd/developer").read_text(encoding="utf-8"),
+            "name=dev01\n",
+        )
+        final_identity = completed.stdout.rsplit("Developer identity:", 1)[-1]
+        self.assertIn("status: created", final_identity)
+
     def test_explicit_project_initialization_creates_only_the_confirmed_name(
         self,
     ) -> None:

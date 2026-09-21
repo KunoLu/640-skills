@@ -51,6 +51,45 @@ class OmpNormalWiringTests(unittest.TestCase):
             self.assertEqual(plan["status"], "not-available")
             self.assertEqual(file_contents(base), before)
 
+    def test_normal_plan_uses_template_only_when_project_agents_will_be_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = legacy_project(base, "project")
+            home = base / "home"
+            home.mkdir()
+            (root / "AGENTS.md").write_bytes(b"\xff<!-- graft:start -->broken")
+            runtime = {
+                "node": "/fixture/node",
+                "cli": "/fixture/cli.js",
+                "python": "/fixture/python",
+            }
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+
+            def plan(skip_project_agents):
+                args = Namespace(
+                    projects_root=str(root),
+                    platform="omp",
+                    graft_hooks=False,
+                    global_skills_dir=str(home / ".agent/skills"),
+                    skip_project_agents=skip_project_agents,
+                )
+                with (
+                    mock.patch.dict(os.environ, environment),
+                    mock.patch(
+                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
+                    ),
+                ):
+                    return plan_normal_wiring("init", args)
+
+            self.assertEqual(plan(False)["status"], "planned")
+            self.assertEqual(plan(True)["status"], "blocked")
+
+
     def test_planned_omp_wiring_writes_active_config_without_hooks(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

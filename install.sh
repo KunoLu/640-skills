@@ -257,6 +257,7 @@ EOF
     "catalog.json"
     "catalog.schema.json"
     "scripts/onboard.py"
+    "scripts/sbtd_project.py"
     "templates/agents/AGENTS.global.md"
     "templates/agents/AGENTS.project.md"
     "templates/skills"
@@ -848,7 +849,7 @@ ensure_graft_cli() {
   color '1;36' 'Graft CLI (optional)'
   printf '\n'
 
-  local probe_file probe_rc=0 probe_out status reason
+  local probe_file probe_rc=0 probe_out status installed reason prompt
   probe_file="$(mktemp "${TMPDIR:-/tmp}/sbtd-onboard-graft-plan.XXXXXX")"
   printf '+ %s\n' "$(command_string "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" install-graft --json)"
   "$PYTHON_BIN" "$SOURCE_ROOT/scripts/onboard.py" install-graft --json >"$probe_file" || probe_rc=$?
@@ -859,27 +860,31 @@ import sys
 try:
     data = json.load(open(sys.argv[1], encoding="utf-8"))
 except (OSError, ValueError):
-    print("unknown\tprobe did not return valid JSON")
+    print("unknown\tfalse\tprobe did not return valid JSON")
     raise SystemExit(0)
 
 status = data.get("status") or "unknown"
 reason = str(data.get("reason") or "").replace("\t", " ").replace("\n", " ")
-print(f"{status}\t{reason}")
+installed = (data.get("before") or {}).get("installed") is True
+print(f"{status}\t{str(installed).lower()}\t{reason}")
 if status != "needs-confirmation":
     raise SystemExit(0)
 plan = data.get("plan") or {}
 telemetry = plan.get("telemetry") or {}
 changes = telemetry.get("changes") or {}
 change_text = ", ".join(f"{key}={value}" for key, value in changes.items()) or "none"
-print(f"  Package: {plan.get('package') or '@nanonets/graft@0.18.0'} (frozen pin; never latest)")
-print(f"  Target: npm global prefix {plan.get('prefix') or '<unresolved>'}")
-print("  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list")
+if installed:
+    print("  Existing CLI: verified; only persist telemetry opt-out (no package install)")
+else:
+    print(f"  Package: {plan.get('package') or '@nanonets/graft@0.18.0'} (frozen pin; never latest)")
+    print(f"  Target: npm global prefix {plan.get('prefix') or '<unresolved>'}")
+    print("  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list")
 print(f"  Telemetry: set {change_text} in {telemetry.get('path') or '<unknown>'} (unknown keys preserved)")
 PY
 )"
   rm -f "$probe_file"
 
-  IFS=$'\t' read -r status reason <<< "$probe_out"
+  IFS=$'\t' read -r status installed reason <<< "$probe_out"
   case "$status" in
     already-installed)
       printf 'Graft CLI is already installed and usable; skipping.\n'
@@ -890,13 +895,23 @@ PY
       return 0
       ;;
     needs-confirmation)
-      printf 'Graft CLI install plan:\n'
+      prompt="Install the optional Graft CLI now?"
+      if [[ "$installed" == "true" ]]; then
+        printf 'Graft telemetry opt-out plan:\n'
+        prompt="Persist telemetry opt-out for the existing Graft CLI now?"
+      else
+        printf 'Graft CLI install plan:\n'
+      fi
       printf '%s\n' "$probe_out" | sed 1d
-      if ! prompt_yes_no "Install the optional Graft CLI now?" "n"; then
-        printf 'Graft CLI installation declined; continuing without it.\n'
+      if ! prompt_yes_no "$prompt" "n"; then
+        printf 'Graft optional changes declined; continuing without changes.\n'
         return 0
       fi
-      run_onboard install-graft --yes
+      if [[ "$installed" == "true" ]]; then
+        run_onboard install-graft --telemetry-only --yes
+      else
+        run_onboard install-graft --yes
+      fi
       refresh_check_json
       ;;
     *)

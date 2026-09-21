@@ -227,6 +227,7 @@ sbtd-workflow-onboard directory.
     "catalog.json",
     "catalog.schema.json",
     "scripts/onboard.py",
+    "scripts/sbtd_project.py",
     "templates/agents/AGENTS.global.md",
     "templates/agents/AGENTS.project.md",
     "templates/skills",
@@ -618,16 +619,30 @@ function Ensure-GraftCli {
       if ($pairs.Count -gt 0) { $changeText = $pairs -join ", " }
     }
   }
-  Write-Host "Graft CLI install plan:"
-  Write-Host "  Package: $package (frozen pin; never latest)"
-  Write-Host "  Target: npm global prefix $prefix"
-  Write-Host "  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list"
+  $telemetryOnly = $probe.PSObject.Properties["before"] -and $probe.before -and $probe.before.PSObject.Properties["installed"] -and $probe.before.installed
+  $prompt = "Install the optional Graft CLI now?"
+  if ($telemetryOnly) {
+    Write-Host "Graft telemetry opt-out plan:"
+    Write-Host "  Existing CLI: verified; only persist telemetry opt-out (no package install)"
+    $prompt = "Persist telemetry opt-out for the existing Graft CLI now?"
+  }
+  else {
+    Write-Host "Graft CLI install plan:"
+    Write-Host "  Package: $package (frozen pin; never latest)"
+    Write-Host "  Target: npm global prefix $prefix"
+    Write-Host "  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list"
+  }
   Write-Host "  Telemetry: set $changeText in $telemetryPath (unknown keys preserved)"
-  if (-not (Prompt-YesNo "Install the optional Graft CLI now?" "n")) {
-    Write-Host "Graft CLI installation declined; continuing without it."
+  if (-not (Prompt-YesNo $prompt "n")) {
+    Write-Host "Graft optional changes declined; continuing without changes."
     return
   }
-  Invoke-Onboard "install-graft" @("--yes")
+  if ($telemetryOnly) {
+    Invoke-Onboard "install-graft" @("--telemetry-only", "--yes")
+  }
+  else {
+    Invoke-Onboard "install-graft" @("--yes")
+  }
   Update-Check
 }
 

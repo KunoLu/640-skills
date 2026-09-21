@@ -7,7 +7,11 @@ from pathlib import Path
 from unittest import mock
 
 from onboard_contracts import ContractError, canonical_json_bytes
-from sbtd_graft_deployment import execute_migration_deployment, load_deployment_context
+from sbtd_graft_deployment import (
+    attach_deployment,
+    execute_migration_deployment,
+    load_deployment_context,
+)
 from sbtd_migration import apply_migration, runtime_versions
 from sbtd_migration_files import snapshot
 from sbtd_migration_plan import plan_migration
@@ -16,6 +20,122 @@ from tests.test_sbtd_migration_apply import legacy_project
 
 
 class DeploymentContextTests(unittest.TestCase):
+    def test_attach_deployment_normalizes_nested_skills_root_under_codex_home(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root, codex_home = base / "project", base / "codex"
+            root.mkdir()
+            roots = [str(root)]
+            payload = {
+                "projects": [
+                    {"root": str(root), "private_operations": [{"owner_kind": "gitignore"}]}
+                ],
+                "shared_operations": [],
+                "shared_roots": [
+                    {
+                        "kind": "skills",
+                        "path": str(codex_home / "skills"),
+                        "dependent_projects": roots,
+                    }
+                ],
+            }
+            with (
+                mock.patch("onboard.default_codex_home", return_value=codex_home),
+                mock.patch("onboard.detect_omp_root", return_value=None),
+                mock.patch(
+                    "onboard.resolve_global_skills_dir",
+                    return_value=(codex_home / "skills", "fixture"),
+                ),
+                mock.patch(
+                    "sbtd_graft_deployment.deployment_operations",
+                    return_value=({str(root): []}, []),
+                ),
+                mock.patch(
+                    "sbtd_graft_deployment._installation_templates", return_value=[]
+                ),
+            ):
+                attach_deployment(
+                    payload, project_only=False, hooks_authorized=False
+                )
+            self.assertEqual(
+                payload["shared_roots"],
+                [
+                    {
+                        "kind": "codex-home",
+                        "path": str(codex_home),
+                        "dependent_projects": roots,
+                    }
+                ],
+            )
+
+    def test_attach_deployment_normalizes_nested_skills_root_under_omp_home(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root, codex_home, omp_home = (
+                base / "project",
+                base / "codex",
+                base / "omp/agent",
+            )
+            root.mkdir()
+            roots = [str(root)]
+            payload = {
+                "projects": [
+                    {"root": str(root), "private_operations": [{"owner_kind": "gitignore"}]}
+                ],
+                "shared_operations": [],
+                "shared_roots": [
+                    {
+                        "kind": "skills",
+                        "path": str(omp_home / "skills"),
+                        "dependent_projects": roots,
+                    }
+                ],
+            }
+            with (
+                mock.patch("onboard.default_codex_home", return_value=codex_home),
+                mock.patch("onboard.detect_omp_root", return_value=omp_home.parent),
+                mock.patch(
+                    "onboard.resolve_global_skills_dir",
+                    return_value=(omp_home / "skills", "fixture"),
+                ),
+                mock.patch(
+                    "sbtd_graft_deployment.deployment_operations",
+                    return_value=({str(root): []}, []),
+                ),
+                mock.patch(
+                    "sbtd_graft_deployment._installation_templates", return_value=[]
+                ),
+                mock.patch(
+                    "sbtd_omp_sources.discover_omp_sources",
+                    return_value={
+                        "agent_dir": str(omp_home),
+                        "inputs": [],
+                    },
+                ),
+            ):
+                attach_deployment(
+                    payload,
+                    project_only=False,
+                    hooks_authorized=False,
+                    platform="omp",
+                )
+            self.assertEqual(
+                payload["shared_roots"],
+                [
+                    {
+                        "kind": "codex-home",
+                        "path": str(codex_home),
+                        "dependent_projects": roots,
+                    },
+                    {
+                        "kind": "omp-home",
+                        "path": str(omp_home.parent),
+                        "dependent_projects": roots,
+                    },
+                ],
+            )
+
+
     def test_context_validates_scope_and_unused_private_output_before_writes(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

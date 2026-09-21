@@ -132,18 +132,34 @@ def _event_table(
     return events, body_start + sum(len(line) for line in lines[:boundary])
 
 
+def _event_cell(value: str) -> str:
+    """Escape one cell without losing whitespace removed by Markdown table parsing."""
+    leading = len(value) - len(value.lstrip())
+    if leading == len(value):
+        return "".join(f"&#{ord(character)};" for character in value)
+    trailing = len(value.rstrip())
+
+    def escape(text: str) -> str:
+        return (
+            html.escape(text, quote=False)
+            .replace("\\", "&#92;")
+            .replace("|", "&#124;")
+            .replace("\r", "&#13;")
+            .replace("\n", "<br>")
+        )
+
+    return (
+        "".join(f"&#{ord(character)};" for character in value[:leading])
+        + escape(value[leading:trailing])
+        + "".join(f"&#{ord(character)};" for character in value[trailing:])
+    )
+
+
 def _event_row(event: dict[str, str], newline: str) -> str:
     validate_task_data(event, "stateEvent", "task state event")
     if event["at"] != "unknown":
         validate_task_timestamps({"updated_at": event["at"]}, "task state event")
-    cells = [
-        html.escape(event[key], quote=False)
-        .replace("\\", "&#92;")
-        .replace("|", "&#124;")
-        .replace("\r", "&#13;")
-        .replace("\n", "<br>")
-        for key in _EVENT_COLUMNS
-    ]
+    cells = [_event_cell(event[key]) for key in _EVENT_COLUMNS]
     return "| " + " | ".join(cells) + " |" + newline
 
 
@@ -194,15 +210,24 @@ class TaskDocument:
             scalar = spans[key]
             first = start + scalar.start_mark.index
             last = start + scalar.end_mark.index
-            if self.text[first:last].endswith(newline):
+            scalar_text = self.text[first:last]
+            header = scalar_text.splitlines()[0] if scalar_text else ""
+            if scalar.style in ("|", ">") and "#" in header:
+                encoded += " " + header[header.index("#") :]
+            if scalar_text.endswith(newline):
                 encoded += newline
             replacements.append((first, last, encoded))
         if additions:
             if node.flow_style:
                 insertion = start + node.end_mark.index - 1
-                prefix = (
-                    " " if self.text[start:insertion].rstrip().endswith(",") else ", "
-                )
+                if node.value:
+                    last_value = node.value[-1][1]
+                    trailing = self.text[
+                        start + last_value.end_mark.index : insertion
+                    ]
+                    prefix = " " if trailing.lstrip().startswith(",") else ", "
+                else:
+                    prefix = " "
                 appended = prefix + ", ".join(additions)
             else:
                 insertion = end
@@ -222,7 +247,12 @@ class TaskDocument:
                 candidate += "| at | from | to | reason | evidence |" + newline
                 candidate += "|---|---|---|---|---|" + newline + row
             else:
-                candidate = candidate[:insertion] + row + candidate[insertion:]
+                prefix = (
+                    newline
+                    if insertion and candidate[insertion - 1] not in "\r\n"
+                    else ""
+                )
+                candidate = candidate[:insertion] + prefix + row + candidate[insertion:]
         parsed = self.parse(candidate)
         added = (event,) if event is not None else ()
         expected_events = added + self.events if prepend_event else self.events + added

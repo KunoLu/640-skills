@@ -1679,6 +1679,7 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
         "skills": [],
     }
     not_checked: dict[str, list[dict[str, object]]] = {"tools": []}
+    conditional_runtime: list[dict[str, object]] = []
 
     for name in ("npm", "node"):
         item = runtime[name]
@@ -1698,13 +1699,14 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
                 )
             )
         else:
+            entry["status"] = "conditional"
             entry["reason"] = f"`{name}` is not available in PATH."
             entry["nextStep"] = (
-                runtime["advice"]
+                "Only if a selected npm-backed install or upgrade needs npm: " + str(runtime["advice"])
                 if name == "npm"
-                else "Install Node.js through nvm or the platform package manager, then rerun `check`."
+                else "Prepare Node.js only for a selected Node-backed operation."
             )
-            failed_or_missing["runtime"].append(entry)
+            conditional_runtime.append(entry)
 
     nvm = runtime["nvm"]
     nvm_entry = report_entry(
@@ -1723,9 +1725,10 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
             )
         )
     elif not runtime["npm"]["installed"]:
-        nvm_entry["reason"] = "npm is missing and nvm is not available for bootstrap."
-        nvm_entry["nextStep"] = nvm["advice"]
-        failed_or_missing["runtime"].append(nvm_entry)
+        nvm_entry["status"] = "conditional"
+        nvm_entry["reason"] = "npm and nvm are missing; bootstrap is conditional on a selected npm-backed operation."
+        nvm_entry["nextStep"] = "Only prepare nvm if that operation requires it. " + str(nvm["advice"])
+        conditional_runtime.append(nvm_entry)
 
     for item in results["tools"]:
         if item.get("optional"):
@@ -1823,12 +1826,14 @@ def build_installation_report(results: dict[str, object]) -> dict[str, object]:
             "skippedAlreadyInstalled": skipped_count,
             "failedOrMissing": failed_count,
             "notChecked": not_checked_count,
+            "conditionalRuntime": len(conditional_runtime),
             "manualConfiguration": len(manual_configuration),
         },
         "installed": installed,
         "skippedAlreadyInstalled": skipped_already_installed,
         "failedOrMissing": failed_or_missing,
         "notChecked": not_checked,
+        "conditionalRuntime": conditional_runtime,
         "manualConfiguration": manual_configuration,
     }
 
@@ -2060,7 +2065,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         for project_root in project_roots
     ]
     missing = {
-        "runtime": [] if runtime["npm"]["installed"] else ["npm"],
+        "runtime": [],
         "tools": [
             item["name"]
             for item in tools
@@ -2176,6 +2181,8 @@ def print_installation_report(
 
     print("\nNot checked:")
     print_report_entries(report["notChecked"]["tools"])
+    print("\nConditional runtime prerequisites (no install selected):")
+    print_report_entries(cast(list[dict[str, object]], report["conditionalRuntime"]))
 
     print("\nManual configuration required:")
     manual_items = report["manualConfiguration"]
@@ -2224,7 +2231,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     )
     if not npm["installed"]:
         print(
-            f"  action: ask the user to install npm via nvm, then {shell_prefix()}run `{onboard_command('ensure-npm', '--yes')}`."
+            f"  action: npm is needed only for a selected npm-backed install or upgrade; if that action is confirmed, {shell_prefix()}run `{onboard_command('ensure-npm', '--yes')}`."
         )
 
     print("\nCLI tools:")
@@ -2264,6 +2271,13 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         print(f"  reason: {graft['reason']}")
     if graft.get("nextStep"):
         print(f"  next: {graft['nextStep']}")
+    wiring = results.get("graftWiring")
+    if isinstance(wiring, dict):
+        print(f"\nGraft wiring: {wiring.get('status')}")
+        if wiring.get("reason"):
+            print(f"  reason: {wiring['reason']}")
+        if wiring.get("nextStep"):
+            print(f"  next: {wiring['nextStep']}")
 
     print("\nSkills:")
     for item in results["skills"]:
@@ -2316,7 +2330,7 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         if missing["skills"]:
             print("- skills: " + ", ".join(missing["skills"]))
         print(
-            "Resolve required installation prerequisites; optional Graft availability does not block unrelated safe work."
+            "Resolve prerequisites for the selected operation only; missing npm and optional Graft do not block unrelated safe work."
         )
     else:
         print("\nMissing summary: none")
@@ -6232,6 +6246,14 @@ def build_plan_payload(
 def print_plan(payload: dict[str, object]) -> None:
     print(f"Mode: {payload['mode']}")
     print(f"Platform: {payload['platform']}")
+    for label, key in (("Optional Graft CLI", "graft"), ("Graft wiring", "graftWiring")):
+        details = payload.get(key)
+        if isinstance(details, dict):
+            print(f"{label}: {details.get('status')}")
+            if details.get("reason"):
+                print(f"  reason: {details['reason']}")
+            if details.get("nextStep"):
+                print(f"  next: {details['nextStep']}")
     for item in payload["operations"]:
         if item["sameLocation"]:
             exists = "same source and target"
@@ -6391,7 +6413,28 @@ def run(mode: str, args: argparse.Namespace) -> int:
     # make a later one report checks it never skipped.
     UNVERIFIED_CHECKS.clear()
     if mode == "migration":
-        from sbtd_migration import run_migration
+        try:
+            from sbtd_migration import run_migration
+        except ImportError:
+            reason = "the installed migration runtime or its declared dependencies are unavailable"
+            response = {
+                "mode": "migration",
+                "phase": args.phase,
+                "status": "blocked",
+                "manifest_id": None,
+                "verification_id": None,
+                "projects": [],
+                "reason": reason,
+                "nextStep": "Restore the complete installed Skill and its declared dependencies before retrying.",
+                "migration": {},
+            }
+            if args.json:
+                print(json.dumps(response, ensure_ascii=False, allow_nan=False))
+            else:
+                print(f"Migration {args.phase}: blocked")
+                print(reason)
+                print(response["nextStep"])
+            return 2
 
         return run_migration(args)
     if mode == "recovery":
@@ -6459,7 +6502,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
     if mode == "install-rtk":
         return install_rtk(args)
     if mode == "install-graft":
-        payload, code = install_graft(confirmed=bool(args.yes))
+        payload, code = install_graft(
+            confirmed=bool(args.yes),
+            telemetry_only=bool(args.telemetry_only),
+        )
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         else:
@@ -6717,6 +6763,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
         ]
         developer_plan = ensure_developer_identities(developer_plan)
         plan_payload["developerPlan"] = developer_plan
+        if not args.json:
+            print_developer_plan(developer_plan)
         developer_exit = developer_plan_exit_code(developer_plan)
         if developer_exit:
             plan_payload["sbtdProjectSetup"] = build_sbtd_project_setup(
@@ -6801,9 +6849,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
         plan_payload["graftWiring"] = wiring_result
         plan_payload["operationResults"] = operation_results
         if wiring_exit:
+            wiring_status = "blocked" if wiring_exit == 2 else "failed"
             for project in cast(list[dict[str, object]], sbtd_report["projects"]):
-                project.update(status="failed", reason="host wiring did not complete", nextStep="Inspect the preserved wiring results and originals.")
-            sbtd_report["status"] = "failed"
+                project.update(status=wiring_status, reason="host wiring did not complete", nextStep="Inspect the preserved wiring results and originals.")
+            sbtd_report["status"] = wiring_status
     if args.json:
         # One run, one root object. The plan was held back above so it can be
         # merged here; flushing it earlier made stdout two concatenated
@@ -6833,10 +6882,12 @@ def run(mode: str, args: argparse.Namespace) -> int:
     else:
         print_sbtd_project_setup_report(sbtd_report)
         if wiring_plan["status"] != "skipped":
-            print("Codex wiring: " + str(wiring_result["status"]))
+            print("Host wiring: " + str(wiring_result["status"]))
             if wiring_result.get("hooks") == "configured-needs-host-trust":
                 print("Hooks configured only: enable supported Codex hooks and trust their exact hashes in the host before use.")
             print("Host-event acceptance is separate from file and graph verification.")
+    if wiring_exit:
+        return wiring_exit
     setup_exit = project_status_exit_code(sbtd_report["status"])
     if setup_exit:
         return setup_exit
@@ -6928,6 +6979,10 @@ def build_parser() -> argparse.ArgumentParser:
     graft_install.add_argument(
         "--yes", action="store_true",
         help="Confirm the pinned global package/native-script and telemetry-disable plan.",
+    )
+    graft_install.add_argument(
+        "--telemetry-only", action="store_true",
+        help="Persist only telemetry opt-out; refuse package installation if the verified CLI is no longer present.",
     )
     graft_install.add_argument(
         "--json", action="store_true", help="Print one machine-readable installation result."

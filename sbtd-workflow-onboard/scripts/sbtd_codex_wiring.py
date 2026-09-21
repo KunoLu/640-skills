@@ -36,7 +36,7 @@ Exports (the complete public surface):
   same ``-E -s`` startup hardening plus the managed launcher ``hook``
   invocation with explicit
   ``--root/--node/--entry/--event`` flags: SessionStart (matcher
-  ``startup|resume|compact``, 10s), UserPromptSubmit (15s), PostToolUse
+  ``startup|resume|clear|compact``, 10s), UserPromptSubmit (15s), PostToolUse
   (matcher ``apply_patch|Write|Edit|MultiEdit``, 10s) and Stop (130s — the
   managed bridge synchronously completes the pinned package's structural
   sync, whose native subprocess cap is 120s, before the Stop handler, so the
@@ -133,7 +133,7 @@ _CMD_FORBIDDEN = frozenset('&|<>^%!()"')
 # Stop budget adds launcher, Node startup and teardown headroom on top of the
 # cap. Every other event keeps its budget.
 _HOOK_SPECS = (
-    ("SessionStart", "startup|resume|compact", 10, "session-start"),
+    ("SessionStart", "startup|resume|clear|compact", 10, "session-start"),
     ("UserPromptSubmit", None, 15, "prompt"),
     ("PostToolUse", "apply_patch|Write|Edit|MultiEdit", 10, "post-edit"),
     ("Stop", None, 130, "stop"),
@@ -476,23 +476,26 @@ def _merge_hook_event(
                     "a managed hook command was changed and requires reconciliation",
                 )
             hits.append((group_index, entry_index))
-    if len(hits) == 1:
+    if hits:
+        if len(hits) != 1:
+            _fail(
+                "ownership-conflict",
+                "duplicate managed hooks require explicit reconciliation",
+            )
         group_index, entry_index = hits[0]
         group = groups[group_index]
-        if group["hooks"][entry_index] == desired and group.get("matcher") == matcher:
-            return
-    by_group: dict[int, list[int]] = {}
-    for group_index, entry_index in hits:
-        by_group.setdefault(group_index, []).append(entry_index)
-    emptied: list[int] = []
-    for group_index, indexes in by_group.items():
-        entries = groups[group_index]["hooks"]
-        for entry_index in sorted(indexes, reverse=True):
-            del entries[entry_index]
-        if not entries and set(groups[group_index]).issubset({"matcher", "hooks"}):
-            emptied.append(group_index)
-    for group_index in sorted(emptied, reverse=True):
-        del groups[group_index]
+        entries = group["hooks"]
+        if len(entries) != 1 or set(group) - {"matcher", "hooks"}:
+            _fail(
+                "ownership-conflict",
+                "a mixed managed hook group requires explicit reconciliation",
+            )
+        entries[entry_index] = desired
+        if matcher is None:
+            group.pop("matcher", None)
+        else:
+            group["matcher"] = matcher
+        return
     owned_group: dict[str, Any] = {}
     if matcher is not None:
         owned_group["matcher"] = matcher
@@ -539,6 +542,21 @@ def codex_hooks_candidate(
             hooks[event] = groups
         elif not isinstance(groups, list):
             _fail("invalid-config", "a hook event section must be a JSON array")
+        if any(
+            not isinstance(group, dict)
+            or (
+                "hooks" in group
+                and (
+                    not isinstance(group["hooks"], list)
+                    or any(not isinstance(entry, dict) for entry in group["hooks"])
+                )
+            )
+            for group in groups
+        ):
+            _fail(
+                "invalid-config",
+                "a hook event contains an unsupported foreign container",
+            )
         for paths in resolved:
             _merge_hook_event(groups, paths, matcher, timeout, event_flag)
     try:

@@ -304,5 +304,27 @@ class DeveloperIdentityTests(unittest.TestCase):
         self.assertFalse((self.root / ".sbtd").exists())
 
 
+    def test_protection_write_verification_failure_reports_gitignore_completion(
+        self,
+    ) -> None:
+        from sbtd_task_state import TaskStateError
+
+        (self.root / ".gitignore").unlink()
+        store = DeveloperStore(self.root)
+        verification_failure = TaskStateError(
+            "local protection cannot be verified by Git"
+        )
+        with mock.patch.object(
+            store.tasks,
+            "_local_protected",
+            side_effect=[False, False, verification_failure],
+        ):
+            result = store.ensure("dev01", confirmed=True, protect=True)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.completed_steps, (".gitignore",))
+        self.assertEqual((self.root / ".gitignore").read_bytes(), b"/.sbtd/\n")
+        self.assertFalse((self.root / ".sbtd/developer").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

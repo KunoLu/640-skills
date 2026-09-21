@@ -89,6 +89,21 @@ def _task_md(
     lines.append("")
     lines.append("# task " + identity)
     lines.append("")
+    provenance = {
+        field: {"source": source, "status": "unproven"}
+        for field, value, source in (
+            ("created_at", created_at, "legacy task.json: createdAt (sidecar or private original)"),
+            ("updated_at", updated_at, "legacy task.json: no recorded update time"),
+            ("completed_at", completed_at, "legacy task.json: completedAt (sidecar or private original)"),
+        )
+        if value is None
+    }
+    lines.extend((
+        "```sbtd-legacy-time-provenance",
+        json.dumps(provenance),
+        "```",
+        "",
+    ))
     if events:
         lines.append("## 状态事件")
         lines.append("")
@@ -302,7 +317,6 @@ class TaskProjectionTests(unittest.TestCase):
             _projection(_legacy_source(), source_path=archived_path)
         projection = _done_projection(archived_path)
         self.assertEqual(projection.document.frontmatter["status"], "done")
-        self.assertEqual(projection.aliases, ("09-01-alpha",))
 
     def test_unfinished_task_with_completion_facts_is_rejected(self):
         with self.assertRaises(ContractError):
@@ -413,6 +427,52 @@ class TaskProjectionTests(unittest.TestCase):
                         source_raw, original=original, sha=None, redacted=redacted
                     ),
                 )
+
+    def test_completion_event_cannot_invent_source_evidence(self):
+        event = {**DONE_EVENT, "evidence": "invented acceptance record"}
+        with self.assertRaises(ContractError):
+            _projection(
+                _legacy_source(status="completed"),
+                task_raw=_task_md(status="done", events=(event,)),
+            )
+
+    def test_null_legacy_times_require_source_provenance_in_body(self):
+        candidate = _task_md()
+        marker = b"```sbtd-legacy-time-provenance\n"
+        start = candidate.index(marker)
+        end = candidate.index(b"```\n", start + len(marker)) + len(b"```\n")
+        with self.assertRaises(ContractError):
+            _projection(task_raw=candidate[:start] + candidate[end:])
+        with self.assertRaises(ContractError):
+            _projection(task_raw=candidate.replace(
+                b"legacy task.json: createdAt (sidecar or private original)", b"unrelated-source"
+            ))
+
+    def test_old_unknown_fixed_field_does_not_replace_current_schema_field(self):
+        projection = _projection(_legacy_source(schema_version="old-custom-value"))
+        self.assertEqual(projection.document.frontmatter["schema_version"], 1)
+
+    def test_sidecar_schema_version_is_exactly_an_integer_one(self):
+        source_raw = _json_bytes(_legacy_source())
+        for version in (b"1.0", b"1e0", b"true", b'"1"'):
+            sidecar = _sidecar(source_raw).replace(b'"schema_version": 1', b'"schema_version": ' + version)
+            with self.subTest(version=version), self.assertRaises(ContractError):
+                _projection(sidecar_raw=sidecar)
+
+    def test_unknown_legacy_source_keys_cannot_become_live_extensions(self):
+        with self.assertRaises(ContractError):
+            _projection(
+                task_raw=_task_md(extra=(("custom_unknown", {"nested": ["x", 2]}),))
+            )
+        _projection(task_raw=_task_md(extra=(("current_extension", {"ok": True}),)))
+
+    def test_archive_root_blocks_unfinished_tasks(self):
+        archive_root = ".trellis/tasks/archive/task.json"
+        with self.assertRaises(ContractError):
+            _projection(source_path=archive_root)
+        self.assertEqual(
+            _done_projection(archive_root).document.frontmatter["status"], "done"
+        )
 
     def test_sidecar_shape_and_source_binding(self):
         source_raw = _json_bytes(_legacy_source())

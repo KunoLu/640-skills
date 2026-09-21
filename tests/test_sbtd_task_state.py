@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "sbtd-workflow-onboard" / "scripts"))
 
-from sbtd_task_state import TaskStateError, TaskStore
+from sbtd_task_state import TaskSnapshot, TaskStateError, TaskStore
 
 
 class TaskStoreTests(unittest.TestCase):
@@ -34,6 +34,18 @@ class TaskStoreTests(unittest.TestCase):
             check=True,
         )
         (self.root / ".gitignore").write_text("/.sbtd/\n", encoding="utf-8")
+
+    def _case_variant_transfer_records(
+        self,
+        source: TaskSnapshot,
+        source_directory: str,
+        variant_directory: str,
+    ) -> tuple[TaskSnapshot, ...]:
+        variant = self.root / variant_directory
+        if not variant.exists():
+            (self.root / source_directory).rename(variant)
+        suffix = source.task_path.removeprefix(source_directory + "/")
+        return (TaskSnapshot(f"{variant_directory}/{suffix}", source.document),)
 
     def test_default_creation_is_persisted_and_selected_without_identity(self) -> None:
         store = TaskStore(self.root)
@@ -1237,6 +1249,248 @@ class TaskStoreTests(unittest.TestCase):
             (source / "private.bin").read_bytes(), b"private synthetic attachment"
         )
 
+
+    def test_new_child_under_completed_ancestor_requires_explicit_reopen(self) -> None:
+        store = TaskStore(self.root)
+        parent = store.create("parent", body="Parent\n", confirmed=True)
+        for status in ("in-progress", "checking", "done"):
+            store.transition(
+                "parent", status, reason="progress", evidence="accepted", confirmed=True
+            )
+        parent_before = (self.root / parent.task_path).read_bytes()
+        pointer = (self.root / ".sbtd/active-task.json").read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.create(
+                "child", parent="parent", body="Child\n", confirmed=True
+            )
+        self.assertFalse((self.root / ".sbtd/tasks/child").exists())
+        self.assertEqual((self.root / parent.task_path).read_bytes(), parent_before)
+        self.assertEqual((self.root / ".sbtd/active-task.json").read_bytes(), pointer)
+
+    def test_promotion_rejects_shared_index_subtree_before_writing(self) -> None:
+        store = TaskStore(self.root)
+        source = store.create(
+            "index.md/child", body="Must not create an index directory.\n", confirmed=True
+        )
+        with self.assertRaises(TaskStateError):
+            store.promote("index.md/child", confirmed=True)
+        self.assertTrue((self.root / source.task_path).exists())
+        self.assertFalse((self.root / "ai").exists())
+
+    def test_archive_rejects_source_target_ancestry_before_writing(self) -> None:
+        task_id = "archive"
+        store = TaskStore(self.root)
+        source = store.create(
+            task_id, body="Archive namespace source.\n", shared=True, confirmed=True
+        )
+        for status in ("in-progress", "checking", "done"):
+            store.transition(
+                task_id, status, reason="progress", evidence="accepted", confirmed=True
+            )
+        before = (self.root / source.task_path).read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.archive(task_id, reason="archive", evidence="approved", confirmed=True)
+        self.assertEqual((self.root / source.task_path).read_bytes(), before)
+
+    def test_promotion_rejects_case_variant_shared_index_subtree_before_writing(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        source = store.create(
+            "index.md/child", body="Must not create an index directory.\n", confirmed=True
+        )
+        records = self._case_variant_transfer_records(
+            source, ".sbtd/tasks/index.md", ".sbtd/tasks/Index.md"
+        )
+        variant_path = self.root / records[0].task_path
+        before = variant_path.read_bytes()
+        with (
+            mock.patch.object(store, "_records", return_value=iter(records)),
+            self.assertRaises(TaskStateError),
+        ):
+            store.promote("index.md/child", confirmed=True)
+        self.assertEqual(variant_path.read_bytes(), before)
+        self.assertFalse((self.root / "ai").exists())
+
+    def test_archive_rejects_case_variant_source_target_ancestry_before_writing(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        source = store.create(
+            "archive", body="Archive namespace source.\n", shared=True, confirmed=True
+        )
+        for status in ("in-progress", "checking", "done"):
+            store.transition(
+                "archive", status, reason="progress", evidence="accepted", confirmed=True
+            )
+        records = self._case_variant_transfer_records(
+            source, "ai/tasks/archive", "ai/tasks/Archive"
+        )
+        variant_path = self.root / records[0].task_path
+        before = variant_path.read_bytes()
+        with (
+            mock.patch.object(store, "_records", return_value=iter(records)),
+            self.assertRaises(TaskStateError),
+        ):
+            store.archive("archive", reason="archive", evidence="approved", confirmed=True)
+        self.assertEqual(variant_path.read_bytes(), before)
+
+    def test_uninspectable_task_subtree_aborts_create_without_writing(self) -> None:
+        store = TaskStore(self.root)
+        existing = store.create("existing", body="Keep this task.\n", confirmed=True)
+        original_walk = os.walk
+
+        def unreadable_walk(path, *args, **kwargs):
+            if Path(path) == self.root / ".sbtd/tasks":
+                kwargs["onerror"](PermissionError("synthetic unreadable subtree"))
+            return original_walk(path, *args, **kwargs)
+
+        with (
+            mock.patch("sbtd_task_state.os.walk", side_effect=unreadable_walk),
+            self.assertRaises(TaskStateError),
+        ):
+            store.create("new", body="Must not be created.\n", confirmed=True)
+        self.assertTrue((self.root / existing.task_path).exists())
+        self.assertFalse((self.root / ".sbtd/tasks/new").exists())
+
+    def test_reopen_rejects_unknown_mode_on_done_ancestor_without_writing(self) -> None:
+        store = TaskStore(self.root)
+        parent = store.create("parent", body="Parent\n", confirmed=True)
+        child = store.create("child", parent="parent", body="Child\n", confirmed=True)
+        for task_id in ("child", "parent"):
+            for status in ("in-progress", "checking", "done"):
+                store.transition(
+                    task_id, status, reason="progress", evidence="accepted", confirmed=True
+                )
+        parent_path = self.root / parent.task_path
+        unknown = store.inspect("parent").document.updated(
+            {
+                "workflow_mode": None,
+                "mode_source": "migration-unknown",
+                "mode_note": "legacy mode is unknown",
+            }
+        )
+        parent_path.write_text(unknown.text, encoding="utf-8")
+        before = {
+            parent_path: parent_path.read_bytes(),
+            self.root / child.task_path: (self.root / child.task_path).read_bytes(),
+        }
+        with self.assertRaises(TaskStateError):
+            store.reopen(
+                "child", reason="new gap", evidence="reproduced", confirmed=True
+            )
+        self.assertEqual(
+            {path: path.read_bytes() for path in before}, before
+        )
+
+    def test_reopen_skips_unknown_mode_planned_ancestor_that_stays_untouched(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        parent = store.create("parent", body="Parent\n", confirmed=True)
+        store.create("child", parent="parent", body="Child\n", confirmed=True)
+        for status in ("in-progress", "checking", "done"):
+            store.transition(
+                "child", status, reason="progress", evidence="accepted", confirmed=True
+            )
+        parent_path = self.root / parent.task_path
+        unknown = store.inspect("parent").document.updated(
+            {
+                "workflow_mode": None,
+                "mode_source": "migration-unknown",
+                "mode_note": "legacy mode is unknown",
+            }
+        )
+        parent_path.write_text(unknown.text, encoding="utf-8")
+        parent_before = parent_path.read_bytes()
+
+        reopened = store.reopen(
+            "child", reason="new gap", evidence="reproduced", confirmed=True
+        )
+
+        self.assertEqual(reopened.document.frontmatter["status"], "planned")
+        self.assertEqual(parent_path.read_bytes(), parent_before)
+
+    def test_create_rejects_history_that_conflicts_with_planned_frontmatter(self) -> None:
+        body = """## 状态事件
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| unknown | unknown | done | old completion | legacy |
+"""
+        with self.assertRaises(TaskStateError):
+            TaskStore(self.root).create("conflict", body=body, confirmed=True)
+        self.assertFalse((self.root / ".sbtd/tasks/conflict").exists())
+
+    def test_future_event_with_null_updated_at_blocks_transition(self) -> None:
+        store = TaskStore(self.root)
+        snapshot = store.create("future-event", body="Task\n", confirmed=True)
+        future = "2999-01-01T00:00:00Z"
+        changed = snapshot.document.updated(
+            {"updated_at": None},
+            event={
+                "at": future,
+                "from": "planned",
+                "to": "planned",
+                "reason": "historical note",
+                "evidence": "preserved",
+            },
+        )
+        path = self.root / snapshot.task_path
+        path.write_text(changed.text, encoding="utf-8")
+        before = path.read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.transition(
+                "future-event",
+                "in-progress",
+                reason="start",
+                evidence="approved",
+                confirmed=True,
+            )
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_transfer_reports_published_target_when_candidate_cleanup_fails(self) -> None:
+        store = TaskStore(self.root)
+        store.create("cleanup-failure", body="Task\n", confirmed=True)
+        target = "ai/tasks/cleanup-failure"
+        with (
+            mock.patch(
+                "sbtd_task_state.shutil.rmtree",
+                side_effect=PermissionError("synthetic cleanup failure"),
+            ),
+            self.assertRaises(TaskStateError) as failure,
+        ):
+            store.promote("cleanup-failure", confirmed=True)
+        self.assertEqual(failure.exception.completed_steps, (target,))
+        self.assertTrue((self.root / target / "task.md").exists())
+
+    def test_taskstore_normalizes_malformed_task_errors_at_its_boundary(self) -> None:
+        store = TaskStore(self.root)
+        created = store.create("malformed", body="Task\n", confirmed=True)
+        path = self.root / created.task_path
+        path.write_text("---\nid: [\n---\n", encoding="utf-8")
+        with self.assertRaises(TaskStateError):
+            store.inspect("malformed")
+
+    def test_non_git_leading_space_ignore_rule_does_not_protect_state(self) -> None:
+        shutil.rmtree(self.root / ".git")
+        (self.root / ".gitignore").write_text(" /.sbtd/\n", encoding="utf-8")
+        with self.assertRaises(TaskStateError):
+            TaskStore(self.root).create(
+                "unprotected", body="Task\n", confirmed=True
+            )
+        self.assertFalse((self.root / ".sbtd").exists())
+
+    def test_git_root_with_trailing_space_keeps_its_binding(self) -> None:
+        spaced = self.root.parent / "project "
+        self.root.rename(spaced)
+        self.root = spaced
+        store = TaskStore(self.root)
+        self.assertEqual(store.current_binding(), "main")
+        self.assertEqual(
+            store.create("space-root", body="Task\n", confirmed=True).task_path,
+            ".sbtd/tasks/space-root/task.md",
+        )
 
 if __name__ == "__main__":
     unittest.main()

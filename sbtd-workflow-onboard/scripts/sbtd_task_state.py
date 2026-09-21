@@ -124,7 +124,7 @@ class TaskStore:
             if "not a git repository" in top.stderr:
                 return None
             raise TaskStateError("Git repository binding cannot be inspected")
-        if Path(top.stdout.strip()).resolve() != self.root:
+        if Path(top.stdout.removesuffix("\n")).resolve() != self.root:
             raise TaskStateError(
                 "selected project is not the actual Git repository root"
             )
@@ -159,7 +159,7 @@ class TaskStore:
                 raise TaskStateError("local protection target is not a regular file")
             try:
                 lines = [
-                    line.strip()
+                    line
                     for line in target.read_text(encoding="utf-8-sig").splitlines()
                     if line.strip() and not line.lstrip().startswith("#")
                 ]
@@ -214,7 +214,15 @@ class TaskStore:
             content += b"\n"
         content += b"/.sbtd/\n"
         self._write(".gitignore", content, original)
-        if not self._local_protected(binding, (".sbtd/",)):
+        try:
+            protected = self._local_protected(binding, (".sbtd/",))
+        except TaskStateError as error:
+            raise TaskStateError(
+                error.reason,
+                error.next_step,
+                completed_steps=tuple(dict.fromkeys((".gitignore", *error.completed_steps))),
+            ) from None
+        if not protected:
             raise TaskStateError(
                 "local protection was written but could not be verified",
                 completed_steps=(".gitignore",),
@@ -226,9 +234,11 @@ class TaskStore:
         try:
             with open_regular_file(path, "selected task") as handle:
                 text = handle.read().decode("utf-8")
+            return TaskDocument.parse(text)
+        except TaskDataError as exc:
+            raise TaskStateError(exc.reason, exc.next_step) from None
         except (OSError, UnicodeDecodeError):
             raise TaskStateError("selected task cannot be read as UTF-8") from None
-        return TaskDocument.parse(text)
 
     def _records(self) -> Iterator[TaskSnapshot]:
         for relative in (".sbtd/tasks", "ai/tasks"):
@@ -237,7 +247,12 @@ class TaskStore:
                 continue
             if not base.is_dir():
                 raise TaskStateError("task storage root is not a directory")
-            for directory, _, files in os.walk(base, followlinks=False):
+            def unreadable(error: OSError) -> None:
+                raise TaskStateError("task storage cannot be fully inspected") from error
+
+            for directory, _, files in os.walk(
+                base, followlinks=False, onerror=unreadable
+            ):
                 if "task.md" not in files:
                     continue
                 relative_path = (
@@ -409,6 +424,8 @@ class TaskStore:
             + "---\n"
             + body
         )
+        if not self._history(document)[1]:
+            raise TaskStateError("new task event history conflicts with its planned state")
         storage = (
             "ai/tasks"
             if shared or selected_mode in ("lite", "strict")
@@ -429,6 +446,14 @@ class TaskStore:
         candidate = existing or TaskSnapshot(relative, document)
         desired = {**records, task_id: candidate}
         self._validate_parents(desired)
+        if existing is None and parent is not None:
+            current = parent
+            while current is not None:
+                if records[current].document.frontmatter["status"] == "done":
+                    raise TaskStateError(
+                        "new child requires its completed ancestor to be explicitly reopened"
+                    )
+                current = records[current].document.frontmatter.get("parent")
         index_before: bytes | None = None
         index_after: bytes | None = None
         if relative.startswith("ai/tasks/"):
@@ -522,13 +547,17 @@ class TaskStore:
     @staticmethod
     def _now(document: TaskDocument) -> str:
         now = datetime.now().astimezone()
-        for field in ("created_at", "updated_at"):
-            previous = document.frontmatter[field]
-            if (
-                previous is not None
-                and datetime.fromisoformat(previous.replace("Z", "+00:00")) > now
-            ):
-                raise TaskStateError("task timestamps are ahead of the observed clock")
+        timestamps = [
+            value
+            for field in ("created_at", "updated_at", "completed_at")
+            if (value := document.frontmatter[field]) is not None
+        ]
+        timestamps.extend(event["at"] for event in document.events if event["at"] != "unknown")
+        if any(
+            datetime.fromisoformat(value.replace("Z", "+00:00")) > now
+            for value in timestamps
+        ):
+            raise TaskStateError("task timestamps are ahead of the observed clock")
         return now.isoformat()
 
     def _save(self, selected: TaskSnapshot, candidate: TaskDocument) -> TaskSnapshot:
@@ -710,6 +739,7 @@ class TaskStore:
             previous = ancestor.document
             if previous.frontmatter["status"] != "done":
                 continue
+            self._require_known_mode(previous)
             if previous.frontmatter["branch"] != binding:
                 raise TaskStateError("completed ancestor belongs to a different branch")
             if ancestor.task_path.startswith(".sbtd/"):
@@ -877,6 +907,7 @@ class TaskStore:
         self._require_local_protection(binding, temporary + "/task/task.md")
         candidate_root = self._path(temporary)
         candidate_root.mkdir(mode=0o700, parents=True)
+        published = False
         try:
             shutil.copytree(self._path(source), candidate_root / "task", symlinks=True)
             if (
@@ -902,8 +933,17 @@ class TaskStore:
                 )
             destination.parent.mkdir(parents=True, exist_ok=True)
             os.rename(candidate_root / "task", destination)
+            published = True
         finally:
-            shutil.rmtree(candidate_root)
+            try:
+                shutil.rmtree(candidate_root)
+            except OSError:
+                if published:
+                    raise TaskStateError(
+                        "task transfer published but candidate cleanup failed",
+                        completed_steps=(target,),
+                    ) from None
+                raise
 
     def _completion_time(self, document: TaskDocument) -> str | None:
         if document.frontmatter["status"] != "done":
@@ -1103,8 +1143,16 @@ class TaskStore:
                 "task directory contains records outside the explicit promotion scope",
                 "review the separate logical tasks and explicitly include each authorized task; path nesting is not ownership",
             )
-        if target_dir == "ai/tasks/index.md":
+        source_key = source_dir.casefold()
+        target_key = target_dir.casefold()
+        if target_key == "ai/tasks/index.md" or target_key.startswith(
+            "ai/tasks/index.md/"
+        ):
             raise TaskStateError("task storage conflicts with the shared index")
+        if target_key.startswith(source_key + "/") or source_key.startswith(
+            target_key + "/"
+        ):
+            raise TaskStateError("task transfer source and target directories overlap")
         source_manifest = self._tree_manifest(source_dir)
         target = self._path(target_dir)
         if retire_source and not target.exists():
@@ -1230,8 +1278,11 @@ class TaskStore:
                 os.rename(self._path(source_dir), destination)
                 written.append(retained)
         except TaskDataError as exc:
+            completed = tuple(
+                dict.fromkeys((*written, *getattr(exc, "completed_steps", ())))
+            )
             raise TaskStateError(
-                exc.reason, exc.next_step, completed_steps=tuple(written)
+                exc.reason, exc.next_step, completed_steps=completed
             ) from None
         except OSError:
             raise TaskStateError(

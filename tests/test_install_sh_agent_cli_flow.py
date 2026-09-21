@@ -10,7 +10,6 @@ import textwrap
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 INSTALL_SH = ROOT / "install.sh"
 INSTALL_PS1 = ROOT / "install.ps1"
@@ -105,9 +104,15 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 ;;
               install-graft)
                 confirmed=false
+                telemetry_only=false
                 for arg in "$@"; do
                   [ "$arg" = "--yes" ] && confirmed=true
+                  [ "$arg" = "--telemetry-only" ] && telemetry_only=true
                 done
+                  if [ "$confirmed" = false ] && [ -f "$FAKE_STATE_DIR/graft-telemetry-only" ]; then
+                    printf '{"mode":"install-graft","status":"needs-confirmation","reason":"persist telemetry opt-out only","plan":{"telemetry":{"path":"/tmp/fake-home/.graft/telemetry.json","changes":{"enabled":false}}},"before":{"installed":true}}\n'
+                    exit 2
+                  fi
                 if [ "$confirmed" = false ]; then
                   if [ -f "$FAKE_STATE_DIR/graft" ]; then
                     printf '{"mode":"install-graft","status":"already-installed","reason":"pinned Graft CLI already verified usable","plan":{},"before":{"installed":true}}\n'
@@ -123,6 +128,11 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                   fi
                   printf '{"mode":"install-graft","status":"needs-confirmation","reason":"explicit confirmation is required before any download, install, or telemetry write; no changes were made","plan":{"package":"@nanonets/graft@0.18.0","prefix":"/tmp/fake-prefix","telemetry":{"path":"/tmp/fake-home/.graft/telemetry.json","changes":{"enabled":false}}},"before":{"installed":false}}\n'
                   exit 2
+                fi
+                if [ "$telemetry_only" = true ]; then
+                  : > "$FAKE_STATE_DIR/telemetry-disabled"
+                  printf '{"mode":"install-graft","status":"already-installed"}\n'
+                  exit 0
                 fi
                 if [ -f "$FAKE_STATE_DIR/graft-fails" ]; then
                   printf '{"mode":"install-graft","status":"failed","stage":"npm-install","reason":"npm exited 1"}\n'
@@ -944,6 +954,31 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             npm_log.exists(),
             "wrapper must not run npm directly; the Python probe owns the plan",
         )
+
+    def test_graft_existing_cli_requests_only_telemetry_consent(self) -> None:
+        (self.state_dir / "npm").touch()
+        (self.state_dir / "agent").touch()
+        (self.state_dir / "graft-telemetry-only").touch()
+        completed = self.run_installer()
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("telemetry opt-out plan", completed.stdout)
+        self.assertIn("no package install", completed.stdout)
+        self.assertNotIn("Graft CLI install plan:", completed.stdout)
+        self.assertTrue((self.state_dir / "telemetry-disabled").exists())
+        self.assertFalse((self.state_dir / "graft").exists())
+
+    def test_powershell_existing_graft_requests_only_telemetry_consent(self) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        (self.state_dir / "npm").touch()
+        (self.state_dir / "agent").touch()
+        (self.state_dir / "graft-telemetry-only").touch()
+        completed = self.run_powershell_installer(runtime, environment)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("telemetry opt-out plan", completed.stdout)
+        self.assertIn("no package install", completed.stdout)
+        self.assertNotIn("Graft CLI install plan:", completed.stdout)
+        self.assertTrue((self.state_dir / "telemetry-disabled").exists())
+        self.assertFalse((self.state_dir / "graft").exists())
 
     def test_graft_decline_continues_onboarding_without_install(self) -> None:
         (self.state_dir / "npm").touch()

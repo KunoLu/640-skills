@@ -264,10 +264,14 @@ class DeveloperStore:
             )
         completed: list[str] = []
         try:
-            if planned.needs_protection and self.tasks.protect_local_state(
-                confirmed=True
-            ):
-                completed.append(".gitignore")
+            if planned.needs_protection:
+                try:
+                    protected = self.tasks.protect_local_state(confirmed=True)
+                except TaskStateError as error:
+                    completed.extend(error.completed_steps)
+                    raise
+                if protected:
+                    completed.append(".gitignore")
             current = self.resolve()
             if current.status == "ready":
                 if current.name == name:

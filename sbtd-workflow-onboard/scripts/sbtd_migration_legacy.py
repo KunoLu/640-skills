@@ -34,7 +34,7 @@ from typing import Any, Mapping
 from onboard_arguments import validate_developer_name
 from onboard_contracts import ContractError
 from sbtd_project import TaskDataError
-from sbtd_task_document import TaskDocument
+from sbtd_task_document import TaskDocument, _frontmatter_bounds
 
 # ---------------------------------------------------------------------------
 # Fixed legacy vocabulary (pinned Trellis source + main PRD section 11.2/11.3)
@@ -94,6 +94,13 @@ _LEGACY_ONLY_KEYS = frozenset(
         "notes",
     }
 )
+
+_CURRENT_FRONTMATTER_FIELDS = frozenset({
+    "schema_version", "id", "workflow_mode", "mode_source", "mode_note",
+    "status", "parent", "branch", "created_at", "updated_at", "completed_at",
+    "blocked_reason",
+})
+
 
 _IDENTITY_KEY = re.compile(r"^[a-z][a-z0-9_]*=")
 _DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -444,6 +451,21 @@ def _legacy_timestamp(source: dict[str, Any], field: str) -> str | None:
         "invalid-legacy-task", f"legacy task {field} has unknown time semantics"
     )
 
+def _archive_bucket(source: dict[str, Any], status: str) -> str | None:
+    if status != "done":
+        return None
+    value = source.get("completedAt")
+    if isinstance(value, str) and _DATE_ONLY.fullmatch(value):
+        timestamp = value
+    else:
+        timestamp = _legacy_timestamp(source, "completedAt")
+    if timestamp is None:
+        return "undated"
+    month = int(timestamp[5:7])
+    return f"{timestamp[:4]}-Q{(month - 1) // 3 + 1}"
+
+
+
 
 def _legacy_parent(source: dict[str, Any]) -> str | None:
     parent = source.get("parent")
@@ -508,7 +530,7 @@ def _check_sidecar_shape(sidecar: Any) -> dict[str, Any]:
             "invalid-sidecar", "legacy-task.json must carry exactly the six fixed keys"
         )
     version = sidecar["schema_version"]
-    if isinstance(version, bool) or version != 1:
+    if type(version) is not int or version != 1:
         raise ContractError(
             "invalid-sidecar", "legacy-task.json schema_version must be 1"
         )
@@ -624,6 +646,38 @@ class TaskProjection:
     children: tuple[str, ...]
     document: TaskDocument
     aliases: tuple[str, ...] = ()
+    archive_bucket: str | None = None
+
+
+
+def _check_time_provenance(document: TaskDocument) -> None:
+    from markdown_it import MarkdownIt
+
+    _, _, body_start = _frontmatter_bounds(document.text)
+    blocks = [
+        token.content
+        for token in MarkdownIt("commonmark").parse(document.text[body_start:])
+        if token.type == "fence"
+        and token.level == 0
+        and token.info.strip() == "sbtd-legacy-time-provenance"
+    ]
+    sources = {
+        "created_at": "legacy task.json: createdAt (sidecar or private original)",
+        "updated_at": "legacy task.json: no recorded update time",
+        "completed_at": "legacy task.json: completedAt (sidecar or private original)",
+    }
+    expected = {
+        field: {"source": source, "status": "unproven"}
+        for field, source in sources.items()
+        if document.frontmatter[field] is None
+    }
+    if len(blocks) != 1 or _decode_legacy(
+        blocks[0].encode("utf-8"), "legacy timestamp provenance"
+    ) != expected:
+        raise ContractError(
+            "invalid-task-document",
+            "unproven legacy times need the source-bound timestamp provenance block",
+        )
 
 
 def _check_document(
@@ -640,6 +694,11 @@ def _check_document(
             "invalid-task-document",
             "migrated frontmatter must not carry legacy-only field spellings",
         )
+    if (source.keys() & frontmatter.keys()) - _CURRENT_FRONTMATTER_FIELDS:
+        raise ContractError(
+            "invalid-task-document",
+            "migrated frontmatter must not absorb unmapped legacy source fields",
+        )
     if frontmatter["id"] != identity:
         raise ContractError(
             "invalid-task-document", "migrated task id does not match the legacy id"
@@ -652,11 +711,12 @@ def _check_document(
     if (
         frontmatter["workflow_mode"] is not None
         or frontmatter["mode_source"] != "migration-unknown"
+        or frontmatter["mode_note"] != "legacy Trellis task without mode proof"
     ):
         raise ContractError(
             "invalid-task-document",
-            "a legacy task without a provable mode keeps workflow_mode null "
-            "and mode_source migration-unknown",
+            "a legacy task without mode proof requires null mode, "
+            "migration-unknown source and the canonical migration mode note",
         )
     declared_parent = frontmatter.get("parent")
     if parent is None:
@@ -696,6 +756,7 @@ def _check_document(
             "invalid-task-document",
             "legacy tasks have no provable update time; updated_at stays null",
         )
+    _check_time_provenance(document)
     events = document.events
     if status != "done":
         if events:
@@ -719,6 +780,14 @@ def _check_document(
         raise ContractError(
             "invalid-task-document",
             "legacy completion event time must be the provable time or unknown",
+        )
+    if (
+        event["reason"] != "legacy completion fact"
+        or event["evidence"] != "legacy task.json status"
+    ):
+        raise ContractError(
+            "invalid-task-document",
+            "legacy completion history must cite the source completion fact",
         )
 
 
@@ -761,7 +830,7 @@ def validate_task_projection(
         raise ContractError("invalid-task-document", error.reason) from None
     identity = _legacy_id(source)
     status = _legacy_status(source)
-    if status != "done" and _ARCHIVE_SEGMENT in parts[:-2]:
+    if status != "done" and _ARCHIVE_SEGMENT in parts[:-1]:
         raise ContractError(
             "invalid-legacy-task",
             "an archived-position task without proven completion is blocked",
@@ -771,8 +840,16 @@ def validate_task_projection(
     branch = _legacy_branch(source)
     _check_document(document, source, identity, status, parent, branch)
     folder = parts[-2]
-    aliases = (folder,) if folder != identity else ()
-    return TaskProjection(identity, parent, children, document, aliases)
+    relative_folder = "/".join(parts[2:-1])
+    aliases = tuple(dict.fromkeys(
+        name for name in (folder, relative_folder) if name and name != identity
+    ))
+    bucket = (
+        _archive_bucket(source, status)
+        if _ARCHIVE_SEGMENT in parts[2:-1]
+        else None
+    )
+    return TaskProjection(identity, parent, children, document, aliases, bucket)
 
 
 # ---------------------------------------------------------------------------
