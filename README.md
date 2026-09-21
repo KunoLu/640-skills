@@ -743,7 +743,7 @@ tests/e2e/**/*.trace.zip
 
 `sbtd-workflow-onboard` 的 init / reset / check 逻辑需要覆盖：
 
-- 根安装器在用户选择或传入目标 Agent 平台后、询问 `init` / `reset` 和项目路径前，立即检测对应 CLI：`codex`、`claude`、`kimi` 或 `omp`。已通过 `<command> --version` 则继续；缺失或验证失败时先确保 npm 可用，再用 npm 全局安装官方 `@latest` 包并复验命令。
+- 根安装器可在选择目标平台后先只读检测 `codex`、`claude`、`kimi` 或 `omp`。缺失或校验失败时先收集模式、完整项目清单和 AGENTS 范围并通过项目前置检查，再确认 npm 准备与官方 `@latest` CLI 安装；任何安装或配置写入都不能早于这个项目 gate。
 - 全局 Agent 规则，以及一个或多个项目根目录下的项目级 Agent 模板和 `.gitignore`。
 - 14 个 bundled Skills 和 19 个 required external Skills 始终以全局 Skill 目录为目标，不再提供 project/none scope 选择。`init` 对已合法的 Skill 壳（普通目录、普通 `SKILL.md`、frontmatter `name` 匹配）跳过；缺失或身份无效才安装。`reset` 无备份覆盖全部 bundled Skills，并从当前 stable snapshot 强制重装全部 required external Skills。`catalog.json` 是 bundled Skill、external Skill 上游 repo/subpath/alias 和模板源路径的事实源，两个根安装器从 `check` 的 `group=referenced` 获取 external canonical 清单，不再各自维护重复数组。Catalog Schema 与运行时会在执行命令前同时拒绝绝对路径 / `..` 逃逸、错误 source 文件类型、bundled Skill frontmatter 身份不一致、非法 kind/id/target-role 组合和不完整的 HTTPS 仓库地址。已退役的 `trellis-workflow` / `trellis-channel` 不在 catalog 和模板树中，任务路由由 bundled `sbtd-task` 承担；本变更不清理用户全局目录里的旧 Skill 副本，旧资源退役由 P1-13 负责。
 

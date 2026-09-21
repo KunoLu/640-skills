@@ -33,8 +33,8 @@ Options:
       This option does not change the Codex global AGENTS.md target; override
       that separately with --global-agents-path. If ~/.omp already exists,
       init/reset also overwrite ~/.omp/agent/AGENTS.md.
-      The installer verifies this CLI immediately, bootstraps npm when needed,
-      and installs the official npm package globally at @latest when missing.
+      The installer may verify this CLI read-only immediately. Missing-CLI
+      repair and npm bootstrap wait for complete selected-project preflight.
   --source-root <path>
       Path to the sbtd-workflow-onboard directory.
       Defaults to ./sbtd-workflow-onboard.
