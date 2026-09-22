@@ -1185,7 +1185,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 
 | ID | 优先级 | 任务／交付 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P2-01 | P2 | 冻结迁移范围、备份责任及保留安排 | P1-16 | AC-37；确认custodian/备份清单/复核安排与拟清理范围；迁移授权不代替cleanup或备份销毁确认 | HITL | planned | — |
+| P2-01 | P2 | 冻结迁移范围、备份责任及保留安排 | P1-16 | AC-37；[冻结协议](sbtd-workflow-v2-migration-scope-freeze.md)。用户已授权启动；目标项目、host/HOME、custodian、backup_root、保留与拟清理范围仍待用户提供，未盘点未授权路径。不批准apply/deploy/cleanup/sync/tag/备份销毁 | HITL | in-progress | — |
 | P2-02 | P2 | 隔离副本迁移及可调用恢复演练 | P2-01 | AC-17/18/35/36；有证据的部分apply/deploy/cleanup分别恢复；验证文件后另测旧工具可用，缺证据安全拒绝 | HITL | planned | — |
 | P2-03 | P2 | 运行 migration apply：数据迁移和旧路由停用 | P2-02 | AC-17/18/29/30；全批次 applied receipt、legacy 校验；不部署新接线、不 smoke，失败不进入 P2-04 | HITL | planned | — |
 | P2-04 | P2 | 独立部署新规则／Skills／接线并逐项目smoke | P2-03、P1-11、P1-13 | AC-08/15/18/29部署子项及AC-21的host query/smoke子项；通过init迁移上下文唯一部署，显式前次输入和新证据输出，失败不清理；不混入独立sync | HITL | planned | — |
@@ -1349,7 +1349,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 ### 18.2 当前待验证／待授权项
 
 1. P0-01 **done**（2026-09-17T10:33:14+08:00）。AC-09 产品收口已确认。AC-10 剩余「`graft version` 断网 fail-closed」改挂 **P1-03**。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**，均不阻断 P0-01。P1-06 必须证明未对父目录 init/build/MCP。Graft 无正向 `--hooks` flag；未授权必须传 `--no-hooks`。
-2. P2-01 未提供目标项目清单、真实 HOME 和清理范围；不得猜测或遍历用户项目替代授权。
+2. P2-01 已启动冻结协议，但目标项目清单、真实 HOME、custodian、backup_root 和拟清理范围仍待用户提供；不得猜测或遍历用户项目替代授权。尚未批准 apply／部署／cleanup／sync／tag 或备份销毁。
 3. Windows、Codex/OMP host 环境及正式证据 runner 在对应任务开始前确认；不可用就记录 blocked。
 4. 用户已授权本源仓库按任务分支实施、循环 review 和 PR 合并（可使用 --admin），以及合并后台账更新。P2 真实项目范围、本机 workflow sync、hooks opt-in、旧数据／全局工具清理、tag／发布、备份销毁仍按对应独立确认门执行，不能从总开发授权推断。
 
@@ -1451,6 +1451,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-21T22:25:18+08:00 | P1-16 planned→in-progress／候选就绪审查 | 用户明确要求开始P1-16；PR #68修复／归档与三平台补充CI闭环后，从clean main `a50ade4586a780e2061f9eb20b0c0c58f9426e20`建立`p1-16-candidate-readiness`。归档199项为195 fixed／4 dismissed，无deferred；当前审查不将这些修复等同于完整host或正式发布验收。沿用P1-15接受限制后的收口，逐项区分required、optional与P2/P3后置证明；不创建rc tag、不sync、不执行真实迁移。 |
 | 2026-09-21T22:58:01+08:00 | P1-16 in-progress→checking／候选证据汇总 | 精确候选三平台CI1126tests/8skip通过；完整328文件Git导出与隔离依赖环境中，CLI9场景、固定Graft计划/安装/重复3场景、Codex/OMP project-only及受管map4场景通过，源文件逐字不变。3份本轮evidence schema/hash/中文摘要校验通过，37项AC各一行；五份历史host raw/hash存在但dirty且无精确sourceCommit，不重标当前候选。文档契约45项通过，独立readiness与evidence复核中；尚不done、不tag、不进入P2。 |
 | 2026-09-21T23:18:09+08:00 | P1-16 checking→done／候选审查完成补记 | [PR #69](https://github.com/KunoLu/640-skills/pull/69)于`2026-09-21T15:16:30Z`合入，merge`7a0200a460f377a2acfaa993aa8249f9de772d2c`；head`16df108cd67c4d16539e4893b02d6f96e57ac78e`的[三平台CI](https://github.com/KunoLu/640-skills/actions/runs/35617088396)通过。两路review仅判定精确代码候选a50ade4及P2准备ready，不把历史dirty host或AC-20 measured-not-met升为完整发布通过。main已快进，任务分支本地／远程已删；328文件副本、合成项目、隔离npm prefix/venv和驱动清理，正式报告保留。P1共20项完成；P2/P3保持planned，rc/tag、真实迁移、sync和备份处置均未执行；本状态补记仍经独立文档PR闭环。 |
+| 2026-09-22T12:23:30+08:00 | P2-01 planned→in-progress／冻结协议启动 | 用户明确要求开始P2及P2-01；从clean main `03541a97f3804f8966cd5c4ff3f579793f9d4175`建立`p2-01-migration-scope-freeze`。已写入[冻结协议](sbtd-workflow-v2-migration-scope-freeze.md)；目标项目、host/HOME、custodian、backup_root、保留与拟清理范围待用户提供。不得猜测或遍历用户项目。未写真实HOME、未备份、未apply、未sync、未tag。P2-02及之后仍为planned。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 
