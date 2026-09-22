@@ -1185,7 +1185,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 
 | ID | 优先级 | 任务／交付 | 依赖 | 验收／完成证据 | 类型 | 状态 | 完成时间 |
 |---|---|---|---|---|---|---|---|
-| P2-01 | P2 | 冻结迁移范围、备份责任及保留安排 | P1-16 | AC-37；[冻结协议](sbtd-workflow-v2-migration-scope-freeze.md)。已接受逻辑名 `demo`/`main`、两host、custodian `kuno`、源仓不纳入。HOME/Skill根、共享闭包、未选平台、专用backup_root、保留与拟清理仍pending；通用下载目录已拒绝。精确路径不进协议层。提前只读属门禁外观察。第3节未齐时不访问目标项目任何路径（含 AGENTS.md）。不批准apply/deploy/cleanup/sync/tag/备份销毁 | HITL | in-progress | — |
+| P2-01 | P2 | 冻结迁移范围、备份责任及保留安排 | P1-16 | AC-37；[冻结协议](sbtd-workflow-v2-migration-scope-freeze.md)。已接受逻辑名 `demo`/`main`、两host、custodian `kuno`、源仓不纳入。HOME政策：冻结 demo 当前实际 Codex/OMP 根为本批正式目标；P2-02 隔离演练不改 live。闭包仅 demo（用户确认该实际 HOME 目前只服务 demo）。未选平台只盘点。backup_root：TEMP 父目录下专用子目录，精确路径只进私有层并已回读；父目录本身不是 backup_root；通用下载目录仍拒绝。已接受默认保留；拟清理本批只盘点、全局卸载 not-allowed。精确项目根与 HOME 路径尚未私有回读。提前只读属门禁外观察。第3节未齐时不访问目标项目任何路径（含 AGENTS.md）。不批准apply/deploy/cleanup/sync/tag/备份销毁 | HITL | in-progress | — |
 | P2-02 | P2 | 隔离副本迁移及可调用恢复演练 | P2-01 | AC-17/18/35/36；有证据的部分apply/deploy/cleanup分别恢复；验证文件后另测旧工具可用，缺证据安全拒绝 | HITL | planned | — |
 | P2-03 | P2 | 运行 migration apply：数据迁移和旧路由停用 | P2-02 | AC-17/18/29/30；全批次 applied receipt、legacy 校验；不部署新接线、不 smoke，失败不进入 P2-04 | HITL | planned | — |
 | P2-04 | P2 | 独立部署新规则／Skills／接线并逐项目smoke | P2-03、P1-11、P1-13 | AC-08/15/18/29部署子项及AC-21的host query/smoke子项；通过init迁移上下文唯一部署，显式前次输入和新证据输出，失败不清理；不混入独立sync | HITL | planned | — |
@@ -1349,7 +1349,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 ### 18.2 当前待验证／待授权项
 
 1. P0-01 **done**（2026-09-17T10:33:14+08:00）。AC-09 产品收口已确认。AC-10 剩余「`graft version` 断网 fail-closed」改挂 **P1-03**。§9.3 剩余升级／cache／stamp／reconciliation 改挂 **P1-04**，均不阻断 P0-01。P1-06 必须证明未对父目录 init/build/MCP。Graft 无正向 `--hooks` flag；未授权必须传 `--no-hooks`。
-2. P2-01 已启动冻结协议。已接受逻辑名 `demo`（声明 `main`）、Codex+OMP、custodian `kuno`、源仓不纳入。HOME/Skill 根、共享闭包、未选平台、专用 backup_root、保留与拟清理仍待用户原文；通用下载目录已拒绝。精确路径、HEAD 与盘点结构不进协议层。点名项目根的提前只读属门禁外观察。第 3 节未齐时不访问目标项目任何路径（含 `AGENTS.md`）；项目规则只在授权盘点开始时再读。不得扫描未点名 HOME。尚未批准 apply／部署／cleanup／sync／tag 或备份销毁。
+2. P2-01 仍 in-progress。已接受逻辑名 `demo`（声明 `main`）、Codex+OMP、custodian `kuno`、源仓不纳入；HOME 政策为冻结 demo 当前实际 Codex/OMP 根（正式目标），P2-02 隔离演练不改 live；闭包仅 demo（用户确认该实际 HOME 目前只服务 demo）；未选平台只盘点；默认保留；拟清理本批只盘点且全局卸载 not-allowed。backup_root 为用户点名 TEMP 父目录下专用子目录（父目录本身不是 backup_root；通用下载目录仍拒绝），精确路径只进私有层并已回读。精确项目根与各 host HOME／Skill 根尚未私有回读，故第 3 节未齐，不开始第 4 节盘点。点名项目根的提前只读属门禁外观察。第 3 节未齐时不访问目标项目任何路径（含 `AGENTS.md`）。不得扫描未点名 HOME。尚未批准 apply／部署／cleanup／sync／tag 或备份销毁。
 3. Windows、Codex/OMP host 环境及正式证据 runner 在对应任务开始前确认；不可用就记录 blocked。
 4. 用户已授权本源仓库按任务分支实施、循环 review 和 PR 合并（可使用 --admin），以及合并后台账更新。P2 真实项目范围、本机 workflow sync、hooks opt-in、旧数据／全局工具清理、tag／发布、备份销毁仍按对应独立确认门执行，不能从总开发授权推断。
 
@@ -1455,6 +1455,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-22T12:30:11+08:00 | P2-01 Gate Plan 校正／DDIA 强制审查 | 迁移/备份/恢复触发 mandatory DDIA。已运行 `book-ddia-data-design`。Gate Plan 仅用 `planned/running/passed/blocked/not-required`：DDIA required→passed；Legacy/DDD/Refactoring/Release/grill 为 not-required。独立 DDIA Review 为 confirmed，只确认冻结协议 fail-closed；第3节字段仍 pending，未接受用户输入，未授权 apply。 |
 | 2026-09-22T12:40:23+08:00 | P2-01 部分 HITL 输入／通用下载目录拒绝 | 用户点名逻辑项目 `demo`、声明 `main`、两 host、custodian `kuno`、源仓不纳入、无需额外私有冻结文件。精确路径与当时项目观察不进协议层。HOME/Skill 根先解释未冻结；用户给出的通用下载目录非专用 backup_root 已拒绝；保留与拟清理待用户确认推荐。未扫描未点名 HOME，未备份，未 apply。 |
 | 2026-09-22T12:45:09+08:00 | P2-01 记门禁外观察／不填冻结栏 | 第4节要求第3节齐后才盘点。此前对逻辑项目 `demo` 的读取发生在 HOME/保留/清理/共享批次仍 pending 时，不是盘点。精确路径与当时结构不进协议层，不得填第3节当前值或推进 P2-01。用户原文（逻辑名 `demo`/`main`、两host、`kuno`、源仓不纳入）仍有效。未扫描 HOME，未备份，未 apply。 |
+| 2026-09-22T14:21:03+08:00 | P2-01 用户确认推荐政策／专用 backup_root | 用户同意推荐包 A1–A3、A5–A6，并指定在 TEMP 父目录下新建专用子目录作为 backup_root（父目录本身不是 backup_root；通用下载目录仍拒绝）。协议层只记政策：正式切换目标为 demo 当前实际 Codex/OMP 根；P2-02 仍为隔离演练、不改 live；批次仅 demo（用户确认该实际 HOME 目前只服务 demo）；未选平台只盘点；默认保留；本批只盘点且全局卸载 not-allowed。私有准备记录已建在 backup_root 内并回读；精确路径不进协议层。尚未复制原件。精确项目根与 HOME 路径仍待私有回读，故不开始第4节。未读 AGENTS.md，未 apply。P2-01 仍 in-progress。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 
