@@ -10,16 +10,34 @@
 
 ## 2. Book Gate Plan
 
+Gate Plan 只使用 `planned / running / passed / blocked / not-required`。各 reviewer 的结果词表写在独立审查节，不填进本表。
+
 | Gate | 判定／触发事实 | 状态 |
 |---|---|---|
-| DDIA | on-demand；备份所有权、私有准备、保留门与销毁分离 | confirmed（沿用主 PRD §11.1／11.8／AC-37，不是授权真实迁移） |
-| Legacy safety | on-demand；只定义只读盘点与拟清理，不改 live | characterized |
-| DDD | 无新领域术语 | not-required |
+| DDIA | required；本项冻结迁移范围、备份所有权、私有准备、保留门与恢复边界，设计稳定前必须审查 | passed |
+| Legacy safety | 无既有行为缺陷修复，不改生产运行代码 | not-required |
+| DDD | 无新领域术语或上下文归属变化 | not-required |
 | Refactoring | 不改生产实现 | not-required |
-| Release readiness | 本项不是 rc 或 v2.0.0 | not-required |
-| grill-with-docs | 沿用已批准迁移边界 | 未完整调用 |
+| Release readiness | 本项不是 rc、v2.0.0 或真实部署完成 | not-required |
+| grill-with-docs | 沿用已批准迁移边界，无新实质歧义 | not-required |
 
-本仓库仍不创建 `.trellis/`、`ai/tasks/` 或 `.feature`。真实目标项目的新目录不自动变成本仓库目录。
+本仓库仍不创建 `.trellis/`、`ai/tasks/` 或 `.feature`。真实目标项目的新目录不自动变成本仓库目录。尚未接受任何用户冻结输入。
+
+### 2.1 DDIA Data Design Review
+
+```text
+DDIA Data Design Review
+Status: confirmed
+Data owner and source of truth: 用户拥有真实项目树和 HOME。非敏感 custodian（用户原文，不得从 Git/OS/lessons 推断）拥有 backup_root、原件、候选、阶段/恢复收据和已登记副本。本冻结文件只拥有可追踪协议层：逻辑名、host 选择、保留政策、拟清理类别、私有记录是否回读成功。manifest 尚未存在；plan 之后才成为迁移绑定事实源。task.md 不因本项成为迁移 SoT。
+Write / read / async / failure paths: P2-01 对项目/HOME 只读且仅读取用户点名的绝对路径。本源仓只写冻结协议与台账。私有准备记录只在用户给出删除范围外路径后写入；私有准备不等于 apply。任一项第 3 节字段缺失则保持 in-progress，不进 P2-02，不写项目/HOME。未点名路径不扫描。无队列/后台/跨服务异步。
+Consistency model: 范围以用户原文为强一致输入。盘点是点名路径的当时观察，不承诺之后不变。共享 HOME/Skill 消费者要么整批纳入，要么明确隔离；未知消费者时全局卸载 not-allowed。原件指纹与敏感路径只留私有层。
+Idempotency / ordering / retry / deduplication: 重复记录同一 pending 字段不是突变。同一项目点名两次不扩大扫描。拟清理清单不是 P2-05 清理确认，也不是 P3-04 销毁授权。cleanup/recovery/uninstall 永不删备份。
+Schema / migration / backfill / rollback / replay: 本项不改迁移 schema、不 apply、不 backfill。它冻结后续 plan 必填 HITL 输入。实现变化后仍须重新 plan，不复用未绑定的旧盘点当 apply 前态。回滚本项只需撤回协议文档；因尚未写用户数据，无数据回放。若在 manifest 前放弃，终止分支仍须在删除范围外私有记录保存并回读 custodian/归属/精确范围/独立授权/确认时间。
+Observability and repair: 协议层表格显示 pending/已填。私有层保存路径/大小/checksum 并回读。回读失败视为未冻结。无后台催办；在 P2/P3 检查点由责任人复核，间隔 ≤30 天。
+Required tests: 用户点名后只读那些路径的 tracked/untracked/身份/声明 HOME 共享消费者。证明本文件不含原件指纹。独立 review 无剩余 P0/P1。不把后续 apply/恢复演练算作本项通过。
+```
+
+本审查确认的是冻结协议本身可以稳定：缺字段就 fail-closed。它不是真实 apply、部署、cleanup、sync、tag 或备份销毁授权。第 3 节字段仍全部 pending，在用户给出原文前不接受/冻结 P2 输入。
 
 ## 3. 本项必须冻结的字段
 
