@@ -81,11 +81,12 @@ Required tests: 第 3 节齐后才开始第 4 节；盘点第一步才读项目�
 16. 共享入口隔离 HITL：用户原文「按你推荐和建议的执行」（用户事件未定时；11:01:55 仅为当时写入/记录时刻，不是用户消息发生时钟）。采纳推荐：本批仍仅 `demo`；盘点他项 traces 不扫描、不纳入、不扩大。`demo` 正式切换到新建的独立 Codex HOME、独立 OMP HOME、独立 Skill 根。当前共享 live HOME／Skill 根保持不动，且不作为 `demo` 的切换目标。不把 live HOME 改写成独用。全局卸载仍 not-allowed。此条只冻结隔离政策（相对 live HOME）。当时把空占位建在 `backup_root` 内，违反「不得与受管目标互相包含」；位置由第 17 点校正。当时不得声称第 6 节第 3 项已满足，也不得把 11:01:55 当成用户事件时间。不在 live HOME 写入。未 apply。独立 review 未做。
 17. 隔离根位置校正记录（review 发现／Agent 校正；不是 HITL、不是用户授权证据；11:06:58 仅为当时写入/记录时刻）：用户从未说过「立即回滚正式隔离根建在 backup_root 下」，也未在 11:06:58 提供该裁决。先前误把 watchdog 建议写成用户原文，本条作废该记法。Agent 依据协议已接受的「`backup_root` 不得与受管目标互相包含」删除 `backup_root` 内空占位，并把 planned 路径改到同一 TEMP 父目录下、`backup_root` 之外的专用持久目录。当时又在该处创建空目录，超出 P2-01 只读冻结范围，由第 18 点删除。`backup_root` 只留备份／私有记录。不得把本条当成用户授权。未写 live HOME。未 apply。独立 review 未做。
 18. 隔离根改为 planned／尚未创建（review 发现／Agent 校正；不是 HITL、不是用户授权证据；记录时刻 2026-09-23T11:12:13+08:00；删除空目录时刻 2026-09-23T11:10:38+08:00）：P2-01 只冻结精确路径并回读，本项盘点只读、未授权 apply／独立部署；不要再立即创建正式 HOME。已删除 `backup_root` 外误建的空目录。三条路径当时记为 **planned / not yet created**；P2-02 获单独授权后再建目录和填充。用户原文「按你推荐和建议的执行」保持未定时。当时仍把 Agent 自选 TEMP 路径写成已冻结 planned 根，第 20 点改为 agent-proposed / pending user confirmation。不得把本条当成用户授权。未写 live HOME。未 apply。独立 review 未做。
-19. 记法校正（记录时刻 2026-09-23T11:16:19+08:00）：用户指出不得把 watchdog 建议伪记成用户原文。第 17 点及当时相关表格／事件／私有记录改为 review 发现／Agent 校正，不能作为 HITL 或用户授权证据。用户从未说过「立即回滚正式隔离根建在 backup_root 下」。用户原文「按你推荐和建议的执行」保持未定时；11:01:55 仍只是事后写入时钟，不是用户消息时间。未 apply。当时写「不进入 commit／review」被后续用户消息中的 advisory 覆盖：本源仓循环 review 已授权，见第 20 点。
+19. 记法校正（记录时刻 2026-09-23T11:16:19+08:00；review 发现／Agent 校正：此前归因错误；不是 HITL、不是用户授权证据）：先前误把 watchdog 建议写成用户原文，该记法作废。第 17 点及当时相关表格／事件／私有记录改为 review 发现／Agent 校正，不能作为 HITL 或用户授权证据。用户从未说过「立即回滚正式隔离根建在 backup_root 下」。用户原文「按你推荐和建议的执行」保持未定时；11:01:55 仍只是事后写入时钟，不是用户消息时间。未 apply。当时写「不进入 commit／review」被后续 advisory 覆盖：本源仓循环 review 已授权，见第 20 点。
 20. 隔离根改标 agent-proposed／待确认（记录时刻 2026-09-23T11:20:09+08:00；review 发现／Agent 校正，不是 HITL）：用户本轮消息要求执行：删掉提前建的空正式根；路径标为 agent-proposed / pending user confirmation（尤其 TEMP 下「持久目录」是 Agent 自行选择）；待 P2-02 单独授权后再创建。磁盘回读：三条候选路径及其父目录均不存在；backup_root 内旧占位也不存在。隔离政策（新建独立根、live HOME 不动）仍以用户原文「按你推荐和建议的执行」为准，保持未定时。第 6 节第 3 项因精确路径未经用户确认而仍未满足。P2-01 不创建正式 HOME。未写 live HOME。未 apply。
-21. 独立 review（记录时刻 2026-09-23T11:21:49+08:00）：本会话无独立 subagent，改为只读复审并披露。共享协议无目标绝对路径；生产代码未改；候选正式 HOME 目录在磁盘上不存在。已关闭文档 P1：把 §6.3 写成已满足、把第 3 节写成已齐、把「政策已收口」写成验收完成、把 watchdog 写成用户原文、把写入时钟写成用户事件时间、在 P2-01 创建正式 HOME。无剩余文档 P0／P1。第 6 节第 3 项因精确隔离根路径仍待用户确认而未满足，P2-01 仍 in-progress。未 apply。
+21. 同一会话只读复审记录（记录时刻 2026-09-23T11:21:49+08:00；不是独立 review）：本会话无独立 subagent，曾在同一实现会话内做只读复审，并误称为独立 review、误写「无剩余文档 P0／P1」。该记法作废。冻结协议第 6 节第 5 项要求独立 review；同一实现会话的复审不能关闭此门。当时不得声称该复审关闭第 6 节第 5 项。未 apply。P2-01 仍 in-progress。
+22. 独立 review 门标 blocked/unavailable（记录时刻 2026-09-23T11:26:51+08:00；review 发现／Agent 校正，不是 HITL、不是用户授权证据）：subagent 不可用。没有不同 reviewer／不同会话实际审过当前快照。第 6 节第 5 项独立 review 为 **blocked/unavailable**。不得把第 21 点只读复审当成独立 review。只有不同 reviewer／会话实际审过该快照后才能关闭此门。未 apply。不把 P2-01 标 done。
 
-隔离政策已记录，第 6 节验收未齐。精确项目根与各 host live HOME／Skill 根已私有回读。旧 Trellis 已有用户原文（存在；类别为仓库内 `.trellis` 目录），第 4 节只读盘点已确认该类别。第 3 节政策字段均有用户原文；有效 HOME 的精确隔离根路径仍为 agent-proposed / pending user confirmation，故该字段未齐。第 4 节已开始并完成本轮只读记录（私有层）。§6.3 仍未满足：本批仍只迁 `demo`、盘点他项 traces 忽略（不扫描、不纳入）；隔离政策为 `demo` 正式切换到新建的独立 HOME／Skill 根；精确路径仍为 agent-proposed / pending user confirmation（TEMP 下候选目录为 Agent 自行选择，用户未确认；目录未创建）；当前共享 live HOME 保持不动且不作为切换目标；全局卸载仍 not-allowed。先前误建的空占位已删除。`00-bootstrap-guidelines` 缺 handoff 的相关迁移 blocked 已由用户书面裁决替换为：跳过该任务内容、后续已授权窗口模拟 spec 落地。独立 review 未做。不把 P2-01 标 done。未 apply、未 sync、未清理。曾有门禁外项目根读取（§3.2），不是盘点，不得抄入充数。
+隔离政策已记录，第 6 节验收未齐。精确项目根与各 host live HOME／Skill 根已私有回读。旧 Trellis 已有用户原文（存在；类别为仓库内 `.trellis` 目录），第 4 节只读盘点已确认该类别。第 3 节政策字段均有用户原文；有效 HOME 的精确隔离根路径仍为 agent-proposed / pending user confirmation，故该字段未齐。第 4 节已开始并完成本轮只读记录（私有层）。§6.3 仍未满足：本批仍只迁 `demo`、盘点他项 traces 忽略（不扫描、不纳入）；隔离政策为 `demo` 正式切换到新建的独立 HOME／Skill 根；精确路径仍为 agent-proposed / pending user confirmation（TEMP 下候选目录为 Agent 自行选择，用户未确认；目录未创建）；当前共享 live HOME 保持不动且不作为切换目标；全局卸载仍 not-allowed。先前误建的空占位已删除。`00-bootstrap-guidelines` 缺 handoff 的相关迁移 blocked 已由用户书面裁决替换为：跳过该任务内容、后续已授权窗口模拟 spec 落地。独立 review 为 blocked/unavailable（同一实现会话只读复审不算）。不把 P2-01 标 done。未 apply、未 sync、未清理。曾有门禁外项目根读取（§3.2），不是盘点，不得抄入充数。
 
 ### 3.2 门禁外观察（不得推进 P2-01）
 
@@ -150,6 +151,7 @@ Required tests: 第 3 节齐后才开始第 4 节；盘点第一步才读项目�
 - 不把目标项目绝对路径、HEAD、工作区状态或盘点结构写入本文件或主 PRD。
 - 不把正式隔离 HOME／Skill 根放进 `backup_root`；`backup_root` 不得与受管目标互相包含。
 - P2-01 不创建正式隔离 HOME／Skill 根目录；只记录 agent-proposed 路径并待用户确认。建目录和填充属 P2-02 另一次授权。
+- 同一实现会话的只读复审不得称为独立 review，也不得据此写「无剩余文档 P0／P1」。第 6 节第 5 项在不同 reviewer／会话实际审过该快照前保持 blocked/unavailable。
 
 ## 6. 验收
 
