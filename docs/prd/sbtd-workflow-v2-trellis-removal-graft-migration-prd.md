@@ -1511,6 +1511,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-24T23:10:47+0800 | P2-03 live plan 被缺批准拒绝 | 观察时刻，不是用户消息发生时钟。只对 live `demo` 运行 migration plan，不传 deployment-mode，不传 `--graft-hooks`，不使用绑定隔离副本的批准文件。退出码 2，status blocked，reason 为 a legacy task has no approved projections。未生成 manifest，未 apply。live 项目、共享 HOME、hooks 和隔离现场的观察哨兵未变。P2-04 仍 planned。 |
 | 2026-09-24T23:18:24+0800 | P2-03 撤回 Release readiness 免审 | 观察时刻，不是用户消息发生时钟。用户要求评估 advisor。初稿把 Release readiness 写成 not-required，理由只是不部署、不发布、不 cleanup。该结论撤回。live apply 属于 migration／runtime 运维行为变更，协议改为 required／planned。适用验证完成前不运行 reviewer，P2-03 标 done 前必须有独立审查。未 apply，未改 live。 |
 | 2026-09-24T23:29:02+0800 | P2-03 准备 live 归档 redact 候选 | 观察时刻，不是用户消息发生时钟。用户批准 bootstrap 整夹跳过、spec 私有保全、journal 与 runtime marker private-only；归档任务只出 redact 候选，未看前不批。候选在私有层，不进仓库，投影校验通过。未写批准文件，未 plan，未 apply，未改 live。 |
+| 2026-09-24T23:57:48+0800 | P2-03 live plan 被未批准字节码挡住 | 观察时刻，不是用户消息发生时钟。用户批准这份 live 归档 redact 候选。私有批准文件绑定 live 原件。只读 plan 退出码 2，status blocked，reason 为 unowned legacy runtime content requires approval。未覆盖的是 scripts/common/__pycache__ 下 19 个 pyc。未生成 manifest，未 apply，未改 live。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 
