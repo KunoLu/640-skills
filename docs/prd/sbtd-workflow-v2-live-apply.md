@@ -44,6 +44,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - 退出码 2，status `blocked`，reason 为 `a legacy task has no approved projections`。未生成 manifest。未 apply。
 - live 项目、共享 HOME 的路由文件、hooks 和隔离现场的观察哨兵未变。
 - P2-04 及之后仍为 planned。
+- `2026-09-24T23:29:02+0800` 用户书面批准：bootstrap 整夹 private-only 跳过；spec 私有保全；journal 与 runtime marker private-only。归档任务只准备 redact 候选，未看前不批。未写批准文件，未 plan，未 apply。
 
 ## 4. 明确不做
 
@@ -57,3 +58,5 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 1. live `demo` 的批准投影必须绑定 live 原件，而不是隔离副本。缺批准时保持 blocked。
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
+4. 归档任务 `onboard-install-html` 的 redact 候选已在私有层准备并完成投影校验。它还不是批准。用户书面确认前，不得把它写入批准文件，不得 plan，不得 apply。
+
