@@ -10,10 +10,11 @@ and the main PRD sections 10.2/11 plus the P1-12 migration-runtime decisions:
   and target states) and seals a bound manifest. Missing, non-private,
   linked or otherwise unproven inputs block the plan with zero writes.
 - No candidate is ever generated here and no scan result substitutes human
-  approval: every mandatory legacy task/spec/lessons file needs its exact
-  approved projection (task.md + legacy-task.json + existing attachments,
-  spec/lessons documents), optional private-only content is explicitly
-  bound, and unknown legacy content blocks the plan.
+  approval. A legacy task is either an exact share/redact projection or an
+  explicit private-only skip of its whole folder. Spec files are either
+  exact share/redact projections or explicit private-only preservation.
+  Lessons still require a share/redact projection. A skipped task is not
+  published and does not require a handoff. Missing approval still blocks.
 - Operations use only the existing contract change kinds. ``apply`` adds
   ignore protection before data writes, extracts the legacy developer name
   into the missing current identity, installs the approved candidates and
@@ -523,6 +524,14 @@ def _classify_project_items(
                         "approval-conflict",
                         "a task item binds sources outside its task folder",
                     )
+                if item["decision"] == "private-only":
+                    if item["required"]:
+                        _fail(
+                            "approval-conflict",
+                            "a private task skip must be explicitly optional",
+                        )
+                    optional.append(item)
+                    continue
                 candidate = item["candidate_ref"]
                 if len(rels) != 1 and (
                     candidate is None or candidate["state"]["type"] != "directory"
@@ -542,6 +551,14 @@ def _classify_project_items(
                     "approval-conflict",
                     "a legacy document source must be a file below its category",
                 )
+            if top == "spec" and item["decision"] == "private-only":
+                if item["required"]:
+                    _fail(
+                        "approval-conflict",
+                        "private spec preservation must be explicitly optional",
+                    )
+                optional.append(item)
+                continue
             documents.append((top, item, [rel[2:] for rel in rels]))
         else:
             if item["decision"] != "private-only":
@@ -1536,6 +1553,61 @@ def _platform_operations(
     return sorted(platforms), operations
 
 
+def _private_task_skips(
+    optional: Sequence[Mapping[str, Any]], root: Path
+) -> dict[str, set[str]]:
+    """Map a task folder to the members bound by one private-only skip."""
+    skipped: dict[str, set[str]] = {}
+    legacy = root / _LEGACY_DIR
+    for item in optional:
+        if item["decision"] != "private-only" or item["target_path"] is not None:
+            continue
+        rels = []
+        for reference in item["sources"]:
+            rel = _parts_relative(Path(reference["path"]), legacy)
+            if rel is None:
+                continue
+            rels.append(rel)
+        task_rels = [rel for rel in rels if rel[-1] == _TASK_JSON]
+        if len(task_rels) != 1 or not task_rels[0] or task_rels[0][0] != "tasks":
+            continue
+        folder_parts = task_rels[0][:-1]
+        folder = PurePosixPath(*folder_parts).as_posix()
+        members = {PurePosixPath(*rel[len(folder_parts) :]).as_posix() for rel in rels}
+        if folder in skipped:
+            _fail("approval-conflict", "a legacy task has more than one private skip")
+        skipped[folder] = members
+    return skipped
+
+
+def _session_targets_complete_skip(
+    relative: tuple[str, ...] | None,
+    entries: Sequence[Mapping[str, Any]],
+    items: Sequence[Mapping[str, Any]],
+    root: Path,
+) -> bool:
+    """True only when a session names one fully private-only task folder."""
+    if (
+        not relative
+        or ".." in relative
+        or len(relative) < 3
+        or relative[0] != _LEGACY_DIR
+        or relative[1] != "tasks"
+    ):
+        return False
+    folder = PurePosixPath(*relative[1:]).as_posix()
+    bound = _private_task_skips(items, root).get(folder)
+    if not bound or _TASK_JSON not in bound:
+        return False
+    prefix = folder + "/"
+    actual = {
+        entry["path"][len(prefix) :]
+        for entry in entries
+        if entry["type"] == "file" and str(entry["path"]).startswith(prefix)
+    }
+    return bound == actual
+
+
 def _inventory_coverage(
     entries: Sequence[Mapping[str, Any]],
     closures: Mapping[
@@ -1618,10 +1690,20 @@ def _inventory_coverage(
                     "legacy task data is not covered exactly by its approved "
                     "projections",
                 )
-    for folder in folder_members:
+    skipped = _private_task_skips(optional, root)
+    for folder, members in folder_members.items():
         folder_tuple = (_LEGACY_DIR, *PurePosixPath(folder).parts)
-        if folder_tuple not in closures:
+        if folder_tuple in closures:
+            continue
+        if skipped.get(folder) != set(members):
             _fail("approval-required", "a legacy task has no approved projections")
+        for member in members:
+            if coverage.get(f"{folder}/{member}", 0) != 1:
+                _fail(
+                    "approval-required",
+                    "legacy task data is not covered exactly by its approved "
+                    "projections",
+                )
     for name in files:
         top = name.split("/", 1)[0]
         if top in _GENERATED_LEGACY_TOP and (
@@ -1742,12 +1824,16 @@ def _check_context_handoffs(
                 relative = (_LEGACY_DIR, *relative)
             elif relative and relative[0] != _LEGACY_DIR:
                 relative = (_LEGACY_DIR, "tasks", *relative)
-        if relative is None or ".." in relative or relative not in closures:
+        if relative is None or ".." in relative or (
+            relative not in closures
+            and not _session_targets_complete_skip(relative, entries, items, root)
+        ):
             _fail(
                 "graph-conflict",
                 "legacy session task has no unique approved projection",
             )
-        active_folders.add(relative)
+        if relative in closures:
+            active_folders.add(relative)
 
     needed = {
         projection.legacy_id

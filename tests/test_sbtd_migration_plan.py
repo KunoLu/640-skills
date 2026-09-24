@@ -1435,6 +1435,221 @@ class MigrationPlanCurrentFindingsTests(unittest.TestCase):
             }
             self.assertNotIn(str(project / "ai/tasks/alpha/prd.md"), copied)
 
+
+    def test_private_task_skip_and_spec_preservation_publish_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            items = json.loads(decisions.read_text())["items"]
+            spec = next(item for item in items if item["item_id"] == "spec-auth")
+            spec.update(
+                required=False,
+                decision="private-only",
+                target_path=None,
+                candidate_ref=None,
+            )
+            spec["approval"]["scope"].update(
+                decision="private-only", target_path=None, candidate_ref=None
+            )
+            folder = project / ".trellis/tasks/00-bootstrap-guidelines"
+            source = _legacy_source(
+                id="bootstrap", name="bootstrap", status="in_progress"
+            )
+            _write(folder / "task.json", _json_bytes(source))
+            _write(folder / "prd.md", b"private bootstrap notes\n")
+            items.append(
+                _item(
+                    "skip-bootstrap",
+                    [_ref(folder / "task.json"), _ref(folder / "prd.md")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                )
+            )
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            targets = {
+                operation["target"]
+                for project_record in manifest["payload"]["projects"]
+                for operation in project_record["private_operations"]
+            }
+            self.assertNotIn(str(project / "ai/tasks/bootstrap"), targets)
+            self.assertNotIn(str(project / "ai/tasks/bootstrap/task.md"), targets)
+            self.assertNotIn(str(project / "docs/spec/auth.md"), targets)
+            self.assertFalse(any("handoffs" in target for target in targets))
+
+    def test_skipped_unfinished_task_does_not_require_a_handoff(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            folder = project / ".trellis/tasks/00-bootstrap-guidelines"
+            _write(
+                folder / "task.json",
+                _json_bytes(
+                    _legacy_source(id="bootstrap", name="bootstrap", status="in_progress")
+                ),
+            )
+            _write(folder / "prd.md", b"private bootstrap notes\n")
+            _write(project / ".trellis/spec/auth.md", b"private spec\n")
+            _write(project / ".trellis/workspace/journal.md", b"private journal\n")
+            items = [
+                _item(
+                    "skip-bootstrap",
+                    [_ref(folder / "task.json"), _ref(folder / "prd.md")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                ),
+                _item(
+                    "private-spec",
+                    [_ref(project / ".trellis/spec/auth.md")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                ),
+                _item(
+                    "private-journal",
+                    [_ref(project / ".trellis/workspace/journal.md")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                ),
+            ]
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            targets = {
+                operation["target"]
+                for operation in manifest["payload"]["projects"][0]["private_operations"]
+            }
+            self.assertFalse(any("handoffs" in target or "bootstrap" in target for target in targets))
+
+    def test_session_may_name_only_a_complete_private_skip(self):
+        def build(base, current_task, *, partial=False):
+            project = _base_tree(base)
+            vault, home = base / "vault", base / "home"
+            vault.mkdir(mode=0o700)
+            home.mkdir(mode=0o700)
+            folder = project / ".trellis/tasks/00-bootstrap-guidelines"
+            _write(
+                folder / "task.json",
+                _json_bytes(
+                    _legacy_source(id="bootstrap", name="bootstrap", status="in_progress")
+                ),
+            )
+            _write(folder / "prd.md", b"private bootstrap notes\n")
+            _write(project / ".trellis/spec/auth.md", b"private spec\n")
+            _write(project / ".trellis/workspace/journal.md", b"private journal\n")
+            session = project / ".trellis/.runtime/sessions/codex.json"
+            _write(session, _json_bytes({"current_task": current_task, "current_run": None}))
+            sources = [_ref(folder / "task.json")]
+            if not partial:
+                sources.append(_ref(folder / "prd.md"))
+            items = [
+                _item("skip-bootstrap", sources, None, "private-only", None, required=False),
+                _item(
+                    "private-spec",
+                    [_ref(project / ".trellis/spec/auth.md")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                ),
+                _item(
+                    "private-journal",
+                    [_ref(project / ".trellis/workspace/journal.md")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                ),
+                _item(
+                    "private-session",
+                    [_ref(session)],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                ),
+            ]
+            return project, vault, home, items
+
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, items = build(
+                Path(directory).resolve(), ".trellis/tasks/00-bootstrap-guidelines"
+            )
+            manifest = _plan(project, vault, _decisions(vault, items), home)
+            targets = {
+                operation["target"]
+                for operation in manifest["payload"]["projects"][0]["private_operations"]
+            }
+            self.assertFalse(any("handoffs" in target or "bootstrap" in target for target in targets))
+        for current_task in ("../../outside", "/tmp/not-a-project-task", ".trellis/tasks/missing"):
+            with self.subTest(current_task=current_task), tempfile.TemporaryDirectory() as directory:
+                project, vault, home, items = build(Path(directory).resolve(), current_task)
+                with self.assertRaises(ContractError) as caught:
+                    _plan(project, vault, _decisions(vault, items), home)
+                self.assertEqual(caught.exception.code, "graph-conflict")
+        with tempfile.TemporaryDirectory() as directory:
+            project, vault, home, items = build(
+                Path(directory).resolve(),
+                ".trellis/tasks/00-bootstrap-guidelines",
+                partial=True,
+            )
+            with self.assertRaises(ContractError) as caught:
+                _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(caught.exception.code, "approval-required")
+
+
+
+    def test_partial_private_task_skip_still_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            items = json.loads(decisions.read_text())["items"]
+            folder = project / ".trellis/tasks/00-keep-private"
+            _write(
+                folder / "task.json",
+                _json_bytes(_legacy_source(id="kept", name="kept")),
+            )
+            _write(folder / "prd.md", b"still private\n")
+            items.append(
+                _item(
+                    "partial-skip",
+                    [_ref(folder / "task.json")],
+                    None,
+                    "private-only",
+                    None,
+                    required=False,
+                )
+            )
+            with self.assertRaises(ContractError) as caught:
+                _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(caught.exception.code, "approval-required")
+
+    def test_private_only_lessons_still_require_a_projection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, home, decisions = _full_fixture(base)
+            items = json.loads(decisions.read_text())["items"]
+            lessons = next(item for item in items if item["item_id"] == "lessons-tree")
+            lessons.update(
+                required=False,
+                decision="private-only",
+                target_path=None,
+                candidate_ref=None,
+            )
+            lessons["approval"]["scope"].update(
+                decision="private-only", target_path=None, candidate_ref=None
+            )
+            with self.assertRaises(ContractError) as caught:
+                _plan(project, vault, _decisions(vault, items), home)
+            self.assertEqual(caught.exception.code, "approval-required")
+
     def test_shared_markdown_links_need_a_planned_local_target(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
