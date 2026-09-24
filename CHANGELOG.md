@@ -56,6 +56,7 @@
 
 ### 变更
 
+- 迁移 plan 接受显式 `private-only` 跳过整个旧任务目录，或私有保全 spec 文件；不生成任务投影、不要求 handoff。session 指针只对完整跳过放行，未知、外部或部分跳过仍拒绝。lessons 仍必须 share/redact。缺批准或部分跳过仍然 blocked。不写死任务名，也不授权 apply。README 两份入口和版本化 automation prompt 同步该例外；live automation 不在本轮同步。
 - P0-07将完整sbtd-task、全局／项目规则及lessons-record候选移入正式安装源，catalog由15个bundled调整为14个，19个required external保持；删除两旧Trellis Skill源目录，不保留alias或包内旧入口副本。
 - 项目setup停止安装／调用Trellis，Python与两安装器移除旧username／platform／skip参数，结果使用`sbtdInit`／`sbtdProjectSetup`。安装前检查全部所选项目，保全既有task、identity、spec、lessons及旧数据；不默认生成bootstrap或完整目录树。
 - 旧bootstrap提示改为保全数据并请求显式迁移，不再调用已退役Skill；README、Onboard说明和版本化automation prompt区分已切换payload与尚待P1完成的v2生命周期，本项不执行真实HOME部署或旧数据清理。

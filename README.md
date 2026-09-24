@@ -20,7 +20,7 @@ P1-19 在 `scripts/` 内增加按需 developer 身份库（`sbtd_identity.py`）
 
 P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只读核对仓库外私有准备和批准候选；apply 经 `--yes` 确认后保存原件、发布已批准投影、暂停已证明受管的 Codex/OMP 旧路由，并保存不可变累计回执；verify 只读核对实际资源、原件和绑定部署报告。`share` 的直接复制内容必须逐字保留，改写需 `redact`；混合／未知配置保留并阻断自动处置。后续文件参数接收 envelope 中相应子对象，不接收整个响应。操作说明见[迁移入口](sbtd-workflow-onboard/REFERENCE.md#migration-runtime)。部署 producer、cleanup、recovery 与真实 host／Windows 验收仍分别受后续门禁约束，不能把消费者夹具或本阶段命令当作完整 v2 迁移发布。
 
-迁移未完成上下文时，旧 workspace journals／session JSON 必须绑定人工批准的 `HandoffStore` 摘要，写入受保护的 `docs/handoffs/`；缺少摘要、任务关联冲突或候选变化会阻断，不自动选择当前任务。Graft 遥测配置改为安全创建：不存在时原子创建、已关闭时只读；已有配置需要修改时拒绝覆盖，须在外部独占处理后重试。具体审批与兼容性边界见上述 REFERENCE。
+迁移未完成且会发布的任务时，旧 workspace journals／session JSON 必须绑定人工批准的 `HandoffStore` 摘要，写入受保护的 `docs/handoffs/`；缺少摘要、任务关联冲突或候选变化会阻断，不自动选择当前任务。显式 private-only 跳过整个旧任务目录时不生成投影、不要求 handoff；journal／session 本身获批 private-only 时留在私有层。部分跳过、未知或外部 session 指针仍阻断。Graft 遥测配置改为安全创建：不存在时原子创建、已关闭时只读；已有配置需要修改时拒绝覆盖，须在外部独占处理后重试。具体审批与兼容性边界见上述 REFERENCE。
 
 SBTD v2 的完整问题台账现归档为 [docs/archive/sbtd-workflow-v2-findings.md](docs/archive/sbtd-workflow-v2-findings.md)：199 项问题及历史裁决完整保留，当前为 195 fixed、4 dismissed；原根目录 `findings.log` 已移除。CI 在 Linux 全量之外明确验证大小写敏感路径，并在 Windows 验证 junction 与私有目录 ACL。
 
