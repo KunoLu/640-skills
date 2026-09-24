@@ -18,7 +18,7 @@
 | Legacy safety | 本轮不改生产迁移代码；live 写入尚未发生 | not-required |
 | DDD | 无新领域术语 | not-required |
 | Refactoring | 不改生产实现 | not-required |
-| Release readiness | 本项不是部署、发布或 cleanup | not-required |
+| Release readiness | required；live apply 是 migration／runtime 运维行为变更。适用验证完成前不得运行 reviewer，也不得把本启动写成 ready。P2-03 标 done 前必须有独立 `Release Readiness Review` | planned |
 | grill-with-docs | 未完整调用。沿用已冻结范围和用户本句，不新增领域边界 | not-required |
 
 ```text
@@ -34,6 +34,9 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 ```
 
 本审查只确认启动可以 fail-closed。它不是 apply 通过，也不是 P2-04 解锁。
+
+`2026-09-24T23:05:27+0800` 初稿把 Release readiness 写成 not-required，理由只是本轮不部署、不发布、不 cleanup。该结论撤回。live apply 属于 migration／runtime 运维行为变更，Gate 改为 required／planned。适用验证完成前不运行 reviewer，也不把本启动写成 ready。
+
 
 ## 3. 当前事实
 

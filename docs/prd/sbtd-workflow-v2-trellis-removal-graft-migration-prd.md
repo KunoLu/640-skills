@@ -1509,6 +1509,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-24T22:46:30+0800 | P2-02 checking→done | 观察时刻，不是用户消息发生时钟。用户原文「P2-02 演练到此结束。不授权 cleanup，不再次恢复，不启动 P2-03。现场继续保留。在此前提下把 P2-02 标 done。」任务 PR #73 merge `2e22adc1a2644c99cbbe830c13ffe99881b1afaa`；状态 PR #74 已合并，merge `d6d38907c9aa5aec8a73d1c0c5617a022f45469b`，GitHub mergedAt `2026-09-24T14:41:08Z`。两条 PR 都已闭环，独立复审无剩余 P0/P1。该原文只关闭本项，不授权 cleanup、再次恢复或 P2-03。现场继续保留。`verified` 不是 cleanup 同意。不启动 P2-03，不 cleanup，不同步 live automation。 |
 | 2026-09-24T23:05:27+0800 | P2-03 planned→in-progress／live apply 启动 | 观察时刻，不是用户消息发生时钟。用户原文「在新的任务分支下，启动 P2-03。范围仍是冻结协议的 demo／main、Codex+OMP，源仓不纳入。这是维护窗口，授权对 live 批次做数据迁移和旧路由停用。不部署新接线，不 smoke，不 cleanup，不删备份，不 sync，不改 hooks。隔离现场继续保留。」从 main `f922991c5aef75c08e05494f9bef94b847516711` 建立 `p2-03-live-apply`。该原文不授权部署、smoke、cleanup、备份销毁、sync、hooks 修改，也不授权改隔离现场。P2-04 仍 planned。 |
 | 2026-09-24T23:10:47+0800 | P2-03 live plan 被缺批准拒绝 | 观察时刻，不是用户消息发生时钟。只对 live `demo` 运行 migration plan，不传 deployment-mode，不传 `--graft-hooks`，不使用绑定隔离副本的批准文件。退出码 2，status blocked，reason 为 a legacy task has no approved projections。未生成 manifest，未 apply。live 项目、共享 HOME、hooks 和隔离现场的观察哨兵未变。P2-04 仍 planned。 |
+| 2026-09-24T23:18:24+0800 | P2-03 撤回 Release readiness 免审 | 观察时刻，不是用户消息发生时钟。用户要求评估 advisor。初稿把 Release readiness 写成 not-required，理由只是不部署、不发布、不 cleanup。该结论撤回。live apply 属于 migration／runtime 运维行为变更，协议改为 required／planned。适用验证完成前不运行 reviewer，P2-03 标 done 前必须有独立审查。未 apply，未改 live。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 
