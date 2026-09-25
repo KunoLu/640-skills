@@ -1516,6 +1516,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-25T09:00:24+0800 | P2-03 live plan 停在共享路由核对 | 观察时刻，不是用户消息发生时钟。用户要求只修 OMP 家目录存在性检查，不碰符号链接，不改两份共享路由。只读 plan 退出码 2，status blocked，reason 为 customized legacy global routing requires explicit reconciliation。未生成 manifest，未 apply，未改 live。 |
 | 2026-09-25T09:04:58+0800 | P2-03 补上 OMP 路径逐级 no-follow | 观察时刻，不是用户消息发生时钟。09:00 的存在性检查只 lstat 最后一级，父目录符号链接仍会被跟随。现已在分类前逐级拒绝链接，不扫子树。只读 plan 仍退出码 2，status blocked，reason 为 customized legacy global routing requires explicit reconciliation。未生成 manifest，未 apply，未改 live。 |
 | 2026-09-25T09:12:15+0800 | P2-03 禁止单独回滚父链接修复 | 观察时刻，不是用户消息发生时钟。单独回滚 2bb2089 会回到 2e5e42c，父目录符号链接仍会被跟随。要恢复整树扫描必须成对撤回 2bb2089 与 2e5e42c 并复验。当前安全实现保持不动。未 apply，未改 live。 |
+| 2026-09-25T09:54:00+0800 | P2-03 只读核对两份共享路由 | 观察时刻，不是用户消息发生时钟。用户要求只读核对，不改文件。两份都不等于 v1.0.15 暂停销，也不等于当前短模板，且仍含旧工具名。OMP 与销同目录，只改 3 个小节。Codex 少 i-have-adhd 小节，交互工具节已改名，另有 8 个小节与销不同。暂停块不在任一文件中。未 plan，未 apply，未改 live。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 

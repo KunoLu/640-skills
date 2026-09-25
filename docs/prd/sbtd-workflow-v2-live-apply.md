@@ -50,6 +50,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-25T09:00:24+0800` 只修了 OMP 家目录存在性检查，不扫子树。当时写了「不跟随链接」，该句不完整：只 `lstat` 了最后一级，父目录是符号链接时仍会被跟随。重跑只读 plan 退出码 2，status `blocked`，reason 为 `customized legacy global routing requires explicit reconciliation`。Codex 与 OMP 两份共享路由文件都未改。未生成 manifest。未 apply。
 - `2026-09-25T09:04:58+0800` 存在性检查改为逐级 no-follow，仍不扫子树。父目录是符号链接时在分类前拒绝。重跑只读 plan 仍退出码 2，status `blocked`，reason 仍为 `customized legacy global routing requires explicit reconciliation`。未改两份共享路由，未生成 manifest，未 apply。
 - `2026-09-25T09:12:15+0800` 回滚警告：不得单独回滚 `2bb2089`。那会回到 `2e5e42c`，父目录符号链接仍会被跟随。要恢复修复前的整树扫描，必须成对撤回 `2bb2089` 与 `2e5e42c` 并复验。当前安全实现保持不动。
+- `2026-09-25T09:54:00+0800` 只读核对两份共享路由，未改文件。两份都不等于 v1.0.15 暂停销，也不等于当前短模板，且仍含旧工具名。OMP 与销同目录，只改了 3 个小节。Codex 少了 `i-have-adhd` 小节，交互工具节已改名，另有 8 个小节与销不同。暂停块不在任一文件中。未 plan，未 apply。
 
 ## 4. 明确不做
 
@@ -65,5 +66,5 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
-5. 19 个 pyc 已批准为 private-only。存在性检查已逐级 no-follow，不再被无关子链接挡住。plan 仍未 `planned`：两份不匹配暂停销的共享路由文件还没有书面核对决定。
+5. 19 个 pyc 已批准为 private-only。存在性检查已逐级 no-follow。两份共享路由已只读核对，仍未改。plan 仍未 `planned`：还没有书面决定保留这两份定制路由、不暂停也不改写。
 
