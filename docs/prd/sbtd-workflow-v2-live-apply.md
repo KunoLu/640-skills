@@ -57,6 +57,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-25T10:09:05+0800` 在私有层准备了 demo 项目规则的受控停用候选。开头是暂停块原文。`## Trellis` 到目录清单、以及 `TRELLIS:START` 到 `TRELLIS:END` 管理块已换成一段否定句。Channel 加载句和 lesson 写入旧目录的句子已改成不得执行。filesystem-safety 与非法 dispatch fail-closed 两条保留。候选未批准，未写入 live，未 plan，未 apply。批准这一份仍不能单独放行 plan。
 - `2026-09-25T10:16:26+0800` 用户书面「批准」只绑定 demo 项目规则候选，checksum `cb5f99ea620f77028ab7323aae1cf4c0989230afd9385da40aa9811370e5f767`。不绑定两份全局候选。未写入 live。未改计划器。未 plan。未 apply。这一份批准不能放行 plan。
 - `2026-09-25T10:18:13+0800` 撤回对两份全局候选的绑定。用户那句只批准已展示的否定句，不能覆盖未展示的 `to-spec` / `to-tickets` 落盘改写、Lessons 路径改写和 Skill 文案改写。私有批准记录已改为 withdrawn-not-binding。未写入 live。未 plan。未 apply。
+- `2026-09-25T10:21:27+0800` 用户按已展示 SHA 批准两份全局候选。Codex `f206428ce4ccb2dc67b364f81264d851401cda67ad94b2f60dda1a2ccef034a9`。OMP `e52100f279aad36e2c629b3dc11dc9f12ba79fe9a1044e4b1401e5125eb16577`。写入前复核与这两个 SHA 一致。未写入 live。未改计划器。未 plan。未 apply。
 
 ## 4. 明确不做
 
@@ -72,5 +73,5 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
-5. demo 项目规则候选已书面批准，但未写入 live。两份全局暂停候选仍未批准。任一已批候选都不能单独放行 plan 或 apply。计划器尚未接受这些定制暂停候选。
+5. demo 项目规则候选和两份全局暂停候选都已按 checksum 书面批准，但都未写入 live。计划器仍只接受与 v1.0.15 销逐字节相同的暂停，尚未接受这些定制候选。因此 plan 仍 blocked，不得 apply。
 
