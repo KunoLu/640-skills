@@ -58,6 +58,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-25T10:16:26+0800` 用户书面「批准」只绑定 demo 项目规则候选，checksum `cb5f99ea620f77028ab7323aae1cf4c0989230afd9385da40aa9811370e5f767`。不绑定两份全局候选。未写入 live。未改计划器。未 plan。未 apply。这一份批准不能放行 plan。
 - `2026-09-25T10:18:13+0800` 撤回对两份全局候选的绑定。用户那句只批准已展示的否定句，不能覆盖未展示的 `to-spec` / `to-tickets` 落盘改写、Lessons 路径改写和 Skill 文案改写。私有批准记录已改为 withdrawn-not-binding。未写入 live。未 plan。未 apply。
 - `2026-09-25T10:21:27+0800` 用户按已展示 SHA 批准两份全局候选。Codex `f206428ce4ccb2dc67b364f81264d851401cda67ad94b2f60dda1a2ccef034a9`。OMP `e52100f279aad36e2c629b3dc11dc9f12ba79fe9a1044e4b1401e5125eb16577`。写入前复核与这两个 SHA 一致。未写入 live。未改计划器。未 plan。未 apply。
+- `2026-09-25T10:24:41+0800` 撤回「计划器只接受三个 SHA」的实现建议。共享暂停校验只认可 pinned `ensure-file-block`，apply 只追加暂停块，不写入已批候选。项目 `AGENTS.md` 的现有操作只删管理块。硬编码放行会让 plan 变绿却执行错误暂停。未改计划器，未写 live，未 plan。
 
 ## 4. 明确不做
 
@@ -73,5 +74,5 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
-5. demo 项目规则候选和两份全局暂停候选都已按 checksum 书面批准，但都未写入 live。计划器仍只接受与 v1.0.15 销逐字节相同的暂停，尚未接受这些定制候选。因此 plan 仍 blocked，不得 apply。
+5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。不得把三个 SHA 做成硬编码放行。下一步设计必须逐项绑定 live 目标、原件快照、候选 SHA 和批准范围，并让 plan、apply、verify 复制并回读已批字节。在该设计被书面接受前，不改计划器。
 
