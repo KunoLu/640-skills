@@ -48,6 +48,8 @@ import onboard_contracts as contracts
 from onboard_contracts import ContractError
 from sbtd_identity import DeveloperStore
 from sbtd_migration_files import (
+    _canonical,
+    _lstat,
     directory_snapshot,
     read_file,
     require_private_directory,
@@ -227,21 +229,10 @@ def _lineage_probe(path: Path) -> str:
 
 def _omp_root_presence(path: Path) -> str:
     """Classify only the OMP root. Do not walk children or follow links."""
-    if not path.is_absolute() or ".." in path.parts:
-        _fail("unsafe-path", "migration paths must be canonical and absolute")
-    try:
-        info = path.lstat()
-    except FileNotFoundError:
+    checked = _canonical(path)
+    info = _lstat(checked)
+    if info is None:
         return "absent"
-    except OSError:
-        _fail("read-failed", "path cannot be inspected")
-    if stat.S_ISLNK(info.st_mode) or bool(
-        getattr(info, "st_file_attributes", 0)
-        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
-    ):
-        _fail(
-            "unsafe-path", "migration paths do not follow symbolic or reparse links"
-        )
     if stat.S_ISDIR(info.st_mode):
         return "directory"
     if stat.S_ISREG(info.st_mode):
@@ -2146,8 +2137,8 @@ def _shared_operations(
     codex_home = default_codex_home()
     routing_targets = [("codex-home", codex_home, codex_home / "AGENTS.md")]
     omp_home = user_home() / ".omp"
-    # Existence only. snapshot() hashes the whole tree and rejects unrelated
-    # child links; those links are not the routing file this pause checks.
+    # Existence only. Every path component is checked nofollow; children are
+    # not walked. Unrelated links inside the directory are not routing targets.
     omp_presence = _omp_root_presence(omp_home)
     if omp_presence == "directory":
         routing_targets.append(("omp-home", omp_home, omp_global_agents_path(omp_home)))

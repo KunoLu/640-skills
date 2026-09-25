@@ -78,6 +78,25 @@ class MigrationPlanTests(unittest.TestCase):
                 "trellis pin must not be read",
             )
 
+    def test_omp_root_presence_rejects_a_symlink_parent_without_following(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            physical = base / "physical"
+            (physical / ".omp" / "agent").mkdir(parents=True)
+            agents = physical / ".omp" / "agent" / "AGENTS.md"
+            agents.write_text("trellis behind a parent link")
+            home = base / "home"
+            home.symlink_to(physical, target_is_directory=True)
+            with self.assertRaises(ContractError) as caught:
+                sbtd_migration_plan._omp_root_presence(home / ".omp")
+            self.assertEqual(
+                caught.exception.message,
+                "migration paths do not follow symbolic or reparse links",
+            )
+            self.assertEqual(agents.read_text(), "trellis behind a parent link")
+            self.assertTrue(home.is_symlink())
+
+
     def test_omp_home_file_root_is_not_a_safe_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
