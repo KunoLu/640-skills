@@ -49,6 +49,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-25T08:16:43+0800` 用户书面批准 19 个 pyc private-only，不发布，不删除。该决定已写入私有批准文件。重跑只读 plan 仍退出码 2，status `blocked`，reason 为 `directory contains a link or special entry`。阻断点是计划器为判断 OMP 家目录是否存在而整树扫描，碰到无关符号链接。未生成 manifest。未 apply。未改 live，未改共享路由文件，未删链接。
 - `2026-09-25T09:00:24+0800` 只修了 OMP 家目录存在性检查，不扫子树。当时写了「不跟随链接」，该句不完整：只 `lstat` 了最后一级，父目录是符号链接时仍会被跟随。重跑只读 plan 退出码 2，status `blocked`，reason 为 `customized legacy global routing requires explicit reconciliation`。Codex 与 OMP 两份共享路由文件都未改。未生成 manifest。未 apply。
 - `2026-09-25T09:04:58+0800` 存在性检查改为逐级 no-follow，仍不扫子树。父目录是符号链接时在分类前拒绝。重跑只读 plan 仍退出码 2，status `blocked`，reason 仍为 `customized legacy global routing requires explicit reconciliation`。未改两份共享路由，未生成 manifest，未 apply。
+- `2026-09-25T09:12:15+0800` 回滚警告：不得单独回滚 `2bb2089`。那会回到 `2e5e42c`，父目录符号链接仍会被跟随。要恢复修复前的整树扫描，必须成对撤回 `2bb2089` 与 `2e5e42c` 并复验。当前安全实现保持不动。
 
 ## 4. 明确不做
 
@@ -56,6 +57,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - 不改隔离现场，不删备份，不 cleanup，不 sync，不改 hooks，不部署，不 smoke。
 - 不把本启动写成 done。完成时间留到 live apply 回执和任务 PR 之后的状态 PR。
 - 不启动 P2-04。
+- 不得单独回滚 `2bb2089`。它的父提交 `2e5e42c` 只检查最后一级。成对撤回这两笔才会回到整树扫描，撤回后必须复验。
 
 ## 5. 继续前必须另有的事实
 
