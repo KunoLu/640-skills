@@ -74,7 +74,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
-5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。复制与回读设计已写入第 6 节，尚未被接受为实现授权。接受前不改计划器，不写 live。
+5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。第 6 节已补契约缺口和失败路径。实现范围不是只改计划器。该设计尚未被接受为实现授权。接受前不改 schema、计划器、apply 或 verify，不写 live。
 
 ## 6. 已批路由候选的复制与回读设计
 
@@ -97,4 +97,42 @@ apply 走现有 `copy-file` 路径，写入候选全文，然后回读快照。�
 verify 再读 live 目标。当前快照必须等于回执 `after`，也必须等于已批候选 checksum。不一致就是 drift，不得报已停用。checksum 一致即全文一致，不再用关键字扫描代替回读。
 
 这三项写入前仍须另有 `planned` manifest 和单独的 apply 确认。本设计不授权现在写 live，不授权部署、smoke、cleanup、删备份、sync 或改 hooks。
+
+`2026-09-25T11:01:28+0800` 补失败路径。撤回「只改计划器即可实现」。本补充仍不改代码。
+
+契约缺口：
+
+- `ownership` 只有 `template-source`、`managed-marker`、`skill-identity`、`config-entry`。没有批准记录类型。新所有权写进 manifest 前，schema 和契约检查必须先接受它，否则文档封存失败。
+- `_validate_shared_operations()` 只接受 pinned `ensure-file-block` 和 Skill `remove`。共享 `copy-file` 现在会被当成未知操作拒绝。
+- 项目平台闭包只接受 `remove`。demo `AGENTS.md` 的 `copy-file` 现在会被当成未知私有操作拒绝。
+- apply 的 `copy-file` 回读已经存在，但这两条校验拒绝后根本到不了它。
+- verify 对已保留资源只比较回执 `after` 和当前快照。它不重新打开候选。错误的追加暂停若已成功，live 会等于回执 `after`，verify 不会发现那不是已批全文。
+- 已成功的错误暂停在重试时因 live 仍等于 `after` 被跳过，不会自动改写成候选。
+
+因此只改计划器会得到两种坏结果：manifest 封存或后续校验失败，plan 并不真绿；或者若绕过校验，apply 仍追加暂停块，verify 把错误结果当成成功。两种都不是完成。
+
+失败路径：
+
+- 批准记录缺失、字段不全或候选 checksum 与记录不一致：plan blocked，`approval-conflict`。零写入。
+- live 快照与批准记录中的原件不一致，或候选文件与记录中的候选快照不一致：plan blocked，`state-conflict`。不自动改批准记录。
+- 候选不以暂停块原文开头：plan blocked，`candidate-conflict`。
+- 同一目标同时出现 `copy-file` 与 `ensure-file-block` 或管理块删除：plan blocked，`approval-conflict`。
+- schema 不接受新所有权：manifest 不得封存。这不是 plan 通过。
+- apply 时候选字节已变：`state-conflict`，该资源不写。
+- apply 写入后回读不等于候选快照：`post-state-conflict`。停止后续资源。回执保留实际 `after`，不得报 succeeded。
+- verify 发现 live 不等于回执 `after`，或不等于操作里的候选快照：drift。不得报已停用。
+- 重试时上次已成功且 live 仍等于 `after`：跳过，不写第二次。
+- 重试时 live 与上次 `after` 不一致：`retry-conflict`。
+- 部分写入或未知写入：`unsafe-retry`。不得退回追加暂停块。
+
+实现范围，接受前不做：
+
+1. schema 增加批准候选所有权，并让契约检查拒绝私有范围外的引用。
+2. plan 只在上述检查通过后发 `copy-file`。
+3. 共享校验和项目闭包都接受这个形状，并拒绝同一目标的旧暂停操作。
+4. apply 测试证明写入的是候选全文，不是追加块。
+5. verify 测试证明它重开候选，并在 live 不等于候选时失败。
+6. 重试测试证明成功结果不重写，部分写入不退回旧暂停。
+
+六项都有失败测试之前，不得把 plan 变绿当成路由已停用。
 
