@@ -46,6 +46,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - P2-04 及之后仍为 planned。
 - `2026-09-24T23:29:02+0800` 用户书面批准：bootstrap 整夹 private-only 跳过；spec 私有保全；journal 与 runtime marker private-only。归档任务只准备 redact 候选，未看前不批。未写批准文件，未 plan，未 apply。
 - `2026-09-24T23:57:48+0800` 用户书面批准这份 live 归档 redact 候选。私有批准文件只绑定 live 原件：bootstrap 整夹跳过、归档 redact、spec 私有保全、journal 与 runtime marker private-only。只读 plan 退出码 2，status `blocked`，reason 为 `unowned legacy runtime content requires approval`。未覆盖的是 legacy `scripts/common/__pycache__/` 下 19 个 `.pyc`。未生成 manifest。未 apply。live 项目、共享 HOME 路由文件、hooks 和隔离现场未变。
+- `2026-09-25T08:16:43+0800` 用户书面批准 19 个 pyc private-only，不发布，不删除。该决定已写入私有批准文件。重跑只读 plan 仍退出码 2，status `blocked`，reason 为 `directory contains a link or special entry`。阻断点是计划器为判断 OMP 家目录是否存在而整树扫描，碰到无关符号链接。未生成 manifest。未 apply。未改 live，未改共享路由文件，未删链接。
 
 ## 4. 明确不做
 
@@ -60,4 +61,5 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
+5. 19 个 pyc 已批准为 private-only。plan 仍未 `planned`。OMP 家目录里的无关符号链接和两份不匹配暂停销的共享路由文件都还没有解除阻断的书面决定。
 
