@@ -22,6 +22,7 @@
 - P1-15 增加 Codex/OMP 三模式 host smoke 入口：默认 CI 跳过真实会话；`SBTD_P115_HOST=1` 才跑六个 host×mode 组合。另含 Gate 分层、跨会话 task 恢复与保存失败格；入口文件规模只作观察，不把字数换算成 AC-20 token 通过。
 
 ### 修复
+- 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。子目录里的无关符号链接不再阻断存在性检查；根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
 
 - 将完整 findings 台账归档为 `docs/archive/sbtd-workflow-v2-findings.md` 的问题／状态表和完整字段表：保留 199 项问题、22 条策略与审查记录、全部原级别与历史；用户确认的 16 项闭环后为 195 fixed、4 dismissed，移除旧 `findings.log` 并更新文档入口。
 - 补充 Linux 大小写敏感路径与原生 Windows 私有目录 ACL 的明确 CI 步骤，保留 Windows junction 拒绝测试；平台条件 skip 不作为该平台验证通过。

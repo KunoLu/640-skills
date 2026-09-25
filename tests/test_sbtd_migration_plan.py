@@ -28,6 +28,75 @@ from tests.test_sbtd_migration_legacy import (
 
 
 class MigrationPlanTests(unittest.TestCase):
+    def test_omp_home_child_link_does_not_block_the_existence_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            omp = home / ".omp"
+            (omp / "agent").mkdir(parents=True)
+            target = base / "elsewhere"
+            target.write_text("unrelated")
+            link = omp / "unrelated"
+            link.symlink_to(target)
+            project = base / "project"
+            project.mkdir()
+            with (
+                _home_env(home),
+                mock.patch("onboard.user_home", return_value=home),
+            ):
+                roots, operations = sbtd_migration_plan._shared_operations([project])
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(link.read_text(), "unrelated")
+            self.assertFalse(any(record["kind"] == "omp-home" for record in roots))
+            self.assertFalse(
+                any("pause-legacy-routing" == op["selector"] for op in operations)
+            )
+
+    def test_omp_home_symlink_root_is_not_followed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            real = base / "real"
+            (real / "agent").mkdir(parents=True)
+            (real / "agent" / "AGENTS.md").write_text("trellis pin must not be read")
+            home = base / "home"
+            home.mkdir()
+            (home / ".omp").symlink_to(real, target_is_directory=True)
+            project = base / "project"
+            project.mkdir()
+            with (
+                _home_env(home),
+                mock.patch("onboard.user_home", return_value=home),
+                self.assertRaises(ContractError) as caught,
+            ):
+                sbtd_migration_plan._shared_operations([project])
+            self.assertEqual(
+                caught.exception.message,
+                "migration paths do not follow symbolic or reparse links",
+            )
+            self.assertEqual(
+                (real / "agent" / "AGENTS.md").read_text(),
+                "trellis pin must not be read",
+            )
+
+    def test_omp_home_file_root_is_not_a_safe_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            home.mkdir()
+            (home / ".omp").write_text("not a directory")
+            project = base / "project"
+            project.mkdir()
+            with (
+                _home_env(home),
+                mock.patch("onboard.user_home", return_value=home),
+                self.assertRaises(ContractError) as caught,
+            ):
+                sbtd_migration_plan._shared_operations([project])
+            self.assertEqual(
+                caught.exception.message,
+                "the existing OMP root is not a safe directory",
+            )
+
     def test_planning_legacy_identity_is_read_only_and_has_no_global_fallback(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

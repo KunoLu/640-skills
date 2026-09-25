@@ -1513,6 +1513,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-24T23:29:02+0800 | P2-03 准备 live 归档 redact 候选 | 观察时刻，不是用户消息发生时钟。用户批准 bootstrap 整夹跳过、spec 私有保全、journal 与 runtime marker private-only；归档任务只出 redact 候选，未看前不批。候选在私有层，不进仓库，投影校验通过。未写批准文件，未 plan，未 apply，未改 live。 |
 | 2026-09-24T23:57:48+0800 | P2-03 live plan 被未批准字节码挡住 | 观察时刻，不是用户消息发生时钟。用户批准这份 live 归档 redact 候选。私有批准文件绑定 live 原件。只读 plan 退出码 2，status blocked，reason 为 unowned legacy runtime content requires approval。未覆盖的是 scripts/common/__pycache__ 下 19 个 pyc。未生成 manifest，未 apply，未改 live。 |
 | 2026-09-25T08:16:43+0800 | P2-03 live plan 被 OMP 家目录扫描挡住 | 观察时刻，不是用户消息发生时钟。用户批准 19 个 pyc private-only，不发布，不删除。只读 plan 退出码 2，status blocked，reason 为 directory contains a link or special entry。计划器整树扫描 OMP 家目录时碰到无关符号链接。Codex 与 OMP 两份共享路由文件都不匹配暂停销，且仍含旧工具名。未生成 manifest，未 apply，未改 live。 |
+| 2026-09-25T09:00:24+0800 | P2-03 live plan 停在共享路由核对 | 观察时刻，不是用户消息发生时钟。用户要求只修 OMP 家目录存在性检查，不碰符号链接，不改两份共享路由。只读 plan 退出码 2，status blocked，reason 为 customized legacy global routing requires explicit reconciliation。未生成 manifest，未 apply，未改 live。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 

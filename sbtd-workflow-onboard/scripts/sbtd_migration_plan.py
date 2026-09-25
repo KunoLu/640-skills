@@ -225,6 +225,30 @@ def _lineage_probe(path: Path) -> str:
     _fail("unsafe-path", "a target parent path is a special entry")
 
 
+def _omp_root_presence(path: Path) -> str:
+    """Classify only the OMP root. Do not walk children or follow links."""
+    if not path.is_absolute() or ".." in path.parts:
+        _fail("unsafe-path", "migration paths must be canonical and absolute")
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return "absent"
+    except OSError:
+        _fail("read-failed", "path cannot be inspected")
+    if stat.S_ISLNK(info.st_mode) or bool(
+        getattr(info, "st_file_attributes", 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+    ):
+        _fail(
+            "unsafe-path", "migration paths do not follow symbolic or reparse links"
+        )
+    if stat.S_ISDIR(info.st_mode):
+        return "directory"
+    if stat.S_ISREG(info.st_mode):
+        return "file"
+    _fail("unsafe-path", "path is a link or special file, not absent")
+
+
 def _check_target_lineage(target: Path, root: Path) -> None:
     """Missing parents are fine (apply creates them); existing junk is not."""
     parent = target.parent
@@ -2122,10 +2146,12 @@ def _shared_operations(
     codex_home = default_codex_home()
     routing_targets = [("codex-home", codex_home, codex_home / "AGENTS.md")]
     omp_home = user_home() / ".omp"
-    omp_state = snapshot(omp_home)
-    if omp_state["type"] == "directory":
+    # Existence only. snapshot() hashes the whole tree and rejects unrelated
+    # child links; those links are not the routing file this pause checks.
+    omp_presence = _omp_root_presence(omp_home)
+    if omp_presence == "directory":
         routing_targets.append(("omp-home", omp_home, omp_global_agents_path(omp_home)))
-    elif omp_state["type"] != "absent":
+    elif omp_presence == "file":
         _fail("ownership-conflict", "the existing OMP root is not a safe directory")
     pause = _present_file_reference(_PAUSE_ASSET, "the maintenance asset")
     current_routing = read_file(_PACKAGE / "templates" / "agents" / "AGENTS.global.md")
