@@ -56,6 +56,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-25T10:06:44+0800` 两份全局候选不能证明 demo 旧入口已停用。候选写明项目 `AGENTS.md` 优先于全局规则。live 项目规则第 50–57 行仍要求加载 `trellis-workflow`、读取 `.trellis/workflow.md`；第 173–193 行管理块仍要求优先使用 Trellis 命令。这是独立阻断。批准两份全局候选不得放行 plan 或 apply。项目级规则还没有单独的受控停用候选。未改项目文件，未 plan，未 apply。
 - `2026-09-25T10:09:05+0800` 在私有层准备了 demo 项目规则的受控停用候选。开头是暂停块原文。`## Trellis` 到目录清单、以及 `TRELLIS:START` 到 `TRELLIS:END` 管理块已换成一段否定句。Channel 加载句和 lesson 写入旧目录的句子已改成不得执行。filesystem-safety 与非法 dispatch fail-closed 两条保留。候选未批准，未写入 live，未 plan，未 apply。批准这一份仍不能单独放行 plan。
 - `2026-09-25T10:16:26+0800` 用户书面「批准」只绑定 demo 项目规则候选，checksum `cb5f99ea620f77028ab7323aae1cf4c0989230afd9385da40aa9811370e5f767`。不绑定两份全局候选。未写入 live。未改计划器。未 plan。未 apply。这一份批准不能放行 plan。
+- `2026-09-25T10:18:13+0800` 撤回对两份全局候选的绑定。用户那句只批准已展示的否定句，不能覆盖未展示的 `to-spec` / `to-tickets` 落盘改写、Lessons 路径改写和 Skill 文案改写。私有批准记录已改为 withdrawn-not-binding。未写入 live。未 plan。未 apply。
 
 ## 4. 明确不做
 
