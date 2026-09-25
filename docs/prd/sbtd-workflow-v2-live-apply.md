@@ -74,5 +74,27 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
-5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。不得把三个 SHA 做成硬编码放行。下一步设计必须逐项绑定 live 目标、原件快照、候选 SHA 和批准范围，并让 plan、apply、verify 复制并回读已批字节。在该设计被书面接受前，不改计划器。
+5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。复制与回读设计已写入第 6 节，尚未被接受为实现授权。接受前不改计划器，不写 live。
+
+## 6. 已批路由候选的复制与回读设计
+
+`2026-09-25T10:42:55+0800` 只出设计，不改代码。这不是实现授权，也不是 apply 授权。
+
+现有共享暂停只认可 pinned `ensure-file-block`，apply 只追加固定暂停块。项目 `AGENTS.md` 若命中所有权哈希，现有操作只删除 `TRELLIS` 管理块。这两条都不能写入已批全文。不得在源码里硬编码三个 SHA 来放行它们。
+
+三项目标按角色解析，不按 SHA 名单解析：
+
+1. Codex 全局路由：当前 Codex home 下的 `AGENTS.md`。
+2. OMP 全局路由：当前 OMP home 下的全局 `AGENTS.md`。
+3. demo 项目路由：本次选中的 live `demo` 根下的 `AGENTS.md`。
+
+私有批准记录是绑定事实源。每项只含角色、live 目标、原件快照、候选引用和批准句。候选引用的 checksum 必须等于已批 SHA。源码不保存这三个 SHA。测试只用夹具，不把 live checksum 写进仓库。
+
+plan 对每一项重新快照 live 目标和候选。任一与批准记录不一致就 blocked，不自动改批准记录。候选必须以内置暂停块原文开头。通过后只发一条既有 `copy-file` 操作：目标是 live 路径，来源是候选引用，前置状态是 live 快照，所有权指向批准记录而不是暂停销。选择器使用新的 `approved-routing-replacement`，避免被现有暂停校验当成 `ensure-file-block`。同一目标不得再发追加暂停块或只删管理块。两条同时出现就 blocked。
+
+apply 走现有 `copy-file` 路径，写入候选全文，然后回读快照。回读 checksum 必须等于候选状态，也必须等于回执 `after`。不得走追加暂停块。
+
+verify 再读 live 目标。当前快照必须等于回执 `after`，也必须等于已批候选 checksum。不一致就是 drift，不得报已停用。checksum 一致即全文一致，不再用关键字扫描代替回读。
+
+这三项写入前仍须另有 `planned` manifest 和单独的 apply 确认。本设计不授权现在写 live，不授权部署、smoke、cleanup、删备份、sync 或改 hooks。
 
