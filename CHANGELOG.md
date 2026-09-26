@@ -22,6 +22,10 @@
 - P1-15 增加 Codex/OMP 三模式 host smoke 入口：默认 CI 跳过真实会话；`SBTD_P115_HOST=1` 才跑六个 host×mode 组合。另含 Gate 分层、跨会话 task 恢复与保存失败格；入口文件规模只作观察，不把字数换算成 AC-20 token 通过。
 
 ### 修复
+- 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。路径上每一级，包括父目录，都按 no-follow 拒绝符号链接；子目录里的无关符号链接不再阻断存在性检查。根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
+- 迁移 apply 的路由批准只认调用方传入的 `--routing-approvals` 文件，不认重封 manifest 里的路径。该文件 SHA 必须等于 sealed 记录，操作从这份文件重建；路径也不能落在 evidence/apply 写入根里。没有这份文件时，必须显式传 `--no-routing-approvals`，并且不得对 `AGENTS.md` 追加暂停块或删除管理块。批准文件还必须带安装包 `assets/routing-approval.pub` 验得过的 Ed25519 签名。公钥不从 manifest 或调用方路径读取。调用方把批准路径指到攻击者文件时，签名对不上就拒绝。plan 只有显式 `--routing-approval-key` 才签名，且私钥路径不进 manifest。仓库不保存对应私钥。未写 live。
+- 同一实现生成的迁移 apply，带回执重试时不再先用 live 当前字节对照批准前快照。已成功且 live 仍等于回执 `after` 的路由替换会跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。已经密封的旧 manifest 仍会先因 `runtime_versions` 不一致报 `version-conflict`，到不了这个重试门。
+- 迁移 plan 不再把 `.trellis` 下被 Git 忽略、且不在已知布局里的杂项当成未分类阻断。这些文件仍留在目录快照里，后续整目录 cleanup 会一起删掉。`tasks`、`spec`、`lessons` 即使被 ignore，也仍要走批准，避免漏掉被忽略的 `task.json`。未被忽略的未知文件会汇总后停下，不自动删除。
 
 - 将完整 findings 台账归档为 `docs/archive/sbtd-workflow-v2-findings.md` 的问题／状态表和完整字段表：保留 199 项问题、22 条策略与审查记录、全部原级别与历史；用户确认的 16 项闭环后为 195 fixed、4 dismissed，移除旧 `findings.log` 并更新文档入口。
 - 补充 Linux 大小写敏感路径与原生 Windows 私有目录 ACL 的明确 CI 步骤，保留 Windows junction 拒绝测试；平台条件 skip 不作为该平台验证通过。

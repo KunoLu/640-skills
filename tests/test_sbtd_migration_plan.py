@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -26,8 +27,128 @@ from tests.test_sbtd_migration_legacy import (
     _task_md,
 )
 
+_TEST_APPROVAL_KEY = None
+_APPROVAL_KEY_PATCH = None
+
+
+def setUpModule():
+    global _TEST_APPROVAL_KEY, _APPROVAL_KEY_PATCH
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    _TEST_APPROVAL_KEY = Ed25519PrivateKey.generate()
+    _APPROVAL_KEY_PATCH = mock.patch(
+        "sbtd_migration_plan._routing_approval_public_key",
+        return_value=_TEST_APPROVAL_KEY.public_key(),
+    )
+    _APPROVAL_KEY_PATCH.start()
+
+
+def tearDownModule():
+    if _APPROVAL_KEY_PATCH is not None:
+        _APPROVAL_KEY_PATCH.stop()
+
+
+def _sign_existing_approval(path, private_key=None):
+    document = json.loads(path.read_bytes())
+    payload = contracts.canonical_json_bytes(
+        {"schema_version": document["schema_version"], "items": document["items"]}
+    )
+    signer = _TEST_APPROVAL_KEY if private_key is None else private_key
+    document["signature"] = base64.b64encode(signer.sign(payload)).decode("ascii")
+    path.write_bytes(json.dumps(document).encode("utf-8"))
+    return path
+
+
 
 class MigrationPlanTests(unittest.TestCase):
+    def test_omp_home_child_link_does_not_block_the_existence_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            omp = home / ".omp"
+            (omp / "agent").mkdir(parents=True)
+            target = base / "elsewhere"
+            target.write_text("unrelated")
+            link = omp / "unrelated"
+            link.symlink_to(target)
+            project = base / "project"
+            project.mkdir()
+            with (
+                _home_env(home),
+                mock.patch("onboard.user_home", return_value=home),
+            ):
+                roots, operations = sbtd_migration_plan._shared_operations([project])
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(link.read_text(), "unrelated")
+            self.assertFalse(any(record["kind"] == "omp-home" for record in roots))
+            self.assertFalse(
+                any("pause-legacy-routing" == op["selector"] for op in operations)
+            )
+
+    def test_omp_home_symlink_root_is_not_followed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            real = base / "real"
+            (real / "agent").mkdir(parents=True)
+            (real / "agent" / "AGENTS.md").write_text("trellis pin must not be read")
+            home = base / "home"
+            home.mkdir()
+            (home / ".omp").symlink_to(real, target_is_directory=True)
+            project = base / "project"
+            project.mkdir()
+            with (
+                _home_env(home),
+                mock.patch("onboard.user_home", return_value=home),
+                self.assertRaises(ContractError) as caught,
+            ):
+                sbtd_migration_plan._shared_operations([project])
+            self.assertEqual(
+                caught.exception.message,
+                "migration paths do not follow symbolic or reparse links",
+            )
+            self.assertEqual(
+                (real / "agent" / "AGENTS.md").read_text(),
+                "trellis pin must not be read",
+            )
+
+    def test_omp_root_presence_rejects_a_symlink_parent_without_following(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            physical = base / "physical"
+            (physical / ".omp" / "agent").mkdir(parents=True)
+            agents = physical / ".omp" / "agent" / "AGENTS.md"
+            agents.write_text("trellis behind a parent link")
+            home = base / "home"
+            home.symlink_to(physical, target_is_directory=True)
+            with self.assertRaises(ContractError) as caught:
+                sbtd_migration_plan._omp_root_presence(home / ".omp")
+            self.assertEqual(
+                caught.exception.message,
+                "migration paths do not follow symbolic or reparse links",
+            )
+            self.assertEqual(agents.read_text(), "trellis behind a parent link")
+            self.assertTrue(home.is_symlink())
+
+
+    def test_omp_home_file_root_is_not_a_safe_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            home.mkdir()
+            (home / ".omp").write_text("not a directory")
+            project = base / "project"
+            project.mkdir()
+            with (
+                _home_env(home),
+                mock.patch("onboard.user_home", return_value=home),
+                self.assertRaises(ContractError) as caught,
+            ):
+                sbtd_migration_plan._shared_operations([project])
+            self.assertEqual(
+                caught.exception.message,
+                "the existing OMP root is not a safe directory",
+            )
+
     def test_planning_legacy_identity_is_read_only_and_has_no_global_fallback(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -2104,7 +2225,9 @@ class MigrationContextHandoffTests(unittest.TestCase):
                 )
                 manifest_path = vault / "manifest.json"
                 manifest_path.write_bytes(contracts.canonical_json_bytes(manifest))
-                receipt, code = apply_migration(manifest_path, confirmed=True)
+                receipt, code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
                 self.assertEqual(code, 0, receipt)
                 receipt_path = vault / "apply.json"
                 receipt_path.write_bytes(
@@ -2116,6 +2239,7 @@ class MigrationContextHandoffTests(unittest.TestCase):
                     manifest_path,
                     previous_receipt_path=receipt_path,
                     confirmed=True,
+                    no_routing_approvals=True,
                 )
                 self.assertEqual(code, 0, repeated)
                 loaded = HandoffStore(TaskStore(project, read_only=True)).load(
@@ -2215,6 +2339,1350 @@ class MigrationContextHandoffTests(unittest.TestCase):
                 with self.assertRaises(ContractError) as error:
                     _plan(project, vault, _decisions(vault, items), home)
                 self.assertEqual(error.exception.code, "invalid-config")
+
+def _routing_batch(base):
+    project = base / "project"
+    (project / ".trellis").mkdir(parents=True)
+    (project / ".codex/agents").mkdir(parents=True)
+    (project / ".trellis/.developer").write_bytes(LEGACY_IDENTITY)
+    owned = b'name = "trellis-implement"\n'
+    relative = ".codex/agents/trellis-implement.toml"
+    (project / relative).write_bytes(owned)
+    (project / ".trellis/.template-hashes.json").write_text(
+        json.dumps(
+            {
+                "__version": 2,
+                "hashes": {relative: hashlib.sha256(owned).hexdigest()},
+            }
+        )
+    )
+    (project / ".trellis/.version").write_text("0.6.17\n")
+    home = base / "home"
+    vault = base / "vault"
+    evidence = base / "evidence"
+    for path in (home, vault, evidence):
+        path.mkdir(mode=0o700)
+    pause = (SCRIPTS.parents[0] / "assets" / "migration-paused-agents.txt").read_bytes()
+    environment = {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "CODEX_HOME": str(home / ".codex"),
+        "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+    }
+    return project, home, vault, evidence, pause, environment
+
+
+def _routing_approval(path, role, target, candidate):
+    path.write_bytes(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "items": [
+                    {
+                        "role": role,
+                        "target_path": str(target),
+                        "before": snapshot(target),
+                        "candidate_ref": {
+                            "path": str(candidate),
+                            "state": snapshot(candidate),
+                        },
+                        "basis": "fixture custodian approval",
+                    }
+                ],
+            }
+        ).encode("utf-8")
+    )
+    return _sign_existing_approval(path)
+
+
+def _plan_routing(project, vault, approval, environment):
+    with mock.patch.dict(os.environ, environment):
+        return plan_migration(
+            [project],
+            vault,
+            "fixture",
+            None,
+            tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+            routing_approvals=approval,
+        )
+
+
+class ApprovedRoutingReplacementTests(unittest.TestCase):
+    def test_approved_candidate_is_copied_and_reopened(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = base / "project"
+            (project / ".trellis").mkdir(parents=True)
+            (project / ".codex/agents").mkdir(parents=True)
+            (project / ".trellis/.developer").write_bytes(LEGACY_IDENTITY)
+            owned = b'name = "trellis-implement"\n'
+            relative = ".codex/agents/trellis-implement.toml"
+            (project / relative).write_bytes(owned)
+            (project / ".trellis/.template-hashes.json").write_text(
+                json.dumps(
+                    {
+                        "__version": 2,
+                        "hashes": {relative: hashlib.sha256(owned).hexdigest()},
+                    }
+                )
+            )
+            (project / ".trellis/.version").write_text("0.6.17\n")
+            home = base / "home"
+            vault = base / "vault"
+            evidence = base / "evidence"
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            live.write_bytes(b"custom trellis routing\n")
+            pause = (
+                SCRIPTS.parents[0] / "assets" / "migration-paused-agents.txt"
+            ).read_bytes()
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = vault / "routing-approvals.json"
+            approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "codex-global",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(candidate),
+                                    "state": snapshot(candidate),
+                                },
+                                "basis": "fixture custodian approval",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            )
+            _sign_existing_approval(approval)
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                with self.assertRaises(ContractError) as blocked:
+                    plan_migration(
+                        [project],
+                        vault,
+                        "fixture",
+                        None,
+                        tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    )
+                self.assertIn(blocked.exception.code, {"ownership-conflict", "semantic-violation"})
+                before_plan = live.read_bytes()
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                )
+                self.assertEqual(live.read_bytes(), before_plan)
+                replacements = [
+                    operation
+                    for operation in manifest["payload"]["shared_operations"]
+                    if operation["selector"] == "approved-routing-replacement"
+                ]
+                self.assertEqual(len(replacements), 1)
+                operation = replacements[0]
+                self.assertEqual(operation["change"]["kind"], "copy-file")
+                self.assertEqual(operation["ownership"]["kind"], "approved-candidate")
+                self.assertFalse(
+                    any(
+                        item["target"] == str(live)
+                        and item["selector"] == "pause-legacy-routing"
+                        for item in manifest["payload"]["shared_operations"]
+                    )
+                )
+                validate_legacy_inputs(manifest, _reader)
+                from onboard_contracts import canonical_json_bytes
+                from sbtd_migration import apply_migration
+
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(manifest))
+                with mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ):
+                    response, code = apply_migration(
+                        manifest_path,
+                        confirmed=True,
+                        routing_approvals=approval,
+                    )
+                self.assertEqual(code, 0, response)
+                self.assertEqual(live.read_bytes(), candidate.read_bytes())
+                validate_legacy_inputs(manifest, _reader)
+                candidate.write_bytes(pause + b"\nchanged after approval\n")
+                from sbtd_migration_verify import _check_approved_routing
+
+                with self.assertRaises(ContractError) as drifted:
+                    _check_approved_routing(manifest)
+                self.assertEqual(drifted.exception.code, "approved-routing-drift")
+
+
+    def test_receipt_retry_skips_an_applied_routing_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            live.write_bytes(b"custom trellis routing\n")
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "codex-global", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+            from onboard_contracts import canonical_json_bytes
+            from sbtd_migration import apply_migration
+
+            manifest_path = evidence / "manifest.json"
+            manifest_path.write_bytes(canonical_json_bytes(manifest))
+            versions = {"onboard": "fixture", "graft": "0.18.0"}
+            with mock.patch.dict(os.environ, environment), mock.patch(
+                "sbtd_migration.runtime_versions", return_value=versions
+            ):
+                response, code = apply_migration(
+                    manifest_path, confirmed=True, routing_approvals=approval
+                )
+                self.assertEqual(code, 0, response)
+                applied = live.read_bytes()
+                self.assertEqual(applied, candidate.read_bytes())
+                receipt = response["migration"]["apply_receipt"]
+                saved = evidence / f"apply-{receipt['apply_id']}.json"
+                retried, retry_code = apply_migration(
+                    manifest_path,
+                    previous_receipt_path=saved,
+                    confirmed=True,
+                    routing_approvals=approval,
+                )
+                self.assertEqual(retry_code, 0, retried)
+                self.assertEqual(retried["status"], "already-complete")
+                self.assertEqual(live.read_bytes(), applied)
+                live.write_bytes(applied + b"tampered\n")
+                with self.assertRaises(ContractError) as conflict:
+                    apply_migration(
+                        manifest_path,
+                        previous_receipt_path=saved,
+                        confirmed=True,
+                        routing_approvals=approval,
+                    )
+            self.assertEqual(conflict.exception.code, "retry-conflict")
+            self.assertEqual(live.read_bytes(), applied + b"tampered\n")
+
+
+
+    def test_candidate_without_the_pause_prefix_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            vault = base / "vault"
+            project = base / "project"
+            for path in (home, vault, project / ".trellis"):
+                path.mkdir(parents=True, mode=0o700)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            live.write_bytes(b"custom trellis routing\n")
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(b"approved replacement without pause\n")
+            approval = vault / "routing-approvals.json"
+            approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "codex-global",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(candidate),
+                                    "state": snapshot(candidate),
+                                },
+                                "basis": "fixture custodian approval",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            )
+            _sign_existing_approval(approval)
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "HOME": str(home),
+                    "USERPROFILE": str(home),
+                    "CODEX_HOME": str(home / ".codex"),
+                    "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+                },
+            ), self.assertRaises(ContractError) as error:
+                plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                )
+            self.assertEqual(error.exception.code, "candidate-conflict")
+
+    def test_retry_block_refuses_a_partial_write(self):
+        from sbtd_migration import _retry_block
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "AGENTS.md"
+            target.write_bytes(b"partial\n")
+            self.assertEqual(
+                _retry_block(
+                    {
+                        "after": snapshot(target),
+                        "before": {"type": "absent", "checksum": None},
+                        "status": "failed",
+                        "error": "post-state-conflict",
+                    },
+                    target,
+                ),
+                "unsafe-retry",
+            )
+
+    def test_resealed_routing_operation_must_match_the_approval_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = base / "project"
+            (project / ".trellis").mkdir(parents=True)
+            (project / ".codex/agents").mkdir(parents=True)
+            (project / ".trellis/.developer").write_bytes(LEGACY_IDENTITY)
+            owned = b'name = "trellis-implement"\n'
+            relative = ".codex/agents/trellis-implement.toml"
+            (project / relative).write_bytes(owned)
+            (project / ".trellis/.template-hashes.json").write_text(
+                json.dumps(
+                    {
+                        "__version": 2,
+                        "hashes": {relative: hashlib.sha256(owned).hexdigest()},
+                    }
+                )
+            )
+            (project / ".trellis/.version").write_text("0.6.17\n")
+            home = base / "home"
+            vault = base / "vault"
+            evidence = base / "evidence"
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            before_live = b"custom trellis routing\n"
+            live.write_bytes(before_live)
+            pause = (
+                SCRIPTS.parents[0] / "assets" / "migration-paused-agents.txt"
+            ).read_bytes()
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = vault / "routing-approvals.json"
+            approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "codex-global",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(candidate),
+                                    "state": snapshot(candidate),
+                                },
+                                "basis": "fixture custodian approval",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            )
+            _sign_existing_approval(approval)
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                )
+                from sbtd_migration import _all_input_references, _original_reference
+
+                approval_refs = [
+                    reference
+                    for reference in _all_input_references(manifest)
+                    if reference["path"] == str(approval)
+                ]
+                self.assertEqual(
+                    approval_refs,
+                    [{"path": str(approval), "state": snapshot(approval)}],
+                )
+
+
+                def change_role(payload):
+                    operation = next(
+                        item
+                        for item in payload["shared_operations"]
+                        if item["selector"] == "approved-routing-replacement"
+                    )
+                    operation["ownership"]["role"] = "omp-global"
+
+                with self.assertRaises(ContractError) as role_error:
+                    validate_legacy_inputs(_reseal(manifest, change_role), _reader)
+                self.assertEqual(role_error.exception.code, "approval-conflict")
+                outside = base / "outside-candidate.md"
+                outside.write_bytes(candidate.read_bytes())
+
+                def point_outside(payload):
+                    operation = next(
+                        item
+                        for item in payload["shared_operations"]
+                        if item["selector"] == "approved-routing-replacement"
+                    )
+                    forged = {"path": str(outside), "state": snapshot(outside)}
+                    operation["change"]["source_ref"] = forged
+                    operation["ownership"]["reference"] = forged
+
+                tampered = _reseal(manifest, point_outside)
+                with self.assertRaises(ContractError) as scope_error:
+                    validate_legacy_inputs(tampered, _reader)
+                self.assertEqual(scope_error.exception.code, "private-scope")
+                from onboard_contracts import canonical_json_bytes
+                from sbtd_migration import apply_migration
+
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(tampered))
+                with mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ), self.assertRaises(ContractError):
+                    apply_migration(manifest_path, confirmed=True)
+                self.assertEqual(live.read_bytes(), before_live)
+                approval.write_bytes(approval.read_bytes() + b"\n")
+                with self.assertRaises(ContractError) as drifted:
+                    _original_reference(approval_refs[0], manifest)
+                self.assertEqual(drifted.exception.code, "state-conflict")
+                with self.assertRaises(ContractError) as rebound:
+                    validate_legacy_inputs(manifest, _reader)
+                self.assertEqual(rebound.exception.code, "state-conflict")
+
+    def test_omp_global_candidate_is_copied_and_a_wrong_path_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = home / ".omp" / "agent" / "AGENTS.md"
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved omp replacement\n")
+            approval = vault / "routing-approvals.json"
+            approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "omp-global",
+                                "target_path": str(live),
+                                "before": {"type": "absent", "checksum": None},
+                                "candidate_ref": {
+                                    "path": str(candidate),
+                                    "state": snapshot(candidate),
+                                },
+                                "basis": "fixture custodian approval",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            )
+            _sign_existing_approval(approval)
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as missing,
+            ):
+                plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                )
+            self.assertEqual(missing.exception.code, "ownership-conflict")
+            live.parent.mkdir(parents=True)
+            live.write_bytes(b"custom trellis omp routing\n")
+            wrong = home / ".omp" / "AGENTS.md"
+            wrong.write_bytes(b"custom trellis omp routing\n")
+            _routing_approval(approval, "omp-global", wrong, candidate)
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as wrong_path,
+            ):
+                plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                )
+            self.assertEqual(wrong_path.exception.code, "approval-conflict")
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as blocked,
+            ):
+                plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                )
+            self.assertEqual(blocked.exception.code, "ownership-conflict")
+            _routing_approval(approval, "omp-global", live, candidate)
+            with mock.patch.dict(os.environ, environment):
+                manifest = _plan_routing(project, vault, approval, environment)
+                replacements = [
+                    operation
+                    for operation in manifest["payload"]["shared_operations"]
+                    if operation["selector"] == "approved-routing-replacement"
+                ]
+                self.assertEqual(
+                    [
+                        (
+                            operation["change"]["kind"],
+                            operation["ownership"]["role"],
+                            operation["target"],
+                        )
+                        for operation in replacements
+                    ],
+                    [("copy-file", "omp-global", str(live))],
+                )
+                self.assertFalse(
+                    any(
+                        operation["target"] == str(live)
+                        and operation["selector"] == "pause-legacy-routing"
+                        for operation in manifest["payload"]["shared_operations"]
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        record["kind"] == "omp-home"
+                        and record["path"] == str(home / ".omp")
+                        for record in manifest["payload"]["shared_roots"]
+                    )
+                )
+                validate_legacy_inputs(manifest, _reader)
+                from onboard_contracts import canonical_json_bytes
+                from sbtd_migration import apply_migration
+
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(manifest))
+                with mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ):
+                    response, code = apply_migration(
+                        manifest_path,
+                        confirmed=True,
+                        routing_approvals=approval,
+                    )
+                self.assertEqual(code, 0, response)
+                self.assertEqual(live.read_bytes(), candidate.read_bytes())
+
+                def change_role(payload):
+                    operation = next(
+                        item
+                        for item in payload["shared_operations"]
+                        if item["selector"] == "approved-routing-replacement"
+                    )
+                    operation["ownership"]["role"] = "demo-project"
+
+                with self.assertRaises(ContractError) as rebound:
+                    validate_legacy_inputs(_reseal(manifest, change_role), _reader)
+                self.assertEqual(rebound.exception.code, "approval-conflict")
+                candidate.write_bytes(pause + b"\nchanged after approval\n")
+                from sbtd_migration_verify import _check_approved_routing
+
+                with self.assertRaises(ContractError) as drifted:
+                    _check_approved_routing(manifest)
+                self.assertEqual(drifted.exception.code, "approved-routing-drift")
+
+    def test_demo_project_candidate_replaces_marker_removal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, _home, vault, evidence, pause, environment = _routing_batch(base)
+            live = project / "AGENTS.md"
+            body = b"custom trellis project routing\n"
+            live.write_bytes(body)
+            hashes_path = project / ".trellis/.template-hashes.json"
+            recorded = json.loads(hashes_path.read_text())
+            recorded["hashes"]["AGENTS.md"] = hashlib.sha256(body).hexdigest()
+            hashes_path.write_text(json.dumps(recorded))
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved demo replacement\n")
+            approval = vault / "routing-approvals.json"
+            other = base / "other" / "AGENTS.md"
+            other.parent.mkdir()
+            other.write_bytes(body)
+            _routing_approval(approval, "demo-project", other, candidate)
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as outside,
+            ):
+                plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                )
+            self.assertEqual(outside.exception.code, "approval-conflict")
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as blocked,
+            ):
+                plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                )
+            self.assertEqual(blocked.exception.code, "ownership-conflict")
+            _routing_approval(approval, "demo-project", live, candidate)
+            before_live = live.read_bytes()
+            with mock.patch.dict(os.environ, environment):
+                manifest = _plan_routing(project, vault, approval, environment)
+                private = manifest["payload"]["projects"][0]["private_operations"]
+                replacements = [
+                    operation
+                    for operation in private
+                    if operation["selector"] == "approved-routing-replacement"
+                ]
+                self.assertEqual(
+                    [
+                        (
+                            operation["change"]["kind"],
+                            operation["ownership"]["role"],
+                            operation["target"],
+                            operation["dependent_projects"],
+                        )
+                        for operation in replacements
+                    ],
+                    [("copy-file", "demo-project", str(live), [str(project)])],
+                )
+                self.assertFalse(
+                    any(
+                        operation["target"] == str(live)
+                        and operation["selector"] == "trellis-block"
+                        for operation in private
+                    )
+                )
+                self.assertFalse(
+                    any(
+                        operation["selector"] == "approved-routing-replacement"
+                        for operation in manifest["payload"]["shared_operations"]
+                    )
+                )
+                validate_legacy_inputs(manifest, _reader)
+                from onboard_contracts import canonical_json_bytes
+                from sbtd_migration import apply_migration
+
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(manifest))
+                with mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ):
+                    response, code = apply_migration(
+                        manifest_path,
+                        confirmed=True,
+                        routing_approvals=approval,
+                    )
+                self.assertEqual(code, 0, response)
+                self.assertEqual(live.read_bytes(), candidate.read_bytes())
+                outside_candidate = base / "outside-candidate.md"
+                outside_candidate.write_bytes(candidate.read_bytes())
+
+                def point_outside(payload):
+                    operation = next(
+                        item
+                        for item in payload["projects"][0]["private_operations"]
+                        if item["selector"] == "approved-routing-replacement"
+                    )
+                    forged = {
+                        "path": str(outside_candidate),
+                        "state": snapshot(outside_candidate),
+                    }
+                    operation["change"]["source_ref"] = forged
+                    operation["ownership"]["reference"] = forged
+
+                tampered = _reseal(manifest, point_outside)
+                with self.assertRaises(ContractError) as scope_error:
+                    validate_legacy_inputs(tampered, _reader)
+                self.assertEqual(scope_error.exception.code, "private-scope")
+                manifest_path.write_bytes(canonical_json_bytes(tampered))
+                with (
+                    mock.patch(
+                        "sbtd_migration.runtime_versions",
+                        return_value={"onboard": "fixture", "graft": "0.18.0"},
+                    ),
+                    self.assertRaises(ContractError),
+                ):
+                    apply_migration(manifest_path, confirmed=True)
+                self.assertEqual(live.read_bytes(), candidate.read_bytes())
+                self.assertNotEqual(live.read_bytes(), before_live)
+                candidate.write_bytes(pause + b"\nchanged after approval\n")
+                from sbtd_migration_verify import _check_approved_routing
+
+                with self.assertRaises(ContractError) as drifted:
+                    _check_approved_routing(manifest)
+                self.assertEqual(drifted.exception.code, "approved-routing-drift")
+
+
+
+
+    def test_dropped_or_substituted_routing_is_rejected_before_write(self):
+        from onboard_contracts import canonical_json_bytes, operation_id, resource_id
+        from sbtd_migration import apply_migration
+
+        def reject(manifest, environment, evidence, live, before, name):
+            with mock.patch.dict(os.environ, environment):
+                with self.assertRaises(ContractError) as error:
+                    validate_legacy_inputs(manifest, _reader)
+                self.assertEqual(error.exception.code, "approval-conflict")
+            path = evidence / f"{name}.json"
+            path.write_bytes(canonical_json_bytes(manifest))
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ),
+                self.assertRaises(ContractError),
+            ):
+                apply_migration(path, confirmed=True)
+            self.assertEqual(live.read_bytes(), before)
+
+        def drop_routing(payload):
+            removed = {
+                operation["operation_id"]
+                for operation in payload["shared_operations"]
+                if operation["selector"] == "approved-routing-replacement"
+            }
+            for project_record in payload["projects"]:
+                removed.update(
+                    operation["operation_id"]
+                    for operation in project_record["private_operations"]
+                    if operation["selector"] == "approved-routing-replacement"
+                )
+                project_record["private_operations"] = [
+                    operation
+                    for operation in project_record["private_operations"]
+                    if operation["operation_id"] not in removed
+                ]
+                project_record["shared_operation_ids"] = [
+                    item
+                    for item in project_record["shared_operation_ids"]
+                    if item not in removed
+                ]
+            payload["shared_operations"] = [
+                operation
+                for operation in payload["shared_operations"]
+                if operation["operation_id"] not in removed
+            ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            before = b"custom trellis routing\n"
+            live.write_bytes(before)
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "codex-global", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+            self.assertEqual(
+                manifest["payload"]["routing_approvals"]["path"], str(approval)
+            )
+            reject(
+                _reseal(manifest, drop_routing),
+                environment,
+                evidence,
+                live,
+                before,
+                "codex-drop",
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = home / ".omp" / "agent" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            before = b"custom trellis omp routing\n"
+            live.write_bytes(before)
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved omp replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "omp-global", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+            reject(
+                _reseal(manifest, drop_routing),
+                environment,
+                evidence,
+                live,
+                before,
+                "omp-drop",
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = project / "AGENTS.md"
+            before = (
+                b"keep-me\n<!-- TRELLIS:START -->\nmanaged\n<!-- TRELLIS:END -->\n"
+                b"keep-tail\n"
+            )
+            live.write_bytes(before)
+            hashes_path = project / ".trellis/.template-hashes.json"
+            recorded = json.loads(hashes_path.read_text())
+            recorded["hashes"]["AGENTS.md"] = hashlib.sha256(before).hexdigest()
+            hashes_path.write_text(json.dumps(recorded))
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved demo replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "demo-project", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+
+            def swap_for_marker_delete(payload):
+                operations = payload["projects"][0]["private_operations"]
+                replacement = next(
+                    operation
+                    for operation in operations
+                    if operation["selector"] == "approved-routing-replacement"
+                )
+                operations.remove(replacement)
+                resource = resource_id("markdown", str(live))
+                operations.append(
+                    {
+                        "operation_id": operation_id(
+                            "apply", resource, "trellis-block"
+                        ),
+                        "phase": "apply",
+                        "resource_id": resource,
+                        "owner_kind": "markdown",
+                        "target": str(live),
+                        "selector": "trellis-block",
+                        "change": {"kind": "remove"},
+                        "ownership": {
+                            "kind": "managed-marker",
+                            "reference": {"path": str(live), "state": snapshot(live)},
+                            "marker": "TRELLIS",
+                        },
+                        "before_requirement": {
+                            "kind": "state",
+                            "state": snapshot(live),
+                        },
+                        "dependent_projects": [str(project)],
+                    }
+                )
+
+            reject(
+                _reseal(manifest, swap_for_marker_delete),
+                environment,
+                evidence,
+                live,
+                before,
+                "demo-swap",
+            )
+
+
+
+    def test_approval_inside_evidence_apply_root_is_rejected_before_write(self):
+        from onboard_contracts import canonical_json_bytes
+        from sbtd_migration import apply_migration
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = project / "AGENTS.md"
+            before = (
+                b"keep-me\n<!-- TRELLIS:START -->\nmanaged\n"
+                b"<!-- TRELLIS:END -->\nkeep-tail\n"
+            )
+            live.write_bytes(before)
+            hashes_path = project / ".trellis/.template-hashes.json"
+            recorded = json.loads(hashes_path.read_text())
+            recorded["hashes"]["AGENTS.md"] = hashlib.sha256(before).hexdigest()
+            hashes_path.write_text(json.dumps(recorded))
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved demo replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "demo-project", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+            attacker = base / "attacker-vault"
+            attacker.mkdir(mode=0o700)
+            forged_candidate = attacker / "forged.md"
+            forged_candidate.write_bytes(pause + b"\nattacker replacement\n")
+            forged_approval = attacker / "routing-approvals.json"
+            forged_approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "demo-project",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(forged_candidate),
+                                    "state": snapshot(forged_candidate),
+                                },
+                                "basis": "forged",
+                            }
+                        ],
+                    }
+                ).encode()
+            )
+            nested = attacker / "evidence"
+            nested.mkdir(mode=0o700)
+
+            def retarget(payload):
+                payload["backup_root"] = str(attacker)
+                payload["routing_approvals"] = {
+                    "path": str(forged_approval),
+                    "state": snapshot(forged_approval),
+                }
+                for project_record in payload["projects"]:
+                    for operation in project_record["private_operations"]:
+                        if operation["selector"] != "approved-routing-replacement":
+                            continue
+                        forged = {
+                            "path": str(forged_candidate),
+                            "state": snapshot(forged_candidate),
+                        }
+                        operation["change"]["source_ref"] = forged
+                        operation["ownership"]["reference"] = forged
+                        operation["ownership"]["approval_ref"] = payload[
+                            "routing_approvals"
+                        ]
+
+            tampered = _reseal(manifest, retarget)
+            path = nested / "manifest.json"
+            path.write_bytes(canonical_json_bytes(tampered))
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ),
+                self.assertRaises(ContractError) as error,
+            ):
+                apply_migration(path, confirmed=True)
+            self.assertEqual(error.exception.code, "private-scope")
+            self.assertEqual(live.read_bytes(), before)
+
+            honest = evidence / "manifest.json"
+            honest.write_bytes(canonical_json_bytes(manifest))
+            approval.write_bytes(approval.read_bytes() + b"\n")
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ),
+                self.assertRaises(ContractError) as drifted,
+            ):
+                apply_migration(honest, confirmed=True)
+            self.assertEqual(drifted.exception.code, "state-conflict")
+            self.assertEqual(live.read_bytes(), before)
+
+    def test_caller_anchor_rejects_retargeted_vault_before_render(self):
+        from onboard_contracts import canonical_json_bytes
+        from sbtd_migration import apply_migration
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = project / "AGENTS.md"
+            before = (
+                b"keep-me\n<!-- TRELLIS:START -->\nmanaged\n"
+                b"<!-- TRELLIS:END -->\nkeep-tail\n"
+            )
+            live.write_bytes(before)
+            hashes_path = project / ".trellis/.template-hashes.json"
+            recorded = json.loads(hashes_path.read_text())
+            recorded["hashes"]["AGENTS.md"] = hashlib.sha256(before).hexdigest()
+            hashes_path.write_text(json.dumps(recorded))
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved demo replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "demo-project", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+            attacker = base / "attacker-vault"
+            attacker.mkdir(mode=0o700)
+            forged_candidate = attacker / "forged.md"
+            forged_candidate.write_bytes(pause + b"\nattacker replacement\n")
+            forged_approval = attacker / "routing-approvals.json"
+            forged_approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "demo-project",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(forged_candidate),
+                                    "state": snapshot(forged_candidate),
+                                },
+                                "basis": "forged",
+                            }
+                        ],
+                    }
+                ).encode()
+            )
+
+            def retarget(payload):
+                payload["backup_root"] = str(attacker)
+                payload["routing_approvals"] = {
+                    "path": str(forged_approval),
+                    "state": snapshot(forged_approval),
+                }
+                for project_record in payload["projects"]:
+                    for operation in project_record["private_operations"]:
+                        if operation["selector"] != "approved-routing-replacement":
+                            continue
+                        forged = {
+                            "path": str(forged_candidate),
+                            "state": snapshot(forged_candidate),
+                        }
+                        operation["change"]["source_ref"] = forged
+                        operation["ownership"]["reference"] = forged
+                        operation["ownership"]["approval_ref"] = payload[
+                            "routing_approvals"
+                        ]
+
+            tampered = _reseal(manifest, retarget)
+            path = evidence / "retarget.json"
+            path.write_bytes(canonical_json_bytes(tampered))
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ),
+                mock.patch(
+                    "sbtd_migration._render_resource",
+                    side_effect=AssertionError("render"),
+                ),
+                self.assertRaises(ContractError) as error,
+            ):
+                apply_migration(
+                    path, confirmed=True, routing_approvals=approval
+                )
+            self.assertEqual(error.exception.code, "invalid-config")
+            self.assertEqual(live.read_bytes(), before)
+
+    def test_null_approval_marker_delete_is_rejected_before_render(self):
+        from onboard_contracts import canonical_json_bytes, operation_id, resource_id
+        from sbtd_migration import apply_migration
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = project / "AGENTS.md"
+            before = (
+                b"keep-me\n<!-- TRELLIS:START -->\nmanaged\n"
+                b"<!-- TRELLIS:END -->\nkeep-tail\n"
+            )
+            live.write_bytes(before)
+            hashes_path = project / ".trellis/.template-hashes.json"
+            recorded = json.loads(hashes_path.read_text())
+            recorded["hashes"]["AGENTS.md"] = hashlib.sha256(before).hexdigest()
+            hashes_path.write_text(json.dumps(recorded))
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved demo replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "demo-project", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+
+            def null_and_delete(payload):
+                payload["routing_approvals"] = None
+                operations = payload["projects"][0]["private_operations"]
+                replacement = next(
+                    operation
+                    for operation in operations
+                    if operation["selector"] == "approved-routing-replacement"
+                )
+                operations.remove(replacement)
+                resource = resource_id("markdown", str(live))
+                operations.append(
+                    {
+                        "operation_id": operation_id(
+                            "apply", resource, "trellis-block"
+                        ),
+                        "phase": "apply",
+                        "resource_id": resource,
+                        "owner_kind": "markdown",
+                        "target": str(live),
+                        "selector": "trellis-block",
+                        "change": {"kind": "remove"},
+                        "ownership": {
+                            "kind": "managed-marker",
+                            "reference": {"path": str(live), "state": snapshot(live)},
+                            "marker": "TRELLIS",
+                        },
+                        "before_requirement": {
+                            "kind": "state",
+                            "state": snapshot(live),
+                        },
+                        "dependent_projects": [str(project)],
+                    }
+                )
+
+            tampered = _reseal(manifest, null_and_delete)
+            path = evidence / "null-delete.json"
+            path.write_bytes(canonical_json_bytes(tampered))
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ),
+                mock.patch(
+                    "sbtd_migration._render_resource",
+                    side_effect=AssertionError("render"),
+                ),
+                self.assertRaises(ContractError) as error,
+            ):
+                apply_migration(path, confirmed=True, no_routing_approvals=True)
+            self.assertEqual(error.exception.code, "approval-conflict")
+            self.assertEqual(live.read_bytes(), before)
+
+    def test_caller_attacker_file_is_rejected_before_render(self):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PrivateKey,
+        )
+        from onboard_contracts import canonical_json_bytes
+        from sbtd_migration import apply_migration
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = project / "AGENTS.md"
+            before = (
+                b"keep-me\n<!-- TRELLIS:START -->\nmanaged\n"
+                b"<!-- TRELLIS:END -->\nkeep-tail\n"
+            )
+            live.write_bytes(before)
+            hashes_path = project / ".trellis/.template-hashes.json"
+            recorded = json.loads(hashes_path.read_text())
+            recorded["hashes"]["AGENTS.md"] = hashlib.sha256(before).hexdigest()
+            hashes_path.write_text(json.dumps(recorded))
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved demo replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "demo-project", live, candidate
+            )
+            manifest = _plan_routing(project, vault, approval, environment)
+            attacker = base / "attacker-vault"
+            attacker.mkdir(mode=0o700)
+            forged_candidate = attacker / "forged.md"
+            forged_candidate.write_bytes(pause + b"\nattacker replacement\n")
+            forged_approval = attacker / "routing-approvals.json"
+            forged_approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "demo-project",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(forged_candidate),
+                                    "state": snapshot(forged_candidate),
+                                },
+                                "basis": "forged",
+                            }
+                        ],
+                    }
+                ).encode()
+            )
+            _sign_existing_approval(forged_approval, Ed25519PrivateKey.generate())
+
+            def retarget(payload):
+                payload["backup_root"] = str(attacker)
+                payload["routing_approvals"] = {
+                    "path": str(forged_approval),
+                    "state": snapshot(forged_approval),
+                }
+                for project_record in payload["projects"]:
+                    for operation in project_record["private_operations"]:
+                        if operation["selector"] != "approved-routing-replacement":
+                            continue
+                        forged = {
+                            "path": str(forged_candidate),
+                            "state": snapshot(forged_candidate),
+                        }
+                        operation["change"]["source_ref"] = forged
+                        operation["ownership"]["reference"] = forged
+                        operation["ownership"]["approval_ref"] = payload[
+                            "routing_approvals"
+                        ]
+
+            tampered = _reseal(manifest, retarget)
+            path = evidence / "attacker-file.json"
+            path.write_bytes(canonical_json_bytes(tampered))
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value={"onboard": "fixture", "graft": "0.18.0"},
+                ),
+                mock.patch(
+                    "sbtd_migration._render_resource",
+                    side_effect=AssertionError("render"),
+                ),
+                self.assertRaises(ContractError) as error,
+            ):
+                apply_migration(
+                    path, confirmed=True, routing_approvals=forged_approval
+                )
+            self.assertEqual(error.exception.code, "approval-conflict")
+            self.assertEqual(live.read_bytes(), before)
+
+    def test_plan_signs_only_the_approval_file_with_the_installed_key(self):
+        from cryptography.hazmat.primitives import serialization
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            live.write_bytes(b"custom trellis routing\n")
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = vault / "routing-approvals.json"
+            approval.write_bytes(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "items": [
+                            {
+                                "role": "codex-global",
+                                "target_path": str(live),
+                                "before": snapshot(live),
+                                "candidate_ref": {
+                                    "path": str(candidate),
+                                    "state": snapshot(candidate),
+                                },
+                                "basis": "fixture custodian approval",
+                            }
+                        ],
+                    }
+                ).encode("utf-8")
+            )
+            before = approval.read_bytes()
+            key_path = base / "operator.key"
+            key_path.write_bytes(
+                _TEST_APPROVAL_KEY.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.PKCS8,
+                    serialization.NoEncryption(),
+                )
+            )
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                    routing_approvals=approval,
+                    routing_approval_key=key_path,
+                )
+            self.assertNotEqual(approval.read_bytes(), before)
+            self.assertIn(b"signature", approval.read_bytes())
+            self.assertEqual(
+                manifest["payload"]["routing_approvals"]["path"], str(approval)
+            )
+            self.assertNotIn("operator.key", json.dumps(manifest))
+
+
+class IgnoredLegacyNoiseTests(unittest.TestCase):
+    def test_gitignore_hides_incidental_files_but_not_task_json(self):
+        from sbtd_migration_files import directory_snapshot
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+            (root / ".gitignore").write_text(
+                ".DS_Store\n*.pyc\n__pycache__/\n.trellis/.backup-*\n"
+                ".trellis/tasks/*/task.json\n"
+            )
+            trellis = root / ".trellis"
+            task = trellis / "tasks" / "00-bootstrap"
+            task.mkdir(parents=True)
+            (task / "task.json").write_text("{}\n")
+            backup = trellis / ".backup-local"
+            backup.mkdir()
+            (backup / "old.txt").write_text("old\n")
+            (trellis / ".DS_Store").write_bytes(b"\x00store")
+            cache = trellis / "scripts" / "common" / "__pycache__"
+            cache.mkdir(parents=True)
+            (cache / "io.cpython-313.pyc").write_bytes(b"\x00pyc")
+            (trellis / "notes.txt").write_text("tracked unknown\n")
+            subprocess.run(
+                ["git", "add", "--", ".gitignore", ".trellis/notes.txt"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+            )
+            _state, entries = directory_snapshot(trellis)
+            present = {entry["path"] for entry in entries}
+            self.assertIn(".backup-local/old.txt", present)
+            self.assertIn(".DS_Store", present)
+            self.assertIn("scripts/common/__pycache__/io.cpython-313.pyc", present)
+            classified, unknown = sbtd_migration_plan._partition_legacy_entries(
+                root, entries
+            )
+            kept = {entry["path"] for entry in classified}
+            self.assertIn("tasks/00-bootstrap/task.json", kept)
+            self.assertNotIn(".backup-local/old.txt", kept)
+            self.assertNotIn(".DS_Store", kept)
+            self.assertIn("scripts/common/__pycache__/io.cpython-313.pyc", kept)
+            self.assertEqual(unknown, ["notes.txt"])
+            with self.assertRaises(ContractError) as caught:
+                sbtd_migration_plan._fail_unknown(root, unknown)
+            self.assertEqual(caught.exception.details["tracked"], ["notes.txt"])
+            self.assertIn("Do not delete a tracked file", caught.exception.details["recommendation"])
 
 
 if __name__ == "__main__":

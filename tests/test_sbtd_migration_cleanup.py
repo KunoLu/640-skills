@@ -63,7 +63,9 @@ class VerifiedMigration:
                 tool_versions=runtime_versions(),
             )
             self.manifest_path.write_bytes(canonical_json_bytes(self.manifest))
-            applied, apply_code = apply_migration(self.manifest_path, confirmed=True)
+            applied, apply_code = apply_migration(
+                self.manifest_path, confirmed=True, no_routing_approvals=True
+            )
             if apply_code != 0:
                 raise AssertionError(f"apply failed: {applied}")
             apply_receipt = applied["migration"]["apply_receipt"]
@@ -261,10 +263,8 @@ class CleanupMigrationTests(unittest.TestCase):
     def test_a_retained_asset_changed_after_verification_blocks_cleanup(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.build(Path(directory).resolve())
-            retained = fixture.root / "AGENTS.md"
-            retained.write_text(
-                retained.read_text() + "\nuser edit after verification\n"
-            )
+            retained = fixture.root / ".sbtd/developer"
+            retained.write_text(retained.read_text() + "extra\n")
             before = _tree_bytes(fixture.base)
             with self.assertRaises(ContractError):
                 fixture.cleanup(confirm_cleanup=fixture.verification["verification_id"])

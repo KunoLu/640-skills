@@ -48,6 +48,8 @@ _MIGRATION_RULES = {
         ("projects_root", "backup_root", "custodian"),
         (
             "publication_decisions",
+            "routing_approvals",
+            "routing_approval_key",
             "deployment_mode",
             "deployment_platform",
             "graft_hooks",
@@ -56,7 +58,13 @@ _MIGRATION_RULES = {
     ),
     "apply": (
         ("manifest",),
-        ("apply_receipt", "yes", "json"),
+        (
+            "apply_receipt",
+            "yes",
+            "json",
+            "routing_approvals",
+            "no_routing_approvals",
+        ),
     ),
     "verify": (
         ("manifest", "apply_receipt", "deployment_evidence"),
@@ -72,6 +80,8 @@ _MIGRATION_VALUE_OPTIONS = (
     "backup_root",
     "custodian",
     "publication_decisions",
+    "routing_approvals",
+    "routing_approval_key",
     "deployment_mode",
     "deployment_platform",
     "manifest",
@@ -81,7 +91,12 @@ _MIGRATION_VALUE_OPTIONS = (
     "cleanup_receipt",
     "confirm_cleanup",
 )
-_MIGRATION_FLAG_OPTIONS = ("yes", "json", "graft_hooks")
+_MIGRATION_FLAG_OPTIONS = (
+    "yes",
+    "json",
+    "graft_hooks",
+    "no_routing_approvals",
+)
 
 _RECOVERY_RULES = {
     "plan": (
@@ -251,6 +266,8 @@ def add_migration_parser(
         "backup_root": "Existing private backup directory outside the repositories.",
         "custodian": "Explicit responsible custodian label.",
         "publication_decisions": "Private approved publication-decisions file.",
+        "routing_approvals": "Private approved routing-candidate record. Plan seals it; apply must be given the same file by the caller.",
+        "routing_approval_key": "Private key outside the vault and selected projects. Plan uses it only to sign the routing approval file.",
         "deployment_mode": "Declare Codex deployment before apply: init or init-projects.",
         "deployment_platform": "Declare the deployment host: codex or omp.",
         "manifest": "Explicit private migration manifest file.",
@@ -276,6 +293,7 @@ def add_migration_parser(
                     "yes": "Authorize this apply attempt.",
                     "graft_hooks": "Plan explicitly authorized Codex hook definitions for full deployment.",
                     "json": "Emit the private single-JSON exchange document.",
+                    "no_routing_approvals": "Apply a plan that has no routing approval record. Does not authorize AGENTS.md pause or marker removal.",
                 }[dest],
             )
     return migration
@@ -420,6 +438,14 @@ def validate_migration_args(
         _MIGRATION_FLAG_OPTIONS,
         _MIGRATION_RULES,
     )
+    if (
+        args.phase == "apply"
+        and getattr(args, "routing_approvals", None)
+        and getattr(args, "no_routing_approvals", False)
+    ):
+        parser.error(
+            "--routing-approvals cannot be combined with --no-routing-approvals"
+        )
 
 
 def _check_migration_context(

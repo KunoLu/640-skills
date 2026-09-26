@@ -695,7 +695,9 @@ class MigrationVerifyPathTests(unittest.TestCase):
                 )
                 manifest_path = evidence / "manifest.json"
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
-                applied, apply_code = apply_migration(manifest_path, confirmed=True)
+                applied, apply_code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
                 self.assertEqual(apply_code, 0, applied)
                 receipt = applied["migration"]["apply_receipt"]
                 apply_path = next(
