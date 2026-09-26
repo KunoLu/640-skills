@@ -351,6 +351,7 @@ def build_manifest_payload() -> dict[str, Any]:
         ],
         "shared_operations": [s1_ops["apply"], s1_ops["deploy"], s1_ops["cleanup"]],
         "publication_decisions": build_publication_decisions(),
+        "routing_approvals": None,
         "custodian": "release-custodian",
         "backup_root": BACKUP_ROOT,
         "created_at": T0,

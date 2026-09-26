@@ -151,11 +151,19 @@ class ContractError(Exception):
     (2 = invalid input or state conflict, 3 = digest/preservation failure).
     """
 
-    def __init__(self, code: str, message: str, *, exit_code: int = 2) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        exit_code: int = 2,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.exit_code = exit_code
+        self.details = None if details is None else dict(details)
 
 
 # ---------------------------------------------------------------------------
@@ -651,6 +659,22 @@ def _check_operation(operation: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "developer extraction must bind its legacy name source",
             )
+    if operation["selector"] == "approved-routing-replacement":
+        ownership = operation["ownership"]
+        if (
+            operation["phase"] != "apply"
+            or operation["owner_kind"] != "markdown"
+            or change_kind != "copy-file"
+            or Path(operation["target"]).name != "AGENTS.md"
+            or ownership.get("kind") != "approved-candidate"
+            or ownership.get("role") not in {"codex-global", "omp-global", "demo-project"}
+            or ownership.get("reference") != operation["change"].get("source_ref")
+            or not isinstance(ownership.get("approval_ref"), Mapping)
+        ):
+            _fail(
+                "semantic-violation",
+                "an approved routing replacement must copy its bound candidate",
+            )
     if (directory and operation["selector"] != "whole-resource") or (
         operation["selector"] == "whole-resource"
         and operation["ownership"]["kind"] not in {"template-source", "skill-identity"}
@@ -705,6 +729,9 @@ def _manifest_input_references(
         if source is not None:
             yield source
         yield operation["ownership"]["reference"]
+        approval = operation["ownership"].get("approval_ref")
+        if approval is not None:
+            yield approval
 
 
 def _manifest_initial_snapshots(

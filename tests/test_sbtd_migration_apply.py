@@ -33,9 +33,11 @@ def legacy_project(base: Path, name: str) -> Path:
         b"\x00retained-private-fixture\xff"
     )
     (root / ".gitignore").write_text(".trellis/\n.gitnexus/\n")
+    (root / "AGENTS.md").write_bytes(
+        b"Foreign project rule.\n<!-- TRELLIS:START -->\nLegacy route.\n<!-- TRELLIS:END -->\n"
+    )
     owned = {
         ".codex/agents/trellis-implement.toml": b'name = "trellis-implement"\n',
-        "AGENTS.md": b"Foreign project rule.\n<!-- TRELLIS:START -->\nLegacy route.\n<!-- TRELLIS:END -->\n",
     }
     for relative_name, raw in owned.items():
         (root / relative_name).write_bytes(raw)
@@ -89,7 +91,9 @@ class MigrationApplyTests(unittest.TestCase):
                         "checksum-mismatch", "synthetic readback failure", exit_code=3
                     ),
                 ):
-                    response, code = apply_migration(path, confirmed=True)
+                    response, code = apply_migration(
+                        path, confirmed=True, no_routing_approvals=True
+                    )
             self.assertEqual(code, 3, response)
             self.assertEqual(response["status"], "failed")
             self.assertEqual((project / ".gitignore").read_bytes(), before)
@@ -154,7 +158,9 @@ class MigrationApplyTests(unittest.TestCase):
                 with mock.patch(
                     "sbtd_migration_files.os.link", side_effect=fail_second_identity
                 ):
-                    failed, code = apply_migration(manifest_path, confirmed=True)
+                    failed, code = apply_migration(
+                        manifest_path, confirmed=True, no_routing_approvals=True
+                    )
                 self.assertEqual(code, 5, failed)
                 receipt = failed["migration"]["apply_receipt"]
                 statuses = {
@@ -177,7 +183,10 @@ class MigrationApplyTests(unittest.TestCase):
                 first_tree = file_contents(roots[0])
                 first_results = receipt["payload"]["projects"][0]["private_results"]
                 retried, retry_code = apply_migration(
-                    manifest_path, previous_receipt_path=saved, confirmed=True
+                    manifest_path,
+                    previous_receipt_path=saved,
+                    confirmed=True,
+                    no_routing_approvals=True,
                 )
                 self.assertEqual(retry_code, 0, retried)
                 final = retried["migration"]["apply_receipt"]
@@ -192,7 +201,7 @@ class MigrationApplyTests(unittest.TestCase):
                     (roots[1] / ".sbtd/developer").read_bytes(), b"name=dev01\n"
                 )
 
-    def test_existing_omp_global_router_is_paused_and_backed_up(self):
+    def test_unapproved_global_pause_is_refused_before_write(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = legacy_project(base, "project")
@@ -251,24 +260,20 @@ class MigrationApplyTests(unittest.TestCase):
                 )
                 manifest_path = evidence / "manifest.json"
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
-                applied, code = apply_migration(manifest_path, confirmed=True)
-                self.assertEqual(code, 0, applied)
-                result = applied["migration"]["apply_receipt"]["payload"][
-                    "shared_results"
-                ][0]
-                self.assertEqual(result["status"], "succeeded")
-                self.assertEqual(
-                    Path(result["backup_ref"]["path"]).read_bytes(), legacy_global
-                )
-                self.assertIn(
-                    (
-                        SCRIPTS.parent / "assets/migration-paused-agents.txt"
-                    ).read_bytes(),
-                    router.read_bytes(),
-                )
-                self.assertFalse((home / ".codex").exists())
+                with (
+                    mock.patch(
+                        "sbtd_migration._render_resource",
+                        side_effect=AssertionError("render"),
+                    ),
+                    self.assertRaises(ContractError) as error,
+                ):
+                    apply_migration(
+                        manifest_path, confirmed=True, no_routing_approvals=True
+                    )
+                self.assertEqual(error.exception.code, "approval-conflict")
+                self.assertEqual(router.read_bytes(), legacy_global)
 
-    def test_private_failure_before_shared_pause_saves_retryable_partial_receipt(self):
+    def test_private_failure_saves_retryable_partial_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             roots = [legacy_project(base, name) for name in ("alpha", "beta")]
@@ -277,42 +282,16 @@ class MigrationApplyTests(unittest.TestCase):
             )
             for path in (home, vault, evidence):
                 path.mkdir(mode=0o700)
-            codex_home = home / ".codex"
-            codex_home.mkdir(mode=0o700)
-            legacy_global = (
-                b"# Legacy global routing\nUse trellis-workflow for every task.\n"
-            )
-            (codex_home / "AGENTS.md").write_bytes(legacy_global)
             environment = {
                 "HOME": str(home),
                 "USERPROFILE": str(home),
-                "CODEX_HOME": str(codex_home),
+                "CODEX_HOME": str(home / ".codex"),
                 "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
             }
-            # Controlled fixture pinning: only the global AGENTS.md pin is
-            # narrowed to the fixture bytes; every other pin stays real.
-            fixture_pins = sbtd_migration_plan._ownership_pins()
-            fixture_pins["agents"] = hashlib.sha256(legacy_global).hexdigest()
-            with (
-                mock.patch.dict(os.environ, environment),
-                mock.patch.object(
-                    sbtd_migration_plan, "_ownership_pins", return_value=fixture_pins
-                ),
-            ):
+            with mock.patch.dict(os.environ, environment):
                 manifest = plan_migration(
                     roots, vault, "fixture", None, tool_versions=runtime_versions()
                 )
-                shared_apply = [
-                    op
-                    for op in manifest["payload"]["shared_operations"]
-                    if op["phase"] == "apply"
-                ]
-                self.assertEqual(
-                    [op["selector"] for op in shared_apply], ["pause-legacy-routing"]
-                )
-                shared_op_ids = sorted(op["operation_id"] for op in shared_apply)
-                for project in manifest["payload"]["projects"]:
-                    self.assertIn(shared_op_ids[0], project["shared_operation_ids"])
                 manifest_path = evidence / "manifest.json"
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
                 link = os.link
@@ -327,7 +306,9 @@ class MigrationApplyTests(unittest.TestCase):
                 with mock.patch(
                     "sbtd_migration_files.os.link", side_effect=fail_beta_identity
                 ):
-                    failed, code = apply_migration(manifest_path, confirmed=True)
+                    failed, code = apply_migration(
+                        manifest_path, confirmed=True, no_routing_approvals=True
+                    )
                 self.assertEqual(code, 5, failed)
                 receipt = failed["migration"]["apply_receipt"]
                 statuses = {
@@ -335,12 +316,12 @@ class MigrationApplyTests(unittest.TestCase):
                     for project in receipt["payload"]["projects"]
                 }
                 self.assertEqual(
-                    statuses, {str(roots[0]): "blocked", str(roots[1]): "failed"}
+                    statuses, {str(roots[0]): "applied", str(roots[1]): "failed"}
                 )
                 self.assertEqual(receipt["payload"]["shared_results"], [])
                 for project in receipt["payload"]["projects"]:
                     self.assertEqual(project["shared_operation_ids"], [])
-                self.assertEqual((codex_home / "AGENTS.md").read_bytes(), legacy_global)
+
                 self.assertEqual(
                     (roots[0] / ".sbtd/developer").read_bytes(), b"name=dev01\n"
                 )
@@ -358,7 +339,10 @@ class MigrationApplyTests(unittest.TestCase):
                 first_tree = file_contents(roots[0])
                 first_results = receipt["payload"]["projects"][0]["private_results"]
                 retried, retry_code = apply_migration(
-                    manifest_path, previous_receipt_path=saved, confirmed=True
+                    manifest_path,
+                    previous_receipt_path=saved,
+                    confirmed=True,
+                    no_routing_approvals=True,
                 )
                 self.assertEqual(retry_code, 0, retried)
                 self.assertEqual(retried["status"], "applied")
@@ -370,16 +354,15 @@ class MigrationApplyTests(unittest.TestCase):
                 self.assertEqual(
                     final["payload"]["projects"][0]["private_results"], first_results
                 )
-                for project in final["payload"]["projects"]:
-                    self.assertEqual(project["status"], "applied")
-                    self.assertEqual(project["shared_operation_ids"], shared_op_ids)
                 self.assertEqual(
-                    [result["status"] for result in final["payload"]["shared_results"]],
-                    ["succeeded"],
-                )
-                self.assertIn(
-                    b"SBTD migration maintenance window",
-                    (codex_home / "AGENTS.md").read_bytes(),
+                    {
+                        project["root"]: project["status"]
+                        for project in final["payload"]["projects"]
+                    },
+                    {
+                        str(roots[0]): "already-complete",
+                        str(roots[1]): "applied",
+                    },
                 )
                 self.assertEqual(
                     (roots[1] / ".sbtd/developer").read_bytes(), b"name=dev01\n"
@@ -412,7 +395,9 @@ class MigrationApplyTests(unittest.TestCase):
                 )
                 manifest_path = evidence / "manifest.json"
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
-                applied, code = apply_migration(manifest_path, confirmed=True)
+                applied, code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
                 self.assertEqual(code, 0, applied)
                 self.assertEqual(applied["status"], "applied")
                 self.assertEqual(
@@ -421,7 +406,7 @@ class MigrationApplyTests(unittest.TestCase):
                 self.assertEqual(file_contents(root / ".trellis"), old_tree)
                 agents = (root / "AGENTS.md").read_text()
                 self.assertIn("Foreign project rule.", agents)
-                self.assertNotIn("Legacy route.", agents)
+                self.assertIn("Legacy route.", agents)
                 self.assertTrue(
                     any(
                         path.read_bytes() == b"\x00retained-private-fixture\xff"
@@ -439,7 +424,10 @@ class MigrationApplyTests(unittest.TestCase):
                 self.assertEqual(json.loads(saved[0].read_text()), receipt)
                 before_retry = file_contents(root)
                 retried, retry_code = apply_migration(
-                    manifest_path, previous_receipt_path=saved[0], confirmed=True
+                    manifest_path,
+                    previous_receipt_path=saved[0],
+                    confirmed=True,
+                    no_routing_approvals=True,
                 )
                 self.assertEqual(retry_code, 0, retried)
                 self.assertEqual(retried["status"], "already-complete")
@@ -467,7 +455,9 @@ class MigrationApplyTests(unittest.TestCase):
                 )
                 manifest_path = evidence / "manifest.json"
                 manifest_path.write_bytes(canonical_json_bytes(manifest))
-                first, first_code = apply_migration(manifest_path, confirmed=True)
+                first, first_code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
                 self.assertEqual(first_code, 0, first)
                 receipt_path = next(
                     path
@@ -478,7 +468,10 @@ class MigrationApplyTests(unittest.TestCase):
                 backup = next(vault.rglob("journal-1.md"))
                 backup.unlink()
                 retried, code = apply_migration(
-                    manifest_path, previous_receipt_path=receipt_path, confirmed=True
+                    manifest_path,
+                    previous_receipt_path=receipt_path,
+                    confirmed=True,
+                    no_routing_approvals=True,
                 )
             self.assertEqual(code, 3, retried)
             self.assertEqual(retried["status"], "failed")

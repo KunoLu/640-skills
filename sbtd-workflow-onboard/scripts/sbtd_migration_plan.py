@@ -32,13 +32,15 @@ a rejected private value.
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import json
 import os
 import re
 import stat
-from collections.abc import Callable, Mapping, Sequence
+import subprocess
+from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn, cast
@@ -78,10 +80,10 @@ _DEVELOPER_NAME = ".developer"
 _TEMPLATE_HASHES = ".template-hashes.json"
 _VERSION_FILE = ".version"
 
-# Known v0.6.17 project layout (grounded: main PRD section 11.2 mapping and
-# the old project ignore contract): generated metadata files, user data trees
-# (tasks/spec/lessons), workspace journals and the per-project workflow.md.
-# Anything else is unclassified and blocks.
+# Known v0.6.17 layout. Gitignore may hide incidental files outside this
+# layout; those stay in the directory snapshot and are deleted with the tree.
+# tasks, spec and lessons stay in the approval closure even when ignored.
+# A path outside this layout that git does not ignore stops the plan.
 _KNOWN_LEGACY_TOP = frozenset(
     {
         _DEVELOPER_NAME,
@@ -130,8 +132,14 @@ _DOC_TARGETS = {"spec": ("docs", "spec"), "lessons": ("docs", "lessons")}
 ReadOriginal = Callable[[Mapping[str, Any]], bytes]
 
 
-def _fail(code: str, message: str, *, exit_code: int = 2) -> NoReturn:
-    raise ContractError(code, message, exit_code=exit_code)
+def _fail(
+    code: str,
+    message: str,
+    *,
+    exit_code: int = 2,
+    details: Mapping[str, Any] | None = None,
+) -> NoReturn:
+    raise ContractError(code, message, exit_code=exit_code, details=details)
 
 
 # ---------------------------------------------------------------------------
@@ -981,6 +989,7 @@ def validate_legacy_inputs(
     from sbtd_graft_deployment import validate_deployment_declarations
 
     validate_deployment_declarations(payload)
+    _bind_approved_routing(payload, roots, bind_live=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1114,7 +1123,16 @@ def _check_platform_closure(
     hashes_reference: Mapping[str, Any] | None = None
     file_targets: set[str] = set()
     marker_targets: set[str] = set()
+    replacement_targets: set[str] = set()
     for operation in operations:
+        if operation["selector"] == _ROUTING_SELECTOR:
+            if operation["change"].get("kind") != "copy-file":
+                _fail(
+                    "semantic-violation",
+                    "an approved routing replacement must copy its candidate",
+                )
+            replacement_targets.add(operation["target"])
+            continue
         if operation["phase"] != "apply" or operation["change"] != {"kind": "remove"}:
             _fail("semantic-violation", "an unknown private operation was added")
         _check_operation_common(operation, root)
@@ -1180,7 +1198,13 @@ def _check_platform_closure(
             expected_markers.add(target)
         else:
             _fail("unknown-content", "a recorded generated path cannot be classified")
-    if file_targets != expected_files or marker_targets != expected_markers:
+    if marker_targets & replacement_targets:
+        _fail(
+            "approval-conflict",
+            "an approved routing replacement cannot also delete the marker block",
+        )
+    covered_markers = marker_targets | (replacement_targets & expected_markers)
+    if file_targets != expected_files or covered_markers != expected_markers:
         _fail(
             "semantic-violation",
             "platform operations do not match the recorded ownership metadata",
@@ -1260,6 +1284,362 @@ def _validate_project_operations(
     _check_platform_closure(root, remaining, project["platforms"], read_original)
 
 
+_ROUTING_ROLES = frozenset({"codex-global", "omp-global", "demo-project"})
+_ROUTING_SELECTOR = "approved-routing-replacement"
+_ROUTING_APPROVAL_PUBLIC_KEY = _PACKAGE / "assets" / "routing-approval.pub"
+
+
+def _routing_crypto():
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PrivateKey,
+            Ed25519PublicKey,
+        )
+        from cryptography.hazmat.primitives.serialization import (
+            load_pem_private_key,
+            load_pem_public_key,
+        )
+    except ImportError:
+        _fail(
+            "validator-unavailable",
+            "prepare the installed Skill's declared requirements before migration",
+        )
+    return (
+        InvalidSignature,
+        Ed25519PrivateKey,
+        Ed25519PublicKey,
+        load_pem_private_key,
+        load_pem_public_key,
+    )
+
+
+def _routing_approval_public_key():
+    """The installed approval key. Callers cannot replace it with a path."""
+    invalid, _private, public_type, _load_private, load_public = _routing_crypto()
+    try:
+        key = load_public(_ROUTING_APPROVAL_PUBLIC_KEY.read_bytes())
+    except (OSError, ValueError, TypeError, invalid):
+        _fail("runtime-unavailable", "the installed routing approval key is unusable")
+    if not isinstance(key, public_type):
+        _fail("runtime-unavailable", "the installed routing approval key is not Ed25519")
+    return key
+
+
+def _approval_signed_bytes(document: Mapping[str, Any]) -> bytes:
+    return contracts.canonical_json_bytes(
+        {"schema_version": document["schema_version"], "items": document["items"]}
+    )
+
+
+def _verify_routing_approval_signature(document: Mapping[str, Any]) -> None:
+    invalid, _private, _public, _load_private, _load_public = _routing_crypto()
+    signature = document.get("signature")
+    if not isinstance(signature, str) or not signature:
+        _fail("invalid-config", "the routing approval record has no signature")
+    try:
+        raw = base64.b64decode(signature, validate=True)
+        _routing_approval_public_key().verify(raw, _approval_signed_bytes(document))
+    except (invalid, ValueError, TypeError):
+        _fail(
+            "approval-conflict",
+            "the routing approval signature does not match the installed key",
+        )
+
+
+def _sign_routing_approval(
+    approval_path: Path, key_path: Path, vault: Path, roots: Sequence[Path]
+) -> None:
+    """Sign one existing approval file. No other path is written."""
+    invalid, private_type, _public, load_private, _load_public = _routing_crypto()
+    if (
+        ".." in key_path.parts
+        or not key_path.is_absolute()
+        or key_path.is_symlink()
+        or not key_path.is_file()
+        or key_path.is_relative_to(vault)
+        or any(
+            key_path.is_relative_to(root) or root.is_relative_to(key_path) for root in roots
+        )
+    ):
+        _fail(
+            "private-scope",
+            "the routing approval key must stay outside the vault and selected projects",
+        )
+    if not approval_path.is_relative_to(vault):
+        _fail("private-scope", "routing approvals must live inside the private vault")
+    require_private_directory(approval_path.parent)
+    document = _json_object(read_file(approval_path), "the routing approval record")
+    if not isinstance(document, dict) or "items" not in document:
+        _fail("invalid-config", "the routing approval record is malformed")
+    try:
+        private = load_private(key_path.read_bytes(), password=None)
+    except (OSError, ValueError, TypeError):
+        _fail("invalid-argument", "the routing approval key is unusable")
+    if not isinstance(private, private_type):
+        _fail("invalid-argument", "the routing approval key is not Ed25519")
+    document["signature"] = base64.b64encode(
+        private.sign(_approval_signed_bytes(document))
+    ).decode("ascii")
+    try:
+        _routing_approval_public_key().verify(
+            base64.b64decode(document["signature"]), _approval_signed_bytes(document)
+        )
+    except (invalid, ValueError, TypeError):
+        _fail(
+            "approval-conflict",
+            "the routing approval key does not match the installed public key",
+        )
+    approval_path.write_bytes(contracts.canonical_json_bytes(document))
+
+
+
+def _load_routing_approvals(path: Any, vault: Path) -> list[dict[str, Any]]:
+    """Load the private routing approval record. Plan never creates it."""
+    if path is None:
+        return []
+    if not isinstance(path, (str, os.PathLike)):
+        _fail("invalid-argument", "the routing approval path must be a path")
+    approval_path = Path(path)
+    if ".." in approval_path.parts or not approval_path.is_absolute():
+        _fail("invalid-argument", "the routing approval path is not canonical")
+    if not approval_path.is_relative_to(vault):
+        _fail("private-scope", "routing approvals must live inside the private vault")
+    require_private_directory(approval_path.parent)
+    document = _json_object(read_file(approval_path), "the routing approval record")
+    if (
+        not isinstance(document, dict)
+        or document.get("schema_version") != 1
+        or set(document) != {"schema_version", "items", "signature"}
+        or not isinstance(document["items"], list)
+    ):
+        _fail("invalid-config", "the routing approval record is malformed")
+    _verify_routing_approval_signature(document)
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in document["items"]:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"role", "target_path", "before", "candidate_ref", "basis"}
+            or item["role"] not in _ROUTING_ROLES
+            or not isinstance(item["target_path"], str)
+            or not isinstance(item["basis"], str)
+            or not item["basis"].strip()
+            or not isinstance(item["before"], dict)
+            or not isinstance(item["candidate_ref"], dict)
+        ):
+            _fail("invalid-config", "a routing approval item is malformed")
+        if item["target_path"] in seen:
+            _fail("approval-conflict", "a routing target is approved more than once")
+        seen.add(item["target_path"])
+        items.append(item)
+    return items
+
+
+def _approved_routing_operations(
+    items: Sequence[Mapping[str, Any]],
+    roots: Sequence[Path],
+    vault: Path,
+    approval_path: Path,
+    *,
+    bind_live: bool = True,
+) -> tuple[list[dict[str, Any]], dict[Path, list[dict[str, Any]]]]:
+    """Bind each approved candidate to its live target. Mismatch blocks."""
+    from onboard import default_codex_home, omp_global_agents_path, user_home
+
+    pause = read_file(_PAUSE_ASSET)
+    approval_ref = {"path": str(approval_path), "state": snapshot(approval_path)}
+    shared: list[dict[str, Any]] = []
+    private: dict[Path, list[dict[str, Any]]] = {root: [] for root in roots}
+    dependents = sorted(str(root) for root in roots)
+    for item in items:
+        target = Path(item["target_path"])
+        if (
+            not target.is_absolute()
+            or ".." in target.parts
+            or target.name != "AGENTS.md"
+            or target.is_relative_to(vault)
+        ):
+            _fail("approval-conflict", "a routing target is not a live AGENTS.md")
+        role = item["role"]
+        owner: Path | None = None
+        if role == "codex-global":
+            if target != default_codex_home() / "AGENTS.md":
+                _fail(
+                    "approval-conflict", "a codex routing approval names another file"
+                )
+        elif role == "omp-global":
+            omp_home = user_home() / ".omp"
+            if _omp_root_presence(omp_home) != "directory":
+                _fail(
+                    "ownership-conflict",
+                    "the existing OMP root is not a safe directory",
+                )
+            if target != omp_global_agents_path(omp_home):
+                _fail("approval-conflict", "an omp routing approval names another file")
+        else:
+            matches = [root for root in roots if target == root / "AGENTS.md"]
+            if len(matches) != 1:
+                _fail(
+                    "approval-conflict",
+                    "a project routing approval is outside the batch",
+                )
+            owner = matches[0]
+        recorded = item["before"]
+        if not isinstance(recorded, Mapping) or recorded.get("type") != "file":
+            _fail("approval-conflict", "a routing approval does not bind a file")
+        if bind_live:
+            before = snapshot(target)
+            if before != recorded:
+                _fail(
+                    "state-conflict", "a routing target no longer matches its approval"
+                )
+        else:
+            before = dict(recorded)
+        candidate = item["candidate_ref"]
+        candidate_path = Path(candidate.get("path", ""))
+        if (
+            not candidate_path.is_absolute()
+            or ".." in candidate_path.parts
+            or not candidate_path.is_relative_to(vault)
+            or snapshot(candidate_path) != candidate.get("state")
+        ):
+            _fail("state-conflict", "an approved routing candidate changed")
+        raw = read_file(candidate_path, candidate["state"])
+        if not raw.startswith(pause):
+            _fail(
+                "candidate-conflict",
+                "an approved routing candidate lacks the pause block",
+            )
+        operation = _operation(
+            "apply",
+            "markdown",
+            target,
+            _ROUTING_SELECTOR,
+            {"kind": "copy-file", "source_ref": copy.deepcopy(candidate)},
+            {
+                "kind": "approved-candidate",
+                "reference": copy.deepcopy(candidate),
+                "approval_ref": approval_ref,
+                "role": role,
+            },
+            _state_requirement(before),
+            dependents if owner is None else [str(owner)],
+        )
+        if owner is None:
+            shared.append(operation)
+        else:
+            private[owner].append(operation)
+    return shared, private
+
+
+def _vault_file_ref(reference: Mapping[str, Any], vault: Path, message: str) -> Path:
+    path = reference.get("path")
+    if (
+        not isinstance(path, str)
+        or not Path(path).is_absolute()
+        or ".." in Path(path).parts
+        or not Path(path).is_relative_to(vault)
+    ):
+        _fail("private-scope", message)
+    return Path(path)
+
+
+def _routing_rows(
+    payload: Mapping[str, Any],
+) -> list[tuple[str, Path | None, Mapping[str, Any]]]:
+    rows: list[tuple[str, Path | None, Mapping[str, Any]]] = []
+    for operation in payload["shared_operations"]:
+        if operation["selector"] == _ROUTING_SELECTOR:
+            rows.append(("shared", None, operation))
+    for project in payload["projects"]:
+        root = Path(project["root"])
+        for operation in project["private_operations"]:
+            if operation["selector"] == _ROUTING_SELECTOR:
+                rows.append(("private", root, operation))
+    return rows
+
+
+def _bind_approved_routing(
+    payload: Mapping[str, Any], roots: Sequence[Path], *, bind_live: bool
+) -> None:
+    """Rebuild the approved set from the sealed approval ref and require a match.
+
+    The ref lives on the payload, so dropping every routing operation cannot
+    hide it. A missing, extra, or substituted operation is rejected. Role,
+    target, and candidate changes fail the same comparison. The approval file
+    and every declared candidate must stay inside the vault.
+    """
+    declared = _routing_rows(payload)
+    approval = payload["routing_approvals"]
+    if approval is None:
+        if declared:
+            _fail(
+                "approval-conflict",
+                "an approved routing replacement is not bound to its approval record",
+            )
+        return
+    vault = Path(payload["backup_root"])
+    approval_path = _vault_file_ref(
+        approval,
+        vault,
+        "an approved routing record lives outside the private vault",
+    )
+    for _place, _root, operation in declared:
+        ownership = operation["ownership"]
+        candidate = operation["change"].get("source_ref")
+        if not isinstance(ownership.get("approval_ref"), Mapping) or not isinstance(
+            candidate, Mapping
+        ):
+            _fail(
+                "approval-conflict",
+                "an approved routing replacement is not bound to its approval record",
+            )
+        _vault_file_ref(
+            ownership["approval_ref"],
+            vault,
+            "an approved routing record lives outside the private vault",
+        )
+        _vault_file_ref(
+            candidate,
+            vault,
+            "an approved routing candidate lives outside the private vault",
+        )
+    if snapshot(approval_path) != approval["state"]:
+        _fail("state-conflict", "the routing approval record changed")
+    items = _load_routing_approvals(approval_path, vault)
+    shared, private = _approved_routing_operations(
+        items, roots, vault, approval_path, bind_live=bind_live
+    )
+    expected: list[tuple[str, Path | None, Mapping[str, Any]]] = [
+        ("shared", None, operation) for operation in shared
+    ]
+    for root in roots:
+        expected.extend(
+            ("private", root, operation) for operation in private.get(root, [])
+        )
+    if [_routing_key(row) for row in declared] != [
+        _routing_key(row) for row in expected
+    ]:
+        _fail(
+            "approval-conflict",
+            "an approved routing replacement does not match its approval record",
+        )
+
+
+def _routing_key(
+    row: tuple[str, Path | None, Mapping[str, Any]],
+) -> str:
+    place, root, operation = row
+    return contracts.canonical_json_bytes(
+        {
+            "place": place,
+            "root": None if root is None else str(root),
+            "operation": operation,
+        }
+    ).decode("utf-8")
+
+
 def _validate_shared_operations(
     payload: Mapping[str, Any], all_roots: list[str]
 ) -> None:
@@ -1319,8 +1699,33 @@ def _validate_shared_operations(
                 _fail("semantic-violation", "a skill retirement ownership was altered")
             if operation["before_requirement"] != _state_requirement(pinned_state):
                 _fail("semantic-violation", "a skill retirement before-state drifted")
+        elif (
+            change.get("kind") == "copy-file"
+            and operation["selector"] == _ROUTING_SELECTOR
+            and operation["phase"] == "apply"
+            and operation["owner_kind"] == "markdown"
+            and Path(operation["target"]).name == "AGENTS.md"
+            and ownership.get("kind") == "approved-candidate"
+            and ownership.get("reference") == change.get("source_ref")
+        ):
+            continue
         else:
             _fail("semantic-violation", "an unknown shared operation was added")
+    pause_targets = {
+        operation["target"]
+        for operation in payload["shared_operations"]
+        if operation["selector"] == "pause-legacy-routing"
+    }
+    replacement_targets = {
+        operation["target"]
+        for operation in payload["shared_operations"]
+        if operation["selector"] == _ROUTING_SELECTOR
+    }
+    if pause_targets & replacement_targets:
+        _fail(
+            "approval-conflict",
+            "an approved routing replacement cannot also append the pause block",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1488,12 +1893,28 @@ def _state_requirement(state: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _platform_operations(
-    root: Path, hashes: Mapping[str, str], hashes_reference: Mapping[str, Any]
+    root: Path,
+    hashes: Mapping[str, str],
+    hashes_reference: Mapping[str, Any],
+    approved_targets: Collection[Path] = (),
 ) -> tuple[list[str], list[dict[str, Any]]]:
     platforms: set[str] = set()
     operations: list[dict[str, Any]] = []
+    legacy_rels = [
+        PurePosixPath(*PurePosixPath(relative).parts[1:]).as_posix()
+        for relative in hashes
+        if PurePosixPath(relative).parts[:1] == (_LEGACY_DIR,)
+        and len(PurePosixPath(relative).parts) > 1
+    ]
+    ignored, _tracked = _legacy_index(root, legacy_rels)
+    pending_unknown: list[str] = []
     for relative in sorted(hashes):
         parts = PurePosixPath(relative).parts
+        legacy_rel = (
+            PurePosixPath(*parts[1:]).as_posix()
+            if parts[:1] == (_LEGACY_DIR,) and len(parts) > 1
+            else None
+        )
         target = root.joinpath(*parts)
         state = snapshot(target)
         if state["type"] != "file":
@@ -1502,7 +1923,19 @@ def _platform_operations(
                 "a recorded generated file is unavailable",
             )
         raw = read_file(target, state)
-        if _normalized_text_digest(raw) != hashes[relative]:
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            if legacy_rel is not None and legacy_rel in ignored:
+                continue
+            if legacy_rel is not None:
+                pending_unknown.append(legacy_rel)
+                continue
+            _fail(
+                "ownership-conflict",
+                "a recorded generated file is not inspectable text",
+            )
+        if hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest() != hashes[relative]:
             _fail(
                 "ownership-conflict",
                 "generated content drifted; removal is not authorized",
@@ -1531,6 +1964,8 @@ def _platform_operations(
                 )
             )
         elif len(parts) == 1 and parts[0] in _ROOT_OWNED_FILES:
+            if target in approved_targets:
+                continue
             try:
                 text = raw.decode("utf-8")
             except UnicodeDecodeError:
@@ -1560,6 +1995,8 @@ def _platform_operations(
                 "unknown-content",
                 "a recorded generated path cannot be classified",
             )
+    if pending_unknown:
+        _fail_unknown(root, pending_unknown)
     if not platforms:
         _fail(
             "unknown-platform",
@@ -1623,6 +2060,102 @@ def _session_targets_complete_skip(
     return bound == actual
 
 
+def _git_bytes(root: Path, args: Sequence[str], stdin: bytes | None = None) -> bytes | None:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            input=stdin,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if completed.returncode == 128:
+        return None
+    if args[0] == "check-ignore" and completed.returncode not in (0, 1):
+        return None
+    if args[0] != "check-ignore" and completed.returncode != 0:
+        return None
+    return completed.stdout
+
+
+def _legacy_index(
+    root: Path, relative_paths: Sequence[str]
+) -> tuple[set[str], set[str]]:
+    """Return (ignored, tracked) paths relative to ``.trellis``.
+
+    Ignored follows index-aware ``git check-ignore``: a tracked file is not
+    ignored. If git cannot answer, nothing is treated as ignored.
+    """
+    prefix = f"{_LEGACY_DIR}/"
+    listed = _git_bytes(root, ["ls-files", "-z", "--", _LEGACY_DIR])
+    if listed is None:
+        return set(), set()
+    tracked = {
+        path.decode()[len(prefix) :]
+        for path in listed.split(b"\0")
+        if path.startswith(prefix.encode())
+    }
+    repo_paths = [f"{prefix}{rel}" for rel in relative_paths]
+    if not repo_paths:
+        return set(), tracked
+    checked = _git_bytes(
+        root,
+        ["check-ignore", "-z", "--stdin"],
+        b"\0".join(path.encode() for path in repo_paths) + b"\0",
+    )
+    if checked is None:
+        return set(), tracked
+    ignored = {
+        path.decode()[len(prefix) :]
+        for path in checked.split(b"\0")
+        if path.startswith(prefix.encode())
+    }
+    return ignored, tracked
+
+
+def _fail_unknown(root: Path, relative_paths: Sequence[str]) -> NoReturn:
+    _ignored, tracked = _legacy_index(root, relative_paths)
+    _fail(
+        "unknown-content",
+        "tracked or unignored unknown legacy files need an explicit decision",
+        details={
+            "paths": list(relative_paths),
+            "tracked": [path for path in relative_paths if path in tracked],
+            "recommendation": (
+                "Do not delete a tracked file from this list. If it is local "
+                "noise, stop tracking it and ignore it, then re-run plan. If "
+                "it is real legacy data, approve it explicitly before planning "
+                "again."
+            ),
+        },
+    )
+
+
+def _partition_legacy_entries(
+    root: Path, entries: Sequence[Mapping[str, Any]]
+) -> tuple[list[Mapping[str, Any]], list[str]]:
+    """Drop only gitignored paths outside the known layout.
+
+    ``tasks``, ``spec`` and ``lessons`` stay even when gitignore matches them,
+    so an ignored ``task.json`` still requires its approval.
+    """
+    ignored, _tracked = _legacy_index(root, [entry["path"] for entry in entries])
+    classified: list[Mapping[str, Any]] = []
+    unknown: list[str] = []
+    for entry in entries:
+        relative = entry["path"]
+        top = relative.split("/", 1)[0]
+        if top not in _KNOWN_LEGACY_TOP:
+            if relative in ignored:
+                continue
+            unknown.append(relative)
+            continue
+        classified.append(entry)
+    return classified, unknown
+
+
 def _inventory_coverage(
     entries: Sequence[Mapping[str, Any]],
     closures: Mapping[
@@ -1634,7 +2167,14 @@ def _inventory_coverage(
     root: Path,
     hashes: Mapping[str, str],
 ) -> None:
-    """Exact bijection between the physical legacy inventory and approvals."""
+    """Exact bijection between classified legacy files and approvals.
+
+    Gitignored entries stay in the directory snapshot and are omitted here.
+    """
+    classified, unknown = _partition_legacy_entries(root, entries)
+    if unknown:
+        _fail_unknown(root, unknown)
+    entries = classified
     empty_task_placeholder = False
     for entry in entries:
         if entry["path"].split("/", 1)[0] not in _KNOWN_LEGACY_TOP:
@@ -1719,12 +2259,24 @@ def _inventory_coverage(
                     "legacy task data is not covered exactly by its approved "
                     "projections",
                 )
+    unowned = [
+        name
+        for name in files
+        if name.split("/", 1)[0] in _GENERATED_LEGACY_TOP
+        and f"{_LEGACY_DIR}/{name}" not in hashes
+        and coverage.get(name, 0) != 1
+    ]
+    if unowned:
+        ignored, _tracked = _legacy_index(root, unowned)
+        asked = [name for name in unowned if name not in ignored]
+        if asked:
+            _fail_unknown(root, asked)
     for name in files:
         top = name.split("/", 1)[0]
         if top in _GENERATED_LEGACY_TOP and (
             f"{_LEGACY_DIR}/{name}" not in hashes and coverage.get(name, 0) != 1
         ):
-            _fail("unknown-content", "unowned legacy runtime content requires approval")
+            continue
         if top == "tasks":
             continue
         if top in _MANDATORY_TOP:
@@ -2115,6 +2667,7 @@ def _legacy_cleanup_operation(
 
 def _shared_operations(
     roots: Sequence[Path],
+    approved_targets: Collection[Path] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Pause the exact pinned v1.0.15 global routing, retire pinned old Skills.
 
@@ -2151,6 +2704,8 @@ def _shared_operations(
         if agents in seen_targets:
             continue
         seen_targets.add(agents)
+        if agents in approved_targets:
+            continue
         agents_state = snapshot(agents)
         if agents_state == {"type": "file", "checksum": pins["agents"]}:
             operations.append(
@@ -2259,14 +2814,18 @@ def plan_migration(
     deployment_mode: str | None = None,
     hooks_authorized: bool = False,
     deployment_platform: str = "codex",
+    routing_approvals: Any = None,
+    routing_approval_key: Any = None,
 ) -> dict[str, Any]:
     """Verify the authorized preparation and seal a bound migration manifest.
 
-    Read-only end to end: an existing verified-private ``backup_root``,
-    exact publication decisions with existing candidates, current source and
-    target states, the per-project Git binding, the pinned legacy ownership
-    metadata and the identity chain are all validated; any conflict blocks
-    the plan with zero writes instead of guessing.
+    Read-only unless ``routing_approval_key`` is set. That path signs only the
+    named approval file, and only after the key matches the installed public
+    key. An existing verified-private ``backup_root``, exact publication
+    decisions with existing candidates, current source and target states, the
+    per-project Git binding, the pinned legacy ownership metadata and the
+    identity chain are all validated; any conflict blocks the plan with zero
+    writes instead of guessing.
     """
     if deployment_mode not in {None, "init", "init-projects"}:
         _fail("invalid-argument", "the deployment mode must be explicitly supported")
@@ -2328,6 +2887,23 @@ def plan_migration(
     items = _load_publication_items(publication_path, vault)
     assigned = _assign_items(roots, items)
     private_strings = _private_strings(vault)
+    if routing_approval_key is not None:
+        if routing_approvals is None:
+            _fail(
+                "invalid-argument",
+                "a routing approval key requires the routing approval file",
+            )
+        _sign_routing_approval(
+            Path(routing_approvals), Path(routing_approval_key), vault, roots
+        )
+    routing_items = _load_routing_approvals(routing_approvals, vault)
+    routing_path = Path(routing_approvals) if routing_approvals is not None else vault
+    shared_replacements, private_replacements = (
+        _approved_routing_operations(routing_items, roots, vault, routing_path)
+        if routing_approvals is not None
+        else ([], {})
+    )
+    approved_targets = {Path(item["target_path"]) for item in routing_items}
 
     def read_current(reference: Mapping[str, Any]) -> bytes:
         return read_file(Path(reference["path"]), reference["state"])
@@ -2349,7 +2925,9 @@ def plan_migration(
         _state, entries = directory_snapshot(legacy_path)
         _check_legacy_version(root)
         hashes, hashes_reference = _template_hashes(root)
-        platforms, platform_ops = _platform_operations(root, hashes, hashes_reference)
+        platforms, platform_ops = _platform_operations(
+            root, hashes, hashes_reference, approved_targets
+        )
         closures, documents, optional = _classify_project_items(root, project_items)
         projections, forms = _validate_project_closures(
             root, closures, documents, read_current, private_strings
@@ -2382,6 +2960,7 @@ def plan_migration(
             private_ops.append(identity_op)
         private_ops.extend(publication_ops)
         private_ops.extend(platform_ops)
+        private_ops.extend(private_replacements.get(root, []))
         private_ops.append(_legacy_cleanup_operation(root, legacy_reference))
         projects.append(
             {
@@ -2394,7 +2973,21 @@ def plan_migration(
                 "shared_operation_ids": [],
             }
         )
-    shared_roots, shared_ops = _shared_operations(roots)
+    shared_roots, shared_ops = _shared_operations(roots, approved_targets)
+    for operation in shared_replacements:
+        target = Path(operation["target"])
+        role = operation["ownership"]["role"]
+        root_path = target.parent if role == "codex-global" else target.parent.parent
+        kind = "codex-home" if role == "codex-global" else "omp-home"
+        if not any(record["path"] == str(root_path) for record in shared_roots):
+            shared_roots.append(
+                {
+                    "kind": kind,
+                    "path": str(root_path),
+                    "dependent_projects": sorted(str(root) for root in roots),
+                }
+            )
+        shared_ops.append(operation)
     shared_ids = sorted(operation["operation_id"] for operation in shared_ops)
     for project in projects:
         project["shared_operation_ids"] = list(shared_ids)
@@ -2403,6 +2996,11 @@ def plan_migration(
         "shared_roots": shared_roots,
         "shared_operations": shared_ops,
         "publication_decisions": {"schema_version": 1, "items": copy.deepcopy(items)},
+        "routing_approvals": (
+            {"path": str(routing_path), "state": snapshot(routing_path)}
+            if routing_approvals is not None
+            else None
+        ),
         "custodian": custodian,
         "backup_root": str(vault),
         "created_at": datetime.now().astimezone().isoformat(timespec="microseconds"),
@@ -2427,4 +3025,5 @@ def plan_migration(
         ]
         + shared_ops
     )
+    _bind_approved_routing(payload, roots, bind_live=True)
     return contracts.seal_document("manifest", payload)

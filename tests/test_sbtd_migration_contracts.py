@@ -64,6 +64,7 @@ class MigrationIdentityContractTests(unittest.TestCase):
                 "shared_roots": [],
                 "shared_operations": [],
                 "publication_decisions": {"schema_version": 1, "items": []},
+                "routing_approvals": None,
                 "custodian": "fixture",
                 "backup_root": str(base / "vault"),
                 "created_at": "2026-09-19T00:00:00Z",

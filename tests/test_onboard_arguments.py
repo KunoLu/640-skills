@@ -187,6 +187,25 @@ class MigrationPhaseTests(ParseErrorAssertions):
         self.assertEqual(args.backup_root, "/private/backup")
         self.assertEqual(args.custodian, "release-owner")
         self.assertIsNone(args.publication_decisions)
+        self.assertIsNone(args.routing_approval_key)
+        signed = parse_workflow_args(
+            [
+                "migration",
+                "--phase",
+                "plan",
+                "--projects-root",
+                "/repo/one",
+                "--backup-root",
+                "/private/backup",
+                "--custodian",
+                "release-owner",
+                "--routing-approvals",
+                "/private/routing-approvals.json",
+                "--routing-approval-key",
+                "/operator/approval.key",
+            ]
+        )
+        self.assertEqual(signed.routing_approval_key, "/operator/approval.key")
 
     def test_plan_phase_accepts_only_explicit_deployment_platforms(self) -> None:
         args = parse_workflow_args(
@@ -280,6 +299,61 @@ class MigrationPhaseTests(ParseErrorAssertions):
         )
         self.assertEqual(retry.apply_receipt, "/private/apply.json")
         self.assertTrue(retry.yes)
+
+
+    def test_apply_phase_accepts_caller_routing_anchor(self) -> None:
+        approved = parse_workflow_args(
+            [
+                "migration",
+                "--phase",
+                "apply",
+                "--manifest",
+                "/private/manifest.json",
+                "--routing-approvals",
+                "/private/routing-approvals.json",
+                "--yes",
+            ]
+        )
+        self.assertEqual(approved.routing_approvals, "/private/routing-approvals.json")
+        self.assertFalse(approved.no_routing_approvals)
+        omitted = parse_workflow_args(
+            [
+                "migration",
+                "--phase",
+                "apply",
+                "--manifest",
+                "/private/manifest.json",
+                "--no-routing-approvals",
+            ]
+        )
+        self.assertTrue(omitted.no_routing_approvals)
+        self.assertIsNone(omitted.routing_approvals)
+        self.assert_parse_error(
+            [
+                "migration",
+                "--phase",
+                "apply",
+                "--manifest",
+                "/private/manifest.json",
+                "--routing-approvals",
+                "/private/routing-approvals.json",
+                "--no-routing-approvals",
+            ]
+        )
+        self.assert_parse_error(
+            [
+                "migration",
+                "--phase",
+                "verify",
+                "--manifest",
+                "m.json",
+                "--apply-receipt",
+                "a.json",
+                "--deployment-evidence",
+                "d.json",
+                "--no-routing-approvals",
+            ]
+        )
 
     def test_apply_phase_requires_manifest(self) -> None:
         self.assert_parse_error(["migration", "--phase", "apply"])

@@ -568,6 +568,19 @@ def validate_deployment_reports(
             3,
         )
 
+def _check_approved_routing(manifest: Mapping[str, Any]) -> None:
+    """Reopen each approved candidate; drift is a conflict, not success."""
+    for operation in migration._operations(manifest):
+        if operation["selector"] != "approved-routing-replacement":
+            continue
+        candidate = operation["change"]["source_ref"]
+        if snapshot(Path(operation["target"])) != snapshot(Path(candidate["path"])):
+            migration._fail(
+                "approved-routing-drift",
+                "an approved routing file no longer matches its candidate",
+            )
+
+
 
 def verify_migration(
     manifest_path: Path,
@@ -607,6 +620,7 @@ def verify_migration(
         "deploy": migration._result_index(deployment),
     }
     migration._check_stage_backups(stage_results)
+    _check_approved_routing(manifest)
 
     epoch_started = None
     if deployment["payload"].get("previous_deployment_id") is not None:

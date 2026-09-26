@@ -35,6 +35,8 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 
 本审查只确认启动可以 fail-closed。它不是 apply 通过，也不是 P2-04 解锁。
 
+上节是启动时审查。此后 live apply 已发生；当前事实见第 3 节末条。该审查不是 done，也不是 P2-04 解锁。
+
 `2026-09-24T23:05:27+0800` 初稿把 Release readiness 写成 not-required，理由只是本轮不部署、不发布、不 cleanup。该结论撤回。live apply 属于 migration／runtime 运维行为变更，Gate 改为 required／planned。适用验证完成前不运行 reviewer，也不把本启动写成 ready。
 
 
@@ -59,6 +61,10 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-25T10:18:13+0800` 撤回对两份全局候选的绑定。用户那句只批准已展示的否定句，不能覆盖未展示的 `to-spec` / `to-tickets` 落盘改写、Lessons 路径改写和 Skill 文案改写。私有批准记录已改为 withdrawn-not-binding。未写入 live。未 plan。未 apply。
 - `2026-09-25T10:21:27+0800` 用户按已展示 SHA 批准两份全局候选。Codex `f206428ce4ccb2dc67b364f81264d851401cda67ad94b2f60dda1a2ccef034a9`。OMP `e52100f279aad36e2c629b3dc11dc9f12ba79fe9a1044e4b1401e5125eb16577`。写入前复核与这两个 SHA 一致。未写入 live。未改计划器。未 plan。未 apply。
 - `2026-09-25T10:24:41+0800` 撤回「计划器只接受三个 SHA」的实现建议。共享暂停校验只认可 pinned `ensure-file-block`，apply 只追加暂停块，不写入已批候选。项目 `AGENTS.md` 的现有操作只删管理块。硬编码放行会让 plan 变绿却执行错误暂停。未改计划器，未写 live，未 plan。
+- `2026-09-26T13:51:48+0800` 记入 live apply 回执。观察时刻，不是用户消息发生时钟，也不是回执时钟。用户原文「把这次 apply 回执记入台账，不要 cleanup」。回执 finished_at 为 `2026-09-26T13:37:05.318875+08:00`，status `applied`，apply_id `9ad029161fe57421a682ed44adaddf8c54d73c45d84eea7ea3341d5fa4497c6f`，manifest `81a0c3d4bc63d906da67f6502b4f218d14a0d410376ad4ad9b354d93f5e280d2`。单独 apply 确认是用户原文「apply」。写入对象是按已展示 SHA 批准的 Orca Codex 候选 `3e22679bf5fac0a6c36cc3840b4c707e3f8c12a20d8787a3d20246cd21f1209e`、OMP 候选 `ea7b3ce951864ff55964ce4cab9a6eba024d610be0560b24795d1ae10d7b3440`，以及此前 demo 候选 `cb5f99ea620f77028ab7323aae1cf4c0989230afd9385da40aa9811370e5f767`。旧全局候选 `f206428c…` / `e52100f2…` 不是本次写入对象。共享两项与项目内 106 项成功。`~/.codex` 未写。`.trellis` 仍在。精确路径只在私有层。不 cleanup，不删备份，不部署，不 smoke，不 sync，不改 hooks。隔离现场保留。P2-03 仍 in-progress。P2-04 仍 planned。
+- `2026-09-26T14:58:49+0800` 只读 Release Readiness Review 为 blocked。观察时刻，不是用户消息发生时钟。用户原文「按你推荐的下一步执行」。审查不是 apply 作者自证。回执仍是 applied，三份已批路由与候选 SHA 一致，`~/.codex` 未写。P1：带回执重试时，路由重绑先对照批准前快照，已成功替换在跳过前变成 `state-conflict`。未改代码，未复跑 live apply。不 cleanup，不部署，不启动 P2-04。P2-03 仍 in-progress。
+- `2026-09-26T17:25:32+0800` 修复带回执的路由重试。观察时刻，不是用户消息发生时钟。用户原文「推荐的下一步是什么，请推进」。只改临时目录证明：已成功且 live 仍等于回执 `after` 时跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。未复跑 live apply。审查未重开为 ready。P2-03 仍 in-progress。
+- `2026-09-26T17:33:19+0800` 本次 live 回执仍被版本门挡住。观察时刻，不是用户消息发生时钟。重试门之前先比对 `tool_versions` 与当前 `runtime_versions()`。live manifest 在 `sbtd_migration.py` 修改前密封，新代码消费它会先报 `version-conflict`。同版本临时测试不证明本次 live 批次可重试。不重封 manifest，不放松版本门。本次 live 批次的 AC-18 未修复。P2-03 仍 in-progress。
 
 ## 4. 明确不做
 
@@ -98,41 +104,28 @@ verify 再读 live 目标。当前快照必须等于回执 `after`，也必须�
 
 这三项写入前仍须另有 `planned` manifest 和单独的 apply 确认。本设计不授权现在写 live，不授权部署、smoke、cleanup、删备份、sync 或改 hooks。
 
-`2026-09-25T11:01:28+0800` 补失败路径。撤回「只改计划器即可实现」。本补充仍不改代码。
+`2026-09-25T11:01:28+0800` 补失败路径。当时的契约缺口已由后续实现关闭，不改写该时刻的历史。
 
-契约缺口：
+`2026-09-25T11:56:19+0800` 工作树实现了第 6 节的复制与回读，未写 live，未 plan，未 apply 真实家目录。schema 接受 `approved-candidate`。plan 只在批准记录、live 快照和候选一致，且候选以暂停块开头时发 `copy-file`。共享校验和项目闭包接受该形状，并拒绝同一目标再追加暂停块或只删管理块。apply 写入候选全文并回读。verify 重开候选，不一致即 `approved-routing-drift`。部分写入重试返回 `unsafe-retry`，不退回追加暂停块。
 
-- `ownership` 只有 `template-source`、`managed-marker`、`skill-identity`、`config-entry`。没有批准记录类型。新所有权写进 manifest 前，schema 和契约检查必须先接受它，否则文档封存失败。
-- `_validate_shared_operations()` 只接受 pinned `ensure-file-block` 和 Skill `remove`。共享 `copy-file` 现在会被当成未知操作拒绝。
-- 项目平台闭包只接受 `remove`。demo `AGENTS.md` 的 `copy-file` 现在会被当成未知私有操作拒绝。
-- apply 的 `copy-file` 回读已经存在，但这两条校验拒绝后根本到不了它。
-- verify 对已保留资源只比较回执 `after` 和当前快照。它不重新打开候选。错误的追加暂停若已成功，live 会等于回执 `after`，verify 不会发现那不是已批全文。
-- 已成功的错误暂停在重试时因 live 仍等于 `after` 被跳过，不会自动改写成候选。
+`2026-09-25T12:22:59+0800` 补批准文件绑定。形状检查不再单独放行重封装的 `copy-file`。apply 前按批准文件逐项重建，角色、目标和候选必须一致，引用必须在私有 vault 内。批准文件漂移在写入前 `state-conflict`。未写 live。
 
-因此只改计划器会得到两种坏结果：manifest 封存或后续校验失败，plan 并不真绿；或者若绕过校验，apply 仍追加暂停块，verify 把错误结果当成成功。两种都不是完成。
+本轮增加写入前鉴权边界：批准文件、路由候选和项目根不能落在会写 evidence/apply 的目录里。manifest 目录若在 `backup_root` 内，该 vault 也算写入根。批准文件必须存在，且 SHA 必须等于 sealed 记录。apply 另要求调用方传入 `--routing-approvals`；SHA 对不上、或操作不能从该文件重建，就在 `_render_resource` 前拒绝。无批准必须显式 `--no-routing-approvals`，且不得再对 `AGENTS.md` 追加暂停块或删除管理块。批准文件必须带安装包公钥验得过的签名。公钥是 `assets/routing-approval.pub`，由安装副本路径加载，不从 manifest 或调用方路径读。调用方把 `--routing-approvals` 指到攻击者文件时，签名对不上安装包公钥就拒绝。未写 live。
 
-失败路径：
+失败路径仍是契约，不是已全部用测试覆盖的清单：
 
-- 批准记录缺失、字段不全或候选 checksum 与记录不一致：plan blocked，`approval-conflict`。零写入。
+- 批准记录缺失、字段不全、目标重复或候选 checksum 与记录不一致：plan blocked。零写入。
 - live 快照与批准记录中的原件不一致，或候选文件与记录中的候选快照不一致：plan blocked，`state-conflict`。不自动改批准记录。
-- 候选不以暂停块原文开头：plan blocked，`candidate-conflict`。
+- 候选不以暂停块原文开头：plan blocked，`candidate-conflict`。已有测试。
 - 同一目标同时出现 `copy-file` 与 `ensure-file-block` 或管理块删除：plan blocked，`approval-conflict`。
-- schema 不接受新所有权：manifest 不得封存。这不是 plan 通过。
 - apply 时候选字节已变：`state-conflict`，该资源不写。
 - apply 写入后回读不等于候选快照：`post-state-conflict`。停止后续资源。回执保留实际 `after`，不得报 succeeded。
-- verify 发现 live 不等于回执 `after`，或不等于操作里的候选快照：drift。不得报已停用。
-- 重试时上次已成功且 live 仍等于 `after`：跳过，不写第二次。
+- verify 发现 live 不等于候选快照：`approved-routing-drift`。已有测试。不得报已停用。
+- 重试时上次已成功且 live 仍等于 `after`：跳过，不写第二次。带回执重试不再先用 live 当前字节对照批准前快照。已有临时目录测试。首次 apply 仍对照批准前快照。
 - 重试时 live 与上次 `after` 不一致：`retry-conflict`。
-- 部分写入或未知写入：`unsafe-retry`。不得退回追加暂停块。
+- 部分写入或未知写入：`unsafe-retry`。已有测试。不得退回追加暂停块。
+- 批准文件、路由候选或项目根落在会写 evidence/apply 的目录里，包括 manifest 目录位于 `backup_root` 内：apply 前 `private-scope`，不得写入。批准文件缺失或 SHA 与 sealed 记录不一致：`state-conflict`，不得写入。证据目录留在 vault 外再换 vault，而调用方仍传原批准文件：`state-conflict`，不得写入。把 `routing_approvals` 改成 null 后再删管理块，且调用方传 `--no-routing-approvals`：`approval-conflict`，不得写入。调用方把 `--routing-approvals` 指到攻击者文件，且该文件不是安装包公钥的有效签名：`approval-conflict`，不得写入。
+- 批准文件在 plan 之后被改：`state-conflict`。已有测试。不得写入。
 
-实现范围，接受前不做：
-
-1. schema 增加批准候选所有权，并让契约检查拒绝私有范围外的引用。
-2. plan 只在上述检查通过后发 `copy-file`。
-3. 共享校验和项目闭包都接受这个形状，并拒绝同一目标的旧暂停操作。
-4. apply 测试证明写入的是候选全文，不是追加块。
-5. verify 测试证明它重开候选，并在 live 不等于候选时失败。
-6. 重试测试证明成功结果不重写，部分写入不退回旧暂停。
-
-六项都有失败测试之前，不得把 plan 变绿当成路由已停用。
+已测的是临时目录里的 Codex 全局、OMP 全局和 demo 项目目标：写入候选全文、错误路径或批外目标被拒、重封装不写 live、候选漂移失败。没有真实家目录的 planned manifest，也没有 apply 确认。不得把这次工作树实现当成 live 路由已停用。
 

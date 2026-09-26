@@ -548,6 +548,20 @@
             }
           }
         }
+        ,
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "reference", "approval_ref", "role"],
+          "properties": {
+            "kind": {"const": "approved-candidate"},
+            "reference": {"$ref": "#/$defs/file_ref"},
+            "approval_ref": {"$ref": "#/$defs/file_ref"},
+            "role": {
+              "enum": ["codex-global", "omp-global", "demo-project"]
+            }
+          }
+        }
       ]
     },
     "before_requirement": {
@@ -913,6 +927,7 @@
         "shared_roots",
         "shared_operations",
         "publication_decisions",
+        "routing_approvals",
         "custodian",
         "backup_root",
         "created_at",
@@ -944,6 +959,16 @@
         },
         "publication_decisions": {
           "$ref": "#/$defs/publication_decisions"
+        },
+        "routing_approvals": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/file_ref"
+            }
+          ]
         },
         "custodian": {
           "$ref": "#/$defs/nonblank"

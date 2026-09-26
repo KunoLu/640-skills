@@ -71,6 +71,7 @@ def runtime_versions() -> dict[str, str]:
         "assets/migration-local-ignore.txt",
         "assets/migration-legacy-ownership.json",
         "assets/migration-paused-agents.txt",
+        "assets/routing-approval.pub",
         "assets/graft-build-policy.json",
         "assets/graft-instructions.txt",
         "assets/graft-hook-entry.mjs",
@@ -112,7 +113,7 @@ def runtime_versions() -> dict[str, str]:
     try:
         dependencies = {
             name: importlib.metadata.version(name)
-            for name in ("jsonschema", "PyYAML", "markdown-it-py", "tomlkit")
+            for name in ("jsonschema", "PyYAML", "markdown-it-py", "tomlkit", "cryptography")
         }
     except importlib.metadata.PackageNotFoundError:
         _fail(
@@ -375,10 +376,160 @@ def _all_input_references(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]
             references.append(item["candidate_ref"])
     for operation in _operations(manifest):
         references.append(operation["ownership"]["reference"])
+        approval = operation["ownership"].get("approval_ref")
+        if approval is not None:
+            references.append(approval)
         if "source_ref" in operation["change"]:
             references.append(operation["change"]["source_ref"])
     return references
 
+
+def _path_inside(path: Path, root: Path) -> bool:
+    return path == root or path.is_relative_to(root)
+
+
+def _check_evidence_apply_boundary(
+    manifest_path: Path, manifest: Mapping[str, Any]
+) -> None:
+    """Keep approval, candidates, and project roots out of evidence/apply writers.
+
+    Apply writes receipts beside the manifest and backups under
+    ``backup_root/<manifest-id>/apply``. When the manifest directory is inside
+    that vault, the vault itself becomes the writer root. A vault that stays
+    outside the manifest directory is not authenticated here.
+    """
+    payload = manifest["payload"]
+    evidence = manifest_path.parent
+    vault = Path(payload["backup_root"])
+    writers = [evidence, vault / manifest["manifest_id"] / "apply"]
+    if _path_inside(evidence, vault):
+        writers.append(vault)
+    subjects = [Path(project["root"]) for project in payload["projects"]]
+    approval = payload.get("routing_approvals")
+    if isinstance(approval, Mapping) and isinstance(approval.get("path"), str):
+        approval_path = Path(approval["path"])
+        subjects.append(approval_path)
+        state = approval.get("state")
+        recorded = state.get("checksum") if isinstance(state, Mapping) else None
+        actual = snapshot(approval_path)
+        if actual.get("type") != "file" or actual.get("checksum") != recorded:
+            _fail(
+                "state-conflict",
+                "the routing approval record does not match its sealed SHA",
+            )
+    for operation in _operations(manifest):
+        if operation.get("selector") != "approved-routing-replacement":
+            continue
+        source = operation["change"].get("source_ref")
+        if isinstance(source, Mapping) and isinstance(source.get("path"), str):
+            subjects.append(Path(source["path"]))
+    for subject in subjects:
+        for writer in writers:
+            if _path_inside(subject, writer):
+                _fail(
+                    "private-scope",
+                    "approval, candidate, or project root overlaps evidence/apply",
+                )
+
+
+
+def _agents_pause_or_marker_delete(operation: Mapping[str, Any]) -> bool:
+    target = operation.get("target")
+    if not isinstance(target, str) or Path(target).name != "AGENTS.md":
+        return False
+    change = operation.get("change")
+    kind = change.get("kind") if isinstance(change, Mapping) else None
+    selector = operation.get("selector")
+    return (
+        selector == "pause-legacy-routing" and kind == "ensure-file-block"
+    ) or (selector == "trellis-block" and kind == "remove")
+
+
+def _bind_apply_routing_anchor(
+    manifest_path: Path,
+    manifest: Mapping[str, Any],
+    routing_approvals: Path | None,
+    no_routing_approvals: bool,
+    *,
+    bind_live: bool = True,
+) -> None:
+    """Bind apply to the caller approval file, not a resealed manifest path.
+
+    A receipt-backed retry must not compare live bytes to the pre-apply
+    snapshot. That comparison runs before the successful-result skip and
+    rejects an already applied replacement. The receipt's after snapshot
+    remains the retry check.
+    """
+    if routing_approvals is not None and no_routing_approvals:
+        _fail(
+            "invalid-argument",
+            "apply accepts a routing approval file or --no-routing-approvals, not both",
+        )
+    if routing_approvals is None and not no_routing_approvals:
+        _fail(
+            "approval-conflict",
+            "apply requires the caller routing approval file or --no-routing-approvals",
+        )
+    payload = manifest["payload"]
+    sealed = payload.get("routing_approvals")
+    if no_routing_approvals:
+        if sealed is not None:
+            _fail("state-conflict", "the sealed plan has a routing approval record")
+        for operation in _operations(manifest):
+            if _agents_pause_or_marker_delete(operation):
+                _fail(
+                    "approval-conflict",
+                    "AGENTS.md pause or marker removal requires the caller routing approval file",
+                )
+        return
+    evidence = manifest_path.parent
+    vault = Path(payload["backup_root"])
+    writers = [evidence, vault / manifest["manifest_id"] / "apply"]
+    if _path_inside(evidence, vault):
+        writers.append(vault)
+    for writer in writers:
+        if _path_inside(routing_approvals, writer):
+            _fail(
+                "private-scope",
+                "the caller routing approval file overlaps evidence/apply",
+            )
+    if not isinstance(sealed, Mapping):
+        _fail("state-conflict", "the sealed plan has no routing approval record")
+    state = sealed.get("state")
+    recorded = state.get("checksum") if isinstance(state, Mapping) else None
+    actual = snapshot(routing_approvals)
+    if actual.get("type") != "file" or actual.get("checksum") != recorded:
+        _fail(
+            "state-conflict",
+            "the caller routing approval file does not match the sealed SHA",
+        )
+    from sbtd_migration_plan import (
+        _approved_routing_operations,
+        _load_routing_approvals,
+        _routing_key,
+        _routing_rows,
+    )
+
+    roots = [Path(project["root"]) for project in payload["projects"]]
+    items = _load_routing_approvals(routing_approvals, vault)
+    shared, private = _approved_routing_operations(
+        items, roots, vault, routing_approvals, bind_live=bind_live
+    )
+    declared = _routing_rows(payload)
+    expected: list[tuple[str, Path | None, Mapping[str, Any]]] = [
+        ("shared", None, operation) for operation in shared
+    ]
+    for root in roots:
+        expected.extend(
+            ("private", root, operation) for operation in private.get(root, [])
+        )
+    if [_routing_key(row) for row in declared] != [
+        _routing_key(row) for row in expected
+    ]:
+        _fail(
+            "approval-conflict",
+            "an approved routing replacement does not match the caller approval file",
+        )
 
 def _validate_context(
     manifest_path: Path,
@@ -392,6 +543,7 @@ def _validate_context(
             "version-conflict",
             "the migration plan belongs to a different installed implementation",
         )
+    _check_evidence_apply_boundary(manifest_path, manifest)
     require_private_directory(Path(manifest["payload"]["backup_root"]))
     resource_inodes: dict[tuple[int, int], str] = {}
     for project in manifest["payload"]["projects"]:
@@ -702,12 +854,31 @@ def _apply_resource(
             ).decode("utf-8")
     return result, exit_code
 
+def _retry_block(old: Mapping[str, Any] | None, target: Path) -> str | None:
+    """Return skip, an error code, or None when this attempt may write."""
+    if old is None:
+        return None
+    if old["after"] is None or snapshot(target) != old["after"]:
+        return "retry-conflict"
+    if old["status"] == "succeeded":
+        return "skip"
+    if (old["error"] or "").startswith(
+        ("foreign-content-conflict", "post-state-conflict")
+    ):
+        return "unsafe-retry"
+    if old["before"] is None or old["before"] != old["after"]:
+        return "unsafe-retry"
+    return None
+
+
 
 def apply_migration(
     manifest_path: Path,
     *,
     previous_receipt_path: Path | None = None,
     confirmed: bool = False,
+    routing_approvals: Path | None = None,
+    no_routing_approvals: bool = False,
 ) -> tuple[dict[str, Any], int]:
     if not confirmed:
         _fail(
@@ -733,6 +904,14 @@ def apply_migration(
                 "a previous receipt is later than the current operation",
             )
     _validate_context(manifest_path, manifest, previous)
+    _bind_apply_routing_anchor(
+        manifest_path,
+        manifest,
+        routing_approvals,
+        no_routing_approvals,
+        bind_live=previous is None,
+    )
+
     groups = _groups(manifest, "apply")
     results = dict(_result_index(previous))
     for group in groups:
@@ -741,25 +920,19 @@ def apply_migration(
         if old is not None:
             if old["backup_ref"] is not None:
                 _check_reference(old["backup_ref"], 3)
-            if old["after"] is None or snapshot(Path(first["target"])) != old["after"]:
+            decision = _retry_block(old, Path(first["target"]))
+            if decision == "retry-conflict":
                 _fail(
                     "retry-conflict",
                     "a previously recorded resource no longer matches its outcome",
                 )
-            if old["status"] == "succeeded":
-                continue
-            if (old["error"] or "").startswith(
-                ("foreign-content-conflict", "post-state-conflict")
-            ):
-                _fail(
-                    "unsafe-retry",
-                    "unapproved changed objects require explicit manual reconciliation",
-                )
-            if old["before"] is None or old["before"] != old["after"]:
+            if decision == "unsafe-retry":
                 _fail(
                     "unsafe-retry",
                     "a partial or unknown write requires explicit recovery or manual reconciliation",
                 )
+            if decision == "skip":
+                continue
         if snapshot(Path(first["target"])) != first["before_requirement"]["state"]:
             _fail(
                 "state-conflict",
@@ -1356,6 +1529,16 @@ def run_migration(args: Any) -> int:
                 deployment_platform=getattr(args, "deployment_platform", None)
                 or "codex",
                 hooks_authorized=bool(getattr(args, "graft_hooks", False)),
+                routing_approvals=(
+                    _argument_path(args.routing_approvals)
+                    if getattr(args, "routing_approvals", None)
+                    else None
+                ),
+                routing_approval_key=(
+                    _argument_path(args.routing_approval_key)
+                    if getattr(args, "routing_approval_key", None)
+                    else None
+                ),
             )
             projects = [
                 {
@@ -1384,6 +1567,12 @@ def run_migration(args: Any) -> int:
                 if args.apply_receipt
                 else None,
                 confirmed=args.yes,
+                routing_approvals=_argument_path(args.routing_approvals)
+                if getattr(args, "routing_approvals", None)
+                else None,
+                no_routing_approvals=bool(
+                    getattr(args, "no_routing_approvals", False)
+                ),
             )
         elif args.phase == "verify":
             from sbtd_migration_verify import verify_migration
@@ -1412,12 +1601,15 @@ def run_migration(args: Any) -> int:
     except contracts.ContractError as error:
         code = error.exit_code
         rejection = str(error)
+        confirmation = error.details
     except ImportError:
         code = 2
         rejection = "the installed migration runtime or its declared dependencies are unavailable"
+        confirmation = None
     except (TaskDataError, OSError, RuntimeError, ValueError):
         code = 5
         rejection = "migration could not safely finish its filesystem operation"
+        confirmation = None
     if rejection is not None:
         # A fixed rejection carries no accepted input/artifact. It must remain
         # printable when the validator itself is unavailable, without weakening
@@ -1433,6 +1625,8 @@ def run_migration(args: Any) -> int:
             "nextStep": "Preserve originals and private evidence; resolve the failure before retrying.",
             "migration": {},
         }
+        if confirmation:
+            envelope["confirmation"] = confirmation
     if args.json:
         if rejection is None:
             contracts.write_json_response(envelope)
