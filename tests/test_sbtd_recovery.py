@@ -103,7 +103,7 @@ class RecoveryPlanTests(unittest.TestCase):
     def test_recovery_plan_is_blocked_when_current_state_drifts(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.build(Path(directory).resolve())
-            retained = fixture.root / "AGENTS.md"
+            retained = fixture.root / ".gitignore"
             retained.write_text(retained.read_text() + "\nuser edit after cleanup\n")
             plan = fixture.plan()
             self.assertEqual(plan["payload"]["status"], "blocked")
