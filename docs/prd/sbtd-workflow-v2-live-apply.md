@@ -65,6 +65,7 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-26T14:58:49+0800` 只读 Release Readiness Review 为 blocked。观察时刻，不是用户消息发生时钟。用户原文「按你推荐的下一步执行」。审查不是 apply 作者自证。回执仍是 applied，三份已批路由与候选 SHA 一致，`~/.codex` 未写。P1：带回执重试时，路由重绑先对照批准前快照，已成功替换在跳过前变成 `state-conflict`。未改代码，未复跑 live apply。不 cleanup，不部署，不启动 P2-04。P2-03 仍 in-progress。
 - `2026-09-26T17:25:32+0800` 修复带回执的路由重试。观察时刻，不是用户消息发生时钟。用户原文「推荐的下一步是什么，请推进」。只改临时目录证明：已成功且 live 仍等于回执 `after` 时跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。未复跑 live apply。审查未重开为 ready。P2-03 仍 in-progress。
 - `2026-09-26T17:33:19+0800` 本次 live 回执仍被版本门挡住。观察时刻，不是用户消息发生时钟。重试门之前先比对 `tool_versions` 与当前 `runtime_versions()`。live manifest 在 `sbtd_migration.py` 修改前密封，新代码消费它会先报 `version-conflict`。同版本临时测试不证明本次 live 批次可重试。不重封 manifest，不放松版本门。本次 live 批次的 AC-18 未修复。P2-03 仍 in-progress。
+- `2026-09-26T21:21:19+08:00` 任务 PR #76 已合并，未标 done。观察时刻，不是用户消息发生时钟。用户原文「CI运行完毕了，都成功了。请继续下一步」。任务 PR #76 已于 GitHub `2026-09-26T13:16:43Z` 合并，merge `bf3af67a28162335eb2e0121e133e6469f613191`。合并前 head `4726245c687a9a0f3d2c9106cd05a0db24de307d` 的 linux-full、macos-bash-installer、windows-powershell-installer 均为 SUCCESS。Codex 对 `bb9c4ec` 留了两条 P2 建议，不是批准；合并使用已授权的 `--admin`。这两条建议未修。不标 done。本次 live 批次的 AC-18 仍未修复。不重封 manifest，不放松版本门。不 cleanup，不部署，不启动 P2-04。P2-03 仍 in-progress。
 
 ## 4. 明确不做
 
