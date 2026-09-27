@@ -476,6 +476,353 @@ class MigrationApplyTests(unittest.TestCase):
             self.assertEqual(code, 3, retried)
             self.assertEqual(retried["status"], "failed")
 
+    def test_unlisted_successor_is_rejected_even_with_a_matching_receipt(self):
+        from onboard_contracts import ContractError
+        from sbtd_migration import _require_runtime_lineage, _verified_runtime_pair
+        from sbtd_migration_files import snapshot
+
+        predecessor, _successor = _verified_runtime_pair()
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            target = base / "live.txt"
+            target.write_bytes(b"after\n")
+            backup = base / "backup.txt"
+            backup.write_bytes(b"before\n")
+            manifest = {
+                "manifest_id": "m1",
+                "payload": {
+                    "tool_versions": {"onboard": predecessor, "graft": "0.18.0"},
+                    "projects": [
+                        {
+                            "private_operations": [
+                                {
+                                    "phase": "apply",
+                                    "resource_id": "r1",
+                                    "target": str(target),
+                                }
+                            ]
+                        }
+                    ],
+                    "shared_operations": [],
+                },
+            }
+            receipt = {
+                "apply_id": "a1",
+                "payload": {
+                    "manifest_id": "m1",
+                    "status": "applied",
+                    "projects": [
+                        {
+                            "private_results": [
+                                {
+                                    "resource_id": "r1",
+                                    "status": "succeeded",
+                                    "after": snapshot(target),
+                                    "backup_ref": {
+                                        "path": str(backup),
+                                        "state": snapshot(backup),
+                                    },
+                                }
+                            ]
+                        }
+                    ],
+                    "shared_results": [],
+                },
+            }
+            with self.assertRaises(ContractError) as unlisted:
+                _require_runtime_lineage(
+                    manifest,
+                    receipt,
+                    manifest["payload"]["tool_versions"],
+                    {
+                        "onboard": "runtime-sha256:unlisted-successor",
+                        "graft": "0.18.0",
+                    },
+                )
+            self.assertEqual(unlisted.exception.code, "version-conflict")
+            self.assertEqual(target.read_bytes(), b"after\n")
+
+    def test_runtime_lineage_stays_closed_without_complete_evidence(self):
+        from onboard_contracts import ContractError
+        from sbtd_migration import _require_runtime_lineage
+        from sbtd_migration_files import snapshot
+
+        predecessor = (
+            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
+        )
+        current = {"onboard": "runtime-sha256:successor", "graft": "0.18.0"}
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            target = base / "live.txt"
+            target.write_bytes(b"after\n")
+            backup = base / "backup.txt"
+            backup.write_bytes(b"before\n")
+            after = snapshot(target)
+            before = snapshot(backup)
+            manifest = {
+                "manifest_id": "m1",
+                "payload": {
+                    "tool_versions": {"onboard": predecessor, "graft": "0.18.0"},
+                    "projects": [
+                        {
+                            "private_operations": [
+                                {
+                                    "phase": "apply",
+                                    "resource_id": "r1",
+                                    "target": str(target),
+                                }
+                            ]
+                        }
+                    ],
+                    "shared_operations": [],
+                },
+            }
+            receipt = {
+                "apply_id": "a1",
+                "payload": {
+                    "manifest_id": "m1",
+                    "status": "applied",
+                    "projects": [
+                        {
+                            "private_results": [
+                                {
+                                    "resource_id": "r1",
+                                    "status": "succeeded",
+                                    "after": after,
+                                    "backup_ref": {
+                                        "path": str(backup),
+                                        "state": before,
+                                    },
+                                }
+                            ]
+                        }
+                    ],
+                    "shared_results": [],
+                },
+            }
+            sealed = manifest["payload"]["tool_versions"]
+            with mock.patch(
+                "sbtd_migration._verified_runtime_pair",
+                return_value=(predecessor, current["onboard"]),
+            ):
+                _require_runtime_lineage(manifest, receipt, sealed, current)
+                with self.assertRaises(ContractError) as unlisted:
+                    _require_runtime_lineage(
+                        manifest,
+                        receipt,
+                        {"onboard": "runtime-sha256:other", "graft": "0.18.0"},
+                        current,
+                    )
+                self.assertEqual(unlisted.exception.code, "version-conflict")
+                with self.assertRaises(ContractError) as missing:
+                    _require_runtime_lineage(manifest, None, sealed, current)
+                self.assertEqual(missing.exception.code, "version-conflict")
+                partial = json.loads(json.dumps(receipt))
+                partial["payload"]["status"] = "failed"
+                with self.assertRaises(ContractError) as incomplete:
+                    _require_runtime_lineage(manifest, partial, sealed, current)
+                self.assertEqual(incomplete.exception.code, "lineage-conflict")
+                backup.write_bytes(b"changed\n")
+                with self.assertRaises(ContractError) as drifted:
+                    _require_runtime_lineage(manifest, receipt, sealed, current)
+                self.assertEqual(drifted.exception.code, "lineage-conflict")
+
+    def test_recovery_receipt_replaces_only_completed_inverse_states(self):
+        from onboard_contracts import ContractError
+        from sbtd_migration import _require_runtime_lineage
+        from sbtd_migration_files import snapshot
+
+        predecessor = (
+            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
+        )
+        current = {"onboard": "runtime-sha256:successor", "graft": "0.18.0"}
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            restored = base / "restored.txt"
+            untouched = base / "untouched.txt"
+            restored.write_bytes(b"applied\n")
+            applied_restored = snapshot(restored)
+            restored.write_bytes(b"pre-apply\n")
+            untouched.write_bytes(b"applied\n")
+            backup = base / "backup.txt"
+            backup.write_bytes(b"original\n")
+            restored_after = snapshot(restored)
+            applied_after = snapshot(untouched)
+            backup_state = snapshot(backup)
+            manifest = {
+                "manifest_id": "m1",
+                "payload": {
+                    "tool_versions": {"onboard": predecessor, "graft": "0.18.0"},
+                    "projects": [
+                        {
+                            "private_operations": [
+                                {
+                                    "phase": "apply",
+                                    "resource_id": "restored",
+                                    "target": str(restored),
+                                },
+                                {
+                                    "phase": "apply",
+                                    "resource_id": "untouched",
+                                    "target": str(untouched),
+                                },
+                            ]
+                        }
+                    ],
+                    "shared_operations": [],
+                },
+            }
+            receipt = {
+                "apply_id": "a1",
+                "payload": {
+                    "manifest_id": "m1",
+                    "status": "applied",
+                    "projects": [
+                        {
+                            "private_results": [
+                                {
+                                    "resource_id": "restored",
+                                    "status": "succeeded",
+                                    "after": applied_restored,
+                                    "backup_ref": {
+                                        "path": str(backup),
+                                        "state": backup_state,
+                                    },
+                                },
+                                {
+                                    "resource_id": "untouched",
+                                    "status": "succeeded",
+                                    "after": applied_after,
+                                    "backup_ref": None,
+                                },
+                            ]
+                        }
+                    ],
+                    "shared_results": [],
+                },
+            }
+            recovery = {
+                "payload": {
+                    "manifest_id": "m1",
+                    "results": [
+                        {
+                            "resource_id": "restored",
+                            "phase": "cleanup",
+                            "status": "succeeded",
+                            "after": {"type": "absent", "checksum": None},
+                        },
+                        {
+                            "resource_id": "restored",
+                            "phase": "apply",
+                            "status": "succeeded",
+                            "after": restored_after,
+                        },
+                        {
+                            "resource_id": "untouched",
+                            "status": "failed",
+                            "after": applied_after,
+                        },
+                    ],
+                }
+            }
+            sealed = manifest["payload"]["tool_versions"]
+            with mock.patch(
+                "sbtd_migration._verified_runtime_pair",
+                return_value=(predecessor, current["onboard"]),
+            ):
+                _require_runtime_lineage(
+                    manifest, receipt, sealed, current, recovery
+                )
+                untouched.write_bytes(b"drifted\n")
+                with self.assertRaises(ContractError) as untouched_drift:
+                    _require_runtime_lineage(
+                        manifest, receipt, sealed, current, recovery
+                    )
+                self.assertEqual(untouched_drift.exception.code, "lineage-conflict")
+                untouched.write_bytes(b"applied\n")
+                restored.write_bytes(b"also-drifted\n")
+                with self.assertRaises(ContractError) as restored_drift:
+                    _require_runtime_lineage(
+                        manifest, receipt, sealed, current, recovery
+                    )
+                self.assertEqual(restored_drift.exception.code, "lineage-conflict")
+                restored.write_bytes(b"pre-apply\n")
+                with self.assertRaises(ContractError) as unlisted:
+                    _require_runtime_lineage(
+                        manifest,
+                        receipt,
+                        sealed,
+                        {
+                            "onboard": "runtime-sha256:unlisted-successor",
+                            "graft": "0.18.0",
+                        },
+                        recovery,
+                    )
+                self.assertEqual(unlisted.exception.code, "version-conflict")
+                partial = json.loads(json.dumps(receipt))
+                partial["payload"]["status"] = "failed"
+                with self.assertRaises(ContractError) as incomplete:
+                    _require_runtime_lineage(
+                        manifest, partial, sealed, current, recovery
+                    )
+                self.assertEqual(incomplete.exception.code, "lineage-conflict")
+
+    def test_installed_lineage_pair_matches_current_runtime_and_stays_outside_it(self):
+        from sbtd_migration import (
+            _LINEAGE_DOCUMENT,
+            _LINEAGE_PUBLIC_KEY,
+            _verified_runtime_pair,
+            runtime_versions,
+        )
+
+        source = Path(
+            "sbtd-workflow-onboard/scripts/sbtd_migration.py"
+        ).read_text(encoding="utf-8")
+        names = source.split("names = [", 1)[1].split("]", 1)[0]
+        self.assertIn("assets/runtime-lineage.pub", names)
+        self.assertNotIn("assets/runtime-lineage.json", names)
+        predecessor, successor = _verified_runtime_pair()
+        self.assertEqual(
+            predecessor,
+            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750",
+        )
+        self.assertEqual(successor, runtime_versions()["onboard"])
+        self.assertTrue(_LINEAGE_PUBLIC_KEY.is_file())
+        self.assertNotEqual(_LINEAGE_DOCUMENT, _LINEAGE_PUBLIC_KEY)
+
+    def test_tampered_lineage_document_is_version_conflict(self):
+        import sbtd_migration
+        from onboard_contracts import ContractError
+        from sbtd_migration import _LINEAGE_DOCUMENT
+
+        official = _LINEAGE_DOCUMENT.read_bytes()
+        document = json.loads(official)
+        with tempfile.TemporaryDirectory() as directory:
+            tampered = Path(directory).resolve() / "runtime-lineage.json"
+            cases = {
+                "successor": {
+                    **document,
+                    "successor": "runtime-sha256:" + "ab" * 32,
+                },
+                "signature": {
+                    **document,
+                    "signature": "A" * len(document["signature"]),
+                },
+            }
+            for name, payload in cases.items():
+                with self.subTest(name=name):
+                    tampered.write_text(
+                        json.dumps(payload), encoding="utf-8"
+                    )
+                    with mock.patch.object(
+                        sbtd_migration, "_LINEAGE_DOCUMENT", tampered
+                    ):
+                        with self.assertRaises(ContractError) as error:
+                            sbtd_migration._verified_runtime_pair()
+                    self.assertEqual(error.exception.code, "version-conflict")
+        self.assertEqual(_LINEAGE_DOCUMENT.read_bytes(), official)
+
+
 
 if __name__ == "__main__":
     unittest.main()

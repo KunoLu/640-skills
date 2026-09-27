@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -408,6 +409,564 @@ class RecoveryApplyTests(unittest.TestCase):
                 apply_recovery(other_plan, confirm_recovery=plan["plan_id"])
             self.assertEqual(raised.exception.exit_code, 2)
             self.assertEqual(_tree_bytes(fixture.base), before)
+
+
+    def test_same_resource_keeps_only_the_latest_succeeded_inverse_step(self):
+        from sbtd_recovery import _latest_succeeded_step_ids
+
+        steps = [
+            {"step_id": "cleanup-step", "resource_id": "same"},
+            {"step_id": "deploy-step", "resource_id": "same"},
+            {"step_id": "apply-step", "resource_id": "same"},
+            {"step_id": "other-step", "resource_id": "other"},
+        ]
+        previous = {
+            "cleanup-step": {"status": "succeeded", "after": {"type": "file"}},
+            "deploy-step": {"status": "succeeded", "after": {"type": "absent"}},
+            "apply-step": {"status": "failed", "after": {"type": "absent"}},
+            "other-step": {"status": "succeeded", "after": {"type": "file"}},
+        }
+        self.assertEqual(
+            _latest_succeeded_step_ids(steps, previous),
+            {"deploy-step", "other-step"},
+        )
+
+    def test_multi_phase_retry_checks_only_the_latest_restored_state(self):
+        from onboard_contracts import (
+            operation_id,
+            recovery_step_id,
+            resource_id,
+            seal_document,
+        )
+        from sbtd_migration_files import snapshot
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            evidence = base / "evidence"
+            evidence.mkdir(mode=0o700)
+            project = base / "project"
+            project.mkdir()
+            target = base / "live.txt"
+            target.write_bytes(b"pre-apply\n")
+            applied_backup = evidence / "backup-applied.txt"
+            applied_backup.write_bytes(b"post-apply\n")
+            original_backup = evidence / "backup-original.txt"
+            original_backup.write_bytes(b"pre-apply\n")
+            manifest_path = evidence / "manifest.json"
+            apply_path = evidence / "apply.json"
+            cleanup_path = evidence / "cleanup.json"
+            for path in (manifest_path, apply_path, cleanup_path):
+                path.write_bytes(b"{}\n")
+            rid = resource_id("file", str(target))
+            manifest_id = "ab" * 32
+            cleanup_step = recovery_step_id(manifest_id, "cleanup", rid)
+            apply_step = recovery_step_id(manifest_id, "apply", rid)
+            cleanup_op = operation_id("cleanup", rid, "whole-resource")
+            apply_op = operation_id("apply", rid, "name")
+            applied = snapshot(applied_backup)
+            original = snapshot(target)
+            evidence_ref = {
+                "manifest": {
+                    "path": str(manifest_path),
+                    "state": snapshot(manifest_path),
+                },
+                "apply_receipt": {
+                    "path": str(apply_path),
+                    "state": snapshot(apply_path),
+                },
+                "deployment_evidence": None,
+                "cleanup_receipt": {
+                    "path": str(cleanup_path),
+                    "state": snapshot(cleanup_path),
+                },
+            }
+            plan = seal_document(
+                "recovery_plan",
+                {
+                    "manifest_id": manifest_id,
+                    "status": "planned",
+                    "projects": [
+                        {"root": str(project), "source_ref": None, "head": None}
+                    ],
+                    "shared_operation_ids": [],
+                    "input_evidence": evidence_ref,
+                    "resources": [
+                        {
+                            "resource_id": rid,
+                            "owner_kind": "file",
+                            "target": str(target),
+                            "operation_ids": sorted([cleanup_op, apply_op]),
+                            "dependent_projects": [str(project)],
+                            "state": {"type": "absent", "checksum": None},
+                        }
+                    ],
+                    "steps": [
+                        {
+                            "step_id": cleanup_step,
+                            "phase": "cleanup",
+                            "resource_id": rid,
+                            "operation_ids": [cleanup_op],
+                            "dependent_projects": [str(project)],
+                            "depends_on": [],
+                            "backup_ref": {
+                                "path": str(applied_backup),
+                                "state": applied,
+                            },
+                            "expected_current": {"type": "absent", "checksum": None},
+                            "restore_to": applied,
+                        },
+                        {
+                            "step_id": apply_step,
+                            "phase": "apply",
+                            "resource_id": rid,
+                            "operation_ids": [apply_op],
+                            "dependent_projects": [str(project)],
+                            "depends_on": [cleanup_step],
+                            "backup_ref": {
+                                "path": str(original_backup),
+                                "state": original,
+                            },
+                            "expected_current": applied,
+                            "restore_to": original,
+                        },
+                    ],
+                    "conflicts": [],
+                    "risks": [],
+                    "target": "pre-apply",
+                    "created_at": "2026-09-27T07:00:00+00:00",
+                },
+            )
+            receipt = seal_document(
+                "recovery_receipt",
+                {
+                    "plan_id": plan["plan_id"],
+                    "manifest_id": manifest_id,
+                    "previous_receipt_id": None,
+                    "input_evidence": evidence_ref,
+                    "status": "restored",
+                    "projects": [
+                        {
+                            "root": str(project),
+                            "source_ref": None,
+                            "head": None,
+                            "status": "restored",
+                            "reason": "",
+                            "nextStep": "",
+                        }
+                    ],
+                    "results": [
+                        {
+                            "step_id": cleanup_step,
+                            "resource_id": rid,
+                            "phase": "cleanup",
+                            "operation_ids": [cleanup_op],
+                            "dependent_projects": [str(project)],
+                            "status": "succeeded",
+                            "protection_ref": None,
+                            "before": {"type": "absent", "checksum": None},
+                            "after": applied,
+                            "error": None,
+                        },
+                        {
+                            "step_id": apply_step,
+                            "resource_id": rid,
+                            "phase": "apply",
+                            "operation_ids": [apply_op],
+                            "dependent_projects": [str(project)],
+                            "status": "succeeded",
+                            "protection_ref": {
+                                "path": str(applied_backup),
+                                "state": applied,
+                            },
+                            "before": applied,
+                            "after": original,
+                            "error": None,
+                        },
+                    ],
+                    "shared_results": [],
+                    "completed_step_ids": sorted([cleanup_step, apply_step]),
+                    "pending_step_ids": [],
+                    "reason": "",
+                    "started_at": "2026-09-27T07:01:00+00:00",
+                    "finished_at": "2026-09-27T07:02:00+00:00",
+                    "runtime_readiness": "not-verified",
+                    "report_refs": [],
+                },
+            )
+            plan_path = evidence / "recovery-plan.json"
+            receipt_path = evidence / f"recovery-{receipt['receipt_id']}.json"
+            save_document(plan_path, plan, private_root=evidence)
+            save_document(receipt_path, receipt, private_root=evidence)
+            loaded_manifest = {
+                "manifest_id": manifest_id,
+                "payload": {
+                    "backup_root": str(evidence),
+                    "projects": [
+                        {
+                            "sources": [],
+                            "private_operations": [
+                                {"resource_id": rid, "target": str(target)}
+                            ],
+                        }
+                    ],
+                    "shared_operations": [],
+                },
+            }
+
+            def load_reference(reference, kind):
+                if kind == "manifest":
+                    return loaded_manifest, b"{}\n"
+                return {
+                    "payload": {"projects": [], "shared_results": []}
+                }, b"{}\n"
+
+            before = target.read_bytes()
+            with (
+                mock.patch(
+                    "sbtd_recovery._document_from_reference",
+                    side_effect=load_reference,
+                ),
+                mock.patch("sbtd_recovery.contracts.validate_declared_bindings"),
+                mock.patch("sbtd_recovery._validate_context"),
+                mock.patch("sbtd_recovery.contracts.validate_cumulative"),
+            ):
+                continued, code = apply_recovery(
+                    plan_path,
+                    previous_receipt_path=receipt_path,
+                    confirm_recovery=plan["plan_id"],
+                )
+            self.assertEqual(code, 0, continued)
+            self.assertEqual(continued["status"], "already-complete")
+            self.assertEqual(target.read_bytes(), before)
+            self.assertNotEqual(snapshot(target), applied)
+
+    def test_bound_multi_phase_continuation_uses_real_recovery_gates(self):
+        import os
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PrivateKey,
+        )
+        from sbtd_graft_deployment import (
+            execute_migration_deployment,
+            load_deployment_context,
+        )
+        from sbtd_migration import apply_migration, runtime_versions
+        from sbtd_migration_files import snapshot
+        from sbtd_migration_plan import plan_migration
+        from test_sbtd_migration_apply import legacy_project
+        from test_sbtd_migration_plan import (
+            _routing_approval,
+            _sign_existing_approval,
+        )
+
+        import test_sbtd_migration_plan as routing_tests
+
+        key = Ed25519PrivateKey.generate()
+        previous_key = routing_tests._TEST_APPROVAL_KEY
+        routing_tests._TEST_APPROVAL_KEY = key
+        self.addCleanup(
+            setattr, routing_tests, "_TEST_APPROVAL_KEY", previous_key
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = legacy_project(base, "project")
+            home, vault, evidence = (
+                base / name for name in ("home", "vault", "evidence")
+            )
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            live = project / "AGENTS.md"
+            pause = (
+                Path(__file__).resolve().parents[1]
+                / "sbtd-workflow-onboard/assets/migration-paused-agents.txt"
+            ).read_bytes()
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = vault / "routing-approvals.json"
+            with mock.patch(
+                "sbtd_migration_plan._routing_approval_public_key",
+                return_value=key.public_key(),
+            ):
+                _routing_approval(approval, "demo-project", live, candidate)
+                _sign_existing_approval(approval, key)
+                with mock.patch.dict(os.environ, environment):
+                    manifest = plan_migration(
+                        [project],
+                        vault,
+                        "fixture",
+                        None,
+                        tool_versions=runtime_versions(),
+                        deployment_mode="init-projects",
+                        routing_approvals=approval,
+                    )
+            approval_patch = mock.patch(
+                "sbtd_migration_plan._routing_approval_public_key",
+                return_value=key.public_key(),
+            )
+            approval_patch.start()
+            self.addCleanup(approval_patch.stop)
+            phases = {}
+            for operation in manifest["payload"]["projects"][0]["private_operations"]:
+                phases.setdefault(operation["resource_id"], set()).add(
+                    operation["phase"]
+                )
+            shared = [
+                resource_id
+                for resource_id, seen in phases.items()
+                if seen >= {"apply", "deploy"}
+            ]
+            self.assertEqual(len(shared), 1)
+            manifest_path = evidence / "manifest.json"
+            from onboard_contracts import canonical_json_bytes
+
+            manifest_path.write_bytes(canonical_json_bytes(manifest))
+            with mock.patch.dict(os.environ, environment), mock.patch(
+                "sbtd_migration_plan._routing_approval_public_key",
+                return_value=key.public_key(),
+            ):
+                applied, apply_code = apply_migration(
+                    manifest_path,
+                    confirmed=True,
+                    routing_approvals=approval,
+                )
+            self.assertEqual(apply_code, 0, applied)
+            receipt = applied["migration"]["apply_receipt"]
+            apply_path = evidence / f"apply-{receipt['apply_id']}.json"
+            deployment_path = evidence / "deployment.json"
+            context = load_deployment_context(
+                manifest_path,
+                apply_path,
+                deployment_path,
+                previous_path=None,
+                mode="init-projects",
+                roots=[project],
+                hooks_authorized=False,
+            )
+
+            def write_graph(root, _runtime):
+                (root / "graft").mkdir()
+                (root / "graft/fixture").write_bytes(b"synthetic native output")
+
+            runtime = {
+                "node": "/fixture/node",
+                "cli": "/fixture/cli.js",
+                "python": "/fixture/python",
+            }
+            with (
+                mock.patch(
+                    "sbtd_graft_deployment.verified_runtime", return_value=runtime
+                ),
+                mock.patch(
+                    "sbtd_graft_deployment.build_project_graph",
+                    side_effect=write_graph,
+                ),
+                mock.patch(
+                    "sbtd_graft_deployment.run_project_smoke", return_value=[]
+                ),
+            ):
+                deployed, deploy_code = execute_migration_deployment(context)
+            self.assertIn(deploy_code, (0, 3), deployed)
+            self.assertTrue(deployment_path.is_file())
+            planned, plan_code = plan_recovery(
+                manifest_path,
+                apply_receipt_path=apply_path,
+                deployment_evidence_path=deployment_path,
+            )
+            self.assertEqual(plan_code, 0, planned)
+            plan = planned["recovery"]["plan"]
+            paired = [
+                step
+                for step in plan["payload"]["steps"]
+                if step["resource_id"] == shared[0]
+            ]
+            self.assertEqual([step["phase"] for step in paired], ["deploy", "apply"])
+            self.assertNotEqual(paired[0]["restore_to"], paired[1]["restore_to"])
+            plan_path = evidence / "recovery-plan.json"
+            save_document(plan_path, plan, private_root=evidence)
+            restored, recovery_code = apply_recovery(
+                plan_path, confirm_recovery=plan["plan_id"]
+            )
+            self.assertEqual(recovery_code, 0, restored)
+            first = restored["recovery"]["receipt"]
+            first_path = evidence / f"recovery-{first['receipt_id']}.json"
+            succeeded = [
+                result["step_id"]
+                for result in first["payload"]["results"]
+                if result["resource_id"] == shared[0]
+                and result["status"] == "succeeded"
+            ]
+            self.assertEqual(len(succeeded), 2)
+            after_restore = live.read_bytes()
+            continued, continued_code = apply_recovery(
+                plan_path,
+                previous_receipt_path=first_path,
+                confirm_recovery=plan["plan_id"],
+            )
+            self.assertEqual(continued_code, 0, continued)
+            self.assertEqual(continued["status"], "already-complete")
+            self.assertEqual(live.read_bytes(), after_restore)
+
+
+    def test_predecessor_recovery_can_continue_from_a_partial_receipt(self):
+        from onboard_contracts import canonical_json_bytes
+        from sbtd_migration import apply_migration, runtime_versions
+        from sbtd_migration_files import snapshot
+        from sbtd_migration_plan import plan_migration
+        from test_sbtd_migration_apply import legacy_project
+
+        predecessor = (
+            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
+        )
+        graft = runtime_versions()["graft"]
+        sealed = {"onboard": predecessor, "graft": graft}
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = legacy_project(base, "project")
+            home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(home / ".codex"),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions=sealed,
+                )
+            manifest_path = evidence / "manifest.json"
+            manifest_path.write_bytes(canonical_json_bytes(manifest))
+            with mock.patch.dict(os.environ, environment), mock.patch(
+                "sbtd_migration.runtime_versions", return_value=sealed
+            ):
+                applied, apply_code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
+            self.assertEqual(apply_code, 0, applied)
+            receipt = applied["migration"]["apply_receipt"]
+            apply_path = evidence / f"apply-{receipt['apply_id']}.json"
+            self.assertTrue(apply_path.is_file())
+            planned, plan_code = plan_recovery(
+                manifest_path, apply_receipt_path=apply_path
+            )
+            self.assertEqual(plan_code, 0, planned)
+            plan = planned["recovery"]["plan"]
+            steps = plan["payload"]["steps"]
+            self.assertGreaterEqual(len(steps), 2)
+            plan_path = evidence / "recovery-plan.json"
+            save_document(plan_path, plan, private_root=evidence)
+            import sbtd_recovery
+
+            real_execute = sbtd_recovery._execute_step
+
+            def stop_after_first(manifest_doc, operation, path, step):
+                if stop_after_first.calls:
+                    current = snapshot(Path(operation["target"]))
+                    return {
+                        "step_id": step["step_id"],
+                        "resource_id": step["resource_id"],
+                        "phase": step["phase"],
+                        "operation_ids": list(step["operation_ids"]),
+                        "dependent_projects": list(step["dependent_projects"]),
+                        "status": "failed",
+                        "protection_ref": None,
+                        "before": current,
+                        "after": current,
+                        "error": "state-conflict",
+                    }
+                stop_after_first.calls += 1
+                return real_execute(manifest_doc, operation, path, step)
+
+            stop_after_first.calls = 0
+            with mock.patch.object(
+                sbtd_recovery, "_execute_step", side_effect=stop_after_first
+            ):
+                first, first_code = apply_recovery(
+                    plan_path, confirm_recovery=plan["plan_id"]
+                )
+            self.assertEqual(first_code, 5, first)
+            first_receipt = first["recovery"]["receipt"]
+            succeeded = [
+                result
+                for result in first_receipt["payload"]["results"]
+                if result["status"] == "succeeded"
+            ]
+            self.assertEqual(len(succeeded), 1)
+            operations = [
+                operation
+                for project in manifest["payload"]["projects"]
+                for operation in project["private_operations"]
+            ] + list(manifest["payload"]["shared_operations"])
+            restored_target = Path(
+                next(
+                    operation["target"]
+                    for operation in operations
+                    if operation["resource_id"] == succeeded[0]["resource_id"]
+                )
+            )
+            self.assertEqual(snapshot(restored_target), succeeded[0]["after"])
+            self.assertNotEqual(snapshot(restored_target), succeeded[0]["before"])
+            first_path = evidence / f"recovery-{first_receipt['receipt_id']}.json"
+            before_continue = _tree_bytes(base)
+            unlisted = {
+                "onboard": "runtime-sha256:unlisted-successor",
+                "graft": graft,
+            }
+            with mock.patch(
+                "sbtd_migration.runtime_versions", return_value=unlisted
+            ):
+                with self.assertRaises(ContractError) as rejected:
+                    apply_recovery(
+                        plan_path,
+                        previous_receipt_path=first_path,
+                        confirm_recovery=plan["plan_id"],
+                    )
+            self.assertEqual(rejected.exception.code, "version-conflict")
+            self.assertEqual(_tree_bytes(base), before_continue)
+            official = sbtd_migration_lineage_document()
+            outside = Path(tempfile.mkdtemp(dir=str(base.parent)))
+            tampered = outside / "bad-lineage.json"
+            payload = json.loads(official)
+            payload["signature"] = "A" * len(payload["signature"])
+            tampered.write_text(json.dumps(payload), encoding="utf-8")
+            with mock.patch("sbtd_migration._LINEAGE_DOCUMENT", tampered):
+                with self.assertRaises(ContractError) as bad_signature:
+                    apply_recovery(
+                        plan_path,
+                        previous_receipt_path=first_path,
+                        confirm_recovery=plan["plan_id"],
+                    )
+            self.assertEqual(bad_signature.exception.code, "version-conflict")
+            self.assertEqual(_tree_bytes(base), before_continue)
+            continued, continued_code = apply_recovery(
+                plan_path,
+                previous_receipt_path=first_path,
+                confirm_recovery=plan["plan_id"],
+            )
+            self.assertEqual(continued_code, 0, continued)
+            self.assertEqual(continued["status"], "restored")
+            self.assertEqual(
+                continued["recovery"]["receipt"]["payload"]["pending_step_ids"],
+                [],
+            )
+            self.assertEqual(snapshot(restored_target), succeeded[0]["after"])
+
+
+def sbtd_migration_lineage_document() -> bytes:
+    from sbtd_migration import _LINEAGE_DOCUMENT
+
+    return _LINEAGE_DOCUMENT.read_bytes()
 
 
 class RecoveryCliTests(unittest.TestCase):

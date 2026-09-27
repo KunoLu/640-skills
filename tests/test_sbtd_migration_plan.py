@@ -2579,6 +2579,93 @@ class ApprovedRoutingReplacementTests(unittest.TestCase):
             self.assertEqual(conflict.exception.code, "retry-conflict")
             self.assertEqual(live.read_bytes(), applied + b"tampered\n")
 
+    def test_listed_predecessor_retry_requires_a_matching_receipt(self):
+        predecessor = (
+            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
+        )
+        sealed = {"onboard": predecessor, "graft": "0.18.0"}
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, home, vault, evidence, pause, environment = _routing_batch(base)
+            live = home / ".codex" / "AGENTS.md"
+            live.parent.mkdir(parents=True)
+            live.write_bytes(b"custom trellis routing\n")
+            candidate = vault / "routing-candidate.md"
+            candidate.write_bytes(pause + b"\napproved replacement\n")
+            approval = _routing_approval(
+                vault / "routing-approvals.json", "codex-global", live, candidate
+            )
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions=sealed,
+                    routing_approvals=approval,
+                )
+            from onboard_contracts import canonical_json_bytes
+            from sbtd_migration import apply_migration
+
+            manifest_path = evidence / "manifest.json"
+            manifest_path.write_bytes(canonical_json_bytes(manifest))
+            with mock.patch.dict(os.environ, environment), mock.patch(
+                "sbtd_migration.runtime_versions", return_value=sealed
+            ):
+                response, code = apply_migration(
+                    manifest_path, confirmed=True, routing_approvals=approval
+                )
+            self.assertEqual(code, 0, response)
+            applied = live.read_bytes()
+            receipt = response["migration"]["apply_receipt"]
+            saved = evidence / f"apply-{receipt['apply_id']}.json"
+            unlisted = {"onboard": "runtime-sha256:unlisted-successor", "graft": "0.18.0"}
+            with mock.patch.dict(os.environ, environment), mock.patch(
+                "sbtd_migration.runtime_versions", return_value=unlisted
+            ):
+                with self.assertRaises(ContractError) as rejected:
+                    apply_migration(
+                        manifest_path,
+                        previous_receipt_path=saved,
+                        confirmed=True,
+                        routing_approvals=approval,
+                    )
+            self.assertEqual(rejected.exception.code, "version-conflict")
+            self.assertEqual(live.read_bytes(), applied)
+            from sbtd_migration import _verified_runtime_pair
+
+            _predecessor, paired = _verified_runtime_pair()
+            successor = {"onboard": paired, "graft": "0.18.0"}
+            with mock.patch.dict(os.environ, environment), mock.patch(
+                "sbtd_migration.runtime_versions", return_value=successor
+            ):
+                with self.assertRaises(ContractError) as missing:
+                    apply_migration(
+                        manifest_path, confirmed=True, routing_approvals=approval
+                    )
+                self.assertEqual(missing.exception.code, "version-conflict")
+                self.assertEqual(live.read_bytes(), applied)
+                retried, retry_code = apply_migration(
+                    manifest_path,
+                    previous_receipt_path=saved,
+                    confirmed=True,
+                    routing_approvals=approval,
+                )
+                self.assertEqual(retry_code, 0, retried)
+                self.assertEqual(retried["status"], "already-complete")
+                self.assertEqual(live.read_bytes(), applied)
+                live.write_bytes(applied + b"tampered\n")
+                with self.assertRaises(ContractError) as drifted:
+                    apply_migration(
+                        manifest_path,
+                        previous_receipt_path=saved,
+                        confirmed=True,
+                        routing_approvals=approval,
+                    )
+            self.assertEqual(drifted.exception.code, "lineage-conflict")
+            self.assertEqual(live.read_bytes(), applied + b"tampered\n")
+
+
 
 
     def test_candidate_without_the_pause_prefix_is_rejected(self):
