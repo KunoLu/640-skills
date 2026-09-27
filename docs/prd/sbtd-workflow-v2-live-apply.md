@@ -168,3 +168,11 @@ verify 再读 live 目标。当前快照必须等于回执 `after`，也必须�
 主隔离脚本的可选D“用生产公钥对应私钥重签合成批准”保持not-run，不读取真实私钥；所需覆盖分别由C1真实安装公钥批准验证及C4合成信任根共享恢复提供，不称D通过。runtime_readiness始终not-verified；旧可写检查与缺失live partial历史不改成通过。
 
 合同复审ready-for-validation，源代码独立安全复核无P0/P1；本节不是最终Release Readiness ready或done。原始路径、快照、回执、raw+同stem中文报告及checksum清单仅保存在本轮私有证据目录。任务PR／状态PR与P2-04授权尚未闭环。
+
+## 8. 独立就绪审查发现的阶段血统修复
+
+针对 `5eee55e` 的独立审查确认第7节 C1–C6 证据通过，但总体 needs-mitigation：签名例外面向整个前驱运行时，不只本次无部署的 live manifest；合法部署写入 apply／deploy 重叠资源后，旧血统检查仍要求 apply after，阻断部署重试及恢复。早先“代码无P0/P1”的裁决已由安全审查撤回，不把本次发现转成非阻塞风险。
+
+回归先复现 predecessor 重叠部署在 `load_deployment_context` 报 lineage-conflict，同运行时对照通过。最小修复把调用者已经绑定的 deployment／cleanup 传入血统检查，按已知最新正向后态再覆盖已成功逆向状态；完整成功 apply、签名配对、未知状态、普通部分写入重试和恢复备份门保持。真实写后故障的部署仍拒绝普通重试，但可凭完整已知前后态及备份恢复；缺失阶段、漂移、错误 apply 绑定、未知后态和缺失／损坏备份负例通过。
+
+生产实现指纹已变化，原第7节 `5eee55e`／`1f645a3a…` 的证据仅属该历史候选，不能直接冒充修复后通过。使用仅驻内存的独立密钥重签，前驱不变，新后继为 `runtime-sha256:0ba72e4ebaf84578c7bf83233d847a3874065be3a8ebc9ed951b9a13b1f319be`；未读取路由批准私钥，未执行live写入。当前待修复后完整复验、独立复审和两层PR收口。

@@ -642,6 +642,9 @@ def _require_runtime_lineage(
     sealed: Mapping[str, Any],
     current: Mapping[str, Any],
     recovery: Mapping[str, Any] | None = None,
+    *,
+    deployment: Mapping[str, Any] | None = None,
+    cleanup: Mapping[str, Any] | None = None,
 ) -> None:
     """Consume one signed predecessor only for its paired successor.
 
@@ -649,9 +652,10 @@ def _require_runtime_lineage(
     checked with the installed public key. This is not a fresh plan and does
     not waive generated-file or absent-target checks. A partial apply receipt
     stays closed so a newer runtime cannot finish writes planned by the
-    predecessor. A bound recovery receipt may replace the expected live state
-    only for resources whose inverse step already succeeded; untouched
-    resources must still equal the apply receipt after.
+    predecessor. Callers bind all stage evidence before this check. Known
+    deploy/cleanup outcomes supersede apply; a bound recovery receipt then
+    supplies the latest succeeded inverse state. Stage-specific retry and
+    restoration checks still decide whether another write is safe.
     """
     onboard = sealed.get("onboard") if isinstance(sealed, Mapping) else None
     predecessor, successor = _verified_runtime_pair()
@@ -694,10 +698,23 @@ def _require_runtime_lineage(
             "lineage-conflict",
             "a predecessor runtime requires a complete matching apply receipt",
         )
+    latest = dict(results)
+    for stage in (deployment, cleanup):
+        for resource_id, outcome in _result_index(stage).items():
+            if outcome.get("before") is None or outcome.get("after") is None:
+                _fail(
+                    "lineage-conflict",
+                    "a later-stage resource has an unknown write state",
+                )
+            # Failed operations can have a known changed outcome. Recognizing
+            # that state is not permission for an ordinary partial-write retry.
+            latest[resource_id] = outcome
     restored = _recovery_expected_states(recovery, manifest.get("manifest_id"))
     for operation in apply_ops:
         result = results[operation["resource_id"]]
-        expected = restored.get(operation["resource_id"], result.get("after"))
+        expected = restored.get(
+            operation["resource_id"], latest[operation["resource_id"]]["after"]
+        )
         if snapshot(Path(operation["target"])) != expected:
             _fail(
                 "lineage-conflict",
@@ -734,6 +751,8 @@ def _validate_context(
             sealed_versions,
             current_versions,
             recovery,
+            deployment=deployment,
+            cleanup=cleanup,
         )
     _check_evidence_apply_boundary(manifest_path, manifest)
     require_private_directory(Path(manifest["payload"]["backup_root"]))

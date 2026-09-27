@@ -25,8 +25,9 @@
 - 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。路径上每一级，包括父目录，都按 no-follow 拒绝符号链接；子目录里的无关符号链接不再阻断存在性检查。根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
 - 迁移 apply 的路由批准只认调用方传入的 `--routing-approvals` 文件，不认重封 manifest 里的路径。该文件 SHA 必须等于 sealed 记录，操作从这份文件重建；路径也不能落在 evidence/apply 写入根里。没有这份文件时，必须显式传 `--no-routing-approvals`，并且不得对 `AGENTS.md` 追加暂停块或删除管理块。批准文件还必须带安装包 `assets/routing-approval.pub` 验得过的 Ed25519 签名。公钥不从 manifest 或调用方路径读取。调用方把批准路径指到攻击者文件时，签名对不上就拒绝。plan 只有显式 `--routing-approval-key` 才签名，且私钥路径不进 manifest。仓库不保存对应私钥。未写 live。
 - 同一实现生成的迁移 apply，带回执重试时不再先用 live 当前字节对照批准前快照。已成功且 live 仍等于回执 `after` 的路由替换会跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。旧 manifest 默认仍因 `runtime_versions` 不一致报 `version-conflict`。只有签名配对里的前驱，且当前 `onboard` 哈希等于该配对的后继，并传入完整成功回执、live 仍等于回执 `after`、非空备份仍匹配时，版本门才放行。配对文件不进运行时指纹，验签公钥 `assets/runtime-lineage.pub` 进入指纹。未列出的后继、坏签名、部分回执或漂移不放行。不使用路由批准私钥。
-- 签名血统下的恢复续作不再在看恢复回执之前要求每个目标仍等于 apply 回执 `after`。已完成的逆向步骤按绑定恢复回执的最新成功状态判断；还没动过的资源仍必须等于 apply `after`。未列出后继和坏签名仍是 `version-conflict`。配对仍用内存独立密钥重签，私钥不落盘，不读取路由批准私钥。未执行 live 回滚，不标 done。
+- 签名血统下的恢复续作不再在看恢复回执之前要求每个目标仍等于 apply 回执 `after`。已完成逆向步骤按绑定恢复回执的最新成功状态判断；未恢复资源按已绑定的最新正向阶段后态核对，没有后续阶段时才使用 apply `after`。未列出后继和坏签名仍拒绝。配对用内存独立密钥重签，私钥不落盘，不读取路由批准私钥；不授权 live 回滚。
 - 同一资源的 cleanup、deploy、apply 逆向步骤都成功后，续作不再拿每个历史 `after` 去比当前文件。只校验计划顺序里该资源最后一次已成功步骤的当前态。更早的成功 `after` 只是中间态。只 mock 文档加载和绑定门的测试只证明预检选择，不是完整证据链。批准路由替换加 `init-projects` 部署会让同一 `AGENTS.md` 资源同时有 apply 和 deploy。该链经真实 plan、apply、部署证据、`plan_recovery` 和两次 `apply_recovery`，不 mock 绑定、上下文或累计校验；续作是 `already-complete`，文件未改。未执行 live 回滚，不标 done。
+- 修复签名前驱 manifest 的 apply／deploy 同资源链在部署后被早先 apply 后态错误阻断的问题。上下文先验证阶段绑定，再按 apply→deploy→cleanup 的已知实际后态及成功逆向状态判断；未知状态不回退。失败但已知变更的部署仍禁止普通续写，只能在保留备份和明确恢复计划下逆向恢复。缺失阶段、错误 apply 绑定、漂移、未知后态或损坏／缺失备份仍拒绝；新增前驱重叠部署与真实写后故障恢复回归。
 - 迁移 plan 不再把 `.trellis` 下被 Git 忽略、且不在已知布局里的杂项当成未分类阻断。这些文件仍留在目录快照里，后续整目录 cleanup 会一起删掉。`tasks`、`spec`、`lessons` 即使被 ignore，也仍要走批准，避免漏掉被忽略的 `task.json`。未被忽略的未知文件会汇总后停下，不自动删除。
 
 - 将完整 findings 台账归档为 `docs/archive/sbtd-workflow-v2-findings.md` 的问题／状态表和完整字段表：保留 199 项问题、22 条策略与审查记录、全部原级别与历史；用户确认的 16 项闭环后为 195 fixed、4 dismissed，移除旧 `findings.log` 并更新文档入口。

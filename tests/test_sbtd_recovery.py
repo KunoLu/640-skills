@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import nullcontext, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -641,16 +641,37 @@ class RecoveryApplyTests(unittest.TestCase):
             self.assertNotEqual(snapshot(target), applied)
 
     def test_bound_multi_phase_continuation_uses_real_recovery_gates(self):
+        self._assert_bound_multi_phase_continuation(predecessor=False)
+
+    def test_predecessor_deployment_recovery_uses_latest_bound_stage(self):
+        self._assert_bound_multi_phase_continuation(predecessor=True)
+
+    def test_predecessor_failed_deployment_recovers_known_writes_not_retries(self):
+        self._assert_bound_multi_phase_continuation(
+            predecessor=True, failed_deploy=True
+        )
+
+    def _assert_bound_multi_phase_continuation(
+        self, *, predecessor: bool, failed_deploy: bool = False
+    ):
+        import base64
         import os
 
+        import test_sbtd_migration_plan as routing_tests
         from cryptography.hazmat.primitives.asymmetric.ed25519 import (
             Ed25519PrivateKey,
         )
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
         from sbtd_graft_deployment import (
             execute_migration_deployment,
             load_deployment_context,
+            write_file,
         )
-        from sbtd_migration import apply_migration, runtime_versions
+        from sbtd_migration import (
+            _verified_runtime_pair,
+            apply_migration,
+            runtime_versions,
+        )
         from sbtd_migration_files import snapshot
         from sbtd_migration_plan import plan_migration
         from test_sbtd_migration_apply import legacy_project
@@ -659,8 +680,13 @@ class RecoveryApplyTests(unittest.TestCase):
             _sign_existing_approval,
         )
 
-        import test_sbtd_migration_plan as routing_tests
-
+        successor_versions = runtime_versions()
+        planned_versions = successor_versions
+        if predecessor:
+            planned_versions = {
+                **planned_versions,
+                "onboard": _verified_runtime_pair()[0],
+            }
         key = Ed25519PrivateKey.generate()
         previous_key = routing_tests._TEST_APPROVAL_KEY
         routing_tests._TEST_APPROVAL_KEY = key
@@ -669,6 +695,37 @@ class RecoveryApplyTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
+            if predecessor:
+                # Real signature checking with this interpreter's fingerprint;
+                # only trust-root paths and old producer identity are fixtures.
+                lineage_key = Ed25519PrivateKey.generate()
+                lineage_public = base / "lineage.pub"
+                lineage_public.write_bytes(
+                    lineage_key.public_key().public_bytes(
+                        Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
+                    )
+                )
+                pair = {
+                    "schema_version": 1,
+                    "purpose": "runtime-lineage",
+                    "predecessor": planned_versions["onboard"],
+                    "successor": successor_versions["onboard"],
+                }
+                signed = json.dumps(
+                    pair, sort_keys=True, separators=(",", ":")
+                ).encode()
+                pair["signature"] = base64.b64encode(
+                    lineage_key.sign(signed)
+                ).decode()
+                lineage_document = base / "lineage.json"
+                lineage_document.write_text(json.dumps(pair))
+                for name, path in (
+                    ("_LINEAGE_PUBLIC_KEY", lineage_public),
+                    ("_LINEAGE_DOCUMENT", lineage_document),
+                ):
+                    patch = mock.patch(f"sbtd_migration.{name}", path)
+                    patch.start()
+                    self.addCleanup(patch.stop)
             project = legacy_project(base, "project")
             home, vault, evidence = (
                 base / name for name in ("home", "vault", "evidence")
@@ -701,7 +758,7 @@ class RecoveryApplyTests(unittest.TestCase):
                         vault,
                         "fixture",
                         None,
-                        tool_versions=runtime_versions(),
+                        tool_versions=planned_versions,
                         deployment_mode="init-projects",
                         routing_approvals=approval,
                     )
@@ -726,9 +783,22 @@ class RecoveryApplyTests(unittest.TestCase):
             from onboard_contracts import canonical_json_bytes
 
             manifest_path.write_bytes(canonical_json_bytes(manifest))
-            with mock.patch.dict(os.environ, environment), mock.patch(
-                "sbtd_migration_plan._routing_approval_public_key",
-                return_value=key.public_key(),
+            # Only the old producer's identity is simulated. Successor gates,
+            # signatures, stage binding and recovery execute without bypasses.
+            old_producer = (
+                mock.patch(
+                    "sbtd_migration.runtime_versions", return_value=planned_versions
+                )
+                if predecessor
+                else nullcontext()
+            )
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch(
+                    "sbtd_migration_plan._routing_approval_public_key",
+                    return_value=key.public_key(),
+                ),
+                old_producer,
             ):
                 applied, apply_code = apply_migration(
                     manifest_path,
@@ -758,6 +828,12 @@ class RecoveryApplyTests(unittest.TestCase):
                 "cli": "/fixture/cli.js",
                 "python": "/fixture/python",
             }
+
+            def fail_after_route_write(target, *args, **kwargs):
+                write_file(target, *args, **kwargs)
+                if target == live:
+                    raise OSError("injected failure after the route was written")
+
             with (
                 mock.patch(
                     "sbtd_graft_deployment.verified_runtime", return_value=runtime
@@ -769,10 +845,108 @@ class RecoveryApplyTests(unittest.TestCase):
                 mock.patch(
                     "sbtd_graft_deployment.run_project_smoke", return_value=[]
                 ),
+                (
+                    mock.patch(
+                        "sbtd_graft_deployment.write_file",
+                        side_effect=fail_after_route_write,
+                    )
+                    if failed_deploy
+                    else nullcontext()
+                ),
             ):
                 deployed, deploy_code = execute_migration_deployment(context)
-            self.assertIn(deploy_code, (0, 3), deployed)
+            self.assertIn(deploy_code, (5,) if failed_deploy else (0, 3), deployed)
             self.assertTrue(deployment_path.is_file())
+            if predecessor:
+                deployed_bytes = live.read_bytes()
+                retry_arguments = {
+                    "previous_path": deployment_path,
+                    "mode": "init-projects",
+                    "roots": [project],
+                    "hooks_authorized": False,
+                }
+                if failed_deploy:
+                    with self.assertRaises(ContractError) as partial_retry:
+                        load_deployment_context(
+                            manifest_path, apply_path,
+                            evidence / "deployment-retry.json", **retry_arguments
+                        )
+                    self.assertEqual(partial_retry.exception.code, "state-conflict")
+                    stage = json.loads(deployment_path.read_text())
+                    route_result = next(
+                        result
+                        for result in stage["payload"]["projects"][0]["private_results"]
+                        if result["resource_id"] == shared[0]
+                    )
+                    self.assertEqual(route_result["status"], "failed")
+                    self.assertNotEqual(route_result["before"], route_result["after"])
+                    backup_path = Path(route_result["backup_ref"]["path"])
+                    backup_bytes = backup_path.read_bytes()
+                    backup_path.write_bytes(b"damaged retained original\n")
+                    with self.assertRaises(ContractError) as damaged:
+                        plan_recovery(
+                            manifest_path, apply_receipt_path=apply_path,
+                            deployment_evidence_path=deployment_path,
+                        )
+                    self.assertEqual(damaged.exception.code, "original-unavailable")
+                    self.assertEqual(live.read_bytes(), deployed_bytes)
+                    backup_path.write_bytes(backup_bytes)
+                    for defect in ("missing-backup", "unknown-after", "wrong-apply"):
+                        with self.subTest(defect=defect):
+                            invalid = copy.deepcopy(stage["payload"])
+                            invalid_result = next(
+                                result
+                                for result in invalid["projects"][0]["private_results"]
+                                if result["resource_id"] == shared[0]
+                            )
+                            if defect == "missing-backup":
+                                invalid_result["backup_ref"] = None
+                            elif defect == "unknown-after":
+                                invalid_result["after"] = None
+                            else:
+                                invalid["apply_id"] = "0" * 64
+                            invalid_path = evidence / f"{defect}.json"
+                            save_document(
+                                invalid_path,
+                                seal_document("deployment_evidence", invalid),
+                                private_root=evidence,
+                            )
+                            if defect == "missing-backup":
+                                blocked, blocked_code = plan_recovery(
+                                    manifest_path, apply_receipt_path=apply_path,
+                                    deployment_evidence_path=invalid_path,
+                                )
+                                self.assertEqual(blocked_code, 2, blocked)
+                                self.assertEqual(blocked["status"], "blocked")
+                            else:
+                                with self.assertRaises(ContractError):
+                                    plan_recovery(
+                                        manifest_path, apply_receipt_path=apply_path,
+                                        deployment_evidence_path=invalid_path,
+                                    )
+                            self.assertEqual(live.read_bytes(), deployed_bytes)
+                else:
+                    retry_context = load_deployment_context(
+                        manifest_path, apply_path,
+                        evidence / "deployment-retry.json", **retry_arguments
+                    )
+                    self.assertEqual(
+                        retry_context.expected_before[shared[0]], snapshot(live)
+                    )
+                self.assertEqual(live.read_bytes(), deployed_bytes)
+                with self.assertRaises(ContractError) as missing_stage:
+                    plan_recovery(manifest_path, apply_receipt_path=apply_path)
+                self.assertEqual(missing_stage.exception.code, "lineage-conflict")
+                live.write_bytes(b"operator changed this route\n")
+                with self.assertRaises(ContractError) as drift:
+                    plan_recovery(
+                        manifest_path,
+                        apply_receipt_path=apply_path,
+                        deployment_evidence_path=deployment_path,
+                    )
+                self.assertEqual(drift.exception.code, "lineage-conflict")
+                self.assertEqual(live.read_bytes(), b"operator changed this route\n")
+                live.write_bytes(deployed_bytes)
             planned, plan_code = plan_recovery(
                 manifest_path,
                 apply_receipt_path=apply_path,
@@ -923,15 +1097,15 @@ class RecoveryApplyTests(unittest.TestCase):
                 "onboard": "runtime-sha256:unlisted-successor",
                 "graft": graft,
             }
-            with mock.patch(
-                "sbtd_migration.runtime_versions", return_value=unlisted
+            with (
+                mock.patch("sbtd_migration.runtime_versions", return_value=unlisted),
+                self.assertRaises(ContractError) as rejected,
             ):
-                with self.assertRaises(ContractError) as rejected:
-                    apply_recovery(
-                        plan_path,
-                        previous_receipt_path=first_path,
-                        confirm_recovery=plan["plan_id"],
-                    )
+                apply_recovery(
+                    plan_path,
+                    previous_receipt_path=first_path,
+                    confirm_recovery=plan["plan_id"],
+                )
             self.assertEqual(rejected.exception.code, "version-conflict")
             self.assertEqual(_tree_bytes(base), before_continue)
             official = sbtd_migration_lineage_document()
@@ -940,13 +1114,15 @@ class RecoveryApplyTests(unittest.TestCase):
             payload = json.loads(official)
             payload["signature"] = "A" * len(payload["signature"])
             tampered.write_text(json.dumps(payload), encoding="utf-8")
-            with mock.patch("sbtd_migration._LINEAGE_DOCUMENT", tampered):
-                with self.assertRaises(ContractError) as bad_signature:
-                    apply_recovery(
-                        plan_path,
-                        previous_receipt_path=first_path,
-                        confirm_recovery=plan["plan_id"],
-                    )
+            with (
+                mock.patch("sbtd_migration._LINEAGE_DOCUMENT", tampered),
+                self.assertRaises(ContractError) as bad_signature,
+            ):
+                apply_recovery(
+                    plan_path,
+                    previous_receipt_path=first_path,
+                    confirm_recovery=plan["plan_id"],
+                )
             self.assertEqual(bad_signature.exception.code, "version-conflict")
             self.assertEqual(_tree_bytes(base), before_continue)
             continued, continued_code = apply_recovery(
