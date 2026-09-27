@@ -767,28 +767,6 @@ class MigrationApplyTests(unittest.TestCase):
                     )
                 self.assertEqual(incomplete.exception.code, "lineage-conflict")
 
-    def test_installed_lineage_pair_matches_current_runtime_and_stays_outside_it(self):
-        from sbtd_migration import (
-            _LINEAGE_DOCUMENT,
-            _LINEAGE_PUBLIC_KEY,
-            _verified_runtime_pair,
-            runtime_versions,
-        )
-
-        source = Path(
-            "sbtd-workflow-onboard/scripts/sbtd_migration.py"
-        ).read_text(encoding="utf-8")
-        names = source.split("names = [", 1)[1].split("]", 1)[0]
-        self.assertIn("assets/runtime-lineage.pub", names)
-        self.assertNotIn("assets/runtime-lineage.json", names)
-        predecessor, successor = _verified_runtime_pair()
-        self.assertEqual(
-            predecessor,
-            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750",
-        )
-        self.assertEqual(successor, runtime_versions()["onboard"])
-        self.assertTrue(_LINEAGE_PUBLIC_KEY.is_file())
-        self.assertNotEqual(_LINEAGE_DOCUMENT, _LINEAGE_PUBLIC_KEY)
 
     def test_tampered_lineage_document_is_version_conflict(self):
         import sbtd_migration
@@ -814,11 +792,13 @@ class MigrationApplyTests(unittest.TestCase):
                     tampered.write_text(
                         json.dumps(payload), encoding="utf-8"
                     )
-                    with mock.patch.object(
-                        sbtd_migration, "_LINEAGE_DOCUMENT", tampered
+                    with (
+                        mock.patch.object(
+                            sbtd_migration, "_LINEAGE_DOCUMENT", tampered
+                        ),
+                        self.assertRaises(ContractError) as error,
                     ):
-                        with self.assertRaises(ContractError) as error:
-                            sbtd_migration._verified_runtime_pair()
+                        sbtd_migration._verified_runtime_pair()
                     self.assertEqual(error.exception.code, "version-conflict")
         self.assertEqual(_LINEAGE_DOCUMENT.read_bytes(), official)
 

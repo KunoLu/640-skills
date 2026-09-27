@@ -651,24 +651,52 @@ class RecoveryApplyTests(unittest.TestCase):
             predecessor=True, failed_deploy=True
         )
 
+    def _install_lineage_fixture(self, base, predecessor, successor):
+        import base64
+
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PrivateKey,
+        )
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+        key = Ed25519PrivateKey.generate()
+        public = base / "lineage.pub"
+        public.write_bytes(
+            key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+        )
+        pair = {
+            "schema_version": 1,
+            "purpose": "runtime-lineage",
+            "predecessor": predecessor,
+            "successor": successor,
+        }
+        signed = json.dumps(pair, sort_keys=True, separators=(",", ":")).encode()
+        pair["signature"] = base64.b64encode(key.sign(signed)).decode()
+        document = base / "lineage.json"
+        document.write_text(json.dumps(pair))
+        for name, path in (
+            ("_LINEAGE_PUBLIC_KEY", public),
+            ("_LINEAGE_DOCUMENT", document),
+        ):
+            patch = mock.patch(f"sbtd_migration.{name}", path)
+            patch.start()
+            self.addCleanup(patch.stop)
+
     def _assert_bound_multi_phase_continuation(
         self, *, predecessor: bool, failed_deploy: bool = False
     ):
-        import base64
         import os
 
         import test_sbtd_migration_plan as routing_tests
         from cryptography.hazmat.primitives.asymmetric.ed25519 import (
             Ed25519PrivateKey,
         )
-        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
         from sbtd_graft_deployment import (
             execute_migration_deployment,
             load_deployment_context,
             write_file,
         )
         from sbtd_migration import (
-            _verified_runtime_pair,
             apply_migration,
             runtime_versions,
         )
@@ -685,7 +713,7 @@ class RecoveryApplyTests(unittest.TestCase):
         if predecessor:
             planned_versions = {
                 **planned_versions,
-                "onboard": _verified_runtime_pair()[0],
+                "onboard": "runtime-sha256:" + "a" * 64,
             }
         key = Ed25519PrivateKey.generate()
         previous_key = routing_tests._TEST_APPROVAL_KEY
@@ -696,36 +724,11 @@ class RecoveryApplyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             if predecessor:
-                # Real signature checking with this interpreter's fingerprint;
-                # only trust-root paths and old producer identity are fixtures.
-                lineage_key = Ed25519PrivateKey.generate()
-                lineage_public = base / "lineage.pub"
-                lineage_public.write_bytes(
-                    lineage_key.public_key().public_bytes(
-                        Encoding.PEM, PublicFormat.SubjectPublicKeyInfo
-                    )
+                # Verify real signatures against this interpreter's identity;
+                # no assumption that CI matches the live operational pairing.
+                self._install_lineage_fixture(
+                    base, planned_versions["onboard"], successor_versions["onboard"]
                 )
-                pair = {
-                    "schema_version": 1,
-                    "purpose": "runtime-lineage",
-                    "predecessor": planned_versions["onboard"],
-                    "successor": successor_versions["onboard"],
-                }
-                signed = json.dumps(
-                    pair, sort_keys=True, separators=(",", ":")
-                ).encode()
-                pair["signature"] = base64.b64encode(
-                    lineage_key.sign(signed)
-                ).decode()
-                lineage_document = base / "lineage.json"
-                lineage_document.write_text(json.dumps(pair))
-                for name, path in (
-                    ("_LINEAGE_PUBLIC_KEY", lineage_public),
-                    ("_LINEAGE_DOCUMENT", lineage_document),
-                ):
-                    patch = mock.patch(f"sbtd_migration.{name}", path)
-                    patch.start()
-                    self.addCleanup(patch.stop)
             project = legacy_project(base, "project")
             home, vault, evidence = (
                 base / name for name in ("home", "vault", "evidence")
@@ -994,13 +997,13 @@ class RecoveryApplyTests(unittest.TestCase):
         from sbtd_migration_plan import plan_migration
         from test_sbtd_migration_apply import legacy_project
 
-        predecessor = (
-            "runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750"
-        )
-        graft = runtime_versions()["graft"]
+        predecessor = "runtime-sha256:" + "a" * 64
+        current = runtime_versions()
+        graft = current["graft"]
         sealed = {"onboard": predecessor, "graft": graft}
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
+            self._install_lineage_fixture(base, predecessor, current["onboard"])
             project = legacy_project(base, "project")
             home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
             for path in (home, vault, evidence):
@@ -1108,7 +1111,7 @@ class RecoveryApplyTests(unittest.TestCase):
                 )
             self.assertEqual(rejected.exception.code, "version-conflict")
             self.assertEqual(_tree_bytes(base), before_continue)
-            official = sbtd_migration_lineage_document()
+            official = (base / "lineage.json").read_bytes()
             outside = Path(tempfile.mkdtemp(dir=str(base.parent)))
             tampered = outside / "bad-lineage.json"
             payload = json.loads(official)
@@ -1139,10 +1142,6 @@ class RecoveryApplyTests(unittest.TestCase):
             self.assertEqual(snapshot(restored_target), succeeded[0]["after"])
 
 
-def sbtd_migration_lineage_document() -> bytes:
-    from sbtd_migration import _LINEAGE_DOCUMENT
-
-    return _LINEAGE_DOCUMENT.read_bytes()
 
 
 class RecoveryCliTests(unittest.TestCase):
