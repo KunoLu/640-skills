@@ -3,22 +3,23 @@
 ## 1. 授权与边界
 
 - 任务：P2-03。唯一状态事实源为主 PRD §14。
-- 开发起点：`main` `f922991c5aef75c08e05494f9bef94b847516711`；任务分支 `p2-03-live-apply`。
+- 开发起点：`main` `f922991c5aef75c08e05494f9bef94b847516711`；最初任务分支 `p2-03-live-apply`。当前续作分支 `p2-03-successor-blocked`，执行模式由用户明确选择 `default`；不是重新启动 live 迁移。
 - 观察时刻 `2026-09-24T23:05:27+0800` 是建立本分支时的 date 返回，不是用户消息发生时钟。
 - 用户原文：「在新的任务分支下，启动 P2-03。范围仍是冻结协议的 demo／main、Codex+OMP，源仓不纳入。这是维护窗口，授权对 live 批次做数据迁移和旧路由停用。不部署新接线，不 smoke，不 cleanup，不删备份，不 sync，不改 hooks。隔离现场继续保留。」
 - 该原文授权的是 live `demo` 项目的数据迁移和旧路由停用。它不授权部署、smoke、cleanup、备份销毁、sync、hooks 修改，也不授权改写隔离现场。
-- 640-skills 不纳入。共享 live HOME 不是正式切换目标。全局卸载仍 not-allowed。`--graft-hooks` 不使用。
-- 现有批准文件绑定隔离副本，不能拿来对 live 项目 apply，也不能拿来改隔离现场。
+- 640-skills 不纳入。P2-01 原共享 HOME 不写政策后来仅对三份按 SHA 批准的路由作出覆盖决定，实际写入见第 3 节；不扩大为共享 HOME／Skill 根的部署授权。全局卸载仍 not-allowed，`--graft-hooks` 不使用。
+- 隔离批次批准不能套用到 live；本批已有绑定 live 的批准、manifest 与真实回执，禁止重封或改写。当前整改只读 live，在新隔离现场验证，不修改 P2-02 保留现场。
+- 本轮用户采纳分层验收整改方案，当前有效合同为主 PRD §15.2／AC-18 与 D-IMP-15：保留受管数据／配置恢复保证，不承诺旧 Trellis 可写回退。旧审查 blocked 与旧证据缺失仍按历史保存。
 
 ## 2. Book Gate Plan
 
 | Gate | 判定 | 状态 |
 |---|---|---|
-| DDIA | required；本项是 live 数据迁移，写入前必须确认事实源和失败路径 | passed |
-| Legacy safety | 本轮不改生产迁移代码；live 写入尚未发生 | not-required |
+| DDIA | required；本轮只读 live，隔离生产者生成真实回执，原件与批准保持绑定；设计确认不代表验证通过 | passed |
+| Legacy safety | 本轮先不改生产实现；既有 live apply 已发生，历史证据不重标 | not-required |
 | DDD | 无新领域术语 | not-required |
 | Refactoring | 不改生产实现 | not-required |
-| Release readiness | required；live apply 是 migration／runtime 运维行为变更。P2-03 标 done 前必须有独立 `Release Readiness Review`。2026-09-27 独立审查为 blocked，不是 ready。工作树已修恢复续作，并有合法绑定的多相位续作测试。未执行 live recovery apply 本身不是关闭条件，也不授权 108 步 live 回滚。仍 blocked：旧运行时可写可用性没有单独证据，partial apply receipt 重试没有这次工作树对已密封 live manifest 的独立执行证明。血统公钥和配对文件纳入本次可审查提交。不能标 done | blocked |
+| Release readiness | required。原关闭尝试审查 blocked 保留；用户已批准修订有效合同，须完成主 PRD §15.2 的 C1–C6、独立证据复核和 PR 收口，不能用文档修订直接改为 ready | blocked |
 | grill-with-docs | 未完整调用。沿用已冻结范围和用户本句，不新增领域边界 | not-required |
 
 ```text
@@ -71,22 +72,30 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-27T15:56:33+0800` 恢复续作按绑定回执的最新状态判断。观察时刻，不是用户消息发生时钟。上一会话建议先修恢复续作，不执行 108 步 live 回滚，不标 done。本轮只改这个校验：已成功的逆向步骤按恢复回执最新 `after` 判断，未动过的资源仍必须等于 apply `after`。临时目录红测先复现 `lineage-conflict`，修复后续作退出码 0。未列出后继和坏签名仍是 `version-conflict`。配对已用内存密钥重签，后继为 `runtime-sha256:74de3e3c7a5821fe7390b5db82e73b75b9edf9bb47775383e233b0dde640b20e`。未执行 live 回滚，未重开审查，不标 done。P2-03 仍 in-progress。
 - `2026-09-27T16:41:20+0800` 同一资源的多相位逆向续作只看最后一次成功状态。观察时刻，不是用户消息发生时钟。顾问指出续作预检会把更早的成功 `after` 当成当前文件。当前计划器不会发出这种步骤，契约允许。预检已收窄。真实 `apply_recovery` 对两步累计回执返回 `already-complete`，文件未改。`sbtd_recovery.py` 在指纹内，配对再次重签，后继为 `runtime-sha256:1f645a3abefc1279d4e1937d5f847feed41c57cb50a8d04d45de0e5abe722bda`。未执行 live 回滚，不标 done。P2-03 仍 in-progress。
 - `2026-09-27T17:32:39+0800` 多相位续作补了合法绑定证据，不把 mock 绿测当成闭环。观察时刻，不是用户消息发生时钟。只 mock 加载和绑定门的测试仍只证明预检选择。新测试用批准路由替换加 `init-projects` 生成同一 `AGENTS.md` 的 apply 与 deploy，再经真实 `plan_recovery` 和两次 `apply_recovery`。续作是 `already-complete`，文件未改。未执行 live 回滚，不标 done。P2-03 仍 in-progress。
+- `2026-09-27T18:15:26+0800` 独立审查 blocked，旧运行时写探针停止。观察时刻，不是用户消息发生时钟。可审查提交 `bb8eb0b3fe68e151c1dea6aec285ff294f321116`。独立 Release Readiness Review 为 blocked。未执行 live recovery apply 不是关闭条件。旧运行时可写证据仍 blocked：全局规则禁止初始化或调用已退役 Trellis 运行时。本轮在收到阻断前已经执行过 `trellis --version` 和 `trellis --help`，没有执行 `init` 或其他写命令。随后停止。安装元数据只读见到 `@mindfoldhq/trellis` `0.6.17`。隔离副本和 live 未改。不把这次调用写成可写证据。P2-03 仍 in-progress。
+- `2026-09-27T18:29:41+0800` 不把缺证据改成完成。观察时刻，不是用户消息发生时钟。用户要完成 P2-03。整体评估后两项 required check 不能在现行规则下变成 pass：旧 Trellis 写操作不能再调用；密封 live 批次没有原始 partial apply receipt，补造只会在写前被拒绝，不是正向证明。不改 AC-18，不标 done，不跑 108 步回滚。P2-03 仍 in-progress。
+- `2026-09-27T19:15:12+0800` 新关闭合同已写入，尚未审查。观察时刻，不是用户消息发生时钟。用户选择合法路径并要求落地。主 PRD §15.2 是新合同。原 AC-18 两项仍未满足，不涂成通过。独立审查写成 ready 之前不标 done。P2-03 仍 in-progress。
+- `2026-09-27T19:20:54+0800` 新关闭合同审查 blocked。观察时刻，不是用户消息发生时钟。两份独立审查都判定主 PRD §15.2 是非法 waiver，不是新范围。第 14.5 节仍把 P2-03 绑在 AC-18 上。不标 done。P2-03 仍 in-progress。
+- `2026-09-27T19:39:44+0800` 另立 P2-06，不关闭 P2-03。观察时刻，不是用户消息发生时钟。用户要求先评估 advisor，再另立不声称 AC-18 已通过的新任务。advisor 成立，不把 blocked 改成通过。P2-06 只登记已执行事实。P2-03 仍 in-progress。P2-04 仍 planned。
+- `2026-09-27T20:47:29+08:00` 用户采纳整改方案并选择 default。观察时刻，不是用户消息发生时钟。有效 AC-18 与关闭合同同步修订，旧运行时可写保证明确撤回但不声称旧检查通过。C1–C6 仍 required，当前未完成本轮验证或独立审查；不改 live，不执行 108 步回滚，不调用 Trellis，不启动 P2-04。P2-06 保留事实登记，不替代 P2-03。
 
 ## 4. 明确不做
 
 - 不把隔离副本的批准、manifest 或回执套到 live。
-- 不改隔离现场，不删备份，不 cleanup，不 sync，不改 hooks，不部署，不 smoke。
+- 不改 P2-02 保留现场；仅本轮新建的私有隔离现场允许验证写入。不删备份，不 cleanup，不 sync，不改 hooks，不部署 live，不做 host smoke。
 - 不把本启动写成 done。完成时间留到 live apply 回执和任务 PR 之后的状态 PR。
 - 不启动 P2-04。
 - 不得单独回滚 `2bb2089`。它的父提交 `2e5e42c` 只检查最后一级。成对撤回这两笔才会回到整树扫描，撤回后必须复验。
 
-## 5. 继续前必须另有的事实
+## 5. apply 前的历史前置条件（后续事实见第 3 节）
 
 1. live `demo` 的批准投影必须绑定 live 原件，而不是隔离副本。缺批准时保持 blocked。
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
 5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。第 6 节已补契约缺口和失败路径。实现范围不是只改计划器。该设计尚未被接受为实现授权。接受前不改 schema、计划器、apply 或 verify，不写 live。
+
+以上记录 apply 前的门禁，不要求已经成功的批次重新 plan/apply。当前继续与关闭仅按主 PRD §15.2；不得用本节历史授权触发新 live 写入。
 
 ## 6. 已批路由候选的复制与回读设计
 

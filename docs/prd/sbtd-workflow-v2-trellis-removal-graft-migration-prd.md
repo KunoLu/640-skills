@@ -799,7 +799,7 @@ recovery_receipt.payload 固定包含 plan_id、manifest_id、输入证据绑定
 
 apply 重试可显式提供 --recovery-receipt：先验证同 plan 的记录，针对每个资源只核对最后一个已执行逆向步骤的后态，跳过已完成 step_ids，再按顺序继续未完成项；不能同时拿已经被覆盖的中间后态作当前状态。全部目标匹配才 restored，完整成功记录及后态未变才 already-complete。若进程突然退出、收据未保存，或无法证明某项写入属于该计划，则保留备份并 blocked，交由人工对账，不引入写前日志／锁机制来承诺无证据恢复。
 
-restored 仅证明受管文件对账完成；receipt 另含 `runtime_readiness=not-verified/verified/blocked` 和真实证据引用。缺旧 Trellis/GitNexus CLI、包或 host 时不能宣称旧流程可运行，不自动联网重装或启动服务。P2 的恢复演练另检查原工具／host 的可用性。恢复成功不删除备份，备份处置为第 11.8 节的人工授权操作规程，不新增 CLI action。
+restored 仅证明受管文件对账完成；receipt 另含 `runtime_readiness=not-verified/verified/blocked` 和真实证据引用。当前恢复实现固定 `not-verified`，不恢复旧工具包、旧 host 执行能力或业务运行状态。按 D-IMP-15，本批明确不再承诺旧 Trellis 可写回退，禁止调用退役运行时；缺历史可写证据不改为 verified。P2-03 以实际批次只读绑定核验加全新隔离恢复执行证明受管数据／配置恢复，P2-04 才验证新 host 接线与流程。恢复后仍保持维护状态，不自动启动旧流程。恢复成功不删除备份，备份处置为第 11.8 节的人工授权操作规程，不新增 CLI action。
 
 ### 10.3 catalog 与旧 Skill 退役
 
@@ -914,6 +914,7 @@ apply 在任何共享写入前验证其候选都有批准的 decision 且 checks
 - 先执行 uninstall dry-run；应用需要明确授权，避免移除其他项目共享的全局 Graft 接线。
 - 二次迁移若源／目标与 manifest 相符应 no-op 或续作，不重复创建 task、index 行、marker 或 MCP key；若内容变化须重新计划。
 - 恢复使用第 10.2.3 节的 manifest-scoped plan／receipt；部分 apply/deploy/cleanup 的已证明写入按顺序恢复，缺证据则阻断而非猜测。恢复或争议未解决时保留唯一备份；正常成功后的保留／销毁按第 11.8 节人工规程，cleanup 不处理备份。
+- 本批恢复保证按 D-IMP-15 限于受管数据／配置；不以旧 Trellis 可写回退作为当前交付。文件恢复不解除维护窗口。live 恢复仍须独立的当前计划与明确确认，不能为了补历史验收而执行。
 
 ### 11.6 老项目身份迁移的精确条件
 
@@ -1119,6 +1120,8 @@ P1-01的基础接口以内部可调用模块交付，现行公开CLI和两个安
 
 P1-04/05/12/13 分别验收各自阶段的真实操作及前后态／备份证据，不提前宣称跨阶段恢复完成；AC-18/33 中的完整恢复子项由依赖这些生产者的 P1-20 验收，再交 P1-14/15 集成复验。
 
+P2-03 的 AC-18 按第 15.2 节分层：实际 live 批次证明全资源完整性、批准路由停用、完整回执幂等及当前恢复输入绑定；工具的 partial apply／recovery 续作在独立新隔离现场用真实生产者回执证明。成功的 live 批次不要求人为制造失败，也不把隔离回执冒充本批回执。原旧运行时可写保证的撤回属于用户批准的交付变更，不是旧验收通过；旧审查保留。
+
 P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状态启动实施。台账根依赖随当前审核更新，R-09 重开时暂停尚未开始的实施；不把历史评审完成当当前契约已收敛。
 
 **P0 安全失败分支：** 未选平台写入、project-only 写 HOME、禁用标志无法持续生效等任一项实测失败，阻断对应模式及依赖任务。只能修改接线设计或候选版本后复验；日常图不可用的 advisory 降级不能用来豁免安装／接线安全。
@@ -1187,9 +1190,10 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 |---|---|---|---|---|---|---|---|
 | P2-01 | P2 | 冻结迁移范围、备份责任及保留安排 | P1-16 | AC-37；[冻结协议](sbtd-workflow-v2-migration-scope-freeze.md)。已接受逻辑名 `demo`/`main`、两host、custodian `kuno`、源仓不纳入。HOME政策：demo 正式切换到新建的独立 Codex／OMP HOME 与独立 Skill 根；当前共享 live HOME／Skill 根保持不动，且不作为 demo 切换目标。P2-02 在隔离副本＋用户确认后的隔离根演练、不改 live。闭包仅 demo；第 6 节第 3 项已满足：用户原文「隔离根用你建议的 TEMP 下独立目录，我确认，现在先别建」（观察时刻 2026-09-23T13:24:19+0800，不是独立的用户消息发生时钟）。确认的是此前 agent-proposed、且在 backup_root 之外的 TEMP 独立目录；精确路径只进私有层；目录仍未创建。不是整批纳入。用户先前「HOME 只服务 demo」不得写成盘点结论。未选平台只盘点。backup_root：TEMP 父目录下专用子目录，只留备份／私有记录，不得与受管目标互相包含；精确路径只进私有层并已回读；父目录本身不是 backup_root；通用下载目录仍拒绝。正式隔离根已由上述用户原文确认，在 backup_root 之外；目录尚未创建；先前误建的空占位已删除。已接受默认保留；拟清理本批只盘点、全局卸载 not-allowed。精确项目根已写入私有层并回读（路径不进本文件；用户确认原文「项目根候选可用，仍是 main」，当时非 git 实测）。live HOME／Skill 根（只读盘点对象）已写入私有层并回读；隔离根精确路径已由上述用户原文确认，尚未创建；路径不进本文件；「HOME 候选都可用」是当时 live 候选回读，不是正式切换目标。旧 Trellis：用户原文存在，协议层类别为仓库内 `.trellis` 目录；版本未说明、不猜；细节只进私有层。第4节已开始并完成本轮只读记录（私有层；路径/HEAD/工作区/目录结构/指纹不进本文件）。盘点确认旧 Trellis 存在，协议层类别仍为仓库内 `.trellis` 目录。项目内有受管 `.codex`/`.omp` Trellis 接线；身份文件 `.trellis/.developer` 存在、`.sbtd/developer` 不存在，未改写。HOME 只读已确认根：与本批相关的全局 Skill 名称只进私有层；Codex HOME hooks 状态有本批以外项目痕迹，不扫描不纳入。用户原文「仍只迁 demo，那些痕迹忽略」（2026-09-22T17:48:03+08:00）：不扫描、不纳入、不扩大本批。用户原文「按你推荐和建议的执行」（用户事件未定时；不得用 11:01:55 充当用户事件时间）：隔离政策为明确隔离根，不把当前共享 live HOME 改成隔离根；live HOME 保持不动且不作为 demo 切换目标；不把 live HOME 改写成独用；全局卸载仍 not-allowed。正式隔离根不得放在 backup_root 内。§6.3 已满足：精确隔离根路径已由上述用户原文确认，目录仍未创建。P2-01 不创建正式 HOME；P2-02 获单独授权后再建目录和填充。第 6 节第 5 项无剩余 P0/P1（2026-09-23T15:00:59+0800 记录；审查对象是 14:08:30 的两份未提交文档）。台账于 2026-09-23T15:31:42+0800 标 done。[PR #71](https://github.com/KunoLu/640-skills/pull/71) 已合并，merge `4cf711a299ff5b056a9a8afb78d381363100fb9a`。不授权 apply，不开始 P2-02，不建目录。用户原文「需要触碰这个任务」及预期迁移行为（用户事件未定时；不得用 18:26:22 充当用户事件时间）：发现 `00-bootstrap-guidelines` 则跳过该任务内容，不迁成新任务、不要求其 handoff；理解其行为是读仓库代码后落地规范，并在后续已授权窗口模拟写入 `docs/spec/`。本批不以空模板直拷冒充已完成规范；原 spec 仍私有保全。不在 P2-01 写项目。此条只解除该起步任务因缺 handoff 造成的相关迁移 blocked。当前 v2 新项目 init 不会自动做同类 spec 落地（仅用户明确要求规范初始化时才有条件任务）。未复制原件。不批准apply/deploy/cleanup/sync/tag/备份销毁 | HITL | done | 2026-09-23T15:31:42+0800 |
 | P2-02 | P2 | 隔离副本迁移及可调用恢复演练 | P2-01 | AC-17/18/35/36；[演练协议](sbtd-workflow-v2-isolated-recovery-drill.md)。隔离 apply 已完成并曾恢复后按带 deployment 的新 plan 再次 apply。用户要求保留现场。官方 verify 返回过 `verified`，但不是事前授权，不能据此 cleanup。旧工具只读探测可调用，写操作仍缺证据。未 cleanup，未启动 host。任务 PR #73 merge `2e22adc1a2644c99cbbe830c13ffe99881b1afaa`；状态 PR #74 merge `d6d38907c9aa5aec8a73d1c0c5617a022f45469b`。用户原文「P2-02 演练到此结束。不授权 cleanup，不再次恢复，不启动 P2-03。现场继续保留。在此前提下把 P2-02 标 done。」该原文只关闭本项，不授权 cleanup、再次恢复或 P2-03。现场继续保留。`verified` 不是 cleanup 同意 | HITL | done | 2026-09-24T22:46:30+0800 |
-| P2-03 | P2 | 运行 migration apply：数据迁移和旧路由停用 | P2-02 | AC-17/18/29/30；[live apply 协议](sbtd-workflow-v2-live-apply.md)。维护窗口已授权 live `demo` 数据迁移和旧路由停用。用户后来选择「明确推翻冻结」，允许按实际绑定的 Codex home（不是 `~/.codex`）准备共享路由候选并纳入 plan；该选择本身不写 live。随后按已展示 SHA 批准 Orca Codex 候选 `3e22679bf5fac0a6c36cc3840b4c707e3f8c12a20d8787a3d20246cd21f1209e` 与 OMP 候选 `ea7b3ce951864ff55964ce4cab9a6eba024d610be0560b24795d1ae10d7b3440`，demo 仍用此前候选 `cb5f99ea620f77028ab7323aae1cf4c0989230afd9385da40aa9811370e5f767`。旧全局候选 `f206428c…` / `e52100f2…` 不是本次写入对象。用户原文「apply」是单独的 apply 确认。plan 为 planned，manifest `81a0c3d4bc63d906da67f6502b4f218d14a0d410376ad4ad9b354d93f5e280d2`。apply 退出码 0，status `applied`，apply_id `9ad029161fe57421a682ed44adaddf8c54d73c45d84eea7ea3341d5fa4497c6f`，回执时钟 `2026-09-26T13:37:05.318875+08:00`。共享 Codex 与 OMP 的 copy-file 成功，demo 路由替换成功，项目内 106 项成功。`~/.codex` 不是绑定目标，未写。`.trellis` 仍在。不部署，不 smoke，不 cleanup，不删备份，不 sync，不改 hooks。隔离现场保留。640-skills 不纳入。回执路径只在私有层。同版本临时测试不能证明本次 live 批次可重试：已密封 manifest 与修改后的 `runtime_versions` 不一致，会先报 `version-conflict`。不重封 manifest，不放松版本门。本次 live 批次的 AC-18 未修复。任务 PR #76 已于 GitHub `2026-09-26T13:16:43Z` 合并，merge `bf3af67a28162335eb2e0121e133e6469f613191`。合并前 head `4726245c687a9a0f3d2c9106cd05a0db24de307d` 的 linux-full、macos-bash-installer、windows-powershell-installer 均为 SUCCESS。Codex 对 `bb9c4ec` 留了两条 P2 建议，不是批准；合并使用已授权的 `--admin`。这两条建议未修。不标 done。本次 live 批次的 AC-18 仍未修复。不重封 manifest，不放松版本门。不 cleanup，不部署，不启动 P2-04。重开的只读 Release Readiness Review 为 blocked。观察时刻，不是用户消息发生时钟。用户原文「重开审查，不标 done」。审查不是 apply 作者自证。`apply_migration` 在 `_retry_block` 之前调用 `_validate_context`；`manifest.payload.tool_versions` 不等于当前 `runtime_versions()` 即 `version-conflict`。`runtime_versions()` 摘要包含 `scripts/sbtd_migration.py` 与 `assets/routing-approval.pub`。`ApprovedRoutingReplacementTests.test_receipt_retry_skips_an_applied_routing_replacement` mock 了同版本 `runtime_versions`，只证明临时目录行为，不证明本次已密封 live manifest。AC-18 的 partial receipt 重试是 required check，不能改写成 residual risk。`plan_recovery` 与 `apply_recovery` 也调用 `_validate_context`。`plan_recovery` 只把 `state-conflict` 收成 blocked plan，`version-conflict` 会直接抛出，得不到恢复计划。`apply_recovery` 同样先过版本门。备份保留不等于本次已密封 manifest 的可执行恢复。该限制同样是 required check，不能改写成 residual risk。因此不能关闭 P2-03。不重封 manifest，不放松版本门，不复跑 live apply，也不把备份保留写成可执行恢复。不 cleanup，不部署，不启动 P2-04，只读后继 plan 被批准前态挡住。观察时刻，不是用户消息发生时钟。用户原文「计划走你说的“能通过规则的关闭形状只有一个新的、版本一致的证据链”，请实施」。未完整调用 grill-with-docs：用户已明确选择先前说出的关闭形状，没有新的领域边界。用当前代码、同一项目、同一 vault、同一 publication decisions 和同一 routing approval 跑 migration plan，不传私钥，不写 live。退出码 2，status blocked，reason 为 `a routing target no longer matches its approval`。Codex、OMP、demo 三份 live 路由都等于已批 candidate，不等于 approval before。无批准 plan 也不能绑定当前 live：它既不是 ownership pin，也不是当前模板。未制造新批准，未签名，未 apply，未恢复 live，未标 done。完成时间保持 —。 | HITL | in-progress | — |
+| P2-03 | P2 | 运行 migration apply：数据迁移和旧路由停用 | P2-02 | AC-17/18/29/30 的本阶段子项，当前关闭合同见 §15.2 与 D-IMP-15；[live apply 协议](sbtd-workflow-v2-live-apply.md)。原密封 manifest `81a0c3d4bc63d906da67f6502b4f218d14a0d410376ad4ad9b354d93f5e280d2`，真实 apply `9ad029161fe57421a682ed44adaddf8c54d73c45d84eea7ea3341d5fa4497c6f` 为 applied／108项成功，完整重试 `3621a7fc6a1e3758338cb5e6114f20a5933bb2a830d0e6a0f13e5bfdebbc8ccc` 为 already-complete。恢复续作修复提交 `bb8eb0b3fe68e151c1dea6aec285ff294f321116`。这些历史事实不单独满足新关闭合同；当前全量核验、隔离运行证据、独立就绪审查和 PR 收口尚待完成。原版本冲突、审查 blocked、缺 partial live 回执和缺旧运行时写证据均保留在 §18.3；不重新归类为历史通过。源仓不纳入，不改 live，不执行 live 回滚，不调用退役 Trellis，不启动 P2-04，不 cleanup/sync/hooks/删备份 | HITL | in-progress | — |
 | P2-04 | P2 | 独立部署新规则／Skills／接线并逐项目smoke | P2-03、P1-11、P1-13 | AC-08/15/18/29部署子项及AC-21的host query/smoke子项；通过init迁移上下文唯一部署，显式前次输入和新证据输出，失败不清理；不混入独立sync | HITL | planned | — |
 | P2-05 | P2 | migration verify、再次确认、cleanup及逐项目集成验收 | P2-04 | AC-18/21/26/29/37；完整数据/链接/恢复证据，授权清理后复验、脱敏逐项目报告及用户验收；不删备份，记录保留安排 | HITL | planned | — |
+| P2-06 | P2 | 登记密封 live 批次已执行事实，不关闭 P2-03 | — | 不引用 AC-18 作为通过项。[已执行事实登记](sbtd-workflow-v2-executed-batch-record.md)。只登记 applied、already-complete 重试和 `bb8eb0b`。不声称 AC-18 通过，不把 P2-03 标 done，不解除 P2-04 对 P2-03 的依赖。不授权 cleanup、删备份、sync、hooks、smoke、108 步 live 回滚或调用旧 Trellis | HITL | in-progress | — |
 
 ### 14.6 P3：观察与正式发布
 
@@ -1223,7 +1227,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 | AC-15 | 文档与发布／sync／update 边界一致 | README.md/html、ENTRYPOINT、prompt、CHANGELOG、Onboard docs 对照；live 只在显式 sync |
 | AC-16 | 零旧运行依赖且历史保留 | 按 source/fixture/history/vendor 分类的扫描报告；允许清单外零旧调用／路由 |
 | AC-17 | 迁移数据完整、无越权 | tracked/ignored/untracked、自定义内容、平铺父子、undated；legacy-task.json 与私有原件按 AC-30 完整核对，不只测已知字段 |
-| AC-18 | 幂等、批次失败与可执行恢复 | 共享资源只恢复一次；partial receipt 重试及最后资源后态；有证据时 recovery 可执行，无证据/用户修改则blocked；旧运行时可用性单独验证 |
+| AC-18 | 分层证明幂等、批次失败与受管数据／配置恢复 | 同运行时真实 partial receipt 重试、最后资源后态及共享资源只恢复一次；有绑定证据时 recovery 可执行，无证据／未知写入／用户修改则 blocked。live 成功批次核验全部当前状态、真实完整回执幂等与恢复输入，故障和逆向续作用新隔离现场证明，不伪造 live 失败历史。签名跨运行时仍只接受完整成功 apply 回执；不承诺旧 Trellis 可写回退，runtime_readiness 保持 not-verified，不据此恢复日常工作。历史合同与撤回依据见 §15.2、D-IMP-15 |
 | AC-19 | 本仓库 validation 与 CI 可复现 | unit 全量、语法／结构检查、受控 integration、fresh clone、CI clean SHA、正式 raw+同 stem MD |
 | AC-20 | 三模式 token 收益可复算，不缩减交付或安全 | 公共核心约 2k、轻入口 ≤3k 为测量目标；分模式／host 统计完整加载和质量，不将文档字数或旧 −60% 假设冒充实测 |
 | AC-21 | 授权项目真正迁移成功 | 每项目报告、全部数据／链接、host query、新流程、恢复验证和用户验收；不存在抽样代替全数据校验 |
@@ -1251,6 +1255,39 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 新增模式负面场景：用户拒绝推荐后仍被自动升级、把续作重置 default、把 caveman lite 当执行模式、恢复读旧 handoff 覆盖当前选择、默认生成 tracked tasks、共享后降模式自动删历史、指针越界／双副本、未 onboard 先强迫填用户名、3/5 次工具结果触发无意义交接、只写新 ignore 就删除旧数据。
 
 这些负面场景分别保护数据、权限、错误与恢复契约。不要将永久测试写成单纯字段转发、mock 原样回声或模板措辞检查；配置仓库必要的路由契约检查必须按真实行为子句组织。
+
+### 15.2 P2-03 分层验收与关闭合同
+
+本节与 AC-18、§10.2.3、§11.5、§14.5 同时生效；不是保留旧要求再追加例外。授权为本次用户原文「先评估advisor，采纳你的方案，请按照你的方案整改并推进」，并在模式询问中明确选择 `default`。观察时刻 `2026-09-27T20:47:29+08:00`，不是用户消息发生时钟。决策与边界见 [D-IMP-15](sbtd-workflow-v2-implementation-decisions.md#d-imp-15p2-03-分层验收与恢复保证修订)。
+
+交付保证：完成授权批次的数据迁移与批准旧路由停用，证明当前批次数据／配置和私有原件完整，以及受管数据／配置可执行恢复。不再承诺恢复后退役 Trellis 可运行或写入；这是用户采纳的产品保证调整，不是用文件恢复替代旧运行时可写证明。`runtime_readiness` 仍为 `not-verified`。维护窗口不因 P2-03 done、隔离恢复成功或未来文件恢复而自动结束。
+
+以下全部为 required；缺失或失败仍阻断，不转 residual，不用 P2-06 代替：
+
+| ID | 场景与通过条件 | 证据边界 |
+|---|---|---|
+| C1 | 对原密封批次全量核验 108 项结果、当前 after、非空 backup、保全原件和批准投影；三份路由等于各自已批准候选。缺失／漂移即失败，不能抽样 | live 只读；精确路径、原件及敏感摘要只留私有层。批准共享两份路由的后续覆盖决定见 live 协议，不扩大到其他 HOME／项目 |
+| C2 | 原完整重试回执正确关联原 apply，已完成资源保持不变；现有零写入观察与回执相互印证 | 这是本批完整幂等，不是 partial retry；不为补证再次执行 live apply。证据缺失则保持阻断 |
+| C3 | 全新隔离现场用当前运行时 plan/apply，受控操作失败产生真实累计 partial 回执；带该回执重试仅完成剩余项，再重试为 already-complete；前面成功资源未重写 | 不动 P2-02 保留现场。manifest 必须由隔离输入重新生成；不复制 live 绝对路径运行，不手工拼装失败回执，不 mock 绑定／上下文／签名／累计校验 |
+| C4 | 隔离真实恢复计划和执行、受控失败、回执续作及最终 no-op；恢复后受管内容与 before 一致，共享资源只恢复一次，同资源多相位只核对最后成功态 | 复用可证明的生产者链。依赖级故障注入和部署替身分别标注；不称为 host/full-stack 实测，不调用旧 Trellis |
+| C5 | 对原密封 live manifest 与真实完整回执生成当前只读 recovery plan；校验全部备份／状态／批准／共享闭包及签名前驱后继绑定，无冲突 | 只证明本批恢复输入当前有效；必须与 C4 执行证明并列，不能独自证明每步可执行。不执行 108 步 live 回滚 |
+| C6 | 隔离证明用户漂移、未知／部分写入、缺证据、坏签名或未列出后继 fail-closed，保留原件和备份，不覆盖新内容；生产者已生成的失败回执原样保留，未生成回执时以真实 blocked／错误结果及零写入证明拒绝，不补造回执 | 不为了负例改变 live。跨运行时 partial apply 拒绝是现行安全契约；同运行时 partial 的正例由 C3 证明 |
+
+验证使用同一可审查实现及实际依赖／解释器指纹，报告记录 source SHA、dirty/exact、命令、时间、原生结果与同 stem 中文汇总。旧运行结果不得重标为当前提交证据；文档提交后须证明实现指纹未变，并按项目规则完成精确提交验证。任何生产实现修改触及指纹时重新处理配对和相关证据，不能放松版本门。
+
+关闭顺序：合同独立审查通过 → C1–C6 与适用回归通过 → 独立 DDIA／Release Readiness 证据复核，无剩余有效 P0/P1 → 任务 PR 合并 → 窄范围状态 PR 记录实际完成时间与合并事实。新合同生效不自动使任何检查 passed；审查和证据未齐时仍 in-progress。状态 PR 闭环前 P2-04 仍 planned；闭环后也只满足依赖，不自动授权部署／host smoke。P2-05 的 verify、cleanup 再确认与备份保留边界不变。
+
+P2-06 仅为已经发生事实的登记，保留编号与历史；按自己的登记验收及文档 PR 独立收口，不承接 C1–C6，不成为 P2-04 前置或 P2-03 的替代完成。
+
+#### 历史关闭尝试（已撤回，不是现行验收）
+
+原 AC-18 最小证明原文：「共享资源只恢复一次；partial receipt 重试及最后资源后态；有证据时 recovery 可执行，无证据/用户修改则blocked；旧运行时可用性单独验证」。
+
+`2026-09-27T19:15:12+0800` 的原 §15.2 在 AC-18 和任务引用不变时，提出把本批 partial retry 与旧 Trellis 写证明移出关闭条件，只用 applied、already-complete 和 `bb8eb0b` 关闭。`2026-09-27T19:20:54+0800` 两份独立审查均判定该做法是非法 waiver、结论 blocked。该判定保留，不重写为通过。
+
+本批仍没有原始 partial apply receipt；旧运行时仍没有可写证据。没有补造，没有调用退役运行时，也没有执行 live 回滚。此前的完整描述与事件见 §18.3 及 live apply 协议。本轮通过明确修改交付保证与补充 required 行为证据取代旧关闭尝试，不回溯改变旧检查结果。
+
+
 
 ## 16. 验证策略、报告和发布门禁
 
@@ -1354,6 +1391,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 4. 用户已授权本源仓库按任务分支实施、循环 review 和 PR 合并（可使用 --admin），以及合并后台账更新。P2 真实项目范围、本机 workflow sync、hooks opt-in、旧数据／全局工具清理、tag／发布、备份销毁仍按对应独立确认门执行，不能从总开发授权推断。
 5. P2-02 **done**（2026-09-24T22:46:30+0800）。任务 PR #73 merge `2e22adc1a2644c99cbbe830c13ffe99881b1afaa`；状态 PR #74 已于 GitHub `2026-09-24T14:41:08Z` 合并，merge `d6d38907c9aa5aec8a73d1c0c5617a022f45469b`。用户原文「P2-02 演练到此结束。不授权 cleanup，不再次恢复，不启动 P2-03。现场继续保留。在此前提下把 P2-02 标 done。」该原文只关闭本项。cleanup、再次恢复和 P2-03 仍未授权。现场继续保留。官方 verify 仍不是事前授权，不能据此 cleanup。旧工具写操作仍按缺证据作安全拒绝。未写 live。禁止启动 host。P2-03 仍 planned。
 6. P2-03 为 in-progress。用户原文授权 live `demo`／`main`、Codex+OMP 的数据迁移和旧路由停用；源仓不纳入。不部署新接线，不 smoke，不 cleanup，不删备份，不 sync，不改 hooks。隔离现场继续保留。用户后来选择「明确推翻冻结」，并按已展示 SHA 批准本次实际写入的 Orca Codex 候选 `3e22679bf5fac0a6c36cc3840b4c707e3f8c12a20d8787a3d20246cd21f1209e` 与 OMP 候选 `ea7b3ce951864ff55964ce4cab9a6eba024d610be0560b24795d1ae10d7b3440`；demo 仍用 `cb5f99ea620f77028ab7323aae1cf4c0989230afd9385da40aa9811370e5f767`。用户原文「apply」之后，apply 退出码 0，status `applied`，manifest `81a0c3d4bc63d906da67f6502b4f218d14a0d410376ad4ad9b354d93f5e280d2`，apply_id `9ad029161fe57421a682ed44adaddf8c54d73c45d84eea7ea3341d5fa4497c6f`。共享两项与项目内 106 项成功。`~/.codex` 未写。`.trellis` 仍在。回执路径只在私有层。同版本临时测试不能证明本次 live 批次可重试。已密封 manifest 会先报 `version-conflict`。不重封，不放松版本门。本次 live 批次的 AC-18 未修复。任务 PR #76 已于 GitHub `2026-09-26T13:16:43Z` 合并，merge `bf3af67a28162335eb2e0121e133e6469f613191`。合并前 head `4726245c687a9a0f3d2c9106cd05a0db24de307d` 的 linux-full、macos-bash-installer、windows-powershell-installer 均为 SUCCESS。Codex 对 `bb9c4ec` 留了两条 P2 建议，不是批准；合并使用已授权的 `--admin`。这两条建议未修。不标 done。本次 live 批次的 AC-18 仍未修复。不重封 manifest，不放松版本门。不 cleanup，不部署，不启动 P2-04。重开的只读 Release Readiness Review 为 blocked。观察时刻，不是用户消息发生时钟。用户原文「重开审查，不标 done」。审查不是 apply 作者自证。`apply_migration` 在 `_retry_block` 之前调用 `_validate_context`；`manifest.payload.tool_versions` 不等于当前 `runtime_versions()` 即 `version-conflict`。`runtime_versions()` 摘要包含 `scripts/sbtd_migration.py` 与 `assets/routing-approval.pub`。`ApprovedRoutingReplacementTests.test_receipt_retry_skips_an_applied_routing_replacement` mock 了同版本 `runtime_versions`，只证明临时目录行为，不证明本次已密封 live manifest。AC-18 的 partial receipt 重试是 required check，不能改写成 residual risk。`plan_recovery` 与 `apply_recovery` 也调用 `_validate_context`。`plan_recovery` 只把 `state-conflict` 收成 blocked plan，`version-conflict` 会直接抛出，得不到恢复计划。`apply_recovery` 同样先过版本门。备份保留不等于本次已密封 manifest 的可执行恢复。该限制同样是 required check，不能改写成 residual risk。因此不能关闭 P2-03。不重封 manifest，不放松版本门，不复跑 live apply，也不把备份保留写成可执行恢复。不 cleanup，不部署，不启动 P2-04，只读后继 plan 被批准前态挡住。观察时刻，不是用户消息发生时钟。用户原文「计划走你说的“能通过规则的关闭形状只有一个新的、版本一致的证据链”，请实施」。未完整调用 grill-with-docs：用户已明确选择先前说出的关闭形状，没有新的领域边界。用当前代码、同一项目、同一 vault、同一 publication decisions 和同一 routing approval 跑 migration plan，不传私钥，不写 live。退出码 2，status blocked，reason 为 `a routing target no longer matches its approval`。Codex、OMP、demo 三份 live 路由都等于已批 candidate，不等于 approval before。无批准 plan 也不能绑定当前 live：它既不是 ownership pin，也不是当前模板。未制造新批准，未签名，未 apply，未恢复 live，未标 done。完成时间保持 —。P2-04 仍 planned。
+7. P2-06 为 in-progress。用户原文「先评估 advisor，然后另立不声称 AC-18 已通过的新任务」。advisor 只要求补交付字段，不把 blocked 审查改成通过。本项只登记已执行事实，不声称 AC-18 通过，不把 P2-03 标 done，不解除 P2-04 对 P2-03 的依赖。不授权 cleanup、删备份、sync、hooks、smoke、108 步 live 回滚或调用旧 Trellis。
 
 ### 18.3 状态事件记录
 
@@ -1544,6 +1582,12 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-27T15:56:33+0800 | P2-03 恢复续作按回执最新状态判断 | 观察时刻，不是用户消息发生时钟。上一会话建议先修恢复续作，不执行 108 步 live 回滚，不标 done。本轮按该范围继续。未完整调用 grill-with-docs：修法已收窄到已完成逆向步骤的预期状态，没有新的领域边界。`apply_recovery` 把绑定的恢复回执交给血统校验。已成功的逆向步骤按该回执最新 `after` 判断；未动过的资源仍必须等于 apply `after`。未列出后继和坏签名仍是 `version-conflict`。红测先在临时目录复现续作 `lineage-conflict`，修复后同一测试恢复剩余步骤且退出码 0。未列出后继和坏签名在续作前仍是 `version-conflict`，树未改。用仅驻内存的新 Ed25519 密钥重签配对，前驱仍是 `runtime-sha256:27e74bf511e8b62ad6dac07188933811bd429a84b38b8f01ae025e997fdd7750`，后继改为 `runtime-sha256:74de3e3c7a5821fe7390b5db82e73b75b9edf9bb47775383e233b0dde640b20e`。私钥不落盘，不读取路由批准私钥。未执行 live 回滚，未重开审查，不标 done。旧运行时可写可用性仍无单独证据。P2-03 仍 in-progress。 |
 | 2026-09-27T16:41:20+0800 | P2-03 多相位恢复续作只看最后成功态 | 观察时刻，不是用户消息发生时钟。用户要求先评估 advisor 再执行推荐下一步。顾问指出 `sbtd_recovery.py` 在运行时指纹内，改它必须重签；同一 `resource_id` 可有 cleanup→deploy→apply 多个逆向步骤，续作预检若逐个要求 live 等于每个已成功 `after`，两步都成功后必报 `retry-conflict`。评估：血统期望已按相位序取最后一次成功 `after`，不是任取一个。当前 `plan_migration` 不会发出同资源多相位步骤，但恢复契约和计划器允许这种链。预检已改为只校验该资源计划顺序中最后一次已成功步骤。真实 `apply_recovery(plan_path, previous_receipt_path, confirm_recovery)` 对密封的两步回执返回 `already-complete`，文件未改。阶段绑定和版本门在该测试中被跳过，因为标准夹具产不出这种 manifest。配对再次用内存密钥重签，后继改为 `runtime-sha256:1f645a3abefc1279d4e1937d5f847feed41c57cb50a8d04d45de0e5abe722bda`。私钥不落盘，不读取路由批准私钥。未执行 live 回滚，未重开审查，不标 done。P2-03 仍 in-progress。 |
 | 2026-09-27T17:32:39+0800 | P2-03 多相位续作有合法绑定证据 | 观察时刻，不是用户消息发生时钟。用户要求补合法绑定的续作测试，不能把 mock 绿测当成闭环。`test_multi_phase_retry_checks_only_the_latest_restored_state` 仍只证明预检选择：它 mock 了文档加载、`validate_declared_bindings`、`_validate_context` 和 `validate_cumulative`。新测试不 mock 这些门。`plan_migration` 在批准的 demo 路由替换加 `init-projects` 时，同一 `AGENTS.md` 资源同时有 apply 与 deploy。真实 apply、部署证据、`plan_recovery` 和两次 `apply_recovery` 之后，续作退出码 0，status `already-complete`，文件未改。部署图和 smoke 使用既有测试替身，因为本机没有 Graft；恢复绑定本身没有被跳过。未执行 live 回滚，未重开审查，不标 done。P2-03 仍 in-progress。 |
+| 2026-09-27T18:15:26+0800 | P2-03 独立审查 blocked，旧运行时写探针停止 | 观察时刻，不是用户消息发生时钟。可审查提交 `bb8eb0b3fe68e151c1dea6aec285ff294f321116`。独立 Release Readiness Review 为 blocked。未执行 live recovery apply 不是关闭条件，不授权 108 步 live 回滚。旧运行时可写证据仍 blocked：禁止初始化或调用已退役 Trellis 运行时。阻断前已执行 `trellis --version` 和 `trellis --help`，没有写命令，随后停止。安装元数据只读为 `@mindfoldhq/trellis` `0.6.17`。私有证据只读：密封 manifest 的 onboard 仍是前驱 `27e74bf5…`，有一份 `applied` 回执和一份 `already-complete` 重试，没有 partial apply receipt。隔离副本和 live 未改。不标 done。P2-03 仍 in-progress。 |
+| 2026-09-27T18:29:41+0800 | P2-03 不能靠删证据标 done | 观察时刻，不是用户消息发生时钟。用户原文「总之我的最终目的是完成p2-03」以及「如果现在整体评估后有阻塞项，那么请你给出方案使其pass，请按照我这个需求进行推进」。评估后不执行该完成。AC-18 仍要求 partial receipt 重试和旧运行时可用性单独验证。独立审查对这两项 FAIL。required check 不能改成 residual，也不能从当前 P2-03 删除缺证据后标 done。旧 Trellis 写探针被禁止，不调用。私有证据没有原始 partial apply receipt，不补造。108 步 live 回滚不是关闭条件，不执行。P2-03 仍 in-progress。 |
+| 2026-09-27T19:15:12+0800 | P2-03 新关闭合同已写入，审查未完成 | 观察时刻，不是用户消息发生时钟。用户原文「选择你说的合法路径，请规划并落地。」新范围写入主 PRD §15.2。原 AC-18 行未改写成已满足。partial retry 与旧 Trellis 写证明仍缺失，不补造，不调用旧运行时，不转 residual。本批关闭只审查已发生的 applied、already-complete 重试和 `bb8eb0b` 续作代码。独立审查未写成 ready。不标 done。P2-03 仍 in-progress。 |
+| 2026-09-27T19:20:54+0800 | P2-03 新关闭合同审查 blocked | 观察时刻，不是用户消息发生时钟。两份只读 Release Readiness Review 都判定主 PRD §15.2 不是合法新范围，而是非法 waiver：第 14.5 节 P2-03 仍要求 AC-18，AC-18 仍要求 partial receipt 重试和旧运行时可用性单独验证，这两项仍 FAIL。已发生的 applied、already-complete 和 `bb8eb0b` 不能代替它们。不标 done。P2-03 仍 in-progress。 |
+| 2026-09-27T19:39:44+0800 | P2-06 另立，不声称 AC-18 通过 | 观察时刻，不是用户消息发生时钟。用户原文「先评估 advisor，然后另立不声称 AC-18 已通过的新任务」。advisor 指出上一轮漏了修改文件、验证和 README／prompt／CHANGELOG 判断，且不能把 blocked 写成通过。该判断成立，不改变审查结论。新任务 P2-06 只登记已执行事实。P2-03 仍 in-progress，AC-18 仍未通过，P2-04 仍 planned 且仍依赖 P2-03。未调用旧 Trellis，未跑 108 步回滚，不标 P2-03 done。 |
+| 2026-09-27T20:47:29+08:00 | P2-03 授权修订有效验收并补证 | 观察时刻，不是用户消息发生时钟。用户原文「先评估advisor，采纳你的方案，请按照你的方案整改并推进」，随后明确选择 default。advisor 的不回滚／不伪造／不提前解锁提醒成立。AC-18、§15.2 与阶段映射改为 live 全量只读核验＋新隔离真实 partial/recovery 续作；明确撤回旧 Trellis 可写回退保证，runtime_readiness 不改为通过。旧 blocked 审查与缺证据事实保留。模式通过已安装 TaskStore 保存在受保护本地记录；原任务历史仍在本表。当前未执行本轮验证、未独立审查通过、未合并、未标 done。不改 live，不动 P2-02 保留现场，不开新 live 批次，不启动 P2-04。 |
 
 PR #67 的状态补记阶段未启动 P1-16、P2 或 P3；后续实际进度以第 14 节及新增状态事件为准。状态补记不新增真实迁移、同步、清理、tag 或发布授权。
 

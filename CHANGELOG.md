@@ -59,6 +59,7 @@
 - P1-19同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`与bundled `lessons-record`的`SKILL.md`／`references/identity-migration.md`记录`DeveloperStore`只读链／plan／ensure与显式`--developer`入口的真实边界；版本化automation prompt把`sbtd_identity.py`纳入只读评估范围，不同步live automation或真实HOME。
 - P1-11同步README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、版本化automation prompt与CHANGELOG：当前主线改为`Codex / OMP + sbtd-task + Graft + Chrome DevTools MCP + Playwright + Maestro`，版本检查专用规则从Trellis监控改为Graft固定pin/source、native lifecycle、telemetry、MCP/hooks与平台接线核验；REFERENCE补充备份保留／人工授权销毁规程与恢复可用／证据不足边界，明确cleanup、恢复成功、任务完成均不删除备份，pre-manifest终止分支删除前须先保存并回读custodian、候选归属、精确范围、本次独立授权和实际确认时间，缺任一项或保存/回读失败均blocked、零删除、不得done。旧Trellis／GitNexus仅保留迁移与历史边界，不同步live automation或真实HOME。
 - P1-12同步README两份入口、Onboard使用说明、身份迁移指针及版本化automation只读范围；明确私有子对象文件输入、同一apply批次内累计报告时间窗、已证明不存在的退役资源不属于保留资产，以及不改原生报告schema的无分支ref表示。声明tomlkit依赖及已安装副本的准备边界；不触碰真实HOME或live automation。
+- P2-03 同步 README 两份入口、Onboard `REFERENCE.md` 与版本化 automation prompt 的恢复保证边界：恢复成功只表示绑定范围内受管数据／配置按回执 reconcile，不承诺已退役 Trellis 运行时可执行或可写，不调用、重装或恢复旧运行时，旧运行时 `runtime_readiness` 保持未验证；同一运行时部分回执重试与签名前驱—后继配对加完整成功回执的前驱接受是两条不同路径；live 回执证明实际状态，故障／部分重试／恢复续作由独立隔离测试分别证明，二者互不替代，文档不声称新证明已通过；部署接受前维护不自动结束，备份保留不变。不同步 live automation 或真实 HOME。
 
 ### 变更
 
