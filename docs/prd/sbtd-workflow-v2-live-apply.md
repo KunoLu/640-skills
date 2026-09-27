@@ -144,3 +144,27 @@ verify 再读 live 目标。当前快照必须等于回执 `after`，也必须�
 
 已测的是临时目录里的 Codex 全局、OMP 全局和 demo 项目目标：写入候选全文、错误路径或批外目标被拒、重封装不写 live、候选漂移失败。没有真实家目录的 planned manifest，也没有 apply 确认。不得把这次工作树实现当成 live 路由已停用。
 
+## 7. 分层验收执行证据（待独立就绪裁决）
+
+观察时刻 `2026-09-27T22:12:58+0800`。第 6 节末尾“没有真实 manifest／apply 确认”属于当时实现期记录，不覆盖第 3 节后来发生的 live apply。当前合同为主 PRD §15.2。
+
+验证候选为 clean `5eee55ea04ac166ed5e27f5cedb69249ad3a0b68`；绝对解释器、Python patch 与依赖版本均记录在私有报告。实际运行指纹 `runtime-sha256:1f645a3abefc1279d4e1937d5f847feed41c57cb50a8d04d45de0e5abe722bda` 等于已签名后继，前驱仍绑定原 live manifest。未安装依赖、未重签、未改生产实现。
+
+| 验收 | 实际结果 | 证据与限制 |
+|---|---|---|
+| C1 | 108 个 apply 结果当前 after／备份匹配，一个完整来源目录备份核验，三份批准路由一致 | 私有 live-audit r3 原生 JSON 与 before/after；全量只读，不是重新 apply |
+| C2 | 原 apply 与 already-complete 回执通过绑定／累计校验，资源结果相等；历史原生 toolResult `b497ee08` 记录 live_changed 0 | 该历史输出与来源已保全，不重标为当前提交运行，不再次执行 live retry |
+| C3 | 真实 plan→os.link 故障→生产者 partial 回执→重试→already-complete，44 条断言通过；已成功目标内容／inode／mtime和写调用观察未变 | 新隔离报告 A，当前实际指纹；没有绑定／版本／累计／签名校验替身 |
+| C4 | 真实恢复→依赖级故障→partial recovery 回执→续作→already-complete，60 条断言通过；两个项目共享路由实际只有一个共享结果、一个逆向步骤、一次目标恢复，重试不改目标 | 新隔离报告 B 与 shared-proof。共享安装副本只替换独立合成公钥，其余文件逐字等于候选 archive；实际签名／验签，不读取真实私钥，不称为生产信任根实测 |
+| C4 多相位 | 合法绑定的同资源 deploy→apply 逆向完成后，再次恢复为 already-complete；实际隔离 manifest／回执已保留 | `test_bound_multi_phase_continuation_uses_real_recovery_gates` 通过；有合成公钥提供者及 graph/smoke 依赖替身，恢复绑定／上下文／累计校验真实执行，不称为 host/full-stack |
+| C5 | 当前只读 recovery plan 为 planned、无冲突；109 个声明资源完整闭包、108 个实际逆向步骤；核验前后受管状态相等 | 一个额外声明资源是未执行的 cleanup 资源。只读计划不证明未来 live 写权限／容量或每步执行，不运行 108 步 live 回滚 |
+| C6 | 隔离漂移／未知写入／不安全重试拒绝的44条断言通过；坏签名、未列出后继、缺完整证据负例通过；连同多相位共4项无跳过 | 未知写入为明确标注的合成拒绝输入，不冒充真实历史故障；正向 partial 回执由生产者实际生成 |
+| 原生 CLI | 新隔离 onboard.py migration plan/apply/完整重试与 recovery plan/apply/完整重试全部退出0，27条断言通过，目标最终恢复原态 | 报告 E；子进程不重写由快照证明，不声称父进程观察了子进程内部调用 |
+
+精确候选全量命令：`python -B -m unittest discover -s tests -p 'test_*.py'`，1160 tests／1781.605s／OK（8 skipped），运行前后源码状态一致；四项补充边界另有原生输出及同 stem 中文汇总。8项skip不算对应平台／host通过。RTK `skipped-for-report`；本仓库不建 `.feature`，场景沿主 PRD C1–C6，证据映射如上。
+
+失败记录全部保留：普通 python3 缺 tomlkit，改用历史绝对解释器后指纹匹配；live首轮300s timeout不计通过；r2校验脚本把109个声明资源误要求为108，改为完整集合与实际逆向集合断言后r3通过；隔离首轮外围写保护误拒自己的fdopen，改为用macOS F_GETPATH验证描述符位于隔离根，完整重跑通过。这些修正未改生产实现。
+
+主隔离脚本的可选D“用生产公钥对应私钥重签合成批准”保持not-run，不读取真实私钥；所需覆盖分别由C1真实安装公钥批准验证及C4合成信任根共享恢复提供，不称D通过。runtime_readiness始终not-verified；旧可写检查与缺失live partial历史不改成通过。
+
+合同复审ready-for-validation，源代码独立安全复核无P0/P1；本节不是最终Release Readiness ready或done。原始路径、快照、回执、raw+同stem中文报告及checksum清单仅保存在本轮私有证据目录。任务PR／状态PR与P2-04授权尚未闭环。
