@@ -60,4 +60,4 @@ P2-04 以 successor 批次（v2 manifest `cf5a4ecf…`）重做部署时，首�
 
 ## 7. 任务合并与状态
 
-（任务 PR 已创建后填写合并与状态。）
+任务 [PR #87](https://github.com/KunoLu/640-skills/pull/87) 于 2026-09-28 经三平台 CI（run 36419809696）全绿后合并，merge `f1b58f3c8640af06967b9f3948312c6fd5d4f281`；任务分支本地/远端已清理，main==origin/main。合并与分支清理按 `LESSON-20260928-pr-…` 分步执行（先证明 MERGED 再删分支）。独立状态 PR 登记台账与本节；P2-04 保持 blocked，v3 successor 批次重做需其自身逐步显式确认，本项完成不授权 live 部署、sync、cleanup 或删备份。
