@@ -33,6 +33,9 @@ from sbtd_project import TaskDataError
 
 _PACKAGE = Path(__file__).resolve().parents[1]
 _ABSENT = {"type": "absent", "checksum": None}
+_LINEAGE_DOCUMENT = _PACKAGE / "assets" / "runtime-lineage.json"
+_LINEAGE_PUBLIC_KEY = _PACKAGE / "assets" / "runtime-lineage.pub"
+
 _RETENTION = {
     "normal_observation_days": 14,
     "normal_disposal_gates": [
@@ -72,6 +75,7 @@ def runtime_versions() -> dict[str, str]:
         "assets/migration-legacy-ownership.json",
         "assets/migration-paused-agents.txt",
         "assets/routing-approval.pub",
+        "assets/runtime-lineage.pub",
         "assets/graft-build-policy.json",
         "assets/graft-instructions.txt",
         "assets/graft-hook-entry.mjs",
@@ -531,17 +535,224 @@ def _bind_apply_routing_anchor(
             "an approved routing replacement does not match the caller approval file",
         )
 
+def _lineage_signed_bytes(predecessor: str, successor: str) -> bytes:
+    return contracts.canonical_json_bytes(
+        {
+            "schema_version": 1,
+            "purpose": "runtime-lineage",
+            "predecessor": predecessor,
+            "successor": successor,
+        }
+    )
+
+
+def _verified_runtime_pair() -> tuple[str, str]:
+    """The installed lineage pair. Callers cannot replace the public key."""
+    import base64
+
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    except ImportError:
+        _fail(
+            "validator-unavailable",
+            "prepare the installed Skill's declared requirements before migration",
+        )
+    try:
+        key = load_pem_public_key(_LINEAGE_PUBLIC_KEY.read_bytes())
+        document = json.loads(_LINEAGE_DOCUMENT.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        _fail("version-conflict", "the runtime lineage pair is not authorized")
+    if not isinstance(key, Ed25519PublicKey) or not isinstance(document, dict):
+        _fail("version-conflict", "the runtime lineage pair is not authorized")
+    predecessor = document.get("predecessor")
+    successor = document.get("successor")
+    signature = document.get("signature")
+    if (
+        document.get("schema_version") != 1
+        or document.get("purpose") != "runtime-lineage"
+        or not isinstance(predecessor, str)
+        or not isinstance(successor, str)
+        or not isinstance(signature, str)
+    ):
+        _fail("version-conflict", "the runtime lineage pair is not authorized")
+    try:
+        key.verify(
+            base64.b64decode(signature, validate=True),
+            _lineage_signed_bytes(predecessor, successor),
+        )
+    except (InvalidSignature, ValueError, TypeError):
+        _fail("version-conflict", "the runtime lineage pair is not authorized")
+    return predecessor, successor
+
+
+def _recovery_expected_states(
+    recovery: Mapping[str, Any] | None, manifest_id: Any
+) -> dict[str, Any]:
+    """Latest succeeded inverse state, keyed by resource.
+
+    Receipt results are stored in plan order, so a later succeeded step for
+    the same resource is its current proven state. A missing or unbound
+    receipt does not waive the apply outcome.
+    """
+    if recovery is None:
+        return {}
+    try:
+        payload = recovery["payload"]
+        results = payload["results"]
+    except (KeyError, TypeError):
+        _fail(
+            "lineage-conflict",
+            "a recovery continuation requires its bound receipt",
+        )
+    if payload.get("manifest_id") != manifest_id or not isinstance(results, list):
+        _fail(
+            "lineage-conflict",
+            "a recovery continuation requires its bound receipt",
+        )
+    expected: dict[str, tuple[int, Any]] = {}
+    phase_rank = {"cleanup": 0, "deploy": 1, "apply": 2}
+    for result in results:
+        if not isinstance(result, Mapping) or result.get("status") != "succeeded":
+            continue
+        resource_id = result.get("resource_id")
+        after = result.get("after")
+        phase = result.get("phase")
+        rank = phase_rank.get(phase) if isinstance(phase, str) else None
+        if not isinstance(resource_id, str) or after is None or rank is None:
+            _fail(
+                "lineage-conflict",
+                "a succeeded recovery step has no proven state",
+            )
+        current = expected.get(resource_id)
+        if current is not None and current[0] == rank:
+            _fail(
+                "lineage-conflict",
+                "a resource has two succeeded recovery steps in one phase",
+            )
+        if current is None or rank > current[0]:
+            expected[resource_id] = (rank, after)
+    return {resource_id: after for resource_id, (_, after) in expected.items()}
+
+
+def _require_runtime_lineage(
+    manifest: Mapping[str, Any],
+    previous: Mapping[str, Any] | None,
+    sealed: Mapping[str, Any],
+    current: Mapping[str, Any],
+    recovery: Mapping[str, Any] | None = None,
+    *,
+    deployment: Mapping[str, Any] | None = None,
+    cleanup: Mapping[str, Any] | None = None,
+) -> None:
+    """Consume one signed predecessor only for its paired successor.
+
+    The pairing file is outside the runtime fingerprint, so its signature is
+    checked with the installed public key. This is not a fresh plan and does
+    not waive generated-file or absent-target checks. A partial apply receipt
+    stays closed so a newer runtime cannot finish writes planned by the
+    predecessor. Callers bind all stage evidence before this check. Known
+    deploy/cleanup outcomes supersede apply; a bound recovery receipt then
+    supplies the latest succeeded inverse state. Stage-specific retry and
+    restoration checks still decide whether another write is safe.
+    """
+    onboard = sealed.get("onboard") if isinstance(sealed, Mapping) else None
+    predecessor, successor = _verified_runtime_pair()
+    if (
+        previous is None
+        or not isinstance(sealed, Mapping)
+        or sealed.get("graft") != current.get("graft")
+        or onboard != predecessor
+        or current.get("onboard") != successor
+    ):
+        _fail(
+            "version-conflict",
+            "the migration plan belongs to a different installed implementation",
+        )
+    try:
+        payload = previous["payload"]
+        results = _result_index(previous)
+    except (KeyError, TypeError):
+        _fail(
+            "lineage-conflict",
+            "a predecessor runtime requires a complete matching apply receipt",
+        )
+    apply_ops = [
+        operation
+        for operation in _operations(manifest)
+        if operation.get("phase") == "apply"
+    ]
+    if (
+        not isinstance(payload, Mapping)
+        or payload.get("manifest_id") != manifest.get("manifest_id")
+        or payload.get("status") not in {"applied", "already-complete"}
+        or not apply_ops
+        or any(operation["resource_id"] not in results for operation in apply_ops)
+        or any(
+            results[operation["resource_id"]].get("status") != "succeeded"
+            for operation in apply_ops
+        )
+    ):
+        _fail(
+            "lineage-conflict",
+            "a predecessor runtime requires a complete matching apply receipt",
+        )
+    latest = dict(results)
+    for stage in (deployment, cleanup):
+        for resource_id, outcome in _result_index(stage).items():
+            if outcome.get("before") is None or outcome.get("after") is None:
+                _fail(
+                    "lineage-conflict",
+                    "a later-stage resource has an unknown write state",
+                )
+            # Failed operations can have a known changed outcome. Recognizing
+            # that state is not permission for an ordinary partial-write retry.
+            latest[resource_id] = outcome
+    restored = _recovery_expected_states(recovery, manifest.get("manifest_id"))
+    for operation in apply_ops:
+        result = results[operation["resource_id"]]
+        expected = restored.get(
+            operation["resource_id"], latest[operation["resource_id"]]["after"]
+        )
+        if snapshot(Path(operation["target"])) != expected:
+            _fail(
+                "lineage-conflict",
+                "a succeeded resource no longer matches its receipt outcome",
+            )
+        backup = result.get("backup_ref")
+        if backup is None:
+            continue
+        if (
+            not isinstance(backup, Mapping)
+            or not isinstance(backup.get("path"), str)
+            or snapshot(Path(backup["path"])) != backup.get("state")
+        ):
+            _fail(
+                "lineage-conflict",
+                "a receipt backup no longer matches its recorded state",
+            )
+
+
 def _validate_context(
     manifest_path: Path,
     manifest: Mapping[str, Any],
     previous: Mapping[str, Any] | None = None,
     deployment: Mapping[str, Any] | None = None,
     cleanup: Mapping[str, Any] | None = None,
+    recovery: Mapping[str, Any] | None = None,
 ) -> None:
-    if manifest["payload"]["tool_versions"] != runtime_versions():
-        _fail(
-            "version-conflict",
-            "the migration plan belongs to a different installed implementation",
+    sealed_versions = manifest["payload"]["tool_versions"]
+    current_versions = runtime_versions()
+    if sealed_versions != current_versions:
+        _require_runtime_lineage(
+            manifest,
+            previous,
+            sealed_versions,
+            current_versions,
+            recovery,
+            deployment=deployment,
+            cleanup=cleanup,
         )
     _check_evidence_apply_boundary(manifest_path, manifest)
     require_private_directory(Path(manifest["payload"]["backup_root"]))

@@ -129,3 +129,13 @@
 - 门内只读评估根`findings.log`所有来源、级别和状态，区分已修复/延期/无效记录；列出建议优先修复项、证据、影响和验证范围。没有优先修复建议也必须等待用户确认，不自动推进第11项。
 - D-IMP-13继续适用，未把低级finding重新变为逐任务阻断；本门不提前授权任何修复、迁移、环境切换、清理或发布。
 - 详细规则与顺序见[十项评估确认门](sbtd-workflow-v2-p1-ten-task-findings-gate.md)。这是计划内执行策略，不修改全局规则、产品README能力或live automation。
+
+## D-IMP-15：P2-03 分层验收与恢复保证修订
+
+- 日期：2026-09-27；用户原文「先评估advisor，采纳你的方案，请按照你的方案整改并推进」，随后明确选择 default。用户采纳的方案已明确说明：保留受管数据／配置恢复，不再承诺恢复后退役 Trellis 能继续运行或写入。
+- 原因：原 §15.2 未修改 AC-18 与任务引用却排除两项 required check，独立审查 blocked 正确；不能借 P2-06 登记或一次成功 apply 绕过。成功 live 批次也不应为了证明工具 partial retry 而人为制造历史失败。
+- 决定：同时修订 AC-18、主 PRD §10.2.3／§11.5／§14.1／§14.5／§15.2 与 live 协议。实际批次负责全部资源、批准、原件／备份、完整幂等和当前恢复输入只读证明；新隔离现场负责真实生产者 partial apply／recovery 续作与 fail-closed 证明。主 PRD C1–C6 全部 required，不转 residual。
+- 保证变化：撤回旧 Trellis 可写回退保证，而非把旧可写验证改成 passed。`runtime_readiness` 保持 not-verified；文件恢复和 P2-03 done 都不解除维护窗口，不自动启动旧工具。旧 AC 原文、缺证据事实与 blocked 审查保留为历史。
+- 安全边界：不改 live、不执行 108 步回滚、不补造／重封 live manifest 或回执、不调用退役 Trellis、不动 P2-02 保留现场、不部署／host smoke／cleanup／删备份／sync／hooks。跨运行时 partial apply 仍拒绝；同运行时 partial 正例须真实执行，不 mock 绑定、版本、签名或累计校验。
+- 收口：合同独立审查通过后执行验证；再做当前提交的独立 Release Readiness 审查与实际任务 PR／状态 PR 闭环，最后才记录 P2-03 done。P2-04 依赖不改，P2-05 再次确认不改。P2-06 保留自身事实与文档审查，不承接未完成验收、不新开替代任务。
+- 当前仅为已授权整改合同，不是 C1–C6 已通过、Release Readiness ready 或发布许可。

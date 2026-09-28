@@ -507,6 +507,23 @@ def _recovery_projects(
     return projects
 
 
+def _latest_succeeded_step_ids(
+    steps: Sequence[Mapping[str, Any]],
+    previous_results: Mapping[str, Mapping[str, Any]],
+) -> set[str]:
+    """Plan order is cleanup, then deploy, then apply.
+
+    An earlier inverse step's after is historical once a later step for the
+    same resource has succeeded. Only that latest succeeded step is current.
+    """
+    latest: dict[str, str] = {}
+    for step in steps:
+        old = previous_results.get(step["step_id"])
+        if old is not None and old["status"] == "succeeded":
+            latest[step["resource_id"]] = step["step_id"]
+    return set(latest.values())
+
+
 def apply_recovery(
     plan_path: Path,
     *,
@@ -565,6 +582,7 @@ def apply_recovery(
         previous=stage_documents.get("apply_receipt"),
         deployment=stage_documents.get("deployment_evidence"),
         cleanup=stage_documents.get("cleanup_receipt"),
+        recovery=previous,
     )
     stage_results = {
         "apply": _result_index(stage_documents.get("apply_receipt")),
@@ -589,9 +607,15 @@ def apply_recovery(
     results: dict[str, Mapping[str, Any]] = {
         step_id: dict(result) for step_id, result in previous_results.items()
     }
+    latest_succeeded = _latest_succeeded_step_ids(
+        plan["payload"]["steps"], previous_results
+    )
+
     for step in plan["payload"]["steps"]:
         old = previous_results.get(step["step_id"])
         if old is not None and old["status"] == "succeeded":
+            if step["step_id"] not in latest_succeeded:
+                continue
             if (
                 old["after"] is None
                 or snapshot(Path(operations[step["resource_id"]]["target"]))

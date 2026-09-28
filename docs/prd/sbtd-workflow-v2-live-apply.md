@@ -3,22 +3,23 @@
 ## 1. 授权与边界
 
 - 任务：P2-03。唯一状态事实源为主 PRD §14。
-- 开发起点：`main` `f922991c5aef75c08e05494f9bef94b847516711`；任务分支 `p2-03-live-apply`。
+- 开发起点：`main` `f922991c5aef75c08e05494f9bef94b847516711`；最初任务分支 `p2-03-live-apply`。当前续作分支 `p2-03-successor-blocked`，执行模式由用户明确选择 `default`；不是重新启动 live 迁移。
 - 观察时刻 `2026-09-24T23:05:27+0800` 是建立本分支时的 date 返回，不是用户消息发生时钟。
 - 用户原文：「在新的任务分支下，启动 P2-03。范围仍是冻结协议的 demo／main、Codex+OMP，源仓不纳入。这是维护窗口，授权对 live 批次做数据迁移和旧路由停用。不部署新接线，不 smoke，不 cleanup，不删备份，不 sync，不改 hooks。隔离现场继续保留。」
 - 该原文授权的是 live `demo` 项目的数据迁移和旧路由停用。它不授权部署、smoke、cleanup、备份销毁、sync、hooks 修改，也不授权改写隔离现场。
-- 640-skills 不纳入。共享 live HOME 不是正式切换目标。全局卸载仍 not-allowed。`--graft-hooks` 不使用。
-- 现有批准文件绑定隔离副本，不能拿来对 live 项目 apply，也不能拿来改隔离现场。
+- 640-skills 不纳入。P2-01 原共享 HOME 不写政策后来仅对三份按 SHA 批准的路由作出覆盖决定，实际写入见第 3 节；不扩大为共享 HOME／Skill 根的部署授权。全局卸载仍 not-allowed，`--graft-hooks` 不使用。
+- 隔离批次批准不能套用到 live；本批已有绑定 live 的批准、manifest 与真实回执，禁止重封或改写。当前整改只读 live，在新隔离现场验证，不修改 P2-02 保留现场。
+- 本轮用户采纳分层验收整改方案，当前有效合同为主 PRD §15.2／AC-18 与 D-IMP-15：保留受管数据／配置恢复保证，不承诺旧 Trellis 可写回退。旧审查 blocked 与旧证据缺失仍按历史保存。
 
 ## 2. Book Gate Plan
 
 | Gate | 判定 | 状态 |
 |---|---|---|
-| DDIA | required；本项是 live 数据迁移，写入前必须确认事实源和失败路径 | passed |
-| Legacy safety | 本轮不改生产迁移代码；live 写入尚未发生 | not-required |
+| DDIA | required；本轮只读 live，隔离生产者生成真实回执，原件与批准保持绑定；设计确认不代表验证通过 | passed |
+| Legacy safety | 本轮先不改生产实现；既有 live apply 已发生，历史证据不重标 | not-required |
 | DDD | 无新领域术语 | not-required |
 | Refactoring | 不改生产实现 | not-required |
-| Release readiness | required；live apply 是 migration／runtime 运维行为变更。适用验证完成前不得运行 reviewer，也不得把本启动写成 ready。P2-03 标 done 前必须有独立 `Release Readiness Review`。重开审查为 blocked。备份保留不等于可执行恢复：`plan_recovery`／`apply_recovery` 对旧密封 manifest 也会先报 `version-conflict`。不能标 done | blocked |
+| Release readiness | required。原关闭尝试审查 blocked 保留；用户已批准修订有效合同，须完成主 PRD §15.2 的 C1–C6、独立证据复核和 PR 收口，不能用文档修订直接改为 ready | blocked |
 | grill-with-docs | 未完整调用。沿用已冻结范围和用户本句，不新增领域边界 | not-required |
 
 ```text
@@ -68,22 +69,33 @@ Required tests: 本文件和台账不含目标绝对路径；P2-04 仍 planned�
 - `2026-09-26T21:21:19+08:00` 任务 PR #76 已合并，未标 done。观察时刻，不是用户消息发生时钟。用户原文「CI运行完毕了，都成功了。请继续下一步」。任务 PR #76 已于 GitHub `2026-09-26T13:16:43Z` 合并，merge `bf3af67a28162335eb2e0121e133e6469f613191`。合并前 head `4726245c687a9a0f3d2c9106cd05a0db24de307d` 的 linux-full、macos-bash-installer、windows-powershell-installer 均为 SUCCESS。Codex 对 `bb9c4ec` 留了两条 P2 建议，不是批准；合并使用已授权的 `--admin`。这两条建议未修。不标 done。本次 live 批次的 AC-18 仍未修复。不重封 manifest，不放松版本门。不 cleanup，不部署，不启动 P2-04。P2-03 仍 in-progress。
 - `2026-09-26T21:51:32+0800` 重开的只读 Release Readiness Review 为 blocked。观察时刻，不是用户消息发生时钟。用户原文「重开审查，不标 done」。审查不是 apply 作者自证。`apply_migration` 在 `_retry_block` 之前调用 `_validate_context`；`manifest.payload.tool_versions` 不等于当前 `runtime_versions()` 即 `version-conflict`。`runtime_versions()` 摘要包含 `scripts/sbtd_migration.py` 与 `assets/routing-approval.pub`。`ApprovedRoutingReplacementTests.test_receipt_retry_skips_an_applied_routing_replacement` mock 了同版本 `runtime_versions`，只证明临时目录行为，不证明本次已密封 live manifest。AC-18 的 partial receipt 重试是 required check，不能改写成 residual risk。`plan_recovery` 与 `apply_recovery` 也调用 `_validate_context`。`plan_recovery` 只把 `state-conflict` 收成 blocked plan，`version-conflict` 会直接抛出，得不到恢复计划。`apply_recovery` 同样先过版本门。备份保留不等于本次已密封 manifest 的可执行恢复。该限制同样是 required check，不能改写成 residual risk。因此不能关闭 P2-03。不重封 manifest，不放松版本门，不复跑 live apply，也不把备份保留写成可执行恢复。不 cleanup，不部署，不启动 P2-04，不标 done。完成时间保持 —。
 - `2026-09-26T22:39:57+0800` 只读后继 plan 被批准前态挡住。观察时刻，不是用户消息发生时钟。用户原文「计划走你说的“能通过规则的关闭形状只有一个新的、版本一致的证据链”，请实施」。未完整调用 grill-with-docs：用户已明确选择先前说出的关闭形状，没有新的领域边界。用当前代码、同一项目、同一 vault、同一 publication decisions 和同一 routing approval 跑 migration plan，不传私钥，不写 live。退出码 2，status blocked，reason 为 `a routing target no longer matches its approval`。Codex、OMP、demo 三份 live 路由都等于已批 candidate，不等于 approval before。无批准 plan 也不能绑定当前 live：它既不是 ownership pin，也不是当前模板。未制造新批准，未签名，未 apply，未恢复 live，未标 done。P2-03 仍 in-progress。
+- `2026-09-27T15:56:33+0800` 恢复续作按绑定回执的最新状态判断。观察时刻，不是用户消息发生时钟。上一会话建议先修恢复续作，不执行 108 步 live 回滚，不标 done。本轮只改这个校验：已成功的逆向步骤按恢复回执最新 `after` 判断，未动过的资源仍必须等于 apply `after`。临时目录红测先复现 `lineage-conflict`，修复后续作退出码 0。未列出后继和坏签名仍是 `version-conflict`。配对已用内存密钥重签，后继为 `runtime-sha256:74de3e3c7a5821fe7390b5db82e73b75b9edf9bb47775383e233b0dde640b20e`。未执行 live 回滚，未重开审查，不标 done。P2-03 仍 in-progress。
+- `2026-09-27T16:41:20+0800` 同一资源的多相位逆向续作只看最后一次成功状态。观察时刻，不是用户消息发生时钟。顾问指出续作预检会把更早的成功 `after` 当成当前文件。当前计划器不会发出这种步骤，契约允许。预检已收窄。真实 `apply_recovery` 对两步累计回执返回 `already-complete`，文件未改。`sbtd_recovery.py` 在指纹内，配对再次重签，后继为 `runtime-sha256:1f645a3abefc1279d4e1937d5f847feed41c57cb50a8d04d45de0e5abe722bda`。未执行 live 回滚，不标 done。P2-03 仍 in-progress。
+- `2026-09-27T17:32:39+0800` 多相位续作补了合法绑定证据，不把 mock 绿测当成闭环。观察时刻，不是用户消息发生时钟。只 mock 加载和绑定门的测试仍只证明预检选择。新测试用批准路由替换加 `init-projects` 生成同一 `AGENTS.md` 的 apply 与 deploy，再经真实 `plan_recovery` 和两次 `apply_recovery`。续作是 `already-complete`，文件未改。未执行 live 回滚，不标 done。P2-03 仍 in-progress。
+- `2026-09-27T18:15:26+0800` 独立审查 blocked，旧运行时写探针停止。观察时刻，不是用户消息发生时钟。可审查提交 `bb8eb0b3fe68e151c1dea6aec285ff294f321116`。独立 Release Readiness Review 为 blocked。未执行 live recovery apply 不是关闭条件。旧运行时可写证据仍 blocked：全局规则禁止初始化或调用已退役 Trellis 运行时。本轮在收到阻断前已经执行过 `trellis --version` 和 `trellis --help`，没有执行 `init` 或其他写命令。随后停止。安装元数据只读见到 `@mindfoldhq/trellis` `0.6.17`。隔离副本和 live 未改。不把这次调用写成可写证据。P2-03 仍 in-progress。
+- `2026-09-27T18:29:41+0800` 不把缺证据改成完成。观察时刻，不是用户消息发生时钟。用户要完成 P2-03。整体评估后两项 required check 不能在现行规则下变成 pass：旧 Trellis 写操作不能再调用；密封 live 批次没有原始 partial apply receipt，补造只会在写前被拒绝，不是正向证明。不改 AC-18，不标 done，不跑 108 步回滚。P2-03 仍 in-progress。
+- `2026-09-27T19:15:12+0800` 新关闭合同已写入，尚未审查。观察时刻，不是用户消息发生时钟。用户选择合法路径并要求落地。主 PRD §15.2 是新合同。原 AC-18 两项仍未满足，不涂成通过。独立审查写成 ready 之前不标 done。P2-03 仍 in-progress。
+- `2026-09-27T19:20:54+0800` 新关闭合同审查 blocked。观察时刻，不是用户消息发生时钟。两份独立审查都判定主 PRD §15.2 是非法 waiver，不是新范围。第 14.5 节仍把 P2-03 绑在 AC-18 上。不标 done。P2-03 仍 in-progress。
+- `2026-09-27T19:39:44+0800` 另立 P2-06，不关闭 P2-03。观察时刻，不是用户消息发生时钟。用户要求先评估 advisor，再另立不声称 AC-18 已通过的新任务。advisor 成立，不把 blocked 改成通过。P2-06 只登记已执行事实。P2-03 仍 in-progress。P2-04 仍 planned。
+- `2026-09-27T20:47:29+08:00` 用户采纳整改方案并选择 default。观察时刻，不是用户消息发生时钟。有效 AC-18 与关闭合同同步修订，旧运行时可写保证明确撤回但不声称旧检查通过。C1–C6 仍 required，当前未完成本轮验证或独立审查；不改 live，不执行 108 步回滚，不调用 Trellis，不启动 P2-04。P2-06 保留事实登记，不替代 P2-03。
 
 ## 4. 明确不做
 
 - 不把隔离副本的批准、manifest 或回执套到 live。
-- 不改隔离现场，不删备份，不 cleanup，不 sync，不改 hooks，不部署，不 smoke。
+- 不改 P2-02 保留现场；仅本轮新建的私有隔离现场允许验证写入。不删备份，不 cleanup，不 sync，不改 hooks，不部署 live，不做 host smoke。
 - 不把本启动写成 done。完成时间留到 live apply 回执和任务 PR 之后的状态 PR。
 - 不启动 P2-04。
 - 不得单独回滚 `2bb2089`。它的父提交 `2e5e42c` 只检查最后一级。成对撤回这两笔才会回到整树扫描，撤回后必须复验。
 
-## 5. 继续前必须另有的事实
+## 5. apply 前的历史前置条件（后续事实见第 3 节）
 
 1. live `demo` 的批准投影必须绑定 live 原件，而不是隔离副本。缺批准时保持 blocked。
 2. 批准不得要求改 hooks、删备份、cleanup，或写入隔离现场。
 3. 只有新的 live plan 为 `planned` 并生成 manifest 后，才可以按本授权 apply。该 apply 仍不部署、不 smoke。
 4. 归档 redact 候选已经用户书面批准，并写入私有批准文件。它仍不是 apply 授权；plan 尚未 `planned`。
 5. 三份暂停候选已按 checksum 书面批准，但都未写入 live。第 6 节已补契约缺口和失败路径。实现范围不是只改计划器。该设计尚未被接受为实现授权。接受前不改 schema、计划器、apply 或 verify，不写 live。
+
+以上记录 apply 前的门禁，不要求已经成功的批次重新 plan/apply。当前继续与关闭仅按主 PRD §15.2；不得用本节历史授权触发新 live 写入。
 
 ## 6. 已批路由候选的复制与回读设计
 
@@ -132,3 +144,37 @@ verify 再读 live 目标。当前快照必须等于回执 `after`，也必须�
 
 已测的是临时目录里的 Codex 全局、OMP 全局和 demo 项目目标：写入候选全文、错误路径或批外目标被拒、重封装不写 live、候选漂移失败。没有真实家目录的 planned manifest，也没有 apply 确认。不得把这次工作树实现当成 live 路由已停用。
 
+## 7. 分层验收执行证据（待独立就绪裁决）
+
+观察时刻 `2026-09-27T22:12:58+0800`。第 6 节末尾“没有真实 manifest／apply 确认”属于当时实现期记录，不覆盖第 3 节后来发生的 live apply。当前合同为主 PRD §15.2。
+
+验证候选为 clean `5eee55ea04ac166ed5e27f5cedb69249ad3a0b68`；绝对解释器、Python patch 与依赖版本均记录在私有报告。实际运行指纹 `runtime-sha256:1f645a3abefc1279d4e1937d5f847feed41c57cb50a8d04d45de0e5abe722bda` 等于已签名后继，前驱仍绑定原 live manifest。未安装依赖、未重签、未改生产实现。
+
+| 验收 | 实际结果 | 证据与限制 |
+|---|---|---|
+| C1 | 108 个 apply 结果当前 after／备份匹配，一个完整来源目录备份核验，三份批准路由一致 | 私有 live-audit r3 原生 JSON 与 before/after；全量只读，不是重新 apply |
+| C2 | 原 apply 与 already-complete 回执通过绑定／累计校验，资源结果相等；历史原生 toolResult `b497ee08` 记录 live_changed 0 | 该历史输出与来源已保全，不重标为当前提交运行，不再次执行 live retry |
+| C3 | 真实 plan→os.link 故障→生产者 partial 回执→重试→already-complete，44 条断言通过；已成功目标内容／inode／mtime和写调用观察未变 | 新隔离报告 A，当前实际指纹；没有绑定／版本／累计／签名校验替身 |
+| C4 | 真实恢复→依赖级故障→partial recovery 回执→续作→already-complete，60 条断言通过；两个项目共享路由实际只有一个共享结果、一个逆向步骤、一次目标恢复，重试不改目标 | 新隔离报告 B 与 shared-proof。共享安装副本只替换独立合成公钥，其余文件逐字等于候选 archive；实际签名／验签，不读取真实私钥，不称为生产信任根实测 |
+| C4 多相位 | 合法绑定的同资源 deploy→apply 逆向完成后，再次恢复为 already-complete；实际隔离 manifest／回执已保留 | `test_bound_multi_phase_continuation_uses_real_recovery_gates` 通过；有合成公钥提供者及 graph/smoke 依赖替身，恢复绑定／上下文／累计校验真实执行，不称为 host/full-stack |
+| C5 | 当前只读 recovery plan 为 planned、无冲突；109 个声明资源完整闭包、108 个实际逆向步骤；核验前后受管状态相等 | 一个额外声明资源是未执行的 cleanup 资源。只读计划不证明未来 live 写权限／容量或每步执行，不运行 108 步 live 回滚 |
+| C6 | 隔离漂移／未知写入／不安全重试拒绝的44条断言通过；坏签名、未列出后继、缺完整证据负例通过；连同多相位共4项无跳过 | 未知写入为明确标注的合成拒绝输入，不冒充真实历史故障；正向 partial 回执由生产者实际生成 |
+| 原生 CLI | 新隔离 onboard.py migration plan/apply/完整重试与 recovery plan/apply/完整重试全部退出0，27条断言通过，目标最终恢复原态 | 报告 E；子进程不重写由快照证明，不声称父进程观察了子进程内部调用 |
+
+精确候选全量命令：`python -B -m unittest discover -s tests -p 'test_*.py'`，1160 tests／1781.605s／OK（8 skipped），运行前后源码状态一致；四项补充边界另有原生输出及同 stem 中文汇总。8项skip不算对应平台／host通过。RTK `skipped-for-report`；本仓库不建 `.feature`，场景沿主 PRD C1–C6，证据映射如上。
+
+失败记录全部保留：普通 python3 缺 tomlkit，改用历史绝对解释器后指纹匹配；live首轮300s timeout不计通过；r2校验脚本把109个声明资源误要求为108，改为完整集合与实际逆向集合断言后r3通过；隔离首轮外围写保护误拒自己的fdopen，改为用macOS F_GETPATH验证描述符位于隔离根，完整重跑通过。这些修正未改生产实现。
+
+主隔离脚本的可选D“用生产公钥对应私钥重签合成批准”保持not-run，不读取真实私钥；所需覆盖分别由C1真实安装公钥批准验证及C4合成信任根共享恢复提供，不称D通过。runtime_readiness始终not-verified；旧可写检查与缺失live partial历史不改成通过。
+
+合同复审ready-for-validation，源代码独立安全复核无P0/P1；本节不是最终Release Readiness ready或done。原始路径、快照、回执、raw+同stem中文报告及checksum清单仅保存在本轮私有证据目录。任务PR／状态PR与P2-04授权尚未闭环。
+
+## 8. 独立就绪审查发现的阶段血统修复
+
+针对 `5eee55e` 的独立审查确认第7节 C1–C6 证据通过，但总体 needs-mitigation：签名例外面向整个前驱运行时，不只本次无部署的 live manifest；合法部署写入 apply／deploy 重叠资源后，旧血统检查仍要求 apply after，阻断部署重试及恢复。早先“代码无P0/P1”的裁决已由安全审查撤回，不把本次发现转成非阻塞风险。
+
+回归先复现 predecessor 重叠部署在 `load_deployment_context` 报 lineage-conflict，同运行时对照通过。最小修复把调用者已经绑定的 deployment／cleanup 传入血统检查，按已知最新正向后态再覆盖已成功逆向状态；完整成功 apply、签名配对、未知状态、普通部分写入重试和恢复备份门保持。真实写后故障的部署仍拒绝普通重试，但可凭完整已知前后态及备份恢复；缺失阶段、漂移、错误 apply 绑定、未知后态和缺失／损坏备份负例通过。
+
+生产实现指纹已变化，原第7节 `5eee55e`／`1f645a3a…` 的证据仅属该历史候选，不能直接冒充修复后通过。使用仅驻内存的独立密钥重签，前驱不变，新后继为 `runtime-sha256:0ba72e4ebaf84578c7bf83233d847a3874065be3a8ebc9ed951b9a13b1f319be`；未读取路由批准私钥，未执行live写入。当前待修复后完整复验、独立复审和两层PR收口。
+
+修复候选 `b0c36e4` 的本地精确全量为1162 tests／396.669s／OK（8 skipped），受影响169项／89.801s／OK；新指纹下live只读全量、新隔离producer/CLI、共享恢复与4项绑定边界复验通过。首次PR #80 CI（run `36327598712`）macOS／Windows jobs通过，Linux失败：两条旧测试把本机运维配对硬套到Python3.12 CI。失败记录保留；删除源码字符串／固定环境偶然断言，前驱恢复改用独立签名夹具，仍真实校验当前解释器指纹、签名和恢复链，不改生产版本门。测试修订后的精确CI与最终审查仍待完成，不能用上述本地绿测替代。

@@ -24,7 +24,11 @@
 ### 修复
 - 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。路径上每一级，包括父目录，都按 no-follow 拒绝符号链接；子目录里的无关符号链接不再阻断存在性检查。根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
 - 迁移 apply 的路由批准只认调用方传入的 `--routing-approvals` 文件，不认重封 manifest 里的路径。该文件 SHA 必须等于 sealed 记录，操作从这份文件重建；路径也不能落在 evidence/apply 写入根里。没有这份文件时，必须显式传 `--no-routing-approvals`，并且不得对 `AGENTS.md` 追加暂停块或删除管理块。批准文件还必须带安装包 `assets/routing-approval.pub` 验得过的 Ed25519 签名。公钥不从 manifest 或调用方路径读取。调用方把批准路径指到攻击者文件时，签名对不上就拒绝。plan 只有显式 `--routing-approval-key` 才签名，且私钥路径不进 manifest。仓库不保存对应私钥。未写 live。
-- 同一实现生成的迁移 apply，带回执重试时不再先用 live 当前字节对照批准前快照。已成功且 live 仍等于回执 `after` 的路由替换会跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。已经密封的旧 manifest 仍会先因 `runtime_versions` 不一致报 `version-conflict`，到不了这个重试门。
+- 同一实现生成的迁移 apply，带回执重试时不再先用 live 当前字节对照批准前快照。已成功且 live 仍等于回执 `after` 的路由替换会跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。旧 manifest 默认仍因 `runtime_versions` 不一致报 `version-conflict`。只有签名配对里的前驱，且当前 `onboard` 哈希等于该配对的后继，并传入完整成功回执、live 仍等于回执 `after`、非空备份仍匹配时，版本门才放行。配对文件不进运行时指纹，验签公钥 `assets/runtime-lineage.pub` 进入指纹。未列出的后继、坏签名、部分回执或漂移不放行。不使用路由批准私钥。
+- 签名血统下的恢复续作不再在看恢复回执之前要求每个目标仍等于 apply 回执 `after`。已完成逆向步骤按绑定恢复回执的最新成功状态判断；未恢复资源按已绑定的最新正向阶段后态核对，没有后续阶段时才使用 apply `after`。未列出后继和坏签名仍拒绝。配对用内存独立密钥重签，私钥不落盘，不读取路由批准私钥；不授权 live 回滚。
+- 同一资源的 cleanup、deploy、apply 逆向步骤都成功后，续作不再拿每个历史 `after` 去比当前文件。只校验计划顺序里该资源最后一次已成功步骤的当前态。更早的成功 `after` 只是中间态。只 mock 文档加载和绑定门的测试只证明预检选择，不是完整证据链。批准路由替换加 `init-projects` 部署会让同一 `AGENTS.md` 资源同时有 apply 和 deploy。该链经真实 plan、apply、部署证据、`plan_recovery` 和两次 `apply_recovery`，不 mock 绑定、上下文或累计校验；续作是 `already-complete`，文件未改。未执行 live 回滚，不标 done。
+- 修复签名前驱 manifest 的 apply／deploy 同资源链在部署后被早先 apply 后态错误阻断的问题。上下文先验证阶段绑定，再按 apply→deploy→cleanup 的已知实际后态及成功逆向状态判断；未知状态不回退。失败但已知变更的部署仍禁止普通续写，只能在保留备份和明确恢复计划下逆向恢复。缺失阶段、错误 apply 绑定、漂移、未知后态或损坏／缺失备份仍拒绝；新增前驱重叠部署与真实写后故障恢复回归。
+- 迁移血统回归不再把本机运维配对误当所有 CI 解释器的固定指纹：删除源码字符串／固定前驱／本机后继相等的偶然实现断言，前驱恢复场景使用独立签名夹具绑定执行环境的实际指纹。真实安装配对仍由授权环境只读核验，生产版本门不放宽，不以跳过测试处理跨平台差异。
 - 迁移 plan 不再把 `.trellis` 下被 Git 忽略、且不在已知布局里的杂项当成未分类阻断。这些文件仍留在目录快照里，后续整目录 cleanup 会一起删掉。`tasks`、`spec`、`lessons` 即使被 ignore，也仍要走批准，避免漏掉被忽略的 `task.json`。未被忽略的未知文件会汇总后停下，不自动删除。
 
 - 将完整 findings 台账归档为 `docs/archive/sbtd-workflow-v2-findings.md` 的问题／状态表和完整字段表：保留 199 项问题、22 条策略与审查记录、全部原级别与历史；用户确认的 16 项闭环后为 195 fixed、4 dismissed，移除旧 `findings.log` 并更新文档入口。
@@ -57,6 +61,7 @@
 - P1-19同步实际入口文档：README两份入口、Onboard `SKILL.md`／`REFERENCE.md`与bundled `lessons-record`的`SKILL.md`／`references/identity-migration.md`记录`DeveloperStore`只读链／plan／ensure与显式`--developer`入口的真实边界；版本化automation prompt把`sbtd_identity.py`纳入只读评估范围，不同步live automation或真实HOME。
 - P1-11同步README两份入口、Onboard `SKILL.md`／`REFERENCE.md`、版本化automation prompt与CHANGELOG：当前主线改为`Codex / OMP + sbtd-task + Graft + Chrome DevTools MCP + Playwright + Maestro`，版本检查专用规则从Trellis监控改为Graft固定pin/source、native lifecycle、telemetry、MCP/hooks与平台接线核验；REFERENCE补充备份保留／人工授权销毁规程与恢复可用／证据不足边界，明确cleanup、恢复成功、任务完成均不删除备份，pre-manifest终止分支删除前须先保存并回读custodian、候选归属、精确范围、本次独立授权和实际确认时间，缺任一项或保存/回读失败均blocked、零删除、不得done。旧Trellis／GitNexus仅保留迁移与历史边界，不同步live automation或真实HOME。
 - P1-12同步README两份入口、Onboard使用说明、身份迁移指针及版本化automation只读范围；明确私有子对象文件输入、同一apply批次内累计报告时间窗、已证明不存在的退役资源不属于保留资产，以及不改原生报告schema的无分支ref表示。声明tomlkit依赖及已安装副本的准备边界；不触碰真实HOME或live automation。
+- P2-03 同步 README 两份入口、Onboard `REFERENCE.md` 与版本化 automation prompt 的恢复保证边界：恢复成功只表示绑定范围内受管数据／配置按回执 reconcile，不承诺已退役 Trellis 运行时可执行或可写，不调用、重装或恢复旧运行时，旧运行时 `runtime_readiness` 保持未验证；同一运行时部分回执重试与签名前驱—后继配对加完整成功回执的前驱接受是两条不同路径；live 回执证明实际状态，故障／部分重试／恢复续作由独立隔离测试分别证明，二者互不替代，文档不声称新证明已通过；部署接受前维护不自动结束，备份保留不变。不同步 live automation 或真实 HOME。
 
 ### 变更
 
