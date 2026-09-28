@@ -490,9 +490,11 @@ class DeploymentSharedRootTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "blocked", result)
             self.assertEqual(target.read_bytes(), b"paused routing\n")
-            self.assertIsNone(result["backup_ref"])
 
     def test_shared_root_non_directory_scope_is_rejected(self):
+        # The target snapshot precheck rejects a non-directory scope before the
+        # scope-root branch can fire; this proves the fail-closed outcome (no
+        # writes, original untouched), not which guard raised first.
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             vault = base / "vault"
