@@ -1,6 +1,6 @@
 # SBTD Workflow v2：后继部署批次（P1-21）实施与验证
 
-> 状态：设计已确认，实施进行中。本文只记录已执行事实；验证证据在完成前不预填。
+> 状态：已完成（任务 PR #84／状态 PR #85 已合并，台账见主 PRD §14.4）；P2-04 已于 2026-09-28T17:53:40+08:00 在新任务分支 `p2-04-successor-deploy` 以 successor 批次重做（主 PRD §14.5／§18.3）。本文只记录已执行事实；验证证据在完成前不预填。
 
 ## 1. 背景与设计缺口
 
@@ -123,4 +123,4 @@ successor manifest + 其 apply receipt + deployment evidence + verification + cl
 
 ## 6. 任务合并与状态
 
-任务 [PR #84](https://github.com/KunoLu/640-skills/pull/84) 于 2026-09-28 经三平台 CI（run 36398200879）全绿后合并，merge `98a6071e94341a7663d53c1707f36a59b47815f2`，合并树等于验证 head `b193930771bb0e862a1e4466324e01cb2d5a3eaa`；main 与 origin/main 一致，任务分支本地/远端已清理。合并前曾发生一次操作失误：非 admin 合并被分支保护拒绝后误删任务分支，随即从对象库恢复同一 head 重推、PR 重开后完成合并，内容与验证 head 未变。独立状态 PR 登记台账与本节；P2-04 保持 blocked/planned，待其任务窗口以 successor 批次重做，本项完成不授权 live 部署、sync、cleanup 或删备份。
+任务 [PR #84](https://github.com/KunoLu/640-skills/pull/84) 于 2026-09-28 经三平台 CI（run 36398200879）全绿后合并，merge `98a6071e94341a7663d53c1707f36a59b47815f2`，合并树等于验证 head `b193930771bb0e862a1e4466324e01cb2d5a3eaa`；main 与 origin/main 一致，任务分支本地/远端已清理。合并前曾发生一次操作失误：非 admin 合并被分支保护拒绝后误删任务分支，随即从对象库恢复同一 head 重推、PR 重开后完成合并，内容与验证 head 未变。独立状态 [PR #85](https://github.com/KunoLu/640-skills/pull/85) 登记台账与本节（merge `cc7d113`，CI run 36399588254 全绿）；当时 P2-04 保持 blocked/planned，本项完成不授权 live 部署、sync、cleanup 或删备份。补记（2026-09-28T17:53:40+08:00）：状态 PR 仅更新本节，主 PRD §14.4 台账行当时漏同步，已随 P2-04 启动补记为 done；同日用户明确指示开始 P2-04，已从 main `1cab440` 建新任务分支 `p2-04-successor-deploy` 以 successor 批次重做（主 PRD §14.5／§18.3）。
