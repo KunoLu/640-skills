@@ -110,12 +110,16 @@ successor manifest + 其 apply receipt + deployment evidence + verification + cl
 - 定点回归：迁移／部署／参数 10 个既有测试文件 192 passed、41 subtests passed（venv）。
 - 全量：`/Users/lusonglin/TEMP/sbtd-v2-p1-21-venv/bin/python -m pytest tests/ -q -p no:cacheprovider` → 1160 passed, 8 skipped（既有平台 skip）, 806 subtests passed, 399.75s。
 - `ruff check` 全部改动文件：All checks passed。
+- 终审后全量（`f9041b3`）：1172 passed, 8 skipped（既有平台 skip）, 815 subtests passed, 378.44s。报告对：`tests/unit/reports/unit-report-final-reviewed-p1-21-successor-deploy-batch-2026_09_28-16_30_09.{json,md}`（加固前 1160 与中途 1171 两份历史报告对保留）。
 
 未执行：真实部署执行、live successor 批次（归 P2-04 重做）、verify/cleanup 的 live 链、Windows 原生、sync/live automation。
 
 ## 5. Review 与 findings
 
-（待独立只读审查后填写。）
+- 代码审查（reviewer，首轮 `fa83e37`）：1 P0（嵌入结果未对照真实前批回执）+ 3 P1（shared cleanup 闭包、计划后漂移漏检、合法前批可生成不可执行计划）+ 2 P2（retention 未继承、CLI 空值静默），全部经 `d9c1832` 修复并附回归测试。
+- 安全审查（security-reviewer，加固后工作树）：NO P0/P1 REMAINING；2 P2（carry_cleanup 非具体态 KeyError 信封逃逸、fail-closed 分支测试缺口）经 `d9c1832`/`f9041b3` 修复；1 P2 文档漂移已同步；1 informational 信任边界已写入 §2.6 与主 PRD §10.2.4。
+- 代码审查复审（`d9c1832`）：1 残留 P1（消费侧未锁 backup_root/custodian/retention 等继承字段），经 `f9041b3` 修复并附 4 个重封负例 subtests；非空 publication 变体由 schema 先行拒绝，语义分支为纵深防御，裁决接受、不构成延期发现。
+- 终审（`f9041b3`）：**NO P0/P1/P2 REMAINING**。无延期 P2/P3 入 findings 归档。
 
 ## 6. 任务合并与状态
 
