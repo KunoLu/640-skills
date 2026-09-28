@@ -1129,6 +1129,8 @@
       "required": [
         "manifest_id",
         "apply_id",
+        "manifest_ref",
+        "apply_receipt_ref",
         "apply_results"
       ],
       "properties": {
@@ -1137,6 +1139,12 @@
         },
         "apply_id": {
           "$ref": "#/$defs/digest"
+        },
+        "manifest_ref": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "apply_receipt_ref": {
+          "$ref": "#/$defs/object_ref"
         },
         "apply_results": {
           "type": "array",

@@ -452,17 +452,20 @@ def validate_migration_args(
         parser.error(
             "--routing-approvals cannot be combined with --no-routing-approvals"
         )
-    if args.phase == "plan" and (
-        getattr(args, "successor_manifest", None)
-        or getattr(args, "successor_apply_receipt", None)
-    ):
-        if not (
-            getattr(args, "successor_manifest", None)
-            and getattr(args, "successor_apply_receipt", None)
+    successor_seen = (
+        getattr(args, "successor_manifest", None) is not None
+        or getattr(args, "successor_apply_receipt", None) is not None
+    )
+    if args.phase == "plan" and successor_seen:
+        if (
+            getattr(args, "successor_manifest", None) is None
+            or getattr(args, "successor_apply_receipt", None) is None
         ):
             parser.error(
                 "--successor-manifest and --successor-apply-receipt must be supplied as a pair"
             )
+        if not args.successor_manifest.strip() or not args.successor_apply_receipt.strip():
+            parser.error("successor input paths must be nonempty")
         if getattr(args, "publication_decisions", None):
             parser.error(
                 "--successor-manifest cannot be combined with --publication-decisions"

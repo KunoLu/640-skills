@@ -1752,12 +1752,12 @@ def run_migration(args: Any) -> int:
                 ),
                 successor_manifest=(
                     _argument_path(args.successor_manifest)
-                    if getattr(args, "successor_manifest", None)
+                    if getattr(args, "successor_manifest", None) is not None
                     else None
                 ),
                 successor_apply_receipt=(
                     _argument_path(args.successor_apply_receipt)
-                    if getattr(args, "successor_apply_receipt", None)
+                    if getattr(args, "successor_apply_receipt", None) is not None
                     else None
                 ),
             )

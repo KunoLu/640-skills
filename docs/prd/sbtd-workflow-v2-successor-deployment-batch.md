@@ -52,6 +52,7 @@ onboard.py migration --phase plan --projects-root <roots> --backup-root <same-va
 |---|---|
 | `manifest_id` / `apply_id` | 前批 manifest 与完整成功 apply receipt 的 ID；plan 时已对真实文件验证 |
 | `apply_results` | 前批 apply 全部资源结果（私有 + 共享 `resource_result` 数组合并）；每项 status 为 succeeded 且 after 非 null；经本 manifest 哈希绑定 |
+| `manifest_ref` / `apply_receipt_ref` | 前批 manifest 与 receipt 文件的 object_ref（规范化路径 + 内容哈希）；整条后继链期间这两个文件不得移动或改写，否则 state-conflict |
 
 - `projects[]`：root/platforms/sources 继承前批（sources 状态必须等于当前实测，否则按 §2.3-4 blocked）；`private_operations` 仅含前批 legacy cleanup 操作原样承接 + 部署附加操作。
 - `shared_operations`：前批未完成 cleanup（Skills 退役）原样承接 + 部署共享操作；`shared_roots` 覆盖承接与部署目标。
@@ -63,6 +64,9 @@ onboard.py migration --phase plan --projects-root <roots> --backup-root <same-va
 ### 2.5 消费侧行为
 
 - **解析叠层**：deploy/verify/cleanup/recovery 中 `phase-after` 期望值的计算，对含 successor 绑定的 manifest 使用「嵌入前批结果 ∪ 本批 receipt 结果」叠层，本批结果优先；叠层只用于期望值计算，不进入结果枚举、状态绑定或备份重叠核对（嵌入结果的 backup_ref 由前批 receipt 链负责，不在本批重复核对）。
+- **消费侧前批复验**（`_verify_successor_predecessor`，apply/deploy/verify/cleanup 每次必经）：经 ref 的内容哈希重载真实前批文档并完整复验绑定与成功门；嵌入 `apply_results` 必须与真实 receipt 结果逐项相等（否则 binding-violation）；承接 cleanup 操作（逐项目私有 + 共享）必须与前批集合逐字节相等（否则 semantic-violation）；未被本批任何阶段操作覆盖的嵌入结果，其 `after` 必须在每次消费时仍等于当前实测（否则 state-conflict）。
+- **retention 继承**：后继 manifest 的 `retention` 逐字段继承前批，不恢复默认值。
+- **ignore 保护门**：successor plan 在 attach 后拒绝任何新增 apply 阶段操作——ignore 保护必须由前批建立；前批遗留未建立时 plan 以 successor-conflict blocked 并说明前置条件，不封存不可执行计划。
 - **apply（后继）**：无 apply 操作，标准流程产出空结果成功 receipt，并按本批 manifest_id 备份 sources，供后续 `_check_source_backups`。
 - **deploy**：`load_deployment_context` 以叠层解析 before 期望；绑定、授权闭环、漂移核对、证据原子保存不变。
 - **verify/cleanup**：承接的 cleanup 操作按既有语义验证与执行；`validate_declared_bindings` / `_bind_stage_states` 以同一叠层计算期望。
@@ -72,8 +76,9 @@ onboard.py migration --phase plan --projects-root <roots> --backup-root <same-va
 
 - 前批 receipt 非完整成功 / 前批 `deployment` 非 null / 前批含 successor 绑定 → blocked。
 - 任一前批 after 漂移、承接 cleanup 前态漂移 → blocked；不恢复前态、不伪造证据。
-- 篡改后继 manifest（删减 cleanup、新增操作、替换嵌入结果）→ ID 与闭合集校验拒绝。
+- 篡改后继 manifest（删减 cleanup、新增操作、替换嵌入结果）→ 复验门拒绝（binding-violation／semantic-violation）；承接 cleanup 的 before 非具体态（构造文档）→ semantic-violation（结构化信封，不裸 traceback）。
 - 无 successor 绑定的 manifest 行为完全不变（既有同资源、同 payload 校验）。
+- 信任边界：successor 链根与前批文档同为未签名私有文档，边界为私有目录权限与逐阶段实测；不声称抗整链伪造，与既有全部批次文档的信任模型一致。
 
 ### 2.7 证据链
 
@@ -90,7 +95,8 @@ successor manifest + 其 apply receipt + deployment evidence + verification + cl
 - `sbtd-workflow-onboard/scripts/sbtd_migration.py`：plan CLI 透传 successor 参数。
 - `sbtd-workflow-onboard/scripts/onboard_arguments.py`：plan 新增 `--successor-manifest`／`--successor-apply-receipt` 选项与成对／互斥／必填 `--deployment-mode` 校验。
 - 文档：主 PRD 2.8（§10.2.2、§10.2.4、§14.4 P1-21、§14.5 P2-04 依赖与 blocked 事实、§18.3 事件）；`REFERENCE.md` 迁移命令形状与 successor 段落；`README.md`／`README.html` 各一段；`CHANGELOG.md` v2.0.0（未发布）新增条目。install.sh/install.ps1 对 migration 为整参转发，无参数白名单，无需改动。
-- 测试：新增 `tests/test_sbtd_successor_batch.py`（7 项）。
+- 测试：新增 `tests/test_sbtd_successor_batch.py`（18 项）。
+- 独立审查加固（同分支后续提交）：`_verify_successor_predecessor`（ref 内容哈希重载真实前批、embedded==recorded、承接 cleanup 集合逐字节相等、未覆盖嵌入结果持续漂移核对）；`carry_cleanup` 非具体态 before 的结构化拒绝；retention 继承前批；attach 后 ignore 保护门；CLI 空值拒绝；successor 绑定新增 `manifest_ref`/`apply_receipt_ref` 必填字段。
 
 ## 4. 验证证据
 
@@ -100,6 +106,7 @@ successor manifest + 其 apply receipt + deployment evidence + verification + cl
   - 红：post-apply 以「before=当前态」的新批准重 plan，仍在 `_platform_operations` 被 ownership-conflict 阻断（钉住的 `.codex` 生成物已被前批合法删除），证实缺口存在。
   - 绿：successor plan 封存绑定 manifest（successor 绑定 ID、空 publication、null routing、仅一条 legacy cleanup、暂停路由目标为跨 manifest phase-after），`validate_legacy_inputs` 通过；successor apply 返回 applied（previous_receipt_id 为 null）并按本批 manifest_id 备份 sources；`load_deployment_context` 通过且暂停模板的期望前态等于当前实测（改动前此处为 missing-deployment-plan/binding-violation）。successor plan 前后 base 快照一致（零写入）。
   - 负面：非完整成功回执 → binding-violation；前批已含 deployment → successor-conflict；前批 after 漂移 → state-conflict；删 cleanup 重封 → semantic-violation；清空嵌入结果 → schema 拒绝；CLI 缺对／缺 deployment-mode／与 publication、routing 输入混用／用于 apply 阶段均被 argparse 拒绝。
+- 审查加固后复测：全文件 18 passed、6 subtests passed（重封嵌入结果 → binding-violation；丢 shared cleanup → semantic-violation；前批 after 再造漂移 → 每消费阶段 state-conflict；retention 继承；ignore 保护门；successor-of-successor；roots/vault/custodian 三门；承接 cleanup 漂移；非 canonical 输入；构造非具体态 cleanup → semantic-violation 而非 KeyError；重封夹带 pause → apply 锚 approval-conflict）。
 - 定点回归：迁移／部署／参数 10 个既有测试文件 192 passed、41 subtests passed（venv）。
 - 全量：`/Users/lusonglin/TEMP/sbtd-v2-p1-21-venv/bin/python -m pytest tests/ -q -p no:cacheprovider` → 1160 passed, 8 skipped（既有平台 skip）, 806 subtests passed, 399.75s。
 - `ruff check` 全部改动文件：All checks passed。

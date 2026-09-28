@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import base64
+import contextlib
+import copy
+import hashlib
 import json
 import os
 import sys
@@ -14,6 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import onboard_arguments
 import onboard_contracts as contracts
+import sbtd_migration_plan
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_graft_deployment import load_deployment_context
 from sbtd_migration import apply_migration
@@ -69,12 +73,12 @@ def _apply_environment(home):
     }
 
 
-def _completed_batch(base):
+def _completed_batch(base, pins=None):
     """Plan and apply one deployment-less batch with an approved replacement."""
     project = legacy_project(base, "project")
     home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
     for path in (home, vault, evidence):
-        path.mkdir(mode=0o700)
+        path.mkdir(mode=0o700, exist_ok=True)
     live = home / ".codex" / "AGENTS.md"
     live.parent.mkdir(parents=True)
     live.write_bytes(b"custom trellis routing\n")
@@ -103,7 +107,14 @@ def _completed_batch(base):
     )
     _sign_existing_approval(approval)
     environment = _apply_environment(home)
-    with mock.patch.dict(os.environ, environment):
+    pin_patch = (
+        mock.patch.object(
+            sbtd_migration_plan, "_ownership_pins", return_value=pins
+        )
+        if pins is not None
+        else contextlib.nullcontext()
+    )
+    with mock.patch.dict(os.environ, environment), pin_patch:
         manifest = plan_migration(
             [project],
             vault,
@@ -367,6 +378,415 @@ class SuccessorBatchTests(unittest.TestCase):
             document["payload"]["successor"]["apply_results"] = []
             with self.assertRaises(ContractError):
                 contracts.validate_document(document, "manifest")
+
+
+class SuccessorPredecessorVerificationTests(unittest.TestCase):
+    def test_resealed_embedded_results_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            successor = _plan_successor_batch(batch)
+            batch["live"].write_bytes(batch["live"].read_bytes() + b"tampered\n")
+            payload = successor["payload"]
+            resource = contracts.resource_id("markdown", str(batch["live"]))
+            for result in payload["successor"]["apply_results"]:
+                if result["resource_id"] == resource:
+                    result["after"] = snapshot(batch["live"])
+            resealed = contracts.seal_document("manifest", payload)
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                self.assertRaises(ContractError) as error,
+            ):
+                validate_legacy_inputs(resealed, _reader)
+            self.assertEqual(error.exception.code, "binding-violation")
+
+    def test_dropped_shared_cleanup_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            skill = base / "home/.agent/skills/trellis-workflow"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# legacy pinned skill\n")
+            pins = sbtd_migration_plan._ownership_pins()
+            pins["skills"] = {"trellis-workflow": snapshot(skill)}
+            batch = _completed_batch(base, pins=pins)
+            retired = [
+                operation
+                for operation in batch["manifest"]["payload"]["shared_operations"]
+                if operation["phase"] == "cleanup"
+            ]
+            assert len(retired) == 1, batch["manifest"]["payload"]["shared_operations"]
+            with mock.patch.object(
+                sbtd_migration_plan, "_ownership_pins", return_value=pins
+            ):
+                successor = _plan_successor_batch(batch)
+                payload = successor["payload"]
+                self.assertEqual(
+                    [
+                        operation
+                        for operation in payload["shared_operations"]
+                        if operation["phase"] == "cleanup"
+                    ],
+                    retired,
+                )
+                payload["shared_operations"] = [
+                    operation
+                    for operation in payload["shared_operations"]
+                    if operation["phase"] != "cleanup"
+                ]
+                for project in payload["projects"]:
+                    project["shared_operation_ids"] = sorted(
+                        operation["operation_id"]
+                        for operation in payload["shared_operations"]
+                        if project["root"] in operation["dependent_projects"]
+                    )
+                resealed = contracts.seal_document("manifest", payload)
+                with (
+                    mock.patch.dict(os.environ, batch["environment"]),
+                    self.assertRaises(ContractError) as error,
+                ):
+                    validate_legacy_inputs(resealed, _reader)
+                self.assertEqual(error.exception.code, "semantic-violation")
+
+    def test_recreated_predecessor_outcome_drift_blocks_every_stage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            successor = _plan_successor_batch(batch)
+            regenerated = batch["project"] / ".codex/agents/trellis-implement.toml"
+            regenerated.write_bytes(b'name = "trellis-implement"\n')
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                self.assertRaises(ContractError) as error,
+            ):
+                validate_legacy_inputs(successor, _reader)
+            self.assertEqual(error.exception.code, "state-conflict")
+
+    def test_successor_inherits_predecessor_retention(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            import sbtd_migration
+
+            custom_retention = copy.deepcopy(sbtd_migration._RETENTION)
+            custom_retention["normal_observation_days"] = 30
+            with mock.patch.object(
+                sbtd_migration, "_RETENTION", custom_retention
+            ):
+                batch = _completed_batch(base)
+            successor = _plan_successor_batch(batch)
+            self.assertEqual(
+                successor["payload"]["retention"], custom_retention
+            )
+
+    def test_successor_rejects_unapplied_ignore_protection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = legacy_project(base, "project")
+            (project / ".trellis/.developer").unlink()
+            home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            environment = _apply_environment(home)
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions=dict(_TOOL_VERSIONS),
+                )
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(manifest))
+                with mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value=dict(_TOOL_VERSIONS),
+                ):
+                    applied, code = apply_migration(
+                        manifest_path, confirmed=True, no_routing_approvals=True
+                    )
+                self.assertEqual(code, 0, applied)
+                receipt = applied["migration"]["apply_receipt"]
+                with self.assertRaises(ContractError) as error:
+                    plan_migration(
+                        [project],
+                        vault,
+                        "fixture",
+                        None,
+                        tool_versions=dict(_TOOL_VERSIONS),
+                        deployment_mode="init",
+                        successor_manifest=manifest_path,
+                        successor_apply_receipt=evidence
+                        / ("apply-" + receipt["apply_id"] + ".json"),
+                    )
+            self.assertEqual(error.exception.code, "successor-conflict")
+
+    def test_successor_of_successor_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            successor = _plan_successor_batch(batch)
+            manifest_path = batch["evidence"] / "successor-manifest.json"
+            manifest_path.write_bytes(canonical_json_bytes(successor))
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value=dict(_TOOL_VERSIONS),
+                ),
+            ):
+                applied, code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
+                self.assertEqual(code, 0, applied)
+                receipt = applied["migration"]["apply_receipt"]
+                with self.assertRaises(ContractError) as error:
+                    plan_migration(
+                        [batch["project"]],
+                        batch["vault"],
+                        "fixture",
+                        None,
+                        tool_versions=dict(_TOOL_VERSIONS),
+                        deployment_mode="init",
+                        successor_manifest=manifest_path,
+                        successor_apply_receipt=batch["evidence"]
+                        / ("apply-" + receipt["apply_id"] + ".json"),
+                    )
+            self.assertEqual(error.exception.code, "successor-conflict")
+
+    def test_successor_rejects_batch_identity_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            other_project = legacy_project(base, "other")
+            other_vault = base / "other-vault"
+            other_vault.mkdir(mode=0o700)
+            cases = [
+                (
+                    [batch["project"], other_project],
+                    batch["vault"],
+                    "fixture",
+                    "scope-conflict",
+                ),
+                ([batch["project"]], other_vault, "fixture", "scope-conflict"),
+                ([batch["project"]], batch["vault"], "intruder", "approval-conflict"),
+            ]
+            for roots, vault, custodian, code in cases:
+                with (
+                    self.subTest(custodian=custodian, vault=vault.name),
+                    mock.patch.dict(os.environ, batch["environment"]),
+                    self.assertRaises(ContractError) as error,
+                ):
+                    plan_migration(
+                        roots,
+                        vault,
+                        custodian,
+                        None,
+                        tool_versions=dict(_TOOL_VERSIONS),
+                        deployment_mode="init",
+                        successor_manifest=batch["manifest_path"],
+                        successor_apply_receipt=batch["receipt_path"],
+                    )
+                self.assertEqual(error.exception.code, code)
+
+    def test_successor_rejects_drifted_carried_cleanup_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            (batch["project"] / ".trellis/workspace/dev01/new-file.md").write_text(
+                "post-apply change\n"
+            )
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                self.assertRaises(ContractError) as error,
+            ):
+                _plan_successor_batch(batch)
+            self.assertEqual(error.exception.code, "state-conflict")
+
+    def test_successor_rejects_non_canonical_input_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            for manifest_value, receipt_value in (
+                ("relative/manifest.json", str(batch["receipt_path"])),
+                (
+                    str(batch["evidence"] / ".." / "manifest.json"),
+                    str(batch["receipt_path"]),
+                ),
+                (str(batch["manifest_path"]), "relative/apply.json"),
+            ):
+                with (
+                    self.subTest(manifest=manifest_value),
+                    mock.patch.dict(os.environ, batch["environment"]),
+                    self.assertRaises(ContractError) as error,
+                ):
+                    plan_migration(
+                        [batch["project"]],
+                        batch["vault"],
+                        "fixture",
+                        None,
+                        tool_versions=dict(_TOOL_VERSIONS),
+                        deployment_mode="init",
+                        successor_manifest=manifest_value,
+                        successor_apply_receipt=receipt_value,
+                    )
+                self.assertEqual(error.exception.code, "invalid-argument")
+
+    def test_non_state_carried_cleanup_fails_with_structured_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            manifest = json.loads(batch["manifest_path"].read_bytes())
+            receipt = json.loads(batch["receipt_path"].read_bytes())
+            payload = manifest["payload"]
+            project = payload["projects"][0]
+            legacy_ref = project["sources"][0]
+            resource = contracts.resource_id("directory", legacy_ref["path"])
+            fake_operation = {
+                "operation_id": contracts.operation_id(
+                    "apply", resource, "whole-resource"
+                ),
+                "phase": "apply",
+                "resource_id": resource,
+                "owner_kind": "directory",
+                "target": legacy_ref["path"],
+                "selector": "whole-resource",
+                "change": {
+                    "kind": "copy-directory",
+                    "source_ref": dict(legacy_ref),
+                },
+                "ownership": {
+                    "kind": "template-source",
+                    "reference": dict(legacy_ref),
+                },
+                "before_requirement": {
+                    "kind": "state",
+                    "state": dict(legacy_ref["state"]),
+                },
+                "dependent_projects": [project["root"]],
+            }
+            project["private_operations"].insert(0, fake_operation)
+            for operation in project["private_operations"]:
+                if operation["phase"] == "cleanup":
+                    operation["before_requirement"] = {
+                        "kind": "phase-after",
+                        "phase": "apply",
+                        "resource_id": resource,
+                    }
+            forged_manifest = contracts.seal_document("manifest", payload)
+            receipt["payload"]["manifest_id"] = forged_manifest["manifest_id"]
+            import shutil
+
+            backup_copy = batch["vault"] / "forged-original-backup"
+            shutil.copytree(legacy_ref["path"], backup_copy)
+            receipt["payload"]["projects"][0]["private_results"].append(
+                {
+                    "phase": "apply",
+                    "resource_id": resource,
+                    "operation_ids": [fake_operation["operation_id"]],
+                    "dependent_projects": [project["root"]],
+                    "status": "succeeded",
+                    "backup_ref": {
+                        "path": str(backup_copy),
+                        "state": snapshot(backup_copy),
+                    },
+                    "before": dict(legacy_ref["state"]),
+                    "after": dict(legacy_ref["state"]),
+                    "error": None,
+                }
+            )
+            forged_receipt = contracts.seal_document("apply_receipt", receipt["payload"])
+            forged_manifest_path = batch["evidence"] / "forged-manifest.json"
+            forged_manifest_path.write_bytes(canonical_json_bytes(forged_manifest))
+            forged_receipt_path = batch["evidence"] / "forged-receipt.json"
+            forged_receipt_path.write_bytes(canonical_json_bytes(forged_receipt))
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                self.assertRaises(ContractError) as error,
+            ):
+                plan_migration(
+                    [batch["project"]],
+                    batch["vault"],
+                    "fixture",
+                    None,
+                    tool_versions=dict(_TOOL_VERSIONS),
+                    deployment_mode="init",
+                    successor_manifest=forged_manifest_path,
+                    successor_apply_receipt=forged_receipt_path,
+                )
+            self.assertEqual(error.exception.code, "semantic-violation")
+
+    def test_resealed_pause_operation_is_refused_at_apply_anchor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            successor = _plan_successor_batch(batch)
+            pause_asset = SCRIPTS.parents[0] / "assets" / "migration-paused-agents.txt"
+            pause_reference = {
+                "path": str(pause_asset),
+                "state": snapshot(pause_asset),
+            }
+            legacy_global = b"# Legacy global routing\nUse trellis-workflow.\n"
+            router_dir = batch["home"] / "elsewhere"
+            router_dir.mkdir(parents=True)
+            router = router_dir / "AGENTS.md"
+            router.write_bytes(legacy_global)
+            fixture_pins = sbtd_migration_plan._ownership_pins()
+            fixture_pins["agents"] = hashlib.sha256(legacy_global).hexdigest()
+            pinned = {"type": "file", "checksum": fixture_pins["agents"]}
+            payload = successor["payload"]
+            root = payload["projects"][0]["root"]
+            resource = contracts.resource_id("markdown", str(router))
+            pause_operation = {
+                "operation_id": contracts.operation_id(
+                    "apply", resource, "pause-legacy-routing"
+                ),
+                "phase": "apply",
+                "resource_id": resource,
+                "owner_kind": "markdown",
+                "target": str(router),
+                "selector": "pause-legacy-routing",
+                "change": {
+                    "kind": "ensure-file-block",
+                    "source_ref": pause_reference,
+                },
+                "ownership": {
+                    "kind": "template-source",
+                    "reference": {"path": str(router), "state": pinned},
+                },
+                "before_requirement": {"kind": "state", "state": pinned},
+                "dependent_projects": [root],
+            }
+            payload["shared_operations"].append(pause_operation)
+            payload["shared_roots"].append(
+                {
+                    "kind": "omp-home",
+                    "path": str(router_dir),
+                    "dependent_projects": [root],
+                }
+            )
+            for project in payload["projects"]:
+                project["shared_operation_ids"] = sorted(
+                    operation["operation_id"]
+                    for operation in payload["shared_operations"]
+                    if project["root"] in operation["dependent_projects"]
+                )
+            resealed = contracts.seal_document("manifest", payload)
+            manifest_path = batch["evidence"] / "pause-carried-manifest.json"
+            manifest_path.write_bytes(canonical_json_bytes(resealed))
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                mock.patch.object(
+                    sbtd_migration_plan, "_ownership_pins", return_value=fixture_pins
+                ),
+                mock.patch(
+                    "sbtd_migration.runtime_versions",
+                    return_value=dict(_TOOL_VERSIONS),
+                ),
+                self.assertRaises(ContractError) as error,
+            ):
+                apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
+            self.assertEqual(error.exception.code, "approval-conflict")
 
 
 class SuccessorCliTests(unittest.TestCase):
