@@ -1750,6 +1750,16 @@ def run_migration(args: Any) -> int:
                     if getattr(args, "routing_approval_key", None)
                     else None
                 ),
+                successor_manifest=(
+                    _argument_path(args.successor_manifest)
+                    if getattr(args, "successor_manifest", None) is not None
+                    else None
+                ),
+                successor_apply_receipt=(
+                    _argument_path(args.successor_apply_receipt)
+                    if getattr(args, "successor_apply_receipt", None) is not None
+                    else None
+                ),
             )
             projects = [
                 {

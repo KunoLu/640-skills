@@ -870,6 +870,30 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "semantic-violation",
                 "deployment read-only inputs cannot own a writable target",
             )
+    successor = payload.get("successor")
+    embedded_results: dict[str, Mapping[str, Any]] = {}
+    if successor is not None:
+        if deployment is None:
+            _fail(
+                "semantic-violation",
+                "a successor batch requires its declared deployment",
+            )
+        for result in successor["apply_results"]:
+            if (
+                result["phase"] != "apply"
+                or result["status"] != "succeeded"
+                or result["after"] is None
+            ):
+                _fail(
+                    "semantic-violation",
+                    "a successor binding requires complete succeeded apply results",
+                )
+            if result["resource_id"] in embedded_results:
+                _fail(
+                    "semantic-violation",
+                    "a successor binding repeats a resource result",
+                )
+            embedded_results[result["resource_id"]] = result
     backup_root = payload["backup_root"]
     for root in roots:
         if _path_contains(root, backup_root) or _path_contains(backup_root, root):
@@ -1077,10 +1101,15 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                     "resource must follow its latest declared phase",
                 )
         elif requirement["kind"] != "state":
-            _fail(
-                "semantic-violation",
-                "initial resource phase needs a concrete before-state",
-            )
+            if (
+                requirement["kind"] != "phase-after"
+                or requirement["phase"] != "apply"
+                or embedded_results.get(rid) is None
+            ):
+                _fail(
+                    "semantic-violation",
+                    "initial resource phase needs a concrete before-state",
+                )
 
     shared_by_id = {op["operation_id"]: op for op in payload["shared_operations"]}
     referenced: dict[str, list[str]] = {op_id: [] for op_id in shared_by_id}
@@ -2088,15 +2117,37 @@ def _expected_before(
     return predecessor["after"]
 
 
+def resolution_stage_results(
+    manifest_payload: Mapping[str, Any],
+    stage_results: Mapping[str, Mapping[str, Any]],
+) -> Mapping[str, Mapping[str, Any]]:
+    """Overlay a successor binding's embedded predecessor apply results.
+
+    The overlay serves before-requirement resolution only; receipt-derived
+    stage results stay authoritative for enumeration, state binding and
+    backup overlap checks. The batch's own results win over embedded ones.
+    """
+    successor = manifest_payload.get("successor")
+    if successor is None:
+        return stage_results
+    overlay = {phase: dict(results) for phase, results in stage_results.items()}
+    embedded = overlay.setdefault("apply", {})
+    for result in successor["apply_results"]:
+        embedded.setdefault(result["resource_id"], result)
+    return overlay
+
+
 def _bind_stage_states(
     requirements: Mapping[tuple[str, str], Mapping[str, Any]],
     stage_results: Mapping[str, Mapping[str, Any]],
+    resolution: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
+    resolution = stage_results if resolution is None else resolution
     for phase, results in stage_results.items():
         for rid, result in results.items():
             if result["before"] is None:
                 continue
-            expected = _expected_before(requirements[(phase, rid)], stage_results)
+            expected = _expected_before(requirements[(phase, rid)], resolution)
             if expected is not None and result["before"] != expected:
                 _fail(
                     "binding-violation",
@@ -2533,8 +2584,15 @@ def _check_recovery_goal(
     for operation in _manifest_operations(manifest_payload):
         rid = operation["resource_id"]
         target_resources[operation["target"]] = rid
-        if operation["before_requirement"]["kind"] == "state":
-            initial[rid] = operation["before_requirement"]["state"]
+        requirement = operation["before_requirement"]
+        if requirement["kind"] == "state":
+            initial[rid] = requirement["state"]
+        elif manifest_payload.get("successor") is not None:
+            resolved = _expected_before(
+                requirement, resolution_stage_results(manifest_payload, stage_results)
+            )
+            if resolved is not None:
+                initial[rid] = resolved
     latest = {rid: initial[rid] for rid in required_resources}
     required_steps: set[tuple[str, str]] = set()
     for phase in ("apply", "deploy", "verification", "cleanup"):
@@ -3062,7 +3120,11 @@ def validate_declared_bindings(
         )
         _bind_stage_receipt(manifest_payload, cleanup, "cleanup")
         _bind_retained_assets(manifest_payload, verification, cleanup)
-    _bind_stage_states(requirements, stage_results)
+    _bind_stage_states(
+        requirements,
+        stage_results,
+        resolution_stage_results(manifest_payload, stage_results),
+    )
     _bind_resource_states_and_backups(manifest_payload, stage_results, supplied)
     if "apply" in stage_results:
         _check_publication_links(manifest_payload, stage_results["apply"])
