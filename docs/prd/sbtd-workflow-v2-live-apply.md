@@ -3,7 +3,7 @@
 ## 1. 授权与边界
 
 - 任务：P2-03。唯一状态事实源为主 PRD §14。
-- 开发起点：`main` `f922991c5aef75c08e05494f9bef94b847516711`；最初任务分支 `p2-03-live-apply`。当前续作分支 `p2-03-successor-blocked`，执行模式由用户明确选择 `default`；不是重新启动 live 迁移。
+- 开发起点：`main` `f922991c5aef75c08e05494f9bef94b847516711`；最初任务分支 `p2-03-live-apply`，恢复修复分支 `p2-03-successor-blocked`。任务 PR #80 已合并，当前通过 `docs/p2-03-merged-status` 独立状态 PR 收口；执行模式保持用户选择的 `default`。不是重新启动 live 迁移。
 - 观察时刻 `2026-09-24T23:05:27+0800` 是建立本分支时的 date 返回，不是用户消息发生时钟。
 - 用户原文：「在新的任务分支下，启动 P2-03。范围仍是冻结协议的 demo／main、Codex+OMP，源仓不纳入。这是维护窗口，授权对 live 批次做数据迁移和旧路由停用。不部署新接线，不 smoke，不 cleanup，不删备份，不 sync，不改 hooks。隔离现场继续保留。」
 - 该原文授权的是 live `demo` 项目的数据迁移和旧路由停用。它不授权部署、smoke、cleanup、备份销毁、sync、hooks 修改，也不授权改写隔离现场。
@@ -16,10 +16,10 @@
 | Gate | 判定 | 状态 |
 |---|---|---|
 | DDIA | required；本轮只读 live，隔离生产者生成真实回执，原件与批准保持绑定；设计确认不代表验证通过 | passed |
-| Legacy safety | 本轮先不改生产实现；既有 live apply 已发生，历史证据不重标 | not-required |
+| Legacy safety | required；阶段血统缺陷先由回归复现，再修复最新已知阶段后态选择；红绿、拒绝分支与最终精确提交验证通过，见第8/9节 | passed |
 | DDD | 无新领域术语 | not-required |
-| Refactoring | 不改生产实现 | not-required |
-| Release readiness | required。原关闭尝试审查 blocked 保留；用户已批准修订有效合同，须完成主 PRD §15.2 的 C1–C6、独立证据复核和 PR 收口，不能用文档修订直接改为 ready | blocked |
+| Refactoring | 未做生产结构重构；测试夹具复用用于跨环境回归，不替代真实运行证据 | not-required |
+| Release readiness | required；最终精确 `58bd118` 的 C1–C6、独立证据复核和 Release Readiness 均通过，无剩余 P0/P1。任务 PR #80 已合并，完成状态按独立状态 PR 发布；旧 blocked 审查保留，第9节仅确认本阶段，不代表整体迁移／发布就绪 | passed |
 | grill-with-docs | 未完整调用。沿用已冻结范围和用户本句，不新增领域边界 | not-required |
 
 ```text
@@ -178,3 +178,34 @@ verify 再读 live 目标。当前快照必须等于回执 `after`，也必须�
 生产实现指纹已变化，原第7节 `5eee55e`／`1f645a3a…` 的证据仅属该历史候选，不能直接冒充修复后通过。使用仅驻内存的独立密钥重签，前驱不变，新后继为 `runtime-sha256:0ba72e4ebaf84578c7bf83233d847a3874065be3a8ebc9ed951b9a13b1f319be`；未读取路由批准私钥，未执行live写入。当前待修复后完整复验、独立复审和两层PR收口。
 
 修复候选 `b0c36e4` 的本地精确全量为1162 tests／396.669s／OK（8 skipped），受影响169项／89.801s／OK；新指纹下live只读全量、新隔离producer/CLI、共享恢复与4项绑定边界复验通过。首次PR #80 CI（run `36327598712`）macOS／Windows jobs通过，Linux失败：两条旧测试把本机运维配对硬套到Python3.12 CI。失败记录保留；删除源码字符串／固定环境偶然断言，前驱恢复改用独立签名夹具，仍真实校验当前解释器指纹、签名和恢复链，不改生产版本门。测试修订后的精确CI与最终审查仍待完成，不能用上述本地绿测替代。
+
+## 9. 最终验收与任务合并
+
+用户在独立就绪审查完成后要求暂停；本次明确「确认，请继续」，恢复的仅是任务 PR／状态 PR 收口及 P2-06 事实登记处理，不包含 P2-04 或 live 写入。
+
+- 最终候选：`58bd1180913d9e639b98d762dbadf2445ed48618`。原生全量 `python -B -m unittest discover -s tests -p 'test_*.py'`：1161 tests／991.387s／OK（8 skipped），运行前后 source unchanged。删除一条源码／固定环境偶然断言使1162降为1161，不是跳过失败用例；签名、漂移和恢复行为回归保留。
+- [精确 head CI](https://github.com/KunoLu/640-skills/actions/runs/36328556337)：Linux 全量、macOS Bash、Windows PowerShell 三个平台 job 均 SUCCESS，包括各自 clean-checkout 门。
+- 最终运行指纹仍为 `runtime-sha256:0ba72e4ebaf84578c7bf83233d847a3874065be3a8ebc9ed951b9a13b1f319be`。本候选重新执行 live 全量只读核验、新隔离 producer／CLI、共享恢复和多相位边界，不用第7节旧指纹证据替代。
+- C1：108 个 apply 后态、全部备份／保全原件及三份批准路由一致。C2：原完整重试回执与历史零写入观察交叉一致，不再次执行 live retry。
+- C3／C4：新隔离真实 partial apply／recovery 回执续作、no-op、双项目共享只恢复一次，以及合法多相位／前驱阶段恢复通过；合成信任根、旧生产者身份模拟、graph/smoke 依赖替身均保留标注，不称 host/full-stack。
+- C5：只读 live recovery plan 为 planned；完整109声明资源、108实际逆向步骤，before/after一致。C6：漂移、未知／缺失证据、坏签名、未列出后继、损坏／缺失备份和不安全重试拒绝通过；合成负例不冒充历史故障。
+- 独立 `P203ReadinessFinal`：Release Readiness **ready**，仅本阶段代码／证据门，无剩余 P0/P1。独立 `P203EvidenceAudit`：8/8索引hash匹配，原生报告、回执链、声明集合与CI head一致，无P0/P1证据缺口。原始回执不复制到共享仓库，复核者对live血统的直接审计限于记录的生产者验证及交叉一致性，不声称重新运行live。
+- Ruff changed files通过；ty基线3条／当前3条、无新增，不声称完整ty通过。8项skip不算相应平台／host通过；可选生产私钥重签场景D保持not-run，所需边界分别由live安装公钥只读核验和独立合成信任根执行证明。
+
+```text
+Release Readiness Review
+Status: ready（P2-03 当前分层验收，不是 v2 发布）
+Production path and affected users / systems: 已 apply 的 demo 批次及三份批准路由，继续受维护窗口约束。
+Failure modes and safeguards: 真实阶段绑定、签名版本门、已知前后态、原件／备份、累计回执和未知写入 fail-closed；历史失败全部保留。
+Capacity / backpressure / limits: 有限离线批次，无队列／服务背压；多资源不宣称原子事务。
+Observability / alerts / runbook: 私有原生报告、回执与完整性索引；人工对账，未建立服务告警。
+Rollout / migration / rollback / cleanup: 未执行 live 回滚／新部署／cleanup；只读计划不证明未来写权限、空间或逐步恢复执行；原现场和备份保留。
+Required validation and result: 精确58bd118的C1–C6、原生CLI、全量与三平台CI通过，独立审查无剩余P0/P1。
+Optional checks, accountable owner acceptance, and residual risk: D未运行且未称通过；旧Trellis可写回退已由用户明确撤回，runtime_readiness保持not-verified，旧缺证据不改成通过。
+```
+
+[任务 PR #80](https://github.com/KunoLu/640-skills/pull/80) 于 `2026-09-28T02:03:20Z` 确认 MERGED，merge `09d430e1725d630b81d56e25dbf8b83161548977`；实际合并树等于已验证 head。按既有授权使用 `--admin` 合并，不能把 GitHub 当时的 REVIEW_REQUIRED 显示写成线上 reviewer approval。
+
+完成记录时间为 `2026-09-28T10:13:26+0800`，通过本独立状态 PR 写回主 PRD。该时间是验收与任务合并均确认后的台账更新时间；状态 PR 闭环前不解除后续依赖，闭环后也不自动执行 P2-04。P2-03 done 不等于整体迁移完成、恢复日常 Agent 工作、清理或正式发布。
+
+本轮维护判断：README.md、README.html 的恢复保证说明已随任务 PR 合并，本状态更新不改变其含义，无需再改；版本化 automation prompt 的评估契约不变，无需再改且不读写 live automation；CHANGELOG 已记录修复与兼容边界，状态登记不是新能力／发布变化，不重复新增 release note。
