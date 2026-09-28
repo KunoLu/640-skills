@@ -25,7 +25,7 @@
 
 ## 4. 独立事实核对
 
-观察时刻 `2026-09-28T10:46:26+08:00`，不是历史 apply／重试发生时钟。用户为 P2-06 单独选择 `default`；当前任务分支为 `p2-06-executed-batch-closeout`。用户另行明确授权本项任务 PR 合并后，通过 TaskStore 从该任务分支重绑定到 `docs/p2-06-merged-status`；模式选择不代替这项独立授权。
+观察时刻 `2026-09-28T10:46:26+08:00`，不是历史 apply／重试发生时钟。用户为 P2-06 单独选择 `default`；该次核对使用的任务分支为 `p2-06-executed-batch-closeout`。用户另行明确授权本项任务 PR 合并后，通过 TaskStore 从该任务分支重绑定到 `docs/p2-06-merged-status`；模式选择不代替这项独立授权。
 
 | 登记项 | 实际核对 | 证明边界 |
 |---|---|---|
@@ -38,3 +38,11 @@
 本轮是文档事实登记，不改变运行时、恢复契约、数据结构或安装行为；未完整调用 grill-with-docs，因为目标和三项事实已确定。只做文档结构／来源一致性检查和独立审查，不重复 P2-03 的运行时验收；本仓库不创建 `.feature`。
 
 README.md、README.html、版本化 automation prompt 的能力／流程边界不变，无需重复修改；CHANGELOG 已记录实现变化，本登记不新增发布能力或验证契约，不追加过程日志。未读写 live automation，未执行 sync。
+
+## 5. 任务合并与独立状态登记
+
+[本项任务 PR #82](https://github.com/KunoLu/640-skills/pull/82) 已于 `2026-09-28T03:02:23Z` MERGED，merge `20b651ed13c007d997e5b41f65a77aeffbf05b6f`。精确任务 head `d9fded766773ac2a326f090a25afd394ca922110` 的登记文档 smoke、45项 workflow tests／1.328s／OK、两路独立文档审查以及 [CI run36371680249](https://github.com/KunoLu/640-skills/actions/runs/36371680249) 的 Linux／macOS／Windows 三个平台 job 均通过。实际合并树与该 head 一致。
+
+用户单独选择的 default 模式和指定任务→状态分支重绑定授权已分别记录；任务合并之后才通过 TaskStore 执行该指定重绑定。本独立状态 PR 将 P2-06 记为 done，台账完成时间 `2026-09-28T11:04:03+08:00` 是任务验收与合并确认后的实际记录时刻，不是历史 apply 时钟，也不预报状态 PR 的合并时钟。
+
+本项满足的只是三项事实登记及其独立交付流程。P2-03 已由 PR #80／#81 另行完成；P2-06 不作为 AC-18 或 P2-03 通过依据，不修改其完成时间，不新增后续任务依赖，不重新执行 live。P2-04／P2-05 保持 planned；部署、host smoke、回滚、cleanup、sync、hooks、旧 Trellis 调用和备份处置仍不在本次授权内。
