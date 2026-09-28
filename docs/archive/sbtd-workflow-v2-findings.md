@@ -4820,3 +4820,41 @@ PR #68 的原生 Windows ACL 步骤在 `563abb9` 失败；`9846200` 的脱敏诊
 | `dispositions` | <code>{"already-fixed": 107, "fixed-now": 72, "deferred": 16, "dismissed": 3, "superseded": 1}</code> |
 | `validation` | <code>{"full": "1104 tests / 7 skip / OK", "affected_final": "105 tests / OK", "native_cli": "隔离fixture下状态、A-B-A handoff、check-projects、cleanup/recovery通过；不是host proof", "native_graft": "本机 tree-sitter-kotlin 缺当前 Node ABI native build，正向探测blocked；未修改全局安装", "static": "Ruff/ty历史诊断仍在，基线对比无新增诊断类型/消息；未冒称全仓静态检查全绿"}</code> |
 | `boundary` | <code>"PLAN-008仍为真实迁移前置缺口；本批不执行P1-16/P2/P3、不迁移真实项目、不sync、不发布、不处置备份。"</code> |
+
+<a id="record-222"></a>
+### 222. P1-22-TOCTOU-ROOT-MKDIR
+
+| 字段 | 内容 |
+|---|---|
+| `type` | <code>"finding"</code> |
+| `id` | <code>"P1-22-TOCTOU-ROOT-MKDIR"</code> |
+| `task` | <code>"P1-22"</code> |
+| `severity` | <code>"P2/low"</code> |
+| `status` | <code>"deferred"</code> |
+| `source` | <code>"security-reviewer（P1-22 独立安全审查）"</code> |
+| `source_revision` | <code>"5f26c52（rebase 后提交）"</code> |
+| `location` | <code>"sbtd_graft_deployment.py:414-417; sbtd_migration.py:944-963; sbtd_migration_files.py:458-473"</code> |
+| `title` | <code>"Residual TOCTOU: symlink-swap of shared root between lstat check and parent mkdir can create directories outside intended root"</code> |
+| `problem` | <code>"一次性 `_lstat(_canonical(root))` 与 `_prepare_target_parents` 之间，同权限攻击者把根换成 symlink 可在其目标下建空 0700 目录；所有文件内容写入在提交时经 `_scope_root`/`_canonical` 重校验 fail-closed，影响上限为空目录。"</code> |
+| `impact` | <code>"旧 `snapshot(root)` 全树遍历存在同一窗口且更长；本改动收窄而非扩大竞态。部署为单写入者用户发起操作，同权限攻击者前提超出本威胁模型。"</code> |
+| `recommendation` | <code>"可选加固：`_prepare_target_parents` 入口对 scope 自身 lstat，或在其调用前以 `_scope_root` 等价重验；否则记录接受。"</code> |
+| `decision` | <code>"依 D-IMP-13 原级延期；窗口较旧代码收窄且内容写入仍 fail-closed，不扩大本轮修复范围。"</code> |
+
+<a id="record-223"></a>
+### 223. P1-22-MKDIR-PARENTS-MODE
+
+| 字段 | 内容 |
+|---|---|
+| `type` | <code>"finding"</code> |
+| `id` | <code>"P1-22-MKDIR-PARENTS-MODE"</code> |
+| `task` | <code>"P1-22"</code> |
+| `severity` | <code>"informational"</code> |
+| `status` | <code>"deferred"</code> |
+| `source` | <code>"security-reviewer（P1-22 独立安全审查）"</code> |
+| `source_revision` | <code>"5f26c52（rebase 后提交）"</code> |
+| `location` | <code>"sbtd_graft_deployment.py:416"</code> |
+| `title` | <code>"Intermediate parents of a missing shared root are created with umask-default permissions, not 0700"</code> |
+| `problem` | <code>"`root.mkdir(parents=True, mode=0o700)` 的 mode 只作用于叶子；缺失的中间父级按进程 umask 创建。共享根父级通常是已存在的用户 home/config 目录，实际影响最小；私有备份 vault 由 require_private_directory 独立加固。"</code> |
+| `impact` | <code>"与 mkdir -p 常见语义一致；非 vault 共享作用域，不降低私有区域保护。"</code> |
+| `recommendation` | <code>"如需一致隐私，按 `_prepare_target_parents` 方式逐级 0700 创建；否则接受并记录。"</code> |
+| `decision` | <code>"依 D-IMP-13 原级延期；共享根中间父级为既有用户目录的场景为主，不扩大本轮修复范围。"</code> |

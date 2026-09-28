@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,8 @@ import onboard_contracts as contracts
 from graft_runtime import GRAFT_PINNED_VERSION, _locate_package, check_graft
 from sbtd_migration import _prepare_target_parents, _project_revision
 from sbtd_migration_files import (
+    _canonical,
+    _lstat,
     backup_reference,
     install_reference,
     read_file,
@@ -408,8 +411,11 @@ def execute_resource(
                     "runtime-unavailable",
                     "the canonical installed launcher is missing or has drifted",
                 )
-        if snapshot(root)["type"] == "absent":
+        root_info = _lstat(_canonical(root))
+        if root_info is None:
             root.mkdir(parents=True, mode=0o700)
+        elif not stat.S_ISDIR(root_info.st_mode):
+            _fail("unsafe-path", "the deployment write scope is not a real directory")
         if private_root.is_relative_to(root):
             _prepare_target_parents(private_root, root)
             require_private_directory(private_root, create=True)
