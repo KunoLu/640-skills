@@ -483,6 +483,7 @@ def attach_deployment(
     project_only: bool,
     hooks_authorized: bool,
     platform: str = "codex",
+    successor_pauses: Mapping[str, str] | None = None,
 ) -> None:
     """Declare every write before the migration manifest is sealed."""
     from onboard import (
@@ -630,7 +631,14 @@ def attach_deployment(
             source = {"path": str(selected.source), "state": snapshot(selected.source)}
             before = snapshot(target)
             earlier = earlier_by_target.get(str(target))
-            if earlier is None and before not in (_ABSENT, source["state"]):
+            paused_predecessor = (
+                None if successor_pauses is None else successor_pauses.get(str(target))
+            )
+            if (
+                earlier is None
+                and paused_predecessor is None
+                and before not in (_ABSENT, source["state"])
+            ):
                 _fail(
                     "ownership-conflict",
                     "an installation target has unrecognized customized content",
@@ -639,11 +647,25 @@ def attach_deployment(
             owner_kind = "directory" if directory else "markdown"
             selector = "whole-resource" if directory else "global-rules"
             resource = contracts.resource_id(owner_kind, str(target))
-            requirement = (
-                {"kind": "phase-after", "phase": "apply", "resource_id": resource}
-                if earlier is not None
-                else {"kind": "state", "state": before}
-            )
+            if earlier is not None:
+                requirement = {
+                    "kind": "phase-after",
+                    "phase": "apply",
+                    "resource_id": resource,
+                }
+            elif paused_predecessor is not None:
+                if paused_predecessor != resource:
+                    _fail(
+                        "ownership-conflict",
+                        "a paused predecessor does not own the installation target",
+                    )
+                requirement = {
+                    "kind": "phase-after",
+                    "phase": "apply",
+                    "resource_id": resource,
+                }
+            else:
+                requirement = {"kind": "state", "state": before}
             shared.append(
                 {
                     "phase": "deploy",
@@ -678,6 +700,12 @@ def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
     from onboard import default_codex_home
 
     roots = sorted(project["root"] for project in payload["projects"])
+    successor = payload.get("successor")
+    successor_embedded = (
+        {}
+        if successor is None
+        else {result["resource_id"]: result for result in successor["apply_results"]}
+    )
     all_deploy = [
         operation
         for project in payload["projects"]
@@ -867,13 +895,19 @@ def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
             and earlier["selector"] == "pause-legacy-routing"
         ]
         requirement = operation["before_requirement"]
+        expected = {
+            "kind": "phase-after",
+            "phase": "apply",
+            "resource_id": operation["resource_id"],
+        }
         if paused:
-            expected = {
-                "kind": "phase-after",
-                "phase": "apply",
-                "resource_id": operation["resource_id"],
-            }
             if len(paused) != 1 or requirement != expected:
+                _fail(
+                    "ownership-conflict",
+                    "global routing must follow its exact paused predecessor",
+                )
+        elif successor_embedded.get(operation["resource_id"]) is not None:
+            if requirement != expected:
                 _fail(
                     "ownership-conflict",
                     "global routing must follow its exact paused predecessor",
@@ -1012,6 +1046,9 @@ def load_deployment_context(
     for root in roots:
         validate_build_scope(root)
     applied_results, prior_results = _result_index(applied), _result_index(previous)
+    resolution = contracts.resolution_stage_results(
+        manifest["payload"], {"apply": applied_results}
+    )
     expected_before: dict[str, Mapping[str, Any]] = {}
     for operation in operations:
         result = prior_results.get(operation["resource_id"])
@@ -1019,7 +1056,7 @@ def load_deployment_context(
             expected = result["after"]
         else:
             expected = contracts._expected_before(
-                operation["before_requirement"], {"apply": applied_results}
+                operation["before_requirement"], resolution
             )
             if result is not None and (
                 result["before"] is None

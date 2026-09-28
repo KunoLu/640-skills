@@ -50,6 +50,8 @@ _MIGRATION_RULES = {
             "publication_decisions",
             "routing_approvals",
             "routing_approval_key",
+            "successor_manifest",
+            "successor_apply_receipt",
             "deployment_mode",
             "deployment_platform",
             "graft_hooks",
@@ -82,6 +84,8 @@ _MIGRATION_VALUE_OPTIONS = (
     "publication_decisions",
     "routing_approvals",
     "routing_approval_key",
+    "successor_manifest",
+    "successor_apply_receipt",
     "deployment_mode",
     "deployment_platform",
     "manifest",
@@ -268,6 +272,8 @@ def add_migration_parser(
         "publication_decisions": "Private approved publication-decisions file.",
         "routing_approvals": "Private approved routing-candidate record. Plan seals it; apply must be given the same file by the caller.",
         "routing_approval_key": "Private key outside the vault and selected projects. Plan uses it only to sign the routing approval file.",
+        "successor_manifest": "Private manifest of one completed deployment-less batch; pairs with --successor-apply-receipt.",
+        "successor_apply_receipt": "Private complete apply receipt of the same completed batch.",
         "deployment_mode": "Declare Codex deployment before apply: init or init-projects.",
         "deployment_platform": "Declare the deployment host: codex or omp.",
         "manifest": "Explicit private migration manifest file.",
@@ -446,6 +452,29 @@ def validate_migration_args(
         parser.error(
             "--routing-approvals cannot be combined with --no-routing-approvals"
         )
+    if args.phase == "plan" and (
+        getattr(args, "successor_manifest", None)
+        or getattr(args, "successor_apply_receipt", None)
+    ):
+        if not (
+            getattr(args, "successor_manifest", None)
+            and getattr(args, "successor_apply_receipt", None)
+        ):
+            parser.error(
+                "--successor-manifest and --successor-apply-receipt must be supplied as a pair"
+            )
+        if getattr(args, "publication_decisions", None):
+            parser.error(
+                "--successor-manifest cannot be combined with --publication-decisions"
+            )
+        if getattr(args, "routing_approvals", None) or getattr(
+            args, "routing_approval_key", None
+        ):
+            parser.error(
+                "successor inputs cannot be combined with routing approval options"
+            )
+        if not getattr(args, "deployment_mode", None):
+            parser.error("successor inputs require --deployment-mode")
 
 
 def _check_migration_context(

@@ -1000,6 +1000,9 @@
         },
         "deployment": {
           "$ref": "#/$defs/deployment_declaration"
+        },
+        "successor": {
+          "$ref": "#/$defs/successor_binding"
         }
       }
     },
@@ -1119,6 +1122,30 @@
           }
         }
       ]
+    },
+    "successor_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_id",
+        "apply_id",
+        "apply_results"
+      ],
+      "properties": {
+        "manifest_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "apply_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "apply_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resource_result"
+          },
+          "minItems": 1
+        }
+      }
     },
     "apply_project": {
       "type": "object",
