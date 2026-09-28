@@ -714,6 +714,51 @@ class SuccessorPredecessorVerificationTests(unittest.TestCase):
                 )
             self.assertEqual(error.exception.code, "semantic-violation")
 
+    def test_resealed_inherited_fields_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            batch = _completed_batch(base)
+            successor = _plan_successor_batch(batch)
+            variants = []
+            altered_vault = json.loads(canonical_json_bytes(successor))
+            altered_vault["payload"]["backup_root"] = str(batch["evidence"])
+            variants.append(altered_vault)
+            altered_custodian = json.loads(canonical_json_bytes(successor))
+            altered_custodian["payload"]["custodian"] = "intruder"
+            variants.append(altered_custodian)
+            altered_retention = json.loads(canonical_json_bytes(successor))
+            altered_retention["payload"]["retention"] = copy.deepcopy(
+                altered_retention["payload"]["retention"]
+            )
+            altered_retention["payload"]["retention"]["normal_observation_days"] = 30
+            variants.append(altered_retention)
+            for index, variant in enumerate(variants):
+                with (
+                    self.subTest(variant=index),
+                    mock.patch.dict(os.environ, batch["environment"]),
+                    self.assertRaises(ContractError) as error,
+                ):
+                    validate_legacy_inputs(
+                        contracts.seal_document("manifest", variant["payload"]),
+                        _reader,
+                    )
+                self.assertEqual(error.exception.code, "semantic-violation")
+            altered_publication = json.loads(canonical_json_bytes(successor))
+            altered_publication["payload"]["publication_decisions"] = {
+                "schema_version": 1,
+                "items": ["not-empty"],
+            }
+            with (
+                mock.patch.dict(os.environ, batch["environment"]),
+                self.assertRaises(ContractError),
+            ):
+                validate_legacy_inputs(
+                    contracts.seal_document(
+                        "manifest", altered_publication["payload"]
+                    ),
+                    _reader,
+                )
+
     def test_resealed_pause_operation_is_refused_at_apply_anchor(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

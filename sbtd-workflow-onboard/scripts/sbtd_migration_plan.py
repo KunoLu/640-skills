@@ -1033,6 +1033,22 @@ def validate_legacy_inputs(
                 "semantic-violation",
                 "a successor batch alters the completed batch roots",
             )
+        for field in ("backup_root", "custodian", "retention"):
+            if payload[field] != prev_payload[field]:
+                _fail(
+                    "semantic-violation",
+                    "a successor batch alters the inherited batch identity",
+                )
+        if payload["publication_decisions"] != {"schema_version": 1, "items": []}:
+            _fail(
+                "semantic-violation",
+                "a successor batch alters the fixed publication record",
+            )
+        if payload["routing_approvals"] is not None:
+            _fail(
+                "semantic-violation",
+                "a successor batch cannot bind routing approvals",
+            )
         declared_rids = {
             operation["resource_id"]
             for project in payload["projects"]
@@ -1044,6 +1060,15 @@ def validate_legacy_inputs(
         for project in payload["projects"]:
             root = Path(project["root"])
             _validate_successor_project_operations(root, project)
+            prev_project = prev_by_root[project["root"]]
+            if (
+                project["sources"] != prev_project["sources"]
+                or project["platforms"] != prev_project["platforms"]
+            ):
+                _fail(
+                    "semantic-violation",
+                    "a successor batch alters an inherited project binding",
+                )
             carried = [
                 operation
                 for operation in project["private_operations"]
