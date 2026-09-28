@@ -41,7 +41,6 @@
 | LESSON-20260701-entrypoint-detail-section-contract | entrypoint, validation, markdown | 校验 `ENTRYPOINT.md` 详情章节 | `ENTRYPOINT` 详情章节校验不得硬编码行名。 | topics/repository-workflow.md#lesson-20260701-entrypoint-detail-section-contract-entrypoint-detail-section-contract |
 | LESSON-20260709-installer-mcp-generated-config | installer, mcp, workflow | 修改根安装脚本、`onboard.py` manualChecks 或已知 MCP server 配置 | 已知 MCP server 的命令 / args 应由 `onboard.py check` 生成结构化配置，根安装器消费该配置；只有检测缺失时才人工输入。 | topics/repository-workflow.md#lesson-20260709-installer-mcp-generated-config-installer-mcp-generated-config |
 | LESSON-20260709-external-skill-rename-canonical | installer, skills, workflow, migration | 维护 external Skill 列表、mattpocock/skills 映射、install/reset 迁移逻辑 | 上游 Skill 重命名时，新 frontmatter / 目录名应成为 canonical，旧名只保留为 alias 并在 reset/install 中迁移删除。 | topics/repository-workflow.md#lesson-20260709-external-skill-rename-canonical-external-skill-rename-canonical |
-| LESSON-20260928-pr-merge-confirm-before-branch-cleanup | git, github, pr, merge, branch, workflow, recovery | 合并任务 PR / 状态 PR 或删除已合并分支 | 合并与分支清理必须分步：先证明 MERGED 再删分支；禁止把 merge 与删除串成 `&&` 链。 | topics/repository-workflow.md#lesson-20260928-pr-merge-confirm-before-branch-cleanup-confirm-merged-before-any-branch-cleanup |
 | LESSON-20260711-external-skill-transaction-path-safety | installer, skills, rollback, path-traversal, validation | 修改 External Skill manifest、source promotion、canonical 检查或事务替换逻辑 | 所有外部路径必须受声明根目录约束；canonical 必须完整校验；恢复不完整时必须保留并报告唯一 rollback 备份。 | topics/repository-workflow.md#lesson-20260711-external-skill-transaction-path-safety-external-skill-transaction-path-safety |
 | LESSON-20260717-mode-exit-reentry-contract | agents, workflow, caveman, state-machine, validation | 修改自动 / 手动模式、退出与恢复指令、任务或会话状态及其文本契约测试 | 模式退出必须定义作用域、优先级和重入生命周期，测试必须断言完整行为子句。 | topics/repository-workflow.md#lesson-20260717-mode-exit-reentry-contract-mode-exit-must-define-re-entry-lifecycle |
 | LESSON-20260716-orca-hub-tool-boundary | orca, hub, tools, worktree, automation | 修改 Orca worktree / automation 状态或向 harness peer 发送消息 | Orca CLI 管理持久化 worktree / automation，Hub 只管理当前 harness peer；两者不能互换。 | topics/repository-workflow.md#lesson-20260716-orca-hub-tool-boundary-orca-cli-and-hub-have-separate-control-planes |
@@ -101,3 +100,9 @@
 | LESSON-20260919-640-native-effective-pointer | native, cache, path, coercion, hooks, validation | 第三方原生图／缓存／Markdown路径守卫与host事件证明 | 验证下游转换后的实际指针及整个生成树，不把stamp或安装成功当作路径安全／host事件证明。 | topics/validation-scripts.md#lesson-20260919-640-native-effective-pointer-validate-the-effective-native-pointer |
 | LESSON-20260921-640-deferred-repair-proof | findings, concurrency, dependencies, powershell, windows, acl, validation | 修复历史延期项、删除依赖、转发确认参数或原生 Windows ACL 验证 | 依据当前消费者裁决；无共同协议不冒充CAS；新建私有目录清除显式非受信ACL；真实解释器与正确失败原因作为证据。 | topics/validation-scripts.md#lesson-20260921-640-deferred-repair-proof-revalidate-deferred-findings-against-current-consumers |
 <!-- lessons:640:end -->
+
+<!-- lessons:pr:start -->
+| id | tags | read_when | summary | detail |
+|---|---|---|---|---|
+| LESSON-20260928-pr-merge-confirm-before-branch-cleanup | git, github, pr, merge, branch, workflow, recovery | 合并任务 PR / 状态 PR 或删除已合并分支 | 合并与分支清理必须分步：先证明 MERGED 再删分支；禁止把 merge 与删除串成 `&&` 链。 | topics/repository-workflow.md#lesson-20260928-pr-merge-confirm-before-branch-cleanup-confirm-merged-before-any-branch-cleanup |
+<!-- lessons:pr:end -->

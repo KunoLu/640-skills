@@ -438,6 +438,8 @@
 - 修复：OMP provider 探测仅在 `~/.omp` 已存在时执行 CLI；缺失时报告 per-platform `not-configured`。保留 configured OMP 的官方 plugin 冲突检测，并用隔离 HOME 聚焦测试覆盖。
 - 预防：调用第三方 CLI 的 read-only 子命令前，先验证它不会 bootstrap 配置 / cache；无法证明时先检查既有配置根或在隔离 HOME 运行。check/preflight 测试必须断言目标 HOME 没有新增路径。
 
+<!-- lessons:pr:start -->
+
 ## LESSON-20260928-pr-merge-confirm-before-branch-cleanup: Confirm MERGED Before Any Branch Cleanup
 
 - 日期：2026-09-28
@@ -449,3 +451,5 @@
 - 根因：把 `gh pr merge` 的输出提示当成已合并事实，没有在执行任何破坏性操作前核验 PR 实际状态；`gh pr merge` 在保护规则不满足时的退出行为没有被命令链当作阻断。
 - 修复：从对象库恢复被删分支的同一 head、重推远端、重开 PR，确认 CI 全绿后以 admin 合并，并核验 merge SHA、合并树等于验证 head、main/origin 一致后才删除分支；失误事实如实记入 §18.3 与设计文档 §6。
 - 预防：合并与分支清理必须分步执行：`gh pr merge` 后先用 `gh pr view --json state` / merge SHA / main 新 HEAD 证明 MERGED，再允许任何本地或远端分支删除；禁止把 merge、checkout、pull、branch -d、push --delete 串成一条 `&&` 链。分支被误删时先恢复同一 head 重推重开，不要新建替代 PR 或改写历史。
+
+<!-- lessons:pr:end -->
