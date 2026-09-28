@@ -1193,7 +1193,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 | P2-03 | P2 | 运行 migration apply：数据迁移和旧路由停用 | P2-02 | 按 §15.2／D-IMP-15 完成本阶段 AC-17/18/29/30；[最终验收与收口](sbtd-workflow-v2-live-apply.md#9-最终验收与任务合并)。精确 head `58bd1180913d9e639b98d762dbadf2445ed48618`：1161 tests／991.387s／OK（8 skipped），三平台 CI 成功；C1–C6 全部 PASS，独立 Release Readiness ready，无剩余 P0/P1，独立证据审计 8/8 checksum 匹配。[任务 PR #80](https://github.com/KunoLu/640-skills/pull/80) 于 `2026-09-28T02:03:20Z` MERGED，merge `09d430e1725d630b81d56e25dbf8b83161548977`，合并树等于验证 head。按用户恢复收口确认在独立状态 PR 记录完成；状态 PR 闭环前不解除后续依赖，闭环后也不自动授权 P2-04。本项 done 不等于部署／整体迁移／发布完成；旧 blocked、缺失 live partial 与旧可写证据历史不改写，维护窗口、备份与隔离现场保留 | HITL | done | 2026-09-28T10:13:26+0800 |
 | P2-04 | P2 | 独立部署新规则／Skills／接线并逐项目smoke | P2-03、P1-11、P1-13 | AC-08/15/18/29部署子项及AC-21的host query/smoke子项；通过init迁移上下文唯一部署，显式前次输入和新证据输出，失败不清理；不混入独立sync | HITL | planned | — |
 | P2-05 | P2 | migration verify、再次确认、cleanup及逐项目集成验收 | P2-04 | AC-18/21/26/29/37；完整数据/链接/恢复证据，授权清理后复验、脱敏逐项目报告及用户验收；不删备份，记录保留安排 | HITL | planned | — |
-| P2-06 | P2 | 登记密封 live 批次已执行事实，不关闭 P2-03 | — | 不引用 AC-18 作为通过项。[已执行事实登记](sbtd-workflow-v2-executed-batch-record.md)。只登记 applied、already-complete 重试和 `bb8eb0b`。不声称 AC-18 通过，不把 P2-03 标 done，不解除 P2-04 对 P2-03 的依赖。不授权 cleanup、删备份、sync、hooks、smoke、108 步 live 回滚或调用旧 Trellis | HITL | in-progress | — |
+| P2-06 | P2 | 登记密封 live 批次已执行事实，不关闭 P2-03 | — | [独立事实登记与核对](sbtd-workflow-v2-executed-batch-record.md)：applied／already-complete 的 ID、已保存原生记录与索引一致，初次恢复续作提交 `bb8eb0b` 为已合并历史祖先；只核对既有记录，不重新执行 live。用户单独选择 default，并独立授权本项指定任务→状态分支重绑定。按自己的任务分支、审查、任务 PR／状态 PR 收口，当前不预填 done。本项不作为 AC-18 或 P2-03 通过依据，不改变已独立完成的 P2-03，不授权 P2-04、cleanup、删备份、sync、hooks、host smoke、live 回滚或旧 Trellis 调用 | HITL | checking | — |
 
 ### 14.6 P3：观察与正式发布
 
@@ -1398,7 +1398,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 #### 当前收口与授权状态（条目6–7）
 
 6. P2-03 已按现行 §15.2／D-IMP-15 完成 C1–C6 分层验收，最终 `58bd118` 独立 Release Readiness 为 ready，任务 PR #80 已合并为 `09d430e1725d630b81d56e25dbf8b83161548977`；本独立状态 PR #81 记录 done，状态 PR 闭环前不解除后续依赖。原“in-progress／AC-18 未修复／不能关闭”的判断完整保留在下方历史快照，不再作为当前结论。P2-04／P2-05 仍 planned，部署、host smoke、live 回滚、cleanup、sync、hooks 和备份处置仍未授权；维护窗口与原现场保留。P2-06 不替代本项，另走自己的登记与文档 PR。
-7. P2-06 为 in-progress。用户原文「先评估 advisor，然后另立不声称 AC-18 已通过的新任务」。advisor 只要求补交付字段，不把 blocked 审查改成通过。本项只登记已执行事实，不声称 AC-18 通过，不把 P2-03 标 done，不解除 P2-04 对 P2-03 的依赖。不授权 cleanup、删备份、sync、hooks、smoke、108 步 live 回滚或调用旧 Trellis。
+7. P2-06 为 checking。已在独立任务分支核对三项登记与既有证据，详见[登记文档第4节](sbtd-workflow-v2-executed-batch-record.md#4-独立事实核对)；用户为本项明确选择 default，并另批指定分支重绑定。任务 PR／合并后独立状态 PR 尚未闭环，完成时间仍为 —。本项不承担 P2-03 的 C1–C6，不改变其已独立收口事实，也不授权部署、清理、live 操作或备份处置。
 
 ### 18.3 状态事件记录
 
@@ -1597,6 +1597,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-27T20:47:29+08:00 | P2-03 授权修订有效验收并补证 | 观察时刻，不是用户消息发生时钟。用户原文「先评估advisor，采纳你的方案，请按照你的方案整改并推进」，随后明确选择 default。advisor 的不回滚／不伪造／不提前解锁提醒成立。AC-18、§15.2 与阶段映射改为 live 全量只读核验＋新隔离真实 partial/recovery 续作；明确撤回旧 Trellis 可写回退保证，runtime_readiness 不改为通过。旧 blocked 审查与缺证据事实保留。模式通过已安装 TaskStore 保存在受保护本地记录；原任务历史仍在本表。当前未执行本轮验证、未独立审查通过、未合并、未标 done。不改 live，不动 P2-02 保留现场，不开新 live 批次，不启动 P2-04。 |
 | 2026-09-27T22:12:58+0800 | P2-03 in-progress→checking／分层证据已执行 | 观察时刻。合同两项发现已修复并复审ready-for-validation；代码安全复核无P0/P1。clean `5eee55e` 原生全量1160 tests／1781.605s／OK／8 skipped，source unchanged；live r3全量只读核验通过，109声明资源／108逆向步骤，未改受管状态。新隔离真实partial apply/recovery续作、原生CLI、合成信任根双项目共享只恢复一次、合法多相位及签名负例通过；测试替身、可选D not-run、超时和校验脚本失败均保留，见live协议第7节。不冒充live恢复或host/full-stack。独立最终就绪审查与PR收口未完成，完成时间保持—，P2-04仍planned。 |
 | 2026-09-28T10:13:26+0800 | P2-03 checking→done／任务合并后状态登记 | 用户先要求就绪审查后暂停，后明确「确认，请继续」。最终验收对象为 clean `58bd118`：1161 tests／991.387s／OK／8 skipped，CI run `36328556337` 三平台成功，C1–C6 PASS；独立就绪 ready、无 P0/P1，证据审计8/8匹配。PR #80 已于 `2026-09-28T02:03:20Z` 合并为 `09d430e1725d630b81d56e25dbf8b83161548977`，合并树与验证对象一致。此为 D-IMP-02 独立状态 PR 的完成记录时间，不倒填成测试或合并时钟。状态 PR 闭环前不解锁 P2-04；本轮不启动 P2-04，不改 live、不回滚、不 cleanup/sync/hooks/删备份。 |
+| 2026-09-28T10:46:26+08:00 | P2-06 in-progress→checking／独立事实登记核对 | 观察时刻，不是历史 apply／重试时钟。P2-03 已由任务 PR #80 和独立状态 PR #81 收口；本项另从 main 建任务分支。用户单独选择 default，并独立授权任务合并后从 p2-06-executed-batch-closeout 重绑定 docs/p2-06-merged-status。只读核对登记中的 manifest／apply／retry ID、保全报告hash、历史零受管写入观察及 bb8eb0b 祖先关系，三项一致；未读取私钥／原始内容，未重跑 live。任务 PR、独立审查与状态 PR 仍待闭环，不预填 done，不作为 AC-18 或 P2-03 完成替代。 |
 
 #### P2-03 旧当前项历史快照
 
