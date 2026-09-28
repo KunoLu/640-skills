@@ -23,6 +23,8 @@
 - P1-15 增加 Codex/OMP 三模式 host smoke 入口：默认 CI 跳过真实会话；`SBTD_P115_HOST=1` 才跑六个 host×mode 组合。另含 Gate 分层、跨会话 task 恢复与保存失败格；入口文件规模只作观察，不把字数换算成 AC-20 token 通过。
 
 ### 修复
+
+- P1-22修复部署共享根检查被根内无关符号链接阻断：迁移部署执行不再对共享根做全树快照来判断存在性，改为逐组件拒绝符号链接的轻量 lstat 检查；共享根本身是链接、文件或特殊项仍 fail-closed，缺失根仍以 0700 创建，目标资源的漂移核对不变。此前用户 home 根里任何无关 symlink（如 hooks/plugins 指向其他配置目录）都会让每条共享部署操作以泛化的 precondition 错误阻断。
 - 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。路径上每一级，包括父目录，都按 no-follow 拒绝符号链接；子目录里的无关符号链接不再阻断存在性检查。根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
 - 迁移 apply 的路由批准只认调用方传入的 `--routing-approvals` 文件，不认重封 manifest 里的路径。该文件 SHA 必须等于 sealed 记录，操作从这份文件重建；路径也不能落在 evidence/apply 写入根里。没有这份文件时，必须显式传 `--no-routing-approvals`，并且不得对 `AGENTS.md` 追加暂停块或删除管理块。批准文件还必须带安装包 `assets/routing-approval.pub` 验得过的 Ed25519 签名。公钥不从 manifest 或调用方路径读取。调用方把批准路径指到攻击者文件时，签名对不上就拒绝。plan 只有显式 `--routing-approval-key` 才签名，且私钥路径不进 manifest。仓库不保存对应私钥。未写 live。
 - 同一实现生成的迁移 apply，带回执重试时不再先用 live 当前字节对照批准前快照。已成功且 live 仍等于回执 `after` 的路由替换会跳过，不写第二次；live 被改后仍是 `retry-conflict`。首次 apply 仍对照批准前快照。旧 manifest 默认仍因 `runtime_versions` 不一致报 `version-conflict`。只有签名配对里的前驱，且当前 `onboard` 哈希等于该配对的后继，并传入完整成功回执、live 仍等于回执 `after`、非空备份仍匹配时，版本门才放行。配对文件不进运行时指纹，验签公钥 `assets/runtime-lineage.pub` 进入指纹。未列出的后继、坏签名、部分回执或漂移不放行。不使用路由批准私钥。
