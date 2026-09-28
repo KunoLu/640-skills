@@ -406,6 +406,224 @@ class DeploymentContextTests(unittest.TestCase):
                 )
                 self.assertEqual(snapshot(root), before_retry)
 
+class DeploymentSharedRootTests(unittest.TestCase):
+    def _copy_operation(self, source, target, root, target_state=None):
+        recorded = snapshot(target) if target_state is None else target_state
+        return {
+            "before_requirement": {"kind": "state", "state": recorded},
+            "change": {
+                "kind": "copy-file",
+                "source_ref": {"path": str(source), "state": snapshot(source)},
+            },
+            "dependent_projects": [str(root)],
+            "operation_id": "fixture-operation",
+            "owner_kind": "markdown",
+            "ownership": {
+                "kind": "template-source",
+                "reference": {"path": str(source), "state": snapshot(source)},
+            },
+            "phase": "deploy",
+            "resource_id": "fixture-resource",
+            "selector": "global-rules",
+            "target": str(target),
+        }
+
+    def _execute(self, operation, root, vault, expected=None):
+        from sbtd_graft_deployment import execute_resource
+
+        target = Path(operation["target"])
+        return execute_resource(
+            operation,
+            expected=snapshot(target) if expected is None else expected,
+            root=Path(root),
+            private_root=Path(vault),
+            backup_path=Path(vault) / "deploy" / operation["resource_id"],
+            bindings=[],
+            runtime={"node": "/fixture/node", "cli": "/fixture/cli.js"},
+            launcher_state={"type": "absent", "checksum": None},
+            install_template=True,
+        )
+
+    def test_shared_root_with_unrelated_symlink_deploys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root, vault = base / "shared-root", base / "vault"
+            root.mkdir(mode=0o700)
+            vault.mkdir(mode=0o700)
+            elsewhere = base / "elsewhere"
+            elsewhere.mkdir()
+            (elsewhere / "payload").write_bytes(b"unrelated payload\n")
+            os.symlink(elsewhere, root / "plugins")
+            source = base / "source.md"
+            source.write_bytes(b"canonical template\n")
+            target = root / "AGENTS.md"
+            target.write_bytes(b"paused routing\n")
+            result = self._execute(self._copy_operation(source, target, root), root, vault)
+            self.assertEqual(result["status"], "succeeded", result)
+            self.assertEqual(target.read_bytes(), b"canonical template\n")
+            self.assertTrue((root / "plugins").is_symlink())
+            self.assertEqual(os.readlink(root / "plugins"), str(elsewhere))
+            backup = result["backup_ref"]
+            self.assertIsNotNone(backup)
+            self.assertEqual(
+                Path(backup["path"]).read_bytes(), b"paused routing\n"
+            )
+
+    def test_shared_root_symlink_scope_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            real, vault = base / "real-root", base / "vault"
+            real.mkdir(mode=0o700)
+            vault.mkdir(mode=0o700)
+            link = base / "link-root"
+            os.symlink(real, link)
+            source = base / "source.md"
+            source.write_bytes(b"canonical template\n")
+            target = link / "AGENTS.md"
+            target.write_bytes(b"paused routing\n")
+            absent = {"type": "absent", "checksum": None}
+            result = self._execute(
+                self._copy_operation(source, target, link, target_state=absent),
+                link,
+                vault,
+                expected=absent,
+            )
+            self.assertEqual(result["status"], "blocked", result)
+            self.assertEqual(target.read_bytes(), b"paused routing\n")
+            self.assertIsNone(result["backup_ref"])
+
+    def test_shared_root_non_directory_scope_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            vault = base / "vault"
+            vault.mkdir(mode=0o700)
+            scope_file = base / "scope-file"
+            scope_file.write_bytes(b"not a directory\n")
+            source = base / "source.md"
+            source.write_bytes(b"canonical template\n")
+            target = scope_file / "AGENTS.md"
+            absent = {"type": "absent", "checksum": None}
+            operation = self._copy_operation(
+                source, target, scope_file, target_state=absent
+            )
+            result = self._execute(
+                operation,
+                scope_file,
+                vault,
+                expected={"type": "absent", "checksum": None},
+            )
+            self.assertEqual(result["status"], "blocked", result)
+            self.assertEqual(scope_file.read_bytes(), b"not a directory\n")
+
+    def test_absent_shared_root_is_created_private(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            vault = base / "vault"
+            vault.mkdir(mode=0o700)
+            root = base / "fresh-root"
+            source = base / "source.md"
+            source.write_bytes(b"canonical template\n")
+            target = root / "AGENTS.md"
+            absent = {"type": "absent", "checksum": None}
+            operation = self._copy_operation(source, target, root, target_state=absent)
+            result = self._execute(
+                operation,
+                root,
+                vault,
+                expected={"type": "absent", "checksum": None},
+            )
+            self.assertEqual(result["status"], "succeeded", result)
+            import stat as stat_module
+
+            mode = stat_module.S_IMODE(root.stat().st_mode)
+            self.assertEqual(mode & 0o077, 0)
+            self.assertEqual(target.read_bytes(), b"canonical template\n")
+
+    def test_full_deployment_with_symlinked_shared_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = legacy_project(base, "project")
+            home, vault, evidence = (
+                base / name for name in ("home", "vault", "evidence")
+            )
+            for path in (home, vault, evidence):
+                path.mkdir(mode=0o700)
+            active = home / "active-codex"
+            active.mkdir(mode=0o700)
+            elsewhere = home / "elsewhere"
+            elsewhere.mkdir()
+            (elsewhere / "payload").write_bytes(b"unrelated payload\n")
+            os.symlink(elsewhere, active / "plugins")
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(active),
+                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+            }
+            with mock.patch.dict(os.environ, environment):
+                manifest = plan_migration(
+                    [root],
+                    vault,
+                    "fixture",
+                    None,
+                    tool_versions=runtime_versions(),
+                    deployment_mode="init",
+                )
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(canonical_json_bytes(manifest))
+                applied, code = apply_migration(
+                    manifest_path, confirmed=True, no_routing_approvals=True
+                )
+                self.assertEqual(code, 0, applied)
+                receipt = applied["migration"]["apply_receipt"]
+                context = load_deployment_context(
+                    manifest_path,
+                    evidence / ("apply-" + receipt["apply_id"] + ".json"),
+                    evidence / "deployment.json",
+                    previous_path=None,
+                    mode="init",
+                    roots=[root],
+                    hooks_authorized=False,
+                )
+
+                def isolated_native_boundary(project, _runtime):
+                    (project / "graft").mkdir(exist_ok=True)
+                    (project / "graft/fixture").write_bytes(b"synthetic native output")
+
+                runtime = {
+                    "node": "/fixture/node",
+                    "cli": "/fixture/cli.js",
+                    "python": "/fixture/python",
+                }
+                with (
+                    mock.patch(
+                        "sbtd_graft_deployment.verified_runtime", return_value=runtime
+                    ),
+                    mock.patch(
+                        "sbtd_graft_deployment.build_project_graph",
+                        side_effect=isolated_native_boundary,
+                    ),
+                    mock.patch(
+                        "sbtd_graft_deployment.run_project_smoke",
+                        side_effect=OSError("synthetic smoke failure"),
+                    ),
+                ):
+                    result, code = execute_migration_deployment(context)
+                self.assertNotEqual(code, 0)
+                saved = result["deploymentEvidence"]["evidence"]["payload"]
+                self.assertEqual(saved["status"], "failed")
+                self.assertEqual(
+                    saved["projects"][0]["reason"],
+                    "deployment or smoke is incomplete",
+                )
+                for resource in saved["shared_results"]:
+                    self.assertEqual(resource["status"], "succeeded", resource)
+                for resource in saved["projects"][0]["private_results"]:
+                    self.assertEqual(resource["status"], "succeeded", resource)
+                self.assertTrue((active / "plugins").is_symlink())
+                self.assertEqual(os.readlink(active / "plugins"), str(elsewhere))
+                self.assertTrue((active / "config.toml").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
