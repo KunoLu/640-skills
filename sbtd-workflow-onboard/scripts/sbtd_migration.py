@@ -1514,6 +1514,11 @@ def cleanup_migration(
             "confirmation-required",
             "migration cleanup requires this verification's explicit confirmation",
         )
+    if verification["payload"]["status"] != "verified":
+        _fail(
+            "unverified-input",
+            "migration cleanup requires a verification with status verified",
+        )
     _validate_context(
         manifest_path,
         manifest,
