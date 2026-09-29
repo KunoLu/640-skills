@@ -434,22 +434,21 @@ def _path_contains(parent: str, child: str) -> bool:
     if child_path.is_relative_to(parent_path):
         return True
 
-    def existing_ancestors(path: Path) -> Iterator[Path]:
+    def existing_ancestors(path: Path) -> Iterator[tuple[Path, os.stat_result]]:
         for ancestor in (path, *path.parents):
             try:
-                ancestor.stat()
+                identity = ancestor.stat()
             except OSError:
                 continue
-            yield ancestor
+            yield ancestor, identity
 
+    # Keep observations local to this call: samefile would stat both paths
+    # again for every pair, despite the identities already being available.
     parent_ancestors = tuple(existing_ancestors(parent_path))
-    for child_ancestor in existing_ancestors(child_path):
+    for child_ancestor, child_identity in existing_ancestors(child_path):
         child_tail = child_path.relative_to(child_ancestor).parts
-        for parent_ancestor in parent_ancestors:
-            try:
-                if not os.path.samefile(parent_ancestor, child_ancestor):
-                    continue
-            except OSError:
+        for parent_ancestor, parent_identity in parent_ancestors:
+            if not os.path.samestat(parent_identity, child_identity):
                 continue
             parent_tail = parent_path.relative_to(parent_ancestor).parts
             if child_tail[: len(parent_tail)] == parent_tail:

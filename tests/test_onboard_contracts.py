@@ -372,6 +372,28 @@ class PathAliasContainmentTests(unittest.TestCase):
 
         contracts.validate_document(payload, "publication_decisions")
 
+    def test_public_contract_rechecks_changed_hardlink_aliases(self) -> None:
+        first = self.root / "first.md"
+        second = self.root / "second.md"
+        first.write_text("first")
+        second.write_text("second")
+        payload = self.decisions_with_targets(first, second)
+        contracts.validate_document(payload, "publication_decisions")
+
+        second.unlink()
+        try:
+            os.link(first, second)
+        except OSError as error:
+            self.skipTest(f"hardlinks are unavailable: {error}")
+        expect_error(
+            self, "semantic-violation", contracts.validate_document,
+            payload, "publication_decisions",
+        )
+
+        second.unlink()
+        second.write_text("separate again")
+        contracts.validate_document(payload, "publication_decisions")
+
 
 class ManifestSemanticTests(unittest.TestCase):
     def setUp(self) -> None:

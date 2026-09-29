@@ -25,6 +25,7 @@
 
 ### 修复
 
+- P1-23将契约路径包含判断的祖先身份复用为同一次调用内的`samestat`，不再在嵌套比较中反复`samefile`/`stat`同一文件；新增文件从独立到硬链接再分离的重检回归，符号链接和大小写语义不变，且无跨调用缓存。
 - P1-22修复部署共享根检查被根内无关符号链接阻断：迁移部署执行不再对共享根做全树快照来判断存在性，改为逐组件拒绝符号链接的轻量 lstat 检查；共享根本身是链接、文件或特殊项仍 fail-closed，缺失根仍以 0700 创建，目标资源的漂移核对不变。此前用户 home 根里任何无关 symlink（如 hooks/plugins 指向其他配置目录）都会让每条共享部署操作以泛化的 precondition 错误阻断。
 - P2-05修复 migration cleanup 消费 failed verification 时删除先于回执成功门：cleanup 现在在任何删除之前拒绝 status 非 verified 的验证文档（`unverified-input`，exit 2，零删除）。此前首次 cleanup（无续作回执）会先执行资源删除，回执封存阶段才命中 verified 绑定门，导致删除已发生而 cleanup receipt 无法保存；带既有 cleanup receipt 的续作路径原本就在初始绑定拒绝，行为不变。verify 为 failed 状态封存验证文档的能力不变。
 - 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。路径上每一级，包括父目录，都按 no-follow 拒绝符号链接；子目录里的无关符号链接不再阻断存在性检查。根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
