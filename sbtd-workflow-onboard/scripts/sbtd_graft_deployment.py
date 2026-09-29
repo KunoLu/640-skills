@@ -1468,6 +1468,10 @@ def execute_migration_deployment(
                 "a shared deployment target has no unique approved root",
             )
         scopes[operation["resource_id"]] = candidates[0]
+    # A followup batch merges the managed fence into the live bytes its
+    # outcome gate just proved, keeping fence-outside user text; earlier
+    # batch kinds keep the explicit template-replacement authorization.
+    install_template = manifest["payload"].get("followup") is None
     # Render every config against the currently expected bytes before the first
     # mutation; malformed/foreign ownership cannot fail after another write.
     for operation in operations:
@@ -1480,7 +1484,7 @@ def execute_migration_deployment(
             if state["type"] == "absent"
             else read_file(Path(operation["target"]), state),
             bindings,
-            install_template=True,
+            install_template=install_template,
         )
     vault = Path(manifest["payload"]["backup_root"])
     stopped = False
@@ -1502,7 +1506,7 @@ def execute_migration_deployment(
             backup_path=backup_path,
             bindings=bindings,
             runtime=runtime,
-            install_template=True,
+            install_template=install_template,
             launcher_state=launcher_state,
         )
         if old is not None and old["backup_ref"] is not None:

@@ -22,7 +22,7 @@ P1-12 提供真实 `onboard.py migration --phase plan|apply|verify`：plan 只�
 
 P1-21 提供后继部署批次：前批 apply 完整成功但 plan 未封存 deployment 声明时，migration plan 以 `--successor-manifest`／`--successor-apply-receipt` 成对输入绑定前批（与 publication／routing 批准输入互斥，须显式 `--deployment-mode`），重新实测每个前批后态与承接 cleanup 前态后封存仅含未完成 cleanup 与部署闭包的 successor manifest；部署 `before_requirement` 的 phase-after 可跨 manifest 引用嵌入的前批 succeeded 结果。无前批绑定的 manifest 行为不变；操作说明见上述 REFERENCE。
 
-P1-23 增加 cleanup 闭合后的 OMP follow-up 批次：`migration --phase plan` 以五个 `--followup-*` 文件参数绑定前批 manifest、apply、deployment、verified verification 与 cleanup，必须显式选择 `--deployment-mode init --deployment-platform omp`。旧 successor 限制不变，不重复迁移或清理；计划仍包含完整项目/全局部署集合，不仅是 `mcp.json`。恢复只撤销本次部署，前批备份继续保护；工具实现不等于 live 接线已获授权。命令与证据要求见 [REFERENCE](sbtd-workflow-onboard/REFERENCE.md#omp-follow-up-deployment)。
+P1-23 增加 cleanup 闭合后的 OMP follow-up 批次：`migration --phase plan` 以五个 `--followup-*` 文件参数绑定前批 manifest、apply、deployment、verified verification 与 cleanup，必须显式选择 `--deployment-mode init --deployment-platform omp`。旧 successor 限制不变，不重复迁移或清理；计划仍包含完整项目/全局部署集合，不仅是 `mcp.json`。P1-24 起 configure-graft 前态按受管节校验并绑定当前快照，图目录仍钉死历史 after；python／node／cli 只做形状与跨条目一致。恢复只撤销本次部署，前批备份继续保护；工具实现不等于 live 接线已获授权。命令与证据要求见 [REFERENCE](sbtd-workflow-onboard/REFERENCE.md#omp-follow-up-deployment)。
 
 恢复（recovery）成功只表示绑定范围内的受管数据／配置已按回执 reconcile，不承诺已退役 Trellis 运行时可执行或可写，也不调用、重装或恢复旧运行时；旧运行时 `runtime_readiness` 保持未验证，不得由恢复成功推断。同一运行时的部分回执重试只续作本批未完成写入；接受前驱运行时是另一条路径，另须签名的前驱—后继配对与该 manifest 的完整成功回执。live 回执只证明 live 实际状态；故障、部分重试和恢复续作行为须由独立隔离测试分别证明，二者互不替代，隔离演练也不证明 live 已迁移。部署接受前维护不自动结束，备份保留规则不变。
 
