@@ -1177,8 +1177,9 @@ def _check_configure_graft_outcome(
     or unparseable file, or any drift inside the managed section, fails
     closed; drift outside it does not block. Returns the live target state
     so followup before-requirements seal the current bytes. ``anchors``
-    are every directory deployment target in the chain, including ones the
-    followup overwrites; Codex launchers must live inside one.
+    are the chain's deploy-phase directory outcomes still present on disk
+    (retired cleanup targets never anchor); Codex launchers must live
+    inside one.
     """
     selector = operation["selector"]
     roots = operation["dependent_projects"]
@@ -1274,14 +1275,19 @@ def _check_followup_predecessor_outcomes(
                 "the completed batch history cannot prove every declared resource",
             )
     outcomes = {target: item[1]["after"] for target, item in latest.items()}
-    # Anchors prove path containment only, so every directory deployment
-    # target qualifies — including ones the followup overwrites. An
-    # overwritten tree's content stays pinned by its sealed
+    # Anchors prove path containment only, so every live directory
+    # deployment outcome qualifies — including trees the followup
+    # overwrites, whose content stays pinned by the sealed
     # before-requirement and is re-measured before any write at execute.
+    # Retired trees (cleanup removals, after absent) never anchor: their
+    # paths no longer prove anything about the bytes that were deployed.
     anchors = [
         target
-        for target, (_key, _result, operation) in latest.items()
-        if operation["owner_kind"] == "directory"
+        for target, (_key, result, operation) in latest.items()
+        if operation["phase"] == "deploy"
+        and operation["change"]["kind"] != "remove"
+        and operation["owner_kind"] == "directory"
+        and result["after"]["type"] == "directory"
     ]
     configure: list[tuple[str, Mapping[str, Any]]] = []
     for target, (_key, result, operation) in latest.items():
