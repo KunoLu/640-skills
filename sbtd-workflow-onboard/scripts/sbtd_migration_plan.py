@@ -1165,6 +1165,45 @@ def _followup_outcome_chain(
     return chain
 
 
+def _check_configure_graft_outcome(
+    operation: Mapping[str, Any], target: Path
+) -> None:
+    """Gate a completed configure-graft outcome by managed-section ownership.
+
+    The host runtime legitimately extends these files outside the
+    graft-owned section, so whole-file equality cannot gate them; the
+    sealed chain never carries launch bindings, so ownership is proven by
+    the managed argv/fence shapes instead of recomputed bytes. A missing
+    or unparseable file, or any drift inside the managed section, fails
+    closed; drift outside it does not block.
+    """
+    selector = operation["selector"]
+    roots = operation["dependent_projects"]
+    state = snapshot(target)
+    if state["type"] != "file":
+        _fail(
+            "state-conflict",
+            "a completed batch outcome no longer matches the current state",
+        )
+    raw = read_file(target, state)
+    if selector == "graft-omp-mcp":
+        from sbtd_omp_wiring import verify_owned_omp_mcp_section
+
+        verify_owned_omp_mcp_section(raw, roots)
+    elif selector == "graft-mcp":
+        from sbtd_codex_wiring import verify_owned_mcp_section
+
+        verify_owned_mcp_section(raw, roots)
+    elif selector == "graft-hooks":
+        from sbtd_codex_wiring import verify_owned_hooks_section
+
+        verify_owned_hooks_section(raw, roots)
+    else:
+        from sbtd_codex_wiring import verify_owned_agents_fence
+
+        verify_owned_agents_fence(raw)
+
+
 def _check_followup_predecessor_outcomes(
     chain: Sequence[tuple[Mapping[str, Any], Mapping[str, Mapping[str, Any]]]],
     *,
@@ -1207,7 +1246,7 @@ def _check_followup_predecessor_outcomes(
                 key = (batch_index, contracts._PHASE_ORDER[operation["phase"]])
                 current = latest.get(operation["target"])
                 if current is None or key > current[0]:
-                    latest[operation["target"]] = (key, result)
+                    latest[operation["target"]] = (key, result, operation)
             declared.append((batch_index, operation, proven))
     for batch_index, operation, proven in declared:
         if proven:
@@ -1223,15 +1262,18 @@ def _check_followup_predecessor_outcomes(
                 "followup-conflict",
                 "the completed batch history cannot prove every declared resource",
             )
-    for target, (_key, result) in latest.items():
+    for target, (_key, result, operation) in latest.items():
         if target in overwritten:
+            continue
+        if operation["change"]["kind"] == "configure-graft":
+            _check_configure_graft_outcome(operation, Path(target))
             continue
         if snapshot(Path(target)) != result["after"]:
             _fail(
                 "state-conflict",
                 "a completed batch outcome no longer matches the current state",
             )
-    return {target: result["after"] for target, (_key, result) in latest.items()}
+    return {target: item[1]["after"] for target, item in latest.items()}
 
 
 

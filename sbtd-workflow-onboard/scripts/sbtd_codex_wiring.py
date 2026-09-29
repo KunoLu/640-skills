@@ -84,7 +84,7 @@ import json
 import os
 import shlex
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -95,6 +95,9 @@ __all__ = [
     "codex_hooks_candidate",
     "codex_mcp_candidate",
     "project_agents_candidate",
+    "verify_owned_agents_fence",
+    "verify_owned_hooks_section",
+    "verify_owned_mcp_section",
 ]
 
 _KEY_PREFIX = "sbtd-graft-"
@@ -613,3 +616,192 @@ def project_agents_candidate(before: bytes) -> bytes:
         _fail("ownership-conflict", "the managed graft fence is misordered")
     right = end + len(_FENCE_END)
     return _encode(text[:left] + block + text[right:])
+
+
+# ---------------------------------------------------------------------------
+# Managed graft section ownership gates (follow-up predecessor checks)
+# ---------------------------------------------------------------------------
+#
+# A completed batch's configure-graft outcome is gated by managed-section
+# ownership, not whole-file equality: the host runtime legitimately appends
+# sections beside the graft-owned entries. The sealed chain never carries
+# launch bindings, so expectations are the owned argv/fence shapes below —
+# never recomputed bytes. Anything missing, malformed, duplicated or
+# reshaped inside the managed section fails closed; drift outside it does
+# not block.
+
+
+def _owned_interpreter(command: Any) -> bool:
+    return (
+        isinstance(command, str)
+        and os.path.isabs(command)
+        and Path(command).name.startswith("python")
+    )
+
+
+def _owned_launcher_name(path: Any) -> bool:
+    return isinstance(path, str) and Path(path).name == "sbtd_graft_entry.py"
+
+
+def _owned_cli_path(path: Any) -> bool:
+    return isinstance(path, str) and Path(path).name == "cli.js"
+
+
+def _owned_server_shape(
+    entry: Any, roots: Collection[str], key: str
+) -> tuple[str, str, str, str]:
+    """Fail closed unless one config.toml entry is exactly the owned shape."""
+    if not isinstance(entry, Mapping) or set(entry) != {
+        "command",
+        "args",
+        "cwd",
+        "env",
+    }:
+        _fail("state-conflict", "a managed graft MCP entry was reshaped")
+    command = entry["command"]
+    args = entry["args"]
+    if (
+        not _owned_interpreter(command)
+        or not isinstance(args, list)
+        or len(args) != 10
+        or any(not isinstance(token, str) for token in args)
+        or args[:2] != list(_PYTHON_STARTUP_FLAGS)
+        or not _owned_launcher_name(args[2])
+        or args[3] != "mcp"
+        or args[4::2] != ["--root", "--node", "--entry"]
+    ):
+        _fail("state-conflict", "a managed graft MCP argv is not the owned shape")
+    root, node, cli = args[5], args[7], args[9]
+    if root not in roots or key != _server_key(root):
+        _fail("state-conflict", "a managed graft MCP entry names a foreign root")
+    if (
+        not os.path.isabs(node)
+        or not _owned_cli_path(cli)
+        or entry["cwd"] != root
+        or not isinstance(entry["env"], Mapping)
+        or dict(entry["env"]) != dict(_MCP_ENV)
+    ):
+        _fail("state-conflict", "a managed graft MCP entry was reshaped")
+    return command, args[2], node, cli
+
+
+def verify_owned_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
+    """Fail closed unless every batch root's graft server is intact."""
+    tomlkit, toml_error, _inline_table, _table_type = _toml_support()
+    text = _utf8(_raw_bytes(raw), "state-conflict", "the Codex config is not UTF-8")
+    try:
+        document = tomlkit.parse(text)
+    except (ValueError, RecursionError, toml_error):
+        _fail("state-conflict", "the Codex config is not well-formed TOML")
+    servers = document.unwrap().get("mcp_servers")
+    if not isinstance(servers, dict):
+        _fail("state-conflict", "the managed graft MCP section is missing")
+    batch = {str(root) for root in roots}
+    managed = {name for name in servers if name.startswith(_KEY_PREFIX)}
+    expected = {_server_key(root) for root in batch}
+    if managed != expected:
+        _fail("state-conflict", "the managed graft MCP entries were changed")
+    identities = {
+        _owned_server_shape(servers[key], batch, key) for key in sorted(expected)
+    }
+    if len(identities) > 1:
+        _fail("state-conflict", "managed graft MCP entries disagree on the runtime")
+
+
+def verify_owned_hooks_section(raw: bytes, roots: Sequence[str]) -> None:
+    """Fail closed unless every batch root's graft hooks are intact."""
+    batch = {str(root) for root in roots}
+    text = _utf8(_raw_bytes(raw), "state-conflict", "the Codex hooks are not UTF-8")
+    try:
+        document = json.loads(
+            text,
+            object_pairs_hook=_reject_json_duplicates,
+            parse_constant=_reject_json_constant,
+        )
+    except (ValueError, RecursionError):
+        _fail("state-conflict", "the Codex hooks document is not well-formed JSON")
+    if not isinstance(document, dict) or not _check_finite(document):
+        _fail("state-conflict", "the Codex hooks document root is malformed")
+    hooks = document.get("hooks")
+    if not isinstance(hooks, dict):
+        _fail("state-conflict", "the managed graft hooks section is missing")
+    timeouts = {spec[3]: spec[2] for spec in _HOOK_SPECS}
+    expected = sorted((root, spec[3]) for spec in _HOOK_SPECS for root in batch)
+    seen: list[tuple[str, str]] = []
+    identities: set[tuple[str, str, str, str]] = set()
+    for event, matcher, _timeout, _event_flag in _HOOK_SPECS:
+        groups = hooks.get(event)
+        if not isinstance(groups, list):
+            _fail("state-conflict", "a managed graft hook event section is missing")
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            entries = group.get("hooks")
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                command = entry.get("command")
+                argv = (
+                    _split_hook_command(command) if isinstance(command, str) else None
+                )
+                if argv is None:
+                    continue
+                launcher = next(
+                    (
+                        token
+                        for token in argv[1:4]
+                        if _owned_launcher_name(token)
+                    ),
+                    None,
+                )
+                if launcher is None:
+                    continue
+                flags = _owned_hook_flags(command, launcher)
+                if (
+                    flags is None
+                    or flags["startup"] != "isolated"
+                    or not _owned_interpreter(flags["interpreter"])
+                    or flags["--root"] not in batch
+                    or not _owned_cli_path(flags["--entry"])
+                    or not os.path.isabs(flags["--node"])
+                    or set(entry) != {"type", "command", "timeout"}
+                    or entry["type"] != "command"
+                    or entry["timeout"] != timeouts[flags["--event"]]
+                    or set(group) - {"matcher", "hooks"}
+                    or (matcher is None and "matcher" in group)
+                    or (matcher is not None and group.get("matcher") != matcher)
+                ):
+                    _fail("state-conflict", "a managed graft hook was reshaped")
+                seen.append((flags["--root"], flags["--event"]))
+                identities.add(
+                    (
+                        flags["interpreter"],
+                        launcher,
+                        flags["--node"],
+                        flags["--entry"],
+                    )
+                )
+    if sorted(seen) != expected:
+        _fail("state-conflict", "the managed graft hooks were changed")
+    if len(identities) > 1:
+        _fail("state-conflict", "managed graft hooks disagree on the runtime")
+
+
+def verify_owned_agents_fence(raw: bytes) -> None:
+    """Fail closed unless the single managed graft fence body is intact."""
+    text = _utf8(
+        _raw_bytes(raw), "state-conflict", "the project AGENTS file is not UTF-8"
+    )
+    if text.count(_FENCE_START) != 1 or text.count(_FENCE_END) != 1:
+        _fail(
+            "state-conflict",
+            "the managed graft fence is incomplete or ambiguous",
+        )
+    left = text.index(_FENCE_START) + len(_FENCE_START)
+    right = text.index(_FENCE_END)
+    if right < left:
+        _fail("state-conflict", "the managed graft fence is misordered")
+    if text[left:right] != f"\n{_instructions_body()}\n":
+        _fail("state-conflict", "the managed graft fence body was changed")

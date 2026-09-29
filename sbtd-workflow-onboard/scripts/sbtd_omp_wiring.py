@@ -18,7 +18,12 @@ from typing import Any, NoReturn
 import onboard_contracts as contracts
 from sbtd_project import _check_finite, _reject_json_constant, _reject_json_duplicates
 
-__all__ = ["analyze_omp_configuration", "desired_omp_server", "omp_mcp_candidate"]
+__all__ = [
+    "analyze_omp_configuration",
+    "desired_omp_server",
+    "omp_mcp_candidate",
+    "verify_owned_omp_mcp_section",
+]
 
 _SERVER_PREFIX = "sbtd-graft"
 _BINDING_KEYS = ("root", "node", "cli", "python", "launcher")
@@ -409,3 +414,87 @@ def omp_mcp_candidate(before: bytes, analysis: Mapping[str, Any]) -> bytes:
         return contracts.canonical_json_bytes(document)
     except (TypeError, ValueError, RecursionError):
         _fail("invalid-config", "the rendered OMP MCP candidate cannot be serialized")
+
+
+# ---------------------------------------------------------------------------
+# Managed graft section ownership gate (follow-up predecessor checks)
+# ---------------------------------------------------------------------------
+#
+# The follow-up plan gates a completed configure-graft outcome by
+# managed-section ownership, not whole-file equality: the host may append
+# unrelated servers beside the graft-owned entries. The sealed chain never
+# carries launch bindings, so expectations are the owned argv shapes —
+# never recomputed bytes. Anything missing, malformed, duplicated or
+# reshaped inside the managed section fails closed; drift outside it does
+# not block.
+
+
+def _owned_launcher_name(path: Any) -> bool:
+    return isinstance(path, str) and Path(path).name == "sbtd_graft_entry.py"
+
+
+def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
+    """Fail closed unless every batch root's graft server is intact."""
+    if not isinstance(raw, (bytes, bytearray)):
+        _fail("state-conflict", "the OMP MCP configuration is unavailable")
+    try:
+        text = bytes(raw).decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        _fail("state-conflict", "the OMP MCP configuration is not strict UTF-8")
+    try:
+        document = json.loads(
+            text,
+            object_pairs_hook=_reject_json_duplicates,
+            parse_constant=_reject_json_constant,
+        )
+    except (ValueError, RecursionError):
+        _fail("state-conflict", "the OMP MCP configuration is not strict JSON")
+    if not _check_finite(document) or not isinstance(document, dict):
+        _fail("state-conflict", "the OMP MCP configuration root is malformed")
+    servers = document.get("mcpServers")
+    if not isinstance(servers, dict):
+        _fail("state-conflict", "the managed graft OMP MCP section is missing")
+    batch = {str(root) for root in roots}
+    managed = {
+        name for name in servers if str(name).startswith(f"{_SERVER_PREFIX}-")
+    }
+    expected = {_server_name(root) for root in batch}
+    if managed != expected:
+        _fail("state-conflict", "the managed graft OMP MCP entries were changed")
+    identities: set[tuple[str, str, str, str]] = set()
+    for root in sorted(batch):
+        entry = servers[_server_name(root)]
+        if not isinstance(entry, Mapping):
+            _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
+        command = entry.get("command")
+        args = entry.get("args")
+        if (
+            not isinstance(command, str)
+            or not os.path.isabs(command)
+            or not Path(command).name.startswith("python")
+            or not isinstance(args, list)
+            or len(args) != 10
+            or any(not isinstance(token, str) for token in args)
+            or args[:2] != list(_STARTUP_FLAGS)
+            or not _owned_launcher_name(args[2])
+            or args[3] != "mcp"
+            or args[4::2] != ["--root", "--node", "--entry"]
+            or args[5] != root
+            or not os.path.isabs(args[7])
+            or Path(args[9]).name != "cli.js"
+        ):
+            _fail("state-conflict", "a managed graft OMP MCP argv was reshaped")
+        desired = {
+            "type": "stdio",
+            "command": command,
+            "args": args,
+            "cwd": root,
+            "env": dict(_TELEMETRY_ENV),
+        }
+        if not _equivalent(entry, desired) or not _entry_enabled(entry):
+            _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
+        identities.add((command, args[2], args[7], args[9]))
+    if len(identities) > 1:
+        _fail(
+            "state-conflict", "managed graft OMP MCP entries disagree on the runtime"
+        )

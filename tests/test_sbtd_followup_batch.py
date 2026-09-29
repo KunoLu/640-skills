@@ -1007,7 +1007,9 @@ class FollowupPredecessorGateTests(unittest.TestCase):
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
             config = fixture.home / ".codex/config.toml"
-            config.write_bytes(config.read_bytes() + b"tampered\n")
+            changed = config.read_bytes().replace(b'DNT = "1"', b'DNT = "0"', 1)
+            assert changed != config.read_bytes()
+            config.write_bytes(changed)
             with self.assertRaises(ContractError) as error:
                 fixture.plan_followup()
             self.assertEqual(error.exception.code, "state-conflict")
@@ -1016,7 +1018,11 @@ class FollowupPredecessorGateTests(unittest.TestCase):
             fixture = FollowupMigration(Path(directory).resolve())
             fixture.build()
             agents = fixture.root / "AGENTS.md"
-            agents.write_bytes(agents.read_bytes() + b"tampered\n")
+            changed = agents.read_bytes().replace(
+                b"<!-- graft:start -->\n", b"<!-- graft:start -->\nedited\n", 1
+            )
+            assert changed != agents.read_bytes()
+            agents.write_bytes(changed)
             with self.assertRaises(ContractError) as error:
                 fixture.plan_followup()
             self.assertEqual(error.exception.code, "state-conflict")
