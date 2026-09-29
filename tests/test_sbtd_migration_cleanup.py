@@ -221,6 +221,40 @@ class CleanupMigrationTests(unittest.TestCase):
             self.assertTrue((fixture.root / ".trellis").is_dir())
             self.assertEqual(list(fixture.evidence.glob("cleanup-*.json")), [])
 
+    def test_cleanup_with_a_failed_verification_deletes_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            retained = next(
+                asset
+                for project in fixture.verification["payload"]["projects"]
+                for asset in project["retained_assets"]
+                if asset["state"]["type"] == "file"
+                and asset["path"].endswith("/.sbtd/developer")
+            )
+            drifted = Path(retained["path"])
+            drifted.write_bytes(drifted.read_bytes() + b"drift\n")
+            failed, failed_code = verify_migration(
+                fixture.manifest_path, fixture.apply_path, fixture.deployment_path
+            )
+            self.assertEqual(failed_code, 3, failed)
+            self.assertEqual(failed["status"], "failed")
+            failed_verification = failed["migration"]["verification"]
+            fixture.verification_path = fixture.evidence / "verification-failed.json"
+            save_document(
+                fixture.verification_path,
+                failed_verification,
+                private_root=fixture.evidence,
+            )
+            before = _tree_bytes(fixture.base)
+            with self.assertRaises(ContractError) as raised:
+                fixture.cleanup(
+                    confirm_cleanup=failed_verification["verification_id"]
+                )
+            self.assertEqual(raised.exception.exit_code, 2)
+            self.assertEqual(_tree_bytes(fixture.base), before)
+            self.assertTrue((fixture.root / ".trellis").is_dir())
+            self.assertEqual(list(fixture.evidence.glob("cleanup-*.json")), [])
+
     def test_cleanup_removes_the_verified_legacy_tree_and_saves_a_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.build(Path(directory).resolve())
