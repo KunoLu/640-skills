@@ -268,6 +268,25 @@ class FollowupSectionGateTests(unittest.TestCase):
             target.write_text(json.dumps(document), encoding="utf-8")
             self.assert_conflict(chain)
 
+    def test_omp_malformed_enabled_flag_is_state_conflict(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "project"
+            target = base / "mcp.json"
+            document = {
+                "mcpServers": {
+                    _omp_server_name(root): desired_omp_server(
+                        _bindings(root, base)
+                    )
+                }
+            }
+            target.write_text(json.dumps(document), encoding="utf-8")
+            chain = _seal(target, "graft-omp-mcp", [root], owner="json")
+            # A non-str/bool enabled flag is gate drift, not a usage error.
+            document["mcpServers"][_omp_server_name(root)]["enabled"] = 1
+            target.write_text(json.dumps(document), encoding="utf-8")
+            self.assert_conflict(chain)
+
     def test_omp_undigested_entry_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

@@ -510,9 +510,17 @@ def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
             "cwd": root,
             "env": dict(_TELEMETRY_ENV),
         }
-        if not _equivalent(entry, desired) or not (
-            _entry_enabled(entry) or name in forced
-        ):
+        if not _equivalent(entry, desired):
+            _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
+        try:
+            enabled = _entry_enabled(entry)
+        except contracts.ContractError as error:
+            if error.code != "invalid-config":
+                raise
+            # Inside this gate a malformed managed-section value is a
+            # state-conflict, never a configuration-usage error.
+            _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
+        if not enabled and name not in forced:
             _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
         identities.add((command, args[2], args[7], args[9]))
     if len(identities) > 1:
