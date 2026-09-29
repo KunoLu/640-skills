@@ -6,7 +6,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.13（逐任务实施；P2 阶段全部收口，P3-01 两周观察窗口已开启（2026-09-29 → 2026-10-13），P3-02～P3-04 仍 planned；当前进度与证据以 §14 为准） |
+| 文档版本 | 2.14（逐任务实施；P2 阶段已收口，P3-01 观察中；P1-23 开发 cleanup 闭合后的 OMP follow-up 部署能力，未授权 live 接线；当前进度与证据以 §14 为准） |
 | 文档状态 | 产品与流程决策已确认；已获本源仓库逐任务开发及 PR 合并授权；实际任务状态与证据见 §14，合并不等于 v2 发布 |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
@@ -812,6 +812,30 @@ plan 保持只读：验证前批文档与 ID 绑定、项目根／backup_root／
 
 后继 manifest 的 deploy 操作可用 `{"kind":"phase-after","phase":"apply","resource_id":<same-resource>}` 跨 manifest 引用前批同资源 apply 结果；deploy/verify/cleanup/recovery 计算期望前态时使用「嵌入前批结果 ∪ 本批 receipt 结果（本批优先）」的解析叠层，叠层只用于期望值计算，不进入结果枚举、状态绑定或备份重叠核对。安装模板目标在本批无 pause 前驱但嵌入结果含同资源 succeeded 结果时，必须使用该跨 manifest phase-after 形状。后继 apply 无 apply 操作，产出空结果成功 receipt 并按本批 manifest_id 备份 sources。闭合集再推导（validate_legacy_inputs）对 successor manifest 每次消费先经 `_verify_successor_predecessor` 复验前批：按 ref 内容哈希重载真实前批文档并完整复验绑定与成功门，嵌入结果必须与真实 receipt 逐项相等（binding-violation），承接 cleanup（逐项目私有＋共享）必须与前批集合逐字节相等（semantic-violation），未被本批任何阶段覆盖的嵌入结果 after 必须仍等于当前实测（state-conflict）；随后要求每项目非部署私有操作恰为一条 legacy cleanup，shared 仅含 cleanup 退役与部署集合，跳过 inventory/publication/identity/platform-removal 等 apply 前态门重推导；validate_deployment_declarations 与 _bind_approved_routing（null 通过）照常。无前批绑定的 manifest 行为完全不变。successor 链根与前批文档同为未签名私有文档，信任边界为私有目录权限与逐阶段实测，不声称抗整链伪造。
 
+#### 10.2.5 清理闭合后的 OMP follow-up 部署批次
+
+P1-23 为已成功部署 Codex、验证通过且 cleanup 闭合的批次增加独立 OMP 部署入口；不是放宽第 10.2.4 节 successor 的链深度。前批可以是原批或 successor，但不得是另一个 followup。本轮只交付工具能力；实际 OMP 接线仍按独立维护窗口、范围确认、备份与 host 验证门执行。
+
+plan 须同时显式提供 `--followup-manifest`、`--followup-apply-receipt`、`--followup-deployment-evidence`、`--followup-verification`、`--followup-cleanup-receipt`，并选择 `--deployment-mode init --deployment-platform omp`。五项成组，与 successor、publication、routing 批准参数互斥，不允许 hooks。路径须通过既有私有文件校验；既有 `--successor-*` 行为及拒绝门保持不变。
+
+`payload.followup` 保存五个文档的内容哈希引用和 `manifest_id/apply_id/deployment_id/verification_id/cleanup_id`；每次消费重新绑定五份证据，拒绝失败/partial 状态、错误 ID、引用漂移与备份缺失。继承项目根、platforms、backup_root、custodian、retention，重新观察项目 Git 绑定；sources 为空、publication 为空、routing 为 null，仅声明 deploy 操作，ignore 保护须已存在。新文档由当前工具版本封存并消费，前批的历史源模板不要求等于新版本源码，也不绕过本批版本门。
+
+复用完整 canonical 部署集合：每个项目的 AGENTS/Graft 图、全局规则/Skills 和 OMP MCP 都必须展示在计划中，不宣称只写一个 `mcp.json`。对于本批将覆盖的前批受管目标，只允许以真实前批成功结果证明其所有权及当前前态，不能给任意自定义内容开覆盖豁免。before 使用本批封存的具体状态；部署后由本批回执与原件证明，不能继续要求 live 等于前批旧后态。未覆盖资源、已清理源及前批备份仍须完整核对。
+
+apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，verify 使用本批 manifest/apply/deployment，五份前批引用由 manifest 携带，无需重复传入。没有 legacy cleanup 操作，不把空 cleanup 当成新增销毁授权。恢复只撤销本 followup 的已证明写入，回到 followup 前态，不重开前批清理、不重装旧运行时、不删除原批/前批/本批备份。
+
+验收场景采用中文场景文字与 English Gherkin 关键词，依本仓规则仅保留在文档和现有 Python 测试体系，不生成 `.feature`：
+
+| 场景 | Given / When / Then | 自动化范围 |
+|---|---|---|
+| 完整清理后追加 OMP 部署 | Given Codex 前批五证据完整且备份可用；When 计划、确认 apply 与部署并验证 followup；Then OMP 接线可被本批证据验证，旧 `.trellis` 仍 absent | `tests/test_sbtd_followup_batch.py`，隔离文件系统与受控 Graft，不代替真实 host 验收 |
+| 拒绝不完整或漂移的前批 | Given 缺失、失败、错误绑定或漂移的前批输入；When 计划或消费 followup；Then blocked 且受管目标零写入 | `tests/test_sbtd_followup_batch.py` |
+| 恢复只撤销本次部署 | Given followup 已写入；When 明确确认本批 recovery；Then 恢复本批前态并保留前批清理结果和全部备份 | `tests/test_sbtd_followup_batch.py` |
+| CLI 范围不扩散 | Given 五项缺任一项、混用旧输入、选错平台/模式或请求 hooks；When 调用 CLI；Then 在写入前拒绝 | `tests/test_sbtd_followup_cli.py` |
+| 重封不能收编用户改动 | Given 项目 AGENTS/图已被用户修改；When 仅修改 followup before-state 并重新封存；Then 消费方以 ownership-conflict 拒绝，用户内容保持不变 | `tests/test_sbtd_followup_batch.py` |
+| 证据输出不污染历史原件 | Given 目录原件、stage backup 或批准候选仍受前批保护；When 把部署输出指向其中的新文件；Then 写入前拒绝；同 vault 内不重叠的 sibling 输出仍允许 | `tests/test_sbtd_followup_preservation.py` |
+| 受管旧目录可升级和恢复 | Given 成功前批拥有与当前模板不同的安装目录；When 确认 followup 部署、重试及恢复；Then 使用已验证备份完成替换，恢复后旧目录逐字一致且前批证据未变 | `tests/test_sbtd_followup_preservation.py` |
+
 ### 10.3 catalog 与旧 Skill 退役
 
 - 15 bundled 减去两个 Trellis Skills，加一个 sbtd-task，目标 14；external 仍为19。
@@ -1192,6 +1216,7 @@ P0/P1 开工统一以 R-09 done 为前置；本轮修复期间不沿旧 R-06 状
 | P1-20 | P1 | Manifest-scoped recovery plan／receipt 与恢复执行 | P1-12、P1-04、P1-05、P1-13 | AC-18/35；[实施与验证](sbtd-workflow-v2-recovery-runtime.md)。最终head`4030e7f9b4c2864e5c58f02fe3d7244321b4a779`原生980tests/224.892s/exit0（6既有skip）、定点344tests/13.969s；原生CLI plan/0、缺confirm单JSON blocked/2、confirm后restored/0且`.trellis`实际恢复；两轮独立review均NO P0/P1，rejection envelope、漂移/unknown write、ignore ordering、plan目录绑定与protection retry均已复核。shared closure运行时覆盖P2延期入findings.log。[PR #51](https://github.com/KunoLu/640-skills/pull/51)合入，merge`7316566f11c1995039df0d0f22f5cd6b16975e97`；真实迁移/工具安装/sync/live automation/Windows/runtime readiness/备份销毁未执行 | AFK | done | 2026-09-20T16:39:32+08:00 |
 | P1-21 | P1 | 后继部署批次：planner successor 形状、部署校验跨 manifest phase-after、隔离红绿 | P1-20 | AC-18/29/35 相应子项；[实施与验证](sbtd-workflow-v2-successor-deployment-batch.md)。设计缺口：plan 密封漏 deployment 声明即永久无法部署（P2-04 blocked 根因）；用户 2026-09-28 显式授权解除维护窗口并采纳方向 1。终审 NO P0/P1/P2，最终 head `f9041b3` 全量 1172 passed／8 skipped（既有平台 skip）／815 subtests；隔离红绿零 live 接触通过。任务 [PR #84](https://github.com/KunoLu/640-skills/pull/84) 合入，merge `98a6071e94341a7663d53c1707f36a59b47815f2`，合并树等于验证 head `b193930`（CI run 36398200879 三平台全绿）；独立状态 [PR #85](https://github.com/KunoLu/640-skills/pull/85) 合入，merge `cc7d113`（CI run 36399588254 全绿），任务分支已清理。合并前一次误删分支事故已从对象库恢复原 head 重推并记录为 lesson（commit `1cab440`）。本行 done 补记于本时间，实际合并时间见 §18.3；live 零写入直到部署，不恢复前态、不伪造证据 | AFK | done | 2026-09-28T17:53:40+08:00 |
 | P1-22 | P1 | 部署共享根轻量存在性检查；P2-04 恢复路径续作血统 | P1-21 | AC-18/29 部署子项相应部分；[实施与验证](sbtd-workflow-v2-deploy-root-scope-check.md)。设计缺口：`execute_resource` 对共享根 `snapshot(root)` 全树遍历判断存在性，被根内无关用户 symlink 拒止（P2-04 v2 部署 blocked 根因）。用户 2026-09-28 裁决立本任务并选择恢复路径续作：v2 partial deploy 已用旧运行时恢复（回执 `5a2d6ae7…`），重 plan 探针通过；修复 `_lstat(_canonical(root))` 轻量检查，根为 link/非目录仍 fail-closed，红绿定点复跑签名与 live 一致。终审：代码审查 GO 零发现、安全审查 NO P0/P1（2 P2 延期入 findings record-222/223），全量 1177 passed／8 skipped／815 subtests，ruff 全过。任务 [PR #87](https://github.com/KunoLu/640-skills/pull/87) 合入，merge `f1b58f3c8640af06967b9f3948312c6fd5d4f281`（CI run 36419809696 三平台全绿），任务分支本地/远端已清理。不扩展 lineage、不动用户 symlink、不绕版本门；P2-04 保持 blocked，v3 successor 批次待其窗口以新运行时重做 | AFK | done | 2026-09-28T20:15:41+08:00 |
+| P1-23 | P1 | cleanup 闭合后的 OMP follow-up 部署批次：五证据绑定、完整部署闭包与恢复 | P1-21、P1-22、P2-05 | AC-08/18/29/35 相应子项；见 §10.2.5。旧 successor 门保持；五份前批证据与祖先保全、完整部署集合及本批恢复已实现。default，DDIA confirmed；本地全量 1214 passed／8 skipped／859 subtests（1001.49s）；原生 CLI＋受控部署/恢复 smoke 通过，真实 Graft/host 尚未执行。两路独立复审无剩余发现，生成前态/祖先输出/目录升级缺陷经回归闭环；ruff 通过，ty 四项既有诊断与隔离基线一致。待精确 head CI 与任务/状态 PR；不执行 live 部署、sync、hooks 或备份处置 | AFK | checking | — |
 
 P1-12在生产者之前用冻结schema的合法／非法fixture证明消费者边界，不宣称真实部署通过；P1-04/05分别产生真实host证据，P1-13验证实际cleanup消费，P1-20验证恢复，最终P1-14才验收完整链。P1-12拥有共用序列化／累计保存实现；host适配器贡献资源结果，由现有init编排统一调用，不各写一份同批次文件。
 
@@ -1633,6 +1658,8 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-09-29T09:59:47+08:00 | P2-05 checking→checking／任务分支重绑定 main；状态 PR #93 起草（预登记，非完成事件） | 用户验收逐项目报告后，任务 [PR #92](https://github.com/KunoLu/640-skills/pull/92) 经三平台 CI（run 36509059940）全绿、代码审查 GO 零发现、安全审查 NO P0/P1 REMAINING（1 条 informational 既有 save 残余非本 PR 引入，记录留档）后合并为 `c9c4d57aa99f5d67f00850b4cce106078db57260`；任务分支本地/远端已清理（先证明 MERGED 再删），TaskStore 记录重绑定 main，main==origin/main。本行为状态 PR 起草时刻，不充当完成事件；真实完成见 10:20:15 行。本项 done 不等于 v2.0.0 发布就绪：P3-01 两周观察与 3–5 个真实任务、P3-03 最终 readiness、P3-04 备份处置各自独立授权。安全审查 informational 残余：save_document I/O 失败时内存回执不落盘（exit 5，既有模式，apply 同款，累计链兜底），归后续 findings 台账评估。 |
 | 2026-09-29T10:20:15+08:00 | P2-05 checking→done／真实完成事件 | 状态 PR #93 合并为 `9380af2d651540bccf9b4131120ebe9ee625fe53`（CI run 36511361414 三平台全绿，head `f505421`），状态分支本地/远端已清理（先证明 MERGED 再删），main==origin/main==`9380af2`；TaskStore 执行 checking→done，`completed_at` 与本事件同时为 `2026-09-29T10:20:15+08:00`（任务分支重绑定 main 已在 09:59:47 先行记录）。§14.5 完成时间列以本时刻为准；09:59:47 仅为状态 PR 起草预登记。 |
 | 2026-09-29T11:15:55+08:00 | P3-01 planned→in-progress／两周观察窗口开启 | 用户指示「根据进度，开始下一步」，为 §14.6 P3-01 行的独立启动授权（该行 planned 不构成自动授权）。依赖 P2-05 已 done。窗口 2026-09-29 → 2026-10-13（两周为观察窗口而非工期估计）。启动事实：基线备份复核 113/113 backup_ref 匹配、0 缺失、0 漂移（目录用官方扁平线路摘要复算，首轮临时算法 1 条误报已排除；review_id `f3010d2fa0df29f710e597b20c9862658c9d2ddd73558ef156a69f5e179c7370`）；观察日志、六格 host×mode 样本矩阵、特殊覆盖项（跨模块任务／跨会话恢复／高风险适用 Gate）与三次复核计划（基线／中点约 2026-10-06／关闭）已建于私有证据目录。备份继续完整保留，本启动不授权处置；发现的问题归 P3-02。TaskStore 已建 P3-01 记录（default 缺省模式，branch main，planned→in-progress）。 |
+| 2026-09-29T11:45:45.740517+08:00 | P1-23 planned→in-progress／OMP 后续部署工具任务 | 用户在接线路径选择中明确选择「立工具链扩展任务」；从 `5049c6a28fc553ea2b0a7f05eb7abf022258025f` 建 `p1-23-followup-deploy-batch`，TaskStore 保存 default/default。新能力与原 successor 路径分离，绑定 cleanup 已闭合的五份前批证据；不重做数据迁移或删除旧源，恢复只回到本次部署前态。实际 live OMP 接线仍待独立授权，P3-01 保持观察中；本任务完成与证据齐全前不计已完成样本。 |
+| 2026-09-29T14:11:06.553947+08:00 | P1-23 in-progress→checking／本地验证与双复审完成 | TaskStore 实际 checking 事件。最终本地全量 1214 passed、8 skipped、859 subtests，1001.49s；基线旧 CLI 拒绝、既有 successor 拒绝门、生成资源前态红绿、祖先备份输出与目录升级隔离修复前重放均已留证。复审中进一步补齐 publication candidate 保护；最终代码/安全复审无剩余发现。ty 四项基线既有诊断保留，不冒充全通过。私有 raw＋同 stem 中文汇总位于 `sbtd-v2-p1-23-evidence-ingucfbe`；本地证据为 dirty/local-only，PR 精确 SHA 由后续 CI 证明。真实 HOME、demo、hooks、sync、live automation 与备份处置均未执行。 |
 
 #### P2-03 旧当前项历史快照
 

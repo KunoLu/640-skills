@@ -871,6 +871,17 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "deployment read-only inputs cannot own a writable target",
             )
     successor = payload.get("successor")
+    followup = payload.get("followup")
+    if successor is not None and followup is not None:
+        _fail(
+            "semantic-violation",
+            "a batch cannot bind both a successor and a followup predecessor",
+        )
+    if followup is not None and deployment is None:
+        _fail(
+            "semantic-violation",
+            "a followup batch requires its declared deployment",
+        )
     embedded_results: dict[str, Mapping[str, Any]] = {}
     if successor is not None:
         if deployment is None:
