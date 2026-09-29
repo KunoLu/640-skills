@@ -88,7 +88,7 @@ from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
-from onboard_contracts import ContractError
+from onboard_contracts import ContractError, _path_contains
 from sbtd_project import _check_finite, _reject_json_constant, _reject_json_duplicates
 
 __all__ = [
@@ -632,11 +632,10 @@ def project_agents_candidate(before: bytes) -> bytes:
 
 
 def _owned_interpreter(command: Any) -> bool:
-    return (
-        isinstance(command, str)
-        and os.path.isabs(command)
-        and Path(command).name.startswith("python")
-    )
+    # The interpreter identity is its absolute path only: a deployment may
+    # lawfully run under any executable name (pypy3, a renamed binary), and
+    # the sealed chain carries no bindings to pin it further.
+    return isinstance(command, str) and os.path.isabs(command)
 
 
 def _owned_launcher_name(path: Any) -> bool:
@@ -647,8 +646,13 @@ def _owned_cli_path(path: Any) -> bool:
     return isinstance(path, str) and Path(path).name == "cli.js"
 
 
+def _anchored(path: str, anchors: Collection[str]) -> bool:
+    """True only inside a directory deployment target verified in this run."""
+    return any(_path_contains(anchor, path) for anchor in anchors)
+
+
 def _owned_server_shape(
-    entry: Any, roots: Collection[str], key: str
+    entry: Any, roots: Collection[str], key: str, anchors: Collection[str]
 ) -> tuple[str, str, str, str]:
     """Fail closed unless one config.toml entry is exactly the owned shape."""
     if not isinstance(entry, Mapping) or set(entry) != {
@@ -677,6 +681,7 @@ def _owned_server_shape(
     if (
         not os.path.isabs(node)
         or not _owned_cli_path(cli)
+        or not _anchored(args[2], anchors)
         or entry["cwd"] != root
         or not isinstance(entry["env"], Mapping)
         or dict(entry["env"]) != dict(_MCP_ENV)
@@ -685,8 +690,16 @@ def _owned_server_shape(
     return command, args[2], node, cli
 
 
-def verify_owned_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
-    """Fail closed unless every batch root's graft server is intact."""
+def verify_owned_mcp_section(
+    raw: bytes, roots: Sequence[str], anchors: Collection[str]
+) -> None:
+    """Fail closed unless every batch root's graft server is intact.
+
+    Foreign ``sbtd-graft-*`` entries owned by other batches are exempt (the
+    render side preserves them); only this batch's hash-keyed entries are
+    validated. Every managed launcher must sit inside one of the chain's
+    directory deployment targets.
+    """
     tomlkit, toml_error, _inline_table, _table_type = _toml_support()
     text = _utf8(_raw_bytes(raw), "state-conflict", "the Codex config is not UTF-8")
     try:
@@ -696,20 +709,32 @@ def verify_owned_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
     servers = document.unwrap().get("mcp_servers")
     if not isinstance(servers, dict):
         _fail("state-conflict", "the managed graft MCP section is missing")
+    if _KEY_PREFIX[:-1] in servers:
+        _fail("state-conflict", "an undigested sbtd-graft MCP entry is ambiguous")
     batch = {str(root) for root in roots}
-    managed = {name for name in servers if name.startswith(_KEY_PREFIX)}
     expected = {_server_key(root) for root in batch}
-    if managed != expected:
+    if not expected.issubset(servers):
         _fail("state-conflict", "the managed graft MCP entries were changed")
     identities = {
-        _owned_server_shape(servers[key], batch, key) for key in sorted(expected)
+        _owned_server_shape(servers[key], batch, key, anchors)
+        for key in sorted(expected)
     }
     if len(identities) > 1:
         _fail("state-conflict", "managed graft MCP entries disagree on the runtime")
 
 
-def verify_owned_hooks_section(raw: bytes, roots: Sequence[str]) -> None:
-    """Fail closed unless every batch root's graft hooks are intact."""
+def verify_owned_hooks_section(
+    raw: bytes, roots: Sequence[str], anchors: Collection[str]
+) -> None:
+    """Fail closed unless every batch root's graft hooks are intact.
+
+    A managed-shaped command naming a root outside this batch is foreign
+    and skipped; every batch root must still prove exactly one intact hook
+    per event. An owned command must be the byte-exact canonical render of
+    its parsed argv (``shlex.join`` on POSIX, the ``_CMD_FORBIDDEN``-gated
+    ``cmd.exe`` dialect on Windows), bound to the event section carrying
+    it, alone in its group.
+    """
     batch = {str(root) for root in roots}
     text = _utf8(_raw_bytes(raw), "state-conflict", "the Codex hooks are not UTF-8")
     try:
@@ -729,7 +754,7 @@ def verify_owned_hooks_section(raw: bytes, roots: Sequence[str]) -> None:
     expected = sorted((root, spec[3]) for spec in _HOOK_SPECS for root in batch)
     seen: list[tuple[str, str]] = []
     identities: set[tuple[str, str, str, str]] = set()
-    for event, matcher, _timeout, _event_flag in _HOOK_SPECS:
+    for event, matcher, _timeout, event_flag in _HOOK_SPECS:
         groups = hooks.get(event)
         if not isinstance(groups, list):
             _fail("state-conflict", "a managed graft hook event section is missing")
@@ -749,11 +774,7 @@ def verify_owned_hooks_section(raw: bytes, roots: Sequence[str]) -> None:
                 if argv is None:
                     continue
                 launcher = next(
-                    (
-                        token
-                        for token in argv[1:4]
-                        if _owned_launcher_name(token)
-                    ),
+                    (token for token in argv[1:4] if _owned_launcher_name(token)),
                     None,
                 )
                 if launcher is None:
@@ -762,13 +783,36 @@ def verify_owned_hooks_section(raw: bytes, roots: Sequence[str]) -> None:
                 if (
                     flags is None
                     or flags["startup"] != "isolated"
-                    or not _owned_interpreter(flags["interpreter"])
                     or flags["--root"] not in batch
+                ):
+                    continue
+                try:
+                    canonical = _hook_command(
+                        {
+                            "python": flags["interpreter"],
+                            "launcher": launcher,
+                            "root": flags["--root"],
+                            "node": flags["--node"],
+                            "cli": flags["--entry"],
+                        },
+                        event_flag,
+                    )
+                except ContractError:
+                    _fail(
+                        "state-conflict",
+                        "a managed graft hook command is not canonical",
+                    )
+                if (
+                    not _owned_interpreter(flags["interpreter"])
+                    or flags["--event"] != event_flag
+                    or command != canonical
                     or not _owned_cli_path(flags["--entry"])
                     or not os.path.isabs(flags["--node"])
+                    or not _anchored(launcher, anchors)
                     or set(entry) != {"type", "command", "timeout"}
                     or entry["type"] != "command"
-                    or entry["timeout"] != timeouts[flags["--event"]]
+                    or entry["timeout"] != timeouts[event_flag]
+                    or len(entries) != 1
                     or set(group) - {"matcher", "hooks"}
                     or (matcher is None and "matcher" in group)
                     or (matcher is not None and group.get("matcher") != matcher)

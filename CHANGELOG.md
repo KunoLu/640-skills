@@ -25,6 +25,7 @@
 
 ### 修复
 
+- P1-24 follow-up 前态闸改为按受管节校验 configure-graft 结果，不再要求整文件相等：宿主可在受管 MCP／hooks／AGENTS 围栏外追加；section 目标把当前快照写入返回映射，图目录仍钉死历史 after。python／node／cli 只核对 argv 形状与跨条目一致（同形状路径对调仍通过）。未知 selector 与受管节漂移 fail-closed 为 `state-conflict`。不代表 live HOME 接线或 P2-07 已授权。
 - P1-23将契约路径包含判断的祖先身份复用为同一次调用内的`samestat`，不再在嵌套比较中反复`samefile`/`stat`同一文件；新增文件从独立到硬链接再分离的重检回归，符号链接和大小写语义不变，且无跨调用缓存。
 - P1-22修复部署共享根检查被根内无关符号链接阻断：迁移部署执行不再对共享根做全树快照来判断存在性，改为逐组件拒绝符号链接的轻量 lstat 检查；共享根本身是链接、文件或特殊项仍 fail-closed，缺失根仍以 0700 创建，目标资源的漂移核对不变。此前用户 home 根里任何无关 symlink（如 hooks/plugins 指向其他配置目录）都会让每条共享部署操作以泛化的 precondition 错误阻断。
 - P2-05修复 migration cleanup 消费 failed verification 时删除先于回执成功门：cleanup 现在在任何删除之前拒绝 status 非 verified 的验证文档（`unverified-input`，exit 2，零删除）。此前首次 cleanup（无续作回执）会先执行资源删除，回执封存阶段才命中 verified 绑定门，导致删除已发生而 cleanup receipt 无法保存；带既有 cleanup receipt 的续作路径原本就在初始绑定拒绝，行为不变。verify 为 failed 状态封存验证文档的能力不变。

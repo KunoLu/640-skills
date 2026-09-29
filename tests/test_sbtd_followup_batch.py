@@ -673,6 +673,28 @@ class FollowupBatchTests(unittest.TestCase):
             self.assertEqual(code, 0, applied)
             self.assertEqual(applied["status"], "applied")
 
+    def test_followup_overlay_preserves_user_agents_text(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = FollowupMigration(Path(directory).resolve())
+            fixture.build()
+            agents = fixture.root / "AGENTS.md"
+            agents.write_bytes(agents.read_bytes() + b"\nUser customization\n")
+            # Plan AFTER the host-side append: the sealed before-state binds
+            # the live managed-section outcome, so apply and deploy accept
+            # the drifted file and the render keeps fence-outside text.
+            followup = fixture.plan_followup()
+            applied, code, manifest_path = fixture.apply_followup(followup)
+            self.assertEqual(code, 0, applied)
+            receipt = applied["migration"]["apply_receipt"]
+            apply_path = fixture.followup_evidence / (
+                "apply-" + receipt["apply_id"] + ".json"
+            )
+            result, code, _path = fixture.deploy_followup(manifest_path, apply_path)
+            self.assertEqual(code, 0, result)
+            self.assertIn(
+                "User customization", agents.read_text(encoding="utf-8")
+            )
+
     def test_sibling_followups_share_one_predecessor(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
@@ -1332,32 +1354,48 @@ class FollowupOperationTamperingTests(unittest.TestCase):
             agents = fixture.root / "AGENTS.md"
             original_agents = agents.read_bytes()
             graph_extra = fixture.root / "graft" / "unowned.txt"
-            for kind in ("configure-graft", "build-graft"):
-                with self.subTest(resource=kind):
-                    payload = copy.deepcopy(followup["payload"])
-                    operation = next(
-                        item
-                        for item in payload["projects"][0]["private_operations"]
-                        if item["change"]["kind"] == kind
-                    )
-                    target = Path(operation["target"])
-                    try:
-                        if kind == "configure-graft":
-                            agents.write_bytes(original_agents + b"\nUser customization\n")
-                        else:
-                            graph_extra.write_bytes(b"User graph data")
-                        customized = snapshot(target)
-                        operation["before_requirement"] = {
-                            "kind": "state", "state": customized
-                        }
-                        resealed = contracts.seal_document("manifest", payload)
-                        with self.assertRaises(ContractError) as error:
-                            fixture.apply_followup(resealed)
-                        self.assertEqual(error.exception.code, "ownership-conflict")
-                        self.assertEqual(snapshot(target), customized)
-                    finally:
-                        agents.write_bytes(original_agents)
-                        graph_extra.unlink(missing_ok=True)
+            # Fence-outside drift is lawful under section ownership: the
+            # resealed before-state matches the live managed-section
+            # outcome, so the closure revalidation accepts it.
+            payload = copy.deepcopy(followup["payload"])
+            operation = next(
+                item
+                for item in payload["projects"][0]["private_operations"]
+                if item["change"]["kind"] == "configure-graft"
+            )
+            try:
+                agents.write_bytes(original_agents + b"\nUser customization\n")
+                operation["before_requirement"] = {
+                    "kind": "state",
+                    "state": snapshot(agents),
+                }
+                resealed = contracts.seal_document("manifest", payload)
+                with mock.patch.dict(os.environ, fixture.environment):
+                    validate_legacy_inputs(resealed, _reader)
+            finally:
+                agents.write_bytes(original_agents)
+            # A whole-resource graft directory still rejects adopted drift.
+            payload = copy.deepcopy(followup["payload"])
+            operation = next(
+                item
+                for item in payload["projects"][0]["private_operations"]
+                if item["change"]["kind"] == "build-graft"
+            )
+            target = Path(operation["target"])
+            try:
+                graph_extra.write_bytes(b"User graph data")
+                customized = snapshot(target)
+                operation["before_requirement"] = {
+                    "kind": "state",
+                    "state": customized,
+                }
+                resealed = contracts.seal_document("manifest", payload)
+                with self.assertRaises(ContractError) as error:
+                    fixture.apply_followup(resealed)
+                self.assertEqual(error.exception.code, "ownership-conflict")
+                self.assertEqual(snapshot(target), customized)
+            finally:
+                graph_extra.unlink(missing_ok=True)
 
     def test_dropped_deploy_operation_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

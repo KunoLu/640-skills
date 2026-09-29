@@ -1166,8 +1166,8 @@ def _followup_outcome_chain(
 
 
 def _check_configure_graft_outcome(
-    operation: Mapping[str, Any], target: Path
-) -> None:
+    operation: Mapping[str, Any], target: Path, anchors: Collection[str]
+) -> dict[str, Any]:
     """Gate a completed configure-graft outcome by managed-section ownership.
 
     The host runtime legitimately extends these files outside the
@@ -1175,7 +1175,10 @@ def _check_configure_graft_outcome(
     sealed chain never carries launch bindings, so ownership is proven by
     the managed argv/fence shapes instead of recomputed bytes. A missing
     or unparseable file, or any drift inside the managed section, fails
-    closed; drift outside it does not block.
+    closed; drift outside it does not block. Returns the live target state
+    so followup before-requirements seal the current bytes. ``anchors``
+    are every directory deployment target in the chain, including ones the
+    followup overwrites; Codex launchers must live inside one.
     """
     selector = operation["selector"]
     roots = operation["dependent_projects"]
@@ -1193,15 +1196,18 @@ def _check_configure_graft_outcome(
     elif selector == "graft-mcp":
         from sbtd_codex_wiring import verify_owned_mcp_section
 
-        verify_owned_mcp_section(raw, roots)
+        verify_owned_mcp_section(raw, roots, anchors)
     elif selector == "graft-hooks":
         from sbtd_codex_wiring import verify_owned_hooks_section
 
-        verify_owned_hooks_section(raw, roots)
-    else:
+        verify_owned_hooks_section(raw, roots, anchors)
+    elif selector == "graft-agents":
         from sbtd_codex_wiring import verify_owned_agents_fence
 
         verify_owned_agents_fence(raw)
+    else:
+        _fail("state-conflict", "unknown Graft configuration selector")
+    return state
 
 
 def _check_followup_predecessor_outcomes(
@@ -1217,10 +1223,15 @@ def _check_followup_predecessor_outcomes(
     the carried copy then holds the proof. The latest proven after-state
     per target is the live expectation unless the followup batch
     legitimately rewrites that target, in which case the followup's own
-    concrete before-requirement and receipts carry the proof.
+    concrete before-requirement and receipts carry the proof. Directory
+    and other whole-resource targets pin the recorded historical
+    after-state; configure-graft targets prove their managed section and
+    map the current live snapshot.
     """
     declared: list[tuple[int, Mapping[str, Any], bool]] = []
-    latest: dict[str, tuple[tuple[int, int], Mapping[str, Any]]] = {}
+    latest: dict[
+        str, tuple[tuple[int, int], Mapping[str, Any], Mapping[str, Any]]
+    ] = {}
     for batch_index, (manifest, stage_results) in enumerate(chain):
         operations = [
             operation
@@ -1262,18 +1273,36 @@ def _check_followup_predecessor_outcomes(
                 "followup-conflict",
                 "the completed batch history cannot prove every declared resource",
             )
+    outcomes = {target: item[1]["after"] for target, item in latest.items()}
+    # Anchors prove path containment only, so every directory deployment
+    # target qualifies — including ones the followup overwrites. An
+    # overwritten tree's content stays pinned by its sealed
+    # before-requirement and is re-measured before any write at execute.
+    anchors = [
+        target
+        for target, (_key, _result, operation) in latest.items()
+        if operation["owner_kind"] == "directory"
+    ]
+    configure: list[tuple[str, Mapping[str, Any]]] = []
     for target, (_key, result, operation) in latest.items():
-        if target in overwritten:
-            continue
         if operation["change"]["kind"] == "configure-graft":
-            _check_configure_graft_outcome(operation, Path(target))
+            configure.append((target, operation))
+            continue
+        if target in overwritten:
             continue
         if snapshot(Path(target)) != result["after"]:
             _fail(
                 "state-conflict",
                 "a completed batch outcome no longer matches the current state",
             )
-    return {target: item[1]["after"] for target, item in latest.items()}
+    for target, operation in configure:
+        # Managed-section outcomes are proven even when the followup batch
+        # rewrites the target, and the mapping carries the live state so the
+        # followup's sealed before-requirement matches the current bytes.
+        outcomes[target] = _check_configure_graft_outcome(
+            operation, Path(target), anchors
+        )
+    return outcomes
 
 
 

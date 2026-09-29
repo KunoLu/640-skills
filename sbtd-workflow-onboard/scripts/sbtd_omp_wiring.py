@@ -434,7 +434,16 @@ def _owned_launcher_name(path: Any) -> bool:
 
 
 def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
-    """Fail closed unless every batch root's graft server is intact."""
+    """Fail closed unless every batch root's graft server is intact.
+
+    Foreign ``sbtd-graft-*`` entries owned by other batches are exempt (the
+    render side preserves them); only this batch's hash-keyed entries are
+    validated, and a managed identity listed in ``disabledServers`` fails
+    closed, mirroring the deployment-time ownership conflict. Unlike the
+    Codex side, no launcher anchor exists here: the chain has no verified
+    directory target provably containing the OMP launcher path, so the
+    boundary stays shape plus cross-entry consistency.
+    """
     if not isinstance(raw, (bytes, bytearray)):
         _fail("state-conflict", "the OMP MCP configuration is unavailable")
     try:
@@ -454,16 +463,27 @@ def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
     servers = document.get("mcpServers")
     if not isinstance(servers, dict):
         _fail("state-conflict", "the managed graft OMP MCP section is missing")
+    if _SERVER_PREFIX in servers:
+        _fail("state-conflict", "an undigested sbtd-graft OMP entry is ambiguous")
     batch = {str(root) for root in roots}
-    managed = {
-        name for name in servers if str(name).startswith(f"{_SERVER_PREFIX}-")
-    }
     expected = {_server_name(root) for root in batch}
-    if managed != expected:
+    if not expected.issubset(servers):
         _fail("state-conflict", "the managed graft OMP MCP entries were changed")
+    for label in ("disabledServers", "enabledServers"):
+        value = document.get(label)
+        if value is not None and (
+            not isinstance(value, list)
+            or any(not isinstance(item, str) for item in value)
+        ):
+            _fail("state-conflict", f"the OMP {label} list is malformed")
+    disabled = set(document.get("disabledServers") or ())
+    forced = set(document.get("enabledServers") or ())
+    if expected & disabled:
+        _fail("state-conflict", "a managed graft OMP entry is explicitly disabled")
     identities: set[tuple[str, str, str, str]] = set()
     for root in sorted(batch):
-        entry = servers[_server_name(root)]
+        name = _server_name(root)
+        entry = servers[name]
         if not isinstance(entry, Mapping):
             _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
         command = entry.get("command")
@@ -471,7 +491,6 @@ def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
         if (
             not isinstance(command, str)
             or not os.path.isabs(command)
-            or not Path(command).name.startswith("python")
             or not isinstance(args, list)
             or len(args) != 10
             or any(not isinstance(token, str) for token in args)
@@ -491,7 +510,9 @@ def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
             "cwd": root,
             "env": dict(_TELEMETRY_ENV),
         }
-        if not _equivalent(entry, desired) or not _entry_enabled(entry):
+        if not _equivalent(entry, desired) or not (
+            _entry_enabled(entry) or name in forced
+        ):
             _fail("state-conflict", "a managed graft OMP MCP entry was reshaped")
         identities.add((command, args[2], args[7], args[9]))
     if len(identities) > 1:
