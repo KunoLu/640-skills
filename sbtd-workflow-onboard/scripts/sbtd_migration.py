@@ -844,6 +844,96 @@ def _check_stage_backups(stage_results: Mapping[str, Any]) -> None:
                 )
 
 
+def _protected_followup_ancestry(
+    manifest: Mapping[str, Any],
+) -> list[tuple[Path, bool]]:
+    """Protected objects of a followup batch's predecessor chain. Read-only.
+
+    Document references are re-proven before their declared paths are used.
+    A directory object protects its complete subtree; any other object
+    protects its exact path. Empty for batches without a followup binding.
+    """
+    followup = manifest["payload"].get("followup")
+    if followup is None:
+        return []
+    protected: list[tuple[Path, bool]] = []
+
+    def protect(reference: Mapping[str, Any]) -> None:
+        protected.append(
+            (Path(reference["path"]), reference["state"]["type"] == "directory")
+        )
+
+    def protect_document(reference: Mapping[str, Any], kind: str) -> Mapping[str, Any]:
+        _check_reference(reference)
+        protect(reference)
+        document, _raw = _private_document(Path(reference["path"]), kind)
+        return document
+
+    def protect_manifest(member: Mapping[str, Any]) -> None:
+        # Preserve historical input paths without demanding that old template
+        # bytes still match the current release's installation sources.
+        for reference in contracts._manifest_input_references(member["payload"]):
+            protect(reference)
+        routing = member["payload"]["routing_approvals"]
+        if routing is not None:
+            protect(routing)
+        locations = _source_backup_paths(member)
+        for project in member["payload"]["projects"]:
+            for reference in project["sources"]:
+                protected.append(
+                    (
+                        locations[reference["path"]],
+                        reference["state"]["type"] == "directory",
+                    )
+                )
+
+    def protect_results(document: Mapping[str, Any]) -> None:
+        for result in _result_index(document).values():
+            if result["backup_ref"] is not None:
+                protect(result["backup_ref"])
+
+    def protect_reports(document: Mapping[str, Any]) -> None:
+        for project in document["payload"]["projects"]:
+            for reference in project.get("report_refs", ()):
+                protect(reference)
+
+    def protect_retained(document: Mapping[str, Any]) -> None:
+        for asset in document["payload"].get("retained_assets", ()):
+            protect(asset)
+        for project in document["payload"]["projects"]:
+            for asset in project.get("retained_assets", ()):
+                protect(asset)
+
+    prev_manifest = protect_document(followup["manifest_ref"], "manifest")
+    prev_apply = protect_document(followup["apply_receipt_ref"], "apply_receipt")
+    prev_deployment = protect_document(
+        followup["deployment_evidence_ref"], "deployment_evidence"
+    )
+    prev_verification = protect_document(
+        followup["verification_ref"], "verification"
+    )
+    prev_cleanup = protect_document(followup["cleanup_receipt_ref"], "cleanup_receipt")
+    protect_manifest(prev_manifest)
+    protect_results(prev_apply)
+    protect_results(prev_deployment)
+    protect_reports(prev_deployment)
+    protect_reports(prev_verification)
+    protect_retained(prev_verification)
+    protect_results(prev_cleanup)
+    protect_retained(prev_cleanup)
+    cursor = prev_manifest
+    while cursor["payload"].get("successor") is not None:
+        successor = cursor["payload"]["successor"]
+        ancestor_manifest = protect_document(successor["manifest_ref"], "manifest")
+        ancestor_apply = protect_document(
+            successor["apply_receipt_ref"], "apply_receipt"
+        )
+        protect_manifest(ancestor_manifest)
+        protect_results(ancestor_apply)
+        cursor = ancestor_manifest
+    return protected
+
+
 def _summary_projects(artifact: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [
         {
@@ -1763,6 +1853,31 @@ def run_migration(args: Any) -> int:
                 successor_apply_receipt=(
                     _argument_path(args.successor_apply_receipt)
                     if getattr(args, "successor_apply_receipt", None) is not None
+                    else None
+                ),
+                followup_manifest=(
+                    _argument_path(args.followup_manifest)
+                    if getattr(args, "followup_manifest", None) is not None
+                    else None
+                ),
+                followup_apply_receipt=(
+                    _argument_path(args.followup_apply_receipt)
+                    if getattr(args, "followup_apply_receipt", None) is not None
+                    else None
+                ),
+                followup_deployment_evidence=(
+                    _argument_path(args.followup_deployment_evidence)
+                    if getattr(args, "followup_deployment_evidence", None) is not None
+                    else None
+                ),
+                followup_verification=(
+                    _argument_path(args.followup_verification)
+                    if getattr(args, "followup_verification", None) is not None
+                    else None
+                ),
+                followup_cleanup_receipt=(
+                    _argument_path(args.followup_cleanup_receipt)
+                    if getattr(args, "followup_cleanup_receipt", None) is not None
                     else None
                 ),
             )

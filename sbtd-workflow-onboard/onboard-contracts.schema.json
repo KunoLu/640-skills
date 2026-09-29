@@ -1003,8 +1003,21 @@
         },
         "successor": {
           "$ref": "#/$defs/successor_binding"
+        },
+        "followup": {
+          "$ref": "#/$defs/followup_binding"
         }
-      }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "successor",
+              "followup"
+            ]
+          }
+        }
+      ]
     },
     "resource_result": {
       "type": "object",
@@ -1152,6 +1165,54 @@
             "$ref": "#/$defs/resource_result"
           },
           "minItems": 1
+        }
+      }
+    },
+    "followup_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_id",
+        "apply_id",
+        "deployment_id",
+        "verification_id",
+        "cleanup_id",
+        "manifest_ref",
+        "apply_receipt_ref",
+        "deployment_evidence_ref",
+        "verification_ref",
+        "cleanup_receipt_ref"
+      ],
+      "properties": {
+        "manifest_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "apply_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "deployment_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "verification_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "cleanup_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "manifest_ref": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "apply_receipt_ref": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "deployment_evidence_ref": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "verification_ref": {
+          "$ref": "#/$defs/object_ref"
+        },
+        "cleanup_receipt_ref": {
+          "$ref": "#/$defs/object_ref"
         }
       }
     },

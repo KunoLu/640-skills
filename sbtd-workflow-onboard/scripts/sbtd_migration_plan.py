@@ -950,7 +950,7 @@ def _validate_successor_project_operations(
 
 def _verify_successor_predecessor(
     manifest: Mapping[str, Any],
-) -> Mapping[str, Any]:
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """Re-verify a successor manifest against its real predecessor chain.
 
     The sealed object refs name the exact predecessor files by content hash.
@@ -1003,7 +1003,236 @@ def _verify_successor_predecessor(
             "binding-violation",
             "embedded predecessor results differ from the completed receipt",
         )
-    return prev_manifest
+    return prev_manifest, prev_receipt
+
+def _bind_followup_predecessor(
+    prev_manifest: Mapping[str, Any],
+    prev_apply: Mapping[str, Any],
+    prev_deployment: Mapping[str, Any],
+    prev_verification: Mapping[str, Any],
+    prev_cleanup: Mapping[str, Any],
+    raw_documents: Mapping[str, Any],
+) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
+    """Bind one fully completed Codex predecessor chain. Read-only.
+
+    Document binding, success gates and retained backup availability only:
+    the predecessor's historical tool versions and deployment template
+    sources are sealed history, never re-derived against this runtime.
+    Returns the successor ancestors (nearest first), each a bound
+    (manifest, apply receipt) pair with its own backups proven retained.
+    """
+    contracts.validate_declared_bindings(
+        prev_manifest,
+        {
+            "apply_receipt": prev_apply,
+            "deployment_evidence": prev_deployment,
+            "verification": prev_verification,
+            "cleanup_receipt": prev_cleanup,
+        },
+        raw_documents,
+    )
+    contracts._bind_success_gate(prev_apply, {"applied", "already-complete"})
+    contracts._bind_success_gate(prev_deployment, {"succeeded"})
+    contracts._bind_success_gate(prev_verification, {"verified"})
+    contracts._bind_success_gate(prev_cleanup, {"cleaned", "already-complete"})
+    prev_payload = prev_manifest["payload"]
+    if prev_payload["deployment"] is None:
+        _fail(
+            "followup-conflict",
+            "a followup batch requires a completed batch with its deployment",
+        )
+    if prev_payload["deployment"]["platform"] != "codex":
+        _fail(
+            "followup-conflict",
+            "a followup batch requires a Codex predecessor deployment",
+        )
+    if prev_payload.get("followup") is not None:
+        _fail(
+            "followup-conflict",
+            "a followup batch cannot follow another followup batch",
+        )
+    from sbtd_migration import (
+        _check_source_backups,
+        _check_stage_backups,
+        _result_index,
+    )
+
+    _check_source_backups(prev_manifest)
+    _check_stage_backups(
+        {
+            "apply": _result_index(prev_apply),
+            "deploy": _result_index(prev_deployment),
+            "cleanup": _result_index(prev_cleanup),
+        }
+    )
+    ancestors: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
+    cursor = prev_manifest
+    while cursor["payload"].get("successor") is not None:
+        ancestor_manifest, ancestor_apply = _verify_successor_predecessor(cursor)
+        # Ancestors of a completed batch are deployment-less originals, so
+        # their source and apply backups are the only reachable artifacts.
+        _check_source_backups(ancestor_manifest)
+        _check_stage_backups({"apply": _result_index(ancestor_apply)})
+        ancestors.append((ancestor_manifest, ancestor_apply))
+        cursor = ancestor_manifest
+    return ancestors
+
+
+def _verify_followup_predecessor(
+    manifest: Mapping[str, Any],
+) -> tuple[
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    list[tuple[Mapping[str, Any], Mapping[str, Any]]],
+]:
+    """Re-verify a followup manifest against its real predecessor chain.
+
+    The sealed object refs name the exact predecessor files by content hash.
+    All five documents are re-loaded and fully re-bound on every consumer.
+    Read-only.
+    """
+    from sbtd_migration import _check_reference, _private_document
+
+    followup = manifest["payload"]["followup"]
+    slots = (
+        ("manifest", followup["manifest_ref"], "manifest_id"),
+        ("apply_receipt", followup["apply_receipt_ref"], "apply_id"),
+        (
+            "deployment_evidence",
+            followup["deployment_evidence_ref"],
+            "deployment_id",
+        ),
+        ("verification", followup["verification_ref"], "verification_id"),
+        ("cleanup_receipt", followup["cleanup_receipt_ref"], "cleanup_id"),
+    )
+    documents: dict[str, Any] = {}
+    raw_documents: dict[str, Any] = {}
+    for kind, reference, id_key in slots:
+        _check_reference(reference)
+        document, raw = _private_document(Path(reference["path"]), kind)
+        if document[id_key] != followup[id_key]:
+            _fail(
+                "binding-violation",
+                "a followup binding does not match its referenced predecessor",
+            )
+        documents[kind] = document
+        raw_documents[kind] = raw
+    ancestors = _bind_followup_predecessor(
+        documents["manifest"],
+        documents["apply_receipt"],
+        documents["deployment_evidence"],
+        documents["verification"],
+        documents["cleanup_receipt"],
+        raw_documents,
+    )
+    return (
+        documents["manifest"],
+        documents["apply_receipt"],
+        documents["deployment_evidence"],
+        documents["verification"],
+        documents["cleanup_receipt"],
+        ancestors,
+    )
+
+
+def _followup_outcome_chain(
+    prev_manifest: Mapping[str, Any],
+    prev_apply: Mapping[str, Any],
+    prev_deployment: Mapping[str, Any],
+    prev_cleanup: Mapping[str, Any],
+    ancestors: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+) -> list[tuple[Mapping[str, Any], dict[str, Mapping[str, Any]]]]:
+    """Order the bound chain oldest to newest with per-phase result indexes."""
+    from sbtd_migration import _result_index
+
+    chain: list[tuple[Mapping[str, Any], dict[str, Mapping[str, Any]]]] = [
+        (manifest, {"apply": _result_index(receipt)})
+        for manifest, receipt in reversed(ancestors)
+    ]
+    chain.append(
+        (
+            prev_manifest,
+            {
+                "apply": _result_index(prev_apply),
+                "deploy": _result_index(prev_deployment),
+                "cleanup": _result_index(prev_cleanup),
+            },
+        )
+    )
+    return chain
+
+
+def _check_followup_predecessor_outcomes(
+    chain: Sequence[tuple[Mapping[str, Any], Mapping[str, Mapping[str, Any]]]],
+    *,
+    overwritten: Collection[str],
+) -> dict[str, Any]:
+    """Require current predecessor outcomes; exempt followup-overwritten targets.
+
+    Every declared predecessor resource must be proven succeeded by its
+    phase receipt. An ancestor operation whose phase receipt is unreachable
+    is lawful only when a newer batch carries the same resource and phase;
+    the carried copy then holds the proof. The latest proven after-state
+    per target is the live expectation unless the followup batch
+    legitimately rewrites that target, in which case the followup's own
+    concrete before-requirement and receipts carry the proof.
+    """
+    declared: list[tuple[int, Mapping[str, Any], bool]] = []
+    latest: dict[str, tuple[tuple[int, int], Mapping[str, Any]]] = {}
+    for batch_index, (manifest, stage_results) in enumerate(chain):
+        operations = [
+            operation
+            for project in manifest["payload"]["projects"]
+            for operation in project["private_operations"]
+        ] + list(manifest["payload"]["shared_operations"])
+        for operation in operations:
+            proven = False
+            results = stage_results.get(operation["phase"])
+            if results is not None:
+                result = results.get(operation["resource_id"])
+                if (
+                    result is None
+                    or result["status"] != "succeeded"
+                    or result["after"] is None
+                ):
+                    _fail(
+                        "followup-conflict",
+                        "the completed batch receipts do not prove every declared "
+                        "resource",
+                    )
+                proven = True
+                key = (batch_index, contracts._PHASE_ORDER[operation["phase"]])
+                current = latest.get(operation["target"])
+                if current is None or key > current[0]:
+                    latest[operation["target"]] = (key, result)
+            declared.append((batch_index, operation, proven))
+    for batch_index, operation, proven in declared:
+        if proven:
+            continue
+        carried = any(
+            later_index > batch_index
+            and later["resource_id"] == operation["resource_id"]
+            and later["phase"] == operation["phase"]
+            for later_index, later, _proven in declared
+        )
+        if not carried:
+            _fail(
+                "followup-conflict",
+                "the completed batch history cannot prove every declared resource",
+            )
+    for target, (_key, result) in latest.items():
+        if target in overwritten:
+            continue
+        if snapshot(Path(target)) != result["after"]:
+            _fail(
+                "state-conflict",
+                "a completed batch outcome no longer matches the current state",
+            )
+    return {target: result["after"] for target, (_key, result) in latest.items()}
+
 
 
 def validate_legacy_inputs(
@@ -1021,8 +1250,127 @@ def validate_legacy_inputs(
     when it is schema-valid. Nothing here writes or substitutes approval.
     """
     payload = manifest["payload"]
+    if payload.get("followup") is not None:
+        from sbtd_migration import _result_index
+
+        (
+            prev_manifest,
+            prev_apply,
+            prev_deployment,
+            _prev_verification,
+            prev_cleanup,
+            ancestors,
+        ) = _verify_followup_predecessor(manifest)
+        prev_payload = prev_manifest["payload"]
+        deployment = payload["deployment"]
+        if deployment["mode"] != "init" or deployment["platform"] != "omp":
+            _fail(
+                "semantic-violation",
+                "a followup batch requires the full init OMP deployment",
+            )
+        followup_operations = [
+            operation
+            for project in payload["projects"]
+            for operation in project["private_operations"]
+        ] + list(payload["shared_operations"])
+        if any(
+            operation["selector"] == "graft-hooks" for operation in followup_operations
+        ):
+            _fail(
+                "semantic-violation",
+                "a followup batch does not authorize hooks",
+            )
+        if any(
+            operation["before_requirement"]["kind"] != "state"
+            for operation in followup_operations
+        ):
+            _fail(
+                "semantic-violation",
+                "a followup batch seals only concrete before-states",
+            )
+        followup_roots = sorted(project["root"] for project in payload["projects"])
+        prev_by_root = {
+            project["root"]: project for project in prev_payload["projects"]
+        }
+        if followup_roots != sorted(prev_by_root):
+            _fail(
+                "semantic-violation",
+                "a followup batch alters the completed batch roots",
+            )
+        for field in ("backup_root", "custodian", "retention"):
+            if payload[field] != prev_payload[field]:
+                _fail(
+                    "semantic-violation",
+                    "a followup batch alters the inherited batch identity",
+                )
+        if payload["publication_decisions"] != {"schema_version": 1, "items": []}:
+            _fail(
+                "semantic-violation",
+                "a followup batch alters the fixed publication record",
+            )
+        if payload["routing_approvals"] is not None:
+            _fail(
+                "semantic-violation",
+                "a followup batch cannot bind routing approvals",
+            )
+        for project in payload["projects"]:
+            if (
+                project["sources"]
+                or project["platforms"] != prev_by_root[project["root"]]["platforms"]
+            ):
+                _fail(
+                    "semantic-violation",
+                    "a followup batch alters an inherited project binding",
+                )
+            if any(
+                operation["phase"] != "deploy"
+                for operation in project["private_operations"]
+            ):
+                _fail(
+                    "semantic-violation",
+                    "a followup batch carries only deployment operations",
+                )
+        if any(
+            operation["phase"] != "deploy" for operation in payload["shared_operations"]
+        ):
+            _fail(
+                "semantic-violation",
+                "a followup batch carries only deployment operations",
+            )
+        overwritten = {operation["target"] for operation in followup_operations}
+        predecessor_states = _check_followup_predecessor_outcomes(
+            _followup_outcome_chain(
+                prev_manifest, prev_apply, prev_deployment, prev_cleanup, ancestors
+            ),
+            overwritten=overwritten,
+        )
+        for operation in followup_operations:
+            target = operation["target"]
+            if (
+                target in predecessor_states
+                and operation["before_requirement"]["state"] != predecessor_states[target]
+            ):
+                _fail(
+                    "ownership-conflict",
+                    "a followup before-state differs from its proven predecessor outcome",
+                )
+        _validate_shared_operations(payload, followup_roots)
+        from sbtd_graft_deployment import validate_deployment_declarations
+
+        validate_deployment_declarations(
+            payload,
+            followup_deployed={
+                result["resource_id"]: result["after"]
+                for result in _result_index(prev_deployment).values()
+                if result["status"] == "succeeded" and result["after"] is not None
+            },
+        )
+        _bind_approved_routing(
+            payload, [Path(root) for root in followup_roots], bind_live=False
+        )
+        return
     if payload.get("successor") is not None:
-        prev_manifest = _verify_successor_predecessor(manifest)
+        prev_manifest, _prev_receipt = _verify_successor_predecessor(manifest)
         prev_payload = prev_manifest["payload"]
         successor_roots = sorted(project["root"] for project in payload["projects"])
         prev_by_root = {
@@ -2483,6 +2831,217 @@ def _plan_successor(
     _bind_approved_routing(payload, roots, bind_live=True)
     return contracts.seal_document("manifest", payload)
 
+def _load_followup_predecessor(
+    manifest_path: Any,
+    apply_path: Any,
+    deployment_path: Any,
+    verification_path: Any,
+    cleanup_path: Any,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    list[tuple[Mapping[str, Any], Mapping[str, Any]]],
+]:
+    """Load and fully bind the completed Codex predecessor chain. Read-only."""
+    from sbtd_migration import _private_document
+
+    values = (manifest_path, apply_path, deployment_path, verification_path, cleanup_path)
+    if any(value is None for value in values):
+        _fail(
+            "invalid-argument",
+            "followup predecessor documents must be supplied as a complete set",
+        )
+    # As with the successor pair: receipts live beside the manifest while the
+    # vault holds approvals/candidates. Privacy comes from _private_document.
+    for value, message in (
+        (manifest_path, "the followup manifest path is not canonical"),
+        (apply_path, "the followup apply receipt path is not canonical"),
+        (deployment_path, "the followup deployment evidence path is not canonical"),
+        (verification_path, "the followup verification path is not canonical"),
+        (cleanup_path, "the followup cleanup receipt path is not canonical"),
+    ):
+        if not isinstance(value, (str, os.PathLike)):
+            _fail("invalid-argument", message)
+        candidate = Path(value)
+        if ".." in candidate.parts or not candidate.is_absolute():
+            _fail("invalid-argument", message)
+    prev_manifest, manifest_raw = _private_document(Path(manifest_path), "manifest")
+    prev_apply, apply_raw = _private_document(Path(apply_path), "apply_receipt")
+    prev_deployment, deployment_raw = _private_document(
+        Path(deployment_path), "deployment_evidence"
+    )
+    prev_verification, verification_raw = _private_document(
+        Path(verification_path), "verification"
+    )
+    prev_cleanup, cleanup_raw = _private_document(Path(cleanup_path), "cleanup_receipt")
+    ancestors = _bind_followup_predecessor(
+        prev_manifest,
+        prev_apply,
+        prev_deployment,
+        prev_verification,
+        prev_cleanup,
+        {
+            "manifest": manifest_raw,
+            "apply_receipt": apply_raw,
+            "deployment_evidence": deployment_raw,
+            "verification": verification_raw,
+            "cleanup_receipt": cleanup_raw,
+        },
+    )
+    return (
+        prev_manifest,
+        prev_apply,
+        prev_deployment,
+        prev_verification,
+        prev_cleanup,
+        ancestors,
+    )
+
+
+def _plan_followup(
+    roots: Sequence[Path],
+    vault: Path,
+    custodian: str,
+    tool_versions: Mapping[str, Any],
+    prev_manifest: Mapping[str, Any],
+    prev_apply: Mapping[str, Any],
+    prev_deployment: Mapping[str, Any],
+    prev_verification: Mapping[str, Any],
+    prev_cleanup: Mapping[str, Any],
+    ancestors: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]],
+    followup_manifest_path: Path,
+    followup_apply_path: Path,
+    followup_deployment_path: Path,
+    followup_verification_path: Path,
+    followup_cleanup_path: Path,
+) -> dict[str, Any]:
+    """Seal a followup batch bound to one fully completed Codex batch.
+
+    The predecessor's proven after-states are this batch's concrete
+    pre-states, so the retired legacy closure is never re-derived; every
+    completed outcome is re-measured instead. Read-only.
+    """
+    from sbtd_migration import _project_revision, _result_index
+
+    prev_payload = prev_manifest["payload"]
+    prev_projects = prev_payload["projects"]
+    if {project["root"] for project in prev_projects} != {
+        str(root) for root in roots
+    }:
+        _fail(
+            "scope-conflict",
+            "a followup batch must exactly match the completed batch roots",
+        )
+    if Path(prev_payload["backup_root"]) != vault:
+        _fail(
+            "scope-conflict",
+            "a followup batch stays in the completed batch vault",
+        )
+    if prev_payload["custodian"] != custodian:
+        _fail(
+            "approval-conflict",
+            "a followup batch keeps the recorded custodian",
+        )
+    _check_followup_predecessor_outcomes(
+        _followup_outcome_chain(
+            prev_manifest, prev_apply, prev_deployment, prev_cleanup, ancestors
+        ),
+        overwritten=(),
+    )
+    followup_deployed = {
+        result["resource_id"]: result["after"]
+        for result in _result_index(prev_deployment).values()
+        if result["status"] == "succeeded" and result["after"] is not None
+    }
+    projects: list[dict[str, Any]] = []
+    for prev_project in prev_projects:
+        root = Path(prev_project["root"])
+        source_ref, head = _project_revision(root)
+        projects.append(
+            {
+                "root": prev_project["root"],
+                "source_ref": source_ref,
+                "head": head,
+                "platforms": list(prev_project["platforms"]),
+                "sources": [],
+                "private_operations": [],
+                "shared_operation_ids": [],
+            }
+        )
+    payload = {
+        "projects": projects,
+        "shared_roots": [],
+        "shared_operations": [],
+        "publication_decisions": {"schema_version": 1, "items": []},
+        "routing_approvals": None,
+        "custodian": custodian,
+        "backup_root": str(vault),
+        "created_at": datetime.now().astimezone().isoformat(timespec="microseconds"),
+        "retention": copy.deepcopy(prev_payload["retention"]),
+        "tool_versions": dict(tool_versions),
+        "deployment": None,
+        "followup": {
+            "manifest_id": prev_manifest["manifest_id"],
+            "apply_id": prev_apply["apply_id"],
+            "deployment_id": prev_deployment["deployment_id"],
+            "verification_id": prev_verification["verification_id"],
+            "cleanup_id": prev_cleanup["cleanup_id"],
+            "manifest_ref": {
+                "path": str(followup_manifest_path),
+                "state": snapshot(followup_manifest_path),
+            },
+            "apply_receipt_ref": {
+                "path": str(followup_apply_path),
+                "state": snapshot(followup_apply_path),
+            },
+            "deployment_evidence_ref": {
+                "path": str(followup_deployment_path),
+                "state": snapshot(followup_deployment_path),
+            },
+            "verification_ref": {
+                "path": str(followup_verification_path),
+                "state": snapshot(followup_verification_path),
+            },
+            "cleanup_receipt_ref": {
+                "path": str(followup_cleanup_path),
+                "state": snapshot(followup_cleanup_path),
+            },
+        },
+    }
+    from sbtd_graft_deployment import attach_deployment
+
+    attach_deployment(
+        payload,
+        project_only=False,
+        hooks_authorized=False,
+        platform="omp",
+        followup_deployed=followup_deployed,
+    )
+    for project in payload["projects"]:
+        if any(
+            operation["phase"] == "apply"
+            for operation in project["private_operations"]
+        ):
+            _fail(
+                "followup-conflict",
+                "the completed batch left required ignore protection unapplied; "
+                "reconcile it before planning a followup batch",
+            )
+    _check_physical_aliases(
+        [
+            operation
+            for project in projects
+            for operation in project["private_operations"]
+        ]
+        + payload["shared_operations"]
+    )
+    _bind_approved_routing(payload, roots, bind_live=True)
+    return contracts.seal_document("manifest", payload)
+
+
 
 def _session_targets_complete_skip(
     relative: tuple[str, ...] | None,
@@ -3270,6 +3829,11 @@ def plan_migration(
     routing_approval_key: Any = None,
     successor_manifest: Any = None,
     successor_apply_receipt: Any = None,
+    followup_manifest: Any = None,
+    followup_apply_receipt: Any = None,
+    followup_deployment_evidence: Any = None,
+    followup_verification: Any = None,
+    followup_cleanup_receipt: Any = None,
 ) -> dict[str, Any]:
     """Verify the authorized preparation and seal a bound migration manifest.
 
@@ -3338,6 +3902,75 @@ def plan_migration(
                 "private-scope",
                 "the private backup root must stay outside the selected projects",
             )
+    followup_values = (
+        followup_manifest,
+        followup_apply_receipt,
+        followup_deployment_evidence,
+        followup_verification,
+        followup_cleanup_receipt,
+    )
+    if any(value is not None for value in followup_values):
+        if successor_manifest is not None or successor_apply_receipt is not None:
+            _fail(
+                "invalid-argument",
+                "a followup batch cannot also be a successor batch",
+            )
+        if publication_path is not None:
+            _fail(
+                "invalid-argument",
+                "a followup batch does not consume publication decisions",
+            )
+        if routing_approvals is not None or routing_approval_key is not None:
+            _fail(
+                "invalid-argument",
+                "a followup batch does not consume routing approvals",
+            )
+        if deployment_mode != "init":
+            _fail(
+                "invalid-argument",
+                "a followup batch requires the full init deployment mode",
+            )
+        if deployment_platform != "omp":
+            _fail(
+                "invalid-argument",
+                "a followup batch deploys only to the OMP platform",
+            )
+        if hooks_authorized:
+            _fail(
+                "scope-conflict",
+                "a followup batch does not authorize hooks",
+            )
+        (
+            prev_manifest,
+            prev_apply,
+            prev_deployment,
+            prev_verification,
+            prev_cleanup,
+            ancestors,
+        ) = _load_followup_predecessor(
+            followup_manifest,
+            followup_apply_receipt,
+            followup_deployment_evidence,
+            followup_verification,
+            followup_cleanup_receipt,
+        )
+        return _plan_followup(
+            roots,
+            vault,
+            custodian,
+            tool_versions,
+            prev_manifest,
+            prev_apply,
+            prev_deployment,
+            prev_verification,
+            prev_cleanup,
+            ancestors,
+            Path(followup_manifest),
+            Path(followup_apply_receipt),
+            Path(followup_deployment_evidence),
+            Path(followup_verification),
+            Path(followup_cleanup_receipt),
+        )
     if successor_manifest is not None or successor_apply_receipt is not None:
         if publication_path is not None:
             _fail(

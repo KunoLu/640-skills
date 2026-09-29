@@ -442,7 +442,11 @@ def execute_resource(
         elif kind in {"copy-file", "copy-directory"}:
             _prepare_target_parents(target, root)
             install_reference(
-                operation["change"]["source_ref"], target, before, scope=root
+                operation["change"]["source_ref"],
+                target,
+                before,
+                scope=root,
+                backup_ref=result.get("backup_ref"),
             )
         else:
             _fail("unsupported-operation", "the deployment operation is not supported")
@@ -461,7 +465,33 @@ def execute_resource(
     return result
 
 
-def _installation_templates(roots: Sequence[str]) -> list[Any]:
+def _omp_agents_template_target(
+    platform: str, omp_home: Path | None
+) -> Path | None:
+    """The OMP global rules target an OMP init deployment implicitly creates.
+
+    The installer catalog includes the OMP global AGENTS.md only when the OMP
+    root already exists; an OMP deployment itself creates that root with its
+    MCP write. Naming the target explicitly keeps the canonical set identical
+    at plan time and at every later re-derivation.
+    """
+    if platform != "omp" or omp_home is None:
+        return None
+    from onboard import detect_omp_root, omp_global_agents_path, user_home
+
+    if detect_omp_root() is not None:
+        return None
+    root = (user_home() / ".omp").resolve()
+    try:
+        omp_home.resolve().relative_to(root)
+    except (OSError, ValueError, RuntimeError):
+        return None
+    return omp_global_agents_path(root)
+
+
+def _installation_templates(
+    roots: Sequence[str], *, omp_agents_target: Path | None = None
+) -> list[Any]:
     """Reuse the installer's canonical source/target selection, not a second catalog."""
     from argparse import Namespace
 
@@ -476,11 +506,22 @@ def _installation_templates(roots: Sequence[str]) -> list[Any]:
     project_targets = {
         str(Path(root) / name) for root in roots for name in ("AGENTS.md", ".gitignore")
     }
-    return [
+    selected = [
         operation
         for operation in build_operations("init", arguments)
         if str(operation.target) not in project_targets and not operation.same_location
     ]
+    if omp_agents_target is not None and all(
+        operation.target != omp_agents_target for operation in selected
+    ):
+        from onboard import GLOBAL_AGENTS_TEMPLATE, Operation
+
+        selected.append(
+            Operation(
+                "omp global AGENTS.md", GLOBAL_AGENTS_TEMPLATE, omp_agents_target, "file"
+            )
+        )
+    return selected
 
 
 def attach_deployment(
@@ -490,6 +531,7 @@ def attach_deployment(
     hooks_authorized: bool,
     platform: str = "codex",
     successor_pauses: Mapping[str, str] | None = None,
+    followup_deployed: Mapping[str, Any] | None = None,
 ) -> None:
     """Declare every write before the migration manifest is sealed."""
     from onboard import (
@@ -522,6 +564,7 @@ def attach_deployment(
             [Path(root) for root in roots], home=user_home(), environ=os.environ
         )
         omp_home = Path(discovery["agent_dir"])
+    omp_agents_target = _omp_agents_template_target(platform, omp_home)
     private, shared = deployment_operations(
         payload["projects"],
         codex_home=codex_home if platform == "codex" else None,
@@ -568,13 +611,23 @@ def attach_deployment(
                     }
                 )
         elif omp_home is not None:
-            if omp_root is not None and not any(
-                record["path"] == str(omp_root) for record in payload["shared_roots"]
+            effective_omp_root = (
+                omp_root
+                if omp_root is not None
+                else (
+                    omp_agents_target.parent.parent
+                    if omp_agents_target is not None
+                    else None
+                )
+            )
+            if effective_omp_root is not None and not any(
+                record["path"] == str(effective_omp_root)
+                for record in payload["shared_roots"]
             ):
                 payload["shared_roots"].append(
                     {
                         "kind": "omp-home",
-                        "path": str(omp_root),
+                        "path": str(effective_omp_root),
                         "dependent_projects": roots,
                     }
                 )
@@ -632,7 +685,9 @@ def attach_deployment(
             if operation["phase"] == "apply"
             and operation["selector"] == "pause-legacy-routing"
         }
-        for selected in _installation_templates(roots):
+        for selected in _installation_templates(
+            roots, omp_agents_target=omp_agents_target
+        ):
             target = selected.target
             source = {"path": str(selected.source), "state": snapshot(selected.source)}
             before = snapshot(target)
@@ -640,19 +695,28 @@ def attach_deployment(
             paused_predecessor = (
                 None if successor_pauses is None else successor_pauses.get(str(target))
             )
-            if (
-                earlier is None
-                and paused_predecessor is None
-                and before not in (_ABSENT, source["state"])
-            ):
-                _fail(
-                    "ownership-conflict",
-                    "an installation target has unrecognized customized content",
-                )
             directory = selected.kind == "dir"
             owner_kind = "directory" if directory else "markdown"
             selector = "whole-resource" if directory else "global-rules"
             resource = contracts.resource_id(owner_kind, str(target))
+            followup_after = (
+                None if followup_deployed is None else followup_deployed.get(resource)
+            )
+            if earlier is None and paused_predecessor is None:
+                if followup_after is not None:
+                    # A followup batch replaces only what its proven
+                    # predecessor deployment owns, from that exact outcome.
+                    if before != followup_after:
+                        _fail(
+                            "state-conflict",
+                            "a completed batch outcome no longer matches the "
+                            "current state",
+                        )
+                elif before not in (_ABSENT, source["state"]):
+                    _fail(
+                        "ownership-conflict",
+                        "an installation target has unrecognized customized content",
+                    )
             if earlier is not None:
                 requirement = {
                     "kind": "phase-after",
@@ -701,7 +765,9 @@ def attach_deployment(
         )
 
 
-def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
+def validate_deployment_declarations(
+    payload: Mapping[str, Any], *, followup_deployed: Mapping[str, Any] | None = None
+) -> None:
     """Re-derive the closed deploy write set without trusting a resealed list."""
     from onboard import default_codex_home
 
@@ -711,6 +777,11 @@ def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
         {}
         if successor is None
         else {result["resource_id"]: result for result in successor["apply_results"]}
+    )
+    followup_owned = (
+        {}
+        if payload.get("followup") is None or followup_deployed is None
+        else followup_deployed
     )
     all_deploy = [
         operation
@@ -861,8 +932,15 @@ def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
             )
         if mcp[0]["target"] != discovered["target"]:
             _fail("scope-conflict", "the MCP resource leaves the active OMP profile")
+    omp_agents_target = _omp_agents_template_target(
+        platform,
+        Path(discovered["agent_dir"]) if platform == "omp" else None,
+    )
     templates = {
-        str(operation.target): operation for operation in _installation_templates(roots)
+        str(operation.target): operation
+        for operation in _installation_templates(
+            roots, omp_agents_target=omp_agents_target
+        )
     }
     copied = {
         operation["target"]: operation
@@ -918,6 +996,18 @@ def validate_deployment_declarations(payload: Mapping[str, Any]) -> None:
                     "ownership-conflict",
                     "global routing must follow its exact paused predecessor",
                 )
+        elif followup_owned.get(operation["resource_id"]) is not None:
+            # A followup batch replaces a predecessor-owned target only from
+            # that exact proven deployment outcome, sealed as concrete state.
+            if requirement != {
+                "kind": "state",
+                "state": followup_owned[operation["resource_id"]],
+            }:
+                _fail(
+                    "ownership-conflict",
+                    "a followup replacement must start from the exact "
+                    "predecessor deployment outcome",
+                )
         elif requirement["kind"] != "state" or requirement["state"] not in (
             _ABSENT,
             source["state"],
@@ -953,6 +1043,7 @@ def load_deployment_context(
     from sbtd_migration import (
         _check_source_backups,
         _private_document,
+        _protected_followup_ancestry,
         _result_index,
         _validate_context,
     )
@@ -998,6 +1089,15 @@ def load_deployment_context(
     require_private_directory(output_path.parent)
     if snapshot(output_path) != _ABSENT:
         _fail("state-conflict", "the deployment evidence target already exists")
+    for protected_path, is_directory in _protected_followup_ancestry(manifest):
+        if output_path == protected_path or (
+            is_directory
+            and contracts._path_contains(str(protected_path), str(output_path))
+        ):
+            _fail(
+                "private-scope",
+                "deployment evidence must not overlap a protected predecessor object",
+            )
     declared_roots = {project["root"] for project in manifest["payload"]["projects"]}
     if {str(root) for root in roots} != declared_roots or len(roots) != len(
         declared_roots

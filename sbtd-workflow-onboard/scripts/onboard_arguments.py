@@ -52,6 +52,11 @@ _MIGRATION_RULES = {
             "routing_approval_key",
             "successor_manifest",
             "successor_apply_receipt",
+            "followup_manifest",
+            "followup_apply_receipt",
+            "followup_deployment_evidence",
+            "followup_verification",
+            "followup_cleanup_receipt",
             "deployment_mode",
             "deployment_platform",
             "graft_hooks",
@@ -86,6 +91,11 @@ _MIGRATION_VALUE_OPTIONS = (
     "routing_approval_key",
     "successor_manifest",
     "successor_apply_receipt",
+    "followup_manifest",
+    "followup_apply_receipt",
+    "followup_deployment_evidence",
+    "followup_verification",
+    "followup_cleanup_receipt",
     "deployment_mode",
     "deployment_platform",
     "manifest",
@@ -138,6 +148,16 @@ _MIGRATION_CONTEXT_GROUP = (
     "deployment_evidence_out",
 )
 _MIGRATION_CONTEXT_OPTIONAL = ("previous_deployment_evidence",)
+
+# Followup deployment batch: the five predecessor documents are one group;
+# all five or none, plan phase only.
+_FOLLOWUP_INPUTS = (
+    "followup_manifest",
+    "followup_apply_receipt",
+    "followup_deployment_evidence",
+    "followup_verification",
+    "followup_cleanup_receipt",
+)
 
 
 def _option_name(dest: str) -> str:
@@ -274,7 +294,12 @@ def add_migration_parser(
         "routing_approval_key": "Private key outside the vault and selected projects. Plan uses it only to sign the routing approval file.",
         "successor_manifest": "Private manifest of one completed deployment-less batch; pairs with --successor-apply-receipt.",
         "successor_apply_receipt": "Private complete apply receipt of the same completed batch.",
-        "deployment_mode": "Declare Codex deployment before apply: init or init-projects.",
+        "followup_manifest": "Private manifest of the completed codex predecessor batch; requires all five --followup-* inputs.",
+        "followup_apply_receipt": "Private complete apply receipt of the codex predecessor batch.",
+        "followup_deployment_evidence": "Private successful deployment evidence of the codex predecessor batch.",
+        "followup_verification": "Private verified verification record of the codex predecessor batch.",
+        "followup_cleanup_receipt": "Private successful cleanup receipt of the codex predecessor batch.",
+        "deployment_mode": "Declare deployment before apply: init or init-projects.",
         "deployment_platform": "Declare the deployment host: codex or omp.",
         "manifest": "Explicit private migration manifest file.",
         "apply_receipt": "Explicit apply receipt for retry or verification.",
@@ -478,6 +503,41 @@ def validate_migration_args(
             )
         if not getattr(args, "deployment_mode", None):
             parser.error("successor inputs require --deployment-mode")
+    followup_seen = any(
+        getattr(args, dest, None) is not None for dest in _FOLLOWUP_INPUTS
+    )
+    if args.phase == "plan" and followup_seen:
+        missing = [
+            _option_name(dest)
+            for dest in _FOLLOWUP_INPUTS
+            if getattr(args, dest, None) is None
+        ]
+        if missing:
+            parser.error(
+                "followup inputs require all five predecessor documents; missing "
+                + ", ".join(missing)
+            )
+        if any(not getattr(args, dest).strip() for dest in _FOLLOWUP_INPUTS):
+            parser.error("followup input paths must be nonempty")
+        if successor_seen:
+            parser.error("followup inputs cannot be combined with successor inputs")
+        if getattr(args, "publication_decisions", None) is not None:
+            parser.error(
+                "followup inputs cannot be combined with --publication-decisions"
+            )
+        if (
+            getattr(args, "routing_approvals", None) is not None
+            or getattr(args, "routing_approval_key", None) is not None
+        ):
+            parser.error(
+                "followup inputs cannot be combined with routing approval options"
+            )
+        if getattr(args, "deployment_mode", None) != "init":
+            parser.error("followup inputs require --deployment-mode init")
+        if getattr(args, "deployment_platform", None) != "omp":
+            parser.error("followup inputs require --deployment-platform omp")
+        if getattr(args, "graft_hooks", False):
+            parser.error("followup inputs cannot be combined with --graft-hooks")
 
 
 def _check_migration_context(

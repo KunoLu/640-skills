@@ -6,6 +6,7 @@
 
 ### 新增
 
+- P1-23 增加清理闭合后的 OMP follow-up 部署批次：五个 `--followup-*` 参数绑定完整 Codex 前批的 manifest/apply/deployment/verification/cleanup，要求显式 `init`/`omp`，不接受 hooks 或递归 followup。旧 successor 拒绝规则不变；完整部署集合可在受管前态证明下升级，空 apply 不重复迁移，恢复只撤销本批写入，前批备份继续保护。实际 HOME 接线与 host 验收仍需独立授权。
 - P1-21加入后继部署批次：迁移plan新增`--successor-manifest`/`--successor-apply-receipt`成对输入（要求显式`--deployment-mode`，与publication/routing批准输入互斥），修复「plan密封漏deployment声明即永久无法部署」的一次性批次缺口。后继plan绑定`deployment`为null且apply完整成功的前批，重新实测每个前批apply后态与承接cleanup前态（任一漂移blocked），封存仅含未完成cleanup与部署闭包的successor manifest；manifest payload新增`successor`绑定（前批manifest_id/apply_id、全部succeeded apply结果嵌入，及钉住真实前批文件的`manifest_ref`/`apply_receipt_ref`内容哈希引用，链期内两文件不得移动或改写），retention逐字段继承前批。部署`before_requirement`的phase-after可跨manifest引用前批同资源结果，deploy/verify/cleanup/recovery以「嵌入结果∪本批回执」叠层解析期望前态，且每次消费都重载真实前批复验嵌入结果、承接集合与未覆盖后态。无前批绑定的manifest行为不变；未执行live部署。
 - P1-01增加内部Onboard参数与交换契约层，覆盖严格JSON、批准快照、私有／共享操作、阶段收据、deployment evidence及恢复数据和envelope；它不注册尚未实现的公开迁移／恢复命令。jsonschema按Onboard requirements显式准备并惰性加载，目录复制不代表依赖已安装，缺失时校验fail-closed。
 - P1-02加入只读SBTD最小状态检查与按需bootstrap：未onboard项目不因缺少task／身份而失败；已有指针与选中任务按schema、日期和物理路径检查，异常不重建。PyYAML显式纳入安装依赖。
@@ -24,6 +25,7 @@
 
 ### 修复
 
+- P1-23将契约路径包含判断的祖先身份复用为同一次调用内的`samestat`，不再在嵌套比较中反复`samefile`/`stat`同一文件；新增文件从独立到硬链接再分离的重检回归，符号链接和大小写语义不变，且无跨调用缓存。
 - P1-22修复部署共享根检查被根内无关符号链接阻断：迁移部署执行不再对共享根做全树快照来判断存在性，改为逐组件拒绝符号链接的轻量 lstat 检查；共享根本身是链接、文件或特殊项仍 fail-closed，缺失根仍以 0700 创建，目标资源的漂移核对不变。此前用户 home 根里任何无关 symlink（如 hooks/plugins 指向其他配置目录）都会让每条共享部署操作以泛化的 precondition 错误阻断。
 - P2-05修复 migration cleanup 消费 failed verification 时删除先于回执成功门：cleanup 现在在任何删除之前拒绝 status 非 verified 的验证文档（`unverified-input`，exit 2，零删除）。此前首次 cleanup（无续作回执）会先执行资源删除，回执封存阶段才命中 verified 绑定门，导致删除已发生而 cleanup receipt 无法保存；带既有 cleanup receipt 的续作路径原本就在初始绑定拒绝，行为不变。verify 为 failed 状态封存验证文档的能力不变。
 - 迁移 plan 判断 OMP 家目录是否存在时不再整树扫描。路径上每一级，包括父目录，都按 no-follow 拒绝符号链接；子目录里的无关符号链接不再阻断存在性检查。根本身是链接、文件或特殊项仍拒绝，不存在不创建，也不改共享路由文件。
