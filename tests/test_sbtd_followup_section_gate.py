@@ -203,6 +203,56 @@ class FollowupSectionGateTests(unittest.TestCase):
                           anchors=[package])
             self.assert_conflict(chain)
 
+    def test_cleanup_directory_is_not_a_launcher_anchor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "project"
+            retired = base / ".trellis"
+            # The launcher sits under a tree the predecessor RETIRED: a
+            # cleanup outcome (after=absent) must never anchor it.
+            bindings = _bindings(root, retired)
+            target = base / "config.toml"
+            target.write_bytes(codex_mcp_candidate(b"", [bindings]))
+            operations = [
+                {
+                    "phase": "deploy",
+                    "resource_id": "resource-1",
+                    "target": str(target),
+                    "selector": "graft-mcp",
+                    "owner_kind": "toml",
+                    "change": {"kind": "configure-graft", "source_ref": "policy"},
+                    "dependent_projects": [str(root)],
+                },
+                {
+                    "phase": "cleanup",
+                    "resource_id": "resource-2",
+                    "target": str(retired),
+                    "selector": "whole-resource",
+                    "owner_kind": "directory",
+                    "change": {"kind": "remove", "source_ref": "policy"},
+                    "dependent_projects": [str(root)],
+                },
+            ]
+            results = {
+                "deploy": {
+                    "resource-1": {
+                        "status": "succeeded",
+                        "after": snapshot(target),
+                    }
+                },
+                "cleanup": {
+                    "resource-2": {
+                        "status": "succeeded",
+                        "after": {"type": "absent", "checksum": None},
+                    }
+                },
+            }
+            chain = [
+                ({"payload": {"projects": [], "shared_operations": operations}},
+                 results)
+            ]
+            self.assert_conflict(chain)
+
     def test_omp_host_appended_server_does_not_block(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
