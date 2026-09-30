@@ -16,7 +16,7 @@
 | 最近核对代码快照 | `main`，`5ad87208167d6cf1ef97444cb84d7cb5fde5f065`；2026-09-17 核对，修订本版前工作区 clean。相对代码基线仅 CHANGELOG、ENTRYPOINT、归档和本 PRD 变化；安装器、模板、catalog 与生产测试未变。此 SHA 是固定核对快照，不表示后续提交的实时 HEAD |
 | 原始输入 | 用户提供《SBTD去Trellis化与Graft替换改造方案.md》，方案版本 v2.0，2026-09-16 |
 | 输入 SHA-256 | `eeefc2d47eb53c0df1094adcd02f983a0b5dbcd74f6af8c5d34038b7a7ba2fcf` |
-| Graft 审核候选 | 当前受管 pin 为 npm `@nanonets/graft@0.21.1`，registry `gitHead=375a37e0b6a21d28f12fce2d220d692726bb0730`。0.18.0 的 darwin/arm64 隔离 spike 仍只证明旧 pin，见第 9.8 节；新 pin 的能力重证以 graft-pin-0.21.1 证据为准，未完成前不得把旧 spike 当作 0.21.1 通过 |
+| Graft 审核候选 | 当前受管 pin 为 npm `@nanonets/graft@0.21.1`，registry `gitHead=375a37e0b6a21d28f12fce2d220d692726bb0730`。0.18.0 的 darwin/arm64 隔离 spike 仍只证明旧 pin，见第 9.8 节。graft-pin-0.21.1 已在 main `b9f03ef4450497c4e00c7772c86c754d8ee2cf19` 完成能力重证：当前 HEAD 全量 pytest exit 0，demo stamp、launcher 和 CLI 为 0.21.1，外版 fail-closed 仍在。该重证不等于 v2 发布，也不授权 sync、cleanup、tag 或备份处置 |
 | 当前交付范围 | 按 §14 依赖顺序实施本源仓库计划；每项独立分支、验证、循环 review、处理 advisor、PR 合并和合并后台账更新。初期 PRD 与 P0-01 证据仍保留 |
 | 独立授权边界 | 真实 HOME／host 接线及工具安装卸载、真实项目迁移、本机 workflow sync、live automation、hooks opt-in、清理、tag／发布及备份销毁仍需具体范围和相应确认；本源仓库开发与隔离验证不等于这些授权 |
 | 实施跟踪事实源 | 本文第 14 节任务台账；每完成一项立即同步状态、实际完成时间和证据 |
