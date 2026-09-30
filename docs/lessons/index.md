@@ -106,3 +106,10 @@
 |---|---|---|---|---|
 | LESSON-20260928-pr-merge-confirm-before-branch-cleanup | git, github, pr, merge, branch, workflow, recovery | 合并任务 PR / 状态 PR 或删除已合并分支 | 合并与分支清理必须分步：先证明 MERGED 再删分支；禁止把 merge 与删除串成 `&&` 链。 | topics/repository-workflow.md#lesson-20260928-pr-merge-confirm-before-branch-cleanup-confirm-merged-before-any-branch-cleanup |
 <!-- lessons:pr:end -->
+
+<!-- lessons:kuno:start -->
+| id | tags | read_when | summary | detail |
+|---|---|---|---|---|
+| LESSON-20260930-kuno-umask-sensitive-test-evidence | validation, pytest, umask, privacy, filesystem | 取证命令修改 `umask`，或测试依赖目录权限/私有目录拒绝 | 取证 umask 会改变 `mkdir(mode)` 结果；环境失败须分类后按正常 umask 复跑，最终仍要完整 suite。 | topics/validation-scripts.md#lesson-20260930-kuno-umask-sensitive-test-evidence-umask-sensitive-tests-need-normal-evidence-runs |
+| LESSON-20260930-kuno-contract-rerun-not-full-suite | validation, pytest, contracts, evidence, gitignore | 修复单条契约或根 ignore 后收尾 | targeted rerun 只证明该项修复，不能替代最终 full suite；旧失败记录与最终报告都要保留。 | topics/validation-scripts.md#lesson-20260930-kuno-contract-rerun-not-full-suite-contract-rerun-is-not-a-full-suite-pass |
+<!-- lessons:kuno:end -->
