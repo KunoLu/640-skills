@@ -6,7 +6,7 @@
 
 P1-01 本身只提供内部参数／交换契约；P1-12 的实际迁移入口见下，cleanup/recovery 已按对应任务分项实现。P1-02 的项目检查只验证选中状态的形状与 containment，不代替完整任务恢复或验收。目录复制／`npx skills add` 不运行 pip；调用契约、任务或迁移校验前，用实际解释器执行 `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`，准备全部声明依赖。缺依赖明确阻断相关校验，不影响帮助和纯参数解析；schema/hash 合法不证明授权或真实执行。
 
-P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 只报告本地能力，`install-graft --json` 展示计划，确认后才使用 `install-graft --yes --json`。固定 `@nanonets/graft@0.18.0`、Node >=20，验证包完整性/native启动及 telemetry 持久关闭；这不代表 graph、MCP、host 接线或完整 v2 已通过。
+P1-03 将 Graft CLI 检测与明确确认的安装独立实现：`check`/`plan` 只报告本地能力，`install-graft --json` 展示计划，确认后才使用 `install-graft --yes --json`。固定 `@nanonets/graft@0.21.1`、Node >=20，验证包完整性/native启动及 telemetry 持久关闭；这不代表 graph、MCP、host 接线或完整 v2 已通过。
 
 现有 CLI 只需关闭 telemetry 时使用 `install-graft --telemetry-only --yes --json`：如果确认后 CLI 消失或变成未验证状态，handler 阻断，不扩大为 npm 安装。普通 `check` 的 npm/Node/nvm 缺失记录为 `conditionalRuntime`，不当作已选择安装的失败；实际安装仍校验所需前置。
 
@@ -251,7 +251,7 @@ pwsh -File .\install.ps1
 
 `ENTRYPOINT.md` 必须由 Git 追踪，保存版本检查和 `update` / `更新` 使用的 authoritative baseline；新 clone 必须直接取得它。根 `AGENTS.md` 是本机可选补充规则，已加入根 `.gitignore` 并从 Git 索引移除，不进入远程 `main`；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。
 
-本配置源仓根 `.gitignore` 独立采用以下七行，不复制业务项目模板；新本地状态／handoff／Graft产物被保护，共享任务、规范、lessons和`ENTRYPOINT.md`仍可追踪：
+本配置源仓根 `.gitignore` 独立采用以下九行，不复制业务项目模板；新本地状态／handoff／Graft产物被保护，共享任务、规范、lessons和`ENTRYPOINT.md`仍可追踪：
 
 ```gitignore
 .DS_Store
@@ -261,13 +261,16 @@ pwsh -File .\install.ps1
 /.graft
 __pycache__/
 AGENTS.md
+.chrome-devtools-mcp/
+.playwright-mcp/
 ```
 
 四条新规则仅锚定仓库根，覆盖同名目录、文件和symlink，不影响`packages/graft`等业务子目录。旧`.trellis/`、`.gitnexus/`不再由根文件保护；切换已有checkout前先核对磁盘与Git索引残留，存在未知或敏感内容时先保全并确认处置，不盲删或直接提交。ignore不会取消已tracked状态；这不是业务项目迁移或全局配置同步。
+新增的两条 MCP 目录规则未加根锚定，在本仓工作树中也会忽略同名嵌套目录；已追踪文件不因新增 ignore 而取消追踪。
 
 回滚这项规则也要先核对四个新本地根与Git索引；若已产生本地数据，先在仓库外私有保全并确认处置，在安全迁出或授权方案落实前保持保护，不能仅恢复旧文件就让这些内容暴露为可提交文件。
 
-`docs/lessons.md`的旧五行摘要以及topics里的三／四／五行记录保留原文，均按当时状态理解，不覆盖此处现行七行契约；不得为了更新验收规则改写历史lesson。
+`docs/lessons.md`的旧五行摘要以及topics里的三／四／五行记录保留原文，均按当时状态理解，不覆盖此处现行九行契约；不得为了更新验收规则改写历史lesson。
 
 `ENTRYPOINT.md` 的版本监控表启用 OMP：监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`），GitHub 源为 `can1357/oh-my-pi` 的对应 `v<package-version>` tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 `UPDATE.md` 区间，无新版本不写 `当前版本 -> 当前版本`；只有手动 `update` / `更新` 才写回基线。本机 `omp --version` 只作交叉校验，不得覆盖表格版本。
 

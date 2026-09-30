@@ -23,6 +23,12 @@
 - P1-14新增仓库级 GitHub Actions `validation` 工作流：`actions/checkout` / `actions/setup-python` 按 commit SHA 固定并指定 Python `3.12.10`，PR 事件显式 checkout PR head SHA；Linux 运行全量 unittest/contract 与语法检查，macOS 运行 Bash installer／多项目／workflow contracts，Windows 运行 PowerShell installer／workflow contracts 并在 pwsh 可用时运行 `-k powershell` 真实安装器子集，三个 job 均断言 checkout 运行后干净。新增 `sbtd_backup_retention` 授权记录 helper：仅对删除范围外的既有私有准备记录或迁移报告读-改-写-回读，写入 custodian、候选归属、精确范围、本次独立授权和实际确认时间，逐项缺失、目标不存在、封闭 publication-decisions 任意加字段、写入失败或回读不一致均 blocked、零删除、不得 done；禁止新建处置文件，不注册处置 CLI，也不替代 P3-04 人工规程。CI 通过不代表真实 host、完整 Windows 原生或发布完成。
 - P1-15 增加 Codex/OMP 三模式 host smoke 入口：默认 CI 跳过真实会话；`SBTD_P115_HOST=1` 才跑六个 host×mode 组合。另含 Gate 分层、跨会话 task 恢复与保存失败格；入口文件规模只作观察，不把字数换算成 AC-20 token 通过。
 
+### 变更
+
+- 受管 Graft pin 从 `@nanonets/graft@0.18.0` 晋升到 `0.21.1`：registry gitHead `375a37e0b6a21d28f12fce2d220d692726bb0730`，tarball integrity 与官方发布包一致。守门启动器、DNT、stamp 精确版本和 fail-closed 不变。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。不改默认守门形态，不新增裸形态开关。
+- 项目 `.gitignore` 模板忽略 `.impeccable/config.local.json`。该文件是 Impeccable 每人本机覆盖，含 hook consent；共享的 `.impeccable/config.json` 与 `.impeccable/design.json` 仍可追踪。安装器忽略探针同步检查这一路径。
+- 配置源仓根 `.gitignore` 从七行改为九行，在 `AGENTS.md` 后增加 `.chrome-devtools-mcp/` 与 `.playwright-mcp/`。两条目录规则在本仓工作树匹配同名本机 MCP 日志目录（也匹配嵌套目录），不复制业务项目模板，也不改历史 lesson。
+
 ### 修复
 
 - P1-24 follow-up 前态闸改为按受管节校验 configure-graft 结果，不再要求整文件相等：宿主可在受管 MCP／hooks／AGENTS 围栏外追加；section 目标把当前快照写入返回映射，图目录仍钉死历史 after。python／node／cli 只核对 argv 形状与跨条目一致（同形状路径对调仍通过）。未知 selector 与受管节漂移 fail-closed 为 `state-conflict`。不代表 live HOME 接线或 P2-07 已授权。
