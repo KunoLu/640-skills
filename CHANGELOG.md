@@ -62,6 +62,7 @@
 
 ### 文档
 - 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
+- `ENTRYPOINT.md` 当前 canonical Skill 改为 `writing-for-agents`。`writing-great-skills` 只保留为迁移别名，不再作为当前安装名。
 
 
 - 交付 P0-03 任务数据契约与声明式 schema，明确本地／共享任务的唯一事实源、active 引用、父子关系、状态历史及跨文件恢复边界；这是实施前协议资产，不代表 Onboard 已提供 v2 任务读写或迁移能力。

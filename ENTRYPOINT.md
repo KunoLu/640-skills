@@ -100,7 +100,7 @@ flowchart TD
 
 ## 2. mattpocock/skills 接入规则
 
-仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并保持官方文件原样。Onboard 内部维护带精确 commit、checksum 和许可证的原样 stable 镜像；普通安装默认使用该镜像，只有显式 `--source upstream` 才直接获取当前上游用于评估或升级验证。本配置沿用既有 canonical 基线；需特别区分：`diagnose`、`write-a-skill` 与 `zoom-out` 属于较早的迁移 / 移除项，而 `to-prd` → `to-spec`、`to-plan` / `to-issues` → `to-tickets` 是 mattpocock/skills v1.1.0 的后续变更。当前只安装最终 canonical Skill：
+仅接入外部评估表格中“是否建议接入”为“是”的官方 Skill，并保持官方文件原样。Onboard 内部维护带精确 commit、checksum 和许可证的原样 stable 镜像；普通安装默认使用该镜像，只有显式 `--source upstream` 才直接获取当前上游用于评估或升级验证。本配置沿用既有 canonical 基线；需特别区分：`diagnose`、`write-a-skill` 与 `zoom-out` 属于较早的迁移 / 移除项，`writing-great-skills` 只是 `writing-for-agents` 的迁移别名，不是当前安装名，而 `to-prd` → `to-spec`、`to-plan` / `to-issues` → `to-tickets` 是 mattpocock/skills v1.1.0 的后续变更。当前只安装最终 canonical Skill：
 
 ```text
 diagnosing-bugs
@@ -111,7 +111,7 @@ grilling
 domain-modeling
 codebase-design
 handoff
-writing-great-skills
+writing-for-agents
 to-spec
 to-tickets
 ```
@@ -128,7 +128,7 @@ to-tickets
 | `domain-modeling` | 项目语言、glossary、CONTEXT.md / ADR 建模辅助 | 遵守本地 `docs/CONTEXT.md`、`docs/adr/*.md` 路径约束 |
 | `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | 作为 `tdd`、陌生模块理解和结构性修改前的设计辅助 |
 | `handoff` | 长会话切换、`/clear`、新会话、任务暂停或多会话交接 | 输出目标、已完成工作、决策、文件、命令、开放问题、下一步和脱敏说明 |
-| `writing-great-skills` | 创建或维护自定义 Skill 的质量规则 | `SKILL.md` 做入口；长内容拆 reference；确定性操作优先脚本化 |
+| `writing-for-agents` | 创建或维护 Skill、AGENTS.md、CLAUDE.md | `SKILL.md` 做入口；长内容拆 reference；确定性操作优先脚本化。`writing-great-skills` 只是迁移别名，不是当前安装名 |
 | `to-spec` | 将当前对话和代码库理解整理为 spec / PRD | 默认输出 Markdown spec / PRD；不自动发布到 issue tracker |
 | `to-tickets` | 将 PRD、plan 或 spec 拆成实现任务 | 默认输出任务可执行的 Markdown vertical slices；不自动发布到 issue tracker |
 

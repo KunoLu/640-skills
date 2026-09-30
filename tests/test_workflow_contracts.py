@@ -409,7 +409,9 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertNotIn("## 3. Trellis 当前使用要点", document)
         self.assertNotIn("## 4. GitNexus 当前使用要点", document)
         self.assertIn("| `tdd` |", document)
-        self.assertIn("| `writing-great-skills` |", document)
+        self.assertIn("| `writing-for-agents` |", document)
+        self.assertIn("`writing-great-skills` 只是迁移别名", document)
+        self.assertNotIn("| `writing-great-skills` |", document)
         self.assertIn("→ ponytail（首次实现编辑前选择最小正确实现）", document)
         high_start = document.index("高风险后端逻辑 / 算法")
         high_risk = document[
