@@ -11,13 +11,13 @@ prints to stdout/stderr; callers own all presentation:
   never the network-bound ``graft version`` command).
 - ``install_graft(*, confirmed, telemetry_only=False)`` — plans (always
   read-only) and, only after explicit confirmation, installs the frozen
-  ``@nanonets/graft@0.18.0`` tarball with integrity verification and
+  ``@nanonets/graft@0.21.1`` tarball with integrity verification and
   conservative telemetry opt-out persistence.
 
 Pinned facts (registry-verified, do not "upgrade" to latest automatically):
-tarball integrity sha512-sNshNND1Q/qSXiuSh9nW8NniWyaD+m55oJZ6oCGJsLzxot52WSJrdT
-hsQ3NZVTNT+lqivlYkkqN8b/nf22S/Xw==, registry gitHead
-de8456e892bad5aeee11403e47fb2227773eb27e, Node >=20.
+tarball integrity sha512-0CSgoGx+FyzgCkFDhM94pvPnYaTU9jL19BixqMmZ0eyQK618GINPHhQ5X
+tto7LcHdNiBGl5RFQcwJob6Mxq4nA==, registry gitHead
+375a37e0b6a21d28f12fce2d220d692726bb0730, Node >=20.
 
 Managed subprocesses always run with telemetry/trackable activation
 scrubbed: DO_NOT_TRACK=1, DNT=1, dotenv disabled via DOTENV_CONFIG_PATH and
@@ -48,14 +48,13 @@ import urllib.request
 from pathlib import Path
 
 GRAFT_PACKAGE = "@nanonets/graft"
-GRAFT_PINNED_VERSION = "0.18.0"
+GRAFT_PINNED_VERSION = "0.21.1"
 GRAFT_SPEC = f"{GRAFT_PACKAGE}@{GRAFT_PINNED_VERSION}"
-GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.18.0.tgz"
+GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.21.1.tgz"
 GRAFT_TARBALL_INTEGRITY = (
-    "sha512-sNshNND1Q/qSXiuSh9nW8NniWyaD+m55oJZ6oCGJsLzxot52WSJrdThsQ3NZVTNT+lq"
-    "ivlYkkqN8b/nf22S/Xw=="
+    "sha512-0CSgoGx+FyzgCkFDhM94pvPnYaTU9jL19BixqMmZ0eyQK618GINPHhQ5Xtto7LcHdNiBGl5RFQcwJob6Mxq4nA=="
 )
-GRAFT_REGISTRY_GIT_HEAD = "de8456e892bad5aeee11403e47fb2227773eb27e"
+GRAFT_REGISTRY_GIT_HEAD = "375a37e0b6a21d28f12fce2d220d692726bb0730"
 NODE_MIN_MAJOR = 20
 
 # npm >= 12 blocks lifecycle scripts by default; the pinned package needs its
@@ -99,7 +98,7 @@ _SCRUBBED_VARS = (
 
 _ADVICE_MISSING = (
     "Install the pinned Graft CLI with the managed install-graft flow after "
-    "explicit confirmation; it fetches the frozen @nanonets/graft@0.18.0 "
+    "explicit confirmation; it fetches the frozen @nanonets/graft@0.21.1 "
     "tarball, verifies its integrity, and disables anonymous telemetry."
 )
 

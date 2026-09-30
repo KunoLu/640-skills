@@ -1,6 +1,6 @@
 """Guarded native Graft MCP/hook launch seam (P1-04).
 
-This is the only path that may start the pinned ``@nanonets/graft@0.18.0``
+This is the only path that may start the pinned ``@nanonets/graft@0.21.1``
 native MCP server or its native hook module for a selected project. It exists
 because every upstream entry point (``graft mcp``, the SessionStart hook) runs
 ``runUpkeep`` → ``reconcileWiring`` at boot, and upstream self-maintenance is
@@ -18,7 +18,7 @@ So this launcher gates ALL native startup, then replaces the shim:
 1. ``validate_runtime`` proves the exact pinned package identity from
    metadata only (no execution): node and the CLI are nofollow ordinary
    files and the CLI resolves exactly to ``dist/cli.js`` of a real
-   ``@nanonets/graft`` package whose ``package.json`` version is 0.18.0.
+   ``@nanonets/graft`` package whose ``package.json`` version is 0.21.1.
 2. ``validate_build_scope`` proves the selected root is safe for ANY native
    launch or build, even before a graph exists (the explicit-build case):
    no graft workspace index and no workspace-parent shape the pinned
@@ -34,7 +34,7 @@ So this launcher gates ALL native startup, then replaces the shim:
 3. ``validate_project`` routes through ``validate_build_scope`` and then
    requires a complete CURRENT native wiring state: an actual built wiring
    graph (``graft/.graph/wiring.json``) and the native stamp
-   (``graft/.cache/wiring-stamp.json``) whose version is exactly 0.18.0,
+   (``graft/.cache/wiring-stamp.json``) whose version is exactly 0.21.1,
    whose hosts are exactly ``["agents"]``, and whose four wiring opts are
    all false. With that stamp in place the native boot-time reconcile is
    a proven no-op. A missing, unreadable, stale or foreign stamp is never
@@ -191,7 +191,9 @@ _EXTRACT_CACHE_RE = re.compile(r"extract\..+\.json")
 # complete, nothing less is current.
 _STAMP_KEYS = frozenset({"version", "hosts", "opts", "at"})
 _STAMP_OPT_KEYS = frozenset({"global", "mcp", "hooks", "statusline"})
-# Every key the pinned package can persist in .graft/config.json.
+# Keys the pinned package may persist in .graft/config.json that this
+# launcher recognizes. Trail ``pendingSignup`` is intentionally absent:
+# any extra key, including that signup claim, fail-closes as unmanaged.
 _BUILD_CONFIG_KEYS = frozenset(
     {"includeDirs", "followSubmodules", "followNestedRepos", "brain"}
 )
@@ -929,7 +931,7 @@ def validate_project(root: Path) -> dict[str, Any]:
     wiring graph (``graft/.graph/wiring.json``, a non-empty ordinary file
     physically contained in the root) and the native wiring stamp
     (``graft/.cache/wiring-stamp.json``) as strict unambiguous JSON in
-    exactly the pinned shape — version exactly 0.18.0, hosts exactly
+    exactly the pinned shape — version exactly 0.21.1, hosts exactly
     ``["agents"]``, all four wiring opts explicitly false. Anything
     missing, unreadable, stale, foreign or ambiguous fails closed; nothing
     is written or repaired, because a guessed stamp is precisely what makes

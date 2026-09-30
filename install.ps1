@@ -608,7 +608,7 @@ function Ensure-GraftCli {
   }
 
   $plan = $probe.plan
-  $package = "@nanonets/graft@0.18.0"
+  $package = "@nanonets/graft@0.21.1"
   if ($plan -and $plan.PSObject.Properties["package"] -and $plan.package) {
     $package = [string]$plan.package
   }

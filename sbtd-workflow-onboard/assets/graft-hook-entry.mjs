@@ -7,14 +7,14 @@
  * repo's node_modules, a legacy prefix guess and finally `npm root -g`, picks
  * the HIGHEST version found, and swallows every failure into a silent no-op.
  * None of that exists here. The managed launcher (`sbtd_graft_entry.py hook`)
- * has already proven the exact pinned `@nanonets/graft@0.18.0` package, the
+ * has already proven the exact pinned `@nanonets/graft@0.21.1` package, the
  * canonical selected root, the complete current wiring stamp and the graph,
  * and runs this bridge with the scrubbed managed environment. This bridge
  * therefore imports ONLY the exact validated `dist/claude/hooks.js` it is
  * handed and calls its `main(event)` — no candidate search, no npm lookup,
  * no version shopping, no fallback entry, no silent no-op.
  *
- * Not an upstream-supported API: it is pinned to the validated 0.18.0 module
+ * Not an upstream-supported API: it is pinned to the validated 0.21.1 module
  * shape (`main(event)`), which the launcher re-proves on every event.
  *
  * Protocol discipline: this bridge writes nothing to stdout — the native
