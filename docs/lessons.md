@@ -62,3 +62,8 @@
 - 全量验证（267 tests + 450 subtests）时长波动大：窗口 ≥600s 或按文件拆分；timeout 一律充足窗口重跑取证并记录最后进度点，不得直接当 pass/fail 证据，原因未证实前不归因为“环境问题”。
 - CLI 参数或入口改动必须用真实解释器验证合法输入与拒绝输入；源码中删掉名字不等于运行时拒绝，负例非零也可能只是语法／编码错误。平台实测范围分别报告，不以 macOS PowerShell 代替 Windows。
 <!-- lessons:640:end -->
+
+<!-- lessons:kuno:start -->
+- 取证命令不得在非正常 `umask` 下代表最终测试；权限相关失败须按正常 `umask` 分类复跑，关闭环境变量后仍要完整 suite。
+- targeted rerun 只证明该失败项修复；最终交付必须单独证明同一修正环境下的 full suite。
+<!-- lessons:kuno:end -->

@@ -5,3 +5,5 @@
 /.graft
 __pycache__/
 AGENTS.md
+.chrome-devtools-mcp/
+.playwright-mcp/

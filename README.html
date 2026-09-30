@@ -406,7 +406,7 @@
         <div class="status-list">
           <div><strong>未发布边界（v2 分阶段交付中）</strong><br>canonical payload为14 bundled / 19 external Skills。项目setup采用按需SBTD检查，不初始化Trellis；Graft检测／安装、显式Codex／OMP接线、任务库、身份、migration plan/apply/verify、cleanup/recovery与两安装器对应参数转发已分项实现。Windows原生和完整v2发布仍待对应任务。真实项目部署与旧数据处置须独立授权。</div>
           <div>P1-01本身只提供内部契约；P1-12实际迁移入口见下，cleanup/recovery已按对应任务分项实现。P1-02只验证选中状态的形状与containment，不替代恢复或验收。目录复制不安装Python依赖；实际解释器须按安装副本的<code>requirements.txt</code>准备全部声明依赖。缺失时相关校验明确阻断，帮助与纯参数解析不受影响。</div>
-          <div>P1-03提供本地Graft检测和明确确认的<code>install-graft</code>，固定<code>@nanonets/graft@0.18.0</code>与Node &gt;=20。验证完整性/native启动和telemetry持久关闭；不等于graph、MCP、host或完整v2可用。</div>
+          <div>P1-03提供本地Graft检测和明确确认的<code>install-graft</code>，固定<code>@nanonets/graft@0.21.1</code>与Node &gt;=20。验证完整性/native启动和telemetry持久关闭；不等于graph、MCP、host或完整v2可用。</div>
           <div>仅关闭现有CLI的telemetry时使用 <code>install-graft --telemetry-only --yes --json</code>；确认后CLI消失或不再可验证则阻断，不转为npm安装。普通check把npm/Node/nvm缺失列为 <code>conditionalRuntime</code>；实际安装仍校验所需前置。</div>
           <div>P1-17在Onboard <code>scripts/</code> 内提供任务状态Python库（<code>sbtd_task_document.py</code>、<code>sbtd_task_state.py</code>）：task.md拥有状态，active仅书签；<code>TaskStore</code> 的 create / inspect / select / transition / set_mode / resume / reopen / protect_local_state / promote / archive 由host-native调用，不是新全局CLI、daemon、journal或<code>onboard.py</code>子命令。Markdown结构识别使用声明依赖markdown-it-py&gt;=4,&lt;5的CommonMark token（parse-only、不渲染、不联网，Python&gt;=3.10），缺失时明确停止写入。提升 / 归档两阶段确认，原目录原子退役保留在 <code>.sbtd/task-originals/</code>；候选区受保护且仅本次操作使用，附带任务须 <code>include_tasks</code> 显式授权。非Git项目branch为null，首次窄保护只追加 <code>/.sbtd/</code>；helper未安装不得冒充已持久化。不代表Windows、host路由、身份、迁移、全量验证或发布已通过。</div>
           <div>P1-18在同一 <code>scripts/</code> 内提供确定性 <code>TaskRouter</code> 与 <code>HandoffStore</code>，不是自然语言分类器或新CLI/daemon。新任务先选ID，续作先定task再定mode；接受推荐保留理由/风险，拒绝按风险去重，自由文本note合法，相同已持久化选择不重复确认，保存失败保持会话mode。跨分支须正确worktree、明确rebind（预期分支/理由/证据/确认）或只读，不checkout、不stash、不重置历史。handoff只在真实pause/context-switch/branch-switch/context-pressure/manual时触发；task/session退出独立锁存，手动不清除退出；只读、保护、分支、确认及redaction门不变。新名称使用完整任务ID的定长SHA-256摘要，旧可逆hex名称继续可读而不自动改名，正文ID/root仍核验；仅与最新快照去重，旧A不抑制A→B→A。提醒只取7天内未完成且root/分支匹配的最新快照，旧快照手动恢复不改task；handoff不是mode/status事实源。完整状态与接口见 <a href="sbtd-workflow-onboard/REFERENCE.md#routing-and-handoff-helpers-p1-18">REFERENCE</a>；不据此声称自动SessionStart恢复、真实迁移或完整发布通过。</div>
@@ -982,17 +982,20 @@ tests/e2e/**/*.trace.zip
           <p>本仓库是配置摘录和模板源，不是真实业务项目。编排按产物类型分层，并保持 Onboard Skill 自包含：automation prompt 位于 <code>prompts/</code>，运行实现位于 <code>scripts/</code>，安装载荷位于 <code>templates/</code>，第三方 fallback 位于 <code>assets/</code>。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。sync 允许列表明确包含 bundled <code>web-ui-autotest-generator</code> 完整目录到 <code>/Users/lusonglin/.agent/skills/web-ui-autotest-generator/</code> 的映射。required external Skills <code>ponytail</code>、<code>ponytail-review</code>、<code>ponytail-audit</code>、<code>ponytail-debt</code> 与 <code>i-have-adhd</code> 不得作为同步表 <code>cp</code> / <code>rsync</code> 行；sync 在复制 Onboard 后必须用已同步的 <code>scripts/onboard.py install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes</code> 从 stable mirror 安装，并确认 5 个 <code>SKILL.md</code> 存在。sync 在 canonical Onboard 校验成功后删除 <code>~/.agent/skills/kuno-workflow-onboard-skills/</code>，并在本机实际使用路径 <code>~/.agent/skills/</code> 上以 <code>--source auto</code> 执行 mattpocock legacy migration，删除 legacy <code>to-prd</code> / <code>to-issues</code> 并安装 canonical <code>to-spec</code> / <code>to-tickets</code>；不保留旧 Onboard alias，普通 sync 不落地 <code>AGENTS.project.md</code>。</p>
         </div>
         <p><code>ENTRYPOINT.md</code> 必须由 Git 追踪，保存版本检查和 <code>update</code> / <code>更新</code> 使用的 authoritative baseline；新 clone 必须直接取得它。根 <code>AGENTS.md</code> 是本机可选补充规则，已加入根 <code>.gitignore</code> 并从 Git 索引移除，不进入远程 <code>main</code>；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。每次仓库代码或工作流规则改动后，都评估 CHANGELOG、README 两份文件和版本化 automation prompt 是否需要同步调整；只有执行 <code>sync</code> / <code>同步</code> 时才比较版本化 prompt 与 Orca <code>SBTD Workflow Tools Version Check</code>，并仅在存在差异时同步到 live automation。<code>update</code> / <code>更新</code> 与 prompt 和 live automation 无关。</p>
-        <p>本配置源仓根<code>.gitignore</code>独立采用七行，不复制业务项目模板；保护新本地状态、handoff和Graft产物，共享任务、规范、lessons及<code>ENTRYPOINT.md</code>仍可追踪：</p>
+        <p>本配置源仓根<code>.gitignore</code>独立采用九行，不复制业务项目模板；保护新本地状态、handoff和Graft产物，共享任务、规范、lessons及<code>ENTRYPOINT.md</code>仍可追踪：</p>
         <pre><code>.DS_Store
 /.sbtd
 /docs/handoffs
 /graft
 /.graft
 __pycache__/
-AGENTS.md</code></pre>
+AGENTS.md
+.chrome-devtools-mcp/
+.playwright-mcp/</code></pre>
         <p>四条新规则锚定仓库根，覆盖同名目录、文件和symlink，不影响<code>packages/graft</code>等业务子目录。旧<code>.trellis/</code>、<code>.gitnexus/</code>不再由根文件保护；切换已有checkout前先核对磁盘和Git索引残留，未知或敏感内容须保全并确认处置，不盲删或直接提交。ignore不会取消已tracked状态；这不是业务项目迁移或全局配置同步。</p>
+        <p>新增的两条 MCP 目录规则未加根锚定，在本仓工作树中也会忽略同名嵌套目录；已追踪文件不因新增 ignore 而取消追踪。</p>
         <p>回滚规则前同样先核对四个新本地根和Git索引；已有本地数据须先在仓库外私有保全并确认处置，安全迁出或授权方案落实前保持保护，不能只恢复旧文件而暴露可提交内容。</p>
-        <p><code>docs/lessons.md</code>的旧五行摘要和topics中的三／四／五行记录保留原文，按当时状态理解，不覆盖现行七行契约；不为更新验收规则改写历史lesson。</p>
+        <p><code>docs/lessons.md</code>的旧五行摘要和topics中的三／四／五行记录保留原文，按当时状态理解，不覆盖现行九行契约；不为更新验收规则改写历史lesson。</p>
         <p><code>ENTRYPOINT.md</code> 的版本监控表启用 OMP：监控对象是 npm <code>@oh-my-pi/pi-coding-agent</code>（CLI <code>omp</code>），GitHub 源为 <code>can1357/oh-my-pi</code> 的对应 <code>v&lt;package-version&gt;</code> tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 <code>UPDATE.md</code> 区间，无新版本不写 <code>当前版本 -&gt; 当前版本</code>；只有手动 <code>update</code> / <code>更新</code> 才写回基线。本机 <code>omp --version</code> 只作交叉校验，不得覆盖表格版本。</p>
         <table>
           <thead>

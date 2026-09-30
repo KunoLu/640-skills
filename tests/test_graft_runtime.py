@@ -408,6 +408,22 @@ class GraftRuntimeTests(unittest.TestCase):
         self.assertNotEqual(probe_env.get("CI"), "1")
         self.assertEqual(before, self.home_snapshot(), "check must not write to HOME")
 
+    def test_pinned_release_matches_adopted_registry_identity(self) -> None:
+        self.assertEqual(graft_runtime.GRAFT_PINNED_VERSION, "0.21.1")
+        self.assertEqual(
+            graft_runtime.GRAFT_TARBALL_URL,
+            "https://registry.npmjs.org/@nanonets/graft/-/graft-0.21.1.tgz",
+        )
+        self.assertEqual(
+            graft_runtime.GRAFT_TARBALL_INTEGRITY,
+            "sha512-0CSgoGx+FyzgCkFDhM94pvPnYaTU9jL19BixqMmZ0eyQK618GINPHhQ5Xtto7LcHdNiBGl5RFQcwJob6Mxq4nA==",
+        )
+        self.assertEqual(
+            graft_runtime.GRAFT_REGISTRY_GIT_HEAD,
+            "375a37e0b6a21d28f12fce2d220d692726bb0730",
+        )
+        self.assertEqual(graft_runtime.GRAFT_SPEC, "@nanonets/graft@0.21.1")
+
     # -- install_graft: confirmation gate ---------------------------------
 
     def test_install_without_confirmation_makes_zero_writes(self) -> None:

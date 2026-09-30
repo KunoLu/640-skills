@@ -2538,6 +2538,7 @@ GITIGNORE_MUST_IGNORE_PROBES = (
     ".graft/state.json",
     ".env",
     ".env.local",
+    ".impeccable/config.local.json",
 )
 
 GITIGNORE_PROBE_UNAVAILABLE = "unavailable"

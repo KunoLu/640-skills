@@ -16,7 +16,7 @@
 | 最近核对代码快照 | `main`，`5ad87208167d6cf1ef97444cb84d7cb5fde5f065`；2026-09-17 核对，修订本版前工作区 clean。相对代码基线仅 CHANGELOG、ENTRYPOINT、归档和本 PRD 变化；安装器、模板、catalog 与生产测试未变。此 SHA 是固定核对快照，不表示后续提交的实时 HEAD |
 | 原始输入 | 用户提供《SBTD去Trellis化与Graft替换改造方案.md》，方案版本 v2.0，2026-09-16 |
 | 输入 SHA-256 | `eeefc2d47eb53c0df1094adcd02f983a0b5dbcd74f6af8c5d34038b7a7ba2fcf` |
-| Graft 审核候选 | npm `@nanonets/graft@0.18.0`，registry `gitHead=de8456e892bad5aeee11403e47fb2227773eb27e`；已在 darwin/arm64 Node v24.15.0 隔离 HOME 实测，见第 9.8 节 |
+| Graft 审核候选 | 当前受管 pin 为 npm `@nanonets/graft@0.21.1`，registry `gitHead=375a37e0b6a21d28f12fce2d220d692726bb0730`。0.18.0 的 darwin/arm64 隔离 spike 仍只证明旧 pin，见第 9.8 节。graft-pin-0.21.1 已在 main `b9f03ef4450497c4e00c7772c86c754d8ee2cf19` 完成能力重证：当前 HEAD 全量 pytest exit 0，demo stamp、launcher 和 CLI 为 0.21.1，外版 fail-closed 仍在。该重证不等于 v2 发布，也不授权 sync、cleanup、tag 或备份处置 |
 | 当前交付范围 | 按 §14 依赖顺序实施本源仓库计划；每项独立分支、验证、循环 review、处理 advisor、PR 合并和合并后台账更新。初期 PRD 与 P0-01 证据仍保留 |
 | 独立授权边界 | 真实 HOME／host 接线及工具安装卸载、真实项目迁移、本机 workflow sync、live automation、hooks opt-in、清理、tag／发布及备份销毁仍需具体范围和相应确认；本源仓库开发与隔离验证不等于这些授权 |
 | 实施跟踪事实源 | 本文第 14 节任务台账；每完成一项立即同步状态、实际完成时间和证据 |
@@ -433,6 +433,7 @@ project/
 ├── graft/                                 [L/条件] 可重建代码图与缓存
 ├── .graft/                                [L/条件] Graft 本地项目配置
 ├── .impeccable/                           [条件] 专项 UI 工具
+│   ├── config.local.json                  [L] 每人本机覆盖，不提交
 │   ├── design.json                        按该工具及项目约定管理
 │   ├── live/                              本地运行产物按既有规则忽略
 │   └── critique/                          [L]
@@ -994,7 +995,7 @@ apply 在任何共享写入前验证其候选都有批准的 decision 且 checks
 | Claude | `.claude/projects/`、`.claude/worktrees/`、`.claude/settings.local.json` |
 | Codex | `.codex/cache/`、`.codex/tmp/`、`.codex/logs/`、`.codex/sessions/`、`.codex/state/`、`.codex/hooks/*.local.*` |
 | OMP | `.omp/plugins/` |
-| Impeccable | `.impeccable/live/server.json`、`.impeccable/live/sessions/`、`.impeccable/live/annotations/`、`.impeccable/critique/` |
+| Impeccable | `.impeccable/live/server.json`、`.impeccable/live/sessions/`、`.impeccable/live/annotations/`、`.impeccable/critique/`、`.impeccable/config.local.json` |
 | 浏览器／runner 临时目录 | `.chrome-devtools-mcp/`、`.playwright-mcp/`、`playwright-report/`、`test-results/`、`blob-report/`、`/output/` |
 | 报告／修复产物 | `tests/e2e/manifest/ui-test-repair-plan.json`、`tests/api/reports/`、`tests/unit/reports/`、`tests/e2e/reports/` |
 | 截图／视频／trace | `tests/e2e/**/screenshots/`、`tests/e2e/**/videos/`、`tests/e2e/**/traces/`、`tests/e2e/**/*.trace.zip` |
@@ -1046,7 +1047,7 @@ apply 在任何共享写入前验证其候选都有批准的 decision 且 checks
 
 当前 `onboard.py:2511-2533` 仅按缺失行追加，不会删除旧规则，不能把“换模板再 init”当迁移成功。v2 迁移需有受管段识别、定向删除、原件备份和重复执行证明。Graft 自维护可能再追加 `graft/`：只对已证明受管的条目归一化，并复验范围，不误删用户规则。ignore 不会自动取消 tracked 状态，发现本地敏感产物已被追踪时单独报告并取得处理授权。
 
-#### 640-skills 根目录七行契约
+#### 640-skills 根目录九行契约
 
 ```gitignore
 .DS_Store
@@ -1056,9 +1057,11 @@ apply 在任何共享写入前验证其候选都有批准的 decision 且 checks
 /.graft
 __pycache__/
 AGENTS.md
+.chrome-devtools-mcp/
+.playwright-mcp/
 ```
 
-此七行替代先前拟定的 Graft 五行目标，因为源仓库也需要保护 default 本地状态及交接。不把业务项目模板全份写到根。根 AGENTS.md 保持 ignored/local-only，业务项目 AGENTS.md 可追踪，ENTRYPOINT 和本 PRD 可追踪。P0-09 同步精确测试及当前有效维护说明，历史 lessons 不重写；删除旧两目录 ignore 前同样先处置残留。本轮不实际修改该文件。
+当前契约为九行：P0-09 确立的七行，加上 `.chrome-devtools-mcp/` 与 `.playwright-mcp/`，在本仓工作树中忽略同名本机 MCP 日志目录（也匹配嵌套目录）；不把业务项目模板全份写到根。根 AGENTS.md 保持 ignored/local-only，业务项目 AGENTS.md 可追踪，ENTRYPOINT 和本 PRD 可追踪。当前精确测试及有效维护说明与九行对齐；历史 lessons 和 P0-09 验收记录保留原文。撤销本机日志忽略前，先核对目录残留和 Git 索引，不自动删除本机内容。
 
 ### 11.8 私有备份保留与人工授权销毁
 
@@ -1264,7 +1267,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 | AC-09 | 多仓和 worktree 不越界 | 两个选定仓与一个未选 sibling **零写入**；证明未对父目录做 `init`／`build`／MCP；工作树不同 branch；MCP root 对应**选定仓根** |
 | AC-10 | 联网与完全离线策略均符合用户选择 | 受管入口 DNT、无 LLM/cloud/代码上传；允许 npm 元数据。P0-01 已证预装后离线 build/ask。**版本不可达／不循环安装**由 P1-03 用真实断网证明 |
 | AC-11 | 可安装 catalog 与全局 Skill cutover 正确 | P0 原子替换两旧 entry 为 sbtd-task；隔离 catalog 安装实际得到完整新 Skill；14 bundled／19 external；完整 init/reset，旧身份冲突保留 |
-| AC-12 | 项目四条新增与源仓库七行 ignore 各自正确 | 保留通用段；根精确断言独立于模板；真实 Git 正反探针、broad ignore 冲突、packages/graft 不误伤、重复构建不变宽 |
+| AC-12 | 项目四条新增与源仓库现行九行 ignore 各自正确 | 保留通用段；根精确断言独立于模板；真实 Git 正反探针、broad ignore 冲突、packages/graft 不误伤、重复构建不变宽 |
 | AC-13 | CLI/JSON/两安装器一致 | Python 命令真实运行；单 JSON；非零错误；Bash3.2/EOF/PTY；Windows PowerShell；project-only 不装全局工具 |
 | AC-14 | 验证语义不变且强制触发正确分层 | strict Book/BDD/Ponytail 序列保留，default/lite 不被旧全局句子强制；external/caveman/i-have-adhd/Evidence v2/Knowledge 回归 |
 | AC-15 | 文档与发布／sync／update 边界一致 | README.md/html、ENTRYPOINT、prompt、CHANGELOG、Onboard docs 对照；live 只在显式 sync |

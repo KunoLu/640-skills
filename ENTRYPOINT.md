@@ -21,7 +21,7 @@
 | Codex | openai/codex | v0.154.0 | stable-only | 是 | 核心 Coding Agent |
 | OMP | can1357/oh-my-pi | v18.2.2 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
 | Caveman Skill Installer | JuliusBrussee/caveman | v2.7.0 | stable-only | 是 | 仅监控 `v*` installer / skill tags，忽略 `bin-v*` engine binary releases；`更新` 只回写 ENTRYPOINT 的 Caveman 版本记录（本表与“当前版本汇总”），不得改 `CAVEMAN_PINNED_REF` / revision / hash。payload 维护由正常 `init` / `reset` 按受管 family 的完整目录集合与内容指纹判定 `current` / `outdated`，已知旧版备份后升级；非 symlink 异常核心在不存在未知 companion 时修复，嵌套或顶层 symlink 一律 fail-closed 只报告；替换 / 备份仅限 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测。 |
-| Graft | nanonets/graft | v0.18.0 | stable-only | 是 | 固定结构图 CLI / `@nanonets/graft` npm pin；只监控稳定版本，采用时另行评估能力边界 |
+| Graft | nanonets/graft | v0.21.1 | stable-only | 是 | 固定结构图 CLI / `@nanonets/graft` npm pin；只监控稳定版本，采用时另行评估能力边界 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.63.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.10.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
@@ -87,7 +87,7 @@ flowchart TD
 | Codex | 主 coding agent | 是 | 默认执行代码理解、修改、调试、测试、文档生成等任务 |
 | OMP | Oh My Pi coding agent | 是 | 当前 host 为 OMP 时作为主 coding agent；CLI 为 `omp`，npm 包为 `@oh-my-pi/pi-coding-agent` |
 | sbtd-task | default / lite / strict 任务路由、记录、状态、handoff | 是 | 每个新任务先路由；strict 才加载完整适用 Gate，default/lite 按需使用，不引入替代调度器 |
-| Graft | 固定版本结构图与影响分析辅助 | 按需启用 | 仅对授权单仓根、固定 `@nanonets/graft@0.18.0` 且满足 DNT / 禁 LLM / cloud 边界时启用；不可用则用源码 / LSP / contract 补充 |
+| Graft | 固定版本结构图与影响分析辅助 | 按需启用 | 仅对授权单仓根、固定 `@nanonets/graft@0.21.1` 且满足 DNT / 禁 LLM / cloud 边界时启用；不可用则用源码 / LSP / contract 补充 |
 | Chrome DevTools MCP | Web 运行时诊断 / 浏览器现场证据 | 按场景启用 | 页面白屏、console error、network、cookie、storage、性能 trace、截图或临时复现需要真实 Chrome 检查时启用；不替代 Playwright 测试 |
 | Playwright CLI | Web E2E / Web 回归 / CI gate | Web 测试阶段启用 | Web UI、路由、表单、权限、跨页面流程、API 集成或浏览器兼容需要可重复验证时启用；项目内未安装时先询问用户 |
 | Playwright MCP | Agentic Web 探索 / locator 辅助 | 可选启用 | 需要 agent 通过可访问性快照探索页面、辅助生成 locator 或临时检查时启用；不替代项目内 `playwright test` |
@@ -235,7 +235,7 @@ handoff
 | 项目 | 当前结论 |
 |---|---|
 | 当前定位 | 固定版本结构图、影响分析和结构证据辅助 |
-| 固定版本 | `@nanonets/graft@0.18.0` npm pin；不使用 latest，版本变化需重新证明能力和遥测边界 |
+| 固定版本 | `@nanonets/graft@0.21.1` npm pin；不使用 latest，版本变化需重新证明能力和遥测边界 |
 | 安全边界 | 受管入口持续 `DO_NOT_TRACK=1`，禁止 `--deep`、`blast --name`、LLM / cloud、代码或查询上传；父目录不建图 |
 | 使用条件 | 只对明确授权的单仓根调用；安装前确认固定包、native lifecycle 与 telemetry 变更 |
 | 不可用时 | 不循环安装；使用源码 / LSP / contract 补充，不以空图或 exit 0 证明无影响 |
@@ -326,7 +326,7 @@ handoff
 | Coding Agent | OMP | v18.2.2 |
 | Agent Output | Caveman Skill Installer | v2.7.0 |
 | 任务路由 | sbtd-task | bundled |
-| 结构分析 | Graft | v0.18.0 |
+| 结构分析 | Graft | v0.21.1 |
 | Web 诊断 | Chrome DevTools MCP | latest |
 | Web 回归测试 | Playwright | v1.63.0 |
 | 移动 E2E | Maestro | cli-2.10.0 |

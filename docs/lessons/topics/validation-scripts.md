@@ -594,3 +594,29 @@
 
   <!-- lessons:640:end -->
 
+<!-- lessons:kuno:start -->
+## LESSON-20260930-kuno-umask-sensitive-test-evidence: Umask Sensitive Tests Need Normal Evidence Runs
+
+- 日期：2026-09-30
+- 标签：validation, pytest, umask, privacy, filesystem
+- 适用场景：取证命令修改 `umask`，或全量测试含目录权限/私有目录拒绝断言
+- 严重级别：high
+- 来源：graft pin 0.21.1 九行根 ignore 验收前的失败分类
+- 问题：取证命令先设 `umask 077`，测试里 `mkdir(mode=0o755)` 实际生成 `0o700`，三项隐私/私有目录测试没有触发预期 `ContractError`，全量出现 4 failed；其中只有根 `.gitignore` 契约是真实工作树失败。
+- 根因：测试环境改变了被测文件模式语义，又把环境造成的拒绝缺失与产品行为失败并列统计。
+- 修复：在 `umask 022` 下重跑失败项确认三项隐私测试通过，再用相同正常 umask 跑完整 `tests/`，得到 1240 passed、8 skipped；原生 JUnit、stdout/stderr/exit 与同 stem 中文摘要都保留。
+- 预防：涉及权限的验证必须先声明并复核 `umask`；不正常的取证环境只能作为失败线索，不能替代正常环境下的小范围复跑与最终全量重跑。
+
+## LESSON-20260930-kuno-contract-rerun-not-full-suite: Contract Rerun Is Not a Full Suite Pass
+
+- 日期：2026-09-30
+- 标签：validation, pytest, contracts, evidence, gitignore
+- 适用场景：只修改契约测试或根 `.gitignore`，并用单条失败测试重跑作为通过证据
+- 严重级别：medium
+- 来源：graft pin 0.21.1 根 `.gitignore` 七行/九行验收
+- 问题：只修复并复跑 `test_repository_gitignore_keeps_canonical_generated_paths` 可以证明该契约已匹配，但不能把此前 4 failed 的全量结果改记为通过；后来全量又因取证 umask 混入三项环境失败，若只看单条测试会掩盖剩余风险。
+- 根因：把 targeted rerun 的结果扩张到整个测试套件，没有区分“失败项已修复”和“最终全量已验证”。
+- 修复：先分类旧失败，再在正常环境下运行完整 `tests/`；九行契约调整后得到 1240 passed、8 skipped，并将报告与旧失败记录并列保留。
+- 预防：最终交付必须分别报告 targeted rerun 与 final full rerun；只有同一修正环境下的最终全量通过，才能关闭 suite-level 验证缺口。
+<!-- lessons:kuno:end -->
+

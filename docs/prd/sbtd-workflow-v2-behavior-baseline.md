@@ -39,7 +39,7 @@
 | B13 | GitNexus 的影响分析、MCP、graph、route/PDG 能力在原规则中有各自前置；当前 Onboard 尚无 Graft | 替换为已证明的 Graft 结构能力；不承诺工具对等。禁 deep/name/cloud、受管入口 DNT、显式仓根、无父目录联邦。图失败不证明无依赖 | P1-03～P1-06 |
 | B14 | `tests/test_onboard_agent_cli.py` 与多项目测试区分平台 CLI、MCP scope 和 active HOME；repo lessons 记录 GUI PATH 与只读 probe 副作用 | 保留未选平台零写入、HOME containment、唯一配置写入者与真实握手。check/plan 零副作用；hooks 默认关闭且单独持久授权，OMP 不翻译 Codex hooks | P1-03～P1-06、P1-14 |
 | B15 | `lessons-record` 的名字合法性、来源顺序、marker 与 ID 查重；历史资产分层保存 | 替换身份位置为 `.sbtd/developer`，不追溯改名。按需建立、缺失询问、异常不绕过；缺身份不冻结 default/lite 的无关安全工作 | P0-06、P1-19、P1-12 |
-| B16 | `tests/test_workflow_contracts.py` 的真实 Git ignore 探针、多项目测试的 append-only 与冲突检测 | 保留 secrets／报告／缓存保护和用户规则；替换旧工具段必须经显式迁移、保全验收与再次确认。源仓七行和业务模板四条新增分别验证 | P0-08、P0-09、P1-12 |
+| B16 | `tests/test_workflow_contracts.py` 的真实 Git ignore 探针、多项目测试的 append-only 与冲突检测 | 保留 secrets／报告／缓存保护和用户规则；替换旧工具段必须经显式迁移、保全验收与再次确认。源仓现行九行（P0-09 七行基线加两个 MCP 本地日志目录）和业务模板四条新增分别验证 | P0-08、P0-09、P1-12 |
 | B17 | 全局表达规则、`test_onboard_caveman_maintenance.py`、`test_onboard_i_have_adhd.py`、`test_onboard_ponytail_integration.py` | 保留 provider conflict、可选 Caveman 维护、19 external 安装和手动启用边界。表达压缩不改变执行模式；handoff 取消计数触发不等于取消 auto-lite 表达状态机 | P0-05、P1-09、P1-14 |
 | B18 | `install.sh`／`install.ps1` 共用 Python；`tests/test_install_sh_agent_cli_flow.py` 覆盖 project-only、EOF 和 scope，部分 PowerShell 检查为静态 | 保留单实现与两端退出码／JSON一致、逐项目错误与恢复信息；替换 Trellis 参数及字段。Bash 3.2 实测与 Windows PowerShell 实测仍需独立证明 | P1-01、P1-07、P1-08、P1-14 |
 | B19 | 根 ENTRYPOINT、README 双入口、版本化 automation prompt，以及 sync/update 的分离契约 | 保留普通开发不写 live／真实 HOME；文档如实随实现变化。Git 分支同步不等于本机 workflow sync；PR 合入不等于发布或迁移完成 | P1-10、P1-11、P2、P3 |

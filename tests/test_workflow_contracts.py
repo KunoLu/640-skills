@@ -34,6 +34,8 @@ class WorkflowContractTests(unittest.TestCase):
                 "/.graft",
                 "__pycache__/",
                 "AGENTS.md",
+                ".chrome-devtools-mcp/",
+                ".playwright-mcp/",
             ],
         )
 
@@ -145,6 +147,15 @@ class WorkflowContractTests(unittest.TestCase):
         self.assert_template_ignore_state(
             ignored=(".env", ".env.local", ".env.production.local"),
             trackable=(".env.example",),
+        )
+
+    def test_project_template_ignores_impeccable_local_config_only(self) -> None:
+        self.assert_template_ignore_state(
+            ignored=(".impeccable/config.local.json",),
+            trackable=(
+                ".impeccable/config.json",
+                ".impeccable/design.json",
+            ),
         )
 
     def test_project_template_output_ignore_is_root_anchored(self) -> None:
@@ -388,9 +399,9 @@ class WorkflowContractTests(unittest.TestCase):
     def test_entrypoint_tracks_current_workflow_and_graft_monitoring(self) -> None:
         document = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
         self.assertIn("Codex / OMP + sbtd-task + Graft", document)
-        self.assertIn("| Graft | nanonets/graft | v0.18.0 | stable-only | 是 |", document)
+        self.assertIn("| Graft | nanonets/graft | v0.21.1 | stable-only | 是 |", document)
         self.assertIn("| 任务路由 | sbtd-task | bundled |", document)
-        self.assertIn("| 结构分析 | Graft | v0.18.0 |", document)
+        self.assertIn("| 结构分析 | Graft | v0.21.1 |", document)
         self.assertIn("## 3. sbtd-task 当前使用要点", document)
         self.assertIn("## 4. Graft 当前使用要点", document)
         self.assertNotIn("| Trellis | mindfold-ai/trellis |", document)

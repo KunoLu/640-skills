@@ -876,7 +876,7 @@ change_text = ", ".join(f"{key}={value}" for key, value in changes.items()) or "
 if installed:
     print("  Existing CLI: verified; only persist telemetry opt-out (no package install)")
 else:
-    print(f"  Package: {plan.get('package') or '@nanonets/graft@0.18.0'} (frozen pin; never latest)")
+    print(f"  Package: {plan.get('package') or '@nanonets/graft@0.21.1'} (frozen pin; never latest)")
     print(f"  Target: npm global prefix {plan.get('prefix') or '<unresolved>'}")
     print("  Requires: Node.js >= 20 and npm native lifecycle scripts for the pinned allow list")
 print(f"  Telemetry: set {change_text} in {telemetry.get('path') or '<unknown>'} (unknown keys preserved)")
