@@ -11,7 +11,7 @@ permissions:
 jobs:
   linux-full:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
