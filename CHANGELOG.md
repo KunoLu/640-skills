@@ -28,6 +28,7 @@
 - 受管 Graft pin 从 `@nanonets/graft@0.18.0` 晋升到 `0.21.1`：registry gitHead `375a37e0b6a21d28f12fce2d220d692726bb0730`，tarball integrity 与官方发布包一致。守门启动器、DNT、stamp 精确版本和 fail-closed 不变。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。不改默认守门形态，不新增裸形态开关。
 - 项目 `.gitignore` 模板忽略 `.impeccable/config.local.json`。该文件是 Impeccable 每人本机覆盖，含 hook consent；共享的 `.impeccable/config.json` 与 `.impeccable/design.json` 仍可追踪。安装器忽略探针同步检查这一路径。
 - 配置源仓根 `.gitignore` 从七行改为九行，在 `AGENTS.md` 后增加 `.chrome-devtools-mcp/` 与 `.playwright-mcp/`。两条目录规则在本仓工作树匹配同名本机 MCP 日志目录（也匹配嵌套目录），不复制业务项目模板，也不改历史 lesson。
+- GitHub Actions `linux-full` 的 `timeout-minutes` 从 20 提到 40。Ubuntu 全量 unittest 已多次贴着 20 分钟上限被取消；macOS / Windows installer job 仍为 20。
 
 ### 修复
 

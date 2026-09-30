@@ -440,6 +440,8 @@ class WorkflowContractTests(unittest.TestCase):
         }
         for name, job in workflow["jobs"].items():
             with self.subTest(job=name):
+                if name == "linux-full":
+                    self.assertGreaterEqual(job.get("timeout-minutes"), 40)
                 uses = [step.get("uses", "") for step in job["steps"]]
                 self.assertIn(
                     "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
