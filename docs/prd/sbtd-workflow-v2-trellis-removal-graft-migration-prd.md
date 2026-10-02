@@ -854,6 +854,18 @@ apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，ver
 - 全局 AGENTS、Skill 目录路径优先级、Onboard rename migration、mattpocock migration、Ponytail provider conflict、caveman pin 维护和 i-have-adhd 安装边界继续有效。
 - 本机可选根 `AGENTS.md` 不能作为新 clone 必需前提。新 sync 路由必须在受追踪 `ENTRYPOINT.md`／版本化说明中可恢复，不能只改本机忽略副本。
 
+### 10.4 迁移后主动清理与延迟清理扩展
+
+2026-10-01 用户新增要求并选择 strict、新 feature 分支实施，见[清理扩展设计](sbtd-cleanup-expansion-design.md)及[任务记录](../../ai/tasks/sbtd-cleanup-expansion/task.md)。该扩展不回写既有 P0/P1/P2/P3 完成证据，也不把开发授权变成当前 PC 的实际清理授权。
+
+- migration apply、部署与 verify 成功后，Agent 必须主动展示实际候选并询问是否清理。用户拒绝时保留目标并告知可用「sbtd cleanup」「清理工作流」或明确同向意图重新发起。提示词只触发规划；展示清单后的明确确认才授权删除，Agent 自行读取对应确认 ID。
+- 项目 `.trellis` 必须通过项目根下的真实 `tl uninstall` 清理。先验证并备份 vendor 的全部文件/配置副作用；不回退直接递归删除。命令失败可能部分写入，必须据实留存 before/after 与恢复证据。
+- 两个全局 Trellis Skill 以非 symlink 目录、合法 `SKILL.md` 内部身份和用户清单确认识别，不再把 SBTD v1.0.15 的历史 checksum 作为版本准入条件；当前状态 hash 仍用于防漂移。
+- 新增项目 `.gitnexus`、四 host（Codex/Claude/Kimi/OMP）已检测的全局 GitNexus MCP 条目，以及项目 AGENTS 中成对的 TRELLIS/gitnexus 标记块。全局条目影响其他项目，必须在确认前说明；不删其他 MCP/Graft 围栏/块外文案，不卸载 npm CLI，不删 `~/.gitnexus` 或备份。
+- 优先复用有效批次证据；确实缺失时使用 `cleanup-legacy` 新鲜计划及确认。已有失败、冲突、篡改证据不能通过 fallback 绕过；历史 manifest 不扩权、不重封。新鲜回执不冒充旧 migration recovery 文档。
+- 普通 init/reset、安装 Graft 和正式清理仍为独立操作；本节只在用户确认的清理窗口覆盖 §10.3/§11 的相应旧资产保留策略。详细路径、异常规则和验证以设计为准。
+
+
 ## 11. 存量项目安全迁移
 
 ### 11.1 授权与备份

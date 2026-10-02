@@ -2280,6 +2280,72 @@ class IndependentReviewRegressionTests(unittest.TestCase):
             with self.subTest(boundary=boundary), self.assertRaises(ContractError):
                 contracts.seal_document("manifest", payload)
 
+    def test_shared_root_logical_skills_root_stays_inside_its_root(self) -> None:
+        for skills_root in (
+            "/private/home/.codex/skills",
+            "/private/home/.codex/nested/skills",
+        ):
+            payload = copy.deepcopy(self.manifest["payload"])
+            payload["shared_roots"][0]["skills_root"] = skills_root
+            with self.subTest(skills_root=skills_root):
+                contracts.seal_document("manifest", payload)
+
+    def test_shared_root_logical_skills_root_rejects_escape_or_self(self) -> None:
+        for boundary, skills_root in (
+            ("sibling", "/private/home/.codex-skills"),
+            ("ancestor", "/private/home"),
+            ("self", "/private/home/.codex"),
+            ("relative", "skills"),
+            ("unnormalized", "/private/home/.codex/../.codex/skills"),
+        ):
+            payload = copy.deepcopy(self.manifest["payload"])
+            payload["shared_roots"][0]["skills_root"] = skills_root
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+
+    def test_skills_kind_root_cannot_declare_a_logical_skills_root(self) -> None:
+        payload = copy.deepcopy(self.manifest["payload"])
+        payload["shared_roots"][0]["kind"] = "skills"
+        payload["shared_roots"][0]["skills_root"] = "/private/home/.codex/skills"
+        with self.assertRaises(ContractError):
+            contracts.seal_document("manifest", payload)
+
+    def test_shared_roots_reject_competing_logical_skills_roots(self) -> None:
+        for boundary in ("standalone plus annotation", "two annotations"):
+            payload = copy.deepcopy(self.manifest["payload"])
+            payload["shared_roots"][0]["skills_root"] = "/private/home/.codex/user"
+            if boundary == "standalone plus annotation":
+                payload["shared_roots"].append(
+                    {
+                        "kind": "skills",
+                        "path": "/private/home/.agent/skills",
+                        "dependent_projects": list(fixtures.BOTH),
+                    }
+                )
+            else:
+                payload["shared_roots"].append(
+                    {
+                        "kind": "omp-home",
+                        "path": "/private/home/.omp",
+                        "skills_root": "/private/home/.omp/skills",
+                        "dependent_projects": list(fixtures.BOTH),
+                    }
+                )
+            with self.subTest(boundary=boundary), self.assertRaises(ContractError):
+                contracts.seal_document("manifest", payload)
+
+    def test_matching_standalone_and_annotation_share_one_logical_root(self) -> None:
+        payload = copy.deepcopy(self.manifest["payload"])
+        payload["shared_roots"][0]["skills_root"] = "/private/home/.codex/skills"
+        payload["shared_roots"].append(
+            {
+                "kind": "skills",
+                "path": "/private/home/.codex/skills",
+                "dependent_projects": list(fixtures.BOTH),
+            }
+        )
+        contracts.seal_document("manifest", payload)
+
     def test_receipt_scope_and_project_outcomes_must_match_its_plan(self) -> None:
         for boundary in ("scope", "evidence", "project result"):
             payload = copy.deepcopy(self.receipt["payload"])

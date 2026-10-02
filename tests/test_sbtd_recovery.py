@@ -167,41 +167,34 @@ class RecoveryPlanTests(unittest.TestCase):
             fixture = VerifiedMigration(base, names=("one", "two"))
             skill = fixture.home / ".agent/skills/trellis-workflow"
             (skill / "SKILL.md").parent.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("# pinned\n")
-            import sbtd_migration_plan
-            from sbtd_migration_files import snapshot
-
-            pins = sbtd_migration_plan._ownership_pins()
-            pins["skills"] = {"trellis-workflow": snapshot(skill)}
-            with mock.patch.object(
-                sbtd_migration_plan, "_ownership_pins", return_value=pins
-            ):
-                fixture.build()
-                cleaned, code = fixture.cleanup(
-                    confirm_cleanup=fixture.verification["verification_id"]
-                )
-                self.assertEqual(code, 0, cleaned)
-                cleanup = fixture.evidence / (
-                    f"cleanup-{cleaned['migration']['cleanup_receipt']['cleanup_id']}.json"
-                )
-                before = _tree_bytes(base)
-                blocked, blocked_code = plan_recovery(
-                    fixture.manifest_path,
-                    apply_receipt_path=fixture.apply_path,
-                    deployment_evidence_path=fixture.deployment_path,
-                    cleanup_receipt_path=cleanup,
-                    projects_root=str(fixture.roots[0]),
-                )
-                self.assertEqual(blocked_code, 2, blocked)
-                self.assertEqual(blocked["recovery"]["plan"]["payload"]["steps"], [])
-                self.assertEqual(_tree_bytes(base), before)
-                planned, planned_code = plan_recovery(
-                    fixture.manifest_path,
-                    apply_receipt_path=fixture.apply_path,
-                    deployment_evidence_path=fixture.deployment_path,
-                    cleanup_receipt_path=cleanup,
-                )
-            self.assertEqual(planned_code, 0, planned)
+            (skill / "SKILL.md").write_text(
+                "---\nname: trellis-workflow\n---\n# another 1.0.x release\n"
+            )
+            fixture.build()
+            cleaned, code = fixture.cleanup(
+                confirm_cleanup=fixture.verification["verification_id"]
+            )
+            self.assertEqual(code, 0, cleaned)
+            cleanup = fixture.evidence / (
+                f"cleanup-{cleaned['migration']['cleanup_receipt']['cleanup_id']}.json"
+            )
+            before = _tree_bytes(base)
+            blocked, blocked_code = plan_recovery(
+                fixture.manifest_path,
+                apply_receipt_path=fixture.apply_path,
+                deployment_evidence_path=fixture.deployment_path,
+                cleanup_receipt_path=cleanup,
+                projects_root=str(fixture.roots[0]),
+            )
+            self.assertEqual(blocked_code, 2, blocked)
+            self.assertEqual(blocked["recovery"]["plan"]["payload"]["steps"], [])
+            self.assertEqual(_tree_bytes(base), before)
+            planned, planned_code = plan_recovery(
+                fixture.manifest_path,
+                apply_receipt_path=fixture.apply_path,
+                deployment_evidence_path=fixture.deployment_path,
+                cleanup_receipt_path=cleanup,
+            )
             resources = planned["recovery"]["plan"]["payload"]["resources"]
             shared = next(resource for resource in resources if resource["target"] == str(skill))
             self.assertEqual(shared["dependent_projects"], sorted(map(str, fixture.roots)))

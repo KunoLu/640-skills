@@ -1,6 +1,6 @@
 ---
 name: sbtd-workflow-onboard
-description: Checks, installs, or resets SBTD workflow tools, global Skills, AGENTS templates, and project configuration; explicitly plans, applies, and verifies authorized legacy project migrations.
+description: Checks, installs, or resets SBTD workflow tools, global Skills, AGENTS templates, and project configuration; explicitly plans, applies, and verifies authorized legacy project migrations; offers confirmed post-migration legacy cleanup and routes "sbtd cleanup" / "清理工作流" requests.
 ---
 
 # SBTD Workflow Onboard Skills
@@ -127,7 +127,7 @@ Normal `init` / `reset` maintains required global Skills. Auxiliary Graft instal
 - The Python handler verifies archive integrity, installed package identity/version, native CLI startup and persisted telemetry opt-out. Any failed phase stays nonzero; npm exit 0 alone is not success.
 - Telemetry persistence never overwrites existing enabled state: absent files are created without clobbering concurrent writers, already-disabled files are read-only, and existing files requiring a change block until externally resolved under exclusive control. Do not substitute a Python-only lock or readback for Graft writer coordination.
 - Managed subprocesses use DNT, an empty dotenv source and forced `DOTENV_CONFIG_QUIET=true`, with inherited debug and LLM/cloud activation settings excluded. Installation also uses noninteractive CI to suppress this pin's postinstall background path; that is not a claim of CI validation.
-- GitNexus CLI installation and its dedicated MCP menu are retired; user-owned installations/configs are not removed. Python Codex/OMP wiring and the corresponding root-installer forwarding are available as described below.
+- GitNexus CLI installation and its dedicated MCP menu are retired. User-owned GitNexus assets are removed only through the confirmed post-migration cleanup path (project `.gitnexus/` and detected host MCP entries; see Legacy Cleanup Routing below); the npm package, the GitNexus CLI and `~/.gitnexus` global data are never touched, and no CLI/npm uninstall is performed. Python Codex/OMP wiring and the corresponding root-installer forwarding are available as described below.
 
 Readonly RTK authenticity verification runs `gain` in a private probe HOME/cwd. It does not inspect or create the user's history database; `verificationScope=isolated-probe` records that limitation.
 
@@ -206,6 +206,22 @@ The target scope is fixed by Agent platform:
 - Oh My Pi: always write the global `~/.omp/agent/mcp.json` file.
 
 Do not couple MCP scope to project roots or Skill scope. Do not configure project-level Claude or Oh My Pi MCP entries during onboarding.
+
+## Legacy Cleanup Routing
+
+When `migration --phase verify` reports `status: verified`, proactively offer cleanup: display the batch-sealed candidates and run `cleanup-legacy --phase plan` so the actual fresh candidate list is displayed before asking. When the user says `sbtd cleanup`, `清理工作流`, or an equivalent explicit intent to remove retired Trellis/GitNexus assets, route to the same flow. Normal `init` / `reset` never performs this cleanup.
+
+The trigger authorizes read-only detection and planning only; execution requires the user's explicit yes after the displayed scope. One confirmation covers the displayed combined scope of the batch-sealed candidates and the freshly planned ones. Run the batch cleanup first; if it changed originals that the fresh plan had sealed, regenerate the fresh plan and display the remaining work. Within this same confirmed cleanup run, keep the original consent when the new plan is unchanged or only omits targets proven completed by the bound batch receipt, with the remaining targets and effects unchanged; do not ask again merely because those completed overlap items disappeared from the fresh list. Any added target or changed effect requires renewed consent. An unexplained disappearance, user edit or conflicting/failed evidence remains a stop-and-reconcile condition, not permission reuse. Always use the current fresh `plan_id`, never an obsolete id. The Agent reads `verification_id` / `plan_id` from the CLI JSON output itself; the user never pastes a hash. An id binds one confirmation to a sealed candidate set; it is not authentication or ownership proof.
+
+Only actually detected items appear in the list:
+
+- Project `.trellis`, removed by actually running the vendor `tl uninstall` in the project root. A dedicated adapter prepares the uninstall at plan time and, before execution, privately backs up the complete vendor footprint — `.trellis` plus the platform configuration and AGENTS entries the vendor uninstall may modify. A missing CLI or failed preparation blocks the target without executing; an incomplete uninstall fails the resource with per-resource measured after-states, so partial mutations are reported as measured evidence and reconciled before any retry — never claimed untouched, never an engine direct delete or `rm -rf`.
+- Global `trellis-workflow` / `trellis-channel` Skill directories whose own `SKILL.md` frontmatter still identifies them. Any 1.0.x version qualifies; there is no fixed checksum pin. Symlinks and identity mismatches stay blocked and preserved.
+- Project `.gitnexus/` directory.
+- Detected gitnexus MCP server entries in the existing Codex / Claude / Kimi / OMP global configuration paths; OMP probing additionally covers the effective configuration that the existing resolver derives from a relative `PI_CONFIG_DIR` override and the active profile (`OMP_PROFILE` taking precedence over `PI_PROFILE`). Spelling aliases of the same directory entry are probed once; distinct hardlink entries remain separate cleanup targets. Every entry that identifies as gitnexus (key name or command/package) is removed; neighboring servers are preserved. These files are shared with other projects — disclose that impact and include it in the confirmation.
+- Project `AGENTS.md` blocks exactly paired as `<!-- TRELLIS:START -->` / `<!-- TRELLIS:END -->` and `<!-- gitnexus:start -->` / `<!-- gitnexus:end -->`, recognized only as top-level HTML comment blocks and removed with their contents; graft fences, code-fence content and all other bytes are preserved. Zero pairs is not a candidate; duplicated, interleaved or unmatched markers are blocked for manual resolution.
+
+Entry selection is batch evidence first: with a complete verified migration batch, run `migration --phase cleanup` with `--confirm-cleanup <verification_id>` for its sealed candidates. Batch manifests are immutable and never gain the new target kinds; project `.gitnexus/`, gitnexus MCP entries and AGENTS marker blocks are always handled by a fresh `cleanup-legacy --phase plan`, display of the sealed candidates, then `cleanup-legacy --phase apply --confirm-cleanup <plan_id>`. The fresh plan accepts an optional plan-only `--global-skills-dir` override under the existing resolver precedence (explicit argument, then `$AGENT_SKILLS_DIR`, then the trusted installed Onboard parent, then the platform default) and seals the selected Skills root into the plan; apply runs against that sealed root only — it has no root option and is not redirected by a later environment change, and migration phase arguments are unchanged. Candidate paths that are equal to or nested inside one another are rejected at plan and apply before any target write. Only missing batch evidence falls back to a fresh plan for the retired `.trellis` / Skill targets as well; stale, conflicting or failed batch evidence is never a fallback reason to bypass a gate — preserve it and resolve the rejection first. Both root installers forward `cleanup-legacy` like `migration` / `recovery`. If the user declines, say cleanup can be retriggered later with `sbtd cleanup`, `清理工作流`, or the same explicit intent. Exact commands, detection paths and safety semantics: [Cleanup Runtime](REFERENCE.md#cleanup-runtime).
 
 ## Shared Python Commands
 

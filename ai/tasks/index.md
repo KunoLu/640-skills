@@ -2,4 +2,5 @@
 
 <!-- sbtd-task-index:start -->
 - [graft-pin-0.21.1](graft-pin-0.21.1/task.md)
+- [sbtd-cleanup-expansion](sbtd-cleanup-expansion/task.md)
 <!-- sbtd-task-index:end -->

@@ -1139,12 +1139,43 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "reference set from projects",
             )
 
+    logical_skills_roots: list[str] = []
     for shared_root in payload["shared_roots"]:
         if not set(shared_root["dependent_projects"]) <= root_set:
             _fail(
                 "semantic-violation",
                 "shared_root dependent_projects must reference declared projects",
             )
+        logical_root = shared_root.get("skills_root")
+        if shared_root["kind"] == "skills":
+            if logical_root is not None:
+                _fail(
+                    "semantic-violation",
+                    "a skills shared root has no separate logical skills root",
+                )
+            logical_skills_roots.append(shared_root["path"])
+        elif logical_root is not None:
+            if not _path_contains(
+                shared_root["path"], logical_root
+            ) or _path_contains(logical_root, shared_root["path"]):
+                _fail(
+                    "semantic-violation",
+                    "shared_root skills_root must stay strictly below its declared root",
+                )
+            logical_skills_roots.append(logical_root)
+    # One plan resolves one logical Skills root; an absorbed location sealed
+    # on a covering home root is that same single choice. A second, distinct
+    # namespace would let a resealed cleanup target escape its selected root.
+    for index, candidate in enumerate(logical_skills_roots):
+        for other in logical_skills_roots[:index]:
+            if not (
+                _path_contains(candidate, other)
+                and _path_contains(other, candidate)
+            ):
+                _fail(
+                    "semantic-violation",
+                    "shared roots declare competing logical skills roots",
+                )
     for operation in payload["shared_operations"]:
         matching_roots = [
             root

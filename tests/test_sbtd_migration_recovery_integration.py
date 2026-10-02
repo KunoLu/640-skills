@@ -4,7 +4,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 TESTS = Path(__file__).resolve().parent
@@ -41,8 +40,9 @@ class ProducerCleanupRecoveryIntegrationTests(unittest.TestCase):
             backup_ref = cleanup_result["backup_ref"]
             self.assertIsNotNone(backup_ref)
             self.assertTrue(Path(backup_ref["path"]).exists())
+            after_cleanup = _tree_bytes(fixture.vault)
             self.assertEqual(
-                _tree_bytes(fixture.vault),
+                {path: after_cleanup[path] for path in vault_before},
                 vault_before,
                 "cleanup must retain every original backup",
             )
@@ -72,10 +72,11 @@ class ProducerCleanupRecoveryIntegrationTests(unittest.TestCase):
             self.assertTrue((fixture.root / ".trellis/.developer").is_file())
             recovery_receipt = restored["recovery"]["receipt"]
             self.assertEqual(recovery_receipt["payload"]["plan_id"], plan["plan_id"])
+            after_recovery = _tree_bytes(fixture.vault)
             self.assertEqual(
-                _tree_bytes(fixture.vault),
+                {path: after_recovery[path] for path in vault_before},
                 vault_before,
-                "recovery success must not delete backups or stage receipts",
+                "recovery success must not delete original backups",
             )
             self.assertTrue(
                 (fixture.evidence / f"cleanup-{cleanup_receipt['cleanup_id']}.json").is_file()
@@ -94,10 +95,14 @@ class ProducerCleanupRecoveryIntegrationTests(unittest.TestCase):
             refusal = ContractError(
                 "state-conflict", "injected cleanup refusal", exit_code=2
             )
-            with mock.patch("sbtd_migration.remove_reference", side_effect=refusal):
-                failed, failed_code = fixture.cleanup(
-                    confirm_cleanup=fixture.verification["verification_id"]
-                )
+
+            def refuse_vendor(*_args):
+                raise refusal
+
+            failed, failed_code = fixture.cleanup(
+                vendor_execute=refuse_vendor,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
             self.assertEqual(failed_code, 5, failed)
             self.assertTrue((fixture.root / ".trellis").is_dir())
             self.assertEqual(_tree_bytes(fixture.vault), vault_before)
@@ -111,7 +116,11 @@ class ProducerCleanupRecoveryIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(resumed_code, 0, resumed)
             self.assertFalse((fixture.root / ".trellis").exists())
-            self.assertEqual(_tree_bytes(fixture.vault), vault_before)
+            after_resume = _tree_bytes(fixture.vault)
+            self.assertEqual(
+                {path: after_resume[path] for path in vault_before},
+                vault_before,
+            )
             cleanup_receipt = resumed["migration"]["cleanup_receipt"]
             cleanup_path = fixture.evidence / f"cleanup-{cleanup_receipt['cleanup_id']}.json"
 
@@ -156,7 +165,11 @@ class ProducerCleanupRecoveryIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(recovery_code, 0, restored)
             self.assertTrue((fixture.root / ".trellis").is_dir())
-            self.assertEqual(_tree_bytes(fixture.vault), vault_before)
+            after_recovery = _tree_bytes(fixture.vault)
+            self.assertEqual(
+                {path: after_recovery[path] for path in vault_before},
+                vault_before,
+            )
 
 
 if __name__ == "__main__":
