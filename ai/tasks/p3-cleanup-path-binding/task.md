@@ -4,11 +4,11 @@ id: p3-cleanup-path-binding
 workflow_mode: strict
 mode_source: user
 mode_note: 用户确认采用 strict 修复 P1 prepared 路径绑定与备份完整性缺口
-status: "checking"
+status: "done"
 branch: fix/cleanup-prepared-path-binding
 created_at: '2026-10-02T16:38:40.658349+08:00'
-updated_at: "2026-10-02T17:23:09.522543+08:00"
-completed_at: null
+updated_at: "2026-10-02T18:29:11.815888+08:00"
+completed_at: "2026-10-02T18:29:11.815888+08:00"
 ---
 # P3 观察问题：清理 prepared 资源路径绑定
 
@@ -37,7 +37,7 @@ completed_at: null
 | Ponytail / Readability | 保留必要的输入边界，无无关重构 | check | passed：单一绑定 helper 服务真实信任边界；无新依赖/协议；独立复核认定路径重放对照可保留作安全清晰性 |
 | 独立安全及回归复核 | 持久迁移与卸载 | check | passed：PathBindingSecurity / PathBindingRegression 无本次范围内发现，原文与中文汇总保留 |
 | Project validation | 定点、真实隔离 smoke、全量、静态 | check | passed：最终 full-2 1380 tests / 8 skipped / exit 0，受检源码不变；清理子集79项、实际vendor/基线计划兼容、Ruff/ty通过 |
-| Release readiness | 迁移/清理运行时改变 | finish | passed / ready：仅本仓修复交付，不代表合并、全局同步、跨平台CI或v2发布；task保持checking |
+| Release readiness | 迁移/清理运行时改变 | finish | passed / ready：本仓修复交付及PR106集成已验证；不代表全局同步或v2发布，后续合并证据见下文 |
 
 ## 初始证据
 
@@ -59,6 +59,7 @@ LSP 实查无配置；采用源调用点与现有 contract/tests 影响分析，
 |---|---|---|---|---|
 | 2026-10-02T16:44:49.169549+08:00 | planned | in-progress | 用户选择 strict；需求、DDIA/Legacy/Refactoring before-dev 完成，公开执行接口对抗回归已红 | docs/prd/sbtd-cleanup-expansion-design.md §7; red-path-binding: 1 test, 2 failures, ContractError not raised; private evidence sbtd-p3-path-binding-2q9juski |
 | 2026-10-02T17:23:09.522543+08:00 | in-progress | checking | 根因修复、对抗回归、实际 vendor/旧计划兼容 smoke、两路独立复核与纠正环境后的完整 suite 均通过；保持检查态，不关闭 P3-01 | sbtd-p3-path-binding-2q9juski/full-2: Ran 1380 tests, OK (skipped=8), exit 0, source unchanged; review-security/review-regression no findings; corrected-real-vendor-smoke; corrected-baseline-plan-compatibility |
+| 2026-10-02T18:29:11.815888+08:00 | checking | done | 用户授权提交/PR/合并并明确授权CI通过后的管理员合并；修复PR106已实际MERGED，合并树与验证head一致 | PR106 head 113a0e9eacbc3a74920144be3b7daabd4ef82086; CI run36993191947 linux-full/macos-bash-installer/windows-powershell-installer success; GitHub review threads 0; merge ed4e65c29f2567c7c83188df9e49e025362a4705 at 2026-10-02T10:26:57Z; local main and origin/main match; P3-01 remains in-progress |
 
 ## 验证与交付证据
 
@@ -76,11 +77,21 @@ LSP 实查无配置；采用源调用点与现有 contract/tests 影响分析，
 
 - README.md、README.html、REFERENCE、版本化automation prompt补充绑定及兼容性边界；CHANGELOG未发布章节记录修复；设计§7作为长期行为规格。
 - Lessons split name：kuno，由本地`.sbtd/developer`经DeveloperStore.resolve确认；`LESSON-20261002-kuno-prepared-resource-binding`写入repository-workflow topic并同步index，未改其他作者块或高频短入口。
-- 无剩余本次范围内审查发现。修复任务保留checking，P3-01仍in-progress；观察问题保持open，仅补充validated-unmerged的本地修复证据，不把未合并修复宣称为main/live已经修复。
+- 无剩余本次范围内审查发现。修复PR106已合入main，TaskStore已登记done；P3-01仍in-progress。观察问题按仓库集成范围登记，不把main修复宣称为live已同步或整体验收完成。
 - 外部vendor按路径执行，不提供原子文件系统事务；必须单一控制者、维护期间无并发写入。这个既有边界未被此次路径绑定消除。
 - 合法prepared格式和现有回执/人工恢复合同不变；未执行真实清理或触碰原始备份，无live写入需要回滚。源码回退会恢复漏洞，不能据此宣称安全。
-- 未commit/push、未同步本机Skills/配置、未修改live automation、未签名迁移、未创建tag或发布、未删除备份。后续提交/合并需对应授权与精确新head的验证；本次旧基线证据不能冒充新提交CI。
+- 提交前阶段未commit/push；该历史本机验证不冒充新提交CI。本轮已完成授权的PR106提交/推送/合并，详见下文；仍未同步本机Skills/配置、未修改live automation、未签名迁移、未创建tag或发布、未删除备份。
 
 ## PR 集成授权
 
-用户在本机修复验证交付后回复「按你推荐的执行」，本轮范围为提交/推送修复、创建PR、检查最终提交CI与新增审查意见、合并及状态登记。前文未提交/未合并是上一阶段事实，不再作为本轮操作禁令。仍不授权全局同步、真实清理、tag/release、备份处置或豁免分支保护；若保护门需要额外决定，保留分支并单独处理。
+用户在本机修复验证交付后回复「按你推荐的执行」，授权提交/推送修复、创建PR、检查最终提交CI与新增审查意见、合并及状态登记。随后用户明确选择「允许本轮管理员合并」：仅在对应最终提交全部CI通过、无未关闭实质审查意见后豁免一条正式批准要求，覆盖修复PR及必要状态PR，不改仓库保护规则。仍不授权全局同步、真实清理、tag/release或备份处置。
+
+## 已证实的仓库集成
+
+- 修复提交：`113a0e9eacbc3a74920144be3b7daabd4ef82086`；[PR #106](https://github.com/KunoLu/640-skills/pull/106) 于 `2026-10-02T10:26:57Z` 实际MERGED，合并提交 `ed4e65c29f2567c7c83188df9e49e025362a4705`。
+- 精确head的[CI run 36993191947](https://github.com/KunoLu/640-skills/actions/runs/36993191947)三项通过：linux-full、macos-bash-installer、windows-powershell-installer；包含Linux大小写敏感路径与Windows junction/ACL专用步骤。真实host opt-in仍不因此视为通过。
+- GitHub自动审查已完成；合并前GraphQL核对review threads为0。仓库仍要求1条正式批准，按用户本轮授权使用管理员合并，并以match-head-commit锁定已验证head；没有更改保护规则。
+- 提交后本机精确head重新运行vendor模块53项、实际vendor及基线旧计划兼容smoke，全部通过，工作树前后clean。原full-2仍保留为提交前dirty证据；10个受检文件的Git对象字节一致性另行复核。
+- 合并后只读确认local main与origin/main均为 `ed4e65c29f2567c7c83188df9e49e025362a4705`，合并树与验证head树同为 `61e95588f93e3a0cb3f5b5b8319174c49aecd719`。没有删除分支。
+- TaskStore实际完成事件时间为frontmatter completed_at，等于状态事件中的checking→done；保持任务原分支历史，不重绑定P3-01。此后状态文档独立PR只登记已发生事实，不重新开发或扩大部署权限。
+- 私有集成证据：`postcommit-113a0e9.{json,md}`、`pr106-ci-review.{json,md}`；CI来源为GitHub Actions，提交后本机来源仍为developer-local，二者分开。
