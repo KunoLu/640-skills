@@ -591,8 +591,15 @@ def read_reply(proc, timeout=10.0):
             proc.kill()
             raise AssertionError("timed out waiting for a protocol line") from None
     if not line:
-        proc.kill()
-        raise AssertionError("the launcher closed its protocol stdout")
+        try:
+            code = proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            code = proc.wait(timeout=5)
+        stderr = proc.stderr.read().decode("utf-8", errors="replace")
+        raise AssertionError(
+            f"the launcher closed its protocol stdout (exit {code}): {stderr}"
+        )
     return json.loads(line)
 
 
