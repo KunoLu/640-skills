@@ -6,7 +6,7 @@
 - 实施分支：`feat/graft-global-session-mcp`；起始 HEAD：`39cf00bb7299d9f7b92153a5bd147382a40c478d`。
 - 主线：[去 Trellis 化与 Graft 替换主 PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。本文承接全局安装／会话项目解析整改；主 PRD 保留原始审核、已执行批次与发布台账，不重写历史成功的含义。
 - 文档选择：新增关联 PRD。整改横跨安装、全局配置、项目初始化、受管 launcher 和旧接线迁移，具有独立验收生命周期；不把完整实现设计继续堆入主 PRD。原主 PRD P3-05 承接实际环境退役，P3-04 继续拥有备份销毁边界。
-- 当前状态：需求已确认；实施与验证进行中。源码实现、隔离验证、真实 PC 切换及发布分别记账。
+- 当前状态：源码与本地验证已完成，已创建 [PR #108](https://github.com/KunoLu/640-skills/pull/108)；精确提交的三平台结果以该 PR Checks 为准，不以旧 head 结果证明新 head。本轮不自动合并，真实 PC 切换及发布另行记账。
 - 前序可行性证明仅覆盖真实 OMP CLI/RPC、Codex CLI/app-server 与 Orca 终端到诊断 MCP 的 cwd 传递；不是新 Graft 查询实现证明。未验证的 GUI 专用启动器／managed-daemon／SDK 不扩大宣称。
 - 现有五份未提交文档修改属于前序调查成果，保留，不 reset、不丢弃。
 
@@ -100,8 +100,8 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 | GM-A | cwd 根解析与会话固定、拒绝边界、launcher 回归 | 已实施；复核后加入实际 cwd 的 bare/admin 拒绝与可信 Git 探针 |
 | GM-B | 单全局 Codex/OMP 候选、旧项所有权及回执验证 | 已实施；复核后收紧旧项闭集形状，项目继承不再代替全局覆盖 |
 | GM-C | 全局安装／本地初始化分离、无项目支持及切换契约 | 已实施；完整安装写集避让批准文件、首写／逐资源复验，尊重 --no-mcp |
-| GM-D | 真 Graft A/B、宿主验证、全套测试与独立复核 | 复核后聚焦 92 项、全量 1425 项（8 skipped）通过；独立代码／安全复审 GO。真实批量／逐次图等价、A/B 并发与 Codex／OMP／Orca 查询通过；待精确提交三平台 CI |
-| GM-E | README 两种入口、automation、CHANGELOG、主 PRD 同步 | 已同步行为／迁移边界并记录长期 lesson；最终 CI／PR 证据待回填 |
+| GM-D | 真 Graft A/B、宿主验证、全套测试与独立复核 | 复核后聚焦 92 项、全量 1425 项（8 skipped）通过；独立代码／安全复审 GO。真实批量／逐次图等价、A/B 并发与 Codex／OMP／Orca 查询通过；精确 head 三平台 CI 见 PR #108 Checks，首个 Windows 失败及修正见下文 |
+| GM-E | README 两种入口、automation、CHANGELOG、主 PRD 同步 | 已同步行为／迁移边界、长期 lesson、PR 入口及本地验证证据；合并和 live 状态保持独立 |
 
 修改前原生复现：两个项目候选追加后 server_count=2，均固定 cwd；期望一条通用定义的断言 exit 1。首次会话 Python 缺 tomlkit 属于环境失败，保留但不作为产品 red；随后复用既有依赖完整的验证解释器得到上述真实 red。
 
@@ -117,3 +117,9 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 - 代码复审：原 4 项问题均关闭；安全复审：原 5 项问题均关闭，重复问题合并修正。Ponytail 无可安全删除的生产抽象；保留现有候选、资源和隔离边界。Code Readability 已核对手写代码／测试；未改 vendor/generated。
 - 静态验证：Bash 语法与 PowerShell 原生 parser 通过；新增／改造模块的 ruff 检查和 onboard 既有诊断分别记录；onboard 的 ty 基线及当前均为 92 项既有诊断，不把已有错误标为通过。
 - 报告位置为本轮私有 `sbtd-global-session-mcp-*` 证据目录，保留 raw／同 stem 中文汇总与失败记录；提交前证据均为 developer-local / dirty / local-only。远程 CI 只能以随后创建的 PR 精确 head 为准。
+
+### 7.2 精确提交 CI 与 Windows 测试辅助修正
+
+[PR #108](https://github.com/KunoLu/640-skills/pull/108) 的首个 head `6373f9cf4a7a4e6c78edb4179455cf58ecd0cce3`，Windows job `110949024431`（run `37040462165`）在 `SessionRootResolutionTests` 报 7 个错误：全部来自测试 `read_reply` 对匿名管道调用 `select.select`，原生日志为 `WinError 10038`（not a socket）。安装器／工作流 50 项与 pwsh 15 项此前通过。这个失败不证明 Git 路径解析有误，不能据此放宽生产路径安全守卫。
+
+测试 helper 改为带超时的后台 `readline`，保留全部协议与拒绝断言；本地完整 launcher 43 项及 ruff 通过。生产模块不因该测试平台问题改变。新 head 必须重新取得 Linux／macOS／Windows 结果，旧 head 的绿色或失败记录只作为历史证据保留；最终 Checks 与本地任务记录共同提供完成证据。本 PR 合并前，主 PRD P1-25 保持 checking，不冒充已进入 main。

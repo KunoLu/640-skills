@@ -11,6 +11,8 @@ import sys
 import tempfile
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard/scripts"
@@ -579,11 +581,15 @@ def send_line(proc, message):
 
 
 def read_reply(proc, timeout=10.0):
-    ready, _, _ = select.select([proc.stdout], [], [], timeout)
-    if not ready:
-        proc.kill()
-        raise AssertionError("timed out waiting for a protocol line")
-    line = proc.stdout.readline()
+    # Windows select() accepts sockets, not subprocess pipes. A bounded
+    # background read exercises the same protocol seam on every platform.
+    with ThreadPoolExecutor(max_workers=1) as reader:
+        pending = reader.submit(proc.stdout.readline)
+        try:
+            line = pending.result(timeout=timeout)
+        except FutureTimeout:
+            proc.kill()
+            raise AssertionError("timed out waiting for a protocol line") from None
     if not line:
         proc.kill()
         raise AssertionError("the launcher closed its protocol stdout")
