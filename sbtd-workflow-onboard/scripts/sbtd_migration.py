@@ -18,6 +18,7 @@ from sbtd_identity import DeveloperStore
 from sbtd_migration_files import (
     RetainedObjectError,
     backup_reference,
+    directory_snapshot,
     install_reference,
     read_file,
     remove_reference,
@@ -94,6 +95,9 @@ def runtime_versions() -> dict[str, str]:
         "scripts/sbtd_migration_files.py",
         "scripts/sbtd_migration_legacy.py",
         "scripts/sbtd_migration_plan.py",
+        "scripts/sbtd_cleanup_targets.py",
+        "scripts/sbtd_cleanup_legacy.py",
+        "scripts/sbtd_trellis_uninstall.py",
         "scripts/sbtd_migration_verify.py",
         "scripts/sbtd_recovery.py",
         "scripts/sbtd_project.py",
@@ -194,9 +198,13 @@ def _groups(manifest: Mapping[str, Any], phase: str) -> list[list[dict[str, Any]
         if operation["phase"] == phase:
             grouped.setdefault(operation["resource_id"], []).append(operation)
     # Protection precedes local data; a resource is still written only once.
+    # The vendor-run legacy tree retirement goes last: every other sealed
+    # cleanup outcome (engine-owned removals) is complete before the vendor
+    # CLI runs, so its footprint meets only already-proven end states.
     return sorted(
         grouped.values(),
         key=lambda operations: (
+            _is_vendor_legacy_retirement(manifest, operations[0]),
             operations[0]["owner_kind"] != "gitignore",
             operations[0]["target"],
         ),
@@ -793,6 +801,9 @@ def _validate_context(
         lambda reference: _read_reference(
             _original_reference(reference, manifest, previous, deployment, cleanup)
         ),
+        resolve_original=lambda reference: _original_reference(
+            reference, manifest, previous, deployment, cleanup
+        ),
     )
 
 
@@ -887,10 +898,19 @@ def _protected_followup_ancestry(
                     )
                 )
 
-    def protect_results(document: Mapping[str, Any]) -> None:
+    def protect_results(member: Mapping[str, Any], document: Mapping[str, Any]) -> None:
+        stage_base = Path(member["payload"]["backup_root"]) / member["manifest_id"]
         for result in _result_index(document).values():
             if result["backup_ref"] is not None:
                 protect(result["backup_ref"])
+            # Producer-owned nested backup layouts keep per-resource backups
+            # and outcome evidence below the stage container (the vendor
+            # uninstall adapter nests its own prepared-id directory there),
+            # so the whole per-resource container is immutable once the stage
+            # has run, not just the single retained reference the row names.
+            protected.append(
+                (stage_base / result["phase"] / result["resource_id"], True)
+            )
 
     def protect_reports(document: Mapping[str, Any]) -> None:
         for project in document["payload"]["projects"]:
@@ -914,12 +934,12 @@ def _protected_followup_ancestry(
     )
     prev_cleanup = protect_document(followup["cleanup_receipt_ref"], "cleanup_receipt")
     protect_manifest(prev_manifest)
-    protect_results(prev_apply)
-    protect_results(prev_deployment)
+    protect_results(prev_manifest, prev_apply)
+    protect_results(prev_manifest, prev_deployment)
     protect_reports(prev_deployment)
     protect_reports(prev_verification)
     protect_retained(prev_verification)
-    protect_results(prev_cleanup)
+    protect_results(prev_manifest, prev_cleanup)
     protect_retained(prev_cleanup)
     cursor = prev_manifest
     while cursor["payload"].get("successor") is not None:
@@ -929,7 +949,7 @@ def _protected_followup_ancestry(
             successor["apply_receipt_ref"], "apply_receipt"
         )
         protect_manifest(ancestor_manifest)
-        protect_results(ancestor_apply)
+        protect_results(ancestor_manifest, ancestor_apply)
         cursor = ancestor_manifest
     return protected
 
@@ -1365,6 +1385,257 @@ def _latest_backup_ref(
     return None
 
 
+_LEGACY_TREE = ".trellis"
+
+# Vendor footprint kinds the batch can represent inside its sealed scope.
+# Anything else on an external path is rejected before the vendor runs.
+_VENDOR_TREE_KIND = "vendor-trellis-dir"
+_VENDOR_EXTERNAL_KINDS = frozenset({"vendor-scrub", "vendor-delete"})
+_VENDOR_PRUNE_KIND = "vendor-prune-dir"
+
+
+def _is_vendor_legacy_retirement(
+    manifest: Mapping[str, Any], operation: Mapping[str, Any]
+) -> bool:
+    """The legacy project tree is retired only through the vendor uninstall."""
+    if (
+        operation["phase"] != "cleanup"
+        or operation["owner_kind"] != "directory"
+        or operation["selector"] != "whole-resource"
+        or operation["change"] != {"kind": "remove"}
+    ):
+        return False
+    target = Path(operation["target"])
+    return target.name == _LEGACY_TREE and any(
+        target.parent == Path(project["root"])
+        for project in manifest["payload"]["projects"]
+    )
+
+
+def _check_vendor_prune_directory(
+    path: Path, removable: set[str], prune_paths: set[str]
+) -> None:
+    """Permit only an empty parent derived from a sealed file removal."""
+    if not any(
+        Path(removed) != path and Path(removed).is_relative_to(path)
+        for removed in removable
+    ):
+        _fail(
+            "scope-conflict",
+            "the vendor uninstall prunes a directory unrelated to sealed removals",
+        )
+    state, entries = directory_snapshot(path)
+    if state["type"] == "absent":
+        return
+    for entry in entries:
+        child = str(path / entry["path"])
+        if entry["type"] == "file" or child not in prune_paths:
+            _fail(
+                "scope-conflict",
+                "the vendor uninstall prunes a directory that still holds "
+                "unapproved content",
+            )
+
+
+def _vendor_footprint_gate(
+    manifest: Mapping[str, Any],
+    target: Path,
+    resources: Sequence[Mapping[str, Any]],
+) -> None:
+    """Bind the vendor footprint to the sealed scope before anything runs.
+
+    Every external path must already be bound to a sealed operation, and the
+    vendor must expect no net change there: earlier phases already completed
+    the authorized outcomes, so a planned external modification is one the
+    batch cannot represent and is rejected before the vendor CLI is invoked.
+    Derived empty-parent pruning is permitted only under the project, outside
+    the legacy tree, with no unapproved live content.
+    """
+    operations = _operations(manifest)
+    bound: dict[str, list[Mapping[str, Any]]] = {}
+    for operation in operations:
+        bound.setdefault(operation["target"], []).append(operation)
+    removable = {
+        operation["target"]
+        for operation in operations
+        if operation["change"] == {"kind": "remove"}
+    }
+    prune_paths = {
+        resource["path"]
+        for resource in resources
+        if resource.get("kind") == _VENDOR_PRUNE_KIND
+    }
+    root = target.parent
+    tree = str(target)
+    seen_tree = False
+    for resource in resources:
+        path = str(Path(resource["path"]))
+        if path == tree:
+            if seen_tree:
+                _fail("unsupported-operation", "the vendor uninstall repeats the legacy tree")
+            seen_tree = True
+            if resource.get("kind") != _VENDOR_TREE_KIND:
+                _fail(
+                    "unsupported-operation",
+                    "the vendor uninstall plan mislabels the legacy tree",
+                )
+            if resource.get("expected_after") != _ABSENT:
+                _fail(
+                    "unsupported-operation",
+                    "the vendor uninstall plan does not remove the legacy tree",
+                )
+            continue
+        if resource.get("kind") == _VENDOR_PRUNE_KIND:
+            candidate = Path(path)
+            if (
+                candidate == root
+                or not candidate.is_relative_to(root)
+                or candidate == target
+                or candidate.is_relative_to(target)
+            ):
+                _fail(
+                    "scope-conflict",
+                    "the vendor uninstall prunes a directory outside its "
+                    "authorized scope",
+                )
+            if resource.get("expected_after") != _ABSENT:
+                _fail(
+                    "scope-conflict",
+                    "the vendor uninstall does not prove empty parent removal",
+                )
+            _check_vendor_prune_directory(candidate, removable, prune_paths)
+            continue
+        if resource.get("kind") not in _VENDOR_EXTERNAL_KINDS:
+            _fail(
+                "scope-conflict",
+                "the vendor uninstall footprint carries an unrepresentable effect",
+            )
+        claims = bound.get(path, ())
+        if not claims:
+            _fail(
+                "scope-conflict",
+                "the vendor uninstall footprint exceeds the sealed cleanup scope",
+            )
+        if resource["kind"] == "vendor-delete" and not any(
+            claim["selector"] == "whole-resource"
+            and claim["change"] == {"kind": "remove"}
+            for claim in claims
+        ):
+            _fail(
+                "scope-conflict",
+                "the vendor uninstall file deletion has no sealed removal",
+            )
+        if resource["kind"] == "vendor-scrub" and not any(
+            claim["selector"] == "trellis-block"
+            and claim["change"] == {"kind": "remove"}
+            for claim in claims
+        ):
+            _fail(
+                "scope-conflict",
+                "the vendor uninstall scrub has no sealed marker removal",
+            )
+        if resource.get("expected_after") != resource.get("before"):
+            _fail(
+                "scope-conflict",
+                "the vendor uninstall expects to modify a path beyond its "
+                "sealed outcome",
+            )
+    if not seen_tree:
+        _fail(
+            "unsupported-operation",
+            "the vendor uninstall plan does not cover the legacy tree",
+        )
+
+
+def _cleanup_vendor_legacy_tree(
+    manifest: Mapping[str, Any],
+    first: Mapping[str, Any],
+    target: Path,
+    backup_ref: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+    """Retire the legacy project tree through the vendor CLI, never manually.
+
+    The engine never deletes ``.trellis`` itself. An unavailable vendor is
+    blocked before execution; a failing vendor may leave partial changes.
+    Preserve the complete footprint's backups and measured outcome for every
+    post-execution failure, including a conflict outside the legacy tree.
+    """
+    from sbtd_trellis_uninstall import (
+        execute_trellis_uninstall,
+        prepare_trellis_uninstall,
+    )
+
+    root = target.parent
+    prepared = prepare_trellis_uninstall(root)
+    payload = prepared["payload"]
+    if payload["status"] != "ready":
+        reason = payload.get("reason") or "no executable uninstall plan"
+        _fail(
+            "vendor-unavailable",
+            "the vendor Trellis uninstall cannot run "
+            f"({reason}); the legacy tree is preserved",
+        )
+    _vendor_footprint_gate(manifest, target, payload["resources"])
+    vault = Path(manifest["payload"]["backup_root"])
+    backup_base = vault / manifest["manifest_id"] / "cleanup" / first["resource_id"]
+    _prepare_backup_parent(backup_base / "vendor", vault)
+    outcome = execute_trellis_uninstall(root, prepared, backup_base)
+    results = outcome["results"]
+
+    def vendor_failure(code: str, message: str, exit_code: int = 5) -> NoReturn:
+        error = contracts.ContractError(code, message, exit_code=exit_code)
+        error.retained_refs = [
+            dict(ref)
+            for ref in [outcome.get("evidence_ref")]
+            + [entry.get("backup_ref") for entry in results]
+            if ref is not None
+        ]
+        raise error
+
+    tree_entry = next(
+        (entry for entry in results if entry["path"] == str(target)), None
+    )
+    tree_backup = tree_entry.get("backup_ref") if tree_entry is not None else None
+    retained = backup_ref if backup_ref is not None else tree_backup
+    if retained is None:
+        vendor_failure(
+            "original-unavailable",
+            "the vendor uninstall produced no private backup of the legacy tree",
+            3,
+        )
+    # The footprint gate already bound every external path to its sealed
+    # outcome before the vendor ran: prune directories were pre-authorized to
+    # end absent, so their authorized removal is not reported as out-of-scope
+    # mutation; any other measured change remains a post-state conflict.
+    if any(
+        entry["path"] != str(target)
+        and entry["after"] != entry["before"]
+        and not (
+            entry.get("kind") == _VENDOR_PRUNE_KIND and entry["after"] == _ABSENT
+        )
+        for entry in results
+    ):
+        vendor_failure(
+            "post-state-conflict",
+            "the vendor uninstall changed content beyond the sealed cleanup scope",
+        )
+    if (
+        outcome["status"] != "removed"
+        or tree_entry is None
+        or tree_entry["after"] != _ABSENT
+    ):
+        detail = "; ".join(outcome.get("errors") or [])
+        vendor_failure(
+            "vendor-uninstall-partial"
+            if outcome["status"] == "partial"
+            else "vendor-uninstall-failed",
+            "the vendor Trellis uninstall did not complete"
+            + (f": {detail}" if detail else ""),
+            5,
+        )
+    return retained
+
+
 def _cleanup_resource(
     manifest: Mapping[str, Any],
     operations: Sequence[Mapping[str, Any]],
@@ -1398,49 +1669,64 @@ def _cleanup_resource(
         scope = _resource_scope(manifest, first)
         wanted_after = _ABSENT
         if before["type"] != "absent":
-            if backup_ref is None:
-                if any(
-                    operation["resource_id"] == first["resource_id"]
-                    and operation["phase"] != "cleanup"
-                    for operation in _operations(manifest)
-                ):
-                    _fail(
-                        "original-unavailable",
-                        "a cleanup target lacks its retained original backup",
-                        3,
-                    )
-                # A cleanup-only resource has not been changed by an earlier
-                # phase. Preserve its verified original before its first write.
-                vault = Path(manifest["payload"]["backup_root"])
-                backup_path = (
-                    vault / manifest["manifest_id"] / "cleanup" / first["resource_id"]
-                )
-                _prepare_backup_parent(backup_path, vault)
-                backup_ref = backup_reference(
-                    {"path": str(target), "state": before},
-                    backup_path,
-                    private_root=vault,
+            if _is_vendor_legacy_retirement(manifest, first):
+                # The legacy project tree is retired by the vendor CLI only;
+                # the engine never deletes it directly. The adapter scopes,
+                # backs up and evidences every vendor side effect.
+                backup_ref = _cleanup_vendor_legacy_tree(
+                    manifest, first, target, backup_ref
                 )
                 result["backup_ref"] = backup_ref
-            _check_reference(backup_ref, 3)
-            action, value = _render_resource(operations, before)
-            if action == "reference" or action == "identity":
-                _fail(
-                    "unsupported-operation",
-                    "this declared cleanup operation cannot be safely rendered",
-                )
-            if action != "remove":
-                _prepare_target_parents(target, scope)
-            if action == "remove":
-                remove_reference(target, before, scope=scope)
+                _check_reference(backup_ref, 3)
             else:
-                if not isinstance(value, bytes):
-                    _fail("unsupported-operation", "cleanup did not render file bytes")
-                wanted_after = {
-                    "type": "file",
-                    "checksum": hashlib.sha256(value).hexdigest(),
-                }
-                write_file(target, value, before, scope=scope)
+                if backup_ref is None:
+                    if any(
+                        operation["resource_id"] == first["resource_id"]
+                        and operation["phase"] != "cleanup"
+                        for operation in _operations(manifest)
+                    ):
+                        _fail(
+                            "original-unavailable",
+                            "a cleanup target lacks its retained original backup",
+                            3,
+                        )
+                    # A cleanup-only resource has not been changed by an earlier
+                    # phase. Preserve its verified original before its first write.
+                    vault = Path(manifest["payload"]["backup_root"])
+                    backup_path = (
+                        vault
+                        / manifest["manifest_id"]
+                        / "cleanup"
+                        / first["resource_id"]
+                    )
+                    _prepare_backup_parent(backup_path, vault)
+                    backup_ref = backup_reference(
+                        {"path": str(target), "state": before},
+                        backup_path,
+                        private_root=vault,
+                    )
+                    result["backup_ref"] = backup_ref
+                _check_reference(backup_ref, 3)
+                action, value = _render_resource(operations, before)
+                if action == "reference" or action == "identity":
+                    _fail(
+                        "unsupported-operation",
+                        "this declared cleanup operation cannot be safely rendered",
+                    )
+                if action != "remove":
+                    _prepare_target_parents(target, scope)
+                if action == "remove":
+                    remove_reference(target, before, scope=scope)
+                else:
+                    if not isinstance(value, bytes):
+                        _fail(
+                            "unsupported-operation", "cleanup did not render file bytes"
+                        )
+                    wanted_after = {
+                        "type": "file",
+                        "checksum": hashlib.sha256(value).hexdigest(),
+                    }
+                    write_file(target, value, before, scope=scope)
         result["after"] = snapshot(target)
         if result["after"] != wanted_after:
             _fail(
@@ -1463,9 +1749,10 @@ def _cleanup_resource(
             if isinstance(error, contracts.ContractError)
             else "operation-io-failed"
         )
-        if isinstance(error, RetainedObjectError):
+        retained_refs = getattr(error, "retained_refs", None)
+        if retained_refs:
             result["error"] += "; retained=" + contracts.canonical_json_bytes(
-                error.retained_refs
+                retained_refs
             ).decode("utf-8")
     return result, exit_code
 

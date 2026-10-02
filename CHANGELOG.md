@@ -6,6 +6,7 @@
 
 ### 新增
 
+- 迁移后旧资产清理扩展（`sbtd-cleanup-expansion`）：migration verify 为 verified 后由 Skill 路由层主动询问是否清理——展示批次封存候选并实际运行 `cleanup-legacy --phase plan`，两份实际清单都展示后才请求合并确认，确认后执行；批次清理先执行，若改变新鲜计划封存的原件则重新生成并展示剩余清单；同一已确认流程内，仅减少由绑定回执证明已完成的项且其余目标/效果不变时沿用原同意，新增目标或改变效果才重新确认，未知消失、用户改动或失败证据仍停止调和，执行使用当前 plan_id；拒绝时告知后续可用「sbtd cleanup」「清理工作流」或同向意图再次触发；提示只授权只读检测/计划，看到清单后的明确同意才授权执行，`verification_id`/`plan_id` 由 Agent 从 CLI JSON 自取。清理候选新增项目 `.gitnexus/`、codex/claude/kimi/omp 四个 host 已配置路径中的 gitnexus MCP 条目（只删识别为 gitnexus 的键/表，邻居保留；全局配置影响其他项目须披露确认）与项目 `AGENTS.md` 精确成对的 `<!-- TRELLIS:START/END -->`、`<!-- gitnexus:start/end -->` 标记块（仅识别顶层 HTML 注释块，块外内容与 graft 围栏逐字节保留，零对非候选，残缺/重复/交错 blocked 待人工裁决）。新增 `cleanup-legacy --phase plan|apply` 新鲜检测路径：只读检测并封存私有 plan（含完整 vendor 足迹准备描述），以 `plan_id` 确认执行；执行前私有备份全部候选原件及完整 vendor 足迹，fail-stop、逐项校验目标后态、累计回执原子保存、同 plan 重试不重放已成功资源、部分结果调和前阻断重试；批次 manifest 不可变、永不新增目标类型，批次证据缺失才走新鲜兜底，陈旧/冲突/失败的批次证据不作为绕过门禁的兜底理由。GitNexus npm 包、CLI 与 `~/.gitnexus` 全局数据不动；正常 init/reset 不执行清理；两安装器直通 `cleanup-legacy`。
 - P1-23 增加清理闭合后的 OMP follow-up 部署批次：五个 `--followup-*` 参数绑定完整 Codex 前批的 manifest/apply/deployment/verification/cleanup，要求显式 `init`/`omp`，不接受 hooks 或递归 followup。旧 successor 拒绝规则不变；完整部署集合可在受管前态证明下升级，空 apply 不重复迁移，恢复只撤销本批写入，前批备份继续保护。实际 HOME 接线与 host 验收仍需独立授权。
 - P1-21加入后继部署批次：迁移plan新增`--successor-manifest`/`--successor-apply-receipt`成对输入（要求显式`--deployment-mode`，与publication/routing批准输入互斥），修复「plan密封漏deployment声明即永久无法部署」的一次性批次缺口。后继plan绑定`deployment`为null且apply完整成功的前批，重新实测每个前批apply后态与承接cleanup前态（任一漂移blocked），封存仅含未完成cleanup与部署闭包的successor manifest；manifest payload新增`successor`绑定（前批manifest_id/apply_id、全部succeeded apply结果嵌入，及钉住真实前批文件的`manifest_ref`/`apply_receipt_ref`内容哈希引用，链期内两文件不得移动或改写），retention逐字段继承前批。部署`before_requirement`的phase-after可跨manifest引用前批同资源结果，deploy/verify/cleanup/recovery以「嵌入结果∪本批回执」叠层解析期望前态，且每次消费都重载真实前批复验嵌入结果、承接集合与未覆盖后态。无前批绑定的manifest行为不变；未执行live部署。
 - P1-01增加内部Onboard参数与交换契约层，覆盖严格JSON、批准快照、私有／共享操作、阶段收据、deployment evidence及恢复数据和envelope；它不注册尚未实现的公开迁移／恢复命令。jsonschema按Onboard requirements显式准备并惰性加载，目录复制不代表依赖已安装，缺失时校验fail-closed。
@@ -25,6 +26,8 @@
 
 ### 变更
 
+- 迁移 cleanup 的 `.trellis` 删除统一改为在项目根实际执行 vendor `tl uninstall`，由专用适配器驱动（新封存与已封存批次一致，前后态校验不变）：计划时封存完整 vendor 足迹（含可能改写的平台配置/AGENTS），执行前私有备份全部足迹；CLI 缺失或准备失败 blocked 不执行，不完整卸载 failed 并按实测逐项记录 after 状态——vendor 失败可能部分改写，保留私有备份与实测证据、调和后才可重试，不回退引擎直删，不用 `rm -rf`。
+- 退役 `trellis-workflow`/`trellis-channel` 全局目录的清理识别从固定版本校验值钉改为身份识别（非 symlink 目录 + 自身 `SKILL.md` frontmatter `name` 精确匹配），任意 1.0.x 内容漂移均可识别；symlink、SKILL.md 缺失/不可读或身份不匹配仍 blocked 保留。
 - 受管 Graft pin 从 `@nanonets/graft@0.18.0` 晋升到 `0.21.1`：registry gitHead `375a37e0b6a21d28f12fce2d220d692726bb0730`，tarball integrity 与官方发布包一致。守门启动器、DNT、stamp 精确版本和 fail-closed 不变。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。不改默认守门形态，不新增裸形态开关。
 - 项目 `.gitignore` 模板忽略 `.impeccable/config.local.json`。该文件是 Impeccable 每人本机覆盖，含 hook consent；共享的 `.impeccable/config.json` 与 `.impeccable/design.json` 仍可追踪。安装器忽略探针同步检查这一路径。
 - 配置源仓根 `.gitignore` 从七行改为九行，在 `AGENTS.md` 后增加 `.chrome-devtools-mcp/` 与 `.playwright-mcp/`。两条目录规则在本仓工作树匹配同名本机 MCP 日志目录（也匹配嵌套目录），不复制业务项目模板，也不改历史 lesson。
@@ -32,6 +35,12 @@
 
 ### 修复
 
+- 清理复核修复：实际 Skills 根即使被更宽的共享 HOME 根覆盖也保留独立逻辑绑定，退役目标始终必须是该 Skills 根的直接子目录，防止同名但未选中的用户目录进入清理。
+- vendor 卸载在备份结束、启动命令前重新验证计划中原先缺失的受管路径仍不存在；备份期间出现的文件保留并阻断卸载，不能让 vendor 在没有备份的情况下删除。
+- 新鲜清理重试继承已成功 vendor 操作的逐路径 after-state 与原件备份，允许后续未改动失败项修复后继续；伪造、漂移或失败/部分成功的 vendor 结果仍阻断。批次已完成授权项导致剩余清单缩小时不重复确认，新增目标或改变效果仍须确认。
+- 清理第二轮复核修复：`cleanup-legacy --phase plan` 接受可选 `--global-skills-dir`，Skills 根解析沿用既有优先级（显式参数 > `AGENT_SKILLS_DIR` > 受信已安装 Onboard 父目录 > 平台默认）并把选定根封存进计划；apply 只消费封存根，不接受重新指定根，也不被环境变化重定向；migration 各阶段与 `cleanup-legacy --phase apply` 参数不变。
+- OMP 的 gitnexus MCP 检测新增现有 `active_omp_paths` 解析的有效配置：相对 `PI_CONFIG_DIR` 覆盖与 `OMP_PROFILE` 优先于 `PI_PROFILE` 的有效 profile；同一目录项的路径拼写别名去重，不合并不同硬链接目录项，默认位置仍按原规则保护。
+- 清理 plan 与 apply 在任何目标写入前拒绝相等或互为祖先/后代的候选路径（如被选中的 `.gitnexus` 内含同被选中的退役 Skill 目录），不靠执行顺序掩盖冲突，父目录与其他候选原文保留。
 - P1-24 follow-up 前态闸改为按受管节校验 configure-graft 结果，不再要求整文件相等：宿主可在受管 MCP／hooks／AGENTS 围栏外追加；section 目标把当前快照写入返回映射，图目录仍钉死历史 after。python／node／cli 只核对 argv 形状与跨条目一致（同形状路径对调仍通过）。未知 selector 与受管节漂移 fail-closed 为 `state-conflict`。不代表 live HOME 接线或 P2-07 已授权。
 - P1-23将契约路径包含判断的祖先身份复用为同一次调用内的`samestat`，不再在嵌套比较中反复`samefile`/`stat`同一文件；新增文件从独立到硬链接再分离的重检回归，符号链接和大小写语义不变，且无跨调用缓存。
 - P1-22修复部署共享根检查被根内无关符号链接阻断：迁移部署执行不再对共享根做全树快照来判断存在性，改为逐组件拒绝符号链接的轻量 lstat 检查；共享根本身是链接、文件或特殊项仍 fail-closed，缺失根仍以 0700 创建，目标资源的漂移核对不变。此前用户 home 根里任何无关 symlink（如 hooks/plugins 指向其他配置目录）都会让每条共享部署操作以泛化的 precondition 错误阻断。

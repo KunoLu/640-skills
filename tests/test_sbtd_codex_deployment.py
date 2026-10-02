@@ -64,6 +64,7 @@ class DeploymentContextTests(unittest.TestCase):
                     {
                         "kind": "codex-home",
                         "path": str(codex_home),
+                        "skills_root": str(codex_home / "skills"),
                         "dependent_projects": roots,
                     }
                 ],
@@ -134,6 +135,7 @@ class DeploymentContextTests(unittest.TestCase):
                     {
                         "kind": "omp-home",
                         "path": str(omp_home.parent),
+                        "skills_root": str(omp_home / "skills"),
                         "dependent_projects": roots,
                     },
                 ],

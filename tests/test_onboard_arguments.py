@@ -300,7 +300,6 @@ class MigrationPhaseTests(ParseErrorAssertions):
         self.assertEqual(retry.apply_receipt, "/private/apply.json")
         self.assertTrue(retry.yes)
 
-
     def test_apply_phase_accepts_caller_routing_anchor(self) -> None:
         approved = parse_workflow_args(
             [
@@ -663,6 +662,43 @@ class RecoveryPhaseTests(ParseErrorAssertions):
             ["recovery", "--phase", "verify", "--manifest", "m.json"]
         )
         self.assert_parse_error(["recovery", "--phase", "cleanup", "--plan", "p.json"])
+
+
+class CleanupLegacyPhaseTests(ParseErrorAssertions):
+    def test_apply_rejects_reselecting_skills_root(self) -> None:
+        self.assert_parse_error(
+            [
+                "cleanup-legacy",
+                "--phase",
+                "apply",
+                "--plan",
+                "/private/plan.json",
+                "--global-skills-dir",
+                "/another/skills",
+            ]
+        )
+
+    def test_apply_leaves_missing_confirmation_to_runtime_gate(self) -> None:
+        args = parse_workflow_args(
+            ["cleanup-legacy", "--phase", "apply", "--plan", "/private/plan.json"]
+        )
+        self.assertEqual(args.phase, "apply")
+        self.assertIsNone(args.confirm_cleanup)
+
+    def test_plan_rejects_execution_confirmation(self) -> None:
+        self.assert_parse_error(
+            [
+                "cleanup-legacy",
+                "--phase",
+                "plan",
+                "--projects-root",
+                "/repo",
+                "--backup-root",
+                "/private/vault",
+                "--confirm-cleanup",
+                "not-a-plan",
+            ]
+        )
 
 
 class RejectionTests(ParseErrorAssertions):

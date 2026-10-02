@@ -5,9 +5,10 @@ import io
 import json
 import os
 import sys
+import shutil
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import contextmanager, nullcontext, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,11 +24,86 @@ for import_path in (str(SCRIPTS), str(TESTS)):
 
 from onboard_contracts import ContractError, canonical_json_bytes, seal_document
 from sbtd_migration import apply_migration, run_migration, runtime_versions
-from sbtd_migration_files import save_document
+from sbtd_migration_files import (
+    backup_reference,
+    require_private_directory,
+    save_document,
+    snapshot,
+)
 from sbtd_migration_plan import plan_migration
 from sbtd_migration_verify import verify_migration
 from test_sbtd_migration_apply import legacy_project
 from test_sbtd_migration_verify import _file_ref, _tree_bytes
+
+
+def _fake_prepare_trellis_uninstall(root: Path) -> dict[str, Any]:
+    """Test-only vendor seam; production always uses the installed tl CLI."""
+    target = Path(root) / ".trellis"
+    before = snapshot(target)
+    return {
+        "schema_version": 1,
+        "kind": "trellis-uninstall-prepare",
+        "prepared_id": hashlib.sha256(str(target).encode()).hexdigest(),
+        "payload": {
+            "root": str(root),
+            "status": "ready",
+            "resources": [
+                {
+                    "kind": "vendor-trellis-dir",
+                    "path": str(target),
+                    "before": before,
+                    "expected_after": {"type": "absent", "checksum": None},
+                }
+            ],
+        },
+    }
+
+
+def _fake_execute_trellis_uninstall(
+    root: Path, prepared: dict[str, Any], backup_root: Path
+) -> dict[str, Any]:
+    target = Path(root) / ".trellis"
+    before = snapshot(target)
+    private = Path(backup_root)
+    backup_dir = require_private_directory(
+        private / prepared["prepared_id"], create=True
+    )
+    backup_ref = backup_reference(
+        {"path": str(target), "state": before},
+        backup_dir / "trellis",
+        private_root=private,
+    )
+    shutil.rmtree(target)  # Test double only; production never deletes .trellis.
+    after = snapshot(target)
+    return {
+        "status": "removed",
+        "exit": 0,
+        "results": [
+            {
+                "path": str(target),
+                "before": before,
+                "after": after,
+                "status": "removed",
+                "backup_ref": backup_ref,
+            }
+        ],
+        "errors": [],
+    }
+
+
+@contextmanager
+def _fake_vendor_adapter(*, prepare=None, execute=None):
+    with (
+        mock.patch(
+            "sbtd_trellis_uninstall.prepare_trellis_uninstall",
+            side_effect=prepare or _fake_prepare_trellis_uninstall,
+        ),
+        mock.patch(
+            "sbtd_trellis_uninstall.execute_trellis_uninstall",
+            side_effect=execute or _fake_execute_trellis_uninstall,
+        ),
+    ):
+        yield
 
 
 class VerifiedMigration:
@@ -185,16 +261,29 @@ class VerifiedMigration:
                 private_root=self.evidence,
             )
 
-    def cleanup(self, **kwargs: Any) -> tuple[dict[str, Any], int]:
+    def cleanup(
+        self,
+        *,
+        fake_vendor: bool = True,
+        vendor_prepare=None,
+        vendor_execute=None,
+        **kwargs: Any,
+    ) -> tuple[dict[str, Any], int]:
         from sbtd_migration import cleanup_migration
 
-        return cleanup_migration(
-            self.manifest_path,
-            self.apply_path,
-            self.deployment_path,
-            self.verification_path,
-            **kwargs,
+        vendor = (
+            _fake_vendor_adapter(prepare=vendor_prepare, execute=vendor_execute)
+            if fake_vendor
+            else nullcontext()
         )
+        with vendor:
+            return cleanup_migration(
+                self.manifest_path,
+                self.apply_path,
+                self.deployment_path,
+                self.verification_path,
+                **kwargs,
+            )
 
 
 class CleanupMigrationTests(unittest.TestCase):
@@ -341,10 +430,14 @@ class CleanupMigrationTests(unittest.TestCase):
             refusal = ContractError(
                 "state-conflict", "injected cleanup refusal", exit_code=2
             )
-            with mock.patch("sbtd_migration.remove_reference", side_effect=refusal):
-                first, first_code = fixture.cleanup(
-                    confirm_cleanup=fixture.verification["verification_id"]
-                )
+
+            def refuse_vendor(*_args):
+                raise refusal
+
+            first, first_code = fixture.cleanup(
+                vendor_execute=refuse_vendor,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
             self.assertEqual(first_code, 5, first)
             first_receipt = first["migration"]["cleanup_receipt"]
             self.assertEqual(first_receipt["payload"]["status"], "failed")
@@ -374,24 +467,19 @@ class CleanupMigrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
             fixture.build()
-            from sbtd_migration_files import remove_reference as real_remove
-
-            def refuse_second_project(path, expected, *, scope):
-                if Path(path) == fixture.roots[1] / ".trellis":
+            def refuse_second_project(root, prepared, backup_root):
+                if Path(root) == fixture.roots[1]:
                     raise ContractError(
                         "state-conflict",
                         "injected second-project refusal",
                         exit_code=2,
                     )
-                return real_remove(path, expected, scope=scope)
+                return _fake_execute_trellis_uninstall(root, prepared, backup_root)
 
-            with mock.patch(
-                "sbtd_migration.remove_reference",
-                side_effect=refuse_second_project,
-            ):
-                envelope, code = fixture.cleanup(
-                    confirm_cleanup=fixture.verification["verification_id"]
-                )
+            envelope, code = fixture.cleanup(
+                vendor_execute=refuse_second_project,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
             self.assertEqual(code, 5, envelope)
             receipt = envelope["migration"]["cleanup_receipt"]
             projects = {
@@ -411,24 +499,25 @@ class CleanupMigrationTests(unittest.TestCase):
             self.assertFalse((fixture.roots[0] / ".trellis").exists())
             self.assertTrue((fixture.roots[1] / ".trellis").is_dir())
 
-    def test_shared_pinned_skill_cleanup_runs_once_for_the_full_batch(self):
+    def test_shared_1_0_x_skill_cleanup_runs_once_for_the_full_batch(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
             skill = fixture.home / ".agent/skills/trellis-workflow"
             (skill / "SKILL.md").parent.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("# pinned\n")
+            (skill / "SKILL.md").write_text(
+                "---\nname: trellis-workflow\n---\n# 1.0.x customized release\n"
+            )
+            (skill / "release.txt").write_text("not the v1.0.15 bytes\n")
             import sbtd_migration_plan
-            from sbtd_migration_files import snapshot
 
-            pins = sbtd_migration_plan._ownership_pins()
-            pins["skills"] = {"trellis-workflow": snapshot(skill)}
-            with mock.patch.object(
-                sbtd_migration_plan, "_ownership_pins", return_value=pins
-            ):
-                fixture.build()
-                envelope, code = fixture.cleanup(
-                    confirm_cleanup=fixture.verification["verification_id"]
-                )
+            self.assertNotEqual(
+                snapshot(skill),
+                sbtd_migration_plan._ownership_pins()["skills"]["trellis-workflow"],
+            )
+            fixture.build()
+            envelope, code = fixture.cleanup(
+                confirm_cleanup=fixture.verification["verification_id"]
+            )
             self.assertEqual(code, 0, envelope)
             receipt = envelope["migration"]["cleanup_receipt"]["payload"]
             self.assertEqual(len(receipt["shared_results"]), 1)
@@ -442,35 +531,27 @@ class CleanupMigrationTests(unittest.TestCase):
                     project["shared_operation_ids"], shared["operation_ids"]
                 )
 
-    def test_shared_pinned_skill_failure_marks_every_dependent_and_keeps_the_skill(
+    def test_shared_skill_failure_marks_every_dependent_and_keeps_the_skill(
         self,
     ):
         with tempfile.TemporaryDirectory() as directory:
             fixture = VerifiedMigration(Path(directory).resolve(), names=("one", "two"))
             skill = fixture.home / ".agent/skills/trellis-workflow"
             (skill / "SKILL.md").parent.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("# pinned\n")
-            import sbtd_migration_plan
+            (skill / "SKILL.md").write_text(
+                "---\nname: trellis-workflow\n---\n# 1.0.x\n"
+            )
             from sbtd_migration_files import remove_reference as real_remove
-            from sbtd_migration_files import snapshot
 
-            pins = sbtd_migration_plan._ownership_pins()
-            pins["skills"] = {"trellis-workflow": snapshot(skill)}
-            with mock.patch.object(
-                sbtd_migration_plan, "_ownership_pins", return_value=pins
-            ):
-                fixture.build()
+            fixture.build()
 
             def refuse_skill(path, expected, *, scope):
                 if Path(path) == skill:
                     raise ContractError("state-conflict", "injected shared refusal")
                 return real_remove(path, expected, scope=scope)
 
-            with (
-                mock.patch.object(
-                    sbtd_migration_plan, "_ownership_pins", return_value=pins
-                ),
-                mock.patch("sbtd_migration.remove_reference", side_effect=refuse_skill),
+            with mock.patch(
+                "sbtd_migration.remove_reference", side_effect=refuse_skill
             ):
                 envelope, code = fixture.cleanup(
                     confirm_cleanup=fixture.verification["verification_id"]
@@ -486,18 +567,258 @@ class CleanupMigrationTests(unittest.TestCase):
     def test_resource_preservation_failure_keeps_exit_three(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.build(Path(directory).resolve())
-            with mock.patch(
-                "sbtd_migration.remove_reference",
-                side_effect=ContractError(
+            def fail_vendor(*_args):
+                raise ContractError(
                     "checksum-mismatch", "synthetic readback failure", exit_code=3
-                ),
-            ):
-                response, code = fixture.cleanup(
-                    confirm_cleanup=fixture.verification["verification_id"]
                 )
+
+            response, code = fixture.cleanup(
+                vendor_execute=fail_vendor,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
             self.assertEqual(code, 3, response)
             self.assertEqual(response["status"], "failed")
             self.assertTrue((fixture.roots[0] / ".trellis").is_dir())
+
+    def test_vendor_unavailable_preserves_tree_and_skips_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            executed = mock.Mock()
+
+            def unavailable(root):
+                prepared = _fake_prepare_trellis_uninstall(root)
+                prepared["payload"].update(
+                    status="unavailable",
+                    reason="the Trellis CLI is not installed",
+                )
+                return prepared
+
+            envelope, code = fixture.cleanup(
+                vendor_prepare=unavailable,
+                vendor_execute=executed,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 5, envelope)
+            self.assertTrue((fixture.root / ".trellis").is_dir())
+            result = envelope["migration"]["cleanup_receipt"]["payload"][
+                "projects"
+            ][0]["private_results"][0]
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["error"], "vendor-unavailable")
+            self.assertIsNotNone(result["backup_ref"])
+            executed.assert_not_called()
+
+    def test_vendor_nonzero_preserves_tree_and_reports_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+
+            def nonzero(root, _prepared, _backup_root):
+                target = Path(root) / ".trellis"
+                before = snapshot(target)
+                return {
+                    "status": "failed",
+                    "exit": 7,
+                    "results": [
+                        {
+                            "path": str(target),
+                            "before": before,
+                            "after": before,
+                            "status": "unchanged",
+                            "backup_ref": None,
+                        }
+                    ],
+                    "errors": [
+                        "vendor-refused: the vendor uninstall exited 7"
+                    ],
+                }
+
+            envelope, code = fixture.cleanup(
+                vendor_execute=nonzero,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 5, envelope)
+            self.assertTrue((fixture.root / ".trellis").is_dir())
+            result = envelope["migration"]["cleanup_receipt"]["payload"][
+                "projects"
+            ][0]["private_results"][0]
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["error"], "vendor-uninstall-failed")
+            self.assertEqual(result["before"], result["after"])
+            self.assertIsNotNone(result["backup_ref"])
+
+    def test_vendor_failure_links_private_outcome_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            evidence_refs = []
+
+            def nonzero(root, _prepared, backup_root):
+                target = Path(root) / ".trellis"
+                before = snapshot(target)
+                evidence_path = backup_root / "outcome.json"
+                evidence_path.write_text('{"exit":7,"status":"failed"}')
+                evidence = {"path": str(evidence_path), "state": snapshot(evidence_path)}
+                resources = backup_root / "resources"
+                resources.mkdir()
+                preserved = resources / "000"
+                shutil.copytree(target, preserved)
+                backup = {"path": str(preserved), "state": snapshot(preserved)}
+                evidence_refs.extend([evidence, backup])
+                return {
+                    "status": "failed",
+                    "exit": 7,
+                    "errors": ["vendor refused"],
+                    "evidence_ref": evidence,
+                    "results": [{
+                        "path": str(target), "before": before, "after": before,
+                        "status": "unchanged", "backup_ref": backup,
+                    }],
+                }
+
+            envelope, code = fixture.cleanup(
+                vendor_execute=nonzero,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 5, envelope)
+            self.assertTrue((fixture.root / ".trellis").is_dir())
+            result = envelope["migration"]["cleanup_receipt"]["payload"]["projects"][0]["private_results"][0]
+            self.assertTrue(result["error"].startswith("vendor-uninstall-failed; retained="))
+            retained = json.loads(result["error"].split("; retained=", 1)[1])
+            self.assertEqual(retained, evidence_refs)
+            self.assertEqual(len(retained), 2)
+            self.assertTrue(retained[0]["path"].endswith("outcome.json"))
+            self.assertTrue(retained[1]["path"].endswith("resources/000"))
+            self.assertNotIn("evidence_ref", result)
+            self.assertEqual(result["before"], result["after"])
+
+    def test_vendor_external_partial_retains_outcome_and_original_references(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            agents = fixture.root / "AGENTS.md"
+            original = agents.read_bytes()
+            evidence_refs = []
+
+            def partial(root, _prepared, backup_root):
+                before = snapshot(agents)
+                preserved = backup_root / "agents-original"
+                preserved.write_bytes(original)
+                backup = {"path": str(preserved), "state": snapshot(preserved)}
+                agents.write_bytes(b"unexpected vendor mutation\n")
+                evidence_path = backup_root / "vendor-outcome.json"
+                evidence_path.write_text('{"exit":7,"status":"partial"}')
+                evidence = {"path": str(evidence_path), "state": snapshot(evidence_path)}
+                evidence_refs.extend([evidence, backup])
+                tree = Path(root) / ".trellis"
+                return {
+                    "status": "partial", "exit": 7, "errors": ["vendor failed"],
+                    "evidence_ref": evidence,
+                    "results": [
+                        {"path": str(tree), "before": snapshot(tree), "after": snapshot(tree), "backup_ref": None},
+                        {"path": str(agents), "before": before, "after": snapshot(agents), "backup_ref": backup},
+                    ],
+                }
+
+            envelope, code = fixture.cleanup(
+                vendor_execute=partial,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 5, envelope)
+            result = envelope["migration"]["cleanup_receipt"]["payload"]["projects"][0]["private_results"][0]
+            self.assertEqual(result["status"], "failed")
+            self.assertTrue(result["error"].startswith("post-state-conflict; retained="))
+            self.assertEqual(json.loads(result["error"].split("; retained=", 1)[1]), evidence_refs)
+            self.assertEqual(Path(evidence_refs[1]["path"]).read_bytes(), original)
+
+    def test_unbound_vendor_footprint_is_rejected_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            foreign = fixture.root / "unrelated.txt"
+            foreign.write_text("keep this user file\n")
+            executed = mock.Mock()
+
+            def broaden(root):
+                prepared = _fake_prepare_trellis_uninstall(root)
+                prepared["payload"]["resources"].append(
+                    {
+                        "kind": "vendor-delete",
+                        "path": str(foreign),
+                        "before": snapshot(foreign),
+                        "expected_after": {"type": "absent", "checksum": None},
+                    }
+                )
+                return prepared
+
+            envelope, code = fixture.cleanup(
+                vendor_prepare=broaden,
+                vendor_execute=executed,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 5, envelope)
+            self.assertEqual(foreign.read_text(), "keep this user file\n")
+            self.assertTrue((fixture.root / ".trellis").is_dir())
+            result = envelope["migration"]["cleanup_receipt"]["payload"][
+                "projects"
+            ][0]["private_results"][0]
+            self.assertEqual(result["error"], "scope-conflict")
+            executed.assert_not_called()
+
+    def test_vendor_prune_with_foreign_empty_child_is_rejected_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.build(Path(directory).resolve())
+            user_dir = fixture.root / ".codex/user-dir"
+            user_dir.mkdir(parents=True)
+            executed = mock.Mock()
+
+            def broaden(root):
+                prepared = _fake_prepare_trellis_uninstall(root)
+                for relative in (".codex/agents", ".codex"):
+                    path = Path(root) / relative
+                    prepared["payload"]["resources"].append(
+                        {
+                            "kind": "vendor-prune-dir",
+                            "path": str(path),
+                            "before": snapshot(path),
+                            "expected_after": {"type": "absent", "checksum": None},
+                        }
+                    )
+                return prepared
+
+            envelope, code = fixture.cleanup(
+                vendor_prepare=broaden,
+                vendor_execute=executed,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 5, envelope)
+            self.assertTrue(user_dir.is_dir())
+            self.assertTrue((fixture.root / ".trellis").is_dir())
+            result = envelope["migration"]["cleanup_receipt"]["payload"][
+                "projects"
+            ][0]["private_results"][0]
+            self.assertEqual(result["error"], "scope-conflict")
+            executed.assert_not_called()
+
+    def test_retry_reproves_removed_skill_identity_from_preserved_original(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = VerifiedMigration(Path(directory).resolve())
+            skill = fixture.home / ".agent/skills/trellis-channel"
+            (skill / "SKILL.md").parent.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: trellis-channel\n---\n# different 1.0.x bytes\n"
+            )
+            fixture.build()
+            first, code = fixture.cleanup(
+                confirm_cleanup=fixture.verification["verification_id"]
+            )
+            self.assertEqual(code, 0, first)
+            self.assertFalse(skill.exists())
+            receipt = first["migration"]["cleanup_receipt"]
+            receipt_path = fixture.evidence / f"cleanup-{receipt['cleanup_id']}.json"
+            second, code = fixture.cleanup(
+                previous_receipt_path=receipt_path,
+                confirm_cleanup=fixture.verification["verification_id"],
+            )
+            self.assertEqual(code, 0, second)
+            self.assertEqual(second["status"], "already-complete")
+
 
     def test_a_receipt_save_failure_is_failed_and_does_not_claim_recovery(self):
         with tempfile.TemporaryDirectory() as directory:

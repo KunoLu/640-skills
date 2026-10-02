@@ -661,17 +661,33 @@ def attach_deployment(
                 "an existing skills root has different project dependencies",
             )
         if obsolete_skills_roots:
+            for record in obsolete_skills_roots:
+                strict_covering = [
+                    scope
+                    for scope in payload["shared_roots"]
+                    if scope["kind"] in {"codex-home", "omp-home"}
+                    and scope["dependent_projects"] == record["dependent_projects"]
+                    and scope["path"] != record["path"]
+                    and Path(record["path"]).is_relative_to(Path(scope["path"]))
+                ]
+                if len(strict_covering) == 1:
+                    # The absorbed Skills root survives as sealed logical
+                    # metadata on its covering home root; an already-sealed
+                    # location keeps authority over a re-resolution.
+                    strict_covering[0].setdefault("skills_root", record["path"])
             payload["shared_roots"] = [
                 record
                 for record in payload["shared_roots"]
                 if record not in obsolete_skills_roots
             ]
         skills_root, _source = resolve_global_skills_dir()
-        if not any(
-            Path(skills_root).is_relative_to(Path(record["path"]))
-            and record["dependent_projects"] == roots
+        covering_skills = [
+            record
             for record in payload["shared_roots"]
-        ):
+            if Path(skills_root).is_relative_to(Path(record["path"]))
+            and record["dependent_projects"] == roots
+        ]
+        if not covering_skills:
             payload["shared_roots"].append(
                 {
                     "kind": "skills",

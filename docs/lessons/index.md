@@ -112,4 +112,6 @@
 |---|---|---|---|---|
 | LESSON-20260930-kuno-umask-sensitive-test-evidence | validation, pytest, umask, privacy, filesystem | 取证命令修改 `umask`，或测试依赖目录权限/私有目录拒绝 | 取证 umask 会改变 `mkdir(mode)` 结果；环境失败须分类后按正常 umask 复跑，最终仍要完整 suite。 | topics/validation-scripts.md#lesson-20260930-kuno-umask-sensitive-test-evidence-umask-sensitive-tests-need-normal-evidence-runs |
 | LESSON-20260930-kuno-contract-rerun-not-full-suite | validation, pytest, contracts, evidence, gitignore | 修复单条契约或根 ignore 后收尾 | targeted rerun 只证明该项修复，不能替代最终 full suite；旧失败记录与最终报告都要保留。 | topics/validation-scripts.md#lesson-20260930-kuno-contract-rerun-not-full-suite-contract-rerun-is-not-a-full-suite-pass |
+| LESSON-20261001-kuno-cleanup-scope | cleanup, migration, authorization, scope, vendor-cli, backups, partial-failure | 确认 ID 绑定删除计划或调用第三方卸载器 | hash 只证明完整性；删除仍须复验精确范围、身份、完整 vendor footprint 与部分结果。 | topics/repository-workflow.md#lesson-20261001-kuno-cleanup-scope-digests-and-vendor-commands-are-not-cleanup-authorization |
+| LESSON-20261002-kuno-cleanup-target-set | cleanup, scope, path-resolution, authorization, overlap, cli | 组合删除候选或支持非默认全局配置根 | 单项合法不代表集合可执行；拒绝父子候选，复用有效路径解析，执行使用封存根。 | topics/repository-workflow.md#lesson-20261002-kuno-cleanup-target-set-resolve-once-validate-the-whole-set |
 <!-- lessons:kuno:end -->

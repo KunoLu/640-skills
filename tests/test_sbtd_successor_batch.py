@@ -405,7 +405,7 @@ class SuccessorPredecessorVerificationTests(unittest.TestCase):
             base = Path(directory).resolve()
             skill = base / "home/.agent/skills/trellis-workflow"
             skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text("# legacy pinned skill\n")
+            (skill / "SKILL.md").write_text("---\nname: trellis-workflow\n---\nlegacy skill\n")
             pins = sbtd_migration_plan._ownership_pins()
             pins["skills"] = {"trellis-workflow": snapshot(skill)}
             batch = _completed_batch(base, pins=pins)

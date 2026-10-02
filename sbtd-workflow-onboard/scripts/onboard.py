@@ -38,8 +38,10 @@ from onboard_arguments import (
     _check_migration_context,
     add_migration_parser,
     add_recovery_parser,
+    add_cleanup_legacy_parser,
     validate_developer_name,
     validate_migration_args,
+    validate_cleanup_legacy_args,
     validate_recovery_args,
 )
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
@@ -6442,6 +6444,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
         from sbtd_recovery import run_recovery
 
         return run_recovery(args)
+    if mode == "cleanup-legacy":
+        from sbtd_cleanup_legacy import run_cleanup_legacy
+
+        return run_cleanup_legacy(args)
     if mode in {"init", "init-projects"} and getattr(args, "migration_manifest", None):
         from sbtd_graft_deployment import run_migration_init
 
@@ -6922,6 +6928,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="mode", required=True)
     add_migration_parser(subparsers, phases=("plan", "apply", "verify", "cleanup"))
     add_recovery_parser(subparsers)
+    add_cleanup_legacy_parser(subparsers)
 
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
@@ -7255,6 +7262,8 @@ def main() -> int:
         validate_migration_args(args, parser=parser)
     elif args.mode == "recovery":
         validate_recovery_args(args, parser=parser)
+    elif args.mode == "cleanup-legacy":
+        validate_cleanup_legacy_args(args, parser=parser)
     elif args.mode in {"init", "init-projects"}:
         _check_migration_context(parser, args)
     return run(args.mode, args)

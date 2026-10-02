@@ -28,7 +28,7 @@ task唯一拥有mode/status；`.sbtd/active-task.json`只存schema_version/task_
 
 状态正常沿planned→in-progress→checking→done；checking发现问题可回in-progress，done重开先回planned。只有验收证据成立才记done与真实completed_at。进入blocked必须写非空blocked_reason，解除时清空；不保存blocked_from字段。完成／阻塞／重开／归档或明确重绑定事件放在同一task.md的`## 状态事件`表（at/from/to/reason/evidence），与字段一次原子更新。重开先保留旧完成证据再清空当前completed_at；持续blocked只改原因，不重写恢复前态。恢复取最近未解除的真实入阻塞前态；未知／冲突则用户选择planned/in-progress/checking，记录真实解除事件和历史未知原因，不能直接done或伪造ingress。完整细节以可用sbtd-task/state reference为准；缺安全能力不强行写入。
 
-首次写本地状态／身份／handoff前检查ignore和tracked；缺保护只请求窄授权，不自动init、改旧规则或清理数据。保存失败保留当前会话选择并说明恢复不可靠。归档、共享提升、清理和发布需要各自确认，Git tag不代替ignored数据/HOME备份。
+首次写本地状态／身份／handoff前检查ignore和tracked；缺保护只请求窄授权，不自动init、改旧规则或清理数据。保存失败保留当前会话选择并说明恢复不可靠。归档、共享提升、清理和发布需要各自确认，Git tag不代替ignored数据/HOME备份。「sbtd cleanup」「清理工作流」或同向清理旧资产的意图只授权只读检测与候选展示，执行须在看到实际清单后单独确认。同一已确认流程内，重计划的目标/效果不变，或仅减少有绑定回执证明已完成的项且其余目标/效果不变时，展示剩余清单并沿用原同意；新增目标或改变效果才重新确认，未知消失、用户改动或失败证据先停止调和，执行仍用当前plan_id；全局MCP条目影响其他项目须单独披露；正常init/reset不清理旧资产。
 
 ## 路径与工具边界
 

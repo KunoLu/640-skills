@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from onboard_contracts import ContractError
 from sbtd_migration_files import read_file, snapshot
 from sbtd_migration_plan import plan_migration, validate_legacy_inputs
 
+from tests.test_sbtd_migration_apply import legacy_project
 from tests.test_sbtd_migration_legacy import (
     _json_bytes,
     _legacy_source,
@@ -1899,6 +1901,309 @@ class MigrationPlanSharedTests(unittest.TestCase):
             manifest = _plan(project, vault, None, home)
             self.assertEqual(manifest["payload"]["shared_operations"], [])
             self.assertEqual(unrelated.read_bytes(), b"name: other\n")
+
+    def test_other_1_0_x_skill_bytes_are_retired_by_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault = base / "vault"
+            vault.mkdir(mode=0o700)
+            home = base / "home"
+            home.mkdir(mode=0o700)
+            skills_root = home / ".agent/skills"
+            names = ("trellis-channel", "trellis-workflow")
+            for name in names:
+                _write(
+                    skills_root / name / "SKILL.md",
+                    f"---\nname: {name}\n---\n# different 1.0.x release\n".encode(),
+                )
+                _write(skills_root / name / "release.txt", b"not v1.0.15\n")
+            pins = sbtd_migration_plan._ownership_pins()["skills"]
+            for name in names:
+                self.assertNotEqual(snapshot(skills_root / name), pins[name])
+            manifest = _plan(project, vault, None, home)
+            retired = [
+                operation
+                for operation in manifest["payload"]["shared_operations"]
+                if operation["phase"] == "cleanup"
+            ]
+            self.assertEqual(
+                [operation["ownership"]["name"] for operation in retired],
+                list(names),
+            )
+            for operation in retired:
+                state = snapshot(Path(operation["target"]))
+                self.assertEqual(operation["before_requirement"]["state"], state)
+                self.assertEqual(operation["ownership"]["reference"]["state"], state)
+            with _home_env(home):
+                self.assertIsNone(validate_legacy_inputs(manifest, _strict_reader))
+
+    def test_same_named_foreign_skill_identity_is_not_retired(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault = base / "vault"
+            vault.mkdir(mode=0o700)
+            home = base / "home"
+            home.mkdir(mode=0o700)
+            impostor = home / ".agent/skills/trellis-channel/SKILL.md"
+            _write(impostor, b"---\nname: user-owned-channel\n---\n# keep\n")
+            manifest = _plan(project, vault, None, home)
+            self.assertEqual(manifest["payload"]["shared_operations"], [])
+            self.assertEqual(
+                impostor.read_bytes(),
+                b"---\nname: user-owned-channel\n---\n# keep\n",
+            )
+
+
+
+def _absorbed_skills_fixture(base):
+    """Retired Skill below the platform-default skills root inside Codex HOME."""
+    project = legacy_project(base, "project")
+    vault = base / "vault"
+    vault.mkdir(mode=0o700)
+    home = base / "home"
+    home.mkdir(mode=0o700)
+    codex_home = home / ".codex"
+    skill = codex_home / "skills" / "trellis-workflow"
+    _write(skill / "SKILL.md", b"---\nname: trellis-workflow\n---\nlegacy skill\n")
+    environment = {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "CODEX_HOME": str(codex_home),
+    }
+    return project, vault, codex_home, skill, environment
+
+
+def _plan_absorbed(project, vault, environment):
+    with mock.patch.dict(os.environ, environment):
+        os.environ.pop("AGENT_SKILLS_DIR", None)
+        return plan_migration(
+            [project],
+            vault,
+            "fixture-custodian",
+            None,
+            tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+            deployment_mode="init",
+        )
+
+
+def _validate_absorbed(manifest, environment, resolve_original=None):
+    with mock.patch.dict(os.environ, environment):
+        os.environ.pop("AGENT_SKILLS_DIR", None)
+        return validate_legacy_inputs(manifest, _strict_reader, resolve_original)
+
+
+class MigrationPlanAbsorbedSkillsRootTests(unittest.TestCase):
+    def test_absorbed_skills_root_seals_its_logical_location(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, codex_home, skill, environment = _absorbed_skills_fixture(
+                base
+            )
+            manifest = _plan_absorbed(project, vault, environment)
+            payload = manifest["payload"]
+            self.assertEqual(
+                payload["shared_roots"],
+                [
+                    {
+                        "kind": "codex-home",
+                        "path": str(codex_home),
+                        "skills_root": str(codex_home / "skills"),
+                        "dependent_projects": [str(project)],
+                    }
+                ],
+            )
+            retired = [
+                operation
+                for operation in payload["shared_operations"]
+                if operation["phase"] == "cleanup"
+            ]
+            self.assertEqual([operation["target"] for operation in retired], [str(skill)])
+            self.assertIsNone(_validate_absorbed(manifest, environment))
+
+    def test_resealed_same_named_target_under_home_root_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, codex_home, _skill, environment = _absorbed_skills_fixture(
+                base
+            )
+            manifest = _plan_absorbed(project, vault, environment)
+            decoy = codex_home / "user" / "trellis-workflow"
+            _write(decoy / "SKILL.md", b"---\nname: trellis-workflow\n---\nuser copy\n")
+
+            def mutate(payload):
+                operation = next(
+                    op
+                    for op in payload["shared_operations"]
+                    if op["phase"] == "cleanup"
+                )
+                target = str(decoy)
+                state = snapshot(decoy)
+                resource = contracts.resource_id("directory", target)
+                operation["target"] = target
+                operation["resource_id"] = resource
+                operation["operation_id"] = contracts.operation_id(
+                    "cleanup", resource, "whole-resource"
+                )
+                operation["ownership"]["reference"] = {"path": target, "state": state}
+                operation["before_requirement"] = {"kind": "state", "state": state}
+                payload["projects"][0]["shared_operation_ids"] = sorted(
+                    op["operation_id"] for op in payload["shared_operations"]
+                )
+
+            tampered = _reseal(manifest, mutate)
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as caught,
+            ):
+                validate_legacy_inputs(tampered, _strict_reader)
+            self.assertEqual(caught.exception.code, "semantic-violation")
+            self.assertEqual(
+                caught.exception.message, "a skill retirement target was altered"
+            )
+
+    def test_absorbed_retirement_revalidates_from_the_preserved_original(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, _codex_home, skill, environment = _absorbed_skills_fixture(
+                base
+            )
+            manifest = _plan_absorbed(project, vault, environment)
+            self.assertIsNone(_validate_absorbed(manifest, environment))
+            preserved = base / "preserved" / "trellis-workflow"
+            shutil.copytree(skill, preserved)
+            shutil.rmtree(skill)
+
+            def resolve_original(reference):
+                return {"path": str(preserved), "state": reference["state"]}
+
+            self.assertIsNone(
+                _validate_absorbed(manifest, environment, resolve_original)
+            )
+
+    def test_absorbed_retirement_without_sealed_location_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project, vault, _codex_home, _skill, environment = _absorbed_skills_fixture(
+                base
+            )
+            manifest = _plan_absorbed(project, vault, environment)
+
+            def mutate(payload):
+                for record in payload["shared_roots"]:
+                    record.pop("skills_root", None)
+
+            tampered = _reseal(manifest, mutate)
+            with (
+                mock.patch.dict(os.environ, environment),
+                self.assertRaises(ContractError) as caught,
+            ):
+                validate_legacy_inputs(tampered, _strict_reader)
+            self.assertEqual(caught.exception.code, "semantic-violation")
+            self.assertEqual(
+                caught.exception.message, "a skill retirement target was altered"
+            )
+
+    def test_merged_skills_root_still_requires_the_selected_direct_child(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _base_tree(base)
+            vault = base / "vault"
+            vault.mkdir(mode=0o700)
+            home = base / "home"
+            home.mkdir(mode=0o700)
+            codex_home = home / ".codex"
+            _write(codex_home / "AGENTS.md", b"pinned-global-agents\n")
+            skill = codex_home / "skills" / "trellis-workflow"
+            _write(skill / "SKILL.md", b"---\nname: trellis-workflow\n---\nlegacy skill\n")
+            pins = sbtd_migration_plan._ownership_pins()
+            pins["agents"] = hashlib.sha256(b"pinned-global-agents\n").hexdigest()
+            environment = {
+                "HOME": str(home),
+                "USERPROFILE": str(home),
+                "CODEX_HOME": str(codex_home),
+                "AGENT_SKILLS_DIR": str(codex_home / "skills"),
+            }
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch.object(
+                    sbtd_migration_plan, "_ownership_pins", return_value=pins
+                ),
+                mock.patch("onboard.user_home", return_value=home),
+            ):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture-custodian",
+                    None,
+                    tool_versions={"onboard": "fixture", "graft": "0.18.0"},
+                )
+            payload = manifest["payload"]
+            self.assertEqual(
+                payload["shared_roots"],
+                [
+                    {
+                        "kind": "codex-home",
+                        "path": str(codex_home),
+                        "skills_root": str(codex_home / "skills"),
+                        "dependent_projects": [str(project)],
+                    }
+                ],
+            )
+            # The sealed merged root binds validation: no deployment and no
+            # ambient skills dir are needed to re-prove it.
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch.object(
+                    sbtd_migration_plan, "_ownership_pins", return_value=pins
+                ),
+                mock.patch("onboard.user_home", return_value=home),
+            ):
+                os.environ.pop("AGENT_SKILLS_DIR", None)
+                self.assertIsNone(
+                    sbtd_migration_plan._validate_shared_operations(
+                        payload, [str(project)]
+                    )
+                )
+            decoy = codex_home / "user" / "trellis-workflow"
+            _write(decoy / "SKILL.md", b"---\nname: trellis-workflow\n---\nuser copy\n")
+
+            def mutate(payload):
+                operation = next(
+                    op
+                    for op in payload["shared_operations"]
+                    if op["phase"] == "cleanup"
+                )
+                target = str(decoy)
+                state = snapshot(decoy)
+                resource = contracts.resource_id("directory", target)
+                operation["target"] = target
+                operation["resource_id"] = resource
+                operation["operation_id"] = contracts.operation_id(
+                    "cleanup", resource, "whole-resource"
+                )
+                operation["ownership"]["reference"] = {"path": target, "state": state}
+                operation["before_requirement"] = {"kind": "state", "state": state}
+                payload["projects"][0]["shared_operation_ids"] = sorted(
+                    op["operation_id"] for op in payload["shared_operations"]
+                )
+
+            tampered = _reseal(manifest, mutate)
+            with (
+                mock.patch.dict(os.environ, environment),
+                mock.patch.object(
+                    sbtd_migration_plan, "_ownership_pins", return_value=pins
+                ),
+                mock.patch("onboard.user_home", return_value=home),
+                self.assertRaises(ContractError) as caught,
+            ):
+                validate_legacy_inputs(tampered, _strict_reader)
+            self.assertEqual(caught.exception.code, "semantic-violation")
+            self.assertEqual(
+                caught.exception.message, "a skill retirement target was altered"
+            )
+
 
 
 def _strict_reader(reference):

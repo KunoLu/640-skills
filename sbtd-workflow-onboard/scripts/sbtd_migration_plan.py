@@ -19,9 +19,11 @@ and the main PRD sections 10.2/11 plus the P1-12 migration-runtime decisions:
   ignore protection before data writes, extracts the legacy developer name
   into the missing current identity, installs the approved candidates and
   stops managed old routing; it never deploys new wiring or runs smoke.
-  ``cleanup`` only retires the legacy project tree and the exact pinned
-  v1.0.15 global Skill directories; drifted or unknown global content is
-  preserved untouched. No deployment producer targets are declared.
+  ``cleanup`` only retires the legacy project tree and the identity-proven
+  global ``trellis-workflow``/``trellis-channel`` Skill directories (any
+  1.0.x version, never a fixed checksum pin); drifted or unknown global
+  content is preserved untouched. No deployment producer targets are
+  declared.
 - ``validate_legacy_inputs`` repeats the complete legacy closure against a
   manifest with caller-supplied original bytes, so apply/verify revalidation
   stays sound after controlled rewrites or cleanup of the legacy sources.
@@ -130,6 +132,9 @@ _SECRET_PATTERNS = (
 _DOC_TARGETS = {"spec": ("docs", "spec"), "lessons": ("docs", "lessons")}
 
 ReadOriginal = Callable[[Mapping[str, Any]], bytes]
+
+ResolveOriginal = Callable[[Mapping[str, Any]], Mapping[str, Any]]
+"""Resolve a sealed reference to its live or retained-backup location."""
 
 
 def _fail(
@@ -1313,7 +1318,9 @@ def _check_followup_predecessor_outcomes(
 
 
 def validate_legacy_inputs(
-    manifest: Mapping[str, Any], read_original: ReadOriginal
+    manifest: Mapping[str, Any],
+    read_original: ReadOriginal,
+    resolve_original: ResolveOriginal | None = None,
 ) -> None:
     """Re-validate the complete legacy closure of a sealed manifest.
 
@@ -1431,7 +1438,7 @@ def validate_legacy_inputs(
                     "ownership-conflict",
                     "a followup before-state differs from its proven predecessor outcome",
                 )
-        _validate_shared_operations(payload, followup_roots)
+        _validate_shared_operations(payload, followup_roots, resolve_original)
         from sbtd_graft_deployment import validate_deployment_declarations
 
         validate_deployment_declarations(
@@ -1560,7 +1567,7 @@ def validate_legacy_inputs(
                     "state-conflict",
                     "a completed batch outcome no longer matches the current state",
                 )
-        _validate_shared_operations(payload, successor_roots)
+        _validate_shared_operations(payload, successor_roots, resolve_original)
         from sbtd_graft_deployment import validate_deployment_declarations
 
         validate_deployment_declarations(payload)
@@ -1614,7 +1621,9 @@ def validate_legacy_inputs(
             project["source_ref"],
             project["head"],
         )
-    _validate_shared_operations(payload, sorted(str(root) for root in roots))
+    _validate_shared_operations(
+        payload, sorted(str(root) for root in roots), resolve_original
+    )
     from sbtd_graft_deployment import validate_deployment_declarations
 
     validate_deployment_declarations(payload)
@@ -2269,8 +2278,46 @@ def _routing_key(
     ).decode("utf-8")
 
 
+def _check_skill_identity(
+    operation: Mapping[str, Any], resolve_original: ResolveOriginal | None
+) -> None:
+    """Re-prove a sealed Skill retirement from the actual preserved original.
+
+    The recorded directory state (never a version pin) binds the exact tree
+    being retired; identity is read back from the live path while it matches
+    or, after retirement, from the retained backup through the caller's
+    resolver. An already-absent target leaves nothing to re-prove: the op is
+    inert and its execution treats absence as a no-op.
+    """
+    ownership = operation["ownership"]
+    reference = ownership["reference"]
+    target = Path(reference["path"])
+    live = snapshot(target)
+    resolved: Path | None = None
+    if live == reference["state"]:
+        resolved = target
+    elif resolve_original is not None:
+        resolved = Path(resolve_original(reference)["path"])
+    if resolved is None:
+        if live["type"] == "absent":
+            return
+        _fail(
+            "state-conflict",
+            "a skill retirement target changed after planning",
+        )
+    from sbtd_cleanup_targets import skill_identity_error
+
+    if skill_identity_error(resolved, ownership["name"]) is not None:
+        _fail(
+            "identity-conflict",
+            "the sealed Skill retirement no longer proves its legacy identity",
+        )
+
+
 def _validate_shared_operations(
-    payload: Mapping[str, Any], all_roots: list[str]
+    payload: Mapping[str, Any],
+    all_roots: list[str],
+    resolve_original: ResolveOriginal | None = None,
 ) -> None:
     pins = _ownership_pins()
     pause_asset = {"path": str(_PAUSE_ASSET), "state": snapshot(_PAUSE_ASSET)}
@@ -2323,11 +2370,43 @@ def _validate_shared_operations(
                 or ownership["name"] not in pins["skills"]
             ):
                 _fail("semantic-violation", "an unknown shared skill was added")
-            pinned_state = dict(pins["skills"][ownership["name"]])
-            if ownership["reference"] != {"path": str(target), "state": pinned_state}:
-                _fail("semantic-violation", "a skill retirement ownership was altered")
-            if operation["before_requirement"] != _state_requirement(pinned_state):
+            # Logical scope proof: the sealed shared roots, never the ambient
+            # environment, bind the retirement target. Re-resolving the live
+            # skills dir here would misjudge a sealed plan whenever the plan
+            # and this validation run under different environments, and the
+            # recorded original (or its retained backup) already pins the
+            # exact tree. A dedicated skills root has path authority itself;
+            # when the Skills root is absorbed into a broader sealed home
+            # root, the covering record must carry the sealed logical
+            # ``skills_root`` location. Without that metadata there is no
+            # exact binding left — a basename match under a broad home root
+            # would prove nothing — so validation fails closed instead of
+            # inferring a customary path.
+            covering_root = covering[0]
+            if covering_root["kind"] == "skills":
+                logical_root = Path(covering_root["path"])
+            else:
+                sealed_logical = covering_root.get("skills_root")
+                if sealed_logical is None:
+                    _fail(
+                        "semantic-violation",
+                        "a skill retirement target was altered",
+                    )
+                logical_root = Path(sealed_logical)
+            if target != logical_root / ownership["name"]:
+                _fail("semantic-violation", "a skill retirement target was altered")
+            requirement = operation["before_requirement"]
+            if (
+                requirement["kind"] != "state"
+                or requirement["state"]["type"] != "directory"
+            ):
                 _fail("semantic-violation", "a skill retirement before-state drifted")
+            if ownership["reference"] != {
+                "path": str(target),
+                "state": requirement["state"],
+            }:
+                _fail("semantic-violation", "a skill retirement ownership was altered")
+            _check_skill_identity(operation, resolve_original)
         elif (
             change.get("kind") == "copy-file"
             and operation["selector"] == _ROUTING_SELECTOR
@@ -2790,7 +2869,7 @@ def _plan_successor(
                 "state-conflict",
                 "a pending cleanup target drifted from the completed batch",
             )
-        return copy.deepcopy(operation)
+        return copy.deepcopy(dict(operation))
 
     carried_shared: list[dict[str, Any]] = []
     for operation in prev_payload["shared_operations"]:
@@ -3757,12 +3836,15 @@ def _shared_operations(
     roots: Sequence[Path],
     approved_targets: Collection[Path] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Pause the exact pinned v1.0.15 global routing, retire pinned old Skills.
+    """Pause the exact pinned v1.0.15 global routing, retire proven old Skills.
 
     Foreign global content is preserved untouched. Customized legacy routing
     blocks instead of silently remaining active; only byte-exact known ownership
-    authorizes a pause. Cleanup stays gated on later verification; no new wiring
-    is deployed here.
+    authorizes a pause. Retired Skills are recognized by identity (a regular
+    directory whose SKILL.md frontmatter names the retired Skill), never by a
+    version checksum, so every 1.0.x line qualifies while a same-named foreign
+    directory is preserved. Cleanup stays gated on later verification; no new
+    wiring is deployed here.
     """
     from onboard import (
         default_codex_home,
@@ -3824,13 +3906,15 @@ def _shared_operations(
     skills_root, _source = resolve_global_skills_dir()
     if _lineage_probe(skills_root) == "directory":
         _physical_root(skills_root)
+        from sbtd_cleanup_targets import skill_identity_error
+
         for name in sorted(pins["skills"]):
             target = skills_root / name
+            if skill_identity_error(target, name) is not None:
+                continue  # absent, drifted or foreign content is never retired
             state = snapshot(target)
-            if state["type"] == "absent":
+            if state["type"] != "directory":
                 continue
-            if state != pins["skills"][name]:
-                continue  # drifted or custom content is preserved, never retired
             operations.append(
                 _operation(
                     "cleanup",
@@ -3852,7 +3936,7 @@ def _shared_operations(
         {"kind": kind, "path": path, "dependent_projects": dependents}
         for path, kind in sorted(needed_roots.items())
     ]
-    shared_roots = [
+    kept_roots = [
         record
         for record in shared_roots
         if not any(
@@ -3861,7 +3945,22 @@ def _shared_operations(
             for other in shared_roots
         )
     ]
-    return shared_roots, operations
+    # A collapsed record leaves its exact binding on the surviving covering
+    # root: an absorbed Skills root seals its logical location there. Without
+    # it the retirement target would lose its exact sealed scope and later
+    # validation fails closed.
+    for record in shared_roots:
+        if record["kind"] != "skills" or record in kept_roots:
+            continue
+        covering = [
+            other
+            for other in kept_roots
+            if other["path"] != record["path"]
+            and Path(record["path"]).is_relative_to(Path(other["path"]))
+        ]
+        if len(covering) == 1:
+            covering[0]["skills_root"] = record["path"]
+    return kept_roots, operations
 
 
 # ---------------------------------------------------------------------------
@@ -4184,6 +4283,25 @@ def plan_migration(
                 }
             )
         shared_ops.append(operation)
+    # A replacement-declared home root can cover a skills root that stood
+    # alone before the merge; fold it into logical metadata exactly like the
+    # producer-side collapse so the retirement target keeps one unambiguous
+    # covering root with its sealed logical Skills location.
+    for record in list(shared_roots):
+        if record["kind"] != "skills":
+            continue
+        covering = [
+            other
+            for other in shared_roots
+            if other is not record
+            and other["path"] != record["path"]
+            and other["dependent_projects"] == record["dependent_projects"]
+            and Path(record["path"]).is_relative_to(Path(other["path"]))
+        ]
+        if len(covering) != 1:
+            continue
+        covering[0].setdefault("skills_root", record["path"])
+        shared_roots.remove(record)
     shared_ids = sorted(operation["operation_id"] for operation in shared_ops)
     for project in projects:
         project["shared_operation_ids"] = list(shared_ids)

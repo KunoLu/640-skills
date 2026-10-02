@@ -820,6 +820,9 @@
         "path": {
           "$ref": "#/$defs/absolute_path"
         },
+        "skills_root": {
+          "$ref": "#/$defs/absolute_path"
+        },
         "dependent_projects": {
           "type": "array",
           "items": {

@@ -50,7 +50,7 @@ from sbtd_migration_verify import verify_migration
 from sbtd_recovery import apply_recovery, plan_recovery
 
 from tests.test_sbtd_migration_apply import legacy_project
-from tests.test_sbtd_migration_cleanup import VerifiedMigration
+from tests.test_sbtd_migration_cleanup import VerifiedMigration, _fake_vendor_adapter
 from tests.test_sbtd_migration_verify import _tree_bytes
 
 _RUNTIME = {"node": "/fixture/node", "cli": "/fixture/cli.js", "python": "/fixture/python"}
@@ -380,7 +380,7 @@ class FollowupMigration:
         save_document(
             self.verification_path, self.verification, private_root=self.evidence
         )
-        with mock.patch.dict(os.environ, self.environment):
+        with mock.patch.dict(os.environ, self.environment), _fake_vendor_adapter():
             cleaned, code = cleanup_migration(
                 self.manifest_path,
                 self.apply_path,
@@ -472,7 +472,7 @@ class FollowupMigration:
         *, previous_receipt_path=None,
     ):
         verification = json.loads(verification_path.read_bytes())
-        with mock.patch.dict(os.environ, self.environment):
+        with mock.patch.dict(os.environ, self.environment), _fake_vendor_adapter():
             return cleanup_migration(
                 manifest_path,
                 apply_path,

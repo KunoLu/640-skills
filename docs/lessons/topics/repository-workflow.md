@@ -453,3 +453,31 @@
 - 预防：合并与分支清理必须分步执行：`gh pr merge` 后先用 `gh pr view --json state` / merge SHA / main 新 HEAD 证明 MERGED，再允许任何本地或远端分支删除；禁止把 merge、checkout、pull、branch -d、push --delete 串成一条 `&&` 链。分支被误删时先恢复同一 head 重推重开，不要新建替代 PR 或改写历史。
 
 <!-- lessons:pr:end -->
+
+<!-- lessons:kuno:start -->
+
+## LESSON-20261001-kuno-cleanup-scope: Digests And Vendor Commands Are Not Cleanup Authorization
+
+- 日期：2026-10-01
+- 标签：cleanup, migration, authorization, scope, vendor-cli, backups, partial-failure
+- 适用场景：确认 ID 绑定删除计划、调用第三方卸载器、删除全局 MCP/Skill 与项目缓存。
+- 严重级别：high
+- 来源：清理扩展的隔离回归与真实 vendor CLI smoke。
+- 问题：仅重算计划 hash 并校验 before-state，仍能把候选换成不在项目范围内的目录；正式卸载器也可能修改命令名没有表达的平台文件和配置。用 `.trellis` 的单一路径结果无法说明这些副作用是否发生。
+- 根因：把内容完整性误当成路径/身份授权；把官方命令误当成单目录删除操作；把非零退出误当成零写入。
+- 修复：执行前重新验证候选 kind、精确项目根/全局配置位置、Skill 内部身份及状态。对 vendor 命令先取得并核对完整 footprint，备份每个可变更资源，调用后测量真实 after-state，保留逐资源证据；部分失败不自动重放。解析及目标文件的可渲染性在计划阶段检查，而不是删完前几项后才发现格式错误。
+- 预防：确认 hash 只绑定用户看过的内容，不是权限来源；测试要覆盖重新计算 hash 后的越界目标、其他 server 参数中出现目标工具名、异常配置、vendor 修改非主目标后失败、缺回执/备份的重试。只使用隔离数据做破坏性回归；无权把这种测试对准真实 HOME。
+
+## LESSON-20261002-kuno-cleanup-target-set: Resolve Once Validate The Whole Set
+
+- 日期：2026-10-02
+- 标签：cleanup, scope, path-resolution, authorization, overlap, cli
+- 适用场景：组合多个来源的删除候选，或通过环境变量、profile、CLI 参数选择全局配置路径。
+- 严重级别：high
+- 来源：清理范围审核的隔离复现与修复后实际 CLI 验证。
+- 问题：单个候选身份都合法，父子候选仍会在执行时互相破坏前态；独立维护的探测路径表还会遗漏安装/运行时已支持的自定义目录。
+- 根因：只验证单项和完全相同的路径，未校验整个目标集合的包含关系；清理入口没有复用现有路径选择规则。
+- 修复：计划与执行前复用同一集合范围检查；检测复用已有有效配置解析器；显式参数选出的 Skills 根封存到计划，执行只消费该根，不由新的环境选择重定向。
+- 预防：用父子候选、参数与环境冲突、非默认配置根/profile、目录项拼写别名去重和未选目录保留场景验证；不同硬链接目录项必须分别处理，不能按文件 inode 合并，因为原子替换只改变一个目录项。实际 CLI 与安装器参数绑定都要演练，不能只证明底层函数接受参数。
+
+<!-- lessons:kuno:end -->

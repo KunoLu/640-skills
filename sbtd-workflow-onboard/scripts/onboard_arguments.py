@@ -24,9 +24,11 @@ from typing import Any, NoReturn
 __all__ = [
     "SingleValueAction",
     "WorkflowArgumentParser",
+    "add_cleanup_legacy_parser",
     "add_migration_parser",
     "add_recovery_parser",
     "parse_workflow_args",
+    "validate_cleanup_legacy_args",
     "validate_developer_name",
     "validate_migration_args",
     "validate_recovery_args",
@@ -139,6 +141,21 @@ _RECOVERY_VALUE_OPTIONS = (
     "confirm_recovery",
 )
 _RECOVERY_FLAG_OPTIONS = ("json",)
+
+_CLEANUP_LEGACY_PHASES = ("plan", "apply")
+_CLEANUP_LEGACY_RULES = {
+    "plan": (("projects_root", "backup_root"), ("global_skills_dir", "json")),
+    "apply": (("plan",), ("cleanup_receipt", "confirm_cleanup", "json")),
+}
+_CLEANUP_LEGACY_VALUE_OPTIONS = (
+    "projects_root",
+    "backup_root",
+    "global_skills_dir",
+    "plan",
+    "cleanup_receipt",
+    "confirm_cleanup",
+)
+_CLEANUP_LEGACY_FLAG_OPTIONS = ("json",)
 
 # init/init-projects migration context: the three deployment evidence inputs
 # are one group; --previous-deployment-evidence may only extend the group.
@@ -387,6 +404,65 @@ def add_recovery_parser(subparsers: Any) -> argparse.ArgumentParser:
     return recovery
 
 
+def add_cleanup_legacy_parser(subparsers: Any) -> argparse.ArgumentParser:
+    cleanup = subparsers.add_parser("cleanup-legacy", allow_abbrev=False)
+    cleanup.add_argument(
+        "--phase",
+        action=SingleValueAction,
+        required=True,
+        choices=_CLEANUP_LEGACY_PHASES,
+        help="Legacy cleanup phase: plan (read-only detection) or apply.",
+    )
+    cleanup.add_argument(
+        "--projects-root",
+        action=SingleValueAction,
+        help="Comma-separated absolute project root paths (plan only).",
+    )
+    cleanup.add_argument(
+        "--backup-root",
+        action=SingleValueAction,
+        help="Existing private backup directory outside the repositories (plan only).",
+    )
+    cleanup.add_argument(
+        "--global-skills-dir",
+        action=SingleValueAction,
+        help="Global Skills root override, sealed into the plan (plan only).",
+    )
+    cleanup.add_argument(
+        "--plan",
+        action=SingleValueAction,
+        help="Sealed cleanup plan file (apply only).",
+    )
+    cleanup.add_argument(
+        "--cleanup-receipt",
+        action=SingleValueAction,
+        help="Cumulative cleanup receipt for an explicit apply retry (apply only).",
+    )
+    cleanup.add_argument(
+        "--confirm-cleanup",
+        action=SingleValueAction,
+        help="plan_id confirmed this run; absence stays blocked in the handler.",
+    )
+    cleanup.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the single machine-readable envelope.",
+    )
+    return cleanup
+
+
+def validate_cleanup_legacy_args(
+    args: argparse.Namespace, *, parser: argparse.ArgumentParser
+) -> None:
+    _check_phase(
+        parser,
+        args,
+        _CLEANUP_LEGACY_VALUE_OPTIONS,
+        _CLEANUP_LEGACY_FLAG_OPTIONS,
+        _CLEANUP_LEGACY_RULES,
+    )
+
+
 def validate_recovery_args(
     args: argparse.Namespace, *, parser: argparse.ArgumentParser
 ) -> None:
@@ -435,6 +511,8 @@ def _build_parser() -> tuple[
     subs["migration"] = add_migration_parser(subparsers)
 
     subs["recovery"] = add_recovery_parser(subparsers)
+
+    subs["cleanup-legacy"] = add_cleanup_legacy_parser(subparsers)
 
     return parser, subs
 
@@ -489,7 +567,10 @@ def validate_migration_args(
             parser.error(
                 "--successor-manifest and --successor-apply-receipt must be supplied as a pair"
             )
-        if not args.successor_manifest.strip() or not args.successor_apply_receipt.strip():
+        if (
+            not args.successor_manifest.strip()
+            or not args.successor_apply_receipt.strip()
+        ):
             parser.error("successor input paths must be nonempty")
         if getattr(args, "publication_decisions", None):
             parser.error(
@@ -578,6 +659,8 @@ def parse_workflow_args(argv: Sequence[str]) -> argparse.Namespace:
             _RECOVERY_FLAG_OPTIONS,
             _RECOVERY_RULES,
         )
+    elif args.mode == "cleanup-legacy":
+        validate_cleanup_legacy_args(args, parser=subs["cleanup-legacy"])
     elif args.mode in ("init", "init-projects"):
         _check_migration_context(subs[args.mode], args)
     return args
