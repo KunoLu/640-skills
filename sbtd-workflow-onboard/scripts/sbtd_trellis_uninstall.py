@@ -826,6 +826,16 @@ def prepare_trellis_uninstall(
     )
 
 
+def _bound_resource_path(root: Path, resource: Mapping[str, Any]) -> Path:
+    target = _join_root(root, _checked_relative(resource.get("relative")))
+    if resource.get("path") != str(target):
+        _fail(
+            "invalid-document",
+            "a prepared resource path does not match its project-relative path",
+        )
+    return target
+
+
 def _checked_prepared(prepared: object) -> dict[str, Any]:
     if not isinstance(prepared, Mapping):
         _fail("invalid-argument", "the prepared uninstall document must be a mapping")
@@ -873,6 +883,7 @@ def _checked_prepared(prepared: object) -> dict[str, Any]:
         if relative in seen:
             _fail("invalid-document", "a prepared resource is repeated")
         seen.add(relative)
+        _bound_resource_path(Path(payload["root"]), resource)
         _checked_state(resource.get("before"))
         _checked_state(resource.get("expected_after"))
     if status in ("absent", "unavailable"):
@@ -898,17 +909,19 @@ def _private_subdirectory(parent: Path, name: str) -> Path:
     return require_private_directory(target)
 
 
-def _measure(resource: Mapping[str, Any], backup: dict[str, Any]) -> dict[str, Any]:
+def _measure(
+    resource: Mapping[str, Any], backup: dict[str, Any], path: Path
+) -> dict[str, Any]:
     record = {
         "resource_id": resource["resource_id"],
         "kind": resource["kind"],
-        "path": resource["path"],
+        "path": str(path),
         "relative": resource["relative"],
         "before": resource["before"],
         "backup_ref": backup,
     }
     try:
-        after = snapshot(Path(resource["path"]))
+        after = snapshot(path)
     except contracts.ContractError:
         record["after"] = None
         record["status"] = "unknown"
@@ -992,6 +1005,7 @@ def execute_trellis_uninstall(
         _fail("scope-conflict", "the prepared uninstall belongs to a different root")
     prepared_id = document["prepared_id"]
     resources: list[Mapping[str, Any]] = payload["resources"]
+    resource_paths = [_bound_resource_path(checked, resource) for resource in resources]
     outcome: dict[str, Any] = {
         "status": None,
         "root": str(checked),
@@ -1016,10 +1030,16 @@ def execute_trellis_uninstall(
     tool = _recheck_tool(payload["tool"])
     replay = _run_planner(checked, tool, runner, environment)
     replay_resources, replay_skipped = _resources(checked, replay)
-    if _scope_fingerprint(replay_resources, replay_skipped) != payload["scope"]:
+    replay_paths = [
+        _bound_resource_path(checked, resource) for resource in replay_resources
+    ]
+    if (
+        _scope_fingerprint(replay_resources, replay_skipped) != payload["scope"]
+        or replay_paths != resource_paths
+    ):
         _fail("scope-conflict", "the vendor plan changed after preparation")
-    for resource in resources:
-        if snapshot(Path(resource["path"])) != resource["before"]:
+    for resource, path in zip(resources, resource_paths):
+        if snapshot(path) != resource["before"]:
             _fail(
                 "state-conflict",
                 f"a prepared uninstall resource changed after preparation: "
@@ -1031,17 +1051,17 @@ def execute_trellis_uninstall(
     backup_dir = _private_subdirectory(vault, prepared_id)
     backups_dir = _private_subdirectory(backup_dir, "resources")
     backup_refs: list[dict[str, Any]] = []
-    for index, resource in enumerate(resources):
+    for index, (resource, path) in enumerate(zip(resources, resource_paths)):
         reference = backup_reference(
-            {"path": resource["path"], "state": resource["before"]},
+            {"path": str(path), "state": resource["before"]},
             backups_dir / f"{index:03d}",
             private_root=vault,
         )
         backup_refs.append(reference)
     if _checked_root(checked, environment) != checked:
         _fail("scope-conflict", "the project root changed during backup")
-    for resource in resources:
-        if snapshot(Path(resource["path"])) != resource["before"]:
+    for resource, path in zip(resources, resource_paths):
+        if snapshot(path) != resource["before"]:
             _fail(
                 "state-conflict",
                 "a prepared uninstall resource changed during backup",
@@ -1077,8 +1097,8 @@ def execute_trellis_uninstall(
         start_error = "the vendor uninstall could not complete"
     outcome["exit"] = exit_code
     results = [
-        _measure(resource, backup_refs[index])
-        for index, resource in enumerate(resources)
+        _measure(resource, backup_refs[index], path)
+        for index, (resource, path) in enumerate(zip(resources, resource_paths))
     ]
     outcome["results"] = results
     matched = sum(record["status"] in ("removed", "scrubbed") for record in results)
