@@ -9,26 +9,38 @@ implicitly.
 
 Exports (the complete public surface):
 
-- ``codex_mcp_candidate(before, bindings)`` — merge the whole binding batch
-  into Codex ``config.toml`` bytes, preserving foreign tables and comments
-  through tomlkit. Every bound repository root gets exactly one deterministic
-  server key ``sbtd-graft-<sha256(canonical root UTF-8)[:16]>`` whose
-  ``command`` is the absolute Python and whose ``args`` start with ``-E -s``
-  (ignore the caller's PYTHON* startup environment, disable the user-site
-  directory — no caller-controlled ``json.py``/``sitecustomize`` shadow or
-  PYTHONHOME redirect runs before the launcher's own guard imports, while
-  the launcher's script directory stays importable, unlike ``-I``) followed
-  by the absolute managed launcher and ``mcp --root <root> --node <node>
-  --entry <cli>``, and whose ``cwd`` is the bound root. The entry is never a
-  plain ``npx``/``graft``
-  command. ``env`` declares DO_NOT_TRACK/DNT explicitly; the managed launcher
-  still scrubs the rest of the inherited environment itself. The key hash
-  covers the root string verbatim, so callers must pass the canonical
-  absolute root. An existing entry under the same key is left untouched when
-  it is exactly the desired content; any difference blocks the whole batch
-  with ``ownership-conflict``, because a same-key entry that is not exactly
-  ours cannot be claimed. Foreign ``mcp_servers`` entries — including other
-  graft-looking ones — are never scanned, renamed or replaced.
+- ``codex_mcp_candidate(before, bindings, *, retire_legacy=False)`` — merge
+  the single global ``sbtd-graft`` server into Codex ``config.toml`` bytes,
+  preserving foreign tables and comments through tomlkit. Every call renders
+  exactly one entry keyed ``sbtd-graft`` whose ``command`` is the absolute
+  Python and whose ``args`` start with ``-E -s`` (ignore the caller's
+  PYTHON* startup environment, disable the user-site directory — no
+  caller-controlled ``json.py``/``sitecustomize`` shadow or PYTHONHOME
+  redirect runs before the launcher's own guard imports, while the
+  launcher's script directory stays importable, unlike ``-I``) followed by
+  the absolute managed launcher and ``mcp --node <node> --entry <cli>`` —
+  no ``--root`` and no ``cwd``: the process working directory alone selects
+  the connection's project for its whole lifetime. The entry is never a
+  plain ``npx``/``graft`` command. ``env`` declares DO_NOT_TRACK/DNT
+  explicitly; the managed launcher still scrubs the rest of the inherited
+  environment itself. ``bindings`` items carry the runtime keys ``node``,
+  ``cli``, ``python`` and ``launcher`` (absolute, caller-verified,
+  re-checked here); every binding in one call must name the same runtime,
+  because one global definition cannot carry two. ``root`` is optional and
+  never rendered: it only selects which retired fixed-root entries an
+  authorized switch may claim, so a rootless runtime mapping renders the
+  global definition with no project at all. An existing ``sbtd-graft``
+  entry is left untouched when it is exactly the desired content; any
+  difference blocks with ``ownership-conflict``. Retired fixed-root entries
+  (``sbtd-graft-<sha256(canonical root UTF-8)[:16]>`` in the exact former
+  argv/``cwd``/``env`` shape) conflict by default; ``retire_legacy=True``
+  deletes only entries whose hashed root is selected by a binding ``root``
+  and whose runtime is proven owned — equal to this batch's runtime, or to
+  that binding's explicit ``legacy`` runtime contract (exactly ``python``/
+  ``node``/``cli``/``launcher`` absolute paths) observed from prior
+  deployment evidence. Unknown ``sbtd-graft-*`` entries are never claimed
+  or deleted by prefix: anything not matching the complete retired shape,
+  or retired without authorization, fails closed.
 - ``codex_hooks_candidate(before, bindings, *, authorized)`` — merge managed
   Codex hook groups into ``hooks.json`` bytes. ``authorized=False`` returns
   the original bytes exactly and installs/removes nothing. When authorized,
@@ -63,9 +75,12 @@ All failures are sanitized ``ContractError`` failures (exit code 2) with fixed
 rule text — never rejected values or foreign content. Strict UTF-8, duplicate JSON
 keys, non-finite JSON numbers, malformed JSON/TOML, wrong section shapes and
 ownership conflicts all fail closed. ``bindings`` items are mappings with
-``root``, ``node``, ``cli``, ``python`` and ``launcher`` absolute path strings
-(caller-verified, re-checked here); extra keys are ignored. An empty batch
-returns the input bytes unchanged.
+``node``, ``cli``, ``python`` and ``launcher`` absolute path strings
+(caller-verified, re-checked here); hook bindings additionally require an
+explicit ``root``, while the MCP candidate accepts it as optional
+retirement selection. An optional ``legacy`` mapping pins an observed
+retired runtime contract for the binding's root; other extra keys are
+ignored. An empty batch returns the input bytes unchanged.
 
 Known limits, deliberately fail-closed: a foreign inline-table
 ``mcp_servers`` section is rejected instead of rewritten; owned hook argv
@@ -101,7 +116,8 @@ __all__ = [
 ]
 
 _KEY_PREFIX = "sbtd-graft-"
-_BINDING_KEYS = ("root", "node", "cli", "python", "launcher")
+_GLOBAL_KEY = _KEY_PREFIX[:-1]
+_RUNTIME_KEYS = ("node", "cli", "python", "launcher")
 _MCP_ENV = (("DO_NOT_TRACK", "1"), ("DNT", "1"))
 # Interpreter flags rendered between the pinned Python and the managed
 # launcher in every owned command: ``-E`` ignores the caller's PYTHON*
@@ -173,26 +189,67 @@ def _utf8(raw: bytes, code: str, message: str) -> str:
         _fail(code, message)
 
 
-def _resolved_bindings(bindings: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+def _absolute_paths(
+    mapping: Mapping[str, Any], keys: Collection[str]
+) -> dict[str, str]:
+    paths: dict[str, str] = {}
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, os.PathLike):
+            value = os.fspath(value)
+        if not isinstance(value, str) or not value or not os.path.isabs(value):
+            _fail(
+                "invalid-argument",
+                "binding paths must be non-empty absolute path strings",
+            )
+        paths[key] = value
+    return paths
+
+
+def _runtime_identity(paths: Mapping[str, str]) -> tuple[str, str, str, str]:
+    return (paths["python"], paths["launcher"], paths["node"], paths["cli"])
+
+
+def _resolved_bindings(
+    bindings: Sequence[Mapping[str, Any]], *, require_root: bool = True
+) -> list[dict[str, Any]]:
     if isinstance(bindings, (str, bytes, bytearray)) or not isinstance(
         bindings, Sequence
     ):
         _fail("invalid-argument", "bindings must be a sequence of mappings")
-    resolved: list[dict[str, str]] = []
+    resolved: list[dict[str, Any]] = []
     for binding in bindings:
         if not isinstance(binding, Mapping):
             _fail("invalid-argument", "each binding must be a mapping")
-        paths: dict[str, str] = {}
-        for key in _BINDING_KEYS:
-            value = binding.get(key)
-            if isinstance(value, os.PathLike):
-                value = os.fspath(value)
-            if not isinstance(value, str) or not value or not os.path.isabs(value):
+        paths: dict[str, Any] = _absolute_paths(binding, _RUNTIME_KEYS)
+        root = binding.get("root")
+        if root is None and require_root:
+            _fail(
+                "invalid-argument",
+                "hook bindings require an explicit absolute root",
+            )
+        if root is not None:
+            if isinstance(root, os.PathLike):
+                root = os.fspath(root)
+            if not isinstance(root, str) or not root or not os.path.isabs(root):
                 _fail(
                     "invalid-argument",
                     "binding paths must be non-empty absolute path strings",
                 )
-            paths[key] = value
+            paths["root"] = root
+        legacy = binding.get("legacy")
+        if legacy is not None:
+            if "root" not in paths:
+                _fail(
+                    "invalid-argument",
+                    "a legacy runtime contract requires the binding root",
+                )
+            if not isinstance(legacy, Mapping) or set(legacy) != set(_RUNTIME_KEYS):
+                _fail(
+                    "invalid-argument",
+                    "a legacy runtime contract names exactly the runtime paths",
+                )
+            paths["legacy"] = _absolute_paths(legacy, _RUNTIME_KEYS)
         resolved.append(paths)
     return resolved
 
@@ -227,31 +284,87 @@ def _server_key(root: str) -> str:
     return f"{_KEY_PREFIX}{digest[:16]}"
 
 
-def _desired_server(paths: dict[str, str]) -> dict[str, Any]:
+def _desired_global_server(paths: Mapping[str, str]) -> dict[str, Any]:
     return {
         "command": paths["python"],
         "args": [
             *_PYTHON_STARTUP_FLAGS,
             paths["launcher"],
             "mcp",
-            "--root",
-            paths["root"],
             "--node",
             paths["node"],
             "--entry",
             paths["cli"],
         ],
-        "cwd": paths["root"],
         "env": dict(_MCP_ENV),
     }
 
 
-def codex_mcp_candidate(before: bytes, bindings: Sequence[Mapping[str, Any]]) -> bytes:
-    """Full-config ``config.toml`` candidate covering the whole binding batch."""
+def _legacy_server_shape(entry: Any) -> tuple[str, tuple[str, str, str, str]] | None:
+    """Parse plain data as the exact retired fixed-root managed shape.
+
+    Returns ``(root, runtime identity)`` only when every byte matches what
+    the retired renderer provably produced; anything else is ``None`` and
+    can never be claimed or deleted by prefix.
+    """
+    if not isinstance(entry, Mapping) or set(entry) != {
+        "command",
+        "args",
+        "cwd",
+        "env",
+    }:
+        return None
+    command = entry["command"]
+    args = entry["args"]
+    if (
+        not _owned_interpreter(command)
+        or not isinstance(args, list)
+        or len(args) != 10
+        or any(not isinstance(token, str) for token in args)
+        or args[:2] != list(_PYTHON_STARTUP_FLAGS)
+        or not _owned_launcher_name(args[2])
+        or args[3] != "mcp"
+        or args[4::2] != ["--root", "--node", "--entry"]
+    ):
+        return None
+    root, node, cli = args[5], args[7], args[9]
+    if (
+        not os.path.isabs(node)
+        or not _owned_cli_path(cli)
+        or entry["cwd"] != root
+        or not isinstance(entry["env"], Mapping)
+        or dict(entry["env"]) != dict(_MCP_ENV)
+    ):
+        return None
+    return root, (command, args[2], node, cli)
+
+
+def codex_mcp_candidate(
+    before: bytes,
+    bindings: Sequence[Mapping[str, Any]],
+    *,
+    retire_legacy: bool = False,
+) -> bytes:
+    """Full-config ``config.toml`` candidate with the one global server."""
     raw = _raw_bytes(before)
-    resolved = _resolved_bindings(bindings)
+    resolved = _resolved_bindings(bindings, require_root=False)
     if not resolved:
         return raw
+    runtimes = {_runtime_identity(paths) for paths in resolved}
+    if len(runtimes) > 1:
+        _fail(
+            "invalid-argument",
+            "a global graft MCP definition carries exactly one runtime",
+        )
+    runtime = runtimes.pop()
+    selected = {paths["root"] for paths in resolved if "root" in paths}
+    contracts: dict[str, set[tuple[str, str, str, str]]] = {}
+    for paths in resolved:
+        if "root" in paths and "legacy" in paths:
+            contracts.setdefault(paths["root"], set()).add(
+                _runtime_identity(paths["legacy"])
+            )
+    desired = _desired_global_server(resolved[0])
     tomlkit, toml_error, inline_table, table_type = _toml_support()
     text = _utf8(raw, "invalid-utf8", "document is not strict UTF-8")
     try:
@@ -267,31 +380,51 @@ def codex_mcp_candidate(before: bytes, bindings: Sequence[Mapping[str, Any]]) ->
             "invalid-config",
             "the existing mcp_servers section is not a plain table",
         )
-    for paths in resolved:
-        key = _server_key(paths["root"])
-        desired = _desired_server(paths)
-        existing = servers.get(key)
-        if existing is None:
-            entry = tomlkit.table()
-            entry["command"] = desired["command"]
-            entry["args"] = desired["args"]
-            entry["cwd"] = desired["cwd"]
-            env = tomlkit.table()
-            for name, value in _MCP_ENV:
-                env[name] = value
-            entry["env"] = env
-            servers[key] = entry
+    existing_global = servers.get(_GLOBAL_KEY)
+    if existing_global is not None and (
+        not isinstance(existing_global, (table_type, inline_table))
+        or existing_global.unwrap() != desired
+    ):
+        _fail(
+            "ownership-conflict",
+            "an existing sbtd-graft MCP entry differs and cannot be claimed",
+        )
+    for key in list(servers):
+        if key == _GLOBAL_KEY or not key.startswith(_KEY_PREFIX):
             continue
-        if not isinstance(existing, (table_type, inline_table)):
+        entry = servers[key]
+        shape = (
+            _legacy_server_shape(entry.unwrap())
+            if isinstance(entry, (table_type, inline_table))
+            else None
+        )
+        if shape is None or _server_key(shape[0]) != key:
             _fail(
                 "ownership-conflict",
-                "an existing sbtd-graft MCP entry differs and cannot be claimed",
+                "an unknown sbtd-graft MCP entry cannot be claimed",
             )
-        if existing.unwrap() != desired:
+        root, old_runtime = shape
+        if not retire_legacy or root not in selected:
             _fail(
                 "ownership-conflict",
-                "an existing sbtd-graft MCP entry differs and cannot be claimed",
+                "a retired-shape graft MCP entry requires explicit "
+                "retirement authorization",
             )
+        if old_runtime != runtime and old_runtime not in contracts.get(root, ()):
+            _fail(
+                "ownership-conflict",
+                "a retired graft MCP runtime is not proven owned",
+            )
+        del servers[key]
+    if existing_global is None:
+        entry = tomlkit.table()
+        entry["command"] = desired["command"]
+        entry["args"] = desired["args"]
+        env = tomlkit.table()
+        for name, value in _MCP_ENV:
+            env[name] = value
+        entry["env"] = env
+        servers[_GLOBAL_KEY] = entry
     try:
         rendered = tomlkit.dumps(document)
     except (ValueError, RecursionError):
@@ -690,15 +823,50 @@ def _owned_server_shape(
     return command, args[2], node, cli
 
 
+def _owned_global_server_shape(
+    entry: Any, anchors: Collection[str]
+) -> tuple[str, str, str, str]:
+    """Fail closed unless one config.toml entry is exactly the global shape."""
+    if not isinstance(entry, Mapping) or set(entry) != {"command", "args", "env"}:
+        _fail("state-conflict", "a managed graft MCP entry was reshaped")
+    command = entry["command"]
+    args = entry["args"]
+    if (
+        not _owned_interpreter(command)
+        or not isinstance(args, list)
+        or len(args) != 8
+        or any(not isinstance(token, str) for token in args)
+        or args[:2] != list(_PYTHON_STARTUP_FLAGS)
+        or not _owned_launcher_name(args[2])
+        or args[3] != "mcp"
+        or args[4::2] != ["--node", "--entry"]
+    ):
+        _fail("state-conflict", "a managed graft MCP argv is not the owned shape")
+    node, cli = args[5], args[7]
+    if (
+        not os.path.isabs(node)
+        or not _owned_cli_path(cli)
+        or not _anchored(args[2], anchors)
+        or not isinstance(entry["env"], Mapping)
+        or dict(entry["env"]) != dict(_MCP_ENV)
+    ):
+        _fail("state-conflict", "a managed graft MCP entry was reshaped")
+    return command, args[2], node, cli
+
+
 def verify_owned_mcp_section(
     raw: bytes, roots: Sequence[str], anchors: Collection[str]
 ) -> None:
-    """Fail closed unless every batch root's graft server is intact.
+    """Fail closed unless the managed graft MCP section is intact.
 
-    Foreign ``sbtd-graft-*`` entries owned by other batches are exempt (the
-    render side preserves them); only this batch's hash-keyed entries are
-    validated. Every managed launcher must sit inside one of the chain's
-    directory deployment targets.
+    The current global definition — one rootless ``sbtd-graft`` entry — is
+    validated whenever present, with every managed launcher inside one of
+    the chain's directory deployment targets; retired hash-keyed entries
+    may not coexist with it. When it is absent, historical receipts sealed
+    against the retired fixed-root shape are validated exactly as before:
+    every batch root's hash-keyed entry must be intact, foreign
+    ``sbtd-graft-*`` entries owned by other batches stay exempt, and all
+    managed entries must agree on the runtime.
     """
     tomlkit, toml_error, _inline_table, _table_type = _toml_support()
     text = _utf8(_raw_bytes(raw), "state-conflict", "the Codex config is not UTF-8")
@@ -709,10 +877,18 @@ def verify_owned_mcp_section(
     servers = document.unwrap().get("mcp_servers")
     if not isinstance(servers, dict):
         _fail("state-conflict", "the managed graft MCP section is missing")
-    if _KEY_PREFIX[:-1] in servers:
-        _fail("state-conflict", "an undigested sbtd-graft MCP entry is ambiguous")
+    if _GLOBAL_KEY in servers:
+        _owned_global_server_shape(servers[_GLOBAL_KEY], anchors)
+        if any(key.startswith(_KEY_PREFIX) for key in servers):
+            _fail(
+                "state-conflict",
+                "managed graft MCP generations are mixed",
+            )
+        return
     batch = {str(root) for root in roots}
     expected = {_server_key(root) for root in batch}
+    if not expected:
+        _fail("state-conflict", "the managed graft MCP section is missing")
     if not expected.issubset(servers):
         _fail("state-conflict", "the managed graft MCP entries were changed")
     identities = {

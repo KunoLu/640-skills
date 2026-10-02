@@ -76,6 +76,12 @@ jobs:
           tests.test_install_sh_agent_cli_flow.BashInstallerAgentCliFlowTests
           tests.test_onboard_multi_projects
           tests.test_workflow_contracts
+          tests.test_sbtd_graft_entry
+          tests.test_sbtd_codex_wiring
+          tests.test_sbtd_omp_wiring
+          tests.test_onboard_omp_wiring
+          tests.test_global_mcp_installation
+          tests.test_sbtd_graft_isolation
 
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"
@@ -108,6 +114,11 @@ jobs:
 
       - name: Run the real pwsh installer subset when available
         run: python -B -m unittest -k powershell tests.test_install_sh_agent_cli_flow
+
+      - name: Verify native Windows session-root MCP boundaries
+        run: >-
+          python -B -m unittest
+          tests.test_sbtd_graft_entry.SessionRootResolutionTests
 
       - name: Reject native Windows migration junction traversal
         run: >-

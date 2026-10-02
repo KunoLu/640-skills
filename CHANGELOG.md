@@ -26,6 +26,9 @@
 
 ### 变更
 
+- Graft MCP 改为每个有效 Codex／OMP 配置域一条全局 `sbtd-graft`，不固定 cwd／项目 root；全局安装可不选项目，项目初始化只维护本地图与 stamp，后续追加不增加连接。launcher 按实际启动 cwd 锁定最近真实 Git 仓／worktree，支持子目录；无项目、HOME、未初始化嵌套仓、旧 stamp、越界数据和不可信 Git PATH 明确拒绝，保留 pin、DNT、环境隔离与每请求校验。
+- 旧固定项目 MCP 仅经 `--graft-retire-legacy` 明确切换；不同旧运行时须提供快照绑定的私有 `--graft-legacy-bindings` 契约。Bash／PowerShell 对等转发，保留原配置备份与无关 MCP；历史回执不改写，project-only 与历史密封部署拒绝混入本次退役。源码能力不代表 live 切换、TEMP 清理或备份销毁已执行。
+
 - 迁移 cleanup 的 `.trellis` 删除统一改为在项目根实际执行 vendor `tl uninstall`，由专用适配器驱动（新封存与已封存批次一致，前后态校验不变）：计划时封存完整 vendor 足迹（含可能改写的平台配置/AGENTS），执行前私有备份全部足迹；CLI 缺失或准备失败 blocked 不执行，不完整卸载 failed 并按实测逐项记录 after 状态——vendor 失败可能部分改写，保留私有备份与实测证据、调和后才可重试，不回退引擎直删，不用 `rm -rf`。
 - 退役 `trellis-workflow`/`trellis-channel` 全局目录的清理识别从固定版本校验值钉改为身份识别（非 symlink 目录 + 自身 `SKILL.md` frontmatter `name` 精确匹配），任意 1.0.x 内容漂移均可识别；symlink、SKILL.md 缺失/不可读或身份不匹配仍 blocked 保留。
 - 受管 Graft pin 从 `@nanonets/graft@0.18.0` 晋升到 `0.21.1`：registry gitHead `375a37e0b6a21d28f12fce2d220d692726bb0730`，tarball integrity 与官方发布包一致。守门启动器、DNT、stamp 精确版本和 fail-closed 不变。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。不改默认守门形态，不新增裸形态开关。
@@ -72,6 +75,7 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 主 PRD 补充 P3-05 验证环境与旧 Graft 接线退役任务，覆盖临时运行时、隔离 HOME 与受管旧 MCP 绑定；正式发布前完成运行依赖退役或必要保留交接，备份销毁仍归 P3-04。明确方案确认不等于替代已部署，不授权清空 TEMP 或整个宿主账户目录。
 - 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
 - `ENTRYPOINT.md` 当前 canonical Skill 改为 `writing-for-agents`。`writing-great-skills` 只保留为迁移别名，不再作为当前安装名。
 

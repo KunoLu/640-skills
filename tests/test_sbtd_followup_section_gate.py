@@ -41,9 +41,41 @@ def _bindings(root, package):
     }
 
 
-def _omp_server_name(root):
+def _legacy_server_key(root):
     digest = hashlib.sha256(str(root).encode("utf-8")).hexdigest()
     return f"sbtd-graft-{digest[:16]}"
+
+
+def _legacy_omp_record(root, package):
+    """The exact retired fixed-root OMP record, for historical receipts."""
+    bindings = _bindings(root, package)
+    return {
+        "type": "stdio",
+        "command": bindings["python"],
+        "args": [
+            "-E", "-s", bindings["launcher"], "mcp", "--root", bindings["root"],
+            "--node", bindings["node"], "--entry", bindings["cli"],
+        ],
+        "cwd": bindings["root"],
+        "env": {"DO_NOT_TRACK": "1", "DNT": "1"},
+    }
+
+
+def _legacy_codex_toml(root, package):
+    """The exact retired fixed-root config.toml entry, for old receipts."""
+    bindings = _bindings(root, package)
+    args = [
+        "-E", "-s", bindings["launcher"], "mcp", "--root", bindings["root"],
+        "--node", bindings["node"], "--entry", bindings["cli"],
+    ]
+    return (
+        f"[mcp_servers.{_legacy_server_key(root)}]\n"
+        f'command = "{bindings["python"]}"\n'
+        f"args = {json.dumps(args)}\n"
+        f'cwd = "{bindings["root"]}"\n'
+        f"[mcp_servers.{_legacy_server_key(root)}.env]\n"
+        'DO_NOT_TRACK = "1"\nDNT = "1"\n'
+    )
 
 
 def _seal(target, selector, roots, *, kind="configure-graft", owner="markdown",
@@ -124,19 +156,49 @@ class FollowupSectionGateTests(unittest.TestCase):
             outcome = _check(chain)
             self.assertEqual(outcome[str(target)], snapshot(target))
 
-    def test_toml_foreign_graft_entry_does_not_block(self):
+    def test_toml_global_receipt_without_projects_verifies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = self._package(base)
+            target = self._codex_config(base, [base / "project"], package)
+            chain = _seal(target, "graft-mcp", [], owner="toml",
+                          anchors=[package])
+            outcome = _check(chain)
+            self.assertIn(str(target), outcome)
+
+    def test_toml_historical_fixed_root_receipt_still_verifies(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = base / "project"
-            foreign = base / "foreign"
             package = self._package(base)
-            # A sibling batch's entry rides the same file; only this batch's
-            # roots are gated.
-            target = self._codex_config(base, [root, foreign], package)
+            target = base / "config.toml"
+            target.write_text(_legacy_codex_toml(root, package), encoding="utf-8")
             chain = _seal(target, "graft-mcp", [root], owner="toml",
                           anchors=[package])
             outcome = _check(chain)
             self.assertIn(str(target), outcome)
+            changed = target.read_bytes().replace(
+                b"/fixture/cli.js", b"/fixture/other.js"
+            )
+            target.write_bytes(changed)
+            self.assert_conflict(chain)
+
+    def test_toml_legacy_entry_beside_global_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "project"
+            package = self._package(base)
+            target = self._codex_config(base, [root], package)
+            chain = _seal(target, "graft-mcp", [root], owner="toml",
+                          anchors=[package])
+            # A retired fixed-root entry beside the global definition mixes
+            # managed generations; the gate cannot prove which is drift.
+            target.write_bytes(
+                target.read_bytes()
+                + b"\n"
+                + _legacy_codex_toml(root, package).encode()
+            )
+            self.assert_conflict(chain)
 
     def test_toml_managed_entry_tampering_still_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -175,17 +237,21 @@ class FollowupSectionGateTests(unittest.TestCase):
             target.unlink()
             self.assert_conflict(chain)
 
-    def test_toml_undigested_entry_blocks(self):
+    def test_toml_historical_receipt_with_global_entry_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = base / "project"
             package = self._package(base)
-            target = self._codex_config(base, [root], package)
+            target = base / "config.toml"
+            target.write_text(_legacy_codex_toml(root, package), encoding="utf-8")
             chain = _seal(target, "graft-mcp", [root], owner="toml",
                           anchors=[package])
+            # The global definition beside a historical fixed-root receipt
+            # is the same mixed-generation ambiguity, in the other order.
             target.write_bytes(
                 target.read_bytes()
-                + b'\n[mcp_servers.sbtd-graft]\ncommand = "/usr/bin/true"\n'
+                + b"\n"
+                + codex_mcp_candidate(b"", [_bindings(root, package)])
             )
             self.assert_conflict(chain)
 
@@ -260,9 +326,7 @@ class FollowupSectionGateTests(unittest.TestCase):
             target = base / "mcp.json"
             document = {
                 "mcpServers": {
-                    _omp_server_name(root): desired_omp_server(
-                        _bindings(root, base)
-                    )
+                    "sbtd-graft": desired_omp_server(_bindings(root, base))
                 }
             }
             target.write_text(json.dumps(document), encoding="utf-8")
@@ -272,13 +336,43 @@ class FollowupSectionGateTests(unittest.TestCase):
                 "command": "/usr/bin/true",
                 "args": [],
             }
-            # A sibling batch's digested entry is likewise exempt.
-            document["mcpServers"][_omp_server_name(base / "foreign")] = (
-                desired_omp_server(_bindings(base / "foreign", base))
-            )
             target.write_text(json.dumps(document), encoding="utf-8")
             outcome = _check(chain)
             self.assertIn(str(target), outcome)
+
+    def test_omp_global_receipt_without_projects_verifies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            target = base / "mcp.json"
+            document = {
+                "mcpServers": {
+                    "sbtd-graft": desired_omp_server(_bindings(base, base))
+                }
+            }
+            target.write_text(json.dumps(document), encoding="utf-8")
+            chain = _seal(target, "graft-omp-mcp", [], owner="json")
+            outcome = _check(chain)
+            self.assertIn(str(target), outcome)
+
+    def test_omp_historical_fixed_root_receipt_still_verifies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "project"
+            target = base / "mcp.json"
+            document = {
+                "mcpServers": {
+                    _legacy_server_key(root): _legacy_omp_record(root, base)
+                }
+            }
+            target.write_text(json.dumps(document), encoding="utf-8")
+            chain = _seal(target, "graft-omp-mcp", [root], owner="json")
+            outcome = _check(chain)
+            self.assertIn(str(target), outcome)
+            document["mcpServers"][_legacy_server_key(root)]["args"][-1] = (
+                "/fixture/other.js"
+            )
+            target.write_text(json.dumps(document), encoding="utf-8")
+            self.assert_conflict(chain)
 
     def test_omp_managed_entry_tampering_still_blocks(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -287,14 +381,12 @@ class FollowupSectionGateTests(unittest.TestCase):
             target = base / "mcp.json"
             document = {
                 "mcpServers": {
-                    _omp_server_name(root): desired_omp_server(
-                        _bindings(root, base)
-                    )
+                    "sbtd-graft": desired_omp_server(_bindings(root, base))
                 }
             }
             target.write_text(json.dumps(document), encoding="utf-8")
             chain = _seal(target, "graft-omp-mcp", [root], owner="json")
-            document["mcpServers"][_omp_server_name(root)]["args"][-1] = (
+            document["mcpServers"]["sbtd-graft"]["args"][-1] = (
                 "/fixture/other.js"
             )
             target.write_text(json.dumps(document), encoding="utf-8")
@@ -307,14 +399,12 @@ class FollowupSectionGateTests(unittest.TestCase):
             target = base / "mcp.json"
             document = {
                 "mcpServers": {
-                    _omp_server_name(root): desired_omp_server(
-                        _bindings(root, base)
-                    )
+                    "sbtd-graft": desired_omp_server(_bindings(root, base))
                 }
             }
             target.write_text(json.dumps(document), encoding="utf-8")
             chain = _seal(target, "graft-omp-mcp", [root], owner="json")
-            document["disabledServers"] = [_omp_server_name(root)]
+            document["disabledServers"] = ["sbtd-graft"]
             target.write_text(json.dumps(document), encoding="utf-8")
             self.assert_conflict(chain)
 
@@ -325,37 +415,33 @@ class FollowupSectionGateTests(unittest.TestCase):
             target = base / "mcp.json"
             document = {
                 "mcpServers": {
-                    _omp_server_name(root): desired_omp_server(
-                        _bindings(root, base)
-                    )
+                    "sbtd-graft": desired_omp_server(_bindings(root, base))
                 }
             }
             target.write_text(json.dumps(document), encoding="utf-8")
             chain = _seal(target, "graft-omp-mcp", [root], owner="json")
             # A non-str/bool enabled flag is gate drift, not a usage error.
-            document["mcpServers"][_omp_server_name(root)]["enabled"] = 1
+            document["mcpServers"]["sbtd-graft"]["enabled"] = 1
             target.write_text(json.dumps(document), encoding="utf-8")
             self.assert_conflict(chain)
 
-    def test_omp_undigested_entry_blocks(self):
+    def test_omp_mixed_generations_block(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = base / "project"
             target = base / "mcp.json"
             document = {
                 "mcpServers": {
-                    _omp_server_name(root): desired_omp_server(
-                        _bindings(root, base)
-                    )
+                    "sbtd-graft": desired_omp_server(_bindings(root, base))
                 }
             }
             target.write_text(json.dumps(document), encoding="utf-8")
             chain = _seal(target, "graft-omp-mcp", [root], owner="json")
-            document["mcpServers"]["sbtd-graft"] = {
-                "type": "stdio",
-                "command": "/usr/bin/true",
-                "args": [],
-            }
+            # A retired fixed-root entry beside the global definition mixes
+            # managed generations; the gate cannot prove which is drift.
+            document["mcpServers"][_legacy_server_key(root)] = (
+                _legacy_omp_record(root, base)
+            )
             target.write_text(json.dumps(document), encoding="utf-8")
             self.assert_conflict(chain)
 

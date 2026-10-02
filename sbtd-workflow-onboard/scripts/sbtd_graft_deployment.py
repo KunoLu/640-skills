@@ -217,16 +217,13 @@ def verified_runtime() -> dict[str, str]:
 def launch_bindings(
     roots: Sequence[Path], runtime: Mapping[str, str], *, package_root: Path
 ) -> list[dict[str, str]]:
-    return [
-        {
-            "root": str(root),
-            "node": runtime["node"],
-            "cli": runtime["cli"],
-            "python": runtime["python"],
-            "launcher": str(package_root / "scripts/sbtd_graft_entry.py"),
-        }
-        for root in roots
-    ]
+    binding = {
+        "node": runtime["node"],
+        "cli": runtime["cli"],
+        "python": runtime["python"],
+        "launcher": str(package_root / "scripts/sbtd_graft_entry.py"),
+    }
+    return [{**binding, "root": str(root)} for root in roots] or [binding]
 
 
 def _run_native(
@@ -309,9 +306,10 @@ def build_project_graph(root: Path, runtime: Mapping[str, str]) -> dict[str, Any
 def render_configuration(
     operation: Mapping[str, Any],
     before: bytes,
-    bindings: Sequence[Mapping[str, str]],
+    bindings: Sequence[Mapping[str, Any]],
     *,
     install_template: bool = False,
+    retire_legacy: bool = False,
 ) -> bytes:
     from sbtd_codex_wiring import (
         codex_hooks_candidate,
@@ -329,14 +327,14 @@ def render_configuration(
             before = read_file(PROJECT_AGENTS_TEMPLATE)
         return project_agents_candidate(before)
     if selector == "graft-mcp":
-        return codex_mcp_candidate(before, bindings)
+        return codex_mcp_candidate(before, bindings, retire_legacy=retire_legacy)
     if selector == "graft-omp-mcp":
         from onboard import user_home
         from sbtd_omp_sources import discover_omp_sources
         from sbtd_omp_wiring import analyze_omp_configuration, omp_mcp_candidate
 
         target = Path(operation["target"])
-        roots = [Path(binding["root"]) for binding in bindings]
+        roots = [Path(binding["root"]) for binding in bindings if "root" in binding]
         discovered = discover_omp_sources(roots, home=user_home(), environ=os.environ)
         if discovered["target"] != str(target):
             _fail("scope-conflict", "the OMP resource leaves the active profile")
@@ -345,6 +343,7 @@ def render_configuration(
             bindings,
             discovered["sources"],
             disabled_extensions=discovered["disabled_extensions"],
+            retire_legacy=retire_legacy,
         )
         return omp_mcp_candidate(before, analysis)
     if selector == "graft-hooks":
@@ -359,10 +358,11 @@ def execute_resource(
     root: Path,
     private_root: Path,
     backup_path: Path,
-    bindings: Sequence[Mapping[str, str]],
+    bindings: Sequence[Mapping[str, Any]],
     runtime: Mapping[str, str],
     launcher_state: Mapping[str, Any],
     install_template: bool = False,
+    retire_legacy: bool = False,
 ) -> dict[str, Any]:
     """One observed resource result; caller persists cumulative stage evidence."""
     result: dict[str, Any] = {
@@ -403,6 +403,7 @@ def execute_resource(
                 before_bytes,
                 bindings,
                 install_template=install_template,
+                retire_legacy=retire_legacy,
             )
         if operation["selector"] in {"graft-mcp", "graft-hooks", "graft-omp-mcp"}:
             installed_package = Path(bindings[0]["launcher"]).parents[1]
@@ -1589,6 +1590,19 @@ def run_migration_init(mode: str, args: Any) -> int:
 
     payload: dict[str, Any] = {"mode": mode, "deploymentEvidence": None}
     try:
+        if (
+            getattr(args, "graft_retire_legacy", False)
+            or getattr(args, "graft_legacy_bindings", None)
+        ):
+            _fail(
+                "scope-conflict",
+                "legacy MCP retirement requires a new explicit installation plan, not a sealed historical deployment",
+            )
+        if mode != "init-projects" and getattr(args, "no_mcp", False):
+            _fail(
+                "scope-conflict",
+                "sealed deployment cannot omit its declared host wiring",
+            )
         if not args.yes:
             _fail(
                 "confirmation-required",
@@ -1671,7 +1685,54 @@ def run_migration_init(mode: str, args: Any) -> int:
     return code
 
 
-def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
+def _legacy_binding_input(
+    value: str, roots: Sequence[Path]
+) -> tuple[dict[str, dict[str, str]], dict[str, Any]]:
+    """Read an explicit private old-runtime contract, never infer its approval."""
+    path = _canonical(Path(value).expanduser().absolute())
+    require_private_directory(path.parent)
+    state = snapshot(path)
+    document = contracts._decode_strict(read_file(path, state))
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema_version", "bindings"}
+        or type(document["schema_version"]) is not int
+        or document["schema_version"] != 1
+        or not isinstance(document["bindings"], list)
+        or not document["bindings"]
+    ):
+        _fail("invalid-argument", "legacy bindings require a version 1 private binding contract")
+    selected = {str(root) for root in roots}
+    approved: dict[str, dict[str, str]] = {}
+    for binding in document["bindings"]:
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"root", "python", "node", "cli", "launcher"}
+            or any(not isinstance(item, str) or not os.path.isabs(item) for item in binding.values())
+            or binding["root"] not in selected
+            or binding["root"] in approved
+        ):
+            _fail("scope-conflict", "legacy bindings must uniquely name selected roots and absolute runtime paths")
+        approved[binding["root"]] = {
+            key: item for key, item in binding.items() if key != "root"
+        }
+    return approved, {"path": str(path), "state": state}
+
+
+def legacy_bindings_unchanged(plan: Mapping[str, Any]) -> bool:
+    """Recheck approval at each mutation boundary, not just when planning."""
+    reference = plan.get("legacyBindingsInput")
+    if reference is None:
+        return True
+    try:
+        return snapshot(Path(reference["path"])) == reference["state"]
+    except (contracts.ContractError, OSError, RuntimeError):
+        return False
+
+
+def plan_normal_wiring(
+    mode: str, args: Any, *, installation_targets: Sequence[Path] = ()
+) -> dict[str, Any]:
     """Read-only installation feasibility for the selected host/template scope."""
     from onboard import (
         default_codex_home,
@@ -1684,19 +1745,44 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
 
     roots = resolve_project_roots(args)
     authorized = bool(getattr(args, "graft_hooks", False))
-    selected = getattr(args, "platform", None)
-    platform = "omp" if selected in {"omp", "oh-my-pi"} else selected
-    if platform not in {"codex", "omp"} or not roots:
-        if authorized:
-            return {
-                "status": "blocked",
-                "reason": "hook authorization requires an explicitly selected Codex project batch",
-            }
-        return {"status": "skipped", "reason": "Codex project wiring was not selected"}
-    if mode == "init-projects" and authorized:
+    retire_legacy = bool(getattr(args, "graft_retire_legacy", False))
+    legacy_input = getattr(args, "graft_legacy_bindings", None)
+    no_mcp = bool(getattr(args, "no_mcp", False))
+    if no_mcp and (authorized or retire_legacy or legacy_input):
         return {
             "status": "blocked",
-            "reason": "project-only setup cannot install global hooks",
+            "reason": "--no-mcp cannot authorize global hooks or legacy MCP retirement",
+        }
+    if legacy_input and not retire_legacy:
+        return {
+            "status": "blocked",
+            "reason": "legacy bindings require explicit --graft-retire-legacy authorization",
+        }
+    selected = getattr(args, "platform", None)
+    platform = "omp" if selected in {"omp", "oh-my-pi"} else selected
+    if platform not in {"codex", "omp"}:
+        if authorized or retire_legacy:
+            return {
+                "status": "blocked",
+                "reason": "Graft configuration changes require an explicitly selected supported host",
+            }
+        return {"status": "skipped", "reason": "Graft host wiring was not selected"}
+    if no_mcp and not roots:
+        return {"status": "skipped", "reason": "MCP configuration was explicitly disabled"}
+    if authorized and not roots:
+        return {
+            "status": "blocked",
+            "reason": "hook authorization requires an explicitly selected Codex project batch",
+        }
+    if retire_legacy and not roots:
+        return {
+            "status": "blocked",
+            "reason": "legacy retirement requires the exact formerly bound project roots",
+        }
+    if mode == "init-projects" and (authorized or retire_legacy):
+        return {
+            "status": "blocked",
+            "reason": "project-only setup cannot change global hooks or retire global MCP entries",
         }
     if platform != "codex" and authorized:
         return {
@@ -1708,7 +1794,7 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
         try:
             runtime = verified_runtime()
         except contracts.ContractError as error:
-            if error.code != "runtime-unavailable" or authorized:
+            if error.code != "runtime-unavailable" or authorized or retire_legacy:
                 raise
             return {
                 "status": "not-available",
@@ -1726,12 +1812,12 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
                     "the selected graph path has another owner type",
                 )
             records.append(
-                {"root": str(root), "platforms": ["codex"], "private_operations": []}
+                {"root": str(root), "platforms": [platform], "private_operations": []}
             )
         codex_home = None
         omp_home = None
         discovered = None
-        if mode != "init-projects":
+        if mode != "init-projects" and not no_mcp:
             if platform == "codex":
                 codex_home = default_codex_home()
             else:
@@ -1767,10 +1853,31 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
                 "runtime-unavailable",
                 "the retained installed Onboard differs; explicitly reset it before installing new wiring",
             )
-        bindings = launch_bindings(roots, runtime, package_root=launcher_package)
+        bindings: list[dict[str, Any]] = list(
+            launch_bindings(roots, runtime, package_root=launcher_package)
+        )
+        legacy_reference = None
+        if legacy_input:
+            legacy_bindings, legacy_reference = _legacy_binding_input(legacy_input, roots)
+            approval_path = Path(legacy_reference["path"])
+            # Full init/reset also replaces global Skills before wiring begins.
+            # Reject the complete selected skills root, including external targets.
+            targets = [scoped_skills_root(args), *installation_targets]
+            for target in targets:
+                target = _canonical(target)
+                if approval_path == target or target in approval_path.parents:
+                    _fail("scope-conflict", "legacy bindings must be outside every installation write target")
+            for binding in bindings:
+                if binding.get("root") in legacy_bindings:
+                    binding["legacy"] = legacy_bindings[binding["root"]]
         for operation in [
             item for group in private.values() for item in group
         ] + shared:
+            if legacy_reference is not None:
+                approval_path = Path(legacy_reference["path"])
+                target = Path(operation["target"])
+                if approval_path == target or target in approval_path.parents:
+                    _fail("scope-conflict", "legacy bindings must be outside deployment write targets")
             if operation["change"]["kind"] != "configure-graft":
                 continue
             state = snapshot(Path(operation["target"]))
@@ -1781,6 +1888,7 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
                 else read_file(Path(operation["target"]), state),
                 bindings,
                 install_template=not bool(getattr(args, "skip_project_agents", False)),
+                retire_legacy=retire_legacy,
             )
         moment = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
         backup_scopes = roots + ([host_home] if host_home is not None else [])
@@ -1793,6 +1901,8 @@ def plan_normal_wiring(mode: str, args: Any) -> dict[str, Any]:
             "deploymentPlatform": platform,
             "ompInputs": list(discovered["inputs"]) if discovered is not None else [],
             "hooksAuthorized": authorized,
+            "retireLegacy": retire_legacy,
+            "legacyBindingsInput": legacy_reference,
             "runtime": runtime,
             "privateOperations": private,
             "sharedOperations": shared,
@@ -1851,6 +1961,12 @@ def execute_normal_wiring(
                 for operation in plan["sharedOperations"]
             }
         )
+    if not legacy_bindings_unchanged(plan):
+        return {
+            "status": "blocked",
+            "reason": "the approved legacy bindings changed since the displayed plan",
+            "operationResults": [],
+        }, 2
     for reference in plan.get("ompInputs", []):
         if snapshot(Path(reference["path"])) != reference["state"]:
             return {
@@ -1870,6 +1986,12 @@ def execute_normal_wiring(
                 "operationResults": [],
             }, 2
     for operation in operations:
+        if not legacy_bindings_unchanged(plan):
+            return {
+                "status": "blocked",
+                "reason": "the approved legacy bindings changed before resource execution",
+                "operationResults": list(results.values()),
+            }, 2
         resource = operation["resource_id"]
         scope = scope_by_resource[resource]
         private = Path(plan["backupRoots"][str(scope)])
@@ -1885,6 +2007,7 @@ def execute_normal_wiring(
             bindings=plan["bindings"],
             runtime=plan["runtime"],
             launcher_state=plan["launcherPackageState"],
+            retire_legacy=bool(plan.get("retireLegacy", False)),
         )
         results[resource] = result
         if result["status"] != "succeeded":
@@ -1914,7 +2037,9 @@ def execute_normal_wiring(
         )
     status = (
         "success"
-        if all(project["status"] == "success" for project in projects)
+        if len(results) == len(operations)
+        and all(result["status"] == "succeeded" for result in results.values())
+        and all(project["status"] == "success" for project in projects)
         else "failed"
     )
     return {
@@ -1924,5 +2049,9 @@ def execute_normal_wiring(
         "hooks": "configured-needs-host-trust"
         if plan["hooksAuthorized"]
         else "not-installed",
-        "validationScope": "selected-files-and-native-graph; host-event-acceptance-separate",
+        "validationScope": (
+            "selected-files-and-native-graph; host-event-acceptance-separate"
+            if roots
+            else "shared-host-definition-only; project-query-not-verified"
+        ),
     }, 0 if status == "success" else 5
