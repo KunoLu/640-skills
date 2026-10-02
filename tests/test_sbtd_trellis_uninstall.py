@@ -973,6 +973,59 @@ class ExecuteTests(unittest.TestCase):
             self.assertTrue((fixture.project / ".trellis").is_dir())
             self.assertEqual(list(fixture.vault.iterdir()), [])
 
+    def test_execute_rejects_resealed_resource_path_substitution(self) -> None:
+        for location in ("inside-project", "outside-project"):
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as directory:
+                fixture = AdapterFixture(Path(directory))
+                prepared, plan = self._prepared(fixture)
+                parent = fixture.project if location == "inside-project" else fixture.base
+                decoy = parent / "decoy.md"
+                decoy.write_text(AGENTS_SCRUBBED)
+                resource = next(
+                    item for item in prepared["payload"]["resources"]
+                    if item["relative"] == "AGENTS.md"
+                )
+                resource["path"] = str(decoy)
+                resource["before"] = snapshot(decoy)
+                prepared["prepared_id"] = hashlib.sha256(
+                    contracts.canonical_json_bytes(prepared["payload"])
+                ).hexdigest()
+                before, _ = directory_snapshot(fixture.project)
+                runner = FakeRunner(plan, uninstall=_apply_plan(fixture.project, plan))
+
+                with self.assertRaises(contracts.ContractError) as caught:
+                    self._execute(fixture, prepared, runner)
+
+                self.assertEqual(caught.exception.code, "invalid-document")
+                self.assertEqual(runner.uninstall_calls(), [])
+                self.assertEqual(directory_snapshot(fixture.project)[0], before)
+                self.assertEqual(decoy.read_text(), AGENTS_SCRUBBED)
+                self.assertEqual(list(fixture.vault.iterdir()), [])
+
+    def test_execute_rejects_resealed_unsafe_relative_paths(self) -> None:
+        for relative in ("../AGENTS.md", "/AGENTS.md", "./AGENTS.md"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                fixture = AdapterFixture(Path(directory))
+                prepared, plan = self._prepared(fixture)
+                payload = prepared["payload"]
+                resource = payload["resources"][1]
+                resource["relative"] = relative
+                resource["path"] = str(fixture.project / relative)
+                payload["scope"]["resources"][1]["relative"] = relative
+                prepared["prepared_id"] = hashlib.sha256(
+                    contracts.canonical_json_bytes(payload)
+                ).hexdigest()
+                before, _ = directory_snapshot(fixture.project)
+                runner = FakeRunner(plan, uninstall=_apply_plan(fixture.project, plan))
+
+                with self.assertRaises(contracts.ContractError) as caught:
+                    self._execute(fixture, prepared, runner)
+
+                self.assertEqual(caught.exception.code, "plan-unsafe")
+                self.assertEqual(runner.uninstall_calls(), [])
+                self.assertEqual(directory_snapshot(fixture.project)[0], before)
+                self.assertEqual(list(fixture.vault.iterdir()), [])
+
     def test_execute_rejects_state_drift(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = AdapterFixture(Path(directory))

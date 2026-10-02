@@ -480,4 +480,16 @@
 - 修复：计划与执行前复用同一集合范围检查；检测复用已有有效配置解析器；显式参数选出的 Skills 根封存到计划，执行只消费该根，不由新的环境选择重定向。
 - 预防：用父子候选、参数与环境冲突、非默认配置根/profile、目录项拼写别名去重和未选目录保留场景验证；不同硬链接目录项必须分别处理，不能按文件 inode 合并，因为原子替换只改变一个目录项。实际 CLI 与安装器参数绑定都要演练，不能只证明底层函数接受参数。
 
+## LESSON-20261002-kuno-prepared-resource-binding: Bind Backups And Effects To The Same Resource
+
+- 日期：2026-10-02
+- 标签：cleanup, vendor, prepared-plan, path-binding, backups, integrity
+- 适用场景：计划同时保存绝对路径、根与相对路径，执行器和备份器采用不同路径表示。
+- 严重级别：high
+- 来源：P3 清理观察问题的公开执行接口 red/green 回归及真实 vendor 隔离 smoke。
+- 问题：重封计划把 AGENTS 的绝对路径换成诱饵并更新 before，vendor 仍修改根下真实文件；备份和结果测量却针对诱饵，可能报告成功而漏存真实原件。
+- 根因：摘要和 before 只能证明调用方给定对象的内容；仅比较 relative/kind/expected-after 的 footprint 不能证明绝对路径指向 vendor 实际操作对象。
+- 修复：严格验证 relative，并要求 path 精确等于受检 root/relative；fresh replay 对照绑定路径，之后复验、备份和测量只使用已绑定 Path。持久 fingerprint 形状不变，避免无关地使既有合法计划失效。
+- 预防：多种路径表示必须在信任边界合一，不能在备份和执行阶段各自选择指针。负例要同时重算摘要、更新诱饵 before 并保持预期后态，断言拒绝先于 vendor、实际文件与 vault 均未变；正例验证备份字节确实来自被修改的对象。
+
 <!-- lessons:kuno:end -->
