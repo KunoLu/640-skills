@@ -38,6 +38,8 @@
 
 ### 修复
 
+- 图目录守卫在 Windows 使用 `os.stat(..., follow_symlinks=False)` 获取真实硬链接数，避免 `DirEntry.stat()` 的 `st_nlink=0` 哨兵导致普通文件被误拒绝；单链接、symlink、reparse 与 special-file 安全限制不变，原生启动回归同时覆盖合法图和真实硬链接拒绝。
+
 - vendor 卸载拒绝将封存资源 `path` 替换为受检项目 `root/relative` 之外的诱饵；严格校验相对路径，并与 fresh planner 的实际路径核对，备份、前态复验和结果测量只消费已绑定路径。重算摘要不能绕过此门；正常旧计划的持久 scope fingerprint 形状及摘要算法不变。
 - 清理复核修复：实际 Skills 根即使被更宽的共享 HOME 根覆盖也保留独立逻辑绑定，退役目标始终必须是该 Skills 根的直接子目录，防止同名但未选中的用户目录进入清理。
 - vendor 卸载在备份结束、启动命令前重新验证计划中原先缺失的受管路径仍不存在；备份期间出现的文件保留并阻断卸载，不能让 vendor 在没有备份的情况下删除。

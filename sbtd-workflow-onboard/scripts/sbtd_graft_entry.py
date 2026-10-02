@@ -479,8 +479,12 @@ def _reject_unsafe_tree(graft_dir: Path) -> None:
         current = pending.pop()
         try:
             with os.scandir(current) as entries:
+                # DirEntry.stat() reports st_nlink=0 on Windows. Query the
+                # actual entry without following links; never relax the
+                # single-link ownership requirement to accept that sentinel.
                 listing = [
-                    (entry, entry.stat(follow_symlinks=False)) for entry in entries
+                    (entry, os.stat(entry.path, follow_symlinks=False))
+                    for entry in entries
                 ]
         except OSError:
             raise ContractError(

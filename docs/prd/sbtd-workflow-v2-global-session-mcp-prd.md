@@ -123,3 +123,9 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 [PR #108](https://github.com/KunoLu/640-skills/pull/108) 的首个 head `6373f9cf4a7a4e6c78edb4179455cf58ecd0cce3`，Windows job `110949024431`（run `37040462165`）在 `SessionRootResolutionTests` 报 7 个错误：全部来自测试 `read_reply` 对匿名管道调用 `select.select`，原生日志为 `WinError 10038`（not a socket）。安装器／工作流 50 项与 pwsh 15 项此前通过。这个失败不证明 Git 路径解析有误，不能据此放宽生产路径安全守卫。
 
 测试 helper 改为带超时的后台 `readline`，保留全部协议与拒绝断言；本地完整 launcher 43 项及 ruff 通过。生产模块不因该测试平台问题改变。新 head 必须重新取得 Linux／macOS／Windows 结果，旧 head 的绿色或失败记录只作为历史证据保留；最终 Checks 与本地任务记录共同提供完成证据。本 PR 合并前，主 PRD P1-25 保持 checking，不冒充已进入 main。
+
+后续诊断 head `24d715357b074568ae6ba01aa4b18530637bbd65` 的 Windows stderr 进一步确认普通图被 `tree-unsafe` 硬链接分支误拒绝。Python 3.12 的 [DirEntry.stat 契约](https://docs.python.org/3.12/library/os.html#os.DirEntry.stat) 明确 Windows `st_nlink=0`；生产守卫仅改为 `os.stat(entry.path, follow_symlinks=False)` 获取真实值，仍要求单链接并拒绝 symlink/reparse/special。新增真实硬链接启动拒绝场景，本地 launcher 44 项和 ruff 通过，独立代码／安全窄复审再次 GO。
+
+同一 head 的 macOS job 曾在嵌套根拒绝场景发生整树 checksum 漂移，旧日志没有逐文件差异，不能指认某个具体文件。隔离 fixture 的 Git trace 证明 commit 会启动 `maintenance run --auto --detach`；仅在测试 fixture 命令设置 `maintenance.auto=false`，排除独立后台 writer，保持原完整无写入断言，生产安装器逻辑不变。后续以新 head 原生 CI 验收。
+
+OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInput`，等待继承 stdin 的 EOF，尚未进入 MCP。仓外驱动已通过 argv 提供完整 prompt，却继承持久工具 stdin；改为 `stdin=DEVNULL` 后同一共享隔离 HOME 的并发 A/B 查询约 1.1s 通过。负载重叠不再作为根因结论；这次只修正验证驱动，没有为超时修改产品源码。全部失败、采样和复跑输出保留。

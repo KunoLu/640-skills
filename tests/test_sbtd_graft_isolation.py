@@ -38,8 +38,10 @@ def _git_env(home: Path) -> dict[str, str]:
 
 
 def _git(root: Path, *args: str, home: Path) -> None:
+    # Fixture commits must not leave detached maintenance writers racing the
+    # subsequent whole-tree no-mutation assertions.
     subprocess.run(
-        ["git", "-C", str(root), *args],
+        ["git", "-c", "maintenance.auto=false", "-C", str(root), *args],
         check=True,
         capture_output=True,
         env=_git_env(home),
@@ -50,7 +52,7 @@ def _git(root: Path, *args: str, home: Path) -> None:
 def _git_repo(path: Path, branch: str, home: Path) -> Path:
     path.mkdir(parents=True)
     subprocess.run(
-        ["git", "init", "-b", branch, str(path)],
+        ["git", "-c", "maintenance.auto=false", "init", "-b", branch, str(path)],
         check=True,
         capture_output=True,
         env=_git_env(home),

@@ -9,6 +9,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -591,12 +592,23 @@ def read_reply(proc, timeout=10.0):
             proc.kill()
             raise AssertionError("timed out waiting for a protocol line") from None
     if not line:
-        try:
-            code = proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
+        if proc.poll() is None:
             proc.kill()
-            code = proc.wait(timeout=5)
-        stderr = proc.stderr.read().decode("utf-8", errors="replace")
+        code = proc.wait(timeout=5)
+        # A failed launcher may leave a descendant holding stderr open.
+        # Read a separate unbuffered descriptor so timeout/close never waits
+        # on the test process's BufferedReader lock.
+        stderr_fd = os.dup(proc.stderr.fileno())
+        captured = []
+
+        def collect_error():
+            with os.fdopen(stderr_fd, "rb", buffering=0) as stream:
+                captured.append(stream.read().decode("utf-8", errors="replace"))
+
+        error_reader = threading.Thread(target=collect_error, daemon=True)
+        error_reader.start()
+        error_reader.join(timeout=2)
+        stderr = captured[0] if captured else "<stderr did not close within 2s>"
         raise AssertionError(
             f"the launcher closed its protocol stdout (exit {code}): {stderr}"
         )
@@ -1332,6 +1344,24 @@ class SessionRootResolutionTests(unittest.TestCase):
             self.assertEqual(consumed_requests(root), consumed_before)
             self.assertEqual(list(tmp.iterdir()), [])
 
+
+    def test_graph_hardlink_is_refused_without_changing_the_outside_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env, tmp = launch_env(base)
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            outside = base / "outside.md"
+            outside.write_bytes(b"user-owned content\n")
+            os.link(outside, root / "graft/linked.md")
+            completed = self.run_mcp(root, cli, env)
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertIn(b"hardlinked", completed.stderr)
+            self.assertEqual(outside.read_bytes(), b"user-owned content\n")
+            self.assertFalse((root / "consumed.log").exists())
+            self.assertEqual(list(tmp.iterdir()), [])
 
     def test_fixed_root_option_is_rejected_before_native_launch(self):
         with tempfile.TemporaryDirectory() as directory:

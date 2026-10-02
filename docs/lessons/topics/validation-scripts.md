@@ -618,5 +618,18 @@
 - 根因：把 targeted rerun 的结果扩张到整个测试套件，没有区分“失败项已修复”和“最终全量已验证”。
 - 修复：先分类旧失败，再在正常环境下运行完整 `tests/`；九行契约调整后得到 1240 passed、8 skipped，并将报告与旧失败记录并列保留。
 - 预防：最终交付必须分别报告 targeted rerun 与 final full rerun；只有同一修正环境下的最终全量通过，才能关闭 suite-level 验证缺口。
+
+## LESSON-20261003-kuno-windows-direntry-link-count: Validate Native Link Counts Without Weakening Ownership
+
+- 日期：2026-10-03
+- 标签：windows, filesystem, hardlink, stat, validation, subprocess
+- 适用场景：用目录项元数据拒绝硬链接，或把 POSIX 子进程测试扩展到原生 Windows。
+- 严重级别：high
+- 来源：全局会话 Graft MCP 的 Windows CI 原生日志与 Python 标准库契约。
+- 问题：测试先因 `select.select` 读取匿名管道而报 `WinError 10038`；修正读取并保全 stderr 后，才显露普通图文件被硬链接守卫误拒绝。
+- 根因：Windows 的 `DirEntry.stat()` 将 `st_nlink` 返回为 0，不能用于证明单链接文件；Windows `select()` 也只支持 socket，不能直接迁用 POSIX 管道测试。
+- 修复：使用 `os.stat(entry.path, follow_symlinks=False)` 获取真实链接数，继续要求 `st_nlink == 1`、拒绝 symlink/reparse/special；测试采用有超时的后台 `readline`，早退保全退出码与 stderr。
+- 预防：先让原生失败报告指出实际守卫，再修正元数据来源；不能把 0 放行为安全值或跳过原生平台测试。正向用普通真实文件，反向用实际硬链接并断言外部原件不变。依据：[Python DirEntry.stat](https://docs.python.org/3.12/library/os.html#os.DirEntry.stat)。
+
 <!-- lessons:kuno:end -->
 
