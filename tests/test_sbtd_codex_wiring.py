@@ -253,9 +253,9 @@ class CodexCandidateTests(unittest.TestCase):
         ]
         return (
             f"[mcp_servers.{key}]\n"
-            f'command = "{runtime["python"]}"\n'
+            f'command = {json.dumps(runtime["python"])}\n'
             f"args = {json.dumps(args)}\n"
-            f'cwd = "{root}"\n'
+            f'cwd = {json.dumps(root)}\n'
             f"[mcp_servers.{key}.env]\n"
             'DO_NOT_TRACK = "1"\nDNT = "1"\n'
         )
@@ -366,6 +366,90 @@ class CodexCandidateTests(unittest.TestCase):
                 codex_mcp_candidate(switched, [binding], retire_legacy=True),
                 switched,
             )
+
+    def test_discontiguous_tables_retire_only_owned_server_and_preserve_comments(self):
+        import tomlkit
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            binding = self.binding(Path(directory).resolve())
+            legacy_head, legacy_env = self._legacy_toml(
+                binding["root"], binding
+            ).split("\n[mcp_servers.", 1)
+            foreign = '# Foreign server\n[mcp_servers.foreign]\ncommand = "keep-me" # keep note\n'
+            features = '\n[features]\nshell_tool = false # user choice\n'
+            provider = '\n[model_providers.local]\nname = "local-provider" # retain provider\n'
+            second = '\n[mcp_servers.second]\ncommand = "another-tool"\n'
+            original = (
+                foreign + legacy_head + features
+                + "\n[mcp_servers." + legacy_env + provider + second
+            ).encode()
+
+            candidate = codex_mcp_candidate(
+                original, [binding], retire_legacy=True
+            )
+            parsed = tomlkit.parse(candidate.decode()).unwrap()
+            self.assertEqual(
+                set(parsed["mcp_servers"]), {"foreign", "second", "sbtd-graft"}
+            )
+            self.assertEqual(parsed["mcp_servers"]["foreign"], {"command": "keep-me"})
+            self.assertEqual(parsed["mcp_servers"]["second"], {"command": "another-tool"})
+            self.assertEqual(parsed["features"], {"shell_tool": False})
+            self.assertEqual(parsed["model_providers"]["local"], {"name": "local-provider"})
+            for block in (foreign, features, provider, second):
+                self.assertIn(block.encode(), candidate)
+            self.assertNotIn("cwd", parsed["mcp_servers"]["sbtd-graft"])
+            self.assertEqual(
+                codex_mcp_candidate(candidate, [binding], retire_legacy=True),
+                candidate,
+            )
+
+    def test_discontiguous_existing_global_server_is_byte_idempotent(self):
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            binding = self.binding(Path(directory).resolve())
+            args = [
+                "-E", "-s", binding["launcher"], "mcp",
+                "--node", binding["node"], "--entry", binding["cli"],
+            ]
+            original = (
+                "[mcp_servers.sbtd-graft]\n"
+                f'command = {json.dumps(binding["python"])}\n'
+                f"args = {json.dumps(args)}\n"
+                '\n[features]\nshell_tool = false # preserve\n'
+                '\n[mcp_servers.sbtd-graft.env]\nDNT = "1"\nDO_NOT_TRACK = "1"\n'
+                '\n[mcp_servers.foreign]\ncommand = "keep-me"\n'
+            ).encode()
+            self.assertEqual(codex_mcp_candidate(original, [binding]), original)
+
+    def test_discontiguous_tables_keep_retirement_ownership_checks(self):
+        from onboard_contracts import ContractError
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            binding = self.binding(base)
+            legacy_head, legacy_env = self._legacy_toml(
+                binding["root"], binding
+            ).split("\n[mcp_servers.", 1)
+            middle = '\n[features]\nshell_tool = false\n'
+            ending = "\n[mcp_servers." + legacy_env
+            original = (legacy_head + middle + ending).encode()
+            customized = (legacy_head + "\ntimeout = 60" + middle + ending).encode()
+            cases = (
+                ("no authorization", original, binding, False, "ownership-conflict"),
+                ("different root", original, {**binding, "root": str(base / "other")}, True, "ownership-conflict"),
+                ("different runtime", original, {**binding, "node": str(base / "other/node")}, True, "ownership-conflict"),
+                ("custom old entry", customized, binding, True, "ownership-conflict"),
+                ("inline root", b'mcp_servers = { foreign = { command = "keep-me" } }\n', binding, True, "invalid-config"),
+            )
+            for label, content, selected, authorized, expected in cases:
+                with self.subTest(label=label), self.assertRaises(ContractError) as failure:
+                    codex_mcp_candidate(
+                        content, [selected], retire_legacy=authorized
+                    )
+                self.assertEqual(failure.exception.code, expected)
 
     def test_authorized_retirement_of_an_observed_legacy_runtime_contract(self):
         import tomlkit

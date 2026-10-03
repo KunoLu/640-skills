@@ -141,7 +141,7 @@ OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInp
 | 合并与分支清理 | 用户另行授权管理员合并；PR #108 的 `mergedAt=2026-10-03T04:38:30Z`，merge `a2d0971c8fb10f91f4fb8c11be2d4432884762bf`；合并树与验证head一致，确认MERGED后删除本地及远程开发分支 | 未修改分支保护规则；不是tag发布或live接线切换 |
 | 独立sync | 用户显式输入sync；于 `2026-10-03T13:33:52.449160+08:00` 完成记录。16个目标与源一致：更新两份全局AGENTS及完整Onboard，其余13个bundled Skill已一致；5个required external Skills经stable安装器重装并校验 | 旧Onboard及六个legacy external目录原已不存在，完整迁移命令返回无需迁移；备份保留，不等于环境退役 |
 | live automation | 完整prompt已按仓库版本同步并读回一致；enabled仍为false，计划、时区、工作区模式／路径和其他配置不变 | 未启用或运行automation；未改MCP绑定 |
-| 尚未执行 | 已知OMP和Orca Codex旧固定根配置仍引用TEMP运行时；未实施新的live全局MCP替代或环境删除 | P3-05仍为planned，须按主PRD §11.9完成替代、host验收、连接退出及精准退役；备份销毁仍归P3-04 |
+| 尚未执行 | 已知OMP和Orca Codex旧固定根配置仍引用TEMP运行时；未实施新的live全局MCP替代或环境删除 | P3-05仅进入后续另获授权的前置准备（§10）；实际替代、host验收、连接退出和精准退役仍按主PRD §11.9另行确认，备份销毁仍归P3-04 |
 
 P1-25在主PRD的状态补记为done，仅关闭源码／验收／合并交付；该表完成时间记录本次台账补记时刻，不回填成先前实现、合并或sync时刻。旧失败、原生报告与同步备份均保留在既有私有证据目录；本节不发布真实HOME配置、账户标识或敏感原件。附带sync检查未识别可用Java，Maestro CLI未检查，不据此宣称完整本机工具栈就绪。
 
@@ -172,3 +172,16 @@ P1-25在主PRD的状态补记为done，仅关闭源码／验收／合并交付�
 | 不可解码的 Git 证明安全拒绝 | Given Git 探针返回无法解码的输出；When 启动 MCP；Then 返回受控 root-unsafe，不启动下游、不输出 traceback，也不修改项目或创建遗留临时 HOME | CLI 错误边界回归，不放宽路径相等、最近仓边界或原生 Git 选择规则 |
 
 Book Gate：DDD not-needed（无领域歧义，未完整 grill）；DDIA not-needed（不改图、stamp、配置或回执格式）；Legacy characterized（原生 Windows 已确认 cp1252／UTF-8 模式关闭时合法仓库被拒绝，POSIX 畸形输出已确认抛出未捕获解码异常）；Refactoring proceed（仅调整探针解码与错误边界，无新抽象）；Release Readiness ready，仅限源码／PR交付，真实场景、聚焦／三平台检查及独立复核均已完成，见 §7.3。既有 POSIX 解码约定未变，未以全局编码改写扩大修复范围；不把合并或sync作为live切换及环境退役证明。
+
+## 10. P3-05 第一阶段准备与 Codex 分散表兼容
+
+用户随后批准按推荐顺序执行第一阶段：备份并清除已证实失效的项目任务指针；通过独立代码流程修复 Codex TOML 兼容并更新已验证 Onboard；准备专用 Python／Graft；重新生成只读切换计划。两份 live MCP 配置、项目 AGENTS／图／ignore、现有会话及旧运行环境不在本阶段的修改／停止／删除范围内，第二阶段仍需用户确认最终清单。精确路径、前态和原件仅进入私有准备记录。
+
+| 场景 | Given / When / Then | 保留边界 |
+|---|---|---|
+| 分散的合法 MCP 表可生成切换候选 | Given MCP 表和受管 server 的子表分散在合法 TOML 的其他表之间；When 显式授权退役已证明归属的旧绑定；Then 仅将该旧绑定替换为一个通用定义，保留其他 server、模型／功能设置及注释，重复调用不再改变候选 | 公共 `codex_mcp_candidate` seam；合成配置与真实配置的只读内存渲染，不写 live |
+| 布局支持不扩大所有权 | Given 相同布局但未授权、所选根／旧运行时不匹配、受管项被用户扩展或顶层为受拒绝的 inline table；When 构造候选；Then 仍按原契约拒绝，不靠容器类型放宽退役范围 | 不新增 alias、旁路 writer 或整体配置重写 |
+
+DDIA confirmed：候选生成仍为单份输入到候选字节的纯转换，跨宿主切换不宣称原子事务，正式执行前重新核对快照；Legacy characterized：实际 Orca 只读预览与合成公共接口回归都在同一 `invalid-config` 容器门失败；Refactoring proceed：仅补齐合法 TOML 表类型，无新架构。未完整调用 grill-with-docs：技术原因与阶段授权已明确。此节不预写尚未完成的代码、安装或 live 验收结果。
+
+依赖边界：tomlkit最低支持版本为0.13.2；上游修复了旧版本删除分散表时遗留片段的问题。原生隔离依赖验证已观察到0.13.0残留旧条目、0.13.2正确删除。候选生成还会复核序列化结果，若仍含受管旧条目则拒绝返回，不能把半切换交给执行器；安装副本须按更新后的requirements准备依赖。
