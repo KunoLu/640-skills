@@ -269,6 +269,7 @@ def _encode(text: str) -> bytes:
 def _toml_support() -> tuple[Any, Any, Any, Any]:
     try:
         import tomlkit
+        from tomlkit.container import OutOfOrderTableProxy
         from tomlkit.exceptions import TOMLKitError
         from tomlkit.items import InlineTable, Table
     except ImportError:
@@ -276,7 +277,8 @@ def _toml_support() -> tuple[Any, Any, Any, Any]:
             "validator-unavailable",
             "install the declared TOML editing dependency before this operation",
         )
-    return tomlkit, TOMLKitError, InlineTable, Table
+    # Noncontiguous table fragments are normal TOML tables, not inline tables.
+    return tomlkit, TOMLKitError, InlineTable, Table | OutOfOrderTableProxy
 
 
 def _server_key(root: str) -> str:
@@ -429,6 +431,19 @@ def codex_mcp_candidate(
         rendered = tomlkit.dumps(document)
     except (ValueError, RecursionError):
         _fail("invalid-config", "the rendered TOML candidate cannot be serialized")
+    if retire_legacy:
+        # Reparse serialized bytes: older editors can drop a proxy key from
+        # their in-memory view while leaving one of its table fragments behind.
+        try:
+            remaining = tomlkit.parse(rendered).get("mcp_servers", {})
+        except (ValueError, RecursionError, toml_error):
+            _fail("invalid-config", "the rendered TOML candidate cannot be parsed")
+        if any(key.startswith(_KEY_PREFIX) for key in remaining):
+            _fail(
+                "validator-unavailable",
+                "the TOML editor did not fully retire the old entries; "
+                "install the declared TOML dependency",
+            )
     return _encode(rendered)
 
 

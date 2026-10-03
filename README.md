@@ -28,7 +28,7 @@ P1-23 增加 cleanup 闭合后的 OMP follow-up 批次：`migration --phase plan
 
 清理安全边界：vendor 卸载的封存资源路径必须与受检项目根及严格相对路径一致，并与 fresh planner 对照；重算摘要不授权路径替换。备份和结果测量只使用已绑定路径，已有合法计划的 scope 格式不变。
 
-发布前环境收口由主 PRD 的 [P3-05／§11.9](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md#119-验证环境与旧-graft-接线的退役) 跟踪：临时验证环境和旧 Graft 接线须在替代生效、无运行／恢复依赖后精准退役；必须保留的备份与证据交由 P3-04，不能因方案确认就删除在用 TEMP 运行时或整个 Orca HOME。该任务尚为 planned，不代表清理已执行。
+发布前环境收口由主 PRD 的 [P3-05／§11.9](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md#119-验证环境与旧-graft-接线的退役) 跟踪：临时验证环境和旧 Graft 接线须在替代生效、无运行／恢复依赖后精准退役；必须保留的备份与证据交由 P3-04，不能因方案确认就删除在用 TEMP 运行时或整个 Orca HOME。当前已进入用户授权的前置准备；live MCP 切换、会话停止及旧环境退役仍待最终清单确认，不代表清理已执行。
 
 恢复（recovery）成功只表示绑定范围内的受管数据／配置已按回执 reconcile，不承诺已退役 Trellis 运行时可执行或可写，也不调用、重装或恢复旧运行时；旧运行时 `runtime_readiness` 保持未验证，不得由恢复成功推断。同一运行时的部分回执重试只续作本批未完成写入；接受前驱运行时是另一条路径，另须签名的前驱—后继配对与该 manifest 的完整成功回执。live 回执只证明 live 实际状态；故障、部分重试和恢复续作行为须由独立隔离测试分别证明，二者互不替代，隔离演练也不证明 live 已迁移。部署接受前维护不自动结束，备份保留规则不变。
 
