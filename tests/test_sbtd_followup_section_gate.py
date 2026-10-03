@@ -354,6 +354,56 @@ class FollowupSectionGateTests(unittest.TestCase):
             outcome = _check(chain)
             self.assertIn(str(target), outcome)
 
+    def test_omp_global_receipt_rejects_relative_runtime_paths(self):
+        """R2: matching basenames cannot substitute for absolute ownership."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            target = base / "mcp.json"
+            binding = {
+                "python": str(base / "python"),
+                "node": str(base / "node"),
+                "cli": str(base / "runtime/cli.js"),
+                "launcher": str(base / "installed/scripts/sbtd_graft_entry.py"),
+            }
+            original = json.dumps({
+                "mcpServers": {"sbtd-graft": desired_omp_server(binding)}
+            }).encode()
+            target.write_bytes(original)
+            chain = _seal(target, "graft-omp-mcp", [], owner="json")
+            self.assertIn(str(target), _check(chain))
+            for index in (2, 7):
+                with self.subTest(argument=index):
+                    document = json.loads(original)
+                    args = document["mcpServers"]["sbtd-graft"]["args"]
+                    args[index] = Path(args[index]).name
+                    target.write_text(json.dumps(document), encoding="utf-8")
+                    before = target.read_bytes()
+                    self.assert_conflict(chain)
+                    self.assertEqual(target.read_bytes(), before)
+
+    def test_omp_historical_receipt_rejects_relative_runtime_paths(self):
+        """The same absolute-path invariant also protects historical readers."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "project"
+            target = base / "mcp.json"
+            name = _legacy_server_key(root)
+            original = json.dumps({
+                "mcpServers": {name: _legacy_omp_record(root, base)}
+            }).encode()
+            target.write_bytes(original)
+            chain = _seal(target, "graft-omp-mcp", [root], owner="json")
+            self.assertIn(str(target), _check(chain))
+            for index in (2, 9):
+                with self.subTest(argument=index):
+                    document = json.loads(original)
+                    args = document["mcpServers"][name]["args"]
+                    args[index] = Path(args[index]).name
+                    target.write_text(json.dumps(document), encoding="utf-8")
+                    before = target.read_bytes()
+                    self.assert_conflict(chain)
+                    self.assertEqual(target.read_bytes(), before)
+
     def test_omp_historical_fixed_root_receipt_still_verifies(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

@@ -38,11 +38,25 @@ SBTD v2 的完整问题台账现归档为 [docs/archive/sbtd-workflow-v2-finding
 
 Python Onboard 在显式 Codex／OMP 范围使用固定 Graft。完整 `init`／`reset` 在有效 host 配置域维护一条全局 `sbtd-graft` 定义，无固定 `cwd`／项目 `--root`，不选项目也可配置；运行时安装仍单独确认。OMP 使用 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并只读核对 OMP、Codex、Claude 继承源；等价连接复用，disabled、未知受管项、denylist、动态或漂移来源阻断。项目初始化只维护本地 fence／图／stamp，追加 B 不登记第二条 MCP。`--graft-hooks` 仍为 Codex 独立 opt-in；OMP 不写 hooks。密封迁移按原上下文执行，apply 不隐式部署。配置完成不代表真实 host 查询通过或 v2 已发布。
 
+根安装器在普通 `init`／`reset` 中使用 `--yes`（PowerShell 为 `-Yes`）且未指定项目参数时，仅做全局安装，不自动把 cwd 当作项目，也不安装项目 AGENTS／ignore／图。需要处理项目时必须显式提供 `--projects-root`／`-ProjectsRoot`；不带自动确认的交互流程仍询问 cwd，显式 `--init-projects`／`-InitProjects` 行为不变。
+
 每条 MCP 连接从启动进程的实际 cwd 定位并锁定最近真实 Git 仓／linked worktree，子目录可用；无项目、HOME、未初始化嵌套仓、缺图、旧 stamp 和越界数据明确拒绝，不回退 demo 或共同父目录。Git 探针忽略外部 `GIT_*` 重定向，并排除项目内／相对 PATH 中的 Git。批量与逐次追加使用同一本地初始化操作，父目录和未选 sibling 不写入；一个连接不会随 shell `cd` 换根。详见[全局会话 MCP 整改 PRD](docs/prd/sbtd-workflow-v2-global-session-mcp-prd.md)。
 
 P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
 
-旧 `sbtd-graft-<hash>` 不自动覆盖或删除。先用 `plan --graft-retire-legacy --projects-root <精确旧根>` 展示范围；旧运行时不同还需经核对的 `--graft-legacy-bindings <私有JSON>`，再在同一确认范围执行 `init --yes`。完整旧形状、根摘要、运行时身份与前态均须匹配；原件保留，无关 MCP 不动。两根安装器分别转发同名 Bash 参数和 PowerShell `-GraftRetireLegacy`／`-GraftLegacyBindings`。这不是清理 TEMP 或销毁备份授权；live 替代与连接退出仍由 P3-05 验收。
+旧 `sbtd-graft-<hash>` 不自动覆盖或删除。plan 与 init 是独立进程，参数不会自动继承；两个调用必须显式保留相同的 host 平台、精确旧根、`--graft-retire-legacy`，以及适用的旧运行时契约。以下以 OMP 跨运行时切换为例，先替换示例绝对路径并只读预览：
+
+```bash
+python sbtd-workflow-onboard/scripts/onboard.py plan --platform omp --projects-root "/abs/project" --graft-retire-legacy --graft-legacy-bindings "/abs/private/old-bindings.json" --json
+```
+
+审阅该计划并明确确认相同范围后，再执行：
+
+```bash
+python sbtd-workflow-onboard/scripts/onboard.py init --platform omp --projects-root "/abs/project" --graft-retire-legacy --graft-legacy-bindings "/abs/private/old-bindings.json" --yes --json
+```
+
+Codex 切换须将**两条命令**的 `--platform` 都改为 `codex`；同一运行时不需要额外旧绑定契约时，**两条命令**同时省略 `--graft-legacy-bindings` 及其值。完整旧形状、根摘要、运行时身份与前态仍须匹配；原件保留，无关 MCP 不动。两根安装器分别转发同名 Bash 参数和 PowerShell `-GraftRetireLegacy`／`-GraftLegacyBindings`。这不是清理 TEMP 或销毁备份授权；live 替代与连接退出仍由 P3-05 验收。
 
 
 当前工具主线（v2 分阶段交付中）：
@@ -212,12 +226,12 @@ bash install.sh
 pwsh -File .\install.ps1
 ```
 
-交互式流程先明确平台、模式、项目根及 AGENTS 选择；普通模式可以先只读探测 Agent CLI，但两安装器都会在任何全局安装、MCP 写入或 Playwright / React Bits 安装之前执行完整 `check-projects` 前置检查。该检查包含 SBTD 状态、scaffold 目标和已有保留数据保护，并传递 `--skip-project-agents` 的实际范围。通过后才进入既有安装流程；Python 写入时再次复验。project-only 仍不做全局操作。Bash 保留原始交互流，EOF 明确失败，不循环提示。
+交互式流程先明确平台、模式、项目根及 AGENTS 选择；普通模式可以先只读探测 Agent CLI。选有项目时，两安装器都会在任何全局安装、MCP 写入或 Playwright / React Bits 安装之前执行完整 `check-projects` 前置检查；global-only 不运行项目检查。该检查包含 SBTD 状态、scaffold 目标和已有保留数据保护，并传递 `--skip-project-agents` 的实际范围。通过后才进入既有安装流程；Python 写入时再次复验。project-only 仍不做全局操作。Bash 保留原始交互流，EOF 明确失败，不循环提示。
 
 
 这里的目标 Agent 平台只选择 CLI 与 MCP adapter，不会选择全局 AGENTS 目标。除非显式传入 `--global-agents-path` / `-GlobalAgentsPath`，正常模式始终把 Codex 全局规则模板写入解析后的 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`。若用户主目录已存在 `.omp` 目录（POSIX `~/.omp`，Windows `%USERPROFILE%\.omp`），`init` / `reset` 会把同一模板备份后覆盖写入 `~/.omp/agent/AGENTS.md`；不存在则跳过且不创建 `.omp`。`--global-agents-path` 只覆盖 Codex 目标，不取消 OMP 附加写入。project-only 不写任何全局 AGENTS。
 
-根安装器的 `--yes` / `-Yes` 确认 yes/no 提示并跳过最终执行确认，也会确认适用的可选安装提示；不猜测无默认值的选项，不授权迁移或绕过状态冲突。非交互普通模式需提供 `--platform`、`--projects-root`、`--action init|reset`；project-only 提供 `--platform`、`--init-projects`；React Bits 等适用输入仍需明确。
+根安装器的 `--yes` / `-Yes` 确认所选范围内的 yes/no 提示并跳过最终执行确认，也会确认适用的可选安装提示；不猜测无默认值的选项，不授权迁移或绕过状态冲突。非交互普通模式需提供 `--platform`、`--action init|reset` 和 `--yes`：省略 `--projects-root` 时为 global-only，选择项目时显式提供该参数；project-only 提供 `--platform`、`--init-projects`；React Bits 等适用输入仍需明确。
 
 ## 仓库定位
 

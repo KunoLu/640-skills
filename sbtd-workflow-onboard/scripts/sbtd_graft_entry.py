@@ -1253,10 +1253,12 @@ def _trusted_git(candidate: Path) -> str:
     entry or a project ``bin/`` directory (including one reaching the
     repository through a symlink alias) can never supply the executable.
     The found executable's own canonical path must likewise resolve
-    outside the candidate. Any entry that cannot be proven is skipped, and
-    no usable installation at all is a fixed failure — never a fallback to
-    an unqualified name.
+    outside the candidate. Windows accepts only an explicitly selected
+    native git.exe, never a PATHEXT batch wrapper or implicit cwd lookup.
+    Any entry that cannot be proven is skipped; no usable installation
+    fails closed rather than falling back to an unqualified name.
     """
+    executable_name = "git.exe" if os.name == "nt" else "git"
     for entry in os.environ.get("PATH", "").split(os.pathsep):
         if not entry or not os.path.isabs(entry):
             continue
@@ -1266,14 +1268,15 @@ def _trusted_git(candidate: Path) -> str:
             continue
         if graft_runtime._is_within(real_dir, candidate):
             continue
-        found = shutil.which("git", path=str(real_dir))
-        if found is None:
-            continue
         try:
-            resolved = Path(found).resolve(strict=True)
+            resolved = (real_dir / executable_name).resolve(strict=True)
+            if not resolved.is_file() or not os.access(resolved, os.X_OK):
+                continue
         except (OSError, RuntimeError):
             continue
         if graft_runtime._is_within(resolved, candidate):
+            continue
+        if os.name == "nt" and resolved.suffix.lower() != ".exe":
             continue
         return str(resolved)
     raise ContractError(

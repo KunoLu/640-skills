@@ -101,7 +101,9 @@ bash install.sh \
 
 `--projects-root` / `-ProjectsRoot` and `--init-projects` / `-InitProjects` are mutually exclusive. Every path must be absolute and must already be a directory. Duplicate paths are normalized and processed once.
 
-When normal onboarding omits the `projects-root` argument, explain that multiple absolute paths are supported with English commas, ask whether the current working directory is a target project, and otherwise prompt for the comma-separated list. A blank answer means global-only onboarding.
+When normal onboarding omits the `projects-root` argument and `--yes` / `-Yes` is absent, explain that multiple absolute paths are supported with English commas, ask whether the current working directory is a target project, and otherwise prompt for the comma-separated list. A blank answer means global-only onboarding.
+
+With `--yes` / `-Yes` and no `projects-root` argument, normal `init` / `reset` is global-only: do not ask the cwd question, infer a project from cwd, or install project AGENTS/ignore/graph assets. Explicit `projects-root` and project-only `init-projects` selections keep their existing meaning. The confirmation flag authorizes the selected scope; it does not create an omitted optional project selection.
 
 ## Target Agent CLI Gate
 

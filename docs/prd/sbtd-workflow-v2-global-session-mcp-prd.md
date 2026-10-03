@@ -129,3 +129,20 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 同一 head 的 macOS job 曾在嵌套根拒绝场景发生整树 checksum 漂移，旧日志没有逐文件差异，不能指认某个具体文件。隔离 fixture 的 Git trace 证明 commit 会启动 `maintenance run --auto --detach`；仅在测试 fixture 命令设置 `maintenance.auto=false`，排除独立后台 writer，保持原完整无写入断言，生产安装器逻辑不变。后续以新 head 原生 CI 验收。
 
 OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInput`，等待继承 stdin 的 EOF，尚未进入 MCP。仓外驱动已通过 argv 提供完整 prompt，却继承持久工具 stdin；改为 `stdin=DEVNULL` 后同一共享隔离 HOME 的并发 A/B 查询约 1.1s 通过。负载重叠不再作为根因结论；这次只修正验证驱动，没有为超时修改产品源码。全部失败、采样和复跑输出保留。
+
+## 8. PR #108 审查修正
+
+用户要求修复独立审查最终保留的五项问题，并在本轮追加明确确认 R6（`--yes` 省略项目参数时 global-only），本轮共六项。基线为 `a9305c57c5ac04b592a7d74194ff69ea1bfb344b`，沿用原分支与 strict，旧完成事件及旧 CI 证据保留。此次授权仍不包含合并、live HOME/MCP、sync、环境或备份删除。
+
+| ID | 问题与 Given / When / Then | 修正及回归边界 |
+|---|---|---|
+| R1 | Given Windows PATH 优先目录含 git.cmd/git.bat；When 启动 MCP 根证明；Then 不执行批处理，存在外部原生 Git 时可继续，否则安全拒绝 | 只选择明确目录中的 git.exe；原生 Windows marker 回归，保留 PATH／物理包含守卫 |
+| R2 | Given 受管 OMP 全局记录的 launcher 或 cli 被改为相对路径；When 校验 ownership/state；Then 返回 state-conflict 且不改变配置 | 全局记录两处路径均须绝对；同一 ownership 入口的历史 reader 保持相同约束，合法历史格式和退役识别不变；分别覆盖 launcher／cli 篡改和合法记录正向控制 |
+| R3 | Given Windows 项目 cwd 内有 git.exe，外部 PATH 也有真实 Git；When 启动 MCP；Then 忽略项目内文件，使用外部 Git，不误报缺失 | 使用完全限定的外部可执行文件候选，避免 which 隐式搜索 cwd；原生 Windows 正向启动回归 |
+| R4 | Given 用户按文档执行旧绑定切换；When 从 plan 转入 init；Then 两个命令显式保留同一平台、根、退役授权及适用的旧运行时契约 | README.md／README.html 给出成对完整命令；不暗示 plan 参数会跨进程继承 |
+| R5 | Given 版本自动化检查当前部署；When 评估 MCP；Then 仅要求每个有效 host 配置域一条全局定义，同时逐项目检查图 | 删除当前规则中的逐仓 MCP 判据；历史 PRD／回执不做全局词语替换 |
+| R6 | Given 普通根安装器带 --yes／-Yes 且没有项目参数；When 从项目 cwd 执行 init／reset；Then 只安装全局范围，不自动选择 cwd，不安装项目资产 | Bash／PowerShell 保持空项目集合；显式 roots 和 project-only 不变，不带自动确认仍保留交互选择；原生解释器回归 |
+
+本轮 Book Gate：DDD not-needed（无新领域歧义、未完整 grill，R6 默认行为由用户明确选择）；DDIA confirmed（配置证明及安装范围收紧，读写所有权和回滚规则不变）；Legacy characterized（OMP 当前／历史 reader 的相对路径消费者红测、Bash／PowerShell 省略 roots 的原生 red，以及 Windows 机制证据／原生回归）；Refactoring proceed（原有函数内的最小修正，不增加调度器、缓存或平台模拟层）；Release Readiness 在本轮新 head 验证与复审后重新判定，旧 head 的通过不自动继承。
+
+验证使用现有 Python／原生 CLI／三平台 CI。Windows 专属场景必须在 Windows runner 执行，不能把本机平台 skip 当通过；文案通过命令参数和行为核对，不新增源码措辞断言。本轮进度与最终证据记录在本地唯一 task 和 PR #108，不预写未执行结果。

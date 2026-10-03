@@ -1345,6 +1345,63 @@ class SessionRootResolutionTests(unittest.TestCase):
             self.assertEqual(list(tmp.iterdir()), [])
 
 
+    @unittest.skipUnless(os.name == "nt", "native Windows Git executable lookup")
+    def test_windows_cwd_git_does_not_shadow_the_external_executable(self):
+        """R3: Windows which must not insert the current project directory."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env, tmp = launch_env(base)
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            real_git = Path(shutil.which("git.exe")).resolve(strict=True)
+            local_git = root / "git.exe"
+            local_git.write_bytes(b"project-owned file, never executable\n")
+            env = {
+                key: value for key, value in env.items()
+                if key.upper() != "NODEFAULTCURRENTDIRECTORYINEXEPATH"
+            }
+            env["PATH"] = str(real_git.parent) + os.pathsep + env["PATH"]
+            self.serve_initialize(launch_mcp(root, cli, env), root)
+            self.assertEqual(local_git.read_bytes(), b"project-owned file, never executable\n")
+            self.assertEqual(list(tmp.iterdir()), [])
+
+    @unittest.skipUnless(os.name == "nt", "native Windows batch-file execution")
+    def test_windows_batch_git_is_never_executed(self):
+        """R1: batch shims are skipped, even with CMD metacharacters in cwd."""
+        real_git = Path(shutil.which("git.exe")).resolve(strict=True)
+        for extension in (".cmd", ".bat"):
+            for native_available in (True, False):
+                with (
+                    self.subTest(extension=extension, native_available=native_available),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    base = Path(directory).resolve()
+                    env, tmp = launch_env(base)
+                    root = project_fixture(base / "project&boundary")
+                    package = fake_runtime_fixture(base)
+                    cli = package / "dist/cli.js"
+                    cli.write_text(FAKE_MCP_SERVER)
+                    shims = base / "external-shims"
+                    shims.mkdir()
+                    marker = base / "batch-executed"
+                    (shims / ("git" + extension)).write_text(
+                        f'@echo off\necho executed>"{marker}"\nexit /b 7\n',
+                        encoding="utf-8",
+                    )
+                    env["PATHEXT"] = ".CMD;.BAT;.EXE"
+                    env["PATH"] = str(shims)
+                    if native_available:
+                        env["PATH"] += os.pathsep + str(real_git.parent)
+                        self.serve_initialize(launch_mcp(root, cli, env), root)
+                    else:
+                        completed = self.run_mcp(root, cli, env)
+                        self.assertEqual(completed.returncode, 2, completed.stderr)
+                        self.assertFalse((root / "consumed.log").exists())
+                    self.assertFalse(marker.exists(), "Git proof executed a batch shim")
+                    self.assertEqual(list(tmp.iterdir()), [])
+
     def test_graph_hardlink_is_refused_without_changing_the_outside_file(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

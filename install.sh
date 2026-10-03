@@ -42,7 +42,7 @@ Options:
       Defaults to ./sbtd-workflow-onboard.
   --projects-root <abs-path[,abs-path...]>
       One or more absolute project root paths separated by English commas.
-      When omitted, the installer asks interactively for the project roots.
+      When omitted, ask interactively unless --yes selects global-only setup.
   --init-projects <abs-path[,abs-path...]>
       Run only per-project checks and initialization for the listed absolute
       project roots. Global tools, Skills, Agent CLI, and MCP are not checked,
@@ -65,7 +65,9 @@ Options:
   --dry-run
       Print commands and MCP writes without making changes.
   --yes
-      Answer yes to every yes/no prompt.
+      Answer yes to yes/no prompts within the selected scope.
+      Normal init/reset without --projects-root is global-only; cwd is not
+      implicitly selected as a project.
   --no-color
       Disable ANSI color.
   migration --phase <phase> [migration options]
@@ -842,6 +844,8 @@ resolve_interactive_inputs() {
 
   if [[ -n "$PROJECTS_ROOT" ]]; then
     normalize_projects_root "$PROJECTS_ROOT"
+  elif [[ "$YES" -eq 1 ]]; then
+    SKIP_PROJECT_AGENTS=1
   else
     local cwd provided
     cwd="$(pwd -P)"

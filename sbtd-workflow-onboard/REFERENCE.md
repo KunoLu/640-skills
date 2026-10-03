@@ -84,8 +84,9 @@ Rules:
 4. Duplicates are processed once.
 5. `projects-root` and `init-projects` are mutually exclusive.
 6. `init-projects` cannot be combined with `action`.
-7. A normal root-installer run that receives neither argument asks whether the current working directory is a project root, explains that multiple absolute paths can be supplied with English commas, and otherwise prompts for the CSV list.
+7. Without `--yes` / `-Yes`, a normal root-installer run that receives neither project argument asks whether cwd is a project root, explains the absolute CSV format, and otherwise prompts for the list.
 8. A blank interactive project list means global-only onboarding.
+9. With `--yes` / `-Yes`, normal `init` / `reset` without `projects-root` is global-only. It does not ask the cwd question or implicitly select cwd; project AGENTS/ignore/graph assets are not installed. Explicit `projects-root` and `init-projects` selections are unchanged.
 
 When the Onboard Skill receives multiple repository paths without an explicit statement that they should be initialized, it must ask the user to confirm that those paths are the intended project initialization roots.
 
@@ -575,6 +576,8 @@ Full setup merges one stable global `sbtd-graft` server into the effective host 
 For `--platform omp`, full `init` writes only the active OMP user MCP target: default `~/.omp/agent/mcp.json`, named-profile `~/.omp/profiles/<profile>/agent/mcp.json`, or default-profile `PI_CODING_AGENT_DIR`. It never writes hooks. Plan/execute snapshots every static OMP, Codex and Claude source it reads; inherited equivalence follows OMP's complete connection identity, not just command shape. Existing enabled equivalent connections leave an absent OMP target absent, while disabled managed entries, conflicting definitions, server/extension denylists, dynamic overlays, agent `.env`, legacy settings and provider-setting project files block rather than infer an effective host state. Migration plan selects this producer with `--deployment-platform omp`; `init-projects` declares only project fence/graph resources and has no shared MCP operation.
 
 Batch setup rejects nested or mutually containing selected roots before any runtime probe. Each selected root receives its own graph; batch and incremental setup use the same project operation. At MCP startup the launcher finds the nearest real Git repository/worktree from the actual process cwd and locks it for the connection. Root proof uses an external Git executable from absolute PATH entries, excludes project-local/relative entries, scrubs inherited `GIT_*` and disables system/global Git config. HOME, no repository, malformed boundaries, uninitialized nested repositories, missing/old stamps and unsafe graphs fail closed without borrowing a demo, parent or sibling graph. Hook/analyze commands retain their explicit root; MCP rejects `--root`. Changing shell cwd does not retarget an existing connection.
+
+On Windows the root proof selects `git.exe` by its fully qualified path in each external PATH directory and requires its resolved target to remain an `.exe` outside the project. It never searches cwd implicitly or executes `.cmd`/`.bat` wrappers through PATHEXT. Global OMP ownership checks require absolute launcher and CLI paths as well as their managed filenames; matching basenames alone do not certify a record.
 
 Full installation binds MCP/hooks to the canonical installed Onboard Skill, not a disposable bootstrap checkout. That package is installed and verified before dependent host configuration is published. If ordinary init would retain a merely-valid but different older Skill shell, wiring preflight requests an explicitly confirmed reset instead of running the old guard. Project-only uses its existing executing package because it installs no global Skill.
 

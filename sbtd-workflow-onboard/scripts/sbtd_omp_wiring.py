@@ -630,10 +630,12 @@ def _verify_global_omp_entry(
         or len(args) != 8
         or any(not isinstance(token, str) for token in args)
         or args[:2] != list(_STARTUP_FLAGS)
+        or not os.path.isabs(args[2])
         or not _owned_launcher_name(args[2])
         or args[3] != "mcp"
         or args[4::2] != ["--node", "--entry"]
         or not os.path.isabs(args[5])
+        or not os.path.isabs(args[7])
         or Path(args[7]).name != "cli.js"
     ):
         _fail("state-conflict", "a managed graft OMP MCP argv was reshaped")
@@ -731,11 +733,13 @@ def verify_owned_omp_mcp_section(raw: bytes, roots: Sequence[str]) -> None:
             or len(args) != 10
             or any(not isinstance(token, str) for token in args)
             or args[:2] != list(_STARTUP_FLAGS)
+            or not os.path.isabs(args[2])
             or not _owned_launcher_name(args[2])
             or args[3] != "mcp"
             or args[4::2] != ["--root", "--node", "--entry"]
             or args[5] != root
             or not os.path.isabs(args[7])
+            or not os.path.isabs(args[9])
             or Path(args[9]).name != "cli.js"
         ):
             _fail("state-conflict", "a managed graft OMP MCP argv was reshaped")

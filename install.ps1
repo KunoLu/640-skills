@@ -59,7 +59,7 @@ Options:
       Defaults to ./sbtd-workflow-onboard.
   -ProjectsRoot <abs-path[,abs-path...]>
       One or more absolute project root paths separated by English commas.
-      When omitted, the installer asks interactively for the project roots.
+      When omitted, ask interactively unless -Yes selects global-only setup.
   -InitProjects <abs-path[,abs-path...]>
       Run only per-project checks and initialization. Global tools, Skills,
       Agent CLI, and MCP are not checked, installed, or configured.
@@ -81,7 +81,9 @@ Options:
   -DryRun
       Print commands and MCP writes without making changes.
   -Yes
-      Answer yes to every yes/no prompt.
+      Answer yes to yes/no prompts within the selected scope.
+      Normal init/reset without -ProjectsRoot is global-only; cwd is not
+      implicitly selected as a project.
   -NoColor
       Disable ANSI color.
   -Help
@@ -546,6 +548,9 @@ function Resolve-InteractiveInputs {
 
   if ($ProjectsRoot) {
     Resolve-ProjectsRoot $ProjectsRoot
+  }
+  elseif ($Yes) {
+    $script:SkipProjectAgents = $true
   }
   else {
     $cwd = (Get-Location).Path

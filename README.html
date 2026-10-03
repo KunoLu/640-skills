@@ -422,9 +422,15 @@
           <div>迁移未完成且会发布的任务时，旧 workspace journals／session JSON 必须绑定人工批准的 <code>HandoffStore</code> 摘要，写入受保护的 <code>docs/handoffs/</code>；缺少摘要、任务关联冲突或候选变化会阻断，不自动选择当前任务。显式 private-only 跳过整个旧任务目录时不生成投影、不要求 handoff；journal／session 本身获批 private-only 时留在私有层。部分跳过、未知或外部 session 指针仍阻断。Graft 遥测配置不存在时原子创建、已关闭时只读；已有配置需要修改时拒绝覆盖，须在外部独占处理后重试。审批与兼容性边界见上述 REFERENCE。</div>
           <div>SBTD v2 完整问题台账归档于 <a href="docs/archive/sbtd-workflow-v2-findings.md">docs/archive/sbtd-workflow-v2-findings.md</a>：保留 199 项问题及历史裁决，当前为 195 fixed、4 dismissed；原根目录 <code>findings.log</code> 已移除。CI 明确验证 Linux 大小写敏感路径及 Windows junction／私有目录 ACL。</div>
           <div>Python Onboard在显式Codex／OMP范围使用固定Graft：完整init/reset在有效host配置域维护一条全局<code>sbtd-graft</code>，不含固定cwd／项目root，不选项目也可配置；运行时安装仍单独确认。OMP使用active profile／<code>PI_CODING_AGENT_DIR</code>，只读核对继承源；等价连接复用，disabled、未知受管项、denylist、动态或漂移阻断。项目初始化只维护本地fence／图／stamp，追加项目不登记第二条MCP；hooks仍是Codex独立opt-in，OMP不写hooks。</div>
+          <div>根安装器普通init/reset带<code>--yes</code>（PowerShell为<code>-Yes</code>）但未指定项目参数时，只做全局安装，不自动选择cwd或安装项目AGENTS／ignore／图。处理项目须显式提供<code>--projects-root</code>／<code>-ProjectsRoot</code>；不带自动确认的交互流程仍询问cwd，显式project-only选择不变。</div>
           <div>每条MCP连接从实际启动cwd定位并锁定最近真实Git仓／linked worktree，支持子目录；无项目、HOME、未初始化嵌套仓、缺图、旧stamp及越界数据拒绝，不回退demo或共同父目录。Git探针忽略GIT_*重定向并排除项目内／相对PATH中的Git。批量与逐次追加采用同一本地初始化操作；一个连接不随shell cd换根。见<a href="docs/prd/sbtd-workflow-v2-global-session-mcp-prd.md">全局会话MCP整改PRD</a>。</div>
           <div>P1-04补救逐次验证MCP请求所读当前图，禁用native自动refresh；Python命令用<code>-E -s</code>阻止启动环境注入。失效仓根的全局hook忽略无关事件，旧未隔离受管命令按ownership冲突阻断，不与新命令并存冒充升级。</div>
-          <div>旧<code>sbtd-graft-&lt;hash&gt;</code>仅在<code>--graft-retire-legacy</code>明确授权、精确旧根与完整旧配置身份匹配时退役；不同旧运行时另需<code>--graft-legacy-bindings</code>私有契约。先plan展示范围，再确认init，保留原件与无关MCP。Bash与PowerShell入口均转发；不授权删除TEMP／备份。live替代与旧连接退出仍由P3-05验收。</div>
+          <div>旧<code>sbtd-graft-&lt;hash&gt;</code>仅在明确授权、精确旧根与完整旧配置身份匹配时退役。plan与init是独立进程，参数不自动继承。以下以OMP跨运行时切换为例，先替换示例绝对路径，只读预览：
+            <pre><code>python sbtd-workflow-onboard/scripts/onboard.py plan --platform omp --projects-root "/abs/project" --graft-retire-legacy --graft-legacy-bindings "/abs/private/old-bindings.json" --json</code></pre>
+            审阅并明确确认相同范围后，再执行：
+            <pre><code>python sbtd-workflow-onboard/scripts/onboard.py init --platform omp --projects-root "/abs/project" --graft-retire-legacy --graft-legacy-bindings "/abs/private/old-bindings.json" --yes --json</code></pre>
+            Codex切换须把两条命令的<code>--platform</code>都改为<code>codex</code>；同一运行时不需要旧绑定契约时，两条命令同时省略<code>--graft-legacy-bindings</code>及其值。保留原件与无关MCP，Bash与PowerShell入口均转发；不授权删除TEMP／备份。live替代与旧连接退出仍由P3-05验收。
+          </div>
         </div>
       </div>
     </section>
@@ -539,9 +545,9 @@ python "$SBTD_ONBOARD_DIR/scripts/onboard.py" reset \
   --yes</code></pre>
           <p>流程判定图：<a href="docs/assets/onboard-init-projects.md">--init-projects 只初始化项目</a>。</p>
           <h3>交互式安装脚本</h3>
-          <p>两安装器收集平台、模式、项目根和 AGENTS 选择后，在任何全局安装、MCP 写入或可选项目安装之前运行完整 <code>check-projects</code>。该检查包含状态、scaffold 与保护冲突，并尊重 <code>--skip-project-agents</code>；普通模式可先做只读 Agent 探测，实际安装须等前置检查通过。Python 写入时再次复验，project-only 不触碰全局配置。</p>
+          <p>两安装器收集平台、模式、项目根和 AGENTS 选择后，若选有项目，在任何全局安装、MCP 写入或可选项目安装之前运行完整 <code>check-projects</code>；global-only 不运行项目检查。该检查包含状态、scaffold 与保护冲突，并尊重 <code>--skip-project-agents</code>；普通模式可先做只读 Agent 探测，实际安装须等适用的前置检查通过。Python 写入时再次复验，project-only 不触碰全局配置。</p>
 
-          <p><code>--yes</code> / <code>-Yes</code> 确认 yes/no 提示及最终执行，不猜测无默认值选项、不授权迁移、不绕过状态冲突。普通非交互模式需提供 platform、projects-root、action；project-only 提供 platform、init-projects；React Bits 等适用输入仍须明确。</p>
+          <p><code>--yes</code> / <code>-Yes</code> 确认所选范围内的 yes/no 提示及最终执行，不猜测无默认值选项、不授权迁移、不绕过状态冲突。普通非交互模式需提供 platform、action 和 yes；省略 projects-root 时为 global-only，选择项目时显式提供 projects-root；project-only 提供 platform、init-projects；React Bits 等适用输入仍须明确。</p>
           <p>这里的目标 Agent 平台只选择 CLI 与 MCP adapter，不会选择全局 AGENTS 目标。除非显式传入 <code>--global-agents-path</code> / <code>-GlobalAgentsPath</code>，正常模式始终把 Codex 全局规则模板写入解析后的 <code>$CODEX_HOME/AGENTS.md</code> 或 <code>~/.codex/AGENTS.md</code>。若用户主目录已存在 <code>.omp</code> 目录（POSIX <code>~/.omp</code>，Windows <code>%USERPROFILE%\.omp</code>），<code>init</code> / <code>reset</code> 会把同一模板备份后覆盖写入 <code>~/.omp/agent/AGENTS.md</code>；不存在则跳过且不创建 <code>.omp</code>。<code>--global-agents-path</code> 只覆盖 Codex 目标，不取消 OMP 附加写入。project-only 不写任何全局 AGENTS。</p>
           </div>
         </div>
