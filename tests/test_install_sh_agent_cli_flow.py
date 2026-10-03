@@ -482,6 +482,32 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertNotIn("install-external-skills", modes)
         self.assertNotIn("install-graft", modes)
 
+    def test_yes_without_projects_root_is_global_only(self) -> None:
+        home = self.root / "global-only-home"
+        home.mkdir()
+        environment = {**self.env, "HOME": str(home), "USERPROFILE": str(home)}
+        completed = subprocess.run(
+            [
+                "/bin/bash", str(INSTALL_SH),
+                "--platform", "codex", "--source-root", str(SOURCE_ROOT),
+                "--yes", "--action", "init", "--no-mcp", "--no-color",
+            ],
+            cwd=self.project_root,
+            input="",
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("Project roots: <none>", completed.stdout)
+        self.assertIn("Project AGENTS: skip", completed.stdout)
+        self.assertNotIn("check-projects", self.modes())
+        self.assertTrue(all("--projects-root" not in args for args in self.invocation_args()))
+        self.assertFalse((self.project_root / "AGENTS.md").exists())
+        self.assertFalse((self.project_root / ".gitignore").exists())
+
     def test_yes_installs_optional_project_tool_without_prompting(self) -> None:
         (self.state_dir / "playwright-applicable").touch()
 
@@ -1078,6 +1104,32 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         )
         return runtime, environment
 
+    def test_powershell_yes_without_projects_root_is_global_only(self) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        completed = subprocess.run(
+            [
+                runtime, "-NoProfile", "-NonInteractive", "-File", str(INSTALL_PS1),
+                "-Platform", "codex", "-SourceRoot", str(SOURCE_ROOT),
+                "-Yes", "-Action", "init", "-NoMcp", "-NoColor",
+            ],
+            cwd=self.project_root,
+            input="",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=environment,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("Project roots: <none>", completed.stdout)
+        self.assertIn("Project AGENTS: skip", completed.stdout)
+        self.assertNotIn("check-projects", self.modes())
+        self.assertTrue(all("--projects-root" not in args for args in self.invocation_args()))
+        self.assertFalse((self.project_root / "AGENTS.md").exists())
+        self.assertFalse((self.project_root / ".gitignore").exists())
+
     def test_powershell_workflow_mode_forwards_without_onboarding(self) -> None:
         runtime, environment = self.powershell_fake_onboard_environment()
         completed = subprocess.run(
@@ -1349,21 +1401,6 @@ class PowerShellInstallerAgentCliFlowTests(unittest.TestCase):
             "Test-Path -LiteralPath $reactBitsSkill -PathType Leaf",
             source,
         )
-
-    def test_powershell_yes_confirms_yes_no_prompts(self) -> None:
-        source = INSTALL_PS1.read_text(encoding="utf-8")
-        usage = source.split("function Show-Usage", 1)[1].split(
-            "function Stop-WithMessage",
-            1,
-        )[0]
-        prompt = source.split("function Prompt-YesNo", 1)[1].split(
-            "function Select-One",
-            1,
-        )[0]
-
-        self.assertIn("Answer yes to every yes/no prompt.", usage)
-        self.assertIn("if ($Yes)", prompt)
-        self.assertIn("return $true", prompt)
 
 
 if __name__ == "__main__":

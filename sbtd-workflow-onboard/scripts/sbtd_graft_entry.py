@@ -49,12 +49,37 @@ So this launcher gates ALL native startup, then replaces the shim:
 CLI (internal; wired only by the managed wiring candidates, never by
 check/plan)::
 
-    sbtd_graft_entry.py mcp  --root ABS --node ABS --entry ABS
+    sbtd_graft_entry.py mcp --node ABS --entry ABS
     sbtd_graft_entry.py hook --root ABS --node ABS --entry ABS \
         --event {session-start,prompt,post-edit,stop}
     sbtd_graft_entry.py analyze --root ABS --node ABS --entry ABS \
         {ask,map,skeleton,callers,check,grep,blast} [VALUE]
 
+``mcp`` takes no root argument: the launch process's own working directory
+selects exactly one project for the connection's entire life, resolved by
+``_resolve_session_root`` to the nearest proven Git repository or linked
+worktree root. A legacy ``--root`` is an argparse usage error before any
+validation, temporary HOME creation or native launch. Resolution never
+descends into child directories (a neutral common parent of several
+projects finds no project), never adopts the user's home directory as a
+project or climbs above it, and never skips an unsafe ``.git`` marker
+(link, reparse point, special or ambiguous gitdir file) to borrow an outer
+repository's graph. A safe-shaped marker is only a candidate: the launch
+cwd's own Git context must then prove it is a real work tree whose real
+top-level is exactly the boundary directory, via the only Git invocation
+this launcher ever makes — a sanitized read-only ``git rev-parse
+--show-toplevel --is-inside-git-dir`` probe of the launch cwd with no
+inherited GIT_* variable, no system/global config and no prompting, run
+from an executable resolved only through canonical absolute PATH entries
+outside the boundary candidate (a relative or empty entry, a project bin/
+directory, or a symlink alias reaching into the repository can never
+supply it; no usable installation fails closed). An empty or hand-made
+marker, a gitdir pointer to a missing or unrelated gitdir, a cwd inside a
+bare repository's data tree or a checkout's ``.git`` administrative tree,
+a context Git itself refuses, or a top-level that resolves anywhere else
+all fail closed; no parent or outer graph is ever borrowed.
+``hook``/``analyze`` keep the explicit absolute ``--root``
+binding above.
 ``mcp`` spawns exactly ``[node, cli, "mcp", root]`` with cwd=root behind
 scoped stdio forwarding. ``analyze`` admits only the seven pinned read-only
 commands above, always selects the selected root as the positional project,
@@ -454,8 +479,12 @@ def _reject_unsafe_tree(graft_dir: Path) -> None:
         current = pending.pop()
         try:
             with os.scandir(current) as entries:
+                # DirEntry.stat() reports st_nlink=0 on Windows. Query the
+                # actual entry without following links; never relax the
+                # single-link ownership requirement to accept that sentinel.
                 listing = [
-                    (entry, entry.stat(follow_symlinks=False)) for entry in entries
+                    (entry, os.stat(entry.path, follow_symlinks=False))
+                    for entry in entries
                 ]
         except OSError:
             raise ContractError(
@@ -1155,6 +1184,231 @@ def _canonical_private_home(private_home: Path, root_real: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# MCP session root resolution (process cwd, fixed for the connection)
+# ---------------------------------------------------------------------------
+
+# Exact gitdir pointer grammar a linked worktree or absorbed submodule
+# ``.git`` file holds (worktree creation writes an absolute target, submodule
+# absorption may write a relative one); the launcher never dereferences the
+# target, the file is only a repository-boundary marker.
+_GITDIR_POINTER_RE = re.compile(r"gitdir: [^\r\n\x00]+")
+# A genuine pointer line is a few dozen bytes; anything larger is ambiguous.
+_GITFILE_MAX_BYTES = 4096
+
+
+def _git_boundary(marker: Path) -> bool:
+    """Whether ``marker`` is a safe-shaped ``.git`` boundary candidate.
+
+    Absence is the only False answer. A real directory or a nofollow regular
+    gitdir pointer file is a boundary CANDIDATE; links, reparse points,
+    special files and ambiguous pointer files fail closed, so an unsafe
+    marker is never silently skipped and its project attributed to an outer
+    repository. The shape alone never selects a project: the launch cwd's
+    Git context must additionally pass ``_prove_checkout_context``.
+    """
+    try:
+        info = marker.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        raise ContractError(
+            "root-unsafe", "a .git marker cannot be inspected safely"
+        ) from None
+    if stat.S_ISLNK(info.st_mode) or _is_reparse(info) or not (
+        stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)
+    ):
+        raise ContractError(
+            "root-unsafe", "a .git marker must be a real directory or file"
+        )
+    if stat.S_ISDIR(info.st_mode):
+        return True
+    if not 0 < info.st_size <= _GITFILE_MAX_BYTES:
+        raise ContractError(
+            "root-unsafe", "a .git worktree pointer file is not the pinned shape"
+        )
+    try:
+        text = _read_regular(
+            marker,
+            code="root-unsafe",
+            message="a .git worktree pointer file cannot be read safely",
+        ).decode("utf-8")
+    except UnicodeDecodeError:
+        raise ContractError(
+            "root-unsafe", "a .git worktree pointer file is not the pinned shape"
+        ) from None
+    body = text.removesuffix("\n")
+    if "\n" in body or _GITDIR_POINTER_RE.fullmatch(body) is None:
+        raise ContractError(
+            "root-unsafe", "a .git worktree pointer file is not the pinned shape"
+        )
+    return True
+
+
+def _trusted_git(candidate: Path) -> str:
+    """Canonical absolute Git executable from PATH, outside the candidate.
+
+    The checkout proof child must never run project-owned code: only PATH
+    entries that are absolute AND whose canonical directory lies outside
+    the boundary candidate are consulted, so a relative entry, an empty
+    entry or a project ``bin/`` directory (including one reaching the
+    repository through a symlink alias) can never supply the executable.
+    The found executable's own canonical path must likewise resolve
+    outside the candidate. Windows accepts only an explicitly selected
+    native git.exe, never a PATHEXT batch wrapper or implicit cwd lookup.
+    Any entry that cannot be proven is skipped; no usable installation
+    fails closed rather than falling back to an unqualified name.
+    """
+    executable_name = "git.exe" if os.name == "nt" else "git"
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry or not os.path.isabs(entry):
+            continue
+        try:
+            real_dir = Path(entry).resolve(strict=True)
+        except (OSError, RuntimeError):
+            continue
+        if graft_runtime._is_within(real_dir, candidate):
+            continue
+        try:
+            resolved = (real_dir / executable_name).resolve(strict=True)
+            if not resolved.is_file() or not os.access(resolved, os.X_OK):
+                continue
+        except (OSError, RuntimeError):
+            continue
+        if graft_runtime._is_within(resolved, candidate):
+            continue
+        if os.name == "nt" and resolved.suffix.lower() != ".exe":
+            continue
+        return str(resolved)
+    raise ContractError(
+        "root-unsafe", "no trusted Git installation is available for the checkout proof"
+    )
+
+
+def _prove_checkout_context(cwd: Path, boundary: Path) -> None:
+    """Prove the launch cwd's own Git context resolves to exactly boundary.
+
+    The marker walk alone proves nothing about the actual launch cwd: a cwd
+    inside a bare repository's data tree (``git init --bare`` has no
+    ``.git`` marker of its own) or inside a checkout's ``.git``
+    administrative tree would otherwise be silently attributed to the
+    nearest marked ancestor. This is the only Git invocation this launcher
+    ever makes — a read-only probe OF THE LAUNCH CWD with no inherited
+    GIT_* variable, no system or global config and no prompting, run from a
+    ``_trusted_git`` executable, so the environment, per-user overrides and
+    project-owned PATH entries can never steer it (a context Git itself
+    refuses, e.g. a bare repository or dubious ownership, fails closed).
+    The probe must report a real work tree whose top-level realpath-matches
+    the boundary exactly: an administrative-tree or bare cwd, an ambiguous
+    answer, or a top-level anywhere else all fail closed, and no parent or
+    outer graph is ever borrowed.
+    """
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GIT_")
+    }
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["LC_ALL"] = "C"
+    try:
+        completed = subprocess.run(
+            [
+                _trusted_git(boundary),
+                "--no-optional-locks",
+                "-C",
+                str(cwd),
+                "rev-parse",
+                "--show-toplevel",
+                "--is-inside-git-dir",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            # Git for Windows emits UTF-8 paths even when Python uses an ANSI locale.
+            encoding="utf-8" if os.name == "nt" else None,
+            timeout=15,
+            check=False,
+        )
+    except UnicodeDecodeError:
+        raise ContractError(
+            "root-unsafe", "the Git checkout proof returned undecodable output"
+        ) from None
+    except (OSError, subprocess.SubprocessError):
+        raise ContractError(
+            "root-unsafe", "the Git checkout proof could not be executed"
+        ) from None
+    if completed.returncode != 0:
+        raise ContractError(
+            "no-project",
+            "the process working directory is not inside a Git work tree",
+        )
+    lines = completed.stdout.split("\n")
+    if len(lines) != 3 or lines[2] != "":
+        raise ContractError(
+            "root-unsafe", "the Git checkout proof returned an ambiguous answer"
+        )
+    top, inside_git_dir = lines[0], lines[1]
+    if inside_git_dir != "false":
+        raise ContractError(
+            "no-project",
+            "the process working directory is Git administrative data, not a work tree",
+        )
+    if (
+        not top
+        or not os.path.isabs(top)
+        or os.path.normcase(os.path.realpath(top))
+        != os.path.normcase(str(boundary))
+    ):
+        raise ContractError(
+            "root-unsafe",
+            "the launch cwd's Git checkout does not match the nearest .git boundary",
+        )
+
+
+def _resolve_session_root() -> Path:
+    """Canonical nearest proven Git repository/worktree root for this cwd.
+
+    The global MCP definition carries no fixed root: the launch process's
+    own working directory selects exactly one project, and the connection
+    keeps that root for its entire life (a later host ``cd`` or protocol
+    roots change never re-targets it). The walk starts at the canonical cwd
+    and ascends to the NEAREST safe-shaped ``.git`` boundary, so a nested
+    repository always wins over any outer graph and a neutral common parent
+    of several projects finds no project at all. The user's home directory
+    is a hard stop: it is never a project and the walk never climbs above
+    it. A boundary candidate is adopted only after
+    ``_prove_checkout_context`` proves the LAUNCH CWD's own Git context is
+    a real work tree whose top-level is exactly that boundary — a cwd
+    inside a bare repository's data tree or a checkout's administrative
+    ``.git`` tree is refused, never attributed to the marked ancestor.
+    Marker shape, environment and config overrides can never substitute for
+    that proof.
+    """
+    try:
+        cwd = Path(os.getcwd()).resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise ContractError(
+            "root-unsafe",
+            "the process working directory cannot be resolved safely",
+        ) from None
+    home = Path(os.path.realpath(os.path.expanduser("~")))
+    for candidate in (cwd, *cwd.parents):
+        if candidate == home:
+            raise ContractError(
+                "no-project",
+                "the user home directory is not a selectable project root",
+            )
+        if _git_boundary(candidate / ".git"):
+            _prove_checkout_context(cwd, candidate)
+            return candidate
+    raise ContractError(
+        "no-project",
+        "the process working directory does not belong to a Git repository",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Native launch (CLI only)
 # ---------------------------------------------------------------------------
 
@@ -1524,7 +1778,7 @@ def _seed_update_cache(home: Path) -> None:
 
 def _run_mcp(args: argparse.Namespace) -> int:
     runtime = validate_runtime(Path(args.node), Path(args.entry))
-    project = validate_project(Path(args.root))
+    project = validate_project(_resolve_session_root())
     root_real = Path(project["root"])
     home = Path(tempfile.mkdtemp(prefix=_TEMP_HOME_PREFIX))
     try:
@@ -1648,8 +1902,11 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     modes = parser.add_subparsers(dest="mode", required=True)
-    mcp = modes.add_parser("mcp", help="serve the selected root's graph over MCP stdio")
-    _bind_launch_arguments(mcp)
+    mcp = modes.add_parser(
+        "mcp",
+        help="serve the cwd-selected project root's graph over MCP stdio",
+    )
+    _bind_runtime_arguments(mcp)
     hook = modes.add_parser(
         "hook", help="forward one Codex hook event to the pinned native module"
     )
@@ -1677,6 +1934,10 @@ def _parser() -> argparse.ArgumentParser:
 
 def _bind_launch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--root", required=True, help="absolute selected project root")
+    _bind_runtime_arguments(parser)
+
+
+def _bind_runtime_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--node",
         required=True,

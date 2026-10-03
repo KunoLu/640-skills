@@ -240,14 +240,36 @@ class CodexCandidateTests(unittest.TestCase):
         self.assertEqual(candidate.count(b"<!-- graft:start -->"), 1)
 
 
-    def test_mcp_bindings_keep_projects_distinct_and_preserve_foreign_toml(self):
+    @staticmethod
+    def _legacy_toml(root, runtime):
+        import hashlib
+
+        key = "sbtd-graft-" + hashlib.sha256(
+            root.encode("utf-8")
+        ).hexdigest()[:16]
+        args = [
+            "-E", "-s", runtime["launcher"], "mcp", "--root", root,
+            "--node", runtime["node"], "--entry", runtime["cli"],
+        ]
+        return (
+            f"[mcp_servers.{key}]\n"
+            f'command = "{runtime["python"]}"\n'
+            f"args = {json.dumps(args)}\n"
+            f'cwd = "{root}"\n'
+            f"[mcp_servers.{key}.env]\n"
+            'DO_NOT_TRACK = "1"\nDNT = "1"\n'
+        )
+
+    def test_mcp_global_definition_is_single_rootless_and_preserves_foreign_toml(
+        self,
+    ):
         import tomlkit
         from sbtd_codex_wiring import codex_mcp_candidate
 
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            first = self.binding(base / "one")
-            second = self.binding(base / "two")
+            first = self.binding(base)
+            second = {**first, "root": str(base / "two")}
             original = b'# User comment\nmodel = "user-model"\n\n[mcp_servers.foreign]\ncommand = "keep-me" # preserve this comment\n'
             candidate = codex_mcp_candidate(original, [first, second])
             parsed = tomlkit.parse(candidate.decode())
@@ -255,19 +277,172 @@ class CodexCandidateTests(unittest.TestCase):
             self.assertEqual(parsed["mcp_servers"]["foreign"]["command"], "keep-me")
             self.assertIn(b"# User comment", candidate)
             self.assertIn(b"# preserve this comment", candidate)
-            servers = [
-                value
-                for key, value in parsed["mcp_servers"].items()
-                if key != "foreign"
-            ]
+            self.assertEqual(set(parsed["mcp_servers"]), {"foreign", "sbtd-graft"})
+            server = parsed["mcp_servers"]["sbtd-graft"]
+            self.assertEqual(server["command"], first["python"])
             self.assertEqual(
-                {server["cwd"] for server in servers}, {first["root"], second["root"]}
+                list(server["args"]),
+                [
+                    "-E", "-s", first["launcher"], "mcp",
+                    "--node", first["node"], "--entry", first["cli"],
+                ],
             )
-            for server in servers:
-                self.assertEqual(
-                    server["args"][server["args"].index("--root") + 1], server["cwd"]
+            self.assertNotIn("cwd", server)
+            self.assertEqual(dict(server["env"]), {"DO_NOT_TRACK": "1", "DNT": "1"})
+            # One runtime carries every project: batch and later append
+            # render the identical single definition, never a second entry.
+            self.assertEqual(codex_mcp_candidate(original, [first]), candidate)
+            self.assertEqual(
+                codex_mcp_candidate(candidate, [first, second]), candidate
+            )
+
+    def test_mcp_rootless_binding_renders_and_empty_batch_keeps_bytes(self):
+        import tomlkit
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            binding = self.binding(base)
+            rootless = {
+                key: value for key, value in binding.items() if key != "root"
+            }
+            original = b'model = "user-model"\n'
+            rendered = codex_mcp_candidate(original, [rootless])
+            server = tomlkit.parse(rendered.decode())["mcp_servers"]["sbtd-graft"]
+            self.assertEqual(server["command"], binding["python"])
+            self.assertNotIn("cwd", server)
+            self.assertEqual(codex_mcp_candidate(original, []), original)
+
+    def test_mcp_batch_with_two_runtimes_is_refused(self):
+        from onboard_contracts import ContractError
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(
+                    b"", [self.binding(base / "one"), self.binding(base / "two")]
                 )
-            self.assertEqual(codex_mcp_candidate(candidate, [first, second]), candidate)
+            self.assertEqual(failure.exception.code, "invalid-argument")
+
+    def test_retired_fixed_root_entry_conflicts_without_explicit_retirement(self):
+        from onboard_contracts import ContractError
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            binding = self.binding(base)
+            document = self._legacy_toml(binding["root"], binding).encode()
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(document, [binding])
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # Authorization scoped to a different root cannot claim it.
+            other = {**binding, "root": str(base / "other")}
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(document, [other], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+
+    def test_authorized_retirement_replaces_only_the_proven_entry(self):
+        import tomlkit
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            binding = self.binding(base)
+            original = b'# User comment\n[mcp_servers.foreign]\ncommand = "keep-me" # note\n'
+            document = (
+                original.decode() + "\n" + self._legacy_toml(binding["root"], binding)
+            ).encode()
+            switched = codex_mcp_candidate(document, [binding], retire_legacy=True)
+            parsed = tomlkit.parse(switched.decode())
+            self.assertEqual(set(parsed["mcp_servers"]), {"foreign", "sbtd-graft"})
+            server = parsed["mcp_servers"]["sbtd-graft"]
+            self.assertEqual(server["command"], binding["python"])
+            self.assertNotIn("cwd", server)
+            self.assertIn(b"# User comment", switched)
+            self.assertIn(b"# note", switched)
+            self.assertEqual(parsed["mcp_servers"]["foreign"]["command"], "keep-me")
+            self.assertEqual(
+                codex_mcp_candidate(switched, [binding], retire_legacy=True),
+                switched,
+            )
+
+    def test_authorized_retirement_of_an_observed_legacy_runtime_contract(self):
+        import tomlkit
+        from onboard_contracts import ContractError
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            binding = self.binding(base)
+            legacy_runtime = {
+                "node": str(base / "old-runtime/node"),
+                "cli": str(base / "old-package/dist/cli.js"),
+                "python": str(base / "old-runtime/python"),
+                "launcher": str(base / "old-deploy/scripts/sbtd_graft_entry.py"),
+            }
+            document = self._legacy_toml(binding["root"], legacy_runtime).encode()
+            # A different old runtime without the observed contract: refused.
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(document, [binding], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # A contract that does not match the observed old runtime: refused.
+            wrong = {
+                **binding,
+                "legacy": {**legacy_runtime, "node": str(base / "other/node")},
+            }
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(document, [wrong], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # The exact observed contract retires the entry onto the new
+            # runtime: the TEMP-runtime migration path.
+            contracted = {**binding, "legacy": legacy_runtime}
+            switched = codex_mcp_candidate(
+                document, [contracted], retire_legacy=True
+            )
+            parsed = tomlkit.parse(switched.decode())
+            self.assertEqual(set(parsed["mcp_servers"]), {"sbtd-graft"})
+            server = parsed["mcp_servers"]["sbtd-graft"]
+            self.assertEqual(server["command"], binding["python"])
+            self.assertEqual(server["args"][2], binding["launcher"])
+
+    def test_unknown_graft_prefixed_entry_is_never_retired_by_prefix(self):
+        from onboard_contracts import ContractError
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            binding = self.binding(base)
+            unknown = b'[mcp_servers.sbtd-graft-mine]\ncommand = "/usr/bin/true"\n'
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(unknown, [binding], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # A hash-keyed entry missing the managed env is likewise unknown.
+            import hashlib
+
+            key = "sbtd-graft-" + hashlib.sha256(
+                binding["root"].encode("utf-8")
+            ).hexdigest()[:16]
+            reshaped = (
+                f"[mcp_servers.{key}]\n"
+                f'command = "{binding["python"]}"\n'
+                f'args = {json.dumps(["-E", "-s", binding["launcher"], "mcp", "--root", binding["root"], "--node", binding["node"], "--entry", binding["cli"]])}\n'
+                f'cwd = "{binding["root"]}"\n'
+            ).encode()
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(reshaped, [binding], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+
+    def test_existing_different_global_entry_is_not_overwritten(self):
+        from onboard_contracts import ContractError
+        from sbtd_codex_wiring import codex_mcp_candidate
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            document = codex_mcp_candidate(b"", [self.binding(base / "elsewhere")])
+            with self.assertRaises(ContractError) as failure:
+                codex_mcp_candidate(document, [self.binding(base)])
+            self.assertEqual(failure.exception.code, "ownership-conflict")
 
     def test_stop_hook_timeout_outlasts_the_native_sync_cap(self):
         from sbtd_codex_wiring import codex_hooks_candidate
@@ -466,7 +641,7 @@ class CodexCandidateTests(unittest.TestCase):
                 "import trusted_sibling\n"
                 "json.dump("
                 "{'argv': sys.argv[1:], 'json_module': json.__file__, "
-                "'sibling': trusted_sibling.MARKER}, "
+                "'cwd': os.getcwd(), 'sibling': trusted_sibling.MARKER}, "
                 "open(os.environ['P104_RESULT'], 'w'))\n",
                 encoding="utf-8",
             )
@@ -490,30 +665,34 @@ class CodexCandidateTests(unittest.TestCase):
                 self.assertNotIn(str(hostile), observed["json_module"])
                 self.assertEqual(list(sentinels.iterdir()), [])
                 return observed["argv"]
-
             # MCP form: exactly the argv Codex spawns — command plus args.
+            # The global definition carries no --root; the host-selected
+            # process cwd alone binds the connection's project.
+            (base / "project").mkdir()
             mcp_candidate = wiring.codex_mcp_candidate(b"", [binding])
             servers = tomlkit.parse(mcp_candidate.decode())["mcp_servers"]
             server = next(iter(servers.values()))
             completed = subprocess.run(
                 [server["command"], *server["args"]],
                 env=env,
+                cwd=binding["root"],
                 capture_output=True,
                 text=True,
+                check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(
                 observe(),
                 [
                     "mcp",
-                    "--root",
-                    binding["root"],
                     "--node",
                     binding["node"],
                     "--entry",
                     binding["cli"],
                 ],
             )
+            observed = json.loads(result.read_text(encoding="utf-8"))
+            self.assertEqual(Path(observed["cwd"]), Path(binding["root"]))
 
             # Hook form: Codex 0.154 runs hook commands through the host
             # shell ($SHELL -lc); /bin/sh -c exercises the same rendered
@@ -528,6 +707,7 @@ class CodexCandidateTests(unittest.TestCase):
                 env=env,
                 capture_output=True,
                 text=True,
+                check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(

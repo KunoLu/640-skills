@@ -28,17 +28,35 @@ P1-23 增加 cleanup 闭合后的 OMP follow-up 批次：`migration --phase plan
 
 清理安全边界：vendor 卸载的封存资源路径必须与受检项目根及严格相对路径一致，并与 fresh planner 对照；重算摘要不授权路径替换。备份和结果测量只使用已绑定路径，已有合法计划的 scope 格式不变。
 
+发布前环境收口由主 PRD 的 [P3-05／§11.9](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md#119-验证环境与旧-graft-接线的退役) 跟踪：临时验证环境和旧 Graft 接线须在替代生效、无运行／恢复依赖后精准退役；必须保留的备份与证据交由 P3-04，不能因方案确认就删除在用 TEMP 运行时或整个 Orca HOME。该任务尚为 planned，不代表清理已执行。
+
 恢复（recovery）成功只表示绑定范围内的受管数据／配置已按回执 reconcile，不承诺已退役 Trellis 运行时可执行或可写，也不调用、重装或恢复旧运行时；旧运行时 `runtime_readiness` 保持未验证，不得由恢复成功推断。同一运行时的部分回执重试只续作本批未完成写入；接受前驱运行时是另一条路径，另须签名的前驱—后继配对与该 manifest 的完整成功回执。live 回执只证明 live 实际状态；故障、部分重试和恢复续作行为须由独立隔离测试分别证明，二者互不替代，隔离演练也不证明 live 已迁移。部署接受前维护不自动结束，备份保留规则不变。
 
 迁移未完成且会发布的任务时，旧 workspace journals／session JSON 必须绑定人工批准的 `HandoffStore` 摘要，写入受保护的 `docs/handoffs/`；缺少摘要、任务关联冲突或候选变化会阻断，不自动选择当前任务。显式 private-only 跳过整个旧任务目录时不生成投影、不要求 handoff；journal／session 本身获批 private-only 时留在私有层。部分跳过、未知或外部 session 指针仍阻断。Graft 遥测配置改为安全创建：不存在时原子创建、已关闭时只读；已有配置需要修改时拒绝覆盖，须在外部独占处理后重试。具体审批与兼容性边界见上述 REFERENCE。
 
 SBTD v2 的完整问题台账现归档为 [docs/archive/sbtd-workflow-v2-findings.md](docs/archive/sbtd-workflow-v2-findings.md)：199 项问题及历史裁决完整保留，当前为 195 fixed、4 dismissed；原根目录 `findings.log` 已移除。CI 在 Linux 全量之外明确验证大小写敏感路径，并在 Windows 验证 junction 与私有目录 ACL。
 
-P1-04/P1-05 在 Python Onboard 的显式 Codex／OMP 项目范围接入固定 Graft：先模板后单一 fence；Codex按仓根注册 active Codex HOME MCP，OMP仅在完整 `init` 部署 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并将读取的 OMP、Codex、Claude继承源以只读快照封存。等价继承按 OMP 的连接字段完整匹配，不创建空配置；disabled、managed前缀冲突、server/extension denylist、动态或漂移来源阻断。`--graft-hooks` 仍是仅 Codex 的独立 opt-in，OMP不写hooks。迁移 plan 使用 `--deployment-mode init|init-projects --deployment-platform codex|omp` 封存host、模式和输入；带完整上下文的现有 init 入口才执行并保存累计证据，apply不隐式部署。内部 `sbtd_graft_entry.py analyze` 只允许固定的图查询子命令，拒绝任意native argv、LLM命名、deep/export与workspace参数。配置成功不等于host信任／模型行为或完整v2发布。
+Python Onboard 在显式 Codex／OMP 范围使用固定 Graft。完整 `init`／`reset` 在有效 host 配置域维护一条全局 `sbtd-graft` 定义，无固定 `cwd`／项目 `--root`，不选项目也可配置；运行时安装仍单独确认。OMP 使用 active profile／`PI_CODING_AGENT_DIR` 的 user MCP JSON，并只读核对 OMP、Codex、Claude 继承源；等价连接复用，disabled、未知受管项、denylist、动态或漂移来源阻断。项目初始化只维护本地 fence／图／stamp，追加 B 不登记第二条 MCP。`--graft-hooks` 仍为 Codex 独立 opt-in；OMP 不写 hooks。密封迁移按原上下文执行，apply 不隐式部署。配置完成不代表真实 host 查询通过或 v2 已发布。
 
-P1-06 明确多项目 Graft 隔离：普通 Codex／OMP 接线在固定 runtime 验证和任何 root-scoped probe 前拒绝嵌套或相互包含的已选仓根；多个显式仓根各自构建 `graft/`，MCP 的 `cwd` 与 `--root` 分别绑定实际根，父目录和未选 sibling 不产生 Graft 写入。linked worktree 按实际 checkout root/branch 分别处理，不支持父目录联邦。真实运行证明仍是隔离环境证据，不扩展到跨仓依赖图。
+根安装器在普通 `init`／`reset` 中使用 `--yes`（PowerShell 为 `-Yes`）且未指定项目参数时，仅做全局安装，不自动把 cwd 当作项目，也不安装项目 AGENTS／ignore／图。需要处理项目时必须显式提供 `--projects-root`／`-ProjectsRoot`；不带自动确认的交互流程仍询问 cwd，显式 `--init-projects`／`-InitProjects` 行为不变。
+
+每条 MCP 连接从启动进程的实际 cwd 定位并锁定最近真实 Git 仓／linked worktree，子目录可用；无项目、HOME、未初始化嵌套仓、缺图、旧 stamp 和越界数据明确拒绝，不回退 demo 或共同父目录。Git 探针忽略外部 `GIT_*` 重定向，并排除项目内／相对 PATH 中的 Git。批量与逐次追加使用同一本地初始化操作，父目录和未选 sibling 不写入；一个连接不会随 shell `cd` 换根。详见[全局会话 MCP 整改 PRD](docs/prd/sbtd-workflow-v2-global-session-mcp-prd.md)。
 
 P1-04补救在每次MCP请求前重新验证当前图，拒绝长连接读取后来生成的不安全图；native自动refresh保持禁用。生成Python命令在脚本前使用`-E -s`，失效仓根的全局hook不再干扰无关项目。旧未隔离的受管命令明确报告ownership冲突，不与新命令并存冒充安全升级。
+
+旧 `sbtd-graft-<hash>` 不自动覆盖或删除。plan 与 init 是独立进程，参数不会自动继承；两个调用必须显式保留相同的 host 平台、精确旧根、`--graft-retire-legacy`，以及适用的旧运行时契约。以下以 OMP 跨运行时切换为例，先替换示例绝对路径并只读预览：
+
+```bash
+python sbtd-workflow-onboard/scripts/onboard.py plan --platform omp --projects-root "/abs/project" --graft-retire-legacy --graft-legacy-bindings "/abs/private/old-bindings.json" --json
+```
+
+审阅该计划并明确确认相同范围后，再执行：
+
+```bash
+python sbtd-workflow-onboard/scripts/onboard.py init --platform omp --projects-root "/abs/project" --graft-retire-legacy --graft-legacy-bindings "/abs/private/old-bindings.json" --yes --json
+```
+
+Codex 切换须将**两条命令**的 `--platform` 都改为 `codex`；同一运行时不需要额外旧绑定契约时，**两条命令**同时省略 `--graft-legacy-bindings` 及其值。完整旧形状、根摘要、运行时身份与前态仍须匹配；原件保留，无关 MCP 不动。两根安装器分别转发同名 Bash 参数和 PowerShell `-GraftRetireLegacy`／`-GraftLegacyBindings`。这不是清理 TEMP 或销毁备份授权；live 替代与连接退出仍由 P3-05 验收。
 
 
 当前工具主线（v2 分阶段交付中）：
@@ -208,12 +226,12 @@ bash install.sh
 pwsh -File .\install.ps1
 ```
 
-交互式流程先明确平台、模式、项目根及 AGENTS 选择；普通模式可以先只读探测 Agent CLI，但两安装器都会在任何全局安装、MCP 写入或 Playwright / React Bits 安装之前执行完整 `check-projects` 前置检查。该检查包含 SBTD 状态、scaffold 目标和已有保留数据保护，并传递 `--skip-project-agents` 的实际范围。通过后才进入既有安装流程；Python 写入时再次复验。project-only 仍不做全局操作。Bash 保留原始交互流，EOF 明确失败，不循环提示。
+交互式流程先明确平台、模式、项目根及 AGENTS 选择；普通模式可以先只读探测 Agent CLI。选有项目时，两安装器都会在任何全局安装、MCP 写入或 Playwright / React Bits 安装之前执行完整 `check-projects` 前置检查；global-only 不运行项目检查。该检查包含 SBTD 状态、scaffold 目标和已有保留数据保护，并传递 `--skip-project-agents` 的实际范围。通过后才进入既有安装流程；Python 写入时再次复验。project-only 仍不做全局操作。Bash 保留原始交互流，EOF 明确失败，不循环提示。
 
 
 这里的目标 Agent 平台只选择 CLI 与 MCP adapter，不会选择全局 AGENTS 目标。除非显式传入 `--global-agents-path` / `-GlobalAgentsPath`，正常模式始终把 Codex 全局规则模板写入解析后的 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`。若用户主目录已存在 `.omp` 目录（POSIX `~/.omp`，Windows `%USERPROFILE%\.omp`），`init` / `reset` 会把同一模板备份后覆盖写入 `~/.omp/agent/AGENTS.md`；不存在则跳过且不创建 `.omp`。`--global-agents-path` 只覆盖 Codex 目标，不取消 OMP 附加写入。project-only 不写任何全局 AGENTS。
 
-根安装器的 `--yes` / `-Yes` 确认 yes/no 提示并跳过最终执行确认，也会确认适用的可选安装提示；不猜测无默认值的选项，不授权迁移或绕过状态冲突。非交互普通模式需提供 `--platform`、`--projects-root`、`--action init|reset`；project-only 提供 `--platform`、`--init-projects`；React Bits 等适用输入仍需明确。
+根安装器的 `--yes` / `-Yes` 确认所选范围内的 yes/no 提示并跳过最终执行确认，也会确认适用的可选安装提示；不猜测无默认值的选项，不授权迁移或绕过状态冲突。非交互普通模式需提供 `--platform`、`--action init|reset` 和 `--yes`：省略 `--projects-root` 时为 global-only，选择项目时显式提供该参数；project-only 提供 `--platform`、`--init-projects`；React Bits 等适用输入仍需明确。
 
 ## 仓库定位
 
@@ -768,7 +786,7 @@ tests/e2e/**/*.trace.zip
 - `init` / `reset` 在写入前检查所有所选项目的最小 SBTD 状态。可选状态缺失正常；异常和旧数据需处理，不创建同名替代品。
 - project-only 不进行全局安装；Python 显式 Codex／OMP 项目范围在已有固定 Graft 可用时还维护项目 fence/图，不写 HOME、全局 Skill、MCP 或 hooks。
 - `AGENTS.project.md` 保存三模式入口、project-only 最小 fallback、项目路径和项目级硬边界；正常 `init` / `reset` 由全局 AGENTS + Skills 激活完整路由，public bootstrap / `init-projects` 不单独激活 book-derived 门禁。全局 AGENTS 维护共同路由与客观触发，bundled `sbtd-task` 承载 `default` / `lite` / `strict` 三模式工作契约（strict 才加载完整适用 Gate），项目模板自带全局路由不可见时的最小 objective-trigger fallback（含 Book Gate Plan 触发事实与 Gate lifecycle）；各 reviewer `SKILL.md` 独占状态、输出 schema、修正回路与 stop condition，模板与 `sbtd-task` 都不复制 reviewer 状态词表。
-- 不再提供 GitNexus MCP 自动建议或专用菜单；Python host producer 已提供逐仓 Codex／OMP MCP 接线，Codex hooks仍须独立opt-in和host信任；两安装器已实现对应参数转发。
+- 不再提供 GitNexus MCP 自动建议或专用菜单；Python host producer 提供每个有效配置域一条通用 Codex／OMP MCP，项目图按根隔离。Codex hooks 仍须独立 opt-in 和 host 信任。
 - Chrome DevTools MCP 手动配置检查。
 - Playwright MCP 手动配置检查。
 - Playwright CLI 按每个项目独立检测和安装引导；只有既有 Playwright/E2E 标记使其适用时才询问。

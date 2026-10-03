@@ -38,14 +38,11 @@ class OmpMcpCandidateTests(unittest.TestCase):
                     "-s",
                     BINDING["launcher"],
                     "mcp",
-                    "--root",
-                    BINDING["root"],
                     "--node",
                     BINDING["node"],
                     "--entry",
                     BINDING["cli"],
                 ],
-                "cwd": BINDING["root"],
                 "env": {"DO_NOT_TRACK": "1", "DNT": "1"},
             }
             inherited = base / ".codex/config.toml"
@@ -54,7 +51,6 @@ class OmpMcpCandidateTests(unittest.TestCase):
                 "[mcp_servers.sbtd-graft]\n"
                 f'command = "{desired["command"]}"\n'
                 "args = " + json.dumps(desired["args"]) + "\n"
-                f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
             )
@@ -140,6 +136,302 @@ class OmpMcpCandidateTests(unittest.TestCase):
                 omp_mcp_candidate(before, analysis)
             self.assertEqual(failure.exception.code, "ownership-conflict")
 
+    @staticmethod
+    def _legacy_record(root, runtime):
+        return {
+            "type": "stdio",
+            "command": runtime["python"],
+            "args": [
+                "-E", "-s", runtime["launcher"], "mcp", "--root", root,
+                "--node", runtime["node"], "--entry", runtime["cli"],
+            ],
+            "cwd": root,
+            "env": {"DO_NOT_TRACK": "1", "DNT": "1"},
+        }
+
+    @staticmethod
+    def _legacy_name(root):
+        import hashlib
+
+        return "sbtd-graft-" + hashlib.sha256(
+            root.encode("utf-8")
+        ).hexdigest()[:16]
+
+    def test_global_definition_is_single_rootless_and_batch_equals_append(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            rootless = {key: value for key, value in BINDING.items() if key != "root"}
+            analysis = analyze_omp_configuration(target, [rootless], [])
+            self.assertEqual(analysis["removals"], [])
+            self.assertEqual(len(analysis["writes"]), 1)
+            write = analysis["writes"][0]
+            self.assertEqual(write["name"], "sbtd-graft")
+            server = write["server"]
+            self.assertEqual(server["command"], BINDING["python"])
+            self.assertEqual(
+                server["args"],
+                [
+                    "-E", "-s", BINDING["launcher"], "mcp",
+                    "--node", BINDING["node"], "--entry", BINDING["cli"],
+                ],
+            )
+            self.assertNotIn("cwd", server)
+            # Same runtime, more project selections: one identical write.
+            second = {**BINDING, "root": "/private/other"}
+            batch = analyze_omp_configuration(target, [BINDING, second], [])
+            self.assertEqual(batch["writes"], analysis["writes"])
+            rendered = omp_mcp_candidate(b"", analysis)
+            document = json.loads(rendered)
+            self.assertEqual(set(document["mcpServers"]), {"sbtd-graft"})
+
+    def test_batch_with_two_runtimes_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            other = {
+                "root": "/private/other",
+                "node": "/elsewhere/node",
+                "cli": "/elsewhere/dist/cli.js",
+                "python": "/elsewhere/python",
+                "launcher": "/elsewhere/scripts/sbtd_graft_entry.py",
+            }
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(target, [BINDING, other], [])
+            self.assertEqual(failure.exception.code, "invalid-argument")
+
+    def test_retired_fixed_root_entry_conflicts_without_explicit_retirement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            target.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            self._legacy_name(BINDING["root"]):
+                                self._legacy_record(BINDING["root"], BINDING),
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            before = target.read_bytes()
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(target, [BINDING], [])
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # Authorization scoped to a different root cannot claim it.
+            other = {**BINDING, "root": "/private/other"}
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(target, [other], [], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            self.assertEqual(target.read_bytes(), before)
+
+    def test_authorized_retirement_removes_only_the_proven_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            legacy_name = self._legacy_name(BINDING["root"])
+            target.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            legacy_name: self._legacy_record(
+                                BINDING["root"], BINDING
+                            ),
+                            "unrelated": {
+                                "type": "stdio",
+                                "command": "/usr/bin/true",
+                                "args": [],
+                            },
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            analysis = analyze_omp_configuration(
+                target, [BINDING], [], retire_legacy=True
+            )
+            self.assertEqual(analysis["removals"], [legacy_name])
+            candidate = json.loads(
+                omp_mcp_candidate(target.read_bytes(), analysis)
+            )
+            self.assertEqual(
+                set(candidate["mcpServers"]), {"sbtd-graft", "unrelated"}
+            )
+            self.assertEqual(
+                candidate["mcpServers"]["unrelated"]["command"], "/usr/bin/true"
+            )
+            self.assertNotIn("cwd", candidate["mcpServers"]["sbtd-graft"])
+
+    def test_authorized_retirement_of_an_observed_legacy_runtime_contract(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            legacy_runtime = {
+                "node": "/temp/old-runtime/node",
+                "cli": "/temp/old-package/dist/cli.js",
+                "python": "/temp/old-runtime/python",
+                "launcher": "/temp/old-deploy/scripts/sbtd_graft_entry.py",
+            }
+            legacy_name = self._legacy_name(BINDING["root"])
+            target.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            legacy_name: self._legacy_record(
+                                BINDING["root"], legacy_runtime
+                            )
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            # A different old runtime without the observed contract: refused.
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(target, [BINDING], [], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # A contract that does not match the observed old runtime: refused.
+            wrong = {
+                **BINDING,
+                "legacy": {**legacy_runtime, "node": "/temp/other/node"},
+            }
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(target, [wrong], [], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            # The exact observed contract retires the entry onto the new
+            # runtime: the TEMP-runtime migration path.
+            contracted = {**BINDING, "legacy": legacy_runtime}
+            analysis = analyze_omp_configuration(
+                target, [contracted], [], retire_legacy=True
+            )
+            self.assertEqual(analysis["removals"], [legacy_name])
+            candidate = json.loads(
+                omp_mcp_candidate(target.read_bytes(), analysis)
+            )
+            self.assertEqual(set(candidate["mcpServers"]), {"sbtd-graft"})
+            self.assertEqual(
+                candidate["mcpServers"]["sbtd-graft"]["command"], BINDING["python"]
+            )
+
+    def test_unknown_graft_prefixed_entry_is_never_retired_by_prefix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            target.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "sbtd-graft-mine": {
+                                "type": "stdio",
+                                "command": "/usr/bin/true",
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            before = target.read_bytes()
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(target, [BINDING], [], retire_legacy=True)
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+            self.assertEqual(target.read_bytes(), before)
+
+    def test_inherited_retired_shape_entry_conflicts_despite_authorization(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_configuration(
+                    target,
+                    [BINDING],
+                    [
+                        {
+                            "source": "codex-user",
+                            "enabled": True,
+                            "servers": {
+                                self._legacy_name(BINDING["root"]):
+                                    self._legacy_record(BINDING["root"], BINDING),
+                            },
+                        },
+                    ],
+                    retire_legacy=True,
+                )
+            self.assertEqual(failure.exception.code, "ownership-conflict")
+
+    def test_retired_record_with_custom_fields_is_never_deleted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            legacy_name = self._legacy_name(BINDING["root"])
+            for extra in (
+                {"timeout": 30},
+                {"description": "user note"},
+                {"enabled": True},
+                {"transport": "http"},
+            ):
+                with self.subTest(extra=extra):
+                    record = self._legacy_record(BINDING["root"], BINDING)
+                    record.update(extra)
+                    target.write_text(
+                        json.dumps({"mcpServers": {legacy_name: record}}),
+                        encoding="utf-8",
+                    )
+                    before = target.read_bytes()
+                    with self.assertRaises(ContractError) as failure:
+                        analyze_omp_configuration(
+                            target, [BINDING], [], retire_legacy=True
+                        )
+                    self.assertEqual(
+                        failure.exception.code, "ownership-conflict"
+                    )
+                    self.assertEqual(target.read_bytes(), before)
+
+    def test_project_scoped_equivalent_does_not_suppress_global_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            analysis = analyze_omp_configuration(
+                target,
+                [BINDING],
+                [
+                    {
+                        "source": "codex-project",
+                        "enabled": True,
+                        "servers": {"sbtd-graft": desired_omp_server(BINDING)},
+                    }
+                ],
+            )
+            # One project's equivalent entry covers only sessions started in
+            # that project; the global definition is still written.
+            self.assertEqual(len(analysis["writes"]), 1)
+            self.assertEqual(analysis["writes"][0]["name"], "sbtd-graft")
+            self.assertEqual(analysis["removals"], [])
+            self.assertEqual(analysis["inherited_matches"], [])
+
+    def test_project_scoped_equivalent_does_not_suppress_retirement_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory).resolve() / "mcp.json"
+            legacy_name = self._legacy_name(BINDING["root"])
+            target.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            legacy_name: self._legacy_record(
+                                BINDING["root"], BINDING
+                            )
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            analysis = analyze_omp_configuration(
+                target,
+                [BINDING],
+                [
+                    {
+                        "source": "claude-project",
+                        "enabled": True,
+                        "servers": {"sbtd-graft": desired_omp_server(BINDING)},
+                    }
+                ],
+                retire_legacy=True,
+            )
+            self.assertEqual(analysis["removals"], [legacy_name])
+            self.assertEqual(len(analysis["writes"]), 1)
+            self.assertEqual(analysis["writes"][0]["name"], "sbtd-graft")
+            self.assertEqual(analysis["inherited_matches"], [])
+
 
 class OmpSourceAnalysisTests(unittest.TestCase):
     def test_named_profile_ignores_agent_override_and_keeps_reads_readonly(self):
@@ -192,7 +484,6 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 "[mcp_servers.sbtd-graft]\n"
                 f'command = "{desired["command"]}"\n'
                 "args = " + json.dumps(desired["args"]) + "\n"
-                f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
             )
@@ -315,8 +606,7 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                         "mcpServers": {
                             "sbtd-graft": {
                                 "command": desired["command"],
-                                "args": desired["args"],
-                                "cwd": desired["cwd"],
+                                "args": ["stale"],
                                 "env": desired["env"],
                             }
                         }
@@ -324,13 +614,15 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            result = analyze_omp_sources([root], [BINDING], home=home, environ={})
-            self.assertEqual(result["analysis"]["writes"], [])
-            self.assertEqual(
-                result["analysis"]["inherited_matches"][0]["source"], "claude-project"
-            )
+            # Only reading the fallback file surfaces this managed
+            # non-equivalent entry; an equivalent entry here would no
+            # longer be observable because project sources never suppress
+            # the global write.
+            with self.assertRaises(ContractError) as failure:
+                analyze_omp_sources([root], [BINDING], home=home, environ={})
+            self.assertEqual(failure.exception.code, "ownership-conflict")
 
-    def test_claude_enabled_override_preserves_equivalent_cwd(self):
+    def test_claude_enabled_override_does_not_suppress_global_write(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             home = base / "home"
@@ -355,11 +647,13 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = analyze_omp_sources([root], [BINDING], home=home, environ={})
-            self.assertEqual(result["analysis"]["writes"], [])
+            # The forced-enabled project entry is equivalent and harmless,
+            # but a project scope can never satisfy the global definition.
+            self.assertEqual(len(result["analysis"]["writes"]), 1)
             self.assertEqual(
-                result["analysis"]["inherited_matches"][0]["source"],
-                "claude-project",
+                result["analysis"]["writes"][0]["name"], "sbtd-graft"
             )
+            self.assertEqual(result["analysis"]["inherited_matches"], [])
 
     def test_enabled_non_equivalent_managed_inherited_entry_conflicts(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -398,7 +692,6 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                             "sbtd-graft": {
                                 "command": desired["command"],
                                 "args": desired["args"],
-                                "cwd": desired["cwd"],
                                 "env": desired["env"],
                             }
                         }
@@ -429,7 +722,6 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 "[mcp_servers.other]\n"
                 f'command = "{desired["command"]}"\n'
                 "args = " + json.dumps(desired["args"]) + "\n"
-                f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.other.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\nEXTRA = "x"\n',
                 encoding="utf-8",
             )
@@ -451,7 +743,40 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 encoding="utf-8",
             )
             result = analyze_omp_sources([root], [BINDING], home=home, environ={})
-            self.assertEqual(result["analysis"]["writes"], [])
+            # ``transport`` stays ignored for equivalence, so no conflict,
+            # but the project-scoped entry cannot suppress the global write.
+            self.assertEqual(len(result["analysis"]["writes"]), 1)
+            self.assertEqual(
+                result["analysis"]["writes"][0]["name"], "sbtd-graft"
+            )
+
+    def test_project_equivalent_for_one_root_does_not_satisfy_global_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            home = base / "home"
+            root_a = base / "a"
+            root_b = base / "b"
+            home.mkdir()
+            claude = root_a / ".claude"
+            claude.mkdir(parents=True)
+            root_b.mkdir()
+            (claude / "mcp.json").write_text(
+                json.dumps(
+                    {"mcpServers": {"sbtd-graft": desired_omp_server(BINDING)}}
+                ),
+                encoding="utf-8",
+            )
+            binding_b = {**BINDING, "root": str(root_b)}
+            result = analyze_omp_sources(
+                [root_a, root_b], [BINDING, binding_b], home=home, environ={}
+            )
+            # Project A's equivalent entry covers neither project B nor a
+            # projectless session: the global write still happens.
+            self.assertEqual(len(result["analysis"]["writes"]), 1)
+            self.assertEqual(
+                result["analysis"]["writes"][0]["name"], "sbtd-graft"
+            )
+            self.assertEqual(result["analysis"]["inherited_matches"], [])
 
     def test_active_disabled_or_stale_managed_entry_conflicts_despite_inheritance(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -462,14 +787,10 @@ class OmpSourceAnalysisTests(unittest.TestCase):
             agent.mkdir(parents=True)
             root.mkdir()
             desired = desired_omp_server(BINDING)
-            import hashlib
-
-            name = (
-                "sbtd-graft-"
-                + hashlib.sha256(BINDING["root"].encode()).hexdigest()[:16]
-            )
+            legacy = OmpMcpCandidateTests._legacy_record(BINDING["root"], BINDING)
+            name = OmpMcpCandidateTests._legacy_name(BINDING["root"])
             (agent / "mcp.json").write_text(
-                json.dumps({"mcpServers": {name: {"enabled": False, **desired}}}),
+                json.dumps({"mcpServers": {name: {"enabled": False, **legacy}}}),
                 encoding="utf-8",
             )
             (root / ".omp").mkdir()
@@ -484,12 +805,7 @@ class OmpSourceAnalysisTests(unittest.TestCase):
     def test_disabled_server_and_extension_lists_block_generated_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
-            import hashlib
-
-            name = (
-                "sbtd-graft-"
-                + hashlib.sha256(BINDING["root"].encode()).hexdigest()[:16]
-            )
+            name = "sbtd-graft"
             for label, settings, config in (
                 (
                     "server",
@@ -535,7 +851,6 @@ class OmpSourceAnalysisTests(unittest.TestCase):
                 "[mcp_servers.sbtd-graft]\n"
                 f'command = "{desired["command"]}"\n'
                 "args = " + json.dumps(desired["args"]) + "\n"
-                f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
             )

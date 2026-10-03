@@ -211,7 +211,8 @@ class OmpDeploymentPlanTests(unittest.TestCase):
             self.assertEqual(len(servers), 1)
             server = next(iter(servers.values()))
             self.assertEqual(server["command"], binding["python"])
-            self.assertEqual(server["cwd"], str(root))
+            self.assertNotIn("cwd", server)
+            self.assertNotIn("--root", server["args"])
             self.assertEqual(server["env"], {"DO_NOT_TRACK": "1", "DNT": "1"})
 
     def test_omp_render_rejects_disabled_generated_extension_identity(self):
@@ -232,7 +233,7 @@ class OmpDeploymentPlanTests(unittest.TestCase):
                     / "sbtd-workflow-onboard/scripts/sbtd_graft_entry.py"
                 ),
             }
-            name = "sbtd-graft-" + hashlib.sha256(str(root).encode()).hexdigest()[:16]
+            name = "sbtd-graft"
             (agent / "config.yml").write_text(
                 f"disabledExtensions: [mcp:{name}]\n", encoding="utf-8"
             )
@@ -282,7 +283,6 @@ class OmpDeploymentPlanTests(unittest.TestCase):
                 "args = "
                 + json.dumps(desired["args"])
                 + "\n"
-                f'cwd = "{desired["cwd"]}"\n'
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
             )
@@ -507,7 +507,8 @@ class OmpDeploymentPlanTests(unittest.TestCase):
                         / ".agent/skills/sbtd-workflow-onboard/scripts/sbtd_graft_entry.py"
                     ),
                 )
-                self.assertEqual(server["cwd"], str(root))
+                self.assertNotIn("cwd", server)
+                self.assertNotIn("--root", server["args"])
                 self.assertFalse((home / ".codex/hooks.json").exists())
                 self.assertFalse((home / ".codex/config.toml").exists())
                 saved = result["deploymentEvidence"]["evidence"]["payload"]

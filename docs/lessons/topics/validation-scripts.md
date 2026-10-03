@@ -618,5 +618,30 @@
 - 根因：把 targeted rerun 的结果扩张到整个测试套件，没有区分“失败项已修复”和“最终全量已验证”。
 - 修复：先分类旧失败，再在正常环境下运行完整 `tests/`；九行契约调整后得到 1240 passed、8 skipped，并将报告与旧失败记录并列保留。
 - 预防：最终交付必须分别报告 targeted rerun 与 final full rerun；只有同一修正环境下的最终全量通过，才能关闭 suite-level 验证缺口。
+
+## LESSON-20261003-kuno-windows-direntry-link-count: Validate Native Link Counts Without Weakening Ownership
+
+- 日期：2026-10-03
+- 标签：windows, filesystem, hardlink, stat, validation, subprocess
+- 适用场景：用目录项元数据拒绝硬链接，或把 POSIX 子进程测试扩展到原生 Windows。
+- 严重级别：high
+- 来源：全局会话 Graft MCP 的 Windows CI 原生日志与 Python 标准库契约。
+- 问题：测试先因 `select.select` 读取匿名管道而报 `WinError 10038`；修正读取并保全 stderr 后，才显露普通图文件被硬链接守卫误拒绝。
+- 根因：Windows 的 `DirEntry.stat()` 将 `st_nlink` 返回为 0，不能用于证明单链接文件；Windows `select()` 也只支持 socket，不能直接迁用 POSIX 管道测试。
+- 修复：使用 `os.stat(entry.path, follow_symlinks=False)` 获取真实链接数，继续要求 `st_nlink == 1`、拒绝 symlink/reparse/special；测试采用有超时的后台 `readline`，早退保全退出码与 stderr。
+- 预防：先让原生失败报告指出实际守卫，再修正元数据来源；不能把 0 放行为安全值或跳过原生平台测试。正向用普通真实文件，反向用实际硬链接并断言外部原件不变。依据：[Python DirEntry.stat](https://docs.python.org/3.12/library/os.html#os.DirEntry.stat)。
+
+## LESSON-20261003-kuno-git-path-decoding: Decode Paths At The Producing Process Boundary
+
+- 日期：2026-10-03
+- 标签：windows, git, unicode, subprocess, encoding, validation
+- 适用场景：通过子进程输出的路径证明项目边界，且生产者编码与父进程默认代码页可能不同。
+- 严重级别：medium
+- 来源：PR #108 原生 Windows 回归；UTF-8 模式关闭、默认 cp1252 时，真实 Git 的 Unicode 仓库被 launcher 以边界不匹配拒绝。
+- 问题：`text=True` 没有声明生产者输出编码；ASCII 路径的 Windows CI 通过不能证明中文或重音字符路径可用。
+- 根因：Git for Windows 输出 UTF-8，但父 Python 使用默认代码页解码；传给子进程的 `LC_ALL` 不改变父进程解码器。fail-closed 避免串仓，却不能消除合法仓库不可用的缺陷。
+- 修复：仅对 Windows Git 探针明确 UTF-8，保留 POSIX 原解码约定；解码错误转换为受控拒绝，路径相等和信任边界检查不变。
+- 预防：在真实 Windows 核对默认编码与 UTF-8 模式后测试 Unicode 路径；记录同一场景的原生 red/green，不把其他平台成功或 skip 当作该条件的证明。畸形输出负例检查退出码、无 traceback、无下游启动和无项目副作用，而非锁定错误文案。
+
 <!-- lessons:kuno:end -->
 

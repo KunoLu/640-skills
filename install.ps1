@@ -9,6 +9,8 @@ param(
   [switch]$SkipProjectAgents,
   [string]$GlobalAgentsPath = "",
   [string]$GlobalSkillsDir = "",
+  [switch]$GraftRetireLegacy,
+  [string]$GraftLegacyBindings = "",
   [switch]$NoMcp,
   [switch]$DryRun,
   [switch]$Yes,
@@ -29,6 +31,12 @@ if ($ProjectsRoot -and $InitProjects) {
 }
 if ($script:ProjectsOnly -and $Action) {
   throw "-InitProjects is a standalone mode and cannot be combined with -Action."
+}
+if ($script:ProjectsOnly -and $GraftRetireLegacy) {
+  throw "-InitProjects cannot retire global Graft MCP entries."
+}
+if ($GraftLegacyBindings -and -not $GraftRetireLegacy) {
+  throw "-GraftLegacyBindings requires -GraftRetireLegacy."
 }
 
 function Show-Usage {
@@ -51,7 +59,7 @@ Options:
       Defaults to ./sbtd-workflow-onboard.
   -ProjectsRoot <abs-path[,abs-path...]>
       One or more absolute project root paths separated by English commas.
-      When omitted, the installer asks interactively for the project roots.
+      When omitted, ask interactively unless -Yes selects global-only setup.
   -InitProjects <abs-path[,abs-path...]>
       Run only per-project checks and initialization. Global tools, Skills,
       Agent CLI, and MCP are not checked, installed, or configured.
@@ -63,12 +71,19 @@ Options:
       Override the global AGENTS.md target.
   -GlobalSkillsDir <path>
       Override global skills directory.
+  -GraftRetireLegacy
+      Explicitly retire exact owned fixed-project Graft MCP entries for the
+      selected roots after preview, preserving originals; not TEMP cleanup.
+  -GraftLegacyBindings <path>
+      Private old-runtime contract for an explicitly authorized MCP cutover.
   -NoMcp
       Skip MCP configuration.
   -DryRun
       Print commands and MCP writes without making changes.
   -Yes
-      Answer yes to every yes/no prompt.
+      Answer yes to yes/no prompts within the selected scope.
+      Normal init/reset without -ProjectsRoot is global-only; cwd is not
+      implicitly selected as a project.
   -NoColor
       Disable ANSI color.
   -Help
@@ -350,6 +365,9 @@ function Get-CommonArgs {
   if ($SkipProjectAgents) { $args += "--skip-project-agents" }
   if ($GlobalAgentsPath) { $args += @("--global-agents-path", $GlobalAgentsPath) }
   if ($GlobalSkillsDir) { $args += @("--global-skills-dir", $GlobalSkillsDir) }
+  if ($GraftRetireLegacy) { $args += "--graft-retire-legacy" }
+  if ($GraftLegacyBindings) { $args += @("--graft-legacy-bindings", $GraftLegacyBindings) }
+  if ($NoMcp) { $args += "--no-mcp" }
   return $args
 }
 
@@ -530,6 +548,9 @@ function Resolve-InteractiveInputs {
 
   if ($ProjectsRoot) {
     Resolve-ProjectsRoot $ProjectsRoot
+  }
+  elseif ($Yes) {
+    $script:SkipProjectAgents = $true
   }
   else {
     $cwd = (Get-Location).Path

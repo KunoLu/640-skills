@@ -6257,6 +6257,17 @@ def print_plan(payload: dict[str, object]) -> None:
                 print(f"  reason: {details['reason']}")
             if details.get("nextStep"):
                 print(f"  next: {details['nextStep']}")
+            if key == "graftWiring" and details.get("status") == "planned":
+                for operation in details.get("sharedOperations", []):
+                    print(f"  host resource: {operation['target']}")
+                if details.get("retireLegacy"):
+                    print("  retire only exact owned fixed-root MCP entries for:")
+                    for root in details.get("roots", []):
+                        print(f"    {root}")
+                    for binding in details.get("bindings", []):
+                        if "legacy" in binding:
+                            print(f"  approved old runtime: {json.dumps(binding['legacy'], sort_keys=True)}")
+                    print("  preserve originals; no runtime-directory or backup deletion")
     for item in payload["operations"]:
         if item["sameLocation"]:
             exists = "same source and target"
@@ -6454,10 +6465,20 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return run_migration_init(mode, args)
     if mode == "check":
         results = build_check_results(args)
-        if getattr(args, "platform", None) in {"codex", "omp", "oh-my-pi"} or getattr(args, "graft_hooks", False):
+        if (
+            getattr(args, "platform", None) in {"codex", "omp", "oh-my-pi"}
+            or getattr(args, "graft_hooks", False)
+            or getattr(args, "graft_retire_legacy", False)
+            or getattr(args, "graft_legacy_bindings", None)
+        ):
             from sbtd_graft_deployment import plan_normal_wiring
 
-            results["graftWiring"] = plan_normal_wiring(mode, args)
+            results["graftWiring"] = plan_normal_wiring(
+                mode, args,
+                installation_targets=[
+                    op.target for op in build_operations(mode, args) if not op.same_location
+                ],
+            )
         developer_plan = build_developer_plan(args)
         if developer_plan is not None:
             results["developerPlan"] = developer_plan
@@ -6563,7 +6584,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
     )
     from sbtd_graft_deployment import plan_normal_wiring
 
-    wiring_plan = plan_normal_wiring(mode, args)
+    wiring_plan = plan_normal_wiring(
+        mode, args,
+        installation_targets=[op.target for op in operations if not op.same_location],
+    )
     if wiring_plan["status"] != "skipped":
         plan_payload["graftWiring"] = wiring_plan
     developer_plan = build_developer_plan(args)
@@ -6659,6 +6683,18 @@ def run(mode: str, args: argparse.Namespace) -> int:
             )
             emit_plan_json()
             return 4
+        from sbtd_graft_deployment import legacy_bindings_unchanged
+
+        if not legacy_bindings_unchanged(wiring_plan):
+            plan_payload["graftWiring"] = {
+                **wiring_plan,
+                "status": "blocked",
+                "reason": "the approved legacy bindings changed before installation",
+            }
+            plan_payload["backups"] = []
+            emit_plan_json()
+            print("Legacy binding approval changed; no installation writes were performed.", file=sys.stderr)
+            return 2
         external_install = install_required_external_skills(
             args, overwrite=mode == "reset"
         )
@@ -6935,6 +6971,20 @@ def build_parser() -> argparse.ArgumentParser:
         if mode in {"init", "init-projects"}:
             _add_migration_context(sub)
         sub.add_argument("--graft-hooks", action="store_true", help="Separately authorize the displayed Codex hooks; does not grant host trust.")
+        sub.add_argument(
+            "--no-mcp", action="store_true",
+            help="Skip user-level Graft MCP wiring; selected project graph setup remains local.",
+        )
+        sub.add_argument(
+            "--graft-retire-legacy",
+            action="store_true",
+            help="Explicitly replace exact owned fixed-project MCP entries for the selected roots; retain originals. Does not authorize environment or backup deletion.",
+        )
+        sub.add_argument(
+            "--graft-legacy-bindings",
+            action=SingleValueAction,
+            help="Private version-1 JSON contract naming observed old runtime paths for --graft-retire-legacy across runtime changes.",
+        )
         sub.add_argument(
             "--projects-root",
             required=mode == "init-projects",

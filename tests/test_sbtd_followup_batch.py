@@ -636,7 +636,8 @@ class FollowupBatchTests(unittest.TestCase):
                     / ".agent/skills/sbtd-workflow-onboard/scripts/sbtd_graft_entry.py"
                 ),
             )
-            self.assertEqual(server["cwd"], str(fixture.root))
+            self.assertNotIn("cwd", server)
+            self.assertNotIn("--root", server["args"])
             self.assertFalse((fixture.home / ".codex/hooks.json").exists())
             self.assertEqual(chain["verification"]["payload"]["status"], "verified")
             self.assertEqual(chain["cleanup_receipt"]["payload"]["status"], "cleaned")

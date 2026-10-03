@@ -9,6 +9,8 @@ PROJECTS_ONLY=0
 PROJECT_ROOTS=()
 ACTION=""
 SKIP_PROJECT_AGENTS=0
+GRAFT_RETIRE_LEGACY=0
+GRAFT_LEGACY_BINDINGS=""
 NO_MCP=0
 DRY_RUN=0
 YES=0
@@ -40,7 +42,7 @@ Options:
       Defaults to ./sbtd-workflow-onboard.
   --projects-root <abs-path[,abs-path...]>
       One or more absolute project root paths separated by English commas.
-      When omitted, the installer asks interactively for the project roots.
+      When omitted, ask interactively unless --yes selects global-only setup.
   --init-projects <abs-path[,abs-path...]>
       Run only per-project checks and initialization for the listed absolute
       project roots. Global tools, Skills, Agent CLI, and MCP are not checked,
@@ -53,12 +55,19 @@ Options:
       Override the global AGENTS.md target.
   --global-skills-dir <path>
       Override global skills directory.
+  --graft-retire-legacy
+      Explicitly retire exact owned fixed-project Graft MCP entries for the
+      selected roots after preview, preserving originals; not TEMP cleanup.
+  --graft-legacy-bindings <path>
+      Private old-runtime contract for an explicitly authorized MCP cutover.
   --no-mcp
       Skip MCP configuration.
   --dry-run
       Print commands and MCP writes without making changes.
   --yes
-      Answer yes to every yes/no prompt.
+      Answer yes to yes/no prompts within the selected scope.
+      Normal init/reset without --projects-root is global-only; cwd is not
+      implicitly selected as a project.
   --no-color
       Disable ANSI color.
   migration --phase <phase> [migration options]
@@ -366,6 +375,15 @@ onboard_common_args() {
   fi
   if [[ -n "$GLOBAL_SKILLS_DIR" ]]; then
     args+=(--global-skills-dir "$GLOBAL_SKILLS_DIR")
+  fi
+  if [[ "$GRAFT_RETIRE_LEGACY" -eq 1 ]]; then
+    args+=(--graft-retire-legacy)
+  fi
+  if [[ -n "$GRAFT_LEGACY_BINDINGS" ]]; then
+    args+=(--graft-legacy-bindings "$GRAFT_LEGACY_BINDINGS")
+  fi
+  if [[ "$NO_MCP" -eq 1 ]]; then
+    args+=(--no-mcp)
   fi
   if (( ${#args[@]} > 0 )); then
     printf '%s\0' "${args[@]}"
@@ -743,6 +761,19 @@ parse_args() {
         GLOBAL_SKILLS_DIR="${1#*=}"
         shift
         ;;
+      --graft-retire-legacy)
+        GRAFT_RETIRE_LEGACY=1
+        shift
+        ;;
+      --graft-legacy-bindings)
+        [[ $# -ge 2 ]] || die "--graft-legacy-bindings requires a value"
+        GRAFT_LEGACY_BINDINGS="$2"
+        shift 2
+        ;;
+      --graft-legacy-bindings=*)
+        GRAFT_LEGACY_BINDINGS="${1#*=}"
+        shift
+        ;;
       --no-mcp)
         NO_MCP=1
         shift
@@ -773,6 +804,12 @@ parse_args() {
   fi
   if [[ "$PROJECTS_ONLY" -eq 1 && -n "$ACTION" ]]; then
     die "--init-projects is a standalone mode and cannot be combined with --action."
+  fi
+  if [[ "$PROJECTS_ONLY" -eq 1 && "$GRAFT_RETIRE_LEGACY" -eq 1 ]]; then
+    die "--init-projects cannot retire global Graft MCP entries."
+  fi
+  if [[ -n "$GRAFT_LEGACY_BINDINGS" && "$GRAFT_RETIRE_LEGACY" -ne 1 ]]; then
+    die "--graft-legacy-bindings requires --graft-retire-legacy."
   fi
 }
 
@@ -807,6 +844,8 @@ resolve_interactive_inputs() {
 
   if [[ -n "$PROJECTS_ROOT" ]]; then
     normalize_projects_root "$PROJECTS_ROOT"
+  elif [[ "$YES" -eq 1 ]]; then
+    SKIP_PROJECT_AGENTS=1
   else
     local cwd provided
     cwd="$(pwd -P)"

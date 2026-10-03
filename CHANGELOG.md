@@ -26,6 +26,9 @@
 
 ### 变更
 
+- Graft MCP 改为每个有效 Codex／OMP 配置域一条全局 `sbtd-graft`，不固定 cwd／项目 root；全局安装可不选项目，项目初始化只维护本地图与 stamp，后续追加不增加连接。launcher 按实际启动 cwd 锁定最近真实 Git 仓／worktree，支持子目录；无项目、HOME、未初始化嵌套仓、旧 stamp、越界数据和不可信 Git PATH 明确拒绝，保留 pin、DNT、环境隔离与每请求校验。
+- 旧固定项目 MCP 仅经 `--graft-retire-legacy` 明确切换；不同旧运行时须提供快照绑定的私有 `--graft-legacy-bindings` 契约。Bash／PowerShell 对等转发，保留原配置备份与无关 MCP；历史回执不改写，project-only 与历史密封部署拒绝混入本次退役。源码能力不代表 live 切换、TEMP 清理或备份销毁已执行。
+
 - 迁移 cleanup 的 `.trellis` 删除统一改为在项目根实际执行 vendor `tl uninstall`，由专用适配器驱动（新封存与已封存批次一致，前后态校验不变）：计划时封存完整 vendor 足迹（含可能改写的平台配置/AGENTS），执行前私有备份全部足迹；CLI 缺失或准备失败 blocked 不执行，不完整卸载 failed 并按实测逐项记录 after 状态——vendor 失败可能部分改写，保留私有备份与实测证据、调和后才可重试，不回退引擎直删，不用 `rm -rf`。
 - 退役 `trellis-workflow`/`trellis-channel` 全局目录的清理识别从固定版本校验值钉改为身份识别（非 symlink 目录 + 自身 `SKILL.md` frontmatter `name` 精确匹配），任意 1.0.x 内容漂移均可识别；symlink、SKILL.md 缺失/不可读或身份不匹配仍 blocked 保留。
 - 受管 Graft pin 从 `@nanonets/graft@0.18.0` 晋升到 `0.21.1`：registry gitHead `375a37e0b6a21d28f12fce2d220d692726bb0730`，tarball integrity 与官方发布包一致。守门启动器、DNT、stamp 精确版本和 fail-closed 不变。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。不改默认守门形态，不新增裸形态开关。
@@ -34,6 +37,14 @@
 - GitHub Actions `linux-full` 的 `timeout-minutes` 从 20 提到 40。Ubuntu 全量 unittest 已多次贴着 20 分钟上限被取消；macOS / Windows installer job 仍为 20。
 
 ### 修复
+
+- Windows MCP 根证明直接选择外部 PATH 目录中的原生 `git.exe`，拒绝批处理包装器及解析后非 `.exe` 目标，避免 CMD 参数解释和 cwd 隐式遮蔽；POSIX 同样使用明确目录内的 Git 候选，保留物理路径边界。
+- Git 根证明在 Windows 显式按 UTF-8 解码路径输出，修复非 UTF-8 默认代码页下合法中文／重音字符仓库被误拒绝的问题；POSIX 保留原解码约定，各平台的输出解码失败均转为受控 `root-unsafe`，不放宽仓库边界检查。
+- OMP 全局 MCP ownership/state 校验同时要求 launcher 与 CLI 路径为绝对路径；同名相对路径不能通过受管记录证明，合法全局配置与历史回执格式不变。
+- README 两个入口补齐同作用域 plan／init 成对切换命令；版本化自动巡检统一为每个有效 host 配置域一条全局 MCP、逐项目本地图，不再把历史逐仓绑定当当前安装要求。
+- 根安装器普通 `init`／`reset` 带 `--yes`／`-Yes` 而未指定项目参数时改为 global-only，不再自动把 cwd 纳入项目写入范围；显式项目参数、project-only 和未启用自动确认的交互选择保持不变。
+
+- 图目录守卫在 Windows 使用 `os.stat(..., follow_symlinks=False)` 获取真实硬链接数，避免 `DirEntry.stat()` 的 `st_nlink=0` 哨兵导致普通文件被误拒绝；单链接、symlink、reparse 与 special-file 安全限制不变，原生启动回归同时覆盖合法图和真实硬链接拒绝。
 
 - vendor 卸载拒绝将封存资源 `path` 替换为受检项目 `root/relative` 之外的诱饵；严格校验相对路径，并与 fresh planner 的实际路径核对，备份、前态复验和结果测量只消费已绑定路径。重算摘要不能绕过此门；正常旧计划的持久 scope fingerprint 形状及摘要算法不变。
 - 清理复核修复：实际 Skills 根即使被更宽的共享 HOME 根覆盖也保留独立逻辑绑定，退役目标始终必须是该 Skills 根的直接子目录，防止同名但未选中的用户目录进入清理。
@@ -72,6 +83,7 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 主 PRD 补充 P3-05 验证环境与旧 Graft 接线退役任务，覆盖临时运行时、隔离 HOME 与受管旧 MCP 绑定；正式发布前完成运行依赖退役或必要保留交接，备份销毁仍归 P3-04。明确方案确认不等于替代已部署，不授权清空 TEMP 或整个宿主账户目录。
 - 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
 - `ENTRYPOINT.md` 当前 canonical Skill 改为 `writing-for-agents`。`writing-great-skills` 只保留为迁移别名，不再作为当前安装名。
 
@@ -101,6 +113,8 @@
 - P0-09将配置源仓根ignore独立切换为七行，保护`.sbtd`、handoff和Graft本地产物，保持根AGENTS本地化与ENTRYPOINT可追踪；切换前核对旧工具残留及Git索引，不复制业务项目模板，不执行真实数据迁移或全局同步。现行维护入口同步，历史lesson原文保留。
 
 ### 验证
+
+- 原生 Windows 的 session-root MCP 回归使用带超时的后台管道读取，替代仅能处理 Windows socket 的 `select.select`；保留协议响应与项目隔离断言，不因测试辅助错误放宽生产根解析守卫。
 
 - 增加任务 schema 的模式来源、阻塞原因、完成时间、入阻塞、路径形状、版本类型和日期边界回归；区分历史元数据事件与新入阻塞，显式配置日期断言，避免把可选格式检查缺失当成通过。
 - 增加完整sbtd-task安装回归，核对references/schema/许可证及两旧目录在fresh安装中的缺席；保留存续公共文档合同、实际provider与Git marker检查，任务schema测试改读正式源。原生catalog smoke逐字验证已审查载荷到正式源及安装副本，不把安装层通过扩大为完整v2或host通过。

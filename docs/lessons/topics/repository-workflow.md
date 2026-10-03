@@ -492,4 +492,40 @@
 - 修复：严格验证 relative，并要求 path 精确等于受检 root/relative；fresh replay 对照绑定路径，之后复验、备份和测量只使用已绑定 Path。持久 fingerprint 形状不变，避免无关地使既有合法计划失效。
 - 预防：多种路径表示必须在信任边界合一，不能在备份和执行阶段各自选择指针。负例要同时重算摘要、更新诱饵 before 并保持预期后态，断言拒绝先于 vendor、实际文件与 vault 均未变；正例验证备份字节确实来自被修改的对象。
 
+## LESSON-20261003-kuno-global-mcp-domains: Global Coverage And Retirement Need Different Proofs
+
+- 日期：2026-10-03
+- 标签：mcp, configuration-scope, ownership, migration, approvals, preflight
+- 适用场景：把逐项目配置改为共享全局定义，或用独立批准文件驱动多阶段安装和旧项退役。
+- 严重级别：high
+- 来源：全局会话 MCP 改造的独立代码／安全复核与消费者回归。
+- 问题：某项目的等价继承连接不能证明其他项目具备全局连接；忽略扩展字段的连接等价比较不能授权删除自定义旧项；批准文件若落在安装器先行替换的 Skill 目录中，可能先被删除、到最终配置步骤才发现。
+- 根因：混淆配置生效域与字段等价、复用运行期等价判定充当删除所有权证明，以及只检查底层配置操作而遗漏完整安装写集。
+- 修复：只有明确 user-wide 来源可满足全局安装；旧项删除使用闭集形状、精确根和显式运行时契约；批准文件避让完整写集，并在首个安装副作用及每个资源执行前复验。
+- 预防：同时覆盖项目 A 有继承项／B 没有、旧受管形状附加用户字段、批准文件位于即将替换的目录、首写前及耗时构图期间批准漂移。断言实际文件保全和部分结果，而不是只检查渲染器返回成功。
+
+## LESSON-20261003-kuno-executable-proof: Executable Proof Must Bind the Actual Target
+
+- 日期：2026-10-03
+- 标签：windows, mcp, executable, path, ownership, validation
+- 适用场景：从 PATH 选择用于安全证明的子进程，或根据序列化 MCP 记录认定受管启动入口。
+- 严重级别：high
+- 来源：PR #108 的五项审查修正；OMP 消费者红绿回归，Windows 专属用例由原生 CI 验证。
+- 问题：外部 PATH 参数不阻止 Windows `which` 隐式搜索 cwd，PATHEXT 又可能选中批处理包装器；只核对脚本 basename 的状态校验会接受相对启动路径。
+- 根因：把名称／搜索目录当成实际可执行目标证明，没有把生产者的绝对路径约束完整保持到消费者，也忽略 Windows 批处理参数会经过 shell。
+- 修复：按明确目录选择 Windows 原生 `git.exe`，复验解析后目标类型与项目外边界；全局 ownership 校验同时验证 launcher／cli 的绝对路径与受管文件名。
+- 预防：使用真实平台覆盖 cwd 同名可执行文件、外部批处理、带 CMD 元字符的目录、无原生 Git 的拒绝；对受管记录分别篡改两处路径并检查 state-conflict。不要以 POSIX 成功或 basename 一致替代 Windows／绝对路径证明。
+
+## LESSON-20261003-kuno-yes-omitted-optional-is-not-default-y: Confirmation Does Not Select Project Roots
+
+- 日期：2026-10-03
+- 标签：installer, authorization, scope, cli, confirmation
+- 适用场景：安装器通过自动确认运行，但可选项目目标列表为空。
+- 严重级别：high
+- 来源：PR #108 修正中用户明确追加的 R6；Bash 和 PowerShell 实际安装器进程的红绿回归。
+- 问题：通用 yes/no helper 把“是否将 cwd 作为项目”也回答为 yes，导致省略项目参数仍扩大写入范围。
+- 根因：把确认既定操作与选择可选写入目标混为一谈；原有测试 helper 自动补齐 roots，掩盖了真正的省略路径。
+- 修复：只在项目选择分支处理自动确认加空目标的 global-only 语义，保留通用确认 helper、显式 roots 和交互流程。
+- 预防：回归必须直接启动实际脚本且确实省略项目参数，检查目标集合、项目检查未执行和项目文件未创建；不要使用会自动补入目标的测试 helper。
+
 <!-- lessons:kuno:end -->

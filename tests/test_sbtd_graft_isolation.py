@@ -38,8 +38,10 @@ def _git_env(home: Path) -> dict[str, str]:
 
 
 def _git(root: Path, *args: str, home: Path) -> None:
+    # Fixture commits must not leave detached maintenance writers racing the
+    # subsequent whole-tree no-mutation assertions.
     subprocess.run(
-        ["git", "-C", str(root), *args],
+        ["git", "-c", "maintenance.auto=false", "-C", str(root), *args],
         check=True,
         capture_output=True,
         env=_git_env(home),
@@ -50,7 +52,7 @@ def _git(root: Path, *args: str, home: Path) -> None:
 def _git_repo(path: Path, branch: str, home: Path) -> Path:
     path.mkdir(parents=True)
     subprocess.run(
-        ["git", "init", "-b", branch, str(path)],
+        ["git", "-c", "maintenance.auto=false", "init", "-b", branch, str(path)],
         check=True,
         capture_output=True,
         env=_git_env(home),
@@ -169,12 +171,9 @@ class GraftIsolationTests(unittest.TestCase):
                 (home / ".codex/config.toml").read_text(encoding="utf-8")
             )
             servers = config["mcp_servers"]
-            self.assertEqual(len(servers), 2)
-            observed = {
-                (server["cwd"], server["args"][server["args"].index("--root") + 1])
-                for server in servers.values()
-            }
-            self.assertEqual(observed, {(str(alpha), str(alpha)), (str(beta), str(beta))})
+            self.assertEqual(set(servers), {"sbtd-graft"})
+            self.assertNotIn("cwd", servers["sbtd-graft"])
+            self.assertNotIn("--root", servers["sbtd-graft"]["args"])
 
     def test_linked_worktrees_on_different_branches_are_distinct_selected_roots(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -244,14 +243,11 @@ class GraftIsolationTests(unittest.TestCase):
             config = tomllib.loads(
                 (home / ".codex/config.toml").read_text(encoding="utf-8")
             )
-            self.assertEqual(len(config["mcp_servers"]), 2)
-            observed = {
-                (server["cwd"], server["args"][server["args"].index("--root") + 1])
-                for server in config["mcp_servers"].values()
-            }
-            self.assertEqual(observed, {(str(main), str(main)), (str(linked), str(linked))})
+            self.assertEqual(set(config["mcp_servers"]), {"sbtd-graft"})
+            self.assertNotIn("cwd", config["mcp_servers"]["sbtd-graft"])
+            self.assertNotIn("--root", config["mcp_servers"]["sbtd-graft"]["args"])
 
-    def test_omp_two_roots_keep_mcp_root_bindings_distinct(self):
+    def test_omp_two_roots_share_one_session_scoped_definition(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             home = base / "home"
@@ -297,12 +293,9 @@ class GraftIsolationTests(unittest.TestCase):
             self.assertEqual(code, 0, result)
             target = home / ".omp/agent/mcp.json"
             servers = json.loads(target.read_text(encoding="utf-8"))["mcpServers"]
-            self.assertEqual(len(servers), 2)
-            observed = {
-                (server["cwd"], server["args"][server["args"].index("--root") + 1])
-                for server in servers.values()
-            }
-            self.assertEqual(observed, {(str(alpha), str(alpha)), (str(beta), str(beta))})
+            self.assertEqual(set(servers), {"sbtd-graft"})
+            self.assertNotIn("cwd", servers["sbtd-graft"])
+            self.assertNotIn("--root", servers["sbtd-graft"]["args"])
 
 
 if __name__ == "__main__":
