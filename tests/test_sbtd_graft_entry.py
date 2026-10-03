@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import hashlib
 import json
 import os
@@ -1344,6 +1345,43 @@ class SessionRootResolutionTests(unittest.TestCase):
             self.assertEqual(consumed_requests(root), consumed_before)
             self.assertEqual(list(tmp.iterdir()), [])
 
+
+    def test_unicode_repository_initializes_with_utf8_mode_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env, tmp = launch_env(base)
+            env["PYTHONUTF8"] = "0"
+            probe = subprocess.run(
+                [
+                    str(Path(sys.executable).resolve()), "-B", "-c",
+                    (
+                        "import json, locale, sys; "
+                        "print(json.dumps({'utf8_mode': sys.flags.utf8_mode, "
+                        "'encoding': locale.getencoding()}))"
+                    ),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="ascii",
+                timeout=10,
+                check=True,
+            )
+            settings = json.loads(probe.stdout)
+            self.assertEqual(settings["utf8_mode"], 0)
+            if os.name == "nt":
+                self.assertNotEqual(
+                    codecs.lookup(settings["encoding"]).name,
+                    "utf-8",
+                    "Windows regression requires a non-UTF-8 default decoder",
+                )
+                print(f"Windows Git path decoding precondition: {settings}")
+            root = project_fixture(base / "caf\u00e9-\u4e2d\u6587")
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            self.serve_initialize(launch_mcp(root, cli, env), root)
+            self.assertEqual(list(tmp.iterdir()), [])
 
     @unittest.skipUnless(os.name == "nt", "native Windows Git executable lookup")
     def test_windows_cwd_git_does_not_shadow_the_external_executable(self):

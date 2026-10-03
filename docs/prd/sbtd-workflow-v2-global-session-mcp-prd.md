@@ -146,3 +146,14 @@ OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInp
 本轮 Book Gate：DDD not-needed（无新领域歧义、未完整 grill，R6 默认行为由用户明确选择）；DDIA confirmed（配置证明及安装范围收紧，读写所有权和回滚规则不变）；Legacy characterized（OMP 当前／历史 reader 的相对路径消费者红测、Bash／PowerShell 省略 roots 的原生 red，以及 Windows 机制证据／原生回归）；Refactoring proceed（原有函数内的最小修正，不增加调度器、缓存或平台模拟层）；Release Readiness 在本轮新 head 验证与复审后重新判定，旧 head 的通过不自动继承。
 
 验证使用现有 Python／原生 CLI／三平台 CI。Windows 专属场景必须在 Windows runner 执行，不能把本机平台 skip 当通过；文案通过命令参数和行为核对，不新增源码措辞断言。本轮进度与最终证据记录在本地唯一 task 和 PR #108，不预写未执行结果。
+
+## 9. Windows Unicode 仓库路径修正
+
+用户在 `11b0a7130526097869889ccda5982eb998feb471` 的审查后确认修复 Git 根证明的编码问题。沿用 strict、原分支与 PR #108；不合并、不执行 live 切换。用户没有本地 Windows，原生证明使用既有 Windows GitHub Actions，不能以 macOS 通过或 Windows skip 代替。
+
+| 场景 | Given / When / Then | 自动化边界 |
+|---|---|---|
+| Unicode 仓库不受 Windows 默认代码页影响 | Given 合法 Git 仓库路径含中文或 é，Windows Python 关闭 UTF-8 模式且默认解码非 UTF-8；When 从该仓库启动 MCP；Then 完成初始化并仍绑定真实仓库，不误报 root-unsafe | 真实 Git／真实 launcher／既有协议 fixture；测试明确核对解释器编码前置条件，先取得 Windows red，再验证 green |
+| 不可解码的 Git 证明安全拒绝 | Given Git 探针返回无法解码的输出；When 启动 MCP；Then 返回受控 root-unsafe，不启动下游、不输出 traceback，也不修改项目或创建遗留临时 HOME | CLI 错误边界回归，不放宽路径相等、最近仓边界或原生 Git 选择规则 |
+
+Book Gate Plan：DDD not-needed（无领域歧义，未完整 grill）；DDIA not-needed（不改图、stamp、配置或回执格式）；Legacy 先建立失败证据再达到 characterized；Refactoring 在生产修改前复核最小局部修正，不引入新抽象；Release Readiness 在真实场景、聚焦／三平台检查与独立复核后判定。保留既有 POSIX 解码约定，不以全局编码改写扩大修复范围。最终原生证据与状态由 task 和 PR 记录，旧 head 的 CI 不自动继承。
