@@ -579,6 +579,8 @@ Batch setup rejects nested or mutually containing selected roots before any runt
 
 On Windows the root proof selects `git.exe` by its fully qualified path in each external PATH directory and requires its resolved target to remain an `.exe` outside the project. It never searches cwd implicitly or executes `.cmd`/`.bat` wrappers through PATHEXT. Global OMP ownership checks require absolute launcher and CLI paths as well as their managed filenames; matching basenames alone do not certify a record.
 
+The Windows Git root proof decodes output as UTF-8 independently of Python's default code page, so Unicode checkout paths do not depend on UTF-8 mode. POSIX retains its existing locale decoding. Undecodable proof output is a controlled `root-unsafe` refusal before downstream launch, never a reason to weaken root equality or borrow another graph.
+
 Full installation binds MCP/hooks to the canonical installed Onboard Skill, not a disposable bootstrap checkout. That package is installed and verified before dependent host configuration is published. If ordinary init would retain a merely-valid but different older Skill shell, wiring preflight requests an explicitly confirmed reset instead of running the old guard. Project-only uses its existing executing package because it installs no global Skill.
 
 Hooks are absent from the default write set. `--graft-hooks` is separate consent to install the managed definitions, not host trust or execution proof. The host must support and enable hooks and trust the exact configured hashes; Onboard never edits trust state or bypasses it. Preserve all foreign handlers. Host-event acceptance is a separate real-host check. The root installers forward this option through the implemented deployment flags.

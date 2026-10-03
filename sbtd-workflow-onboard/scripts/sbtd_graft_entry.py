@@ -1325,9 +1325,15 @@ def _prove_checkout_context(cwd: Path, boundary: Path) -> None:
             env=env,
             capture_output=True,
             text=True,
+            # Git for Windows emits UTF-8 paths even when Python uses an ANSI locale.
+            encoding="utf-8" if os.name == "nt" else None,
             timeout=15,
             check=False,
         )
+    except UnicodeDecodeError:
+        raise ContractError(
+            "root-unsafe", "the Git checkout proof returned undecodable output"
+        ) from None
     except (OSError, subprocess.SubprocessError):
         raise ContractError(
             "root-unsafe", "the Git checkout proof could not be executed"

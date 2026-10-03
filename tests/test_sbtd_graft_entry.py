@@ -1383,6 +1383,29 @@ class SessionRootResolutionTests(unittest.TestCase):
             self.serve_initialize(launch_mcp(root, cli, env), root)
             self.assertEqual(list(tmp.iterdir()), [])
 
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixture emits invalid bytes")
+    def test_undecodable_git_toplevel_is_a_controlled_refusal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env, tmp = launch_env(base)
+            root = project_fixture(base)
+            package = fake_runtime_fixture(base)
+            cli = package / "dist/cli.js"
+            cli.write_text(FAKE_MCP_SERVER)
+            trusted = base / "trusted-git"
+            trusted.mkdir()
+            executable = trusted / "git"
+            executable.write_text("#!/bin/sh\nprintf '\\377\\nfalse\\n'\n")
+            executable.chmod(0o700)
+            env.update(PATH=str(trusted), PYTHONUTF8="1")
+            before = snapshot(root)
+            completed = self.run_mcp(root, cli, env)
+            self.assertEqual(completed.returncode, 2, completed.stderr)
+            self.assertNotIn(b"Traceback", completed.stderr)
+            self.assertFalse((root / "consumed.log").exists())
+            self.assertEqual(snapshot(root), before)
+            self.assertEqual(list(tmp.iterdir()), [])
+
     @unittest.skipUnless(os.name == "nt", "native Windows Git executable lookup")
     def test_windows_cwd_git_does_not_shadow_the_external_executable(self):
         """R3: Windows which must not insert the current project directory."""

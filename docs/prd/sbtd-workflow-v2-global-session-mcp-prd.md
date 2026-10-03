@@ -156,4 +156,4 @@ OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInp
 | Unicode 仓库不受 Windows 默认代码页影响 | Given 合法 Git 仓库路径含中文或 é，Windows Python 关闭 UTF-8 模式且默认解码非 UTF-8；When 从该仓库启动 MCP；Then 完成初始化并仍绑定真实仓库，不误报 root-unsafe | 真实 Git／真实 launcher／既有协议 fixture；测试明确核对解释器编码前置条件，先取得 Windows red，再验证 green |
 | 不可解码的 Git 证明安全拒绝 | Given Git 探针返回无法解码的输出；When 启动 MCP；Then 返回受控 root-unsafe，不启动下游、不输出 traceback，也不修改项目或创建遗留临时 HOME | CLI 错误边界回归，不放宽路径相等、最近仓边界或原生 Git 选择规则 |
 
-Book Gate Plan：DDD not-needed（无领域歧义，未完整 grill）；DDIA not-needed（不改图、stamp、配置或回执格式）；Legacy 先建立失败证据再达到 characterized；Refactoring 在生产修改前复核最小局部修正，不引入新抽象；Release Readiness 在真实场景、聚焦／三平台检查与独立复核后判定。保留既有 POSIX 解码约定，不以全局编码改写扩大修复范围。最终原生证据与状态由 task 和 PR 记录，旧 head 的 CI 不自动继承。
+Book Gate：DDD not-needed（无领域歧义，未完整 grill）；DDIA not-needed（不改图、stamp、配置或回执格式）；Legacy characterized（原生 Windows 已确认 cp1252／UTF-8 模式关闭时合法仓库被拒绝，POSIX 畸形输出已确认抛出未捕获解码异常）；Refactoring proceed（仅调整探针解码与错误边界，无新抽象）；Release Readiness 在真实场景、聚焦／三平台检查与独立复核后判定。保留既有 POSIX 解码约定，不以全局编码改写扩大修复范围。最终原生证据与状态由 task 和 PR 记录，旧 head 的 CI 不自动继承。

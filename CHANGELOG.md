@@ -39,6 +39,7 @@
 ### 修复
 
 - Windows MCP 根证明直接选择外部 PATH 目录中的原生 `git.exe`，拒绝批处理包装器及解析后非 `.exe` 目标，避免 CMD 参数解释和 cwd 隐式遮蔽；POSIX 同样使用明确目录内的 Git 候选，保留物理路径边界。
+- Git 根证明在 Windows 显式按 UTF-8 解码路径输出，修复非 UTF-8 默认代码页下合法中文／重音字符仓库被误拒绝的问题；POSIX 保留原解码约定，各平台的输出解码失败均转为受控 `root-unsafe`，不放宽仓库边界检查。
 - OMP 全局 MCP ownership/state 校验同时要求 launcher 与 CLI 路径为绝对路径；同名相对路径不能通过受管记录证明，合法全局配置与历史回执格式不变。
 - README 两个入口补齐同作用域 plan／init 成对切换命令；版本化自动巡检统一为每个有效 host 配置域一条全局 MCP、逐项目本地图，不再把历史逐仓绑定当当前安装要求。
 - 根安装器普通 `init`／`reset` 带 `--yes`／`-Yes` 而未指定项目参数时改为 global-only，不再自动把 cwd 纳入项目写入范围；显式项目参数、project-only 和未启用自动确认的交互选择保持不变。
