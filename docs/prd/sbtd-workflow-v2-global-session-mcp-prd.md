@@ -3,18 +3,18 @@
 ## 1. 状态、来源与主 PRD 关系
 
 - 用户在本次会话明确确认 OMP session `01a0fb46-a6aa-7305-9db5-6942c2a05be9` 最后一轮修正方案，并要求新建分支、按 strict 实施。
-- 实施分支：`feat/graft-global-session-mcp`；起始 HEAD：`39cf00bb7299d9f7b92153a5bd147382a40c478d`。
+- 实施分支：`feat/graft-global-session-mcp`（合并成功后已删除本地及远程分支）；起始 HEAD：`39cf00bb7299d9f7b92153a5bd147382a40c478d`。
 - 主线：[去 Trellis 化与 Graft 替换主 PRD](sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。本文承接全局安装／会话项目解析整改；主 PRD 保留原始审核、已执行批次与发布台账，不重写历史成功的含义。
 - 文档选择：新增关联 PRD。整改横跨安装、全局配置、项目初始化、受管 launcher 和旧接线迁移，具有独立验收生命周期；不把完整实现设计继续堆入主 PRD。原主 PRD P3-05 承接实际环境退役，P3-04 继续拥有备份销毁边界。
-- 当前状态：源码与本地验证已完成，已创建 [PR #108](https://github.com/KunoLu/640-skills/pull/108)；精确提交的三平台结果以该 PR Checks 为准，不以旧 head 结果证明新 head。本轮不自动合并，真实 PC 切换及发布另行记账。
+- 当前状态：源码与验收已完成；[PR #108](https://github.com/KunoLu/640-skills/pull/108) 已于 `2026-10-03T04:38:30Z` 合并，merge `a2d0971c8fb10f91f4fb8c11be2d4432884762bf`。随后用户独立授权的规则／Skills／automation prompt 同步已完成。最终证据见 §7.3；live 全局 MCP 切换、环境退役及 v2 发布仍未完成，不由合并或 sync 推定。
 - 前序可行性证明仅覆盖真实 OMP CLI/RPC、Codex CLI/app-server 与 Orca 终端到诊断 MCP 的 cwd 传递；不是新 Graft 查询实现证明。未验证的 GUI 专用启动器／managed-daemon／SDK 不扩大宣称。
-- 现有五份未提交文档修改属于前序调查成果，保留，不 reset、不丢弃。
+- 历史输入：实施开始时的五份未提交文档修改属于前序调查成果，当时要求保留、不 reset、不丢弃；此项记录输入来源，不表示当前工作树仍有未提交修改。
 
 ## 2. 目标与授权
 
 每个所选 host 的有效配置域只有一条通用受管 `sbtd-graft` stdio 定义；无固定 cwd、无固定项目 `--root`。进程实际 cwd 决定一条连接的唯一项目。全局安装可不选项目；项目初始化只准备本项目规则、图与 stamp。一次批量初始化和随后逐次追加使用同一项目操作，不引入 daemon、跨项目路由服务或全局项目注册表。
 
-本轮授权仓库代码、测试、文档和隔离验证，不自动授权真实 HOME 接线替换、全局安装、sync、发布、终止用户连接或备份销毁。真实 PC 切换须先展示精确前态／目标清单。已确认的条件清理只有在替代生效、host 验收、旧连接停止且无运行／恢复用途时才成立；不得以方案确认代替这些事实。
+初始实施授权仅包含仓库代码、测试、文档和隔离验证，不自动授权真实 HOME 接线替换、全局安装、sync、发布、终止用户连接或备份销毁。后续管理员合并、分支删除及范围限定 sync 均由用户另行明确授权并已执行，见 §7.3；这些授权不扩大为 live MCP 切换或环境清理。真实 PC 切换仍须先展示精确前态／目标清单。条件清理只有在替代生效、host 验收、旧连接停止且无运行／恢复用途时才成立。
 
 ## 3. 领域及不变量
 
@@ -87,7 +87,7 @@
 | DDIA | 全局持久配置、项目图、切换和恢复所有权 | 设计前 | confirmed：单文件候选、预期前态检查、原子资源提交及既有备份；跨资源失败如实部分完成，禁止覆盖漂移 |
 | Legacy | 原固定项目连接语义与迁移历史有回归风险 | 代码前 | characterized：修改前原生候选复现追加 B 产生两个 cwd 绑定；空批次不渲染。既有配置／launcher／迁移 tests 为安全网 |
 | Refactoring | strict 修改既有生产代码 | 代码前 | proceed：沿用 launcher、候选渲染与资源执行 seam，无前置结构重构 |
-| Release | 安装／宿主启动／迁移行为变化 | 测试后 | pending，不能用方案或单测代替 |
+| Release | 安装／宿主启动／迁移行为变化 | 测试后 | ready，仅限源码／PR交付；最终验证与独立复核见 §7.3，不等于 live 切换或 v2 发布就绪 |
 
 未完整调用 grill-with-docs：用户已确认具有实测依据的最终方案，无需重问已明确问题。LSP references 调用返回无可用 language server，因此本轮影响分析用实际源码、符号搜索和契约测试；未调用有未证明副作用的 Graft 查询。
 
@@ -100,14 +100,16 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 | GM-A | cwd 根解析与会话固定、拒绝边界、launcher 回归 | 已实施；复核后加入实际 cwd 的 bare/admin 拒绝与可信 Git 探针 |
 | GM-B | 单全局 Codex/OMP 候选、旧项所有权及回执验证 | 已实施；复核后收紧旧项闭集形状，项目继承不再代替全局覆盖 |
 | GM-C | 全局安装／本地初始化分离、无项目支持及切换契约 | 已实施；完整安装写集避让批准文件、首写／逐资源复验，尊重 --no-mcp |
-| GM-D | 真 Graft A/B、宿主验证、全套测试与独立复核 | 复核后聚焦 92 项、全量 1425 项（8 skipped）通过；独立代码／安全复审 GO。真实批量／逐次图等价、A/B 并发与 Codex／OMP／Orca 查询通过；精确 head 三平台 CI 见 PR #108 Checks，首个 Windows 失败及修正见下文 |
-| GM-E | README 两种入口、automation、CHANGELOG、主 PRD 同步 | 已同步行为／迁移边界、长期 lesson、PR 入口及本地验证证据；合并和 live 状态保持独立 |
+| GM-D | 真 Graft A/B、宿主验证、全套测试与独立复核 | 最终实现 head `d3a6b5813a85768ac470d0e8d76cc024f9bc9846` 本地完整1433项／10 skipped、三平台CI与独立复核通过；真实 Graft／Codex／OMP smoke通过，分平台范围见 §7.3；早期 Orca 入口证明和失败记录保留在 §7.1–7.2 |
+| GM-E | README 两种入口、automation、CHANGELOG、主 PRD 同步 | 源码行为文档已更新；PR已合并，后续独立授权的本机规则／Skills及live automation prompt同步已完成；本次补齐台账，MCP绑定和环境退役仍归P3-05 |
 
 修改前原生复现：两个项目候选追加后 server_count=2，均固定 cwd；期望一条通用定义的断言 exit 1。首次会话 Python 缺 tomlkit 属于环境失败，保留但不作为产品 red；随后复用既有依赖完整的验证解释器得到上述真实 red。
 
-恢复边界：本轮保留起始 dirty patch，不改真实生效 MCP 或删除历史环境。用户随后明确授权本地检查和复核收口后提交、推送本分支并创建 PR，取得精确提交的三平台 CI；不授权合并、发布或 live 切换。另明确授权只用本轮 Orca 专用终端和隔离 HOME 查询合成图，完成后关闭终端并移除本轮临时注册，不删除项目文件。源码回退不能替代 HOME／ignored 数据恢复；live 退役继续遵守主 PRD P3-05/P3-04。
+历史授权与恢复边界：实施阶段保留起始 dirty patch，不改真实生效 MCP 或删除历史环境。最初提交／推送／创建 PR 的授权不包含合并、发布或 live 切换；后续合并与 sync 的独立授权及实际结果见 §7.3，不改写当时边界。另获授权的 Orca 专用终端和隔离 HOME 仅查询合成图，完成后已关闭终端并移除本轮临时注册，项目文件保留。源码回退不能替代 HOME／ignored 数据恢复；live 退役继续遵守主 PRD P3-05/P3-04。
 
 ### 7.1 本地验证记录
+
+以下为早期阶段的历史验证记录，不作为最终实现 head 的计数或合并状态；最终结果统一见 §7.3。
 
 - `full-suite-02`：原生 `python -B -m unittest discover -s tests -p 'test_*.py'`，1425 tests，8 skipped，exit 0；首轮 1414 tests／8 skipped 记录仍保留，不冒充复核后结果。
 - `review-fixes-focused-02`：批准完整写集／首写及构图期间漂移、MCP opt-out、OMP 生效域与闭集退役、launcher、候选渲染和隔离 92 项通过。此前 fixture 语法失败记录保留；修复的是测试括号，不是压低安全断言。
@@ -122,7 +124,7 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 
 [PR #108](https://github.com/KunoLu/640-skills/pull/108) 的首个 head `6373f9cf4a7a4e6c78edb4179455cf58ecd0cce3`，Windows job `110949024431`（run `37040462165`）在 `SessionRootResolutionTests` 报 7 个错误：全部来自测试 `read_reply` 对匿名管道调用 `select.select`，原生日志为 `WinError 10038`（not a socket）。安装器／工作流 50 项与 pwsh 15 项此前通过。这个失败不证明 Git 路径解析有误，不能据此放宽生产路径安全守卫。
 
-测试 helper 改为带超时的后台 `readline`，保留全部协议与拒绝断言；本地完整 launcher 43 项及 ruff 通过。生产模块不因该测试平台问题改变。新 head 必须重新取得 Linux／macOS／Windows 结果，旧 head 的绿色或失败记录只作为历史证据保留；最终 Checks 与本地任务记录共同提供完成证据。本 PR 合并前，主 PRD P1-25 保持 checking，不冒充已进入 main。
+测试 helper 改为带超时的后台 `readline`，保留全部协议与拒绝断言；本地完整 launcher 43 项及 ruff 通过。生产模块不因该测试平台问题改变。每个新 head 必须重新取得 Linux／macOS／Windows 结果，旧 head 的绿色或失败记录只作为历史证据保留。当时 PR 尚未合并，主 PRD P1-25 因而保持 checking；后续已合并并补记 done，见 §7.3。
 
 后续诊断 head `24d715357b074568ae6ba01aa4b18530637bbd65` 的 Windows stderr 进一步确认普通图被 `tree-unsafe` 硬链接分支误拒绝。Python 3.12 的 [DirEntry.stat 契约](https://docs.python.org/3.12/library/os.html#os.DirEntry.stat) 明确 Windows `st_nlink=0`；生产守卫仅改为 `os.stat(entry.path, follow_symlinks=False)` 获取真实值，仍要求单链接并拒绝 symlink/reparse/special。新增真实硬链接启动拒绝场景，本地 launcher 44 项和 ruff 通过，独立代码／安全窄复审再次 GO。
 
@@ -130,9 +132,22 @@ TDD 公共 seam：用户确认的 MCP 进程启动、安装 CLI、TOML/JSON 配�
 
 OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInput`，等待继承 stdin 的 EOF，尚未进入 MCP。仓外驱动已通过 argv 提供完整 prompt，却继承持久工具 stdin；改为 `stdin=DEVNULL` 后同一共享隔离 HOME 的并发 A/B 查询约 1.1s 通过。负载重叠不再作为根因结论；这次只修正验证驱动，没有为超时修改产品源码。全部失败、采样和复跑输出保留。
 
+### 7.3 最终验收、合并与独立同步
+
+| 事项 | 已核验事实 | 边界 |
+|---|---|---|
+| 最终实现验收 | head `d3a6b5813a85768ac470d0e8d76cc024f9bc9846`；[CI run 37094601001](https://github.com/KunoLu/640-skills/actions/runs/37094601001) 三平台全部 success；本地完整1433项／10 skipped，聚焦53项／2 skipped，ruff及两路独立复核通过 | 这些结果绑定实现 head，不冒充后续文档提交的重新运行 |
+| 原生平台结果 | Linux全量1433项／15 skipped；macOS268项／2 skipped；Windows安装器／契约49、pwsh15、MCP边界22（1项POSIX专属skip）、junction1、ACL1全部通过 | Unicode仓库用例在Windows `utf8_mode=0`、`cp1252` 下由red转green，未跳过；真实Git／launcher使用下游协议fixture，不冒充Windows真实Graft全栈；macOS真实Graft／Codex／OMP smoke另行通过 |
+| 合并与分支清理 | 用户另行授权管理员合并；PR #108 的 `mergedAt=2026-10-03T04:38:30Z`，merge `a2d0971c8fb10f91f4fb8c11be2d4432884762bf`；合并树与验证head一致，确认MERGED后删除本地及远程开发分支 | 未修改分支保护规则；不是tag发布或live接线切换 |
+| 独立sync | 用户显式输入sync；于 `2026-10-03T13:33:52.449160+08:00` 完成记录。16个目标与源一致：更新两份全局AGENTS及完整Onboard，其余13个bundled Skill已一致；5个required external Skills经stable安装器重装并校验 | 旧Onboard及六个legacy external目录原已不存在，完整迁移命令返回无需迁移；备份保留，不等于环境退役 |
+| live automation | 完整prompt已按仓库版本同步并读回一致；enabled仍为false，计划、时区、工作区模式／路径和其他配置不变 | 未启用或运行automation；未改MCP绑定 |
+| 尚未执行 | 已知OMP和Orca Codex旧固定根配置仍引用TEMP运行时；未实施新的live全局MCP替代或环境删除 | P3-05仍为planned，须按主PRD §11.9完成替代、host验收、连接退出及精准退役；备份销毁仍归P3-04 |
+
+P1-25在主PRD的状态补记为done，仅关闭源码／验收／合并交付；该表完成时间记录本次台账补记时刻，不回填成先前实现、合并或sync时刻。旧失败、原生报告与同步备份均保留在既有私有证据目录；本节不发布真实HOME配置、账户标识或敏感原件。附带sync检查未识别可用Java，Maestro CLI未检查，不据此宣称完整本机工具栈就绪。
+
 ## 8. PR #108 审查修正
 
-用户要求修复独立审查最终保留的五项问题，并在本轮追加明确确认 R6（`--yes` 省略项目参数时 global-only），本轮共六项。基线为 `a9305c57c5ac04b592a7d74194ff69ea1bfb344b`，沿用原分支与 strict，旧完成事件及旧 CI 证据保留。此次授权仍不包含合并、live HOME/MCP、sync、环境或备份删除。
+用户要求修复独立审查最终保留的五项问题，并在该阶段追加明确确认 R6（`--yes` 省略项目参数时 global-only），共六项。基线为 `a9305c57c5ac04b592a7d74194ff69ea1bfb344b`，沿用原分支与 strict，旧完成事件及旧 CI 证据保留。该修正阶段的授权不包含合并、live HOME/MCP、sync、环境或备份删除；后续独立授权及执行事实见 §7.3。
 
 | ID | 问题与 Given / When / Then | 修正及回归边界 |
 |---|---|---|
@@ -143,17 +158,17 @@ OMP 超时补充取证：带启动期 stderr 的复现明确停在 `readPipedInp
 | R5 | Given 版本自动化检查当前部署；When 评估 MCP；Then 仅要求每个有效 host 配置域一条全局定义，同时逐项目检查图 | 删除当前规则中的逐仓 MCP 判据；历史 PRD／回执不做全局词语替换 |
 | R6 | Given 普通根安装器带 --yes／-Yes 且没有项目参数；When 从项目 cwd 执行 init／reset；Then 只安装全局范围，不自动选择 cwd，不安装项目资产 | Bash／PowerShell 保持空项目集合；显式 roots 和 project-only 不变，不带自动确认仍保留交互选择；原生解释器回归 |
 
-本轮 Book Gate：DDD not-needed（无新领域歧义、未完整 grill，R6 默认行为由用户明确选择）；DDIA confirmed（配置证明及安装范围收紧，读写所有权和回滚规则不变）；Legacy characterized（OMP 当前／历史 reader 的相对路径消费者红测、Bash／PowerShell 省略 roots 的原生 red，以及 Windows 机制证据／原生回归）；Refactoring proceed（原有函数内的最小修正，不增加调度器、缓存或平台模拟层）；Release Readiness 在本轮新 head 验证与复审后重新判定，旧 head 的通过不自动继承。
+该阶段 Book Gate：DDD not-needed（无新领域歧义、未完整 grill，R6 默认行为由用户明确选择）；DDIA confirmed（配置证明及安装范围收紧，读写所有权和回滚规则不变）；Legacy characterized（OMP 当前／历史 reader 的相对路径消费者红测、Bash／PowerShell 省略 roots 的原生 red，以及 Windows 机制证据／原生回归）；Refactoring proceed（原有函数内的最小修正，不增加调度器、缓存或平台模拟层）；Release Readiness 复核已完成，后续 Unicode 修复的最终实现 head 验收见 §7.3，未继承旧 head 的通过结论。
 
 验证使用现有 Python／原生 CLI／三平台 CI。Windows 专属场景必须在 Windows runner 执行，不能把本机平台 skip 当通过；文案通过命令参数和行为核对，不新增源码措辞断言。本轮进度与最终证据记录在本地唯一 task 和 PR #108，不预写未执行结果。
 
 ## 9. Windows Unicode 仓库路径修正
 
-用户在 `11b0a7130526097869889ccda5982eb998feb471` 的审查后确认修复 Git 根证明的编码问题。沿用 strict、原分支与 PR #108；不合并、不执行 live 切换。用户没有本地 Windows，原生证明使用既有 Windows GitHub Actions，不能以 macOS 通过或 Windows skip 代替。
+用户在 `11b0a7130526097869889ccda5982eb998feb471` 的审查后确认修复 Git 根证明的编码问题。该修正阶段沿用 strict、原分支与 PR #108，不自动合并、不执行 live 切换；后续独立合并与sync事实见 §7.3。用户没有本地 Windows，原生证明使用既有 Windows GitHub Actions，不能以 macOS 通过或 Windows skip 代替。
 
 | 场景 | Given / When / Then | 自动化边界 |
 |---|---|---|
 | Unicode 仓库不受 Windows 默认代码页影响 | Given 合法 Git 仓库路径含中文或 é，Windows Python 关闭 UTF-8 模式且默认解码非 UTF-8；When 从该仓库启动 MCP；Then 完成初始化并仍绑定真实仓库，不误报 root-unsafe | 真实 Git／真实 launcher／既有协议 fixture；测试明确核对解释器编码前置条件，先取得 Windows red，再验证 green |
 | 不可解码的 Git 证明安全拒绝 | Given Git 探针返回无法解码的输出；When 启动 MCP；Then 返回受控 root-unsafe，不启动下游、不输出 traceback，也不修改项目或创建遗留临时 HOME | CLI 错误边界回归，不放宽路径相等、最近仓边界或原生 Git 选择规则 |
 
-Book Gate：DDD not-needed（无领域歧义，未完整 grill）；DDIA not-needed（不改图、stamp、配置或回执格式）；Legacy characterized（原生 Windows 已确认 cp1252／UTF-8 模式关闭时合法仓库被拒绝，POSIX 畸形输出已确认抛出未捕获解码异常）；Refactoring proceed（仅调整探针解码与错误边界，无新抽象）；Release Readiness 在真实场景、聚焦／三平台检查与独立复核后判定。保留既有 POSIX 解码约定，不以全局编码改写扩大修复范围。最终原生证据与状态由 task 和 PR 记录，旧 head 的 CI 不自动继承。
+Book Gate：DDD not-needed（无领域歧义，未完整 grill）；DDIA not-needed（不改图、stamp、配置或回执格式）；Legacy characterized（原生 Windows 已确认 cp1252／UTF-8 模式关闭时合法仓库被拒绝，POSIX 畸形输出已确认抛出未捕获解码异常）；Refactoring proceed（仅调整探针解码与错误边界，无新抽象）；Release Readiness ready，仅限源码／PR交付，真实场景、聚焦／三平台检查及独立复核均已完成，见 §7.3。既有 POSIX 解码约定未变，未以全局编码改写扩大修复范围；不把合并或sync作为live切换及环境退役证明。
