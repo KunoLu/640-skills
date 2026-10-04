@@ -17,6 +17,7 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -246,6 +247,202 @@ class InventoryTests(unittest.TestCase):
             self.build(scope, **kwargs)
         self.assertEqual(raised.exception.code, code)
         return raised.exception
+
+
+class PhysicalTargetPlanTests(InventoryTests):
+    def _case_sensitive_parent(self):
+        parent = self.base / "case-sensitive"
+        parent.mkdir()
+        if os.name == "nt":
+            enabled = subprocess.run(
+                ["fsutil", "file", "setCaseSensitiveInfo", str(parent), "enable"],
+                capture_output=True, timeout=30, check=False,
+            )
+            self.assertEqual(enabled.returncode, 0, enabled.stdout + enabled.stderr)
+        return parent
+
+    def test_absent_agents_alias_cannot_install_through_preserve(self):
+        """U20: missing targets need alias protection before they have inodes."""
+        import sbtd_upgrade
+        from sbtd_migration_files import require_private_directory
+
+        marker = self.base / "CaseProbe"
+        marker.mkdir()
+        if case_variant(marker) is None:
+            self.skipTest("requires a case-insensitive directory")
+        target, alias = self.base / "AGENTS.md", self.base / "agents.md"
+        vault = self.base / "vault"
+        require_private_directory(vault, create=True)
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.plan_upgrade(self.scope(
+                agents_targets=[str(target), str(alias)],
+                decisions={str(alias): "preserve"},
+            ), vault, package_root=self.pkg)
+        self.assertEqual(caught.exception.code, "resource-overlap")
+        self.assertFalse(target.exists())
+        self.assertFalse(alias.exists())
+        self.assertEqual(list(vault.iterdir()), [])
+
+    def test_absent_case_sensitive_targets_remain_distinct(self):
+        """U18: absent differently-cased names are valid on proven sensitive parents."""
+        import sbtd_upgrade
+        from sbtd_migration_files import require_private_directory
+
+        parent = self._case_sensitive_parent()
+        marker = parent / "CaseProbe"
+        marker.mkdir()
+        if case_variant(marker) is not None:
+            self.skipTest("requires a case-sensitive directory")
+        target, other = parent / "AGENTS.md", parent / "agents.md"
+        vault = self.base / "vault"
+        require_private_directory(vault, create=True)
+        plan = sbtd_upgrade.plan_upgrade(self.scope(
+            agents_targets=[str(target), str(other)],
+            decisions={str(other): "preserve"},
+        ), vault, package_root=self.pkg)
+        choices = {row["target"]: row["decision"] for row in plan["payload"]["resources"]}
+        self.assertEqual(choices, {str(target): "install", str(other): "preserve"})
+
+    def test_case_sensitive_onboard_provider_uses_selected_installation(self):
+        """U18/U21: the scheduled lowercase installation, not its sibling, supplies MCP."""
+        import sbtd_upgrade
+        import tomllib
+        from sbtd_migration_files import require_private_directory
+
+        parent = self._case_sensitive_parent()
+        lower, upper = parent / "installs", parent / "INSTALLS"
+        lower.mkdir()
+        try:
+            upper.mkdir()
+        except FileExistsError:
+            self.skipTest("requires a case-sensitive directory")
+        package = SCRIPTS.parent
+        for selected in (lower, upper):
+            shutil.copytree(package, selected / SELF_NAME, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        installed = lower / SELF_NAME
+        (installed / "SKILL.md").write_text(skill_md(SELF_NAME, "old custom body"), encoding="utf-8")
+        config_home = self.base / "codex"
+        runtime = {}
+        for key, name in (("python", "python"), ("node", "node"), ("cli", "cli.js")):
+            executable = self.base / name
+            executable.write_bytes(b"")
+            runtime[key] = str(executable)
+        config = config_home / "config.toml"
+        host = {
+            "id": "codex", "platform": "codex", "config_home": str(config_home),
+            "config": str(config), "skills_roots": [str(lower)], "project_roots": [],
+            "onboard_root": str(installed), "runtime": runtime,
+        }
+        vault = self.base / "vault"
+        require_private_directory(vault, create=True)
+        plan = sbtd_upgrade.plan_upgrade(self.scope(
+            skills_roots=[str(upper), str(lower)], hosts=[host],
+            decisions={str(installed): "replace"},
+        ), vault)
+        receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+        self.assertEqual(receipt["payload"]["status"], "complete", receipt)
+        self.assertEqual((installed / "SKILL.md").read_bytes(), (package / "SKILL.md").read_bytes())
+        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.assertIn(
+            str(installed / "scripts" / "sbtd_graft_entry.py"),
+            parsed["mcp_servers"]["sbtd-graft"]["args"],
+        )
+
+    def test_conflicting_agents_aliases_refuse_without_mutation(self):
+        """U20: real inventory cannot authorize replace through a preserved alias."""
+        import sbtd_upgrade
+
+        target = self.base / "AGENTS.md"
+        original = b"# private custom instructions\n"
+        target.write_bytes(original)
+        alias = case_variant(target)
+        if alias is None:
+            self.skipTest("the volume is case-sensitive")
+        vault = self.base / "vault"
+        vault.mkdir(mode=0o700)
+        scope = self.scope(
+            agents_targets=[str(target), str(alias)],
+            decisions={str(target): "replace", str(alias): "preserve"},
+        )
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.plan_upgrade(scope, vault, package_root=self.pkg)
+        self.assertIn(caught.exception.code, ("resource-overlap", "unsafe-path"))
+        self.assertEqual(target.read_bytes(), original)
+        self.assertEqual(list(vault.iterdir()), [])
+
+    def test_folded_path_keys_do_not_merge_distinct_roots_or_payloads(self):
+        """U18: Windows string folding is not filesystem identity."""
+        parent = self._case_sensitive_parent()
+        lower = parent / "installs"
+        upper = parent / "INSTALLS"
+        lower.mkdir()
+        try:
+            upper.mkdir()
+        except FileExistsError:
+            self.skipTest("requires a case-sensitive directory")
+        install_all(self.pkg, lower)
+        install_all(self.pkg, upper)
+        changed = upper / "alpha-skill" / "SKILL.md"
+        changed.write_text(skill_md("alpha-skill", "private change"), encoding="utf-8")
+        with mock.patch.object(inventory.os.path, "normcase", side_effect=str.lower):
+            document = self.build(self.scope(skills_roots=[str(lower), str(upper)]))
+        rows = {row["target"]: row for row in document["resources"]}
+        self.assertEqual(rows[str(lower / "alpha-skill")]["classification"], "current")
+        self.assertEqual(rows[str(upper / "alpha-skill")]["classification"], "unknown-drift")
+
+    def test_folded_home_does_not_accept_distinct_config_directory(self):
+        """U18: a case-sensitive sibling is outside the selected home."""
+        parent = self._case_sensitive_parent()
+        home = parent / "Conf"
+        sibling = parent / "conf"
+        home.mkdir()
+        try:
+            sibling.mkdir()
+        except FileExistsError:
+            self.skipTest("requires a case-sensitive directory")
+        host = {
+            "id": "custom", "platform": "claude",
+            "config_home": str(home), "config": str(sibling / "config.json"),
+            "skills_roots": [], "project_roots": [],
+            "runtime": {"python": None, "node": None, "cli": None},
+        }
+        with mock.patch.object(inventory.os.path, "normcase", side_effect=str.lower):
+            self.assert_code("unsafe-path", self.scope(hosts=[host]))
+
+    def test_selected_profile_alias_decision_seals_selected_spelling(self):
+        """U21: non-Skill aliases bind without Skill-name normalization."""
+        profile = self.base / "Profile.ps1"
+        profile.write_bytes(b"# private profile\n")
+        alias = case_variant(profile)
+        if alias is None:
+            self.skipTest("requires a case-insensitive directory")
+        scope = self.scope(
+            shell_profiles=[{"path": str(profile), "shell": "powershell", "bin": str(self.base / "bin")}],
+            decisions={str(alias): "preserve"},
+        )
+        self.build(scope)
+        sealed = inventory.normalize_scope(scope)
+        self.assertEqual(sealed["decisions"], {str(profile): "preserve"})
+
+    def test_explicit_onboard_child_alias_binds_with_multiple_roots(self):
+        """U21: an existing Onboard child alias is a valid explicit selection."""
+        install_all(self.pkg, self.skills_root)
+        installed = self.skills_root / SELF_NAME
+        alias = case_variant(installed)
+        if alias is None:
+            self.skipTest("requires a case-insensitive directory")
+        second = self.base / "other-skills"
+        host = {
+            "id": "codex", "platform": "codex",
+            "config_home": str(self.base / "home"),
+            "config": str(self.base / "home" / "config.toml"),
+            "skills_roots": [str(self.skills_root), str(second)],
+            "onboard_root": str(alias), "project_roots": [],
+            "runtime": {"python": None, "node": None, "cli": None},
+        }
+        document = self.build(self.scope(skills_roots=host["skills_roots"], hosts=[host]))
+        domain = next(row for row in document["domains"] if row["kind"] == "host")
+        self.assertEqual(domain["onboard_root"], str(installed))
 
 
 class BaselineTests(InventoryTests):

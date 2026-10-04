@@ -43,6 +43,10 @@
 
 ### 修复
 
+- 升级目标重叠与继承依赖预检识别物理路径别名，拒绝通过另一拼写覆盖 preserve 原件；Windows 大小写敏感目录不再被字符串折叠去重、误判包含或共享错误载荷摘要。已选配置／profile／Onboard 子目录的合法别名绑定封存目标。
+- 封存 blocked 的 MCP／shell 决定先于宿主语义比较，磁盘后来匹配不能补足授权；probe 未确认的拒绝补齐 schema 引导字段，无法展开的 home 路径返回受控 JSON。
+- Profile 重写识别并保留首行 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼容 Windows PowerShell 5.1 Unicode 路径；Bash／zsh 登录 profile 按登录模式隔离探测，rc 文件保持非登录模式。
+- MCP／Codex method 回复不再接受 data 冒充 result；MCP 检查初始化协商版本及正常收尾，缺失／不支持版本、非零或强制退出不得报告 verified；宿主缺少方法按结构化错误码脱敏报告 unsupported。
 - 升级写后持久化／执行器失败不再冒充普通写前拒绝：返回 failed／exit 3、绑定批次的 checkpoint 与备份入口，并区分实测后态和 unknown；证据读取再次失败仍保留恢复上下文。
 - 升级父目录预检改为逐组件 no-follow 检查，不递归扫描无关兄弟内容；修正文件系统根包含判断，按物理身份合并 Skills 根及已存在子目录的拼写别名，并绑定决定键，保留大小写敏感卷上的不同目录。
 - 宿主对齐只接受 Codex 实际 `config.toml` 入口；统一 `oh-my-pi`／`omp`，blocked 不再被 drift 掩盖，合法无关 MCP 与非法配置分别报告 legacy none／unknown。

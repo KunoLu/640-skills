@@ -650,6 +650,8 @@ def _marker_spans(lines: list[bytes]) -> list[tuple[int, int]]:
     events: list[tuple[int, str]] = []
     for index, line in enumerate(lines):
         stripped = line.rstrip(b"\r")
+        if index == 0:
+            stripped = stripped.removeprefix(b"\xef\xbb\xbf")
         if stripped == _MARKER_START:
             events.append((index, "start"))
         elif stripped == _MARKER_END:
@@ -687,7 +689,11 @@ def _shell_profile_candidate(before: bytes, *, shell: str, bin_dir: str) -> byte
             "invalid-config",
             "a UTF-16 shell profile cannot be rewritten byte-exactly",
         )
-    lines = raw.split(b"\n")
+    # Windows PowerShell 5.1 decodes BOM-less scripts as ANSI.
+    bom = b"\xef\xbb\xbf" if (
+        raw.startswith(b"\xef\xbb\xbf") or (not raw and shell == "powershell")
+    ) else b""
+    lines = raw[len(bom):].split(b"\n")
     spans = _marker_spans(lines)
     crlf = any(line.endswith(b"\r") for line in lines)
     terminator = b"\r" if crlf else b""
@@ -711,7 +717,7 @@ def _shell_profile_candidate(before: bytes, *, shell: str, bin_dir: str) -> byte
     rendered = b"\n".join(remaining[:insert_at] + block + remaining[insert_at:])
     if not rendered.endswith(b"\n"):
         rendered += b"\n"
-    return rendered
+    return bom + rendered
 
 
 def _shell_legacy_lines(raw: bytes, bin_dir: str) -> list[int]:
@@ -1422,10 +1428,19 @@ class _JsonLines:
                     raise _ProbeError("failed", "host-request-refused")
                 return message.get("data")
             if message.get("error") is not None:
+                error = message["error"]
+                if (
+                    isinstance(error, Mapping)
+                    and type(error.get("code")) is int and error["code"] == -32601
+                    and "result" not in message
+                ):
+                    raise _ProbeError("unsupported", "host-method-unsupported")
                 raise _ProbeError("failed", "host-request-refused")
             if message.get("success") is False:
                 raise _ProbeError("failed", "host-request-refused")
-            return message.get("result", message.get("data"))
+            if "result" not in message or "error" in message:
+                raise _ProbeError("failed", "protocol-evidence-invalid")
+            return message["result"]
 
     def notify(self, method: str, params: Mapping[str, Any]) -> None:
         self._write(
@@ -1465,6 +1480,7 @@ class _JsonLines:
         try:
             code = proc.wait(timeout=_HOST_SHUTDOWN)
         except subprocess.TimeoutExpired:
+            graceful = False
             proc.terminate()
             try:
                 code = proc.wait(timeout=_HOST_SHUTDOWN)
@@ -1504,7 +1520,7 @@ class _JsonLines:
                 RuntimeWarning,
                 stacklevel=2,
             )
-        return code
+        return code if graceful and not incomplete else (code or -1)
 
 
 def _probe_env(base: Path, extra: Mapping[str, str]) -> dict[str, str]:
@@ -1558,6 +1574,11 @@ def _mcp_handshake(argv: list[str], *, cwd: Path, fixture: Path) -> dict[str, An
         )
         if not isinstance(result, Mapping):
             raise _ProbeError("failed", "protocol-evidence-invalid")
+        # This stdio client implements initialization-based revisions only.
+        if result.get("protocolVersion") not in (
+            "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25",
+        ):
+            raise _ProbeError("failed", "protocol-version-unsupported")
         server_info = result.get("serverInfo")
         version = server_info.get("version") if isinstance(server_info, Mapping) else None
         rpc.notify("notifications/initialized", {})
@@ -1571,9 +1592,11 @@ def _mcp_handshake(argv: list[str], *, cwd: Path, fixture: Path) -> dict[str, An
         ):
             raise _ProbeError("failed", "protocol-evidence-invalid")
         names = sorted(tool["name"] for tool in tools)
-        return {"tools": names, "server_version": version}
     finally:
-        rpc.close()
+        exit_code = rpc.close()
+    if exit_code != 0:
+        raise _ProbeError("failed", "protocol-shutdown-failed")
+    return {"tools": names, "server_version": version}
 
 
 # ---------------------------------------------------------------------------
@@ -2387,6 +2410,12 @@ def _shell_resolution(
             # Interactive load: real profiles guard on $- / -o interactive, so
             # the probe must meet the same condition the user session meets.
             flags = ["--noprofile", "--norc", "-i"] if shell == "bash" else ["-f", "-i"]
+            login_profiles = (
+                (".bash_profile", ".bash_login", ".profile")
+                if shell == "bash" else (".zprofile", ".zlogin")
+            )
+            if target.name in login_profiles:
+                flags.append("-l")
             argv = [executable, *flags, "-c", script]
         try:
             result = subprocess.run(

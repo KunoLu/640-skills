@@ -846,3 +846,8 @@ python scripts/onboard.py recovery --phase apply \
 | U17 真实探测证据 | Given 交互守卫、命令遮蔽、npm shim 或 OMP 工具文本；When 显式 probe；Then 真实优先级与受限 CLI 指向可验证，只有有效 RPC 注册表可证明 OMP 加载，写入／响应均受期限约束 |
 | U18 物理路径边界 | Given 物理路径别名、大小写敏感目录或父目录中的无关链接；When plan／apply；Then 同一资源只绑定一次，不合并不同目录，不递归读取无关兄弟，根路径包含判断正确 |
 | U19 状态与失败入口 | Given 写后证据失败、平台别名或混合域状态；When CLI 返回／verify；Then 保留绑定批次的 checkpoint 与实测／unknown，平台统一，blocked 不被 drift 掩盖，合法无关 MCP 与非法配置区分 |
+| U20 冲突目标别名 | Given 同一既有定制 AGENTS 的不同大小写物理别名分别声明 replace／preserve；When plan／apply；Then 写入前拒绝重叠，原文件及 vault 不变 |
+| U21 决定与依赖别名 | Given 已选配置／profile／Onboard 子目录的真实别名或继承输入别名；When 绑定决定／预检；Then 合法决定绑定封存目标，依赖写入冲突在任意目标修改前拒绝 |
+| U22 协议边界 | Given data-only method 回复、缺失／不支持 MCP 协商版本或异常关闭；When probe；Then 不报告 verified；支持的协商版本可正常使用，缺失宿主方法脱敏报告 unsupported |
+| U23 Profile 兼容性 | Given 首行 UTF-8 BOM、Unicode PowerShell PATH 或登录守卫；When render／probe；Then 保留既有 BOM，新 PowerShell profile 兼容 5.1，登录 profile 在隔离登录模式检验 |
+| U24 受控 CLI 拒绝 | Given 未授权 probe 或无法展开的用户目录；When CLI；Then 返回满足 failureDocument 的脱敏拒绝，前者不读取 plan |

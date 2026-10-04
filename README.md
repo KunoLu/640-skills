@@ -100,6 +100,10 @@ Python、Bash `install.sh upgrade ...` 和 PowerShell `-WorkflowMode upgrade` �
 
 升级安全与兼容边界：Codex 只对齐所选 `config_home/config.toml`；UTF-16 profile 和无法表示为单个 PATH 项的目录写前拒绝。Shell probe 使用实际交互加载／命令优先级，并核对受支持 npm shim 的 CLI 文件指向，不冒充包装器执行或 Node 验证；OMP 以结构化注册表而非 prompt 文本证明加载，仍只验收 user-wide 隔离投影。混合结果保留 blocked 优先级；写后失败返回 exit 3 与本批 `batch` checkpoint／备份入口，不能当作零写入拒绝。
 
+路径判断区分字面拼写与文件系统身份：同一目标的冲突物理别名、同批改写的继承输入在目标写入前拒绝；大小写敏感 Windows 目录不因字符串折叠被合并或复用错误摘要。已选配置、profile 与 Onboard 子目录的真实别名绑定规范选择，封存的 blocked 决定不因磁盘后来匹配而解除。
+
+Shell 保留既有 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼容 Windows PowerShell 5.1 的 Unicode 路径；登录 profile 与 rc 文件分别按登录／非登录条件隔离探测。协议验收要求有效 method 回复、受支持的 MCP 协商版本和正常收尾；缺少宿主方法报告脱敏 unsupported。输入路径无法展开、probe 未确认等拒绝统一返回完整 JSON 引导。
+
 已选但缺失的 host 资源仍进入安装，`preserve` 不取消该安装；不需要时应从 scope 移除。受支持的嵌套安装可从同基线已安装副本续作，restore intent 后的 absent 窗口保持原契约；这些边界不授权未知内容覆盖、项目级宿主图构建或真实 HOME 变更。
 
 跨平台基线按原始载荷字节及相对 POSIX 路径排序计算。根 `.gitattributes` 对 `sbtd-workflow-onboard/**` 及其 canonical `/LICENSE` 源禁用文本换行转换，保护固定 stable pin 和模板／脚本／许可证基线；不能通过运行时换行归一化来掩盖实际内容漂移。

@@ -1047,6 +1047,53 @@ class ShellResourceTests(unittest.TestCase):
             scope["decisions"] = {str(path): decision}
         return scope
 
+    @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell 5.1 required")
+    def test_new_unicode_profile_loads_in_windows_powershell(self):
+        """U23: the legacy host must load non-ASCII paths without mojibake."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            profile, bin_dir = base / "profile.ps1", base / "bin-é-中文"
+            scope = self._scope(base, profile, "powershell", bin_dir)
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            _write(profile, hosts.render_resource(resource))
+            result = subprocess.run(
+                [shutil.which("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+                 ("[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); "
+                  ". $env:SBTD_TEST_PROFILE; "
+                  "[Console]::WriteLine($env:PATH.Split([IO.Path]::PathSeparator)[0])")],
+                env={**os.environ, "SBTD_TEST_PROFILE": str(profile)},
+                capture_output=True, timeout=30, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.decode("utf-8").strip(), str(bin_dir))
+
+    def test_utf8_bom_first_marker_is_replaced_without_losing_bom(self):
+        """U23: replacing a first-line owned block retains encoding and foreign bytes."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            profile, bin_dir = base / "profile.ps1", base / "new-bin"
+            foreign = b"# private tail\r\n"
+            before = (
+                b"\xef\xbb\xbf# sbtd-workflow-onboard:path:start\r\n"
+                b"$env:PATH = 'old-bin' + [IO.Path]::PathSeparator + $env:PATH\r\n"
+                b"# sbtd-workflow-onboard:path:end\r\n" + foreign
+            )
+            _write(profile, before)
+            scope = self._scope(base, profile, "powershell", bin_dir, decision="replace")
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            self.assertEqual(resource["decision"], "replace")
+            rendered = hosts.render_resource(resource)
+            self.assertTrue(rendered.startswith(b"\xef\xbb\xbf"))
+            self.assertIn(foreign, rendered)
+            self.assertNotIn(b"'old-bin'", rendered)
+            self.assertIn(str(bin_dir).encode("utf-8"), rendered)
+            _write(profile, rendered)
+            converged = hosts.build_host_resources(scope, package_root=package)[0]
+            self.assertEqual(converged["classification"], "current")
+            self.assertEqual(hosts.render_resource(converged), rendered)
+
     def test_missing_bash_profile_installs_idempotent_block(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -1417,6 +1464,120 @@ class VerifyProbeTests(unittest.TestCase):
         resource = hosts.build_host_resources(scope, package_root=package)[0]
         _write(Path(host["config"]), hosts.render_resource(resource))
         return host, scope
+
+    def test_missing_codex_method_is_unsupported_without_private_error_text(self):
+        """U22: unsupported interface is distinct from an ordinary refusal."""
+        for code, expected in ((-32601, "unsupported"), (-32602, "failed")):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime, package = _runtime(base), _package(base)
+                skills = _skills_root(base, ["alpha-skill"])
+                project = base / "project"
+                project.mkdir()
+                _host, scope = self._aligned_codex(base, runtime, package, skills, project)
+                rig = _ProbeRig(self, ["alpha-skill"]).install()
+                original = rig._codex_handler
+
+                def refused(request, original=original, code=code):
+                    if request.get("method") == "config/mcpServer/reload":
+                        return {"id": request["id"], "error": {"code": code, "message": SECRET}}
+                    return original(request)
+
+                rig._codex_handler = refused
+                result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                self.assertEqual(result["hosts"][0]["host"]["checks"]["host_load"]["status"], expected)
+                self.assertNotIn(SECRET, json.dumps(result))
+
+    def test_mcp_failed_or_forced_shutdown_is_not_verified(self):
+        """U22: valid tools cannot hide a failed or forced process shutdown."""
+        for exit_code, forced in ((7, False), (0, True)):
+            with self.subTest(exit_code=exit_code, forced=forced), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime, package = _runtime(base), _package(base)
+                skills = _skills_root(base, ["alpha-skill"])
+                project = base / "project"
+                project.mkdir()
+                _host, scope = self._aligned_codex(base, runtime, package, skills, project)
+                rig = _ProbeRig(self, ["alpha-skill"]).install()
+                original = hosts._spawn
+
+                def spawn(argv, original=original, exit_code=exit_code, forced=forced, **kwargs):
+                    proc = original(argv, **kwargs)
+                    if "app-server" not in argv:
+                        proc._exit_code = exit_code
+                        if forced:
+                            native_wait = proc.wait
+                            attempts = 0
+
+                            def wait(timeout=None):
+                                nonlocal attempts
+                                attempts += 1
+                                if attempts == 1:
+                                    raise subprocess.TimeoutExpired(argv, timeout)
+                                return native_wait(timeout)
+
+                            proc.wait = wait
+                    return proc
+
+                with mock.patch.object(hosts, "_spawn", side_effect=spawn):
+                    result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                self.assertEqual(result["hosts"][0]["host"]["checks"]["protocol"]["status"], "failed")
+                self.assertTrue(all(proc.returncode is not None for proc in rig.procs))
+
+    def test_mcp_negotiated_version_must_be_supported(self):
+        """U22: compatible negotiation may differ from the requested revision."""
+        cases = [
+            (None, "failed"), ([], "failed"), ("2099-01-01", "failed"),
+            ("2026-07-28", "failed"),
+            ("2024-11-05", "verified"), ("2025-03-26", "verified"),
+            ("2025-06-18", "verified"), ("2025-11-25", "verified"),
+        ]
+        for version, expected in cases:
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime, package = _runtime(base), _package(base)
+                skills = _skills_root(base, ["alpha-skill"])
+                project = base / "project"
+                project.mkdir()
+                _host, scope = self._aligned_codex(base, runtime, package, skills, project)
+                rig = _ProbeRig(self, ["alpha-skill"]).install()
+                original = rig._mcp_handler
+
+                def negotiated(request, original=original, version=version):
+                    response = original(request)
+                    if request.get("method") == "initialize":
+                        if version is None:
+                            response["result"].pop("protocolVersion")
+                        else:
+                            response["result"]["protocolVersion"] = version
+                    return response
+
+                rig._mcp_handler = negotiated
+                result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                self.assertEqual(result["hosts"][0]["host"]["checks"]["protocol"]["status"], expected)
+
+    def test_method_data_only_reply_is_not_success_evidence(self):
+        """U22: OMP's data envelope cannot satisfy method-response contracts."""
+        for adapter, check in (("_mcp_handler", "protocol"), ("_codex_handler", "host_load")):
+            with self.subTest(adapter=adapter), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime, package = _runtime(base), _package(base)
+                skills = _skills_root(base, ["alpha-skill"])
+                project = base / "project"
+                project.mkdir()
+                _host, scope = self._aligned_codex(base, runtime, package, skills, project)
+                rig = _ProbeRig(self, ["alpha-skill"]).install()
+                original = getattr(rig, adapter)
+
+                def data_only(request, original=original):
+                    response = original(request)
+                    if response is not None:
+                        response["data"] = response.pop("result")
+                    return response
+
+                setattr(rig, adapter, data_only)
+                result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                self.assertEqual(result["hosts"][0]["host"]["checks"][check]["status"], "failed")
 
     def test_probe_pass_reports_distinct_verified_checks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3033,6 +3194,37 @@ class RealPowerShellWinningCommandTests(unittest.TestCase):
 
 
 class InteractiveProfileProbeTests(unittest.TestCase):
+    def test_selected_profile_uses_its_login_mode(self):
+        """U23: login guards run in login shells; rc files remain non-login."""
+        cases = [
+            ("bash", ".bash_profile", b"shopt -q login_shell || return 0\n"),
+            ("bash", ".bash_login", b"shopt -q login_shell || return 0\n"),
+            ("bash", ".profile", b"shopt -q login_shell || return 0\n"),
+            ("bash", ".bashrc", b"shopt -q login_shell && return 0\ntrue\n"),
+            ("zsh", ".zprofile", b"[[ -o login ]] || return 0\n"),
+            ("zsh", ".zlogin", b"[[ -o login ]] || return 0\n"),
+            ("zsh", ".zshrc", b"[[ -o login ]] && return 0\ntrue\n"),
+        ]
+        for shell, name, guard in cases:
+            with self.subTest(shell=shell, profile=name), tempfile.TemporaryDirectory() as directory:
+                if shutil.which(shell) is None:
+                    self.skipTest(f"{shell} unavailable")
+                base = Path(directory).resolve()
+                package = _package(base)
+                profile, bin_dir = base / name, base / "bin"
+                bin_dir.mkdir()
+                _write_graft(bin_dir)
+                _write(profile, guard)
+                scope = {
+                    "shell_profiles": [{"path": str(profile), "shell": shell, "bin": str(bin_dir)}],
+                    "decisions": {str(profile): "replace"},
+                }
+                resource = hosts.build_host_resources(scope, package_root=package)[0]
+                _write(profile, hosts.render_resource(resource))
+                result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                entry = result["shell_profiles"][0]
+                self.assertEqual(entry["status"], "pass", entry)
+
     @unittest.skipUnless(shutil.which("bash"), "bash unavailable")
     def test_bash_profile_with_noninteractive_guard_proves_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3267,9 +3459,10 @@ class StalledChildDeadlineTests(unittest.TestCase):
                     "-I",
                     "-c",
                     (
-                        "import sys\n"
+                        "import json, sys\n"
                         "for line in sys.stdin:\n"
-                        "    sys.stdout.write(line)\n"
+                        "    request = json.loads(line)\n"
+                        "    print(json.dumps({'id': request['id'], 'result': {'ready': True}}))\n"
                         "    sys.stdout.flush()\n"
                     ),
                 ],
@@ -3277,8 +3470,7 @@ class StalledChildDeadlineTests(unittest.TestCase):
                 cwd=str(base),
             )
             rpc = hosts._JsonLines(proc, 5.0)
-            # One live round trip (echo returns the request; no result payload).
-            self.assertIsNone(rpc.call("initialize", {"probe": True}))
+            self.assertEqual(rpc.call("initialize", {"probe": True}), {"ready": True})
             # Graceful close: stdin EOF lets the healthy child exit 0, and the
             # client seals every owned handle and finishes both threads.
             self.assertEqual(rpc.close(), 0)

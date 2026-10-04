@@ -10,10 +10,17 @@ from sbtd_cleanup_targets import strict_json_object
 from sbtd_migration_files import read_file, save_document, snapshot
 
 
+def _input_path(value: str) -> Path:
+    try:
+        return Path(value).expanduser().absolute()
+    except RuntimeError:
+        raise ValueError("input home directory cannot be expanded") from None
+
+
 def _load(value: str) -> dict[str, Any]:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("input path must not be empty")
-    path = Path(value).expanduser().absolute()
+    path = _input_path(value)
     state = snapshot(path)
     if state["type"] != "file":
         raise ValueError("input must be a regular JSON file")
@@ -24,7 +31,7 @@ def _save(plan: dict[str, Any], output: str | None) -> str | None:
     if output is None:
         return None
     vault = Path(plan["payload"]["backup_root"])
-    path = Path(output).expanduser().absolute()
+    path = _input_path(output)
     save_document(path, plan, private_root=vault)
     return str(path)
 
@@ -67,13 +74,14 @@ def _validate_supplied_paths(args: Any, names: tuple[str, ...]) -> None:
 def run_upgrade(args: Any) -> int:
     if args.phase == "verify" and args.probe and not args.yes:
         return _emit(args, {"mode": "upgrade", "phase": "verify", "status": "blocked",
-                            "reason": "probe-confirmation-required"}, 2)
+                            "reason": "probe-confirmation-required",
+                            "nextStep": "Review the selected probe scope, then explicitly confirm with --yes."}, 2)
     try:
         _validate_supplied_paths(args, ("scope", "backup_root", "output", "plan", "receipt"))
         from sbtd_upgrade import apply_upgrade, plan_upgrade, verify_upgrade
 
         if args.phase == "plan":
-            plan = plan_upgrade(_load(args.scope), Path(args.backup_root).expanduser().absolute())
+            plan = plan_upgrade(_load(args.scope), _input_path(args.backup_root))
             output = _save(plan, args.output)
             result = {"mode": "upgrade", "phase": "plan", "plan": plan, "plan_path": output}
             status = plan["payload"].get("status", "planned")

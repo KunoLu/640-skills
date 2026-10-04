@@ -168,23 +168,19 @@ def _resolved(value: object, field: str) -> Path:
 
 
 def _norm(path: Path) -> str:
-    return os.path.normcase(str(path))
+    """Checked spelling key; filesystem equivalence requires physical evidence."""
+    return str(path)
 
 
 def _inside(path: Path, root: Path) -> bool:
-    """Canonical containment including equality (both already checked).
-
-    Root-aware: a filesystem root key already ends with the separator, so
-    descendants of ``/`` or ``C:\\`` match without a doubled-separator
-    prefix that would never occur in a real path.
-    """
-    path_key = _norm(path)
-    root_key = _norm(root)
-    if path_key == root_key:
-        return True
-    if not root_key.endswith(os.sep):
-        root_key += os.sep
-    return path_key.startswith(root_key)
+    """Containment of checked paths, including proven physical ancestor aliases."""
+    root_key = _physical_key(root)
+    for ancestor in (path, *path.parents):
+        if str(ancestor) == str(root):
+            return True
+        if root_key is not None and _physical_key(ancestor) == root_key:
+            return True
+    return False
 
 def _canonical_child(root: Path, relative: str) -> Path:
     """One package-internal path proven link-free on every literal component.
@@ -940,6 +936,10 @@ def _validate_hosts(
             onboard_root = host_roots[0] / _SELF_ENTRY_ID.removeprefix("skill:")
         if onboard_root is None and platform in {"codex", "omp"}:
             _fail("scope-conflict", f"host {host_id} requires one unambiguous Onboard installation")
+        if onboard_root is not None:
+            onboard_root = _canonical_skill_child(
+                onboard_root, frozenset(_norm(root) for root in host_roots)
+            )
         if onboard_root is not None and host_roots and not any(
             _norm(onboard_root) == _norm(root / _SELF_ENTRY_ID.removeprefix("skill:"))
             for root in host_roots
@@ -1064,6 +1064,11 @@ def _validate_scope(scope: object) -> dict[str, Any]:
     non_skill_targets = {str(target) for target in agents_targets}
     non_skill_targets.update(str(host["config"]) for host in hosts)
     non_skill_targets.update(str(profile["path"]) for profile in shell_profiles)
+    decision_identities = dict(root_identities)
+    for selected in sorted(non_skill_targets):
+        key = _physical_key(Path(selected))
+        if key is not None:
+            decision_identities.setdefault(key, Path(selected))
 
     raw_decisions = scope.get("decisions", {})
     decisions: dict[str, str] = {}
@@ -1071,7 +1076,7 @@ def _validate_scope(scope: object) -> dict[str, Any]:
         _fail("invalid-config", "decisions must be an object keyed by absolute targets")
     for raw_target, raw_value in raw_decisions.items():
         target = _canonical_target(
-            _resolved(raw_target, "a decision target"), root_identities
+            _resolved(raw_target, "a decision target"), decision_identities
         )
         if str(target) not in non_skill_targets:
             target = _canonical_skill_child(target, root_norms)

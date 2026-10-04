@@ -22,6 +22,126 @@ from sbtd_migration_files import require_private_directory
 
 
 class UpgradeCliTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "POSIX unknown-user expansion")
+    def test_unresolved_home_paths_return_controlled_json(self):
+        """U24: input, output and vault expansion failures are metadata-only."""
+        import uuid
+
+        unknown = f"~sbtd-missing-{uuid.uuid4().hex}/private-input.json"
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            vault = base / "vault"
+            require_private_directory(vault, create=True)
+            scope = base / "scope.json"
+            scope.write_text(json.dumps({
+                "schema_version": 1, "agents_targets": [str(base / "AGENTS.md")],
+            }), encoding="utf-8")
+            commands = [
+                ["upgrade", "--phase", "plan", "--scope", unknown, "--backup-root", str(vault)],
+                ["upgrade", "--phase", "plan", "--scope", str(scope), "--backup-root", unknown],
+                ["upgrade", "--phase", "plan", "--scope", str(scope), "--backup-root", str(vault), "--output", unknown],
+                ["recovery", "--phase", "plan", "--upgrade-plan", unknown, "--upgrade-receipt", unknown],
+            ]
+            for command in commands:
+                with self.subTest(command=command):
+                    result = subprocess.run(
+                        [sys.executable, "-B", str(CLI), *command, "--json"],
+                        capture_output=True, text=True, timeout=120, check=False,
+                    )
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertNotIn("Traceback", result.stderr)
+                    document = json.loads(result.stdout)
+                    self.assertEqual(document["reason"], "invalid-input")
+                    self.assertEqual(document["status"], "blocked")
+                    self.assertNotIn(unknown, result.stdout + result.stderr)
+            self.assertEqual(list(vault.iterdir()), [])
+            self.assertFalse((base / "AGENTS.md").exists())
+
+    def test_undecided_profile_stays_blocked_even_after_disk_alignment(self):
+        """U19: sealed consent cannot be supplied by later matching bytes."""
+        import sbtd_upgrade
+        import sbtd_upgrade_hosts
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            profile = base / ".bashrc"
+            profile.write_bytes(b"# user profile\n")
+            vault = base / "vault"
+            require_private_directory(vault, create=True)
+            scope = {
+                "schema_version": 1,
+                "shell_profiles": [{"path": str(profile), "shell": "bash", "bin": str(base / "bin")}],
+            }
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            self.assertEqual(plan["payload"]["status"], "blocked")
+            self.assertEqual(sbtd_upgrade.verify_upgrade(plan)["status"], "blocked")
+            resource = sbtd_upgrade_hosts.build_host_resources({
+                **scope, "decisions": {str(profile): "replace"},
+            })[0]
+            profile.write_bytes(sbtd_upgrade_hosts.render_resource(resource))
+            self.assertEqual(sbtd_upgrade.verify_upgrade(plan)["status"], "blocked")
+
+    def test_inherited_provider_alias_refuses_before_any_target_write(self):
+        """U21: existing foreign-only Codex config aliases an OMP dependency."""
+        from tests.test_sbtd_upgrade_inventory import case_variant
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            home = base / "account"
+            provider_home = home / ".CODEX"
+            provider_home.mkdir(parents=True)
+            if case_variant(provider_home) is None:
+                self.skipTest("requires a case-insensitive directory")
+            provider = provider_home / "config.toml"
+            original = b'[mcp_servers.foreign]\ncommand = "unrelated"\n'
+            provider.write_bytes(original)
+            omp_home = home / ".omp"
+            (omp_home / "agent").mkdir(parents=True)
+            (omp_home / "agent/config.yml").write_bytes(b'enabledProviders: ["codex"]\n')
+            consumer = omp_home / "agent/mcp.json"
+            runtime = {}
+            for key, filename in (("python", "python"), ("node", "node"), ("cli", "cli.js")):
+                path = base / filename
+                path.write_bytes(b"")
+                runtime[key] = str(path)
+            hosts = [
+                {
+                    "id": name, "platform": name, "config_home": str(config_home),
+                    "config": str(config), "onboard_root": str(CLI.parents[1]),
+                    "skills_roots": [], "project_roots": [], "runtime": runtime,
+                }
+                for name, config_home, config in (
+                    ("codex", provider_home, provider), ("omp", omp_home, consumer)
+                )
+            ]
+            scope = base / "scope.json"
+            scope.write_text(json.dumps({
+                "schema_version": 1, "hosts": hosts,
+                "decisions": {str(provider): "replace"},
+            }), encoding="utf-8")
+            vault = base / "vault"
+            require_private_directory(vault, create=True)
+            plan_path = vault / "plan.json"
+            planned = subprocess.run(
+                [sys.executable, "-B", str(CLI), "upgrade", "--phase", "plan",
+                 "--scope", str(scope), "--backup-root", str(vault),
+                 "--output", str(plan_path), "--json"],
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(planned.returncode, 0, planned.stdout + planned.stderr)
+            plan = json.loads(planned.stdout)["plan"]
+            applied = subprocess.run(
+                [sys.executable, "-B", str(CLI), "upgrade", "--phase", "apply",
+                 "--plan", str(plan_path), "--confirm-plan", plan["plan_id"], "--yes", "--json"],
+                capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(
+                json.loads(applied.stdout).get("reason"), "inherited-dependency-conflict",
+                applied.stdout + applied.stderr,
+            )
+            self.assertEqual(provider.read_bytes(), original)
+            self.assertFalse(consumer.exists())
+
     def test_canonical_license_checkout_keeps_lf_bytes(self):
         """U14: autocrlf cannot change the canonical license versus its payload."""
         with tempfile.TemporaryDirectory() as temporary:
@@ -110,6 +230,10 @@ class UpgradeCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2)
         self.assertEqual(json.loads(result.stdout)["reason"], "probe-confirmation-required")
+        import jsonschema
+
+        schema = json.loads((CLI.parents[1] / "upgrade.schema.json").read_text(encoding="utf-8"))
+        jsonschema.validate(json.loads(result.stdout), schema)
 
     def test_cli_post_mutation_failure_emits_one_redacted_batch_json(self):
         """R02: a real post-mutation persistence halt surfaces one redacted
