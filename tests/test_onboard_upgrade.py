@@ -18,6 +18,39 @@ from sbtd_migration_files import require_private_directory
 
 
 class UpgradeCliTests(unittest.TestCase):
+    def test_canonical_license_checkout_keeps_lf_bytes(self):
+        """U14: autocrlf cannot change the canonical license versus its payload."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            environment = {
+                key: value for key, value in os.environ.items()
+                if not key.startswith("GIT_")
+            }
+            environment.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+            subprocess.run(
+                ["git", "init", "-q", str(root)], env=environment,
+                check=True, capture_output=True,
+            )
+            (root / ".gitattributes").write_bytes((ROOT / ".gitattributes").read_bytes())
+            expected = (CLI.parents[1] / "LICENSE").read_bytes()
+            root_license = root / "LICENSE"
+            root_license.write_bytes((ROOT / "LICENSE").read_bytes())
+            bundled_license = root / "sbtd-workflow-onboard/LICENSE"
+            bundled_license.parent.mkdir()
+            bundled_license.write_bytes(expected)
+            subprocess.run(
+                ["git", "-C", str(root), "-c", "core.autocrlf=true", "add", "."],
+                env=environment, check=True, capture_output=True,
+            )
+            root_license.unlink()
+            bundled_license.unlink()
+            subprocess.run(
+                ["git", "-C", str(root), "-c", "core.autocrlf=true", "checkout-index", "-a", "-f"],
+                env=environment, check=True, capture_output=True,
+            )
+            self.assertEqual(root_license.read_bytes(), expected)
+            self.assertEqual(bundled_license.read_bytes(), expected)
+
     def test_plan_describes_missing_payload_without_writing_targets(self):
         """U01: a real plan inventories payload, but never initializes the target."""
         with tempfile.TemporaryDirectory() as temporary:
