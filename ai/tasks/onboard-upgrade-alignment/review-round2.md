@@ -69,3 +69,5 @@ Ponytail／Code Readability：保留必要的物理祖先检查、输入异常 s
 ## 完整运行与既有测试修正
 
 本地完整运行1750项，1 failure／25 skip：既有 PowerShell project-only 测试把项目目录精确限定为 AGENTS.md／.gitignore，但已存在的生产契约允许运行时可用时生成项目内 graft／.sbtd。删除该偶然布局断言，保留禁止全局命令及 HOME 配置写入的断言；不改安装生产行为。定点真实 PowerShell 复跑通过，原始失败在 `full-local-failed`，完整重跑另行记录。修复代码提交 `6eed0bdd61af22874342e5882530622d9ce86903` 已推送草稿PR，CI run37213454737在执行；后续测试／记录提交的证据须绑定新head。
+
+首轮精确代码CI run37213454737：Linux／macOS成功；Windows升级回归在40分钟job上限取消，没有失败用例或最终summary，不能判通过。历史原生287项已耗时1702.879秒，本轮增加真实双根安装；将Windows窗口设90分钟并启用逐项输出，完整范围不减少。README两入口及automation prompt不重复修改：它们不规定job时长，用户操作与监控边界未变；CHANGELOG记录该验证变化。新运行仍须取得原生最终结果。

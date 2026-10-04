@@ -101,7 +101,7 @@ jobs:
 
   windows-powershell-installer:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -154,7 +154,7 @@ jobs:
 
       - name: Verify native Windows upgrade and recovery
         run: >-
-          python -B -m unittest
+          python -B -m unittest -v
           tests.test_onboard_upgrade
           tests.test_sbtd_upgrade_inventory
           tests.test_sbtd_upgrade_engine
