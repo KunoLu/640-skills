@@ -733,6 +733,8 @@ Network, permissions, missing dependencies, unsupported platform execution, malf
 
 可选 shell profile 以 `path`、`shell`（`bash`／`zsh`／`powershell`）与绝对 `bin` 描述。仅修改该文件中的受管 PATH 块，保留其他内容；MCP 使用固定绝对运行时，不依赖 PATH。执行 profile 会运行其中用户代码，因此只读计划不启动 shell。
 
+Windows Git Bash／zsh 的受管 PATH 使用 `/c/...` 驱动器别名（UNC 使用 `//server/share/...`），避免把 `C:` 的冒号误作 PATH 分隔符。探测只转换路径拼写，仍绑定所选 shell 实际使用的可执行文件；并存的 `graft.ps1`、`graft.exe` 不能仅因同名被判为同一目标。PowerShell 使用原生路径。
+
 `decisions` 以计划中的绝对目标路径为键，值为 `replace` 或 `preserve`。缺失受管资产进入安装；当前内容跳过；未知内容必须选择后重新计划，先展示额外文件及替换影响。身份不符、不安全路径或候选重叠不能靠 `replace` 放行。保留差异属于例外，不是完全对齐。个人 Skills、Caveman 未知定制、插件、hooks、账号与凭据不在默认升级范围。
 
 ### 计划、应用与分层验收

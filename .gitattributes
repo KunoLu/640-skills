@@ -3,3 +3,5 @@
 # reproduce the exact committed bytes on every OS: marking the package binary
 # disables text conversion so Windows autocrlf cannot rewrite pinned payloads.
 sbtd-workflow-onboard/** -text
+# Canonical source for bundled license payloads must have the same bytes.
+/LICENSE -text

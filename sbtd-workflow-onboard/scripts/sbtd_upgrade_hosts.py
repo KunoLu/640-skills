@@ -575,8 +575,6 @@ def _posix_shell_path(value: str) -> str:
     profile. The ``/c/...`` alias Git Bash itself assigns to the drive is the
     only form that genuinely resolves there.
     """
-    if os.name != "nt":
-        return value
     if value.startswith(("\\\\", "//")):
         return value.replace("\\", "/")
     match = re.fullmatch(r"([a-zA-Z]):[\\/](.*)", value)
@@ -1321,7 +1319,7 @@ def _probe_codex(
     try:
         require_private_directory(fixture / "home", create=True)
         codex_home = fixture / "codex-home"
-        codex_home.mkdir(mode=0o700)
+        require_private_directory(codex_home, create=True)
         config = codex_mcp_candidate(_CODEX_FIXTURE_CONFIG.encode("utf-8"), bindings)
         quoted = json.dumps(str(proven_root))
         config += f'\n[projects.{quoted}]\ntrust_level = "trusted"\n'.encode()
@@ -1549,7 +1547,7 @@ def _probe_omp(
     try:
         home = fixture / "home"
         agent = fixture / "agent"
-        agent.mkdir(mode=0o700)
+        require_private_directory(agent, create=True)
         require_private_directory(home, create=True)
         server_identity = _omp_projection(host, bindings, home, agent)
         (agent / "models.yml").write_text(_OMP_FIXTURE_MODELS, encoding="utf-8")
