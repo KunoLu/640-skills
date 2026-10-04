@@ -4,11 +4,11 @@ id: onboard-upgrade-alignment
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确要求在新开发分支以 strict 完成已确认四阶段方案；本机应用、同步、旧资产清理、新分支合并及发布未授权。
-status: "checking"
+status: "done"
 branch: feat/onboard-upgrade-alignment
 created_at: '2026-10-03T22:31:25.791160+08:00'
-updated_at: "2026-10-04T08:19:54.113257+08:00"
-completed_at: null
+updated_at: "2026-10-04T10:14:38.220261+08:00"
+completed_at: "2026-10-04T10:14:38.220261+08:00"
 ---
 # Onboard 通用升级对齐、恢复与分层验收
 
@@ -28,3 +28,4 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-03T22:31:26.747654+08:00 | planned | in-progress | 已完成旧分支合并清理，在新分支启动获批 strict 实施 | PR #109 MERGED; 用户已确认四阶段方案 |
 | 2026-10-04T08:19:54.113257+08:00 | in-progress | checking | 完整升级与恢复及真实隔离宿主已验证，进入最终回归与精确head三平台CI | final-native-*报告；公开installed-copy跨路径retry/recovery回归通过；独立复核已修正 |
+| 2026-10-04T10:14:38.220261+08:00 | checking | done | 四阶段实现、隔离CLI及真实host证明、独立复核和精确代码提交三平台CI全部完成；未部署或发布 | befa24eb7ef68c884a125af313528551b7d97af0; GitHub run 37168994920; ai/tasks/onboard-upgrade-alignment/check.md |

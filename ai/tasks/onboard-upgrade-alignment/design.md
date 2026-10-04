@@ -54,7 +54,7 @@ DDIA Data Design Review（复核）：confirmed。数据owner为操作人；当�
 | DDIA | 计划/回执持久化、全局写入与恢复 | 开发前 | passed：confirmed；逐资源前态/备份/实测回执，不承诺跨域事务 |
 | Legacy | 安装/清理/CLI既有行为高回归风险 | 开发前 | passed：characterized；声明依赖解释器77项通过，保留初次缺tomlkit失败 |
 | Refactoring | 修改既有生产CLI/清理代码 | Legacy后 | passed：proceed / normal；复用现有安全原语，无先行重构 |
-| Release | 安装、迁移、运行时行为 | 验证与独立复核后 | planned |
+| Release | 安装、迁移、运行时行为 | 验证与独立复核后 | passed：ready；befa24e原生三平台CI通过，详见check.md；不代表live部署或发布 |
 
 ## 持久行为场景（本仓库禁止.feature）
 
