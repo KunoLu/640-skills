@@ -36,13 +36,15 @@ from onboard_arguments import (
     WorkflowArgumentParser,
     _add_migration_context,
     _check_migration_context,
+    add_cleanup_legacy_parser,
     add_migration_parser,
     add_recovery_parser,
-    add_cleanup_legacy_parser,
+    add_upgrade_parser,
+    validate_cleanup_legacy_args,
     validate_developer_name,
     validate_migration_args,
-    validate_cleanup_legacy_args,
     validate_recovery_args,
+    validate_upgrade_args,
 )
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
@@ -2025,6 +2027,41 @@ def detect_ponytail_provider(global_skills_dir: Path) -> dict[str, object]:
     }
 
 
+def check_content_alignment(global_skills_dir: Path) -> dict[str, object]:
+    """Report selected Skills content, never global rules or host readiness."""
+    from onboard_contracts import ContractError
+
+    try:
+        from sbtd_upgrade_inventory import build_inventory
+
+        inventory = build_inventory(
+            {"schema_version": 1, "skills_roots": [str(global_skills_dir)]},
+            package_root=SKILL_DIR,
+        )
+        resources = inventory["resources"]
+        return {
+            "scope": "skills-only",
+            "checkedRoots": [str(global_skills_dir)],
+            "status": "aligned" if all(
+                row["classification"] == "current" for row in resources
+            ) else "needs-alignment",
+            "baseline": inventory["baseline"]["baseline_id"],
+            "resources": [
+                {key: row[key] for key in ("target", "classification", "decision", "details")}
+                for row in resources
+            ],
+            "nextStep": "Use upgrade --phase plan with an explicit scope before replacing retained content.",
+        }
+    except (ContractError, OSError, ValueError, RuntimeError, ImportError) as error:
+        return {
+            "scope": "skills-only",
+            "checkedRoots": [str(global_skills_dir)],
+            "status": "unverified",
+            "reason": getattr(error, "code", "inventory-unavailable"),
+            "nextStep": "Run explicit upgrade planning with the complete installed package and declared dependencies.",
+        }
+
+
 def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     project_roots = resolve_project_roots(args)
     global_skills_dir, global_skills_dir_source = resolve_global_skills_dir(
@@ -2099,6 +2136,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "projectChecks": project_checks,
         "missing": missing,
         "ponytailProvider": detect_ponytail_provider(global_skills_dir),
+        "contentAlignment": check_content_alignment(global_skills_dir),
     }
     results["installationReport"] = build_installation_report(results)
     return results
@@ -2209,6 +2247,10 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
     print(f"Platform: {results['platform']}")
     paths = results["paths"]
     print(f"Global skills: {paths['globalSkillsDir']}")
+    alignment = results.get("contentAlignment", {})
+    print(f"Skills-only content alignment: {alignment.get('status', 'unverified')}")
+    if alignment.get("status") != "aligned":
+        print("  Installation validity does not prove content alignment; use explicit upgrade planning.")
     for project_root in paths["projectRoots"]:
         print(f"Project root: {project_root}")
 
@@ -6241,6 +6283,7 @@ def build_plan_payload(
         payload["sbtdInit"] = sbtd_init_plan
     if global_skills_dir and mode in {"plan", "init", "reset"}:
         payload["cavemanMaintenance"] = caveman_maintenance_plan(global_skills_dir)
+        payload["contentAlignment"] = check_content_alignment(global_skills_dir)
     if mode != "init-projects":
         payload["graft"] = check_graft()
     return payload
@@ -6249,6 +6292,10 @@ def build_plan_payload(
 def print_plan(payload: dict[str, object]) -> None:
     print(f"Mode: {payload['mode']}")
     print(f"Platform: {payload['platform']}")
+    if "contentAlignment" in payload:
+        print(f"Skills-only content alignment: {payload['contentAlignment']['status']}")
+        if payload["contentAlignment"]["status"] != "aligned":
+            print("  Existing valid Skills may be retained; use upgrade for confirmed content alignment.")
     for label, key in (("Optional Graft CLI", "graft"), ("Graft wiring", "graftWiring")):
         details = payload.get(key)
         if isinstance(details, dict):
@@ -6426,6 +6473,17 @@ def run(mode: str, args: argparse.Namespace) -> int:
     # One process may run several modes; a note left by an earlier run would
     # make a later one report checks it never skipped.
     UNVERIFIED_CHECKS.clear()
+    if mode == "upgrade":
+        from sbtd_upgrade_cli import run_upgrade
+
+        return run_upgrade(args)
+    if mode == "recovery" and (
+        getattr(args, "upgrade_plan", None) is not None
+        or getattr(args, "upgrade_recovery_plan", None) is not None
+    ):
+        from sbtd_upgrade_cli import run_upgrade_recovery
+
+        return run_upgrade_recovery(args)
     if mode == "migration":
         try:
             from sbtd_migration import run_migration
@@ -6965,6 +7023,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_migration_parser(subparsers, phases=("plan", "apply", "verify", "cleanup"))
     add_recovery_parser(subparsers)
     add_cleanup_legacy_parser(subparsers)
+    add_upgrade_parser(subparsers)
 
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
@@ -7314,6 +7373,8 @@ def main() -> int:
         validate_recovery_args(args, parser=parser)
     elif args.mode == "cleanup-legacy":
         validate_cleanup_legacy_args(args, parser=parser)
+    elif args.mode == "upgrade":
+        validate_upgrade_args(args, parser=parser)
     elif args.mode in {"init", "init-projects"}:
         _check_migration_context(parser, args)
     return run(args.mode, args)

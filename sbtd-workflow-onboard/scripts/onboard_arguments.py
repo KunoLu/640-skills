@@ -27,11 +27,13 @@ __all__ = [
     "add_cleanup_legacy_parser",
     "add_migration_parser",
     "add_recovery_parser",
+    "add_upgrade_parser",
     "parse_workflow_args",
     "validate_cleanup_legacy_args",
     "validate_developer_name",
     "validate_migration_args",
     "validate_recovery_args",
+    "validate_upgrade_args",
 ]
 
 PROG = "onboard.py"
@@ -401,7 +403,45 @@ def add_recovery_parser(subparsers: Any) -> argparse.ArgumentParser:
         action="store_true",
         help="Print the single machine-readable envelope.",
     )
+    for option in ("upgrade-plan", "upgrade-receipt", "upgrade-recovery-plan", "output"):
+        recovery.add_argument("--" + option, action=SingleValueAction)
     return recovery
+
+
+def add_upgrade_parser(subparsers: Any) -> argparse.ArgumentParser:
+    upgrade = subparsers.add_parser("upgrade", allow_abbrev=False)
+    upgrade.add_argument("--phase", action=SingleValueAction, required=True,
+                         choices=("plan", "apply", "verify"))
+    for option, help_text in (
+        ("scope", "Explicit version-1 upgrade scope JSON (plan only)."),
+        ("backup-root", "Existing private vault, outside every source and target."),
+        ("output", "Save a new plan in its private vault; otherwise stdout only."),
+        ("plan", "Previously displayed sealed upgrade plan."),
+        ("receipt", "Bound cumulative receipt for retry or verification."),
+        ("confirm-plan", "The displayed plan_id, not a substitute for authorization."),
+    ):
+        upgrade.add_argument("--" + option, action=SingleValueAction, help=help_text)
+    upgrade.add_argument("--yes", action="store_true", help="Authorize the displayed operation.")
+    upgrade.add_argument("--probe", action="store_true", help="Explicitly run runtime/host probes; requires --yes.")
+    upgrade.add_argument("--json", action="store_true")
+    return upgrade
+
+
+def validate_upgrade_args(
+    args: argparse.Namespace, *, parser: argparse.ArgumentParser
+) -> None:
+    _check_phase(
+        parser, args,
+        ("scope", "backup_root", "output", "plan", "receipt", "confirm_plan"),
+        ("yes", "probe", "json"),
+        {
+            "plan": (("scope", "backup_root"), ("output", "json")),
+            "apply": (("plan",), ("receipt", "confirm_plan", "yes", "json")),
+            "verify": (("plan",), ("receipt", "probe", "yes", "json")),
+        },
+    )
+    if args.phase == "verify" and args.yes and not args.probe:
+        parser.error("--yes is only meaningful with --probe during verification")
 
 
 def add_cleanup_legacy_parser(subparsers: Any) -> argparse.ArgumentParser:
@@ -466,9 +506,22 @@ def validate_cleanup_legacy_args(
 def validate_recovery_args(
     args: argparse.Namespace, *, parser: argparse.ArgumentParser
 ) -> None:
-    _check_phase(
-        parser, args, _RECOVERY_VALUE_OPTIONS, _RECOVERY_FLAG_OPTIONS, _RECOVERY_RULES
-    )
+    upgrade_options = ("upgrade_plan", "upgrade_receipt", "upgrade_recovery_plan", "output")
+    is_upgrade = any(getattr(args, key, None) is not None for key in upgrade_options)
+    if is_upgrade:
+        _check_phase(
+            parser, args, (*_RECOVERY_VALUE_OPTIONS, *upgrade_options),
+            _RECOVERY_FLAG_OPTIONS,
+            {
+                "plan": (("upgrade_plan", "upgrade_receipt"), ("output", "json")),
+                "apply": (("upgrade_recovery_plan",),
+                          ("confirm_recovery", "recovery_receipt", "json")),
+            },
+        )
+    else:
+        _check_phase(
+            parser, args, _RECOVERY_VALUE_OPTIONS, _RECOVERY_FLAG_OPTIONS, _RECOVERY_RULES
+        )
 
 
 def _build_parser() -> tuple[
@@ -513,6 +566,7 @@ def _build_parser() -> tuple[
     subs["recovery"] = add_recovery_parser(subparsers)
 
     subs["cleanup-legacy"] = add_cleanup_legacy_parser(subparsers)
+    subs["upgrade"] = add_upgrade_parser(subparsers)
 
     return parser, subs
 
@@ -652,13 +706,9 @@ def parse_workflow_args(argv: Sequence[str]) -> argparse.Namespace:
     if args.mode == "migration":
         validate_migration_args(args, parser=subs["migration"])
     elif args.mode == "recovery":
-        _check_phase(
-            subs["recovery"],
-            args,
-            _RECOVERY_VALUE_OPTIONS,
-            _RECOVERY_FLAG_OPTIONS,
-            _RECOVERY_RULES,
-        )
+        validate_recovery_args(args, parser=subs["recovery"])
+    elif args.mode == "upgrade":
+        validate_upgrade_args(args, parser=subs["upgrade"])
     elif args.mode == "cleanup-legacy":
         validate_cleanup_legacy_args(args, parser=subs["cleanup-legacy"])
     elif args.mode in ("init", "init-projects"):

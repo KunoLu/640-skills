@@ -88,6 +88,14 @@ jobs:
           tests.test_global_mcp_installation
           tests.test_sbtd_graft_isolation
 
+      - name: Verify native macOS upgrade and recovery
+        run: >-
+          python -B -m unittest
+          tests.test_onboard_upgrade
+          tests.test_sbtd_upgrade_inventory
+          tests.test_sbtd_upgrade_engine
+          tests.test_sbtd_upgrade_hosts
+
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"
 
@@ -143,6 +151,14 @@ jobs:
         run: >-
           python -B -m unittest -v
           tests.test_sbtd_migration_files.MigrationFileTests.test_windows_private_directory_acl_gateway
+
+      - name: Verify native Windows upgrade and recovery
+        run: >-
+          python -B -m unittest
+          tests.test_onboard_upgrade
+          tests.test_sbtd_upgrade_inventory
+          tests.test_sbtd_upgrade_engine
+          tests.test_sbtd_upgrade_hosts
 
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"

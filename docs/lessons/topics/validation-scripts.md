@@ -643,5 +643,17 @@
 - 修复：仅对 Windows Git 探针明确 UTF-8，保留 POSIX 原解码约定；解码错误转换为受控拒绝，路径相等和信任边界检查不变。
 - 预防：在真实 Windows 核对默认编码与 UTF-8 模式后测试 Unicode 路径；记录同一场景的原生 red/green，不把其他平台成功或 skip 当作该条件的证明。畸形输出负例检查退出码、无 traceback、无下游启动和无项目副作用，而非锁定错误文案。
 
+## LESSON-20261004-kuno-owned-temp-canonicalization: Canonicalize Owned Temporary Roots Before Nofollow Operations
+
+- 日期：2026-10-04
+- 标签：macos, tempfile, nofollow, symlink, isolation, validation
+- 适用场景：工具主动创建临时 HOME／宿主夹具，再调用拒绝链接祖先的文件备份或复制原语。
+- 严重级别：high
+- 来源：Onboard 升级宿主探测的真实失败与修正后回归。
+- 问题：安全复制尚未接触 Skill 内容，就因系统临时路径的 `/var` 链接祖先返回 `unsafe-path`，使 Codex／OMP 探测无法获得宿主证据。
+- 根因：将本次操作创建的临时目录的逻辑拼写直接传入 nofollow 原语，没有区分系统临时别名与用户提交的源／目标路径。
+- 修复：仅在 `mkdtemp` 成功后立即解析本次拥有的临时根，再向下创建和访问夹具。用户提供的 Skills 根、源、目标继续逐级拒绝 symlink／junction，不用 resolve 绕过所有权检查。
+- 预防：回归同时覆盖“自有临时父目录通过系统别名访问仍可探测”和“用户提供的链接／越界 sibling 仍拒绝”。真实宿主探测与脚本化协议测试分别报告；不得通过放宽所有路径链接守卫来修正夹具。
+
 <!-- lessons:kuno:end -->
 

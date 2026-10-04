@@ -16,7 +16,7 @@ from typing import Any, NoReturn
 
 import onboard_contracts as contracts
 from sbtd_cleanup_targets import (
-    TRELLIS_SKILL_NAMES,
+    RETIRED_SKILL_NAMES,
     detect_mcp_targets,
     detect_project_targets,
     detect_skill_targets,
@@ -176,7 +176,9 @@ def plan_cleanup_legacy(
         "skills_root": str(skills_root),
         "projects": projects,
         "shared": {
-            "skills": _seal_candidates(detect_skill_targets(skills_root)),
+            "skills": _seal_candidates(
+                detect_skill_targets(skills_root, retired=RETIRED_SKILL_NAMES)
+            ),
             "mcp": _seal_candidates(detect_mcp_targets(environ=environ)),
         },
     }
@@ -312,12 +314,13 @@ def _validate_scope(
     for item in payload["shared"]["skills"]["candidates"]:
         if (
             item["kind"] != "skill-directory"
-            or item["name"] not in TRELLIS_SKILL_NAMES
+            or item["name"] not in RETIRED_SKILL_NAMES
             or Path(item["path"]) != skills_root / item["name"]
         ):
             _fail("scope-conflict", "unknown shared Skill deletion")
     compare(
-        payload["shared"]["skills"]["candidates"], detect_skill_targets(skills_root)
+        payload["shared"]["skills"]["candidates"],
+        detect_skill_targets(skills_root, retired=RETIRED_SKILL_NAMES),
     )
     compare(payload["shared"]["mcp"]["candidates"], detect_mcp_targets(environ=environ))
     for candidate in _all_candidates(plan):

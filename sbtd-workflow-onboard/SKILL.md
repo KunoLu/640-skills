@@ -1,6 +1,6 @@
 ---
 name: sbtd-workflow-onboard
-description: Checks, installs, or resets SBTD workflow tools, global Skills, AGENTS templates, and project configuration; explicitly plans, applies, and verifies authorized legacy project migrations; offers confirmed post-migration legacy cleanup and routes "sbtd cleanup" / "清理工作流" requests.
+description: Checks, installs, resets, or explicitly upgrades and verifies selected SBTD workflow Skills, AGENTS and host configuration domains; plans and applies authorized legacy migrations and recovery; routes separately confirmed legacy cleanup.
 ---
 
 # SBTD Workflow Onboard Skills
@@ -30,6 +30,17 @@ Before Codex/OMP global wiring, project initialization or migration-context init
 Whole-directory installation and `npx skills add` do not run pip. Before validating exchange contracts, task state or migration, use the actual installed-copy interpreter: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. This declares jsonschema, PyYAML, markdown-it-py, tomlkit and cryptography; missing dependencies block the affected validation or write without breaking help or pure argument parsing. Verify a fresh installed copy, not the source machine's existing packages.
 
 Do not install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target templates.
+
+## Upgrade Alignment Routing
+
+When the user asks to upgrade an existing environment or align it with a fixed Onboard baseline, read [Upgrade Alignment](REFERENCE.md#upgrade-alignment) before running commands. `init` preserves valid Skill shells and is not proof of content alignment; `reset` is not the upgrade recovery protocol.
+
+Collect explicit Skills roots, global AGENTS targets, host configuration domains and optional shell profiles. Ordinary Codex and an Orca account may use different domains. Inventory only those selections; do not enumerate credentials or silently select other accounts. Present content differences and unresolved ownership; unknown custom content needs an explicit replace/preserve decision. A preserved exception is not fully aligned.
+
+Run read-only `upgrade --phase plan`, display the exact baseline and target set, then obtain consent before `apply --yes --confirm-plan`. A plan identifier binds the displayed selection; it is not authorization by itself. Read-only `verify` measures current content; runtime/host probes require separate `--probe --yes` consent. Report disk, protocol, actual host loading and legacy cleanup separately. Use `recovery --upgrade-*` only after showing and confirming its recovery plan; retain backups. Neither upgrade success nor migration verification authorizes `cleanup-legacy`, removal of runtimes/backups, plugin/hooks changes, or workflow sync.
+
+The selected, operator-controlled private vault is trusted historical evidence, not a signed journal. Hashes do not protect against a writer forging its entire history. Refuse automatic recovery when provenance/control of the vault is uncertain; still validate scope-derived resources, complete recovery eligibility and current drift. Never run a historical executor merely because its files match a vault hash. Recovery preserves empty parent directories and backups.
+
 
 ## Required Questions
 
@@ -219,6 +230,7 @@ Only actually detected items appear in the list:
 
 - Project `.trellis`, removed by actually running the vendor `tl uninstall` in the project root. A dedicated adapter prepares the uninstall at plan time and, before execution, privately backs up the complete vendor footprint — `.trellis` plus the platform configuration and AGENTS entries the vendor uninstall may modify. A missing CLI or failed preparation blocks the target without executing; an incomplete uninstall fails the resource with per-resource measured after-states, so partial mutations are reported as measured evidence and reconciled before any retry — never claimed untouched, never an engine direct delete or `rm -rf`.
 - Global `trellis-workflow` / `trellis-channel` Skill directories whose own `SKILL.md` frontmatter still identifies them. Any 1.0.x version qualifies; there is no fixed checksum pin. Symlinks and identity mismatches stay blocked and preserved.
+- The nine exact GitNexus Skill names listed in [Upgrade Alignment](REFERENCE.md#upgrade-alignment), only as direct children of the selected Skills root with matching regular `SKILL.md` identities. No wildcard or CLI/package removal. These are fresh cleanup candidates, not additions to immutable historical migration manifests.
 - Project `.gitnexus/` directory.
 - Detected gitnexus MCP server entries in the existing Codex / Claude / Kimi / OMP global configuration paths; OMP probing additionally covers the effective configuration that the existing resolver derives from a relative `PI_CONFIG_DIR` override and the active profile (`OMP_PROFILE` taking precedence over `PI_PROFILE`). Spelling aliases of the same directory entry are probed once; distinct hardlink entries remain separate cleanup targets. Every entry that identifies as gitnexus (key name or command/package) is removed; neighboring servers are preserved. These files are shared with other projects — disclose that impact and include it in the confirmation.
 - Project `AGENTS.md` blocks exactly paired as `<!-- TRELLIS:START -->` / `<!-- TRELLIS:END -->` and `<!-- gitnexus:start -->` / `<!-- gitnexus:end -->`, recognized only as top-level HTML comment blocks and removed with their contents; graft fences, code-fence content and all other bytes are preserved. Zero pairs is not a candidate; duplicated, interleaved or unmatched markers are blocked for manual resolution.

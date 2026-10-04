@@ -27,7 +27,7 @@ SBTD workflow installer
 
 Usage:
   ./install.sh [options]
-  ./install.sh migration|recovery|cleanup-legacy [options]
+  ./install.sh migration|recovery|cleanup-legacy|upgrade [options]
 
 Options:
   --platform <codex|claude|kimi|oh-my-pi|omp>
@@ -76,6 +76,8 @@ Options:
       Forward directly to scripts/onboard.py recovery without onboarding.
   cleanup-legacy --phase <plan|apply> [cleanup options]
       Forward directly to scripts/onboard.py; no normal onboarding.
+  upgrade --phase <plan|apply|verify> [upgrade options]
+      Plan, apply, or verify only an explicitly selected upgrade scope.
   -h, --help
       Show this help.
 EOF
@@ -1340,7 +1342,7 @@ cleanup() {
 
 main() {
   trap cleanup EXIT
-  if [[ $# -gt 0 && ( "$1" == "migration" || "$1" == "recovery" || "$1" == "cleanup-legacy" ) ]]; then
+  if [[ $# -gt 0 && ( "$1" == "migration" || "$1" == "recovery" || "$1" == "cleanup-legacy" || "$1" == "upgrade" ) ]]; then
     forward_workflow_mode "$@"
   fi
   parse_args "$@"

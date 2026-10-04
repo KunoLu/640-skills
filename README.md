@@ -85,6 +85,20 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 
 ## 安装及使用说明
 
+### 升级与对齐（区别于初始化和数据迁移）
+
+已有环境需要内容对齐时，使用显式 `upgrade --phase plan|apply|verify`，不要用 `init` 的“合法 Skill 壳已存在”推断已经升级，也不要把 `reset` 当作带恢复保证的升级。基线来自当前完整 Onboard 包的 catalog、模板和固定 stable 快照；不联网追逐 latest。
+
+1. 明确选择 Skills 根、全局 AGENTS、宿主配置域及可选 shell profile；普通 Codex 与 Orca 账户是不同配置域，未选择的范围不修改。
+2. 只读计划列出缺失、当前、未知内容漂移和身份冲突；未知定制须明确 `replace` 或 `preserve`，不能自动覆盖。
+3. 审阅计划后显式确认 apply；先保存原件，再逐资源应用与记录结果。恢复另走 `recovery`，备份不随成功自动销毁。
+4. 分别验收磁盘内容、运行时协议、真实宿主加载和历史清理。只读 verify 不启动宿主；`--probe --yes` 才授权探测。未重载、未验证或保留差异不能写成“全部对齐”。
+
+恢复以操作人选定并独占管理的私有 vault 为受信历史；hash 不防御有写权限者整组伪造操作记录。来源不明的 vault 不可直接自动恢复。恢复会保留空父目录，执行包独立变化后的旧计划需重新核对，不自动执行历史暂存代码。
+
+Python、Bash `install.sh upgrade ...` 和 PowerShell `-WorkflowMode upgrade` 使用同一实现。Scope JSON、私有计划、恢复命令与验收边界见 [Upgrade Alignment](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。旧工具入口仍由 `cleanup-legacy` 独立确认；新增九个 GitNexus Skills 的精确身份清理，不卸载 CLI、不删除全局数据、历史运行时或备份。Caveman 未知定制、插件与 hooks 不因升级被覆盖。
+
+
 ### 1. 使用 `npx skills` 全局安装 Onboard Skill
 
 只建议把 `sbtd-workflow-onboard` 安装到用户级全局 Skill 目录，使同一用户下的 Codex 会话都能发现它；不建议安装到单个项目目录，也不要省略 `--global` 后把 bootstrap Skill 变成项目依赖。

@@ -11,6 +11,9 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scrip
 sys.path.insert(0, str(SCRIPTS))
 
 from sbtd_cleanup_targets import (
+    GITNEXUS_SKILL_NAMES,
+    RETIRED_SKILL_NAMES,
+    TRELLIS_SKILL_NAMES,
     detect_marker_blocks,
     detect_mcp_targets,
     detect_project_targets,
@@ -155,6 +158,124 @@ class SkillIdentityTests(unittest.TestCase):
             blocked = [item["name"] for item in result["blocked"]]
             self.assertEqual(kinds, ["trellis-workflow"])
             self.assertEqual(blocked, ["trellis-channel"])
+
+class GitNexusRetiredSkillTests(unittest.TestCase):
+    EXPECTED_GITNEXUS = (
+        "gitnexus-cli",
+        "gitnexus-debugging",
+        "gitnexus-exploring",
+        "gitnexus-guide",
+        "gitnexus-impact-analysis",
+        "gitnexus-pdg-query",
+        "gitnexus-pr-review",
+        "gitnexus-refactoring",
+        "gitnexus-taint-analysis",
+    )
+
+    def _skill_dir(self, base: Path, name: str, frontmatter_name: str) -> Path:
+        target = base / name
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text(
+            f"---\nname: {frontmatter_name}\ndescription: retired gitnexus skill\n---\nbody\n"
+        )
+        return target
+
+    def test_closed_set_is_exact_and_wildcard_free(self) -> None:
+        self.assertEqual(GITNEXUS_SKILL_NAMES, self.EXPECTED_GITNEXUS)
+        self.assertEqual(len(set(GITNEXUS_SKILL_NAMES)), 9)
+        for name in GITNEXUS_SKILL_NAMES:
+            self.assertNotIn("*", name)
+            self.assertNotIn("/", name)
+            self.assertNotIn("\\", name)
+        self.assertEqual(
+            RETIRED_SKILL_NAMES, TRELLIS_SKILL_NAMES + GITNEXUS_SKILL_NAMES
+        )
+
+    def test_default_detection_stays_trellis_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            for name in self.EXPECTED_GITNEXUS:
+                self._skill_dir(base, name, name)
+            self._skill_dir(base, "trellis-workflow", "trellis-workflow")
+            result = detect_skill_targets(base)
+            self.assertEqual(
+                [item["name"] for item in result["candidates"]],
+                ["trellis-workflow"],
+            )
+            self.assertEqual(result["blocked"], [])
+
+    def test_explicit_opt_in_detects_all_eleven_exact_identities(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            for name in RETIRED_SKILL_NAMES:
+                self._skill_dir(base, name, name)
+            result = detect_skill_targets(base, retired=RETIRED_SKILL_NAMES)
+            self.assertEqual(
+                [item["name"] for item in result["candidates"]],
+                sorted(RETIRED_SKILL_NAMES),
+            )
+            self.assertEqual(result["blocked"], [])
+
+    def test_similar_directory_names_are_never_matched(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            # A directory outside the closed set is ignored even when its
+            # frontmatter claims a retired identity (never a prefix match).
+            self._skill_dir(base, "gitnexus-cli-extra", "gitnexus-cli")
+            self._skill_dir(base, "gitnexus", "gitnexus")
+            self._skill_dir(base, "gitnexus-pr", "gitnexus-pr-review")
+            result = detect_skill_targets(base, retired=RETIRED_SKILL_NAMES)
+            self.assertEqual(result["candidates"], [])
+            self.assertEqual(result["blocked"], [])
+
+    def test_identity_conflict_is_blocked_not_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            self._skill_dir(base, "gitnexus-cli", "user-own-skill")
+            result = detect_skill_targets(base, retired=RETIRED_SKILL_NAMES)
+            self.assertEqual(result["candidates"], [])
+            self.assertEqual(
+                [item["name"] for item in result["blocked"]], ["gitnexus-cli"]
+            )
+
+    def test_drifted_content_with_matching_frontmatter_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            target = self._skill_dir(base, "gitnexus-taint-analysis", "gitnexus-taint-analysis")
+            (target / "extra.txt").write_text("user drift from any version\n")
+            self.assertIsNone(
+                skill_identity_error(target, "gitnexus-taint-analysis")
+            )
+            result = detect_skill_targets(base, retired=RETIRED_SKILL_NAMES)
+            self.assertEqual(
+                [item["name"] for item in result["candidates"]],
+                ["gitnexus-taint-analysis"],
+            )
+
+    def test_symlink_directory_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            real = self._skill_dir(base, "real", "gitnexus-guide")
+            os.symlink(real, base / "gitnexus-guide")
+            result = detect_skill_targets(base, retired=RETIRED_SKILL_NAMES)
+            self.assertEqual(result["candidates"], [])
+            self.assertEqual(
+                [item["name"] for item in result["blocked"]], ["gitnexus-guide"]
+            )
+
+    def test_retired_names_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            with self.assertRaises(ValueError):
+                detect_skill_targets(base, retired=["gitnexus/evil"])
+            with self.assertRaises(ValueError):
+                detect_skill_targets(base, retired=[".."])
+            with self.assertRaises(ValueError):
+                detect_skill_targets(base, retired=[""])
+            with self.assertRaises(TypeError):
+                detect_skill_targets(base, retired="gitnexus-cli")
+            with self.assertRaises(ValueError):
+                detect_skill_targets(base, retired=[123])
 
 
 class ProjectTargetTests(unittest.TestCase):

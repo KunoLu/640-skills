@@ -16,7 +16,7 @@ param(
   [switch]$Yes,
   [switch]$NoColor,
   [switch]$Help,
-  [ValidateSet("", "migration", "recovery", "cleanup-legacy")]
+  [ValidateSet("", "migration", "recovery", "cleanup-legacy", "upgrade")]
   [string]$WorkflowMode = "",
   [Parameter(ValueFromRemainingArguments=$true)]
   [string[]]$WorkflowArgs = @()
@@ -88,7 +88,7 @@ Options:
       Disable ANSI color.
   -Help
       Show this help.
-  -WorkflowMode <migration|recovery|cleanup-legacy>
+  -WorkflowMode <migration|recovery|cleanup-legacy|upgrade>
       Forward directly to scripts/onboard.py without onboarding. Remaining
       arguments are passed through unchanged, except --source-root.
       PowerShell-bound --yes and --help are forwarded explicitly; the `--`
@@ -331,7 +331,7 @@ function Invoke-WorkflowMode {
     $forwarded += "--help"
   }
   if ($WorkflowMode -cne $WorkflowMode.ToLowerInvariant()) {
-    Stop-WithMessage "WorkflowMode must be lowercase: migration, recovery or cleanup-legacy"
+    Stop-WithMessage "WorkflowMode must be lowercase: migration, recovery, cleanup-legacy or upgrade"
   }
   Validate-SourceRoot $source
   Find-Python

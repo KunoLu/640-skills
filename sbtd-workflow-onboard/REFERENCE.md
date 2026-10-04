@@ -529,6 +529,7 @@ Detected candidate kinds:
   Each prepared resource path must exactly match the checked project root joined with its strictly validated relative path, and execution compares the bound paths with the fresh planner replay. Resealing the descriptor does not authorize a decoy path: a mismatch is rejected as `invalid-document` before adapter backups or vendor execution. Backup, state rechecks and outcome measurement consume only bound paths. The persisted scope fingerprint shape and digest algorithm remain unchanged for valid existing plans.
 - `skill-directory` — a global `trellis-workflow` or `trellis-channel` directory under the resolved global Skills root, proven by identity: a non-symlink directory whose regular `SKILL.md` frontmatter `name` exactly matches. Content drift across 1.0.x versions does not matter; there is no fixed checksum pin. A symlink, a missing or unreadable `SKILL.md`, or a mismatched `name` is blocked and preserved.
   A physical shared HOME root does not authorize every same-named directory beneath it. A standalone `shared_root` of kind `skills` binds its own `path`; when that root is absorbed into a broader record, the manifest retains its exact logical directory as `shared_root.skills_root`. Producers preserve this annotation through root merging, and consumers require the retired Skill to be its direct child. Missing logical scope for an absorbed retirement fails closed; it is not reconstructed from the current environment or from the target's basename.
+  Fresh `cleanup-legacy` additionally recognizes the nine exact GitNexus Skill identities listed in [Upgrade Alignment](#upgrade-alignment). This does not widen immutable migration manifests or authorize prefix-based removal; the same direct-child, identity, backup and separate-confirmation checks apply.
 - `directory-remove` — a project `.gitnexus/` directory; a symlink is blocked. This is project-local data only: the GitNexus npm package, its CLI and `~/.gitnexus` global data are never cleanup targets, and no CLI/npm uninstall is performed.
 - `mcp-server-remove` — gitnexus server entries in an already existing host global configuration file. Only existing files are probed and nothing is created; the user home resolves from `HOME` or `USERPROFILE`:
 
@@ -702,3 +703,114 @@ After writes:
 7. Rerun only `check-projects` after project-only onboarding.
 
 Network, permissions, missing dependencies, unsupported platform execution, malformed state, legacy migration requirements and bootstrap-required results remain explicit; no skipped check is a pass.
+
+## Upgrade Alignment
+
+`upgrade` 对显式范围进行内容对齐，不改变 `init` 跳过合法 Skill 壳、`reset` 重装和 `migration` 迁移数据的既有含义。基线来自执行中的完整 Onboard 包：catalog、模板、固定 stable 内容及来源；绝对安装路径或文件时间不是版本。不能证明历史版本时报告 `unknown-drift`，不凭名称或版本字符串猜测。
+
+### 范围与授权
+
+准备 version-1 scope JSON。下例只选择 Skills 与全局规则；路径须替换为真实、明确授权的绝对路径：
+
+```json
+{
+  "schema_version": 1,
+  "skills_roots": ["/abs/selected/skills"],
+  "agents_targets": ["/abs/selected/config/AGENTS.md"],
+  "hosts": [],
+  "shell_profiles": [],
+  "decisions": {}
+}
+```
+
+一个宿主域以 `id`、`platform`、`config_home`、`config`、`skills_roots`、`runtime`（绝对 `python`／`node`／`cli`）和 `project_roots` 描述。宿主 Skills 根也必须在顶层选择。普通 Codex 与 Orca 账户使用各自的配置域，不自动扫描账号或认证目录。Codex／OMP 复用现有受管 Graft 候选生成器；其他平台不擅自新增 Graft 接线。选中已有项目用于验证，不等于初始化项目或构建图授权。
+
+可选 `executable` 是实际宿主 CLI 的绝对路径。`onboard_root` 表示宿主要加载的**已安装 Onboard 包目录**，不是 Skills 根：仅有一个宿主 Skills 根时派生为该根的 `sbtd-workflow-onboard`；多个根必须明确选定其中一个包目录。host-only 范围需显式选定已有且受信的包目录。最终 MCP launcher 指向这个安装目标，不能指向仓库源码或升级暂存执行器。OMP 计划同时核对所选项目的有效继承来源；相同继承连接可复用，来源变化或被禁用／冲突的受管连接不能冒充对齐。
+
+若 OMP 的有效继承来源同时属于本批将改写的 provider 配置，计划／应用以 `inherited-dependency-conflict` 在目标写入前拒绝。先对齐 provider 配置域，再以其实际新状态重新规划 consumer；不把上一份计划中的旧继承快照用作新状态，也不在同一批中先写一半再因自身写入失败。
+
+可选 shell profile 以 `path`、`shell`（`bash`／`zsh`／`powershell`）与绝对 `bin` 描述。仅修改该文件中的受管 PATH 块，保留其他内容；MCP 使用固定绝对运行时，不依赖 PATH。执行 profile 会运行其中用户代码，因此只读计划不启动 shell。
+
+`decisions` 以计划中的绝对目标路径为键，值为 `replace` 或 `preserve`。缺失受管资产进入安装；当前内容跳过；未知内容必须选择后重新计划，先展示额外文件及替换影响。身份不符、不安全路径或候选重叠不能靠 `replace` 放行。保留差异属于例外，不是完全对齐。个人 Skills、Caveman 未知定制、插件、hooks、账号与凭据不在默认升级范围。
+
+### 计划、应用与分层验收
+
+备份根必须是已有私有目录，与安装包及所有目标互不嵌套。默认计划仅 stdout；`--output` 只创建指定私有 vault 内的新计划，不覆盖现存文件。
+
+```bash
+python scripts/onboard.py upgrade --phase plan \
+  --scope /abs/scope.json --backup-root /abs/private/vault \
+  --output /abs/private/vault/upgrade-plan.json --json
+```
+
+展示完整计划并确认后，从返回的 `plan.plan_id` 读取 ID（不要让用户手抄 hash）。修改 scope 决策或目标后必须重新生成计划并重新展示。
+
+```bash
+python scripts/onboard.py upgrade --phase apply \
+  --plan /abs/private/vault/upgrade-plan.json \
+  --confirm-plan <plan_id> --yes --json
+
+python scripts/onboard.py upgrade --phase verify \
+  --plan /abs/private/vault/upgrade-plan.json \
+  --receipt /abs/private/vault/upgrade-receipt-<id>.json --json
+```
+
+apply 重新推导范围并校验源、完整前态与私有备份路径，先保存原件，再逐资源写入和测量；写入意图与累计回执供中断后调和。重试必须传入对应 `--receipt`；用户新增或未知后态停止，不通过重新规划丢弃失败事实。Onboard 自身更新由校验后的独立包副本执行，不在被覆盖目录中混合导入新旧模块。跨资源不承诺原子提交；失败报告与原件均保留。
+
+只读 verify 实测当前磁盘，不启动宿主、不构建图、不自动修复。明确批准后可添加 `--probe --yes` 进行运行时与宿主探测。报告分开：
+
+| 层级 | 通过所需证据 | 不可替代的边界 |
+|---|---|---|
+| disk | 实际完整载荷或受管配置语义匹配固定基线 | 合法 Skill 壳或旧回执不够 |
+| runtime | 实际绑定命令及协议能力 | shell 版本号不代表 GUI 使用相同路径 |
+| host | 真实 Codex／OMP 进程加载所选受管配置的隔离投影，标记 `isolated-host/selected-projection` | 不是原配置域、GUI 或既有会话重载证明；`live_reload` 保持 unverified |
+| legacy | 实际旧入口检测与独立清理结果 | 升级成功不授权删除旧资产 |
+
+`aligned` 仅表示内容对齐；host 未验证必须继续显示未验证。`preserve` 导致 `exceptions`，必需资源不同导致 `drift`；两者非零退出。缺依赖、身份冲突、缺确认或不安全路径为 blocked，执行失败和部分失败保留实际结果。不能把该阶段退出 0 改写成“整机已经与全新安装完全一致”。
+
+当前 `--probe` 的宿主测试不读取认证或发起模型请求，使用临时 HOME 和所选受管配置投影。它证明真实宿主能加载该投影，不证明所有原宿主继承配置或已有连接已切换。原配置域／既有会话是否重载必须另有实际证据；普通 `check` 的 `contentAlignment.scope=skills-only` 只检查所选 Skills 根，不包括全局 AGENTS 或 MCP。
+
+Bash 入口为 `bash install.sh upgrade ...`，PowerShell 为 `./install.ps1 -WorkflowMode upgrade ...`；工作流参数直接转发，不运行普通 onboarding。恢复也由两入口转发。
+
+### 独立恢复与旧资产退出
+
+```bash
+python scripts/onboard.py recovery --phase plan \
+  --upgrade-plan /abs/private/vault/upgrade-plan.json \
+  --upgrade-receipt /abs/private/vault/upgrade-receipt-<id>.json \
+  --output /abs/private/vault/recovery-plan.json --json
+
+python scripts/onboard.py recovery --phase apply \
+  --upgrade-recovery-plan /abs/private/vault/recovery-plan.json \
+  --confirm-recovery <recovery_id> --json
+```
+
+恢复只针对本批实际写过的资源，绑定当前实测后态及原件。展示恢复清单后另行确认；后态漂移时保留用户内容并阻断。不自动删除备份，也不承诺恢复旧运行时可用。恢复重试使用返回的累计 `--recovery-receipt`。升级恢复参数不能与 migration 恢复参数混用。
+
+**历史信任边界：** 操作人明确选择且独占管理的已有私有 vault 是受信历史来源。摘要和相互引用验证一致性，不是签名认证；不能防御有 vault 写权限的人整组一致伪造计划、回执、意图与 checkpoint。不得从未知来源接收整套 vault 并据此自动删除文件。来源或控制权存疑时停止恢复，人工核对原件及操作记录。本流程不创建独立签名密钥或后台信任服务。
+
+执行始终绑定当前受信 Onboard 包；包内容在独立升级后变化时，旧计划可能返回 `source-stale`，不会自动信任并执行 vault 内历史代码。保留旧失败证据，使用可信原包核对或重新规划。生成缓存不改变载荷对齐，但恢复仍保护完整当前内容；新增缓存不自动归本批所有。恢复资源后保留空父目录，避免把并发创建的用户目录误删。
+
+九个退役 GitNexus Skills 纳入现有独立 `cleanup-legacy` 身份检测：`gitnexus-cli`、`gitnexus-debugging`、`gitnexus-exploring`、`gitnexus-guide`、`gitnexus-impact-analysis`、`gitnexus-pdg-query`、`gitnexus-pr-review`、`gitnexus-refactoring`、`gitnexus-taint-analysis`。仅在所选根的直接子目录且自身 `SKILL.md` 名称相符时成为候选。没有前缀删除，不卸载 CLI，不删除 `~/.gitnexus`、未选项目索引、历史运行时或备份；清理计划、独立确认和完整原件保护沿用 Cleanup Runtime。
+
+### 升级行为验收场景
+
+本仓库以 Markdown 场景映射现有 unittest，不生成 `.feature`。场景正文中文，结构关键词英文。
+
+| Scenario | Given / When / Then |
+|---|---|
+| U01 只读完整盘点 | Given 空选定目录；When plan；Then 返回完整 catalog 载荷与摘要，目标和 vault 无新增 |
+| U02 合法旧壳不冒充当前 | Given 名称合法但正文或辅助文件不同；When plan；Then 报告缺失、不同、额外文件和未知漂移 |
+| U03 升级收敛 | Given 明确替换差异；When apply 后 verify；Then 受管载荷与同基线全新安装等价，原件保留 |
+| U04 定制保留 | Given preserve 决定；When verify；Then 报告例外而非完全对齐 |
+| U05 多域隔离 | Given 多域与共享根；When apply；Then 共享资源只写一次，未选域不变 |
+| U06 前态变化拒绝 | Given 计划后源或目标改变；When apply；Then 不覆盖并报告冲突 |
+| U07 重复执行 | Given 上次已完成且后态未变；When 重试或重新计划；Then 不重复改写与制造备份 |
+| U08 故障恢复 | Given 部分失败或写后中断；When 续作或确认恢复；Then 记录真实后态且保护原件和用户新增 |
+| U09 自升级隔离 | Given 当前包属于更新集合；When apply；Then 独立已校验包执行，载荷不混版 |
+| U10 混合配置保护 | Given 其他 MCP 与注释；When 接线；Then 保留无关内容，未知受管所有权拒绝 |
+| U11 分层验收 | Given 文件对齐但未有真实宿主证据；When verify；Then disk 与 host 分开，host 不冒报通过 |
+| U12 退役身份 | Given 精确旧名及同名异身份目录；When cleanup；Then 仅获批且身份通过者可退出，冲突保留 |
+| U13 PATH 与 MCP 分离 | Given 所选 profile；When 确认应用；Then 受管块幂等，MCP 不依赖 shell PATH |
+| U14 路径安全 | Given 中文/空格路径或 symlink/junction/重叠目标；When plan/apply；Then 合法路径正确处理，越界拒绝 |
+| U15 脱敏输出 | Given 配置含私密字段；When 计划、验证或错误；Then 不打印原始配置或凭据 |
