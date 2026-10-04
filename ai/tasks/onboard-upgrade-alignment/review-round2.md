@@ -65,3 +65,7 @@ Ponytail／Code Readability：保留必要的物理祖先检查、输入异常 s
 新增公开真实库存／计划回归和完整包双根＋host apply。普通卷与 Case-sensitive APFS 各8项（各4 skip）互补通过；后者包括实际双根安装成功。修正后305项升级回归通过、15 skip；Ruff／ty通过。`final-native-*` 再次完成37资源 plan/apply、真实 Codex／OMP、installed retry/recovery及原件恢复。此前启动的全量因复核修正主动取消，不计通过；新的完整运行已启动。
 
 两位独立 reviewer 最终均无本轮剩余 finding：宿主切面一次通过，路径切面两项修正后复核通过；reviewer 未运行验证。路径复核额外指出 APFS 缺失文件 NFC／NFD 规范化等价属于基线已有、未纳入本轮14项的边界；本轮只证明大小写别名与所列场景，不宣称涵盖所有 Unicode 等价路径。
+
+## 完整运行与既有测试修正
+
+本地完整运行1750项，1 failure／25 skip：既有 PowerShell project-only 测试把项目目录精确限定为 AGENTS.md／.gitignore，但已存在的生产契约允许运行时可用时生成项目内 graft／.sbtd。删除该偶然布局断言，保留禁止全局命令及 HOME 配置写入的断言；不改安装生产行为。定点真实 PowerShell 复跑通过，原始失败在 `full-local-failed`，完整重跑另行记录。修复代码提交 `6eed0bdd61af22874342e5882530622d9ce86903` 已推送草稿PR，CI run37213454737在执行；后续测试／记录提交的证据须绑定新head。
