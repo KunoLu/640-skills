@@ -2007,15 +2007,15 @@ def _shell_resolution(
         reported = _resolution_key(resolutions[0])
         selected_key = _resolution_key(identity["path"])
         if reported != selected_key:
-            stem, suffix = os.path.splitext(selected_key)
-            unique_suffix_alias = (
+            selected_path = Path(identity["path"])
+            extensionless_bash_alias = (
                 os.name == "nt"
-                and suffix in {".exe", ".cmd", ".ps1"}
-                and reported == stem
-                and not os.path.lexists(stem)
-                and sum(os.path.lexists(stem + ext) for ext in (".exe", ".cmd", ".ps1")) == 1
+                and shell in {"bash", "zsh"}
+                and selected_path.suffix.lower() == ".exe"
+                and reported == _resolution_key(str(selected_path.with_suffix("")))
+                and not os.path.lexists(selected_path.with_suffix(""))
             )
-            if not unique_suffix_alias:
+            if not extensionless_bash_alias:
                 return {"status": "failed", "reason": "graft-resolution-mismatch"}
         pinned = details.get("runtime_cli_targets", [])
         if pinned and not any(

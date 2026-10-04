@@ -930,7 +930,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         preserved = skills / "skill-b"
         preserved.mkdir()
         (preserved / "SKILL.md").write_text("user custom\n", encoding="utf-8")
@@ -1026,9 +1026,9 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         (package / "payload/skill-a").mkdir(parents=True)
-        (package / "payload/skill-a/SKILL.md").write_text("same\n", encoding="utf-8")
+        (package / "payload/skill-a/SKILL.md").write_bytes(b"same\n")
         fixture = json.loads((package / "upgrade_fixture.json").read_text(encoding="utf-8"))
         fixture["resources"] = [self._skill_fixture(current, "payload/skill-a")]
         (package / "upgrade_fixture.json").write_text(json.dumps(fixture), encoding="utf-8")
@@ -1077,7 +1077,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         package = self._package(
             fixture={
                 "baseline_id": "b1",
@@ -1122,7 +1122,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         package = self._package(
             fixture={
                 "baseline_id": "b1",
@@ -1808,7 +1808,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         package = self._package(
             fixture={"baseline_id": "b1", "resources": [self._skill_fixture(current, "payload/skill-a")]},
             files={
@@ -1858,7 +1858,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         home = self.base / "home"
         home.mkdir()
         package = self._package(
@@ -1884,7 +1884,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         current = skills / "skill-a"
         current.mkdir()
-        (current / "SKILL.md").write_text("same\n", encoding="utf-8")
+        (current / "SKILL.md").write_bytes(b"same\n")
         home = self.base / "home"
         home.mkdir()
         package = self._package(

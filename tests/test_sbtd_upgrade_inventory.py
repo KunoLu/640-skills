@@ -71,7 +71,7 @@ def build_package(root: Path) -> Path:
     (pkg / "requirements.txt").write_text("jsonschema>=4,<5\n", encoding="utf-8")
     (pkg / "catalog.schema.json").write_text("{}\n", encoding="utf-8")
     (pkg / "onboard-contracts.schema.json").write_text("{}\n", encoding="utf-8")
-    (pkg / "SKILL.md").write_text(skill_md(SELF_NAME), encoding="utf-8")
+    (pkg / "SKILL.md").write_bytes(skill_md(SELF_NAME).encode("utf-8"))
 
     agents_dir = pkg / "templates" / "agents"
     agents_dir.mkdir(parents=True)
@@ -80,7 +80,7 @@ def build_package(root: Path) -> Path:
     for name in BUNDLED:
         skill_dir = pkg / "templates" / "skills" / name
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text(skill_md(name), encoding="utf-8")
+        (skill_dir / "SKILL.md").write_bytes(skill_md(name).encode("utf-8"))
     beta_notes = pkg / "templates" / "skills" / "beta-skill" / "references"
     beta_notes.mkdir()
     (beta_notes / "notes.md").write_text("beta notes\n", encoding="utf-8")
@@ -93,7 +93,7 @@ def build_package(root: Path) -> Path:
     for name in EXTERNAL:
         skill_dir = stable / "skills" / name
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text(skill_md(name), encoding="utf-8")
+        (skill_dir / "SKILL.md").write_bytes(skill_md(name).encode("utf-8"))
     gamma_scripts = stable / "skills" / "gamma-skill" / "scripts"
     gamma_scripts.mkdir()
     (gamma_scripts / "tool.sh").write_text("#!/bin/sh\ntrue\n", encoding="utf-8")
@@ -367,8 +367,8 @@ class MissingCurrentDriftTests(InventoryTests):
         """U02: a content-valid older shell lists full differences and waits."""
         install_all(self.pkg, self.skills_root)
         target = self.skills_root / "alpha-skill"
-        (target / "SKILL.md").write_text(
-            skill_md("alpha-skill", "older managed body"), encoding="utf-8"
+        (target / "SKILL.md").write_bytes(
+            skill_md("alpha-skill", "older managed body").encode("utf-8")
         )
         extra = target / "scripts"
         extra.mkdir()

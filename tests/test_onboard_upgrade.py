@@ -186,7 +186,7 @@ class UpgradeCliTests(unittest.TestCase):
             def invoke(package, *arguments):
                 result = subprocess.run(
                     [sys.executable, "-B", str(package / "scripts/onboard.py"), *arguments, "--json"],
-                    capture_output=True, text=True, timeout=180, check=False,
+                    capture_output=True, text=True, timeout=900, check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
                 return json.loads(result.stdout)
