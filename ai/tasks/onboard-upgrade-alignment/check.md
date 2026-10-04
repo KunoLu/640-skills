@@ -2,7 +2,7 @@
 
 ## PR #110 第二轮14项修复（当前）
 
-基线40b0dbf；先修P1，后按路径／事务、协议可信度、Shell、CLI及诊断顺序修复。逐项范围、red/green、证据限度和门禁见[review-round2.md](review-round2.md)。代码已完成局部302项升级回归与37资源真实隔离生命周期；完整项目验证及新head三平台CI尚待闭合，不复用下方历史绿灯。
+基线40b0dbf；先修P1，后按路径／事务、协议可信度、Shell、CLI及诊断顺序完成14项及独立复核两处补充。逐项范围、red/green、证据限度和门禁见[review-round2.md](review-round2.md)。本地1750项全量（25 skip）、305项升级回归（15 skip）、Ruff／ty与37资源真实隔离生命周期通过；代码及CI配置提交`36ee62eb362ec671552eaf971815e1bb43b12441`的[三平台CI 37216126160](https://github.com/KunoLu/640-skills/actions/runs/37216126160)全部通过。Windows305项（26 skip）包含原生PowerShell5.1 Unicode与大小写敏感双根apply实际通过，不将平台skip当证明。Release Readiness: ready，仅仓库能力；未部署或发布。最终记录提交另核对其精确head CI。
 
 ## PR #110 上一轮15项修复（历史）
 
