@@ -39,8 +39,20 @@ def _emit(args: Any, document: dict[str, Any], code: int) -> int:
 
 def _failure(args: Any, error: Exception, mode: str) -> int:
     code = getattr(error, "exit_code", 2)
+    reason = getattr(error, "code", "invalid-input")
+    details = getattr(error, "details", None)
+    batch = details.get("batch") if isinstance(details, dict) else None
+    if batch is not None:
+        # Post-mutation halt: bind the batch identity, backup root, latest
+        # checkpoint and measured/unknown mutation state. The checkpoint is
+        # recovery evidence, never this attempt's success; pre-write errors
+        # below stay generic blocked.
+        return _emit(args, {"mode": mode, "phase": args.phase, "status": "failed",
+                            "reason": reason, "batch": batch,
+                            "nextStep": "Inspect the bound checkpoint and backup root, reconcile unknown mutation, then re-plan recovery; originals are preserved."},
+                     3)
     return _emit(args, {"mode": mode, "phase": args.phase, "status": "blocked",
-                        "reason": getattr(error, "code", "invalid-input"),
+                        "reason": reason,
                         "nextStep": "Check input paths, private vault, declared dependencies and the selected phase; preserve originals."},
                  code if code in (2, 3) else 2)
 

@@ -1,6 +1,19 @@
 # 升级对齐验证与复核
 
-## 当前证据边界
+## PR #110 审查修复（当前）
+
+本轮相对ac34ee4修复15项；用户明确保留R03／R09／R11／R12原契约并纠正审查。详细场景、更正、故障分类和独立复核见[review-fixes.md](review-fixes.md)。
+
+- 本地全量1732项通过、20项平台／opt-in跳过；之后的静态收口由当前287项升级回归（10 skip）、Ruff与ty通过复验。最终三平台全量以新head CI为准，当前仍待执行。
+- 最终包真实隔离CLI完成37资源升级、Codex／OMP各33 Skills与6工具加载、已安装副本重试与恢复。缺失host的preserve仍安装；物理根别名只绑定一次；原profile与未选链接保留。不是GUI／既有会话重载。
+- 库存、事务／CLI、shell、协议四个独立静态复核均已收口；作者与reviewer不代跑验证。当前实际验证证据在`reports/review-fixes/`，raw及同stem中文汇总保留、不上传本地路径。
+- README两入口、REFERENCE U16—U19、版本化automation prompt、CHANGELOG及kuno lesson已维护。README HTML已用实际浏览器验证新增区块；Ego不可用时的失败证据保留。无业务Web／移动UI，Playwright／Maestro专项not-needed。
+- BDD: traceable，中文正文＋英文Given/When/Then；API Contract: verified（升级schema、真实OMP响应）；Mock Strategy: contract-backed，仅用于协议／故障注入；真实隔离host单独报告。Cross-repo context: not-needed。rtk: skipped-for-report，普通Git事实查询使用rtk。
+- 当前Release Readiness gate待精确head CI，不以历史ready结论关闭本轮。没有合并、发布、sync、真实HOME应用或真实旧资产清理。
+
+以下各节为修复前历史记录，不作为本轮head的通过证据。
+
+## 修复前证据边界（历史）
 
 四阶段仓库能力实现、隔离运行和独立复核已完成；代码提交 `befa24eb7ef68c884a125af313528551b7d97af0` 的三平台 CI 全部通过（[run 37168994920](https://github.com/KunoLu/640-skills/actions/runs/37168994920)）。全部本地原始输出和同stem中文汇总保留在本目录 reports/；其中含本地运行路径，不随PR上传。提交前证据不冒充精确head；本机应用、同步、旧资产实际清理、新PR合并及发布均未执行。
 
@@ -44,7 +57,7 @@ Ponytail/Code Readability Review：保留真实库存、宿主差异和安全事
 
 原始CI矩阵与每平台日志／同stem中文汇总：本地 `reports/ci-code-final*`。Evidence Source: ci；Source Revision: exact；Environment Alignment: verified（各自原生runner）；GitHub Checks已发布。Final Full Rerun: passed。没有把平台不适用skip视为该平台能力证明。
 
-## Release Readiness Review
+## 修复前 Release Readiness Review（历史）
 
 - Status: ready，仅表示本次仓库能力交付，不代表v2正式发布或用户环境部署。
 - Production path: 显式升级与恢复、选定Skills/配置域、独立清理能力；init/reset/migration既有含义保持。

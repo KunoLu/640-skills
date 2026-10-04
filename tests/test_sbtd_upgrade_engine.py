@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -37,6 +38,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from onboard_contracts import ContractError
 from sbtd_migration_files import snapshot
 
 
@@ -56,6 +58,24 @@ def payload_directory_state(path):
 
 def payload_file_state(path):
     return snapshot(Path(path))
+
+_PLATFORM_ALIASES = {"oh-my-pi": "omp"}
+
+
+def normalize_host_platform(value):
+    if not isinstance(value, str) or not value:
+        raise ContractError("invalid-config", "host platform must be a non-empty string")
+    return _PLATFORM_ALIASES.get(value, value)
+
+
+def normalize_scope(scope):
+    """Fixture canonicalization mirroring the inventory provider contract."""
+    if not isinstance(scope, dict) or scope.get("schema_version") != 1:
+        raise ContractError("invalid-config", "the upgrade scope must declare schema_version 1")
+    normalized = json.loads(json.dumps(scope))
+    for host in normalized.get("hosts", []):
+        host["platform"] = normalize_host_platform(host.get("platform"))
+    return normalized
 
 
 def _state(path):
@@ -1944,7 +1964,506 @@ class UpgradeEngineTests(unittest.TestCase):
                                   "disk": {"status": "not-applicable"}, "host": {"status": "not-applicable"}}]}
         self.assertIsNone(sbtd_upgrade._host_verdict(unsupported, probe=True)[0])
 
+    # -- review regressions: R02/R03/R05/R16/R17 ------------------------------
 
+    @unittest.skipIf(os.name == "nt", "POSIX symlink scenario")
+    def test_parent_preflight_ignores_unselected_sibling_links(self):
+        """R05: apply preflight lstats only parent components, never the tree."""
+        skills = self._skills_root()
+        target = skills / "AGENTS.md"
+        elsewhere = self.base / "elsewhere"
+        elsewhere.mkdir()
+        (skills / "unselected-link").symlink_to(elsewhere, target_is_directory=True)
+        (skills / "dangling-link").symlink_to(self.base / "missing-target")
+        nested = skills / "nested"
+        nested.mkdir()
+        (nested / "deep-link").symlink_to(elsewhere, target_is_directory=True)
+        if hasattr(os, "mkfifo"):
+            os.mkfifo(skills / "unselected-fifo")
+        package = self._package(
+            fixture={
+                "baseline_id": "b1",
+                "resources": [{
+                    "id": f"agents@{target}",
+                    "kind": "agents",
+                    "source": "payload/AGENTS.global.md",
+                    "target": str(target),
+                }],
+            },
+            files={"payload/AGENTS.global.md": "# agents\n"},
+        )
+        self._register(package)
+        vault = self._vault()
+        plan = self._plan({"schema_version": 1, "agents_targets": [str(target)]}, vault, package)
+        receipt = self._apply_local(plan)
+        self.assertEqual(receipt["payload"]["status"], "complete")
+        self.assertEqual(target.read_text(encoding="utf-8"), "# agents\n")
+        # Unselected siblings are never read or disturbed.
+        self.assertTrue((skills / "unselected-link").is_symlink())
+        self.assertTrue((skills / "dangling-link").is_symlink())
+        self.assertTrue((nested / "deep-link").is_symlink())
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlink scenario")
+    def test_parent_preflight_refuses_linked_parents(self):
+        """R05: a linked parent component itself is still refused."""
+        real = self.base / "real"
+        real.mkdir()
+        (real / "sub").mkdir()
+        link = self.base / "link"
+        link.symlink_to(real, target_is_directory=True)
+        for target in (
+            link / "AGENTS.md",
+            link / "sub" / "AGENTS.md",
+            link / "missing" / "AGENTS.md",
+        ):
+            with self.subTest(target=str(target)):
+                with self.assertRaises(ContractError) as caught:
+                    sbtd_upgrade._missing_parents(target)
+                self.assertEqual(caught.exception.code, "unsafe-path")
+
+    def test_parent_preflight_refuses_file_parent(self):
+        """R05: an existing parent that is a regular file is refused."""
+        blocker = self.base / "blocker"
+        blocker.write_text("x\n", encoding="utf-8")
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade._missing_parents(blocker / "AGENTS.md")
+        self.assertEqual(caught.exception.code, "unsafe-path")
+
+    def test_host_verdict_blocked_outranks_drift(self):
+        """R17: one blocked domain is never hidden by another domain's drift."""
+        report = {
+            "hosts": [
+                {"id": "blocked-host", "disk": {"status": "blocked"}},
+                {"id": "drift-host", "disk": {"status": "missing"}},
+            ]
+        }
+        verdict, exceptions = sbtd_upgrade._host_verdict(report)
+        self.assertEqual(verdict, "blocked")
+        self.assertEqual(exceptions, [])
+        profiles = {
+            "shell_profiles": [
+                {"path": "/p", "disk": {"status": "blocked"}},
+                {"path": "/q", "disk": {"status": "drifted"}},
+            ]
+        }
+        self.assertEqual(sbtd_upgrade._host_verdict(profiles)[0], "blocked")
+        drift_only = {"hosts": [{"id": "d", "disk": {"status": "drifted"}}]}
+        self.assertEqual(sbtd_upgrade._host_verdict(drift_only)[0], "drift")
+
+    def test_verify_status_blocked_outranks_skill_drift(self):
+        """R17: aggregate verify keeps blocked over drift with per-domain evidence."""
+        skills = self._skills_root()
+        target = skills / "skill-a"
+        target.mkdir()
+        (target / "SKILL.md").write_text("original\n", encoding="utf-8")
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [
+                self._skill_fixture(target, "payload/skill-a"),
+            ]},
+            files={"payload/skill-a/SKILL.md": "replacement\n"},
+        )
+        self._register(package)
+        vault = self._vault()
+        plan = self._plan({
+            "schema_version": 1, "skills_roots": [str(skills)],
+            "decisions": {str(target): "replace"},
+        }, vault, package)
+        receipt = self._apply_local(plan)
+        (target / "SKILL.md").write_text("user drift\n", encoding="utf-8")
+        report = {
+            "hosts": [
+                {"id": "blocked-host", "disk": {"status": "blocked"}},
+                {"id": "drift-host", "disk": {"status": "missing"}},
+            ],
+            "shell_profiles": [],
+        }
+        provider = sys.modules["sbtd_upgrade_hosts"]
+        with mock.patch.object(provider, "verify_hosts", return_value=report):
+            verification = sbtd_upgrade.verify_upgrade(plan, receipt=receipt)
+        self.assertEqual(verification["status"], "blocked")
+        rows = {row["id"]: row for row in verification["payload"]["resources"]}
+        self.assertEqual(rows[f"skill@{target}"]["result"], "drift")
+
+    def test_plan_seals_canonical_platform_and_probe_requires_reported_host(self):
+        """R16: the oh-my-pi alias is sealed as canonical omp for every layer."""
+        skills = self._skills_root()
+        current = skills / "skill-a"
+        current.mkdir()
+        (current / "SKILL.md").write_bytes(b"same\n")
+        home = self.base / "home"
+        home.mkdir()
+        package = self._package(
+            fixture={
+                "baseline_id": "b1",
+                "resources": [self._skill_fixture(current, "payload/skill-a")],
+            },
+            files={"payload/skill-a/SKILL.md": "same\n"},
+        )
+        self._register(package)
+        scope = {
+            "schema_version": 1, "skills_roots": [str(skills)],
+            "hosts": [{
+                "id": "omp-box", "platform": "oh-my-pi", "config_home": str(home),
+                "config": str(home / "omp.json"), "onboard_root": str(package),
+                "skills_roots": [], "project_roots": [],
+                "runtime": {"python": None, "node": None, "cli": None},
+            }],
+        }
+        plan = self._plan(scope, self._vault(), package)
+        self.assertEqual(plan["payload"]["scope"]["hosts"][0]["platform"], "omp")
+        verified = {"status": "verified"}
+        report = {
+            "hosts": [{
+                "id": "omp-box", "platform": "omp", "applicability": "supported",
+                "disk": {"status": "aligned", "decision": "keep"},
+                "runtime": verified,
+                "host": {"status": "verified", "checks": {
+                    key: dict(verified)
+                    for key in ("binding", "protocol", "host_load", "skills")
+                }},
+                "legacy": {"status": "none"},
+            }],
+            "shell_profiles": [],
+        }
+        provider = sys.modules["sbtd_upgrade_hosts"]
+        with mock.patch.object(provider, "verify_hosts", return_value=report):
+            self.assertEqual(sbtd_upgrade.verify_upgrade(plan, probe=True)["status"], "aligned")
+        with mock.patch.object(
+            provider, "verify_hosts", return_value={"hosts": [], "shell_profiles": []}
+        ):
+            self.assertEqual(sbtd_upgrade.verify_upgrade(plan, probe=True)["status"], "blocked")
+
+
+    def test_preserve_decision_missing_host_config_still_installs(self):
+        """R03 retained contract: preserve on a missing selected host config
+        cannot keep it absent — the plan stays install and apply creates the
+        valid rendered config."""
+        import tomllib
+        skills = self._skills_root()
+        current = skills / "skill-a"
+        current.mkdir()
+        (current / "SKILL.md").write_bytes(b"same\n")
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [self._skill_fixture(current, "payload/skill-a")]},
+            files={
+                "payload/skill-a/SKILL.md": "same\n",
+                "SKILL.md": "---\nname: sbtd-workflow-onboard\n---\n",
+                "scripts/sbtd_graft_entry.py": (SCRIPTS / "sbtd_graft_entry.py").read_text(encoding="utf-8"),
+            },
+        )
+        self._register(package)
+        real_inventory = self._real_module("sbtd_upgrade_inventory")
+        fixture_inventory = sys.modules["sbtd_upgrade_inventory"]
+        fixture_inventory._payload_scan = real_inventory._payload_scan
+        fixture_inventory.payload_directory_state = real_inventory.payload_directory_state
+        fixture_inventory.payload_file_state = real_inventory.payload_file_state
+        real_hosts = self._real_module("sbtd_upgrade_hosts")
+        sys.modules["sbtd_upgrade_hosts"] = real_hosts
+        home = self.base / "codex-home"
+        home.mkdir()
+        config = home / "config.toml"
+        runtime = self.base / "runtime"
+        runtime.mkdir()
+        for name in ("python", "node", "graft"):
+            (runtime / name).write_text("fixture executable\n", encoding="utf-8")
+        host = {
+            "id": "codex", "platform": "codex", "config_home": str(home),
+            "config": str(config), "onboard_root": str(package),
+            "skills_roots": [], "project_roots": [],
+            "runtime": {"python": str(runtime / "python"), "node": str(runtime / "node"), "cli": str(runtime / "graft")},
+        }
+        scope = {
+            "schema_version": 1, "skills_roots": [str(skills)], "hosts": [host],
+            "decisions": {str(config): "preserve"},
+        }
+        expected = real_hosts.render_resource(
+            real_hosts.build_host_resources(scope, package_root=package)[0],
+            package_root=package,
+        )
+        vault = self._vault()
+        plan = self._plan(scope, vault, package)
+        mcp = next(row for row in plan["payload"]["resources"] if row["kind"] == "mcp")
+        self.assertEqual(mcp["classification"], "missing")
+        self.assertEqual(mcp["decision"], "install")
+        receipt = self._apply_local(plan)
+        rows = {row["id"]: row for row in receipt["payload"]["resources"]}
+        self.assertEqual(rows[mcp["id"]]["result"], "succeeded")
+        self.assertEqual(config.read_bytes(), expected)
+        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.assertIn("sbtd-graft", json.dumps(parsed))
+
+    def test_post_write_persistence_failure_binds_batch_checkpoint(self):
+        """R02: a post-mutation persistence failure keeps batch recovery evidence."""
+        skills = self._skills_root()
+        target = skills / "skill-a"
+        target.mkdir()
+        (target / "SKILL.md").write_text("original\n", encoding="utf-8")
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [
+                self._skill_fixture(target, "payload/skill-a"),
+            ]},
+            files={"payload/skill-a/SKILL.md": "replacement\n"},
+        )
+        self._register(package)
+        vault = self._vault()
+        plan = self._plan({
+            "schema_version": 1, "skills_roots": [str(skills)],
+            "decisions": {str(target): "replace"},
+        }, vault, package)
+        desired = plan["payload"]["resources"][0]["desired"]
+        real_save = sbtd_upgrade._save_once
+
+        def fail_final_receipt(path, document, vault_arg):
+            if Path(path).name.startswith("upgrade-receipt-") and any(
+                row.get("result") == "succeeded"
+                for row in document["payload"]["resources"]
+            ):
+                raise OSError("injected receipt persistence failure")
+            return real_save(path, document, vault_arg)
+
+        with (
+            mock.patch.object(sbtd_upgrade, "_save_once", fail_final_receipt),
+            self.assertRaises(ContractError) as caught,
+        ):
+            self._apply_local(plan)
+        error = caught.exception
+        self.assertEqual(error.code, "write-failed")
+        self.assertEqual(error.exit_code, 3)
+        batch = (error.details or {}).get("batch")
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch["phase"], "upgrade")
+        self.assertEqual(batch["plan_id"], plan["plan_id"])
+        self.assertEqual(batch["backup_root"], str(vault))
+        persisted = list(vault.glob("upgrade-receipt-*.json"))
+        self.assertEqual(len(persisted), 1)
+        checkpoint = batch["checkpoint"]
+        self.assertEqual(checkpoint["path"], str(persisted[0]))
+        # The bound checkpoint is evidence, never this attempt's success.
+        self.assertNotEqual(checkpoint["status"], "complete")
+        self.assertEqual(batch["mutation"]["state"], "measured")
+        measured = {row["id"]: row for row in batch["mutation"]["resources"]}
+        self.assertEqual(measured[f"skill@{target}"]["after"], desired)
+        self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "replacement\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX symlink scenario")
+    def test_post_write_persistence_failure_reports_unknown_mutation(self):
+        """R02: an unmeasurable post-mutation state is reported as unknown."""
+        skills = self._skills_root()
+        target = skills / "skill-a"
+        target.mkdir()
+        (target / "SKILL.md").write_text("original\n", encoding="utf-8")
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [
+                self._skill_fixture(target, "payload/skill-a"),
+            ]},
+            files={"payload/skill-a/SKILL.md": "replacement\n"},
+        )
+        self._register(package)
+        vault = self._vault()
+        plan = self._plan({
+            "schema_version": 1, "skills_roots": [str(skills)],
+            "decisions": {str(target): "replace"},
+        }, vault, package)
+        real_save = sbtd_upgrade._save_once
+
+        def fail_and_poison(path, document, vault_arg):
+            if Path(path).name.startswith("upgrade-receipt-") and any(
+                row.get("result") == "succeeded"
+                for row in document["payload"]["resources"]
+            ):
+                (target / "unselected-link").symlink_to(skills)
+                raise OSError("injected receipt persistence failure")
+            return real_save(path, document, vault_arg)
+
+        with (
+            mock.patch.object(sbtd_upgrade, "_save_once", fail_and_poison),
+            self.assertRaises(ContractError) as caught,
+        ):
+            self._apply_local(plan)
+        batch = (caught.exception.details or {}).get("batch")
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch["mutation"]["state"], "unknown")
+        measured = {row["id"]: row for row in batch["mutation"]["resources"]}
+        self.assertIsNone(measured[f"skill@{target}"]["after"])
+
+    def test_isolated_crash_after_intent_binds_checkpoint_and_mutation(self):
+        """R02: an executor crash after intents binds checkpoint plus mutation."""
+        skills = self._skills_root()
+        target_a = skills / "skill-a"
+        target_b = skills / "skill-b"
+        for target, text in ((target_a, "old a\n"), (target_b, "old b\n")):
+            target.mkdir()
+            (target / "SKILL.md").write_text(text, encoding="utf-8")
+        package = self._package(
+            fixture={
+                "baseline_id": "b1",
+                "resources": [
+                    self._skill_fixture(target_a, "payload/skill-a"),
+                    self._skill_fixture(target_b, "payload/skill-b"),
+                ],
+            },
+            files={
+                "payload/skill-a/SKILL.md": "new a\n",
+                "payload/skill-b/SKILL.md": "new b\n",
+            },
+        )
+        self._register(package)
+        vault = self._vault()
+        scope = {
+            "schema_version": 1,
+            "skills_roots": [str(skills)],
+            "decisions": {str(target_a): "replace", str(target_b): "replace"},
+        }
+        plan = self._plan(scope, vault, package)
+        sealed = {row["id"]: row for row in plan["payload"]["resources"]}
+        real_install = sbtd_upgrade.install_reference
+
+        def failing_install(source_ref, target, expected, *, scope, backup_ref=None):
+            if Path(target).name == "skill-b":
+                raise ContractError("write-failed", "injected write failure", exit_code=3)
+            return real_install(source_ref, target, expected, scope=scope, backup_ref=backup_ref)
+
+        with mock.patch.object(sbtd_upgrade, "install_reference", failing_install):
+            receipt = self._apply_local(plan)
+        self.assertEqual(receipt["payload"]["status"], "partial")
+        crash = ContractError(
+            "self-upgrade-failed",
+            "the isolated upgrade executor failed without a contract error",
+            exit_code=3,
+        )
+        with (
+            mock.patch.object(sbtd_upgrade, "_run_isolated", side_effect=crash),
+            self.assertRaises(ContractError) as caught,
+        ):
+            sbtd_upgrade.apply_upgrade(
+                plan, confirmed=plan["plan_id"], receipt=receipt
+            )
+        error = caught.exception
+        self.assertEqual(error.code, "self-upgrade-failed")
+        self.assertEqual(error.exit_code, 3)
+        batch = (error.details or {}).get("batch")
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch["checkpoint"]["receipt_id"], receipt["receipt_id"])
+        self.assertNotEqual(batch["checkpoint"]["status"], "complete")
+        self.assertEqual(batch["mutation"]["state"], "measured")
+        measured = {row["id"]: row for row in batch["mutation"]["resources"]}
+        self.assertEqual(measured[f"skill@{target_a}"]["after"], sealed[f"skill@{target_a}"]["desired"])
+        self.assertEqual(measured[f"skill@{target_b}"]["after"], sealed[f"skill@{target_b}"]["before"])
+
+    def test_pre_write_validation_has_no_batch_evidence(self):
+        """R02: pre-write validation stays a plain blocked contract error."""
+        skills = self._skills_root()
+        target = skills / "skill-a"
+        target.mkdir()
+        (target / "SKILL.md").write_text("original\n", encoding="utf-8")
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [
+                self._skill_fixture(target, "payload/skill-a"),
+            ]},
+            files={"payload/skill-a/SKILL.md": "replacement\n"},
+        )
+        self._register(package)
+        vault = self._vault()
+        plan = self._plan({
+            "schema_version": 1, "skills_roots": [str(skills)],
+            "decisions": {str(target): "replace"},
+        }, vault, package)
+        (target / "SKILL.md").write_text("tampered\n", encoding="utf-8")
+        with self.assertRaises(ContractError) as caught:
+            self._apply_local(plan)
+        self.assertEqual(caught.exception.code, "state-conflict")
+        self.assertIsNone(caught.exception.details)
+
+    def test_recovery_post_step_persistence_failure_binds_recovery_evidence(self):
+        """R02: recovery persistence failures bind the recovery identity too."""
+        plan, receipt, target, _agents, vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        real_save = sbtd_upgrade._save_once
+
+        def fail_final_receipt(path, document, vault_arg):
+            if Path(path).name.startswith("upgrade-recovery-receipt-") and any(
+                row.get("result") == "succeeded" for row in document["payload"]["steps"]
+            ):
+                raise OSError("injected recovery receipt persistence failure")
+            return real_save(path, document, vault_arg)
+
+        with (
+            mock.patch.object(sbtd_upgrade, "_save_once", fail_final_receipt),
+            self.assertRaises(ContractError) as caught,
+        ):
+            self._apply_recovery_local(recovery)
+        error = caught.exception
+        self.assertEqual(error.code, "write-failed")
+        self.assertEqual(error.exit_code, 3)
+        batch = (error.details or {}).get("batch")
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch["phase"], "recovery")
+        self.assertEqual(batch["recovery_id"], recovery["recovery_id"])
+        self.assertEqual(batch["plan_id"], plan["plan_id"])
+        self.assertEqual(batch["backup_root"], str(vault))
+        self.assertNotEqual(batch["checkpoint"]["status"], "complete")
+        self.assertEqual(batch["mutation"]["state"], "measured")
+        self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original bytes\n")
+
+    def test_post_write_halt_survives_intent_scan_io_failure(self):
+        """R02: an evidence-scan I/O failure degrades to unknown mutation and
+        never drops the bound batch — the write halt must not be lost."""
+        skills = self._skills_root()
+        target = skills / "skill-a"
+        target.mkdir()
+        (target / "SKILL.md").write_text("original\n", encoding="utf-8")
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [
+                self._skill_fixture(target, "payload/skill-a"),
+            ]},
+            files={"payload/skill-a/SKILL.md": "replacement\n"},
+        )
+        self._register(package)
+        vault = self._vault()
+        plan = self._plan({
+            "schema_version": 1, "skills_roots": [str(skills)],
+            "decisions": {str(target): "replace"},
+        }, vault, package)
+        real_save = sbtd_upgrade._save_once
+        real_scan = sbtd_upgrade._scan_intents
+
+        def fail_final_receipt(path, document, vault_arg):
+            if Path(path).name.startswith("upgrade-receipt-") and any(
+                row.get("result") == "succeeded"
+                for row in document["payload"]["resources"]
+            ):
+                raise OSError("injected receipt persistence failure")
+            return real_save(path, document, vault_arg)
+
+        scans: list[str] = []
+
+        def broken_second_scan(vault_arg, prefix, id_field):
+            scans.append(prefix)
+            if len(scans) > 1:
+                raise OSError("injected intent scan failure")
+            return real_scan(vault_arg, prefix, id_field)
+
+        with (
+            mock.patch.object(sbtd_upgrade, "_save_once", fail_final_receipt),
+            mock.patch.object(sbtd_upgrade, "_scan_intents", broken_second_scan),
+            self.assertRaises(ContractError) as caught,
+        ):
+            self._apply_local(plan)
+        error = caught.exception
+        self.assertEqual(error.code, "write-failed")
+        self.assertEqual(error.exit_code, 3)
+        batch = (error.details or {}).get("batch")
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch["plan_id"], plan["plan_id"])
+        self.assertEqual(batch["backup_root"], str(vault))
+        persisted = list(vault.glob("upgrade-receipt-*.json"))
+        self.assertEqual(len(persisted), 1)
+        self.assertEqual(batch["checkpoint"]["path"], str(persisted[0]))
+        self.assertNotEqual(batch["checkpoint"]["status"], "complete")
+        # The intent scan failed: mutation state is honestly unknown, but the
+        # batch, checkpoint and write halt are never lost.
+        self.assertEqual(batch["mutation"]["state"], "unknown")
+        self.assertEqual(batch["mutation"]["resources"], [])
 
 
 if __name__ == "__main__":

@@ -1,14 +1,18 @@
 """Public CLI scenarios U01/U03/U06: read-only planning and guarded upgrade."""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "sbtd-workflow-onboard/scripts/onboard.py"
@@ -106,6 +110,131 @@ class UpgradeCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2)
         self.assertEqual(json.loads(result.stdout)["reason"], "probe-confirmation-required")
+
+    def test_cli_post_mutation_failure_emits_one_redacted_batch_json(self):
+        """R02: a real post-mutation persistence halt surfaces one redacted
+        batch JSON; a real pre-write refusal stays blocked without batch."""
+        import jsonschema
+        import sbtd_upgrade
+        import sbtd_upgrade_cli
+
+        schema = json.loads(
+            (ROOT / "sbtd-workflow-onboard" / "upgrade.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        def real_batch_phase(inject):
+            """Drive the public handler over a real plan/vault; only the
+            isolated process boundary runs in-process so the persistence
+            fault injection can reach it."""
+            temporary = tempfile.TemporaryDirectory()
+            self.addCleanup(temporary.cleanup)
+            root = Path(temporary.name).resolve()
+            package = root / "bootstrap"
+            shutil.copytree(
+                CLI.parents[1], package,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+            skills = root / "skills"
+            old = skills / "sbtd-workflow-onboard"
+            old.mkdir(parents=True)
+            original = (
+                b"---\nname: sbtd-workflow-onboard\n---\nold installed payload\n"
+            )
+            (old / "SKILL.md").write_bytes(original)
+            vault = root / "vault"
+            require_private_directory(vault, create=True)
+            scope = {
+                "schema_version": 1, "skills_roots": [str(skills)],
+                "decisions": {str(old): "replace"},
+            }
+            plan = sbtd_upgrade.plan_upgrade(scope, str(vault), package_root=str(package))
+            plan_file = root / "plan.json"
+            plan_file.write_text(json.dumps(plan), encoding="utf-8")
+            args = types.SimpleNamespace(
+                phase="apply", plan=str(plan_file), receipt=None,
+                confirm_plan=plan["plan_id"], yes=True, json=True, probe=False,
+                scope=None, backup_root=None, output=None,
+            )
+
+            def in_process(runner, argv):
+                return sbtd_upgrade._apply_upgrade_local(
+                    plan, confirmed=plan["plan_id"], receipt=None,
+                    package_root=package,
+                )
+
+            buffer = io.StringIO()
+            with (
+                mock.patch.object(sbtd_upgrade, "_run_isolated", in_process),
+                inject(old, plan),
+                contextlib.redirect_stdout(buffer),
+            ):
+                code = sbtd_upgrade_cli.run_upgrade(args)
+            return code, json.loads(buffer.getvalue()), buffer.getvalue(), plan, vault, old, original
+
+        def halt_injection(old, plan):
+            real_save = sbtd_upgrade._save_once
+
+            def fail_succeeded_receipt(path, document, vault_arg):
+                if Path(path).name.startswith("upgrade-receipt-") and any(
+                    row.get("result") == "succeeded"
+                    for row in document["payload"]["resources"]
+                ):
+                    raise OSError("injected receipt persistence failure")
+                return real_save(path, document, vault_arg)
+
+            return mock.patch.object(sbtd_upgrade, "_save_once", fail_succeeded_receipt)
+
+        code, document, raw, plan, vault, old, original = real_batch_phase(halt_injection)
+        self.assertEqual(code, 3)
+        self.assertEqual(document["status"], "failed")
+        self.assertEqual(document["reason"], "write-failed")
+        self.assertEqual(len(raw.strip().splitlines()), 1)
+        self.assertNotIn("Traceback", raw)
+        batch = document["batch"]
+        self.assertEqual(batch["plan_id"], plan["plan_id"])
+        self.assertEqual(batch["backup_root"], str(vault))
+        persisted = list(vault.glob("upgrade-receipt-*.json"))
+        self.assertEqual(len(persisted), 1)
+        self.assertEqual(batch["checkpoint"]["path"], str(persisted[0]))
+        self.assertNotEqual(batch["checkpoint"]["status"], "complete")
+        self.assertEqual(batch["mutation"]["state"], "measured")
+        sealed = {
+            row["id"]: row for row in plan["payload"]["resources"]
+            if row["kind"] == "skill"
+        }
+        measured = {row["id"]: row for row in batch["mutation"]["resources"]}
+        self.assertTrue(measured)
+        # The fault fires on the first succeeded receipt: prove the mutation
+        # for the resource the batch evidence actually bound, independently
+        # of any assumed plan ordering.
+        for resource_id, row in measured.items():
+            self.assertEqual(row["after"], sealed[resource_id]["desired"])
+            source = Path(sealed[resource_id]["source"]["path"])
+            target_path = Path(row["target"])
+            for payload_file in source.rglob("*"):
+                if payload_file.is_file():
+                    relative = payload_file.relative_to(source)
+                    self.assertEqual(
+                        (target_path / relative).read_bytes(),
+                        payload_file.read_bytes(),
+                    )
+        if str(old) not in {row["target"] for row in measured.values()}:
+            # The halt stopped the batch before the old Onboard was attempted.
+            self.assertEqual((old / "SKILL.md").read_bytes(), original)
+        jsonschema.validate(document, schema)
+
+        def prewrite_injection(old, plan):
+            (old / "SKILL.md").write_bytes(b"tampered after planning\n")
+            return contextlib.nullcontext()
+
+        code, document, raw, plan, vault, old, original = real_batch_phase(prewrite_injection)
+        self.assertEqual(code, 2)
+        self.assertEqual(document["status"], "blocked")
+        self.assertNotIn("batch", document)
+        self.assertNotIn("Traceback", raw)
+        jsonschema.validate(document, schema)
 
     def test_empty_upgrade_recovery_paths_return_redacted_json_not_legacy_traceback(self):
         """U06/U15: an empty upgrade path cannot route into legacy recovery."""

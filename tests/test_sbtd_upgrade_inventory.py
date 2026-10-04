@@ -209,6 +209,21 @@ def by_name(document: dict) -> dict[str, dict]:
     return {Path(resource["target"]).name: resource for resource in document["resources"]}
 
 
+def case_variant(path: Path) -> Path | None:
+    """A different-case spelling of one existing directory.
+
+    ``None`` on case-sensitive volumes, where the variant names a genuinely
+    distinct entry instead of an alias.
+    """
+    variant = path.parent / path.name.swapcase()
+    try:
+        if os.path.samefile(path, variant):
+            return variant
+    except OSError:
+        pass
+    return None
+
+
 class InventoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-upgrade-inventory-")
@@ -1210,6 +1225,461 @@ class ReviewRegressionTests(InventoryTests):
         (foreign / "SKILL.md").write_bytes(b"UNSELECTED-PRIVATE-CONTENT")
         source.symlink_to(foreign, target_is_directory=True)
         self.assert_code("unsafe-path", self.scope(skills_roots=[str(self.skills_root)]))
+
+    def test_install_target_nested_in_source_package_inventories_read_only(self):
+        """Supported contract: a target nested in the package inventories fine.
+
+        Nesting is classified by content like anywhere else and never
+        writes; the user-confirmed contract keeps no source-overlap ban.
+        """
+        before = {str(path.relative_to(self.pkg)) for path in self.pkg.rglob("*")}
+        for root in (self.pkg, self.pkg / "templates"):
+            with self.subTest(root=root):
+                document = self.build(self.scope(skills_roots=[str(root)]))
+                resources = by_name(document)
+                for name in ("alpha-skill", "gamma-skill"):
+                    self.assertEqual(resources[name]["classification"], "missing")
+                    self.assertEqual(resources[name]["decision"], "install")
+        after = {str(path.relative_to(self.pkg)) for path in self.pkg.rglob("*")}
+        self.assertEqual(before, after)
+
+    def test_source_package_nested_in_skill_target_classifies_by_content(self):
+        """Supported: a package below an install target is content-classified."""
+        inner_pkg = self.skills_root / SELF_NAME / "inner-pkg"
+        shutil.copytree(self.pkg, inner_pkg)
+        document = self.build(
+            self.scope(skills_roots=[str(self.skills_root)]), package_root=inner_pkg
+        )
+        resources = by_name(document)
+        onboard = resources[SELF_NAME]
+        self.assertEqual(onboard["classification"], "identity-conflict")
+        self.assertEqual(onboard["details"]["identity"]["kind"], "skill-md-missing")
+        self.assertEqual(onboard["decision"], "blocked")
+        self.assertEqual(resources["alpha-skill"]["classification"], "missing")
+
+    def test_agents_target_nested_in_source_package_inventories_normally(self):
+        """Supported: AGENTS targets near the package classify by content."""
+        document = self.build(self.scope(agents_targets=[str(self.pkg / "AGENTS.md")]))
+        (resource,) = document["resources"]
+        self.assertEqual(resource["classification"], "missing")
+        self.assertEqual(resource["decision"], "install")
+        reverse = self.build(self.scope(agents_targets=[str(self.base)]))
+        (conflict,) = reverse["resources"]
+        self.assertEqual(conflict["classification"], "identity-conflict")
+        self.assertEqual(conflict["details"]["identity"]["kind"], "type-conflict")
+
+    def test_same_location_self_target_stays_current_keep(self):
+        """R09: exact source == target equality remains readable current/keep."""
+        installed = self.base / SELF_NAME
+        shutil.copytree(self.pkg, installed)
+        document = self.build(
+            self.scope(
+                skills_roots=[str(self.base)],
+                decisions={str(installed): "preserve"},
+            ),
+            package_root=installed,
+        )
+        onboard = by_name(document)[SELF_NAME]
+        self.assertEqual(onboard["classification"], "current")
+        self.assertEqual(onboard["decision"], "keep")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX filesystem root semantics")
+    def test_filesystem_root_containment_is_component_aware(self):
+        """R19: the filesystem root contains descendants without a '//' bug."""
+        document = self.build(self.scope(skills_roots=["/"]))
+        (domain,) = [row for row in document["domains"] if row["kind"] == "skills"]
+        self.assertEqual(domain["path"], "/")
+        self.assertEqual(len(domain["resources"]), len(skill_names(self.pkg)))
+        self.assert_code(
+            "unsafe-path",
+            self.scope(skills_roots=["/", str(self.skills_root)]),
+        )
+        self.assert_code(
+            "unsafe-path",
+            self.scope(skills_roots=["/"], agents_targets=["/AGENTS.md"]),
+        )
+
+    def test_case_alias_skills_roots_deduplicate_physically(self):
+        """R10: two spellings of one physical root produce a single write set."""
+        install_all(self.pkg, self.skills_root)
+        alias = case_variant(self.skills_root)
+        if alias is None:
+            self.skipTest("the volume is case-sensitive")
+        document = self.build(
+            self.scope(skills_roots=[str(self.skills_root), str(alias)])
+        )
+        skills_domains = [row for row in document["domains"] if row["kind"] == "skills"]
+        self.assertEqual(len(skills_domains), 1)
+        self.assertEqual(skills_domains[0]["path"], str(self.skills_root))
+        self.assertEqual(len(document["resources"]), len(skill_names(self.pkg)))
+        physical = {
+            (os.lstat(resource["target"]).st_dev, os.lstat(resource["target"]).st_ino)
+            for resource in document["resources"]
+        }
+        self.assertEqual(len(physical), len(document["resources"]))
+
+    def test_case_alias_decisions_bind_and_conflicts_reject(self):
+        """R10: alias decision keys bind canonically; contradictions fail."""
+        install_all(self.pkg, self.skills_root)
+        alias = case_variant(self.skills_root)
+        if alias is None:
+            self.skipTest("the volume is case-sensitive")
+        target = self.skills_root / "alpha-skill"
+        (target / "SKILL.md").write_text(
+            skill_md("alpha-skill", "custom"), encoding="utf-8"
+        )
+        shutil.rmtree(self.skills_root / "beta-skill")
+        document = self.build(
+            self.scope(
+                skills_roots=[str(self.skills_root), str(alias)],
+                decisions={
+                    str(alias / "alpha-skill"): "replace",
+                    str(alias / "beta-skill"): "preserve",
+                },
+            )
+        )
+        resources = by_name(document)
+        self.assertEqual(resources["alpha-skill"]["target"], str(target))
+        self.assertEqual(resources["alpha-skill"]["decision"], "replace")
+        # An absent child target under the same physical root binds via alias.
+        self.assertEqual(resources["beta-skill"]["decision"], "preserve")
+        merged = self.build(
+            self.scope(
+                skills_roots=[str(self.skills_root), str(alias)],
+                decisions={
+                    str(target): "replace",
+                    str(alias / "alpha-skill"): "replace",
+                },
+            )
+        )
+        self.assertEqual(by_name(merged)["alpha-skill"]["decision"], "replace")
+        self.assert_code(
+            "decision-conflict",
+            self.scope(
+                skills_roots=[str(self.skills_root), str(alias)],
+                decisions={
+                    str(target): "replace",
+                    str(alias / "alpha-skill"): "preserve",
+                },
+            ),
+        )
+
+    def test_host_skills_root_alias_binds_to_canonical_root(self):
+        """R10: host root spellings alias to the canonical selected root."""
+        self.skills_root.mkdir()
+        alias = case_variant(self.skills_root)
+        if alias is None:
+            self.skipTest("the volume is case-sensitive")
+        host = {
+            "id": "orca",
+            "platform": "codex",
+            "config_home": str(self.base / "home"),
+            "config": str(self.base / "home" / "config.toml"),
+            "skills_roots": [str(alias)],
+            "runtime": {"python": None, "node": None, "cli": None},
+            "project_roots": [],
+        }
+        document = self.build(
+            self.scope(skills_roots=[str(self.skills_root)], hosts=[host])
+        )
+        (host_domain,) = [row for row in document["domains"] if row["kind"] == "host"]
+        self.assertEqual(host_domain["skills_roots"], [str(self.skills_root)])
+        (skills_domain,) = [row for row in document["domains"] if row["kind"] == "skills"]
+        self.assertIn("host:orca", skills_domain["selected_by"])
+
+    def test_case_sensitive_roots_with_folded_names_stay_distinct(self):
+        """R10: genuinely distinct case-sensitive roots are never merged."""
+        lower = self.base / "fold" / "skills"
+        upper = self.base / "fold" / "SKILLS"
+        lower.mkdir(parents=True)
+        try:
+            upper.mkdir()
+        except FileExistsError:
+            self.skipTest("the volume folds case")
+        if os.path.samefile(lower, upper):
+            self.skipTest("the volume folds case")
+        document = self.build(self.scope(skills_roots=[str(lower), str(upper)]))
+        skills_domains = [row for row in document["domains"] if row["kind"] == "skills"]
+        self.assertEqual(len(skills_domains), 2)
+        self.assertEqual(len(document["resources"]), 2 * len(skill_names(self.pkg)))
+
+    def test_oh_my_pi_platform_normalizes_to_omp(self):
+        """R16: one canonical platform spelling across every layer."""
+        host = {
+            "id": "orca",
+            "platform": "oh-my-pi",
+            "config_home": str(self.base / "home" / ".omp"),
+            "config": str(self.base / "home" / ".omp" / "agent" / "mcp.json"),
+            "skills_roots": [str(self.skills_root)],
+            "runtime": {"python": None, "node": None, "cli": None},
+            "project_roots": [],
+        }
+        document = self.build(
+            self.scope(skills_roots=[str(self.skills_root)], hosts=[host])
+        )
+        (domain,) = [row for row in document["domains"] if row["kind"] == "host"]
+        self.assertEqual(domain["platform"], "omp")
+        self.assertEqual(domain["onboard_root"], str(self.skills_root / SELF_NAME))
+
+    def test_oh_my_pi_multi_root_requires_unambiguous_onboard(self):
+        """R16: the oh-my-pi alias obeys the omp installation-binding rule."""
+        second = self.base / "second-skills"
+        host = {
+            "id": "orca",
+            "platform": "oh-my-pi",
+            "config_home": str(self.base / "home"),
+            "config": str(self.base / "home" / "mcp.json"),
+            "skills_roots": [str(self.skills_root), str(second)],
+            "runtime": {"python": None, "node": None, "cli": None},
+            "project_roots": [],
+        }
+        self.assert_code(
+            "scope-conflict",
+            self.scope(skills_roots=[str(self.skills_root), str(second)], hosts=[host]),
+        )
+
+    def test_normalize_host_platform_public_contract(self):
+        """R16: the shared normalization is strict and alias-only."""
+        self.assertEqual(inventory.normalize_host_platform("oh-my-pi"), "omp")
+        for unchanged in ("omp", "codex", "claude", "kimi"):
+            self.assertEqual(inventory.normalize_host_platform(unchanged), unchanged)
+        for invalid in ("", None, 7):
+            with self.subTest(invalid=invalid), self.assertRaises(ContractError):
+                inventory.normalize_host_platform(invalid)
+
+    def test_normalize_scope_seals_json_safe_canonical_scope(self):
+        """R16: the sealed scope is strict, JSON-safe and idempotent."""
+        sealed = inventory.normalize_scope(
+            self.scope(
+                skills_roots=[str(self.skills_root)],
+                hosts=[
+                    {
+                        "id": "orca",
+                        "platform": "oh-my-pi",
+                        "config_home": str(self.base / "home"),
+                        "config": str(self.base / "home" / "mcp.json"),
+                        "skills_roots": [str(self.skills_root)],
+                        "runtime": {"python": None, "node": None, "cli": None},
+                        "project_roots": [],
+                    }
+                ],
+                decisions={str(self.skills_root / "alpha-skill"): "replace"},
+            )
+        )
+        json.dumps(sealed)
+        self.assertEqual(sealed["schema_version"], 1)
+        self.assertEqual(sealed["skills_roots"], [str(self.skills_root)])
+        self.assertEqual(sealed["hosts"][0]["platform"], "omp")
+        self.assertEqual(
+            sealed["hosts"][0]["onboard_root"], str(self.skills_root / SELF_NAME)
+        )
+        self.assertEqual(
+            sealed["decisions"], {str(self.skills_root / "alpha-skill"): "replace"}
+        )
+        self.assertEqual(inventory.normalize_scope(sealed), sealed)
+        with self.assertRaises(ContractError):
+            inventory.normalize_scope({"schema_version": 2})
+        with self.assertRaises(ContractError):
+            inventory.normalize_scope({"schema_version": 1})
+
+    def test_host_config_and_shell_path_near_package_are_supported(self):
+        """Supported: host/shell write targets may live inside the package."""
+        host = {
+            "id": "orca",
+            "platform": "claude",
+            "config_home": str(self.pkg),
+            "config": str(self.pkg / "config.toml"),
+            "skills_roots": [],
+            "runtime": {"python": None, "node": None, "cli": None},
+            "project_roots": [],
+        }
+        profile = {
+            "path": str(self.pkg / ".zshrc"),
+            "shell": "zsh",
+            "bin": str(self.base / "bin"),
+        }
+        document = self.build(self.scope(hosts=[host], shell_profiles=[profile]))
+        (host_domain,) = [d for d in document["domains"] if d["kind"] == "host"]
+        self.assertEqual(host_domain["config"], str(self.pkg / "config.toml"))
+        (shell_domain,) = [d for d in document["domains"] if d["kind"] == "shell"]
+        self.assertEqual(shell_domain["path"], str(self.pkg / ".zshrc"))
+        # Reverse nesting is equally supported: the package below a target.
+        nested_pkg = self.base / "conf-home" / "sub" / "pkg"
+        shutil.copytree(self.pkg, nested_pkg)
+        reverse = {
+            **host,
+            "config_home": str(self.base / "conf-home"),
+            "config": str(self.base / "conf-home" / "sub"),
+        }
+        document = self.build(self.scope(hosts=[reverse]), package_root=nested_pkg)
+        (host_domain,) = [d for d in document["domains"] if d["kind"] == "host"]
+        self.assertEqual(host_domain["config"], str(self.base / "conf-home" / "sub"))
+
+    def test_host_alias_roots_dedup_before_onboard_derivation(self):
+        """R10: alias spellings in one host collapse before binding rules."""
+        self.skills_root.mkdir()
+        alias = case_variant(self.skills_root)
+        if alias is None:
+            self.skipTest("the volume is case-sensitive")
+        host = {
+            "id": "orca",
+            "platform": "codex",
+            "config_home": str(self.base / "home"),
+            "config": str(self.base / "home" / "config.toml"),
+            "skills_roots": [str(self.skills_root), str(alias)],
+            "runtime": {"python": None, "node": None, "cli": None},
+            "project_roots": [],
+        }
+        scope = self.scope(skills_roots=[str(self.skills_root)], hosts=[host])
+        sealed = inventory.normalize_scope(scope)
+        self.assertEqual(sealed["hosts"][0]["skills_roots"], [str(self.skills_root)])
+        document = self.build(scope)
+        (domain,) = [row for row in document["domains"] if row["kind"] == "host"]
+        self.assertEqual(domain["skills_roots"], [str(self.skills_root)])
+        self.assertEqual(domain["onboard_root"], str(self.skills_root / SELF_NAME))
+
+    def test_case_alias_same_physical_package_stays_current_keep(self):
+        """R10: the same physical package in any spelling is current/keep."""
+        installed = self.base / SELF_NAME
+        shutil.copytree(self.pkg, installed)
+        alias = case_variant(self.base)
+        if alias is None:
+            self.skipTest("the volume is case-sensitive")
+        document = self.build(
+            self.scope(skills_roots=[str(alias)]), package_root=installed
+        )
+        onboard = by_name(document)[SELF_NAME]
+        self.assertEqual(onboard["classification"], "current")
+        self.assertEqual(onboard["decision"], "keep")
+        # An alias-spelled root naming the package itself inventories nested
+        # targets by content (missing/install), never an overlap failure.
+        nested = self.build(
+            self.scope(skills_roots=[str(alias / SELF_NAME)]), package_root=installed
+        )
+        alpha = by_name(nested)["alpha-skill"]
+        self.assertEqual(alpha["classification"], "missing")
+        self.assertEqual(alpha["decision"], "install")
+        # A package nested below an alias-spelled target classifies by content.
+        inner_pkg = self.base / "outer" / SELF_NAME / "inner-pkg"
+        shutil.copytree(self.pkg, inner_pkg)
+        document = self.build(
+            self.scope(skills_roots=[str(alias / "outer")]), package_root=inner_pkg
+        )
+        onboard = by_name(document)[SELF_NAME]
+        self.assertEqual(onboard["classification"], "identity-conflict")
+
+    def test_existing_child_case_alias_decision_binds_canonical_target(self):
+        """R10: an existing skill child binds through a case-alias spelling."""
+        install_all(self.pkg, self.skills_root)
+        child = self.skills_root / "alpha-skill"
+        variant = case_variant(child)
+        if variant is None:
+            self.skipTest("the volume is case-sensitive")
+        (child / "SKILL.md").write_text(
+            skill_md("alpha-skill", "custom"), encoding="utf-8"
+        )
+        scope = self.scope(
+            skills_roots=[str(self.skills_root)],
+            decisions={str(variant): "preserve"},
+        )
+        # The sealed decision keeps the stable catalog spelling, so a later
+        # retry against the same target still binds.
+        sealed = inventory.normalize_scope(scope)
+        self.assertEqual(sealed["decisions"], {str(child): "preserve"})
+        alpha = by_name(self.build(scope))["alpha-skill"]
+        self.assertEqual(alpha["classification"], "unknown-drift")
+        self.assertEqual(alpha["decision"], "preserve")
+        # Same-value aliases merge onto the one canonical target.
+        merged = self.build(
+            self.scope(
+                skills_roots=[str(self.skills_root)],
+                decisions={str(child): "preserve", str(variant): "preserve"},
+            )
+        )
+        self.assertEqual(by_name(merged)["alpha-skill"]["decision"], "preserve")
+
+    def test_selected_profile_under_skills_root_keeps_file_spelling(self):
+        self.skills_root.mkdir(parents=True, exist_ok=True)
+        profile = self.skills_root / "Profile.ps1"
+        original = b"# existing profile\n"
+        profile.write_bytes(original)
+        scope = self.scope(
+            skills_roots=[str(self.skills_root)],
+            shell_profiles=[{
+                "path": str(profile), "shell": "powershell", "bin": str(self.base),
+            }],
+            decisions={str(profile): "replace"},
+        )
+        document = self.build(scope)
+        shell = next(row for row in document["domains"] if row["kind"] == "shell")
+        self.assertEqual(shell["path"], str(profile))
+        self.assertEqual(
+            inventory.normalize_scope(scope)["decisions"], {str(profile): "replace"}
+        )
+        self.assertEqual(profile.read_bytes(), original)
+
+    def test_selected_host_directory_keeps_its_non_skill_decision(self):
+        config = self.skills_root / "CONFIG"
+        config.mkdir(parents=True)
+        scope = self.scope(
+            skills_roots=[str(self.skills_root)],
+            hosts=[{
+                "id": "other-host",
+                "platform": "claude",
+                "config_home": str(self.skills_root),
+                "config": str(config),
+                "skills_roots": [],
+                "runtime": {"python": None, "node": None, "cli": None},
+                "project_roots": [],
+            }],
+            decisions={str(config): "replace"},
+        )
+        document = self.build(scope)
+        self.assertEqual(by_name(document)["alpha-skill"]["decision"], "install")
+        self.assertEqual(
+            inventory.normalize_scope(scope)["decisions"], {str(config): "replace"}
+        )
+
+    def test_conflicting_child_case_aliases_are_rejected(self):
+        """R10: opposing spellings of one existing child conflict explicitly."""
+        install_all(self.pkg, self.skills_root)
+        child = self.skills_root / "alpha-skill"
+        variant = case_variant(child)
+        if variant is None:
+            self.skipTest("the volume is case-sensitive")
+        (child / "SKILL.md").write_text(
+            skill_md("alpha-skill", "custom"), encoding="utf-8"
+        )
+        error = self.assert_code(
+            "decision-conflict",
+            self.scope(
+                skills_roots=[str(self.skills_root)],
+                decisions={str(child): "replace", str(variant): "preserve"},
+            ),
+        )
+        self.assertIn("conflicting", error.message)
+
+    def test_distinct_case_sensitive_children_are_never_folded(self):
+        """R10: same-name-different-case children stay distinct targets."""
+        lower = self.skills_root / "alpha-skill"
+        upper = self.skills_root / "ALPHA-SKILL"
+        lower.mkdir(parents=True)
+        try:
+            upper.mkdir()
+        except FileExistsError:
+            self.skipTest("the volume folds case")
+        if os.path.samefile(lower, upper):
+            self.skipTest("the volume folds case")
+        (lower / "SKILL.md").write_text(skill_md("alpha-skill"), encoding="utf-8")
+        document = self.build(self.scope(skills_roots=[str(self.skills_root)]))
+        self.assertEqual(by_name(document)["alpha-skill"]["target"], str(lower))
+        self.assert_code(
+            "decision-conflict",
+            self.scope(
+                skills_roots=[str(self.skills_root)],
+                decisions={str(upper): "preserve"},
+            ),
+        )
 
 
 if __name__ == "__main__":

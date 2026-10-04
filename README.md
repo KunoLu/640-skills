@@ -98,6 +98,10 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 
 Python、Bash `install.sh upgrade ...` 和 PowerShell `-WorkflowMode upgrade` 使用同一实现。Scope JSON、私有计划、恢复命令与验收边界见 [Upgrade Alignment](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。旧工具入口仍由 `cleanup-legacy` 独立确认；新增九个 GitNexus Skills 的精确身份清理，不卸载 CLI、不删除全局数据、历史运行时或备份。Caveman 未知定制、插件与 hooks 不因升级被覆盖。
 
+升级安全与兼容边界：Codex 只对齐所选 `config_home/config.toml`；UTF-16 profile 和无法表示为单个 PATH 项的目录写前拒绝。Shell probe 使用实际交互加载／命令优先级，并核对受支持 npm shim 的 CLI 文件指向，不冒充包装器执行或 Node 验证；OMP 以结构化注册表而非 prompt 文本证明加载，仍只验收 user-wide 隔离投影。混合结果保留 blocked 优先级；写后失败返回 exit 3 与本批 `batch` checkpoint／备份入口，不能当作零写入拒绝。
+
+已选但缺失的 host 资源仍进入安装，`preserve` 不取消该安装；不需要时应从 scope 移除。受支持的嵌套安装可从同基线已安装副本续作，restore intent 后的 absent 窗口保持原契约；这些边界不授权未知内容覆盖、项目级宿主图构建或真实 HOME 变更。
+
 跨平台基线按原始载荷字节及相对 POSIX 路径排序计算。根 `.gitattributes` 对 `sbtd-workflow-onboard/**` 及其 canonical `/LICENSE` 源禁用文本换行转换，保护固定 stable pin 和模板／脚本／许可证基线；不能通过运行时换行归一化来掩盖实际内容漂移。
 
 

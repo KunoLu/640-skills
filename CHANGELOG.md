@@ -43,6 +43,11 @@
 
 ### 修复
 
+- 升级写后持久化／执行器失败不再冒充普通写前拒绝：返回 failed／exit 3、绑定批次的 checkpoint 与备份入口，并区分实测后态和 unknown；证据读取再次失败仍保留恢复上下文。
+- 升级父目录预检改为逐组件 no-follow 检查，不递归扫描无关兄弟内容；修正文件系统根包含判断，按物理身份合并 Skills 根及已存在子目录的拼写别名，并绑定决定键，保留大小写敏感卷上的不同目录。
+- 宿主对齐只接受 Codex 实际 `config.toml` 入口；统一 `oh-my-pi`／`omp`，blocked 不再被 drift 掩盖，合法无关 MCP 与非法配置分别报告 legacy none／unknown。
+- Shell profile 拒绝 UTF-16 混写及不可表达的 PATH 项；Bash／zsh 按交互条件探测，PowerShell 检查真实命令优先级并兼容区分大小写的 PATH 环境。受支持 npm shim 仅按受限字面相对路径证明 CLI 指向，不执行任意包装器，也不冒充 Node 解释器证明。
+- OMP 加载以成功 RPC 响应中的结构化工具注册表为据，不再将 prompt 中的 URI 当可调用证据；RPC 写入与读取共享期限，健康 EOF 与阻塞子进程的管道收尾分别处理。
 - Codex MCP 候选兼容合法 TOML 中分散的 `mcp_servers` 表及 server 子表，不再把解析器的分散表代理误判为非法配置；最低 tomlkit 提高至已修复完整片段删除的 0.13.2，退役后复核序列化结果，避免返回残留旧项的半切换候选。无关设置、注释及幂等性保留，顶层 inline table 和未证明归属的旧条目仍拒绝。
 - Windows MCP 根证明直接选择外部 PATH 目录中的原生 `git.exe`，拒绝批处理包装器及解析后非 `.exe` 目标，避免 CMD 参数解释和 cwd 隐式遮蔽；POSIX 同样使用明确目录内的 Git 候选，保留物理路径边界。
 - Git 根证明在 Windows 显式按 UTF-8 解码路径输出，修复非 UTF-8 默认代码页下合法中文／重音字符仓库被误拒绝的问题；POSIX 保留原解码约定，各平台的输出解码失败均转为受控 `root-unsafe`，不放宽仓库边界检查。
@@ -89,6 +94,7 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 升级参考与 README 两入口明确四项保留契约：缺失 host 仍安装，受支持的嵌套安装由同基线已安装副本续作，restore intent 后 absent 保持续作窗口，OMP 隔离探测仍限 user-wide。版本化巡检提示同步这些边界，不改 live automation。
 - 主 PRD 补充 P3-05 验证环境与旧 Graft 接线退役任务，覆盖临时运行时、隔离 HOME 与受管旧 MCP 绑定；正式发布前完成运行依赖退役或必要保留交接，备份销毁仍归 P3-04。明确方案确认不等于替代已部署，不授权清空 TEMP 或整个宿主账户目录。
 - 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
 - `ENTRYPOINT.md` 当前 canonical Skill 改为 `writing-for-agents`。`writing-great-skills` 只保留为迁移别名，不再作为当前安装名。

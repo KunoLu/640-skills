@@ -727,15 +727,25 @@ Network, permissions, missing dependencies, unsupported platform execution, malf
 
 一个宿主域以 `id`、`platform`、`config_home`、`config`、`skills_roots`、`runtime`（绝对 `python`／`node`／`cli`）和 `project_roots` 描述。宿主 Skills 根也必须在顶层选择。普通 Codex 与 Orca 账户使用各自的配置域，不自动扫描账号或认证目录。Codex／OMP 复用现有受管 Graft 候选生成器；其他平台不擅自新增 Graft 接线。选中已有项目用于验证，不等于初始化项目或构建图授权。
 
+`oh-my-pi` 在计划封存前统一为 `omp`，后续应用／验证使用同一平台标识。Codex 的 `config` 必须是所选 `config_home` 下的 `config.toml`；不能对宿主不加载的其他 TOML 文件报告对齐。
+
+同一物理 Skills 根的路径拼写别名只产生一个写入集合；目标与决定键同步绑定到选定拼写。不把大小写敏感卷上的真实不同目录合并，也不通过再次跟随 symlink／junction 来归一化用户路径。
+
 可选 `executable` 是实际宿主 CLI 的绝对路径。`onboard_root` 表示宿主要加载的**已安装 Onboard 包目录**，不是 Skills 根：仅有一个宿主 Skills 根时派生为该根的 `sbtd-workflow-onboard`；多个根必须明确选定其中一个包目录。host-only 范围需显式选定已有且受信的包目录。最终 MCP launcher 指向这个安装目标，不能指向仓库源码或升级暂存执行器。OMP 计划同时核对所选项目的有效继承来源；相同继承连接可复用，来源变化或被禁用／冲突的受管连接不能冒充对齐。
 
 若 OMP 的有效继承来源同时属于本批将改写的 provider 配置，计划／应用以 `inherited-dependency-conflict` 在目标写入前拒绝。先对齐 provider 配置域，再以其实际新状态重新规划 consumer；不把上一份计划中的旧继承快照用作新状态，也不在同一批中先写一半再因自身写入失败。
 
 可选 shell profile 以 `path`、`shell`（`bash`／`zsh`／`powershell`）与绝对 `bin` 描述。仅修改该文件中的受管 PATH 块，保留其他内容；MCP 使用固定绝对运行时，不依赖 PATH。执行 profile 会运行其中用户代码，因此只读计划不启动 shell。
 
+带 UTF-16 LE／BE BOM 的 profile 在生成候选前明确拒绝，保持原件字节，不混写 UTF-8，也不自动转码。不能表示为单个 PATH 项的目录同样写前拒绝：POSIX 的 `:`、Windows PowerShell 的 `;`，以及驱动器转换后仍含 `:` 的 Windows POSIX-shell 路径。
+
 Windows Git Bash／zsh 的受管 PATH 使用 `/c/...` 驱动器别名（UNC 使用 `//server/share/...`），避免把 `C:` 的冒号误作 PATH 分隔符。探测只转换路径拼写，仍绑定所选 shell 实际使用的可执行文件；并存的 `graft.ps1`、`graft.exe` 不能仅因同名被判为同一目标。PowerShell 使用原生路径。
 
+显式 shell probe 在隔离 HOME 中以交互条件加载 Bash／zsh profile；PowerShell 检查实际优先级最高的命令，alias／function 遮蔽不能被筛掉后报通过。受支持的 npm shim 按已识别的包装器结构绑定其字面相对 CLI 目标，不能把普通 `.cmd`／`.ps1` 文件的物理路径当作 `cli.js`。这证明命令解析及 CLI 文件指向，不执行包装器，也不证明其 Node 选择或实际运行成功；固定 Node 的协议能力由独立 host/runtime 检查证明。未知或具有动态路径展开的包装器不冒报匹配。
+
 `decisions` 以计划中的绝对目标路径为键，值为 `replace` 或 `preserve`。缺失受管资产进入安装；当前内容跳过；未知内容必须选择后重新计划，先展示额外文件及替换影响。身份不符、不安全路径或候选重叠不能靠 `replace` 放行。保留差异属于例外，不是完全对齐。个人 Skills、Caveman 未知定制、插件、hooks、账号与凭据不在默认升级范围。
+
+对已选但缺失的 host MCP／shell profile，`preserve` 不表示“保持不存在”：仍按缺失资源安装契约处理。不需要安装时应从 scope 移除该目标；对已经存在的差异才使用 `preserve` 保留例外。
 
 ### 计划、应用与分层验收
 
@@ -774,7 +784,15 @@ apply 重新推导范围并校验源、完整前态与私有备份路径，先�
 
 `aligned` 仅表示内容对齐；host 未验证必须继续显示未验证。`preserve` 导致 `exceptions`，必需资源不同导致 `drift`；两者非零退出。缺依赖、身份冲突、缺确认或不安全路径为 blocked，执行失败和部分失败保留实际结果。不能把该阶段退出 0 改写成“整机已经与全新安装完全一致”。
 
+聚合状态保留 `blocked` 高于 `drift` 的优先级，并保留逐域结果。合法配置仅包含无关 MCP 时，legacy 为 `none`；非法配置仍为 `unknown`，不把两者混为一谈。
+
+写后发生回执持久化或隔离执行器失败时，CLI 返回 `status=failed`、exit 3，并携带绑定本批的 `batch`：计划／恢复 ID、`backup_root`、可取得的最后持久 `checkpoint`（或 `null`）及实测／`unknown` 的 `mutation`。旧 checkpoint 不是本次成功证明；证据再次读取失败也不得把已有写入改报为普通写前 blocked。保留这些恢复入口和原件，先核对实际状态，再按同一批次的续作／恢复规则处理。
+
 当前 `--probe` 的宿主测试不读取认证或发起模型请求，使用临时 HOME 和所选受管配置投影。它证明真实宿主能加载该投影，不证明所有原宿主继承配置或已有连接已切换。原配置域／既有会话是否重载必须另有实际证据；普通 `check` 的 `contentAlignment.scope=skills-only` 只检查所选 Skills 根，不包括全局 AGENTS 或 MCP。
+
+OMP 隔离宿主探测保持 **user-wide** 投影边界；它不创建私有项目图，也不证明仅由项目级配置提供的连接已加载。项目级路由没有用户级等价连接时，不得把该探测报告成通过；用户级路由通过也不构成项目级路由已验证的证据。
+
+OMP 加载判据使用 `get_state.dumpTools` 的结构化工具名与参数 schema；prompt 中提到工具 URI 不构成注册或可调用证据。隔离配置显式关闭 xdev 延迟入口，以核对实际注册的目标工具。RPC 请求写入与响应共用期限，宿主不消费 stdin 也不能无限阻塞；探测结束负责回收自有进程及管道。
 
 Bash 入口为 `bash install.sh upgrade ...`，PowerShell 为 `./install.ps1 -WorkflowMode upgrade ...`；工作流参数直接转发，不运行普通 onboarding。恢复也由两入口转发。
 
@@ -793,9 +811,13 @@ python scripts/onboard.py recovery --phase apply \
 
 恢复只针对本批实际写过的资源，绑定当前实测后态及原件。展示恢复清单后另行确认；后态漂移时保留用户内容并阻断。不自动删除备份，也不承诺恢复旧运行时可用。恢复重试使用返回的累计 `--recovery-receipt`。升级恢复参数不能与 migration 恢复参数混用。
 
+已确认的 restore 意图之后，目标 `absent` 是既有恢复续作窗口，不要求额外“删除完成”checkpoint；这不是覆盖未知非空内容的授权。当前内容与可接受续作状态不符时仍停止，保留备份和冲突内容。
+
 **历史信任边界：** 操作人明确选择且独占管理的已有私有 vault 是受信历史来源。摘要和相互引用验证一致性，不是签名认证；不能防御有 vault 写权限的人整组一致伪造计划、回执、意图与 checkpoint。不得从未知来源接收整套 vault 并据此自动删除文件。来源或控制权存疑时停止恢复，人工核对原件及操作记录。本流程不创建独立签名密钥或后台信任服务。
 
 执行始终绑定当前受信 Onboard 包；包内容在独立升级后变化时，旧计划可能返回 `source-stale`，不会自动信任并执行 vault 内历史代码。保留旧失败证据，使用可信原包核对或重新规划。生成缓存不改变载荷对齐，但恢复仍保护完整当前内容；新增缓存不自动归本批所有。恢复资源后保留空父目录，避免把并发创建的用户目录误删。
+
+源包与安装目标具有包含关系本身不构成全面禁令，仍按内容、目标冲突与分阶段执行边界判断。嵌套安装后，原 bootstrap 可能因自身树内容改变而变成 `source-stale`；应从本次安装的**同基线规范 Onboard 副本**继续重试／恢复，而不是据此执行 vault 内历史代码或放宽基线校验。
 
 九个退役 GitNexus Skills 纳入现有独立 `cleanup-legacy` 身份检测：`gitnexus-cli`、`gitnexus-debugging`、`gitnexus-exploring`、`gitnexus-guide`、`gitnexus-impact-analysis`、`gitnexus-pdg-query`、`gitnexus-pr-review`、`gitnexus-refactoring`、`gitnexus-taint-analysis`。仅在所选根的直接子目录且自身 `SKILL.md` 名称相符时成为候选。没有前缀删除，不卸载 CLI，不删除 `~/.gitnexus`、未选项目索引、历史运行时或备份；清理计划、独立确认和完整原件保护沿用 Cleanup Runtime。
 
@@ -820,3 +842,7 @@ python scripts/onboard.py recovery --phase apply \
 | U13 PATH 与 MCP 分离 | Given 所选 profile；When 确认应用；Then 受管块幂等，MCP 不依赖 shell PATH |
 | U14 路径安全 | Given 中文/空格路径或 symlink/junction/重叠目标；When plan/apply；Then 合法路径正确处理，越界拒绝 |
 | U15 脱敏输出 | Given 配置含私密字段；When 计划、验证或错误；Then 不打印原始配置或凭据 |
+| U16 输入与编码拒绝 | Given UTF-16 profile、不可表达的 PATH 项或非规范 Codex 配置名；When plan／render；Then 写前拒绝，原字节与未选配置不变 |
+| U17 真实探测证据 | Given 交互守卫、命令遮蔽、npm shim 或 OMP 工具文本；When 显式 probe；Then 真实优先级与受限 CLI 指向可验证，只有有效 RPC 注册表可证明 OMP 加载，写入／响应均受期限约束 |
+| U18 物理路径边界 | Given 物理路径别名、大小写敏感目录或父目录中的无关链接；When plan／apply；Then 同一资源只绑定一次，不合并不同目录，不递归读取无关兄弟，根路径包含判断正确 |
+| U19 状态与失败入口 | Given 写后证据失败、平台别名或混合域状态；When CLI 返回／verify；Then 保留绑定批次的 checkpoint 与实测／unknown，平台统一，blocked 不被 drift 掩盖，合法无关 MCP 与非法配置区分 |

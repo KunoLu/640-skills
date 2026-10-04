@@ -655,5 +655,17 @@
 - 修复：仅在 `mkdtemp` 成功后立即解析本次拥有的临时根，再向下创建和访问夹具。用户提供的 Skills 根、源、目标继续逐级拒绝 symlink／junction，不用 resolve 绕过所有权检查。
 - 预防：回归同时覆盖“自有临时父目录通过系统别名访问仍可探测”和“用户提供的链接／越界 sibling 仍拒绝”。真实宿主探测与脚本化协议测试分别报告；不得通过放宽所有路径链接守卫来修正夹具。
 
+## LESSON-20261004-kuno-review-red-is-not-a-contract-defect: Review Red Is Not A Contract Defect
+
+- 日期：2026-10-04
+- 标签：review, validation, contracts, fixtures, scope, recovery
+- 适用场景：把审查 finding 转成回归测试，尤其涉及安装策略、分阶段执行和中断恢复窗口。
+- 严重级别：high
+- 来源：Onboard 升级审查复核与冻结原版公开 CLI／已安装副本的真实续作。
+- 问题：新写的 red 将缺失 host 的 preserve、源目标包含关系等拟议策略当成既有缺陷；只看已改变的旧 bootstrap 返回 source-stale，又错误扩大为安装后不能重试或恢复。
+- 根因：先把审查建议写成预期，未先证明预期属于既有契约，也未沿真正的已安装消费者走完整生命周期。断言失败只能证明实现不同于断言，不能自动证明产品违约。
+- 修正：冻结原版执行 plan／apply，再从同基线已安装规范副本完成 retry／recovery；向用户说明策略差异并取得明确选择，撤回未经需要的行为变更，保留原始 red 和更正结论。
+- 预防：每条 red 先证明有效输入、前置条件与目标 seam，排除 schema、依赖、夹具顺序或更早门禁造成的失败；正向控制必须实际成功。探测只报告已证明的层级，不顺便增加更广的验证或预置环境，让测试替被测行为完成工作。
+
 <!-- lessons:kuno:end -->
 

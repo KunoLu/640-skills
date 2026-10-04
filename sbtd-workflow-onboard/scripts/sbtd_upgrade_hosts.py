@@ -74,10 +74,12 @@ import os
 import queue
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import threading
 import time
+import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
@@ -95,6 +97,7 @@ from sbtd_migration_files import (
     require_private_directory,
     snapshot,
 )
+from sbtd_project import TaskDataError, open_regular_file
 
 __all__ = ["build_host_resources", "render_resource", "verify_hosts"]
 
@@ -156,6 +159,8 @@ def _string_list(value: Any, label: str) -> list[str]:
 
 
 def _scope_hosts(scope: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from sbtd_upgrade_inventory import normalize_host_platform
+
     raw = scope.get("hosts") or []
     if not isinstance(raw, list):
         _fail("scope-conflict", "scope hosts must be a list")
@@ -179,6 +184,7 @@ def _scope_hosts(scope: Mapping[str, Any]) -> list[dict[str, Any]]:
             or not _is_abs(config)
         ):
             _fail("scope-conflict", "a scope host identity or config path is invalid")
+        platform = normalize_host_platform(platform)
         ids.add(host_id)
         home_path = Path(config_home)
         config_path = Path(config)
@@ -244,7 +250,7 @@ def _scope_shell_profiles(scope: Mapping[str, Any]) -> list[dict[str, str]]:
                 "scope-conflict",
                 "scope shell profiles are limited to bash/zsh/powershell",
             )
-        _validate_bin(bin_dir)
+        _validate_bin(bin_dir, shell)
         seen.add(path)
         profiles.append({"path": path, "shell": shell, "bin": bin_dir})
     return profiles
@@ -554,13 +560,31 @@ def _render_mcp(
 # ---------------------------------------------------------------------------
 
 
-def _validate_bin(value: Any) -> None:
+def _validate_bin(value: Any, shell: str = "") -> None:
     if (
         not isinstance(value, str)
         or not os.path.isabs(value)
         or any(char in value for char in ("\0", "\n", "\r"))
     ):
         _fail("invalid-argument", "a managed PATH entry needs a clean absolute bin")
+    # The managed PATH entry must survive its target PATH syntax exactly: a
+    # separator character would silently split into phantom entries.
+    if os.name == "nt":
+        if shell == "powershell" and ";" in value:
+            _fail(
+                "unsafe-path",
+                "the managed PATH entry cannot be represented in a PowerShell PATH",
+            )
+        if shell in {"bash", "zsh"} and ":" in _posix_shell_path(value):
+            _fail(
+                "unsafe-path",
+                "the managed PATH entry cannot be represented in a POSIX shell PATH",
+            )
+    elif ":" in value:
+        _fail(
+            "unsafe-path",
+            "the managed PATH entry cannot be represented in a POSIX PATH",
+        )
 
 
 def _quote_posix(value: str) -> str:
@@ -611,8 +635,8 @@ def _shell_block(shell: str, bin_dir: str, terminator: bytes) -> list[bytes]:
         body = f"export PATH={_quote_posix(bin_dir)}:$PATH"
     else:
         body = (
-            f"$env:Path = {_quote_powershell(bin_dir)}"
-            " + [IO.Path]::PathSeparator + $env:Path"
+            f"$env:PATH = {_quote_powershell(bin_dir)}"
+            " + [IO.Path]::PathSeparator + $env:PATH"
         )
     encoded = body.encode("utf-8")
     return [
@@ -651,10 +675,18 @@ def _shell_profile_candidate(before: bytes, *, shell: str, bin_dir: str) -> byte
     """Idempotent managed PATH block; placed after NVM init lines on insert."""
     if shell not in _SHELLS:
         _fail("invalid-argument", "only bash/zsh/powershell profiles are supported")
-    _validate_bin(bin_dir)
+    _validate_bin(bin_dir, shell)
     if not isinstance(before, (bytes, bytearray)):
         _fail("invalid-argument", "input document must be bytes")
     raw = bytes(before)
+    # UTF-16 keeps every ASCII marker interleaved with NUL bytes, so the
+    # byte-exact pipeline could never locate or preserve a managed block
+    # inside it. Reject before any write; the original stays untouched.
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        _fail(
+            "invalid-config",
+            "a UTF-16 shell profile cannot be rewritten byte-exactly",
+        )
     lines = raw.split(b"\n")
     spans = _marker_spans(lines)
     crlf = any(line.endswith(b"\r") for line in lines)
@@ -790,6 +822,10 @@ def _build_mcp_resource(
         "legacy": [],
         "effective_inputs": [],
     }
+    # The Codex target is canonical: exactly config_home/config.toml. Any
+    # other file is never read for alignment and never written.
+    if platform == "codex" and Path(target) != Path(host["config_home"]) / "config.toml":
+        return _blocked_resource(base, before, details, "scope-conflict")
     runtime = _host_runtime(host)
     if launcher["desired"]["type"] != "file":
         return _blocked_resource(base, before, details, "launcher-source-unavailable")
@@ -841,6 +877,199 @@ def _build_mcp_resource(
     }
 
 
+# ---------------------------------------------------------------------------
+# npm cmd-shim binding proof (bounded real-generator templates, never executed)
+# ---------------------------------------------------------------------------
+
+# cmd-shim 9.0.2 (bundled with npm via bin-links) emits exactly three wrapper
+# files per bin entry. Only byte-exact instances of these generator templates
+# — with one consistent embedded relative cli path — prove the wrapper's
+# embedded logical cli target only; nothing about command execution or the
+# interpreter is claimed. Anything else (edited, appended, hand-written) is
+# an unknown wrapper: parsed never, trusted never, executed never.
+_NPM_SHIM_MAX_BYTES = 64 * 1024
+_NPM_SHIM_REL_TOKEN = "\x00SBTD_NPM_REL\x00"
+
+_NPM_SHIM_SH = (
+    "#!/bin/sh\n"
+    "basedir=$(dirname \"$(echo \"$0\" | sed -e 's,\\\\,/,g')\")\n"
+    'basedir_win="$basedir"\n'
+    "\n"
+    "case `uname -a` in\n"
+    "  *CYGWIN*|*MINGW*|*MSYS*)\n"
+    "    if command -v cygpath > /dev/null 2>&1; then\n"
+    "      basedir_win=`cygpath -w \"$basedir\"`\n"
+    "    fi\n"
+    "  ;;\n"
+    "  *WSL2*)\n"
+    "    if command -v wslpath > /dev/null 2>&1; then\n"
+    "      basedir_win=\"$(wslpath -w \"$basedir\" 2> /dev/null)\"\n"
+    '      if [ $? -ne 0 ] || [ -z "$basedir_win" ]; then\n'
+    '        echo "Error: wslpath failed to convert path. WSL environment may be misconfigured." >&2\n'
+    "        exit 1\n"
+    "      fi\n"
+    "    fi\n"
+    "  ;;\n"
+    "esac\n"
+    "\n"
+    'PROG_EXE="$basedir/node.exe"\n'
+    'if ! [ -x "$PROG_EXE" ]; then\n'
+    '  PROG_EXE="$basedir/node"\n'
+    '  if ! [ -x "$PROG_EXE" ]; then\n'
+    "    PROG_EXE=node\n"
+    '    if ! [ -x "$PROG_EXE" ]; then\n'
+    "      PROG_EXE=node.exe\n"
+    "    fi\n"
+    "  fi\n"
+    "fi\n"
+    "\n"
+    'exec "$PROG_EXE"  "$basedir_win/' + _NPM_SHIM_REL_TOKEN + '" "$@"\n'
+)
+_NPM_SHIM_CMD = "\r\n".join(
+    [
+        "@ECHO off",
+        "GOTO start",
+        ":find_dp0",
+        "SET dp0=%~dp0",
+        "EXIT /b",
+        ":start",
+        "SETLOCAL",
+        "CALL :find_dp0",
+        "",
+        'IF EXIST "%dp0%\\node.exe" (',
+        '  SET "_prog=%dp0%\\node.exe"',
+        ") ELSE (",
+        '  SET "_prog=node"',
+        ")",
+        "",
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & '
+        'set PATHEXT=%PATHEXT:;.JS;=;% & "%_prog%"  "%dp0%\\'
+        + _NPM_SHIM_REL_TOKEN
+        + '" %*',
+    ]
+) + "\r\n"
+_NPM_SHIM_PS1 = (
+    "#!/usr/bin/env pwsh\n"
+    "$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent\n"
+    "\n"
+    '$exe=""\n'
+    'if ($PSVersionTable.PSVersion -lt "6.0" -or $IsWindows) {\n'
+    "  # Fix case when both the Windows and Linux builds of Node\n"
+    "  # are installed in the same directory\n"
+    '  $exe=".exe"\n'
+    "}\n"
+    "$ret=0\n"
+    'if (Test-Path "$basedir/node$exe") {\n'
+    "  # Support pipeline input\n"
+    "  if ($MyInvocation.ExpectingInput) {\n"
+    '    $input | & "$basedir/node$exe"  "$basedir/' + _NPM_SHIM_REL_TOKEN + '" $args\n'
+    "  } else {\n"
+    '    & "$basedir/node$exe"  "$basedir/' + _NPM_SHIM_REL_TOKEN + '" $args\n'
+    "  }\n"
+    "  $ret=$LASTEXITCODE\n"
+    "} else {\n"
+    "  # Support pipeline input\n"
+    "  if ($MyInvocation.ExpectingInput) {\n"
+    '    $input | & "node$exe"  "$basedir/' + _NPM_SHIM_REL_TOKEN + '" $args\n'
+    "  } else {\n"
+    '    & "node$exe"  "$basedir/' + _NPM_SHIM_REL_TOKEN + '" $args\n'
+    "  }\n"
+    "  $ret=$LASTEXITCODE\n"
+    "}\n"
+    "exit $ret\n"
+)
+
+
+def _shim_template_pattern(template: str) -> re.Pattern[str]:
+    """Fullmatch pattern: literal template, one consistent relative cli path."""
+    parts = template.split(_NPM_SHIM_REL_TOKEN)
+    pattern = re.escape(parts[0])
+    for index, part in enumerate(parts[1:]):
+        pattern += "(?P<rel>[^\"'\r\n]+)" if index == 0 else "(?P=rel)"
+        pattern += re.escape(part)
+    return re.compile(pattern)
+
+
+_NPM_SHIM_TEMPLATES = (
+    ("npm-cmd-shim-sh", _shim_template_pattern(_NPM_SHIM_SH), False),
+    ("npm-cmd-shim-cmd", _shim_template_pattern(_NPM_SHIM_CMD), True),
+    ("npm-cmd-shim-ps1", _shim_template_pattern(_NPM_SHIM_PS1), False),
+)
+
+
+def _shim_relative_literal(relative: str, *, backslashes: bool) -> bool:
+    r"""True when the captured target is a plain relative path the wrapper
+    language concatenates verbatim, so ``Path.parent / relative`` names the
+    file an invocation would actually use:
+
+    - no NUL/control bytes (they must never reach path resolution);
+    - no absolute or rooted form and no drive prefix (``C:``/``C:/`` are
+      drive-relative or absolute in Git Bash and cmd);
+    - no expansion characters (``$``/backtick for sh and pwsh, ``%``/``!``
+      for cmd, where delayed expansion substitutes ``!VAR!`` even quoted);
+    - no backslash in sh/ps1 captures: cmd-shim normalizes those targets to
+      ``/``, so a backslash marks an unknown wrapper whose double-quoted
+      reading diverges from the proof path math. The ``.cmd`` separator
+      backslash is literal in cmd double quotes and stays accepted.
+
+    Genuine same-volume ``../node_modules/...`` captures, including spaces
+    and unicode, stay accepted.
+    """
+    if not relative or relative.startswith(("/", "\\")):
+        return False
+    if len(relative) >= 2 and relative[0].isalpha() and relative[1] == ":":
+        return False
+    if any(ord(char) < 0x20 for char in relative):
+        return False
+    if backslashes:
+        return not any(char in relative for char in ("%", "!"))
+    return not any(char in relative for char in ("\\", "$", "`", "%"))
+
+
+def _shim_binding(path: Path) -> dict[str, str] | None:
+    """Logical cli target of a recognized npm cmd-shim wrapper, else ``None``.
+
+    The wrapper bytes are only compared against the bounded generator
+    templates; an unrecognized or oversized wrapper is not a shim and its
+    content is never executed to discover a target. The size bound is a
+    metadata fast-reject, and the safe nofollow handle never reads more
+    than the bound plus one byte.
+    """
+    # Metadata fast-reject, then a single safe nofollow open reading at most
+    # MAX+1 bytes: a wrapper that grows past the bound mid-read is rejected
+    # without ever allocating its content.
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return None
+    if not stat.S_ISREG(info.st_mode) or info.st_size > _NPM_SHIM_MAX_BYTES:
+        return None
+    try:
+        with open_regular_file(path, "shim wrapper") as handle:
+            raw = handle.read(_NPM_SHIM_MAX_BYTES + 1)
+    except (OSError, TaskDataError):
+        return None
+    if len(raw) > _NPM_SHIM_MAX_BYTES:
+        return None
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    for kind, pattern, backslashes in _NPM_SHIM_TEMPLATES:
+        match = pattern.fullmatch(text)
+        if match is None:
+            continue
+        relative = match.group("rel")
+        if not _shim_relative_literal(relative, backslashes=backslashes):
+            # The shell would invoke a different file than
+            # ``Path.parent / relative``: never a provable binding.
+            continue
+        if backslashes:
+            relative = relative.replace("\\", "/")
+        target = (path.parent / relative).resolve()
+        return {"template": kind, "target": str(target), "relative": relative}
+    return None
+
 def _command_identity(bin_dir: Path, shell: str = "powershell") -> dict[str, Any]:
     """Bind only the selected executable; npm executable symlinks are read-only."""
     _canonical(bin_dir)
@@ -865,7 +1094,21 @@ def _command_identity(bin_dir: Path, shell: str = "powershell") -> dict[str, Any
     state = snapshot(resolved)
     if state["type"] != "file":
         _fail("unsafe-path", "the selected command does not resolve to a regular file")
-    return {"path": str(selected), "resolved": str(resolved), "link": link, "state": state}
+    identity: dict[str, Any] = {
+        "path": str(selected),
+        "resolved": str(resolved),
+        "link": link,
+        "state": state,
+    }
+    # A recognized wrapper computes its basedir from the INVOKED path
+    # ($0 / %~dp0 / $MyInvocation): through a selected symlink the resolved
+    # wrapper's parent proves the wrong cli location, so the binding is
+    # refused while the physical wrapper identity stays sealed. An ordinary
+    # npm symlink straight to the cli has no shim content and is unaffected.
+    shim = None if link is not None else _shim_binding(resolved)
+    if shim is not None:
+        identity["shim"] = shim
+    return identity
 
 
 def _build_shell_resource(
@@ -1013,6 +1256,11 @@ def render_resource(
     if not isinstance(host, Mapping) or host.get("platform") not in _SUPPORTED_MCP_PLATFORMS:
         _fail("invalid-argument", "a host resource descriptor is malformed")
     platform = str(host["platform"])
+    config_home = host.get("config_home")
+    if platform == "codex" and (
+        not isinstance(config_home, str) or target != Path(config_home) / "config.toml"
+    ):
+        _fail("scope-conflict", "a codex host config must be config_home/config.toml")
     resolution = _omp_resolution(host) if platform == "omp" else None
     observed_inputs: list[dict[str, Any]] = []
     for dependency in details.get("effective_inputs", []):
@@ -1069,11 +1317,23 @@ class _JsonLines:
         self._timeout = timeout
         self._next = 0
         self._lines: queue.Queue[bytes | None] = queue.Queue()
+        # Writes run on one dedicated thread so a stalled child (full pipe,
+        # no reader) can never block the caller past the shared deadline.
+        self._outbox: queue.Queue[
+            tuple[bytes, threading.Event, list[BaseException]] | None
+        ] = queue.Queue()
+        # Writer-completion event: starts cleared and is set exactly once, as
+        # the writer thread returns on the sentinel, so close() can
+        # distinguish "writer finished" from "writer never ran" (a stale
+        # initial set could deadlock stdin.close behind a blocked flush).
+        self._writer_done = threading.Event()
         assert proc.stdout is not None
         self._reader = threading.Thread(
             target=self._pump, args=(proc.stdout,), daemon=True
         )
         self._reader.start()
+        self._writer = threading.Thread(target=self._drain, daemon=True)
+        self._writer.start()
 
     def _pump(self, stream: Any) -> None:
         try:
@@ -1096,14 +1356,34 @@ class _JsonLines:
             raise _ProbeError("failed", "host-closed-unexpectedly")
         return line
 
-    def _write(self, payload: Mapping[str, Any]) -> None:
+    def _drain(self) -> None:
+        while True:
+            item = self._outbox.get()
+            if item is None:
+                self._writer_done.set()
+                return
+            data, done, errors = item
+            try:
+                assert self._proc.stdin is not None
+                self._proc.stdin.write(data)
+                self._proc.stdin.flush()
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+    def _write(self, payload: Mapping[str, Any], deadline: float) -> None:
         assert self._proc.stdin is not None
-        try:
-            self._proc.stdin.write(
-                json.dumps(payload, allow_nan=False).encode("utf-8") + b"\n"
-            )
-            self._proc.stdin.flush()
-        except (BrokenPipeError, OSError, ValueError):
+        data = json.dumps(payload, allow_nan=False).encode("utf-8") + b"\n"
+        done = threading.Event()
+        errors: list[BaseException] = []
+        self._outbox.put((data, done, errors))
+        # The stdin write/flush shares the response deadline: a write that
+        # cannot complete in time is a timeout, never an unbounded block.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not done.wait(remaining):
+            raise _ProbeError("failed", "host-response-timeout")
+        if errors:
             raise _ProbeError("failed", "host-closed-unexpectedly") from None
 
     def call(self, method: str, params: Mapping[str, Any], *, key: str = "method") -> Any:
@@ -1114,8 +1394,8 @@ class _JsonLines:
             if key == "method"
             else {"id": request_id, "type": method, **params}
         )
-        self._write(payload)
         deadline = time.monotonic() + self._timeout
+        self._write(payload, deadline)
         while True:
             line = self._read_line(deadline).strip()
             if not line:
@@ -1126,6 +1406,21 @@ class _JsonLines:
                 continue
             if not isinstance(message, dict) or message.get("id") != request_id:
                 continue
+            if key != "method":
+                # OMP envelope (native-proven shape {type:response, command:
+                # <request>, success:true}): only the strict successful
+                # response to THIS request is consumed; events, other
+                # commands and missing/invalid success are never evidence,
+                # and the payload is the authoritative data field only — a
+                # JSON-RPC-style result is never promoted.
+                if (
+                    message.get("type") != "response"
+                    or message.get("command") != method
+                ):
+                    continue
+                if message.get("success") is not True:
+                    raise _ProbeError("failed", "host-request-refused")
+                return message.get("data")
             if message.get("error") is not None:
                 raise _ProbeError("failed", "host-request-refused")
             if message.get("success") is False:
@@ -1133,25 +1428,83 @@ class _JsonLines:
             return message.get("result", message.get("data"))
 
     def notify(self, method: str, params: Mapping[str, Any]) -> None:
-        self._write({"jsonrpc": "2.0", "method": method, "params": params})
+        self._write(
+            {"jsonrpc": "2.0", "method": method, "params": params},
+            time.monotonic() + self._timeout,
+        )
+
+    @staticmethod
+    def _seal(stream: Any) -> None:
+        # Close one owned handle, tolerating a missing attribute (stderr is
+        # None under DEVNULL) and a pipe already broken by the reaped child.
+        closer = getattr(stream, "close", None)
+        if closer is None:
+            return
+        try:
+            closer()
+        except (OSError, ValueError):
+            pass
 
     def close(self) -> int:
         proc = self._proc
+        self._outbox.put(None)
+        # ``_writer_done`` starts cleared, is set exactly once as the writer
+        # thread returns, and the outbox is FIFO, so a set event here proves
+        # the writer finished and holds no buffer lock: only then is closing
+        # stdin (graceful EOF) safe from deadlocking behind a blocked flush.
+        graceful = self._writer_done.wait(0.5)
+        if graceful:
+            self._seal(getattr(proc, "stdin", None))
+        else:
+            # A writer still blocked on a full pipe holds the buffer lock:
+            # terminate our own child first so the blocked write unblocks.
+            try:
+                proc.terminate()
+            except OSError:
+                pass
         try:
-            if proc.stdin is not None:
-                proc.stdin.close()
-        except OSError:
-            pass
-        try:
-            return proc.wait(timeout=_HOST_SHUTDOWN)
+            code = proc.wait(timeout=_HOST_SHUTDOWN)
         except subprocess.TimeoutExpired:
             proc.terminate()
             try:
-                return proc.wait(timeout=_HOST_SHUTDOWN)
+                code = proc.wait(timeout=_HOST_SHUTDOWN)
             except subprocess.TimeoutExpired:
                 proc.kill()
-                proc.wait(timeout=_HOST_SHUTDOWN)
-                return proc.returncode if proc.returncode is not None else -1
+                try:
+                    proc.wait(timeout=_HOST_SHUTDOWN)
+                except subprocess.TimeoutExpired:
+                    pass
+                code = proc.returncode if proc.returncode is not None else -1
+        # The child is reaped, so a blocked writer/reader unblocks (broken
+        # pipe / EOF) and each join finishes quickly. A stream is sealed only
+        # once its owner thread is done, so close() never waits on a buffer
+        # lock held by a live thread. Deliberate residual edge: if a
+        # descendant inherited the pipe ends and keeps a thread blocked past
+        # the bounded join, that handle is left to process-exit cleanup
+        # rather than risking a deadlock; close() then warns explicitly
+        # instead of silently claiming a complete teardown.
+        incomplete: list[str] = []
+        self._writer.join(timeout=_HOST_SHUTDOWN)
+        if self._writer.is_alive():
+            incomplete.append("writer")
+        else:
+            self._seal(getattr(proc, "stdin", None))
+        self._reader.join(timeout=_HOST_SHUTDOWN)
+        if self._reader.is_alive():
+            incomplete.append("reader")
+        else:
+            self._seal(getattr(proc, "stdout", None))
+        self._seal(getattr(proc, "stderr", None))
+        if incomplete:
+            warnings.warn(
+                "host probe cleanup incomplete: "
+                + "/".join(incomplete)
+                + " still blocked past the shutdown budget; owned pipe "
+                "handles are left to process-exit cleanup",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        return code
 
 
 def _probe_env(base: Path, extra: Mapping[str, str]) -> dict[str, str]:
@@ -1476,6 +1829,8 @@ startup:
   quiet: true
 mcp:
   enableProjectConfig: false
+tools:
+  xdev: false
 """
 
 def _omp_projection(
@@ -1531,7 +1886,29 @@ def _omp_projection(
     return re.sub(r"[^a-z0-9_]", "_", name.lower())
 
 
-_OMP_DEVICE = re.compile(r"xd://mcp__[A-Za-z0-9_]+")
+def _omp_registered_tools(state: Any, prefix: str) -> list[str]:
+    """Authoritative callable registry: structured ``get_state`` dumpTools.
+
+    Only fully-described tool definitions (name plus description plus a
+    parameters schema) count as registered-callable evidence; prompt text or
+    any other blob never proves a callable tool. Anything malformed in the
+    structured payload invalidates the protocol evidence itself.
+    """
+    if not isinstance(state, Mapping):
+        raise _ProbeError("failed", "protocol-evidence-invalid")
+    tools = state.get("dumpTools")
+    if not isinstance(tools, list):
+        raise _ProbeError("failed", "protocol-evidence-invalid")
+    names: list[str] = []
+    for tool in tools:
+        if not isinstance(tool, Mapping) or not isinstance(tool.get("name"), str):
+            raise _ProbeError("failed", "protocol-evidence-invalid")
+        if not isinstance(tool.get("description"), str) or not isinstance(
+            tool.get("parameters"), Mapping
+        ):
+            continue
+        names.append(tool["name"])
+    return sorted(name for name in names if name.startswith(prefix))
 
 
 def _probe_omp(
@@ -1576,29 +1953,25 @@ def _probe_omp(
         rpc = _JsonLines(proc, _HOST_TIMEOUT)
         try:
             rpc.call("negotiate_protocol", {"protocolVersion": 2}, key="type")
-            devices: list[str] = []
+            prefix = f"mcp__{server_identity}_"
+            registered: list[str] = []
             deadline = time.monotonic() + _HOST_TIMEOUT
             while time.monotonic() < deadline:
                 state = rpc.call("get_state", {}, key="type")
-                blob = json.dumps(state, ensure_ascii=False) if state is not None else ""
-                devices = sorted(set(_OMP_DEVICE.findall(blob)))
-                if any(
-                    device == f"xd://mcp__{server_identity}_{tool}"
-                    for device in devices
-                    for tool in _PINNED_GRAFT_TOOLS
+                registered = _omp_registered_tools(state, prefix)
+                if all(
+                    f"{prefix}{tool}" in registered for tool in _PINNED_GRAFT_TOOLS
                 ):
                     break
                 time.sleep(1.0)
             matched = sorted(
-                tool
-                for tool in _PINNED_GRAFT_TOOLS
-                if f"xd://mcp__{server_identity}_{tool}" in devices
+                tool for tool in _PINNED_GRAFT_TOOLS if f"{prefix}{tool}" in registered
             )
             commands = rpc.call("get_available_commands", {}, key="type")
             found = _omp_skill_names(commands, expected)
             return {
                 "reload": "session-connect",
-                "server": {"tools": matched, "devices": devices},
+                "server": {"tools": matched, "registered": registered},
                 "skills": {"expected": expected, "found": found, "errors": 0},
                 "exit": rpc.close(),
             }
@@ -1852,17 +2225,40 @@ def _legacy_mcp(host: Mapping[str, Any]) -> dict[str, Any]:
         return {"status": "none", "entries": []}
     try:
         raw = read_file(target, live)
-        _record, legacy = (
-            _codex_managed(raw) if host["platform"] == "codex" else _omp_managed(raw)
-        )
     except ContractError as error:
+        # A read racing a concurrent write keeps the contract reason,
+        # distinct from malformed-content invalid-config.
         return {"status": "unknown", "reason": error.code}
-    if _record is None and not legacy and raw.strip():
+    except OSError:
         return {"status": "unknown", "reason": "invalid-config"}
-    return {
-        "status": "present" if legacy else "none",
-        "entries": legacy,
-    }
+    if not raw.strip():
+        return {"status": "none", "entries": []}
+    # Parse authority decides: a valid config with only unrelated servers is
+    # genuinely legacy-free; a config that cannot be parsed, names a null or
+    # non-object servers section, or holds a null/non-object server entry is
+    # unknown. A section that is simply absent reports none.
+    servers: Any = None
+    section = False
+    if host["platform"] == "codex":
+        try:
+            document = _toml().parse(raw.decode("utf-8")).unwrap()
+        except (ValueError, RecursionError, UnicodeDecodeError):
+            return {"status": "unknown", "reason": "invalid-config"}
+        section = "mcp_servers" in document
+        servers = document.get("mcp_servers")
+    else:
+        try:
+            document = strict_json_object(raw)
+        except (ValueError, TypeError, RecursionError):
+            return {"status": "unknown", "reason": "invalid-config"}
+        section = "mcpServers" in document
+        servers = document.get("mcpServers")
+    if section and not isinstance(servers, dict):
+        return {"status": "unknown", "reason": "invalid-config"}
+    if servers and any(not isinstance(entry, Mapping) for entry in servers.values()):
+        return {"status": "unknown", "reason": "invalid-config"}
+    legacy = sorted(key for key in (servers or {}) if key.startswith(_SERVER_PREFIX))
+    return {"status": "present" if legacy else "none", "entries": legacy}
 
 
 def _verify_mcp_host(
@@ -1948,17 +2344,26 @@ def _shell_resolution(
         if shell in {"bash", "zsh"}:
             env["HOME"] = _posix_shell_path(env["HOME"])
             env["SBTD_PROBE_PROFILE"] = _posix_shell_path(str(selected))
+            # Only the selected profile may expose bin: the seeded PATH is the
+            # bare OS default, never runtime or sibling directories.
             if os.name == "nt":
                 env["PATH"] = "/usr/bin:/bin"
+            env["SBTD_PROBE_BIN"] = _posix_shell_path(str(bin_dir))
+        else:
+            env["SBTD_PROBE_BIN"] = str(bin_dir)
         marker = "SBTD_RESOLVED_GRAFT="
         if shell == "powershell":
+            # The winning command is inspected unfiltered: an alias or
+            # function shadowing graft must fail, never be filtered away.
             script = (
                 "$e=$null;$t=$null;"
                 "[void][System.Management.Automation.Language.Parser]::ParseFile("
                 "$env:SBTD_PROBE_PROFILE,[ref]$t,[ref]$e);"
                 "if($e.Count){exit 41};"
                 "try { . $env:SBTD_PROBE_PROFILE; "
-                "$p=(Get-Command graft -CommandType Application,ExternalScript -ErrorAction Stop).Source;"
+                "$w=Get-Command graft -ErrorAction Stop; "
+                "if($w.CommandType -ne 'Application' -and $w.CommandType -ne 'ExternalScript'){exit 43}; "
+                "$p=$w.Source; "
                 f"[Console]::Out.WriteLine('{marker}'+$p)"
                 " } catch {exit 42}"
             )
@@ -1979,7 +2384,9 @@ def _shell_resolution(
                 'p=$(command -v graft) || exit 42; '
                 f"printf '{marker}%s\\n' \"$p\""
             )
-            flags = ["--noprofile", "--norc"] if shell == "bash" else ["-f"]
+            # Interactive load: real profiles guard on $- / -o interactive, so
+            # the probe must meet the same condition the user session meets.
+            flags = ["--noprofile", "--norc", "-i"] if shell == "bash" else ["-f", "-i"]
             argv = [executable, *flags, "-c", script]
         try:
             result = subprocess.run(
@@ -1991,7 +2398,11 @@ def _shell_resolution(
         except subprocess.TimeoutExpired:
             return {"status": "failed", "reason": "shell-probe-timeout"}
         if result.returncode != 0:
-            reason = "profile-load-failed" if result.returncode == 41 else "graft-not-resolved"
+            reason = {
+                41: "profile-load-failed",
+                42: "graft-not-resolved",
+                43: "graft-resolution-shadowed",
+            }.get(result.returncode, "graft-not-resolved")
             return {"status": "failed", "reason": reason}
         resolutions = [
             line[len(marker):] for line in result.stdout.decode("utf-8", errors="replace").splitlines()
@@ -2018,7 +2429,16 @@ def _shell_resolution(
             if not extensionless_bash_alias:
                 return {"status": "failed", "reason": "graft-resolution-mismatch"}
         pinned = details.get("runtime_cli_targets", [])
-        if pinned and not any(
+        shim = identity.get("shim")
+        if shim is not None:
+            # A recognized npm wrapper binds its embedded logical cli target,
+            # never the wrapper file itself; the physical wrapper identity is
+            # already proven by the sealed command_identity above.
+            if pinned and not any(
+                str(Path(item["path"]).resolve()) == shim["target"] for item in pinned
+            ):
+                return {"status": "failed", "reason": "graft-runtime-binding-mismatch"}
+        elif pinned and not any(
             str(Path(item["path"]).resolve()) == identity["resolved"] for item in pinned
         ):
             return {"status": "failed", "reason": "graft-runtime-binding-mismatch"}

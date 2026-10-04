@@ -14,6 +14,14 @@ Contract (shared with ``sbtd_upgrade`` and ``sbtd_upgrade_hosts``):
 anything. Only scope-supplied paths and the package itself are inspected;
 unselected HOME locations are never discovered.
 
+``normalize_scope(scope) -> dict`` is the same strict validator exposed for
+the engine to seal into plans: a JSON-safe, idempotent canonical scope with
+physical alias dedup of existing skills roots (proven device/inode identity,
+never a blanket casefold), alias-canonical decision keys and one canonical
+host platform spelling from ``normalize_host_platform`` (``oh-my-pi`` is
+``omp``). Targets nested in the source package — including the exact
+same-location installed copy — are supported and classified by content.
+
 * ``baseline.schema_version`` is 1. ``baseline.baseline_id`` is
   ``"sha256:<hex>"`` over the canonical JSON of the catalog summary, stable
   provenance, runtime constraints and known-old evidence pins. It depends on
@@ -60,6 +68,8 @@ from sbtd_project import TaskDataError, open_regular_file
 __all__ = [
     "BASELINE_SCHEMA_VERSION",
     "build_inventory",
+    "normalize_host_platform",
+    "normalize_scope",
     "payload_directory_state",
     "payload_file_state",
 ]
@@ -86,6 +96,8 @@ _HOST_OPTIONAL_KEYS = frozenset({"executable", "onboard_root"})
 _SHELL_KEYS = frozenset({"path", "shell", "bin"})
 _SHELL_NAMES = frozenset({"bash", "zsh", "powershell"})
 _DECISION_VALUES = frozenset({"replace", "preserve"})
+
+_HOST_PLATFORM_ALIASES = {"oh-my-pi": "omp"}
 
 _AGENT_TEMPLATE_ID = "agent:codex-global"
 _SELF_ENTRY_ID = "skill:sbtd-workflow-onboard"
@@ -142,13 +154,17 @@ def _canonical(path: Path) -> Path:
 
 
 def _resolved(value: object, field: str) -> Path:
-    """One canonical absolute path: link components rejected, then normalized."""
+    """One checked absolute path: link components rejected, spelling kept.
+
+    No ``resolve()`` after the literal walk: re-following here would reopen
+    link traversal behind the no-follow preflight and silently rewrite the
+    user's spelling that physical alias dedup and decision binding rely on.
+    """
     if isinstance(value, str) and not value:
         _fail("invalid-config", f"{field} must be a non-empty absolute path string")
     if not isinstance(value, (str, os.PathLike)):
         _fail("invalid-config", f"{field} must be a non-empty absolute path string")
-    candidate = _canonical(Path(value))
-    return candidate.resolve()
+    return _canonical(Path(value))
 
 
 def _norm(path: Path) -> str:
@@ -156,8 +172,19 @@ def _norm(path: Path) -> str:
 
 
 def _inside(path: Path, root: Path) -> bool:
-    """Canonical containment including equality (both already resolved)."""
-    return _norm(path) == _norm(root) or _norm(path).startswith(_norm(root) + os.sep)
+    """Canonical containment including equality (both already checked).
+
+    Root-aware: a filesystem root key already ends with the separator, so
+    descendants of ``/`` or ``C:\\`` match without a doubled-separator
+    prefix that would never occur in a real path.
+    """
+    path_key = _norm(path)
+    root_key = _norm(root)
+    if path_key == root_key:
+        return True
+    if not root_key.endswith(os.sep):
+        root_key += os.sep
+    return path_key.startswith(root_key)
 
 def _canonical_child(root: Path, relative: str) -> Path:
     """One package-internal path proven link-free on every literal component.
@@ -168,10 +195,9 @@ def _canonical_child(root: Path, relative: str) -> Path:
     rejected before a single byte is read through it.
     """
     candidate = _canonical(root / relative)
-    resolved = candidate.resolve()
-    if not _inside(resolved, root):
+    if not _inside(candidate, root):
         _fail("source-untrusted", "a package path escapes its root")
-    return resolved
+    return candidate
 
 
 def _read_bytes(path: Path, label: str) -> bytes:
@@ -782,7 +808,75 @@ def _path_list(value: object, field: str) -> list[Path]:
     return resolved
 
 
-def _validate_hosts(value: object, top_roots: list[Path]) -> list[dict[str, Any]]:
+def normalize_host_platform(value: object) -> str:
+    """One canonical host platform spelling; ``oh-my-pi`` is ``omp``.
+
+    Strict: anything but a non-empty string is rejected. Every other
+    declared platform passes through unchanged so the hosts layer keeps
+    classifying it (unsupported platforms are reported, never rewritten).
+    """
+    if not isinstance(value, str) or not value:
+        _fail("invalid-config", "a host platform must be a non-empty string")
+    return _HOST_PLATFORM_ALIASES.get(value, value)
+
+
+def _physical_key(path: Path) -> tuple[int, int] | None:
+    """Proven physical identity (device, inode) of one existing entry.
+
+    ``None`` when identity cannot be proven — an absent path or a zero
+    inode — because distinct paths are never merged on suspicion.
+    """
+    info = _lstat(path)
+    if info is None or not info.st_ino:
+        return None
+    return (info.st_dev, info.st_ino)
+
+
+def _canonical_target(
+    target: Path, root_identities: Mapping[tuple[int, int], Path]
+) -> Path:
+    """Rewrite ``target`` through the canonical spelling of any aliased root.
+
+    The nearest existing ancestor decides, so absent child targets under the
+    same physical root bind exactly like present ones; paths with no proven
+    aliased ancestor keep their spelling untouched.
+    """
+    if not root_identities:
+        return target
+    for ancestor in (target, *target.parents):
+        key = _physical_key(ancestor)
+        canonical = root_identities.get(key) if key is not None else None
+        if canonical is not None:
+            return canonical.joinpath(*target.parts[len(ancestor.parts):])
+    return target
+
+
+def _canonical_skill_child(target: Path, root_norms: frozenset[str]) -> Path:
+    """Fold a direct skill-child alias onto its lowercase catalog spelling.
+
+    Only when physical identity proves both spellings name the same existing
+    directory: case-insensitive aliases then bind the canonical resource
+    target (and the sealed decision keeps the stable catalog spelling, so a
+    later retry against an absent target still binds). Genuinely distinct
+    case-sensitive children keep their spelling and stay unselected. Never
+    fold anything beyond this one proven child component.
+    """
+    lowered = target.name.lower()
+    if lowered == target.name or _norm(target.parent) not in root_norms:
+        return target
+    candidate = target.parent / lowered
+    info = _lstat(target)
+    if info is None or not stat.S_ISDIR(info.st_mode) or not info.st_ino:
+        return target
+    if (info.st_dev, info.st_ino) == _physical_key(candidate):
+        return candidate
+    return target
+
+def _validate_hosts(
+    value: object,
+    top_roots: list[Path],
+    root_identities: Mapping[tuple[int, int], Path],
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         _fail("invalid-config", "hosts must be an array of host objects")
     top = {_norm(root) for root in top_roots}
@@ -799,13 +893,16 @@ def _validate_hosts(value: object, top_roots: list[Path]) -> list[dict[str, Any]
         if not isinstance(host_id, str) or not host_id or host_id in seen_ids:
             _fail("invalid-config", "a host id is invalid or duplicated")
         seen_ids.add(host_id)
-        if not isinstance(item["platform"], str) or not item["platform"]:
-            _fail("invalid-config", f"host {host_id} platform must be a non-empty string")
-        config_home = _resolved(item["config_home"], f"host {host_id} config_home")
+        platform = normalize_host_platform(item["platform"])
+        config_home = _canonical_target(
+            _resolved(item["config_home"], f"host {host_id} config_home"), root_identities
+        )
         home_info = _lstat(config_home)
         if home_info is not None and not stat.S_ISDIR(home_info.st_mode):
             _fail("invalid-config", f"host {host_id} config_home is not a directory")
-        config = _resolved(item["config"], f"host {host_id} config")
+        config = _canonical_target(
+            _resolved(item["config"], f"host {host_id} config"), root_identities
+        )
         if _norm(config) == _norm(config_home) or not _inside(config, config_home):
             _fail("unsafe-path", f"host {host_id} config must stay inside its config_home")
         runtime = item["runtime"]
@@ -814,7 +911,18 @@ def _validate_hosts(value: object, top_roots: list[Path]) -> list[dict[str, Any]
         for constraint in runtime.values():
             if constraint is not None and (not isinstance(constraint, str) or not constraint):
                 _fail("invalid-config", f"host {host_id} runtime values must be strings or null")
-        host_roots = _path_list(item["skills_roots"], f"host {host_id} skills_roots")
+        # Aliases of one physical root collapse to a single canonical root
+        # before the installation-binding rules below count them.
+        host_roots: list[Path] = []
+        seen_roots: set[str] = set()
+        for root in (
+            _canonical_target(candidate, root_identities)
+            for candidate in _path_list(item["skills_roots"], f"host {host_id} skills_roots")
+        ):
+            key = _norm(root)
+            if key not in seen_roots:
+                seen_roots.add(key)
+                host_roots.append(root)
         for root in host_roots:
             if _norm(root) not in top:
                 _fail(
@@ -823,19 +931,24 @@ def _validate_hosts(value: object, top_roots: list[Path]) -> list[dict[str, Any]
                 )
         onboard_value = item.get("onboard_root")
         onboard_root = (
-            _resolved(onboard_value, f"host {host_id} onboard_root")
+            _canonical_target(
+                _resolved(onboard_value, f"host {host_id} onboard_root"), root_identities
+            )
             if onboard_value is not None else None
         )
         if onboard_root is None and len(host_roots) == 1:
             onboard_root = host_roots[0] / _SELF_ENTRY_ID.removeprefix("skill:")
-        if onboard_root is None and item["platform"] in {"codex", "omp"}:
+        if onboard_root is None and platform in {"codex", "omp"}:
             _fail("scope-conflict", f"host {host_id} requires one unambiguous Onboard installation")
         if onboard_root is not None and host_roots and not any(
             _norm(onboard_root) == _norm(root / _SELF_ENTRY_ID.removeprefix("skill:"))
             for root in host_roots
         ):
             _fail("unsafe-path", f"host {host_id} onboard_root must name a selected Onboard installation")
-        project_roots = _path_list(item["project_roots"], f"host {host_id} project_roots")
+        project_roots = [
+            _canonical_target(root, root_identities)
+            for root in _path_list(item["project_roots"], f"host {host_id} project_roots")
+        ]
         # Optional probe-only host CLI binary: absolute-string shape is the
         # entire contract here; sbtd_upgrade_hosts resolves/executes it (or
         # the platform default) exclusively inside verify_hosts(probe=True).
@@ -849,7 +962,7 @@ def _validate_hosts(value: object, top_roots: list[Path]) -> list[dict[str, Any]
         hosts.append(
             {
                 "id": host_id,
-                "platform": item["platform"],
+                "platform": platform,
                 "config_home": config_home,
                 "config": config,
                 "skills_roots": host_roots,
@@ -862,7 +975,9 @@ def _validate_hosts(value: object, top_roots: list[Path]) -> list[dict[str, Any]
     return hosts
 
 
-def _validate_shells(value: object) -> list[dict[str, Any]]:
+def _validate_shells(
+    value: object, root_identities: Mapping[tuple[int, int], Path]
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         _fail("invalid-config", "shell_profiles must be an array of profile objects")
     profiles: list[dict[str, Any]] = []
@@ -870,13 +985,17 @@ def _validate_shells(value: object) -> list[dict[str, Any]]:
     for item in value:
         if not isinstance(item, dict) or set(item) != _SHELL_KEYS:
             _fail("invalid-config", "a shell profile must carry exactly path, shell and bin")
-        path = _resolved(item["path"], "a shell profile path")
+        path = _canonical_target(
+            _resolved(item["path"], "a shell profile path"), root_identities
+        )
         info = _lstat(path)
         if info is not None and not stat.S_ISREG(info.st_mode):
             _fail("invalid-config", "a shell profile path is not a regular file")
         if not isinstance(item["shell"], str) or item["shell"] not in _SHELL_NAMES:
             _fail("invalid-config", "a shell profile must name bash, zsh or powershell")
-        bin_dir = _resolved(item["bin"], "a shell profile bin")
+        bin_dir = _canonical_target(
+            _resolved(item["bin"], "a shell profile bin"), root_identities
+        )
         bin_info = _lstat(bin_dir)
         if bin_info is not None and not stat.S_ISDIR(bin_info.st_mode):
             _fail("invalid-config", "a shell profile bin is not a directory")
@@ -900,17 +1019,32 @@ def _validate_scope(scope: object) -> dict[str, Any]:
     if type(scope.get("schema_version")) is not int or scope.get("schema_version") != 1:
         _fail("invalid-config", "the upgrade scope schema_version must be 1")
 
-    skills_roots = _path_list(scope.get("skills_roots", []), "skills_roots")
-    for root in skills_roots:
+    listed_roots = _path_list(scope.get("skills_roots", []), "skills_roots")
+    for root in listed_roots:
         info = _lstat(root)
         if info is not None and not stat.S_ISDIR(info.st_mode):
             _fail("invalid-config", "a selected skills root is not a directory")
+    # Spellings proven to name the same existing directory (case-folding
+    # volumes, bind mounts) collapse to the first spelling; genuinely
+    # distinct case-sensitive roots keep their separate identities.
+    root_identities: dict[tuple[int, int], Path] = {}
+    skills_roots: list[Path] = []
+    for root in listed_roots:
+        key = _physical_key(root)
+        if key is not None:
+            if key in root_identities:
+                continue
+            root_identities[key] = root
+        skills_roots.append(root)
     for index, root in enumerate(skills_roots):
         for other in skills_roots[index + 1 :]:
             if _inside(root, other) or _inside(other, root):
                 _fail("unsafe-path", "selected skills roots overlap")
 
-    agents_targets = _path_list(scope.get("agents_targets", []), "agents_targets")
+    agents_targets = [
+        _canonical_target(target, root_identities)
+        for target in _path_list(scope.get("agents_targets", []), "agents_targets")
+    ]
     for index, target in enumerate(agents_targets):
         for other in agents_targets[index + 1 :]:
             if _inside(target, other) or _inside(other, target):
@@ -923,20 +1057,35 @@ def _validate_scope(scope: object) -> dict[str, Any]:
         if info is not None and not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
             _fail("unsafe-path", "an AGENTS target is a special file")
 
-    hosts = _validate_hosts(scope.get("hosts", []), skills_roots)
-    shell_profiles = _validate_shells(scope.get("shell_profiles", []))
+    hosts = _validate_hosts(scope.get("hosts", []), skills_roots, root_identities)
+    shell_profiles = _validate_shells(scope.get("shell_profiles", []), root_identities)
+
+    root_norms = frozenset(_norm(root) for root in skills_roots)
+    non_skill_targets = {str(target) for target in agents_targets}
+    non_skill_targets.update(str(host["config"]) for host in hosts)
+    non_skill_targets.update(str(profile["path"]) for profile in shell_profiles)
 
     raw_decisions = scope.get("decisions", {})
     decisions: dict[str, str] = {}
     if not isinstance(raw_decisions, Mapping):
         _fail("invalid-config", "decisions must be an object keyed by absolute targets")
     for raw_target, raw_value in raw_decisions.items():
-        target = _resolved(raw_target, "a decision target")
+        target = _canonical_target(
+            _resolved(raw_target, "a decision target"), root_identities
+        )
+        if str(target) not in non_skill_targets:
+            target = _canonical_skill_child(target, root_norms)
         if not isinstance(raw_value, str) or raw_value not in _DECISION_VALUES:
             _fail("invalid-config", "a decision must be replace or preserve")
         key = str(target)
-        if key in decisions:
-            _fail("invalid-config", "duplicate decisions for one target")
+        previous = decisions.get(key)
+        if previous is not None:
+            if previous != raw_value:
+                _fail(
+                    "decision-conflict",
+                    "aliased spellings of one target carry conflicting decisions",
+                )
+            continue
         decisions[key] = raw_value
 
     if not (skills_roots or agents_targets or hosts or shell_profiles):
@@ -949,6 +1098,76 @@ def _validate_scope(scope: object) -> dict[str, Any]:
         "shell_profiles": shell_profiles,
         "decisions": decisions,
     }
+
+
+def _seal_scope(validated: Mapping[str, Any]) -> dict[str, Any]:
+    """JSON-safe canonical scope: every path stringified, nothing re-read."""
+    return {
+        "schema_version": 1,  # the scope schema required by _validate_scope
+        "skills_roots": [str(root) for root in validated["skills_roots"]],
+        "agents_targets": [str(target) for target in validated["agents_targets"]],
+        "hosts": [
+            {
+                "id": host["id"],
+                "platform": host["platform"],
+                "config_home": str(host["config_home"]),
+                "config": str(host["config"]),
+                "skills_roots": [str(root) for root in host["skills_roots"]],
+                "runtime": dict(host["runtime"]),
+                "project_roots": [str(root) for root in host["project_roots"]],
+                "executable": host["executable"],
+                "onboard_root": str(host["onboard_root"])
+                if host["onboard_root"] is not None else None,
+            }
+            for host in validated["hosts"]
+        ],
+        "shell_profiles": [
+            {
+                "path": str(profile["path"]),
+                "shell": profile["shell"],
+                "bin": str(profile["bin"]),
+            }
+            for profile in validated["shell_profiles"]
+        ],
+        "decisions": dict(validated["decisions"]),
+    }
+
+
+def _scope_paths(sealed: Mapping[str, Any]) -> dict[str, Any]:
+    """Path view of a sealed canonical scope for the resource builders."""
+    return {
+        "skills_roots": [Path(value) for value in sealed["skills_roots"]],
+        "agents_targets": [Path(value) for value in sealed["agents_targets"]],
+        "hosts": [
+            {
+                **host,
+                "config_home": Path(host["config_home"]),
+                "config": Path(host["config"]),
+                "skills_roots": [Path(value) for value in host["skills_roots"]],
+                "project_roots": [Path(value) for value in host["project_roots"]],
+                "onboard_root": Path(host["onboard_root"])
+                if host["onboard_root"] is not None else None,
+            }
+            for host in sealed["hosts"]
+        ],
+        "shell_profiles": [
+            {**profile, "path": Path(profile["path"]), "bin": Path(profile["bin"])}
+            for profile in sealed["shell_profiles"]
+        ],
+        "decisions": dict(sealed["decisions"]),
+    }
+
+
+def normalize_scope(scope: object) -> dict[str, Any]:
+    """Strictly validate and canonically normalize one upgrade scope.
+
+    This is the validator the engine seals into plans before deriving
+    resources: absolute link-free paths, physical alias dedup of existing
+    skills roots, alias-canonical decision keys and the shared host platform
+    spelling (``normalize_host_platform``). The result is JSON-safe and
+    idempotent: ``normalize_scope(normalize_scope(scope))`` is identical.
+    """
+    return _seal_scope(_validate_scope(scope))
 
 
 # ---------------------------------------------------------------------------
@@ -1199,7 +1418,6 @@ def _build_domains(
     package_key = _norm(package_root)
     domains: list[dict[str, Any]] = []
     for root in scope["skills_roots"]:
-        prefix = str(root) + os.sep
         selected_by = ["skills_roots"]
         selected_by.extend(f"host:{host_id}" for host_id in sorted(host_by_root.get(_norm(root), [])))
         onboard_target = onboard_targets.get(_norm(root))
@@ -1220,7 +1438,7 @@ def _build_domains(
                 "resources": sorted(
                     resource["id"]
                     for resource in resources
-                    if resource["target"].startswith(prefix)
+                    if _inside(Path(resource["target"]), root)
                 ),
                 "onboard_copy": onboard_copy,
             }
@@ -1287,7 +1505,7 @@ def build_inventory(scope: object, *, package_root: Path | str | None = None) ->
     if info is None or not stat.S_ISDIR(info.st_mode):
         _fail("invalid-config", "the package root is not a directory")
 
-    validated = _validate_scope(scope)
+    validated = _scope_paths(normalize_scope(scope))
     cache = _PayloadCache()
     baseline, entries, stable, agents_pin = _build_baseline(root, cache)
 

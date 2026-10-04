@@ -10,6 +10,7 @@
     { "$ref": "#/$defs/verificationDocument" },
     { "$ref": "#/$defs/recoveryPlanDocument" },
     { "$ref": "#/$defs/recoveryReceiptDocument" },
+    { "$ref": "#/$defs/failureDocument" },
     { "$ref": "#/$defs/scope" }
   ],
   "$defs": {
@@ -372,6 +373,66 @@
             }
           }
         }
+      }
+    },
+    "batchEvidence": {
+      "type": "object",
+      "required": ["phase", "backup_root", "checkpoint", "mutation"],
+      "additionalProperties": false,
+      "properties": {
+        "phase": { "enum": ["upgrade", "recovery"] },
+        "plan_id": { "$ref": "#/$defs/hex" },
+        "recovery_id": { "$ref": "#/$defs/hex" },
+        "backup_root": { "type": "string" },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["receipt_id", "path", "status"],
+              "additionalProperties": false,
+              "properties": {
+                "receipt_id": { "$ref": "#/$defs/hex" },
+                "path": { "type": "string" },
+                "status": { "enum": ["complete", "partial", "failed"] }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "mutation": {
+          "type": "object",
+          "required": ["state", "resources"],
+          "additionalProperties": false,
+          "properties": {
+            "state": { "enum": ["measured", "unknown"] },
+            "resources": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "target", "after"],
+                "additionalProperties": false,
+                "properties": {
+                  "id": { "type": "string" },
+                  "target": { "type": "string" },
+                  "after": { "anyOf": [{ "$ref": "#/$defs/state" }, { "type": "null" }] }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "failureDocument": {
+      "type": "object",
+      "required": ["mode", "phase", "status", "reason", "nextStep"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["upgrade", "recovery"] },
+        "phase": { "enum": ["plan", "apply", "verify"] },
+        "status": { "enum": ["blocked", "failed"] },
+        "reason": { "type": "string" },
+        "batch": { "$ref": "#/$defs/batchEvidence" },
+        "nextStep": { "type": "string" }
       }
     }
   }

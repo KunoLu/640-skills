@@ -19,10 +19,13 @@ Two digest families are kept strictly separate:
 
 Security semantics, by design:
 
-- A plan seals the baseline, the scope (including decisions keyed by
-  absolute target path), the private backup root and every resource
-  identity. The ``plan_id`` binds one confirmation to that sealed set; it
-  is not authentication and never authorizes arbitrary paths.
+- A plan seals the baseline, the canonical scope (normalized once through
+  the inventory provider's strict ``normalize_scope``: checked absolute
+  paths with their literal spelling, canonical host platforms such as
+  oh-my-pi -> omp), the private backup
+  root and every resource identity. The ``plan_id`` binds one confirmation
+  to that sealed set; it is not authentication and never authorizes
+  arbitrary paths.
 - Apply re-derives resource identities from the sealed scope and the
   current validated sources. A self-consistent plan whose resources were
   edited and re-hashed (paths, desired content, source pins) is rejected
@@ -50,6 +53,13 @@ Security semantics, by design:
   the current after-state, requires its own confirmation, refuses live
   drift (unknown changes are never overwritten) and restores backups
   without deleting them.
+- A failure escaping the mutation region (intent/receipt persistence or an
+  isolated executor crash) is re-raised with ``details["batch"]`` binding
+  the plan or recovery identity, the private backup root, the latest
+  trusted checkpoint receipt path and the measured-or-unknown mutation
+  state. The bound checkpoint is recovery evidence, never the failed
+  attempt's success; pre-write validation failures carry no batch evidence
+  and keep the plain pre-write blocked surface.
 - Verify is read-only: managed skill/AGENTS payload state is measured
   semantically against the sealed desired states, while MCP/shell disk,
   runtime, host and legacy evidence comes from ``verify_hosts`` as a
@@ -68,6 +78,7 @@ import hashlib
 import importlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -77,6 +88,8 @@ from typing import Any, NoReturn
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_cleanup_targets import strict_json_object
 from sbtd_migration_files import (
+    _canonical,
+    _lstat,
     backup_reference,
     directory_snapshot,
     install_reference,
@@ -369,6 +382,22 @@ def _validate_scope(value: Any) -> dict[str, Any]:
         _fail("invalid-scope", "scope schema_version must be 1")
     _scope_decisions(scope)
     return scope
+
+def _canonical_scope(scope: Mapping[str, Any]) -> dict[str, Any]:
+    """Canonical provider-normalized scope sealed by every plan.
+
+    The inventory provider's strict ``normalize_scope`` owns the single
+    normalization rule (resolved paths, canonical host platforms such as
+    oh-my-pi -> omp); the engine re-validates the JSON-safe result so the
+    sealed scope, derived resources and later verification all agree.
+    """
+    normalize = getattr(_inventory_module(), "normalize_scope", None)
+    if normalize is None:
+        _fail(
+            "inventory-unavailable",
+            "the upgrade inventory module does not expose scope normalization",
+        )
+    return _validate_scope(_strict_loads(canonical_json_bytes(normalize(scope))))
 
 
 def _validate_plan(plan: Any) -> tuple[str, dict[str, Any]]:
@@ -867,6 +896,179 @@ def _latest_receipt(
 
 
 # ---------------------------------------------------------------------------
+# Post-mutation failure evidence (bound to the sealed batch identity)
+# ---------------------------------------------------------------------------
+
+
+def _latest_checkpoint(
+    vault: Path, *, phase: str, plan_id: str | None, recovery_id: str | None
+) -> dict[str, Any] | None:
+    """Latest persisted checkpoint receipt reference for the batch, if any."""
+    batch_id = recovery_id if phase == "recovery" else plan_id
+    if batch_id is None:
+        return None
+    try:
+        if phase == "recovery":
+            document = _latest_receipt(
+                vault,
+                "upgrade-recovery-receipt-",
+                "recovery_id",
+                batch_id,
+                None,
+                _validate_recovery_receipt,
+            )
+            id_key, prefix = "recovery_receipt_id", "upgrade-recovery-receipt-"
+        else:
+            document = _latest_receipt(
+                vault,
+                "upgrade-receipt-",
+                "plan_id",
+                batch_id,
+                None,
+                _validate_upgrade_receipt,
+            )
+            id_key, prefix = "receipt_id", "upgrade-receipt-"
+    except (ContractError, OSError):
+        return None
+    if document is None:
+        return None
+    receipt_id = document[id_key]
+    return {
+        "receipt_id": receipt_id,
+        "path": str(vault / f"{prefix}{receipt_id}.json"),
+        "status": document["payload"]["status"],
+    }
+
+
+def _batch_evidence(
+    vault: Path,
+    *,
+    phase: str,
+    plan_id: str | None,
+    recovery_id: str | None,
+    intent_prefix: str,
+    id_field: str,
+) -> dict[str, Any] | None:
+    """Measured/unknown mutation evidence bound to persisted batch intents.
+
+    Returns ``None`` when no intent and no checkpoint was ever persisted:
+    the failure is pre-mutation and keeps the plain pre-write surface.
+    """
+    identity: dict[str, Any] = {}
+    if plan_id is not None:
+        identity["plan_id"] = plan_id
+    if recovery_id is not None:
+        identity["recovery_id"] = recovery_id
+    try:
+        intents = _scan_intents(vault, intent_prefix, id_field)
+    except (ContractError, OSError):
+        # A failed evidence scan must never mask the original halt.
+        intents = None
+    checkpoint = _latest_checkpoint(
+        vault, phase=phase, plan_id=plan_id, recovery_id=recovery_id
+    )
+    if intents is None:
+        return {
+            "phase": phase,
+            **identity,
+            "backup_root": str(vault),
+            "checkpoint": checkpoint,
+            "mutation": {"state": "unknown", "resources": []},
+        }
+    if not intents and checkpoint is None:
+        return None
+    resources: list[dict[str, Any]] = []
+    measured = True
+    for key in sorted(intents):
+        target = intents[key].get("target")
+        after = _measured(target) if isinstance(target, str) else None
+        if after is None:
+            measured = False
+        resources.append(
+            {
+                "id": key,
+                "target": target if isinstance(target, str) else "",
+                "after": after,
+            }
+        )
+    return {
+        "phase": phase,
+        **identity,
+        "backup_root": str(vault),
+        "checkpoint": checkpoint,
+        "mutation": {
+            "state": "measured" if measured else "unknown",
+            "resources": resources,
+        },
+    }
+
+
+def _batch_halt(
+    error: BaseException,
+    vault: Path,
+    *,
+    phase: str,
+    plan_id: str | None,
+    recovery_id: str | None,
+    intent_prefix: str,
+    id_field: str,
+) -> ContractError:
+    """Post-mutation halt carrying batch evidence; pre-mutation stays plain."""
+    batch = _batch_evidence(
+        vault,
+        phase=phase,
+        plan_id=plan_id,
+        recovery_id=recovery_id,
+        intent_prefix=intent_prefix,
+        id_field=id_field,
+    )
+    if batch is None:
+        if isinstance(error, ContractError):
+            return error
+        return ContractError(
+            "write-failed", "the batch failed before any mutation was persisted"
+        )
+    details: dict[str, Any] = {}
+    if isinstance(error, ContractError):
+        code, message = error.code, error.message
+        if isinstance(error.details, Mapping):
+            details.update(error.details)
+    else:
+        code, message = (
+            "write-failed",
+            "a post-mutation persistence failure interrupted the batch",
+        )
+    details["batch"] = batch
+    return ContractError(code, message, exit_code=3, details=details)
+
+
+def _isolated_batch_evidence(
+    error: ContractError,
+    vault: Path,
+    *,
+    phase: str,
+    plan_id: str | None,
+    recovery_id: str | None,
+    intent_prefix: str,
+    id_field: str,
+) -> ContractError:
+    """Bind batch evidence to an isolated executor crash; forward the rest."""
+    if isinstance(error.details, Mapping) and "batch" in error.details:
+        return error
+    if error.code != "self-upgrade-failed":
+        return error
+    return _batch_halt(
+        error,
+        vault,
+        phase=phase,
+        plan_id=plan_id,
+        recovery_id=recovery_id,
+        intent_prefix=intent_prefix,
+        id_field=id_field,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Self-upgrade staging and isolated execution
 # ---------------------------------------------------------------------------
 
@@ -995,12 +1197,18 @@ def _run_isolated(runner: Path, argv: list[str]) -> dict[str, Any]:
         code = error.get("code")
         message = error.get("message")
         exit_code = error.get("exit_code")
+        details = error.get("details")
         if (
             isinstance(code, str)
             and isinstance(message, str)
             and exit_code in (2, 3)
         ):
-            raise ContractError(code, message, exit_code=exit_code)
+            raise ContractError(
+                code,
+                message,
+                exit_code=exit_code,
+                details=dict(details) if isinstance(details, Mapping) else None,
+            )
     _fail(
         "self-upgrade-failed",
         "the isolated upgrade executor failed without a contract error",
@@ -1014,32 +1222,35 @@ def _run_isolated(runner: Path, argv: list[str]) -> dict[str, Any]:
 
 
 def _missing_parents(target: Path) -> list[str]:
+    """Parent-chain preflight: lstat/nofollow each component, never a tree scan.
+
+    Only the target's own ancestry is inspected: unselected siblings are
+    never read, while a linked, reparse or non-directory parent component
+    is still refused.
+    """
+    parent = _canonical(target.parent)
     missing: list[str] = []
-    current = target.parent
-    while not current.exists():
+    current = parent
+    while True:
+        info = _lstat(current)
+        if info is not None:
+            break
         missing.append(str(current))
+        if current.parent == current:
+            break
         current = current.parent
-    snapshot(current)
-    if not current.is_dir():
-        _fail("unsafe-path", "a target parent is not a directory")
+    info = _lstat(current)
+    if info is None or not stat.S_ISDIR(info.st_mode):
+        _fail("unsafe-path", "an upgrade target parent is not a real directory")
     return list(reversed(missing))
 
 
 def _ensure_parent_directories(target: Path) -> list[str]:
     """Create missing target parents top-down; returns the created directories."""
-    missing: list[Path] = []
-    current = target.parent
-    while not current.exists():
-        missing.append(current)
-        if current.parent == current:
-            break
-        current = current.parent
-    if not current.is_dir() or current.is_symlink():
-        _fail("unsafe-path", "an upgrade target parent is not a real directory")
     created: list[str] = []
-    for directory in reversed(missing):
+    for name in _missing_parents(target):
         try:
-            os.mkdir(directory, 0o755)
+            os.mkdir(name, 0o755)
         except FileExistsError:
             continue
         except OSError:
@@ -1049,7 +1260,7 @@ def _ensure_parent_directories(target: Path) -> list[str]:
                 except OSError:
                     pass
             _fail("write-failed", "an upgrade target parent cannot be created")
-        created.append(str(directory))
+        created.append(name)
     return created
 
 
@@ -1065,7 +1276,9 @@ def plan_upgrade(
     package_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Read-only sealed upgrade plan. Writes nothing; the vault stays untouched."""
-    sealed_scope = _validate_scope(_strict_loads(canonical_json_bytes(scope)))
+    sealed_scope = _canonical_scope(
+        _validate_scope(_strict_loads(canonical_json_bytes(scope)))
+    )
     vault = require_private_directory(Path(backup_root))
     root = None if package_root is None else Path(package_root)
     baseline, resources, domains = _derive_resources(sealed_scope, root)
@@ -1163,7 +1376,18 @@ def apply_upgrade(
             vault / f"upgrade-receipt-{previous_id}.json", previous, vault
         )
         argv += ["--receipt-file", receipt_ref["path"]]
-    document = _run_isolated(stage["runner"], argv)
+    try:
+        document = _run_isolated(stage["runner"], argv)
+    except ContractError as error:
+        raise _isolated_batch_evidence(
+            error,
+            vault,
+            phase="upgrade",
+            plan_id=plan_id,
+            recovery_id=None,
+            intent_prefix=f"intent-{plan_id[:16]}-",
+            id_field="resource_id",
+        ) from error
     _validate_upgrade_receipt(document)
     if document["payload"]["plan_id"] != plan_id:
         _fail(
@@ -1312,117 +1536,126 @@ def _apply_upgrade_local(
         _record_result(results, _result_row(
             action["resource"], "pending", None, action["backup_ref"], action["created_parents"],
         ))
-    initial_payload = _receipt_payload(
-        plan_id, payload, vault, previous_id, sequence, results, None, executor
-    )
-    initial = _receipt_document(initial_payload, "receipt_id")
-    _save_once(vault / f"upgrade-receipt-{initial['receipt_id']}.json", initial, vault)
-    failure: dict[str, Any] | None = None
-    stopped = False
-    document: dict[str, Any] | None = None
-    for action in actions:
-        resource = action["resource"]
-        if stopped:
-            continue
-        intent = {
-            "intent_schema": "upgrade-write-intent",
-            "plan_id": plan_id,
-            "resource_id": resource["id"],
-            "target": resource["target"],
-            "before": resource["before"],
-            "desired": resource["desired"],
-            "backup_ref": action["backup_ref"],
-            "mechanical_desired": (
-                snapshot(
-                    Path(recomputed_by_id[resource["id"]]["source"]["path"])
-                )
-                if resource["kind"] in ("skill", "agents") else resource["desired"]
-            ),
-            "mechanical_before": action["mechanical_before"],
-            "created_parents": action["created_parents"],
-        }
-        action["mechanical_desired"] = intent["mechanical_desired"]
-        _save_once(
-            intents_dir / f"intent-{plan_id[:16]}-{_digest(resource['id'])[:32]}.json",
-            {"schema_version": 1, "payload": intent},
-            vault,
+    try:
+        initial_payload = _receipt_payload(
+            plan_id, payload, vault, previous_id, sequence, results, None, executor
         )
-        try:
-            created_parents = _ensure_parent_directories(Path(resource["target"]))
-            action["created_parents"] = created_parents
-            _write_resource(
-                resource,
-                recomputed_by_id[resource["id"]],
-                action["backup_ref"],
-                inventory_root,
-                action["mechanical_before"],
-                action,
+        initial = _receipt_document(initial_payload, "receipt_id")
+        _save_once(vault / f"upgrade-receipt-{initial['receipt_id']}.json", initial, vault)
+        failure: dict[str, Any] | None = None
+        stopped = False
+        document: dict[str, Any] | None = None
+        for action in actions:
+            resource = action["resource"]
+            if stopped:
+                continue
+            intent = {
+                "intent_schema": "upgrade-write-intent",
+                "plan_id": plan_id,
+                "resource_id": resource["id"],
+                "target": resource["target"],
+                "before": resource["before"],
+                "desired": resource["desired"],
+                "backup_ref": action["backup_ref"],
+                "mechanical_desired": (
+                    snapshot(
+                        Path(recomputed_by_id[resource["id"]]["source"]["path"])
+                    )
+                    if resource["kind"] in ("skill", "agents") else resource["desired"]
+                ),
+                "mechanical_before": action["mechanical_before"],
+                "created_parents": action["created_parents"],
+            }
+            action["mechanical_desired"] = intent["mechanical_desired"]
+            _save_once(
+                intents_dir / f"intent-{plan_id[:16]}-{_digest(resource['id'])[:32]}.json",
+                {"schema_version": 1, "payload": intent},
+                vault,
             )
-            after = _payload_state(Path(resource["target"]))
-        except ContractError as error:
-            _record_result(results,
-                _result_row(
+            try:
+                created_parents = _ensure_parent_directories(Path(resource["target"]))
+                action["created_parents"] = created_parents
+                _write_resource(
                     resource,
-                    "failed",
-                    _measured(resource["target"]),
+                    recomputed_by_id[resource["id"]],
                     action["backup_ref"],
-                    action["created_parents"],
-                    reason=error.code,
+                    inventory_root,
+                    action["mechanical_before"],
+                    action,
                 )
-            )
-            failure = {"resource_id": resource["id"], "code": error.code}
-            retained = getattr(error, "retained_refs", None)
-            if retained:
-                failure["retained_refs"] = retained
-            stopped = True
-        except OSError:
-            _record_result(results,
-                _result_row(
-                    resource,
-                    "failed",
-                    _measured(resource["target"]),
-                    action["backup_ref"],
-                    action["created_parents"],
-                    reason="write-failed",
-                )
-            )
-            failure = {"resource_id": resource["id"], "code": "write-failed"}
-            stopped = True
-        else:
-            if after != resource["desired"]:
+                after = _payload_state(Path(resource["target"]))
+            except ContractError as error:
                 _record_result(results,
                     _result_row(
                         resource,
                         "failed",
-                        after,
+                        _measured(resource["target"]),
                         action["backup_ref"],
                         action["created_parents"],
-                        reason="after-mismatch",
+                        reason=error.code,
                     )
                 )
-                failure = {"resource_id": resource["id"], "code": "after-mismatch"}
+                failure = {"resource_id": resource["id"], "code": error.code}
+                retained = getattr(error, "retained_refs", None)
+                if retained:
+                    failure["retained_refs"] = retained
                 stopped = True
-            else:
+            except OSError:
                 _record_result(results,
                     _result_row(
                         resource,
-                        "succeeded",
-                        after,
+                        "failed",
+                        _measured(resource["target"]),
                         action["backup_ref"],
                         action["created_parents"],
+                        reason="write-failed",
                     )
                 )
-        row = next(row for row in results if row["id"] == resource["id"])
-        if row["result"] == "failed":
-            no_commit = not action.get("mutation_started") or row["reason"] in (
-                "state-conflict", "plan-stale", "render-drift", "invalid-inventory",
-            )
-            if no_commit or row["mechanical_after"] == action["mechanical_before"]:
-                row["mutated"] = False
-            elif row["mechanical_after"] == intent["mechanical_desired"]:
-                row["mutated"] = True
+                failure = {"resource_id": resource["id"], "code": "write-failed"}
+                stopped = True
             else:
-                row["mutated"] = None
+                if after != resource["desired"]:
+                    _record_result(results,
+                        _result_row(
+                            resource,
+                            "failed",
+                            after,
+                            action["backup_ref"],
+                            action["created_parents"],
+                            reason="after-mismatch",
+                        )
+                    )
+                    failure = {"resource_id": resource["id"], "code": "after-mismatch"}
+                    stopped = True
+                else:
+                    _record_result(results,
+                        _result_row(
+                            resource,
+                            "succeeded",
+                            after,
+                            action["backup_ref"],
+                            action["created_parents"],
+                        )
+                    )
+            row = next(row for row in results if row["id"] == resource["id"])
+            if row["result"] == "failed":
+                no_commit = not action.get("mutation_started") or row["reason"] in (
+                    "state-conflict", "plan-stale", "render-drift", "invalid-inventory",
+                )
+                if no_commit or row["mechanical_after"] == action["mechanical_before"]:
+                    row["mutated"] = False
+                elif row["mechanical_after"] == intent["mechanical_desired"]:
+                    row["mutated"] = True
+                else:
+                    row["mutated"] = None
+            receipt_payload = _receipt_payload(
+                plan_id, payload, vault, previous_id, sequence, results, failure, executor
+            )
+            document = _receipt_document(receipt_payload, "receipt_id")
+            _save_once(
+                vault / f"upgrade-receipt-{document['receipt_id']}.json", document, vault
+            )
+
         receipt_payload = _receipt_payload(
             plan_id, payload, vault, previous_id, sequence, results, failure, executor
         )
@@ -1430,14 +1663,16 @@ def _apply_upgrade_local(
         _save_once(
             vault / f"upgrade-receipt-{document['receipt_id']}.json", document, vault
         )
-
-    receipt_payload = _receipt_payload(
-        plan_id, payload, vault, previous_id, sequence, results, failure, executor
-    )
-    document = _receipt_document(receipt_payload, "receipt_id")
-    _save_once(
-        vault / f"upgrade-receipt-{document['receipt_id']}.json", document, vault
-    )
+    except (ContractError, OSError) as error:
+        raise _batch_halt(
+            error,
+            vault,
+            phase="upgrade",
+            plan_id=plan_id,
+            recovery_id=None,
+            intent_prefix=f"intent-{plan_id[:16]}-",
+            id_field="resource_id",
+        ) from error
     return document
 
 
@@ -1680,9 +1915,17 @@ def verify_upgrade(
     drifted = False
     blocked = False
     if probe:
+        normalize_platform = getattr(
+            _inventory_module(), "normalize_host_platform", None
+        )
+        if normalize_platform is None:
+            _fail(
+                "inventory-unavailable",
+                "the upgrade inventory module does not expose platform normalization",
+            )
         required_hosts = {
             host["id"] for host in payload["scope"].get("hosts", [])
-            if host["platform"] in ("codex", "omp", "oh-my-pi")
+            if normalize_platform(host["platform"]) in ("codex", "omp")
         }
         reported_hosts = {
             row.get("id") for row in hosts_report.get("hosts", []) if isinstance(row, Mapping)
@@ -1851,7 +2094,9 @@ def _host_verdict(
             elif probe and any(token != "verified" for token in required):
                 blocked = True
             # live_reload and legacy are separate, nonrequested dimensions.
-    return ("drift" if failed else "blocked" if blocked else None), exceptions
+    # Blocked evidence always outranks drift: one blocked domain must never
+    # be hidden by another domain's drift, and per-domain rows stay intact.
+    return ("blocked" if blocked else "drift" if failed else None), exceptions
 
 
 # ---------------------------------------------------------------------------
@@ -2210,7 +2455,18 @@ def apply_recovery(
             vault / f"upgrade-recovery-receipt-{previous_id}.json", previous, vault
         )
         argv += ["--receipt-file", receipt_ref["path"]]
-    document = _run_isolated(stage["runner"], argv)
+    try:
+        document = _run_isolated(stage["runner"], argv)
+    except ContractError as error:
+        raise _isolated_batch_evidence(
+            error,
+            vault,
+            phase="recovery",
+            plan_id=payload["plan_id"],
+            recovery_id=recovery_id,
+            intent_prefix=f"rintent-{recovery_id[:16]}-",
+            id_field="step_id",
+        ) from error
     _validate_recovery_receipt(document)
     if document["payload"]["recovery_id"] != recovery_id:
         _fail(
@@ -2299,73 +2555,84 @@ def _apply_recovery_local(
     }
     for action in actions:
         _record_result(results, _step_row(action["step"], "pending", None))
-    initial_payload = _recovery_receipt_payload(
-        recovery_id, payload, vault, previous_id, sequence, results, None, executor
-    )
-    initial = _receipt_document(initial_payload, "recovery_receipt_id")
-    _save_once(
-        vault / f"upgrade-recovery-receipt-{initial['recovery_receipt_id']}.json", initial, vault
-    )
-    failure: dict[str, Any] | None = None
-    stopped = False
-    document: dict[str, Any] | None = None
-    for action in actions:
-        step = action["step"]
-        if stopped:
-            continue
-        intent = {
-            "intent_schema": "upgrade-recovery-intent",
-            "recovery_id": recovery_id,
-            "step_id": step["step_id"],
-            "target": step["target"],
-            "action": step["action"],
-            "expected_current": step["expected_current"],
-            "restore_state": step["restore_state"],
-        }
-        _save_once(
-            intents_dir / f"rintent-{recovery_id[:16]}-{step['step_id'][:32]}.json",
-            {"schema_version": 1, "payload": intent},
-            vault,
+    try:
+        initial_payload = _recovery_receipt_payload(
+            recovery_id, payload, vault, previous_id, sequence, results, None, executor
         )
-        try:
-            _execute_step(step, action["mechanical_before"])
-            after = _payload_state(Path(step["target"]))
-        except ContractError as error:
-            _record_result(results,
-                _step_row(step, "failed", _measured(step["target"]), reason=error.code)
+        initial = _receipt_document(initial_payload, "recovery_receipt_id")
+        _save_once(
+            vault / f"upgrade-recovery-receipt-{initial['recovery_receipt_id']}.json", initial, vault
+        )
+        failure: dict[str, Any] | None = None
+        stopped = False
+        document: dict[str, Any] | None = None
+        for action in actions:
+            step = action["step"]
+            if stopped:
+                continue
+            intent = {
+                "intent_schema": "upgrade-recovery-intent",
+                "recovery_id": recovery_id,
+                "step_id": step["step_id"],
+                "target": step["target"],
+                "action": step["action"],
+                "expected_current": step["expected_current"],
+                "restore_state": step["restore_state"],
+            }
+            _save_once(
+                intents_dir / f"rintent-{recovery_id[:16]}-{step['step_id'][:32]}.json",
+                {"schema_version": 1, "payload": intent},
+                vault,
             )
-            failure = {"step_id": step["step_id"], "code": error.code}
-            retained = getattr(error, "retained_refs", None)
-            if retained:
-                failure["retained_refs"] = retained
-            stopped = True
-        except OSError:
-            _record_result(results,
-                _step_row(
-                    step, "failed", _measured(step["target"]), reason="write-failed"
+            try:
+                _execute_step(step, action["mechanical_before"])
+                after = _payload_state(Path(step["target"]))
+            except ContractError as error:
+                _record_result(results,
+                    _step_row(step, "failed", _measured(step["target"]), reason=error.code)
                 )
-            )
-            failure = {"step_id": step["step_id"], "code": "write-failed"}
-            stopped = True
-        else:
-            expected_after = (
-                dict(_ABSENT) if step["action"] == "remove" else step["restore_state"]
-            )
-            if after != expected_after:
-                _record_result(results, _step_row(step, "failed", after, reason="after-mismatch"))
-                failure = {"step_id": step["step_id"], "code": "after-mismatch"}
+                failure = {"step_id": step["step_id"], "code": error.code}
+                retained = getattr(error, "retained_refs", None)
+                if retained:
+                    failure["retained_refs"] = retained
+                stopped = True
+            except OSError:
+                _record_result(results,
+                    _step_row(
+                        step, "failed", _measured(step["target"]), reason="write-failed"
+                    )
+                )
+                failure = {"step_id": step["step_id"], "code": "write-failed"}
                 stopped = True
             else:
-                _record_result(results, _step_row(step, "succeeded", after))
+                expected_after = (
+                    dict(_ABSENT) if step["action"] == "remove" else step["restore_state"]
+                )
+                if after != expected_after:
+                    _record_result(results, _step_row(step, "failed", after, reason="after-mismatch"))
+                    failure = {"step_id": step["step_id"], "code": "after-mismatch"}
+                    stopped = True
+                else:
+                    _record_result(results, _step_row(step, "succeeded", after))
+            receipt_payload = _recovery_receipt_payload(
+                recovery_id,
+                payload,
+                vault,
+                previous_id,
+                sequence,
+                results,
+                failure,
+                executor,
+            )
+            document = _receipt_document(receipt_payload, "recovery_receipt_id")
+            _save_once(
+                vault / f"upgrade-recovery-receipt-{document['recovery_receipt_id']}.json",
+                document,
+                vault,
+            )
+
         receipt_payload = _recovery_receipt_payload(
-            recovery_id,
-            payload,
-            vault,
-            previous_id,
-            sequence,
-            results,
-            failure,
-            executor,
+            recovery_id, payload, vault, previous_id, sequence, results, failure, executor
         )
         document = _receipt_document(receipt_payload, "recovery_receipt_id")
         _save_once(
@@ -2373,16 +2640,16 @@ def _apply_recovery_local(
             document,
             vault,
         )
-
-    receipt_payload = _recovery_receipt_payload(
-        recovery_id, payload, vault, previous_id, sequence, results, failure, executor
-    )
-    document = _receipt_document(receipt_payload, "recovery_receipt_id")
-    _save_once(
-        vault / f"upgrade-recovery-receipt-{document['recovery_receipt_id']}.json",
-        document,
-        vault,
-    )
+    except (ContractError, OSError) as error:
+        raise _batch_halt(
+            error,
+            vault,
+            phase="recovery",
+            plan_id=payload["plan_id"],
+            recovery_id=recovery_id,
+            intent_prefix=f"rintent-{recovery_id[:16]}-",
+            id_field="step_id",
+        ) from error
     return document
 
 
@@ -2563,15 +2830,14 @@ def _internal_main(argv: list[str] | None = None) -> int:
             )
     except ContractError as error:
         exit_code = error.exit_code if error.exit_code in (2, 3) else 2
-        _emit_internal(
-            {
-                "error": {
-                    "code": error.code,
-                    "message": error.message,
-                    "exit_code": exit_code,
-                }
-            }
-        )
+        surface: dict[str, Any] = {
+            "code": error.code,
+            "message": error.message,
+            "exit_code": exit_code,
+        }
+        if isinstance(error.details, Mapping):
+            surface["details"] = dict(error.details)
+        _emit_internal({"error": surface})
         return exit_code
     _emit_internal(document)
     return 0
