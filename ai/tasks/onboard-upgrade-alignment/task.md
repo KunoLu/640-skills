@@ -4,11 +4,11 @@ id: onboard-upgrade-alignment
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确要求在新开发分支以 strict 完成已确认四阶段方案；本机应用、同步、旧资产清理、新分支合并及发布未授权。
-status: "checking"
+status: "done"
 branch: feat/onboard-upgrade-alignment
 created_at: '2026-10-03T22:31:25.791160+08:00'
-updated_at: "2026-10-04T19:27:13.033399+08:00"
-completed_at: null
+updated_at: "2026-10-04T20:32:45.703308+08:00"
+completed_at: "2026-10-04T20:32:45.703308+08:00"
 ---
 # Onboard 通用升级对齐、恢复与分层验收
 
@@ -34,3 +34,4 @@ completed_at: null
 | 2026-10-04T12:37:01.748191+08:00 | done | planned | 用户要求修复PR #110审查保留的全部19项问题 | 本轮用户明确修复授权；审查基线ac34ee4 |
 | 2026-10-04T12:37:03.495081+08:00 | planned | in-progress | 沿用strict，恢复开发前门禁并逐项闭合19项审查问题 | PR #110的19项最终审查清单 |
 | 2026-10-04T19:27:13.033399+08:00 | in-progress | checking | 15项修复及4项保留契约已核对，冻结源码进入全量与精确head三平台验证 | review-fixes.md; final-native-upgrade/installed-host/recovery报告;287项升级回归及末次host131项通过;独立复核已收口 |
+| 2026-10-04T20:32:45.703308+08:00 | checking | done | 15项修复及4项保留契约完成，原生隔离闭环、独立复核与精确代码提交三平台CI通过 | 99afbe89266ed4da456fd315f969caa0655d654f;GitHub run37200497908;check.md;review-fixes.md |

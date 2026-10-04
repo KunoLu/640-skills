@@ -44,7 +44,7 @@
 | DDIA | 写后失败证据变更，开发前 | passed：confirmed，绑定本批证据与unknown状态策略明确；R11新增删除checkpoint已撤回 |
 | Legacy | 修复既有行为，开发前 | passed：characterized；真实red及正向控制均保留，原R03／R09等策略性red已更正，不作为缺陷证据 |
 | Refactoring | 既有生产代码变更，Legacy后 | passed：proceed / normal，沿用现有安全原语，不做广泛重构 |
-| Release | 新head完整验证与独立复核后 | planned |
+| Release | 新head完整验证与独立复核后 | passed：ready，代码99afbe89266ed4da456fd315f969caa0655d654f三平台CI 37200497908通过；不代表部署／发布 |
 
 ## 验证记录
 
@@ -66,7 +66,7 @@ R02增加证据读取再次失败时的unknown批次；R13只消费匹配成功O
 
 ### 当前本地验证
 
-- `final-full-unittest-local`：冻结源码全量1732项，OK，20项平台／opt-in跳过；之后仅做上述静态收口，最终全量权威仍等待新head CI。
+- `final-full-unittest-local`：冻结源码全量1732项，OK，20项平台／opt-in跳过；之后仅做上述静态收口，最终代码全量以99afbe8的原生CI为权威。
 - `final-upgrade-gate-after-static-cleanup`：当前四个upgrade模块287项，OK，10项平台条件跳过。
 - `final-all-changed-python-lint`、`final-type-check-green`：本轮8个Python文件Ruff与4个生产模块ty均通过；既有compileall／Bash语法门通过。
 - `post-static-native-*`：最终当前包真实公开CLI完成37资源plan／apply、已安装副本Codex及OMP probe（各33 Skills、6工具）、retry与recovery；平台别名和共享物理根规范化生效，缺失host的preserve仍安装，未选悬空链接与原profile保留。
@@ -75,3 +75,9 @@ R02增加证据读取再次失败时的unknown批次；R13只消费匹配成功O
 - `docs-lesson-and-scenario-validation`：kuno lesson唯一ID、索引锚点与U16—U19场景结构通过。BDD为traceable；不生成`.feature`，无新测试框架。README.md／README.html／版本化automation prompt／CHANGELOG均同步；不触碰live automation。
 
 以上均为developer-local／dirty／local-only。没有把本地macOS、协议夹具或旧PR绿灯冒充新的原生Windows／Linux／精确head证明。
+
+### 精确代码提交CI
+
+`99afbe89266ed4da456fd315f969caa0655d654f`的[run 37200497908](https://github.com/KunoLu/640-skills/actions/runs/37200497908)全部通过：Linux1732项（32 skip）＋最低tomlkit56＋大小写1；macOS271项（2 skip）＋升级287项（10 skip）；Windows安装器49＋PowerShell15、边界22（1 skip）、TOML3、junction1、DACL1、升级287（22 skip）。三个job末次checkout均clean，平台skip不冒充执行。
+
+原始CI元数据／日志／中文汇总及通过schema／digest验证的generic v1 envelope在`reports/review-fixes/ci-repairs-code-99afbe8*`。本地dirty证据不升级为exact，任意JSON／TXT不宣称v2场景执行绑定。最终记录提交后的head还须使用其自身PR Checks；代码CI与交付CI分别留存，不复用旧绿灯。

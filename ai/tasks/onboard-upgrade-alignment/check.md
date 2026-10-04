@@ -4,12 +4,37 @@
 
 本轮相对ac34ee4修复15项；用户明确保留R03／R09／R11／R12原契约并纠正审查。详细场景、更正、故障分类和独立复核见[review-fixes.md](review-fixes.md)。
 
-- 本地全量1732项通过、20项平台／opt-in跳过；之后的静态收口由当前287项升级回归（10 skip）、Ruff与ty通过复验。最终三平台全量以新head CI为准，当前仍待执行。
+- 本地全量1732项通过、20项平台／opt-in跳过；之后的静态收口由当前287项升级回归（10 skip）、Ruff与ty通过复验。代码提交`99afbe89266ed4da456fd315f969caa0655d654f`的[三平台CI 37200497908](https://github.com/KunoLu/640-skills/actions/runs/37200497908)全部通过。
 - 最终包真实隔离CLI完成37资源升级、Codex／OMP各33 Skills与6工具加载、已安装副本重试与恢复。缺失host的preserve仍安装；物理根别名只绑定一次；原profile与未选链接保留。不是GUI／既有会话重载。
 - 库存、事务／CLI、shell、协议四个独立静态复核均已收口；作者与reviewer不代跑验证。当前实际验证证据在`reports/review-fixes/`，raw及同stem中文汇总保留、不上传本地路径。
 - README两入口、REFERENCE U16—U19、版本化automation prompt、CHANGELOG及kuno lesson已维护。README HTML已用实际浏览器验证新增区块；Ego不可用时的失败证据保留。无业务Web／移动UI，Playwright／Maestro专项not-needed。
 - BDD: traceable，中文正文＋英文Given/When/Then；API Contract: verified（升级schema、真实OMP响应）；Mock Strategy: contract-backed，仅用于协议／故障注入；真实隔离host单独报告。Cross-repo context: not-needed。rtk: skipped-for-report，普通Git事实查询使用rtk。
-- 当前Release Readiness gate待精确head CI，不以历史ready结论关闭本轮。没有合并、发布、sync、真实HOME应用或真实旧资产清理。
+- 本轮Release Readiness: ready，仅针对已验收代码的仓库能力交付；没有合并、发布、sync、真实HOME应用或真实旧资产清理。最终验收记录提交后，交付head仍以PR页面对应的新一轮原生Checks为准，不把代码提交的CI冒称另一head。
+
+### 本轮精确代码提交矩阵
+
+| 平台／范围 | 99afbe8实际结果 |
+|---|---|
+| Linux全量 | 1732 tests，OK，32平台／opt-in skip |
+| Linux最低tomlkit与大小写敏感路径 | 56＋1 tests，OK |
+| macOS安装器／工作流 | 271 tests，OK，2 skip |
+| macOS升级／恢复 | 287 tests，OK，10 skip |
+| Windows安装器与PowerShell子集 | 49＋15 tests，OK |
+| Windows根边界／TOML／junction／DACL | 22（1 skip）＋3＋1＋1 tests，OK |
+| Windows升级／恢复 | 287 tests，OK，22平台／条件skip |
+
+三个job均通过末次checkout清洁检查。原始元数据、各平台原生日志和同stem中文汇总见本地`reports/review-fixes/ci-repairs-code-99afbe8*`；generic v1 envelope已做schema及每份日志SHA复验，不将TXT／任意JSON伪装成v2场景执行绑定。Evidence Source: ci；Source Revision: exact；Environment Alignment: verified；自定义证据发布器not-configured，GitHub原生Checks与日志已可见。
+
+### 本轮 Release Readiness Review
+
+- Status: ready，作用域为本轮代码；正式部署／发布未授权。
+- Production path：显式升级、恢复、所选host与profile；缺失host、嵌套安装、restore续作窗口和user-wide边界按用户确认保留。
+- Failure modes：写后失败保留批次和unknown，原件／checkpoint不被旧成功替代；父路径与别名安全，动态shim和伪OMP证据拒绝。
+- Capacity：本地串行操作；shim打开后最多读取65537字节，RPC写入／响应同期限；直接子进程／线程／管道正常及阻塞收尾已验证。异常后代继承管道仅限时尽力处理并警告，不声明进程组终止。
+- Observability/runbook：分层JSON与REFERENCE；保留所有失败和修正报告，不新增后台遥测／服务告警设施。
+- Rollout/recovery：仅草稿PR；实际隔离重试／恢复已通过，用户vault仍须独占且受信，不自动销毁备份或执行历史代码。
+- Required validation：本轮矩阵、Ruff／ty、最终包真实Codex／OMP与完整CLI生命周期、四切面独立复核全部完成。业务Web／Mobile与真实GUI／账号部署不在本轮范围，无未获接受的可选检查豁免。
+- Residual risk：UTF-16 BOM profile拒绝不转码；shim只证明CLI指向；原GUI／既有会话不由隔离probe证明。CI对既有Action的Node运行时和runner标签给出迁移提示，本轮未改其pin，也未将警告当成失败或悄悄升级。
 
 以下各节为修复前历史记录，不作为本轮head的通过证据。
 
