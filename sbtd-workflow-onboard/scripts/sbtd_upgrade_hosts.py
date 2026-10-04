@@ -1,4 +1,4 @@
-"""Upgrade host-domain resources: Codex/OMP MCP config and shell PATH profiles.
+r"""Upgrade host-domain resources: Codex/OMP MCP config and shell PATH profiles.
 
 This module owns the host side of the Onboard upgrade alignment (design.md
 §公共接口与模块责任):
@@ -41,7 +41,15 @@ Applicability: only ``codex`` and ``omp`` hosts carry managed MCP wiring.
 Other platforms (e.g. claude/kimi) are reported ``unsupported`` and no
 resource or wiring is invented for them. Legacy retired entries are reported
 in the legacy dimension; retiring them belongs to the cleanup engine, never
-to this module.
+to this module. On native Windows a bash/zsh managed block renders the bin
+in Git Bash POSIX form (``/c/Users/...``): a drive-letter colon is the POSIX
+PATH delimiter, so both ``C:\`` and ``C:/`` entries split and could never
+resolve. Probes run through the real available shell (Git Bash for bash) and
+compare the reported ``/c/...`` resolution with the native ``C:\...``
+selection via path aliases — a pass is real, never fabricated. PowerShell
+profiles keep their native form and probe. Every probe fixture directory is
+created through the migration ``require_private_directory`` primitive, so
+Windows privacy is proven by its ACL helper at creation, never by a chmod.
 
 Probe evidence policy: recorded evidence is limited to fixed status tokens,
 digests, sorted pinned tool names, skill names, and exit/timeout flags. Raw
@@ -80,7 +88,13 @@ from onboard_contracts import ContractError
 from sbtd_cleanup_targets import strict_json_object
 from sbtd_graft_deployment import launch_bindings
 from sbtd_graft_entry import validate_project, validate_runtime
-from sbtd_migration_files import _canonical, backup_reference, read_file, snapshot
+from sbtd_migration_files import (
+    _canonical,
+    backup_reference,
+    read_file,
+    require_private_directory,
+    snapshot,
+)
 
 __all__ = ["build_host_resources", "render_resource", "verify_hosts"]
 
@@ -550,7 +564,44 @@ def _validate_bin(value: Any) -> None:
 
 
 def _quote_posix(value: str) -> str:
-    return "'" + value.replace("'", "'\\''") + "'"
+    return "'" + _posix_shell_path(value).replace("'", "'\\''") + "'"
+
+
+def _posix_shell_path(value: str) -> str:
+    r"""Git Bash POSIX form of a native absolute path; identity elsewhere.
+
+    A drive-letter colon is the POSIX PATH delimiter, so ``C:\`` and ``C:/``
+    entries both split and could never resolve inside a sourced bash/zsh
+    profile. The ``/c/...`` alias Git Bash itself assigns to the drive is the
+    only form that genuinely resolves there.
+    """
+    if os.name != "nt":
+        return value
+    if value.startswith(("\\\\", "//")):
+        return value.replace("\\", "/")
+    match = re.fullmatch(r"([a-zA-Z]):[\\/](.*)", value)
+    if match is None:
+        return value
+    tail = match.group(2).replace("\\", "/").rstrip("/")
+    drive = match.group(1).lower()
+    return f"/{drive}/{tail}" if tail else f"/{drive}"
+
+
+def _resolution_key(value: str) -> str:
+    r"""Canonical comparison key for one shell-reported resolution path.
+
+    Git Bash reports ``/c/...`` for what the native selection holds as
+    ``C:\...``; both spellings are aliases of the same file, so the key
+    folds the POSIX drive alias back to the native form before the usual
+    case/separator normalization.
+    """
+    text = value
+    if os.name == "nt":
+        match = re.fullmatch(r"/([a-zA-Z])(?:/(.*))?", text)
+        if match is not None:
+            tail = (match.group(2) or "").replace("/", "\\")
+            text = match.group(1).upper() + ":\\" + tail
+    return os.path.normcase(os.path.normpath(text))
 
 
 def _quote_powershell(value: str) -> str:
@@ -792,10 +843,15 @@ def _build_mcp_resource(
     }
 
 
-def _command_identity(bin_dir: Path) -> dict[str, Any]:
+def _command_identity(bin_dir: Path, shell: str = "powershell") -> dict[str, Any]:
     """Bind only the selected executable; npm executable symlinks are read-only."""
     _canonical(bin_dir)
-    names = ("graft.ps1", "graft.cmd", "graft.exe", "graft") if os.name == "nt" else ("graft",)
+    names = ("graft",)
+    if os.name == "nt":
+        names = (
+            ("graft", "graft.exe") if shell in {"bash", "zsh"}
+            else ("graft.ps1", "graft.exe", "graft.cmd", "graft")
+        )
     selected = next(
         (bin_dir / name for name in names if os.path.lexists(bin_dir / name)),
         bin_dir / names[0],
@@ -838,7 +894,7 @@ def _build_shell_resource(
         "managed_digest": hashlib.sha256(b"\n".join(block)).hexdigest(),
         "before_managed_digest": None,
         "legacy_lines": [],
-        "command_identity": _command_identity(Path(bin_dir)),
+        "command_identity": _command_identity(Path(bin_dir), shell),
     }
     if before["type"] not in {"absent", "file"}:
         return _blocked_resource(base, before, details, "invalid-config")
@@ -923,7 +979,7 @@ def render_resource(
         _fail("state-conflict", "the host resource changed before execution")
     before_bytes = b"" if live["type"] == "absent" else read_file(target, live)
     if kind == "shell":
-        if _command_identity(Path(str(details["bin"]))) != details.get("command_identity"):
+        if _command_identity(Path(str(details["bin"])), str(details["shell"])) != details.get("command_identity"):
             _fail("state-conflict", "the selected shell executable changed")
         return _shell_profile_candidate(
             before_bytes, shell=str(details["shell"]), bin_dir=str(details["bin"])
@@ -1121,6 +1177,14 @@ def _probe_env(base: Path, extra: Mapping[str, str]) -> dict[str, str]:
         "PYTHONDONTWRITEBYTECODE": "1",
         "NODE_DISABLE_COMPILE_CACHE": "1",
     }
+    if os.name == "nt":
+        # Native Windows spawns still need the system roots for process
+        # creation and batch-shim resolution; the stripped probe env carries
+        # exactly these two, never anything else ambient.
+        env["SystemRoot"] = os.environ.get("SystemRoot", r"C:\Windows")
+        env["COMSPEC"] = os.environ.get(
+            "COMSPEC", r"C:\Windows\System32\cmd.exe"
+        )
     env.update(extra)
     return env
 
@@ -1185,9 +1249,32 @@ wire_api = "responses"
 """
 
 
+def _probe_fixture(prefix: str) -> tuple[Path, Path]:
+    """(holder, private fixture root) for one isolated probe.
+
+    The holder only reserves a unique name; the fixture root itself is always
+    created through ``require_private_directory(create=True)`` — the same
+    migration primitive that proves the upgrade vault — so Windows privacy is
+    established by its ACL helper at creation, never by a chmod. Descendant
+    directories inherit the proven ACL and stay plain single-level creations.
+    """
+    holder = Path(tempfile.mkdtemp(prefix=prefix)).resolve()
+    try:
+        return holder, require_private_directory(holder / "fixture", create=True)
+    except BaseException:
+        shutil.rmtree(holder, ignore_errors=True)
+        raise
+
+
 def _copy_skill_roots(roots: Sequence[str], destinations: Path) -> list[str]:
-    """Copy verified no-link trees using the existing nofollow copy primitive."""
-    destinations.mkdir(parents=True, mode=0o700, exist_ok=True)
+    """Copy verified no-link trees using the existing nofollow copy primitive.
+
+    ``destinations`` goes through ``require_private_directory(create=True)``:
+    a fresh directory is privatized by the ACL helper at creation, while a
+    pre-existing path is only ever verified and fails closed when its privacy
+    cannot be proven — it is never repaired.
+    """
+    destinations = require_private_directory(destinations, create=True)
     copies: list[str] = []
     for index, root in enumerate(roots):
         source = Path(root)
@@ -1230,10 +1317,11 @@ def _probe_codex(
 
     if proven_root is None:
         raise _ProbeError("unavailable", "no-proven-project-root")
-    fixture = Path(tempfile.mkdtemp(prefix="sbtd-upgrade-codex-")).resolve()
+    holder, fixture = _probe_fixture("sbtd-upgrade-codex-")
     try:
+        require_private_directory(fixture / "home", create=True)
         codex_home = fixture / "codex-home"
-        codex_home.mkdir(parents=True, mode=0o700)
+        codex_home.mkdir(mode=0o700)
         config = codex_mcp_candidate(_CODEX_FIXTURE_CONFIG.encode("utf-8"), bindings)
         quoted = json.dumps(str(proven_root))
         config += f'\n[projects.{quoted}]\ntrust_level = "trusted"\n'.encode()
@@ -1292,7 +1380,7 @@ def _probe_codex(
             rpc.close()
             raise
     finally:
-        shutil.rmtree(fixture, ignore_errors=True)
+        shutil.rmtree(holder, ignore_errors=True)
 
 
 def _find_server_status(payload: Any) -> dict[str, Any]:
@@ -1439,7 +1527,7 @@ def _omp_projection(
         )
         if source.startswith("claude-"):
             config += 'enabledProviders: ["claude"]\n'
-    destination.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    destination.parent.mkdir(mode=0o700, exist_ok=True)
     destination.write_bytes(content)
     (agent / "config.yml").write_text(config, encoding="utf-8")
     return re.sub(r"[^a-z0-9_]", "_", name.lower())
@@ -1457,18 +1545,17 @@ def _probe_omp(
 
     if proven_root is None:
         raise _ProbeError("unavailable", "no-proven-project-root")
-    fixture = Path(tempfile.mkdtemp(prefix="sbtd-upgrade-omp-")).resolve()
+    holder, fixture = _probe_fixture("sbtd-upgrade-omp-")
     try:
         home = fixture / "home"
         agent = fixture / "agent"
-        agent.mkdir(parents=True, mode=0o700)
-        home.mkdir(mode=0o700, exist_ok=True)
+        agent.mkdir(mode=0o700)
+        require_private_directory(home, create=True)
         server_identity = _omp_projection(host, bindings, home, agent)
         (agent / "models.yml").write_text(_OMP_FIXTURE_MODELS, encoding="utf-8")
         # _omp_projection wrote the exact provider route's fixture settings.
         copies = _copy_skill_roots(host["skills_roots"], fixture / "skills-roots")
-        selected = agent / "skills"
-        selected.mkdir(mode=0o700)
+        selected = require_private_directory(agent / "skills", create=True)
         for copy in copies:
             for child in sorted(Path(copy).iterdir()):
                 state = snapshot(child)
@@ -1521,7 +1608,7 @@ def _probe_omp(
             rpc.close()
             raise
     finally:
-        shutil.rmtree(fixture, ignore_errors=True)
+        shutil.rmtree(holder, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1643,13 +1730,17 @@ def _protocol_check(host: Mapping[str, Any], resource: Mapping[str, Any]) -> dic
         "--entry",
         pins["cli"],
     ]
-    fixture = Path(tempfile.mkdtemp(prefix="sbtd-upgrade-mcp-")).resolve()
     try:
+        holder, fixture = _probe_fixture("sbtd-upgrade-mcp-")
+    except ContractError as error:
+        return {"status": "failed", "reason": error.code}
+    try:
+        require_private_directory(fixture / "home", create=True)
         evidence = _mcp_handshake(argv, cwd=proven, fixture=fixture)
     except _ProbeError as error:
         return {"status": error.kind, "reason": error.reason}
     finally:
-        shutil.rmtree(fixture, ignore_errors=True)
+        shutil.rmtree(holder, ignore_errors=True)
     tools = evidence.get("tools") or []
     version = evidence.get("server_version")
     if sorted(_PINNED_GRAFT_TOOLS) != tools or version != GRAFT_PINNED_VERSION:
@@ -1828,15 +1919,15 @@ def _shell_resolution(
     profile: Mapping[str, str], details: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Parse and load the selected profile in an isolated shell; resolve graft."""
+    shell = profile["shell"]
     bin_dir = _canonical(Path(profile["bin"]))
     if not bin_dir.exists():
         return {"status": "unavailable", "reason": "bin-missing"}
     if not bin_dir.is_dir():
         return {"status": "failed", "reason": "bin-not-a-directory"}
-    identity = _command_identity(bin_dir)
+    identity = _command_identity(bin_dir, shell)
     if identity != details.get("command_identity"):
         return {"status": "failed", "reason": "selected-executable-changed"}
-    shell = profile["shell"]
     executable = _which(shell if shell != "powershell" else "pwsh")
     if executable is None and shell == "powershell":
         executable = _which("powershell")
@@ -1847,11 +1938,20 @@ def _shell_resolution(
     if before["type"] != "file":
         return {"status": "failed", "reason": "profile-missing"}
     with tempfile.TemporaryDirectory(prefix="sbtd-upgrade-shell-") as directory:
-        fixture = Path(directory).resolve()
-        (fixture / "home").mkdir(mode=0o700)
+        holder = Path(directory).resolve()
+        try:
+            fixture = require_private_directory(holder / "fixture", create=True)
+        except ContractError as error:
+            return {"status": "failed", "reason": error.code}
+        require_private_directory(fixture / "home", create=True)
         selected = fixture / ("profile.ps1" if shell == "powershell" else "profile")
         selected.write_bytes(read_file(target, before))
         env = _probe_env(fixture, {"PATH": os.defpath, "SBTD_PROBE_PROFILE": str(selected)})
+        if shell in {"bash", "zsh"}:
+            env["HOME"] = _posix_shell_path(env["HOME"])
+            env["SBTD_PROBE_PROFILE"] = _posix_shell_path(str(selected))
+            if os.name == "nt":
+                env["PATH"] = "/usr/bin:/bin"
         marker = "SBTD_RESOLVED_GRAFT="
         if shell == "powershell":
             script = (
@@ -1866,7 +1966,7 @@ def _shell_resolution(
             )
             argv = [executable, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script]
         else:
-            syntax = [executable, "-n", str(selected)]
+            syntax = [executable, "-n", _posix_shell_path(str(selected))]
             try:
                 parsed = subprocess.run(
                     syntax, cwd=fixture, env=env, stdout=subprocess.DEVNULL,
@@ -1899,15 +1999,26 @@ def _shell_resolution(
             line[len(marker):] for line in result.stdout.decode("utf-8", errors="replace").splitlines()
             if line.startswith(marker)
         ]
-        expected = {os.path.normcase(str(bin_dir / name)) for name in
+        expected = {_resolution_key(str(bin_dir / name)) for name in
                     ("graft", "graft.exe", "graft.cmd", "graft.ps1")}
-        if len(resolutions) != 1 or os.path.normcase(os.path.normpath(resolutions[0])) not in expected:
+        if len(resolutions) != 1 or _resolution_key(resolutions[0]) not in expected:
             return {"status": "failed", "reason": "graft-resolution-mismatch"}
-        identity = _command_identity(bin_dir)
+        identity = _command_identity(bin_dir, shell)
         if identity["resolved"] is None or identity["state"]["type"] != "file":
             return {"status": "failed", "reason": "graft-not-an-ordinary-file"}
-        if os.path.normcase(os.path.normpath(resolutions[0])) != os.path.normcase(identity["path"]):
-            return {"status": "failed", "reason": "graft-resolution-mismatch"}
+        reported = _resolution_key(resolutions[0])
+        selected_key = _resolution_key(identity["path"])
+        if reported != selected_key:
+            stem, suffix = os.path.splitext(selected_key)
+            unique_suffix_alias = (
+                os.name == "nt"
+                and suffix in {".exe", ".cmd", ".ps1"}
+                and reported == stem
+                and not os.path.lexists(stem)
+                and sum(os.path.lexists(stem + ext) for ext in (".exe", ".cmd", ".ps1")) == 1
+            )
+            if not unique_suffix_alias:
+                return {"status": "failed", "reason": "graft-resolution-mismatch"}
         pinned = details.get("runtime_cli_targets", [])
         if pinned and not any(
             str(Path(item["path"]).resolve()) == identity["resolved"] for item in pinned

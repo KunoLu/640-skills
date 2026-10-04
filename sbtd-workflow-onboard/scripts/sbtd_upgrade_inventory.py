@@ -32,7 +32,7 @@ unselected HOME locations are never discovered.
   copies.
 
 Directory checksums everywhere in this module are *payload* digests: the
-same construction as ``onboard.external_tree_sha256`` on POSIX, with portable
+same construction as ``onboard.external_tree_sha256``, with portable
 relative POSIX path ordering and streamed file contents, excluding the declared
 generated caches (``__pycache__``/``.pytest_cache``/``.ruff_cache``/
 ``.mypy_cache`` directories and ``*.pyc``/``*.pyo`` files) and rejecting any
@@ -246,8 +246,8 @@ def _collect_payload_files(root: Path) -> list[str]:
     except RecursionError:
         _fail("unsafe-path", "a payload tree is deeper than the traversal limit")
     # Plain relative POSIX order: identical to onboard.external_tree_sha256's
-    # normcase order on POSIX, but stable across operating systems, so the
-    # fixed baseline digests stay valid on Windows too.
+    # string-keyed order on every operating system, so the fixed baseline
+    # digests stay valid on Windows too.
     files.sort()
     return files
 

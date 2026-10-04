@@ -706,6 +706,8 @@ Network, permissions, missing dependencies, unsupported platform execution, malf
 
 ## Upgrade Alignment
 
+跨平台基线按原始文件字节与相对 POSIX 字符串顺序计算。仓库根 `.gitattributes` 对整个 `sbtd-workflow-onboard/**` 禁用 checkout 文本转换，既保留二进制，也保留上游合法 CRLF；运行时不归一化内容来制造 pin 匹配。Stable promotion 必须从保留上游提交原始字节的 checkout 取证，不能把本地自动换行转换后的内容当作上游原样镜像。
+
 `upgrade` 对显式范围进行内容对齐，不改变 `init` 跳过合法 Skill 壳、`reset` 重装和 `migration` 迁移数据的既有含义。基线来自执行中的完整 Onboard 包：catalog、模板、固定 stable 内容及来源；绝对安装路径或文件时间不是版本。不能证明历史版本时报告 `unknown-drift`，不凭名称或版本字符串猜测。
 
 ### 范围与授权
@@ -736,6 +738,8 @@ Network, permissions, missing dependencies, unsupported platform execution, malf
 ### 计划、应用与分层验收
 
 备份根必须是已有私有目录，与安装包及所有目标互不嵌套。默认计划仅 stdout；`--output` 只创建指定私有 vault 内的新计划，不覆盖现存文件。
+
+POSIX 使用当前用户所有权及私有权限证明；Windows 必须有可验证的私有 DACL，`chmod(0700)` 不等于 Windows 隐私证明。已有 vault 只校验、不自动修权限；执行器仅对本次新建的子目录使用既有跨平台私有目录初始化器。准备根目录时须由操作人确认，不能把 plan 变成隐式 ACL 修复。
 
 ```bash
 python scripts/onboard.py upgrade --phase plan \

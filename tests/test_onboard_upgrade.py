@@ -12,6 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "sbtd-workflow-onboard/scripts/onboard.py"
+sys.path.insert(0, str(CLI.parent))
+
+from sbtd_migration_files import require_private_directory
 
 
 class UpgradeCliTests(unittest.TestCase):
@@ -20,7 +23,7 @@ class UpgradeCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             vault = root / "vault"
-            vault.mkdir(mode=0o700)
+            require_private_directory(vault, create=True)
             target = root / "skills"
             scope = root / "scope.json"
             scope.write_text(json.dumps({"schema_version": 1, "skills_roots": [str(target)]}), encoding="utf-8")
@@ -86,7 +89,7 @@ class UpgradeCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             vault = root / "vault"
-            vault.mkdir(mode=0o700)
+            require_private_directory(vault, create=True)
             scope = root / "scope.json"
             scope.write_text(json.dumps({
                 "schema_version": 1, "agents_targets": [str(root / "AGENTS.md")],
@@ -127,7 +130,7 @@ class UpgradeCliTests(unittest.TestCase):
             original = b"---\nname: sbtd-workflow-onboard\n---\nold installed payload\n"
             (old / "SKILL.md").write_bytes(original)
             vault = root / "vault"
-            vault.mkdir(mode=0o700)
+            require_private_directory(vault, create=True)
             config_home = root / "codex"
             config = config_home / "config.toml"
             profile = root / ".bashrc"

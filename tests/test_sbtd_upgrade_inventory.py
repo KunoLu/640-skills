@@ -1116,6 +1116,30 @@ class ReviewRegressionTests(InventoryTests):
             state = inventory.payload_directory_state(tree)
         self.assertEqual(state["checksum"], expected.hexdigest())
 
+    def test_producer_and_scanner_share_platform_independent_order(self):
+        """Stable pins are minted by onboard.external_tree_sha256: it must
+        order exactly like the inventory scanner on every OS. The top-level
+        uppercase file vs lowercase subdirectory shape is where Windows
+        normcase folding flips Path-object ordering (the gamma-skill
+        regression); the explicit iteration below pins plain POSIX order."""
+        tree = self.base / "gamma-order"
+        (tree / "scripts").mkdir(parents=True)
+        (tree / "SKILL.md").write_bytes(b"upper top\n")
+        (tree / "scripts" / "tool.sh").write_bytes(b"lower sub\n")
+        expected = hashlib.sha256()
+        for name, raw in (("SKILL.md", b"upper top\n"), ("scripts/tool.sh", b"lower sub\n")):
+            encoded = name.encode()
+            expected.update(len(encoded).to_bytes(8, "big"))
+            expected.update(encoded)
+            expected.update(len(raw).to_bytes(8, "big"))
+            expected.update(raw)
+        self.assertEqual(
+            reference_onboard().external_tree_sha256(tree), expected.hexdigest()
+        )
+        self.assertEqual(
+            inventory.payload_directory_state(tree)["checksum"], expected.hexdigest()
+        )
+
     def test_matching_invalid_catalog_and_manifest_urls_are_untrusted(self):
         catalog_path = self.pkg / "catalog.json"
         original_catalog = catalog_path.read_bytes()

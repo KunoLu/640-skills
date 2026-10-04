@@ -773,17 +773,7 @@ def _check_decisions(payload: Mapping[str, Any]) -> None:
 
 
 def _ensure_private_subdir(vault: Path, name: str) -> Path:
-    path = vault / name
-    if not path.exists():
-        try:
-            os.mkdir(path, 0o700)
-        except FileExistsError:
-            pass
-        except OSError:
-            _fail(
-                "write-failed", "a private vault subdirectory cannot be created"
-            )
-    return require_private_directory(path)
+    return require_private_directory(vault / name, create=True)
 
 
 def _save_once(
@@ -1293,13 +1283,8 @@ def _apply_upgrade_local(
     intents_dir = _ensure_private_subdir(vault, "intents")
     originals_dir = _ensure_private_subdir(vault, "originals")
     batch_dir = originals_dir / plan_id[:16]
-    if actions and not batch_dir.exists():
-        try:
-            os.mkdir(batch_dir, 0o700)
-        except OSError:
-            _fail("write-failed", "the original-backup directory cannot be created")
     if actions:
-        require_private_directory(batch_dir)
+        require_private_directory(batch_dir, create=True)
     for action in actions:
         resource = action["resource"]
         backup_ref: dict[str, Any] | None = None

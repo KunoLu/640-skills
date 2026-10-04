@@ -98,6 +98,8 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 
 Python、Bash `install.sh upgrade ...` 和 PowerShell `-WorkflowMode upgrade` 使用同一实现。Scope JSON、私有计划、恢复命令与验收边界见 [Upgrade Alignment](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。旧工具入口仍由 `cleanup-legacy` 独立确认；新增九个 GitNexus Skills 的精确身份清理，不卸载 CLI、不删除全局数据、历史运行时或备份。Caveman 未知定制、插件与 hooks 不因升级被覆盖。
 
+跨平台基线按原始载荷字节及相对 POSIX 路径排序计算。根 `.gitattributes` 仅对 `sbtd-workflow-onboard/**` 禁用文本换行转换，保护固定 stable pin 和模板／脚本基线；不能通过运行时换行归一化来掩盖实际内容漂移。
+
 
 ### 1. 使用 `npx skills` 全局安装 Onboard Skill
 

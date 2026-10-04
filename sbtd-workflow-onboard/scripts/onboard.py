@@ -3007,9 +3007,12 @@ def external_tree_digest_excluded(relative: Path) -> bool:
 
 def external_tree_sha256(root: Path) -> str:
     digest = hashlib.sha256()
-    for path in sorted(
-        candidate for candidate in root.rglob("*") if candidate.is_file()
-    ):
+    files = [candidate for candidate in root.rglob("*") if candidate.is_file()]
+    # Plain relative POSIX order, stable across operating systems: sorting
+    # Path objects applies normcase folding on Windows, which reorders
+    # case-differing names and would make pinned digests platform-dependent.
+    files.sort(key=lambda candidate: candidate.relative_to(root).as_posix())
+    for path in files:
         if external_tree_digest_excluded(path.relative_to(root)):
             continue
         if path.is_symlink():

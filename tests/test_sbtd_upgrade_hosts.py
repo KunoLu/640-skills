@@ -17,6 +17,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import sbtd_upgrade_hosts as hosts
 from onboard_contracts import ContractError
+from sbtd_migration_files import require_private_directory
 
 # Fixed protocol fixture, deliberately independent of implementation constants.
 PINNED_TOOLS = [
@@ -30,6 +31,24 @@ SECRET = "sk-live-secret-9f8e7d6c5b4a"
 # ---------------------------------------------------------------------------
 # Fixture builders
 # ---------------------------------------------------------------------------
+
+
+def _posix_path_export(path: Path) -> bytes:
+    value = path.as_posix()
+    if os.name == "nt" and path.drive:
+        value = "/" + path.drive[0].lower() + value[2:]
+    quoted = value.replace("'", "'\\''")
+    return f"export PATH='{quoted}':$PATH\n".encode()
+
+
+def _write_graft(bin_dir: Path) -> Path:
+    target = bin_dir / ("graft.exe" if os.name == "nt" else "graft")
+    if os.name == "nt":
+        shutil.copyfile(sys.executable, target)
+    else:
+        target.write_bytes(b"#!/bin/sh\nexit 0\n")
+        target.chmod(0o755)
+    return target
 
 
 def _package(base: Path) -> Path:
@@ -75,6 +94,19 @@ def _codex_toml(command: str, args: list[str]) -> bytes:
         "[mcp_servers.sbtd-graft.env]\n"
         f"{env}"
     ).encode()
+
+
+def _rendered_record(rendered: bytes) -> tuple[str, list[str]]:
+    """Parsed managed record: exact binding values, never raw TOML bytes.
+
+    TOML string escaping (backslashes on Windows) makes byte-substring checks
+    platform-naive; parsing proves the actual bound argv on every platform.
+    """
+    import tomlkit
+
+    parsed = tomlkit.parse(rendered.decode("utf-8"))
+    record = parsed["mcp_servers"]["sbtd-graft"]
+    return str(record["command"]), [str(item) for item in record["args"]]
 
 
 def _codex_host(
@@ -158,7 +190,7 @@ def _write(path: Path, content: bytes) -> None:
 
 def _tree_bytes(root: Path) -> dict[str, bytes]:
     return {
-        str(path.relative_to(root)): path.read_bytes()
+        path.relative_to(root).as_posix(): path.read_bytes()
         for path in sorted(root.rglob("*"))
         if path.is_file()
     }
@@ -988,7 +1020,7 @@ class ShellResourceTests(unittest.TestCase):
             rendered = hosts.render_resource(resource)
             expected = (
                 b"# sbtd-workflow-onboard:path:start\n"
-                + f"export PATH='{bin_dir}':$PATH\n".encode()
+                + _posix_path_export(bin_dir)
                 + b"# sbtd-workflow-onboard:path:end\n"
             )
             self.assertEqual(rendered, expected)
@@ -1086,8 +1118,7 @@ class ShellResourceTests(unittest.TestCase):
             scope = self._scope(base, profile, "bash", bin_dir)
             resources = hosts.build_host_resources(scope, package_root=package)
             rendered = hosts.render_resource(resources[0])
-            quoted = str(bin_dir).replace("'", "'\\''")
-            self.assertIn(f"export PATH='{quoted}':$PATH".encode(), rendered)
+            self.assertIn(_posix_path_export(bin_dir).rstrip(b"\n"), rendered)
 
     def test_duplicated_markers_are_blocked(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1097,7 +1128,7 @@ class ShellResourceTests(unittest.TestCase):
             bin_dir = base / "bin"
             block = (
                 b"# sbtd-workflow-onboard:path:start\n"
-                + f"export PATH='{bin_dir}':$PATH\n".encode()
+                + _posix_path_export(bin_dir)
                 + b"# sbtd-workflow-onboard:path:end\n"
             )
             _write(profile, block + block)
@@ -1131,7 +1162,7 @@ class ShellResourceTests(unittest.TestCase):
             before = (
                 f"export PATH=\"{bin_dir}:$PATH\"\n".encode()
                 + b"# sbtd-workflow-onboard:path:start\n"
-                + f"export PATH='{bin_dir}':$PATH\n".encode()
+                + _posix_path_export(bin_dir)
                 + b"# sbtd-workflow-onboard:path:end\n"
             )
             _write(profile, before)
@@ -1621,9 +1652,7 @@ class VerifyProbeTests(unittest.TestCase):
                 ]
             }
             bin_dir.mkdir()
-            graft = bin_dir / "graft"
-            graft.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            graft.chmod(0o755)
+            _write_graft(bin_dir)
             resources = hosts.build_host_resources(scope, package_root=package)
             for resource in resources:
                 _write(Path(resource["target"]), hosts.render_resource(resource))
@@ -1840,6 +1869,41 @@ class EffectiveHostSafetyTests(unittest.TestCase):
             self.assertNotIn(SECRET, json.dumps(result))
 
 
+class ProbeFixturePrivacyTests(unittest.TestCase):
+    def test_skill_copy_destination_is_proven_private_at_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            skills = _skills_root(base, ["alpha"])
+            # The parent is a plain directory on purpose: privacy must come
+            # from the destination creation itself, never from the caller's
+            # chmod or from inherited defaults.
+            parent = base / "fixture"
+            parent.mkdir()
+            destinations = parent / "roots"
+            copies = hosts._copy_skill_roots([str(skills)], destinations)
+            self.assertEqual(copies, [str(destinations / "0")])
+            self.assertEqual(
+                sorted(child.name for child in (destinations / "0").iterdir()),
+                ["alpha", "sbtd-workflow-onboard"],
+            )
+            # Proof, not assumption: the migration primitive re-verifies the
+            # destination (POSIX mode/ownership, Windows ACL) on every platform.
+            self.assertEqual(require_private_directory(destinations), destinations)
+
+    def test_skill_copy_destination_that_cannot_be_privatized_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            skills = _skills_root(base, ["alpha"])
+            blocker = base / "blocked"
+            blocker.write_bytes(b"not a directory")
+            # A supplied path that can never be a private directory is refused
+            # with a real reason; it is never repaired or replaced.
+            with self.assertRaises(ContractError) as caught:
+                hosts._copy_skill_roots([str(skills)], blocker)
+            self.assertEqual(caught.exception.code, "privacy-unproven")
+            self.assertEqual(blocker.read_bytes(), b"not a directory")
+
+
 class InstalledLauncherBindingTests(unittest.TestCase):
     def test_missing_selected_installation_is_plannable_not_source_bound(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1860,8 +1924,12 @@ class InstalledLauncherBindingTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, "runtime-unavailable")
             _write(Path(launcher["path"]), (package / "scripts/sbtd_graft_entry.py").read_bytes())
             rendered = hosts.render_resource(resource)
-            self.assertIn(str(selected).encode(), rendered)
-            self.assertNotIn(str(package).encode(), rendered)
+            command, args = _rendered_record(rendered)
+            self.assertEqual(command, runtime["python"])
+            self.assertEqual(
+                args, _managed_args(selected / "sbtd-workflow-onboard", runtime)
+            )
+            self.assertNotIn(str(package), " ".join([command, *args]))
 
     def test_installed_real_launcher_remains_runnable_after_stage_removed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1881,14 +1949,25 @@ class InstalledLauncherBindingTests(unittest.TestCase):
             installed = selected / "sbtd-workflow-onboard"
             shutil.copytree(stage, installed)
             rendered = hosts.render_resource(resource)
-            self.assertNotIn(str(stage).encode(), rendered)
-            self.assertIn(str(installed).encode(), rendered)
+            command, args = _rendered_record(rendered)
+            self.assertEqual(command, runtime["python"])
+            self.assertEqual(args, _managed_args(installed, runtime))
+            self.assertNotIn(str(stage), " ".join([command, *args]))
             shutil.rmtree(stage)
             isolated = base / "isolated-home"
             isolated.mkdir()
             result = subprocess.run(
                 [sys.executable, "-E", "-s", str(installed / "scripts/sbtd_graft_entry.py"), "--help"],
-                env={"HOME": str(isolated), "USERPROFILE": str(isolated), "PATH": os.defpath},
+                env={
+                    "HOME": str(isolated),
+                    "USERPROFILE": str(isolated),
+                    "PATH": os.defpath,
+                    **{
+                        name: os.environ[name]
+                        for name in ("SystemRoot", "COMSPEC")
+                        if name in os.environ
+                    },
+                },
                 cwd=base, capture_output=True, timeout=15, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
@@ -1908,8 +1987,12 @@ class InstalledLauncherBindingTests(unittest.TestCase):
             host["onboard_root"] = str(second / "sbtd-workflow-onboard")
             resource = hosts.build_host_resources(scope, package_root=package)[0]
             rendered = hosts.render_resource(resource)
-            self.assertIn(str(second).encode(), rendered)
-            self.assertNotIn(str(first).encode(), rendered)
+            command, args = _rendered_record(rendered)
+            self.assertEqual(command, runtime["python"])
+            self.assertEqual(
+                args, _managed_args(second / "sbtd-workflow-onboard", runtime)
+            )
+            self.assertNotIn(str(first), " ".join([command, *args]))
 
     def test_host_only_foreign_launcher_payload_is_not_trusted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1966,9 +2049,7 @@ class RealShellResolutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             scope, bin_dir = self._profile(base, b'export NVM_DIR="/isolated-nvm"\nexport PATH="/nowhere"\n')
-            executable = bin_dir / "graft"
-            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            executable.chmod(0o755)
+            _write_graft(bin_dir)
             entry = hosts.verify_hosts(scope, package_root=base / "package", probe=True)["shell_profiles"][0]
             self.assertEqual(entry["status"], "pass")
             check = entry["host"]["checks"]["command_resolution"]
@@ -1989,9 +2070,7 @@ class RealShellResolutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             scope, bin_dir = self._profile(base, shell="zsh")
-            executable = bin_dir / "graft"
-            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-            executable.chmod(0o755)
+            _write_graft(bin_dir)
             entry = hosts.verify_hosts(scope, package_root=base / "package", probe=True)["shell_profiles"][0]
             self.assertEqual(entry["status"], "pass")
 
@@ -2061,6 +2140,62 @@ class SelectedExecutableIdentityTests(unittest.TestCase):
             check = hosts._shell_resolution(scope["shell_profiles"][0], resource["details"])
             self.assertEqual(check["status"], "failed")
             self.assertEqual(check["reason"], "graft-runtime-binding-mismatch")
+
+
+class NativeWindowsBoundaryTests(unittest.TestCase):
+    """Native Windows process environment stays explicit and private."""
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("bash"), "native Git Bash required")
+    def test_git_bash_binds_exe_not_same_named_powershell_wrapper(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            bin_dir = base / "bin with space"
+            bin_dir.mkdir()
+            executable = _write_graft(bin_dir)
+            (bin_dir / "graft.ps1").write_text("Write-Output 'unrelated wrapper'\n", encoding="utf-8")
+            profile = base / ".bashrc"
+            scope = {"shell_profiles": [{"path": str(profile), "shell": "bash", "bin": str(bin_dir)}]}
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            self.assertEqual(resource["details"]["command_identity"]["path"], str(executable))
+            _write(profile, hosts.render_resource(resource))
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)["shell_profiles"][0]
+            self.assertEqual(entry["status"], "pass", entry)
+            executable.write_bytes(b"changed executable, unchanged ps1")
+            with self.assertRaises(ContractError) as changed:
+                hosts.render_resource(resource)
+            self.assertEqual(changed.exception.code, "state-conflict")
+
+    @unittest.skipUnless(os.name == "nt", "native Windows boundary only")
+    def test_probe_spawn_env_carries_system_root_and_comspec(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime, package = _runtime(base), _package(base)
+            skills = _skills_root(base, ["alpha"])
+            project = base / "project"
+            project.mkdir()
+            host = _codex_host(
+                base, runtime, skills_roots=[skills], project_roots=[project]
+            )
+            scope = {"hosts": [host], "skills_roots": [str(skills)]}
+            resource = hosts.build_host_resources(scope, package_root=package)[0]
+            _write(Path(host["config"]), hosts.render_resource(resource))
+            rig = _ProbeRig(self, ["alpha"]).install()
+            entry = hosts.verify_hosts(scope, package_root=package, probe=True)["hosts"][0]
+            # The real ACL path proves the fixture private, so the native
+            # probe completes end to end instead of failing privacy-unproven.
+            self.assertEqual(entry["status"], "pass", entry)
+            self.assertTrue(rig.spawns)
+            for _argv, environment, _cwd in rig.spawns:
+                self.assertEqual(
+                    environment["SystemRoot"],
+                    os.environ.get("SystemRoot", r"C:\Windows"),
+                )
+                self.assertEqual(
+                    environment["COMSPEC"],
+                    os.environ.get("COMSPEC", r"C:\Windows\System32\cmd.exe"),
+                )
+            self.assertNotIn(SECRET, json.dumps(entry))
 
 
 class NativePowerShellResolutionTests(unittest.TestCase):

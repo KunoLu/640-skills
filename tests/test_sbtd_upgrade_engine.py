@@ -28,7 +28,7 @@ if str(SCRIPTS) not in sys.path:
 
 import sbtd_upgrade
 from onboard_contracts import ContractError
-from sbtd_migration_files import snapshot
+from sbtd_migration_files import require_private_directory, snapshot
 
 FIXTURE_INVENTORY = '''\
 """Fixture inventory provider driven by upgrade_fixture.json."""
@@ -188,11 +188,15 @@ def build_host_resources(scope, *, package_root=None):
             decision = "blocked"
         desired = rendered if decision in ("install", "replace", "keep") else None
         if entry["kind"] == "shell":
+            bin_dir = next(
+                (profile["bin"] for profile in scope.get("shell_profiles", []) if profile["path"] == str(target)),
+                str(target.parent / "bin"),
+            )
             descriptor = {
                 "profile": {
                     "path": str(target),
                     "shell": entry.get("shell", "bash"),
-                    "bin": entry.get("bin", "/usr/local/bin"),
+                    "bin": bin_dir,
                 }
             }
         else:
@@ -209,7 +213,7 @@ def build_host_resources(scope, *, package_root=None):
                 "id": entry["id"],
                 "kind": entry["kind"],
                 "target": str(target),
-                "source": entry.get("bin", "/usr/local/bin") if entry["kind"] == "shell" else str(root / "scripts"),
+                "source": bin_dir if entry["kind"] == "shell" else str(root / "scripts"),
                 "before": before,
                 "desired": desired,
                 "classification": classification,
@@ -310,9 +314,7 @@ class UpgradeEngineTests(unittest.TestCase):
     # -- fixture helpers ----------------------------------------------------
 
     def _vault(self, name: str = "vault") -> Path:
-        vault = self.base / name
-        vault.mkdir(mode=0o700)
-        return vault
+        return require_private_directory(self.base / name, create=True)
 
     def _package(
         self,
@@ -338,7 +340,7 @@ class UpgradeEngineTests(unittest.TestCase):
         for relative, content in files.items():
             path = package / relative
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            path.write_bytes(content.encode("utf-8"))
         return package
 
     def _register(self, package: Path) -> None:
@@ -469,7 +471,7 @@ class UpgradeEngineTests(unittest.TestCase):
         )
         self._register(package)
         nested_vault = skills / "skill-a"
-        nested_vault.mkdir(mode=0o700)
+        require_private_directory(nested_vault, create=True)
         scope = {"schema_version": 1, "skills_roots": [str(skills)]}
         with self.assertRaises(ContractError) as caught:
             self._plan(scope, nested_vault, package)
@@ -1036,7 +1038,7 @@ class UpgradeEngineTests(unittest.TestCase):
             "schema_version": 1,
             "skills_roots": [str(skills)],
             "shell_profiles": [
-                {"path": str(profile), "shell": "bash", "bin": "/usr/local/bin"}
+                {"path": str(profile), "shell": "bash", "bin": str(self.base / "bin")}
             ],
         }
         plan = self._plan(scope, vault, package)
@@ -1095,7 +1097,7 @@ class UpgradeEngineTests(unittest.TestCase):
         vault = self._vault()
         scope = {
             "schema_version": 1, "skills_roots": [str(skills)],
-            "shell_profiles": [{"path": str(profile), "shell": "bash", "bin": "/usr/local/bin"}],
+            "shell_profiles": [{"path": str(profile), "shell": "bash", "bin": str(self.base / "bin")}],
         }
         plan = self._plan(scope, vault, package)
         receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
