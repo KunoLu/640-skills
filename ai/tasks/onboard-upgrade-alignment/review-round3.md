@@ -51,3 +51,11 @@ Lesson身份经installed helper只读确认local kuno；新增LESSON-20261005-ku
 ## 本地完整验收
 
 `env SBTD_NATIVE_CODEX=1 python -B -m unittest discover -s tests -p 'test_*.py'`：1762 tests，1350.066秒，OK，25 skip。没有重复启动第二套全量；原生Codex隔离在本轮完整运行中实际执行。所有本地red、集成替身缺字段失败、修正与最终报告均保留。旧profile的Windows5.1实测仍待精确head CI；不将编码模型当原生结果。
+
+## 原生Windows反馈与收口
+
+首个修复提交d8c86c695f398c3ecf6bd2ac137862073c6814e0的CI run37256529384：Linux全量1762项（44 skip）、macOS升级317项（16 skip）通过；Windows317项出现唯一T08失败，原因是graft-not-resolved，而不是UTF-8解码失败。同轮Windows PowerShell5.1的新建及既有ANSI profile Unicode加载已实际通过。
+
+隔离PowerShell环境原先没有PATHEXT，原生.exe选择因此无法按Windows规则解析。仅在该Windows shell探针保留扩展名列表，不向PATH加入受管bin，不执行wrapper。回归同时运行真实pwsh与powershell（可用者），Windows CI增加前置两项定位检查，完整套件不减少。独立host reviewer只读复核无新问题；本地相关61项（4 skip）及Ruff／ty通过，新head原生结果待完成。失败原始日志及schema/digest校验的generic v1证据保留在ci-d8c86c6*。
+
+README两入口／REFERENCE／版本化prompt已明确真实命令优先级和输出编码，本次仅恢复Windows环境解析要素，不需重复改写这些说明；CHANGELOG记录验证顺序与PATHEXT边界。此前完整本地结果不冒充该Windows追加分支的实测，最终以新head Windows定点及完整CI为准。

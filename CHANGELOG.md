@@ -135,6 +135,7 @@
 ### 验证
 
 - 原生 Windows 的 session-root MCP 回归使用带超时的后台管道读取，替代仅能处理 Windows socket 的 `select.select`；保留协议响应与项目隔离断言，不因测试辅助错误放宽生产根解析守卫。
+- Windows CI 先执行原生 PowerShell Unicode profile／命令解析定点检查，再运行完整升级／恢复套件；PowerShell 隔离探针保留 Windows 的 PATHEXT 扩展名解析，不预置受管 bin 或绕过真实命令优先级。
 
 - 增加任务 schema 的模式来源、阻塞原因、完成时间、入阻塞、路径形状、版本类型和日期边界回归；区分历史元数据事件与新入阻塞，显式配置日期断言，避免把可选格式检查缺失当成通过。
 - 增加完整sbtd-task安装回归，核对references/schema/许可证及两旧目录在fresh安装中的缺席；保留存续公共文档合同、实际provider与Git marker检查，任务schema测试改读正式源。原生catalog smoke逐字验证已审查载荷到正式源及安装副本，不把安装层通过扩大为完整v2或host通过。

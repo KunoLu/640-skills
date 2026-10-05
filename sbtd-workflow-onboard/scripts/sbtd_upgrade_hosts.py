@@ -2395,6 +2395,9 @@ def _shell_resolution(
             env["SBTD_PROBE_BIN"] = _posix_shell_path(str(bin_dir))
         else:
             env["SBTD_PROBE_BIN"] = str(bin_dir)
+            if os.name == "nt":
+                # Get-Command uses PATHEXT for native applications; this adds no PATH entries.
+                env["PATHEXT"] = os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD")
         marker = "SBTD_RESOLVED_GRAFT="
         if shell == "powershell":
             # The winning command is inspected unfiltered: an alias or

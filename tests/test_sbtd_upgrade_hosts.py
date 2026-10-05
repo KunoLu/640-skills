@@ -1126,8 +1126,15 @@ class ShellResourceTests(unittest.TestCase):
             scope = self._scope(base, profile, "powershell", bin_dir, decision="replace")
             resource = hosts.build_host_resources(scope, package_root=package)[0]
             _write(profile, hosts.render_resource(resource))
-            result = hosts.verify_hosts(scope, package_root=package, probe=True)
-            self.assertEqual(result["shell_profiles"][0]["status"], "pass", result)
+            engines = [shutil.which("pwsh") or shutil.which("powershell")]
+            if os.name == "nt":
+                engines.append(shutil.which("powershell"))
+            for executable in dict.fromkeys(engine for engine in engines if engine):
+                with self.subTest(executable=Path(executable).name), mock.patch.object(
+                    hosts, "_which", return_value=executable,
+                ):
+                    result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                    self.assertEqual(result["shell_profiles"][0]["status"], "pass", result)
 
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell 5.1 required")
     def test_new_unicode_profile_loads_in_windows_powershell(self):
