@@ -934,8 +934,9 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
             <p class="eyebrow">Artifacts</p>
             <h2>工具与测试产物忽略规则</h2>
           </div>
-          <p>项目v2模板保留现有临时文件、构建／依赖、环境秘密、Python缓存、Agent本地状态和测试报告规则，不因缓存规则而自动接入平台。新增四条根锚定、无尾随斜杠规则：<code>/.sbtd</code>、<code>/docs/handoffs</code>、<code>/graft</code>、<code>/.graft</code>，覆盖目录、同名文件和symlink路径，不误伤<code>packages/graft</code>等业务子目录。项目AGENTS／CLAUDE、共享<code>.agents/skills</code>、<code>ai/tasks</code>（含子任务／归档）、<code>docs/spec</code>、<code>docs/lessons</code>、CONTEXT／ADR、features、maestro/flow和三个可入库Web manifest保持可追踪；修复计划与报告保留本地忽略。初始化只追加缺失非空行，重复执行保持字节幂等；原生<code>git check-ignore</code>检查新本地根和共享路径，宽泛排除或重新包含给出具体来源，缺保护明确报告，Git不可用标未验证。规则检查不会自动取消tracked状态，也不证明数据所有权或迁移完成。</p>
+          <p>项目v2模板保留现有临时文件、构建／依赖、环境秘密、Python缓存、Agent本地状态和测试报告规则，不因缓存规则而自动接入平台。本地状态保护采用四条根锚定、无尾随斜杠规则：<code>/.sbtd</code>、<code>/docs/handoffs</code>、<code>/graft</code>、<code>/.graft</code>，覆盖目录、同名文件和symlink路径，不误伤<code>packages/graft</code>等业务子目录。任务报告另由<code>/ai/tasks/**/reports</code>保护。项目AGENTS／CLAUDE、共享<code>.agents/skills</code>、<code>ai/tasks</code>中的任务正文（含子任务／归档，排除reports本地产物）、<code>docs/spec</code>、<code>docs/lessons</code>、CONTEXT／ADR、features、maestro/flow和三个可入库Web manifest保持可追踪；修复计划与报告保留本地忽略。初始化只追加缺失非空行，重复执行保持字节幂等；原生<code>git check-ignore</code>检查本地保护和共享路径，宽泛排除或重新包含给出具体来源，缺保护明确报告，Git不可用标未验证。规则检查不会自动取消tracked状态，也不证明数据所有权或迁移完成。</p>
           <p>共享探针覆盖固定分支：既有<code>docs/lessons.md</code>短入口、context ADR、undated任务归档、任务附属产物／bootstrap、UI上下文、测试源码、iOS／Android flow、受管React Bits Skill及根Git控制文件。代表性文件检查不等于穷举自定义文件名，也不替代实际迁移清单。</p>
+          <p>任务附属原始报告和同stem汇总默认本地留存；需要公开的证据先脱敏并独立确认发布位置，不强制添加整个reports目录。既有API／unit／Web／Maestro报告目录不迁移。验收场景：Given普通、嵌套或归档任务存在报告，When初始化并重复执行，Then报告被忽略、正文可追踪且原件字节不变；Given已有否定规则重新暴露报告，When安装器验证，Then返回非零并指出冲突来源，报告原件保留。</p>
           <p><strong>既有项目迁移：</strong>如果旧模板已经写入 <code>.claude/</code>、<code>CLAUDE.md</code>、<code>.agents/</code> 或 <code>/AGENTS.md</code>，<code>init</code> / <code>reset</code> 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 <code>git check-ignore</code> 复核目标路径。</p>
           <p>上述旧规则建议以项目确实需要追踪相应资产为前提；v2不会因此重新接入旧Claude生成集成，也不把其agents／commands／hooks设为所有项目必需的共享探针。旧集成保留／迁移仍按实际项目及授权确认。</p>
           <p>v2新模板删除旧Trellis／GitNexus段，但已有项目必须在显式迁移中先加新保护、保留旧规则；数据搬迁／验证及旧目录处置完成后，再单独确认清理已证明受管的旧段，未知自定义内容保留。<code>init</code>／<code>reset</code>不会自动完成清理；业务保留路径和已tracked本地数据须另取授权。P0模板／探针交付不是P1所有权／迁移门禁完成，不应将过渡生命周期用于真实项目。</p>
@@ -958,6 +959,7 @@ check_coverage.py --root . --manifest tests/e2e/manifest/ui-test-manifest.json -
 # ---------- SBTD ----------
 /.sbtd
 /docs/handoffs
+/ai/tasks/**/reports
 
 # ---------- Graft ----------
 /graft
@@ -1002,10 +1004,11 @@ tests/e2e/**/*.trace.zip
           <p>本仓库是配置摘录和模板源，不是真实业务项目。编排按产物类型分层，并保持 Onboard Skill 自包含：automation prompt 位于 <code>prompts/</code>，运行实现位于 <code>scripts/</code>，安装载荷位于 <code>templates/</code>，第三方 fallback 位于 <code>assets/</code>。普通修改只更新仓库源文件；只有用户输入 <code>sync</code> 或 <code>同步</code> 时，才同步允许列表中的全局规则和 Skill 到本地生效路径。sync 允许列表明确包含 bundled <code>web-ui-autotest-generator</code> 完整目录到 <code>/Users/lusonglin/.agent/skills/web-ui-autotest-generator/</code> 的映射。required external Skills <code>ponytail</code>、<code>ponytail-review</code>、<code>ponytail-audit</code>、<code>ponytail-debt</code> 与 <code>i-have-adhd</code> 不得作为同步表 <code>cp</code> / <code>rsync</code> 行；sync 在复制 Onboard 后必须用已同步的 <code>scripts/onboard.py install-external-skills --skills ponytail,ponytail-review,ponytail-audit,ponytail-debt,i-have-adhd --scope global --source auto --global-skills-dir /Users/lusonglin/.agent/skills --yes</code> 从 stable mirror 安装，并确认 5 个 <code>SKILL.md</code> 存在。sync 在 canonical Onboard 校验成功后删除 <code>~/.agent/skills/kuno-workflow-onboard-skills/</code>，并在本机实际使用路径 <code>~/.agent/skills/</code> 上以 <code>--source auto</code> 执行 mattpocock legacy migration，删除 legacy <code>to-prd</code> / <code>to-issues</code> 并安装 canonical <code>to-spec</code> / <code>to-tickets</code>；不保留旧 Onboard alias，普通 sync 不落地 <code>AGENTS.project.md</code>。</p>
         </div>
         <p><code>ENTRYPOINT.md</code> 必须由 Git 追踪，保存版本检查和 <code>update</code> / <code>更新</code> 使用的 authoritative baseline；新 clone 必须直接取得它。根 <code>AGENTS.md</code> 是本机可选补充规则，已加入根 <code>.gitignore</code> 并从 Git 索引移除，不进入远程 <code>main</code>；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。每次仓库代码或工作流规则改动后，都评估 CHANGELOG、README 两份文件和版本化 automation prompt 是否需要同步调整；只有执行 <code>sync</code> / <code>同步</code> 时才比较版本化 prompt 与 Orca <code>SBTD Workflow Tools Version Check</code>，并仅在存在差异时同步到 live automation。<code>update</code> / <code>更新</code> 与 prompt 和 live automation 无关。</p>
-        <p>本配置源仓根<code>.gitignore</code>独立采用九行，不复制业务项目模板；保护新本地状态、handoff和Graft产物，共享任务、规范、lessons及<code>ENTRYPOINT.md</code>仍可追踪：</p>
+        <p>本配置源仓根<code>.gitignore</code>独立采用十行，不复制业务项目模板；保护本地状态、handoff、Graft产物和任务报告，共享任务正文、规范、lessons及<code>ENTRYPOINT.md</code>仍可追踪：</p>
         <pre><code>.DS_Store
 /.sbtd
 /docs/handoffs
+/ai/tasks/**/reports
 /graft
 /.graft
 __pycache__/
@@ -1014,8 +1017,9 @@ AGENTS.md
 .playwright-mcp/</code></pre>
         <p>四条新规则锚定仓库根，覆盖同名目录、文件和symlink，不影响<code>packages/graft</code>等业务子目录。旧<code>.trellis/</code>、<code>.gitnexus/</code>不再由根文件保护；切换已有checkout前先核对磁盘和Git索引残留，未知或敏感内容须保全并确认处置，不盲删或直接提交。ignore不会取消已tracked状态；这不是业务项目迁移或全局配置同步。</p>
         <p>新增的两条 MCP 目录规则未加根锚定，在本仓工作树中也会忽略同名嵌套目录；已追踪文件不因新增 ignore 而取消追踪。</p>
+        <p>任务报告使用<code>/ai/tasks/**/reports</code>，覆盖普通任务、嵌套子任务和季度／undated归档中的报告及全部后代；无尾随斜杠也保护同名文件或symlink。<code>task.md</code>、<code>prd.md</code>、<code>design.md</code>、<code>implement.md</code>、<code>reports.md</code>和任务索引仍可追踪，业务<code>src/reports/</code>及根<code>reports/</code>不受此规则影响。已有报告保留原位，不自动untrack；ignore不是脱敏或防止强制添加的安全机制。</p>
         <p>回滚规则前同样先核对四个新本地根和Git索引；已有本地数据须先在仓库外私有保全并确认处置，安全迁出或授权方案落实前保持保护，不能只恢复旧文件而暴露可提交内容。</p>
-        <p><a href="docs/lessons.md">Lessons 短入口</a>只链接当前规则，不再维护根 <code>.gitignore</code> 的历史五行摘要；topics 中的三／四／五行记录保留原文，按当时状态理解，不覆盖现行九行契约。入口和索引用于导航，完整历史记录只存一份，不为更新验收规则改写历史 lesson。</p>
+        <p><a href="docs/lessons.md">Lessons 短入口</a>只链接当前规则，不再维护根 <code>.gitignore</code> 的历史五行摘要；topics 中的三／四／五行记录保留原文，按当时状态理解，不覆盖现行十行契约。入口和索引用于导航，完整历史记录只存一份，不为更新验收规则改写历史 lesson。</p>
         <p><code>ENTRYPOINT.md</code> 的版本监控表启用 OMP：监控对象是 npm <code>@oh-my-pi/pi-coding-agent</code>（CLI <code>omp</code>），GitHub 源为 <code>can1357/oh-my-pi</code> 的对应 <code>v&lt;package-version&gt;</code> tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 <code>UPDATE.md</code> 区间，无新版本不写 <code>当前版本 -&gt; 当前版本</code>；只有手动 <code>update</code> / <code>更新</code> 才写回基线。本机 <code>omp --version</code> 只作交叉校验，不得覆盖表格版本。</p>
         <table>
           <thead>

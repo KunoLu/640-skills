@@ -303,12 +303,13 @@ pwsh -File .\install.ps1
 
 `ENTRYPOINT.md` 必须由 Git 追踪，保存版本检查和 `update` / `更新` 使用的 authoritative baseline；新 clone 必须直接取得它。根 `AGENTS.md` 是本机可选补充规则，已加入根 `.gitignore` 并从 Git 索引移除，不进入远程 `main`；新 clone 不包含该文件，工作树缺失时继续使用已追踪规则，不得把它的存在当作 Gate。
 
-本配置源仓根 `.gitignore` 独立采用以下九行，不复制业务项目模板；新本地状态／handoff／Graft产物被保护，共享任务、规范、lessons和`ENTRYPOINT.md`仍可追踪：
+本配置源仓根 `.gitignore` 独立采用以下十行，不复制业务项目模板；本地状态／handoff／Graft产物和任务报告被保护，共享任务正文、规范、lessons和`ENTRYPOINT.md`仍可追踪：
 
 ```gitignore
 .DS_Store
 /.sbtd
 /docs/handoffs
+/ai/tasks/**/reports
 /graft
 /.graft
 __pycache__/
@@ -319,10 +320,11 @@ AGENTS.md
 
 四条新规则仅锚定仓库根，覆盖同名目录、文件和symlink，不影响`packages/graft`等业务子目录。旧`.trellis/`、`.gitnexus/`不再由根文件保护；切换已有checkout前先核对磁盘与Git索引残留，存在未知或敏感内容时先保全并确认处置，不盲删或直接提交。ignore不会取消已tracked状态；这不是业务项目迁移或全局配置同步。
 新增的两条 MCP 目录规则未加根锚定，在本仓工作树中也会忽略同名嵌套目录；已追踪文件不因新增 ignore 而取消追踪。
+任务报告使用 `/ai/tasks/**/reports`，覆盖普通任务、嵌套子任务和季度／undated归档中的报告及全部后代；无尾随斜杠也保护同名文件或symlink。`task.md`、`prd.md`、`design.md`、`implement.md`、`reports.md`和任务索引仍可追踪，业务`src/reports/`及根`reports/`不受此规则影响。已有报告保留原位，不自动untrack；ignore不是脱敏或防止强制添加的安全机制。
 
 回滚这项规则也要先核对四个新本地根与Git索引；若已产生本地数据，先在仓库外私有保全并确认处置，在安全迁出或授权方案落实前保持保护，不能仅恢复旧文件就让这些内容暴露为可提交文件。
 
-[Lessons 短入口](docs/lessons.md)只链接当前规则，不再维护根 `.gitignore` 的历史五行摘要；topics 中的三／四／五行记录保留原文，按当时状态理解，不覆盖此处现行九行契约。入口和索引用于导航，完整历史记录只存一份，不为更新验收规则改写历史 lesson。
+[Lessons 短入口](docs/lessons.md)只链接当前规则，不再维护根 `.gitignore` 的历史五行摘要；topics 中的三／四／五行记录保留原文，按当时状态理解，不覆盖此处现行十行契约。入口和索引用于导航，完整历史记录只存一份，不为更新验收规则改写历史 lesson。
 
 `ENTRYPOINT.md` 的版本监控表启用 OMP：监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`），GitHub 源为 `can1357/oh-my-pi` 的对应 `v<package-version>` tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 `UPDATE.md` 区间，无新版本不写 `当前版本 -> 当前版本`；只有手动 `update` / `更新` 才写回基线。本机 `omp --version` 只作交叉校验，不得覆盖表格版本。
 
@@ -739,9 +741,11 @@ API、Web E2E、Mobile E2E、Hybrid E2E 或发布前 smoke 进入正式验证时
 
 ## 模板 `.gitignore` 工具与测试产物策略
 
-项目v2模板保留现有临时文件、构建／依赖、环境秘密、Python缓存、各Agent本地状态和测试报告规则；不因保留某个平台缓存规则而自动接入该平台。新本地保护只有四条根锚定、无尾随斜杠的规则：`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`，覆盖目录、同名文件和symlink路径，但不会忽略`packages/graft`等同名业务子目录。共享的项目`AGENTS.md`、`CLAUDE.md`、`.agents/skills/**`、`ai/tasks/**`（含子任务／归档）、`docs/spec`、`docs/lessons`、CONTEXT／ADR、features、maestro/flow及三个可入库Web manifest保持可追踪；`ui-test-repair-plan.json`和报告仍属本地产物。初始化仍只追加缺失非空行，既有行不重排，重复执行保持字节幂等。写入Git worktree后，Onboard用原生`git check-ignore`验证新本地保护和共享路径规则；`ai/`、`docs/`、`tests/`等宽泛排除或重新包含本地路径时报告具体来源，缺保护时明确指出无匹配规则，Git不可用则标未验证。该检查是规则语义检查，不自动取消tracked状态，也不证明保留路径的数据所有权或迁移已完成。相关片段如下：
+项目v2模板保留现有临时文件、构建／依赖、环境秘密、Python缓存、各Agent本地状态和测试报告规则；不因保留某个平台缓存规则而自动接入该平台。本地状态保护采用四条根锚定、无尾随斜杠的规则：`/.sbtd`、`/docs/handoffs`、`/graft`、`/.graft`，覆盖目录、同名文件和symlink路径，但不会忽略`packages/graft`等同名业务子目录。任务报告另由`/ai/tasks/**/reports`保护。共享的项目`AGENTS.md`、`CLAUDE.md`、`.agents/skills/**`、`ai/tasks/**`中的任务正文（含子任务／归档，排除reports本地产物）、`docs/spec`、`docs/lessons`、CONTEXT／ADR、features、maestro/flow及三个可入库Web manifest保持可追踪；`ui-test-repair-plan.json`和报告仍属本地产物。初始化仍只追加缺失非空行，既有行不重排，重复执行保持字节幂等。写入Git worktree后，Onboard用原生`git check-ignore`验证本地保护和共享路径规则；`ai/`、`docs/`、`tests/`等宽泛排除或重新包含本地路径时报告具体来源，缺保护时明确指出无匹配规则，Git不可用则标未验证。该检查是规则语义检查，不自动取消tracked状态，也不证明保留路径的数据所有权或迁移已完成。相关片段如下：
 
 共享探针覆盖公开目录的固定分支：既有`docs/lessons.md`短入口、按context分组的ADR、undated任务归档、任务附属产物／bootstrap、UI上下文、测试源码、iOS／Android flow、受管React Bits Skill及根Git控制文件。使用代表性文件验证规则，不声称穷举每个自定义文件名，也不代替实际迁移清单核验。
+
+任务附属原始报告和同stem汇总默认本地留存；需要公开的证据先脱敏并独立确认发布位置，不强制添加整个reports目录。既有API／unit／Web／Maestro报告目录不迁移。验收场景：Given普通、嵌套或归档任务存在报告，When初始化并重复执行，Then报告被忽略、正文可追踪且原件字节不变；Given已有否定规则重新暴露报告，When安装器验证，Then返回非零并指出冲突来源，报告原件保留。
 
 既有项目迁移：如果旧模板已经写入 `.claude/`、`CLAUDE.md`、`.agents/` 或 `/AGENTS.md`，`init` / `reset` 的“只追加缺失行”契约不会自动删除这些既有行；确认项目需要追踪对应控制文件与生成集成后，手工删除这些旧行，并用 `git check-ignore` 复核目标路径。
 
@@ -769,6 +773,7 @@ v2新模板不再含Trellis／GitNexus段。已有项目的旧保护不是按字
 # ---------- SBTD ----------
 /.sbtd
 /docs/handoffs
+/ai/tasks/**/reports
 
 # ---------- Graft ----------
 /graft

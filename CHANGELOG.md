@@ -43,6 +43,8 @@
 
 ### 修复
 
+- 本仓及项目模板加入 `/ai/tasks/**/reports`，保护普通任务、嵌套子任务和季度／undated归档任务的原始报告与汇总，并覆盖同名文件／symlink；共享任务正文与业务报告源码保持可追踪。安装器补充真实 Git 保护检查，重新包含任务报告时返回冲突；保留原件，不自动取消追踪、搬迁其他测试报告或同步本机配置。
+
 - 缺失 Skills 根的大小写／规范化别名重叠在封存前拒绝，避免创建目录后计划范围失效；升级／恢复的计划与执行均先校验当前 Python 的隔离依赖，仅 user-site 可见时受控拒绝，不取消 `-I` 或自动安装。
 - Bash／zsh 新 PATH 块使用 LF，保留原 CRLF 和 PATH 末项；Windows POSIX 别名按完整所选目录检测旧 PATH，不误报同前缀或子目录。PowerShell 非 ASCII npm shim 按实际引擎编码限制证明，避免旧 ANSI 解码下误报 CLI matched。
 - RPC ID 按 JSON 类型匹配，Boolean 不冒充 Number；直接 MCP 验证 JSON-RPC 2.0 envelope，保留 Codex 无版本回显兼容。OMP 来源未完成发现／分析且无旧入口证据时报告 unknown，不误报不存在。
