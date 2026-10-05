@@ -261,6 +261,62 @@ class PhysicalTargetPlanTests(InventoryTests):
             self.assertEqual(enabled.returncode, 0, enabled.stdout + enabled.stderr)
         return parent
 
+    def test_host_config_home_alias_binds_before_host_planning(self):
+        """U21: inventory and the real host producer share one selected home spelling."""
+        import sbtd_upgrade
+        from sbtd_migration_files import require_private_directory
+
+        from tests.test_sbtd_upgrade_hosts import _runtime
+
+        home = self.base / ".CODEX"
+        home.mkdir()
+        alias = case_variant(home)
+        if alias is None:
+            self.skipTest("requires a case-insensitive directory")
+        (self.pkg / "scripts/sbtd_graft_entry.py").write_bytes(b"# launcher fixture\n")
+        host = {
+            "id": "codex", "platform": "codex", "config_home": str(home),
+            "config": str(alias / "config.toml"), "skills_roots": [], "project_roots": [],
+            "onboard_root": str(self.pkg), "runtime": _runtime(self.base),
+        }
+        vault = self.base / "vault"
+        require_private_directory(vault, create=True)
+        plan = sbtd_upgrade.plan_upgrade(self.scope(hosts=[host]), vault, package_root=self.pkg)
+        resource = plan["payload"]["resources"][0]
+        self.assertEqual(resource["target"], str(home / "config.toml"))
+        self.assertEqual(resource["decision"], "install")
+        agents = alias / "AGENTS.md"
+        mixed = sbtd_upgrade.plan_upgrade(self.scope(
+            hosts=[host], agents_targets=[str(agents)],
+            decisions={str(agents): "preserve"},
+        ), vault, package_root=self.pkg)
+        preserved = next(row for row in mixed["payload"]["resources"] if row["kind"] == "agents")
+        self.assertEqual(preserved["target"], str(agents))
+        self.assertEqual(preserved["decision"], "preserve")
+        self.assertFalse(agents.exists())
+
+    def test_absent_normalization_alias_preserve_is_never_installed(self):
+        """U27: NFC/NFD equivalents cannot become two independently writable files."""
+        import sbtd_upgrade
+        from sbtd_migration_files import require_private_directory
+
+        probe = self.base / "Caf\u00e9-probe"
+        probe.write_bytes(b"probe")
+        equivalent = self.base / "Cafe\u0301-probe"
+        if not equivalent.exists() or not equivalent.samefile(probe):
+            self.skipTest("requires normalization-insensitive filesystem")
+        probe.unlink()
+        target, alias = self.base / "Caf\u00e9.md", self.base / "Cafe\u0301.md"
+        vault = self.base / "vault"
+        require_private_directory(vault, create=True)
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.plan_upgrade(self.scope(
+                agents_targets=[str(target), str(alias)], decisions={str(alias): "preserve"},
+            ), vault, package_root=self.pkg)
+        self.assertEqual(caught.exception.code, "resource-overlap")
+        self.assertFalse(target.exists())
+        self.assertEqual(list(vault.iterdir()), [])
+
     def test_absent_agents_alias_cannot_install_through_preserve(self):
         """U20: missing targets need alias protection before they have inodes."""
         import sbtd_upgrade

@@ -901,6 +901,10 @@ def _validate_hosts(
         )
         if _norm(config) == _norm(config_home) or not _inside(config, config_home):
             _fail("unsafe-path", f"host {host_id} config must stay inside its config_home")
+        if home_info is not None and home_info.st_ino:
+            config = _canonical_target(
+                config, {(home_info.st_dev, home_info.st_ino): config_home},
+            )
         runtime = item["runtime"]
         if not isinstance(runtime, dict) or set(runtime) != _RUNTIME_KEYS:
             _fail("invalid-config", f"host {host_id} runtime must declare python, node and cli")
@@ -1065,6 +1069,10 @@ def _validate_scope(scope: object) -> dict[str, Any]:
     non_skill_targets.update(str(host["config"]) for host in hosts)
     non_skill_targets.update(str(profile["path"]) for profile in shell_profiles)
     decision_identities = dict(root_identities)
+    for host in hosts:
+        home_key = _physical_key(host["config_home"])
+        if home_key is not None:
+            decision_identities.setdefault(home_key, host["config_home"])
     for selected in sorted(non_skill_targets):
         key = _physical_key(Path(selected))
         if key is not None:
@@ -1075,9 +1083,9 @@ def _validate_scope(scope: object) -> dict[str, Any]:
     if not isinstance(raw_decisions, Mapping):
         _fail("invalid-config", "decisions must be an object keyed by absolute targets")
     for raw_target, raw_value in raw_decisions.items():
-        target = _canonical_target(
-            _resolved(raw_target, "a decision target"), decision_identities
-        )
+        target = _resolved(raw_target, "a decision target")
+        if str(target) not in non_skill_targets:
+            target = _canonical_target(target, decision_identities)
         if str(target) not in non_skill_targets:
             target = _canonical_skill_child(target, root_norms)
         if not isinstance(raw_value, str) or raw_value not in _DECISION_VALUES:

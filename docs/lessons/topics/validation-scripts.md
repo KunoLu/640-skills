@@ -679,5 +679,17 @@
 - 修复：缓存与已绑定选择采用精确拼写，别名归并／祖先包含使用实际非零 device/inode 证据；完整写集与继承输入在目标写入前复核。继续逐组件拒绝链接，不用 resolve 放宽用户路径。
 - 预防：同时运行“不同拼写同一对象”和“仅大小写不同的两个对象”正反例；测试应走真实库存与公开消费者，验证原件和写集不变。平台字符串折叠模拟只证明算法边界，必须与原生平台证据分开报告。
 
+## LESSON-20261005-kuno-no-write-evidence-precedence: No-Write Evidence Outranks Matching Bytes
+
+- 日期：2026-10-05
+- 标签：recovery, ownership, intent, receipts, concurrency, validation
+- 适用场景：由 intent、现场内容和历史回执共同判断中断写入／重试／恢复归属。
+- 严重级别：high
+- 来源：PR #110 第三轮真实库存、文件写入检查和恢复消费链 red／green。
+- 问题：用户在 intent 后创建与 desired 相同的内容，写入检查已记录未写入；重试或旧 pending checkpoint 却仅凭相同字节重新认领，进而生成删除用户文件的恢复步骤。未知 pending 现场也可能被直接跳过后冒报恢复完成。
+- 根因：把内容相等当作操作归属，未给明确的未写入证据优先级，也未保留不能归属的现场。
+- 修复：最新可信未写入结果不能被旧 checkpoint 或匹配内容覆盖；无明确归属但现场不同于 before 时保持 blocked，保留用户内容与原件。
+- 预防：用真实消费者分别覆盖 intent 前后竞态、明确未写入后相同内容、旧 checkpoint、成功写后回执中断与新增缓存；不能只测理想 desired 状态或把 partial／unknown 当作零写入。
+
 <!-- lessons:kuno:end -->
 

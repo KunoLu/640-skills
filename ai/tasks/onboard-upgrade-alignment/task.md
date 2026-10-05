@@ -4,11 +4,11 @@ id: onboard-upgrade-alignment
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确要求在新开发分支以 strict 完成已确认四阶段方案；本机应用、同步、旧资产清理、新分支合并及发布未授权。
-status: "done"
+status: "checking"
 branch: feat/onboard-upgrade-alignment
 created_at: '2026-10-03T22:31:25.791160+08:00'
-updated_at: "2026-10-05T01:06:13.545781+08:00"
-completed_at: "2026-10-05T01:06:13.545781+08:00"
+updated_at: "2026-10-05T10:25:09.830888+08:00"
+completed_at: null
 ---
 # Onboard 通用升级对齐、恢复与分层验收
 
@@ -26,6 +26,8 @@ completed_at: "2026-10-05T01:06:13.545781+08:00"
 
 第二轮审查（head 40b0dbf）保留14项，用户要求先修P1、再依优先级修复其余13项，已按顺序完成并修正独立复核两处路径遗漏。沿用strict，独立编号N01–N14及本轮证据见[review-round2.md](review-round2.md)，不覆盖上一轮历史。本地完整验证、两切面独立复核、真实隔离宿主／重试／恢复及36ee62e精确三平台CI全部通过；本机部署、同步、清理、合并和发布均未执行。
 
+第三轮审查（head 1ae9c321）13项按用户要求先修三个P1，再依风险顺序修复其余项；独立编号T01—T13与本轮门禁／证据见[review-round3.md](review-round3.md)。不覆盖两轮历史。代码局部回归、独立复核和真实隔离生命周期已通过，完整项目／精确head CI尚待闭合。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -41,3 +43,6 @@ completed_at: "2026-10-05T01:06:13.545781+08:00"
 | 2026-10-04T22:27:37.106458+08:00 | planned | in-progress | 沿用strict，按P1、路径事务、验证协议、Shell、CLI顺序修复 | 本轮修复范围明确；旧四项契约保留 |
 | 2026-10-04T23:26:17.258511+08:00 | in-progress | checking | 14项顺序修复完成，局部回归和真实隔离宿主及恢复已通过，冻结实现进入完整验收 | review-round2.md；302tests；native-round2-*；原生Windows仍待CI |
 | 2026-10-05T01:06:13.545781+08:00 | checking | done | 第二轮14项及独立复核遗漏全部修复；本地完整验证、真实隔离闭环和精确三平台CI通过 | 36ee62eb362ec671552eaf971815e1bb43b12441；GitHub run37216126160；review-round2.md；1750tests；305升级回归 |
+| 2026-10-05T09:04:33.152975+08:00 | done | planned | 用户要求先修复第三轮三个P1再依风险顺序修复其余10项 | PR110 head1ae9c321；第三轮13项审查；用户明确修复授权 |
+| 2026-10-05T09:04:35.203059+08:00 | planned | in-progress | 沿用strict，真实复现后依优先级修复 | 第三轮13项清单；原四项契约保留 |
+| 2026-10-05T10:25:09.830888+08:00 | in-progress | checking | 第三轮13项及独立复核修正完成，真实隔离生命周期已通过，进入完整项目与精确head CI | review-round3.md；317tests；native-*；原生Windows待CI |

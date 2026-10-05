@@ -104,6 +104,10 @@ Python、Bash `install.sh upgrade ...` 和 PowerShell `-WorkflowMode upgrade` �
 
 Shell 保留既有 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼容 Windows PowerShell 5.1 的 Unicode 路径；登录 profile 与 rc 文件分别按登录／非登录条件隔离探测。协议验收要求有效 method 回复、受支持的 MCP 协商版本和正常收尾；缺少宿主方法报告脱敏 unsupported。输入路径无法展开、probe 未确认等拒绝统一返回完整 JSON 引导。
 
+恢复认领以可信写入证据为准：明确未写入的回执不能被“现场字节恰好相同”或更旧 checkpoint 覆盖；有 intent 但归属不明的现场保持 blocked。Darwin 缺失目标的 Unicode 规范化等价拼写保守拒绝；Shell 所选命令与同批写目标冲突先拒绝，合法 host-home 别名与精确已选目标决定保持一致。
+
+Codex 隔离 probe 不信任真实项目的配置层，避免启动项目内未选 MCP；受管连接仍使用已验证项目 cwd。既有 PowerShell profile 的 Unicode PATH 使用 ASCII-only 解码表达式保留原字节，探针固定 UTF-8 输出并保留路径内 Unicode 分隔符；npm shim 支持真实字面标点但仍拒绝动态展开。OMP legacy 包含有效启用继承来源，非文件配置为 unknown，unsupported 保留到宿主／域汇总。
+
 已选但缺失的 host 资源仍进入安装，`preserve` 不取消该安装；不需要时应从 scope 移除。受支持的嵌套安装可从同基线已安装副本续作，restore intent 后的 absent 窗口保持原契约；这些边界不授权未知内容覆盖、项目级宿主图构建或真实 HOME 变更。
 
 跨平台基线按原始载荷字节及相对 POSIX 路径排序计算。根 `.gitattributes` 对 `sbtd-workflow-onboard/**` 及其 canonical `/LICENSE` 源禁用文本换行转换，保护固定 stable pin 和模板／脚本／许可证基线；不能通过运行时换行归一化来掩盖实际内容漂移。

@@ -241,6 +241,14 @@ def build_host_resources(scope, *, package_root=None):
                 "details": {
                     "package_root": str(root),
                     "managed_digest": rendered["checksum"],
+                    **({
+                        "command_identity": {
+                            "path": str(Path(bin_dir) / "graft"),
+                            "resolved": None,
+                            "link": None,
+                            "state": snapshot(Path(bin_dir) / "graft"),
+                        },
+                    } if entry["kind"] == "shell" else {}),
                 },
                 **descriptor,
             }

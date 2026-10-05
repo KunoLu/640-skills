@@ -493,6 +493,56 @@ class _ProbeRig:
 # ---------------------------------------------------------------------------
 
 
+class NativeCodexIsolationTests(unittest.TestCase):
+    @unittest.skipUnless(
+        os.environ.get("SBTD_NATIVE_CODEX") == "1" and shutil.which("codex"),
+        "opt-in native Codex required",
+    )
+    def test_probe_does_not_start_project_local_mcp(self):
+        """U26: native Codex loads the selected server, not project-local peers."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package = _package(base)
+            project = base / "project"
+            project.mkdir()
+            environment = hosts._probe_env(base, {})
+            (base / "home").mkdir()
+            subprocess.run(
+                ["git", "init", "-q", str(project)], env=environment,
+                capture_output=True, check=True,
+            )
+            marker = base / "unselected-started"
+            peer = (
+                "import json,sys\nfrom pathlib import Path\n"
+                "if sys.argv[-1] == 'unselected': Path(sys.argv[-2]).write_text('started')\n"
+                "for line in sys.stdin:\n"
+                " r=json.loads(line)\n"
+                " if 'id' not in r: continue\n"
+                " result=({'protocolVersion':'2024-11-05','capabilities':{'tools':{}},"
+                "'serverInfo':{'name':'fixture','version':'0.21.1'}}"
+                " if r['method']=='initialize' else {'tools':[]})\n"
+                " print(json.dumps({'jsonrpc':'2.0','id':r['id'],'result':result}),flush=True)\n"
+            )
+            launcher = package / "scripts/sbtd_graft_entry.py"
+            launcher.write_text(peer, encoding="utf-8")
+            local = project / ".codex/config.toml"
+            _write(local, (
+                "[mcp_servers.unselected]\n"
+                f"command = {json.dumps(sys.executable)}\n"
+                f"args = {json.dumps(['-I', str(launcher), str(marker), 'unselected'])}\n"
+            ).encode())
+            original = local.read_bytes()
+            runtime = _runtime(base)
+            runtime["python"] = sys.executable
+            bindings = hosts.launch_bindings([], runtime, package_root=package)
+            evidence = hosts._probe_codex(
+                shutil.which("codex"), {"skills_roots": []}, bindings, project,
+            )
+            self.assertFalse(marker.exists(), "unselected project MCP was started")
+            self.assertEqual(evidence["server"]["status"], "connected")
+            self.assertEqual(local.read_bytes(), original)
+
+
 class ScopeValidationTests(unittest.TestCase):
     def test_scope_must_be_a_mapping(self) -> None:
         with tempfile.TemporaryDirectory() as directory, self.assertRaises(ContractError) as caught:
@@ -1047,26 +1097,63 @@ class ShellResourceTests(unittest.TestCase):
             scope["decisions"] = {str(path): decision}
         return scope
 
-    @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell 5.1 required")
-    def test_new_unicode_profile_loads_in_windows_powershell(self):
-        """U23: the legacy host must load non-ASCII paths without mojibake."""
+    @unittest.skipUnless(shutil.which("bash"), "bash required")
+    def test_unicode_line_separators_remain_inside_resolved_path(self):
+        """U29: shell protocol emits LF, not Unicode line separators."""
+        for separator in ("\u2028", "\u0085"):
+            with self.subTest(separator=ascii(separator)), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                package = _package(base)
+                profile, bin_dir = base / ".bashrc", base / ("bin" + separator + "name")
+                bin_dir.mkdir()
+                _write_graft(bin_dir)
+                scope = self._scope(base, profile, "bash", bin_dir)
+                resource = hosts.build_host_resources(scope, package_root=package)[0]
+                _write(profile, hosts.render_resource(resource))
+                result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                self.assertEqual(result["shell_profiles"][0]["status"], "pass", result)
+
+    @unittest.skipUnless(shutil.which("pwsh") or shutil.which("powershell"), "PowerShell required")
+    def test_unicode_resolution_uses_utf8_even_with_legacy_console_encoding(self):
+        """U29: profile console settings cannot corrupt the probe's wire encoding."""
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             package = _package(base)
-            profile, bin_dir = base / "profile.ps1", base / "bin-é-中文"
-            scope = self._scope(base, profile, "powershell", bin_dir)
+            profile, bin_dir = base / "profile.ps1", base / "bin-é"
+            bin_dir.mkdir()
+            _write_graft(bin_dir)
+            _write(profile, b"[Console]::OutputEncoding=[Text.Encoding]::GetEncoding(1252)\n")
+            scope = self._scope(base, profile, "powershell", bin_dir, decision="replace")
             resource = hosts.build_host_resources(scope, package_root=package)[0]
             _write(profile, hosts.render_resource(resource))
-            result = subprocess.run(
-                [shutil.which("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
-                 ("[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); "
-                  ". $env:SBTD_TEST_PROFILE; "
-                  "[Console]::WriteLine($env:PATH.Split([IO.Path]::PathSeparator)[0])")],
-                env={**os.environ, "SBTD_TEST_PROFILE": str(profile)},
-                capture_output=True, timeout=30, check=False,
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.decode("utf-8").strip(), str(bin_dir))
+            result = hosts.verify_hosts(scope, package_root=package, probe=True)
+            self.assertEqual(result["shell_profiles"][0]["status"], "pass", result)
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell 5.1 required")
+    def test_new_unicode_profile_loads_in_windows_powershell(self):
+        """U23/U29: new and existing legacy profiles preserve Unicode PATH."""
+        for before in (b"", b"# existing ANSI comment: \xe9\r\n"):
+            with self.subTest(existing=bool(before)), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                package = _package(base)
+                profile, bin_dir = base / "profile.ps1", base / "bin-é-中文"
+                if before:
+                    _write(profile, before)
+                scope = self._scope(base, profile, "powershell", bin_dir, decision="replace")
+                resource = hosts.build_host_resources(scope, package_root=package)[0]
+                rendered = hosts.render_resource(resource)
+                self.assertTrue(rendered.startswith(before))
+                _write(profile, rendered)
+                result = subprocess.run(
+                    [shutil.which("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+                     ("[Console]::OutputEncoding=[Text.UTF8Encoding]::new(); "
+                      ". $env:SBTD_TEST_PROFILE; "
+                      "[Console]::WriteLine($env:PATH.Split([IO.Path]::PathSeparator)[0])")],
+                    env={**os.environ, "SBTD_TEST_PROFILE": str(profile)},
+                    capture_output=True, timeout=30, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.decode("utf-8").strip(), str(bin_dir))
 
     def test_utf8_bom_first_marker_is_replaced_without_losing_bom(self):
         """U23: replacing a first-line owned block retains encoding and foreign bytes."""
@@ -1486,6 +1573,8 @@ class VerifyProbeTests(unittest.TestCase):
                 rig._codex_handler = refused
                 result = hosts.verify_hosts(scope, package_root=package, probe=True)
                 self.assertEqual(result["hosts"][0]["host"]["checks"]["host_load"]["status"], expected)
+                self.assertEqual(result["hosts"][0]["host"]["status"], expected)
+                self.assertEqual(result["hosts"][0]["status"], "unsupported" if code == -32601 else "fail")
                 self.assertNotIn(SECRET, json.dumps(result))
 
     def test_mcp_failed_or_forced_shutdown_is_not_verified(self):
@@ -2773,6 +2862,28 @@ class NpmShimBindingTests(unittest.TestCase):
         }
         return scope, profile
 
+    @unittest.skipUnless(shutil.which("bash"), "bash required")
+    def test_literal_apostrophe_and_percent_in_npm_target_resolve(self):
+        """U29: quoted shim targets keep literal punctuation, not shell expansion."""
+        for name in ("O'Brien", "percent%name"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                package, runtime = _package(base), _runtime(base)
+                cli = base / name / "dist/cli.js"
+                _write(cli, b"// selected cli\n")
+                runtime["cli"] = str(cli)
+                bin_dir = base / "bin"
+                _npm_shims(bin_dir, f"../{name}/dist/cli.js")
+                scope, profile = self._profile_scope(base, runtime, bin_dir)
+                resource = next(
+                    row for row in hosts.build_host_resources(scope, package_root=package)
+                    if row["kind"] == "shell"
+                )
+                _write(profile, hosts.render_resource(resource))
+                entry = hosts.verify_hosts(scope, package_root=package, probe=True)["shell_profiles"][0]
+                self.assertEqual(entry["host"]["checks"]["command_resolution"].get("runtime_binding"), "matched", entry)
+
+
     @unittest.skipUnless(shutil.which("bash") and os.name != "nt", "POSIX bash unavailable")
     def test_real_npm_sh_shim_binds_selected_cli(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3585,6 +3696,42 @@ class LegacyMcpClassificationTests(unittest.TestCase):
         return hosts.verify_hosts({"hosts": [host]}, package_root=package)["hosts"][0][
             "legacy"
         ]
+
+    def test_nonfile_config_is_unknown_not_legacy_free(self):
+        """U30: a present directory cannot prove that legacy entries are absent."""
+        for factory in (_codex_host, _omp_host):
+            with self.subTest(platform=factory.__name__), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime, package = _runtime(base), _package(base)
+                host = factory(base, runtime)
+                Path(host["config"]).mkdir(parents=True)
+                self.assertEqual(
+                    self._legacy(host, package),
+                    {"status": "unknown", "reason": "invalid-config"},
+                )
+
+
+    def test_omp_legacy_uses_only_enabled_inherited_sources(self):
+        """U30: inherited retired entries count; unselected providers do not."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime, package = _runtime(base), _package(base)
+            host = _omp_host(base, runtime)
+            codex = base / "account/.codex/config.toml"
+            retired = "sbtd-graft-old"
+            _write(codex, _codex_toml(
+                runtime["python"], _managed_args(package, runtime),
+            ).replace(b"sbtd-graft", retired.encode()))
+            settings = Path(host["config"]).parent / "config.yml"
+            for enabled in (True, False):
+                with self.subTest(enabled=enabled):
+                    _write(settings, (
+                        b'enabledProviders: ["codex"]\n'
+                        if enabled else b'disabledProviders: ["codex"]\n'
+                    ))
+                    expected = {"status": "present", "entries": [retired]} if enabled else {"status": "none", "entries": []}
+                    self.assertEqual(self._legacy(host, package), expected)
+            self.assertFalse(Path(host["config"]).exists())
 
     def test_valid_codex_config_with_only_unrelated_servers_reports_none(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

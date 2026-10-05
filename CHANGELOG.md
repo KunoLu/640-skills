@@ -43,6 +43,10 @@
 
 ### 修复
 
+- 恢复重试尊重明确未写入回执，旧 pending checkpoint 不得把用户同字节文件认领为本批；无法归属的 intent 现场保留为 blocked，不再报告空恢复完成。
+- Codex 隔离验收不信任真实项目配置层，防止启动未选项目 MCP；Darwin 缺失 Unicode 等价目标及 Shell 命令与写集的依赖冲突写前拒绝，host-home 别名不改写已明确选中目标的决定。
+- 既有 BOMless PowerShell profile 以 ASCII-only 表达式写入 Unicode PATH、不转码无关字节；探针固定 UTF-8 输出，按实际 LF 协议分割；npm shim 允许语言中的字面标点，动态展开仍拒绝。
+- OMP legacy 报告纳入有效启用继承来源，不扫描未选 provider；非文件配置为 unknown，不支持的 RPC 状态保留到宿主和域汇总。
 - 升级目标重叠与继承依赖预检识别物理路径别名，拒绝通过另一拼写覆盖 preserve 原件；Windows 大小写敏感目录不再被字符串折叠去重、误判包含或共享错误载荷摘要。已选配置／profile／Onboard 子目录的合法别名绑定封存目标。
 - 封存 blocked 的 MCP／shell 决定先于宿主语义比较，磁盘后来匹配不能补足授权；probe 未确认的拒绝补齐 schema 引导字段，无法展开的 home 路径返回受控 JSON。
 - Profile 重写识别并保留首行 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼容 Windows PowerShell 5.1 Unicode 路径；Bash／zsh 登录 profile 按登录模式隔离探测，rc 文件保持非登录模式。

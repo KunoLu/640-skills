@@ -68,6 +68,7 @@ fabricated.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -510,6 +511,7 @@ def _render_mcp(
     package_root: Path,
     project_roots: Sequence[str] = (),
     effective_inputs: list[dict[str, Any]] | None = None,
+    legacy_entries: list[str] | None = None,
 ) -> bytes:
     if platform == "codex":
         from sbtd_codex_wiring import codex_mcp_candidate
@@ -532,6 +534,12 @@ def _render_mcp(
     )
     if effective_inputs is not None:
         effective_inputs.extend(discovered["inputs"])
+    if legacy_entries is not None:
+        legacy_entries.extend(
+            name
+            for source in discovered["sources"] if source["enabled"]
+            for name in source["servers"] if name.startswith(_SERVER_PREFIX)
+        )
     if discovered["target"] != str(config):
         _fail("scope-conflict", "the OMP resource leaves the active profile")
     target = Path(discovered["target"])
@@ -627,6 +635,9 @@ def _resolution_key(value: str) -> str:
 
 
 def _quote_powershell(value: str) -> str:
+    if not value.isascii():
+        encoded = base64.b64encode(value.encode("utf-8")).decode("ascii")
+        return f"[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))"
     return "'" + value.replace("'", "''") + "'"
 
 
@@ -865,6 +876,7 @@ def _build_mcp_resource(
             package_root=installed_root,
             project_roots=host["project_roots"],
             effective_inputs=details["effective_inputs"],
+            legacy_entries=details["legacy"],
         )
     except ContractError as error:
         if error.code in _PROPAGATE_CODES:
@@ -991,7 +1003,7 @@ def _shim_template_pattern(template: str) -> re.Pattern[str]:
     parts = template.split(_NPM_SHIM_REL_TOKEN)
     pattern = re.escape(parts[0])
     for index, part in enumerate(parts[1:]):
-        pattern += "(?P<rel>[^\"'\r\n]+)" if index == 0 else "(?P=rel)"
+        pattern += "(?P<rel>[^\"\r\n]+)" if index == 0 else "(?P=rel)"
         pattern += re.escape(part)
     return re.compile(pattern)
 
@@ -1029,7 +1041,7 @@ def _shim_relative_literal(relative: str, *, backslashes: bool) -> bool:
         return False
     if backslashes:
         return not any(char in relative for char in ("%", "!"))
-    return not any(char in relative for char in ("\\", "$", "`", "%"))
+    return not any(char in relative for char in ("\\", "$", "`"))
 
 
 def _shim_binding(path: Path) -> dict[str, str] | None:
@@ -1698,7 +1710,8 @@ def _probe_codex(
         require_private_directory(codex_home, create=True)
         config = codex_mcp_candidate(_CODEX_FIXTURE_CONFIG.encode("utf-8"), bindings)
         quoted = json.dumps(str(proven_root))
-        config += f'\n[projects.{quoted}]\ntrust_level = "trusted"\n'.encode()
+        # Keep the real cwd for Graft, but never load its project-local config.
+        config += f'\n[projects.{quoted}]\ntrust_level = "untrusted"\n'.encode()
         (codex_home / "config.toml").write_bytes(config)
         copies = _copy_skill_roots(host["skills_roots"], fixture / "skills-roots")
         expected = _expected_skill_names(copies)
@@ -2211,7 +2224,7 @@ def _host_load_check(host: Mapping[str, Any], resource: Mapping[str, Any]) -> tu
 
 def _worst(checks: Iterable[Mapping[str, Any]]) -> str:
     statuses = [check["status"] for check in checks]
-    for token in ("failed", "unavailable"):
+    for token in ("failed", "unavailable", "unsupported"):
         if token in statuses:
             return token
     if all(status == "verified" for status in statuses):
@@ -2243,10 +2256,12 @@ def _disk_status(resource: Mapping[str, Any]) -> dict[str, Any]:
 
 def _legacy_mcp(host: Mapping[str, Any]) -> dict[str, Any]:
     target = Path(host["config"])
-    live = snapshot(target)
-    if live["type"] != "file":
-        return {"status": "none", "entries": []}
     try:
+        live = snapshot(target)
+        if live["type"] == "absent":
+            return {"status": "none", "entries": []}
+        if live["type"] != "file":
+            return {"status": "unknown", "reason": "invalid-config"}
         raw = read_file(target, live)
     except ContractError as error:
         # A read racing a concurrent write keeps the contract reason,
@@ -2287,12 +2302,16 @@ def _legacy_mcp(host: Mapping[str, Any]) -> dict[str, Any]:
 def _verify_mcp_host(
     host: Mapping[str, Any], resource: Mapping[str, Any], probe: bool
 ) -> dict[str, Any]:
+    legacy = _legacy_mcp(host)
+    if host["platform"] == "omp" and legacy["status"] != "unknown":
+        entries = sorted(set(legacy["entries"]) | set(resource["details"].get("legacy", [])))
+        legacy = {"status": "present" if entries else "none", "entries": entries}
     entry: dict[str, Any] = {
         "id": host["id"],
         "platform": host["platform"],
         "applicability": "supported",
         "disk": _disk_status(resource),
-        "legacy": _legacy_mcp(host),
+        "legacy": legacy,
     }
     if not probe:
         entry["runtime"] = {"status": "unverified"}
@@ -2325,6 +2344,8 @@ def _verify_mcp_host(
         entry["status"] = "fail"
     elif runtime["status"] == "unavailable" or host_status == "unavailable":
         entry["status"] = "unavailable"
+    elif host_status == "unsupported":
+        entry["status"] = "unsupported"
     elif runtime["status"] == "verified" and host_status == "verified":
         entry["status"] = "pass"
     else:
@@ -2387,6 +2408,7 @@ def _shell_resolution(
                 "$w=Get-Command graft -ErrorAction Stop; "
                 "if($w.CommandType -ne 'Application' -and $w.CommandType -ne 'ExternalScript'){exit 43}; "
                 "$p=$w.Source; "
+                "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); "
                 f"[Console]::Out.WriteLine('{marker}'+$p)"
                 " } catch {exit 42}"
             )
@@ -2434,7 +2456,8 @@ def _shell_resolution(
             }.get(result.returncode, "graft-not-resolved")
             return {"status": "failed", "reason": reason}
         resolutions = [
-            line[len(marker):] for line in result.stdout.decode("utf-8", errors="replace").splitlines()
+            line[len(marker):].removesuffix("\r")
+            for line in result.stdout.decode("utf-8", errors="replace").split("\n")
             if line.startswith(marker)
         ]
         expected = {_resolution_key(str(bin_dir / name)) for name in

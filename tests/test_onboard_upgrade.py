@@ -22,6 +22,139 @@ from sbtd_migration_files import require_private_directory
 
 
 class UpgradeCliTests(unittest.TestCase):
+    def test_shell_command_dependency_refuses_before_skill_replacement(self):
+        """U28: replacing a command's containing Skill must not partially commit."""
+        import sbtd_upgrade
+        from onboard_contracts import ContractError
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            skills, vault = base / "skills", base / "vault"
+            target = skills / "sbtd-task"
+            (target / "bin").mkdir(parents=True)
+            original = b"---\nname: sbtd-task\n---\nold custom body\n"
+            (target / "SKILL.md").write_bytes(original)
+            command = target / "bin/graft"
+            command.write_bytes(b"#!/bin/sh\nexit 0\n")
+            command.chmod(0o755)
+            require_private_directory(vault, create=True)
+            scope = {"schema_version": 1, "skills_roots": [str(skills)]}
+            initial = sbtd_upgrade.plan_upgrade(scope, vault)
+            scope["decisions"] = {
+                row["target"]: "replace" if row["target"] == str(target) else "preserve"
+                for row in initial["payload"]["resources"]
+            }
+            profile = base / ".bashrc"
+            scope["shell_profiles"] = [{"path": str(profile), "shell": "bash", "bin": str(command.parent)}]
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            with self.assertRaises(ContractError) as caught:
+                sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+            self.assertEqual(caught.exception.code, "shell-dependency-conflict")
+            self.assertEqual((target / "SKILL.md").read_bytes(), original)
+            self.assertEqual(command.read_bytes(), b"#!/bin/sh\nexit 0\n")
+            self.assertFalse(profile.exists())
+
+    def _user_created_desired_after_intent(self):
+        import sbtd_upgrade
+
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        base = Path(temporary.name).resolve()
+        target = base / "AGENTS.md"
+        vault = base / "vault"
+        require_private_directory(vault, create=True)
+        plan = sbtd_upgrade.plan_upgrade(
+            {"schema_version": 1, "agents_targets": [str(target)]}, vault,
+        )
+        desired = (CLI.parents[1] / "templates/agents/AGENTS.global.md").read_bytes()
+        real_write = sbtd_upgrade._write_resource
+
+        def user_write(*args, **kwargs):
+            target.write_bytes(desired)
+            return real_write(*args, **kwargs)
+
+        def in_process(_runner, _argv):
+            return sbtd_upgrade._apply_upgrade_local(
+                plan, confirmed=plan["plan_id"], receipt=None, package_root=CLI.parents[1],
+            )
+
+        with (
+            mock.patch.object(sbtd_upgrade, "_run_isolated", in_process),
+            mock.patch.object(sbtd_upgrade, "_write_resource", user_write),
+        ):
+            failed = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+        self.assertEqual(failed["payload"]["resources"][0]["mutated"], False)
+        checkpoints = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in vault.glob("upgrade-receipt-*.json")
+        ]
+        pending = next(row for row in checkpoints if row["payload"]["resources"][0]["result"] == "pending")
+        return plan, failed, pending, target, desired
+
+    def test_retry_does_not_claim_a_proven_unwritten_user_file(self):
+        """U25: matching bytes do not override a known no-write result."""
+        import sbtd_upgrade
+        from onboard_contracts import ContractError
+
+        plan, failed, _pending, target, desired = self._user_created_desired_after_intent()
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"], receipt=failed)
+        self.assertEqual(caught.exception.code, "state-conflict")
+        self.assertEqual(target.read_bytes(), desired)
+
+    def test_old_pending_checkpoint_respects_later_no_write_evidence(self):
+        """U25: old checkpoints cannot turn a user file into a recovery deletion."""
+        import sbtd_upgrade
+
+        plan, _failed, pending, target, desired = self._user_created_desired_after_intent()
+        recovery = sbtd_upgrade.plan_recovery(plan, pending)
+        self.assertEqual(recovery["payload"]["steps"], [])
+        result = sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(target.read_bytes(), desired)
+
+    def test_pending_written_skill_with_cache_blocks_recovery(self):
+        """U25: unknown intent-backed outcomes cannot disappear from recovery."""
+        import sbtd_upgrade
+        from onboard_contracts import ContractError
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            skills, vault = base / "skills", base / "vault"
+            require_private_directory(vault, create=True)
+            scope = {"schema_version": 1, "skills_roots": [str(skills)]}
+            initial = sbtd_upgrade.plan_upgrade(scope, vault)
+            target = skills / "sbtd-task"
+            scope["decisions"] = {
+                row["target"]: "preserve" for row in initial["payload"]["resources"]
+                if row["target"] != str(target)
+            }
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            save = sbtd_upgrade._save_once
+
+            def fail_after_write(path, document, private_root):
+                if Path(path).name.startswith("upgrade-receipt-") and any(
+                    row["result"] == "succeeded" for row in document["payload"]["resources"]
+                ):
+                    raise OSError("receipt interruption")
+                return save(path, document, private_root)
+
+            with mock.patch.object(sbtd_upgrade, "_save_once", fail_after_write), self.assertRaises(ContractError):
+                sbtd_upgrade._apply_upgrade_local(
+                    plan, confirmed=plan["plan_id"], receipt=None, package_root=CLI.parents[1],
+                )
+            pending = json.loads(next(vault.glob("upgrade-receipt-*.json")).read_text(encoding="utf-8"))
+            cache = target / "__pycache__/generated.pyc"
+            cache.parent.mkdir()
+            cache.write_bytes(b"user generated cache")
+            recovery = sbtd_upgrade.plan_recovery(plan, pending)
+            self.assertEqual(recovery["payload"]["status"], "blocked")
+            self.assertEqual(recovery["payload"]["steps"][0]["reason"], "unattributed-outcome")
+            with self.assertRaises(ContractError):
+                sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(cache.read_bytes(), b"user generated cache")
+            self.assertTrue((target / "SKILL.md").is_file())
+
     @unittest.skipUnless(os.name == "posix", "POSIX unknown-user expansion")
     def test_unresolved_home_paths_return_controlled_json(self):
         """U24: input, output and vault expansion failures are metadata-only."""

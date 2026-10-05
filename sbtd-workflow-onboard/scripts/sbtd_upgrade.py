@@ -81,6 +81,7 @@ import os
 import stat
 import subprocess
 import sys
+import unicodedata
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NoReturn
@@ -314,6 +315,10 @@ def _paths_overlap(first: Path, second: Path) -> bool:
                 and len(other_tail) >= len(tail)
             ):
                 prefix = other_tail[:len(tail)]
+                if sys.platform == "darwin":
+                    # APFS/HFS+ fold canonical Unicode forms even on case-sensitive volumes.
+                    prefix = tuple(unicodedata.normalize("NFD", part) for part in prefix)
+                    tail = tuple(unicodedata.normalize("NFD", part) for part in tail)
                 if prefix == tail:
                     return True
                 if tuple(part.casefold() for part in prefix) == tuple(part.casefold() for part in tail):
@@ -1580,6 +1585,20 @@ def _apply_upgrade_local(
         if not current_or_scheduled:
             _fail("launcher-dependency-conflict", "align the selected Onboard installation before writing MCP")
     for consumer in recomputed:
+        if consumer["kind"] == "shell" and consumer["id"] in write_ids:
+            identity = consumer["details"]["command_identity"]
+            command_paths = {identity["path"], identity.get("resolved")}
+            if identity.get("shim") is not None:
+                command_paths.add(identity["shim"]["target"])
+            for command_path in command_paths - {None}:
+                for action in actions:
+                    if action["resource"]["id"] != consumer["id"] and _paths_overlap(
+                        Path(command_path), Path(action["resource"]["target"]),
+                    ):
+                        _fail(
+                            "shell-dependency-conflict",
+                            "align the selected shell command first, then re-plan its profile",
+                        )
         for dependency in consumer["details"].get("effective_inputs", []):
             path = Path(_expect_abs_path(dependency["path"], "host dependency"))
             expected = _expect_state(dependency["state"], "host dependency state")
@@ -1882,6 +1901,11 @@ def _reconcile_resource(
             "state-conflict",
             "a completed resource no longer matches its receipt outcome",
         )
+    if (
+        prior is not None and prior.get("result") != "pending"
+        and prior.get("mutated") is False and live != resource["before"]
+    ):
+        _fail("state-conflict", "a proven unwritten target changed outside this batch")
     intent = intents.get(resource["id"])
     if intent is not None:
         if intent.get("before") != resource["before"] or intent.get(
@@ -2357,17 +2381,32 @@ def _recovery_rows(
     vault = Path(payload["backup_root"])
     intents = _scan_intents(vault, f"intent-{plan['plan_id'][:16]}-", "resource_id")
     resources = {resource["id"]: resource for resource in payload["resources"]}
+    latest = _latest_receipt(
+        vault, "upgrade-receipt-", "plan_id", plan["plan_id"],
+        dict(receipt), _validate_upgrade_receipt,
+    )
+    latest_rows = {
+        row["id"]: row for row in latest["payload"]["resources"]
+    } if latest is not None else {}
     rows: list[dict[str, Any]] = []
     for original in receipt["payload"]["resources"]:
         row = dict(original)
         intent = intents.get(row["id"])
+        later = latest_rows.get(row["id"])
+        if (
+            row["result"] == "pending" and later is not None
+            and later["result"] != "pending" and later.get("mutated") is False
+        ):
+            rows.append(dict(later))
+            continue
         if row["result"] == "pending" and intent is not None:
             resource = resources.get(row["id"])
             if resource is None or any(
                 intent.get(key) != resource.get(key) for key in ("target", "before", "desired")
             ) or intent.get("plan_id") != plan["plan_id"]:
                 _fail("corrupt-evidence", "an interruption intent leaves the sealed resource set")
-            observed = snapshot(Path(row["target"])) == intent["mechanical_desired"]
+            measured = snapshot(Path(row["target"]))
+            observed = measured == intent["mechanical_desired"]
             if observed or (observed_ids is not None and row["id"] in observed_ids):
                 row.update({
                     "result": "reconciled", "after": resource["desired"],
@@ -2376,6 +2415,15 @@ def _recovery_rows(
                     "mechanical_before": intent["mechanical_before"],
                     "backup_ref": intent["backup_ref"],
                     "created_parents": intent.get("created_parents", []),
+                })
+            elif measured != intent["mechanical_before"]:
+                row.update({
+                    "result": "failed", "after": _measured(row["target"]),
+                    "mutated": None, "mechanical_after": measured,
+                    "mechanical_before": intent["mechanical_before"],
+                    "backup_ref": intent["backup_ref"],
+                    "created_parents": intent.get("created_parents", []),
+                    "reason": "unattributed-outcome",
                 })
         rows.append(row)
     return rows
