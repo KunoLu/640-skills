@@ -707,7 +707,7 @@ def _shell_profile_candidate(before: bytes, *, shell: str, bin_dir: str) -> byte
     lines = raw[len(bom):].split(b"\n")
     spans = _marker_spans(lines)
     crlf = any(line.endswith(b"\r") for line in lines)
-    terminator = b"\r" if crlf else b""
+    terminator = b"\r" if crlf and shell == "powershell" else b""
     block = _shell_block(shell, bin_dir, terminator)
     if spans:
         start, end = spans[0]
@@ -732,7 +732,12 @@ def _shell_profile_candidate(before: bytes, *, shell: str, bin_dir: str) -> byte
 
 
 def _shell_legacy_lines(raw: bytes, bin_dir: str) -> list[int]:
-    needle = bin_dir.encode("utf-8")
+    needles = {bin_dir.encode("utf-8"), _posix_shell_path(bin_dir).encode("utf-8")}
+    patterns = [
+        re.compile(rb"""(?:^|[\s=:'";(])""" + re.escape(needle)
+                   + rb"""[/\\]?(?=$|[\s:'";)])""")
+        for needle in needles
+    ]
     lines = raw.split(b"\n")
     try:
         spans = _marker_spans(lines)
@@ -744,7 +749,7 @@ def _shell_legacy_lines(raw: bytes, bin_dir: str) -> list[int]:
     return sorted(
         index + 1
         for index, line in enumerate(lines)
-        if index not in inside and needle in line
+        if index not in inside and any(pattern.search(line) for pattern in patterns)
     )
 
 
@@ -837,6 +842,7 @@ def _build_mcp_resource(
         "managed_digest": None,
         "before_managed_digest": None,
         "legacy": [],
+        "legacy_discovered": False,
         "effective_inputs": [],
     }
     # The Codex target is canonical: exactly config_home/config.toml. Any
@@ -878,6 +884,7 @@ def _build_mcp_resource(
             effective_inputs=details["effective_inputs"],
             legacy_entries=details["legacy"],
         )
+        details["legacy_discovered"] = True
     except ContractError as error:
         if error.code in _PROPAGATE_CODES:
             raise
@@ -1330,9 +1337,10 @@ def _which(name: str) -> str | None:
 class _JsonLines:
     """Newline-delimited JSON-RPC client over one spawned process."""
 
-    def __init__(self, proc: subprocess.Popen[bytes], timeout: float) -> None:
+    def __init__(self, proc: subprocess.Popen[bytes], timeout: float, *, require_jsonrpc: bool = False) -> None:
         self._proc = proc
         self._timeout = timeout
+        self._require_jsonrpc = require_jsonrpc
         self._next = 0
         self._lines: queue.Queue[bytes | None] = queue.Queue()
         # Writes run on one dedicated thread so a stalled child (full pipe,
@@ -1422,8 +1430,14 @@ class _JsonLines:
                 message = json.loads(line)
             except ValueError:
                 continue
-            if not isinstance(message, dict) or message.get("id") != request_id:
+            if (
+                not isinstance(message, dict)
+                or type(message.get("id")) not in ((int, float) if type(request_id) is int else (str,))
+                or message["id"] != request_id
+            ):
                 continue
+            if self._require_jsonrpc and message.get("jsonrpc") != "2.0":
+                raise _ProbeError("failed", "host-invalid-envelope")
             if key != "method":
                 # OMP envelope (native-proven shape {type:response, command:
                 # <request>, success:true}): only the strict successful
@@ -1574,7 +1588,7 @@ def _mcp_handshake(argv: list[str], *, cwd: Path, fixture: Path) -> dict[str, An
         proc = _spawn(argv, env=_probe_env(fixture, {}), cwd=str(cwd))
     except OSError:
         raise _ProbeError("unavailable", "managed-command-unavailable") from None
-    rpc = _JsonLines(proc, _HANDSHAKE_TIMEOUT)
+    rpc = _JsonLines(proc, _HANDSHAKE_TIMEOUT, require_jsonrpc=True)
     try:
         result = rpc.call(
             "initialize",
@@ -2306,6 +2320,8 @@ def _verify_mcp_host(
     if host["platform"] == "omp" and legacy["status"] != "unknown":
         entries = sorted(set(legacy["entries"]) | set(resource["details"].get("legacy", [])))
         legacy = {"status": "present" if entries else "none", "entries": entries}
+        if not entries and not resource["details"].get("legacy_discovered", False):
+            legacy = {"status": "unknown", "reason": "source-discovery-incomplete"}
     entry: dict[str, Any] = {
         "id": host["id"],
         "platform": host["platform"],
@@ -2412,6 +2428,7 @@ def _shell_resolution(
                 "if($w.CommandType -ne 'Application' -and $w.CommandType -ne 'ExternalScript'){exit 43}; "
                 "$p=$w.Source; "
                 "[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); "
+                "[Console]::Out.WriteLine('SBTD_PS_ENCODING='+$PSVersionTable.PSVersion.Major+':'+[Text.Encoding]::Default.CodePage); "
                 f"[Console]::Out.WriteLine('{marker}'+$p)"
                 " } catch {exit 42}"
             )
@@ -2486,6 +2503,13 @@ def _shell_resolution(
         pinned = details.get("runtime_cli_targets", [])
         shim = identity.get("shim")
         if shim is not None:
+            if shell == "powershell" and shim["template"] == "npm-cmd-shim-ps1" and not shim["relative"].isascii():
+                engines = re.findall(
+                    r"^SBTD_PS_ENCODING=(\d+):(\d+)\r?$",
+                    result.stdout.decode("utf-8", errors="replace"), re.MULTILINE,
+                )
+                if len(engines) != 1 or not (int(engines[0][0]) >= 6 or int(engines[0][1]) == 65001):
+                    return {"status": "failed", "reason": "graft-shim-encoding-unproven"}
             # A recognized npm wrapper binds its embedded logical cli target,
             # never the wrapper file itself; the physical wrapper identity is
             # already proven by the sealed command_identity above.

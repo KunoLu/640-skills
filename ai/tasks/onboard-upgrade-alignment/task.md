@@ -4,11 +4,11 @@ id: onboard-upgrade-alignment
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确要求在新开发分支以 strict 完成已确认四阶段方案；本机应用、同步、旧资产清理、新分支合并及发布未授权。
-status: "done"
+status: "checking"
 branch: feat/onboard-upgrade-alignment
 created_at: '2026-10-03T22:31:25.791160+08:00'
-updated_at: "2026-10-05T12:24:31.867839+08:00"
-completed_at: "2026-10-05T12:24:31.867839+08:00"
+updated_at: "2026-10-05T16:25:52.744853+08:00"
+completed_at: null
 ---
 # Onboard 通用升级对齐、恢复与分层验收
 
@@ -27,6 +27,8 @@ completed_at: "2026-10-05T12:24:31.867839+08:00"
 第二轮审查（head 40b0dbf）保留14项，用户要求先修P1、再依优先级修复其余13项，已按顺序完成并修正独立复核两处路径遗漏。沿用strict，独立编号N01–N14及本轮证据见[review-round2.md](review-round2.md)，不覆盖上一轮历史。本地完整验证、两切面独立复核、真实隔离宿主／重试／恢复及36ee62e精确三平台CI全部通过；本机部署、同步、清理、合并和发布均未执行。
 
 第三轮审查（head 1ae9c321）13项按用户要求先修三个P1，再依风险顺序完成其余项及独立复核／原生Windows反馈修正；独立编号T01—T13与本轮门禁／证据见[review-round3.md](review-round3.md)。本地1762项完整验证、317项升级回归、真实隔离生命周期、独立复核和7d360b6精确三平台CI全部通过；不覆盖两轮历史，未部署、同步、清理、合并或发布。
+
+第四轮审查（head 2b913a66）7项按用户优先级实现，F07独立复核两个边界已修正。范围、原始red／green、真实隔离生命周期和验证状态见[review-round4.md](review-round4.md)。326项升级回归及真实37资源安装／宿主／重试／恢复通过；完整suite的followup漂移正在诊断，三平台精确head CI尚待完成，不提前标记done。
 
 ## 状态事件
 
@@ -47,3 +49,6 @@ completed_at: "2026-10-05T12:24:31.867839+08:00"
 | 2026-10-05T09:04:35.203059+08:00 | planned | in-progress | 沿用strict，真实复现后依优先级修复 | 第三轮13项清单；原四项契约保留 |
 | 2026-10-05T10:25:09.830888+08:00 | in-progress | checking | 第三轮13项及独立复核修正完成，真实隔离生命周期已通过，进入完整项目与精确head CI | review-round3.md；317tests；native-*；原生Windows待CI |
 | 2026-10-05T12:24:31.867839+08:00 | checking | done | 第三轮13项、独立复核及Windows反馈全部闭合；完整本地、真实隔离与精确三平台CI通过 | 7d360b65a2c82926ae683b4518e68cc7b2a2655e；GitHub run37260456824；review-round3.md；1762tests；317升级回归 |
+| 2026-10-05T15:02:04.878812+08:00 | done | planned | 用户确认按优先级修复第四轮7项审查问题 | PR110 head2b913a66；本轮7项与用户授权 |
+| 2026-10-05T15:02:07.080119+08:00 | planned | in-progress | 沿用strict，按封存范围/依赖/Shell/协议/诊断顺序复现修复 | 第四轮范围已确认；保留既有四项契约 |
+| 2026-10-05T16:25:52.744853+08:00 | in-progress | checking | 第四轮7项及独立复核边界修正完成，真实隔离生命周期通过，继续诊断全量followup漂移并准备原生CI | review-round4.md；326升级回归；37资源native生命周期；full失败原始报告保留 |

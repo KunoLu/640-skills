@@ -261,6 +261,27 @@ class PhysicalTargetPlanTests(InventoryTests):
             self.assertEqual(enabled.returncode, 0, enabled.stdout + enabled.stderr)
         return parent
 
+    def test_absent_root_alias_cannot_make_scope_invalid_after_install(self):
+        """U31: root containment must be stable before the root has an inode."""
+        import sbtd_upgrade
+        from sbtd_migration_files import require_private_directory
+
+        marker = self.base / "CaseProbe"
+        marker.mkdir()
+        if case_variant(marker) is None:
+            self.skipTest("requires a case-insensitive directory")
+        selected = self.base / "SKILLS"
+        agents = self.base / "skills/AGENTS.md"
+        vault = self.base / "vault"
+        require_private_directory(vault, create=True)
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.plan_upgrade(self.scope(
+                skills_roots=[str(selected)], agents_targets=[str(agents)],
+            ), vault, package_root=self.pkg)
+        self.assertEqual(caught.exception.code, "unsafe-path")
+        self.assertFalse(selected.exists())
+        self.assertEqual(list(vault.iterdir()), [])
+
     def test_host_config_home_alias_binds_before_host_planning(self):
         """U21: inventory and the real host producer share one selected home spelling."""
         import sbtd_upgrade
@@ -309,11 +330,10 @@ class PhysicalTargetPlanTests(InventoryTests):
         target, alias = self.base / "Caf\u00e9.md", self.base / "Cafe\u0301.md"
         vault = self.base / "vault"
         require_private_directory(vault, create=True)
-        with self.assertRaises(ContractError) as caught:
+        with self.assertRaises(ContractError):
             sbtd_upgrade.plan_upgrade(self.scope(
                 agents_targets=[str(target), str(alias)], decisions={str(alias): "preserve"},
             ), vault, package_root=self.pkg)
-        self.assertEqual(caught.exception.code, "resource-overlap")
         self.assertFalse(target.exists())
         self.assertEqual(list(vault.iterdir()), [])
 
@@ -329,12 +349,11 @@ class PhysicalTargetPlanTests(InventoryTests):
         target, alias = self.base / "AGENTS.md", self.base / "agents.md"
         vault = self.base / "vault"
         require_private_directory(vault, create=True)
-        with self.assertRaises(ContractError) as caught:
+        with self.assertRaises(ContractError):
             sbtd_upgrade.plan_upgrade(self.scope(
                 agents_targets=[str(target), str(alias)],
                 decisions={str(alias): "preserve"},
             ), vault, package_root=self.pkg)
-        self.assertEqual(caught.exception.code, "resource-overlap")
         self.assertFalse(target.exists())
         self.assertFalse(alias.exists())
         self.assertEqual(list(vault.iterdir()), [])

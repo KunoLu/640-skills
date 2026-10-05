@@ -108,6 +108,8 @@ Shell 保留既有 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼
 
 Codex 隔离 probe 不信任真实项目的配置层，避免启动项目内未选 MCP；受管连接仍使用已验证项目 cwd。既有 PowerShell profile 的 Unicode PATH 使用 ASCII-only 解码表达式保留原字节，探针固定 UTF-8 输出并保留路径内 Unicode 分隔符；npm shim 支持真实字面标点但仍拒绝动态展开。OMP legacy 包含有效启用继承来源，非文件配置为 unknown，unsupported 保留到宿主／域汇总。
 
+升级／恢复计划先检查同一 Python 的 `-I` 隔离依赖可用性；仅 user-site 可用时受控拒绝，不取消隔离或自动安装。缺失 Skills 根的冲突物理别名也在封存前拒绝。新增 Bash／zsh PATH 块使用 LF，保留原 CRLF 字节及原 PATH 末项；Windows POSIX 别名按完整所选目录识别旧 PATH。PowerShell 非 ASCII npm shim 的指向须与实际引擎解码相容；MCP 回复要求 `jsonrpc: "2.0"`，Boolean ID 不能冒充数字，Codex 仍兼容无版本回显。OMP 来源未完成发现／分析且未取得旧入口证据时为 `unknown`，不把未检查当作不存在。
+
 已选但缺失的 host 资源仍进入安装，`preserve` 不取消该安装；不需要时应从 scope 移除。受支持的嵌套安装可从同基线已安装副本续作，restore intent 后的 absent 窗口保持原契约；这些边界不授权未知内容覆盖、项目级宿主图构建或真实 HOME 变更。
 
 跨平台基线按原始载荷字节及相对 POSIX 路径排序计算。根 `.gitattributes` 对 `sbtd-workflow-onboard/**` 及其 canonical `/LICENSE` 源禁用文本换行转换，保护固定 stable pin 和模板／脚本／许可证基线；不能通过运行时换行归一化来掩盖实际内容漂移。

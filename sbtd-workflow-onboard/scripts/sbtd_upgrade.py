@@ -81,7 +81,6 @@ import os
 import stat
 import subprocess
 import sys
-import unicodedata
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NoReturn
@@ -101,6 +100,7 @@ from sbtd_migration_files import (
     snapshot,
     write_file,
 )
+from sbtd_upgrade_paths import paths_overlap
 
 __all__ = [
     "apply_recovery",
@@ -231,101 +231,6 @@ def _expect_abs_path(value: Any, what: str) -> str:
     return str(path)
 
 
-def _directory_case_sensitive(path: Path) -> bool | None:
-    """Read native directory semantics; unknown must not authorize alias writes."""
-    try:
-        if sys.platform == "darwin":
-            # Darwin sys/unistd.h: _PC_CASE_SENSITIVE (not exposed by Python).
-            value = os.pathconf(path, 11)
-            return bool(value) if value >= 0 else None
-        if os.name == "nt":
-            import ctypes
-            from ctypes import wintypes
-
-            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-            create = kernel.CreateFileW
-            create.argtypes = [
-                wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
-                wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
-            ]
-            create.restype = wintypes.HANDLE
-            query = kernel.GetFileInformationByHandleEx
-            query.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
-            query.restype = wintypes.BOOL
-            close = kernel.CloseHandle
-            close.argtypes = [wintypes.HANDLE]
-            close.restype = wintypes.BOOL
-            handle = create(str(path), 0x80, 7, None, 3, 0x02200000, None)
-            if handle == ctypes.c_void_p(-1).value:
-                return None
-            try:
-                flags = wintypes.ULONG()
-                # FileCaseSensitiveInfo, FILE_CS_FLAG_CASE_SENSITIVE_DIR.
-                if not query(handle, 23, ctypes.byref(flags), ctypes.sizeof(flags)):
-                    return None
-                return bool(flags.value & 1)
-            finally:
-                close(handle)
-        if sys.platform.startswith("linux"):
-            import array
-            import fcntl
-
-            flags = array.array("L", [0])
-            fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            try:
-                # FS_IOC_GETFLAGS; ext4/f2fs casefold is per-directory.
-                request = 0x80000000 | (flags.itemsize << 16) | (ord("f") << 8) | 1
-                fcntl.ioctl(fd, request, flags, True)
-                return not bool(flags[0] & 0x40000000)
-            finally:
-                os.close(fd)
-    except (OSError, ValueError):
-        pass
-    return None
-
-
-def _missing_path_anchor(path: Path) -> tuple[Path, tuple[str, ...]]:
-    ancestor = path
-    while _lstat(ancestor) is None and str(ancestor.parent) != str(ancestor):
-        ancestor = ancestor.parent
-    return ancestor, path.parts[len(ancestor.parts):]
-
-
-def _paths_overlap(first: Path, second: Path) -> bool:
-    def contains(path: Path, root: Path) -> bool:
-        root_info = _lstat(root)
-        for ancestor in (path, *path.parents):
-            if str(ancestor) == str(root):
-                return True
-            info = _lstat(ancestor)
-            if (
-                root_info is not None and root_info.st_ino
-                and info is not None and info.st_ino
-                and (info.st_dev, info.st_ino) == (root_info.st_dev, root_info.st_ino)
-            ):
-                return True
-        if root_info is None:
-            anchor, tail = _missing_path_anchor(root)
-            other_anchor, other_tail = _missing_path_anchor(path)
-            anchor_info, other_info = _lstat(anchor), _lstat(other_anchor)
-            if (
-                anchor_info is not None and anchor_info.st_ino
-                and other_info is not None and other_info.st_ino
-                and (anchor_info.st_dev, anchor_info.st_ino) == (other_info.st_dev, other_info.st_ino)
-                and len(other_tail) >= len(tail)
-            ):
-                prefix = other_tail[:len(tail)]
-                if sys.platform == "darwin":
-                    # APFS/HFS+ fold canonical Unicode forms even on case-sensitive volumes.
-                    prefix = tuple(unicodedata.normalize("NFD", part) for part in prefix)
-                    tail = tuple(unicodedata.normalize("NFD", part) for part in tail)
-                if prefix == tail:
-                    return True
-                if tuple(part.casefold() for part in prefix) == tuple(part.casefold() for part in tail):
-                    return _directory_case_sensitive(anchor) is not True
-        return False
-
-    return contains(first, second) or contains(second, first)
 
 
 def _expect_reference(value: Any, what: str) -> dict[str, Any]:
@@ -749,19 +654,19 @@ def _preflight_set(resources: list[dict[str, Any]], vault: Path) -> None:
             _fail("resource-overlap", "two resources share one stable id")
         ids.add(resource_id)
         for other in targets[index + 1 :]:
-            if _paths_overlap(target, other):
+            if paths_overlap(target, other):
                 _fail(
                     "resource-overlap",
                     "upgrade targets must never be equal or nested",
                 )
-        if _paths_overlap(target, vault):
+        if paths_overlap(target, vault):
             _fail(
                 "backup-root-overlap",
                 "the private backup root and an upgrade target overlap",
             )
     for resource in resources:
         source = Path(resource["source"]["path"])
-        if _paths_overlap(source, vault):
+        if paths_overlap(source, vault):
             _fail(
                 "backup-root-overlap",
                 "the private backup root and an upgrade source overlap",
@@ -1363,6 +1268,21 @@ def _ensure_parent_directories(target: Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _require_isolated_dependencies() -> None:
+    """Planning and execution must use the same isolated dependency environment."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-I", "-B", "-c",
+             "import yaml, jsonschema, markdown_it, tomlkit, cryptography"],
+            env=_scrubbed_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        _fail("isolated-dependencies-unavailable", "prepare the declared dependencies in an isolated-capable interpreter")
+    if result.returncode != 0:
+        _fail("isolated-dependencies-unavailable", "prepare the declared dependencies in an isolated-capable interpreter")
+
+
 def plan_upgrade(
     scope: Mapping[str, Any],
     backup_root: str | Path,
@@ -1374,9 +1294,10 @@ def plan_upgrade(
         _validate_scope(_strict_loads(canonical_json_bytes(scope)))
     )
     vault = require_private_directory(Path(backup_root))
+    _require_isolated_dependencies()
     root = None if package_root is None else Path(package_root)
     baseline, resources, domains = _derive_resources(sealed_scope, root)
-    if _paths_overlap(vault, Path(baseline["source"]["path"])):
+    if paths_overlap(vault, Path(baseline["source"]["path"])):
         _fail("backup-root-overlap", "the backup root overlaps the package")
     _preflight_set(resources, vault)
     blocked = sorted(
@@ -1442,7 +1363,7 @@ def apply_upgrade(
     if _payload_state(trusted) != payload["baseline"]["source"]["state"]:
         _fail("source-stale", "the running trusted package does not match the sealed baseline")
     vault = require_private_directory(Path(payload["backup_root"]))
-    if _paths_overlap(vault, trusted):
+    if paths_overlap(vault, trusted):
         _fail("backup-root-overlap", "the backup root overlaps the trusted package")
     baseline, recomputed, _domains = _derive_resources(
         payload["scope"], trusted, host_package_root=trusted
@@ -1592,7 +1513,7 @@ def _apply_upgrade_local(
                 command_paths.add(identity["shim"]["target"])
             for command_path in command_paths - {None}:
                 for action in actions:
-                    if action["resource"]["id"] != consumer["id"] and _paths_overlap(
+                    if action["resource"]["id"] != consumer["id"] and paths_overlap(
                         Path(command_path), Path(action["resource"]["target"]),
                     ):
                         _fail(
@@ -1606,7 +1527,7 @@ def _apply_upgrade_local(
                 _fail("state-conflict", "an inherited configuration source changed")
             for action in actions:
                 provider = Path(action["resource"]["target"])
-                if action["resource"]["id"] != consumer["id"] and _paths_overlap(path, provider):
+                if action["resource"]["id"] != consumer["id"] and paths_overlap(path, provider):
                     _fail(
                         "inherited-dependency-conflict",
                         "align the provider domain first, then re-plan the consumer against its measured state",
@@ -2371,6 +2292,7 @@ def plan_recovery(
     plan: Mapping[str, Any], receipt: Mapping[str, Any]
 ) -> dict[str, Any]:
     """Read-only recovery plan over measured writes, including interrupted intents."""
+    _require_isolated_dependencies()
     return _plan_recovery(plan, receipt)
 
 

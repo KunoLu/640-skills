@@ -22,6 +22,71 @@ from sbtd_migration_files import require_private_directory
 
 
 class UpgradeCliTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "isolated POSIX user-site fixture")
+    def test_plan_rejects_dependencies_unavailable_to_isolated_executor(self):
+        """U32: parent-only imports cannot authorize an unappliable plan."""
+        import sysconfig
+        import venv
+
+        import tomlkit
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            environment = base / "python"
+            venv.EnvBuilder(with_pip=False).create(environment)
+            binary = environment / "bin/python"
+            site_dir = environment / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+            user_site = base / "user/lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+            user_site.mkdir(parents=True)
+            for item in Path(sysconfig.get_path("purelib")).iterdir():
+                if item.name.startswith("tomlkit") or item.name.endswith(".pth") or item.name == "__pycache__":
+                    continue
+                (site_dir / item.name).symlink_to(item, target_is_directory=item.is_dir())
+            (user_site / "tomlkit").symlink_to(Path(tomlkit.__file__).parent, target_is_directory=True)
+            # Enable the test-owned user site only in the non-isolated interpreter.
+            (site_dir / "fixture-user-site.pth").write_text(
+                "import site,sys; site.ENABLE_USER_SITE = not sys.flags.isolated; "
+                "site.addusersitepackages(set()) if site.ENABLE_USER_SITE else None\n",
+                encoding="utf-8",
+            )
+            env = {**os.environ, "PYTHONUSERBASE": str(base / "user"), "HOME": str(base)}
+            visibility = "import importlib.util; print(importlib.util.find_spec('tomlkit') is not None)"
+            for flags, expected in (([], "True"), (["-I"], "False")):
+                result = subprocess.run([str(binary), *flags, "-B", "-c", visibility],
+                                        env=env, capture_output=True, text=True, check=True)
+                self.assertEqual(result.stdout.strip(), expected)
+            vault = base / "vault"
+            require_private_directory(vault, create=True)
+            config = base / "codex/config.toml"
+            runtime = {}
+            for key, name in (("python", "python-bin"), ("node", "node"), ("cli", "cli.js")):
+                path = base / name
+                path.write_bytes(b"")
+                runtime[key] = str(path)
+            scope = base / "scope.json"
+            scope.write_text(json.dumps({
+                "schema_version": 1,
+                "hosts": [{"id": "codex", "platform": "codex", "config": str(config),
+                           "config_home": str(config.parent), "onboard_root": str(CLI.parents[1]),
+                           "skills_roots": [], "project_roots": [], "runtime": runtime}],
+            }), encoding="utf-8")
+            result = subprocess.run(
+                [str(binary), "-B", str(CLI), "upgrade", "--phase", "plan",
+                 "--scope", str(scope), "--backup-root", str(vault), "--json"],
+                env=env, capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["reason"], "isolated-dependencies-unavailable")
+            self.assertFalse(config.exists())
+            self.assertEqual(list(vault.iterdir()), [])
+            (site_dir / "tomlkit").symlink_to(Path(tomlkit.__file__).parent, target_is_directory=True)
+            positive = subprocess.run(result.args, env=env, capture_output=True, text=True,
+                                      timeout=120, check=False)
+            self.assertEqual(positive.returncode, 0, positive.stderr)
+            self.assertEqual(json.loads(positive.stdout)["plan"]["payload"]["status"], "planned")
+            self.assertFalse(config.exists())
+            self.assertEqual(list(vault.iterdir()), [])
+
     def test_shell_command_dependency_refuses_before_skill_replacement(self):
         """U28: replacing a command's containing Skill must not partially commit."""
         import sbtd_upgrade

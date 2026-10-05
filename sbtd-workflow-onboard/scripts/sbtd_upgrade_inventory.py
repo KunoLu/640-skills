@@ -64,6 +64,7 @@ from typing import Any, NoReturn
 
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_project import TaskDataError, open_regular_file
+from sbtd_upgrade_paths import path_contains
 
 __all__ = [
     "BASELINE_SCHEMA_VERSION",
@@ -172,15 +173,6 @@ def _norm(path: Path) -> str:
     return str(path)
 
 
-def _inside(path: Path, root: Path) -> bool:
-    """Containment of checked paths, including proven physical ancestor aliases."""
-    root_key = _physical_key(root)
-    for ancestor in (path, *path.parents):
-        if str(ancestor) == str(root):
-            return True
-        if root_key is not None and _physical_key(ancestor) == root_key:
-            return True
-    return False
 
 def _canonical_child(root: Path, relative: str) -> Path:
     """One package-internal path proven link-free on every literal component.
@@ -191,7 +183,7 @@ def _canonical_child(root: Path, relative: str) -> Path:
     rejected before a single byte is read through it.
     """
     candidate = _canonical(root / relative)
-    if not _inside(candidate, root):
+    if not path_contains(candidate, root):
         _fail("source-untrusted", "a package path escapes its root")
     return candidate
 
@@ -899,7 +891,7 @@ def _validate_hosts(
         config = _canonical_target(
             _resolved(item["config"], f"host {host_id} config"), root_identities
         )
-        if _norm(config) == _norm(config_home) or not _inside(config, config_home):
+        if _norm(config) == _norm(config_home) or not path_contains(config, config_home):
             _fail("unsafe-path", f"host {host_id} config must stay inside its config_home")
         if home_info is not None and home_info.st_ino:
             config = _canonical_target(
@@ -1042,7 +1034,7 @@ def _validate_scope(scope: object) -> dict[str, Any]:
         skills_roots.append(root)
     for index, root in enumerate(skills_roots):
         for other in skills_roots[index + 1 :]:
-            if _inside(root, other) or _inside(other, root):
+            if path_contains(root, other) or path_contains(other, root):
                 _fail("unsafe-path", "selected skills roots overlap")
 
     agents_targets = [
@@ -1051,11 +1043,11 @@ def _validate_scope(scope: object) -> dict[str, Any]:
     ]
     for index, target in enumerate(agents_targets):
         for other in agents_targets[index + 1 :]:
-            if _inside(target, other) or _inside(other, target):
+            if path_contains(target, other) or path_contains(other, target):
                 _fail("unsafe-path", "selected AGENTS targets overlap")
     for target in agents_targets:
         for root in skills_roots:
-            if _inside(target, root) or _inside(root, target):
+            if path_contains(target, root) or path_contains(root, target):
                 _fail("unsafe-path", "an AGENTS target overlaps a selected skills root")
         info = _lstat(target)
         if info is not None and not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
@@ -1451,7 +1443,7 @@ def _build_domains(
                 "resources": sorted(
                     resource["id"]
                     for resource in resources
-                    if _inside(Path(resource["target"]), root)
+                    if path_contains(Path(resource["target"]), root)
                 ),
                 "onboard_copy": onboard_copy,
             }

@@ -743,6 +743,8 @@ Windows Git Bash／zsh 的受管 PATH 使用 `/c/...` 驱动器别名（UNC 使�
 
 显式 shell probe 在隔离 HOME 中以交互条件加载 Bash／zsh profile；PowerShell 检查实际优先级最高的命令，alias／function 遮蔽不能被筛掉后报通过。受支持的 npm shim 按已识别的包装器结构绑定其字面相对 CLI 目标，不能把普通 `.cmd`／`.ps1` 文件的物理路径当作 `cli.js`。这证明命令解析及 CLI 文件指向，不执行包装器，也不证明其 Node 选择或实际运行成功；固定 Node 的协议能力由独立 host/runtime 检查证明。未知或具有动态路径展开的包装器不冒报匹配。
 
+新增 Bash／zsh PATH 块使用 LF，原有 CRLF 内容不转码，避免 CR 附着于原 PATH 最后一项。旧 PATH 检测同时识别所选目录的原生／POSIX 拼写及 zsh 数组项，按完整目录边界匹配，不把同前缀目录或子目录算作已选 bin。BOMless 非 ASCII npm PS1 shim 仅在实际 PowerShell 引擎使用 UTF-8（新版引擎或 UTF-8 默认代码页）时可按 UTF-8 字面目标证明，否则报告编码未证明；不执行 wrapper。
+
 `decisions` 以计划中的绝对目标路径为键，值为 `replace` 或 `preserve`。缺失受管资产进入安装；当前内容跳过；未知内容必须选择后重新计划，先展示额外文件及替换影响。身份不符、不安全路径或候选重叠不能靠 `replace` 放行。保留差异属于例外，不是完全对齐。个人 Skills、Caveman 未知定制、插件、hooks、账号与凭据不在默认升级范围。
 
 对已选但缺失的 host MCP／shell profile，`preserve` 不表示“保持不存在”：仍按缺失资源安装契约处理。不需要安装时应从 scope 移除该目标；对已经存在的差异才使用 `preserve` 保留例外。
@@ -788,9 +790,13 @@ apply 重新推导范围并校验源、完整前态与私有备份路径，先�
 
 OMP 的 legacy 还计入已启用继承来源中的 `sbtd-graft-*` 入口，不把未选 provider 或 YAML 设置文件当作 MCP 源。存在但非文件的配置不能证明无旧入口，报告 unknown。host RPC 已证明 unsupported 时，host 与域汇总保持该状态，不降为 unverified。host-home 别名只绑定配置目标，不改写已精确选中的其他决定键。
 
+OMP 来源发现／分析未完成且没有旧入口证据时，legacy 为 `unknown`／`source-discovery-incomplete`，不能由缺失 active 文件推出无继承旧项。直接 MCP 回复必须带 `jsonrpc: "2.0"`；RPC 数字 ID 不接受 Boolean 代替，合法 Number 表示仍匹配，Codex 不回显版本的独立约定保持。
+
 写后发生回执持久化或隔离执行器失败时，CLI 返回 `status=failed`、exit 3，并携带绑定本批的 `batch`：计划／恢复 ID、`backup_root`、可取得的最后持久 `checkpoint`（或 `null`）及实测／`unknown` 的 `mutation`。旧 checkpoint 不是本次成功证明；证据再次读取失败也不得把已有写入改报为普通写前 blocked。保留这些恢复入口和原件，先核对实际状态，再按同一批次的续作／恢复规则处理。
 
 当前 `--probe` 的宿主测试不读取认证或发起模型请求，使用临时 HOME 和所选受管配置投影。它证明真实宿主能加载该投影，不证明所有原宿主继承配置或已有连接已切换。原配置域／既有会话是否重载必须另有实际证据；普通 `check` 的 `contentAlignment.scope=skills-only` 只检查所选 Skills 根，不包括全局 AGENTS 或 MCP。
+
+升级／恢复计划使用同一 `sys.executable -I -B` 和净化环境检查声明 Python 依赖。依赖仅在父进程 user-site 可见时，在目标及 vault 写入前以 `isolated-dependencies-unavailable` 受控拒绝；须由操作人准备隔离可用的解释器依赖，不注入 user-site、取消隔离或自动安装。
 
 OMP 隔离宿主探测保持 **user-wide** 投影边界；它不创建私有项目图，也不证明仅由项目级配置提供的连接已加载。项目级路由没有用户级等价连接时，不得把该探测报告成通过；用户级路由通过也不构成项目级路由已验证的证据。
 
@@ -859,3 +865,9 @@ python scripts/onboard.py recovery --phase apply \
 | U28 Shell 命令依赖 | Given 受管 shell 命令位于同批被替换的 Skill 内；When apply；Then 先拒绝依赖冲突，目标均不写入 |
 | U29 既有 Profile 与路径编码 | Given 非空 BOMless PowerShell profile、Unicode 路径或 npm shim 字面标点；When render／probe；Then 无关字节保持，5.1正确解释PATH、stdout正确解码、路径内部Unicode分隔符不被截断、动态shim仍拒绝 |
 | U30 有效域与状态汇总 | Given OMP有效继承旧入口、非文件配置或不支持的host RPC；When verify；Then legacy按有效选定来源报告，非文件unknown，unsupported不降为unverified |
+| U31 封存范围稳定 | Given 缺失Skills根与AGENTS路径是大小写／规范化别名；When plan；Then 写前拒绝范围重叠，合法范围在创建目录后仍可重试／恢复 |
+| U32 隔离依赖一致 | Given 仅父解释器user-site可见的依赖；When plan；Then 在目标和vault写入前确认隔离解释器可用性，否则受控拒绝并引导准备依赖 |
+| U33 POSIX换行保全 | Given 带CRLF注释的Bash/zsh profile；When加入PATH块并加载；Then 保留原字节，原PATH最后目录仍能解析命令 |
+| U34 原生shim编码证明 | Given PowerShell5.1与BOMless非ASCII npm shim；When probe；Then 按实际解码证明CLI指向或拒绝matched，不执行wrapper |
+| U35 RPC类型与版本 | Given Boolean ID或MCP缺失／错误jsonrpc版本；When probe；Then 不获得verified，合法Number ID与Codex兼容保持 |
+| U36 未发现不等于不存在 | Given OMP接线前置条件不满足或Windows Bash旧PATH为POSIX拼写；When verify；Then 未完成来源发现为unknown，已选旧PATH仍报告 |

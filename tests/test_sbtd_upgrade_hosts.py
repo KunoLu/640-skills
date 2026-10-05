@@ -1097,6 +1097,37 @@ class ShellResourceTests(unittest.TestCase):
             scope["decisions"] = {str(path): decision}
         return scope
 
+    @unittest.skipIf(os.name == "nt", "POSIX PATH retention scenario")
+    def test_crlf_profile_preserves_last_original_path_directory(self):
+        """U33: inserting PATH must not append CR to an existing directory."""
+        for shell in ("bash", "zsh"):
+            executable = shutil.which(shell)
+            if executable is None:
+                continue
+            with self.subTest(shell=shell), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                profile, bin_dir, original_bin = base / "profile", base / "bin", base / "old-bin"
+                bin_dir.mkdir()
+                original_bin.mkdir()
+                command = original_bin / "retained-command"
+                command.write_bytes(b"#!/bin/sh\nexit 0\n")
+                command.chmod(0o755)
+                before = b"# existing CRLF comment\r\n"
+                _write(profile, before)
+                scope = self._scope(base, profile, shell, bin_dir, decision="replace")
+                resource = hosts.build_host_resources(scope, package_root=_package(base))[0]
+                rendered = hosts.render_resource(resource)
+                self.assertTrue(rendered.startswith(before))
+                _write(profile, rendered)
+                flags = ["--noprofile", "--norc"] if shell == "bash" else ["-f"]
+                result = subprocess.run(
+                    [executable, *flags, "-c", '. "$1"; command -v retained-command', shell, str(profile)],
+                    env={**os.environ, "HOME": str(base), "PATH": os.defpath + ":" + str(original_bin)},
+                    capture_output=True, text=True, timeout=30, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), str(command))
+
     @unittest.skipUnless(shutil.which("bash"), "bash required")
     def test_unicode_line_separators_remain_inside_resolved_path(self):
         """U29: shell protocol emits LF, not Unicode line separators."""
@@ -1558,6 +1589,47 @@ class VerifyProbeTests(unittest.TestCase):
         resource = hosts.build_host_resources(scope, package_root=package)[0]
         _write(Path(host["config"]), hosts.render_resource(resource))
         return host, scope
+
+    def test_rpc_envelope_types_and_mcp_version_are_authoritative(self):
+        """U35: Python Boolean equality cannot substitute a JSON Number ID."""
+        cases = (("boolean", "failed"), ("missing-version", "failed"),
+                 ("wrong-version", "failed"), ("numeric", "verified"), ("valid", "verified"))
+        for case, expected in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory).resolve()
+                runtime, package = _runtime(base), _package(base)
+                skills = _skills_root(base, ["alpha-skill"])
+                project = base / "project"
+                project.mkdir()
+                _host, scope = self._aligned_codex(base, runtime, package, skills, project)
+                rig = _ProbeRig(self, ["alpha-skill"]).install()
+                original, codex = rig._mcp_handler, rig._codex_handler
+
+                def mcp(request, original=original, case=case):
+                    response = original(request)
+                    if response is not None:
+                        if case == "boolean" and request["id"] == 1:
+                            response["id"] = True
+                        elif case == "numeric":
+                            response["id"] = float(request["id"])
+                        elif case == "missing-version":
+                            response.pop("jsonrpc")
+                        elif case == "wrong-version":
+                            response["jsonrpc"] = "1.0"
+                    return response
+
+                def versionless_codex(request, codex=codex):
+                    response = codex(request)
+                    if response is not None:
+                        response.pop("jsonrpc", None)
+                    return response
+
+                rig._mcp_handler, rig._codex_handler = mcp, versionless_codex
+                with mock.patch.object(hosts, "_HANDSHAKE_TIMEOUT", 0.1):
+                    result = hosts.verify_hosts(scope, package_root=package, probe=True)
+                checks = result["hosts"][0]["host"]["checks"]
+                self.assertEqual(checks["protocol"]["status"], expected, checks)
+                self.assertEqual(checks["host_load"]["status"], "verified", checks)
 
     def test_missing_codex_method_is_unsupported_without_private_error_text(self):
         """U22: unsupported interface is distinct from an ordinary refusal."""
@@ -2508,6 +2580,25 @@ class SelectedExecutableIdentityTests(unittest.TestCase):
 class NativeWindowsBoundaryTests(unittest.TestCase):
     """Native Windows process environment stays explicit and private."""
 
+    def test_legacy_selected_bin_matches_git_bash_alias(self):
+        raw = (b'export PATH="/c/Users/me/bin:$PATH"\nexport PATH="/c/other/bin:$PATH"\n'
+               b'export PATH="/c/Users/me/bin-extra:$PATH"\n'
+               b'export PATH="/c/Users/me/bin/nested:$PATH"\n'
+               b'path=(/c/Users/me/bin $path)\npath+=(/c/Users/me/bin)\n')
+        self.assertEqual(hosts._shell_legacy_lines(raw, r"C:\Users\me\bin"), [1, 5, 6])
+
+    @unittest.skipUnless(os.name == "nt", "native Windows selected path")
+    def test_git_bash_legacy_alias_is_reported_by_public_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            profile, bin_dir = base / ".bashrc", base / "bin"
+            before = f'export PATH="{hosts._posix_shell_path(str(bin_dir))}:$PATH"\n'.encode()
+            _write(profile, before)
+            scope = {"shell_profiles": [{"path": str(profile), "shell": "bash", "bin": str(bin_dir)}]}
+            entry = hosts.verify_hosts(scope, package_root=_package(base))["shell_profiles"][0]
+            self.assertEqual(entry["legacy"]["status"], "present", entry)
+            self.assertEqual(profile.read_bytes(), before)
+
     @unittest.skipUnless(os.name == "nt" and shutil.which("bash"), "native Git Bash required")
     def test_git_bash_binds_exe_not_same_named_powershell_wrapper(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -3136,6 +3227,55 @@ class NpmShimBindingTests(unittest.TestCase):
 class NativeWindowsShimBindingTests(unittest.TestCase):
     """Real npm cmd-shim wrappers on native Windows (Git Bash / PowerShell)."""
 
+    def test_legacy_powershell_cannot_prove_utf8_unicode_shim(self):
+        """U34: command resolution alone does not prove legacy script decoding."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package, runtime = _package(base), _runtime(base)
+            cli = base / "包/dist/cli.js"
+            _write(cli, b"")
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir, "../包/dist/cli.js")
+            # POSIX fixture uses the selected extensionless command with PS1 bytes.
+            if os.name != "nt":
+                (bin_dir / "graft").write_bytes((bin_dir / "graft.ps1").read_bytes())
+            scope, profile = self._scope(base, runtime, bin_dir, "powershell")
+            resource = next(row for row in hosts.build_host_resources(scope, package_root=package)
+                            if row["kind"] == "shell")
+            _write(profile, hosts.render_resource(resource))
+            selected = resource["details"]["command_identity"]["path"]
+            for engine, expected in (("5:1252", "failed"), ("7:65001", "verified"), ("5:65001", "verified")):
+                wire = f"SBTD_PS_ENCODING={engine}\nSBTD_RESOLVED_GRAFT={selected}\n".encode()
+                with self.subTest(engine=engine), mock.patch.object(hosts, "_which", return_value="selected-powershell"), mock.patch.object(
+                    hosts.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout=wire),
+                ):
+                    check = hosts._shell_resolution(scope["shell_profiles"][0], resource["details"])
+                self.assertEqual(check["status"], expected, check)
+
+    @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell 5.1 required")
+    def test_native_legacy_engine_unicode_shim_is_not_falsely_matched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            package, runtime = _package(base), self._runtime_with_exe_node(base)
+            cli = base / "包/dist/cli.js"
+            _write(cli, b"")
+            runtime["cli"] = str(cli)
+            bin_dir = base / "bin"
+            _npm_shims(bin_dir, "../包/dist/cli.js")
+            scope, profile = self._scope(base, runtime, bin_dir, "powershell")
+            resource = next(row for row in hosts.build_host_resources(scope, package_root=package)
+                            if row["kind"] == "shell")
+            _write(profile, hosts.render_resource(resource))
+            executable = shutil.which("powershell")
+            encoding = subprocess.run(
+                [executable, "-NoProfile", "-Command", "[Text.Encoding]::Default.CodePage"],
+                capture_output=True, text=True, check=True, timeout=30,
+            )
+            with mock.patch.object(hosts, "_which", return_value=executable):
+                check = hosts._shell_resolution(scope["shell_profiles"][0], resource["details"])
+            self.assertEqual(check["status"], "verified" if encoding.stdout.strip() == "65001" else "failed", check)
+
     def _scope(self, base: Path, runtime: dict, bin_dir: Path, shell: str = "bash"):
         host = _codex_host(base, runtime)
         profile = base / ("profile.ps1" if shell == "powershell" else ".bashrc")
@@ -3703,6 +3843,20 @@ class LegacyMcpClassificationTests(unittest.TestCase):
         return hosts.verify_hosts({"hosts": [host]}, package_root=package)["hosts"][0][
             "legacy"
         ]
+
+    def test_omp_incomplete_runtime_cannot_prove_inherited_legacy_absent(self):
+        """U36: skipped discovery is unknown even when the active file is absent."""
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            runtime, package = _runtime(base), _package(base)
+            host = _omp_host(base, runtime)
+            _write(base / "account/.codex/config.toml", _codex_toml(
+                runtime["python"], _managed_args(package, runtime),
+            ).replace(b"sbtd-graft", b"sbtd-graft-old"))
+            host["runtime"] = {"python": None, "node": None, "cli": None}
+            legacy = self._legacy(host, package)
+            self.assertEqual(legacy["status"], "unknown", legacy)
+            self.assertFalse(Path(host["config"]).exists())
 
     def test_nonfile_config_is_unknown_not_legacy_free(self):
         """U30: a present directory cannot prove that legacy entries are absent."""
