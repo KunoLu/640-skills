@@ -47,9 +47,9 @@ README.html实际浏览器新段落可见、无横向溢出；README.md、README
 
 完整观察器1771项（27跳过）通过，随后无观察器的原生full1771项（27跳过）也通过。后续取证确认真实followup计划封存catalog `source: "."`对应的当前Onboard包directory，且目录snapshot包含缓存；隔离实验复现compileall改变该snapshot。首轮源码编辑、第二轮compileall均与全量并发，这是已确认的验证输入污染机制；原始错误未保存具体来源路径，故不把机制证据冒充两次失败的逐路径归因。最终无写入完整重跑通过，生产守卫未变。
 
-后续静态复核修正F04测试隔离：只stub显式`selected-powershell`，真实Windows ACL子进程仍委托原run；失败控制要求编码未证明原因，不能让更早隐私拒绝冒充目标red。定点／ruff通过，reviewer再次clean。代码9ee8b317ce5148cf6634abd4b986b8a2ab0990ee与测试修正ea62faa已推送，生产实现未再改变。
+后续静态复核修正F04测试隔离：只stub显式`selected-powershell`，真实Windows ACL子进程仍委托原run；失败控制要求编码未证明原因，不能让更早隐私拒绝冒充目标red。定点／ruff通过，reviewer再次clean。代码9ee8b317ce5148cf6634abd4b986b8a2ab0990ee与测试修正ea62faa已推送；这一测试修正本身未改变生产实现。
 
-macOS原生CI9ee8b31的U32在父解释器正向控制失败：fixture硬编码user-site布局不适用于framework Python。改由临时解释器的`site.getusersitepackages()`／`sysconfig.get_path("purelib")`取得两路径，保留真实父／`-I`负例及补依赖正向控制；本地U32、ruff及326项升级全子集通过，独立复核clean。原生CI仍待最终测试修正提交复验。
+macOS原生CI9ee8b31的U32在父解释器正向控制失败：fixture硬编码user-site布局不适用于framework Python。改由临时解释器的`site.getusersitepackages()`／`sysconfig.get_path("purelib")`取得两路径，保留真实父／`-I`负例及补依赖正向控制；本地U32、ruff及326项升级全子集通过，独立复核clean。布局修正已包含在acaf83a及其精确原生CI通过证据中；0e682f2不是最终交付head。
 
 Lessons split name: kuno；来源`.sbtd/developer`只读resolve为ready。新增`LESSON-20261005-kuno-freeze-sealed-inputs`到validation-scripts topic、index与高频短入口，只记已证实机制与归因限制；不记录猜测根因。
 
