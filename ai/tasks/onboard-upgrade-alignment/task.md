@@ -4,11 +4,11 @@ id: onboard-upgrade-alignment
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确要求在新开发分支以 strict 完成已确认四阶段方案；本机应用、同步、旧资产清理、新分支合并及发布未授权。
-status: "checking"
+status: "done"
 branch: feat/onboard-upgrade-alignment
 created_at: '2026-10-03T22:31:25.791160+08:00'
-updated_at: "2026-10-05T16:25:52.744853+08:00"
-completed_at: null
+updated_at: "2026-10-05T18:38:11.700246+08:00"
+completed_at: "2026-10-05T18:38:11.700246+08:00"
 ---
 # Onboard 通用升级对齐、恢复与分层验收
 
@@ -28,7 +28,7 @@ completed_at: null
 
 第三轮审查（head 1ae9c321）13项按用户要求先修三个P1，再依风险顺序完成其余项及独立复核／原生Windows反馈修正；独立编号T01—T13与本轮门禁／证据见[review-round3.md](review-round3.md)。本地1762项完整验证、317项升级回归、真实隔离生命周期、独立复核和7d360b6精确三平台CI全部通过；不覆盖两轮历史，未部署、同步、清理、合并或发布。
 
-第四轮审查（head 2b913a66）7项按用户优先级实现，F07独立复核两个边界已修正。范围、原始red／green、真实隔离生命周期和验证状态见[review-round4.md](review-round4.md)。326项升级回归及真实37资源安装／宿主／重试／恢复通过；完整suite的followup漂移正在诊断，三平台精确head CI尚待完成，不提前标记done。
+第四轮审查（head 2b913a66）7项及独立复核／原生CI反馈均已修复，F02覆盖计划与升级／恢复执行环境，F07完整目录边界与zsh数组均保持。证据见[review-round4.md](review-round4.md)及[check.md](check.md)：最终本地1771项、326项升级子集、真实37资源生命周期、两切面独立复核及`acaf83a39679f1f6605d54a9b6ce43847b3bbe31`精确三平台CI全部通过。早期失败与输入污染机制证据保留，不放宽守卫；未部署、同步、清理、合并或发布。最终记录提交另验自身CI。
 
 ## 状态事件
 
@@ -52,3 +52,4 @@ completed_at: null
 | 2026-10-05T15:02:04.878812+08:00 | done | planned | 用户确认按优先级修复第四轮7项审查问题 | PR110 head2b913a66；本轮7项与用户授权 |
 | 2026-10-05T15:02:07.080119+08:00 | planned | in-progress | 沿用strict，按封存范围/依赖/Shell/协议/诊断顺序复现修复 | 第四轮范围已确认；保留既有四项契约 |
 | 2026-10-05T16:25:52.744853+08:00 | in-progress | checking | 第四轮7项及独立复核边界修正完成，真实隔离生命周期通过，继续诊断全量followup漂移并准备原生CI | review-round4.md；326升级回归；37资源native生命周期；full失败原始报告保留 |
+| 2026-10-05T18:38:11.700246+08:00 | checking | done | 第四轮7项、独立复核与原生CI反馈全部闭合；完整本地、真实隔离生命周期及精确三平台CI通过 | acaf83a39679f1f6605d54a9b6ce43847b3bbe31；GitHub run37291867601；review-round4.md；check.md；1771tests及326升级回归 |

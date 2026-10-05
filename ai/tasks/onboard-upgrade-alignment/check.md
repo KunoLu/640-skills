@@ -4,7 +4,11 @@
 
 基线2b913a66，按F01—F07优先级完成封存范围、隔离依赖、Shell／RPC证据和legacy诊断修复；两切面独立复核已关闭F07边界与跨平台fixture问题。详细red／green、失败记录与证据边界见[review-round4.md](review-round4.md)。F02计划与两个执行入口都验证当前隔离解释器，真实CLI覆盖plan拒绝、合法计划、apply零写入拒绝和recovery保全拒绝；当前326项升级子集通过（18 skip）。最终生产源码的37资源真实安装／Codex／OMP／retry／recovery闭环通过，原字节恢复。
 
-本地早期1771项无写入full已通过，最后执行入口补充后的完整重跑与精确提交原生三平台CI尚待完成。旧0e682f2及更早提交不能作为本次最终交付证据；不提前报告Release Readiness ready。README两入口、REFERENCE、CHANGELOG和版本化automation prompt均维护；未操作live automation、真实HOME或发布。
+最终生产／测试提交`acaf83a39679f1f6605d54a9b6ce43847b3bbe31`的[三平台CI run37291867601](https://github.com/KunoLu/640-skills/actions/runs/37291867601)全部通过；同版本地原生完整1771项（27 skip）通过。Linux完整1771项（47 skip）及最低tomlkit56项通过；macOS安装器271项（2 skip）、升级326项（18 skip）通过；Windows安装器49项、PowerShell子集15项、升级326项（30 skip）通过，原生5.1 Unicode shim／Git Bash legacy实际执行。README两入口、REFERENCE、CHANGELOG和版本化automation prompt均维护，浏览器实际文档可见；未操作live automation、真实HOME或发布。最终记录提交须另取自身CI，不以旧head冒充。
+
+第四轮Release Readiness：ready，仅仓库能力交付。计划与执行依赖检查限时30秒且不取消`-I`；原件、确认、写前守卫、RPC期限及私有恢复边界保持；无新增服务队列。真实37资源两次安装／重试／恢复、Codex／OMP各33 Skills与6工具通过，不声称原GUI重载或用户环境部署。两切面独立复核最终clean，Ponytail与可读性复核无待处理项。
+
+BDD：traceable；REFERENCE U31—U36中文正文＋英文Given/When/Then，unittest映射在review-round4及命名用例；v1报告仅通用CI证据，不伪造v2场景执行绑定。Cross-repo context／API Contract：not-needed；Mock Strategy：contract-backed，真实宿主证据单列。rtk：skipped-for-report。Final Test Report／Run Summary MD：generated；Targeted Rerun／Final Full Rerun：passed。本地证据developer-local／dirty／local-only，CI证据ci／exact／verified；外部envelope发布器not-configured，GitHub原生Checks已发布。无业务Web／移动端变更，Playwright／Maestro不适用；静态README表面已用Chrome DevTools验证。
 
 ## PR #110 第三轮13项修复（历史）
 

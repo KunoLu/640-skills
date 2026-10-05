@@ -54,3 +54,19 @@ macOS原生CI9ee8b31的U32在父解释器正向控制失败：fixture硬编码us
 Lessons split name: kuno；来源`.sbtd/developer`只读resolve为ready。新增`LESSON-20261005-kuno-freeze-sealed-inputs`到validation-scripts topic、index与高频短入口，只记已证实机制与归因限制；不记录猜测根因。
 
 最终F02执行消费链补充：两个public apply在校验封存ID确认后、stage／vault写入前复用当前隔离依赖门，防止由不同解释器执行时沿用旧计划环境证明。U32真实CLI执行red原为误导性plan-stale；修后升级apply缺依赖为exit2且空vault／无配置，恢复apply缺依赖为exit2且既有vault与配置原字节不变。恢复输出必须位于vault的夹具错误已修正，原始scope-violation保留。326项升级子集、ruff／ty／语法以及再次37资源真实宿主／重试／恢复均通过；独立复核clean。此后冻结源码，最终完整重跑与精确新head CI不复用旧0e682f2结果。
+
+## 最终验收与交付
+
+生产／测试提交`acaf83a39679f1f6605d54a9b6ce43847b3bbe31`：本地最终1771 tests／27 skip通过；精确[run37291867601](https://github.com/KunoLu/640-skills/actions/runs/37291867601)三平台全绿。
+
+| 平台 | 原生结果 |
+|---|---|
+| Linux | 全量1771 tests／47 skip；最低tomlkit56项；大小写敏感路径控制通过 |
+| macOS | 安装器271 tests／2 skip；升级326 tests／18 skip；U32真实解释器布局及plan/apply/recovery控制通过 |
+| Windows | 安装器49项、PowerShell15项、升级326 tests／30 skip；原生PowerShell5.1 Unicode shim、Git Bash alias legacy和真实ACL路径通过 |
+
+原始CI日志、同stem中文汇总、通用v1 envelope及schema／报告摘要校验均在`reports/review-round4/ci-code-acaf83a*`；历史9ee8b31的Windows fixture／macOS布局失败和ea62faa的macOS失败另存，不覆盖。Final Full Rerun passed；生产代码之后不再修改，最终记录提交另跑精确head CI。
+
+Release Readiness Review：ready（仅仓库修复交付）。依赖检查30秒期限；RPC原期限、原件与确认、受信vault和独立恢复不变；无服务队列／跨服务背压需求。JSON原因和回执可观测，REFERENCE给出运行／恢复边界；真实临时域恢复证明已取得。原GUI、真实HOME部署、live automation同步、旧资产清理、合并与发布均未执行，不属于本次通过声明。
+
+README.md、README.html均更新用户可见计划／执行与证据边界；版本化automation prompt新增路径模块扫描并更新同一边界；CHANGELOG中文未发布章节已维护。Lessons为已验证本地kuno身份的单条追加，历史块不改写。任务关闭证据指向本段与check.md，所有scope外本机路径保持未写。
