@@ -691,5 +691,17 @@
 - 修复：最新可信未写入结果不能被旧 checkpoint 或匹配内容覆盖；无明确归属但现场不同于 before 时保持 blocked，保留用户内容与原件。
 - 预防：用真实消费者分别覆盖 intent 前后竞态、明确未写入后相同内容、旧 checkpoint、成功写后回执中断与新增缓存；不能只测理想 desired 状态或把 partial／unknown 当作零写入。
 
+## LESSON-20261005-kuno-freeze-sealed-inputs: Freeze All Sealed Inputs During Validation
+
+- 日期：2026-10-05
+- 标签：validation, migration, source-snapshot, compileall, concurrency
+- 适用场景：测试把当前仓库的完整安装包封存为来源，或全量验证与编辑／编译检查并行。
+- 严重级别：high
+- 来源：第四轮升级修复的真实followup来源封存检查与隔离目录快照实验。
+- 问题：前两次全量期间分别发生源码编辑和compileall，followup夹具出现来源漂移拒绝；仅冻结手写源码不能阻止字节码写入。原错误未保留具体来源路径，不能把推断表述为逐路径已证明的根因。
+- 机制：真实followup计划确实把catalog中source为`.`的当前Onboard包作为directory来源封存；目录snapshot不排除缓存。隔离实验直接证明compileall创建字节码会改变同一目录的snapshot，即使Python本身以`-B`启动。
+- 修正：编辑、compileall、格式化等写入步骤先完成，再冻结所有封存输入运行完整suite；只读观察器和随后原生全量均通过，保留最初失败与归因边界，不放宽`_original_reference`。
+- 预防：验证调度按实际文件写集而非“检查命令”名称分类；唯一controller也不能在自己的全量运行期间改写输入。来源漂移先抓具体路径与前后态；重跑通过不是原错误根因证明。
+
 <!-- lessons:kuno:end -->
 

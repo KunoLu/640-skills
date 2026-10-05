@@ -35,8 +35,13 @@ class UpgradeCliTests(unittest.TestCase):
             environment = base / "python"
             venv.EnvBuilder(with_pip=False).create(environment)
             binary = environment / "bin/python"
-            site_dir = environment / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
-            user_site = base / "user/lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+            env = {**os.environ, "PYTHONUSERBASE": str(base / "user"), "HOME": str(base)}
+            layout = subprocess.run(
+                [str(binary), "-B", "-c",
+                 "import json,site,sysconfig; print(json.dumps([sysconfig.get_path('purelib'),site.getusersitepackages()]))"],
+                env=env, capture_output=True, text=True, check=True, timeout=30,
+            )
+            site_dir, user_site = map(Path, json.loads(layout.stdout))
             user_site.mkdir(parents=True)
             for item in Path(sysconfig.get_path("purelib")).iterdir():
                 if item.name.startswith("tomlkit") or item.name.endswith(".pth") or item.name == "__pycache__":
@@ -49,7 +54,6 @@ class UpgradeCliTests(unittest.TestCase):
                 "site.addusersitepackages(set()) if site.ENABLE_USER_SITE else None\n",
                 encoding="utf-8",
             )
-            env = {**os.environ, "PYTHONUSERBASE": str(base / "user"), "HOME": str(base)}
             visibility = "import importlib.util; print(importlib.util.find_spec('tomlkit') is not None)"
             for flags, expected in (([], "True"), (["-I"], "False")):
                 result = subprocess.run([str(binary), *flags, "-B", "-c", visibility],
