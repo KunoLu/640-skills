@@ -1,6 +1,7 @@
 .DS_Store
 /.sbtd
 /docs/handoffs
+/ai/tasks/**/reports
 /graft
 /.graft
 __pycache__/

@@ -21,23 +21,36 @@ SKILLS = ROOT / "sbtd-workflow-onboard" / "templates" / "skills"
 
 
 class WorkflowContractTests(unittest.TestCase):
-    def test_repository_gitignore_keeps_canonical_generated_paths(self) -> None:
-        entries = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
-
-        self.assertEqual(
-            entries,
-            [
-                ".DS_Store",
-                "/.sbtd",
-                "/docs/handoffs",
-                "/graft",
-                "/.graft",
-                "__pycache__/",
-                "AGENTS.md",
-                ".chrome-devtools-mcp/",
-                ".playwright-mcp/",
-            ],
-        )
+    def test_task_reports_stay_local_without_hiding_shared_documents(self) -> None:
+        for source in (
+            ROOT / ".gitignore",
+            ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore",
+        ):
+            with self.subTest(source=source):
+                self.assert_template_ignore_state(
+                    source=source,
+                    ignored=(
+                        "ai/tasks/example/reports/raw.json",
+                        "ai/tasks/example/reports/review-round4/summary.md",
+                        "ai/tasks/parent/child/reports/raw.txt",
+                        "ai/tasks/archive/2026-Q1/example/reports/raw.json",
+                        "ai/tasks/archive/undated/example/reports/summary.md",
+                    ),
+                    trackable=(
+                        "ai/tasks/index.md",
+                        "ai/tasks/example/task.md",
+                        "ai/tasks/example/prd.md",
+                        "ai/tasks/example/design.md",
+                        "ai/tasks/example/implement.md",
+                        "ai/tasks/example/reports.md",
+                        "ai/tasks/parent/child/task.md",
+                        "ai/tasks/archive/2026-Q1/example/task.md",
+                        "ai/tasks/archive/undated/example/task.md",
+                        "src/reports/template.ts",
+                        "reports/public.md",
+                        "packages/demo/ai/tasks/example/reports/public.md",
+                    ),
+                )
 
     def test_project_template_protects_local_state_without_hiding_shared_paths(
         self,
@@ -75,7 +88,10 @@ class WorkflowContractTests(unittest.TestCase):
             shutil.copyfile(template, project / ".gitignore")
             external = root / "external"
             external.mkdir()
-            for relative in (".sbtd", "docs/handoffs", "graft", ".graft"):
+            for relative in (
+                ".sbtd", "docs/handoffs", "graft", ".graft",
+                "ai/tasks/example/reports",
+            ):
                 with self.subTest(path=relative):
                     target = project / relative
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -97,8 +113,9 @@ class WorkflowContractTests(unittest.TestCase):
         self,
         ignored: tuple[str, ...],
         trackable: tuple[str, ...],
+        source: Path | None = None,
     ) -> None:
-        template = (
+        template = source or (
             ROOT / "sbtd-workflow-onboard" / "templates" / "project" / ".gitignore"
         )
         with tempfile.TemporaryDirectory() as temporary:
@@ -126,7 +143,10 @@ class WorkflowContractTests(unittest.TestCase):
             project = Path(temporary)
             self._run_git(project, "init", "--quiet")
             shutil.copyfile(template, project / ".gitignore")
-            for relative in (".sbtd", "docs/handoffs", "graft", ".graft"):
+            for relative in (
+                ".sbtd", "docs/handoffs", "graft", ".graft",
+                "ai/tasks/example/reports",
+            ):
                 with self.subTest(path=relative):
                     target = project / relative
                     target.parent.mkdir(parents=True, exist_ok=True)

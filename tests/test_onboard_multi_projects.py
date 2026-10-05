@@ -523,12 +523,19 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
             "docs/handoffs/session.md",
             "graft/index.json",
             ".graft/state.json",
+            "ai/tasks/example/reports/raw.json",
+            "ai/tasks/parent/child/reports/raw.txt",
+            "ai/tasks/archive/2026-Q1/example/reports/raw.json",
+            "ai/tasks/archive/undated/example/reports/summary.md",
         )
         trackable = (
             "AGENTS.md",
             "ai/tasks/shared/task.md",
             "ai/tasks/parent/child/task.md",
             "ai/tasks/archive/2026-Q1/shared/task.md",
+            "ai/tasks/archive/undated/shared/task.md",
+            "ai/tasks/shared/reports.md",
+            "src/reports/template.ts",
             "docs/spec/lessons.md",
             "docs/lessons/index.md",
             "docs/CONTEXT.md",
@@ -567,6 +574,32 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, output)
         self.assertFalse((self.project_one / ".git").exists())
         self.assertIn("verification skipped", output)
+
+    def test_init_projects_rejects_task_report_reinclusion(self) -> None:
+        self.git_init_project_one()
+        first = self.init_project_one_gitignore()
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        gitignore = self.project_one / ".gitignore"
+        protected = gitignore.read_text(encoding="utf-8")
+        for report_dir in (
+            "ai/tasks/example/reports",
+            "ai/tasks/parent/child/reports",
+            "ai/tasks/archive/2026-Q1/example/reports",
+            "ai/tasks/archive/undated/example/reports",
+        ):
+            with self.subTest(report_dir=report_dir):
+                report = self.project_one / report_dir / "raw.json"
+                report.parent.mkdir(parents=True, exist_ok=True)
+                report.write_bytes(b'{"private": "fixture"}\n')
+                pattern = f"!/{report_dir}"
+                gitignore.write_text(protected + pattern + "\n", encoding="utf-8")
+                result = self.init_project_one_gitignore()
+                output = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, output)
+                self.assertIn("must stay ignored", output)
+                self.assertIn(pattern, output)
+                self.assertIn(report_dir, output)
+                self.assertEqual(report.read_bytes(), b'{"private": "fixture"}\n')
 
     def test_init_projects_rejects_reinclusion_that_exposes_env_secrets(self) -> None:
         """A pre-existing `!.env*` outlives the appended `.env` rule because the

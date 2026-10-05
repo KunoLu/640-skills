@@ -47,9 +47,10 @@ venv/
 .omp/plugins/
 
 # ---------- SBTD ----------
-# Root-local state and handoffs; shared ai/tasks and docs/spec stay trackable.
+# Shared task documents stay trackable; task reports stay local at every depth.
 /.sbtd
 /docs/handoffs
+/ai/tasks/**/reports
 
 # ---------- Impeccable ----------
 .impeccable/live/server.json

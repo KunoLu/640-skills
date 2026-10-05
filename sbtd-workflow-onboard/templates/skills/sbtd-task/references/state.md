@@ -14,6 +14,8 @@ The task's `task.md` owns mode, source, status, timestamps, body and events. Ord
 
 `.sbtd/active-task.json` is only `{schema_version, task_id, task_path}`. A shared `ai/tasks/index.md` is navigation; handoff is a dated snapshot. Neither owns a second mode or status. Local files do not automatically move to another machine or worktree.
 
+Within shared `ai/tasks/`, a directory named `reports` at any depth is reserved for local raw evidence and report summaries, including nested and archived tasks. The project template protects it with `/ai/tasks/**/reports` (also matching a same-name file or symlink); task documents, the index and `reports.md` remain trackable. Verify protection before writing reports. Keep existing test-runner report locations unchanged. Publishing evidence requires redaction and an explicitly approved destination outside the ignored report tree; do not force-add it or automatically untrack existing files. Ignore rules do not sanitize content or authorize deletion.
+
 Before any local write, inspect actual ignore rules and tracked state. If `.sbtd` or `docs/handoffs` lacks protection, request narrow authorization for the required root-anchored rules; do not initialize an entire project or remove old protection. A reserved path that contains user content is a conflict, not permission to hide or replace it. No authorization means no local persistence; say so and continue only unrelated safe work where the mode permits.
 
 ## Read and validate
