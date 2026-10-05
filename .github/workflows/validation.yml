@@ -88,12 +88,20 @@ jobs:
           tests.test_global_mcp_installation
           tests.test_sbtd_graft_isolation
 
+      - name: Verify native macOS upgrade and recovery
+        run: >-
+          python -B -m unittest
+          tests.test_onboard_upgrade
+          tests.test_sbtd_upgrade_inventory
+          tests.test_sbtd_upgrade_engine
+          tests.test_sbtd_upgrade_hosts
+
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"
 
   windows-powershell-installer:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -143,6 +151,20 @@ jobs:
         run: >-
           python -B -m unittest -v
           tests.test_sbtd_migration_files.MigrationFileTests.test_windows_private_directory_acl_gateway
+
+      - name: Verify native PowerShell Unicode resolution
+        run: >-
+          python -B -m unittest -v
+          tests.test_sbtd_upgrade_hosts.ShellResourceTests.test_unicode_resolution_uses_utf8_even_with_legacy_console_encoding
+          tests.test_sbtd_upgrade_hosts.ShellResourceTests.test_new_unicode_profile_loads_in_windows_powershell
+
+      - name: Verify native Windows upgrade and recovery
+        run: >-
+          python -B -m unittest -v
+          tests.test_onboard_upgrade
+          tests.test_sbtd_upgrade_inventory
+          tests.test_sbtd_upgrade_engine
+          tests.test_sbtd_upgrade_hosts
 
       - name: Verify the checkout stayed clean
         run: test -z "$(git status --porcelain)"

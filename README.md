@@ -85,6 +85,36 @@ Codex plugin / connector、remote plugins、ChatGPT-hosted MCP 和 `tool_search`
 
 ## 安装及使用说明
 
+### 升级与对齐（区别于初始化和数据迁移）
+
+已有环境需要内容对齐时，使用显式 `upgrade --phase plan|apply|verify`，不要用 `init` 的“合法 Skill 壳已存在”推断已经升级，也不要把 `reset` 当作带恢复保证的升级。基线来自当前完整 Onboard 包的 catalog、模板和固定 stable 快照；不联网追逐 latest。
+
+1. 明确选择 Skills 根、全局 AGENTS、宿主配置域及可选 shell profile；普通 Codex 与 Orca 账户是不同配置域，未选择的范围不修改。
+2. 只读计划列出缺失、当前、未知内容漂移和身份冲突；未知定制须明确 `replace` 或 `preserve`，不能自动覆盖。
+3. 审阅计划后显式确认 apply；先保存原件，再逐资源应用与记录结果。恢复另走 `recovery`，备份不随成功自动销毁。
+4. 分别验收磁盘内容、运行时协议、真实宿主加载和历史清理。只读 verify 不启动宿主；`--probe --yes` 才授权探测。未重载、未验证或保留差异不能写成“全部对齐”。
+
+恢复以操作人选定并独占管理的私有 vault 为受信历史；hash 不防御有写权限者整组伪造操作记录。来源不明的 vault 不可直接自动恢复。恢复会保留空父目录，执行包独立变化后的旧计划需重新核对，不自动执行历史暂存代码。
+
+Python、Bash `install.sh upgrade ...` 和 PowerShell `-WorkflowMode upgrade` 使用同一实现。Scope JSON、私有计划、恢复命令与验收边界见 [Upgrade Alignment](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。旧工具入口仍由 `cleanup-legacy` 独立确认；新增九个 GitNexus Skills 的精确身份清理，不卸载 CLI、不删除全局数据、历史运行时或备份。Caveman 未知定制、插件与 hooks 不因升级被覆盖。
+
+升级安全与兼容边界：Codex 只对齐所选 `config_home/config.toml`；UTF-16 profile 和无法表示为单个 PATH 项的目录写前拒绝。Shell probe 使用实际交互加载／命令优先级，并核对受支持 npm shim 的 CLI 文件指向，不冒充包装器执行或 Node 验证；OMP 以结构化注册表而非 prompt 文本证明加载，仍只验收 user-wide 隔离投影。混合结果保留 blocked 优先级；写后失败返回 exit 3 与本批 `batch` checkpoint／备份入口，不能当作零写入拒绝。
+
+路径判断区分字面拼写与文件系统身份：同一目标的冲突物理别名、同批改写的继承输入在目标写入前拒绝；大小写敏感 Windows 目录不因字符串折叠被合并或复用错误摘要。已选配置、profile 与 Onboard 子目录的真实别名绑定规范选择，封存的 blocked 决定不因磁盘后来匹配而解除。
+
+Shell 保留既有 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼容 Windows PowerShell 5.1 的 Unicode 路径；登录 profile 与 rc 文件分别按登录／非登录条件隔离探测。协议验收要求有效 method 回复、受支持的 MCP 协商版本和正常收尾；缺少宿主方法报告脱敏 unsupported。输入路径无法展开、probe 未确认等拒绝统一返回完整 JSON 引导。
+
+恢复认领以可信写入证据为准：明确未写入的回执不能被“现场字节恰好相同”或更旧 checkpoint 覆盖；有 intent 但归属不明的现场保持 blocked。Darwin 缺失目标的 Unicode 规范化等价拼写保守拒绝；Shell 所选命令与同批写目标冲突先拒绝，合法 host-home 别名与精确已选目标决定保持一致。
+
+Codex 隔离 probe 不信任真实项目的配置层，避免启动项目内未选 MCP；受管连接仍使用已验证项目 cwd。既有 PowerShell profile 的 Unicode PATH 使用 ASCII-only 解码表达式保留原字节，探针固定 UTF-8 输出并保留路径内 Unicode 分隔符；npm shim 支持真实字面标点但仍拒绝动态展开。OMP legacy 包含有效启用继承来源，非文件配置为 unknown，unsupported 保留到宿主／域汇总。
+
+升级／恢复的计划与执行先检查当前 Python 的 `-I` 隔离依赖可用性；仅 user-site 可用时在目标／vault写入前受控拒绝，不取消隔离或自动安装。缺失 Skills 根的冲突物理别名也在封存前拒绝。新增 Bash／zsh PATH 块使用 LF，保留原 CRLF 字节及原 PATH 末项；Windows POSIX 别名按完整所选目录识别旧 PATH。PowerShell 非 ASCII npm shim 的指向须与实际引擎解码相容；MCP 回复要求 `jsonrpc: "2.0"`，Boolean ID 不能冒充数字，Codex 仍兼容无版本回显。OMP 来源未完成发现／分析且未取得旧入口证据时为 `unknown`，不把未检查当作不存在。
+
+已选但缺失的 host 资源仍进入安装，`preserve` 不取消该安装；不需要时应从 scope 移除。受支持的嵌套安装可从同基线已安装副本续作，restore intent 后的 absent 窗口保持原契约；这些边界不授权未知内容覆盖、项目级宿主图构建或真实 HOME 变更。
+
+跨平台基线按原始载荷字节及相对 POSIX 路径排序计算。根 `.gitattributes` 对 `sbtd-workflow-onboard/**` 及其 canonical `/LICENSE` 源禁用文本换行转换，保护固定 stable pin 和模板／脚本／许可证基线；不能通过运行时换行归一化来掩盖实际内容漂移。
+
+
 ### 1. 使用 `npx skills` 全局安装 Onboard Skill
 
 只建议把 `sbtd-workflow-onboard` 安装到用户级全局 Skill 目录，使同一用户下的 Codex 会话都能发现它；不建议安装到单个项目目录，也不要省略 `--global` 后把 bootstrap Skill 变成项目依赖。

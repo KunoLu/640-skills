@@ -244,6 +244,30 @@ class CleanupLegacyTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.fixture = CleanupLegacyFixture(Path(self.temporary.name))
 
+    def test_gitnexus_skill_retirement_requires_confirmation_and_preserves_original(self):
+        """U12: fresh cleanup retires an exact old Skill, not a prefix neighbor."""
+        fixture = self.fixture
+        skill = fixture.skills / "gitnexus-cli"
+        skill.mkdir()
+        payload = b"---\nname: gitnexus-cli\n---\nUser-retained old tool instructions\n"
+        (skill / "SKILL.md").write_bytes(payload)
+        neighbor = fixture.skills / "gitnexus-cli-extra"
+        neighbor.mkdir()
+        (neighbor / "SKILL.md").write_bytes(payload)
+        before = snapshot(skill)
+        plan_path, plan_id = fixture.prepare()
+        _rejected, code = fixture.apply(plan_path, "not-the-displayed-plan")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(snapshot(skill), before)
+        result, code = fixture.apply(plan_path, plan_id)
+        self.assertEqual(code, 0, result)
+        self.assertFalse(skill.exists())
+        self.assertEqual((neighbor / "SKILL.md").read_bytes(), payload)
+        rows = result["cleanup_legacy"]["receipt"]["payload"]["results"]
+        retired = next(row for row in rows if row["path"] == str(skill))
+        self.assertEqual(retired["status"], "succeeded")
+        self.assertEqual(snapshot(Path(retired["backup_ref"]["path"])), before)
+
     def test_plan_preserves_targets_and_lists_actual_contents(self):
         fixture = self.fixture
         original = snapshot(fixture.project)

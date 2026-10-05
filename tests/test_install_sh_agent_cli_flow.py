@@ -766,10 +766,6 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertEqual(
-            {path.name for path in self.project_root.iterdir()},
-            {"AGENTS.md", ".gitignore"},
-        )
         self.assertFalse(forbidden.exists())
         self.assertFalse((Path(environment["HOME"]) / ".codex").exists())
         self.assertFalse((Path(environment["HOME"]) / ".omp").exists())

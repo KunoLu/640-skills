@@ -529,6 +529,7 @@ Detected candidate kinds:
   Each prepared resource path must exactly match the checked project root joined with its strictly validated relative path, and execution compares the bound paths with the fresh planner replay. Resealing the descriptor does not authorize a decoy path: a mismatch is rejected as `invalid-document` before adapter backups or vendor execution. Backup, state rechecks and outcome measurement consume only bound paths. The persisted scope fingerprint shape and digest algorithm remain unchanged for valid existing plans.
 - `skill-directory` — a global `trellis-workflow` or `trellis-channel` directory under the resolved global Skills root, proven by identity: a non-symlink directory whose regular `SKILL.md` frontmatter `name` exactly matches. Content drift across 1.0.x versions does not matter; there is no fixed checksum pin. A symlink, a missing or unreadable `SKILL.md`, or a mismatched `name` is blocked and preserved.
   A physical shared HOME root does not authorize every same-named directory beneath it. A standalone `shared_root` of kind `skills` binds its own `path`; when that root is absorbed into a broader record, the manifest retains its exact logical directory as `shared_root.skills_root`. Producers preserve this annotation through root merging, and consumers require the retired Skill to be its direct child. Missing logical scope for an absorbed retirement fails closed; it is not reconstructed from the current environment or from the target's basename.
+  Fresh `cleanup-legacy` additionally recognizes the nine exact GitNexus Skill identities listed in [Upgrade Alignment](#upgrade-alignment). This does not widen immutable migration manifests or authorize prefix-based removal; the same direct-child, identity, backup and separate-confirmation checks apply.
 - `directory-remove` — a project `.gitnexus/` directory; a symlink is blocked. This is project-local data only: the GitNexus npm package, its CLI and `~/.gitnexus` global data are never cleanup targets, and no CLI/npm uninstall is performed.
 - `mcp-server-remove` — gitnexus server entries in an already existing host global configuration file. Only existing files are probed and nothing is created; the user home resolves from `HOME` or `USERPROFILE`:
 
@@ -702,3 +703,171 @@ After writes:
 7. Rerun only `check-projects` after project-only onboarding.
 
 Network, permissions, missing dependencies, unsupported platform execution, malformed state, legacy migration requirements and bootstrap-required results remain explicit; no skipped check is a pass.
+
+## Upgrade Alignment
+
+跨平台基线按原始文件字节与相对 POSIX 字符串顺序计算。仓库根 `.gitattributes` 对整个 `sbtd-workflow-onboard/**` 禁用 checkout 文本转换，既保留二进制，也保留上游合法 CRLF；运行时不归一化内容来制造 pin 匹配。Stable promotion 必须从保留上游提交原始字节的 checkout 取证，不能把本地自动换行转换后的内容当作上游原样镜像。
+
+`upgrade` 对显式范围进行内容对齐，不改变 `init` 跳过合法 Skill 壳、`reset` 重装和 `migration` 迁移数据的既有含义。基线来自执行中的完整 Onboard 包：catalog、模板、固定 stable 内容及来源；绝对安装路径或文件时间不是版本。不能证明历史版本时报告 `unknown-drift`，不凭名称或版本字符串猜测。
+
+### 范围与授权
+
+准备 version-1 scope JSON。下例只选择 Skills 与全局规则；路径须替换为真实、明确授权的绝对路径：
+
+```json
+{
+  "schema_version": 1,
+  "skills_roots": ["/abs/selected/skills"],
+  "agents_targets": ["/abs/selected/config/AGENTS.md"],
+  "hosts": [],
+  "shell_profiles": [],
+  "decisions": {}
+}
+```
+
+一个宿主域以 `id`、`platform`、`config_home`、`config`、`skills_roots`、`runtime`（绝对 `python`／`node`／`cli`）和 `project_roots` 描述。宿主 Skills 根也必须在顶层选择。普通 Codex 与 Orca 账户使用各自的配置域，不自动扫描账号或认证目录。Codex／OMP 复用现有受管 Graft 候选生成器；其他平台不擅自新增 Graft 接线。选中已有项目用于验证，不等于初始化项目或构建图授权。
+
+`oh-my-pi` 在计划封存前统一为 `omp`，后续应用／验证使用同一平台标识。Codex 的 `config` 必须是所选 `config_home` 下的 `config.toml`；不能对宿主不加载的其他 TOML 文件报告对齐。
+
+同一物理 Skills 根的路径拼写别名只产生一个写入集合；目标与决定键同步绑定到选定拼写。不把大小写敏感卷上的真实不同目录合并，也不通过再次跟随 symlink／junction 来归一化用户路径。
+
+可选 `executable` 是实际宿主 CLI 的绝对路径。`onboard_root` 表示宿主要加载的**已安装 Onboard 包目录**，不是 Skills 根：仅有一个宿主 Skills 根时派生为该根的 `sbtd-workflow-onboard`；多个根必须明确选定其中一个包目录。host-only 范围需显式选定已有且受信的包目录。最终 MCP launcher 指向这个安装目标，不能指向仓库源码或升级暂存执行器。OMP 计划同时核对所选项目的有效继承来源；相同继承连接可复用，来源变化或被禁用／冲突的受管连接不能冒充对齐。
+
+若 OMP 的有效继承来源同时属于本批将改写的 provider 配置，计划／应用以 `inherited-dependency-conflict` 在目标写入前拒绝。先对齐 provider 配置域，再以其实际新状态重新规划 consumer；不把上一份计划中的旧继承快照用作新状态，也不在同一批中先写一半再因自身写入失败。
+
+可选 shell profile 以 `path`、`shell`（`bash`／`zsh`／`powershell`）与绝对 `bin` 描述。仅修改该文件中的受管 PATH 块，保留其他内容；MCP 使用固定绝对运行时，不依赖 PATH。执行 profile 会运行其中用户代码，因此只读计划不启动 shell。
+
+带 UTF-16 LE／BE BOM 的 profile 在生成候选前明确拒绝，保持原件字节，不混写 UTF-8，也不自动转码。不能表示为单个 PATH 项的目录同样写前拒绝：POSIX 的 `:`、Windows PowerShell 的 `;`，以及驱动器转换后仍含 `:` 的 Windows POSIX-shell 路径。
+
+Windows Git Bash／zsh 的受管 PATH 使用 `/c/...` 驱动器别名（UNC 使用 `//server/share/...`），避免把 `C:` 的冒号误作 PATH 分隔符。探测只转换路径拼写，仍绑定所选 shell 实际使用的可执行文件；并存的 `graft.ps1`、`graft.exe` 不能仅因同名被判为同一目标。PowerShell 使用原生路径。
+
+显式 shell probe 在隔离 HOME 中以交互条件加载 Bash／zsh profile；PowerShell 检查实际优先级最高的命令，alias／function 遮蔽不能被筛掉后报通过。受支持的 npm shim 按已识别的包装器结构绑定其字面相对 CLI 目标，不能把普通 `.cmd`／`.ps1` 文件的物理路径当作 `cli.js`。这证明命令解析及 CLI 文件指向，不执行包装器，也不证明其 Node 选择或实际运行成功；固定 Node 的协议能力由独立 host/runtime 检查证明。未知或具有动态路径展开的包装器不冒报匹配。
+
+新增 Bash／zsh PATH 块使用 LF，原有 CRLF 内容不转码，避免 CR 附着于原 PATH 最后一项。旧 PATH 检测同时识别所选目录的原生／POSIX 拼写及 zsh 数组项，按完整目录边界匹配，不把同前缀目录或子目录算作已选 bin。BOMless 非 ASCII npm PS1 shim 仅在实际 PowerShell 引擎使用 UTF-8（新版引擎或 UTF-8 默认代码页）时可按 UTF-8 字面目标证明，否则报告编码未证明；不执行 wrapper。
+
+`decisions` 以计划中的绝对目标路径为键，值为 `replace` 或 `preserve`。缺失受管资产进入安装；当前内容跳过；未知内容必须选择后重新计划，先展示额外文件及替换影响。身份不符、不安全路径或候选重叠不能靠 `replace` 放行。保留差异属于例外，不是完全对齐。个人 Skills、Caveman 未知定制、插件、hooks、账号与凭据不在默认升级范围。
+
+对已选但缺失的 host MCP／shell profile，`preserve` 不表示“保持不存在”：仍按缺失资源安装契约处理。不需要安装时应从 scope 移除该目标；对已经存在的差异才使用 `preserve` 保留例外。
+
+### 计划、应用与分层验收
+
+备份根必须是已有私有目录，与安装包及所有目标互不嵌套。默认计划仅 stdout；`--output` 只创建指定私有 vault 内的新计划，不覆盖现存文件。
+
+POSIX 使用当前用户所有权及私有权限证明；Windows 必须有可验证的私有 DACL，`chmod(0700)` 不等于 Windows 隐私证明。已有 vault 只校验、不自动修权限；执行器仅对本次新建的子目录使用既有跨平台私有目录初始化器。准备根目录时须由操作人确认，不能把 plan 变成隐式 ACL 修复。
+
+```bash
+python scripts/onboard.py upgrade --phase plan \
+  --scope /abs/scope.json --backup-root /abs/private/vault \
+  --output /abs/private/vault/upgrade-plan.json --json
+```
+
+展示完整计划并确认后，从返回的 `plan.plan_id` 读取 ID（不要让用户手抄 hash）。修改 scope 决策或目标后必须重新生成计划并重新展示。
+
+```bash
+python scripts/onboard.py upgrade --phase apply \
+  --plan /abs/private/vault/upgrade-plan.json \
+  --confirm-plan <plan_id> --yes --json
+
+python scripts/onboard.py upgrade --phase verify \
+  --plan /abs/private/vault/upgrade-plan.json \
+  --receipt /abs/private/vault/upgrade-receipt-<id>.json --json
+```
+
+apply 重新推导范围并校验源、完整前态与私有备份路径，先保存原件，再逐资源写入和测量；写入意图与累计回执供中断后调和。重试必须传入对应 `--receipt`；用户新增或未知后态停止，不通过重新规划丢弃失败事实。Onboard 自身更新由校验后的独立包副本执行，不在被覆盖目录中混合导入新旧模块。跨资源不承诺原子提交；失败报告与原件均保留。
+
+只读 verify 实测当前磁盘，不启动宿主、不构建图、不自动修复。明确批准后可添加 `--probe --yes` 进行运行时与宿主探测。报告分开：
+
+| 层级 | 通过所需证据 | 不可替代的边界 |
+|---|---|---|
+| disk | 实际完整载荷或受管配置语义匹配固定基线 | 合法 Skill 壳或旧回执不够 |
+| runtime | 实际绑定命令及协议能力 | shell 版本号不代表 GUI 使用相同路径 |
+| host | 真实 Codex／OMP 进程加载所选受管配置的隔离投影，标记 `isolated-host/selected-projection` | 不是原配置域、GUI 或既有会话重载证明；`live_reload` 保持 unverified |
+| legacy | 实际旧入口检测与独立清理结果 | 升级成功不授权删除旧资产 |
+
+`aligned` 仅表示内容对齐；host 未验证必须继续显示未验证。`preserve` 导致 `exceptions`，必需资源不同导致 `drift`；两者非零退出。缺依赖、身份冲突、缺确认或不安全路径为 blocked，执行失败和部分失败保留实际结果。不能把该阶段退出 0 改写成“整机已经与全新安装完全一致”。
+
+聚合状态保留 `blocked` 高于 `drift` 的优先级，并保留逐域结果。合法配置仅包含无关 MCP 时，legacy 为 `none`；非法配置仍为 `unknown`，不把两者混为一谈。
+
+OMP 的 legacy 还计入已启用继承来源中的 `sbtd-graft-*` 入口，不把未选 provider 或 YAML 设置文件当作 MCP 源。存在但非文件的配置不能证明无旧入口，报告 unknown。host RPC 已证明 unsupported 时，host 与域汇总保持该状态，不降为 unverified。host-home 别名只绑定配置目标，不改写已精确选中的其他决定键。
+
+OMP 来源发现／分析未完成且没有旧入口证据时，legacy 为 `unknown`／`source-discovery-incomplete`，不能由缺失 active 文件推出无继承旧项。直接 MCP 回复必须带 `jsonrpc: "2.0"`；RPC 数字 ID 不接受 Boolean 代替，合法 Number 表示仍匹配，Codex 不回显版本的独立约定保持。
+
+写后发生回执持久化或隔离执行器失败时，CLI 返回 `status=failed`、exit 3，并携带绑定本批的 `batch`：计划／恢复 ID、`backup_root`、可取得的最后持久 `checkpoint`（或 `null`）及实测／`unknown` 的 `mutation`。旧 checkpoint 不是本次成功证明；证据再次读取失败也不得把已有写入改报为普通写前 blocked。保留这些恢复入口和原件，先核对实际状态，再按同一批次的续作／恢复规则处理。
+
+当前 `--probe` 的宿主测试不读取认证或发起模型请求，使用临时 HOME 和所选受管配置投影。它证明真实宿主能加载该投影，不证明所有原宿主继承配置或已有连接已切换。原配置域／既有会话是否重载必须另有实际证据；普通 `check` 的 `contentAlignment.scope=skills-only` 只检查所选 Skills 根，不包括全局 AGENTS 或 MCP。
+
+升级／恢复的计划与执行使用当前 `sys.executable -I -B` 和净化环境检查声明 Python 依赖。依赖仅在父进程 user-site 可见时，在目标及 vault 写入前以 `isolated-dependencies-unavailable` 受控拒绝；执行入口先校验封存ID确认，再检查当前解释器，不能沿用计划时另一环境的证明。须由操作人准备隔离可用的解释器依赖，不注入 user-site、取消隔离或自动安装。
+
+OMP 隔离宿主探测保持 **user-wide** 投影边界；它不创建私有项目图，也不证明仅由项目级配置提供的连接已加载。项目级路由没有用户级等价连接时，不得把该探测报告成通过；用户级路由通过也不构成项目级路由已验证的证据。
+
+OMP 加载判据使用 `get_state.dumpTools` 的结构化工具名与参数 schema；prompt 中提到工具 URI 不构成注册或可调用证据。隔离配置显式关闭 xdev 延迟入口，以核对实际注册的目标工具。RPC 请求写入与响应共用期限，宿主不消费 stdin 也不能无限阻塞；探测结束负责回收自有进程及管道。
+
+Bash 入口为 `bash install.sh upgrade ...`，PowerShell 为 `./install.ps1 -WorkflowMode upgrade ...`；工作流参数直接转发，不运行普通 onboarding。恢复也由两入口转发。
+
+### 独立恢复与旧资产退出
+
+```bash
+python scripts/onboard.py recovery --phase plan \
+  --upgrade-plan /abs/private/vault/upgrade-plan.json \
+  --upgrade-receipt /abs/private/vault/upgrade-receipt-<id>.json \
+  --output /abs/private/vault/recovery-plan.json --json
+
+python scripts/onboard.py recovery --phase apply \
+  --upgrade-recovery-plan /abs/private/vault/recovery-plan.json \
+  --confirm-recovery <recovery_id> --json
+```
+
+恢复只针对本批实际写过的资源，绑定当前实测后态及原件。展示恢复清单后另行确认；后态漂移时保留用户内容并阻断。不自动删除备份，也不承诺恢复旧运行时可用。恢复重试使用返回的累计 `--recovery-receipt`。升级恢复参数不能与 migration 恢复参数混用。
+
+已确认的 restore 意图之后，目标 `absent` 是既有恢复续作窗口，不要求额外“删除完成”checkpoint；这不是覆盖未知非空内容的授权。当前内容与可接受续作状态不符时仍停止，保留备份和冲突内容。
+
+**历史信任边界：** 操作人明确选择且独占管理的已有私有 vault 是受信历史来源。摘要和相互引用验证一致性，不是签名认证；不能防御有 vault 写权限的人整组一致伪造计划、回执、意图与 checkpoint。不得从未知来源接收整套 vault 并据此自动删除文件。来源或控制权存疑时停止恢复，人工核对原件及操作记录。本流程不创建独立签名密钥或后台信任服务。
+
+执行始终绑定当前受信 Onboard 包；包内容在独立升级后变化时，旧计划可能返回 `source-stale`，不会自动信任并执行 vault 内历史代码。保留旧失败证据，使用可信原包核对或重新规划。生成缓存不改变载荷对齐，但恢复仍保护完整当前内容；新增缓存不自动归本批所有。恢复资源后保留空父目录，避免把并发创建的用户目录误删。
+
+源包与安装目标具有包含关系本身不构成全面禁令，仍按内容、目标冲突与分阶段执行边界判断。嵌套安装后，原 bootstrap 可能因自身树内容改变而变成 `source-stale`；应从本次安装的**同基线规范 Onboard 副本**继续重试／恢复，而不是据此执行 vault 内历史代码或放宽基线校验。
+
+九个退役 GitNexus Skills 纳入现有独立 `cleanup-legacy` 身份检测：`gitnexus-cli`、`gitnexus-debugging`、`gitnexus-exploring`、`gitnexus-guide`、`gitnexus-impact-analysis`、`gitnexus-pdg-query`、`gitnexus-pr-review`、`gitnexus-refactoring`、`gitnexus-taint-analysis`。仅在所选根的直接子目录且自身 `SKILL.md` 名称相符时成为候选。没有前缀删除，不卸载 CLI，不删除 `~/.gitnexus`、未选项目索引、历史运行时或备份；清理计划、独立确认和完整原件保护沿用 Cleanup Runtime。
+
+### 升级行为验收场景
+
+本仓库以 Markdown 场景映射现有 unittest，不生成 `.feature`。场景正文中文，结构关键词英文。
+
+| Scenario | Given / When / Then |
+|---|---|
+| U01 只读完整盘点 | Given 空选定目录；When plan；Then 返回完整 catalog 载荷与摘要，目标和 vault 无新增 |
+| U02 合法旧壳不冒充当前 | Given 名称合法但正文或辅助文件不同；When plan；Then 报告缺失、不同、额外文件和未知漂移 |
+| U03 升级收敛 | Given 明确替换差异；When apply 后 verify；Then 受管载荷与同基线全新安装等价，原件保留 |
+| U04 定制保留 | Given preserve 决定；When verify；Then 报告例外而非完全对齐 |
+| U05 多域隔离 | Given 多域与共享根；When apply；Then 共享资源只写一次，未选域不变 |
+| U06 前态变化拒绝 | Given 计划后源或目标改变；When apply；Then 不覆盖并报告冲突 |
+| U07 重复执行 | Given 上次已完成且后态未变；When 重试或重新计划；Then 不重复改写与制造备份 |
+| U08 故障恢复 | Given 部分失败或写后中断；When 续作或确认恢复；Then 记录真实后态且保护原件和用户新增 |
+| U09 自升级隔离 | Given 当前包属于更新集合；When apply；Then 独立已校验包执行，载荷不混版 |
+| U10 混合配置保护 | Given 其他 MCP 与注释；When 接线；Then 保留无关内容，未知受管所有权拒绝 |
+| U11 分层验收 | Given 文件对齐但未有真实宿主证据；When verify；Then disk 与 host 分开，host 不冒报通过 |
+| U12 退役身份 | Given 精确旧名及同名异身份目录；When cleanup；Then 仅获批且身份通过者可退出，冲突保留 |
+| U13 PATH 与 MCP 分离 | Given 所选 profile；When 确认应用；Then 受管块幂等，MCP 不依赖 shell PATH |
+| U14 路径安全 | Given 中文/空格路径或 symlink/junction/重叠目标；When plan/apply；Then 合法路径正确处理，越界拒绝 |
+| U15 脱敏输出 | Given 配置含私密字段；When 计划、验证或错误；Then 不打印原始配置或凭据 |
+| U16 输入与编码拒绝 | Given UTF-16 profile、不可表达的 PATH 项或非规范 Codex 配置名；When plan／render；Then 写前拒绝，原字节与未选配置不变 |
+| U17 真实探测证据 | Given 交互守卫、命令遮蔽、npm shim 或 OMP 工具文本；When 显式 probe；Then 真实优先级与受限 CLI 指向可验证，只有有效 RPC 注册表可证明 OMP 加载，写入／响应均受期限约束 |
+| U18 物理路径边界 | Given 物理路径别名、大小写敏感目录或父目录中的无关链接；When plan／apply；Then 同一资源只绑定一次，不合并不同目录，不递归读取无关兄弟，根路径包含判断正确 |
+| U19 状态与失败入口 | Given 写后证据失败、平台别名或混合域状态；When CLI 返回／verify；Then 保留绑定批次的 checkpoint 与实测／unknown，平台统一，blocked 不被 drift 掩盖，合法无关 MCP 与非法配置区分 |
+| U20 冲突目标别名 | Given 同一既有定制 AGENTS 的不同大小写物理别名分别声明 replace／preserve；When plan／apply；Then 写入前拒绝重叠，原文件及 vault 不变 |
+| U21 决定与依赖别名 | Given 已选配置／profile／Onboard 子目录的真实别名或继承输入别名；When 绑定决定／预检；Then 合法决定绑定封存目标，依赖写入冲突在任意目标修改前拒绝 |
+| U22 协议边界 | Given data-only method 回复、缺失／不支持 MCP 协商版本或异常关闭；When probe；Then 不报告 verified；支持的协商版本可正常使用，缺失宿主方法脱敏报告 unsupported |
+| U23 Profile 兼容性 | Given 首行 UTF-8 BOM、Unicode PowerShell PATH 或登录守卫；When render／probe；Then 保留既有 BOM，新 PowerShell profile 兼容 5.1，登录 profile 在隔离登录模式检验 |
+| U24 受控 CLI 拒绝 | Given 未授权 probe 或无法展开的用户目录；When CLI；Then 返回满足 failureDocument 的脱敏拒绝，前者不读取 plan |
+| U25 写入归属保护 | Given intent 后明确记录未写入且用户内容恰等于 desired；When retry／用旧 checkpoint recovery；Then 不认领或删除用户内容；有 intent 的未知现场阻断恢复，不静默空恢复成功 |
+| U26 宿主配置隔离 | Given 真实项目存在未选 Codex MCP／配置；When 授权隔离 probe；Then 不加载该项目配置，仍验证所选受管连接与 Skills |
+| U27 缺失 Unicode 别名 | Given APFS 下缺失目标的 NFC／NFD 等价拼写及 preserve；When plan／apply；Then 目标写入前拒绝重叠，不改变 preserve 现场 |
+| U28 Shell 命令依赖 | Given 受管 shell 命令位于同批被替换的 Skill 内；When apply；Then 先拒绝依赖冲突，目标均不写入 |
+| U29 既有 Profile 与路径编码 | Given 非空 BOMless PowerShell profile、Unicode 路径或 npm shim 字面标点；When render／probe；Then 无关字节保持，5.1正确解释PATH、stdout正确解码、路径内部Unicode分隔符不被截断、动态shim仍拒绝 |
+| U30 有效域与状态汇总 | Given OMP有效继承旧入口、非文件配置或不支持的host RPC；When verify；Then legacy按有效选定来源报告，非文件unknown，unsupported不降为unverified |
+| U31 封存范围稳定 | Given 缺失Skills根与AGENTS路径是大小写／规范化别名；When plan；Then 写前拒绝范围重叠，合法范围在创建目录后仍可重试／恢复 |
+| U32 隔离依赖一致 | Given 仅父解释器user-site可见的依赖或执行解释器不同于计划时；When plan／apply；Then 在目标和vault写入前确认当前隔离解释器可用性，否则受控拒绝并引导准备依赖 |
+| U33 POSIX换行保全 | Given 带CRLF注释的Bash/zsh profile；When加入PATH块并加载；Then 保留原字节，原PATH最后目录仍能解析命令 |
+| U34 原生shim编码证明 | Given PowerShell5.1与BOMless非ASCII npm shim；When probe；Then 按实际解码证明CLI指向或拒绝matched，不执行wrapper |
+| U35 RPC类型与版本 | Given Boolean ID或MCP缺失／错误jsonrpc版本；When probe；Then 不获得verified，合法Number ID与Codex兼容保持 |
+| U36 未发现不等于不存在 | Given OMP接线前置条件不满足或Windows Bash旧PATH为POSIX拼写；When verify；Then 未完成来源发现为unknown，已选旧PATH仍报告，同前缀或子目录不计 |

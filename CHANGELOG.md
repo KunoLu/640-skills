@@ -6,6 +6,11 @@
 
 ### 新增
 
+- 新增显式 `upgrade --phase plan|apply|verify` 与升级专用 `recovery` 输入：按所选 Skills 根、全局规则、宿主配置域及 shell profile 生成固定载荷基线、完整差异和可确认计划；合法旧 Skill 壳不再被内容验收视为同版。未知定制须明确替换或保留，身份／路径冲突拒绝，原有 init/reset/migration 语义保持。
+- 升级采用独立校验执行副本、完整原件、逐资源写入意图和累计实测回执；恢复独立确认，拒绝用户漂移，不自动销毁备份。MCP 指向选定的已安装 Onboard，而非仓库源码或暂存执行器。共享 Skills 根去重，OMP 有效继承来源封存；同批相互改写的继承依赖在写入前拒绝，按 provider 完成后重新规划 consumer。
+- 内容、运行时协议、隔离真实 Codex／OMP 加载及历史清理分别报告；隔离 host probe 明确不证明原 GUI 或既有会话重载。显式 shell probe 实际解析所选 profile 并验证 Graft 命令解析。Bash／PowerShell 根安装器均转发升级与恢复，默认只读计划与验收不运行 host probe。
+- 新鲜 `cleanup-legacy` 增加九个 GitNexus Skills 的闭集身份检测，仍先备份、展示清单并独立确认；不扩展不可变历史迁移清单，不使用前缀删除，不卸载 CLI 或删除全局数据、旧运行时及备份。
+- 固定载荷摘要统一按相对 POSIX 路径字符串排序；整个自包含 Onboard 包及 canonical 根 LICENSE 在 Git checkout 中保留原始字节，避免 Windows 路径排序及自动换行转换破坏 stable pin。Windows 私有 vault 子目录与宿主探测夹具通过既有 DACL 初始化器创建，保留已有目录只验证、不自动修权限的边界；Git Bash 使用 `/c/...` PATH 别名并绑定独立的 shell 可执行目标，不混同 `graft.exe` 与 `graft.ps1`。
 - 迁移后旧资产清理扩展（`sbtd-cleanup-expansion`）：migration verify 为 verified 后由 Skill 路由层主动询问是否清理——展示批次封存候选并实际运行 `cleanup-legacy --phase plan`，两份实际清单都展示后才请求合并确认，确认后执行；批次清理先执行，若改变新鲜计划封存的原件则重新生成并展示剩余清单；同一已确认流程内，仅减少由绑定回执证明已完成的项且其余目标/效果不变时沿用原同意，新增目标或改变效果才重新确认，未知消失、用户改动或失败证据仍停止调和，执行使用当前 plan_id；拒绝时告知后续可用「sbtd cleanup」「清理工作流」或同向意图再次触发；提示只授权只读检测/计划，看到清单后的明确同意才授权执行，`verification_id`/`plan_id` 由 Agent 从 CLI JSON 自取。清理候选新增项目 `.gitnexus/`、codex/claude/kimi/omp 四个 host 已配置路径中的 gitnexus MCP 条目（只删识别为 gitnexus 的键/表，邻居保留；全局配置影响其他项目须披露确认）与项目 `AGENTS.md` 精确成对的 `<!-- TRELLIS:START/END -->`、`<!-- gitnexus:start/end -->` 标记块（仅识别顶层 HTML 注释块，块外内容与 graft 围栏逐字节保留，零对非候选，残缺/重复/交错 blocked 待人工裁决）。新增 `cleanup-legacy --phase plan|apply` 新鲜检测路径：只读检测并封存私有 plan（含完整 vendor 足迹准备描述），以 `plan_id` 确认执行；执行前私有备份全部候选原件及完整 vendor 足迹，fail-stop、逐项校验目标后态、累计回执原子保存、同 plan 重试不重放已成功资源、部分结果调和前阻断重试；批次 manifest 不可变、永不新增目标类型，批次证据缺失才走新鲜兜底，陈旧/冲突/失败的批次证据不作为绕过门禁的兜底理由。GitNexus npm 包、CLI 与 `~/.gitnexus` 全局数据不动；正常 init/reset 不执行清理；两安装器直通 `cleanup-legacy`。
 - P1-23 增加清理闭合后的 OMP follow-up 部署批次：五个 `--followup-*` 参数绑定完整 Codex 前批的 manifest/apply/deployment/verification/cleanup，要求显式 `init`/`omp`，不接受 hooks 或递归 followup。旧 successor 拒绝规则不变；完整部署集合可在受管前态证明下升级，空 apply 不重复迁移，恢复只撤销本批写入，前批备份继续保护。实际 HOME 接线与 host 验收仍需独立授权。
 - P1-21加入后继部署批次：迁移plan新增`--successor-manifest`/`--successor-apply-receipt`成对输入（要求显式`--deployment-mode`，与publication/routing批准输入互斥），修复「plan密封漏deployment声明即永久无法部署」的一次性批次缺口。后继plan绑定`deployment`为null且apply完整成功的前批，重新实测每个前批apply后态与承接cleanup前态（任一漂移blocked），封存仅含未完成cleanup与部署闭包的successor manifest；manifest payload新增`successor`绑定（前批manifest_id/apply_id、全部succeeded apply结果嵌入，及钉住真实前批文件的`manifest_ref`/`apply_receipt_ref`内容哈希引用，链期内两文件不得移动或改写），retention逐字段继承前批。部署`before_requirement`的phase-after可跨manifest引用前批同资源结果，deploy/verify/cleanup/recovery以「嵌入结果∪本批回执」叠层解析期望前态，且每次消费都重载真实前批复验嵌入结果、承接集合与未覆盖后态。无前批绑定的manifest行为不变；未执行live部署。
@@ -34,10 +39,26 @@
 - 受管 Graft pin 从 `@nanonets/graft@0.18.0` 晋升到 `0.21.1`：registry gitHead `375a37e0b6a21d28f12fce2d220d692726bb0730`，tarball integrity 与官方发布包一致。守门启动器、DNT、stamp 精确版本和 fail-closed 不变。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。不改默认守门形态，不新增裸形态开关。
 - 项目 `.gitignore` 模板忽略 `.impeccable/config.local.json`。该文件是 Impeccable 每人本机覆盖，含 hook consent；共享的 `.impeccable/config.json` 与 `.impeccable/design.json` 仍可追踪。安装器忽略探针同步检查这一路径。
 - 配置源仓根 `.gitignore` 从七行改为九行，在 `AGENTS.md` 后增加 `.chrome-devtools-mcp/` 与 `.playwright-mcp/`。两条目录规则在本仓工作树匹配同名本机 MCP 日志目录（也匹配嵌套目录），不复制业务项目模板，也不改历史 lesson。
-- GitHub Actions `linux-full` 的 `timeout-minutes` 从 20 提到 40。Ubuntu 全量 unittest 已多次贴着 20 分钟上限被取消；macOS / Windows installer job 仍为 20。
+- GitHub Actions `linux-full` 的 `timeout-minutes` 从 20 提到 40；macOS 保持20。Windows 升级／恢复含真实私有目录 ACL 与双根安装回归，40分钟窗口已超时，扩大到90分钟并开启逐项 unittest 输出，保留完整验证范围。
 
 ### 修复
 
+- 缺失 Skills 根的大小写／规范化别名重叠在封存前拒绝，避免创建目录后计划范围失效；升级／恢复的计划与执行均先校验当前 Python 的隔离依赖，仅 user-site 可见时受控拒绝，不取消 `-I` 或自动安装。
+- Bash／zsh 新 PATH 块使用 LF，保留原 CRLF 和 PATH 末项；Windows POSIX 别名按完整所选目录检测旧 PATH，不误报同前缀或子目录。PowerShell 非 ASCII npm shim 按实际引擎编码限制证明，避免旧 ANSI 解码下误报 CLI matched。
+- RPC ID 按 JSON 类型匹配，Boolean 不冒充 Number；直接 MCP 验证 JSON-RPC 2.0 envelope，保留 Codex 无版本回显兼容。OMP 来源未完成发现／分析且无旧入口证据时报告 unknown，不误报不存在。
+- 恢复重试尊重明确未写入回执，旧 pending checkpoint 不得把用户同字节文件认领为本批；无法归属的 intent 现场保留为 blocked，不再报告空恢复完成。
+- Codex 隔离验收不信任真实项目配置层，防止启动未选项目 MCP；Darwin 缺失 Unicode 等价目标及 Shell 命令与写集的依赖冲突写前拒绝，host-home 别名不改写已明确选中目标的决定。
+- 既有 BOMless PowerShell profile 以 ASCII-only 表达式写入 Unicode PATH、不转码无关字节；探针固定 UTF-8 输出，按实际 LF 协议分割；npm shim 允许语言中的字面标点，动态展开仍拒绝。
+- OMP legacy 报告纳入有效启用继承来源，不扫描未选 provider；非文件配置为 unknown，不支持的 RPC 状态保留到宿主和域汇总。
+- 升级目标重叠与继承依赖预检识别物理路径别名，拒绝通过另一拼写覆盖 preserve 原件；Windows 大小写敏感目录不再被字符串折叠去重、误判包含或共享错误载荷摘要。已选配置／profile／Onboard 子目录的合法别名绑定封存目标。
+- 封存 blocked 的 MCP／shell 决定先于宿主语义比较，磁盘后来匹配不能补足授权；probe 未确认的拒绝补齐 schema 引导字段，无法展开的 home 路径返回受控 JSON。
+- Profile 重写识别并保留首行 UTF-8 BOM，新建空 PowerShell profile 使用 UTF-8 BOM 兼容 Windows PowerShell 5.1 Unicode 路径；Bash／zsh 登录 profile 按登录模式隔离探测，rc 文件保持非登录模式。
+- MCP／Codex method 回复不再接受 data 冒充 result；MCP 检查初始化协商版本及正常收尾，缺失／不支持版本、非零或强制退出不得报告 verified；宿主缺少方法按结构化错误码脱敏报告 unsupported。
+- 升级写后持久化／执行器失败不再冒充普通写前拒绝：返回 failed／exit 3、绑定批次的 checkpoint 与备份入口，并区分实测后态和 unknown；证据读取再次失败仍保留恢复上下文。
+- 升级父目录预检改为逐组件 no-follow 检查，不递归扫描无关兄弟内容；修正文件系统根包含判断，按物理身份合并 Skills 根及已存在子目录的拼写别名，并绑定决定键，保留大小写敏感卷上的不同目录。
+- 宿主对齐只接受 Codex 实际 `config.toml` 入口；统一 `oh-my-pi`／`omp`，blocked 不再被 drift 掩盖，合法无关 MCP 与非法配置分别报告 legacy none／unknown。
+- Shell profile 拒绝 UTF-16 混写及不可表达的 PATH 项；Bash／zsh 按交互条件探测，PowerShell 检查真实命令优先级并兼容区分大小写的 PATH 环境。受支持 npm shim 仅按受限字面相对路径证明 CLI 指向，不执行任意包装器，也不冒充 Node 解释器证明。
+- OMP 加载以成功 RPC 响应中的结构化工具注册表为据，不再将 prompt 中的 URI 当可调用证据；RPC 写入与读取共享期限，健康 EOF 与阻塞子进程的管道收尾分别处理。
 - Codex MCP 候选兼容合法 TOML 中分散的 `mcp_servers` 表及 server 子表，不再把解析器的分散表代理误判为非法配置；最低 tomlkit 提高至已修复完整片段删除的 0.13.2，退役后复核序列化结果，避免返回残留旧项的半切换候选。无关设置、注释及幂等性保留，顶层 inline table 和未证明归属的旧条目仍拒绝。
 - Windows MCP 根证明直接选择外部 PATH 目录中的原生 `git.exe`，拒绝批处理包装器及解析后非 `.exe` 目标，避免 CMD 参数解释和 cwd 隐式遮蔽；POSIX 同样使用明确目录内的 Git 候选，保留物理路径边界。
 - Git 根证明在 Windows 显式按 UTF-8 解码路径输出，修复非 UTF-8 默认代码页下合法中文／重音字符仓库被误拒绝的问题；POSIX 保留原解码约定，各平台的输出解码失败均转为受控 `root-unsafe`，不放宽仓库边界检查。
@@ -84,6 +105,7 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 升级参考与 README 两入口明确四项保留契约：缺失 host 仍安装，受支持的嵌套安装由同基线已安装副本续作，restore intent 后 absent 保持续作窗口，OMP 隔离探测仍限 user-wide。版本化巡检提示同步这些边界，不改 live automation。
 - 主 PRD 补充 P3-05 验证环境与旧 Graft 接线退役任务，覆盖临时运行时、隔离 HOME 与受管旧 MCP 绑定；正式发布前完成运行依赖退役或必要保留交接，备份销毁仍归 P3-04。明确方案确认不等于替代已部署，不授权清空 TEMP 或整个宿主账户目录。
 - 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
 - `ENTRYPOINT.md` 当前 canonical Skill 改为 `writing-for-agents`。`writing-great-skills` 只保留为迁移别名，不再作为当前安装名。
@@ -116,6 +138,7 @@
 ### 验证
 
 - 原生 Windows 的 session-root MCP 回归使用带超时的后台管道读取，替代仅能处理 Windows socket 的 `select.select`；保留协议响应与项目隔离断言，不因测试辅助错误放宽生产根解析守卫。
+- Windows CI 先执行原生 PowerShell Unicode profile／命令解析定点检查，再运行完整升级／恢复套件；PowerShell 隔离探针保留 Windows 的 PATHEXT 扩展名解析，不预置受管 bin 或绕过真实命令优先级。
 
 - 增加任务 schema 的模式来源、阻塞原因、完成时间、入阻塞、路径形状、版本类型和日期边界回归；区分历史元数据事件与新入阻塞，显式配置日期断言，避免把可选格式检查缺失当成通过。
 - 增加完整sbtd-task安装回归，核对references/schema/许可证及两旧目录在fresh安装中的缺席；保留存续公共文档合同、实际provider与Git marker检查，任务schema测试改读正式源。原生catalog smoke逐字验证已审查载荷到正式源及安装副本，不把安装层通过扩大为完整v2或host通过。

@@ -643,5 +643,65 @@
 - 修复：仅对 Windows Git 探针明确 UTF-8，保留 POSIX 原解码约定；解码错误转换为受控拒绝，路径相等和信任边界检查不变。
 - 预防：在真实 Windows 核对默认编码与 UTF-8 模式后测试 Unicode 路径；记录同一场景的原生 red/green，不把其他平台成功或 skip 当作该条件的证明。畸形输出负例检查退出码、无 traceback、无下游启动和无项目副作用，而非锁定错误文案。
 
+## LESSON-20261004-kuno-owned-temp-canonicalization: Canonicalize Owned Temporary Roots Before Nofollow Operations
+
+- 日期：2026-10-04
+- 标签：macos, tempfile, nofollow, symlink, isolation, validation
+- 适用场景：工具主动创建临时 HOME／宿主夹具，再调用拒绝链接祖先的文件备份或复制原语。
+- 严重级别：high
+- 来源：Onboard 升级宿主探测的真实失败与修正后回归。
+- 问题：安全复制尚未接触 Skill 内容，就因系统临时路径的 `/var` 链接祖先返回 `unsafe-path`，使 Codex／OMP 探测无法获得宿主证据。
+- 根因：将本次操作创建的临时目录的逻辑拼写直接传入 nofollow 原语，没有区分系统临时别名与用户提交的源／目标路径。
+- 修复：仅在 `mkdtemp` 成功后立即解析本次拥有的临时根，再向下创建和访问夹具。用户提供的 Skills 根、源、目标继续逐级拒绝 symlink／junction，不用 resolve 绕过所有权检查。
+- 预防：回归同时覆盖“自有临时父目录通过系统别名访问仍可探测”和“用户提供的链接／越界 sibling 仍拒绝”。真实宿主探测与脚本化协议测试分别报告；不得通过放宽所有路径链接守卫来修正夹具。
+
+## LESSON-20261004-kuno-review-red-is-not-a-contract-defect: Review Red Is Not A Contract Defect
+
+- 日期：2026-10-04
+- 标签：review, validation, contracts, fixtures, scope, recovery
+- 适用场景：把审查 finding 转成回归测试，尤其涉及安装策略、分阶段执行和中断恢复窗口。
+- 严重级别：high
+- 来源：Onboard 升级审查复核与冻结原版公开 CLI／已安装副本的真实续作。
+- 问题：新写的 red 将缺失 host 的 preserve、源目标包含关系等拟议策略当成既有缺陷；只看已改变的旧 bootstrap 返回 source-stale，又错误扩大为安装后不能重试或恢复。
+- 根因：先把审查建议写成预期，未先证明预期属于既有契约，也未沿真正的已安装消费者走完整生命周期。断言失败只能证明实现不同于断言，不能自动证明产品违约。
+- 修正：冻结原版执行 plan／apply，再从同基线已安装规范副本完成 retry／recovery；向用户说明策略差异并取得明确选择，撤回未经需要的行为变更，保留原始 red 和更正结论。
+- 预防：每条 red 先证明有效输入、前置条件与目标 seam，排除 schema、依赖、夹具顺序或更早门禁造成的失败；正向控制必须实际成功。探测只报告已证明的层级，不顺便增加更广的验证或预置环境，让测试替被测行为完成工作。
+
+## LESSON-20261004-kuno-path-spelling-is-not-identity: Path Spelling Is Not Filesystem Identity
+
+- 日期：2026-10-04
+- 标签：filesystem, windows, macos, aliases, cache, preflight, validation
+- 适用场景：按路径去重、载荷缓存、选定目标包含判断或批次依赖预检。
+- 严重级别：high
+- 来源：PR #110 第二轮公开 CLI 与大小写敏感 APFS 隔离回归。
+- 问题：大小写不敏感卷的两个拼写绕过重叠保护，replace 可以改写 preserve 所指原件；反向用 normcase 归并，又会丢弃大小写敏感目录中的不同目标并复用错误摘要。继承输入别名漏检会在 provider 写入后才令 consumer 失败。
+- 根因：把路径字符串比较、操作系统默认大小写习惯与实际文件系统身份混为一个判定；缓存、授权和祖先关系拥有不同需求。
+- 修复：缓存与已绑定选择采用精确拼写，别名归并／祖先包含使用实际非零 device/inode 证据；完整写集与继承输入在目标写入前复核。继续逐组件拒绝链接，不用 resolve 放宽用户路径。
+- 预防：同时运行“不同拼写同一对象”和“仅大小写不同的两个对象”正反例；测试应走真实库存与公开消费者，验证原件和写集不变。平台字符串折叠模拟只证明算法边界，必须与原生平台证据分开报告。
+
+## LESSON-20261005-kuno-no-write-evidence-precedence: No-Write Evidence Outranks Matching Bytes
+
+- 日期：2026-10-05
+- 标签：recovery, ownership, intent, receipts, concurrency, validation
+- 适用场景：由 intent、现场内容和历史回执共同判断中断写入／重试／恢复归属。
+- 严重级别：high
+- 来源：PR #110 第三轮真实库存、文件写入检查和恢复消费链 red／green。
+- 问题：用户在 intent 后创建与 desired 相同的内容，写入检查已记录未写入；重试或旧 pending checkpoint 却仅凭相同字节重新认领，进而生成删除用户文件的恢复步骤。未知 pending 现场也可能被直接跳过后冒报恢复完成。
+- 根因：把内容相等当作操作归属，未给明确的未写入证据优先级，也未保留不能归属的现场。
+- 修复：最新可信未写入结果不能被旧 checkpoint 或匹配内容覆盖；无明确归属但现场不同于 before 时保持 blocked，保留用户内容与原件。
+- 预防：用真实消费者分别覆盖 intent 前后竞态、明确未写入后相同内容、旧 checkpoint、成功写后回执中断与新增缓存；不能只测理想 desired 状态或把 partial／unknown 当作零写入。
+
+## LESSON-20261005-kuno-freeze-sealed-inputs: Freeze All Sealed Inputs During Validation
+
+- 日期：2026-10-05
+- 标签：validation, migration, source-snapshot, compileall, concurrency
+- 适用场景：测试把当前仓库的完整安装包封存为来源，或全量验证与编辑／编译检查并行。
+- 严重级别：high
+- 来源：第四轮升级修复的真实followup来源封存检查与隔离目录快照实验。
+- 问题：前两次全量期间分别发生源码编辑和compileall，followup夹具出现来源漂移拒绝；仅冻结手写源码不能阻止字节码写入。原错误未保留具体来源路径，不能把推断表述为逐路径已证明的根因。
+- 机制：真实followup计划确实把catalog中source为`.`的当前Onboard包作为directory来源封存；目录snapshot不排除缓存。隔离实验直接证明compileall创建字节码会改变同一目录的snapshot，即使Python本身以`-B`启动。
+- 修正：编辑、compileall、格式化等写入步骤先完成，再冻结所有封存输入运行完整suite；只读观察器和随后原生全量均通过，保留最初失败与归因边界，不放宽`_original_reference`。
+- 预防：验证调度按实际文件写集而非“检查命令”名称分类；唯一controller也不能在自己的全量运行期间改写输入。来源漂移先抓具体路径与前后态；重跑通过不是原错误根因证明。
+
 <!-- lessons:kuno:end -->
 

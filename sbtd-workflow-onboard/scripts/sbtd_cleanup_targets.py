@@ -7,7 +7,10 @@ global ``trellis-workflow`` / ``trellis-channel`` Skills (identity-proven
 directory removal, not a v1.0.15 checksum pin), the project ``.gitnexus``
 directory, ``gitnexus`` MCP server entries in the Codex / Claude / Kimi /
 OMP user-level configurations, and the legacy ``TRELLIS`` / ``gitnexus``
-marker blocks inside a project ``AGENTS.md``.
+marker blocks inside a project ``AGENTS.md``. The retired-Skill detector's
+default closed set stays trellis-only; the nine retired GitNexus Skills in
+``GITNEXUS_SKILL_NAMES`` (exact identities, never wildcard) are detected
+only when a caller explicitly opts into ``RETIRED_SKILL_NAMES``.
 
 Every detection returns JSON-safe dictionaries so both the sealed
 migration batch path and the fresh ``cleanup-legacy`` path can seal and
@@ -20,11 +23,28 @@ to execute, and never touches the GitNexus npm package or the global
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 TRELLIS_SKILL_NAMES = ("trellis-channel", "trellis-workflow")
+
+# Retired GitNexus Skills: exact directory identities, never a prefix or
+# wildcard match. The default detection closed set stays trellis-only so
+# sealed migration batches and historical plans keep their exact semantics;
+# the fresh cleanup-legacy path opts into the combined set explicitly.
+GITNEXUS_SKILL_NAMES = (
+    "gitnexus-cli",
+    "gitnexus-debugging",
+    "gitnexus-exploring",
+    "gitnexus-guide",
+    "gitnexus-impact-analysis",
+    "gitnexus-pdg-query",
+    "gitnexus-pr-review",
+    "gitnexus-refactoring",
+    "gitnexus-taint-analysis",
+)
+RETIRED_SKILL_NAMES = TRELLIS_SKILL_NAMES + GITNEXUS_SKILL_NAMES
 
 _MARKER_PAIRS = (
     ("<!-- TRELLIS:START -->", "<!-- TRELLIS:END -->"),
@@ -154,10 +174,29 @@ def skill_identity_error(target: Path, name: str) -> str | None:
     return None
 
 
-def detect_skill_targets(skills_root: Path) -> dict[str, Any]:
+def _retired_names(retired: Iterable[str]) -> list[str]:
+    if isinstance(retired, (str, bytes)):
+        raise TypeError("retired Skill identities must be an iterable of names")
+    names = set(retired)
+    if any(
+        not isinstance(name, str)
+        or not name
+        or name in {".", ".."}
+        or "/" in name
+        or "\\" in name
+        for name in names
+    ):
+        raise ValueError("retired Skill identities must be plain directory names")
+    return sorted(names)
+
+
+def detect_skill_targets(
+    skills_root: Path, *, retired: Iterable[str] = TRELLIS_SKILL_NAMES
+) -> dict[str, Any]:
+    """Detect identity-proven retired Skills; the default closed set is trellis-only."""
     candidates: list[dict[str, Any]] = []
     blocked: list[dict[str, Any]] = []
-    for name in sorted(TRELLIS_SKILL_NAMES):
+    for name in _retired_names(retired):
         target = skills_root / name
         if not target.exists() and not target.is_symlink():
             continue
