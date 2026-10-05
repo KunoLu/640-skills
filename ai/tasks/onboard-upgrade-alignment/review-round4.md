@@ -44,3 +44,7 @@ README.html实际浏览器新段落可见、无横向溢出；README.md、README
 ## 完整验证进度
 
 初次与冻结源码后的本地full各1771项、27跳过、1 error，均为不同followup夹具的来源漂移拒绝；首轮曾怀疑在途编辑，第二轮仍失败后撤回该单因归因。两次失败证据保留。失败项及11项followup前置类定点均通过；正在以只读错误观察器追踪完整suite，不放宽来源守卫。最终全量／精确提交三平台CI尚未通过，任务保持checking而非done。
+
+完整观察器1771项（27跳过）通过，随后无观察器的原生full1771项（27跳过）也通过；此前两次非预期followup漂移未定位根因，保留为已观察的不稳定性风险，不声称重跑等于修复。所有失败与更正均保留在reports/review-round4/。
+
+后续静态复核修正F04测试隔离：只stub显式`selected-powershell`，真实Windows ACL子进程仍委托原run；失败控制要求编码未证明原因，不能让更早隐私拒绝冒充目标red。定点／ruff通过，reviewer再次clean。代码提交9ee8b317ce5148cf6634abd4b986b8a2ab0990ee已推送；测试隔离修正待后续精确CI。生产实现未变。Lessons已调用并复核现有“真实consumer／正向控制／并行验证职责”记录，本轮不新增重复或未经证实根因的长期lesson。

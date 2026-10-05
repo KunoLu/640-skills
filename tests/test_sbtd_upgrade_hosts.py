@@ -3245,13 +3245,22 @@ class NativeWindowsShimBindingTests(unittest.TestCase):
                             if row["kind"] == "shell")
             _write(profile, hosts.render_resource(resource))
             selected = resource["details"]["command_identity"]["path"]
+            real_run = subprocess.run
             for engine, expected in (("5:1252", "failed"), ("7:65001", "verified"), ("5:65001", "verified")):
                 wire = f"SBTD_PS_ENCODING={engine}\nSBTD_RESOLVED_GRAFT={selected}\n".encode()
+
+                def selected_probe(argv, *args, wire=wire, **kwargs):
+                    if argv[0] == "selected-powershell":
+                        return subprocess.CompletedProcess(argv, 0, stdout=wire)
+                    return real_run(argv, *args, **kwargs)
+
                 with self.subTest(engine=engine), mock.patch.object(hosts, "_which", return_value="selected-powershell"), mock.patch.object(
-                    hosts.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout=wire),
+                    hosts.subprocess, "run", side_effect=selected_probe,
                 ):
                     check = hosts._shell_resolution(scope["shell_profiles"][0], resource["details"])
                 self.assertEqual(check["status"], expected, check)
+                if expected == "failed":
+                    self.assertEqual(check["reason"], "graft-shim-encoding-unproven")
 
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell 5.1 required")
     def test_native_legacy_engine_unicode_shim_is_not_falsely_matched(self):
