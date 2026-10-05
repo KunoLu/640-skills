@@ -1,6 +1,6 @@
 # Lessons Index
 
-本索引按 `lessons-record` 分层规范维护当前仓库的完整 lessons。开始任务时先读取 `docs/lessons.md`；只有当前任务、错误信息、工具名或 tags 命中本表时，再读取对应 topic。
+本文件是检索索引，不保存完整 lesson 正文，也不独立定义现行规则。开始任务时先读[短入口](../lessons.md)；需要精确定位时按 id、tags、read_when 或 summary 检索，再沿 detail 读取对应 topic / archive。每个 ID 对应一处完整记录，归档时更新 detail，不复制正文；历史摘要按详情中的时间与适用范围理解。
 
 | id | tags | read_when | summary | detail |
 |---|---|---|---|---|

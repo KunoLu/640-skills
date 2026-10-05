@@ -281,9 +281,9 @@ pwsh -File .\install.ps1
 | `sbtd-workflow-onboard/templates/skills/seo-geo/LICENSE` / `NOTICE` | 第三方衍生的 bundled `seo-geo` 保留 ReScienceLab/opc-skills 的 Apache License 2.0；`NOTICE` 固定上游 source、revision 和本地修改范围，`Copyright 2026 KunoLu` 仅适用于本地修改。 |
 | `install.sh` | macOS / Linux 交互式安装入口，直接以 `sbtd-workflow-onboard` 目录作为 `source-root`。 |
 | `install.ps1` | Windows PowerShell 交互式安装入口，参数语义与 `install.sh` 对齐。 |
-| `docs/lessons.md` | Lessons 必读短入口；执行仓库操作前必须先读取。 |
-| `docs/lessons/index.md` | Lessons 完整索引，按 tags、适用场景和详情路径检索。 |
-| `docs/lessons/topics/**` | Lessons 完整详情，按当前任务命中后读取。 |
+| [docs/lessons.md](docs/lessons.md) | Lessons 唯一必读短入口：阅读协议、topic 路由和少量高频提醒，不保存完整正文。 |
+| [docs/lessons/index.md](docs/lessons/index.md) | Lessons 检索索引，按 ID、tags、适用场景定位详情；摘要不独立定义现行规则。 |
+| [docs/lessons/topics/](docs/lessons/topics/) | Lessons 完整记录的唯一存放处；按命中主题读取，低频记录归档后由索引指向 archive，不留两份正文。 |
 | `docs/prd/knowledge-base-integration-prd.md` | P1 / P1.1 已实现能力与 P2 Evidence Store / PR Gate 实施方案。 |
 | `docs/assets/npx-skills-global-onboard-install.md` 等 5 份流程判定图 | Onboard 安装 / init / reset / init-projects 与 SBTD 工作路径 mermaid；从「安装及使用说明」和「工作流主线」跳转。 |
 | `docs/assets/codex-omp-host-mode-smoke.md` | Codex / OMP 三模式 host smoke 验证手册：opt-in live、skip≠绿、读事件 / 助手回复 / persist 口径；不进 CI，不把 usage 当 AC-20 达标。 |
@@ -322,7 +322,7 @@ AGENTS.md
 
 回滚这项规则也要先核对四个新本地根与Git索引；若已产生本地数据，先在仓库外私有保全并确认处置，在安全迁出或授权方案落实前保持保护，不能仅恢复旧文件就让这些内容暴露为可提交文件。
 
-`docs/lessons.md`的旧五行摘要以及topics里的三／四／五行记录保留原文，均按当时状态理解，不覆盖此处现行九行契约；不得为了更新验收规则改写历史lesson。
+[Lessons 短入口](docs/lessons.md)只链接当前规则，不再维护根 `.gitignore` 的历史五行摘要；topics 中的三／四／五行记录保留原文，按当时状态理解，不覆盖此处现行九行契约。入口和索引用于导航，完整历史记录只存一份，不为更新验收规则改写历史 lesson。
 
 `ENTRYPOINT.md` 的版本监控表启用 OMP：监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`），GitHub 源为 `can1357/oh-my-pi` 的对应 `v<package-version>` tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 `UPDATE.md` 区间，无新版本不写 `当前版本 -> 当前版本`；只有手动 `update` / `更新` 才写回基线。本机 `omp --version` 只作交叉校验，不得覆盖表格版本。
 

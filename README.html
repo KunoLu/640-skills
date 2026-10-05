@@ -1015,7 +1015,7 @@ AGENTS.md
         <p>四条新规则锚定仓库根，覆盖同名目录、文件和symlink，不影响<code>packages/graft</code>等业务子目录。旧<code>.trellis/</code>、<code>.gitnexus/</code>不再由根文件保护；切换已有checkout前先核对磁盘和Git索引残留，未知或敏感内容须保全并确认处置，不盲删或直接提交。ignore不会取消已tracked状态；这不是业务项目迁移或全局配置同步。</p>
         <p>新增的两条 MCP 目录规则未加根锚定，在本仓工作树中也会忽略同名嵌套目录；已追踪文件不因新增 ignore 而取消追踪。</p>
         <p>回滚规则前同样先核对四个新本地根和Git索引；已有本地数据须先在仓库外私有保全并确认处置，安全迁出或授权方案落实前保持保护，不能只恢复旧文件而暴露可提交内容。</p>
-        <p><code>docs/lessons.md</code>的旧五行摘要和topics中的三／四／五行记录保留原文，按当时状态理解，不覆盖现行九行契约；不为更新验收规则改写历史lesson。</p>
+        <p><a href="docs/lessons.md">Lessons 短入口</a>只链接当前规则，不再维护根 <code>.gitignore</code> 的历史五行摘要；topics 中的三／四／五行记录保留原文，按当时状态理解，不覆盖现行九行契约。入口和索引用于导航，完整历史记录只存一份，不为更新验收规则改写历史 lesson。</p>
         <p><code>ENTRYPOINT.md</code> 的版本监控表启用 OMP：监控对象是 npm <code>@oh-my-pi/pi-coding-agent</code>（CLI <code>omp</code>），GitHub 源为 <code>can1357/oh-my-pi</code> 的对应 <code>v&lt;package-version&gt;</code> tag/Release。定时版本检查仅为检测到可分析新版本的启用工具（含 OMP）生成或刷新 <code>UPDATE.md</code> 区间，无新版本不写 <code>当前版本 -&gt; 当前版本</code>；只有手动 <code>update</code> / <code>更新</code> 才写回基线。本机 <code>omp --version</code> 只作交叉校验，不得覆盖表格版本。</p>
         <table>
           <thead>
@@ -1033,9 +1033,9 @@ AGENTS.md
             <tr><td><code>sbtd-workflow-onboard/templates/skills/*/LICENSE</code> / <code>NOTICE</code></td><td>除第三方衍生的 <code>seo-geo</code> 外，其余 bundled Skill 的原创内容均使用同一 Apache License 2.0 和 <code>Copyright 2026 KunoLu</code> 声明；既有第三方来源说明继续保留。</td></tr>
             <tr><td><code>sbtd-workflow-onboard/templates/skills/web-ui-autotest-generator/LICENSE</code> / <code>NOTICE</code></td><td>个人独立实现的 bundled <code>web-ui-autotest-generator</code> 使用与仓库根一致的 Apache License 2.0；<code>NOTICE</code> 声明 <code>Copyright 2026 KunoLu</code>，两份文件随独立安装的 Skill 一起分发。</td></tr>
             <tr><td><code>sbtd-workflow-onboard/templates/skills/seo-geo/LICENSE</code> / <code>NOTICE</code></td><td>第三方衍生的 bundled <code>seo-geo</code> 保留 ReScienceLab/opc-skills 的 Apache License 2.0；<code>NOTICE</code> 固定上游 source、revision 和本地修改范围，<code>Copyright 2026 KunoLu</code> 仅适用于本地修改。</td></tr>
-            <tr><td><code>docs/lessons.md</code></td><td>Lessons 必读短入口；执行仓库操作前必须先读取。</td></tr>
-            <tr><td><code>docs/lessons/index.md</code></td><td>Lessons 完整索引，按 tags、适用场景和详情路径检索。</td></tr>
-            <tr><td><code>docs/lessons/topics/**</code></td><td>Lessons 完整详情，按当前任务命中后读取。</td></tr>
+            <tr><td><a href="docs/lessons.md"><code>docs/lessons.md</code></a></td><td>Lessons 唯一必读短入口：阅读协议、topic 路由和少量高频提醒，不保存完整正文。</td></tr>
+            <tr><td><a href="docs/lessons/index.md"><code>docs/lessons/index.md</code></a></td><td>Lessons 检索索引，按 ID、tags、适用场景定位详情；摘要不独立定义现行规则。</td></tr>
+            <tr><td><a href="docs/lessons/topics/"><code>docs/lessons/topics/</code></a></td><td>Lessons 完整记录的唯一存放处；按命中主题读取，低频记录归档后由索引指向 archive，不留两份正文。</td></tr>
             <tr><td><code>docs/assets/npx-skills-global-onboard-install.md</code> 等 5 份流程判定图</td><td>Onboard 安装 / init / reset / init-projects 与 SBTD 工作路径 mermaid；从安装说明和主线跳转。</td></tr>
             <tr><td><code>docs/assets/codex-omp-host-mode-smoke.md</code></td><td>Codex / OMP 三模式 host smoke 验证手册：opt-in live、skip≠绿、读事件 / 助手回复 / persist 口径；不进 CI，不把 usage 当 AC-20 达标。</td></tr>
 

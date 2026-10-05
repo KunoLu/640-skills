@@ -105,6 +105,7 @@
 - P1-04补救按每个MCP请求重新验证当前图，防止Stop／部署替换后被长连接绕过启动守卫读取；生成Python命令先隔离启动环境，旧未隔离hook不再被默认为foreign。失效仓根不影响无关hook事件，native提前退出和host慢读不再导致解释器崩溃或截断已接收响应。
 
 ### 文档
+- 精简本仓 `docs/lessons.md`，保留阅读协议、topic 路由与少量带详情链接的高频提醒；索引仅负责检索，完整 lesson 与作者块保持原文。移除入口中过时的根 `.gitignore` 五行摘要，改为引用现行规则；同步两份 README 与版本化 automation prompt 的导航、历史边界及 lessons 只读范围，不同步 live automation。
 - 升级参考与 README 两入口明确四项保留契约：缺失 host 仍安装，受支持的嵌套安装由同基线已安装副本续作，restore intent 后 absent 保持续作窗口，OMP 隔离探测仍限 user-wide。版本化巡检提示同步这些边界，不改 live automation。
 - 主 PRD 补充 P3-05 验证环境与旧 Graft 接线退役任务，覆盖临时运行时、隔离 HOME 与受管旧 MCP 绑定；正式发布前完成运行依赖退役或必要保留交接，备份销毁仍归 P3-04。明确方案确认不等于替代已部署，不授权清空 TEMP 或整个宿主账户目录。
 - 新增 `docs/assets/codex-omp-host-mode-smoke.md`：整理 P1-15 Codex/OMP host smoke 的复用验证口径（opt-in、skip≠绿、读事件与助手回复、persist 信号、AC-20 不再复测六格）。
