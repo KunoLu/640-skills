@@ -52,3 +52,5 @@ README.html实际浏览器新段落可见、无横向溢出；README.md、README
 macOS原生CI9ee8b31的U32在父解释器正向控制失败：fixture硬编码user-site布局不适用于framework Python。改由临时解释器的`site.getusersitepackages()`／`sysconfig.get_path("purelib")`取得两路径，保留真实父／`-I`负例及补依赖正向控制；本地U32、ruff及326项升级全子集通过，独立复核clean。原生CI仍待最终测试修正提交复验。
 
 Lessons split name: kuno；来源`.sbtd/developer`只读resolve为ready。新增`LESSON-20261005-kuno-freeze-sealed-inputs`到validation-scripts topic、index与高频短入口，只记已证实机制与归因限制；不记录猜测根因。
+
+最终F02执行消费链补充：两个public apply在校验封存ID确认后、stage／vault写入前复用当前隔离依赖门，防止由不同解释器执行时沿用旧计划环境证明。U32真实CLI执行red原为误导性plan-stale；修后升级apply缺依赖为exit2且空vault／无配置，恢复apply缺依赖为exit2且既有vault与配置原字节不变。恢复输出必须位于vault的夹具错误已修正，原始scope-violation保留。326项升级子集、ruff／ty／语法以及再次37资源真实宿主／重试／恢复均通过；独立复核clean。此后冻结源码，最终完整重跑与精确新head CI不复用旧0e682f2结果。

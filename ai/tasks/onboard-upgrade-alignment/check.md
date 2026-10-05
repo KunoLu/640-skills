@@ -1,6 +1,12 @@
 # 升级对齐验证与复核
 
-## PR #110 第三轮13项修复（当前）
+## PR #110 第四轮7项修复（当前）
+
+基线2b913a66，按F01—F07优先级完成封存范围、隔离依赖、Shell／RPC证据和legacy诊断修复；两切面独立复核已关闭F07边界与跨平台fixture问题。详细red／green、失败记录与证据边界见[review-round4.md](review-round4.md)。F02计划与两个执行入口都验证当前隔离解释器，真实CLI覆盖plan拒绝、合法计划、apply零写入拒绝和recovery保全拒绝；当前326项升级子集通过（18 skip）。最终生产源码的37资源真实安装／Codex／OMP／retry／recovery闭环通过，原字节恢复。
+
+本地早期1771项无写入full已通过，最后执行入口补充后的完整重跑与精确提交原生三平台CI尚待完成。旧0e682f2及更早提交不能作为本次最终交付证据；不提前报告Release Readiness ready。README两入口、REFERENCE、CHANGELOG和版本化automation prompt均维护；未操作live automation、真实HOME或发布。
+
+## PR #110 第三轮13项修复（历史）
 
 基线1ae9c321，三个P1优先、其余按风险顺序完成13项及复核／原生Windows反馈修正；详细red／green见[review-round3.md](review-round3.md)。本地全量1762项（25 skip，启用真实Codex隔离）、317项升级回归（16 skip）、Ruff／ty、APFS与完整37资源真实宿主／重试／恢复通过。提交`7d360b65a2c82926ae683b4518e68cc7b2a2655e`的[三平台CI run37260456824](https://github.com/KunoLu/640-skills/actions/runs/37260456824)全部通过；Windows317项（28 skip）及PowerShell定点2项无skip通过，失败记录保留。Release Readiness: ready，仅仓库能力；最终记录提交另核对其自身CI。下方为历史，不作为本轮通过证据。
 

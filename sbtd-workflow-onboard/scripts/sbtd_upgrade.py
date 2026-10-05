@@ -1359,6 +1359,7 @@ def apply_upgrade(
     """Guarded apply via the staged, digest-bound isolated executor."""
     plan_id, payload = _validate_plan(plan)
     _require_confirmation(confirmed, plan_id)
+    _require_isolated_dependencies()
     trusted = _trusted_package_root()
     if _payload_state(trusted) != payload["baseline"]["source"]["state"]:
         _fail("source-stale", "the running trusted package does not match the sealed baseline")
@@ -2481,6 +2482,7 @@ def apply_recovery(
     """Guarded recovery via the staged, digest-bound isolated executor."""
     recovery_id, payload = _validate_recovery_plan(recovery_plan)
     _require_confirmation(confirmed, recovery_id)
+    _require_isolated_dependencies()
     if payload["status"] != "planned" or any(
         step["status"] != "actionable" for step in payload["steps"]
     ):

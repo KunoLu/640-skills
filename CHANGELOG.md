@@ -43,7 +43,7 @@
 
 ### 修复
 
-- 缺失 Skills 根的大小写／规范化别名重叠在封存前拒绝，避免创建目录后计划范围失效；升级／恢复计划先校验同一 Python 的隔离依赖，仅 user-site 可见时受控拒绝，不取消 `-I` 或自动安装。
+- 缺失 Skills 根的大小写／规范化别名重叠在封存前拒绝，避免创建目录后计划范围失效；升级／恢复的计划与执行均先校验当前 Python 的隔离依赖，仅 user-site 可见时受控拒绝，不取消 `-I` 或自动安装。
 - Bash／zsh 新 PATH 块使用 LF，保留原 CRLF 和 PATH 末项；Windows POSIX 别名按完整所选目录检测旧 PATH，不误报同前缀或子目录。PowerShell 非 ASCII npm shim 按实际引擎编码限制证明，避免旧 ANSI 解码下误报 CLI matched。
 - RPC ID 按 JSON 类型匹配，Boolean 不冒充 Number；直接 MCP 验证 JSON-RPC 2.0 envelope，保留 Codex 无版本回显兼容。OMP 来源未完成发现／分析且无旧入口证据时报告 unknown，不误报不存在。
 - 恢复重试尊重明确未写入回执，旧 pending checkpoint 不得把用户同字节文件认领为本批；无法归属的 intent 现场保留为 blocked，不再报告空恢复完成。

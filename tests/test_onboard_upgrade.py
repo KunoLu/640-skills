@@ -24,7 +24,7 @@ from sbtd_migration_files import require_private_directory
 class UpgradeCliTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "isolated POSIX user-site fixture")
     def test_plan_rejects_dependencies_unavailable_to_isolated_executor(self):
-        """U32: parent-only imports cannot authorize an unappliable plan."""
+        """U32: parent-only imports cannot authorize plan or apply."""
         import sysconfig
         import venv
 
@@ -90,6 +90,47 @@ class UpgradeCliTests(unittest.TestCase):
             self.assertEqual(json.loads(positive.stdout)["plan"]["payload"]["status"], "planned")
             self.assertFalse(config.exists())
             self.assertEqual(list(vault.iterdir()), [])
+            plan = json.loads(positive.stdout)["plan"]
+            plan_path = base / "plan.json"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            (site_dir / "tomlkit").unlink()
+            applied = subprocess.run(
+                [str(binary), "-B", str(CLI), "upgrade", "--phase", "apply",
+                 "--plan", str(plan_path), "--confirm-plan", plan["plan_id"], "--yes", "--json"],
+                env=env, capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(applied.returncode, 2, applied.stderr)
+            self.assertEqual(json.loads(applied.stdout)["reason"], "isolated-dependencies-unavailable")
+            self.assertFalse(config.exists())
+            self.assertEqual(list(vault.iterdir()), [])
+            # Recovery may also be invoked from a different interpreter environment.
+            from sbtd_migration_files import snapshot
+
+            (site_dir / "tomlkit").symlink_to(Path(tomlkit.__file__).parent, target_is_directory=True)
+            installed = subprocess.run(applied.args, env=env, capture_output=True, text=True,
+                                       timeout=120, check=False)
+            self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
+            recovery_path = vault / "recovery.json"
+            recovery = subprocess.run(
+                [str(binary), "-B", str(CLI), "recovery", "--phase", "plan",
+                 "--upgrade-plan", str(plan_path), "--upgrade-receipt", json.loads(installed.stdout)["receipt_path"],
+                 "--output", str(recovery_path), "--json"],
+                env=env, capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(recovery.returncode, 0, recovery.stdout + recovery.stderr)
+            recovery_plan = json.loads(recovery.stdout)["plan"]
+            vault_before, config_before = snapshot(vault), config.read_bytes()
+            (site_dir / "tomlkit").unlink()
+            restored = subprocess.run(
+                [str(binary), "-B", str(CLI), "recovery", "--phase", "apply",
+                 "--upgrade-recovery-plan", str(recovery_path),
+                 "--confirm-recovery", recovery_plan["recovery_id"], "--json"],
+                env=env, capture_output=True, text=True, timeout=120, check=False,
+            )
+            self.assertEqual(restored.returncode, 2, restored.stderr)
+            self.assertEqual(json.loads(restored.stdout)["reason"], "isolated-dependencies-unavailable")
+            self.assertEqual(snapshot(vault), vault_before)
+            self.assertEqual(config.read_bytes(), config_before)
 
     def test_shell_command_dependency_refuses_before_skill_replacement(self):
         """U28: replacing a command's containing Skill must not partially commit."""

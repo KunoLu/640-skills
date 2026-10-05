@@ -796,7 +796,7 @@ OMP 来源发现／分析未完成且没有旧入口证据时，legacy 为 `unkn
 
 当前 `--probe` 的宿主测试不读取认证或发起模型请求，使用临时 HOME 和所选受管配置投影。它证明真实宿主能加载该投影，不证明所有原宿主继承配置或已有连接已切换。原配置域／既有会话是否重载必须另有实际证据；普通 `check` 的 `contentAlignment.scope=skills-only` 只检查所选 Skills 根，不包括全局 AGENTS 或 MCP。
 
-升级／恢复计划使用同一 `sys.executable -I -B` 和净化环境检查声明 Python 依赖。依赖仅在父进程 user-site 可见时，在目标及 vault 写入前以 `isolated-dependencies-unavailable` 受控拒绝；须由操作人准备隔离可用的解释器依赖，不注入 user-site、取消隔离或自动安装。
+升级／恢复的计划与执行使用当前 `sys.executable -I -B` 和净化环境检查声明 Python 依赖。依赖仅在父进程 user-site 可见时，在目标及 vault 写入前以 `isolated-dependencies-unavailable` 受控拒绝；执行入口先校验封存ID确认，再检查当前解释器，不能沿用计划时另一环境的证明。须由操作人准备隔离可用的解释器依赖，不注入 user-site、取消隔离或自动安装。
 
 OMP 隔离宿主探测保持 **user-wide** 投影边界；它不创建私有项目图，也不证明仅由项目级配置提供的连接已加载。项目级路由没有用户级等价连接时，不得把该探测报告成通过；用户级路由通过也不构成项目级路由已验证的证据。
 
@@ -866,8 +866,8 @@ python scripts/onboard.py recovery --phase apply \
 | U29 既有 Profile 与路径编码 | Given 非空 BOMless PowerShell profile、Unicode 路径或 npm shim 字面标点；When render／probe；Then 无关字节保持，5.1正确解释PATH、stdout正确解码、路径内部Unicode分隔符不被截断、动态shim仍拒绝 |
 | U30 有效域与状态汇总 | Given OMP有效继承旧入口、非文件配置或不支持的host RPC；When verify；Then legacy按有效选定来源报告，非文件unknown，unsupported不降为unverified |
 | U31 封存范围稳定 | Given 缺失Skills根与AGENTS路径是大小写／规范化别名；When plan；Then 写前拒绝范围重叠，合法范围在创建目录后仍可重试／恢复 |
-| U32 隔离依赖一致 | Given 仅父解释器user-site可见的依赖；When plan；Then 在目标和vault写入前确认隔离解释器可用性，否则受控拒绝并引导准备依赖 |
+| U32 隔离依赖一致 | Given 仅父解释器user-site可见的依赖或执行解释器不同于计划时；When plan／apply；Then 在目标和vault写入前确认当前隔离解释器可用性，否则受控拒绝并引导准备依赖 |
 | U33 POSIX换行保全 | Given 带CRLF注释的Bash/zsh profile；When加入PATH块并加载；Then 保留原字节，原PATH最后目录仍能解析命令 |
 | U34 原生shim编码证明 | Given PowerShell5.1与BOMless非ASCII npm shim；When probe；Then 按实际解码证明CLI指向或拒绝matched，不执行wrapper |
 | U35 RPC类型与版本 | Given Boolean ID或MCP缺失／错误jsonrpc版本；When probe；Then 不获得verified，合法Number ID与Codex兼容保持 |
-| U36 未发现不等于不存在 | Given OMP接线前置条件不满足或Windows Bash旧PATH为POSIX拼写；When verify；Then 未完成来源发现为unknown，已选旧PATH仍报告 |
+| U36 未发现不等于不存在 | Given OMP接线前置条件不满足或Windows Bash旧PATH为POSIX拼写；When verify；Then 未完成来源发现为unknown，已选旧PATH仍报告，同前缀或子目录不计 |
