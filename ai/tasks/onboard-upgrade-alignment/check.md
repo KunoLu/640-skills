@@ -2,7 +2,7 @@
 
 ## PR #110 第三轮13项修复（当前）
 
-基线1ae9c321，三个P1优先、其余按风险顺序修复；详细项及实际red／green见[review-round3.md](review-round3.md)。317项升级回归、Ruff／ty、普通／大小写敏感APFS、真实Codex项目MCP隔离、完整37资源Codex／OMP升级／重试／恢复已通过；完整项目与新head原生CI尚待闭合。下方为历史，不作为本轮通过证据。
+基线1ae9c321，三个P1优先、其余按风险顺序完成13项及复核／原生Windows反馈修正；详细red／green见[review-round3.md](review-round3.md)。本地全量1762项（25 skip，启用真实Codex隔离）、317项升级回归（16 skip）、Ruff／ty、APFS与完整37资源真实宿主／重试／恢复通过。提交`7d360b65a2c82926ae683b4518e68cc7b2a2655e`的[三平台CI run37260456824](https://github.com/KunoLu/640-skills/actions/runs/37260456824)全部通过；Windows317项（28 skip）及PowerShell定点2项无skip通过，失败记录保留。Release Readiness: ready，仅仓库能力；最终记录提交另核对其自身CI。下方为历史，不作为本轮通过证据。
 
 ## PR #110 第二轮14项修复（历史）
 

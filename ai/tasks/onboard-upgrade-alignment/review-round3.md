@@ -59,3 +59,36 @@ Lesson身份经installed helper只读确认local kuno；新增LESSON-20261005-ku
 隔离PowerShell环境原先没有PATHEXT，原生.exe选择因此无法按Windows规则解析。仅在该Windows shell探针保留扩展名列表，不向PATH加入受管bin，不执行wrapper。回归同时运行真实pwsh与powershell（可用者），Windows CI增加前置两项定位检查，完整套件不减少。独立host reviewer只读复核无新问题；本地相关61项（4 skip）及Ruff／ty通过，新head原生结果待完成。失败原始日志及schema/digest校验的generic v1证据保留在ci-d8c86c6*。
 
 README两入口／REFERENCE／版本化prompt已明确真实命令优先级和输出编码，本次仅恢复Windows环境解析要素，不需重复改写这些说明；CHANGELOG记录验证顺序与PATHEXT边界。此前完整本地结果不冒充该Windows追加分支的实测，最终以新head Windows定点及完整CI为准。
+
+## 最终代码验收
+
+提交`7d360b65a2c82926ae683b4518e68cc7b2a2655e`的[原生三平台CI run37260456824](https://github.com/KunoLu/640-skills/actions/runs/37260456824)全部通过，三个job末次checkout清洁检查成功。
+
+| 范围 | 真实结果 |
+|---|---|
+| 本地全量（启用真实Codex隔离） | 1762 tests，OK，25 skip |
+| 本地升级／恢复 | 317 tests，OK，16 skip |
+| Linux全量 | 1762 tests，OK，44 skip |
+| Linux最低tomlkit／大小写敏感路径 | 56＋1 tests，OK |
+| macOS安装器／工作流 | 271 tests，OK，2 skip |
+| macOS升级／恢复 | 317 tests，OK，16 skip |
+| Windows安装器／PowerShell子集 | 49＋15 tests，OK |
+| Windows根边界／TOML／junction／DACL | 22（1 skip）＋3＋1＋1 tests，OK |
+| Windows PowerShell编码／命令解析定点 | 2 tests，OK，无skip，涵盖实际可用pwsh与powershell |
+| Windows升级／恢复完整范围 | 317 tests，OK，28 skip，2319.673秒 |
+
+平台skip不计作该平台证明。原生Windows新旧profile的Unicode、非UTF8控制台输出、PATHEXT命令解析均实际通过；Codex项目配置隔离在本地显式启用的真实app-server中证明，不把CI opt-in skip当宿主通过。失败CI与本地失败均保留。
+
+CI元数据／各job原始日志／同stem中文汇总见`reports/review-round3/ci-code-7d360b6*`，generic v1 envelope已通过schema及每份报告SHA校验；不把TXT声明为v2场景执行绑定。Evidence Source: ci；Source Revision: exact；Environment Alignment: verified；Evidence Publication: not-configured（GitHub原生Checks可见，无自定义publisher）。
+
+### Release Readiness Review
+
+- Status: ready，限本轮仓库能力交付；不是合并、部署或发布。
+- Production path：显式升级／恢复、selected host/profile探测；三个P1及其余十项全部闭合，四项用户保留契约未变。
+- Failure safeguards：明确no-write证据优先；未知intent现场blocked保全；缺失Unicode别名和Shell写集依赖写前拒绝；不自动执行历史vault代码或删除备份。
+- Isolation/limits：Codex真实项目配置层不加载，OMP仍user-wide；有界RPC和既有超时不变。Darwin规范化等价缺失名称保守拒绝，不声称对所有外部文件系统证明可区分性。PowerShell只恢复所需扩展名解析，不预置bin；shim仍不证明Node或wrapper执行。
+- Observability/runbook：分层JSON、REFERENCE U25—U30、README与完整raw证据；legacy只消费有效来源，unknown／unsupported不丢失；无新服务／遥测／后台设施。
+- Rollout/recovery：草稿PR；真实隔离37资源升级、Codex／OMP各33Skills与6工具、installed retry及恢复原件通过。真实HOME／GUI重载、sync、旧资产退出、备份销毁均未授权且未执行。
+- Required validation：局部、完整本地、独立复核、真实smoke和精确三平台CI通过。Web／Mobile业务专项not-needed；README浏览器实测通过，无必需检查豁免。
+
+最终验收记录提交后，交付head使用自身原生CI结果，不将本节代码提交的绿灯冒充不同head。
