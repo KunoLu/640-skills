@@ -29,7 +29,7 @@ Before Codex/OMP global wiring, project initialization or migration-context init
 
 Whole-directory installation and `npx skills add` do not run pip. Before validating exchange contracts, task state or migration, use the actual installed-copy interpreter: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. This declares jsonschema, PyYAML, markdown-it-py, tomlkit and cryptography; missing dependencies block the affected validation or write without breaking help or pure argument parsing. Verify a fresh installed copy, not the source machine's existing packages.
 
-Do not install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.html`, `archive/`, or `docs/lessons.md` as target templates.
+Do not install the source repository root `AGENTS.md`, `ENTRYPOINT.md`, `README.md`, `README.zh.md`, `archive/`, or `docs/lessons.md` as target templates.
 
 ## Upgrade Alignment Routing
 

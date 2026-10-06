@@ -4,7 +4,7 @@
 
 完整 lesson 只保存在 `docs/lessons/topics/<topic>.md`；归档后只保存在索引指向的 `docs/lessons/archive/YYYY-QN.md`，不保留两份正文。索引负责检索，入口摘要不替代详情。
 
-历史 lesson（含下方作者摘要）的旧路径、版本、测试数量和配置状态按记录当时理解，不授权恢复已退役流程。现行仓库定位与根 `.gitignore` 契约见 [README「仓库定位」](../README.md#仓库定位)；版本检查与自动化权限见[版本化 automation prompt](../prompts/automations/sbtd-workflow-tools-version-check.md)。发生差异时按当前规则执行，保留历史详情。
+历史 lesson（含下方作者摘要）的旧路径、版本、测试数量和配置状态按记录当时理解，不授权恢复已退役流程。现行仓库定位与根 `.gitignore` 契约见 [README「Repository」](../README.md#repository)；版本检查与自动化权限见[版本化 automation prompt](../prompts/automations/sbtd-workflow-tools-version-check.md)。发生差异时按当前规则执行，保留历史详情。
 
 写入新 lesson 时：
 

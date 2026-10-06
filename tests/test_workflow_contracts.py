@@ -4,13 +4,11 @@ import copy
 import fnmatch
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
 import tempfile
 import unittest
-from html.parser import HTMLParser
 from pathlib import Path
 
 import jsonschema
@@ -213,14 +211,6 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             self.assertIn(local_artifact, entries)
 
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        for document in (readme, readme_html, changelog):
-            self.assertIn("旧模板已经写入", document)
-            self.assertIn("reset", document)
-            self.assertIn("不会自动删除", document)
-
         with tempfile.TemporaryDirectory() as temp_dir:
             project = Path(temp_dir)
             subprocess.run(
@@ -313,12 +303,6 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn("~/.omp/agent/AGENTS.md", document)
             self.assertIn("does not create `.omp`", document)
             self.assertIn("single file write", document)
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        self.assertIn("~/.omp/agent/AGENTS.md", readme)
-        self.assertIn("~/.omp/agent/AGENTS.md", readme_html)
-        self.assertIn("不存在则跳过且不创建 `.omp`", readme)
-        self.assertIn("不存在则跳过且不创建 <code>.omp</code>", readme_html)
         init_asset = (ROOT / "docs" / "assets" / "onboard-skill-init.md").read_text(
             encoding="utf-8"
         )
@@ -522,20 +506,6 @@ class WorkflowContractTests(unittest.TestCase):
             ).hexdigest(),
             "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
         )
-        license_entries = {
-            "README.md": "`sbtd-workflow-onboard/LICENSE` / `NOTICE`",
-            "README.html": (
-                "<code>sbtd-workflow-onboard/LICENSE</code> / <code>NOTICE</code>"
-            ),
-        }
-        for document, license_entry in license_entries.items():
-            content = (ROOT / document).read_text(encoding="utf-8")
-            self.assertIn("Apache License 2.0", content)
-            self.assertIn("web-ui-autotest-generator/LICENSE", content)
-            self.assertIn("seo-geo/LICENSE", content)
-            self.assertIn("ReScienceLab/opc-skills", content)
-            self.assertIn(license_entry, content)
-            self.assertIn("Copyright 2026 KunoLu", content)
 
     def test_onboard_and_eligible_bundled_skills_share_kunolu_license(self) -> None:
         canonical_license = (ROOT / "LICENSE").read_bytes()
@@ -1088,20 +1058,6 @@ class WorkflowContractTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.Draft202012Validator(schema).validate(invalid_checkout)
 
-    def test_readme_uses_repository_root_script_path(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        repository_script = (
-            "sbtd-workflow-onboard/templates/skills/"
-            "knowledge-base-integration/scripts/knowledge_base_p1.py"
-        )
-        self.assertIn(repository_script, readme)
-        self.assertIn(repository_script, readme_html)
-
-        parser = HTMLParser()
-        parser.feed(readme_html)
-        parser.close()
-
     def test_version_check_prompt_is_versioned_and_documented(self) -> None:
         prompt_path = (
             ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
@@ -1152,15 +1108,6 @@ class WorkflowContractTests(unittest.TestCase):
         ):
             with self.subTest(read_only_path=read_only_path):
                 self.assertNotIn(read_only_path, write_allowlist)
-        for document_path in (
-            ROOT / "README.md",
-            ROOT / "README.html",
-        ):
-            with self.subTest(document=document_path.name):
-                self.assertIn(
-                    "prompts/automations/sbtd-workflow-tools-version-check.md",
-                    document_path.read_text(encoding="utf-8"),
-                )
 
     def test_external_skill_policy_is_stable_first_across_user_surfaces(
         self,
@@ -1170,7 +1117,6 @@ class WorkflowContractTests(unittest.TestCase):
             for path in (
                 "ENTRYPOINT.md",
                 "README.md",
-                "README.html",
                 "install.sh",
                 "install.ps1",
                 "prompts/automations/sbtd-workflow-tools-version-check.md",
@@ -1296,38 +1242,6 @@ class WorkflowContractTests(unittest.TestCase):
             with self.subTest(prompt_phrase=phrase):
                 self.assertIn(phrase, prompt)
 
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        parser = HTMLParser()
-        parser.feed(readme_html)
-        parser.close()
-        for label, document in (
-            ("README.md", readme),
-            ("README.html", readme_html),
-        ):
-            with self.subTest(document=label):
-                self.assertIn("@oh-my-pi/pi-coding-agent", document)
-                self.assertIn("can1357/oh-my-pi", document)
-                self.assertIn("只作交叉校验", document)
-
-    def test_readme_knowledge_cli_example_is_shell_executable(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
-        invalid_pipeline = "knowledge_base_p1.py " + "|".join(
-            ("validate-config", "decision", "ingest", "smoke")
-        )
-        executable_prefix = (
-            "python sbtd-workflow-onboard/templates/skills/"
-            "knowledge-base-integration/scripts/knowledge_base_p1.py "
-            "validate-config"
-        )
-
-        for document in (readme, readme_html):
-            self.assertNotIn(invalid_pipeline, document)
-            self.assertIn(executable_prefix, document)
-            self.assertIn("--product", document)
-            self.assertIn("--workspace", document)
-
     def test_p1_1_runtime_contract_and_runner_examples_are_complete(self) -> None:
         references = SKILLS / "knowledge-base-integration" / "references"
         runtime_contract = (references / "runtime-contract.md").read_text(
@@ -1375,29 +1289,18 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(expected, actual)
 
     def test_p1_1_documentation_keeps_sync_and_read_separate(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
         design = (
             ROOT / "docs" / "prd" / "knowledge-base-integration-prd.md"
         ).read_text(encoding="utf-8")
-        for document in (readme, design):
-            self.assertIn("sync / 同步", document)
-            self.assertIn("read / 读取", document)
-        self.assertIn("P1.1", readme)
+        self.assertIn("sync / 同步", design)
+        self.assertIn("read / 读取", design)
         self.assertIn("Runner Adapter", design)
 
     def test_caveman_auto_lite_has_monotonic_task_state(self) -> None:
         """Public documentation remains a contract after the rule relocation."""
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
         reference = (ROOT / "sbtd-workflow-onboard" / "REFERENCE.md").read_text(
             encoding="utf-8"
         )
-
-        for document in (readme, readme_html):
-            self.assertIn("autoLiteEligible", document)
-            self.assertIn("新的主要目标", document)
-            self.assertIn("保护区只覆盖当前回复", document)
-            self.assertIn("配置缺失时按 auto 处理", document)
 
         self.assertIn("monotonic eligibility latch", reference)
         self.assertIn("new primary goal", reference)
@@ -1405,8 +1308,6 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_i_have_adhd_required_external_contract(self) -> None:
         """Keep the surviving public install/activation documentation contract."""
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        readme_html = (ROOT / "README.html").read_text(encoding="utf-8")
         reference = (ROOT / "sbtd-workflow-onboard" / "REFERENCE.md").read_text(
             encoding="utf-8"
         )
@@ -1415,15 +1316,6 @@ class WorkflowContractTests(unittest.TestCase):
         )
         entrypoint = (ROOT / "ENTRYPOINT.md").read_text(encoding="utf-8")
 
-        self.assertIn("第 19 个 required external Skill", readme)
-        self.assertIn("stable 镜像离线自动安装", readme)
-        self.assertIn("行动优先的可扫读结构", readme)
-        self.assertNotIn("install-i-have-adhd", readme)
-        row_start = readme_html.index("<td>i-have-adhd</td>")
-        row_end = readme_html.index("</tr>", row_start)
-        i_have_adhd_row = readme_html[row_start:row_end]
-        self.assertIn("第 19 个 required external Skill", i_have_adhd_row)
-        self.assertNotIn("install-i-have-adhd", readme_html)
         self.assertIn("All 19 referenced external Skills", reference)
         self.assertIn("ayghri/i-have-adhd", reference)
         self.assertIn("- `i-have-adhd`", onboard_skill)
@@ -1455,19 +1347,6 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertIn(
                 "Every completed external `grill-with-docs` session", document
             )
-        for path in (ROOT / "README.md", ROOT / "README.html"):
-            document = path.read_text(encoding="utf-8")
-            for term in (
-                "DDD Boundary Review",
-                "每次完整执行",
-                "grill-with-docs",
-                "external",
-                "domain-modeling",
-                "不能替代",
-                "未达到",
-                "confirmed",
-            ):
-                self.assertIn(term, document)
 
     def test_other_book_skills_have_strict_development_gates(self) -> None:
         """Check the unchanged public reviewer result contracts with mode layering."""
@@ -1510,17 +1389,6 @@ class WorkflowContractTests(unittest.TestCase):
         )
         self.assertIn("normal `init` / `reset`", onboard_skill)
         self.assertIn("objective predicates", reference)
-        for path in (ROOT / "README.md", ROOT / "README.html"):
-            document = path.read_text(encoding="utf-8")
-            for term in (
-                "Book Gate Plan",
-                "DDIA Data Design Review",
-                "Legacy Change Safety Review",
-                "Refactoring Review",
-                "Release Readiness Review",
-                "其他场景仍按需调用",
-            ):
-                self.assertIn(term, document)
 
     def test_lessons_split_name_charset_keeps_ids_collision_free(self) -> None:
         """Exercise the declared public name format without pinning its prose."""
