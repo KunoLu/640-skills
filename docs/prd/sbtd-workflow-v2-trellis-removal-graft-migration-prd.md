@@ -6,7 +6,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.21（保留历史观察者签名授权，补齐消费末端来源校验与真实非成功回执；逐任务实施与既有 P2/P3 状态不改写。P3-01观察中，P3-05仍待既有连接与环境退役／保留交接收口；当前进度与证据以§14为准） |
+| 文档版本 | 2.22（闭合直接及 followup 祖先现态来源的计划／回执输出门，保留晚期失败的实测结果；逐任务实施与既有 P2/P3 状态不改写。P3-01观察中，P3-05仍待既有连接与环境退役／保留交接收口；当前进度与证据以§14为准） |
 | 文档状态 | 产品与流程决策已确认；已获本源仓库逐任务开发及 PR 合并授权；实际任务状态与证据见 §14，合并不等于 v2 发布 |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，须有明确发布授权并通过实际目标 SHA 的验证，不能由实现完成推定已发布 |
@@ -860,7 +860,8 @@ apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，ver
 - 纯契约层只核对所给文档与原始字节，不读取文件系统；实际 verify、部署重试发布、cleanup/recovery 上下文及历史 followup 消费另须安全复核两份来源对象的存在、类型和摘要。内容相同的安全副本可作为真实引用，不把命令行路径拼写作为唯一身份；缺失、目录、异内容或 symlink/reparse 路径均拒绝。
 - 观察者 Onboard 指纹只允许等于 manifest 封存运行时，或精确匹配经既有信任公钥验签的 `(manifest前驱, 观察者后继)`；不接受反向或无关配对。消费者自身与 manifest 的兼容性仍由原有运行时／完整回执门单独校验。历史观察者不必等于当前消费者；缺少所需血统授权时失败关闭，不重封旧证据或伪造版本。
 - 新跨运行时观察还须内嵌 `observer_lineage`，闭集字段为 `schema_version:1`、`purpose:runtime-lineage`、`predecessor`、`successor`、`signature`；保存原已验签授权而不是重新签名，证据不携带公钥或密钥。纯契约绑定端点，实际消费用已安装受信公钥验证嵌入签名，当前配对文件轮换不抹去原授权。旧无该字段记录仅保留同运行时／当前精确配对回退；授权不可用时拒绝，不重封历史或推断授权。该授权只证明观察者配对，不放宽消费者自身的运行时兼容门。
-- verify 在全部处理后、返回前再次复核现态来源；cleanup 在全部预检后、首次写入前及回执契约处理后、保存前复核。若最后一次检查发现漂移但清理已实际发生，保留实测资源结果、原始备份与来源，保存非成功累计回执并返回非零；不得抹去已观察写入、伪造回滚或报告清理成功。这不是跨进程原子快照保证。
+- 直接消费现态证据或通过一层 followup 祖先间接消费时，接受计划／证据的输出边界均须再次复核来源；不能因当前回执没有 `reconciliation` 字段而跳过祖先来源。只重读已绑定的祖先文档与来源，不重新要求被合法后继阶段取代的旧现场，不扩大为递归 followup。verify、恢复计划和 followup 计划在返回前复核，reconcile／部署／apply 在其输出边界复核；cleanup/recovery 另在完整预检后、首次写入前及回执校验后、保存前复核。
+- 若晚期来源检查失败但清理／恢复已实际发生，保留实测资源结果、完成步骤、保护原件与引用，保存非成功累计回执并返回非零；部署保存拒绝沿用失败结果中的 `operationResults`，明确无可用回执。不得抹去已观察写入、伪造回滚或报告成功。这不是跨进程原子快照保证。
 - `succeeded` 表示当前后置条件已接受，不表示原进程曾被观察到成功退出，也不表示本次新写了配置或图。`started_at`／`finished_at` 只描述本次观察；不得虚构旧执行事实。
 - 两个证据路径必须是原 manifest 私有目录内的绝对物理路径；输出必须全新、不覆盖，避让原始输入、受管目标、原件及受保护前批对象。新输出对大小写／Unicode 等价拼写保守拒绝，不改变普通受管资源身份判定。历史缺失路径始终不写。
 - 成功返回 `status=reconciled`、`verification_id=null`、裸deployment文档及实际保存路径。随后标准 verify 消费该新文档，成功时输出 `verified` 及 `acceptance_basis=current-state`，仍不授权清理。
@@ -868,7 +869,7 @@ apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，ver
 
 这组新增字段与phase需要一致升级的生产者和消费者；旧严格schema读者可能拒绝，不提供隐藏alias或降级伪装。私有本机签名包的成功不证明公共发布包能直接续接任意旧manifest；安装、真实批次执行、宿主验收与备份处置均保持独立授权。
 
-回归追踪：`tests/test_sbtd_reconciliation.py` 覆盖生命周期、现场／原件漂移及发布竞态；`tests/test_sbtd_reconciliation_contracts.py` 覆盖来源、原始字节绑定与累计重试；`tests/test_sbtd_omp_reconciliation.py` 覆盖OMP继承等价无写与配置保护；`tests/test_sbtd_reconciliation_followup.py` 覆盖后继消费。测试中的原生边界替身只证明其声明的契约；真实CLI／Graft、宿主与跨平台结果分别取证，不互相替代。
+回归追踪：`tests/test_sbtd_reconciliation.py` 覆盖生命周期、现场／原件漂移及发布竞态，其中 `CurrentStateProvenanceRecheckTests` 覆盖 verify、cleanup、recovery 与计划／发布末端；`tests/test_sbtd_reconciliation_contracts.py` 覆盖来源、原始字节绑定与累计重试；`tests/test_sbtd_reconciliation_lineage.py` 覆盖原始签名保留、轮换和伪造拒绝；`tests/test_sbtd_omp_reconciliation.py` 覆盖OMP继承等价无写、空原件拒绝与配置保护；`tests/test_sbtd_reconciliation_followup.py` 覆盖后继计划、直接及间接消费。测试中的原生边界替身只证明其声明的契约；真实CLI／Graft、宿主与跨平台结果分别取证，不互相替代。
 
 ### 10.3 catalog 与旧 Skill 退役
 

@@ -24,7 +24,7 @@ import onboard_contracts as contracts
 from sbtd_graft_deployment import load_deployment_context, save_deployment_evidence
 from sbtd_migration_files import save_document, snapshot
 from sbtd_reconciliation import reconcile_deployment
-from sbtd_recovery import plan_recovery
+from sbtd_recovery import apply_recovery, plan_recovery
 from sbtd_migration_verify import verify_migration
 
 
@@ -1355,6 +1355,15 @@ class CurrentStateProvenanceRecheckTests(unittest.TestCase):
     still-verify binding test allows), so late drift invalidates only the
     cited-source recheck — never the argv spelling or the raw input documents
     already bound at the initial gate.
+
+    Recovery follows the same discipline (discussion_r4237001536): apply must
+    recheck after the full preflight, before the first step write, and again
+    after result processing, before publication — a stale recheck there still
+    persists every genuinely measured step outcome, completed id and
+    protection object in a non-success cumulative receipt, never reporting
+    restored/already-complete. The read-only recovery plan and reconcile
+    consumers recheck once more before any accepted artifact is returned or
+    saved, and a reappearing historical receipt is stale provenance too.
     """
 
     def test_verify_rechecks_cited_sources_after_report_inspection(self):
@@ -1588,6 +1597,409 @@ class CurrentStateProvenanceRecheckTests(unittest.TestCase):
                 self.assertEqual(apply_path.read_bytes(), apply_before)
                 self.assertEqual(output_path.read_bytes(), evidence_before)
                 self.assertFalse(missing_path.exists())
+
+    def test_reconciled_recovery_roundtrip_restores_pre_apply_state(self):
+        # Control: cited copies intact and the historical receipt still
+        # absent, so the guarded path still genuinely restores pre-apply.
+        (
+            batch,
+            manifest_path,
+            apply_path,
+            missing_path,
+            output_path,
+            copies,
+        ) = _reconciled_batch_citing_copied_inputs(self)
+        with mock.patch.dict(os.environ, batch.environment):
+            planned, plan_code = plan_recovery(
+                manifest_path,
+                apply_receipt_path=apply_path,
+                deployment_evidence_path=output_path,
+            )
+        self.assertEqual(plan_code, 0, planned)
+        plan = planned["recovery"]["plan"]
+        steps = plan["payload"]["steps"]
+        self.assertTrue(steps)
+        plan_path = batch.evidence / "recovery-plan.json"
+        save_document(plan_path, plan, private_root=batch.evidence)
+
+        with mock.patch.dict(os.environ, batch.environment):
+            restored, recovery_code = apply_recovery(
+                plan_path, confirm_recovery=plan["plan_id"]
+            )
+        self.assertEqual(recovery_code, 0, restored)
+        self.assertEqual(restored["status"], "restored")
+        receipt = restored["recovery"]["receipt"]
+        self.assertEqual(receipt["payload"]["status"], "restored")
+        self.assertEqual(
+            receipt["payload"]["completed_step_ids"],
+            sorted(step["step_id"] for step in steps),
+        )
+        self.assertEqual(receipt["payload"]["pending_step_ids"], [])
+        self.assertEqual(batch.agents.read_bytes(), batch.foreign)
+        saved = [
+            path
+            for path in batch.evidence.glob("recovery-*.json")
+            if path != plan_path
+        ]
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(
+            json.loads(saved[0].read_bytes())["receipt_id"],
+            receipt["receipt_id"],
+        )
+        self.assertEqual(
+            copies["manifest_ref"].read_bytes(), manifest_path.read_bytes()
+        )
+        self.assertEqual(
+            copies["apply_receipt_ref"].read_bytes(), apply_path.read_bytes()
+        )
+        self.assertFalse(missing_path.exists())
+
+    def test_recovery_rechecks_provenance_after_preflight_before_any_write(self):
+        import sbtd_recovery
+
+        damaged = b'{"late cited source drift": true}\n'
+        reappeared = b'{"late_historical_evidence": true}\n'
+        real_validate_context = sbtd_recovery._validate_context
+        real_execute_step = sbtd_recovery._execute_step
+        for ref_key, change in (
+            ("manifest_ref", "modify"),
+            ("manifest_ref", "delete"),
+            ("apply_receipt_ref", "modify"),
+            ("apply_receipt_ref", "delete"),
+            ("missing_deployment_evidence", "reappear"),
+        ):
+            with self.subTest(ref=ref_key, change=change):
+                (
+                    batch,
+                    manifest_path,
+                    apply_path,
+                    missing_path,
+                    output_path,
+                    copies,
+                ) = _reconciled_batch_citing_copied_inputs(self)
+                cited = copies.get(ref_key)
+                with mock.patch.dict(os.environ, batch.environment):
+                    planned, plan_code = plan_recovery(
+                        manifest_path,
+                        apply_receipt_path=apply_path,
+                        deployment_evidence_path=output_path,
+                    )
+                self.assertEqual(plan_code, 0, planned)
+                plan = planned["recovery"]["plan"]
+                plan_path = batch.evidence / "recovery-plan.json"
+                save_document(plan_path, plan, private_root=batch.evidence)
+                root_before = _tree_bytes(batch.root)
+                home_before = _tree_bytes(batch.home)
+                vault_before = _tree_bytes(batch.vault)
+                manifest_before = manifest_path.read_bytes()
+                apply_before = apply_path.read_bytes()
+                evidence_before = output_path.read_bytes()
+                names_before = set(os.listdir(batch.evidence))
+                writes = []
+
+                def drift_after_real_validation(
+                    *args, cited=cited, change=change, missing=missing_path, **kwargs
+                ):
+                    # The real full-context preflight genuinely accepts first;
+                    # the cited source copy drifts, or the historical receipt
+                    # reappears, only afterwards — inside the window before
+                    # the first recovery write.
+                    result = real_validate_context(*args, **kwargs)
+                    if change == "reappear":
+                        missing.write_bytes(reappeared)
+                    else:
+                        _drift_cited_copy(cited, change, damaged)
+                    return result
+
+                def recording_execute_step(*args, writes=writes, **kwargs):
+                    writes.append(args)
+                    return real_execute_step(*args, **kwargs)
+
+                with (
+                    mock.patch.dict(os.environ, batch.environment),
+                    mock.patch.object(
+                        sbtd_recovery,
+                        "_validate_context",
+                        side_effect=drift_after_real_validation,
+                    ),
+                    mock.patch.object(
+                        sbtd_recovery,
+                        "_execute_step",
+                        side_effect=recording_execute_step,
+                    ),
+                    self.assertRaises(contracts.ContractError) as failure,
+                ):
+                    apply_recovery(plan_path, confirm_recovery=plan["plan_id"])
+                self.assertEqual(failure.exception.code, "state-conflict")
+                # The refusal lands after the full genuine preflight yet
+                # before the first recovery write: no step ran, no target,
+                # backup, protection object or receipt is touched, and the
+                # concurrent change is preserved exactly as it landed.
+                self.assertEqual(writes, [])
+                self.assertEqual(_tree_bytes(batch.root), root_before)
+                self.assertEqual(_tree_bytes(batch.home), home_before)
+                self.assertEqual(_tree_bytes(batch.vault), vault_before)
+                if change == "modify":
+                    self.assertEqual(cited.read_bytes(), damaged)
+                    self.assertEqual(set(os.listdir(batch.evidence)), names_before)
+                elif change == "delete":
+                    self.assertFalse(cited.exists())
+                    self.assertEqual(
+                        set(os.listdir(batch.evidence)),
+                        names_before - {cited.name},
+                    )
+                else:
+                    self.assertEqual(missing_path.read_bytes(), reappeared)
+                    self.assertEqual(
+                        set(os.listdir(batch.evidence)),
+                        names_before | {missing_path.name},
+                    )
+                self.assertEqual(manifest_path.read_bytes(), manifest_before)
+                self.assertEqual(apply_path.read_bytes(), apply_before)
+                self.assertEqual(output_path.read_bytes(), evidence_before)
+
+    def test_recovery_recheck_failure_preserves_measured_results(self):
+        import sbtd_recovery
+
+        damaged = b'{"late cited source drift": true}\n'
+        reappeared = b'{"late_historical_evidence": true}\n'
+        real_projects = sbtd_recovery._recovery_projects
+        for ref_key, change in (
+            ("manifest_ref", "modify"),
+            ("manifest_ref", "delete"),
+            ("apply_receipt_ref", "modify"),
+            ("apply_receipt_ref", "delete"),
+            ("missing_deployment_evidence", "reappear"),
+        ):
+            with self.subTest(ref=ref_key, change=change):
+                (
+                    batch,
+                    manifest_path,
+                    apply_path,
+                    missing_path,
+                    output_path,
+                    copies,
+                ) = _reconciled_batch_citing_copied_inputs(self)
+                cited = copies.get(ref_key)
+                with mock.patch.dict(os.environ, batch.environment):
+                    planned, plan_code = plan_recovery(
+                        manifest_path,
+                        apply_receipt_path=apply_path,
+                        deployment_evidence_path=output_path,
+                    )
+                self.assertEqual(plan_code, 0, planned)
+                plan = planned["recovery"]["plan"]
+                steps = plan["payload"]["steps"]
+                self.assertTrue(steps)
+                plan_path = batch.evidence / "recovery-plan.json"
+                save_document(plan_path, plan, private_root=batch.evidence)
+                manifest_before = manifest_path.read_bytes()
+                apply_before = apply_path.read_bytes()
+                evidence_before = output_path.read_bytes()
+
+                def drift_after_real_projects(
+                    *args, cited=cited, change=change, missing=missing_path, **kwargs
+                ):
+                    # Real recovery already executed and measured every step
+                    # outcome; the cited source copy drifts, or the historical
+                    # receipt reappears, only afterwards — before publication.
+                    projects = real_projects(*args, **kwargs)
+                    if change == "reappear":
+                        missing.write_bytes(reappeared)
+                    else:
+                        _drift_cited_copy(cited, change, damaged)
+                    return projects
+
+                with (
+                    mock.patch.dict(os.environ, batch.environment),
+                    mock.patch.object(
+                        sbtd_recovery,
+                        "_recovery_projects",
+                        side_effect=drift_after_real_projects,
+                    ),
+                ):
+                    envelope, code = apply_recovery(
+                        plan_path, confirm_recovery=plan["plan_id"]
+                    )
+                # Every step genuinely restored, then the final provenance
+                # recheck failed: the batch can never claim restored or
+                # already-complete, and the measured results are retained in
+                # a truthful blocked/failed cumulative receipt.
+                self.assertNotEqual(code, 0, envelope)
+                self.assertNotIn(
+                    envelope["status"], ("restored", "already-complete")
+                )
+                self.assertIn(envelope["status"], ("blocked", "failed"))
+                receipt = envelope["recovery"]["receipt"]
+                self.assertIn(receipt["payload"]["status"], ("blocked", "failed"))
+                for project in receipt["payload"]["projects"]:
+                    self.assertIn(project["status"], ("blocked", "failed"))
+                saved = [
+                    path
+                    for path in batch.evidence.glob("recovery-*.json")
+                    if path != plan_path
+                ]
+                self.assertEqual(len(saved), 1)
+                saved_receipt = json.loads(saved[0].read_bytes())
+                self.assertEqual(saved_receipt["receipt_id"], receipt["receipt_id"])
+                completed = receipt["payload"]["completed_step_ids"]
+                self.assertEqual(
+                    completed, sorted(step["step_id"] for step in steps)
+                )
+                self.assertEqual(receipt["payload"]["pending_step_ids"], [])
+                restore_to = {step["step_id"]: step["restore_to"] for step in steps}
+                targets = {
+                    resource["resource_id"]: resource["target"]
+                    for resource in plan["payload"]["resources"]
+                }
+                results = {
+                    result["step_id"]: result
+                    for result in receipt["payload"]["results"]
+                }
+                self.assertEqual(sorted(results), completed)
+                protections = []
+                for step_id in completed:
+                    result = results[step_id]
+                    self.assertEqual(result["status"], "succeeded")
+                    self.assertEqual(result["after"], restore_to[step_id])
+                    if result["protection_ref"] is not None:
+                        protections.append(result["protection_ref"])
+                # A later inverse step may supersede an earlier after-state
+                # for the same resource. Only the final planned state is live.
+                final_states = {
+                    step["resource_id"]: step["restore_to"] for step in steps
+                }
+                for resource_id, expected in final_states.items():
+                    self.assertEqual(snapshot(Path(targets[resource_id])), expected)
+                self.assertTrue(protections)
+                for protection in protections:
+                    self.assertEqual(
+                        snapshot(Path(protection["path"])), protection["state"]
+                    )
+                # The restoration is neither rolled back nor repaired, and the
+                # concurrent change is preserved exactly as it landed; every
+                # genuine input stays byte-identical.
+                self.assertEqual(batch.agents.read_bytes(), batch.foreign)
+                if change == "modify":
+                    self.assertEqual(cited.read_bytes(), damaged)
+                elif change == "delete":
+                    self.assertFalse(cited.exists())
+                else:
+                    self.assertEqual(missing_path.read_bytes(), reappeared)
+                self.assertEqual(manifest_path.read_bytes(), manifest_before)
+                self.assertEqual(apply_path.read_bytes(), apply_before)
+                self.assertEqual(output_path.read_bytes(), evidence_before)
+
+    def test_recovery_plan_rechecks_cited_sources_before_accepted_return(self):
+        import sbtd_recovery
+
+        damaged = b'{"late cited source drift": true}\n'
+        real_validate_context = sbtd_recovery._validate_context
+        for ref_key, change in (
+            ("manifest_ref", "modify"),
+            ("apply_receipt_ref", "delete"),
+        ):
+            with self.subTest(ref=ref_key, change=change):
+                (
+                    batch,
+                    manifest_path,
+                    apply_path,
+                    missing_path,
+                    output_path,
+                    copies,
+                ) = _reconciled_batch_citing_copied_inputs(self)
+                cited = copies[ref_key]
+                names_before = set(os.listdir(batch.evidence))
+                manifest_before = manifest_path.read_bytes()
+                apply_before = apply_path.read_bytes()
+
+                def drift_after_real_validation(
+                    *args, cited=cited, change=change, **kwargs
+                ):
+                    # The real context validation genuinely accepts first;
+                    # the cited source copy drifts only afterwards, inside
+                    # the read-only planning window.
+                    result = real_validate_context(*args, **kwargs)
+                    _drift_cited_copy(cited, change, damaged)
+                    return result
+
+                with (
+                    mock.patch.dict(os.environ, batch.environment),
+                    mock.patch.object(
+                        sbtd_recovery,
+                        "_validate_context",
+                        side_effect=drift_after_real_validation,
+                    ),
+                    self.assertRaises(contracts.ContractError) as failure,
+                ):
+                    plan_recovery(
+                        manifest_path,
+                        apply_receipt_path=apply_path,
+                        deployment_evidence_path=output_path,
+                    )
+                self.assertEqual(failure.exception.code, "state-conflict")
+                # Planning stays read-only: no accepted plan envelope, no new
+                # private object, genuine inputs byte-identical, and the
+                # drifted copy is preserved as the concurrent change left it.
+                if change == "modify":
+                    self.assertEqual(cited.read_bytes(), damaged)
+                    self.assertEqual(set(os.listdir(batch.evidence)), names_before)
+                else:
+                    self.assertFalse(cited.exists())
+                    self.assertEqual(
+                        set(os.listdir(batch.evidence)),
+                        names_before - {cited.name},
+                    )
+                self.assertEqual(manifest_path.read_bytes(), manifest_before)
+                self.assertEqual(apply_path.read_bytes(), apply_before)
+                self.assertFalse(missing_path.exists())
+
+    def test_reconcile_rechecks_cited_manifest_bytes_before_save(self):
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        output_path = batch.evidence / "current-state-evidence.json"
+        manifest_before = manifest_path.read_bytes()
+        apply_before = apply_path.read_bytes()
+        damaged = manifest_before + b'\n{"late cited source drift": true}\n'
+        real_validate_result = contracts.validate_deployment_result
+
+        def drift_after_real_result(*args, **kwargs):
+            # The real result validator genuinely accepts first; the cited
+            # manifest bytes drift only afterwards — after every earlier
+            # input guard and before the single evidence write.
+            result = real_validate_result(*args, **kwargs)
+            manifest_path.write_bytes(damaged)
+            return result
+
+        patches = _native_doubles(manifest)
+        with (
+            mock.patch.dict(os.environ, batch.environment),
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            mock.patch.object(
+                contracts,
+                "validate_deployment_result",
+                side_effect=drift_after_real_result,
+            ),
+            self.assertRaises(contracts.ContractError) as failure,
+        ):
+            reconcile_deployment(
+                manifest_path,
+                apply_path,
+                missing_path,
+                output_path,
+                confirmed=True,
+            )
+        self.assertEqual(failure.exception.code, "state-conflict")
+        # No accepted evidence exists; the late drift is preserved exactly as
+        # the concurrent change left it and the apply receipt is untouched.
+        self.assertFalse(output_path.exists())
+        self.assertFalse(missing_path.exists())
+        self.assertEqual(manifest_path.read_bytes(), damaged)
+        self.assertEqual(apply_path.read_bytes(), apply_before)
 
 
 if __name__ == "__main__":

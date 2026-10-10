@@ -15,6 +15,7 @@ from sbtd_migration import (
     _operations,
     _prepare_backup_parent,
     _private_document,
+    _require_reconciliation_provenance,
     _resource_scope,
     _result_index,
     _summary_projects,
@@ -349,19 +350,18 @@ def plan_recovery(
         }
         for project in projects
     ]
-    return (
-        contracts.make_envelope(
-            "recovery",
-            "plan",
-            "planned",
-            projects_summary,
-            "",
-            "Save only the recovery plan object in an authorized private directory; plan made no writes.",
-            plan,
-            {"manifest_id": manifest["manifest_id"], "plan_id": plan["plan_id"]},
-        ),
-        0,
+    envelope = contracts.make_envelope(
+        "recovery",
+        "plan",
+        "planned",
+        projects_summary,
+        "",
+        "Save only the recovery plan object in an authorized private directory; plan made no writes.",
+        plan,
+        {"manifest_id": manifest["manifest_id"], "plan_id": plan["plan_id"]},
     )
+    _require_reconciliation_provenance(manifest, documents.get("deployment_evidence"))
+    return envelope, 0
 
 
 def _protection_ref(
@@ -639,6 +639,9 @@ def apply_recovery(
                     "unsafe-retry",
                     "a partial or unknown recovery write requires manual reconciliation",
                 )
+    _require_reconciliation_provenance(
+        manifest, stage_documents.get("deployment_evidence")
+    )
     started = _now()
     global_error = None
     try:
@@ -716,14 +719,45 @@ def apply_recovery(
         "runtime_readiness": "not-verified",
         "report_refs": [],
     }
-    receipt = contracts.seal_document("recovery_receipt", payload)
-    contracts.validate_cumulative(previous, receipt, "recovery_receipt")
-    contracts.validate_declared_bindings(
-        manifest,
-        {key: value for key, value in documents.items() if key != "recovery_receipt"}
-        | {"recovery_receipt": receipt},
-        {kind: raw for kind, raw in raw_documents.items() if kind != "recovery_receipt"},
-    )
+
+    def seal_receipt() -> dict[str, Any]:
+        document = contracts.seal_document("recovery_receipt", payload)
+        contracts.validate_cumulative(previous, document, "recovery_receipt")
+        contracts.validate_declared_bindings(
+            manifest,
+            {key: value for key, value in documents.items() if key != "recovery_receipt"}
+            | {"recovery_receipt": document},
+            {kind: raw for kind, raw in raw_documents.items() if kind != "recovery_receipt"},
+        )
+        return document
+
+    receipt = seal_receipt()
+    try:
+        _require_reconciliation_provenance(
+            manifest, stage_documents.get("deployment_evidence")
+        )
+    except contracts.ContractError:
+        # Restoration has already happened. Preserve completed steps and
+        # protections, but do not accept a result against stale provenance.
+        provenance_error = "reconciliation provenance changed before recovery receipt publication"
+        global_error = (
+            f"{global_error}; {provenance_error}" if global_error else provenance_error
+        )
+        for project in projects:
+            if project["status"] in {"restored", "already-complete"}:
+                project.update(
+                    status="blocked",
+                    reason=provenance_error,
+                    nextStep="Preserve the measured results and resolve the cited source drift before retrying.",
+                )
+        status = contracts._aggregate(
+            [project["status"] for project in projects],
+            ("failed", "blocked"),
+            "restored",
+            "already-complete",
+        )
+        payload.update(status=status, reason=global_error, finished_at=_now())
+        receipt = seal_receipt()
     destination = plan_path.parent / f"recovery-{receipt['receipt_id']}.json"
     try:
         save_document(destination, receipt, private_root=plan_path.parent)

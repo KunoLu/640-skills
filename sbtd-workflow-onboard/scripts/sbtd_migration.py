@@ -775,6 +775,23 @@ def _require_reconciliation_provenance(
     need not equal today's consumer, but must belong to the manifest runtime
     or its signature-verified successor. Never revalidate superseded targets.
     """
+    followup = manifest["payload"].get("followup")
+    if followup is not None:
+        # A later ordinary receipt still depends on its reconciled ancestor.
+        # Reopen only the bound documents, not superseded resource outcomes.
+        manifest_ref = followup["manifest_ref"]
+        deployment_ref = followup["deployment_evidence_ref"]
+        _check_reference(manifest_ref)
+        _check_reference(deployment_ref)
+        require_private_directory(Path(manifest_ref["path"]).parent)
+        require_private_directory(Path(deployment_ref["path"]).parent)
+        predecessor = contracts.load_document(_read_reference(manifest_ref), "manifest")
+        if predecessor["payload"].get("followup") is not None:
+            _fail("followup-conflict", "a followup batch cannot follow another followup batch")
+        predecessor_deployment = contracts.load_document(
+            _read_reference(deployment_ref), "deployment_evidence"
+        )
+        _require_reconciliation_provenance(predecessor, predecessor_deployment)
     if deployment is None:
         return
     reconciliation = deployment["payload"].get("reconciliation")
@@ -1397,6 +1414,7 @@ def apply_migration(
     receipt = contracts.seal_document("apply_receipt", payload)
     contracts.validate_cumulative(previous, receipt, "apply_receipt")
     contracts.validate_declared_bindings(manifest, {"apply_receipt": receipt})
+    _require_reconciliation_provenance(manifest, None)
     destination = manifest_path.parent / f"apply-{receipt['apply_id']}.json"
     try:
         save_document(destination, receipt, private_root=manifest_path.parent)

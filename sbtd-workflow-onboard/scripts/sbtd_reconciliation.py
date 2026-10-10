@@ -271,6 +271,7 @@ def reconcile_deployment(
         _operations,
         _private_document,
         _protected_followup_ancestry,
+        _require_reconciliation_provenance,
         _result_index,
         _source_backup_paths,
         _validate_context,
@@ -557,5 +558,6 @@ def reconcile_deployment(
                     "state-conflict",
                     "a fresh report changed before evidence publication",
                 )
+    _require_reconciliation_provenance(manifest, evidence)
     save_document(output_path, evidence, private_root=manifest_path.parent)
     return result

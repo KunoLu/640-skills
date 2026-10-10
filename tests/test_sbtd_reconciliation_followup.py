@@ -162,6 +162,96 @@ class ReconciledPredecessorFollowupTests(unittest.TestCase):
             )
             self.assertEqual(snapshot(missing_path), ABSENT)
 
+    def test_followup_plan_rechecks_provenance_after_sealing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = FollowupMigration(Path(directory).resolve())
+            fixture.build()
+            _reconciled_predecessor(fixture)
+            proof = fixture.predecessor_proof()
+            original = fixture.manifest_path.read_bytes()
+            real_seal = contracts.seal_document
+
+            def drift_after_seal(kind, payload):
+                document = real_seal(kind, payload)
+                if kind == "manifest" and payload.get("followup") is not None:
+                    fixture.manifest_path.write_bytes(original + b"\n")
+                return document
+
+            with (
+                mock.patch.object(contracts, "seal_document", side_effect=drift_after_seal),
+                self.assertRaises(ContractError) as failure,
+            ):
+                fixture.plan_followup()
+            self.assertEqual(failure.exception.code, "state-conflict")
+            self.assertEqual(fixture.manifest_path.read_bytes(), original + b"\n")
+            assert_proof_intact(
+                self, {path: raw for path, raw in proof.items() if path != str(fixture.manifest_path)}
+            )
+
+    def test_followup_apply_rechecks_ancestor_provenance_before_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = FollowupMigration(Path(directory).resolve())
+            fixture.build()
+            missing = _reconciled_predecessor(fixture)
+            followup = fixture.plan_followup()
+            real_seal = contracts.seal_document
+            before = {path: snapshot(path) for path in (fixture.root, fixture.home, fixture.vault)}
+
+            def reveal_history_after_seal(kind, payload):
+                document = real_seal(kind, payload)
+                if kind == "apply_receipt" and payload["manifest_id"] == followup["manifest_id"]:
+                    missing.write_bytes(FORGED)
+                return document
+
+            with (
+                mock.patch.object(contracts, "seal_document", side_effect=reveal_history_after_seal),
+                self.assertRaises(ContractError) as failure,
+            ):
+                fixture.apply_followup(followup)
+            self.assertEqual(failure.exception.code, "state-conflict")
+            self.assertEqual(missing.read_bytes(), FORGED)
+            self.assertFalse(list(fixture.followup_evidence.glob("apply-*.json")))
+            self.assertEqual({path: snapshot(path) for path in before}, before)
+
+    def test_followup_deploy_preserves_results_when_ancestor_provenance_drifts(self):
+        import sbtd_graft_deployment as deployment
+
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = FollowupMigration(Path(directory).resolve())
+            fixture.build()
+            missing = _reconciled_predecessor(fixture)
+            followup = fixture.plan_followup()
+            manifest_path, apply_path = _apply_followup_at(
+                fixture, followup, fixture.followup_evidence
+            )
+            real_assemble = deployment._assemble_deployment_evidence
+
+            def reveal_history_after_assembly(*args, **kwargs):
+                document = real_assemble(*args, **kwargs)
+                missing.write_bytes(FORGED)
+                return document
+
+            with mock.patch.object(
+                deployment, "_assemble_deployment_evidence",
+                side_effect=reveal_history_after_assembly,
+            ):
+                result, code, output_path = fixture.deploy_followup(manifest_path, apply_path)
+            self.assertEqual(code, 5, result)
+            self.assertEqual(result["status"], "failed")
+            self.assertIsNone(result["deploymentEvidence"])
+            self.assertFalse(output_path.exists())
+            operations = {
+                operation["resource_id"]: operation
+                for operation in migration._operations(followup)
+                if operation["phase"] == "deploy"
+            }
+            results = {row["resource_id"]: row for row in result["operationResults"]}
+            self.assertEqual(set(results), set(operations))
+            for resource_id, row in results.items():
+                self.assertEqual(row["status"], "succeeded")
+                self.assertEqual(snapshot(Path(operations[resource_id]["target"])), row["after"])
+            self.assertEqual(missing.read_bytes(), FORGED)
+
     def test_followup_planning_fails_closed_when_missing_history_reappears(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())

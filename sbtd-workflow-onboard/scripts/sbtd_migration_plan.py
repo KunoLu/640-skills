@@ -3543,7 +3543,11 @@ def _plan_followup(
     pre-states, so the retired legacy closure is never re-derived; every
     completed outcome is re-measured instead. Read-only.
     """
-    from sbtd_migration import _project_revision, _result_index
+    from sbtd_migration import (
+        _project_revision,
+        _require_reconciliation_provenance,
+        _result_index,
+    )
 
     prev_payload = prev_manifest["payload"]
     prev_projects = prev_payload["projects"]
@@ -3668,7 +3672,9 @@ def _plan_followup(
         + payload["shared_operations"]
     )
     _bind_approved_routing(payload, roots, bind_live=True)
-    return contracts.seal_document("manifest", payload)
+    manifest = contracts.seal_document("manifest", payload)
+    _require_reconciliation_provenance(prev_manifest, prev_deployment)
+    return manifest
 
 
 
