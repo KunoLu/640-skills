@@ -2080,5 +2080,74 @@ class CurrentStateFinalSnapshotTests(unittest.TestCase):
         self.assertFalse(missing_path.exists())
 
 
+class CurrentStateRetrySnapshotTests(unittest.TestCase):
+    def test_retry_rechecks_artifacts_after_provenance_validation(self):
+        import sbtd_graft_deployment as deployment
+        import sbtd_migration as migration
+
+        for artifact in ("target", "original", "report"):
+            with self.subTest(artifact=artifact):
+                batch, manifest, manifest_path, apply_path, missing_path = (
+                    _interrupted_deployment(self)
+                )
+                previous_path = batch.evidence / "current-state-evidence.json"
+                _reconcile(batch, manifest, manifest_path, apply_path, missing_path, previous_path)
+                previous_bytes = previous_path.read_bytes()
+                output_path = batch.evidence / "retry.json"
+                real_assemble = deployment._assemble_deployment_evidence
+                real_provenance = migration._require_reconciliation_provenance
+                stage = {"assembled": False}
+                changed = []
+
+                def after_assembly(*args, stage=stage, real_assemble=real_assemble, **kwargs):
+                    document = real_assemble(*args, **kwargs)
+                    stage["assembled"] = True
+                    return document
+
+                def after_provenance(
+                    manifest_document, evidence, *, artifact=artifact,
+                    changed=changed, agents=batch.agents, stage=stage,
+                    real_provenance=real_provenance,
+                ):
+                    references = real_provenance(manifest_document, evidence)
+                    if stage["assembled"] and not changed:
+                        if artifact == "target":
+                            path = agents
+                        elif artifact == "original":
+                            path = Path(next(
+                                row["backup_ref"]["path"]
+                                for row in migration._result_index(evidence).values()
+                                if row["backup_ref"] is not None
+                                and row["backup_ref"]["state"]["type"] == "file"
+                            ))
+                        else:
+                            path = Path(evidence["payload"]["projects"][0]["report_refs"][0]["path"])
+                        damaged = path.read_bytes() + b"\nlate retry drift\n"
+                        path.write_bytes(damaged)
+                        changed.append((path, damaged))
+                    return references
+
+                with (
+                    mock.patch.object(deployment, "_assemble_deployment_evidence", side_effect=after_assembly),
+                    mock.patch.object(migration, "_require_reconciliation_provenance", side_effect=after_provenance),
+                ):
+                    result, code = batch.execute(
+                        manifest_path, apply_path, output_path,
+                        previous_path=previous_path, rebuild_graph=False,
+                    )
+                self.assertEqual(code, 5, result)
+                self.assertEqual(result["status"], "failed")
+                self.assertIsNone(result["deploymentEvidence"])
+                self.assertFalse(output_path.exists())
+                self.assertEqual(previous_path.read_bytes(), previous_bytes)
+                self.assertEqual(len(changed), 1)
+                path, damaged = changed[0]
+                self.assertEqual(path.read_bytes(), damaged)
+                self.assertEqual(
+                    {row["resource_id"] for row in result["operationResults"]},
+                    set(migration._result_index(json.loads(previous_bytes))),
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

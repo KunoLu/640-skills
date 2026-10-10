@@ -1506,9 +1506,31 @@ def save_deployment_evidence(
     result = contracts.validate_deployment_result(
         {"path": str(context.output_path), "evidence": evidence}
     )
-    from sbtd_migration import _require_reconciliation_provenance
+    from sbtd_migration import (
+        _check_reference,
+        _check_source_backups,
+        _check_stage_backups,
+        _operations,
+        _require_reconciliation_provenance,
+        _result_index,
+    )
 
-    _require_reconciliation_provenance(context.manifest, evidence)
+    provenance = _require_reconciliation_provenance(context.manifest, evidence)
+    if provenance:
+        _check_source_backups(context.manifest)
+        _check_stage_backups({"apply": _result_index(context.applied), "deploy": results})
+        for operation in _operations(context.manifest):
+            if operation["phase"] != "deploy":
+                continue
+            observed = results.get(operation["resource_id"])
+            if observed is None or observed["status"] != "succeeded":
+                continue
+            _check_reference({"path": operation["target"], "state": observed["after"]})
+        for project in evidence["payload"]["projects"]:
+            for reference in project["report_refs"]:
+                _check_reference(reference)
+        for reference in provenance:
+            _check_reference(reference)
     save_document(
         context.output_path, evidence, private_root=context.manifest_path.parent
     )
