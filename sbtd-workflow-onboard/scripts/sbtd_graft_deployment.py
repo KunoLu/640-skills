@@ -1517,6 +1517,10 @@ def save_deployment_evidence(
 
     provenance = _require_reconciliation_provenance(context.manifest, evidence)
     if provenance:
+        for project in context.manifest["payload"]["projects"]:
+            no_touch = project.get("agents_no_touch")
+            if no_touch is not None:
+                provenance += (no_touch["target"], no_touch["template"])
         _check_source_backups(context.manifest)
         _check_stage_backups({"apply": _result_index(context.applied), "deploy": results})
         for operation in _operations(context.manifest):

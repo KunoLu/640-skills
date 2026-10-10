@@ -10,6 +10,7 @@ proof (合成夹具；不证明真实 host 部署。).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -61,13 +62,21 @@ class _OmpBatch:
 
     def __init__(
         self, case, *, inherited_equivalent=False, manifest_in_agent_dir=False,
-        present_empty_original=False,
+        present_empty_original=False, no_touch=False,
     ):
         directory = tempfile.TemporaryDirectory()
         case.addCleanup(directory.cleanup)
         base = Path(directory.name).resolve()
         self.base = base
         self.root = legacy_project(base, "project")
+        if no_touch:
+            from onboard import PROJECT_AGENTS_TEMPLATE
+
+            (self.root / "AGENTS.md").write_bytes(PROJECT_AGENTS_TEMPLATE.read_bytes())
+            hashes_path = self.root / ".trellis/.template-hashes.json"
+            hashes = json.loads(hashes_path.read_bytes())
+            hashes["hashes"]["AGENTS.md"] = hashlib.sha256(b"old owned rules").hexdigest()
+            hashes_path.write_text(json.dumps(hashes), encoding="utf-8")
         self.home = base / "home"
         self.agent = self.home / ".omp/agent"
         self.codex = self.home / ".codex"
@@ -212,6 +221,65 @@ def _observed_omp_result(batch, evidence):
 
 
 class OmpCurrentStateReconciliationLifecycleTests(unittest.TestCase):
+    def test_no_touch_inputs_rechecked_after_provenance(self):
+        import sbtd_graft_deployment as deployment
+        import sbtd_migration as migration
+
+        for consumer in ("reconcile", "retry"):
+            with self.subTest(consumer=consumer):
+                batch = _OmpBatch(self, no_touch=True)
+                proof = batch.manifest["payload"]["projects"][0]["agents_no_touch"]
+                agents = Path(proof["target"]["path"])
+                output = batch.evidence / "current-state.json"
+                if consumer == "retry":
+                    _reconcile(batch, output)
+                    previous = output
+                    output = batch.evidence / "retry.json"
+                    with mock.patch.dict(os.environ, batch.environment):
+                        context = load_deployment_context(
+                            batch.manifest_path, batch.apply_path, output,
+                            previous_path=previous, mode="init", roots=[batch.root],
+                            hooks_authorized=False,
+                        )
+                real_result = contracts.validate_deployment_result
+                real_provenance = migration._require_reconciliation_provenance
+                stage = {"ready": False}
+                damaged = agents.read_bytes() + b"\nconcurrent no-touch drift\n"
+
+                def after_result(*args, stage=stage, real_result=real_result, **kwargs):
+                    result = real_result(*args, **kwargs)
+                    stage["ready"] = True
+                    return result
+
+                def after_provenance(
+                    *args, stage=stage, real_provenance=real_provenance,
+                    agents=agents, damaged=damaged, **kwargs,
+                ):
+                    refs = real_provenance(*args, **kwargs)
+                    if stage["ready"]:
+                        agents.write_bytes(damaged)
+                    return refs
+
+                with (
+                    mock.patch.object(contracts, "validate_deployment_result", side_effect=after_result),
+                    mock.patch.object(migration, "_require_reconciliation_provenance", side_effect=after_provenance),
+                ):
+                    if consumer == "reconcile":
+                        with self.assertRaises(contracts.ContractError):
+                            _reconcile(batch, output)
+                    else:
+                        with (
+                            mock.patch.dict(os.environ, batch.environment),
+                            mock.patch.object(deployment, "verified_runtime", return_value=dict(_RUNTIME)),
+                            mock.patch.object(deployment, "run_project_smoke", side_effect=_synthetic_smoke(batch.manifest)),
+                            mock.patch.object(deployment, "build_project_graph", side_effect=AssertionError("no rebuild")),
+                        ):
+                            result, code = execute_migration_deployment(context)
+                        self.assertEqual(code, 5, result)
+                        self.assertIsNone(result["deploymentEvidence"])
+                self.assertFalse(output.exists())
+                self.assertEqual(agents.read_bytes(), damaged)
+
     def test_present_empty_omp_original_fails_closed(self):
         import sbtd_graft_deployment as deployment
         from sbtd_migration_files import backup_reference

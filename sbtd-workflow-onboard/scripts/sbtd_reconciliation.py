@@ -522,6 +522,10 @@ def reconcile_deployment(
         {"path": str(output_path), "evidence": evidence}
     )
     provenance = _require_reconciliation_provenance(manifest, evidence)
+    for project in payload["projects"]:
+        no_touch = project.get("agents_no_touch")
+        if no_touch is not None:
+            provenance += (no_touch["target"], no_touch["template"])
     # Final snapshot-only pass: no lineage parsing after observed artifacts.
     _check_source_backups(manifest)
     _check_stage_backups({"apply": applied_results, "deploy": _result_index(evidence)})

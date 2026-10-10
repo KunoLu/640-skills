@@ -878,6 +878,10 @@ def verify_migration(
     )
     provenance = migration._require_reconciliation_provenance(manifest, deployment)
     if status == "verified" and track_freshness:
+        for project in payload["projects"]:
+            no_touch = project.get("agents_no_touch")
+            if no_touch is not None:
+                provenance += (no_touch["target"], no_touch["template"])
         # Refresh the same observed states, including absent resources, after
         # all semantic/lineage work. Previously failed outcomes stay unchanged.
         migration._check_source_backups(manifest)
