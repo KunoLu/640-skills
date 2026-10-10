@@ -141,6 +141,14 @@ def _observe_resource(
         before_bytes = (
             b"" if expected["type"] == "absent" else read_file(backup_path, expected)
         )
+        # Live size describes the post-state here, not whether the original
+        # was absent; the OMP renderer must not treat an empty file as absence.
+        if (
+            operation["selector"] == "graft-omp-mcp"
+            and expected["type"] == "file"
+            and not before_bytes
+        ):
+            _fail("invalid-json", "the active OMP MCP configuration is not strict JSON")
         candidate = deployment.render_configuration(
             operation,
             before_bytes,

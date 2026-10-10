@@ -1,6 +1,6 @@
 """OMP current-state reconciliation lifecycle; native boundaries are fixtures.
 
-One genuine OMP batch (plan/apply/deploy) is built inside an isolated HOME;
+Normal cases build one genuine OMP batch (plan/apply/deploy) in an isolated HOME;
 its historical deployment receipt is then lost and reconciliation observes
 the current state. Covers the two truthful OMP configure outcomes — a real
 absent-to-desired mcp.json write and the inherited user-wide equivalent
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -52,9 +53,16 @@ class _OmpBatch:
     ``manifest_in_agent_dir`` the manifest private directory IS the active OMP
     agent directory, so sealed OMP configuration inputs sit beside the
     evidence paths.
+
+    The present-empty negative case stops after genuine plan/apply and
+    supplies current post-state separately, without claiming native deploy
+    success; reconciliation must still validate the retained original type.
     """
 
-    def __init__(self, case, *, inherited_equivalent=False, manifest_in_agent_dir=False):
+    def __init__(
+        self, case, *, inherited_equivalent=False, manifest_in_agent_dir=False,
+        present_empty_original=False,
+    ):
         directory = tempfile.TemporaryDirectory()
         case.addCleanup(directory.cleanup)
         base = Path(directory.name).resolve()
@@ -98,6 +106,8 @@ class _OmpBatch:
                 '[mcp_servers.sbtd-graft.env]\nDO_NOT_TRACK = "1"\nDNT = "1"\n',
                 encoding="utf-8",
             )
+        if present_empty_original:
+            (self.agent / "mcp.json").write_bytes(b"")
         manifest_dir = self.agent if manifest_in_agent_dir else self.evidence
         with mock.patch.dict(os.environ, self.environment):
             self.manifest = plan_migration(
@@ -122,6 +132,11 @@ class _OmpBatch:
             receipt = applied["migration"]["apply_receipt"]
             self.apply_path = manifest_dir / ("apply-" + receipt["apply_id"] + ".json")
             self.missing_path = manifest_dir / "interrupted-deployment.json"
+            if present_empty_original:
+                # This case supplies current state later; it deliberately
+                # makes no claim that normal deployment accepted empty JSON.
+                self.target = self.agent / "mcp.json"
+                return
             context = load_deployment_context(
                 self.manifest_path,
                 self.apply_path,
@@ -197,6 +212,73 @@ def _observed_omp_result(batch, evidence):
 
 
 class OmpCurrentStateReconciliationLifecycleTests(unittest.TestCase):
+    def test_present_empty_omp_original_fails_closed(self):
+        import sbtd_graft_deployment as deployment
+        from sbtd_migration_files import backup_reference
+
+        batch = _OmpBatch(self, present_empty_original=True)
+        package = batch.home / ".agent/skills/sbtd-workflow-onboard"
+        shutil.copytree(deployment._PACKAGE, package)
+        bindings = deployment.launch_bindings(
+            [batch.root], _RUNTIME, package_root=package
+        )
+        resolution = contracts.resolution_stage_results(
+            batch.manifest["payload"], {"apply": _stage_results(batch.apply_path)}
+        )
+        operations = [
+            operation
+            for project in batch.manifest["payload"]["projects"]
+            for operation in project["private_operations"]
+            if operation["phase"] == "deploy"
+        ] + [
+            operation for operation in batch.manifest["payload"]["shared_operations"]
+            if operation["phase"] == "deploy"
+        ]
+        with (
+            mock.patch.dict(os.environ, batch.environment),
+            mock.patch("sbtd_graft_deployment.build_project_graph", side_effect=_graph_fixture),
+        ):
+            for operation in operations:
+                expected = contracts._expected_before(operation["before_requirement"], resolution)
+                backup = batch.vault / batch.manifest["manifest_id"] / "deploy" / operation["resource_id"]
+                if operation["selector"] == "graft-omp-mcp":
+                    # Preserve the actual sealed empty file, then supply a
+                    # plausible nonempty post-state. History remains unknown;
+                    # validation must derive from the original, not live size.
+                    deployment._prepare_target_parents(backup, batch.vault)
+                    backup_reference(
+                        {"path": str(batch.target), "state": expected},
+                        backup, private_root=batch.vault,
+                    )
+                    batch.target.write_bytes(b"{}")
+                    batch.target.write_bytes(deployment.render_configuration(operation, b"", bindings))
+                else:
+                    target = Path(operation["target"])
+                    if target == package:
+                        # The canonical runtime was copied above so bindings
+                        # can be constructed; its planned original was absent.
+                        self.assertEqual(expected, _ABSENT)
+                        self.assertEqual(snapshot(package), operation["change"]["source_ref"]["state"])
+                        continue
+                    result = deployment.execute_resource(
+                        operation, expected=expected,
+                        root=batch.root if target.is_relative_to(batch.root) else batch.home,
+                        private_root=batch.vault, backup_path=backup, bindings=bindings,
+                        runtime=_RUNTIME, launcher_state=snapshot(deployment._PACKAGE),
+                        install_template=True,
+                    )
+                    self.assertEqual(result["status"], "succeeded", (operation, result))
+        output_path = batch.evidence / "current-state-evidence.json"
+        original_state = snapshot(batch.vault)
+        current_state = snapshot(batch.target)
+        with self.assertRaises(contracts.ContractError) as failure:
+            _reconcile(batch, output_path)
+        self.assertEqual(failure.exception.code, "invalid-json")
+        self.assertFalse(output_path.exists())
+        self.assertFalse(batch.missing_path.exists())
+        self.assertEqual(snapshot(batch.vault), original_state)
+        self.assertEqual(snapshot(batch.target), current_state)
+
     def test_changed_omp_target_reconciles_and_verifies(self):
         batch = _OmpBatch(self)
         # The genuine deployment wrote the desired rootless sbtd-graft entry:
