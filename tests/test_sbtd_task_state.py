@@ -304,6 +304,437 @@ class TaskStoreTests(unittest.TestCase):
             )
         self.assertEqual((self.root / parent.task_path).read_bytes(), before)
 
+    def test_cancellation_is_terminal_keeps_completion_empty_and_never_cascades(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        store.create("parent", body="Parent\n", confirmed=True)
+        child = store.create(
+            "child", body="Child\n", parent="parent", confirmed=True
+        )
+        for status in ("in-progress", "checking", "done"):
+            store.transition(
+                "child", status, reason="progress", evidence="accepted", confirmed=True
+            )
+        store.transition(
+            "parent",
+            "in-progress",
+            reason="summarizing children",
+            evidence="child task exists",
+            confirmed=True,
+        )
+        child_before = (self.root / child.task_path).read_bytes()
+
+        cancelled = store.transition(
+            "parent",
+            "cancelled",
+            reason="scope withdrawn",
+            evidence="sponsor decision recorded",
+            confirmed=True,
+        )
+        self.assertEqual(cancelled.document.frontmatter["status"], "cancelled")
+        self.assertIsNone(cancelled.document.frontmatter["completed_at"])
+        self.assertEqual(
+            (
+                cancelled.document.events[-1]["from"],
+                cancelled.document.events[-1]["to"],
+            ),
+            ("in-progress", "cancelled"),
+        )
+        self.assertEqual((self.root / child.task_path).read_bytes(), child_before)
+        self.assertEqual(
+            store.inspect("child").document.frontmatter["status"], "done"
+        )
+        for target in ("planned", "in-progress", "checking", "done", "blocked"):
+            with self.subTest(target=target), self.assertRaises(TaskStateError):
+                store.transition(
+                    "parent",
+                    target,
+                    reason="no longer applicable",
+                    evidence="terminal record",
+                    confirmed=True,
+                )
+        before_retry = (self.root / cancelled.task_path).read_bytes()
+        repeated = store.transition(
+            "parent",
+            "cancelled",
+            reason="same withdrawal",
+            evidence="same decision",
+            confirmed=True,
+        )
+        self.assertEqual(repeated.document.text, cancelled.document.text)
+        self.assertEqual((self.root / cancelled.task_path).read_bytes(), before_retry)
+
+    def test_cancelling_planned_checking_and_blocked_records_no_completion(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        for source, path in (
+            ("planned", ()),
+            ("checking", ("in-progress", "checking")),
+            ("blocked", ("in-progress", "blocked")),
+        ):
+            task_id = f"cancel-from-{source}"
+            with self.subTest(source=source):
+                store.create(task_id, body=f"Cancel from {source}.\n", confirmed=True)
+                for status in path:
+                    store.transition(
+                        task_id,
+                        status,
+                        reason="recorded progress",
+                        evidence="recorded evidence",
+                        confirmed=True,
+                    )
+                cancelled = store.transition(
+                    task_id,
+                    "cancelled",
+                    reason="scope withdrawn",
+                    evidence="decision record",
+                    confirmed=True,
+                )
+                frontmatter = cancelled.document.frontmatter
+                self.assertEqual(frontmatter["status"], "cancelled")
+                self.assertIsNone(frontmatter["completed_at"])
+                self.assertIsNone(frontmatter.get("blocked_reason"))
+                self.assertEqual(
+                    (
+                        cancelled.document.events[-1]["from"],
+                        cancelled.document.events[-1]["to"],
+                    ),
+                    (source, "cancelled"),
+                )
+
+    def test_completed_tasks_cannot_be_cancelled_silently(self) -> None:
+        store = TaskStore(self.root)
+        original = store.create("finished", body="Done work.\n", confirmed=True)
+        for status in ("in-progress", "checking", "done"):
+            store.transition(
+                "finished",
+                status,
+                reason="progress",
+                evidence="accepted",
+                confirmed=True,
+            )
+        before = (self.root / original.task_path).read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.transition(
+                "finished",
+                "cancelled",
+                reason="late withdrawal",
+                evidence="decision",
+                confirmed=True,
+            )
+        self.assertEqual((self.root / original.task_path).read_bytes(), before)
+        self.assertEqual(
+            store.inspect("finished").document.frontmatter["status"], "done"
+        )
+
+    def test_unfinished_descendants_guard_cancellation_and_cancelled_counts_terminal(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        parent = store.create("parent", body="Parent\n", confirmed=True)
+        store.create("child", body="Child\n", parent="parent", confirmed=True)
+        store.transition(
+            "parent",
+            "in-progress",
+            reason="summarizing children",
+            evidence="child task exists",
+            confirmed=True,
+        )
+        before = (self.root / parent.task_path).read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.transition(
+                "parent",
+                "cancelled",
+                reason="premature withdrawal",
+                evidence="child is not finished",
+                confirmed=True,
+            )
+        with self.assertRaises(TaskStateError):
+            store.select("parent", confirmed=True)
+        self.assertEqual((self.root / parent.task_path).read_bytes(), before)
+
+        store.transition(
+            "child",
+            "cancelled",
+            reason="child scope withdrawn",
+            evidence="decision",
+            confirmed=True,
+        )
+        cancelled = store.transition(
+            "parent",
+            "cancelled",
+            reason="parent scope withdrawn",
+            evidence="decision",
+            confirmed=True,
+        )
+        self.assertEqual(cancelled.document.frontmatter["status"], "cancelled")
+
+        store.create("integration", body="Parent\n", confirmed=True)
+        store.create(
+            "integration-child",
+            body="Child\n",
+            parent="integration",
+            confirmed=True,
+        )
+        store.transition(
+            "integration-child",
+            "cancelled",
+            reason="child scope withdrawn",
+            evidence="decision",
+            confirmed=True,
+        )
+        selected = store.select("integration", confirmed=True)
+        self.assertEqual(selected.task_path, ".sbtd/tasks/integration/task.md")
+        for status in ("in-progress", "checking", "done"):
+            snapshot = store.transition(
+                "integration",
+                status,
+                reason="progress",
+                evidence="accepted",
+                confirmed=True,
+            )
+        self.assertEqual(snapshot.document.frontmatter["status"], "done")
+        self.assertIsNotNone(snapshot.document.frontmatter["completed_at"])
+
+    def test_new_child_under_cancelled_ancestor_requires_explicit_reopen(self) -> None:
+        store = TaskStore(self.root)
+        store.create("parent", body="Parent\n", confirmed=True)
+        store.transition(
+            "parent",
+            "cancelled",
+            reason="scope withdrawn",
+            evidence="decision",
+            confirmed=True,
+        )
+        with self.assertRaises(TaskStateError):
+            store.create("child", body="Child\n", parent="parent", confirmed=True)
+        self.assertFalse((self.root / ".sbtd/tasks/child").exists())
+        store.reopen(
+            "parent",
+            reason="scope restored",
+            evidence="user request",
+            confirmed=True,
+        )
+        child = store.create("child", body="Child\n", parent="parent", confirmed=True)
+        self.assertEqual(child.document.frontmatter["parent"], "parent")
+
+    def test_reopening_cancelled_preserves_cancellation_and_reopens_terminal_ancestors(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        store.create("parent", body="Parent\n", confirmed=True)
+        store.create("child", body="Child\n", parent="parent", confirmed=True)
+        for task_id in ("child", "parent"):
+            store.transition(
+                task_id,
+                "cancelled",
+                reason="scope withdrawn",
+                evidence="decision",
+                confirmed=True,
+            )
+
+        reopened = store.reopen(
+            "child",
+            reason="scope restored",
+            evidence="user request",
+            confirmed=True,
+        )
+        self.assertEqual(reopened.document.frontmatter["status"], "planned")
+        for task_id in ("parent", "child"):
+            current = TaskStore(self.root).inspect(task_id)
+            self.assertEqual(current.document.frontmatter["status"], "planned")
+            self.assertIsNone(current.document.frontmatter["completed_at"])
+            cancellations = [
+                event
+                for event in current.document.events
+                if event["to"] == "cancelled" and event["from"] != "cancelled"
+            ]
+            self.assertEqual(len(cancellations), 1)
+            self.assertEqual(
+                (
+                    current.document.events[-1]["from"],
+                    current.document.events[-1]["to"],
+                ),
+                ("cancelled", "planned"),
+            )
+        before_retry = (self.root / reopened.task_path).read_bytes()
+        store.reopen(
+            "child",
+            reason="same restoration",
+            evidence="same request",
+            confirmed=True,
+        )
+        self.assertEqual((self.root / reopened.task_path).read_bytes(), before_retry)
+
+    def test_reopen_does_not_infer_cancellation_time_from_updated_at(self) -> None:
+        store = TaskStore(self.root)
+        selected = store.create(
+            "legacy-cancelled", body="Historical cancellation without an event.\n",
+            confirmed=True,
+        )
+        legacy = selected.document.updated(
+            {"status": "cancelled", "created_at": None, "completed_at": None}
+        )
+        (self.root / selected.task_path).write_text(legacy.text, encoding="utf-8")
+
+        reopened = store.reopen(
+            "legacy-cancelled",
+            reason="operator explicitly restores the scope",
+            evidence="reopening request",
+            confirmed=True,
+        )
+
+        self.assertEqual(reopened.document.frontmatter["status"], "planned")
+        self.assertIsNone(reopened.document.frontmatter["completed_at"])
+        preserved = reopened.document.events[0]
+        self.assertEqual((preserved["from"], preserved["to"]), ("unknown", "cancelled"))
+        self.assertEqual(preserved["at"], "unknown")
+
+    def test_resume_does_not_treat_blocked_cancellation_as_recovery(self):
+        store = TaskStore(self.root)
+        store.create("cancelled-block", body="Task\n", confirmed=True)
+        for status in ("blocked", "cancelled"):
+            selected = store.transition(
+                "cancelled-block", status, reason="operator decision",
+                evidence="recorded request", confirmed=True,
+            )
+        path = self.root / selected.task_path
+        before = path.read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.resume(
+                "cancelled-block", reason="retry", evidence="operator request",
+                confirmed=True,
+            )
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(store.inspect("cancelled-block").document.frontmatter["status"], "cancelled")
+
+    def test_cancelled_block_can_reopen_and_block_again_without_stale_phase(self):
+        store = TaskStore(self.root)
+        store.create("repeat-block", body="Task\n", confirmed=True)
+        for status in ("blocked", "cancelled"):
+            store.transition(
+                "repeat-block", status, reason="first cycle",
+                evidence="operator decision", confirmed=True,
+            )
+        store.reopen(
+            "repeat-block", reason="new scope", evidence="operator request",
+            confirmed=True,
+        )
+        for status in ("in-progress", "blocked"):
+            store.transition(
+                "repeat-block", status, reason="second cycle",
+                evidence="new blocker", confirmed=True,
+            )
+        resumed = store.resume(
+            "repeat-block", reason="second blocker resolved",
+            evidence="resolution", confirmed=True,
+        )
+        self.assertEqual(resumed.document.frontmatter["status"], "in-progress")
+        self.assertIsNone(resumed.document.frontmatter["blocked_reason"])
+
+    def test_archiving_cancelled_parent_checks_children_in_other_directories(self):
+        store = TaskStore(self.root)
+        parent = store.create("parent", body="Parent\n", confirmed=True)
+        store.create("separate-child", body="Child\n", parent="parent", confirmed=True)
+        store.transition(
+            "separate-child", "blocked", reason="waiting",
+            evidence="legacy child fact", confirmed=True,
+        )
+        historical = parent.document.updated(
+            {"status": "cancelled", "created_at": None, "updated_at": None},
+            event={
+                "at": "unknown", "from": "unknown", "to": "cancelled",
+                "reason": "legacy cancellation fact", "evidence": "legacy task.json status",
+            },
+        )
+        parent_path = self.root / parent.task_path
+        parent_path.write_text(historical.text, encoding="utf-8")
+        before = parent_path.read_bytes()
+        for confirmed in (False, True):
+            with self.subTest(confirmed=confirmed), self.assertRaises(TaskStateError):
+                store.archive(
+                    "parent", reason="retain history", evidence="operator request",
+                    confirmed=confirmed,
+                )
+            self.assertEqual(parent_path.read_bytes(), before)
+            self.assertEqual(store.inspect("parent").task_path, parent.task_path)
+            self.assertEqual(
+                store.inspect("separate-child").document.frontmatter["status"], "blocked"
+            )
+
+    def test_historical_unknown_block_fact_recovers_only_through_explicit_choice(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        selected = store.create(
+            "legacy-block-fact", body="Historical blocked record.\n", confirmed=True
+        )
+        legacy = selected.document.updated(
+            {
+                "status": "blocked",
+                "blocked_reason": "legacy blocker",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+            },
+            event={
+                "at": "unknown",
+                "from": "unknown",
+                "to": "blocked",
+                "reason": "legacy blocked fact",
+                "evidence": "legacy task.json status",
+            },
+        )
+        path = self.root / selected.task_path
+        path.write_text(legacy.text, encoding="utf-8")
+        before = path.read_bytes()
+        with self.assertRaises(TaskStateError):
+            store.resume(
+                "legacy-block-fact",
+                reason="access restored",
+                evidence="user confirmation",
+                confirmed=True,
+            )
+        with self.assertRaises(TaskStateError):
+            store.transition(
+                "legacy-block-fact",
+                "in-progress",
+                reason="skip recovery",
+                evidence="not permitted",
+                confirmed=True,
+            )
+        self.assertEqual(path.read_bytes(), before)
+
+        store.set_mode(
+            "legacy-block-fact",
+            "lite",
+            note="user chose a shorter process",
+            confirmed=True,
+        )
+        resumed = store.resume(
+            "legacy-block-fact",
+            target="in-progress",
+            reason="user chose in-progress because the prior phase is unknown",
+            evidence="explicit recovery choice",
+            confirmed=True,
+        )
+        self.assertEqual(resumed.document.frontmatter["status"], "in-progress")
+        self.assertIsNone(resumed.document.frontmatter.get("blocked_reason"))
+        self.assertEqual(
+            [(event["from"], event["to"]) for event in resumed.document.events],
+            [("unknown", "blocked"), ("blocked", "in-progress")],
+        )
+        self.assertEqual(resumed.document.events[0]["at"], "unknown")
+        progressed = store.transition(
+            "legacy-block-fact",
+            "checking",
+            reason="implemented",
+            evidence="candidate exists",
+            confirmed=True,
+        )
+        self.assertEqual(progressed.document.frontmatter["status"], "checking")
+
     def test_partial_ancestor_reopen_reports_written_prefix_and_retries_once(
         self,
     ) -> None:
@@ -607,6 +1038,144 @@ class TaskStoreTests(unittest.TestCase):
             "archive-me",
             reason="user requested archive",
             evidence="archive approved",
+            confirmed=True,
+            retire_source=True,
+        )
+        self.assertEqual(repeated.status, "already-archived")
+        self.assertEqual(
+            (self.root / archived.task.task_path).read_bytes(), before_retry
+        )
+
+    def test_cancelled_archive_uses_the_proven_cancellation_quarter(self) -> None:
+        store = TaskStore(self.root)
+        original = store.create(
+            "cancelled-shared",
+            mode="lite",
+            body="Keep the cancelled scope record.\n",
+            confirmed=True,
+        )
+        cancelled_at = "2026-03-31T23:59:00+08:00"
+        historical = original.document.updated(
+            {
+                "created_at": "2026-01-01T00:00:00+08:00",
+                "updated_at": cancelled_at,
+                "status": "cancelled",
+            },
+            event={
+                "at": cancelled_at,
+                "from": "unknown",
+                "to": "cancelled",
+                "reason": "known historical cancellation",
+                "evidence": "accepted legacy fixture",
+            },
+        )
+        original_path = self.root / original.task_path
+        original_path.write_text(historical.text, encoding="utf-8")
+        prepared = store.archive(
+            "cancelled-shared",
+            reason="user requested archive",
+            evidence="archive approved",
+            confirmed=True,
+        )
+        self.assertEqual(prepared.status, "retirement-required")
+        self.assertEqual(
+            prepared.task.task_path,
+            "ai/tasks/archive/2026-Q1/cancelled-shared/task.md",
+        )
+        archived = store.archive(
+            "cancelled-shared",
+            reason="user requested archive",
+            evidence="archive approved",
+            confirmed=True,
+            retire_source=True,
+        )
+        self.assertEqual(archived.status, "archived")
+        self.assertIsNone(archived.task.document.frontmatter["completed_at"])
+        self.assertEqual(
+            [
+                (event["from"], event["to"])
+                for event in archived.task.document.events
+            ],
+            [("unknown", "cancelled"), ("cancelled", "cancelled")],
+        )
+        self.assertFalse(original_path.parent.exists())
+        self.assertEqual(store.inspect().task_path, archived.task.task_path)
+        before_retry = (self.root / archived.task.task_path).read_bytes()
+        repeated = store.archive(
+            "cancelled-shared",
+            reason="user requested archive",
+            evidence="archive approved",
+            confirmed=True,
+            retire_source=True,
+        )
+        self.assertEqual(repeated.status, "already-archived")
+        self.assertEqual(
+            (self.root / archived.task.task_path).read_bytes(), before_retry
+        )
+
+    def test_migrated_undated_cancellation_archives_under_undated_idempotently(
+        self,
+    ) -> None:
+        store = TaskStore(self.root)
+        original = store.create(
+            "undated-cancelled",
+            mode="lite",
+            body="Migrated cancelled record.\n",
+            confirmed=True,
+        )
+        historical = original.document.updated(
+            {
+                "workflow_mode": None,
+                "mode_source": "migration-unknown",
+                "created_at": None,
+                "updated_at": None,
+                "status": "cancelled",
+            },
+            event={
+                "at": "unknown",
+                "from": "unknown",
+                "to": "cancelled",
+                "reason": "legacy cancellation fact",
+                "evidence": "legacy task.json status",
+            },
+        )
+        (self.root / original.task_path).write_text(historical.text, encoding="utf-8")
+        prepared = store.archive(
+            "undated-cancelled",
+            reason="archive",
+            evidence="old source",
+            confirmed=True,
+        )
+        self.assertEqual(
+            prepared.task.task_path,
+            "ai/tasks/archive/undated/undated-cancelled/task.md",
+        )
+        archived = store.archive(
+            "undated-cancelled",
+            reason="archive",
+            evidence="old source",
+            confirmed=True,
+            retire_source=True,
+        )
+        self.assertEqual(archived.status, "archived")
+        frontmatter = archived.task.document.frontmatter
+        self.assertIsNone(frontmatter["completed_at"])
+        self.assertIsNone(frontmatter["workflow_mode"])
+        events = archived.task.document.events
+        self.assertEqual(
+            (events[0]["from"], events[0]["to"], events[0]["at"]),
+            ("unknown", "cancelled", "unknown"),
+        )
+        self.assertEqual(
+            [(event["from"], event["to"]) for event in events],
+            [("unknown", "cancelled"), ("cancelled", "cancelled")],
+        )
+        self.assertNotEqual(events[-1]["at"], "unknown")
+        before_retry = (self.root / archived.task.task_path).read_bytes()
+        repeated = store.archive(
+            "undated-cancelled",
+            reason="archive",
+            evidence="old source",
             confirmed=True,
             retire_source=True,
         )

@@ -444,6 +444,25 @@ class HandoffTests(unittest.TestCase):
             ["recent"],
         )
 
+    def test_cancelled_tasks_get_no_unfinished_work_reminder(self) -> None:
+        tasks = self._make_task(self.root)
+        handoffs = HandoffStore(tasks)
+        saved = self._save(handoffs)
+        tasks.transition(
+            "task",
+            "cancelled",
+            reason="scope withdrawn",
+            evidence="decision",
+            confirmed=True,
+        )
+        self.assertEqual(handoffs.reminders(), ())
+        self.assertEqual(handoffs.load(saved.path)["task_id"], "task")
+        cancelled = self._save(handoffs)
+        self.assertEqual(cancelled.status, "saved")
+        assert cancelled.snapshot is not None
+        self.assertEqual(cancelled.snapshot["task_status"], "cancelled")
+        self.assertEqual(handoffs.reminders(), ())
+
     def test_readonly_store_still_loads_and_lists_reminders(self) -> None:
         tasks = self._make_task(self.root)
         saved = self._save(HandoffStore(tasks))

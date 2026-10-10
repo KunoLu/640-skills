@@ -10,7 +10,11 @@ Boundary (docs/prd/sbtd-workflow-v2-migration-runtime.md, main PRD 10.2/11):
   approved publication projections and the declared cleanup candidates. It
   never writes projects, HOME or the vault, never deploys, runs no smoke and
   performs no receipt discovery; the sealed verification is returned inside
-  the read-only envelope for the authorized caller to store privately.
+  the read-only envelope for the authorized caller to store privately. When
+  the bound deployment evidence carries current-state reconciliation
+  provenance, the verification payload exposes
+  ``acceptance_basis = "current-state"``; ordinary executed-origin evidence
+  keeps the historical shape with no marker.
 - ``validate_deployment_reports`` re-validates the native validation-evidence
   v1/v2 envelopes and their raw runner reports for one supplied deployment
   project record. The caller owns actual project Git and filesystem truth;
@@ -569,12 +573,53 @@ def validate_deployment_reports(
         )
 
 def _check_approved_routing(manifest: Mapping[str, Any]) -> None:
-    """Reopen each approved candidate; drift is a conflict, not success."""
-    for operation in migration._operations(manifest):
+    """Reopen each approved candidate; drift is a conflict, not success.
+
+    A target this batch deployed through its declared ``graft-agents``
+    operation must equal the rendered approved projection — the re-proved
+    approved body plus exactly the managed fence. Only then is the shared
+    provenance resolver consulted (a successor batch is followed to its
+    revalidated predecessor origin). A current-manifest approved target
+    without a deployment keeps the raw paused-candidate comparison and its
+    drift failure unchanged; an ancestor batch's other approved targets
+    (e.g. global routing) are legitimately superseded by this batch's
+    declared deployment, and their outcomes stay pinned by the stage
+    receipts and retained-resource checks instead.
+    """
+    rendered = {
+        operation["target"]
+        for operation in migration._operations(manifest)
+        if operation["phase"] == "deploy" and operation["selector"] == "graft-agents"
+    }
+    if rendered:
+        from sbtd_codex_wiring import project_agents_candidate
+        from sbtd_migration_plan import approved_agents_provenance
+
+        origin, bodies = approved_agents_provenance(manifest)
+    else:
+        origin, bodies = manifest, {}
+    for operation in migration._operations(origin):
         if operation["selector"] != "approved-routing-replacement":
             continue
-        candidate = operation["change"]["source_ref"]
-        if snapshot(Path(operation["target"])) != snapshot(Path(candidate["path"])):
+        target = operation["target"]
+        if target in rendered:
+            body = bodies.get(target)
+            expected = (
+                None
+                if body is None
+                else {
+                    "type": "file",
+                    "checksum": hashlib.sha256(
+                        project_agents_candidate(body)
+                    ).hexdigest(),
+                }
+            )
+        elif origin is manifest:
+            candidate = operation["change"]["source_ref"]
+            expected = snapshot(Path(candidate["path"]))
+        else:
+            continue
+        if expected is None or snapshot(Path(target)) != expected:
             migration._fail(
                 "approved-routing-drift",
                 "an approved routing file no longer matches its candidate",
@@ -627,6 +672,11 @@ def verify_migration(
         epoch_started = apply_document["payload"]["finished_at"]
 
     payload = manifest["payload"]
+    track_freshness = (
+        deployment["payload"].get("reconciliation") is not None
+        or payload.get("followup") is not None
+    )
+    observed_states: dict[str, Mapping[str, Any]] = {}
     private, shared, dependents, identity = contracts._declared_resources(payload)
     publications = {
         item["target_path"]: item["candidate_ref"]["state"]
@@ -673,6 +723,8 @@ def verify_migration(
         except (contracts.ContractError, OSError, RuntimeError):
             blocked_roots.update(cleanup_dependents[rid])
             continue
+        if track_freshness:
+            observed_states[target] = state
         shared_candidates.append(
             {
                 "resource_id": rid,
@@ -716,6 +768,8 @@ def verify_migration(
             except (contracts.ContractError, OSError, RuntimeError):
                 blocked = True
                 continue
+            if track_freshness:
+                observed_states[target] = state
             if state["type"] != "absent":
                 retained_assets.append({"path": target, "state": state})
             if state["type"] not in {"absent", expected_type}:
@@ -751,6 +805,8 @@ def verify_migration(
             except (contracts.ContractError, OSError, RuntimeError):
                 blocked = True
                 continue
+            if track_freshness:
+                observed_states[target] = state
             cleanup_candidates.append(
                 {
                     "resource_id": rid,
@@ -785,20 +841,24 @@ def verify_migration(
         "verified",
         None,
     )
-    verification = contracts.seal_document(
-        "verification",
-        {
-            "manifest_id": manifest["manifest_id"],
-            "apply_id": apply_document["apply_id"],
-            "deployment_evidence_hash": hashlib.sha256(
-                bytes(deployment_raw)
-            ).hexdigest(),
-            "status": status,
-            "projects": projects,
-            "shared_cleanup_candidates": shared_candidates,
-            "verified_at": _now(),
-        },
-    )
+    verification_payload: dict[str, Any] = {
+        "manifest_id": manifest["manifest_id"],
+        "apply_id": apply_document["apply_id"],
+        "deployment_evidence_hash": hashlib.sha256(
+            bytes(deployment_raw)
+        ).hexdigest(),
+        "status": status,
+        "projects": projects,
+        "shared_cleanup_candidates": shared_candidates,
+        "verified_at": _now(),
+    }
+    if deployment["payload"].get("reconciliation") is not None:
+        # The bound evidence is a provenance-marked current-state observation
+        # of an interrupted deployment, not an executed-origin receipt; expose
+        # that acceptance basis explicitly so downstream consumers and the
+        # contract binding cannot mistake it for observed historical success.
+        verification_payload["acceptance_basis"] = "current-state"
+    verification = contracts.seal_document("verification", verification_payload)
     contracts.validate_declared_bindings(
         manifest, {**documents, "verification": verification}, raw_documents
     )
@@ -816,4 +876,21 @@ def verify_migration(
             "verification_id": verification["verification_id"],
         },
     )
+    provenance = migration._require_reconciliation_provenance(manifest, deployment)
+    if status == "verified" and track_freshness:
+        for project in payload["projects"]:
+            no_touch = project.get("agents_no_touch")
+            if no_touch is not None:
+                provenance += (no_touch["target"], no_touch["template"])
+        # Refresh the same observed states, including absent resources, after
+        # all semantic/lineage work. Previously failed outcomes stay unchanged.
+        migration._check_source_backups(manifest)
+        migration._check_stage_backups(stage_results)
+        for target, state in observed_states.items():
+            migration._check_reference({"path": target, "state": state})
+        for project in deployment["payload"]["projects"]:
+            for reference in project["report_refs"]:
+                migration._check_reference(reference)
+    for reference in provenance:
+        migration._check_reference(reference)
     return envelope, _VERIFY_EXIT[status]

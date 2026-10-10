@@ -531,6 +531,69 @@ class FollowupMigration:
             / ("cleanup-" + cleanup_receipt["cleanup_id"] + ".json"),
         }
 
+class FollowupNoTouchAgentsTests(unittest.TestCase):
+    """An already-aligned project AGENTS.md survives the whole batch chain."""
+
+    def test_no_touch_chain_preserves_exact_agents_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = FollowupMigration(Path(directory).resolve())
+            # Convert the legacy project to the exact-template shape before
+            # any plan runs: live bytes equal the bundled project template
+            # while the recorded legacy digest differs.
+            template = (
+                SCRIPTS.parents[0] / "templates" / "agents" / "AGENTS.project.md"
+            ).read_bytes()
+            (fixture.root / "AGENTS.md").write_bytes(template)
+            hashes_path = fixture.root / ".trellis" / ".template-hashes.json"
+            document = json.loads(hashes_path.read_text(encoding="utf-8"))
+            document["hashes"]["AGENTS.md"] = hashlib.sha256(
+                b"legacy trellis routing marker\n"
+            ).hexdigest()
+            hashes_path.write_text(json.dumps(document), encoding="utf-8")
+
+            fixture.build()
+            # The deployment chain ran on the successor batch.
+            successor_project = fixture.manifest["payload"]["projects"][0]
+            self.assertIsNotNone(successor_project.get("agents_no_touch"))
+            self.assertTrue(
+                all(
+                    operation["target"] != str(fixture.root / "AGENTS.md")
+                    for operation in successor_project["private_operations"]
+                )
+            )
+            self.assertEqual(
+                [
+                    operation["change"]["kind"]
+                    for operation in successor_project["private_operations"]
+                    if operation["phase"] == "deploy"
+                ],
+                ["build-graft"],
+            )
+            self.assertEqual((fixture.root / "AGENTS.md").read_bytes(), template)
+
+            chain = fixture.complete_followup()
+            followup_project = chain["manifest"]["payload"]["projects"][0]
+            self.assertEqual(
+                followup_project.get("agents_no_touch"),
+                successor_project.get("agents_no_touch"),
+            )
+            self.assertTrue(
+                all(
+                    operation["target"] != str(fixture.root / "AGENTS.md")
+                    for operation in followup_project["private_operations"]
+                )
+            )
+            self.assertEqual(
+                [
+                    operation["change"]["kind"]
+                    for operation in followup_project["private_operations"]
+                    if operation["phase"] == "deploy"
+                ],
+                ["build-graft"],
+            )
+            self.assertEqual((fixture.root / "AGENTS.md").read_bytes(), template)
+
+
 class FollowupBatchTests(unittest.TestCase):
     def test_followup_full_chain_preserves_predecessor_proof(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -16,7 +16,7 @@ SBTD 将**规格、行为、测试与领域语言**连接起来。Coding Agent �
 
 本仓库是**配置与 Skill 的摘录／同步源**，不是真实业务应用。工作流主线面向 **Codex 与 Oh My Pi（OMP）**；安装器也提供 Claude Code、Kimi 适配入口。有适配入口，不等于各宿主行为已取得同等验证。
 
-> **源码预览：v2.0.0 尚未发布。** 当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。已实现的初始化、任务、升级和迁移能力，不代表完整 Windows 原生验收、真实环境部署或发布就绪。详见[变更记录](CHANGELOG.md)与[交付计划](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
+> **RC 准备：v2.0.0-rc.1 尚未创建 tag 或发布。** 正式版 v2.0.0 仍未发布。当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。候选代码、CI、安装、原生检查与真实宿主验收是不同证据层级。详见 [RC 范围与已知限制](CHANGELOG.md)及[交付计划](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
 
 | [首次安装](#install) | [已经安装](#onboard-prompts) | [开始任务](#task-prompts) |
 |---|---|---|
@@ -87,7 +87,7 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 | 只追加项目 | `init-projects` | 项目 AGENTS／ignore 与适用本地资产；不做全局安装或用户级 MCP／hooks 写入 |
 | 对齐已有环境 | `upgrade` | 固定基线的 plan/apply/verify，显式裁决漂移，保留备份与恢复入口 |
 | 明确要求重装 | `reset` | **不备份**覆盖 bundled Skills，重装 required external Skills；不是带恢复保证的升级流程 |
-| 迁移旧数据 | `migration` | 批准投影、保留原件和验证回执；部署另行授权 |
+| 迁移旧数据 | `migration` | 批准投影、保留原件和验证回执；部署另行授权；中断未保存的部署证据只按当前状态调和，绝不回填伪造 |
 | 退役已检测旧资产 | `cleanup-legacy` | 展示实际候选，再单独确认执行 |
 | 恢复已授权批次 | `recovery` | 根据可信批次证据计划并确认恢复，不是通用撤销命令 |
 
@@ -169,6 +169,32 @@ handoff 和旧数据；不要把 reset 当成迁移或清理。
 如实报告部分完成结果。
 ```
 
+**调和中断未保存的部署证据：**
+
+```text
+请使用 sbtd-workflow-onboard migration --phase reconcile 处理[apply 已完成
+但累计部署证据未及保存的批次]。绑定精确的 manifest 与完整成功 apply 回执，
+证明历史证据路径真实缺失，把当前状态新鲜实测写入新私有路径上的
+一份带类型标记的新证据文档。不得伪造缺失的历史回执，也不得声称原部署
+已运行完成；--yes 由我显式确认，之后运行标准 verify。
+```
+
+迁移器接受已刻画的 Trellis **0.6.15／0.6.17 数据布局**，不接受任意旧版本。用户内容的 hash 声明不是删除授权；批准缺失、任务关系矛盾或宿主配置不明仍会阻断。确实没有宿主配置的项目可保留空平台列表，不伪造宿主文件。vendor 卸载运行时仍独立钉版。
+
+旧模板登记 hash 过期时，只能用安装包内已审核的**精确路径／版本／内容钉**补足识别；迁移不刷新旧 hash 文件，也不在运行时下载模板。混合项目规则的 `AGENTS.md` 不是整份生成资产，其替换仍须已有签名批准，绑定实际前态和精确候选。识别成功不等于授权 apply 或清理。
+迁移部署保留已批准的项目规则正文，仅解除维护暂停前缀并追加受管 Graft 段，不静默换回通用模板。
+OMP 部署也接受由绑定的成功迁移回执及完整原件证明的配置输入后态；未记录的漂移仍阻断，不豁免运行时版本检查，也不自动授权重试部署。
+
+中断而未保存证据的部署只按**当前状态**调和，绝不回填：`migration --phase reconcile` 要求完整成功的 apply 回执、真实缺失的历史证据路径、全新不覆盖的输出路径以及显式 `--yes`。它重新验证签名运行时血统、保留原件与封存资源，然后写入一份显式标记 `kind: current-state`／`historical_execution: unknown` 的新证据文档——每项结果的 before 由保留原件证明，after 为本次新鲜实测，不伪造历史退出码、成功事实或旧时间戳。接受只表示当前后置条件成立，不代表原进程 exit0 或发生新的目标写入；随后的标准 `verify` 报告 `acceptance_basis: current-state`。这不授权任何安装、部署重试或清理，常规 deploy/retry/recovery 各门禁不变。
+
+消费时重新核验所引用的 manifest／apply 是安全文件且摘要相符。观察者必须属于 manifest 同运行时或经签名批准的精确后继；反向或无关血统拒绝。历史观察者不要求等于当前消费者，累计重试不改写来源；这仍不证明未知历史执行，也不授权刷新旧证据。
+
+新跨运行时观察在 `observer_lineage` 中保留原验签授权，后续配对文件轮换不会抹去历史观察者授权；消费者只信任已安装公钥，不接受证据自带密钥。旧无该证明的记录仍要求匹配的当前配对（同运行时除外），不补造已丢失的授权。计划／证据在接受输出前复核直接来源及 followup 祖先来源；cleanup/recovery 写前也须复核。晚期拒绝保留真实实测结果，但不宣称验收成功。
+
+现态接受先完成语义／血统验证，再对实测对象和固定输入做最后的纯快照复核，包含 absent 资源；这不是跨进程原子快照，也不保证对象在检查后永不变化。
+
+已与项目模板逐字对齐的规则可凭精确证据保持不动。只有文档的旧任务目录按历史文档归档，不伪造任务；历史任务分支保持原值，通过明确的延后恢复说明承接，不自动切分支或重绑定。
+
 [升级与恢复](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [迁移](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [清理](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)
 
 </details>
@@ -238,6 +264,7 @@ Strict 门禁由事实触发：领域歧义、持久／共享数据、不明确�
 ### 状态只保留一个事实源
 
 - `task.md` 拥有 mode、status 与 events。普通 default 任务在 `.sbtd/tasks/<id>/`；lite／strict 或明确共享任务在 `ai/tasks/<id>/`。`.sbtd/active-task.json` 只是书签。
+- `cancelled` 是取消终止，**不是成功完成**，`completed_at` 保持 null；不自动取消子任务，归档和显式重开保留取消历史。导入的 `blocked` 记录若无法证明原阶段，恢复必须明确选择。旧安装使用这些记录前，应成套更新任务运行库、schema 与 Skill references。
 - 真实暂停／切换或手动请求时，handoff 写入受保护的 `docs/handoffs/`；它不覆盖任务事实。纯问答／只读任务不创建 task、身份或 handoff 文件。
 - 真正要写长期 lesson 时才需要 developer 身份，普通工作不需要。本地合法 `.sbtd/developer` 优先；只有确实缺失且已验证为 linked worktree，才只读主 checkout 的身份。不得猜名字或覆盖异常身份。
 

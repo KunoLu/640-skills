@@ -1,7 +1,8 @@
 """Read-only batch migration planning and repeatable legacy input validation.
 
 Grounded in Trellis v0.6.17 (commit 833a5846d18ad7a5ccd8c41c876d89cc936f5fd9)
-and the main PRD sections 10.2/11 plus the P1-12 migration-runtime decisions:
+and the characterized Trellis v0.6.15 project data shape, plus the main PRD
+sections 10.2/11 plus the P1-12 migration-runtime decisions:
 
 - ``plan_migration`` is strictly read-only. It never creates the private
   vault, candidates, projects or HOME entries; it verifies the already
@@ -64,6 +65,7 @@ from sbtd_migration_legacy import (
     validate_projection_graph,
     validate_task_projection,
 )
+from sbtd_task_state import TERMINAL_STATUSES
 
 __all__ = ["plan_migration", "validate_legacy_inputs"]
 
@@ -74,7 +76,7 @@ _OWNERSHIP_ASSET = _PACKAGE / "assets" / "migration-legacy-ownership.json"
 
 _ABSENT = {"type": "absent", "checksum": None}
 _LEGACY_DIR = ".trellis"
-_LEGACY_VERSION = "0.6.17"
+_LEGACY_VERSIONS = frozenset({"0.6.15", "0.6.17"})
 _TASK_JSON = "task.json"
 _TASK_DOCUMENT = "task.md"
 _TASK_SIDECAR = "legacy-task.json"
@@ -82,7 +84,7 @@ _DEVELOPER_NAME = ".developer"
 _TEMPLATE_HASHES = ".template-hashes.json"
 _VERSION_FILE = ".version"
 
-# Known v0.6.17 layout. Gitignore may hide incidental files outside this
+# Known v0.6.15/v0.6.17 layout. Gitignore may hide incidental files outside this
 # layout; those stay in the directory snapshot and are deleted with the tree.
 # tasks, spec and lessons stay in the approval closure even when ignored.
 # A path outside this layout that git does not ignore stops the plan.
@@ -106,6 +108,11 @@ _KNOWN_LEGACY_TOP = frozenset(
 )
 _MANDATORY_TOP = frozenset({"tasks", "spec", "lessons"})
 _GENERATED_LEGACY_TOP = frozenset({"workflow.md", "config.yaml", "scripts", "agents"})
+# v0.6.15 also recorded digests for these non-generated legacy paths. A
+# recorded claim proves bytes only, never generated ownership: lessons keep
+# their publication closure, runtime context its private approval, and junk
+# stays on the fail-closed unknown-path rules.
+_LEGACY_CLAIMED_USER_DATA = frozenset({"lessons", ".runtime", ".DS_Store"})
 _UNSELECTED_PLATFORM_PREFIX = frozenset({".cursor", ".opencode", ".pi"})
 _PLATFORM_PREFIX = {
     ".codex": "codex",
@@ -115,6 +122,9 @@ _PLATFORM_PREFIX = {
     ".omp": "oh-my-pi",
 }
 _ROOT_OWNED_FILES = frozenset({"AGENTS.md"})
+# Host-level shared configuration keeps its own pin rules; the exact
+# official payload fallback below never authorizes these names.
+_SHARED_CONFIG_NAMES = frozenset({"config.toml", "hooks.json", "settings.json"})
 _TRELLIS_MARKER = "TRELLIS"
 
 _HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -130,6 +140,13 @@ _SECRET_PATTERNS = (
 
 # (category root inside the legacy directory) -> shared document root.
 _DOC_TARGETS = {"spec": ("docs", "spec"), "lessons": ("docs", "lessons")}
+# Historical task documents (files below legacy tasks/ with no ancestor
+# task.json) publish verbatim under this root, keeping their exact legacy
+# relative path below tasks/ as an opaque directory hierarchy.
+_HISTORY_DOC_TARGET = ("docs", "legacy-archive", "tasks")
+# Trusted project-root template used to prove an already-aligned root
+# AGENTS.md; patchable in tests like the other trusted payload assets.
+_PROJECT_AGENTS_TEMPLATE = _PACKAGE / "templates" / "agents" / "AGENTS.project.md"
 
 ReadOriginal = Callable[[Mapping[str, Any]], bytes]
 
@@ -311,7 +328,81 @@ def _ownership_pins() -> dict[str, Any]:
             )
         ):
             _fail("invalid-config", "the legacy configuration pins are malformed")
-    return {"agents": agents, "skills": pinned, "project_configs": configurations}
+    return {
+        "agents": agents,
+        "skills": pinned,
+        "project_configs": configurations,
+        "official_payloads": _official_template_payloads(document),
+    }
+
+
+def _official_template_payloads(
+    document: Mapping[str, Any],
+) -> dict[str, tuple[str, ...]]:
+    """Optional provenance-pinned exact official payload digests by path.
+
+    Absent evidence disables fallback recognition entirely; malformed
+    evidence fails closed.  A digest is authorized only for its exact
+    recorded path with published provenance.
+    """
+    if "official_template_payloads" not in document:
+        return {}
+    field = document["official_template_payloads"]
+    if not isinstance(field, Mapping):
+        _fail("invalid-config", "the official template payload evidence is malformed")
+    if (
+        field.get("package") != "@mindfoldhq/trellis"
+        or field.get("normalization") != "UTF-8, CRLF to LF only"
+    ):
+        _fail("invalid-config", "the official template payload evidence is malformed")
+    releases = field.get("releases")
+    if not isinstance(releases, Mapping) or not releases:
+        _fail("invalid-config", "the official template payload evidence is malformed")
+    for name, release in releases.items():
+        if (
+            not isinstance(name, str)
+            or not name
+            or not isinstance(release, Mapping)
+            or not isinstance(release.get("tarball"), str)
+            or not release["tarball"]
+            or not isinstance(release.get("integrity"), str)
+            or not release["integrity"].startswith("sha512-")
+        ):
+            _fail(
+                "invalid-config",
+                "the official template payload evidence is malformed",
+            )
+    files = field.get("files")
+    if not isinstance(files, Mapping) or not files:
+        _fail("invalid-config", "the official template payload evidence is malformed")
+    payloads: dict[str, tuple[str, ...]] = {}
+    for relative, records in files.items():
+        parts = _check_safe_relative(relative, "an official payload path")
+        if not isinstance(records, list) or not records:
+            _fail(
+                "invalid-config",
+                "the official template payload evidence is malformed",
+            )
+        digests: list[str] = []
+        for record in records:
+            if (
+                not isinstance(record, Mapping)
+                or not isinstance(record.get("sha256"), str)
+                or _HEX64.fullmatch(record["sha256"]) is None
+                or not isinstance(record.get("version"), str)
+                or record["version"] not in releases
+                or not isinstance(record.get("member"), str)
+                or not isinstance(record.get("rendering"), str)
+                or not record["rendering"]
+            ):
+                _fail(
+                    "invalid-config",
+                    "the official template payload evidence is malformed",
+                )
+            _check_safe_relative(record["member"], "an official payload member")
+            digests.append(record["sha256"])
+        payloads[PurePosixPath(*parts).as_posix()] = tuple(digests)
+    return payloads
 
 
 def _private_strings(vault: Path) -> tuple[str, ...]:
@@ -609,13 +700,29 @@ def _classify_project_items(
                     "approval-conflict",
                     "a private task attachment must be explicitly optional",
                 )
+            if len(matches) == 0:
+                _fail(
+                    "approval-conflict",
+                    "a historical task document cannot stay private-only",
+                )
             optional.append(item)
             continue
         if len(matches) == 0:
-            _fail(
-                "approval-conflict",
-                "a task attachment has no unique approved task",
-            )
+            # No approved task closure claims these files: the item documents
+            # one orphan legacy file verbatim as task history, keeping its
+            # exact relative path below the shared legacy-archive root.
+            candidate = item["candidate_ref"]
+            if (
+                len(rels) != 1
+                or candidate is None
+                or candidate["state"]["type"] != "file"
+            ):
+                _fail(
+                    "approval-conflict",
+                    "a historical task document binds exactly one legacy file",
+                )
+            documents.append(("tasks", item, [rels[0][2:]]))
+            continue
         folder = max(matches, key=len)
         primaries[folder].append((item, [rel[len(folder) :] for rel in rels]))
     return primaries, documents, optional
@@ -808,11 +915,14 @@ def _check_document_item(
     if item["decision"] not in {"share", "redact"} or not item["required"]:
         _fail(
             "approval-required",
-            "legacy spec and lessons projections cannot be omitted or optional",
+            "legacy document projections cannot be omitted or optional",
         )
     candidate = item["candidate_ref"]
     target = Path(item["target_path"])
-    documents_root = root.joinpath(*_DOC_TARGETS[category])
+    root_parts = (
+        _HISTORY_DOC_TARGET if category == "tasks" else _DOC_TARGETS[category]
+    )
+    documents_root = root.joinpath(*root_parts)
     pairs: list[tuple[str, bytes, bytes, Path]] = []
     if candidate["state"]["type"] == "file":
         if len(rels) != 1:
@@ -933,6 +1043,7 @@ def _validate_successor_project_operations(
     root: Path, project: Mapping[str, Any]
 ) -> None:
     """A successor project carries exactly its pending legacy retirement."""
+    _check_agents_no_touch_untouched(project)
     sources = project["sources"]
     if (
         len(sources) != 1
@@ -1020,9 +1131,11 @@ def _bind_followup_predecessor(
 ) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
     """Bind one fully completed Codex predecessor chain. Read-only.
 
-    Document binding, success gates and retained backup availability only:
-    the predecessor's historical tool versions and deployment template
-    sources are sealed history, never re-derived against this runtime.
+    Document binding, success gates, retained backup availability and — for
+    a reconciled predecessor — cited source objects, observer lineage and
+    continued absence of its missing historical receipt are rechecked.
+    Historical versions need not equal this runtime; template sources and
+    superseded live after-states are never re-derived against it.
     Returns the successor ancestors (nearest first), each a bound
     (manifest, apply receipt) pair with its own backups proven retained.
     """
@@ -1040,6 +1153,16 @@ def _bind_followup_predecessor(
     contracts._bind_success_gate(prev_deployment, {"succeeded"})
     contracts._bind_success_gate(prev_verification, {"verified"})
     contracts._bind_success_gate(prev_cleanup, {"cleaned", "already-complete"})
+    from sbtd_migration import (
+        _check_source_backups,
+        _check_stage_backups,
+        _require_reconciliation_provenance,
+        _result_index,
+    )
+
+    # Recheck provenance without revalidating live after-states that cleanup
+    # or a later deployment may have superseded.
+    _require_reconciliation_provenance(prev_manifest, prev_deployment)
     prev_payload = prev_manifest["payload"]
     if prev_payload["deployment"] is None:
         _fail(
@@ -1056,12 +1179,6 @@ def _bind_followup_predecessor(
             "followup-conflict",
             "a followup batch cannot follow another followup batch",
         )
-    from sbtd_migration import (
-        _check_source_backups,
-        _check_stage_backups,
-        _result_index,
-    )
-
     _check_source_backups(prev_manifest)
     _check_stage_backups(
         {
@@ -1321,6 +1438,7 @@ def validate_legacy_inputs(
     manifest: Mapping[str, Any],
     read_original: ReadOriginal,
     resolve_original: ResolveOriginal | None = None,
+    stage_results: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
     """Re-validate the complete legacy closure of a sealed manifest.
 
@@ -1332,6 +1450,11 @@ def validate_legacy_inputs(
     sources, the ownership metadata and the approved candidates: a re-sealed
     manifest with altered, invented or missing operations is rejected even
     when it is schema-valid. Nothing here writes or substitutes approval.
+    ``stage_results`` carries the bound stage receipts' results (phase to
+    resource outcome) so deployment revalidation can recognize a sealed
+    configuration input change that a succeeded, intact-backed stage result
+    already proves; without it the sealed inputs must match live discovery
+    exactly.
     """
     payload = manifest["payload"]
     if payload.get("followup") is not None:
@@ -1398,9 +1521,12 @@ def validate_legacy_inputs(
                 "a followup batch cannot bind routing approvals",
             )
         for project in payload["projects"]:
+            _check_agents_no_touch_untouched(project)
             if (
                 project["sources"]
                 or project["platforms"] != prev_by_root[project["root"]]["platforms"]
+                or project.get("agents_no_touch")
+                != prev_by_root[project["root"]].get("agents_no_touch")
             ):
                 _fail(
                     "semantic-violation",
@@ -1496,6 +1622,8 @@ def validate_legacy_inputs(
             if (
                 project["sources"] != prev_project["sources"]
                 or project["platforms"] != prev_project["platforms"]
+                or project.get("agents_no_touch")
+                != prev_project.get("agents_no_touch")
             ):
                 _fail(
                     "semantic-violation",
@@ -1585,7 +1713,6 @@ def validate_legacy_inputs(
         projections, forms = _validate_project_closures(
             root, closures, documents, read_original, private_strings
         )
-        _validate_project_operations(root, project, assigned[root], read_original)
         original = project["sources"][0]
         inventory_root = Path(original["path"])
         if snapshot(inventory_root) != original["state"]:
@@ -1596,6 +1723,9 @@ def validate_legacy_inputs(
         state, entries = directory_snapshot(inventory_root)
         if state != original["state"]:
             _fail("state-conflict", "the complete original inventory is unavailable")
+        # The sealed inventory proves the data version and the metadata bytes
+        # for every later closure step, live or from the retained backup.
+        version = _inventory_version(entries, inventory_root)
         metadata = next(
             (entry for entry in entries if entry["path"] == _TEMPLATE_HASHES), None
         )
@@ -1608,9 +1738,32 @@ def validate_legacy_inputs(
                     {"type": "file", "checksum": metadata["checksum"]},
                 ),
                 "the original ownership metadata",
-            )
+            ),
+            version,
         )
-        _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
+        metadata_reference = {
+            "path": str(root / _LEGACY_DIR / _TEMPLATE_HASHES),
+            "state": {"type": "file", "checksum": metadata["checksum"]},
+        }
+        _check_generated_legacy_bytes(root, inventory_root, entries, hashes)
+        _validate_project_operations(
+            root,
+            project,
+            assigned[root],
+            read_original,
+            metadata_reference,
+            version,
+        )
+        _inventory_coverage(
+            entries,
+            closures,
+            forms,
+            documents,
+            optional,
+            root,
+            hashes,
+            inventory_root=inventory_root,
+        )
         _check_context_handoffs(
             root,
             entries,
@@ -1626,7 +1779,7 @@ def validate_legacy_inputs(
     )
     from sbtd_graft_deployment import validate_deployment_declarations
 
-    validate_deployment_declarations(payload)
+    validate_deployment_declarations(payload, stage_results=stage_results)
     _bind_approved_routing(payload, roots, bind_live=False)
 
 
@@ -1749,19 +1902,18 @@ def _check_platform_closure(
     operations: list[Mapping[str, Any]],
     platforms: Sequence[str],
     read_original: ReadOriginal,
+    metadata_reference: Mapping[str, Any],
+    version: str,
+    agents_no_touch: Any,
 ) -> None:
     """The remaining operations must be exactly the recorded platform files."""
-    if not operations:
-        if platforms:
-            _fail(
-                "semantic-violation",
-                "the recorded platform retirement operations are missing",
-            )
-        return
+    if not platforms:
+        _require_no_host_roots(root)
     hashes_reference: Mapping[str, Any] | None = None
     file_targets: set[str] = set()
     marker_targets: set[str] = set()
     replacement_targets: set[str] = set()
+    content_operations: list[Mapping[str, Any]] = []
     for operation in operations:
         if operation["selector"] == _ROUTING_SELECTOR:
             if operation["change"].get("kind") != "copy-file":
@@ -1806,16 +1958,39 @@ def _check_platform_closure(
             marker_targets.add(operation["target"])
         else:
             _fail("semantic-violation", "an unknown private ownership was added")
+        content_operations.append(operation)
     if hashes_reference is None:
-        _fail(
-            "semantic-violation",
-            "the recorded platform ownership metadata is missing",
-        )
+        # Marker-only or empty platform closures carry no template-source
+        # operation; the sealed inventory still proves the metadata.
+        hashes_reference = metadata_reference
     if Path(hashes_reference["path"]) != root / _LEGACY_DIR / _TEMPLATE_HASHES:
         _fail("semantic-violation", "the platform ownership reference was altered")
     hashes = _parse_template_hashes(
-        _json_object(read_original(hashes_reference), "the legacy ownership metadata")
+        _json_object(read_original(hashes_reference), "the legacy ownership metadata"),
+        version,
     )
+    agents_target = str(root / "AGENTS.md")
+    if agents_target in replacement_targets:
+        # An approved routing replacement owns the root document; a sealed
+        # no-touch proof cannot coexist with it.
+        derived_no_touch = None
+    else:
+        agents_before = next(
+            (
+                operation["before_requirement"]["state"]
+                for operation in content_operations
+                if operation["target"] == agents_target
+            ),
+            None,
+        )
+        derived_no_touch = _agents_no_touch(
+            root, hashes, read_original, target_state=agents_before
+        )
+    if agents_no_touch != derived_no_touch:
+        _fail(
+            "semantic-violation",
+            "the sealed AGENTS no-touch proof was altered",
+        )
     expected_files: set[str] = set()
     expected_markers: set[str] = set()
     derived_platforms: set[str] = set()
@@ -1842,6 +2017,10 @@ def _check_platform_closure(
             "an approved routing replacement cannot also delete the marker block",
         )
     covered_markers = marker_targets | (replacement_targets & expected_markers)
+    if derived_no_touch is not None:
+        covered_markers = covered_markers | (
+            {derived_no_touch["target"]["path"]} & expected_markers
+        )
     if file_targets != expected_files or covered_markers != expected_markers:
         _fail(
             "semantic-violation",
@@ -1849,6 +2028,33 @@ def _check_platform_closure(
         )
     if sorted(derived_platforms) != list(platforms):
         _fail("semantic-violation", "the declared platforms were altered")
+    # Re-prove every content-bearing operation's before bytes from the live
+    # path or the retained original: a coherently re-sealed manifest must not
+    # let foreign bytes inherit recorded or official ownership.
+    official = _ownership_pins()["official_payloads"]
+    for operation in content_operations:
+        parts = _parts_relative(Path(operation["target"]), root)
+        if parts is None:
+            continue
+        relative = PurePosixPath(*parts).as_posix()
+        recorded = hashes.get(relative)
+        if recorded is None:
+            continue
+        raw = read_original(
+            {
+                "path": operation["target"],
+                "state": operation["before_requirement"]["state"],
+            }
+        )
+        digest = _normalized_text_digest(raw)
+        if digest == recorded:
+            continue
+        if digest in _official_alternative_digests(official, relative, parts):
+            continue
+        _fail(
+            "ownership-conflict",
+            "generated content drifted; removal is not authorized",
+        )
 
 
 def _validate_project_operations(
@@ -1856,7 +2062,10 @@ def _validate_project_operations(
     project: Mapping[str, Any],
     items: Sequence[Mapping[str, Any]],
     read_original: ReadOriginal,
+    metadata_reference: Mapping[str, Any],
+    version: str,
 ) -> None:
+    _check_agents_no_touch_untouched(project)
     sources = project["sources"]
     if (
         len(sources) != 1
@@ -1919,7 +2128,15 @@ def _validate_project_operations(
         )
     remaining.remove(cleanups[0])
     _check_cleanup_operation(root, cleanups[0], sources[0])
-    _check_platform_closure(root, remaining, project["platforms"], read_original)
+    _check_platform_closure(
+        root,
+        remaining,
+        project["platforms"],
+        read_original,
+        metadata_reference,
+        version,
+        project.get("agents_no_touch"),
+    )
 
 
 _ROUTING_ROLES = frozenset({"codex-global", "omp-global", "demo-project"})
@@ -2278,6 +2495,54 @@ def _routing_key(
     ).decode("utf-8")
 
 
+def approved_agents_provenance(
+    manifest: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], dict[str, bytes]]:
+    """Re-proved signed AGENTS routing origin and approved project bodies.
+
+    The origin is the manifest itself, or the re-verified deployment-less
+    predecessor for a successor batch (``_verify_successor_predecessor``).
+    The origin's complete signed routing set is rebuilt and bound exactly by
+    ``_bind_approved_routing`` with ``bind_live=False``: the approval record,
+    its signature, every target and every candidate state must still match
+    the sealed operations, so preservation is authorized by the signed
+    binding — never by a file name or live-byte prefix. Each returned body
+    is the exact approved candidate bytes minus the native pause block and
+    at most one immediately following formatting blank line, keyed by the
+    sealed operation target. Only demo-project replacements carry project
+    bodies; followup batches and batches without signed routing return an
+    empty mapping (their deployments keep merging proven live bytes).
+    """
+    origin = manifest
+    payload = manifest["payload"]
+    if payload.get("followup") is not None:
+        return origin, {}
+    if payload.get("successor") is not None:
+        origin, _receipt = _verify_successor_predecessor(manifest)
+        payload = origin["payload"]
+    if payload.get("routing_approvals") is None:
+        return origin, {}
+    roots = [Path(project["root"]) for project in payload["projects"]]
+    _bind_approved_routing(payload, roots, bind_live=False)
+    pause = read_file(_PAUSE_ASSET)
+    bodies: dict[str, bytes] = {}
+    for _place, _root, operation in _routing_rows(payload):
+        if operation["ownership"].get("role") != "demo-project":
+            continue
+        candidate = operation["change"]["source_ref"]
+        raw = read_file(Path(candidate["path"]), candidate["state"])
+        if not raw.startswith(pause):
+            _fail(
+                "candidate-conflict",
+                "an approved routing candidate lacks the pause block",
+            )
+        body = raw[len(pause) :]
+        if body.startswith(b"\n"):
+            body = body[1:]
+        bodies[operation["target"]] = body
+    return origin, bodies
+
+
 def _check_skill_identity(
     operation: Mapping[str, Any], resolve_original: ResolveOriginal | None
 ) -> None:
@@ -2493,33 +2758,65 @@ def _load_publication_items(
     return decisions["items"]
 
 
-def _check_legacy_version(root: Path) -> None:
-    path = root / _LEGACY_DIR / _VERSION_FILE
-    state = snapshot(path)
-    if state["type"] != "file":
-        _fail("unsupported-version", "the legacy tool version cannot be proven")
+def _parse_legacy_version(raw: bytes) -> str:
     try:
-        text = read_file(path, state).decode("utf-8")
+        version = raw.decode("utf-8").strip()
     except UnicodeDecodeError:
         _fail("unsupported-version", "the legacy tool version cannot be proven")
-    if text.strip() != _LEGACY_VERSION:
+    if version not in _LEGACY_VERSIONS:
         _fail(
             "unsupported-version",
             "the legacy tool version is not the characterized one",
         )
+    return version
 
 
-def _template_hashes(root: Path) -> tuple[dict[str, str], dict[str, Any]]:
+def _check_legacy_version(root: Path) -> str:
+    path = root / _LEGACY_DIR / _VERSION_FILE
+    state = snapshot(path)
+    if state["type"] != "file":
+        _fail("unsupported-version", "the legacy tool version cannot be proven")
+    return _parse_legacy_version(read_file(path, state))
+
+
+def _inventory_version(
+    entries: Sequence[Mapping[str, Any]], inventory_root: Path
+) -> str:
+    """Prove the data version of a sealed legacy inventory (live or backup)."""
+    entry = next(
+        (entry for entry in entries if entry["path"] == _VERSION_FILE), None
+    )
+    if entry is None or entry["type"] != "file":
+        _fail("unsupported-version", "the legacy tool version cannot be proven")
+    return _parse_legacy_version(
+        read_file(
+            inventory_root / _VERSION_FILE,
+            {"type": "file", "checksum": entry["checksum"]},
+        )
+    )
+
+
+def _template_hashes(root: Path, version: str) -> tuple[dict[str, str], dict[str, Any]]:
     path = root / _LEGACY_DIR / _TEMPLATE_HASHES
     reference = _present_file_reference(path, "the legacy ownership metadata")
     document = _json_object(
         read_file(path, reference["state"]), "the legacy ownership metadata"
     )
-    return _parse_template_hashes(document), reference
+    return _parse_template_hashes(document, version), reference
 
 
-def _parse_template_hashes(document: Any) -> dict[str, str]:
-    """Validate v0.6.17 metadata against the installed ownership pins."""
+def _parse_template_hashes(document: Any, version: str) -> dict[str, str]:
+    """Validate legacy ownership metadata against the installed ownership pins.
+
+    A v0.6.15 record may also claim lessons, runtime context or junk paths.
+    Those digests prove recorded bytes only, never generated ownership, so
+    they are validated for shape and left out of the generated hashes: user
+    data keeps its publication, approval and fail-closed unknown-path rules.
+    """
+    if version not in _LEGACY_VERSIONS:
+        _fail(
+            "unsupported-version", "the legacy tool version is not the characterized one"
+        )
     if (
         not isinstance(document, dict)
         or document.get("__version") != 2
@@ -2533,14 +2830,25 @@ def _parse_template_hashes(document: Any) -> dict[str, str]:
         if parts[0] == _LEGACY_DIR and (
             len(parts) < 2 or parts[1] not in _GENERATED_LEGACY_TOP
         ):
-            _fail("invalid-config", "ownership metadata cannot claim legacy user data")
+            if (
+                version != "0.6.15"
+                or len(parts) < 2
+                or parts[1] not in _LEGACY_CLAIMED_USER_DATA
+            ):
+                _fail(
+                    "invalid-config",
+                    "ownership metadata cannot claim legacy user data",
+                )
+            if not isinstance(digest, str) or _HEX64.fullmatch(digest) is None:
+                _fail("invalid-config", "the legacy ownership metadata is malformed")
+            continue
         if not isinstance(digest, str) or _HEX64.fullmatch(digest) is None:
             _fail("invalid-config", "the legacy ownership metadata is malformed")
         # A mutable legacy hash proves recorded bytes, not sole ownership
         # of a shared configuration. Mixed entries need reconciliation.
         if (
             len(parts) == 2
-            and parts[1] in {"config.toml", "hooks.json", "settings.json"}
+            and parts[1] in _SHARED_CONFIG_NAMES
             and digest not in configuration_pins.get(relative, ())
         ):
             _fail("ownership-conflict", "shared configuration ownership is unproven")
@@ -2557,6 +2865,24 @@ def _normalized_text_digest(raw: bytes) -> str:
             "a recorded generated file is not inspectable text",
         )
     return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+
+def _official_alternative_digests(
+    official: Mapping[str, tuple[str, ...]],
+    relative: str,
+    parts: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Exact official digests authorized for one recorded path, if any.
+
+    Shared host configuration and root-owned mixed documents keep their
+    existing ownership rules; no official payload digest ever authorizes
+    them.  Every other digest binds to this exact recorded path only.
+    """
+    if len(parts) == 2 and parts[1] in _SHARED_CONFIG_NAMES:
+        return ()
+    if len(parts) == 1 and parts[0] in _ROOT_OWNED_FILES:
+        return ()
+    return official.get(relative, ())
 
 
 def _check_marker_block(text: str) -> None:
@@ -2600,14 +2926,131 @@ def _state_requirement(state: Mapping[str, Any]) -> dict[str, Any]:
     return {"kind": "state", "state": dict(state)}
 
 
+def _require_no_host_roots(root: Path) -> None:
+    """Prove absence without inspecting an unowned host directory's contents."""
+    _canonical(root)
+    for prefix in (*_PLATFORM_PREFIX, *_UNSELECTED_PLATFORM_PREFIX):
+        if _lstat(root / prefix) is not None:
+            _fail(
+                "unknown-platform",
+                "no configured platform could be proven from the ownership metadata",
+            )
+
+
+def _read_current(reference: Mapping[str, Any]) -> bytes:
+    """Read a live input, pinned to its sealed state."""
+    return read_file(Path(reference["path"]), reference["state"])
+
+
+def _agents_no_touch(
+    root: Path,
+    hashes: Mapping[str, str],
+    read_original: ReadOriginal,
+    *,
+    target_state: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Re-derive the sealed proof for an already-aligned root AGENTS.md.
+
+    Recognition is exact and local: the legacy ownership metadata must record
+    the project-root AGENTS.md, the original bytes must equal the bundled
+    project template byte for byte, and those bytes must carry no legacy marker. A
+    drifted or customized file returns None and keeps its signed-replacement
+    or refusal rules; a trusted template that itself carries a marker fails
+    closed instead of freezing legacy content in place.
+    """
+    if "AGENTS.md" not in hashes:
+        return None
+    target = root / "AGENTS.md"
+    state = dict(target_state) if target_state is not None else snapshot(target)
+    if state["type"] != "file":
+        return None
+    template = _present_file_reference(_PROJECT_AGENTS_TEMPLATE, "the project template")
+    raw = read_original({"path": str(target), "state": state})
+    if raw != read_original(template):
+        return None
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if (
+        f"<!-- {_TRELLIS_MARKER}:START -->" in text
+        or f"<!-- {_TRELLIS_MARKER}:END -->" in text
+    ):
+        _fail(
+            "ownership-conflict",
+            "an aligned root document still carries a legacy marker",
+        )
+    return {
+        "target": {"path": str(target), "state": state},
+        "template": template,
+    }
+
+
+def _check_agents_no_touch_untouched(project: Mapping[str, Any]) -> None:
+    """Re-prove the exact installed template binding and forbid all writes.
+
+    Later batches must not trust a predecessor's re-sealed proof merely
+    because its two references point to the same custom project document.
+    """
+    proof = project.get("agents_no_touch")
+    if proof is None:
+        return
+    target = str(Path(project["root"]) / "AGENTS.md")
+    if (
+        proof["target"]["path"] != target
+        or proof["template"]["path"] != str(_PROJECT_AGENTS_TEMPLATE)
+    ):
+        _fail(
+            "semantic-violation",
+            "the untouched AGENTS proof is not bound to the installed project template",
+        )
+    template = _present_file_reference(_PROJECT_AGENTS_TEMPLATE, "the project template")
+    if (
+        proof["template"] != template
+        or proof["target"]["state"] != template["state"]
+        or snapshot(Path(target)) != proof["target"]["state"]
+    ):
+        _fail(
+            "semantic-violation",
+            "the untouched AGENTS evidence no longer matches the installed template",
+        )
+    raw = _read_current(proof["target"])
+    if raw != _read_current(template):
+        _fail(
+            "semantic-violation",
+            "the untouched AGENTS bytes differ from the installed template",
+        )
+    if (
+        f"<!-- {_TRELLIS_MARKER}:START -->".encode() in raw
+        or f"<!-- {_TRELLIS_MARKER}:END -->".encode() in raw
+    ):
+        _fail(
+            "ownership-conflict",
+            "an aligned root document still carries a legacy marker",
+        )
+    for operation in project["private_operations"]:
+        if operation["target"] == target:
+            _fail(
+                "semantic-violation",
+                "an operation targets the proven untouched AGENTS",
+            )
+
+
 def _platform_operations(
     root: Path,
     hashes: Mapping[str, str],
     hashes_reference: Mapping[str, Any],
     approved_targets: Collection[Path] = (),
-) -> tuple[list[str], list[dict[str, Any]]]:
+) -> tuple[list[str], list[dict[str, Any]], dict[str, Any] | None]:
+    official = _ownership_pins()["official_payloads"]
     platforms: set[str] = set()
     operations: list[dict[str, Any]] = []
+    agents_target = root / "AGENTS.md"
+    no_touch = None
+    if agents_target not in approved_targets:
+        # An approved routing replacement takes precedence over recognition;
+        # otherwise an already-aligned file is sealed as untouched proof.
+        no_touch = _agents_no_touch(root, hashes, _read_current)
     legacy_rels = [
         PurePosixPath(*PurePosixPath(relative).parts[1:]).as_posix()
         for relative in hashes
@@ -2624,6 +3067,18 @@ def _platform_operations(
             else None
         )
         target = root.joinpath(*parts)
+        if (
+            len(parts) == 1
+            and parts[0] in _ROOT_OWNED_FILES
+            and target in approved_targets
+        ):
+            # An approved routing replacement owns this root document; the
+            # recorded whole-file template digest must not gate it.
+            continue
+        if no_touch is not None and len(parts) == 1 and parts[0] in _ROOT_OWNED_FILES:
+            # Already aligned with the bundled template: no operation, and
+            # the sealed proof revalidates at every lifecycle stage instead.
+            continue
         state = snapshot(target)
         if state["type"] != "file":
             _fail(
@@ -2643,7 +3098,10 @@ def _platform_operations(
                 "ownership-conflict",
                 "a recorded generated file is not inspectable text",
             )
-        if hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest() != hashes[relative]:
+        digest = hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+        if digest != hashes[relative] and digest not in _official_alternative_digests(
+            official, relative, parts
+        ):
             _fail(
                 "ownership-conflict",
                 "generated content drifted; removal is not authorized",
@@ -2672,8 +3130,6 @@ def _platform_operations(
                 )
             )
         elif len(parts) == 1 and parts[0] in _ROOT_OWNED_FILES:
-            if target in approved_targets:
-                continue
             try:
                 text = raw.decode("utf-8")
             except UnicodeDecodeError:
@@ -2706,11 +3162,8 @@ def _platform_operations(
     if pending_unknown:
         _fail_unknown(root, pending_unknown)
     if not platforms:
-        _fail(
-            "unknown-platform",
-            "no configured platform could be proven from the ownership metadata",
-        )
-    return sorted(platforms), operations
+        _require_no_host_roots(root)
+    return sorted(platforms), operations, no_touch
 
 
 def _private_task_skips(
@@ -2910,17 +3363,27 @@ def _plan_successor(
                     "the completed batch declares an unsupported later phase",
                 )
             carried_private.append(carry_cleanup(operation))
-        projects.append(
-            {
-                "root": prev_project["root"],
-                "source_ref": source_ref,
-                "head": head,
-                "platforms": list(prev_project["platforms"]),
-                "sources": sources,
-                "private_operations": carried_private,
-                "shared_operation_ids": [],
-            }
-        )
+        project_payload: dict[str, Any] = {
+            "root": prev_project["root"],
+            "source_ref": source_ref,
+            "head": head,
+            "platforms": list(prev_project["platforms"]),
+            "sources": sources,
+            "private_operations": carried_private,
+            "shared_operation_ids": [],
+        }
+        proof = prev_project.get("agents_no_touch")
+        if proof is not None:
+            # The completed batch's untouched-AGENTS proof carries forward
+            # only while the live file still matches it exactly.
+            if snapshot(Path(proof["target"]["path"])) != proof["target"]["state"]:
+                _fail(
+                    "state-conflict",
+                    "the proven untouched AGENTS drifted from the completed batch",
+                )
+            _check_agents_no_touch_untouched(prev_project)
+            project_payload["agents_no_touch"] = copy.deepcopy(proof)
+        projects.append(project_payload)
     embedded = [
         copy.deepcopy(result)
         for project in prev_receipt["payload"]["projects"]
@@ -3080,7 +3543,11 @@ def _plan_followup(
     pre-states, so the retired legacy closure is never re-derived; every
     completed outcome is re-measured instead. Read-only.
     """
-    from sbtd_migration import _project_revision, _result_index
+    from sbtd_migration import (
+        _project_revision,
+        _require_reconciliation_provenance,
+        _result_index,
+    )
 
     prev_payload = prev_manifest["payload"]
     prev_projects = prev_payload["projects"]
@@ -3116,17 +3583,27 @@ def _plan_followup(
     for prev_project in prev_projects:
         root = Path(prev_project["root"])
         source_ref, head = _project_revision(root)
-        projects.append(
-            {
-                "root": prev_project["root"],
-                "source_ref": source_ref,
-                "head": head,
-                "platforms": list(prev_project["platforms"]),
-                "sources": [],
-                "private_operations": [],
-                "shared_operation_ids": [],
-            }
-        )
+        project_payload: dict[str, Any] = {
+            "root": prev_project["root"],
+            "source_ref": source_ref,
+            "head": head,
+            "platforms": list(prev_project["platforms"]),
+            "sources": [],
+            "private_operations": [],
+            "shared_operation_ids": [],
+        }
+        proof = prev_project.get("agents_no_touch")
+        if proof is not None:
+            # The completed chain's untouched-AGENTS proof carries forward
+            # only while the live file still matches it exactly.
+            if snapshot(Path(proof["target"]["path"])) != proof["target"]["state"]:
+                _fail(
+                    "state-conflict",
+                    "the proven untouched AGENTS drifted from the completed batch",
+                )
+            _check_agents_no_touch_untouched(prev_project)
+            project_payload["agents_no_touch"] = copy.deepcopy(proof)
+        projects.append(project_payload)
     payload = {
         "projects": projects,
         "shared_roots": [],
@@ -3195,7 +3672,9 @@ def _plan_followup(
         + payload["shared_operations"]
     )
     _bind_approved_routing(payload, roots, bind_live=True)
-    return contracts.seal_document("manifest", payload)
+    manifest = contracts.seal_document("manifest", payload)
+    _require_reconciliation_provenance(prev_manifest, prev_deployment)
+    return manifest
 
 
 
@@ -3227,7 +3706,13 @@ def _session_targets_complete_skip(
     return bound == actual
 
 
-def _git_bytes(root: Path, args: Sequence[str], stdin: bytes | None = None) -> bytes | None:
+def _git_bytes(
+    root: Path,
+    args: Sequence[str],
+    stdin: bytes | None = None,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> bytes | None:
     try:
         completed = subprocess.run(
             ["git", *args],
@@ -3235,6 +3720,7 @@ def _git_bytes(root: Path, args: Sequence[str], stdin: bytes | None = None) -> b
             input=stdin,
             capture_output=True,
             check=False,
+            env=environment,
         )
     except OSError:
         return None
@@ -3248,7 +3734,11 @@ def _git_bytes(root: Path, args: Sequence[str], stdin: bytes | None = None) -> b
 
 
 def _legacy_index(
-    root: Path, relative_paths: Sequence[str]
+    root: Path,
+    relative_paths: Sequence[str],
+    *,
+    inventory_root: Path | None = None,
+    entries: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[set[str], set[str]]:
     """Return (ignored, tracked) paths relative to ``.trellis``.
 
@@ -3267,19 +3757,134 @@ def _legacy_index(
     repo_paths = [f"{prefix}{rel}" for rel in relative_paths]
     if not repo_paths:
         return set(), tracked
+    if inventory_root is not None and inventory_root != root / _LEGACY_DIR:
+        ignored = _retained_legacy_ignored(root, inventory_root, entries, relative_paths)
+        return ignored - tracked, tracked
     checked = _git_bytes(
         root,
         ["check-ignore", "-z", "--stdin"],
         b"\0".join(path.encode() for path in repo_paths) + b"\0",
     )
-    if checked is None:
-        return set(), tracked
     ignored = {
         path.decode()[len(prefix) :]
-        for path in checked.split(b"\0")
+        for path in (checked or b"").split(b"\0")
         if path.startswith(prefix.encode())
     }
-    return ignored, tracked
+    return ignored - tracked, tracked
+
+
+def _retained_legacy_ignored(
+    root: Path,
+    inventory_root: Path,
+    entries: Sequence[Mapping[str, Any]],
+    relative_paths: Sequence[str],
+) -> set[str]:
+    """Ask Git about the original rule hierarchy, not a re-rooted approximation.
+
+    Only ignore files enter a private temporary tree. No payload, repository,
+    index or worktree registration is copied or changed.
+    """
+    import tempfile
+
+    git_dir = _git_bytes(root, ["rev-parse", "--absolute-git-dir"])
+    git_top = _git_bytes(root, ["rev-parse", "--show-toplevel"])
+    if git_dir is None or git_top is None:
+        return set()
+    directory = Path(os.fsdecode(git_dir.rstrip(b"\n")))
+    top = Path(os.fsdecode(git_top.rstrip(b"\n")))
+    if (
+        not directory.is_absolute()
+        or not directory.is_dir()
+        or not top.is_absolute()
+        or not root.is_relative_to(top)
+    ):
+        return set()
+    project_relative = root.relative_to(top)
+    ancestors = [root]
+    while ancestors[-1] != top:
+        ancestors.append(ancestors[-1].parent)
+    directories = {entry["path"] for entry in entries if entry["type"] == "directory"}
+    files_by_directory: dict[str, list[Mapping[str, Any]]] = {}
+    for entry in entries:
+        if entry["type"] == "file":
+            parent = PurePosixPath(entry["path"]).parent.as_posix()
+            files_by_directory.setdefault(parent, []).append(entry)
+    queries = {
+        f"{_LEGACY_DIR}/{relative}" + ("/" if relative in directories else ""): relative
+        for relative in relative_paths
+    }
+    with tempfile.TemporaryDirectory(prefix="sbtd-retained-ignore-") as temporary:
+        sandbox = require_private_directory(
+            Path(temporary).resolve() / "rules", create=True
+        )
+        project = sandbox / project_relative
+        legacy = project / _LEGACY_DIR
+        legacy.mkdir(parents=True, exist_ok=True)
+        directory_ids: set[tuple[int, int]] = set()
+        for relative in sorted(directories, key=lambda path: (path.count("/"), path)):
+            target = legacy / relative
+            target.mkdir(parents=True, exist_ok=True)
+            info = target.stat()
+            identity = (info.st_dev, info.st_ino)
+            if identity in directory_ids:
+                _fail("ownership-conflict", "retained directory aliases cannot be reproduced")
+            directory_ids.add(identity)
+        for entry in entries:
+            if entry["type"] == "file" and (legacy / entry["path"]).is_dir():
+                _fail("ownership-conflict", "retained file and directory aliases conflict")
+        for ancestor in reversed(ancestors):
+            source = ancestor / ".gitignore"
+            state = snapshot(source)
+            if state["type"] == "absent":
+                continue
+            content = read_file(source, state)
+            target = sandbox / ancestor.relative_to(top) / ".gitignore"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        for parent, siblings in files_by_directory.items():
+            relative = PurePosixPath(parent) / ".gitignore"
+            source = inventory_root.joinpath(*relative.parts)
+            state = snapshot(source)
+            if state["type"] == "absent":
+                continue
+            # Git uses the filesystem lookup, not a case-sensitive basename
+            # filter. Bind any effective alias back to the proven inventory.
+            entry = next(
+                (item for item in siblings if item["path"] == relative.as_posix()),
+                None,
+            )
+            if entry is None:
+                matches = [
+                    item
+                    for item in siblings
+                    if source.samefile(inventory_root / item["path"])
+                ]
+                if len(matches) != 1:
+                    _fail("ownership-conflict", "retained ignore alias cannot be proven")
+                entry = matches[0]
+            content = read_file(
+                source, {"type": "file", "checksum": entry["checksum"]}
+            )
+            target = legacy / relative
+            target.write_bytes(content)
+        checked = _git_bytes(
+            project,
+            ["check-ignore", "--no-index", "-z", "--stdin"],
+            b"\0".join(os.fsencode(path) for path in queries) + b"\0",
+            environment={
+                **os.environ,
+                "GIT_DIR": str(directory),
+                "GIT_WORK_TREE": str(sandbox),
+                "GIT_OPTIONAL_LOCKS": "0",
+            },
+        )
+    if checked is None:
+        return set()
+    return {
+        queries[path]
+        for raw in checked.split(b"\0")
+        if (path := os.fsdecode(raw)) in queries
+    }
 
 
 def _fail_unknown(root: Path, relative_paths: Sequence[str]) -> NoReturn:
@@ -3301,14 +3906,22 @@ def _fail_unknown(root: Path, relative_paths: Sequence[str]) -> NoReturn:
 
 
 def _partition_legacy_entries(
-    root: Path, entries: Sequence[Mapping[str, Any]]
+    root: Path,
+    entries: Sequence[Mapping[str, Any]],
+    *,
+    inventory_root: Path | None = None,
 ) -> tuple[list[Mapping[str, Any]], list[str]]:
     """Drop only gitignored paths outside the known layout.
 
     ``tasks``, ``spec`` and ``lessons`` stay even when gitignore matches them,
     so an ignored ``task.json`` still requires its approval.
     """
-    ignored, _tracked = _legacy_index(root, [entry["path"] for entry in entries])
+    ignored, _tracked = _legacy_index(
+        root,
+        [entry["path"] for entry in entries],
+        inventory_root=inventory_root,
+        entries=entries,
+    )
     classified: list[Mapping[str, Any]] = []
     unknown: list[str] = []
     for entry in entries:
@@ -3323,6 +3936,71 @@ def _partition_legacy_entries(
     return classified, unknown
 
 
+def _check_generated_legacy_bytes(
+    root: Path,
+    inventory_root: Path,
+    entries: Sequence[Mapping[str, Any]],
+    hashes: Mapping[str, str],
+) -> None:
+    """Re-prove recorded generated legacy payloads from the sealed inventory.
+
+    The directory snapshot binds the whole tree, but a coherently re-sealed
+    manifest could swap one generated payload's bytes.  Bind every recorded
+    generated file to its recorded digest - or to a pinned exact official
+    payload - before its ownership claim is honored.  Bytes come from the
+    proven inventory root (live or retained backup), checksum-bound to the
+    sealed snapshot; binary and gitignore handling mirrors the plan gate.
+    """
+    official = _ownership_pins()["official_payloads"]
+    recorded = [
+        relative
+        for relative in sorted(hashes)
+        if PurePosixPath(relative).parts[:1] == (_LEGACY_DIR,)
+        and len(PurePosixPath(relative).parts) > 1
+    ]
+    if not recorded:
+        return
+    proven = {entry["path"]: entry for entry in entries if entry["type"] == "file"}
+    ignored: set[str] | None = None
+    for relative in recorded:
+        parts = PurePosixPath(relative).parts
+        legacy_rel = PurePosixPath(*parts[1:]).as_posix()
+        entry = proven.get(legacy_rel)
+        if entry is None:
+            _fail(
+                "ownership-conflict",
+                "a recorded generated file is unavailable",
+            )
+        raw = read_file(
+            inventory_root.joinpath(*parts[1:]),
+            {"type": "file", "checksum": entry["checksum"]},
+        )
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            if ignored is None:
+                ignored, _tracked = _legacy_index(
+                    root,
+                    [
+                        PurePosixPath(*PurePosixPath(item).parts[1:]).as_posix()
+                        for item in recorded
+                    ],
+                    inventory_root=inventory_root,
+                    entries=entries,
+                )
+            if legacy_rel in ignored:
+                continue
+            _fail_unknown(root, [legacy_rel])
+        digest = hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+        if digest != hashes[relative] and digest not in _official_alternative_digests(
+            official, relative, parts
+        ):
+            _fail(
+                "ownership-conflict",
+                "generated content drifted; removal is not authorized",
+            )
+
+
 def _inventory_coverage(
     entries: Sequence[Mapping[str, Any]],
     closures: Mapping[
@@ -3333,12 +4011,16 @@ def _inventory_coverage(
     optional: Sequence[Mapping[str, Any]],
     root: Path,
     hashes: Mapping[str, str],
+    *,
+    inventory_root: Path | None = None,
 ) -> None:
     """Exact bijection between classified legacy files and approvals.
 
     Gitignored entries stay in the directory snapshot and are omitted here.
     """
-    classified, unknown = _partition_legacy_entries(root, entries)
+    classified, unknown = _partition_legacy_entries(
+        root, entries, inventory_root=inventory_root
+    )
     if unknown:
         _fail_unknown(root, unknown)
     entries = classified
@@ -3358,6 +4040,7 @@ def _inventory_coverage(
         if len(parts) >= 3 and parts[0] == "tasks" and parts[-1] == _TASK_JSON:
             folder_names.add(PurePosixPath(*parts[:-1]).as_posix())
     folder_members: dict[str, list[str]] = {folder: [] for folder in folder_names}
+    history_files: list[str] = []
     for name in files:
         if not name.startswith("tasks/"):
             continue
@@ -3365,7 +4048,10 @@ def _inventory_coverage(
             continue
         matches = [folder for folder in folder_names if name.startswith(folder + "/")]
         if not matches:
-            _fail("unknown-content", "loose legacy task data cannot be classified")
+            # No ancestor task.json claims this file: it is task history and
+            # only an approved verbatim document may cover it, exactly once.
+            history_files.append(name)
+            continue
         folder = max(matches, key=len)
         folder_members[folder].append(name[len(folder) + 1 :])
     coverage: dict[str, int] = {}
@@ -3426,6 +4112,18 @@ def _inventory_coverage(
                     "legacy task data is not covered exactly by its approved "
                     "projections",
                 )
+    for name in history_files:
+        count = coverage.get(name, 0)
+        if count == 0:
+            _fail(
+                "approval-required",
+                "a historical task document needs its approved projection",
+            )
+        if count > 1:
+            _fail(
+                "approval-conflict",
+                "a historical task document is approved at most once",
+            )
     unowned = [
         name
         for name in files
@@ -3434,7 +4132,9 @@ def _inventory_coverage(
         and coverage.get(name, 0) != 1
     ]
     if unowned:
-        ignored, _tracked = _legacy_index(root, unowned)
+        ignored, _tracked = _legacy_index(
+            root, unowned, inventory_root=inventory_root, entries=entries
+        )
         asked = [name for name in unowned if name not in ignored]
         if asked:
             _fail_unknown(root, asked)
@@ -3459,6 +4159,29 @@ def _inventory_coverage(
 # ---------------------------------------------------------------------------
 # Identity, protection and legacy-tree operations
 # ---------------------------------------------------------------------------
+
+
+def _deferred_recovery_instruction(
+    task_branch: str | None, checkout: str | None
+) -> str:
+    """Canonical resume instruction for a handoff on a historic task branch.
+
+    The migrated task keeps its legacy branch verbatim while the planning
+    checkout records the actual current project HEAD. When the two differ,
+    the approved handoff must carry this exact instruction (as its whole
+    next action or as its first line) so any later write goes through the
+    existing TaskStore rebind/branch gate instead of silently resuming.
+    """
+    task = task_branch if task_branch is not None else "no Git binding"
+    seen = checkout if checkout is not None else "no Git binding"
+    return (
+        "Deferred branch recovery: the task stays bound to branch "
+        + json.dumps(task, ensure_ascii=False)
+        + " while the planning checkout is "
+        + json.dumps(seen, ensure_ascii=False)
+        + "; resume on the task branch or explicitly rebind the task through "
+        "recovery before any task write."
+    )
 
 
 def _check_context_handoffs(
@@ -3572,7 +4295,7 @@ def _check_context_handoffs(
     needed = {
         projection.legacy_id
         for projection in projections.values()
-        if projection.document.frontmatter["status"] != "done"
+        if projection.document.frontmatter["status"] not in TERMINAL_STATUSES
         and (
             has_journal
             or any(
@@ -3631,9 +4354,7 @@ def _check_context_handoffs(
             "mode_note": fields["mode_note"],
             "redaction": _REDACTION_DECLARATION,
         }
-        if fields["branch"] != source_ref or any(
-            handoff[key] != value for key, value in expected.items()
-        ):
+        if any(handoff[key] != value for key, value in expected.items()):
             _fail(
                 "candidate-conflict",
                 "handoff identity, revision or task state does not match",
@@ -3647,6 +4368,18 @@ def _check_context_handoffs(
             _fail(
                 "candidate-conflict",
                 "handoff must state its goal, remaining work and next action",
+            )
+        instruction = _deferred_recovery_instruction(fields["branch"], source_ref)
+        next_action = content["next_action"]
+        mismatched = fields["branch"] != source_ref
+        carries = next_action == instruction or next_action.startswith(
+            instruction + "\n"
+        )
+        if mismatched != carries:
+            _fail(
+                "candidate-conflict",
+                "a handoff on a historic branch must carry its exact deferred "
+                "recovery instruction, and a same-branch handoff must not",
             )
         target = Path(item["target_path"])
         date = datetime.fromisoformat(handoff["created_at"].replace("Z", "+00:00"))
@@ -4200,8 +4933,7 @@ def plan_migration(
     )
     approved_targets = {Path(item["target_path"]) for item in routing_items}
 
-    def read_current(reference: Mapping[str, Any]) -> bytes:
-        return read_file(Path(reference["path"]), reference["state"])
+    read_current = _read_current
 
     projects: list[dict[str, Any]] = []
     for root in roots:
@@ -4218,16 +4950,25 @@ def plan_migration(
             )
         legacy_reference = {"path": str(legacy_path), "state": legacy_state}
         _state, entries = directory_snapshot(legacy_path)
-        _check_legacy_version(root)
-        hashes, hashes_reference = _template_hashes(root)
-        platforms, platform_ops = _platform_operations(
+        version = _check_legacy_version(root)
+        hashes, hashes_reference = _template_hashes(root, version)
+        platforms, platform_ops, agents_no_touch = _platform_operations(
             root, hashes, hashes_reference, approved_targets
         )
         closures, documents, optional = _classify_project_items(root, project_items)
         projections, forms = _validate_project_closures(
             root, closures, documents, read_current, private_strings
         )
-        _inventory_coverage(entries, closures, forms, documents, optional, root, hashes)
+        _inventory_coverage(
+            entries,
+            closures,
+            forms,
+            documents,
+            optional,
+            root,
+            hashes,
+            inventory_root=root / _LEGACY_DIR,
+        )
         _check_context_handoffs(
             root,
             entries,
@@ -4257,17 +4998,21 @@ def plan_migration(
         private_ops.extend(platform_ops)
         private_ops.extend(private_replacements.get(root, []))
         private_ops.append(_legacy_cleanup_operation(root, legacy_reference))
-        projects.append(
-            {
-                "root": str(root),
-                "source_ref": source_ref,
-                "head": head,
-                "platforms": platforms,
-                "sources": [legacy_reference],
-                "private_operations": private_ops,
-                "shared_operation_ids": [],
-            }
-        )
+        project_payload: dict[str, Any] = {
+            "root": str(root),
+            "source_ref": source_ref,
+            "head": head,
+            "platforms": platforms,
+            "sources": [legacy_reference],
+            "private_operations": private_ops,
+            "shared_operation_ids": [],
+        }
+        if agents_no_touch is not None:
+            # Sealed proof that the root AGENTS.md already matches the
+            # bundled template; revalidated exactly at validate/apply/retry/
+            # recovery instead of touching the file.
+            project_payload["agents_no_touch"] = agents_no_touch
+        projects.append(project_payload)
     shared_roots, shared_ops = _shared_operations(roots, approved_targets)
     for operation in shared_replacements:
         target = Path(operation["target"])

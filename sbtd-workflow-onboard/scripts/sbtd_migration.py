@@ -17,6 +17,8 @@ from onboard import missing_file_lines
 from sbtd_identity import DeveloperStore
 from sbtd_migration_files import (
     RetainedObjectError,
+    _canonical,
+    _lstat,
     backup_reference,
     directory_snapshot,
     install_reference,
@@ -99,6 +101,7 @@ def runtime_versions() -> dict[str, str]:
         "scripts/sbtd_cleanup_legacy.py",
         "scripts/sbtd_trellis_uninstall.py",
         "scripts/sbtd_migration_verify.py",
+        "scripts/sbtd_reconciliation.py",
         "scripts/sbtd_recovery.py",
         "scripts/sbtd_project.py",
         "scripts/sbtd_task_document.py",
@@ -382,6 +385,11 @@ def _all_input_references(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]
         for project in manifest["payload"]["projects"]
         for reference in project["sources"]
     ]
+    for project in manifest["payload"]["projects"]:
+        no_touch = project.get("agents_no_touch")
+        if no_touch is not None:
+            references.append(no_touch["target"])
+            references.append(no_touch["template"])
     for item in manifest["payload"]["publication_decisions"]["items"]:
         references.extend(item["sources"])
         if item["candidate_ref"] is not None:
@@ -554,8 +562,10 @@ def _lineage_signed_bytes(predecessor: str, successor: str) -> bytes:
     )
 
 
-def _verified_runtime_pair() -> tuple[str, str]:
-    """The installed lineage pair. Callers cannot replace the public key."""
+def _verified_runtime_lineage(
+    document: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Verify a retained or installed authorization against the trusted key."""
     import base64
 
     try:
@@ -569,10 +579,11 @@ def _verified_runtime_pair() -> tuple[str, str]:
         )
     try:
         key = load_pem_public_key(_LINEAGE_PUBLIC_KEY.read_bytes())
-        document = json.loads(_LINEAGE_DOCUMENT.read_text(encoding="utf-8"))
+        if document is None:
+            document = json.loads(_LINEAGE_DOCUMENT.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
-    if not isinstance(key, Ed25519PublicKey) or not isinstance(document, dict):
+    if not isinstance(key, Ed25519PublicKey) or not isinstance(document, Mapping):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
     predecessor = document.get("predecessor")
     successor = document.get("successor")
@@ -592,7 +603,19 @@ def _verified_runtime_pair() -> tuple[str, str]:
         )
     except (InvalidSignature, ValueError, TypeError):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
-    return predecessor, successor
+    return {
+        "schema_version": 1,
+        "purpose": "runtime-lineage",
+        "predecessor": predecessor,
+        "successor": successor,
+        "signature": signature,
+    }
+
+
+def _verified_runtime_pair() -> tuple[str, str]:
+    """The current installed pair used to authorize a consumer runtime."""
+    document = _verified_runtime_lineage()
+    return document["predecessor"], document["successor"]
 
 
 def _recovery_expected_states(
@@ -742,6 +765,76 @@ def _require_runtime_lineage(
             )
 
 
+def _require_reconciliation_provenance(
+    manifest: Mapping[str, Any],
+    deployment: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any], ...]:
+    """Validate provenance and return its pinned filesystem references.
+
+    Raw-byte binding remains in the pure contracts layer. Historical observers
+    need not equal today's consumer, but must belong to the manifest runtime
+    or its signature-verified successor. Never revalidate superseded targets.
+    Publishers can refresh these snapshots after their remaining checks
+    without repeating lineage parsing or signature validation.
+    """
+    references: tuple[Mapping[str, Any], ...] = ()
+    followup = manifest["payload"].get("followup")
+    if followup is not None:
+        # A later ordinary receipt still depends on its reconciled ancestor.
+        # Reopen only the bound documents, not superseded resource outcomes.
+        manifest_ref = followup["manifest_ref"]
+        deployment_ref = followup["deployment_evidence_ref"]
+        _check_reference(manifest_ref)
+        _check_reference(deployment_ref)
+        require_private_directory(Path(manifest_ref["path"]).parent)
+        require_private_directory(Path(deployment_ref["path"]).parent)
+        predecessor = contracts.load_document(_read_reference(manifest_ref), "manifest")
+        if predecessor["payload"].get("followup") is not None:
+            _fail("followup-conflict", "a followup batch cannot follow another followup batch")
+        predecessor_deployment = contracts.load_document(
+            _read_reference(deployment_ref), "deployment_evidence"
+        )
+        references = (
+            manifest_ref,
+            deployment_ref,
+            *_require_reconciliation_provenance(predecessor, predecessor_deployment),
+        )
+    if deployment is None:
+        return references
+    reconciliation = deployment["payload"].get("reconciliation")
+    if reconciliation is None:
+        return references
+    missing = reconciliation["missing_deployment_evidence"]
+    if missing["state"] != _ABSENT or _lstat(_canonical(Path(missing["path"]))) is not None:
+        _fail(
+            "state-conflict",
+            "the historical deployment receipt is no longer absent",
+        )
+    for key in ("manifest_ref", "apply_receipt_ref"):
+        _check_reference(reconciliation[key])
+    references += (
+        reconciliation["manifest_ref"], reconciliation["apply_receipt_ref"], missing
+    )
+    sealed_onboard = manifest["payload"]["tool_versions"]["onboard"]
+    observer = reconciliation["runtime_versions"]["onboard"]
+    proof = reconciliation.get("observer_lineage")
+    if proof is not None:
+        lineage = _verified_runtime_lineage(proof)
+        pair = lineage["predecessor"], lineage["successor"]
+    elif observer == sealed_onboard:
+        return references
+    else:
+        # Old evidence has no retained authorization: accept only while the
+        # installed pair still proves it, never invent a historical grant.
+        pair = _verified_runtime_pair()
+    if pair != (sealed_onboard, observer):
+        _fail(
+            "version-conflict",
+            "the reconciliation observer is not an authorized manifest runtime",
+        )
+    return references
+
+
 def _validate_context(
     manifest_path: Path,
     manifest: Mapping[str, Any],
@@ -750,6 +843,7 @@ def _validate_context(
     cleanup: Mapping[str, Any] | None = None,
     recovery: Mapping[str, Any] | None = None,
 ) -> None:
+    _require_reconciliation_provenance(manifest, deployment)
     sealed_versions = manifest["payload"]["tool_versions"]
     current_versions = runtime_versions()
     if sealed_versions != current_versions:
@@ -804,6 +898,15 @@ def _validate_context(
         resolve_original=lambda reference: _original_reference(
             reference, manifest, previous, deployment, cleanup
         ),
+        stage_results={
+            phase: _result_index(document)
+            for phase, document in (
+                ("apply", previous),
+                ("deploy", deployment),
+                ("cleanup", cleanup),
+            )
+            if document is not None
+        },
     )
 
 
@@ -937,6 +1040,13 @@ def _protected_followup_ancestry(
     protect_results(prev_manifest, prev_apply)
     protect_results(prev_manifest, prev_deployment)
     protect_reports(prev_deployment)
+    # The centralized immutable-stage iterator also yields a reconciled
+    # predecessor's cited missing historical receipt snapshot; it stays
+    # protected against descendant evidence outputs even though absent.
+    for reference in contracts._immutable_stage_references(
+        prev_deployment["payload"]
+    ):
+        protect(reference)
     protect_reports(prev_verification)
     protect_retained(prev_verification)
     protect_results(prev_manifest, prev_cleanup)
@@ -1315,6 +1425,7 @@ def apply_migration(
     receipt = contracts.seal_document("apply_receipt", payload)
     contracts.validate_cumulative(previous, receipt, "apply_receipt")
     contracts.validate_declared_bindings(manifest, {"apply_receipt": receipt})
+    _require_reconciliation_provenance(manifest, None)
     destination = manifest_path.parent / f"apply-{receipt['apply_id']}.json"
     try:
         save_document(destination, receipt, private_root=manifest_path.parent)
@@ -1961,6 +2072,7 @@ def cleanup_migration(
                     "unsafe-retry",
                     "a partial or unknown cleanup requires explicit recovery or manual reconciliation",
                 )
+    _require_reconciliation_provenance(manifest, deployment)
     started = _now()
     global_error = None
     failure_exit = 5
@@ -2025,12 +2137,42 @@ def cleanup_migration(
         "started_at": started,
         "finished_at": _now(),
     }
-    receipt = contracts.seal_document("cleanup_receipt", payload)
-    contracts.validate_cumulative(previous, receipt, "cleanup_receipt")
-    contracts.validate_declared_bindings(
-        manifest,
-        {**documents, "cleanup_receipt": receipt},
-    )
+
+    def seal_receipt() -> dict[str, Any]:
+        document = contracts.seal_document("cleanup_receipt", payload)
+        contracts.validate_cumulative(previous, document, "cleanup_receipt")
+        contracts.validate_declared_bindings(
+            manifest,
+            {**documents, "cleanup_receipt": document},
+            {kind: raw for kind, raw in raw_documents.items() if kind != "cleanup_receipt"},
+        )
+        return document
+
+    receipt = seal_receipt()
+    try:
+        _require_reconciliation_provenance(manifest, deployment)
+    except contracts.ContractError:
+        # Cleanup may already have changed resources. Keep their measured
+        # outcomes, but never publish acceptance against stale provenance.
+        provenance_error = "reconciliation provenance changed before cleanup receipt publication"
+        global_error = (
+            f"{global_error}; {provenance_error}" if global_error else provenance_error
+        )
+        for project in projects:
+            if project["status"] in {"cleaned", "already-complete"}:
+                project.update(
+                    status="blocked",
+                    reason=provenance_error,
+                    nextStep="Preserve the measured results and resolve the cited source drift before retrying.",
+                )
+        status = contracts._aggregate(
+            [project["status"] for project in projects],
+            ("failed", "blocked"),
+            "cleaned",
+            "already-complete",
+        )
+        payload.update(status=status, finished_at=_now())
+        receipt = seal_receipt()
     destination = manifest_path.parent / f"cleanup-{receipt['cleanup_id']}.json"
     try:
         save_document(destination, receipt, private_root=manifest_path.parent)
@@ -2202,6 +2344,43 @@ def run_migration(args: Any) -> int:
                     getattr(args, "no_routing_approvals", False)
                 ),
             )
+        elif args.phase == "reconcile":
+            from sbtd_reconciliation import reconcile_deployment
+
+            reconciled = reconcile_deployment(
+                _argument_path(args.manifest),
+                _argument_path(args.apply_receipt),
+                _argument_path(args.missing_deployment_evidence),
+                _argument_path(args.deployment_evidence_out),
+                confirmed=args.yes,
+            )
+            evidence = reconciled["evidence"]
+            envelope = contracts.validate_document(
+                {
+                    "mode": "migration",
+                    "phase": "reconcile",
+                    "status": "reconciled",
+                    "manifest_id": evidence["payload"]["manifest_id"],
+                    "verification_id": None,
+                    "projects": [
+                        {
+                            "root": project["root"],
+                            "status": "reconciled",
+                            "reason": "",
+                            "nextStep": "Verify this new current-state evidence before completion.",
+                        }
+                        for project in evidence["payload"]["projects"]
+                    ],
+                    "reason": "",
+                    "nextStep": "Run migration verify with the new evidence; historical execution remains unknown.",
+                    "migration": {
+                        "deployment_evidence": evidence,
+                        "deployment_evidence_path": reconciled["path"],
+                    },
+                },
+                "migration_envelope",
+            )
+            code = 0
         elif args.phase == "verify":
             from sbtd_migration_verify import verify_migration
 

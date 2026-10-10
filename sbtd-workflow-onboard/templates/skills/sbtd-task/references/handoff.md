@@ -46,6 +46,6 @@ A handoff does not authorize migration, deployment, commit/push, archive, cleanu
 
 1. Read the explicit task/current safe reference and resolve candidates. Confirm the project, full logical ID and branch before writing. Different branch/worktree binding needs the separate user choice in [state.md](state.md).
 2. Read the task's effective mode and decisions before the handoff. A newer task choice wins over a stale handoff; a handoff alone is a clue that requires confirmation, not a silently trusted mode.
-3. If identity and branch match, “continue this task” is sufficient resumption intent; do not ask the same question again. For unsolicited reminders, consider only unfinished matching handoffs within seven days. Older tasks remain manually recoverable; done tasks get no unfinished-work reminder.
+3. If identity and branch match, “continue this task” is sufficient resumption intent; do not ask the same question again. For unsolicited reminders, consider only unfinished matching handoffs within seven days. Older tasks remain manually recoverable; done and cancelled tasks get no unfinished-work reminder.
 4. Carry forward the user's declined mode recommendation and opt-outs. New substantive risk can justify a new recommendation, not repeated generic persuasion.
 5. Explain missing/corrupt/unpersisted state accurately. Continue only the safe work that does not depend on it, according to the selected mode. Do not promise automatic session-start reading without observing that host capability.

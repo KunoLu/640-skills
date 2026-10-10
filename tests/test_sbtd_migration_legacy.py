@@ -25,6 +25,22 @@ DONE_EVENT = {
     "reason": "legacy completion fact",
     "evidence": "legacy task.json status",
 }
+CANCELLED_EVENT = {
+    "at": "unknown",
+    "from": "unknown",
+    "to": "cancelled",
+    "reason": "legacy cancellation fact",
+    "evidence": "legacy task.json status",
+}
+BLOCKED_EVENT = {
+    "at": "unknown",
+    "from": "unknown",
+    "to": "blocked",
+    "reason": "legacy blocked fact",
+    "evidence": "legacy task.json status",
+}
+NO_RECORDED_REASON = "legacy task.json status=blocked; reason not recorded"
+ARCHIVED_PATH = ".trellis/tasks/archive/2026-09/09-01-alpha/task.json"
 
 
 def _json_bytes(value):
@@ -63,6 +79,7 @@ def _task_md(
     completed_at=None,
     workflow_mode=None,
     mode_source="migration-unknown",
+    blocked_reason=None,
     extra=(),
     events=(),
 ):
@@ -80,6 +97,8 @@ def _task_md(
     ]
     if parent is not None:
         fields.append(("parent", parent))
+    if blocked_reason is not None:
+        fields.append(("blocked_reason", blocked_reason))
     fields.extend(extra)
     lines = ["---"]
     lines.extend(
@@ -168,6 +187,66 @@ def _done_projection(source_path, **source_overrides):
         source,
         source_path=source_path,
         task_raw=_task_md(identity=source["id"], status="done", events=[DONE_EVENT]),
+    )
+
+
+def _suspension(**overrides):
+    # Exact old observed shape: state/reason/since/resumeWhen, all synthetic.
+    base = {
+        "state": "suspended",
+        "reason": "waiting on the upstream API key",
+        "since": "2026-08-20T09:30:00Z",
+        "resumeWhen": "the upstream key is issued",
+    }
+    base.update(overrides)
+    return base
+
+
+def _cancelled_projection(
+    source_path=SOURCE_PATH,
+    *,
+    cancelled_at="2026-02-10T15:30:00Z",
+    event_at=None,
+    **source_overrides,
+):
+    source_overrides.setdefault("createdAt", "2026-01-01")
+    source = _legacy_source(status="cancelled", **source_overrides)
+    if cancelled_at is not None:
+        source["cancelledAt"] = cancelled_at
+    if event_at is None:
+        event_at = cancelled_at if cancelled_at is not None else "unknown"
+    return _projection(
+        source,
+        source_path=source_path,
+        task_raw=_task_md(
+            identity=source["id"],
+            status="cancelled",
+            events=[dict(CANCELLED_EVENT, at=event_at)],
+        ),
+    )
+
+
+def _blocked_projection(
+    source_path=SOURCE_PATH,
+    *,
+    suspension=None,
+    document_reason=NO_RECORDED_REASON,
+    event_at="unknown",
+    **source_overrides,
+):
+    source_overrides.setdefault("createdAt", "2026-01-01")
+    source = _legacy_source(status="blocked", **source_overrides)
+    if suspension is not None:
+        source["meta"] = {**source["meta"], "suspension": suspension}
+    return _projection(
+        source,
+        source_path=source_path,
+        task_raw=_task_md(
+            identity=source["id"],
+            status="blocked",
+            blocked_reason=document_reason,
+            events=[dict(BLOCKED_EVENT, at=event_at)],
+        ),
     )
 
 
@@ -497,6 +576,386 @@ class TaskProjectionTests(unittest.TestCase):
                 )
             )
 
+    def test_cancelled_projection_preserves_terminal_cancellation_fact(self):
+        projection = _cancelled_projection()
+        frontmatter = projection.document.frontmatter
+        self.assertEqual(frontmatter["status"], "cancelled")
+        self.assertIsNone(frontmatter["completed_at"])
+        self.assertIsNone(frontmatter["workflow_mode"])
+        self.assertEqual(frontmatter["mode_source"], "migration-unknown")
+        self.assertIsNone(projection.archive_bucket)
+        self.assertEqual(len(projection.document.events), 1)
+        event = projection.document.events[0]
+        self.assertEqual(event["from"], "unknown")
+        self.assertEqual(event["to"], "cancelled")
+        self.assertEqual(event["at"], "2026-02-10T15:30:00Z")
+        self.assertEqual(event["reason"], "legacy cancellation fact")
+        self.assertEqual(event["evidence"], "legacy task.json status")
+
+    def test_cancelled_archive_bucket_uses_proven_cancellation_not_folder_date(self):
+        # The archive folder month (2026-09, Q3) is not a cancellation proof.
+        projection = _cancelled_projection(ARCHIVED_PATH)
+        self.assertEqual(projection.archive_bucket, "2026-Q1")
+        date_only = _cancelled_projection(
+            ARCHIVED_PATH, cancelled_at="2026-02-10", event_at="unknown"
+        )
+        # A date-only cancelledAt never becomes a quarter: the event time is
+        # unknown, so a re-archived import must derive the same undated bucket.
+        self.assertEqual(date_only.archive_bucket, "undated")
+        self.assertEqual(date_only.document.events[0]["at"], "unknown")
+        self.assertIsNone(date_only.document.frontmatter["completed_at"])
+
+    def test_cancelled_archive_without_cancellation_time_is_undated(self):
+        projection = _cancelled_projection(ARCHIVED_PATH, cancelled_at=None)
+        self.assertEqual(projection.archive_bucket, "undated")
+        event = projection.document.events[0]
+        self.assertEqual(event["at"], "unknown")
+        self.assertEqual(event["to"], "cancelled")
+        self.assertIsNone(projection.document.frontmatter["completed_at"])
+
+    def test_cancelled_completion_facts_and_alias_spellings_are_rejected(self):
+        with self.assertRaises(ContractError):
+            _cancelled_projection(completedAt="2026-02-10")
+        with self.assertRaises(ContractError):
+            _cancelled_projection(cancelled_at="not-a-time")
+        with self.assertRaises(ContractError):
+            _projection(
+                _legacy_source(
+                    status="cancelled", createdAt="2026-01-01",
+                    cancelledAt="2026-02-10T15:30:00Z",
+                ),
+                task_raw=_task_md(
+                    status="cancelled",
+                    completed_at="2026-02-10T15:30:00Z",
+                    events=[dict(CANCELLED_EVENT, at="2026-02-10T15:30:00Z")],
+                ),
+            )
+        with self.assertRaises(ContractError):
+            _projection(
+                _legacy_source(status="cancelled"),
+                task_raw=_task_md(status="cancelled", events=[DONE_EVENT]),
+            )
+        with self.assertRaises(ContractError):
+            _projection(
+                _legacy_source(status="cancelled"),
+                task_raw=_task_md(
+                    status="cancelled",
+                    events=[CANCELLED_EVENT],
+                    extra=(("cancelledAt", "2026-02-10T15:30:00Z"),),
+                ),
+            )
+        for spelling in ("canceled", "Cancelled"):
+            with self.subTest(spelling=spelling), self.assertRaises(ContractError):
+                _projection(_legacy_source(status=spelling))
+
+    def test_blocked_projection_uses_proven_suspension_reason_and_time(self):
+        projection = _blocked_projection(
+            suspension=_suspension(), event_at="2026-08-20T09:30:00Z",
+            document_reason="waiting on the upstream API key",
+        )
+        frontmatter = projection.document.frontmatter
+        self.assertEqual(frontmatter["status"], "blocked")
+        self.assertEqual(
+            frontmatter["blocked_reason"], "waiting on the upstream API key"
+        )
+        self.assertIsNone(frontmatter["completed_at"])
+        self.assertIsNone(frontmatter["updated_at"])
+        self.assertIsNone(projection.archive_bucket)
+        self.assertEqual(len(projection.document.events), 1)
+        event = projection.document.events[0]
+        self.assertEqual(event["from"], "unknown")
+        self.assertEqual(event["to"], "blocked")
+        self.assertEqual(event["at"], "2026-08-20T09:30:00Z")
+        self.assertEqual(event["reason"], "legacy blocked fact")
+        self.assertEqual(event["evidence"], "legacy task.json status")
+
+    def test_blocked_reason_from_source_field_or_suspension_unambiguously(self):
+        field_only = _blocked_projection(
+            blocked_reason="waiting on reviewer sign-off",
+            document_reason="waiting on reviewer sign-off",
+        )
+        self.assertEqual(
+            field_only.document.frontmatter["blocked_reason"],
+            "waiting on reviewer sign-off",
+        )
+        self.assertEqual(field_only.document.events[0]["at"], "unknown")
+        agreeing = _blocked_projection(
+            suspension=_suspension(reason="waiting on reviewer sign-off"),
+            blocked_reason="waiting on reviewer sign-off",
+            document_reason="waiting on reviewer sign-off",
+            event_at="2026-08-20T09:30:00Z",
+        )
+        self.assertEqual(
+            agreeing.document.frontmatter["blocked_reason"],
+            "waiting on reviewer sign-off",
+        )
+
+    def test_blocked_without_recorded_reason_states_canonical_uncertainty(self):
+        for source in (
+            {},
+            {"meta": {"suspension": {"state": "suspended", "resumeWhen": "later"}}},
+        ):
+            with self.subTest(source=source):
+                projection = _blocked_projection(**source)
+                self.assertEqual(
+                    projection.document.frontmatter["blocked_reason"],
+                    NO_RECORDED_REASON,
+                )
+                self.assertEqual(projection.document.events[0]["at"], "unknown")
+
+    def test_blocked_suspension_date_only_since_keeps_time_unknown(self):
+        projection = _blocked_projection(
+            suspension=_suspension(since="2026-08-20"),
+            document_reason="waiting on the upstream API key",
+        )
+        self.assertEqual(
+            projection.document.frontmatter["blocked_reason"],
+            "waiting on the upstream API key",
+        )
+        self.assertEqual(projection.document.events[0]["at"], "unknown")
+
+    def test_blocked_malformed_or_contradictory_metadata_is_rejected(self):
+        for suspension in (
+            "suspended",
+            _suspension(reason=""),
+            _suspension(reason=42),
+            _suspension(since="last week"),
+        ):
+            with self.subTest(suspension=suspension), self.assertRaises(ContractError):
+                _blocked_projection(
+                    suspension=suspension,
+                    document_reason="waiting on the upstream API key",
+                )
+        with self.assertRaises(ContractError):
+            _blocked_projection(blocked_reason="")
+        with self.assertRaises(ContractError):
+            _blocked_projection(
+                suspension=_suspension(),
+                blocked_reason="a different recorded cause",
+                document_reason="waiting on the upstream API key",
+            )
+        with self.assertRaises(ContractError):
+            _blocked_projection(
+                suspension=_suspension(), document_reason="an invented cause"
+            )
+
+    def test_blocked_recovery_history_stays_unknown(self):
+        source = _legacy_source(
+            status="blocked", createdAt="2026-01-01",
+            meta={"suspension": _suspension()},
+        )
+        resumed = {
+            "at": "unknown",
+            "from": "blocked",
+            "to": "planned",
+            "reason": "resumed after suspension",
+            "evidence": "legacy task.json status",
+        }
+        with self.assertRaises(ContractError):
+            _projection(
+                source,
+                task_raw=_task_md(
+                    status="blocked",
+                    blocked_reason="waiting on the upstream API key",
+                    events=[dict(BLOCKED_EVENT, at="2026-08-20T09:30:00Z"), resumed],
+                ),
+            )
+        with self.assertRaises(ContractError):
+            _projection(
+                source,
+                task_raw=_task_md(
+                    status="blocked",
+                    blocked_reason="waiting on the upstream API key",
+                ),
+            )
+        with self.assertRaises(ContractError):
+            _projection(
+                source,
+                task_raw=_task_md(
+                    status="blocked",
+                    blocked_reason="waiting on the upstream API key",
+                    events=[
+                        dict(
+                            BLOCKED_EVENT,
+                            at="2026-08-20T09:30:00Z",
+                            reason="the recorded suspension cause",
+                        )
+                    ],
+                ),
+            )
+
+    def test_raw_blocked_and_cancelled_never_become_done(self):
+        for raw_status in ("blocked", "cancelled"):
+            with self.subTest(status=raw_status), self.assertRaises(ContractError):
+                _projection(
+                    _legacy_source(status=raw_status),
+                    task_raw=_task_md(status="done", events=[DONE_EVENT]),
+                )
+
+    def test_archived_blocked_task_is_rejected(self):
+        with self.assertRaises(ContractError):
+            _blocked_projection(
+                ARCHIVED_PATH,
+                suspension=_suspension(),
+                document_reason="waiting on the upstream API key",
+                event_at="2026-08-20T09:30:00Z",
+            )
+
+    def test_redacted_blocker_reason_cannot_reappear_in_shared_frontmatter(self):
+        secret_reason = "confidential acquisition decision"
+        source = _legacy_source(
+            status="blocked", createdAt="2026-01-01",
+            meta={"suspension": _suspension(reason=secret_reason)},
+        )
+        redacted = copy.deepcopy(source)
+        redacted["meta"]["suspension"]["reason"] = None
+        raw = _json_bytes(source)
+        sidecar = _sidecar(
+            raw, original=redacted, sha=None,
+            redacted=("/meta/suspension/reason",),
+        )
+        with self.assertRaises(ContractError):
+            _projection(
+                source, decision="redact", sidecar_raw=sidecar,
+                task_raw=_task_md(
+                    status="blocked", blocked_reason=secret_reason,
+                    events=[dict(BLOCKED_EVENT, at="2026-08-20T09:30:00Z")],
+                ),
+            )
+
+    def test_top_level_blocker_redaction_is_preserved_in_frontmatter(self):
+        source = _legacy_source(
+            status="blocked", blocked_reason="private coordinator assignment"
+        )
+        redacted = copy.deepcopy(source)
+        redacted["blocked_reason"] = None
+        sidecar = _sidecar(
+            _json_bytes(source), original=redacted, sha=None,
+            redacted=("/blocked_reason",),
+        )
+        projection = _projection(
+            source, decision="redact", sidecar_raw=sidecar,
+            task_raw=_task_md(
+                status="blocked",
+                blocked_reason="legacy task.json status=blocked; reason redacted",
+                events=[BLOCKED_EVENT],
+            ),
+        )
+        self.assertNotIn("private coordinator assignment", projection.document.text)
+        with self.assertRaises(ContractError):
+            _projection(
+                source, decision="redact", sidecar_raw=sidecar,
+                task_raw=_task_md(
+                    status="blocked", blocked_reason=source["blocked_reason"],
+                    events=[BLOCKED_EVENT],
+                ),
+            )
+
+    def test_redacted_blocker_details_keep_truth_private_and_status_visible(self):
+        source = _legacy_source(
+            status="blocked", createdAt="2026-01-01",
+            meta={"suspension": _suspension(reason="confidential acquisition decision")},
+        )
+        raw = _json_bytes(source)
+        for pointer in ("", "/meta", "/meta/suspension", "/meta/suspension/reason"):
+            redacted = copy.deepcopy(source)
+            if pointer == "":
+                redacted = None
+            elif pointer == "/meta":
+                redacted["meta"] = None
+            elif pointer == "/meta/suspension":
+                redacted["meta"]["suspension"] = None
+            else:
+                redacted["meta"]["suspension"]["reason"] = None
+            at = "2026-08-20T09:30:00Z" if pointer.endswith("/reason") else "unknown"
+            with self.subTest(pointer=pointer):
+                projection = _projection(
+                    source, decision="redact",
+                    sidecar_raw=_sidecar(
+                        raw, original=redacted, sha=None, redacted=(pointer,),
+                    ),
+                    task_raw=_task_md(
+                        status="blocked",
+                        blocked_reason="legacy task.json status=blocked; reason redacted",
+                        events=[dict(BLOCKED_EVENT, at=at)],
+                    ),
+                )
+                self.assertEqual(projection.document.frontmatter["status"], "blocked")
+                self.assertNotIn(
+                    "confidential acquisition decision", projection.document.text
+                )
+                self.assertEqual(projection.document.events[0]["at"], at)
+
+    def test_redacted_cancellation_time_does_not_leak_through_event_or_archive(self):
+        source = _legacy_source(
+            status="cancelled", createdAt="2026-01-01",
+            cancelledAt="2026-02-10T15:30:00Z",
+        )
+        redacted = copy.deepcopy(source)
+        redacted["cancelledAt"] = None
+        sidecar = _sidecar(
+            _json_bytes(source), source_path=ARCHIVED_PATH,
+            original=redacted, sha=None, redacted=("/cancelledAt",),
+        )
+        with self.assertRaises(ContractError):
+            _projection(
+                source, source_path=ARCHIVED_PATH, decision="redact",
+                sidecar_raw=sidecar,
+                task_raw=_task_md(
+                    status="cancelled",
+                    events=[dict(CANCELLED_EVENT, at="2026-02-10T15:30:00Z")],
+                ),
+            )
+        projection = _projection(
+            source, source_path=ARCHIVED_PATH, decision="redact", sidecar_raw=sidecar,
+            task_raw=_task_md(status="cancelled", events=[CANCELLED_EVENT]),
+        )
+        self.assertEqual(projection.document.events[0]["at"], "unknown")
+        self.assertEqual(projection.archive_bucket, "undated")
+
+    def test_proven_cancellation_and_suspension_cannot_predate_creation(self):
+        created_at = "2026-09-10T12:00:00Z"
+        earlier = "2026-09-09T12:00:00Z"
+        for status, event in (("cancelled", CANCELLED_EVENT), ("blocked", BLOCKED_EVENT)):
+            source = _legacy_source(status=status, createdAt=created_at)
+            kwargs = {}
+            if status == "cancelled":
+                source["cancelledAt"] = earlier
+            else:
+                source["meta"]["suspension"] = _suspension(since=earlier)
+                kwargs["blocked_reason"] = "waiting on the upstream API key"
+            with self.subTest(status=status), self.assertRaises(ContractError):
+                _projection(
+                    source,
+                    task_raw=_task_md(
+                        status=status, created_at=created_at,
+                        events=[dict(event, at=earlier)], **kwargs,
+                    ),
+                )
+
+    def test_proven_status_time_cannot_predate_date_only_creation_day(self):
+        for status, event in (("cancelled", CANCELLED_EVENT), ("blocked", BLOCKED_EVENT)):
+            for day in ("09", "10"):
+                source = _legacy_source(status=status, createdAt="2026-09-10")
+                timestamp = f"2026-09-{day}T12:00:00Z"
+                kwargs = {}
+                if status == "cancelled":
+                    source["cancelledAt"] = timestamp
+                else:
+                    source["meta"]["suspension"] = _suspension(since=timestamp)
+                    kwargs["blocked_reason"] = "waiting on the upstream API key"
+                task = _task_md(
+                    status=status, events=[dict(event, at=timestamp)], **kwargs
+                )
+                with self.subTest(status=status, day=day):
+                    if day == "09":
+                        with self.assertRaises(ContractError):
+                            _projection(source, task_raw=task)
+                    else:
+                        projection = _projection(source, task_raw=task)
+                        self.assertIsNone(projection.document.frontmatter["created_at"])
+                        self.assertEqual(projection.document.events[0]["at"], timestamp)
+
 
 def _beta_projection(children=("09-01-alpha",), parent=None, parent_id=None):
     source = _legacy_source(
@@ -524,6 +983,53 @@ def _alpha_projection(parent=None, parent_id=None, children=()):
         _sidecar(raw, source_path=SOURCE_PATH),
         source_path=SOURCE_PATH,
         decision="share",
+    )
+
+
+def _cancelled_alpha(children=(), parent=None, parent_id=None):
+    source = _legacy_source(
+        status="cancelled",
+        createdAt="2026-01-01",
+        cancelledAt="2026-02-10T15:30:00Z",
+        parent=parent,
+        children=list(children),
+    )
+    path = ".trellis/tasks/archive/2026-02/09-01-alpha/task.json"
+    document = _task_md(
+        identity="alpha",
+        status="cancelled",
+        parent=parent_id,
+        events=[dict(CANCELLED_EVENT, at="2026-02-10T15:30:00Z")],
+    )
+    raw = _json_bytes(source)
+    return validate_task_projection(
+        raw, document, _sidecar(raw, source_path=path),
+        source_path=path, decision="share",
+    )
+
+
+def _blocked_beta(children=(), parent=None, parent_id=None):
+    source = _legacy_source(
+        id="beta",
+        name="beta",
+        status="blocked",
+        meta={"suspension": _suspension()},
+        createdAt="2026-01-01",
+        parent=parent,
+        children=list(children),
+    )
+    path = ".trellis/tasks/08-15-beta/task.json"
+    document = _task_md(
+        identity="beta",
+        status="blocked",
+        parent=parent_id,
+        blocked_reason="waiting on the upstream API key",
+        events=[dict(BLOCKED_EVENT, at="2026-08-20T09:30:00Z")],
+    )
+    raw = _json_bytes(source)
+    return validate_task_projection(
+        raw, document, _sidecar(raw, source_path=path),
+        source_path=path, decision="share",
     )
 
 
@@ -573,6 +1079,41 @@ class ProjectionGraphTests(unittest.TestCase):
             validate_projection_graph({"alpha": alpha, "alpha-old": archived_twin})
         with self.assertRaises(ContractError):
             validate_projection_graph({"other": alpha})
+
+    def test_parent_child_closure_across_cancelled_blocked_and_done(self):
+        gamma_source = _legacy_source(
+            id="gamma",
+            name="gamma",
+            status="completed",
+            completedAt="2026-09-05",
+            parent="09-01-alpha",
+        )
+        gamma_path = ".trellis/tasks/archive/2026-09/07-15-gamma/task.json"
+        gamma_raw = _json_bytes(gamma_source)
+        gamma = validate_task_projection(
+            gamma_raw,
+            _task_md(identity="gamma", status="done", parent="alpha",
+                     events=[DONE_EVENT]),
+            _sidecar(gamma_raw, source_path=gamma_path),
+            source_path=gamma_path,
+            decision="share",
+        )
+        alpha = _cancelled_alpha(children=("08-15-beta", "07-15-gamma"))
+        beta = _blocked_beta(parent="09-01-alpha", parent_id="alpha")
+        validate_projection_graph({"alpha": alpha, "beta": beta, "gamma": gamma})
+        self.assertEqual(alpha.archive_bucket, "2026-Q1")
+        with self.assertRaises(ContractError):
+            validate_projection_graph(
+                {"alpha": _cancelled_alpha(), "beta": beta, "gamma": gamma}
+            )
+        cyclic_alpha = _cancelled_alpha(
+            children=("08-15-beta",), parent="08-15-beta", parent_id="beta"
+        )
+        cyclic_beta = _blocked_beta(
+            children=("09-01-alpha",), parent="09-01-alpha", parent_id="alpha"
+        )
+        with self.assertRaises(ContractError):
+            validate_projection_graph({"alpha": cyclic_alpha, "beta": cyclic_beta})
 
 
 if __name__ == "__main__":

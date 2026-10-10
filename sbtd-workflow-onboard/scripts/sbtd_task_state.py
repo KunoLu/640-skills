@@ -32,6 +32,10 @@ from sbtd_project import (
 )
 from sbtd_task_document import TaskDocument
 
+# Terminal states finish a task without success semantics; cancelled never
+# counts as done and never carries a completion time.
+TERMINAL_STATUSES = frozenset(("done", "cancelled"))
+
 
 class TaskStateError(TaskDataError):
     def __init__(
@@ -294,7 +298,10 @@ class TaskStore:
         pending = list(children.get(task_id, ()))
         while pending:
             child_id = pending.pop()
-            if records[child_id].document.frontmatter["status"] != "done":
+            if (
+                records[child_id].document.frontmatter["status"]
+                not in TERMINAL_STATUSES
+            ):
                 return True
             pending.extend(children.get(child_id, ()))
         return False
@@ -449,9 +456,12 @@ class TaskStore:
         if existing is None and parent is not None:
             current = parent
             while current is not None:
-                if records[current].document.frontmatter["status"] == "done":
+                if (
+                    records[current].document.frontmatter["status"]
+                    in TERMINAL_STATUSES
+                ):
                     raise TaskStateError(
-                        "new child requires its completed ancestor to be explicitly reopened"
+                        "new child requires its terminal ancestor to be explicitly reopened"
                     )
                 current = records[current].document.frontmatter.get("parent")
         index_before: bytes | None = None
@@ -517,7 +527,12 @@ class TaskStore:
                 if previous_at is not None and at < previous_at:
                     consistent = False
                 previous_at = at
-            if source != "blocked" and target == "blocked":
+            if source == "unknown" and target == "blocked" and previous is None:
+                # A first historical unknown->blocked record is a consistent
+                # snapshot whose recovery phase stays unknown; it never
+                # proves a real blocked ingress or invents one.
+                pass
+            elif source != "blocked" and target == "blocked":
                 if phase is not None or source not in phases:
                     consistent = False
                 phase = source
@@ -531,6 +546,8 @@ class TaskStore:
                     consistent = True
                 elif phase is None or phase != target:
                     consistent = False
+                phase = None
+            elif source == "blocked" and target == "cancelled":
                 phase = None
             previous = target
         if previous is not None and previous != document.frontmatter["status"]:
@@ -588,24 +605,26 @@ class TaskStore:
                 {"blocked_reason": reason, "updated_at": self._now(document)}
             )
             return self._save(selected, candidate)
-        if previous == "blocked":
+        if previous == "blocked" and status != "cancelled":
             raise TaskStateError("blocked tasks require history-aware recovery")
         _, consistent = self._history(document)
         if not consistent:
             raise TaskStateError("task event history conflicts with its current state")
         allowed = {
-            "planned": ("in-progress", "blocked"),
-            "in-progress": ("checking", "blocked"),
-            "checking": ("in-progress", "done", "blocked"),
+            "planned": ("in-progress", "blocked", "cancelled"),
+            "in-progress": ("checking", "blocked", "cancelled"),
+            "checking": ("in-progress", "done", "blocked", "cancelled"),
+            "blocked": ("cancelled",),
             "done": (),
+            "cancelled": (),
         }
         if status not in allowed[previous]:
             raise TaskStateError("requested task status change is not permitted")
-        if status in ("checking", "done") and self._unfinished_descendants(
-            task_id, self._catalog()
-        ):
+        if (
+            status == "checking" or status in TERMINAL_STATUSES
+        ) and self._unfinished_descendants(task_id, self._catalog()):
             raise TaskStateError(
-                "parent integration requires all descendant tasks to be done"
+                "terminal parent transitions require all descendant tasks to be finished"
             )
         moment = self._now(document)
         event = {
@@ -624,7 +643,11 @@ class TaskStore:
         }
         if status == "blocked":
             fields["blocked_reason"] = reason
+        elif previous == "blocked":
+            fields["blocked_reason"] = None
         candidate = document.updated(fields, event=event)
+        if not self._history(candidate)[1]:
+            raise TaskStateError("requested transition would create inconsistent history")
         return self._save(selected, candidate)
 
     def set_mode(
@@ -667,8 +690,14 @@ class TaskStore:
             raise TaskStateError("recovery requires a nonempty reason and evidence")
         document = selected.document
         self._require_known_mode(document)
-        if document.frontmatter["status"] != "blocked":
-            if document.events and document.events[-1]["from"] == "blocked":
+        status = document.frontmatter["status"]
+        if status != "blocked":
+            if (
+                status in ("planned", "in-progress", "checking")
+                and document.events
+                and document.events[-1]["from"] == "blocked"
+                and document.events[-1]["to"] == status
+            ):
                 return selected
             raise TaskStateError("selected task is not blocked")
         previous_phase, _ = self._history(document)
@@ -715,15 +744,16 @@ class TaskStore:
         selected = self._selected_for_write(task_id, confirmed)
         document = selected.document
         self._require_known_mode(document)
-        if document.frontmatter["status"] != "done":
+        terminal = document.frontmatter["status"]
+        if terminal not in TERMINAL_STATUSES:
             if (
-                document.frontmatter["status"] == "planned"
+                terminal == "planned"
                 and document.events
-                and document.events[-1]["from"] == "done"
+                and document.events[-1]["from"] in TERMINAL_STATUSES
                 and document.events[-1]["to"] == "planned"
             ):
                 return selected
-            raise TaskStateError("only a completed task can be reopened")
+            raise TaskStateError("only a finished task can be reopened")
         records = self._catalog()
         if records[task_id].document.text != document.text:
             raise TaskStateError("task changed while preparing ancestor reopening")
@@ -737,36 +767,48 @@ class TaskStore:
         candidates: list[tuple[TaskSnapshot, TaskDocument]] = []
         for ancestor in reversed(lineage):
             previous = ancestor.document
-            if previous.frontmatter["status"] != "done":
+            terminal = previous.frontmatter["status"]
+            if terminal not in TERMINAL_STATUSES:
                 continue
             self._require_known_mode(previous)
             if previous.frontmatter["branch"] != binding:
-                raise TaskStateError("completed ancestor belongs to a different branch")
+                raise TaskStateError("terminal ancestor belongs to a different branch")
             if ancestor.task_path.startswith(".sbtd/"):
                 self._require_local_protection(binding, ancestor.task_path)
             _, consistent = self._history(previous)
             if not consistent:
-                raise TaskStateError("completed task history is inconsistent")
-            completions = [
+                raise TaskStateError("finished task history is inconsistent")
+            ingress = [
                 event
                 for event in previous.events
-                if event["to"] == "done" and event["from"] != "done"
+                if event["to"] == terminal and event["from"] != terminal
             ]
             prepared = previous
-            if not completions:
+            if not ingress:
+                if terminal == "done":
+                    preserved_at = previous.frontmatter["completed_at"] or "unknown"
+                    preserved_reason = "Preserved historical completion from existing task frontmatter"
+                    preserved_evidence = "existing task.md status/completed_at; earlier evidence not-recorded"
+                else:
+                    preserved_at = "unknown"
+                    preserved_reason = "Preserved historical cancellation from existing task frontmatter"
+                    preserved_evidence = "existing task.md status; earlier evidence not-recorded"
                 prepared = previous.updated(
                     {},
                     event={
-                        "at": previous.frontmatter["completed_at"] or "unknown",
+                        "at": preserved_at,
                         "from": "unknown",
-                        "to": "done",
-                        "reason": "Preserved historical completion from existing task frontmatter",
-                        "evidence": "existing task.md status/completed_at; earlier evidence not-recorded",
+                        "to": terminal,
+                        "reason": preserved_reason,
+                        "evidence": preserved_evidence,
                     },
                     prepend_event=True,
                 )
-            elif previous.frontmatter["completed_at"] is not None:
-                recorded = completions[-1]["at"]
+            elif (
+                terminal == "done"
+                and previous.frontmatter["completed_at"] is not None
+            ):
+                recorded = ingress[-1]["at"]
                 if recorded == "unknown" or (
                     datetime.fromisoformat(recorded.replace("Z", "+00:00"))
                     != datetime.fromisoformat(
@@ -785,7 +827,7 @@ class TaskStore:
                 },
                 event={
                     "at": moment,
-                    "from": "done",
+                    "from": terminal,
                     "to": "planned",
                     "reason": reason,
                     "evidence": evidence,
@@ -793,7 +835,7 @@ class TaskStore:
             )
             if not self._history(candidate)[1]:
                 raise TaskStateError(
-                    "historical completion cannot be reconciled without changing existing events"
+                    "historical terminal record cannot be reconciled without changing existing events"
                 )
             candidates.append((ancestor, candidate))
         written: list[str] = []
@@ -945,19 +987,20 @@ class TaskStore:
                     ) from None
                 raise
 
-    def _completion_time(self, document: TaskDocument) -> str | None:
-        if document.frontmatter["status"] != "done":
-            raise TaskStateError("only completed tasks can be archived")
+    def _terminal_time(self, document: TaskDocument) -> str | None:
+        terminal = document.frontmatter["status"]
+        if terminal not in TERMINAL_STATUSES:
+            raise TaskStateError("only finished tasks can be archived")
         _, consistent = self._history(document)
         if not consistent:
-            raise TaskStateError("completion history is inconsistent")
-        completions = [
+            raise TaskStateError("terminal history is inconsistent")
+        ingress = [
             event
             for event in document.events
-            if event["to"] == "done" and event["from"] != "done"
+            if event["to"] == terminal and event["from"] != terminal
         ]
-        field = document.frontmatter["completed_at"]
-        event_at = completions[-1]["at"] if completions else None
+        field = document.frontmatter["completed_at"] if terminal == "done" else None
+        event_at = ingress[-1]["at"] if ingress else None
         if event_at == "unknown":
             event_at = None
         if (
@@ -969,23 +1012,23 @@ class TaskStore:
             raise TaskStateError("completion time conflicts with its preserved event")
         value = field or event_at
         if value is not None:
-            completed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            finished = datetime.fromisoformat(value.replace("Z", "+00:00"))
             created = document.frontmatter["created_at"]
-            if completed > datetime.now().astimezone() or (
+            if finished > datetime.now().astimezone() or (
                 created is not None
-                and completed < datetime.fromisoformat(created.replace("Z", "+00:00"))
+                and finished < datetime.fromisoformat(created.replace("Z", "+00:00"))
             ):
                 raise TaskStateError(
-                    "completion time is outside the task's observed history"
+                    "terminal time is outside the task's observed history"
                 )
         return value
 
     def _archive_target(self, snapshot: TaskSnapshot) -> str:
-        completed_at = self._completion_time(snapshot.document)
+        finished_at = self._terminal_time(snapshot.document)
         period = "undated"
-        if completed_at is not None:
-            completed = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
-            period = f"{completed.year:04d}-Q{(completed.month - 1) // 3 + 1}"
+        if finished_at is not None:
+            finished = datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
+            period = f"{finished.year:04d}-Q{(finished.month - 1) // 3 + 1}"
         storage = (
             ".sbtd/tasks"
             if snapshot.task_path.startswith(".sbtd/tasks/")
@@ -1003,7 +1046,8 @@ class TaskStore:
         evidence: str,
         existing: TaskSnapshot | None,
     ) -> TaskDocument:
-        self._completion_time(source.document)
+        self._terminal_time(source.document)
+        terminal = source.document.frontmatter["status"]
         message = f"Archived task from {source.task_path} to {target}: {reason}"
         now = self._now(source.document)
         moment = now
@@ -1012,8 +1056,8 @@ class TaskStore:
                 raise TaskStateError("archive candidate has no operation event")
             event = existing.document.events[-1]
             if (
-                event["from"] != "done"
-                or event["to"] != "done"
+                event["from"] != terminal
+                or event["to"] != terminal
                 or event["reason"] != message
                 or event["evidence"] != evidence
                 or event["at"] == "unknown"
@@ -1029,8 +1073,8 @@ class TaskStore:
             {"updated_at": moment},
             event={
                 "at": moment,
-                "from": "done",
-                "to": "done",
+                "from": terminal,
+                "to": terminal,
                 "reason": message,
                 "evidence": evidence,
             },
@@ -1206,6 +1250,8 @@ class TaskStore:
                     updates.get(relative[len(source_dir) + 1 :], snapshot.document),
                 )
         self._validate_parents(records)
+        if operation == "archive" and self._unfinished_descendants(task_id, records):
+            raise TaskStateError("archive requires all descendant tasks to be finished")
         desired = {**records, **moved}
         self._validate_parents(desired)
         index_before: bytes | None = None

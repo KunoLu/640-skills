@@ -16,7 +16,7 @@ SBTD connects **specifications, behavior, tests and domain language**. Your codi
 
 This repository is a **configuration and Skill source**, not a business application. The main workflow targets **Codex and Oh My Pi (OMP)**; the installers also expose Claude Code and Kimi adapters. Adapter availability is not proof of identical host behavior.
 
-> **Source preview: v2.0.0 is unreleased.** The catalog contains 14 bundled and 19 required external Skills. Implemented setup, task, upgrade and migration capabilities are not a claim of complete Windows-native acceptance, live deployment or release readiness. See the [changelog](CHANGELOG.md) and [delivery plan](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md).
+> **RC preparation: v2.0.0-rc.1 is not tagged or published.** Stable v2.0.0 remains unreleased. The catalog contains 14 bundled and 19 required external Skills. Candidate code, CI, installation, native checks and actual host acceptance are separate evidence layers. See the [RC scope and known limitations](CHANGELOG.md) and [delivery plan](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md).
 
 | [New installation](#install) | [Already installed](#onboard-prompts) | [Start a task](#task-prompts) |
 |---|---|---|
@@ -87,7 +87,7 @@ These are **natural-language requests to your agent**, not new CLI commands. Rep
 | Add a project only | `init-projects` | Project AGENTS/ignore and applicable local assets; no global installation or user MCP/hooks |
 | Align an existing environment | `upgrade` | Fixed-baseline plan/apply/verify, explicit drift decisions, backups and recovery |
 | Deliberately reinstall | `reset` | Overwrite bundled Skills **without backup**, reinstall required externals; not an upgrade recovery protocol |
-| Move legacy data | `migration` | Approved projections, retained originals and verified receipts; separate deployment authorization |
+| Move legacy data | `migration` | Approved projections, retained originals and verified receipts; separate deployment authorization; interrupted deployment evidence is reconciled from current state, never backfilled |
 | Retire detected legacy assets | `cleanup-legacy` | Display actual candidates, then obtain separate execution consent |
 | Restore an authorized batch | `recovery` | Plan and confirm restoration from trusted batch evidence; not a general undo command |
 
@@ -169,6 +169,33 @@ current drift, exact restoration scope and what cannot be restored. Wait for my 
 before apply; retain backups and report partial results honestly.
 ```
 
+**Reconcile interrupted deployment evidence:**
+
+```text
+Use sbtd-workflow-onboard migration --phase reconcile for [the batch whose apply completed
+but whose cumulative deployment evidence was never saved]. Bind the exact manifest and
+complete apply receipt, prove the historical evidence path genuinely absent, and freshly
+observe current state into one new typed evidence document at a new private path.
+Do not forge the missing receipt or claim the original deployment ran to completion;
+I confirm --yes explicitly and run the standard verify afterwards.
+```
+
+The migration planner accepts characterized Trellis **0.6.15 / 0.6.17 data layouts**, not arbitrary old versions. Hash claims on user content are not deletion authority; missing approvals, contradictory task relationships and unknown host configuration still block. A genuinely host-free project can retain an empty platform list without inventing host files. Vendor-uninstall runtime support remains separately pinned.
+
+Stale recorded template hashes may be reconciled only against the installed package's reviewed **exact path/version/content pins**; migration neither refreshes the old hash file nor fetches templates at runtime. Mixed project `AGENTS.md` content is not generated-file ownership: replacing it still requires the existing signed approval, bound to the actual before-state and exact candidate. Recognition is not authorization to apply or clean up.
+Migration deployment retains the approved project-rule body, removing only the maintenance pause and adding the managed Graft fence; it does not silently swap that body for the generic template.
+OMP deployment also recognizes configuration-input changes already proved by bound successful migration receipts and intact originals. Unrecorded drift still blocks; this does not waive runtime-version checks or authorize a deployment retry.
+
+An interrupted deployment whose evidence was never saved is reconciled from **current state**, not backfilled: `migration --phase reconcile` requires the complete successful apply receipt, a genuinely absent historical evidence path, a new non-overwriting output path and explicit `--yes`. It revalidates the signed runtime lineage, retained originals and sealed resources, then writes one new evidence document explicitly typed `kind: current-state` / `historical_execution: unknown` — each result pairs a before-state proven by the retained original with a freshly measured after-state, and no historical exit code, success claim or timestamp is invented. Acceptance means the current postconditions hold, not that the original process exited cleanly or wrote new targets; the subsequent standard `verify` reports `acceptance_basis: current-state`. This authorizes no install, deployment retry or cleanup, and the regular deploy/retry/recovery gates are unchanged.
+
+Consumers recheck that the cited manifest/apply objects are safe files with the recorded digests. The observer must match the manifest runtime or its exact signature-approved successor; reverse or unrelated lineage is rejected. Historical observers need not match the current consumer, and cumulative retries never rewrite their provenance. This does not authenticate historical execution or authorize refreshing old evidence.
+
+New cross-runtime observations retain the verified signed authorization in `observer_lineage`, so later pair-file rotation does not erase historical observer authority. Consumers verify it with the installed trusted key, never a key supplied by the evidence. Legacy records without this proof still require the matching current pair (unless observer and manifest runtimes match); lost authority is not invented. Accepted plans and evidence recheck direct and followup-ancestor provenance at output; cleanup and recovery also recheck before writes. Post-write refusals preserve measured results without claiming successful acceptance.
+
+Current-state acceptance completes semantic/lineage validation before its final snapshot-only pass over observed artifacts and pinned inputs. That pass includes absent resources; it is not an atomic cross-process snapshot and does not promise objects can never change afterward.
+
+Already aligned project rules can remain untouched under exact-template evidence. Document-only legacy task folders are archived as documents, not fabricated tasks; historical task branches remain historical, with explicit deferred recovery instead of an automatic checkout or rebinding.
+
 [Upgrade & recovery](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [Migration](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [Cleanup](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)
 
 </details>
@@ -239,6 +266,7 @@ Strict gates are triggered by facts: domain ambiguity, persistent/shared data, u
 ### State without a second source of truth
 
 - `task.md` owns mode, status and events. Ordinary default tasks use `.sbtd/tasks/<id>/`; lite/strict or explicitly shared tasks use `ai/tasks/<id>/`. `.sbtd/active-task.json` is only a bookmark.
+- `cancelled` is a terminal cancellation, **not successful completion**: `completed_at` stays null. Cancellation never cascades to children; archive and explicit reopen preserve its history. Imported `blocked` records with an unknown prior phase require an explicit recovery choice. Update the task runtime, schema and Skill references together before using these records with older installations.
 - Handoffs live under protected `docs/handoffs/` on a real pause/switch or explicit request; they never override the task. Pure Q&A/read-only work creates no task, identity or handoff files.
 - Developer identity is needed for a durable lesson write, not ordinary work. A valid local `.sbtd/developer` wins; only genuine absence in a verified linked worktree allows reading the main checkout's identity. Never guess names or replace a malformed identity.
 

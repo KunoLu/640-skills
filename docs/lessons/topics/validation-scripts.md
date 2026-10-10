@@ -703,5 +703,17 @@
 - 修正：编辑、compileall、格式化等写入步骤先完成，再冻结所有封存输入运行完整suite；只读观察器和随后原生全量均通过，保留最初失败与归因边界，不放宽`_original_reference`。
 - 预防：验证调度按实际文件写集而非“检查命令”名称分类；唯一controller也不能在自己的全量运行期间改写输入。来源漂移先抓具体路径与前后态；重跑通过不是原错误根因证明。
 
+## LESSON-20261009-kuno-isolate-host-overrides: Isolate Effective Host Paths Before Fixture Writes
+
+- 日期：2026-10-09
+- 标签：validation, fixtures, environment, omp, paths, isolation
+- 适用场景：隔离 HOME 后运行真实配置写入，或验证默认 Skills／provider 路径选择。
+- 严重级别：high
+- 来源：现态调和测试的 OMP 路径解析与完整套件环境修正。
+- 问题：只替换 HOME 仍会继承绝对 agent/provider 覆盖；反过来，控制器统一设置 AGENT_SKILLS_DIR 会改变测试要覆盖的默认根，实际完整测试因此出现目标目录断言失败。另一次夹具把 PI_CONFIG_DIR 设为绝对路径，被实际解析器正确拒绝。
+- 根因：隔离位置与保持被测配置分支是两个约束；环境变量的相对目录名／绝对路径语义不能凭名称猜测。
+- 修复：外层去掉无关配置重定向并使用私有 HOME；OMP 夹具按实际解析契约设置 PI_CONFIG_DIR=.omp、临时绝对 agent/provider 路径及默认 profile，在任何部署前断言解析目标属于夹具。取消外层 Skills 根覆盖后，原失败测试通过，未改产品默认值或测试断言。
+- 预防：先读取实际优先级与值类型；隔离器不要替所有测试强制选择显式配置分支。可写夹具在调用生产写入器前检查完整实际写集，不能把“环境看起来私有”当作越界不会发生的证明。定点修正之后仍需同环境全量验证。
+
 <!-- lessons:kuno:end -->
 

@@ -40,7 +40,7 @@ PROG = "onboard.py"
 
 _DEVELOPER_PATTERN = re.compile(r"^[a-z0-9]+$")
 
-_MIGRATION_PHASES = ("plan", "apply", "verify", "cleanup")
+_MIGRATION_PHASES = ("plan", "apply", "reconcile", "verify", "cleanup")
 _RECOVERY_PHASES = ("plan", "apply")
 
 # Phase rules map each phase to (required value options, optional options).
@@ -77,6 +77,15 @@ _MIGRATION_RULES = {
             "no_routing_approvals",
         ),
     ),
+    "reconcile": (
+        (
+            "manifest",
+            "apply_receipt",
+            "missing_deployment_evidence",
+            "deployment_evidence_out",
+        ),
+        ("yes", "json"),
+    ),
     "verify": (
         ("manifest", "apply_receipt", "deployment_evidence"),
         ("json",),
@@ -105,6 +114,8 @@ _MIGRATION_VALUE_OPTIONS = (
     "manifest",
     "apply_receipt",
     "deployment_evidence",
+    "missing_deployment_evidence",
+    "deployment_evidence_out",
     "verification",
     "cleanup_receipt",
     "confirm_cleanup",
@@ -323,6 +334,8 @@ def add_migration_parser(
         "manifest": "Explicit private migration manifest file.",
         "apply_receipt": "Explicit apply receipt for retry or verification.",
         "deployment_evidence": "Explicit completed deployment evidence file.",
+        "missing_deployment_evidence": "Explicit absent historical deployment evidence path; never overwritten.",
+        "deployment_evidence_out": "New private current-state evidence output, distinct from the missing historical path.",
         "verification": "Explicit verification record for cleanup.",
         "cleanup_receipt": "Explicit cumulative cleanup receipt for retry.",
         "confirm_cleanup": "The verification_id confirmed for this cleanup attempt.",
@@ -340,7 +353,7 @@ def add_migration_parser(
                 _option_name(dest),
                 action="store_true",
                 help={
-                    "yes": "Authorize this apply attempt.",
+                    "yes": "Authorize this apply or current-state reconciliation attempt.",
                     "graft_hooks": "Plan explicitly authorized Codex hook definitions for full deployment.",
                     "json": "Emit the private single-JSON exchange document.",
                     "no_routing_approvals": "Apply a plan that has no routing approval record. Does not authorize AGENTS.md pause or marker removal.",

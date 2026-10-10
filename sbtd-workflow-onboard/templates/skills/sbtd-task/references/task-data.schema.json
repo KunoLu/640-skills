@@ -9,7 +9,7 @@
       "type": "string",
       "pattern": "^(?![~/])(?![A-Za-z]:)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/\\\\\u0000-\u001f\u007f-\u009f]+(?:/[^/\\\\\u0000-\u001f\u007f-\u009f]+)*(?![\\s\\S])"
     },
-    "status": { "enum": ["planned", "in-progress", "checking", "done", "blocked"] },
+    "status": { "enum": ["planned", "in-progress", "checking", "done", "blocked", "cancelled"] },
     "timestamp": {
       "type": "string",
       "format": "date-time",
@@ -88,12 +88,13 @@
         "evidence": { "type": "string", "pattern": "\\S" }
       },
       "oneOf": [
-        { "properties": { "from": { "const": "planned" }, "to": { "enum": ["planned", "in-progress", "blocked"] } } },
-        { "properties": { "from": { "const": "in-progress" }, "to": { "enum": ["in-progress", "checking", "blocked"] } } },
-        { "properties": { "from": { "const": "checking" }, "to": { "enum": ["checking", "in-progress", "done", "blocked"] } } },
+        { "properties": { "from": { "const": "planned" }, "to": { "enum": ["planned", "in-progress", "blocked", "cancelled"] } } },
+        { "properties": { "from": { "const": "in-progress" }, "to": { "enum": ["in-progress", "checking", "blocked", "cancelled"] } } },
+        { "properties": { "from": { "const": "checking" }, "to": { "enum": ["checking", "in-progress", "done", "blocked", "cancelled"] } } },
         { "properties": { "from": { "const": "done" }, "to": { "enum": ["done", "planned"] } } },
-        { "properties": { "from": { "const": "blocked" }, "to": { "enum": ["blocked", "planned", "in-progress", "checking"] } } },
-        { "properties": { "from": { "const": "unknown" }, "to": { "const": "done" } } }
+        { "properties": { "from": { "const": "blocked" }, "to": { "enum": ["blocked", "planned", "in-progress", "checking", "cancelled"] } } },
+        { "properties": { "from": { "const": "cancelled" }, "to": { "enum": ["cancelled", "planned"] } } },
+        { "properties": { "from": { "const": "unknown" }, "to": { "enum": ["done", "cancelled", "blocked"] } } }
       ]
     },
     "blockEntryEvent": {

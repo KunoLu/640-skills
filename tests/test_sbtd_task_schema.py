@@ -198,6 +198,73 @@ class TaskDataSchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             self.validate("stateEvent", {**historical, "to": "planned"})
 
+    def test_cancelled_status_never_carries_completion_or_block_reason(self) -> None:
+        self.validate("taskFrontmatter", self.task(status="cancelled"))
+        self.validate(
+            "taskFrontmatter", self.task(status="cancelled", blocked_reason=None)
+        )
+        with self.assertRaises(jsonschema.ValidationError):
+            self.validate(
+                "taskFrontmatter",
+                self.task(
+                    status="cancelled", completed_at="2026-09-17T11:00:00+08:00"
+                ),
+            )
+        with self.assertRaises(jsonschema.ValidationError):
+            self.validate(
+                "taskFrontmatter",
+                self.task(status="cancelled", blocked_reason="取消前记录的阻塞"),
+            )
+
+    def test_cancellation_events_follow_terminal_and_reopen_rules(self) -> None:
+        event = {
+            "at": "2026-09-17T11:00:00+08:00",
+            "from": "planned",
+            "to": "cancelled",
+            "reason": "范围被上游决定取消",
+            "evidence": "reports/cancellation.md",
+        }
+        for source in ("planned", "in-progress", "checking", "blocked", "cancelled"):
+            with self.subTest(source=source):
+                self.validate("stateEvent", {**event, "from": source})
+        self.validate("stateEvent", {**event, "from": "cancelled", "to": "planned"})
+        for transition in (
+            {"from": "done", "to": "cancelled"},
+            {"from": "cancelled", "to": "in-progress"},
+            {"from": "cancelled", "to": "checking"},
+            {"from": "cancelled", "to": "done"},
+            {"from": "cancelled", "to": "blocked"},
+        ):
+            with (
+                self.subTest(transition=transition),
+                self.assertRaises(jsonschema.ValidationError),
+            ):
+                self.validate("stateEvent", {**event, **transition})
+
+    def test_historical_terminal_facts_are_not_real_ingress(self) -> None:
+        for target in ("cancelled", "blocked"):
+            with self.subTest(target=target):
+                self.validate(
+                    "stateEvent",
+                    {
+                        "at": "unknown",
+                        "from": "unknown",
+                        "to": target,
+                        "reason": "旧记录中的终态事实，缺原始时间",
+                        "evidence": "not-recorded",
+                    },
+                )
+        blocked_fact = {
+            "at": "2026-09-17T11:00:00+08:00",
+            "from": "unknown",
+            "to": "blocked",
+            "reason": "旧记录中的阻塞事实",
+            "evidence": "not-recorded",
+        }
+        self.validate("stateEvent", blocked_fact)
+        with self.assertRaises(jsonschema.ValidationError):
+            self.validate("blockEntryEvent", blocked_fact)
+
 
 if __name__ == "__main__":
     unittest.main()
