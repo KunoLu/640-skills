@@ -192,6 +192,8 @@ Consumers recheck that the cited manifest/apply objects are safe files with the 
 
 New cross-runtime observations retain the verified signed authorization in `observer_lineage`, so later pair-file rotation does not erase historical observer authority. Consumers verify it with the installed trusted key, never a key supplied by the evidence. Legacy records without this proof still require the matching current pair (unless observer and manifest runtimes match); lost authority is not invented. Accepted plans and evidence recheck direct and followup-ancestor provenance at output; cleanup and recovery also recheck before writes. Post-write refusals preserve measured results without claiming successful acceptance.
 
+Current-state acceptance completes semantic/lineage validation before its final snapshot-only pass over observed artifacts and pinned inputs. That pass includes absent resources; it is not an atomic cross-process snapshot and does not promise objects can never change afterward.
+
 Already aligned project rules can remain untouched under exact-template evidence. Document-only legacy task folders are archived as documents, not fabricated tasks; historical task branches remain historical, with explicit deferred recovery instead of an automatic checkout or rebinding.
 
 [Upgrade & recovery](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [Migration](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [Cleanup](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)

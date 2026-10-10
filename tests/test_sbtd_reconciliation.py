@@ -2002,5 +2002,83 @@ class CurrentStateProvenanceRecheckTests(unittest.TestCase):
         self.assertEqual(apply_path.read_bytes(), apply_before)
 
 
+class CurrentStateFinalSnapshotTests(unittest.TestCase):
+    def test_reconcile_rechecks_artifacts_after_provenance_validation(self):
+        for artifact in ("target", "original", "report"):
+            with self.subTest(artifact=artifact):
+                self._assert_late_artifact_rejected("reconcile", artifact)
+
+    def test_verify_rechecks_artifacts_after_provenance_validation(self):
+        for artifact in ("target", "original", "report"):
+            with self.subTest(artifact=artifact):
+                self._assert_late_artifact_rejected("verify", artifact)
+
+    def _assert_late_artifact_rejected(self, consumer, artifact):
+        import sbtd_migration as migration
+
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        output_path = batch.evidence / "current-state-evidence.json"
+        if consumer == "verify":
+            _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+        input_bytes = {path: path.read_bytes() for path in (manifest_path, apply_path)}
+        evidence_bytes = output_path.read_bytes() if output_path.exists() else None
+        real_context = migration._validate_context
+        real_provenance = migration._require_reconciliation_provenance
+        context_complete = False
+        changed = None
+
+        def complete_real_context(*args, **kwargs):
+            nonlocal context_complete
+            result = real_context(*args, **kwargs)
+            context_complete = True
+            return result
+
+        def drift_after_real_provenance(manifest_document, deployment_document):
+            nonlocal changed
+            references = real_provenance(manifest_document, deployment_document)
+            if context_complete and changed is None:
+                if artifact == "target":
+                    path = batch.agents
+                elif artifact == "original":
+                    reference = next(
+                        row["backup_ref"]
+                        for row in migration._result_index(deployment_document).values()
+                        if row["backup_ref"] is not None
+                        and row["backup_ref"]["state"]["type"] == "file"
+                    )
+                    path = Path(reference["path"])
+                else:
+                    path = Path(deployment_document["payload"]["projects"][0]["report_refs"][0]["path"])
+                damaged = path.read_bytes() + b"\nconcurrent artifact drift\n"
+                path.write_bytes(damaged)
+                changed = path, damaged
+            return references
+
+        with (
+            mock.patch.dict(os.environ, batch.environment),
+            mock.patch.object(migration, "_validate_context", side_effect=complete_real_context),
+            mock.patch.object(
+                migration, "_require_reconciliation_provenance",
+                side_effect=drift_after_real_provenance,
+            ),
+            self.assertRaises(contracts.ContractError),
+        ):
+            if consumer == "reconcile":
+                _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+            else:
+                verify_migration(manifest_path, apply_path, output_path)
+        self.assertIsNotNone(changed)
+        path, damaged = changed
+        self.assertEqual(path.read_bytes(), damaged)
+        self.assertEqual({path: path.read_bytes() for path in input_bytes}, input_bytes)
+        if evidence_bytes is None:
+            self.assertFalse(output_path.exists())
+        else:
+            self.assertEqual(output_path.read_bytes(), evidence_bytes)
+        self.assertFalse(missing_path.exists())
+
+
 if __name__ == "__main__":
     unittest.main()

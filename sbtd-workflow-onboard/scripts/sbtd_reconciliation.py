@@ -266,6 +266,7 @@ def reconcile_deployment(
     a sanitized ContractError before any accepted evidence exists.
     """
     from sbtd_migration import (
+        _check_reference,
         _check_source_backups,
         _check_stage_backups,
         _operations,
@@ -512,25 +513,18 @@ def reconcile_deployment(
     # evidence: runtime lineage, revisions, physical aliases, input references
     # and retained backups, all through the ordinary validators.
     _validate_context(manifest_path, manifest, previous=applied, deployment=evidence)
+
+    # Validate the proposed result before the single write: a reconciled
+    # record never claims its own cited missing historical path, and no
+    # invalid deployment result is ever persisted.
+    deployment._require_output_clear_of_missing(output_path, evidence["payload"])
+    result = contracts.validate_deployment_result(
+        {"path": str(output_path), "evidence": evidence}
+    )
+    provenance = _require_reconciliation_provenance(manifest, evidence)
+    # Final snapshot-only pass: no lineage parsing after observed artifacts.
     _check_source_backups(manifest)
     _check_stage_backups({"apply": applied_results, "deploy": _result_index(evidence)})
-
-    # Publishing race guards: inputs untouched, historical path still absent,
-    # output still new. save_document itself never overwrites.
-    if snapshot(manifest_path) != reconciliation["manifest_ref"]["state"]:
-        _fail("state-conflict", "the original manifest changed during reconciliation")
-    if snapshot(apply_path) != reconciliation["apply_receipt_ref"]["state"]:
-        _fail("state-conflict", "the apply receipt changed during reconciliation")
-    if snapshot(missing_path) != _ABSENT:
-        _fail(
-            "state-conflict",
-            "the missing historical receipt appeared during reconciliation",
-        )
-    if snapshot(output_path) != _ABSENT:
-        _fail(
-            "state-conflict",
-            "the reconciliation evidence target appeared before publication",
-        )
     # Apply-only drift gate before publication: the native check window must
     # not have mutated any receipt-proven apply target either.
     _require_apply_outcomes(_operations(manifest), applied_results, results)
@@ -544,13 +538,6 @@ def reconcile_deployment(
             vault / manifest["manifest_id"] / "deploy" / operation["resource_id"],
             expected_before[operation["resource_id"]],
         )
-    # Validate the proposed result before the single write: a reconciled
-    # record never claims its own cited missing historical path, and no
-    # invalid deployment result is ever persisted.
-    deployment._require_output_clear_of_missing(output_path, evidence["payload"])
-    result = contracts.validate_deployment_result(
-        {"path": str(output_path), "evidence": evidence}
-    )
     for project in evidence["payload"]["projects"]:
         for reference in project["report_refs"]:
             if snapshot(Path(reference["path"])) != reference["state"]:
@@ -558,6 +545,12 @@ def reconcile_deployment(
                     "state-conflict",
                     "a fresh report changed before evidence publication",
                 )
-    _require_reconciliation_provenance(manifest, evidence)
+    for reference in provenance:
+        _check_reference(reference)
+    if snapshot(output_path) != _ABSENT:
+        _fail(
+            "state-conflict",
+            "the reconciliation evidence target appeared before publication",
+        )
     save_document(output_path, evidence, private_root=manifest_path.parent)
     return result

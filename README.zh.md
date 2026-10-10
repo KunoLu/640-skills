@@ -191,6 +191,8 @@ OMP 部署也接受由绑定的成功迁移回执及完整原件证明的配置�
 
 新跨运行时观察在 `observer_lineage` 中保留原验签授权，后续配对文件轮换不会抹去历史观察者授权；消费者只信任已安装公钥，不接受证据自带密钥。旧无该证明的记录仍要求匹配的当前配对（同运行时除外），不补造已丢失的授权。计划／证据在接受输出前复核直接来源及 followup 祖先来源；cleanup/recovery 写前也须复核。晚期拒绝保留真实实测结果，但不宣称验收成功。
 
+现态接受先完成语义／血统验证，再对实测对象和固定输入做最后的纯快照复核，包含 absent 资源；这不是跨进程原子快照，也不保证对象在检查后永不变化。
+
 已与项目模板逐字对齐的规则可凭精确证据保持不动。只有文档的旧任务目录按历史文档归档，不伪造任务；历史任务分支保持原值，通过明确的延后恢复说明承接，不自动切分支或重绑定。
 
 [升级与恢复](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [迁移](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [清理](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)

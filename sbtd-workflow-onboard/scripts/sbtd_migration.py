@@ -768,13 +768,16 @@ def _require_runtime_lineage(
 def _require_reconciliation_provenance(
     manifest: Mapping[str, Any],
     deployment: Mapping[str, Any] | None,
-) -> None:
-    """Recheck cited objects and the observer's forward runtime authority.
+) -> tuple[Mapping[str, Any], ...]:
+    """Validate provenance and return its pinned filesystem references.
 
     Raw-byte binding remains in the pure contracts layer. Historical observers
     need not equal today's consumer, but must belong to the manifest runtime
     or its signature-verified successor. Never revalidate superseded targets.
+    Publishers can refresh these snapshots after their remaining checks
+    without repeating lineage parsing or signature validation.
     """
+    references: tuple[Mapping[str, Any], ...] = ()
     followup = manifest["payload"].get("followup")
     if followup is not None:
         # A later ordinary receipt still depends on its reconciled ancestor.
@@ -791,12 +794,16 @@ def _require_reconciliation_provenance(
         predecessor_deployment = contracts.load_document(
             _read_reference(deployment_ref), "deployment_evidence"
         )
-        _require_reconciliation_provenance(predecessor, predecessor_deployment)
+        references = (
+            manifest_ref,
+            deployment_ref,
+            *_require_reconciliation_provenance(predecessor, predecessor_deployment),
+        )
     if deployment is None:
-        return
+        return references
     reconciliation = deployment["payload"].get("reconciliation")
     if reconciliation is None:
-        return
+        return references
     missing = reconciliation["missing_deployment_evidence"]
     if missing["state"] != _ABSENT or _lstat(_canonical(Path(missing["path"]))) is not None:
         _fail(
@@ -805,6 +812,9 @@ def _require_reconciliation_provenance(
         )
     for key in ("manifest_ref", "apply_receipt_ref"):
         _check_reference(reconciliation[key])
+    references += (
+        reconciliation["manifest_ref"], reconciliation["apply_receipt_ref"], missing
+    )
     sealed_onboard = manifest["payload"]["tool_versions"]["onboard"]
     observer = reconciliation["runtime_versions"]["onboard"]
     proof = reconciliation.get("observer_lineage")
@@ -812,7 +822,7 @@ def _require_reconciliation_provenance(
         lineage = _verified_runtime_lineage(proof)
         pair = lineage["predecessor"], lineage["successor"]
     elif observer == sealed_onboard:
-        return
+        return references
     else:
         # Old evidence has no retained authorization: accept only while the
         # installed pair still proves it, never invent a historical grant.
@@ -822,6 +832,7 @@ def _require_reconciliation_provenance(
             "version-conflict",
             "the reconciliation observer is not an authorized manifest runtime",
         )
+    return references
 
 
 def _validate_context(

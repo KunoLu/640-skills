@@ -672,6 +672,11 @@ def verify_migration(
         epoch_started = apply_document["payload"]["finished_at"]
 
     payload = manifest["payload"]
+    track_freshness = (
+        deployment["payload"].get("reconciliation") is not None
+        or payload.get("followup") is not None
+    )
+    observed_states: dict[str, Mapping[str, Any]] = {}
     private, shared, dependents, identity = contracts._declared_resources(payload)
     publications = {
         item["target_path"]: item["candidate_ref"]["state"]
@@ -718,6 +723,8 @@ def verify_migration(
         except (contracts.ContractError, OSError, RuntimeError):
             blocked_roots.update(cleanup_dependents[rid])
             continue
+        if track_freshness:
+            observed_states[target] = state
         shared_candidates.append(
             {
                 "resource_id": rid,
@@ -761,6 +768,8 @@ def verify_migration(
             except (contracts.ContractError, OSError, RuntimeError):
                 blocked = True
                 continue
+            if track_freshness:
+                observed_states[target] = state
             if state["type"] != "absent":
                 retained_assets.append({"path": target, "state": state})
             if state["type"] not in {"absent", expected_type}:
@@ -796,6 +805,8 @@ def verify_migration(
             except (contracts.ContractError, OSError, RuntimeError):
                 blocked = True
                 continue
+            if track_freshness:
+                observed_states[target] = state
             cleanup_candidates.append(
                 {
                     "resource_id": rid,
@@ -865,5 +876,17 @@ def verify_migration(
             "verification_id": verification["verification_id"],
         },
     )
-    migration._require_reconciliation_provenance(manifest, deployment)
+    provenance = migration._require_reconciliation_provenance(manifest, deployment)
+    if status == "verified" and track_freshness:
+        # Refresh the same observed states, including absent resources, after
+        # all semantic/lineage work. Previously failed outcomes stay unchanged.
+        migration._check_source_backups(manifest)
+        migration._check_stage_backups(stage_results)
+        for target, state in observed_states.items():
+            migration._check_reference({"path": target, "state": state})
+        for project in deployment["payload"]["projects"]:
+            for reference in project["report_refs"]:
+                migration._check_reference(reference)
+    for reference in provenance:
+        migration._check_reference(reference)
     return envelope, _VERIFY_EXIT[status]
