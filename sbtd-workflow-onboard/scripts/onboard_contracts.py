@@ -2511,6 +2511,15 @@ def _bind_reconciliation(
             "binding-violation",
             "reconciliation cannot change the manifest's pinned Graft version",
         )
+    proof = metadata.get("observer_lineage")
+    if proof is not None and (
+        proof["predecessor"] != manifest_payload["tool_versions"]["onboard"]
+        or proof["successor"] != metadata["runtime_versions"]["onboard"]
+    ):
+        _fail(
+            "binding-violation",
+            "the observer authorization does not bind this manifest and observer",
+        )
     for kind, key in (
         ("manifest", "manifest_ref"),
         ("apply_receipt", "apply_receipt_ref"),

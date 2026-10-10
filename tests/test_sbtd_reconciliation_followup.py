@@ -47,7 +47,8 @@ def _digest(raw: bytes) -> str:
 
 
 def _reconciled_predecessor(
-    fixture: FollowupMigration, *, observer: str | None = None
+    fixture: FollowupMigration, *, observer: str | None = None,
+    observer_lineage: dict | None = None,
 ) -> Path:
     """Reseal the completed predecessor with current-state provenance.
 
@@ -79,6 +80,8 @@ def _reconciled_predecessor(
     }
     if observer is not None:
         metadata["runtime_versions"]["onboard"] = observer
+    if observer_lineage is not None:
+        metadata["observer_lineage"] = copy.deepcopy(observer_lineage)
     deployment_payload = copy.deepcopy(fixture.deployment["payload"])
     deployment_payload["reconciliation"] = metadata
     deployment = contracts.seal_document("deployment_evidence", deployment_payload)
@@ -240,6 +243,34 @@ class ReconciledPredecessorFollowupTests(unittest.TestCase):
             ):
                 # The old observer differs from this consumer; historical
                 # provenance must not be compared to its current runtime.
+                followup = fixture.plan_followup()
+                artifacts = fixture.complete_followup(followup)
+            self.assertEqual(artifacts["cleanup_receipt"]["payload"]["status"], "cleaned")
+            assert_proof_intact(self, proof)
+
+    def test_rotated_lineage_preserves_historical_followup_chain(self):
+        from tests import test_sbtd_followup_batch as followup_tests
+        from tests.test_sbtd_reconciliation_lineage import _installed, _LineageAuthority
+
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = FollowupMigration(base)
+            fixture.build()
+            sealed = fixture.manifest["payload"]["tool_versions"]
+            observer = "runtime-sha256:" + "a" * 64
+            current = {**sealed, "onboard": "runtime-sha256:" + "c" * 64}
+            authority = _LineageAuthority(base)
+            original_pair = authority.install(sealed["onboard"], observer)
+            _reconciled_predecessor(
+                fixture, observer=observer, observer_lineage=original_pair
+            )
+            proof = fixture.predecessor_proof()
+            authority.install(observer, current["onboard"])
+            with (
+                _installed(authority),
+                mock.patch.object(followup_tests, "runtime_versions", return_value=current),
+                mock.patch.object(migration, "runtime_versions", return_value=current),
+            ):
                 followup = fixture.plan_followup()
                 artifacts = fixture.complete_followup(followup)
             self.assertEqual(artifacts["cleanup_receipt"]["payload"]["status"], "cleaned")

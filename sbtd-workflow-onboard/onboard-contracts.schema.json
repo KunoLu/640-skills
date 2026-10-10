@@ -1647,6 +1647,34 @@
         }
       }
     },
+    "runtime_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "predecessor",
+        "successor",
+        "signature"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "purpose": {
+          "const": "runtime-lineage"
+        },
+        "predecessor": {
+          "$ref": "#/$defs/runtime_fingerprint"
+        },
+        "successor": {
+          "$ref": "#/$defs/runtime_fingerprint"
+        },
+        "signature": {
+          "$ref": "#/$defs/nonblank"
+        }
+      }
+    },
     "reconciliation_metadata": {
       "type": "object",
       "additionalProperties": false,
@@ -1688,6 +1716,9 @@
               }
             }
           ]
+        },
+        "observer_lineage": {
+          "$ref": "#/$defs/runtime_lineage"
         },
         "runtime_versions": {
           "type": "object",

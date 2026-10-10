@@ -865,4 +865,5 @@ def verify_migration(
             "verification_id": verification["verification_id"],
         },
     )
+    migration._require_reconciliation_provenance(manifest, deployment)
     return envelope, _VERIFY_EXIT[status]

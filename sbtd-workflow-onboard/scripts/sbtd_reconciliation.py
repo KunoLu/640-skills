@@ -266,6 +266,7 @@ def reconcile_deployment(
         _result_index,
         _source_backup_paths,
         _validate_context,
+        _verified_runtime_lineage,
         runtime_versions,
     )
 
@@ -475,6 +476,8 @@ def reconcile_deployment(
         },
         "runtime_versions": runtime_versions(),
     }
+    if reconciliation["runtime_versions"]["onboard"] != payload["tool_versions"]["onboard"]:
+        reconciliation["observer_lineage"] = _verified_runtime_lineage()
     context = deployment.DeploymentContext(
         manifest_path=manifest_path,
         output_path=output_path,

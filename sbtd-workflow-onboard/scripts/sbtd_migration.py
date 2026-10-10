@@ -562,8 +562,10 @@ def _lineage_signed_bytes(predecessor: str, successor: str) -> bytes:
     )
 
 
-def _verified_runtime_pair() -> tuple[str, str]:
-    """The installed lineage pair. Callers cannot replace the public key."""
+def _verified_runtime_lineage(
+    document: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Verify a retained or installed authorization against the trusted key."""
     import base64
 
     try:
@@ -577,10 +579,11 @@ def _verified_runtime_pair() -> tuple[str, str]:
         )
     try:
         key = load_pem_public_key(_LINEAGE_PUBLIC_KEY.read_bytes())
-        document = json.loads(_LINEAGE_DOCUMENT.read_text(encoding="utf-8"))
+        if document is None:
+            document = json.loads(_LINEAGE_DOCUMENT.read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
-    if not isinstance(key, Ed25519PublicKey) or not isinstance(document, dict):
+    if not isinstance(key, Ed25519PublicKey) or not isinstance(document, Mapping):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
     predecessor = document.get("predecessor")
     successor = document.get("successor")
@@ -600,7 +603,19 @@ def _verified_runtime_pair() -> tuple[str, str]:
         )
     except (InvalidSignature, ValueError, TypeError):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
-    return predecessor, successor
+    return {
+        "schema_version": 1,
+        "purpose": "runtime-lineage",
+        "predecessor": predecessor,
+        "successor": successor,
+        "signature": signature,
+    }
+
+
+def _verified_runtime_pair() -> tuple[str, str]:
+    """The current installed pair used to authorize a consumer runtime."""
+    document = _verified_runtime_lineage()
+    return document["predecessor"], document["successor"]
 
 
 def _recovery_expected_states(
@@ -775,10 +790,17 @@ def _require_reconciliation_provenance(
         _check_reference(reconciliation[key])
     sealed_onboard = manifest["payload"]["tool_versions"]["onboard"]
     observer = reconciliation["runtime_versions"]["onboard"]
-    if observer != sealed_onboard and _verified_runtime_pair() != (
-        sealed_onboard,
-        observer,
-    ):
+    proof = reconciliation.get("observer_lineage")
+    if proof is not None:
+        lineage = _verified_runtime_lineage(proof)
+        pair = lineage["predecessor"], lineage["successor"]
+    elif observer == sealed_onboard:
+        return
+    else:
+        # Old evidence has no retained authorization: accept only while the
+        # installed pair still proves it, never invent a historical grant.
+        pair = _verified_runtime_pair()
+    if pair != (sealed_onboard, observer):
         _fail(
             "version-conflict",
             "the reconciliation observer is not an authorized manifest runtime",
@@ -2021,6 +2043,7 @@ def cleanup_migration(
                     "unsafe-retry",
                     "a partial or unknown cleanup requires explicit recovery or manual reconciliation",
                 )
+    _require_reconciliation_provenance(manifest, deployment)
     started = _now()
     global_error = None
     failure_exit = 5
@@ -2085,13 +2108,42 @@ def cleanup_migration(
         "started_at": started,
         "finished_at": _now(),
     }
-    receipt = contracts.seal_document("cleanup_receipt", payload)
-    contracts.validate_cumulative(previous, receipt, "cleanup_receipt")
-    contracts.validate_declared_bindings(
-        manifest,
-        {**documents, "cleanup_receipt": receipt},
-        {kind: raw for kind, raw in raw_documents.items() if kind != "cleanup_receipt"},
-    )
+
+    def seal_receipt() -> dict[str, Any]:
+        document = contracts.seal_document("cleanup_receipt", payload)
+        contracts.validate_cumulative(previous, document, "cleanup_receipt")
+        contracts.validate_declared_bindings(
+            manifest,
+            {**documents, "cleanup_receipt": document},
+            {kind: raw for kind, raw in raw_documents.items() if kind != "cleanup_receipt"},
+        )
+        return document
+
+    receipt = seal_receipt()
+    try:
+        _require_reconciliation_provenance(manifest, deployment)
+    except contracts.ContractError:
+        # Cleanup may already have changed resources. Keep their measured
+        # outcomes, but never publish acceptance against stale provenance.
+        provenance_error = "reconciliation provenance changed before cleanup receipt publication"
+        global_error = (
+            f"{global_error}; {provenance_error}" if global_error else provenance_error
+        )
+        for project in projects:
+            if project["status"] in {"cleaned", "already-complete"}:
+                project.update(
+                    status="blocked",
+                    reason=provenance_error,
+                    nextStep="Preserve the measured results and resolve the cited source drift before retrying.",
+                )
+        status = contracts._aggregate(
+            [project["status"] for project in projects],
+            ("failed", "blocked"),
+            "cleaned",
+            "already-complete",
+        )
+        payload.update(status=status, finished_at=_now())
+        receipt = seal_receipt()
     destination = manifest_path.parent / f"cleanup-{receipt['cleanup_id']}.json"
     try:
         save_document(destination, receipt, private_root=manifest_path.parent)

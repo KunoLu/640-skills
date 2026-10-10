@@ -17,11 +17,12 @@ from unittest import mock
 
 from tests import test_sbtd_approved_agents_deployment as approved
 from tests.test_sbtd_followup_batch import _failed_copy, _synthetic_smoke
+from tests.test_sbtd_migration_cleanup import _fake_vendor_adapter
 from tests.test_sbtd_migration_verify import _tree_bytes
 
 import onboard_contracts as contracts
 from sbtd_graft_deployment import load_deployment_context, save_deployment_evidence
-from sbtd_migration_files import snapshot
+from sbtd_migration_files import save_document, snapshot
 from sbtd_reconciliation import reconcile_deployment
 from sbtd_recovery import plan_recovery
 from sbtd_migration_verify import verify_migration
@@ -261,6 +262,72 @@ def _reseal_deployment_evidence(document_path, mutate):
     resealed = contracts.seal_document("deployment_evidence", document["payload"])
     document_path.write_bytes(contracts.canonical_json_bytes(resealed))
     return resealed
+
+
+def _drift_cited_copy(copied, change, damaged):
+    """Idempotently apply the concurrent cited-source change under test."""
+    if change == "modify":
+        copied.write_bytes(damaged)
+    else:
+        copied.unlink(missing_ok=True)
+
+
+def _reconciled_batch_citing_copied_inputs(case):
+    """One reconciled batch whose evidence cites intact private input copies.
+
+    The reseal is honest: each copy holds the exact genuine input bytes, so
+    the cited refs satisfy both the byte binding and the live provenance gate
+    while consumer argv still names the original documents. Mutating a copy
+    afterwards therefore exercises only the cited-source recheck — it cannot
+    invalidate the argv spelling or the already-bound raw documents before
+    the initial gate.
+    """
+    batch, manifest, manifest_path, apply_path, missing_path = (
+        _interrupted_deployment(case)
+    )
+    output_path = batch.evidence / "current-state-evidence.json"
+    _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+    copies = {}
+    for ref_key, source in (
+        ("manifest_ref", manifest_path),
+        ("apply_receipt_ref", apply_path),
+    ):
+        copied = batch.evidence / f"cited-{ref_key}.json"
+        copied.write_bytes(source.read_bytes())
+        copies[ref_key] = copied
+
+    def cite_copies(payload):
+        for ref_key, copied in copies.items():
+            payload["reconciliation"][ref_key]["path"] = str(copied)
+
+    _reseal_deployment_evidence(output_path, cite_copies)
+    return batch, manifest_path, apply_path, missing_path, output_path, copies
+
+
+def _verified_batch_citing_copied_inputs(case):
+    """Reconciled-and-verified copied-input batch, ready for real cleanup."""
+    batch, manifest_path, apply_path, missing_path, output_path, copies = (
+        _reconciled_batch_citing_copied_inputs(case)
+    )
+    with mock.patch.dict(os.environ, batch.environment):
+        verified, verify_code = verify_migration(
+            manifest_path, apply_path, output_path
+        )
+        case.assertEqual(verify_code, 0, verified)
+        case.assertEqual(verified["status"], "verified")
+        verification = verified["migration"]["verification"]
+        verification_path = batch.evidence / "verification.json"
+        save_document(verification_path, verification, private_root=batch.evidence)
+    return (
+        batch,
+        manifest_path,
+        apply_path,
+        missing_path,
+        output_path,
+        copies,
+        verification,
+        verification_path,
+    )
 
 
 class CurrentStateReconciliationLifecycleTests(unittest.TestCase):
@@ -1269,6 +1336,258 @@ class CurrentStateProvenanceBindingTests(unittest.TestCase):
         self.assertEqual(manifest_path.read_bytes(), manifest_before)
         self.assertEqual(apply_path.read_bytes(), apply_before)
         self.assertFalse(missing_path.exists())
+
+
+class CurrentStateProvenanceRecheckTests(unittest.TestCase):
+    """Late cited-source drift must defeat acceptance at every consumer.
+
+    Regression coverage for finding 4236584341 (P1): the cited manifest/apply
+    source copies can change or vanish AFTER the initial provenance gate,
+    while the consumer is still inspecting reports and targets. Verify must
+    recheck the cited sources immediately before returning; cleanup must
+    recheck after the full preflight (before the first resource write) and
+    again after receipt contract processing (before publication). Every case
+    drives the real consumer with a call-real-first wrapper on one internal
+    seam: the genuine validator runs to completion, then the drift lands.
+    Nothing mocks a success path, the provenance guard, or a saved receipt.
+
+    Cited inputs are intact private COPIES (honestly resealed, exactly as the
+    still-verify binding test allows), so late drift invalidates only the
+    cited-source recheck — never the argv spelling or the raw input documents
+    already bound at the initial gate.
+    """
+
+    def test_verify_rechecks_cited_sources_after_report_inspection(self):
+        import sbtd_migration_verify as verify_module
+
+        damaged = b'{"late cited source drift": true}\n'
+        real_reports = verify_module.validate_deployment_reports
+        for ref_key in ("manifest_ref", "apply_receipt_ref"):
+            for change in ("modify", "delete"):
+                with self.subTest(ref=ref_key, change=change):
+                    (
+                        batch,
+                        manifest_path,
+                        apply_path,
+                        missing_path,
+                        output_path,
+                        copies,
+                    ) = _reconciled_batch_citing_copied_inputs(self)
+                    cited = copies[ref_key]
+                    manifest_before = manifest_path.read_bytes()
+                    apply_before = apply_path.read_bytes()
+                    evidence_before = output_path.read_bytes()
+                    names_before = set(os.listdir(batch.evidence))
+
+                    def drift_after_real_reports(*args, cited=cited, change=change, **kwargs):
+                        # The real report validator genuinely accepts first;
+                        # only then does the cited source copy drift.
+                        result = real_reports(*args, **kwargs)
+                        _drift_cited_copy(cited, change, damaged)
+                        return result
+
+                    with (
+                        mock.patch.dict(os.environ, batch.environment),
+                        mock.patch.object(
+                            verify_module,
+                            "validate_deployment_reports",
+                            side_effect=drift_after_real_reports,
+                        ),
+                        self.assertRaises(contracts.ContractError) as failure,
+                    ):
+                        verify_migration(manifest_path, apply_path, output_path)
+                    self.assertEqual(failure.exception.code, "state-conflict")
+                    # No verified envelope exists; the late drift is preserved
+                    # exactly as the concurrent change left it, no input is
+                    # repaired or rewritten, and verify stays read-only.
+                    if change == "modify":
+                        self.assertEqual(cited.read_bytes(), damaged)
+                        self.assertEqual(
+                            set(os.listdir(batch.evidence)), names_before
+                        )
+                    else:
+                        self.assertFalse(cited.exists())
+                        self.assertEqual(
+                            set(os.listdir(batch.evidence)),
+                            names_before - {cited.name},
+                        )
+                    self.assertEqual(manifest_path.read_bytes(), manifest_before)
+                    self.assertEqual(apply_path.read_bytes(), apply_before)
+                    self.assertEqual(output_path.read_bytes(), evidence_before)
+                    self.assertFalse(missing_path.exists())
+
+    def test_cleanup_rechecks_cited_sources_after_preflight_before_any_write(self):
+        import sbtd_migration as migration
+
+        damaged = b'{"late cited source drift": true}\n'
+        real_groups = migration._groups
+        real_cleanup_resource = migration._cleanup_resource
+        for ref_key, change in (
+            ("manifest_ref", "modify"),
+            ("apply_receipt_ref", "delete"),
+        ):
+            with self.subTest(ref=ref_key, change=change):
+                (
+                    batch,
+                    manifest_path,
+                    apply_path,
+                    missing_path,
+                    output_path,
+                    copies,
+                    verification,
+                    verification_path,
+                ) = _verified_batch_citing_copied_inputs(self)
+                cited = copies[ref_key]
+                root_before = _tree_bytes(batch.root)
+                vault_before = _tree_bytes(batch.vault)
+                names_before = set(os.listdir(batch.evidence))
+                writes = []
+
+                def drift_after_real_groups(manifest_document, phase, *, cited=cited, change=change):
+                    # Real preflight grouping completes; the cited source copy
+                    # drifts only afterwards, still inside the preflight
+                    # window that follows the initial provenance gate.
+                    groups = real_groups(manifest_document, phase)
+                    if phase == "cleanup":
+                        _drift_cited_copy(cited, change, damaged)
+                    return groups
+
+                def recording_cleanup_resource(*args, writes=writes, **kwargs):
+                    writes.append(args)
+                    return real_cleanup_resource(*args, **kwargs)
+
+                with (
+                    mock.patch.dict(os.environ, batch.environment),
+                    _fake_vendor_adapter(),
+                    mock.patch.object(
+                        migration, "_groups", side_effect=drift_after_real_groups
+                    ),
+                    mock.patch.object(
+                        migration,
+                        "_cleanup_resource",
+                        side_effect=recording_cleanup_resource,
+                    ),
+                    self.assertRaises(contracts.ContractError) as failure,
+                ):
+                    migration.cleanup_migration(
+                        manifest_path,
+                        apply_path,
+                        output_path,
+                        verification_path,
+                        confirm_cleanup=verification["verification_id"],
+                    )
+                self.assertEqual(failure.exception.code, "state-conflict")
+                # The refusal lands after the full genuine preflight yet
+                # before the first resource write: no target, backup or
+                # receipt is touched, and the drifted copy is preserved.
+                self.assertEqual(writes, [])
+                self.assertEqual(_tree_bytes(batch.root), root_before)
+                self.assertEqual(_tree_bytes(batch.vault), vault_before)
+                self.assertEqual(list(batch.evidence.glob("cleanup-*.json")), [])
+                if change == "modify":
+                    self.assertEqual(cited.read_bytes(), damaged)
+                    self.assertEqual(set(os.listdir(batch.evidence)), names_before)
+                else:
+                    self.assertFalse(cited.exists())
+                    self.assertEqual(
+                        set(os.listdir(batch.evidence)), names_before - {cited.name}
+                    )
+                self.assertFalse(missing_path.exists())
+
+    def test_cleanup_recheck_failure_preserves_measured_results(self):
+        import sbtd_migration as migration
+
+        damaged = b'{"late cited source drift": true}\n'
+        real_cleanup_projects = migration._cleanup_projects
+        for ref_key, change in (
+            ("manifest_ref", "modify"),
+            ("apply_receipt_ref", "delete"),
+        ):
+            with self.subTest(ref=ref_key, change=change):
+                (
+                    batch,
+                    manifest_path,
+                    apply_path,
+                    missing_path,
+                    output_path,
+                    copies,
+                    verification,
+                    verification_path,
+                ) = _verified_batch_citing_copied_inputs(self)
+                cited = copies[ref_key]
+                legacy_tree = batch.root / ".trellis"
+                self.assertTrue(legacy_tree.is_dir())
+                manifest_before = manifest_path.read_bytes()
+                apply_before = apply_path.read_bytes()
+                evidence_before = output_path.read_bytes()
+
+                def drift_after_real_projects(*args, cited=cited, change=change, **kwargs):
+                    # Real cleanup already measured every resource outcome;
+                    # the cited source copy drifts only afterwards, before
+                    # the receipt is published.
+                    projects = real_cleanup_projects(*args, **kwargs)
+                    _drift_cited_copy(cited, change, damaged)
+                    return projects
+
+                with (
+                    mock.patch.dict(os.environ, batch.environment),
+                    _fake_vendor_adapter(),
+                    mock.patch.object(
+                        migration,
+                        "_cleanup_projects",
+                        side_effect=drift_after_real_projects,
+                    ),
+                ):
+                    envelope, code = migration.cleanup_migration(
+                        manifest_path,
+                        apply_path,
+                        output_path,
+                        verification_path,
+                        confirm_cleanup=verification["verification_id"],
+                    )
+                # The resources were genuinely cleaned, then the final
+                # provenance recheck failed: the batch can never claim
+                # cleaned/already-complete, and the measured results are
+                # retained in a truthful blocked/failed cumulative receipt.
+                self.assertNotEqual(code, 0, envelope)
+                self.assertNotIn(
+                    envelope["status"], ("cleaned", "already-complete")
+                )
+                self.assertIn(envelope["status"], ("blocked", "failed"))
+                receipt = envelope["migration"]["cleanup_receipt"]
+                self.assertIn(receipt["payload"]["status"], ("blocked", "failed"))
+                for project in receipt["payload"]["projects"]:
+                    self.assertIn(project["status"], ("blocked", "failed"))
+                saved = list(batch.evidence.glob("cleanup-*.json"))
+                self.assertEqual(len(saved), 1)
+                saved_receipt = json.loads(saved[0].read_bytes())
+                self.assertEqual(saved_receipt["cleanup_id"], receipt["cleanup_id"])
+                results = _stage_results(saved[0])
+                succeeded = [
+                    result
+                    for result in results.values()
+                    if result["status"] == "succeeded"
+                ]
+                self.assertTrue(succeeded)
+                self.assertIn(
+                    {"type": "absent", "checksum": None},
+                    [result["after"] for result in succeeded],
+                )
+                for result in succeeded:
+                    if result["backup_ref"] is not None:
+                        self.assertTrue(Path(result["backup_ref"]["path"]).exists())
+                # Real cleanup is neither rolled back nor repaired, and the
+                # drifted copy is preserved exactly as the concurrent change
+                # left it; every genuine input stays byte-identical.
+                self.assertFalse(legacy_tree.exists())
+                if change == "modify":
+                    self.assertEqual(cited.read_bytes(), damaged)
+                else:
+                    self.assertFalse(cited.exists())
+                self.assertEqual(manifest_path.read_bytes(), manifest_before)
+                self.assertEqual(apply_path.read_bytes(), apply_before)
+                self.assertEqual(output_path.read_bytes(), evidence_before)
+                self.assertFalse(missing_path.exists())
 
 
 if __name__ == "__main__":
