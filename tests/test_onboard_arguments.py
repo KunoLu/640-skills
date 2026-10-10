@@ -430,6 +430,54 @@ class MigrationPhaseTests(ParseErrorAssertions):
             ]
         )
 
+    def test_reconcile_requires_all_explicit_evidence_paths(self) -> None:
+        options = [
+            "--manifest", "m.json",
+            "--apply-receipt", "a.json",
+            "--missing-deployment-evidence", "missing.json",
+            "--deployment-evidence-out", "current.json",
+        ]
+        for offset in range(0, len(options), 2):
+            with self.subTest(missing=options[offset]):
+                self.assert_parse_error(
+                    ["migration", "--phase", "reconcile"]
+                    + options[:offset]
+                    + options[offset + 2 :]
+                )
+
+    def test_reconcile_rejects_other_phase_authority(self) -> None:
+        base = [
+            "migration", "--phase", "reconcile",
+            "--manifest", "m.json",
+            "--apply-receipt", "a.json",
+            "--missing-deployment-evidence", "missing.json",
+            "--deployment-evidence-out", "current.json",
+        ]
+        for extra in (
+            ["--deployment-evidence", "existing.json"],
+            ["--verification", "verification.json"],
+            ["--confirm-cleanup", "cleanup-id"],
+            ["--graft-hooks"],
+            ["--no-routing-approvals"],
+        ):
+            with self.subTest(extra=extra[0]):
+                self.assert_parse_error(base + extra)
+
+    def test_reconciliation_output_does_not_authorize_other_phases(self) -> None:
+        self.assert_parse_error(
+            [
+                "migration", "--phase", "apply", "--manifest", "m.json",
+                "--deployment-evidence-out", "current.json",
+            ]
+        )
+        self.assert_parse_error(
+            [
+                "migration", "--phase", "verify", "--manifest", "m.json",
+                "--apply-receipt", "a.json", "--deployment-evidence", "d.json",
+                "--missing-deployment-evidence", "missing.json",
+            ]
+        )
+
     def test_deploy_phase_does_not_exist(self) -> None:
         self.assert_parse_error(
             ["migration", "--phase", "deploy", "--manifest", "m.json"]

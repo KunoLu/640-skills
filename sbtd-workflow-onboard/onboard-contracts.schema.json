@@ -48,6 +48,10 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
+    "runtime_fingerprint": {
+      "type": "string",
+      "pattern": "^runtime-sha256:[0-9a-f]{64}$"
+    },
     "oid": {
       "type": "string",
       "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
@@ -755,7 +759,6 @@
               "oh-my-pi"
             ]
           },
-          "minItems": 1,
           "uniqueItems": true
         },
         "sources": {
@@ -779,6 +782,22 @@
           },
           "minItems": 0,
           "uniqueItems": true
+        },
+        "agents_no_touch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "target",
+            "template"
+          ],
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/object_ref"
+            },
+            "template": {
+              "$ref": "#/$defs/object_ref"
+            }
+          }
         }
       },
       "allOf": [
@@ -1622,6 +1641,69 @@
         },
         "finished_at": {
           "$ref": "#/$defs/timestamp"
+        },
+        "reconciliation": {
+          "$ref": "#/$defs/reconciliation_metadata"
+        }
+      }
+    },
+    "reconciliation_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "historical_execution",
+        "manifest_ref",
+        "apply_receipt_ref",
+        "missing_deployment_evidence",
+        "runtime_versions"
+      ],
+      "properties": {
+        "kind": {
+          "const": "current-state"
+        },
+        "historical_execution": {
+          "const": "unknown"
+        },
+        "manifest_ref": {
+          "$ref": "#/$defs/file_ref"
+        },
+        "apply_receipt_ref": {
+          "$ref": "#/$defs/file_ref"
+        },
+        "missing_deployment_evidence": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/snapshot"
+            },
+            {
+              "properties": {
+                "state": {
+                  "properties": {
+                    "type": {
+                      "const": "absent"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "runtime_versions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "onboard",
+            "graft"
+          ],
+          "properties": {
+            "onboard": {
+              "$ref": "#/$defs/runtime_fingerprint"
+            },
+            "graft": {
+              "$ref": "#/$defs/nonblank"
+            }
+          }
         }
       }
     },
@@ -1792,6 +1874,9 @@
         },
         "verified_at": {
           "$ref": "#/$defs/timestamp"
+        },
+        "acceptance_basis": {
+          "const": "current-state"
         }
       }
     },
@@ -2624,6 +2709,7 @@
             "verified",
             "cleaned",
             "restored",
+            "reconciled",
             "already-complete",
             "blocked",
             "failed"
@@ -2659,6 +2745,7 @@
           "enum": [
             "plan",
             "apply",
+            "reconcile",
             "verify",
             "cleanup"
           ]
@@ -2667,6 +2754,7 @@
           "enum": [
             "planned",
             "applied",
+            "reconciled",
             "verified",
             "cleaned",
             "already-complete",
@@ -3020,9 +3108,93 @@
           "if": {
             "properties": {
               "phase": {
+                "const": "reconcile"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "reconciled",
+                  "blocked",
+                  "failed"
+                ]
+              },
+              "migration": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [],
+                    "properties": {}
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "deployment_evidence",
+                      "deployment_evidence_path"
+                    ],
+                    "properties": {
+                      "deployment_evidence": {
+                        "$ref": "#/$defs/deployment_evidence"
+                      },
+                      "deployment_evidence_path": {
+                        "$ref": "#/$defs/absolute_path"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "reconcile"
+              },
+              "status": {
+                "enum": [
+                  "reconciled"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "manifest_id": {
+                "$ref": "#/$defs/digest"
+              },
+              "migration": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "deployment_evidence",
+                  "deployment_evidence_path"
+                ],
+                "properties": {
+                  "deployment_evidence": {
+                    "$ref": "#/$defs/deployment_evidence"
+                  },
+                  "deployment_evidence_path": {
+                    "$ref": "#/$defs/absolute_path"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "phase": {
                 "enum": [
                   "plan",
-                  "apply"
+                  "apply",
+                  "reconcile"
                 ]
               }
             }

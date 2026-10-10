@@ -17,6 +17,8 @@ from onboard import missing_file_lines
 from sbtd_identity import DeveloperStore
 from sbtd_migration_files import (
     RetainedObjectError,
+    _canonical,
+    _lstat,
     backup_reference,
     directory_snapshot,
     install_reference,
@@ -99,6 +101,7 @@ def runtime_versions() -> dict[str, str]:
         "scripts/sbtd_cleanup_legacy.py",
         "scripts/sbtd_trellis_uninstall.py",
         "scripts/sbtd_migration_verify.py",
+        "scripts/sbtd_reconciliation.py",
         "scripts/sbtd_recovery.py",
         "scripts/sbtd_project.py",
         "scripts/sbtd_task_document.py",
@@ -382,6 +385,11 @@ def _all_input_references(manifest: Mapping[str, Any]) -> list[Mapping[str, Any]
         for project in manifest["payload"]["projects"]
         for reference in project["sources"]
     ]
+    for project in manifest["payload"]["projects"]:
+        no_touch = project.get("agents_no_touch")
+        if no_touch is not None:
+            references.append(no_touch["target"])
+            references.append(no_touch["template"])
     for item in manifest["payload"]["publication_decisions"]["items"]:
         references.extend(item["sources"])
         if item["candidate_ref"] is not None:
@@ -742,6 +750,22 @@ def _require_runtime_lineage(
             )
 
 
+def _require_missing_historical_receipt(
+    deployment: Mapping[str, Any] | None,
+) -> None:
+    if deployment is None:
+        return
+    reconciliation = deployment["payload"].get("reconciliation")
+    if reconciliation is None:
+        return
+    missing = reconciliation["missing_deployment_evidence"]
+    if missing["state"] != _ABSENT or _lstat(_canonical(Path(missing["path"]))) is not None:
+        _fail(
+            "state-conflict",
+            "the historical deployment receipt is no longer absent",
+        )
+
+
 def _validate_context(
     manifest_path: Path,
     manifest: Mapping[str, Any],
@@ -750,6 +774,7 @@ def _validate_context(
     cleanup: Mapping[str, Any] | None = None,
     recovery: Mapping[str, Any] | None = None,
 ) -> None:
+    _require_missing_historical_receipt(deployment)
     sealed_versions = manifest["payload"]["tool_versions"]
     current_versions = runtime_versions()
     if sealed_versions != current_versions:
@@ -804,6 +829,15 @@ def _validate_context(
         resolve_original=lambda reference: _original_reference(
             reference, manifest, previous, deployment, cleanup
         ),
+        stage_results={
+            phase: _result_index(document)
+            for phase, document in (
+                ("apply", previous),
+                ("deploy", deployment),
+                ("cleanup", cleanup),
+            )
+            if document is not None
+        },
     )
 
 
@@ -937,6 +971,13 @@ def _protected_followup_ancestry(
     protect_results(prev_manifest, prev_apply)
     protect_results(prev_manifest, prev_deployment)
     protect_reports(prev_deployment)
+    # The centralized immutable-stage iterator also yields a reconciled
+    # predecessor's cited missing historical receipt snapshot; it stays
+    # protected against descendant evidence outputs even though absent.
+    for reference in contracts._immutable_stage_references(
+        prev_deployment["payload"]
+    ):
+        protect(reference)
     protect_reports(prev_verification)
     protect_retained(prev_verification)
     protect_results(prev_manifest, prev_cleanup)
@@ -2030,6 +2071,7 @@ def cleanup_migration(
     contracts.validate_declared_bindings(
         manifest,
         {**documents, "cleanup_receipt": receipt},
+        {kind: raw for kind, raw in raw_documents.items() if kind != "cleanup_receipt"},
     )
     destination = manifest_path.parent / f"cleanup-{receipt['cleanup_id']}.json"
     try:
@@ -2202,6 +2244,43 @@ def run_migration(args: Any) -> int:
                     getattr(args, "no_routing_approvals", False)
                 ),
             )
+        elif args.phase == "reconcile":
+            from sbtd_reconciliation import reconcile_deployment
+
+            reconciled = reconcile_deployment(
+                _argument_path(args.manifest),
+                _argument_path(args.apply_receipt),
+                _argument_path(args.missing_deployment_evidence),
+                _argument_path(args.deployment_evidence_out),
+                confirmed=args.yes,
+            )
+            evidence = reconciled["evidence"]
+            envelope = contracts.validate_document(
+                {
+                    "mode": "migration",
+                    "phase": "reconcile",
+                    "status": "reconciled",
+                    "manifest_id": evidence["payload"]["manifest_id"],
+                    "verification_id": None,
+                    "projects": [
+                        {
+                            "root": project["root"],
+                            "status": "reconciled",
+                            "reason": "",
+                            "nextStep": "Verify this new current-state evidence before completion.",
+                        }
+                        for project in evidence["payload"]["projects"]
+                    ],
+                    "reason": "",
+                    "nextStep": "Run migration verify with the new evidence; historical execution remains unknown.",
+                    "migration": {
+                        "deployment_evidence": evidence,
+                        "deployment_evidence_path": reconciled["path"],
+                    },
+                },
+                "migration_envelope",
+            )
+            code = 0
         elif args.phase == "verify":
             from sbtd_migration_verify import verify_migration
 

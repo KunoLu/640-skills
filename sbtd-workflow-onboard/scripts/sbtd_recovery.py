@@ -722,6 +722,7 @@ def apply_recovery(
         manifest,
         {key: value for key, value in documents.items() if key != "recovery_receipt"}
         | {"recovery_receipt": receipt},
+        {kind: raw for kind, raw in raw_documents.items() if kind != "recovery_receipt"},
     )
     destination = plan_path.parent / f"recovery-{receipt['receipt_id']}.json"
     try:

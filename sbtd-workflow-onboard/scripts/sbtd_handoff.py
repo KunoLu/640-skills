@@ -30,7 +30,7 @@ from sbtd_project import (
     parse_task_frontmatter,
     validate_json_compatible,
 )
-from sbtd_task_state import TaskSnapshot, TaskStateError, TaskStore
+from sbtd_task_state import TERMINAL_STATUSES, TaskSnapshot, TaskStateError, TaskStore
 
 HANDOFFS_DIR = "docs/handoffs"
 IGNORE_RULE = "/docs/handoffs/"
@@ -589,8 +589,9 @@ class HandoffStore:
         """Unfinished matching snapshots within seven days, latest per task.
 
         Matching means this project root, the current branch binding and a
-        task that is not done. Older snapshots stay manually recoverable
-        through ``load``; nothing here reads automatically at session start.
+        task that is not finished (done or cancelled). Older snapshots stay
+        manually recoverable through ``load``; nothing here reads
+        automatically at session start.
         """
         moment = now if now is not None else datetime.now().astimezone()
         if moment.tzinfo is None:
@@ -613,7 +614,7 @@ class HandoffStore:
             except TaskDataError:
                 continue  # not provably unfinished
             if (
-                task.document.frontmatter["status"] == "done"
+                task.document.frontmatter["status"] in TERMINAL_STATUSES
                 or task.document.frontmatter["branch"] != binding
                 or task.task_path != snapshot["task_path"]
             ):

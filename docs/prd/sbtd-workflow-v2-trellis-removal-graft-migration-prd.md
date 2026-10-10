@@ -6,7 +6,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.18（逐任务实施；P2已收口，P1-25源码／验收已合入main；本机全局接线与新进程验收已完成，2026-10-05完成增量同步及本仓Graft建图；P3-01观察中，P3-05仍待既有连接与环境退役／保留交接收口；当前进度与证据以§14为准） |
+| 文档版本 | 2.19（补齐 RC 候选的现态 reconcile 契约；逐任务实施与既有 P2/P3 状态不改写。P3-01观察中，P3-05仍待既有连接与环境退役／保留交接收口；当前进度与证据以§14为准） |
 | 文档状态 | 产品与流程决策已确认；已获本源仓库逐任务开发及 PR 合并授权；实际任务状态与证据见 §14，合并不等于 v2 发布 |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
@@ -645,7 +645,7 @@ npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；
 | `init` | 仅选定项目的授权安装与必要脚手架；保留任务／spec／lessons，不强制每个项目预建完整任务包，不暗中迁移旧 Trellis 数据 |
 | `reset` | 保留现有 Skill 维护语义；不覆盖项目历史／身份／业务文件，不把 reset 当旧项目迁移或清理命令 |
 | `init-projects` | 严格 project-only；缺 CLI 报告缺失，不越权装全局包；只处理本次明确选择的项目文件 |
-| `migration --phase ...` | 固定 plan/apply/verify/cleanup 四阶段；apply 只迁移数据和停旧路由，新部署／smoke 独立属于 P2-04；命令、manifest 和二次确认见第 10.2.1 节 |
+| `migration --phase ...` | 常规生命周期为 plan/apply/verify/cleanup；apply 只迁移数据和停旧路由，新部署／smoke 独立属于 P2-04。另提供显式 reconcile 修复缺失部署证据，只观察现态，不重新部署；见第 10.2.1、10.2.6 节 |
 | `recovery --phase ...` | 仅 manifest-scoped 恢复 plan/apply；输出原子保存的 recovery plan／receipt，不增加 journal、锁、证据索引或备份处置子系统 |
 | `sync` | 仍是显式本机发布动作，先 Orca 精确名称 preflight，后范围内复制／校验／live prompt 比对 |
 | `update` | 仍只按既有规则写回版本基线和归档 UPDATE；不附带 sync、迁移或 live automation 修改 |
@@ -658,7 +658,7 @@ npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；
 
 删除公开 Trellis flags，不留隐藏兼容 alias：`--trellis-user / --trellis-platform / --skip-trellis-init / --skip-trellis-bootstrap` 及 PowerShell 对应参数。新身份使用 `--developer`；SBTD 跳过开关只有存在实际场景才增加，不能机械一比一改名。
 
-目标报告字段为 `sbtdInit`（安装计划）、`sbtdProjectSetup`（逐项目安装结果）、`graft`（版本／graph／wiring）、`migration`（四阶段迁移）；仅带下述迁移部署上下文的init/init-projects另返回`deploymentEvidence`。Python是唯一实现入口，Bash／PowerShell只转发同一参数／JSON／退出码，不设计另一套字段或阶段。
+目标报告字段为 `sbtdInit`（安装计划）、`sbtdProjectSetup`（逐项目安装结果）、`graft`（版本／graph／wiring）、`migration`（常规迁移及显式现态证据修复）；仅带下述迁移部署上下文的init/init-projects另返回`deploymentEvidence`。Python是唯一实现入口，Bash／PowerShell不设计另一套字段或阶段；新增reconcile参数直接使用已安装Python CLI，不据此宣称根安装器已转发该入口。
 
 继续保证 stdout 只有一个 JSON 根对象；进度和诊断走 stderr；逐项目保留 status/reason/nextStep，不以聚合状态隐去失败项目。既有 `0=success, 2=needs-user/blocked, 3=file verification failure, 4=Ponytail provider conflict, 5=project setup failed, 6=bootstrap-required` 的已覆盖语义尽量保留，不重复赋予相反含义。若新增迁移专用退出码，必须在两安装器和文档同步声明。
 
@@ -667,19 +667,21 @@ npm 12 默认 `allowScripts` 会挡住 Graft／tree-sitter 生命周期脚本；
 
 plan 可接收 `--publication-decisions <private-file>`：在运行 plan **之前**，用户或其授权 Agent 经明确的私有准备授权，在仓库外准备 share/redact 的安全候选并逐项裁决，记录源 checksum、目标、批准依据及已存在候选的路径／checksum；private-only 可选内容不要求共享候选。plan 只读验证并嵌入 manifest.payload.publication_decisions，必要项缺候选／批准则 blocked。私有准备不写项目或 HOME，纳入同一责任人和备份保留范围；apply 只复验已绑定候选，不新增裁决。
 以下是 v2 公开契约：P1-12 提供 plan/apply/verify，cleanup 仍由 P1-13 独立实施；不把阶段性消费者交付当作完整迁移发布。沿用现有 `--projects-root` 的逗号分隔绝对路径输入约定；路径规范化／去重、containment 和冲突校验完成后才形成计划。
+RC 候选另提供第 10.2.6 节的 reconcile：它是独立确认的现态证据修复，不代替 apply、部署或清理，也不将原来缺失的历史回执改为已观察成功。
 
-下文“migration apply／verify／cleanup”均为 `migration --phase <阶段>` 的简称，不另增同义子命令或兼容 alias。
+下文“migration apply／reconcile／verify／cleanup”均为 `migration --phase <阶段>` 的简称，不另增同义子命令或兼容 alias。
 
 | 阶段 | 统一调用形状 | 允许的副作用 |
 |---|---|---|
 | plan | `onboard.py migration --phase plan --projects-root <roots> --backup-root <private-dir> --custodian <label> [--publication-decisions <private-file>] [--routing-approvals <private-file>] --json` | 只读验证下述版本化候选输入并绑定责任／保留策略；仅无待发布产物、全部输入可按既定规则私有保留时可省略 publication 文件。routing-approvals 只在已有私有批准记录时传入，plan 不创建它；省略则仍走 pinned 暂停或阻断。不创建目录或部署 |
 | apply | `onboard.py migration --phase apply --manifest <plan-file> [--apply-receipt <apply-file>] --yes --json` | 初次不带receipt；重试显式传入并验证manifest绑定，跳过成功且后态未变项，仅续作合法未完成项；不部署、smoke或最终删除旧数据 |
-| verify | `onboard.py migration --phase verify --manifest <plan-file> --apply-receipt <apply-file> --deployment-evidence <evidence-file> --json` | P2-04 独立部署和真实 smoke 完成后，只读核对所有项目及当前清理候选，输出验收记录；不自动部署、查询会写缓存的工具或清理 |
+| reconcile | `onboard.py migration --phase reconcile --manifest <plan-file> --apply-receipt <complete-apply-file> --missing-deployment-evidence <absent-history-path> --deployment-evidence-out <new-private-file> --yes --json` | 完整成功 apply、封存部署声明及原件可核对时，重新实测现态和原生报告；仅新增私有报告与新现态证据，历史路径保持缺失；不回滚、部署、重做 apply 或清理 |
+| verify | `onboard.py migration --phase verify --manifest <plan-file> --apply-receipt <apply-file> --deployment-evidence <evidence-file> --json` | 消费 P2-04 真实部署证据或第 10.2.6 节的现态证据，只读核对所有项目及当前清理候选并输出验收记录；不部署、运行 smoke 或清理 |
 | cleanup | `onboard.py migration --phase cleanup --manifest <plan-file> --apply-receipt <apply-file> --deployment-evidence <evidence-file> --verification <verification-file> [--cleanup-receipt <cleanup-file>] --confirm-cleanup <verification-id> --json` | 初次或携合法累计receipt重试，均再次确认并复验完整证据链；仅处理绑定的剩余旧内容，普通--yes不代替确认 |
 
-plan/apply/verify的stdout均为单JSON对象；诊断走stderr。调用者只在获授权私有报告位置保存对象，不写共享任务树；显式保存stdout不改变plan/verify只读语义。P2-04统一使用下述带迁移上下文的现有init/init-projects入口部署并生成证据；apply/verify不递归调用它。sync仍是独立显式动作并保留Orca preflight，不作为同批次第二个部署写入者；途中另行sync若改变受管状态，按冲突停止，不伪造累计记录。
+各phase的stdout均为单JSON对象；诊断走stderr。调用者只在获授权私有报告位置保存对象，不写共享任务树；显式保存stdout不改变plan/verify只读语义。P2-04统一使用下述带迁移上下文的现有init/init-projects入口部署并生成证据；apply/verify/reconcile均不递归部署，reconcile只运行现态检查并新增私有报告和证据。sync仍是独立显式动作并保留Orca preflight，不作为同批次第二个部署写入者；途中另行sync若改变受管状态，按冲突停止，不伪造累计记录。
 
-所有阶段顶层固定字段：`mode: "migration"`、`phase`、`status`、`manifest_id`、`verification_id`（不适用为 null）、`projects`、`reason`、`nextStep`、`migration`。`migration` 中仅放当前阶段产物：plan 的 `manifest`、apply 的 `apply_receipt`、verify 的 `verification`、cleanup 的 `cleanup_receipt`；失败且没有有效产物时为空对象。后续文件参数接收相应子对象，例如 `response.migration.manifest`，不接收整个 envelope。状态枚举为 `planned / applied / verified / cleaned / already-complete / blocked / failed`；项目结果不被聚合状态隐藏。
+所有阶段顶层固定字段：`mode: "migration"`、`phase`、`status`、`manifest_id`、`verification_id`（不适用为 null）、`projects`、`reason`、`nextStep`、`migration`。`migration` 中仅放当前阶段产物：plan 的 `manifest`、apply 的 `apply_receipt`、reconcile 的裸 `deployment_evidence` 及其绝对路径 `deployment_evidence_path`、verify 的 `verification`、cleanup 的 `cleanup_receipt`；失败且没有有效产物时为空对象。后续文件参数接收相应子对象，例如 `response.migration.manifest`，不接收整个 envelope。状态枚举为 `planned / applied / reconciled / verified / cleaned / already-complete / blocked / failed`；reconcile 成功仍令 `verification_id=null`，不提前冒报 verify 通过，项目结果不被聚合状态隐藏。
 
 数据对象采用 `{schema_version: 1, payload: {...}, <对应_id>: <sha256>}`；manifest、apply_receipt、verification、cleanup_receipt 的 ID 键分别固定为 `manifest_id`、`apply_id`、`verification_id`、`cleanup_id`。ID 是 payload 的 UTF-8 JSON（键排序、紧凑分隔、非 ASCII 不强制转义、禁止非有限数值）SHA-256，不含自身；输入 ID 缺失或不匹配拒绝处理。哈希只证明内容一致，不是用户授权或真实测试发生的密码学证明：
 
@@ -690,8 +692,10 @@ plan/apply/verify的stdout均为单JSON对象；诊断走stderr。调用者只�
 - apply 的 --apply-receipt 只在同 manifest 的续作／完成核对时使用；初次仍验证全部前态。完整成功记录且后态未变返回 already-complete；合法部分记录先核对累计已完成后态，跳过这些操作，再核对未完成项前态并续作。无可信收据且当前不再是初始前态时 blocked，不自动发现收据或按目标恰好相同猜成功。
 - apply／cleanup 每次成功或可处理失败均输出一份**自包含累计收据**：保留前次已完成结果、该阶段原始 before 和 backup_ref，合入本次结果及尚未完成项；不能只返回本次增量。payload.previous_receipt_id 初次为 null、续作为输入收据 ID，用于关联而非索引扫描；最新收据本身足以供 verify/recovery 消费。新收据原子保存为新文件，旧收据不可改写，不能因重试以中间状态覆盖原备份。
 - P2-04 生成迁移外层 deployment evidence，绑定 manifest_id、同一项目／共享 HOME 范围、实际 ref/HEAD、累计部署操作及原始before/backup_ref、当前结果／配置checksum和真实验证报告引用。正常或可处理失败均原子保存到manifest私有目录；尚无smoke时只记录实际操作和未验证状态，不能声明部署验收通过。重试保留已完成操作及原始备份，最新单份外层记录足以供recovery使用；原生验证证据schema不变，资源改变后旧smoke不得冒充当前成功。计划、mock或合法哈希不代替真实证据。
+- 缺失累计部署证据时，第 10.2.6 节可以重新验收当前后置条件；新记录明确为 current-state，不补写历史路径、旧时间或原进程退出码。保留原manifest/apply、原件与先前失败记录。
 - 原生报告schema保持不变。外层迁移source_ref为null时，原生repository.sourceRef与raw sourceRef使用明确的无分支标签：detached Git为`HEAD`并绑定实际完整OID，非Git为`non-git`、null commit及unknown sourceRevision；不伪造分支，外层值不改写。首轮报告时间仍落在该部署窗口；累计重试可保留同一绑定apply批次内的成功报告，时间下界为该apply_receipt.finished_at、上界为最新deployment.finished_at，且仍复验实际报告字节、项目/ref/OID、环境、模式与进程结果。
 - verification payload 绑定 manifest_id、apply_id、deployment evidence 文件的原始 bytes SHA-256、验收时 refs、被保留的新资产状态，以及实际 cleanup 候选的路径／类型／操作／当前内容 checksum；输出 verification_id。共享配置按受管条目清理，保留 foreign entries。
+- verification 消费现态证据成功时，payload 另含 `acceptance_basis: "current-state"`；该字段须与所绑定deployment evidence的来源标记一致。普通执行来源证据不带此字段，不能把现态验收转述为历史执行已证明。
 - 首次 cleanup 必须读取命令中传入的 manifest、apply_receipt、deployment evidence、verification，重算各 ID／文件哈希并核对相互绑定、项目范围、成功状态与实际候选。只给哈希而没有可读取证据对象不得清理。每个破坏性操作前复验预期状态；内容变化或证据缺失返回 blocked，要求重新核对／verify 并再次确认。plan 源／目标前态变化不能按旧 manifest 初次 apply。
 - --confirm-cleanup 必须等于本次展示且用户刚确认的 verification_id；缺失、错误或未绑定当前清单的旧 ID 返回 blocked。合法 partial receipt 可继续绑定同一 verification_id，但须重新展示已完成／剩余范围并取得本次确认，Agent／wrapper 不得复用旧同意或自动填参。cleanup 正常成功或可处理失败都原子保存累计 cleanup_receipt 再返回；payload 绑定 manifest_id、verification_id、apply_id、deployment evidence 哈希、实际操作、保留资产和实际 refs／路径／checksum／不存在状态。
 - cleanup 重试须显式传入 --cleanup-receipt 并核对完整证据绑定。完整成功记录及后态一致才 already-complete；合法部分记录按第 10.2.2 节跳过成功且未变资源、续作前态仍匹配的未完成资源，不因“部分失败”本身拒绝。缺失／不完整收据、未知写入或后态冲突才 blocked，不扫描索引或凭目录消失猜成功；无法续作的已知部分写入可另走独立恢复。cleanup 永不删除原件备份、候选、manifest 或恢复收据，处置另按第 11.8 节人工授权。
@@ -720,7 +724,7 @@ plan逐字段核对approval.scope与本项sources/target_path/decision/candidate
 
 **deployment-evidence v1：**
 
-外层固定为 `{schema_version:1, payload:{...}, deployment_id:<sha256>}`，deployment_id 使用本节规范payload哈希；verify/cleanup同时验证此ID及已绑定的文件原始bytes哈希。由P2-04的部署执行路径生产，三个消费者verify/cleanup/recovery读取同一对象，不修改其引用的原生报告schema。
+外层固定为 `{schema_version:1, payload:{...}, deployment_id:<sha256>}`，deployment_id 使用本节规范payload哈希；verify/cleanup同时验证此ID及已绑定文件的原始bytes哈希。普通执行来源由P2-04生产；第10.2.6节的现态观察来源必须额外保留reconciliation标记。verify/cleanup/recovery消费同一类型对象，不修改其引用的原生报告schema。
 
 | payload 字段 | 类型／固定语义 |
 |---|---|
@@ -729,7 +733,8 @@ plan逐字段核对approval.scope与本项sources/target_path/decision/candidate
 | status | succeeded、not-verified、blocked、failed之一 |
 | projects | 项目结果数组，规范化root唯一，集合必须与manifest一致 |
 | shared_results | 本阶段共享resource_result数组；同resource一次结果，项目仅引用 |
-| started_at / finished_at | 本次执行实际RFC3339时间，带时区；不伪造尚未发生事件 |
+| started_at / finished_at | 本次执行的实际RFC3339时间，带时区；现态修复记录本次观察窗口，不填写未知历史时间 |
+| reconciliation | 可选的现态来源元数据；仅第10.2.6节路径产生，普通执行来源不带；累计重试不得移除或改写 |
 
 每个projects[]对象固定包含`root,source_ref,head,status,reason,nextStep,private_results,shared_operation_ids,report_refs`。root绑定manifest项目；source_ref为实际分支字符串，detached为null；head为实际完整OID字符串，非Git两者均null。status同上，reason/nextStep为字符串，失败／阻塞须解释原因及下一步。private_results为该项目私有resource_result数组，shared_operation_ids引用共享结果中的操作；report_refs为原生验证证据及正式报告的object_ref数组，无报告时为空，不捏造通过。每项目状态结合全部私有／共享依赖及当前真实smoke判定；全部成功且所需报告齐全才succeeded，操作完成但未验证为not-verified，阻塞为blocked，实际操作或验证失败为failed。批次按failed→blocked→not-verified→succeeded优先级汇总，不掩盖逐项目结果。
 
@@ -843,6 +848,23 @@ apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，ver
 | 证据输出不污染历史原件 | Given 目录原件、stage backup 或批准候选仍受前批保护；When 把部署输出指向其中的新文件；Then 写入前拒绝；同 vault 内不重叠的 sibling 输出仍允许 | `tests/test_sbtd_followup_preservation.py` |
 | 受管旧目录可升级和恢复 | Given 成功前批拥有与当前模板不同的安装目录；When 确认 followup 部署、重试及恢复；Then 使用已验证备份完成替换，恢复后旧目录逐字一致且前批证据未变 | `tests/test_sbtd_followup_preservation.py` |
 | 受管节 ownership 与退役树不锚定 | Given 前批 configure-graft 目标仅受管节可证且宿主段外有追加，或 launcher 位于 cleanup 退役目录；When 计划 followup；Then 宿主追加不阻断，退役树内 launcher 为 state-conflict | `tests/test_sbtd_followup_section_gate.py` |
+
+#### 10.2.6 缺失部署证据的现态修复（reconcile）
+
+本入口仅处理完整成功 apply 后，封存部署资源已经存在、但累计部署证据未保存的缺口。调用者显式给出原 manifest、完整 apply、真实缺失的历史证据路径及全新输出路径，并以 `--yes` 确认。本入口不重新执行部署，不重做 apply，不回滚、不清理，也不重封历史 manifest／回执。历史证据已存在、不完整 apply、无部署声明或无法证明原件时均拒绝。
+
+- 复验原始 manifest/apply 字节、项目 root/ref/HEAD、封存操作闭包、运行时版本与既有签名血统；新旧运行时不是仅凭版本文字即可兼容。旧 partial apply 不因本入口而取得跨运行时续作权限。
+- before 来自封存要求及完整保留原件，after 是本次新鲜测量；按原件而非当前目标内容推导受管配置。等价继承的 `configure-graft` 可以保持 absent→absent；文件原本存在而消失不是这个无写分支。apply 后态未被部署观察覆盖的资源仍须保持原回执后态。
+- 每项目运行固定原生图检查并生成当前观察窗口内的新报告，不接受调用者旧报告或手工资源结果。原件、目标及原本不存在的确定性备份槽在检查后与发布前复验；漂移或检查失败保留现场，不生成成功证据。
+- 新证据沿用 `deployment_evidence`，但 `payload.reconciliation` 固定包含 `kind: current-state`、`historical_execution: unknown`、绑定精确原始字节的 `manifest_ref`／`apply_receipt_ref`、`missing_deployment_evidence` 缺失快照及实际 `runtime_versions`。缺失引用使用允许 absent 的 snapshot，不是要求存在的普通 object_ref。
+- `succeeded` 表示当前后置条件已接受，不表示原进程曾被观察到成功退出，也不表示本次新写了配置或图。`started_at`／`finished_at` 只描述本次观察；不得虚构旧执行事实。
+- 两个证据路径必须是原 manifest 私有目录内的绝对物理路径；输出必须全新、不覆盖，避让原始输入、受管目标、原件及受保护前批对象。新输出对大小写／Unicode 等价拼写保守拒绝，不改变普通受管资源身份判定。历史缺失路径始终不写。
+- 成功返回 `status=reconciled`、`verification_id=null`、裸deployment文档及实际保存路径。随后标准 verify 消费该新文档，成功时输出 `verified` 及 `acceptance_basis=current-state`，仍不授权清理。
+- 累计重试与后继消费保留不可变来源；原生上下文检查和重试发布前要求历史路径仍缺失。该路径重现时拒绝，不静默切换证据或覆盖新出现的对象。cleanup/recovery继续保留自己的确认与证据门，不重新要求已被合法后继阶段取代的旧现场。
+
+这组新增字段与phase需要一致升级的生产者和消费者；旧严格schema读者可能拒绝，不提供隐藏alias或降级伪装。私有本机签名包的成功不证明公共发布包能直接续接任意旧manifest；安装、真实批次执行、宿主验收与备份处置均保持独立授权。
+
+回归追踪：`tests/test_sbtd_reconciliation.py` 覆盖生命周期、现场／原件漂移及发布竞态；`tests/test_sbtd_reconciliation_contracts.py` 覆盖来源、原始字节绑定与累计重试；`tests/test_sbtd_omp_reconciliation.py` 覆盖OMP继承等价无写与配置保护；`tests/test_sbtd_reconciliation_followup.py` 覆盖后继消费。测试中的原生边界替身只证明其声明的契约；真实CLI／Graft、宿主与跨平台结果分别取证，不互相替代。
 
 ### 10.3 catalog 与旧 Skill 退役
 

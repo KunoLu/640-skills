@@ -689,6 +689,30 @@ class BootstrapTaskTests(ProjectStateTestCase):
             "default",
         )
 
+    def test_cancelled_bootstrap_is_not_a_completed_bootstrap(self) -> None:
+        self.write_bootstrap(status="cancelled")
+
+        result = self.inspect()
+
+        self.assertEqual(result["status"], "bootstrap-required")
+        assert result["bootstrapTask"] is not None
+        self.assertEqual(result["bootstrapTask"]["status"], "cancelled")
+
+    def test_cancelled_active_task_is_a_readable_terminal_record(self) -> None:
+        self.write_task(".sbtd/tasks/example/task.md", status="cancelled")
+        self.write_pointer()
+
+        result = self.inspect()
+
+        self.assertEqual(result["status"], "success")
+        self.assert_summary(
+            result["activeTask"],
+            ".sbtd/tasks/example/task.md",
+            "example",
+            "cancelled",
+            "default",
+        )
+
     def test_malformed_bootstrap_is_blocked(self) -> None:
         self.write_bootstrap("---\nid: [unclosed\n---\n")
 

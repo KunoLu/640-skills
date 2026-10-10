@@ -10,6 +10,12 @@ Boundary (docs/prd/sbtd-workflow-v2-onboard-contracts.md, main PRD section 10.2)
 - Schema validity, canonical IDs and declared bindings prove structure and
   declared relationships only. They are not filesystem safety, authorization,
   execution or smoke proof; runtime producers own those checks.
+- Deployment evidence may carry an optional closed ``payload.reconciliation``
+  record marking a current-state observation of an interrupted deployment:
+  ``historical_execution`` stays ``unknown``, the record cites the exact
+  original manifest/apply input bytes, and ``succeeded`` then means the
+  current postconditions were accepted, never that the original process was
+  observed to exit0 or that new target writes occurred.
 - ``jsonschema`` is imported lazily inside the validation path so that module
   import, pure argument parsing and the existing CLI keep working without the
   dependency. Missing ``jsonschema`` fails closed with a clear ContractError;
@@ -24,6 +30,7 @@ import math
 import os
 import re
 import sys
+import unicodedata
 from collections.abc import Iterable, Iterator, Mapping
 from datetime import datetime
 from itertools import chain
@@ -94,6 +101,7 @@ _ENVELOPE_PROJECT_STATUSES = {
     ("migration", "apply"): frozenset(
         {"applied", "already-complete", "blocked", "failed"}
     ),
+    ("migration", "reconcile"): frozenset({"reconciled", "blocked", "failed"}),
     ("migration", "verify"): frozenset({"verified", "blocked", "failed"}),
     ("migration", "cleanup"): frozenset(
         {"cleaned", "already-complete", "blocked", "failed"}
@@ -108,11 +116,25 @@ _ENVELOPE_PROJECT_STATUSES = {
 _ENVELOPE_ARTIFACT = {
     ("migration", "plan"): ("migration", "manifest", "manifest"),
     ("migration", "apply"): ("migration", "apply_receipt", "apply_receipt"),
+    ("migration", "reconcile"): (
+        "migration",
+        "deployment_evidence",
+        "deployment_evidence",
+    ),
     ("migration", "verify"): ("migration", "verification", "verification"),
     ("migration", "cleanup"): ("migration", "cleanup_receipt", "cleanup_receipt"),
     ("recovery", "plan"): ("recovery", "plan", "recovery_plan"),
     ("recovery", "apply"): ("recovery", "receipt", "recovery_receipt"),
 }
+
+# Envelope success variants that name a transport-phase outcome distinct from
+# the embedded artifact's own success status. A reconciled envelope embeds
+# current-state deployment evidence whose payload status stays "succeeded".
+_ENVELOPE_SUCCESS_ALIASES = {"reconciled": "succeeded"}
+
+
+def _artifact_success(status: str) -> str:
+    return _ENVELOPE_SUCCESS_ALIASES.get(status, status)
 
 _ENVELOPE_IDENTIFIER_KEYS = {
     "migration": frozenset({"manifest_id", "verification_id"}),
@@ -456,6 +478,20 @@ def _path_contains(parent: str, child: str) -> bool:
     return False
 
 
+def _publication_paths_overlap(left: str, right: str) -> bool:
+    """Reject ambiguous new output names without changing resource identity.
+
+    Absent names have no inode to compare. Reserve case/Unicode-equivalent
+    spellings conservatively, including on case-sensitive filesystems.
+    """
+    if _path_contains(left, right) or _path_contains(right, left):
+        return True
+    left_parts = tuple(unicodedata.normalize("NFC", p).casefold() for p in Path(left).parts)
+    right_parts = tuple(unicodedata.normalize("NFC", p).casefold() for p in Path(right).parts)
+    length = min(len(left_parts), len(right_parts))
+    return left_parts[:length] == right_parts[:length]
+
+
 def _paths_overlap(paths: Iterable[str]) -> bool:
     values = list(paths)
     return any(
@@ -716,6 +752,10 @@ def _manifest_input_references(
 ) -> Iterator[Mapping[str, Any]]:
     for project in payload["projects"]:
         yield from project["sources"]
+        no_touch = project.get("agents_no_touch")
+        if no_touch is not None:
+            yield no_touch["target"]
+            yield no_touch["template"]
     deployment = payload["deployment"]
     if deployment is not None:
         yield from deployment["inputs"]
@@ -1304,6 +1344,18 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
         ]
         _check_nested_reference_paths(report_refs)
         _check_reference_states(report_refs)
+        reconciliation = payload.get("reconciliation")
+        if reconciliation is not None:
+            cited_paths = [
+                reconciliation["manifest_ref"]["path"],
+                reconciliation["apply_receipt_ref"]["path"],
+                reconciliation["missing_deployment_evidence"]["path"],
+            ]
+            if _paths_identify_same(cited_paths):
+                _fail(
+                    "semantic-violation",
+                    "reconciliation inputs and the missing-evidence path must be distinct",
+                )
     shared_ids: set[str] = set()
     for result in payload["shared_results"]:
         if result["phase"] != phase:
@@ -1816,7 +1868,7 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
         payload = document["payload"]
         if severity.get(payload.get("status"), 0) > envelope_severity:
             _fail("semantic-violation", "envelope status masks its artifact outcome")
-        if envelope_severity == 0 and value["status"] != payload.get(
+        if envelope_severity == 0 and _artifact_success(value["status"]) != payload.get(
             "status", "planned"
         ):
             _fail(
@@ -1827,6 +1879,11 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
             linked = value["manifest_id"] == document["manifest_id"]
         elif doc_kind == "apply_receipt":
             linked = value["manifest_id"] == payload["manifest_id"]
+        elif doc_kind == "deployment_evidence":
+            linked = (
+                value["manifest_id"] == payload["manifest_id"]
+                and value["verification_id"] is None
+            )
         elif doc_kind == "verification":
             linked = (
                 value["manifest_id"] == payload["manifest_id"]
@@ -1853,6 +1910,25 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
                 "semantic-violation",
                 "envelope identifiers do not match the embedded artifact",
             )
+        if doc_kind == "deployment_evidence":
+            reconciliation = payload.get("reconciliation")
+            if value["status"] == "reconciled" and reconciliation is None:
+                _fail(
+                    "semantic-violation",
+                    "a reconciled envelope must embed current-state reconciliation evidence",
+                )
+            output_path = artifact.get("deployment_evidence_path")
+            if reconciliation is not None and output_path is not None:
+                cited = [
+                    reconciliation["manifest_ref"]["path"],
+                    reconciliation["apply_receipt_ref"]["path"],
+                    reconciliation["missing_deployment_evidence"]["path"],
+                ]
+                if any(_publication_paths_overlap(output_path, path) for path in cited):
+                    _fail(
+                        "semantic-violation",
+                        "reconcile output path identifies a cited reconciliation input",
+                    )
         artifact_roots = sorted(project["root"] for project in payload["projects"])
         if sorted(roots) != artifact_roots:
             _fail(
@@ -1865,7 +1941,7 @@ def _check_envelope(value: Mapping[str, Any], kind: str) -> None:
             if (
                 project.get("status") is not None
                 and severity.get(summary["status"], 0) == 0
-                and summary["status"] != project["status"]
+                and _artifact_success(summary["status"]) != project["status"]
             ):
                 _fail(
                     "semantic-violation", "project summary changed the success variant"
@@ -2049,6 +2125,13 @@ def _immutable_stage_references(
         for result in results:
             if result["backup_ref"] is not None:
                 yield result["backup_ref"]
+    reconciliation = payload.get("reconciliation")
+    if reconciliation is not None:
+        # The cited missing historical receipt is a stage-cited snapshot too:
+        # it stays reserved even though its state is exactly absent. The
+        # manifest/apply input refs are not stage-produced artifacts and are
+        # deliberately not yielded here.
+        yield reconciliation["missing_deployment_evidence"]
 
 
 def _source_object_references(
@@ -2273,6 +2356,11 @@ def _bind_resource_states_and_backups(
                     )
             observed = result["after"]["type"]
             removed = operation["change"]["kind"] == "remove" and observed == "absent"
+            kept_absent = (
+                operation["change"]["kind"] == "configure-graft"
+                and result["before"]["type"] == "absent"
+                and observed == "absent"
+            )
             if (
                 operation["change"]["kind"] == "remove"
                 and operation["selector"] == "whole-resource"
@@ -2282,7 +2370,7 @@ def _bind_resource_states_and_backups(
                     "binding-violation",
                     "whole-resource removal must leave the resource absent",
                 )
-            if not removed and observed != expected:
+            if not removed and not kept_absent and observed != expected:
                 _fail(
                     "binding-violation", "successful result has the wrong resource type"
                 )
@@ -2404,10 +2492,46 @@ def _bind_stage_receipt(
                 )
 
 
+def _bind_reconciliation(
+    metadata: Mapping[str, Any],
+    raw_documents: Mapping[str, Any],
+    manifest_payload: Mapping[str, Any],
+) -> None:
+    """Bind a current-state reconciliation record to its cited input bytes.
+
+    Reconciled evidence is accepted only against the exact original manifest
+    and apply receipt raw bytes its provenance cites; a caller that cannot
+    supply both cannot bind the record, and a digest mismatch rejects
+    corrupted or substituted inputs.
+    """
+    if metadata["runtime_versions"]["graft"] != manifest_payload["tool_versions"].get("graft"):
+        _fail(
+            "binding-violation",
+            "reconciliation cannot change the manifest's pinned Graft version",
+        )
+    for kind, key in (
+        ("manifest", "manifest_ref"),
+        ("apply_receipt", "apply_receipt_ref"),
+    ):
+        raw = raw_documents.get(kind)
+        if raw is None:
+            _fail(
+                "binding-violation",
+                "reconciled deployment evidence requires the cited raw input bytes",
+            )
+        if _raw_digest(raw) != metadata[key]["state"]["checksum"]:
+            _fail(
+                "binding-violation",
+                "reconciliation input reference does not match the supplied raw bytes",
+                exit_code=3,
+            )
+
+
 def _bind_verification(
     manifest_payload: Mapping[str, Any],
     document: Mapping[str, Any],
     apply_document: Mapping[str, Any] | None,
+    deployment_document: Mapping[str, Any] | None,
     requirements: Mapping[tuple[str, str], Mapping[str, Any]],
     stage_results: Mapping[str, Mapping[str, Any]],
     raw_documents: Mapping[str, Any],
@@ -2422,6 +2546,21 @@ def _bind_verification(
     _check_raw_hash(
         "deployment_evidence", payload["deployment_evidence_hash"], raw_documents
     )
+    reconciled = (
+        deployment_document is not None
+        and deployment_document["payload"].get("reconciliation") is not None
+    )
+    if payload.get("acceptance_basis") == "current-state":
+        if not reconciled:
+            _fail(
+                "binding-violation",
+                "current-state acceptance requires reconciled deployment evidence",
+            )
+    elif reconciled:
+        _fail(
+            "binding-violation",
+            "reconciled deployment evidence requires a current-state acceptance basis",
+        )
     manifest_projects = {
         project["root"]: project for project in manifest_payload["projects"]
     }
@@ -3039,7 +3178,11 @@ def validate_declared_bindings(
 
     Only caller-provided objects and raw bytes are checked. A supplied recovery
     plan requires the source stage for each inverse step; other absent kinds
-    are not inferred as unexecuted. No filesystem reads take place.
+    are not inferred as unexecuted. Deployment evidence carrying current-state
+    reconciliation provenance additionally requires the exact raw manifest and
+    apply receipt bytes it cites, and a bound verification must expose
+    acceptance_basis "current-state" exactly when its deployment evidence is
+    reconciled. No filesystem reads take place.
     """
     validate_document(manifest, "manifest")
     manifest_payload = manifest["payload"]
@@ -3123,6 +3266,9 @@ def validate_declared_bindings(
                 "deployment evidence apply_id does not match the apply receipt",
             )
         _bind_stage_receipt(manifest_payload, deployment, "deploy")
+        reconciliation = deployment["payload"].get("reconciliation")
+        if reconciliation is not None:
+            _bind_reconciliation(reconciliation, raw, manifest_payload)
     verification = supplied.get("verification")
     if verification is not None:
         _bind_success_gate(apply_document, {"applied", "already-complete"})
@@ -3131,6 +3277,7 @@ def validate_declared_bindings(
             manifest_payload,
             verification,
             apply_document,
+            deployment,
             requirements,
             stage_results,
             raw,
@@ -3302,8 +3449,12 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
     null previous receipt reference. Otherwise the current document must link
     the previous document's ID and carry every previously succeeded result
     forward with its original before/after and backup (or protection) refs.
-    Report files in the supplied previous record stay reserved even when the
-    current report list replaces them with fresh, disjoint report references.
+    Deployment evidence retries must carry their reconciliation provenance
+    (or absence of it) forward unchanged, so a retry can never launder a
+    current-state observation back into executed-origin evidence or vice
+    versa. Report files in the supplied previous record stay reserved even
+    when the current report list replaces them with fresh, disjoint report
+    references.
     """
     if kind not in _CUMULATIVE_KINDS:
         _fail("unknown-kind", "kind does not support cumulative validation")
@@ -3349,6 +3500,15 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
         _fail(
             "cumulative-violation",
             "retry changed its bound evidence chain",
+            exit_code=3,
+        )
+    if kind == "deployment_evidence" and (
+        current["payload"].get("reconciliation")
+        != previous["payload"].get("reconciliation")
+    ):
+        _fail(
+            "cumulative-violation",
+            "retry changed its reconciliation provenance",
             exit_code=3,
         )
     if {project["root"] for project in current["payload"]["projects"]} != {
@@ -3468,8 +3628,10 @@ def make_envelope(
 
     ``artifact`` is the stage document (for example the manifest for a
     migration plan phase); it is wrapped under the fixed phase key, or the
-    holder stays an empty object. ``identifiers`` carries the honest id fields
-    (null when not applicable).
+    holder stays an empty object. For the migration reconcile phase the
+    artifact is the complete holder body carrying the bare deployment
+    evidence document and its private output path. ``identifiers`` carries
+    the honest id fields (null when not applicable).
     """
     if mode not in _ENVELOPE_IDENTIFIER_KEYS:
         _fail("unknown-kind", "mode must be migration or recovery")
@@ -3485,7 +3647,10 @@ def make_envelope(
     if artifact is not None:
         if not isinstance(artifact, dict):
             _fail("unexpected-type", "artifact must be a contract document")
-        body[artifact_key] = artifact
+        if (mode, phase) == ("migration", "reconcile"):
+            body.update(artifact)
+        else:
+            body[artifact_key] = artifact
     envelope: dict[str, Any] = {
         "mode": mode,
         "phase": phase,
@@ -3513,6 +3678,10 @@ def validate_deployment_result(value: Any) -> Any:
     if any(
         _path_contains(value["path"], reference["path"])
         or _path_contains(reference["path"], value["path"])
+        or (
+            reference["state"]["type"] == "absent"
+            and _publication_paths_overlap(value["path"], reference["path"])
+        )
         for reference in _immutable_stage_references(value["evidence"]["payload"])
     ):
         _fail(

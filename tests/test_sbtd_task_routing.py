@@ -724,6 +724,44 @@ class TaskRoutingTests(unittest.TestCase):
             store.inspect().document.frontmatter["workflow_mode"], "strict"
         )
 
+    def test_continuing_a_cancelled_task_keeps_its_recorded_choice(self) -> None:
+        store = TaskStore(self.root)
+        original = store.create(
+            "withdrawn", mode="lite", body="Cancelled scope.\n", confirmed=True
+        )
+        store.transition(
+            "withdrawn",
+            "cancelled",
+            reason="scope withdrawn",
+            evidence="decision",
+            confirmed=True,
+        )
+        before = (self.root / original.task_path).read_bytes()
+        decision = TaskRouter(store).route(
+            RouteRequest(intent="continue", task_id="withdrawn")
+        )
+        self.assertEqual(decision.status, "ready")
+        self.assertEqual(decision.mode, "lite")
+        self.assertTrue(decision.persisted)
+        assert decision.task is not None
+        self.assertEqual(decision.task.document.frontmatter["status"], "cancelled")
+        self.assertEqual((self.root / original.task_path).read_bytes(), before)
+        changed = TaskRouter(store).route(
+            RouteRequest(
+                intent="continue",
+                task_id="withdrawn",
+                explicit_mode="strict",
+                mode_note="user now wants strict review",
+                confirmed=True,
+            )
+        )
+        self.assertEqual(changed.status, "ready")
+        self.assertTrue(changed.persisted)
+        persisted = store.inspect("withdrawn").document.frontmatter
+        self.assertEqual(persisted["workflow_mode"], "strict")
+        self.assertEqual(persisted["status"], "cancelled")
+        self.assertIsNone(persisted["completed_at"])
+
 
 if __name__ == "__main__":
     unittest.main()

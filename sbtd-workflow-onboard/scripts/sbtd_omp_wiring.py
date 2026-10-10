@@ -328,11 +328,17 @@ def analyze_omp_configuration(
     *,
     disabled_extensions: Sequence[str] = (),
     retire_legacy: bool = False,
+    active_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     """Analyze the active OMP target and explicit inherited records.
 
     ``inherited`` is the caller's observed source set, already honoring profile
     and provider gates. This function does not rediscover or execute it.
+    ``active_bytes`` substitutes verified in-memory bytes for the active
+    document instead of reading ``target`` from disk; every ownership,
+    disabled-identity and inheritance gate applies unchanged, so a caller
+    holding proven original bytes can derive the deterministic outcome
+    without trusting live target content.
     """
     if not isinstance(target, Path) or not target.is_absolute():
         _fail("invalid-argument", "the OMP MCP target must be an absolute path")
@@ -359,10 +365,18 @@ def analyze_omp_configuration(
         {_GLOBAL_NAME: desired_omp_server(paths[0])} if paths else {}
     )
     sources = sorted(_normalized_inherited(inherited), key=_source_order)
-    raw = b""
     document: dict[str, Any] = {"mcpServers": {}}
     existing: dict[str, Mapping[str, Any]] = {}
-    if target.exists():
+    if active_bytes is not None:
+        # Verified in-memory document: empty bytes mean no document (an
+        # absent or never-written target), never a malformed one.
+        if not isinstance(active_bytes, (bytes, bytearray)):
+            _fail("invalid-argument", "the active OMP MCP document must be bytes")
+        raw = bytes(active_bytes)
+        if raw:
+            document = _strict_json(raw, "active OMP MCP configuration")
+            existing = _servers(document, "active OMP MCP configuration")
+    elif target.exists():
         raw = target.read_bytes()
         document = _strict_json(raw, "active OMP MCP configuration")
         existing = _servers(document, "active OMP MCP configuration")

@@ -189,6 +189,77 @@ class CodexDeploymentContractTests(unittest.TestCase):
         with self.assertRaises(contracts.ContractError):
             contracts.seal_document("manifest", broken)
 
+    def test_configure_graft_may_keep_an_absent_target_absent(self):
+        payload = fixtures.build_manifest_payload()
+        target = "/private/home/.omp/mcp.json"
+        resource = contracts.resource_id("json", target)
+        policy_path = (
+            Path(__file__).resolve().parents[1]
+            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
+        )
+        policy = {
+            "path": str(policy_path),
+            "state": {
+                "type": "file",
+                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
+            },
+        }
+        payload["shared_roots"].append({
+            "kind": "omp-home", "path": "/private/home/.omp",
+            "dependent_projects": list(fixtures.BOTH),
+        })
+        payload["deployment"] = {"mode": "init", "platform": "omp", "inputs": []}
+        operation = {
+            "phase": "deploy",
+            "resource_id": resource,
+            "operation_id": contracts.operation_id("deploy", resource, "graft-omp-mcp"),
+            "owner_kind": "json",
+            "target": target,
+            "selector": "graft-omp-mcp",
+            "change": {"kind": "configure-graft", "source_ref": policy},
+            "ownership": {"kind": "template-source", "reference": policy},
+            "before_requirement": {"kind": "state", "state": fixtures.ABSENT},
+            "dependent_projects": list(fixtures.BOTH),
+        }
+        payload["shared_operations"].append(operation)
+        for project in payload["projects"]:
+            project["shared_operation_ids"].append(operation["operation_id"])
+        for before in (fixtures.ABSENT, fixtures.file_state(3)):
+            with self.subTest(before=before["type"]):
+                operation["before_requirement"]["state"] = before
+                manifest = contracts.seal_document("manifest", payload)
+                applied = fixtures.build_apply_receipt(manifest)
+                evidence_payload = fixtures.build_deployment_evidence_payload(
+                    manifest, applied
+                )
+                evidence_payload["shared_results"].append({
+                    "phase": "deploy",
+                    "resource_id": resource,
+                    "operation_ids": [operation["operation_id"]],
+                    "dependent_projects": list(fixtures.BOTH),
+                    "status": "succeeded",
+                    "backup_ref": None if before == fixtures.ABSENT else {
+                        "path": f"{fixtures.BACKUP_ROOT}/deploy/{resource}",
+                        "state": before,
+                    },
+                    "before": before,
+                    "after": fixtures.ABSENT,
+                    "error": None,
+                })
+                for project in evidence_payload["projects"]:
+                    project["shared_operation_ids"].append(operation["operation_id"])
+                evidence = contracts.seal_document(
+                    "deployment_evidence", evidence_payload
+                )
+                documents = {"apply_receipt": applied, "deployment_evidence": evidence}
+                if before == fixtures.ABSENT:
+                    contracts.validate_declared_bindings(manifest, documents)
+                else:
+                    with self.assertRaises(contracts.ContractError) as caught:
+                        contracts.validate_declared_bindings(manifest, documents)
+                    self.assertEqual(caught.exception.code, "binding-violation")
+                    self.assertIn("wrong resource type", str(caught.exception))
+
 
 
 if __name__ == "__main__":

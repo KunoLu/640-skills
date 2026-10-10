@@ -7,6 +7,7 @@ separate stages.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -106,15 +107,22 @@ def deployment_operations(
     for project in projects:
         root = Path(project["root"])
         prior = project["private_operations"]
-        private[str(root)] = [
-            _operation(
-                root / "AGENTS.md",
-                "markdown",
-                "graft-agents",
-                "configure-graft",
-                [str(root)],
-                prior,
-            ),
+        operations: list[dict[str, Any]] = []
+        if project.get("agents_no_touch") is None:
+            operations.append(
+                _operation(
+                    root / "AGENTS.md",
+                    "markdown",
+                    "graft-agents",
+                    "configure-graft",
+                    [str(root)],
+                    prior,
+                )
+            )
+        # A sealed no-touch proof preserves the exact aligned AGENTS.md, so
+        # no fence is appended; the graph build is independent capability
+        # and stays declared either way.
+        operations.append(
             _operation(
                 root / "graft",
                 "directory",
@@ -122,8 +130,9 @@ def deployment_operations(
                 "build-graft",
                 [str(root)],
                 prior,
-            ),
-        ]
+            )
+        )
+        private[str(root)] = operations
     shared = []
     if platform == "codex" and codex_home is not None:
         shared.append(
@@ -310,6 +319,7 @@ def render_configuration(
     *,
     install_template: bool = False,
     retire_legacy: bool = False,
+    approved_body: bytes | None = None,
 ) -> bytes:
     from sbtd_codex_wiring import (
         codex_hooks_candidate,
@@ -319,6 +329,10 @@ def render_configuration(
 
     selector = operation["selector"]
     if selector == "graft-agents":
+        if approved_body is not None:
+            # The migration manifest chain proves this exact approved body;
+            # deployment adds or refreshes only the managed fence around it.
+            return project_agents_candidate(approved_body)
         if install_template:
             from onboard import PROJECT_AGENTS_TEMPLATE
 
@@ -338,12 +352,22 @@ def render_configuration(
         discovered = discover_omp_sources(roots, home=user_home(), environ=os.environ)
         if discovered["target"] != str(target):
             _fail("scope-conflict", "the OMP resource leaves the active profile")
+        if (
+            not before
+            and target.exists()
+            and target.stat().st_size == 0
+        ):
+            # A present but empty active document is invalid JSON, exactly as
+            # the live analysis has always enforced; only genuine absence
+            # renders from an empty document.
+            _fail("invalid-json", "the active OMP MCP configuration is not strict JSON")
         analysis = analyze_omp_configuration(
             target,
             bindings,
             discovered["sources"],
             disabled_extensions=discovered["disabled_extensions"],
             retire_legacy=retire_legacy,
+            active_bytes=before,
         )
         return omp_mcp_candidate(before, analysis)
     if selector == "graft-hooks":
@@ -363,6 +387,7 @@ def execute_resource(
     launcher_state: Mapping[str, Any],
     install_template: bool = False,
     retire_legacy: bool = False,
+    approved_body: bytes | None = None,
 ) -> dict[str, Any]:
     """One observed resource result; caller persists cumulative stage evidence."""
     result: dict[str, Any] = {
@@ -404,6 +429,7 @@ def execute_resource(
                 bindings,
                 install_template=install_template,
                 retire_legacy=retire_legacy,
+                approved_body=approved_body,
             )
         if operation["selector"] in {"graft-mcp", "graft-hooks", "graft-omp-mcp"}:
             installed_package = Path(bindings[0]["launcher"]).parents[1]
@@ -782,8 +808,81 @@ def attach_deployment(
         )
 
 
+def _require_proven_input_changes(
+    payload: Mapping[str, Any],
+    sealed: Sequence[Mapping[str, Any]],
+    discovered: Sequence[Mapping[str, Any]],
+    stage_results: Mapping[str, Mapping[str, Any]] | None,
+) -> None:
+    """Recognize only input changes proven by bound successful stage results.
+
+    Between planning and deployment a bound stage may legitimately change a
+    sealed configuration input; an approved apply removal is the known case.
+    Every differing input must chain from its sealed state through succeeded
+    receipt outcomes to the live state, with the retained original still
+    intact. The input path set itself is closed: new or vanished paths,
+    unbound or partial outcomes and mutated originals keep the drift
+    rejection.
+    """
+    sealed_states = {entry["path"]: entry["state"] for entry in sealed}
+    live_states = {entry["path"]: entry["state"] for entry in discovered}
+    if not stage_results or sealed_states.keys() != live_states.keys():
+        _fail("state-conflict", "the sealed OMP configuration sources have drifted")
+    operations = {
+        (operation["phase"], operation["resource_id"]): operation
+        for operation in (
+            *(
+                operation
+                for project in payload["projects"]
+                for operation in project["private_operations"]
+            ),
+            *payload["shared_operations"],
+        )
+    }
+    for path, proven in sealed_states.items():
+        live_state = live_states[path]
+        if proven == live_state:
+            continue
+        for phase in ("apply", "deploy", "cleanup"):
+            matched = []
+            for resource_id, result in (stage_results.get(phase) or {}).items():
+                operation = operations.get((phase, resource_id))
+                if operation is not None and operation["target"] == path:
+                    matched.append(result)
+            if not matched:
+                continue
+            result = matched[0]
+            backup = result["backup_ref"]
+            if (
+                len(matched) != 1
+                or result["status"] != "succeeded"
+                or result["before"] != proven
+                or result["after"] is None
+                or (
+                    proven["type"] != "absent"
+                    and (
+                        backup is None
+                        or snapshot(Path(backup["path"])) != backup["state"]
+                    )
+                )
+            ):
+                _fail(
+                    "state-conflict",
+                    "the sealed OMP configuration sources have drifted",
+                )
+            proven = result["after"]
+        if proven != live_state:
+            _fail(
+                "state-conflict",
+                "the sealed OMP configuration sources have drifted",
+            )
+
+
 def validate_deployment_declarations(
-    payload: Mapping[str, Any], *, followup_deployed: Mapping[str, Any] | None = None
+    payload: Mapping[str, Any],
+    *,
+    followup_deployed: Mapping[str, Any] | None = None,
+    stage_results: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
     """Re-derive the closed deploy write set without trusting a resealed list."""
     from onboard import default_codex_home
@@ -843,13 +942,16 @@ def validate_deployment_declarations(
         )
     for project in payload["projects"]:
         expected = {
-            (
-                str(Path(project["root"]) / "AGENTS.md"),
-                "configure-graft",
-                "graft-agents",
-            ),
             (str(Path(project["root"]) / "graft"), "build-graft", "whole-resource"),
         }
+        if project.get("agents_no_touch") is None:
+            expected.add(
+                (
+                    str(Path(project["root"]) / "AGENTS.md"),
+                    "configure-graft",
+                    "graft-agents",
+                )
+            )
         actual = {
             (operation["target"], operation["change"]["kind"], operation["selector"])
             for operation in project["private_operations"]
@@ -943,9 +1045,11 @@ def validate_deployment_declarations(
             [Path(root) for root in roots], home=user_home(), environ=os.environ
         )
         if declaration["inputs"] != discovered["inputs"]:
-            _fail(
-                "state-conflict",
-                "the sealed OMP configuration sources have drifted",
+            _require_proven_input_changes(
+                payload,
+                declaration["inputs"],
+                discovered["inputs"],
+                stage_results,
             )
         if mcp[0]["target"] != discovered["target"]:
             _fail("scope-conflict", "the MCP resource leaves the active OMP profile")
@@ -1044,6 +1148,28 @@ class DeploymentContext:
     previous: dict[str, Any] | None
     started_at: str
     expected_before: dict[str, Mapping[str, Any]]
+    manifest_raw: bytes
+    apply_raw: bytes
+
+
+def _require_output_clear_of_missing(
+    output_path: Path, payload: Mapping[str, Any]
+) -> None:
+    """Keep new evidence off a reconciled record's missing historical path.
+
+    Reconciled deployment evidence cites the historical receipt it observed
+    absent; that path stays reserved for the truthful record, so no later
+    evidence output may equal it or overlap it in either direction.
+    """
+    reconciliation = payload.get("reconciliation")
+    if reconciliation is None:
+        return
+    missing = Path(reconciliation["missing_deployment_evidence"]["path"])
+    if contracts._publication_paths_overlap(str(output_path), str(missing)):
+        _fail(
+            "private-scope",
+            "deployment evidence must not overlap the cited missing historical receipt",
+        )
 
 
 def load_deployment_context(
@@ -1107,14 +1233,13 @@ def load_deployment_context(
     if snapshot(output_path) != _ABSENT:
         _fail("state-conflict", "the deployment evidence target already exists")
     for protected_path, is_directory in _protected_followup_ancestry(manifest):
-        if output_path == protected_path or (
-            is_directory
-            and contracts._path_contains(str(protected_path), str(output_path))
-        ):
+        if contracts._publication_paths_overlap(str(output_path), str(protected_path)):
             _fail(
                 "private-scope",
                 "deployment evidence must not overlap a protected predecessor object",
             )
+    if previous is not None:
+        _require_output_clear_of_missing(output_path, previous["payload"])
     declared_roots = {project["root"] for project in manifest["payload"]["projects"]}
     if {str(root) for root in roots} != declared_roots or len(roots) != len(
         declared_roots
@@ -1209,19 +1334,49 @@ def load_deployment_context(
         previous,
         started_at,
         expected_before,
+        manifest_raw,
+        apply_raw,
     )
 
 
-def save_deployment_evidence(
+def _assemble_deployment_evidence(
     context: DeploymentContext,
     results: Mapping[str, Mapping[str, Any]],
     reports: Mapping[str, Sequence[Mapping[str, Any]]],
     *,
     failed_smokes: set[str],
+    reconciliation: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Seal one observed cumulative deployment, preserving all prior successes."""
+    """Assemble and fully validate one cumulative evidence document, unsaved.
+
+    This is the pure assembly/validation portion of save_deployment_evidence:
+    same project statuses, same payload, same seals and binding checks, but no
+    filesystem write. Reconciliation provenance is immutable through a retry
+    chain: a fresh current-state record supplies its metadata exactly once, a
+    retry of an already reconciled record carries the identical metadata
+    forward, and the two can never disagree or silently appear/disappear.
+    When reconciliation provenance is present, the raw manifest/apply bytes
+    are bound explicitly so the metadata can never point at other inputs.
+    """
     from sbtd_migration_verify import validate_deployment_reports
 
+    prior_reconciliation = (
+        None
+        if context.previous is None
+        else context.previous["payload"].get("reconciliation")
+    )
+    if (
+        reconciliation is not None
+        and prior_reconciliation is not None
+        and reconciliation != prior_reconciliation
+    ):
+        _fail(
+            "provenance-conflict",
+            "reconciliation provenance cannot change across a deployment retry",
+        )
+    effective_reconciliation = (
+        reconciliation if reconciliation is not None else prior_reconciliation
+    )
     manifest = context.manifest
     projects: list[dict[str, Any]] = []
     shared_operations = [
@@ -1313,18 +1468,51 @@ def save_deployment_evidence(
             None,
         ),
     }
+    if effective_reconciliation is not None:
+        payload["reconciliation"] = copy.deepcopy(dict(effective_reconciliation))
     evidence = contracts.seal_document("deployment_evidence", payload)
     contracts.validate_cumulative(context.previous, evidence, "deployment_evidence")
-    contracts.validate_declared_bindings(
-        manifest,
-        {"apply_receipt": context.applied, "deployment_evidence": evidence},
+    if effective_reconciliation is not None:
+        contracts.validate_declared_bindings(
+            manifest,
+            {"apply_receipt": context.applied, "deployment_evidence": evidence},
+            {"manifest": context.manifest_raw, "apply_receipt": context.apply_raw},
+        )
+    else:
+        contracts.validate_declared_bindings(
+            manifest,
+            {"apply_receipt": context.applied, "deployment_evidence": evidence},
+        )
+    return evidence
+
+
+def save_deployment_evidence(
+    context: DeploymentContext,
+    results: Mapping[str, Mapping[str, Any]],
+    reports: Mapping[str, Sequence[Mapping[str, Any]]],
+    *,
+    failed_smokes: set[str],
+) -> dict[str, Any]:
+    """Seal one observed cumulative deployment, preserving all prior successes.
+
+    The proposed result is fully validated before the single write: a retry
+    of reconciled evidence can never claim its cited missing historical
+    path, and no invalid result is ever persisted.
+    """
+    evidence = _assemble_deployment_evidence(
+        context, results, reports, failed_smokes=failed_smokes
     )
+    _require_output_clear_of_missing(context.output_path, evidence["payload"])
+    result = contracts.validate_deployment_result(
+        {"path": str(context.output_path), "evidence": evidence}
+    )
+    from sbtd_migration import _require_missing_historical_receipt
+
+    _require_missing_historical_receipt(evidence)
     save_document(
         context.output_path, evidence, private_root=context.manifest_path.parent
     )
-    return contracts.validate_deployment_result(
-        {"path": str(context.output_path), "evidence": evidence}
-    )
+    return result
 
 
 def run_project_smoke(
@@ -1489,6 +1677,15 @@ def execute_migration_deployment(
     # outcome gate just proved, keeping fence-outside user text; earlier
     # batch kinds keep the explicit template-replacement authorization.
     install_template = manifest["payload"].get("followup") is None
+    from sbtd_migration_plan import approved_agents_provenance
+
+    # Signature-approved project routing keeps its exact approved body: the
+    # re-proved manifest chain (origin signature, sealed target and
+    # candidate states), never the live bytes or a name prefix, authorizes
+    # preservation. Targets without provenance keep the explicit template
+    # replacement or followup merge behavior. The same per-target base feeds
+    # the preflight render and the executing render below.
+    _origin, approved_bodies = approved_agents_provenance(manifest)
     # Render every config against the currently expected bytes before the first
     # mutation; malformed/foreign ownership cannot fail after another write.
     for operation in operations:
@@ -1502,6 +1699,7 @@ def execute_migration_deployment(
             else read_file(Path(operation["target"]), state),
             bindings,
             install_template=install_template,
+            approved_body=approved_bodies.get(operation["target"]),
         )
     vault = Path(manifest["payload"]["backup_root"])
     stopped = False
@@ -1525,6 +1723,7 @@ def execute_migration_deployment(
             runtime=runtime,
             install_template=install_template,
             launcher_state=launcher_state,
+            approved_body=approved_bodies.get(operation["target"]),
         )
         if old is not None and old["backup_ref"] is not None:
             result["backup_ref"] = old["backup_ref"]
@@ -1889,6 +2088,9 @@ def plan_normal_wiring(
                 bindings,
                 install_template=not bool(getattr(args, "skip_project_agents", False)),
                 retire_legacy=retire_legacy,
+                # Normal wiring has no migration manifest chain, so no target
+                # can carry signature-approved AGENTS provenance.
+                approved_body=None,
             )
         moment = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
         backup_scopes = roots + ([host_home] if host_home is not None else [])
@@ -2008,6 +2210,7 @@ def execute_normal_wiring(
             runtime=plan["runtime"],
             launcher_state=plan["launcherPackageState"],
             retire_legacy=bool(plan.get("retireLegacy", False)),
+            approved_body=None,
         )
         results[resource] = result
         if result["status"] != "succeeded":

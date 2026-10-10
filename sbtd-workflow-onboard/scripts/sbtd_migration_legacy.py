@@ -13,6 +13,17 @@ Grounded in Trellis v0.6.17 commit 833a5846d18ad7a5ccd8c41c876d89cc936f5fd9:
 - Archive writes status=completed before moving a task under
   ``tasks/archive/<YYYY-MM>/``; position or the archive action alone never
   proves completion, and an ``archived`` status value is not a success proof.
+- Older observed task.json records also carry the blocked/cancelled status
+  literals, preserved verbatim. cancelled is a native terminal cancellation:
+  ``completed_at`` stays null (no fake completedAt), its history is exactly
+  one ``unknown -> cancelled`` event timed by a provable cancelledAt (missing
+  or date-only stays unknown), and an archived cancelled record buckets only
+  by a fully proven (RFC3339) cancellation quarter, else ``undated`` — never
+  the directory name.
+  blocked keeps its truthful reason (a supplied blocked_reason or an
+  unambiguous ``meta.suspension.reason``; otherwise the canonical missing-
+  evidence text), one ``unknown -> blocked`` event timed by a provable
+  ``meta.suspension.since``, and no fabricated recovery phase.
 
 The caller (Main) reads and binds the actual bytes; this module only parses
 and validates. Publication approval, secret scanning and plan/apply/verify
@@ -44,7 +55,11 @@ from sbtd_task_document import TaskDocument, _frontmatter_bounds
 
 # v0.6.17 writes planning -> in_progress -> completed; the PRD mapping table
 # additionally names the pending/in-progress/checking/review/done spellings.
-# "archived" is deliberately absent: it never proves completion by itself.
+# Older observed records also carry the blocked/cancelled literals; both are
+# preserved verbatim (blocked stays unfinished, cancelled is a native
+# terminal cancellation, never a success). "archived" is deliberately
+# absent: it never proves completion by itself, and no alias spellings
+# (e.g. "canceled") are accepted.
 _STATUS_MAP = {
     "planning": "planned",
     "pending": "planned",
@@ -54,6 +69,8 @@ _STATUS_MAP = {
     "review": "checking",
     "completed": "done",
     "done": "done",
+    "blocked": "blocked",
+    "cancelled": "cancelled",
 }
 
 _SIDECAR_KEYS = frozenset(
@@ -79,6 +96,7 @@ _LEGACY_ONLY_KEYS = frozenset(
         "description",
         "createdAt",
         "completedAt",
+        "cancelledAt",
         "base_branch",
         "subtasks",
         "children",
@@ -123,6 +141,11 @@ _RFC3339 = re.compile(
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _ARCHIVE_SEGMENT = "archive"
 _TASK_JSON_NAME = "task.json"
+
+# Canonical uncertainty wording when a legacy blocked record carries no
+# reason; it describes the missing evidence, never a guessed cause.
+_BLOCKED_REASON_MISSING = "legacy task.json status=blocked; reason not recorded"
+_BLOCKED_REASON_REDACTED = "legacy task.json status=blocked; reason redacted"
 
 __all__ = [
     "TaskProjection",
@@ -465,14 +488,31 @@ def _legacy_timestamp(source: dict[str, Any], field: str) -> str | None:
     )
 
 
-def _archive_bucket(source: dict[str, Any], status: str) -> str | None:
-    if status != "done":
+# Terminal statuses with a provable legacy terminal time. A date-only
+# completedAt still proves its calendar quarter for done (characterized
+# legacy behavior); cancelled uses its validated publishable event, so an
+# imported record re-archives to the same bucket that event implies.
+# Redacted or unproven cancellation times are undated. The old archive
+# directory name is never a time proof.
+_ARCHIVE_TIME_FIELDS = {"done": "completedAt", "cancelled": "cancelledAt"}
+
+
+def _archive_bucket(
+    source: dict[str, Any], status: str, document: TaskDocument
+) -> str | None:
+    field = _ARCHIVE_TIME_FIELDS.get(status)
+    if field is None:
         return None
-    value = source.get("completedAt")
-    if isinstance(value, str) and _DATE_ONLY.fullmatch(value):
-        timestamp = value
+    if status == "cancelled":
+        event_at = document.events[0]["at"]
+        timestamp = None if event_at == "unknown" else event_at
     else:
-        timestamp = _legacy_timestamp(source, "completedAt")
+        value = source.get(field)
+        timestamp = (
+            value
+            if isinstance(value, str) and _DATE_ONLY.fullmatch(value)
+            else _legacy_timestamp(source, field)
+        )
     if timestamp is None:
         return "undated"
     month = int(timestamp[5:7])
@@ -529,6 +569,105 @@ def _legacy_branch(source: dict[str, Any]) -> str | None:
             "invalid-legacy-task", "legacy task branch is not a string or null"
         )
     return branch
+
+
+def _blocked_suspension(source: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the recorded ``meta.suspension`` object of a legacy blocked task.
+
+    The old observed shape carries state/reason/since/resumeWhen; only the
+    reason string and the since time are provable current facts, so
+    state/resumeWhen stay sidecar/private truth and are never read here.
+    A present but non-object suspension is malformed metadata, not evidence.
+    """
+    meta = source.get("meta")
+    if not isinstance(meta, dict):
+        return None
+    suspension = meta.get("suspension")
+    if suspension is None:
+        return None
+    if not isinstance(suspension, dict):
+        raise ContractError(
+            "invalid-legacy-task", "legacy suspension metadata is malformed"
+        )
+    return suspension
+
+
+def _blocked_reason(source: dict[str, Any]) -> str:
+    """Derive the one truthful blocked reason from recorded legacy evidence.
+
+    A supplied top-level ``blocked_reason`` and ``meta.suspension.reason``
+    must each be non-blank strings and must agree; contradictory or
+    malformed supplied reasons block the projection. When no reason was
+    recorded, the canonical uncertainty text describes the missing evidence
+    instead of guessing a cause.
+    """
+    supplied: list[str] = []
+    containers: tuple[dict[str, Any], ...] = (source,)
+    suspension = _blocked_suspension(source)
+    if suspension is not None:
+        containers = (source, suspension)
+    for container, field in zip(containers, ("blocked_reason", "reason")):
+        value = container.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            raise ContractError(
+                "invalid-legacy-task",
+                "a supplied legacy blocked reason is malformed",
+            )
+        if value not in supplied:
+            supplied.append(value)
+    if len(supplied) > 1:
+        raise ContractError(
+            "invalid-legacy-task", "recorded legacy blocked reasons contradict"
+        )
+    return supplied[0] if supplied else _BLOCKED_REASON_MISSING
+
+
+def _blocked_since(source: dict[str, Any]) -> str | None:
+    """Provable suspension start from ``meta.suspension.since`` or None.
+
+    Shares the legacy time rule: an RFC3339 value is provable, a date-only
+    or missing value is unknown, anything else is malformed. The recovery
+    phase stays unknown; no resume history is ever derived here.
+    """
+    suspension = _blocked_suspension(source)
+    if suspension is None:
+        return None
+    return _legacy_timestamp(suspension, "since")
+
+
+def _redacts_field(
+    sidecar: dict[str, Any], decision: str, path: tuple[str, ...]
+) -> bool:
+    """A validated redaction also covers newly derived optional task details."""
+    if decision != "redact":
+        return False
+    for pointer in sidecar["redacted_paths"]:
+        if pointer == "":
+            return True
+        segments = _pointer_segments(pointer)
+        if path[: len(segments)] == segments:
+            return True
+    return False
+
+
+def _projected_blocked_reason(
+    source: dict[str, Any], sidecar: dict[str, Any], decision: str
+) -> str:
+    reason = _blocked_reason(source)
+    if source.get("blocked_reason") is not None and _redacts_field(
+        sidecar, decision, ("blocked_reason",)
+    ):
+        return _BLOCKED_REASON_REDACTED
+    suspension = _blocked_suspension(source)
+    if (
+        suspension is not None
+        and suspension.get("reason") is not None
+        and _redacts_field(sidecar, decision, ("meta", "suspension", "reason"))
+    ):
+        return _BLOCKED_REASON_REDACTED
+    return reason
 
 
 # ---------------------------------------------------------------------------
@@ -700,6 +839,9 @@ def _check_document(
     status: str,
     parent: str | None,
     branch: str | None,
+    *,
+    sidecar: dict[str, Any],
+    decision: str,
 ) -> None:
     frontmatter = document.frontmatter
     if _LEGACY_ONLY_KEYS & frontmatter.keys():
@@ -771,36 +913,94 @@ def _check_document(
         )
     _check_time_provenance(document)
     events = document.events
-    if status != "done":
+    if status == "blocked":
+        expected_reason = _projected_blocked_reason(source, sidecar, decision)
+        if frontmatter.get("blocked_reason") != expected_reason:
+            raise ContractError(
+                "invalid-task-document",
+                "migrated blocked_reason does not match its publishable legacy value",
+            )
+    # Each proven terminal/blocked status carries exactly one canonical
+    # historical fact event; other statuses have no provable history at all.
+    fact: tuple[str, str | None, str, str, str] | None = None
+    if status == "done":
+        fact = (
+            "done", completed_at, "legacy completion fact", "completed", "completion"
+        )
+    elif status == "cancelled":
+        # completed_at stays null; a provable cancelledAt timestamps the
+        # cancellation event, a missing/date-only one stays unknown.
+        fact = (
+            "cancelled",
+            _legacy_timestamp(source, "cancelledAt"),
+            "legacy cancellation fact",
+            "cancelled",
+            "cancellation",
+        )
+    elif status == "blocked":
+        fact = (
+            "blocked",
+            _blocked_since(source),
+            "legacy blocked fact",
+            "blocked",
+            "blocked",
+        )
+    if fact is None:
         if events:
             raise ContractError(
                 "invalid-task-document",
                 "an unfinished legacy task has no provable state history",
             )
         return
+    to, proven_at, reason, adjective, noun = fact
+    if status in ("cancelled", "blocked"):
+        if (
+            created_at is not None
+            and proven_at is not None
+            and datetime.fromisoformat(proven_at.replace("Z", "+00:00"))
+            < datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        ):
+            raise ContractError(
+                "invalid-legacy-task", "legacy status time precedes its creation"
+            )
+        creation_day = source.get("createdAt")
+        if (
+            created_at is None
+            and isinstance(creation_day, str)
+            and _DATE_ONLY.fullmatch(creation_day)
+            and proven_at is not None
+            and proven_at[:10] < creation_day
+        ):
+            raise ContractError(
+                "invalid-legacy-task", "legacy status day precedes its creation day"
+            )
+        time_path = (
+            ("cancelledAt",)
+            if status == "cancelled"
+            else ("meta", "suspension", "since")
+        )
+        if _redacts_field(sidecar, decision, time_path):
+            proven_at = None
     if len(events) != 1:
         raise ContractError(
             "invalid-task-document",
-            "a completed legacy task needs exactly its completion record event",
+            f"a {adjective} legacy task needs exactly its {noun} record event",
         )
     event = events[0]
-    if event["from"] != "unknown" or event["to"] != "done":
+    if event["from"] != "unknown" or event["to"] != to:
         raise ContractError(
             "invalid-task-document",
-            "legacy completion history is only recorded as unknown -> done",
+            f"legacy {noun} history is only recorded as unknown -> {to}",
         )
-    if event["at"] != (completed_at if completed_at is not None else "unknown"):
+    if event["at"] != (proven_at if proven_at is not None else "unknown"):
         raise ContractError(
             "invalid-task-document",
-            "legacy completion event time must be the provable time or unknown",
+            f"legacy {noun} event time must be the provable time or unknown",
         )
-    if (
-        event["reason"] != "legacy completion fact"
-        or event["evidence"] != "legacy task.json status"
-    ):
+    if event["reason"] != reason or event["evidence"] != "legacy task.json status":
         raise ContractError(
             "invalid-task-document",
-            "legacy completion history must cite the source completion fact",
+            f"legacy {noun} history must cite the source {noun} fact",
         )
 
 
@@ -843,15 +1043,18 @@ def validate_task_projection(
         raise ContractError("invalid-task-document", error.reason) from None
     identity = _legacy_id(source)
     status = _legacy_status(source)
-    if status != "done" and _ARCHIVE_SEGMENT in parts[:-1]:
+    if status not in ("done", "cancelled") and _ARCHIVE_SEGMENT in parts[:-1]:
         raise ContractError(
             "invalid-legacy-task",
-            "an archived-position task without proven completion is blocked",
+            "an archived-position task without a proven terminal state is blocked",
         )
     parent = _legacy_parent(source)
     children = _legacy_children(source)
     branch = _legacy_branch(source)
-    _check_document(document, source, identity, status, parent, branch)
+    _check_document(
+        document, source, identity, status, parent, branch,
+        sidecar=sidecar, decision=decision,
+    )
     folder = parts[-2]
     relative_folder = "/".join(parts[2:-1])
     aliases = tuple(
@@ -860,7 +1063,8 @@ def validate_task_projection(
         )
     )
     bucket = (
-        _archive_bucket(source, status) if _ARCHIVE_SEGMENT in parts[2:-1] else None
+        _archive_bucket(source, status, document)
+        if _ARCHIVE_SEGMENT in parts[2:-1] else None
     )
     return TaskProjection(identity, parent, children, document, aliases, bucket)
 

@@ -7032,7 +7032,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Install or reset SBTD workflow AGENTS and skills."
     )
     subparsers = parser.add_subparsers(dest="mode", required=True)
-    add_migration_parser(subparsers, phases=("plan", "apply", "verify", "cleanup"))
+    add_migration_parser(subparsers)
     add_recovery_parser(subparsers)
     add_cleanup_legacy_parser(subparsers)
     add_upgrade_parser(subparsers)
