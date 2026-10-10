@@ -1976,7 +1976,17 @@ def _check_platform_closure(
         # no-touch proof cannot coexist with it.
         derived_no_touch = None
     else:
-        derived_no_touch = _agents_no_touch(root, hashes, read_original)
+        agents_before = next(
+            (
+                operation["before_requirement"]["state"]
+                for operation in content_operations
+                if operation["target"] == agents_target
+            ),
+            None,
+        )
+        derived_no_touch = _agents_no_touch(
+            root, hashes, read_original, target_state=agents_before
+        )
     if agents_no_touch != derived_no_touch:
         _fail(
             "semantic-violation",
@@ -2934,13 +2944,17 @@ def _read_current(reference: Mapping[str, Any]) -> bytes:
 
 
 def _agents_no_touch(
-    root: Path, hashes: Mapping[str, str], read_original: ReadOriginal
+    root: Path,
+    hashes: Mapping[str, str],
+    read_original: ReadOriginal,
+    *,
+    target_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Re-derive the sealed proof for an already-aligned root AGENTS.md.
 
     Recognition is exact and local: the legacy ownership metadata must record
-    the project-root AGENTS.md, the live bytes must equal the bundled project
-    template byte for byte, and those bytes must carry no legacy marker. A
+    the project-root AGENTS.md, the original bytes must equal the bundled
+    project template byte for byte, and those bytes must carry no legacy marker. A
     drifted or customized file returns None and keeps its signed-replacement
     or refusal rules; a trusted template that itself carries a marker fails
     closed instead of freezing legacy content in place.
@@ -2948,7 +2962,7 @@ def _agents_no_touch(
     if "AGENTS.md" not in hashes:
         return None
     target = root / "AGENTS.md"
-    state = snapshot(target)
+    state = dict(target_state) if target_state is not None else snapshot(target)
     if state["type"] != "file":
         return None
     template = _present_file_reference(_PROJECT_AGENTS_TEMPLATE, "the project template")

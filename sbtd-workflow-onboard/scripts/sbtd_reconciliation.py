@@ -523,6 +523,11 @@ def reconcile_deployment(
     # not have mutated any receipt-proven apply target either.
     _require_apply_outcomes(_operations(manifest), applied_results, results)
     for operation in operations:
+        if snapshot(Path(operation["target"])) != results[operation["resource_id"]]["after"]:
+            _fail(
+                "state-conflict",
+                "a deployment resource changed before evidence publication",
+            )
         _require_original_state(
             vault / manifest["manifest_id"] / "deploy" / operation["resource_id"],
             expected_before[operation["resource_id"]],

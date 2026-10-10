@@ -2358,6 +2358,8 @@ def _bind_resource_states_and_backups(
             removed = operation["change"]["kind"] == "remove" and observed == "absent"
             kept_absent = (
                 operation["change"]["kind"] == "configure-graft"
+                and operation["selector"] == "graft-omp-mcp"
+                and (manifest_payload.get("deployment") or {}).get("platform") == "omp"
                 and result["before"]["type"] == "absent"
                 and observed == "absent"
             )

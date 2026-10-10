@@ -260,6 +260,108 @@ class CodexDeploymentContractTests(unittest.TestCase):
                     self.assertEqual(caught.exception.code, "binding-violation")
                     self.assertIn("wrong resource type", str(caught.exception))
 
+    def test_configure_graft_file_targets_cannot_stay_absent(self):
+        policy_path = (
+            Path(__file__).resolve().parents[1]
+            / "sbtd-workflow-onboard/assets/graft-build-policy.json"
+        )
+        policy = {
+            "path": str(policy_path),
+            "state": {
+                "type": "file",
+                "checksum": hashlib.sha256(policy_path.read_bytes()).hexdigest(),
+            },
+        }
+        cases = (
+            ("graft-mcp", "toml", "/private/home/alt-codex/config.toml", "shared"),
+            ("graft-hooks", "json", "/private/home/.codex/hooks.json", "shared"),
+            ("graft-agents", "markdown", fixtures.ALPHA + "/AGENTS.md", "private"),
+        )
+        for selector, owner_kind, target, scope in cases:
+            payload = fixtures.build_manifest_payload()
+            resource = contracts.resource_id(owner_kind, target)
+            dependents = (
+                list(fixtures.BOTH) if scope == "shared" else [fixtures.ALPHA]
+            )
+            if target.startswith("/private/home/alt-codex"):
+                payload["shared_roots"].append({
+                    "kind": "codex-home",
+                    "path": "/private/home/alt-codex",
+                    "dependent_projects": list(fixtures.BOTH),
+                })
+            operation = {
+                "phase": "deploy",
+                "resource_id": resource,
+                "operation_id": contracts.operation_id(
+                    "deploy", resource, selector
+                ),
+                "owner_kind": owner_kind,
+                "target": target,
+                "selector": selector,
+                "change": {"kind": "configure-graft", "source_ref": policy},
+                "ownership": {"kind": "template-source", "reference": policy},
+                "before_requirement": {"kind": "state", "state": fixtures.ABSENT},
+                "dependent_projects": dependents,
+            }
+            if scope == "shared":
+                payload["shared_operations"].append(operation)
+                for project in payload["projects"]:
+                    project["shared_operation_ids"].append(
+                        operation["operation_id"]
+                    )
+            else:
+                payload["projects"][0]["private_operations"].append(operation)
+            manifest = contracts.seal_document("manifest", payload)
+            applied = fixtures.build_apply_receipt(manifest)
+            for after in (fixtures.file_state(7), fixtures.ABSENT):
+                with self.subTest(selector=selector, after=after["type"]):
+                    evidence_payload = (
+                        fixtures.build_deployment_evidence_payload(
+                            manifest, applied
+                        )
+                    )
+                    result = {
+                        "phase": "deploy",
+                        "resource_id": resource,
+                        "operation_ids": [operation["operation_id"]],
+                        "dependent_projects": dependents,
+                        "status": "succeeded",
+                        "backup_ref": None,
+                        "before": fixtures.ABSENT,
+                        "after": after,
+                        "error": None,
+                    }
+                    if scope == "shared":
+                        evidence_payload["shared_results"].append(result)
+                        for project in evidence_payload["projects"]:
+                            project["shared_operation_ids"].append(
+                                operation["operation_id"]
+                            )
+                    else:
+                        evidence_payload["projects"][0][
+                            "private_results"
+                        ].append(result)
+                    evidence = contracts.seal_document(
+                        "deployment_evidence", evidence_payload
+                    )
+                    documents = {
+                        "apply_receipt": applied,
+                        "deployment_evidence": evidence,
+                    }
+                    if after["type"] == "file":
+                        # Positive control: an otherwise valid family whose
+                        # configure-graft deploy records a real file after-state.
+                        contracts.validate_declared_bindings(manifest, documents)
+                    else:
+                        with self.assertRaises(
+                            contracts.ContractError
+                        ) as caught:
+                            contracts.validate_declared_bindings(
+                                manifest, documents
+                            )
+                        self.assertEqual(
+                            caught.exception.code, "binding-violation"
+                        )
 
 
 if __name__ == "__main__":

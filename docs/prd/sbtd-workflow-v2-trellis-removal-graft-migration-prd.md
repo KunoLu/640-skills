@@ -854,7 +854,7 @@ apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，ver
 本入口仅处理完整成功 apply 后，封存部署资源已经存在、但累计部署证据未保存的缺口。调用者显式给出原 manifest、完整 apply、真实缺失的历史证据路径及全新输出路径，并以 `--yes` 确认。本入口不重新执行部署，不重做 apply，不回滚、不清理，也不重封历史 manifest／回执。历史证据已存在、不完整 apply、无部署声明或无法证明原件时均拒绝。
 
 - 复验原始 manifest/apply 字节、项目 root/ref/HEAD、封存操作闭包、运行时版本与既有签名血统；新旧运行时不是仅凭版本文字即可兼容。旧 partial apply 不因本入口而取得跨运行时续作权限。
-- before 来自封存要求及完整保留原件，after 是本次新鲜测量；按原件而非当前目标内容推导受管配置。等价继承的 `configure-graft` 可以保持 absent→absent；文件原本存在而消失不是这个无写分支。apply 后态未被部署观察覆盖的资源仍须保持原回执后态。
+- before 来自封存要求及完整保留原件，after 是本次新鲜测量；按原件而非当前目标内容推导受管配置。仅已绑定 OMP 的等价继承 `graft-omp-mcp` 可以保持 absent→absent；Codex MCP、hooks、项目 AGENTS 缺失，以及文件原本存在而消失均不是这个无写分支。apply 后态未被部署观察覆盖的资源仍须保持原回执后态。
 - 每项目运行固定原生图检查并生成当前观察窗口内的新报告，不接受调用者旧报告或手工资源结果。原件、目标及原本不存在的确定性备份槽在检查后与发布前复验；漂移或检查失败保留现场，不生成成功证据。
 - 新证据沿用 `deployment_evidence`，但 `payload.reconciliation` 固定包含 `kind: current-state`、`historical_execution: unknown`、绑定精确原始字节的 `manifest_ref`／`apply_receipt_ref`、`missing_deployment_evidence` 缺失快照及实际 `runtime_versions`。缺失引用使用允许 absent 的 snapshot，不是要求存在的普通 object_ref。
 - `succeeded` 表示当前后置条件已接受，不表示原进程曾被观察到成功退出，也不表示本次新写了配置或图。`started_at`／`finished_at` 只描述本次观察；不得虚构旧执行事实。

@@ -1010,6 +1010,37 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         self.assertFalse(retry_path.exists())
         self.assertEqual(missing_path.read_bytes(), b"late historical receipt")
 
+    def test_deployment_drift_after_context_validation_prevents_publication(self):
+        import sbtd_migration
+
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        output_path = batch.evidence / "current-state-evidence.json"
+        before = batch.agents.read_bytes()
+        late_content = before + b"\nConcurrent operator change after validation.\n"
+        validate_context = sbtd_migration._validate_context
+
+        def change_after_real_validation(*args, **kwargs):
+            result = validate_context(*args, **kwargs)
+            batch.agents.write_bytes(late_content)
+            return result
+
+        with (
+            mock.patch(
+                "sbtd_migration._validate_context",
+                side_effect=change_after_real_validation,
+            ),
+            self.assertRaises(contracts.ContractError) as failure,
+        ):
+            _reconcile(
+                batch, manifest, manifest_path, apply_path, missing_path, output_path
+            )
+        self.assertEqual(failure.exception.code, "state-conflict")
+        self.assertEqual(batch.agents.read_bytes(), late_content)
+        self.assertFalse(output_path.exists())
+        self.assertFalse(missing_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

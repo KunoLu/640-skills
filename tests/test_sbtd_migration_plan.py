@@ -6773,6 +6773,126 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
             self.assertEqual(error.exception.code, "semantic-violation")
             self.assertEqual(_tree_bytes(base), before)
 
+    def test_marker_removal_converging_to_template_retries_already_complete(self):
+        """Recorded AGENTS.md = bundled template + one removable TRELLIS block.
+
+        Plan declares the block removal and seals no agents_no_touch proof;
+        apply converges the file to the exact template; a receipt-backed
+        retry must stay already-complete, and the retained-original replay
+        must still validate with the converged bytes in place.
+        """
+        from sbtd_migration import (
+            _backup_sources,
+            _source_backup_paths,
+            apply_migration,
+            runtime_versions,
+        )
+
+        template = (
+            SCRIPTS.parents[0] / "templates" / "agents" / "AGENTS.project.md"
+        ).read_bytes()
+        block = (
+            b"<!-- TRELLIS:START -->\nlegacy trellis routing\n<!-- TRELLIS:END -->"
+        )
+        recorded = template + block
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            project = _no_touch_tree(base, template=recorded)
+            _write(
+                project / ".trellis/.template-hashes.json",
+                _json_bytes(
+                    {
+                        "__version": 2,
+                        "hashes": {
+                            PLATFORM_REL: hashlib.sha256(PLATFORM_TOML).hexdigest(),
+                            "AGENTS.md": hashlib.sha256(recorded).hexdigest(),
+                        },
+                    }
+                ),
+            )
+            vault = base / "vault"
+            evidence = base / "evidence"
+            home = base / "home"
+            for path in (vault, evidence, home):
+                path.mkdir(mode=0o700)
+            # A marker-removal apply requires the caller routing approval
+            # file; an empty signed record seals the anchor without any
+            # approved replacement.
+            approval = vault / "routing-approvals.json"
+            approval.write_bytes(
+                json.dumps({"schema_version": 1, "items": []}).encode("utf-8")
+            )
+            _sign_existing_approval(approval)
+            with _home_env(home):
+                manifest = plan_migration(
+                    [project],
+                    vault,
+                    "fixture-custodian",
+                    None,
+                    tool_versions=runtime_versions(),
+                    routing_approvals=approval,
+                )
+            payload_project = manifest["payload"]["projects"][0]
+            markers = [
+                operation
+                for operation in payload_project["private_operations"]
+                if operation["selector"] == "trellis-block"
+            ]
+            self.assertEqual(
+                [operation["target"] for operation in markers],
+                [str(project / "AGENTS.md")],
+            )
+            self.assertEqual(markers[0]["change"], {"kind": "remove"})
+            self.assertIsNone(payload_project.get("agents_no_touch"))
+            with _home_env(home):
+                self.assertIsNone(validate_legacy_inputs(manifest, _reader))
+                manifest_path = evidence / "manifest.json"
+                manifest_path.write_bytes(contracts.canonical_json_bytes(manifest))
+                applied, code = apply_migration(
+                    manifest_path, confirmed=True, routing_approvals=approval
+                )
+                self.assertEqual(code, 0, applied)
+                self.assertEqual(applied["status"], "applied")
+            self.assertEqual((project / "AGENTS.md").read_bytes(), template)
+            receipt_path = vault / "apply.json"
+            receipt_path.write_bytes(
+                contracts.canonical_json_bytes(
+                    applied["migration"]["apply_receipt"]
+                )
+            )
+            with _home_env(home):
+                repeated, code = apply_migration(
+                    manifest_path,
+                    previous_receipt_path=receipt_path,
+                    confirmed=True,
+                    routing_approvals=approval,
+                )
+                self.assertEqual(code, 0, repeated)
+                self.assertEqual(repeated["status"], "already-complete")
+            self.assertEqual((project / "AGENTS.md").read_bytes(), template)
+            source_root = project / ".trellis"
+            backup = _source_backup_paths(manifest)[str(source_root)]
+            _backup_sources(manifest)
+            source_root.rename(base / "retired-source")
+            resolve_receipt = _receipt_reader(
+                manifest, applied["migration"]["apply_receipt"]
+            )
+
+            def original(reference):
+                path = Path(reference["path"])
+                if path.is_relative_to(source_root):
+                    return read_file(
+                        backup / path.relative_to(source_root), reference["state"]
+                    )
+                # Retired platform files resolve through the receipt's retained
+                # backups, exactly as apply-time revalidation resolves them.
+                return resolve_receipt(reference)
+
+            with _home_env(home):
+                self.assertIsNone(validate_legacy_inputs(manifest, original))
+            self.assertEqual((project / "AGENTS.md").read_bytes(), template)
+
+
 class MigrationHistoricBranchHandoffTests(unittest.TestCase):
     """A legacy task branch differing from the planning checkout defers recovery."""
 
