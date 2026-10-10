@@ -16,7 +16,7 @@ SBTD 将**规格、行为、测试与领域语言**连接起来。Coding Agent �
 
 本仓库是**配置与 Skill 的摘录／同步源**，不是真实业务应用。工作流主线面向 **Codex 与 Oh My Pi（OMP）**；安装器也提供 Claude Code、Kimi 适配入口。有适配入口，不等于各宿主行为已取得同等验证。
 
-> **RC 准备：v2.0.0-rc.1 尚未创建 tag 或发布。** 正式版 v2.0.0 仍未发布。当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。候选代码、CI、安装、原生检查与真实宿主验收是不同证据层级。详见 [RC 范围与已知限制](CHANGELOG.md)及[交付计划](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
+> **候选版：[v2.0.0-rc.1](https://github.com/KunoLu/640-skills/tree/v2.0.0-rc.1) 已创建并推送 tag。** 正式版 v2.0.0 仍未发布。当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。候选代码、CI、安装、原生检查与真实宿主验收是不同证据层级。详见 [RC 范围与已知限制](CHANGELOG.md)及[交付计划](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
 
 | [首次安装](#install) | [已经安装](#onboard-prompts) | [开始任务](#task-prompts) |
 |---|---|---|
