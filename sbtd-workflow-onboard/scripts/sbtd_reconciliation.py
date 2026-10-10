@@ -539,5 +539,12 @@ def reconcile_deployment(
     result = contracts.validate_deployment_result(
         {"path": str(output_path), "evidence": evidence}
     )
+    for project in evidence["payload"]["projects"]:
+        for reference in project["report_refs"]:
+            if snapshot(Path(reference["path"])) != reference["state"]:
+                _fail(
+                    "state-conflict",
+                    "a fresh report changed before evidence publication",
+                )
     save_document(output_path, evidence, private_root=manifest_path.parent)
     return result

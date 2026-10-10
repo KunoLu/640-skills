@@ -1041,6 +1041,52 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
         self.assertFalse(output_path.exists())
         self.assertFalse(missing_path.exists())
 
+    def test_report_drift_after_context_validation_prevents_publication(self):
+        import sbtd_migration
+
+        damaged_bytes = b"Concurrent report replacement.\n"
+
+        for change in ("modify", "delete"):
+            with self.subTest(change=change):
+                batch, manifest, manifest_path, apply_path, missing_path = (
+                    _interrupted_deployment(self)
+                )
+                output_path = batch.evidence / "current-state-evidence.json"
+                validate_context = sbtd_migration._validate_context
+                changed_report = []
+
+                def change_after_real_validation(
+                    *args, change=change, validate=validate_context,
+                    changed=changed_report, **kwargs
+                ):
+                    result = validate(*args, **kwargs)
+                    reference = kwargs["deployment"]["payload"]["projects"][0]["report_refs"][0]
+                    report = Path(reference["path"])
+                    if change == "modify":
+                        report.write_bytes(damaged_bytes)
+                    else:
+                        report.unlink()
+                    changed.append(report)
+                    return result
+
+                with (
+                    mock.patch(
+                        "sbtd_migration._validate_context",
+                        side_effect=change_after_real_validation,
+                    ),
+                    self.assertRaises(contracts.ContractError) as failure,
+                ):
+                    _reconcile(
+                        batch, manifest, manifest_path, apply_path, missing_path, output_path
+                    )
+                self.assertEqual(failure.exception.code, "state-conflict")
+                if change == "modify":
+                    self.assertEqual(changed_report[0].read_bytes(), damaged_bytes)
+                else:
+                    self.assertFalse(changed_report[0].exists())
+                self.assertFalse(output_path.exists())
+                self.assertFalse(missing_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
