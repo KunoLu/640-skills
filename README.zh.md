@@ -187,6 +187,8 @@ OMP 部署也接受由绑定的成功迁移回执及完整原件证明的配置�
 
 中断而未保存证据的部署只按**当前状态**调和，绝不回填：`migration --phase reconcile` 要求完整成功的 apply 回执、真实缺失的历史证据路径、全新不覆盖的输出路径以及显式 `--yes`。它重新验证签名运行时血统、保留原件与封存资源，然后写入一份显式标记 `kind: current-state`／`historical_execution: unknown` 的新证据文档——每项结果的 before 由保留原件证明，after 为本次新鲜实测，不伪造历史退出码、成功事实或旧时间戳。接受只表示当前后置条件成立，不代表原进程 exit0 或发生新的目标写入；随后的标准 `verify` 报告 `acceptance_basis: current-state`。这不授权任何安装、部署重试或清理，常规 deploy/retry/recovery 各门禁不变。
 
+消费时重新核验所引用的 manifest／apply 是安全文件且摘要相符。观察者必须属于 manifest 同运行时或经签名批准的精确后继；反向或无关血统拒绝。历史观察者不要求等于当前消费者，累计重试不改写来源；这仍不证明未知历史执行，也不授权刷新旧证据。
+
 已与项目模板逐字对齐的规则可凭精确证据保持不动。只有文档的旧任务目录按历史文档归档，不伪造任务；历史任务分支保持原值，通过明确的延后恢复说明承接，不自动切分支或重绑定。
 
 [升级与恢复](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [迁移](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [清理](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)

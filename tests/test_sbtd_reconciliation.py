@@ -250,6 +250,19 @@ def _drift_target(target, after):
         (target / "receipt-outcome-drift.marker").write_bytes(b"drift\n")
 
 
+def _reseal_deployment_evidence(document_path, mutate):
+    """Mutate one deployment evidence payload in place, then honestly reseal it.
+
+    The seal is recomputed from the mutated payload, so the result is a
+    schema-valid, self-consistent document whose provenance claims are false.
+    """
+    document = json.loads(document_path.read_bytes())
+    mutate(document["payload"])
+    resealed = contracts.seal_document("deployment_evidence", document["payload"])
+    document_path.write_bytes(contracts.canonical_json_bytes(resealed))
+    return resealed
+
+
 class CurrentStateReconciliationLifecycleTests(unittest.TestCase):
     def test_reconcile_then_cumulative_retry_preserves_current_state_provenance(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
@@ -1086,6 +1099,176 @@ class CurrentStateReconciliationRefusalTests(unittest.TestCase):
                     self.assertFalse(changed_report[0].exists())
                 self.assertFalse(output_path.exists())
                 self.assertFalse(missing_path.exists())
+
+
+class CurrentStateProvenanceBindingTests(unittest.TestCase):
+    """Public verify must reject resealed evidence carrying false provenance.
+
+    Regression coverage for the deferred RC1 findings RC1-P2-PROVENANCE-PATH
+    and RC1-P2-OBSERVER-RUNTIME: a resealed record whose cited input path no
+    longer resolves to the recorded bytes, or whose observer Onboard runtime
+    fingerprint was swapped for another format-valid value, must not verify.
+    """
+
+    def test_equivalent_existing_source_references_still_verify(self):
+        # Provenance binds safe objects and exact bytes, not the caller's argv
+        # spelling: intact copies remain valid cited sources.
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        output_path = batch.evidence / "current-state-evidence.json"
+        _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+        copies = {}
+        for ref_key, source in (
+            ("manifest_ref", manifest_path), ("apply_receipt_ref", apply_path)
+        ):
+            copied = batch.evidence / f"preserved-{ref_key}.json"
+            copied.write_bytes(source.read_bytes())
+            copies[ref_key] = copied
+
+        def cite_copies(payload):
+            for ref_key, copied in copies.items():
+                payload["reconciliation"][ref_key]["path"] = str(copied)
+
+        _reseal_deployment_evidence(output_path, cite_copies)
+
+        with mock.patch.dict(os.environ, batch.environment):
+            verified, verify_code = verify_migration(
+                manifest_path, apply_path, output_path
+            )
+        self.assertEqual(verify_code, 0, verified)
+        self.assertEqual(verified["status"], "verified")
+        self.assertEqual(
+            verified["migration"]["verification"]["payload"]["acceptance_basis"],
+            "current-state",
+        )
+        self.assertFalse(missing_path.exists())
+
+    def test_signed_successor_can_reconcile_and_verify_predecessor(self):
+        import sbtd_migration as migration
+        from tests.test_sbtd_reconciliation_followup import _signed_lineage
+
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        sealed = manifest["payload"]["tool_versions"]
+        observer = {**sealed, "onboard": "runtime-sha256:" + "a" * 64}
+        self.assertNotEqual(observer, sealed)
+        public_path, pair_path = _signed_lineage(
+            batch.evidence, sealed["onboard"], observer["onboard"]
+        )
+        output_path = batch.evidence / "successor-observation.json"
+        with (
+            mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", public_path),
+            mock.patch.object(migration, "_LINEAGE_DOCUMENT", pair_path),
+            mock.patch.object(migration, "runtime_versions", return_value=observer),
+            mock.patch.dict(os.environ, batch.environment),
+        ):
+            _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+            verified, code = verify_migration(manifest_path, apply_path, output_path)
+        self.assertEqual(code, 0, verified)
+        self.assertEqual(verified["status"], "verified")
+        evidence = json.loads(output_path.read_bytes())
+        self.assertEqual(evidence["payload"]["reconciliation"]["runtime_versions"], observer)
+        self.assertEqual(
+            verified["migration"]["verification"]["payload"]["acceptance_basis"],
+            "current-state",
+        )
+
+    def test_forged_manifest_ref_path_fails_verification(self):
+        self._assert_forged_ref_path_rejected("manifest_ref")
+
+    def test_forged_apply_receipt_ref_path_fails_verification(self):
+        self._assert_forged_ref_path_rejected("apply_receipt_ref")
+
+    def _assert_forged_ref_path_rejected(self, ref_key):
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        output_path = batch.evidence / "current-state-evidence.json"
+        _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+        genuine = manifest_path if ref_key == "manifest_ref" else apply_path
+        wrong_bytes = batch.evidence / f"decoy-{ref_key}.json"
+        wrong_bytes.write_bytes(b'{"decoy": true}\n')
+        linked = batch.evidence / f"linked-{ref_key}.json"
+        linked.symlink_to(genuine)
+        manifest_before = manifest_path.read_bytes()
+        apply_before = apply_path.read_bytes()
+
+        for name, forged_path in (
+            ("nonexistent path", batch.evidence / f"absent-{ref_key}.json"),
+            ("existing bytes of another object", wrong_bytes),
+            ("existing directory", batch.evidence),
+            ("symlink to the genuine input", linked),
+        ):
+            with self.subTest(ref=ref_key, case=name):
+                # Only the cited path changes; the recorded state still
+                # describes the genuine input bytes, exactly the reseal
+                # forgery the finding demonstrates.
+                _reseal_deployment_evidence(
+                    output_path,
+                    lambda payload, key=ref_key, path=forged_path: payload[
+                        "reconciliation"
+                    ][key].update({"path": str(path)}),
+                )
+                forged = output_path.read_bytes()
+                evidence_before = _tree_bytes(batch.evidence)
+                with (
+                    mock.patch.dict(os.environ, batch.environment),
+                    self.assertRaises(contracts.ContractError),
+                ):
+                    verify_migration(manifest_path, apply_path, output_path)
+                # Rejection is read-only: forged evidence stays as submitted,
+                # inputs are untouched, and nothing is written anywhere.
+                self.assertEqual(output_path.read_bytes(), forged)
+                self.assertEqual(_tree_bytes(batch.evidence), evidence_before)
+                self.assertEqual(manifest_path.read_bytes(), manifest_before)
+                self.assertEqual(apply_path.read_bytes(), apply_before)
+                self.assertFalse(missing_path.exists())
+
+    def test_foreign_observer_runtime_fails_verification(self):
+        batch, manifest, manifest_path, apply_path, missing_path = (
+            _interrupted_deployment(self)
+        )
+        output_path = batch.evidence / "current-state-evidence.json"
+        _reconcile(batch, manifest, manifest_path, apply_path, missing_path, output_path)
+
+        # Same-runtime baseline: the genuine record verifies before forgery.
+        with mock.patch.dict(os.environ, batch.environment):
+            verified, verify_code = verify_migration(
+                manifest_path, apply_path, output_path
+            )
+        self.assertEqual(verify_code, 0, verified)
+        self.assertEqual(verified["status"], "verified")
+
+        runtime = json.loads(output_path.read_bytes())["payload"]["reconciliation"][
+            "runtime_versions"
+        ]
+        foreign = "runtime-sha256:" + hashlib.sha256(
+            b"foreign observer runtime\n"
+        ).hexdigest()
+        self.assertNotEqual(foreign, runtime["onboard"])
+
+        # Swap only the observer Onboard fingerprint for another format-valid
+        # value; the pinned Graft version and every input stay genuine.
+        _reseal_deployment_evidence(
+            output_path,
+            lambda payload: payload["reconciliation"]["runtime_versions"].update(
+                {"onboard": foreign}
+            ),
+        )
+        forged = output_path.read_bytes()
+        manifest_before = manifest_path.read_bytes()
+        apply_before = apply_path.read_bytes()
+        with (
+            mock.patch.dict(os.environ, batch.environment),
+            self.assertRaises(contracts.ContractError),
+        ):
+            verify_migration(manifest_path, apply_path, output_path)
+        self.assertEqual(output_path.read_bytes(), forged)
+        self.assertEqual(manifest_path.read_bytes(), manifest_before)
+        self.assertEqual(apply_path.read_bytes(), apply_before)
+        self.assertFalse(missing_path.exists())
 
 
 if __name__ == "__main__":

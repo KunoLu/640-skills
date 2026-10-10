@@ -13,8 +13,10 @@ against descendant evidence output.
 """
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -22,10 +24,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import onboard_contracts as contracts
+import sbtd_migration as migration
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_migration import _protected_followup_ancestry, apply_migration
 from sbtd_migration_files import save_document, snapshot
@@ -40,7 +46,9 @@ def _digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _reconciled_predecessor(fixture: FollowupMigration) -> Path:
+def _reconciled_predecessor(
+    fixture: FollowupMigration, *, observer: str | None = None
+) -> Path:
     """Reseal the completed predecessor with current-state provenance.
 
     Manifest and apply receipt stay byte-identical; deployment evidence gains
@@ -69,6 +77,8 @@ def _reconciled_predecessor(fixture: FollowupMigration) -> Path:
         },
         "runtime_versions": dict(fixture.manifest["payload"]["tool_versions"]),
     }
+    if observer is not None:
+        metadata["runtime_versions"]["onboard"] = observer
     deployment_payload = copy.deepcopy(fixture.deployment["payload"])
     deployment_payload["reconciliation"] = metadata
     deployment = contracts.seal_document("deployment_evidence", deployment_payload)
@@ -93,6 +103,23 @@ def _reconciled_predecessor(fixture: FollowupMigration) -> Path:
     fixture.verification = verification
     fixture.cleanup_receipt = cleanup
     return missing_path
+
+
+def _signed_lineage(directory: Path, predecessor: str, successor: str):
+    """Real signature under an isolated test trust key, never a mocked verifier."""
+    key = Ed25519PrivateKey.generate()
+    public_path = directory / "lineage.pub"
+    public_path.write_bytes(
+        key.public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+    signed = migration._lineage_signed_bytes(predecessor, successor)
+    document = json.loads(signed)
+    document["signature"] = base64.b64encode(key.sign(signed)).decode("ascii")
+    pair_path = directory / "lineage.json"
+    pair_path.write_bytes(canonical_json_bytes(document))
+    return public_path, pair_path
 
 
 def _apply_followup_at(fixture: FollowupMigration, followup: dict, directory: Path):
@@ -195,6 +222,61 @@ class ReconciledPredecessorFollowupTests(unittest.TestCase):
             self.assertEqual(snapshot(fixture.home), home_before)
             self.assertEqual(snapshot(fixture.root), root_before)
             assert_proof_intact(self, proof)
+
+    def test_signed_successor_observer_survives_historical_followup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = FollowupMigration(base)
+            fixture.build()
+            predecessor = fixture.manifest["payload"]["tool_versions"]["onboard"]
+            observer = "runtime-sha256:" + "a" * 64
+            self.assertNotEqual(predecessor, observer)
+            _reconciled_predecessor(fixture, observer=observer)
+            public_path, pair_path = _signed_lineage(base, predecessor, observer)
+            proof = fixture.predecessor_proof()
+            with (
+                mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", public_path),
+                mock.patch.object(migration, "_LINEAGE_DOCUMENT", pair_path),
+            ):
+                # The old observer differs from this consumer; historical
+                # provenance must not be compared to its current runtime.
+                followup = fixture.plan_followup()
+                artifacts = fixture.complete_followup(followup)
+            self.assertEqual(artifacts["cleanup_receipt"]["payload"]["status"], "cleaned")
+            assert_proof_intact(self, proof)
+
+    def test_historical_observer_requires_valid_forward_lineage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            fixture = FollowupMigration(base)
+            fixture.build()
+            predecessor = fixture.manifest["payload"]["tool_versions"]["onboard"]
+            observer = "runtime-sha256:" + "a" * 64
+            unrelated = "runtime-sha256:" + "b" * 64
+            _reconciled_predecessor(fixture, observer=observer)
+            proof = fixture.predecessor_proof()
+            for variant in ("reverse", "unrelated", "invalid-signature", "missing"):
+                with self.subTest(variant=variant):
+                    first, second = predecessor, observer
+                    if variant == "reverse":
+                        first, second = observer, predecessor
+                    elif variant == "unrelated":
+                        second = unrelated
+                    public_path, pair_path = _signed_lineage(base, first, second)
+                    if variant == "invalid-signature":
+                        pair = json.loads(pair_path.read_bytes())
+                        pair["signature"] = base64.b64encode(bytes(64)).decode("ascii")
+                        pair_path.write_bytes(canonical_json_bytes(pair))
+                    elif variant == "missing":
+                        pair_path.unlink()
+                    with (
+                        mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", public_path),
+                        mock.patch.object(migration, "_LINEAGE_DOCUMENT", pair_path),
+                        self.assertRaises(ContractError) as failure,
+                    ):
+                        fixture.plan_followup()
+                    self.assertEqual(failure.exception.code, "version-conflict")
+                    assert_proof_intact(self, proof)
 
     def test_executed_predecessor_ancestry_has_no_missing_path(self):
         # Regular-path compatibility: without reconciliation provenance the

@@ -750,9 +750,16 @@ def _require_runtime_lineage(
             )
 
 
-def _require_missing_historical_receipt(
+def _require_reconciliation_provenance(
+    manifest: Mapping[str, Any],
     deployment: Mapping[str, Any] | None,
 ) -> None:
+    """Recheck cited objects and the observer's forward runtime authority.
+
+    Raw-byte binding remains in the pure contracts layer. Historical observers
+    need not equal today's consumer, but must belong to the manifest runtime
+    or its signature-verified successor. Never revalidate superseded targets.
+    """
     if deployment is None:
         return
     reconciliation = deployment["payload"].get("reconciliation")
@@ -764,6 +771,18 @@ def _require_missing_historical_receipt(
             "state-conflict",
             "the historical deployment receipt is no longer absent",
         )
+    for key in ("manifest_ref", "apply_receipt_ref"):
+        _check_reference(reconciliation[key])
+    sealed_onboard = manifest["payload"]["tool_versions"]["onboard"]
+    observer = reconciliation["runtime_versions"]["onboard"]
+    if observer != sealed_onboard and _verified_runtime_pair() != (
+        sealed_onboard,
+        observer,
+    ):
+        _fail(
+            "version-conflict",
+            "the reconciliation observer is not an authorized manifest runtime",
+        )
 
 
 def _validate_context(
@@ -774,7 +793,7 @@ def _validate_context(
     cleanup: Mapping[str, Any] | None = None,
     recovery: Mapping[str, Any] | None = None,
 ) -> None:
-    _require_missing_historical_receipt(deployment)
+    _require_reconciliation_provenance(manifest, deployment)
     sealed_versions = manifest["payload"]["tool_versions"]
     current_versions = runtime_versions()
     if sealed_versions != current_versions:

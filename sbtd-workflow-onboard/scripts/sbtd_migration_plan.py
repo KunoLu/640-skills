@@ -1132,10 +1132,10 @@ def _bind_followup_predecessor(
     """Bind one fully completed Codex predecessor chain. Read-only.
 
     Document binding, success gates, retained backup availability and — for
-    a reconciled predecessor — the continued absence of its cited missing
-    historical receipt only: the predecessor's historical tool versions,
-    deployment template sources and superseded live after-states are sealed
-    history, never re-derived against this runtime.
+    a reconciled predecessor — cited source objects, observer lineage and
+    continued absence of its missing historical receipt are rechecked.
+    Historical versions need not equal this runtime; template sources and
+    superseded live after-states are never re-derived against it.
     Returns the successor ancestors (nearest first), each a bound
     (manifest, apply receipt) pair with its own backups proven retained.
     """
@@ -1156,14 +1156,13 @@ def _bind_followup_predecessor(
     from sbtd_migration import (
         _check_source_backups,
         _check_stage_backups,
-        _require_missing_historical_receipt,
+        _require_reconciliation_provenance,
         _result_index,
     )
 
-    # A reconciled predecessor is accepted only while its cited missing
-    # historical receipt stays absent; this is the single absence gate, not
-    # a revalidation of live after-states cleanup may have superseded.
-    _require_missing_historical_receipt(prev_deployment)
+    # Recheck provenance without revalidating live after-states that cleanup
+    # or a later deployment may have superseded.
+    _require_reconciliation_provenance(prev_manifest, prev_deployment)
     prev_payload = prev_manifest["payload"]
     if prev_payload["deployment"] is None:
         _fail(

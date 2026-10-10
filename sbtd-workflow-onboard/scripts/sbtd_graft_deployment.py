@@ -1506,9 +1506,9 @@ def save_deployment_evidence(
     result = contracts.validate_deployment_result(
         {"path": str(context.output_path), "evidence": evidence}
     )
-    from sbtd_migration import _require_missing_historical_receipt
+    from sbtd_migration import _require_reconciliation_provenance
 
-    _require_missing_historical_receipt(evidence)
+    _require_reconciliation_provenance(context.manifest, evidence)
     save_document(
         context.output_path, evidence, private_root=context.manifest_path.parent
     )

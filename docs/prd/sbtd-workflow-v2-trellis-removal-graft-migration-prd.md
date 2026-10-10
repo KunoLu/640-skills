@@ -1,15 +1,15 @@
 # SBTD Workflow v2：去 Trellis 化与 Graft 替换实施 PRD
 
-> 台账路径迁移：原根目录 `findings.log` 已由 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md) 接替。下文历史授权、原级别和当时状态不改写；后续读取与记录使用新路径。
+> 台账路径迁移：历史 SBTD v2 `findings.log` 由 [SBTD v2 findings](../archive/sbtd-workflow-v2-findings.md) 接替；历史授权、原级别和当时状态不改写。本次 RC1 的两项 P2 按用户明确要求在根 `findings.log` 保留发现、修复状态与验证记录，不复制历史台账。
 
 ## 1. 文档状态与执行边界
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.19（补齐 RC 候选的现态 reconcile 契约；逐任务实施与既有 P2/P3 状态不改写。P3-01观察中，P3-05仍待既有连接与环境退役／保留交接收口；当前进度与证据以§14为准） |
+| 文档版本 | 2.20（补齐 RC 现态来源对象及观察者有向血统校验；逐任务实施与既有 P2/P3 状态不改写。P3-01观察中，P3-05仍待既有连接与环境退役／保留交接收口；当前进度与证据以§14为准） |
 | 文档状态 | 产品与流程决策已确认；已获本源仓库逐任务开发及 PR 合并授权；实际任务状态与证据见 §14，合并不等于 v2 发布 |
 | 创建日期 | 2026-09-16 |
-| 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，本轮不创建 tag |
+| 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，须有明确发布授权并通过实际目标 SHA 的验证，不能由实现完成推定已发布 |
 | 代码基线 | `KunoLu/640-skills`，`v1.0.15`，完整 commit `bc8eec1549928fb0966254751b96b611b6334183` |
 | 初次审核 HEAD | `3139be4f6b7476f84b2affbd3667bed003119f94`，`main`；在该初次审核快照，相对基线仅 `CHANGELOG.md` 一行日期变更，实施代码相同 |
 | 初次审核工作树 | 初次审核时 clean；本文件在本会话创建并持续修订，不将初次状态冒充最终实现状态 |
@@ -857,6 +857,8 @@ apply 仅保存空操作成功回执；部署沿用 `init` 迁移上下文，ver
 - before 来自封存要求及完整保留原件，after 是本次新鲜测量；按原件而非当前目标内容推导受管配置。仅已绑定 OMP 的等价继承 `graft-omp-mcp` 可以保持 absent→absent；Codex MCP、hooks、项目 AGENTS 缺失，以及文件原本存在而消失均不是这个无写分支。apply 后态未被部署观察覆盖的资源仍须保持原回执后态。
 - 每项目运行固定原生图检查并生成当前观察窗口内的新报告，不接受调用者旧报告或手工资源结果。原件、目标及原本不存在的确定性备份槽在检查后与发布前复验；漂移或检查失败保留现场，不生成成功证据。
 - 新证据沿用 `deployment_evidence`，但 `payload.reconciliation` 固定包含 `kind: current-state`、`historical_execution: unknown`、绑定精确原始字节的 `manifest_ref`／`apply_receipt_ref`、`missing_deployment_evidence` 缺失快照及实际 `runtime_versions`。缺失引用使用允许 absent 的 snapshot，不是要求存在的普通 object_ref。
+- 纯契约层只核对所给文档与原始字节，不读取文件系统；实际 verify、部署重试发布、cleanup/recovery 上下文及历史 followup 消费另须安全复核两份来源对象的存在、类型和摘要。内容相同的安全副本可作为真实引用，不把命令行路径拼写作为唯一身份；缺失、目录、异内容或 symlink/reparse 路径均拒绝。
+- 观察者 Onboard 指纹只允许等于 manifest 封存运行时，或精确匹配经既有信任公钥验签的 `(manifest前驱, 观察者后继)`；不接受反向或无关配对。消费者自身与 manifest 的兼容性仍由原有运行时／完整回执门单独校验。历史观察者不必等于当前消费者；缺少所需血统授权时失败关闭，不重封旧证据或伪造版本。
 - `succeeded` 表示当前后置条件已接受，不表示原进程曾被观察到成功退出，也不表示本次新写了配置或图。`started_at`／`finished_at` 只描述本次观察；不得虚构旧执行事实。
 - 两个证据路径必须是原 manifest 私有目录内的绝对物理路径；输出必须全新、不覆盖，避让原始输入、受管目标、原件及受保护前批对象。新输出对大小写／Unicode 等价拼写保守拒绝，不改变普通受管资源身份判定。历史缺失路径始终不写。
 - 成功返回 `status=reconciled`、`verification_id=null`、裸deployment文档及实际保存路径。随后标准 verify 消费该新文档，成功时输出 `verified` 及 `acceptance_basis=current-state`，仍不授权清理。
