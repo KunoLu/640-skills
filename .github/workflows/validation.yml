@@ -40,11 +40,12 @@ jobs:
       - name: Install declared Onboard dependencies
         run: python -m pip install -r sbtd-workflow-onboard/requirements.txt
 
-      - name: Check Python and installer syntax
+      - name: Prepare Python bytecode before source snapshots
+        run: python -m compileall -q sbtd-workflow-onboard/scripts tests
+
+      - name: Check installer syntax
         if: matrix.shard == 1
-        run: |
-          python -m compileall -q sbtd-workflow-onboard/scripts tests
-          bash -n install.sh
+        run: bash -n install.sh
 
       - name: Run disjoint full-suite shard
         run: >-
