@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3]
     defaults:
       run:
         shell: bash
@@ -50,7 +50,7 @@ jobs:
       - name: Run disjoint full-suite shard
         run: >-
           python -B tests/run_ci.py --platform linux
-          --shard ${{ matrix.shard }} --shards 4
+          --shard ${{ matrix.shard }} --shards 3
           --output "${{ runner.temp }}/validation"
 
       - name: Verify minimum supported TOML editor
@@ -93,7 +93,7 @@ jobs:
           merge-multiple: false
       - name: Prove complete non-overlapping Linux coverage
         run: >-
-          python -B tests/run_ci.py --platform linux --shards 4
+          python -B tests/run_ci.py --platform linux --shards 3
           --output "${{ runner.temp }}/validation" --verify-reports
 
   macos-bash-installer:
@@ -143,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     defaults:
       run:
         shell: bash
@@ -167,7 +167,7 @@ jobs:
       - name: Run disjoint native Windows shard
         run: >-
           python -B tests/run_ci.py --platform windows
-          --shard ${{ matrix.shard }} --shards 2
+          --shard ${{ matrix.shard }} --shards 3
           --output "${{ runner.temp }}/validation"
 
       - name: Preserve native results and Chinese summary
@@ -204,5 +204,5 @@ jobs:
           merge-multiple: false
       - name: Prove complete non-overlapping Windows coverage
         run: >-
-          python -B tests/run_ci.py --platform windows --shards 2
+          python -B tests/run_ci.py --platform windows --shards 3
           --output "${{ runner.temp }}/validation" --verify-reports
