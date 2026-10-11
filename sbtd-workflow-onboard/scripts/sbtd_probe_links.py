@@ -9,14 +9,14 @@ physical target path explicitly. The supplied path is never ``resolve()``d:
 the link text is walked component by component with per-component nofollow
 lstat proofs (kernel-faithful, so ``..`` collapses never cross a hidden
 link), and the supplied physical path must match both lexically and by
-device/inode object identity before any target content is read. The target
+device/inode/ctime_ns object identity before any target content is read. The target
 must additionally prove its Skill identity — a regular nofollow ``SKILL.md``
 whose frontmatter ``name`` equals the logical Skill name (the link's own
 basename). The output is a digest-pure, reusable local JSON document binding
 the original upgrade plan id, host id, logical Skill path, exact link text,
 the link object's own lstat identity, the physical approved directory, the
 target object's identity and the whole-tree content digest. It is bound to
-content, not to any keypair, and carries no timestamps.
+content, not to any keypair, and carries no issuance timestamps.
 
 Phase 2 (``validate_link_authorization`` at ``verify`` time and
 ``materialize_authorized_skill`` inside the isolated probe copy) revalidates
@@ -72,8 +72,8 @@ _PAYLOAD_KEYS = {
     "target",
     "state",
 }
-_LINK_KEYS = {"text", "device", "inode"}
-_TARGET_KEYS = {"path", "device", "inode"}
+_LINK_KEYS = {"text", "device", "inode", "ctime_ns"}
+_TARGET_KEYS = {"path", "device", "inode", "ctime_ns"}
 _STATE_KEYS = {"type", "checksum"}
 
 
@@ -91,15 +91,19 @@ def _digest(value: Any) -> str:
 
 
 def _object_identity(info: os.stat_result, what: str) -> dict[str, int]:
-    """Fail-closed device/inode identity; unprovable inode is never accepted."""
+    """Bind an inode version as well as its number: deleted inodes can be reused."""
     device = getattr(info, "st_dev", None)
     inode = getattr(info, "st_ino", None)
-    if type(device) is not int or type(inode) is not int or not inode:
+    ctime_ns = getattr(info, "st_ctime_ns", None)
+    if (
+        type(device) is not int or type(inode) is not int or inode <= 0
+        or type(ctime_ns) is not int or ctime_ns < 0
+    ):
         _fail(
             "identity-unprovable",
             f"{what} object identity cannot be proven on this filesystem",
         )
-    return {"device": device, "inode": inode}
+    return {"device": device, "inode": inode, "ctime_ns": ctime_ns}
 
 
 def _real_directory(path: Path, what: str) -> os.stat_result:
@@ -378,10 +382,10 @@ def _expect_document_hex(value: Any, what: str) -> str:
 
 def _expect_document_identity(value: Any, keys: set[str], what: str) -> dict[str, Any]:
     identity = _expect_exact(value, keys, what)
-    if type(identity["device"]) is not int or type(identity["inode"]) is not int:
-        _fail("invalid-document", f"{what} identity must carry integer device and inode")
-    if not identity["inode"]:
-        _fail("invalid-document", f"{what} identity inode is unproven")
+    if any(type(identity[key]) is not int for key in ("device", "inode", "ctime_ns")):
+        _fail("invalid-document", f"{what} identity must carry integer device, inode and ctime_ns")
+    if identity["inode"] <= 0 or identity["ctime_ns"] < 0:
+        _fail("invalid-document", f"{what} object identity is unproven")
     return identity
 
 
@@ -426,11 +430,15 @@ def _expect_payload(payload: Any) -> dict[str, Any]:
         "host_id": host_id,
         "skill_name": skill_name,
         "skill_path": skill_path,
-        "link": {"text": link["text"], "device": link["device"], "inode": link["inode"]},
+        "link": {
+            "text": link["text"], "device": link["device"],
+            "inode": link["inode"], "ctime_ns": link["ctime_ns"],
+        },
         "target": {
             "path": target["path"],
             "device": target["device"],
             "inode": target["inode"],
+            "ctime_ns": target["ctime_ns"],
         },
         "state": {"type": "directory", "checksum": state["checksum"]},
     }
@@ -484,8 +492,9 @@ def _validate_live(payload: Mapping[str, Any]) -> None:
     if _object_identity(info, "the authorized Skill link") != {
         "device": sealed_link["device"],
         "inode": sealed_link["inode"],
+        "ctime_ns": sealed_link["ctime_ns"],
     }:
-        _fail("identity-mismatch", "the authorized Skill link object was replaced")
+        _fail("identity-mismatch", "the authorized Skill link identity changed")
     try:
         text = os.readlink(link)
     except OSError:
@@ -499,8 +508,9 @@ def _validate_live(payload: Mapping[str, Any]) -> None:
     if _object_identity(target_info, "the authorized link target") != {
         "device": payload["target"]["device"],
         "inode": payload["target"]["inode"],
+        "ctime_ns": payload["target"]["ctime_ns"],
     }:
-        _fail("identity-mismatch", "the authorized link target object was replaced")
+        _fail("identity-mismatch", "the authorized link target identity changed")
     state, _entries = directory_snapshot(target)
     if state != {"type": "directory", "checksum": payload["state"]["checksum"]}:
         _fail("state-conflict", "the authorized link target content changed")

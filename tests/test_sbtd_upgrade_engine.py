@@ -333,12 +333,19 @@ class UpgradeEngineTests(unittest.TestCase):
     def setUp(self):
         self.base = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.base, True)
-        self.addCleanup(
-            lambda: [
-                sys.modules.pop(name, None)
-                for name in ("sbtd_upgrade_inventory", "sbtd_upgrade_hosts")
-            ]
-        )
+        previous = {
+            name: sys.modules.get(name)
+            for name in ("sbtd_upgrade_inventory", "sbtd_upgrade_hosts")
+        }
+
+        def restore_providers():
+            for name, module in previous.items():
+                if module is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = module
+
+        self.addCleanup(restore_providers)
 
     # -- fixture helpers ----------------------------------------------------
 

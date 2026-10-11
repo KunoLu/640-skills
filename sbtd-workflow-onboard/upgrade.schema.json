@@ -442,22 +442,24 @@
             "skill_path": { "type": "string", "minLength": 1 },
             "link": {
               "type": "object",
-              "required": ["text", "device", "inode"],
+              "required": ["text", "device", "inode", "ctime_ns"],
               "additionalProperties": false,
               "properties": {
                 "text": { "type": "string", "minLength": 1 },
                 "device": { "type": "integer" },
-                "inode": { "type": "integer", "minimum": 1 }
+                "inode": { "type": "integer", "minimum": 1 },
+                "ctime_ns": { "type": "integer", "minimum": 0 }
               }
             },
             "target": {
               "type": "object",
-              "required": ["path", "device", "inode"],
+              "required": ["path", "device", "inode", "ctime_ns"],
               "additionalProperties": false,
               "properties": {
                 "path": { "type": "string", "minLength": 1 },
                 "device": { "type": "integer" },
-                "inode": { "type": "integer", "minimum": 1 }
+                "inode": { "type": "integer", "minimum": 1 },
+                "ctime_ns": { "type": "integer", "minimum": 0 }
               }
             },
             "state": {

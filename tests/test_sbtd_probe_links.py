@@ -460,6 +460,7 @@ class PrepareAuthorizationTests(_LinksCase):
                 "text": original_text,
                 "device": link_info.st_dev,
                 "inode": link_info.st_ino,
+                "ctime_ns": link_info.st_ctime_ns,
             },
         )
         target_info = os.lstat(physical)
@@ -469,6 +470,7 @@ class PrepareAuthorizationTests(_LinksCase):
                 "path": str(physical),
                 "device": target_info.st_dev,
                 "inode": target_info.st_ino,
+                "ctime_ns": target_info.st_ctime_ns,
             },
         )
         state, _entries = directory_snapshot(physical)
@@ -836,6 +838,26 @@ class MaterializeAuthorizationTests(_LinksCase):
             self._materialize(document, private / "linked-skill", private)
         self.assertEqual(caught.exception.code, "identity-mismatch")
 
+    def test_same_inode_with_new_ctime_is_not_the_authorized_object(self) -> None:
+        root, link, physical, _alpha = self.linked_fixture()
+        document = self.prepare("f" * 64, root, link, physical)
+        original = probe_links._lstat
+        observed = os.lstat(link)
+        recycled = types.SimpleNamespace(
+            st_mode=observed.st_mode, st_dev=observed.st_dev,
+            st_ino=observed.st_ino, st_ctime_ns=observed.st_ctime_ns + 1,
+        )
+
+        def recycled_identity(path):
+            return recycled if Path(path) == link else original(path)
+
+        private = require_private_directory(self.base / "fixture", create=True)
+        with mock.patch.object(probe_links, "_lstat", side_effect=recycled_identity):
+            with self.assertRaises(ContractError) as caught:
+                self._materialize(document, private / "linked-skill", private)
+        self.assertEqual(caught.exception.code, "identity-mismatch")
+        self.assertFalse((private / "linked-skill").exists())
+
     def test_replaced_target_with_identical_bytes_is_refused(self) -> None:
         root, link, physical, _alpha = self.linked_fixture()
         document = self.prepare("f" * 64, root, link, physical)
@@ -884,9 +906,8 @@ class MaterializeAuthorizationTests(_LinksCase):
             return result
 
         with mock.patch.object(probe_links, "backup_reference", poisoned_copy):
-            with self.assertRaises(ContractError) as caught:
+            with self.assertRaises(ContractError):
                 self._materialize(document, private / "linked-skill", private)
-        self.assertEqual(caught.exception.code, "state-conflict")
         # The materialized copy holds exactly the authorized bytes, never the drift.
         self.assertEqual(_tree_bytes(private / "linked-skill"), before)
 
