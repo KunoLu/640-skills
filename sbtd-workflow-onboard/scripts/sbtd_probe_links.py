@@ -116,7 +116,7 @@ def _real_directory(path: Path, what: str) -> os.stat_result:
 
 
 def _target_comparison_key(path: Path | str) -> str:
-    """Compare ordinary/extended Windows spellings only after nofollow proofs.
+    """Compare spellings without treating equality as a filesystem safety proof.
 
     This key is never used for filesystem access; raw link text is retained.
     Unsupported device namespaces and Win32-trimmed components stay refused.
@@ -318,9 +318,14 @@ def prepare_link_authorization(
             "the linked Skill is not a direct child of the bound host's selected Skills roots",
         )
     text, link_identity = _read_link(link, prepare=True)
+    supplied = _operator_path(target_path, "the supplied physical target")
+    lexical_target = os.path.join(str(link.parent), text)
+    if _target_comparison_key(lexical_target) != _target_comparison_key(supplied):
+        _fail("target-mismatch", "the supplied physical path is not the link target")
+    # The lexical check only rejects: traverse the original text afterward so
+    # a symlink before '..' cannot disappear through normalization.
     target = _resolve_link_text(link, text)
     target_info = _real_directory(target, "the link target")
-    supplied = _operator_path(target_path, "the supplied physical target")
     supplied_info = _real_directory(supplied, "the supplied physical target")
     if _target_comparison_key(target) != _target_comparison_key(supplied):
         _fail(
@@ -501,6 +506,9 @@ def _validate_live(payload: Mapping[str, Any]) -> None:
         _fail("read-failed", "the authorized Skill link cannot be read")
     if text != sealed_link["text"]:
         _fail("link-mismatch", "the authorized Skill link text changed")
+    lexical_target = os.path.join(str(link.parent), text)
+    if _target_comparison_key(lexical_target) != _target_comparison_key(payload["target"]["path"]):
+        _fail("link-mismatch", "the authorized Skill link names a different target")
     target = _resolve_link_text(link, text)
     if _target_comparison_key(target) != _target_comparison_key(payload["target"]["path"]):
         _fail("link-mismatch", "the authorized Skill link resolves to a different target")

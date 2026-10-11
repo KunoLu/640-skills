@@ -551,6 +551,21 @@ class PrepareAuthorizationTests(_LinksCase):
             with self.assertRaises(ContractError):
                 self.prepare("b" * 64, root, link, physical)
 
+    def test_mismatched_target_is_refused_before_its_metadata_is_accessed(self) -> None:
+        root, link, physical, _alpha = self.linked_fixture()
+        approved = _write_skill(self.base / "approved", "linked-skill")
+        original = probe_links._lstat
+
+        def guarded_metadata(path):
+            if Path(path).is_relative_to(physical.parent):
+                self.fail("unapproved target metadata was accessed")
+            return original(path)
+
+        with mock.patch.object(probe_links, "_lstat", side_effect=guarded_metadata):
+            with self.assertRaises(ContractError) as caught:
+                self.prepare("c" * 64, root, link, approved)
+        self.assertEqual(caught.exception.code, "target-mismatch")
+
     def test_target_mismatch_refused_before_any_content_read(self) -> None:
         root, link, physical, _alpha = self.linked_fixture()
         other = _write_skill(self.base / "other", "linked-skill")
@@ -617,9 +632,11 @@ class PrepareAuthorizationTests(_LinksCase):
         intermediate.symlink_to(physical, target_is_directory=True)
         link = root / "linked-skill"
         link.symlink_to(intermediate, target_is_directory=True)
-        with self.assertRaises(ContractError) as caught:
-            self.prepare("c" * 64, root, link, physical)
-        self.assertEqual(caught.exception.code, "unsafe-path")
+        original_text = os.readlink(link)
+        for supplied in (physical, intermediate):
+            with self.subTest(supplied=supplied), self.assertRaises(ContractError):
+                self.prepare("c" * 64, root, link, supplied)
+        self.assertEqual(os.readlink(link), original_text)
 
     def test_target_with_nested_link_inside_is_refused(self) -> None:
         root, link, physical, _alpha = self.linked_fixture()
@@ -787,6 +804,30 @@ class MaterializeAuthorizationTests(_LinksCase):
         return probe_links.materialize_authorized_skill(
             payload, destination=destination, private_root=private_root
         )
+
+    def test_inconsistent_target_document_refuses_before_target_metadata_access(self) -> None:
+        root, link, physical, _alpha = self.linked_fixture()
+        document = self.prepare("f" * 64, root, link, physical)
+        approved = _write_skill(self.base / "approved", "linked-skill")
+        document["payload"]["target"] = {
+            "path": str(approved),
+            **probe_links._object_identity(os.lstat(approved), "fixture target"),
+        }
+        document["payload"]["state"] = directory_snapshot(approved)[0]
+        document["authorization_id"] = _digest(document["payload"])
+        original = probe_links._lstat
+
+        def guarded_metadata(path):
+            if Path(path).is_relative_to(physical.parent):
+                self.fail("unapproved target metadata was accessed")
+            return original(path)
+
+        private = require_private_directory(self.base / "fixture", create=True)
+        with mock.patch.object(probe_links, "_lstat", side_effect=guarded_metadata):
+            with self.assertRaises(ContractError) as caught:
+                self._materialize(document, private / "linked-skill", private)
+        self.assertEqual(caught.exception.code, "link-mismatch")
+        self.assertFalse((private / "linked-skill").exists())
 
     def test_materializes_plain_directory_and_preserves_original(self) -> None:
         root, link, physical, _alpha = self.linked_fixture()

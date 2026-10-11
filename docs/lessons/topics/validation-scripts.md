@@ -725,6 +725,7 @@
 - 问题：把完整 checkout 放在 `.sbtd/tasks/<任务>/` 内后，其复制的共享 `task.md` 被再次发现，状态更新返回 `multiple task records have the same logical ID`；初始模式记录仍在，但新的状态未保存。
 - 根因：任务树是逻辑任务发现边界，不是任意临时文件容器。TaskStore 递归读取 `.sbtd/tasks` 与 `ai/tasks` 下的任务正文；Git ignore、独立 worktree 的 `.git` 或目录名带 baseline 都不会将其中的记录排除。
 - 修正原则：完整验证 checkout 放在任务树外的受保护位置，例如 `.sbtd/validation/` 或独立私有临时目录。若运行已绑定错误位置，先保全原任务和运行证据，不在执行中移动输入；完成后只移除本次自建 checkout，再用状态 helper 复验。不得改任务 ID、覆盖真实任务或放宽目录发现规则绕过冲突。
+- 验证：完成的 checkout 非破坏性移出任务树后，同一 TaskStore 成功保存 checking；源码与失败证据保留，原任务 ID 和发现规则均未改写。
 - 预防：创建副本前检查是否携带任务记录及其发现边界；ignore 只证明 Git 保护，不证明任务语义隔离。明确区分会话内阶段与实际保存的状态，保存失败不得声称恢复可靠。
 
 <!-- lessons:kuno:end -->
