@@ -36,6 +36,25 @@ def _save(plan: dict[str, Any], output: str | None) -> str | None:
     return str(path)
 
 
+def _save_authorization(
+    plan: dict[str, Any], authorization: dict[str, Any], output: str | None
+) -> str | None:
+    """Persist a sealed link authorization inside the bound plan's vault."""
+    if output is None:
+        return None
+    vault = Path(plan["payload"]["backup_root"])
+    path = _input_path(output)
+    save_document(path, authorization, private_root=vault)
+    return str(path)
+
+
+def _split_path_list(value: str) -> list[str]:
+    items = [item.strip() for item in value.split(",")]
+    if not items or any(not item for item in items):
+        raise ValueError("a supplied path must not be blank")
+    return items
+
+
 def _emit(args: Any, document: dict[str, Any], code: int) -> int:
     # Human output uses the same metadata-only document; never print raw errors
     # from JSON/TOML parsers or subprocess output that could contain credentials.
@@ -77,8 +96,17 @@ def run_upgrade(args: Any) -> int:
                             "reason": "probe-confirmation-required",
                             "nextStep": "Review the selected probe scope, then explicitly confirm with --yes."}, 2)
     try:
-        _validate_supplied_paths(args, ("scope", "backup_root", "output", "plan", "receipt"))
-        from sbtd_upgrade import apply_upgrade, plan_upgrade, verify_upgrade
+        _validate_supplied_paths(
+            args,
+            ("scope", "backup_root", "output", "plan", "receipt",
+             "host", "skill_path", "target_path", "link_authorization"),
+        )
+        from sbtd_upgrade import (
+            apply_upgrade,
+            plan_upgrade,
+            prepare_probe_link_authorization,
+            verify_upgrade,
+        )
 
         if args.phase == "plan":
             plan = plan_upgrade(_load(args.scope), _input_path(args.backup_root))
@@ -87,12 +115,35 @@ def run_upgrade(args: Any) -> int:
             status = plan["payload"].get("status", "planned")
             return _emit(args, result, 2 if status == "blocked" else 0)
         plan = _load(args.plan)
+        if args.phase == "authorize-link":
+            authorization = prepare_probe_link_authorization(
+                plan,
+                host_id=args.host,
+                skill_path=str(_input_path(args.skill_path)),
+                target_path=str(_input_path(args.target_path)),
+            )
+            output = _save_authorization(plan, authorization, args.output)
+            result = {
+                "mode": "upgrade",
+                "phase": "authorize-link",
+                "authorization": authorization,
+                "authorization_path": output,
+            }
+            return _emit(args, result, 0)
         receipt = _load(args.receipt) if args.receipt is not None else None
         if args.phase == "apply":
             confirmed = args.confirm_plan if args.yes else None
             result = apply_upgrade(plan, confirmed=confirmed, receipt=receipt)
         else:
-            result = verify_upgrade(plan, receipt=receipt, probe=args.probe)
+            link_authorizations = None
+            if args.link_authorization is not None:
+                link_authorizations = [
+                    _load(item) for item in _split_path_list(args.link_authorization)
+                ]
+            result = verify_upgrade(
+                plan, receipt=receipt, probe=args.probe,
+                link_authorizations=link_authorizations,
+            )
         status = result.get("status", result.get("payload", {}).get("status"))
         code = 3 if status in {"failed", "partial"} else 0 if status in {"complete", "aligned"} else 2
         return _emit(args, result, code)

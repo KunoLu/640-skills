@@ -127,6 +127,8 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 宿主 probe 另行询问；不要清理旧资产，也不要同步到其他环境。
 ```
 
+隔离 probe 默认仍拒绝链接 Skill。需要保留链接时，先用 `upgrade --phase authorize-link` 明确批准其物理目标，再将生成的文档传给 `verify --probe --yes --link-authorization`。这只授权精确的本地目标访问及临时普通目录投影，不替换原链接、不跟随嵌套链接，也不证明现有会话已重载。命令及拒绝边界见[链接授权说明](sbtd-workflow-onboard/REFERENCE.md#probe-skill-link-authorization)。
+
 **只有明确要替换 Skill 内容时才使用 reset：**
 
 ```text
@@ -425,7 +427,11 @@ Ignore 不会脱敏、不取消已有 tracked 状态，也不授权删除。任�
 
 源文件变化时，同轮评估两种语言的 README、[CHANGELOG](CHANGELOG.md) 和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两种语言保持语义一致，不重复堆积实现日志。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 只推进监控基线并归档已分析更新。它们不是 Onboard upgrade，也不是 BDD sync。
 
-原生全量命令为 `python -B -m unittest discover -s tests -p 'test_*.py'`；CI 另查 Python／Bash 语法和各平台行为，精确矩阵见 [workflow](.github/workflows/validation.yml)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
+原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按模块耗时权重分为互不重叠的分片；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
+
+Windows 必需原生检查（ACL、junction、Unicode、PowerShell 及已启用的大小写敏感路径）与 Linux 大小写敏感检查必须实际通过；仅被选中不够，skip 或预期失败也会阻断所在分片。
+
+CI artifact 按原生运行 attempt 保留，不覆盖失败记录。部分重跑可沿用同一 SHA 已成功的分片；聚合取各分片最新报告，拒绝较新的失败或同 attempt 重复证据，并核对分片并集完整且不重叠。
 
 <a id="license"></a>
 ## 许可证与致谢

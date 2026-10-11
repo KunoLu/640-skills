@@ -184,6 +184,58 @@ def build_package(root: Path) -> Path:
     return pkg
 
 
+def build_runtime_package(root: Path) -> Path:
+    """Real runtime with small synthetic Skill payloads for provider selection.
+
+    Keep the CLI's required catalog identities and genuine schemas. Only
+    temporary test payloads are synthetic; the repository mirror is untouched.
+    The full installed distribution lifecycle remains in UpgradeCliTests.
+    """
+    package = root / "runtime-pkg"
+    scripts = package / "scripts"
+    scripts.mkdir(parents=True)
+    for source in SCRIPTS.glob("*.py"):
+        shutil.copy(source, scripts / source.name)
+    (package / "SKILL.md").write_text(skill_md(SELF_NAME), encoding="utf-8")
+    for name in (
+        "requirements.txt", "catalog.schema.json", "onboard-contracts.schema.json",
+        "upgrade.schema.json", "assets/migration-legacy-ownership.json",
+    ):
+        destination = package / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(SCRIPTS.parent / name, destination)
+
+    catalog = json.loads((SCRIPTS.parent / "catalog.json").read_text(encoding="utf-8"))
+    catalog["entries"] = [
+        entry for entry in catalog["entries"]
+        if entry["kind"] != "bundled-skill" or entry["source"] == "."
+    ]
+    for entry in catalog["entries"]:
+        if entry["kind"] not in ("agent-template", "project-template"):
+            continue
+        destination = package / entry["source"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(SCRIPTS.parent / entry["source"], destination)
+    (package / "catalog.json").write_text(json.dumps(catalog), encoding="utf-8")
+
+    real_stable = SCRIPTS.parent / "assets" / "external-skills" / "stable"
+    stable = package / "assets" / "external-skills" / "stable"
+    manifest = json.loads((real_stable / "MANIFEST.json").read_text(encoding="utf-8"))
+    for repository in manifest["repositories"].values():
+        for license_file in repository["licenseFiles"]:
+            destination = stable / license_file["stablePath"]
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(real_stable / license_file["stablePath"], destination)
+    reference = reference_onboard()
+    for name, record in manifest["skills"].items():
+        target = stable / record["stablePath"]
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text(skill_md(name), encoding="utf-8")
+        record["treeSha256"] = reference.external_tree_sha256(target)
+    (stable / "MANIFEST.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return package
+
+
 def skill_names(pkg: Path) -> set[str]:
     catalog = json.loads((pkg / "catalog.json").read_text(encoding="utf-8"))
     return {
@@ -380,8 +432,8 @@ class PhysicalTargetPlanTests(InventoryTests):
 
     def test_case_sensitive_onboard_provider_uses_selected_installation(self):
         """U18/U21: the scheduled lowercase installation, not its sibling, supplies MCP."""
-        import sbtd_upgrade
         import tomllib
+
         from sbtd_migration_files import require_private_directory
 
         parent = self._case_sensitive_parent()
@@ -391,11 +443,18 @@ class PhysicalTargetPlanTests(InventoryTests):
             upper.mkdir()
         except FileExistsError:
             self.skipTest("requires a case-sensitive directory")
-        package = SCRIPTS.parent
-        for selected in (lower, upper):
-            shutil.copytree(package, selected / SELF_NAME, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        # Preserve the original API-level selection boundary with a small payload.
+        package = build_runtime_package(self.base)
         installed = lower / SELF_NAME
-        (installed / "SKILL.md").write_text(skill_md(SELF_NAME, "old custom body"), encoding="utf-8")
+        sibling = upper / SELF_NAME
+        # Both siblings remain valid runnable installations: selection must not
+        # succeed merely because the unselected sibling is missing its runtime.
+        for candidate in (installed, sibling):
+            shutil.copytree(package, candidate)
+        (installed / "SKILL.md").write_text(
+            skill_md(SELF_NAME, "old custom body"), encoding="utf-8"
+        )
+        sibling_original = (sibling / "SKILL.md").read_bytes()
         config_home = self.base / "codex"
         runtime = {}
         for key, name in (("python", "python"), ("node", "node"), ("cli", "cli.js")):
@@ -410,18 +469,39 @@ class PhysicalTargetPlanTests(InventoryTests):
         }
         vault = self.base / "vault"
         require_private_directory(vault, create=True)
-        plan = sbtd_upgrade.plan_upgrade(self.scope(
+        scope_path = self.base / "scope.json"
+        scope_path.write_text(json.dumps(self.scope(
             skills_roots=[str(upper), str(lower)], hosts=[host],
             decisions={str(installed): "replace"},
-        ), vault)
-        receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
-        self.assertEqual(receipt["payload"]["status"], "complete", receipt)
-        self.assertEqual((installed / "SKILL.md").read_bytes(), (package / "SKILL.md").read_bytes())
-        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
-        self.assertIn(
-            str(installed / "scripts" / "sbtd_graft_entry.py"),
-            parsed["mcp_servers"]["sbtd-graft"]["args"],
+        )), encoding="utf-8")
+        # Import from the fixture package in a clean interpreter so its baseline
+        # is genuinely the running trusted package, not a mocked digest.
+        bootstrap = """
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
+import sbtd_upgrade
+scope = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+plan = sbtd_upgrade.plan_upgrade(scope, Path(sys.argv[3]))
+receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+print(json.dumps(receipt))
+"""
+        result = subprocess.run(
+            [sys.executable, "-I", "-B", "-c", bootstrap, str(package), str(scope_path), str(vault)],
+            capture_output=True, text=True, timeout=900, check=False,
         )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        receipt = json.loads(result.stdout)
+        self.assertEqual(receipt["payload"]["status"], "complete", receipt)
+        self.assertEqual(
+            (installed / "SKILL.md").read_bytes(), (package / "SKILL.md").read_bytes()
+        )
+        self.assertEqual((sibling / "SKILL.md").read_bytes(), sibling_original)
+        self.assertTrue((sibling / "scripts" / "sbtd_graft_entry.py").is_file())
+        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+        args = parsed["mcp_servers"]["sbtd-graft"]["args"]
+        self.assertIn(str(installed / "scripts" / "sbtd_graft_entry.py"), args)
+        self.assertNotIn(str(sibling / "scripts" / "sbtd_graft_entry.py"), args)
 
     def test_conflicting_agents_aliases_refuse_without_mutation(self):
         """U20: real inventory cannot authorize replace through a preserved alias."""

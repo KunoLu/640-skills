@@ -127,6 +127,8 @@ approval before apply. Then verify disk content separately from protocol and rea
 Ask separately before host probes. Do not clean up old assets or sync other environments.
 ```
 
+An isolated probe still rejects linked Skills by default. To retain a link, explicitly approve its physical target with `upgrade --phase authorize-link`, then pass the resulting document to `verify --probe --yes --link-authorization`. This grants only exact local target access and a temporary plain-directory projection; it does not replace the original link, follow nested links or prove a live session reload. See the [authorization commands and refusal boundaries](sbtd-workflow-onboard/REFERENCE.md#probe-skill-link-authorization).
+
 **Use reset only when you intend to replace Skill content:**
 
 ```text
@@ -427,7 +429,11 @@ Ignore rules do not sanitize secrets, untrack existing files or authorize deleti
 
 For source changes, assess both language READMEs, [CHANGELOG](CHANGELOG.md) and the [versioned automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md). Keep both languages semantically aligned without duplicating implementation logs. Ordinary edits do **not** sync installed copies or live automation. Repository-maintenance `sync` requires explicit authorization; `update` only advances the monitored baseline and archives the analyzed update. These are not Onboard upgrade commands or BDD sync requests.
 
-The native full-suite command is `python -B -m unittest discover -s tests -p 'test_*.py'`; CI also checks Python/Bash syntax and platform-specific behavior. Consult the [workflow](.github/workflows/validation.yml) for the exact matrix. Source checks, installed-copy checks, real host loading and release acceptance remain separate evidence.
+The native full-suite command remains `python -B -m unittest discover -s tests -p 'test_*.py'`. CI discovers that complete Linux set and partitions it into disjoint, duration-weighted module shards; Windows partitions its native scope without repeating overlapping PowerShell/Unicode selectors. macOS keeps its native scope. The existing check names aggregate all required shards; any failed, cancelled or missing shard blocks success. The minimum supported TOML-editor run remains a separate dependency variant, not a duplicate. Per-case timings, skip reasons and Chinese result summaries are retained as CI artifacts. Consult the [workflow](.github/workflows/validation.yml) and [runner](tests/run_ci.py) for exact scope. Source checks, installed-copy checks, real host loading and release acceptance remain separate evidence.
+
+Required native Windows checks (including ACLs, junctions, Unicode, PowerShell and enabled case-sensitive paths) and Linux case-sensitive checks must pass, not merely be selected: skip or expected failure blocks their shard.
+
+CI artifacts retain each native run attempt without overwriting failures. Partial retries may reuse successful shards from the same SHA; aggregation selects each shard's newest report, rejects newer failures or ambiguous duplicates, and proves that the union covers the complete scope exactly once.
 
 <a id="license"></a>
 ## License and credits

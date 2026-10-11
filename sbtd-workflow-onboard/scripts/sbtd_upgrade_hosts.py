@@ -64,6 +64,15 @@ reports ``unavailable`` when the host CLI or a proven project root is
 missing, ``unsupported`` when the actual binary lacks the protocol surface,
 and ``failed`` on real errors or evidence mismatch — a pass is never
 fabricated.
+
+Linked Skills: a selected Skills root containing a direct-child link is
+refused by default (``unsafe-path``) and the link target is never accessed.
+The only exception is a sealed ``sbtd.probe.link.authorization/1`` document
+(see ``sbtd_probe_links``) passed via ``verify_hosts(...,
+link_authorizations=[...])``: it binds the plan id, host id, logical Skill
+path, exact link text, link/target object identities and whole-tree content
+digest. Materialization revalidates every binding before and after the copy
+and places a plain directory in the fixture; there is no follow-all switch.
 """
 
 from __future__ import annotations
@@ -93,6 +102,8 @@ from sbtd_graft_deployment import launch_bindings
 from sbtd_graft_entry import validate_project, validate_runtime
 from sbtd_migration_files import (
     _canonical,
+    _is_reparse,
+    _lstat,
     backup_reference,
     read_file,
     require_private_directory,
@@ -1666,32 +1677,188 @@ def _probe_fixture(prefix: str) -> tuple[Path, Path]:
         raise
 
 
-def _copy_skill_roots(roots: Sequence[str], destinations: Path) -> list[str]:
+def _root_entries(source: Path) -> list[tuple[str, str]]:
+    """Sorted (name, kind) inventory of one directory's direct children.
+
+    Only true symlinks classify as ``link``; junctions and other reparse
+    points stay ``other`` so the unchanged nofollow primitives keep refusing
+    them. Identity never comes from DirEntry stat (known-zero inode).
+    """
+    try:
+        with os.scandir(source) as listing:
+            children = list(listing)
+    except OSError:
+        _fail("read-failed", "directory entry cannot be inspected")
+    entries: list[tuple[str, str]] = []
+    for child in children:
+        try:
+            info = child.stat(follow_symlinks=False)
+        except OSError:
+            _fail("read-failed", "directory entry cannot be inspected")
+        if stat.S_ISLNK(info.st_mode):
+            kind = "link"
+        elif _is_reparse(info):
+            kind = "other"
+        elif stat.S_ISDIR(info.st_mode):
+            kind = "directory"
+        elif stat.S_ISREG(info.st_mode):
+            kind = "file"
+        else:
+            kind = "other"
+        entries.append((child.name, kind))
+    entries.sort(key=lambda entry: entry[0])
+    return entries
+
+
+def _link_outcome(entry: Mapping[str, Any], status: str) -> dict[str, Any]:
+    """Evidence for one sealed authorization: full binding, fixed status token."""
+    payload = entry["payload"]
+    return {
+        "authorization_id": entry["authorization_id"],
+        "host_id": payload["host_id"],
+        "skill_name": payload["skill_name"],
+        "skill_path": payload["skill_path"],
+        "target": dict(payload["target"]),
+        "state_checksum": payload["state"]["checksum"],
+        "status": status,
+    }
+
+
+def _copy_mixed_root(
+    source: Path,
+    target: Path,
+    authorized: Mapping[str, Mapping[str, Any]],
+    destinations: Path,
+    outcomes: list[dict[str, Any]] | None,
+) -> None:
+    """Copy a Skills root whose direct-child links are precisely authorized.
+
+    Every plain child keeps the unchanged nofollow copy primitive; each
+    authorized link is materialized as a plain directory from its sealed
+    physical target, revalidated before and after its copy. The root's
+    children set and every plain child's state are re-proven after the copy,
+    so mid-copy drift refuses the fixture before any host process spawns.
+    """
+    from sbtd_probe_links import _validate_live, materialize_authorized_skill
+
+    pre = _root_entries(source)
+    if any(kind == "other" for _name, kind in pre):
+        _fail("unsafe-path", "directory contains a link or special entry")
+    # Full preflight before any fixture byte is written: every plain child's
+    # complete state (nested links refuse here, exactly as the whole-tree
+    # scan did) and every authorized link's live bindings.
+    plain: dict[str, dict[str, Any]] = {}
+    payloads: dict[str, Mapping[str, Any]] = {}
+    for name, kind in pre:
+        child = source / name
+        if kind == "link":
+            payload = authorized[os.path.normpath(str(child))]["payload"]
+            _validate_live(payload)
+            payloads[name] = payload
+        else:
+            plain[name] = snapshot(child)
+    try:
+        os.mkdir(target, 0o700)
+    except OSError:
+        _fail("write-failed", "directory copy target cannot be created")
+    for name, kind in pre:
+        child = source / name
+        if kind == "link":
+            materialize_authorized_skill(
+                payloads[name], destination=target / name, private_root=destinations
+            )
+            if outcomes is not None:
+                outcomes.append(
+                    _link_outcome(
+                        authorized[os.path.normpath(str(child))], "materialized"
+                    )
+                )
+        else:
+            backup_reference(
+                {"path": str(child), "state": plain[name]},
+                target / name,
+                private_root=destinations,
+            )
+    if _root_entries(source) != pre:
+        _fail("state-conflict", "a selected Skills root changed during the probe copy")
+    for name, state in plain.items():
+        if snapshot(source / name) != state:
+            _fail(
+                "state-conflict", "a selected Skill changed during the probe copy"
+            )
+    for payload in payloads.values():
+        _validate_live(payload)
+
+
+def _copy_skill_roots(
+    roots: Sequence[str],
+    destinations: Path,
+    *,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
+    outcomes: list[dict[str, Any]] | None = None,
+) -> list[str]:
     """Copy verified no-link trees using the existing nofollow copy primitive.
 
     ``destinations`` goes through ``require_private_directory(create=True)``:
     a fresh directory is privatized by the ACL helper at creation, while a
     pre-existing path is only ever verified and fails closed when its privacy
     cannot be proven — it is never repaired.
+
+    Roots without direct-child links keep the byte-identical legacy path. A
+    direct-child link without a matching sealed authorization keeps the
+    default refusal (``unsafe-path``); an authorized link is materialized as
+    a plain directory from its revalidated physical target, never followed.
     """
     destinations = require_private_directory(destinations, create=True)
+    authorized: dict[str, Mapping[str, Any]] = {}
+    for entry in link_authorizations or []:
+        key = os.path.normpath(str(entry["payload"]["skill_path"]))
+        if key in authorized:
+            _fail(
+                "authorization-conflict",
+                "duplicate link authorizations for one Skill path",
+            )
+        authorized[key] = entry
+    from sbtd_probe_links import _validate_live
+
     copies: list[str] = []
     for index, root in enumerate(roots):
-        source = Path(root)
-        state = snapshot(source)
-        if state["type"] == "absent":
+        source = _canonical(Path(root))
+        # A supplied authorization is a binding, not an optional hint. Prove it
+        # even if its link disappeared or was replaced by a plain directory.
+        for entry in authorized.values():
+            if Path(entry["payload"]["skill_path"]).parent == source:
+                _validate_live(entry["payload"])
+        info = _lstat(source)
+        if info is None:
             continue
-        if state["type"] != "directory":
+        if _is_reparse(info) or not stat.S_ISDIR(info.st_mode):
             _fail("unsafe-path", "a selected Skills root is not a safe directory")
         target = destinations / str(index)
-        backup_reference(
-            {"path": str(source), "state": state}, target, private_root=destinations
-        )
+        linked = [name for name, kind in _root_entries(source) if kind == "link"]
+        if not linked:
+            state = snapshot(source)
+            if state["type"] == "absent":
+                continue
+            if state["type"] != "directory":
+                _fail("unsafe-path", "a selected Skills root is not a safe directory")
+            backup_reference(
+                {"path": str(source), "state": state}, target, private_root=destinations
+            )
+        else:
+            if any(
+                os.path.normpath(str(source / name)) not in authorized for name in linked
+            ):
+                _fail(
+                    "unsafe-path",
+                    "a selected Skills root contains an unauthorized link",
+                )
+            _copy_mixed_root(source, target, authorized, destinations, outcomes)
         copies.append(str(target))
     return copies
 
 
-def _expected_skill_names(roots: Sequence[str]) -> list[str]:
+def _expected_skill_names(roots: Sequence[str], *, required: Sequence[str] = ()) -> list[str]:
     names: set[str] = set()
     for root in roots:
         path = Path(root)
@@ -1704,7 +1871,24 @@ def _expected_skill_names(roots: Sequence[str]) -> list[str]:
         for child in children:
             if child.is_dir() and (child / "SKILL.md").is_file():
                 names.add(child.name)
+    if not set(required).issubset(names):
+        _fail("skill-identity-unproven", "an authorized Skill is missing from the probe projection")
     return sorted(names)
+
+
+def _link_evidence(
+    entries: Sequence[Mapping[str, Any]] | None,
+    outcomes: list[dict[str, Any]],
+) -> list[dict[str, Any]] | None:
+    """Return only fully consumed authorizations; stale bindings never degrade."""
+    if entries is None:
+        return None
+    used = {outcome["authorization_id"] for outcome in outcomes}
+    if used != {entry["authorization_id"] for entry in entries}:
+        _fail("authorization-mismatch", "a supplied link authorization was not consumed")
+    evidence = list(outcomes)
+    evidence.sort(key=lambda outcome: outcome["skill_path"])
+    return evidence
 
 
 def _probe_codex(
@@ -1712,6 +1896,8 @@ def _probe_codex(
     host: Mapping[str, Any],
     bindings: Sequence[Mapping[str, Any]],
     proven_root: Path | None,
+    *,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     from sbtd_codex_wiring import codex_mcp_candidate
 
@@ -1727,8 +1913,17 @@ def _probe_codex(
         # Keep the real cwd for Graft, but never load its project-local config.
         config += f'\n[projects.{quoted}]\ntrust_level = "untrusted"\n'.encode()
         (codex_home / "config.toml").write_bytes(config)
-        copies = _copy_skill_roots(host["skills_roots"], fixture / "skills-roots")
-        expected = _expected_skill_names(copies)
+        outcomes: list[dict[str, Any]] = []
+        copies = _copy_skill_roots(
+            host["skills_roots"],
+            fixture / "skills-roots",
+            link_authorizations=link_authorizations,
+            outcomes=outcomes,
+        )
+        link_evidence = _link_evidence(link_authorizations, outcomes)
+        expected = _expected_skill_names(
+            copies, required=[entry["payload"]["skill_name"] for entry in link_authorizations or []]
+        )
         env = _probe_env(fixture, {"CODEX_HOME": str(codex_home), "CODEX_PROBE_DUMMY_API_KEY": "dummy"})
         try:
             proc = _spawn(
@@ -1771,10 +1966,17 @@ def _probe_codex(
                 "skills/list", {"cwds": [str(proven_root)], "forceReload": True}
             )
             found_skills, skill_errors = _parse_skills(skills, copies)
+            skill_evidence: dict[str, Any] = {
+                "expected": expected,
+                "found": found_skills,
+                "errors": skill_errors,
+            }
+            if link_evidence is not None:
+                skill_evidence["link_authorizations"] = link_evidence
             return {
                 "reload": "ok",
                 "server": server,
-                "skills": {"expected": expected, "found": found_skills, "errors": skill_errors},
+                "skills": skill_evidence,
                 "exit": rpc.close(),
             }
         except _ProbeError:
@@ -1966,6 +2168,8 @@ def _probe_omp(
     host: Mapping[str, Any],
     bindings: Sequence[Mapping[str, Any]],
     proven_root: Path | None,
+    *,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
 
     if proven_root is None:
@@ -1979,7 +2183,14 @@ def _probe_omp(
         server_identity = _omp_projection(host, bindings, home, agent)
         (agent / "models.yml").write_text(_OMP_FIXTURE_MODELS, encoding="utf-8")
         # _omp_projection wrote the exact provider route's fixture settings.
-        copies = _copy_skill_roots(host["skills_roots"], fixture / "skills-roots")
+        outcomes: list[dict[str, Any]] = []
+        copies = _copy_skill_roots(
+            host["skills_roots"],
+            fixture / "skills-roots",
+            link_authorizations=link_authorizations,
+            outcomes=outcomes,
+        )
+        link_evidence = _link_evidence(link_authorizations, outcomes)
         selected = require_private_directory(agent / "skills", create=True)
         for copy in copies:
             for child in sorted(Path(copy).iterdir()):
@@ -1990,7 +2201,9 @@ def _probe_omp(
                     destination,
                     private_root=selected,
                 )
-        expected = _expected_skill_names(copies)
+        expected = _expected_skill_names(
+            copies, required=[entry["payload"]["skill_name"] for entry in link_authorizations or []]
+        )
         env = _probe_env(fixture, {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent)})
         try:
             proc = _spawn(
@@ -2019,10 +2232,17 @@ def _probe_omp(
             )
             commands = rpc.call("get_available_commands", {}, key="type")
             found = _omp_skill_names(commands, expected)
+            skill_evidence: dict[str, Any] = {
+                "expected": expected,
+                "found": found,
+                "errors": 0,
+            }
+            if link_evidence is not None:
+                skill_evidence["link_authorizations"] = link_evidence
             return {
                 "reload": "session-connect",
                 "server": {"tools": matched, "registered": registered},
-                "skills": {"expected": expected, "found": found, "errors": 0},
+                "skills": skill_evidence,
                 "exit": rpc.close(),
             }
         except _ProbeError:
@@ -2169,7 +2389,12 @@ def _protocol_check(host: Mapping[str, Any], resource: Mapping[str, Any]) -> dic
     return {"status": "verified", "tools": tools, "server_version": version}
 
 
-def _host_load_check(host: Mapping[str, Any], resource: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _host_load_check(
+    host: Mapping[str, Any],
+    resource: Mapping[str, Any],
+    *,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Real host reload/load plus skills evidence; never fabricated.
 
     Evidence comes from an isolated HOME carrying only the selected managed
@@ -2197,8 +2422,17 @@ def _host_load_check(host: Mapping[str, Any], resource: Mapping[str, Any]) -> tu
     bindings = launch_bindings([], pins, package_root=Path(host["onboard_root"]))
     proven = _proven_project_root(host)
     adapter = _probe_codex if platform == "codex" else _probe_omp
+    host_links = None
+    if link_authorizations is not None:
+        host_links = [
+            entry
+            for entry in link_authorizations
+            if entry["payload"]["host_id"] == host["id"]
+        ]
     try:
-        evidence = adapter(executable, host, bindings, proven)
+        evidence = adapter(
+            executable, host, bindings, proven, link_authorizations=host_links
+        )
     except _ProbeError as error:
         return load_result(error.kind, error.reason)
     except ContractError as error:
@@ -2233,6 +2467,8 @@ def _host_load_check(host: Mapping[str, Any], resource: Mapping[str, Any]) -> tu
     if not skills_ok:
         skill_status["expected"] = sorted(skills["expected"])
         skill_status["reason"] = "skills-evidence-mismatch"
+    if skills.get("link_authorizations") is not None:
+        skill_status["link_authorizations"] = skills["link_authorizations"]
     return load, skill_status
 
 
@@ -2314,7 +2550,11 @@ def _legacy_mcp(host: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _verify_mcp_host(
-    host: Mapping[str, Any], resource: Mapping[str, Any], probe: bool
+    host: Mapping[str, Any],
+    resource: Mapping[str, Any],
+    probe: bool,
+    *,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     legacy = _legacy_mcp(host)
     if host["platform"] == "omp" and legacy["status"] != "unknown":
@@ -2339,7 +2579,7 @@ def _verify_mcp_host(
     runtime = _runtime_check(resource)
     binding = _binding_check(host, resource)
     protocol = _protocol_check(host, resource)
-    load, skills = _host_load_check(host, resource)
+    load, skills = _host_load_check(host, resource, link_authorizations=link_authorizations)
     host_status = _worst((binding, protocol, load, skills))
     entry["runtime"] = runtime
     entry["host"] = {
@@ -2570,9 +2810,18 @@ def _verify_shell_profile(
 
 
 def verify_hosts(
-    scope: Mapping[str, Any], *, package_root: Path | str | None = None, probe: bool = False
+    scope: Mapping[str, Any],
+    *,
+    package_root: Path | str | None = None,
+    probe: bool = False,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Per-domain disk/runtime/host/legacy status; probe adds real evidence."""
+    """Per-domain disk/runtime/host/legacy status; probe adds real evidence.
+
+    ``link_authorizations`` carries sealed ``sbtd_probe_links`` entries
+    (``{"authorization_id", "payload"}``) already bound to the upgrade plan
+    by the engine; without ``probe`` they are never consulted.
+    """
     root = _package_root(package_root)
     resources = {
         resource["target"]: resource
@@ -2594,7 +2843,12 @@ def verify_hosts(
                 }
             )
             continue
-        result["hosts"].append(_verify_mcp_host(host, resources[host["config"]], probe))
+        result["hosts"].append(
+            _verify_mcp_host(
+                host, resources[host["config"]], probe,
+                link_authorizations=link_authorizations,
+            )
+        )
     for profile in _scope_shell_profiles(scope):
         result["shell_profiles"].append(
             _verify_shell_profile(profile, resources[profile["path"]], probe)

@@ -868,6 +868,57 @@ OMP 隔离宿主探测保持 **user-wide** 投影边界；它不创建私有项�
 
 OMP 加载判据使用 `get_state.dumpTools` 的结构化工具名与参数 schema；prompt 中提到工具 URI 不构成注册或可调用证据。隔离配置显式关闭 xdev 延迟入口，以核对实际注册的目标工具。RPC 请求写入与响应共用期限，宿主不消费 stdin 也不能无限阻塞；探测结束负责回收自有进程及管道。
 
+<a id="probe-skill-link-authorization"></a>
+#### 隔离 probe 的精确 Skill 链接授权
+
+默认继续拒绝 Skills 根内的符号链接，不读取未批准的链接目标。授权只适用于本次隔离宿主投影：原链接保留，明确批准的物理目录复制为临时环境中的普通目录；安装、迁移、清理与通用 nofollow 策略不变。授权不允许缩减 expected Skills，不替代真实宿主 Skill／MCP 注册检查，也不证明 `live_reload`。
+
+只在已展示并批准的宿主与 Skills 根范围内，为具体链接准备授权。下列 `--target-path` 是**允许读取该物理目录内容**的明确输入；不是安装或宿主启动授权。目录必须使用不经过链接／reparse point 的物理绝对路径，不能用通用 `resolve()` 放宽用户路径。
+
+```bash
+python scripts/onboard.py upgrade --phase authorize-link \
+  --plan /abs/private/vault/upgrade-plan.json \
+  --host omp-default \
+  --skill-path /abs/skills/example-skill \
+  --target-path /abs/physical/example-skill \
+  --output /abs/private/vault/example-skill-authorization.json --json
+```
+
+本阶段不启动宿主、不修改原链接；默认只向 stdout 返回授权，`--output` 仅在原计划的私有 vault 中新建文件，拒绝覆盖。`--host` 必须是计划封存的宿主 ID，`--skill-path` 必须是其所选 Skills 根的直接子链接；目标 `SKILL.md` 的身份须匹配该 Skill。原始链接文本、链接对象身份、目标目录身份与完整内容摘要共同绑定到原 `plan_id`；授权摘要不是签名，不要求普通用户创建密钥对，授权文件必须由操作者控制。
+
+准备授权时先比较链接文本的纯路径拼写与明确批准的物理目标；不匹配即拒绝，不先探查原链接目标的元数据，避免未经批准的 UNC／网络路径访问。拼写相同只是预检，不产生权限证明；随后仍沿原始文本逐组件执行 nofollow 检查，保留 `..` 前的隐藏链接拒绝。
+
+读取并确认授权记录后，在原 verify 命令上追加 `--probe --yes --link-authorization`。多个授权路径使用逗号分隔；参数仅用于 probe，缺少 probe 或不匹配原计划／宿主均拒绝：
+
+```bash
+python scripts/onboard.py upgrade --phase verify \
+  --plan /abs/private/vault/upgrade-plan.json \
+  --receipt /abs/private/vault/upgrade-receipt.json \
+  --probe --yes \
+  --link-authorization /abs/private/vault/example-skill-authorization.json --json
+```
+
+授权只在当前对象和摘要仍匹配时有效；链接即使以相同文本重新创建，或目录以相同内容替换，也必须重新审查。无法证明对象身份、嵌套链接、特殊文件、错误 Skill 身份及复制漂移均停止。过期记录不自动刷新；重新批准时使用新的输出文件，旧证据保持不变。磁盘、runtime、host 与 `live_reload` 继续分别报告，物化成功本身不等于宿主加载成功。
+
+对象绑定包含 `device`、`inode` 和纳秒级 `ctime_ns`，不把被文件系统复用的 inode 号码独自当作原对象证明。授权文档应原样消费，不经会截断大整数精度的工具重写。
+
+多个宿主可以共享同一 Skills 根，但每个宿主须各自准备授权并在同次 verify 中提供；仅拒绝同一宿主与逻辑路径的重复授权，不把一个宿主的授权借给另一个宿主。相对链接中的 `..` 逐级按 nofollow 证明；Windows 普通盘符／UNC 与对应 `\\?\` 拼写只用于等价比较，仍保留原始链接文本和对象身份。未知设备命名空间、尾点／尾空格歧义保持拒绝。
+
+`SKILL.md` 身份与封存快照中的同一文件摘要绑定，私有副本再次验证身份，已授权 Skill 不能从 expected 集合静默消失。上述检查使用既有基于路径的快照／复制原语，不是跨进程原子文件系统事务，也不保证其他进程在检查完成后不再修改对象；操作者须控制授权文件和输入目录。
+
+持久行为规格沿用本仓 Markdown 约定，中文场景与 English Given／When／Then；自动化映射为 `tests/test_sbtd_probe_links.py` 及既有 `tests/test_sbtd_upgrade_hosts.py`：
+
+| 场景 | Given / When / Then |
+|---|---|
+| 未授权目标不访问 | Given 所选根含链接且未提供对应授权；When 请求隔离 probe；Then 拒绝该投影，不跟随链接读取目标，不改原链接 |
+| 精确批准只物化投影 | Given 批准绑定原计划、宿主、逻辑路径、原始链接文本、物理目录及身份／摘要；When 所有绑定仍匹配；Then 在隔离目录复制普通 Skill 目录，并完整核对宿主实际加载 |
+| 共享根按宿主授权 | Given 两个宿主共享同一个链接 Skill；When 分别提供绑定各宿主的有效授权；Then 两个宿主均可验证，授权不跨宿主借用，同宿主重复仍拒绝 |
+| 授权与现场不符 | Given 授权属于其他计划／宿主或链接／目标已替换；When 消费授权；Then 拒绝，不自动刷新批准或改写旧计划／回执 |
+| 不安全嵌套仍拒绝 | Given 批准的目录含嵌套链接、特殊文件或不安全路径；When 准备或消费授权；Then 拒绝，不递归扩大访问范围 |
+| 身份与封存内容一致 | Given Skill 身份已检查；When SKILL.md 在封存前删除或替换；Then 不签发与该身份不符的授权，私有副本也不能省略已授权 Skill |
+| Windows 原生链接文本 | Given readlink 返回合法扩展盘符或 UNC 拼写；When 批准相同物理目录；Then 在 nofollow 和对象身份均匹配后接受，原始文本不改；未知设备路径仍拒绝 |
+| 复制漂移不接受 | Given 复制前后链接、目标身份或内容出现变化；When 完成投影检查；Then 不启动宿主或不发布成功结果，保留原链接与原件 |
+
 Bash 入口为 `bash install.sh upgrade ...`，PowerShell 为 `./install.ps1 -WorkflowMode upgrade ...`；工作流参数直接转发，不运行普通 onboarding。恢复也由两入口转发。
 
 ### 独立恢复与旧资产退出

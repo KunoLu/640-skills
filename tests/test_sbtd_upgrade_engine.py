@@ -283,7 +283,7 @@ def _disk(root, entry, target, decisions):
     return {"status": status, "decision": decisions.get(str(target))}
 
 
-def verify_hosts(scope, *, package_root=None, probe=False):
+def verify_hosts(scope, *, package_root=None, probe=False, link_authorizations=None):
     root = _root(package_root)
     spec = _spec(root)
     decisions = scope.get("decisions", {})
@@ -333,12 +333,19 @@ class UpgradeEngineTests(unittest.TestCase):
     def setUp(self):
         self.base = Path(tempfile.mkdtemp()).resolve()
         self.addCleanup(shutil.rmtree, self.base, True)
-        self.addCleanup(
-            lambda: [
-                sys.modules.pop(name, None)
-                for name in ("sbtd_upgrade_inventory", "sbtd_upgrade_hosts")
-            ]
-        )
+        previous = {
+            name: sys.modules.get(name)
+            for name in ("sbtd_upgrade_inventory", "sbtd_upgrade_hosts")
+        }
+
+        def restore_providers():
+            for name, module in previous.items():
+                if module is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = module
+
+        self.addCleanup(restore_providers)
 
     # -- fixture helpers ----------------------------------------------------
 

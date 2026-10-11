@@ -424,7 +424,7 @@ def add_recovery_parser(subparsers: Any) -> argparse.ArgumentParser:
 def add_upgrade_parser(subparsers: Any) -> argparse.ArgumentParser:
     upgrade = subparsers.add_parser("upgrade", allow_abbrev=False)
     upgrade.add_argument("--phase", action=SingleValueAction, required=True,
-                         choices=("plan", "apply", "verify"))
+                         choices=("plan", "apply", "verify", "authorize-link"))
     for option, help_text in (
         ("scope", "Explicit version-1 upgrade scope JSON (plan only)."),
         ("backup-root", "Existing private vault, outside every source and target."),
@@ -432,6 +432,10 @@ def add_upgrade_parser(subparsers: Any) -> argparse.ArgumentParser:
         ("plan", "Previously displayed sealed upgrade plan."),
         ("receipt", "Bound cumulative receipt for retry or verification."),
         ("confirm-plan", "The displayed plan_id, not a substitute for authorization."),
+        ("host", "Scope host id owning the linked Skill (authorize-link only)."),
+        ("skill-path", "Absolute logical path of the linked Skill (authorize-link only)."),
+        ("target-path", "Operator-supplied physical link target directory (authorize-link only)."),
+        ("link-authorization", "Comma-separated sealed link authorization artifacts (verify --probe only)."),
     ):
         upgrade.add_argument("--" + option, action=SingleValueAction, help=help_text)
     upgrade.add_argument("--yes", action="store_true", help="Authorize the displayed operation.")
@@ -445,16 +449,21 @@ def validate_upgrade_args(
 ) -> None:
     _check_phase(
         parser, args,
-        ("scope", "backup_root", "output", "plan", "receipt", "confirm_plan"),
+        ("scope", "backup_root", "output", "plan", "receipt", "confirm_plan",
+         "host", "skill_path", "target_path", "link_authorization"),
         ("yes", "probe", "json"),
         {
             "plan": (("scope", "backup_root"), ("output", "json")),
             "apply": (("plan",), ("receipt", "confirm_plan", "yes", "json")),
-            "verify": (("plan",), ("receipt", "probe", "yes", "json")),
+            "verify": (("plan",), ("receipt", "probe", "yes", "json", "link_authorization")),
+            "authorize-link": (("plan", "host", "skill_path", "target_path"),
+                               ("output", "json")),
         },
     )
     if args.phase == "verify" and args.yes and not args.probe:
         parser.error("--yes is only meaningful with --probe during verification")
+    if args.phase == "verify" and args.link_authorization and not args.probe:
+        parser.error("--link-authorization is only meaningful with --probe during verification")
 
 
 def add_cleanup_legacy_parser(subparsers: Any) -> argparse.ArgumentParser:
