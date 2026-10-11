@@ -715,5 +715,17 @@
 - 修复：外层去掉无关配置重定向并使用私有 HOME；OMP 夹具按实际解析契约设置 PI_CONFIG_DIR=.omp、临时绝对 agent/provider 路径及默认 profile，在任何部署前断言解析目标属于夹具。取消外层 Skills 根覆盖后，原失败测试通过，未改产品默认值或测试断言。
 - 预防：先读取实际优先级与值类型；隔离器不要替所有测试强制选择显式配置分支。可写夹具在调用生产写入器前检查完整实际写集，不能把“环境看起来私有”当作越界不会发生的证明。定点修正之后仍需同环境全量验证。
 
+## LESSON-20261011-kuno-validation-worktrees-outside-task-tree: Keep Validation Checkouts Outside Task Trees
+
+- 日期：2026-10-11
+- 标签：validation, worktree, task-state, identity, isolation
+- 适用场景：在同一仓库保存冻结源码、覆盖对比 checkout 或完整项目夹具，同时使用 TaskStore 更新任务状态。
+- 严重级别：high
+- 来源：源码覆盖基线的实际 TaskStore 写入拒绝与任务发现代码核对。
+- 问题：把完整 checkout 放在 `.sbtd/tasks/<任务>/` 内后，其复制的共享 `task.md` 被再次发现，状态更新返回 `multiple task records have the same logical ID`；初始模式记录仍在，但新的状态未保存。
+- 根因：任务树是逻辑任务发现边界，不是任意临时文件容器。TaskStore 递归读取 `.sbtd/tasks` 与 `ai/tasks` 下的任务正文；Git ignore、独立 worktree 的 `.git` 或目录名带 baseline 都不会将其中的记录排除。
+- 修正原则：完整验证 checkout 放在任务树外的受保护位置，例如 `.sbtd/validation/` 或独立私有临时目录。若运行已绑定错误位置，先保全原任务和运行证据，不在执行中移动输入；完成后只移除本次自建 checkout，再用状态 helper 复验。不得改任务 ID、覆盖真实任务或放宽目录发现规则绕过冲突。
+- 预防：创建副本前检查是否携带任务记录及其发现边界；ignore 只证明 Git 保护，不证明任务语义隔离。明确区分会话内阶段与实际保存的状态，保存失败不得声称恢复可靠。
+
 <!-- lessons:kuno:end -->
 
