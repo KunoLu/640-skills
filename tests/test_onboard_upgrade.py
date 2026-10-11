@@ -491,6 +491,17 @@ class UpgradeCliTests(unittest.TestCase):
             )
         )
 
+        # Both injection phases share one frozen read-only bootstrap copy;
+        # production never writes the package, so the second identical
+        # 9MB copytree was redundant.
+        package_temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(package_temporary.cleanup)
+        package = Path(package_temporary.name).resolve() / "bootstrap"
+        shutil.copytree(
+            CLI.parents[1], package,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+
         def real_batch_phase(inject):
             """Drive the public handler over a real plan/vault; only the
             isolated process boundary runs in-process so the persistence
@@ -498,11 +509,6 @@ class UpgradeCliTests(unittest.TestCase):
             temporary = tempfile.TemporaryDirectory()
             self.addCleanup(temporary.cleanup)
             root = Path(temporary.name).resolve()
-            package = root / "bootstrap"
-            shutil.copytree(
-                CLI.parents[1], package,
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-            )
             skills = root / "skills"
             old = skills / "sbtd-workflow-onboard"
             old.mkdir(parents=True)
