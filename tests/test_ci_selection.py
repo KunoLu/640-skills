@@ -5,7 +5,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tests.run_ci import RecordedResult, WINDOWS_CASES, partition, select_cases, verify_reports
+from tests.run_ci import (
+    RecordedResult, WINDOWS_CASES, partition, required_native_cases,
+    select_cases, unpassed_required, verify_reports,
+)
 
 
 class CaseIdentity:
@@ -115,3 +118,43 @@ class CiSelectionTests(unittest.TestCase):
             (retry / "linux-1.json").write_text(json.dumps(failed_retry))
             with self.assertRaises(ValueError):
                 verify_reports(directory, "linux", 2, "exact-sha")
+
+    def test_required_native_skip_or_expected_failure_does_not_count_as_pass(self):
+        executed = []
+        class NativeChecks(unittest.TestCase):
+            def test_skipped(self):
+                self.skipTest("native capability unavailable")
+
+            @unittest.expectedFailure
+            def test_expected_failure(self):
+                self.fail("known native failure")
+
+            def test_passed(self):
+                executed.append(self.id())
+
+        cases = list(unittest.defaultTestLoader.loadTestsFromTestCase(NativeChecks))
+        required = {case.id() for case in cases}
+        result = unittest.TextTestRunner(stream=io.StringIO(), resultclass=RecordedResult).run(
+            unittest.TestSuite(cases)
+        )
+        self.assertTrue(result.wasSuccessful())  # unittest alone accepts skip/xfail.
+        self.assertCountEqual(
+            unpassed_required(required, result.records),
+            required - set(executed),
+        )
+
+    def test_native_requirements_keep_platform_specific_failures_distinct(self):
+        powershell = "test_install_sh_agent_cli_flow.BashInstallerAgentCliFlowTests.test_powershell_new_case"
+        sensitive = "test_sbtd_upgrade_inventory.PhysicalTargetPlanTests.test_case_sensitive_onboard_provider_uses_selected_installation"
+        windows = required_native_cases("windows", [powershell])
+        linux = required_native_cases("linux", [powershell])
+        self.assertIn(sensitive, windows)  # The fixture enables NTFS per-directory sensitivity.
+        self.assertIn(sensitive, linux)
+        self.assertTrue(set(WINDOWS_CASES).issubset(windows))
+        records = [
+            {"id": identity, "status": "skipped" if identity == powershell else "passed"}
+            for identity in windows | linux
+        ]
+        self.assertEqual(unpassed_required(windows, records), [powershell])
+        self.assertEqual(unpassed_required(linux, records), [])
+        self.assertEqual(unpassed_required(required_native_cases("macos", [powershell]), records), [])

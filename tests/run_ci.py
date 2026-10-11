@@ -93,6 +93,31 @@ def partition(cases, count, weights):
     return bins
 
 
+def required_native_cases(target, identities):
+    """Critical native checks must execute, not merely be selected and skipped."""
+    required = set()
+    case_sensitive = "test_sbtd_upgrade_inventory.PhysicalTargetPlanTests.test_case_sensitive_onboard_provider_uses_selected_installation"
+    if target == "windows":
+        required.update(WINDOWS_CASES)
+        required.update((
+            case_sensitive,
+            "test_sbtd_upgrade_hosts.ShellResourceTests.test_unicode_resolution_uses_utf8_even_with_legacy_console_encoding",
+            "test_sbtd_upgrade_hosts.ShellResourceTests.test_new_unicode_profile_loads_in_windows_powershell",
+        ))
+        required.update(identity for identity in identities
+                        if identity.startswith("test_install_sh_agent_cli_flow.") and "powershell" in identity)
+    elif target == "linux":
+        required.update((
+            case_sensitive,
+            "test_onboard_contracts.PathAliasContainmentTests.test_public_contract_keeps_distinct_case_sensitive_targets_separate",
+        ))
+    return required
+
+
+def unpassed_required(required, records):
+    return sorted(set(required) - {row["id"] for row in records if row["status"] == "passed"})
+
+
 class RecordedResult(unittest.TextTestResult):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -122,6 +147,14 @@ class RecordedResult(unittest.TextTestResult):
         if error is not None:
             self.row.update(status="failed-subtest")
         super().addSubTest(test, subtest, error)
+
+    def addExpectedFailure(self, test, error):
+        self.row.update(status="expected-failure")
+        super().addExpectedFailure(test, error)
+
+    def addUnexpectedSuccess(self, test):
+        self.row.update(status="unexpected-success")
+        super().addUnexpectedSuccess(test)
 
     def stopTest(self, test):
         self.row["seconds"] = time.monotonic() - self.started
@@ -198,22 +231,29 @@ def main():
     started = datetime.now(timezone.utc).isoformat()
     manifest = {"platform": args.platform, "shard": args.shard, "shards": args.shards,
                 "scope": sorted(case.id() for case in cases), "selected": [case.id() for case in selected]}
+    required = required_native_cases(args.platform, manifest["scope"])
+    if required - set(manifest["scope"]):
+        parser.error("Required native cases are missing from discovery")
     prefix.with_suffix(".inventory.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     if args.list:
         print(json.dumps(manifest, indent=2))
         return 0
     tick = time.monotonic()
     result = unittest.TextTestRunner(verbosity=2, resultclass=RecordedResult).run(unittest.TestSuite(selected))
+    native_failures = unpassed_required(required.intersection(manifest["selected"]), result.records)
+    successful = result.wasSuccessful() and not native_failures
     report = {**manifest, "started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(),
               "seconds": time.monotonic() - tick, "python": sys.version, "environment": platform.platform(),
-              "source_sha": os.environ.get("VALIDATION_SHA"), "successful": result.wasSuccessful(),
+              "source_sha": os.environ.get("VALIDATION_SHA"), "successful": successful,
               "evidence_source": "ci" if os.environ.get("GITHUB_ACTIONS") == "true" else "developer-local",
               "run_attempt": int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")),
               "tests": result.testsRun, "skipped": len(result.skipped), "cases": result.records,
+              "required_native_failures": native_failures,
+              "skip_details": [(test.id(), reason) for test, reason in result.skipped],
               "failures": [(test.id(), message) for test, message in result.failures + result.errors]}
     prefix.with_suffix(".json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     prefix.with_suffix(".md").write_text(
-        f"# 原生 CI 分片验证\n\n- 结果：{'通过' if result.wasSuccessful() else '失败'}\n"
+        f"# 原生 CI 分片验证\n\n- 结果：{'通过' if successful else '失败'}\n"
         f"- 平台／分片：{args.platform} {args.shard}/{args.shards}\n"
         f"- SHA：`{report['source_sha']}`\n- 测试：{result.testsRun}；skip：{len(result.skipped)}\n"
         f"- 原生运行 attempt：{report['run_attempt']}；聚合允许同 SHA 的成功分片保留其真实较早 attempt。\n"
@@ -223,7 +263,9 @@ def main():
         encoding="utf-8",
     )
     print(f"Shard {args.shard}/{args.shards}: {result.testsRun} tests in {report['seconds']:.3f}s")
-    return 0 if result.wasSuccessful() else 1
+    if native_failures:
+        print("Required native checks did not pass: " + ", ".join(native_failures), file=sys.stderr)
+    return 0 if successful else 1
 
 
 if __name__ == "__main__":
