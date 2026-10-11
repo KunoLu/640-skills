@@ -283,7 +283,7 @@ def _disk(root, entry, target, decisions):
     return {"status": status, "decision": decisions.get(str(target))}
 
 
-def verify_hosts(scope, *, package_root=None, probe=False):
+def verify_hosts(scope, *, package_root=None, probe=False, link_authorizations=None):
     root = _root(package_root)
     spec = _spec(root)
     decisions = scope.get("decisions", {})

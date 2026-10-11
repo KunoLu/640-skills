@@ -49,6 +49,8 @@ Collect explicit Skills roots, global AGENTS targets, host configuration domains
 
 Run read-only `upgrade --phase plan`, display the exact baseline and target set, then obtain consent before `apply --yes --confirm-plan`. A plan identifier binds the displayed selection; it is not authorization by itself. Read-only `verify` measures current content; runtime/host probes require separate `--probe --yes` consent. Report disk, protocol, actual host loading and legacy cleanup separately. Use `recovery --upgrade-*` only after showing and confirming its recovery plan; retain backups. Neither upgrade success nor migration verification authorizes `cleanup-legacy`, removal of runtimes/backups, plugin/hooks changes, or workflow sync.
 
+When an isolated probe encounters a linked Skill, keep the default refusal and the original link. Read [precise link authorization](REFERENCE.md#probe-skill-link-authorization): only an explicitly approved physical target may be captured with `upgrade --phase authorize-link` and consumed by `verify --probe --yes --link-authorization`. Recheck plan/host/path, link and target identities, Skill identity and content before/after temporary materialization; reject nested links or drift. This does not change installation/cleanup policy or prove live session reload.
+
 The selected, operator-controlled private vault is trusted historical evidence, not a signed journal. Hashes do not protect against a writer forging its entire history. Refuse automatic recovery when provenance/control of the vault is uncertain; still validate scope-derived resources, complete recovery eligibility and current drift. Never run a historical executor merely because its files match a vault hash. Recovery preserves empty parent directories and backups.
 
 

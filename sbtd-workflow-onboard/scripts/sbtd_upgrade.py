@@ -81,7 +81,7 @@ import os
 import stat
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -107,6 +107,7 @@ __all__ = [
     "apply_upgrade",
     "plan_recovery",
     "plan_upgrade",
+    "prepare_probe_link_authorization",
     "save_plan",
     "verify_upgrade",
 ]
@@ -1332,6 +1333,31 @@ def save_plan(
     return save_document(Path(destination), plan, private_root=root)
 
 
+def prepare_probe_link_authorization(
+    plan: Mapping[str, Any],
+    *,
+    host_id: str,
+    skill_path: str,
+    target_path: str,
+) -> dict[str, Any]:
+    """Seal a precise linked-Skill probe authorization bound to this plan.
+
+    The operator's explicit physical ``target_path`` is the required initial
+    target access; nothing is written and no other target is read. See
+    ``sbtd_probe_links`` for the exact binding and revalidation rules.
+    """
+    plan_id, payload = _validate_plan(plan)
+    from sbtd_probe_links import prepare_link_authorization
+
+    return prepare_link_authorization(
+        plan_id=plan_id,
+        hosts=payload["scope"].get("hosts") or [],
+        host_id=host_id,
+        skill_path=skill_path,
+        target_path=target_path,
+    )
+
+
 # ---------------------------------------------------------------------------
 # apply_upgrade
 # ---------------------------------------------------------------------------
@@ -1911,11 +1937,55 @@ def _write_resource(
 # ---------------------------------------------------------------------------
 
 
+def _validate_link_authorizations(
+    link_authorizations: Sequence[Mapping[str, Any]] | None,
+    *,
+    plan_id: str,
+    payload: Mapping[str, Any],
+    probe: bool,
+) -> list[dict[str, Any]] | None:
+    """Bind precise linked-Skill authorizations to this plan before any probe."""
+    if link_authorizations is None:
+        return None
+    if not probe:
+        _fail(
+            "invalid-argument",
+            "link authorizations are only meaningful for an explicit probe verification",
+        )
+    if isinstance(link_authorizations, (str, bytes)) or not isinstance(
+        link_authorizations, Sequence
+    ):
+        _fail("invalid-argument", "link authorizations must be a sequence of documents")
+    from sbtd_probe_links import validate_link_authorization
+
+    hosts = payload["scope"].get("hosts") or []
+    sealed = []
+    for document in link_authorizations:
+        sealed_payload = validate_link_authorization(document, plan_id=plan_id, hosts=hosts)
+        sealed.append(
+            {
+                "authorization_id": document["authorization_id"],
+                "payload": sealed_payload,
+            }
+        )
+    seen: set[tuple[str, str]] = set()
+    for item in sealed:
+        key = (item["payload"]["host_id"], os.path.normpath(item["payload"]["skill_path"]))
+        if key in seen:
+            _fail(
+                "authorization-conflict",
+                "duplicate link authorizations for one host and Skill path",
+            )
+        seen.add(key)
+    return sealed
+
+
 def verify_upgrade(
     plan: Mapping[str, Any],
     *,
     receipt: Mapping[str, Any] | None = None,
     probe: bool = False,
+    link_authorizations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Read-only verification: managed payload state plus separate host evidence."""
     plan_id, payload = _validate_plan(plan)
@@ -1939,8 +2009,11 @@ def verify_upgrade(
                 receipt_rows[row["id"]] = dict(row)
     if not isinstance(probe, bool):
         _fail("invalid-argument", "probe must be a boolean")
+    sealed_links = _validate_link_authorizations(
+        link_authorizations, plan_id=plan_id, payload=payload, probe=probe
+    )
     hosts_report = _hosts_module().verify_hosts(
-        payload["scope"], package_root=None, probe=probe
+        payload["scope"], package_root=None, probe=probe, link_authorizations=sealed_links
     )
     if not isinstance(hosts_report, Mapping):
         _fail("invalid-inventory", "host verification must return an object")
