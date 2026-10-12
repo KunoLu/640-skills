@@ -163,7 +163,7 @@ class VerifiedMigration:
             for index, root in enumerate(self.roots):
                 report_path = self.evidence / f"smoke-{index}.json"
                 summary = self.evidence / f"smoke-{index}.md"
-                summary.write_text("合成 cleanup 夹具；不证明真实 host 部署。\n")
+                summary.write_text("合成 cleanup 夹具；不证明真实 host 部署。\n", encoding="utf-8")
                 raw = {
                     "repositoryKey": "fixture/project",
                     "projectRoot": str(root),
