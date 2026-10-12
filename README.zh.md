@@ -429,9 +429,11 @@ Ignore 不会脱敏、不取消已有 tracked 状态，也不授权删除。任�
 
 原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按模块耗时权重分为互不重叠的分片；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
 
+不依赖完整清单的迁移边界测试仅缩小安装输入：仍保留完整 Onboard 启动器包、多个兄弟 Skill 和全部文件路由操作；完整清单生命周期与已安装副本测试继续作为独立锚点。每个阶段仍调用真实迁移／恢复 API 并重新执行安全校验；小型夹具不授权缓存通过结论、复用回执或省略漂移场景。总 runner 成本与并行墙钟等待分别比较。
+
 Windows 必需原生检查（ACL、junction、Unicode、PowerShell 及已启用的大小写敏感路径）与 Linux 大小写敏感检查必须实际通过；仅被选中不够，skip 或预期失败也会阻断所在分片。
 
-CI artifact 按原生运行 attempt 保留，不覆盖失败记录。部分重跑可沿用同一 SHA 已成功的分片；聚合取各分片最新报告，拒绝较新的失败或同 attempt 重复证据，并核对分片并集完整且不重叠。
+CI artifact 按原生运行 attempt 保留，不覆盖失败记录。部分重跑可沿用同一 SHA 已成功的分片；聚合取各分片最新报告，拒绝较新的失败或同 attempt 重复证据，并核对分片并集完整且不重叠。skip 总数按原生事件统计，包含被跳过的子场景，可能不同于父例状态计数；跨轮对照保留子场景身份与理由。
 
 <a id="license"></a>
 ## 许可证与致谢

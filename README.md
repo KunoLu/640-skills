@@ -431,9 +431,11 @@ For source changes, assess both language READMEs, [CHANGELOG](CHANGELOG.md) and 
 
 The native full-suite command remains `python -B -m unittest discover -s tests -p 'test_*.py'`. CI discovers that complete Linux set and partitions it into disjoint, duration-weighted module shards; Windows partitions its native scope without repeating overlapping PowerShell/Unicode selectors. macOS keeps its native scope. The existing check names aggregate all required shards; any failed, cancelled or missing shard blocks success. The minimum supported TOML-editor run remains a separate dependency variant, not a duplicate. Per-case timings, skip reasons and Chinese result summaries are retained as CI artifacts. Consult the [workflow](.github/workflows/validation.yml) and [runner](tests/run_ci.py) for exact scope. Source checks, installed-copy checks, real host loading and release acceptance remain separate evidence.
 
+Catalog-independent migration boundary tests narrow only their installation inputs: they retain the complete Onboard launcher package, multiple sibling Skills and all file-routing operations. Full-catalog lifecycle and installed-copy tests remain separate anchors. Every stage still runs the real migration/recovery APIs and fresh safety checks; smaller fixtures do not authorize cached verdicts, reused receipts or omitted drift cases. Compare total runner cost separately from parallel wall-clock time.
+
 Required native Windows checks (including ACLs, junctions, Unicode, PowerShell and enabled case-sensitive paths) and Linux case-sensitive checks must pass, not merely be selected: skip or expected failure blocks their shard.
 
-CI artifacts retain each native run attempt without overwriting failures. Partial retries may reuse successful shards from the same SHA; aggregation selects each shard's newest report, rejects newer failures or ambiguous duplicates, and proves that the union covers the complete scope exactly once.
+CI artifacts retain each native run attempt without overwriting failures. Partial retries may reuse successful shards from the same SHA; aggregation selects each shard's newest report, rejects newer failures or ambiguous duplicates, and proves that the union covers the complete scope exactly once. Skip totals count native events, including skipped subtests; parent-case status counts can differ. Preserve subtest identities and reasons when comparing runs.
 
 <a id="license"></a>
 ## License and credits

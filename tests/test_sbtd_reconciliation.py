@@ -16,7 +16,11 @@ from pathlib import Path
 from unittest import mock
 
 from tests import test_sbtd_approved_agents_deployment as approved
-from tests.test_sbtd_followup_batch import _failed_copy, _synthetic_smoke
+from tests.test_sbtd_followup_batch import (
+    _failed_copy,
+    _focused_installation_templates,
+    _synthetic_smoke,
+)
 from tests.test_sbtd_migration_cleanup import _fake_vendor_adapter
 from tests.test_sbtd_migration_verify import _tree_bytes
 
@@ -331,6 +335,10 @@ def _verified_batch_citing_copied_inputs(case):
 
 
 class CurrentStateReconciliationLifecycleTests(unittest.TestCase):
+    def setUp(self):
+        # Provenance/retry invariants never depend on the full skill catalog.
+        _focused_installation_templates(self)
+
     def test_reconcile_then_cumulative_retry_preserves_current_state_provenance(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
@@ -553,6 +561,10 @@ class CurrentStateReconciliationLifecycleTests(unittest.TestCase):
 
 
 class CurrentStateReconciliationRefusalTests(unittest.TestCase):
+    def setUp(self):
+        # Refusal drift targets are file-level fixture objects, not skill dirs.
+        _focused_installation_templates(self)
+
     def test_missing_consent_blocks_before_any_write_or_smoke(self):
         batch, manifest, manifest_path, apply_path, missing_path = (
             _interrupted_deployment(self)
@@ -1177,6 +1189,10 @@ class CurrentStateProvenanceBindingTests(unittest.TestCase):
     fingerprint was swapped for another format-valid value, must not verify.
     """
 
+    def setUp(self):
+        # Provenance binding covers cited input documents, not skill dirs.
+        _focused_installation_templates(self)
+
     def test_equivalent_existing_source_references_still_verify(self):
         # Provenance binds safe objects and exact bytes, not the caller's argv
         # spelling: intact copies remain valid cited sources.
@@ -1365,6 +1381,11 @@ class CurrentStateProvenanceRecheckTests(unittest.TestCase):
     consumers recheck once more before any accepted artifact is returned or
     saved, and a reappearing historical receipt is stale provenance too.
     """
+
+    def setUp(self):
+        # Cited-source recheck invariants bind private document copies; every
+        # drift subcase and real consumer call stays exactly as declared.
+        _focused_installation_templates(self)
 
     def test_verify_rechecks_cited_sources_after_report_inspection(self):
         import sbtd_migration_verify as verify_module
@@ -2003,6 +2024,11 @@ class CurrentStateProvenanceRecheckTests(unittest.TestCase):
 
 
 class CurrentStateFinalSnapshotTests(unittest.TestCase):
+    def setUp(self):
+        # Late-artifact drift targets are the project file, its file backup
+        # and the project report; none is a sibling skill directory.
+        _focused_installation_templates(self)
+
     def test_reconcile_rechecks_artifacts_after_provenance_validation(self):
         for artifact in ("target", "original", "report"):
             with self.subTest(artifact=artifact):
@@ -2081,6 +2107,11 @@ class CurrentStateFinalSnapshotTests(unittest.TestCase):
 
 
 class CurrentStateRetrySnapshotTests(unittest.TestCase):
+    def setUp(self):
+        # The retry result set mirrors the same manifest's evidence on both
+        # sides of the equality, so catalog size never enters the invariant.
+        _focused_installation_templates(self)
+
     def test_retry_rechecks_artifacts_after_provenance_validation(self):
         import sbtd_graft_deployment as deployment
         import sbtd_migration as migration

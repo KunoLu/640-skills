@@ -728,5 +728,17 @@
 - 验证：完成的 checkout 非破坏性移出任务树后，同一 TaskStore 成功保存 checking；源码与失败证据保留，原任务 ID 和发现规则均未改写。
 - 预防：创建副本前检查是否携带任务记录及其发现边界；ignore 只证明 Git 保护，不证明任务语义隔离。明确区分会话内阶段与实际保存的状态，保存失败不得声称恢复可靠。
 
+## LESSON-20261012-kuno-native-skip-events: Count Unittest Skip Events Not Only Parent Cases
+
+- 日期：2026-10-12
+- 标签：validation, unittest, subtest, skip, reports, ci
+- 适用场景：聚合分片报告、比较优化前后执行范围，或由逐例状态生成测试摘要。
+- 严重级别：medium
+- 来源：Linux CI 取证对原生跳过明细与 `RecordedResult` 的核对。
+- 问题：仅统计 `cases[].status == skipped` 得到 Linux 46、Windows 30，但原生报告分别为 48、32；这不是环境新增跳过，而是摘要低报。
+- 根因：一个父测试方法的三个 zsh 配置子场景分别调用 skip；`unittest` 保存三个跳过事件，逐例记录却只有一个父例状态。父例数与跳过事件数不是同一口径。
+- 修正：只更正派生摘要，原生报告不改；使用 runner 的 `skipped` 和完整 `skip_details`，同时保留父例状态。优化对照逐项比较父例身份／状态与跳过子场景身份／理由，不仅比较一个总数。
+- 预防：先确认 runner 对父例、subTest、跳过和失败的记录粒度；不能从 `testsRun` 或父例状态推导原生事件总数。摘要纠正不得改写原件或被表述为补跑通过。
+
 <!-- lessons:kuno:end -->
 
