@@ -1,0 +1,125 @@
+name: linux-cost-experiment
+
+# Temporary experiment scaffold; deleted after the cost proof, before release.
+on:
+  push:
+    branches: [perf/linux-ci-runner-cost]
+    paths:
+      - .github/workflows/linux-cost-experiment.yml
+      - tests/linux_cost_experiment.py
+
+permissions:
+  contents: read
+
+jobs:
+  linux-cost-pair:
+    # 9 uninstrumented paired jobs: round x shard, both variants on one runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        round: [1, 2, 3]
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the frozen baseline commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 2aef801a93aece7a3999fff0bb577c695042948f
+          path: baseline
+
+      - name: Check out the exact candidate commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Install declared Onboard dependencies once
+        run: python -m pip install -r candidate/sbtd-workflow-onboard/requirements.txt
+
+      - name: Run the paired baseline/candidate measurement
+        run: >-
+          python -B candidate/tests/linux_cost_experiment.py
+          --baseline "$GITHUB_WORKSPACE/baseline"
+          --candidate "$GITHUB_WORKSPACE/candidate"
+          --round ${{ matrix.round }}
+          --shard ${{ matrix.shard }}
+          --output "${{ runner.temp }}/linux-cost-experiment/round-${{ matrix.round }}-shard-${{ matrix.shard }}"
+
+      - name: Preserve native results and experiment summaries
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-cost-experiment-round-${{ matrix.round }}-shard-${{ matrix.shard }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linux-cost-experiment/round-${{ matrix.round }}-shard-${{ matrix.shard }}
+          if-no-files-found: error
+
+      - name: Verify both checkouts stayed clean
+        run: |
+          test -z "$(git -C baseline status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+
+  linux-coverage:
+    # 6 instrumented jobs: variant x shard. Excluded from performance bounds;
+    # counted separately as experiment expense. Native run_ci stays authoritative.
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, candidate]
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the ${{ matrix.variant }} commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ matrix.variant == 'baseline' && '2aef801a93aece7a3999fff0bb577c695042948f' || github.sha }}
+          path: checkout
+
+      - name: Check out the candidate commit for the companion script
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: candidate
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12.10"
+
+      - name: Install declared Onboard dependencies and coverage
+        run: |
+          python -m pip install -r checkout/sbtd-workflow-onboard/requirements.txt
+          python -m pip install 'coverage==7.16.2'
+
+      - name: Run the instrumented Linux shard
+        run: >-
+          python -B candidate/tests/linux_cost_experiment.py
+          --coverage "$GITHUB_WORKSPACE/checkout"
+          --variant ${{ matrix.variant }}
+          --shard ${{ matrix.shard }}
+          --output "${{ runner.temp }}/linux-cost-experiment/coverage-${{ matrix.variant }}-shard-${{ matrix.shard }}"
+
+      - name: Preserve native results and coverage summaries
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-cost-experiment-coverage-${{ matrix.variant }}-shard-${{ matrix.shard }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linux-cost-experiment/coverage-${{ matrix.variant }}-shard-${{ matrix.shard }}
+          if-no-files-found: error
+
+      - name: Verify the checkouts stayed clean
+        run: |
+          test -z "$(git -C checkout status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"

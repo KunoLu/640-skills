@@ -41,6 +41,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scrip
 sys.path.insert(0, str(SCRIPTS))
 
 import onboard_contracts as contracts
+import sbtd_graft_deployment
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_graft_deployment import execute_migration_deployment, load_deployment_context
 from sbtd_migration import apply_migration, cleanup_migration, runtime_versions
@@ -169,6 +170,38 @@ def _failed_copy(path, kind, destination):
     failed = contracts.seal_document(kind, payload)
     destination.write_bytes(canonical_json_bytes(failed))
     return destination
+
+
+# Keep the full launcher package and two ordinary sibling Skill directories.
+_FOCUSED_SKILL_DIRECTORIES = frozenset(
+    {"sbtd-workflow-onboard", "sbtd-task", "project-validation"}
+)
+
+
+def _focused_installation_templates(case):
+    """Narrow the installation input for catalog-independent boundary tests.
+
+    The wrapper always calls the genuine selection and only drops directory
+    operations whose target is an unrelated sibling skill; every kept
+    operation is the exact selected object (real sources, payload bytes and
+    targets), including all non-directory operations. Classes whose
+    invariants do not depend on the full catalog call this from ``setUp``.
+    Normal test cleanup restores the unfiltered selection; nested catalog
+    patches still compose through the same module attribute.
+    """
+    real_catalog = sbtd_graft_deployment._installation_templates
+
+    def focused(roots, *, omp_agents_target=None):
+        return [
+            operation
+            for operation in real_catalog(roots, omp_agents_target=omp_agents_target)
+            if operation.kind != "dir"
+            or operation.target.name in _FOCUSED_SKILL_DIRECTORIES
+        ]
+
+    patcher = mock.patch("sbtd_graft_deployment._installation_templates", new=focused)
+    case.addCleanup(patcher.stop)
+    patcher.start()
 
 
 def assert_proof_intact(case, proof):
@@ -945,6 +978,10 @@ class FollowupBatchTests(unittest.TestCase):
 
 
 class FollowupPredecessorGateTests(unittest.TestCase):
+    def setUp(self):
+        # Gate/binding invariants never depend on the full skill catalog.
+        _focused_installation_templates(self)
+
     def test_followup_rejects_a_missing_predecessor_document(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
@@ -1273,6 +1310,10 @@ class FollowupPredecessorGateTests(unittest.TestCase):
 
 
 class FollowupOperationTamperingTests(unittest.TestCase):
+    def setUp(self):
+        # Tamper invariants need one real copy operation, not the full catalog.
+        _focused_installation_templates(self)
+
     def test_resealed_inherited_fields_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = FollowupMigration(Path(directory).resolve())
