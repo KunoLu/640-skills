@@ -15,13 +15,13 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
 import subprocess
 import sys
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 BASE_SHA = "2aef801a93aece7a3999fff0bb577c695042948f"
 SHARDS = 3
@@ -139,7 +139,9 @@ def capture_metadata(output_dir):
     """Whitelisted environment/dependency/image metadata; never a full env dump."""
     metadata_dir = Path(output_dir) / "metadata"
     metadata_dir.mkdir(parents=True, exist_ok=True)
-    freeze = subprocess.run([sys.executable, "-m", "pip", "freeze"], capture_output=True, text=True)
+    freeze = subprocess.run(
+        [sys.executable, "-m", "pip", "freeze"], capture_output=True, text=True, check=False
+    )
     (metadata_dir / "pip-freeze.txt").write_text(freeze.stdout, encoding="utf-8")
     if freeze.returncode != 0:
         (metadata_dir / "pip-freeze.stderr.txt").write_text(freeze.stderr, encoding="utf-8")
@@ -273,8 +275,10 @@ def pair_summary_md(report):
         "# Linux 配对成本实验（临时脚手架，验证后删除）",
         "",
         f"- 结果：{'通过' if report['successful'] else '失败'}",
-        f"- 轮次：第 {report['round']} 轮（共 3 轮）；分片：{report['shard']}/{report['shards']}；"
-        f"执行顺序：{' → '.join(report['order'])}",
+        (
+            f"- 轮次：第 {report['round']} 轮（共 3 轮）；分片：{report['shard']}/{report['shards']}；"
+            f"执行顺序：{' → '.join(report['order'])}"
+        ),
         f"- 冻结基线 SHA：`{report['base_sha']}`",
     ]
     for label in report["order"]:
@@ -306,10 +310,14 @@ def coverage_summary_md(report):
         f"- 变体／分片：{report['variant']}；{report['shard']}/{report['shards']}",
         f"- 实际 SHA：`{report['git_sha']}`（冻结基线 `{report['base_sha']}`）",
         f"- 原生 run_ci 返回码：{run_rc}（权威状态以原生 JSON 为准：`{report['variant']}/results/`）",
-        f"- 覆盖率 JSON：`{report['coverage_json']}`（source 相对路径，含 executed_lines／executed_branches；"
-        "仅父解释器，子进程 CLI 保持真实黑盒行为）",
-        f"- 生产树（{ONBOARD}）：`{report['production_tree']}`；输入漂移：{'无' if report['drift']['equal'] else '有'}；"
-        f"检出干净：{yes_no[report['checkout_clean']]}",
+        (
+            f"- 覆盖率 JSON：`{report['coverage_json']}`（source 相对路径，含 executed_lines／executed_branches；"
+            "仅父解释器，子进程 CLI 保持真实黑盒行为）"
+        ),
+        (
+            f"- 生产树（{ONBOARD}）：`{report['production_tree']}`；输入漂移：{'无' if report['drift']['equal'] else '有'}；"
+            f"检出干净：{yes_no[report['checkout_clean']]}"
+        ),
         "- 本作业不计入性能界限，单独计为实验开销；不含任何计时或性能声明。",
     ]
     return "\n".join(lines) + "\n"
