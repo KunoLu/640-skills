@@ -608,7 +608,7 @@ def _verified_runtime_lineage(
         key = load_pem_public_key(read_file(key_path, snapshot(key_path)))
         if document is None:
             document = json.loads(read_file(pair_path, snapshot(pair_path)))
-    except (OSError, ValueError, TypeError):
+    except (contracts.ContractError, OSError, ValueError, TypeError):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
     if not isinstance(key, Ed25519PublicKey) or not isinstance(document, Mapping):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
@@ -2097,6 +2097,16 @@ def cleanup_migration(
         None if upgrade_context is None else upgrade_context.provenance
     ):
         _fail("upgrade-lineage-conflict", "cleanup retry changed its upgrade provenance")
+    followup_deployed = None
+    if manifest["payload"].get("followup") is not None:
+        from sbtd_migration_plan import _verify_followup_predecessor
+
+        _, _, predecessor_deployment, _, _, _ = _verify_followup_predecessor(manifest)
+        followup_deployed = {
+            row["resource_id"]: row["after"]
+            for row in _result_index(predecessor_deployment).values()
+            if row["status"] == "succeeded" and row["after"] is not None
+        }
 
     def check_deployment_inputs(
         cleanup_results: Mapping[str, Any] | None = None,
@@ -2105,6 +2115,7 @@ def cleanup_migration(
 
         return validate_deployment_declarations(
             manifest["payload"],
+            followup_deployed=followup_deployed,
             stage_results={
                 "apply": _result_index(apply_document),
                 "deploy": _result_index(deployment),

@@ -2061,9 +2061,9 @@ class CurrentStateFinalSnapshotTests(unittest.TestCase):
             context_complete = True
             return result
 
-        def drift_after_real_provenance(manifest_document, deployment_document):
+        def drift_after_real_provenance(manifest_document, deployment_document, **kwargs):
             nonlocal changed
-            references = real_provenance(manifest_document, deployment_document)
+            references = real_provenance(manifest_document, deployment_document, **kwargs)
             if context_complete and changed is None:
                 if artifact == "target":
                     path = batch.agents
@@ -2138,9 +2138,9 @@ class CurrentStateRetrySnapshotTests(unittest.TestCase):
                 def after_provenance(
                     manifest_document, evidence, *, artifact=artifact,
                     changed=changed, agents=batch.agents, stage=stage,
-                    real_provenance=real_provenance,
+                    real_provenance=real_provenance, **kwargs,
                 ):
-                    references = real_provenance(manifest_document, evidence)
+                    references = real_provenance(manifest_document, evidence, **kwargs)
                     if stage["assembled"] and not changed:
                         if artifact == "target":
                             path = agents

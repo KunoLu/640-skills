@@ -22,7 +22,7 @@ import onboard
 import sbtd_migration as migration
 from onboard_arguments import parse_workflow_args
 from onboard_contracts import ContractError, canonical_json_bytes, seal_document
-from sbtd_migration_files import snapshot
+from sbtd_migration_files import require_private_directory, snapshot
 from sbtd_migration_verify import verify_migration
 from sbtd_upgrade import apply_upgrade, plan_upgrade
 from sbtd_upgrade_inventory import build_inventory
@@ -56,7 +56,7 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
             pair = installed / "assets" / "runtime-lineage.json"
             fixture = VerifiedMigration(base)
             upgrade_vault = base / "upgrade-vault"
-            upgrade_vault.mkdir(mode=0o700)
+            require_private_directory(upgrade_vault, create=True)
             with (
                 mock.patch.dict(os.environ, fixture.environment),
                 mock.patch.object(migration, "_PACKAGE", installed),

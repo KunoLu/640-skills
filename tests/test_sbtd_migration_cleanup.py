@@ -121,7 +121,7 @@ class VerifiedMigration:
         self.vault = base / "vault"
         self.evidence = base / "evidence"
         for path in (self.home, self.vault, self.evidence):
-            path.mkdir(mode=0o700)
+            require_private_directory(path, create=True)
         self.environment = {
             "HOME": str(self.home),
             "USERPROFILE": str(self.home),
