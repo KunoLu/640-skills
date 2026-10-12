@@ -1153,6 +1153,14 @@ def _bind_followup_predecessor(
     contracts._bind_success_gate(prev_deployment, {"succeeded"})
     contracts._bind_success_gate(prev_verification, {"verified"})
     contracts._bind_success_gate(prev_cleanup, {"cleaned", "already-complete"})
+    if prev_cleanup["payload"].get("upgrade_context") is not None:
+        # Upgrade provenance is restricted to the cleanup invocation that
+        # consumed the bound native upgrade evidence; no followup contract
+        # re-proves it, so an upgrade-backed predecessor fails closed.
+        _fail(
+            "upgrade-lineage-conflict",
+            "a followup batch cannot consume an upgrade-backed cleanup",
+        )
     from sbtd_migration import (
         _check_source_backups,
         _check_stage_backups,
@@ -1439,7 +1447,8 @@ def validate_legacy_inputs(
     read_original: ReadOriginal,
     resolve_original: ResolveOriginal | None = None,
     stage_results: Mapping[str, Mapping[str, Any]] | None = None,
-) -> None:
+    cleanup_only: bool = False,
+) -> list[dict[str, Any]] | None:
     """Re-validate the complete legacy closure of a sealed manifest.
 
     The caller has already proven the bound references current or resolved
@@ -1455,6 +1464,14 @@ def validate_legacy_inputs(
     configuration input change that a succeeded, intact-backed stage result
     already proves; without it the sealed inputs must match live discovery
     exactly.
+    ``cleanup_only`` is set only by the migration cleanup phase, which never
+    redeploys. Every check above is unchanged; only the deployment
+    declaration's sealed OMP input byte equality may then recognize drift
+    that is receipt-proven or deterministically irrelevant to the cleanup
+    dependency scope, and the ignored deployment-only input entries are
+    returned (sorted by path, each with its sealed and live state) so the
+    cleanup receipt can report truthfully what this phase did not
+    re-validate. Every other caller receives the historical None return.
     """
     payload = manifest["payload"]
     if payload.get("followup") is not None:
@@ -1567,18 +1584,19 @@ def validate_legacy_inputs(
         _validate_shared_operations(payload, followup_roots, resolve_original)
         from sbtd_graft_deployment import validate_deployment_declarations
 
-        validate_deployment_declarations(
+        ignored = validate_deployment_declarations(
             payload,
             followup_deployed={
                 result["resource_id"]: result["after"]
                 for result in _result_index(prev_deployment).values()
                 if result["status"] == "succeeded" and result["after"] is not None
             },
+            cleanup_only=cleanup_only,
         )
         _bind_approved_routing(
             payload, [Path(root) for root in followup_roots], bind_live=False
         )
-        return
+        return ignored
     if payload.get("successor") is not None:
         prev_manifest, _prev_receipt = _verify_successor_predecessor(manifest)
         prev_payload = prev_manifest["payload"]
@@ -1698,11 +1716,11 @@ def validate_legacy_inputs(
         _validate_shared_operations(payload, successor_roots, resolve_original)
         from sbtd_graft_deployment import validate_deployment_declarations
 
-        validate_deployment_declarations(payload)
+        ignored = validate_deployment_declarations(payload, cleanup_only=cleanup_only)
         _bind_approved_routing(
             payload, [Path(root) for root in successor_roots], bind_live=False
         )
-        return
+        return ignored
     items = payload["publication_decisions"]["items"]
     roots = [Path(project["root"]) for project in payload["projects"]]
     assigned = _assign_items(roots, items)
@@ -1779,8 +1797,11 @@ def validate_legacy_inputs(
     )
     from sbtd_graft_deployment import validate_deployment_declarations
 
-    validate_deployment_declarations(payload, stage_results=stage_results)
+    ignored = validate_deployment_declarations(
+        payload, stage_results=stage_results, cleanup_only=cleanup_only
+    )
     _bind_approved_routing(payload, roots, bind_live=False)
+    return ignored
 
 
 # ---------------------------------------------------------------------------

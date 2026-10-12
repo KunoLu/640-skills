@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import stat
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, NoReturn
@@ -66,6 +66,11 @@ def _now() -> str:
 
 def runtime_versions() -> dict[str, str]:
     """Bind plans to the installed implementation, not a guessed release tag."""
+    return _runtime_versions_at(_PACKAGE, cleanup_upgrade=True)
+
+
+def _runtime_versions_at(package: Path, *, cleanup_upgrade: bool) -> dict[str, str]:
+    """Measure a known package layout without importing its executable code."""
     import importlib.metadata
     import sys
 
@@ -113,12 +118,22 @@ def runtime_versions() -> dict[str, str]:
         "templates/skills/project-validation/references/validation-evidence.schema.json",
         "templates/skills/project-validation/references/validation-evidence.v2.schema.json",
     ]
+    if cleanup_upgrade:
+        names.extend(
+            (
+                "upgrade.schema.json",
+                "scripts/sbtd_cleanup_upgrade.py",
+                "scripts/sbtd_upgrade.py",
+                "scripts/sbtd_upgrade_inventory.py",
+                "scripts/sbtd_upgrade_paths.py",
+            )
+        )
     from onboard import PROJECT_AGENTS_TEMPLATE
 
     selected_template = PROJECT_AGENTS_TEMPLATE.relative_to(_PACKAGE).as_posix()
     if selected_template not in names:
         names.append(selected_template)
-    hashes: list[list[Any]] = [[name, snapshot(_PACKAGE / name)] for name in names]
+    hashes: list[list[Any]] = [[name, snapshot(package / name)] for name in names]
     if any(state["type"] != "file" for _, state in hashes):
         _fail("runtime-unavailable", "the installed migration runtime is incomplete")
     try:
@@ -564,6 +579,8 @@ def _lineage_signed_bytes(predecessor: str, successor: str) -> bytes:
 
 def _verified_runtime_lineage(
     document: Mapping[str, Any] | None = None,
+    *,
+    previous_package: Path | None = None,
 ) -> dict[str, Any]:
     """Verify a retained or installed authorization against the trusted key."""
     import base64
@@ -577,10 +594,20 @@ def _verified_runtime_lineage(
             "validator-unavailable",
             "prepare the installed Skill's declared requirements before migration",
         )
+    key_path = (
+        _LINEAGE_PUBLIC_KEY
+        if previous_package is None
+        else previous_package / "assets" / "runtime-lineage.pub"
+    )
+    pair_path = (
+        _LINEAGE_DOCUMENT
+        if previous_package is None
+        else previous_package / "assets" / "runtime-lineage.json"
+    )
     try:
-        key = load_pem_public_key(_LINEAGE_PUBLIC_KEY.read_bytes())
+        key = load_pem_public_key(read_file(key_path, snapshot(key_path)))
         if document is None:
-            document = json.loads(_LINEAGE_DOCUMENT.read_text(encoding="utf-8"))
+            document = json.loads(read_file(pair_path, snapshot(pair_path)))
     except (OSError, ValueError, TypeError):
         _fail("version-conflict", "the runtime lineage pair is not authorized")
     if not isinstance(key, Ed25519PublicKey) or not isinstance(document, Mapping):
@@ -612,9 +639,11 @@ def _verified_runtime_lineage(
     }
 
 
-def _verified_runtime_pair() -> tuple[str, str]:
-    """The current installed pair used to authorize a consumer runtime."""
-    document = _verified_runtime_lineage()
+def _verified_runtime_pair(
+    previous_package: Path | None = None,
+) -> tuple[str, str]:
+    """The installed pair, or a historical pair proven by a native upgrade."""
+    document = _verified_runtime_lineage(previous_package=previous_package)
     return document["predecessor"], document["successor"]
 
 
@@ -676,6 +705,7 @@ def _require_runtime_lineage(
     *,
     deployment: Mapping[str, Any] | None = None,
     cleanup: Mapping[str, Any] | None = None,
+    previous_package: Path | None = None,
 ) -> None:
     """Consume one signed predecessor only for its paired successor.
 
@@ -689,13 +719,22 @@ def _require_runtime_lineage(
     restoration checks still decide whether another write is safe.
     """
     onboard = sealed.get("onboard") if isinstance(sealed, Mapping) else None
-    predecessor, successor = _verified_runtime_pair()
+    consumer = current
+    if previous_package is not None:
+        consumer = _runtime_versions_at(
+            previous_package,
+            cleanup_upgrade=snapshot(previous_package / "scripts" / "sbtd_cleanup_upgrade.py")["type"] == "file",
+        )
+    if previous_package is not None and sealed == consumer:
+        predecessor = successor = consumer["onboard"]
+    else:
+        predecessor, successor = _verified_runtime_pair(previous_package)
     if (
         previous is None
         or not isinstance(sealed, Mapping)
         or sealed.get("graft") != current.get("graft")
         or onboard != predecessor
-        or current.get("onboard") != successor
+        or consumer.get("onboard") != successor
     ):
         _fail(
             "version-conflict",
@@ -768,6 +807,8 @@ def _require_runtime_lineage(
 def _require_reconciliation_provenance(
     manifest: Mapping[str, Any],
     deployment: Mapping[str, Any] | None,
+    *,
+    previous_package: Path | None = None,
 ) -> tuple[Mapping[str, Any], ...]:
     """Validate provenance and return its pinned filesystem references.
 
@@ -797,7 +838,9 @@ def _require_reconciliation_provenance(
         references = (
             manifest_ref,
             deployment_ref,
-            *_require_reconciliation_provenance(predecessor, predecessor_deployment),
+            *_require_reconciliation_provenance(
+                predecessor, predecessor_deployment, previous_package=previous_package
+            ),
         )
     if deployment is None:
         return references
@@ -819,14 +862,14 @@ def _require_reconciliation_provenance(
     observer = reconciliation["runtime_versions"]["onboard"]
     proof = reconciliation.get("observer_lineage")
     if proof is not None:
-        lineage = _verified_runtime_lineage(proof)
+        lineage = _verified_runtime_lineage(proof, previous_package=previous_package)
         pair = lineage["predecessor"], lineage["successor"]
     elif observer == sealed_onboard:
         return references
     else:
         # Old evidence has no retained authorization: accept only while the
         # installed pair still proves it, never invent a historical grant.
-        pair = _verified_runtime_pair()
+        pair = _verified_runtime_pair(previous_package)
     if pair != (sealed_onboard, observer):
         _fail(
             "version-conflict",
@@ -842,8 +885,18 @@ def _validate_context(
     deployment: Mapping[str, Any] | None = None,
     cleanup: Mapping[str, Any] | None = None,
     recovery: Mapping[str, Any] | None = None,
+    *,
+    cleanup_only: bool = False,
+    previous_package: Path | None = None,
 ) -> None:
-    _require_reconciliation_provenance(manifest, deployment)
+    if previous_package is not None and not cleanup_only:
+        _fail("upgrade-lineage-conflict", "upgrade trust is restricted to cleanup")
+    if cleanup is not None and cleanup["payload"].get("upgrade_context") is not None:
+        if previous_package is None:
+            _fail("upgrade-lineage-conflict", "this cleanup receipt requires its native upgrade evidence")
+    _require_reconciliation_provenance(
+        manifest, deployment, previous_package=previous_package
+    )
     sealed_versions = manifest["payload"]["tool_versions"]
     current_versions = runtime_versions()
     if sealed_versions != current_versions:
@@ -855,6 +908,7 @@ def _validate_context(
             recovery,
             deployment=deployment,
             cleanup=cleanup,
+            previous_package=previous_package,
         )
     _check_evidence_apply_boundary(manifest_path, manifest)
     require_private_directory(Path(manifest["payload"]["backup_root"]))
@@ -907,6 +961,7 @@ def _validate_context(
             )
             if document is not None
         },
+        cleanup_only=cleanup_only,
     )
 
 
@@ -1663,6 +1718,7 @@ def _cleanup_vendor_legacy_tree(
     first: Mapping[str, Any],
     target: Path,
     backup_ref: Mapping[str, Any] | None,
+    before_mutation: Callable[[], None] | None = None,
 ) -> Mapping[str, Any]:
     """Retire the legacy project tree through the vendor CLI, never manually.
 
@@ -1689,8 +1745,12 @@ def _cleanup_vendor_legacy_tree(
     _vendor_footprint_gate(manifest, target, payload["resources"])
     vault = Path(manifest["payload"]["backup_root"])
     backup_base = vault / manifest["manifest_id"] / "cleanup" / first["resource_id"]
+    if before_mutation is not None:
+        before_mutation()
     _prepare_backup_parent(backup_base / "vendor", vault)
-    outcome = execute_trellis_uninstall(root, prepared, backup_base)
+    outcome = execute_trellis_uninstall(
+        root, prepared, backup_base, before_execute=before_mutation
+    )
     results = outcome["results"]
 
     def vendor_failure(code: str, message: str, exit_code: int = 5) -> NoReturn:
@@ -1752,6 +1812,8 @@ def _cleanup_resource(
     operations: Sequence[Mapping[str, Any]],
     candidate: Mapping[str, Any],
     backup_ref: Mapping[str, Any] | None,
+    *,
+    before_mutation: Callable[[], None] | None = None,
 ) -> tuple[dict[str, Any], int]:
     first = operations[0]
     target = Path(first["target"])
@@ -1785,7 +1847,7 @@ def _cleanup_resource(
                 # the engine never deletes it directly. The adapter scopes,
                 # backs up and evidences every vendor side effect.
                 backup_ref = _cleanup_vendor_legacy_tree(
-                    manifest, first, target, backup_ref
+                    manifest, first, target, backup_ref, before_mutation=before_mutation
                 )
                 result["backup_ref"] = backup_ref
                 _check_reference(backup_ref, 3)
@@ -1826,6 +1888,8 @@ def _cleanup_resource(
                     )
                 if action != "remove":
                     _prepare_target_parents(target, scope)
+                if before_mutation is not None:
+                    before_mutation()
                 if action == "remove":
                     remove_reference(target, before, scope=scope)
                 else:
@@ -1956,6 +2020,8 @@ def cleanup_migration(
     *,
     previous_receipt_path: Path | None = None,
     confirm_cleanup: str | None = None,
+    upgrade_plan_path: Path | None = None,
+    upgrade_receipt_path: Path | None = None,
 ) -> tuple[dict[str, Any], int]:
     manifest_path = Path(manifest_path)
     manifest, manifest_raw = _private_document(manifest_path, "manifest")
@@ -2007,12 +2073,58 @@ def cleanup_migration(
             "unverified-input",
             "migration cleanup requires a verification with status verified",
         )
+    upgrade_context = None
+    if (upgrade_plan_path is None) != (upgrade_receipt_path is None):
+        _fail("missing-input", "cleanup upgrade evidence must be supplied as a pair")
+    if upgrade_plan_path is not None:
+        from sbtd_cleanup_upgrade import validate_cleanup_upgrade
+
+        if manifest["payload"].get("successor") or manifest["payload"].get("followup"):
+            _fail("upgrade-lineage-conflict", "upgrade-backed cleanup requires an original batch")
+        if (
+            apply_document["payload"]["status"] not in {"applied", "already-complete"}
+            or deployment["payload"]["status"] != "succeeded"
+        ):
+            _fail("unverified-input", "upgrade-backed cleanup requires completed migration stages")
+        assert upgrade_receipt_path is not None
+        upgrade_context = validate_cleanup_upgrade(
+            upgrade_plan_path, upgrade_receipt_path, current_package=_PACKAGE
+        )
+    previous_package = (
+        None if upgrade_context is None else upgrade_context.previous_package
+    )
+    if previous is not None and previous["payload"].get("upgrade_context") != (
+        None if upgrade_context is None else upgrade_context.provenance
+    ):
+        _fail("upgrade-lineage-conflict", "cleanup retry changed its upgrade provenance")
+
+    def check_deployment_inputs(
+        cleanup_results: Mapping[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        from sbtd_graft_deployment import validate_deployment_declarations
+
+        return validate_deployment_declarations(
+            manifest["payload"],
+            stage_results={
+                "apply": _result_index(apply_document),
+                "deploy": _result_index(deployment),
+                "cleanup": (
+                    _result_index(previous) if cleanup_results is None else cleanup_results
+                ),
+            },
+            cleanup_only=True,
+        ) or []
+
+    # Reject cheap scope conflicts before the full original/evidence walk.
+    deployment_only_inputs = check_deployment_inputs()
     _validate_context(
         manifest_path,
         manifest,
         previous=apply_document,
         deployment=deployment,
         cleanup=previous,
+        cleanup_only=True,
+        previous_package=previous_package,
     )
     _check_source_backups(manifest)
     source_backups = _source_backup_paths(manifest)
@@ -2028,13 +2140,19 @@ def cleanup_migration(
         (operation["phase"], operation["resource_id"]): operation["before_requirement"]
         for operation in _operations(manifest)
     }
-    for project in verification["payload"]["projects"]:
-        for asset in project["retained_assets"]:
-            if snapshot(Path(asset["path"])) != asset["state"]:
-                _fail(
-                    "state-conflict",
-                    "a retained asset changed after verification",
-                )
+    def check_retained_project_state() -> None:
+        for project in verification["payload"]["projects"]:
+            for asset in project["retained_assets"]:
+                if snapshot(Path(asset["path"])) != asset["state"]:
+                    _fail("state-conflict", "a retained asset changed after verification")
+        for project in manifest["payload"]["projects"]:
+            root = _canonical(Path(project["root"]))
+            if not root.is_dir() or _project_revision(root) != (
+                project["source_ref"], project["head"]
+            ):
+                _fail("revision-conflict", "a project revision changed after planning")
+
+    check_retained_project_state()
     groups = _groups(manifest, "cleanup")
     results = dict(_result_index(previous))
     for group in groups:
@@ -2072,7 +2190,17 @@ def cleanup_migration(
                     "unsafe-retry",
                     "a partial or unknown cleanup requires explicit recovery or manual reconciliation",
                 )
-    _require_reconciliation_provenance(manifest, deployment)
+    def last_cleanup_gate() -> None:
+        nonlocal deployment_only_inputs
+        _require_reconciliation_provenance(
+            manifest, deployment, previous_package=previous_package
+        )
+        if upgrade_context is not None:
+            upgrade_context.revalidate()
+        deployment_only_inputs = check_deployment_inputs(results)
+        check_retained_project_state()
+
+    last_cleanup_gate()
     started = _now()
     global_error = None
     failure_exit = 5
@@ -2083,6 +2211,7 @@ def cleanup_migration(
             old = results.get(rid)
             if old is not None and old["status"] == "succeeded":
                 continue
+            last_cleanup_gate()
             backup_ref = _latest_backup_ref(rid, previous, deployment, apply_document)
             if backup_ref is None:
                 backup_path = source_backups.get(str(Path(first["target"])))
@@ -2092,7 +2221,8 @@ def cleanup_migration(
                         "state": snapshot(backup_path),
                     }
             results[rid], failure_exit = _cleanup_resource(
-                manifest, group, candidates[rid], backup_ref
+                manifest, group, candidates[rid], backup_ref,
+                before_mutation=last_cleanup_gate,
             )
             if results[rid]["status"] != "succeeded":
                 global_error = (
@@ -2137,6 +2267,10 @@ def cleanup_migration(
         "started_at": started,
         "finished_at": _now(),
     }
+    if upgrade_context is not None:
+        payload["upgrade_context"] = upgrade_context.provenance
+    if deployment_only_inputs:
+        payload["deployment_only_inputs"] = deployment_only_inputs
 
     def seal_receipt() -> dict[str, Any]:
         document = contracts.seal_document("cleanup_receipt", payload)
@@ -2150,7 +2284,12 @@ def cleanup_migration(
 
     receipt = seal_receipt()
     try:
-        _require_reconciliation_provenance(manifest, deployment)
+        last_cleanup_gate()
+        if deployment_only_inputs:
+            payload["deployment_only_inputs"] = deployment_only_inputs
+        else:
+            payload.pop("deployment_only_inputs", None)
+        receipt = seal_receipt()
     except contracts.ContractError:
         # Cleanup may already have changed resources. Keep their measured
         # outcomes, but never publish acceptance against stale provenance.
@@ -2399,6 +2538,14 @@ def run_migration(args: Any) -> int:
                 if args.cleanup_receipt
                 else None,
                 confirm_cleanup=args.confirm_cleanup,
+                upgrade_plan_path=(
+                    _argument_path(args.upgrade_plan)
+                    if getattr(args, "upgrade_plan", None) is not None else None
+                ),
+                upgrade_receipt_path=(
+                    _argument_path(args.upgrade_receipt)
+                    if getattr(args, "upgrade_receipt", None) is not None else None
+                ),
             )
         else:
             _fail(

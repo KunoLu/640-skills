@@ -198,6 +198,8 @@ Current-state acceptance completes semantic/lineage validation before its final 
 
 Already aligned project rules can remain untouched under exact-template evidence. Document-only legacy task folders are archived as documents, not fabricated tasks; historical task branches remain historical, with explicit deferred recovery instead of an automatic checkout or rebinding.
 
+Ordinary RC upgrades use content comparison and native upgrade receipts, not a new local lineage signature on every release. To retire an already verified original migration after one Onboard replacement, cleanup can consume paired `--upgrade-plan` / `--upgrade-receipt` and the intact old package backup. This is cleanup-only: it verifies existing historical signatures without executing old code and does not authorize followup or migration recovery. Proven unrelated deployment-discovery file/absent drift may be left untouched; target, retained-asset, profile, tool, footprint and provenance drift still block. See the [cleanup contract](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime).
+
 [Upgrade & recovery](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [Migration](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [Cleanup](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)
 
 </details>

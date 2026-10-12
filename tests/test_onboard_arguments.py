@@ -415,6 +415,27 @@ class MigrationPhaseTests(ParseErrorAssertions):
         self.assertEqual(args.cleanup_receipt, "c.json")
         self.assertEqual(args.confirm_cleanup, "verification-id-value")
 
+    def test_cleanup_upgrade_evidence_must_be_a_complete_pair(self) -> None:
+        cleanup = [
+            "migration", "--phase", "cleanup",
+            "--manifest", "m.json", "--apply-receipt", "a.json",
+            "--deployment-evidence", "d.json", "--verification", "v.json",
+        ]
+        for suffix in (
+            ["--upgrade-plan", "p.json"],
+            ["--upgrade-receipt", "r.json"],
+            ["--upgrade-plan", "p.json", "--upgrade-receipt", ""],
+            ["--upgrade-plan", "", "--upgrade-receipt", "r.json"],
+        ):
+            with self.subTest(suffix=suffix):
+                self.assert_parse_error(cleanup + suffix)
+        self.assert_parse_error([
+            "migration", "--phase", "verify",
+            "--manifest", "m.json", "--apply-receipt", "a.json",
+            "--deployment-evidence", "d.json",
+            "--upgrade-plan", "p.json", "--upgrade-receipt", "r.json",
+        ])
+
     def test_cleanup_phase_requires_bound_evidence(self) -> None:
         self.assert_parse_error(
             [

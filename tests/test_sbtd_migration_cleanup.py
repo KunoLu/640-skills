@@ -22,6 +22,7 @@ for import_path in (str(SCRIPTS), str(TESTS)):
         sys.path.insert(0, import_path)
 
 
+from onboard_arguments import parse_workflow_args
 from onboard_contracts import ContractError, canonical_json_bytes, seal_document
 from sbtd_migration import apply_migration, run_migration, runtime_versions
 from sbtd_migration_files import (
@@ -93,6 +94,11 @@ def _fake_execute_trellis_uninstall(
 
 @contextmanager
 def _fake_vendor_adapter(*, prepare=None, execute=None):
+    def guarded_execute(root, prepared, backup_root, *, before_execute=None):
+        if before_execute is not None:
+            before_execute()
+        return (execute or _fake_execute_trellis_uninstall)(root, prepared, backup_root)
+
     with (
         mock.patch(
             "sbtd_trellis_uninstall.prepare_trellis_uninstall",
@@ -100,7 +106,7 @@ def _fake_vendor_adapter(*, prepare=None, execute=None):
         ),
         mock.patch(
             "sbtd_trellis_uninstall.execute_trellis_uninstall",
-            side_effect=execute or _fake_execute_trellis_uninstall,
+            side_effect=guarded_execute,
         ),
     ):
         yield
@@ -863,42 +869,32 @@ class CleanupMigrationTests(unittest.TestCase):
             self.assertTrue((fixture.root / ".trellis").is_dir())
 
     def test_run_migration_dispatches_the_cleanup_phase(self):
-        envelope = {
-            "mode": "migration",
-            "phase": "cleanup",
-            "status": "blocked",
-            "manifest_id": "0" * 64,
-            "verification_id": "1" * 64,
-            "projects": [],
-            "reason": "confirmation required",
-            "nextStep": "Confirm the current verification_id.",
-            "migration": {},
-        }
+        """Legacy CLI cleanup remains usable without any upgrade-hop options."""
         with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory).resolve()
-            args = SimpleNamespace(
-                phase="cleanup",
-                manifest=str(base / "manifest.json"),
-                apply_receipt=str(base / "apply.json"),
-                deployment_evidence=str(base / "deployment.json"),
-                verification=str(base / "verification.json"),
-                cleanup_receipt=None,
-                confirm_cleanup="1" * 64,
-                json=False,
-            )
-            with mock.patch(
-                "sbtd_migration.cleanup_migration", return_value=(envelope, 2)
-            ) as cleanup:
+            fixture = self.build(Path(directory).resolve())
+            args = parse_workflow_args([
+                "migration", "--phase", "cleanup",
+                "--manifest", str(fixture.manifest_path),
+                "--apply-receipt", str(fixture.apply_path),
+                "--deployment-evidence", str(fixture.deployment_path),
+                "--verification", str(fixture.verification_path),
+                "--confirm-cleanup", fixture.verification["verification_id"],
+                "--json",
+            ])
+            output = io.StringIO()
+            with (
+                mock.patch.dict(os.environ, fixture.environment),
+                _fake_vendor_adapter(),
+                redirect_stdout(output),
+            ):
                 code = run_migration(args)
-        self.assertEqual(code, 2)
-        cleanup.assert_called_once_with(
-            base / "manifest.json",
-            base / "apply.json",
-            base / "deployment.json",
-            base / "verification.json",
-            previous_receipt_path=None,
-            confirm_cleanup="1" * 64,
-        )
+            response = json.loads(output.getvalue())
+            self.assertEqual(code, 0, response)
+            self.assertEqual(response["status"], "cleaned")
+            self.assertFalse((fixture.root / ".trellis").exists())
+            receipt = response["migration"]["cleanup_receipt"]
+            self.assertNotIn("upgrade_context", receipt["payload"])
+
 
 
 if __name__ == "__main__":

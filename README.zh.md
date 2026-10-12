@@ -197,6 +197,8 @@ OMP 部署也接受由绑定的成功迁移回执及完整原件证明的配置�
 
 已与项目模板逐字对齐的规则可凭精确证据保持不动。只有文档的旧任务目录按历史文档归档，不伪造任务；历史任务分支保持原值，通过明确的延后恢复说明承接，不自动切分支或重绑定。
 
+普通 RC 升级按内容比较和原生升级回执执行，不要求每次新增本机 lineage 签名。已验收的原始迁移批次在一次 Onboard 替换后，可仅在 cleanup 中成对提供 `--upgrade-plan`／`--upgrade-receipt` 及完整旧包备份：只读验证既有历史签名，不执行旧包代码，不授权 followup 或迁移恢复。可证明与实际清理无关的部署发现输入 file／absent 漂移可保持原样；目标、保留资产、profile、工具、vendor footprint 或来源漂移仍阻断。详见[清理契约](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)。
+
 [升级与恢复](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [迁移](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [清理](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime)
 
 </details>
