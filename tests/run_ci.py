@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UPGRADE_MODULES = (
     "test_onboard_upgrade", "test_sbtd_upgrade_inventory",
     "test_sbtd_upgrade_engine", "test_sbtd_upgrade_hosts",
+    "test_sbtd_cleanup_upgrade", "test_sbtd_cleanup_upgrade_integration",
 )
 MACOS_MODULES = UPGRADE_MODULES + (
     "test_onboard_multi_projects", "test_sbtd_graft_entry", "test_sbtd_codex_wiring",

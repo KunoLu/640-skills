@@ -528,4 +528,16 @@
 - 修复：只在项目选择分支处理自动确认加空目标的 global-only 语义，保留通用确认 helper、显式 roots 和交互流程。
 - 预防：回归必须直接启动实际脚本且确实省略项目参数，检查目标集合、项目检查未执行和项目文件未创建；不要使用会自动补入目标的测试 helper。
 
+## LESSON-20261012-kuno-cleanup-only-discovery-and-upgrade-hop: Cleanup-only Inputs And Upgrade Proof
+
+- 日期：2026-10-12
+- 标签：cleanup, migration, upgrade, dependency-scope, provenance, receipts
+- 适用场景：已验收迁移的旧资产退出，或普通 Onboard 升级后继续处理历史清理。
+- 严重级别：high
+- 来源：RC4 聚焦回归、已安装副本原生 CLI／vendor 隔离 smoke 与独立安全复核。
+- 问题：cleanup 复用部署来源的整文件比较，会被与实际删除无关的宿主配置变化阻断；仅换执行器又会引入旧证据的信任断层。
+- 根因：混淆历史证明、部署发现输入和当前清理依赖；用整个项目目录替代实际 vendor footprint 也会误伤无关项目配置。
+- 修复：保持发现路径集合及工具／profile 绑定，按精确根身份、实际 vendor 足迹、操作目标、原件及来源证明区分 file／absent 漂移；仅清理可消费完整原生升级回执及旧包原件承接历史信任，不将该能力传播给 followup。
+- 预防：不能修改旧 manifest 或要求用户恢复猜测配置来消除漂移。最后复验应位于耗时备份之后、真正副作用之前；失败回执保留封存引用和实测结果，序列化时不要重新解释已变化的 live alias。CLI 验证要经过真实参数解析及消费链，不以 mock 转发断言代替实际文件后态。
+
 <!-- lessons:kuno:end -->

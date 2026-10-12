@@ -92,7 +92,7 @@ _MIGRATION_RULES = {
     ),
     "cleanup": (
         ("manifest", "apply_receipt", "deployment_evidence", "verification"),
-        ("cleanup_receipt", "confirm_cleanup", "json"),
+        ("cleanup_receipt", "confirm_cleanup", "upgrade_plan", "upgrade_receipt", "json"),
     ),
 }
 _MIGRATION_VALUE_OPTIONS = (
@@ -119,6 +119,8 @@ _MIGRATION_VALUE_OPTIONS = (
     "verification",
     "cleanup_receipt",
     "confirm_cleanup",
+    "upgrade_plan",
+    "upgrade_receipt",
 )
 _MIGRATION_FLAG_OPTIONS = (
     "yes",
@@ -339,6 +341,8 @@ def add_migration_parser(
         "verification": "Explicit verification record for cleanup.",
         "cleanup_receipt": "Explicit cumulative cleanup receipt for retry.",
         "confirm_cleanup": "The verification_id confirmed for this cleanup attempt.",
+        "upgrade_plan": "Native complete Onboard upgrade plan (cleanup only; pair with --upgrade-receipt).",
+        "upgrade_receipt": "Native complete Onboard upgrade receipt (cleanup only).",
     }
     for dest in _MIGRATION_VALUE_OPTIONS:
         if dest not in allowed:
@@ -623,6 +627,15 @@ def validate_migration_args(
         _MIGRATION_FLAG_OPTIONS,
         _MIGRATION_RULES,
     )
+    if args.phase == "cleanup":
+        upgrade_paths = (
+            getattr(args, "upgrade_plan", None),
+            getattr(args, "upgrade_receipt", None),
+        )
+        if any(value is not None for value in upgrade_paths) and not all(
+            isinstance(value, str) and value.strip() for value in upgrade_paths
+        ):
+            parser.error("--upgrade-plan and --upgrade-receipt require two nonempty paths")
     if (
         args.phase == "apply"
         and getattr(args, "routing_approvals", None)

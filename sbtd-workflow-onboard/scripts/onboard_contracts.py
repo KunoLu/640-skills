@@ -1401,6 +1401,18 @@ def _check_stage_payload(kind: str, payload: Mapping[str, Any]) -> None:
             statuses, ("failed", "blocked"), "applied", "already-complete"
         )
     elif kind == "cleanup_receipt":
+        upgrade = payload.get("upgrade_context")
+        if upgrade is not None:
+            references = [
+                upgrade[key]
+                for key in ("plan_ref", "receipt_ref", "current_package", "previous_package")
+            ]
+            # Historical pins remain reportable after a live alias drifts.
+            # The native upgrade consumer checks physical path safety.
+            paths = [reference["path"] for reference in references]
+            if len(paths) != len(set(paths)):
+                _fail("semantic-violation", "cleanup upgrade references must be distinct")
+            _check_reference_states(references)
         _retained_states(payload)
         expected = _aggregate(
             statuses, ("failed", "blocked"), "cleaned", "already-complete"
@@ -3060,6 +3072,20 @@ def _bind_retained_assets(
     verification: Mapping[str, Any] | None,
     cleanup: Mapping[str, Any],
 ) -> None:
+    declaration = manifest_payload.get("deployment") or {}
+    inputs = {item["path"]: item["state"] for item in declaration.get("inputs", ())}
+    observed: set[str] = set()
+    for item in cleanup["payload"].get("deployment_only_inputs", ()):
+        path = item["path"]
+        if (
+            path in observed
+            or inputs.get(path) != item["sealed_state"]
+            or item["sealed_state"]["type"] not in {"file", "absent"}
+            or item["live_state"]["type"] not in {"file", "absent"}
+            or item["sealed_state"] == item["live_state"]
+        ):
+            _fail("binding-violation", "cleanup input observation differs from its declaration")
+        observed.add(path)
     verified = (
         {
             project["root"]: {
@@ -3520,6 +3546,15 @@ def validate_cumulative(previous: Any, current: Any, kind: str) -> Any:
         _fail(
             "cumulative-violation",
             "retry changed its reconciliation provenance",
+            exit_code=3,
+        )
+    if kind == "cleanup_receipt" and (
+        current["payload"].get("upgrade_context")
+        != previous["payload"].get("upgrade_context")
+    ):
+        _fail(
+            "cumulative-violation",
+            "retry changed its cleanup upgrade provenance",
             exit_code=3,
         )
     if {project["root"] for project in current["payload"]["projects"]} != {

@@ -23,7 +23,7 @@ from typing import Any, NoReturn
 
 import onboard_contracts as contracts
 from graft_runtime import GRAFT_PINNED_VERSION, _locate_package, check_graft
-from sbtd_migration import _prepare_target_parents, _project_revision
+from sbtd_migration import _LEGACY_TREE, _prepare_target_parents, _project_revision
 from sbtd_migration_files import (
     _canonical,
     _lstat,
@@ -808,6 +808,69 @@ def attach_deployment(
         )
 
 
+def _declared_operations(
+    payload: Mapping[str, Any],
+) -> dict[tuple[str, str], Mapping[str, Any]]:
+    return {
+        (operation["phase"], operation["resource_id"]): operation
+        for operation in (
+            *(
+                operation
+                for project in payload["projects"]
+                for operation in project["private_operations"]
+            ),
+            *payload["shared_operations"],
+        )
+    }
+
+
+def _proven_input_outcome(
+    operations: Mapping[tuple[str, str], Mapping[str, Any]],
+    stage_results: Mapping[str, Mapping[str, Any]] | None,
+    path: str,
+    sealed_state: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    """Chain one sealed input through its bound successful stage outcomes.
+
+    Returns the receipt-proven outcome once at least one bound stage result
+    claims the input path, or None when no bound stage touches it. A claimed
+    input with a broken chain (duplicate, failed, partial or untracked
+    outcome, mutated retained original) keeps the exact drift rejection.
+    """
+    proven = sealed_state
+    bound = False
+    for phase in ("apply", "deploy", "cleanup"):
+        matched = []
+        for resource_id, result in ((stage_results or {}).get(phase) or {}).items():
+            operation = operations.get((phase, resource_id))
+            if operation is not None and operation["target"] == path:
+                matched.append(result)
+        if not matched:
+            continue
+        bound = True
+        result = matched[0]
+        backup = result["backup_ref"]
+        if (
+            len(matched) != 1
+            or result["status"] != "succeeded"
+            or result["before"] != proven
+            or result["after"] is None
+            or (
+                proven["type"] != "absent"
+                and (
+                    backup is None
+                    or snapshot(Path(backup["path"])) != backup["state"]
+                )
+            )
+        ):
+            _fail(
+                "state-conflict",
+                "the sealed OMP configuration sources have drifted",
+            )
+        proven = result["after"]
+    return proven if bound else None
+
+
 def _require_proven_input_changes(
     payload: Mapping[str, Any],
     sealed: Sequence[Mapping[str, Any]],
@@ -828,54 +891,177 @@ def _require_proven_input_changes(
     live_states = {entry["path"]: entry["state"] for entry in discovered}
     if not stage_results or sealed_states.keys() != live_states.keys():
         _fail("state-conflict", "the sealed OMP configuration sources have drifted")
-    operations = {
-        (operation["phase"], operation["resource_id"]): operation
-        for operation in (
-            *(
-                operation
-                for project in payload["projects"]
-                for operation in project["private_operations"]
-            ),
-            *payload["shared_operations"],
-        )
-    }
-    for path, proven in sealed_states.items():
-        live_state = live_states[path]
-        if proven == live_state:
+    operations = _declared_operations(payload)
+    for path, sealed_state in sealed_states.items():
+        if sealed_state == live_states[path]:
             continue
-        for phase in ("apply", "deploy", "cleanup"):
-            matched = []
-            for resource_id, result in (stage_results.get(phase) or {}).items():
-                operation = operations.get((phase, resource_id))
-                if operation is not None and operation["target"] == path:
-                    matched.append(result)
-            if not matched:
-                continue
-            result = matched[0]
-            backup = result["backup_ref"]
-            if (
-                len(matched) != 1
-                or result["status"] != "succeeded"
-                or result["before"] != proven
-                or result["after"] is None
-                or (
-                    proven["type"] != "absent"
-                    and (
-                        backup is None
-                        or snapshot(Path(backup["path"])) != backup["state"]
-                    )
-                )
-            ):
-                _fail(
-                    "state-conflict",
-                    "the sealed OMP configuration sources have drifted",
-                )
-            proven = result["after"]
-        if proven != live_state:
+        if _proven_input_outcome(operations, stage_results, path, sealed_state) != (
+            live_states[path]
+        ):
             _fail(
                 "state-conflict",
                 "the sealed OMP configuration sources have drifted",
             )
+
+
+def _cleanup_safe_input_drift(
+    payload: Mapping[str, Any],
+    sealed: Sequence[Mapping[str, Any]],
+    discovered: Sequence[Mapping[str, Any]],
+    stage_results: Mapping[str, Mapping[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Recognize only drift provably irrelevant to the cleanup phase.
+
+    Cleanup never redeploys, so a sealed deployment-discovery input whose
+    bytes changed since planning need not block legacy retirement — but only
+    when the input is deterministically proven to take no part in this
+    cleanup. This is never a lexical-disjointness waiver; an input is
+    ignored only after every cleanup dependency is shown independent of it:
+
+    - Tool and host choice: cleanup executes only the characterized
+      retirement kinds below. A project legacy tree is retired exclusively
+      by ``sbtd_trellis_uninstall``: its planner/executor never imports or
+      consults OMP runtime configuration, binds an absolute
+      ``@mindfoldhq/trellis`` CLI of a supported version plus the verified
+      Node executable on a scrubbed child environment, never runs a command
+      taken from the plan, and confines every vendor effect to the selected
+      project root through the validated relative-path adapter
+      (``_join_root`` rejects anything escaping the root) and the sealed
+      footprint gate. Global skill retirement writes exactly its validated
+      operation target via ``remove_reference`` after preserving the
+      verified original. No OMP input byte selects or steers either path.
+    - Scope and ownership: every declared operation target (which also
+      covers every retained asset, including the MCP write target), the
+      exact selected project roots, the private backup vault and every
+      ownership/source reference an operation binds are sealed in the
+      payload and re-validated by the caller; a drifted input must not
+      overlap any of them in either direction, so it cannot be a cleanup
+      target, a retained asset, a backup or recovery input, or an
+      ownership anchor. The input path set stays closed: new or vanished
+      paths change the discovery scope and keep the rejection.
+    - Vendor footprint: for each pending characterized ``.trellis``
+      retirement the *actual current* vendor footprint is derived with the
+      same read-only ``prepare_trellis_uninstall`` planner the executor
+      uses, and every resource path it carries is protected exactly — a
+      drifted input the vendor would delete, scrub or prune out from under
+      is influencing and keeps the rejection, while unrelated project-level
+      settings outside the real footprint stay accepted. A retirement
+      already proven cleaned by a bound succeeded result whose target is
+      still absent runs no vendor plan, so it contributes no footprint; an
+      unavailable vendor produces no effects and is reported blocked by the
+      executor instead. Project roots themselves stay protected only by
+      exact identity: the vendor footprint, not coarse root descent,
+      decides which project-local paths participate.
+    - Plan, backup and recovery: the cleanup plan derives from the sealed
+      operations and the bound verification candidates, backups and stage
+      receipts — never from deployment-discovery inputs; receipt-proven
+      input changes keep their historical chained acceptance here.
+    - Live binding checks stay live: the active profile, target and agent
+      directory are still re-derived from the current environment and the
+      MCP resource must still match them; only byte equality of the proven
+      irrelevant inputs is not re-run.
+
+    Acceptance is limited to inputs whose sealed and live states are both
+    ordinary files or genuine absence; a forged non-file sealed state or
+    any unknown type keeps the exact historical drift rejection, and live
+    links, specials and directories already fail inside source discovery,
+    so no state transition becomes a generic waiver. Anything unproven
+    keeps that rejection. Returns the ignored deployment-only input
+    entries, sorted by path.
+    """
+    sealed_states = {entry["path"]: entry["state"] for entry in sealed}
+    live_states = {entry["path"]: entry["state"] for entry in discovered}
+    if sealed_states.keys() != live_states.keys():
+        _fail("state-conflict", "the sealed OMP configuration sources have drifted")
+    declared = [
+        operation
+        for project in payload["projects"]
+        for operation in project["private_operations"]
+    ] + list(payload["shared_operations"])
+    operations = _declared_operations(payload)
+    roots = [Path(project["root"]) for project in payload["projects"]]
+    protected = [Path(operation["target"]) for operation in declared]
+    protected.append(Path(payload["backup_root"]))
+    for operation in declared:
+        for field in (
+            operation["ownership"].get("reference"),
+            operation["change"].get("source_ref"),
+        ):
+            if isinstance(field, Mapping) and isinstance(field.get("path"), str):
+                protected.append(Path(field["path"]))
+    retirements: list[tuple[Mapping[str, Any], Path]] = []
+    for operation in declared:
+        if operation["phase"] != "cleanup":
+            continue
+        if (
+            operation["change"] != {"kind": "remove"}
+            or operation["owner_kind"] != "directory"
+            or operation["selector"] != "whole-resource"
+        ):
+            _fail(
+                "scope-conflict",
+                "the cleanup dependency scope carries an unknown target kind",
+            )
+        target = Path(operation["target"])
+        if target.name == _LEGACY_TREE and target.parent in roots:
+            retirements.append((operation, target))
+    if retirements:
+        from sbtd_trellis_uninstall import prepare_trellis_uninstall
+
+        cleanup_results = (stage_results or {}).get("cleanup") or {}
+        for operation, target in retirements:
+            prior = cleanup_results.get(operation["resource_id"])
+            if (
+                prior is not None
+                and prior["status"] == "succeeded"
+                and prior["after"] == _ABSENT
+                and snapshot(target) == _ABSENT
+            ):
+                # Proven already cleaned: the retry runs no vendor plan for
+                # this tree, so it contributes no footprint to protect.
+                continue
+            prepared = prepare_trellis_uninstall(target.parent)
+            plan = prepared["payload"]
+            if plan["status"] != "ready":
+                # An unavailable vendor mutates nothing; the executor
+                # reports the blocked retirement instead of validating it.
+                continue
+            protected.extend(Path(resource["path"]) for resource in plan["resources"])
+    ignored: list[dict[str, Any]] = []
+    for path in sorted(sealed_states):
+        sealed_state = sealed_states[path]
+        live_state = live_states[path]
+        if sealed_state == live_state:
+            continue
+        proven = _proven_input_outcome(operations, stage_results, path, sealed_state)
+        if proven is not None:
+            if proven != live_state:
+                _fail(
+                    "state-conflict",
+                    "the sealed OMP configuration sources have drifted",
+                )
+            continue
+        if (
+            sealed_state["type"] not in {"file", "absent"}
+            or live_state["type"] not in {"file", "absent"}
+        ):
+            _fail(
+                "state-conflict",
+                "the sealed OMP configuration sources have drifted",
+            )
+        candidate = Path(path)
+        if any(candidate == root for root in roots) or any(
+            candidate.is_relative_to(scope) or scope.is_relative_to(candidate)
+            for scope in protected
+        ):
+            _fail(
+                "state-conflict",
+                "the sealed OMP configuration sources have drifted",
+            )
+        ignored.append(
+            {"path": path, "sealed_state": sealed_state, "live_state": live_state}
+        )
+    return ignored
 
 
 def validate_deployment_declarations(
@@ -883,10 +1069,21 @@ def validate_deployment_declarations(
     *,
     followup_deployed: Mapping[str, Any] | None = None,
     stage_results: Mapping[str, Mapping[str, Any]] | None = None,
-) -> None:
-    """Re-derive the closed deploy write set without trusting a resealed list."""
+    cleanup_only: bool = False,
+) -> list[dict[str, Any]] | None:
+    """Re-derive the closed deploy write set without trusting a resealed list.
+
+    With ``cleanup_only`` the caller is the migration cleanup phase, which
+    never redeploys: every structural, ownership and live host-binding check
+    below still runs, but sealed OMP discovery inputs that drifted may be
+    accepted by ``_cleanup_safe_input_drift`` only when provably irrelevant
+    to the cleanup scope. The ignored deployment-only input entries are
+    then returned, sorted by path; every other caller keeps the historical
+    proven-change rule and a None return.
+    """
     from onboard import default_codex_home
 
+    ignored: list[dict[str, Any]] = []
     roots = sorted(project["root"] for project in payload["projects"])
     successor = payload.get("successor")
     successor_embedded = (
@@ -921,7 +1118,7 @@ def validate_deployment_declarations(
                 "semantic-violation",
                 "a deployment declaration requires declared deployment operations",
             )
-        return
+        return ignored if cleanup_only else None
     if declaration is None:
         _fail(
             "semantic-violation",
@@ -979,7 +1176,7 @@ def validate_deployment_declarations(
                 "scope-conflict",
                 "shared legacy operations require their declared deployment",
             )
-        return
+        return ignored if cleanup_only else None
     if any(operation["dependent_projects"] != roots for operation in shared):
         _fail(
             "scope-conflict", "shared deployment requires the complete selected batch"
@@ -1045,12 +1242,20 @@ def validate_deployment_declarations(
             [Path(root) for root in roots], home=user_home(), environ=os.environ
         )
         if declaration["inputs"] != discovered["inputs"]:
-            _require_proven_input_changes(
-                payload,
-                declaration["inputs"],
-                discovered["inputs"],
-                stage_results,
-            )
+            if cleanup_only:
+                ignored = _cleanup_safe_input_drift(
+                    payload,
+                    declaration["inputs"],
+                    discovered["inputs"],
+                    stage_results,
+                )
+            else:
+                _require_proven_input_changes(
+                    payload,
+                    declaration["inputs"],
+                    discovered["inputs"],
+                    stage_results,
+                )
         if mcp[0]["target"] != discovered["target"]:
             _fail("scope-conflict", "the MCP resource leaves the active OMP profile")
     omp_agents_target = _omp_agents_template_target(
@@ -1137,6 +1342,7 @@ def validate_deployment_declarations(
                 "ownership-conflict",
                 "an installation target has unrecognized customized content",
             )
+    return ignored if cleanup_only else None
 
 
 @dataclass(frozen=True)

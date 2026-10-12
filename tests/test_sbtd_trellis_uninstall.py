@@ -562,6 +562,38 @@ class ExecuteTests(unittest.TestCase):
             runner=runner,
         )
 
+    def test_caller_guard_rejects_evidence_drift_during_backup_before_vendor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = AdapterFixture(Path(directory))
+            prepared, plan = self._prepared(fixture)
+            proof = fixture.vault / "proof.json"
+            proof.write_bytes(b"original evidence")
+            expected = snapshot(proof)
+            original_tree = snapshot(fixture.project)
+            original_backup = adapter.backup_reference
+            runner = FakeRunner(plan, uninstall=_apply_plan(fixture.project, plan))
+
+            def backup_then_drift(*args, **kwargs):
+                ref = original_backup(*args, **kwargs)
+                proof.write_bytes(b"concurrent change")
+                return ref
+
+            def guard():
+                if snapshot(proof) != expected:
+                    raise contracts.ContractError("evidence-mismatch", "evidence changed")
+
+            with (
+                mock.patch.object(adapter, "backup_reference", side_effect=backup_then_drift),
+                self.assertRaises(contracts.ContractError) as failure,
+            ):
+                execute_trellis_uninstall(
+                    fixture.project, prepared, fixture.vault,
+                    environ=fixture.environ, runner=runner, before_execute=guard,
+                )
+            self.assertEqual(failure.exception.code, "evidence-mismatch")
+            self.assertEqual(runner.uninstall_calls(), [])
+            self.assertEqual(snapshot(fixture.project), original_tree)
+
     def test_execute_runs_vendor_and_records_everything(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = AdapterFixture(Path(directory))

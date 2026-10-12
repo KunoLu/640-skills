@@ -982,6 +982,7 @@ def execute_trellis_uninstall(
     *,
     environ: Mapping[str, str] | None = None,
     runner: Callable[..., Any] = subprocess.run,
+    before_execute: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Back up every prepared resource, then run the vendor uninstaller.
 
@@ -1081,6 +1082,8 @@ def execute_trellis_uninstall(
     start_error: str | None = None
     stdout: str | None = None
     stderr: str | None = None
+    if before_execute is not None:
+        before_execute()
     try:
         completed = runner(
             command,

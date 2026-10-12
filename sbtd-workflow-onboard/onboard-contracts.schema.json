@@ -1911,6 +1911,37 @@
         }
       }
     },
+    "cleanup_upgrade_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "schema_version", "plan_id", "receipt_id", "baseline_id",
+        "resource_id", "backup_root", "plan_ref", "receipt_ref",
+        "current_package", "previous_package", "previous_payload_state"
+      ],
+      "properties": {
+        "schema": {"const": "cleanup-upgrade-provenance"},
+        "schema_version": {"const": 1},
+        "plan_id": {"$ref": "#/$defs/digest"},
+        "receipt_id": {"$ref": "#/$defs/digest"},
+        "baseline_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "resource_id": {"type": "string", "pattern": "^skill:sbtd-workflow-onboard@"},
+        "backup_root": {"$ref": "#/$defs/absolute_path"},
+        "plan_ref": {"$ref": "#/$defs/file_ref"},
+        "receipt_ref": {"$ref": "#/$defs/file_ref"},
+        "current_package": {"$ref": "#/$defs/directory_ref"},
+        "previous_package": {"$ref": "#/$defs/directory_ref"},
+        "previous_payload_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "checksum"],
+          "properties": {
+            "type": {"const": "directory"},
+            "checksum": {"$ref": "#/$defs/digest"}
+          }
+        }
+      }
+    },
     "cleanup_receipt_payload": {
       "type": "object",
       "additionalProperties": false,
@@ -1928,6 +1959,22 @@
         "finished_at"
       ],
       "properties": {
+        "deployment_only_inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sealed_state", "live_state"],
+            "properties": {
+              "path": {"$ref": "#/$defs/absolute_path"},
+              "sealed_state": {"$ref": "#/$defs/state"},
+              "live_state": {"$ref": "#/$defs/state"}
+            }
+          }
+        },
+        "upgrade_context": {
+          "$ref": "#/$defs/cleanup_upgrade_context"
+        },
         "manifest_id": {
           "$ref": "#/$defs/digest"
         },
