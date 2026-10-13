@@ -1,6 +1,7 @@
 # Shared tasks
 
 <!-- sbtd-task-index:start -->
+- [P3-03](P3-03/task.md)
 - [graft-pin-0.21.1](graft-pin-0.21.1/task.md)
 - [onboard-upgrade-alignment](onboard-upgrade-alignment/task.md)
 - [p3-cleanup-path-binding](p3-cleanup-path-binding/task.md)

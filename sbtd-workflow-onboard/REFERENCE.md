@@ -9,7 +9,7 @@
 
 `catalog.json` is the runtime source of truth for these paths, all bundled Skill ids, and every external Skill repository/subpath/alias. `catalog.schema.json` defines its Draft 2020-12 contract; `examples/catalog.minimal.json` is the minimal valid shape. The root installers require both catalog files, and `scripts/onboard.py` rejects duplicate ids, absolute or escaping paths, malformed HTTPS repository URLs, invalid kind/id/target-role combinations, wrong local source types, missing sources, and bundled Skill frontmatter identity mismatches before processing a command.
 
-> **Staged v2 delivery (unreleased):** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex/OMP project wiring, task libraries, developer identity, migration plan/apply/verify, cleanup/recovery and the corresponding root-installer forwarding have stage-owned implementations. Windows-native proof and full v2 release remain separately gated. Existing legacy data is preserved.
+> **v2 delivery boundaries:** canonical payload is 14 bundled / 19 external Skills. Project setup uses SBTD checks without Trellis initialization. Graft detection/installation, explicit Codex/OMP project wiring, task libraries, developer identity, migration plan/apply/verify/reconcile, cleanup/recovery and root-installer forwarding have separate implementation and acceptance records. Published tags and their evidence establish release and platform status; a source checkout or installed copy alone does not. Existing legacy data is preserved.
 
 The P1-01 argument/codec modules and `onboard-contracts.schema.json` provide the exchange contracts. P1-12 exposes migration plan/apply/verify; P1-04/P1-05 supply Codex/OMP wiring and the migration-context deployment producer below; cleanup and recovery are implemented by their owning tasks. Contract validation checks declared structures and relationships; filesystem safety, authorization and actual operations remain stage-owned.
 
@@ -431,7 +431,7 @@ Ordinary resolve/plan/check/global installation never reads `.trellis/.developer
 
 ## Migration Runtime
 
-The installed Onboard script exposes `migration --phase plan`, `apply`, `verify`, `reconcile` and `cleanup`, plus the separate `recovery --phase plan|apply` mode and the fresh-detection `cleanup-legacy --phase plan|apply` mode. This is not a second CLI, and there is no positional `migration plan` alias. Batch cleanup consumes the bound verification record and an explicitly confirmed `verification_id`; recovery consumes the manifest-scoped evidence chain and an explicitly confirmed `plan_id`; `cleanup-legacy` consumes a freshly sealed cleanup plan and an explicitly confirmed `plan_id`. Do not use this unreleased stage to perform a real-project cutover before the remaining integration validation, Windows-native proof and release gates are available and accepted.
+The installed Onboard script exposes `migration --phase plan`, `apply`, `verify`, `reconcile` and `cleanup`, plus the separate `recovery --phase plan|apply` mode and the fresh-detection `cleanup-legacy --phase plan|apply` mode. This is not a second CLI, and there is no positional `migration plan` alias. Batch cleanup consumes the bound verification record and an explicitly confirmed `verification_id`; recovery consumes the manifest-scoped evidence chain and an explicitly confirmed `plan_id`; `cleanup-legacy` consumes a freshly sealed cleanup plan and an explicitly confirmed `plan_id`. Before a real-project cutover, verify the selected version's integration and applicable native-platform evidence, then obtain the separate exact-scope deployment authorization. A release tag does not grant that authorization.
 
 ### Authorized preparation and plan
 
@@ -478,7 +478,7 @@ The installed Onboard script exposes `migration --phase plan`, `apply`, `verify`
 
 #### Canonical legacy task candidates
 
-The unreleased v2 candidate validator binds mapped state to the preserved `task.json`, rather than accepting prose as machine evidence. Unknown old fields stay in `legacy-task.json` (or the private original); they must not become current frontmatter extensions. Independently validated current fields are regenerated, not copied from coincidentally named old fields.
+The v2 candidate validator binds mapped state to the preserved `task.json`, rather than accepting prose as machine evidence. Unknown old fields stay in `legacy-task.json` (or the private original); they must not become current frontmatter extensions. Independently validated current fields are regenerated, not copied from coincidentally named old fields.
 
 - Unproven mode is `workflow_mode: null`, `mode_source: migration-unknown`, and `mode_note: legacy Trellis task without mode proof`.
 - A proven completed legacy task has one `unknown -> done` event. Its reason is exactly `legacy completion fact`, evidence exactly `legacy task.json status`, and time is the provable completion timestamp or `unknown`. Extra narrative belongs outside that authoritative event.

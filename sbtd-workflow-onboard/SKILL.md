@@ -11,9 +11,9 @@ The repository root installers are `install.sh` and `install.ps1`. `scripts/onbo
 
 The directory remains self-contained: `catalog.json` is the machine-readable source catalog, `catalog.schema.json` is its Draft 2020-12 contract, `scripts/` is the Onboard implementation, `templates/` is the install payload, and `assets/` contains managed third-party fallback snapshots and migration support assets. Keep this separation when adding catalog entries; do not move install payloads beside runtime code merely to flatten paths.
 
-## Staged v2 Delivery (Unreleased)
+## v2 Delivery and Release Boundaries
 
-This unreleased branch carries 14 bundled / 19 external Skills and on-demand SBTD setup. Explicit Codex/OMP project graph/MCP wiring, the corresponding root-installer forwarding and cleanup/recovery have stage-owned implementations; Graft installation remains separately confirmed. Windows-native proof and full v2 release remain staged. Real-project deployment and legacy retirement require their independent authorization.
+The v2 catalog carries 14 bundled / 19 external Skills and on-demand SBTD setup. Explicit Codex/OMP project graph/MCP wiring, root-installer forwarding, migration and cleanup/recovery have separate implementation and acceptance records. A source checkout or successful installation is not release, Windows-native or actual-host proof. Check the repository's published tag and release evidence for those claims. Graft installation, real-project deployment and legacy retirement each require their independent authorization.
 
 P1-01 supplies the internal argument and exchange-contract modules (`scripts/onboard_arguments.py`, `scripts/onboard_contracts.py`, `onboard-contracts.schema.json`). P1-12 registers `migration --phase plan|apply|verify`; P1-04/P1-05 add the Codex/OMP deployment producers through existing init entry points, and cleanup/recovery are implemented by their owning tasks. Do not substitute contract fixtures, valid hashes, or a copied directory for executed migration or recovery evidence.
 
