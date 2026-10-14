@@ -66,16 +66,57 @@ class CiSelectionTests(unittest.TestCase):
         for shard in shards:
             self.assertEqual(shard, sorted(shard, key=order.index))
 
+    def test_static_and_inherited_class_fixtures_execute_once_per_shard(self):
+        events = []
+        state = {}
+
+        class StaticFixture(unittest.TestCase):
+            @staticmethod
+            def setUpClass():
+                events.append("setup")
+                state["ready"] = True
+
+            @staticmethod
+            def tearDownClass():
+                events.append("teardown")
+                state["ready"] = False
+
+            def test_first(self):
+                self.assertTrue(state["ready"])
+                events.append("first")
+
+            def test_second(self):
+                self.assertTrue(state["ready"])
+                events.append("second")
+
+        class InheritedFixture(StaticFixture):
+            pass
+
+        for kind in (StaticFixture, InheritedFixture):
+            with self.subTest(kind=kind.__name__):
+                events.clear()
+                cases = list(unittest.defaultTestLoader.loadTestsFromTestCase(kind))
+                shards = partition(cases, 2, {case.id(): 1 for case in cases})
+                for shard in shards:
+                    result = unittest.TextTestRunner(stream=io.StringIO()).run(
+                        unittest.TestSuite(shard)
+                    )
+                    self.assertFalse(result.errors or result.failures)
+                self.assertEqual(events, ["setup", "first", "second", "teardown"])
+                self.assertFalse(state["ready"])
+
     def test_weights_come_only_from_one_complete_successful_revision(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             common = {"platform": "windows", "shards": 2, "source_sha": "exact-sha",
                       "successful": True, "scope": ["a", "b"], "run_attempt": 1}
-            first = {**common, "shard": 1, "cases": [{"id": "a", "seconds": 1.23456}]}
-            second = {**common, "shard": 2, "cases": [{"id": "b", "seconds": 9.0}]}
+            first = {**common, "shard": 1, "selected": ["a"],
+                     "cases": [{"id": "a", "seconds": 1.23456}]}
+            second = {**common, "shard": 2, "selected": ["b"],
+                      "cases": [{"id": "b", "seconds": 9.0}]}
             (directory / "windows-1.json").write_text(json.dumps(first))
             (directory / "windows-1.inventory.json").write_text(json.dumps({"ignored": True}))
-            self.assertRaises(ValueError, measured_weights, directory, "windows")
+            self.assertRaises((ValueError, FileNotFoundError), measured_weights, directory, "windows")
             retry = directory / "attempt-2"
             retry.mkdir()
             (directory / "windows-2.json").write_text(json.dumps({**second, "successful": False}))
@@ -88,6 +129,44 @@ class CiSelectionTests(unittest.TestCase):
                         json.dumps({**second, "run_attempt": 2, **change}))
                     self.assertRaises(ValueError, measured_weights, directory, "windows")
             self.assertRaises(FileNotFoundError, measured_weights, directory, "linux")
+
+    def test_weight_refresh_rejects_ambiguous_mixed_or_unbound_measurements(self):
+        for defect in ("ambiguous-attempt", "mixed-shard-counts",
+                       "missing-revision", "duplicate-measured-id", "extra-failed-shard",
+                       "noncanonical-filename"):
+            with self.subTest(defect=defect), tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                common = {"platform": "windows", "shards": 2,
+                          "source_sha": "exact-sha", "successful": True,
+                          "scope": ["a", "b"], "run_attempt": 1}
+                first = {**common, "shard": 1, "selected": ["a"],
+                         "cases": [{"id": "a", "seconds": 1.0}]}
+                second = {**common, "shard": 2, "selected": ["b"],
+                          "cases": [{"id": "b", "seconds": 2.0}]}
+                if defect == "ambiguous-attempt":
+                    duplicate = directory / "duplicate"
+                    duplicate.mkdir()
+                    (duplicate / "windows-1.json").write_text(
+                        json.dumps({**first, "successful": False})
+                    )
+                elif defect == "noncanonical-filename":
+                    (directory / "windows-01.json").write_text(
+                        json.dumps({**first, "run_attempt": 2, "successful": False})
+                    )
+                elif defect == "mixed-shard-counts":
+                    first.update(shards=1, selected=["a", "b"],
+                                 cases=first["cases"] + second["cases"])
+                elif defect == "missing-revision":
+                    first["source_sha"] = second["source_sha"] = None
+                elif defect == "extra-failed-shard":
+                    first.update(shards=1, scope=["a"])
+                    second["successful"] = False
+                else:
+                    first["cases"].append({"id": "a", "seconds": 99.0})
+                (directory / "windows-1.json").write_text(json.dumps(first))
+                (directory / "windows-2.json").write_text(json.dumps(second))
+                with self.assertRaises(ValueError):
+                    measured_weights(directory, "windows")
 
     def test_duplicate_identity_is_an_error_not_an_extra_execution(self):
         with self.assertRaisesRegex(ValueError, "Duplicate test identity"):

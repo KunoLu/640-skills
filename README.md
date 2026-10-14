@@ -522,6 +522,8 @@ Required native Windows checks (including ACLs, junctions, Unicode, PowerShell a
 
 CI artifacts retain each native run attempt without overwriting failures. Partial retries may reuse successful shards from the same SHA; aggregation selects each shard's newest report, rejects newer failures or ambiguous duplicates, and proves that the union covers the complete scope exactly once. Skip totals count native events, including skipped subtests; parent-case status counts can differ. Preserve subtest identities and reasons when comparing runs.
 
+Windows currently uses four shards, Linux three, and macOS one job. After downloading a complete successful native report set, refresh scheduling inputs with `python -B tests/run_ci.py --platform windows --output <downloaded-reports> --refresh-weights` (use `linux` for Linux). Refresh requires a nonempty source revision and an unambiguous, complete, disjoint latest-attempt set; duplicate measurements or noncanonical shard filenames are rejected. Weights only change allocation, never test selection. Equal line/branch coverage alone does not justify removing a behavioral or platform boundary test.
+
 <a id="license"></a>
 ## License and credits
 

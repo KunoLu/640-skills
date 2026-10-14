@@ -31,6 +31,7 @@ WINDOWS_CASES = (
     "test_sbtd_migration_files.MigrationFileTests.test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_private_directory_acl_gateway",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_native_acl_proof_matches_the_powershell_oracle",
+    "test_sbtd_migration_files.MigrationFileTests.test_windows_native_acl_distinguishes_empty_null_and_unreadable_dacls",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_keeps_later_user_edit_and_new_file",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_preserves_replaced_capture_directory",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_reports_disappearing_holder_without_deleting_files",
@@ -85,7 +86,8 @@ def fixture_unit(case):
         return kind.__module__
     base = unittest.TestCase
     if isinstance(case, base) and any(
-        getattr(kind, name).__func__ is not getattr(base, name).__func__
+        getattr(getattr(kind, name), "__func__", getattr(kind, name))
+        is not getattr(base, name).__func__
         for name in ("setUpClass", "tearDownClass")
     ):
         return f"{kind.__module__}.{kind.__qualname__}"
@@ -130,16 +132,27 @@ def partition(cases, count, weights):
 
 def latest_reports(directory, target):
     """Newest attempt of every shard report found under ``directory``."""
-    newest = {}
+    candidates = {}
     for path in directory.rglob(f"{target}-*.json"):
         stem = path.stem.removeprefix(f"{target}-")
         if not stem.isdigit():
             continue
+        if stem != str(int(stem)):
+            raise ValueError(f"Noncanonical native shard filename: {path.name}")
         report = json.loads(path.read_text(encoding="utf-8"))
-        key = int(stem)
-        if key not in newest or report["run_attempt"] > newest[key]["run_attempt"]:
-            newest[key] = report
-    return [newest[key] for key in sorted(newest)]
+        attempt = report["run_attempt"]
+        if type(attempt) is not int or attempt < 1:
+            raise ValueError(f"Invalid native run attempt: {path}")
+        candidates.setdefault(int(stem), []).append(report)
+    newest = []
+    for index in sorted(candidates):
+        reports = candidates[index]
+        attempt = max(report["run_attempt"] for report in reports)
+        latest = [report for report in reports if report["run_attempt"] == attempt]
+        if len(latest) != 1:
+            raise ValueError(f"Ambiguous {target} shard {index} attempt {attempt}")
+        newest.append(latest[0])
+    return newest
 
 
 def measured_weights(directory, target):
@@ -148,12 +161,26 @@ def measured_weights(directory, target):
     if not reports:
         raise FileNotFoundError(f"No {target} shard reports under {directory}")
     revisions = {report["source_sha"] for report in reports}
-    if len(revisions) != 1 or not all(report["successful"] is True for report in reports):
+    if len(revisions) != 1:
         raise ValueError("Weights need successful shards from exactly one revision")
-    seconds = {row["id"]: round(row["seconds"], 3) for report in reports for row in report["cases"]}
+    sha = revisions.pop()
+    if not sha:
+        raise ValueError("Weights need an exact source revision")
+    if len(reports) != reports[0]["shards"]:
+        raise ValueError("Weights need exactly the declared shard set")
+    verify_reports(directory, target, reports[0]["shards"], sha)
+    seconds = {}
+    for report in reports:
+        measured = [row["id"] for row in report["cases"]]
+        if len(measured) != len(set(measured)) or set(measured) != set(report["selected"]):
+            raise ValueError("Weights need exactly one measurement per selected case")
+        for row in report["cases"]:
+            if row["id"] in seconds:
+                raise ValueError("Weights contain a repeated measured case")
+            seconds[row["id"]] = round(row["seconds"], 3)
     if set(seconds) != set(reports[0]["scope"]):
         raise ValueError("Weights need the complete measured scope")
-    return revisions.pop(), dict(sorted(seconds.items()))
+    return sha, dict(sorted(seconds.items()))
 
 
 def required_native_cases(target, identities):

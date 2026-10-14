@@ -513,6 +513,8 @@ Windows 必需原生检查（ACL、junction、Unicode、PowerShell 及已启用�
 
 CI artifact 按原生运行 attempt 保留，不覆盖失败记录。部分重跑可沿用同一 SHA 已成功的分片；聚合取各分片最新报告，拒绝较新的失败或同 attempt 重复证据，并核对分片并集完整且不重叠。skip 总数按原生事件统计，包含被跳过的子场景，可能不同于父例状态计数；跨轮对照保留子场景身份与理由。
 
+当前Windows四分片、Linux三分片、macOS单job。下载完整成功的原生报告集合后，可执行 `python -B tests/run_ci.py --platform windows --output <downloaded-reports> --refresh-weights` 刷新调度输入（Linux使用 `linux`）。刷新要求非空源码修订身份及无歧义、完整互斥的最新attempt集合；重复测量或非规范分片文件名会被拒绝。权重只影响分配，不决定是否执行用例；行／分支覆盖相同本身不足以删除行为或平台边界测试。
+
 <a id="license"></a>
 ## 许可证与致谢
 

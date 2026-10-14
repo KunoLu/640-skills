@@ -986,8 +986,8 @@ class MigrationFileTests(unittest.TestCase):
             plain.mkdir()
             cases["plain-mkdir"] = (plain, None)
             foreign = require_private_directory(root / "foreign-owner", create=True)
-            if _powershell(_POWERSHELL_SET_OWNER, foreign, check=False) == "ok":
-                cases["foreign-owner"] = (foreign, False)
+            _powershell(_POWERSHELL_SET_OWNER, foreign)
+            cases["foreign-owner"] = (foreign, False)
 
             for name, (path, expected) in cases.items():
                 with self.subTest(name):
@@ -1009,6 +1009,56 @@ class MigrationFileTests(unittest.TestCase):
             finally:
                 junction.rmdir()
             self.assertTrue(sbtd_migration_files._windows_acl_proven(made))
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL privacy semantics")
+    def test_windows_native_acl_distinguishes_empty_null_and_unreadable_dacls(self):
+        import ctypes
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = require_private_directory(Path(directory).resolve() / "private", create=True)
+            api = sbtd_migration_files._win32()
+            with sbtd_migration_files._win32_directory(
+                target,
+                sbtd_migration_files._READ_CONTROL | sbtd_migration_files._WRITE_DAC,
+            ) as handle:
+                # Retain WRITE_DAC on this original handle for reliable restoration
+                # even while the directory's DACL is deny-all.
+                owner = ctypes.c_void_p()
+                original = ctypes.c_void_p()
+                descriptor = ctypes.c_void_p()
+                self.assertEqual(api.GetSecurityInfo(
+                    handle, 1, 5, ctypes.byref(owner), None,
+                    ctypes.byref(original), None, ctypes.byref(descriptor),
+                ), 0)
+                try:
+                    empty = ctypes.create_string_buffer(8)
+                    self.assertTrue(api.InitializeAcl(empty, len(empty), 2))
+                    self.assertEqual(api.SetSecurityInfo(
+                        handle, 1, 0x80000004, None, None, empty, None
+                    ), 0)
+                    self.assertTrue(sbtd_migration_files._windows_acl_proven(target))
+                    self.assertTrue(_powershell_acl_proven(target))
+
+                    self.assertEqual(api.SetSecurityInfo(
+                        handle, 1, 0x80000004, None, None, None, None
+                    ), 0)
+                    self.assertFalse(sbtd_migration_files._windows_acl_proven(target))
+                    with self.assertRaises(ContractError) as rejected:
+                        require_private_directory(target)
+                    self.assertEqual(rejected.exception.code, "privacy-unproven")
+                finally:
+                    try:
+                        self.assertEqual(api.SetSecurityInfo(
+                            handle, 1, 0x80000004, None, None, original, None
+                        ), 0)
+                    finally:
+                        api.LocalFree(descriptor)
+
+            self.assertTrue(sbtd_migration_files._windows_acl_proven(target))
+            with mock.patch.object(api, "GetSecurityInfo", return_value=5):
+                with self.assertRaises(ContractError) as rejected:
+                    require_private_directory(target)
+                self.assertEqual(rejected.exception.code, "privacy-unproven")
 
 
 # The PowerShell ACL proof the runtime used before its in-process rewrite,

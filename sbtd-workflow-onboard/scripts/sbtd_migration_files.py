@@ -26,6 +26,9 @@ Honest limits, by design:
   an in-process Win32 owner and DACL proof on Windows. Any
   platform or state that cannot be proven fails closed; a chmod is never
   treated as ACL evidence.
+- Directory creation followed by ACL installation assumes a trusted,
+  single-controller parent namespace. Handle identity proof binds the
+  path at open time; it does not make mkdir plus ACL installation atomic.
 - Callers take the original target backup (``backup_reference``) before
   ``install_reference`` changes anything, and keep manifest authorization.
 
