@@ -4,11 +4,11 @@ id: windows-recovery-acl-overhead
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确选择strict用于Windows安全删除/恢复性能修复
-status: "checking"
+status: "done"
 branch: fix/windows-recovery-acl-overhead
 created_at: '2026-10-14T15:18:51.142645+08:00'
-updated_at: "2026-10-14T16:01:13.255507+08:00"
-completed_at: null
+updated_at: "2026-10-14T16:57:07.508361+08:00"
+completed_at: "2026-10-14T16:57:07.508361+08:00"
 ---
 # Windows恢复ACL往返性能修复
 
@@ -34,10 +34,10 @@ completed_at: null
 | DDIA | 删除/恢复所有权与失败路径 | confirmed：原件/回执所有权不变，同操作同父目录分组复用；每文件重新证明权限/身份/内容，未知对象保留 |
 | Legacy | 既有安全删除行为 | characterized：原生Windows900秒失败、25项安全基线；新增并发修改、holder替换/权限漂移/消失场景 |
 | Refactoring | 修改生产删除原语 | proceed normally：仅私有holder生命周期，公开接口/schema不变，不做跨调用缓存 |
-| TDD/BDD | 已证Windows900秒red；保留现有行为场景 | 本地安全集及CLI已通过；holder消失的AssertionError有red/green；源仓Markdown场景见cleanup设计§8，最终Windows证明待CI |
-| Project validation | 原生Windows、相关完整范围、三平台CI | 本地111项安全/迁移回归通过（2 Windows skip）；macOS原生范围686项通过（20 skip），安装副本恢复CLI用例8.650秒；精确PR head三平台CI待运行 |
+| TDD/BDD | 已证Windows900秒red；保留现有行为场景 | 源仓Markdown场景见cleanup设计§8；holder消失AssertionError red/green、公开冲突/漂移回归通过；原900秒Windows安装副本生命周期通过 |
+| Project validation | 原生Windows、相关完整范围、三平台CI | 本地111安全/迁移项通过（2 skip）、macOS686通过（20 skip）；精确5b97c820候选CI run38532355204九job成功，Linux2133/macOS686/Windows507，原生skip事件48/20/33；七份分片完整互斥SHA复验通过 |
 | Independent security/readability | 安全删除与权限边界 | RecoveryHolderSecurity、RecoveryHolderRegression最终均无发现；ReleasePackageReview报告合同复核无发现；不以审查替代Windows运行 |
-| Release readiness | 安装/恢复运行路径 | blocked：等待原生Windows/三平台CI；只限修复PR交付，不发布 |
+| Release readiness | 安装/恢复运行路径 | ready：仅修复PR交付；适用检查已通过，无发布/合并授权，原备份保留及单controller边界不变 |
 
 ## 验收场景
 
@@ -62,9 +62,18 @@ completed_at: null
 - 长期lesson使用本地合法身份kuno，新增固定执行汇总记录于bdd-e2e-reports topic及索引，不重写历史作者块。
 - 私有证据根为本任务reports；保留失败及修正记录。PR提交前为dirty本地证据，后续只以精确head原生CI证明远端候选。
 
+## 交付与发布边界
+
+修复PR：[122](https://github.com/KunoLu/640-skills/pull/122)。实现候选`5b97c8200c5095de823c258da6029de335d60fa5`的[三平台CI](https://github.com/KunoLu/640-skills/actions/runs/38532355204)通过；原生Windows安装副本完整升级/重试/恢复用例672.687秒通过，相关子进程原900秒限制未改。这是完整用例时长，不冒充单独recovery阶段计时或通用性能保证。
+
+完成记录仅改任务正文/导航；安装载荷与测试保持已验证候选字节，新head按实际CI另验。报告与下载原件保持私有，不上传证据正文。v2.0.0已发布且tag不动；v2.0.1未发布；PR121仍是独立未合并发布记录，P3-03整体收口与本修复PR交付分开，不在此分支伪写P3-03完成。
+
+Release Readiness Review：ready（修复交付范围）；同卷捕获、逐文件权限/身份/空目录/内容证明及非覆盖恢复；未知对象保留、部分结果真实；无新的schema/常驻进程/权限缓存。无部署，因此源码回退不改变持久备份。真实HOME/live认证/生产负载不在本次验证范围；没有合并、发布patch、workflow sync或备份销毁授权。既有同UID并发TOCTOU与单controller约束保留，不宣称事务性删除。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-14T15:18:58.555854+08:00 | planned | in-progress | 用户授权独立修复验证和PR，并明确选择strict；已定位重复PowerShell ACL往返，禁止合并发布 | P3-03 windows-recovery-root-cause；原生Windows诊断run38522065660 |
 | 2026-10-14T16:01:13.255507+08:00 | in-progress | checking | 实现、报告模板与本地验证完成，独立复核无发现；等待精确PR head三平台CI | 本地111安全迁移测试、macOS686、public removal smoke、report-layout-assessment及三路review |
+| 2026-10-14T16:57:07.508361+08:00 | checking | done | 修复与固定报告合同已交付PR122；三平台原生CI和独立复核通过，未合并或发布 | run38532355204；精确候选5b97c820；Windows完整用例672.687s；exact-head-ci及readiness私有报告 |
