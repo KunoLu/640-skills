@@ -6,7 +6,9 @@
 
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
-## v2.0.1（未发布）
+## v2.0.1（2026-10-14）
+
+正式版 [v2.0.1 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.1) 已发布。annotated tag 指向 `0aec5d3c9493a2010ad2a52b4894ccf7e0869224`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/38572152150)通过。源码发布不执行本机安装、workflow sync、项目迁移或备份处置。
 
 ### 变更
 
