@@ -4,11 +4,11 @@ id: P3-03
 workflow_mode: strict
 mode_source: user
 mode_note: 用户接受建议，明确选择strict用于v2.0.0最终发布审查
-status: "done"
+status: "in-progress"
 branch: "docs/v2.0.0-release-record"
 created_at: '2026-10-14T00:02:56.566903+08:00'
-updated_at: "2026-10-14T11:35:20.508935+08:00"
-completed_at: "2026-10-14T11:35:20.508935+08:00"
+updated_at: "2026-10-14T14:03:10.069511+08:00"
+completed_at: null
 ---
 # P3-03 最终 readiness、用户确认与 v2.0.0 发布
 
@@ -88,3 +88,5 @@ completed_at: "2026-10-14T11:35:20.508935+08:00"
 | 2026-10-14T09:38:14.874428+08:00 | in-progress | checking | 用户追加的现行文档/双语提示词/双语CHANGELOG全部完成并独立复核收敛；原生686项和upgrade/recovery闭环通过，进入新精确候选PR/main CI及授权发布核对 | P3-03私有reports：pretag-docs-native-macos-run、bilingual-changelog-final-verification、upgrade-prompt-native-lifecycle |
 | 2026-10-14T11:31:55.790362+08:00 | checking | checking | Explicit branch rebinding from "docs/v2.0.0-release-docs" to "docs/v2.0.0-release-record": 已按授权发布v2.0.0并核验远端tag/正式Release；进入用户已批准的docs/v2.0.0-release-record窄范围日期/状态记录分支 | v2.0.0指向8f6c46993e7546b68f949bd52ede806d9b1afa61，main CI38500935539通过，GitHub Release已发布 |
 | 2026-10-14T11:35:20.508935+08:00 | checking | done | 用户限定授权的v2.0.0正式发布已完成：实际main精确三平台CI通过、annotated tag已推送并解引用正确、正式Release/latest已读回；双语文档/提示词/变更日志与保留责任验收完成，本窄范围状态PR继续按授权闭环 | https://github.com/KunoLu/640-skills/releases/tag/v2.0.0 ; SHA8f6c46993e7546b68f949bd52ede806d9b1afa61 ; CI38500935539 ; private stable-release-verified.json |
+| 2026-10-14T14:03:05.116358+08:00 | done | planned | 正式Release已发布事实保留，但用户授权的记录PR121闭环因Windows恢复用例两次超时未完成，恢复整体任务为未完成并开展已授权隔离诊断 | CI38507559057 attempts1/2 recovery apply exceeded900s；用户选择授权隔离诊断 |
+| 2026-10-14T14:03:10.069511+08:00 | planned | in-progress | 继续原生Windows隔离诊断，保留旧done事件/真实发布与未合并记录PR；不在红灯合并，不移动tag | 专用diagnose/windows-upgrade-recovery-timeout；记录PR121仍OPEN |
