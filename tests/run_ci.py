@@ -77,27 +77,83 @@ def select_cases(cases, target):
     return selected
 
 
+def fixture_unit(case):
+    """Cases sharing a module or class fixture must run in one shard."""
+    kind = type(case)
+    module = sys.modules.get(kind.__module__)
+    if hasattr(module, "setUpModule") or hasattr(module, "tearDownModule"):
+        return kind.__module__
+    base = unittest.TestCase
+    if isinstance(case, base) and any(
+        getattr(kind, name).__func__ is not getattr(base, name).__func__
+        for name in ("setUpClass", "tearDownClass")
+    ):
+        return f"{kind.__module__}.{kind.__qualname__}"
+    return case.id()
+
+
+def fallback_weight(weights):
+    """Median measured case seconds; never zero, so new tests still count."""
+    known = sorted(weights.values())
+    return max(known[len(known) // 2], 0.001) if known else 1.0
+
+
+def unweighted(cases, weights):
+    return sorted(case.id() for case in cases if case.id() not in weights)
+
+
 def partition(cases, count, weights):
-    """Greedy module bins preserve class/module fixtures and discover new tests."""
+    """Greedy bins over fixture units: single cases unless a fixture binds them."""
     if count < 1:
         raise ValueError("Shard count must be positive")
-    modules = {}
-    identities = set()
-    for case in cases:
+    units = {}
+    order = {}
+    for index, case in enumerate(cases):
         identity = case.id()
-        if identity in identities:
+        if identity in order:
             raise ValueError(f"Duplicate test identity: {identity}")
-        identities.add(identity)
-        modules.setdefault(identity.split(".")[0], []).append(case)
+        order[identity] = index
+        units.setdefault(fixture_unit(case), []).append(case)
+    fallback = fallback_weight(weights)
+    unit_weights = {
+        name: sum(weights.get(case.id(), fallback) for case in members)
+        for name, members in units.items()
+    }
     bins = [[] for _ in range(count)]
     totals = [0.0] * count
-    def weight(name):
-        return weights.get(name, float(len(modules[name])))
-    for name in sorted(modules, key=lambda name: (-weight(name), name)):
+    for name in sorted(units, key=lambda name: (-unit_weights[name], name)):
         slot = min(range(count), key=lambda index: (totals[index], index))
-        bins[slot].extend(modules[name])
-        totals[slot] += weight(name)
-    return bins
+        bins[slot].extend(units[name])
+        totals[slot] += unit_weights[name]
+    return [sorted(shard, key=lambda case: order[case.id()]) for shard in bins]
+
+
+def latest_reports(directory, target):
+    """Newest attempt of every shard report found under ``directory``."""
+    newest = {}
+    for path in directory.rglob(f"{target}-*.json"):
+        stem = path.stem.removeprefix(f"{target}-")
+        if not stem.isdigit():
+            continue
+        report = json.loads(path.read_text(encoding="utf-8"))
+        key = int(stem)
+        if key not in newest or report["run_attempt"] > newest[key]["run_attempt"]:
+            newest[key] = report
+    return [newest[key] for key in sorted(newest)]
+
+
+def measured_weights(directory, target):
+    """Per-case native seconds from one revision's complete, successful shards."""
+    reports = latest_reports(directory, target)
+    if not reports:
+        raise FileNotFoundError(f"No {target} shard reports under {directory}")
+    revisions = {report["source_sha"] for report in reports}
+    if len(revisions) != 1 or not all(report["successful"] is True for report in reports):
+        raise ValueError("Weights need successful shards from exactly one revision")
+    seconds = {row["id"]: round(row["seconds"], 3) for report in reports for row in report["cases"]}
+    if set(seconds) != set(reports[0]["scope"]):
+        raise ValueError("Weights need the complete measured scope")
+    return revisions.pop(), dict(sorted(seconds.items()))
 
 
 def required_native_cases(target, identities):
@@ -215,9 +271,20 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--list", action="store_true", help="Emit selected IDs without executing tests")
     parser.add_argument("--verify-reports", action="store_true", help="Verify the complete downloaded shard union")
+    parser.add_argument("--refresh-weights", action="store_true",
+                        help="Rewrite this platform's scheduling weights from downloaded shard reports")
     args = parser.parse_args()
     if not 1 <= args.shard <= args.shards:
         parser.error("shard must be in 1..shards")
+    weights_path = ROOT / ".github" / "test-weights.json"
+    if args.refresh_weights:
+        sha, seconds = measured_weights(args.output, args.platform)
+        weights = json.loads(weights_path.read_text(encoding="utf-8"))
+        weights[args.platform] = seconds
+        weights["_measurement"][args.platform] = {"source_sha": sha, "cases": len(seconds)}
+        weights_path.write_text(json.dumps(weights, indent=2) + "\n", encoding="utf-8")
+        print(f"Recorded {len(seconds)} {args.platform} case weights from {sha}")
+        return 0
     if args.verify_reports:
         count = verify_reports(args.output, args.platform, args.shards, os.environ.get("VALIDATION_SHA"))
         print(f"Verified {count} distinct tests across all {args.shards} successful {args.platform} shards")
@@ -228,8 +295,8 @@ def main():
     if loader.errors:
         parser.error("Test discovery failed:\n" + "\n".join(loader.errors))
     cases = select_cases(discovered, args.platform)
-    weights = json.loads((ROOT / ".github" / "test-weights.json").read_text(encoding="utf-8"))
-    shards = partition(cases, args.shards, weights[args.platform])
+    weights = json.loads(weights_path.read_text(encoding="utf-8")).get(args.platform, {})
+    shards = partition(cases, args.shards, weights)
     selected = shards[args.shard - 1]
     if not selected:
         parser.error("Empty required shard")
@@ -237,7 +304,8 @@ def main():
     prefix = args.output / f"{args.platform}-{args.shard}"
     started = datetime.now(timezone.utc).isoformat()
     manifest = {"platform": args.platform, "shard": args.shard, "shards": args.shards,
-                "scope": sorted(case.id() for case in cases), "selected": [case.id() for case in selected]}
+                "scope": sorted(case.id() for case in cases), "selected": [case.id() for case in selected],
+                "unweighted": unweighted(cases, weights) if args.shards > 1 else []}
     required = required_native_cases(args.platform, manifest["scope"])
     if required - set(manifest["scope"]):
         parser.error("Required native cases are missing from discovery")
@@ -265,6 +333,7 @@ def main():
         f"- SHA：`{report['source_sha']}`\n- 测试：{result.testsRun}；skip：{len(result.skipped)}\n"
         f"- 原生运行 attempt：{report['run_attempt']}；聚合允许同 SHA 的成功分片保留其真实较早 attempt。\n"
         f"- 耗时：{report['seconds']:.3f} 秒\n- 逐例结果、skip 原因及失败详情：同 stem JSON。\n"
+        f"- 缺少调度权重的用例：{len(manifest['unweighted'])}（按中位数估算，仍全部执行；清单见 inventory）。\n"
         f"- Evidence Source: {report['evidence_source']}；rtk: skipped-for-report。\n"
         "- 仅证明此分片；全部必需分片及最低 TOML 依赖检查通过才通过聚合门禁。\n",
         encoding="utf-8",
