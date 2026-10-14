@@ -16,7 +16,7 @@ SBTD connects **specifications, behavior, tests and domain language**. Your codi
 
 This repository is a **configuration and Skill source**, not a business application. The main workflow targets **Codex and Oh My Pi (OMP)**; the installers also expose Claude Code and Kimi adapters. Adapter availability is not proof of identical host behavior.
 
-> **Release candidate: [v2.0.0-rc.3](https://github.com/KunoLu/640-skills/tree/v2.0.0-rc.3) is tagged and pushed.** Stable v2.0.0 remains unreleased. The catalog contains 14 bundled and 19 required external Skills. Candidate code, CI, installation, native checks and actual host acceptance are separate evidence layers. See the [RC scope and known limitations](CHANGELOG.md) and [delivery plan](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md).
+> **SBTD v2 release line.** The catalog contains 14 bundled and 19 required external Skills. Check [published tags](https://github.com/KunoLu/640-skills/tags) and the [CHANGELOG](CHANGELOG.md) for released versions; a `main` checkout or an unreleased draft is not a release. Code, CI, installation, native checks and actual host acceptance are separate evidence layers. See the [delivery plan and acceptance boundaries](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md).
 
 | [New installation](#install) | [Already installed](#onboard-prompts) | [Start a task](#task-prompts) |
 |---|---|---|
