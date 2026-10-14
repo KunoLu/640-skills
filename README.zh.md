@@ -16,7 +16,7 @@ SBTD 将**规格、行为、测试与领域语言**连接起来。Coding Agent �
 
 本仓库是**配置与 Skill 的摘录／同步源**，不是真实业务应用。工作流主线面向 **Codex 与 Oh My Pi（OMP）**；安装器也提供 Claude Code、Kimi 适配入口。有适配入口，不等于各宿主行为已取得同等验证。
 
-> **正式版 [v2.0.0](https://github.com/KunoLu/640-skills/releases/tag/v2.0.0) 已发布。** 当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。[中文变更日志](CHANGELOG.zh.md)与[英文对应版](CHANGELOG.md)记录相同发布历史。代码、CI、安装、原生检查与真实宿主验收仍是不同证据层级；发布 tag 不会升级你的环境。详见[交付计划与验收边界](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
+> **正式版 [v2.0.1](https://github.com/KunoLu/640-skills/releases/tag/v2.0.1) 已发布。** 当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。[中文变更日志](CHANGELOG.zh.md)与[英文对应版](CHANGELOG.md)记录相同发布历史。代码、CI、安装、原生检查与真实宿主验收仍是不同证据层级；发布 tag 不会升级你的环境。详见[交付计划与验收边界](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
 
 | [首次安装](#install) | [已经安装](#onboard-prompts) | [开始任务](#task-prompts) |
 |---|---|---|
@@ -30,7 +30,7 @@ SBTD 将**规格、行为、测试与领域语言**连接起来。Coding Agent �
 将下面的提示词交给 Coding Agent；需要时替换目标 Agent：
 
 ```text
-请从 KunoLu/640-skills 的 v2.0.0 tag 只安装 sbtd-workflow-onboard，
+请从 KunoLu/640-skills 的 v2.0.1 tag 只安装 sbtd-workflow-onboard，
 目标是 Codex 用户级全局 Skills 目录，不是当前项目。
 先解析并确认该 revision 存在；不得静默替换为 main 或 v1 包。
 使用官方 skills CLI 复制整个目录，报告实际来源与目标路径。
