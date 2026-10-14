@@ -406,6 +406,8 @@ Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/s
 
 **只报告实际执行结果。** 报告型测试优先原生命令；保留失败轮次、命名后的 native／raw 报告及同 stem **中文**汇总。区分 `full-stack`、`contract-backed`、`mock-backed`／`app-mocked`、`backend-only`、`smoke-only` 和 `blocked`；报告已生成不等于测试通过。dirty 本地证据不代表精确 PR head 的 CI 证明。
 
+Agent 编写的执行汇总统一使用[固定中文报告模板](sbtd-workflow-onboard/templates/skills/project-validation/references/run-summary.zh-CN.md.template)：结论与统计、运行信息、命令、BDD／范围、逐例结果、失败与复跑、API URI 覆盖、产物与状态、限制。保留失败轮次及源码／部署边界；无法提供的字段必须写原因，不填造数值。覆盖率评分作为附录，不能替代执行结果。历史报告不改写；已有证据的重新排版须另存并标明预览，不代表新的测试运行。
+
 | 资产 | 目标项目中的默认位置 |
 |---|---|
 | BDD 源 | 项目既有 `.feature` 约定；无约定时使用中文场景正文与英文结构关键词 |

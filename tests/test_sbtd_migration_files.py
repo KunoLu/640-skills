@@ -148,34 +148,45 @@ class MigrationFileTests(unittest.TestCase):
             )
 
     def test_conflicting_restore_reports_the_retained_object_without_overwriting(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            target = root / "owned.txt"
-            target.write_bytes(b"original")
-            before = snapshot(target)
-            rename = os.rename
-
-            def competing_writer(source, destination, *args, **kwargs):
-                rename(source, destination, *args, **kwargs)
-                if Path(source) == target:
-                    Path(destination).write_bytes(b"captured-user-version")
-                    target.write_bytes(b"later-user-version")
-
+        for directory_target in (False, True):
             with (
-                mock.patch(
-                    "sbtd_migration_files.os.rename", side_effect=competing_writer
-                ),
-                self.assertRaises(RetainedObjectError) as caught,
+                self.subTest(directory_target=directory_target),
+                tempfile.TemporaryDirectory() as directory,
             ):
-                remove_reference(target, before, scope=root)
+                root = Path(directory).resolve()
+                owned = root / "owned"
+                if directory_target:
+                    owned.mkdir()
+                    target = owned / "original.txt"
+                else:
+                    target = owned
+                target.write_bytes(b"original")
+                before = snapshot(owned)
+                rename = os.rename
 
-            self.assertEqual(target.read_bytes(), b"later-user-version")
-            retained = caught.exception.retained_refs[0]
-            retained_path = Path(retained["path"])
-            self.assertEqual(retained_path.read_bytes(), b"captured-user-version")
-            self.assertEqual(snapshot(retained_path), retained["state"])
-            require_private_directory(retained_path.parent)
-            self.assertNotIn(str(retained_path), str(caught.exception))
+                def competing_writer(
+                    source, destination, *args, _rename=rename, _target=target, **kwargs
+                ):
+                    _rename(source, destination, *args, **kwargs)
+                    if Path(source) == _target:
+                        Path(destination).write_bytes(b"captured-user-version")
+                        _target.write_bytes(b"later-user-version")
+
+                with (
+                    mock.patch(
+                        "sbtd_migration_files.os.rename", side_effect=competing_writer
+                    ),
+                    self.assertRaises(RetainedObjectError) as caught,
+                ):
+                    remove_reference(owned, before, scope=root)
+
+                self.assertEqual(target.read_bytes(), b"later-user-version")
+                retained = caught.exception.retained_refs[0]
+                retained_path = Path(retained["path"])
+                self.assertEqual(retained_path.read_bytes(), b"captured-user-version")
+                self.assertEqual(snapshot(retained_path), retained["state"])
+                require_private_directory(retained_path.parent)
+                self.assertNotIn(str(retained_path), str(caught.exception))
 
     def test_file_removal_preserves_a_change_after_the_initial_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -206,6 +217,152 @@ class MigrationFileTests(unittest.TestCase):
             self.assertTrue(changed)
             self.assertEqual(target.read_bytes(), b"new-user-content")
             self.assertEqual(list(root.iterdir()), [target])
+
+    def test_directory_removal_keeps_later_user_edit_and_new_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            first = target / "a.txt"
+            later = target / "b.txt"
+            first.write_bytes(b"first")
+            later.write_bytes(b"second")
+            expected = snapshot(target)
+            rename = os.rename
+
+            def edit_after_capture(source, destination, *args, **kwargs):
+                result = rename(source, destination, *args, **kwargs)
+                if Path(source) == first:
+                    later.write_bytes(b"user edit")
+                    (target / "new.txt").write_bytes(b"user addition")
+                return result
+
+            with (
+                mock.patch("sbtd_migration_files.os.rename", side_effect=edit_after_capture),
+                self.assertRaises(ContractError),
+            ):
+                remove_reference(target, expected, scope=root)
+
+            self.assertFalse(first.exists())
+            self.assertEqual(later.read_bytes(), b"user edit")
+            self.assertEqual((target / "new.txt").read_bytes(), b"user addition")
+
+    def test_directory_removal_preserves_replaced_capture_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            first = target / "a.txt"
+            later = target / "b.txt"
+            first.write_bytes(b"first")
+            later.write_bytes(b"second")
+            expected = snapshot(target)
+            unlink = Path.unlink
+            saved_holder = root / "captured-holder"
+            replaced = []
+
+            def replace_after_first_unlink(path, *args, **kwargs):
+                result = unlink(path, *args, **kwargs)
+                if path.name == "original" and not replaced:
+                    holder = path.parent
+                    holder.rename(saved_holder)
+                    holder.mkdir(mode=0o700)
+                    (holder / "user.txt").write_bytes(b"unrelated holder content")
+                    replaced.append(holder)
+                return result
+
+            with (
+                mock.patch("sbtd_migration_files.Path.unlink", new=replace_after_first_unlink),
+                self.assertRaises(ContractError),
+            ):
+                remove_reference(target, expected, scope=root)
+
+            self.assertEqual(later.read_bytes(), b"second")
+            self.assertEqual((replaced[0] / "user.txt").read_bytes(), b"unrelated holder content")
+
+    def test_directory_removal_stops_when_holder_gains_unknown_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            (target / "a.txt").write_bytes(b"first")
+            later = target / "b.txt"
+            later.write_bytes(b"second")
+            expected = snapshot(target)
+            unlink = Path.unlink
+            planted = []
+
+            def plant_after_capture(path, *args, **kwargs):
+                result = unlink(path, *args, **kwargs)
+                if path.name == "original" and not planted:
+                    foreign = path.parent / "user.txt"
+                    foreign.write_bytes(b"user addition")
+                    planted.append(foreign)
+                return result
+
+            with (
+                mock.patch("sbtd_migration_files.Path.unlink", new=plant_after_capture),
+                self.assertRaises(RetainedObjectError) as caught,
+            ):
+                remove_reference(target, expected, scope=root)
+
+            self.assertEqual(later.read_bytes(), b"second")
+            self.assertEqual(planted[0].read_bytes(), b"user addition")
+            self.assertEqual(caught.exception.retained_refs[0]["path"], str(planted[0].parent))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX permission drift fixture")
+    def test_directory_removal_rechecks_holder_permissions_before_next_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            first = target / "a.txt"
+            later = target / "b.txt"
+            first.write_bytes(b"first")
+            later.write_bytes(b"second")
+            expected = snapshot(target)
+            unlink = Path.unlink
+            changed = []
+
+            def widen_after_capture(path, *args, **kwargs):
+                result = unlink(path, *args, **kwargs)
+                if path.name == "original" and not changed:
+                    path.parent.chmod(0o755)
+                    changed.append(path.parent)
+                return result
+
+            with (
+                mock.patch("sbtd_migration_files.Path.unlink", new=widen_after_capture),
+                self.assertRaises(ContractError),
+            ):
+                remove_reference(target, expected, scope=root)
+
+            self.assertEqual(later.read_bytes(), b"second")
+            self.assertFalse(first.exists())
+
+    def test_directory_removal_reports_disappearing_holder_without_deleting_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            original = target / "a.txt"
+            original.write_bytes(b"original")
+            expected = snapshot(target)
+            private_sibling = sbtd_migration_files._private_sibling
+
+            def disappear_after_creation(parent, prefix):
+                holder = private_sibling(parent, prefix)
+                holder.rmdir()
+                return holder
+
+            with (
+                mock.patch("sbtd_migration_files._private_sibling",
+                           side_effect=disappear_after_creation),
+                self.assertRaises(ContractError),
+            ):
+                remove_reference(target, expected, scope=root)
+
+            self.assertEqual(original.read_bytes(), b"original")
 
     def test_backup_does_not_follow_a_symbolic_link_in_a_source_parent(self):
         with tempfile.TemporaryDirectory() as directory:

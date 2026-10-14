@@ -700,14 +700,21 @@ def _stage_tree(
     return staging, created
 
 
-def _capture_and_remove_file(target: Path, before: Mapping[str, Any]) -> None:
+def _capture_and_remove_file(
+    target: Path, before: Mapping[str, Any], *, holder: Path | None = None
+) -> None:
     """Capture the name before verification so a public-name swap is retained."""
-    holder = _private_sibling(target.parent, ".sbtd-migration-held-")
+    own_holder = holder is None
+    if holder is None:
+        holder = _private_sibling(target.parent, ".sbtd-migration-held-")
     held = holder / "original"
+    if _lstat(held) is not None:
+        raise RetainedObjectError(holder)
     try:
         os.rename(target, held)
     except OSError:
-        holder.rmdir()
+        if own_holder:
+            holder.rmdir()
         _fail("write-failed", "the owned file could not be captured for removal")
     try:
         unchanged = snapshot(held) == before
@@ -722,7 +729,8 @@ def _capture_and_remove_file(target: Path, before: Mapping[str, Any]) -> None:
             raise RetainedObjectError(held) from None
         try:
             held.unlink()
-            holder.rmdir()
+            if own_holder:
+                holder.rmdir()
         except OSError:
             raise RetainedObjectError(holder) from None
         _fail(
@@ -730,7 +738,66 @@ def _capture_and_remove_file(target: Path, before: Mapping[str, Any]) -> None:
             "a replacement was restored without deleting its content",
         )
     held.unlink()
-    holder.rmdir()
+    if own_holder:
+        holder.rmdir()
+
+
+def _release_removal_holder(holder: Path, identity: os.stat_result) -> None:
+    """Remove only the same empty directory we created, never unknown entries."""
+    observed = _lstat(_canonical(holder))
+    if observed is None or not os.path.samestat(identity, observed):
+        raise RetainedObjectError(holder)
+    try:
+        holder.rmdir()
+    except OSError:
+        raise RetainedObjectError(holder) from None
+
+
+def _remove_directory_files(target: Path, entries: list[dict[str, Any]]) -> None:
+    # Reuse only a same-parent, same-operation holder. ACLs are checked afresh
+    # before every capture; no privacy result survives across files or calls.
+    holder: Path | None = None
+    identity: os.stat_result | None = None
+    files = sorted(
+        (entry for entry in entries if entry["type"] == "file"),
+        key=lambda entry: (str(Path(entry["path"]).parent), entry["path"]),
+    )
+    try:
+        for entry in files:
+            member = _target_in_scope(target / entry["path"], target)
+            if holder is None or holder.parent != member.parent:
+                if holder is not None:
+                    previous, holder = holder, None
+                    assert identity is not None
+                    _release_removal_holder(previous, identity)
+                candidate = _private_sibling(member.parent, ".sbtd-migration-held-")
+                try:
+                    identity = candidate.lstat()
+                except OSError:
+                    raise RetainedObjectError(candidate) from None
+                holder = candidate
+            observed = _lstat(_canonical(holder))
+            if observed is None or not os.path.samestat(identity, observed):
+                raise RetainedObjectError(holder)
+            require_private_directory(holder)
+            if next(holder.iterdir(), None) is not None:
+                raise RetainedObjectError(holder)
+            state = {"type": "file", "checksum": entry["checksum"]}
+            if snapshot(member) != state:
+                _fail(
+                    "foreign-content-conflict",
+                    "a captured entry changed during owned removal",
+                )
+            _capture_and_remove_file(member, state, holder=holder)
+    except RetainedObjectError:
+        # Preserve the primary retained path (possibly holder/original) and
+        # its evidence instead of replacing it with a failed rmdir diagnostic.
+        holder = None
+        raise
+    finally:
+        if holder is not None:
+            assert identity is not None
+            _release_removal_holder(holder, identity)
 
 
 def remove_reference(path: Path, expected: Mapping[str, Any], *, scope: Path) -> None:
@@ -753,17 +820,7 @@ def remove_reference(path: Path, expected: Mapping[str, Any], *, scope: Path) ->
         if before["type"] == "file":
             _capture_and_remove_file(target, before)
             return
-        for entry in entries:
-            if entry["type"] != "file":
-                continue
-            member = _target_in_scope(target / entry["path"], target)
-            state = {"type": "file", "checksum": entry["checksum"]}
-            if snapshot(member) != state:
-                _fail(
-                    "foreign-content-conflict",
-                    "a captured entry changed during owned removal",
-                )
-            _capture_and_remove_file(member, state)
+        _remove_directory_files(target, entries)
         directories = sorted(
             (entry for entry in entries if entry["type"] == "directory"),
             key=lambda entry: len(Path(entry["path"]).parts),

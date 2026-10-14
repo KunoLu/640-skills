@@ -415,6 +415,8 @@ Graft installation is separately confirmed and pinned by the [managed runtime](s
 
 **Report what actually ran.** Native commands are preferred for report-producing tests. Keep failed runs, named native/raw reports and same-stem **Chinese** summaries. Distinguish `full-stack`, `contract-backed`, `mock-backed`/`app-mocked`, `backend-only`, `smoke-only` and `blocked`; a generated report is not a passing test. Dirty local evidence is not exact PR-head CI proof.
 
+Agent-authored execution summaries use the [fixed Chinese report template](sbtd-workflow-onboard/templates/skills/project-validation/references/run-summary.zh-CN.md.template): conclusion/counts, run metadata, commands, BDD/scope, case results, failures/reruns, API URI coverage, artifacts/status, and limitations. Preserve failed rounds and source/deployment boundaries; unsupported fields need an explicit reason, not fabricated values. Coverage scoring is an appendix, not a substitute for execution results. Historical reports remain unchanged; reformatting retained evidence is a separately labeled preview, not a new test run.
+
 | Asset | Default location in a target project |
 |---|---|
 | BDD source | Existing project `.feature` convention; Chinese scenario text + English keywords when no convention exists |
