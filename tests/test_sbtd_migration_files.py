@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import stat
@@ -927,25 +928,225 @@ class MigrationFileTests(unittest.TestCase):
             self.assertEqual(saved["state"], snapshot(made / "backup.txt"))
 
             # Existing scopes are inspection-only, even when create=True.
-            widened = sbtd_migration_files._run_privacy_script(
-                """
-$ErrorActionPreference = 'Stop'
-$path = $env:SBTD_PRIVATE_PATH
-$acl = Get-Acl -LiteralPath $path
-$everyone = New-Object System.Security.Principal.SecurityIdentifier('S-1-1-0')
-$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-$acl.AddAccessRule($rule)
-Set-Acl -LiteralPath $path -AclObject $acl
-[Console]::Out.Write('ok')
-""",
+            _powershell(
+                _POWERSHELL_ADD_RULE,
                 made,
+                SBTD_SID="S-1-1-0",
+                SBTD_RIGHTS="ReadAndExecute",
+                SBTD_TYPE="Allow",
             )
-            self.assertEqual(widened, "ok")
             with self.assertRaises(ContractError) as rejected:
                 require_private_directory(made, create=True)
             self.assertEqual(rejected.exception.code, "privacy-unproven")
             self.assertFalse(sbtd_migration_files._windows_acl_proven(made))
             self.assertEqual((made / "backup.txt").read_bytes(), b"private")
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL privacy semantics")
+    def test_windows_native_acl_proof_matches_the_powershell_oracle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with mock.patch(
+                "subprocess.Popen",
+                side_effect=AssertionError("ACL proof must not start a process"),
+            ):
+                made = require_private_directory(root / "made", create=True)
+                require_private_directory(made)
+                staging = sbtd_migration_files._private_sibling(root, ".sbtd-stage-")
+            cases: dict[str, tuple[Path, bool | None]] = {
+                "created": (made, True),
+                "staging": (staging, True),
+            }
+
+            oracle_made = root / "oracle-made"
+            oracle_made.mkdir()
+            _powershell(_POWERSHELL_PRIVATIZE, oracle_made)
+            cases["oracle-made"] = (oracle_made, True)
+
+            for name, sid, rights, kind, expected in (
+                ("everyone", "S-1-1-0", "ReadAndExecute", "Allow", False),
+                ("users", "S-1-5-32-545", "Read", "Allow", False),
+                ("deny-me", "me", "WriteExtendedAttributes", "Deny", False),
+                ("system", "S-1-5-18", "FullControl", "Allow", True),
+                ("administrators", "S-1-5-32-544", "FullControl", "Allow", True),
+            ):
+                target = require_private_directory(root / name, create=True)
+                _powershell(
+                    _POWERSHELL_ADD_RULE,
+                    target,
+                    SBTD_SID=sid,
+                    SBTD_RIGHTS=rights,
+                    SBTD_TYPE=kind,
+                )
+                cases[name] = (target, expected)
+
+            inherited = require_private_directory(root / "inherited", create=True)
+            _powershell(_POWERSHELL_INHERIT, inherited)
+            cases["inherited"] = (inherited, None)
+            plain = root / "plain"
+            plain.mkdir()
+            cases["plain-mkdir"] = (plain, None)
+            foreign = require_private_directory(root / "foreign-owner", create=True)
+            _powershell(_POWERSHELL_SET_OWNER, foreign)
+            cases["foreign-owner"] = (foreign, False)
+
+            for name, (path, expected) in cases.items():
+                with self.subTest(name):
+                    native = sbtd_migration_files._windows_acl_proven(path)
+                    self.assertEqual(native, _powershell_acl_proven(path))
+                    if expected is not None:
+                        self.assertEqual(native, expected)
+
+            junction = root / "junction"
+            subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(junction), str(made)],
+                check=True,
+                capture_output=True,
+            )
+            try:
+                self.assertFalse(sbtd_migration_files._windows_acl_proven(junction))
+                with self.assertRaises(ContractError):
+                    require_private_directory(junction)
+            finally:
+                junction.rmdir()
+            self.assertTrue(sbtd_migration_files._windows_acl_proven(made))
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL privacy semantics")
+    def test_windows_native_acl_distinguishes_empty_null_and_unreadable_dacls(self):
+        import ctypes
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = require_private_directory(Path(directory).resolve() / "private", create=True)
+            api = sbtd_migration_files._win32()
+            with sbtd_migration_files._win32_directory(
+                target,
+                sbtd_migration_files._READ_CONTROL | sbtd_migration_files._WRITE_DAC,
+            ) as handle:
+                # Retain WRITE_DAC on this original handle for reliable restoration
+                # even while the directory's DACL is deny-all.
+                owner = ctypes.c_void_p()
+                original = ctypes.c_void_p()
+                descriptor = ctypes.c_void_p()
+                self.assertEqual(api.GetSecurityInfo(
+                    handle, 1, 5, ctypes.byref(owner), None,
+                    ctypes.byref(original), None, ctypes.byref(descriptor),
+                ), 0)
+                try:
+                    empty = ctypes.create_string_buffer(8)
+                    self.assertTrue(api.InitializeAcl(empty, len(empty), 2))
+                    self.assertEqual(api.SetSecurityInfo(
+                        handle, 1, 0x80000004, None, None, empty, None
+                    ), 0)
+                    self.assertTrue(sbtd_migration_files._windows_acl_proven(target))
+                    self.assertTrue(_powershell_acl_proven(target))
+
+                    self.assertEqual(api.SetSecurityInfo(
+                        handle, 1, 0x80000004, None, None, None, None
+                    ), 0)
+                    self.assertFalse(sbtd_migration_files._windows_acl_proven(target))
+                    with self.assertRaises(ContractError) as rejected:
+                        require_private_directory(target)
+                    self.assertEqual(rejected.exception.code, "privacy-unproven")
+                finally:
+                    try:
+                        self.assertEqual(api.SetSecurityInfo(
+                            handle, 1, 0x80000004, None, None, original, None
+                        ), 0)
+                    finally:
+                        api.LocalFree(descriptor)
+
+            self.assertTrue(sbtd_migration_files._windows_acl_proven(target))
+            with mock.patch.object(api, "GetSecurityInfo", return_value=5):
+                with self.assertRaises(ContractError) as rejected:
+                    require_private_directory(target)
+                self.assertEqual(rejected.exception.code, "privacy-unproven")
+
+
+# The PowerShell ACL proof the runtime used before its in-process rewrite,
+# kept as an independent oracle for the native implementation.
+_POWERSHELL_ACL_CHECK = """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = Get-Acl -LiteralPath $path
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
+$ownerSid = ''
+try { $ownerSid = ([System.Security.Principal.SecurityIdentifier]$acl.Owner).Value } catch {
+  try { $ownerSid = ([System.Security.Principal.NTAccount]$acl.Owner).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $ownerSid = '' }
+}
+$ok = ($ownerSid -eq $me)
+foreach ($ace in $acl.Access) {
+  try { $sid = $ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $ok = $false; continue }
+  if ($ace.AccessControlType.ToString() -ne 'Allow') { $ok = $false }
+  if (-not $trusted.Contains($sid)) { $ok = $false }
+}
+[Console]::Out.Write((@{ ok = $ok } | ConvertTo-Json -Compress))
+"""
+
+_POWERSHELL_PRIVATIZE = """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = New-Object System.Security.AccessControl.DirectorySecurity
+$acl.SetAccessRuleProtection($true, $false)
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$acl.SetOwner($me)
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+$acl.SetAccessRule($rule)
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+"""
+
+_POWERSHELL_ADD_RULE = """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = Get-Acl -LiteralPath $path
+if ($env:SBTD_SID -eq 'me') { $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User }
+else { $sid = New-Object System.Security.Principal.SecurityIdentifier($env:SBTD_SID) }
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, $env:SBTD_RIGHTS, 'ContainerInherit,ObjectInherit', 'None', $env:SBTD_TYPE)
+$acl.AddAccessRule($rule)
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+"""
+
+_POWERSHELL_INHERIT = """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = Get-Acl -LiteralPath $path
+$acl.SetAccessRuleProtection($false, $true)
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+"""
+
+_POWERSHELL_SET_OWNER = """
+$ErrorActionPreference = 'Stop'
+$path = $env:SBTD_PRIVATE_PATH
+$acl = Get-Acl -LiteralPath $path
+$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+Set-Acl -LiteralPath $path -AclObject $acl
+[Console]::Out.Write('ok')
+"""
+
+
+def _powershell(script: str, path: Path, *, check: bool = True, **env: str) -> str:
+    completed = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        env={**os.environ, "SBTD_PRIVATE_PATH": str(path), **env},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if check and (completed.returncode != 0 or completed.stdout.strip() != "ok"):
+        raise AssertionError(f"PowerShell fixture failed: {completed.stderr.strip()}")
+    return completed.stdout.strip() if completed.returncode == 0 else ""
+
+
+def _powershell_acl_proven(path: Path) -> bool:
+    output = _powershell(_POWERSHELL_ACL_CHECK, path, check=False)
+    try:
+        result = json.loads(output)
+    except ValueError:
+        return False
+    return isinstance(result, dict) and result.get("ok") is True
 
 
 if __name__ == "__main__":

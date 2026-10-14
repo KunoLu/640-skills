@@ -23,9 +23,12 @@ Honest limits, by design:
   existing directory without such a backup is a conflict, never a silent
   delete of unrelated paths.
 - Privacy uses real platform semantics: POSIX ownership plus mode bits, or
-  a fixed NoProfile/NonInteractive PowerShell ACL proof on Windows. Any
+  an in-process Win32 owner and DACL proof on Windows. Any
   platform or state that cannot be proven fails closed; a chmod is never
   treated as ACL evidence.
+- Directory creation followed by ACL installation assumes a trusted,
+  single-controller parent namespace. Handle identity proof binds the
+  path at open time; it does not make mkdir plus ACL installation atomic.
 - Callers take the original target backup (``backup_reference``) before
   ``install_reference`` changes anything, and keep manifest authorization.
 
@@ -35,14 +38,15 @@ rejected values or private path content.
 
 from __future__ import annotations
 
+import contextlib
+import ctypes
+import functools
 import hashlib
-import json
 import os
-import shutil
 import stat
-import subprocess
 import tempfile
-from collections.abc import Mapping
+import types
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -330,75 +334,337 @@ def read_file(path: Path, expected: Mapping[str, Any] | None = None) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-# Fixed privacy helpers. The literal path always travels through the
-# environment, never inside the script text; the scripts emit only a
-# minimal status, never SIDs, trustee names or paths.
-_PRIVACY_CHECK_SCRIPT = """
-$ErrorActionPreference = 'Stop'
-$path = $env:SBTD_PRIVATE_PATH
-$acl = Get-Acl -LiteralPath $path
-$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-$trusted = @($me, 'S-1-5-18', 'S-1-5-32-544')
-$ownerSid = ''
-try { $ownerSid = ([System.Security.Principal.SecurityIdentifier]$acl.Owner).Value } catch {
-  try { $ownerSid = ([System.Security.Principal.NTAccount]$acl.Owner).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $ownerSid = '' }
-}
-$ok = ($ownerSid -eq $me)
-foreach ($ace in $acl.Access) {
-  try { $sid = $ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $ok = $false; continue }
-  if ($ace.AccessControlType.ToString() -ne 'Allow') { $ok = $false }
-  if (-not $trusted.Contains($sid)) { $ok = $false }
-}
-[Console]::Out.Write((@{ ok = $ok } | ConvertTo-Json -Compress))
-"""
-
-_PRIVACY_CREATE_SCRIPT = """
-$ErrorActionPreference = 'Stop'
-$path = $env:SBTD_PRIVATE_PATH
-$acl = New-Object System.Security.AccessControl.DirectorySecurity
-$acl.SetAccessRuleProtection($true, $false)
-$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-$acl.SetOwner($me)
-$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-$acl.SetAccessRule($rule)
-Set-Acl -LiteralPath $path -AclObject $acl
-[Console]::Out.Write('ok')
-"""
+# Windows privacy proof, in process through the Win32 security API. The
+# directory is opened without following reparse points, bound to the
+# object the path names at check time, and its security descriptor read
+# from that handle. Nothing is cached between calls.
+_TRUSTED_SID_STRINGS = ("S-1-5-18", "S-1-5-32-544")  # SYSTEM, Administrators
+_READ_CONTROL = 0x00020000
+_WRITE_DAC = 0x00040000
+_WRITE_OWNER = 0x00080000
+_FILE_SHARE_ALL = 0x00000007
+_OPEN_EXISTING = 3
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+_TOKEN_QUERY = 0x0008
+_TOKEN_USER_CLASS = 1
+_SE_FILE_OBJECT = 1
+_OWNER_SECURITY_INFORMATION = 0x00000001
+_DACL_SECURITY_INFORMATION = 0x00000004
+_PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+_ACL_REVISION = 2
+_ACL_SIZE_INFORMATION_CLASS = 2
+_ACCESS_ALLOWED_ACE_TYPE = 0
+_OBJECT_AND_CONTAINER_INHERIT = 0x01 | 0x02
+_FILE_ALL_ACCESS = 0x001F01FF
 
 
-def _run_privacy_script(script: str, path: Path) -> str | None:
-    """Run one fixed privacy helper; None when evidence cannot be produced."""
-    command = shutil.which("powershell")
-    if command is None:
-        return None
-    env = dict(os.environ)
-    env["SBTD_PRIVATE_PATH"] = str(path)
+@functools.cache
+def _win32() -> Any:
+    """Typed Win32 bindings; only built on Windows, never on other hosts."""
+    import msvcrt
+    from ctypes import wintypes as w
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    void = ctypes.c_void_p
+    out = ctypes.POINTER(ctypes.c_void_p)
+
+    def bind(library: Any, name: str, restype: Any, *argtypes: Any) -> Any:
+        function = getattr(library, name)
+        function.restype = restype
+        function.argtypes = argtypes
+        return function
+
+    class AceHeader(ctypes.Structure):
+        _fields_ = [
+            ("AceType", ctypes.c_ubyte),
+            ("AceFlags", ctypes.c_ubyte),
+            ("AceSize", w.WORD),
+        ]
+
+    class AclSizeInformation(ctypes.Structure):
+        _fields_ = [
+            ("AceCount", w.DWORD),
+            ("AclBytesInUse", w.DWORD),
+            ("AclBytesFree", w.DWORD),
+        ]
+
+    return types.SimpleNamespace(
+        msvcrt=msvcrt,
+        wintypes=w,
+        AceHeader=AceHeader,
+        AclSizeInformation=AclSizeInformation,
+        CreateFileW=bind(
+            kernel32,
+            "CreateFileW",
+            w.HANDLE,
+            w.LPCWSTR,
+            w.DWORD,
+            w.DWORD,
+            void,
+            w.DWORD,
+            w.DWORD,
+            w.HANDLE,
+        ),
+        CloseHandle=bind(kernel32, "CloseHandle", w.BOOL, w.HANDLE),
+        LocalFree=bind(kernel32, "LocalFree", void, void),
+        GetCurrentProcess=bind(kernel32, "GetCurrentProcess", w.HANDLE),
+        OpenProcessToken=bind(
+            advapi32,
+            "OpenProcessToken",
+            w.BOOL,
+            w.HANDLE,
+            w.DWORD,
+            ctypes.POINTER(w.HANDLE),
+        ),
+        GetTokenInformation=bind(
+            advapi32,
+            "GetTokenInformation",
+            w.BOOL,
+            w.HANDLE,
+            ctypes.c_int,
+            void,
+            w.DWORD,
+            ctypes.POINTER(w.DWORD),
+        ),
+        GetSecurityInfo=bind(
+            advapi32,
+            "GetSecurityInfo",
+            w.DWORD,
+            w.HANDLE,
+            ctypes.c_int,
+            w.DWORD,
+            out,
+            out,
+            out,
+            out,
+            out,
+        ),
+        SetSecurityInfo=bind(
+            advapi32,
+            "SetSecurityInfo",
+            w.DWORD,
+            w.HANDLE,
+            ctypes.c_int,
+            w.DWORD,
+            void,
+            void,
+            void,
+            void,
+        ),
+        ConvertStringSidToSidW=bind(
+            advapi32, "ConvertStringSidToSidW", w.BOOL, w.LPCWSTR, out
+        ),
+        IsValidSid=bind(advapi32, "IsValidSid", w.BOOL, void),
+        EqualSid=bind(advapi32, "EqualSid", w.BOOL, void, void),
+        GetLengthSid=bind(advapi32, "GetLengthSid", w.DWORD, void),
+        IsValidAcl=bind(advapi32, "IsValidAcl", w.BOOL, void),
+        GetAclInformation=bind(
+            advapi32, "GetAclInformation", w.BOOL, void, void, w.DWORD, ctypes.c_int
+        ),
+        GetAce=bind(advapi32, "GetAce", w.BOOL, void, w.DWORD, out),
+        InitializeAcl=bind(advapi32, "InitializeAcl", w.BOOL, void, w.DWORD, w.DWORD),
+        AddAccessAllowedAceEx=bind(
+            advapi32,
+            "AddAccessAllowedAceEx",
+            w.BOOL,
+            void,
+            w.DWORD,
+            w.DWORD,
+            w.DWORD,
+            void,
+        ),
+    )
+
+
+_WIN32_FAILURES = (OSError, ValueError, TypeError, ctypes.ArgumentError)
+
+
+def _win32_check(succeeded: Any) -> None:
+    if not succeeded:
+        raise OSError("windows security call failed")
+
+
+@contextlib.contextmanager
+def _win32_directory(path: Path, access: int) -> Iterator[int]:
+    """Handle to exactly the real directory ``path`` names right now."""
+    api = _win32()
+    expected = os.lstat(path)
+    handle = api.CreateFileW(
+        str(path),
+        access,
+        _FILE_SHARE_ALL,
+        None,
+        _OPEN_EXISTING,
+        _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
+    if handle is None or handle == ctypes.c_void_p(-1).value:
+        raise OSError("directory cannot be opened")
     try:
-        completed = subprocess.run(
-            [command, "-NoProfile", "-NonInteractive", "-Command", script],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
+        descriptor = api.msvcrt.open_osfhandle(handle, os.O_RDONLY)
+    except OSError:
+        api.CloseHandle(handle)
+        raise
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or getattr(opened, "st_file_attributes", 0) & _FILE_ATTRIBUTE_REPARSE_POINT
+            or not os.path.samestat(opened, expected)
+        ):
+            raise OSError("opened object is not the named real directory")
+        yield handle
+    finally:
+        os.close(descriptor)
+
+
+@contextlib.contextmanager
+def _win32_current_user_sid() -> Iterator[Any]:
+    api = _win32()
+    w = api.wintypes
+    token = w.HANDLE()
+    _win32_check(
+        api.OpenProcessToken(api.GetCurrentProcess(), _TOKEN_QUERY, ctypes.byref(token))
+    )
+    try:
+        needed = w.DWORD()
+        api.GetTokenInformation(token, _TOKEN_USER_CLASS, None, 0, ctypes.byref(needed))
+        buffer = ctypes.create_string_buffer(needed.value)
+        _win32_check(
+            api.GetTokenInformation(
+                token, _TOKEN_USER_CLASS, buffer, needed, ctypes.byref(needed)
+            )
         )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if completed.returncode != 0:
-        return None
-    return completed.stdout.strip()
+    finally:
+        api.CloseHandle(token)
+    sid = ctypes.c_void_p.from_buffer(buffer)
+    _win32_check(sid.value and api.IsValidSid(sid))
+    yield sid
+
+
+@contextlib.contextmanager
+def _win32_well_known_sids() -> Iterator[list[Any]]:
+    api = _win32()
+    sids: list[Any] = []
+    try:
+        for text in _TRUSTED_SID_STRINGS:
+            sid = ctypes.c_void_p()
+            _win32_check(api.ConvertStringSidToSidW(text, ctypes.byref(sid)))
+            sids.append(sid)
+        yield sids
+    finally:
+        for sid in sids:
+            api.LocalFree(sid)
+
+
+def _win32_acl_private(handle: int, me: Any, trusted: list[Any]) -> bool:
+    api = _win32()
+    owner, dacl, descriptor = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
+    status = api.GetSecurityInfo(
+        handle,
+        _SE_FILE_OBJECT,
+        _OWNER_SECURITY_INFORMATION | _DACL_SECURITY_INFORMATION,
+        ctypes.byref(owner),
+        None,
+        ctypes.byref(dacl),
+        None,
+        ctypes.byref(descriptor),
+    )
+    try:
+        if status != 0:
+            return False
+        if not owner.value or not api.IsValidSid(owner) or not api.EqualSid(owner, me):
+            return False
+        # A NULL DACL grants everyone everything.
+        if not dacl.value or not api.IsValidAcl(dacl):
+            return False
+        size = api.AclSizeInformation()
+        _win32_check(
+            api.GetAclInformation(
+                dacl,
+                ctypes.byref(size),
+                ctypes.sizeof(size),
+                _ACL_SIZE_INFORMATION_CLASS,
+            )
+        )
+        for index in range(size.AceCount):
+            ace = ctypes.c_void_p()
+            _win32_check(api.GetAce(dacl, index, ctypes.byref(ace)))
+            header = api.AceHeader.from_address(ace.value)
+            if header.AceType != _ACCESS_ALLOWED_ACE_TYPE:
+                return False
+            # ACCESS_ALLOWED_ACE: header, access mask, then the SID.
+            sid = ctypes.c_void_p(ace.value + ctypes.sizeof(header) + 4)
+            if not api.IsValidSid(sid):
+                return False
+            if not any(api.EqualSid(sid, candidate) for candidate in (me, *trusted)):
+                return False
+        return True
+    finally:
+        if descriptor.value:
+            api.LocalFree(descriptor)
 
 
 def _windows_acl_proven(path: Path) -> bool:
-    """True only when the fixed ACL check proves a trusted private scope."""
-    output = _run_privacy_script(_PRIVACY_CHECK_SCRIPT, path)
-    if output is None:
-        return False
+    """True only when the directory's own ACL proves a trusted private scope.
+
+    The owner must be the current user and every ACE an allow for the
+    current user, SYSTEM or Administrators. Any other ACE type, a NULL
+    DACL, or anything unreadable fails closed.
+    """
     try:
-        result = json.loads(output)
-    except ValueError:
+        with (
+            _win32_directory(path, _READ_CONTROL) as handle,
+            _win32_current_user_sid() as me,
+            _win32_well_known_sids() as trusted,
+        ):
+            return _win32_acl_private(handle, me, trusted)
+    except _WIN32_FAILURES:
         return False
-    return isinstance(result, dict) and result.get("ok") is True
+
+
+def _windows_make_private(path: Path) -> bool:
+    """Own a directory this run just created and give it a protected DACL.
+
+    The DACL holds a single inheritable FullControl allow for the current
+    user and inherits nothing from the parent.
+    """
+    try:
+        with (
+            _win32_directory(path, _READ_CONTROL | _WRITE_DAC | _WRITE_OWNER) as handle,
+            _win32_current_user_sid() as me,
+        ):
+            api = _win32()
+            # ACL header + ACCESS_ALLOWED_ACE (its SidStart overlaps the SID).
+            size = (8 + 8 + api.GetLengthSid(me) + 3) & ~3
+            acl = ctypes.create_string_buffer(size)
+            _win32_check(api.InitializeAcl(acl, size, _ACL_REVISION))
+            _win32_check(
+                api.AddAccessAllowedAceEx(
+                    acl,
+                    _ACL_REVISION,
+                    _OBJECT_AND_CONTAINER_INHERIT,
+                    _FILE_ALL_ACCESS,
+                    me,
+                )
+            )
+            status = api.SetSecurityInfo(
+                handle,
+                _SE_FILE_OBJECT,
+                _OWNER_SECURITY_INFORMATION
+                | _DACL_SECURITY_INFORMATION
+                | _PROTECTED_DACL_SECURITY_INFORMATION,
+                me,
+                None,
+                acl,
+                None,
+            )
+            return status == 0
+    except _WIN32_FAILURES:
+        return False
 
 
 def require_private_directory(path: Path, *, create: bool = False) -> Path:
@@ -406,7 +672,8 @@ def require_private_directory(path: Path, *, create: bool = False) -> Path:
 
     The path itself must always be a real directory, never a link. POSIX
     proof uses current-user ownership plus mode bits with no group/other
-    access. Windows proof uses the fixed ACL helper above: the owner must
+    access. Windows proof reads the directory's own security descriptor
+    through a handle bound to that directory (``_windows_acl_proven``): the owner must
     be the current user and every ACE an allow for the current user,
     SYSTEM or Administrators; anything unreadable or unknown fails closed.
     ACLs are only ever set on a directory this call created itself, never
@@ -440,7 +707,7 @@ def require_private_directory(path: Path, *, create: bool = False) -> Path:
                 "privacy-unproven", "private directory is not owned by the current user"
             )
     elif os.name == "nt":
-        if created and _run_privacy_script(_PRIVACY_CREATE_SCRIPT, target) != "ok":
+        if created and not _windows_make_private(target):
             _fail("write-failed", "new private directory could not be privatized")
         if not _windows_acl_proven(target):
             _fail(
@@ -666,10 +933,7 @@ def _verified_replacement_backup(
 def _private_sibling(parent: Path, prefix: str) -> Path:
     holder = Path(tempfile.mkdtemp(prefix=prefix, dir=parent))
     try:
-        if (
-            os.name == "nt"
-            and _run_privacy_script(_PRIVACY_CREATE_SCRIPT, holder) != "ok"
-        ):
+        if os.name == "nt" and not _windows_make_private(holder):
             _fail("privacy-unproven", "a staging directory could not be made private")
         require_private_directory(holder)
     except ContractError:

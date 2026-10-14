@@ -143,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         shell: bash
@@ -167,7 +167,7 @@ jobs:
       - name: Run disjoint native Windows shard
         run: >-
           python -B tests/run_ci.py --platform windows
-          --shard ${{ matrix.shard }} --shards 3
+          --shard ${{ matrix.shard }} --shards 4
           --output "${{ runner.temp }}/validation"
 
       - name: Preserve native results and Chinese summary
@@ -204,5 +204,5 @@ jobs:
           merge-multiple: false
       - name: Prove complete non-overlapping Windows coverage
         run: >-
-          python -B tests/run_ci.py --platform windows --shards 3
+          python -B tests/run_ci.py --platform windows --shards 4
           --output "${{ runner.temp }}/validation" --verify-reports

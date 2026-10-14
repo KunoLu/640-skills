@@ -505,13 +505,15 @@ Ignore 不会脱敏、不取消已有 tracked 状态，也不授权删除。任�
 
 源文件变化时，同轮评估两种语言的 README、[英文 CHANGELOG](CHANGELOG.md)、[中文变更日志](CHANGELOG.zh.md)和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两份变更日志逐条对应，版本、日期、顺序、事实、URL、提交SHA和代码标识相同，仅正文语言不同；同步更新最上方未发布章节，保留已发布历史。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 只推进监控基线并归档已分析更新。它们不是 Onboard upgrade，也不是 BDD sync。
 
-原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按模块耗时权重分为互不重叠的分片；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
+原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按逐例实测耗时权重分为互不重叠的分片：无fixture的用例逐个分配，类级／模块级fixture保持同片，缺少权重的用例按中位数估算并在各分片清单中列出；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
 
 不依赖完整清单的迁移边界测试仅缩小安装输入：仍保留完整 Onboard 启动器包、多个兄弟 Skill 和全部文件路由操作；完整清单生命周期与已安装副本测试继续作为独立锚点。每个阶段仍调用真实迁移／恢复 API 并重新执行安全校验；小型夹具不授权缓存通过结论、复用回执或省略漂移场景。总 runner 成本与并行墙钟等待分别比较。
 
 Windows 必需原生检查（ACL、junction、Unicode、PowerShell 及已启用的大小写敏感路径）与 Linux 大小写敏感检查必须实际通过；仅被选中不够，skip 或预期失败也会阻断所在分片。
 
 CI artifact 按原生运行 attempt 保留，不覆盖失败记录。部分重跑可沿用同一 SHA 已成功的分片；聚合取各分片最新报告，拒绝较新的失败或同 attempt 重复证据，并核对分片并集完整且不重叠。skip 总数按原生事件统计，包含被跳过的子场景，可能不同于父例状态计数；跨轮对照保留子场景身份与理由。
+
+当前Windows四分片、Linux三分片、macOS单job。下载完整成功的原生报告集合后，可执行 `python -B tests/run_ci.py --platform windows --output <downloaded-reports> --refresh-weights` 刷新调度输入（Linux使用 `linux`）。刷新要求非空源码修订身份及无歧义、完整互斥的最新attempt集合；重复测量或非规范分片文件名会被拒绝。权重只影响分配，不决定是否执行用例；行／分支覆盖相同本身不足以删除行为或平台边界测试。
 
 <a id="license"></a>
 ## 许可证与致谢

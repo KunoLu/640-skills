@@ -113,7 +113,7 @@ R4 属于 Skill 路由契约，由独立审查核对相同/减项/扩权/未知�
 
 ## 8. Windows 恢复删除的私有暂存目录复用
 
-同一次受管目录删除按父目录分组文件并复用空私有holder，避免文件与子目录名称交错时反复创建holder和启动PowerShell设置ACL。每个文件仍重新证明holder私有权限、目录身份、路径安全和当前内容；权限结果不跨文件或调用缓存。不同父目录分别创建holder，单文件操作保持独立生命周期，不用跨卷搬移优化。
+同一次受管目录删除按父目录分组文件并复用空私有holder，避免文件与子目录名称交错时反复创建holder。每个文件仍重新证明holder私有权限、目录身份、路径安全和当前内容；权限结果不跨文件或调用缓存。Windows权限证明改用下节进程内安全API，不再为每次证明启动PowerShell。不同父目录分别创建holder，单文件操作保持独立生命周期，不用跨卷搬移优化。
 
 | 场景 | Given / When / Then |
 |---|---|
@@ -123,3 +123,20 @@ R4 属于 Skill 路由契约，由独立审查核对相同/减项/扩权/未知�
 | 捕获后原名竞争 | Given文件已捕获到私有位置；When原名出现新的用户对象；Then不覆盖竞争者，原捕获对象保留并报告真实部分结果 |
 
 公开验证接口仍为`remove_reference`、`install_reference`及upgrade/recovery CLI；不新增持久schema、后台清理器或ACL缓存。目录对象仅在身份仍匹配且为空时移除，未知或非空内容不得递归删除。
+
+## 9. 进程内 Windows ACL 证明与验证范围
+
+Windows使用Win32安全API读取打开目录的安全描述符；句柄不跟随重解析点，并与打开前lstat身份核对。属主必须为当前进程用户，DACL每条ACE均须为授予该用户、SYSTEM或Administrators的标准允许项；NULL/无效DACL、未知ACE形式或无法读取一律拒绝。空但有效DACL禁止所有显式访问，不等于NULL DACL。继承开启本身不拒绝，以实际继承的ACE内容判断。仅缓存函数绑定，不缓存身份或ACL决定。
+
+仅在本次创建目录分支设置当前用户属主和受保护的可继承FullControl DACL；既有目录只读核验。创建及后续ACL安装仍依赖可信、单controller的父目录命名空间：句柄证明不使mkdir和ACL设置成为原子操作，也不消除在初始身份采样之前换目录的既有竞态。不新增线程模拟身份支持或全新权限策略。
+
+| 场景 | Given / When / Then |
+|---|---|
+| 新建与重复核验 | Given受控父目录；When创建私有目录或staging并复核；Then无需PowerShell子进程，基本主体/规则判定与原脚本对照一致 |
+| 非受信主体与拒绝项 | GivenEveryone/Users授权或Deny ACE；When检查；Then拒绝，且create=True不得修补既有对象 |
+| 错误属主 | Given成功建立外部属主夹具；When检查；Then拒绝；夹具建立失败不得静默跳过后仍声称已验 |
+| 空与NULL DACL | Given有效空DACL或NULL DACL；When检查；Then前者符合deny-all私密边界，后者拒绝；测试后用原句柄恢复权限 |
+| 无法读取 | Given安全描述符读取返回错误；When公开私有目录入口检查；Thenprivacy-unproven，不把缺少证据当通过 |
+
+CI按fixture单元与实测逐例权重分片，Windows四片、Linux三片、macOS保持单job。分片并集须等于各平台原选用集合，fixture不得分散执行；缺权重新例仍运行并显式列出。权重刷新拒绝无修订身份、歧义attempt、失败/缺失/重复或不一致分片。覆盖重叠只是冗余筛选，不能替代断言/状态/平台语义审查；具体Windows排除清单须用户审阅后生效，替代见证必须实际通过。
+
