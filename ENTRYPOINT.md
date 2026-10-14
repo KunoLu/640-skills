@@ -9,6 +9,7 @@
 > `ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` 作为 required external Skills 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；官方 Ponytail plugin 与 Onboard stable provider 不得同时启用，检测到已启用 plugin 时 check / init / reset 阻断并交由人工处理。Ponytail 版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
 > `i-have-adhd` 同为 required external Skill 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
 > 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `sbtd-workflow-onboard/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
+> SBTD 自身发布状态与使用示例以[中文变更日志](CHANGELOG.zh.md)、[英文 CHANGELOG](CHANGELOG.md)、[中文 README](README.zh.md)和[英文 README](README.md)为准；首次 v2 初始化、已有环境 init/reset、v1→v2 迁移采用各自提示词和确认门。两份变更日志逐项同义，下表仍是外部工具监控基线，不因 SBTD 发布或文档同步自动改写。
 
 ## 0. 版本监控配置
 

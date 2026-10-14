@@ -5,11 +5,13 @@
 
 相对 `init` 的语义差：
 
-- 用户意图是更新 / 重置已有配置，而不是第一次 bootstrap。
+- 用户明确要求重装／重置所选已有配置；版本对齐优先走有计划、备份与恢复证据的 `upgrade`，不是把 reset 当作升级器。
 - React Bits：检测到既有 Free / Starter / Pro / Ultimate 时必须保留，不得默认改成免费版。
 - 保留 containment、canonical 身份、事务 rollback 和用户确认；不调用 Trellis，不重建旧状态。
 
 目标 Agent 平台仍是单数。Q4 项目 `AGENTS.md` 仍须单独确认。
+
+执行前核对已审阅的 v2 包和真实目标，特别确认 bundled Skills 的无备份覆盖风险；需要保留定制内容时先另行授权备份或选择 upgrade。可复制的 reset 提示词见[中文 README](../../README.zh.md#onboard-prompts)和[英文 README](../../README.md#onboard-prompts)；v1 数据迁移不由 reset 执行。
 
 ```mermaid
 flowchart TD

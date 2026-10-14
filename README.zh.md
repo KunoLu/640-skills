@@ -16,7 +16,7 @@ SBTD 将**规格、行为、测试与领域语言**连接起来。Coding Agent �
 
 本仓库是**配置与 Skill 的摘录／同步源**，不是真实业务应用。工作流主线面向 **Codex 与 Oh My Pi（OMP）**；安装器也提供 Claude Code、Kimi 适配入口。有适配入口，不等于各宿主行为已取得同等验证。
 
-> **SBTD v2 发布主线。** 当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。实际发布版本以[已发布 tag](https://github.com/KunoLu/640-skills/tags)及 [CHANGELOG](CHANGELOG.md) 为准；`main` 工作树或未发布草案不等于正式发布。代码、CI、安装、原生检查与真实宿主验收是不同证据层级。详见[交付计划与验收边界](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
+> **SBTD v2 发布主线。** 当前 catalog 包含 14 个 bundled Skills 和 19 个 required external Skills。实际发布版本以[已发布 tag](https://github.com/KunoLu/640-skills/tags)及[中文变更日志](CHANGELOG.zh.md)为准；`main` 工作树或未发布草案不等于正式发布。代码、CI、安装、原生检查与真实宿主验收是不同证据层级。详见[交付计划与验收边界](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md)。
 
 | [首次安装](#install) | [已经安装](#onboard-prompts) | [开始任务](#task-prompts) |
 |---|---|---|
@@ -30,11 +30,11 @@ SBTD 将**规格、行为、测试与领域语言**连接起来。Coding Agent �
 将下面的提示词交给 Coding Agent；需要时替换目标 Agent：
 
 ```text
-请从 https://github.com/KunoLu/640-skills 安装 sbtd-workflow-onboard Skill，
-目标是 Codex 的用户级全局 Skills 目录，不是当前项目目录。
-使用官方 skills CLI，只选择 sbtd-workflow-onboard，并复制整个目录。
-报告来源 revision 和解析后的安装路径。暂不执行 init/reset，不安装其他工具，
-也不修改 AGENTS 或 MCP 配置。
+请从 KunoLu/640-skills 的[已审阅 v2 tag 或 commit]只安装 sbtd-workflow-onboard，
+目标是 Codex 用户级全局 Skills 目录，不是当前项目。
+先解析并确认该 revision 存在；不得静默替换为 main 或 v1 包。
+使用官方 skills CLI 复制整个目录，报告实际来源与目标路径。
+暂不执行 init/reset、不安装其他工具，也不修改 AGENTS/MCP 配置。
 ```
 
 偏好终端操作？在已有 Node/npm 的环境中，使用[官方 Skills CLI](https://github.com/vercel-labs/skills)：
@@ -45,7 +45,7 @@ npx --yes skills@latest add https://github.com/KunoLu/640-skills \
 npx skills list --global --agent codex
 ```
 
-`skills@latest` 选择的是 CLI 版本，**不是 Skill 发布版本**。未固定 ref 的仓库源读取默认分支，而非最新 tag。固定来源的语法为 `'KunoLu/640-skills#<reviewed-ref>@sbtd-workflow-onboard'`：将 `<reviewed-ref>` 替换为已审阅的 tag 或 commit，并遵循该 revision 的文档。**不要将历史 v1 包与下文 v2 初始化提示词混用**：旧版初始化可能安装或调用已退役的 Trellis／GitNexus 工作流。本文不宣称已有 v2 release tag。
+`skills@latest` 选择的是 CLI 版本，**不是 Skill 发布版本**。未固定 ref 的仓库源读取默认分支，而非最新 tag。固定来源的语法为 `'KunoLu/640-skills#<reviewed-ref>@sbtd-workflow-onboard'`：将 `<reviewed-ref>` 替换为已存在的 v2 tag 或已审阅 commit，并遵循该 revision 的文档。**不要将历史 v1 包与下文 v2 初始化提示词混用**：旧版初始化可能安装或调用已退役的 Trellis／GitNexus 工作流。已有 v1 数据应使用下方迁移提示词，不用 init/reset 代替。
 
 **安装入口 Skill 不等于完成初始化。** 这一步只复制自包含的 Onboard 包，不运行 `onboard.py`、不安装其他 Skills 或 Python 依赖、不配置 MCP，也不初始化项目。应定位实际安装目录，不猜测 HOME 下的路径。为 OMP 或其他宿主安装时，先确认 Skills CLI 支持的 Agent 标识和发现路径，不要假设它与 Onboard 的 platform 名称相同。
 
@@ -91,6 +91,23 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 | 退役已检测旧资产 | `cleanup-legacy` | 展示实际候选，再单独确认执行 |
 | 恢复已授权批次 | `recovery` | 根据可信批次证据计划并确认恢复，不是通用撤销命令 |
 
+[首次初始化提示词](#install)用于 bootstrap 之后的新 v2 环境。已有安装或 v1 项目使用下列对应提示词；执行前替换为精确的已审阅 v2 来源、项目根和配置域。
+
+<details>
+<summary><strong>再次执行 v2 init——不等于版本升级</strong></summary>
+
+```text
+请使用已审阅的 v2 sbtd-workflow-onboard，为平台 codex 和已有项目 /abs/project
+制定 init 计划；我需要安装项目级 AGENTS.md。
+先核对已安装包的 revision 和解释器依赖，再展示 plan --json，
+列明全局 Skills/AGENTS/MCP 目标、项目写入及备份，等待我批准后才 init。
+保留任务、身份、lessons 和旧数据。说明哪些合法 Skill 壳会被跳过，
+不要把跳过说成内容已升级；如果需要版本对齐，停下来提出显式 upgrade 计划。
+本次不授权 reset、迁移、旧资产删除或 hooks 启用。
+```
+
+</details>
+
 <details>
 <summary><strong>检查与 project-only 初始化提示词</strong></summary>
 
@@ -129,14 +146,62 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 
 隔离 probe 默认仍拒绝链接 Skill。需要保留链接时，先用 `upgrade --phase authorize-link` 明确批准其物理目标，再将生成的文档传给 `verify --probe --yes --link-authorization`。这只授权精确的本地目标访问及临时普通目录投影，不替换原链接、不跟随嵌套链接，也不证明现有会话已重载。命令及拒绝边界见[链接授权说明](sbtd-workflow-onboard/REFERENCE.md#probe-skill-link-authorization)。
 
+**只应用已经审阅并批准的计划：**
+
+```text
+我确认[upgrade-plan 文件]中上一轮已展示的精确升级范围和 replace/preserve 决定。
+请使用匹配的受信 v2 Onboard 执行器，复核来源、目标和私有 vault，
+从该文件读取 plan_id，带实际所需确认执行 upgrade --phase apply，不让我手抄 hash。
+保存实际回执和备份；如果范围或现场已变化，停下，不在旧授权下静默重新规划。
+部分失败时报告已测得写入和续作路径。本次不授权宿主 probe、项目迁移、
+清理或其他环境同步。
+```
+
+**核验已应用的升级，不启动宿主 probe：**
+
+```text
+请使用 upgrade --phase verify，消费[已批准计划]和[其实际 upgrade 回执]。
+按精确基线核验安装包与选定资源，分别报告磁盘、运行时/协议、宿主加载和旧资产清理，
+未执行层明确标 unverified。不要添加 --probe 或 --yes，不修复配置，也不删除备份。
+```
+
+**可选宿主及链接 Skill 验证——先确认范围：**
+
+```text
+请展示针对[upgrade 计划和回执]拟执行的宿主 probe，列明配置域、子进程、
+临时投影及潜在副作用。该升级探测无需真实认证或模型请求，不读取或复制凭据文件；
+等待我明确批准 probe。若遇到链接 Skill，先展示逻辑路径、物理目标、身份与内容范围，
+只有我批准该目标后，才用 upgrade --phase authorize-link 保存精确授权。
+随后按需要携带该授权运行 upgrade --phase verify --probe --yes。
+保留原链接和无关配置；隔离宿主加载与现有会话重载分开报告。
+无法证明隔离时标 blocked，不绕过；真实模型/行为 smoke另行确定范围和受控认证，
+不包含在本升级 probe中。
+```
+
+**计划恢复本次升级，不混用迁移恢复：**
+
+```text
+请使用 recovery --phase plan，提供 --upgrade-plan [计划]和 --upgrade-receipt [回执]。
+确认私有 vault 来源可信，核对当前漂移，展示精确恢复范围与限制，
+只把恢复计划保存到已批准的私有位置。
+另获恢复授权后才 recovery --phase apply，使用实际 --upgrade-recovery-plan，
+从计划读取 recovery_id 供 --confirm-recovery 使用。
+保留用户改动、备份和部分完成回执，不执行不受信历史代码。
+```
+
+这些提示词对应[实际 upgrade／recovery 命令](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。`verify` 成功不授权 cleanup；旧计划也不能授权已经变化的新包或新目标集合。
+
 **只有明确要替换 Skill 内容时才使用 reset：**
 
 ```text
-请使用 sbtd-workflow-onboard，为平台 codex 和 /abs/project 制定 reset 计划。
-说明 bundled Skills 会无备份覆盖、required external Skills 会重装，
-列出受影响路径，并保留检测到的 React Bits tier/registry。
-等待我批准后执行 reset。保留任务、developer 身份、spec、lessons、
-handoff 和旧数据；不要把 reset 当成迁移或清理。
+请使用已审阅的 v2 sbtd-workflow-onboard，为平台 codex 和 /abs/project 制定 reset 计划。
+我需要重写项目级 AGENTS.md，但须先看到实际计划并确认。
+核对包 revision 和解释器依赖；说明 bundled Skills 会无备份覆盖、
+required external Skills 会重装。识别定制 Skill 内容；如果我需要保留，
+停下来另行确认备份，或建议改用 upgrade。
+列出所有全局/项目目标、AGENTS 备份和 MCP 影响，保留检测到的 React Bits tier/registry。
+等待我批准后才 reset；保留任务、developer 身份、spec、lessons、handoff 和旧数据。
+reset 不等于迁移、清理、全机升级，也不提供自动回滚保证。
 ```
 
 </details>
@@ -144,14 +209,23 @@ handoff 和旧数据；不要把 reset 当成迁移或清理。
 <details>
 <summary><strong>旧数据迁移、清理与恢复提示词</strong></summary>
 
-**先计划旧数据迁移：**
+**SBTD v1 项目迁移到 v2——包升级与数据迁移分开：**
 
 ```text
-请使用 sbtd-workflow-onboard 评估 /abs/project 中的旧 Trellis/GitNexus 数据。
-先只读检查，明确项目与全局范围，以及迁移 plan 所需的前置条件，
-包括私有 vault、已批准候选与 publication decisions。
-保留原件和未知内容，在请求 apply 授权前展示计划与恢复边界。
-部署、宿主 probe 和清理分别取得授权。
+我的 /abs/project 正在使用 SBTD v1，希望迁移到[已审阅 v2 tag 或 commit]，
+目标为[codex 和/或 omp，以及明确选定的配置域]。
+先只读盘点：Onboard 版本、旧 Trellis/GitNexus 布局、项目分支、
+定制规则、任务/spec/lessons、共享 HOME/Skills 的使用者和活动进程。
+暂不运行 v1 init/reset、不复制凭据、不创建目录或修改配置。
+分别制定 Onboard/Skills 包升级计划与项目数据迁移计划。
+若旧执行器没有 v2 upgrade 入口，先展示如何准备已审阅的 v2 执行器、
+保全既有安装，并单独请求该安装授权。
+确认项目外私有 vault、保管人、保留原件、publication decisions、
+已批准候选和恢复限制；展示真实 migration plan 后再请求 apply 授权。
+获准 apply 后，部署另行确认；消费绑定 manifest/回执部署新规则/Skills/接线，
+再验证数据、真实宿主行为和恢复证据。
+验证后才展示批次及新鲜 cleanup 候选，另行请求删除授权；未知内容和备份继续保留，
+不承诺旧 Trellis 可写回退。每个未获授权的阶段都停下，不用 reset 代替升级或迁移。
 ```
 
 **请求清理计划，而非立即删除：**
@@ -364,7 +438,7 @@ Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/s
 | Bootstrap／init／reset／project-only 流程图 | [Bootstrap](docs/assets/npx-skills-global-onboard-install.md) · [Init](docs/assets/onboard-skill-init.md) · [Reset](docs/assets/onboard-skill-reset.md) · [Project-only](docs/assets/onboard-init-projects.md) |
 | 升级／迁移／清理／恢复 | [升级](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [迁移与恢复](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [清理](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime) |
 | 全局／项目规则 | [全局模板](sbtd-workflow-onboard/templates/agents/AGENTS.global.md) · [项目模板](sbtd-workflow-onboard/templates/agents/AGENTS.project.md) |
-| 发布历史／监控版本 | [CHANGELOG](CHANGELOG.md) · [ENTRYPOINT](ENTRYPOINT.md) |
+| 发布历史／监控版本 | [中文变更日志](CHANGELOG.zh.md) · [English CHANGELOG](CHANGELOG.md) · [ENTRYPOINT](ENTRYPOINT.md) |
 
 <details>
 <summary><strong>Bootstrap 后手动执行，或从已克隆仓库启动</strong></summary>
@@ -427,7 +501,7 @@ AGENTS.md
 
 Ignore 不会脱敏、不取消已有 tracked 状态，也不授权删除。任务报告默认本地留存；发布证据必须先脱敏并单独确认目标位置。**本配置源仓不生成 `.feature` 文件**；持久行为规格使用 Markdown 与现有测试。
 
-源文件变化时，同轮评估两种语言的 README、[CHANGELOG](CHANGELOG.md) 和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两种语言保持语义一致，不重复堆积实现日志。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 只推进监控基线并归档已分析更新。它们不是 Onboard upgrade，也不是 BDD sync。
+源文件变化时，同轮评估两种语言的 README、[英文 CHANGELOG](CHANGELOG.md)、[中文变更日志](CHANGELOG.zh.md)和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两份变更日志逐条对应，版本、日期、顺序、事实、URL、提交SHA和代码标识相同，仅正文语言不同；同步更新最上方未发布章节，保留已发布历史。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 只推进监控基线并归档已分析更新。它们不是 Onboard upgrade，也不是 BDD sync。
 
 原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按模块耗时权重分为互不重叠的分片；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
 

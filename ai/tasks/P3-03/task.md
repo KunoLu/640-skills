@@ -4,17 +4,17 @@ id: P3-03
 workflow_mode: strict
 mode_source: user
 mode_note: 用户接受建议，明确选择strict用于v2.0.0最终发布审查
-status: "in-progress"
-branch: "release/v2.0.0"
+status: "checking"
+branch: "docs/v2.0.0-release-docs"
 created_at: '2026-10-14T00:02:56.566903+08:00'
-updated_at: "2026-10-14T07:39:18.007306+08:00"
+updated_at: "2026-10-14T09:38:14.874428+08:00"
 completed_at: null
 ---
 # P3-03 最终 readiness、用户确认与 v2.0.0 发布
 
 ## 身份、模式与授权
 
-用户要求开始P3-03，并明确选择strict。项目640-skills，从main创建release/v2.0.0候选分支并经用户明确授权重绑定；P3-01/P3-02/P3-05已完成。当前授权包含发布审查、候选准备/验证及已展示九文件的commit/push/PR；不包含合并、创建或推送tag、GitHub Release、管理员绕过、本机sync/升级或备份销毁。最终发布范围须在精确候选CI通过后另行确认。
+用户要求开始P3-03并选择strict。P3-01/P3-02/P3-05已完成；首个候选PR119获明确授权合并。用户随后批准限定发布流程，并追加发布前全部受影响现行文档、双语v2初始化/v1迁移/init/reset/upgrade提示词及双语CHANGELOG；已明确授权docs/v2.0.0-release-docs分支/本任务rebind/commit/push/PR，独立复核和精确CI通过后仅该PR可管理员合并。稳定tag/Release改为新文档合并后的实际main SHA，须该SHA三平台CI全绿；发布后的docs/v2.0.0-release-record PR及原定同条件合并保留。不改保护规则，不授权本机sync/升级、生产部署、认证修改或备份销毁。
 当前工作树已存在主PRD和关联MCP PRD的前序收口修改，保留不重置。目标为v2.0.0；P3-04仍planned，已接受的原位保留责任不变。
 未完整调用grill-with-docs：发布目标、依赖、AC和安全合同已在PRD明确，无新领域建模或产品范围设计。
 
@@ -35,10 +35,10 @@ completed_at: null
 | Legacy safety | 尚无既有行为修复 | before-dev | not-needed；发现需改产品时先刻画 |
 | Refactoring | 尚无生产代码编辑 | before-dev | not-needed；不夹带重构 |
 | TDD/BDD | 无新增行为，沿用主PRD及既有测试；源仓禁止.feature | check | traceable：AC-01～37映射及既有行为场景；无新增代码不做TDD |
-| Project validation | 最终发布候选验证 | check | 本机macOS完整687项通过/20原生skip、完整副本CLI通过；最终clean SHA三平台CI待建立 |
-| Code readability / Ponytail | 仅状态/发布文档时无生产diff | check | not-needed；若改手写代码重新触发 |
-| Independent review | 迁移、安装、权限与宿主配置产品正式发布 | check | 两路独立只读review无新增范围内缺陷；精确最终SHA及发布授权仍待完成 |
-| Release readiness | 正式运行时/安装载荷发布 | finish | blocked：本机验证已通过，最终候选CI与发布授权未完成；不以风险接受替代required gates |
+| Project validation | 最终发布候选验证 | check | 新文档树macOS完整686项通过/20原生skip、原生upgrade/recovery五步及Markdown/链接/双语对照通过；新clean SHA三平台CI待建立 |
+| Code readability / Ponytail | 无生产diff，仅文档与删除固定中文措辞测试 | check | 无新手写运行代码；Ruff4项既有诊断与基线相同，不顺带重构 |
+| Independent review | 发布文档/权限路由及完整双语历史 | check | 两路完整语义复核；只读路由、probe认证前提及5项翻译发现均修正并复审关闭 |
+| Release readiness | 正式运行时/安装载荷发布 | finish | blocked：新文档候选技术复核通过，需新的精确PR/main CI；用户已授权限定发布流程，不以旧SHA替代 |
 
 ## 发布边界
 
@@ -55,9 +55,25 @@ completed_at: null
 - 私有原生报告/中文汇总位于本任务被忽略的`reports/readiness-main-2026_10_14-00_03_03/`：含37AC映射、两路review原文、baseline CI原生报告、首轮失败、诊断、完整复跑、CLI smoke、Release Readiness Review和分阶段publication-plan。不发布raw/HOME/账号/图。
 - 既有LESSON-20260930-kuno-umask-sensitive-test-evidence及同日full-suite lesson覆盖本次环境教训，不另造重复lesson。本机准备完成时readiness为blocked；随后用户明确授权候选PR阶段，TaskStore于2026-10-14T07:39:18.007306+08:00将main绑定改为release/v2.0.0。最终精确SHA三平台CI仍待取得，合并/tag/稳定GitHub Release另行确认。
 
+## 发布前关联文档追加范围
+
+- 用户要求完整检查根README和所有受v2发布影响的现行关联文档，并明确补齐双语初始化、v1→v2迁移、init/reset及upgrade各阶段提示词；不是执行这些用户环境操作的授权。
+- 首个PR119 head `eb656ebe490b7fac41026e775a9981019228b16d`九job CI38485923170通过，实际merge `4c375d94467917ab1ca752f9635a2b3463b77d97`与审查树一致。因追加文档门，该SHA不直接打稳定tag；新候选必须重新绑定验证。
+- 修正现行工作路径图的旧Trellis/GitNexus调度，统一sbtd-task/Graft和按模式方法门；只读仍经过模式/澄清/适用门，仅免除写入。独立复核发现的只读绕路P2已修正并复审关闭。
+- host smoke手册不再指导复制真实auth.json，明确旧P1-15 live执行器仍有此代码、不得按该路径做现行真实认证验证；未运行或修改其live逻辑。保留无host单测和受控真实证据边界，AC-20按文本与usage分层，不沿用早期“OMP无usage”或整场input直接对比2k的判断。
+- 双语README现有upgrade probe提示词一度误加真实认证前提；按真实实现纠正为免真实认证、无模型请求的隔离加载，真实模型行为smoke另行授权。plan/apply/verify/authorize-link/独立upgrade recovery与实际CLI参数对应。
+- 当前源原生upgrade plan→apply→verify aligned→独立recovery plan→apply五步均exit0；只操作新临时Skills/vault，无agents/hosts/shell目标或真实认证，恢复后目标移除且计划/回执保留；证据保存后临时现场清理。不是v1用户数据或live恢复证明。
+- 用户明确要求中文原CHANGELOG改名CHANGELOG.zh.md，英文CHANGELOG.md逐项全译；两份只语言不同，版本/日期/链接/SHA/代码保持，历史不摘要或改写。旧单测仅钉固定中文标题/日期/字面量，删除而不重钉英文；本次另用结构/元数据对照和独立翻译复核。
+- README双语、ENTRYPOINT发布导航、Onboard REFERENCE、五份现行docs/assets、版本化automation prompt及当前PRD合同同轮维护；外部监控版本不推进，live automation不写。独立KPi/Runtime Dashboard规划、已发布历史及第三方镜像不属于本次SBTD发布状态改写范围。
+- 双语CHANGELOG集成21个版本、325个条目、766个代码字面量；逐版本数字、链接及代码对应，中文20个已发布章节与原基线逐字保留。两路独立语义复核覆盖全部内容，5项误译/7处英文纠正后无遗留；不把结构校验当语义证明。
+- 新文档候选在compileall后冻结完整来源，子进程显式umask022：原生macOS完整686项、20个skip、185.304秒、exit0，Onboard前后snapshot一致；较前轮少1项是删除固定中文标题/旧日期的措辞测试，不删运行行为回归。Ruff exit1的4项UP022/PLW1510与原合并基线同code/源码行，无新增诊断，未声称全绿。
+- 12份现行Markdown的CommonMark/table解析、相对文件链接及details配对通过；本地ignored AGENTS维护规则同步为双语CHANGELOG，但不提交或全局同步。此前旧main CI38492338717的watch因GitHub接口500退出，run摘要实际completed/success；该旧SHA仍不替代新文档候选。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-14T00:03:03.769895+08:00 | planned | in-progress | 用户要求开始P3-03并选择strict；P3-02/P3-05依赖已done，启动发布审查与候选验证，发布写入另行确认 | 主PRD §14.6 P3-03、§15/16及本轮模式选择 |
 | 2026-10-14T07:39:18.007306+08:00 | in-progress | in-progress | Explicit branch rebinding from "main" to "release/v2.0.0": 用户明确授权创建release/v2.0.0候选分支并重绑定本任务，仅commit/push/PR取证，不合并或发布 | 本轮用户选择：授权候选PR阶段；九文件范围已展示 |
+| 2026-10-14T08:58:31.477350+08:00 | in-progress | in-progress | Explicit branch rebinding from "release/v2.0.0" to "docs/v2.0.0-release-docs": 用户追加现行关联文档及双语v2使用示例要求，并明确授权发布前docs/v2.0.0-release-docs分支/PR及同条件管理员合并；稳定tag延后至新main精确CI通过 | 用户选择先补齐文档再发布；追加初始化、v1到v2、init/reset提示词要求 |
+| 2026-10-14T09:38:14.874428+08:00 | in-progress | checking | 用户追加的现行文档/双语提示词/双语CHANGELOG全部完成并独立复核收敛；原生686项和upgrade/recovery闭环通过，进入新精确候选PR/main CI及授权发布核对 | P3-03私有reports：pretag-docs-native-macos-run、bilingual-changelog-final-verification、upgrade-prompt-native-lifecycle |

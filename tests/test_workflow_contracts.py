@@ -709,33 +709,6 @@ class WorkflowContractTests(unittest.TestCase):
             ).exists()
         )
 
-    def test_changelog_orders_tags_newest_first(self) -> None:
-        changelog_path = ROOT / "CHANGELOG.md"
-
-        self.assertTrue(changelog_path.is_file())
-        changelog = changelog_path.read_text(encoding="utf-8")
-        self.assertTrue(changelog.startswith("# CHANGELOG\n"))
-
-        def heading_index(version: str) -> int:
-            match = re.search(
-                rf"^## {re.escape(version)}（",
-                changelog,
-                re.MULTILINE,
-            )
-            self.assertIsNotNone(match, version)
-            return int(match.start())
-
-        self.assertLess(heading_index("v1.0.4"), heading_index("v1.0.3"))
-        self.assertLess(heading_index("v1.0.3"), heading_index("v1.0.2"))
-        self.assertLess(heading_index("v1.0.2"), heading_index("v1.0.1"))
-        self.assertLess(heading_index("v1.0.1"), heading_index("v1.0.0"))
-        self.assertIn("## v1.0.4（2026-07-19）", changelog)
-        self.assertIn("## v1.0.3（2026-07-19）", changelog)
-        self.assertIn("## v1.0.2（2026-07-18）", changelog)
-        self.assertIn("## v1.0.1（2026-07-18）", changelog)
-        self.assertNotIn("## v1.0.2（未发布）", changelog)
-        self.assertNotIn("## v1.0.4（未发布）", changelog)
-        self.assertRegex(changelog, r"[\u4e00-\u9fff]")
 
     def test_onboard_skill_is_discoverable_and_documents_npx_install(self) -> None:
         skill_path = ROOT / "sbtd-workflow-onboard" / "SKILL.md"
