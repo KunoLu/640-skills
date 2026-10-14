@@ -6,6 +6,13 @@ English · [简体中文](CHANGELOG.zh.md)
 
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
+## v2.0.1 (Unreleased)
+
+### Fixed
+
+- Reduce repeated private-holder creation during managed directory removal and upgrade recovery. Files are grouped by parent directory and share an empty operation-local holder, while each capture still freshly validates private permissions, object identity, safe paths and content. No cross-call ACL cache, recursive deletion of unknown content, relaxed timeout or backup disposal is introduced.
+- Standardize agent-authored Chinese Markdown execution summaries with one `project-validation` template, separating run metadata, commands, scope, result tables, failed rounds/reruns, artifacts and limitations. Web UI coverage assessment becomes an appendix; retained historical reports are not rewritten, and formatting is not treated as test or release evidence.
+
 ## v2.0.0 (2026-10-14)
 
 The stable [v2.0.0 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.0) is published. Its annotated tag points to `8f6c46993e7546b68f949bd52ede806d9b1afa61`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/38500935539) passed. This release cumulatively includes rc.1—rc.4 and the baseline capabilities below; published RC sections retain their original historical verification boundaries. Source publication does not perform local installation, workflow sync, project migration or backup disposal.

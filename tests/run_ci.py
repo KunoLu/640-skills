@@ -30,6 +30,11 @@ WINDOWS_CASES = (
     "test_sbtd_codex_wiring.CodexCandidateTests.test_discontiguous_tables_keep_retirement_ownership_checks",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_junction_is_rejected_before_snapshot_or_copy_reads_target",
     "test_sbtd_migration_files.MigrationFileTests.test_windows_private_directory_acl_gateway",
+    "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_keeps_later_user_edit_and_new_file",
+    "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_preserves_replaced_capture_directory",
+    "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_reports_disappearing_holder_without_deleting_files",
+    "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_stops_when_holder_gains_unknown_content",
+    "test_sbtd_migration_files.MigrationFileTests.test_conflicting_restore_reports_the_retained_object_without_overwriting",
 )
 
 

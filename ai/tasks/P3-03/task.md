@@ -4,11 +4,11 @@ id: P3-03
 workflow_mode: strict
 mode_source: user
 mode_note: 用户接受建议，明确选择strict用于v2.0.0最终发布审查
-status: "in-progress"
+status: "done"
 branch: "docs/v2.0.0-release-record"
 created_at: '2026-10-14T00:02:56.566903+08:00'
-updated_at: "2026-10-14T14:03:10.069511+08:00"
-completed_at: null
+updated_at: "2026-10-14T18:07:35.804056+08:00"
+completed_at: "2026-10-14T18:07:35.804056+08:00"
 ---
 # P3-03 最终 readiness、用户确认与 v2.0.0 发布
 
@@ -86,6 +86,8 @@ completed_at: null
 - 代码及堆栈闭环：`remove_reference`逐文件调用`_capture_and_remove_file`，每次新建`_private_sibling`并以独立PowerShell进行ACL创建/校验。此重复进程开销主导恢复期限；不归因于认证/模型或单次30秒ACL门失败。外层只是在等待隔离恢复子进程。
 - 建议独立修复重复私有holder/ACL启动开销，必须保留逐文件capture-before-delete、nofollow、checksum、并发新增/修改拒绝、原件及部分回执；不得简单提高900秒、削减fixture或取消ACL检查。修复范围和v2.0.1等后续发布尚待用户确认，v2.0.0 tag保持不动。
 - 原生/raw和中文汇总保存在本任务私有reports，核心为`windows-recovery-root-cause`，两次记录CI失败和两次诊断原文均保留。仅已确认MERGED的原release/v2.0.0分支按原授权删除；记录、追加文档与诊断分支保留。未知未追踪文件`nonexistent`保留且未入库。
+- 阻塞解除：独立strict任务`windows-recovery-acl-overhead`按父目录复用本次操作的空私有holder，逐文件仍重新证明ACL/身份/空目录/内容，未放宽900秒、未删减fixture或ACL检查。[PR122](https://github.com/KunoLu/640-skills/pull/122)经三路独立复核、精确head CI38538887444三平台九job通过（Windows安装副本完整生命周期用例通过），用户授权admin合并为main`8996d9e290ba689da1e9982f5389785319222ae7`；v2.0.1仍未发布。
+- 记录PR121合入新main：双语CHANGELOG冲突仅在标题区，main版本为PR121发布段落的超集（另含v2.0.1未发布段落），按main取用；README仅保留PR121的发布横幅与v2.0.0安装来源两处差异。用户授权admin审批合并PR121，合并以该合并head的三平台CI通过为前提，红灯不合并。
 
 ## 状态事件
 
@@ -99,3 +101,5 @@ completed_at: null
 | 2026-10-14T11:35:20.508935+08:00 | checking | done | 用户限定授权的v2.0.0正式发布已完成：实际main精确三平台CI通过、annotated tag已推送并解引用正确、正式Release/latest已读回；双语文档/提示词/变更日志与保留责任验收完成，本窄范围状态PR继续按授权闭环 | https://github.com/KunoLu/640-skills/releases/tag/v2.0.0 ; SHA8f6c46993e7546b68f949bd52ede806d9b1afa61 ; CI38500935539 ; private stable-release-verified.json |
 | 2026-10-14T14:03:05.116358+08:00 | done | planned | 正式Release已发布事实保留，但用户授权的记录PR121闭环因Windows恢复用例两次超时未完成，恢复整体任务为未完成并开展已授权隔离诊断 | CI38507559057 attempts1/2 recovery apply exceeded900s；用户选择授权隔离诊断 |
 | 2026-10-14T14:03:10.069511+08:00 | planned | in-progress | 继续原生Windows隔离诊断，保留旧done事件/真实发布与未合并记录PR；不在红灯合并，不移动tag | 专用diagnose/windows-upgrade-recovery-timeout；记录PR121仍OPEN |
+| 2026-10-14T18:07:30.591310+08:00 | in-progress | checking | 记录PR121阻塞根因已由独立修复PR122解决并经用户授权admin合并；记录PR合入新main待精确head三平台CI | PR122 merge 8996d9e；CI38538887444三平台九job通过；windows-recovery-acl-overhead done |
+| 2026-10-14T18:07:35.804056+08:00 | checking | done | v2.0.0发布事实与记录收口完成：PR121合入新main，双语CHANGELOG取main超集；用户授权admin审批合并，以合并head三平台CI通过为前提，红灯不合并并重开 | PR121合并head CI（待登记于PR）；PR122 merge 8996d9e；原发布CI38500935539 |
