@@ -16,7 +16,7 @@ SBTD connects **specifications, behavior, tests and domain language**. Your codi
 
 This repository is a **configuration and Skill source**, not a business application. The main workflow targets **Codex and Oh My Pi (OMP)**; the installers also expose Claude Code and Kimi adapters. Adapter availability is not proof of identical host behavior.
 
-> **SBTD v2 release line.** The catalog contains 14 bundled and 19 required external Skills. Check [published tags](https://github.com/KunoLu/640-skills/tags) and the [CHANGELOG](CHANGELOG.md) for released versions; a `main` checkout or an unreleased draft is not a release. Code, CI, installation, native checks and actual host acceptance are separate evidence layers. See the [delivery plan and acceptance boundaries](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md).
+> **Stable [v2.0.0](https://github.com/KunoLu/640-skills/releases/tag/v2.0.0) is released.** The catalog contains 14 bundled and 19 required external Skills. See the [English CHANGELOG](CHANGELOG.md) and [Chinese counterpart](CHANGELOG.zh.md) for the same release history. Code, CI, installation, native checks and actual host acceptance remain separate evidence layers; publishing a tag does not upgrade your environment. See the [delivery plan and acceptance boundaries](docs/prd/sbtd-workflow-v2-trellis-removal-graft-migration-prd.md).
 
 | [New installation](#install) | [Already installed](#onboard-prompts) | [Start a task](#task-prompts) |
 |---|---|---|
@@ -30,7 +30,7 @@ This repository is a **configuration and Skill source**, not a business applicat
 Paste this into your coding agent; replace the target agent if needed:
 
 ```text
-Install only sbtd-workflow-onboard from KunoLu/640-skills at [reviewed v2 tag or commit]
+Install only sbtd-workflow-onboard from the KunoLu/640-skills v2.0.0 tag
 into my user-level global Skills directory for Codex, not this project.
 First resolve that revision and verify it exists; do not silently substitute main or a v1 package.
 Use the official skills CLI and copy the full directory. Show the resolved source and target.
