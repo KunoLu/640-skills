@@ -794,6 +794,20 @@ def _remove_directory_files(target: Path, entries: list[dict[str, Any]]) -> None
         # its evidence instead of replacing it with a failed rmdir diagnostic.
         holder = None
         raise
+    except BaseException as primary:
+        # Keep the in-flight error primary; a failed release is only a note.
+        if holder is not None:
+            assert identity is not None
+            pending, holder = holder, None
+            try:
+                _release_removal_holder(pending, identity)
+            except Exception as release_error:
+                note = f"removal holder release also failed: {release_error!r}"
+                if hasattr(primary, "add_note"):
+                    primary.add_note(note)
+                else:  # Python 3.10: same attribute 3.11+ tracebacks render.
+                    primary.__notes__ = [*getattr(primary, "__notes__", []), note]
+        raise
     finally:
         if holder is not None:
             assert identity is not None

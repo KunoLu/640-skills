@@ -12,6 +12,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 - Reduce repeated private-holder creation during managed directory removal and upgrade recovery. Files are grouped by parent directory and share an empty operation-local holder, while each capture still freshly validates private permissions, object identity, safe paths and content. No cross-call ACL cache, recursive deletion of unknown content, relaxed timeout or backup disposal is introduced.
 - Standardize agent-authored Chinese Markdown execution summaries with one `project-validation` template, separating run metadata, commands, scope, result tables, failed rounds/reruns, artifacts and limitations. Web UI coverage assessment becomes an appendix; retained historical reports are not rewritten, and formatting is not treated as test or release evidence.
+- Keep the original error primary when releasing an operation-local removal holder also fails during managed directory removal; the release failure is attached as a note instead of replacing it. Release still only uses `rmdir` on the same empty holder; no recursive deletion is introduced.
 
 ## v2.0.0 (2026-10-14)
 

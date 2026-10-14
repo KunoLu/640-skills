@@ -247,6 +247,43 @@ class MigrationFileTests(unittest.TestCase):
             self.assertEqual(later.read_bytes(), b"user edit")
             self.assertEqual((target / "new.txt").read_bytes(), b"user addition")
 
+    def test_directory_removal_keeps_original_error_when_holder_release_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            first = target / "a.txt"
+            later = target / "b.txt"
+            first.write_bytes(b"first")
+            later.write_bytes(b"second")
+            expected = snapshot(target)
+            rename = os.rename
+
+            def edit_after_capture(source, destination, *args, **kwargs):
+                result = rename(source, destination, *args, **kwargs)
+                if Path(source) == first:
+                    later.write_bytes(b"user edit")
+                return result
+
+            release_error = RetainedObjectError(root / "holder")
+            with (
+                mock.patch("sbtd_migration_files.os.rename", side_effect=edit_after_capture),
+                mock.patch(
+                    "sbtd_migration_files._release_removal_holder",
+                    side_effect=release_error,
+                ) as release,
+                self.assertRaises(ContractError) as raised,
+            ):
+                remove_reference(target, expected, scope=root)
+
+            release.assert_called_once()
+            self.assertIsNot(raised.exception, release_error)
+            self.assertNotIsInstance(raised.exception, RetainedObjectError)
+            self.assertTrue(
+                any("release also failed" in note for note in getattr(raised.exception, "__notes__", []))
+            )
+            self.assertEqual(later.read_bytes(), b"user edit")
+
     def test_directory_removal_preserves_replaced_capture_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
