@@ -8,6 +8,11 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ## v2.0.1 (Unreleased)
 
+### Changed
+
+- Prove Windows private-directory ACLs in process through the Win32 security API instead of starting PowerShell for every check and creation. The verdict is unchanged or stricter: the owner must be the current user, every ACE must be an allow for the current user, SYSTEM or Administrators, and junctions, unknown ACE types or any API error fail closed. The previous PowerShell proof stays in the tests as a differential oracle. No ACL cache, relaxed timeout or reduced check is introduced.
+- CI shards split fixture-free test cases individually by measured native per-case seconds, keep class and module fixtures within one shard, list cases without a recorded weight, and run Windows in four shards. `tests/run_ci.py --refresh-weights` rebuilds weights from one revision's successful shard reports. Every discovered case still runs exactly once.
+
 ### Fixed
 
 - Reduce repeated private-holder creation during managed directory removal and upgrade recovery. Files are grouped by parent directory and share an empty operation-local holder, while each capture still freshly validates private permissions, object identity, safe paths and content. No cross-call ACL cache, recursive deletion of unknown content, relaxed timeout or backup disposal is introduced.

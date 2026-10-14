@@ -476,7 +476,7 @@ def _win32() -> Any:
     )
 
 
-_WIN32_FAILURES = (OSError, ValueError, ctypes.ArgumentError)
+_WIN32_FAILURES = (OSError, ValueError, TypeError, ctypes.ArgumentError)
 
 
 def _win32_check(succeeded: Any) -> None:
