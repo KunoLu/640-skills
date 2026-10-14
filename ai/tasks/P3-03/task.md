@@ -4,11 +4,11 @@ id: P3-03
 workflow_mode: strict
 mode_source: user
 mode_note: 用户接受建议，明确选择strict用于v2.0.0最终发布审查
-status: "checking"
-branch: "docs/v2.0.0-release-docs"
+status: "done"
+branch: "docs/v2.0.0-release-record"
 created_at: '2026-10-14T00:02:56.566903+08:00'
-updated_at: "2026-10-14T09:38:14.874428+08:00"
-completed_at: null
+updated_at: "2026-10-14T11:35:20.508935+08:00"
+completed_at: "2026-10-14T11:35:20.508935+08:00"
 ---
 # P3-03 最终 readiness、用户确认与 v2.0.0 发布
 
@@ -35,10 +35,10 @@ completed_at: null
 | Legacy safety | 尚无既有行为修复 | before-dev | not-needed；发现需改产品时先刻画 |
 | Refactoring | 尚无生产代码编辑 | before-dev | not-needed；不夹带重构 |
 | TDD/BDD | 无新增行为，沿用主PRD及既有测试；源仓禁止.feature | check | traceable：AC-01～37映射及既有行为场景；无新增代码不做TDD |
-| Project validation | 最终发布候选验证 | check | 新文档树macOS完整686项通过/20原生skip、原生upgrade/recovery五步及Markdown/链接/双语对照通过；新clean SHA三平台CI待建立 |
+| Project validation | 最终发布候选验证 | check | 实际发布SHA 8f6c469三平台main CI38500935539九job通过；原生报告/聚合核验通过，保留skip；本机686项、5步CLI及双语语义复核通过 |
 | Code readability / Ponytail | 无生产diff，仅文档与删除固定中文措辞测试 | check | 无新手写运行代码；Ruff4项既有诊断与基线相同，不顺带重构 |
 | Independent review | 发布文档/权限路由及完整双语历史 | check | 两路完整语义复核；只读路由、probe认证前提及5项翻译发现均修正并复审关闭 |
-| Release readiness | 正式运行时/安装载荷发布 | finish | blocked：新文档候选技术复核通过，需新的精确PR/main CI；用户已授权限定发布流程，不以旧SHA替代 |
+| Release readiness | 正式运行时/安装载荷发布 | finish | ready：实际main已验证，用户授权的v2.0.0 tag/正式Release已发布并读回核验；状态记录PR另行闭环，不移动tag |
 
 ## 发布边界
 
@@ -69,6 +69,15 @@ completed_at: null
 - 新文档候选在compileall后冻结完整来源，子进程显式umask022：原生macOS完整686项、20个skip、185.304秒、exit0，Onboard前后snapshot一致；较前轮少1项是删除固定中文标题/旧日期的措辞测试，不删运行行为回归。Ruff exit1的4项UP022/PLW1510与原合并基线同code/源码行，无新增诊断，未声称全绿。
 - 12份现行Markdown的CommonMark/table解析、相对文件链接及details配对通过；本地ignored AGENTS维护规则同步为双语CHANGELOG，但不提交或全局同步。此前旧main CI38492338717的watch因GitHub接口500退出，run摘要实际completed/success；该旧SHA仍不替代新文档候选。
 
+## 实际正式发布（2026-10-14）
+
+- 新文档PR120 head `250922673a4c1cdc85408b672d78998a44594b5d`精确CI38497113728及两路复核通过后按用户限定授权合并；实际main `8f6c46993e7546b68f949bd52ede806d9b1afa61`与审查树相同。
+- 该实际main的CI38500935539九job全绿，原生报告source_sha和完整无重叠聚合核对通过：Linux2128/48skip、macOS686/20skip、Windows502/33skip；必需原生检查未被skip冒充。watch曾因API EOF中断，重接同一run而非重跑测试，失败记录保留。
+- 用户已批准的annotated `v2.0.0` tag已创建并推送，远端tag对象解引用到上述实际发布SHA；GitHub正式Release于2026-10-14T11:30:23+08:00发布，draft=false、prerelease=false，latest ID读回一致：[Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.0)。
+- 双语CHANGELOG只在真实tag/Release成功后补同一日期、SHA和CI链接；双语README声明实际稳定版并提供v2.0.0 bootstrap提示词。历史20章节未改，不重打或移动tag。
+- 原有恢复/计量/受控host限制保留；P3-04仍planned，下一人工复核2026-10-27。正常备份保留至少到2026-10-28T11:30:23+08:00，之后也需独立精确处置授权；不自动删除。
+- 本状态记录走用户批准的docs/v2.0.0-release-record窄范围PR，精确CI/复核通过后合并；闭环前不声称记录已合入main。仅原来批准的release/v2.0.0与本记录分支在确认MERGED后清理；追加文档分支保留，不扩大删除范围。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -77,3 +86,5 @@ completed_at: null
 | 2026-10-14T07:39:18.007306+08:00 | in-progress | in-progress | Explicit branch rebinding from "main" to "release/v2.0.0": 用户明确授权创建release/v2.0.0候选分支并重绑定本任务，仅commit/push/PR取证，不合并或发布 | 本轮用户选择：授权候选PR阶段；九文件范围已展示 |
 | 2026-10-14T08:58:31.477350+08:00 | in-progress | in-progress | Explicit branch rebinding from "release/v2.0.0" to "docs/v2.0.0-release-docs": 用户追加现行关联文档及双语v2使用示例要求，并明确授权发布前docs/v2.0.0-release-docs分支/PR及同条件管理员合并；稳定tag延后至新main精确CI通过 | 用户选择先补齐文档再发布；追加初始化、v1到v2、init/reset提示词要求 |
 | 2026-10-14T09:38:14.874428+08:00 | in-progress | checking | 用户追加的现行文档/双语提示词/双语CHANGELOG全部完成并独立复核收敛；原生686项和upgrade/recovery闭环通过，进入新精确候选PR/main CI及授权发布核对 | P3-03私有reports：pretag-docs-native-macos-run、bilingual-changelog-final-verification、upgrade-prompt-native-lifecycle |
+| 2026-10-14T11:31:55.790362+08:00 | checking | checking | Explicit branch rebinding from "docs/v2.0.0-release-docs" to "docs/v2.0.0-release-record": 已按授权发布v2.0.0并核验远端tag/正式Release；进入用户已批准的docs/v2.0.0-release-record窄范围日期/状态记录分支 | v2.0.0指向8f6c46993e7546b68f949bd52ede806d9b1afa61，main CI38500935539通过，GitHub Release已发布 |
+| 2026-10-14T11:35:20.508935+08:00 | checking | done | 用户限定授权的v2.0.0正式发布已完成：实际main精确三平台CI通过、annotated tag已推送并解引用正确、正式Release/latest已读回；双语文档/提示词/变更日志与保留责任验收完成，本窄范围状态PR继续按授权闭环 | https://github.com/KunoLu/640-skills/releases/tag/v2.0.0 ; SHA8f6c46993e7546b68f949bd52ede806d9b1afa61 ; CI38500935539 ; private stable-release-verified.json |
