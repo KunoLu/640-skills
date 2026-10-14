@@ -6,7 +6,7 @@
 
 | 项目 | 内容 |
 |---|---|
-| 文档版本 | 2.25（P3-01最终验收、P3-02观察问题复跑及P3-05精准清理／保留交接已完成；原始失败和计量限制保留。P3-03发布审查与P3-04备份处置仍未执行；当前进度及实际时间以§14为准） |
+| 文档版本 | 2.26（P3-01/02/05已完成；P3-03已启动strict并合并首个候选PR，用户追加发布前现行文档、双语使用示例及双语CHANGELOG，待补齐后的新main精确CI通过再发布。P3-04保留／处置仍独立；当前进度以§14为准） |
 | 文档状态 | 产品与流程决策已确认；已获本源仓库逐任务开发及 PR 合并授权；实际任务状态与证据见 §14，合并不等于 v2 发布 |
 | 创建日期 | 2026-09-16 |
 | 推荐目标 tag | **v2.0.0**；候选发布可使用 `v2.0.0-rc.1`，须有明确发布授权并通过实际目标 SHA 的验证，不能由实现完成推定已发布 |
@@ -1183,9 +1183,9 @@ P3-05 在 P3-03 最终发布审查前收口，但不强迫等待发布才处理�
 | `templates/project/.gitignore` | 保留通用段、删除旧工具段、新增四条根锚定规则 | default 本地记录被忽略；共享任务／spec／lessons 可追踪；老项目按授权阶段迁移 |
 | 根 `.gitignore` | P0-09 独立切换七行契约与精确断言 | 见第 11.7 节；保护 .sbtd/handoff/Graft，保留根 AGENTS.md local-only |
 | `ENTRYPOINT.md` | 新工具监控、主线、source/sync 入口 | 新 Graft 版本仅在采用时写入；不执行本轮 update |
-| `README.md`／`README.html` | 新主线、迁移／兼容边界和命令 | 实现同轮同步，不能提前声称 v2 已可用 |
+| `README.md`／`README.zh.md` | 双语主线、v2初始化、v1→v2迁移、init/reset与upgrade分阶段提示词 | 同轮语义对齐；不提前声称tag已发布；历史README.html记录不改写 |
 | `prompts/automations/sbtd-workflow-tools-version-check.md` | 移除有效 Trellis/GitNexus 监控规则，纳入 Graft | 普通修改只动版本化源；live 仍只在 sync |
-| `CHANGELOG.md` | 实施时新增顶部 `v2.0.0（未发布）` | 本轮仅 PRD，不改已发布历史 |
+| `CHANGELOG.md`／`CHANGELOG.zh.md` | 英文／中文逐项对应的发布历史与顶部未发布章节 | 版本/日期/顺序/URL/SHA/代码标识一致，仅语言不同；实际tag创建推送后补日期，不改已发布事实 |
 | `tests/**` | 行为、迁移、两平台、报告与旧路由回归 | 不仅把字符串断言改名 |
 | `.github/workflows/` | 新增本仓库必要 CI | 只验证可机器证明事项，权限最小，无真实 HOME／secrets |
 
@@ -1309,7 +1309,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 |---|---|---|---|---|---|---|---|
 | P3-01 | P3 | 两周观察内 3–5 个真实任务与备份复核 | P2-05 | AC-20/21/22/24/37；窗口2026-09-29→2026-10-13，期末原基线113/113备份匹配，不回填中点。三模式样本、P1撤回/P2补证关闭见§14.6.1。AC-20计量交付完成，不宣称收益比例或全部常驻仅2k；AC-22自然升级证据及7项受控真实宿主补证通过。用户明确接受受控样本、中点缺记录及宿主/配置证明边界后验收关闭，失败与备份保留 | HITL | done | 2026-10-13T22:37:33.774150+08:00 |
 | P3-02 | P3 | 修正观察问题并复跑验证 | P3-01 | 三项观察问题核对完成：直推main误判撤回；strict文档/私密模式缺口按A/B原生补证关闭；prepared路径绑定由[PR #106](https://github.com/KunoLu/640-skills/pull/106)修复合入。当前源码五模块125 tests/0失败/错误/跳过，实际tl隔离smoke通过，原备份113/113复核匹配；无剩余范围内缺陷、无新增产品修复。详见§14.6.2；原备份及失败证据保留，不代表发布或P3-05完成 | AFK | done | 2026-10-13T22:56:18.123353+08:00 |
-| P3-03 | P3 | 最终 readiness、用户确认与 v2.0.0 发布 | P3-02、P3-05 | 用户明确选择strict，2026-10-14启动。37AC映射及两路独立复核无新增范围内缺陷；本机原生macOS最终687 tests/20原生skip、完整副本CLI smoke通过，初轮失败保留。用户随后批准九文件候选commit/push/PR并明确rebind至release/v2.0.0；不授权合并/tag/Release。Release Readiness仍blocked：最终候选精确SHA三平台CI待取得，基础c91a66f或dirty证据不替代。恢复与保留边界沿用已验收记录，P3-04不作为发布前置 | HITL | in-progress | — |
+| P3-03 | P3 | 最终 readiness、用户确认与 v2.0.0 发布 | P3-02、P3-05 | strict；PR119已按限定授权合并，用户追加发布前现行文档、双语v2初始化/v1迁移/init/reset/upgrade提示词及双语CHANGELOG。追加范围已完成：21版本/325条目/766字面量一致，完整语义复核问题关闭；新文档树macOS686项/20skip、原生upgrade/recovery五步通过。2026-10-14T09:38:14.874428+08:00进入checking，待新增文档PR及其实际main精确三平台CI，再按已批准范围tag/正式Release和状态记录；不以旧SHA替代，P3-04不作为发布前置 | HITL | checking | — |
 | P3-04 | P3 | 正常发布或明确终止后的备份人工复核与授权处置 | —（条件门见验收栏） | AC-37；正常需P3-03完成及保留门结束；终止需终止决定、必要恢复验收/回滚需求关闭；无P2-01/manifest仍须在既有私有准备记录或迁移报告保存custodian/归属/精确范围/本次独立授权/实际确认时间，缺任一项或删除前保存回读失败均blocked、零删除、不得done；两分支均重新授权。已接收P3-05用户确认的历史环境／原件／证据原位保留交接，责任与精确路径仅存私有记录，下次人工复核2026-10-27或P3-03前，以先到者为准；该交接不授权销毁 | HITL | planned | — |
 | P3-05 | P3 | 验证环境与旧 Graft 接线盘点、替代及精准退役 | —（执行条件见 §11.9） | 既有第二阶段部署、本机对齐与三域新宿主验收见[关联PRD §11](sbtd-workflow-v2-global-session-mcp-prd.md#11-本机后续切换与对齐事实)。本轮确认已选接线/当前可见Graft无旧TEMP运行依赖；用户批准清理P3-01隔离计量环境/缓存及两个合成fixture共五项，均已删除，原生分词和稳定Graft协议复验通过。37个历史TEMP根及原件/证据获明确接受原位保留并交接P3-04，原备份113/113匹配；详见§14.6.3。不冒充全部历史环境删除、全GUI重载或发布 | HITL | done | 2026-10-13T23:47:45.066884+08:00 |
 
@@ -1381,7 +1381,7 @@ AC-37分层验收：P1-11交付规程文档；P1-14只证明cleanup不删备份�
 | AC-12 | 项目四条新增与源仓库现行九行 ignore 各自正确 | 保留通用段；根精确断言独立于模板；真实 Git 正反探针、broad ignore 冲突、packages/graft 不误伤、重复构建不变宽 |
 | AC-13 | CLI/JSON/两安装器一致 | Python 命令真实运行；单 JSON；非零错误；Bash3.2/EOF/PTY；Windows PowerShell；project-only 不装全局工具 |
 | AC-14 | 验证语义不变且强制触发正确分层 | strict Book/BDD/Ponytail 序列保留，default/lite 不被旧全局句子强制；external/caveman/i-have-adhd/Evidence v2/Knowledge 回归 |
-| AC-15 | 文档与发布／sync／update 边界一致 | README.md/html、ENTRYPOINT、prompt、CHANGELOG、Onboard docs 对照；live 只在显式 sync |
+| AC-15 | 文档与发布／sync／update 边界一致 | 双语README、ENTRYPOINT、prompt、双语CHANGELOG、Onboard与现行使用指南对照；live只在显式sync，历史文档不改写为当前状态 |
 | AC-16 | 零旧运行依赖且历史保留 | 按 source/fixture/history/vendor 分类的扫描报告；允许清单外零旧调用／路由 |
 | AC-17 | 迁移数据完整、无越权 | tracked/ignored/untracked、自定义内容、平铺父子、undated；legacy-task.json 与私有原件按 AC-30 完整核对，不只测已知字段 |
 | AC-18 | 分层证明幂等、批次失败与受管数据／配置恢复 | 同运行时真实 partial receipt 重试、最后资源后态及共享资源只恢复一次；有绑定证据时 recovery 可执行，无证据／未知写入／用户修改则 blocked。live 成功批次核验全部当前状态、真实完整回执幂等与恢复输入，故障和逆向续作用新隔离现场证明，不伪造 live 失败历史。签名跨运行时仍只接受完整成功 apply 回执；不承诺旧 Trellis 可写回退，runtime_readiness 保持 not-verified，不据此恢复日常工作。历史合同与撤回依据见 §15.2、D-IMP-15 |
@@ -1812,6 +1812,7 @@ P3 两周观察窗口内完成 3–5 个真实任务，样本整体覆盖 Codex/
 | 2026-10-13T23:47:33.803848+08:00 | P3-05清理验收／checking | 用户批准精确五项删除并接受历史材料保留交接；计量venv/缓存和两个合成现场已删除，95份证据及五份配置字节不变，原生分词1921/3010/1883一致，稳定Graft0.21.1六工具协议通过，原基线备份113/113匹配。 |
 | 2026-10-13T23:47:45.066884+08:00 | P3-05收口／done | TaskStore完成；所选现行接线与可见Graft进程无旧TEMP依赖，37个历史根及原件/证据由用户接受原位保留并交接P3-04，保留既有浏览器及其cwd。不是全历史环境删除或全GUI重载，不授权发布、sync或备份销毁；下一步P3-03另行验收。 |
 | 2026-10-14T00:03:03.769895+08:00 | P3-03启动／strict | 用户要求开始最终发布审查并明确选择strict；TaskStore建立strict/user/main/in-progress。依赖P3-02/P3-05已done，启动候选准备和验证，commit/push/PR、合并/tag/Release仍需各自精确授权，未执行发布写入。 |
+| 2026-10-14T09:38:14.874428+08:00 | P3-03发布前文档门／checking | 用户追加全部关联现行文档和双语生命周期提示词、英文/中文逐项一致CHANGELOG，并授权新增文档PR。只读路由、probe认证前提及翻译发现已独立复核关闭；原生macOS686项/20skip和合成upgrade/recovery五步通过。稳定tag延后至新文档合并后实际main精确CI全绿；尚未发布。 |
 
 #### P2-03 旧当前项历史快照
 

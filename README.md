@@ -30,11 +30,11 @@ This repository is a **configuration and Skill source**, not a business applicat
 Paste this into your coding agent; replace the target agent if needed:
 
 ```text
-Install the sbtd-workflow-onboard Skill from https://github.com/KunoLu/640-skills
+Install only sbtd-workflow-onboard from KunoLu/640-skills at [reviewed v2 tag or commit]
 into my user-level global Skills directory for Codex, not this project.
-Use the official skills CLI to select only sbtd-workflow-onboard and copy the full directory.
-Show the source revision and resolved installation path. Do not run init/reset,
-install other tools, or change AGENTS/MCP configuration yet.
+First resolve that revision and verify it exists; do not silently substitute main or a v1 package.
+Use the official skills CLI and copy the full directory. Show the resolved source and target.
+Do not run init/reset, install other tools, or change AGENTS/MCP configuration yet.
 ```
 
 Prefer the terminal? With Node/npm available, use the [official Skills CLI](https://github.com/vercel-labs/skills):
@@ -45,7 +45,7 @@ npx --yes skills@latest add https://github.com/KunoLu/640-skills \
 npx skills list --global --agent codex
 ```
 
-`skills@latest` selects the CLI version, **not a Skill release**. An unpinned repository source reads the default branch, not the latest tag. Pinning syntax is `'KunoLu/640-skills#<reviewed-ref>@sbtd-workflow-onboard'`: replace `<reviewed-ref>` with a tag or commit you have reviewed, and follow that revision's documentation. **Do not combine a historical v1 package with the v2 setup prompts below**: its initialization may install or invoke the retired Trellis/GitNexus workflow. No v2 release tag is claimed here.
+`skills@latest` selects the CLI version, **not a Skill release**. An unpinned repository source reads the default branch, not the latest tag. Pinning syntax is `'KunoLu/640-skills#<reviewed-ref>@sbtd-workflow-onboard'`: replace `<reviewed-ref>` with an existing v2 tag or reviewed commit, and follow that revision's documentation. **Do not combine a historical v1 package with the v2 setup prompts below**: its initialization may install or invoke the retired Trellis/GitNexus workflow. For v1 data, use the migration prompt below instead of init/reset.
 
 **Bootstrap is not setup.** It copies the self-contained Onboard package; it does not execute `onboard.py`, install the remaining Skills or Python dependencies, configure MCP, or initialize projects. Find the actual installed directory rather than assuming a HOME path. For OMP or another host, confirm its supported Skills CLI agent identifier and discovery path instead of assuming Onboard's platform name is the same identifier.
 
@@ -91,6 +91,24 @@ These are **natural-language requests to your agent**, not new CLI commands. Rep
 | Retire detected legacy assets | `cleanup-legacy` | Display actual candidates, then obtain separate execution consent |
 | Restore an authorized batch | `recovery` | Plan and confirm restoration from trusted batch evidence; not a general undo command |
 
+The [first-time initialization prompt](#install) covers a new v2 installation after bootstrap. Use the following prompts for an existing installation or a v1 project; substitute the exact reviewed v2 source, project roots and configuration domains before execution.
+
+<details>
+<summary><strong>Run v2 init again — not a version upgrade</strong></summary>
+
+```text
+Use the reviewed v2 sbtd-workflow-onboard package to plan init for platform codex
+and the existing project /abs/project. I want project AGENTS.md installed.
+Inspect the installed package revision and interpreter dependencies first.
+Show plan --json, exact global Skills/AGENTS/MCP targets and project writes/backups;
+wait for my approval before init. Preserve tasks, identity, lessons and legacy data.
+Explain which valid Skill shells init will skip; do not claim their contents were upgraded.
+If version alignment is needed, stop and propose an explicit upgrade plan instead.
+Do not reset, migrate, remove legacy assets or enable hooks under this request.
+```
+
+</details>
+
 <details>
 <summary><strong>Inspection and project-only setup prompts</strong></summary>
 
@@ -129,14 +147,67 @@ Ask separately before host probes. Do not clean up old assets or sync other envi
 
 An isolated probe still rejects linked Skills by default. To retain a link, explicitly approve its physical target with `upgrade --phase authorize-link`, then pass the resulting document to `verify --probe --yes --link-authorization`. This grants only exact local target access and a temporary plain-directory projection; it does not replace the original link, follow nested links or prove a live session reload. See the [authorization commands and refusal boundaries](sbtd-workflow-onboard/REFERENCE.md#probe-skill-link-authorization).
 
+**Apply only the plan you have reviewed and approved:**
+
+```text
+I approve the exact upgrade scope and replace/preserve decisions already shown in
+[upgrade-plan file]. Use the matching trusted v2 Onboard executor and recheck the source,
+targets and private vault. Read plan_id from that file and run upgrade --phase apply
+with the required confirmation; do not ask me to transcribe hashes.
+Save the actual receipt and backups. If scope or state has changed, stop rather than silently
+replanning under this approval. On partial failure, report measured writes and the retry path.
+Do not probe hosts, migrate projects, clean up or sync other environments.
+```
+
+**Verify the applied upgrade without starting host probes:**
+
+```text
+Use upgrade --phase verify with [the approved plan] and [its actual upgrade receipt].
+Verify the installed package and selected resources against that exact baseline.
+Report disk, runtime/protocol, host loading and legacy cleanup separately; mark unexecuted
+layers unverified. Do not add --probe or --yes, repair configuration, or delete backups.
+```
+
+**Optional host and linked-Skill verification — approve the scope first:**
+
+```text
+Show the exact host probes proposed for [upgrade plan and receipt], including configuration
+domains, subprocesses, temporary projections and potential side effects. These upgrade probes
+need no real authentication or model request; do not read or copy credential files.
+Wait for my explicit probe approval.
+For a linked Skill, show its logical path, physical target, identity and content boundary.
+Only after I approve that target, use upgrade --phase authorize-link and preserve its output.
+Then run upgrade --phase verify --probe --yes with that authorization where required.
+Keep the original link and unrelated configuration; report isolated host loading separately
+from any live session reload. Unproven isolation is blocked, not bypassed; real model/behavior
+smoke requires its own scope and controlled authentication, outside this upgrade probe.
+```
+
+**Plan recovery of this upgrade, not a migration rollback:**
+
+```text
+Use recovery --phase plan with --upgrade-plan [plan] and --upgrade-receipt [receipt].
+Confirm the private vault is trusted, inspect current drift and show the exact restoration
+scope and limits. Save the recovery plan only to the approved private location.
+Wait for separate recovery approval before recovery --phase apply; use the actual
+--upgrade-recovery-plan and read its recovery_id for --confirm-recovery.
+Preserve user changes, backups and partial receipts; do not execute untrusted historical code.
+```
+
+These prompts map to the [implemented upgrade and recovery commands](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment). A successful `verify` does not grant cleanup permission; an old plan does not authorize a newly changed package or target set.
+
 **Use reset only when you intend to replace Skill content:**
 
 ```text
-Use sbtd-workflow-onboard to plan reset for platform codex and /abs/project.
-Explain that bundled Skills will be overwritten without backup and required external Skills
-reinstalled. Show affected paths and preserve detected React Bits tier/registry.
-Wait for approval before reset. Preserve tasks, developer identity, specs, lessons,
-handoffs and legacy data; do not treat reset as migration or cleanup.
+Use the reviewed v2 sbtd-workflow-onboard package to plan reset for platform codex
+and /abs/project. I want project AGENTS.md rewritten, subject to the displayed plan.
+Verify the package revision and interpreter dependencies. Explain that bundled Skills
+will be overwritten without backup and required external Skills reinstalled.
+Identify custom Skill content; if I need it preserved, stop for a separately approved backup
+or propose upgrade instead. Show all global/project targets, AGENTS backups and MCP impact;
+preserve detected React Bits tier/registry. Wait for approval before reset.
+Preserve tasks, developer identity, specs, lessons, handoffs and legacy data.
+Reset is not migration, cleanup, a full-machine upgrade, or an automatic rollback guarantee.
 ```
 
 </details>
@@ -144,14 +215,24 @@ handoffs and legacy data; do not treat reset as migration or cleanup.
 <details>
 <summary><strong>Legacy migration, cleanup and recovery prompts</strong></summary>
 
-**Plan a legacy migration:**
+**Migrate an SBTD v1 project to v2 — package upgrade and data migration are separate:**
 
 ```text
-Use sbtd-workflow-onboard to assess legacy Trellis/GitNexus data in /abs/project.
-Start read-only. Identify the exact project/global scope and the prerequisites for a migration
-plan, including a private vault, approved candidates and publication decisions.
-Preserve originals and unknown content. Show the plan and recovery boundary before requesting
-apply authorization. Deployment, host probes and cleanup require their own approvals.
+I use SBTD v1 in /abs/project and want to move to [reviewed v2 tag or commit]
+for [codex and/or omp, with the exact selected configuration domains].
+Start read-only: identify the installed Onboard version, old Trellis/GitNexus layout,
+project branch, custom rules, tasks/specs/lessons, shared HOME/Skills users and active processes.
+Do not run v1 init/reset, copy credentials, create directories or modify configuration yet.
+Separate the plan for upgrading the Onboard/Skills package from the project-data migration.
+If the old executor lacks the v2 upgrade entry point, show how to prepare the reviewed v2
+executor and preserve the existing installation; request that installation approval separately.
+Agree an external private vault, custodian, retained originals, publication decisions,
+approved candidates and recovery limits. Show the real migration plan before requesting apply.
+After authorized apply, request deployment approval separately; consume the bound
+manifest/receipts for new rules/Skills/wiring, then verify data, host behavior and recovery evidence.
+Only after verification, display batch and fresh cleanup candidates and request deletion
+approval separately. Keep unknown content and backups; do not promise writable Trellis rollback.
+Stop at each unapproved phase. Do not use reset as a substitute for upgrade or migration.
 ```
 
 **Request cleanup planning, not immediate deletion:**
@@ -366,7 +447,7 @@ Knowledge-base P1.1 produces read-only catalogs and smoke bundles; remote Eviden
 | Bootstrap / init / reset / project-only flowcharts | [Bootstrap](docs/assets/npx-skills-global-onboard-install.md) · [Init](docs/assets/onboard-skill-init.md) · [Reset](docs/assets/onboard-skill-reset.md) · [Project-only](docs/assets/onboard-init-projects.md) |
 | Upgrade / migration / cleanup / recovery | [Upgrade](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [Migration & recovery](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [Cleanup](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime) |
 | Global / project rules | [Global template](sbtd-workflow-onboard/templates/agents/AGENTS.global.md) · [Project template](sbtd-workflow-onboard/templates/agents/AGENTS.project.md) |
-| Release history / monitored versions | [CHANGELOG](CHANGELOG.md) · [ENTRYPOINT](ENTRYPOINT.md) |
+| Release history / monitored versions | [English CHANGELOG](CHANGELOG.md) · [中文变更日志](CHANGELOG.zh.md) · [ENTRYPOINT](ENTRYPOINT.md) |
 
 <details>
 <summary><strong>Manual setup after bootstrap, or from a cloned checkout</strong></summary>
@@ -429,7 +510,7 @@ AGENTS.md
 
 Ignore rules do not sanitize secrets, untrack existing files or authorize deletion. Task reports are local by default; publishing evidence requires redaction and a separately approved destination. **This template-source repository does not create `.feature` files**; its durable behavioral specifications use Markdown and existing tests.
 
-For source changes, assess both language READMEs, [CHANGELOG](CHANGELOG.md) and the [versioned automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md). Keep both languages semantically aligned without duplicating implementation logs. Ordinary edits do **not** sync installed copies or live automation. Repository-maintenance `sync` requires explicit authorization; `update` only advances the monitored baseline and archives the analyzed update. These are not Onboard upgrade commands or BDD sync requests.
+For source changes, assess both language READMEs, [English CHANGELOG](CHANGELOG.md), [Chinese CHANGELOG](CHANGELOG.zh.md) and the [versioned automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md). The changelogs must match entry for entry: same versions, dates, order, facts, URLs, commit SHAs and code identifiers; only prose language differs. Update the top unpublished section in both, and preserve published history. Ordinary edits do **not** sync installed copies or live automation. Repository-maintenance `sync` requires explicit authorization; `update` only advances the monitored baseline and archives the analyzed update. These are not Onboard upgrade commands or BDD sync requests.
 
 The native full-suite command remains `python -B -m unittest discover -s tests -p 'test_*.py'`. CI discovers that complete Linux set and partitions it into disjoint, duration-weighted module shards; Windows partitions its native scope without repeating overlapping PowerShell/Unicode selectors. macOS keeps its native scope. The existing check names aggregate all required shards; any failed, cancelled or missing shard blocks success. The minimum supported TOML-editor run remains a separate dependency variant, not a duplicate. Per-case timings, skip reasons and Chinese result summaries are retained as CI artifacts. Consult the [workflow](.github/workflows/validation.yml) and [runner](tests/run_ci.py) for exact scope. Source checks, installed-copy checks, real host loading and release acceptance remain separate evidence.
 

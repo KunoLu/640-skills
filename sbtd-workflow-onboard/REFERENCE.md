@@ -406,7 +406,7 @@ Unconfirmed `promote` / `archive` calls return read-only transfer previews. Othe
 - New file names are `docs/handoffs/{YYYY_mm_dd}-<sha256>.md`, with a fixed-length lowercase SHA-256 digest of the UTF-8 full task ID. Existing reversible full-ID hex names stay readable without renaming. Filename ownership is checked against the full `task_id`; the filename alone is never authority. Snapshot fields remain `schema_version`, `task_id`, `task_path`, `task_status`, `workflow_mode`, `mode_source`, `mode_note`, `project_root`, `branch`, `head` (null for unborn HEAD / non-Git), `created_at`, `content`, `policy`, and `redaction`. Content requires `goal` / `next_action` / `limitations` strings and `decisions` / `completed` / `remaining` / `changed_files` / `verification` / `do_not_repeat` string lists, plus optional JSON-compatible `presentation`; unknown keys are rejected.
 - `load(relative_path)` requires the closed schema version 1, a filename key matching the task ID's SHA-256 or legacy reversible hex, and the current `project_root`. Malformed, unowned or foreign files raise `TaskStateError`. Snapshots of any age can be explicitly loaded without changing the task. `reminders(now=None)` returns snapshots at most seven days old, latest per task, for matching root/branch and unfinished tasks; malformed or foreign files are skipped and each returned dict adds its `path`. No automatic session-start capability is claimed.
 
-Whether the Agent truly recommends first and pauses, invokes grill/DDD, or executes a mode's full method remains owned by the Skill rules and real-host proof, not by these return values. Windows, host wiring, automatic session-start restoration and legacy migration remain unclaimed.
+Whether the Agent truly recommends first and pauses, invokes grill/DDD, or executes a mode's full method remains owned by the Skill rules and real-host proof, not by these return values. Platform, host-wiring and migration acceptance require their own selected-version evidence. The library alone does not prove automatic session-start restoration.
 
 ## Developer Identity (P1-19)
 
@@ -427,7 +427,7 @@ Whether the Agent truly recommends first and pauses, invokes grill/DDD, or execu
 - Text-mode writes print the final developer result as well as preflight. Identity outcomes `conflict`, `blocked`, and `needs-*` exit 2; actual `failed` outcomes exit 5. Completed writes remain reported for either category.
 - Without `--developer` nothing changes: no command creates, repairs or requires an identity, and `reset` preserves any existing file.
 
-Ordinary resolve/plan/check/global installation never reads `.trellis/.developer`; authorized legacy identity migration remains the separately gated P1-12 task and is not claimed complete by this helper. The root installers forward the implemented public flags without adding a developer-specific option. Windows proof, full validation and release remain unclaimed.
+Ordinary resolve/plan/check/global installation never reads `.trellis/.developer`; authorized legacy identity migration remains separately gated and is not performed by this helper alone. The root installers forward the implemented public flags without adding a developer-specific option. Use the selected version's native-platform, integration and release evidence rather than inferring acceptance from the identity API.
 
 ## Migration Runtime
 

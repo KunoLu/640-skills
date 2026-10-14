@@ -2,7 +2,7 @@
 
 普通 `init`，不是 `--init-projects`。目标 Agent 平台在 Skill 里是**单数**：只选 `codex` / `claude` / `kimi` / `oh-my-pi|omp` 之一。平台只决定 CLI 与 MCP adapter，不决定全局 AGENTS 落点。
 
-`plan --json` 包含安装 operations、路径来源和只读 `sbtdInit` 检查；不执行 CLI 安装或创建可选状态。完整 v2 尚未发布，Graft／host／迁移仍按各自任务交付。
+`plan --json` 包含安装 operations、路径来源和只读 `sbtdInit` 检查；不执行 CLI 安装或创建可选状态。先核对已选择的 v2 tag/commit 与安装副本，版本状态以[中文变更日志](../../CHANGELOG.zh.md)及其[英文对应版](../../CHANGELOG.md)为准；可复制的首次及重复 init 提示词见[中文 README](../../README.zh.md#onboard-prompts)和[英文 README](../../README.md#onboard-prompts)。
 
 Required Question 4「要不要安装项目 `AGENTS.md`」必须单独确认。「逐项目汇总 AGENTS」只是汇报，不是同意写入。
 
@@ -97,4 +97,4 @@ flowchart TD
 | MCP | 交互配置；提示词没提则不要静默写 | 已有配置不自动改 |
 | Playwright / React Bits | 仅项目适用时询问 | 仍是条件项，不是全量重装 |
 
-`onboard.py init` 不代替 Agent/Graft 安装授权。Graft 使用独立 `install-graft`，不提前提供 graph/host/MCP 接线；project-only不进行全局安装。已有旧工具配置保留，不借本项清理。
+`onboard.py init` 不代替 Agent/Graft 安装授权。Graft 使用独立 `install-graft`；受管 Codex/OMP 接线在完整计划和确认后维护每个有效配置域的一条通用 MCP，项目初始化只维护本地图与围栏，不追加全局连接。project-only不进行全局安装。已有旧工具配置保留，不借本项清理；合法 Skill 壳被 init 跳过不代表内容已升级，版本对齐另走[upgrade](../../sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。

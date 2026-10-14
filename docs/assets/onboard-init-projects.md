@@ -8,6 +8,8 @@ project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥
 
 两安装器在可选 Playwright / React Bits 安装之前调用完整 `check-projects`，包含状态、目标和保护冲突；`--skip-project-agents` 仅排除用户未选择的 AGENTS 目标。Python 核心写入前再次检查所有所选根。下面展示核心写入流程，optional 安装仍各自确认。
 
+使用已审阅 v2 包执行；追加项目的可复制提示词见[中文 README](../../README.zh.md#onboard-prompts)和[英文 README](../../README.md#onboard-prompts)。已有 v1 数据先走显式 migration；project-only既不是全局包 upgrade，也不授权旧数据清理。
+
 ```mermaid
 flowchart TD
   start[调用 init-projects] --> entry{入口?}
