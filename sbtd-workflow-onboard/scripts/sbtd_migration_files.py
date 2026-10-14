@@ -742,6 +742,13 @@ def _capture_and_remove_file(
         holder.rmdir()
 
 
+def _add_note(error: BaseException, note: str) -> None:
+    if hasattr(error, "add_note"):
+        error.add_note(note)
+    else:  # Python 3.10: same attribute 3.11+ tracebacks render.
+        error.__notes__ = [*getattr(error, "__notes__", []), note]
+
+
 def _release_removal_holder(holder: Path, identity: os.stat_result) -> None:
     """Remove only the same empty directory we created, never unknown entries."""
     observed = _lstat(_canonical(holder))
@@ -801,12 +808,19 @@ def _remove_directory_files(target: Path, entries: list[dict[str, Any]]) -> None
             pending, holder = holder, None
             try:
                 _release_removal_holder(pending, identity)
+            except RetainedObjectError as retained:
+                # Callers and receipts record retained_refs; surface the
+                # retained holder and chain the original error as the cause.
+                _add_note(
+                    retained,
+                    f"raised while handling original error: {primary!r}",
+                )
+                raise retained from primary
             except Exception as release_error:
-                note = f"removal holder release also failed: {release_error!r}"
-                if hasattr(primary, "add_note"):
-                    primary.add_note(note)
-                else:  # Python 3.10: same attribute 3.11+ tracebacks render.
-                    primary.__notes__ = [*getattr(primary, "__notes__", []), note]
+                _add_note(
+                    primary,
+                    f"removal holder release also failed: {release_error!r}",
+                )
         raise
     finally:
         if holder is not None:
