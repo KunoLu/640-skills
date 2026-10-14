@@ -78,6 +78,15 @@ completed_at: null
 - 原有恢复/计量/受控host限制保留；P3-04仍planned，下一人工复核2026-10-27。正常备份保留至少到2026-10-28T11:30:23+08:00，之后也需独立精确处置授权；不自动删除。
 - 本状态记录走用户批准的docs/v2.0.0-release-record窄范围PR，精确CI/复核通过后合并；闭环前不声称记录已合入main。仅原来批准的release/v2.0.0与本记录分支在确认MERGED后清理；追加文档分支保留，不扩大删除范围。
 
+## 发布记录CI阻塞与获准隔离诊断
+
+- 记录PR121 head `c3d050ca8a1d29e2ce7274ed65e1856c1920d226`的CI38507559057 attempts1/2均在真实安装副本recovery apply子进程超过900秒；不改期限、不跳过测试、不在红灯合并。Onboard包/测试/CI/安装器与已发布SHA完全相同，根发布记录不是该夹具输入；不能仅凭相同源码判定失败可忽略。
+- 用户明确授权专用Windows隔离诊断，未授权生产修复或新patch发布。诊断分支`diagnose/windows-upgrade-recovery-timeout`不合并/不发布；首轮在记录提交上已推送取证，不强推改写历史。后续所有堆栈/ACL计时仅由`SBTD_UPGRADE_TRACE=1`启用，专用workflow只跑一个合成用例，保留900秒和全部断言。
+- 原生诊断run38519740668取得恢复子进程周期堆栈；run38522065660进一步实测：plan2.891s、apply396.531s、retry15.515s、recovery plan7.610s，recovery apply900.000s超时。隔离恢复进程完成1250次PowerShell ACL调用（create593/check657），累计868.900s；资源动作仍持续推进，不是已证明死锁。
+- 代码及堆栈闭环：`remove_reference`逐文件调用`_capture_and_remove_file`，每次新建`_private_sibling`并以独立PowerShell进行ACL创建/校验。此重复进程开销主导恢复期限；不归因于认证/模型或单次30秒ACL门失败。外层只是在等待隔离恢复子进程。
+- 建议独立修复重复私有holder/ACL启动开销，必须保留逐文件capture-before-delete、nofollow、checksum、并发新增/修改拒绝、原件及部分回执；不得简单提高900秒、削减fixture或取消ACL检查。修复范围和v2.0.1等后续发布尚待用户确认，v2.0.0 tag保持不动。
+- 原生/raw和中文汇总保存在本任务私有reports，核心为`windows-recovery-root-cause`，两次记录CI失败和两次诊断原文均保留。仅已确认MERGED的原release/v2.0.0分支按原授权删除；记录、追加文档与诊断分支保留。未知未追踪文件`nonexistent`保留且未入库。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
