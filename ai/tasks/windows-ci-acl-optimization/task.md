@@ -4,11 +4,11 @@ id: windows-ci-acl-optimization
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确选择strict用于Windows CI优化及ACL安全原语改动
-status: "in-progress"
+status: "done"
 branch: perf/windows-ci-acl
 created_at: '2026-10-14T18:32:31.998550+08:00'
-updated_at: "2026-10-14T18:32:34.668168+08:00"
-completed_at: null
+updated_at: "2026-10-14T20:34:17.036970+08:00"
+completed_at: "2026-10-14T20:34:17.036970+08:00"
 ---
 # v2.0.1 Windows CI耗时优化与进程内ACL证明
 
@@ -37,12 +37,12 @@ completed_at: null
 |---|---|---|
 | DDD | 未完整grill、无新领域规则 | not-needed |
 | DDIA | 私有目录所有权与证明语义 | confirmed（本轮补证）：权限决定无缓存、真实owner/DACL是事实源；trusted单controller命名空间与非原子mkdir+ACL旧边界不变，不冒充消除创建竞态 |
-| Legacy | 既有ACL判定行为 | needs-safety-net：既有native脚本对照及失败基线已刻画；补充强制foreign-owner、empty/NULL DACL实测待下一轮原生CI，读取失败为故障注入 |
+| Legacy | 既有ACL判定行为 | characterized：既有native脚本对照及失败基线保留；run38557031285已通过强制foreign-owner和empty/NULL DACL；读取失败为故障注入，未知ACE/创建竞态只做静态审查不冒充实测 |
 | Refactoring | 修改生产ACL原语与CI调度 | proceed / normal：不再扩展生产结构；复用既有verify_reports防止测量消费未验证分片 |
-| TDD/BDD | ACL判定与分片行为 | 源仓cleanup设计§9；选择器/权重六项review发现有red/green，43项本地通过（4 Windows skip）；新native ACL项待CI |
-| Project validation | 三平台原生CI、耗时对比 | 首轮ca3d520 run38552195519全绿并下载复验；新实测权重及review修正须最终head验证 |
-| Independent security/readability | ACL安全原语 | NativeAclSecurity、ShardRegressionReview、DedupBehaviorReview已独立复核；修正后无未解决changed finding，安全新增用例仍须原生实测 |
-| Release readiness | 安装/升级/恢复运行路径 | pending：仅PR交付，不发布 |
+| TDD/BDD | ACL判定与分片行为 | 源仓cleanup设计§9；选择器/权重六项review发现有red/green；97项本地通过（4 Windows skip），新增Windows必需ACL项实际passed |
+| Project validation | 三平台原生CI、耗时对比 | ca3d520/run38552195519及9677eed/run38557031285连续两轮成功；后者十job全绿、八份分片下载复验，Windows509/Linux2139/macOS686，skip事件33/50/20 |
+| Independent security/readability | ACL安全原语 | NativeAclSecurity、ShardRegressionReview、DedupBehaviorReview独立复核收敛，修正后无未解决changed finding；新native安全项已实际通过 |
+| Release readiness | 安装/升级/恢复运行路径 | ready：仅实现PR交付，尚未合并/发布；数据schema、备份归属、单controller/非原子创建边界保持 |
 
 ## 实施记录
 
@@ -55,8 +55,8 @@ completed_at: null
 - 独立审查：本轮实际调用NativeAclSecurity、ShardRegressionReview、DedupBehaviorReview。此前“子代理不可用”判断不成立，自审不算独立审查；已修复静默省略foreign-owner及调度/权重六项缺陷并补充有意义的回归。Gate历史顺序缺口如实保留，不倒填此前before-dev通过。
 - PR：#124，保持OPEN，未获本PR合并/发布授权。PR121/122已独立合并，不把其授权扩展到本PR。
 - 首轮完整原生CI：Windows508项/33skip事件，四片测试90.234/217.047/125.125/136.141秒；Linux2136项/49skip事件，三片544.075/854.212/812.598秒；macOS686项/20skip事件，280.639秒。未做任何去重删减。原始分片及比较证据保存在本任务私有reports；计时存在runner环境差异，不宣称受控性能实验。
-- 根据该轮native数据刷新Windows/Linux逐例权重，Windows预计约142秒/片（待实测）；保持用户批准的四片，暂不增加并发数。Linux仍三片，模块fixture单元形成下限；macOS保持一job，不为可接受耗时增加分片开销。
-- 去重：508项完整诊断中筛出100个覆盖重叠候选，12.849秒；行为审查仅确认1项同等fixture且被更强断言覆盖，0.141秒。具体清单见dedup-review.md，尚未应用，其他99项保留。先前六慢例合计253秒的口头数值有误，按已记录六个值合计277.6秒；最终以完整native报告为准。
+- 已用首轮native结果刷新权重并复跑：Windows四片测试133.703/141.781/193.047/201.578秒，最慢job墙钟235秒；Linux最慢job998秒；macOS349秒。恢复完整生命周期68.578秒通过，原900秒子进程期限不变。两轮Windows最慢job约244/235秒，保持批准的四片，不为微小额外收益增加并发。Linux保持三片，macOS单job。
+- 去重：508项完整诊断中筛出100个覆盖重叠候选，12.849秒；行为审查仅确认1项同等fixture且被更强断言覆盖，0.141秒。用户审阅具体清单后明确选择“全部保留，不增加排除规则”，本轮零排除，见dedup-review.md。先前六慢例合计253秒的口头数值有误，按已记录六个值合计277.6秒；最终以完整native报告为准。
 - README双语入口及CHANGELOG已更新，长期场景写入cleanup设计§9；版本化automation prompt现有第27行已约束完整互斥/同SHA/原生行为与成本，不需无意义改写；live automation未触碰。
 
 ## 验收场景
@@ -64,11 +64,21 @@ completed_at: null
 - Given新建私有目录；When在原生Windows创建并校验；Then进程内实现与PowerShell对照结论一致，且无需启动PowerShell。
 - Given目录被加入非受信Everyone/Users或Deny ACE、属主不符或为重解析点；When校验；Then拒绝且不改动目录。继承开启本身不是拒绝条件：按继承ACE的实际主体及类型判断，与旧PowerShell合同一致；新建私有目录的DACL仍主动保护以阻止继承。
 - Given分片计算；When新增用例无权重；Then按中位数估算并列出，不遗漏；When用例重复或分片遗漏；Then拒绝并集校验，保持平台计划范围及fixture生命周期。
-- Given去重后Windows范围；When按用例统计覆盖；Then生产代码行/分支覆盖与去重前一致，强制保留用例全部执行通过。
+- Given覆盖及行为冗余审查完成；When用户选择全部保留；Then不新增Windows排除规则，原用例全部保持并增加本轮回归，强制保留用例实际执行通过。
 - Given最终head；When三平台CI；Then全部通过，Windows墙钟显著下降，900秒恢复期限不变。
+
+## 最终交付边界
+
+实现验收提交`9677eed1419fe18f0de1a2207f2f44a21c49f6d4`，CI [38557031285](https://github.com/KunoLu/640-skills/actions/runs/38557031285)；raw/native与中文汇总保留本任务私有reports。最终记录提交只更新任务、用户去重选择及lesson，不更改载荷/测试，仍需以实际新head CI核验远端状态，不能套用旧SHA声称新head验证。
+
+用户选择保留全部用例是本轮去重的正式结果，不是遗漏。主收益来自进程内ACL；Linux分片再均衡、macOS保持不变已完成。双语README/CHANGELOG及长期场景完成；automation prompt第27行合同适用，无需改写；无live同步。长期lesson使用合法本地kuno身份，仅写自己topic/index marker。
+
+无本机真实安装或生产迁移，无备份销毁，不创建v2.0.1 tag/Release；诊断分支/原始失败证据保留，不并入PR。安全证明不承诺消除既有同UID并发换目录竞态或新增线程impersonation支持。性能数字来自原生CI观察，不是同机控制实验。
 
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-14T18:32:34.668168+08:00 | planned | in-progress | 用户确认ACL纳入v2.0.1、Windows4分片、覆盖一致去重及strict；开始实现 | 基线CI38532355204/38538887444；诊断run38522065660 |
+| 2026-10-14T20:34:12.024830+08:00 | in-progress | checking | 三路独立复核已闭环，精确候选三平台nativeCI通过；用户完成去重清单审阅 | run38557031285；97项本地验证；独立security/scheduling/behavior审查；用户选择全部保留 |
+| 2026-10-14T20:34:17.036970+08:00 | checking | done | ACL、四分片及权重优化完成；用户选择零去重；双语文档和原生验证齐备，PR124仅交付未合并发布 | 9677eed精确CI十job通过，Windows509/Linux2139/macOS686；八分片复验；Release Readiness ready |
