@@ -248,6 +248,78 @@ class MigrationFileTests(unittest.TestCase):
             self.assertEqual(later.read_bytes(), b"user edit")
             self.assertEqual((target / "new.txt").read_bytes(), b"user addition")
 
+    def _remove_with_edit_and_failing_release(self, release_side_effect, inspect=None):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "owned"
+            target.mkdir()
+            first = target / "a.txt"
+            later = target / "b.txt"
+            first.write_bytes(b"first")
+            later.write_bytes(b"second")
+            expected = snapshot(target)
+            rename = os.rename
+            real_release = sbtd_migration_files._release_removal_holder
+            released = []
+
+            def edit_after_capture(source, destination, *args, **kwargs):
+                result = rename(source, destination, *args, **kwargs)
+                if Path(source) == first:
+                    later.write_bytes(b"user edit")
+                return result
+
+            def failing_release(holder, identity):
+                released.append(holder)
+                release_side_effect(holder, identity, real_release)
+
+            with (
+                mock.patch("sbtd_migration_files.os.rename", side_effect=edit_after_capture),
+                mock.patch(
+                    "sbtd_migration_files._release_removal_holder",
+                    side_effect=failing_release,
+                ),
+                self.assertRaises(ContractError) as raised,
+            ):
+                remove_reference(target, expected, scope=root)
+
+            self.assertEqual(len(released), 1)
+            self.assertEqual(later.read_bytes(), b"user edit")
+            if inspect is not None:
+                inspect(raised.exception, released[0])
+            return raised.exception, released[0]
+
+    def test_directory_removal_keeps_holder_refs_and_original_when_release_retains(self):
+        def retain_holder(holder, identity, real_release):
+            # Unknown content makes the real rmdir-only release fail closed.
+            (holder / "unknown").write_bytes(b"foreign")
+            real_release(holder, identity)
+
+        def holder_kept(error, holder):
+            self.assertTrue((holder / "unknown").exists())
+
+        error, holder = self._remove_with_edit_and_failing_release(
+            retain_holder, holder_kept
+        )
+
+        self.assertIsInstance(error, RetainedObjectError)
+        self.assertIn(str(holder), [ref["path"] for ref in error.retained_refs])
+        self.assertIsInstance(error.__cause__, ContractError)
+        self.assertNotIsInstance(error.__cause__, RetainedObjectError)
+        self.assertTrue(
+            any("original error" in note for note in getattr(error, "__notes__", []))
+        )
+
+    def test_directory_removal_keeps_original_error_when_release_fails_otherwise(self):
+        def fail(holder, identity, real_release):
+            raise RuntimeError("release failed")
+
+        error, _ = self._remove_with_edit_and_failing_release(fail)
+
+        self.assertNotIsInstance(error, RetainedObjectError)
+        self.assertTrue(
+            any("release also failed" in note for note in getattr(error, "__notes__", []))
+        )
+
     def test_directory_removal_preserves_replaced_capture_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

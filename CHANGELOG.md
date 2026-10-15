@@ -19,6 +19,7 @@ The stable [v2.0.1 Release](https://github.com/KunoLu/640-skills/releases/tag/v2
 
 - Reduce repeated private-holder creation during managed directory removal and upgrade recovery. Files are grouped by parent directory and share an empty operation-local holder, while each capture still freshly validates private permissions, object identity, safe paths and content. No cross-call ACL cache, recursive deletion of unknown content, relaxed timeout or backup disposal is introduced.
 - Standardize agent-authored Chinese Markdown execution summaries with one `project-validation` template, separating run metadata, commands, scope, result tables, failed rounds/reruns, artifacts and limitations. Web UI coverage assessment becomes an appendix; retained historical reports are not rewritten, and formatting is not treated as test or release evidence.
+- Keep both errors visible when releasing an operation-local removal holder fails during an already failing managed directory removal: a retained holder is reported as `RetainedObjectError` with its `retained_refs`, chained from the original error; any other release failure is attached as a note to the original error, which still propagates. Release still only uses `rmdir` on the same empty holder; no recursive deletion is introduced.
 
 ## v2.0.0 (2026-10-14)
 
