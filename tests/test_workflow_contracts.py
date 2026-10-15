@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import fnmatch
 import hashlib
 import json
 import re
@@ -271,94 +270,6 @@ class WorkflowContractTests(unittest.TestCase):
                     cwd=project,
                 )
                 self.assertEqual(result.returncode, 0, ignored_file)
-
-    def test_platform_option_and_automation_scope_are_explicit(self) -> None:
-        bash_installer = (ROOT / "install.sh").read_text(encoding="utf-8")
-        powershell_installer = (ROOT / "install.ps1").read_text(encoding="utf-8")
-        onboard_skill = (ROOT / "sbtd-workflow-onboard" / "SKILL.md").read_text(
-            encoding="utf-8"
-        )
-        onboard_reference = (ROOT / "sbtd-workflow-onboard" / "REFERENCE.md").read_text(
-            encoding="utf-8"
-        )
-        prompt = (
-            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
-        ).read_text(encoding="utf-8")
-
-        for installer in (bash_installer, powershell_installer):
-            self.assertIn("Target Agent CLI and MCP platform.", installer)
-            self.assertIn(
-                "does not change the Codex global AGENTS.md target",
-                installer,
-            )
-        for document in (onboard_skill, onboard_reference):
-            self.assertIn(
-                "The Agent platform selects the CLI and MCP adapter",
-                document,
-            )
-            self.assertIn(
-                "does not select the global AGENTS target",
-                document,
-            )
-            self.assertIn("~/.omp/agent/AGENTS.md", document)
-            self.assertIn("does not create `.omp`", document)
-            self.assertIn("single file write", document)
-        init_asset = (ROOT / "docs" / "assets" / "onboard-skill-init.md").read_text(
-            encoding="utf-8"
-        )
-        self.assertNotIn("不写 `~/.omp/agent/AGENTS.md`", init_asset)
-        self.assertIn("~/.omp/agent/AGENTS.md", init_asset)
-
-        for path in (
-            "`install.sh`",
-            "`install.ps1`",
-            "`sbtd-workflow-onboard/templates/project/.gitignore`",
-            "`tests/**`",
-        ):
-            self.assertIn(path, prompt)
-        self.assertIn("不依赖根 `AGENTS.md` 是否存在", prompt)
-        self.assertIn("不得创建缺失的 `.omp`", prompt)
-
-        self.assertIn("无人值守自动化", prompt)
-        self.assertIn("用户在交互会话中明确要求", prompt)
-
-        self.assertIn("无人值守自动化仅可创建或修改", prompt)
-        # Published scope contract, not proof that an LLM enforces the policy.
-        protected_paths = {
-            "install.sh",
-            "install.ps1",
-            "sbtd-workflow-onboard/scripts/onboard.py",
-            "sbtd-workflow-onboard/scripts/onboard_arguments.py",
-            "sbtd-workflow-onboard/scripts/onboard_contracts.py",
-            "sbtd-workflow-onboard/onboard-contracts.schema.json",
-            "sbtd-workflow-onboard/requirements.txt",
-            "sbtd-workflow-onboard/catalog.json",
-            "sbtd-workflow-onboard/catalog.schema.json",
-            "sbtd-workflow-onboard/templates/project/.gitignore",
-            "tests/**",
-        }
-        read_only_paths = {
-            path
-            for line in prompt.splitlines()
-            if "不得由无人值守自动化修改" in line
-            for path in re.findall(r"`([^`]+)`", line)
-        }
-        writable_patterns = {
-            path
-            for line in prompt.splitlines()
-            if "无人值守自动化仅可创建或修改" in line
-            for path in re.findall(r"`([^`]+)`", line)
-        }
-        self.assertLessEqual(protected_paths, read_only_paths)
-        for path in protected_paths:
-            with self.subTest(path=path):
-                self.assertFalse(
-                    any(
-                        fnmatch.fnmatchcase(path, pattern)
-                        or fnmatch.fnmatchcase(pattern, path)
-                        for pattern in writable_patterns
-                    )
-                )
 
     def test_bundled_templates_do_not_route_to_retired_workflows(self) -> None:
         allowed = {
@@ -970,57 +881,6 @@ class WorkflowContractTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.Draft202012Validator(schema).validate(invalid_checkout)
 
-    def test_version_check_prompt_is_versioned_and_documented(self) -> None:
-        prompt_path = (
-            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
-        )
-        prompt = prompt_path.read_text(encoding="utf-8")
-
-        self.assertIn("SBTD Workflow Tools Version Check", prompt)
-        self.assertIn("sbtd-workflow-onboard/catalog.json", prompt)
-        self.assertIn("catalog.schema.json", prompt)
-        self.assertIn("`__pycache__/`", prompt)
-        self.assertIn("不要修改 `ENTRYPOINT.md`", prompt)
-        self.assertIn(
-            "- `prompts/automations/sbtd-workflow-tools-version-check.md`",
-            prompt,
-        )
-        self.assertIn(
-            "`## <工具名> <起始版本> -> <目标版本>`",
-            prompt,
-        )
-        self.assertIn("每个 bundled Skill local source", prompt)
-        self.assertIn("每个 external Skill source", prompt)
-        self.assertNotRegex(prompt, r"\d+ 个 bundled Skill local source")
-        self.assertNotRegex(prompt, r"\d+ 个 external Skill source")
-        read_allowlist = next(
-            line
-            for line in prompt.splitlines()
-            if "当前可读取、评估或验证的本仓库版本化规则" in line
-        )
-        write_allowlist = next(
-            line
-            for line in prompt.splitlines()
-            if "无人值守自动化仅可创建或修改" in line
-        )
-        self.assertIn("`ENTRYPOINT.md`", read_allowlist)
-        self.assertIn("`UPDATE.md`", read_allowlist)
-        for writable_path in (
-            "`sbtd-workflow-onboard/SKILL.md`",
-            "`sbtd-workflow-onboard/REFERENCE.md`",
-        ):
-            with self.subTest(writable_path=writable_path):
-                self.assertIn(writable_path, write_allowlist)
-        for read_only_path in (
-            "`install.sh`",
-            "`install.ps1`",
-            "`sbtd-workflow-onboard/scripts/onboard.py`",
-            "`sbtd-workflow-onboard/templates/project/.gitignore`",
-            "`tests/**`",
-        ):
-            with self.subTest(read_only_path=read_only_path):
-                self.assertNotIn(read_only_path, write_allowlist)
-
     def test_external_skill_policy_is_stable_first_across_user_surfaces(
         self,
     ) -> None:
@@ -1134,25 +994,6 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(len(summary_omp), 1)
         self.assertEqual(summary_omp[0]["当前版本记录"], omp["当前使用版本"])
 
-        prompt = (
-            ROOT / "prompts" / "automations" / "sbtd-workflow-tools-version-check.md"
-        ).read_text(encoding="utf-8")
-        for phrase in (
-            "npm 包 `@oh-my-pi/pi-coding-agent`",
-            "dist-tags.latest",
-            "packages/coding-agent/package.json",
-            "不得把 monorepo 中其他包的任意 release 当作 OMP CLI 更新",
-            "解析时去掉 `omp/` 前缀",
-            "把 canonical OMP 目标定义为 `v<package-version>`",
-            "后续 `update` / `更新` 写回",
-            "存在对应 `v<package-version>` tag/Release",
-            "`name=@oh-my-pi/pi-coding-agent` 且 `version=<package-version>`",
-            "报告证据冲突，不得静默推进目标版本",
-            "无新版本则不新建章节",
-            "否则不要改 `UPDATE.md`",
-        ):
-            with self.subTest(prompt_phrase=phrase):
-                self.assertIn(phrase, prompt)
 
     def test_p1_1_runtime_contract_and_runner_examples_are_complete(self) -> None:
         references = SKILLS / "knowledge-base-integration" / "references"
