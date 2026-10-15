@@ -541,4 +541,28 @@
 - 修复：保持发现路径集合及工具／profile 绑定，按精确根身份、实际 vendor 足迹、操作目标、原件及来源证明区分 file／absent 漂移；仅清理可消费完整原生升级回执及旧包原件承接历史信任，不将该能力传播给 followup。
 - 预防：不能修改旧 manifest 或要求用户恢复猜测配置来消除漂移。最后复验应位于耗时备份之后、真正副作用之前；失败回执保留封存引用和实测结果，序列化时不要重新解释已变化的 live alias。CLI 验证要经过真实参数解析及消费链，不以 mock 转发断言代替实际文件后态。
 
+## LESSON-20261015-kuno-pin-promotion-contract-closure: Pin Promotion Needs Consumer Closure
+
+- 日期：2026-10-15
+- 标签：graft, pin, native-runtime, ownership, environment, path-scope, validation
+- 适用场景：晋升固定第三方 CLI，尤其新增别名、自动接线或查询数据源时。
+- 严重级别：high
+- 来源：Graft 0.22.0 独立代码／安全审查、真实固定包 smoke 与拒绝路径回归。
+- 问题：更新包版本与策略资产后，旧策略摘要仍使部署拒绝；把官方 npm bin 直接写入持久绑定会破坏既有 ownership 消费者。新包还可通过继承环境和自动品牌迁移改变工具合同，并从此前未验证的笔记／技能树读取内容。
+- 根因：把版本探针成功当成完整能力重证，遗漏策略摘要、生产者／消费者和新上游读取面。
+- 修复：同步策略摘要；发现入口与 canonical 持久入口分别证明；锁定受管品牌并阻止隐式迁移／fetch，隔离新增环境输入；按上游实际 checkout 发现规则验证笔记及技能树，并在每请求前重验。
+- 预防：pin 晋升同时验证安装、生成配置的消费、真实 build/check/MCP/hook、父环境污染及新增读取路径；旧 stamp 不代表新版启动无副作用。版本／摘要复制断言不能替代真实消费链，源码验收、独立安装和 live 切换必须分别报告。
+
+## LESSON-20261015-kuno-strict-record-before-edit: Persist Strict Selection Before Editing
+
+- 日期：2026-10-15
+- 标签：strict, task-state, workflow, gates, recovery
+- 适用场景：用户明确选择 strict，或任务从只读分析转为可写实现。
+- 严重级别：high
+- 来源：用户指出 Graft pin 任务已开始实现，但 `ai/tasks` 没有任务记录。
+- 问题：已口头承诺 strict 并读取 Skill，却未调用 TaskStore 保存任务、模式和状态；旧活动指针仍指向无关的已完成任务。
+- 根因：把会话里的计划和 Skill 阅读当成已执行的工作流，将持久化推迟到实现之后。
+- 修复：按当前分支补建明确的 strict/user 任务，保留真实补录时间与顺序偏差；后续审查、RED/GREEN 和完成事件依据实际证据记录，不回填先前未执行的 Gate。
+- 预防：首个生产编辑前必须完成 TaskStore 保存并验证 task／index／active 三者指向一致；只读转可写时重新核对该前提。若保存失败，明确 strict 记录未完成，不用 Todo、模式口头承诺或旧任务指针替代。
+
 <!-- lessons:kuno:end -->

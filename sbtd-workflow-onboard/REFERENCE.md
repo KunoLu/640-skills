@@ -147,7 +147,7 @@ Normal onboarding may probe the target CLI read-only first, but collects the act
 
 ## Required Global Tools
 
-Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.21.1` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
+Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.22.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
 
 ```bash
 python scripts/onboard.py install-graft --json
@@ -161,6 +161,20 @@ When only telemetry opt-out is selected, use `install-graft --telemetry-only --y
 All managed Graft children receive `DO_NOT_TRACK=1`, an empty dotenv input, `DOTENV_CONFIG_QUIET=true`, and no inherited dotenv-debug or LLM/cloud activation settings. The installation child also uses `CI=1` to avoid this pin's detached postinstall path; runtime DNT is separately exercised without relying on CI. These child settings do not edit the user's global environment.
 
 `graft --version` is local-only; `graft version` invokes npm metadata and can return an offline/unreachable message. Check/plan never run the latter. A cached npm answer is not proof of connectivity; offline verification uses a real network control and empty per-case caches.
+
+Managed discovery accepts the package-owned npm entry `dist/bin/graft.js` and the internal `dist/cli.js`; generated MCP/hook bindings retain `dist/cli.js` so existing ownership verification remains compatible. Managed children discard inherited `TRAIL_*` settings, force `TRAIL_INVOKED_AS=graft`, and set `TRAIL_NO_FETCH=1` and `GRAFT_NO_TRAIL_SWITCH=1`; installing Trail elsewhere must not rename managed tools or trigger upstream wiring migration. Note lookup must stay within the selected root: ancestor checkouts outside it are rejected; non-Git roots include the upstream-discovered immediate child checkouts. Each effective checkout's `.trail` and `.claude/skills` trees must have contained real directories and single-link regular files, revalidated before each MCP request.
+
+### Graft pin acceptance scenarios
+
+This source repository keeps scenarios in documentation, not `.feature` files. Chinese scenario text uses English Gherkin keywords; test references describe behavioral coverage, not a separate Gherkin runner.
+
+- **Scenario: 官方 npm 入口可用** — Given 固定版本包的 npm 命令链接到 `dist/bin/graft.js`，When 检查本地可用性，Then 返回该固定版本可用；包外 shim 仍拒绝且不执行。覆盖：`test_check_accepts_official_npm_bin`、`test_check_rejects_package_name_in_unowned_shim_without_execution`。
+- **Scenario: 安装不扩展为接线切换** — Given 已展示目标前缀与遥测计划，When 明确确认安装，Then 校验固定包完整性及可运行版本并保持遥测关闭，And 不修改 MCP、PATH 或项目 stamp。覆盖：`test_install_without_confirmation_makes_zero_writes` 及独立前缀真实安装 smoke。
+- **Scenario: 新包沿用接线合同** — Given 官方 npm 入口已验证可用，When 生成受管 MCP/hook 配置，Then 使用同包 `dist/cli.js` 且通过既有 ownership 校验。覆盖：真实运行时的配置生成／消费 smoke。
+- **Scenario: 宿主环境不能触发 Trail 迁移** — Given 父进程设置 Trail 品牌且 PATH 存在 Trail，And 项目保留 Graft helper，When 受管 MCP 或 hook 启动，Then 工具仍为 `graft_*`，And 不自动迁移或改写项目接线。覆盖：真实固定包的品牌、upkeep、MCP 与 hook smoke。
+- **Scenario: 旧运行时或 stamp 不自动修复** — Given 包版本或 stamp 仍为 `0.21.1`，When 新守门入口启动，Then 拒绝执行且不改现场。覆盖：`test_missing_or_old_stamp_never_repairs_itself` 及旧版真实运行时／stamp smoke。
+- **Scenario: 新增笔记与技能读取不越界** — Given 笔记有效 checkout 位于选定根之外，或其 `.trail`／`.claude/skills` 包含链接、hardlink 或特殊文件，When 构图、hook、分析或 MCP 请求开始，Then 在读取正文前拒绝且保留现场。普通非 Git 根及范围内普通笔记仍可用。覆盖：`test_trail_notes_cannot_read_linked_or_special_files`、`test_regular_project_trail_notes_are_valid_without_a_graph`、`test_ancestor_note_checkout_is_outside_selected_scope`、`test_single_child_note_checkout_is_validated`、`test_session_start_skill_inputs_are_bounded`，以及 MCP 请求间笔记篡改 smoke。
+
 
 GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus assets are removed only through the confirmed cleanup path (see [Cleanup runtime](#cleanup-runtime)); the npm package, the GitNexus CLI and `~/.gitnexus` global data always remain untouched. Explicit Codex/OMP graph/MCP wiring is described below.
 

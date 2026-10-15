@@ -8,6 +8,11 @@
 
 ## v2.0.2（未发布）
 
+### 变更
+
+- 受管 Graft pin 从 `@nanonets/graft@0.21.1` 晋升到 `@nanonets/graft@0.22.0`。npm bin 现为 `dist/bin/graft.js`；registry `gitHead` 缺失，因此 pin 只保留 tarball URL 与 integrity，不再保存 git SHA。`openai` 与 `@anthropic-ai/sdk` 随包提供但不默认启用。受管安装仍须显式确认，拒绝 shell shim，并保持遥测关闭。旧 stamp 与旧 MCP 绑定在新 pin 下拒绝，须受管重建图并重部署。
+- 生成的绑定继续使用包内 canonical `dist/cli.js`。受管子进程清除继承的 `TRAIL_*`、固定 Graft 品牌、禁用 Trail fetch／自动切换，并在启动及每次 MCP 请求前校验新增消费的项目 `.trail` 树；拒绝链接或特殊文件笔记，避免读取选定仓库之外的内容。构图策略摘要随固定资产同步更新。
+
 ### 修复
 
 - 受管目录删除已失败时若释放本次操作的删除holder也失败，两个错误均保留可见：holder被保留时以携带 `retained_refs` 的 `RetainedObjectError` 报告，并以原始错误为其原因链；其他释放失败仅作为附注附加到原始错误，仍抛出原始错误。释放仍只对同一空holder使用 `rmdir`，不引入递归删除。

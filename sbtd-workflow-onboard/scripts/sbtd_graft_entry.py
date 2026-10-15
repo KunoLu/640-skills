@@ -1,6 +1,6 @@
 """Guarded native Graft MCP/hook launch seam (P1-04).
 
-This is the only path that may start the pinned ``@nanonets/graft@0.21.1``
+This is the only path that may start the pinned ``@nanonets/graft@0.22.0``
 native MCP server or its native hook module for a selected project. It exists
 because every upstream entry point (``graft mcp``, the SessionStart hook) runs
 ``runUpkeep`` → ``reconcileWiring`` at boot, and upstream self-maintenance is
@@ -17,8 +17,8 @@ So this launcher gates ALL native startup, then replaces the shim:
 
 1. ``validate_runtime`` proves the exact pinned package identity from
    metadata only (no execution): node and the CLI are nofollow ordinary
-   files and the CLI resolves exactly to ``dist/cli.js`` of a real
-   ``@nanonets/graft`` package whose ``package.json`` version is 0.21.1.
+   files and the CLI resolves to ``dist/cli.js`` or ``dist/bin/graft.js`` of a
+   real ``@nanonets/graft`` package whose ``package.json`` version is 0.22.0.
 2. ``validate_build_scope`` proves the selected root is safe for ANY native
    launch or build, even before a graph exists (the explicit-build case):
    no graft workspace index and no workspace-parent shape the pinned
@@ -34,7 +34,7 @@ So this launcher gates ALL native startup, then replaces the shim:
 3. ``validate_project`` routes through ``validate_build_scope`` and then
    requires a complete CURRENT native wiring state: an actual built wiring
    graph (``graft/.graph/wiring.json``) and the native stamp
-   (``graft/.cache/wiring-stamp.json``) whose version is exactly 0.21.1,
+   (``graft/.cache/wiring-stamp.json``) whose version is exactly 0.22.0,
    whose hosts are exactly ``["agents"]``, and whose four wiring opts are
    all false. With that stamp in place the native boot-time reconcile is
    a proven no-op. A missing, unreadable, stale or foreign stamp is never
@@ -466,7 +466,7 @@ def _reject_workspace_scope(root_real: Path) -> None:
 
 
 def _reject_unsafe_tree(graft_dir: Path) -> None:
-    """Nofollow walk of the generated tree: real dirs and single-link files.
+    """Nofollow walk of a native input tree: real dirs and single-link files.
 
     A native build writes ``INDEX.md``, cards and ``.graph``/``.cache``
     files through whatever already sits inside ``graft/`` — a symlink or
@@ -488,14 +488,14 @@ def _reject_unsafe_tree(graft_dir: Path) -> None:
                 ]
         except OSError:
             raise ContractError(
-                "tree-unsafe", "the generated graft tree cannot be inspected safely"
+                "tree-unsafe", "the native input tree cannot be inspected safely"
             ) from None
         for entry, info in listing:
             mode = info.st_mode
             if stat.S_ISLNK(mode) or _is_reparse(info):
                 raise ContractError(
                     "tree-unsafe",
-                    "the generated graft tree holds a link or reparse entry",
+                    "the native input tree holds a link or reparse entry",
                 )
             if stat.S_ISDIR(mode):
                 pending.append(Path(entry.path))
@@ -504,7 +504,7 @@ def _reject_unsafe_tree(graft_dir: Path) -> None:
                 continue
             raise ContractError(
                 "tree-unsafe",
-                "the generated graft tree holds a hardlinked or special entry",
+                "the native input tree holds a hardlinked or special entry",
             )
 
 
@@ -865,6 +865,43 @@ def _validate_concept_data(root_real: Path, graft_dir: Path, memo: set[str]) -> 
 # ---------------------------------------------------------------------------
 
 
+def _validate_note_scope(root: Path) -> None:
+    """Bound 0.22.0 note/skill reads to the selected root, without reading content."""
+    checkout = next((path for path in (root, *root.parents) if (path / ".git").exists()), None)
+    if checkout is not None and checkout != root:
+        raise ContractError(
+            "notes-scope-unsafe", "native notes would read an ancestor outside the selected root"
+        )
+    note_roots = [root]
+    if checkout is None:
+        try:
+            with os.scandir(root) as entries:
+                names = sorted(
+                    entry.name for entry in entries
+                    if not entry.name.startswith(".") and entry.is_dir(follow_symlinks=False)
+                )
+            # Match upstream childCheckouts; its note lookup has no build skip list.
+            note_roots.extend(
+                [root / name for name in names if (root / name / ".git").exists()][:64]
+            )
+        except OSError:
+            raise ContractError(
+                "notes-scope-unsafe", "native note checkouts cannot be inspected safely"
+            ) from None
+    for note_root in note_roots:
+        for parts in ((".trail",), (".claude", "skills")):
+            relative = (*note_root.relative_to(root).parts, *parts)
+            if not os.path.lexists(root.joinpath(*relative)):
+                continue
+            tree = _contained(
+                root, relative, code="tree-unsafe",
+                message="the native notes or skills tree cannot be resolved safely",
+            )
+            if not tree.is_dir():
+                raise ContractError("tree-unsafe", "the native notes or skills path is not a directory")
+            _reject_unsafe_tree(tree)
+
+
 def validate_build_scope(root: Path) -> None:
     """Prove the selected root is safe for ANY native launch or build.
 
@@ -886,6 +923,7 @@ def validate_build_scope(root: Path) -> None:
     root_real = _canonical_root(root)
     _reject_unsafe_build_config(root_real)
     _reject_workspace_scope(root_real)
+    _validate_note_scope(root_real)
     if not os.path.lexists(root_real / "graft"):
         return  # explicit build: nothing generated yet, nothing more to prove
     graft_dir = _contained(
@@ -909,10 +947,11 @@ def validate_runtime(node: Path, cli: Path) -> dict[str, str]:
     """Prove the exact pinned native runtime from metadata, without execution.
 
     Both paths must be absolute nofollow ordinary files. The CLI must resolve
-    exactly to ``dist/cli.js`` inside a real ``@nanonets/graft`` package whose
-    ``package.json`` version is exactly the pinned release; the npm bin shim
-    or any repointed path is not accepted. Returns the canonical node path,
-    the proven package CLI path, the package directory and the pinned version.
+    to the package-owned ``dist/cli.js`` or ``dist/bin/graft.js`` inside a real
+    ``@nanonets/graft`` package whose ``package.json`` version is exactly the
+    pinned release; unverified shell shims are not accepted. Returns the
+    canonical node path, the proven package CLI path, the package directory
+    and the pinned version.
     """
     node_path = Path(node)
     cli_path = Path(cli)
@@ -945,7 +984,7 @@ def validate_runtime(node: Path, cli: Path) -> dict[str, str]:
         )
     return {
         "node": os.path.realpath(node_path),
-        "cli": str(package_dir / "dist" / "cli.js"),
+        "cli": os.path.realpath(cli_path),
         "package": str(package_dir),
         "version": version,
     }
@@ -960,7 +999,7 @@ def validate_project(root: Path) -> dict[str, Any]:
     wiring graph (``graft/.graph/wiring.json``, a non-empty ordinary file
     physically contained in the root) and the native wiring stamp
     (``graft/.cache/wiring-stamp.json``) as strict unambiguous JSON in
-    exactly the pinned shape — version exactly 0.21.1, hosts exactly
+    exactly the pinned shape — version exactly 0.22.0, hosts exactly
     ``["agents"]``, all four wiring opts explicitly false. Anything
     missing, unreadable, stale, foreign or ambiguous fails closed; nothing
     is written or repaired, because a guessed stamp is precisely what makes
@@ -1946,7 +1985,7 @@ def _bind_runtime_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--entry",
         required=True,
-        help="absolute pinned @nanonets/graft package dist/cli.js",
+        help="absolute pinned @nanonets/graft dist/cli.js or dist/bin/graft.js",
     )
 
 

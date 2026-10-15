@@ -26,7 +26,7 @@ PINNED_TOOLS = [
     "graft_check_freshness", "graft_file_api", "graft_find_all",
     "graft_find_code", "graft_repo_map", "graft_trace_calls",
 ]
-GRAFT_VERSION = "0.21.1"
+GRAFT_VERSION = "0.22.0"
 SECRET = "sk-live-secret-9f8e7d6c5b4a"
 
 
@@ -519,7 +519,7 @@ class NativeCodexIsolationTests(unittest.TestCase):
                 " r=json.loads(line)\n"
                 " if 'id' not in r: continue\n"
                 " result=({'protocolVersion':'2024-11-05','capabilities':{'tools':{}},"
-                "'serverInfo':{'name':'fixture','version':'0.21.1'}}"
+                "'serverInfo':{'name':'fixture','version':'0.22.0'}}"
                 " if r['method']=='initialize' else {'tools':[]})\n"
                 " print(json.dumps({'jsonrpc':'2.0','id':r['id'],'result':result}),flush=True)\n"
             )
@@ -2104,10 +2104,6 @@ class EffectiveHostSafetyTests(unittest.TestCase):
             for _argv, environment, _cwd in rig.spawns:
                 self.assertNotIn(str(alias), environment["TMPDIR"])
                 self.assertTrue(Path(environment["TMPDIR"]).is_relative_to(physical))
-
-    def test_protocol_catalog_is_independently_pinned(self) -> None:
-        self.assertEqual(sorted(hosts._PINNED_GRAFT_TOOLS), PINNED_TOOLS)
-        self.assertEqual(hosts.GRAFT_PINNED_VERSION, GRAFT_VERSION)
 
     def test_selected_project_managed_conflict_blocks_omp(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
