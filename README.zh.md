@@ -499,6 +499,8 @@ Project-only 使用 `bash install.sh --platform codex --init-projects /abs/proje
 /graft
 /.graft
 __pycache__/
+/.pytest_cache/
+/.ruff_cache/
 AGENTS.md
 .chrome-devtools-mcp/
 .playwright-mcp/

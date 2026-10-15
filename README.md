@@ -508,6 +508,8 @@ This source repository's root `AGENTS.md` is **optional, ignored and local-only*
 /graft
 /.graft
 __pycache__/
+/.pytest_cache/
+/.ruff_cache/
 AGENTS.md
 .chrome-devtools-mcp/
 .playwright-mcp/
