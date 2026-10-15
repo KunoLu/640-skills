@@ -6,7 +6,9 @@
 
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
-## v2.0.2（未发布）
+## v2.0.2（2026-10-16）
+
+正式版 [v2.0.2 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2) 已发布。annotated tag 指向 `1d82494d74f6df9bca7dccef2da409f87091883e`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/38758808131)在 attempt 2 通过，首次 macOS job 因未能分配 hosted runner 而未执行。源码发布不执行本机安装、workflow sync、项目迁移或备份处置。
 
 ### 变更
 

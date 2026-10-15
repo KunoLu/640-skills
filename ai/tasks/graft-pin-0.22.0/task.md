@@ -4,11 +4,11 @@ id: graft-pin-0.22.0
 workflow_mode: strict
 mode_source: user
 mode_note: 用户声明初始即要求 strict。记录在实现开始后补写；补写前的源码改动不是 Gate 通过证据。
-status: "in-progress"
-branch: feat/graft-pin-0.22.0
+status: "done"
+branch: "main"
 created_at: '2026-10-15T16:57:23.053098+08:00'
-updated_at: "2026-10-15T22:53:34.332846+08:00"
-completed_at: null
+updated_at: "2026-10-16T07:14:12.624573+08:00"
+completed_at: "2026-10-16T07:14:12.624573+08:00"
 "blocked_reason": null
 ---
 把受管 Graft pin 从 `@nanonets/graft@0.21.1` 晋升到已核对的 `0.22.0`。
@@ -23,7 +23,7 @@ completed_at: null
 - 身份校验接受包内 `dist/cli.js` 或 `dist/bin/graft.js`，仍拒绝 shell shim。
 - 当前文档、安装回退、策略、契约测试与未发布 CHANGELOG 同步到 `0.22.0`。
 - 用户先选择新的独立运行时目录并完成源码／隔离运行时验收，随后明确授权 MCP、PATH、stamp 切换，并补充授权对齐已安装 Onboard；本机切换范围与结果见 [cutover.md](cutover.md)。不把两阶段的授权或验收混为一谈。
-- commit、push、tag／Release仍待最终确认，不授权sync或live automation变更。用户最新要求评估并清理冗余Graft安装目录；删除仅限展示实际清单并确认后的范围，备份销毁未授权。
+- 用户已授权commit/push/PR、CI通过后admin合并、对应两端开发分支删除，以及以精确提交 `1d82494d74f6df9bca7dccef2da409f87091883e` 发布v2.0.2 tag／Release；上述步骤均已完成。不授权sync或live automation变更。已确认的三个冗余Graft目录已删除，恢复归档和历史备份保留。
 - 历史 PRD、已发布 CHANGELOG、`graft-pin-0.21.1` 任务记录不改写。
 
 ## 验收
@@ -103,3 +103,28 @@ completed_at: null
 | 2026-10-15T22:47:15.269003+08:00 | checking | done | 本机npm全局统一、四项目图和获准清理完成；发布准备确认单独进行，未commit/push/tag/Release | global-consolidation.md; private batch cleanup reports and retained archive proofs |
 | 2026-10-15T22:53:28.360123+08:00 | done | planned | 用户授权提交推送PR、CI通过后合并，并在确认MERGED后删除本地和远程开发分支；tag/Release仍待确认 | 用户本轮授权；源码及本机部署已完成验收 |
 | 2026-10-15T22:53:34.332846+08:00 | planned | in-progress | 开始发布写集和隐私核对，仅640-skills仓库，不提交四业务项目或私有报告 | feat/graft-pin-0.22.0 branch; git status; gh repo identity |
+| 2026-10-15T23:19:13.979302+08:00 | in-progress | in-progress | Explicit branch rebinding from "feat/graft-pin-0.22.0" to "main": 用户授权PR合并后删除本地与远程开发分支；现已确认MERGED并切main，续接最终main CI验收 | PR126 MERGED; merge 1d82494d74f6df9bca7dccef2da409f87091883e; feature 400b39a5354f3cb354b96e3a1a960bf9b548c683 ancestor verified; branch deletion receipts |
+| 2026-10-15T23:19:19.921176+08:00 | in-progress | checking | PR精确head三平台CI及原生分片完整性通过，admin合并和两端分支清理已完成；等待最终main精确SHA CI | PR126; PR CI38755582265; main CI38758808131 |
+| 2026-10-15T23:43:05.772841+08:00 | checking | done | PR126 admin合并及本地远程开发分支清理完成；最终main精确SHA三平台CI和原生报告完整性通过；tag/Release等待用户确认 | PR126; merge 1d82494d74f6df9bca7dccef2da409f87091883e; PR CI38755582265; main CI38758808131 attempt2; reports/publication-20261015-225334/ |
+| 2026-10-16T07:11:46.123034+08:00 | done | planned | 用户明确授权以完整验证提交1d82494d74f6df9bca7dccef2da409f87091883e发布v2.0.2 annotated tag和GitHub Release | 本轮用户指令；main CI38758808131 attempt2 success；本地任务记录不进入tag |
+| 2026-10-16T07:11:52.314121+08:00 | planned | in-progress | 发布目标固定，开始精确tag和Release写入；不移动tag、不纳入工作树未提交内容 | release exact-SHA preflight |
+| 2026-10-16T07:14:06.457185+08:00 | in-progress | checking | v2.0.2 annotated tag和正式Release已发布，远端目标精确匹配指定SHA，双语发布日期补记校验通过 | https://github.com/KunoLu/640-skills/releases/tag/v2.0.2; annotated tag 8f851cfc8a88cdf86bc36ad6c0f7a4e2cecf0e75; CI38758808131 attempt2 |
+| 2026-10-16T07:14:12.624573+08:00 | checking | done | 用户授权的精确提交v2.0.2 tag/Release发布完成；发布后CHANGELOG及task记录本地保留，未移动tag或创建新源码提交 | GitHub release published_at2026-10-15T23:12:58Z; tag peeled 1d82494d74f6df9bca7dccef2da409f87091883e; reports/publication-20261015-225334/ |
+
+## PR 合并与发布前置结果
+
+- 已提交 `400b39a5354f3cb354b96e3a1a960bf9b548c683`，PR [#126](https://github.com/KunoLu/640-skills/pull/126) 在用户明确admin授权后合并，merge SHA为 `1d82494d74f6df9bca7dccef2da409f87091883e`。
+- PR精确head的CI [38755582265](https://github.com/KunoLu/640-skills/actions/runs/38755582265) 十job通过。最终main的CI [38758808131](https://github.com/KunoLu/640-skills/actions/runs/38758808131) attempt2通过；attempt1的macOS因hosted runner未分配而取消，未执行步骤，未当作测试通过或产品失败。
+- 两轮原生报告均下载并复验exact SHA与分片完整性：Linux2142、macOS687、Windows505，零重复／遗漏；失败尝试保留。
+- 确认GitHub MERGED、分支tip等于已验收head、被main包含且无worktree占用后，分别删除本地和远程 `feat/graft-pin-0.22.0`。本地main与origin/main一致，其他分支／worktree未动。
+- 私有原生／中文证据保存于本任务 `reports/publication-20261015-225334/`（实际目录以本轮报告位置为准）。本节及TaskStore完成事件为合并后本地记录，未冒充已提交或已进入上述CI。
+- PR合并阶段尚未创建v2.0.2 tag／Release；用户后续追加的精确提交发布见下节。四业务项目的AGENTS修改、全部私有报告及HOME备份不在本次提交范围。
+
+## v2.0.2 正式发布
+
+- 用户明确指定已验证提交 `1d82494d74f6df9bca7dccef2da409f87091883e`，本轮没有创建新的源码提交或将dirty任务记录放进tag。
+- annotated tag对象 `8f851cfc8a88cdf86bc36ad6c0f7a4e2cecf0e75`，远端peeled commit精确匹配用户指定SHA。
+- 正式Release：[v2.0.2](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2)，draft=false、prerelease=false、target_commitish为指定完整SHA；双语正文取自该提交的CHANGELOG，未上传私有报告。
+- GitHub published_at为 `2026-10-15T23:12:58Z`，本地日期 `2026-10-16`。双语CHANGELOG在发布后补记该日期与精确CI链接，不移动tag；这些补记与任务完成记录留在本地工作树，未冒充发布提交的一部分。
+- README.md、README.zh.md无需修改：现有入口引用Release／CHANGELOG且安装契约不变。版本化automation prompt无需修改：本轮只是已授权发布，不变更监控／同步范围；live automation未操作。
+- 发布操作与核验原始记录保存在 `reports/publication-20261015-225334/`；首次release list使用不支持的url字段，命令零写入失败后改为支持字段重试，失败记录保留。没有修改发布源码、重新运行旧CI或声称新的测试运行。

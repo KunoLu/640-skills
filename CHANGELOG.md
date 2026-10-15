@@ -6,7 +6,9 @@ English · [简体中文](CHANGELOG.zh.md)
 
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
-## v2.0.2 (Unreleased)
+## v2.0.2 (2026-10-16)
+
+The stable [v2.0.2 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2) is published. Its annotated tag points to `1d82494d74f6df9bca7dccef2da409f87091883e`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/38758808131) passed on attempt 2 after the first macOS job could not acquire a hosted runner. Source publication does not perform local installation, workflow sync, project migration or backup disposal.
 
 ### Changed
 
