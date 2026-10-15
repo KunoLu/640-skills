@@ -19,13 +19,13 @@
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
-| Codex | openai/codex | v0.154.0 | stable-only | 是 | 核心 Coding Agent |
-| OMP | can1357/oh-my-pi | v18.2.2 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
-| Caveman Skill Installer | JuliusBrussee/caveman | v2.7.0 | stable-only | 是 | 仅监控 `v*` installer / skill tags，忽略 `bin-v*` engine binary releases；`更新` 只回写 ENTRYPOINT 的 Caveman 版本记录（本表与“当前版本汇总”），不得改 `CAVEMAN_PINNED_REF` / revision / hash。payload 维护由正常 `init` / `reset` 按受管 family 的完整目录集合与内容指纹判定 `current` / `outdated`，已知旧版备份后升级；非 symlink 异常核心在不存在未知 companion 时修复，嵌套或顶层 symlink 一律 fail-closed 只报告；替换 / 备份仅限 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测。 |
+| Codex | openai/codex | v0.162.1 | stable-only | 是 | 核心 Coding Agent |
+| OMP | can1357/oh-my-pi | v18.11.0 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
+| Caveman Skill Installer | JuliusBrussee/caveman | v4.0.1 | stable-only | 是 | 仅监控 `v*` installer / skill tags，忽略 `bin-v*` engine binary releases；`更新` 只回写 ENTRYPOINT 的 Caveman 版本记录（本表与“当前版本汇总”），不得改 `CAVEMAN_PINNED_REF` / revision / hash。payload 维护由正常 `init` / `reset` 按受管 family 的完整目录集合与内容指纹判定 `current` / `outdated`，已知旧版备份后升级；非 symlink 异常核心在不存在未知 companion 时修复，嵌套或顶层 symlink 一律 fail-closed 只报告；替换 / 备份仅限 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测。 |
 | Graft | nanonets/graft | v0.21.1 | stable-only | 是 | 固定结构图 CLI / `@nanonets/graft` 受管 pin。ENTRYPOINT 基线只跟已发布 SBTD workflow 中一致的 `GRAFT_PINNED_VERSION` 与 `graft-build-policy.json` `version`；官方新版本只评估，不写本表。`update` / `更新` 不写回 Graft。 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
-| Playwright | microsoft/playwright | v1.63.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
-| Maestro | mobile-dev-inc/Maestro | cli-2.10.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
+| Playwright | microsoft/playwright | v1.64.1 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
+| Maestro | mobile-dev-inc/Maestro | cli-2.11.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
 | web-ui-autotest-generator | KunoLu/640-skills | bundled | repository-controlled | 否 | 内置 Web UI Playwright 测试资产生成 Skill |
 | React Bits Pro Skill | pro.reactbits.dev | manual | manual | 否 | React / shadcn UI 组件与 blocks 集成辅助 |
 | 待添加 | owner/repo | 未明确 | stable-only | 否 | 后续需要监控的新工具在此补充 |
@@ -323,14 +323,14 @@ handoff
 
 | 类别 | 工具 | 当前版本记录 |
 |---|---|---:|
-| Coding Agent | Codex | v0.154.0 |
-| Coding Agent | OMP | v18.2.2 |
-| Agent Output | Caveman Skill Installer | v2.7.0 |
+| Coding Agent | Codex | v0.162.1 |
+| Coding Agent | OMP | v18.11.0 |
+| Agent Output | Caveman Skill Installer | v4.0.1 |
 | 任务路由 | sbtd-task | bundled |
 | 结构分析 | Graft | v0.21.1 |
 | Web 诊断 | Chrome DevTools MCP | latest |
-| Web 回归测试 | Playwright | v1.63.0 |
-| 移动 E2E | Maestro | cli-2.10.0 |
+| Web 回归测试 | Playwright | v1.64.1 |
+| 移动 E2E | Maestro | cli-2.11.0 |
 | Web UI 测试资产 | web-ui-autotest-generator | bundled |
 | 前端 UI 组件辅助 | React Bits Pro Skill | manual |
 
