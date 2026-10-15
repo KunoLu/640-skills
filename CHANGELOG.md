@@ -8,6 +8,11 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ## v2.0.2 (Unreleased)
 
+### Changed
+
+- Promote the managed Graft pin from `@nanonets/graft@0.21.1` to `@nanonets/graft@0.22.0`. The npm bin is now `dist/bin/graft.js`; registry `gitHead` is absent, so the pin keeps the tarball URL and integrity and no longer stores a git SHA. `openai` and `@anthropic-ai/sdk` are bundled but not default-enabled. Managed install still requires explicit confirmation, blocks shell shims, and keeps telemetry off. Old stamps and old MCP bindings are rejected under the new pin and require a managed graph rebuild and redeployment.
+- Keep generated bindings on the package's canonical `dist/cli.js`. Managed children scrub inherited `TRAIL_*`, force Graft branding, disable Trail fetch/switch behavior, and validate the newly consumed project `.trail` tree before startup and each MCP request, rejecting linked or special-file notes instead of reading outside the selected repository. The build-policy digest is updated with its pinned asset.
+
 ### Fixed
 
 - Keep both errors visible when releasing an operation-local removal holder fails during an already failing managed directory removal: a retained holder is reported as `RetainedObjectError` with its `retained_refs`, chained from the original error; any other release failure is attached as a note to the original error, which still propagates. Release still only uses `rmdir` on the same empty holder; no recursive deletion is introduced.

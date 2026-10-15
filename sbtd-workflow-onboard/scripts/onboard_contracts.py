@@ -42,7 +42,7 @@ SCHEMA_PATH = Path(__file__).resolve().parents[1] / "onboard-contracts.schema.js
 SCHEMA_ID = "urn:sbtd:onboard-contracts:schema:1"
 GRAFT_BUILD_POLICY_PATH = SCHEMA_PATH.parent / "assets" / "graft-build-policy.json"
 GRAFT_BUILD_POLICY_SHA256 = (
-    "dc255f954ad8a5e3a9fb78114a71441f0a1ecd25d6eee8f53982e3458c324640"
+    "70cc0ada685fe417bce093470339ac96445d4a130a1c61968e57c97249bd4d6d"
 )
 
 # kind -> (schema $def name, payload digest key or None)

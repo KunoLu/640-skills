@@ -116,6 +116,7 @@
 - 受管MCP必须在每个可执行请求前复验当前图，不能只依赖启动证明或native no-refresh；Stop／部署替换后的长连接也须拒绝未证明图。Python启动环境隔离应先于守卫脚本，旧未隔离受管hook不得被当作foreign静默并存；无关hook事件不依赖已失效仓根。核对真实子进程退出／慢读响应，不把thread实现存在当作生命周期通过。
 
 - Graft候选版本以运行模块的精确pin/gitHead/integrity与官方固定版本证据为准，不静默升级latest。check/plan仅验证本地版本且HOME/项目零副作用；已有本地能力不因npm不可达而被判定缺失。安装必须展示计划并确认，验证native与telemetry持久状态；所有受管子进程DNT、dotenv及LLM/cloud环境边界必须真实验证，CI不能作为DNT通过的唯一理由。离线必须有真实网络正反控制与空cache，不用缓存latest冒充联网/断网证明；不提前生成Graft host/MCP配置，不清理用户旧GitNexus资源。
+- 上游新增品牌别名、自动迁移或笔记检索时，核对 canonical 绑定路径与 ownership 消费者一致、父进程品牌／HOME／cloud 参数隔离、匹配 stamp 是否仍足以阻止自动改写，以及新增读取树是否经过启动与逐请求范围校验。Graft/Trail 的 `TRAIL_*`、`GRAFT_NO_TRAIL_SWITCH`、`.trail` 只按固定包证据评估，不执行迁移、联网 fetch 或 live 接线。
 
 - 当前受管 Graft MCP 为每个有效 host 配置域一条 `sbtd-graft`，无固定 cwd/项目 root；launcher 从实际会话 cwd 选择并锁定最近真实 Git 仓/worktree，缺项目/图/旧 stamp/越界均拒绝，不能回退 demo 或父目录。只读评估全局无项目安装、批量与追加等价、项目初始化不写 HOME、Git 探针环境/PATH 隔离和旧项显式退役契约。`--graft-retire-legacy` 与不同旧运行时的私有 `--graft-legacy-bindings` 只由独立确认执行；无人值守版本检查不生成批准、不切换 live 配置、不停止连接或删除 TEMP/备份。
 

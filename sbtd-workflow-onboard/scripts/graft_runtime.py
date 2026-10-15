@@ -11,13 +11,12 @@ prints to stdout/stderr; callers own all presentation:
   never the network-bound ``graft version`` command).
 - ``install_graft(*, confirmed, telemetry_only=False)`` — plans (always
   read-only) and, only after explicit confirmation, installs the frozen
-  ``@nanonets/graft@0.21.1`` tarball with integrity verification and
+  ``@nanonets/graft@0.22.0`` tarball with integrity verification and
   conservative telemetry opt-out persistence.
 
 Pinned facts (registry-verified, do not "upgrade" to latest automatically):
-tarball integrity sha512-0CSgoGx+FyzgCkFDhM94pvPnYaTU9jL19BixqMmZ0eyQK618GINPHhQ5X
-tto7LcHdNiBGl5RFQcwJob6Mxq4nA==, registry gitHead
-375a37e0b6a21d28f12fce2d220d692726bb0730, Node >=20.
+tarball integrity sha512-UQ6VTzNYwRehZ5GXB/RZI/gdY9vkinMlEO4JKuqfvFu+7WKKE7dtf8cWsLtKDlQG/5yGGm5oBe7wS2Av5nXe7g==,
+registry repository ``trailhq/Trail-Code``, registry gitHead absent, Node >=20.
 
 Managed subprocesses always run with telemetry/trackable activation
 scrubbed: DO_NOT_TRACK=1, DNT=1, dotenv disabled via DOTENV_CONFIG_PATH and
@@ -48,13 +47,13 @@ import urllib.request
 from pathlib import Path
 
 GRAFT_PACKAGE = "@nanonets/graft"
-GRAFT_PINNED_VERSION = "0.21.1"
+GRAFT_PINNED_VERSION = "0.22.0"
 GRAFT_SPEC = f"{GRAFT_PACKAGE}@{GRAFT_PINNED_VERSION}"
-GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.21.1.tgz"
+GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.22.0.tgz"
 GRAFT_TARBALL_INTEGRITY = (
-    "sha512-0CSgoGx+FyzgCkFDhM94pvPnYaTU9jL19BixqMmZ0eyQK618GINPHhQ5Xtto7LcHdNiBGl5RFQcwJob6Mxq4nA=="
+    "sha512-UQ6VTzNYwRehZ5GXB/RZI/gdY9vkinMlEO4JKuqfvFu+7WKKE7dtf8cWsLtKDlQG/5yGGm5oBe7wS2Av5nXe7g=="
 )
-GRAFT_REGISTRY_GIT_HEAD = "375a37e0b6a21d28f12fce2d220d692726bb0730"
+GRAFT_REGISTRY_GIT_HEAD = None
 NODE_MIN_MAJOR = 20
 
 # npm >= 12 blocks lifecycle scripts by default; the pinned package needs its
@@ -84,6 +83,7 @@ NPM_INSTALL_TIMEOUT = 900
 
 _SCRUBBED_PREFIXES = (
     "GRAFT_",
+    "TRAIL_",
     "OPENROUTER_",
     "ORCAROUTER_",
     "OPENAI_",
@@ -98,7 +98,7 @@ _SCRUBBED_VARS = (
 
 _ADVICE_MISSING = (
     "Install the pinned Graft CLI with the managed install-graft flow after "
-    "explicit confirmation; it fetches the frozen @nanonets/graft@0.21.1 "
+    "explicit confirmation; it fetches the frozen @nanonets/graft@0.22.0 "
     "tarball, verifies its integrity, and disables anonymous telemetry."
 )
 
@@ -126,6 +126,10 @@ def _managed_env(base: dict[str, str], *, ci: bool) -> dict[str, str]:
     env.pop("CI", None)
     env["DO_NOT_TRACK"] = "1"
     env["DNT"] = "1"
+    # 0.22.0 also ships Trail; managed Graft must never rename or rewire a repo.
+    env["TRAIL_INVOKED_AS"] = "graft"
+    env["TRAIL_NO_FETCH"] = "1"
+    env["GRAFT_NO_TRAIL_SWITCH"] = "1"
     env["DOTENV_CONFIG_PATH"] = os.devnull
     env["DOTENV_CONFIG_QUIET"] = "true"
     if ci:
@@ -307,15 +311,18 @@ def _package_dir_from_path(path: Path) -> Path | None:
 
 
 def _locate_package(executable: str) -> tuple[Path, str] | None:
-    """Bind a command to the frozen package's actual CLI, not shim text.
+    """Bind a command to the frozen package, not unverified shim text.
 
-    npm's POSIX bin symlink (or the direct CLI path) must resolve exactly to
-    dist/cli.js. Unverified shell/Windows shims are blocked without execution;
-    their text or a nearby package does not prove the command's identity.
+    Accept the package-owned ``dist/cli.js`` or the 0.22.0 npm bin
+    ``dist/bin/graft.js``. Shell and Windows shims are still blocked without
+    execution; their text or a nearby package does not prove identity.
     """
     real = Path(os.path.realpath(executable))
     pkg_dir = _package_dir_from_path(real)
-    if pkg_dir is None or real != pkg_dir / "dist" / "cli.js":
+    if pkg_dir is None:
+        return None
+    allowed = {pkg_dir / "dist" / "cli.js", pkg_dir / "dist" / "bin" / "graft.js"}
+    if real not in allowed:
         return None
     version = _package_identity(pkg_dir)
     if version is None:
@@ -750,6 +757,9 @@ def _build_plan(env: dict[str, str], before: dict[str, object]) -> dict[str, obj
         "env": {
             "DO_NOT_TRACK": "1",
             "DNT": "1",
+            "TRAIL_INVOKED_AS": "graft",
+            "TRAIL_NO_FETCH": "1",
+            "GRAFT_NO_TRAIL_SWITCH": "1",
             "CI": "1",
             "DOTENV_CONFIG_PATH": os.devnull,
             "DOTENV_CONFIG_QUIET": "true",

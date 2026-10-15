@@ -30,7 +30,7 @@ def graft_state(root):
     (root / "graft/.cache").mkdir()
     (root / "graft/.graph/wiring.json").write_text('{"fixture":true}\n')
     stamp = {
-        "version": "0.21.1",
+        "version": "0.22.0",
         "hosts": ["agents"],
         "opts": {"global": False, "mcp": False, "hooks": False, "statusline": False},
         "at": "2026-09-19T00:00:00Z",
@@ -88,7 +88,7 @@ class GuardedLaunchTests(unittest.TestCase):
             package = base / "node_modules/@nanonets/graft"
             (package / "dist").mkdir(parents=True)
             (package / "package.json").write_text(
-                '{"name":"@nanonets/graft","version":"0.21.1"}'
+                '{"name":"@nanonets/graft","version":"0.22.0"}'
             )
             cli = package / "dist/cli.js"
             cli.write_text(
@@ -241,6 +241,99 @@ class BuildScopeGuardTests(unittest.TestCase):
                 self.assert_refused_readonly(base, lambda: validate_build_scope(root))
                 (root / "graft/pipe").unlink()
             self.assertIsNone(validate_build_scope(root))
+
+    def test_trail_notes_cannot_read_linked_or_special_files(self):
+        for kind in ("trail-link", "learnings-link", "note-link", "hardlink", "fifo"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                if kind == "fifo" and not hasattr(os, "mkfifo"):
+                    continue
+                base = Path(directory).resolve()
+                root = project_fixture(base)
+                outside = base / "outside"
+                outside.mkdir()
+                note = outside / "note.md"
+                note.write_text("---\ntitle: private note\n---\nforeign contents\n")
+                trail = root / ".trail"
+                if kind == "trail-link":
+                    trail.symlink_to(outside, target_is_directory=True)
+                else:
+                    trail.mkdir()
+                    learnings = trail / "learnings"
+                    if kind == "learnings-link":
+                        learnings.symlink_to(outside, target_is_directory=True)
+                    else:
+                        learnings.mkdir()
+                        target = learnings / "note.md"
+                        if kind == "note-link":
+                            target.symlink_to(note)
+                        elif kind == "hardlink":
+                            os.link(note, target)
+                        else:
+                            os.mkfifo(target)
+                self.assert_refused_readonly(base, lambda root=root: validate_project(root))
+                self.assertEqual(note.read_text(), "---\ntitle: private note\n---\nforeign contents\n")
+
+    def test_regular_project_trail_notes_are_valid_without_a_graph(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            notes = root / ".trail/learnings"
+            notes.mkdir(parents=True)
+            note = notes / "note.md"
+            note.write_text("---\ntitle: local note\n---\nproject contents\n")
+            before = snapshot(root)
+            validate_build_scope(root)
+            self.assertEqual(snapshot(root), before)
+
+    def test_ancestor_note_checkout_is_outside_selected_scope(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            parent = project_fixture(base)
+            selected = parent / "selected"
+            graft_state(selected)
+            self.assert_refused_readonly(base, lambda: validate_project(selected))
+
+    def test_single_child_note_checkout_is_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            root = base / "workspace"
+            root.mkdir()
+            child = root / "node_modules"
+            (child / ".git").mkdir(parents=True)
+            notes = child / ".trail/learnings"
+            notes.mkdir(parents=True)
+            target = notes / "note.md"
+            target.write_text("local note\n")
+            validate_build_scope(root)
+            target.unlink()
+            victim = base / "private.md"
+            victim.write_text("private contents\n")
+            target.symlink_to(victim)
+            self.assert_refused_readonly(base, lambda: validate_build_scope(root))
+
+    def test_session_start_skill_inputs_are_bounded(self):
+        for kind in ("parent-link", "skill-link", "hardlink", "fifo"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                if kind == "fifo" and not hasattr(os, "mkfifo"):
+                    continue
+                base = Path(directory).resolve()
+                root = project_fixture(base)
+                (root / ".trail").mkdir()
+                outside = base / "external"
+                (outside / "skills" / "foreign").mkdir(parents=True)
+                victim = outside / "skills/foreign/SKILL.md"
+                victim.write_text("foreign skill\n")
+                if kind == "parent-link":
+                    (root / ".claude").symlink_to(outside, target_is_directory=True)
+                else:
+                    skill = root / ".claude/skills/local/SKILL.md"
+                    skill.parent.mkdir(parents=True)
+                    if kind == "skill-link":
+                        skill.symlink_to(victim)
+                    elif kind == "hardlink":
+                        os.link(victim, skill)
+                    else:
+                        os.mkfifo(skill)
+                self.assert_refused_readonly(base, lambda root=root: validate_project(root))
 
     def test_poisoned_graph_paths_and_spans_refused_readonly(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -511,7 +604,7 @@ def fake_runtime_fixture(base):
     (package / "dist/claude").mkdir(parents=True)
     (package / "dist/cli.js").write_text("// pinned cli placeholder\n")
     (package / "package.json").write_text(
-        '{"name":"@nanonets/graft","version":"0.21.1"}'
+        '{"name":"@nanonets/graft","version":"0.22.0"}'
     )
     (package / "dist/claude/hooks.js").write_text("// pinned hook module\n")
     return package

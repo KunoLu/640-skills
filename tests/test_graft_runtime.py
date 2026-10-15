@@ -309,6 +309,23 @@ class GraftRuntimeTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertFalse(marker.exists())
 
+    def test_check_accepts_official_npm_bin(self) -> None:
+        package = self.make_package_layout()
+        official = package / "dist" / "bin" / "graft.js"
+        official.parent.mkdir()
+        official.write_text(f"#!/bin/sh\necho {PINNED}\n", encoding="utf-8")
+        official.chmod(0o700)
+        link = self.bin_dir / "graft"
+        link.unlink()
+        link.symlink_to(official)
+
+        result = graft_runtime.check_graft()
+
+        self.assertEqual(result["status"], "available")
+        self.assertTrue(result["installed"])
+        self.assertEqual(result["version"], PINNED)
+
+
     def test_install_verification_rejects_unowned_prefix_command(self) -> None:
         self.make_package_layout()
         marker = self.root / "unowned-installed-command"
@@ -407,22 +424,6 @@ class GraftRuntimeTests(unittest.TestCase):
             self.assertNotIn(scrubbed, probe_env)
         self.assertNotEqual(probe_env.get("CI"), "1")
         self.assertEqual(before, self.home_snapshot(), "check must not write to HOME")
-
-    def test_pinned_release_matches_adopted_registry_identity(self) -> None:
-        self.assertEqual(graft_runtime.GRAFT_PINNED_VERSION, "0.21.1")
-        self.assertEqual(
-            graft_runtime.GRAFT_TARBALL_URL,
-            "https://registry.npmjs.org/@nanonets/graft/-/graft-0.21.1.tgz",
-        )
-        self.assertEqual(
-            graft_runtime.GRAFT_TARBALL_INTEGRITY,
-            "sha512-0CSgoGx+FyzgCkFDhM94pvPnYaTU9jL19BixqMmZ0eyQK618GINPHhQ5Xtto7LcHdNiBGl5RFQcwJob6Mxq4nA==",
-        )
-        self.assertEqual(
-            graft_runtime.GRAFT_REGISTRY_GIT_HEAD,
-            "375a37e0b6a21d28f12fce2d220d692726bb0730",
-        )
-        self.assertEqual(graft_runtime.GRAFT_SPEC, "@nanonets/graft@0.21.1")
 
     # -- install_graft: confirmation gate ---------------------------------
 

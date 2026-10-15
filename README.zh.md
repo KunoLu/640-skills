@@ -404,6 +404,8 @@ Onboard 使用 **Ponytail skill-only provider**。官方 Ponytail plugin 已启�
 
 Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/scripts/graft_runtime.py)固定。每个有效 Codex／OMP 配置域只有一条全局 `sbtd-graft` 连接，按启动 cwd 锁定真实仓库／worktree；项目初始化准备本地图。不做共同父目录多项目图、不隐式开启 cloud enrichment、不静默替换旧绑定。Codex hooks 单独 opt-in；OMP 初始化不写 hooks。[接线契约](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
 
+即使本机安装了 Trail，受管 Graft 也保持 Graft 命令／工具合同：子进程禁用自动 Trail 切换并隔离继承的 Trail 配置。项目 `.trail` 笔记与原生图输入同样执行拒绝链接／特殊文件的范围检查。见 [pin 验收场景](sbtd-workflow-onboard/REFERENCE.md#graft-pin-acceptance-scenarios)。
+
 **只报告实际执行结果。** 报告型测试优先原生命令；保留失败轮次、命名后的 native／raw 报告及同 stem **中文**汇总。区分 `full-stack`、`contract-backed`、`mock-backed`／`app-mocked`、`backend-only`、`smoke-only` 和 `blocked`；报告已生成不等于测试通过。dirty 本地证据不代表精确 PR head 的 CI 证明。
 
 Agent 编写的执行汇总统一使用[固定中文报告模板](sbtd-workflow-onboard/templates/skills/project-validation/references/run-summary.zh-CN.md.template)：结论与统计、运行信息、命令、BDD／范围、逐例结果、失败与复跑、API URI 覆盖、产物与状态、限制。保留失败轮次及源码／部署边界；无法提供的字段必须写原因，不填造数值。覆盖率评分作为附录，不能替代执行结果。历史报告不改写；已有证据的重新排版须另存并标明预览，不代表新的测试运行。
