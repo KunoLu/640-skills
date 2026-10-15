@@ -14,6 +14,7 @@
 - 根因：automation prompt 没有明确区分“每日检查”和用户手动输入 `更新` / `update` 后的写回动作，也没有要求 `UPDATE.md` 必须使用中文。
 - 修复：每日自动化只读取 `ENTRYPOINT.md` 当前版本作为固定比对起点，只用中文刷新 `UPDATE.md`，不得写回 `ENTRYPOINT.md`；只有用户手动输入 `更新` / `update` 时才允许更新版本号并归档。
 - 预防：后续涉及自动化写入项目基线文件时，必须在 prompt 和 `AGENTS.md` 中同时明确“只读基线”和“手动确认写回”的边界。
+- 现行边界：历史修复仍然禁止用官方工具新版本或每日检查推进其他工具的 `ENTRYPOINT.md` 版本。Graft 例外只同步已发布 workflow pin，不经 `update`，也不要求 `UPDATE.md` 章节；以版本化 automation prompt 和 `version-check-scope.md` 的 Graft 基线同步为准。
 
 ## LESSON-20260701-config-excerpt-repo-boundary: Config Excerpt Repo Boundary
 

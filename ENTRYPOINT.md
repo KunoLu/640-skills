@@ -9,20 +9,20 @@
 > `ponytail` / `ponytail-review` / `ponytail-audit` / `ponytail-debt` 作为 required external Skills 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；官方 Ponytail plugin 与 Onboard stable provider 不得同时启用，检测到已启用 plugin 时 check / init / reset 阻断并交由人工处理。Ponytail 版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
 > `i-have-adhd` 同为 required external Skill 由 Onboard stable set 统一安装和管理：缺失即补装、失败即阻断；版本基线只以 `assets/external-skills/stable/MANIFEST.json` 为事实源，不纳入下方版本监控表。
 > 本仓库当前可复用模板和本地安装 / 重置自动化集中在 `sbtd-workflow-onboard/`，旧 `agents/` 和 `skills/` 顶层目录已移除。
-> SBTD 自身发布状态与使用示例以[中文变更日志](CHANGELOG.zh.md)、[英文 CHANGELOG](CHANGELOG.md)、[中文 README](README.zh.md)和[英文 README](README.md)为准；首次 v2 初始化、已有环境 init/reset、v1→v2 迁移采用各自提示词和确认门。两份变更日志逐项同义，下表仍是外部工具监控基线，不因 SBTD 发布或文档同步自动改写。
+> SBTD 自身发布状态与使用示例以[中文变更日志](CHANGELOG.zh.md)、[英文 CHANGELOG](CHANGELOG.md)、[中文 README](README.zh.md)和[英文 README](README.md)为准；首次 v2 初始化、已有环境 init/reset、v1→v2 迁移采用各自提示词和确认门。两份变更日志逐项同义。下表仍是外部工具监控基线，不因 SBTD 发布或文档同步改写其他工具；唯一例外是 Graft 的版本号，已发布 workflow 的受管 pin 变化时由版本检查按第 0 节同步。
 
 ## 0. 版本监控配置
 
 > 自动化任务优先读取本章节。后续如需新增指定工具，在下表继续追加即可。
 >
-> 自动化必须处理所有“是否启用监控”为“是”的工具。`update` / `更新` 必须把 `UPDATE.md` 对应章节的目标版本写回本表和“当前版本汇总”。OMP 监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`）；版本字段使用 GitHub tag 格式 `v<semver>`。
+> 自动化必须处理所有“是否启用监控”为“是”的工具。除 Graft 外，`update` / `更新` 必须把 `UPDATE.md` 对应章节的目标版本写回本表和“当前版本汇总”。Graft 的当前使用版本不由官方 Graft 发行或 `update` 写回；只在已发布的 SBTD workflow 版本中的受管 pin 变化时，由版本检查按该 pin 同步本表、“当前版本汇总”和“Graft 当前使用要点”中的版本号。OMP 监控对象是 npm `@oh-my-pi/pi-coding-agent`（CLI `omp`）；版本字段使用 GitHub tag 格式 `v<semver>`。
 
 | 工具 | GitHub 仓库 | 当前使用版本 | 版本通道策略 | 是否启用监控 | 备注 |
 |---|---|---:|---|---|---|
 | Codex | openai/codex | v0.154.0 | stable-only | 是 | 核心 Coding Agent |
 | OMP | can1357/oh-my-pi | v18.2.2 | stable-only | 是 | Oh My Pi Coding Agent / `@oh-my-pi/pi-coding-agent` |
 | Caveman Skill Installer | JuliusBrussee/caveman | v2.7.0 | stable-only | 是 | 仅监控 `v*` installer / skill tags，忽略 `bin-v*` engine binary releases；`更新` 只回写 ENTRYPOINT 的 Caveman 版本记录（本表与“当前版本汇总”），不得改 `CAVEMAN_PINNED_REF` / revision / hash。payload 维护由正常 `init` / `reset` 按受管 family 的完整目录集合与内容指纹判定 `current` / `outdated`，已知旧版备份后升级；非 symlink 异常核心在不存在未知 companion 时修复，嵌套或顶层 symlink 一律 fail-closed 只报告；替换 / 备份仅限 `caveman`、`caveman-*`、`cavecrew`、`cavecrew-*`，更宽的 `caveman*` / `cavecrew*` 前缀仅用于 symlink 侦测。 |
-| Graft | nanonets/graft | v0.21.1 | stable-only | 是 | 固定结构图 CLI / `@nanonets/graft` npm pin；只监控稳定版本，采用时另行评估能力边界 |
+| Graft | nanonets/graft | v0.21.1 | stable-only | 是 | 固定结构图 CLI / `@nanonets/graft` 受管 pin。ENTRYPOINT 基线只跟已发布 SBTD workflow 中一致的 `GRAFT_PINNED_VERSION` 与 `graft-build-policy.json` `version`；官方新版本只评估，不写本表。`update` / `更新` 不写回 Graft。 |
 | Chrome DevTools MCP | ChromeDevTools/chrome-devtools-mcp | latest | stable-only | 否 | Web 运行时诊断 / MCP 浏览器检查 |
 | Playwright | microsoft/playwright | v1.63.0 | stable-only | 是 | Web E2E / 回归测试 / Playwright MCP |
 | Maestro | mobile-dev-inc/Maestro | cli-2.10.0 | stable-only | 是 | Android / iOS / Hybrid App E2E |
@@ -236,7 +236,7 @@ handoff
 | 项目 | 当前结论 |
 |---|---|
 | 当前定位 | 固定版本结构图、影响分析和结构证据辅助 |
-| 固定版本 | `@nanonets/graft@0.21.1` npm pin；不使用 latest，版本变化需重新证明能力和遥测边界 |
+| 固定版本 | `@nanonets/graft@0.21.1` npm pin；不使用 latest。监控表版本只在已发布 workflow 的该 pin 变化后由版本检查同步，不由官方发行或 `update` 写回。版本变化仍需重新证明能力和遥测边界 |
 | 安全边界 | 受管入口持续 `DO_NOT_TRACK=1`，禁止 `--deep`、`blast --name`、LLM / cloud、代码或查询上传；父目录不建图 |
 | 使用条件 | 只对明确授权的单仓根调用；安装前确认固定包、native lifecycle 与 telemetry 变更 |
 | 不可用时 | 不循环安装；使用源码 / LSP / contract 补充，不以空图或 exit 0 证明无影响 |

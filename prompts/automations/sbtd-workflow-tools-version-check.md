@@ -19,7 +19,7 @@
 
 从 `ENTRYPOINT.md` 的 `## 0. 版本监控配置` 按表头解析全部“是否启用监控＝是”的行，至少记录工具、仓库、当前使用版本、通道策略、备注。禁用工具不补查、不新增监控行。
 
-- **唯一比较起点是ENTRYPOINT中的当前使用版本**。已有UPDATE目标、本机CLI版本、最新Release及SBTD自身发布版本都不推进该起点。不要修改 `ENTRYPOINT.md` 的版本字段。
+- **除 Graft 外，唯一比较起点是ENTRYPOINT中的当前使用版本**。已有UPDATE目标、本机CLI版本、最新官方Release及SBTD自身发布版本都不推进这些起点。不要用官方工具发行修改 `ENTRYPOINT.md` 的版本字段。Graft 不跟官方 Graft 发行走，只按下方“Graft 基线”从已发布 workflow pin 同步。
 - 对每个工具独立处理：某工具的认证失败、限流、超时、来源冲突或缺失不阻止其他工具完成，也不能被写成“无更新”。不通过交互提问、登录或安装来解除自动化权限。
 - 默认读取官方GitHub releases/tags；npm只用于已有明确包映射。区分HTTP失败、空列表与确无新版本；读取必要分页直到覆盖目标及基线区间，不以第一页、API返回顺序、发布日期或字符串字典序判最新。排除draft，并按semver和通道共同过滤prerelease。
 - 短暂网络错误可对同一只读请求有限重试，最多两次；429尊重Retry-After，等待超出本轮可用执行窗口就停止该工具。缓存可辅助定位，但不能冒充本次成功查询。禁止无限等待、安装工具或改代理。
@@ -32,7 +32,7 @@
 | Codex | `openai/codex` 的CLI release/tag；`rust-vX.Y.Z`映射为ENTRYPOINT风格`vX.Y.Z`，保留原tag用于源码/compare定位。若出现`vX.Y.Z`别名须核对指向；同版本不同commit报告冲突 | 不把SDK、其他产品或未发布main当CLI stable；本机`codex --version`不能替代基线 |
 | OMP | npm 包 `@oh-my-pi/pi-coding-agent`；按下节的npm/tag/包内容三方核对 | 不监控monorepo任意包release，不把裸版本或`omp/`写入基线/标题 |
 | Caveman Skill Installer | `JuliusBrussee/caveman`纯`v<semver>` installer/skill tag线 | 忽略`bin-v*`、`cli-v*`、`pi-v*`等产品线，即使releases/latest指向它们 |
-| Graft | ENTRYPOINT指定仓库stable发行；同时读运行模块的固定pin/source证据 | 发现新版本只供评估，不能修改运行pin、gitHead、integrity或遥测/接线策略 |
+| Graft | 已发布 SBTD workflow tag 中的受管 pin：`GRAFT_PINNED_VERSION` 与 `graft-build-policy.json` 的 `version` 必须一致，ENTRYPOINT 写成 `v<semver>`。官方 `nanonets/graft` tag 与 npm `@nanonets/graft` 只作评估 | 两处 pin 不一致，或只存在于未发布 main／工作区 diff 时不改 ENTRYPOINT。不修改运行 pin、gitHead、integrity 或遥测/接线。`update` 不写回 Graft |
 | Playwright | `microsoft/playwright`正式`v<semver>`发行 | CLI、MCP接口与浏览器依赖影响分别分析，不自动安装或下载浏览器 |
 | Maestro | `mobile-dev-inc/Maestro`的CLI tag；当前`cli-X.Y.Z`去掉`cli-`仅用于semver比较，输出区间保留`cli-X.Y.Z`格式及原tag | 不把Cloud/其他产品版本当CLI；出现新tag命名规则先取官方映射证据，不猜格式 |
 
@@ -46,6 +46,16 @@
 4. 只分析进入OMP CLI/runtime的变化；npm、tag、包内容不一致则报告冲突，不能推进目标。本机版本若附带记录，仅去掉 `omp/` 作安装观察，不用于报告区间起点或写回。
 
 Caveman目标升级也不修改 `CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`、core hash或 `CAVEMAN_KNOWN_FAMILY_SHA256`。采用新基线必须由独立维护任务审阅完整 `caveman`／`caveman-*`／`cavecrew`／`cavecrew-*` family及安装器/hooks后成套更新。
+
+### Graft 基线
+
+Graft 的 ENTRYPOINT 固定基线只跟已发布 SBTD workflow 版本中的受管 pin 变化，不跟官方 Graft tag 或 npm `latest`。`update` / `更新` 不写回 Graft。
+
+1. 用只读 Git 列出 tag，并与 `CHANGELOG.md` 已发布二级标题对齐：标题含版本且有发布日期，排除 Unreleased／未发布。取其中最高 semver 的 tag。没有可对齐的已发布 tag 时不改 ENTRYPOINT，只报告缺失。
+2. 读取该 tag 上的 `sbtd-workflow-onboard/scripts/graft_runtime.py` 中 `GRAFT_PINNED_VERSION`，以及 `sbtd-workflow-onboard/assets/graft-build-policy.json` 的 `version`。两者都必须是无 `v` 前缀的 stable semver，且彼此相等。ENTRYPOINT 写法为 `v<pin>`。不一致、缺失或只存在于未发布 main／工作区 diff 时结果为 `conflict`，不写 ENTRYPOINT。
+3. 与 `## 0. 版本监控配置` 的 Graft“当前使用版本”、`## 10. 当前版本汇总` 的 Graft“当前版本记录”，以及 `## 4. Graft 当前使用要点` 固定版本中的 `@nanonets/graft@<pin>` 比较。三处都已匹配时结果为 `no-update`，不写文件。
+4. 只有 pin 证据一致且与上述字段不同时，才按表头只改这三处版本号。写前重新核对前态；ENTRYPOINT 相对本轮快照已变则停止该文件。不改其他工具、历史对比文本、备注结构、运行脚本、gitHead、integrity 或接线。
+5. 官方 Graft 新版本只留在本轮输出供评估，不写入 `UPDATE.md` 的可写回区间，也不触发上述同步。
 
 ### 通道与证据
 
@@ -86,9 +96,10 @@ Caveman目标升级也不修改 `CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`
 
 - 正文中文，保留工具/代码标识和原始tag；每个工具只保留一个“固定起点→最新已分析目标”章节。同一起点的新目标扩展原段，不新增重复区间；无新版本不补“当前→当前”占位。
 - 保留未在本轮成功分析的工具章节和人工批注。已有章节起点不匹配、重复段归属不明或包含未确认改动时保留原文，只报告冲突，不自动合并/删段。
-- 新查询目标低于已有已分析目标时不降级；调查通道/撤回/分页或来源冲突并保留旧段。起点只由交互 `update` / `更新` 流程变更。
+- 新查询目标低于已有已分析目标时不降级；调查通道/撤回/分页或来源冲突并保留旧段。除 Graft 外，起点只由交互 `update` / `更新` 流程变更。Graft 不进入该写回。
 - 有明确新目标且区间分析可追溯、但局部影响仍不确定时，可在该工具章节标明 `partial`、已分析范围和缺失项；不能据此修改未证明的长期规则。完全无法分析的目标仅在本轮最终输出报告，不制造已完成分析区间。
 - 记录查询时间、原始tag/包版本、tag commit（取得时）、官方链接、变更摘要、破坏性/迁移影响、本地消费者和剩余不确定性。不含凭据、个人数据或完整私有日志。
+- Graft 官方新版本不创建或扩展 `UPDATE.md` 写回章节。已有 Graft 章节保留，但不是 `update` 的写回源。
 
 写入前再次核对前态；不以本轮生成的文本覆盖无法确认归属的旧diff。无法安全写UPDATE时仍输出逐工具分析与待写建议，但长期规则本轮也不落盘。
 
@@ -99,7 +110,7 @@ Caveman目标升级也不修改 `CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`
 - 同轮评估双语README、双语CHANGELOG及本prompt。已确认未发布章节不存在时，把release-note建议留在UPDATE/输出，不创造下一版本或改已发布章节。
 - 校验启用工具全部有结果、起点与ENTRYPOINT一致、OMP/各工具格式正确、来源链接可追溯、UPDATE无重复/同版本占位或错误降级；双语维护保持版本/URL/SHA/标识与事实对应。
 - 对实际修改文档做解析/链接检查；catalog/schema及匹配主题仅按scope允许的静态或隔离方式验证。缺依赖不安装，不能执行真实HOME/宿主/迁移/清理，也不触发CI。非原生平台不得冒充原生验证。
-- 核对修改路径均在允许范围，ENTRYPOINT基线、运行脚本、固定pin、stable镜像及其他只读资源未变；旧工作区改动保留。校验失败则报告未完成，不以继续改代码、删测试或改忽略规则过门。
+- 核对修改路径均在允许范围。除已按“Graft 基线”证明并完成的三处版本号同步外，ENTRYPOINT 其他版本字段、运行脚本、固定pin、stable镜像及其他只读资源未变；旧工作区改动保留。校验失败则报告未完成，不以继续改代码、删测试或改忽略规则过门。
 - 普通信息命令按宿主规则优先rtk；网络证据和需生成报告的命令采用native/report-safe路径，缓存/回放不能冒充本次执行。报告rtk实际状态，不把安装检测当运行证明。
 
 ## 6. 最终交付与停止
@@ -111,4 +122,4 @@ Caveman目标升级也不修改 `CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`
 3. 实际验证命令、退出结果、跳过原因、剩余风险及rtk状态。只报告本轮执行，不复用旧CI冒充新修改验证。
 4. 若改写仓库源文件，报告其最小diff及前态保护结果；如果源文件写入降级为只读，明确“未修改仓库源文件”，另行披露是否创建了获准的本轮私有任务/报告产物。只有源文件及私有产物都没有写入时才能说“未写任何文件”；记录不能持久化时说明，不冒充可恢复任务。
 
-**到此停止。** 保留diff等待用户审阅，不commit/push、不更新ENTRYPOINT、不安装/同步/发布或清理；不读取/修改Orca live automation。只有用户后续明确输入 `sync` / `同步`，才进入独立的live prompt比较和同步流程；`update` / `更新`仍只负责版本基线写回及归档，与live automation无关。
+**到此停止。** 保留diff等待用户审阅，不commit/push、不安装/同步/发布或清理；不读取/修改Orca live automation。除已证明的已发布 workflow Graft pin 同步外，不更新 ENTRYPOINT。`update` / `更新` 不写回 Graft，只负责其他工具的版本基线写回及归档，与 live automation 无关。

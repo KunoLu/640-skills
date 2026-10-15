@@ -109,6 +109,7 @@
 - `.gitattributes` 仅作为载荷原始字节边界的只读评估对象：`sbtd-workflow-onboard/** -text` 防止 checkout 改写固定摘要输入；检查目录摘要统一按相对 POSIX 字符串排序，不按平台路径对象排序。不得为消除校验失败而转换 stable 镜像字节、重写 pin 或放宽私有目录 DACL。
 
 - 对 Graft、Codex dispatch、sub-agent、hook 或平台接线的变更，必须额外核验目标 stable tag 的固定包版本、native lifecycle、telemetry、MCP/hooks 边界与部署 producer 行为；区分功能首次引入、默认值变化与既有能力的 bug fix。Graft 结论必须回到固定 pin/source、源码、LSP / contract 定位或真实 host 证据，不得用 latest、缓存元数据或旧 GitNexus 规则替代。`.trellis/**` 与旧平台 dispatch 只作为历史迁移输入，不是现行平台身份；若结论涉及平台调度，还必须读取当前 host 与其专属生成资产，并区分“已配置平台目录”与“当前 host”。不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
+- ENTRYPOINT 的 Graft 当前版本不是官方 latest 的写回目标。`update` 不写回 Graft。只有已发布 SBTD workflow tag 中 `GRAFT_PINNED_VERSION` 与 `graft-build-policy.json` 的 `version` 一致且与 ENTRYPOINT 不同时，版本检查才同步 ENTRYPOINT 的 Graft 版本字段；不改运行 pin、gitHead、integrity 或接线。
 
 - Codex部署模块与三份Graft资产只读评估：核对固定policy绑定、模板后接线、active HOME中每个有效host配置域一条全局MCP定义及逐项目本地图/stamp、hooks独立opt-in及host信任分离、临时HOME与拒绝危险自维护；init迁移上下文必须先验证完整证据，只执行plan已声明的部署资源并保存实际累计结果。普通init的全局规则/Skills仍复用既有选择，OMP公共AGENTS镜像不等于OMP MCP/event接线；project-only不得写HOME或新增全局连接。历史逐仓绑定只按退役输入／旧回执识别，不作为当前安装要求。不把结构图check报告当作真实host事件通过。
 

@@ -4,7 +4,7 @@
 
 | id | tags | read_when | summary | detail |
 |---|---|---|---|---|
-| LESSON-20260701-entrypoint-version-baseline | automation, entrypoint, update | 每日版本检查、`ENTRYPOINT.md` 写回、`UPDATE.md` 生成 | 每日检查不得推进 `ENTRYPOINT.md` 当前版本，只有手动 `更新` / `update` 才写回。 | topics/repository-workflow.md#lesson-20260701-entrypoint-version-baseline-entrypoint-version-baseline |
+| LESSON-20260701-entrypoint-version-baseline | automation, entrypoint, update | 每日版本检查、`ENTRYPOINT.md` 写回、`UPDATE.md` 生成 | 每日检查不得用官方工具新版本推进 `ENTRYPOINT.md`。除 Graft 已发布 workflow pin 同步外，只有手动 `更新` / `update` 才写回。 | topics/repository-workflow.md#lesson-20260701-entrypoint-version-baseline-entrypoint-version-baseline |
 | LESSON-20260701-config-excerpt-repo-boundary | repository, templates, scope | 判断当前仓库角色、修改 AGENTS / Skill 模板、迁移配置摘录 | 当前仓库是配置摘录 / 同步源，不是真实业务项目。 | topics/repository-workflow.md#lesson-20260701-config-excerpt-repo-boundary-config-excerpt-repo-boundary |
 | LESSON-20260701-project-agents-template-boundary | agents, templates, scope | 修改 `AGENTS.project.md`、根 `AGENTS.md` 或全局 / 项目模板 | 项目级 AGENTS 模板不得镜像配置仓库根 AGENTS。 | topics/repository-workflow.md#lesson-20260701-project-agents-template-boundary-project-agents-template-boundary |
 | LESSON-20260701-local-sync-explicit-trigger | sync, local-config, scope | 同步本仓库配置到本机实际生效路径 | 本地配置同步必须由用户明确输入 `同步` / `sync` 触发。 | topics/repository-workflow.md#lesson-20260701-local-sync-explicit-trigger-local-sync-explicit-trigger |

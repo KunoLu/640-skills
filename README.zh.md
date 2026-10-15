@@ -504,9 +504,9 @@ AGENTS.md
 
 Ignore 不会脱敏、不取消已有 tracked 状态，也不授权删除。任务报告默认本地留存；发布证据必须先脱敏并单独确认目标位置。**本配置源仓不生成 `.feature` 文件**；持久行为规格使用 Markdown 与现有测试。
 
-源文件变化时，同轮评估两种语言的 README、[英文 CHANGELOG](CHANGELOG.md)、[中文变更日志](CHANGELOG.zh.md)和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两份变更日志逐条对应，版本、日期、顺序、事实、URL、提交SHA和代码标识相同，仅正文语言不同；同步更新最上方未发布章节，保留已发布历史。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 只推进监控基线并归档已分析更新。它们不是 Onboard upgrade，也不是 BDD sync。
+源文件变化时，同轮评估两种语言的 README、[英文 CHANGELOG](CHANGELOG.md)、[中文变更日志](CHANGELOG.zh.md)和[版本化 automation prompt](prompts/automations/sbtd-workflow-tools-version-check.md)。两份变更日志逐条对应，版本、日期、顺序、事实、URL、提交SHA和代码标识相同，仅正文语言不同；同步更新最上方未发布章节，保留已发布历史。普通改动**不**同步已安装副本或 live automation。仓库维护 `sync`／`同步` 需要明确授权；`update`／`更新` 推进除 Graft 以外的监控基线并归档已分析更新。Graft 的 ENTRYPOINT 基线只跟已发布 SBTD workflow 版本中的 pin，不由官方 Graft 发行或 `update` 推进。它们不是 Onboard upgrade，也不是 BDD sync。
 
-版本检查自动化采用精简主prompt、每轮权限清单及按需影响检查。先核对Orca分配的工作区并保护已有改动，区分证据不可用与“没有更新”，始终以 `ENTRYPOINT.md` 为固定基线；原始tag与比较版本分别记录。没有已确认的未发布CHANGELOG章节时，发布条目建议留在 `UPDATE.md` 或本轮输出，不由自动化猜下一tag。修改这些源文件不会更新live automation，后者仍须明确 `sync`。
+版本检查自动化采用精简主prompt、每轮权限清单及按需影响检查。先核对Orca分配的工作区并保护已有改动，区分证据不可用与“没有更新”，官方工具始终以 `ENTRYPOINT.md` 为固定基线。Graft 是例外：只有已发布 workflow 版本中的受管 pin 变化时，才同步其 ENTRYPOINT 版本字段。原始tag与比较版本分别记录。没有已确认的未发布CHANGELOG章节时，发布条目建议留在 `UPDATE.md` 或本轮输出，不由自动化猜下一tag。修改这些源文件不会更新live automation，后者仍须明确 `sync`。
 
 原生全量命令仍为 `python -B -m unittest discover -s tests -p 'test_*.py'`。CI 自动发现完整 Linux 集合，按逐例实测耗时权重分为互不重叠的分片：无fixture的用例逐个分配，类级／模块级fixture保持同片，缺少权重的用例按中位数估算并在各分片清单中列出；Windows 将原生范围分片，消除 PowerShell／Unicode 选择器重叠；macOS 保留原生范围。既有检查名称聚合全部必需分片，任一失败、取消或缺失均不能通过。最低 TOML 编辑器检查使用不同依赖版本，仍独立保留，不当作重复。逐例耗时、skip 原因和中文结果摘要保存为 CI artifact。精确范围见 [workflow](.github/workflows/validation.yml) 与[运行器](tests/run_ci.py)。源码检查、安装副本检查、真实宿主加载与发布验收仍是不同层次的证据。
 
