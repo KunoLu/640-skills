@@ -19,6 +19,10 @@
 
 - ADR 0001 Q6 宿主表改为通过条件。门禁宿主在真实 smoke 中没有结构化 Skill／Tool 调用时，只将该宿主标为 `unsupported`；另一宿主和指标类别保持不变。
 
+### 修复
+
+- 事件库扩展名在大小写不敏感、并规范化 `-`、`_` 和驼峰之后，按敏感词的后缀或段子串拒绝。`github_token`、`x-api-key`、`X-Api-Key`、`authToken` 和 `client_secret` 在写入 spool 前被拒绝。`token_count`、`input_tokens` 和 `tokens` 仍入库。已接受的旧事件不回写。
+
 ## v2.0.2（2026-10-16）
 
 正式版 [v2.0.2 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2) 已发布。annotated tag 指向 `1d82494d74f6df9bca7dccef2da409f87091883e`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/38758808131)在 attempt 2 通过，首次 macOS job 因未能分配 hosted runner 而未执行。源码发布不执行本机安装、workflow sync、项目迁移或备份处置。

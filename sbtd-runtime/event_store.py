@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import tempfile
 import uuid
@@ -542,24 +543,41 @@ def _secret_extension(event: dict[str, Any]) -> bool:
     return any(_secret_key(key) for key in extensions)
 
 
+_SECRET_SEGMENTS = (
+    ("token",),
+    ("secret",),
+    ("password",),
+    ("passwd",),
+    ("api", "key"),
+    ("authorization",),
+    ("cookie",),
+    ("credential",),
+    ("private", "key"),
+    ("bearer",),
+    ("oauth",),
+)
+
+
+def _secret_parts(key: object) -> tuple[str, ...]:
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(key))
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", text)
+    return tuple(part.casefold() for part in re.split(r"[^0-9A-Za-z]+", text) if part)
+
+
 def _secret_key(key: object) -> bool:
-    normalized = "".join(ch for ch in str(key).casefold() if ch.isalnum())
-    return normalized in {
-        "apikey",
-        "accesstoken",
-        "refreshtoken",
-        "idtoken",
-        "token",
-        "password",
-        "passwd",
-        "secret",
-        "clientsecret",
-        "cookie",
-        "authorization",
-        "bearer",
-        "oauth",
-        "oauthtoken",
-    }
+    # Suffix/segment match after casefold and -/_/camelCase splits.
+    # token_count stays: its tail is count, not token. tokens is not token.
+    parts = _secret_parts(key)
+    if not parts or parts[-1] in {"count", "counts"}:
+        return False
+    squashed = "".join(parts)
+    if any(squashed.endswith("".join(term)) for term in _SECRET_SEGMENTS):
+        return True
+    return any(
+        parts[index : index + len(term)] == term
+        for term in _SECRET_SEGMENTS
+        for index in range(len(parts) - len(term) + 1)
+    )
 
 
 def _require_intact(database: Path) -> None:
