@@ -1,0 +1,285 @@
+{
+  "scope": "query_scope",
+  "metrics": {
+    "tasks.touched": {
+      "support": "supported",
+      "value": 2,
+      "source_event_ids": [
+        "evt_created_leaf",
+        "evt_created_wt_b",
+        "evt_run_leaf_1_start",
+        "evt_run_child_b_start"
+      ]
+    },
+    "tasks.created": {
+      "support": "supported",
+      "value": 2,
+      "source_event_ids": [
+        "evt_created_leaf",
+        "evt_created_wt_b"
+      ]
+    },
+    "tasks.completed_unique": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_leaf_done_1",
+        "evt_leaf_done_2"
+      ]
+    },
+    "tasks.completion_events": {
+      "support": "supported",
+      "value": 2,
+      "source_event_ids": [
+        "evt_leaf_done_1",
+        "evt_leaf_done_2"
+      ]
+    },
+    "tasks.reopened": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_leaf_reopen"
+      ]
+    },
+    "tasks.status_at_end": {
+      "support": "supported",
+      "value": {
+        "done": 1,
+        "in-progress": 1,
+        "unknown": 2
+      },
+      "source_event_ids": [
+        "evt_leaf_done_2",
+        "evt_wt_b_progress",
+        "evt_created_untimed",
+        "evt_created_other"
+      ]
+    },
+    "runs.started": {
+      "support": "supported",
+      "value": 4,
+      "source_event_ids": [
+        "evt_run_leaf_1_start",
+        "evt_run_child_b_start",
+        "evt_run_leaf_2_start",
+        "evt_run_open_start"
+      ]
+    },
+    "runs.interrupted": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_run_leaf_2_interrupt",
+        "evt_run_open_start"
+      ]
+    },
+    "steps.attempts": {
+      "support": "supported",
+      "value": 4,
+      "source_event_ids": [
+        "evt_step_a1_start",
+        "evt_step_a2_start",
+        "evt_step_b_start",
+        "evt_step_c_start"
+      ]
+    },
+    "steps.success_rate_observed": {
+      "support": "supported",
+      "value": "1/2",
+      "numerator": 1,
+      "denominator": 2,
+      "source_event_ids": [
+        "evt_step_a1_finish",
+        "evt_step_a2_finish",
+        "evt_step_b_finish",
+        "evt_step_c_start"
+      ]
+    },
+    "steps.retry_count": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_step_a2_start"
+      ]
+    },
+    "components.invocations": {
+      "support": "supported",
+      "value": 3,
+      "source_event_ids": [
+        "evt_inv1_start",
+        "evt_inv1_host",
+        "evt_inv2_start",
+        "evt_inv3_start"
+      ]
+    },
+    "components.failure_rate": {
+      "support": "supported",
+      "value": "1/3",
+      "numerator": 1,
+      "denominator": 3,
+      "source_event_ids": [
+        "evt_inv1_finish",
+        "evt_inv2_finish",
+        "evt_inv3_finish"
+      ]
+    },
+    "gates.required": {
+      "support": "supported",
+      "value": 3,
+      "source_event_ids": [
+        "evt_gate_ddd_app",
+        "evt_gate_declared_app",
+        "evt_gate_stale_app"
+      ]
+    },
+    "gates.evidence_coverage": {
+      "support": "supported",
+      "value": "1/3",
+      "numerator": 1,
+      "denominator": 3,
+      "source_event_ids": [
+        "evt_gate_ddd_pass",
+        "evt_gate_declared_result",
+        "evt_gate_stale_result"
+      ]
+    },
+    "gates.rework": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_gate_ddd_pass"
+      ]
+    },
+    "validations.runs": {
+      "support": "supported",
+      "value": 2,
+      "source_event_ids": [
+        "evt_val1_start",
+        "evt_val2_start"
+      ]
+    },
+    "validations.run_pass_rate": {
+      "support": "supported",
+      "value": null,
+      "source_event_ids": [
+        "evt_val1_finish",
+        "evt_val2_finish"
+      ]
+    },
+    "tests.first_attempt_pass_rate": {
+      "support": "supported",
+      "value": "1/2",
+      "numerator": 1,
+      "denominator": 2,
+      "source_event_ids": [
+        "evt_val1_finish",
+        "evt_val2_finish"
+      ]
+    },
+    "tests.final_result_distribution": {
+      "support": "supported",
+      "value": {
+        "failed": 1,
+        "passed": 2
+      },
+      "source_event_ids": [
+        "evt_val1_finish",
+        "evt_val2_finish"
+      ]
+    },
+    "evidence.stale_count": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_gate_stale_result"
+      ]
+    },
+    "audit.unlinked_count": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_unlinked"
+      ]
+    },
+    "audit.gap_intervals": {
+      "support": "supported",
+      "value": 1,
+      "source_event_ids": [
+        "evt_gap"
+      ]
+    },
+    "usage.tokens": {
+      "support": "conditional",
+      "value": {
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "cache_read_tokens": null,
+        "reasoning_tokens": null
+      },
+      "source_event_ids": [
+        "evt_usage_detail",
+        "evt_usage_rollup",
+        "evt_usage_missing",
+        "evt_usage_sub"
+      ]
+    },
+    "usage.cost_reported": {
+      "support": "conditional",
+      "value": null,
+      "source_event_ids": [
+        "evt_usage_detail",
+        "evt_usage_sub"
+      ]
+    },
+    "usage.cost_estimated": {
+      "support": "conditional",
+      "value": {
+        "USD": 1.5
+      },
+      "source_event_ids": [
+        "evt_usage_estimated"
+      ]
+    },
+    "duration.execution_ms": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "duration.blocked_ms": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "duration.step_p50/p95": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "components.available": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "components.loaded": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "modes.distribution": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "modes.recommendation_response": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    },
+    "usage.requests": {
+      "support": "unsupported",
+      "value": null,
+      "source_event_ids": []
+    }
+  }
+}

@@ -56,6 +56,10 @@ ID 是不透明字符串，唯一性不依赖事件时间，也不从 MAC、邮�
 | `producer_version` / `parser_version` | 采集器与解析器 |
 | `host_version` | 宿主发行版本。验收针只认 capability pin |
 | `scope_revision` | 某次 Gate 或验证评价的输入范围 |
+| `workflow_source_revision` | 当时的工作流规则 revision，不按新规则重判旧 Gate |
+| `source_commit_sha` | 业务仓库完整提交 |
+| `worktree_revision` | 已授权工作树身份；dirty 变化也要区分 |
+| `task_document_revision` | 读取到的 task.md 字节版本 |
 
 ## 去重
 
@@ -73,6 +77,8 @@ ID 是不透明字符串，唯一性不依赖事件时间，也不从 MAC、邮�
 - `occurred_at` 为空时进入时间不可定位集合，不回填导入时间，默认不进入指定窗口。
 - 范围前开始、范围内结束的 run 计入相交活动，但不计为范围内新启动。
 - 缺少结束且没有可靠中断事实的 run 是 unknown，不是 interrupted，也不是 failed。
+- 历史状态按 `occurred_at` 归约，不按入库顺序覆盖更晚发生的状态。
+- 执行区间与查询窗口相交的任务计入 touched，但不因此计为窗口内新启动。
 - 成功率分母为 0 时是无可判定样本，不是 0% 或 100%。blocked、cancelled、unknown 不藏进成功。
 - 日历日长用绝对瞬间相减。同一时区对象的墙上时钟相减会吞掉 DST 偏移变化。
 

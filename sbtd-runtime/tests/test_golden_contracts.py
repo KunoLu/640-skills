@@ -114,7 +114,8 @@ class GoldenContractTests(unittest.TestCase):
         self.assertEqual(conflicts[0]["event_id"], "evt_inv1_conflict")
         self.assertEqual(conflicts[0]["kept_event_id"], "evt_inv1_start")
         self.assertNotIn("evt_inv1_conflict", self.result["dedup"]["accepted_event_ids"])
-        self.assertEqual(self.result["invocations"]["inv_1"]["result"], "succeeded")
+        kept = next(item for item in self.result["invocations"] if item["invocation_id"] == "inv_1")
+        self.assertEqual(kept["result"], "succeeded")
 
     def test_timestamp_alone_is_not_a_dedup_key(self) -> None:
         self.assertIn("evt_off_1_replay", self.result["dedup"]["confirmed_event_ids"])
@@ -122,7 +123,7 @@ class GoldenContractTests(unittest.TestCase):
         self.assertNotIn("evt_off_2", self.result["dedup"]["confirmed_event_ids"])
 
     def test_facade_and_host_observations_merge_to_one_invocation(self) -> None:
-        invocation = self.result["invocations"]["inv_1"]
+        invocation = next(item for item in self.result["invocations"] if item["invocation_id"] == "inv_1")
         self.assertEqual(invocation["source_ids"], ["source_runtime", "source_codex"])
         self.assertEqual(self.metric("components.invocations")["value"], 3)
         self.assertEqual(
@@ -156,7 +157,7 @@ class GoldenContractTests(unittest.TestCase):
     def test_cross_boundary_run_is_not_a_new_start(self) -> None:
         self.assertEqual(
             self.metric("runs.started")["run_ids"],
-            ["run_leaf_1", "run_leaf_2", "run_open"],
+            ["run_child_b", "run_leaf_1", "run_leaf_2", "run_open"],
         )
         self.assertNotIn("run_cross", self.metric("runs.started")["run_ids"])
         self.assertNotIn("run_parent", self.metric("runs.started")["run_ids"])
@@ -201,7 +202,10 @@ class GoldenContractTests(unittest.TestCase):
         first = self.metric("tests.first_attempt_pass_rate")
         self.assertEqual(first["numerator"], 1)
         self.assertEqual(first["denominator"], 2)
-        self.assertEqual(self.metric("tests.final_result_distribution")["value"], {"passed": 2})
+        self.assertEqual(
+            self.metric("tests.final_result_distribution")["value"],
+            {"failed": 1, "passed": 2},
+        )
         narrow = self.metric("validations.run_pass_rate")["strata"]["narrow"]
         self.assertEqual(narrow["numerator"], 1)
         self.assertEqual(narrow["denominator"], 2)
@@ -212,7 +216,7 @@ class GoldenContractTests(unittest.TestCase):
         self.assertEqual(tokens["value"]["input_tokens"], 10)
         self.assertEqual(tokens["value"]["output_tokens"], 5)
         self.assertIsNone(tokens["value"]["cache_read_tokens"])
-        self.assertEqual(tokens["missing_request_ids"], ["req_2", "req_3"])
+        self.assertEqual(tokens["missing_request_ids"], ["req_2", "req_3", "req_est"])
         self.assertTrue(tokens["missing"])
         self.assertNotEqual(tokens["value"]["input_tokens"], 0)
         cost = self.metric("usage.cost_reported")
@@ -222,8 +226,9 @@ class GoldenContractTests(unittest.TestCase):
         self.assertNotIn("free", cost["statuses"])
         self.assertTrue(cost["missing"])
         estimated = self.metric("usage.cost_estimated")
-        self.assertIsNone(estimated["value"])
-        self.assertEqual(estimated["missing_reason"], "source-not-provided")
+        self.assertEqual(estimated["value"], {"USD": 1.5})
+        self.assertFalse(estimated["missing"])
+        self.assertIsNone(self.metric("usage.cost_reported")["value"])
 
     def test_parent_rollup_and_child_detail_are_not_both_summed(self) -> None:
         inclusive = evaluate(DATASET, {**self.scope, "task_granularity": "all"})
@@ -319,6 +324,133 @@ class GoldenContractTests(unittest.TestCase):
         est = parse_instant("2026-11-01T01:30:00-05:00")
         self.assertNotEqual(edt, est)
         self.assertLess(edt, est)
+
+
+    def test_declared_step_success_is_not_machine_observed(self) -> None:
+        sample = copy.deepcopy(DATASET)
+        declared = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_step_a1_finish"))
+        declared["event_id"] = "evt_declared_finish"
+        declared["ingest_seq"] = 30000
+        declared["provenance"]["source_event_id"] = "evt_declared_finish"
+        declared["provenance"]["source_kind"] = "user-declared"
+        declared["provenance"]["observation_level"] = "declared"
+        declared["scope"]["step_run_id"] = "step_declared"
+        sample["events"].append(declared)
+        rate = evaluate(sample, self.scope)["metrics"]["steps.success_rate_observed"]
+        self.assertEqual(rate["numerator"], 1)
+        self.assertEqual(rate["excluded"]["declared"], 1)
+
+    def test_gate_invalidation_removes_coverage(self) -> None:
+        sample = copy.deepcopy(DATASET)
+        invalidated = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_gate_ddd_pass"))
+        invalidated["event_id"] = "evt_gate_ddd_invalidated"
+        invalidated["event_type"] = "gate.evidence_invalidated"
+        invalidated["occurred_at"] = "2026-10-15T18:40:00Z"
+        invalidated["recorded_at"] = invalidated["occurred_at"]
+        invalidated["ingest_seq"] = 30001
+        invalidated["provenance"]["source_event_id"] = invalidated["event_id"]
+        invalidated["gate"]["evidence_status"] = "invalid"
+        invalidated["gate"]["correction"] = False
+        sample["events"].append(invalidated)
+        coverage = evaluate(sample, self.scope)["metrics"]["gates.evidence_coverage"]
+        self.assertEqual(coverage["numerator"], 0)
+        self.assertEqual(coverage["denominator"], 3)
+
+    def test_late_receipt_does_not_override_later_occurrence(self) -> None:
+        sample = copy.deepcopy(DATASET)
+        late = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_leaf_progress"))
+        late["event_id"] = "evt_leaf_late_progress"
+        late["occurred_at"] = "2026-10-15T19:30:00Z"
+        late["recorded_at"] = "2026-10-15T21:30:00Z"
+        late["ingest_seq"] = 30002
+        late["provenance"]["source_event_id"] = late["event_id"]
+        late["state"] = {"previous": "done", "current": "in-progress"}
+        sample["events"].append(late)
+        # The later done at 20:00 still wins over the earlier 19:30 progress, even if ingested last.
+        status = evaluate(sample, self.scope)["metrics"]["tasks.status_at_end"]["value"]
+        self.assertEqual(status["done"], 1)
+
+    def test_spanning_run_counts_as_touched_but_not_started(self) -> None:
+        scoped = evaluate(
+            DATASET,
+            {**self.scope, "from": "2026-10-15T16:21:00Z", "to": "2026-10-15T16:24:00Z"},
+        )
+        self.assertIn("task_leaf", scoped["metrics"]["tasks.touched"]["task_uids"])
+        self.assertEqual(scoped["metrics"]["runs.started"]["value"], 0)
+
+    def test_terminal_invocation_rate_includes_a_finish_whose_start_is_outside(self) -> None:
+        scoped = evaluate(
+            DATASET,
+            {**self.scope, "from": "2026-10-15T15:47:30Z", "to": "2026-10-15T15:49:00Z"},
+        )
+        rate = scoped["metrics"]["components.failure_rate"]
+        self.assertEqual(rate["numerator"], 0)
+        self.assertEqual(rate["denominator"], 1)
+        self.assertEqual(scoped["metrics"]["components.invocations"]["value"], 0)
+
+    def test_retry_attempt_is_not_relabeled_as_first(self) -> None:
+        scoped = evaluate(
+            DATASET,
+            {**self.scope, "from": "2026-10-15T17:30:00Z", "to": "2026-10-15T18:00:00Z"},
+        )
+        first = scoped["metrics"]["tests.first_attempt_pass_rate"]
+        self.assertEqual(first["numerator"], 1)
+        self.assertEqual(first["denominator"], 2)
+
+    def test_recovered_gap_is_not_an_open_interval(self) -> None:
+        sample = copy.deepcopy(DATASET)
+        recovered = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_gap"))
+        recovered["event_id"] = "evt_gap_recovered"
+        recovered["event_type"] = "collection.recovered"
+        recovered["occurred_at"] = "2026-10-15T18:45:00Z"
+        recovered["recorded_at"] = recovered["occurred_at"]
+        recovered["ingest_seq"] = 30003
+        recovered["provenance"]["source_event_id"] = recovered["event_id"]
+        recovered["collection"]["closed"] = True
+        sample["events"].append(recovered)
+        gaps = evaluate(sample, self.scope)["metrics"]["audit.gap_intervals"]
+        self.assertEqual(gaps["value"], 0)
+
+    def test_parallel_child_runs_stay_distinct(self) -> None:
+        self.assertIn("run_child_b", self.metric("runs.started")["run_ids"])
+        self.assertIn("run_leaf_1", self.metric("runs.started")["run_ids"])
+
+    def test_revision_fields_can_be_retained(self) -> None:
+        event = copy.deepcopy(DATASET["events"][0])
+        event["workflow"] = {
+            "workflow_source_revision": "workflow-sha",
+            "source_commit_sha": "commit-sha",
+            "worktree_revision": "worktree-sha",
+            "task_document_revision": "task-sha",
+        }
+        validate_events([event], SCHEMA)
+
+    def test_mixed_token_semantics_are_not_summed_together(self) -> None:
+        sample = copy.deepcopy(DATASET)
+        other = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_usage_detail"))
+        other["event_id"] = "evt_usage_cache"
+        other["occurred_at"] = "2026-10-15T18:12:00Z"
+        other["recorded_at"] = other["occurred_at"]
+        other["ingest_seq"] = 30004
+        other["provenance"]["source_event_id"] = other["event_id"]
+        other["usage"] = {**other["usage"], "request_id": "req_cache", "input_includes_cache": True, "input_tokens": 7}
+        sample["events"].append(other)
+        tokens = evaluate(sample, self.scope)["metrics"]["usage.tokens"]
+        self.assertIsNone(tokens["value"])
+        self.assertEqual(len(tokens["groups"]), 2)
+
+    def test_golden_oracle_matches_every_metric(self) -> None:
+        expected = json.loads((ROOT / "golden" / "expected.json").read_text(encoding="utf-8"))
+        present = {event["event_id"] for event in DATASET["events"]}
+        self.assertEqual(set(expected["metrics"]), {item["metric_id"] for item in CATALOG["metrics"]})
+        for metric_id, oracle in expected["metrics"].items():
+            actual = self.metric(metric_id)
+            self.assertEqual(actual["support"], oracle["support"], metric_id)
+            self.assertEqual(actual["value"], oracle["value"], metric_id)
+            if "numerator" in oracle:
+                self.assertEqual(actual["numerator"], oracle["numerator"], metric_id)
+                self.assertEqual(actual["denominator"], oracle["denominator"], metric_id)
+            self.assertTrue(set(oracle["source_event_ids"]) <= present, metric_id)
 
     def test_runtime_package_does_not_import_a_server(self) -> None:
         source = (ROOT / "contract_eval.py").read_text(encoding="utf-8")

@@ -29,3 +29,12 @@
 - rtk：skipped-for-report。原生命令直接运行。
 
 本记录完成时工作树仍 dirty。精确 SHA 证据在提交后的复跑，不把 dirty 通过写成 PR head 证明。
+
+
+## 独立审查
+
+只读审查发现 16 项 P2，无 P0／P1。Q6 措辞、unsupported 不用 0、以及未引入 Starlette／uvicorn 没有被判为问题。
+
+已修：声明结果不进机器观察成功率；Gate 失效与窗口前历史；状态按 occurred_at 归约；相交 run 计入 touched 但不计新启动；终结调用率不依赖窗口内 start；invocation attempt 不互相覆盖；首次尝试必须是 attempt 1；最终结果按验证轮保留；估算费用保留金额和币种；token 语义分组；采集恢复关闭缺口；补并行子 run；schema 预留四个修订字段；golden/expected.json 覆盖全部 metric_id。
+
+审查后复跑以新提交 SHA 为准。

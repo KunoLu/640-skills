@@ -252,8 +252,12 @@ def _component_kind(event: dict) -> str | None:
 
 
 def _latest_state(events: list[dict]) -> str | None:
+    ordered = sorted(
+        events,
+        key=lambda event: (event.get("occurred_at") or "", event.get("ingest_seq", 0)),
+    )
     current = None
-    for event in events:
+    for event in ordered:
         state = (event.get("state") or {}).get("current")
         if state:
             current = state
@@ -263,26 +267,43 @@ def _latest_state(events: list[dict]) -> str | None:
 def _usage_records(events: list[dict]) -> list[dict]:
     grouped: dict[str, list[dict]] = {}
     for event in events:
-        if event["event_type"] != "usage.recorded":
+        if event["event_type"] not in {"usage.recorded", "usage.corrected"}:
             continue
         usage = event.get("usage") or {}
         request_id = usage.get("request_id") or event["event_id"]
         grouped.setdefault(request_id, []).append(event)
     kept: list[dict] = []
-    for request_id, group in grouped.items():
+    for group in grouped.values():
         details = [event for event in group if not (event.get("usage") or {}).get("rollup")]
         chosen = details or group
-        # One request is one billable fact. Extra detail copies still collapse.
-        kept.append(chosen[0])
+        corrections = [event for event in chosen if event["event_type"] == "usage.corrected"]
+        pool = corrections or chosen
+        pool = sorted(pool, key=lambda event: (event.get("occurred_at") or "", event.get("ingest_seq", 0)))
+        kept.append(pool[-1])
     return kept
+
+
+def _token_group(records: list[dict]) -> dict:
+    totals = {field: 0 for field in TOKEN_FIELDS}
+    seen = {field: False for field in TOKEN_FIELDS}
+    request_ids = []
+    for event in records:
+        usage = event.get("usage") or {}
+        request_ids.append(usage.get("request_id") or event["event_id"])
+        for field in TOKEN_FIELDS:
+            if usage.get(field) is not None:
+                totals[field] += usage[field]
+                seen[field] = True
+    return {
+        "request_ids": sorted(request_ids),
+        "tokens": {field: totals[field] if seen[field] else None for field in TOKEN_FIELDS},
+    }
 
 
 def _token_sum(records: list[dict]) -> dict:
     observed: list[str] = []
     missing: list[str] = []
-    totals = {field: 0 for field in TOKEN_FIELDS}
-    seen = {field: False for field in TOKEN_FIELDS}
-    includes_cache = False
+    grouped: dict[bool, list[dict]] = {}
     for event in records:
         usage = event.get("usage") or {}
         request_id = usage.get("request_id") or event["event_id"]
@@ -291,20 +312,20 @@ def _token_sum(records: list[dict]) -> dict:
             missing.append(request_id)
             continue
         observed.append(request_id)
-        includes_cache = includes_cache or bool(usage.get("input_includes_cache"))
-        for field in present:
-            totals[field] += usage[field]
-            seen[field] = True
-    value = {
-        field: totals[field] if seen[field] else None for field in TOKEN_FIELDS
-    }
+        grouped.setdefault(bool(usage.get("input_includes_cache")), []).append(event)
+    groups = [
+        {"input_includes_cache": flag, **_token_group(members)}
+        for flag, members in sorted(grouped.items())
+    ]
+    value = groups[0]["tokens"] if len(groups) == 1 else None
     return {
         "support": "conditional",
         "value": value,
+        "groups": groups,
         "missing": bool(missing) or not observed,
         "missing_request_ids": sorted(missing),
         "observed_request_ids": sorted(observed),
-        "input_includes_cache": includes_cache,
+        "input_includes_cache": groups[0]["input_includes_cache"] if len(groups) == 1 else None,
     }
 
 
@@ -329,16 +350,19 @@ def _cost_reported(records: list[dict]) -> dict:
 
 
 def _cost_estimated(records: list[dict]) -> dict:
-    estimated = []
+    by_currency: dict[str, float] = {}
     for event in records:
         usage = event.get("usage") or {}
-        if usage.get("cost_status") == "estimated" and usage.get("cost_amount") is not None:
-            estimated.append(event["event_id"])
+        amount = usage.get("cost_amount")
+        if usage.get("cost_status") == "estimated" and amount is not None:
+            currency = usage.get("currency") or "unknown"
+            by_currency[currency] = by_currency.get(currency, 0) + amount
     return {
         "support": "conditional",
-        "value": None if not estimated else {"event_ids": estimated},
-        "missing": not estimated,
-        "missing_reason": None if estimated else "source-not-provided",
+        "value": None if not by_currency else by_currency,
+        "missing": not by_currency,
+        "by_currency": by_currency,
+        "missing_reason": None if by_currency else "source-not-provided",
     }
 
 
@@ -383,6 +407,27 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
         for event in window_leaf
         if _task_uid(event)
     }
+    run_bounds: dict[str, dict] = {}
+    for event in accepted:
+        if not event["event_type"].startswith("run.") or _task_uid(event) not in leaf_ids:
+            continue
+        if not _before_end(event.get("occurred_at"), end):
+            continue
+        run_id = _run_id(event)
+        if not run_id:
+            continue
+        slot = run_bounds.setdefault(run_id, {"task_uid": _task_uid(event), "start": None, "end": None})
+        if event["event_type"] == "run.started":
+            slot["start"] = event.get("occurred_at")
+        elif event["event_type"] in {"run.finished", "run.interrupted"}:
+            slot["end"] = event.get("occurred_at")
+    for slot in run_bounds.values():
+        if not slot["start"]:
+            continue
+        run_start = parse_instant(slot["start"])
+        run_end = parse_instant(slot["end"]) if slot["end"] else None
+        if run_start < end and (run_end is None or run_end > start):
+            touched.add(slot["task_uid"])
     created = {
         _task_uid(event)
         for event in window_leaf
@@ -433,15 +478,24 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
 
     step_starts = [event for event in window_leaf if event["event_type"] == "step.started"]
     step_finishes = [event for event in window_leaf if event["event_type"] == "step.finished"]
+    def machine_observed(event: dict) -> bool:
+        return event.get("provenance", {}).get("observation_level") in {
+            "execution-observed",
+            "artifact-verified",
+        }
+
     succeeded = [
         event
         for event in step_finishes
-        if (event.get("state") or {}).get("current") == "succeeded"
+        if (event.get("state") or {}).get("current") == "succeeded" and machine_observed(event)
     ]
     failed = [
         event
         for event in step_finishes
-        if (event.get("state") or {}).get("current") == "failed"
+        if (event.get("state") or {}).get("current") == "failed" and machine_observed(event)
+    ]
+    declared_steps = [
+        event for event in step_finishes if not machine_observed(event)
     ]
     blocked = [
         event
@@ -473,15 +527,20 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
     ]
 
     invocations: dict[tuple[str, str], dict] = {}
-    for event in in_window:
+    invocation_events = [
+        event
+        for event in accepted
+        if _invocation_identity(event)
+        and event["event_type"] in {"invocation.started", "invocation.finished"}
+        and _component_kind(event) in CALL_KINDS
+        and _in_population(event, scope, tasks)
+        and _before_end(event.get("occurred_at"), end)
+    ]
+    for event in sorted(invocation_events, key=lambda item: (item.get("occurred_at") or "", item.get("ingest_seq", 0))):
         identity = _invocation_identity(event)
-        if identity is None or event["event_type"] not in {"invocation.started", "invocation.finished"}:
-            continue
-        if _component_kind(event) not in CALL_KINDS:
-            continue
         slot = invocations.setdefault(
             identity,
-            {"source_ids": [], "result": None, "started": False, "host": None},
+            {"source_ids": [], "result": None, "started_at": None, "finish_at": None, "host": None},
         )
         source_id = event["provenance"]["source_id"]
         if source_id not in slot["source_ids"]:
@@ -490,29 +549,36 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
         if host.get("host_kind") and host.get("host_version"):
             slot["host"] = f"{host['host_kind']}@{host['host_version']}"
         if event["event_type"] == "invocation.started":
-            slot["started"] = True
+            slot["started_at"] = event.get("occurred_at")
         else:
             slot["result"] = (event.get("state") or {}).get("current")
+            slot["finish_at"] = event.get("occurred_at")
     started_invocations = {
-        identity: slot for identity, slot in invocations.items() if slot["started"]
+        identity: slot
+        for identity, slot in invocations.items()
+        if slot["started_at"] and _time_class(slot["started_at"], start, end) == "in"
     }
-    invocation_failed = [
-        identity
-        for identity, slot in started_invocations.items()
-        if slot["result"] == "failed"
+    terminal = [
+        (identity, slot)
+        for identity, slot in invocations.items()
+        if slot["finish_at"] and _time_class(slot["finish_at"], start, end) == "in"
     ]
-    invocation_succeeded = [
-        identity
-        for identity, slot in started_invocations.items()
-        if slot["result"] == "succeeded"
-    ]
+    invocation_failed = [identity for identity, slot in terminal if slot["result"] == "failed"]
+    invocation_succeeded = [identity for identity, slot in terminal if slot["result"] == "succeeded"]
     invocation_unknown = [
         identity
         for identity, slot in started_invocations.items()
-        if slot["result"] not in {"succeeded", "failed"}
+        if not slot["finish_at"] or _time_class(slot["finish_at"], start, end) != "in"
     ]
 
-    gate_events = [event for event in window_leaf if event["event_type"].startswith("gate.")]
+    gate_events = [
+        event
+        for event in accepted
+        if event["event_type"].startswith("gate.")
+        and _task_uid(event) in leaf_ids
+        and _before_end(event.get("occurred_at"), end)
+    ]
+    gate_events = sorted(gate_events, key=lambda event: (event.get("occurred_at") or "", event.get("ingest_seq", 0)))
     gates: dict[tuple[str, str], dict] = {}
     for event in gate_events:
         gate = event.get("gate") or {}
@@ -526,8 +592,10 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
         if event["event_type"] == "gate.result_recorded":
             slot["result"] = gate.get("normalized_result")
             slot["evidence_status"] = gate.get("evidence_status")
-            if gate.get("correction"):
+            if gate.get("correction") and timed(event) == "in":
                 slot["corrections"] += 1
+        elif event["event_type"] == "gate.evidence_invalidated":
+            slot["evidence_status"] = gate.get("evidence_status") or "invalid"
     required = [slot for slot in gates.values() if slot["applicability"] == "required"]
     covered = [
         slot
@@ -564,23 +632,50 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
     for stratum in ("narrow", "full-stack"):
         pass_rates.setdefault(stratum, _rate(0, 0, {}))
 
-    cases: dict[str, list[dict]] = {}
-    for event in validation_finishes:
+    historical_cases: dict[tuple[str, str], list[dict]] = {}
+    for event in accepted:
+        if event["event_type"] != "validation.finished":
+            continue
+        validation_id = (event.get("validation") or {}).get("validation_id")
         for case in (event.get("validation") or {}).get("cases") or []:
-            cases.setdefault(case["case_id"], []).append(case)
+            historical_cases.setdefault((validation_id, case["case_id"]), []).append(case)
+    first_by_case: dict[str, dict] = {}
+    for attempts in historical_cases.values():
+        for attempt in attempts:
+            if attempt["attempt_no"] == 1:
+                first_by_case[attempt["case_id"]] = attempt
     first_passed = 0
     first_decidable = 0
+    first_missing = 0
     final_distribution: dict[str, int] = {}
-    for case_id, attempts in cases.items():
-        ordered_cases = sorted(attempts, key=lambda case: case["attempt_no"])
-        first = ordered_cases[0]
-        if first["result"] in {"passed", "failed"}:
-            first_decidable += 1
-            if first["result"] == "passed":
-                first_passed += 1
-        final_distribution[ordered_cases[-1]["result"]] = (
-            final_distribution.get(ordered_cases[-1]["result"], 0) + 1
-        )
+    final_records = []
+    seen_final = set()
+    seen_first = set()
+    for event in validation_finishes:
+        validation_id = (event.get("validation") or {}).get("validation_id")
+        for case in (event.get("validation") or {}).get("cases") or []:
+            final_key = (validation_id, case["case_id"])
+            if final_key not in seen_final:
+                seen_final.add(final_key)
+                last = sorted(historical_cases[final_key], key=lambda item: item["attempt_no"])[-1]
+                final_distribution[last["result"]] = final_distribution.get(last["result"], 0) + 1
+                final_records.append(
+                    {
+                        "validation_id": validation_id,
+                        "case_id": case["case_id"],
+                        "result": last["result"],
+                    }
+                )
+            if case["case_id"] in seen_first:
+                continue
+            seen_first.add(case["case_id"])
+            first = first_by_case.get(case["case_id"])
+            if first and first["result"] in {"passed", "failed"}:
+                first_decidable += 1
+                if first["result"] == "passed":
+                    first_passed += 1
+            else:
+                first_missing += 1
 
     stale = [
         event["event_id"]
@@ -593,23 +688,39 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
         for event in in_window
         if not _task_uid(event)
     ]
-    gaps = []
-    for event in in_window:
-        if event["event_type"] != "collection.gap_detected":
-            continue
+    gaps = {}
+    gap_events = [
+        event
+        for event in accepted
+        if event["event_type"] in {"collection.gap_detected", "collection.recovered"}
+        and _in_population(event, scope, tasks)
+        and _before_end(event.get("occurred_at"), end)
+    ]
+    for event in sorted(gap_events, key=lambda item: (item.get("occurred_at") or "", item.get("ingest_seq", 0))):
         collection = event.get("collection") or {}
-        if not collection.get("closed"):
-            gaps.append(collection.get("gap_id") or event["event_id"])
+        gap_id = collection.get("gap_id") or event["event_id"]
+        if event["event_type"] == "collection.recovered" or collection.get("closed"):
+            gaps.pop(gap_id, None)
+        else:
+            gaps[gap_id] = event["event_id"]
 
     usage_events = [
         event
         for event in accepted
-        if event["event_type"] == "usage.recorded" and timed(event) == "in"
+        if event["event_type"] in {"usage.recorded", "usage.corrected"}
+        and (timed(event) == "in" or event["event_type"] == "usage.corrected")
+        and _before_end(event.get("occurred_at"), end)
     ]
+    in_window_requests = {
+        (event.get("usage") or {}).get("request_id")
+        for event in usage_events
+        if timed(event) == "in"
+    }
     usage_kept = [
         event
         for event in _usage_records(usage_events)
         if _in_population(event, scope, tasks)
+        and (event.get("usage") or {}).get("request_id") in in_window_requests
     ]
     hosts: dict[str, str] = {}
     for event in accepted:
@@ -650,6 +761,7 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
                     (event.get("state") or {}).get("current") == "cancelled"
                     for event in step_finishes
                 ),
+                "declared": len(declared_steps),
             },
         ),
         "steps.retry_count": _count(len(retries)),
@@ -682,10 +794,11 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
             "value": None,
             "strata": pass_rates,
         },
-        "tests.first_attempt_pass_rate": _rate(first_passed, first_decidable, {}),
+        "tests.first_attempt_pass_rate": _rate(first_passed, first_decidable, {"missing_first_attempt": first_missing}),
         "tests.final_result_distribution": {
             "support": "supported",
             "value": final_distribution,
+            "records": final_records,
         },
         "evidence.stale_count": _count(len(set(stale)), event_ids=sorted(set(stale))),
         "audit.unlinked_count": _count(len(unlinked), event_ids=sorted(unlinked)),
@@ -714,15 +827,16 @@ def evaluate(dataset: dict, scope: dict, catalog: dict | None = None, matrix: di
             "confirmed_event_ids": acceptance["confirmed_event_ids"],
             "conflicts": acceptance["conflicts"],
         },
-        "invocations": {
-            identity[0]: {
+        "invocations": [
+            {
+                "invocation_id": identity[0],
                 "attempt_id": identity[1],
                 "source_ids": slot["source_ids"],
                 "result": slot["result"],
                 "host": slot["host"],
             }
-            for identity, slot in started_invocations.items()
-        },
+            for identity, slot in sorted(started_invocations.items())
+        ],
         "metrics": metrics,
         "capability": hosts,
         "unknown_time_event_ids": unknown_time,
