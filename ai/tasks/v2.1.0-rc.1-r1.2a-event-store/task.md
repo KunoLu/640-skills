@@ -7,8 +7,8 @@ mode_note: 用户本次明确要求 SBTD strict mode。
 status: "done"
 branch: feat/v2.1.0-rc.1-r1.2a-event-store
 created_at: '2026-10-16T19:15:14.094444+08:00'
-updated_at: "2026-10-16T19:47:00.729647+08:00"
-completed_at: "2026-10-16T19:47:00.729647+08:00"
+updated_at: "2026-10-16T20:26:42.150088+08:00"
+completed_at: "2026-10-16T20:26:42.150088+08:00"
 ---
 交付 v2.1.0-rc.1 的 R1.2a：事件库、去重、spool、checkpoint、质量记录。产物是本地存储与恢复机制。不做 R1.2b 宿主适配器、R1.2c 历史导入、R1.3 API。
 
@@ -126,6 +126,70 @@ Deferred refactors: 不把去重逻辑从 contract_eval 抽到第三模块。
 3. `event.corrected` / `supersedes_event_id` 未进入 R1.0 schema。本包不发明更正事件，冲突只保留先接受的记录。
 4. 入库时是否覆盖生产者带来的 `recorded_at` / `ingest_seq`。本包保存生产者原文，库内顺序只用自己的 `ingest_seq` 列；规范化比较仍排除这两个字段和 `event_id`。
 
+## Reviewy fault blocker
+
+未完整调用 grill-with-docs。Reviewy blocker 与本次指定的测试 seam 已经固定：`EventStore.append` 不再接受 `fault`；截断和部分失败由测试 patch `_write_ready` / `_commit_event`；崩溃在子进程脚本内 patch 后触发。没有新的领域歧义。
+
+### Book Gate Plan（本轮）
+
+| Reviewer | 客观触发／阶段 | Lifecycle | 谓词与结果 |
+|---|---|---|---|
+| book-ddd-distilled-modeling | 领域术语或上下文歧义，需求确认前 | before-dev | not-needed。未完整 grill。`fault` 不是通用语言。上一轮 confirmed 边界仍有效。 |
+| book-ddia-data-design | 持久化／恢复设计确认前 | before-dev | not-needed。不改 schema、所有权、一致性或恢复算法。上一轮 confirmed 设计仍有效。 |
+| book-legacy-change-safety | 既有高风险行为，改行为前 | before-dev | characterized。改前五个完成门与开关关闭测试已通过。 |
+| book-refactoring-pass | 既有生产代码编辑前 | before-dev | proceed。删除 fault 分支即可，不先做结构重构。 |
+| book-release-readiness | 生产运行时／部署，验证后 | finish | not-needed。无服务、作业、队列、集成、发布或迁移。 |
+| TDD | 公开契约高风险 | implement | 先断言签名不含 fault，再删生产参数。 |
+| gherkin-bdd | 可观察恢复行为 | before-dev | traceable。场景仍在 `sbtd-runtime/spec/r1.2a-event-store-scenarios.md`。源仓不建 .feature。 |
+| ponytail | 实现选型 | implement | 删除生产 fault；测试用 stdlib `unittest.mock.patch`。 |
+
+### Legacy Change Safety Review
+
+Status: characterized
+
+Behavior to change: 公开 `append(..., fault=)` 可以 `os._exit(91)` 或截断真实 spool。
+
+Behavior to preserve: 无 fault 的正常入库、重放确认、乱序入库序、截断不补造、崩溃后恢复一次、部分失败不把未提交报成已接受、开关关闭等价且不写审计文件。
+
+Current reproduction evidence: 改生产代码前，五个完成门与 `test_switch_off_matches_direct_helper_and_writes_no_audit` 通过。
+
+Safety net: 上述测试保留可观察断言。注入改打已有 `_write_ready` / `_commit_event`，不新增生产 seam。
+
+Hidden dependencies / seam: 无新生产 seam。测试 seam 是既有私有写路径。
+
+Validation plan: 签名红测后删除 `fault`，再跑 `sbtd-runtime/tests` 与 ruff。
+
+Validation result: 签名测试先红（`fault` 仍在参数里）后绿。`python3 -B -m unittest discover -s sbtd-runtime/tests` 71 ok。`python3 -B -m unittest tests.test_sbtd_runtime_r1_event_store tests.test_sbtd_runtime_r1_facade` 30 ok。ruff 0.17.1 check 与 format --check 通过。
+
+Review mode: normal
+
+### Ponytail Review
+
+Lean already. Ship. 测试 patch helper 是指定 seam，不是新的生产抽象。
+
+### Code Readability Review
+
+`append` 仍是原来的写入路径，只删掉 fault 分支。测试 helper 点名 `_write_ready` / `_commit_event`。崩溃 patch 留在既有子进程脚本内。未改 vendor。
+
+
+### Refactoring Review
+
+Status: proceed
+
+Review mode: normal
+
+Existing-code scope: `sbtd-runtime/event_store.py` 的 `append` 与只服务于 fault 的 `CRASH_EXIT`。
+
+Behavior that must remain unchanged: 无 fault 的入库、重放、恢复和开关关闭路径。
+
+Structural friction: fault 分支嵌在公开方法里。删除即可，不需要先抽新模块。
+
+Decision and smallest safe step: no refactor needed。
+
+Safety net and validation: 既有完成门测试；注入改为测试 patch。
+
+Deferred refactors: 不把 `_write_ready` / `_commit_event` 改成公开测试钩子。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -137,3 +201,7 @@ Deferred refactors: 不把去重逻辑从 contract_eval 抽到第三模块。
 | 2026-10-16T19:46:40.848371+08:00 | planned | in-progress | apply the remaining secret-name and pending-count fixes | sbtd-runtime/tests/test_event_store.py secret and foreign pending assertions |
 | 2026-10-16T19:46:56.788705+08:00 | in-progress | checking | secret spelling and foreign pending fixes passed the runtime tests | python3 -B -m unittest discover -s sbtd-runtime/tests (70 ok) at 8c8bc180ad8c8e2d8f6dc0fa7160362520b76341 |
 | 2026-10-16T19:47:00.729647+08:00 | checking | done | R1.2a event store recovery fixes are on the pull request head | https://github.com/KunoLu/640-skills/pull/131 head 8c8bc180ad8c8e2d8f6dc0fa7160362520b76341; sbtd-runtime tests 70 passed |
+| 2026-10-16T20:11:47.850690+08:00 | done | planned | Reviewy blocker: public append fault can os._exit or truncate the real spool | PR #131; sbtd-runtime/event_store.py append fault parameter; pre-change gate tests passed |
+| 2026-10-16T20:11:52.806958+08:00 | planned | in-progress | remove fault from production append and move injection to test patches | Reviewy blocker on PR #131; consumer seam remains EventStore.append without fault |
+| 2026-10-16T20:26:37.488899+08:00 | in-progress | checking | fault removed from production append; gate tests and related wrappers passed | python3 -B -m unittest discover -s sbtd-runtime/tests (71 ok); tests.test_sbtd_runtime_r1_event_store and tests.test_sbtd_runtime_r1_facade (30 ok); ruff 0.17.1 check/format passed |
+| 2026-10-16T20:26:42.150088+08:00 | checking | done | public append no longer accepts fault; injection stays in tests | sbtd-runtime/tests 71 ok including five completion gates, signature assertion, and switch-off facade wrapper; ruff 0.17.1 passed |

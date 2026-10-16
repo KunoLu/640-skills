@@ -21,7 +21,6 @@ import jsonschema
 from contract_eval import canonical_content, dedup_key, validate_events
 
 SCHEMA_VERSION = "1"
-CRASH_EXIT = 91
 _HEADER = "sbtd_spool"
 _SCHEMA_ERRORS = (
     jsonschema.ValidationError,
@@ -216,9 +215,7 @@ class EventStore:
     def __del__(self) -> None:
         self.close()
 
-    def append(
-        self, events: list[dict[str, Any]], *, fault: str | None = None
-    ) -> AppendResult:
+    def append(self, events: list[dict[str, Any]]) -> AppendResult:
         if self._read_only:
             raise StoreError("read-only context cannot persist")
         if not isinstance(events, list):
@@ -254,15 +251,6 @@ class EventStore:
             return AppendResult(tuple(outcomes))
         segment_id = uuid.uuid4().hex
         path, offsets = self._write_ready(segment_id, accepted_input)
-        if fault == "truncate-tail":
-            size = path.stat().st_size
-            with path.open("r+b") as handle:
-                handle.truncate(max(0, size - 8))
-                handle.flush()
-                os.fsync(handle.fileno())
-            raise StoreError("spool tail truncated before commit")
-        if fault == "crash":
-            os._exit(CRASH_EXIT)
         for event, offset in zip(accepted_input, offsets, strict=True):
             status = self._commit_event(event, segment_id, offset)
             outcomes.append(
@@ -270,8 +258,6 @@ class EventStore:
                     status, event["event_id"], None if status == "accepted" else status
                 )
             )
-            if fault == "after-first":
-                raise StoreError("commit interrupted before the batch finished")
         path.unlink(missing_ok=True)
         return AppendResult(tuple(outcomes))
 

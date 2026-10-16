@@ -6,6 +6,7 @@ does not create .feature files. The consumer seam is EventStore.
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import stat
@@ -14,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -96,6 +98,34 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
 
+def _truncate_tail():
+    real = EventStore._write_ready
+
+    def truncate(self, segment_id, events):
+        path, _ = real(self, segment_id, events)
+        size = path.stat().st_size
+        with path.open("r+b") as handle:
+            handle.truncate(max(0, size - 8))
+            handle.flush()
+            os.fsync(handle.fileno())
+        raise StoreError("spool tail truncated before commit")
+
+    return patch.object(EventStore, "_write_ready", truncate)
+
+
+def _stop_after_first():
+    real = EventStore._commit_event
+    seen = {"count": 0}
+
+    def stop(self, event, segment_id, offset):
+        seen["count"] += 1
+        if seen["count"] > 1:
+            raise StoreError("commit interrupted before the batch finished")
+        return real(self, event, segment_id, offset)
+
+    return patch.object(EventStore, "_commit_event", stop)
+
+
 class EventStoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="sbtd-r12a-")
@@ -146,6 +176,9 @@ class EventStoreTests(unittest.TestCase):
         self.assertEqual((real / "notes.txt").read_text(encoding="utf-8"), "keep")
         self.assertFalse((real / "audit.db").exists())
         self.assertFalse((real / "spool").exists())
+
+    def test_append_signature_has_no_fault(self) -> None:
+        self.assertNotIn("fault", inspect.signature(EventStore.append).parameters)
 
     def test_replay_confirms_same_content_without_counting_twice(self) -> None:
         store = self._open()
@@ -201,8 +234,8 @@ class EventStoreTests(unittest.TestCase):
         store = self._open()
         first = _event("evt_keep", "native_keep", "2026-10-16T01:00:00Z")
         second = _event("evt_cut", "native_cut", "2026-10-16T01:05:00Z")
-        with self.assertRaises(StoreError):
-            store.append([first, second], fault="truncate-tail")
+        with _truncate_tail(), self.assertRaises(StoreError):
+            store.append([first, second])
         recovered = EventStore.open(self.home, confirmed=True)
         replayed = recovered.replay()
         self.assertEqual([item["event_id"] for item in replayed], ["evt_keep"])
@@ -234,14 +267,18 @@ class EventStoreTests(unittest.TestCase):
                 "-B",
                 "-c",
                 (
-                    "import json, sys\n"
+                    "import json, os, sys\n"
                     "from pathlib import Path\n"
+                    "from unittest.mock import patch\n"
                     "sys.path.insert(0, sys.argv[1])\n"
                     "from event_store import EventStore\n"
                     "home = Path(sys.argv[2])\n"
                     "event = json.loads(Path(sys.argv[3]).read_text(encoding='utf-8'))\n"
                     "store = EventStore.open(home, confirmed=True)\n"
-                    "store.append([event], fault='crash')\n"
+                    "def crash(self, event, segment_id, offset):\n"
+                    "    os._exit(91)\n"
+                    "with patch.object(EventStore, '_commit_event', crash):\n"
+                    "    store.append([event])\n"
                 ),
                 str(ROOT),
                 str(self.home),
@@ -264,8 +301,8 @@ class EventStoreTests(unittest.TestCase):
         store = self._open()
         first = _event("evt_done", "native_done", "2026-10-16T01:00:00Z")
         second = _event("evt_left", "native_left", "2026-10-16T01:05:00Z")
-        with self.assertRaises(StoreError) as caught:
-            store.append([first, second], fault="after-first")
+        with _stop_after_first(), self.assertRaises(StoreError) as caught:
+            store.append([first, second])
         self.assertNotIn("accepted=2", str(caught.exception))
         ready = list((self.home / "spool").glob("*.ready"))
         self.assertEqual(len(ready), 1)
@@ -371,8 +408,8 @@ class EventStoreTests(unittest.TestCase):
         store = self._open()
         first = _event("evt_keep", "native_keep", "2026-10-16T01:00:00Z")
         second = _event("evt_left", "native_left", "2026-10-16T01:05:00Z")
-        with self.assertRaises(StoreError):
-            store.append([first, second], fault="after-first")
+        with _stop_after_first(), self.assertRaises(StoreError):
+            store.append([first, second])
         ready = next((self.home / "spool").glob("*.ready"))
         other = self.home.parent / "other-home"
         _enable(other)
