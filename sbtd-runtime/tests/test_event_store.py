@@ -448,13 +448,13 @@ class EventStoreTests(unittest.TestCase):
             [{key: f"metric-{index}"} for index, key in enumerate(kept)],
         )
 
-    def test_nested_extension_secrets_are_rejected_and_counters_stay(self) -> None:
+    def test_nested_extensions_are_schema_rejected_and_not_persisted(self) -> None:
         # Scenario: 嵌套扩展里的敏感键不入库
-        # Scenario: 嵌套的 token 计数字段仍入库
         store = self._open()
         rejected = (
             ("evt_nested_auth", {"auth": {"github_token": "nested-token-value"}}),
             ("evt_nested_list", {"items": [{"x-api-key": "nested-key-value"}]}),
+            ("evt_nested_usage", {"usage": {"input_tokens": 1, "max_tokens": 2}}),
         )
         for event_id, extensions in rejected:
             event = _event(event_id, f"native_{event_id}", "2026-10-16T01:00:00Z")
@@ -462,7 +462,7 @@ class EventStoreTests(unittest.TestCase):
             result = store.append([event])
             self.assertEqual(
                 [(item.status, item.code) for item in result.outcomes],
-                [("rejected", "secret-rejected")],
+                [("rejected", "schema-rejected")],
                 extensions,
             )
         self.assertEqual(store.replay(), [])
@@ -473,17 +473,10 @@ class EventStoreTests(unittest.TestCase):
             and (
                 b"nested-token-value" in path.read_bytes()
                 or b"nested-key-value" in path.read_bytes()
+                or b"input_tokens" in path.read_bytes()
             )
         ]
         self.assertEqual(leaked, [])
-        kept = _event("evt_nested_usage", "native_nested_usage", "2026-10-16T02:00:00Z")
-        kept["extensions"] = {"usage": {"input_tokens": 1, "max_tokens": 2}}
-        result = store.append([kept])
-        self.assertEqual([item.status for item in result.outcomes], ["accepted"])
-        self.assertEqual(
-            [item["extensions"] for item in store.replay()],
-            [{"usage": {"input_tokens": 1, "max_tokens": 2}}],
-        )
 
     def test_cookie_plurals_are_rejected(self) -> None:
         # Scenario: cookie 复数扩展名不入库
