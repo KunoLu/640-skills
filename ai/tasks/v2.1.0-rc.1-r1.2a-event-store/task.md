@@ -4,11 +4,11 @@ id: v2.1.0-rc.1-r1.2a-event-store
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 SBTD strict mode。
-status: "in-progress"
+status: "done"
 branch: feat/v2.1.0-rc.1-r1.2a-event-store
 created_at: '2026-10-16T19:15:14.094444+08:00'
-updated_at: "2026-10-16T19:46:40.848371+08:00"
-completed_at: null
+updated_at: "2026-10-16T19:47:00.729647+08:00"
+completed_at: "2026-10-16T19:47:00.729647+08:00"
 ---
 交付 v2.1.0-rc.1 的 R1.2a：事件库、去重、spool、checkpoint、质量记录。产物是本地存储与恢复机制。不做 R1.2b 宿主适配器、R1.2c 历史导入、R1.3 API。
 
@@ -135,3 +135,5 @@ Deferred refactors: 不把去重逻辑从 contract_eval 抽到第三模块。
 | 2026-10-16T19:45:47.731677+08:00 | checking | done | R1.2a event store, dedup, spool, checkpoint, and quality records are delivered | https://github.com/KunoLu/640-skills/pull/131 head 27c4201f951c219c0195ca583500fb8fb7dbb6a3; sbtd-runtime tests 70 passed |
 | 2026-10-16T19:46:37.089145+08:00 | done | planned | review found camelCase secret names and foreign pending counts after the first done mark | event_store.py secret normalizer and pending ownership filter |
 | 2026-10-16T19:46:40.848371+08:00 | planned | in-progress | apply the remaining secret-name and pending-count fixes | sbtd-runtime/tests/test_event_store.py secret and foreign pending assertions |
+| 2026-10-16T19:46:56.788705+08:00 | in-progress | checking | secret spelling and foreign pending fixes passed the runtime tests | python3 -B -m unittest discover -s sbtd-runtime/tests (70 ok) at 8c8bc180ad8c8e2d8f6dc0fa7160362520b76341 |
+| 2026-10-16T19:47:00.729647+08:00 | checking | done | R1.2a event store recovery fixes are on the pull request head | https://github.com/KunoLu/640-skills/pull/131 head 8c8bc180ad8c8e2d8f6dc0fa7160362520b76341; sbtd-runtime tests 70 passed |
