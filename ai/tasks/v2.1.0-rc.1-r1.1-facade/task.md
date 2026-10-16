@@ -4,11 +4,11 @@ id: v2.1.0-rc.1-r1.1-facade
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 SBTD strict mode。
-status: "checking"
+status: "done"
 branch: feat/v2.1.0-rc.1-r1.1-facade
 created_at: '2026-10-16T17:28:14.429175+08:00'
-updated_at: "2026-10-16T18:05:41.414629+08:00"
-completed_at: null
+updated_at: "2026-10-16T18:07:29.357787+08:00"
+completed_at: "2026-10-16T18:07:29.357787+08:00"
 ---
 交付 v2.1.0-rc.1 的 R1.1：Facade 与旧 helper 兼容包装、显式项目注册。不做 R1.2a 事件存储，不做 R1.2b 宿主适配器，不做 HTTP 服务。
 
@@ -87,3 +87,4 @@ Required tests: 开关关闭的业务文件等价、开启时无 audit.db、只�
 |---|---|---|---|---|
 | 2026-10-16T17:28:16.272618+08:00 | planned | in-progress | R1.1 facade scope is fixed by PRD and ADR; implementation starts after the failing seam tests | docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:1377 and docs/adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md |
 | 2026-10-16T18:05:41.414629+08:00 | in-progress | checking | R1.1 facade tests and related helper tests passed after review fixes | python3 -m unittest discover -s sbtd-runtime/tests (50 ok); tests.test_sbtd_runtime_r1_facade tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_task_state tests.test_sbtd_task_routing tests.test_sbtd_handoff tests.test_sbtd_identity (180 ok); review symlink/key/gap regressions 24 ok |
+| 2026-10-16T18:07:29.357787+08:00 | checking | done | R1.1 facade, registration, and switch-off equivalence are delivered in PR 130 | https://github.com/KunoLu/640-skills/pull/130 code 9fb73b6356f51649e12c2a3871e6cc130982a052; sbtd-runtime tests 53 passed; related helper tests 183 passed |
