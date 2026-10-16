@@ -4,11 +4,11 @@ id: v2.1.0-rc.1-prd-scalar-extensions
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 strict 模式，并要求把任务记录写盘。
-status: "checking"
+status: "done"
 branch: docs/v2.1.0-rc.1-prd-scalar-extensions
 created_at: '2026-10-16T23:37:07.631749+08:00'
-updated_at: "2026-10-16T23:37:49.596787+08:00"
-completed_at: null
+updated_at: "2026-10-16T23:38:53.274634+08:00"
+completed_at: "2026-10-16T23:38:53.274634+08:00"
 ---
 修订 PRD v0.2，使扩展字段表述与已发布的 `event.schema.json` 一致：扩展值标量-only（string、number、boolean、null），嵌套数据由宿主适配器拍平（如 `a.b` 键）或丢弃。同时在 `ai/tasks/v2.1.0-rc.1-secret-key-match/task.md` 把 PRD-vs-schema 开放项标记为已解决（2026-10-16 用户决定），并把 Book Gate Plan 中“扩展值可嵌套后入库”的触发行改为“嵌套扩展值被 schema 拒绝，不入库”。
 
@@ -46,3 +46,4 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-16T23:37:10.365966+08:00 | planned | in-progress | PRD extension row and secret-key-match task record edits are applied | docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md extension row now scalar-only; ai/tasks/v2.1.0-rc.1-secret-key-match/task.md open item resolved and gate trigger fixed |
 | 2026-10-16T23:37:49.596787+08:00 | in-progress | checking | docs-only diff reviewed against acceptance criteria | git diff: PRD extension row scalar-only, open item resolved with 2026-10-16 decision, gate trigger fixed; no code/schema/test changes; wording not pinned by any test (grep-verified) |
+| 2026-10-16T23:38:53.274634+08:00 | checking | done | PRD amended to scalar-only, open item resolved, pull request open and not merged | https://github.com/KunoLu/640-skills/pull/133 head 16ab765c4406d4839d51277a05e7db3825cc9a48 base main; docs-only diff verified against acceptance criteria |
