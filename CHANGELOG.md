@@ -22,7 +22,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 ### Fixed
 
 - Reject event-store extension names that match a secret term only after case-insensitive `-`, `_`, and camelCase normalization. `github_token`, `x-api-key`, `X-Api-Key`, `authToken`, and `client_secret` are rejected before the spool write. `token_count`, `input_tokens`, and `tokens` stay. Already stored events are not rewritten.
-- Scan secret key names at every depth of event-store extension objects and arrays before the spool write. A nested `github_token` or list item `x-api-key` rejects the whole event. Nested `input_tokens` and `max_tokens` stay. `cookies` and `set_cookies` are rejected. Extension values may be small nested JSON objects and arrays, still size-limited. Already stored events are not rewritten.
+- Scan secret key names recursively as defense in depth, but extension values stay scalar-only: nested objects and arrays are rejected by the event schema and are not persisted. A nested `github_token`, a list item `x-api-key`, or nested `input_tokens`/`max_tokens` rejects the whole event as `schema-rejected` before the spool write. `cookies` and `set_cookies` are rejected. Already stored events are not rewritten.
 
 ## v2.0.2 (2026-10-16)
 

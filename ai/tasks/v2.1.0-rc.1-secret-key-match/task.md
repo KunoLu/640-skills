@@ -123,7 +123,9 @@ Status: not-needed
 
 ## Reviewy nested-key blocker
 
-未完整调用 grill-with-docs。Reviewy blocker 与 nit 已固定嵌套拒绝、计数放行和复数 cookie。没有新的领域歧义。PRD v0.2 已允许扩展里的小对象；本轮之前 schema 只允许标量，放行用例会变成 schema-rejected。本轮放宽扩展值，仍保持 maxProperties 8 和字符串 256，数组 maxItems 8。不改 schema_version，不回填，不把拒绝改成掩码。
+未完整调用 grill-with-docs。Reviewy blocker 与 nit 已固定嵌套拒绝、计数放行和复数 cookie。没有新的领域歧义。PRD v0.2 已允许扩展里的小对象；最终结果是扩展值保持标量-only（string ≤256、number、boolean、null），嵌套对象和数组被 schema 拒绝且不入库，递归敏感扫描保留为纵深防御。不改 schema_version，不回填，不把拒绝改成掩码。
+
+开放项：PRD v0.2 提到扩展里允许小对象，与最终的标量-only schema 不一致（既有不一致，非本轮引入）。R1.2b 之前由用户决定：修订 PRD，或另开契约 PR 允许嵌套。
 
 BDD：沿用 `sbtd-runtime/spec/r1.2a-event-store-scenarios.md`。场景正文中文，关键词英文。源仓不建 .feature。Cross-repo context：not-needed。Mock Strategy：none。
 
@@ -146,17 +148,17 @@ Status: confirmed
 
 Data owner and source of truth: 已接受事件仍只属于 `audit.db`。不新增表，不改 `schema_version`。
 
-Write / read / async / failure paths: `append` 仍先过 schema，再走 `_secret_extension`。任一层键命中则 `secret-rejected`，不写 spool。嵌套非敏感对象现在可以入库。读取仍是 `replay`。`_recover` 对已落盘行再判一次。
+Write / read / async / failure paths: `append` 仍先过 schema，再走 `_secret_extension`。任一层键命中则 `secret-rejected`，不写 spool。嵌套对象和数组在 schema 阶段被拒绝且不入库；递归扫描保留为纵深防御。读取仍是 `replay`。`_recover` 对已落盘行再判一次。
 
 Consistency model: 单进程读己之写。不变。
 
 Idempotency / ordering / retry / deduplication: 去重键不变。被拒绝的事件不进入去重账。
 
-Schema / migration / backfill / rollback / replay: 扩展值允许同样大小限制下的嵌套对象和数组。无迁移、无回填。已接受的旧事件不改写。超过深度 32 的未扫描层按敏感拒绝，避免漏检后落盘。
+Schema / migration / backfill / rollback / replay: 扩展值只允许标量（string ≤256、number、boolean、null）；嵌套对象和数组被 schema 拒绝。无迁移、无回填。已接受的旧事件不改写。超过深度 32 的未扫描层按敏感拒绝，避免漏检后落盘。
 
 Observability and repair: 拒绝仍记 `secret-rejected`。不新增指标。
 
-Required tests: 嵌套 `github_token` 与列表中的 `x-api-key` 被拒绝且不落盘；嵌套 `input_tokens` / `max_tokens` 被接受并出现在重放中；`cookies` / `set_cookies` 被拒绝；顶层 `max_tokens` 被接受。
+Required tests: 嵌套 `github_token`、列表中的 `x-api-key` 与嵌套 `input_tokens` / `max_tokens` 都被 schema 拒绝且不落盘；`cookies` / `set_cookies` 被拒绝；顶层 `max_tokens` 被接受。
 
 ### Legacy Change Safety Review
 
