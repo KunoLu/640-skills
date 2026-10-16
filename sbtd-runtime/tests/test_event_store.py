@@ -354,10 +354,11 @@ class EventStoreTests(unittest.TestCase):
 
     def test_extension_secret_is_not_persisted(self) -> None:
         store = self._open()
-        secret = _event("evt_secret", "native_secret", "2026-10-16T01:00:00Z")
-        secret["extensions"] = {"api_key": "do-not-store"}
-        result = store.append([secret])
-        self.assertEqual([item.status for item in result.outcomes], ["rejected"])
+        for name, key in (("evt_secret", "api_key"), ("evt_camel", "clientSecret")):
+            secret = _event(name, f"native_{name}", "2026-10-16T01:00:00Z")
+            secret["extensions"] = {key: "do-not-store"}
+            result = store.append([secret])
+            self.assertEqual([item.status for item in result.outcomes], ["rejected"])
         self.assertEqual(store.replay(), [])
         leaked = [
             path
@@ -384,6 +385,7 @@ class EventStoreTests(unittest.TestCase):
         other_store.close()
         recovered = EventStore.open(other, confirmed=True)
         self.assertEqual(recovered.replay(), [])
+        self.assertEqual(recovered.quality().pending, 0)
         self.assertTrue(copied.is_file())
 
     def test_question_mark_in_home_can_reopen(self) -> None:

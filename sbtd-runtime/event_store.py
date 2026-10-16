@@ -492,7 +492,7 @@ class EventStore:
             return 0
         pending = 0
         for path in spool.glob("*.ready"):
-            if path.is_symlink():
+            if path.is_symlink() or not self._owned_ready(path):
                 continue
             lines, _truncated = _complete_lines(path.read_bytes())
             for line in lines[1:]:
@@ -508,6 +508,20 @@ class EventStore:
                 if row is None:
                     pending += 1
         return pending
+
+    def _owned_ready(self, path: Path) -> bool:
+        lines, _truncated = _complete_lines(path.read_bytes())
+        if not lines:
+            return False
+        try:
+            header = json.loads(lines[0])
+        except json.JSONDecodeError:
+            return False
+        return (
+            isinstance(header, dict)
+            and header.get(_HEADER) == 1
+            and header.get("source_instance") == self._instance()
+        )
 
     def _checkpoint_offset(self, source_id: str, segment_id: str) -> int:
         row = self._conn.execute(
@@ -543,23 +557,22 @@ def _secret_extension(event: dict[str, Any]) -> bool:
 
 
 def _secret_key(key: object) -> bool:
-    normalized = str(key).casefold().replace("-", "_")
+    normalized = "".join(ch for ch in str(key).casefold() if ch.isalnum())
     return normalized in {
-        "api_key",
         "apikey",
-        "access_token",
-        "refresh_token",
-        "id_token",
+        "accesstoken",
+        "refreshtoken",
+        "idtoken",
         "token",
         "password",
         "passwd",
         "secret",
-        "client_secret",
+        "clientsecret",
         "cookie",
         "authorization",
         "bearer",
         "oauth",
-        "oauth_token",
+        "oauthtoken",
     }
 
 
