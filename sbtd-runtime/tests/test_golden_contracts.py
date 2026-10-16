@@ -90,6 +90,25 @@ REQUIRED_CATALOG_FIELDS = {
 }
 
 
+class CapabilityMatrixTests(unittest.TestCase):
+    def test_completion_gate_encodes_the_adr_fallback_gate(self) -> None:
+        # Scenario: 两门禁宿主都拿不到结构化事件时 R1 不放行
+        gate = MATRIX["completion_gate"]
+        pins = [
+            f"{pin['host_kind']}@{pin['host_version']}"
+            for pin in MATRIX["acceptance_pins"]
+        ]
+        self.assertEqual(gate["hosts"], ["codex@0.163.0", "omp@18.11.1"])
+        self.assertEqual(gate["hosts"], pins)
+        self.assertEqual(gate["evidence"], "real-smoke")
+        self.assertIs(gate["parser_fixture_counts"], False)
+        self.assertEqual(gate["event"], "skill-or-tool-call")
+        self.assertEqual(gate["minimum_passing_hosts"], 1)
+        self.assertLess(gate["minimum_passing_hosts"], len(gate["hosts"]))
+        self.assertEqual(gate["both_unsupported"], "r1-fail-return-to-user")
+        self.assertIs(gate["release_when_both_unsupported"], False)
+
+
 class GoldenContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -536,3 +555,42 @@ class OpenApiDraftTests(unittest.TestCase):
                 unsafe.append(f"{method.upper()} {path}")
         self.assertIn("POST /api/v1/collection/refresh", unsafe)
         self.assertIn("DELETE /api/v1/exports/{export_id}", unsafe)
+
+    def test_exports_are_rc2_and_not_rc1_blocking(self) -> None:
+        # Scenario: 导出接口不属于 rc.1 阻塞交付
+        exports = {
+            path: item
+            for path, item in self.doc["paths"].items()
+            if path == "/api/v1/exports" or path.startswith("/api/v1/exports/")
+        }
+        self.assertEqual(
+            set(exports),
+            {
+                "/api/v1/exports",
+                "/api/v1/exports/{export_id}",
+                "/api/v1/exports/{export_id}/file",
+            },
+        )
+        for path, item in exports.items():
+            for method, operation in item.items():
+                with self.subTest(path=path, method=method):
+                    self.assertEqual(operation["x-sbtd-release"], "v2.1.0-rc.2")
+                    self.assertIs(operation["x-sbtd-rc1-blocking"], False)
+        self.assertEqual(self.doc["info"]["x-sbtd-release"], "v2.1.0-rc.1")
+        refresh = self.doc["paths"]["/api/v1/collection/refresh"]["post"]
+        self.assertNotEqual(refresh.get("x-sbtd-release"), "v2.1.0-rc.2")
+
+    def test_forbidden_response_is_shared_for_host_origin_and_csrf(self) -> None:
+        # Scenario: Host／Origin 与 CSRF 拒绝共用 403 契约
+        forbidden = self.doc["components"]["responses"]["Forbidden"]
+        description = forbidden["description"].lower()
+        self.assertIn("host", description)
+        self.assertIn("origin", description)
+        self.assertIn("csrf", description)
+        for path, item in self.doc["paths"].items():
+            for method, operation in item.items():
+                with self.subTest(path=path, method=method):
+                    self.assertEqual(
+                        operation["responses"]["403"]["$ref"],
+                        "#/components/responses/Forbidden",
+                    )

@@ -11,7 +11,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ### Added
 
-- Add optional `sbtd-runtime/` R1.0 contracts for `v2.1.0-rc.1`: data dictionary, event JSON Schema, metric catalog, loopback OpenAPI draft, capability pins, and golden dataset checks for nouns, denominators, and dedup. Core metrics cover task status, runs, steps, Skill/Tool invocations, gates, test evidence, and collection health. Other §8.2 metrics stay in the catalog as `unsupported` and are not returned as 0. Token and cost fields are conditional: provided values are kept, and missing values stay visible instead of 0. No Starlette/uvicorn server, event store, or collector is included.
+- Add optional `sbtd-runtime/` R1.0 contracts for `v2.1.0-rc.1`: data dictionary, event JSON Schema, metric catalog, loopback OpenAPI draft, capability pins, and golden dataset checks for nouns, denominators, and dedup. Core metrics cover task status, runs, steps, Skill/Tool invocations, gates, test evidence, and collection health. Other §8.2 metrics stay in the catalog as `unsupported` and are not returned as 0. Token and cost fields are conditional: provided values are kept, and missing values stay visible instead of 0. The capability matrix also freezes the ADR 0001 fallback completion gate: at least one pinned host must collect a Skill or Tool call event in a real smoke; if both pinned hosts are unsupported, R1 fails and returns to the user instead of being released. In the OpenAPI draft, every `/api/v1/exports*` operation is annotated `v2.1.0-rc.2` and non-blocking for rc.1, and every operation references a shared 403 response for Host/Origin and CSRF rejection. No Starlette/uvicorn server, event store, or collector is included.
 
 ### Changed
 

@@ -11,7 +11,7 @@
 | 观察事件 | 未来用户私有 audit store | 原始记录 | 当成业务授权或法律不可抵赖 |
 | 指标 | 版本化投影 | 从已接受事件重建 | 用 0 或 mock 填未实现指标 |
 | registry／长期凭证 | `SBTD_RUNTIME_HOME` | 用户私有映射 | 写入项目 tracked 文件 |
-| capability pin | 本目录 `capability-matrix.json` | 固定验收宿主 | 代替 R1.2b 真实 smoke |
+| capability pin | 本目录 `capability-matrix.json` | 固定验收宿主与兜底完成门决策 | 代替 R1.2b 真实 smoke |
 
 ## 标识
 

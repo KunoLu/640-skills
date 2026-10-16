@@ -11,7 +11,7 @@
 
 ### 新增
 
-- 新增可选的 `sbtd-runtime/`，作为 `v2.1.0-rc.1` 的 R1.0 契约：数据字典、事件 JSON Schema、指标目录、loopback OpenAPI 草案、capability pin，以及用 golden dataset 检查名词、分母和去重。核心指标覆盖任务状态、执行轮次、步骤、Skill／Tool 调用、Gate、测试证据和采集健康。§8.2 其余指标保留在目录中并标 `unsupported`，不返回 0。token／费用是条件性字段：来源提供则保留，缺失可见且不填 0。不包含 Starlette／uvicorn 服务、事件库或采集器。
+- 新增可选的 `sbtd-runtime/`，作为 `v2.1.0-rc.1` 的 R1.0 契约：数据字典、事件 JSON Schema、指标目录、loopback OpenAPI 草案、capability pin，以及用 golden dataset 检查名词、分母和去重。核心指标覆盖任务状态、执行轮次、步骤、Skill／Tool 调用、Gate、测试证据和采集健康。§8.2 其余指标保留在目录中并标 `unsupported`，不返回 0。token／费用是条件性字段：来源提供则保留，缺失可见且不填 0。capability matrix 同时固定 ADR 0001 的兜底完成门：至少一个门禁宿主在真实 smoke 采到 Skill 或 Tool 调用事件才通过；两宿主均 unsupported 时 R1 不通过并回到用户决策，不得放行。OpenAPI 草案中每个 `/api/v1/exports*` operation 标注 `v2.1.0-rc.2` 且非 rc.1 阻塞交付，所有 operation 引用同一个 403 响应组件覆盖 Host／Origin 与 CSRF 拒绝。不包含 Starlette／uvicorn 服务、事件库或采集器。
 
 ### 变更
 

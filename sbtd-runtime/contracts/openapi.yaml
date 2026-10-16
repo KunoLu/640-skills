@@ -40,6 +40,8 @@ paths:
       summary: Liveness without a project list
       security: []
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Minimal liveness
           content:
@@ -56,6 +58,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/PairingCode"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Session bearer. Not a long-term token and not returned in a URL.
           content:
@@ -72,6 +76,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/openapi.json:
@@ -82,6 +88,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: This contract
   /api/v1/projects:
@@ -94,6 +102,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/actors:
@@ -104,6 +114,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/components:
@@ -114,6 +126,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/tasks:
@@ -126,6 +140,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/tasks/{task_uid}:
@@ -138,6 +154,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TaskUid"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
         "404":
@@ -152,6 +170,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TaskUid"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/runs:
@@ -162,6 +182,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [audit:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/runs/{run_id}/steps:
@@ -174,6 +196,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RunId"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/gates:
@@ -184,6 +208,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [audit:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/validations:
@@ -194,6 +220,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [audit:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/events:
@@ -206,6 +234,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/collection-health:
@@ -216,6 +246,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/metrics/catalog:
@@ -226,6 +258,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [stats:read]
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Metric catalog, including unsupported and conditional metrics
           content:
@@ -248,6 +282,8 @@ paths:
             schema:
               $ref: "#/components/schemas/QueryScope"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
         "400":
@@ -268,6 +304,8 @@ paths:
             schema:
               $ref: "#/components/schemas/QueryScope"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/collection/refresh:
@@ -281,6 +319,8 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "202":
           $ref: "#/components/responses/Json"
         "409":
@@ -303,6 +343,8 @@ paths:
             schema:
               $ref: "#/components/schemas/IngestBatch"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
         "409":
@@ -318,6 +360,8 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "201":
           $ref: "#/components/responses/Json"
   /api/v1/report-snapshots/{snapshot_id}:
@@ -330,6 +374,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/SnapshotId"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
         "410":
@@ -345,6 +391,8 @@ paths:
         - $ref: "#/components/parameters/SnapshotId"
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
   /api/v1/exports:
@@ -354,10 +402,14 @@ paths:
       security:
         - localSession: []
       x-sbtd-scopes: [export:create]
+      x-sbtd-release: v2.1.0-rc.2
+      x-sbtd-rc1-blocking: false
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "202":
           $ref: "#/components/responses/Json"
   /api/v1/exports/{export_id}:
@@ -367,9 +419,13 @@ paths:
       security:
         - localSession: []
       x-sbtd-scopes: [export:read]
+      x-sbtd-release: v2.1.0-rc.2
+      x-sbtd-rc1-blocking: false
       parameters:
         - $ref: "#/components/parameters/ExportId"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
     delete:
@@ -378,11 +434,15 @@ paths:
       security:
         - localSession: []
       x-sbtd-scopes: [export:create]
+      x-sbtd-release: v2.1.0-rc.2
+      x-sbtd-rc1-blocking: false
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/ExportId"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "204":
           description: Cancelled or cleaned
   /api/v1/exports/{export_id}/file:
@@ -393,9 +453,13 @@ paths:
       security:
         - localSession: []
       x-sbtd-scopes: [export:read]
+      x-sbtd-release: v2.1.0-rc.2
+      x-sbtd-rc1-blocking: false
       parameters:
         - $ref: "#/components/parameters/ExportId"
       responses:
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "200":
           description: Authorized export bytes
 components:
@@ -474,6 +538,8 @@ components:
       description: Missing or invisible object.
     Conflict:
       description: Same idempotency key with a different payload, or a source-event conflict.
+    Forbidden:
+      description: Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF check on an unsafe method. Does not reveal internal policy details.
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
   schemas:

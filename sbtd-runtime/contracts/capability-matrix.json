@@ -14,6 +14,16 @@
   "other_versions": "unsupported",
   "rule": "A host version that is not pinned is unsupported for that host only. It does not mark another host or a metric category unsupported.",
   "pass_condition": "A pinned host passes only when a real smoke collects a Skill or Tool call event. A parser fixture is not that evidence. Failure marks only that host unsupported.",
+  "completion_gate": {
+    "statement": "Fallback completion gate from ADR 0001 section 6: at least one pinned host must collect a Skill or Tool call event in a real smoke for the component-call requirement to count as done. If both pinned hosts end up unsupported, the R1 gate fails and returns to the user for a new decision; it must not be released.",
+    "hosts": ["codex@0.163.0", "omp@18.11.1"],
+    "evidence": "real-smoke",
+    "parser_fixture_counts": false,
+    "event": "skill-or-tool-call",
+    "minimum_passing_hosts": 1,
+    "both_unsupported": "r1-fail-return-to-user",
+    "release_when_both_unsupported": false
+  },
   "smoke_status": "not-run",
-  "smoke_note": "R1.2b owns the real host smoke. This file only freezes the R1.0 pin and the single-host unsupported rule."
+  "smoke_note": "R1.2b owns the real host smoke. This file only freezes the R1.0 pin, the single-host unsupported rule, and the fallback completion-gate decision rule."
 }
