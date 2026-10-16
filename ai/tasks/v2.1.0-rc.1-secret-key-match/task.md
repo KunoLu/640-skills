@@ -4,11 +4,11 @@ id: v2.1.0-rc.1-secret-key-match
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 strict 模式，并要求在 ai/tasks/ 写任务记录。
-status: "checking"
+status: "done"
 branch: fix/v2.1.0-rc.1-secret-key-match
 created_at: '2026-10-16T21:27:57.232291+08:00'
-updated_at: "2026-10-16T21:33:38.710651+08:00"
-completed_at: null
+updated_at: "2026-10-16T21:34:11.291544+08:00"
+completed_at: "2026-10-16T21:34:11.291544+08:00"
 ---
 收紧事件库扩展字段的敏感名判断：`_secret_key` 不能只做去分隔符后的精确名匹配。`github_token`、`x-api-key`、`X-Api-Key`、`authToken` 当前会入库。
 
@@ -127,3 +127,4 @@ Status: not-needed
 |---|---|---|---|---|
 | 2026-10-16T21:28:04.307641+08:00 | planned | in-progress | secret-key misses are reproduced; add the failing public-seam test before changing the matcher | pre-change _secret_key: github_token/x-api-key/X-Api-Key/authToken/private_key False; API_KEY/client_secret True; token_count/input_tokens/tokens False |
 | 2026-10-16T21:33:38.710651+08:00 | in-progress | checking | prefixed secret names are rejected and counter fields still replay | python3 -B -m unittest discover -s sbtd-runtime/tests (72 ok); tests.test_sbtd_runtime_r1_event_store and tests.test_sbtd_runtime_r1_facade (31 ok); ruff 0.17.1 check/format passed |
+| 2026-10-16T21:34:11.291544+08:00 | checking | done | secret key matching is broadened and the pull request is open, not merged | https://github.com/KunoLu/640-skills/pull/132 head 13b557bbdf5573997bec04b9234b1f7a09044db5; sbtd-runtime tests 72 ok; ruff 0.17.1 passed |
