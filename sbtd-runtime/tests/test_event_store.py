@@ -278,6 +278,7 @@ class EventStoreTests(unittest.TestCase):
             ["evt_done", "evt_left"],
         )
         self.assertEqual(recovered.quality().accepted, 2)
+        self.assertEqual(recovered.quality().duplicate, 0)
 
     def test_invalid_event_is_rejected_and_unlinked_stays_unlinked(self) -> None:
         store = self._open()
@@ -350,6 +351,50 @@ class EventStoreTests(unittest.TestCase):
         with self.assertRaises(StoreError):
             reader.append([_event("evt_2", "native_2", "2026-10-16T01:05:00Z")])
         self.assertEqual([item["event_id"] for item in reader.replay()], ["evt_1"])
+
+    def test_extension_secret_is_not_persisted(self) -> None:
+        store = self._open()
+        secret = _event("evt_secret", "native_secret", "2026-10-16T01:00:00Z")
+        secret["extensions"] = {"api_key": "do-not-store"}
+        result = store.append([secret])
+        self.assertEqual([item.status for item in result.outcomes], ["rejected"])
+        self.assertEqual(store.replay(), [])
+        leaked = [
+            path
+            for path in self.home.rglob("*")
+            if path.is_file() and b"do-not-store" in path.read_bytes()
+        ]
+        self.assertEqual(leaked, [])
+
+    def test_foreign_ready_spool_is_not_recovered(self) -> None:
+        store = self._open()
+        first = _event("evt_keep", "native_keep", "2026-10-16T01:00:00Z")
+        second = _event("evt_left", "native_left", "2026-10-16T01:05:00Z")
+        with self.assertRaises(StoreError):
+            store.append([first, second], fault="after-first")
+        ready = next((self.home / "spool").glob("*.ready"))
+        other = self.home.parent / "other-home"
+        _enable(other)
+        other_store = EventStore.open(other, confirmed=True)
+        self.addCleanup(other_store.close)
+        other_spool = other / "spool"
+        other_spool.mkdir(mode=0o700, exist_ok=True)
+        copied = other_spool / ready.name
+        copied.write_bytes(ready.read_bytes())
+        other_store.close()
+        recovered = EventStore.open(other, confirmed=True)
+        self.assertEqual(recovered.replay(), [])
+        self.assertTrue(copied.is_file())
+
+    def test_question_mark_in_home_can_reopen(self) -> None:
+        home = self.home.parent / "home?q"
+        _enable(home)
+        store = EventStore.open(home, confirmed=True)
+        self.addCleanup(store.close)
+        store.append([_event("evt_q", "native_q", "2026-10-16T01:00:00Z")])
+        store.close()
+        reopened = EventStore.open(home, confirmed=True)
+        self.assertEqual([item["event_id"] for item in reopened.replay()], ["evt_q"])
 
 
 if __name__ == "__main__":

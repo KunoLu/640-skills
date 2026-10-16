@@ -15,6 +15,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self
+from urllib.parse import quote
 
 import jsonschema
 from contract_eval import canonical_content, dedup_key, validate_events
@@ -171,9 +172,7 @@ class EventStore:
             if not database.is_file():
                 raise StoreError("event store does not exist")
             _require_intact(database)
-            connection = sqlite3.connect(
-                f"file:{database.resolve().as_posix()}?mode=ro", uri=True
-            )
+            connection = sqlite3.connect(_ro_uri(database), uri=True)
             return cls(root, connection, read_only=True)
         if not confirmed:
             raise StoreError("confirmation required")
@@ -238,6 +237,14 @@ class EventStore:
                         str(event_id) if event_id else None,
                         "schema-rejected",
                     )
+                )
+                continue
+            if _secret_extension(event):
+                self._mark(
+                    "rejected", event["provenance"]["source_id"], "secret-rejected"
+                )
+                outcomes.append(
+                    Outcome("rejected", event["event_id"], "secret-rejected")
                 )
                 continue
             accepted_input.append(event)
@@ -448,6 +455,8 @@ class EventStore:
                 continue
             if not isinstance(header, dict) or header.get(_HEADER) != 1:
                 continue
+            if header.get("source_instance") != self._instance():
+                continue
             segment_id = str(header.get("segment_id") or path.stem)
             offset = len(lines[0]) + 1
             for line in lines[1:]:
@@ -459,6 +468,13 @@ class EventStore:
                 except _SCHEMA_ERRORS:
                     self._mark("rejected", None, "schema-rejected")
                     self._conn.commit()
+                    continue
+                if _secret_extension(event):
+                    self._mark("rejected", None, "secret-rejected")
+                    self._conn.commit()
+                    continue
+                source_id = event["provenance"]["source_id"]
+                if offset <= self._checkpoint_offset(source_id, segment_id):
                     continue
                 self._commit_event(event, segment_id, offset)
             if truncated:
@@ -493,6 +509,13 @@ class EventStore:
                     pending += 1
         return pending
 
+    def _checkpoint_offset(self, source_id: str, segment_id: str) -> int:
+        row = self._conn.execute(
+            "SELECT offset FROM checkpoints WHERE source_id=? AND segment_id=?",
+            (source_id, segment_id),
+        ).fetchone()
+        return 0 if row is None else int(row[0])
+
     def _instance(self) -> str:
         row = self._conn.execute(
             "SELECT value FROM meta WHERE key='source_instance'"
@@ -508,12 +531,43 @@ class EventStore:
         )
 
 
+def _ro_uri(path: Path) -> str:
+    return f"file:{quote(path.resolve().as_posix(), safe='/')}?mode=ro"
+
+
+def _secret_extension(event: dict[str, Any]) -> bool:
+    extensions = event.get("extensions")
+    if not isinstance(extensions, dict):
+        return False
+    return any(_secret_key(key) for key in extensions)
+
+
+def _secret_key(key: object) -> bool:
+    normalized = str(key).casefold().replace("-", "_")
+    return normalized in {
+        "api_key",
+        "apikey",
+        "access_token",
+        "refresh_token",
+        "id_token",
+        "token",
+        "password",
+        "passwd",
+        "secret",
+        "client_secret",
+        "cookie",
+        "authorization",
+        "bearer",
+        "oauth",
+        "oauth_token",
+    }
+
+
 def _require_intact(database: Path) -> None:
     if database.is_symlink() or not database.is_file() or database.stat().st_size < 16:
         raise StoreError("audit database is damaged; gap file not written")
-    uri = f"file:{database.resolve().as_posix()}?mode=ro"
     try:
-        connection = sqlite3.connect(uri, uri=True)
+        connection = sqlite3.connect(_ro_uri(database), uri=True)
         try:
             row = connection.execute("PRAGMA integrity_check").fetchone()
         finally:
