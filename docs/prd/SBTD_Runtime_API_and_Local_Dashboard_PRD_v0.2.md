@@ -1648,6 +1648,8 @@ Golden Dataset 为每个 metric 提供预期值及来源 ID 集；API、Panel、
 | 长图／CSV 最大支持规模 | 本文性能和容量目标通过真实平台试验冻结 | R2.2 前 |
 | OMP 视觉复用程度 | 先参考视觉语言；复制代码时核验并保留适用许可证／声明 | R2.0 |
 
+R1.0 已确认决策见 [ADR 0001](../adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md)。
+
 ---
 
 <a id="section-20"></a>
