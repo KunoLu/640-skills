@@ -13,6 +13,7 @@
 
 - 新增可选的 `sbtd-runtime/`，作为 `v2.1.0-rc.1` 的 R1.0 契约：数据字典、事件 JSON Schema、指标目录、loopback OpenAPI 草案、capability pin，以及用 golden dataset 检查名词、分母和去重。核心指标覆盖任务状态、执行轮次、步骤、Skill／Tool 调用、Gate、测试证据和采集健康。§8.2 其余指标保留在目录中并标 `unsupported`，不返回 0。token／费用是条件性字段：来源提供则保留，缺失可见且不填 0。capability matrix 同时固定 ADR 0001 的兜底完成门：至少一个门禁宿主在真实 smoke 采到 Skill 或 Tool 调用事件才通过；两宿主均 unsupported 时 R1 不通过并回到用户决策，不得放行。OpenAPI 草案中每个 `/api/v1/exports*` operation 标注 `v2.1.0-rc.2` 且非 rc.1 阻塞交付，所有 operation 引用同一个 403 响应组件覆盖 Host／Origin 与 CSRF 拒绝。不包含 Starlette／uvicorn 服务、事件库或采集器。
 - 新增 R1.1 runtime facade：`sbtd-runtime/facade.py`。它包装 TaskStore、TaskRouter、HandoffStore 和 DeveloperStore，不移动这些 helper，并把项目显式注册到 `SBTD_RUNTIME_HOME/registry.json`。`observation.enabled` 关闭时，已注册调用的项目文件副作用与旧 helper 相同，且不写审计库。开启观察时 `audit_status=gap`，仍不创建 `audit.db`。未注册根、相邻目录、symlink 根和完全只读调用会被拒绝。本阶段没有 HTTP 服务、事件库或宿主适配器。
+- 新增 R1.2a 本地事件库：`sbtd-runtime/event_store.py`。观察已开启且调用方确认后，原始事件写入 `SBTD_RUNTIME_HOME/audit.db`（一个 SQLite 文件，WAL），未提交批次先落盘到 `spool/`。去重使用 R1.0 键：同键且规范化内容相同只确认，内容不同则冲突且不覆盖先接受的事件。重放、乱序、spool 尾部截断、崩溃恢复和部分提交都有测试。损坏的数据库被拒绝，不会被换成空库。观察关闭、不可读、未确认、只读和 symlink 运行时目录不创建 `audit.db`，也不写 spool。Facade 的任务写入仍不自动产生事件。没有历史导入，也没有 HTTP API。
 
 ### 变更
 

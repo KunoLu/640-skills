@@ -1,6 +1,6 @@
 # SBTD Runtime 数据字典（v2.1.0-rc.1 / R1.0）
 
-本字典固定 R1.0 名词。它不改 `task.md` 事实源，也不实现存储或 HTTP 服务。指标计算见 `metrics-catalog.json`；事件形状见 `event.schema.json`。
+本字典固定 R1.0 名词。它不改 `task.md` 事实源，也不实现 HTTP 服务。R1.2a 把原始观察写入用户私有 `audit.db`；指标计算仍见 `metrics-catalog.json`，事件形状仍见 `event.schema.json`。
 
 ## 事实源
 
@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 任务 mode／status／history | 有效 `task.md` | 只读投影 | 回放观察事件覆盖任务文件 |
 | active task | `active-task.json` 指向的记录 | 引用 | 拥有 mode／status |
-| 观察事件 | 未来用户私有 audit store | 原始记录 | 当成业务授权或法律不可抵赖 |
+| 观察事件 | 用户私有 `audit.db` | 原始记录 | 当成业务授权或法律不可抵赖，或回放覆盖 task.md |
 | 指标 | 版本化投影 | 从已接受事件重建 | 用 0 或 mock 填未实现指标 |
 | registry／长期凭证 | `SBTD_RUNTIME_HOME` | 用户私有映射 | 写入项目 tracked 文件 |
 | capability pin | 本目录 `capability-matrix.json` | 固定验收宿主与兜底完成门决策 | 代替 R1.2b 真实 smoke |
