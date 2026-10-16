@@ -24,6 +24,19 @@
     "both_unsupported": "r1-fail-return-to-user",
     "release_when_both_unsupported": false
   },
-  "smoke_status": "not-run",
-  "smoke_note": "R1.2b owns the real host smoke. This file only freezes the R1.0 pin, the single-host unsupported rule, and the fallback completion-gate decision rule."
+  "smoke_status": "partial",
+  "smoke": {
+    "omp": {
+      "status": "pass",
+      "host_version": "omp/18.11.1",
+      "smoked_at": "2026-10-17",
+      "evidence": "Real `omp -p` invocation on this host produced a real `read` toolCall (`call-d9b26888-01fc-4abd-aa3d-70b9f7840f07-0|fc_f54d5b30-39ec-90ed-8dad-17bd5574bee2_0`) and toolResult `11aef67c` in session 2026-10-16T17-06-22-104Z_01a145ad-d318-7734-8b78-7402c5b01884.jsonl; omp_adapter emitted invocation.started + invocation.finished (tool:read, duration_ms 27, wall) and the event store accepted both; re-ingest returned 2 duplicates and replay stayed at 2. Receipt and raw line snippets are in ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md."
+    },
+    "codex": {
+      "status": "pending",
+      "host_version": "codex@0.163.0",
+      "evidence": "Codex is not installed or run in this repository. The real smoke follows the exact instructions in sbtd-runtime/docs/host-adapters.md and is executed by a separate operator."
+    }
+  },
+  "smoke_note": "R1.2b owns the real host smoke. This file only freezes the R1.0 pin, the single-host unsupported rule, and the fallback completion-gate decision rule. smoke.omp is a real-run pass on 2026-10-17; smoke.codex stays pending until the codex@0.163.0 smoke in sbtd-runtime/docs/host-adapters.md is executed. A parser fixture is never smoke evidence."
 }

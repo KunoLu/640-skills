@@ -13,6 +13,7 @@
 - [v2.1.0-rc.1-r1.0-review-fixes](v2.1.0-rc.1-r1.0-review-fixes/task.md)
 - [v2.1.0-rc.1-r1.1-facade](v2.1.0-rc.1-r1.1-facade/task.md)
 - [v2.1.0-rc.1-r1.2a-event-store](v2.1.0-rc.1-r1.2a-event-store/task.md)
+- [v2.1.0-rc.1-r1.2b-host-adapters](v2.1.0-rc.1-r1.2b-host-adapters/task.md)
 - [v2.1.0-rc.1-secret-key-match](v2.1.0-rc.1-secret-key-match/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)
