@@ -37,12 +37,22 @@ def base_event(
     segment_id: str | None = None,
     offset: int | None = None,
     observation_level: str = "execution-observed",
+    source_kind: str = "host-observed",
+    evidence_status: str = "present",
+    actor_kind: str = "agent",
     session_id: str | None = None,
+    logical_task_id: str | None = None,
+    project_id: str | None = None,
+    repository_id: str | None = None,
+    worktree_id: str | None = None,
     component: dict[str, Any] | None = None,
     host: dict[str, Any] | None = None,
     state: dict[str, Any] | None = None,
     measurement: dict[str, Any] | None = None,
     correlation: dict[str, Any] | None = None,
+    workflow: dict[str, Any] | None = None,
+    validation: dict[str, Any] | None = None,
+    external_refs: list[dict[str, Any]] | None = None,
     extensions: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one schema-shaped event. Required identity stays explicit."""
@@ -59,29 +69,29 @@ def base_event(
         "device_id": device_id,
         "actor": {
             "actor_id": None,
-            "kind": "agent",
+            "kind": actor_kind,
             "identity_assurance": "unbound",
         },
         "scope": {
             "tenant_id": None,
             "workspace_id": None,
-            "project_id": None,
-            "repository_id": None,
-            "worktree_id": None,
+            "project_id": project_id,
+            "repository_id": repository_id,
+            "worktree_id": worktree_id,
             "task_uid": None,
-            "logical_task_id": None,
+            "logical_task_id": logical_task_id,
             "task_run_id": None,
             "session_id": session_id,
         },
         "provenance": {
-            "source_kind": "host-observed",
+            "source_kind": source_kind,
             "source_id": source_id,
             "source_event_id": source_event_id,
             "segment_id": segment_id,
             "offset": offset,
             "producer_version": "0.1.0",
             "observation_level": observation_level,
-            "evidence_status": "present",
+            "evidence_status": evidence_status,
             "parser_version": parser_version,
         },
         "privacy": {
@@ -102,6 +112,12 @@ def base_event(
         event["measurement"] = measurement
     if correlation is not None:
         event["correlation"] = correlation
+    if workflow is not None:
+        event["workflow"] = workflow
+    if validation is not None:
+        event["validation"] = validation
+    if external_refs is not None:
+        event["external_refs"] = external_refs
     return event
 
 
