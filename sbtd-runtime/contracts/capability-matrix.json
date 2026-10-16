@@ -16,7 +16,10 @@
   "pass_condition": "A pinned host passes only when a real smoke collects a Skill or Tool call event. A parser fixture is not that evidence. Failure marks only that host unsupported.",
   "completion_gate": {
     "statement": "Fallback completion gate from ADR 0001 section 6: at least one pinned host must collect a Skill or Tool call event in a real smoke for the component-call requirement to count as done. If both pinned hosts end up unsupported, the R1 gate fails and returns to the user for a new decision; it must not be released.",
-    "hosts": ["codex@0.163.0", "omp@18.11.1"],
+    "hosts": [
+      "codex@0.163.0",
+      "omp@18.11.1"
+    ],
     "evidence": "real-smoke",
     "parser_fixture_counts": false,
     "event": "skill-or-tool-call",
@@ -24,6 +27,20 @@
     "both_unsupported": "r1-fail-return-to-user",
     "release_when_both_unsupported": false
   },
-  "smoke_status": "not-run",
-  "smoke_note": "R1.2b owns the real host smoke. This file only freezes the R1.0 pin, the single-host unsupported rule, and the fallback completion-gate decision rule."
+  "smoke_status": "partial",
+  "smoke": {
+    "omp": {
+      "status": "pass",
+      "host_version": "omp/18.11.1",
+      "smoked_at": "2026-10-17",
+      "evidence": "Real `omp -p` invocation on this host produced a real `read` toolCall (`call-d9b26888-01fc-4abd-aa3d-70b9f7840f07-0|fc_f54d5b30-39ec-90ed-8dad-17bd5574bee2_0`) and toolResult `11aef67c` in session 2026-10-16T17-06-22-104Z_01a145ad-d318-7734-8b78-7402c5b01884.jsonl; omp_adapter emitted invocation.started + invocation.finished (tool:read, duration_ms 27, wall) and the event store accepted both; re-ingest returned 2 duplicates and replay stayed at 2. Receipt and raw line snippets are in ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md."
+    },
+    "codex": {
+      "status": "unsupported",
+      "host_version": "codex-cli 0.163.0",
+      "smoked_at": "2026-10-17",
+      "evidence": "Real `codex exec --json --sandbox read-only` on this box (tip 5a21688) with ChatGPT login produced JSONL turn.failed `workspace routing discovery failed` after Cloudflare HTTP 403 on chatgpt.com/backend-api; no item.started/completed with item.type in {command_execution,mcp_tool_call,web_search,collab_tool_call,file_change}; codex_adapter receipt events_emitted=0 accepted=0; EventStore replay empty. Evidence: /workspace/codex-notes/r1.2b-smoke/ (codex-r12b-smoke.jsonl, adapter-receipt.json, replay-output.txt, network-failure-summary.txt, conclusion.json). Parser fixture not used."
+    }
+  },
+  "smoke_note": "R1.2b owns the real host smoke. smoke.omp is a real-run pass on 2026-10-17; smoke.codex is unsupported on 2026-10-17 because the pinned host could not collect a Skill/Tool call event (ChatGPT backend HTTP 403 / workspace routing discovery failed on this box egress). A parser fixture is never smoke evidence. Completion gate: at least one pinned host passed (omp)."
 }
