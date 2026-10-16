@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "release": "v2.1.0-rc.1",
+  "acceptance_pins": [
+    {
+      "host_kind": "codex",
+      "host_version": "0.163.0"
+    },
+    {
+      "host_kind": "omp",
+      "host_version": "18.11.1"
+    }
+  ],
+  "other_versions": "unsupported",
+  "rule": "A host version that is not pinned is unsupported for that host only. It does not mark another host or a metric category unsupported.",
+  "pass_condition": "A pinned host passes only when a real smoke collects a Skill or Tool call event. A parser fixture is not that evidence. Failure marks only that host unsupported.",
+  "smoke_status": "not-run",
+  "smoke_note": "R1.2b owns the real host smoke. This file only freezes the R1.0 pin and the single-host unsupported rule."
+}

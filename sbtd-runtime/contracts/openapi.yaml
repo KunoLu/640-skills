@@ -1,0 +1,565 @@
+openapi: 3.1.0
+info:
+  title: SBTD Runtime local API
+  version: 1.0.0
+  summary: Contract draft for v2.1.0-rc.1 R1.0. No server is implemented in this package.
+  x-sbtd-implementation: contract-only
+  x-sbtd-release: v2.1.0-rc.1
+  x-sbtd-not-implemented-before: R1.1
+  description: |
+    Local loopback API. The service binds only 127.0.0.1 and ::1. Binding any
+    non-loopback address is forbidden. A browser exchanges a one-time pairing
+    code for a short-lived session bearer. The long-term token stays in
+    SBTD_RUNTIME_HOME with Unix mode 0600 and must not appear in a URL, log,
+    or export. Unsafe methods require Host and Origin checks plus CSRF.
+    Reserved scopes tasks:write, migration:apply, and remote command execution
+    have no route in this draft.
+  x-sbtd-auth:
+    loopback: [127.0.0.1, "::1"]
+    pairing: one-time header exchanged for a session bearer
+    long_term_token: file only, mode 0600, never a query parameter
+    csrf: required on POST and DELETE
+    host_origin: reject external origins and DNS rebinding
+servers:
+  - url: http://127.0.0.1:6400
+    description: IPv4 loopback only
+  - url: http://[::1]:6400
+    description: IPv6 loopback only
+tags:
+  - name: auth
+  - name: metadata
+  - name: audit
+  - name: stats
+  - name: collection
+  - name: export
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      tags: [metadata]
+      summary: Liveness without a project list
+      security: []
+      responses:
+        "200":
+          description: Minimal liveness
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /api/v1/session/pair:
+    post:
+      operationId: pairSession
+      tags: [auth]
+      summary: Exchange a one-time pairing code for a short-lived session
+      security:
+        - pairingCode: []
+      parameters:
+        - $ref: "#/components/parameters/PairingCode"
+      responses:
+        "200":
+          description: Session bearer. Not a long-term token and not returned in a URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/capabilities:
+    get:
+      operationId: getCapabilities
+      tags: [metadata]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [metadata:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/openapi.json:
+    get:
+      operationId: getOpenApi
+      tags: [metadata]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [metadata:read]
+      responses:
+        "200":
+          description: This contract
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      tags: [metadata]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [metadata:read]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/actors:
+    get:
+      operationId: listActors
+      tags: [metadata]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [metadata:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/components:
+    get:
+      operationId: listComponents
+      tags: [metadata]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [metadata:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/tasks:
+    get:
+      operationId: listTasks
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [tasks:read]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/tasks/{task_uid}:
+    get:
+      operationId: getTask
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [tasks:read]
+      parameters:
+        - $ref: "#/components/parameters/TaskUid"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/tasks/{task_uid}/history:
+    get:
+      operationId: getTaskHistory
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      parameters:
+        - $ref: "#/components/parameters/TaskUid"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/runs:
+    get:
+      operationId: listRuns
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/runs/{run_id}/steps:
+    get:
+      operationId: listRunSteps
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/gates:
+    get:
+      operationId: listGates
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/validations:
+    get:
+      operationId: listValidations
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/events:
+    get:
+      operationId: listEvents
+      tags: [audit]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/collection-health:
+    get:
+      operationId: getCollectionHealth
+      tags: [metadata]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [metadata:read]
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/metrics/catalog:
+    get:
+      operationId: getMetricCatalog
+      tags: [stats]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [stats:read]
+      responses:
+        "200":
+          description: Metric catalog, including unsupported and conditional metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/v1/statistics/query:
+    post:
+      operationId: queryStatistics
+      tags: [stats]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [stats:read]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryScope"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/v1/statistics/timeseries:
+    post:
+      operationId: queryTimeseries
+      tags: [stats]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [stats:read]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryScope"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/collection/refresh:
+    post:
+      operationId: refreshCollection
+      tags: [collection]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [collection:refresh]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          $ref: "#/components/responses/Json"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/ingest/events:
+    post:
+      operationId: ingestEvents
+      tags: [collection]
+      summary: Trusted local producer ingest. The browser session does not hold this scope.
+      security:
+        - localSession: []
+      x-sbtd-scopes: [events:ingest]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestBatch"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/report-snapshots:
+    post:
+      operationId: createReportSnapshot
+      tags: [export]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [stats:read]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          $ref: "#/components/responses/Json"
+  /api/v1/report-snapshots/{snapshot_id}:
+    get:
+      operationId: getReportSnapshot
+      tags: [export]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [stats:read]
+      parameters:
+        - $ref: "#/components/parameters/SnapshotId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+        "410":
+          $ref: "#/components/responses/Gone"
+  /api/v1/report-snapshots/{snapshot_id}/dataset:
+    get:
+      operationId: getSnapshotDataset
+      tags: [export]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [audit:read]
+      parameters:
+        - $ref: "#/components/parameters/SnapshotId"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+  /api/v1/exports:
+    post:
+      operationId: createExport
+      tags: [export]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [export:create]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          $ref: "#/components/responses/Json"
+  /api/v1/exports/{export_id}:
+    get:
+      operationId: getExport
+      tags: [export]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [export:read]
+      parameters:
+        - $ref: "#/components/parameters/ExportId"
+      responses:
+        "200":
+          $ref: "#/components/responses/Json"
+    delete:
+      operationId: deleteExport
+      tags: [export]
+      security:
+        - localSession: []
+      x-sbtd-scopes: [export:create]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/ExportId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "204":
+          description: Cancelled or cleaned
+  /api/v1/exports/{export_id}/file:
+    get:
+      operationId: downloadExport
+      tags: [export]
+      summary: Download by export id and the current session. No file path parameter.
+      security:
+        - localSession: []
+      x-sbtd-scopes: [export:read]
+      parameters:
+        - $ref: "#/components/parameters/ExportId"
+      responses:
+        "200":
+          description: Authorized export bytes
+components:
+  securitySchemes:
+    localSession:
+      type: http
+      scheme: bearer
+      bearerFormat: session
+      description: Short-lived session from pairing. Not a long-term token.
+    pairingCode:
+      type: apiKey
+      in: header
+      name: X-Pairing-Code
+      description: One-time pairing credential. Destroy after exchange.
+  parameters:
+    PairingCode:
+      name: X-Pairing-Code
+      in: header
+      required: true
+      schema:
+        type: string
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+    TaskUid:
+      name: task_uid
+      in: path
+      required: true
+      schema:
+        type: string
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema:
+        type: string
+    SnapshotId:
+      name: snapshot_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ExportId:
+      name: export_id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Json:
+      description: Versioned JSON envelope
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    BadRequest:
+      description: Invalid time, dimension, or metric. No silent default.
+    Unauthorized:
+      description: Missing credential or scope. Does not reveal whether a hidden object exists.
+    NotFound:
+      description: Missing or invisible object.
+    Conflict:
+      description: Same idempotency key with a different payload, or a source-event conflict.
+    Gone:
+      description: Snapshot expired. A new snapshot must not reuse the old id.
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          const: ok
+    Session:
+      type: object
+      additionalProperties: false
+      required: [token_type, access_token, expires_in]
+      properties:
+        token_type:
+          const: bearer
+        access_token:
+          type: string
+        expires_in:
+          type: integer
+          minimum: 1
+    Envelope:
+      type: object
+      required: [api_version, request_id, data, meta]
+      properties:
+        api_version:
+          const: "1"
+        request_id:
+          type: string
+        data: {}
+        meta:
+          $ref: "#/components/schemas/Meta"
+    Meta:
+      type: object
+      required: [metrics_version, projection_version, complete]
+      properties:
+        metrics_version:
+          type: string
+        projection_version:
+          type: string
+        complete:
+          type: boolean
+        coverage_state:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        next_cursor:
+          type: ["string", "null"]
+    QueryScope:
+      type: object
+      additionalProperties: false
+      required: [schema_version, range, metrics]
+      properties:
+        schema_version:
+          const: "1.0"
+        range:
+          type: object
+          required: [from, to, timezone]
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+            timezone:
+              type: string
+        filters:
+          type: object
+        task_granularity:
+          enum: [executable-leaf, all]
+        include_unlinked:
+          type: boolean
+        include_unknown_time:
+          type: boolean
+        metrics:
+          type: array
+          items:
+            type: string
+    IngestBatch:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            type: object
+          description: Each item must validate against event.schema.json.

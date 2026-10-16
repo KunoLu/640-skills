@@ -1,0 +1,3139 @@
+{
+  "dataset_id": "r1.0-golden",
+  "description": "Synthetic R1.0 golden observations. No accounts, secrets, or real paths.",
+  "tasks": [
+    {
+      "task_uid": "task_parent",
+      "parent_uid": null,
+      "worktree_id": "wt_a",
+      "role": "summary"
+    },
+    {
+      "task_uid": "task_leaf",
+      "parent_uid": "task_parent",
+      "worktree_id": "wt_a",
+      "role": "leaf"
+    },
+    {
+      "task_uid": "task_wt_b",
+      "parent_uid": "task_parent",
+      "worktree_id": "wt_b",
+      "role": "leaf"
+    },
+    {
+      "task_uid": "task_other",
+      "parent_uid": "task_parent",
+      "worktree_id": "wt_b",
+      "role": "leaf"
+    },
+    {
+      "task_uid": "task_untimed",
+      "parent_uid": "task_parent",
+      "worktree_id": "wt_a",
+      "role": "leaf"
+    }
+  ],
+  "events": [
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_created_leaf",
+      "event_type": "task.created",
+      "occurred_at": "2026-10-15T15:00:00Z",
+      "recorded_at": "2026-10-15T15:00:00Z",
+      "ingest_seq": 1,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_created_leaf",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "workflow": {
+        "mode_at_event": "strict",
+        "mode_source": "user"
+      },
+      "state": {
+        "previous": null,
+        "current": "planned"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_created_parent",
+      "event_type": "task.created",
+      "occurred_at": "2026-10-15T15:10:00Z",
+      "recorded_at": "2026-10-15T15:10:00Z",
+      "ingest_seq": 2,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_parent",
+        "logical_task_id": "parent/demo",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_created_parent",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "planned"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_created_wt_b",
+      "event_type": "task.created",
+      "occurred_at": "2026-10-15T16:00:00Z",
+      "recorded_at": "2026-10-15T16:00:00Z",
+      "ingest_seq": 3,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_b",
+        "task_uid": "task_wt_b",
+        "logical_task_id": "parent/demo/wt-b",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_created_wt_b",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "planned"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_created_other",
+      "event_type": "task.created",
+      "occurred_at": "2026-10-16T15:00:00Z",
+      "recorded_at": "2026-10-16T15:00:00Z",
+      "ingest_seq": 4,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_b",
+        "task_uid": "task_other",
+        "logical_task_id": "parent/demo/other",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_created_other",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "planned"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_created_untimed",
+      "event_type": "task.created",
+      "occurred_at": null,
+      "recorded_at": "2026-10-16T12:00:00Z",
+      "ingest_seq": 5,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_untimed",
+        "logical_task_id": "parent/demo/untimed",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_created_untimed",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "planned"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_leaf_progress",
+      "event_type": "task.state_changed",
+      "occurred_at": "2026-10-15T15:20:00Z",
+      "recorded_at": "2026-10-15T15:20:00Z",
+      "ingest_seq": 6,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_leaf_progress",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "planned",
+        "current": "in-progress"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_leaf_done_1",
+      "event_type": "task.state_changed",
+      "occurred_at": "2026-10-15T18:00:00Z",
+      "recorded_at": "2026-10-15T18:00:00Z",
+      "ingest_seq": 7,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_leaf_done_1",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "in-progress",
+        "current": "done"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_leaf_reopen",
+      "event_type": "task.reopened",
+      "occurred_at": "2026-10-15T19:00:00Z",
+      "recorded_at": "2026-10-15T19:00:00Z",
+      "ingest_seq": 8,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_leaf_reopen",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "done",
+        "current": "planned"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_leaf_done_2",
+      "event_type": "task.state_changed",
+      "occurred_at": "2026-10-15T20:00:00Z",
+      "recorded_at": "2026-10-15T20:00:00Z",
+      "ingest_seq": 9,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_leaf_done_2",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "planned",
+        "current": "done"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_parent_done",
+      "event_type": "task.state_changed",
+      "occurred_at": "2026-10-15T21:00:00Z",
+      "recorded_at": "2026-10-15T21:00:00Z",
+      "ingest_seq": 10,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_parent",
+        "logical_task_id": "parent/demo",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_parent_done",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "planned",
+        "current": "done"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_wt_b_progress",
+      "event_type": "task.state_changed",
+      "occurred_at": "2026-10-16T14:00:00Z",
+      "recorded_at": "2026-10-16T16:00:00Z",
+      "ingest_seq": 11,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_b",
+        "task_uid": "task_wt_b",
+        "logical_task_id": "parent/demo/wt-b",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_wt_b_progress",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "planned",
+        "current": "in-progress"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_leaf_1_start",
+      "event_type": "run.started",
+      "occurred_at": "2026-10-15T15:30:00Z",
+      "recorded_at": "2026-10-15T15:30:00Z",
+      "ingest_seq": 12,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_leaf_1_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "workflow": {
+        "mode_at_event": "strict",
+        "mode_source": "user"
+      },
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "correlation": {
+        "parent_run_id": "run_parent"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_leaf_1_finish",
+      "event_type": "run.finished",
+      "occurred_at": "2026-10-15T18:00:00Z",
+      "recorded_at": "2026-10-15T18:00:00Z",
+      "ingest_seq": 13,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_leaf_1_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "running",
+        "current": "succeeded"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_leaf_2_start",
+      "event_type": "run.started",
+      "occurred_at": "2026-10-15T19:10:00Z",
+      "recorded_at": "2026-10-15T19:10:00Z",
+      "ingest_seq": 14,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_2",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_leaf_2_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_leaf_2_interrupt",
+      "event_type": "run.interrupted",
+      "occurred_at": "2026-10-15T19:40:00Z",
+      "recorded_at": "2026-10-15T19:40:00Z",
+      "ingest_seq": 15,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_2",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_leaf_2_interrupt",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "running",
+        "current": "interrupted"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_cross_start",
+      "event_type": "run.started",
+      "occurred_at": "2026-10-15T14:00:00Z",
+      "recorded_at": "2026-10-15T14:00:00Z",
+      "ingest_seq": 16,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_cross",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_cross_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_cross_finish",
+      "event_type": "run.finished",
+      "occurred_at": "2026-10-15T15:30:00Z",
+      "recorded_at": "2026-10-15T15:30:00Z",
+      "ingest_seq": 17,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_cross",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_cross_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "running",
+        "current": "succeeded"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_open_start",
+      "event_type": "run.started",
+      "occurred_at": "2026-10-15T22:00:00Z",
+      "recorded_at": "2026-10-15T22:00:00Z",
+      "ingest_seq": 18,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_open",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_open_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_run_parent_start",
+      "event_type": "run.started",
+      "occurred_at": "2026-10-15T15:40:00Z",
+      "recorded_at": "2026-10-15T15:40:00Z",
+      "ingest_seq": 19,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_parent",
+        "logical_task_id": "parent/demo",
+        "task_run_id": "run_parent",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_run_parent_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_a1_start",
+      "event_type": "step.started",
+      "occurred_at": "2026-10-15T15:45:00Z",
+      "recorded_at": "2026-10-15T15:45:00Z",
+      "ingest_seq": 20,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_a"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_a1_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "measurement": {
+        "attempt_no": 1,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_a1_finish",
+      "event_type": "step.finished",
+      "occurred_at": "2026-10-15T15:50:00Z",
+      "recorded_at": "2026-10-15T15:50:00Z",
+      "ingest_seq": 21,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_a"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_a1_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "running",
+        "current": "succeeded"
+      },
+      "measurement": {
+        "attempt_no": 1,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_a1_replay",
+      "event_type": "step.started",
+      "occurred_at": "2026-10-15T15:45:00Z",
+      "recorded_at": "2026-10-15T15:46:00Z",
+      "ingest_seq": 10000,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_a"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_a1_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "measurement": {
+        "attempt_no": 1,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_a2_start",
+      "event_type": "step.started",
+      "occurred_at": "2026-10-15T15:55:00Z",
+      "recorded_at": "2026-10-15T15:55:00Z",
+      "ingest_seq": 22,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_a"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_a2_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "measurement": {
+        "attempt_no": 2,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_a2_finish",
+      "event_type": "step.finished",
+      "occurred_at": "2026-10-15T16:05:00Z",
+      "recorded_at": "2026-10-15T16:05:00Z",
+      "ingest_seq": 23,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_a"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_a2_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "running",
+        "current": "failed"
+      },
+      "measurement": {
+        "attempt_no": 2,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_b_start",
+      "event_type": "step.started",
+      "occurred_at": "2026-10-15T16:10:00Z",
+      "recorded_at": "2026-10-15T16:10:00Z",
+      "ingest_seq": 24,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_b"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_b_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "measurement": {
+        "attempt_no": 1,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_b_finish",
+      "event_type": "step.finished",
+      "occurred_at": "2026-10-15T16:15:00Z",
+      "recorded_at": "2026-10-15T16:15:00Z",
+      "ingest_seq": 25,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_b"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_b_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": "running",
+        "current": "blocked"
+      },
+      "measurement": {
+        "attempt_no": 1,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_step_c_start",
+      "event_type": "step.started",
+      "occurred_at": "2026-10-15T16:20:00Z",
+      "recorded_at": "2026-10-15T16:20:00Z",
+      "ingest_seq": 26,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": "step_c"
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_step_c_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "measurement": {
+        "attempt_no": 1,
+        "duration_ms": null,
+        "duration_basis": "monotonic"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_off_1",
+      "event_type": "component.available",
+      "occurred_at": "2026-10-15T16:30:00Z",
+      "recorded_at": "2026-10-15T16:30:00Z",
+      "ingest_seq": 27,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": null,
+        "producer_version": "0.1.0",
+        "observation_level": "configured",
+        "evidence_status": "present",
+        "segment_id": "seg_1",
+        "offset": 10
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_off_1_replay",
+      "event_type": "component.available",
+      "occurred_at": "2026-10-15T16:30:00Z",
+      "recorded_at": "2026-10-15T16:31:00Z",
+      "ingest_seq": 10001,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": null,
+        "producer_version": "0.1.0",
+        "observation_level": "configured",
+        "evidence_status": "present",
+        "segment_id": "seg_1",
+        "offset": 10
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_off_2",
+      "event_type": "component.available",
+      "occurred_at": "2026-10-15T16:30:00Z",
+      "recorded_at": "2026-10-15T16:30:00Z",
+      "ingest_seq": 28,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": null,
+        "producer_version": "0.1.0",
+        "observation_level": "configured",
+        "evidence_status": "present",
+        "segment_id": "seg_1",
+        "offset": 11
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_loaded",
+      "event_type": "skill.loaded",
+      "occurred_at": "2026-10-15T15:46:00Z",
+      "recorded_at": "2026-10-15T15:46:00Z",
+      "ingest_seq": 29,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_loaded",
+        "producer_version": "0.1.0",
+        "observation_level": "loaded",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.163.0"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv1_start",
+      "event_type": "invocation.started",
+      "occurred_at": "2026-10-15T15:47:00Z",
+      "recorded_at": "2026-10-15T15:47:00Z",
+      "ingest_seq": 30,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv1_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.163.0"
+      },
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "correlation": {
+        "invocation_id": "inv_1",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv1_host",
+      "event_type": "invocation.started",
+      "occurred_at": "2026-10-15T15:47:01Z",
+      "recorded_at": "2026-10-15T15:47:01Z",
+      "ingest_seq": 31,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "host-observed",
+        "source_id": "source_codex",
+        "source_event_id": "evt_inv1_host",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.163.0"
+      },
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "correlation": {
+        "invocation_id": "inv_1",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv1_finish",
+      "event_type": "invocation.finished",
+      "occurred_at": "2026-10-15T15:48:00Z",
+      "recorded_at": "2026-10-15T15:48:00Z",
+      "ingest_seq": 32,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv1_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.163.0"
+      },
+      "state": {
+        "previous": "running",
+        "current": "succeeded"
+      },
+      "correlation": {
+        "invocation_id": "inv_1",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv1_conflict",
+      "event_type": "invocation.started",
+      "occurred_at": "2026-10-15T15:47:00Z",
+      "recorded_at": "2026-10-15T15:49:00Z",
+      "ingest_seq": 10002,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv1_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:demo",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.163.0"
+      },
+      "state": {
+        "previous": null,
+        "current": "failed"
+      },
+      "correlation": {
+        "invocation_id": "inv_1",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv2_start",
+      "event_type": "invocation.started",
+      "occurred_at": "2026-10-15T16:40:00Z",
+      "recorded_at": "2026-10-15T16:40:00Z",
+      "ingest_seq": 33,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv2_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "tool:demo",
+        "kind": "tool",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "omp",
+        "host_version": "18.11.1"
+      },
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "correlation": {
+        "invocation_id": "inv_2",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv2_finish",
+      "event_type": "invocation.finished",
+      "occurred_at": "2026-10-15T16:50:00Z",
+      "recorded_at": "2026-10-15T16:50:00Z",
+      "ingest_seq": 34,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv2_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "tool:demo",
+        "kind": "tool",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "omp",
+        "host_version": "18.11.1"
+      },
+      "state": {
+        "previous": "running",
+        "current": "failed",
+        "reason_code": "tool_failed"
+      },
+      "correlation": {
+        "invocation_id": "inv_2",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv3_start",
+      "event_type": "invocation.started",
+      "occurred_at": "2026-10-15T17:00:00Z",
+      "recorded_at": "2026-10-15T17:00:00Z",
+      "ingest_seq": 35,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv3_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:other",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.164.0"
+      },
+      "state": {
+        "previous": null,
+        "current": "running"
+      },
+      "correlation": {
+        "invocation_id": "inv_3",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_inv3_finish",
+      "event_type": "invocation.finished",
+      "occurred_at": "2026-10-15T17:05:00Z",
+      "recorded_at": "2026-10-15T17:05:00Z",
+      "ingest_seq": 36,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_inv3_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:other",
+        "kind": "skill",
+        "version": "1"
+      },
+      "host": {
+        "host_kind": "codex",
+        "host_version": "0.164.0"
+      },
+      "state": {
+        "previous": "running",
+        "current": "succeeded"
+      },
+      "correlation": {
+        "invocation_id": "inv_3",
+        "attempt_id": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_ddd_app",
+      "event_type": "gate.applicability_decided",
+      "occurred_at": "2026-10-15T17:10:00Z",
+      "recorded_at": "2026-10-15T17:10:00Z",
+      "ingest_seq": 37,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_ddd_app",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "missing"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_ddd",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": null,
+        "evidence_status": "missing",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_ddd_fail",
+      "event_type": "gate.result_recorded",
+      "occurred_at": "2026-10-15T17:20:00Z",
+      "recorded_at": "2026-10-15T17:20:00Z",
+      "ingest_seq": 38,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_ddd_fail",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "missing"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_ddd",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": "failed",
+        "evidence_status": "missing",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_ddd_pass",
+      "event_type": "gate.result_recorded",
+      "occurred_at": "2026-10-15T18:30:00Z",
+      "recorded_at": "2026-10-15T18:30:00Z",
+      "ingest_seq": 39,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_ddd_pass",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "validated"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_ddd",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": "passed",
+        "evidence_status": "validated",
+        "correction": true
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_legacy_app",
+      "event_type": "gate.applicability_decided",
+      "occurred_at": "2026-10-15T17:11:00Z",
+      "recorded_at": "2026-10-15T17:11:00Z",
+      "ingest_seq": 40,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_legacy_app",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "missing"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_legacy",
+        "scope_revision": "scope_rev_1",
+        "applicability": "not-required",
+        "normalized_result": null,
+        "evidence_status": "missing",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_release_app",
+      "event_type": "gate.applicability_decided",
+      "occurred_at": "2026-10-15T17:12:00Z",
+      "recorded_at": "2026-10-15T17:12:00Z",
+      "ingest_seq": 41,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_release_app",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "missing"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_release",
+        "scope_revision": "scope_rev_1",
+        "applicability": "undecided",
+        "normalized_result": null,
+        "evidence_status": "missing",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_declared_app",
+      "event_type": "gate.applicability_decided",
+      "occurred_at": "2026-10-15T17:13:00Z",
+      "recorded_at": "2026-10-15T17:13:00Z",
+      "ingest_seq": 42,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_declared_app",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "missing"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_declared",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": null,
+        "evidence_status": "missing",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_declared_result",
+      "event_type": "gate.result_recorded",
+      "occurred_at": "2026-10-15T17:30:00Z",
+      "recorded_at": "2026-10-15T17:30:00Z",
+      "ingest_seq": 43,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_declared_result",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "declared"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_declared",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": "passed",
+        "evidence_status": "declared",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_stale_app",
+      "event_type": "gate.applicability_decided",
+      "occurred_at": "2026-10-15T17:14:00Z",
+      "recorded_at": "2026-10-15T17:14:00Z",
+      "ingest_seq": 44,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_stale_app",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "missing"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_stale",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": null,
+        "evidence_status": "missing",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gate_stale_result",
+      "event_type": "gate.result_recorded",
+      "occurred_at": "2026-10-15T17:40:00Z",
+      "recorded_at": "2026-10-15T17:40:00Z",
+      "ingest_seq": 45,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_gate_stale_result",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "stale"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "gate": {
+        "gate_id": "gate_stale",
+        "scope_revision": "scope_rev_1",
+        "applicability": "required",
+        "normalized_result": "passed",
+        "evidence_status": "stale",
+        "correction": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_val1_start",
+      "event_type": "validation.started",
+      "occurred_at": "2026-10-15T17:15:00Z",
+      "recorded_at": "2026-10-15T17:15:00Z",
+      "ingest_seq": 46,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_val1_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "validation": {
+        "validation_id": "val_1",
+        "e2e_scope": "narrow",
+        "result": null
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_val1_finish",
+      "event_type": "validation.finished",
+      "occurred_at": "2026-10-15T17:25:00Z",
+      "recorded_at": "2026-10-15T17:25:00Z",
+      "ingest_seq": 47,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_val1_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "validation": {
+        "validation_id": "val_1",
+        "e2e_scope": "narrow",
+        "result": "failed",
+        "cases": [
+          {
+            "case_id": "case_a",
+            "attempt_no": 1,
+            "result": "failed"
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_val2_start",
+      "event_type": "validation.started",
+      "occurred_at": "2026-10-15T17:35:00Z",
+      "recorded_at": "2026-10-15T17:35:00Z",
+      "ingest_seq": 48,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_val2_start",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "validation": {
+        "validation_id": "val_2",
+        "e2e_scope": "narrow",
+        "result": null
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_val2_finish",
+      "event_type": "validation.finished",
+      "occurred_at": "2026-10-15T17:55:00Z",
+      "recorded_at": "2026-10-15T17:55:00Z",
+      "ingest_seq": 49,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_val2_finish",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "validation": {
+        "validation_id": "val_2",
+        "e2e_scope": "narrow",
+        "result": "passed",
+        "cases": [
+          {
+            "case_id": "case_a",
+            "attempt_no": 2,
+            "result": "passed"
+          },
+          {
+            "case_id": "case_b",
+            "attempt_no": 1,
+            "result": "passed"
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_usage_detail",
+      "event_type": "usage.recorded",
+      "occurred_at": "2026-10-15T18:10:00Z",
+      "recorded_at": "2026-10-15T18:10:00Z",
+      "ingest_seq": 50,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_usage_detail",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "correlation": {
+        "request_id": "req_1",
+        "parent_run_id": "run_parent"
+      },
+      "usage": {
+        "request_id": "req_1",
+        "rollup": false,
+        "provider": "synthetic",
+        "model": "demo",
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "cache_read_tokens": null,
+        "reasoning_tokens": null,
+        "input_includes_cache": false,
+        "cost_amount": null,
+        "currency": null,
+        "cost_status": "missing",
+        "billing_basis": null
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_usage_rollup",
+      "event_type": "usage.recorded",
+      "occurred_at": "2026-10-15T18:11:00Z",
+      "recorded_at": "2026-10-15T18:11:00Z",
+      "ingest_seq": 51,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_parent",
+        "logical_task_id": "parent/demo",
+        "task_run_id": "run_parent",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_usage_rollup",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "correlation": {
+        "request_id": "req_1"
+      },
+      "usage": {
+        "request_id": "req_1",
+        "rollup": true,
+        "provider": "synthetic",
+        "model": "demo",
+        "input_tokens": 10,
+        "output_tokens": 5,
+        "cache_read_tokens": null,
+        "reasoning_tokens": null,
+        "input_includes_cache": false,
+        "cost_amount": null,
+        "currency": null,
+        "cost_status": "missing",
+        "billing_basis": null
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_usage_missing",
+      "event_type": "usage.recorded",
+      "occurred_at": "2026-10-15T18:20:00Z",
+      "recorded_at": "2026-10-15T18:20:00Z",
+      "ingest_seq": 52,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_usage_missing",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "usage": {
+        "request_id": "req_2",
+        "rollup": false,
+        "cost_amount": null,
+        "cost_status": "missing",
+        "currency": null,
+        "billing_basis": null
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_usage_sub",
+      "event_type": "usage.recorded",
+      "occurred_at": "2026-10-15T18:30:00Z",
+      "recorded_at": "2026-10-15T18:30:00Z",
+      "ingest_seq": 53,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_usage_sub",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "usage": {
+        "request_id": "req_3",
+        "rollup": false,
+        "cost_amount": null,
+        "cost_status": "subscription",
+        "currency": null,
+        "billing_basis": "subscription"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_gap",
+      "event_type": "collection.gap_detected",
+      "occurred_at": "2026-10-15T18:40:00Z",
+      "recorded_at": "2026-10-15T18:40:00Z",
+      "ingest_seq": 54,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_omp",
+        "source_event_id": "evt_gap",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "host": {
+        "host_kind": "omp",
+        "host_version": "18.11.1"
+      },
+      "collection": {
+        "gap_id": "gap_omp",
+        "gap_start": "2026-10-15T18:00:00Z",
+        "gap_end": null,
+        "closed": false
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_unlinked",
+      "event_type": "handoff.saved",
+      "occurred_at": "2026-10-15T18:50:00Z",
+      "recorded_at": "2026-10-15T18:50:00Z",
+      "ingest_seq": 56,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": null,
+        "kind": "agent",
+        "identity_assurance": "unbound"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": null,
+        "repository_id": null,
+        "worktree_id": null,
+        "task_uid": null,
+        "logical_task_id": null,
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_unlinked",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [
+        {
+          "system": "dify",
+          "object_type": "workflow_run",
+          "external_id": "opaque-external-id",
+          "mapping_version": 1
+        }
+      ],
+      "extensions": {},
+      "authorization_context": {
+        "approval_ref": null
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_mode_later",
+      "event_type": "mode.kept",
+      "occurred_at": "2026-10-15T17:50:00Z",
+      "recorded_at": "2026-10-15T17:50:00Z",
+      "ingest_seq": 57,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": "run_leaf_1",
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_mode_later",
+        "producer_version": "0.1.0",
+        "observation_level": "execution-observed",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "workflow": {
+        "mode_at_event": "lite",
+        "mode_source": "user"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_dst_edt",
+      "event_type": "component.available",
+      "occurred_at": "2026-11-01T01:30:00-04:00",
+      "recorded_at": "2026-11-01T01:30:00-04:00",
+      "ingest_seq": 58,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_dst_edt",
+        "producer_version": "0.1.0",
+        "observation_level": "configured",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:dst",
+        "kind": "skill",
+        "version": "1"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "event_id": "evt_dst_est",
+      "event_type": "component.available",
+      "occurred_at": "2026-11-01T01:30:00-05:00",
+      "recorded_at": "2026-11-01T01:30:00-05:00",
+      "ingest_seq": 59,
+      "installation_id": "inst_g1",
+      "device_id": "device_g1",
+      "actor": {
+        "actor_id": "actor_bound",
+        "kind": "agent",
+        "identity_assurance": "local-declared"
+      },
+      "scope": {
+        "tenant_id": null,
+        "workspace_id": null,
+        "project_id": "project_a",
+        "repository_id": "repo_a",
+        "worktree_id": "wt_a",
+        "task_uid": "task_leaf",
+        "logical_task_id": "parent/demo/leaf",
+        "task_run_id": null,
+        "session_id": null,
+        "step_run_id": null
+      },
+      "provenance": {
+        "source_kind": "runtime-instrumented",
+        "source_id": "source_runtime",
+        "source_event_id": "evt_dst_est",
+        "producer_version": "0.1.0",
+        "observation_level": "configured",
+        "evidence_status": "present"
+      },
+      "privacy": {
+        "classification": "local-metadata",
+        "redaction_policy_version": "1",
+        "exportable": true
+      },
+      "external_refs": [],
+      "extensions": {},
+      "component": {
+        "component_id": "skill:dst",
+        "kind": "skill",
+        "version": "1"
+      }
+    }
+  ],
+  "dst_fixture": {
+    "timezone": "America/New_York",
+    "from_civil": "2026-11-01T00:00:00",
+    "to_civil": "2026-11-02T00:00:00",
+    "note": "DST end makes this civil day 25 hours. The two 01:30 clock faces are different instants."
+  },
+  "query_scope": {
+    "from": "2026-10-15T15:00:00Z",
+    "to": "2026-10-16T15:00:00Z",
+    "timezone": "Asia/Tokyo",
+    "task_granularity": "executable-leaf",
+    "include_unlinked": true,
+    "include_unknown_time": false,
+    "task_uids": []
+  }
+}
