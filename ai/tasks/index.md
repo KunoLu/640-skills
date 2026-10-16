@@ -8,6 +8,7 @@
 - [p3-cleanup-path-binding](p3-cleanup-path-binding/task.md)
 - [readme-bilingual-redesign](readme-bilingual-redesign/task.md)
 - [sbtd-cleanup-expansion](sbtd-cleanup-expansion/task.md)
+- [v2.1.0-rc.1-r1.0-contracts](v2.1.0-rc.1-r1.0-contracts/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)
 <!-- sbtd-task-index:end -->
