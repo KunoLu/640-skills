@@ -4,11 +4,11 @@ id: v2.1.0-rc.1-r1.0-contracts
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 SBTD strict mode，并指定 strict.md。
-status: "in-progress"
+status: "done"
 branch: feat/v2.1.0-rc.1-r1.0-contracts
 created_at: '2026-10-16T13:31:08.139862+08:00'
-updated_at: "2026-10-16T13:31:16.528516+08:00"
-completed_at: null
+updated_at: "2026-10-16T14:15:43.663354+08:00"
+completed_at: "2026-10-16T14:15:43.663354+08:00"
 ---
 交付 v2.1.0-rc.1 的 R1.0 数据与权限契约。不实现 R1.1 及以后的 Facade、存储、采集器或 HTTP 服务。
 
@@ -84,3 +84,5 @@ Required tests: schema、去重处置、分母字面量、缺失不为 0、unsup
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-16T13:31:16.528516+08:00 | planned | in-progress | 前置门已记录，开始实现 R1.0 契约 | ai/tasks/v2.1.0-rc.1-r1.0-contracts/task.md |
+| 2026-10-16T14:15:40.412329+08:00 | in-progress | checking | 契约测试与独立审查修正已完成，进入验收 | python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts on bc0d7a6 |
+| 2026-10-16T14:15:43.663354+08:00 | checking | done | R1.0 名词、分母和去重测试通过，审查 P2 已修 | ai/tasks/v2.1.0-rc.1-r1.0-contracts/check.md |
