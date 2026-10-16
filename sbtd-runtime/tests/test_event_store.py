@@ -404,6 +404,102 @@ class EventStoreTests(unittest.TestCase):
         ]
         self.assertEqual(leaked, [])
 
+    def test_prefixed_secret_names_are_rejected_and_counters_stay(self) -> None:
+        # Scenario: 带前缀或驼峰的敏感扩展名不入库
+        # Scenario: token 计数字段仍入库
+        store = self._open()
+        secret_keys = (
+            "github_token",
+            "x-api-key",
+            "X-Api-Key",
+            "authToken",
+            "client_secret",
+        )
+        for index, key in enumerate(secret_keys):
+            event = _event(
+                f"evt_sec_{index}", f"native_sec_{index}", "2026-10-16T01:00:00Z"
+            )
+            event["extensions"] = {key: "do-not-store"}
+            result = store.append([event])
+            self.assertEqual(
+                [(item.status, item.code) for item in result.outcomes],
+                [("rejected", "secret-rejected")],
+                key,
+            )
+        self.assertEqual(store.replay(), [])
+        leaked = [
+            path
+            for path in self.home.rglob("*")
+            if path.is_file() and b"do-not-store" in path.read_bytes()
+        ]
+        self.assertEqual(leaked, [])
+        kept = ("token_count", "input_tokens", "tokens", "max_tokens")
+        for index, key in enumerate(kept):
+            event = _event(
+                f"evt_count_{index}", f"native_count_{index}", "2026-10-16T02:00:00Z"
+            )
+            event["extensions"] = {key: f"metric-{index}"}
+            result = store.append([event])
+            self.assertEqual(
+                [item.status for item in result.outcomes], ["accepted"], key
+            )
+        self.assertEqual(
+            [item["extensions"] for item in store.replay()],
+            [{key: f"metric-{index}"} for index, key in enumerate(kept)],
+        )
+
+    def test_nested_extensions_are_schema_rejected_and_not_persisted(self) -> None:
+        # Scenario: 嵌套扩展里的敏感键不入库
+        store = self._open()
+        rejected = (
+            ("evt_nested_auth", {"auth": {"github_token": "nested-token-value"}}),
+            ("evt_nested_list", {"items": [{"x-api-key": "nested-key-value"}]}),
+            ("evt_nested_usage", {"usage": {"input_tokens": 1, "max_tokens": 2}}),
+        )
+        for event_id, extensions in rejected:
+            event = _event(event_id, f"native_{event_id}", "2026-10-16T01:00:00Z")
+            event["extensions"] = extensions
+            result = store.append([event])
+            self.assertEqual(
+                [(item.status, item.code) for item in result.outcomes],
+                [("rejected", "schema-rejected")],
+                extensions,
+            )
+        self.assertEqual(store.replay(), [])
+        leaked = [
+            path
+            for path in self.home.rglob("*")
+            if path.is_file()
+            and (
+                b"nested-token-value" in path.read_bytes()
+                or b"nested-key-value" in path.read_bytes()
+                or b"input_tokens" in path.read_bytes()
+            )
+        ]
+        self.assertEqual(leaked, [])
+
+    def test_cookie_plurals_are_rejected(self) -> None:
+        # Scenario: cookie 复数扩展名不入库
+        store = self._open()
+        for index, key in enumerate(("cookies", "set_cookies")):
+            event = _event(
+                f"evt_cookie_{index}", f"native_cookie_{index}", "2026-10-16T01:00:00Z"
+            )
+            event["extensions"] = {key: "do-not-store"}
+            result = store.append([event])
+            self.assertEqual(
+                [(item.status, item.code) for item in result.outcomes],
+                [("rejected", "secret-rejected")],
+                key,
+            )
+        self.assertEqual(store.replay(), [])
+        leaked = [
+            path
+            for path in self.home.rglob("*")
+            if path.is_file() and b"do-not-store" in path.read_bytes()
+        ]
+        self.assertEqual(leaked, [])
+
     def test_foreign_ready_spool_is_not_recovered(self) -> None:
         store = self._open()
         first = _event("evt_keep", "native_keep", "2026-10-16T01:00:00Z")

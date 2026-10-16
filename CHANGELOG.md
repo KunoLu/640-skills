@@ -19,6 +19,11 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 - ADR 0001 Q6 host table now states a pass condition. A pinned host that does not yield a structured Skill/Tool call in real smoke is marked `unsupported` alone; the other host and the metric category stay unchanged.
 
+### Fixed
+
+- Reject event-store extension names that match a secret term only after case-insensitive `-`, `_`, and camelCase normalization. `github_token`, `x-api-key`, `X-Api-Key`, `authToken`, and `client_secret` are rejected before the spool write. `token_count`, `input_tokens`, and `tokens` stay. Already stored events are not rewritten.
+- Scan secret key names recursively as defense in depth, but extension values stay scalar-only: nested objects and arrays are rejected by the event schema and are not persisted. A nested `github_token`, a list item `x-api-key`, or nested `input_tokens`/`max_tokens` rejects the whole event as `schema-rejected` before the spool write. `cookies` and `set_cookies` are rejected. Already stored events are not rewritten.
+
 ## v2.0.2 (2026-10-16)
 
 The stable [v2.0.2 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2) is published. Its annotated tag points to `1d82494d74f6df9bca7dccef2da409f87091883e`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/38758808131) passed on attempt 2 after the first macOS job could not acquire a hosted runner. Source publication does not perform local installation, workflow sync, project migration or backup disposal.

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import tempfile
 import uuid
@@ -539,27 +540,70 @@ def _secret_extension(event: dict[str, Any]) -> bool:
     extensions = event.get("extensions")
     if not isinstance(extensions, dict):
         return False
-    return any(_secret_key(key) for key in extensions)
+    return _secret_nodes(extensions)
+
+
+_SECRET_DEPTH = 32
+
+
+def _secret_nodes(root: object) -> bool:
+    # Iterative. JSON has no cycles; the cap still stops a crafted loop.
+    # ponytail: depth 32 fails closed; raise it if real extensions need deeper trees.
+    pending: list[tuple[object, int]] = [(root, 0)]
+    while pending:
+        node, depth = pending.pop()
+        if depth > _SECRET_DEPTH:
+            return True
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if _secret_key(key):
+                    return True
+                if isinstance(value, (dict, list)):
+                    pending.append((value, depth + 1))
+        elif isinstance(node, list):
+            for value in node:
+                if isinstance(value, (dict, list)):
+                    pending.append((value, depth + 1))
+    return False
+
+
+_SECRET_SEGMENTS = (
+    ("token",),
+    ("secret",),
+    ("password",),
+    ("passwd",),
+    ("api", "key"),
+    ("authorization",),
+    ("cookie",),
+    ("cookies",),
+    ("credential",),
+    ("private", "key"),
+    ("bearer",),
+    ("oauth",),
+)
+
+
+def _secret_parts(key: object) -> tuple[str, ...]:
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", str(key))
+    text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", text)
+    return tuple(part.casefold() for part in re.split(r"[^0-9A-Za-z]+", text) if part)
 
 
 def _secret_key(key: object) -> bool:
-    normalized = "".join(ch for ch in str(key).casefold() if ch.isalnum())
-    return normalized in {
-        "apikey",
-        "accesstoken",
-        "refreshtoken",
-        "idtoken",
-        "token",
-        "password",
-        "passwd",
-        "secret",
-        "clientsecret",
-        "cookie",
-        "authorization",
-        "bearer",
-        "oauth",
-        "oauthtoken",
-    }
+    # Suffix/segment match after casefold and -/_/camelCase splits.
+    # token_count stays: its tail is count, not token. tokens is not token.
+    # cookies is a secret plural; do not strip s from every term.
+    parts = _secret_parts(key)
+    if not parts or parts[-1] in {"count", "counts"}:
+        return False
+    squashed = "".join(parts)
+    if any(squashed.endswith("".join(term)) for term in _SECRET_SEGMENTS):
+        return True
+    return any(
+        parts[index : index + len(term)] == term
+        for term in _SECRET_SEGMENTS
+        for index in range(len(parts) - len(term) + 1)
+    )
 
 
 def _require_intact(database: Path) -> None:
