@@ -22,6 +22,7 @@
 ### 修复
 
 - 事件库扩展名在大小写不敏感、并规范化 `-`、`_` 和驼峰之后，按敏感词的后缀或段子串拒绝。`github_token`、`x-api-key`、`X-Api-Key`、`authToken` 和 `client_secret` 在写入 spool 前被拒绝。`token_count`、`input_tokens` 和 `tokens` 仍入库。已接受的旧事件不回写。
+- 事件库扩展对象和数组的任意层键名在写入 spool 前按敏感词拒绝。嵌套的 `github_token` 和列表中的 `x-api-key` 整条拒绝。嵌套的 `input_tokens` 和 `max_tokens` 仍入库。`cookies` 和 `set_cookies` 被拒绝。扩展值可以是仍受大小限制的小型嵌套 JSON 对象和数组。已接受的旧事件不回写。
 
 ## v2.0.2（2026-10-16）
 

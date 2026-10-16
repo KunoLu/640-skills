@@ -540,7 +540,31 @@ def _secret_extension(event: dict[str, Any]) -> bool:
     extensions = event.get("extensions")
     if not isinstance(extensions, dict):
         return False
-    return any(_secret_key(key) for key in extensions)
+    return _secret_nodes(extensions)
+
+
+_SECRET_DEPTH = 32
+
+
+def _secret_nodes(root: object) -> bool:
+    # Iterative. JSON has no cycles; the cap still stops a crafted loop.
+    # ponytail: depth 32 fails closed; raise it if real extensions need deeper trees.
+    pending: list[tuple[object, int]] = [(root, 0)]
+    while pending:
+        node, depth = pending.pop()
+        if depth > _SECRET_DEPTH:
+            return True
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if _secret_key(key):
+                    return True
+                if isinstance(value, (dict, list)):
+                    pending.append((value, depth + 1))
+        elif isinstance(node, list):
+            for value in node:
+                if isinstance(value, (dict, list)):
+                    pending.append((value, depth + 1))
+    return False
 
 
 _SECRET_SEGMENTS = (
@@ -551,6 +575,7 @@ _SECRET_SEGMENTS = (
     ("api", "key"),
     ("authorization",),
     ("cookie",),
+    ("cookies",),
     ("credential",),
     ("private", "key"),
     ("bearer",),
@@ -567,6 +592,7 @@ def _secret_parts(key: object) -> tuple[str, ...]:
 def _secret_key(key: object) -> bool:
     # Suffix/segment match after casefold and -/_/camelCase splits.
     # token_count stays: its tail is count, not token. tokens is not token.
+    # cookies is a secret plural; do not strip s from every term.
     parts = _secret_parts(key)
     if not parts or parts[-1] in {"count", "counts"}:
         return False

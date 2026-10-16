@@ -2,6 +2,39 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:sbtd:runtime:event:1.0",
   "title": "SBTD Runtime observation event 1.0",
+  "$defs": {
+    "extensionValue": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 256
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/extensionValue"
+          }
+        },
+        {
+          "type": "object",
+          "maxProperties": 8,
+          "additionalProperties": {
+            "$ref": "#/$defs/extensionValue"
+          }
+        }
+      ]
+    }
+  },
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -817,21 +850,7 @@
       "type": "object",
       "maxProperties": 8,
       "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "maxLength": 256
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ]
+        "$ref": "#/$defs/extensionValue"
       }
     },
     "gate": {
