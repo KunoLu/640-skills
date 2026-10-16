@@ -6,6 +6,17 @@
 
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
+
+## 未发布
+
+### 新增
+
+- 新增可选的 `sbtd-runtime/`，作为 `v2.1.0-rc.1` 的 R1.0 契约：数据字典、事件 JSON Schema、指标目录、loopback OpenAPI 草案、capability pin，以及用 golden dataset 检查名词、分母和去重。核心指标覆盖任务状态、执行轮次、步骤、Skill／Tool 调用、Gate、测试证据和采集健康。§8.2 其余指标保留在目录中并标 `unsupported`，不返回 0。token／费用是条件性字段：来源提供则保留，缺失可见且不填 0。不包含 Starlette／uvicorn 服务、事件库或采集器。
+
+### 变更
+
+- ADR 0001 Q6 宿主表改为通过条件。门禁宿主在真实 smoke 中没有结构化 Skill／Tool 调用时，只将该宿主标为 `unsupported`；另一宿主和指标类别保持不变。
+
 ## v2.0.2（2026-10-16）
 
 正式版 [v2.0.2 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2) 已发布。annotated tag 指向 `1d82494d74f6df9bca7dccef2da409f87091883e`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/38758808131)在 attempt 2 通过，首次 macOS job 因未能分配 hosted runner 而未执行。源码发布不执行本机安装、workflow sync、项目迁移或备份处置。
