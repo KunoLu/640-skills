@@ -491,6 +491,7 @@ For project-only setup, use `bash install.sh --platform codex --init-projects /a
 |---|---|
 | `README.md` / `README.zh.md` | English and Chinese reader entrypoints; detailed contracts stay in linked sources |
 | `sbtd-workflow-onboard/` | Self-contained installable Skill: runtime `scripts/`, payload `templates/`, mirrored `assets/`, catalog and reference |
+| `sbtd-runtime/` | Optional v2.1.0-rc.1 R1.0 contracts: event schema, metric catalog, OpenAPI draft, and golden checks. Not installed by Onboard and not a running service |
 | `install.sh` / `install.ps1` | Root installation interfaces; source root is the Onboard directory |
 | `ENTRYPOINT.md` | Tracked monitoring baseline and recoverable maintenance entrypoint |
 | `docs/lessons.md` | Required short lessons entry; index/topic detail is loaded only when relevant |

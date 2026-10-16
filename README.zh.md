@@ -482,6 +482,7 @@ Project-only 使用 `bash install.sh --platform codex --init-projects /abs/proje
 |---|---|
 | `README.md`／`README.zh.md` | 英文与中文阅读入口；详细契约留在链接指向的源文件 |
 | `sbtd-workflow-onboard/` | 自包含可安装 Skill：运行实现 `scripts/`、载荷 `templates/`、镜像 `assets/`、catalog 与参考说明 |
+| `sbtd-runtime/` | 可选的 v2.1.0-rc.1 R1.0 契约：事件 schema、指标目录、OpenAPI 草案与 golden 检查。不随 Onboard 安装，也不是已运行的服务 |
 | `install.sh`／`install.ps1` | 根安装入口；source root 是 Onboard 目录 |
 | `ENTRYPOINT.md` | 已追踪的版本监控基线与可恢复维护入口 |
 | `docs/lessons.md` | 必读 lessons 短入口，按需读取 index／topic 详情 |

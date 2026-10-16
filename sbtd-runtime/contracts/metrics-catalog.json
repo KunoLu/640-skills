@@ -1,0 +1,1416 @@
+{
+  "schema_version": "1.0",
+  "metrics_version": "1.0.0",
+  "release": "v2.1.0-rc.1",
+  "core_rule": "task status, runs, steps, Skill/Tool invocations, gates, test evidence and collection health are supported. Other section 8.2 metrics are reserved as unsupported. Token and cost are conditional.",
+  "metrics": [
+    {
+      "metric_id": "tasks.touched",
+      "name_zh": "范围内有活动的叶子任务",
+      "unit": "count",
+      "grain": "executable leaf task_uid; summary parents are excluded from default throughput",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "leaf task_uid with in-window activity or an intersecting run"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "same task_uid across runs counts once"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "events without occurred_at are listed, not counted",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "task-status",
+      "source_requirement": "trusted activity event",
+      "empty_policy": "zero means no in-window leaf activity, not an unsupported metric"
+    },
+    {
+      "metric_id": "tasks.created",
+      "name_zh": "范围内创建的叶子任务",
+      "unit": "count",
+      "grain": "executable leaf task_uid; summary parents are excluded from default throughput",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "leaf task.created in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "replay of the same source event does not create another task"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "file mtime is not a creation time; null occurred_at is not backfilled",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "task-status",
+      "source_requirement": "task.created",
+      "empty_policy": "boundary at to is excluded"
+    },
+    {
+      "metric_id": "tasks.completed_unique",
+      "name_zh": "范围内至少一次真实 done 的叶子任务",
+      "unit": "count",
+      "grain": "executable leaf task_uid; summary parents are excluded from default throughput",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "leaf task_uid with a done transition in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "reopen then done does not increase unique"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "insufficient history is not the current file status",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "task-status",
+      "source_requirement": "task.state_changed current=done",
+      "empty_policy": "parent completions are not leaf completions"
+    },
+    {
+      "metric_id": "tasks.completion_events",
+      "name_zh": "范围内 done 转换次数",
+      "unit": "count",
+      "grain": "done transition",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "leaf done transitions in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "replay does not add a transition"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "not unique task count",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "task-status",
+      "source_requirement": "task.state_changed current=done",
+      "empty_policy": "reopen then done increases events only"
+    },
+    {
+      "metric_id": "tasks.reopened",
+      "name_zh": "范围内 done 到 planned 的重开次数",
+      "unit": "count",
+      "grain": "reopen event",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "leaf task.reopened in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "replay does not add a reopen"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "a reopen is not a new task",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "task-status",
+      "source_requirement": "task.reopened",
+      "empty_policy": "not equal to created"
+    },
+    {
+      "metric_id": "tasks.status_at_end",
+      "name_zh": "范围结束时可证明的状态分布",
+      "unit": "distribution",
+      "grain": "executable leaf task_uid; summary parents are excluded from default throughput",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distribution",
+        "population": "leaf tasks with the last lifecycle event occurred_at < to"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "later events do not rewrite an earlier chain"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "no chain before to is unknown, not the current file",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "task-status",
+      "source_requirement": "task lifecycle events",
+      "empty_policy": "unknown is explicit"
+    },
+    {
+      "metric_id": "runs.started",
+      "name_zh": "范围内真实开始的 run",
+      "unit": "count",
+      "grain": "task_run_id",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "leaf run.started in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "resume and a later session are not a new run"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "a run that started before the window is not a start",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "run",
+      "source_requirement": "run.started",
+      "empty_policy": "not session count"
+    },
+    {
+      "metric_id": "runs.interrupted",
+      "name_zh": "有可靠中断事实的 run",
+      "unit": "count",
+      "grain": "task_run_id",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "leaf run.interrupted in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "missing end without an interrupt fact is unknown, not interrupted"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "unknown runs are listed and not folded into the value",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "run",
+      "source_requirement": "run.interrupted",
+      "empty_policy": "missing end is not failed"
+    },
+    {
+      "metric_id": "steps.attempts",
+      "name_zh": "范围内开始的 step attempt",
+      "unit": "count",
+      "grain": "step attempt",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host",
+        "step"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "leaf step.started in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "same source event replay does not add an attempt"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "unfinished attempts stay unknown",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "step",
+      "source_requirement": "step.started",
+      "empty_policy": "replay excluded"
+    },
+    {
+      "metric_id": "steps.success_rate_observed",
+      "name_zh": "机器观察到的步骤成功率",
+      "unit": "ratio",
+      "grain": "terminal attempt",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host",
+        "step"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "ratio",
+        "numerator": "succeeded",
+        "denominator": "succeeded + failed"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "cancelled, blocked and unknown are excluded from the denominator"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "zero decidable samples are no-decidable-sample, not 0% or 100%",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "step",
+      "source_requirement": "step.finished execution-observed",
+      "empty_policy": "excluded statuses are listed"
+    },
+    {
+      "metric_id": "steps.retry_count",
+      "name_zh": "attempt_no 大于 1 的步骤开始",
+      "unit": "count",
+      "grain": "step attempt",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host",
+        "step"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "leaf step.started with attempt_no > 1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "replay does not add a retry"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "user rerun and host retry stay distinguishable by reason_code when present",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "step",
+      "source_requirement": "step.started",
+      "empty_policy": "attempt 1 is not a retry"
+    },
+    {
+      "metric_id": "duration.execution_ms",
+      "name_zh": "可靠执行时长",
+      "unit": "milliseconds",
+      "grain": "interval intersection",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "duration",
+        "population": "not computed in rc.1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "same key and same canonical content confirms and does not recount"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "negative duration is a quality anomaly, not coerced to 0",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "duration",
+      "source_requirement": "monotonic clock",
+      "empty_policy": "unsupported is not 0"
+    },
+    {
+      "metric_id": "duration.blocked_ms",
+      "name_zh": "已证明阻塞时长",
+      "unit": "milliseconds",
+      "grain": "interval intersection",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "duration",
+        "population": "not computed in rc.1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "same key and same canonical content confirms and does not recount"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "unknown end is right-censored, not assumed cleared",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "duration",
+      "source_requirement": "blocked interval",
+      "empty_policy": "unsupported is not 0"
+    },
+    {
+      "metric_id": "duration.step_p50/p95",
+      "name_zh": "完整步骤时长分位数",
+      "unit": "milliseconds",
+      "grain": "finished attempt",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host",
+        "step"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "quantile",
+        "population": "not computed in rc.1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "same key and same canonical content confirms and does not recount"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "incomplete samples are not mixed in",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "duration",
+      "source_requirement": "complete step duration",
+      "empty_policy": "unsupported is not 0"
+    },
+    {
+      "metric_id": "components.available",
+      "name_zh": "观察时可用组件数",
+      "unit": "count",
+      "grain": "component",
+      "dimensions": [
+        "time",
+        "project",
+        "component",
+        "host",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "count",
+        "population": "installed or configured components"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "availability is not an invocation"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "not a use count",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "component-installed",
+      "source_requirement": "component.available",
+      "empty_policy": "unsupported is not an invocation count of 0"
+    },
+    {
+      "metric_id": "components.loaded",
+      "name_zh": "可证明载入次数",
+      "unit": "count",
+      "grain": "load event",
+      "dimensions": [
+        "time",
+        "project",
+        "component",
+        "host",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "skill.loaded"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "loaded is not invoked"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "file read does not prove method completion",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "component-loaded",
+      "source_requirement": "skill.loaded",
+      "empty_policy": "unsupported is not an invocation count of 0"
+    },
+    {
+      "metric_id": "components.invocations",
+      "name_zh": "Skill 与 Tool 的实际调用 attempt",
+      "unit": "count",
+      "grain": "invocation attempt",
+      "dimensions": [
+        "time",
+        "project",
+        "component",
+        "host",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "invocation.started whose component.kind is skill or tool"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "facade and host observations of the same invocation_id merge to one execution"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "skill.loaded and component.available do not increment this metric",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "component-call",
+      "source_requirement": "invocation.started",
+      "empty_policy": "event count is not call count"
+    },
+    {
+      "metric_id": "components.failure_rate",
+      "name_zh": "终结调用失败率",
+      "unit": "ratio",
+      "grain": "terminal invocation",
+      "dimensions": [
+        "time",
+        "project",
+        "component",
+        "host",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "ratio",
+        "numerator": "failed",
+        "denominator": "succeeded + failed"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "unfinished invocations are unknown, not failed"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "zero decidable samples are no-decidable-sample",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "component-call",
+      "source_requirement": "invocation.finished",
+      "empty_policy": "normalized error code only"
+    },
+    {
+      "metric_id": "gates.required",
+      "name_zh": "明确 required 的 Gate 实例",
+      "unit": "count",
+      "grain": "gate_id + scope_revision",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "gate",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "latest applicability required before to"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "retries and corrections do not increase the required denominator"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "undecided is not required",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "gate",
+      "source_requirement": "gate.applicability_decided",
+      "empty_policy": "not-required is listed separately"
+    },
+    {
+      "metric_id": "gates.evidence_coverage",
+      "name_zh": "required 且 passed 且证据 validated",
+      "unit": "ratio",
+      "grain": "gate instance",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "gate",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "ratio",
+        "numerator": "passed and evidence validated",
+        "denominator": "gates.required"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "declared-only and stale are not coverage"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "not a generic compliance rate",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "gate",
+      "source_requirement": "gate.result_recorded",
+      "empty_policy": "declared and stale stay visible"
+    },
+    {
+      "metric_id": "gates.rework",
+      "name_zh": "同一 Gate 与作用域的修正后再审",
+      "unit": "count",
+      "grain": "correction",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "gate",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "result events with correction true"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "a new scope_revision is a new evaluation, not rework"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "rework does not increase required",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "gate",
+      "source_requirement": "gate.result_recorded correction",
+      "empty_policy": "new scope is not rework"
+    },
+    {
+      "metric_id": "validations.runs",
+      "name_zh": "范围内开始的验证 run",
+      "unit": "count",
+      "grain": "validation_id",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "validation",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "validation.started in [from, to)"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "replay does not add a run"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "passed, failed, blocked and unfinished stay separate",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "validation",
+      "source_requirement": "validation.started",
+      "empty_policy": "finish state is not the start count"
+    },
+    {
+      "metric_id": "validations.run_pass_rate",
+      "name_zh": "结束验证的通过率",
+      "unit": "ratio",
+      "grain": "finished validation",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "validation",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "ratio",
+        "numerator": "passed",
+        "denominator": "passed + failed",
+        "strata": [
+          "narrow",
+          "full-stack"
+        ]
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "narrow and full-stack are not blended"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "a stratum with zero samples is no-decidable-sample, not 100%",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "validation",
+      "source_requirement": "validation.finished",
+      "empty_policy": "strata stay separate"
+    },
+    {
+      "metric_id": "tests.first_attempt_pass_rate",
+      "name_zh": "用例首次可判定通过率",
+      "unit": "ratio",
+      "grain": "case first attempt",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "validation",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "ratio",
+        "numerator": "first attempt passed",
+        "denominator": "cases with a decidable first result"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "a later pass does not erase a first failure"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "no decidable first result is no-decidable-sample",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "test-evidence",
+      "source_requirement": "validation case attempt_no 1",
+      "empty_policy": "final pass is a different metric"
+    },
+    {
+      "metric_id": "tests.final_result_distribution",
+      "name_zh": "用例最后已知结果分布",
+      "unit": "distribution",
+      "grain": "case",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "validation",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distribution",
+        "population": "last attempt per case"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "retries remain visible as attempts, not deleted"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "a conclusion requires the recorded result",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "test-evidence",
+      "source_requirement": "validation cases",
+      "empty_policy": "not a single pass rate"
+    },
+    {
+      "metric_id": "evidence.stale_count",
+      "name_zh": "不再匹配所声明修订的证据",
+      "unit": "count",
+      "grain": "evidence",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "validation",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "events whose evidence_status is stale"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "stale is not validated"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "old-version valid is not current-version valid",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "test-evidence",
+      "source_requirement": "evidence_status stale",
+      "empty_policy": "stale is not zero"
+    },
+    {
+      "metric_id": "modes.distribution",
+      "name_zh": "run 开始时的 mode 分布",
+      "unit": "distribution",
+      "grain": "run",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distribution",
+        "population": "not computed in rc.1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "a mid-run mode change does not rewrite earlier events"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "unknown mode stays unknown",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "mode",
+      "source_requirement": "mode_at_event",
+      "empty_policy": "unsupported is not a rewritten history"
+    },
+    {
+      "metric_id": "modes.recommendation_response",
+      "name_zh": "模式推荐的接受或保持",
+      "unit": "count",
+      "grain": "decision",
+      "dimensions": [
+        "time",
+        "project",
+        "task",
+        "mode",
+        "data-quality",
+        "host"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "not computed in rc.1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "keeping the current mode is not an error"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "pending stays pending",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "mode",
+      "source_requirement": "mode.accepted or mode.kept",
+      "empty_policy": "unsupported is not 0 errors"
+    },
+    {
+      "metric_id": "usage.requests",
+      "name_zh": "去重后的来源请求数",
+      "unit": "count",
+      "grain": "request_id",
+      "dimensions": [
+        "time",
+        "project",
+        "model",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "distinct",
+        "population": "not computed as a required metric in rc.1"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "parent rollup and child detail of the same request_id are one request"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "replay does not add a request",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "unsupported",
+      "category": "usage",
+      "source_requirement": "usage.recorded",
+      "empty_policy": "unsupported is not a doubled request count"
+    },
+    {
+      "metric_id": "usage.tokens",
+      "name_zh": "来源提供的 token",
+      "unit": "tokens",
+      "grain": "request_id",
+      "dimensions": [
+        "time",
+        "project",
+        "model",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "sum",
+        "population": "present token fields after request dedup"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "parent rollup and child detail of the same request are not both summed"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "missing tokens stay missing and are not filled with 0; cache is not added twice",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "conditional",
+      "category": "usage-conditional",
+      "source_requirement": "usage.recorded when the source provides tokens",
+      "empty_policy": "missing is visible"
+    },
+    {
+      "metric_id": "usage.cost_reported",
+      "name_zh": "提供方实际返回的费用",
+      "unit": "money",
+      "grain": "currency",
+      "dimensions": [
+        "time",
+        "project",
+        "model",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "sum",
+        "population": "cost_status reported, grouped by currency"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "currencies are not converted or added together"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "missing, unknown and subscription are not 0 and not free",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "conditional",
+      "category": "usage-conditional",
+      "source_requirement": "provider-returned cost",
+      "empty_policy": "missing is visible"
+    },
+    {
+      "metric_id": "usage.cost_estimated",
+      "name_zh": "价格表估算费用",
+      "unit": "money",
+      "grain": "currency",
+      "dimensions": [
+        "time",
+        "project",
+        "model",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "sum",
+        "population": "cost_status estimated only when a source amount exists"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "no price table is invented"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "absence is source-not-provided, not 0",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "conditional",
+      "category": "usage-conditional",
+      "source_requirement": "estimated amount from the source",
+      "empty_policy": "missing is visible"
+    },
+    {
+      "metric_id": "audit.unlinked_count",
+      "name_zh": "无法绑定任务的观察",
+      "unit": "count",
+      "grain": "event",
+      "dimensions": [
+        "time",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "event",
+        "population": "accepted in-window events with null task_uid"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "unlinked events are not attached to the most recently opened task"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "unknown actor stays unbound",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "collection-health",
+      "source_requirement": "events with null task_uid",
+      "empty_policy": "not force-linked"
+    },
+    {
+      "metric_id": "audit.gap_intervals",
+      "name_zh": "已发现且未关闭的采集缺口",
+      "unit": "count",
+      "grain": "gap",
+      "dimensions": [
+        "time",
+        "host",
+        "data-quality"
+      ],
+      "filter_semantics": "过滤作用于该指标的事实对象，不抹掉其他对象的状态",
+      "denominator": {
+        "kind": "gap",
+        "population": "collection.gap_detected with closed false"
+      },
+      "dedup": {
+        "event_key": [
+          "provenance.source_id",
+          "provenance.source_event_id"
+        ],
+        "replay": "same key and same canonical content confirms and does not recount",
+        "conflict": "same key and different canonical content conflicts and does not overwrite",
+        "without_source_event_id": "segment_id + offset + content digest; timestamp alone is not a key",
+        "metric_rule": "a gap is not represented as zero activity"
+      },
+      "time": {
+        "window": "[from, to)",
+        "clock": "occurred_at",
+        "timezone": "IANA",
+        "unknown_occurred_at": "excluded from the window and listed; not backfilled"
+      },
+      "unknown_data": "closed gaps are not open intervals",
+      "version": "1.0.0",
+      "metrics_version": "1.0.0",
+      "support": "supported",
+      "category": "collection-health",
+      "source_requirement": "collection.gap_detected",
+      "empty_policy": "gap is visible"
+    }
+  ]
+}

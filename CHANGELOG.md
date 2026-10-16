@@ -6,6 +6,17 @@ English · [简体中文](CHANGELOG.zh.md)
 
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
+
+## Unreleased
+
+### Added
+
+- Add optional `sbtd-runtime/` R1.0 contracts for `v2.1.0-rc.1`: data dictionary, event JSON Schema, metric catalog, loopback OpenAPI draft, capability pins, and golden dataset checks for nouns, denominators, and dedup. Core metrics cover task status, runs, steps, Skill/Tool invocations, gates, test evidence, and collection health. Other §8.2 metrics stay in the catalog as `unsupported` and are not returned as 0. Token and cost fields are conditional: provided values are kept, and missing values stay visible instead of 0. The capability matrix also freezes the ADR 0001 fallback completion gate: at least one pinned host must collect a Skill or Tool call event in a real smoke; if both pinned hosts are unsupported, R1 fails and returns to the user instead of being released. In the OpenAPI draft, every `/api/v1/exports*` operation is annotated `v2.1.0-rc.2` and non-blocking for rc.1, and every operation references a shared 403 response for Host/Origin and CSRF rejection. No Starlette/uvicorn server, event store, or collector is included.
+
+### Changed
+
+- ADR 0001 Q6 host table now states a pass condition. A pinned host that does not yield a structured Skill/Tool call in real smoke is marked `unsupported` alone; the other host and the metric category stay unchanged.
+
 ## v2.0.2 (2026-10-16)
 
 The stable [v2.0.2 Release](https://github.com/KunoLu/640-skills/releases/tag/v2.0.2) is published. Its annotated tag points to `1d82494d74f6df9bca7dccef2da409f87091883e`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/38758808131) passed on attempt 2 after the first macOS job could not acquire a hosted runner. Source publication does not perform local installation, workflow sync, project migration or backup disposal.
