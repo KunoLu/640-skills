@@ -123,9 +123,9 @@ Status: not-needed
 
 ## Reviewy nested-key blocker
 
-未完整调用 grill-with-docs。Reviewy blocker 与 nit 已固定嵌套拒绝、计数放行和复数 cookie。没有新的领域歧义。PRD v0.2 已允许扩展里的小对象；最终结果是扩展值保持标量-only（string ≤256、number、boolean、null），嵌套对象和数组被 schema 拒绝且不入库，递归敏感扫描保留为纵深防御。不改 schema_version，不回填，不把拒绝改成掩码。
+未完整调用 grill-with-docs。Reviewy blocker 与 nit 已固定嵌套拒绝、计数放行和复数 cookie。没有新的领域歧义。PRD v0.2 原先允许扩展里的小对象，已于 2026-10-16 按用户决定修订为标量-only；最终结果是扩展值保持标量-only（string ≤256、number、boolean、null），嵌套对象和数组被 schema 拒绝且不入库，递归敏感扫描保留为纵深防御。不改 schema_version，不回填，不把拒绝改成掩码。
 
-开放项：PRD v0.2 提到扩展里允许小对象，与最终的标量-only schema 不一致（既有不一致，非本轮引入）。R1.2b 之前由用户决定：修订 PRD，或另开契约 PR 允许嵌套。
+开放项已解决（2026-10-16 用户决定）：修订 PRD v0.2 为标量-only 表述，与最终 schema 一致；不另开契约 PR 允许嵌套。文档修订在 `docs/v2.1.0-rc.1-prd-scalar-extensions` 分支。
 
 BDD：沿用 `sbtd-runtime/spec/r1.2a-event-store-scenarios.md`。场景正文中文，关键词英文。源仓不建 .feature。Cross-repo context：not-needed。Mock Strategy：none。
 
@@ -134,7 +134,7 @@ BDD：沿用 `sbtd-runtime/spec/r1.2a-event-store-scenarios.md`。场景正文�
 | Reviewer | 客观触发／阶段 | Lifecycle | 谓词与结果 |
 |---|---|---|---|
 | book-ddd-distilled-modeling | 无完整 grill，无新边界 | before-dev | not-needed |
-| book-ddia-data-design | 扩展值可嵌套后入库 | before-dev | confirmed |
+| book-ddia-data-design | 嵌套扩展值被 schema 拒绝，不入库 | before-dev | confirmed |
 | book-legacy-change-safety | 嵌套键漏检 | before-dev | characterized |
 | book-refactoring-pass | 既有生产代码 | before-dev | proceed |
 | book-release-readiness | 无服务或迁移 | finish | not-needed |
