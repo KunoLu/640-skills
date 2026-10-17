@@ -580,6 +580,19 @@ class OpenApiDraftTests(unittest.TestCase):
         refresh = self.doc["paths"]["/api/v1/collection/refresh"]["post"]
         self.assertNotEqual(refresh.get("x-sbtd-release"), "v2.1.0-rc.2")
 
+    def test_download_export_csv_columns_match_serializer(self) -> None:
+        import csv_export
+
+        operation = self.doc["paths"]["/api/v1/exports/{export_id}/file"]["get"]
+        columns = operation["responses"]["200"]["x-sbtd-csv-columns"]
+        self.assertEqual(columns, csv_export.COLUMNS)
+        self.assertEqual(columns[-1], "reasoning_tokens")
+        notes = operation["responses"]["200"]["x-sbtd-csv-column-notes"]
+        self.assertIn("reasoning_tokens", notes)
+        schema_version = operation["responses"]["200"]["x-sbtd-csv-schema-version"]
+        self.assertEqual(schema_version, "1.1")
+        self.assertEqual(schema_version, csv_export.CSV_SCHEMA_VERSION)
+
     def test_forbidden_response_is_shared_for_host_origin_and_csrf(self) -> None:
         # Scenario: Host／Origin 与 CSRF 拒绝共用 403 契约
         forbidden = self.doc["components"]["responses"]["Forbidden"]

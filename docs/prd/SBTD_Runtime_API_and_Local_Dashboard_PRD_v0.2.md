@@ -1219,8 +1219,12 @@ metric_id, metric_value, unit, numerator, denominator,
 bucket_start, bucket_end, group_dimensions,
 workflow_source_revision, source_commit_sha, worktree_revision, task_document_revision,
 scope_revision, revision_state, relation_role,
-coverage_state, warning_code, metadata_key, metadata_value
+coverage_state, warning_code, metadata_key, metadata_value, reasoning_tokens
 ```
+
+`reasoning_tokens` 追加在固定列末尾，既有列顺序与含义不变；它是 `output_tokens` 的子集，不能再加到 output 上（不得 output_tokens + reasoning_tokens 双算）；宿主未报告时值为 null，CSV 单元格留空，绝不填 0。
+
+因固定列末尾追加 `reasoning_tokens`，本版 `export_schema_version` 为 `1.1`（相对首版 `1.0`）。
 
 `group_dimensions` 可为固定规范的 JSON 小对象，仅用于可变分组键；主要分析字段必须独立列，不用它替代 project／actor／component 等常用维度。多维复杂扩展后续版本新增列，不能悄悄改变既有列含义。
 

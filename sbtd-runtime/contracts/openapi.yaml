@@ -478,6 +478,106 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           description: Authorized export bytes
+          x-sbtd-csv-columns:
+            - export_schema_version
+            - snapshot_id
+            - record_type
+            - record_id
+            - row_grain
+            - range_from
+            - range_to
+            - timezone
+            - as_of
+            - metrics_version
+            - project_id
+            - repository_id
+            - worktree_id
+            - actor_id
+            - actor_alias
+            - host_kind
+            - host_version
+            - branch_alias
+            - task_uid
+            - logical_task_id
+            - task_run_id
+            - session_id
+            - step_run_id
+            - parent_step_run_id
+            - component_id
+            - component_kind
+            - component_version
+            - invocation_id
+            - attempt_id
+            - attempt_no
+            - gate_id
+            - gate_eval_id
+            - gate_scope_revision
+            - validation_run_id
+            - case_id
+            - artifact_id
+            - event_id
+            - event_type
+            - source_id
+            - source_event_id
+            - occurred_at
+            - recorded_at
+            - started_at
+            - ended_at
+            - duration_ms
+            - duration_basis
+            - workflow_mode
+            - mode_source
+            - previous_status
+            - status
+            - raw_result
+            - normalized_result
+            - reason_code
+            - operation_status
+            - state_persisted
+            - audit_status
+            - applicability
+            - evidence_status
+            - observation_level
+            - source_kind
+            - validation_scope
+            - tests_total
+            - tests_passed
+            - tests_failed
+            - tests_skipped
+            - tests_unknown
+            - provider
+            - model
+            - billing_basis
+            - currency
+            - input_tokens
+            - output_tokens
+            - cache_read_tokens
+            - cache_write_tokens
+            - cost_reported
+            - cost_estimated
+            - metric_id
+            - metric_value
+            - unit
+            - numerator
+            - denominator
+            - bucket_start
+            - bucket_end
+            - group_dimensions
+            - workflow_source_revision
+            - source_commit_sha
+            - worktree_revision
+            - task_document_revision
+            - scope_revision
+            - revision_state
+            - relation_role
+            - coverage_state
+            - warning_code
+            - metadata_key
+            - metadata_value
+            - reasoning_tokens
+          x-sbtd-csv-schema-version: "1.1"
+          x-sbtd-csv-column-notes:
+            reasoning_tokens: "Appended last; existing column order unchanged. Subset of output_tokens; must not be added to output_tokens. When the host does not report it the value is null and the CSV cell is empty, never 0."
 components:
   securitySchemes:
     localSession:
