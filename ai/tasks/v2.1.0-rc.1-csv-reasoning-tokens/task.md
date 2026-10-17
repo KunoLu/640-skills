@@ -7,8 +7,8 @@ mode_note: 用户本次明确要求 SBTD strict，单独的契约变更 PR。
 status: "done"
 branch: feat/v2.1.0-rc.1-csv-reasoning-tokens
 created_at: '2026-10-17T10:36:00+08:00'
-updated_at: '2026-10-17T11:06:52+08:00'
-completed_at: '2026-10-17T11:06:52+08:00'
+updated_at: '2026-10-17T12:57:37+08:00'
+completed_at: '2026-10-17T12:57:37+08:00'
 ---
 本次是契约变更：在 CSV 固定列末尾追加 `reasoning_tokens`。范围是 PRD §13.8 固定列清单、OpenAPI 导出下载的机器可读列清单、`csv_export.COLUMNS`、golden 数据与对应测试。不开始 R1.4，不扩大范围。
 
@@ -54,7 +54,7 @@ Status: confirmed
 
 Data owner and source of truth: CSV 是快照 dataset 的派生只读视图，不是事实源。新增列是追加，向后兼容读取按列名定位；既有列的位置、含义与序列化规则不变。
 
-Schema / migration / backfill / rollback / replay: 无存储 schema 变更；`event.schema.json` 早已有 `usage.reasoning_tokens`（integer|null），本变更只把它投影到导出列。`export_schema_version` 仍为 1.0 未升版（见待确认问题）。回滚是还原本提交，不动已入库事件。
+Schema / migration / backfill / rollback / replay: 无存储 schema 变更；`event.schema.json` 早已有 `usage.reasoning_tokens`（integer|null），本变更只把它投影到导出列。`export_schema_version` 用户已决定升为 1.1（因追加 reasoning_tokens 列）。回滚是还原本提交，不动已入库事件。
 
 Required tests: 末列身份与既有顺序、OpenAPI 列清单一致、null 留空、golden oracle 期望值。
 
@@ -82,7 +82,7 @@ OpenAPI `x-sbtd-csv-column-notes`（sbtd-runtime/contracts/openapi.yaml）：
 
 ## 待确认问题
 
-1. OpenAPI 原本没有 CSV 列清单，本次在 `downloadExport` 200 增加 `x-sbtd-csv-columns` 机器可读完整列表并以测试锁定与 `csv_export.COLUMNS` 一致；`export_schema_version` 仍为 1.0 未升版，若需按追加列升版另议。
+1. 【已解决】OpenAPI 原本没有 CSV 列清单，本次在 `downloadExport` 200 增加 `x-sbtd-csv-columns` 机器可读完整列表并以测试锁定与 `csv_export.COLUMNS` 一致；用户决定：`export_schema_version` 升为 `1.1`；OpenAPI 增加 `x-sbtd-csv-schema-version: "1.1"`。
 2. golden req_1 的 `reasoning_tokens` 由 null 改为 2，`usage.tokens.reasoning_tokens` 期望值随之从 null 变 2，`output_tokens` 保持 5。
 
 ## 状态事件
@@ -92,3 +92,4 @@ OpenAPI `x-sbtd-csv-column-notes`（sbtd-runtime/contracts/openapi.yaml）：
 | 2026-10-17T10:36:00+08:00 | planned | in-progress | contract change scoped by user: append reasoning_tokens to PRD §13.8 fixed CSV columns, OpenAPI, csv_export.COLUMNS, golden and tests | docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:1198; sbtd-runtime/csv_export.py COLUMNS; branch from origin/main cd5b26988fa31cd19895ad375fa895224601b953 |
 | 2026-10-17T10:42:00+08:00 | in-progress | verifying | PRD/OpenAPI/COLUMNS/golden/tests changed; running suites | docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md; sbtd-runtime/contracts/openapi.yaml; sbtd-runtime/csv_export.py; sbtd-runtime/golden/dataset.json; sbtd-runtime/golden/expected.json; sbtd-runtime/spec/r1.3-stats-api-scenarios.md; sbtd-runtime/tests/test_csv_export.py; sbtd-runtime/tests/test_golden_contracts.py; sbtd-runtime/tests/test_stats_query.py |
 | 2026-10-17T11:06:52+08:00 | verifying | done | all relevant suites pass | `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p test_*.py` → Ran 191 tests, OK (baseline main 187; +4 new); `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_event_store tests.test_sbtd_runtime_r1_facade tests.test_sbtd_runtime_r1_history_import tests.test_sbtd_runtime_r1_host_adapters tests.test_sbtd_runtime_r1_stats_api` → Ran 191 tests, OK (contracts 42 OK, stats_api 59 OK); `ruff format --check` + `ruff check` clean on csv_export.py, test_csv_export.py, test_stats_query.py; test_golden_contracts.py has the same pre-existing ruff findings (1 I001 + format) on main, unchanged by this PR; golden oracle test passes with usage.tokens reasoning_tokens=2, output_tokens=5 |
+| 2026-10-17T12:57:37+08:00 | done | done | user decided bump export_schema_version 1.0→1.1 on PR #137 | `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p test_*.py` → Ran 191 tests, OK; `python3 -B -m unittest tests.test_sbtd_runtime_r1_stats_api tests.test_sbtd_runtime_r1_contracts` → Ran 101 tests, OK; `ruff format --check` + `ruff check` clean on csv_export.py, test_csv_export.py; test_golden_contracts.py keeps the same pre-existing ruff findings (1 I001 + format) on main, unchanged by this PR; new assertions lock CSV_SCHEMA_VERSION=="1.1" and OpenAPI x-sbtd-csv-schema-version=="1.1" |

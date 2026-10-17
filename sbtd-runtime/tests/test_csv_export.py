@@ -101,7 +101,9 @@ class CsvExportTests(unittest.TestCase):
             self.assertEqual(int(pairs[f"rows:{family}"]), count)
         self.assertEqual(pairs["query_hash"], self.snapshot.query_hash)
         self.assertEqual(pairs["escape_version"], CSV_ESCAPE_VERSION)
+        self.assertEqual(CSV_SCHEMA_VERSION, "1.1")
         head = metadata[0]
+        self.assertEqual(head["export_schema_version"], "1.1")
         self.assertEqual(head["export_schema_version"], CSV_SCHEMA_VERSION)
         self.assertEqual(head["snapshot_id"], self.snapshot.snapshot_id)
         self.assertEqual(head["range_from"], self.scope["range"]["from"])

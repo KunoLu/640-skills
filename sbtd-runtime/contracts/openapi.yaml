@@ -575,6 +575,7 @@ paths:
             - metadata_key
             - metadata_value
             - reasoning_tokens
+          x-sbtd-csv-schema-version: "1.1"
           x-sbtd-csv-column-notes:
             reasoning_tokens: "Appended last; existing column order unchanged. Subset of output_tokens; must not be added to output_tokens. When the host does not report it the value is null and the CSV cell is empty, never 0."
 components:

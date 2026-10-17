@@ -589,6 +589,9 @@ class OpenApiDraftTests(unittest.TestCase):
         self.assertEqual(columns[-1], "reasoning_tokens")
         notes = operation["responses"]["200"]["x-sbtd-csv-column-notes"]
         self.assertIn("reasoning_tokens", notes)
+        schema_version = operation["responses"]["200"]["x-sbtd-csv-schema-version"]
+        self.assertEqual(schema_version, "1.1")
+        self.assertEqual(schema_version, csv_export.CSV_SCHEMA_VERSION)
 
     def test_forbidden_response_is_shared_for_host_origin_and_csrf(self) -> None:
         # Scenario: Host／Origin 与 CSRF 拒绝共用 403 契约

@@ -1224,6 +1224,8 @@ coverage_state, warning_code, metadata_key, metadata_value, reasoning_tokens
 
 `reasoning_tokens` 追加在固定列末尾，既有列顺序与含义不变；它是 `output_tokens` 的子集，不能再加到 output 上（不得 output_tokens + reasoning_tokens 双算）；宿主未报告时值为 null，CSV 单元格留空，绝不填 0。
 
+因固定列末尾追加 `reasoning_tokens`，本版 `export_schema_version` 为 `1.1`（相对首版 `1.0`）。
+
 `group_dimensions` 可为固定规范的 JSON 小对象，仅用于可变分组键；主要分析字段必须独立列，不用它替代 project／actor／component 等常用维度。多维复杂扩展后续版本新增列，不能悄悄改变既有列含义。
 
 `relation_role=activity | context | quality` 区分范围内事实、为关联而附带的实体／起始状态、数据质量说明。范围外的 run 起始上下文只作为 context 附带，不制造范围内开始次数。

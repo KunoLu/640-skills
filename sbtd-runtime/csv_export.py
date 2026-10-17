@@ -8,8 +8,10 @@ with a single quote under escape policy csv-text-escape-v1; legitimate
 negative numeric columns are numbers, not text, and are not escaped.
 reasoning_tokens is appended last in the fixed columns; it is a subset of
 output_tokens and is never added to output, and a missing value stays an
-empty cell. The serializer walks the snapshot's full dataset rows — page
-limits and Top-N never truncate the file.
+empty cell. CSV_SCHEMA_VERSION 1.1 is the schema that includes the trailing
+reasoning_tokens column (1.0 predates it). The serializer walks the
+snapshot's full dataset rows — page limits and Top-N never truncate the
+file.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from contract_eval import metric_catalog
 from report_snapshot import DATASET_FAMILIES, Snapshot
 from stats_query import query
 
-CSV_SCHEMA_VERSION = "1.0"
+CSV_SCHEMA_VERSION = "1.1"
 CSV_ESCAPE_VERSION = "csv-text-escape-v1"
 RECORD_TYPES = ("metadata", "metric") + DATASET_FAMILIES
 COLUMNS = [
