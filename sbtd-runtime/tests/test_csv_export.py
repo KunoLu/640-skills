@@ -127,6 +127,26 @@ class CsvExportTests(unittest.TestCase):
         self.assertEqual(detail["cache_read_tokens"], "")
         self.assertEqual(detail["cost_reported"], "")
 
+    def test_reasoning_tokens_is_appended_as_the_last_column(self) -> None:
+        self.assertEqual(COLUMNS[-1], "reasoning_tokens")
+        self.assertEqual(COLUMNS.index("metadata_value"), len(COLUMNS) - 2)
+        payload = serialize_csv(self.snapshot)
+        header = payload.decode("utf-8-sig").splitlines()[0]
+        self.assertEqual(header.split(",")[-1], "reasoning_tokens")
+
+    def test_reasoning_tokens_is_a_subset_not_added_to_output(self) -> None:
+        rows = _rows(serialize_csv(self.snapshot))
+        usage = [row for row in rows if row["record_type"] == "usage"]
+        detail = next(row for row in usage if row["record_id"] == "req_1")
+        self.assertEqual(detail["reasoning_tokens"], "2")
+        self.assertEqual(detail["output_tokens"], "5")
+
+    def test_unreported_reasoning_tokens_stays_empty_not_zero(self) -> None:
+        rows = _rows(serialize_csv(self.snapshot))
+        usage = [row for row in rows if row["record_type"] == "usage"]
+        missing = next(row for row in usage if row["record_id"] == "req_2")
+        self.assertEqual(missing["reasoning_tokens"], "")
+
     def test_formula_injection_is_escaped_but_numbers_are_not(self) -> None:
         dataset = json.loads(json.dumps(self.dataset))
         for event in dataset["events"]:

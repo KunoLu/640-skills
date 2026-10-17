@@ -215,7 +215,7 @@
         "input_tokens": 10,
         "output_tokens": 5,
         "cache_read_tokens": null,
-        "reasoning_tokens": null
+        "reasoning_tokens": 2
       },
       "source_event_ids": [
         "evt_usage_detail",

@@ -8,6 +8,7 @@
 - [p3-cleanup-path-binding](p3-cleanup-path-binding/task.md)
 - [readme-bilingual-redesign](readme-bilingual-redesign/task.md)
 - [sbtd-cleanup-expansion](sbtd-cleanup-expansion/task.md)
+- [v2.1.0-rc.1-csv-reasoning-tokens](v2.1.0-rc.1-csv-reasoning-tokens/task.md)
 - [v2.1.0-rc.1-prd-scalar-extensions](v2.1.0-rc.1-prd-scalar-extensions/task.md)
 - [v2.1.0-rc.1-r1.0-contracts](v2.1.0-rc.1-r1.0-contracts/task.md)
 - [v2.1.0-rc.1-r1.0-review-fixes](v2.1.0-rc.1-r1.0-review-fixes/task.md)

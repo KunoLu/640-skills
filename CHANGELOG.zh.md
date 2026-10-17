@@ -18,6 +18,7 @@
 
 - 新增 R1.2c 历史导入：`sbtd-runtime/history_import.py`。`build_scan_plan` 只记录调用方点名的项目根和来源，`approve_scan_plan` 是独立的显式动作；未批准的计划不会调用 `EventStore.append`。越界路径和符号链接在任何读取之前被拒绝。task.md 状态表复用既有 `TaskDocument` 解析：能证明的时间原样保留，`unknown` 或无法证明的时间记为 null 的 `occurred_at`（绝不从 frontmatter `created_at` 伪造），`recorded_at` 只表示本次导入观察到的时间，`done → planned` 记为 `task.reopened`，task.md 字节永不改写。验证 envelope 复用 `validate_v2` 和 JUnit／Playwright 解析器：只有校验器接受、`e2eMode` 直接映射到 `narrow`／`full-stack`／`contract-backed`、且解析出的用例有通过且无失败时才记 `validation.result=passed`；仅凭 HTML 标题不产生通过。报告绑定放在 `validation`、`external_refs` 和 `correlation`——事件 schema 没有 artifact 对象，也不新造。同一计划重复导入只确认；观察开关关闭时不创建 `audit.db` 或 spool。
 - 新增 R1.3 统计 API 库（`sbtd-runtime/`）。`stats_query.py` 校验 QueryScope（无效时间／维度／指标 id 一律拒绝，绝不静默默认），提供指标目录，并通过 `contract_eval.evaluate` 回答 query 与 timeseries，不复制分母规则；窗口处处半开 `[from, to)`（含每个 timeseries 桶），东京／UTC／DST 三种写法的同一窗口结果一致。`report_snapshot.py` 按查询哈希与接收水位冻结不可变 ReportSnapshot：query、timeseries、dataset 各页与 CSV 共享同一 snapshot_id，cursor 绑定所属快照，迟到事件生成新 id，过期快照报 gone 而不回收旧 id。`csv_export.py` 按 PRD §13.8 固定列序列化完整筛选数据集：UTF-8 BOM、公式注入转义（`csv-text-escape-v1`）、null 留空不填 0；分页 limit 永不截断文件。`history_read.py` 经 `EventStore.replay()` 提供任务历史与事件列表，不改变 append／dedup。缺失 token／费用保持 null，0 个可判定样本的比率保持 `no-decidable-sample`，不是 0 也不是 100%。OpenAPI 将 R1.3 操作标记为 `library`；`/api/v1/exports*` 保持 `v2.1.0-rc.2`。不含 HTTP 服务、Dashboard、JPEG、PDF。
+- CSV 导出在固定列末尾追加 `reasoning_tokens`（PRD §13.8、导出下载的 OpenAPI `x-sbtd-csv-columns`、`csv_export.COLUMNS`）；既有列顺序不变。它是 `output_tokens` 的子集，不再加到 output 上；宿主未报告时单元格留空（null），绝不填 0。
 
 ### 变更
 

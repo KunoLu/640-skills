@@ -5,9 +5,11 @@ CSV quoting, ISO 8601 times, numbers without thousand separators, null stays
 empty and is never replaced with 0. User-controlled text that could trigger
 spreadsheet formulas (leading = + - @ or control characters) is prefixed
 with a single quote under escape policy csv-text-escape-v1; legitimate
-negative numeric columns are numbers, not text, and are not escaped. The
-serializer walks the snapshot's full dataset rows — page limits and Top-N
-never truncate the file.
+negative numeric columns are numbers, not text, and are not escaped.
+reasoning_tokens is appended last in the fixed columns; it is a subset of
+output_tokens and is never added to output, and a missing value stays an
+empty cell. The serializer walks the snapshot's full dataset rows — page
+limits and Top-N never truncate the file.
 """
 
 from __future__ import annotations
@@ -120,6 +122,7 @@ COLUMNS = [
     "warning_code",
     "metadata_key",
     "metadata_value",
+    "reasoning_tokens",
 ]
 BOM = b"\xef\xbb\xbf"
 _FORMULA_PREFIXES = ("=", "+", "-", "@")

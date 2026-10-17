@@ -178,8 +178,9 @@ class QueryTests(unittest.TestCase):
         result = query(self.dataset, scope)
         value = result["metrics"]["usage.tokens"]["value"]
         self.assertEqual(value["input_tokens"], 10)
+        self.assertEqual(value["output_tokens"], 5)
         self.assertIsNone(value["cache_read_tokens"])
-        self.assertIsNone(value["reasoning_tokens"])
+        self.assertEqual(value["reasoning_tokens"], 2)
 
     def test_project_filter_narrows_the_population(self) -> None:
         scope = _scope(self.dataset, metrics=["tasks.touched"])
