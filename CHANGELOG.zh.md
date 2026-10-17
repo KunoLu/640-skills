@@ -7,24 +7,26 @@
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
 
-## 未发布
+## v2.1.0-rc.1（2026-10-17）
+
+预发布版 [v2.1.0-rc.1](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.1) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag 指向 `ba2e0cd7fa73e3ac3bd66d199a9d9e100add1718`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/39011914305)在 attempt 1 通过，十个 job 全部成功（Linux 2349、macOS 687、Windows 505 个不重复测试）。源码预发布不执行本机安装、workflow sync、项目迁移、现有宿主重载或备份处置；`sbtd-runtime/` 仍为可选且默认关闭，不启动 HTTP 服务、Dashboard 或后台采集器。
 
 ### 新增
 
-- 在 `docs/release-notes-template.md` 增加仓库内双语发布／annotated-tag 说明模板（源自 v2.0.2 Release 正文与 `bilingual-release-notes` skill）；并在 README 参考表中链接。
 - 新增可选的 `sbtd-runtime/`，作为 `v2.1.0-rc.1` 的 R1.0 契约：数据字典、事件 JSON Schema、指标目录、loopback OpenAPI 草案、capability pin，以及用 golden dataset 检查名词、分母和去重。核心指标覆盖任务状态、执行轮次、步骤、Skill／Tool 调用、Gate、测试证据和采集健康。§8.2 其余指标保留在目录中并标 `unsupported`，不返回 0。token／费用是条件性字段：来源提供则保留，缺失可见且不填 0。capability matrix 同时固定 ADR 0001 的兜底完成门：至少一个门禁宿主在真实 smoke 采到 Skill 或 Tool 调用事件才通过；两宿主均 unsupported 时 R1 不通过并回到用户决策，不得放行。OpenAPI 草案中每个 `/api/v1/exports*` operation 标注 `v2.1.0-rc.2` 且非 rc.1 阻塞交付，所有 operation 引用同一个 403 响应组件覆盖 Host／Origin 与 CSRF 拒绝。不包含 Starlette／uvicorn 服务、事件库或采集器。
 - 新增 R1.1 runtime facade：`sbtd-runtime/facade.py`。它包装 TaskStore、TaskRouter、HandoffStore 和 DeveloperStore，不移动这些 helper，并把项目显式注册到 `SBTD_RUNTIME_HOME/registry.json`。`observation.enabled` 关闭时，已注册调用的项目文件副作用与旧 helper 相同，且不写审计库。开启观察时 `audit_status=gap`，仍不创建 `audit.db`。未注册根、相邻目录、symlink 根和完全只读调用会被拒绝。本阶段没有 HTTP 服务、事件库或宿主适配器。
 - 新增 R1.2a 本地事件库：`sbtd-runtime/event_store.py`。观察已开启且调用方确认后，原始事件写入 `SBTD_RUNTIME_HOME/audit.db`（一个 SQLite 文件，WAL），未提交批次先落盘到 `spool/`。去重使用 R1.0 键：同键且规范化内容相同只确认，内容不同则冲突且不覆盖先接受的事件。重放、乱序、spool 尾部截断、崩溃恢复和部分提交都有测试。损坏的数据库被拒绝，不会被换成空库。观察关闭、不可读、未确认、只读和 symlink 运行时目录不创建 `audit.db`，也不写 spool。Facade 的任务写入仍不自动产生事件。没有历史导入，也没有 HTTP API。
 - 新增 R1.2b 宿主来源适配器（`sbtd-runtime/`）。`omp_adapter.py` 把 omp 会话 JSONL（toolCall／toolResult 记录、`skill://` 读取）翻译成 `invocation.started`、`invocation.finished` 和 `skill.loaded` 事件；`codex_adapter.py` 翻译 `codex exec --json` 流（command_execution、mcp_tool_call、web_search、collab_tool_call、file_change 项），因该流不带时间戳，`occurred_at` 保持 null。`extensions.py` 把扩展值规范化到只含标量、最多 8 键的契约，并记录文档化丢弃策略（嵌套对象压平成 `a.b`；数组、超长字符串、非有限数值和 #132 秘密键丢弃；超过 8 键先保留声明的 priority 再按字母序，被丢键全部点名进回执）。`host_adapter.py` 产出结构化 ingest 回执，回执不是宿主能力证明。capability matrix 记录 `omp@18.11.1` 真实 smoke 为 pass；`codex@0.163.0` 在真实宿主调用后标为 unsupported：运行到达 ChatGPT 后端但在 `chatgpt.com/backend-api` 收到 Cloudflare HTTP 403，流在任何工具调用前以 `turn.failed: workspace routing discovery failed` 结束，未产生结构化事件（`events_emitted=0`）；证据在 `/workspace/codex-notes/r1.2b-smoke/`。
-
 - 新增 R1.2c 历史导入：`sbtd-runtime/history_import.py`。`build_scan_plan` 只记录调用方点名的项目根和来源，`approve_scan_plan` 是独立的显式动作；未批准的计划不会调用 `EventStore.append`。越界路径和符号链接在任何读取之前被拒绝。task.md 状态表复用既有 `TaskDocument` 解析：能证明的时间原样保留，`unknown` 或无法证明的时间记为 null 的 `occurred_at`（绝不从 frontmatter `created_at` 伪造），`recorded_at` 只表示本次导入观察到的时间，`done → planned` 记为 `task.reopened`，task.md 字节永不改写。验证 envelope 复用 `validate_v2` 和 JUnit／Playwright 解析器：只有校验器接受、`e2eMode` 直接映射到 `narrow`／`full-stack`／`contract-backed`、且解析出的用例有通过且无失败时才记 `validation.result=passed`；仅凭 HTML 标题不产生通过。报告绑定放在 `validation`、`external_refs` 和 `correlation`——事件 schema 没有 artifact 对象，也不新造。同一计划重复导入只确认；观察开关关闭时不创建 `audit.db` 或 spool。
 - 新增 R1.3 统计 API 库（`sbtd-runtime/`）。`stats_query.py` 校验 QueryScope（无效时间／维度／指标 id 一律拒绝，绝不静默默认），提供指标目录，并通过 `contract_eval.evaluate` 回答 query 与 timeseries，不复制分母规则；窗口处处半开 `[from, to)`（含每个 timeseries 桶），东京／UTC／DST 三种写法的同一窗口结果一致。`report_snapshot.py` 按查询哈希与接收水位冻结不可变 ReportSnapshot：query、timeseries、dataset 各页与 CSV 共享同一 snapshot_id，cursor 绑定所属快照，迟到事件生成新 id，过期快照报 gone 而不回收旧 id。`csv_export.py` 按 PRD §13.8 固定列序列化完整筛选数据集：UTF-8 BOM、公式注入转义（`csv-text-escape-v1`）、null 留空不填 0；分页 limit 永不截断文件。`history_read.py` 经 `EventStore.replay()` 提供任务历史与事件列表，不改变 append／dedup。缺失 token／费用保持 null，0 个可判定样本的比率保持 `no-decidable-sample`，不是 0 也不是 100%。OpenAPI 将 R1.3 操作标记为 `library`；`/api/v1/exports*` 保持 `v2.1.0-rc.2`。不含 HTTP 服务、Dashboard、JPEG、PDF。
-- CSV 导出在固定列末尾追加 `reasoning_tokens`（PRD §13.8、导出下载的 OpenAPI `x-sbtd-csv-columns`、`csv_export.COLUMNS`）；既有列顺序不变。它是 `output_tokens` 的子集，不再加到 output 上；宿主未报告时单元格留空（null），绝不填 0。因追加该列，`export_schema_version` 现为 `1.1`（OpenAPI `x-sbtd-csv-schema-version`）。
 - 新增 `v2.1.0-rc.1` 的 R1.4 验收收口（安全、审计边界、版本兼容）。`sbtd-runtime/spec/r1.4-acceptance-scenarios.md` 把验收场景钉到可执行测试；`sbtd-runtime/tests/test_r1_acceptance.py` 与 CI 包装 `tests/test_sbtd_runtime_r1_acceptance.py` 锁定版本针（事件 schema 1.0、QueryScope `schema_version` "1.0"、CSV `export_schema_version` 1.1 且 `reasoning_tokens` 为最后一列）、未知未来 schema 版本的如实拒绝、无远程业务控制操作，以及经由既有 EventStore 表面的薄审计边界／去重冒烟。`sbtd-runtime/docs/install-and-use.md` 覆盖可选启用、项目授权、观察关闭、升级注意与卸载／数据保留；`sbtd-runtime/docs/r1.4-acceptance-report.md` 把 §20.1 交付物与 §16.1／§16.2 验收矩阵映射到测试名、命令与结果，并明确把 Dashboard、JPEG／PDF、HTTP 导出作业、落盘快照保留和 CORS 推迟到 R2。不新增产品 API、不起服务、不建落盘快照存储；`/api/v1/exports*` 保持 `v2.1.0-rc.2`。
+- 在 `docs/release-notes-template.md` 增加仓库内双语发布／annotated-tag 说明模板（源自 v2.0.2 Release 正文与 `bilingual-release-notes` skill）；并在 README 参考表中链接。
 
 ### 变更
 
+- CSV 导出在固定列末尾追加 `reasoning_tokens`（PRD §13.8、导出下载的 OpenAPI `x-sbtd-csv-columns`、`csv_export.COLUMNS`）；既有列顺序不变。它是 `output_tokens` 的子集，不再加到 output 上；宿主未报告时单元格留空（null），绝不填 0。因追加该列，`export_schema_version` 现为 `1.1`（OpenAPI `x-sbtd-csv-schema-version`）。
 - ADR 0001 Q6 宿主表改为通过条件。门禁宿主在真实 smoke 中没有结构化 Skill／Tool 调用时，只将该宿主标为 `unsupported`；另一宿主和指标类别保持不变。
+- Runtime API／Local Dashboard PRD 修订为 v0.2，事件扩展改为只含标量；ADR 0001 记录 R1.0 运行时决策。
 
 ### 修复
 
