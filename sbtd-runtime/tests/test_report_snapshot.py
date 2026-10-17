@@ -88,6 +88,74 @@ class SnapshotTests(unittest.TestCase):
         second = store.create_or_reuse(changed, self.scope)
         self.assertNotEqual(first.snapshot_id, second.snapshot_id)
 
+    def test_store_appended_event_with_zero_payload_seq_mints_a_new_id(self) -> None:
+        # Real producers build events with payload ingest_seq=0; the store
+        # assigns the true sequence only in SQL, so replay() payloads keep 0.
+        import os
+        import tempfile
+
+        from event_store import EventStore
+        from host_adapter import base_event
+
+        temporary = tempfile.TemporaryDirectory(prefix="sbtd-r13-wm-")
+        self.addCleanup(temporary.cleanup)
+        home = Path(temporary.name) / "runtime-home"
+        home.mkdir(mode=0o700)
+        os.chmod(home, 0o700)
+        (home / "config.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "observation": {
+                        "enabled": True,
+                        "level": "metadata",
+                        "failure_policy": "best-effort",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def make_event(sid: str, at: str) -> dict:
+            return base_event(
+                event_type="task.state_changed",
+                occurred_at=at,
+                recorded_at=at,
+                installation_id="inst_r13",
+                device_id="device_r13",
+                source_id="source_runtime",
+                source_event_id=sid,
+                parser_version="1",
+                project_id="project_a",
+                logical_task_id="demo/leaf",
+                state={"previous": "planned", "current": "in-progress"},
+            )
+
+        store = EventStore.open(home, confirmed=True)
+        self.addCleanup(store.close)
+        store.append([make_event("e1", "2026-10-15T16:00:00Z")])
+        snapshots = SnapshotStore()
+        dataset = {"tasks": [], "events": store.replay()}
+        scope = _scope(self.dataset)
+        first = snapshots.create_or_reuse(dataset, scope)
+        store.append([make_event("e2", "2026-10-15T17:00:00Z")])
+        second = snapshots.create_or_reuse(
+            {"tasks": [], "events": store.replay()}, scope
+        )
+        self.assertNotEqual(first.snapshot_id, second.snapshot_id)
+
+    def test_filters_narrow_dataset_rows_not_only_metrics(self) -> None:
+        store = SnapshotStore()
+        scope = _scope(self.dataset)
+        scope["filters"] = {"project_ids": ["project_b"]}
+        snapshot = store.create_or_reuse(self.dataset, scope)
+        event_rows = [row for row in snapshot.rows if row["record_type"] == "event"]
+        self.assertEqual(event_rows, [])
+        for row in snapshot.rows:
+            project = row["fields"].get("project_id")
+            self.assertIn(project, (None, "project_b"))
+
     def test_query_timeseries_dataset_share_one_snapshot_id(self) -> None:
         store = SnapshotStore()
         answer = query(self.dataset, self.scope, store=store)

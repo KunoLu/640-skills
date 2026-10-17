@@ -28,11 +28,12 @@ from contract_eval import (
     _time_class,
     _usage_records,
     accept_events,
+    canonical_content,
     metric_catalog,
     parse_instant,
 )
 from history_read import CursorError, decode_cursor, encode_cursor
-from stats_query import normalize_scope
+from stats_query import filter_events, normalize_scope
 
 DEFAULT_TTL_SECONDS = 3600
 DEFAULT_PAGE_SIZE = 100
@@ -472,7 +473,11 @@ def dataset_rows(dataset: dict, scope: dict[str, Any]) -> tuple[list[dict], list
     tasks = {task["task_uid"]: task for task in dataset["tasks"]}
     start = parse_instant(scope["from"])
     end = parse_instant(scope["to"])
-    accepted = accept_events(dataset["events"])["accepted"]
+    # The declared QueryScope filters narrow the dataset exactly as they
+    # narrow metric evaluation; a filtered export never leaks out-of-filter
+    # activity into pages or CSV.
+    events = filter_events(dataset["events"], scope)
+    accepted = accept_events(events)["accepted"]
     population = [event for event in accepted if _in_population(event, scope, tasks)]
     in_window = [
         event
@@ -543,6 +548,7 @@ class Snapshot:
     dataset: dict[str, Any] = field(repr=False)
     rows: list[dict] = field(repr=False)
     expires_instant: datetime = field(repr=False)
+    dataset_fingerprint: str = field(repr=False)
 
     def public_view(self) -> dict[str, Any]:
         return {
@@ -596,15 +602,30 @@ class SnapshotStore:
         scope = normalize_scope(raw_scope, catalog=catalog)
         query_hash = _digest(scope)
         frozen = copy.deepcopy(dataset)
+        # watermark_seq reports the ingest high-water mark. Producers may
+        # leave payload ingest_seq at 0 (the store assigns the real sequence
+        # only in SQL), so reuse is decided by a content fingerprint of the
+        # frozen view — a late event always mints a new snapshot_id.
         watermark = max(
             (event.get("ingest_seq", 0) for event in frozen["events"]), default=0
+        )
+        fingerprint = _digest(
+            {
+                "watermark_seq": watermark,
+                "events": sorted(
+                    [event["event_id"], canonical_content(event)]
+                    for event in frozen["events"]
+                ),
+                "tasks": _canonical(frozen["tasks"]),
+                "source_watermarks": [dict(item) for item in source_watermarks],
+            }
         )
         for snapshot in self._snapshots.values():
             if now >= snapshot.expires_instant:
                 continue
             if (
                 snapshot.query_hash == query_hash
-                and snapshot.watermark_seq == watermark
+                and snapshot.dataset_fingerprint == fingerprint
             ):
                 return snapshot
         rows, unknown_ids = dataset_rows(frozen, scope)
@@ -647,6 +668,7 @@ class SnapshotStore:
             dataset=frozen,
             rows=rows,
             expires_instant=expires,
+            dataset_fingerprint=fingerprint,
         )
         self._snapshots[snapshot.snapshot_id] = snapshot
         return snapshot

@@ -271,6 +271,27 @@ class TimeseriesTests(unittest.TestCase):
             self.assertIsNone(metric["value"])
             self.assertEqual(metric["sample_status"], "no-decidable-sample")
 
+    def test_zero_bucket_seconds_is_rejected_not_defaulted(self) -> None:
+        scope = _scope(self.dataset, metrics=["tasks.created"])
+        with self.assertRaises(QueryScopeError) as caught:
+            timeseries(self.dataset, scope, bucket_seconds=0)
+        self.assertIn("bucket_seconds", str(caught.exception))
+
+    def test_group_by_is_rejected_not_silently_ignored(self) -> None:
+        scope = _scope(self.dataset, metrics=["tasks.touched"])
+        scope["group_by"] = ["component_id"]
+        with self.assertRaises(QueryScopeError) as caught:
+            query(self.dataset, scope)
+        self.assertIn("group_by", str(caught.exception))
+
+    def test_timeseries_meta_matches_query_coverage(self) -> None:
+        scope = _scope(self.dataset, metrics=["tasks.created"])
+        series = timeseries(self.dataset, scope, bucket_seconds=43200)
+        # The golden set holds evt_created_untimed with occurred_at null.
+        self.assertIs(series["meta"]["complete"], False)
+        self.assertEqual(series["meta"]["coverage_state"], "partial")
+        self.assertIn("UNKNOWN_OCCURRED_AT", series["meta"]["warnings"])
+
 
 if __name__ == "__main__":
     unittest.main()

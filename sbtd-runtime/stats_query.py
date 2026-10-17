@@ -27,9 +27,6 @@ FILTER_KEYS = frozenset(
         "evidence_levels",
     }
 )
-GROUP_BY_KEYS = frozenset(
-    {"project_id", "actor_id", "host_kind", "workflow_mode", "component_id"}
-)
 TASK_GRANULARITIES = frozenset({"executable-leaf", "all"})
 
 
@@ -104,9 +101,10 @@ def normalize_scope(raw: dict[str, Any], catalog: dict | None = None) -> dict[st
         _fail("task_granularity", f"must be one of {sorted(TASK_GRANULARITIES)}")
     group_by = raw.get("group_by") or []
     _string_list(group_by, "group_by")
-    unknown_groups = set(group_by) - GROUP_BY_KEYS
-    if unknown_groups:
-        _fail("group_by", f"unsupported dimensions: {sorted(unknown_groups)}")
+    if group_by:
+        # Grouped aggregation is outside R1.3; an ungrouped answer under a
+        # grouped scope would silently mislead (PRD §9.1, §9.6).
+        _fail("group_by", "grouped aggregation is not implemented in v2.1.0-rc.1")
     for flag in ("include_unlinked", "include_unknown_time"):
         if flag in raw and not isinstance(raw[flag], bool):
             _fail(flag, "must be a boolean")
@@ -120,7 +118,6 @@ def normalize_scope(raw: dict[str, Any], catalog: dict | None = None) -> dict[st
         "task_granularity": granularity,
         "include_unlinked": bool(raw.get("include_unlinked", False)),
         "include_unknown_time": bool(raw.get("include_unknown_time", False)),
-        "group_by": list(group_by),
         "metrics": list(metrics),
     }
 
@@ -246,8 +243,10 @@ def timeseries(
     start = parse_instant(scope["from"])
     end = parse_instant(scope["to"])
     span = (end - start).total_seconds()
-    step = bucket_seconds or _default_bucket_seconds(span)
-    if step <= 0:
+    step = (
+        bucket_seconds if bucket_seconds is not None else _default_bucket_seconds(span)
+    )
+    if not isinstance(step, int) or step <= 0:
         _fail("bucket_seconds", "must be a positive number of seconds")
     buckets = []
     cursor = start
@@ -269,18 +268,11 @@ def timeseries(
             }
         )
         cursor = bucket_end
+    full_window = _evaluate(dataset, scope, catalog)
     result = {
         "scope": scope,
         "bucket_seconds": step,
         "buckets": buckets,
-        "meta": {
-            "as_of": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "effective_from": scope["from"],
-            "effective_to": scope["to"],
-            "timezone": scope["timezone"],
-            "metrics_version": (catalog or metric_catalog())["metrics_version"],
-            "complete": True,
-            "next_cursor": None,
-        },
+        "meta": _meta(scope, full_window),
     }
     return _attach_snapshot(result, dataset, raw_scope, store)
