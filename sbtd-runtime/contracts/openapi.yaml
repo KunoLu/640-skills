@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: SBTD Runtime local API
   version: 1.0.0
-  summary: "Contract draft for v2.1.0-rc.1. No server is implemented in this package; operations marked x-sbtd-implementation: library have in-process Python library surfaces under sbtd-runtime/."
+  summary: "Contract draft for v2.1.0-rc.1. No server is implemented in this package; operations marked x-sbtd-implementation: library have in-process Python library surfaces under sbtd-runtime/. R1.4 acceptance pins event schema 1.0, QueryScope schema_version 1.0, and CSV export_schema_version 1.1; exports* stay v2.1.0-rc.2."
   x-sbtd-implementation: contract-only
   x-sbtd-release: v2.1.0-rc.1
   x-sbtd-not-implemented-before: R1.1
