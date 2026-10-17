@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: SBTD Runtime local API
   version: 1.0.0
-  summary: Contract draft for v2.1.0-rc.1 R1.0. No server is implemented in this package.
+  summary: "Contract draft for v2.1.0-rc.1. No server is implemented in this package; operations marked x-sbtd-implementation: library have in-process Python library surfaces under sbtd-runtime/."
   x-sbtd-implementation: contract-only
   x-sbtd-release: v2.1.0-rc.1
   x-sbtd-not-implemented-before: R1.1
@@ -164,6 +164,8 @@ paths:
     get:
       operationId: getTaskHistory
       tags: [audit]
+      x-sbtd-implementation: library
+      summary: Implemented as history_read.task_history over EventStore.replay (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [audit:read]
@@ -228,6 +230,8 @@ paths:
     get:
       operationId: listEvents
       tags: [audit]
+      x-sbtd-implementation: library
+      summary: Implemented as history_read.list_events over EventStore.replay (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [audit:read]
@@ -254,6 +258,8 @@ paths:
     get:
       operationId: getMetricCatalog
       tags: [stats]
+      x-sbtd-implementation: library
+      summary: Implemented as stats_query.serve_catalog (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [stats:read]
@@ -270,6 +276,8 @@ paths:
     post:
       operationId: queryStatistics
       tags: [stats]
+      x-sbtd-implementation: library
+      summary: Implemented as stats_query.query over contract_eval.evaluate (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [stats:read]
@@ -292,6 +300,8 @@ paths:
     post:
       operationId: queryTimeseries
       tags: [stats]
+      x-sbtd-implementation: library
+      summary: Implemented as stats_query.timeseries with half-open buckets (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [stats:read]
@@ -353,6 +363,8 @@ paths:
     post:
       operationId: createReportSnapshot
       tags: [export]
+      x-sbtd-implementation: library
+      summary: Implemented as report_snapshot.SnapshotStore.create_or_reuse (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [stats:read]
@@ -368,6 +380,8 @@ paths:
     get:
       operationId: getReportSnapshot
       tags: [export]
+      x-sbtd-implementation: library
+      summary: Implemented as report_snapshot.SnapshotStore.get (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [stats:read]
@@ -384,6 +398,8 @@ paths:
     get:
       operationId: getSnapshotDataset
       tags: [export]
+      x-sbtd-implementation: library
+      summary: Implemented as report_snapshot.SnapshotStore.dataset_page with snapshot-bound cursors; csv_export.serialize_csv walks the same full range (in-process, no HTTP server).
       security:
         - localSession: []
       x-sbtd-scopes: [audit:read]
