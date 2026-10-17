@@ -442,7 +442,7 @@ Agent 编写的执行汇总统一使用[固定中文报告模板](sbtd-workflow-
 | Bootstrap／init／reset／project-only 流程图 | [Bootstrap](docs/assets/npx-skills-global-onboard-install.md) · [Init](docs/assets/onboard-skill-init.md) · [Reset](docs/assets/onboard-skill-reset.md) · [Project-only](docs/assets/onboard-init-projects.md) |
 | 升级／迁移／清理／恢复 | [升级](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [迁移与恢复](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [清理](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime) |
 | 全局／项目规则 | [全局模板](sbtd-workflow-onboard/templates/agents/AGENTS.global.md) · [项目模板](sbtd-workflow-onboard/templates/agents/AGENTS.project.md) |
-| 发布历史／监控版本 | [中文变更日志](CHANGELOG.zh.md) · [English CHANGELOG](CHANGELOG.md) · [ENTRYPOINT](ENTRYPOINT.md) |
+| 发布历史／监控版本 | [中文变更日志](CHANGELOG.zh.md) · [English CHANGELOG](CHANGELOG.md) · [ENTRYPOINT](ENTRYPOINT.md) · [双语发布／标签模板](docs/release-notes-template.md) |
 
 <details>
 <summary><strong>Bootstrap 后手动执行，或从已克隆仓库启动</strong></summary>

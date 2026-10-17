@@ -451,7 +451,7 @@ Knowledge-base P1.1 produces read-only catalogs and smoke bundles; remote Eviden
 | Bootstrap / init / reset / project-only flowcharts | [Bootstrap](docs/assets/npx-skills-global-onboard-install.md) · [Init](docs/assets/onboard-skill-init.md) · [Reset](docs/assets/onboard-skill-reset.md) · [Project-only](docs/assets/onboard-init-projects.md) |
 | Upgrade / migration / cleanup / recovery | [Upgrade](sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment) · [Migration & recovery](sbtd-workflow-onboard/REFERENCE.md#migration-runtime) · [Cleanup](sbtd-workflow-onboard/REFERENCE.md#cleanup-runtime) |
 | Global / project rules | [Global template](sbtd-workflow-onboard/templates/agents/AGENTS.global.md) · [Project template](sbtd-workflow-onboard/templates/agents/AGENTS.project.md) |
-| Release history / monitored versions | [English CHANGELOG](CHANGELOG.md) · [中文变更日志](CHANGELOG.zh.md) · [ENTRYPOINT](ENTRYPOINT.md) |
+| Release history / monitored versions | [English CHANGELOG](CHANGELOG.md) · [中文变更日志](CHANGELOG.zh.md) · [ENTRYPOINT](ENTRYPOINT.md) · [Bilingual release/tag template](docs/release-notes-template.md) |
 
 <details>
 <summary><strong>Manual setup after bootstrap, or from a cloned checkout</strong></summary>
