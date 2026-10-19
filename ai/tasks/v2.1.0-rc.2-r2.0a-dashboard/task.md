@@ -4,12 +4,12 @@ id: v2.1.0-rc.2-r2.0a-dashboard
 workflow_mode: strict
 mode_source: user
 mode_note: Lead 本次明确指派 strict 模式 SBTD 任务；范围严格等于 plan.md R2.0a 行的锁定决定与验收，非目标含 R2.0b（含轮询）、R2.0c、R2.1a/b、R2.2 证据；Lead 附加 SIZE GATE——通读事实源后判定 R2.0a 超出一个可审 PR 时，只做回填 commit 并在本文件写拆分提案，不开始实现。
-status: "in-progress"
+status: "done"
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0a-dashboard
 created_at: '2026-10-19T13:30:05+08:00'
-updated_at: '2026-10-19T17:55:28+08:00'
-completed_at: null
+updated_at: '2026-10-19T22:31:04+08:00'
+completed_at: '2026-10-19T22:27:23+08:00'
 ---
 
 R2.0a：OMP 风格单页 Dashboard 骨架、Panel registry（`contracts/panel-manifest.json` 单一事实源）、ReportDocument、`serve` 启动与访问控制（D5–D8）。底座为 R1 已验收库面（main `a55117c`：`stats_query`／`csv_export`／`report_snapshot`／`facade` 等），真实 API／数据路径，不用 mock 数字冒充真实接口（PRD §15.0）。
@@ -50,6 +50,7 @@ Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts
 | 2026-10-19T16:16:29+08:00 | in-progress | in-progress | 评审第一轮修复完成（Reviewy blockers B1/B2＋Codex P1/P2 与 Reviewy C1–C4）：manifest 内容 sha256＋manifest_version 配对锁定、panel-manifest JSON schema＋jsonschema 正负例、api.ts 按 openapi QueryScope／Envelope／Idempotency-Key 对齐、PanelCard 按 value＋support 形状渲染；全部验证通过，证据见「评审第一轮修复」一节；任务按拆分决定保持 in-progress 至 PR-2 合并 | 见「评审第一轮修复」验证证据（命令＋结果、mutation 表、逐字节重建、体积、审计、测试计数） |
 | 2026-10-19T16:34:21+08:00 | in-progress | in-progress | B2 跟进（Reviewy／Lord 于房间要求）：测试内完成 schema 绑定——`SCHEMA_BY_VERSION = {"1.0": contracts/panel-manifest.schema.json}`，正向校验测试按 `manifest["schema_version"]` 查映射、无映射即失败（不 skip）；schema 保持 const "1.0"，manifest 不变（仍无 `$schema` 键）；新增负例——schema_version 置 "1.1"／"2.0" 的深拷贝对映射的 1.0 schema 抛 jsonschema.ValidationError 且查映射无该版本。测试计数：test_panel_manifest.py Ran 21 tests OK（20→21）；sbtd-runtime 全套 `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py'` → Ran 228 tests OK（227→228） | 本事件同 commit「test(r2.0a): bind panel manifest schema_version to its schema and reject wrong versions」；sbtd-runtime/tests/test_panel_manifest.py |
 | 2026-10-19T17:55:28+08:00 | in-progress | in-progress | PR-1 已 squash-merge：PR #142 → main merge SHA `3c9cf4e`，完成时间 2026-10-19T17:32:13+08:00；按拆分决定只追加本事件，plan.md R2.0a 行保持 in_progress 至 PR-2 合并；PR-2 任务记录建立于 ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md，分支 feat/v2.1.0-rc.2-r2.0a-serve | PR #142；merge commit 3c9cf4e；ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md |
+| 2026-10-19T22:31:04+08:00 | in-progress | done | PR-2 已 squash-merge：PR #144 → main merge SHA `8178b26abe75454b958d096ff58522eda7facbb4`，完成时间 2026-10-19T22:27:23+08:00（CLEAN tip `d9c5e58`）；按拆分决定「本任务保持 in-progress 直到 PR-2 合并」条件已满足，本任务记 done；plan.md R2.0a 行同步记 done；本事件为 docs-only 回填 | PR #144；merge commit 8178b26abe75454b958d096ff58522eda7facbb4；ai/tasks/v2.1.0-rc.2-plan/plan.md R2.0a 行 |
 
 ## 拆分决定（用户 2026-10-19 13:40 +08:00「按建议拆」）
 
