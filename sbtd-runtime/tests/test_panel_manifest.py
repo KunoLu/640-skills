@@ -9,6 +9,7 @@ so no second panel list can silently appear.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import sys
@@ -26,6 +27,11 @@ from contract_eval import load_json
 MANIFEST_PATH = ROOT / "contracts" / "panel-manifest.json"
 SCHEMA_PATH = ROOT / "contracts" / "panel-manifest.schema.json"
 SCHEMA = load_json(SCHEMA_PATH)
+# Explicit schema_version → schema binding (instance files carry no $schema
+# pointer, per the event.schema.json convention). A manifest whose
+# schema_version has no entry here has no known schema: validation must
+# fail loudly, never silently validate against the wrong (or latest) schema.
+SCHEMA_BY_VERSION = {"1.0": SCHEMA_PATH}
 CATALOG = load_json(ROOT / "contracts" / "metrics-catalog.json")
 BUDGET = load_json(ROOT / "dashboard" / "artifact-budget.json")
 DASHBOARD = ROOT / "dashboard"
@@ -162,7 +168,32 @@ class SchemaValidationTests(unittest.TestCase):
     """
 
     def test_manifest_validates_against_its_schema(self) -> None:
-        jsonschema.Draft202012Validator(SCHEMA).validate(load_manifest())
+        manifest = load_manifest()
+        version = manifest["schema_version"]
+        schema_path = SCHEMA_BY_VERSION.get(version)
+        # Fail (never skip) when the manifest declares a schema_version with
+        # no mapped schema file.
+        self.assertIsNotNone(
+            schema_path, f"no schema mapped for schema_version {version!r}"
+        )
+        jsonschema.Draft202012Validator(load_json(schema_path)).validate(manifest)
+
+    def test_unmapped_schema_versions_are_rejected(self) -> None:
+        for version in ("1.1", "2.0"):
+            with self.subTest(schema_version=version):
+                manifest = copy.deepcopy(load_manifest())
+                manifest["schema_version"] = version
+                # The mapped 1.0 schema pins const "1.0": any other declared
+                # version fails validation against it.
+                with self.assertRaises(jsonschema.ValidationError):
+                    jsonschema.Draft202012Validator(SCHEMA).validate(manifest)
+                # The version → schema binding itself must also fail loudly:
+                # no schema is mapped for an unknown version.
+                self.assertNotIn(
+                    version,
+                    SCHEMA_BY_VERSION,
+                    f"schema_version {version!r} unexpectedly has a mapped schema",
+                )
 
     def test_unknown_extra_root_key_is_rejected(self) -> None:
         manifest = load_manifest()
