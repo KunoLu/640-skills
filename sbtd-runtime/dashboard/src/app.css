@@ -1,0 +1,158 @@
+/* Layout rules per PRD v0.2 §12.3, expressed with the tokens in tokens.css. */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sbtd-font-family);
+  font-size: var(--sbtd-font-size-body);
+  line-height: var(--sbtd-line-height-body);
+  background: var(--sbtd-bg);
+  color: var(--sbtd-text);
+}
+
+.page {
+  max-width: var(--sbtd-report-width);
+  margin: 0 auto;
+  padding: var(--sbtd-space-page);
+}
+
+.topbar h1 {
+  font-size: 20px;
+  margin: 0 0 var(--sbtd-space-gap);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sbtd-space-gap);
+  align-items: center;
+}
+
+.controls button {
+  font: inherit;
+  color: var(--sbtd-text);
+  background: var(--sbtd-bg-elevated);
+  border: var(--sbtd-border-width) solid var(--sbtd-border);
+  border-radius: var(--sbtd-radius-control);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.controls button:focus-visible {
+  outline: 2px solid var(--sbtd-focus-ring);
+  outline-offset: 2px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: var(--sbtd-border-width) solid var(--sbtd-border);
+  border-radius: var(--sbtd-radius-control);
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  background: var(--sbtd-bg-elevated);
+}
+
+.segmented button + button {
+  border-left: var(--sbtd-border-width) solid var(--sbtd-border);
+}
+
+.segmented .segment-active {
+  background: var(--sbtd-accent);
+  color: var(--sbtd-accent-contrast);
+}
+
+.watermark {
+  color: var(--sbtd-text-secondary);
+  font-size: var(--sbtd-font-size-secondary);
+  margin: 8px 0 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--sbtd-space-gap);
+  margin-top: var(--sbtd-space-gap);
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .grid > .panel {
+    grid-column: span 1 !important;
+  }
+}
+
+.panel {
+  background: var(--sbtd-bg-elevated);
+  border: var(--sbtd-border-width) solid var(--sbtd-border);
+  border-radius: var(--sbtd-radius-panel);
+  padding: var(--sbtd-space-panel-padding);
+  min-width: 0;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.panel-header h2 {
+  font-size: var(--sbtd-font-size-title);
+  margin: 0;
+}
+
+.panel-id {
+  font-family: var(--sbtd-font-mono);
+  font-size: var(--sbtd-font-size-secondary);
+  color: var(--sbtd-text-secondary);
+}
+
+.panel-state {
+  color: var(--sbtd-text-secondary);
+}
+
+.panel-state-error {
+  color: var(--sbtd-error);
+}
+
+.panel-state-unknown {
+  color: var(--sbtd-unknown);
+}
+
+.panel-metrics {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.panel-metric dt {
+  font-family: var(--sbtd-font-mono);
+  font-size: var(--sbtd-font-size-secondary);
+  color: var(--sbtd-text-secondary);
+}
+
+.panel-metric dd {
+  margin: 0;
+  font-size: var(--sbtd-font-size-metric);
+}
+
+.page-footer {
+  margin-top: var(--sbtd-space-gap);
+  color: var(--sbtd-text-secondary);
+  font-size: var(--sbtd-font-size-secondary);
+}

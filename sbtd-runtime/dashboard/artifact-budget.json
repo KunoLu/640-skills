@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "set_by": "docs/adr/0002-v2.1.0-rc.2-r2.0a-dashboard-frontend-decisions.md",
+  "budgets": {
+    "static_total_bytes": 524288,
+    "single_asset_bytes": 409600
+  },
+  "baseline": {
+    "measured_at": "2026-10-19",
+    "measured_with": "vite 6.4.4 / react 19.3.1 / typescript 5.9.3 (exact pins, package-lock.json)",
+    "static_total_bytes": 237933,
+    "largest_asset_bytes": 233356
+  }
+}

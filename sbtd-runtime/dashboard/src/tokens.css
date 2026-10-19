@@ -1,0 +1,82 @@
+/*
+ * SBTD Runtime Dashboard design tokens (D17).
+ *
+ * These are our own token definitions. OMP was used as a *visual reference
+ * only* (layout density, dark/light theme structure, segmented time-range
+ * control); no OMP code, asset, or token value was copied. The reference
+ * points and their mapping to the tokens below are documented in
+ * sbtd-runtime/docs/dashboard-design-tokens.md.
+ *
+ * Layout constants follow PRD v0.2 §12.3: page padding 24px, panel gap 16px,
+ * 12-column desktop grid, body text >= 14px, metric values 24–32px,
+ * standard report width 1,440 CSS px.
+ */
+
+:root {
+  /* spacing */
+  --sbtd-space-page: 24px;
+  --sbtd-space-gap: 16px;
+  --sbtd-space-panel-padding: 16px;
+
+  /* sizing */
+  --sbtd-report-width: 1440px;
+  --sbtd-radius-panel: 10px;
+  --sbtd-radius-control: 8px;
+  --sbtd-border-width: 1px;
+
+  /* typography (system font stack with explicit CJK fallback, §13.4/D16) */
+  --sbtd-font-family:
+    -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Noto Sans CJK JP", sans-serif;
+  --sbtd-font-mono:
+    ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sbtd-font-size-body: 14px;
+  --sbtd-font-size-secondary: 12px;
+  --sbtd-font-size-title: 16px;
+  --sbtd-font-size-metric: 28px; /* §12.3: 指标数值 24–32px */
+  --sbtd-line-height-body: 1.55;
+
+  /* status hues (shared across themes; §12.3 状态=颜色+文字+图标) */
+  --sbtd-hue-ok: 152;
+  --sbtd-hue-warn: 38;
+  --sbtd-hue-error: 4;
+  --sbtd-hue-unknown: 210;
+}
+
+/* Dark theme (default when the system prefers dark) */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --sbtd-bg: #14171c;
+  --sbtd-bg-elevated: #1b1f26;
+  --sbtd-bg-inset: #101318;
+  --sbtd-border: #2c333d;
+  --sbtd-text: #e2e8f0;
+  --sbtd-text-secondary: #94a3b8;
+  --sbtd-accent: #5b9cf5;
+  --sbtd-accent-contrast: #0b1622;
+  --sbtd-ok: hsl(var(--sbtd-hue-ok) 55% 55%);
+  --sbtd-warn: hsl(var(--sbtd-hue-warn) 85% 58%);
+  --sbtd-error: hsl(var(--sbtd-hue-error) 72% 62%);
+  --sbtd-unknown: hsl(var(--sbtd-hue-unknown) 45% 65%);
+  --sbtd-focus-ring: #8fbbf8;
+}
+
+/* Light theme */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --sbtd-bg: #f5f7fa;
+  --sbtd-bg-elevated: #ffffff;
+  --sbtd-bg-inset: #eceff3;
+  --sbtd-border: #d4dbe3;
+  --sbtd-text: #1d2632;
+  --sbtd-text-secondary: #55647a;
+  --sbtd-accent: #1f6fd6;
+  --sbtd-accent-contrast: #ffffff;
+  --sbtd-ok: hsl(var(--sbtd-hue-ok) 60% 32%);
+  --sbtd-warn: hsl(var(--sbtd-hue-warn) 90% 35%);
+  --sbtd-error: hsl(var(--sbtd-hue-error) 68% 45%);
+  --sbtd-unknown: hsl(var(--sbtd-hue-unknown) 40% 45%);
+  --sbtd-focus-ring: #1f6fd6;
+}
