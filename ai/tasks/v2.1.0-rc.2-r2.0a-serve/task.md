@@ -8,7 +8,7 @@ status: "done"
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0a-serve
 created_at: '2026-10-19T17:55:28+08:00'
-updated_at: '2026-10-19T22:31:04+08:00'
+updated_at: '2026-10-19T23:07:33+08:00'
 completed_at: '2026-10-19T22:27:23+08:00'
 ---
 
@@ -121,3 +121,4 @@ R2.0b／R2.0c／R2.1a/b／R2.2 全部；PRD 正文修改；契约（openapi.yaml
 | 2026-10-19T20:28:16+08:00 | in-progress | in-progress | PR-2 实现完成：commit 1 回填＋修正（c0bbc4e）、前端修复＋产物（e708901）、serve＋单测＋CI＋钉法（bb52bf8）；serve 单测 14 OK、sbtd-runtime 全套 242 OK、逐字节重建 OK、体积 241,853≤524,288、npm audit 0、真实冒烟（D5–D8＋UI＋golden 形状）全部通过；证据见「验证证据」 | 本文件「验证证据」；commits c0bbc4e/e708901/bb52bf8 |
 | 2026-10-19T20:58:16+08:00 | in-progress | in-progress | 收尾验证完成：docs（install-and-use serve 节）＋requirements-serve 补钉 jsonschema（d580ad9）；全仓 `run_ci.py --platform linux` 2349 tests、唯一失败为 issue #143 已知 test_sbtd_probe_links 不稳定项（签名与基线一致）；任务当时保持 in-progress 至本 PR 合并（plan.md R2.0a 行同理）；当时未 push、未开 PR——随后已开为 PR #144 并于 2026-10-19T22:27:23+08:00 squash-merge 入 main（merge SHA `8178b26abe75454b958d096ff58522eda7facbb4`），见下一条状态事件 | /tmp/rc2-pr2-ci/linux-1.json；commit d580ad9 |
 | 2026-10-19T22:31:04+08:00 | in-progress | done | PR #144 已 squash-merge 入 main：merge SHA `8178b26abe75454b958d096ff58522eda7facbb4`，完成时间 2026-10-19T22:27:23+08:00（CLEAN tip `d9c5e58`）；plan.md R2.0a 行同步记 done；本事件为 docs-only 回填，不改代码、不重建产物 | PR #144；merge commit 8178b26abe75454b958d096ff58522eda7facbb4；ai/tasks/v2.1.0-rc.2-plan/plan.md R2.0a 行 |
+| 2026-10-19T22:54:44+08:00 | done | done | Closeout 回填 PR #145 已 squash-merge 入 main：merge SHA `1415134817015580067274b843cc73bcc8e37441`，合并时间 2026-10-19T22:54:44+08:00；该 PR 即上一条 done 回填与 models-used 证据本身，R2.0a 行随其合并正式关闭（本行由 R2.0b 首个 commit 补记） | PR #145；merge commit 1415134817015580067274b843cc73bcc8e37441；ai/tasks/v2.1.0-rc.2-plan/plan.md R2.0a 行 |
