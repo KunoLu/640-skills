@@ -8,7 +8,7 @@
   "baseline": {
     "measured_at": "2026-10-19",
     "measured_with": "vite 6.4.4 / react 19.3.1 / typescript 5.9.3 (exact pins, package-lock.json)",
-    "static_total_bytes": 239309,
-    "largest_asset_bytes": 234732
+    "static_total_bytes": 241853,
+    "largest_asset_bytes": 236927
   }
 }

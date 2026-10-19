@@ -127,7 +127,7 @@ PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验�
 - **lint／typecheck**：`ruff format --check` 与 `ruff check`（test_panel_manifest.py、check_artifacts.py）→ 全过；`python3 -m compileall` 通过；`tsc --noEmit` 随 `npm run build` 通过。
 - **npm ci ＋ 构建**：干净 `rm -rf node_modules && npm ci`（70 包）后 `npm run build` 成功（vite 6.4.4，36 modules）。
 - **逐字节重建（D1）**：`npm ci` 干净重建前后 `find static -type f | sort | xargs sha256sum` diff 为空 → BYTE_IDENTICAL_OK；CI `dashboard-artifacts` job 以「重建后 `git status --porcelain` 为空」钉住同一性质。
-- **产物体积（ADR 0002 §1）**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 239,309 bytes（预算 524,288；最大单文件 234,732／预算 409,600）。【更正 2026-10-19：此处原记 237,933／233,356 为评审第一轮修复前实测，基线应以合并态为准，见「评审第一轮修复」与本条更正】
+- **产物体积（ADR 0002 §1）**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 241,853 bytes（预算 524,288；最大单文件 236,927／预算 409,600）。【更正 2026-10-19：此处原记 237,933／233,356 为评审第一轮修复前实测，基线应以合并态为准，见「评审第一轮修复」与本条更正】
 - **npm 审计基线（ADR 0002 §2）**：`npm audit --audit-level=high` → found 0 vulnerabilities（vite 5.4.21 原带 1 high＋1 moderate，改钉 6.4.4 清零，plugin-react 4.7.0 声明兼容 ^6.0.0）。
 - **UI 冒烟**：`python3 -m http.server` 服务 `static/`，Playwright 实测：13 个 Panel 全部按 manifest 顺序渲染（region 数=13，`panelCount: 13`）；API 不可达时所有 Panel 显示「查询失败…错误不显示 0」而非 0（§12.5）；主题切换深 `#14171c` ↔ 浅 `#f5f7fa` 双向生效并持久化 localStorage；时间范围 24h 激活、7d/30d/自定义 disabled（R2.0b 边界）；导出四键 disabled（R2.1a 边界）；水位行显示「未知（尚未取得快照）」。冒烟后服务器与 `.playwright-mcp/` 已清理。
 - **全仓套件**：`python3 -B tests/run_ci.py --platform linux` → 2349 tests，FAILED (failures=1, skipped=66)。唯一失败为 `test_sbtd_probe_links.MaterializeAuthorizationTests` 内用例。**预先存在的环境相关失败，与 PR-1 无关**；本 PR 未触碰 `sbtd_probe_links` 及其脚本链路。**措辞更正（2026-10-19）**：此前所写「单测独立运行通过」「基线失败 3 条」不准确。真实数据（2026-10-19，`python3 -B -m unittest tests.test_sbtd_probe_links.MaterializeAuthorizationTests` 各独立运行 20 次）：基线 `a55117c` 对 test_replaced_link_with_identical_text_is_refused／test_link_text_change_is_refused／test_link_swap_during_copy_is_refused_after_copy 三用例分别失败 16／11／2 次，`6f600c6`（PR #142 tip）分别失败 18／12／3 次；两侧失败原因相同（L878 ContractError not raised；L867 'link-mismatch' != 'identity-mismatch'），两个 SHA 上均不稳定。已登记 issue #143，由 R2.0a 之后的 chore PR 处理；运行日志在 `~/.omp/logs/640-rc2-r2.0a/probe/`。
@@ -171,7 +171,7 @@ PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验�
 - **lint**：`ruff format --check` 通过；`ruff check` 的 I001 与既有 test_golden_contracts.py 完全同型（sys.path 插入后 import jsonschema），属仓内既有惯例，未改；`python3 -m compileall` 通过。
 - **type check／构建**：`npm run build`（tsc --noEmit ＋ vite build）通过，36 modules。
 - **逐字节重建（钉版工具链，vite 6.4.4 精确钉＋package-lock）**：连续两次 `npm run build` 后 `find static -type f | sort | xargs sha256sum` diff 为空 → BYTE_IDENTICAL_OK。
-- **产物体积**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 239,309 bytes（预算 524,288；最大单文件 234,732＜409,600）。
+- **产物体积**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 241,853 bytes（预算 524,288；最大单文件 236,927＜409,600）。
 - **npm audit**：`npm audit --audit-level=high` → found 0 vulnerabilities。
 - **UI 冒烟（Playwright，本机 http.server 服务新 static/）**：stub fetch 返回契约 Envelope 后切主题触发重查，实测——① C1 线上请求体：`{schema_version:"1.0", range:{from,to,timezone:"Asia/Shanghai"}, metrics:[31 个 manifest 派生 id]}`，无 task_uids、无扁平 from/to；② C3 请求头含 `Idempotency-Key: a706ef76-2323-4903-ab7a-101b2f6f5a96`；③ C2 Envelope 解包生效（水位行显示快照 as_of）；④ C4 渲染：对象值 `tasks.status_at_end` 显示「done 1、unknown 2、in-progress 1」（非 [object Object]），unsupported 显示「不支持 — outside-v2.1.0-rc.1-core-subset」，缺失指标显示「unknown — 未提供 usage 显示不支持／未知，不填 0…」。冒烟后服务器与 `.playwright-mcp/` 已清理。
 
