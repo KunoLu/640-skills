@@ -8,7 +8,7 @@ status: "in-progress"
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0a-dashboard
 created_at: '2026-10-19T13:30:05+08:00'
-updated_at: '2026-10-19T16:16:29+08:00'
+updated_at: '2026-10-19T17:55:28+08:00'
 completed_at: null
 ---
 
@@ -49,6 +49,7 @@ Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts
 | 2026-10-19T16:16:29+08:00 | in-progress | in-progress | PR-1 开为 PR #142（分支 feat/v2.1.0-rc.2-r2.0a-dashboard，tip `6f600c6`）；同步修正本文件 PR-1 状态表述（原「未推送、未开 PR」）与验证证据 tip 表述（原 735559b）；更正 test_sbtd_probe_links 措辞——真实复跑数据：a55117c 16/11/2、6f600c6 18/12/3 失败，两侧同因且均不稳定，登记 issue #143 由 R2.0a 后 chore PR 处理；延后项登记见「评审第一轮修复 › 延后非阻塞项」 | PR #142；issue #143；日志 ~/.omp/logs/640-rc2-r2.0a/probe/ |
 | 2026-10-19T16:16:29+08:00 | in-progress | in-progress | 评审第一轮修复完成（Reviewy blockers B1/B2＋Codex P1/P2 与 Reviewy C1–C4）：manifest 内容 sha256＋manifest_version 配对锁定、panel-manifest JSON schema＋jsonschema 正负例、api.ts 按 openapi QueryScope／Envelope／Idempotency-Key 对齐、PanelCard 按 value＋support 形状渲染；全部验证通过，证据见「评审第一轮修复」一节；任务按拆分决定保持 in-progress 至 PR-2 合并 | 见「评审第一轮修复」验证证据（命令＋结果、mutation 表、逐字节重建、体积、审计、测试计数） |
 | 2026-10-19T16:34:21+08:00 | in-progress | in-progress | B2 跟进（Reviewy／Lord 于房间要求）：测试内完成 schema 绑定——`SCHEMA_BY_VERSION = {"1.0": contracts/panel-manifest.schema.json}`，正向校验测试按 `manifest["schema_version"]` 查映射、无映射即失败（不 skip）；schema 保持 const "1.0"，manifest 不变（仍无 `$schema` 键）；新增负例——schema_version 置 "1.1"／"2.0" 的深拷贝对映射的 1.0 schema 抛 jsonschema.ValidationError 且查映射无该版本。测试计数：test_panel_manifest.py Ran 21 tests OK（20→21）；sbtd-runtime 全套 `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py'` → Ran 228 tests OK（227→228） | 本事件同 commit「test(r2.0a): bind panel manifest schema_version to its schema and reject wrong versions」；sbtd-runtime/tests/test_panel_manifest.py |
+| 2026-10-19T17:55:28+08:00 | in-progress | in-progress | PR-1 已 squash-merge：PR #142 → main merge SHA `3c9cf4e`，完成时间 2026-10-19T17:32:13+08:00；按拆分决定只追加本事件，plan.md R2.0a 行保持 in_progress 至 PR-2 合并；PR-2 任务记录建立于 ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md，分支 feat/v2.1.0-rc.2-r2.0a-serve | PR #142；merge commit 3c9cf4e；ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md |
 
 ## 拆分决定（用户 2026-10-19 13:40 +08:00「按建议拆」）
 
@@ -78,9 +79,9 @@ Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts
 - **PR-1 不含任何 serve 代码**，也不含 Python 侧 serve 的 stub／壳（`test_runtime_package_does_not_import_a_server` 钉法保持不动）。
 - **PR-2 不得变更 PR-1 定下的 manifest schema 与 ADR 0002 决策**；任何变更须单独提出，不随 PR-2 夹带。
 
-### PR-1 当前状态（2026-10-19 16:16 +08:00 更新）
+### PR-1 当前状态（2026-10-19 17:55 +08:00 更新）
 
-PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验证」），commits `0c20db4`（feat）、`adb229d`（ADR 0002）、`735559b`（CI job），随后追加验证记录 commit `6f600c6`；**PR-1 已以 tip `6f600c6` 开为 PR #142**。按拆分决定：本任务保持 in-progress 直到 PR-2 合并；PR-1 合并时只追加状态事件，plan.md R2.0a 行由 PR-2 首个 commit 回填 PR-1 的 PR 号／merge SHA／完成时间。
+PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验证」），commits `0c20db4`（feat）、`adb229d`（ADR 0002）、`735559b`（CI job），随后追加验证记录 commit `6f600c6`；PR-1 以 tip `6f600c6` 开为 PR #142，**已于 2026-10-19T17:32:13+08:00 squash-merge 入 main（merge SHA `3c9cf4e`）**。按拆分决定：本任务保持 in-progress 直到 PR-2 合并；PR-2 任务记录为 `ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md`。
 
 ## SIZE GATE 拆分提案（2026-10-19，已按用户 13:40 决定采纳）
 
@@ -126,7 +127,7 @@ PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验�
 - **lint／typecheck**：`ruff format --check` 与 `ruff check`（test_panel_manifest.py、check_artifacts.py）→ 全过；`python3 -m compileall` 通过；`tsc --noEmit` 随 `npm run build` 通过。
 - **npm ci ＋ 构建**：干净 `rm -rf node_modules && npm ci`（70 包）后 `npm run build` 成功（vite 6.4.4，36 modules）。
 - **逐字节重建（D1）**：`npm ci` 干净重建前后 `find static -type f | sort | xargs sha256sum` diff 为空 → BYTE_IDENTICAL_OK；CI `dashboard-artifacts` job 以「重建后 `git status --porcelain` 为空」钉住同一性质。
-- **产物体积（ADR 0002 §1）**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 237,933 bytes（预算 524,288，余量约 2.2×；最大单文件 233,356／预算 409,600）。
+- **产物体积（ADR 0002 §1）**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 239,309 bytes（预算 524,288；最大单文件 234,732／预算 409,600）。【更正 2026-10-19：此处原记 237,933／233,356 为评审第一轮修复前实测，基线应以合并态为准，见「评审第一轮修复」与本条更正】
 - **npm 审计基线（ADR 0002 §2）**：`npm audit --audit-level=high` → found 0 vulnerabilities（vite 5.4.21 原带 1 high＋1 moderate，改钉 6.4.4 清零，plugin-react 4.7.0 声明兼容 ^6.0.0）。
 - **UI 冒烟**：`python3 -m http.server` 服务 `static/`，Playwright 实测：13 个 Panel 全部按 manifest 顺序渲染（region 数=13，`panelCount: 13`）；API 不可达时所有 Panel 显示「查询失败…错误不显示 0」而非 0（§12.5）；主题切换深 `#14171c` ↔ 浅 `#f5f7fa` 双向生效并持久化 localStorage；时间范围 24h 激活、7d/30d/自定义 disabled（R2.0b 边界）；导出四键 disabled（R2.1a 边界）；水位行显示「未知（尚未取得快照）」。冒烟后服务器与 `.playwright-mcp/` 已清理。
 - **全仓套件**：`python3 -B tests/run_ci.py --platform linux` → 2349 tests，FAILED (failures=1, skipped=66)。唯一失败为 `test_sbtd_probe_links.MaterializeAuthorizationTests` 内用例。**预先存在的环境相关失败，与 PR-1 无关**；本 PR 未触碰 `sbtd_probe_links` 及其脚本链路。**措辞更正（2026-10-19）**：此前所写「单测独立运行通过」「基线失败 3 条」不准确。真实数据（2026-10-19，`python3 -B -m unittest tests.test_sbtd_probe_links.MaterializeAuthorizationTests` 各独立运行 20 次）：基线 `a55117c` 对 test_replaced_link_with_identical_text_is_refused／test_link_text_change_is_refused／test_link_swap_during_copy_is_refused_after_copy 三用例分别失败 16／11／2 次，`6f600c6`（PR #142 tip）分别失败 18／12／3 次；两侧失败原因相同（L878 ContractError not raised；L867 'link-mismatch' != 'identity-mismatch'），两个 SHA 上均不稳定。已登记 issue #143，由 R2.0a 之后的 chore PR 处理；运行日志在 `~/.omp/logs/640-rc2-r2.0a/probe/`。
@@ -145,7 +146,7 @@ PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验�
 
 ### 修复内容
 
-- **B1（test_panel_manifest.py）**：新增 `test_canonical_content_hash_matches_manifest_version`——对 canonical JSON（sorted keys、compact separators、ensure_ascii=False、UTF-8）的 sha256 与 `manifest_version` 配对锁定（`EXPECTED_MANIFEST_VERSION="1.0.0"` ＋ `EXPECTED_MANIFEST_SHA256=fa9ffa78…878d01`）；任何内容变更（值改、键增删、数组项重排）未 bump manifest_version 即失败，失败信息要求两个 pin 一起更新。
+- **B1（test_panel_manifest.py）**：新增 `test_canonical_content_hash_matches_manifest_version`——对 canonical JSON（sorted keys、compact separators、ensure_ascii=False、UTF-8）的 sha256 与 `manifest_version` 配对锁定（`EXPECTED_MANIFEST_VERSION="1.0.0"` ＋ `EXPECTED_MANIFEST_SHA256=fa9ffa78…878d01`）；任何内容变更（值改、键增删、数组项重排）若不同时更新 `EXPECTED_MANIFEST_SHA256` pin 即失败，失败信息要求两个 pin 一起更新；`manifest_version` 本身的同步 bump 由 code review 强制，测试不机械检查版本号递增。
 - **B2（contracts/panel-manifest.schema.json 新增）**：仿 event.schema.json（draft 2020-12、`$id: urn:sbtd:runtime:panel-manifest:1.0`），root 与 panel 级 `additionalProperties: false`、required 全字段、desktop_span enum [6,12]、kind enum [kpi,chart,table]、order integer 1..13、panels minItems=maxItems=13、field_dependencies minItems=1、metric_ids uniqueItems。实例文件不带 `$schema` 指针，沿用仓内 event.schema.json 由测试显式加载的惯例。测试新增 `SchemaValidationTests`（jsonschema 正例＋负例：root 额外键拒、panel 额外键拒、缺 title_zh 拒、空 field_dependencies 拒），`test_required_fields_and_shape` 的子集检查改为精确键集合 `assertEqual(set(panel), REQUIRED_PANEL_FIELDS)`。
 - **C1（dashboard/src/api.ts）**：`QueryScope` 严格按 openapi.yaml QueryScope——`{schema_version:"1.0", range:{from,to,timezone}, metrics:string[]}` 必填，`filters`／`task_granularity("executable-leaf"|"all")`／`include_unlinked`／`include_unknown_time` 为全部可选集；删除扁平 from/to 与契约外的 task_uids。`defaultScope24h(metrics, now)` 由调用方传入指标；`registry.ts` 新增 `ALL_METRIC_IDS`（manifest 派生、去重、manifest 顺序），App.tsx 用之。
 - **C2（api.ts）**：`/api/v1/statistics/query` 与 `/api/v1/report-snapshots` 解包 Envelope（校验 api_version "1"、request_id、data、meta）取 `data`；畸形 Envelope 抛 ApiError 不静默当空数据；meta.warnings console.warn 浮现；非 2xx 时解析错误体附 request_id／warnings 进 ApiError。`/api/v1/health` 按契约 Health schema 不解包。
@@ -165,8 +166,8 @@ PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验�
   | M5 field_dependencies 置空 | 失败 2 测试（hash pin＋schema minItems）✓ |
   | M6 未知额外 panel 键 | 失败 3 测试（hash pin＋schema additionalProperties＋精确键集合）✓ |
 
-- **manifest 钉测**：`PYTHONPATH=sbtd-runtime python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_panel_manifest.py'` → Ran 20 tests, OK（13→20）。
-- **sbtd-runtime 全套**：`PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py'` → Ran 227 tests, OK（220＋7 新增）。
+- **manifest 钉测**：`PYTHONPATH=sbtd-runtime python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_panel_manifest.py'` → Ran 21 tests, OK（13→21）。【更正 2026-10-19：原记 20，B2 跟进后实为 21】
+- **sbtd-runtime 全套**：`PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py'` → Ran 228 tests, OK（220＋8 新增）。【更正 2026-10-19：原记 227，B2 跟进后实为 228】
 - **lint**：`ruff format --check` 通过；`ruff check` 的 I001 与既有 test_golden_contracts.py 完全同型（sys.path 插入后 import jsonschema），属仓内既有惯例，未改；`python3 -m compileall` 通过。
 - **type check／构建**：`npm run build`（tsc --noEmit ＋ vite build）通过，36 modules。
 - **逐字节重建（钉版工具链，vite 6.4.4 精确钉＋package-lock）**：连续两次 `npm run build` 后 `find static -type f | sort | xargs sha256sum` diff 为空 → BYTE_IDENTICAL_OK。
