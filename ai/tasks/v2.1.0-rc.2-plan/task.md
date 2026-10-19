@@ -4,10 +4,11 @@ id: v2.1.0-rc.2-plan
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 SBTD strict task（frontmatter 结构对齐 v2.1.0-rc.1-r1.4-acceptance），且任务 0 只做 grill+DDD+任务表计划，不写任何产品代码、不改 PRD 正文（PR #141 已开，修订随该 PR 提交）。
-status: "in_progress"
+status: "done"
 branch: docs/v2.1.0-rc.2-plan
 created_at: '2026-10-19T10:16:55+08:00'
-updated_at: '2026-10-19T12:12:00+08:00'
+updated_at: '2026-10-19T13:32:00+08:00'
+completed_at: '2026-10-19T13:09:42+08:00'
 ---
 v2.1.0-rc.2 的任务 0：为 R2（Local Dashboard + HTML/CSV/JPEG/PDF 四格式导出，PRD v0.2 §15.3）做实施前计划。底座是 rc.1 已验收的 R1 接口（`sbtd-runtime/` 库面、`contracts/openapi.yaml`、`stats_query`／`csv_export`／`event_store`／`report_snapshot`），不得用 mock 数字冒充真实接口（§15.0）。
 
@@ -33,3 +34,4 @@ v2.1.0-rc.2 的任务 0：为 R2（Local Dashboard + HTML/CSV/JPEG/PDF 四格式
 | 2026-10-19T11:36:31+08:00 | in-progress | in-progress | grill R1d 修订：吸收 Researchy 2026-10-19 事实核验——Q10 OMP 许可证查明为 MIT（oh-my-pi LICENSE，GitHub API 识别，最新 release v18.12.2），删除全部「待核验」，B/C 标许可证可行（保留版权声明＋第三方声明），维持推荐 A（零许可证义务，B 作 R2.0a ADR 升级路径）；Q2a-A 默认改 `playwright install --only-shell chromium`，体积按 Playwright 1.64.0 核验（--only-shell 100–126MB/平台，完整 chromium 300–330MB/平台，playwright 包本体约 140MB），授权提示须显示实际所选模式体积；Q3c-A 补 ADR 须注明 #ticket URL 出现在浏览器启动命令行参数、同机进程可见及缓解（终端不打印、ticket 短时一次性）；待复审 | ai/tasks/v2.1.0-rc.2-plan/grill-r1.md（修订记录 R1d）；https://github.com/can1357/oh-my-pi/blob/main/LICENSE |
 | 2026-10-19T11:47:00+08:00 | in-progress | in-progress | grill R1 锁定：用户逐题确认全部 17 个子问题，所选与推荐一致（Q1a A、Q1b A、Q2a A、Q2b A、Q3a A、Q3b A、Q3c A、Q3d A、Q4 D、Q5 C、Q6a A、Q6b A、Q6c A、Q7 B、Q8 C、Q9 C、Q10 A）；grill-r1.md 各题标 ✅ 已锁定并新增 D1–D17 锁定决定清单，DDD 初稿按锁定更新（Open questions 收窄），新增 plan.md 任务表（0／R2.0a／R2.0b／R2.0c 快照落盘／R2.1a／R2.1b／R2.2／E／F）；待 Reviewy 按 book-ddd-distilled-modeling 出独立 DDD Boundary Review，通过前不进入 R2 设计／实现 | ai/tasks/v2.1.0-rc.2-plan/grill-r1.md（锁定决定清单 D1–D17）；ai/tasks/v2.1.0-rc.2-plan/plan.md |
 | 2026-10-19T12:12:00+08:00 | in-progress | in-progress | DDD Boundary Review R1 意见修复：Query & Snapshot 改标「R2.0c 扩展」并列出落盘格式与版本／24h 保留／snapshots/ 启动清扫／崩溃一致性职责；新增导出与快照清理不变量（在途导出固定 snapshot_id 并持引用，被引用快照不得清理；snapshots/ 仅 Query & Snapshot 清理、exports/ 仅 Export 清理）；新增 Local Server & Access Control 上下文（D5–D8），plan.md 将 D5–D8 实现归入 R2.0a、R2.2 只出证据；Renderer Isolation 补 fonts-noto-cjk 依赖清单（D16）与 SBTD_RUNTIME_HOME/browsers/（D3/D4）；待 Reviewy 复审通过 | ai/tasks/v2.1.0-rc.2-plan/grill-r1.md（修订记录 R1e、DDD 初稿上下文表与不变量）；ai/tasks/v2.1.0-rc.2-plan/plan.md（R2.0a／R2.2 行） |
+| 2026-10-19T13:09:42+08:00 | in-progress | done | Reviewy DDD Boundary Review 复审通过；PR #141 经 Reviewy CLEAN 后由 Lord squash-merge 入 main；按执行规则在 R2.0a 首个 commit 回填本行 PR／merge SHA／完成时间 | PR #141；merge SHA a55117c（main）；ai/tasks/v2.1.0-rc.2-plan/plan.md 任务表第 0 行 |
