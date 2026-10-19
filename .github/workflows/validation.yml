@@ -135,6 +135,10 @@ jobs:
         working-directory: sbtd-runtime/dashboard
         run: npm ci
 
+      - name: Run dashboard unit tests (R2.0b scope/pin/page-model)
+        working-directory: sbtd-runtime/dashboard
+        run: npm test
+
       - name: Enforce the npm audit baseline (ADR 0002 §2)
         working-directory: sbtd-runtime/dashboard
         run: npm audit --audit-level=high
