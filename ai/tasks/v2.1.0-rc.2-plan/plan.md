@@ -13,8 +13,8 @@
 
 | seq | 任务 | 优先级 | 状态 | PR | merge SHA | 完成时间 | strict 任务记录 |
 |---|---|---|---|---|---|---|---|
-| 0 | 计划：grill + DDD + 任务表 | P0 | in-progress（R1 已锁定；Reviewy DDD Boundary Review R1 意见已折入 grill-r1.md R1e，复审待通过） | — | — | — | ai/tasks/v2.1.0-rc.2-plan/task.md |
-| R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument、`serve` 启动与访问控制（D5–D8） | P1 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md |
+| 0 | 计划：grill + DDD + 任务表 | P0 | done（PR #141 已 squash-merge；Reviewy DDD Boundary Review 复审通过） | #141 | a55117c | 2026-10-19T13:09:42+08:00 | ai/tasks/v2.1.0-rc.2-plan/task.md |
+| R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument、`serve` 启动与访问控制（D5–D8） | P1 | in_progress | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md |
 | R2.0b | 筛选、数据质量、页内详情 | P2 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md |
 | R2.0c | 临时 ReportSnapshot 落盘：24h 默认保留＋启动清扫过期＋崩溃一致性 | P3 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0c-snapshot-persistence/task.md |
 | R2.1a | 离线 HTML + 全量 CSV 导出（导出副本 `exports/` 下 24h） | P4 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1a-html-csv-export/task.md |
@@ -28,7 +28,7 @@
 ### 0 — 计划（grill + DDD + 任务表）
 
 - 锁定决定：本轮产出 D1–D17 本身；Q5-C（D10）决定本计划放任务目录而非 PRD。
-- 状态：R1 全部 17 个子问题已由用户 2026-10-19 11:47 锁定；Reviewy 按 book-ddd-distilled-modeling 出的独立 DDD Boundary Review 已返回 R1 意见并全部折入（grill-r1.md 修订记录 R1e：Query & Snapshot 标 R2.0c 扩展、导出／快照清理不变量、新增 Local Server & Access Control 上下文、Renderer Isolation 补 D16/D3/D4 职责、D5–D8 实现归入 R2.0a）；复审达到通过状态后本行方可标 done。
+- 状态：done。R1 全部 17 个子问题已由用户 2026-10-19 11:47 锁定；Reviewy 按 book-ddd-distilled-modeling 出的独立 DDD Boundary Review 意见已全部折入（grill-r1.md 修订记录 R1e），复审通过；随 PR #141 squash-merge 入 main（merge SHA `a55117c`，完成时间 2026-10-19T13:09:42+08:00）。
 - 验收：D1–D17 写入 `grill-r1.md`；DDD 初稿按锁定结果更新；本任务表落地；Boundary Review 通过。
 
 ### R2.0a — OMP 风格单页、Panel registry、ReportDocument

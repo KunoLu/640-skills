@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:sbtd:runtime:panel-manifest:1.0",
+  "title": "SBTD Runtime panel manifest 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_version",
+    "release",
+    "source",
+    "panels"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Content version of this manifest. Any change to the panel table must bump this version; tests pin the (manifest_version, content sha256) pair."
+    },
+    "release": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "panels": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "items": {
+        "$ref": "#/$defs/panel"
+      }
+    }
+  },
+  "$defs": {
+    "panel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "panel_id",
+        "title_zh",
+        "order",
+        "desktop_span",
+        "kind",
+        "metric_ids",
+        "field_dependencies",
+        "export_required",
+        "always_visible",
+        "insufficient_data_zh"
+      ],
+      "properties": {
+        "panel_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title_zh": {
+          "type": "string",
+          "minLength": 1
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 13
+        },
+        "desktop_span": {
+          "enum": [6, 12]
+        },
+        "kind": {
+          "enum": ["kpi", "chart", "table"]
+        },
+        "metric_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "field_dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "export_required": {
+          "type": "boolean"
+        },
+        "always_visible": {
+          "type": "boolean"
+        },
+        "insufficient_data_zh": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

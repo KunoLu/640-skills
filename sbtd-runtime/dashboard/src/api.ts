@@ -1,0 +1,223 @@
+/*
+ * Real /api/v1 client (contracts/openapi.yaml). No mocked or hardcoded
+ * numbers: every value rendered by the page comes from these endpoints.
+ * When the service is unreachable or the session is missing, callers get a
+ * typed failure and panels render their declared error / insufficient-data
+ * states (§12.5) — never a 0 or a fabricated number.
+ *
+ * Session note: the Bearer token and CSRF token are read from
+ * sessionStorage, where the pairing flow (PR-2, D7) stores them after
+ * exchanging the one-time #ticket. PR-1 ships no pairing UI.
+ */
+
+import type { Snapshot } from "./reportDocument";
+
+const SESSION_KEY = "sbtd.session";
+
+export interface SessionCredentials {
+  bearer: string;
+  csrf: string;
+}
+
+export function readSession(): SessionCredentials | null {
+  const raw = sessionStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as SessionCredentials;
+    if (typeof parsed.bearer === "string" && typeof parsed.csrf === "string") {
+      return parsed;
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+export class ApiError extends Error {
+  readonly status: number | null;
+  constructor(message: string, status: number | null) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
+  const session = readSession();
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (session) {
+    headers["Authorization"] = `Bearer ${session.bearer}`;
+    if (method !== "GET") headers["X-CSRF-Token"] = session.csrf;
+  }
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new ApiError(`network error: ${String(error)}`, null);
+  }
+  if (!response.ok) {
+    // Surface whatever the envelope carries (request_id, meta.warnings) so a
+    // failed call is diagnosable without DevTools.
+    let detail = "";
+    try {
+      const payload = (await response.json()) as {
+        request_id?: unknown;
+        meta?: { warnings?: unknown };
+      };
+      const parts: string[] = [];
+      if (typeof payload?.request_id === "string") {
+        parts.push(`request_id=${payload.request_id}`);
+      }
+      const warnings = payload?.meta?.warnings;
+      if (Array.isArray(warnings) && warnings.length > 0) {
+        parts.push(`warnings=${warnings.join(",")}`);
+      }
+      if (parts.length > 0) detail = ` (${parts.join("; ")})`;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(
+      `${method} ${path} -> ${response.status}${detail}`,
+      response.status,
+    );
+  }
+  return (await response.json()) as T;
+}
+
+interface Envelope<T> {
+  api_version: "1";
+  request_id: string;
+  data: T;
+  /** openapi.yaml Meta schema; only warnings is consumed today. */
+  meta: { warnings?: string[] };
+}
+
+/**
+ * Unwrap the versioned response Envelope (openapi.yaml Envelope schema) and
+ * return its data. Non-fatal envelope warnings are surfaced on the console;
+ * a malformed envelope is an error, never silently treated as empty data.
+ */
+function unwrapEnvelope<T>(payload: unknown, path: string): T {
+  const envelope = payload as Partial<Envelope<T>> | null;
+  if (
+    envelope === null ||
+    typeof envelope !== "object" ||
+    envelope.api_version !== "1" ||
+    typeof envelope.request_id !== "string" ||
+    !("data" in envelope) ||
+    envelope.meta === null ||
+    typeof envelope.meta !== "object"
+  ) {
+    throw new ApiError(`${path}: malformed response envelope`, null);
+  }
+  const warnings = envelope.meta.warnings;
+  if (Array.isArray(warnings) && warnings.length > 0) {
+    console.warn(`${path}: envelope warnings`, warnings);
+  }
+  return envelope.data as T;
+}
+
+/**
+ * QueryScope per contracts/openapi.yaml #/components/schemas/QueryScope
+ * (schema_version 1.0; ADR 0001 / test_r1_acceptance pins). The schema is
+ * additionalProperties: false with required [schema_version, range, metrics];
+ * every optional field below is the full optional set. Field names and
+ * nesting must match the contract exactly — no flat from/to, no task_uids.
+ */
+export interface QueryScopeRange {
+  from: string;
+  to: string;
+  timezone: string;
+}
+
+export interface QueryScope {
+  schema_version: "1.0";
+  range: QueryScopeRange;
+  metrics: string[];
+  filters?: Record<string, string[]>;
+  task_granularity?: "executable-leaf" | "all";
+  include_unlinked?: boolean;
+  include_unknown_time?: boolean;
+}
+
+export function defaultScope24h(
+  metrics: string[],
+  now: Date = new Date(),
+): QueryScope {
+  const to = now;
+  const from = new Date(now.getTime() - 24 * 3600 * 1000);
+  return {
+    schema_version: "1.0",
+    range: {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    },
+    metrics: [...metrics],
+  };
+}
+
+export interface Health {
+  status: string;
+  [key: string]: unknown;
+}
+
+export function fetchHealth(): Promise<Health> {
+  // /api/v1/health answers with the bare Health schema, not an Envelope.
+  return request<Health>("GET", "/api/v1/health");
+}
+
+/**
+ * POST /api/v1/report-snapshots → 201 Envelope whose data is the Snapshot
+ * public view. The contract requires the Idempotency-Key header
+ * (openapi.yaml #/components/parameters/IdempotencyKey); a fresh UUID is
+ * generated per call so a retry of this call is safely deduplicated.
+ */
+export function createReportSnapshot(scope: QueryScope): Promise<Snapshot> {
+  return request<Envelope<Snapshot>>(
+    "POST",
+    "/api/v1/report-snapshots",
+    { scope },
+    { "Idempotency-Key": crypto.randomUUID() },
+  ).then((envelope) => unwrapEnvelope<Snapshot>(envelope, "/api/v1/report-snapshots"));
+}
+
+/**
+ * POST /api/v1/statistics/query → 200 Envelope whose data carries metric
+ * values keyed by metric_id (stats_query.query over contract_eval.evaluate).
+ */
+
+/** Metric value shape returned by evaluate(): value plus support metadata. */
+export interface MetricValue {
+  metric_id: string;
+  /** supported | conditional | unsupported (metrics-catalog support field). */
+  support: string;
+  /** null when the metric is unsupported or has insufficient data. */
+  value: unknown;
+  /** Present on unsupported / conditional metrics: why no value. */
+  reason?: string;
+  [key: string]: unknown;
+}
+
+export interface StatisticsResult {
+  metrics: Record<string, MetricValue>;
+  meta?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export function queryStatistics(scope: QueryScope): Promise<StatisticsResult> {
+  return request<Envelope<StatisticsResult>>(
+    "POST",
+    "/api/v1/statistics/query",
+    scope,
+  ).then((envelope) => unwrapEnvelope<StatisticsResult>(envelope, "/api/v1/statistics/query"));
+}
