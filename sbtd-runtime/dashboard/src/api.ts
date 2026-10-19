@@ -5,9 +5,14 @@
  * typed failure and panels render their declared error / insufficient-data
  * states (§12.5) — never a 0 or a fabricated number.
  *
- * Session note: the Bearer token and CSRF token are read from
- * sessionStorage, where the pairing flow (PR-2, D7) stores them after
- * exchanging the one-time #ticket. PR-1 ships no pairing UI.
+ * Pairing (D7): the launcher opens the page with a one-time ticket in the
+ * URL fragment (`#ticket=…`). pairWithTicket exchanges it via the
+ * X-Pairing-Code header (openapi.yaml pairingCode security scheme) for a
+ * short-lived session Bearer plus a CSRF token (returned in the X-CSRF-Token
+ * response header, since the Session schema carries only
+ * token_type/access_token/expires_in). Both tokens live in sessionStorage;
+ * the fragment is removed from the address bar and history immediately
+ * (PRD §10.2). The ticket value itself is never logged or displayed.
  */
 
 import type { Snapshot } from "./reportDocument";
@@ -31,6 +36,62 @@ export function readSession(): SessionCredentials | null {
     /* fall through */
   }
   return null;
+}
+
+/** Extract the one-time pairing ticket from the URL fragment, if present. */
+export function readTicketFromFragment(): string | null {
+  const match = /^#ticket=([A-Za-z0-9_-]+)$/.exec(window.location.hash);
+  return match ? match[1] : null;
+}
+
+/**
+ * Remove the ticket fragment from the address bar and browser history
+ * (PRD §10.2: 读取后立即移除并销毁). Called before the pair exchange so the
+ * ticket never survives navigation or history inspection.
+ */
+export function clearTicketFromAddressBar(): void {
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
+/**
+ * POST /api/v1/session/pair: exchange the one-time ticket for a session
+ * (openapi.yaml pairSession; the server destroys the ticket on read, so a
+ * failed exchange also consumes it). On success the credentials are stored
+ * in sessionStorage and returned.
+ */
+export async function pairWithTicket(ticket: string): Promise<SessionCredentials> {
+  let response: Response;
+  try {
+    response = await fetch("/api/v1/session/pair", {
+      method: "POST",
+      headers: { "X-Pairing-Code": ticket },
+    });
+  } catch (error) {
+    throw new ApiError(`network error: ${String(error)}`, null);
+  }
+  if (!response.ok) {
+    throw new ApiError(
+      `POST /api/v1/session/pair -> ${response.status}（配对失败：ticket 无效或已过期）`,
+      response.status,
+    );
+  }
+  const session = (await response.json()) as {
+    token_type?: unknown;
+    access_token?: unknown;
+    expires_in?: unknown;
+  };
+  const csrf = response.headers.get("X-CSRF-Token");
+  if (
+    session.token_type !== "bearer" ||
+    typeof session.access_token !== "string" ||
+    typeof session.expires_in !== "number" ||
+    !csrf
+  ) {
+    throw new ApiError("POST /api/v1/session/pair: malformed session", null);
+  }
+  const credentials: SessionCredentials = { bearer: session.access_token, csrf };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(credentials));
+  return credentials;
 }
 
 export class ApiError extends Error {
@@ -177,24 +238,33 @@ export function fetchHealth(): Promise<Health> {
 }
 
 /**
- * POST /api/v1/report-snapshots → 201 Envelope whose data is the Snapshot
- * public view. The contract requires the Idempotency-Key header
- * (openapi.yaml #/components/parameters/IdempotencyKey); a fresh UUID is
- * generated per call so a retry of this call is safely deduplicated.
+ * GET /api/v1/report-snapshots/{snapshot_id} → 200 Envelope whose data is
+ * the Snapshot public view (report_snapshot.Snapshot.public_view). The
+ * snapshot id comes from the statistics query response: the server attaches
+ * a SnapshotStore to stats_query.query, which mints-or-reuses the snapshot
+ * for the queried scope. openapi.yaml defines no requestBody for POST
+ * /api/v1/report-snapshots, so the client never posts a scope there — the
+ * query is the only scope-carrying call.
  */
-export function createReportSnapshot(scope: QueryScope): Promise<Snapshot> {
-  return request<Envelope<Snapshot>>(
-    "POST",
-    "/api/v1/report-snapshots",
-    { scope },
-    { "Idempotency-Key": crypto.randomUUID() },
-  ).then((envelope) => unwrapEnvelope<Snapshot>(envelope, "/api/v1/report-snapshots"));
+export function fetchReportSnapshot(snapshotId: string): Promise<Snapshot> {
+  const path = `/api/v1/report-snapshots/${encodeURIComponent(snapshotId)}`;
+  return request<Envelope<Snapshot>>("GET", path).then((envelope) =>
+    unwrapEnvelope<Snapshot>(envelope, path),
+  );
 }
 
 /**
  * POST /api/v1/statistics/query → 200 Envelope whose data carries metric
  * values keyed by metric_id (stats_query.query over contract_eval.evaluate).
  */
+
+/** Stratified rate entry (e.g. validations.run_pass_rate strata). */
+export interface MetricStratum {
+  /** "n/d" when decidable, null when the stratum has no decidable sample. */
+  value: unknown;
+  sample_status?: string;
+  [key: string]: unknown;
+}
 
 /** Metric value shape returned by evaluate(): value plus support metadata. */
 export interface MetricValue {
@@ -205,11 +275,21 @@ export interface MetricValue {
   value: unknown;
   /** Present on unsupported / conditional metrics: why no value. */
   reason?: string;
+  /** Present on conditional cost metrics: why the value is missing. */
+  missing_reason?: string;
+  /** true when part of the sample is missing (conditional metrics). */
+  missing?: boolean;
+  /** decidable | no-decidable-sample (rate metrics). */
+  sample_status?: string;
+  /** Per-stratum rate results; top-level value may be null while these carry data. */
+  strata?: Record<string, MetricStratum>;
   [key: string]: unknown;
 }
 
 export interface StatisticsResult {
   metrics: Record<string, MetricValue>;
+  /** Attached by the server-side SnapshotStore (stats_query._attach_snapshot). */
+  snapshot_id?: string;
   meta?: Record<string, unknown>;
   [key: string]: unknown;
 }
