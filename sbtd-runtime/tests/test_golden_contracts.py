@@ -65,16 +65,20 @@ CONDITIONAL_LITERALS = {
     "usage.cost_reported",
     "usage.cost_estimated",
 }
-PRD_METRIC_IDS = CORE_LITERALS | CONDITIONAL_LITERALS | {
-    "duration.execution_ms",
-    "duration.blocked_ms",
-    "duration.step_p50/p95",
-    "components.available",
-    "components.loaded",
-    "modes.distribution",
-    "modes.recommendation_response",
-    "usage.requests",
-}
+PRD_METRIC_IDS = (
+    CORE_LITERALS
+    | CONDITIONAL_LITERALS
+    | {
+        "duration.execution_ms",
+        "duration.blocked_ms",
+        "duration.step_p50/p95",
+        "components.available",
+        "components.loaded",
+        "modes.distribution",
+        "modes.recommendation_response",
+        "usage.requests",
+    }
+)
 REQUIRED_CATALOG_FIELDS = {
     "metric_id",
     "name_zh",
@@ -124,7 +128,9 @@ class GoldenContractTests(unittest.TestCase):
 
     def test_replay_does_not_increase_step_attempts(self) -> None:
         self.assertIn("evt_step_a1_replay", self.result["dedup"]["confirmed_event_ids"])
-        self.assertNotIn("evt_step_a1_replay", self.result["dedup"]["accepted_event_ids"])
+        self.assertNotIn(
+            "evt_step_a1_replay", self.result["dedup"]["accepted_event_ids"]
+        )
         self.assertEqual(self.metric("steps.attempts")["value"], 4)
         self.assertEqual(self.metric("steps.retry_count")["value"], 1)
 
@@ -132,8 +138,14 @@ class GoldenContractTests(unittest.TestCase):
         conflicts = self.result["dedup"]["conflicts"]
         self.assertEqual(conflicts[0]["event_id"], "evt_inv1_conflict")
         self.assertEqual(conflicts[0]["kept_event_id"], "evt_inv1_start")
-        self.assertNotIn("evt_inv1_conflict", self.result["dedup"]["accepted_event_ids"])
-        kept = next(item for item in self.result["invocations"] if item["invocation_id"] == "inv_1")
+        self.assertNotIn(
+            "evt_inv1_conflict", self.result["dedup"]["accepted_event_ids"]
+        )
+        kept = next(
+            item
+            for item in self.result["invocations"]
+            if item["invocation_id"] == "inv_1"
+        )
         self.assertEqual(kept["result"], "succeeded")
 
     def test_timestamp_alone_is_not_a_dedup_key(self) -> None:
@@ -142,14 +154,20 @@ class GoldenContractTests(unittest.TestCase):
         self.assertNotIn("evt_off_2", self.result["dedup"]["confirmed_event_ids"])
 
     def test_facade_and_host_observations_merge_to_one_invocation(self) -> None:
-        invocation = next(item for item in self.result["invocations"] if item["invocation_id"] == "inv_1")
+        invocation = next(
+            item
+            for item in self.result["invocations"]
+            if item["invocation_id"] == "inv_1"
+        )
         self.assertEqual(invocation["source_ids"], ["source_runtime", "source_codex"])
         self.assertEqual(self.metric("components.invocations")["value"], 3)
         self.assertEqual(
             self.metric("components.invocations")["invocation_ids"],
             ["inv_1", "inv_2", "inv_3"],
         )
-        self.assertNotIn("skill:demo", self.metric("components.invocations")["invocation_ids"])
+        self.assertNotIn(
+            "skill:demo", self.metric("components.invocations")["invocation_ids"]
+        )
 
     def test_loaded_skill_is_not_an_invocation(self) -> None:
         self.assertEqual(self.metric("components.loaded")["support"], "unsupported")
@@ -257,10 +275,14 @@ class GoldenContractTests(unittest.TestCase):
         self.assertNotEqual(tokens["value"]["input_tokens"], 20)
 
     def test_unlinked_actor_and_gap_stay_visible(self) -> None:
-        self.assertEqual(self.metric("audit.unlinked_count")["event_ids"], ["evt_unlinked"])
+        self.assertEqual(
+            self.metric("audit.unlinked_count")["event_ids"], ["evt_unlinked"]
+        )
         self.assertEqual(self.metric("audit.gap_intervals")["gap_ids"], ["gap_omp"])
         self.assertEqual(self.result["unknown_time_event_ids"], ["evt_created_untimed"])
-        unlinked = next(event for event in DATASET["events"] if event["event_id"] == "evt_unlinked")
+        unlinked = next(
+            event for event in DATASET["events"] if event["event_id"] == "evt_unlinked"
+        )
         self.assertIsNone(unlinked["actor"]["actor_id"])
         self.assertEqual(unlinked["actor"]["identity_assurance"], "unbound")
         self.assertEqual(unlinked["external_refs"][0]["system"], "dify")
@@ -344,10 +366,15 @@ class GoldenContractTests(unittest.TestCase):
         self.assertNotEqual(edt, est)
         self.assertLess(edt, est)
 
-
     def test_declared_step_success_is_not_machine_observed(self) -> None:
         sample = copy.deepcopy(DATASET)
-        declared = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_step_a1_finish"))
+        declared = copy.deepcopy(
+            next(
+                event
+                for event in sample["events"]
+                if event["event_id"] == "evt_step_a1_finish"
+            )
+        )
         declared["event_id"] = "evt_declared_finish"
         declared["ingest_seq"] = 30000
         declared["provenance"]["source_event_id"] = "evt_declared_finish"
@@ -361,7 +388,13 @@ class GoldenContractTests(unittest.TestCase):
 
     def test_gate_invalidation_removes_coverage(self) -> None:
         sample = copy.deepcopy(DATASET)
-        invalidated = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_gate_ddd_pass"))
+        invalidated = copy.deepcopy(
+            next(
+                event
+                for event in sample["events"]
+                if event["event_id"] == "evt_gate_ddd_pass"
+            )
+        )
         invalidated["event_id"] = "evt_gate_ddd_invalidated"
         invalidated["event_type"] = "gate.evidence_invalidated"
         invalidated["occurred_at"] = "2026-10-15T18:40:00Z"
@@ -377,7 +410,13 @@ class GoldenContractTests(unittest.TestCase):
 
     def test_late_receipt_does_not_override_later_occurrence(self) -> None:
         sample = copy.deepcopy(DATASET)
-        late = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_leaf_progress"))
+        late = copy.deepcopy(
+            next(
+                event
+                for event in sample["events"]
+                if event["event_id"] == "evt_leaf_progress"
+            )
+        )
         late["event_id"] = "evt_leaf_late_progress"
         late["occurred_at"] = "2026-10-15T19:30:00Z"
         late["recorded_at"] = "2026-10-15T21:30:00Z"
@@ -392,15 +431,25 @@ class GoldenContractTests(unittest.TestCase):
     def test_spanning_run_counts_as_touched_but_not_started(self) -> None:
         scoped = evaluate(
             DATASET,
-            {**self.scope, "from": "2026-10-15T16:21:00Z", "to": "2026-10-15T16:24:00Z"},
+            {
+                **self.scope,
+                "from": "2026-10-15T16:21:00Z",
+                "to": "2026-10-15T16:24:00Z",
+            },
         )
         self.assertIn("task_leaf", scoped["metrics"]["tasks.touched"]["task_uids"])
         self.assertEqual(scoped["metrics"]["runs.started"]["value"], 0)
 
-    def test_terminal_invocation_rate_includes_a_finish_whose_start_is_outside(self) -> None:
+    def test_terminal_invocation_rate_includes_a_finish_whose_start_is_outside(
+        self,
+    ) -> None:
         scoped = evaluate(
             DATASET,
-            {**self.scope, "from": "2026-10-15T15:47:30Z", "to": "2026-10-15T15:49:00Z"},
+            {
+                **self.scope,
+                "from": "2026-10-15T15:47:30Z",
+                "to": "2026-10-15T15:49:00Z",
+            },
         )
         rate = scoped["metrics"]["components.failure_rate"]
         self.assertEqual(rate["numerator"], 0)
@@ -410,7 +459,11 @@ class GoldenContractTests(unittest.TestCase):
     def test_retry_attempt_is_not_relabeled_as_first(self) -> None:
         scoped = evaluate(
             DATASET,
-            {**self.scope, "from": "2026-10-15T17:30:00Z", "to": "2026-10-15T18:00:00Z"},
+            {
+                **self.scope,
+                "from": "2026-10-15T17:30:00Z",
+                "to": "2026-10-15T18:00:00Z",
+            },
         )
         first = scoped["metrics"]["tests.first_attempt_pass_rate"]
         self.assertEqual(first["numerator"], 1)
@@ -418,7 +471,9 @@ class GoldenContractTests(unittest.TestCase):
 
     def test_recovered_gap_is_not_an_open_interval(self) -> None:
         sample = copy.deepcopy(DATASET)
-        recovered = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_gap"))
+        recovered = copy.deepcopy(
+            next(event for event in sample["events"] if event["event_id"] == "evt_gap")
+        )
         recovered["event_id"] = "evt_gap_recovered"
         recovered["event_type"] = "collection.recovered"
         recovered["occurred_at"] = "2026-10-15T18:45:00Z"
@@ -446,35 +501,69 @@ class GoldenContractTests(unittest.TestCase):
 
     def test_mixed_token_semantics_are_not_summed_together(self) -> None:
         sample = copy.deepcopy(DATASET)
-        other = copy.deepcopy(next(event for event in sample["events"] if event["event_id"] == "evt_usage_detail"))
+        other = copy.deepcopy(
+            next(
+                event
+                for event in sample["events"]
+                if event["event_id"] == "evt_usage_detail"
+            )
+        )
         other["event_id"] = "evt_usage_cache"
         other["occurred_at"] = "2026-10-15T18:12:00Z"
         other["recorded_at"] = other["occurred_at"]
         other["ingest_seq"] = 30004
         other["provenance"]["source_event_id"] = other["event_id"]
-        other["usage"] = {**other["usage"], "request_id": "req_cache", "input_includes_cache": True, "input_tokens": 7}
+        other["usage"] = {
+            **other["usage"],
+            "request_id": "req_cache",
+            "input_includes_cache": True,
+            "input_tokens": 7,
+        }
         sample["events"].append(other)
         tokens = evaluate(sample, self.scope)["metrics"]["usage.tokens"]
         self.assertIsNone(tokens["value"])
         self.assertEqual(len(tokens["groups"]), 2)
 
     def test_golden_oracle_matches_every_metric(self) -> None:
-        expected = json.loads((ROOT / "golden" / "expected.json").read_text(encoding="utf-8"))
+        expected = json.loads(
+            (ROOT / "golden" / "expected.json").read_text(encoding="utf-8")
+        )
         present = {event["event_id"] for event in DATASET["events"]}
-        self.assertEqual(set(expected["metrics"]), {item["metric_id"] for item in CATALOG["metrics"]})
+        self.assertEqual(
+            set(expected["metrics"]), {item["metric_id"] for item in CATALOG["metrics"]}
+        )
         for metric_id, oracle in expected["metrics"].items():
             actual = self.metric(metric_id)
             self.assertEqual(actual["support"], oracle["support"], metric_id)
             self.assertEqual(actual["value"], oracle["value"], metric_id)
             if "numerator" in oracle:
                 self.assertEqual(actual["numerator"], oracle["numerator"], metric_id)
-                self.assertEqual(actual["denominator"], oracle["denominator"], metric_id)
+                self.assertEqual(
+                    actual["denominator"], oracle["denominator"], metric_id
+                )
             self.assertTrue(set(oracle["source_event_ids"]) <= present, metric_id)
 
-    def test_runtime_package_does_not_import_a_server(self) -> None:
-        source = (ROOT / "contract_eval.py").read_text(encoding="utf-8")
-        self.assertNotIn("starlette", source)
-        self.assertNotIn("uvicorn", source)
+    def test_library_modules_do_not_import_the_server_layer(self) -> None:
+        """R2 起允许服务层存在（serve.py）；钉法改为契约层约束：R1 库面模块
+        不得 import 服务栈（starlette／uvicorn），服务依赖只许出现在 serve.py。"""
+        library_modules = [
+            "codex_adapter.py",
+            "contract_eval.py",
+            "csv_export.py",
+            "event_store.py",
+            "extensions.py",
+            "facade.py",
+            "history_import.py",
+            "history_read.py",
+            "omp_adapter.py",
+            "report_snapshot.py",
+            "stats_query.py",
+        ]
+        for name in library_modules:
+            source = (ROOT / name).read_text(encoding="utf-8")
+            with self.subTest(module=name):
+                self.assertNotIn("starlette", source)
+                self.assertNotIn("uvicorn", source)
 
 
 class OpenApiDraftTests(unittest.TestCase):

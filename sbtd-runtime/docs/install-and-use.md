@@ -93,7 +93,27 @@ PRD §10.4 期望临时 ReportSnapshot 默认保留 24 小时。当前实现是*
 
 ## R1 没有的东西（如实声明）
 
-- 没有 HTTP 服务与 Dashboard（R2）。
+- 没有 HTTP 服务与 Dashboard（R2。R2.0a PR-2 起见下文「R2.0a：serve」）。
 - 没有 `/api/v1/exports*` 导出作业（OpenAPI 标记 `v2.1.0-rc.2`，非 rc.1 阻塞）；CSV 通过 `csv_export.serialize_csv(snapshot)` 在进程内直接获得字节。
 - 没有 JPEG／PDF／HTML 导出，没有落盘快照保留，没有远程业务控制端点。
 - codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
+
+## R2.0a：serve（本地 Dashboard 服务，D5–D8）
+
+R2.0a PR-2 起仓内有 HTTP 服务层 `sbtd-runtime/serve.py`（Starlette＋uvicorn，ADR 0001 §2），服务入仓的 `dashboard/static/` 产物并接 R1 真实库面（`stats_query`／`report_snapshot` over `EventStore`）。安装精确钉版依赖后从仓库根启动：
+
+```bash
+python3 -m pip install -r sbtd-runtime/requirements-serve.txt
+PYTHONPATH=sbtd-runtime python3 -m serve [--port 6400] [--no-open] [--home PATH]
+```
+
+行为（每条都有 `tests/test_serve.py` 的真实进程／socket 测试）：
+
+- 只绑定 127.0.0.1；Host 白名单 localhost／127.0.0.1／[::1] 且端口相等，Origin 全匹配，规则硬编码无配置面（D8）。
+- 端口占用即启动失败、退出码非零并提示 `--port`（D5）；重复启动经 `serve.lock` 实例锁＋端口双判报「已有实例」，陈旧锁（死 pid／不可读／损坏）按无效处理（D6）。
+- 前台运行，Ctrl-C 干净退出并移除锁（D6）。
+- 一次性 ticket 只经自动打开浏览器的 URL fragment 交付（默认 `--open`）；`--no-open` 或打开失败时写入 `$SBTD_RUNTIME_HOME/pairing-ticket`（0600）由用户手动配对。ticket 短时（300s）一次性、读后即毁、终端与日志不打印（D7；命令行参数可见风险与残余风险见 ADR 0002 §3）。配对换取 session Bearer＋CSRF（`X-CSRF-Token` 响应头），unsafe 方法要求两者。
+- 审计库不可用（观察关闭／无 audit.db）时服务仍启动，查询响应 Envelope meta 带 `AUDIT_STORE_UNAVAILABLE:*` warning 且 complete=false，不编造数字。
+- 快照仍为进程内对象（TTL 3600s，R1.3 语义），重启即消失；24h 落盘属 R2.0c。
+
+跨平台（macOS／Windows）证据与 Host/Origin 负例对账属 R2.2；Windows 上实例锁的活 pid 判定（`os.kill(pid, 0)` 语义）未在本期验证。

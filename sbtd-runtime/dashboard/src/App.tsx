@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  createReportSnapshot,
+  ApiError,
+  clearTicketFromAddressBar,
   defaultScope24h,
+  fetchReportSnapshot,
+  pairWithTicket,
   queryStatistics,
+  readSession,
+  readTicketFromFragment,
   type MetricValue,
   type QueryScope,
 } from "./api";
@@ -19,7 +24,7 @@ type Theme = "dark" | "light";
 type PageState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; document: ReportDocument; values: Record<string, MetricValue> };
+  | { kind: "ready"; snapshot: Snapshot; values: Record<string, MetricValue> };
 
 function systemTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches
@@ -39,29 +44,63 @@ export function App() {
     localStorage.setItem("sbtd.theme", theme);
   }, [theme]);
 
+  // load intentionally does NOT depend on theme: presentation_state.theme is
+  // applied when the ReportDocument is derived below, so switching theme
+  // never re-queries the API.
   const load = useCallback(async (scope: QueryScope) => {
     setState({ kind: "loading" });
     try {
-      const snapshot: Snapshot = await createReportSnapshot(scope);
       const stats = await queryStatistics(scope);
-      const document = new ReportDocument(snapshot, {
-        ...DEFAULT_PRESENTATION_STATE,
-        theme,
-      });
-      setState({ kind: "ready", document, values: stats.metrics });
+      const snapshotId = stats.snapshot_id;
+      if (typeof snapshotId !== "string" || snapshotId.length === 0) {
+        throw new ApiError(
+          "statistics response carried no snapshot_id",
+          null,
+        );
+      }
+      const snapshot = await fetchReportSnapshot(snapshotId);
+      setState({ kind: "ready", snapshot, values: stats.metrics });
     } catch (error) {
       setState({ kind: "error", message: String(error) });
     }
-  }, [theme]);
+  }, []);
 
+  // Bootstrap (D7): a one-time ticket in the URL fragment is exchanged for a
+  // session before any data query; the fragment leaves the address bar and
+  // history immediately. Without ticket and without an existing session the
+  // page says so honestly instead of querying into a 401.
   useEffect(() => {
+    const ticket = readTicketFromFragment();
+    if (ticket !== null) {
+      clearTicketFromAddressBar();
+      void pairWithTicket(ticket)
+        .then(() => load(defaultScope24h(ALL_METRIC_IDS)))
+        .catch((error: unknown) =>
+          setState({ kind: "error", message: String(error) }),
+        );
+      return;
+    }
+    if (readSession() === null) {
+      setState({
+        kind: "error",
+        message:
+          "未配对：本页须经 sbtd-runtime serve 自动打开的配对链接访问" +
+          "（ticket 一次性且短时有效；过期请重启 serve）",
+      });
+      return;
+    }
     void load(defaultScope24h(ALL_METRIC_IDS));
   }, [load]);
 
-  const watermark = useMemo(() => {
+  const report = useMemo(() => {
     if (state.kind !== "ready") return null;
-    return state.document.snapshot.as_of;
-  }, [state]);
+    return new ReportDocument(state.snapshot, {
+      ...DEFAULT_PRESENTATION_STATE,
+      theme,
+    });
+  }, [state, theme]);
+
+  const watermark = report ? report.snapshot.as_of : null;
 
   return (
     <div className="page">

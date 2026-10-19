@@ -14,7 +14,7 @@
 | seq | 任务 | 优先级 | 状态 | PR | merge SHA | 完成时间 | strict 任务记录 |
 |---|---|---|---|---|---|---|---|
 | 0 | 计划：grill + DDD + 任务表 | P0 | done（PR #141 已 squash-merge；Reviewy DDD Boundary Review 复审通过） | #141 | a55117c | 2026-10-19T13:09:42+08:00 | ai/tasks/v2.1.0-rc.2-plan/task.md |
-| R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument、`serve` 启动与访问控制（D5–D8） | P1 | in_progress | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md |
+| R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument、`serve` 启动与访问控制（D5–D8） | P1 | in_progress（PR-1 已合并；PR-2 进行中） | #142（PR-1） | 3c9cf4e（PR-1） | —（PR-2 合并后回填） | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md（PR-1）；ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md（PR-2） |
 | R2.0b | 筛选、数据质量、页内详情 | P2 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md |
 | R2.0c | 临时 ReportSnapshot 落盘：24h 默认保留＋启动清扫过期＋崩溃一致性 | P3 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0c-snapshot-persistence/task.md |
 | R2.1a | 离线 HTML + 全量 CSV 导出（导出副本 `exports/` 下 24h） | P4 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1a-html-csv-export/task.md |
@@ -32,6 +32,8 @@
 - 验收：D1–D17 写入 `grill-r1.md`；DDD 初稿按锁定结果更新；本任务表落地；Boundary Review 通过。
 
 ### R2.0a — OMP 风格单页、Panel registry、ReportDocument
+
+- PR 拆分（用户 2026-10-19 13:40「按建议拆」）：PR-1（前端骨架＋manifest＋重建一致 CI＋ADR 0002）已 squash-merge——PR #142，merge SHA `3c9cf4e`，完成时间 2026-10-19T17:32:13+08:00；PR-2（`serve` 与访问控制 D5–D8）进行中，任务记录 `ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md`。本行在 PR-2 合并后才记 done。
 
 - 锁定决定：D1（产物入仓＋重建一致 CI）、D2（Vite 精确钉版）、D14（`contracts/panel-manifest.json` 单一事实源）、D17（仅参考 OMP 视觉、零复制）；Local Server & Access Control 上下文的实现——D5（端口占用即启动失败并提示 `--port`）、D6（前台 Ctrl-C、默认 `--open`、实例锁＋端口双判、陈旧锁按无效处理）、D7（一次性 ticket 经 fragment 配对换 session／Bearer、读后即毁、不进日志）、D8（Host／Origin 严格白名单，规则硬编码）。
 - 验收：Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts`）；前端注册表与 ReportDocument 均由 manifest 派生；源码重建产物与入仓产物逐字节一致的 CI 检查通过；设计规格把 OMP 参考点写成自有 token 定义；产物体积预算与 npm 审计基线由本任务 ADR 固定；`serve` 按 D5–D8 实现启动、实例锁、配对与 Host／Origin 校验（本任务出实现与单测，`#ticket` URL 命令行参数可见风险与缓解写入本任务 ADR），跨平台与安全证据由 R2.2 统一产出。

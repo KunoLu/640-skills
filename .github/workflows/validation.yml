@@ -124,6 +124,13 @@ jobs:
           PYTHONPATH=sbtd-runtime python -B -m unittest discover \
             -s sbtd-runtime/tests -p 'test_panel_manifest.py'
 
+      - name: Run serve access-control tests (D5-D8)
+        run: |
+          python -m pip install -r sbtd-workflow-onboard/requirements.txt \
+            -r sbtd-runtime/requirements-serve.txt
+          PYTHONPATH=sbtd-runtime python -B -m unittest discover \
+            -s sbtd-runtime/tests -p 'test_serve.py'
+
       - name: Install pinned npm dependencies
         working-directory: sbtd-runtime/dashboard
         run: npm ci

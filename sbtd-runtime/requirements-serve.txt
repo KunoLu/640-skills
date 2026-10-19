@@ -1,0 +1,6 @@
+# serve 层精确钉版（ADR 0001 §2：Starlette + uvicorn；Python ≥3.11）
+# jsonschema 为库面（event_store／contract_eval）既有依赖，此处一并钉死使
+# requirements-serve.txt 可独立安装。
+jsonschema==4.26.0
+starlette==1.9.0
+uvicorn==0.54.0
