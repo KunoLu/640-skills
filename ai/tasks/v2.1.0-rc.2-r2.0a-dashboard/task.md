@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.0a-dashboard
 workflow_mode: strict
 mode_source: user
 mode_note: Lead 本次明确指派 strict 模式 SBTD 任务；范围严格等于 plan.md R2.0a 行的锁定决定与验收，非目标含 R2.0b（含轮询）、R2.0c、R2.1a/b、R2.2 证据；Lead 附加 SIZE GATE——通读事实源后判定 R2.0a 超出一个可审 PR 时，只做回填 commit 并在本文件写拆分提案，不开始实现。
-status: "blocked"
-blocked_reason: "SIZE GATE 命中：通读事实源后判定 R2.0a 超出一个可审 PR（两个不相干领域、两套工具链）。已按 Lead 规则只做回填 commit 并在下文写拆分提案（PR-1 前端骨架＋manifest／registry／ReportDocument＋重建一致 CI＋ADR；PR-2 serve＋访问控制 D5–D8），未开始实现，待组内决定。"
+status: "in-progress"
+blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0a-dashboard
 created_at: '2026-10-19T13:30:05+08:00'
-updated_at: '2026-10-19T13:36:00+08:00'
+updated_at: '2026-10-19T13:46:11+08:00'
 completed_at: null
 ---
 
@@ -45,8 +45,37 @@ Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts
 |---|---|---|---|---|
 | 2026-10-19T13:30:05+08:00 | planned | in-progress | 任务记录建立；开始通读事实源（plan.md、grill-r1.md、PRD §10.4/§12.4/§13、ADR 0001、R1 代码与测试惯例），随后按 Lead SIZE GATE 评估单 PR 可审性 | ai/tasks/v2.1.0-rc.2-plan/plan.md；ai/tasks/v2.1.0-rc.2-plan/grill-r1.md；docs/adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md；sbtd-runtime/tests/test_golden_contracts.py |
 | 2026-10-19T13:36:00+08:00 | in-progress | blocked | SIZE GATE 命中：R2.0a 判定超出一个可审 PR，按 Lead 规则停止于实现前；回填 commit 已完成（a858f96），拆分提案见下文「SIZE GATE 拆分提案」，待组内决定后解除阻塞 | commit a858f96「docs(plan): backfill task 0 (#141 a55117c) and start R2.0a」；本文件「SIZE GATE 拆分提案」 |
+| 2026-10-19T13:46:11+08:00 | blocked | in-progress | 用户 2026-10-19 13:40 +08:00 决定「按建议拆」：采纳 PR-1／PR-2 拆分（提案第 1、3 项按推荐执行——PR-1 先行，ADR 0002 归属 PR-1）；本轮只实现 PR-1，验收归属与 PR 边界见「拆分决定」一节 | 用户决定「按建议拆」（2026-10-19 13:40 +08:00）；本文件「拆分决定」一节 |
 
-## SIZE GATE 拆分提案（2026-10-19，待组内决定）
+## 拆分决定（用户 2026-10-19 13:40 +08:00「按建议拆」）
+
+用户批准按「SIZE GATE 拆分提案」拆为 PR-1 → PR-2。**本轮只实现 PR-1。**
+
+### plan.md 行归属
+
+- plan.md R2.0a 保持单行，不拆行；只有在 **PR-2 合并后**该行才记 done。
+- PR-1 合并只在本文件追加一条状态事件（不改 plan.md 行状态）。
+- PR-2 的第一个 commit 回填 PR-1 的 PR 号、merge SHA 与完成时间（沿用 plan.md「每个 PR 的第一个 commit 回填上一行」规则，此处上一行即 R2.0a 的 PR-1 段）。
+
+### 验收项归属（逐项）
+
+| 验收项（plan.md R2.0a 行） | 归属 |
+|---|---|
+| Panel manifest schema 版本化＋golden 钉测（仿 `test_golden_contracts`） | **PR-1** |
+| 前端注册表与 ReportDocument 均由 manifest 派生 | **PR-1** |
+| 源码重建产物与入仓产物逐字节一致的 CI 检查 | **PR-1** |
+| 设计规格把 OMP 参考点写成自有 token 定义（D17） | **PR-1** |
+| 产物体积预算与 npm 审计基线由本任务 ADR 固定 | **PR-1**（ADR 0002 全文，含 `#ticket` 风险／缓解／残余风险） |
+| `serve` 按 D5–D8 实现启动、实例锁、配对与 Host／Origin 校验＋单测 | **PR-2** |
+
+`#ticket` 风险拆分：**ADR 0002 完整文本（风险、缓解、残余风险）落在 PR-1**；把缓解措施落实为代码（终端不打印 ticket、ticket 短时一次性）属 **PR-2** 实现。
+
+### PR 边界（硬性）
+
+- **PR-1 不含任何 serve 代码**，也不含 Python 侧 serve 的 stub／壳（`test_runtime_package_does_not_import_a_server` 钉法保持不动）。
+- **PR-2 不得变更 PR-1 定下的 manifest schema 与 ADR 0002 决策**；任何变更须单独提出，不随 PR-2 夹带。
+
+## SIZE GATE 拆分提案（2026-10-19，已按用户 13:40 决定采纳）
 
 ### 判定依据
 
