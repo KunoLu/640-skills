@@ -13,8 +13,8 @@
 
 | seq | 任务 | 优先级 | 状态 | PR | merge SHA | 完成时间 | strict 任务记录 |
 |---|---|---|---|---|---|---|---|
-| 0 | 计划：grill + DDD + 任务表 | P0 | in-progress（R1 已锁定，Reviewy 的 DDD Boundary Review 待出） | — | — | — | ai/tasks/v2.1.0-rc.2-plan/task.md |
-| R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument | P1 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md |
+| 0 | 计划：grill + DDD + 任务表 | P0 | in-progress（R1 已锁定；Reviewy DDD Boundary Review R1 意见已折入 grill-r1.md R1e，复审待通过） | — | — | — | ai/tasks/v2.1.0-rc.2-plan/task.md |
+| R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument、`serve` 启动与访问控制（D5–D8） | P1 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md |
 | R2.0b | 筛选、数据质量、页内详情 | P2 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md |
 | R2.0c | 临时 ReportSnapshot 落盘：24h 默认保留＋启动清扫过期＋崩溃一致性 | P3 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0c-snapshot-persistence/task.md |
 | R2.1a | 离线 HTML + 全量 CSV 导出（导出副本 `exports/` 下 24h） | P4 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1a-html-csv-export/task.md |
@@ -28,13 +28,13 @@
 ### 0 — 计划（grill + DDD + 任务表）
 
 - 锁定决定：本轮产出 D1–D17 本身；Q5-C（D10）决定本计划放任务目录而非 PRD。
-- 状态：R1 全部 17 个子问题已由用户 2026-10-19 11:47 锁定；Reviewy 按 book-ddd-distilled-modeling 出的独立 DDD Boundary Review 尚待完成，达到通过状态后本行方可标 done。
+- 状态：R1 全部 17 个子问题已由用户 2026-10-19 11:47 锁定；Reviewy 按 book-ddd-distilled-modeling 出的独立 DDD Boundary Review 已返回 R1 意见并全部折入（grill-r1.md 修订记录 R1e：Query & Snapshot 标 R2.0c 扩展、导出／快照清理不变量、新增 Local Server & Access Control 上下文、Renderer Isolation 补 D16/D3/D4 职责、D5–D8 实现归入 R2.0a）；复审达到通过状态后本行方可标 done。
 - 验收：D1–D17 写入 `grill-r1.md`；DDD 初稿按锁定结果更新；本任务表落地；Boundary Review 通过。
 
 ### R2.0a — OMP 风格单页、Panel registry、ReportDocument
 
-- 锁定决定：D1（产物入仓＋重建一致 CI）、D2（Vite 精确钉版）、D14（`contracts/panel-manifest.json` 单一事实源）、D17（仅参考 OMP 视觉、零复制）。
-- 验收：Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts`）；前端注册表与 ReportDocument 均由 manifest 派生；源码重建产物与入仓产物逐字节一致的 CI 检查通过；设计规格把 OMP 参考点写成自有 token 定义；产物体积预算与 npm 审计基线由本任务 ADR 固定。
+- 锁定决定：D1（产物入仓＋重建一致 CI）、D2（Vite 精确钉版）、D14（`contracts/panel-manifest.json` 单一事实源）、D17（仅参考 OMP 视觉、零复制）；Local Server & Access Control 上下文的实现——D5（端口占用即启动失败并提示 `--port`）、D6（前台 Ctrl-C、默认 `--open`、实例锁＋端口双判、陈旧锁按无效处理）、D7（一次性 ticket 经 fragment 配对换 session／Bearer、读后即毁、不进日志）、D8（Host／Origin 严格白名单，规则硬编码）。
+- 验收：Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts`）；前端注册表与 ReportDocument 均由 manifest 派生；源码重建产物与入仓产物逐字节一致的 CI 检查通过；设计规格把 OMP 参考点写成自有 token 定义；产物体积预算与 npm 审计基线由本任务 ADR 固定；`serve` 按 D5–D8 实现启动、实例锁、配对与 Host／Origin 校验（本任务出实现与单测，`#ticket` URL 命令行参数可见风险与缓解写入本任务 ADR），跨平台与安全证据由 R2.2 统一产出。
 
 ### R2.0b — 筛选、数据质量、页内详情
 
@@ -58,7 +58,7 @@
 
 ### R2.2 — 跨平台 E2E、安全、性能、导出对账
 
-- 锁定决定：D5–D8（端口冲突、启停、ticket 配对、Host/Origin）、D9（CI runner＋用户 Mac 组合证据）、D14（Panel manifest 对账 AC-45）、D15（脱敏三层证据 AC-54/AC-55）。
+- 锁定决定：D9（CI runner＋用户 Mac 组合证据）、D14（Panel manifest 对账 AC-45）、D15（脱敏三层证据 AC-54/AC-55）；D5–D8 的实现归属 R2.0a（Local Server & Access Control 上下文），本行只对既成实现产出跨平台与安全证据，不改实现。
 - 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。
 
 ### E — prerelease v2.1.0-rc.2

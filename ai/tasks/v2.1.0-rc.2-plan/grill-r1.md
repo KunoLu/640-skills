@@ -2,6 +2,8 @@
 
 > **R1 已锁定（2026-10-19 11:47，Asia/Shanghai）**：用户逐题确认全部 17 个子问题，所选与推荐一致（Q1a A、Q1b A、Q2a A、Q2b A、Q3a A、Q3b A、Q3c A、Q3d A、Q4 D、Q5 C、Q6a A、Q6b A、Q6c A、Q7 B、Q8 C、Q9 C、Q10 A）；锁定决定清单见文末「D1–D17」。DDD 初稿已按锁定结果更新，待 Reviewy 按 book-ddd-distilled-modeling 出独立 Boundary Review。
 >
+> 修订记录（R1e，2026-10-19）：吸收 Reviewy DDD Boundary Review 意见——Query & Snapshot 由「R1 已有，不改」改为「R1 已有，R2.0c 扩展」并列出新增职责（落盘快照格式与版本、24h 保留、`snapshots/` 过期清理含启动清扫、崩溃一致性）；新增导出与快照清理不变量（在途导出作业固定 `snapshot_id` 并持引用，被引用快照不得被清理；`snapshots/` 仅由 Query & Snapshot 清理、`exports/` 仅由 Export 清理），上下文表拆分两目录的所有权；新增 Local Server & Access Control 上下文（D5–D8：端口冲突、serve 生命周期与实例锁含陈旧锁、一次性 ticket 配对与 session／Bearer、Host／Origin 白名单），明确不拥有查询与导出；Renderer Isolation 补 fonts-noto-cjk 依赖清单（D16）与 Playwright 安装目录 `SBTD_RUNTIME_HOME/browsers/`（D3/D4）；plan.md 将 D5–D8 实现归入 R2.0a，R2.2 只出证据。其余未动。
+>
 > 修订记录（R1d，2026-10-19）：吸收 Researchy 2026-10-19 事实核验——Q10 OMP 许可证已查明为 MIT（https://github.com/can1357/oh-my-pi/blob/main/LICENSE，GitHub API 识别为 MIT，最新 release v18.12.2），全文删除 OMP 许可证「待核验」表述，B/C 标为许可证可行（须保留版权声明并记入第三方声明），维持推荐 A（仅参考视觉语言，无许可证义务，B 可作 R2.0a ADR 升级路径）；Q2a-A 默认改为 `playwright install --only-shell chromium`（仅 headless shell，截图与 PDF 足够），体积按 Playwright 1.64.0 压缩下载量核验（--only-shell 每平台约 100–126MB；完整 chromium 约 300–330MB；Python playwright 包本体约 140MB），删除「约 300MB 估算／待核验」，安装授权提示须按实际所选模式显示体积；Q3c-A 补 ADR 须注明 #ticket URL 出现在浏览器启动命令行参数中、同机其他进程可见及缓解措施。其余未动。
 >
 > 修订记录（R1c，2026-10-19）：原 Q6 拆为 Q6a（仅导出临时副本，exports/ 下 24h 为 PRD §10.4 第 900 行默认）与 Q6c（临时 ReportSnapshot 是否本期落盘并默认保留 24h，PRD §10.4 第 899 行）；事实依据已核对——PRD v0.2 第 899–900 行、`sbtd-runtime/report_snapshot.py` `DEFAULT_TTL_SECONDS = 3600`（进程内 `SnapshotStore`）、`r1.4-acceptance-report.md`「落盘 snapshots/ 保留（§10.4 24h 期望）」deferred 条目；全文删除把快照推迟称为「基准／基线」的表述。非阻塞审题意见折入：Q2a-A「约 300MB」标为估算（待核验，随钉定的 Playwright 版本而异）并注明 Playwright 为可选 extra 依赖；Q1a-A 补「源码重建产物与入仓静态产物一致」的 CI 检查（仿 omp-sbtd kit `check-generated`）；Q3c-A 注明终端不打印含 ticket 的 URL、ticket 一次性；Q3b-A 注明陈旧锁（端口未监听）按无效处理；Q10 维持 OMP 许可证待核验。Q6b 未动。
@@ -264,12 +266,13 @@
 
 | Context | 拥有 | 不拥有 |
 |---|---|---|
-| Query & Snapshot（R1 已有，不改） | QueryScope、指标口径、snapshot_id／水位、dataset cursor | 页面布局、导出文件格式 |
+| Query & Snapshot（R1 已有，R2.0c 扩展） | QueryScope、指标口径、snapshot_id／水位、dataset cursor；R2.0c 新增：落盘快照格式与版本、24h 保留、`snapshots/` 过期清理（含启动时清扫过期快照）、崩溃一致性（半成品文件永不当有效快照） | 页面布局、导出文件格式 |
 | Dashboard Presentation（R2 新） | Panel 注册表消费、筛选交互、主题、整页同一快照替换 | 不直接查事件库、不各自计算总数 |
-| Export（R2 新） | ReportDocument 序列化、四格式产物、导出作业生命周期、脱敏版本、manifest 对账 | 不改快照语义、不新造统计口径 |
-| Renderer Isolation（R2 新） | Chromium 子进程、profile／网络隔离、像素与分页上限 | 不接受任意 URL／HTML，不复用用户浏览器 |
+| Export（R2 新） | ReportDocument 序列化、四格式产物、导出作业生命周期、脱敏版本、manifest 对账、`exports/` 过期清理（仅 Export 清理 exports/） | 不改快照语义、不新造统计口径、不清理 `snapshots/` |
+| Renderer Isolation（R2 新） | Chromium 子进程、profile／网络隔离、像素与分页上限；renderer 环境依赖清单（含 fonts-noto-cjk 并钉版本，D16）与 Playwright 安装目录 `SBTD_RUNTIME_HOME/browsers/`（D3/D4） | 不接受任意 URL／HTML，不复用用户浏览器 |
+| Local Server & Access Control（R2 新） | `serve` 启动与端口冲突处理（D5）、serve 生命周期与实例锁（含陈旧锁按无效处理，D6）、一次性 ticket 配对与 session／Bearer 签发（D7）、Host／Origin 白名单校验（D8） | 不拥有查询与快照语义、不拥有导出产物与导出作业 |
 | Observation & Audit（R1 已有，不改） | 原始事件、去重、checkpoint | 导出行为只产生操作事件，不回流污染当前快照（§13.9） |
 
-**Invariants（草案）**：同一快照四格式关键数值一致（AC-51）；导出期间新数据不影响在生成文件（AC-52）；页面与导出无任何业务写操作（§0.2-5）；核心 Panel 查询失败不产出冒充完整的导出（§13.10）；脱敏以后端输出层为唯一权威管线；落盘快照半成品文件永不被当作有效快照（写临时文件＋原子 rename＋校验和／版本头，D13），过期清理仅触及 `snapshots/` 与 `exports/` 本扩展自有目录（D11/D13）。
+**Invariants（草案）**：同一快照四格式关键数值一致（AC-51）；导出期间新数据不影响在生成文件（AC-52）；导出作业创建即固定 `snapshot_id` 并持引用直到完成／取消，**被在途导出作业引用的快照不得被清理**（plan.md 依赖顺序说明已载）；页面与导出无任何业务写操作（§0.2-5）；核心 Panel 查询失败不产出冒充完整的导出（§13.10）；脱敏以后端输出层为唯一权威管线；落盘快照半成品文件永不被当作有效快照（写临时文件＋原子 rename＋校验和／版本头，D13）；清理所有权单一：`snapshots/` 仅由 Query & Snapshot 清理（含启动时清扫过期快照，D13），`exports/` 仅由 Export 清理（ready 后 24h 过期清理，D11），两者互不越界且均仅触及本扩展自有目录。
 
 **Open questions（R1 锁定后剩余，待后续轮次或 ADR 固定）**：Panel manifest 版本号与 metrics 版本的对齐节奏（R2.0a ADR 固定）；落盘 ReportSnapshot 文件格式版本号与校验和算法选型（R2.0c ADR 固定）；Q10 若升级 B 则逐文件复用清单与第三方声明的格式由 R2.0a ADR 固定（OMP 许可证已核验为 MIT，2026-10-19）。服务框架、鉴权、家目录、宿主版本已由 ADR 0001 锁定；Q1–Q10（含 Q6a/Q6b/Q6c）全部子问题已由用户 2026-10-19 11:47 锁定（D1–D17）。
