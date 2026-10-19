@@ -93,7 +93,7 @@ function StrataList({ strata }: { strata: Record<string, MetricStratum> }) {
  * fabricated number. Strata render whenever present, even when the
  * top-level value is null.
  */
-function MetricCell({
+export function MetricCell({
   metricId,
   entry,
   insufficientDataZh,
@@ -163,16 +163,27 @@ function MetricCell({
 }
 
 /**
- * One manifest-defined panel. The skeleton renders the panel frame, its
- * metric bindings, and honest states: loading, error (never 0, §12.5), or
- * the manifest's declared insufficient-data note when metrics are absent.
+ * The manifest-driven panel frame: header (title + panel id) plus the
+ * honest loading / error states. Body content is composed by callers so
+ * specialized panels (data-quality, task-audit-detail) and the generic
+ * metric panel share exactly one frame — panel identity still comes from
+ * the manifest, never from JSX scattered across the app.
  */
-export function PanelCard({
+export function PanelFrame({
   definition,
   status,
+  detailExpanded,
+  onToggleDetail,
+  children,
 }: {
   definition: PanelDefinition;
   status: PanelStatus;
+  /** When set, an inline-detail toggle is rendered in the header (§12.5:
+   * 图表点击默认只在同页展开明细 — realized as an explicit, keyboard-
+   * accessible toggle per §12.3 accessibility rules). */
+  detailExpanded?: boolean;
+  onToggleDetail?: () => void;
+  children?: ReactNode;
 }) {
   return (
     <section
@@ -183,6 +194,16 @@ export function PanelCard({
     >
       <header className="panel-header">
         <h2>{definition.title_zh}</h2>
+        {onToggleDetail !== undefined && (
+          <button
+            type="button"
+            className="panel-detail-toggle"
+            aria-expanded={detailExpanded === true}
+            onClick={onToggleDetail}
+          >
+            {detailExpanded === true ? "收起明细" : "明细"}
+          </button>
+        )}
         <span className="panel-id">{definition.panel_id}</span>
       </header>
       {status.kind === "loading" && (
@@ -195,23 +216,56 @@ export function PanelCard({
           查询失败：{status.message}（错误不显示 0，可重试）
         </p>
       )}
-      {status.kind === "ready" && (
-        <dl className="panel-metrics">
-          {definition.metric_ids.map((metricId) => (
-            <MetricCell
-              key={metricId}
-              metricId={metricId}
-              entry={status.values[metricId]}
-              insufficientDataZh={definition.insufficient_data_zh}
-            />
-          ))}
-          {definition.metric_ids.length === 0 && (
-            <p className="panel-state">
-              字段依赖：{definition.field_dependencies.join("、")}
-            </p>
-          )}
-        </dl>
-      )}
+      {status.kind === "ready" && children}
     </section>
+  );
+}
+
+/**
+ * One manifest-defined panel. The skeleton renders the panel frame, its
+ * metric bindings, and honest states: loading, error (never 0, §12.5), or
+ * the manifest's declared insufficient-data note when metrics are absent.
+ * `detail` (when provided) is the inline expansion content — same-page
+ * detail from the same snapshot view, never a navigation (§12.5).
+ */
+export function PanelCard({
+  definition,
+  status,
+  detail,
+  detailExpanded,
+  onToggleDetail,
+}: {
+  definition: PanelDefinition;
+  status: PanelStatus;
+  detail?: ReactNode;
+  detailExpanded?: boolean;
+  onToggleDetail?: () => void;
+}) {
+  return (
+    <PanelFrame
+      definition={definition}
+      status={status}
+      detailExpanded={detailExpanded}
+      onToggleDetail={onToggleDetail}
+    >
+      <dl className="panel-metrics">
+        {definition.metric_ids.map((metricId) => (
+          <MetricCell
+            key={metricId}
+            metricId={metricId}
+            entry={
+              status.kind === "ready" ? status.values[metricId] : undefined
+            }
+            insufficientDataZh={definition.insufficient_data_zh}
+          />
+        ))}
+        {definition.metric_ids.length === 0 && (
+          <p className="panel-state">
+            字段依赖：{definition.field_dependencies.join("、")}
+          </p>
+        )}
+      </dl>
+      {detailExpanded === true && detail}
+    </PanelFrame>
   );
 }
