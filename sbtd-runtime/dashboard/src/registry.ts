@@ -28,3 +28,8 @@ export const PANELS_BY_ID: Record<string, PanelDefinition> = Object.fromEntries(
 );
 
 export const MANIFEST_VERSION: string = MANIFEST.manifest_version;
+
+/** Every metric bound to a panel, deduplicated, in manifest order. */
+export const ALL_METRIC_IDS: string[] = [
+  ...new Set(MANIFEST.panels.flatMap((panel) => panel.metric_ids)),
+];

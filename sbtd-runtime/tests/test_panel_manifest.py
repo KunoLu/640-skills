@@ -9,6 +9,8 @@ so no second panel list can silently appear.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -17,9 +19,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import jsonschema
+
 from contract_eval import load_json
 
 MANIFEST_PATH = ROOT / "contracts" / "panel-manifest.json"
+SCHEMA_PATH = ROOT / "contracts" / "panel-manifest.schema.json"
+SCHEMA = load_json(SCHEMA_PATH)
 CATALOG = load_json(ROOT / "contracts" / "metrics-catalog.json")
 BUDGET = load_json(ROOT / "dashboard" / "artifact-budget.json")
 DASHBOARD = ROOT / "dashboard"
@@ -57,6 +63,16 @@ REQUIRED_PANEL_FIELDS = {
 
 PANEL_KINDS = {"kpi", "chart", "table"}
 
+# Pinned (manifest_version, canonical content sha256) pair. Canonical form:
+# json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+# encoded as UTF-8. ANY content change to contracts/panel-manifest.json must
+# bump manifest_version AND update both pins here together; a content change
+# without a manifest_version bump fails test_canonical_content_hash_matches.
+EXPECTED_MANIFEST_VERSION = "1.0.0"
+EXPECTED_MANIFEST_SHA256 = (
+    "fa9ffa78b693ff2bb93ed5c74f4afb845c40ddb9b5c3d98a2241e686bb878d01"
+)
+
 
 def load_manifest() -> dict:
     return load_json(MANIFEST_PATH)
@@ -68,6 +84,25 @@ class ManifestVersionTests(unittest.TestCase):
         self.assertEqual(manifest["schema_version"], "1.0")
         self.assertEqual(manifest["manifest_version"], "1.0.0")
         self.assertEqual(manifest["release"], "v2.1.0-rc.2")
+
+    def test_canonical_content_hash_matches_manifest_version(self) -> None:
+        # Locks the full panel table: every panel_id, title_zh, order,
+        # desktop_span, kind, metric_ids, field_dependencies, export_required,
+        # always_visible, insufficient_data_zh, and the root metadata. Any
+        # content change — value edit, added/removed key, reorder of array
+        # items — changes the canonical hash and fails here unless
+        # manifest_version was bumped and both pins updated together.
+        manifest = load_manifest()
+        self.assertEqual(manifest["manifest_version"], EXPECTED_MANIFEST_VERSION)
+        canonical = json.dumps(
+            manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        self.assertEqual(
+            hashlib.sha256(canonical).hexdigest(),
+            EXPECTED_MANIFEST_SHA256,
+            "panel-manifest.json content changed: bump manifest_version and "
+            "update EXPECTED_MANIFEST_VERSION/EXPECTED_MANIFEST_SHA256 together",
+        )
 
 
 class PanelSetTests(unittest.TestCase):
@@ -86,7 +121,9 @@ class PanelSetTests(unittest.TestCase):
     def test_required_fields_and_shape(self) -> None:
         for panel in self.panels:
             with self.subTest(panel=panel["panel_id"]):
-                self.assertTrue(REQUIRED_PANEL_FIELDS <= set(panel))
+                # Exact key set, not a subset: an unknown extra key or a
+                # missing required field is a contract violation.
+                self.assertEqual(set(panel), REQUIRED_PANEL_FIELDS)
                 self.assertIn(panel["desktop_span"], (6, 12))
                 self.assertIn(panel["kind"], PANEL_KINDS)
                 self.assertTrue(panel["title_zh"].strip())
@@ -114,6 +151,48 @@ class PanelSetTests(unittest.TestCase):
         self.assertIs(data_quality[0]["always_visible"], True)
         others = [p for p in self.panels if p["panel_id"] != "data-quality"]
         self.assertTrue(all(p["always_visible"] is False for p in others))
+
+
+class SchemaValidationTests(unittest.TestCase):
+    """jsonschema validation against contracts/panel-manifest.schema.json.
+
+    Modeled on test_golden_contracts.py: the schema file is loaded directly
+    (instance contracts carry no $schema pointer — the repository convention
+    established with event.schema.json).
+    """
+
+    def test_manifest_validates_against_its_schema(self) -> None:
+        jsonschema.Draft202012Validator(SCHEMA).validate(load_manifest())
+
+    def test_unknown_extra_root_key_is_rejected(self) -> None:
+        manifest = load_manifest()
+        manifest["unexpected"] = True
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(SCHEMA).validate(manifest)
+
+    def test_unknown_extra_panel_key_is_rejected(self) -> None:
+        manifest = load_manifest()
+        manifest["panels"][0]["unexpected"] = True
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(SCHEMA).validate(manifest)
+
+    def test_missing_required_panel_field_is_rejected(self) -> None:
+        manifest = load_manifest()
+        del manifest["panels"][0]["title_zh"]
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(SCHEMA).validate(manifest)
+
+    def test_empty_field_dependencies_is_rejected(self) -> None:
+        manifest = load_manifest()
+        manifest["panels"][0]["field_dependencies"] = []
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(SCHEMA).validate(manifest)
+
+    def test_load_manifest_returns_fresh_objects(self) -> None:
+        # The negative tests above mutate their manifest copies; ensure the
+        # loader returns independent objects so tests cannot contaminate each
+        # other (load_json parses the file on every call).
+        self.assertIsNot(load_manifest(), load_manifest())
 
 
 class DerivationChainTests(unittest.TestCase):

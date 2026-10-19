@@ -3,10 +3,11 @@ import {
   createReportSnapshot,
   defaultScope24h,
   queryStatistics,
+  type MetricValue,
   type QueryScope,
 } from "./api";
 import { PanelCard, type PanelStatus } from "./PanelCard";
-import { PANEL_REGISTRY } from "./registry";
+import { ALL_METRIC_IDS, PANEL_REGISTRY } from "./registry";
 import {
   DEFAULT_PRESENTATION_STATE,
   ReportDocument,
@@ -18,7 +19,7 @@ type Theme = "dark" | "light";
 type PageState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; document: ReportDocument; values: Record<string, unknown> };
+  | { kind: "ready"; document: ReportDocument; values: Record<string, MetricValue> };
 
 function systemTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches
@@ -54,7 +55,7 @@ export function App() {
   }, [theme]);
 
   useEffect(() => {
-    void load(defaultScope24h());
+    void load(defaultScope24h(ALL_METRIC_IDS));
   }, [load]);
 
   const watermark = useMemo(() => {
