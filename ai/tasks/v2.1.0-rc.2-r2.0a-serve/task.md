@@ -4,12 +4,12 @@ id: v2.1.0-rc.2-r2.0a-serve
 workflow_mode: strict
 mode_source: user
 mode_note: Lead 本次明确指派 strict 模式 SBTD 任务；范围严格等于 plan.md R2.0a 行的 PR-2 段（serve 启动与访问控制 D5–D8 实现＋单测、Reviewy #142 CLEAN review 的 PR-2 项、PR-1 延后项中 serve 接线前必须落地的项）。硬边界（condition c）：不得变更 contracts/panel-manifest.json、panel-manifest.schema.json、ADR 0002 任何决策、openapi.yaml 或任何其他契约；契约变更不可避时停下并出 CONTRACT-CHANGE-NEEDED 报告。plan.md R2.0a 行在 PR-2 合并前不标 done。显式 git add 路径；不纳入 .omp-r12b-addendum.txt 与 ai/tasks/codex-verify/；不 push、不开 PR。
-status: "in-progress"
+status: "done"
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0a-serve
 created_at: '2026-10-19T17:55:28+08:00'
-updated_at: '2026-10-19T20:58:16+08:00'
-completed_at: null
+updated_at: '2026-10-19T22:31:04+08:00'
+completed_at: '2026-10-19T22:27:23+08:00'
 ---
 
 R2.0a **PR-2**：`serve` 启动与访问控制（D5–D8）实现＋单测。分支 `feat/v2.1.0-rc.2-r2.0a-serve` 基于 main `3c9cf4e`（PR-1 #142 squash-merge 产物）。
@@ -104,10 +104,20 @@ R2.0b／R2.0c／R2.1a/b／R2.2 全部；PRD 正文修改；契约（openapi.yaml
 - 实例锁按 runtime home 粒度（同 home 第二实例无论端口均拒），与 D6「实例锁＋端口双判」一致。
 - 审计库不可用时指标为真空集计算结果＋Envelope warning（complete=false）；页面级数据质量细化属 R2.0b。
 
+## 模型使用证据（models-used，Lord 2026-10-19 ~22:27 +08:00 指令回填）
+
+| 用途 | 模型 | 调用次数 |
+|---|---|---|
+| 实现（implement：PR-2 serve＋前端修复＋单测＋docs 各 commit） | `kimi-code/k3:high` | unknown（未记录） |
+| 基线数字 commit（baseline numbers：回填＋PR-1 记录修正中的基线复跑数字） | `openai-codex/gpt-6-astra:high` | unknown（未记录） |
+
+调用次数无原始记录可考，如实标 unknown，不补造。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-19T17:55:28+08:00 | planned | in-progress | PR-2 任务记录建立；事实源通读完成；首个 commit 为回填＋PR-1 记录修正（docs only） | 本文件「事实源」；Lead 指派消息 |
 | 2026-10-19T20:28:16+08:00 | in-progress | in-progress | PR-2 实现完成：commit 1 回填＋修正（c0bbc4e）、前端修复＋产物（e708901）、serve＋单测＋CI＋钉法（bb52bf8）；serve 单测 14 OK、sbtd-runtime 全套 242 OK、逐字节重建 OK、体积 241,853≤524,288、npm audit 0、真实冒烟（D5–D8＋UI＋golden 形状）全部通过；证据见「验证证据」 | 本文件「验证证据」；commits c0bbc4e/e708901/bb52bf8 |
-| 2026-10-19T20:58:16+08:00 | in-progress | in-progress | 收尾验证完成：docs（install-and-use serve 节）＋requirements-serve 补钉 jsonschema（d580ad9）；全仓 `run_ci.py --platform linux` 2349 tests、唯一失败为 issue #143 已知 test_sbtd_probe_links 不稳定项（签名与基线一致）；任务保持 in-progress 至本 PR 合并（plan.md R2.0a 行同理）；未 push、未开 PR | /tmp/rc2-pr2-ci/linux-1.json；commit d580ad9 |
+| 2026-10-19T20:58:16+08:00 | in-progress | in-progress | 收尾验证完成：docs（install-and-use serve 节）＋requirements-serve 补钉 jsonschema（d580ad9）；全仓 `run_ci.py --platform linux` 2349 tests、唯一失败为 issue #143 已知 test_sbtd_probe_links 不稳定项（签名与基线一致）；任务当时保持 in-progress 至本 PR 合并（plan.md R2.0a 行同理）；当时未 push、未开 PR——随后已开为 PR #144 并于 2026-10-19T22:27:23+08:00 squash-merge 入 main（merge SHA `8178b26abe75454b958d096ff58522eda7facbb4`），见下一条状态事件 | /tmp/rc2-pr2-ci/linux-1.json；commit d580ad9 |
+| 2026-10-19T22:31:04+08:00 | in-progress | done | PR #144 已 squash-merge 入 main：merge SHA `8178b26abe75454b958d096ff58522eda7facbb4`，完成时间 2026-10-19T22:27:23+08:00（CLEAN tip `d9c5e58`）；plan.md R2.0a 行同步记 done；本事件为 docs-only 回填，不改代码、不重建产物 | PR #144；merge commit 8178b26abe75454b958d096ff58522eda7facbb4；ai/tasks/v2.1.0-rc.2-plan/plan.md R2.0a 行 |
