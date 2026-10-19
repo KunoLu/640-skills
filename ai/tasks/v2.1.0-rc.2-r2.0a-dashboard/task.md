@@ -8,7 +8,7 @@ status: "in-progress"
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0a-dashboard
 created_at: '2026-10-19T13:30:05+08:00'
-updated_at: '2026-10-19T13:46:11+08:00'
+updated_at: '2026-10-19T15:14:35+08:00'
 completed_at: null
 ---
 
@@ -75,6 +75,10 @@ Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts
 - **PR-1 不含任何 serve 代码**，也不含 Python 侧 serve 的 stub／壳（`test_runtime_package_does_not_import_a_server` 钉法保持不动）。
 - **PR-2 不得变更 PR-1 定下的 manifest schema 与 ADR 0002 决策**；任何变更须单独提出，不随 PR-2 夹带。
 
+### PR-1 当前状态（2026-10-19 15:14 +08:00）
+
+PR-1 实现完成、全部验证通过（见「验证证据 › PR-1 实现验证」），commits `0c20db4`（feat）、`adb229d`（ADR 0002）、`735559b`（CI job），未推送、未开 PR。按拆分决定：本任务保持 in-progress 直到 PR-2 合并；PR-1 合并时只追加状态事件，plan.md R2.0a 行由 PR-2 首个 commit 回填 PR-1 的 PR 号／merge SHA／完成时间。
+
 ## SIZE GATE 拆分提案（2026-10-19，已按用户 13:40 决定采纳）
 
 ### 判定依据
@@ -111,8 +115,23 @@ Panel manifest schema 版本化并有 golden 钉测（仿 `test_golden_contracts
 
 ## 验证证据
 
-- `git status --short`／`git log --oneline -3`：分支 feat/v2.1.0-rc.2-r2.0a-dashboard 基于 main a55117c；仅 `.omp-r12b-addendum.txt` 与 `ai/tasks/codex-verify/` 两个既有未跟踪项，未纳入任何 commit。
+### PR-1 实现验证（2026-10-19，tip `735559b`）
+
+- **拆分决定记录**：commit `90b45ba docs(r2.0a): record split decision, acceptance ownership and PR boundaries`。
+- **新钉测**：`PYTHONPATH=sbtd-runtime python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_panel_manifest.py'` → Ran 13 tests, OK。
+- **sbtd-runtime 全套**：`PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py'` → Ran 220 tests, OK（基线 207 ＋ 新增 13；AC-32 库面无服务钉测不受影响——PR-1 无 serve 代码）。
+- **lint／typecheck**：`ruff format --check` 与 `ruff check`（test_panel_manifest.py、check_artifacts.py）→ 全过；`python3 -m compileall` 通过；`tsc --noEmit` 随 `npm run build` 通过。
+- **npm ci ＋ 构建**：干净 `rm -rf node_modules && npm ci`（70 包）后 `npm run build` 成功（vite 6.4.4，36 modules）。
+- **逐字节重建（D1）**：`npm ci` 干净重建前后 `find static -type f | sort | xargs sha256sum` diff 为空 → BYTE_IDENTICAL_OK；CI `dashboard-artifacts` job 以「重建后 `git status --porcelain` 为空」钉住同一性质。
+- **产物体积（ADR 0002 §1）**：`python3 sbtd-runtime/dashboard/check_artifacts.py` → OK: 3 files, 237,933 bytes（预算 524,288，余量约 2.2×；最大单文件 233,356／预算 409,600）。
+- **npm 审计基线（ADR 0002 §2）**：`npm audit --audit-level=high` → found 0 vulnerabilities（vite 5.4.21 原带 1 high＋1 moderate，改钉 6.4.4 清零，plugin-react 4.7.0 声明兼容 ^6.0.0）。
+- **UI 冒烟**：`python3 -m http.server` 服务 `static/`，Playwright 实测：13 个 Panel 全部按 manifest 顺序渲染（region 数=13，`panelCount: 13`）；API 不可达时所有 Panel 显示「查询失败…错误不显示 0」而非 0（§12.5）；主题切换深 `#14171c` ↔ 浅 `#f5f7fa` 双向生效并持久化 localStorage；时间范围 24h 激活、7d/30d/自定义 disabled（R2.0b 边界）；导出四键 disabled（R2.1a 边界）；水位行显示「未知（尚未取得快照）」。冒烟后服务器与 `.playwright-mcp/` 已清理。
+- **全仓套件**：`python3 -B tests/run_ci.py --platform linux` → 2349 tests，FAILED (failures=1, skipped=66)。唯一失败为 `test_sbtd_probe_links.MaterializeAuthorizationTests` 内用例（分片复跑定位：shard 1/3 OK、shard 3/3 OK、shard 2/3 仅此模块失败）。**预先存在的环境相关失败，与 PR-1 无关**：同一模块在基线 `a55117c`（main，未含本分支任何改动）干净 worktree 复跑失败 3 条（含同两条），单测独立运行通过，模块连跑失败且失败集合不稳定——本 PR 未触碰 `sbtd_probe_links` 及其脚本链路。
+
+### 拆分决定前（SIZE GATE 阶段）
+
+- `git status --short`／`git log --oneline -3`：分支 feat/v2.1.0-rc.2-r2.0a-dashboard 基于 main a55117c；仅 `.omp-r12b-addendum.txt` 与 `ai/tasks/codex-verify/` 两个既有未跟踪项，未纳入任何 commit（PR-1 各 commit 同样保持排除）。
 - 事实源通读：plan.md、grill-r1.md、PRD §10.4/§12.4/§13.3–13.4、ADR 0001 全文；R1 现状经 `sbtd-runtime/` 目录、`test_golden_contracts.py`、openapi.yaml 摘要核对（纯库面、无 npm 链）。
 - 工具链核查：`node v22.20.0`、`npm 10.9.3` 可用；Python 3.13.5（CI 钉 3.12.10，ADR 0001 §2）。
 - 回填 commit：`a858f96 docs(plan): backfill task 0 (#141 a55117c) and start R2.0a`（plan.md 第 0 行 done＋R2.0a in_progress、plan task.md done＋状态事件、本任务记录建立）。
-- 未开始实现，无测试／lint／构建可跑；现有测试套件未改动，保持绿（未重跑，无代码变更）。
+- DDIA Data Design Review（strict gate，manifest 契约触发）：confirmed——panel-manifest.json 为 Panel 单一事实源，构建期内联＋逐字节重建 CI 保证产物与契约不漂移，schema_version／manifest_version 双针，metric_id 参照完整性由钉测对 metrics-catalog.json 校验。
