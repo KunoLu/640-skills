@@ -301,3 +301,79 @@ export function queryStatistics(scope: QueryScope): Promise<StatisticsResult> {
     scope,
   ).then((envelope) => unwrapEnvelope<StatisticsResult>(envelope, "/api/v1/statistics/query"));
 }
+
+/**
+ * One dataset row (report_snapshot dataset family row): a typed record with
+ * a stable id and a flat field bag. Rows power the inline detail views
+ * (§12.4 task-audit-detail); they are page-level previews, never a
+ * substitute for the CSV export (§12.6).
+ */
+export interface DatasetRow {
+  record_type: string;
+  record_id: string;
+  relation_role: string;
+  fields: Record<string, unknown>;
+}
+
+export interface DatasetPage {
+  snapshot_id: string;
+  rows: DatasetRow[];
+  next_cursor: string | null;
+  total: number;
+}
+
+/**
+ * GET /api/v1/report-snapshots/{snapshot_id}/dataset?cursor=… → one page of
+ * the snapshot's immutable dataset (report_snapshot.SnapshotStore.dataset_page).
+ */
+export function fetchSnapshotDatasetPage(
+  snapshotId: string,
+  cursor: string | null = null,
+): Promise<DatasetPage> {
+  const base = `/api/v1/report-snapshots/${encodeURIComponent(snapshotId)}/dataset`;
+  const path = cursor === null ? base : `${base}?cursor=${encodeURIComponent(cursor)}`;
+  return request<Envelope<DatasetPage>>("GET", path).then((envelope) =>
+    unwrapEnvelope<DatasetPage>(envelope, path),
+  );
+}
+
+export interface DatasetRows {
+  rows: DatasetRow[];
+  /** Server-declared total rows in the snapshot (all families). */
+  total: number;
+  /** True when the page cap stopped the walk before the last page. */
+  truncated: boolean;
+}
+
+/**
+ * Walk every dataset page of a snapshot. Every page must answer with the
+ * requested snapshot_id — a mismatch means the server mixed snapshots,
+ * which would break the single-snapshot guarantee (§12.5) and is an error,
+ * never silently stitched together. The walk is capped (default 100 pages ×
+ * server page size); hitting the cap sets `truncated` so the UI can say so
+ * honestly instead of implying completeness.
+ */
+export async function fetchAllSnapshotRows(
+  snapshotId: string,
+  maxPages = 100,
+): Promise<DatasetRows> {
+  const rows: DatasetRow[] = [];
+  let cursor: string | null = null;
+  let total = 0;
+  for (let page = 0; page < maxPages; page += 1) {
+    const result: DatasetPage = await fetchSnapshotDatasetPage(snapshotId, cursor);
+    if (result.snapshot_id !== snapshotId) {
+      throw new ApiError(
+        `dataset page answered with ${result.snapshot_id}, expected ${snapshotId}`,
+        null,
+      );
+    }
+    rows.push(...result.rows);
+    total = result.total;
+    if (result.next_cursor === null) {
+      return { rows, total, truncated: false };
+    }
+    cursor = result.next_cursor;
+  }
+  return { rows, total, truncated: true };
+}
