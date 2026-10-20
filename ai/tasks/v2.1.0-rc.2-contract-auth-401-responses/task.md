@@ -1,0 +1,149 @@
+---
+schema_version: 1
+id: v2.1.0-rc.2-contract-auth-401-responses
+workflow_mode: strict
+mode_source: user
+mode_note: 用户明确 strict、contract-only；固定指定分支，仅显式 git add；不 push、不开 PR、不 merge；禁止暂存两个用户路径。
+status: done
+branch: contract/v2.1.0-rc.2-auth-401-responses
+created_at: '2026-10-20T12:56:59.675195+00:00'
+updated_at: '2026-10-20T13:10:05.388702+00:00'
+completed_at: '2026-10-20T13:10:05.388702+00:00'
+---
+
+# SecurityMiddleware Bearer 401 响应契约
+
+## 范围与验收
+
+基线 `ef8975212a4f80686d19a03f3c169bbf533eb117`，指定分支已核对，不切分支。仅修改 `sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py` 和本文件。runtime、Dashboard、panel-manifest、ADR、PRD、CSV schema、plan.md 均不修改。`.omp-r12b-addendum.txt` 与 `ai/tasks/codex-verify/` 保持原状，不暂存或提交。
+
+修改前共 28 个 `/api/v1/*` operation：26 个经过 Bearer middleware，均缺少 401；两个豁免，其中 pair 已有 401。给前 26 个复用 `#/components/responses/Unauthorized`；health 不增加 401；pair 现有声明不重复、不改写、不移动。新增 OpenApiDraftTests 断言覆盖所有非豁免操作、health 与 pair；同步既有 snapshot response map 回归。运行用户指定三组 unittest、format、lint 及真实 HTTP smoke。只做本地提交。
+
+未完整调用 grill-with-docs：需求和验收明确，源码可回答边界。主会话为唯一 writer 和验证 controller，独立 reviewer 只读。
+
+## 源码证据
+
+已重读当前文件：`sbtd-runtime/serve.py:361` 定义 health/pair 豁免集合；`:388–396` 对非豁免 `/api/*` 执行 Bearer 认证，`:393–395` 在 authenticate 返回 None 时返回 401；`:413–416` 为 pair 自身配对码失败 401。Host/Origin 检查与 403 在 `:382–385`，拒绝返回结束于 `:386`，先于认证；不改变顺序。health handler 为 `:410–411`。
+
+`sbtd-runtime/contracts/openapi.yaml:69–70` 的 pair 401 声明未动。现有 Unauthorized 组件定义保持原样，当前位于 `:739–740`（修改前 `:687–688`）。全部 26 个新增引用均指向该组件；没有新增 schema 或其他状态。
+
+### Operation evidence table（PR-body-ready）
+
+下列 26 项均新增 `401 → #/components/responses/Unauthorized`。共享依据为 `sbtd-runtime/serve.py:388–396`，其中 `:393–395` 是实际认证失败返回；它位于路由分发之前，因此也覆盖契约中尚无业务 handler 的路径，不声称这些 handler 已实现。
+
+| Method / URI | operationId | 本次动作 | 当前 runtime 证据 |
+|---|---|---|---|
+| GET `/api/v1/capabilities` | getCapabilities | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/openapi.json` | getOpenApi | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/projects` | listProjects | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/actors` | listActors | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/components` | listComponents | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/tasks` | listTasks | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/tasks/{task_uid}` | getTask | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/tasks/{task_uid}/history` | getTaskHistory | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/runs` | listRuns | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/runs/{run_id}/steps` | listRunSteps | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/gates` | listGates | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/validations` | listValidations | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/events` | listEvents | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/collection-health` | getCollectionHealth | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/metrics/catalog` | getMetricCatalog | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| POST `/api/v1/statistics/query` | queryStatistics | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| POST `/api/v1/statistics/timeseries` | queryTimeseries | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| POST `/api/v1/collection/refresh` | refreshCollection | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| POST `/api/v1/ingest/events` | ingestEvents | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| POST `/api/v1/report-snapshots` | createReportSnapshot | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/report-snapshots/{snapshot_id}` | getReportSnapshot | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/report-snapshots/{snapshot_id}/dataset` | getSnapshotDataset | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| POST `/api/v1/exports` | createExport | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/exports/{export_id}` | getExport | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| DELETE `/api/v1/exports/{export_id}` | deleteExport | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/exports/{export_id}/file` | downloadExport | 新增 401 | `sbtd-runtime/serve.py:388–396` |
+| GET `/api/v1/health` | getHealth | 豁免，不新增 401 | `sbtd-runtime/serve.py:361,388,410–411` |
+| POST `/api/v1/session/pair` | pairSession | 豁免，已有 Unauthorized 401 完全保留 | `sbtd-runtime/serve.py:361,388,413–416` |
+
+## Book Gate Plan
+
+| Gate | 触发事实 | 阶段 | 状态 |
+|---|---|---|---|
+| book-ddia-data-design | HTTP 认证失败 wire contract | before-dev | passed / confirmed |
+| book-ddd-distilled-modeling | 无完整 grill、无领域术语或边界歧义 | before-dev | not-required |
+| book-legacy-change-safety | 不修改 runtime 行为，现有 middleware seam 明确 | before-dev | not-required |
+| book-refactoring-pass | 仅声明式契约、测试和任务文件，无生产代码编辑 | before-dev | not-required |
+| book-release-readiness | 不修改 runtime、部署或集成行为 | finish | not-required；不声称发布就绪 |
+
+DDIA Data Design Review — confirmed。SecurityMiddleware 是 Bearer 失败事实源，OpenAPI 记录既有 HTTP 行为。无数据写入路径、一致性、幂等、顺序、重试、去重、migration、backfill 或 replay 变更；Host/Origin 拒绝仍先于 Bearer。回滚仅撤回声明和测试，需协调已依赖契约的消费者。验证所有非豁免操作的组件引用、两个豁免及真实 HTTP。Ponytail：复用现有组件和 unittest，不新增 schema、依赖或 helper。
+
+## 状态持久化限制
+
+已核对 task 父路径为普通目录、无 symlink，目标不存在。`git check-ignore .sbtd/active-task.json ai/tasks/v2.1.0-rc.2-contract-auth-401-responses/reports/probe.json` 两项均匹配保护；`git ls-files -- .sbtd ai/tasks/v2.1.0-rc.2-contract-auth-401-responses` 无输出。沿用 snapshot-errors / #148 记录的 TaskStore catalog `task has no YAML frontmatter block` 限制，不重跑确认、不改其他任务绕过；TaskStore.create 还会写 index/active，超出用户三文件授权。本文件为明确要求的共享交付记录，不声称 helper 生命周期、active 或自动恢复成功，不写身份／ignore。报告存于仓库外 local:// 工具产物。
+
+## 验证命令与结果
+
+原生命令在仓库根执行；stdout、stderr、退出码、完整命令、时区时间、完整基线 SHA、分支与 Linux 环境保存在仓库外 `local://auth-401-<stem>.json`；每项有同 stem 九节中文汇总 `.md`。rtk: skipped-for-report，避免缓存／压缩替代原生证据。证据为 developer-local / dirty / local-only，不冒充 CI、PR head 或发布证明。`PYTHONDONTWRITEBYTECODE=1`、`RUFF_NO_CACHE=true` 防止验证生成仓库缓存。
+
+| 精确命令 | 实际结果 | raw／同 stem 中文汇总 |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 15 passed，0.072s，exit 0 | `local://auth-401-openapi.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 266 tests：265 passed、1 skipped，18.413s，exit 0；Windows junction evidence only | `local://auth-401-runtime.{json,md}` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 68 passed，0.764s，exit 0；与 runtime 重叠，不累计 | `local://auth-401-wrappers.{json,md}` |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | 1 file already formatted，exit 0 | `local://auth-401-format.{json,md}` |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1；仅用户已知 I001，19–30 行 import block 未修改 | `local://auth-401-lint.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -c <smoke source>` | 55 real HTTP checks passed，0.545s（进程总时长），exit 0 | `local://auth-401-http-smoke.{json,md}` |
+
+完整可复现 smoke `-c` 源码保存在 raw 的 command 字段与中文汇总「运行命令」。复用既有 ServeProcess 启动真实 serve 子进程、真实 loopback socket、临时 home，无 mock；finally 停止服务且验证 exit 0，临时目录自动清理，无新增仓库脚手架。
+
+### HTTP 覆盖矩阵
+
+上方 operation 表的全部 26 个新增项均各执行两次：无 Authorization、无效 Bearer；均得到 HTTP 401 和 `{"detail":"unauthorized"}`，共 52 checks。路径占位符统一替换为 `smoke-id`，包括 DELETE export；原生报告及其中文汇总逐 URI 列出，不将 middleware 拒绝视为对应 handler 已实现。
+
+| Method / URI | 场景 | 实际结果 |
+|---|---|---|
+| GET `/api/v1/health` | 无 Bearer | 200，`{"status":"ok"}` |
+| POST `/api/v1/session/pair` | 正确配对码，无 Bearer | 200，token_type=bearer；凭据不写报告 |
+| POST `/api/v1/session/pair` | 错误配对码 | 401，`{"detail":"unauthorized"}` |
+
+### 验证边界与跳过
+
+- BDD: skipped；无 runtime 用户行为变更，不新增 .feature，契约回归由 OpenApiDraftTests 覆盖。Cross-repo context: contract-only；API Contract: verified（静态断言与真实 middleware HTTP smoke）；Mock Strategy: none。
+- E2E Mode: backend-only；Final Test Report / Run Summary MD: generated；Final Full Rerun: passed（用户指定 unittest 范围，保留平台 skip）；Targeted Rerun: not-needed。**lint 不全绿**，既有 I001 原始失败保留，不修无关 import。
+- Graft: skipped，直接源码／契约证据足够；无导出符号编辑，不需要 LSP 重构。未使用 cloud 索引。
+- UI、TS typecheck、Dashboard build、浏览器／移动端 E2E、全仓无关 workflow suite 未运行：无对应变更。完整 OAS meta-schema validator 未运行：沿用项目 YAML/contract 测试，不安装依赖。
+- 无长期 lesson：没有新的 runtime 根因、回滚或持久工作流事故，不修改身份／lesson。报告在当前宿主工具产物中，不保证跨宿主恢复；TaskStore 限制保持可见。
+
+### 独立审查与可读性
+
+- AuthCorrectness：correct，无 actionable finding。独立核对 26 个新增引用、DELETE export、health 无 401、pair 相对基线 byte-for-byte 不变、serve.py 证据及 snapshot 集合加强。只读，未执行测试。
+- AuthMaintainability：Lean already，无必须削减项。可选删掉 HTTP method/path guard 约 4 行，但会削弱 middleware 边界表达，主会话保留。确认 snapshot 断言是加强而非削弱、无新 import/helper/dependency。
+- 主会话 Ponytail／Code Readability Review：复用现有组件和 unittest；subTest 与精确字典断言覆盖所有非豁免 operation。无 unrelated cleanup。
+
+## 提交与恢复边界
+
+RESULT：本次 contract-only 验收完成。实现提交 **`c9c9360a0875f24cd56db42831beb678c0af9777`**，parent `ef8975212a4f80686d19a03f3c169bbf533eb117`，message 为 `feat(contract): declare middleware Bearer 401 on authenticated /api/v1 operations`。通过 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py` 显式暂存，仅这两个文件进入实现提交；82 insertions、1 deletion，无 runtime 修改。
+
+提交后读取两个 Git blob 计算 SHA-256，确认与验证快照 `local://auth-401-validated-content.json` 完全一致，因此不重复执行未改变内容的测试、不重跑已知 I001 来确认。
+
+| 已验证并提交的文件 | SHA-256 |
+|---|---|
+| `sbtd-runtime/contracts/openapi.yaml` | `c5d239fcc0004746a7a64ecbc23b5d207a054f5243dfc8b038b6fad3250a554e` |
+| `sbtd-runtime/tests/test_golden_contracts.py` | `8381d0cb49c4758d42bd7e8f58ce754966ba562763fe69010614dff39d108428` |
+
+本完成记录以独立 docs 提交保存，从而能在 task 内记录真实实现 SHA，而不编造自身提交的自引用 SHA。暂存命令仅 `git add ai/tasks/v2.1.0-rc.2-contract-auth-401-responses/task.md`；该记录提交的 SHA 由最终 stdout 与 `local://auth-401-commit-receipt.json` 给出。最终修改文件总计三个；两个禁止路径不暂存。未 push、未开 PR、未 merge、未部署／发布。完成只指本地契约交付；回滚需撤回本次实现提交并协调依赖消费者，不改变存量 runtime 数据。TaskStore／自动恢复限制不变。
+
+## 模型使用
+
+主会话 host 标识为 `openai-codex/gpt-6-astra`；请求为 `openai-codex/gpt-6-astra:high`，host 未独立暴露 reasoning 配置，不能据此证明 `:high`。独立 simplicity/readability reviewer 自报 host 标识 `kimi-code/k3`。下表仍按用户要求保留 unknown，由 operator 核实回填。
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| 主会话 | openai-codex/gpt-6-astra:high | unknown | unknown | unknown |
+| 独立 correctness review | host 默认 reviewer | unknown | unknown | unknown |
+| 独立 simplicity/readability review | host 默认 reviewer | unknown | unknown | unknown |
+
+## 状态事件
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-20T12:56:59.675195+00:00 | planned | in-progress | 用户明确 strict；根、分支、路径、runtime 与全部 operation 已核对 | 基线 ef8975212a4f80686d19a03f3c169bbf533eb117；28 operations，26 缺少 middleware 401；serve.py:361,388–396,413–416 |
+| 2026-10-20T13:01:05.329412+00:00 | in-progress | checking | 契约／回归完成，指定验证与真实 HTTP smoke 已执行，进入独立审查与交付检查 | OpenAPI 15 passed；runtime 266/1 skip；wrappers 68 passed；format passed；已知 I001；55 HTTP checks |
+| 2026-10-20T13:10:05.388702+00:00 | checking | done | 指定验证、真实 HTTP smoke、独立审查完成；实现提交的 blob 与验证快照一致 | 实现提交 c9c9360a0875f24cd56db42831beb678c0af9777；contract-only，无 runtime 修改；保留已知 I001 与 Windows skip |
