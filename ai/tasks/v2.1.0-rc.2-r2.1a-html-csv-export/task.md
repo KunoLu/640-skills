@@ -167,13 +167,17 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| Round 2 主会话 | openai-codex/gpt-6-astra:high | xai-oauth/grok-4.7 | unknown | unknown |
-| ExportStorage 实现 | 未指定 | xai-oauth/grok-4.7 | unknown | unknown |
-| ExportRendering 实现 | 未指定 | xai-oauth/grok-4.7 | unknown | unknown |
-| ExportLifecycleReview | 未指定 | openai-codex/gpt-6.1-sol | unknown | unknown |
-| ExportOutputReview | 未指定 | kimi-code/k3 | unknown | unknown |
+| Round 2 主会话（回退前） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 104（102 toolUse + 2 error） | 247（主会话合计，含回退后） |
+| Round 2 主会话（回退后，2026-10-20 21:19:15 北京时间起） | fallback 角色 | xai-oauth/grok-4.7 | 54（52 toolUse + 1 error + 1 stop） | （计入上行 247） |
+| ExportStorage 实现 | 未指定（thinking xhigh） | xai-oauth/grok-4.7 | 53 | 94 |
+| ExportRendering 实现 | 未指定（thinking xhigh） | xai-oauth/grok-4.7 | 51 | 110 |
+| ExportLifecycleReview | 未指定（thinking max、xhigh） | kimi-code/k3 19 ＋ openai-codex/gpt-6.1-sol 15 | 34 | 51 |
+| ExportOutputReview | 未指定（thinking max） | kimi-code/k3 | 123 | 132 |
+| Round 2 title generation | unknown | unknown | unknown | unknown |
 
-无 advisor、无 fallback。Round 2 title generation：unknown。
+来源（operator 更正）：round-2 会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T10-49-37-681Z_01a158ee-5891-719d-a34c-8ca96493a8a6.jsonl` 及子目录四个 subagent jsonl。计数口径：`type=message` 且 `message.role=assistant` 按 `message.provider/message.model` 分组（含 error／aborted），工具调用为其中 `type=toolCall` content block 数；thinking 取自 `thinking_level_change`。无 advisor。
+
+**Fallback 更正**：原文“无 fallback”有误。主会话 astra 于 2026-10-20 21:19:15（北京时间）返回 HTML 拦截页错误，omp 自动 `model_change` 回退到 `xai-oauth/grok-4.7`（`role: fallback`）。之后的连通性测试（21:53、22:10–22:12）显示云主机出口被识别为 loc=CN，`chatgpt.com/backend-api/codex` 返回 Cloudflare 403，这是可能原因；round-2 jsonl 本身未出现 403／loc=CN 字样。
 
 ## 风险与恢复边界
 
