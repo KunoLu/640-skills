@@ -8,11 +8,11 @@ status: "done"
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.0b-filters-detail
 created_at: '2026-10-19T23:07:33+08:00'
-updated_at: '2026-10-20T03:14:10+08:00'
+updated_at: '2026-10-20T11:05:30+08:00'
 completed_at: '2026-10-20T03:14:10+08:00'
 ---
 
-R2.0b：筛选、数据质量、页内详情。分支 `feat/v2.1.0-rc.2-r2.0b-filters-detail` 基于 main `1415134`（PR #145 squash-merge 产物）。实现模型 `openai-codex/gpt-6-astra:high`。
+R2.0b：筛选、数据质量、页内详情。分支 `feat/v2.1.0-rc.2-r2.0b-filters-detail` 基于 main `1415134`（PR #145 squash-merge 产物）。模型记录纠正：requested astra; actual k3/grok per session logs（用户 2026-10-20 指令提供）。
 
 ## 事实源（已通读）
 
@@ -98,8 +98,8 @@ R2.1a 导出作业创建时调用 `PinRegistry.pin(当前 snapshot_id)` 并持 p
 
 | 用途 | 模型 | 调用次数 |
 |---|---|---|
-| 实现（implement：本任务全部 commit） | `openai-codex/gpt-6-astra:high` | unknown（未记录） |
-| closeout 复跑与任务记录收口 | `xai-oauth/grok-4.7:high` | 1（Lord 2026-10-20 授权；openai-codex/astra 保持 403） |
+| 实现（implement） | requested `openai-codex/gpt-6-astra:high`；actual fallback `kimi-code/k3`（per session logs，用户 closeout 指令） | unknown（未记录） |
+| closeout 复跑与任务记录收口 | `xai-oauth/grok-4.7`（per session logs；requested astra; actual k3/grok per session logs） | unknown（不从先前记录推断调用次数） |
 
 ## 状态事件
 
@@ -107,3 +107,4 @@ R2.1a 导出作业创建时调用 `PinRegistry.pin(当前 snapshot_id)` 并持 p
 |---|---|---|---|---|
 | 2026-10-19T23:07:33+08:00 | planned | in-progress | R2.0b 任务记录建立；事实源通读完成；首个 commit 为 R2.0a closeout 回填（#145／1415134／22:54:44）＋plan.md R2.0b 行 in_progress（docs only） | 本文件「事实源」；Lead 指派消息（2026-10-19 ~23:01 +08:00） |
 | 2026-10-20T03:14:10+08:00 | in-progress | done | Grok closeout relaunch 收口：finish2 全仓套件已跑完并写入真实失败结果；先前 Astra/Grok finish 仅 inventory 被杀，不把那些当结果。plan.md R2.0b 保持 in_progress 至 PR 合并。TaskStore 未持久化：catalog 被未跟踪 ai/tasks/codex-verify/task.md 无 YAML frontmatter 阻断，本文件手写状态。 | `/tmp/rc2-r2b-ci-finish2/linux-1.md` 失败；2349 tests, failures=1, skipped=62；唯一失败 test_sbtd_probe_links.MaterializeAuthorizationTests.test_replaced_link_with_identical_text_is_refused |
+| 2026-10-20T04:14:03+08:00 | done | done | merged：PR #146 squash-merged；R2.0c 首个 docs commit 按用户授权回填，不改变原分支绑定与本地完成时间；requested astra; actual k3/grok per session logs | merge SHA 2d147c98ce2874fa2621b95ff816e1781c02f93f；implement requested openai-codex/gpt-6-astra、actual kimi-code/k3；closeout xai-oauth/grok-4.7；用户 2026-10-20 11:02 指令 |
