@@ -8,7 +8,7 @@ status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T22:14:25+08:00'
+updated_at: '2026-10-20T22:30:12+08:00'
 completed_at: '2026-10-20T21:32:47+08:00'
 ---
 
@@ -248,3 +248,68 @@ plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(
 | 会话标题生成 | unknown | unknown | unknown（jsonl 仅有空 `title` 记录，无 `title_change`，未记录生成调用） | unknown |
 
 本轮未派生 subagent。
+
+## 真实 serve 重启 smoke 与浏览器复核（d1e2734 @ 10bc530）
+
+为何运行：Reviewy 要求 PR 前在新 base 复跑 round 2 在 rebase 前 `e087b25` 上做过的两项检查——(a) 真实 serve 重启 smoke 与 (b) 导出 HTML／CSV 浏览器检查；#150（squash 为 base `10bc530caa263c0484046128218a8fc2936f523e`）改了 `sbtd-runtime/serve.py` SecurityMiddleware Bearer 401 认证路径，必须在真实 serve 上重证。本节为复核记录，不改 frontmatter `status`／`completed_at`，不新增状态事件。
+
+执行命令（verbatim）：`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-smoke-d1e2734/prompt.md)" </dev/null`
+
+对象：tip `d1e27345e59e82e938b2a21bd53d9e239406c798`，base origin/main `10bc530caa263c0484046128218a8fc2936f523e`（merge-base 同源）。不切换分支、不 rebase、不 amend、不 push、不开 PR。未完整调用 grill-with-docs：验收标准与冻结契约无歧义，复核范围由 operator prompt 锁定；不重开 before-dev 门禁，check 阶段证据为真实 serve smoke＋真实浏览器检查。
+
+### (a) 真实 serve 重启 smoke — PASS
+
+命令（verbatim；脚本源码与完整 stdout/stderr 在同 stem raw JSON）：
+
+```sh
+PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. timeout 300 python3 -B /tmp/r21a-smoke-d1e2734/smoke.py
+```
+
+真实主机调用：真实 `python3 -B -m serve` 子进程（经既有 `test_serve.ServeProcess`）两次启动同一临时 runtime home、真实 TCP HTTP、真实 pairing-ticket 配对、真实 Bearer＋CSRF、真实 SIGINT 停止与重启；无 mock／假服务器／进程内 handler。数据源：golden events 经真实 EventStore API 写入临时 home（数据，非假服务器），与 round 2 相同。退出码 0，stderr 为空。raw＋中文汇总：`reports/d1e2734-restart-smoke.{json,md}`（gitignored）。
+
+关键输出：
+
+| 项 | 本轮（d1e2734） | round 2（e087b25） |
+|---|---|---|
+| HTML bytes | 14100 | 14100 |
+| HTML SHA-256（＝manifest） | `10f5f26c6a2c1561b360918e4474155c0f4108a2e90cec2616bd5ebd1f65719a` | `db1cdab1…`（跨 run 新 snapshot_id／export_id 嵌入，digest 预期不同，非验收项） |
+| CSV bytes／rows | 51855／139 | 51855／139 |
+| CSV SHA-256（＝manifest） | `328c57d2543cf72cf0003ee4082ba75e7c0b54c14f0e46f4b6f9f658c16ec6ef` | `ea297088…`（同上） |
+| CSV 表头 | 等于 schema 1.1 COLUMNS（96 列）；tasks.touched 值与 statistics/query 一致 | 同 |
+| 同 boot 两次下载 bytes | 逐字节一致 | 一致 |
+| 重启后再下载 | 两种格式 bytes／SHA-256 逐字节一致（identical=True） | 一致 |
+| expiry 重启前后 | 不变：html `exp_86a33fc3…` `2026-10-21T14:25:10.160468Z`；csv `exp_11fd992b…` `2026-10-21T14:25:10.233063Z` | 不变 |
+| #150 认证路径 | 下载无 Bearer → 401 `{"detail":"unauthorized"}`；无效 Bearer → 401 同体；`GET /api/v1/health` 无 Bearer → 200；首次启动与重启后各一轮全过 | round 2 未含，本轮新增 |
+| 重启后重新配对 | 新 pairing 接受 | 接受 |
+
+### (b) 浏览器检查导出 HTML／CSV — PASS
+
+Playwright MCP（Chromium，本机 headless）。MCP 阻断 `file:` 协议，产物经 `python3 -B -m http.server 18923 --bind 127.0.0.1 --directory /tmp/r21a-smoke-d1e2734` 在本机回环提供，`browser_navigate` 至 `http://127.0.0.1:18923/d1e2734-smoke.html`，`browser_emulate_media` `colorScheme: dark`（round 2 同为浅色文字，即暗色方案），随后 `browser_evaluate`／`browser_network_requests`／`browser_console_messages`／截图。CSV 复核命令：
+
+```sh
+PYTHONPATH=sbtd-runtime python3 -B -c '…读取 /tmp/r21a-smoke-d1e2734/d1e2734-smoke.csv，csv.DictReader 解析，比对 csv_export.COLUMNS…'
+```
+
+| 检查 | 期望 | 实际 | 结论 |
+|---|---|---|---|
+| 可见 panel 数 | 13 | 13（`section.panel` 全部可见，id 含 overview…data-quality） | PASS |
+| `<script>` 元素 | 0 | 0（inline／external 均 0） | PASS |
+| 页面网络请求 | 仅 HTML 自身 | 1 条：`GET /d1e2734-smoke.html` 200；favicon 为 `data:,`，无其他资源请求 | PASS |
+| 字体栈 | 系统字体＋CJK fallback | body computed `-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragana Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif` | PASS |
+| 图表文字颜色 | 浅色 `rgb(231, 237, 245)` | `svg.chart text` computed fill／color 均 `rgb(231, 237, 245)`（4 个 chart） | PASS |
+| console 错误 | 0 | 0 条消息（Errors 0／Warnings 0） | PASS |
+| 渲染 | 无脚本错误、版面正常 | 全页截图确认暗色主题 13 panel 中文标题／图表／表格正常渲染（截图不入 Git，已移至 `/tmp/r21a-smoke-d1e2734/browser-check.png`） | PASS |
+| CSV 解析 | 可解析、UTF-8 BOM 允许 | BOM 存在；DictReader 解析 139 行；表头逐列等于 schema 1.1 COLUMNS（96 列）；`export_schema_version` 值 ∈ {`1.1`, 空} | PASS |
+
+与 round 2 浏览器结果一致：13 panels、0 scripts、0 资源请求（仅 HTML 自身）、同一字体栈、同一浅色图表文字。
+
+### 修复
+
+无。两项检查全过，未发现 blocker，未改任何代码；无 CONTRACT-CHANGE-NEEDED（`sbtd-runtime/contracts/`、PRD、ADR、CSV schema 均未触碰）。本轮无 fix 提交，故未触发全量 unittest 复跑（fix policy 仅在修复时要求）；本 tip 的全量套件证据见上节 Re-verify（301／68／15 全绿）。产物目录 `/tmp/r21a-smoke-d1e2734/` 在仓外；`reports/d1e2734-restart-smoke.{json,md}` 为 gitignored，未 force-add；工作树保持干净。
+
+### 模型使用（operator 按 session jsonl 回填）
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| smoke 复核主会话 | kimi-code/k3:max | unknown | unknown | unknown |
+| 会话标题生成 | unknown | unknown | unknown | unknown |
