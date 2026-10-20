@@ -3,17 +3,17 @@ schema_version: 1
 id: v2.1.0-rc.2-r2.0c-snapshot-persistence
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确选择 strict；仅 plan.md R2.0c 与 D13。显式 git add 路径；不 push、不开 PR；禁止暂存或提交 .omp-r12b-addendum.txt 与 ai/tasks/codex-verify/。不修改 contracts、ADR 0001/0002 决策或 PRD 正文；不可避免的契约变化须 STOP + CONTRACT-CHANGE-NEEDED。
+mode_note: 用户明确选择 strict；仅 plan.md R2.0c 与 D13；显式 git add 路径。本地 run 未自行 push；operator 按 Lord 2026-10-20 11:06 指令在本地绿色后 push 并开 PR #147，随后经复核合并。不改契约。禁止暂存或提交 .omp-r12b-addendum.txt 与 ai/tasks/codex-verify/；不修改 contracts、ADR 0001/0002 决策或 PRD 正文。
 status: done
 branch: feat/v2.1.0-rc.2-r2.0c-snapshot-persistence
 created_at: '2026-10-20T11:05:30+08:00'
-updated_at: '2026-10-20T11:25:19+08:00'
+updated_at: '2026-10-20T15:03:24+08:00'
 completed_at: '2026-10-20T11:25:19+08:00'
 ---
 
 # R2.0c：临时 ReportSnapshot 落盘
 
-基线 `2d147c98ce2874fa2621b95ff816e1781c02f93f`（R2.0b #146 squash-merge，2026-10-20T04:14:03+08:00）。用户 2026-10-20 11:02 Asia/Shanghai 授权开始。任务 done 仅指本地验收完成，不指发布或合并；plan 行在合并前保持 in_progress。
+基线 `2d147c98ce2874fa2621b95ff816e1781c02f93f`（R2.0b #146 squash-merge，2026-10-20T04:14:03+08:00）。用户 2026-10-20 11:02 Asia/Shanghai 授权开始。completed_at 保留本地验收完成时间；后续 operator push／开 PR #147，Reviewy 在 tip `2dbf7b1` CLEAN，2026-10-20T15:03:24+08:00 squash-merge 为 `e9cb05b84e449fe4a7dde1b5523faf7478bc310e`；plan 行现已关闭。不把合并等同部署或发布。
 
 ## 范围与验收
 
@@ -55,7 +55,7 @@ completed_at: '2026-10-20T11:25:19+08:00'
 
 ### 最终结论与命令
 
-本地 R2.0c 验收完成；**没有 push、没有 PR、没有发布**。验收代码／测试 tip SHA：`3aab4a96df8588da7288785fceca751b18312c67`。最终 docs-only closeout commit 的完整 tip SHA 与五次提交列表在提交后写入 [reports/closeout-tip.json](reports/closeout-tip.json)，并在会话最终 stdout 输出；避免要求 task.md 包含它自身的 Git hash。该 receipt 是本地 ignored 证据，不入提交。
+本地 R2.0c 验收完成；当时本地 run **没有自行 push、没有自行开 PR、没有发布**。随后 operator 按 Lord 11:06 指令 push 并开 PR #147，已复核合并（见 closeout 状态事件）。验收代码／测试 tip SHA：`3aab4a96df8588da7288785fceca751b18312c67`。最终 docs-only closeout commit 的完整 tip SHA 与五次提交列表在提交后写入 [reports/closeout-tip.json](reports/closeout-tip.json)，并在会话最终 stdout 输出；该 receipt 是本地 ignored 证据，不入提交。
 
 | 实际命令（仓库根） | 结果 |
 |---|---|
@@ -116,11 +116,15 @@ completed_at: '2026-10-20T11:25:19+08:00'
 
 ## 模型使用
 
-| 用途 | 请求模型 | 实际模型 | 调用次数 |
-|---|---|---|---|
-| implementation / validation / closeout | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（当前 host 标识；high 为请求档位） | unknown |
-| 独立正确性复核（SnapshotCorrectness，首次＋修正复核） | 默认 reviewer，未指定替代模型 | openai-codex/gpt-6.1-sol（agent 实际自报，不冒充 astra） | unknown |
-| 独立文件系统安全复核（SnapshotFilesystem） | 默认 security-reviewer，未指定替代模型 | openai-codex/gpt-6-astra（agent 实际自报） | unknown |
+计数来源：用户提供的 Reviewy 2026-10-20 11:41 session log 核对；计数口径为 assistant messages，不是工具调用次数。本次仅回填该证据，不冒充重新统计历史日志。
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| implementation / validation / closeout 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 80 | unknown |
+| 独立正确性复核 | 默认 reviewer | openai-codex/gpt-6.1-sol | 16 | unknown |
+| 独立文件系统／安全复核 | 默认 security-reviewer | openai-codex/gpt-6-astra | 15 | unknown |
+| advisor | unknown | xai-oauth/grok-4.6 | 88 | unknown |
+| session title generation | unknown | cursor/composer-2.5 | 3 | unknown |
 
 ## 状态事件
 
@@ -129,3 +133,4 @@ completed_at: '2026-10-20T11:25:19+08:00'
 | 2026-10-20T11:05:30+08:00 | planned | in-progress | 用户明确 strict 与 R2.0c 范围，分支及基线匹配；共享记录创建，不声称 TaskStore 持久化成功 | git status/rev-parse；D13；本文件状态持久化限制 |
 | 2026-10-20T11:22:25.640823+08:00 | in-progress | checking | 实现、ADR、测试、文档已落地，进入最终计划范围验证与独立复核闭环；TaskStore 自动状态仍未持久化 | 中间轮 runtime 253 通过；根 CI wrapper 73 项/1 skip；真实 serve restart smoke |
 | 2026-10-20T11:25:19+08:00 | checking | done | 本地指定验收绿色；两位独立复核关闭；本任务完成不代表 merge／push／PR／部署／发布，plan R2.0c 保持 in_progress | 代码 tip 3aab4a96df8588da7288785fceca751b18312c67；runtime 256/1 skip、CI wrapper 73/1 skip、Dashboard 22、ruff/artifact passed、真实 restart smoke；reports/validation-final-20261020-1125.json 与同 stem 中文汇总 |
+| 2026-10-20T15:03:24+08:00 | done | done | Closeout：operator 按 Lord 11:06 指令 push／开 PR 后，#147 squash-merged；本地完成时间不改，不改契约 | 用户 2026-10-20 15:05 指令：merge SHA e9cb05b84e449fe4a7dde1b5523faf7478bc310e；Reviewy CLEAN on tip 2dbf7b1；模型计数据 Reviewy 11:41 log check |
