@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、contract-only；固定指定分支，基线必�
 status: done
 branch: contract/v2.1.0-rc.2-export-error-responses
 created_at: '2026-10-20T15:12:17.324062+00:00'
-updated_at: '2026-10-20T15:13:26.380438+00:00'
+updated_at: '2026-10-20T15:31:45.460390+00:00'
 completed_at: '2026-10-20T15:13:26.380438+00:00'
 ---
 
@@ -127,12 +127,13 @@ RESULT：本次 contract-only 验收完成。实现提交 **`b122407f87423a860ff
 | 2026-10-20T15:05:55.350852+00:00 | planned | in-progress | 用户明确 strict；根、分支、基线、三操作存在性、组件存在性及 R2.1a 分支逐行 runtime 证据已确认 | 基线 10bc530caa263c0484046128218a8fc2936f523e；serve.py:577–605、export_store.py:324–380,615–622（R2.1a 分支，git show 只读） |
 | 2026-10-20T15:09:37.258964+00:00 | in-progress | checking | 契约／测试完成（+66/-0），指定验证、红灯证明已取得，两位独立 reviewer 已派出 | OpenAPI 16 passed；runtime 267/1 skip；wrappers 69 passed；format passed；已知 I001；红灯 3 subTest 失败于基线 |
 | 2026-10-20T15:13:26.380438+00:00 | checking | done | 独立审查双通过（correct / lean），实现提交的 blob 与验证快照一致；保留已知 I001 与 Windows skip | 实现提交 b122407f87423a860ff61fbd7a4bff268449884a，parent 为基线；两个 committed blob SHA-256 与验证快照一致；contract-only，无 runtime 修改 |
+| 2026-10-20T15:31:45.460390+00:00 | done | done | CodeX soft：subagent 模型名从 jsonl 回填为显式 kimi-code/k3:max（非 inherit） | ExportCorrectness／ExportMaintainability 均为 kimi-code/k3:max（10/13、9/13）；主会话 41/60；无 grok／fallback |
 
 ## 模型使用（operator 按 session jsonl 回填）
 
 来源：主会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills-contract-export-errors--/2026-10-20T14-56-14-504Z_01a159d0-20a8-73e8-9a48-e79899187569.jsonl`（session `01a159d0-20a8-73e8-9a48-e79899187569`，2026-10-20 22:56:13–23:17:10 北京时间／Asia/Shanghai，exit 0，idle watchdog 未触发）及其子目录 `ExportCorrectness.jsonl`、`ExportMaintainability.jsonl`。计数口径：每个 jsonl 中 `type=message` 且 `message.role=assistant` 的记录，按 `message.provider/message.model` 分组（含 error／aborted；本轮无）；工具调用次数为这些消息中 `type=toolCall` content block 数（与 `tool_execution_start` 自定义记录数交叉一致：主 60／Correctness 13／Maintainability 13）。`thinking_level_change` 为 `max`；各 jsonl `model_change` 仅 `kimi-code/k3`（`resolvedModelIsFallback: false`），无 grok／其他 provider／fallback。会话 title：`📤 ERROP: Declare export error responses per-op`（`title`／`title_change` 事件存在；未单独计量 title 生成模型）。无 advisor。
 
-**注**：jsonl 只记录 `kimi-code/k3`，`:max` 来自命令行 `--model kimi-code/k3:max` 与 `thinking_level_change: max`。
+**注**：jsonl 只记录 `kimi-code/k3`；`:max` 来自 CLI `--model kimi-code/k3:max` + `thinking_level_change` / `session_init` resolvedModel（主会话与两 subagent 均为 `kimi-code/k3:max`）。无 grok、无 fallback。
 
 执行命令（verbatim）：
 
@@ -142,6 +143,6 @@ cd /workspace/640-skills-contract-export-errors && timeout 10800 omp -p --model 
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 主会话 | kimi-code/k3:max | kimi-code/k3（thinking max） | 41 | 60 |
-| ExportCorrectness（subagent） | 继承主会话 thinking max | kimi-code/k3（thinking max） | 10 | 13 |
-| ExportMaintainability（subagent） | 继承主会话 thinking max | kimi-code/k3（thinking max） | 9 | 13 |
+| 主会话 | kimi-code/k3:max | kimi-code/k3:max（jsonl `kimi-code/k3` + thinking max；resolvedModelIsFallback false） | 41 | 60 |
+| ExportCorrectness（subagent） | kimi-code/k3:max | kimi-code/k3:max（jsonl `model_change`/`session_init` resolvedModel；role subagent:ExportCorrectness；resolvedModelIsFallback false） | 10 | 13 |
+| ExportMaintainability（subagent） | kimi-code/k3:max | kimi-code/k3:max（jsonl 同模式；role subagent:ExportMaintainability；resolvedModelIsFallback false） | 9 | 13 |
