@@ -240,9 +240,11 @@ plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(
 
 ### 模型使用（operator 按 session jsonl 回填）
 
+来源：复核会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T14-08-28-109Z_01a159a4-63cd-75a8-a18a-d5fd4279a8ef.jsonl`（session `01a159a4-63cd-75a8-a18a-d5fd4279a8ef`，2026-10-20 22:08:26–22:17:02 北京时间，exit 0，idle watchdog 未触发）。计数口径：`type=message` 且 `message.role=assistant` 的记录按 `message.provider/message.model` 分组（含 error／aborted；本轮无），工具调用为其中 `type=toolCall` content block 数（与 `tool_execution_start` 记录数一致）。`thinking_level_change` 为 `max`，`model_change` 仅一次 `kimi-code/k3`（`resolvedModelIsFallback: false`），无 grok／其他 provider；会话目录无 subagent jsonl。
+
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 复核主会话 | kimi-code/k3:max | unknown | unknown | unknown |
-| 会话标题生成 | unknown | unknown | unknown | unknown |
+| 复核主会话 | kimi-code/k3:max | kimi-code/k3（thinking max） | 30（29 toolUse + 1 stop） | 36 |
+| 会话标题生成 | unknown | unknown | unknown（jsonl 仅有空 `title` 记录，无 `title_change`，未记录生成调用） | unknown |
 
 本轮未派生 subagent。
