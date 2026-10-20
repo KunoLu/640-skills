@@ -76,6 +76,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -88,6 +90,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -102,6 +106,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -114,6 +120,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -126,6 +134,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -140,6 +150,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -154,6 +166,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TaskUid"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -172,6 +186,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/TaskUid"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -184,6 +200,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [audit:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -198,6 +216,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/RunId"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -210,6 +230,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [audit:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -222,6 +244,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [audit:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -238,6 +262,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -250,6 +276,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [metadata:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -264,6 +292,8 @@ paths:
         - localSession: []
       x-sbtd-scopes: [stats:read]
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -290,6 +320,8 @@ paths:
             schema:
               $ref: "#/components/schemas/QueryScope"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -314,6 +346,8 @@ paths:
             schema:
               $ref: "#/components/schemas/QueryScope"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -329,6 +363,8 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "202":
@@ -353,6 +389,8 @@ paths:
             schema:
               $ref: "#/components/schemas/IngestBatch"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -372,6 +410,8 @@ paths:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "201":
@@ -388,6 +428,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/SnapshotId"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -409,6 +451,8 @@ paths:
         - $ref: "#/components/parameters/SnapshotId"
         - $ref: "#/components/parameters/Cursor"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -438,6 +482,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateExportRequest"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "202":
@@ -460,6 +506,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/ExportId"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
@@ -477,6 +525,8 @@ paths:
         - $ref: "#/components/parameters/ExportId"
         - $ref: "#/components/parameters/IdempotencyKey"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "204":
@@ -494,6 +544,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/ExportId"
       responses:
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":

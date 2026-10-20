@@ -592,6 +592,30 @@ class OpenApiDraftTests(unittest.TestCase):
         schema = body["content"]["application/json"]["schema"]
         return jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
 
+    def test_authenticated_operations_declare_bearer_401(self) -> None:
+        exempt_paths = {"/api/v1/health", "/api/v1/session/pair"}
+        methods = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+        for path, path_item in self.doc["paths"].items():
+            if not path.startswith("/api/v1/") or path in exempt_paths:
+                continue
+            for method, operation in path_item.items():
+                if method not in methods:
+                    continue
+                with self.subTest(path=path, method=method):
+                    self.assertEqual(
+                        operation["responses"].get("401"),
+                        {"$ref": "#/components/responses/Unauthorized"},
+                    )
+
+    def test_auth_exempt_operations_preserve_their_401_contracts(self) -> None:
+        health = self.doc["paths"]["/api/v1/health"]["get"]
+        pair = self.doc["paths"]["/api/v1/session/pair"]["post"]
+        self.assertNotIn("401", health["responses"])
+        self.assertEqual(
+            pair["responses"].get("401"),
+            {"$ref": "#/components/responses/Unauthorized"},
+        )
+
     def test_snapshot_get_responses_match_runtime_handlers(self) -> None:
         for suffix, errors in (
             ("", {"404": "NotFound", "410": "Gone"}),
@@ -601,7 +625,12 @@ class OpenApiDraftTests(unittest.TestCase):
                 operation = self.doc["paths"][
                     f"/api/v1/report-snapshots/{{snapshot_id}}{suffix}"
                 ]["get"]
-                expected = {"200": "Json", "403": "Forbidden", **errors}
+                expected = {
+                    "200": "Json",
+                    "401": "Unauthorized",
+                    "403": "Forbidden",
+                    **errors,
+                }
                 self.assertEqual(
                     operation["responses"],
                     {
