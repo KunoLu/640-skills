@@ -309,7 +309,9 @@ PYTHONPATH=sbtd-runtime python3 -B -c '…读取 /tmp/r21a-smoke-d1e2734/d1e2734
 
 ### 模型使用（operator 按 session jsonl 回填）
 
+来源：smoke 会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T14-21-05-320Z_01a159af-f1a8-73ef-b011-7123932b8a15.jsonl`（session `01a159af-f1a8-73ef-b011-7123932b8a15`，2026-10-20 22:21:03–22:31:58 北京时间，exit 0，idle watchdog 未触发）。计数口径：`type=message` 且 `message.role=assistant` 按 `message.provider/message.model` 分组（含 error／aborted；本轮无），工具调用为其中 `type=toolCall` content block 数（与 `tool_execution_start` 记录数一致）。`thinking_level_change` 为 `max`；`model_change` 仅一次 `kimi-code/k3`，无 grok／其他 provider；无 subagent jsonl。
+
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| smoke 复核主会话 | kimi-code/k3:max | unknown | unknown | unknown |
-| 会话标题生成 | unknown | unknown | unknown | unknown |
+| smoke 复核主会话 | kimi-code/k3:max | kimi-code/k3（thinking max） | 35（34 toolUse + 1 stop） | 49 |
+| 会话标题生成 | unknown | unknown | unknown（jsonl 仅有空 `title` 记录，无 `title_change`，未记录生成调用） | unknown |
