@@ -96,20 +96,20 @@ PY
 
 **清理授权独立依据 PRD §10.4 临时 ReportSnapshot 行与 D13，不由 AC-61 覆盖。** 启动清扫与显式 `store.sweep()` 只删除 `snapshots/` 内有效、已过期且无引用的本扩展快照；不递归、不跟随 symlink/junction、不碰 `exports/`、审计库、配置、spool、备份、源 task.md／报告／handoff。未知文件、坏文件和遗留 temp 保留。服务持续运行时没有新增定时清理器；到期即拒绝无引用读取，但物理删除在 sweep 执行时发生。当前实例已知的过期 ID 返回 gone；删除并再次重启后返回 not found，不永久保存 tombstone。
 
-**R2.1a pin 对接：** 前端 `PinRegistry` 只固定 snapshot_id；它本身不是后端保活。作业开始取数前调用共享 `store.pin(snapshot_id)`，完成／取消／失败的 `finally` 调用 `store.release(snapshot_id)`；引用计数未归零时，即使到期，get/dataset_page 仍可读且 sweep 不删除。若作业支持跨重启恢复，须先恢复引用，再用 `SnapshotStore(home, pinned_snapshot_ids=恢复的 ID 列表)` 创建 store，确保引用先于启动清扫安装。本任务没有导出作业或新的 pin HTTP API；进程内引用不自动成为持久作业。
+**R2.1a pin 对接：** 前端 `PinRegistry` 只固定 snapshot_id；它本身不是后端保活。HTML／CSV 作业接受前调用共享 `store.pin(snapshot_id)`，完成／取消／失败的 `finally` 调用 `store.release(snapshot_id)`；引用计数未归零时，即使到期，get/dataset_page 仍可读且 snapshot sweep 不删除。R2.1a 不恢复进程中断的在途作业；重启只装载已完整发布并通过校验的 ready 产物，因此无需恢复在途 pin。
 
 目录／文件沿用 POSIX 0700／0600，Windows ACL 尚未本机验证。单 runtime writer 由 serve 实例锁保证，不支持多个独立服务并发管理相同 snapshots/。当前仍启动装载全部快照，无新增容量策略。查询审计事件（`query.executed`）当前也不落盘。回滚到 R1 内存实现不会自动删除新文件，但不能解析它们；可重新查询，原始事件不受影响。
 
 ## R1 没有的东西（如实声明）
 
 - 没有 HTTP 服务与 Dashboard（R2。R2.0a PR-2 起见下文「R2.0a：serve」）。
-- 没有 `/api/v1/exports*` 导出作业（OpenAPI 标记 `v2.1.0-rc.2`，非 rc.1 阻塞）；CSV 通过 `csv_export.serialize_csv(snapshot)` 在进程内直接获得字节。
-- R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现（见上文）。仍没有远程业务控制端点。
+- R1 没有 `/api/v1/exports*` 导出作业；R2.1a 起支持 HTML／CSV，见下文。库面仍可通过 `csv_export.serialize_csv(snapshot)` 直接获得 CSV 字节。
+- R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现，R2.1a 增加 HTML／CSV 作业。JPEG／PDF 属于后续 R2.1b；仍没有远程业务控制端点。
 - codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
 
-### R2.1a 导出请求契约（服务实现仍待交付）
+### R2.1a：离线 HTML／全量 CSV 导出
 
-用户于 2026-10-20 批准独立契约变更：`POST /api/v1/exports` 必须提交
+`POST /api/v1/exports` 必须提交
 `application/json`，例如 `{"snapshot_id":"snap_0123456789abcdef0123456789abcdef","format":"html"}`。
 `snapshot_id` 固定点击导出时已完成的快照；`format` 当前仅接受 `html` 或 `csv`，
 不包含后续 R2.1b 的 JPEG／PDF。现有 Bearer、CSRF、Idempotency-Key 要求不变。
@@ -124,10 +124,21 @@ PY
 的完整、唯一排列，可调整顺序；空列表、重复、未知或遗漏 ID 均要求 400 BadRequest。
 schema 检查非空与唯一性；成员资格和完整性由服务按 manifest 校验，不在 schema 复制枚举。
 请求和呈现对象拒绝未知字段；排序、预览行数和隐藏图例不改变 CSV 全量数据范围。
-createExport 契约声明非法／缺失请求（包括 snapshot_id 不满足 pattern）为 400 BadRequest；
+createExport 对非法／缺失请求（包括 snapshot_id 不满足 pattern）返回 400 BadRequest；
 格式正确但不存在／不可见的快照为 404，已过期快照为 410；不能静默替换成新快照。
 这与既有快照 PATH 参数不同：PATH ID 格式错误在 runtime 中按不存在处理，返回 404。
-此变更只定义输入协议，不代表导出作业或 HTTP 错误处理已实现。
+
+接受成功返回 **202**，标准 Envelope 的 `data` 恰为 `{"export_id":"exp_…"}`；不表示文件已生成。使用同一请求与 Idempotency-Key 重试获得同一 ID，换请求而复用该键返回 400。`GET /api/v1/exports/{export_id}` 查询 queued／generating／ready／failed／cancelled；ready 后 `GET /api/v1/exports/{export_id}/file` 下载一个文件。`DELETE /api/v1/exports/{export_id}`（Bearer、CSRF、Idempotency-Key）取消／清理本作业。下载不接受 query 参数或文件路径；无 session、非法路径、其他 runtime home 的 ID 被拒绝。
+
+授权沿用现有本地服务：配对 session 可读取当前 runtime home 的快照与导出，不新增多用户／租户隔离。serve 重启使旧 session 失效；重新配对后可按原 export_id 下载该 home 内仍有效的 ready 文件。任何下载都不重新查询实时数据，字节与 SHA-256 保持不变，下载或重启不续期。
+
+- **HTML**：单文件静态正文、内联 CSS／SVG，无外部脚本、CDN、字体或 API；所有 Panel 的身份／指标绑定来自 manifest。系统字体栈含 PingFang SC、Hiragino Sans GB、Microsoft YaHei、Noto Sans CJK SC／JP；不写入机器字体路径。深浅主题、顺序、宽度、排序、预览行数、展开详情和隐藏系列说明随请求固定；HTML 预览不等于完整审计明细。
+- **CSV**：沿 snapshot-bound dataset cursor 取完所有授权数据族，复用 schema **1.1** serializer；BOM、固定列、空值与公式转义不变，不受 HTML 预览／排序／图例限制。
+- **输出安全**：两格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。非 exportable 事件明细不输出，保留省略告警与实际导出数据族计数；不在脱敏前改写指标输入。
+- **产物与保留**：`$SBTD_RUNTIME_HOME/exports/`，目录 0700、文件 0600（POSIX）。artifact 与 v1 JSON manifest 依次用同目录 temp、fsync、atomic rename 发布；manifest 为 ready 标记。记录 MIME、字节数、SHA-256、固定范围、Panel、数据族行数、renderer／脱敏版本和告警。半成品、坏摘要与未知版本不提供下载；失败只报告安全错误，不泄露本地路径。
+- **清扫**：ready 起默认 **86400 秒（24h）**；启动必扫，可显式调用 `ExportStore.sweep()`，没有后台定时删除器。到期拒绝下载；物理回收在 sweep 时发生。仅删除 `exports/` 内已验证的过期文件，不递归、不跟随链接、不触及 snapshots／audit.db／配置／源 task／报告／handoff／浏览器下载文件；未知、损坏和崩溃遗留 temp 保留且不升级为成品。删除后本进程记 gone，重启后无永久 tombstone，可返回 not found。
+
+一个本地 worker 串行生成；取消由作业在取数／发布边界响应，不影响其他业务测试或 Agent。manifest 摘要用于损坏检测，不抵御同机管理员篡改。Snapshot 磁盘容量上限不在本轮实现；Windows ACL、macOS／Windows 视觉及四格式对账仍属 R2.2。撤回本轮代码不迁移或删除原始事件／快照；已下载文件不由服务回收。
 
 ## R2.0a：serve（本地 Dashboard 服务，D5–D8）
 

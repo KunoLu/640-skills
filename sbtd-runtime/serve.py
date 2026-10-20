@@ -22,18 +22,23 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import math
 import os
+import re
 import secrets
 import socket
 import sys
 import uuid
 import webbrowser
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from event_store import EventStore, StoreError
+from export_render import ExportRenderer, default_presentation, load_panel_manifest
+from export_store import ExportGone, ExportNotFound, ExportNotReady, ExportStore
 from history_read import CursorError
 from report_snapshot import (
     SnapshotGone,
@@ -42,8 +47,9 @@ from report_snapshot import (
     validate_snapshot_home,
 )
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from stats_query import QueryScopeError, query, serve_catalog
@@ -404,8 +410,76 @@ class SecurityMiddleware:
         await self.app(scope, receive, send)
 
 
+def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
+    """Validate the frozen CreateExportRequest, including manifest membership."""
+    if not isinstance(body, dict) or not {"snapshot_id", "format"} <= body.keys():
+        raise ValueError("snapshot_id and format are required")
+    if body.keys() - {"snapshot_id", "format", "presentation_state"}:
+        raise ValueError("unknown export request property")
+    snapshot_id = body["snapshot_id"]
+    if not isinstance(snapshot_id, str) or not re.fullmatch(
+        r"snap_[0-9a-f]{32}", snapshot_id
+    ):
+        raise ValueError("invalid snapshot_id")
+    format_name = body["format"]
+    if format_name not in ("html", "csv"):
+        raise ValueError("format must be html or csv")
+    presentation = body.get("presentation_state", default_presentation(manifest))
+    required = {
+        "theme",
+        "report_width_px",
+        "expanded_detail_ids",
+        "table_sort",
+        "preview_row_sets",
+        "panel_order",
+        "legend_state",
+    }
+    if not isinstance(presentation, dict) or set(presentation) != required:
+        raise ValueError("presentation_state must contain exactly seven fields")
+    if presentation["theme"] not in ("dark", "light"):
+        raise ValueError("invalid theme")
+
+    def nonnegative(value: Any) -> bool:
+        return (
+            type(value) is int
+            and value >= 0
+            or type(value) is float
+            and math.isfinite(value)
+            and value >= 0
+        )
+
+    if not nonnegative(presentation["report_width_px"]):
+        raise ValueError("report_width_px must be a nonnegative number")
+    for name in ("expanded_detail_ids", "panel_order"):
+        value = presentation[name]
+        if not isinstance(value, list) or any(not isinstance(v, str) for v in value):
+            raise ValueError(f"{name} must be a string array")
+    panel_ids = {panel["panel_id"] for panel in manifest["panels"]}
+    order = presentation["panel_order"]
+    if len(order) != len(panel_ids) or set(order) != panel_ids:
+        raise ValueError("panel_order must be a complete unique manifest permutation")
+    for name, check in (
+        ("table_sort", lambda value: isinstance(value, str)),
+        ("preview_row_sets", nonnegative),
+        ("legend_state", lambda value: type(value) is bool),
+    ):
+        values = presentation[name]
+        if not isinstance(values, dict) or not all(check(v) for v in values.values()):
+            raise ValueError(f"invalid {name}")
+    return snapshot_id, format_name, presentation
+
+
 def create_app(home: Path, access: AccessControl, port: int) -> Any:
     store = SnapshotStore(home)
+    manifest = load_panel_manifest()
+    exports = ExportStore(home, store, ExportRenderer(store))
+
+    @asynccontextmanager
+    async def lifespan(_app: Starlette):
+        try:
+            yield
+        finally:
+            await run_in_threadpool(exports.close)
 
     async def health(_request: Request) -> JSONResponse:
         return _json({"status": "ok"})
@@ -472,11 +546,74 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             _envelope(page, {"next_cursor": page["next_cursor"], "complete": True})
         )
 
+    async def create_export(request: Request) -> JSONResponse:
+        try:
+            if (
+                request.headers.get("content-type", "").split(";")[0].strip()
+                != "application/json"
+            ):
+                raise ValueError("application/json body required")
+            key = request.headers.get("idempotency-key")
+            if key is None:
+                raise ValueError("Idempotency-Key is required")
+            snapshot_id, format_name, presentation = _export_request(
+                await request.json(), manifest
+            )
+            export_id = await run_in_threadpool(
+                exports.create,
+                snapshot_id,
+                format_name,
+                presentation,
+                idempotency_key=key,
+            )
+        except (ValueError, UnicodeError):
+            return _json({"detail": "invalid export request"}, 400)
+        except SnapshotNotFound:
+            return _json({"detail": "not found"}, 404)
+        except SnapshotGone:
+            return _json({"detail": "gone"}, 410)
+        return _json(_envelope({"export_id": export_id}), 202)
+
+    async def export_resource(request: Request) -> Response:
+        export_id = request.path_params["export_id"]
+        if request.query_params:
+            return _json({"detail": "export paths do not accept query parameters"}, 400)
+        try:
+            if request.method == "DELETE":
+                if request.headers.get("idempotency-key") is None:
+                    return _json({"detail": "Idempotency-Key is required"}, 400)
+                await run_in_threadpool(exports.delete, export_id)
+                return Response(status_code=204)
+            if request.url.path.endswith("/file"):
+                blob, info = await run_in_threadpool(exports.download, export_id)
+                return Response(
+                    blob,
+                    media_type=info["mime_type"],
+                    headers={
+                        "Content-Disposition": f'attachment; filename="sbtd-report_{export_id}.{info["format"]}"',
+                        "Cache-Control": "no-store",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
+            info = await run_in_threadpool(exports.get, export_id)
+            return _json(_envelope(info))
+        except ExportNotFound:
+            return _json({"detail": "not found"}, 404)
+        except ExportGone:
+            return _json({"detail": "gone"}, 410)
+        except ExportNotReady:
+            return _json({"detail": "export is not ready"}, 409)
+
     routes = [
         Route("/api/v1/health", health, methods=["GET"]),
         Route("/api/v1/session/pair", pair, methods=["POST"]),
         Route("/api/v1/metrics/catalog", metric_catalog, methods=["GET"]),
         Route("/api/v1/statistics/query", statistics_query, methods=["POST"]),
+        Route("/api/v1/exports", create_export, methods=["POST"]),
+        Route(
+            "/api/v1/exports/{export_id}", export_resource, methods=["GET", "DELETE"]
+        ),
+        Route("/api/v1/exports/{export_id}/file", export_resource, methods=["GET"]),
         Route(
             "/api/v1/report-snapshots/{snapshot_id}",
             get_snapshot,
@@ -489,7 +626,7 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
         ),
         Mount("/", app=StaticFiles(directory=STATIC_DIR, html=True)),
     ]
-    app = Starlette(routes=routes)
+    app = Starlette(routes=routes, lifespan=lifespan)
     return SecurityMiddleware(app, access, port)
 
 

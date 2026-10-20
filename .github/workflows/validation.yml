@@ -130,6 +130,8 @@ jobs:
             -r sbtd-runtime/requirements-serve.txt
           PYTHONPATH=sbtd-runtime python -B -m unittest discover \
             -s sbtd-runtime/tests -p 'test_serve.py'
+          PYTHONPATH=sbtd-runtime python -B -m unittest discover \
+            -s sbtd-runtime/tests -p 'test_export*.py'
 
       - name: Install pinned npm dependencies
         working-directory: sbtd-runtime/dashboard

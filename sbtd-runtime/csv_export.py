@@ -11,7 +11,9 @@ output_tokens and is never added to output, and a missing value stays an
 empty cell. CSV_SCHEMA_VERSION 1.1 is the schema that includes the trailing
 reasoning_tokens column (1.0 predates it). The serializer walks the
 snapshot's full dataset rows — page limits and Top-N never truncate the
-file.
+file. An optional rows iterator replaces that walk, and an optional
+value_transform runs on formatted cells after metric rows are computed.
+Omitting both preserves this default, including schema 1.1.
 """
 
 from __future__ import annotations
@@ -215,14 +217,21 @@ def _metric_rows(snapshot: Snapshot, catalog: dict | None) -> list[dict[str, Any
     return rows
 
 
-def serialize_csv(snapshot: Snapshot, catalog: dict | None = None) -> bytes:
+def serialize_csv(
+    snapshot: Snapshot,
+    catalog: dict | None = None,
+    *,
+    rows=None,
+    value_transform=None,
+) -> bytes:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\r\n")
     writer.writerow(COLUMNS)
-    rows = _metadata_rows(snapshot)
-    rows += _metric_rows(snapshot, catalog)
-    for row in snapshot.rows:
-        rows.append(
+    built = _metadata_rows(snapshot)
+    built += _metric_rows(snapshot, catalog)
+    dataset_rows = snapshot.rows if rows is None else rows
+    for row in dataset_rows:
+        built.append(
             {
                 "record_type": row["record_type"],
                 "record_id": row["record_id"],
@@ -234,6 +243,11 @@ def serialize_csv(snapshot: Snapshot, catalog: dict | None = None) -> bytes:
                 **row["fields"],
             }
         )
-    for row in rows:
-        writer.writerow([_cell(row.get(column)) for column in COLUMNS])
+    for row in built:
+        cells = [_cell(row.get(column)) for column in COLUMNS]
+        if value_transform is not None:
+            cells = [
+                value_transform(column, cell) for column, cell in zip(COLUMNS, cells)
+            ]
+        writer.writerow(cells)
     return BOM + buffer.getvalue().encode("utf-8")
