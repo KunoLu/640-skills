@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、contract-only；固定指定分支，仅显式 
 status: done
 branch: contract/v2.1.0-rc.2-auth-401-responses
 created_at: '2026-10-20T12:56:59.675195+00:00'
-updated_at: '2026-10-20T13:10:05.388702+00:00'
+updated_at: '2026-10-20T13:22:24.318813+00:00'
 completed_at: '2026-10-20T13:10:05.388702+00:00'
 ---
 
@@ -147,3 +147,61 @@ RESULT：本次 contract-only 验收完成。实现提交 **`c9c9360a0875f24cd56
 | 2026-10-20T12:56:59.675195+00:00 | planned | in-progress | 用户明确 strict；根、分支、路径、runtime 与全部 operation 已核对 | 基线 ef8975212a4f80686d19a03f3c169bbf533eb117；28 operations，26 缺少 middleware 401；serve.py:361,388–396,413–416 |
 | 2026-10-20T13:01:05.329412+00:00 | in-progress | checking | 契约／回归完成，指定验证与真实 HTTP smoke 已执行，进入独立审查与交付检查 | OpenAPI 15 passed；runtime 266/1 skip；wrappers 68 passed；format passed；已知 I001；55 HTTP checks |
 | 2026-10-20T13:10:05.388702+00:00 | checking | done | 指定验证、真实 HTTP smoke、独立审查完成；实现提交的 blob 与验证快照一致 | 实现提交 c9c9360a0875f24cd56db42831beb678c0af9777；contract-only，无 runtime 修改；保留已知 I001 与 Windows skip |
+
+## Advisor 复核（astra→grok 回退后的 --advisor 重跑）
+
+本段是证据追加，不是重开。`status` 保持 `done`，`completed_at` 保持 `2026-10-20T13:10:05.388702+00:00`。不新增状态事件：没有 planned/in-progress/checking/blocked 迁移，done→done 不是本记录允许的新 ingress。
+
+原因：前序会话 `01a15961-fb36…` 从 astra 回退到 grok-4.7，房间规则要求用 `--advisor` 再复核一次并说明。本轮就是该重启。本轮 session id：unknown（环境未暴露，不能从 jsonl 读取）。operator 请求模型为 `openai-codex/gpt-6-astra:high` 且启用 advisor。本会话唯一可见的 runtime workstation 模型字段是 `xai-oauth/grok-4.7`；不能据此证明 reasoning level，也不能证明 host 实际调度就是该字段。advisor 进程模型：unknown。截至本段写入，本会话没有收到注入的 advisor advisory，因此 observed blocker count = 0。这不是“隐藏 advisor 已书面通过”的声明。
+
+未完整调用 grill-with-docs：operator 验收清单已明确，源码和相对基线 `ef8975212a4f80686d19a03f3c169bbf533eb117` 的 diff 能回答边界，没有新的领域歧义。
+
+### 本轮 Book Gate Plan
+
+| Gate | 触发事实 | 阶段 | 状态 |
+|---|---|---|---|
+| book-ddd-distilled-modeling | 无完整 grill；复核不引入术语或上下文歧义 | before-dev | not-required |
+| book-ddia-data-design | 不改数据设计或写入路径；只复核既有 HTTP 声明 | before-dev | not-required；前序 confirmed 记录不在本轮重开 |
+| book-legacy-change-safety | 不修改 runtime 行为 | before-dev | not-required |
+| book-refactoring-pass | 无生产代码编辑 | before-dev | not-required |
+| book-release-readiness | 无 runtime、部署或集成行为变更 | finish | not-required；不声称发布就绪 |
+
+### 源码与清单
+
+当前 `sbtd-runtime/serve.py:361` 是 `_AUTH_EXEMPT_PATHS = {"/api/v1/health", "/api/v1/session/pair"}`。middleware Bearer 失败在 `:393–396`：`authenticate` 返回 None 时 `_json({"detail": "unauthorized"}, 401)` 并 return。pair 自身失败在 `:416`。Host/Origin 403 仍在 `:382–386`，先于认证。`serve.py` 相对基线无 diff。
+
+当前 OpenAPI 有 28 个 `/api/v1/*` operation，与基线 operation 身份一致。26 个非豁免 operation 的 `401` 均为 `$ref: "#/components/responses/Unauthorized"`，且相对基线新增的 response key 只有这 26 个 `401`，没有删除或改写既有 response。`GET /api/v1/health`（`getHealth`）responses 仍是 `403`/`200`，无 401；该 path block 与基线 byte-equal。`POST /api/v1/session/pair`（`pairSession`）整段与基线 byte-equal（651 bytes），401 仍是既有 Unauthorized ref，未重复、未改写、未移动。`Unauthorized` 组件文本与基线 byte-equal。非豁免 401 加 pair 既有 401 共 27 处，没有指向其他 401 schema。middleware 认证失败仍只对应 401，本轮没有为它发明额外状态码。
+
+相对基线的已提交 diff 仍只有 `sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py`、本文件。openapi SHA-256 仍是 `c5d239fcc0004746a7a64ecbc23b5d207a054f5243dfc8b038b6fad3250a554e`；测试文件仍是 `8381d0cb49c4758d42bd7e8f58ce754966ba562763fe69010614dff39d108428`。
+
+### 本轮验证
+
+命令在仓库根执行。`PYTHONDONTWRITEBYTECODE=1` 与 `RUFF_NO_CACHE=true` 只防止仓库缓存。rtk: skipped-for-report。证据为 developer-local / dirty / local-only，绑定测试时 HEAD `bb2ba1b4a660b24ce7c70be14bf5d420b2b368df`，不冒充 CI 或 PR head。
+
+| 精确命令 | 实际结果 | raw／同 stem 中文汇总 |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 15 passed，0.058s，exit 0 | `local://auth-401-advisor-openapi.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 266 tests：265 passed、1 skipped，18.939s，exit 0；Windows junction evidence only | `local://auth-401-advisor-runtime.{json,md}` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 68 passed，0.643s，exit 0；与 runtime 重叠，不累计 | `local://auth-401-advisor-wrappers.{json,md}` |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | 1 file already formatted，exit 0 | `local://auth-401-advisor-format.{json,md}` |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1；仅既有 I001，19–30 行，本轮不修 | `local://auth-401-advisor-lint.{json,md}` |
+| 复用 `test_serve.ServeProcess` 的短真实 HTTP smoke | 6 checks passed；serve stop rc 0 | `local://auth-401-advisor-http-smoke.{json,md}` |
+
+短 smoke：`GET /api/v1/health` 无 Bearer → 200 `{"status":"ok"}`；`GET /api/v1/metrics/catalog` 无 Bearer 与无效 Bearer → 401 `{"detail":"unauthorized"}`；`POST /api/v1/statistics/query` 无 Bearer → 401；`GET /api/v1/exports/smoke-id` 无 Bearer → 401；`POST /api/v1/session/pair` 错误配对码 → 401。不把这 6 项写成 26 路全量 HTTP；静态 26 路仍由 OpenApiDraftTests 覆盖。凭据未写入报告。
+
+BDD: skipped；无行为变更，不新增 .feature。Cross-repo context: contract-only。API Contract: verified。Mock Strategy: none。E2E Mode: backend-only。Final Test Report / Run Summary MD: generated（仓库外 local://）。Final Full Rerun: 指定 unittest 与 format passed；lint 的 Final Full Rerun 是 failed，仅既有 I001。Targeted Rerun: not-needed。Graft: skipped。无生产 diff，本轮不做 ponytail-review。无长期 lesson。TaskStore 未调用：transition 会改终态，create/select 会写 index/active，超出本段只改本文件的授权；不声称 helper 恢复成功。
+
+### 本轮模型计数（operator 回填）
+
+不编造消息数或工具调用数。
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| 本轮主会话 | openai-codex/gpt-6-astra:high | unknown | unknown | unknown |
+| 本轮 advisor | --advisor，模型未在会话中暴露 | unknown | unknown | unknown |
+
+runtime workstation 字段观察到 `xai-oauth/grok-4.7`。该观察不填入上表“实际模型”列，避免把未核实的 host 标识写成计数事实；operator 可按 jsonl 改上表。
+
+### 本轮结论
+
+无 advisor blocker，无契约或测试代码变更。若本段随后单独提交，只允许 `git add ai/tasks/v2.1.0-rc.2-contract-auth-401-responses/task.md`。不暂存 `.omp-r12b-addendum.txt` 与 `ai/tasks/codex-verify/`。不 push、不开 PR、不 merge。`/workspace/640-skills-r2.1a` 本轮未写入。
