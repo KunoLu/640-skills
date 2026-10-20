@@ -35,7 +35,12 @@ from urllib.parse import urlsplit
 
 from event_store import EventStore, StoreError
 from history_read import CursorError
-from report_snapshot import SnapshotGone, SnapshotNotFound, SnapshotStore
+from report_snapshot import (
+    SnapshotGone,
+    SnapshotNotFound,
+    SnapshotStore,
+    validate_snapshot_home,
+)
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -400,7 +405,7 @@ class SecurityMiddleware:
 
 
 def create_app(home: Path, access: AccessControl, port: int) -> Any:
-    store = SnapshotStore()
+    store = SnapshotStore(home)
 
     async def health(_request: Request) -> JSONResponse:
         return _json({"status": "ok"})
@@ -556,6 +561,11 @@ def main(argv: list[str] | None = None) -> int:
         print("--port 须在 1..65535 之间", file=sys.stderr)
         return 2
     home = args.home or default_runtime_home()
+    try:
+        validate_snapshot_home(home)
+    except (OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 2
     home.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(home, 0o700)
 
@@ -572,8 +582,13 @@ def main(argv: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
 
-    access = AccessControl()
-    app = create_app(home, access, args.port)
+    try:
+        access = AccessControl()
+        app = create_app(home, access, args.port)
+    except (OSError, ValueError) as error:
+        lock.release()
+        print(str(error), file=sys.stderr)
+        return 2
 
     import uvicorn
 

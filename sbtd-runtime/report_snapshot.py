@@ -14,9 +14,18 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
+import os
+import re
+import stat
+import tempfile
+import threading
 import uuid
-from dataclasses import dataclass, field
+from collections import Counter
+from collections.abc import Iterable
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from contract_eval import (
@@ -35,7 +44,9 @@ from contract_eval import (
 from history_read import CursorError, decode_cursor, encode_cursor
 from stats_query import filter_events, normalize_scope
 
-DEFAULT_TTL_SECONDS = 3600
+DEFAULT_TTL_SECONDS = 86400
+SNAPSHOT_FORMAT_VERSION = 1
+_SNAPSHOT_ID = re.compile(r"snap_[0-9a-f]{32}")
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 1000
 REDACTION_POLICY_VERSION = "1"
@@ -67,7 +78,11 @@ class SnapshotGone(RuntimeError):
 
 def _canonical(payload: Any) -> str:
     return json.dumps(
-        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
     )
 
 
@@ -581,12 +596,210 @@ def _iso(instant: datetime) -> str:
     return instant.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-class SnapshotStore:
-    """In-process immutable snapshot registry. No persistence, no writes."""
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate snapshot field")
+        result[key] = value
+    return result
 
-    def __init__(self, ttl_seconds: float = DEFAULT_TTL_SECONDS) -> None:
+
+def validate_snapshot_home(home: Path) -> None:
+    """Read-only preflight, also used before serve mutates its runtime home."""
+    home = Path(home).absolute()
+    directory = home / "snapshots"
+    for path in (directory, *directory.parents):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if os.name == "nt" and not hasattr(info, "st_file_attributes"):
+            raise ValueError("snapshot reparse-point check is unavailable")
+        if stat.S_ISLNK(info.st_mode) or (
+            getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            raise ValueError("snapshot directory link is refused")
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError("snapshot home must be a directory")
+        if (
+            path in (home, directory)
+            and hasattr(os, "getuid")
+            and info.st_uid != os.getuid()
+        ):
+            raise ValueError("snapshot directory has unknown ownership")
+
+
+class SnapshotStore:
+    """Disk-backed snapshots owned by one runtime writer (ADR 0003).
+
+    Restore job references via pinned_snapshot_ids before the startup sweep.
+    UI pins alone do not hold server references; jobs must pin/release here.
+    """
+
+    def __init__(
+        self,
+        home: Path,
+        ttl_seconds: float = DEFAULT_TTL_SECONDS,
+        *,
+        pinned_snapshot_ids: Iterable[str] = (),
+    ) -> None:
+        if not math.isfinite(ttl_seconds) or ttl_seconds < 0:
+            raise ValueError("snapshot TTL must be finite and nonnegative")
+        home = Path(home).absolute()
+        self._directory = home / "snapshots"
+        validate_snapshot_home(home)
+        home.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._directory.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(home, 0o700)
+        os.chmod(self._directory, 0o700)
+        self._directory_identity = self._identity()
         self._ttl = ttl_seconds
+        self._lock = threading.RLock()
+        self._pins = Counter(pinned_snapshot_ids)
         self._snapshots: dict[str, Snapshot] = {}
+        self._gone: set[str] = set()
+        for path in self._directory.iterdir():
+            if not _SNAPSHOT_ID.fullmatch(path.stem) or path.suffix != ".json":
+                continue
+            try:
+                snapshot = self._read(path.stem)
+            except SnapshotNotFound:
+                continue
+            self._snapshots[snapshot.snapshot_id] = snapshot
+        self.sweep()
+
+    def _identity(self) -> tuple[int, int]:
+        info = self._directory.stat()
+        return info.st_dev, info.st_ino
+
+    def _check_directory(self) -> None:
+        validate_snapshot_home(self._directory.parent)
+        if self._identity() != self._directory_identity:
+            raise ValueError("snapshot directory was replaced")
+
+    def _path(self, snapshot_id: str) -> Path:
+        if not _SNAPSHOT_ID.fullmatch(snapshot_id):
+            raise SnapshotNotFound(snapshot_id)
+        self._check_directory()
+        return self._directory / f"{snapshot_id}.json"
+
+    def _read(self, snapshot_id: str) -> Snapshot:
+        path = self._path(snapshot_id)
+        try:
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError("snapshot must be a regular unlinked file")
+            if hasattr(os, "getuid") and info.st_uid != os.getuid():
+                raise ValueError("snapshot has unknown ownership")
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0)
+            )
+            fd = os.open(path, flags)
+            with os.fdopen(fd, encoding="utf-8") as handle:
+                opened = os.fstat(handle.fileno())
+                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    raise ValueError("snapshot file was replaced")
+                envelope = json.load(handle, object_pairs_hook=_unique_object)
+            if set(envelope) != {"format_version", "checksum", "snapshot"}:
+                raise ValueError("invalid snapshot header")
+            version = envelope["format_version"]
+            if type(version) is not int or version != SNAPSHOT_FORMAT_VERSION:
+                raise ValueError("unsupported snapshot format")
+            payload = envelope["snapshot"]
+            if envelope["checksum"] != f"sha256:{_digest(payload)}":
+                raise ValueError("snapshot checksum mismatch")
+            # Validate persisted field types before parsing timestamps.
+            for item in fields(Snapshot):
+                if item.name == "expires_instant":
+                    continue
+                annotation = str(item.type).split("[", 1)[0]
+                expected = {"str": str, "int": int, "dict": dict, "list": list}[
+                    annotation
+                ]
+                if type(payload[item.name]) is not expected:
+                    raise ValueError("invalid snapshot field type")
+            snapshot = Snapshot(
+                **payload, expires_instant=parse_instant(payload["expires_at"])
+            )
+            if snapshot.snapshot_id != snapshot_id:
+                raise ValueError("snapshot id mismatch")
+            if snapshot.expires_instant < parse_instant(snapshot.created_at):
+                raise ValueError("invalid snapshot lifetime")
+            return snapshot
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            raise SnapshotNotFound(snapshot_id) from None
+
+    def _write(self, snapshot: Snapshot) -> None:
+        target = self._path(snapshot.snapshot_id)
+        payload = {
+            item.name: getattr(snapshot, item.name)
+            for item in fields(Snapshot)
+            if item.name != "expires_instant"
+        }
+        blob = _canonical(
+            {
+                "format_version": SNAPSHOT_FORMAT_VERSION,
+                "checksum": f"sha256:{_digest(payload)}",
+                "snapshot": payload,
+            }
+        ).encode("utf-8")
+        fd, name = tempfile.mkstemp(
+            prefix=".snapshot-", suffix=".tmp", dir=self._directory
+        )
+        temporary = Path(name)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                os.chmod(temporary, 0o600)
+                handle.write(blob)
+                handle.flush()
+                os.fsync(handle.fileno())
+            self._check_directory()
+            os.replace(temporary, target)
+            if os.name == "posix":
+                directory_fd = os.open(self._directory, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def pin(self, snapshot_id: str, *, now: datetime | None = None) -> Snapshot:
+        """Hold one job reference; release in the job's completion/cancel finally."""
+        with self._lock:
+            snapshot = self.get(snapshot_id, now=now)
+            self._pins[snapshot_id] += 1
+            return snapshot
+
+    def release(self, snapshot_id: str) -> None:
+        with self._lock:
+            if self._pins[snapshot_id] > 1:
+                self._pins[snapshot_id] -= 1
+            else:
+                self._pins.pop(snapshot_id, None)
+
+    def sweep(self, *, now: datetime | None = None) -> list[str]:
+        """Remove only valid, expired, unreferenced files in our own directory."""
+        now = now or datetime.now(UTC)
+        removed = []
+        with self._lock:
+            self._check_directory()
+            for snapshot_id in list(self._snapshots):
+                if self._pins[snapshot_id]:
+                    continue
+                try:
+                    snapshot = self._read(snapshot_id)
+                except SnapshotNotFound:
+                    continue
+                if now >= snapshot.expires_instant:
+                    self._path(snapshot_id).unlink()
+                    del self._snapshots[snapshot_id]
+                    self._gone.add(snapshot_id)
+                    removed.append(snapshot_id)
+        return removed
 
     def create_or_reuse(
         self,
@@ -596,6 +809,24 @@ class SnapshotStore:
         now: datetime | None = None,
         source_watermarks: tuple | list = (),
         catalog: dict | None = None,
+    ) -> Snapshot:
+        with self._lock:
+            return self._create_or_reuse(
+                dataset,
+                raw_scope,
+                now=now,
+                source_watermarks=source_watermarks,
+                catalog=catalog,
+            )
+
+    def _create_or_reuse(
+        self,
+        dataset: dict,
+        raw_scope: dict,
+        *,
+        now: datetime | None,
+        source_watermarks: tuple | list,
+        catalog: dict | None,
     ) -> Snapshot:
         now = now or datetime.now(UTC)
         catalog = catalog or metric_catalog()
@@ -627,7 +858,10 @@ class SnapshotStore:
                 snapshot.query_hash == query_hash
                 and snapshot.dataset_fingerprint == fingerprint
             ):
-                return snapshot
+                try:
+                    return self.get(snapshot.snapshot_id, now=now)
+                except SnapshotNotFound:
+                    continue
         rows, unknown_ids = dataset_rows(frozen, scope)
         manifest = [{"record_type": family, "rows": 0} for family in DATASET_FAMILIES]
         counts = {item["record_type"]: 0 for item in manifest}
@@ -670,17 +904,19 @@ class SnapshotStore:
             expires_instant=expires,
             dataset_fingerprint=fingerprint,
         )
+        self._write(snapshot)
         self._snapshots[snapshot.snapshot_id] = snapshot
         return snapshot
 
     def get(self, snapshot_id: str, *, now: datetime | None = None) -> Snapshot:
         now = now or datetime.now(UTC)
-        snapshot = self._snapshots.get(snapshot_id)
-        if snapshot is None:
-            raise SnapshotNotFound(snapshot_id)
-        if now >= snapshot.expires_instant:
-            raise SnapshotGone(snapshot_id)
-        return snapshot
+        with self._lock:
+            if snapshot_id in self._gone:
+                raise SnapshotGone(snapshot_id)
+            snapshot = self._read(snapshot_id)
+            if now >= snapshot.expires_instant and not self._pins[snapshot_id]:
+                raise SnapshotGone(snapshot_id)
+            return snapshot
 
     def dataset_page(
         self,
