@@ -8,7 +8,7 @@ status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T22:30:12+08:00'
+updated_at: '2026-10-20T22:59:40+08:00'
 completed_at: '2026-10-20T21:32:47+08:00'
 ---
 
@@ -161,7 +161,7 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 
 红绿回归均保留：HTTP tracer `405 != 202`；结构化秘密、结构化指标、嵌入标识、worker 启动失败、排队取消、目录替换清理、发布后 sweep。修复后对应 green 报告保留。未运行 dashboard tests／typecheck／build：dashboard 源码和静态产物未改。未运行全仓 workflow 或历史 probe_links，不修复、不重跑、不称全仓通过。
 
-`git diff 6e2cc56f386c603179ee6efd6004a24b5391ffc8 -- sbtd-runtime/contracts/openapi.yaml` 为空。panel manifest/schema、ADR 0001–0003、PRD、CSV schema 1.1 未改。无 CONTRACT-CHANGE-NEEDED。
+`git diff 6e2cc56f386c603179ee6efd6004a24b5391ffc8 -- sbtd-runtime/contracts/openapi.yaml` 为空。panel manifest/schema、ADR 0001–0003、PRD、CSV schema 1.1 未改。（2026-10-20 更正：原结论「无 CONTRACT-CHANGE-NEEDED」有误——契约 diff 为空仅证明本分支未修改契约文件，不证明 OpenAPI 声明覆盖 runtime 实际响应；Reviewy B1 发现 getExport／deleteExport／downloadExport 缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）
 
 ## 模型使用
 
@@ -171,13 +171,15 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 | Round 2 主会话（回退后，2026-10-20 21:19:15 北京时间起） | fallback 角色 | xai-oauth/grok-4.7 | 54（52 toolUse + 1 error + 1 stop） | （计入上行 247） |
 | ExportStorage 实现 | 未指定（thinking xhigh） | xai-oauth/grok-4.7 | 53 | 94 |
 | ExportRendering 实现 | 未指定（thinking xhigh） | xai-oauth/grok-4.7 | 51 | 110 |
-| ExportLifecycleReview | 未指定（thinking max、xhigh） | kimi-code/k3 19 ＋ openai-codex/gpt-6.1-sol 15 | 34 | 51 |
+| ExportLifecycleReview | 未指定（thinking max、xhigh） | kimi-code/k3 19 ＋ openai-codex/gpt-6.1-sol 15（自动 fallback） | 34 | 51 |
 | ExportOutputReview | 未指定（thinking max） | kimi-code/k3 | 123 | 132 |
 | Round 2 title generation | unknown | unknown | unknown | unknown |
 
 来源（operator 更正）：round-2 会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T10-49-37-681Z_01a158ee-5891-719d-a34c-8ca96493a8a6.jsonl` 及子目录四个 subagent jsonl。计数口径：`type=message` 且 `message.role=assistant` 按 `message.provider/message.model` 分组（含 error／aborted），工具调用为其中 `type=toolCall` content block 数；thinking 取自 `thinking_level_change`。无 advisor。
 
 **Fallback 更正**：原文“无 fallback”有误。主会话 astra 于 2026-10-20 21:19:15（北京时间）返回 HTML 拦截页错误，omp 自动 `model_change` 回退到 `xai-oauth/grok-4.7`（`role: fallback`）。之后的连通性测试（21:53、22:10–22:12）显示云主机出口被识别为 loc=CN，`chatgpt.com/backend-api/codex` 返回 Cloudflare 403，这是可能原因；round-2 jsonl 本身未出现 403／loc=CN 字样。
+
+**ExportLifecycleReview 子代理 fallback**（2026-10-20 按 jsonl 核验补充）：初始 subagent 模型 kimi-code/k3（19 条 assistant messages；model_change 2026-10-20T12:15:42Z，role `subagent:ExportLifecycleReview`，resolvedModelIsFallback: false），2026-10-20T12:42:39.355Z omp 自动回退至 openai-codex/gpt-6.1-sol（role: `fallback`，resolvedModelIsFallback: true），sol 段 15 条；工具调用 k3 20 ＋ sol 31 ＝ 51，与上表合计一致。来源：`ExportLifecycleReview.jsonl`。
 
 ## 风险与恢复边界
 
@@ -196,6 +198,7 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 | 2026-10-20T18:50:07+08:00 | blocked | in-progress | #148 merged as 6e2cc56 supplied createExport request contract；已 rebased onto 6e2cc56；用户明确恢复 strict R2.1a | round-2 prompt；当前分支匹配、HEAD 7ec402e；重新读取冻结 OpenAPI 请求／202／错误／panel_order；清除 blocked_reason |
 | 2026-10-20T20:35:58+08:00 | in-progress | checking | HTML／CSV、作业存储、冻结请求校验、测试／场景／文档已实现；真实 serve 重启与浏览器报告 smoke 通过，独立复核进行中 | runtime 首次完整 291 tests／2 skips；wrapper 65、OpenAPI 12；新增输出／pin 边界红绿证据；reports/r2-full-panel-restart-smoke；浏览器 13 panels、0 scripts、0 resources |
 | 2026-10-20T21:32:47+08:00 | checking | done | 本地 HTML／CSV 导出验收、独立复核和最终套件完成；不表示 push、PR、部署或发布 | 实现 e087b25ed0de119f97e043628c41965d2a254142；runtime 298／2 skip；wrapper 65；OpenAPI 12；ruff passed；真实重启 smoke SHA-256 不变；两位 reviewer 关闭；OpenAPI diff 为空 |
+| 2026-10-20T22:59:40+08:00 | done | done | Reviewy B1：export get/download/delete OpenAPI 缺 400/404/409/410；标记 CONTRACT-CHANGE-NEEDED，本 PR 不改契约，等待用户决定契约 PR 顺序 | PR #151；serve.py export_resource；openapi getExport/deleteExport/downloadExport |
 
 ## Re-verify（round-2 grok 回退后 k3:max 复核）
 
@@ -209,7 +212,7 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 
 | # | 验收 | 证据 | 结论 |
 |---|---|---|---|
-| 1 | 单文件离线 HTML；无外部 URL／script src／link href=http／@import／url(http；系统字体＋CJK fallback | `export_render.py` `_html` 仅内联 `<style>`＋`<link rel="icon" href="data:,">`；`_CSS` 字体栈含 PingFang SC／Hiragana Sans GB／Microsoft YaHei／Noto Sans CJK SC·JP；`test_export_render.py::test_html_contains_every_panel_and_shared_metric_values` 断言 FORBIDDEN 全部缺失、CJK 字体全部存在 | PASS |
+| 1 | 单文件离线 HTML；无外部 URL／script src／link href=http／@import／url(http；系统字体＋CJK fallback | `export_render.py` `_html` 仅内联 `<style>`＋`<link rel="icon" href="data:,">`；`_CSS` 字体栈含 PingFang SC／Hiragino Sans GB／Microsoft YaHei／Noto Sans CJK SC·JP；`test_export_render.py::test_html_contains_every_panel_and_shared_metric_values` 断言 FORBIDDEN 全部缺失、CJK 字体全部存在 | PASS |
 | 2 | CSV 复用 serialize_csv／SnapshotStore.dataset_page，snapshot-bound cursor 全量遍历；schema 1.1 不变 | `export_render._walk_rows` 以 `dataset_page(snapshot_id, cursor, DEFAULT_PAGE_SIZE)` 循环至 `next_cursor is None`；`csv_export.CSV_SCHEMA_VERSION = "1.1"` 未改，仅新增可选 `rows`／`value_transform` 参数且缺省路径不变；`test_csv_cursor_walk_matches_schema_without_truncation`（limit=2 分页走完全量） | PASS |
 | 3 | 创建固定 snapshot_id 并持 backend pin 至完成／取消／失败；在途 expiry/sweep 不删、结束释放 | `ExportStore.create` 先入队前 `snapshots.pin`，`_run` finally `release`，`close`/`delete` 同路径释放；`test_pin_precedes_render_and_releases_on_each_terminal_state`、`test_two_jobs_hold_the_snapshot_until_each_releases`、`test_sweep_between_publish_and_finally_still_releases_pin`、`test_worker_start_failure_releases_snapshot_pin`；前端 dashboard 未改，PinRegistry 复用为文档级说明 | PASS |
 | 4 | ready 后默认 24h，含启动清扫；清理仅 exports/ | `EXPORT_TTL_SECONDS = 86400`；`__init__` 执行 `_restore()` 后 `sweep()`；sweep 仅删已验证配对；`test_sweep_and_startup_touch_only_verified_expired_exports` | PASS |
@@ -224,7 +227,7 @@ plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(
 ### 契约未变检查
 
 - `git diff 10bc530..HEAD -- sbtd-runtime/contracts/` 为空（0 行），含 OpenAPI 与 panel-manifest/schema。
-- `git diff --name-only 10bc530..HEAD` 全部 16 个文件中无任何 PRD、ADR 0001/0002/0003、dashboard、schema/manifest 路径；`CSV_SCHEMA_VERSION` 仍为 `"1.1"`。无 CONTRACT-CHANGE-NEEDED。
+- `git diff --name-only 10bc530..HEAD` 全部 16 个文件中无任何 PRD、ADR 0001/0002/0003、dashboard、schema/manifest 路径；`CSV_SCHEMA_VERSION` 仍为 `"1.1"`。（2026-10-20 更正：此处「无 CONTRACT-CHANGE-NEEDED」结论有误——契约 diff 为空 ≠ 声明完整；Reviewy B1 发现 export 三个操作缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）
 
 ### 测试执行（developer-local，raw 输出在仓外 `/tmp/r21a-reverify/`，不入 Git）
 
@@ -240,7 +243,7 @@ plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(
 
 ### 复核结论
 
-**PASS（无代码变更）**：九项验收与 D11/D15/D16 全部有实现与测试证据，契约 diff 为空，四套测试与 ruff 全绿，未发现 blocker，无需修复提交，无 CONTRACT-CHANGE-NEEDED。本轮仅新增本节 docs 记录。
+**PASS（无代码变更）**：九项验收与 D11/D15/D16 全部有实现与测试证据，契约 diff 为空，四套测试与 ruff 全绿，未发现 blocker，无需修复提交。本轮仅新增本节 docs 记录。（2026-10-20 更正：当时「无 CONTRACT-CHANGE-NEEDED」结论有误——契约 diff 为空只说明本分支未改契约，与声明缺口正交；Reviewy B1 见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）
 
 ### 模型使用（operator 按 session jsonl 回填）
 
@@ -299,7 +302,7 @@ PYTHONPATH=sbtd-runtime python3 -B -c '…读取 /tmp/r21a-smoke-d1e2734/d1e2734
 | 可见 panel 数 | 13 | 13（`section.panel` 全部可见，id 含 overview…data-quality） | PASS |
 | `<script>` 元素 | 0 | 0（inline／external 均 0） | PASS |
 | 页面网络请求 | 仅 HTML 自身 | 1 条：`GET /d1e2734-smoke.html` 200；favicon 为 `data:,`，无其他资源请求 | PASS |
-| 字体栈 | 系统字体＋CJK fallback | body computed `-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragana Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif` | PASS |
+| 字体栈 | 系统字体＋CJK fallback | body computed `-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif` | PASS |
 | 图表文字颜色 | 浅色 `rgb(231, 237, 245)` | `svg.chart text` computed fill／color 均 `rgb(231, 237, 245)`（4 个 chart） | PASS |
 | console 错误 | 0 | 0 条消息（Errors 0／Warnings 0） | PASS |
 | 渲染 | 无脚本错误、版面正常 | 全页截图确认暗色主题 13 panel 中文标题／图表／表格正常渲染（截图不入 Git，已移至 `/tmp/r21a-smoke-d1e2734/browser-check.png`） | PASS |
@@ -309,7 +312,7 @@ PYTHONPATH=sbtd-runtime python3 -B -c '…读取 /tmp/r21a-smoke-d1e2734/d1e2734
 
 ### 修复
 
-无。两项检查全过，未发现 blocker，未改任何代码；无 CONTRACT-CHANGE-NEEDED（`sbtd-runtime/contracts/`、PRD、ADR、CSV schema 均未触碰）。本轮无 fix 提交，故未触发全量 unittest 复跑（fix policy 仅在修复时要求）；本 tip 的全量套件证据见上节 Re-verify（301／68／15 全绿）。产物目录 `/tmp/r21a-smoke-d1e2734/` 在仓外；`reports/d1e2734-restart-smoke.{json,md}` 为 gitignored，未 force-add；工作树保持干净。
+无。两项检查全过，未发现 blocker，未改任何代码（`sbtd-runtime/contracts/`、PRD、ADR、CSV schema 均未触碰）。（2026-10-20 更正：原「无 CONTRACT-CHANGE-NEEDED」结论有误——未触碰契约 ≠ 声明完整；Reviewy B1 发现 getExport／deleteExport／downloadExport 缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）本轮无 fix 提交，故未触发全量 unittest 复跑（fix policy 仅在修复时要求）；本 tip 的全量套件证据见上节 Re-verify（301／68／15 全绿）。产物目录 `/tmp/r21a-smoke-d1e2734/` 在仓外；`reports/d1e2734-restart-smoke.{json,md}` 为 gitignored，未 force-add；工作树保持干净。
 
 ### 模型使用（operator 按 session jsonl 回填）
 
@@ -319,3 +322,43 @@ PYTHONPATH=sbtd-runtime python3 -B -c '…读取 /tmp/r21a-smoke-d1e2734/d1e2734
 |---|---|---|---|---|
 | smoke 复核主会话 | kimi-code/k3:max | kimi-code/k3（thinking max） | 35（34 toolUse + 1 stop） | 49 |
 | 会话标题生成 | unknown | unknown | unknown（jsonl 仅有空 `title` 记录，无 `title_change`，未记录生成调用） | unknown |
+
+## #150 task.md 回填模型使用（PR #150 合并后）
+
+PR #150（contract-auth-401-responses）squash-merge 为 base `10bc530` 后，operator 在本 worktree 以两次 omp run 回填 #150 task.md（目标文件 `ai/tasks/v2.1.0-rc.2-contract-auth-401-responses/task.md`，非本文件）。计数已按 jsonl 核验，口径同上（`type=message` 且 `message.role=assistant` 分组计数，工具调用为 `type=toolCall` content block 数）：
+
+| Session | 请求模型 | 实际模型 | assistant messages | 备注 |
+|---|---|---|---|---|
+| `01a159a0-e6e1-70dd-8fe5-d66505e229ef`（2026-10-20T14:04:39Z／22:04 +08:00） | kimi-code/k3:high（stdin 卡住的 run，被 kill） | kimi-code/k3（thinking high） | 1（aborted：空 content、stopReason `aborted`、"Request was aborted"） | kill 于文件编辑前；0 次工具调用 |
+| `01a159a1-69dc-7452-a04e-d46d19899258`（2026-10-20T14:05:13Z／22:05 +08:00） | kimi-code/k3:max | kimi-code/k3（thinking max） | 9（8 toolUse + 1 stop） | #150 task.md 回填编辑成功（read×1、edit×6、bash×1；`git diff --stat` 1 file changed, 27+/11-）；8 次工具调用 |
+
+来源：`~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T14-04-39-521Z_01a159a0-e6e1-70dd-8fe5-d66505e229ef.jsonl` 与 `2026-10-20T14-05-13-052Z_01a159a1-69dc-7452-a04e-d46d19899258.jsonl`。两会话均无 subagent、无 fallback（model_change 各一次 kimi-code/k3，resolvedModelIsFallback: false）。
+
+## CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）
+
+为何记录：Reviewy 对 PR #151 @ `5021ee1` 的 B1 发现——runtime `export_resource` 对 getExport／downloadExport／deleteExport 实际会返回 400／404／409／410，但 `sbtd-runtime/contracts/openapi.yaml` 这三个操作只声明 401／403／2xx。createExport 已完整（401／403／202／400／404／410，openapi.yaml:468–497），不受影响。本节为 docs 记录：不改 frontmatter `status`／`completed_at`，不 reopen 任务生命周期；状态事件按 Reviewy 要求新增一条 done→done 发现记录（见「状态事件」末行）。
+
+每操作缺失声明（对当前 tip `5021ee1` 核验）：
+
+| operationId | openapi.yaml 位置 | 已声明 | runtime 实际还会返回 | 缺失 |
+|---|---|---|---|---|
+| getExport | operationId 第 499 行；responses 第 508–514 行 | 401／403／200 | 400（query 参数）／404（ExportNotFound）／409（ExportNotReady）／410（ExportGone） | 400、404、409、410 |
+| deleteExport | operationId 第 516 行；responses 第 529–534 行 | 401／403／204 | 400（query 参数；DELETE 缺 Idempotency-Key）／404／409／410 | 400、404、409、410 |
+| downloadExport | operationId 第 536 行；responses 第 547–551 行 | 401／403／200 | 400（query 参数）／404／409／410 | 400、404、409、410 |
+
+证据：
+
+- `sbtd-runtime/serve.py` `export_resource`（第 577–605 行）：第 579–580 行 query 参数 → 400；第 583–584 行 DELETE 缺 Idempotency-Key → 400；第 600–601 行 `ExportNotFound` → 404；第 602–603 行 `ExportGone` → 410；第 604–605 行 `ExportNotReady` → 409。三个操作共享同一 handler：第 614 行 GET／DELETE `/api/v1/exports/{export_id}`，第 616 行 GET `/api/v1/exports/{export_id}/file`。
+- `sbtd-runtime/tests/test_exports_http.py`：`test_download_auth_path_boundary_and_delete`（第 229 行）第 244–247 行断言带 query 后缀下载 → 400，第 248–257 行断言 foreign／traversal export id → 404；另有 400 断言（第 155、187、310、319、344 行）、404（第 216 行）、410（第 227 行）。
+- 本分支未修改契约的事实不变：`git diff 10bc530..HEAD -- sbtd-runtime/contracts/` 为空（0 行）。「分支未改契约」与「契约声明缺口」是正交的两件事；前文 round-2 验证证据、re-verify「契约未变检查」／「复核结论」、smoke「修复」中「diff 为空 ⇒ 无 CONTRACT-CHANGE-NEEDED」的推断不成立，已就地更正。
+
+处理：与 #149／#150 先例一致，需要**独立契约 PR** 为 getExport／deleteExport／downloadExport 补齐 400／404／409／410 响应声明；契约 PR 与本 PR 的先后顺序等待用户决定。**本 PR 不得修改 `openapi.yaml` 或任何契约／schema／PRD／ADR／runtime／测试代码**；本节仅为 docs 标记。
+
+### 模型使用（本轮 B1 docs）
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| B1 docs 主会话 | kimi-code/k3:max | unknown | unknown | unknown |
+| 会话标题生成 | unknown | unknown | unknown | unknown |
+
+执行命令（verbatim）：`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-b1-docs/prompt.md)" </dev/null`
