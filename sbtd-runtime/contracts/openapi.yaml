@@ -423,11 +423,23 @@ paths:
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExportRequest"
       responses:
         "403":
           $ref: "#/components/responses/Forbidden"
         "202":
           $ref: "#/components/responses/Json"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
   /api/v1/exports/{export_id}:
     get:
       operationId: getExport
@@ -647,7 +659,7 @@ components:
           schema:
             $ref: "#/components/schemas/Envelope"
     BadRequest:
-      description: Invalid time, dimension, or metric. No silent default.
+      description: Invalid or missing request body, field type, export format, time, dimension, or metric. No silent default.
     Unauthorized:
       description: Missing credential or scope. Does not reveal whether a hidden object exists.
     NotFound:
@@ -659,6 +671,72 @@ components:
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
   schemas:
+    CreateExportRequest:
+      type: object
+      additionalProperties: false
+      required: [snapshot_id, format]
+      description: |
+        Fix the completed snapshot and presentation state at export selection
+        time (PRD 13.2–13.3). Later refreshes or filter changes must not change
+        this export. A missing or invisible snapshot returns 404; an expired
+        snapshot returns 410, never an automatically selected replacement.
+      properties:
+        snapshot_id:
+          $ref: "#/components/parameters/SnapshotId/schema"
+        format:
+          type: string
+          enum: [html, csv]
+        presentation_state:
+          $ref: "#/components/schemas/ExportPresentationState"
+          description: Optional; when omitted, use the existing ReportDocument default presentation state.
+    ExportPresentationState:
+      type: object
+      additionalProperties: false
+      required:
+        - theme
+        - report_width_px
+        - expanded_detail_ids
+        - table_sort
+        - preview_row_sets
+        - panel_order
+        - legend_state
+      description: |
+        Complete presentation state matching Dashboard PresentationState
+        (PRD 13.3). Affects rendering only, never the CSV dataset range.
+        Hidden series must retain an explanatory note in the export.
+      properties:
+        theme:
+          type: string
+          enum: [dark, light]
+          description: Report color theme.
+        report_width_px:
+          type: number
+          description: Standard report width in CSS pixels.
+        expanded_detail_ids:
+          type: array
+          items:
+            type: string
+          description: Identifiers of expanded detail objects.
+        table_sort:
+          type: object
+          additionalProperties:
+            type: string
+          description: Table identifiers mapped to their current sort selection.
+        preview_row_sets:
+          type: object
+          additionalProperties:
+            type: number
+          description: Table identifiers mapped to preview row counts; never a CSV row limit.
+        panel_order:
+          type: array
+          items:
+            type: string
+          description: Ordered Panel identifiers from the panel manifest.
+        legend_state:
+          type: object
+          additionalProperties:
+            type: boolean
+          description: Series identifiers mapped to their visibility state.
     Health:
       type: object
       additionalProperties: false

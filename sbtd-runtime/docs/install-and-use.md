@@ -107,6 +107,21 @@ PY
 - R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现（见上文）。仍没有远程业务控制端点。
 - codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
 
+### R2.1a 导出请求契约（服务实现仍待交付）
+
+用户于 2026-10-20 批准独立契约变更：`POST /api/v1/exports` 必须提交
+`application/json`，例如 `{"snapshot_id":"snap_report","format":"html"}`。
+`snapshot_id` 固定点击导出时已完成的快照；`format` 当前仅接受 `html` 或 `csv`，
+不包含后续 R2.1b 的 JPEG／PDF。现有 Bearer、CSRF、Idempotency-Key 要求不变。
+
+可省略 `presentation_state`（使用现有 ReportDocument 默认呈现状态）；若提供，
+须包含与 Dashboard `PresentationState` 相同的七个字段：`theme`、
+`report_width_px`、`expanded_detail_ids`、`table_sort`、`preview_row_sets`、
+`panel_order`、`legend_state`，具体类型见 OpenAPI `ExportPresentationState`。
+请求和呈现对象拒绝未知字段；排序、预览行数和隐藏图例不改变 CSV 全量数据范围。
+契约声明非法／缺失请求为 400，不存在／不可见快照为 404，已过期快照为 410；
+不能静默替换成新快照。此变更只定义输入协议，不代表导出作业或 HTTP 错误处理已实现。
+
 ## R2.0a：serve（本地 Dashboard 服务，D5–D8）
 
 R2.0a PR-2 起仓内有 HTTP 服务层 `sbtd-runtime/serve.py`（Starlette＋uvicorn，ADR 0001 §2），服务入仓的 `dashboard/static/` 产物并接 R1 真实库面（`stats_query`／`report_snapshot` over `EventStore`）。安装精确钉版依赖后从仓库根启动：
