@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、contract-only；固定指定分支，仅显式 
 status: done
 branch: contract/v2.1.0-rc.2-auth-401-responses
 created_at: '2026-10-20T12:56:59.675195+00:00'
-updated_at: '2026-10-20T13:22:24.318813+00:00'
+updated_at: '2026-10-20T22:00:00+08:00'
 completed_at: '2026-10-20T13:10:05.388702+00:00'
 ---
 
@@ -119,7 +119,9 @@ DDIA Data Design Review — confirmed。SecurityMiddleware 是 Bearer 失败事�
 
 ## 提交与恢复边界
 
-RESULT：本次 contract-only 验收完成。实现提交 **`c9c9360a0875f24cd56db42831beb678c0af9777`**，parent `ef8975212a4f80686d19a03f3c169bbf533eb117`，message 为 `feat(contract): declare middleware Bearer 401 on authenticated /api/v1 operations`。通过 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py` 显式暂存，仅这两个文件进入实现提交；82 insertions、1 deletion，无 runtime 修改。
+RESULT：本次 contract-only 验收完成。本地实现提交曾为 `c9c9360a0875f24cd56db42831beb678c0af9777`（parent `ef8975212a4f80686d19a03f3c169bbf533eb117`，message `feat(contract): declare middleware Bearer 401 on authenticated /api/v1 operations`），经 PR #150 squash-merge 后，**权威实现 SHA 为 `10bc530caa263c0484046128218a8fc2936f523e`**。pre-merge 本地／PR SHA `c9c9360a0875f24cd56db42831beb678c0af9777`（实现）、`bb2ba1b4a660b24ce7c70be14bf5d420b2b368df`（证据 docs）、`a5aa704952064a48e4344f23b9a25ac4782576f0`（advisor 复核 docs，PR tip）在 squash 后作废，不以 ancestry 声称。通过 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py` 显式暂存，仅这两个文件进入实现提交；82 insertions、1 deletion，无 runtime 修改。
+
+**Squash 权威说明**：合并后以 squash commit `10bc530caa263c0484046128218a8fc2936f523e` 为权威；`git diff a5aa704952064a48e4344f23b9a25ac4782576f0 10bc530caa263c0484046128218a8fc2936f523e` 全树为空，squash 内容与 PR tip 一致。无 force-push。
 
 提交后读取两个 Git blob 计算 SHA-256，确认与验证快照 `local://auth-401-validated-content.json` 完全一致，因此不重复执行未改变内容的测试、不重跑已知 I001 来确认。
 
@@ -132,13 +134,17 @@ RESULT：本次 contract-only 验收完成。实现提交 **`c9c9360a0875f24cd56
 
 ## 模型使用
 
-主会话 host 标识为 `openai-codex/gpt-6-astra`；请求为 `openai-codex/gpt-6-astra:high`，host 未独立暴露 reasoning 配置，不能据此证明 `:high`。独立 simplicity/readability reviewer 自报 host 标识 `kimi-code/k3`。下表仍按用户要求保留 unknown，由 operator 核实回填。
+来源：operator 核验的会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills--/2026-10-20T12-55-55-958Z_01a15961-fb36-7762-a02b-9e81f396ea1c.jsonl` 及其子目录 `AuthCorrectness.jsonl`、`AuthMaintainability.jsonl`。计数口径：每个 jsonl 中 `type=message` 且 `message.role=assistant` 的记录，按 `message.provider/message.model` 分组，含 `stopReason` 为 error／aborted 的记录；工具调用次数为这些消息中 `type=toolCall` content block 数（与 `tool_execution_start` 自定义记录数交叉一致）。请求 tier 取自各 jsonl 的 `thinking_level_change`。主会话 astra 在一次 error 后于 2026-10-20 21:08:35（北京时间）`model_change` 至 `xai-oauth/grok-4.7`（`role: fallback`）。
+
+会话标题生成：jsonl 仅记录 `title`／`title_change`（`source: auto`，主会话 1 次，标题 “Execute attached prompt task”），未记录生成模型或调用消息，故模型与计数为 unknown（`config.yml` 中 smol/tiny 角色为 `cursor/composer-2.5`，但会话记录未证实其被用于标题生成）。
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 主会话 | openai-codex/gpt-6-astra:high | unknown | unknown | unknown |
-| 独立 correctness review | host 默认 reviewer | unknown | unknown | unknown |
-| 独立 simplicity/readability review | host 默认 reviewer | unknown | unknown | unknown |
+| 主会话（回退前） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 18（17 toolUse + 1 error） | 42 |
+| 主会话（回退后） | fallback 角色 | xai-oauth/grok-4.7 | 12（11 toolUse + 1 stop） | 11 |
+| 独立 AuthCorrectness review | kimi-code/k3:max | kimi-code/k3 | 16（14 toolUse + 1 stop + 1 error） | 27 |
+| 独立 AuthMaintainability review | kimi-code/k3:high | kimi-code/k3 | 14（12 toolUse + 1 stop + 1 error） | 17 |
+| 会话标题生成 | unknown | unknown | unknown（1 次 auto title 事件） | unknown |
 
 ## 状态事件
 
@@ -146,7 +152,7 @@ RESULT：本次 contract-only 验收完成。实现提交 **`c9c9360a0875f24cd56
 |---|---|---|---|---|
 | 2026-10-20T12:56:59.675195+00:00 | planned | in-progress | 用户明确 strict；根、分支、路径、runtime 与全部 operation 已核对 | 基线 ef8975212a4f80686d19a03f3c169bbf533eb117；28 operations，26 缺少 middleware 401；serve.py:361,388–396,413–416 |
 | 2026-10-20T13:01:05.329412+00:00 | in-progress | checking | 契约／回归完成，指定验证与真实 HTTP smoke 已执行，进入独立审查与交付检查 | OpenAPI 15 passed；runtime 266/1 skip；wrappers 68 passed；format passed；已知 I001；55 HTTP checks |
-| 2026-10-20T13:10:05.388702+00:00 | checking | done | 指定验证、真实 HTTP smoke、独立审查完成；实现提交的 blob 与验证快照一致 | 实现提交 c9c9360a0875f24cd56db42831beb678c0af9777；contract-only，无 runtime 修改；保留已知 I001 与 Windows skip |
+| 2026-10-20T13:10:05.388702+00:00 | checking | done | 指定验证、真实 HTTP smoke、独立审查完成；实现提交的 blob 与验证快照一致 | 本地实现曾为 c9c9360a0875f24cd56db42831beb678c0af9777；PR #150 squash-merge 权威 SHA 10bc530caa263c0484046128218a8fc2936f523e（pre-merge SHA 作废）；contract-only，无 runtime 修改；保留已知 I001 与 Windows skip |
 
 ## Advisor 复核（astra→grok 回退后的 --advisor 重跑）
 
@@ -193,15 +199,25 @@ BDD: skipped；无行为变更，不新增 .feature。Cross-repo context: contra
 
 ### 本轮模型计数（operator 回填）
 
-不编造消息数或工具调用数。
+来源：会话 jsonl `~/.omp/agent/sessions/--workspace-640-skills--/2026-10-20T13-17-10-870Z_01a15975-6f56-7492-b227-d4359c50f047.jsonl` 及子目录 `__advisor.jsonl`（advisor 子会话 id `01a15975-887a-743e-ae1f-d78b2f7a70ea`），计数口径同「模型使用」。上文“本轮 session id：unknown”由此回填为 `01a15975-6f56-7492-b227-d4359c50f047`。
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 本轮主会话 | openai-codex/gpt-6-astra:high | unknown | unknown | unknown |
-| 本轮 advisor | --advisor，模型未在会话中暴露 | unknown | unknown | unknown |
+| 本轮主会话（回退前） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 1（error） | 0 |
+| 本轮主会话（回退后） | fallback 角色 | xai-oauth/grok-4.7 | 25（24 toolUse + 1 stop） | 53 |
+| 本轮 advisor | --advisor | xai-oauth/grok-4.7 | 22（20 stop + 2 toolUse） | 2 |
+| 会话标题生成 | unknown | unknown | unknown（1 次 auto title 事件） | unknown |
 
-runtime workstation 字段观察到 `xai-oauth/grok-4.7`。该观察不填入上表“实际模型”列，避免把未核实的 host 标识写成计数事实；operator 可按 jsonl 改上表。
+Advisor observed blocker = 0：22 条 advisor 消息中 1 条为非阻塞纠正（提示报告不应写成“没有 advisor 运行”），其余均为 “No side effect to stop”／“No blocker”。
+
+中止尝试：会话 `01a15974-e768-718a-b6ea-c30f0e60bcad` 启动后 astra 立即 error 并回退 grok-4.7，随后被 operator kill，未产出提交。计数：`openai-codex/gpt-6-astra` 1（error，0 工具调用）；`xai-oauth/grok-4.7` 4（3 toolUse + 1 aborted，9 工具调用）；其 `__advisor.jsonl`（子会话 `01a15974-fe12-72a0-8ee4-c6249b9ea5a4`）`xai-oauth/grok-4.7` 2（stop，0 工具调用）；auto title 1 次，生成模型 unknown。
 
 ### 本轮结论
 
 无 advisor blocker，无契约或测试代码变更。若本段随后单独提交，只允许 `git add ai/tasks/v2.1.0-rc.2-contract-auth-401-responses/task.md`。不暂存 `.omp-r12b-addendum.txt` 与 `ai/tasks/codex-verify/`。不 push、不开 PR、不 merge。`/workspace/640-skills-r2.1a` 本轮未写入。
+
+## PR #150 合并后回填（operator）
+
+本段只回填合并后权威 SHA 与模型计数，不重开任务、不新增状态事件。权威实现 SHA：`10bc530caa263c0484046128218a8fc2936f523e`（PR #150 squash）；pre-merge `c9c9360`／`bb2ba1b`／`a5aa704` 作废。本回填编辑由 omp CLI 执行，jsonl 只记录 `kimi-code/k3`，不记录 thinking tier，故以下精确命令作为 `k3:max` 请求级别的证据（未启用 --advisor）：
+
+`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-backfill-150/prompt.md)" </dev/null`

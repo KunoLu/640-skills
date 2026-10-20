@@ -1,0 +1,955 @@
+"""Offline HTML and full CSV export for one frozen snapshot.
+
+Metrics are read from the frozen query before any output redaction. Dataset
+rows come from SnapshotStore.dataset_page. Presentation changes HTML only.
+"""
+
+from __future__ import annotations
+
+import html
+import json
+import math
+import re
+from collections import Counter
+from dataclasses import replace
+from pathlib import Path
+from typing import Any
+
+from csv_export import CSV_SCHEMA_VERSION, serialize_csv
+from report_snapshot import DEFAULT_PAGE_SIZE, REDACTION_POLICY_VERSION
+from stats_query import query
+
+RENDERER_VERSION = "r2.1a.1"
+_MANIFEST_PATH = Path(__file__).resolve().parent / "contracts" / "panel-manifest.json"
+_FONT_FAMILY = (
+    '-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, '
+    '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", '
+    '"Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif'
+)
+_FAMILY_LABELS = {
+    "task": "任务",
+    "run": "运行",
+    "step": "步骤",
+    "gate": "Gate",
+    "component": "组件",
+    "invocation": "调用",
+    "validation_run": "验证运行",
+    "validation_case": "验证用例",
+    "usage": "用量",
+    "artifact": "工件",
+    "event": "事件",
+    "data_quality": "数据质量",
+}
+# View metadata only. Panel identity stays in the manifest.
+_PANEL_FAMILIES = {
+    "task-lifecycle": ("task",),
+    "activity-trend": ("event",),
+    "mode-decisions": ("event",),
+    "step-performance": ("step",),
+    "blockers": ("run",),
+    "gate-matrix": ("gate",),
+    "component-usage": ("component", "invocation"),
+    "validation-evidence": ("validation_run", "validation_case"),
+    "host-model-usage": ("usage",),
+    "project-actor-summary": ("task",),
+}
+_TASK_LIMIT = 20
+_DETAIL_LIMIT = 50
+_NUMERIC = re.compile(r"^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$")
+_FRACTION = re.compile(r"^-?\d+/-?\d+$")
+# Absolute paths only. A slash inside parent/demo or duration.step_p50/p95
+# is preceded by a word character and must survive.
+_ABS_PATH = re.compile(
+    r"(?<![A-Za-z0-9_])(?:"
+    r"~(?:/[A-Za-z0-9._~\-]+)+"
+    r"|/(?![/\s])[A-Za-z0-9._~\-]+(?:/[A-Za-z0-9._~\-]+)*"
+    r"|[A-Za-z]:\\[^\s\"'<>]+"
+    r"|\\\\[^\s\"'<>]+"
+    r"|file://[^\s\"'<>]+"
+    r")"
+)
+_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_URL = re.compile(r"(?i)\b(?:https?|ftp)://[^\s\"'<>]+")
+_PROTO_REL = re.compile(r"(?<![:/\w])//[A-Za-z0-9.\-]+")
+_BEARER = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._\-+/=]{6,}")
+_ASSIGNED = re.compile(
+    r"(?i)\b(?:api[_-]?key|secret|password|passwd|token|authorization|credential)"
+    r"\b\s*[:=]\s*\S+"
+)
+_SK = re.compile(r"\bsk-[A-Za-z0-9_\-]{8,}\b")
+_AWS = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
+_PEM = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
+_CSS = """
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #14171c; --panel: #1b1f26; --text: #e7edf5;
+  --muted: #9aa8b8; --line: #2c333d; --unknown: #8eabcb;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f7fb; --panel: #ffffff; --text: #1c2430;
+  --muted: #5c6b7c; --line: #d5dee8; --unknown: #3d5f86;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: FONT_FAMILY;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.report { margin: 0 auto; padding: 24px; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+.panel h2 { margin: 0 0 8px; font-size: 16px; }
+.panel-id, .metric dt {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--muted);
+  font-size: 12px;
+}
+.metric { margin: 0 0 10px; }
+.metric dd { margin: 0; font-size: 28px; }
+.unknown, .marker, .insufficient, .legend-hidden { color: var(--unknown); }
+table { border-collapse: collapse; width: 100%; }
+th, td {
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  padding: 4px 8px;
+  vertical-align: top;
+}
+svg { max-width: 100%; height: auto; }
+svg text { fill: currentColor; }
+""".replace("FONT_FAMILY", _FONT_FAMILY)
+
+
+class ExportCancelled(Exception):
+    """Worker cancellation observed before the artifact is returned."""
+
+
+def load_panel_manifest() -> dict:
+    return json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+def _ordered_panels(manifest: dict) -> list[dict]:
+    return sorted(manifest["panels"], key=lambda panel: panel["order"])
+
+
+def default_presentation(manifest: dict | None = None) -> dict:
+    manifest = manifest or load_panel_manifest()
+    return {
+        "theme": "dark",
+        "report_width_px": 1440,
+        "expanded_detail_ids": [],
+        "table_sort": {},
+        "preview_row_sets": {},
+        "panel_order": [panel["panel_id"] for panel in _ordered_panels(manifest)],
+        "legend_state": {},
+    }
+
+
+def _check(cancelled) -> None:
+    if cancelled():
+        raise ExportCancelled("export cancelled")
+
+
+def _controls(text: str) -> str:
+    return "".join(ch for ch in text if ch in "\t\n\r" or ord(ch) >= 32)
+
+
+def _is_literal(text: str) -> bool:
+    return bool(_NUMERIC.fullmatch(text) or _FRACTION.fullmatch(text))
+
+
+def _has_raw_audit(node: Any) -> bool:
+    if isinstance(node, dict):
+        keys = {str(key).casefold() for key in node}
+        if keys & {
+            "messages",
+            "conversation",
+            "privacy",
+            "prompt",
+            "reasoning",
+            "password",
+            "passwd",
+            "secret",
+            "token",
+            "api_key",
+            "apikey",
+            "authorization",
+            "cookie",
+            "credential",
+        }:
+            return True
+        if "event_type" in keys and keys & {"schema_version", "extensions"}:
+            return True
+        return any(
+            _raw_audit(str(key)) or _has_raw_audit(value) for key, value in node.items()
+        )
+    if isinstance(node, list):
+        return any(_has_raw_audit(item) for item in node)
+    return False
+
+
+def _raw_audit(text: str) -> bool:
+    body = text.removeprefix("'").strip()
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(body):
+        if char not in "{[":
+            continue
+        try:
+            parsed, _end = decoder.raw_decode(body[index:])
+        except json.JSONDecodeError:
+            continue
+        if _has_raw_audit(parsed):
+            return True
+    return False
+
+
+def redact_text(text: str) -> str:
+    """Output-only redaction. Numeric literals and relative ids stay intact."""
+    if text in {"", "unknown", "true", "false"} or _is_literal(text):
+        return text
+    if _raw_audit(text) or _PEM.search(text):
+        return "[redacted]"
+    text = _URL.sub("[redacted-url]", text)
+    text = _PROTO_REL.sub("[redacted-url]", text)
+    text = re.sub(r"(?i)@import\b", "[redacted-import]", text)
+    text = re.sub(r"(?i)url\s*\(", "[redacted-url](", text)
+    text = _BEARER.sub("[redacted]", text)
+    text = _ASSIGNED.sub("[redacted]", text)
+    text = _SK.sub("[redacted]", text)
+    text = _AWS.sub("[redacted]", text)
+    text = _EMAIL.sub("[redacted-email]", text)
+    text = _ABS_PATH.sub("[redacted-path]", text)
+    return text
+
+
+def redact_cell(column: str, text: str) -> str:
+    if column == "metric_id" or _is_literal(text):
+        return text
+    parsed = None
+    if text[:1] in "{[":
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+    if isinstance(parsed, (dict, list)):
+        return json.dumps(
+            _redact_node(parsed),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    return redact_text(text)
+
+
+def _redact_node(value: Any) -> Any:
+    if isinstance(value, (dict, list)) and _has_raw_audit(value):
+        return "[redacted]"
+    if isinstance(value, dict):
+        return {
+            _redact_node(str(key)): _redact_node(item) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_node(item) for item in value]
+    if isinstance(value, str):
+        return "[redacted]" if _raw_audit(value) else redact_text(value)
+    return value
+
+
+def _non_exportable_ids(snapshot) -> set[str]:
+    blocked: set[str] = set()
+    dataset = getattr(snapshot, "dataset", None)
+    events = dataset.get("events") if isinstance(dataset, dict) else None
+    if not isinstance(events, list):
+        return blocked
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        privacy = event.get("privacy")
+        if not isinstance(privacy, dict):
+            continue
+        exportable = privacy.get("exportable", True)
+        classification = privacy.get("classification", "local-metadata")
+        if exportable is False or classification != "local-metadata":
+            event_id = event.get("event_id")
+            if isinstance(event_id, str):
+                blocked.add(event_id)
+    return blocked
+
+
+def _row_event_id(row: dict) -> str | None:
+    if row.get("record_type") == "event":
+        record_id = row.get("record_id")
+        return record_id if isinstance(record_id, str) else None
+    fields = row.get("fields")
+    if isinstance(fields, dict) and isinstance(fields.get("event_id"), str):
+        return fields["event_id"]
+    return None
+
+
+def _withheld(row: dict, blocked: set[str]) -> bool:
+    if row.get("record_type") == "task":
+        return False
+    event_id = _row_event_id(row)
+    return event_id in blocked
+
+
+def _walk_rows(
+    snapshot, snapshots, cancelled, blocked: set[str]
+) -> tuple[list[dict], int]:
+    if snapshots is None:
+        raise ValueError("dataset cursor walk requires a snapshot store")
+    kept: list[dict] = []
+    withheld = 0
+    cursor = None
+    while True:
+        _check(cancelled)
+        page = snapshots.dataset_page(snapshot.snapshot_id, cursor, DEFAULT_PAGE_SIZE)
+        for row in page["rows"]:
+            _check(cancelled)
+            if _withheld(row, blocked):
+                withheld += 1
+                continue
+            kept.append(row)
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    _check(cancelled)
+    return kept, withheld
+
+
+def _presentation(state, manifest: dict) -> dict:
+    base = default_presentation(manifest)
+    if not isinstance(state, dict):
+        return base
+    merged = dict(base)
+    for key in base:
+        if key in state:
+            merged[key] = state[key]
+    ids = base["panel_order"]
+    order = merged["panel_order"]
+    if not isinstance(order, list) or len(order) != len(ids) or set(order) != set(ids):
+        merged["panel_order"] = list(ids)
+    else:
+        merged["panel_order"] = list(order)
+    return merged
+
+
+def _css_px(value: Any) -> str:
+    if type(value) is bool or not isinstance(value, (int, float)):
+        value = 1440
+    if not math.isfinite(value) or value < 0:
+        value = 1440
+    text = format(value, "f").rstrip("0").rstrip(".")
+    if not re.fullmatch(r"\d+(?:\.\d+)?", text):
+        return "1440"
+    return text
+
+
+def _mapping(state: dict, name: str) -> dict:
+    value = state.get(name)
+    return value if isinstance(value, dict) else {}
+
+
+def _limit(state: dict, keys: tuple[str, ...], default: int) -> int:
+    sets = _mapping(state, "preview_row_sets")
+    for key in keys:
+        if key not in sets:
+            continue
+        value = sets[key]
+        if type(value) is bool or not isinstance(value, (int, float)):
+            return default
+        if not math.isfinite(value) or value < 0:
+            return default
+        return math.floor(value)
+    return default
+
+
+def _sort_spec(state: dict, keys: tuple[str, ...]) -> str | None:
+    sorts = _mapping(state, "table_sort")
+    for key in keys:
+        value = sorts.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _field(row: dict, name: str) -> Any:
+    if name in {"record_id", "record_type", "relation_role"}:
+        return row.get(name)
+    fields = row.get("fields")
+    if isinstance(fields, dict) and name in fields:
+        return fields[name]
+    return None
+
+
+def _apply_sort(rows: list[dict], spec: str | None) -> list[dict]:
+    if not spec:
+        return list(rows)
+    descending = spec.startswith("-")
+    body = spec[1:] if descending else spec
+    field, sep, direction = body.partition(":")
+    if sep and direction == "desc":
+        descending = True
+    elif sep and direction == "asc":
+        descending = False
+
+    def key(row: dict) -> tuple:
+        value = _field(row, field)
+        missing = value is None or value == ""
+        return (missing, "" if missing else str(value))
+
+    return sorted(rows, key=key, reverse=descending)
+
+
+def _esc(value: Any) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def _show(value: Any) -> str:
+    if value is None or value == "":
+        return "unknown"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return str(value)
+    return _esc(redact_text(_controls(str(value))))
+
+
+def _render_value(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value) if math.isfinite(value) else "unknown"
+    if isinstance(value, list):
+        return "、".join(_render_value(item) for item in value)
+    if isinstance(value, dict):
+        if not value:
+            return "unknown"
+        return "、".join(
+            f"{_render_value(str(key))} {_render_value(item)}"
+            for key, item in value.items()
+        )
+    if isinstance(value, str):
+        return "[redacted]" if _raw_audit(value) else redact_text(value)
+    return _render_value(str(value))
+
+
+def _metric_body(entry: Any, insufficient: str) -> str:
+    if not isinstance(entry, dict):
+        return f"unknown — {insufficient}"
+    if entry.get("support") == "unsupported":
+        reason = entry.get("reason")
+        return "不支持" + (f" — {reason}" if reason else "")
+    reason = entry.get("reason") or entry.get("missing_reason")
+    strata = entry.get("strata") if isinstance(entry.get("strata"), dict) else None
+    chunks: list[str] = []
+    if entry.get("value") is None:
+        text = "unknown" + (f"（{reason}）" if reason else "")
+        if not strata:
+            text += f" — {insufficient}"
+        chunks.append(text)
+    else:
+        chunks.append(_render_value(entry.get("value")))
+    if strata:
+        for name, item in strata.items():
+            item_value = item.get("value") if isinstance(item, dict) else None
+            status = item.get("sample_status") if isinstance(item, dict) else None
+            extra = (
+                f"（{status}）"
+                if isinstance(status, str) and status != "decidable"
+                else ""
+            )
+            chunks.append(
+                f"{_render_value(str(name))} {_render_value(item_value)}{extra}"
+            )
+    marks = []
+    if entry.get("support") == "conditional":
+        marks.append("conditional")
+    if entry.get("missing") is True:
+        marks.append("partial")
+    status = entry.get("sample_status")
+    if isinstance(status, str) and status != "decidable":
+        marks.append(status)
+    if marks:
+        chunks.append(" ".join(marks))
+    return " ".join(chunks)
+
+
+def _metric_html(metric_id: str, entry: Any, insufficient: str) -> str:
+    body = _esc(redact_text(_metric_body(entry, insufficient)))
+    return f'<div class="metric"><dt>{_esc(metric_id)}</dt><dd>{body}</dd></div>'
+
+
+def _chart(series: list[tuple[str, float]]) -> str:
+    if not series:
+        return ""
+    peak = max(abs(value) for _, value in series) or 1.0
+    height = 16 * len(series) + 4
+    parts = [f'<svg class="chart" width="460" height="{height}" role="img">']
+    for index, (metric_id, value) in enumerate(series):
+        width = 1 if value == 0 else max(1, round(abs(value) / peak * 240))
+        y = 4 + index * 16
+        parts.append(
+            f'<rect data-series="{_esc(metric_id)}" x="0" y="{y}" '
+            f'width="{width}" height="12" fill="currentColor"></rect>'
+        )
+        parts.append(
+            f'<text x="248" y="{y + 11}" font-size="12">'
+            f"{_esc(metric_id)} {_esc(value)}</text>"
+        )
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _count_label(title: str, shown: int, total: int) -> str:
+    return f"{title}：展示 {shown} 条／范围内总 {total} 条"
+
+
+def _rows_of(rows: list[dict], family: str) -> list[dict]:
+    return [row for row in rows if row.get("record_type") == family]
+
+
+def _family_table(
+    panel_id: str,
+    family: str,
+    rows: list[dict],
+    state: dict,
+    totals: dict[str, int],
+    *,
+    detail: bool,
+) -> str:
+    chosen = _apply_sort(
+        _rows_of(rows, family),
+        _sort_spec(state, (f"{panel_id}:{family}", panel_id, family)),
+    )
+    limit = _limit(state, (f"{panel_id}:{family}", panel_id, family), _DETAIL_LIMIT)
+    shown = chosen[:limit]
+    total = totals.get(family, len(chosen))
+    label = _FAMILY_LABELS.get(family, family)
+    css = "panel-detail" if detail else "panel-table"
+    body = []
+    for row in shown:
+        body.append(
+            "<tr>"
+            f"<td>{_show(row.get('record_id'))}</td>"
+            f"<td>{_show(_field(row, 'status'))}</td>"
+            f"<td>{_show(_field(row, 'occurred_at'))}</td>"
+            f"<td>{_show(row.get('relation_role'))}</td>"
+            "</tr>"
+        )
+    if not body:
+        note = "范围内无记录。" if total == 0 else "无展示行。"
+        body.append(f'<tr><td colspan="4">{note}</td></tr>')
+    return (
+        f'<div class="{css}">'
+        f"<p>{_esc(_count_label(label, len(shown), total))}</p>"
+        "<table><thead><tr><th>记录</th><th>状态</th>"
+        "<th>时间</th><th>角色</th></tr></thead><tbody>"
+        + "".join(body)
+        + "</tbody></table></div>"
+    )
+
+
+def _task_detail(task_uid: str, rows: list[dict], state: dict) -> str:
+    steps = [
+        row
+        for row in rows
+        if row.get("record_type") == "step" and _field(row, "task_uid") == task_uid
+    ]
+    events = [
+        row
+        for row in rows
+        if row.get("record_type") == "event" and _field(row, "task_uid") == task_uid
+    ]
+    step_spec = _sort_spec(state, ("task-audit-detail:step", "step"))
+    if step_spec:
+        steps = _apply_sort(steps, step_spec)
+    else:
+        steps = sorted(steps, key=lambda row: str(_field(row, "started_at") or ""))
+    event_spec = _sort_spec(state, ("task-audit-detail:event", "event"))
+    if event_spec:
+        events = _apply_sort(events, event_spec)
+    else:
+        events = sorted(
+            events,
+            key=lambda row: str(_field(row, "occurred_at") or ""),
+            reverse=True,
+        )
+    step_limit = _limit(state, ("task-audit-detail:step", "step"), _DETAIL_LIMIT)
+    event_limit = _limit(state, ("task-audit-detail:event", "event"), _DETAIL_LIMIT)
+    shown_steps = steps[:step_limit]
+    shown_events = events[:event_limit]
+    step_rows = []
+    for row in shown_steps:
+        step_rows.append(
+            "<tr>"
+            f"<td>{_show(_field(row, 'step_run_id'))}</td>"
+            f"<td>{_show(_field(row, 'attempt_no'))}</td>"
+            f"<td>{_show(_field(row, 'started_at'))}</td>"
+            f"<td>{_show(_field(row, 'duration_ms'))}</td>"
+            f"<td>{_show(_field(row, 'status'))}</td>"
+            "</tr>"
+        )
+    event_items = []
+    for row in shown_events:
+        status = _field(row, "status")
+        suffix = "" if status is None else f" — {_show(status)}"
+        event_items.append(
+            "<li>"
+            f"{_show(_field(row, 'occurred_at'))} {_show(_field(row, 'event_type'))}"
+            f"{suffix}</li>"
+        )
+    step_body = (
+        "".join(step_rows)
+        if step_rows
+        else '<tr><td colspan="5">范围内无该任务的步骤记录。</td></tr>'
+    )
+    event_body = (
+        "".join(event_items) if event_items else "<li>范围内无该任务的事件。</li>"
+    )
+    return (
+        '<div class="panel-detail">'
+        f"<h3>步骤时间线（展示 {len(shown_steps)} 条／该任务范围内 {len(steps)} 条）</h3>"
+        "<table><thead><tr><th>步骤</th><th>尝试</th><th>开始</th>"
+        f"<th>耗时 ms</th><th>状态</th></tr></thead><tbody>{step_body}</tbody></table>"
+        f"<h3>事件预览（最新优先；展示 {len(shown_events)} 条／该任务范围内 "
+        f"{len(events)} 条）</h3><ul>{event_body}</ul></div>"
+    )
+
+
+def _task_audit(
+    rows: list[dict], state: dict, totals: dict[str, int], expanded: set[str]
+) -> str:
+    tasks = _apply_sort(
+        _rows_of(rows, "task"),
+        _sort_spec(state, ("task-audit-detail", "task")),
+    )
+    limit = _limit(state, ("task-audit-detail", "task"), _TASK_LIMIT)
+    shown = tasks[:limit]
+    total = totals.get("task", len(tasks))
+    body = []
+    for row in shown:
+        task_uid = str(row.get("record_id"))
+        body.append(
+            "<tr>"
+            f"<td>{_show(row.get('record_id'))}</td>"
+            f"<td>{_show(_field(row, 'status'))}</td>"
+            f"<td>{_show(_field(row, 'worktree_id'))}</td>"
+            f"<td>{_show(row.get('relation_role'))}</td>"
+            "</tr>"
+        )
+        if task_uid in expanded:
+            body.append(
+                f'<tr><td colspan="4">{_task_detail(task_uid, rows, state)}</td></tr>'
+            )
+    if not body:
+        note = "范围内无任务记录。" if total == 0 else "无展示行。"
+        body.append(f'<tr><td colspan="4">{note}</td></tr>')
+    return (
+        f"<p>{_esc(_count_label('任务摘要', len(shown), total))}</p>"
+        "<table><thead><tr><th>任务</th><th>状态</th><th>worktree</th>"
+        f"<th>角色</th></tr></thead><tbody>{''.join(body)}</tbody></table>"
+    )
+
+
+def _quality_html(snapshot, blocked: set[str], warnings: list[str]) -> str:
+    totals = []
+    for item in snapshot.dataset_manifest:
+        family = item.get("record_type")
+        count = item.get("rows")
+        label = (
+            _FAMILY_LABELS.get(family, family) if isinstance(family, str) else "unknown"
+        )
+        shown = (
+            count
+            if isinstance(count, int) and not isinstance(count, bool)
+            else "unknown"
+        )
+        totals.append(f"<tr><td>{_esc(label)}</td><td>{_esc(shown)}</td></tr>")
+    unknown_ids = [
+        item for item in snapshot.unknown_time_event_ids if item not in blocked
+    ]
+    unknown_count = len(snapshot.unknown_time_event_ids)
+    id_text = ""
+    if unknown_ids:
+        preview = "、".join(_redact_node(item) for item in unknown_ids[:5])
+        if len(unknown_ids) > 5:
+            preview += "…"
+        id_text = f"（{_esc(preview)}）"
+    summary = snapshot.quality_summary
+    if isinstance(summary, dict) and summary:
+        summary_text = _esc(
+            redact_text("；".join(f"{key}={value}" for key, value in summary.items()))
+        )
+    else:
+        summary_text = "unknown（快照未携带）"
+    warning_text = "无" if not warnings else _esc("、".join(warnings))
+    watermarks = snapshot.source_watermarks
+    if watermarks:
+        watermark_text = _esc(
+            redact_text(
+                "；".join(
+                    json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+                    for item in watermarks
+                )
+            )
+        )
+    else:
+        watermark_text = "无声明（单一本地来源）"
+    return (
+        "<h3>覆盖（dataset manifest，实测行数）</h3>"
+        "<table><thead><tr><th>数据族</th><th>行数</th></tr></thead>"
+        f"<tbody>{''.join(totals)}</tbody></table>"
+        "<h3>缺口与未关联</h3><ul>"
+        f"<li>未知发生时间事件：{unknown_count} 条{id_text}</li>"
+        f"<li>quality_summary：{summary_text}</li>"
+        f"<li>快照告警：{warning_text}</li>"
+        f"<li>来源水位：{watermark_text}</li>"
+        f"<li>水位序号 watermark_seq：{_esc(snapshot.watermark_seq)}</li>"
+        "</ul>"
+    )
+
+
+def _panel_html(
+    panel: dict,
+    metrics: dict,
+    rows: list[dict],
+    state: dict,
+    snapshot,
+    totals: dict[str, int],
+    expanded: set[str],
+    blocked: set[str],
+    warnings: list[str],
+) -> str:
+    panel_id = panel["panel_id"]
+    legend = _mapping(state, "legend_state")
+    insufficient = str(panel.get("insufficient_data_zh") or "")
+    parts = [
+        (
+            f'<section id="{_esc(panel_id)}" class="panel" '
+            f'style="grid-column: span {int(panel["desktop_span"])}">'
+        ),
+        (
+            f"<h2>{_esc(panel.get('title_zh') or panel_id)} "
+            f'<span class="panel-id">{_esc(panel_id)}</span></h2>'
+        ),
+        f'<p class="insufficient">{_esc(insufficient)}</p>',
+    ]
+    visible: list[tuple[str, float]] = []
+    hidden: list[str] = []
+    for metric_id in panel.get("metric_ids") or []:
+        entry = metrics.get(metric_id)
+        parts.append(_metric_html(metric_id, entry, insufficient))
+        if legend.get(metric_id) is False:
+            hidden.append(metric_id)
+            continue
+        value = entry.get("value") if isinstance(entry, dict) else None
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        ):
+            visible.append((metric_id, float(value)))
+    for metric_id in hidden:
+        parts.append(
+            f'<p class="legend-hidden">隐藏系列：{_esc(metric_id)}'
+            "（仅影响图表显示，不改变 CSV 数据范围）</p>"
+        )
+    if panel.get("kind") == "chart":
+        parts.append(_chart(visible))
+        summary = "、".join(
+            f"{metric_id} {_render_value(metrics.get(metric_id, {}).get('value'))}"
+            for metric_id, _value in visible
+        )
+        if summary:
+            parts.append(f"<p>图表摘要：{_esc(redact_text(summary))}</p>")
+    if panel_id == "data-quality":
+        parts.append(_quality_html(snapshot, blocked, warnings))
+    elif panel_id == "task-audit-detail":
+        parts.append(_task_audit(rows, state, totals, expanded))
+    else:
+        families = _PANEL_FAMILIES.get(panel_id, ())
+        show_table = panel.get("kind") == "table" or panel_id in expanded
+        for family in families if show_table else ():
+            parts.append(
+                _family_table(
+                    panel_id,
+                    family,
+                    rows,
+                    state,
+                    totals,
+                    detail=panel_id in expanded and panel.get("kind") != "table",
+                )
+            )
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def _html(
+    snapshot,
+    presentation: dict,
+    manifest: dict,
+    rows: list[dict],
+    metrics: dict,
+    warnings: list[str],
+    blocked: set[str],
+) -> bytes:
+    theme = presentation.get("theme")
+    if theme not in ("dark", "light"):
+        theme = "dark"
+    width = _css_px(presentation.get("report_width_px"))
+    panels = {panel["panel_id"]: panel for panel in manifest["panels"]}
+    totals = {}
+    for item in snapshot.dataset_manifest:
+        family = item.get("record_type")
+        count = item.get("rows")
+        if (
+            isinstance(family, str)
+            and isinstance(count, int)
+            and not isinstance(count, bool)
+        ):
+            totals[family] = count
+    expanded_raw = presentation.get("expanded_detail_ids")
+    expanded = set(expanded_raw) if isinstance(expanded_raw, list) else set()
+    coverage = "partial" if snapshot.unknown_time_event_ids else "complete"
+    parts = [
+        "<!DOCTYPE html>",
+        f'<html lang="zh-CN" data-theme="{theme}">',
+        '<head><meta charset="utf-8"><title>SBTD 报告</title>',
+        '<link rel="icon" href="data:,">',
+        f"<style>{_CSS}</style></head><body>",
+        f'<article class="report" style="width: {width}px">',
+        "<header><h1>SBTD 报告</h1>",
+        (
+            "<p>范围："
+            f"{_show(snapshot.effective_from)} → {_show(snapshot.effective_to)}"
+            f"（{_show(snapshot.timezone)}）</p>"
+        ),
+        (
+            "<p>数据水位："
+            f"{_show(snapshot.as_of)}（快照 {_show(snapshot.snapshot_id)}，"
+            f"watermark_seq {_esc(snapshot.watermark_seq)}）</p>"
+        ),
+        (
+            f"<p>数据质量：{coverage}；脱敏版本 {_esc(REDACTION_POLICY_VERSION)}；"
+            f"导出 schema {_esc(CSV_SCHEMA_VERSION)}</p>"
+        ),
+        "<p>HTML 预览受呈现状态限制；CSV 导出同一快照的全部授权数据族。</p>",
+        '</header><main class="grid">',
+    ]
+    for panel_id in presentation["panel_order"]:
+        panel = panels.get(panel_id)
+        if panel is None:
+            continue
+        parts.append(
+            _panel_html(
+                panel,
+                metrics,
+                rows,
+                presentation,
+                snapshot,
+                totals,
+                expanded,
+                blocked,
+                warnings,
+            )
+        )
+    parts.append("</main></article></body></html>")
+    return "".join(parts).encode("utf-8")
+
+
+def _metadata(
+    snapshot,
+    presentation: dict,
+    manifest: dict,
+    payload: bytes,
+    mime: str,
+    warnings: list[str],
+    export_format: str,
+) -> dict:
+    return {
+        "mime_type": mime,
+        "format": export_format,
+        "byte_size": len(payload),
+        "redaction_policy_version": REDACTION_POLICY_VERSION,
+        "export_schema_version": CSV_SCHEMA_VERSION,
+        "panel_manifest_version": manifest.get("manifest_version"),
+        "panel_ids": list(presentation["panel_order"]),
+        "dataset_manifest": [dict(item) for item in snapshot.dataset_manifest],
+        "snapshot_id": snapshot.snapshot_id,
+        "range_from": snapshot.effective_from,
+        "range_to": snapshot.effective_to,
+        "timezone": snapshot.timezone,
+        "warnings": list(warnings),
+        "renderer_version": RENDERER_VERSION,
+    }
+
+
+def render_export(snapshot, format, presentation_state, cancelled, *, snapshots=None):
+    if format not in ("html", "csv"):
+        raise ValueError("format must be html or csv")
+    _check(cancelled)
+    manifest = load_panel_manifest()
+    presentation = _presentation(presentation_state, manifest)
+    blocked = _non_exportable_ids(snapshot)
+    rows, withheld = _walk_rows(snapshot, snapshots, cancelled, blocked)
+    _check(cancelled)
+    warnings = list(snapshot.warnings)
+    if withheld:
+        warnings.append(f"WITHHELD_NON_EXPORTABLE:{withheld}")
+        counts = Counter(row["record_type"] for row in rows)
+        snapshot = replace(
+            snapshot,
+            dataset_manifest=[
+                {**item, "rows": counts[item["record_type"]]}
+                for item in snapshot.dataset_manifest
+            ],
+        )
+    if format == "csv":
+        payload = serialize_csv(snapshot, rows=rows, value_transform=redact_cell)
+        mime = "text/csv; charset=utf-8"
+    else:
+        answer = query(snapshot.dataset, snapshot.raw_scope)
+        _check(cancelled)
+        payload = _html(
+            snapshot,
+            presentation,
+            manifest,
+            rows,
+            answer["metrics"],
+            warnings,
+            blocked,
+        )
+        mime = "text/html; charset=utf-8"
+    _check(cancelled)
+    metadata = _metadata(
+        snapshot, presentation, manifest, payload, mime, warnings, format
+    )
+    _check(cancelled)
+    return payload, metadata
+
+
+class ExportRenderer:
+    def __init__(self, snapshots) -> None:
+        self.snapshots = snapshots
+
+    def __call__(self, snapshot, format, presentation_state, cancelled):
+        return render_export(
+            snapshot,
+            format,
+            presentation_state,
+            cancelled,
+            snapshots=self.snapshots,
+        )
