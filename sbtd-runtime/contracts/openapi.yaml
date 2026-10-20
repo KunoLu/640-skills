@@ -643,6 +643,10 @@ components:
       name: snapshot_id
       in: path
       required: true
+      description: |
+        The pattern documents the runtime ID format. Malformed PATH IDs return
+        404 NotFound (sbtd-runtime/report_snapshot.py:682–683;
+        sbtd-runtime/serve.py get_snapshot / get_snapshot_dataset).
       schema:
         type: string
         pattern: "^snap_[0-9a-f]{32}$"
@@ -697,11 +701,16 @@ components:
       description: |
         Fix the completed snapshot and presentation state at export selection
         time (PRD 13.2–13.3). Later refreshes or filter changes must not change
-        this export. A missing or invisible snapshot returns 404; an expired
-        snapshot returns 410, never an automatically selected replacement.
+        this export. A malformed snapshot_id (failing the pattern) returns
+        400 BadRequest; a well-formed but missing or invisible snapshot returns
+        404; an expired snapshot returns 410, never an automatically selected
+        replacement.
       properties:
         snapshot_id:
           $ref: "#/components/parameters/SnapshotId/schema"
+          description: |
+            Malformed (fails the pattern): 400 BadRequest. Well-formed but
+            missing or invisible: 404. Expired: 410.
         format:
           type: string
           enum: [html, csv]
@@ -750,9 +759,16 @@ components:
           description: Table identifiers mapped to preview row counts; never a CSV row limit.
         panel_order:
           type: array
+          minItems: 1
+          uniqueItems: true
           items:
             type: string
-          description: Ordered Panel identifiers from the panel manifest.
+          description: |
+            Must be a complete, unique ordering of all panel IDs in
+            sbtd-runtime/contracts/panel-manifest.json. Any other value
+            (empty, duplicate, unknown, or missing IDs) is rejected with
+            400 BadRequest. Membership and completeness are checked against
+            the manifest by the service, not enumerated in this schema.
         legend_state:
           type: object
           additionalProperties:

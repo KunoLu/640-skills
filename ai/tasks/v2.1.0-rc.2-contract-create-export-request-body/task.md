@@ -7,8 +7,8 @@ mode_note: 用户明确 strict；2026-10-20 16:01 CST 已批准独立 createExpo
 status: done
 branch: contract/v2.1.0-rc.2-create-export-request-body
 created_at: '2026-10-20T16:04:10.056607+08:00'
-updated_at: '2026-10-20T09:28:23.289553+00:00'
-completed_at: '2026-10-20T09:28:23.289553+00:00'
+updated_at: '2026-10-20T09:42:56.591170+00:00'
+completed_at: '2026-10-20T09:42:56.591170+00:00'
 ---
 
 # createExport requestBody：独立契约变更
@@ -240,6 +240,58 @@ BDD: traceable（原场景的 ID／非负边界 → 既有 test_create_export_* 
 
 独立只读 PatternCorrectness：overall_correctness correct，无 material bug；确认正则来源、共享 SnapshotId 引用、ExportId 无验证、number/minimum 选择及五文件范围。该 reviewer 对锚点与 fullmatch 的一般性等价描述以以上已实测的末尾换行例外为准，不声称逐字符完全等价。两项独立复核均无阻塞问题；10 组原生／中文报告配对、九节顺序、退出码和基线身份已核验。本轮 done 仅指契约交付验收，保留既有 I001、Windows skip 和末尾换行边界，不表示 runtime／部署／发布完成。
 
+## Round 4: snapshot_id error semantics / panel_order
+
+用户明确继续 strict；基线 `dff132c8b98b2e8cd597ff9d1b09c0ea6e9d0e21`，原分支不变。仅修改指定五个文件，不改模型列表、不 push／开 PR。未完整调用 grill-with-docs：两项 reviewer 决策、范围与验收明确。继续沿用 TaskStore catalog 已知限制；本共享交付记录不冒充 helper 生命周期或自动恢复成功。不新增仓内报告文件，本轮原生输出与中文汇总记录于会话工具 artifact。
+
+### 源码证据与决定
+
+- `sbtd-runtime/report_snapshot.py:682–683`：不符合 runtime ID fullmatch 的值抛出 SnapshotNotFound。`sbtd-runtime/serve.py:449–456` 的 get_snapshot 与 `:460–470` 的 get_snapshot_dataset 映射为 404；dataset 还映射过期 410、CursorError 400。SnapshotId 参数 description 说明 pattern 记录 runtime 格式，PATH malformed ID 是 404，不改 pattern。
+- createExport 请求体：snapshot_id 不满足 pattern → 400 BadRequest；格式正确但不存在／不可见 → 404；过期 → 410。两份说明和字段 description 明确区分，不把 PATH 的 404 套用到 body。
+- `sbtd-runtime/contracts/panel-manifest.json:6–189` 定义 13 个 panel，`:8` 为 overview，不存在 summary。`sbtd-runtime/dashboard/src/reportDocument.ts:53–60` 默认使用完整 registry；`:79–85` 按输入逐项绑定，未知 ID 抛错，子集只生成子集，空列表生成空报告。
+- panel_order 必须是 manifest 所有 ID 的完整、唯一排列（可调整顺序，不强制默认顺序）；否则契约要求 400 BadRequest。增加 uniqueItems 与 minItems: 1；不复制 manifest enum、不改 manifest／ReportDocument。schema 只机械检查非空、去重和 string，成员资格／完整性是未来 export handler 的契约义务，不声称已实现。
+- **R2.2 范围外：** getReportSnapshot（runtime get_snapshot）与 dataset 未声明 runtime 返回的 404；dataset 也未声明 410／400。本轮不补这些 response，保留现有 operations 原样。
+
+### 本轮 Book Gate Plan
+
+| Gate | 触发事实 | 阶段 | 状态 |
+|---|---|---|---|
+| book-ddia-data-design | 请求 schema 与错误语义；manifest 单一事实源 | before-dev | passed / confirmed：无持久化、迁移、重试或幂等变更；撤回契约须协调消费者 |
+| book-legacy-change-safety | 既有 panel_order 接受空列表／重复项 | before-dev | passed / characterized：r4-panel-red 两个子用例分别因缺少 minItems／uniqueItems 失败；malformed body 用例通过；无需生产 seam |
+| book-refactoring-pass | 声明式契约／测试／说明，无生产代码修改 | before-dev | not-required |
+| book-ddd-distilled-modeling | 无完整 grill、无领域术语或边界歧义 | before-dev | not-required |
+| book-release-readiness | 不修改 runtime／部署，export HTTP 尚未实现 | finish | not-required；不声称发布就绪 |
+
+BDD 沿用指定 Markdown 场景，中文正文＋英文关键词；Cross-repo context: contract-only；Mock Strategy: none。主会话唯一 writer／验证 controller；验证计划为 malformed body、空／重复 panel 负例、完整 manifest 正例、OpenApiDraftTests、runtime discover、contract＋acceptance、ruff format/check 与真实 schema/runtime smoke。
+
+### 本轮验证与范围边界
+
+主会话使用原生命令（rtk: skipped-for-report）；完整 command（含 smoke 的 `-c` 源码）、stdout、stderr、exit code、带时区时间、基线 SHA、worktree 与环境保存在仓外 `local://r4-*.json`，同 stem `.md` 为中文汇总。未在五文件之外创建仓内报告；会话 artifact 不是 Git 中的持久证据，不承诺跨会话恢复。七组报告保留 red 与 lint failure；九节顺序、stem、退出码与模型列表逐字一致已核验。
+
+| 命令（仓库根） | 实际结果 | raw／中文汇总 |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests.test_create_export_rejects_incomplete_or_invalid_presentation test_golden_contracts.OpenApiDraftTests.test_create_export_rejects_malformed_snapshot_id -v` | 修改 schema 前 2 tests：panel 的空／重复项两个子用例失败；malformed snapshot body 通过 | `local://r4-panel-red.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 12 passed，0.064s；包含 red 用例 green，HTML／CSV malformed body 共 16 个子用例 | `local://r4-openapi-final.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 263 tests：262 passed、1 skipped，17.000s；Windows junction evidence only | `local://r4-runtime-final.{json,md}` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 65 passed，0.573s；与 runtime 重叠，不累计计数 | `local://r4-contract-acceptance-final.{json,md}` |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | exit 0，1 file already formatted | `local://r4-ruff-format.{json,md}` |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1，既有 19–30 行 I001 import 排序；导入段未改，不修无关 lint | `local://r4-ruff-check.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -c <smoke source>` | exit 0；HTML／CSV JSON round-trip、完整 13-panel 正序／逆序接受，空／重复 panel 与 malformed body 拒绝；真实 SnapshotStore.get／dataset_page 的 malformed ID 抛 SnapshotNotFound；9 个组件 schema 合法；与基线比较全部 paths 结构相同 | `local://r4-schema-runtime-smoke.{json,md}` |
+
+测试变更证据：`sbtd-runtime/tests/test_golden_contracts.py:575–579` 从 manifest 读取完整顺序；`:618`、`:701` 替换旧的 summary／空合法 fixture；`:671–691` 独立 malformed body 回归保留原负例并覆盖 html/csv；`:726–727` 增加空列表／重复 ID 负例。没有复制 panel enum、添加依赖／helper 或修改 manifest／ReportDocument。
+
+契约变更证据：`sbtd-runtime/contracts/openapi.yaml:646–649` 说明 PATH 404；`:701–713` 明确 body 的 400／404／410；`:760–771` 增加非空、唯一和完整排列说明。场景 `sbtd-runtime/spec/r1.0-contract-scenarios.md:152–181` 与使用说明 `sbtd-runtime/docs/install-and-use.md:118–130` 同步上述边界。
+
+BDD: traceable；沿用中文正文＋英文关键词，场景对应 test_create_export_*。Cross-repo context: contract-only；API Contract: verified（schema／实例，不是 export HTTP）；Mock Strategy: none。Final Test Report / Run Summary MD: generated；Targeted Rerun / Final Full Rerun: passed（计划测试范围，保留平台 skip）；**lint 并非全绿**。Evidence Source: developer-local；Source Revision: dirty；Environment Alignment: not-needed；Evidence Publication: local-only。
+
+未运行 TS typecheck、Dashboard build／UI E2E、export HTTP、全仓无关 workflow suite：无 TS／UI／runtime 修改，导出 HTTP 尚未实现。独立完整 OAS validator 沿用未安装限制，不新增依赖；jsonschema 不冒充 OAS linter。Graft: skipped，以精确 schema 比较和源码为证据；无导出符号变化，不需 LSP refactor。保留 Round 3 已知 `$` 末尾换行边界，不扩 scope。不存在必须改五文件之外的项目变更，因此不触发 CONTRACT-CHANGE-NEEDED。回滚只撤回契约，必须协调下游消费者；不表示 runtime／部署／发布完成。
+
+### 独立复核与提交边界
+
+- SnapshotSemantics（独立只读）：overall_correctness correct，无 actionable finding；核实 body 引用仅指向 SnapshotId/schema，不继承 PATH description；既有 snapshot operations／createExport responses、Bearer、CSRF、幂等头保持；源码引用准确。
+- PanelContractReview（独立只读）：overall_correctness correct，无 finding；完整 13-panel fixture、两个 schema 负例及 malformed body 的错误路径断言有效，场景／说明一致，未重复枚举。Ponytail / Code Readability：Lean already，net 0 lines；保留按 manifest order 排序，与 registry 语义一致。
+- 两位 reviewer 均未运行测试；主会话为唯一验证 controller。四个已验证内容的 SHA-256 在会话记录保留，提交后核对对应 Git blob；本 task 只追加真实验收和复核结果，模型列表不变。显式 git add 仅五个授权文件；两个禁止路径不暂存。无 push／PR／发布，done 仅指本轮契约交付。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -255,3 +307,7 @@ BDD: traceable（原场景的 ID／非负边界 → 既有 test_create_export_* 
 | 2026-10-20T09:13:47.338151+00:00 | planned | in-progress | strict 继续；ID 与数值证据已核对；模型列表不改 | Round 3 源码证据与 Book Gate Plan；沿用 TaskStore 限制 |
 | 2026-10-20T09:17:12.261988+00:00 | in-progress | checking | 两项契约收紧及负例完成；各 red→green 与真实 SnapshotStore/schema smoke 通过；开始完整验证及独立复核 | reports/r3-id-red、r3-id-green、r3-numbers-red、r3-numbers-green、r3-runtime-schema-smoke |
 | 2026-10-20T09:28:23.289553+00:00 | checking | done | Round 3 契约与实例回归验收完成；两项独立复核无阻塞；保留既有 lint、平台 skip 与可选锚点边界，模型列表不变 | OpenAPI 11 passed；runtime 262/1 skip；contract＋acceptance 64 passed；format passed；SnapshotStore/schema smoke passed；reports/r3-*；独立 review 结论 |
+| 2026-10-20T09:36:16.177940+00:00 | done | planned | 用户授权 Round 4；保留 Round 3 完成证据并重开 | 本轮 prompt；基线 dff132c8b98b2e8cd597ff9d1b09c0ea6e9d0e21；分支匹配 |
+| 2026-10-20T09:36:16.177940+00:00 | planned | in-progress | strict 继续；核对 runtime ID 错误及 manifest／ReportDocument，限制五文件 | Round 4 源码证据与 Book Gate Plan；沿用 TaskStore 限制 |
+| 2026-10-20T09:39:23.375735+00:00 | in-progress | checking | Round 4 schema／测试／场景／说明完成；原生套件与 schema/runtime smoke 通过；独立复核进行中 | OpenAPI 12；runtime 263/1 skip；contract＋acceptance 65；format passed；既有 I001；全部 paths 结构不变 |
+| 2026-10-20T09:42:56.591170+00:00 | checking | done | Round 4 两项契约修正及全部指定验收完成；两位独立 reviewer 无 finding；保留既有 I001／Windows skip／pattern 末尾换行边界 | OpenAPI 12 passed；runtime 263/1 skip；contract＋acceptance 65 passed；format passed；schema/runtime smoke passed；local://r4-*；模型列表不变；仅五文件 |

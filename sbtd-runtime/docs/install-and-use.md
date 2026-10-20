@@ -120,9 +120,14 @@ PY
 `report_width_px`、`expanded_detail_ids`、`table_sort`、`preview_row_sets`、
 `panel_order`、`legend_state`，具体类型见 OpenAPI `ExportPresentationState`。
 `report_width_px` 与 `preview_row_sets` 的值为非负 number，允许零与小数；不限制为 integer。
+`panel_order` 必须是 `sbtd-runtime/contracts/panel-manifest.json` 中所有 Panel ID
+的完整、唯一排列，可调整顺序；空列表、重复、未知或遗漏 ID 均要求 400 BadRequest。
+schema 检查非空与唯一性；成员资格和完整性由服务按 manifest 校验，不在 schema 复制枚举。
 请求和呈现对象拒绝未知字段；排序、预览行数和隐藏图例不改变 CSV 全量数据范围。
-契约声明非法／缺失请求为 400，不存在／不可见快照为 404，已过期快照为 410；
-不能静默替换成新快照。此变更只定义输入协议，不代表导出作业或 HTTP 错误处理已实现。
+createExport 契约声明非法／缺失请求（包括 snapshot_id 不满足 pattern）为 400 BadRequest；
+格式正确但不存在／不可见的快照为 404，已过期快照为 410；不能静默替换成新快照。
+这与既有快照 PATH 参数不同：PATH ID 格式错误在 runtime 中按不存在处理，返回 404。
+此变更只定义输入协议，不代表导出作业或 HTTP 错误处理已实现。
 
 ## R2.0a：serve（本地 Dashboard 服务，D5–D8）
 

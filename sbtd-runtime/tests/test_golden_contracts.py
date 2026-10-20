@@ -572,6 +572,11 @@ class OpenApiDraftTests(unittest.TestCase):
         import yaml
 
         cls.doc = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))
+        manifest = load_json(ROOT / "contracts" / "panel-manifest.json")
+        cls.panel_order = [
+            panel["panel_id"]
+            for panel in sorted(manifest["panels"], key=lambda panel: panel["order"])
+        ]
 
     def parameter_names(self, operation: dict) -> set[str]:
         names = set()
@@ -610,7 +615,7 @@ class OpenApiDraftTests(unittest.TestCase):
             "expanded_detail_ids": ["task_report"],
             "table_sort": {"tasks": "duration:desc"},
             "preview_row_sets": {"tasks": 20},
-            "panel_order": ["summary", "data-quality"],
+            "panel_order": self.panel_order,
             "legend_state": {"tokens": False},
         }
         validator = self.create_export_validator()
@@ -649,23 +654,6 @@ class OpenApiDraftTests(unittest.TestCase):
             ("null presentation", {**valid, "presentation_state": None}, "type"),
             ("array presentation", {**valid, "presentation_state": []}, "type"),
         ]
-        for snapshot_id in (
-            "",
-            "snap_report",
-            "snap_" + "a" * 31,
-            "snap_" + "a" * 33,
-            "snap_" + "A" * 32,
-            "snap_" + "g" * 32,
-            "prefix_snap_" + "a" * 32,
-            "snap_" + "a" * 32 + "_suffix",
-        ):
-            cases.append(
-                (
-                    f"malformed snapshot {snapshot_id!r}",
-                    {**valid, "snapshot_id": snapshot_id},
-                    "pattern",
-                )
-            )
         for export_format in ("jpeg", "pdf", "json", "HTML", "", None, 42):
             cases.append(
                 (
@@ -680,15 +668,37 @@ class OpenApiDraftTests(unittest.TestCase):
                 errors = list(validator.iter_errors(request))
                 self.assertIn(expected_error, [error.validator for error in errors])
 
+    def test_create_export_rejects_malformed_snapshot_id(self) -> None:
+        # Scenario: 请求体中格式错误的快照标识属于非法请求
+        validator = self.create_export_validator()
+        for snapshot_id in (
+            "",
+            "snap_report",
+            "snap_" + "a" * 31,
+            "snap_" + "a" * 33,
+            "snap_" + "A" * 32,
+            "snap_" + "g" * 32,
+            "prefix_snap_" + "a" * 32,
+            "snap_" + "a" * 32 + "_suffix",
+        ):
+            for export_format in ("html", "csv"):
+                with self.subTest(snapshot_id=snapshot_id, format=export_format):
+                    request = {"snapshot_id": snapshot_id, "format": export_format}
+                    errors = list(validator.iter_errors(request))
+                    self.assertEqual(
+                        [(list(error.path), error.validator) for error in errors],
+                        [(["snapshot_id"], "pattern")],
+                    )
+
     def test_create_export_rejects_incomplete_or_invalid_presentation(self) -> None:
-        # Scenario: 拒绝不完整或不支持的导出请求
+        # Scenarios: 拒绝不完整或不支持的导出请求；拒绝空或重复的 Panel 顺序
         state = {
             "theme": "dark",
             "report_width_px": 1440,
             "expanded_detail_ids": [],
             "table_sort": {},
             "preview_row_sets": {},
-            "panel_order": [],
+            "panel_order": self.panel_order,
             "legend_state": {},
         }
         validator = self.create_export_validator()
@@ -713,6 +723,8 @@ class OpenApiDraftTests(unittest.TestCase):
             ("preview_row_sets", {"tasks": -1}, "minimum"),
             ("preview_row_sets", {"tasks": -0.5}, "minimum"),
             ("panel_order", [42], "type"),
+            ("panel_order", [], "minItems"),
+            ("panel_order", [*self.panel_order, self.panel_order[0]], "uniqueItems"),
             ("legend_state", {"tokens": "hidden"}, "type"),
             ("filters", {}, "additionalProperties"),
         ]
