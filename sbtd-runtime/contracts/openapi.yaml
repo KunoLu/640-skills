@@ -512,6 +512,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
     delete:
       operationId: deleteExport
       tags: [export]
@@ -531,6 +537,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "204":
           description: Cancelled or cleaned
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
   /api/v1/exports/{export_id}/file:
     get:
       operationId: downloadExport
@@ -650,6 +662,14 @@ paths:
           x-sbtd-csv-schema-version: "1.1"
           x-sbtd-csv-column-notes:
             reasoning_tokens: "Appended last; existing column order unchanged. Subset of output_tokens; must not be added to output_tokens. When the host does not report it the value is null and the CSV cell is empty, never 0."
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
 components:
   securitySchemes:
     localSession:

@@ -639,6 +639,52 @@ class OpenApiDraftTests(unittest.TestCase):
                     },
                 )
 
+    def test_export_responses_match_runtime_handlers(self) -> None:
+        # export_resource 映射：三个操作带 query params 均 400；DELETE 缺
+        # Idempotency-Key 亦 400；ExportNotFound→404、ExportGone→410；
+        # ExportNotReady→409 仅 download 抛出，get 返回 200 状态视图、
+        # delete 不抛 ExportNotReady，因此两者不声明 409。
+        for method, path, success, errors in (
+            (
+                "get",
+                "/api/v1/exports/{export_id}",
+                {"200": "Json"},
+                {"400": "BadRequest", "404": "NotFound", "410": "Gone"},
+            ),
+            (
+                "get",
+                "/api/v1/exports/{export_id}/file",
+                {"200": None},  # inline description 与 x-sbtd-csv-columns
+                {
+                    "400": "BadRequest",
+                    "404": "NotFound",
+                    "409": "Conflict",
+                    "410": "Gone",
+                },
+            ),
+            (
+                "delete",
+                "/api/v1/exports/{export_id}",
+                {"204": None},  # inline description
+                {"400": "BadRequest", "404": "NotFound", "410": "Gone"},
+            ),
+        ):
+            with self.subTest(method=method, path=path):
+                responses = dict(self.doc["paths"][path][method]["responses"])
+                expected = {"401": "Unauthorized", "403": "Forbidden", **errors}
+                for status, component in success.items():
+                    if component is None:
+                        responses.pop(status)
+                    else:
+                        expected[status] = component
+                self.assertEqual(
+                    responses,
+                    {
+                        status: {"$ref": f"#/components/responses/{component}"}
+                        for status, component in expected.items()
+                    },
+                )
+
     def test_create_export_accepts_html_and_csv_without_presentation(self) -> None:
         # Scenario: 固定快照并选择当前支持的导出格式
         operation = self.doc["paths"]["/api/v1/exports"]["post"]
