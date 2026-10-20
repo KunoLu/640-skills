@@ -8,7 +8,7 @@ status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T23:05:00+08:00'
+updated_at: '2026-10-21T00:38:28+08:00'
 completed_at: '2026-10-20T21:32:47+08:00'
 ---
 
@@ -161,7 +161,7 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 
 红绿回归均保留：HTTP tracer `405 != 202`；结构化秘密、结构化指标、嵌入标识、worker 启动失败、排队取消、目录替换清理、发布后 sweep。修复后对应 green 报告保留。未运行 dashboard tests／typecheck／build：dashboard 源码和静态产物未改。未运行全仓 workflow 或历史 probe_links，不修复、不重跑、不称全仓通过。
 
-`git diff 6e2cc56f386c603179ee6efd6004a24b5391ffc8 -- sbtd-runtime/contracts/openapi.yaml` 为空。panel manifest/schema、ADR 0001–0003、PRD、CSV schema 1.1 未改。（2026-10-20 更正：原结论「无 CONTRACT-CHANGE-NEEDED」有误——契约 diff 为空仅证明本分支未修改契约文件，不证明 OpenAPI 声明覆盖 runtime 实际响应；Reviewy B1 发现 getExport／deleteExport／downloadExport 缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）
+`git diff 6e2cc56f386c603179ee6efd6004a24b5391ffc8 -- sbtd-runtime/contracts/openapi.yaml` 为空。panel manifest/schema、ADR 0001–0003、PRD、CSV schema 1.1 未改。（2026-10-20 更正：原结论「无 CONTRACT-CHANGE-NEEDED」有误——契约 diff 为空仅证明本分支未修改契约文件，不证明 OpenAPI 声明覆盖 runtime 实际响应；Reviewy B1 发现 getExport／deleteExport／downloadExport 缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口；已由 #152 解决）」。）
 
 ## 模型使用
 
@@ -200,6 +200,7 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 | 2026-10-20T21:32:47+08:00 | checking | done | 本地 HTML／CSV 导出验收、独立复核和最终套件完成；不表示 push、PR、部署或发布 | 实现 e087b25ed0de119f97e043628c41965d2a254142；runtime 298／2 skip；wrapper 65；OpenAPI 12；ruff passed；真实重启 smoke SHA-256 不变；两位 reviewer 关闭；OpenAPI diff 为空 |
 | 2026-10-20T22:59:40+08:00 | done | done | Reviewy B1：export get/download/delete OpenAPI 缺 400/404/409/410；标记 CONTRACT-CHANGE-NEEDED，本 PR 不改契约，等待用户决定契约 PR 顺序 | PR #151；serve.py export_resource；openapi getExport/deleteExport/downloadExport |
 | 2026-10-20T23:05:00+08:00 | done | done | 用户已定顺序：契约 PR `contract/v2.1.0-rc.2-export-error-responses` 先合并，#151 随后 rebase 并回填其合并 SHA；本 PR 仍不改契约 | parent 转达用户决定（2026-10-20 22:54 北京时间）；CONTRACT-CHANGE-NEEDED 节 |
+| 2026-10-21T00:38:28+08:00 | done | done | #152 已合并为 c7a87e4（c7a87e484d80a1a483ce8c142d3e66517ac3a17f）；main c7a87e4 以 merge（非 rebase，避免 force push，按 Lord 要求）合入本分支，合并提交 ba7a145；Reviewy B1 契约缺口已解决；本 PR 仍不改契约 | PR #152；merge commit ba7a145；openapi getExport/downloadExport/deleteExport；test_golden_contracts.py::test_export_responses_match_runtime_handlers |
 
 ## Re-verify（round-2 grok 回退后 k3:max 复核）
 
@@ -228,7 +229,7 @@ plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(
 ### 契约未变检查
 
 - `git diff 10bc530..HEAD -- sbtd-runtime/contracts/` 为空（0 行），含 OpenAPI 与 panel-manifest/schema。
-- `git diff --name-only 10bc530..HEAD` 全部 16 个文件中无任何 PRD、ADR 0001/0002/0003、dashboard、schema/manifest 路径；`CSV_SCHEMA_VERSION` 仍为 `"1.1"`。（2026-10-20 更正：此处「无 CONTRACT-CHANGE-NEEDED」结论有误——契约 diff 为空 ≠ 声明完整；Reviewy B1 发现 export 三个操作缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）
+- `git diff --name-only 10bc530..HEAD` 全部 16 个文件中无任何 PRD、ADR 0001/0002/0003、dashboard、schema/manifest 路径；`CSV_SCHEMA_VERSION` 仍为 `"1.1"`。（2026-10-20 更正：此处「无 CONTRACT-CHANGE-NEEDED」结论有误——契约 diff 为空 ≠ 声明完整；Reviewy B1 发现 export 三个操作缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口；已由 #152 解决）」。）
 
 ### 测试执行（developer-local，raw 输出在仓外 `/tmp/r21a-reverify/`，不入 Git）
 
@@ -244,7 +245,7 @@ plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(
 
 ### 复核结论
 
-**PASS（无代码变更）**：九项验收与 D11/D15/D16 全部有实现与测试证据，契约 diff 为空，四套测试与 ruff 全绿，未发现 blocker，无需修复提交。本轮仅新增本节 docs 记录。（2026-10-20 更正：当时「无 CONTRACT-CHANGE-NEEDED」结论有误——契约 diff 为空只说明本分支未改契约，与声明缺口正交；Reviewy B1 见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）
+**PASS（无代码变更）**：九项验收与 D11/D15/D16 全部有实现与测试证据，契约 diff 为空，四套测试与 ruff 全绿，未发现 blocker，无需修复提交。本轮仅新增本节 docs 记录。（2026-10-20 更正：当时「无 CONTRACT-CHANGE-NEEDED」结论有误——契约 diff 为空只说明本分支未改契约，与声明缺口正交；Reviewy B1 见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口；已由 #152 解决）」。）
 
 ### 模型使用（operator 按 session jsonl 回填）
 
@@ -313,7 +314,7 @@ PYTHONPATH=sbtd-runtime python3 -B -c '…读取 /tmp/r21a-smoke-d1e2734/d1e2734
 
 ### 修复
 
-无。两项检查全过，未发现 blocker，未改任何代码（`sbtd-runtime/contracts/`、PRD、ADR、CSV schema 均未触碰）。（2026-10-20 更正：原「无 CONTRACT-CHANGE-NEEDED」结论有误——未触碰契约 ≠ 声明完整；Reviewy B1 发现 getExport／deleteExport／downloadExport 缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）」。）本轮无 fix 提交，故未触发全量 unittest 复跑（fix policy 仅在修复时要求）；本 tip 的全量套件证据见上节 Re-verify（301／68／15 全绿）。产物目录 `/tmp/r21a-smoke-d1e2734/` 在仓外；`reports/d1e2734-restart-smoke.{json,md}` 为 gitignored，未 force-add；工作树保持干净。
+无。两项检查全过，未发现 blocker，未改任何代码（`sbtd-runtime/contracts/`、PRD、ADR、CSV schema 均未触碰）。（2026-10-20 更正：原「无 CONTRACT-CHANGE-NEEDED」结论有误——未触碰契约 ≠ 声明完整；Reviewy B1 发现 getExport／deleteExport／downloadExport 缺 400／404／409／410 声明，见文末「CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口；已由 #152 解决）」。）本轮无 fix 提交，故未触发全量 unittest 复跑（fix policy 仅在修复时要求）；本 tip 的全量套件证据见上节 Re-verify（301／68／15 全绿）。产物目录 `/tmp/r21a-smoke-d1e2734/` 在仓外；`reports/d1e2734-restart-smoke.{json,md}` 为 gitignored，未 force-add；工作树保持干净。
 
 ### 模型使用（operator 按 session jsonl 回填）
 
@@ -335,9 +336,11 @@ PR #150（contract-auth-401-responses）squash-merge 为 base `10bc530` 后，op
 
 来源：`~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T14-04-39-521Z_01a159a0-e6e1-70dd-8fe5-d66505e229ef.jsonl` 与 `2026-10-20T14-05-13-052Z_01a159a1-69dc-7452-a04e-d46d19899258.jsonl`。两会话均无 subagent、无 fallback（model_change 各一次 kimi-code/k3，resolvedModelIsFallback: false）。
 
-## CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口）
+## CONTRACT-CHANGE-NEEDED（Reviewy B1：export 错误响应声明缺口；已由 #152 解决）
 
-为何记录：Reviewy 对 PR #151 @ `5021ee1` 的 B1 发现——runtime `export_resource` 对 getExport／downloadExport／deleteExport 实际会返回 400／404／409／410，但 `sbtd-runtime/contracts/openapi.yaml` 这三个操作只声明 401／403／2xx。createExport 已完整（401／403／202／400／404／410，openapi.yaml:468–497），不受影响。本节为 docs 记录：不改 frontmatter `status`／`completed_at`，不 reopen 任务生命周期；状态事件按 Reviewy 要求新增一条 done→done 发现记录（见「状态事件」末行）。
+**Reviewy B1 曾发现声明缺口并停止于此等待契约 PR；#152 于 2026-10-21 00:04 CST（+08:00）squash-merge 为 `c7a87e4`，已补齐所缺响应声明，main 已以 merge 合入本分支。本节保留历史，不代表当前仍阻塞。**
+
+为何记录：Reviewy 对 PR #151 @ `5021ee1` 的 B1 发现——runtime `export_resource` 对 getExport／downloadExport／deleteExport 实际会返回 400／404／409／410，但 `sbtd-runtime/contracts/openapi.yaml` 这三个操作只声明 401／403／2xx。createExport 已完整（401／403／202／400／404／410，openapi.yaml:468–497），不受影响。本节为 docs 记录：不改 frontmatter `status`／`completed_at`，不 reopen 任务生命周期；状态事件按 Reviewy 要求新增一条 done→done 发现记录（见「状态事件」2026-10-20T22:59 与 23:05 行）。
 
 每操作缺失声明（对当前 tip `5021ee1` 核验）：
 
@@ -355,9 +358,29 @@ PR #150（contract-auth-401-responses）squash-merge 为 base `10bc530` 后，op
 
 处理：与 #149／#150 先例一致，需要**独立契约 PR** 为 getExport／deleteExport／downloadExport 补齐 400／404／409／410 响应声明；契约 PR 与本 PR 的先后顺序等待用户决定。
 
-**顺序已定（用户 2026-10-20 22:54 北京时间）**：独立契约 PR `contract/v2.1.0-rc.2-export-error-responses` 先合并；随后本 PR #151 rebase 到其 squash 提交，并回填该合并 SHA。契约 PR 由另一 worktree 负责，本分支不触碰。
+**顺序已定（用户 2026-10-20 22:54 北京时间）**：独立契约 PR `contract/v2.1.0-rc.2-export-error-responses`（即 #152）先合并；随后本 PR #151 同步其 squash 提交并回填该合并 SHA。契约 PR 由另一 worktree 负责，本分支不触碰。（2026-10-21 更正：同步方式由「#151 随后 rebase」改为 `git merge --no-ff origin/main`——按 Lord（lead）「normal push only, no force push」约束避免 force push；合并提交 `ba7a145`，见下节「解决」。）
 
 **本 PR 不得修改 `openapi.yaml` 或任何契约／schema／PRD／ADR／runtime／测试代码**；本节仅为 docs 标记。
+
+### 解决（2026-10-21：#152 合并，main 已 merge 入本分支）
+
+契约 PR [#152](https://github.com/KunoLu/640-skills/pull/152)（`contract(openapi): declare getExport/downloadExport/deleteExport error responses`）于 2026-10-21 00:04 CST（北京时间，+08:00）squash-merge 进 main，合并提交 `c7a87e484d80a1a483ce8c142d3e66517ac3a17f`（`c7a87e4`）。
+
+#152 后各操作实际声明（对本 worktree 当前 `sbtd-runtime/contracts/openapi.yaml` 只读核验）：
+
+| operationId | 新增错误响应声明 |
+|---|---|
+| getExport | 400／404／410（不声明 409：GET 元数据在未就绪时正常返回 200 状态视图，不抛 ExportNotReady） |
+| downloadExport | 400／404／409／410 |
+| deleteExport | 400／404／410（不声明 409） |
+
+409 取舍的代码依据：`export_resource`（`sbtd-runtime/serve.py:577–605`）虽对三操作共享 `ExportNotReady → 409` 捕获，但 ExportNotReady 仅由 `ExportStore.download` 在 status != ready 时抛出（`sbtd-runtime/export_store.py:348–349`）；`ExportStore.get` 返回状态视图、`ExportStore.delete` 走取消／清理路径，两者均不抛 ExportNotReady，故 getExport／deleteExport 不声明 409。
+
+golden 测试：`sbtd-runtime/tests/test_golden_contracts.py::test_export_responses_match_runtime_handlers` 逐操作断言 openapi.yaml 的 responses 与期望键集完全相等——三操作均含 401／403；getExport 成功码 200（Json component）＋400／404／410；downloadExport 成功码 200（inline，含 x-sbtd-csv-columns，比对前弹出）＋400／404／409／410；deleteExport 成功码 204（inline，弹出）＋400／404／410。该测试锁住「getExport／deleteExport 不声明 409、downloadExport 声明 409」的边界。
+
+同步方式：main `c7a87e4` 以 `git merge --no-ff origin/main` 合入本分支，合并提交 `ba7a145d154fe7bf3b736bf0a7ba4afc3f2819d7`（`ba7a145`），无冲突；**非 rebase**——按 Lord（lead）「normal push only, no force push」约束避免 force push，早先「#151 随后 rebase」的计划随之改为 merge。
+
+#151 自身仍不修改 `openapi.yaml` 或任何契约／schema／PRD／ADR；本分支当前的上述契约声明行全部来自 main 的 merge，而非本 PR 的提交。
 
 ### 模型使用（本轮 B1 docs）
 
@@ -369,3 +392,13 @@ PR #150（contract-auth-401-responses）squash-merge 为 base `10bc530` 后，op
 来源（operator 回填）：session `01a159cd-98de-71e9-ac4a-0e4a0635bfa6`（`~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T14-53-28-670Z_01a159cd-98de-71e9-ac4a-0e4a0635bfa6.jsonl`），2026-10-20 22:53:27–23:03:19 北京时间，exit 0，idle watchdog 未触发。计数口径同前：assistant 记录按 provider/model 分组（含 error／aborted；本轮无），工具调用为 `toolCall` block 数（与 `tool_execution_start` 34 条一致）。`thinking_level_change` 为 `max`；`model_change` 仅一次 `kimi-code/k3`，无 grok／fallback；无 subagent、无 advisor。jsonl 只记录 `kimi-code/k3`，`max` 依据为命令行与 `thinking_level_change`。
 
 执行命令（verbatim）：`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-b1-docs/prompt.md)" </dev/null`
+
+### 模型使用（本轮 sync c7a87e4 docs）
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| sync c7a87e4 docs 主会话 | kimi-code/k3:max | kimi-code/k3（thinking max） | 13（12 toolUse + 1 stop） | 25 |
+
+来源（operator 回填）：session `01a15a28-aaae-7755-b1fb-7475be2cd69f`（`~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T16-32-57-006Z_01a15a28-aaae-7755-b1fb-7475be2cd69f.jsonl`），2026-10-21 00:32:55–00:40:20 北京时间，exit 0，idle watchdog 未触发。计数口径同前：assistant 记录按 provider/model 分组（含 error／aborted；本轮无），工具调用为 `toolCall` block 数（read 7、edit 8、grep 5、bash 5；与 `tool_execution_start` 25 条一致）。`thinking_level_change` 为 `max`；`model_change` 仅一次 `kimi-code/k3`（`resolvedModelIsFallback: false`），无 grok／fallback；会话目录无 subagent jsonl、无 advisor。
+
+执行命令（verbatim）：`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-sync-c7a87e4/prompt.md)" </dev/null`
