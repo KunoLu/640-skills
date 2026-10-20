@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -67,15 +68,18 @@ class SnapshotTests(unittest.TestCase):
     def setUp(self) -> None:
         self.dataset = _dataset()
         self.scope = _scope(self.dataset)
+        temporary = tempfile.TemporaryDirectory(prefix="sbtd-snapshot-test-")
+        self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name) / "runtime"
 
     def test_same_scope_and_watermark_reuse_one_snapshot(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         first = store.create_or_reuse(self.dataset, self.scope)
         second = store.create_or_reuse(self.dataset, self.scope)
         self.assertEqual(first.snapshot_id, second.snapshot_id)
 
     def test_new_watermark_mints_a_new_snapshot_id(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         first = store.create_or_reuse(self.dataset, self.scope)
         changed = json.loads(json.dumps(self.dataset))
         extra = json.loads(json.dumps(changed["events"][0]))
@@ -135,7 +139,7 @@ class SnapshotTests(unittest.TestCase):
         store = EventStore.open(home, confirmed=True)
         self.addCleanup(store.close)
         store.append([make_event("e1", "2026-10-15T16:00:00Z")])
-        snapshots = SnapshotStore()
+        snapshots = SnapshotStore(self.home)
         dataset = {"tasks": [], "events": store.replay()}
         scope = _scope(self.dataset)
         first = snapshots.create_or_reuse(dataset, scope)
@@ -146,7 +150,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertNotEqual(first.snapshot_id, second.snapshot_id)
 
     def test_filters_narrow_dataset_rows_not_only_metrics(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         scope = _scope(self.dataset)
         scope["filters"] = {"project_ids": ["project_b"]}
         snapshot = store.create_or_reuse(self.dataset, scope)
@@ -157,7 +161,7 @@ class SnapshotTests(unittest.TestCase):
             self.assertIn(project, (None, "project_b"))
 
     def test_query_timeseries_dataset_share_one_snapshot_id(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         answer = query(self.dataset, self.scope, store=store)
         series = timeseries(self.dataset, self.scope, bucket_seconds=43200, store=store)
         self.assertEqual(answer["snapshot_id"], series["snapshot_id"])
@@ -165,7 +169,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(page["snapshot_id"], answer["snapshot_id"])
 
     def test_expired_snapshot_is_gone_and_never_recycled(self) -> None:
-        store = SnapshotStore(ttl_seconds=0)
+        store = SnapshotStore(self.home, ttl_seconds=0)
         first = store.create_or_reuse(self.dataset, self.scope)
         with self.assertRaises(SnapshotGone):
             store.get(first.snapshot_id)
@@ -173,12 +177,12 @@ class SnapshotTests(unittest.TestCase):
         self.assertNotEqual(first.snapshot_id, second.snapshot_id)
 
     def test_unknown_snapshot_is_not_found(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         with self.assertRaises(SnapshotNotFound):
             store.get("snapshot_missing")
 
     def test_cursor_from_another_snapshot_is_rejected(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         first = store.create_or_reuse(self.dataset, self.scope)
         other_scope = _scope(self.dataset, metrics=["tasks.created"])
         second = store.create_or_reuse(self.dataset, other_scope)
@@ -187,7 +191,7 @@ class SnapshotTests(unittest.TestCase):
             store.dataset_page(second.snapshot_id, cursor=page["next_cursor"])
 
     def test_full_pagination_matches_the_manifest_without_gaps(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         snapshot = store.create_or_reuse(self.dataset, self.scope)
         rows = _all_pages(store, snapshot.snapshot_id, limit=7)
         keys = [(row["record_type"], row["record_id"]) for row in rows]
@@ -202,7 +206,7 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(by_type, {k: v for k, v in manifest.items() if v})
 
     def test_manifest_lists_every_family_and_unknown_time_set(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         snapshot = store.create_or_reuse(self.dataset, self.scope)
         families = {item["record_type"] for item in snapshot.dataset_manifest}
         self.assertEqual(families, set(DATASET_FAMILIES))
@@ -211,13 +215,13 @@ class SnapshotTests(unittest.TestCase):
         self.assertGreater(snapshot.watermark_seq, 0)
 
     def test_bad_cursor_is_rejected(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         snapshot = store.create_or_reuse(self.dataset, self.scope)
         with self.assertRaises(CursorError):
             store.dataset_page(snapshot.snapshot_id, cursor="not-a-cursor")
 
     def test_snapshot_is_immutable_against_dataset_mutation(self) -> None:
-        store = SnapshotStore()
+        store = SnapshotStore(self.home)
         snapshot = store.create_or_reuse(self.dataset, self.scope)
         before = snapshot.snapshot_digest
         self.dataset["events"].clear()

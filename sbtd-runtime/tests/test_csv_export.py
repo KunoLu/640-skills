@@ -10,6 +10,7 @@ import csv
 import io
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -56,7 +57,9 @@ def _rows(payload: bytes) -> list[dict]:
 class CsvExportTests(unittest.TestCase):
     def setUp(self) -> None:
         self.dataset = _dataset()
-        self.store = SnapshotStore()
+        temporary = tempfile.TemporaryDirectory(prefix="sbtd-csv-test-")
+        self.addCleanup(temporary.cleanup)
+        self.store = SnapshotStore(Path(temporary.name) / "runtime")
         self.scope = _scope(
             self.dataset, ["tasks.touched", "steps.success_rate_observed"]
         )

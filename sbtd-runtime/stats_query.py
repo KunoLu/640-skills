@@ -187,6 +187,7 @@ def _attach_snapshot(
         return result
     snapshot = store.create_or_reuse(dataset, raw_scope)
     result["snapshot_id"] = snapshot.snapshot_id
+    result["expires_at"] = snapshot.expires_at
     result["meta"]["watermark_seq"] = snapshot.watermark_seq
     result["meta"]["query_hash"] = snapshot.query_hash
     return result

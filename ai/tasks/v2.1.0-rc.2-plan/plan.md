@@ -15,8 +15,8 @@
 |---|---|---|---|---|---|---|---|
 | 0 | 计划：grill + DDD + 任务表 | P0 | done（PR #141 已 squash-merge；Reviewy DDD Boundary Review 复审通过） | #141 | a55117c | 2026-10-19T13:09:42+08:00 | ai/tasks/v2.1.0-rc.2-plan/task.md |
 | R2.0a | OMP 风格单页、Panel registry（`contracts/panel-manifest.json` + golden 钉测）、ReportDocument、`serve` 启动与访问控制（D5–D8） | P1 | done（PR-1 #142 与 PR-2 #144 均已 squash-merge；closeout 回填 PR #145 已 squash-merge） | #142（PR-1）；#144（PR-2）；#145（closeout 回填） | 3c9cf4e（PR-1）；8178b26abe75454b958d096ff58522eda7facbb4（PR-2）；1415134817015580067274b843cc73bcc8e37441（#145） | 2026-10-19T22:54:44+08:00（#145 合并、行正式关闭；PR-2 功能合并 2026-10-19T22:27:23+08:00） | ai/tasks/v2.1.0-rc.2-r2.0a-dashboard/task.md（PR-1）；ai/tasks/v2.1.0-rc.2-r2.0a-serve/task.md（PR-2） |
-| R2.0b | 筛选、数据质量、页内详情 | P2 | in_progress（分支 feat/v2.1.0-rc.2-r2.0b-filters-detail，基于 main `1415134`；implement 模型 openai-codex/gpt-6-astra:high） | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md |
-| R2.0c | 临时 ReportSnapshot 落盘：24h 默认保留＋启动清扫过期＋崩溃一致性 | P3 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0c-snapshot-persistence/task.md |
+| R2.0b | 筛选、数据质量、页内详情 | P2 | done（PR #146 已 squash-merge；requested astra; actual k3/grok per session logs） | #146 | 2d147c98ce2874fa2621b95ff816e1781c02f93f | 2026-10-20T04:14:03+08:00 | ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md |
+| R2.0c | 临时 ReportSnapshot 落盘：24h 默认保留＋启动清扫过期＋崩溃一致性 | P3 | in_progress（分支 feat/v2.1.0-rc.2-r2.0c-snapshot-persistence；implement 模型 openai-codex/gpt-6-astra:high） | — | — | — | ai/tasks/v2.1.0-rc.2-r2.0c-snapshot-persistence/task.md |
 | R2.1a | 离线 HTML + 全量 CSV 导出（导出副本 `exports/` 下 24h） | P4 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1a-html-csv-export/task.md |
 | R2.1b | JPEG/PDF 独立 renderer（Playwright 可选 extra，`--only-shell`，精确钉版，renderer 环境含 fonts-noto-cjk） | P5 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md |
 | R2.2 | 跨平台 E2E（CI macOS/Windows runner + 用户 Mac 视觉／字体确认）、安全（Host/Origin、ticket、脱敏分层）、性能、导出对账 | P6 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md |

@@ -1,4 +1,4 @@
-"""CI discovery entry for sbtd-runtime R1.3 stats API tests."""
+"""CI discovery entry for sbtd-runtime stats API and snapshot persistence tests."""
 
 from __future__ import annotations
 
@@ -11,10 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "sbtd-runtime"
 if str(RUNTIME) not in sys.path:
     sys.path.insert(0, str(RUNTIME))
+if str(RUNTIME / "tests") not in sys.path:
+    sys.path.insert(0, str(RUNTIME / "tests"))
 
 for _file in (
     "test_stats_query.py",
     "test_report_snapshot.py",
+    "test_snapshot_persistence.py",
     "test_csv_export.py",
     "test_history_read.py",
 ):
