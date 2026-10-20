@@ -8,7 +8,7 @@ status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T22:59:40+08:00'
+updated_at: '2026-10-20T23:05:00+08:00'
 completed_at: '2026-10-20T21:32:47+08:00'
 ---
 
@@ -199,6 +199,7 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 | 2026-10-20T20:35:58+08:00 | in-progress | checking | HTML／CSV、作业存储、冻结请求校验、测试／场景／文档已实现；真实 serve 重启与浏览器报告 smoke 通过，独立复核进行中 | runtime 首次完整 291 tests／2 skips；wrapper 65、OpenAPI 12；新增输出／pin 边界红绿证据；reports/r2-full-panel-restart-smoke；浏览器 13 panels、0 scripts、0 resources |
 | 2026-10-20T21:32:47+08:00 | checking | done | 本地 HTML／CSV 导出验收、独立复核和最终套件完成；不表示 push、PR、部署或发布 | 实现 e087b25ed0de119f97e043628c41965d2a254142；runtime 298／2 skip；wrapper 65；OpenAPI 12；ruff passed；真实重启 smoke SHA-256 不变；两位 reviewer 关闭；OpenAPI diff 为空 |
 | 2026-10-20T22:59:40+08:00 | done | done | Reviewy B1：export get/download/delete OpenAPI 缺 400/404/409/410；标记 CONTRACT-CHANGE-NEEDED，本 PR 不改契约，等待用户决定契约 PR 顺序 | PR #151；serve.py export_resource；openapi getExport/deleteExport/downloadExport |
+| 2026-10-20T23:05:00+08:00 | done | done | 用户已定顺序：契约 PR `contract/v2.1.0-rc.2-export-error-responses` 先合并，#151 随后 rebase 并回填其合并 SHA；本 PR 仍不改契约 | parent 转达用户决定（2026-10-20 22:54 北京时间）；CONTRACT-CHANGE-NEEDED 节 |
 
 ## Re-verify（round-2 grok 回退后 k3:max 复核）
 
@@ -352,13 +353,19 @@ PR #150（contract-auth-401-responses）squash-merge 为 base `10bc530` 后，op
 - `sbtd-runtime/tests/test_exports_http.py`：`test_download_auth_path_boundary_and_delete`（第 229 行）第 244–247 行断言带 query 后缀下载 → 400，第 248–257 行断言 foreign／traversal export id → 404；另有 400 断言（第 155、187、310、319、344 行）、404（第 216 行）、410（第 227 行）。
 - 本分支未修改契约的事实不变：`git diff 10bc530..HEAD -- sbtd-runtime/contracts/` 为空（0 行）。「分支未改契约」与「契约声明缺口」是正交的两件事；前文 round-2 验证证据、re-verify「契约未变检查」／「复核结论」、smoke「修复」中「diff 为空 ⇒ 无 CONTRACT-CHANGE-NEEDED」的推断不成立，已就地更正。
 
-处理：与 #149／#150 先例一致，需要**独立契约 PR** 为 getExport／deleteExport／downloadExport 补齐 400／404／409／410 响应声明；契约 PR 与本 PR 的先后顺序等待用户决定。**本 PR 不得修改 `openapi.yaml` 或任何契约／schema／PRD／ADR／runtime／测试代码**；本节仅为 docs 标记。
+处理：与 #149／#150 先例一致，需要**独立契约 PR** 为 getExport／deleteExport／downloadExport 补齐 400／404／409／410 响应声明；契约 PR 与本 PR 的先后顺序等待用户决定。
+
+**顺序已定（用户 2026-10-20 22:54 北京时间）**：独立契约 PR `contract/v2.1.0-rc.2-export-error-responses` 先合并；随后本 PR #151 rebase 到其 squash 提交，并回填该合并 SHA。契约 PR 由另一 worktree 负责，本分支不触碰。
+
+**本 PR 不得修改 `openapi.yaml` 或任何契约／schema／PRD／ADR／runtime／测试代码**；本节仅为 docs 标记。
 
 ### 模型使用（本轮 B1 docs）
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| B1 docs 主会话 | kimi-code/k3:max | unknown | unknown | unknown |
-| 会话标题生成 | unknown | unknown | unknown | unknown |
+| B1 docs 主会话 | kimi-code/k3:max | kimi-code/k3（thinking max） | 20（19 toolUse + 1 stop） | 34 |
+| 会话标题生成 | unknown | unknown | unknown（jsonl 仅有空 `title` 记录，无 `title_change`，未记录生成调用） | unknown |
+
+来源（operator 回填）：session `01a159cd-98de-71e9-ac4a-0e4a0635bfa6`（`~/.omp/agent/sessions/--workspace-640-skills-r2.1a--/2026-10-20T14-53-28-670Z_01a159cd-98de-71e9-ac4a-0e4a0635bfa6.jsonl`），2026-10-20 22:53:27–23:03:19 北京时间，exit 0，idle watchdog 未触发。计数口径同前：assistant 记录按 provider/model 分组（含 error／aborted；本轮无），工具调用为 `toolCall` block 数（与 `tool_execution_start` 34 条一致）。`thinking_level_change` 为 `max`；`model_change` 仅一次 `kimi-code/k3`，无 grok／fallback；无 subagent、无 advisor。jsonl 只记录 `kimi-code/k3`，`max` 依据为命令行与 `thinking_level_change`。
 
 执行命令（verbatim）：`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-b1-docs/prompt.md)" </dev/null`
