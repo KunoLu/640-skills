@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、contract-only；保持指定分支，仅显式 
 status: done
 branch: contract/v2.1.0-rc.2-snapshot-error-responses
 created_at: '2026-10-20T10:50:35.455473+00:00'
-updated_at: '2026-10-20T11:10:10.473847+00:00'
+updated_at: '2026-10-20T21:41:00+08:00'
 completed_at: '2026-10-20T11:10:10.473847+00:00'
 ---
 
@@ -101,7 +101,9 @@ Smoke 的完整可复现 `-c` 命令（含全部源码）在该 raw 的 `command
 
 ## 提交与恢复边界
 
-RESULT：本次 contract-only 验收完成。实现提交 **`0cf687833c0afc59dd822b2c1577b45ed67dcd24`**，message 为 `feat(contract): declare snapshot 404/410 and dataset 400 error responses`。通过 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py` 显式暂存，仅这两个文件进入实现提交；26 insertions，无 runtime 修改。
+RESULT：本次 contract-only 验收完成。本地实现提交曾为 `0cf687833c0afc59dd822b2c1577b45ed67dcd24`（message `feat(contract): declare snapshot 404/410 and dataset 400 error responses`），经 PR #149 squash-merge 后，**权威实现 SHA 为 `ef8975212a4f80686d19a03f3c169bbf533eb117`**。pre-merge 本地／PR tip SHA（含 `0cf687833c0afc59dd822b2c1577b45ed67dcd24`）在 squash 后作废，不以 ancestry 声称。通过 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py` 显式暂存，仅这两个文件进入实现提交；26 insertions，无 runtime 修改。
+
+**Squash 权威说明**：合并后以 squash commit `ef8975212a4f80686d19a03f3c169bbf533eb117` 为权威（Codex P2 on #149 曾误称 ancestry；以本处记录 squash SHA 处理，无 force-push）。
 
 用户在 host pause 后明确要求继续。本次恢复只读确认原分支／基线、checking 状态及保留证据；`sha256sum sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py` 与暂停前 `local://snapshot-errors-validated-content.json` 完全一致。提交后读取两个 Git blob 计算 SHA-256，再次确认与已验证内容一致，因此不重复执行未改变内容的测试、不重跑已知 I001 来确认。
 
@@ -114,15 +116,17 @@ RESULT：本次 contract-only 验收完成。实现提交 **`0cf687833c0afc59dd8
 
 ## 模型使用
 
-主会话 host 标识为 `openai-codex/gpt-6-astra`；用户请求 `openai-codex/gpt-6-astra:high`，host 未独立暴露 reasoning 配置，不能据此证明 `:high`。以下计量行留给 operator 回填。
+来源：operator 核验的会话 jsonl（与 PR #149 body 模型表一致）。计数口径为 assistant messages。主会话请求 `openai-codex/gpt-6-astra:high`，实际 `openai-codex/gpt-6-astra`；独立 review 实际 `kimi-code/k3`（请求 tiers max/high 若已知则记；本表按 PR body 核实结果）。
 
-独立 simplicity/readability reviewer 自报 host 标识 `kimi-code/k3`；correctness reviewer 未返回模型标识。计量表仍按用户要求保持 unknown，供 operator 核实回填。
+**分段口径（按进程，不按墙钟）**：主会话中断前 13（12 正常 + 1 aborted，jsonl 中 `stopReason: aborted`）；续跑 resume 8。若按墙钟切分则为 12+9。会话标题生成：unknown。
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 主会话 | openai-codex/gpt-6-astra:high | unknown | unknown | unknown |
-| 独立 correctness review | host 默认 reviewer | unknown | unknown | unknown |
-| 独立 simplicity/readability review | host 默认 reviewer | unknown | unknown | unknown |
+| 主会话，中断前（18:49–18:55 北京时间） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 13（12 正常 + 1 aborted） | unknown |
+| 主会话，续跑后（19:09–19:11 北京时间，同一会话 `--resume`） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 8 | unknown |
+| 独立 SnapshotCorrectness review | kimi-code/k3（tier max/high if known） | kimi-code/k3 | 10 | unknown |
+| 独立 SnapshotMaintainability review | kimi-code/k3（tier max/high if known） | kimi-code/k3 | 9 | unknown |
+| 会话标题生成 | unknown | unknown | unknown | unknown |
 
 ## 状态事件
 
@@ -130,4 +134,5 @@ RESULT：本次 contract-only 验收完成。实现提交 **`0cf687833c0afc59dd8
 |---|---|---|---|---|
 | 2026-10-20T10:50:35.455473+00:00 | planned | in-progress | 用户明确 strict；根、分支、安全路径及 handler 证据已确认 | 基线 6e2cc56f386c603179ee6efd6004a24b5391ffc8；上表 serve.py / report_snapshot.py |
 | 2026-10-20T10:54:46.099185+00:00 | in-progress | checking | 四个响应引用及完整集合回归已完成，指定验证与独立审查已取得 | OpenAPI 13；runtime 264/1 skip；wrappers 66；format passed；已知 I001；13 HTTP checks；两位 reviewer 无阻塞 finding |
-| 2026-10-20T11:10:10.473847+00:00 | checking | done | 暂停后确认原绑定与已测内容一致；指定验证、真实 HTTP smoke、独立审查完成并提交实现；保留已知 I001 与 Windows skip | 实现提交 0cf687833c0afc59dd822b2c1577b45ed67dcd24；两个 committed blob SHA-256 与验证快照一致；contract-only，无 runtime 修改 |
+| 2026-10-20T11:10:10.473847+00:00 | checking | done | 暂停后确认原绑定与已测内容一致；指定验证、真实 HTTP smoke、独立审查完成并提交实现；保留已知 I001 与 Windows skip | 本地实现曾为 0cf687833c0afc59dd822b2c1577b45ed67dcd24；PR #149 squash-merge 权威 SHA ef8975212a4f80686d19a03f3c169bbf533eb117（pre-merge SHA 作废）；两个 committed blob SHA-256 与验证快照一致；contract-only，无 runtime 修改 |
+| 2026-10-20T21:41:00+08:00 | done | done | Closeout backfill：以 squash `ef8975212a4f80686d19a03f3c169bbf533eb117` 为权威实现 SHA；回填模型表（主会话 13+8、review 10+9）；pre-merge SHA 作废；无 force-push | PR #149 squash `ef8975212a4f80686d19a03f3c169bbf533eb117`；operator 核验会话 jsonl / PR body |
