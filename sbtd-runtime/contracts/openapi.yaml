@@ -392,6 +392,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "410":
           $ref: "#/components/responses/Gone"
   /api/v1/report-snapshots/{snapshot_id}/dataset:
@@ -411,6 +413,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           $ref: "#/components/responses/Json"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
   /api/v1/exports:
     post:
       operationId: createExport

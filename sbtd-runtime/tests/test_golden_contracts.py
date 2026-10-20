@@ -592,6 +592,24 @@ class OpenApiDraftTests(unittest.TestCase):
         schema = body["content"]["application/json"]["schema"]
         return jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
 
+    def test_snapshot_get_responses_match_runtime_handlers(self) -> None:
+        for suffix, errors in (
+            ("", {"404": "NotFound", "410": "Gone"}),
+            ("/dataset", {"400": "BadRequest", "404": "NotFound", "410": "Gone"}),
+        ):
+            with self.subTest(path=suffix or "/"):
+                operation = self.doc["paths"][
+                    f"/api/v1/report-snapshots/{{snapshot_id}}{suffix}"
+                ]["get"]
+                expected = {"200": "Json", "403": "Forbidden", **errors}
+                self.assertEqual(
+                    operation["responses"],
+                    {
+                        status: {"$ref": f"#/components/responses/{component}"}
+                        for status, component in expected.items()
+                    },
+                )
+
     def test_create_export_accepts_html_and_csv_without_presentation(self) -> None:
         # Scenario: 固定快照并选择当前支持的导出格式
         operation = self.doc["paths"]["/api/v1/exports"]["post"]
