@@ -4,12 +4,12 @@ id: v2.1.0-rc.2-r2.1a-html-csv-export
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确 strict；仅 plan R2.1a 与 D11/D15/D16。不改契约；显式 git add；不 push、不开 PR；不暂存或提交 .omp-r12b-addendum.txt、ai/tasks/codex-verify/。保持 OpenAPI、Panel manifest/schema、ADR 0001/0002/0003、PRD、CSV schema 1.1 不变。不可避免的契约变化 STOP + CONTRACT-CHANGE-NEEDED。
-status: in-progress
+status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T18:50:07+08:00'
-completed_at: null
+updated_at: '2026-10-20T21:32:47+08:00'
+completed_at: '2026-10-20T21:32:47+08:00'
 ---
 
 # R2.1a：离线 HTML + 全量 CSV 导出
@@ -32,11 +32,11 @@ completed_at: null
 
 | Gate | 触发事实 | 阶段 | 状态 |
 |---|---|---|---|
-| book-ddd-distilled-modeling | 作业／快照引用／会话授权与两目录所有权 | before-dev | blocked；领域不变量已明确，创建作业的 HTTP 输入未定义 |
-| book-ddia-data-design | 导出持久产物、manifest、异步作业与恢复 | before-dev | blocked；不能在未定义的输入协议上稳定作业设计 |
-| book-legacy-change-safety | serve 鉴权、CSV 与 snapshot 高回归面 | before-dev | planned；因契约 STOP 未进入行为修改，未声称 characterized |
-| book-refactoring-pass | 修改既有生产代码 | before-dev | planned；因契约 STOP 未修改生产代码 |
-| book-release-readiness | HTTP 服务与导出作业 runtime 改变 | validation 后 | planned；未实现／未测试，不声称 release ready |
+| book-ddd-distilled-modeling | 作业／快照引用／会话授权与两目录所有权 | before-dev | round 2 confirmed：#148 消除输入缺口；沿用 runtime-home 授权，Export 不拥有 snapshots 清理 |
+| book-ddia-data-design | 导出持久产物、manifest、异步作业与恢复 | before-dev | round 2 confirmed：artifact 后 manifest 原子发布、SHA-256、ready 后 24h；中断作业不自动恢复 |
+| book-legacy-change-safety | serve 鉴权、CSV 与 snapshot 高回归面 | before-dev | characterized：修改前 38 tests，37 passed／1 Windows skip；HTTP tracer red 405 != 202 |
+| book-refactoring-pass | 修改既有生产代码 | before-dev | proceed：无需前置重构；保留现有鉴权、SnapshotStore、CSV schema；只扩展输出 seam |
+| book-release-readiness | HTTP 服务与导出作业 runtime 改变 | validation 后 | planned；等待本轮实现、测试与独立复核 |
 
 已读 plan、grill D11/D15/D16/R1e、PRD §10.4/§13、OpenAPI exports 与全部 components schemas、CSV、SnapshotStore、serve、ReportDocument、PinRegistry、ADR 0003。未完整调用 grill-with-docs：范围和验收已锁定，无须重开需求。Python LSP references 实际返回 No language server found，已以源码查找 serialize_csv 与 API 调用证据补充。尚未进入生产编辑。
 
@@ -122,6 +122,67 @@ Round 1 title generation：unknown。本轮请求模型 `openai-codex/gpt-6-astr
 
 R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout 与 plan R2.0c done 行已核对存在且正确，不重复回填。未完整调用 grill-with-docs：原验收与本轮契约明确。继续 strict；沿用已知 TaskStore catalog 限制，不重跑已失败调用、不写 active／ignore／身份；本共享记录是用户明确要求的交付，不声称 helper 恢复成功。
 
+### Round 2 before-dev 决策与证据
+
+- DDD Boundary Review — confirmed：Snapshot 是固定范围／水位；Export 为支撑子域，AccessControl 为通用能力。既有配对 session 均读取该 runtime home，不添加租户／用户模型；重启重新配对后可读该 home 的 ready 产物，外部 home 的 ID 不可见。前端 PinRegistry 只固定 ID，backend pin 保证在途存活。无 grill 修正、无未决领域冲突。
+- DDIA Data Design Review — confirmed：SnapshotStore 为数据事实源；Export 拥有固定 bytes 与 manifest。接受前 pin，终态 finally release；artifact 与 manifest 同目录 temp／fsync／rename，manifest 为 ready 发布标记。SHA-256 校验下载；ready 起 86400 秒，重启不续期；清扫仅 exports。无需迁移／backfill；中断作业不重放，失败／取消不冒充 ready；撤回实现保留原始事件与快照。
+- Legacy Change Safety Review — characterized：`reports/r2-before-dev-safety.{json,md}` 38 tests／1 skip；真实 `POST /api/v1/exports` tracer 红例 `405 != 202`，`reports/r2-http-tracer-red.{json,md}`。保留 cursor 绑定、CSV 空值／公式转义、snapshot TTL、鉴权。
+- Refactoring Review — proceed / normal：不需要重构；新增 storage／render 两模块、serve 局部路由。Python LSP references 返回 No language server found；源码调用点已核对。无 seam-only 例外。
+- BDD：`sbtd-runtime/spec/r2.1a-export-scenarios.md`，中文正文／英文关键词；真实本地 HTTP 与文件为测试 seam；Cross-repo context: complete；Mock Strategy: none（故障注入仅文件发布边界）。主会话唯一验证 controller；两个实现 slice 独占 storage 与 rendering 文件，不运行测试／lint／formatter。
+
+## Round 2 实现与验证
+
+实现提交 `e087b25ed0de119f97e043628c41965d2a254142`。新增 `export_store.py`、`export_render.py`，扩展 CSV 输出 seam 与 serve 导出路由；场景、测试、安装文档和 CI 入口同步。未新增 ADR：manifest／digest 决定记录在安装文档，不改变外部契约。
+
+行为：请求按冻结契约校验；接受前 pin，成功、失败、取消、关闭和 worker 启动失败均释放。artifact 后 manifest 原子发布，下载和重启重新校验 SHA-256。ready 起 86400 秒，启动清扫只删除已验证的 `exports/` 文件。HTML 为静态单文件；CSV 走 snapshot cursor，schema 1.1。后端输出层对文本、结构化键／叶子及嵌入 JSON 标识脱敏，manifest 记录版本。
+
+### 复核与门禁
+
+- ExportLifecycleReview：`openai-codex/gpt-6.1-sol`。三轮前发现的目录替换清理、sweep 与 finally 竞态、FIFO 非阻塞打开均已用失败回归修复；复核关闭，无剩余 actionable 缺陷。可选重复状态字段未删，避免行为改动。
+- ExportOutputReview：`kimi-code/k3`。结构化指标键／叶子、复合标识和未知时间预览的脱敏缺口均由红绿回归修复；最终复核 correct，无剩余 actionable 缺陷。
+- Code Readability：沿用现有 serve／SnapshotStore 错误、权限和原子发布形状；长渲染函数保留数据面板 seam，不拆无关抽象。
+- Ponytail Review：生命周期可选减少约 7 行重复状态，不采纳；输出侧重复扫描已合并。无新依赖。
+- Release Readiness Review — ready（仅本地 R2.1a，不是部署／发布）：失败保持 pin 释放和安全错误；取消只影响本作业；摘要不符、半成品和替换目录不提供或清理外部文件。一个 worker 串行，无远程暴露。无新增指标、告警或队列上限；状态由 getExport 观察。回滚只撤回代码，不迁移或删除原始事件、快照和已下载文件。
+
+### 验证证据
+
+主会话是唯一验证 controller。rtk：skipped-for-report。所有正式结果为 developer-local／dirty／local-only；实现提交后仅 task 证据待提交，不冒充 CI 或 PR head。
+
+| 命令 | 结果 | raw／中文汇总 |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 298 tests：296 passed、2 skipped，55.998s；skip 为 Windows junction evidence only | `reports/r2-runtime-final-redaction` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 65 passed，0.634s；与 runtime 重叠，不累计 | `reports/r2-contract-acceptance-final` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 12 passed，0.070s；最终 runtime discovery 再次覆盖 | `reports/r2-openapi-full` |
+| `ruff check` 七个改动 Python 文件 | All checks passed | `reports/r2-python-final-redaction-check` |
+| `ruff format --check` 同一范围 | 7 files already formatted | `reports/r2-python-final-redaction-format` |
+| 真实 `python3 -B -m serve` 两次启动、配对、HTML／CSV 下载、Ctrl-C 重启 smoke | HTML 14100 bytes、CSV 51855 bytes／139 行；两次 SHA-256 相同且等于 manifest；到期时间不变 | `reports/r2-final-restart-smoke` |
+
+浏览器检查最终 smoke HTML：13 个 Panel 均可见，脚本 0，页面资源请求 0；系统字体栈含 CJK fallback，图表文字为浅色 `rgb(231, 237, 245)`。首次完整浏览器检查曾记录 favicon 请求，随后 HTML 使用 `data:,` favicon，最终网络记录只有 HTML 自身。截图由 Playwright 返回，不入 Git。
+
+红绿回归均保留：HTTP tracer `405 != 202`；结构化秘密、结构化指标、嵌入标识、worker 启动失败、排队取消、目录替换清理、发布后 sweep。修复后对应 green 报告保留。未运行 dashboard tests／typecheck／build：dashboard 源码和静态产物未改。未运行全仓 workflow 或历史 probe_links，不修复、不重跑、不称全仓通过。
+
+`git diff 6e2cc56f386c603179ee6efd6004a24b5391ffc8 -- sbtd-runtime/contracts/openapi.yaml` 为空。panel manifest/schema、ADR 0001–0003、PRD、CSV schema 1.1 未改。无 CONTRACT-CHANGE-NEEDED。
+
+## 模型使用
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| Round 2 主会话 | openai-codex/gpt-6-astra:high | xai-oauth/grok-4.7 | unknown | unknown |
+| ExportStorage 实现 | 未指定 | xai-oauth/grok-4.7 | unknown | unknown |
+| ExportRendering 实现 | 未指定 | xai-oauth/grok-4.7 | unknown | unknown |
+| ExportLifecycleReview | 未指定 | openai-codex/gpt-6.1-sol | unknown | unknown |
+| ExportOutputReview | 未指定 | kimi-code/k3 | unknown | unknown |
+
+无 advisor、无 fallback。Round 2 title generation：unknown。
+
+## 风险与恢复边界
+
+- done 只表示本地实现和指定验收完成；未 push、未开 PR、未部署、未发布。plan 行保持 in_progress，等待后续 PR／merge 回填。
+- 一个本地 worker，无队列上限、指标或告警。本地单用户可接受；远程或多用户并发不在本授权范围。
+- 在途作业不跨进程恢复；重启只恢复通过摘要校验的 ready 文件。SHA-256 检测损坏，不抵御同机管理员篡改。
+- Snapshot 磁盘容量上限仍是 follow-up。Windows ACL、macOS／Windows 视觉和 JPEG／PDF 不属于本任务。
+- TaskStore catalog 限制未绕过；此文件是用户明确要求的共享记录，不承诺自动恢复。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -129,3 +190,5 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 | 2026-10-20T15:07:13+08:00 | planned | in-progress | 用户明确 strict 与 R2.1a；分支、基线匹配；创建明确授权共享交付记录，非 TaskStore lifecycle 成功 | git branch/rev-parse；用户附加 prompt；TaskStore.create 失败且无 completed_steps |
 | 2026-10-20T15:09:39.646430+08:00 | in-progress | blocked | CONTRACT-CHANGE-NEEDED：创建导出缺少固定快照／格式／呈现状态的请求协议；按用户硬边界停止，不自行扩展外部契约 | openapi.yaml:414–430、661–747；PRD §13.2–13.3；实际 YAML 解析 requestBody_present=False，参数仅 CsrfToken/IdempotencyKey；八个受保护文件逐字节未变 |
 | 2026-10-20T18:50:07+08:00 | blocked | in-progress | #148 merged as 6e2cc56 supplied createExport request contract；已 rebased onto 6e2cc56；用户明确恢复 strict R2.1a | round-2 prompt；当前分支匹配、HEAD 7ec402e；重新读取冻结 OpenAPI 请求／202／错误／panel_order；清除 blocked_reason |
+| 2026-10-20T20:35:58+08:00 | in-progress | checking | HTML／CSV、作业存储、冻结请求校验、测试／场景／文档已实现；真实 serve 重启与浏览器报告 smoke 通过，独立复核进行中 | runtime 首次完整 291 tests／2 skips；wrapper 65、OpenAPI 12；新增输出／pin 边界红绿证据；reports/r2-full-panel-restart-smoke；浏览器 13 panels、0 scripts、0 resources |
+| 2026-10-20T21:32:47+08:00 | checking | done | 本地 HTML／CSV 导出验收、独立复核和最终套件完成；不表示 push、PR、部署或发布 | 实现 e087b25ed0de119f97e043628c41965d2a254142；runtime 298／2 skip；wrapper 65；OpenAPI 12；ruff passed；真实重启 smoke SHA-256 不变；两位 reviewer 关闭；OpenAPI diff 为空 |
