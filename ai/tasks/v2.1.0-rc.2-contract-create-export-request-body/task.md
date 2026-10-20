@@ -7,8 +7,8 @@ mode_note: 用户明确 strict；2026-10-20 16:01 CST 已批准独立 createExpo
 status: done
 branch: contract/v2.1.0-rc.2-create-export-request-body
 created_at: '2026-10-20T16:04:10.056607+08:00'
-updated_at: '2026-10-20T08:46:27.157295+00:00'
-completed_at: '2026-10-20T08:46:27.157295+00:00'
+updated_at: '2026-10-20T09:28:23.289553+00:00'
+completed_at: '2026-10-20T09:28:23.289553+00:00'
 ---
 
 # createExport requestBody：独立契约变更
@@ -190,6 +190,56 @@ Code Readability Review：测试沿用既有 unittest/jsonschema 验证方式；
 
 提交范围仅 `sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py` 和本 task；其他 operation 及两份未描述 202 的说明保持不变。提交前记录已验证契约／测试 SHA-256，提交后以 Git blob 比对确认同一内容；SHA 由最终输出及 ignored commit receipt 提供，不在提交中自引用。无 push／PR／部署。TaskStore 自动恢复限制不变。
 
+## Round 3: pattern / non-negative
+
+用户于 2026-10-20 17:12 CST 批准本轮，明确继续 strict；起点 `b972328b0100f119a1f9764391823cb3a65c3aea`，原分支不变。只修改指定 schema、对应测试、受影响的两份说明及本记录；模型列表原样保留。未完整调用 grill-with-docs：范围明确，决策可由源码确定。沿用已记录 TaskStore catalog 限制，不重试、不写 active／身份／ignore，不声称 helper 生命周期或自动恢复成功。
+
+### 源码证据与决定
+
+- SnapshotId：`sbtd-runtime/report_snapshot.py:49` 为 `re.compile(r"snap_[0-9a-f]{32}")`；`:682–683` 使用 `_SNAPSHOT_ID.fullmatch(snapshot_id)`，不匹配抛出 `SnapshotNotFound`；`:663` 装载文件时也使用 fullmatch。JSON Schema 的 pattern 默认子串匹配，因此采用 `^snap_[0-9a-f]{32}$`，不改变内部正则。
+- ExportId：搜索 `sbtd-runtime` 的 Python 源码及 Dashboard 源码，没有 export_id validator／正则；`sbtd-runtime/serve.py:475–489` 的 API 路由未注册 exports；`sbtd-runtime/csv_export.py:152–155` 只序列化 snapshot_id。**不添加 ExportId pattern**，保留 string，不编造 export 前缀。
+- 数值：`sbtd-runtime/dashboard/src/reportDocument.ts:45` 的 `report_width_px: number`；`:48` 的 `preview_row_sets: Record<string, number>`；`:73–85` 构造器直接保存呈现状态，只验证 panel_id，无整数转换／校验。源码搜索未找到其他 runtime／dashboard 数值校验。保留两处 `type: number`，按本轮授权增加 `minimum: 0`；允许零和非负小数，不声称 Dashboard 已拒绝负值。
+- 两份指定说明都使用 `snap_report` 作为合法 ID 示例（场景 `:146`、使用说明 `:113`），需替换为符合格式的 ID；仅同步受影响的标识／数值说明，不修改其他行为。
+
+### 本轮 Book Gate Plan
+
+| Gate | 触发事实 | 阶段 | 状态 |
+|---|---|---|---|
+| book-ddia-data-design | ID 与数值 wire schema | before-dev | passed / confirmed |
+| book-legacy-change-safety | 既有契约缺格式／非负边界回归 | before-dev | passed / characterized：ID 8 个、负数 4 个子用例先失败；各 schema 修改后定点通过；无需新 seam |
+| book-refactoring-pass | 只有声明式契约、测试和说明，无生产代码重构 | before-dev | not-required；无需新 seam |
+| book-ddd-distilled-modeling | 无完整 grill、领域术语／边界歧义 | before-dev | not-required |
+| book-release-readiness | 无 runtime／部署变更，export HTTP 尚未实现 | finish | not-required；不声称发布就绪 |
+
+DDIA Data Design Review — confirmed。ID 格式以 runtime 为事实源；数值类型以既有 PresentationState 为依据，非负限制来自本轮明确授权。共享参数 schema 继续供路径及请求／响应引用；无存储、迁移、backfill、异步顺序或幂等变更。回滚仅撤回契约，须协调已依赖消费者。必需验证为 malformed ID、负数、零／小数保留及完整既有套件。
+
+BDD 沿用指定场景文件，中文步骤＋英文关键词；contract-only，Mock Strategy: none。新增断言仍使用用户指定的 OpenApiDraftTests / jsonschema seam，不引入 HTTP mock。
+
+### 本轮验证
+
+已完成 red → green：`reports/r3-id-red` 保留 8 个 malformed ID 失败，`r3-id-green` 定点通过；`r3-numbers-red` 保留 4 个负数失败，`r3-numbers-green` 的 2 tests 通过（包括零／小数保留）。`r3-runtime-schema-smoke` 实际创建／读取 SnapshotStore，JSON round-trip 的 html/csv 请求通过，零／小数接受，负数与 malformed ID 拒绝，9 个 component schema 合法；未调用 export HTTP。完整命令／stdout／stderr／退出码保存在同 stem `.json`，中文汇总 `.md`，均 ignored／local-only。
+
+Code Readability / Ponytail：复用既有用例与 validator；不增加 helper、依赖或生产实现。合法 ID 样本全部迁移，负例使用明确子用例名；没有新增整数限制。模型列表逐字比较未改变。主会话为唯一 writer／验证 controller；两项独立只读审查覆盖 schema/source correctness 与测试／说明一致性。
+
+| 命令（仓库根） | 实际结果 | raw／同 stem 中文汇总 |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 11 passed，0.066s | `reports/r3-openapi-final.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 262 tests：261 passed、1 skipped，17.917s；Windows junction evidence only | `reports/r3-runtime-final.{json,md}` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 64 passed，0.576s；与 runtime 重叠，不累计计数 | `reports/r3-contract-acceptance-final.{json,md}` |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | exit 0，1 file already formatted | `reports/r3-ruff-format.{json,md}` |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1，既有 19–30 行 imports I001；未改该段，不做无关 lint 修复 | `reports/r3-ruff-check.{json,md}` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -c <smoke source>` | exit 0，真实 SnapshotStore＋JSON 请求、数值边界、malformed ID、9 个 component schema | `reports/r3-runtime-schema-smoke.{json,md}` |
+
+Smoke 的完整可复现 `-c` 源码保存在报告 command 数组及中文汇总，不留下脚手架。结构比较基线证明 OpenAPI **仅**新增 SnapshotId.pattern 与两处 minimum，ExportId 与其他 operation/schema 完全不变；源码／说明 SHA-256 保存在 `reports/r3-validated-content.json`，提交后核对 Git blob，防止将未验证内容当作已验证提交。
+
+BDD: traceable（原场景的 ID／非负边界 → 既有 test_create_export_* 扩充）；中文步骤＋英文关键词；Cross-repo context: contract-only；API Contract: verified（schema／实例层）；Mock Strategy: none。rtk: skipped-for-report；Final Test Report / Run Summary MD: generated；Targeted Rerun: passed；Final Full Rerun: passed（计划测试范围，保留平台 skip）；**lint 并非全绿**。Evidence Source: developer-local；Source Revision: dirty；Environment Alignment: not-needed；Evidence Publication: local-only。仅本地证据，不冒称 CI 或已发布 PR head。
+
+未运行 TS typecheck、Dashboard build、UI E2E、export HTTP、全仓无关 workflow suite：没有 TS／UI／runtime 修改，导出 HTTP 尚未实现；独立完整 OAS validator 沿用未安装限制，不新增依赖。Graft: skipped，以源码及精确 schema 比较为证据；无导出符号修改，不需 LSP refactor。没有要求范围外实现，因此无 CONTRACT-CHANGE-NEEDED。提交仅上述四个契约／测试／说明文件与本 task，显式 git add；不包含两个禁止路径，不 push、不开 PR。恢复／回滚边界与既有 TaskStore 限制不变。
+
+独立只读 BoundaryCoverage：overall_correctness correct，无阻塞问题；确认 schema 引用生效、ID／负数／零与小数覆盖、说明及场景一致、模型列表未改。Simplicity / Code Readability：Lean，net 0 lines required；不抽取仅减少字面量的全局常量。可选 P3：Python jsonschema 的 `$` 可在末尾换行之前匹配，故 `"snap_" + "a"*32 + "\n"` 在 schema 下接受、runtime fullmatch 拒绝；主会话已用实例确认。保留用户要求的 `^...$` 形式，不额外加入 maxLength 或非便携锚点；这是 contract 比 runtime 更宽的已知边界，不会变得更严格。
+
+独立只读 PatternCorrectness：overall_correctness correct，无 material bug；确认正则来源、共享 SnapshotId 引用、ExportId 无验证、number/minimum 选择及五文件范围。该 reviewer 对锚点与 fullmatch 的一般性等价描述以以上已实测的末尾换行例外为准，不声称逐字符完全等价。两项独立复核均无阻塞问题；10 组原生／中文报告配对、九节顺序、退出码和基线身份已核验。本轮 done 仅指契约交付验收，保留既有 I001、Windows skip 和末尾换行边界，不表示 runtime／部署／发布完成。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -201,3 +251,7 @@ Code Readability Review：测试沿用既有 unittest/jsonschema 验证方式；
 | 2026-10-20T08:40:00.194208+00:00 | planned | in-progress | strict 继续；已读取 PRD 输入、Envelope 与 ExportId，限定 createExport-only | 本轮 Book Gate Plan／输入映射／202 export_id；TaskStore 限制沿用 |
 | 2026-10-20T08:43:31.180755+00:00 | in-progress | checking | 202 契约与回归完成；响应 smoke、runtime、contract＋acceptance、OpenAPI 测试通过；修正新测试换行格式，独立 review 进行中 | reports/r2-response-red、r2-response-green、r2-response-smoke、r2-runtime-final、r2-contract-acceptance-final、r2-openapi-targeted；保留 ruff 初次结果 |
 | 2026-10-20T08:46:27.157295+00:00 | checking | done | 本轮 createExport 202 export_id、完整输入映射与本地验收完成；两位独立 review 无阻塞；保留既有 lint 与平台 skip | 最终 runtime 262/1 skip、contract＋acceptance 64、OpenAPI 11；format passed；response smoke 9 schemas/98 refs；其他 OpenAPI 内容不变；本轮 review 结论 |
+| 2026-10-20T09:13:47.338151+00:00 | done | planned | 用户授权 Round 3 pattern / non-negative；保留上一轮完成证据，重开共享交付记录 | 本轮 prompt；b972328b0100f119a1f9764391823cb3a65c3aea；分支匹配 |
+| 2026-10-20T09:13:47.338151+00:00 | planned | in-progress | strict 继续；ID 与数值证据已核对；模型列表不改 | Round 3 源码证据与 Book Gate Plan；沿用 TaskStore 限制 |
+| 2026-10-20T09:17:12.261988+00:00 | in-progress | checking | 两项契约收紧及负例完成；各 red→green 与真实 SnapshotStore/schema smoke 通过；开始完整验证及独立复核 | reports/r3-id-red、r3-id-green、r3-numbers-red、r3-numbers-green、r3-runtime-schema-smoke |
+| 2026-10-20T09:28:23.289553+00:00 | checking | done | Round 3 契约与实例回归验收完成；两项独立复核无阻塞；保留既有 lint、平台 skip 与可选锚点边界，模型列表不变 | OpenAPI 11 passed；runtime 262/1 skip；contract＋acceptance 64 passed；format passed；SnapshotStore/schema smoke passed；reports/r3-*；独立 review 结论 |

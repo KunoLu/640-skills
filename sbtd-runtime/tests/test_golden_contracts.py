@@ -597,7 +597,7 @@ class OpenApiDraftTests(unittest.TestCase):
             with self.subTest(format=export_format):
                 errors = list(
                     validator.iter_errors(
-                        {"snapshot_id": "snap_report", "format": export_format}
+                        {"snapshot_id": "snap_" + "a" * 32, "format": export_format}
                     )
                 )
                 self.assertEqual(errors, [])
@@ -617,26 +617,55 @@ class OpenApiDraftTests(unittest.TestCase):
         for export_format in ("html", "csv"):
             with self.subTest(format=export_format):
                 request = {
-                    "snapshot_id": "snap_report",
+                    "snapshot_id": "snap_" + "a" * 32,
                     "format": export_format,
                     "presentation_state": state,
+                }
+                self.assertEqual(list(validator.iter_errors(request)), [])
+        for value in (0, 0.5):
+            with self.subTest(nonnegative_number=value):
+                request = {
+                    "snapshot_id": "snap_" + "a" * 32,
+                    "format": "html",
+                    "presentation_state": {
+                        **state,
+                        "report_width_px": value,
+                        "preview_row_sets": {"tasks": value},
+                    },
                 }
                 self.assertEqual(list(validator.iter_errors(request)), [])
 
     def test_create_export_rejects_invalid_requests(self) -> None:
         # Scenario: 拒绝不完整或不支持的导出请求
-        valid = {"snapshot_id": "snap_report", "format": "html"}
+        valid = {"snapshot_id": "snap_" + "a" * 32, "format": "html"}
         cases = [
             ("null body", None, "type"),
             ("array body", [], "type"),
             ("missing snapshot", {"format": "html"}, "required"),
-            ("missing format", {"snapshot_id": "snap_report"}, "required"),
+            ("missing format", {"snapshot_id": valid["snapshot_id"]}, "required"),
             ("numeric snapshot", {**valid, "snapshot_id": 42}, "type"),
             ("null snapshot", {**valid, "snapshot_id": None}, "type"),
             ("unknown field", {**valid, "filters": {}}, "additionalProperties"),
             ("null presentation", {**valid, "presentation_state": None}, "type"),
             ("array presentation", {**valid, "presentation_state": []}, "type"),
         ]
+        for snapshot_id in (
+            "",
+            "snap_report",
+            "snap_" + "a" * 31,
+            "snap_" + "a" * 33,
+            "snap_" + "A" * 32,
+            "snap_" + "g" * 32,
+            "prefix_snap_" + "a" * 32,
+            "snap_" + "a" * 32 + "_suffix",
+        ):
+            cases.append(
+                (
+                    f"malformed snapshot {snapshot_id!r}",
+                    {**valid, "snapshot_id": snapshot_id},
+                    "pattern",
+                )
+            )
         for export_format in ("jpeg", "pdf", "json", "HTML", "", None, 42):
             cases.append(
                 (
@@ -667,7 +696,7 @@ class OpenApiDraftTests(unittest.TestCase):
             incomplete = {key: value for key, value in state.items() if key != field}
             with self.subTest(missing=field):
                 request = {
-                    "snapshot_id": "snap_report",
+                    "snapshot_id": "snap_" + "a" * 32,
                     "format": "html",
                     "presentation_state": incomplete,
                 }
@@ -676,17 +705,21 @@ class OpenApiDraftTests(unittest.TestCase):
         invalid_fields = [
             ("theme", "sepia", "enum"),
             ("report_width_px", "1440", "type"),
+            ("report_width_px", -1, "minimum"),
+            ("report_width_px", -0.5, "minimum"),
             ("expanded_detail_ids", [42], "type"),
             ("table_sort", {"tasks": 42}, "type"),
             ("preview_row_sets", {"tasks": "20"}, "type"),
+            ("preview_row_sets", {"tasks": -1}, "minimum"),
+            ("preview_row_sets", {"tasks": -0.5}, "minimum"),
             ("panel_order", [42], "type"),
             ("legend_state", {"tokens": "hidden"}, "type"),
             ("filters", {}, "additionalProperties"),
         ]
         for field, value, expected_error in invalid_fields:
-            with self.subTest(invalid=field):
+            with self.subTest(invalid=field, value=value):
                 request = {
-                    "snapshot_id": "snap_report",
+                    "snapshot_id": "snap_" + "a" * 32,
                     "format": "csv",
                     "presentation_state": {**state, field: value},
                 }

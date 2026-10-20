@@ -110,14 +110,16 @@ PY
 ### R2.1a 导出请求契约（服务实现仍待交付）
 
 用户于 2026-10-20 批准独立契约变更：`POST /api/v1/exports` 必须提交
-`application/json`，例如 `{"snapshot_id":"snap_report","format":"html"}`。
+`application/json`，例如 `{"snapshot_id":"snap_0123456789abcdef0123456789abcdef","format":"html"}`。
 `snapshot_id` 固定点击导出时已完成的快照；`format` 当前仅接受 `html` 或 `csv`，
 不包含后续 R2.1b 的 JPEG／PDF。现有 Bearer、CSRF、Idempotency-Key 要求不变。
+快照 ID 必须完整匹配 `^snap_[0-9a-f]{32}$`。
 
 可省略 `presentation_state`（使用现有 ReportDocument 默认呈现状态）；若提供，
 须包含与 Dashboard `PresentationState` 相同的七个字段：`theme`、
 `report_width_px`、`expanded_detail_ids`、`table_sort`、`preview_row_sets`、
 `panel_order`、`legend_state`，具体类型见 OpenAPI `ExportPresentationState`。
+`report_width_px` 与 `preview_row_sets` 的值为非负 number，允许零与小数；不限制为 integer。
 请求和呈现对象拒绝未知字段；排序、预览行数和隐藏图例不改变 CSV 全量数据范围。
 契约声明非法／缺失请求为 400，不存在／不可见快照为 404，已过期快照为 410；
 不能静默替换成新快照。此变更只定义输入协议，不代表导出作业或 HTTP 错误处理已实现。

@@ -645,6 +645,7 @@ components:
       required: true
       schema:
         type: string
+        pattern: "^snap_[0-9a-f]{32}$"
     ExportId:
       name: export_id
       in: path
@@ -729,6 +730,7 @@ components:
           description: Report color theme.
         report_width_px:
           type: number
+          minimum: 0
           description: Standard report width in CSS pixels.
         expanded_detail_ids:
           type: array
@@ -744,6 +746,7 @@ components:
           type: object
           additionalProperties:
             type: number
+            minimum: 0
           description: Table identifiers mapped to preview row counts; never a CSV row limit.
         panel_order:
           type: array
