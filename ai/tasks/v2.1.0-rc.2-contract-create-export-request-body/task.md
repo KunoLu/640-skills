@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；2026-10-20 16:01 CST 已批准独立 createExpo
 status: done
 branch: contract/v2.1.0-rc.2-create-export-request-body
 created_at: '2026-10-20T16:04:10.056607+08:00'
-updated_at: '2026-10-20T09:42:56.591170+00:00'
+updated_at: '2026-10-20T18:47:00+08:00'
 completed_at: '2026-10-20T09:42:56.591170+00:00'
 ---
 
@@ -105,13 +105,29 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源，�
 
 提交仅显式添加上述五个文件，使用 conventional message `feat(contract): add createExport requestBody`。自身 commit SHA 不自引用；实际提交结果由最终会话输出及提交后本地 `reports/commit-receipt.json` 记录。提交前保存已验证四个契约／测试／场景／说明文件的 SHA-256，提交后与 Git blob 比较，防止把不同内容冒充已验证版本；task.md 单独解析模式与状态事件。既有两个 untracked 路径保留，不切分支、不 push、不开 PR。
 
-## 模型列表（operator 可补全）
+## 模型列表（operator 已核验）
 
-| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+来源：operator 提供的各轮 session logs；计数为 assistant messages，非工具调用。请求主模型均为 `openai-codex/gpt-6-astra:high`，实际 `openai-codex/gpt-6-astra`；子代理请求 `kimi-code/k3:max`，实际 `kimi-code/k3`。无 fallback model，无 advisor。
+
+| 轮次／用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 主会话 | 未另指定 | openai-codex/gpt-6-astra（host 标识） | unknown | unknown |
-| ContractCorrectness（独立只读 reviewer） | host 默认 reviewer | unknown（host 未返回模型标识，operator 可补全） | unknown | unknown |
-| ContractMaintainability（独立只读 reviewer） | host 默认 reviewer | unknown（host 未返回模型标识，operator 可补全） | unknown | unknown |
+| R1 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 36 | unknown |
+| R1 ContractCorrectness | kimi-code/k3:max | kimi-code/k3 | 18 | unknown |
+| R1 ContractMaintainability | kimi-code/k3:max | kimi-code/k3 | 19 | unknown |
+| R2 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 27 | unknown |
+| R2 ResponseCorrectness | kimi-code/k3:max | kimi-code/k3 | 10 | unknown |
+| R2 MappingReadability | kimi-code/k3:max | kimi-code/k3 | 10 | unknown |
+| R3 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 35 | unknown |
+| R3 PatternCorrectness | kimi-code/k3:max | kimi-code/k3 | 10 | unknown |
+| R3 BoundaryCoverage | kimi-code/k3:max | kimi-code/k3 | 15 | unknown |
+| R4 aborted first start（session 01a158a9，无文件修改） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 4 | unknown |
+| R4 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 24 | unknown |
+| R4 SnapshotSemantics | kimi-code/k3:max | kimi-code/k3 | 11 | unknown |
+| R4 PanelContractReview | kimi-code/k3:max | kimi-code/k3 | 14 | unknown |
+
+Session title generation：R1 10 requests，R2 9 requests，R3／R4 unknown；标题模型未提供，不推测。后文“模型列表未改”均为当轮历史事实，本次按 operator 核验结果补全。
+
+Closeout：PR #148 于 **2026-10-20 18:47 +08:00** squash-merged 为 `6e2cc56f386c603179ee6efd6004a24b5391ffc8`。保留本地 completed_at；合并不表示 R2.1a runtime 已实现或发布。
 
 ## PR round 2：202 接受响应
 
@@ -311,3 +327,4 @@ BDD: traceable；沿用中文正文＋英文关键词，场景对应 test_create
 | 2026-10-20T09:36:16.177940+00:00 | planned | in-progress | strict 继续；核对 runtime ID 错误及 manifest／ReportDocument，限制五文件 | Round 4 源码证据与 Book Gate Plan；沿用 TaskStore 限制 |
 | 2026-10-20T09:39:23.375735+00:00 | in-progress | checking | Round 4 schema／测试／场景／说明完成；原生套件与 schema/runtime smoke 通过；独立复核进行中 | OpenAPI 12；runtime 263/1 skip；contract＋acceptance 65；format passed；既有 I001；全部 paths 结构不变 |
 | 2026-10-20T09:42:56.591170+00:00 | checking | done | Round 4 两项契约修正及全部指定验收完成；两位独立 reviewer 无 finding；保留既有 I001／Windows skip／pattern 末尾换行边界 | OpenAPI 12 passed；runtime 263/1 skip；contract＋acceptance 65 passed；format passed；schema/runtime smoke passed；local://r4-*；模型列表不变；仅五文件 |
+| 2026-10-20T18:47:00+08:00 | done | done | Closeout：PR #148 squash-merged；operator 核验四轮模型与 assistant message 计数后回填，保留本地完成时间 | 用户 round-2 prompt：6e2cc56f386c603179ee6efd6004a24b5391ffc8；2026-10-20 18:47 +08:00；无 fallback／advisor |

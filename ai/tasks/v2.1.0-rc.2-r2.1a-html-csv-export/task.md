@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.1a-html-csv-export
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确 strict；仅 plan R2.1a 与 D11/D15/D16。不改契约；显式 git add；不 push、不开 PR；不暂存或提交 .omp-r12b-addendum.txt、ai/tasks/codex-verify/。保持 OpenAPI、Panel manifest/schema、ADR 0001/0002/0003、PRD、CSV schema 1.1 不变。不可避免的契约变化 STOP + CONTRACT-CHANGE-NEEDED。
-status: blocked
-blocked_reason: CONTRACT-CHANGE-NEEDED：POST /api/v1/exports 未定义 requestBody 或 snapshot_id、格式、presentation_state 输入；实现必需新增外部请求约定，超出当前不改契约授权。
+status: in-progress
+blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T15:09:39.646430+08:00'
+updated_at: '2026-10-20T18:50:07+08:00'
 completed_at: null
 ---
 
@@ -54,9 +54,9 @@ completed_at: null
 - R2.1b JPEG/PDF／Playwright 与 R2.2 跨平台证据不实现；Windows ACL／macOS 不冒充本机验证。
 - 不修复无关历史 probe_links 失败；若命中如实保留。
 
-## CONTRACT-CHANGE-NEEDED
+## CONTRACT-CHANGE-NEEDED（round 1 历史；已由 #148 解决）
 
-**已触发；按用户硬边界停止实现。**
+**Round 1 曾触发并停止实现；#148 于 2026-10-20 18:47 +08:00 合并，已提供所缺请求契约。本节保留历史，不代表当前仍阻塞。**
 
 ### 事实与不可绕过的缺口
 
@@ -112,7 +112,15 @@ DDIA Data Design Review — blocked。SnapshotStore 是固定数据源；Export 
 
 | 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
-| 主会话：契约调查／docs backfill／STOP 记录（未实施生产代码） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（host 标识；high 仅请求档位） | unknown（未取得完整会话日志计数） | unknown |
+| Round 1 主会话：契约调查／docs backfill／STOP 记录；session 01a15822-15df-7329-b854-f224871df557 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 17（operator 核验 session logs） | unknown |
+
+Round 1 title generation：unknown。本轮请求模型 `openai-codex/gpt-6-astra:high`，实际 host 标识 `openai-codex/gpt-6-astra`；完整计数待交付时按可用证据记录。
+
+## Round 2 恢复
+
+已 rebase 到 `6e2cc56f386c603179ee6efd6004a24b5391ffc8`；旧 docs 提交现为 `240d31b`、`7ec402e`，以上旧 SHA 仅为 round-1 历史。#148 的 CreateExportRequest、202 export_id、400／404／410、SnapshotId pattern 与完整 panel_order 规则为本轮冻结输入。
+
+R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout 与 plan R2.0c done 行已核对存在且正确，不重复回填。未完整调用 grill-with-docs：原验收与本轮契约明确。继续 strict；沿用已知 TaskStore catalog 限制，不重跑已失败调用、不写 active／ignore／身份；本共享记录是用户明确要求的交付，不声称 helper 恢复成功。
 
 ## 状态事件
 
@@ -120,3 +128,4 @@ DDIA Data Design Review — blocked。SnapshotStore 是固定数据源；Export 
 |---|---|---|---|---|
 | 2026-10-20T15:07:13+08:00 | planned | in-progress | 用户明确 strict 与 R2.1a；分支、基线匹配；创建明确授权共享交付记录，非 TaskStore lifecycle 成功 | git branch/rev-parse；用户附加 prompt；TaskStore.create 失败且无 completed_steps |
 | 2026-10-20T15:09:39.646430+08:00 | in-progress | blocked | CONTRACT-CHANGE-NEEDED：创建导出缺少固定快照／格式／呈现状态的请求协议；按用户硬边界停止，不自行扩展外部契约 | openapi.yaml:414–430、661–747；PRD §13.2–13.3；实际 YAML 解析 requestBody_present=False，参数仅 CsrfToken/IdempotencyKey；八个受保护文件逐字节未变 |
+| 2026-10-20T18:50:07+08:00 | blocked | in-progress | #148 merged as 6e2cc56 supplied createExport request contract；已 rebased onto 6e2cc56；用户明确恢复 strict R2.1a | round-2 prompt；当前分支匹配、HEAD 7ec402e；重新读取冻结 OpenAPI 请求／202／错误／panel_order；清除 blocked_reason |
