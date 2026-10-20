@@ -8,7 +8,7 @@ status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1a-html-csv-export
 created_at: '2026-10-20T15:07:13+08:00'
-updated_at: '2026-10-20T21:32:47+08:00'
+updated_at: '2026-10-20T22:14:25+08:00'
 completed_at: '2026-10-20T21:32:47+08:00'
 ---
 
@@ -192,3 +192,57 @@ R2.0c task 的 mode_note、80／16／15／88／3 模型计数、#147 closeout �
 | 2026-10-20T18:50:07+08:00 | blocked | in-progress | #148 merged as 6e2cc56 supplied createExport request contract；已 rebased onto 6e2cc56；用户明确恢复 strict R2.1a | round-2 prompt；当前分支匹配、HEAD 7ec402e；重新读取冻结 OpenAPI 请求／202／错误／panel_order；清除 blocked_reason |
 | 2026-10-20T20:35:58+08:00 | in-progress | checking | HTML／CSV、作业存储、冻结请求校验、测试／场景／文档已实现；真实 serve 重启与浏览器报告 smoke 通过，独立复核进行中 | runtime 首次完整 291 tests／2 skips；wrapper 65、OpenAPI 12；新增输出／pin 边界红绿证据；reports/r2-full-panel-restart-smoke；浏览器 13 panels、0 scripts、0 resources |
 | 2026-10-20T21:32:47+08:00 | checking | done | 本地 HTML／CSV 导出验收、独立复核和最终套件完成；不表示 push、PR、部署或发布 | 实现 e087b25ed0de119f97e043628c41965d2a254142；runtime 298／2 skip；wrapper 65；OpenAPI 12；ruff passed；真实重启 smoke SHA-256 不变；两位 reviewer 关闭；OpenAPI diff 为空 |
+
+## Re-verify（round-2 grok 回退后 k3:max 复核）
+
+为何运行：round-2 主会话 `01a158ee-5891-719d-a34c-8ca96493a8a6` 在 `openai-codex/gpt-6-astra` 104 条 assistant messages 后回退到 `xai-oauth/grok-4.7`（54 条，约 2026-10-20 21:19 Asia/Shanghai 起，model_change 2026-10-20T13:19:15Z），全程无 advisor；实现与部分证据落于回退段。按 operator 规则用已知模型复核一次。本节为合规复核记录，不改 frontmatter `status`／`completed_at`，不新增状态事件。
+
+执行命令（verbatim）：`cd /workspace/640-skills-r2.1a && timeout 10800 omp -p --model kimi-code/k3:max --auto-approve "$(cat ~/.omp/logs/640-r21a-reverify-k3max/prompt.md)" </dev/null`
+
+复核对象：同一分支 `feat/v2.1.0-rc.2-r2.1a-html-csv-export` @ `796ff45d9f069b71da93824e3ad26e1e81b56a91`（已 rebase onto `10bc530`；实现提交现为 `3fcb5cf`，本文件 round-2 段落引用的 `e087b25…` 为 rebase 前 SHA，仅作历史）。不切换分支、不 rebase、不 push、不开 PR、不 amend。未完整调用 grill-with-docs：验收标准与冻结契约无歧义，复核范围由 operator prompt 锁定；不重开 before-dev 门禁，check 阶段证据为全量 diff 复核＋完整测试执行。
+
+### 验收清单复核（diff 对逐条验收）
+
+| # | 验收 | 证据 | 结论 |
+|---|---|---|---|
+| 1 | 单文件离线 HTML；无外部 URL／script src／link href=http／@import／url(http；系统字体＋CJK fallback | `export_render.py` `_html` 仅内联 `<style>`＋`<link rel="icon" href="data:,">`；`_CSS` 字体栈含 PingFang SC／Hiragana Sans GB／Microsoft YaHei／Noto Sans CJK SC·JP；`test_export_render.py::test_html_contains_every_panel_and_shared_metric_values` 断言 FORBIDDEN 全部缺失、CJK 字体全部存在 | PASS |
+| 2 | CSV 复用 serialize_csv／SnapshotStore.dataset_page，snapshot-bound cursor 全量遍历；schema 1.1 不变 | `export_render._walk_rows` 以 `dataset_page(snapshot_id, cursor, DEFAULT_PAGE_SIZE)` 循环至 `next_cursor is None`；`csv_export.CSV_SCHEMA_VERSION = "1.1"` 未改，仅新增可选 `rows`／`value_transform` 参数且缺省路径不变；`test_csv_cursor_walk_matches_schema_without_truncation`（limit=2 分页走完全量） | PASS |
+| 3 | 创建固定 snapshot_id 并持 backend pin 至完成／取消／失败；在途 expiry/sweep 不删、结束释放 | `ExportStore.create` 先入队前 `snapshots.pin`，`_run` finally `release`，`close`/`delete` 同路径释放；`test_pin_precedes_render_and_releases_on_each_terminal_state`、`test_two_jobs_hold_the_snapshot_until_each_releases`、`test_sweep_between_publish_and_finally_still_releases_pin`、`test_worker_start_failure_releases_snapshot_pin`；前端 dashboard 未改，PinRegistry 复用为文档级说明 | PASS |
+| 4 | ready 后默认 24h，含启动清扫；清理仅 exports/ | `EXPORT_TTL_SECONDS = 86400`；`__init__` 执行 `_restore()` 后 `sweep()`；sweep 仅删已验证配对；`test_sweep_and_startup_touch_only_verified_expired_exports` | PASS |
+| 5 | 有效期内重复下载 bytes/digest 不变，含 serve 重启 | `_read_ready` 每次重校 SHA-256；`test_ready_manifest_is_stable_across_download_and_restart`、`test_identical_download_bytes_and_digest_after_real_restart`、`test_download_does_not_extend_retention` | PASS |
+| 6 | export_id＋当前 session 下载，无路径参数；拒绝 traversal／foreign ID | `export_resource` 拒绝 query 参数（400）；`_check_id` 仅接受 `exp_[0-9a-f]{32}`；SecurityMiddleware Bearer 不变；`test_download_auth_path_boundary_and_delete`、`test_foreign_home_and_traversal_cannot_read_bytes`、`test_required_headers_and_idempotent_creation`（缺 Authorization 401） | PASS |
+| 7 | HTML／CSV 后端统一脱敏，manifest 记录 redaction version | `redact_text`／`redact_cell`／`_redact_node`；CSV 走 `value_transform=redact_cell`；metadata 含 `redaction_policy_version`；`test_redaction_is_shared_and_does_not_change_metrics`、`test_structured_secret_text_is_redacted_in_both_formats`、`test_structured_metric_keys_and_leaves_are_redacted`、`test_embedded_identifier_secrets_are_redacted` | PASS |
+| 8 | temp＋fsync＋rename 原子发布；半成品永不被下载 | `_write_temp` 同目录 mkstemp＋0600＋fsync，`os.replace`＋`_fsync_dir`，manifest 后发布为 ready 标记；`_fail`／`_mark_cancelled` 清理 artifact；`test_partial_and_corrupt_files_are_never_ready` | PASS |
+| 9 | install-and-use.md 更新 exports 行为说明 | 文档段落由「服务实现仍待交付」改为「R2.1a：离线 HTML／全量 CSV 导出」，含 202/export_id、24h 保留、清扫边界、脱敏与原子发布说明 | PASS |
+
+plan R2.1a 行与 D11（exports/ 24h、export_id 寻址、0700/0600——`mkdir(mode=0o700)`、`os.chmod`、temp 0600，POSIX 权限测试 `test_private_modes_links_and_replaced_directory`）、D15（后端输出层统一脱敏）、D16（系统字体栈＋CJK fallback）均随上表覆盖；spec 11 个场景全部有对应测试。
+
+### 契约未变检查
+
+- `git diff 10bc530..HEAD -- sbtd-runtime/contracts/` 为空（0 行），含 OpenAPI 与 panel-manifest/schema。
+- `git diff --name-only 10bc530..HEAD` 全部 16 个文件中无任何 PRD、ADR 0001/0002/0003、dashboard、schema/manifest 路径；`CSV_SCHEMA_VERSION` 仍为 `"1.1"`。无 CONTRACT-CHANGE-NEEDED。
+
+### 测试执行（developer-local，raw 输出在仓外 `/tmp/r21a-reverify/`，不入 Git）
+
+| 命令 | 实际结果 | exit |
+|---|---|---|
+| `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | Ran 301 tests，OK（skipped=2，均 "Windows junction evidence only"），46.797s | 0 |
+| `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | Ran 68 tests，OK，0.579s | 0 |
+| `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | Ran 15 tests，OK，0.060s | 0 |
+| `RUFF_NO_CACHE=true ruff check <7 个 diff 改动 .py>` | All checks passed! | 0 |
+| `RUFF_NO_CACHE=true ruff format --check <同范围>` | 7 files already formatted | 0 |
+
+计数与 round-2 记录（298／65／12）的 +3 差异已由 rebase base 解释：#150 契约测试随 `10bc530` 引入（OpenApiDraftTests 6e2cc56=12 → 10bc530=15，HEAD 仍为 15），非本轮新增。已知跳过：2 个 Windows junction 测试（与 round-2 相同）；dashboard tests／typecheck／build 未运行（dashboard 源码与静态产物未改）；本轮未重跑真实 serve 重启 smoke 与浏览器检查——round-2 证据在案（HTML 14100 bytes、CSV 51855 bytes、两次 SHA-256 相同、13 panels／0 scripts／0 resources），离线不变量由上述测试断言覆盖。工作树复核后干净，无 `__pycache__`／`.ruff_cache` 落入仓内。
+
+### 复核结论
+
+**PASS（无代码变更）**：九项验收与 D11/D15/D16 全部有实现与测试证据，契约 diff 为空，四套测试与 ruff 全绿，未发现 blocker，无需修复提交，无 CONTRACT-CHANGE-NEEDED。本轮仅新增本节 docs 记录。
+
+### 模型使用（operator 按 session jsonl 回填）
+
+| 用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| 复核主会话 | kimi-code/k3:max | unknown | unknown | unknown |
+| 会话标题生成 | unknown | unknown | unknown | unknown |
+
+本轮未派生 subagent。
