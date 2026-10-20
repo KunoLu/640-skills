@@ -706,6 +706,53 @@ class OpenApiDraftTests(unittest.TestCase):
                     responses[status]["$ref"], f"#/components/responses/{component}"
                 )
 
+    def test_create_export_202_requires_export_id_and_preserves_envelope(self) -> None:
+        # Scenario: 导出接受响应提供后续查询与下载所需标识
+        response = self.doc["paths"]["/api/v1/exports"]["post"]["responses"]["202"]
+        response = self.doc["components"]["responses"][
+            response["$ref"].rsplit("/", 1)[1]
+        ]
+        schema = response["content"]["application/json"]["schema"]
+        validator = jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
+        accepted = {
+            "api_version": "1",
+            "request_id": "req_export",
+            "data": {"export_id": "export_report"},
+            "meta": {
+                "metrics_version": "1.0",
+                "projection_version": "1.0",
+                "complete": True,
+            },
+        }
+        self.assertEqual(list(validator.iter_errors(accepted)), [])
+        for data, expected_error in (
+            ({}, "required"),
+            ({"export_id": 42}, "type"),
+            ({"export_id": None}, "type"),
+            ({"export_id": "export_report", "status": "ready"}, "additionalProperties"),
+            (None, "type"),
+            ([], "type"),
+        ):
+            with self.subTest(data=data):
+                errors = list(validator.iter_errors({**accepted, "data": data}))
+                self.assertIn(expected_error, [error.validator for error in errors])
+        for field in accepted:
+            with self.subTest(missing=field):
+                incomplete = {
+                    key: value for key, value in accepted.items() if key != field
+                }
+                errors = list(validator.iter_errors(incomplete))
+                self.assertIn("required", [error.validator for error in errors])
+        for field, value, expected_error in (
+            ("api_version", "2", "const"),
+            ("request_id", 42, "type"),
+            ("meta", {}, "required"),
+            ("meta", {**accepted["meta"], "complete": "yes"}, "type"),
+        ):
+            with self.subTest(invalid=field, value=value):
+                errors = list(validator.iter_errors({**accepted, field: value}))
+                self.assertIn(expected_error, [error.validator for error in errors])
+
     def test_loopback_pairing_and_csrf_match_the_auth_decision(self) -> None:
         servers = [server["url"] for server in self.doc["servers"]]
         self.assertEqual(servers, ["http://127.0.0.1:6400", "http://[::1]:6400"])

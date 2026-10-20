@@ -7,8 +7,8 @@ mode_note: 用户明确 strict；2026-10-20 16:01 CST 已批准独立 createExpo
 status: done
 branch: contract/v2.1.0-rc.2-create-export-request-body
 created_at: '2026-10-20T16:04:10.056607+08:00'
-updated_at: '2026-10-20T16:17:54.846339+08:00'
-completed_at: '2026-10-20T16:17:54.846339+08:00'
+updated_at: '2026-10-20T08:46:27.157295+00:00'
+completed_at: '2026-10-20T08:46:27.157295+00:00'
 ---
 
 # createExport requestBody：独立契约变更
@@ -113,6 +113,83 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源，�
 | ContractCorrectness（独立只读 reviewer） | host 默认 reviewer | unknown（host 未返回模型标识，operator 可补全） | unknown | unknown |
 | ContractMaintainability（独立只读 reviewer） | host 默认 reviewer | unknown（host 未返回模型标识，operator 可补全） | unknown | unknown |
 
+## PR round 2：202 接受响应
+
+用户明确要求继续 strict；基线 `58dcc038bdf51ca47380d4e988d2301188122e69`，分支不变。本轮仅修改 createExport 的 202、对应测试及本 task；保留原轮验收证据。未完整调用 grill-with-docs：需求、授权和验收均明确。沿用上文 TaskStore 已知限制，仅更新用户要求的共享交付记录，不重试 catalog，不声称生命周期 helper 或自动恢复成功。
+
+### 本轮 Book Gate Plan
+
+| Gate | 触发事实 | 阶段 | 状态 |
+|---|---|---|---|
+| book-ddia-data-design | createExport 接受响应的 wire schema | before-dev | passed / confirmed：OpenAPI 为事实源；复用 ExportId/schema 与 Envelope；无持久化迁移；幂等、失败路径不变 |
+| book-legacy-change-safety | 既有响应没有要求 export_id | before-dev | passed / characterized：新增响应实例回归修改前 6 个子用例失败；修改后通过；无需生产 seam |
+| book-refactoring-pass | 只改声明式契约／测试，无生产代码重构 | before-dev | not-required |
+| book-ddd-distilled-modeling | 本轮无完整 grill、无新增领域规则或边界歧义 | before-dev | not-required；沿用既有 Export／Snapshot 边界 |
+| book-release-readiness | 没有 runtime／部署变更，export HTTP 仍未实现 | finish | not-required；不声明服务／发布就绪 |
+
+DDIA：接受响应只交付供既有查询／下载路径使用的 ID，不表示文件已完成。不增加 status、URL 或时间字段；PRD §13.2–13.3 未要求这些接受响应字段。无 backfill/replay；撤回本契约前需协调已依赖消费者。验证覆盖 ID 必填／类型／封闭 data、Envelope 保留，以及其他 operation 不变。
+
+本轮 BDD（contract-only，Mock Strategy: none）：用户限定两份说明仅在已有 202 描述时修改；经读取均无 202 描述，故保持不变，在本明确交付 task 中记录本轮验收场景。语言沿用中文正文、英文关键词；由 `test_create_export_202_requires_export_id_and_preserves_envelope` 追踪。
+
+```gherkin
+Scenario: 导出接受响应提供后续查询与下载所需标识
+  Given 客户端提交固定快照的 HTML 或 CSV 导出请求
+  When 按 createExport 的 202 契约校验接受响应
+  Then data 必须是仅含字符串 export_id 的对象
+  And 缺失 export_id、错误类型或未知 data 字段均被拒绝
+  And api_version、request_id、meta 保持既有 Envelope 约束
+```
+
+## PRD §13.2–13.3 input → requestBody field mapping
+
+以下所有引用均来自 `docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md`；表列出创建导出的输入及实际承载边界，不把预检／渲染／下载步骤冒充新增输入。
+
+| PRD 简短原文及路径／章节 | requestBody 字段 | 承载情况／边界 |
+|---|---|---|
+| `docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md` §13.2：“HTML 网页、JPEG 长图、PDF 文档、CSV 数据”“选择一种格式” | `format` | HTML／CSV 已承载；**JPEG／PDF NOT carried**，本 PR 已批准范围仅 html/csv，后续 R2.1b，不在本轮扩枚举 |
+| 同路径 §13.2：“固定当前已完成 snapshot_id”；§13.3：`ReportDocument(snapshot, presentation_state)` | `snapshot_id` | 已承载快照引用；snapshot 内容不复制进请求 |
+| 同路径 §13.2：“页面展示状态”；§13.3：`presentation_state` | `presentation_state` | 可承载完整七字段状态；省略时沿用既有默认状态，不保证省略时还原用户非默认页面 |
+| 同路径 §13.3：“主题” | `presentation_state.theme` | 已承载 dark/light |
+| 同路径 §13.3：“标准报告宽度” | `presentation_state.report_width_px` | 已承载 CSS 像素宽度 |
+| 同路径 §13.3：“展开的明细对象” | `presentation_state.expanded_detail_ids` | 已承载展开对象 ID 列表 |
+| 同路径 §13.3：“表格排序” | `presentation_state.table_sort` | 已承载 table ID → 排序字符串 |
+| 同路径 §13.3：“当前预览行集” | `presentation_state.preview_row_sets` | 沿用现有模型 table ID → 预览行数；**显式行 ID／任意行集 NOT carried**。固定快照＋排序＋行数供呈现使用，不是 CSV 范围 |
+| 同路径 §13.3：“Panel 顺序” | `presentation_state.panel_order` | 已承载 Panel ID 顺序 |
+| 同路径 §13.3：“图例状态”“隐藏某条系列属于显示状态” | `presentation_state.legend_state` | 已承载 series ID → 可见性；保留隐藏说明是渲染要求，不是额外输入 |
+
+**requestBody 无 PRD 来源字段：无。** 所有字段均在表内；具体 wire 名称、类型及 optional/default 是上一轮已批准的既有模型映射，并非 PRD 原文规定。§13.2 的固定时间范围／筛选通过 snapshot_id 间接固定；预检数据完整性、renderer／容量、授权／脱敏、生成校验、取消与下载是行为或独立流程，不是本 requestBody 必须新增的字段。Bearer、CSRF、Idempotency-Key 是既有协议头，不冒充 §13.2–13.3 的请求体输入。本轮不修改上述既有输入边界，也不需要修改 createExport 之外的操作。
+
+## 202 export_id
+
+上一轮 createExport 的 202 仍引用通用 `Json` → `Envelope`，其中 `data: {}` 没有要求返回 export_id。本 PR 本轮新增 `ExportAccepted` response，以 `allOf` 组合原有 `Envelope` 与 `data: CreateExportAccepted`；新数据 schema 为封闭 object，required `[export_id]`，其类型引用 `#/components/parameters/ExportId/schema`。不添加其他接受响应字段，不改变 Envelope 的 api_version/request_id/meta，也不改变 getExport、deleteExport、downloadExport 或其他 operation。
+
+### 本轮验证结果
+
+原生输出、退出码、命令、时间、基线 SHA、Linux 环境均保存于本 task 的 ignored `reports/r2-*.json`，同 stem 中文 `.md` 汇总；失败报告保留。rtk: skipped-for-report。证据为 developer-local／dirty／local-only，不冒称 CI、HTTP 导出或已发布 PR head。
+
+| 命令（仓库根） | 实际结果 | raw／中文汇总 stem |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests.test_create_export_202_requires_export_id_and_preserves_envelope -v` | 修改前 1 test、6 个失败子用例；修改后 1 passed | `r2-response-red`、`r2-response-green` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 最终 11 passed，0.070s | `r2-openapi-final-format-fix` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 最终 262 tests：261 passed、1 skipped，18.688s；skip 为 Windows junction evidence only | `r2-runtime-final-format-fix` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 最终 64 passed，0.608s；与 runtime 重叠，不累计计数 | `r2-contract-acceptance-final-format-fix` |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1：既有 19–30 行 import I001；该段未改，沿用上一轮，不修范围外 lint | `r2-ruff-check` |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | 首轮 exit 1：新测试两处换行；已修正，最终 exit 0：1 file already formatted | `r2-ruff-format`、`r2-ruff-format-fixed` |
+| `python3 -B -c <response smoke source>` | exit 0：9 个 component schema、98 个本地引用；JSON 响应 round-trip、缺 ID 拒绝、ID 可用于既有查询／下载路径；结构比较证明除 createExport 202 和两个新增 component 外整个 OpenAPI 不变 | `r2-response-smoke` |
+
+Smoke 完整 `-c` 源码在 `r2-response-smoke.json` 的 command 数组及同 stem `.md`，无落盘脚手架。初次 suite 成功证据另保留 `r2-openapi-targeted`、`r2-runtime-final`、`r2-contract-acceptance-final`；格式修正后最终套件已完整重跑。
+
+BDD: traceable（本轮 task 场景 → 新响应回归）；Cross-repo context: contract-only；API Contract: verified（schema／引用／实例层）；Mock Strategy: none。Final Test Report / Run Summary MD: generated；Targeted Rerun: passed；Final Full Rerun: passed（计划测试范围，保留 Windows skip）；**lint 并非全绿**。完整 OAS meta-schema validator 未安装，沿用既有 jsonschema，不添加依赖。没有 TS／UI／runtime 变更，因此不运行 typecheck、Dashboard build、浏览器 E2E 或 export HTTP；不执行全仓无关 workflow suite。Graft: skipped，以精确契约结构比较和源码为证据；没有修改既有导出符号，无需 LSP rename/refactor。
+
+Code Readability Review：测试沿用既有 unittest/jsonschema 验证方式；一个响应样本、显式负例、独立子用例定位；不引入 helper 抽象、依赖或 HTTP mock。Ponytail 实现选择：复用 Envelope 和 ExportId schema，不复制公共字段、不添加未要求的接受响应字段。
+
+独立只读 review 已完成（均未运行测试，主会话唯一验证 controller）：
+- ResponseCorrectness：overall_correctness correct；确认 allOf、Envelope 保留、ID 类型和其他操作不变、负例有效。唯一 P3 非阻塞建议为测试固定 `ExportAccepted` 组件名称；**不采纳**：用户允许示例命名，等价重命名不是消费者可见缺陷；测试应验证响应行为而非内部引用名称。
+- MappingReadability：输入映射完整准确，无 PRD 来源遗漏；确认 JPEG/PDF、显式预览行集及默认状态边界已标明；PRD 无额外接受响应字段要求。Simplicity / Code Readability：Lean already，net 0 lines to cut，无阻塞问题。
+- 两位 reviewer 均覆盖最终换行后的测试版本；无待修复 correctness finding。主会话检查最终报告同 stem 配对、九节顺序、无模板占位、退出码一致；完成只指本轮契约交付，不表示 runtime／部署／发布就绪。
+
+提交范围仅 `sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py` 和本 task；其他 operation 及两份未描述 202 的说明保持不变。提交前记录已验证契约／测试 SHA-256，提交后以 Git blob 比对确认同一内容；SHA 由最终输出及 ignored commit receipt 提供，不在提交中自引用。无 push／PR／部署。TaskStore 自动恢复限制不变。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -120,3 +197,7 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源，�
 | 2026-10-20T16:04:10.056607+08:00 | planned | in-progress | 用户明确 strict 与 contract-only 授权；保存共享交付记录，非 TaskStore 成功声明 | 分支／基线检查；prompt；PRD §13.2–13.3；f02fe5f blocker |
 | 2026-10-20T16:09:58.204636+08:00 | in-progress | checking | 请求契约／测试／场景／文档已实现；本地 schema smoke 与 runtime、CI wrapper 通过，等待独立复核 | reports/schema-request-smoke、runtime-final、contract-wrappers-final；既有 I001 保留，Windows junction skip |
 | 2026-10-20T16:17:54.846339+08:00 | checking | done | 本地 contract-only 验收完成，两位独立复核无阻塞问题；保留既有 I001 与 Windows-only skip，不声称导出 runtime 或发布完成 | runtime 261/1 skip；wrapper 63 passed；schema 8/refs 95 smoke；contract-focused 10 passed；format passed；独立 review 记录 |
+| 2026-10-20T08:40:00.194208+00:00 | done | planned | 用户授权 PR round 2：补 createExport 202 export_id；保留上一轮完成证据并重开 | 本轮 prompt；基线 58dcc038bdf51ca47380d4e988d2301188122e69；指定分支匹配 |
+| 2026-10-20T08:40:00.194208+00:00 | planned | in-progress | strict 继续；已读取 PRD 输入、Envelope 与 ExportId，限定 createExport-only | 本轮 Book Gate Plan／输入映射／202 export_id；TaskStore 限制沿用 |
+| 2026-10-20T08:43:31.180755+00:00 | in-progress | checking | 202 契约与回归完成；响应 smoke、runtime、contract＋acceptance、OpenAPI 测试通过；修正新测试换行格式，独立 review 进行中 | reports/r2-response-red、r2-response-green、r2-response-smoke、r2-runtime-final、r2-contract-acceptance-final、r2-openapi-targeted；保留 ruff 初次结果 |
+| 2026-10-20T08:46:27.157295+00:00 | checking | done | 本轮 createExport 202 export_id、完整输入映射与本地验收完成；两位独立 review 无阻塞；保留既有 lint 与平台 skip | 最终 runtime 262/1 skip、contract＋acceptance 64、OpenAPI 11；format passed；response smoke 9 schemas/98 refs；其他 OpenAPI 内容不变；本轮 review 结论 |

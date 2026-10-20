@@ -433,7 +433,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "202":
-          $ref: "#/components/responses/Json"
+          $ref: "#/components/responses/ExportAccepted"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -658,6 +658,17 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Envelope"
+    ExportAccepted:
+      description: Export accepted; use data.export_id to query or download the export.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CreateExportAccepted"
     BadRequest:
       description: Invalid or missing request body, field type, export format, time, dimension, or metric. No silent default.
     Unauthorized:
@@ -671,6 +682,13 @@ components:
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
   schemas:
+    CreateExportAccepted:
+      type: object
+      additionalProperties: false
+      required: [export_id]
+      properties:
+        export_id:
+          $ref: "#/components/parameters/ExportId/schema"
     CreateExportRequest:
       type: object
       additionalProperties: false
