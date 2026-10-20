@@ -423,11 +423,23 @@ paths:
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExportRequest"
       responses:
         "403":
           $ref: "#/components/responses/Forbidden"
         "202":
-          $ref: "#/components/responses/Json"
+          $ref: "#/components/responses/ExportAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
   /api/v1/exports/{export_id}:
     get:
       operationId: getExport
@@ -631,8 +643,13 @@ components:
       name: snapshot_id
       in: path
       required: true
+      description: |
+        The pattern documents the runtime ID format. Malformed PATH IDs return
+        404 NotFound (sbtd-runtime/report_snapshot.py:682–683;
+        sbtd-runtime/serve.py get_snapshot / get_snapshot_dataset).
       schema:
         type: string
+        pattern: "^snap_[0-9a-f]{32}$"
     ExportId:
       name: export_id
       in: path
@@ -646,8 +663,19 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Envelope"
+    ExportAccepted:
+      description: Export accepted; use data.export_id to query or download the export.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/CreateExportAccepted"
     BadRequest:
-      description: Invalid time, dimension, or metric. No silent default.
+      description: Invalid or missing request body, field type, export format, time, dimension, or metric. No silent default.
     Unauthorized:
       description: Missing credential or scope. Does not reveal whether a hidden object exists.
     NotFound:
@@ -659,6 +687,93 @@ components:
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
   schemas:
+    CreateExportAccepted:
+      type: object
+      additionalProperties: false
+      required: [export_id]
+      properties:
+        export_id:
+          $ref: "#/components/parameters/ExportId/schema"
+    CreateExportRequest:
+      type: object
+      additionalProperties: false
+      required: [snapshot_id, format]
+      description: |
+        Fix the completed snapshot and presentation state at export selection
+        time (PRD 13.2–13.3). Later refreshes or filter changes must not change
+        this export. A malformed snapshot_id (failing the pattern) returns
+        400 BadRequest; a well-formed but missing or invisible snapshot returns
+        404; an expired snapshot returns 410, never an automatically selected
+        replacement.
+      properties:
+        snapshot_id:
+          $ref: "#/components/parameters/SnapshotId/schema"
+          description: |
+            Malformed (fails the pattern): 400 BadRequest. Well-formed but
+            missing or invisible: 404. Expired: 410.
+        format:
+          type: string
+          enum: [html, csv]
+        presentation_state:
+          $ref: "#/components/schemas/ExportPresentationState"
+          description: Optional; when omitted, use the existing ReportDocument default presentation state.
+    ExportPresentationState:
+      type: object
+      additionalProperties: false
+      required:
+        - theme
+        - report_width_px
+        - expanded_detail_ids
+        - table_sort
+        - preview_row_sets
+        - panel_order
+        - legend_state
+      description: |
+        Complete presentation state matching Dashboard PresentationState
+        (PRD 13.3). Affects rendering only, never the CSV dataset range.
+        Hidden series must retain an explanatory note in the export.
+      properties:
+        theme:
+          type: string
+          enum: [dark, light]
+          description: Report color theme.
+        report_width_px:
+          type: number
+          minimum: 0
+          description: Standard report width in CSS pixels.
+        expanded_detail_ids:
+          type: array
+          items:
+            type: string
+          description: Identifiers of expanded detail objects.
+        table_sort:
+          type: object
+          additionalProperties:
+            type: string
+          description: Table identifiers mapped to their current sort selection.
+        preview_row_sets:
+          type: object
+          additionalProperties:
+            type: number
+            minimum: 0
+          description: Table identifiers mapped to preview row counts; never a CSV row limit.
+        panel_order:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+          description: |
+            Must be a complete, unique ordering of all panel IDs in
+            sbtd-runtime/contracts/panel-manifest.json. Any other value
+            (empty, duplicate, unknown, or missing IDs) is rejected with
+            400 BadRequest. Membership and completeness are checked against
+            the manifest by the service, not enumerated in this schema.
+        legend_state:
+          type: object
+          additionalProperties:
+            type: boolean
+          description: Series identifiers mapped to their visibility state.
     Health:
       type: object
       additionalProperties: false

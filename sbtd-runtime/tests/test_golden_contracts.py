@@ -572,6 +572,11 @@ class OpenApiDraftTests(unittest.TestCase):
         import yaml
 
         cls.doc = yaml.safe_load(OPENAPI.read_text(encoding="utf-8"))
+        manifest = load_json(ROOT / "contracts" / "panel-manifest.json")
+        cls.panel_order = [
+            panel["panel_id"]
+            for panel in sorted(manifest["panels"], key=lambda panel: panel["order"])
+        ]
 
     def parameter_names(self, operation: dict) -> set[str]:
         names = set()
@@ -581,6 +586,217 @@ class OpenApiDraftTests(unittest.TestCase):
                 parameter = self.doc["components"]["parameters"][name]
             names.add(parameter["name"])
         return names
+
+    def create_export_validator(self) -> jsonschema.Draft202012Validator:
+        body = self.doc["paths"]["/api/v1/exports"]["post"]["requestBody"]
+        schema = body["content"]["application/json"]["schema"]
+        return jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
+
+    def test_create_export_accepts_html_and_csv_without_presentation(self) -> None:
+        # Scenario: 固定快照并选择当前支持的导出格式
+        operation = self.doc["paths"]["/api/v1/exports"]["post"]
+        body = operation["requestBody"]
+        self.assertIs(body["required"], True)
+        validator = self.create_export_validator()
+        for export_format in ("html", "csv"):
+            with self.subTest(format=export_format):
+                errors = list(
+                    validator.iter_errors(
+                        {"snapshot_id": "snap_" + "a" * 32, "format": export_format}
+                    )
+                )
+                self.assertEqual(errors, [])
+
+    def test_create_export_accepts_complete_presentation(self) -> None:
+        # Scenario: 呈现状态不成为数据筛选
+        state = {
+            "theme": "light",
+            "report_width_px": 1440,
+            "expanded_detail_ids": ["task_report"],
+            "table_sort": {"tasks": "duration:desc"},
+            "preview_row_sets": {"tasks": 20},
+            "panel_order": self.panel_order,
+            "legend_state": {"tokens": False},
+        }
+        validator = self.create_export_validator()
+        for export_format in ("html", "csv"):
+            with self.subTest(format=export_format):
+                request = {
+                    "snapshot_id": "snap_" + "a" * 32,
+                    "format": export_format,
+                    "presentation_state": state,
+                }
+                self.assertEqual(list(validator.iter_errors(request)), [])
+        for value in (0, 0.5):
+            with self.subTest(nonnegative_number=value):
+                request = {
+                    "snapshot_id": "snap_" + "a" * 32,
+                    "format": "html",
+                    "presentation_state": {
+                        **state,
+                        "report_width_px": value,
+                        "preview_row_sets": {"tasks": value},
+                    },
+                }
+                self.assertEqual(list(validator.iter_errors(request)), [])
+
+    def test_create_export_rejects_invalid_requests(self) -> None:
+        # Scenario: 拒绝不完整或不支持的导出请求
+        valid = {"snapshot_id": "snap_" + "a" * 32, "format": "html"}
+        cases = [
+            ("null body", None, "type"),
+            ("array body", [], "type"),
+            ("missing snapshot", {"format": "html"}, "required"),
+            ("missing format", {"snapshot_id": valid["snapshot_id"]}, "required"),
+            ("numeric snapshot", {**valid, "snapshot_id": 42}, "type"),
+            ("null snapshot", {**valid, "snapshot_id": None}, "type"),
+            ("unknown field", {**valid, "filters": {}}, "additionalProperties"),
+            ("null presentation", {**valid, "presentation_state": None}, "type"),
+            ("array presentation", {**valid, "presentation_state": []}, "type"),
+        ]
+        for export_format in ("jpeg", "pdf", "json", "HTML", "", None, 42):
+            cases.append(
+                (
+                    f"unsupported format {export_format!r}",
+                    {**valid, "format": export_format},
+                    "enum",
+                )
+            )
+        validator = self.create_export_validator()
+        for name, request, expected_error in cases:
+            with self.subTest(case=name):
+                errors = list(validator.iter_errors(request))
+                self.assertIn(expected_error, [error.validator for error in errors])
+
+    def test_create_export_rejects_malformed_snapshot_id(self) -> None:
+        # Scenario: 请求体中格式错误的快照标识属于非法请求
+        validator = self.create_export_validator()
+        for snapshot_id in (
+            "",
+            "snap_report",
+            "snap_" + "a" * 31,
+            "snap_" + "a" * 33,
+            "snap_" + "A" * 32,
+            "snap_" + "g" * 32,
+            "prefix_snap_" + "a" * 32,
+            "snap_" + "a" * 32 + "_suffix",
+        ):
+            for export_format in ("html", "csv"):
+                with self.subTest(snapshot_id=snapshot_id, format=export_format):
+                    request = {"snapshot_id": snapshot_id, "format": export_format}
+                    errors = list(validator.iter_errors(request))
+                    self.assertEqual(
+                        [(list(error.path), error.validator) for error in errors],
+                        [(["snapshot_id"], "pattern")],
+                    )
+
+    def test_create_export_rejects_incomplete_or_invalid_presentation(self) -> None:
+        # Scenarios: 拒绝不完整或不支持的导出请求；拒绝空或重复的 Panel 顺序
+        state = {
+            "theme": "dark",
+            "report_width_px": 1440,
+            "expanded_detail_ids": [],
+            "table_sort": {},
+            "preview_row_sets": {},
+            "panel_order": self.panel_order,
+            "legend_state": {},
+        }
+        validator = self.create_export_validator()
+        for field in state:
+            incomplete = {key: value for key, value in state.items() if key != field}
+            with self.subTest(missing=field):
+                request = {
+                    "snapshot_id": "snap_" + "a" * 32,
+                    "format": "html",
+                    "presentation_state": incomplete,
+                }
+                errors = list(validator.iter_errors(request))
+                self.assertIn("required", [error.validator for error in errors])
+        invalid_fields = [
+            ("theme", "sepia", "enum"),
+            ("report_width_px", "1440", "type"),
+            ("report_width_px", -1, "minimum"),
+            ("report_width_px", -0.5, "minimum"),
+            ("expanded_detail_ids", [42], "type"),
+            ("table_sort", {"tasks": 42}, "type"),
+            ("preview_row_sets", {"tasks": "20"}, "type"),
+            ("preview_row_sets", {"tasks": -1}, "minimum"),
+            ("preview_row_sets", {"tasks": -0.5}, "minimum"),
+            ("panel_order", [42], "type"),
+            ("panel_order", [], "minItems"),
+            ("panel_order", [*self.panel_order, self.panel_order[0]], "uniqueItems"),
+            ("legend_state", {"tokens": "hidden"}, "type"),
+            ("filters", {}, "additionalProperties"),
+        ]
+        for field, value, expected_error in invalid_fields:
+            with self.subTest(invalid=field, value=value):
+                request = {
+                    "snapshot_id": "snap_" + "a" * 32,
+                    "format": "csv",
+                    "presentation_state": {**state, field: value},
+                }
+                errors = list(validator.iter_errors(request))
+                self.assertIn(expected_error, [error.validator for error in errors])
+
+    def test_create_export_declares_validation_and_snapshot_errors(self) -> None:
+        # Scenario: 缺失与过期快照不被静默替换
+        responses = self.doc["paths"]["/api/v1/exports"]["post"]["responses"]
+        for status, component in (
+            ("400", "BadRequest"),
+            ("404", "NotFound"),
+            ("410", "Gone"),
+        ):
+            with self.subTest(status=status):
+                self.assertEqual(
+                    responses[status]["$ref"], f"#/components/responses/{component}"
+                )
+
+    def test_create_export_202_requires_export_id_and_preserves_envelope(self) -> None:
+        # Scenario: 导出接受响应提供后续查询与下载所需标识
+        response = self.doc["paths"]["/api/v1/exports"]["post"]["responses"]["202"]
+        response = self.doc["components"]["responses"][
+            response["$ref"].rsplit("/", 1)[1]
+        ]
+        schema = response["content"]["application/json"]["schema"]
+        validator = jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
+        accepted = {
+            "api_version": "1",
+            "request_id": "req_export",
+            "data": {"export_id": "export_report"},
+            "meta": {
+                "metrics_version": "1.0",
+                "projection_version": "1.0",
+                "complete": True,
+            },
+        }
+        self.assertEqual(list(validator.iter_errors(accepted)), [])
+        for data, expected_error in (
+            ({}, "required"),
+            ({"export_id": 42}, "type"),
+            ({"export_id": None}, "type"),
+            ({"export_id": "export_report", "status": "ready"}, "additionalProperties"),
+            (None, "type"),
+            ([], "type"),
+        ):
+            with self.subTest(data=data):
+                errors = list(validator.iter_errors({**accepted, "data": data}))
+                self.assertIn(expected_error, [error.validator for error in errors])
+        for field in accepted:
+            with self.subTest(missing=field):
+                incomplete = {
+                    key: value for key, value in accepted.items() if key != field
+                }
+                errors = list(validator.iter_errors(incomplete))
+                self.assertIn("required", [error.validator for error in errors])
+        for field, value, expected_error in (
+            ("api_version", "2", "const"),
+            ("request_id", 42, "type"),
+            ("meta", {}, "required"),
+            ("meta", {**accepted["meta"], "complete": "yes"}, "type"),
+        ):
+            with self.subTest(invalid=field, value=value):
+                errors = list(validator.iter_errors({**accepted, field: value}))
+                self.assertIn(expected_error, [error.validator for error in errors])
 
     def test_loopback_pairing_and_csrf_match_the_auth_decision(self) -> None:
         servers = [server["url"] for server in self.doc["servers"]]

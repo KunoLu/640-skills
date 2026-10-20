@@ -107,6 +107,28 @@ PY
 - R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现（见上文）。仍没有远程业务控制端点。
 - codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
 
+### R2.1a 导出请求契约（服务实现仍待交付）
+
+用户于 2026-10-20 批准独立契约变更：`POST /api/v1/exports` 必须提交
+`application/json`，例如 `{"snapshot_id":"snap_0123456789abcdef0123456789abcdef","format":"html"}`。
+`snapshot_id` 固定点击导出时已完成的快照；`format` 当前仅接受 `html` 或 `csv`，
+不包含后续 R2.1b 的 JPEG／PDF。现有 Bearer、CSRF、Idempotency-Key 要求不变。
+快照 ID 必须完整匹配 `^snap_[0-9a-f]{32}$`。
+
+可省略 `presentation_state`（使用现有 ReportDocument 默认呈现状态）；若提供，
+须包含与 Dashboard `PresentationState` 相同的七个字段：`theme`、
+`report_width_px`、`expanded_detail_ids`、`table_sort`、`preview_row_sets`、
+`panel_order`、`legend_state`，具体类型见 OpenAPI `ExportPresentationState`。
+`report_width_px` 与 `preview_row_sets` 的值为非负 number，允许零与小数；不限制为 integer。
+`panel_order` 必须是 `sbtd-runtime/contracts/panel-manifest.json` 中所有 Panel ID
+的完整、唯一排列，可调整顺序；空列表、重复、未知或遗漏 ID 均要求 400 BadRequest。
+schema 检查非空与唯一性；成员资格和完整性由服务按 manifest 校验，不在 schema 复制枚举。
+请求和呈现对象拒绝未知字段；排序、预览行数和隐藏图例不改变 CSV 全量数据范围。
+createExport 契约声明非法／缺失请求（包括 snapshot_id 不满足 pattern）为 400 BadRequest；
+格式正确但不存在／不可见的快照为 404，已过期快照为 410；不能静默替换成新快照。
+这与既有快照 PATH 参数不同：PATH ID 格式错误在 runtime 中按不存在处理，返回 404。
+此变更只定义输入协议，不代表导出作业或 HTTP 错误处理已实现。
+
 ## R2.0a：serve（本地 Dashboard 服务，D5–D8）
 
 R2.0a PR-2 起仓内有 HTTP 服务层 `sbtd-runtime/serve.py`（Starlette＋uvicorn，ADR 0001 §2），服务入仓的 `dashboard/static/` 产物并接 R1 真实库面（`stats_query`／`report_snapshot` over `EventStore`）。安装精确钉版依赖后从仓库根启动：
