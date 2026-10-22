@@ -192,13 +192,13 @@ BDD: traceable，仅契约场景；沿用 task 中文正文／英文关键词，
 
 ## 模型使用
 
-operator 将依据本次 session jsonl 回填实际模型及精确计数；下面是明确待回填的计数表，不推测 assistant messages 或工具调用次数。
+operator 于 2026-10-22 12:10 +08:00 依据 session jsonl（`~/.omp/agent/sessions/--workspace-640-skills-contract-jpeg-pdf--/`）回填。主会话命令：`timeout 10800 omp -p "$(cat PROMPT)" --model openai-codex/gpt-6-astra:high --auto-approve --cwd /workspace/640-skills-contract-jpeg-pdf`，无 `--advisor`、无配置覆盖。subagent 均由主会话以 `agent: reviewer` 派出、未显式指定 model，omp 配置解析为 `kimi-code/k3:high`（`session_init` resolvedModel；并非 config `task` 角色的 grok-4.7），全部只读。全部会话 `resolvedModelIsFallback: false`，无 403、无 fallback。
 
-| 用途 | 请求／配置模型 | 实际模型 | assistant messages | 工具调用次数 |
-|---|---|---|---|---|
-| 主会话 | openai-codex/gpt-6-astra:high | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
-| ContractCorrectness（只读 reviewer） | omp configured task-role（未覆盖 model；用户告知当前 grok-4.7） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
-| ContractCoverage（只读 reviewer） | omp configured task-role（未覆盖 model；用户告知当前 grok-4.7） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
-| Round 2 主会话 | openai-codex/gpt-6-astra（当前配置） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
-| AddendumSemantics（只读 reviewer） | omp configured reviewer-role（未覆盖 model） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
-| AddendumCoverage（只读 reviewer） | omp configured reviewer-role（未覆盖 model） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
+| 用途 | 会话 | 请求／配置模型 | 实际模型（jsonl） | resolvedModelIsFallback | assistant messages | 工具调用次数 |
+|---|---|---|---|---|---|---|
+| Round 1 主会话（唯一 writer） | 01a161a5-6bf1-75f4-b636-b712d58cf6df | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 39 | 74 |
+| ContractCorrectness（只读 reviewer） | Round 1 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 19 | 27 |
+| ContractCoverage（只读 reviewer） | Round 1 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 13 | 24 |
+| Round 2 主会话（唯一 writer） | 01a161c2-b2fc-7549-ba1e-b94c3b9f49e2 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 18 | 40 |
+| AddendumSemantics（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 7 | 11 |
+| AddendumCoverage（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 5 | 9 |
