@@ -248,6 +248,6 @@ operator 于 2026-10-22 12:10 +08:00 依据 session jsonl（`~/.omp/agent/sessio
 | Round 2 主会话（唯一 writer） | 01a161c2-b2fc-7549-ba1e-b94c3b9f49e2 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 18 | 40 |
 | AddendumSemantics（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 7 | 11 |
 | AddendumCoverage（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 5 | 9 |
-| Round 3 主会话（唯一 writer） | Round 3 主会话；session ID operator 回填 | openai-codex/gpt-6-astra（当前 runtime） | operator 回填 | operator 回填 | operator 回填 | operator 回填 |
-| WarningContractReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | operator 回填（reviewer 自报 kimi-code/k3） | operator 回填 | operator 回填 | operator 回填 |
-| WarningCoverageReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | operator 回填（reviewer 自报 kimi-code/k3） | operator 回填 | operator 回填 | operator 回填 |
+| Round 3 主会话（唯一 writer） | 01a161cc-3c9b-7399-a067-841d4e763e12 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 23 | 48 |
+| WarningContractReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 11 | 15 |
+| WarningCoverageReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 12 | 12 |
