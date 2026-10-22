@@ -23,6 +23,7 @@ import sys
 import tempfile
 import threading
 import time
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -32,9 +33,13 @@ PLAYWRIGHT_VERSION = "1.64.0"
 BROWSER_RENDERER_VERSION = "r2.1b.1"
 JPEG_WIDTH = 1440
 JPEG_QUALITY = 90
+# PRD suggested, freeze after measurement (建议值，实测后冻结).
+# Configure these module constants before submitting jobs; each worker gets a copy.
 MAX_SIDE_PX = 32000
 MAX_PIXELS = 80_000_000
-JPEG_SCALE_WARNING = "JPEG_SCALE_1X:2x exceeds 32000px side or 80000000 pixels"
+JPEG_SCALE_WARNING = (
+    "JPEG_SCALE_1X:2x exceeds configured image limits; using full-page 1x"
+)
 DEFAULT_TIMEOUT_SECONDS = 60.0
 RENDERER_UNAVAILABLE = "RENDERER_UNAVAILABLE"
 EXPORT_IMAGE_SIZE_LIMIT = "EXPORT_IMAGE_SIZE_LIMIT"
@@ -289,7 +294,7 @@ def _jpeg_scale(css_width: int, css_height: int) -> tuple[int, str | None]:
         raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
     if not _exceeds(css_width, css_height, 2):
         return 2, None
-    if not _exceeds(css_width, css_height, 1):
+    if css_width >= JPEG_WIDTH and not _exceeds(css_width, css_height, 1):
         return 1, JPEG_SCALE_WARNING
     raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
 
@@ -467,6 +472,8 @@ def _write_job(
         "home": str(home),
         "presentation": presentation if isinstance(presentation, dict) else None,
         "timeout_seconds": timeout_seconds,
+        "max_side_px": MAX_SIDE_PX,
+        "max_pixels": MAX_PIXELS,
     }
     (job / "request.json").write_text(
         json.dumps(payload, ensure_ascii=False),
@@ -541,6 +548,7 @@ def _execute_job(
             owner = WindowsJob()
             env["SBTD_RENDERER_JOB"] = owner.name
         proc = subprocess.Popen(_worker_argv(job), **popen_kwargs)
+        downgrade_notified = False
         while True:
             if os.name == "posix":
                 # Keep the exited leader unreaped: its PID/PGID cannot be
@@ -561,6 +569,16 @@ def _execute_job(
                 raise RendererError(RENDERER_CANCELLED)
             if time.monotonic() >= deadline:
                 raise RendererError(RENDERER_TIMEOUT)
+            if not downgrade_notified and _real_file(job / "downgrade"):
+                # The worker cannot capture until the caller's warning handler
+                # returns. A handler that raises leaves no partial artifact.
+                warnings.warn(JPEG_SCALE_WARNING, RuntimeWarning, stacklevel=2)
+                if _cancelled(cancelled):
+                    raise RendererError(RENDERER_CANCELLED)
+                if time.monotonic() >= deadline:
+                    raise RendererError(RENDERER_TIMEOUT)
+                downgrade_notified = True
+                (job / "continue").touch()
             time.sleep(0.05)
         if _cancelled(cancelled):
             raise RendererError(RENDERER_CANCELLED)
@@ -700,7 +718,7 @@ def _render_document(
 
 
 class BrowserRenderer:
-    """Render one snapshot to JPEG or PDF. ``home`` must be explicit."""
+    """Render one snapshot to JPEG/PDF; emit a RuntimeWarning before JPEG downgrade."""
 
     def __init__(
         self,
@@ -925,6 +943,14 @@ def _load_report(
     return page
 
 
+def _notify_downgrade(job: Path, deadline: float) -> None:
+    (job / "downgrade").touch()
+    while not _real_file(job / "continue"):
+        if time.monotonic() >= deadline:
+            raise RendererError(RENDERER_TIMEOUT)
+        time.sleep(0.05)
+
+
 def _capture(
     document: str,
     export_format: str,
@@ -932,6 +958,7 @@ def _capture(
     shell: Path,
     profile: Path,
     timeout_seconds: float,
+    job: Path,
 ) -> tuple[bytes, dict[str, Any]]:
     from playwright.sync_api import sync_playwright
 
@@ -963,8 +990,10 @@ def _capture(
                         )
                         page = _load_report(context, prepared, aborted, deadline)
                         css_width, css_height = _measured_size(page)
-                    if _exceeds(css_width, css_height, scale):
+                    if css_width < JPEG_WIDTH or _exceeds(css_width, css_height, scale):
                         raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
+                    if warning:
+                        _notify_downgrade(job, deadline)
                     payload = page.screenshot(
                         type="jpeg",
                         quality=JPEG_QUALITY,
@@ -1041,7 +1070,18 @@ def _write_error(job: Path, code: str) -> None:
 
 
 def _worker_run(job: Path) -> None:
+    global MAX_SIDE_PX, MAX_PIXELS
     spec = json.loads(_read_member(job / "request.json", job).decode("utf-8"))
+    max_side = spec.get("max_side_px")
+    max_pixels = spec.get("max_pixels")
+    if (
+        type(max_side) is not int
+        or max_side <= 0
+        or type(max_pixels) is not int
+        or max_pixels <= 0
+    ):
+        raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
+    MAX_SIDE_PX, MAX_PIXELS = max_side, max_pixels
     document = _read_member(job / "report.html", job).decode("utf-8")
     export_format = spec.get("format")
     if export_format not in {"jpeg", "pdf"}:
@@ -1067,6 +1107,7 @@ def _worker_run(job: Path) -> None:
         shell,
         profile,
         float(timeout_seconds),
+        job,
     )
     _write_result(job, payload, meta)
 

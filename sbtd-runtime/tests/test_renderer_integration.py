@@ -661,6 +661,23 @@ class FrozenHttpExportTests(unittest.TestCase):
             time.sleep(0.02)
         self.fail("export did not become ready")
 
+    def test_capabilities_require_session_and_allowed_host_origin(self) -> None:
+        for headers, expected in (
+            ({}, 401),
+            ({**self.headers, "Host": "external.invalid"}, 403),
+            ({**self.headers, "Origin": "https://external.invalid"}, 403),
+        ):
+            with self.subTest(headers=list(headers), expected=expected):
+                status, _, body = request(
+                    self.port,
+                    "GET",
+                    "/api/v1/capabilities",
+                    headers=headers,
+                    host=headers.get("Host"),
+                )
+                self.assertEqual(status, expected, body)
+                self.assertNotIn(b"http_available", body)
+
     def test_capabilities_absence_leaves_html_and_csv_usable(self) -> None:
         """Scenario: 缺少可选依赖不影响原有格式."""
         status, _, body = request(

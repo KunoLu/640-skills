@@ -16,6 +16,7 @@ import tempfile
 import threading
 import time
 import unittest
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -253,6 +254,11 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(scale, 1)
         scale, warning = _jpeg_scale(10000, 8000)
         self.assertEqual(scale, 1)
+
+    def test_downgrade_never_uses_less_than_standard_width(self) -> None:
+        with self.assertRaises(RendererError) as caught:
+            _jpeg_scale(1439, 16001)
+        self.assertEqual(caught.exception.code, EXPORT_IMAGE_SIZE_LIMIT)
 
     def test_1x_over_limit_is_a_safe_size_error(self) -> None:
         for width, height in (
@@ -893,6 +899,91 @@ class RealBrowserTests(unittest.TestCase):
         self.assertEqual(_jpeg_size(payload)[0], 16001)
         self.assertLessEqual(max(_jpeg_size(payload)), 32000)
         self.assertIn(JPEG_SCALE_WARNING, metadata["warnings"])
+
+    def test_configured_limits_and_notice_apply_before_capture(self) -> None:
+        from browser_renderer import _make_job_dir, _render_document
+
+        document = (
+            "<html><body style='margin:0'>"
+            "<article class='report' style='height:1000px'>"
+            "完整中文 Full page</article></body></html>"
+        )
+        jobs = []
+        notices = []
+        worker = (
+            "import sys\n"
+            f"sys.path.insert(0, {str(ROOT)!r})\n"
+            "from pathlib import Path\n"
+            "from playwright.sync_api import Page\n"
+            "from browser_renderer import _worker_entry\n"
+            "job = Path(sys.argv[1])\n"
+            "original = Page.screenshot\n"
+            "def capture(self, **kwargs):\n"
+            "    (job / 'capture-started').touch()\n"
+            "    return original(self, **kwargs)\n"
+            "Page.screenshot = capture\n"
+            "sys.exit(_worker_entry(str(job)))\n"
+        )
+
+        def track_job():
+            job = _make_job_dir()
+            jobs.append(job)
+            return job
+
+        def notice(message, *_args, **_kwargs):
+            notices.append(str(message))
+            self.assertFalse((jobs[-1] / "result.bin").exists())
+            self.assertFalse((jobs[-1] / "capture-started").exists())
+            # Rejecting the notice must stop capture, not just publication.
+            raise RuntimeWarning(str(message))
+
+        with (
+            mock.patch("browser_renderer._make_job_dir", side_effect=track_job),
+            mock.patch("browser_renderer.MAX_PIXELS", 2_000_000),
+            mock.patch(
+                "browser_renderer._worker_argv",
+                side_effect=lambda job: [sys.executable, "-c", worker, str(job)],
+            ),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("always")
+            with (
+                mock.patch("warnings.showwarning", side_effect=notice),
+                self.assertRaises(RuntimeWarning),
+            ):
+                _render_document(
+                    document,
+                    "jpeg",
+                    home=self.home,
+                    cancelled=lambda: False,
+                    presentation={},
+                )
+            self.assertEqual(notices, [JPEG_SCALE_WARNING])
+            self.assertFalse(jobs[-1].exists())
+            with warnings.catch_warnings(record=True) as caught:
+                payload, metadata = _render_document(
+                    document,
+                    "jpeg",
+                    home=self.home,
+                    cancelled=lambda: False,
+                    presentation={},
+                )
+            self.assertEqual(
+                [str(item.message) for item in caught], [JPEG_SCALE_WARNING]
+            )
+            self.assertEqual(_jpeg_size(payload), (1440, 1000))
+            self.assertIn(JPEG_SCALE_WARNING, metadata["warnings"])
+
+        with mock.patch("browser_renderer.MAX_SIDE_PX", 1439):
+            with self.assertRaises(RendererError) as caught:
+                _render_document(
+                    document,
+                    "jpeg",
+                    home=self.home,
+                    cancelled=lambda: False,
+                    presentation={},
+                )
+            self.assertEqual(caught.exception.code, EXPORT_IMAGE_SIZE_LIMIT)
 
     def test_pdf_is_searchable_a3_with_embedded_cjk(self) -> None:
         missing = [

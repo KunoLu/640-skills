@@ -134,7 +134,7 @@ createExport 对非法／缺失请求（包括 snapshot_id 不满足 pattern）�
 
 - **HTML**：单文件静态正文、内联 CSS／SVG，无外部脚本、CDN、字体或 API；所有 Panel 的身份／指标绑定来自 manifest。系统字体栈含 PingFang SC、Hiragino Sans GB、Microsoft YaHei、Noto Sans CJK SC／JP；不写入机器字体路径。深浅主题、顺序、宽度、排序、预览行数、展开详情和隐藏系列说明随请求固定；HTML 预览不等于完整审计明细。
 - **CSV**：沿 snapshot-bound dataset cursor 取完所有授权数据族，复用 schema **1.1** serializer；BOM、固定列、空值与公式转义不变，不受 HTML 预览／排序／图例限制。
-- **输出安全**：四格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。`exportable=false` 或 `classification != local-metadata` 仅屏蔽 **event-detail 行**，保留省略告警与实际导出数据族计数；派生 task／run／aggregate 行不按事件标志过滤，也不回退到最后可导出状态，不在脱敏前改写指标输入。JPEG／PDF 消费同一已过滤 HTML，不能视为更强的整任务保密边界（后续项 A，用户 2026-10-22 决定保持 #151 行为）。
+- **输出安全**：四格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。非 exportable 事件明细不输出，保留省略告警与实际导出数据族计数；不在脱敏前改写指标输入。JPEG／PDF 消费同一已过滤 HTML。
 - **产物与保留**：`$SBTD_RUNTIME_HOME/exports/`，目录 0700、文件 0600（POSIX）。artifact 与 v1 JSON manifest 依次用同目录 temp、fsync、atomic rename 发布；manifest 为 ready 标记。记录 MIME、字节数、SHA-256、固定范围、Panel、数据族行数、renderer／脱敏版本和告警。半成品、坏摘要与未知版本不提供下载；失败只报告安全错误，不泄露本地路径。
 - **清扫**：ready 起默认 **86400 秒（24h）**；启动必扫，可显式调用 `ExportStore.sweep()`，没有后台定时删除器。到期拒绝下载；物理回收在 sweep 时发生。仅删除 `exports/` 内已验证的过期文件，不递归、不跟随链接、不触及 snapshots／audit.db／配置／源 task／报告／handoff／浏览器下载文件；未知、损坏和崩溃遗留 temp 保留且不升级为成品。删除后本进程记 gone，重启后无永久 tombstone，可返回 not found。
 
@@ -182,7 +182,7 @@ finally:
 
 `GET /api/v1/capabilities` 的 `data.exports` 分格式提供 `available`、`reason` 与 `http_available`。Playwright、专用 browser 或必需 CJK 字体缺失时，仅 JPEG／PDF 不可用且附原因；HTML／CSV 不受影响。`available` 描述本地库依赖，**不表示 HTTP 已开放**：JPEG／PDF 的 `http_available=false`，POST 仍返回 400。依赖可用也不保证每次作业成功，超时／崩溃通过作业 failed 状态观察。
 
-JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与不透明背景；等待字体和布局，禁动画。单边 32,000 px 或总像素 80 MP 超限时尝试 1x 并记 warning；仍超限则安全失败，不截断、不分包。PDF 为 A3 横向、10mm 边距、保留背景的可搜索文字／矢量文档；长表分页重复表头，页脚含标题、范围、短 snapshot ID 与页码。
+JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与不透明背景；等待字体和布局，禁动画。`browser_renderer.MAX_SIDE_PX=32000` 与 `MAX_PIXELS=80000000` 是模块级可配置建议值（实测后冻结），须在提交作业前设置，独立 worker 沿用该次配置。2x 超限仅在完整内容和不低于 1440 CSS px 宽度下回退 1x；截图前在调用进程发出 `RuntimeWarning`（`JPEG_SCALE_1X`），告警处理返回后才截图，manifest 也保留 warning。调用方可用 Python `warnings` 机制提前显示／捕获通知；ExportStore 调用发生在其工作线程，应在提交作业前配置告警处理，不应在处理器中阻塞。1x 仍超限抛库级 `RendererError.code=EXPORT_IMAGE_SIZE_LIMIT`，不截断、不分包、不发布半成品；HTTP 映射等待独立契约 PR。PDF 为 A3 横向、10mm 边距、保留背景的可搜索文字／矢量文档；长表分页重复表头，页脚含标题、范围、短 snapshot ID 与页码。
 
 每作业独立子进程与临时 profile，不复用浏览器登录态；只允许内存报告主文档，其他路由一律 abort，禁止外联和任意 file 读取。进程内单作业信号量限制 JPEG／PDF 并发，配合服务现有单 runtime writer 锁；取消／超时终止本作业并清理 profile。作业复用现有 pin、`exports/` 原子发布、manifest／SHA-256、ready 后 24h 保留和启动清扫，没有第二条存储路径或新增配额策略。
 
