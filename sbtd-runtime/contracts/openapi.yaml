@@ -496,6 +496,8 @@ paths:
           $ref: "#/components/responses/Gone"
         "422":
           $ref: "#/components/responses/ExportImageSizeLimit"
+        "503":
+          $ref: "#/components/responses/ExportRendererUnavailable"
   /api/v1/exports/{export_id}:
     get:
       operationId: getExport
@@ -513,7 +515,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "200":
-          $ref: "#/components/responses/Json"
+          $ref: "#/components/responses/ExportStatus"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -760,6 +762,17 @@ components:
                 properties:
                   data:
                     $ref: "#/components/schemas/CreateExportAccepted"
+    ExportStatus:
+      description: Export job state, including a stable error code only when failed.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ExportJob"
     BadRequest:
       description: Invalid or missing request body, field type, export format, time, dimension, or metric. No silent default.
     Unauthorized:
@@ -806,7 +819,58 @@ components:
                 type: integer
                 minimum: 1
                 description: Maximum supported total pixel count of the output image.
+    ExportRendererUnavailable:
+      description: |
+        The server-side renderer dependency is unavailable (PRD 9.6), for example
+        Playwright, the chromium shell, or the optional extra is not installed.
+        Applies only to formats requiring this renderer (jpeg, pdf); html/csv
+        never return this error. The request is valid: this is HTTP 503 dependency
+        unavailability, not a client request defect or the HTTP 422 image size limit.
+        Returned synchronously before acceptance (HTTP 202): no job, no export_id,
+        and no partial file. Semantics match capabilities reporting jpeg/pdf as
+        unavailable with the reason; other export capabilities remain independent.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [detail]
+            properties:
+              detail:
+                type: string
+                const: EXPORT_RENDERER_UNAVAILABLE
   schemas:
+    ExportJob:
+      type: object
+      required: [status, error]
+      description: |
+        Public export job view. Other job metadata remains optional and open.
+        Failure codes apply to all export formats, including html/csv.
+      properties:
+        status:
+          type: string
+          enum: [queued, generating, ready, failed, cancelled]
+        error:
+          type: ["string", "null"]
+          enum: [EXPORT_RENDER_TIMEOUT, EXPORT_RENDER_FAILED, null]
+          description: |
+            Non-null only when status is failed; null for every other status.
+            Future failure rows, such as disk-capacity row 4, only add codes.
+            Clients must treat unknown codes as generic failure.
+        warnings:
+          $ref: "#/components/schemas/Meta/properties/warnings"
+      if:
+        properties:
+          status:
+            const: failed
+      then:
+        properties:
+          error:
+            type: string
+      else:
+        properties:
+          error:
+            type: "null"
     CreateExportAccepted:
       type: object
       additionalProperties: false
