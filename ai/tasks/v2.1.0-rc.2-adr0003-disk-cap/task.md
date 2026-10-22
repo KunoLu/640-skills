@@ -3,25 +3,25 @@ schema_version: 1
 id: v2.1.0-rc.2-adr0003-disk-cap
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；仅指定 worktree，恰好三个本地 commit；不 push／PR／评论／merge／rebase，不改全局配置或其他 checkout；仅显式 git add，排除 .omp-r12b-addendum.txt 与 ai/tasks/codex-verify/。
+mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；仅指定 worktree，恰好三个本地 commit。当时本地 run 不自行 push／PR／评论／merge／rebase；随后 operator push／开 PR #157 并 squash-merge。不改全局配置或其他 checkout；仅显式 git add，排除 .omp-r12b-addendum.txt 与 ai/tasks/codex-verify/。
 status: done
 branch: docs/v2.1.0-rc.2-item4-adr0003-disk-cap
 created_at: '2026-10-22T17:47:41+08:00'
-updated_at: '2026-10-22T18:10:32+08:00'
-completed_at: '2026-10-22T18:10:32+08:00'
+updated_at: '2026-10-22T18:36:03+08:00'
+completed_at: '2026-10-22T18:36:03+08:00'
 ---
 
 # rc.2 计划第 4 项：ADR 0003 §4／§5 磁盘上限
 
 ## 用户决定与任务身份
 
-用户明确 strict、唯一 writer 与三个本地提交。工作根 `/workspace/640-skills-item4-adr`；入口 HEAD／origin/main 均为 `b73ebe501cb529d11e6829b02a363fd7f4f4274a`（#156）。未完整调用 grill-with-docs：已批准的 PRD §10.4、plan 决定与本次交付边界明确，不重开需求。
+用户明确 strict、唯一 writer 与三个本地提交。工作根 `/workspace/640-skills-item4-adr`；入口 HEAD／origin/main 均为 `b73ebe501cb529d11e6829b02a363fd7f4f4274a`（#156）。当时本地 run 仅完成本地提交；随后 operator push／开 PR [#157](https://github.com/KunoLu/640-skills/pull/157)，已于 `2026-10-22T18:36:03+08:00` squash-merge 为 `6c344d13ddf6b49882b87d52300b8d697e8aeec4`（mergedAt `2026-10-22T10:36:03Z`；git committer 时间 `2026-10-22T18:36:02+08:00`）。未完整调用 grill-with-docs：已批准的 PRD §10.4、plan 决定与本次交付边界明确，不重开需求。
 
 ## 范围与验收
 
 1. 仅 plan 与 PRD task 回填 #156、完整 SHA、mergedAt／committer 时间及主会话最终 26／57，保留历史状态事件。
 2. 仅 ADR 0003 §4／§5 正文定义清扫与共享配额配置；不改标题、§1–§3，不加 revision log，不改代码、契约、golden tests、PRD、其他 ADR 或安装文档。
-3. 本任务文件随第三个 commit 提交；task index 按 rc.2 惯例不改。记录真实命令与模型证据；local done 不代表 push、PR、合并、实现或发布。
+3. 本任务文件随第三个 commit 提交；task index 按 rc.2 惯例不改。记录真实命令与模型证据；当时 local done 不代表 push、PR、合并、实现或发布，后续 operator push／PR #157 squash-merge 见 closeout。
 
 ## 待定项／决策
 
@@ -78,18 +78,18 @@ completed_at: '2026-10-22T18:10:32+08:00'
 2. `ec020b823a6c3b2ad850a89393c0ccd42668bb4a` — `docs(adr): ADR 0003 §4/§5 disk-cap sweep scope and quota env var (rc.2 item 4)`，仅 ADR 0003 §4／§5。
 3. `docs(task): record rc.2 item 4 ADR 0003 §4/§5 disk-cap task`，仅本记录，自身 SHA 由最终 stdout 提供，避免自引用。
 
-local done 仅指三个本地文档提交完成；push／PR 由 operator 负责，ADR 尚未合并、contract 尚未开始、配额尚未实现。撤回仅涉及本分支文档提交，无运行时或数据迁移，不删除用户数据，不操作其他 worktree 或远端。未知数据持续占用、意外子目录不计量、准入后的瞬时越限以及跨平台链接／ACL 验证均是已披露边界，不承诺恢复工具或发布就绪。
+当时 local done 仅指三个本地文档提交完成；随后 operator push／开 PR #157 并 squash-merge，现 updated_at／completed_at 取合并时间（见 closeout），不等同配额实现或发布。contract 另由后续独立任务定义。撤回仅涉及文档，无运行时或数据迁移，不删除用户数据，不操作其他 worktree 或远端。未知数据持续占用、意外子目录不计量、准入后的瞬时越限以及跨平台链接／ACL 验证均是已披露边界，不承诺恢复工具或发布就绪。
 
 ## 模型使用
 
 | agent/session | provider/model | thinkingLevel（thinking_level_change） | assistant messages / toolCall blocks | purpose | resolvedModelIsFallback | title-generation count | job-widget entries（type model_usage / purpose） |
 |---|---|---|---|---|---|---|---|
 | operator astra ping／01a16301-06a6-7473-b9c8-562f8f7fe65c | openai-codex/gpt-6-astra | high | 1 / 0 | `--no-tools` 连通性 | false | 0（对应日志无 request） | 未记录 / unknown |
-| 主会话／01a16302-335f-70f4-a8b8-ad60413b8059 | openai-codex/gpt-6-astra | high | 25 / 52（截至提交前 snapshot） | 唯一 writer、验证 controller | false | 未记录 / unknown（日志内部 ID 与 session ID 不同，未强行归属） | 未记录 / unknown |
+| 主会话／01a16302-335f-70f4-a8b8-ad60413b8059 | openai-codex/gpt-6-astra | high | 34 / 62（最终） | 唯一 writer、验证 controller | false | 未记录 / unknown（日志内部 ID 与 session ID 不同，未强行归属） | 未记录 / unknown |
 | DecisionReview／DecisionReview.jsonl | kimi-code/k3 | max | 14 / 20 | 只读历史回填／配置一致性复核 | false | 2 requests：cursor/composer-2.5 ×1、kimi-code/k3-256k ×1 | 未记录 / unknown |
 | SweepSafety／SweepSafety.jsonl | kimi-code/k3 | max | 28 / 31 | 只读清扫安全复核，含 P3 修正复查 | false | 2 requests：cursor/composer-2.5 ×1、kimi-code/k3-256k ×1 | 未记录 / unknown |
 
-只读 Python `json.loads` 统计时间 **2026-10-22T18:08:58+08:00**（`TZ=Asia/Shanghai date -Is`）：session 根 `~/.omp/agent/sessions/--workspace-640-skills-item4-adr--/`。ping 为 `2026-10-22T09-46-14-054Z_01a16301-06a6-7473-b9c8-562f8f7fe65c.jsonl` 第 1–9 行；排除 ping 后最新主文件为 `2026-10-22T09-47-31-039Z_01a16302-335f-70f4-a8b8-ad60413b8059.jsonl` 第 1–138 行。两个子代理位于该主文件同 stem 目录，DecisionReview 第 1–63 行、SweepSafety 第 1–100 行。统计 `type=message` 且 `role=assistant` 与其 `type=toolCall` blocks；主会话是截至提交前快照，不含随后记录回填、提交及最终输出，最终计数由 operator 报告。
+主会话最终计数由 operator 只读核实：`~/.omp/agent/sessions/--workspace-640-skills-item4-adr--/2026-10-22T09-47-31-039Z_01a16302-335f-70f4-a8b8-ad60413b8059.jsonl` 共 34 assistant messages／62 toolCall blocks，`openai-codex/gpt-6-astra`、thinking high、resolvedModelIsFallback=false。此最终计数取代 `2026-10-22T18:08:58+08:00` 第 1–138 行的提交前 25／52 snapshot；历史状态事件中的快照保持原样。统计口径为 `type=message` 且 `role=assistant` 与其 `type=toolCall` blocks。ping 为同目录 `2026-10-22T09-46-14-054Z_01a16301-06a6-7473-b9c8-562f8f7fe65c.jsonl` 第 1–9 行；两个子代理位于主文件同 stem 目录，DecisionReview 第 1–63 行、SweepSafety 第 1–100 行，既有计数不变。
 
 模型与 fallback 来自 message／model_change，thinking 明确取 `thinking_level_change`（不是按请求 effort 推断）；两 reviewer 的 session_init 也记录 `kimi-code/k3:max`。上述 session 元数据及 custom entries 未见 `type=model_usage`／purpose job-widget 记录，故填 unknown，不编造计数。未修改模型配置；子代理实际用 kimi，不冒充 astra。
 
@@ -102,3 +102,4 @@ local done 仅指三个本地文档提交完成；push／PR 由 operator 负责�
 | 2026-10-22T17:47:41+08:00 | planned | in-progress | 用户指定 strict 与三个本地 commit；入口身份已核对 | 指定分支；HEAD／origin/main b73ebe501cb529d11e6829b02a363fd7f4f4274a；status 为空；授权路径安全 |
 | 2026-10-22T18:03:10+08:00 | in-progress | checking | 回填已提交，ADR 设计与文档 smoke 已完成，进入独立清扫复核与最终记录 | 首 commit 650c3363275a9bec727d5d090de7411bd4cb5bc6；DecisionReview 无发现；Markdown／YAML smoke 通过 |
 | 2026-10-22T18:10:32+08:00 | checking | done | 本地文档交付收口；前两次提交完成，第三次只提交本记录；两位独立复核无未关闭发现，不等同外部 Reviewy／合并／实现 | ec020b823a6c3b2ad850a89393c0ccd42668bb4a；范围与 whitespace 检查通过；ADR／任务 Markdown 与 YAML smoke 通过；主会话提交前 snapshot 25／52，最终计数由 operator 报告 |
+| 2026-10-22T18:36:03+08:00 | done | done | Closeout：operator push／开 PR #157 后 squash-merged；本地 done 收口为已合并，completed_at 采用合并时间，不改历史验证或快照 | merge SHA 6c344d13ddf6b49882b87d52300b8d697e8aeec4；mergedAt 2026-10-22T10:36:03Z；git committer 时间 %cI 2026-10-22T18:36:02+08:00；主会话最终 34 assistant messages／62 toolCall blocks，openai-codex/gpt-6-astra high，resolvedModelIsFallback=false |

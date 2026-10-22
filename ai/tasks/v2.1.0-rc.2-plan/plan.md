@@ -92,7 +92,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 1. R2.1b。
 2. 后续项 A 决策已定 — 用户 2026-10-22 11:13 +08:00：保持 #151 行为（事件明细行按 `exportable=false`／`classification != local-metadata` 屏蔽；task/run/聚合派生行不屏蔽；不新增 `withheld` 值；不开 contract PR）。
 3. R2.1b 评审与合并。
-4. 磁盘上限 PRD §10.4 补充已 done：独立 PRD docs PR [#156](https://github.com/KunoLu/640-skills/pull/156) 已 squash-merge，merge SHA `b73ebe501cb529d11e6829b02a363fd7f4f4274a`，完成时间 `2026-10-22T17:42:55+08:00`（mergedAt `2026-10-22T09:42:55Z`；git committer 时间 `2026-10-22T17:42:54+08:00`）。ADR 0003 §4/§5 修订仍 in_progress（本分支 `docs/v2.1.0-rc.2-item4-adr0003-disk-cap`）；磁盘上限新错误码 contract PR 尚未开始，仍须独立提交（附 golden 测试，错误体带已占用量与上限）。
+4. 磁盘上限 PRD §10.4 补充已 done：独立 PRD docs PR [#156](https://github.com/KunoLu/640-skills/pull/156) 已 squash-merge，merge SHA `b73ebe501cb529d11e6829b02a363fd7f4f4274a`，完成时间 `2026-10-22T17:42:55+08:00`（mergedAt `2026-10-22T09:42:55Z`；git committer 时间 `2026-10-22T17:42:54+08:00`）。ADR 0003 §4/§5 修订已 done：PR [#157](https://github.com/KunoLu/640-skills/pull/157) 已 squash-merge，merge SHA `6c344d13ddf6b49882b87d52300b8d697e8aeec4`，完成时间 `2026-10-22T18:36:03+08:00`（mergedAt `2026-10-22T10:36:03Z`；git committer 时间 `2026-10-22T18:36:02+08:00`）。磁盘上限新错误码 contract PR 为 in_progress（分支 `contract/v2.1.0-rc.2-item4-disk-cap-error-contract`；附 golden 测试，错误体带已占用量与上限）。
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
 6. E 预发布。
 7. F 文档 + 后续项 B + 后续项 C：B 在 `install-and-use.md` 写明事件明细屏蔽范围；C 在 F 阶段另开单独 PRD docs PR，补充「本地导出屏蔽 event-detail 行，当 `exportable=false` 或 `classification != local-metadata`；不影响 task/run/aggregate 派生行」，两种屏蔽条件均须明确，B／C 措辞一致。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。该 PR 独立于第 4 项磁盘上限 PRD docs PR；本轮不改 PRD。
@@ -103,7 +103,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 `snapshots/` 和 `exports/` 共用一个按字节计的配额，默认 2 GB，可用环境变量调整，80% 预警。每次新建快照或导出前清掉过期且未被 pin 的文件和残留临时文件，不加定时器；清完仍超限则拒绝新建并返回明确错误（含已占用量与上限），不淘汰未过期快照；损坏／无法识别的文件不删但计入占用。
 
-实现与容量实测校准默认值归 R2.2；PRD §10.4 补充已随 #156 完成（merge SHA 与两类时间见上方第 4 项）。ADR 0003 §4（清扫可触及 exports/ 与临时文件）与 §5（新增环境变量配置面）修订由本分支进行，尚未合并；独立 contract PR 尚未开始。本轮不实施配额或定义错误码。
+实现与容量实测校准默认值归 R2.2；PRD §10.4 补充已随 #156 完成，ADR 0003 §4（清扫可触及 exports/ 与临时文件）与 §5（新增环境变量配置面）修订已随 #157 完成（merge SHA 与两类时间见上方第 4 项）。独立 contract PR 在分支 `contract/v2.1.0-rc.2-item4-disk-cap-error-contract` 上 in_progress，定义错误码与携带已占用量／上限的错误体并附 golden 测试；本轮不实施配额。
 
 ## 风险与边界
 
