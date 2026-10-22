@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import logging
 import math
 import os
 import re
@@ -596,7 +597,13 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             return _json({"detail": "gone"}, 410)
         except RendererError as error:
             if error.code != EXPORT_IMAGE_SIZE_LIMIT:
-                raise
+                # Preserve the existing generic 500 without a path-bearing traceback.
+                logging.getLogger(__name__).warning(
+                    "export preflight failed: %s", RendererError(error.code).code
+                )
+                return Response(
+                    "Internal Server Error", status_code=500, media_type="text/plain"
+                )
             return _json(
                 {
                     "detail": error.code,

@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 import os
 import re
 import stat
@@ -512,12 +513,19 @@ class ExportStore:
                     snapshot, format_name, presentation, cancelled, job.renderer
                 )
             except Exception as error:  # noqa: BLE001 — worker boundary releases the pin.
-                from browser_renderer import RendererError
+                from browser_renderer import RENDERER_FAILED, RendererError
 
+                # Re-allowlist even a mutated exception; never log text or traceback.
                 code = (
-                    error.code if isinstance(error, RendererError) else "export failed"
+                    RendererError(error.code).code
+                    if isinstance(error, RendererError)
+                    else RENDERER_FAILED
                 )
-                self._fail(export_id, code)
+                if not cancelled() and not self._closed:
+                    logging.getLogger(__name__).warning(
+                        "export renderer failed: %s", code
+                    )
+                self._fail(export_id)
                 return
             if cancelled() or self._closed:
                 self._mark_cancelled(export_id)
@@ -525,6 +533,7 @@ class ExportStore:
             try:
                 self._publish(job, blob, meta)
             except Exception:  # noqa: BLE001 — publication failure must release the pin.
+                logging.getLogger(__name__).warning("export publication failed")
                 self._fail(export_id)
         finally:
             with self._lock:
@@ -556,7 +565,7 @@ class ExportStore:
             raise TypeError("renderer must return bytes")
         return blob, meta
 
-    def _fail(self, export_id: str, error: str = "export failed") -> None:
+    def _fail(self, export_id: str) -> None:
         with self._lock:
             job = self._jobs.get(export_id)
             if job is None or job.published:
@@ -567,7 +576,7 @@ class ExportStore:
                 job.error = None
             else:
                 job.status = "failed"
-                job.error = error
+                job.error = "export failed"
 
     def _mark_cancelled(self, export_id: str) -> None:
         with self._lock:

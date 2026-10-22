@@ -198,8 +198,8 @@ JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelo
 
 两个 **CONTRACT-CHANGE-NEEDED（open）** 未在本轮扩张：
 
-1. **createExport 时 renderer 不可用**：JPEG 同步预检抛出 `RENDERER_UNAVAILABLE`，目前没有专用 HTTP 映射，由框架返回 500，无作业；PDF 不做图像预检，仍 202，随后作业 failed、error=`RENDERER_UNAVAILABLE`。Reviewy 初步认为可映射现有 400 BadRequest（“export format”）；最终由用户决定，本轮不采用新映射。
-2. **202 后超时／崩溃**：现有 getExport 返回 200 Envelope，`data.status=failed`、`data.error=RENDERER_TIMEOUT` 或 `RENDERER_FAILED`；download 返回 409 `{"detail":"export is not ready"}`。不发布部分文件或伪造 ready。Reviewy 初步认为需要独立 contract PR；最终由用户决定，#153 的受理前 422 不覆盖此异步失败协议。
+1. **createExport 时 renderer 不可用**：JPEG 同步预检失败，目前仍返回通用 500 `Internal Server Error`，无作业且释放 snapshot pin；服务端仅记录安全错误码，不输出 traceback。PDF 不做图像预检，仍 202，随后作业 failed、error 精确为 `"export failed"`。是否改用现有 400 BadRequest（“export format”）仍待契约决定，本轮不采用新映射。
+2. **202 后失败协议**：按 Reviewy/Lord 2026-10-22 13:38 +08:00 规则，在 [contract PR #154](https://github.com/KunoLu/640-skills/pull/154) 合并前，所有失败作业的 getExport 均返回 200 Envelope，`data.status=failed`、`data.error="export failed"`。不可用、timeout、crash、作业时尺寸超限及普通异常的诊断只以安全错误码写服务端 warning，不写异常原文、stderr、traceback、路径或凭据，也不写其他 API 字段或 manifest。download 保持 409 `{"detail":"export is not ready"}`；不发布部分文件或伪造 ready。#153 的受理前尺寸 422 与 202 降级 warning 不变。
 
 每作业独立子进程与临时 profile，不复用浏览器登录态；只允许内存报告主文档，其他路由一律 abort，禁止外联和任意 file 读取。进程内单作业信号量限制 JPEG／PDF 并发，配合服务现有单 runtime writer 锁；取消／超时终止本作业并清理 profile。作业复用现有 pin、`exports/` 原子发布、manifest／SHA-256、ready 后 24h 保留和启动清扫，没有第二条存储路径或新增配额策略。
 
