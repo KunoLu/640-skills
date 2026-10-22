@@ -468,12 +468,35 @@ paths:
   /api/v1/exports:
     post:
       operationId: createExport
+      description: |
+        After access checks (401/403) and request validation needed to identify a
+        replay (400: JSON content type, required Idempotency-Key, and valid
+        CreateExportRequest body), evaluate idempotent replay first. A replay is
+        the same Idempotency-Key and canonical request body as a previously
+        accepted createExport, within the store's retention of that idempotency
+        record. Return the original HTTP 202 ExportAccepted with the original
+        data.export_id and originally accepted meta.warnings; create no new job,
+        export_id, or file, and do not re-run JPEG preflight.
+        Only non-replay requests proceed to admission checks: renderer
+        availability (jpeg/pdf 503 EXPORT_RENDERER_UNAVAILABLE), snapshot 404/410,
+        disk quota (507 DISK_QUOTA_EXCEEDED), and JPEG image size
+        (422 EXPORT_IMAGE_SIZE_LIMIT). A replay is not answered with these errors
+        merely because renderer, snapshot, quota, or image-size limits changed
+        after acceptance. The replay's own export may still be observed as
+        expired/410 via getExport; that behavior is unchanged.
+        This rule does not redefine the relative order among non-replay admission
+        checks. The extension arrays classify codes relative to replay, not their
+        order within each array. Same-key/different-payload behavior is unchanged.
       tags: [export]
       security:
         - localSession: []
       x-sbtd-scopes: [export:create]
       x-sbtd-release: v2.1.0-rc.2
       x-sbtd-rc1-blocking: false
+      x-sbtd-idempotent-replay:
+        response: "202"
+        evaluated_after: ["400", "401", "403"]
+        precedes: ["404", "410", "422", "503", "507"]
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -757,6 +780,10 @@ components:
         When createExport downgrades a JPEG export from 2x to 1x, this HTTP 202
         response carries the fixed-format warning string EXPORT_SCALE_DOWNGRADED:1x
         in meta.warnings as the user notice before generation.
+        An idempotent replay returns the original data.export_id and originally
+        accepted meta.warnings (including EXPORT_SCALE_DOWNGRADED:1x), without
+        creating a new job or file or re-running JPEG preflight; see createExport's
+        x-sbtd-idempotent-replay rule.
       content:
         application/json:
           schema:
@@ -833,6 +860,8 @@ components:
         Returned synchronously before acceptance (HTTP 202): no job, no export_id,
         and no partial file. Semantics match capabilities reporting jpeg/pdf as
         unavailable with the reason; other export capabilities remain independent.
+        Not returned for an idempotent replay of a previously accepted request;
+        see createExport's x-sbtd-idempotent-replay rule.
       content:
         application/json:
           schema:
@@ -856,8 +885,11 @@ components:
         For createReportSnapshot, refuse before HTTP 201; its current library
         surface must provide the equivalent refusal with these byte counts
         before creating a file. This declaration does not add an HTTP handler.
-        Existing-ID reuse and idempotent replay are not new creates; their
-        precedence is not redefined here. This is not an ExportJob failure code.
+        Existing-ID reuse and idempotent replay are not new creates. For
+        createExport, this error is not returned for an idempotent replay of a
+        previously accepted request; see its x-sbtd-idempotent-replay rule.
+        For createReportSnapshot, existing-ID reuse precedence relative to 507
+        remains undefined. This is not an ExportJob failure code.
         used_bytes > quota_bytes is a semantic requirement; standard JSON Schema
         cannot compare these two fields. Return parsed numeric byte counts only,
         never the raw environment variable value or string.

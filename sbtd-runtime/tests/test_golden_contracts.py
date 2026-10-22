@@ -872,6 +872,49 @@ class OpenApiDraftTests(unittest.TestCase):
                 },
             )
 
+    def test_create_export_replay_precedes_admission_checks(self) -> None:
+        # Scenarios: renderer／快照／配额变化后的重放；非重放仍执行准入检查
+        operation = self.doc["paths"]["/api/v1/exports"]["post"]
+        replay = operation.get("x-sbtd-idempotent-replay")
+        self.assertEqual(
+            replay,
+            {
+                "response": "202",
+                "evaluated_after": ["400", "401", "403"],
+                "precedes": ["404", "410", "422", "503", "507"],
+            },
+        )
+        responses = set(operation["responses"])
+        self.assertLessEqual(set(replay["precedes"]), responses)
+        self.assertEqual(
+            set(replay["precedes"]) | set(replay["evaluated_after"]) | {"202"},
+            responses,
+        )
+
+    def test_create_export_replay_accepts_original_id_and_warnings(self) -> None:
+        # Scenario: JPEG 降级重放保留原告警且不重复预检（这里只验证响应 schema）
+        operation = self.doc["paths"]["/api/v1/exports"]["post"]
+        response = operation["responses"][
+            operation["x-sbtd-idempotent-replay"]["response"]
+        ]
+        self.assertEqual(response, {"$ref": "#/components/responses/ExportAccepted"})
+        schema = self.doc["components"]["responses"]["ExportAccepted"]["content"][
+            "application/json"
+        ]["schema"]
+        validator = jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
+        replayed = {
+            "api_version": "1",
+            "request_id": "req_export_replay",
+            "data": {"export_id": "exp_0123456789abcdef0123456789abcdef"},
+            "meta": {
+                "metrics_version": "1.0",
+                "projection_version": "1.0",
+                "complete": True,
+                "warnings": ["EXPORT_SCALE_DOWNGRADED:1x"],
+            },
+        }
+        self.assertEqual(list(validator.iter_errors(replayed)), [])
+
     def test_create_report_snapshot_declares_disk_quota_refusal(self) -> None:
         # Scenario: 清扫后共享占用超限时拒绝新建
         responses = self.doc["paths"]["/api/v1/report-snapshots"]["post"]["responses"]
