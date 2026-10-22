@@ -58,6 +58,7 @@
 
 - 锁定决定：D3（`--only-shell` 安装到扩展自有目录、授权提示按实际模式显示体积）、D4（playwright 精确钉版）、D16（renderer 环境依赖清单含 fonts-noto-cjk 并钉版本）。
 - 验收：Playwright 为可选 extra，未安装时仅 JPEG/PDF 标不可用并说明原因；隔离按 §13.7（独立子进程、每作业临时 profile、路由层 abort 一切外联、单作业信号量），AC-58 出断网与隔离证据；PDF 中／日／英混合文字可显示（§13.6、AC-42）；导出前等待字体完成（§13.5）。
+- 契约领先实现跟进（[export-failure-states](../v2.1.0-rc.2-contract-export-failure-states/task.md)，用户／Reviewy 2026-10-22 13:14 +08:00）：R2.1b 接入失败路径时，将现有 HTML/CSV 自由文本失败映射为 `EXPORT_RENDER_FAILED`、超时映射为 `EXPORT_RENDER_TIMEOUT`；JPEG/PDF renderer 依赖不可用时在 202 前返回 503 `EXPORT_RENDERER_UNAVAILABLE`（无 job、export_id 或半成品文件，html/csv 不适用），并与 capabilities 的 unavailable 及原因保持一致。该 contract-only 任务不修改 runtime。
 
 ### R2.2 — 跨平台 E2E、安全、性能、导出对账
 
