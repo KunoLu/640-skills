@@ -942,10 +942,19 @@ def render_export(snapshot, format, presentation_state, cancelled, *, snapshots=
 
 
 class ExportRenderer:
-    def __init__(self, snapshots) -> None:
+    def __init__(self, snapshots, *, home: Path | None = None) -> None:
         self.snapshots = snapshots
+        self.home = home
 
     def __call__(self, snapshot, format, presentation_state, cancelled):
+        if format in ("jpeg", "pdf"):
+            from browser_renderer import BrowserRenderer, RendererError
+
+            if self.home is None:
+                raise RendererError("RENDERER_UNAVAILABLE")
+            return BrowserRenderer(self.home, self.snapshots)(
+                snapshot, format, presentation_state, cancelled
+            )
         return render_export(
             snapshot,
             format,
@@ -953,3 +962,90 @@ class ExportRenderer:
             cancelled,
             snapshots=self.snapshots,
         )
+
+    def prepare(self, snapshot, format, presentation, cancelled=None):
+        """Freeze one JPEG report and return ``(renderer, warnings)``.
+
+        HTML generation and preflight share one renderer budget. The returned
+        callable renders that same HTML at the chosen scale and caps; it does
+        not rebuild the report or select another scale.
+        """
+        if format != "jpeg":
+            raise ValueError("format must be jpeg")
+        import time
+
+        from browser_renderer import (
+            MAX_PIXELS,
+            MAX_SIDE_PX,
+            BrowserRenderer,
+            RendererError,
+            _require_timeout,
+            _static_html,
+        )
+
+        if self.home is None:
+            raise RendererError("RENDERER_UNAVAILABLE")
+        max_side_px = MAX_SIDE_PX
+        max_pixels = MAX_PIXELS
+        if (
+            type(max_side_px) is not int
+            or max_side_px <= 0
+            or type(max_pixels) is not int
+            or max_pixels <= 0
+        ):
+            raise RendererError("RENDERER_FAILED")
+        browser = BrowserRenderer(self.home, self.snapshots)
+        deadline = time.monotonic() + _require_timeout(browser.timeout_seconds)
+        try:
+            html_bytes, meta = _static_html(
+                self.home,
+                self.snapshots,
+                snapshot,
+                presentation,
+                cancelled,
+                deadline,
+            )
+            html_text = html_bytes.decode("utf-8")
+            measured = browser.preflight(
+                snapshot,
+                "jpeg",
+                presentation,
+                cancelled=cancelled,
+                timeout_seconds=deadline - time.monotonic(),
+                prepared_html=html_text,
+                meta=meta,
+                max_side_px=max_side_px,
+                max_pixels=max_pixels,
+            )
+        except RendererError:
+            raise
+        except Exception:  # noqa: BLE001 — library boundary strips local paths.
+            raise RendererError("RENDERER_FAILED") from None
+        scale = measured.get("scale") if isinstance(measured, dict) else None
+        raw_warnings = measured.get("warnings") if isinstance(measured, dict) else None
+        if type(scale) is not int or scale not in (1, 2):
+            raise RendererError("RENDERER_FAILED")
+        if not isinstance(raw_warnings, list) or any(
+            type(item) is not str for item in raw_warnings
+        ):
+            raise RendererError("RENDERER_FAILED")
+        warnings = list(raw_warnings)
+        frozen_meta = dict(meta)
+        frozen_meta["warnings"] = list(warnings)
+
+        def render_job(job_snapshot, job_format, _presentation, cancelled):
+            if job_format != "jpeg":
+                raise ValueError("format must be jpeg")
+            return browser(
+                job_snapshot,
+                "jpeg",
+                presentation,
+                cancelled,
+                prepared_html=html_text,
+                meta=frozen_meta,
+                locked_scale=scale,
+                max_side_px=max_side_px,
+                max_pixels=max_pixels,
+            )
+
+        return render_job, warnings

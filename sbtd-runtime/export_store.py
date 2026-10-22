@@ -15,6 +15,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import logging
 import os
 import re
 import stat
@@ -32,7 +33,12 @@ EXPORT_TTL_SECONDS = 86400
 EXPORT_FORMAT_VERSION = 1
 _EXPORT_ID = re.compile(r"exp_[0-9a-f]{32}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
-_FORMATS = {"html": "text/html; charset=utf-8", "csv": "text/csv; charset=utf-8"}
+_FORMATS = {
+    "html": "text/html; charset=utf-8",
+    "csv": "text/csv; charset=utf-8",
+    "jpeg": "image/jpeg",
+    "pdf": "application/pdf",
+}
 _METADATA_KEYS = (
     "mime_type",
     "redaction_policy_version",
@@ -97,6 +103,7 @@ class _Job:
         self.cancel_event = threading.Event()
         self.done = threading.Event()
         self.future: Any = None
+        self.renderer: Any = None
 
 
 def _now() -> datetime:
@@ -234,6 +241,9 @@ class ExportStore:
         os.chmod(self._directory, 0o700)
         self._directory_identity = self._identity()
         self._lock = threading.RLock()
+        self._admissions = threading.Condition(self._lock)
+        self._preparing = 0
+        self._closing = threading.Event()
         self._jobs: dict[str, _Job] = {}
         self._gone: set[str] = set()
         self._gone_payload: dict[str, str | None] = {}
@@ -250,10 +260,11 @@ class ExportStore:
         presentation_state: dict[str, Any],
         *,
         idempotency_key: str | None = None,
+        prepare: Any = None,
     ) -> str:
-        """Pin the snapshot, copy presentation, then queue one render."""
+        """Pin, optionally preflight before allocating a job, then queue one render."""
         if format not in _FORMATS:
-            raise ValueError("export format must be html or csv")
+            raise ValueError("export format must be html, csv, jpeg or pdf")
         if not isinstance(presentation_state, dict):
             raise TypeError("presentation_state must be an object")
         if idempotency_key is not None and not isinstance(idempotency_key, str):
@@ -281,9 +292,19 @@ class ExportStore:
             existing = self._existing_idempotent(idempotency_key, payload)
             if existing is not None:
                 return existing
-        snapshot = self._snapshots.pin(snapshot_id)
-        pinned = True
+            if prepare is not None:
+                self._preparing += 1
+        snapshot = None
+        pinned = False
         try:
+            snapshot = self._snapshots.pin(snapshot_id)
+            pinned = True
+            renderer = self._renderer
+            warnings: list[str] = []
+            if prepare is not None:
+                renderer, warnings = prepare(
+                    snapshot, format, presentation, cancelled=self._closing.is_set
+                )
             with self._lock:
                 if self._closed:
                     raise ValueError("export store is closed")
@@ -301,6 +322,8 @@ class ExportStore:
                     payload if idempotency_key is not None else None,
                     _iso(_now()),
                 )
+                job.renderer = renderer
+                job.metadata = {"warnings": list(warnings)}
                 job.pin_held = True
                 pinned = False
                 self._jobs[export_id] = job
@@ -318,8 +341,23 @@ class ExportStore:
                     raise
                 return export_id
         finally:
-            if pinned:
-                self._snapshots.release(snapshot.snapshot_id)
+            try:
+                if pinned:
+                    self._snapshots.release(snapshot.snapshot_id)
+            finally:
+                if prepare is not None:
+                    with self._admissions:
+                        self._preparing -= 1
+                        self._admissions.notify_all()
+
+    def acceptance_warnings(self, export_id: str) -> list[str]:
+        """Read accepted warnings without changing idempotent replay/expiry behavior."""
+        with self._lock:
+            job = self._jobs.get(export_id)
+            if job is None:
+                return []
+            metadata = job.public if job.public is not None else job.metadata
+            return list(metadata.get("warnings", []))
 
     def get(self, export_id: str) -> dict[str, Any]:
         """Return a JSON-safe status. Ready views are re-verified from disk."""
@@ -383,11 +421,13 @@ class ExportStore:
             job.public = None
 
     def close(self) -> None:
-        """Cancel queued work, wait for the worker, and release leftover pins."""
+        """Cancel preparation/jobs, wait for cleanup, and release leftover pins."""
         with self._lock:
             if self._closed:
+                self._admissions.wait_for(lambda: self._preparing == 0)
                 return
             self._closed = True
+            self._closing.set()
             for job in self._jobs.values():
                 job.cancel_event.set()
                 job.cancelled = True
@@ -395,6 +435,7 @@ class ExportStore:
         if executor is not None:
             executor.shutdown(wait=True, cancel_futures=True)
         with self._lock:
+            self._admissions.wait_for(lambda: self._preparing == 0)
             for job in self._jobs.values():
                 if job.status in ("queued", "generating"):
                     job.status = "cancelled"
@@ -469,10 +510,26 @@ class ExportStore:
                 cancelled = job.cancel_event.is_set
             try:
                 blob, meta = self._invoke(
-                    snapshot, format_name, presentation, cancelled
+                    snapshot, format_name, presentation, cancelled, job.renderer
                 )
-            except Exception:  # noqa: BLE001 — worker boundary records any renderer failure.
-                self._fail(export_id)
+            except Exception as error:  # noqa: BLE001 — worker boundary releases the pin.
+                from browser_renderer import (
+                    RENDERER_FAILED,
+                    RENDERER_TIMEOUT,
+                    RendererError,
+                )
+
+                # Re-allowlist even a mutated exception; never log text or traceback.
+                code = (
+                    RendererError(error.code).code
+                    if isinstance(error, RendererError)
+                    else RENDERER_FAILED
+                )
+                if not cancelled() and not self._closed:
+                    logging.getLogger(__name__).warning(
+                        "export renderer failed: %s", code
+                    )
+                self._fail(export_id, timed_out=code == RENDERER_TIMEOUT)
                 return
             if cancelled() or self._closed:
                 self._mark_cancelled(export_id)
@@ -480,6 +537,7 @@ class ExportStore:
             try:
                 self._publish(job, blob, meta)
             except Exception:  # noqa: BLE001 — publication failure must release the pin.
+                logging.getLogger(__name__).warning("export publication failed")
                 self._fail(export_id)
         finally:
             with self._lock:
@@ -490,7 +548,7 @@ class ExportStore:
                             "cancelled" if job.cancelled or self._closed else "failed"
                         )
                         if job.status == "failed" and job.error is None:
-                            job.error = "export failed"
+                            job.error = "EXPORT_RENDER_FAILED"
                     job.done.set()
 
     def _invoke(
@@ -499,8 +557,9 @@ class ExportStore:
         format_name: str,
         presentation: dict[str, Any],
         cancelled: Any,
+        renderer: Any,
     ) -> tuple[bytes, Any]:
-        result = self._renderer(snapshot, format_name, presentation, cancelled)
+        result = renderer(snapshot, format_name, presentation, cancelled)
         if not isinstance(result, tuple) or len(result) != 2:
             raise TypeError("renderer must return (bytes, metadata)")
         blob, meta = result
@@ -510,7 +569,7 @@ class ExportStore:
             raise TypeError("renderer must return bytes")
         return blob, meta
 
-    def _fail(self, export_id: str) -> None:
+    def _fail(self, export_id: str, *, timed_out: bool = False) -> None:
         with self._lock:
             job = self._jobs.get(export_id)
             if job is None or job.published:
@@ -521,7 +580,9 @@ class ExportStore:
                 job.error = None
             else:
                 job.status = "failed"
-                job.error = "export failed"
+                job.error = (
+                    "EXPORT_RENDER_TIMEOUT" if timed_out else "EXPORT_RENDER_FAILED"
+                )
 
     def _mark_cancelled(self, export_id: str) -> None:
         with self._lock:
@@ -848,3 +909,4 @@ class ExportStore:
         self._snapshots.release(job.snapshot_id)
         job.snapshot = None
         job.presentation = {}
+        job.renderer = None

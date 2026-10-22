@@ -1,0 +1,2 @@
+# Optional, extension-owned JPEG/PDF runtime (D3/D4); not a business-project dependency.
+playwright==1.64.0

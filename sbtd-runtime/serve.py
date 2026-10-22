@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import logging
 import math
 import os
 import re
@@ -36,6 +37,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from browser_renderer import EXPORT_IMAGE_SIZE_LIMIT, RendererError
 from event_store import EventStore, StoreError
 from export_render import ExportRenderer, default_presentation, load_panel_manifest
 from export_store import ExportGone, ExportNotFound, ExportNotReady, ExportStore
@@ -411,7 +413,7 @@ class SecurityMiddleware:
 
 
 def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
-    """Validate the frozen CreateExportRequest, including manifest membership."""
+    """Validate CreateExportRequest, including manifest membership."""
     if not isinstance(body, dict) or not {"snapshot_id", "format"} <= body.keys():
         raise ValueError("snapshot_id and format are required")
     if body.keys() - {"snapshot_id", "format", "presentation_state"}:
@@ -422,8 +424,8 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
     ):
         raise ValueError("invalid snapshot_id")
     format_name = body["format"]
-    if format_name not in ("html", "csv"):
-        raise ValueError("format must be html or csv")
+    if format_name not in ("html", "csv", "jpeg", "pdf"):
+        raise ValueError("format must be html, csv, jpeg or pdf")
     presentation = body.get("presentation_state", default_presentation(manifest))
     required = {
         "theme",
@@ -472,7 +474,8 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
 def create_app(home: Path, access: AccessControl, port: int) -> Any:
     store = SnapshotStore(home)
     manifest = load_panel_manifest()
-    exports = ExportStore(home, store, ExportRenderer(store))
+    renderer = ExportRenderer(store, home=home)
+    exports = ExportStore(home, store, renderer)
 
     @asynccontextmanager
     async def lifespan(_app: Starlette):
@@ -483,6 +486,22 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
 
     async def health(_request: Request) -> JSONResponse:
         return _json({"status": "ok"})
+
+    async def capabilities(_request: Request) -> JSONResponse:
+        from browser_renderer import renderer_capability
+
+        renderer = await run_in_threadpool(renderer_capability, home)
+        formats = {
+            name: {"available": True, "reason": None, "http_available": True}
+            for name in ("html", "csv")
+        }
+        formats.update(
+            {
+                name: {**renderer, "http_available": renderer["available"]}
+                for name in ("jpeg", "pdf")
+            }
+        )
+        return _json(_envelope({"exports": formats}))
 
     async def pair(request: Request) -> JSONResponse:
         result = access.pair(request.headers.get("x-pairing-code"))
@@ -559,12 +578,23 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             snapshot_id, format_name, presentation = _export_request(
                 await request.json(), manifest
             )
+            if format_name in ("jpeg", "pdf"):
+                from browser_renderer import renderer_capability
+
+                capability = await run_in_threadpool(renderer_capability, home)
+                if not capability["available"]:
+                    # No renderer means no JPEG preflight, snapshot pin, or job.
+                    return _json({"detail": "EXPORT_RENDERER_UNAVAILABLE"}, 503)
             export_id = await run_in_threadpool(
                 exports.create,
                 snapshot_id,
                 format_name,
                 presentation,
                 idempotency_key=key,
+                prepare=renderer.prepare if format_name == "jpeg" else None,
+            )
+            warnings = (
+                exports.acceptance_warnings(export_id) if format_name == "jpeg" else []
             )
         except (ValueError, UnicodeError):
             return _json({"detail": "invalid export request"}, 400)
@@ -572,7 +602,27 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             return _json({"detail": "not found"}, 404)
         except SnapshotGone:
             return _json({"detail": "gone"}, 410)
-        return _json(_envelope({"export_id": export_id}), 202)
+        except RendererError as error:
+            if error.code == "RENDERER_UNAVAILABLE":
+                # The dependency can disappear after the admission check.
+                return _json({"detail": "EXPORT_RENDERER_UNAVAILABLE"}, 503)
+            if error.code != EXPORT_IMAGE_SIZE_LIMIT:
+                # Preserve the existing generic 500 without a path-bearing traceback.
+                logging.getLogger(__name__).warning(
+                    "export preflight failed: %s", RendererError(error.code).code
+                )
+                return Response(
+                    "Internal Server Error", status_code=500, media_type="text/plain"
+                )
+            return _json(
+                {
+                    "detail": error.code,
+                    "max_edge_px": error.max_edge_px,
+                    "max_total_pixels": error.max_total_pixels,
+                },
+                422,
+            )
+        return _json(_envelope({"export_id": export_id}, {"warnings": warnings}), 202)
 
     async def export_resource(request: Request) -> Response:
         export_id = request.path_params["export_id"]
@@ -606,6 +656,7 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
 
     routes = [
         Route("/api/v1/health", health, methods=["GET"]),
+        Route("/api/v1/capabilities", capabilities, methods=["GET"]),
         Route("/api/v1/session/pair", pair, methods=["POST"]),
         Route("/api/v1/metrics/catalog", metric_catalog, methods=["GET"]),
         Route("/api/v1/statistics/query", statistics_query, methods=["POST"]),
