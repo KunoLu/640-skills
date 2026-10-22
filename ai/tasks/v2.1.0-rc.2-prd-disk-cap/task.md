@@ -3,19 +3,19 @@ schema_version: 1
 id: v2.1.0-rc.2-prd-disk-cap
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict、PRD-only；主会话唯一 writer／验证 controller；三个本地 commit，首 commit 回填 R2.1b；显式 git add，不 push、不开 PR、不评论，不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/。
+mode_note: 用户明确 strict、PRD-only；主会话唯一 writer／验证 controller；三个本地 commit，首 commit 回填 R2.1b。当时本地 run 显式 git add，不自行 push／开 PR／评论；随后 operator push／开 PR #156 并 squash-merge。不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/。
 status: done
 branch: docs/v2.1.0-rc.2-item4-disk-cap-prd
 created_at: '2026-10-22T17:10:55+08:00'
-updated_at: '2026-10-22T17:16:40+08:00'
-completed_at: '2026-10-22T17:16:40+08:00'
+updated_at: '2026-10-22T17:42:55+08:00'
+completed_at: '2026-10-22T17:42:55+08:00'
 ---
 
 # rc.2 计划第 4 项：PRD §10.4 磁盘上限补充
 
 ## 用户决定与任务身份
 
-用户于 **2026-10-22 约 17:05 Asia/Shanghai** 经 Lord、640-skills 房间决定：「开第 4 项磁盘上限 PRD PR（首 commit 回填 R2.1b）」。本会话仅完成本地提交；push／开 PR／评论由 operator 负责。
+用户于 **2026-10-22 约 17:05 Asia/Shanghai** 经 Lord、640-skills 房间决定：「开第 4 项磁盘上限 PRD PR（首 commit 回填 R2.1b）」。当时本地 run 仅完成本地提交；随后 operator push／开 PR [#156](https://github.com/KunoLu/640-skills/pull/156)，已于 `2026-10-22T17:42:55+08:00` squash-merge 为 `b73ebe501cb529d11e6829b02a363fd7f4f4274a`。
 
 工作根 `/workspace/640-skills-item4-prd`，分支见 frontmatter；入口 HEAD 与 origin/main 均为 `c5904ef787c29bf9761f44ca4613ce0f2805daa4`。未完整调用 grill-with-docs：用户指定的决定、文档范围与排除项明确，直接沿用 plan「磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）」与「2026-10-21 计划定稿」第 4 项，不重开需求。
 
@@ -25,7 +25,7 @@ completed_at: '2026-10-22T17:16:40+08:00'
 2. 第二个 commit 仅修改 PRD §10.4：按原决定写共享按字节配额、默认 2 GB、环境变量调整、80% 预警、新建前清理、超限拒绝、不淘汰未过期快照、损坏／未知文件保留但计入、自有目录边界及后续职责。不新增数值、变量名、错误码或预警渠道。
 3. 第三个 commit 仅提交本 strict 记录；复核模型计数、实际检查与本地完成边界。任务 index 沿用 rc.2 惯例不改。
 4. ADR 0003 §4／§5 修订、磁盘上限错误码与错误体的独立 contract PR（含 golden tests）、R2.2 实现与容量实测校准默认值另行。本任务不涉及后续项 D（Idempotency-Key replay 先于 renderer 检查）。
-5. 不改代码、contracts、golden tests、ADR、install-and-use.md、PRD 头部日期／§22／其他章节；不 push、不开 PR、不评论。
+5. 当时本地 run 不改代码、contracts、golden tests、ADR、install-and-use.md、PRD 头部日期／§22／其他章节，不自行 push／开 PR／评论；后续 operator 操作见 closeout。
 
 ## 待定项
 
@@ -69,18 +69,18 @@ completed_at: '2026-10-22T17:16:40+08:00'
 2. `2941de0457233995a17968b4e094361750fae850` — `docs(prd): add shared snapshots/exports disk cap to §10.4 (rc.2 item 4)`，只含 PRD §10.4。
 3. `docs(task): record rc.2 item 4 disk-cap PRD task`，只含本文件；自身完整 SHA 由最终 stdout 输出，避免自引用。
 
-done 仅指本地文档提交完成；push／PR 由 operator 另行处理，不等同合并、实现、部署或发布。无运行时或数据迁移；撤回仅涉及这三个文档提交，不删除用户数据，不改远端或其他 worktree。ADR 0003 与 PRD 的后续设计差异已明确交由独立修订处理，不能据本任务宣称配额已生效。
+当时 done 仅指本地文档提交完成；随后 operator push／开 PR #156 并 squash-merge，现 updated_at／completed_at 取合并时间（见 closeout），不等同实现、部署或发布。无运行时或数据迁移；撤回仅涉及文档，不删除用户数据，不改远端或其他 worktree。ADR 0003 与 PRD 的后续设计差异已明确交由独立修订处理，不能据本任务宣称配额已生效。
 
 ## 模型使用
 
 | 用途 | 请求模型 | 实际模型／证据 | assistant messages | toolCall blocks |
 |---|---|---|---|---|
 | astra 连通性 ping（operator 运行，`--no-tools`） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra；session 01a162dd-898d-7633-b24a-468764fbe062，只读复核 | 1 | 0 |
-| 本次主会话（截至提交前；唯一 writer） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra；thinking_level_change=high；session 01a162e0-1965-7253-b000-9bc83aa78974 | 21 | 51 |
+| 本次主会话（最终；唯一 writer） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra；thinking_level_change=high；resolvedModelIsFallback=false；session 01a162e0-1965-7253-b000-9bc83aa78974 | 26 | 57 |
 
 未派子代理；未修改模型配置。标题生成计数留给 operator，本记录不填本次标题生成计数。
 
-提交前最后一次只读统计于 `2026-10-22T17:16:40+08:00`：Python `json.loads` 解析 `~/.omp/agent/sessions/--workspace-640-skills-item4-prd--/2026-10-22T09-10-16-165Z_01a162e0-1965-7253-b000-9bc83aa78974.jsonl` 第 1–129 行，筛选 `type=message`／`role=assistant` 并汇总其中 `type=toolCall` blocks，得到 21／51；全部为 astra，无 task 子代理调用。这是截至提交前的快照，不含后续回填、commit 与最终报告；不是最终会话总数。ping 来源为同目录 `2026-10-22T09-07-28-269Z_01a162dd-898d-7633-b24a-468764fbe062.jsonl`。
+主会话最终计数由 operator 只读核实：`~/.omp/agent/sessions/--workspace-640-skills-item4-prd--/2026-10-22T09-10-16-165Z_01a162e0-1965-7253-b000-9bc83aa78974.jsonl` 共 26 assistant messages／57 toolCall blocks，全部 `openai-codex/gpt-6-astra`、thinking high、resolvedModelIsFallback=false，无 fallback、无子代理。此最终计数取代提交前 `2026-10-22T17:16:40+08:00` 第 1–129 行的 21／51 snapshot；历史状态事件中的快照保持原样。ping 来源为同目录 `2026-10-22T09-07-28-269Z_01a162dd-898d-7633-b24a-468764fbe062.jsonl`。
 
 ## 状态事件
 
@@ -89,3 +89,4 @@ done 仅指本地文档提交完成；push／PR 由 operator 另行处理，不�
 | 2026-10-22T17:10:55+08:00 | planned | in-progress | 用户明确 strict 与三个本地提交；根／分支／基线匹配，已读决定、ADR、PRD 与回填先例 | origin/main c5904ef787c29bf9761f44ca4613ce0f2805daa4；git show ceb202ee23／037fe934ea；路径与 ignore 核对 |
 | 2026-10-22T17:13:53+08:00 | in-progress | checking | 回填已提交，PRD diff 已逐项对照批准决定并限定 §10.4；进入文档解析、范围检查与任务记录收口 | 首 commit 9fc31f8f94e9925b5e69bf7540214043ae1366f2；PRD 原生 diff；无共享配额变量名 |
 | 2026-10-22T17:16:40+08:00 | checking | done | 本地文档交付收口：回填与 PRD 已提交，记录和提交前模型计数完成；本记录随第三个本地 commit 保存，PR 由 operator 开，不等同合并 | 9fc31f8f94e9925b5e69bf7540214043ae1366f2；2941de0457233995a17968b4e094361750fae850；diff --check 通过；Markdown／YAML smoke 通过；主会话截至提交前 21／51 |
+| 2026-10-22T17:42:55+08:00 | done | done | Closeout：operator push／开 PR #156 后 squash-merged；本地 done 收口为已合并，completed_at 采用合并时间，不改历史验证或快照 | merge SHA b73ebe501cb529d11e6829b02a363fd7f4f4274a；mergedAt 2026-10-22T09:42:55Z；git committer 时间 2026-10-22T17:42:54+08:00；主会话最终 26 assistant messages／57 toolCall blocks，无 fallback／子代理 |
