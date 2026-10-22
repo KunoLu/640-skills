@@ -368,9 +368,13 @@ Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完�
 | Round 5 FailurePrivacyReview：只读隐私审计 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 11 | 33 |
 | Round 5 FailureContractReview：只读契约／覆盖复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init `kimi-code/k3:high`） | 33 | 40 |
 | Session title generation（Round 5，pid 269214） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
-| Round 6（operator run7）主会话：merge、#154 接线、验证与记录 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（本会话 runtime metadata；thinking 按用户指定 high） | unknown | unknown |
-| Round 6 RoundSixContractReview：只读契约／覆盖复核 | agent `reviewer`（未覆盖 model），effort:"med" | kimi-code/k3（子代理 runtime 自报；thinking 待 operator jsonl 核对） | unknown | unknown |
-| Round 6 RoundSixSafetyReview：只读生命周期／隐私复核 | agent `security-reviewer`（未覆盖 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`；thinking_level_change `max`） | unknown | unknown |
+| Round 6（operator run7）主会话：merge、#154 接线、验证与记录；session 01a16253-37ca-7535-b26a-cc86989790e0 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`；resolvedModelIsFallback=false） | 51 | 93 |
+| Round 6 follow-up resume run7b：Reviewy notes | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 12 | 33 |
+| Round 6 follow-up resume run7c：follow-up C placement | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 8 | 17 |
+| Round 6 RoundSixContractReview：只读契约／覆盖复核 | agent `reviewer`（@slow，configured primary kimi-code/k3:max；spawn effort:"med"） | kimi-code/k3（session_init `kimi-code/k3:high`；resolvedModelIsFallback=false） | 28 | 33 |
+| Round 6 RoundSixSafetyReview：只读生命周期／隐私复核 | agent `security-reviewer`（未覆盖 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`；resolvedModelIsFallback=false） | 11 | 41 |
+| Session title generation（Round 6：run7 ×4，含 2 subagents；run7b ×1；run7c ×1） | omp title-generator | cursor/composer-2.5 ×6（全部成功） | 6 requests | 0 |
+| Round 6 follow-up resume run7d：plan.md:63 + count backfill | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 见 PR 描述 | 见 PR 描述 |
 
 子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；原因见下述 effort 解释）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填，Round 6 按用户提供的 spawn 事实补充原因。
 
@@ -387,7 +391,7 @@ Security-reviewer thinking 亦随 main 每次 spawn 的 effort，而非沿用主
 | Round 5 FailurePrivacyReview | `2026-10-22T06-07-07-417Z_01a16238-6c99-74da-873a-30f8569cfa47`：109 | `hi` | `FailurePrivacyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
 | Round 6 RoundSixSafetyReview | `2026-10-22T06-36-23-370Z_01a16253-37ca-7535-b26a-cc86989790e0`：171 | `hi` | `RoundSixSafetyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
 
-Round 6（operator run7）assistant messages／工具调用计数全部保持 `unknown`，由 operator 从 jsonl 回填；未推算或冒充实际 token／调用数。
+Round 6 模型与计数按本次用户提供的 operator 核验结果回填，来源为 session `01a16253-37ca-7535-b26a-cc86989790e0` 的 jsonl；计数为 assistant messages／toolCall blocks。run7、run7b、run7c 分别为 51／93、12／33、8／17；两位子代理分别为 ContractReview 28／33、SafetyReview 11／41。Round 6 title generation 共 6 次，均为 `cursor/composer-2.5` 且全部成功；Round 6 logs 无 job widget。当前 resume run7d 计数记「见 PR 描述」，不推算或提前回填。
 
 Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。Round 4／5 计数由 operator 于 2026-10-22 14:35 +08:00 从 session jsonl 核实（assistant messages／toolCall blocks），全部 `resolvedModelIsFallback: false`，无 advisor；主会话 thinking 取自 `thinking_level_change`。
 
