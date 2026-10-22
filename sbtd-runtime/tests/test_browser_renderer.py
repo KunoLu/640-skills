@@ -7,6 +7,7 @@ or the dedicated runtime is unavailable. They do not delete that install.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -1103,6 +1104,299 @@ class RealBrowserTests(unittest.TestCase):
         self.assertTrue(
             any("yes" in line.lower() or "yes" in line for line in embedded)
         )
+
+
+def _playwright_double(
+    sizes: list[tuple[int, int]], launches: list[int], shots: list[str]
+):
+    import types
+
+    class _Page:
+        def __init__(self, size: tuple[int, int]) -> None:
+            self.size = size
+            self.main_frame = object()
+
+        def evaluate(self, script: str):
+            if "scrollWidth" in script:
+                return [self.size[0], self.size[1]]
+            return None
+
+        def goto(self, *_args, **_kwargs):
+            return None
+
+        def screenshot(self, **kwargs):
+            shots.append(kwargs.get("type", ""))
+            return b"\xff\xd8\xfflocked"
+
+        def emulate_media(self, **_kwargs):
+            raise AssertionError("locked jpeg must not emulate print")
+
+    class _Context:
+        def __init__(self, size: tuple[int, int]) -> None:
+            self.pages = [_Page(size)]
+
+        def close(self) -> None:
+            return None
+
+        def set_default_timeout(self, _ms: int) -> None:
+            return None
+
+        def set_default_navigation_timeout(self, _ms: int) -> None:
+            return None
+
+        def route(self, *_args) -> None:
+            return None
+
+        def route_web_socket(self, *_args) -> None:
+            return None
+
+        def on(self, *_args) -> None:
+            return None
+
+        def new_page(self):
+            return self.pages[0]
+
+    class _Chromium:
+        def launch_persistent_context(self, _profile, **kwargs):
+            launches.append(kwargs["device_scale_factor"])
+            return _Context(sizes.pop(0))
+
+    class _Playwright:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc) -> bool:
+            return False
+
+        chromium = _Chromium()
+
+    sync_api = types.ModuleType("playwright.sync_api")
+    sync_api.sync_playwright = _Playwright
+    package = types.ModuleType("playwright")
+    package.sync_api = sync_api
+    return package, sync_api
+
+
+class JpegPrepareTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="sbtd-jpeg-prepare-")
+        self.addCleanup(self.temporary.cleanup)
+        self.home = Path(self.temporary.name) / "home"
+        self.home.mkdir()
+
+    def _bound(self, timeout: float):
+        class Bound(BrowserRenderer):
+            def __init__(
+                self, home, snapshots, timeout_seconds: float = timeout
+            ) -> None:
+                super().__init__(home, snapshots, timeout_seconds=timeout)
+
+        return Bound
+
+    def test_prepare_rejects_non_jpeg_and_missing_home(self) -> None:
+        from export_render import ExportRenderer
+
+        with self.assertRaises(ValueError):
+            ExportRenderer(object(), home=self.home).prepare(object(), "pdf", {})
+        with self.assertRaises(RendererError) as caught:
+            ExportRenderer(object()).prepare(object(), "jpeg", {})
+        self.assertEqual(caught.exception.code, "RENDERER_UNAVAILABLE")
+
+    def test_prepare_counts_html_against_the_acceptance_budget(self) -> None:
+        from export_render import ExportRenderer
+
+        called: list[bool] = []
+
+        def slow_html(*_args, **_kwargs):
+            time.sleep(0.08)
+            return b"<html>LATE</html>", {"warnings": []}
+
+        def render_doc(*_args, **_kwargs):
+            called.append(True)
+            return b"", {"scale": 2, "warnings": []}
+
+        with (
+            mock.patch("browser_renderer.BrowserRenderer", self._bound(0.03)),
+            mock.patch(
+                "browser_renderer.renderer_capability",
+                return_value={"available": True, "reason": None},
+            ),
+            mock.patch("browser_renderer.render_export", side_effect=slow_html),
+            mock.patch("browser_renderer._render_document", side_effect=render_doc),
+            self.assertRaises(RendererError) as caught,
+        ):
+            ExportRenderer(object(), home=self.home).prepare(
+                object(), "jpeg", {"theme": "dark"}
+            )
+        self.assertEqual(caught.exception.code, "RENDERER_TIMEOUT")
+        self.assertEqual(called, [])
+
+    def _run_locked(
+        self,
+        sizes: list[tuple[int, int]],
+        *,
+        caps: tuple[int, int] | None,
+    ):
+        launches: list[int] = []
+        shots: list[str] = []
+        recorded: list[dict] = []
+        artifacts: list[bool] = []
+        package, sync_api = _playwright_double(sizes, launches, shots)
+        counts = {"html": 0}
+
+        def render_html(*_args, **_kwargs):
+            counts["html"] += 1
+            return (
+                b"<html>FROZEN_HTML_TOKEN</html>",
+                {
+                    "warnings": ["REPORT_WARNING"],
+                    "mime_type": "text/html; charset=utf-8",
+                    "format": "html",
+                    "byte_size": 28,
+                    "snapshot_id": "snap_frozen",
+                },
+            )
+
+        def execute(job, _profile, _cancelled, _deadline):
+            import browser_renderer
+
+            spec = json.loads((job / "request.json").read_text(encoding="utf-8"))
+            recorded.append(
+                {
+                    "spec": spec,
+                    "html": (job / "report.html").read_text(encoding="utf-8"),
+                }
+            )
+            saved = (browser_renderer.MAX_SIDE_PX, browser_renderer.MAX_PIXELS)
+            try:
+                code = browser_renderer._worker_entry(str(job))
+                artifacts.append((job / "result.bin").is_file())
+                return browser_renderer._read_result(
+                    job, code, spec["format"], preflight=bool(spec.get("preflight"))
+                )
+            finally:
+                browser_renderer.MAX_SIDE_PX, browser_renderer.MAX_PIXELS = saved
+
+        patches = [
+            mock.patch("browser_renderer.BrowserRenderer", self._bound(3)),
+            mock.patch(
+                "browser_renderer.renderer_capability",
+                return_value={"available": True, "reason": None},
+            ),
+            mock.patch("browser_renderer.render_export", side_effect=render_html),
+            mock.patch(
+                "browser_renderer._playwright_version",
+                return_value=PLAYWRIGHT_VERSION,
+            ),
+            mock.patch(
+                "browser_renderer._shell_executable",
+                return_value=self.home / "shell",
+            ),
+            mock.patch("browser_renderer._execute_job", side_effect=execute),
+            mock.patch.dict(
+                sys.modules,
+                {"playwright": package, "playwright.sync_api": sync_api},
+            ),
+        ]
+        if caps is not None:
+            patches.extend(
+                [
+                    mock.patch("browser_renderer.MAX_SIDE_PX", caps[0]),
+                    mock.patch("browser_renderer.MAX_PIXELS", caps[1]),
+                ]
+            )
+        return launches, shots, recorded, artifacts, counts, patches
+
+    def test_prepare_rejects_locked_scale_drift_without_output(self) -> None:
+        from contextlib import ExitStack
+
+        from export_render import ExportRenderer
+
+        launches, shots, recorded, artifacts, counts, patches = self._run_locked(
+            [(1440, 1000), (1440, 4000)],
+            caps=(4000, 9_000_000),
+        )
+
+        def mutate_caps(*_args, **_kwargs):
+            counts["html"] += 1
+            import browser_renderer
+
+            browser_renderer.MAX_SIDE_PX = 111
+            browser_renderer.MAX_PIXELS = 222
+            return (
+                b"<html>FROZEN_HTML_TOKEN</html>",
+                {
+                    "warnings": ["REPORT_WARNING"],
+                    "mime_type": "text/html; charset=utf-8",
+                    "format": "html",
+                    "byte_size": 28,
+                    "snapshot_id": "snap_frozen",
+                },
+            )
+
+        patches[2] = mock.patch(
+            "browser_renderer.render_export", side_effect=mutate_caps
+        )
+        with ExitStack() as stack:
+            for patch in patches[:7]:
+                stack.enter_context(patch)
+            with patches[7], patches[8]:
+                render_job, warnings = ExportRenderer(object(), home=self.home).prepare(
+                    object(), "jpeg", {"theme": "dark"}
+                )
+            self.assertEqual(warnings, ["REPORT_WARNING"])
+            self.assertEqual(counts["html"], 1)
+            with self.assertRaises(RendererError) as caught:
+                render_job(object(), "jpeg", {"theme": "light"}, lambda: False)
+        self.assertEqual(caught.exception.code, EXPORT_IMAGE_SIZE_LIMIT)
+        self.assertEqual(caught.exception.max_edge_px, 4000)
+        self.assertEqual(caught.exception.max_total_pixels, 9_000_000)
+        self.assertEqual(shots, [])
+        self.assertEqual(launches, [2, 2])
+        self.assertEqual(artifacts, [False, False])
+        self.assertNotIn("locked_scale", recorded[0]["spec"])
+        self.assertEqual(recorded[1]["spec"]["locked_scale"], 2)
+        self.assertEqual(recorded[0]["spec"]["max_side_px"], 4000)
+        self.assertEqual(recorded[1]["spec"]["max_side_px"], 4000)
+        self.assertEqual(recorded[1]["spec"]["max_pixels"], 9_000_000)
+        self.assertIn("FROZEN_HTML_TOKEN", recorded[0]["html"])
+        self.assertEqual(recorded[0]["html"], recorded[1]["html"])
+        self.assertEqual(counts["html"], 1)
+
+    def test_prepare_keeps_one_x_when_two_x_would_fit(self) -> None:
+        from export_render import ExportRenderer
+
+        launches, shots, recorded, artifacts, counts, patches = self._run_locked(
+            [(1440, 20000), (1440, 20000), (1440, 1000)],
+            caps=None,
+        )
+        with (
+            patches[0],
+            patches[1],
+            patches[2],
+            patches[3],
+            patches[4],
+            patches[5],
+            patches[6],
+        ):
+            render_job, warnings = ExportRenderer(object(), home=self.home).prepare(
+                object(), "jpeg", {"theme": "dark"}
+            )
+            payload, meta = render_job(
+                object(), "jpeg", {"theme": "light"}, lambda: False
+            )
+        self.assertEqual(warnings, ["REPORT_WARNING", "EXPORT_SCALE_DOWNGRADED:1x"])
+        self.assertEqual(meta["warnings"], warnings)
+        self.assertEqual(meta["mime_type"], "image/jpeg")
+        self.assertEqual(meta["format"], "jpeg")
+        self.assertTrue(payload.startswith(b"\xff\xd8\xff"))
+        self.assertEqual(launches, [2, 1, 1])
+        self.assertEqual(shots, ["jpeg"])
+        self.assertEqual(recorded[-1]["spec"]["locked_scale"], 1)
+        self.assertEqual(recorded[0]["html"], recorded[-1]["html"])
+        self.assertIn("FROZEN_HTML_TOKEN", recorded[-1]["html"])
+        self.assertEqual(counts["html"], 1)
+        self.assertEqual(artifacts[-1], True)
 
 
 if __name__ == "__main__":
