@@ -3,18 +3,18 @@ schema_version: 1
 id: v2.1.0-rc.2-r2.1b-renderer
 workflow_mode: strict
 mode_source: user
-mode_note: 沿用用户 strict；Round 6（operator run7）先完成已开始的 origin/main merge，再接线 #154（d46d4ad）的 503 与失败码；13:38 固定字符串规则已被 #154 取代。仅授权 worktree；显式 git add，不 push／PR／评论／rebase；不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/；merge 后冻结 contracts、Panel manifest、ADR 0001–0003、PRD、CSV schema。
-status: in_progress
+mode_note: 沿用用户 strict；Round 6（operator run7）先完成已开始的 origin/main merge，再接线 #154（d46d4ad）的 503 与失败码；13:38 固定字符串规则已被 #154 取代。当时本地 run 仅授权 worktree，显式 git add，不自行 push／PR／评论／rebase；随后 operator 已 push／开 PR #155，并已 squash-merge。不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/；merge 后冻结 contracts、Panel manifest、ADR 0001–0003、PRD、CSV schema。
+status: done
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1b-renderer
 created_at: '2026-10-22T11:12:22+08:00'
-updated_at: '2026-10-22T15:37:59+08:00'
-completed_at: null
+updated_at: '2026-10-22T16:22:16+08:00'
+completed_at: '2026-10-22T16:22:16+08:00'
 ---
 
 # R2.1b：JPEG/PDF 独立 renderer
 
-基线 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`（R2.1a #151）。本地验收不代表评审、合并、部署或发布。
+基线 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`（R2.1a #151）。当时本地验收不代表评审、合并、部署或发布；随后 operator push／开 PR #155，已于 `2026-10-22T16:22:16+08:00` squash-merge 为 `c5904ef787c29bf9761f44ca4613ce0f2805daa4`。本任务从未本地记 done，completed_at 取合并时间；不把合并等同部署或发布。
 
 ## 范围与验收
 
@@ -43,6 +43,7 @@ completed_at: null
 | 2026-10-22T14:38:21+08:00 | in_progress | in_progress | Round 6（operator run7）沿用 strict；两份指定文档冲突按要求解决，真实 merge 完成；开始 #154 接线 | merge 8ac91c6a1853550a2c94f4e4d406d764514570f2；parent d46d4ad2097742e48441f8d094f29570131a5377；冲突列表为空 |
 | 2026-10-22T14:53:27+08:00 | in_progress | in_progress | Round 6 本地交付验证完成；#154 两项缺口均 satisfied，13:38 规则取代；整体保留 operator smoke／提审状态 | runtime 370／10 skip；renderer 64／1 skip；contracts73、golden57；Ruff5；Store smoke5；Safety Findings=[]、Contract correct |
 | 2026-10-22T15:37:59+08:00 | in_progress | in_progress | Round 7（operator run8）：Reviewy doc fixes；修正 Round 3 effort、run7d 计数、plan R2.1b 行 → #155、plan:65 已完成，登记后续项 D | docs-only diff；git diff --check；仅本 task 与 plan，无代码变更 |
+| 2026-10-22T16:22:16+08:00 | in_progress | done | Closeout：#155 squash-merged；operator 已 push／开 PR，本任务从未本地记 done，completed_at 采用合并时间；不改历史验收证据或契约 | merge SHA c5904ef787c29bf9761f44ca4613ce0f2805daa4；mergedAt 2026-10-22T08:22:16Z；git committer 时间 2026-10-22T16:22:15+08:00；run8 最终 9 assistant messages／24 toolCall blocks |
 
 ## 决策
 
@@ -299,7 +300,7 @@ BDD=`traceable`（既有中文场景／英文关键词，无新 runner）；Cros
 
 失败证据 `failure-red` 保留（2 个测试／11 个失败子项均因没有安全 warning）；`failure-green` 两项通过。首次完整报告保留，review 后所有指定命令完整重跑，以 `*-reviewed*` 为最终结果。系统 10 skips＝7 个需 browser home 的真实场景＋3 个 Windows 场景；venv 已覆盖真实 browser 场景，1 个 Windows 原生 skip 保留。跨平台仍属 R2.2；UI 未改，不运行 Dashboard／移动端；无新依赖／全仓 workflow 检查，Python LSP 不可用，不声称 typecheck 或 CI。BDD=`traceable`（中文＋英文关键词），Cross-repo context=`complete`，API Contract=`verified`（#153 保持，#154 前规则 user-provided），Mock Strategy=`user-approved`；真实 HTTP 为 backend-only，不冒充 UI E2E。Final Test Report／Run Summary MD=`generated`，Final Full Rerun=`passed`，rtk=`skipped-for-report`。
 
-Round 5 本地交付完成，整体任务仍 `in_progress`／`completed_at=null`，等待 operator 评审及契约后续；没有 push、PR、评论、merge/rebase 或发布。回滚仅撤回代码，无迁移，不删除用户数据。长期预防已落实在固定错误／日志隐私回归，不另建 developer 身份或 lesson 文件；不改变既有 TaskStore 恢复限制。
+Round 5 本地交付完成，当时整体任务仍 `in_progress`／`completed_at=null`，等待 operator 评审及契约后续；当时本地 run 没有 push、PR、评论、merge/rebase 或发布。回滚仅撤回代码，无迁移，不删除用户数据。长期预防已落实在固定错误／日志隐私回归，不另建 developer 身份或 lesson 文件；不改变既有 TaskStore 恢复限制。
 
 ### Round 6（operator run7）：#154 合并与失败状态接线
 
@@ -378,7 +379,8 @@ Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完�
 | Session title generation（Round 6：run7 ×4，含 2 subagents；run7b ×1；run7c ×1） | omp title-generator | cursor/composer-2.5 ×6（全部成功） | 6 requests | 0 |
 | Round 6 follow-up resume run7d：plan.md:63 + count backfill；无子代理 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 6 | 12 |
 | Session title generation（Round 6 resume run7d） | omp title-generator | cursor/composer-2.5 ×1 | 1 request | 0 |
-| Round 7 doc-fix resume run8（截至提交前；无子代理） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 5 | 19 |
+| Round 7 doc-fix resume run8（最终；无子代理） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 9 | 24 |
+| Session title generation（Round 7 resume run8） | omp title-generator | cursor/composer-2.5 ×1（成功） | 1 request | 0 |
 
 子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；原因见下述 effort 解释）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填，Round 6 按用户提供的 spawn 事实补充原因。
 
@@ -397,7 +399,7 @@ Security-reviewer thinking 亦随 main 每次 spawn 的 effort，而非沿用主
 
 Round 6 模型与计数按用户提供的 operator 核验结果回填，来源为 session `01a16253-37ca-7535-b26a-cc86989790e0` 的 jsonl；计数为 assistant messages／toolCall blocks。run7、run7b、run7c、run7d 分别为 51／93、12／33、8／17、6／12；run7d 主模型 openai-codex/gpt-6-astra:high、thinking high，无子代理，标题生成 `cursor/composer-2.5` ×1。两位子代理分别为 ContractReview 28／33、SafetyReview 11／41。run7 至 run7c 的 title generation 共 6 次，均为 `cursor/composer-2.5` 且全部成功；加上 run7d 的 1 次，Round 6 合计 7 次。Round 6 logs 无 job widget。
 
-Round 7 run8 计数为「截至提交前」快照：只读解析 `/home/box/.omp/agent/sessions/--workspace-640-skills-r2.1b--/2026-10-22T06-36-23-370Z_01a16253-37ca-7535-b26a-cc86989790e0.jsonl` 第 411–455 行，统计 role=assistant 的 message 记录与其中 type=toolCall 的 blocks，分别为 5／19；不含其后的计数回填、提交及最终报告。无子代理；本轮标题生成由 operator 单独报告，此处不登记计数。
+Round 7 run8 最终计数：只读解析 `/home/box/.omp/agent/sessions/--workspace-640-skills-r2.1b--/2026-10-22T06-36-23-370Z_01a16253-37ca-7535-b26a-cc86989790e0.jsonl` 第 411–471 行（run8 用户消息起至 session_exit），统计 role=assistant 的 message 记录与其中 type=toolCall 的 blocks，分别为 9／24；含计数回填、提交与最终报告，全部为 `openai-codex/gpt-6-astra`。无子代理；标题生成 `cursor/composer-2.5` ×1，来源 `~/.omp/logs/omp.2026-10-22.355356.log` 的 `title-generator: request` ×1 及对应 success。
 
 Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。Round 4／5 计数由 operator 于 2026-10-22 14:35 +08:00 从 session jsonl 核实（assistant messages／toolCall blocks），全部 `resolvedModelIsFallback: false`，无 advisor；主会话 thinking 取自 `thinking_level_change`。
 
@@ -427,13 +429,13 @@ Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview
 
 主要修改：新增 `browser_renderer.py`、`renderer_windows.py`；扩展 `export_render.py`、`export_store.py`、`serve.py`；新增三个 renderer 测试文件并删除旧 pdf 拒绝断言；复用场景、ADR 0004、安装文档、两份依赖清单；更新本 task 与 plan 的后续项 A 决定。
 
-已执行 `git diff 8931c35 -- sbtd-runtime/contracts/ docs/prd/ 'docs/adr/0001*' 'docs/adr/0002*' 'docs/adr/0003*'`，输出为空。CSV schema／Panel manifest 未改。仅显式路径 git add；不暂存／提交禁止路径；未 push、未开 PR、未评论 GitHub、未 merge，未触及主 checkout。
+当时已执行 `git diff 8931c35 -- sbtd-runtime/contracts/ docs/prd/ 'docs/adr/0001*' 'docs/adr/0002*' 'docs/adr/0003*'`，输出为空。CSV schema／Panel manifest 未改。仅显式路径 git add；不暂存／提交禁止路径；当时本地 run 未 push、未开 PR、未评论 GitHub、未 merge，未触及主 checkout。
 
 Round 3 提交前已核对仅上述 7 个允许文件变化、index 初始为空；相对入口 `4476b3136e280077816518faa996a59e1ca4f329` 的 contracts／serve.py／PRD／ADR 0001–0003 diff 为空，`git diff --check` 通过。本轮仅显式 `git add <path>`，无禁止路径入 index。
 
 Round 4 仅上述 **11 个允许文件**变化，提交前 index 为空；四个提交均使用显式路径 `git add`，不包含 `.omp-r12b-addendum.txt`／`ai/tasks/codex-verify/`，不含 OpenAPI／Panel manifest／CSV schema／PRD／ADR 0001–0003／#153 task。未 push、未开 PR、未评论、未 merge/rebase、未操作其他 worktree。
 
-`status` 保持 **in_progress**，`completed_at=null`：Round 6 已完成 #154 本地接线与指定测试；整体仍待 operator 真实 HTTP smoke／提审／合并，R2.2 跨平台／完整 AC-51 和发布不冒充完成。原生/raw 与同 stem 中文汇总已生成，Final Full Rerun=`passed`（条件 skip 如上），rtk=`skipped-for-report`；工具诊断不是 CI。
+Round 6 当时 `status` 保持 **in_progress**，`completed_at=null`：已完成 #154 本地接线与指定测试，整体仍待 operator 真实 HTTP smoke／提审／合并。现 operator 已 push／开 PR #155 并 squash-merge，本任务记 done（见 closeout 状态事件）；R2.2 跨平台／完整 AC-51 和发布不冒充完成。原生/raw 与同 stem 中文汇总已生成，Final Full Rerun=`passed`（条件 skip 如上），rtk=`skipped-for-report`；工具诊断不是 CI。
 
 恢复／回滚：无数据迁移；撤回代码不删除 audit.db、snapshots、exports 或浏览器下载文件。在途作业不跨重启恢复；浏览器依赖不自动安装／下载；配额仍待 R2.2。应用级隔离显式 `chromium_sandbox=False`，不承诺 OS sandbox 或抵御浏览器漏洞。TaskStore 历史限制未绕过，不声称自动恢复成功。
 
