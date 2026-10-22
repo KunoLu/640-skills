@@ -8,7 +8,7 @@ status: in_progress
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1b-renderer
 created_at: '2026-10-22T11:12:22+08:00'
-updated_at: '2026-10-22T14:53:27+08:00'
+updated_at: '2026-10-22T15:37:59+08:00'
 completed_at: null
 ---
 
@@ -42,12 +42,14 @@ completed_at: null
 | 2026-10-22T14:24:05.351023+08:00 | in_progress | in_progress | Round 5 固定错误规则、四模块审计、指定全部回归与真实 HTTP timeout smoke 完成；两位独立 reviewer 收口，保留整体 review pending | http/r5/runtime-reviewed-full 366／10 skip；renderer-reviewed-full 62／1 skip；contracts-reviewed 71；golden-reviewed 55；real-http-reviewed；final-server-log.txt |
 | 2026-10-22T14:38:21+08:00 | in_progress | in_progress | Round 6（operator run7）沿用 strict；两份指定文档冲突按要求解决，真实 merge 完成；开始 #154 接线 | merge 8ac91c6a1853550a2c94f4e4d406d764514570f2；parent d46d4ad2097742e48441f8d094f29570131a5377；冲突列表为空 |
 | 2026-10-22T14:53:27+08:00 | in_progress | in_progress | Round 6 本地交付验证完成；#154 两项缺口均 satisfied，13:38 规则取代；整体保留 operator smoke／提审状态 | runtime 370／10 skip；renderer 64／1 skip；contracts73、golden57；Ruff5；Store smoke5；Safety Findings=[]、Contract correct |
+| 2026-10-22T15:37:59+08:00 | in_progress | in_progress | Round 7（operator run8）：Reviewy doc fixes；修正 Round 3 effort、run7d 计数、plan R2.1b 行 → #155、plan:65 已完成，登记后续项 D | docs-only diff；git diff --check；仅本 task 与 plan，无代码变更 |
 
 ## 决策
 
 - 未完整调用 grill-with-docs：用户范围、锁定决定与冻结契约边界明确，不重开需求。
 - 后续项 A 已决定（用户 2026-10-22 11:13 +08:00）：保持 #151 行为，仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。四格式共用同一过滤管线，不新增 `withheld` 值，不为 A 开 contract PR。保留 AC-51 四格式事件明细屏蔽一致性测试作为该决定的回归保护；AC-51 完整验收仍在 R2.2，不宣称本轮通过 AC-51。
 - 后续项 B 在计划第 7 项／F 阶段回填 `install-and-use.md`；后续项 C 同归第 7 项／F 阶段，另开单独 PRD docs PR，独立于第 4 项的 PRD §10.4 磁盘上限补充。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。C 明确本地导出在 `exportable=false` 或 `classification != local-metadata` 时屏蔽 event-detail 行，task/run/aggregate 派生行不受影响，与 B 措辞一致；先前放置决定由本次确认取代。本轮不改 PRD，也不提前交付 B／C。
+- 后续项 D（待用户决定，Reviewy 2026-10-22）：只读核对 `serve.py:create_export` 与 `export_store.py:ExportStore.create`，当前先校验请求体／Idempotency-Key，再对 JPEG／PDF 检查 renderer 可用性；不可用则直接返回 503 `EXPORT_RENDERER_UNAVAILABLE`，早于 Store 内的 snapshot 404／410 检查及幂等重放。因此，同一 jpeg/pdf 请求曾受理后，若 renderer 被移除，再以相同 Idempotency-Key 重试会返回 503，而非原 export_id。#154 未规定 availability、snapshot 404／410 与幂等重放之间的优先级；该 503 不进入 Store，不创建作业／文件、不 pin 快照，也不持久化此次请求的幂等结果。本轮仅登记，无代码变更，是否调整顺序待用户决定。
 - 独立 JPEG/PDF contract PR #153（https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开）。**当时快照**：上述 tip／open 及本段执行边界保留为历史；#153 后于 **2026-10-22 13:06:35 +08:00** squash-merged 为 `ce80ca2`。用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成。范围：`CreateExportRequest.format` 加 `jpeg`／`pdf`；仅 createExport 预接受 422 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含第 4 项磁盘上限错误码；后续项 C 的当时放置已由 10-22 15:00 决定取代，现归计划第 7 项／F 阶段的单独 PRD docs PR。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线、不评论、不 merge。
 - 配额决定仅登记在 plan，R2.2 才实现。
 - 沿用 R2.1a 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败、不改 active/ignore；本文件是用户明确要求的共享交付，不声称 helper lifecycle 或自动恢复成功。
@@ -353,7 +355,7 @@ Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完�
 | Round 3 RoundThreeDocs：plan／task 文档更新 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:medium`） | 12 | 25 |
 | Round 3 RoundThreeTests：预检／caps／kana 回归实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 41 | 79 |
 | Round 3 RoundThreeSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 15 | 55 |
-| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | 17 | 35 |
+| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | agent `reviewer`（内置 `model: "@slow"`，configured primary kimi-code/k3:max；spawn effort:"med"） | kimi-code/k3（thinking_level_change `high`；session_init resolvedModel `kimi-code/k3:high`；resolvedModelIsFallback=false） | 17 | 35 |
 | Session title generation（Run 1，omp log pid 23357） | omp `tiny`／title-generator | cursor/composer-2.5 | 4 requests | 0 |
 | Session title generation（Run 1b，pid 36250） | omp title-generator | cursor/composer-2.5 | 6 requests | 0 |
 | Session title generation（Round 2，pid 120521） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
@@ -374,11 +376,13 @@ Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完�
 | Round 6 RoundSixContractReview：只读契约／覆盖复核 | agent `reviewer`（@slow，configured primary kimi-code/k3:max；spawn effort:"med"） | kimi-code/k3（session_init `kimi-code/k3:high`；resolvedModelIsFallback=false） | 28 | 33 |
 | Round 6 RoundSixSafetyReview：只读生命周期／隐私复核 | agent `security-reviewer`（未覆盖 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`；resolvedModelIsFallback=false） | 11 | 41 |
 | Session title generation（Round 6：run7 ×4，含 2 subagents；run7b ×1；run7c ×1） | omp title-generator | cursor/composer-2.5 ×6（全部成功） | 6 requests | 0 |
-| Round 6 follow-up resume run7d：plan.md:63 + count backfill | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 见 PR 描述 | 见 PR 描述 |
+| Round 6 follow-up resume run7d：plan.md:63 + count backfill；无子代理 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 6 | 12 |
+| Session title generation（Round 6 resume run7d） | omp title-generator | cursor/composer-2.5 ×1 | 1 request | 0 |
+| Round 7 doc-fix resume run8（截至提交前；无子代理） | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking `high`） | 5 | 19 |
 
 子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；原因见下述 effort 解释）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填，Round 6 按用户提供的 spawn 事实补充原因。
 
-同为 reviewer agent（@slow = kimi-code/k3）；thinking 随 main 每次 spawn 传的 effort 变化：Run 1b RendererOutputReview 与 Round 4 RoundFourContractReview 传 effort:"hi" → max；Round 2 RoundTwoScopeReview、Round 5 FailureContractReview 传 effort:"med"，Round 3 RoundThreeScopeReview 未传 effort → high。由 omp main 自行选择 effort，非配置或角色差异。
+同为 reviewer agent（@slow = kimi-code/k3）；thinking 随 main 每次 spawn 传的 effort 变化：Run 1b RendererOutputReview 与 Round 4 RoundFourContractReview 传 effort:"hi" → kimi-code/k3 thinking max；Round 2 RoundTwoScopeReview、Round 3 RoundThreeScopeReview、Round 5 FailureContractReview 与 Round 6 RoundSixContractReview 均传 effort:"med" → kimi-code/k3 thinking high。Round 3 的 effort 由 operator 核对父 session `2026-10-22T04-41-34-324Z_01a161ea-1974-77c4-9051-f6209e7b6283.jsonl` 的 task spawn，子 `RoundThreeScopeReview.jsonl` 的 thinking_level_change=`high`、session_init resolvedModel=`kimi-code/k3:high`、resolvedModelIsFallback=false。由 omp main 自行选择 effort，非配置或角色差异。
 
 Security-reviewer thinking 亦随 main 每次 spawn 的 effort，而非沿用主会话 thinking：以下六次父会话 `task` 调用均明确传 `effort:"hi"`、未传 `model` override；子会话 `thinking_level_change` 均为 `max`，`session_init.resolvedModel` 均为 `openai-codex/gpt-6-astra:max`。父会话各自第 4 行的 `thinking_level_change` 均为 `high`，不能把子会话 max 写成「继承主会话」。本次只读核对的证据根为 `~/.omp/agent/sessions/--workspace-640-skills-r2.1b--/`：
 
@@ -391,7 +395,9 @@ Security-reviewer thinking 亦随 main 每次 spawn 的 effort，而非沿用主
 | Round 5 FailurePrivacyReview | `2026-10-22T06-07-07-417Z_01a16238-6c99-74da-873a-30f8569cfa47`：109 | `hi` | `FailurePrivacyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
 | Round 6 RoundSixSafetyReview | `2026-10-22T06-36-23-370Z_01a16253-37ca-7535-b26a-cc86989790e0`：171 | `hi` | `RoundSixSafetyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
 
-Round 6 模型与计数按本次用户提供的 operator 核验结果回填，来源为 session `01a16253-37ca-7535-b26a-cc86989790e0` 的 jsonl；计数为 assistant messages／toolCall blocks。run7、run7b、run7c 分别为 51／93、12／33、8／17；两位子代理分别为 ContractReview 28／33、SafetyReview 11／41。Round 6 title generation 共 6 次，均为 `cursor/composer-2.5` 且全部成功；Round 6 logs 无 job widget。当前 resume run7d 计数记「见 PR 描述」，不推算或提前回填。
+Round 6 模型与计数按用户提供的 operator 核验结果回填，来源为 session `01a16253-37ca-7535-b26a-cc86989790e0` 的 jsonl；计数为 assistant messages／toolCall blocks。run7、run7b、run7c、run7d 分别为 51／93、12／33、8／17、6／12；run7d 主模型 openai-codex/gpt-6-astra:high、thinking high，无子代理，标题生成 `cursor/composer-2.5` ×1。两位子代理分别为 ContractReview 28／33、SafetyReview 11／41。run7 至 run7c 的 title generation 共 6 次，均为 `cursor/composer-2.5` 且全部成功；加上 run7d 的 1 次，Round 6 合计 7 次。Round 6 logs 无 job widget。
+
+Round 7 run8 计数为「截至提交前」快照：只读解析 `/home/box/.omp/agent/sessions/--workspace-640-skills-r2.1b--/2026-10-22T06-36-23-370Z_01a16253-37ca-7535-b26a-cc86989790e0.jsonl` 第 411–455 行，统计 role=assistant 的 message 记录与其中 type=toolCall 的 blocks，分别为 5／19；不含其后的计数回填、提交及最终报告。无子代理；本轮标题生成由 operator 单独报告，此处不登记计数。
 
 Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。Round 4／5 计数由 operator 于 2026-10-22 14:35 +08:00 从 session jsonl 核实（assistant messages／toolCall blocks），全部 `resolvedModelIsFallback: false`，无 advisor；主会话 thinking 取自 `thinking_level_change`。
 
