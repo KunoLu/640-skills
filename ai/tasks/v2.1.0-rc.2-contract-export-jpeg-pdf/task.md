@@ -3,19 +3,19 @@ schema_version: 1
 id: v2.1.0-rc.2-contract-export-jpeg-pdf
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict、contract-only；仅指定 worktree 与分支；主会话唯一 writer／验证 controller；子代理仅只读；显式 git add 指定路径；本地两个提交，不 push、不开 PR、不评论、不 merge。
+mode_note: 用户明确 strict、contract-only；仅指定 worktree 与分支；主会话唯一 writer／验证 controller；子代理仅只读；显式 git add 指定路径；Round 1 两个提交保留，Round 2 新增提交，不改写历史、不 push、不开 PR、不评论、不 merge。
 status: done
 branch: contract/v2.1.0-rc.2-export-jpeg-pdf
 created_at: '2026-10-22T11:27:23+08:00'
-updated_at: '2026-10-22T11:55:23+08:00'
-completed_at: '2026-10-22T11:55:23+08:00'
+updated_at: '2026-10-22T12:02:52+08:00'
+completed_at: '2026-10-22T12:02:52+08:00'
 ---
 
 # JPEG／PDF 与图像超限错误：独立导出契约
 
 ## 范围与验收
 
-授权依据：640-skills room 用户于 **2026-10-22 11:23 Asia/Shanghai** 明确「授权开契约PR」；Lord 于 **11:24 +08:00** dispatch。本轮仅本地提交，operator 负责后续 push／PR／merge。基线 `origin/main` 为 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`，工作根 `/workspace/640-skills-contract-jpeg-pdf`，分支见 frontmatter。
+授权依据：640-skills room 用户于 **2026-10-22 11:23 Asia/Shanghai** 明确「授权开契约PR」；Lord 于 **11:24 +08:00** dispatch，**11:34 +08:00** 补充细节。本轮仅本地提交，operator 负责后续 push／PR／merge。基线 `origin/main` 为 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`，工作根 `/workspace/640-skills-contract-jpeg-pdf`，分支见 frontmatter。记录沿用 `ai/tasks/v2.1.0-rc.2-contract-export-error-responses/task.md` 的范围／证据／Gate／验证／提交／状态事件结构。
 
 仅三个交付文件：`sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py`、本 task。扩展 CreateExportRequest.format 为 `[html, csv, jpeg, pdf]`，仅 createExport 新增 422 → ExportImageSizeLimit；错误 body 必须给出稳定 detail 和实际限制。保留全部 HTML／CSV 定义、其他 operation、CSV 列与版本。
 
@@ -37,7 +37,7 @@ Scenario: 固定快照可选择四种导出格式
   And jpg、JPEG、PDF、png 等未声明格式仍被拒绝
 
 Scenario: JPEG 超限预检返回明确限制
-  Given JPEG 完整输出仍超过已验证图像上限
+  Given JPEG 在完整内容、宽度至少为标准报告宽度的 1x 输出下仍超限
   When 按 createExport 的预检失败契约校验响应
   Then HTTP 状态为 422 且 detail 为 EXPORT_IMAGE_SIZE_LIMIT
   And max_edge_px 与 max_total_pixels 必须给出正整数限制
@@ -48,7 +48,7 @@ Scenario: JPEG 超限预检返回明确限制
 
 - 已读 `git show c7a87e4`（#152）、两份指定 task 及当前 OpenApiDraftTests；沿用精确 status→`$ref` 映射与 subTest 风格。
 - PRD `docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md` §9.6（841 行）：请求体或导出规模超出已验证上限 → 413／422，预检失败、明确限制、不截断。
-- 同 PRD §13.5（1146–1148 行）：单边 32,000 px／总像素 80 MP 是建议值、待平台实测冻结；若保持完整内容的降采样仍超限，返回 EXPORT_IMAGE_SIZE_LIMIT，不截断、不拆文件、不伪造成功。AC-48（1480 行）要求 JPEG 超限明确失败。
+- 同 PRD §13.5（1146–1148 行）：单边 32,000 px／总像素 80 MP 是建议值、待目标平台实测及用户决定冻结；2x 超限时，在内容完整且宽度仍 ≥ 标准报告宽度的条件下降为 1x，生成前提示用户；仅 1x 仍超限才返回 EXPORT_IMAGE_SIZE_LIMIT。AC-48（1480 行）要求不截断、不拆文件、不产生半成品成功文件、不伪造成功。
 - `serve.py:425–426` 与 `export_store.py:35,255–256` 目前只接受 html/csv；`test_exports_http.py:127` 明确保留 pdf → 400。此 PR 为前置契约，不声明当前 runtime 已支持新格式。
 - `serve.py` 使用 `_json({"detail": str(error)}, status)`；既有 BadRequest／NotFound／Conflict／Gone 为 description-only。新增专用响应，不引入公共错误 envelope 或 code 字段。
 
@@ -56,13 +56,17 @@ Scenario: JPEG 超限预检返回明确限制
 
 | 项目 | 决定与理由 |
 |---|---|
-| 名称 | detail const `EXPORT_IMAGE_SIZE_LIMIT`，直接采用 PRD §13.5／AC-48，不发明其他错误码 |
-| HTTP | 422：JSON 请求有效且很小，超限对象是预期渲染输出；413 更适合请求内容大小。符合 §9.6 二选一 |
-| body | 封闭 object，required detail／max_edge_px／max_total_pixels；限制为 minimum 1 的 integer；32,000／80,000,000 只写建议默认值描述，不用 const/default 锁死；不加可选估算值 |
+| 名称 | detail const `EXPORT_IMAGE_SIZE_LIMIT`，直接采用 PRD §13.5／AC-48；语义为渲染图像尺寸或总像素数超出限制 |
+| HTTP | POST /api/v1/exports 返回 HTTP 422，Content-Type 为 application/json；JSON 请求有效且很小，超限对象是预期渲染输出，符合 §9.6 的 413／422 选择 |
+| body | 沿用 runtime 的 `{"detail": ...}` 错误体惯例，不加 code 或成功 envelope；封闭 object，必填 detail（string，const EXPORT_IMAGE_SIZE_LIMIT）、max_edge_px（integer，minimum 1，实际单边像素上限）、max_total_pixels（integer，minimum 1，实际总像素上限）；限制数值不以 const／enum／maximum／default 冻结 |
 | operation | 仅 POST /api/v1/exports 的 createExport：生成前、202 接受前预检失败。其余 get/download/delete 无此同步错误路径，不毯式添加 |
 | 异步边界 | R2.1b 必须保证此预检先于 202；若只能在接受后检测，需独立明确 getExport failed 状态／错误信息契约与无半成品成功文件保证；本次不扩张查询 schema，不把后置失败伪称 HTTP 422 |
 | JPEG／PDF | 四格式 enum 是请求选择契约；§13.5 图像限制错误针对 JPEG，PDF 仍按 §13.6 单文件多页语义，不套用 JPEG 单图上限 |
 | 兼容与回滚 | html/csv 及幂等／认证／CSRF／202 envelope 不变；仅新增可选格式和失败响应。撤回实现提交前需协调依赖此契约的 R2.1b；无数据迁移或回放 |
+
+上限数值 冻结 待定（待目标平台实测及用户决定；PRD 建议值 32,000 px／80 MP 仅为建议）。
+
+Round 2 仅在 `ExportImageSizeLimit.description` 补充触发语义：2x 超限时，在内容保持完整且宽度仍 ≥ 标准报告宽度的条件下降为 1x，并在生成前通知用户；只有 1x 仍超限才返回 `EXPORT_IMAGE_SIZE_LIMIT`。不得截断、拆成多个文件、产生部分／半成品输出或伪造成功。降采样逻辑及通知本身属于 **R2.1b runtime，不在本 PR 实现范围**；无需新 schema 字段。
 
 ## Book Gate Plan
 
@@ -76,6 +80,8 @@ Scenario: JPEG 超限预检返回明确限制
 
 DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Export 负责固定快照导出，runtime job 状态不变。新失败只在接受前声明；接受后失败需 R2.1b 单独处理。无共享持久数据写入／一致性／重试／排序／去重／迁移／backfill／replay 变化。detail 与两项实际限制是诊断信号。以实例校验、精确响应集合、红灯证明和现有全套 runtime 测试约束兼容性。Ponytail：内联一个 response schema，复用现有 validator，不加依赖、helper 或公共错误抽象。
 
+Round 2 DDIA Data Design Review — confirmed：PRD／OpenAPI 仍为需求／wire contract 事实源；仅补充接受前失败条件，不改变字段、异步 job 状态、一致性、幂等、持久数据、迁移或回放。沿用 Round 1 Gate 适用性；无生产代码重构或发布动作。轻量 golden guard 约束两项限制字段不得出现 const／enum／maximum，保留已有实例验证，不钉死描述措辞。
+
 ## 状态持久化限制
 
 初始根／分支／基线匹配，git status 为空；路径逐级检查无 symlink。`git check-ignore` 证实 `.sbtd/active-task.json` 与本 task reports 受保护；`git ls-files -- .sbtd ai/tasks/v2.1.0-rc.2-contract-export-jpeg-pdf` 为空。namei 对不存在的新任务目录返回 1 是缺失确认，非写入失败。
@@ -83,6 +89,8 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Ex
 沿用 #148/#152 已记录的 TaskStore catalog `task has no YAML frontmatter block` 限制，不重跑确认；TaskStore.create 的 index／active 写入也超出三文件范围。本文件是用户明确要求的共享交付记录，不声称 TaskStore helper 生命周期、active 或自动恢复成功；不写身份／ignore／其他任务。原始验证报告与同 stem 中文汇总仅放本任务 ignored reports，不暂存。
 
 ## 验证证据
+
+以下至 Round 2 小节之前均为 **Round 1 历史证据**，保留原始结果，不代表本轮重跑。
 
 所有命令在授权 worktree 根执行，使用原生工具；`PYTHONDONTWRITEBYTECODE=1 RUFF_NO_CACHE=true`，runtime 命令 `PYTHONPATH=sbtd-runtime`。rtk: skipped-for-report。环境 Linux／Python 3.13.5（CI 配置为 3.12.10，此处不是 CI 环境等价证明）。原始 command／stdout／stderr／exit code／时间／基线／平台存入本 task ignored `reports/<stem>.json`，同 stem 中文 `.md`；不暂存报告。证据为 developer-local／dirty／local-only，不冒称 PR head／部署证明。
 
@@ -127,7 +135,31 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Ex
 - 唯一非阻塞 simplicity 建议：移除只有 createExport 的 subTest，net -1 line。保留：用户明确要求 #152 精确映射与 subTests 风格；reviewer 已确认此决定合理，无需修改。
 - 两位均只读，未运行测试／lint／formatter，无共享 writer；主会话完成 Code Readability Review，无必要重构、helper 或依赖。review 覆盖的是最终格式修正后的契约／测试；未产生代码修正回路。
 
-## 提交与恢复边界
+### Round 2 验证证据与独立审查
+
+本轮以 `0cd5da2c61fa026bb77bb04fcfd5b377f03740b3` 为提交前 HEAD，基线与分支不变。原始命令／stdout／stderr／退出码／时间／已验证文件 SHA-256 保存在本任务 ignored `reports/round2-validation.json`，同 stem 中文汇总为 `reports/round2-validation.md`；不暂存。Evidence Source: developer-local；Source Revision: dirty；Evidence Publication: local-only；Environment Alignment: unverified（Linux／Python 3.13.5，非 CI Python 3.12.10 等价证明）；rtk: skipped-for-report。以下均为本轮新执行，环境 `PYTHONDONTWRITEBYTECODE=1 RUFF_NO_CACHE=true PYTHONPATH=sbtd-runtime:sbtd-runtime/tests`。
+
+| 命令 | 本轮实际结果 |
+|---|---|
+| `python -B -c <smoke，完整源码见 raw JSON>` | exit 0；Draft202012Validator 消费 JSON round-trip 错误体，接受 16000／40000000、32000／80000000、64000／160000000 三组实际上限；两个限制字段分别加入 const／enum／maximum 的六个进程内变异均被 golden 测试拒绝，无 errors；无遗留脚本 |
+| `python -B -m unittest sbtd-runtime/tests/test_golden_contracts.py -v` | exit 0；54 passed，0.305s |
+| `python -B -m unittest discover -s sbtd-runtime/tests` | exit 0；303 tests，301 passed、2 skipped，47.804s |
+| `python -B -m unittest discover -s sbtd-runtime/tests -p 'test_serve.py'` | exit 0；14 passed，6.702s |
+| `python -B -m unittest discover -s sbtd-runtime/tests -p 'test_export*.py'` | exit 0；35 tests，34 passed、1 skipped，29.225s |
+| `python -B -m unittest discover -s sbtd-runtime/tests -p 'test_panel_manifest.py'` | exit 0；21 passed，0.004s |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | exit 0；1 file already formatted |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1；仅既有 I001，19–30 行 import block 未修改；不修范围外问题 |
+
+平台 skips 与 Round 1 一致（Windows junction）；套件重叠，不累加通过数。本轮每条命令运行一次；未重跑 Round 1 根 Linux CI，也未声称其两项范围外失败已修复。Final Test Report／Run Summary MD: generated；Targeted Rerun: not-needed；Final Full Rerun: passed（本轮指定 unittest 范围）；**lint 不全绿，整仓 CI 不作通过声明**。
+
+BDD: traceable，仅契约场景；沿用 task 中文正文／英文关键词，不新增 .feature。API Contract: verified；Cross-repo context: contract-only；Mock Strategy: none（新增 smoke）；E2E Mode: contract-backed。未验证 JPEG/PDF 渲染、降采样或用户通知：这些是 R2.1b runtime 范围，不把描述或 schema 校验当运行时实现。目标平台实测／数值冻结／UI E2E／部署未执行。
+
+- AddendumSemantics：correct，confidence 0.95，无 finding；独立核对 PRD 行号、五项语义、授权与 task 模型、仅 response description 的 YAML 改动、Round 1 兼容性。审查时 task 尚未最终填充验证结果，其状态观察是当时快照。
+- AddendumCoverage：correct，confidence 0.98，无 finding；两字段 const／enum／maximum guard、detail const、既有实例正负例和可读性均符合要求，无描述措辞断言。
+- 两位 reviewer 均只读、未运行测试／lint／formatter。主会话 Code Readability Review：复用现有 subTest 的五行 guard，无 helper／依赖／runtime 改动；无必要重构，无修正回路。
+
+## Round 1 提交与恢复边界
+
 
 本地契约交付完成；done 不表示 runtime JPEG/PDF 已实现、整仓 CI 全绿、部署或发布就绪。实现提交 `d75ca3b57594d0010d3e0e29850a1942b35347a4`，parent 为指定基线 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`。只执行 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py`，实现提交仅两文件、116 insertions／16 deletions。
 
@@ -140,6 +172,12 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Ex
 
 本记录以第二个 docs 提交保存，只显式添加 `ai/tasks/v2.1.0-rc.2-contract-export-jpeg-pdf/task.md`；自身提交 SHA 由最终命令输出／本地 receipt 记录，避免自引用。最终交付三文件；reports ignored、不暂存禁止路径；不 push、不开 PR、不评论、不 merge。回滚为协调撤回实现提交（下游 R2.1b 尚不得假设已合并），无持久数据恢复步骤。TaskStore／active／自动恢复限制不变；operator 负责模型计数与后续发布操作。
 
+### Round 2 提交与恢复边界
+
+保留 `d75ca3b` 与 `0cd5da2`，新增一个提交 `contract(export): document EXPORT_IMAGE_SIZE_LIMIT downgrade semantics`，不 amend／rebase。只显式添加 `sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py`、本 task；提交 SHA 以最终 `git log --oneline origin/main..HEAD` 输出为准，避免自身 SHA 自引用。未 push／PR／merge／comment；禁止路径不暂存，其他 worktree 不触碰。
+
+本轮验证快照 SHA-256：openapi.yaml 为 `d06209d33396d584422c469cb2d2201e8e28cfe34aa155092d03218e08ba2b43`；test_golden_contracts.py 为 `56bef9031868078513300afc3ebc2a0d205310a8cd18c51d1744a8a39341e3ec`。该证据是提交前 local-only，不冒称新提交的 CI／发布证据。回滚需协调 R2.1b 消费者后撤回本轮补充提交；无数据迁移。TaskStore helper／active／自动恢复限制继续保留；本次仅维护获授权的 task.md。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -147,6 +185,10 @@ DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Ex
 | 2026-10-22T11:27:23+08:00 | planned | in-progress | 用户明确 strict；授权根／分支／基线与三文件范围已确认，完成 PRD／先例与 schema 设计核对 | origin/main 8931c35ef1aa4a58d3675b6f8d1a8fead309ed90；PRD §9.6／§13.5／AC-48；#152 |
 | 2026-10-22T11:32:27+08:00 | in-progress | checking | 契约与测试已完成；红灯、smoke、指定 runtime 子集／全量和格式检查已执行，进入独立 review／根 CI 验证 | golden 54；runtime 303/2 skips；panel 21；serve 14；exports 35/1 skip；既有 I001 保留 |
 | 2026-10-22T11:55:23+08:00 | checking | done | 指定契约／runtime 验证及双独立 review 完成；实现提交内容与验证哈希一致；明确保留根 CI 两项范围外失败与既有 I001，不声称整仓全绿 | d75ca3b57594d0010d3e0e29850a1942b35347a4；parent 为指定基线；golden 54／runtime 303；根 CI 2375 tests、2 failures、63 skip events；契约 wrapper 70 passed |
+| 2026-10-22T11:58:58+08:00 | done | planned | 用户 Round 2 明确要求同任务补充；保留 Round 1 提交与完成证据，不改写历史 | 初始 git log 为 0cd5da2、d75ca3b；git status 为空；分支匹配 |
+| 2026-10-22T11:58:58+08:00 | planned | in-progress | 已核对 Lord 11:34 细节、PRD 1146／1148／1480 与指定 task 模型；继续 strict 三文件范围 | 授权 11:23／dispatch 11:24；路径无 symlink；reports ignored 且未跟踪；TaskStore 既有限制不重跑 |
+| 2026-10-22T12:00:13+08:00 | in-progress | checking | 响应描述与两项限制字段 golden guard 完成；两位只读 reviewer 分别核对语义与覆盖，主会话执行本轮指定验证 | YAML 仅 description 修改；HTTP／body／建议值／R2.1b 边界已记入 task；Python 3.13.5、Ruff 0.17.1 |
+| 2026-10-22T12:02:52+08:00 | checking | done | Round 2 五项补充完成；指定 unittest、format、契约消费者 smoke／六个冻结变异与双独立只读 review 完成；明确保留既有 lint 与 Round 1 根 CI 失败，不声明 runtime 实现 | reports/round2-validation.json 与同 stem 中文 md；golden 54、runtime 303/2 skips、serve 14、exports 35/1 skip、panel 21；I001；AddendumSemantics／AddendumCoverage correct |
 
 ## 模型使用
 
@@ -157,3 +199,6 @@ operator 将依据本次 session jsonl 回填实际模型及精确计数；下�
 | 主会话 | openai-codex/gpt-6-astra:high | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
 | ContractCorrectness（只读 reviewer） | omp configured task-role（未覆盖 model；用户告知当前 grok-4.7） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
 | ContractCoverage（只读 reviewer） | omp configured task-role（未覆盖 model；用户告知当前 grok-4.7） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
+| Round 2 主会话 | openai-codex/gpt-6-astra（当前配置） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
+| AddendumSemantics（只读 reviewer） | omp configured reviewer-role（未覆盖 model） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
+| AddendumCoverage（只读 reviewer） | omp configured reviewer-role（未覆盖 model） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |

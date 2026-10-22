@@ -881,6 +881,11 @@ class OpenApiDraftTests(unittest.TestCase):
         self.assertEqual(
             set(schema["required"]), {"detail", "max_edge_px", "max_total_pixels"}
         )
+        for field in ("max_edge_px", "max_total_pixels"):
+            with self.subTest(unfrozen_limit=field):
+                self.assertTrue(
+                    {"const", "enum", "maximum"}.isdisjoint(schema["properties"][field])
+                )
         validator = jsonschema.Draft202012Validator(schema)
         body = {
             "detail": "EXPORT_IMAGE_SIZE_LIMIT",
