@@ -3,12 +3,12 @@ schema_version: 1
 id: v2.1.0-rc.2-r2.1b-renderer
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict；Round 5 仅指定 worktree 与分支，按 Reviewy/Lord 2026-10-22 13:38 +08:00 规则，在 #154 合并前所有失败作业 error 固定为 export failed。显式 git add；不 push、不开 PR、不评论、不 merge/rebase；不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/。冻结 contracts、Panel manifest、ADR 0001–0003、PRD、CSV schema。
+mode_note: 沿用用户 strict；Round 6（operator run7）先完成已开始的 origin/main merge，再接线 #154（d46d4ad）的 503 与失败码；13:38 固定字符串规则已被 #154 取代。仅授权 worktree；显式 git add，不 push／PR／评论／rebase；不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/；merge 后冻结 contracts、Panel manifest、ADR 0001–0003、PRD、CSV schema。
 status: in_progress
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1b-renderer
 created_at: '2026-10-22T11:12:22+08:00'
-updated_at: '2026-10-22T14:24:05.351023+08:00'
+updated_at: '2026-10-22T14:53:27+08:00'
 completed_at: null
 ---
 
@@ -23,7 +23,7 @@ completed_at: null
 3. 每作业子进程与临时 profile；路由拒绝外联和 file；单作业信号量、超时及清理。
 4. JPEG 按 §13.5 像素预检、降采样与安全失败；PDF 按 §13.6 可搜索、中日英字体嵌入、长表与页脚。
 5. 四格式沿用同一 event-detail exportable/classification 过滤；不改变 derived rows 或 withheld 值。
-6. 缺依赖仅 JPEG/PDF 不可用并附原因；Round 4 依合并 #153 开放 HTTP，JPEG 受理前预检、固定比例生成，PDF 正常异步受理。
+6. 缺依赖仅 JPEG/PDF 不可用并附原因；Round 4 依 #153 开放 HTTP，Round 6 依 #154 接线受理前 503 与受理后固定失败码；JPEG 依赖可用后预检、固定比例生成，PDF 不做尺寸预检。
 7. 单元、真实浏览器、全量指定回归、真实 runtime snapshot smoke、独立复核及冻结契约检查。
 
 ## 状态事件
@@ -40,6 +40,8 @@ completed_at: null
 | 2026-10-22T14:02:40.176880+08:00 | in_progress | in_progress | Round 4 验证收口：独立 safety／contract review 通过，冻结路径最终 diff 为空；仅本地 Linux HTTP 交付 ready，保留 review pending 与两项契约缺口 | http/protected-final；reviewed 全套报告；Safety Findings=[]；ContractReview correct；Release Readiness ready（限定授权范围） |
 | 2026-10-22T14:08:00+08:00 | in_progress | in_progress | Round 5 用户明确 strict；入口 09c4c6669f64e4580f0e12b55de7bd1b591a90d6、分支与干净 worktree 已核对；执行固定失败字符串规则 | 用户 13:38 规则与 #154；本轮仅授权四模块审计、最小修复、回归及记录 |
 | 2026-10-22T14:24:05.351023+08:00 | in_progress | in_progress | Round 5 固定错误规则、四模块审计、指定全部回归与真实 HTTP timeout smoke 完成；两位独立 reviewer 收口，保留整体 review pending | http/r5/runtime-reviewed-full 366／10 skip；renderer-reviewed-full 62／1 skip；contracts-reviewed 71；golden-reviewed 55；real-http-reviewed；final-server-log.txt |
+| 2026-10-22T14:38:21+08:00 | in_progress | in_progress | Round 6（operator run7）沿用 strict；两份指定文档冲突按要求解决，真实 merge 完成；开始 #154 接线 | merge 8ac91c6a1853550a2c94f4e4d406d764514570f2；parent d46d4ad2097742e48441f8d094f29570131a5377；冲突列表为空 |
+| 2026-10-22T14:53:27+08:00 | in_progress | in_progress | Round 6 本地交付验证完成；#154 两项缺口均 satisfied，13:38 规则取代；整体保留 operator smoke／提审状态 | runtime 370／10 skip；renderer 64／1 skip；contracts73、golden57；Ruff5；Store smoke5；Safety Findings=[]、Contract correct |
 
 ## 决策
 
@@ -51,6 +53,7 @@ completed_at: null
 - 沿用 R2.1a 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败、不改 active/ignore；本文件是用户明确要求的共享交付，不声称 helper lifecycle 或自动恢复成功。
 - Round 4：#153 已合并为 `ce80ca2` 并经 `376ea0c` merge 纳入；前述 Round 1–3 的 open／HTTP 冻结描述是历史证据。本轮按用户缩小范围接线正常路径，两个尚未定义的失败协议仅登记于文末，不自行改映射。
 - Round 5：遵循 Reviewy/Lord **2026-10-22 13:38 +08:00** 决定，contract [PR #154](https://github.com/KunoLu/640-skills/pull/154) 合并前所有失败作业对外 `error` 精确为 `"export failed"`，与 main R2.1a 一致。renderer code 仅写安全服务端 warning，不记录异常原文、stderr、traceback、路径或凭据；不改 createExport 422 或 202 warning。JPEG 不可用仍 500／无作业，PDF 仍 202 后失败，不提前决定不可用的错误协议。
+- Round 6：contract [PR #154](https://github.com/KunoLu/640-skills/pull/154) 已合并为 `d46d4ad2097742e48441f8d094f29570131a5377`，经本轮真实 merge `8ac91c6a1853550a2c94f4e4d406d764514570f2` 纳入。**2026-10-22 13:38 +08:00 的固定 `"export failed"` 规则已被 #154 取代**，Round 5 描述仅为历史证据。请求校验后、pin／JPEG 预检／建作业前复用 capabilities 的可用性检查；不可用返回封闭 503，JPEG 不能预检时 503 优先于尺寸 422。受理后 renderer timeout → `EXPORT_RENDER_TIMEOUT`，其他失败 → `EXPORT_RENDER_FAILED`，所有格式适用；非失败状态 error=null。
 
 ## Book Gate Plan
 
@@ -73,6 +76,8 @@ Round 3 before-dev：strict、分支与干净入口 `4476b3136e280077816518faa99
 Round 4 before-dev：未完整调用 grill-with-docs，范围和合并 wire contract 明确。DDD=`not-needed`，无新领域歧义；Legacy Change Safety=`characterized`，`http/before-dev-safety` 11 passed，保留认证／CSRF／Host-Origin／幂等／快照到期／下载安全网；Refactoring=`proceed / normal`，无需前置重构；DDIA=`confirmed`：SnapshotStore 仍拥有快照，ExportStore 在现有 pin 生命周期内先执行 JPEG preparation，再建立作业。固定同一 HTML／metadata／presentation／caps／scale；拒绝释放 pin，不写作业／文件；幂等先查重，准备后在锁内再查重，避免并发重复作业。无迁移、第二队列或恢复语义变化。Python LSP references 实际不可用，采用源码调用分析。Release gate=`pending`，须完成本轮指定测试、真实 HTTP smoke 与独立 review。TaskStore 已知 catalog/frontmatter 限制不重试，不写 active/ignore，不声称 helper lifecycle 或自动恢复；本文件保存用户明确模式。主会话唯一验证 controller；子代理仅在各自文件责任范围写入，均不得执行测试／lint／formatter。
 
 Round 5 Book Gate Plan／执行结论：未完整调用 grill-with-docs，用户 13:38 规则与边界明确，DDD=`not-needed`。Legacy Change Safety=`characterized`：用户报告与 worker 源码直接建立错误码泄漏事实；新 HTTP 红例 `failure-red` 记录无安全 warning 的 11 个失败子项，避免重复运行已知问题只为确认。Refactoring=`proceed / normal`：无需重构，移除 `_fail` 可变 error 参数，在现有边界固定错误并记录允许码；保留 422／202 warning、pin、取消与原子发布。DDIA=`confirmed`：ExportStore 仍是唯一作业／产物 owner，无新持久状态、重试或迁移；失败不写 manifest，幂等／恢复／保留期不变。Python LSP references 实际无 server，源码核对两个 `_fail` 调用及全部 error 写入。Release=`ready`（仅授权 Linux 本地修复），最终测试与真实 HTTP 证据见 Round 5 段；无部署／发布。TaskStore 既有 helper 限制不重试、不声称自动恢复。
+
+Round 6 Book Gate Plan／before-dev：未完整调用 grill-with-docs，#154 与用户验收明确，DDD=`not-needed`。Legacy Change Safety=`characterized`：新增 `reports/r6/unavailable-red` 在现有 HTTP seam 证明新 503／零 pin 约束未满足；保留 422、202 warning、幂等、访问控制、取消、原子发布与安全日志回归。Refactoring=`proceed / normal`：无需重构，仅 admission 和既有失败边界。DDIA=`confirmed`：503 在 Store 外拒绝，预检竞态释放 pin，202 后仍由 ExportStore 唯一管理失败／清理；仅 ready manifest 持久化且 error=null；无迁移／重试／恢复策略变更。Python LSP references 实际无 server，源码／合并契约补充分析。Release=`ready`（仅本轮本地交付，详见 Round 6 验证与复核收口）；TaskStore 既有 catalog/frontmatter 限制不重试，不写 active/ignore、不声称 helper lifecycle 或自动恢复成功。主会话唯一 writer／验证 controller。
 
 ## 验证证据
 
@@ -294,6 +299,38 @@ BDD=`traceable`（既有中文场景／英文关键词，无新 runner）；Cros
 
 Round 5 本地交付完成，整体任务仍 `in_progress`／`completed_at=null`，等待 operator 评审及契约后续；没有 push、PR、评论、merge/rebase 或发布。回滚仅撤回代码，无迁移，不删除用户数据。长期预防已落实在固定错误／日志隐私回归，不另建 developer 身份或 lesson 文件；不改变既有 TaskStore 恢复限制。
 
+### Round 6（operator run7）：#154 合并与失败状态接线
+
+入口已有 `origin/main` merge，冲突恰为 #153 task 与 plan 两份文档。先按用户指定保留 HEAD 详细 reviewer／title／widget rows 与三条 plan bullets，追加 main closeout 和 export-failure-states bullet；仅暂存两份冲突文件，unmerged 列表为空后 `git commit --no-edit`。真实 merge=`8ac91c6a1853550a2c94f4e4d406d764514570f2`，parents=`0705e3888f1acccd4f730ce63a43aba31e9b5e32`／`d46d4ad2097742e48441f8d094f29570131a5377`。merge 后不修改 contracts 或 golden tests。
+
+实现仅两个生产文件：`serve.py` 复用 `renderer_capability`，在 pin／预检／job 前拒绝不可用 JPEG／PDF，503 body 精确封闭；JPEG 预检期间依赖消失也拒绝并释放 pin。`export_store.py` 两处原 `"export failed"` 写入改为契约码；仅 allowlisted renderer timeout 映射超时，其余生成／发布／兜底失败均通用失败，取消仍 null。HTML／CSV 同样适用失败码，但不执行 renderer admission。依赖不可用的 createExport 503 优先于 JPEG 尺寸预检与 Store 幂等重放；已有 GET／download 不受该检查影响。
+
+证据目录：**`ai/tasks/v2.1.0-rc.2-r2.1b-renderer/reports/r6/`**（已确认 ignored，不暂存）。每条命令保留 raw `.txt`、命令／真实 +08:00 时间／入口 SHA `.json` 与同 stem 九节中文 `.md`。Evidence Source=`developer-local`、Source Revision=`dirty`、Evidence Publication=`local-only`；`validated-source-hashes.json` 绑定最终被测字节，提交后再作内容等价核对，不能把 merge SHA 冒充新提交已运行。
+
+| 最终命令／检查 | 实际结果 | 报告 stem |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py'` | **370 tests：360 passed、10 skipped；106.689s** | `runtime-final-full` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. SBTD_RENDERER_TEST_HOME=/workspace/smoke-r2.1b/home /workspace/venv-r2.1b/bin/python -B -m unittest test_browser_renderer test_renderer_integration test_renderer_windows` | **64 tests：63 passed、1 Windows skip；91.248s** | `renderer-final-full` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance` | **73 passed；0.569s** | `contracts-final-full` |
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py` | **57 passed；0.289s；golden 原样通过** | `golden-final-full` |
+| `ruff check`／`ruff format --check`：serve.py、export_store.py、test_export_store.py、test_exports_http.py、test_renderer_integration.py | **全部通过；5 files already formatted** | `ruff-final`、`ruff-format-final` |
+| 系统 Python throwaway Store smoke（`python3 -B -c …`，完整命令在 JSON） | **5 场景，无 mocks**：无浏览器时 HTML／CSV ready/null；库级接受 JPEG／PDF 后通用失败；真实 renderer budget 到期为超时；失败无 manifest | `store-smoke-corrected` |
+| 503 定点、失败码定点、旧 HTTP 校验定点 | **3 passed／11.062s；2 passed／3.380s；1 passed／3.678s** | `unavailable-green`、`failure-codes-green`、`http-validation-targeted` |
+
+新增／更新回归：JPEG／PDF 精确 503、与 capabilities 原因一致、无新文件／job／pin／manifest、503 优先于尺寸预检；HTML／CSV 缺依赖仍可生成；预检依赖消失释放 pin；四格式 × 五种失败（unavailable、timeout、crash、job-time size、generic）共 20 个 HTTP 子项验证固定码／安全日志／409／无产物。HTTP 实际 getExport 数据用合并 ExportJob schema 验证；阻塞真实 Store worker 固定观察 queued／generating／cancelled／ready，全部 error=null；ready manifest 及重启恢复保持 null。Store 普通失败保留 path-not-leaked 断言，并覆盖发布失败通用码。全测试目录剩余 `"export failed"` 仅为未修改 golden 的反例。
+
+失败证据保留：`unavailable-red`（1 test，3 failure 子项）与 `failure-codes-red`（2 tests，11 failure 子项）是契约红例；`affected-subset`（54 tests，1 failure、3 skips）发现旧 `test_exports_http` 仍断言无依赖 PDF202，删除该重复旧断言后定点及完整 runtime 通过；`ruff-format-check` 的两处格式问题经 formatter 修正；`store-smoke` 首轮因 throwaway fixture 调用缺 metrics 参数失败，修正后无替身 5 场景通过，不改生产代码来迎合 smoke。
+
+BDD=`traceable`：沿用 `sbtd-runtime/spec/r2.1b-renderer-scenarios.md` 中文正文＋英文关键词，Cross-repo context=`complete`，API Contract=`verified`（#154），Mock Strategy=`user-approved / contract-backed`（可控故障）；无替身 Store smoke 与 suite 内真实 Chromium／HTTP 分开记录。系统 10 skips 沿用未启用 browser home／Windows 条件，venv 仅剩 1 Windows 原生 skip；套件重叠，不相加成独立用例数。用户明确 operator 另跑真实 HTTP smoke，本轮未另建该 smoke；无 UI 修改，不跑 Dashboard／移动端，未安装任何依赖。rtk=`skipped-for-report`，Final Full Rerun=`passed`。
+
+Ponytail／Code Readability Review：复用现有 admission、failure、schema helper 与生命周期 fixture；无新增运行时 abstraction／持久格式／队列／依赖。用布尔 timeout 选择两个允许的公开码，不引入任意 error 透传。删除重复旧 PDF202 测试，不复制第二份 503 用例。无新长期 lesson／身份文件，错误调用的修正与预防保留在本轮 evidence。
+
+独立 `RoundSixSafetyReview`：Findings=`[]`；静态检查 pin／取消／关闭、生成失败／finally、原子发布／恢复、503／422／安全 500 与日志边界，无本轮引入的泄漏或生命周期问题。只读、未运行测试／lint，runtime 自报实际模型 `openai-codex/gpt-6-astra`。主会话最终 scope 检查仅 8 个允许文件变化，`git diff --check` 通过；相对 merge 的 contracts／golden／PRD／ADR 0001–0003 diff 为空，Panel／CSV schema 不在修改列表。
+
+独立 `RoundSixContractReview`：`correct`（confidence 0.9），无 P0–P2 缺陷；确认闭合 503、四格式失败码、状态 schema／null、503 优先级、422／warning 与测试替换符合 #154。runtime 自报 `kimi-code/k3`，只读、未运行验证。两条非阻断观察：serve 可改用已有不可用常量替代字面量；依赖不可用时重放的 503 优先级与已有产物仍可 GET／download 可增加专门测试。实现与文档已明确该边界，不扩展本轮范围。
+
+Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完整套件、5 场景无替身 Store smoke、两位独立复核通过；单 worker／背压、总预算、取消／pin／原子发布保持，安全日志与 operator 指引已更新。无数据迁移／安装／部署；回滚撤回实现提交，不删除 audit.db、snapshots、exports 或浏览器资源。Windows／macOS、用户安排的 operator 真实 HTTP smoke 与发布不冒充完成。17 组 raw／JSON／九节中文汇总已检查章节顺序与配对，失败记录保留；Final Test Report／Run Summary MD=`generated`，Final Full Rerun=`passed`。不存在本轮未关闭的阻断发现。
+
 
 
 
@@ -331,8 +368,15 @@ Round 5 本地交付完成，整体任务仍 `in_progress`／`completed_at=null`
 | Round 5 FailurePrivacyReview：只读隐私审计 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 11 | 33 |
 | Round 5 FailureContractReview：只读契约／覆盖复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init `kimi-code/k3:high`） | 33 | 40 |
 | Session title generation（Round 5，pid 269214） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
+| Round 6（operator run7）主会话：merge、#154 接线、验证与记录 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（本会话 runtime metadata；thinking 按用户指定 high） | unknown | unknown |
+| Round 6 RoundSixContractReview：只读契约／覆盖复核 | agent `reviewer`（未覆盖 model），effort:"med" | kimi-code/k3（子代理 runtime 自报；thinking 待 operator jsonl 核对） | unknown | unknown |
+| Round 6 RoundSixSafetyReview：只读生命周期／隐私复核 | agent `security-reviewer`（未覆盖 model），effort:"hi" | openai-codex/gpt-6-astra（子代理 runtime 自报；thinking 待 operator jsonl 核对） | unknown | unknown |
 
-子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（例如 reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；slow 角色配置为 `kimi-code/k3:max`，Round 2／3 出现 high 的原因未能从日志确认，如实记录）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填。
+子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；原因见下述 effort 解释）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填，Round 6 按用户提供的 spawn 事实补充原因。
+
+同为 reviewer agent（@slow = kimi-code/k3）；thinking 随 main 每次 spawn 传的 effort 变化：Run 1b RendererOutputReview 与 Round 4 RoundFourContractReview 传 effort:"hi" → max；Round 2 RoundTwoScopeReview、Round 5 FailureContractReview 传 effort:"med"，Round 3 RoundThreeScopeReview 未传 effort → high。由 omp main 自行选择 effort，非配置或角色差异。
+
+Round 6（operator run7）assistant messages／工具调用计数全部保持 `unknown`，由 operator 从 jsonl 回填；未推算或冒充实际 token／调用数。
 
 Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。Round 4／5 计数由 operator 于 2026-10-22 14:35 +08:00 从 session jsonl 核实（assistant messages／toolCall blocks），全部 `resolvedModelIsFallback: false`，无 advisor；主会话 thinking 取自 `thinking_level_change`。
 
@@ -356,6 +400,9 @@ Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview
 14. Round 4 记录收口：`docs(task): record R2.1b HTTP wiring evidence`（本 task 与 plan；最终 tip 在 `http/final-tip.json` 与 stdout，避免自身哈希循环）。
 15. Round 5 修复提交：`fix(runtime): keep fixed export failure error until #154`；两个生产文件、integration 回归、既有 BDD 场景与 operator 文档。
 16. Round 5 记录提交：`docs(task): record R2.1b fixed failure error rule`；本 task 的规则、状态事件、证据、模型 unknown 计数和两项 open gap。实际提交与最终 tip 在 `http/r5/final-tip.json` 及最终交付，避免自身哈希循环。
+17. `8ac91c6a1853550a2c94f4e4d406d764514570f2` — Round 6 真实 merge：纳入 main 的 #154；仅手工解决两份指定 docs 冲突，不 rebase。
+18. `18de842a5f4ece38808054ae791c5bd491f323d6` — `feat(runtime): wire #154 renderer-unavailable 503 and failure codes`；两个生产模块、三份测试、renderer spec 与安装使用文档，共 7 文件。
+19. Round 6 记录提交：`docs(task): record R2.1b #154 wiring and reviewer effort`；仅本 task。最终 SHA／tip 与被测文件内容等价绑定见 ignored `reports/r6/final-tip.json` 及最终交付，不自引用本提交哈希。
 
 主要修改：新增 `browser_renderer.py`、`renderer_windows.py`；扩展 `export_render.py`、`export_store.py`、`serve.py`；新增三个 renderer 测试文件并删除旧 pdf 拒绝断言；复用场景、ADR 0004、安装文档、两份依赖清单；更新本 task 与 plan 的后续项 A 决定。
 
@@ -365,7 +412,7 @@ Round 3 提交前已核对仅上述 7 个允许文件变化、index 初始为空
 
 Round 4 仅上述 **11 个允许文件**变化，提交前 index 为空；四个提交均使用显式路径 `git add`，不包含 `.omp-r12b-addendum.txt`／`ai/tasks/codex-verify/`，不含 OpenAPI／Panel manifest／CSV schema／PRD／ADR 0001–0003／#153 task。未 push、未开 PR、未评论、未 merge/rebase、未操作其他 worktree。
 
-`status` 保持 **in_progress**，`completed_at=null`：Round 4 已完成本地 Linux HTTP 接线与指定验收，仍 review pending；operator 提审／合并、R2.2 跨平台／完整 AC-51 和发布不冒充完成。原生/raw 与同 stem 中文汇总已生成，Final Full Rerun=`passed`（条件 skip 如上），rtk=`skipped-for-report`；工具诊断不是 CI。
+`status` 保持 **in_progress**，`completed_at=null`：Round 6 已完成 #154 本地接线与指定测试；整体仍待 operator 真实 HTTP smoke／提审／合并，R2.2 跨平台／完整 AC-51 和发布不冒充完成。原生/raw 与同 stem 中文汇总已生成，Final Full Rerun=`passed`（条件 skip 如上），rtk=`skipped-for-report`；工具诊断不是 CI。
 
 恢复／回滚：无数据迁移；撤回代码不删除 audit.db、snapshots、exports 或浏览器下载文件。在途作业不跨重启恢复；浏览器依赖不自动安装／下载；配额仍待 R2.2。应用级隔离显式 `chromium_sandbox=False`，不承诺 OS sandbox 或抵御浏览器漏洞。TaskStore 历史限制未绕过，不声称自动恢复成功。
 
@@ -373,9 +420,9 @@ Round 4 仅上述 **11 个允许文件**变化，提交前 index 为空；四个
 
 格式、受理前尺寸限制与 202 降级通知已由 [PR #153](https://github.com/KunoLu/640-skills/pull/153) 合并解决：squash `ce80ca2`，经 merge `376ea0c` 纳入本分支。Round 4 仅消费该契约，不修改 OpenAPI／#153 task。`CreateExportRequest.format` 为 html/csv/jpeg/pdf；尺寸 422 为无 Envelope 的封闭三字段对象，返回生效 caps；202 的 `data` 仍只有 export_id，降级告警在 `meta.warnings`。capabilities 自由 Json 响应不需 schema 修改。
 
-仅保留以下两个 **open CONTRACT-CHANGE-NEEDED**：
+以下两项 **CONTRACT-CHANGE-NEEDED 均已 satisfied**：由 [PR #154](https://github.com/KunoLu/640-skills/pull/154)（`d46d4ad`）定义，经 merge `8ac91c6a1853550a2c94f4e4d406d764514570f2` 纳入，并在 Round 6 实现：
 
-1. **createExport 时 renderer 不可用**（缺 Playwright、专用 browser 或必需 CJK 字体）。JPEG 同步预检抛 `RendererError(RENDERER_UNAVAILABLE)`；仍返回 HTTP **500**、body 精确 `Internal Server Error`，未建立作业、无输出，pin 在 finally 释放。Round 5 仅显式返回同一通用响应并以安全码 warning 替代框架 traceback，不改为 400 或新增协议。PDF 无图像预检，仍返回 **202**，之后 getExport HTTP **200**、`status=failed`、`error="export failed"`。日志可含 `RENDERER_UNAVAILABLE`，API／manifest 不可含诊断。是否采用现有 400 BadRequest（“export format”）仍待契约决定。
-2. **202 后失败状态协议（#154 尚待合并）**。按 Reviewy/Lord **2026-10-22 13:38 +08:00** 规则，所有失败作业（包括 unavailable、timeout、crash、作业时 EXPORT_IMAGE_SIZE_LIMIT 与普通异常）的 getExport HTTP **200** Envelope 只暴露 `status=failed`、`error="export failed"`，与 R2.1a 一致；任何其他 API 字段／manifest 均不携带诊断。安全码仅写 server warning，不记录异常原文、stderr、traceback、路径或凭据。downloadExport 保持 **409** `{"detail":"export is not ready"}`，不发布 artifact／manifest、不伪造 ready；生成时尺寸不安全不能事后改称 createExport 422。独立 [contract PR #154](https://github.com/KunoLu/640-skills/pull/154) 合并前不新增字段／状态码；#153 的受理前 422 与 202 warning 保持不变。
+1. **createExport 时 renderer 不可用 — satisfied / implemented in Round 6**。JPEG／PDF 共用 capabilities 检查／原因，在 pin／预检／作业前返回 HTTP **503**，封闭 body 精确 `{"detail":"EXPORT_RENDERER_UNAVAILABLE"}`，无 job、export_id、文件、pin 或 manifest。JPEG 无法预检时 503 优先；预检期间依赖消失同样 503 并释放 pin。HTML／CSV 不返回该 503；422 尺寸 caps 与 202 warning 不变。
+2. **202 后失败状态协议 — satisfied / implemented in Round 6**。四格式均适用：renderer timeout → **EXPORT_RENDER_TIMEOUT**；崩溃、受理后不可用、作业时尺寸超限、发布失败及普通异常 → **EXPORT_RENDER_FAILED**。getExport 保持 HTTP200 Envelope，queued／generating／ready／cancelled 的 error=null，ready 持久 manifest 同样 null。内部诊断仅入安全 server warning，异常原文／stderr／路径／凭据不公开。downloadExport 仍 **409**，失败不发布 artifact／manifest。**13:38 的 `"export failed"` 固定字符串规则已被 #154 取代**，此前轮次记录仅为历史。
 
 不包含磁盘上限协议、后续项 B/C、跨平台或完整 AC-51；这些仍按计划单独交付。
