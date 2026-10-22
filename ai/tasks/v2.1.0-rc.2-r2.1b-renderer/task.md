@@ -48,7 +48,7 @@ completed_at: null
 - 未完整调用 grill-with-docs：用户范围、锁定决定与冻结契约边界明确，不重开需求。
 - 后续项 A 已决定（用户 2026-10-22 11:13 +08:00）：保持 #151 行为，仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。四格式共用同一过滤管线，不新增 `withheld` 值，不为 A 开 contract PR。保留 AC-51 四格式事件明细屏蔽一致性测试作为该决定的回归保护；AC-51 完整验收仍在 R2.2，不宣称本轮通过 AC-51。
 - 后续项 B 仅在 F 回填 `install-and-use.md`。后续项 C 根据用户约 11:15 授权及 11:19 放置修订，与计划第 4 项 PRD §10.4 磁盘上限补充同属单独 PRD docs PR；明确两种 event 明细屏蔽条件及派生行不受影响，与 B 措辞一致。本轮不改 PRD，也不提前交付 B。
-- 独立 JPEG/PDF contract PR #153（https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开）。用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成。范围：`CreateExportRequest.format` 加 `jpeg`／`pdf`；仅 createExport 预接受 422 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含第 4 项磁盘上限错误码，后续项 C 仍留在计划第 4 项。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线、不评论、不 merge。
+- 独立 JPEG/PDF contract PR #153（https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开）。**当时快照**：上述 tip／open 及本段执行边界保留为历史；#153 后于 **2026-10-22 13:06:35 +08:00** squash-merged 为 `ce80ca2`。用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成。范围：`CreateExportRequest.format` 加 `jpeg`／`pdf`；仅 createExport 预接受 422 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含第 4 项磁盘上限错误码，后续项 C 仍留在计划第 4 项。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线、不评论、不 merge。
 - 配额决定仅登记在 plan，R2.2 才实现。
 - 沿用 R2.1a 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败、不改 active/ignore；本文件是用户明确要求的共享交付，不声称 helper lifecycle 或自动恢复成功。
 - Round 4：#153 已合并为 `ce80ca2` 并经 `376ea0c` merge 纳入；前述 Round 1–3 的 open／HTTP 冻结描述是历史证据。本轮按用户缩小范围接线正常路径，两个尚未定义的失败协议仅登记于文末，不自行改映射。
@@ -344,15 +344,15 @@ Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完�
 | Run 1b 主会话：实现、验证、交付；session 01a161a4-776d-75bb-aef2-39a6e00bc50f | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 130 | 218 |
 | Run 1b BrowserImplementation：renderer 实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 64 | 124 |
 | Run 1b RendererIntegration：库／HTTP／过滤一致性实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 63 | 139 |
-| Run 1b RendererSecurityReview：安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 28 | 82 |
+| Run 1b RendererSecurityReview：安全复核 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 28 | 82 |
 | Run 1b RendererOutputReview：输出／集成复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:max`） | 62 | 78 |
 | Round 2 主会话：决定回填、范围修正、预检通知与验证；session 01a161d9-7264-725e-9d47-caeaf21ccfd9 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 51 | 112 |
-| Round 2 RoundTwoSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 12 | 40 |
+| Round 2 RoundTwoSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 12 | 40 |
 | Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | 42 | 47 |
 | Round 3 主会话；session 01a161ea-1974-77c4-9051-f6209e7b6283 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 55 | 104 |
 | Round 3 RoundThreeDocs：plan／task 文档更新 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:medium`） | 12 | 25 |
 | Round 3 RoundThreeTests：预检／caps／kana 回归实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 41 | 79 |
-| Round 3 RoundThreeSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 15 | 55 |
+| Round 3 RoundThreeSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 15 | 55 |
 | Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | 17 | 35 |
 | Session title generation（Run 1，omp log pid 23357） | omp `tiny`／title-generator | cursor/composer-2.5 | 4 requests | 0 |
 | Session title generation（Run 1b，pid 36250） | omp title-generator | cursor/composer-2.5 | 6 requests | 0 |
@@ -361,20 +361,31 @@ Round 6 Release Readiness=`ready`（仅授权 Linux 本地交付）：指定完�
 | Round 4 主会话：HTTP 接线与本地验证；session 01a16205-0866-7749-8956-0c353f38b14b | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking_level_change `high`） | 105 | 172 |
 | Round 4 PreparedRenderer：renderer／store 预检冻结实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init `xai-oauth/grok-4.7:xhigh`） | 57 | 99 |
 | Round 4 HttpRendererTests：HTTP 测试实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init `xai-oauth/grok-4.7:xhigh`） | 52 | 99 |
-| Round 4 RoundFourSafety：安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 20 | 51 |
+| Round 4 RoundFourSafety：安全复核 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 20 | 51 |
 | Round 4 RoundFourContractReview：契约复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init `kimi-code/k3:max`） | 68 | 76 |
 | Session title generation（Round 4，pid 190550） | omp title-generator | cursor/composer-2.5 ×6；kimi-code/k3-256k ×2 | 8 requests | 0 |
 | Round 5 主会话：固定失败 error、审计、验证与记录；session 01a16238-6c99-74da-873a-30f8569cfa47 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking_level_change `high`） | 29 | 85 |
-| Round 5 FailurePrivacyReview：只读隐私审计 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 11 | 33 |
+| Round 5 FailurePrivacyReview：只读隐私审计 | agent `security-reviewer`（未钉 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 11 | 33 |
 | Round 5 FailureContractReview：只读契约／覆盖复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init `kimi-code/k3:high`） | 33 | 40 |
 | Session title generation（Round 5，pid 269214） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
 | Round 6（operator run7）主会话：merge、#154 接线、验证与记录 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（本会话 runtime metadata；thinking 按用户指定 high） | unknown | unknown |
 | Round 6 RoundSixContractReview：只读契约／覆盖复核 | agent `reviewer`（未覆盖 model），effort:"med" | kimi-code/k3（子代理 runtime 自报；thinking 待 operator jsonl 核对） | unknown | unknown |
-| Round 6 RoundSixSafetyReview：只读生命周期／隐私复核 | agent `security-reviewer`（未覆盖 model），effort:"hi" | openai-codex/gpt-6-astra（子代理 runtime 自报；thinking 待 operator jsonl 核对） | unknown | unknown |
+| Round 6 RoundSixSafetyReview：只读生命周期／隐私复核 | agent `security-reviewer`（未覆盖 model；main spawn effort:"hi" → thinking max） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`；thinking_level_change `max`） | unknown | unknown |
 
 子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；原因见下述 effort 解释）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填，Round 6 按用户提供的 spawn 事实补充原因。
 
 同为 reviewer agent（@slow = kimi-code/k3）；thinking 随 main 每次 spawn 传的 effort 变化：Run 1b RendererOutputReview 与 Round 4 RoundFourContractReview 传 effort:"hi" → max；Round 2 RoundTwoScopeReview、Round 5 FailureContractReview 传 effort:"med"，Round 3 RoundThreeScopeReview 未传 effort → high。由 omp main 自行选择 effort，非配置或角色差异。
+
+Security-reviewer thinking 亦随 main 每次 spawn 的 effort，而非沿用主会话 thinking：以下六次父会话 `task` 调用均明确传 `effort:"hi"`、未传 `model` override；子会话 `thinking_level_change` 均为 `max`，`session_init.resolvedModel` 均为 `openai-codex/gpt-6-astra:max`。父会话各自第 4 行的 `thinking_level_change` 均为 `high`，不能把子会话 max 写成「继承主会话」。本次只读核对的证据根为 `~/.omp/agent/sessions/--workspace-640-skills-r2.1b--/`：
+
+| 轮次／security reviewer | 父 session 文件 stem（`.jsonl` 的 spawn 行） | spawn effort | 子 session 文件（在同 stem 目录内） | resolved thinking 证据 |
+|---|---|---|---|---|
+| Run 1b RendererSecurityReview | `2026-10-22T03-25-30-861Z_01a161a4-776d-75bb-aef2-39a6e00bc50f`：272 | `hi` | `RendererSecurityReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
+| Round 2 RoundTwoSafetyReview | `2026-10-22T04-23-22-980Z_01a161d9-7264-725e-9d47-caeaf21ccfd9`：157 | `hi` | `RoundTwoSafetyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
+| Round 3 RoundThreeSafetyReview | `2026-10-22T04-41-34-324Z_01a161ea-1974-77c4-9051-f6209e7b6283`：155 | `hi` | `RoundThreeSafetyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
+| Round 4 RoundFourSafety | `2026-10-22T05-10-59-430Z_01a16205-0866-7749-8956-0c353f38b14b`：281 | `hi` | `RoundFourSafety.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
+| Round 5 FailurePrivacyReview | `2026-10-22T06-07-07-417Z_01a16238-6c99-74da-873a-30f8569cfa47`：109 | `hi` | `FailurePrivacyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
+| Round 6 RoundSixSafetyReview | `2026-10-22T06-36-23-370Z_01a16253-37ca-7535-b26a-cc86989790e0`：171 | `hi` | `RoundSixSafetyReview.jsonl` | 第 4 行 thinking=`max`；第 6 行 resolvedModel=`openai-codex/gpt-6-astra:max` |
 
 Round 6（operator run7）assistant messages／工具调用计数全部保持 `unknown`，由 operator 从 jsonl 回填；未推算或冒充实际 token／调用数。
 
@@ -399,7 +410,7 @@ Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview
 13. `a0e97e4` — `docs(runtime): document HTTP jpeg/pdf exports`（仅 renderer 相关 operator 文档）。
 14. Round 4 记录收口：`docs(task): record R2.1b HTTP wiring evidence`（本 task 与 plan；最终 tip 在 `http/final-tip.json` 与 stdout，避免自身哈希循环）。
 15. Round 5 修复提交：`fix(runtime): keep fixed export failure error until #154`；两个生产文件、integration 回归、既有 BDD 场景与 operator 文档。
-16. Round 5 记录提交：`docs(task): record R2.1b fixed failure error rule`；本 task 的规则、状态事件、证据、模型 unknown 计数和两项 open gap。实际提交与最终 tip 在 `http/r5/final-tip.json` 及最终交付，避免自身哈希循环。
+16. Round 5 记录提交：`docs(task): record R2.1b fixed failure error rule`；实际提交与最终 tip 在 `http/r5/final-tip.json` 及最终交付，避免自身哈希循环。
 17. `8ac91c6a1853550a2c94f4e4d406d764514570f2` — Round 6 真实 merge：纳入 main 的 #154；仅手工解决两份指定 docs 冲突，不 rebase。
 18. `18de842a5f4ece38808054ae791c5bd491f323d6` — `feat(runtime): wire #154 renderer-unavailable 503 and failure codes`；两个生产模块、三份测试、renderer spec 与安装使用文档，共 7 文件。
 19. Round 6 记录提交：`docs(task): record R2.1b #154 wiring and reviewer effort`；仅本 task。最终 SHA／tip 与被测文件内容等价绑定见 ignored `reports/r6/final-tip.json` 及最终交付，不自引用本提交哈希。
