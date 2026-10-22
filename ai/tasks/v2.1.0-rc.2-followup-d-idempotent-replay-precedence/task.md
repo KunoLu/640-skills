@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.2-followup-d-idempotent-replay-precedence
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict、CONTRACT-ONLY；主会话唯一 writer／验证 controller；恰好三个本地 commit，仅显式 git add；不 push／PR／评论／merge／rebase／amend，不改其他 worktree 或全局配置，不暂存禁止路径或 reports。
+mode_note: 用户明确 strict、mode_source user；主会话唯一 writer／验证 controller。原批次恰好三个本地 commit；本修正批次仅改 Follow-up D 与磁盘上限两个 task.md，恰好追加一个本地 commit，仅显式 git add；不 push／PR／评论／merge／rebase／amend，不改其他 worktree 或全局配置，不暂存禁止路径或 reports。
 status: done
 branch: contract/v2.1.0-rc.2-followup-d-idempotent-replay-precedence
 created_at: '2026-10-22T20:29:27+08:00'
-updated_at: '2026-10-22T20:44:29+08:00'
+updated_at: '2026-10-22T20:48:29+08:00'
 completed_at: '2026-10-22T20:44:29+08:00'
 ---
 
@@ -15,9 +15,11 @@ completed_at: '2026-10-22T20:44:29+08:00'
 
 ## 范围与验收
 
-用户决定由 Lord 转达，收到时间为 2026-10-22 约 20:24 +08:00：「幂等重放放在渲染器检查之前」。入口 HEAD／origin/main 为 `82d42a20a6dc757356173535148fdcc7c0b9024d`（#158）；工作根 `/workspace/640-skills-fud`。仅五条授权路径，三个本地提交：plan／磁盘上限 task closeout；OpenAPI／golden tests；本记录。不改 task index、其他 task、PRD、ADR、runtime 或安装文档。未完整调用 grill-with-docs：用户决定、PRD §9.6 与验收 seam 明确，无待澄清领域边界。
+用户实际规则原文为「只有新请求才依次检查 503、404、410」；Lord 于 2026-10-22 约 20:24 +08:00 较早转述为「幂等重放放在渲染器检查之前」。用户规则没有点名 507 或 422，不视为对这两个优先级的批准。原批次入口 HEAD／origin/main 为 `82d42a20a6dc757356173535148fdcc7c0b9024d`（#158）；工作根 `/workspace/640-skills-fud`。原批次仅五条授权路径、三个本地提交：plan／磁盘上限 task closeout；OpenAPI／golden tests；本记录。本修正批次入口 `0fbdd01`，仅授权两个 task.md、追加一个本地提交，不改 task index、plan、OpenAPI、tests、PRD、ADR、runtime 或安装文档。未完整调用 grill-with-docs：本批是用户明确指定的记录纠偏；未决定值保持待用户确认，不补作领域决定。
 
-只定义 createExport 的契约，不实现 HTTP／Store 顺序调整。沿用 OpenApiDraftTests／Draft202012Validator、内联 golden body 与既有 vendor extension 风格，无新依赖。访问检查 401／403 与识别重放所需的 400 校验（JSON content type、必需 Idempotency-Key、合法 CreateExportRequest）仍在前；幂等记录保留期间，同 key、同 canonical request body 返回原接受结果，不是新建。不规定非重放准入检查的相对顺序，不改同 key 不同 payload 行为，不新增 409。
+原批次只定义 createExport 的契约，不实现 HTTP／Store 顺序调整。沿用 OpenApiDraftTests／Draft202012Validator、内联 golden body 与既有 vendor extension 风格，无新依赖。访问检查 401／403 与识别重放所需的 400 校验（JSON content type、必需 Idempotency-Key、合法 CreateExportRequest）仍在前；幂等记录保留期间，同 key、同 canonical request body 返回原接受结果，不是新建。当前契约只对错误码相对重放分类，没有重定义非重放准入检查的相对顺序；用户原文的「依次」503→404→410 是否需要显式固定，列入下方待确认项。不改同 key 不同 payload 行为，不新增 409。
+
+以下保留原批次场景作为现有契约／测试的记录；其中 replay-before-507 与 replay-before-422 是**待用户确认的提议值（未决定）**，不是用户已批准的验收值。
 
 ```gherkin
 Scenario: renderer 移除后的重放仍返回原接受结果
@@ -59,9 +61,20 @@ Scenario: 非重放请求仍执行原准入检查
 ### Proposed values for user decision
 
 1. **extension 名称与形状**：采用用户建议的 `x-sbtd-idempotent-replay`，`response: "202"`、`evaluated_after: ["400", "401", "403"]`、`precedes: ["404", "410", "422", "503", "507"]`。这些数组是相对重放的分类，不是各自内部排序；复用既有 x-sbtd-* 风格，无新抽象。
-2. **优先于 507／422 及 503／404／410**：本次明确验收要求覆盖全部准入码；用户约 20:24 的简短决定只点名 renderer，plan 也未规定全部准入顺序。按本次授权实现契约，不把简短决定扩写为未记录的逐项批准。
+2. **重放优先于 507 `DISK_QUOTA_EXCEEDED`：待用户确认的提议值（未决定）**。Reviewy、Lord、CodeX、Researchy 房间共识（2026-10-22 约 20:36 +08:00 转达）采纳的新契约提议值：重放不创建作业／文件、不使用新增配额，所以提议置于 507 之前。#158 明确未重定义重放／已有 ID 复用的优先级；不是沿袭 #158 的既定顺序，也不是用户已决定。
 3. **createExport-only**：不改变 createReportSnapshot 已有 ID 复用相对 507 的未定义状态；不扩展其他操作。
 4. **同 key 不同 payload**：PRD §9.6 写 409，runtime 的 `_existing_idempotent` 抛 ValueError，经 handler 映射 400；createExport 未声明 409。本次不改变该行为或补码，保留差异供独立决定。
+5. **重放优先于 422：待用户确认的提议值（未决定）**。用户原文只点名 503／404／410；保留原接受结果、不重复 JPEG preflight 的 422 放置是提议，不由原文自动推导为批准。
+6. **新请求 503→404→410 的相互顺序：待用户确认的提议值（未决定）**。用户原文明确说「依次」；当前 extension 数组只是各码相对重放的分类，并未固定非重放检查之间的顺序。当前 runtime 已先检查 503，再进入 Store 的 404／410 检查；是否在契约中显式固定此顺序，须用户决定，本批不修改契约或 runtime。
+
+### 决定与依据边界
+
+- **用户已决定**：仅原文「只有新请求才依次检查 503、404、410」；较早 Lord 转述不是扩大决定范围的依据。
+- **房间共识提议，不是用户决定**：replay-before-507 与 replay-before-422 均为**待用户确认的提议值（未决定）**。原批次 OpenAPI／golden tests 已写入这两个放置值，不使其自动成为已批准决定；本批只纠正记录，留待用户确认。
+- 已读 [PRD v0.2 §9.6](../../../docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md#section-9)（`docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:845`）：「同 key 同 payload 返回同结果；同 key 不同 payload 返回 409。导出重试不得产生多个无法追踪的文件。」
+- 已读 PRD §10.4（`docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:908`）：清理后仍超限则「拒绝新建」，配额拒绝针对新建。
+- 已读 [ADR 0003 §4 step 4](../../../docs/adr/0003-v2.1.0-rc.2-r2.0c-snapshot-persistence.md#4-清理授权边界)（`docs/adr/0003-v2.1.0-rc.2-r2.0c-snapshot-persistence.md:52`）：「仅通过上述准入后才开始本次新建／接受新导出作业」；「已有 ID 复用／幂等回放不是新建，不在此重定义其契约优先级」。
+- **证据限度**：这些仅间接支持「重放不是新建、准入针对新建」。PRD 与 ADR 均未明确排列 replay 与 507 的先后；未找到显式依据。不能把房间提议写成 PRD／ADR 已决定的优先级。
 
 已读 R2.1b task「后续项 D」（Reviewy 2026-10-22，PR #156 引用）、PRD §9.6、ADR 0003 §4 step 4，以及当前四个 response 描述。`serve.py:create_export` 在 Store 调用前检查 renderer，因此仍会先返回 503；`ExportStore.create` 内先查幂等再 pin／preflight，`_existing_idempotent` 可返回已清扫导出的旧 ID。`sbtd-runtime/docs/install-and-use.md:189` 明确写「JPEG／PDF createExport 的依赖检查先于幂等重放」，并说明已清理告警 metadata 不额外保留；这与新契约的优先级及原告警保留要求不一致。已知 contract-ahead-of-implementation drift 归 R2.2，文档由 R2.2／F 对齐，本次按授权不编辑。
 
@@ -77,6 +90,8 @@ Scenario: 非重放请求仍执行原准入检查
 | TDD／gherkin-bdd／ponytail | 消费者契约／before-dev、check | confirmed；基线红灯、最终 golden 绿灯、独立 schema 消费者 smoke；中文场景／英文关键词，无新依赖或抽象。Ponytail Review：无需删减，两个测试分别保护分类完备性与接受响应兼容性。 |
 | 独立 review／可读性 | 公共契约／check | correct；ReplayContractReview、ReplayEvidenceReview 均无 findings；两位只读，不运行测试／lint／build／formatter；主会话唯一 writer／controller。 |
 | project-validation | 用户指定两条 suite／check | 完成指定 golden／runtime suite、消费者 smoke 与格式检查；不运行根 native CI。既有 import I001 不重跑确认、不修范围外 import。 |
+
+本修正批次 Gate 适用性：仅纠正两份任务记录，不改变契约、生产代码、schema 或运行行为；DDD／DDIA／legacy／refactoring／release gates、TDD 与运行时 BDD not-needed，不重用原批次通过状态冒充本批执行。纠偏依据是本次用户转达的四方共识；以 Markdown／frontmatter 文档消费者诊断、历史事件保留核对及 Git 范围／空白检查验证，不生成报告或改写既有测试证据。
 
 ## 验证证据
 
@@ -128,6 +143,8 @@ Scenario: 非重放请求仍执行原准入检查
 
 前两次均显式 `git add <paths>`，`git diff --check`／`git diff --cached --check` 退出 0；第三次同样只暂存本 task。最终 log／stat／status 与五路径集合由提交后回执给出，不额外修改 plan 的 in_progress（本地完成不等于契约 PR 已合并）。
 
+本修正批次仅追加 `docs(task): mark follow-up D 507/422 placement as proposed; finalize #158 reviewer counts`；前述三个提交不 amend／rebase。两个 task 的历史 branch／completed_at 保持不变；本 task 仅更新 updated_at 并追加一条记录纠偏事件，#158 只修正用户明确授权的 closeout 行及最终计数说明。沿用 edit 保存共享记录的既有限制，不调用 TaskStore 或宣称生命周期／自动恢复成功。
+
 ## 模型使用
 
 | agent/session | provider/model | thinkingLevel (from thinking_level_change) | assistant messages / toolCall blocks | purpose | resolvedModelIsFallback | title-generation count | job-widget entries (unknown when not recorded) |
@@ -135,10 +152,13 @@ Scenario: 非重放请求仍执行原准入检查
 | 主会话／01a16395-ab3a-73c1-9aa1-a67ba48277bd | openai-codex/gpt-6-astra | high | 33 / 65（提交前 snapshot） | 唯一 writer、验证 controller | false | 未记录 / unknown | 未记录 / unknown |
 | ReplayContractReview／ReplayContractReview.jsonl | kimi-code/k3 | max | 30 / 47（提交前 snapshot） | 只读契约语义／runtime 漂移复核 | false | 未记录 / unknown | 未记录 / unknown |
 | ReplayEvidenceReview／ReplayEvidenceReview.jsonl | kimi-code/k3 | max | 30 / 42（提交前 snapshot） | 只读 golden／closeout／验证证据复核 | false | 未记录 / unknown | 未记录 / unknown |
+| 本修正批次主会话／01a163a7-0d9a-753c-9f6f-d41cc0ff342f | openai-codex/gpt-6-astra | high | 4 / 15（本修正批次提交前 snapshot） | 两份 task 记录纠偏，唯一 writer／验证 controller | false | 未记录 / unknown | 未记录 / unknown |
 
 统计时间 `2026-10-22T20:44:29+08:00`；只读 Python `json.loads` 解析 `~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T12-28-35-514Z_01a16395-ab3a-73c1-9aa1-a67ba48277bd.jsonl` 第 1–170 行，同 stem 目录的 ReplayContractReview 第 1–134 行、ReplayEvidenceReview 第 1–124 行。统计 `type=message`／`role=assistant` 及其 `type=toolCall` blocks；均是第三次提交前快照，不含后续记录、提交和最终输出，不宣称主会话最终总数。
 
 模型来自 message／model_change，thinking 明确来自 `thinking_level_change`，不是按 effort 推断；resolvedModelIsFallback 均为 false，无 fallback，未改模型配置。每个 JSONL 有一个 title 条目，但不等于 title-generation request 次数，故 unknown；未记录 `type=model_usage`／同名 customType，不把缺记录写成 job-widget 0。
+
+本修正批次统计时间 `2026-10-22T20:48:29+08:00`；只读 Python `json.loads` 解析 `~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T12-47-34-810Z_01a163a7-0d9a-753c-9f6f-d41cc0ff342f.jsonl` 第 1–38 行，按相同口径得 4 assistant messages／15 toolCall blocks。会话 ID／cwd／本次用户请求匹配；model_change 为 openai-codex/gpt-6-astra、resolvedModelIsFallback=false，thinking_level_change 为 high。此为提交前快照，不含后续编辑、验证、提交及最终输出，不是最终计数；title-generation／job-widget 次数未记录，保持 unknown。
 
 ## 状态事件
 
@@ -147,3 +167,4 @@ Scenario: 非重放请求仍执行原准入检查
 | 2026-10-22T20:29:27+08:00 | planned | in-progress | 用户 strict、三提交与五路径授权；保存模式与验收场景 | HEAD／origin/main 82d42a20a6dc757356173535148fdcc7c0b9024d；路径安全；PRD／ADR／rc.2 先例；DDIA confirmed |
 | 2026-10-22T20:38:15+08:00 | in-progress | checking | 基线红灯、最终两 suite 与消费者 smoke 通过，进入独立审查与记录收口 | 8625ed6；golden 61 passed／0.319s；runtime 374／10 skipped／112.502s；格式修正后通过；最终内容哈希一致 |
 | 2026-10-22T20:44:29+08:00 | checking | done | 本地契约交付收口；前两个 commit 已完成，第三个只保存本记录；两位独立 review 无 findings，不等同提审／合并／R2.2 实现或发布 | ffd6baac3822c2b7324d8082af1c255b8c1de237；golden 61 passed／0.319s；runtime 374／10 skipped／112.502s；schema smoke／格式通过；被测内容与提交 blob 一致；主会话提交前 snapshot 33／65 |
+| 2026-10-22T20:48:29+08:00 | done | done | 记录纠偏：按用户转达的 Reviewy／Lord／CodeX／Researchy 房间共识，区分用户原规则与未决定的 507／422 提议，并修正 #158 reviewer 最终计数；仅追加一个本地 commit，不改变原完成时间或旧事件 | 入口 0fbdd01；用户原文「只有新请求才依次检查 503、404、410」；PRD :845／:908、ADR 0003 :52 仅间接支持，无 replay-vs-507 显式排序依据；507／422 均待用户确认；非重放相互顺序列为 review flag；#158 最终主会话 39／73、QuotaContractReview 18／22、QuotaEvidenceReview 21／34 采用 operator 已核实事实；本批主会话提交前 snapshot 4／15 |
