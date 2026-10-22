@@ -8,7 +8,7 @@ status: in_progress
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1b-renderer
 created_at: '2026-10-22T11:12:22+08:00'
-updated_at: '2026-10-22T12:17:20.268311+08:00'
+updated_at: '2026-10-22T12:35:13.972967+08:00'
 completed_at: null
 ---
 
@@ -31,12 +31,16 @@ completed_at: null
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-22T11:12:22+08:00 | planned | in_progress | 用户指定 strict；授权 worktree、分支与基线匹配；建立共享交付记录 | pwd、git status/branch/rev-parse；用户任务 |
+| 2026-10-22T11:13:00+08:00 | in_progress | in_progress | 补记用户后续项 A 决定：保持 #151 事件明细屏蔽行为；不新增 withheld，不为 A 开 contract PR | 用户 round-2 指令；保留四格式 event-detail 屏蔽一致性回归，AC-51 完整验收仍归 R2.2 |
 | 2026-10-22T12:17:20.268311+08:00 | in_progress | in_progress | Run 1b 从 ceb202e 续接；库级实现、真实 smoke、指定回归与两位独立复核完成。本地验收通过，保留 in_progress 等待 operator 提审／契约后续，不宣称已发布 | runtime-final-full 341／7 skip；renderer-final-full 39／1 Windows skip；contracts 69、OpenAPI 16；smoke-receipt.json；reviewer closure |
+| 2026-10-22T12:35:13.972967+08:00 | in_progress | in_progress | Round 2：A/B/C 与独立 contract PR 登记、模型回填、F 文档越界修正；补齐事前降级通知／配置跨进程传递和 capabilities 认证回归；本地指定回归与真实 smoke 通过 | round2/runtime-final-full 344／8 skip；renderer-final-full 42／1 Windows skip；contracts 69、OpenAPI 16；runtime-final/smoke-receipt.json |
 
 ## 决策
 
 - 未完整调用 grill-with-docs：用户范围、锁定决定与冻结契约边界明确，不重开需求。
-- 后续项 A 已决定（用户 2026-10-22 11:13 +08:00）：保持 #151 行为，仅屏蔽 exportable=false 或 classification != local-metadata 的 event-detail 行；派生 task/run/aggregate 不过滤。四格式共用同一过滤管线，不新增 withheld 值。后续项 B 安装使用说明按此范围回填。
+- 后续项 A 已决定（用户 2026-10-22 11:13 +08:00）：保持 #151 行为，仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。四格式共用同一过滤管线，不新增 `withheld` 值，不为 A 开 contract PR。保留 AC-51 四格式事件明细屏蔽一致性测试作为该决定的回归保护；AC-51 完整验收仍在 R2.2，不宣称本轮通过 AC-51。
+- 后续项 B 仅在 F 回填 `install-and-use.md`。后续项 C 根据用户约 11:15 授权及 11:19 放置修订，与计划第 4 项 PRD §10.4 磁盘上限补充同属单独 PRD docs PR；明确两种 event 明细屏蔽条件及派生行不受影响，与 B 措辞一致。本轮不改 PRD，也不提前交付 B。
+- 独立 JPEG/PDF contract PR：用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成；范围为 `CreateExportRequest.format` 加 `jpeg`／`pdf`、`EXPORT_IMAGE_SIZE_LIMIT` 及 golden tests，不含第 4 项磁盘上限错误码。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线。
 - 配额决定仅登记在 plan，R2.2 才实现。
 - 沿用 R2.1a 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败、不改 active/ignore；本文件是用户明确要求的共享交付，不声称 helper lifecycle 或自动恢复成功。
 
@@ -51,6 +55,8 @@ completed_at: null
 | book-release-readiness | runtime 子进程与可选安装变化，check 后 | ready（仅本次 Linux 库级验收）；指定套件与真实 smoke 通过，两位 reviewer 有效发现关闭；HTTP 开放／跨平台实测／完整 AC-51 仍按授权归后续 |
 
 测试 seam 为用户明确要求的 ExportStore、renderer 隔离／预检、capabilities 与真实 PDF/JPEG。主会话为唯一验证 controller。BDD 沿用 spec 中文正文＋英文关键词，不引入 Gherkin runner。Round 1 未提交场景已复用并修正 A 的状态。
+
+Round 2 before-dev：Legacy Change Safety=`characterized`，`round2/preflight-red` 两项真实失败分别证明低于 1440px 的降级未拒绝、父进程配置／事前告警未生效；保留完整输出、错误码、隔离清理与四格式过滤回归。Refactoring=`proceed / normal`，无需前置重构。DDIA=`confirmed`：配置随现有 request 进入独立 worker；降级通知／确认只在临时 job 目录，通知返回前不截图，取消／超时／处理器异常均沿用清理和不发布语义；不改数据格式、恢复或 HTTP。Python LSP status／references 均实际不可用，使用源码调用点补充。Round 2 release gate 见本轮验证收口，不以 Run 1b 的 ready 替代。
 
 ## 验证证据
 
@@ -105,6 +111,40 @@ Run 1 初始检查与 ignore 事实沿用当轮记录。Run 1b 首次只读核�
 | 取消／超时／崩溃清理 | `IsolationTests`；`WindowsJobTests`（本机 skip） |
 | 既有存储生命周期复用 | `RendererLibraryTests` 的 pin／digest／restart／sweep cases；真实 Store 重启 smoke |
 
+### Round 2：决定回填与剩余项收口
+
+本轮入口 HEAD=`6caf067`，工作区干净、分支匹配，strict 沿用用户选择；round-1 六个提交均已存在，不重做已完成的安装、字体下载、隔离实现或四格式屏蔽测试。
+
+修改范围：`plan.md`／本 task 登记 A 决定、B 在 F、C 与第 4 项 PRD docs PR 同行、独立 JPEG/PDF contract PR 和 merge-main 前置条件；安装文档输出安全 bullet 恢复基线，仅「两格式→四格式」并追加消费同一过滤 HTML 的中性说明。spec／ADR 0004 去掉 A 决策归因，决定只在 plan/task；既有行为场景与同源过滤仍保留。
+
+预检补齐：`MAX_SIDE_PX`／`MAX_PIXELS` 标为建议值、实测后冻结，并随作业传入 worker；2x→1x 要求完整内容、至少 1440 CSS px，重测后复检。截图前 worker 通知、父进程同步发出 `RuntimeWarning` 并重检取消／超时，再确认继续；manifest 保留同一 warning。处理器异常不确认，沿用进程清理／安全错误／不发布。没有改 `serve.py` 或任何 HTTP 错误映射。
+
+本轮报告统一在 **`/workspace/smoke-r2.1b/round2/`**，每个 stem 保留 native `.txt`、中文九节 `.md` 与命令／时间／源码身份 `.json`。均为 `developer-local / dirty / local-only`，不是 CI 或 PR-head；最终提交用 `validated-source-hashes.json` 对照实际文件字节作等价绑定。
+
+| 执行命令 | 结果 | 报告 stem |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | 344 tests：336 passed、8 skipped；60.480s | `runtime-final-full` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. SBTD_RENDERER_TEST_HOME=/workspace/smoke-r2.1b/home /workspace/venv-r2.1b/bin/python -B -m unittest test_browser_renderer test_renderer_integration test_renderer_windows -v` | 42 tests：41 passed、1 Windows skip；28.564s | `renderer-final-full` |
+| `python3 -B -m unittest tests.test_sbtd_runtime_r1_contracts tests.test_sbtd_runtime_r1_acceptance -v` | 69 passed；0.548s | `contracts-final-full` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts.OpenApiDraftTests -v` | 16 passed；0.060s | `openapi-final-full` |
+| `ruff format`、`ruff check`、`ruff format --check`：browser_renderer.py、test_browser_renderer.py、test_renderer_integration.py | 三文件全部通过；最终完整回归在格式化后运行 | `round2-ruff-format` |
+| `PYTHONPATH=sbtd-runtime:. /workspace/venv-r2.1b/bin/python -B /workspace/smoke-r2.1b/round2/smoke.py` | 真实追加 72 条中／日／英事件，经 EventStore→load_dataset→SnapshotStore→ExportStore；四格式 ready，摘要匹配；配置降级及超限失败均验证 | `round2-runtime-smoke-final` |
+| `pdffonts`、`pdftotext -layout`、`pdftoppm -f 1 -singlefile -png -r 60`，输入 `round2/runtime-final/report.pdf` | CJK 嵌入、三语可搜索；12 页；已查看新生成 page-1.png | `round2-pdffonts`、`round2-pdftotext`、`round2-pdf-preview` |
+
+系统套件 8 skips = 5 个需显式 browser home 的场景＋3 个 Windows 场景；venv 已执行前 5 项，Windows 原生证据仍归 R2.2。Dashboard 未修改，跳过其测试／构建；没有重装已验证依赖或运行无关全仓检查。rtk=`skipped-for-report`，native 保留真实输出。
+
+Smoke 产物在 `round2/runtime-final/`：`report.html`、`report.csv`、`report.jpg`、`report.pdf`、`downgraded.jpg`、`page-1.png`、`smoke-receipt.json`。默认 JPEG **2880×25494**，降级 **1440×12744**；2x／1x 字体布局舍入会改变高度，不把两者高度恰好二分当作契约。固定高度真实回归另证完整 **1440×31999**、32001 安全失败及宽内容不截断。通知记录时 job=`generating`、artifact 不存在；最终 manifest 有 warning。1x 超限 job=`failed`、error=`EXPORT_IMAGE_SIZE_LIMIT`、无产物／manifest 且 download 拒绝。原 round-1 route-abort 日志与浏览器体积证据保留，不冒充本轮重新测量；本轮真实隔离回归已再执行。
+
+失败记录保留：`preflight-red` 两个产品缺口；`preflight-green` 的 Host 测试误用 helper 会覆盖的 header（改用 `host` 参数后 `http-auth-green` 通过）；`round2-runtime-smoke` 的 throwaway 脚本误用异常名、`round2-runtime-smoke-green` 的不成立高度二分断言；`round2-ruff` 的 SIM117。脚本／断言修正后 smoke 与最终套件通过，无遗留产品失败。没有以降低预检标准修复 smoke。
+
+持久回归保留四格式同一 snapshot 屏蔽集合／计数、HTML／CSV／JPEG/PDF 源与真实 PDF 文本 omission；新增 capabilities 无认证 401、非法 Host／Origin 403，既有 JPEG/PDF POST 400 与 `http_available=false` 测试通过。预检新增低于标准宽度拒绝、配置跨 worker 生效、实际 screenshot 入口前告警、拒绝通知无截图与清理、成功 1x 完整输出。AC-51 完整验收未在本轮执行或宣称通过。
+
+独立安全复核 `RoundTwoSafetyReview`：`Findings: []`，覆盖通知顺序、配置传播、取消／超时／异常清理及 Store 发布边界；只读，未运行测试。其额外建议为给「通知处理器返回后取消／超时」补专门分支回归，非阻断发现；现有检查与生命周期回归保留。Ponytail Review：无新增公共 API、队列、依赖或第二存储路径，保留最小临时通知／确认以保证调用方在截图前收到告警，无可安全删除的控制步骤。Code Readability Review：生产逻辑限于单模块，预检与存储所有权未混合，测试在用户指定预检／HTTP／Store seam 验证行为。
+
+独立范围复核 `RoundTwoScopeReview`：`correct`，A/B/C 放置、HTTP 冻结、AC-51 边界、模型回填、安装 safety bullet 基线逐字比对均通过；唯一 P3 建议已采纳：CONTRACT-CHANGE-NEEDED 第 3 项改成待另行决策的信息项，不扩大 11:23 授权 PR 的范围。两位 reviewer 均只读，不充当验证 controller。
+
+Round 2 Release Readiness=`ready`（仅用户授权的 Linux 库级交付，不代表 HTTP／跨平台／发布就绪）：指定完整套件与真实 Store smoke 通过；单作业信号量、总预算、取消、处理器异常清理与不发布语义保留；降级可提前观察且 manifest 留据。配置／代码回滚无需迁移，不删除原始事件或产物；未安装／卸载全局依赖。BDD=`traceable`（既有中文场景＋英文关键词，renderer／integration unittest），Cross-repo context=`complete`，API Contract=`verified`（冻结 html/csv），Mock Strategy=`user-approved`；实际浏览器／库 smoke 不混称 HTTP 四格式 E2E。Final Full Rerun=`passed`；原生/raw 与同 stem 中文汇总已校验章节／配对；跨平台与完整 AC-51 按用户计划仍归 R2.2。
+
 ## 模型使用
 
 | 轮次／用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
@@ -112,13 +152,19 @@ Run 1 初始检查与 ignore 事实沿用当轮记录。Run 1b 首次只读核�
 | Run 1 主会话：计划首提交、只读设计；session 01a16197-919f-7482-b4ca-4d8cef45a0e5 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 15 | 52 |
 | Run 1 BrowserRenderer：只读研究，无写入 | omp task role | xai-oauth/grok-4.7 | 7 | 18 |
 | Run 1 RendererIntegrationTests：只读研究，无写入 | omp task role | xai-oauth/grok-4.7 | 5 | 16 |
-| Run 1b 主会话：续接实现、验证、交付 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（host 标识） | unknown | unknown |
-| Run 1b BrowserImplementation：renderer 与单元／真实浏览器测试 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | unknown | unknown |
-| Run 1b RendererIntegration：库／HTTP／过滤一致性测试 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | unknown | unknown |
-| Run 1b RendererSecurityReview：独立只读安全复核及修正闭环 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | unknown | unknown |
-| Run 1b RendererOutputReview：独立只读输出／集成／简化复核 | omp 配置 reviewer role | kimi-code/k3 | unknown | unknown |
+| Run 1b 主会话：实现、验证、交付；session 01a161a4-776d-75bb-aef2-39a6e00bc50f | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 130 | 218 |
+| Run 1b BrowserImplementation：renderer 实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 64 | 124 |
+| Run 1b RendererIntegration：库／HTTP／过滤一致性实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 63 | 139 |
+| Run 1b RendererSecurityReview：安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 28 | 82 |
+| Run 1b RendererOutputReview：输出／集成复核 | omp 配置 reviewer role | kimi-code/k3 | 62 | 78 |
+| Round 2 主会话：决定回填、范围修正、剩余项验证与交付 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | unknown | unknown |
+| Round 2 RoundTwoSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | unknown | unknown |
+| Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | unknown | unknown |
+| Session title generation | unknown | unknown | unknown | unknown |
 
-Run 1 计数与无 fallback 来自 operator 本轮 resume note；两子代理 resolvedModelIsFallback=false。本轮主会话 host 与子代理完成结果／model_change 元数据提供上述实际模型；没有把所有子代理写成 Grok。精确次数由 operator 按 session jsonl 回填，不推测；未知计数不表示零。主会话 session 为 `01a161a4-776d-75bb-aef2-39a6e00bc50f`。
+Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 计数待 operator 运行后回填，不推测；unknown 不表示零。
+
+Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview 已只读复核第 3 项修正并确认 P3 关闭，无进一步发现。其回执晚于首次 docs commit 返回，因此仅将该回执与实际模型并入同一未发布的本轮 docs commit；不改 round-1 历史。
 
 ## 提交与交付边界
 
@@ -127,7 +173,9 @@ Run 1 计数与无 fallback 来自 operator 本轮 resume note；两子代理 re
 3. `ca9478a` — `feat(runtime): add isolated JPEG and PDF library renderer`（含复用的场景文件）。
 4. `1987db4` — `test(runtime): cover renderer isolation and four-format consistency`。
 5. `30b7518` — `docs(runtime): document pinned optional renderer installation`。
-6. 随后的 task／plan 证据提交：最终完整 tip SHA 写入 `/workspace/smoke-r2.1b/final-tip.json` 及 stdout，避免本文件自引用自身提交哈希。
+6. `6caf067` — `docs(task): record R2.1b acceptance evidence and contract gaps`（Run 1b）。
+7. `12afbb4` — `fix(runtime): notify JPEG downgrade before capture`（Round 2 预检、测试与 renderer 文档）。
+8. Round 2 决定回填采用用户指定 `docs(r2.1b): record follow-up A decision (keep #151 exportable behavior)`。最终 tip 与源码内容绑定记录在 `/workspace/smoke-r2.1b/round2/final-tip.json` 及 stdout，避免本文件自引用自身哈希。
 
 主要修改：新增 `browser_renderer.py`、`renderer_windows.py`；扩展 `export_render.py`、`export_store.py`、`serve.py`；新增三个 renderer 测试文件并删除旧 pdf 拒绝断言；复用场景、ADR 0004、安装文档、两份依赖清单；更新本 task 与 plan 的后续项 A 决定。
 
@@ -143,7 +191,7 @@ Run 1 计数与无 fallback 来自 operator 本轮 resume note；两子代理 re
 
 1. `sbtd-runtime/contracts/openapi.yaml:777–799`，尤其 `:794–796`：`CreateExportRequest.format` 只有 `[html, csv]`。HTTP 开放必须由独立契约 PR 加入 `jpeg`／`pdf`，本实现不提前放行。
 2. 同文件 `:739–768` 的 response 定义及 `:757–758` BadRequest 只有描述，没有 `EXPORT_IMAGE_SIZE_LIMIT` 的错误码／错误体协议。PRD §13.5 要求 1x 仍超限可辨识失败；契约 PR 必须确定该错误在异步 failed 作业与／或创建响应中的位置、HTTP 状态和安全字段，不能只把通用 400 当作尺寸语义。
-3. 同一 response/schema 区没有 renderer 不可用的错误协议。需要确定缺 Playwright／专用 browser／必需字体的可辨识错误码及异步作业／创建失败语义；本轮仅库级安全错误与 capabilities 原因，不据此自行增加 HTTP 格式或错误契约。超时／渲染失败如要成为稳定客户端枚举，也应在同一契约 PR 明确。
+3. 信息项／待另行决策，**不属于 11:23 已授权 contract PR 的范围**：同一 response/schema 区没有 renderer 不可用的错误协议。缺 Playwright／专用 browser／必需字体，以及超时／渲染失败若要成为稳定客户端错误枚举，需另行确认协议与授权；本轮仅记录库级安全错误与 capabilities 原因，不自行扩展该 PR 或 HTTP 契约。
 4. `/api/v1/capabilities` `:71–84` 已是自由 Json/Envelope 响应；新增按格式的依赖可用性与 `http_available=false` 不需要本轮修改 schema。没有新增 `withheld` 值、过滤规则或 CSV schema。
 
 Operator 已于 2026-10-22 11:24 +08:00 指定：由他人完成已授权契约 PR；合并后将 main **merge（非 rebase）** 进入本分支，再接 HTTP JPEG/PDF。本轮不执行该 merge、不 push／开 PR／评论。

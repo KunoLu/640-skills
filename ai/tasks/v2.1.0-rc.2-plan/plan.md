@@ -18,10 +18,10 @@
 | R2.0b | 筛选、数据质量、页内详情 | P2 | done（PR #146 已 squash-merge；requested astra; actual k3/grok per session logs） | #146 | 2d147c98ce2874fa2621b95ff816e1781c02f93f | 2026-10-20T04:14:03+08:00 | ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md |
 | R2.0c | 临时 ReportSnapshot 落盘：24h 默认保留＋启动清扫过期＋崩溃一致性 | P3 | done（PR #147 已 squash-merge；Reviewy CLEAN on 2dbf7b1） | #147 | e9cb05b84e449fe4a7dde1b5523faf7478bc310e | 2026-10-20T15:03:24+08:00 | ai/tasks/v2.1.0-rc.2-r2.0c-snapshot-persistence/task.md |
 | R2.1a | 离线 HTML + 全量 CSV 导出（导出副本 `exports/` 下 24h） | P4 | done（PR #151 已 squash-merge；requested astra; implement 起于 openai-codex/gpt-6-astra:high，2026-10-20 21:19 起 fallback 到 xai-oauth/grok-4.7，后续轮次 kimi-code/k3:max，per session logs） | #151 | 8931c35ef1aa4a58d3675b6f8d1a8fead309ed90 | 2026-10-21T07:07:34+08:00 | ai/tasks/v2.1.0-rc.2-r2.1a-html-csv-export/task.md |
-| R2.1b | JPEG/PDF 独立 renderer（Playwright 可选 extra，`--only-shell`，精确钉版，renderer 环境含 fonts-noto-cjk） | P5 | in_progress（分支 feat/v2.1.0-rc.2-r2.1b-renderer；implement 模型 openai-codex/gpt-6-astra:high） | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md |
+| R2.1b | JPEG/PDF 独立 renderer（Playwright 可选 extra，`--only-shell`，精确钉版，renderer 环境含 fonts-noto-cjk）；开放 HTTP jpeg/pdf（待该 contract PR 合并后；届时 main 以 merge（非 rebase）方式并入 R2.1b 分支） | P5 | in_progress（分支 feat/v2.1.0-rc.2-r2.1b-renderer；implement 模型 openai-codex/gpt-6-astra:high） | — | — | — | ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md |
 | R2.2 | 跨平台 E2E（CI macOS/Windows runner + 用户 Mac 视觉／字体确认）、安全（Host/Origin、ticket、脱敏分层）、性能、导出对账 | P6 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
-| F | docs 回填 | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| F | docs 回填 + 后续项 B（`install-and-use.md` 写明事件明细屏蔽范围；不含后续项 C） | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
 
 ## 各行锁定决定与验收
 
@@ -59,6 +59,9 @@
 
 - 锁定决定：D3（`--only-shell` 安装到扩展自有目录、授权提示按实际模式显示体积）、D4（playwright 精确钉版）、D16（renderer 环境依赖清单含 fonts-noto-cjk 并钉版本）。
 - 验收：Playwright 为可选 extra，未安装时仅 JPEG/PDF 标不可用并说明原因；隔离按 §13.7（独立子进程、每作业临时 profile、路由层 abort 一切外联、单作业信号量），AC-58 出断网与隔离证据；PDF 中／日／英混合文字可显示（§13.6、AC-42）；导出前等待字体完成（§13.5）。
+- 范围：开放 HTTP jpeg/pdf（待该 contract PR 合并后；届时 main 以 merge（非 rebase）方式并入 R2.1b 分支）。当前仅库级渲染，HTTP 继续 400，不提前接线。
+- 独立 contract PR（用户 2026-10-22 11:23 +08:00 授权，11:24 指定由他人完成）：`CreateExportRequest.format` 增加 `jpeg`、`pdf`，增加 `EXPORT_IMAGE_SIZE_LIMIT` 错误码及 golden tests；不在本 PR 修改 OpenAPI，不包含磁盘上限错误码（仍归 10-21 计划第 4 项）。
+- AC-51 完整验收仍归 R2.2；R2.1b 仅保留四格式 event-detail 屏蔽集合／计数一致性测试，作为后续项 A 决定的回归保护，不宣称 AC-51 已通过。
 
 ### R2.2 — 跨平台 E2E、安全、性能、导出对账
 
@@ -74,6 +77,7 @@
 
 - 锁定决定：D10（E／F 阶段回填）；PRD 若升 v0.3 须用户届时另行授权。
 - 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；PRD 正文不在本任务范围内修改。
+- 后续项 B：F 阶段在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/聚合派生行不屏蔽。与第 4 项后续项 C 的 PRD 条款保持一致。本轮不提前回填；后续项 C 不归 F。
 
 ## 依赖顺序说明
 
@@ -84,14 +88,14 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 以下顺序于 2026-10-21 13:02 +08:00 定稿：
 
 1. R2.1b。
-2. 后续项 A 决策：本地导出是否遵守 `exportable`（整行屏蔽／回退到最后一个可导出状态／不处理）；若需新增 `withheld` 值另开 contract PR；必须在 R2.1b 提审前定。
+2. 后续项 A 决策已定 — 用户 2026-10-22 11:13 +08:00：保持 #151 行为（事件明细行按 `exportable=false`／`classification != local-metadata` 屏蔽；task/run/聚合派生行不屏蔽；不新增 `withheld` 值；不开 contract PR）。
 3. R2.1b 评审与合并。
-4. 磁盘上限的 PRD §10.4 补充 + ADR 0003 §4/§5 修订 + 新错误码 contract PR（附 golden 测试，错误体带已占用量与上限）。
+4. 磁盘上限的 PRD §10.4 补充 + 后续项 C（同一个独立的小 PRD docs PR，用户 10-22 授权）；ADR 0003 §4/§5 修订和磁盘上限新错误码 contract PR 分别独立（contract 附 golden 测试，错误体带已占用量与上限）。后续项 C：PRD 必须补充「本地导出拦截 event 明细（`exportable=false` 或 `classification ≠ local-metadata`），不影响 task/run/聚合派生行」，两种屏蔽条件均须明确；依据用户 2026-10-22 11:13 的 A 决定与约 11:15 +08:00 的授权。按 11:19 补充归本项而非 F，措辞与后续项 B 一致；独立于 R2.1b，本 PR 不改 PRD。
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
 6. E 预发布。
-7. F 文档 + 后续项 B（`install-and-use.md` 按 A 的结论写明 `exportable` 的作用范围）。
+7. F 文档 + 后续项 B：`install-and-use.md`（F 阶段）写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 的事件明细也屏蔽，task/run/聚合派生行不屏蔽；措辞与第 4 项后续项 C 一致。F 仅 docs + B，不含 PRD 后续项 C。
 
-定稿时 A、B 尚未确定。后续项 A 已由用户于 2026-10-22 11:13 +08:00 决定：保持 #151 行为——仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。JPEG/PDF 与 HTML/CSV 共用该过滤路径，不新增 `withheld` 值、不改契约；AC-51 完整验收仍归 R2.2。后续项 B 按此结论写明 `exportable` 的作用范围。
+后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR；这不取代独立的 JPEG/PDF HTTP 格式与图像尺寸错误码 contract PR。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
 
 ### 磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）
 
