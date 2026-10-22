@@ -3,19 +3,19 @@ schema_version: 1
 id: v2.1.0-rc.2-disk-cap-error-contract
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict、CONTRACT-ONLY；主会话唯一 writer／验证 controller；恰好三个本地 commit，仅显式 git add；不 push／PR／评论／merge／rebase／amend，不改其他 worktree 或全局配置，不暂存禁止路径或 reports。
+mode_note: 用户明确 strict、CONTRACT-ONLY；主会话唯一 writer／验证 controller；恰好三个本地 commit，仅显式 git add。当时本地 run 不自行 push／PR／评论／merge／rebase／amend；随后 operator push／开 PR #158 并 admin-squash-merge。不改其他 worktree 或全局配置，不暂存禁止路径或 reports。
 status: done
 branch: contract/v2.1.0-rc.2-item4-disk-cap-error-contract
 created_at: '2026-10-22T18:56:12+08:00'
-updated_at: '2026-10-22T19:10:57+08:00'
-completed_at: '2026-10-22T19:10:57+08:00'
+updated_at: '2026-10-22T20:23:39+08:00'
+completed_at: '2026-10-22T20:23:39+08:00'
 ---
 
 # rc.2 计划第 4 项：磁盘上限拒绝错误契约
 
 ## 范围与验收
 
-入口 HEAD／origin/main 为 `6c344d13ddf6b49882b87d52300b8d697e8aeec4`（#157）；工作根 `/workspace/640-skills-item4-errc`。用户授权五条路径、三个本地提交：先回填 plan／ADR task，再仅提交 OpenAPI／golden tests，最后提交本记录。task index 按 rc.2 惯例不改。未完整调用 grill-with-docs：PRD §10.4、ADR 0003 §4／§5 与用户验收边界明确，不重开需求。
+入口 HEAD／origin/main 为 `6c344d13ddf6b49882b87d52300b8d697e8aeec4`（#157）；工作根 `/workspace/640-skills-item4-errc`。用户授权五条路径、三个本地提交：先回填 plan／ADR task，再仅提交 OpenAPI／golden tests，最后提交本记录。task index 按 rc.2 惯例不改。当时本地 run 仅完成本地提交；随后 operator push／开 PR [#158](https://github.com/KunoLu/640-skills/pull/158)，已于 `2026-10-22T20:23:39+08:00` admin-squash-merge 为 `82d42a20a6dc757356173535148fdcc7c0b9024d`（mergedAt `2026-10-22T12:23:39Z`；git committer 时间 `2026-10-22T20:23:39+08:00`，一致）。未完整调用 grill-with-docs：PRD §10.4、ADR 0003 §4／§5 与用户验收边界明确，不重开需求。
 
 只定义同步拒绝契约，不实现清扫、计量、HTTP handler、库异常或 CLI。沿用 #152／#153／#154 的 response 引用与 OpenApiDraftTests／Draft202012Validator seam，不增加依赖或其他测试文件。
 
@@ -45,10 +45,12 @@ Scenario: 恰等配额不是拒绝条件
 
 ## 待定项／Review flags
 
-### Proposed values for user decision
+### 用户已确认（原 Proposed values for user decision）
+
+用户于 2026-10-22 20:23 +08:00 确认以下三项值，均不再是 proposed：
 
 1. **错误码字符串 `DISK_QUOTA_EXCEEDED`**：沿用既有 UPPER_SNAKE 与 `detail` const；因 snapshots/ 与 exports/ 共用，不用只表示导出的 `EXPORT_` 前缀；与 ADR 配置名 `SBTD_RUNTIME_DISK_QUOTA_BYTES` 的 quota 术语一致。
-2. **HTTP 507 Insufficient Storage**：按 [RFC 4918 §11.5](https://www.rfc-editor.org/rfc/rfc4918.html#section-11.5)，服务端无法存储完成请求所需表示；区别于既有 503 `EXPORT_RENDERER_UNAVAILABLE` 依赖不可用，避免混淆为 Retry-After 等待；413 针对请求载荷而非小型创建请求；422 `EXPORT_IMAGE_SIZE_LIMIT` 是请求特定输出缺陷；409 既用于幂等 payload／资源状态冲突，不如 507 明确表示共享存储配额。这是 proposed value，待用户决定，不宣称最终批准。
+2. **HTTP 507 Insufficient Storage（用户已确认）**：按 [RFC 4918 §11.5](https://www.rfc-editor.org/rfc/rfc4918.html#section-11.5)，服务端无法存储完成请求所需表示；区别于既有 503 `EXPORT_RENDERER_UNAVAILABLE` 依赖不可用，避免混淆为 Retry-After 等待；413 针对请求载荷而非小型创建请求；422 `EXPORT_IMAGE_SIZE_LIMIT` 是请求特定输出缺陷；409 既用于幂等 payload／资源状态冲突，不如 507 明确表示共享存储配额。
 3. **body 字段名 `detail`、`used_bytes`、`quota_bytes`**：沿用 #153／#154 封闭错误体与 `detail`；`_bytes` 与 `max_edge_px`／`max_total_pixels` 及既有 `byte_count` 的单位显式命名一致。used_bytes 为 ADR 清扫后 st_size 总量 U，quota_bytes 为生效上限 L；只回数字，不回显原始环境变量字符串。
 
 预警决定项：`5 × U >= 4 × L` 的 80% 预警不定义 `meta.warnings` 新码；本契约按 log-only／R2.2 边界登记，最终呈现渠道仍由 R2.2 决定，不宣称已有日志实现。非法 `SBTD_RUNTIME_DISK_QUOTA_BYTES` 的启动拒绝属于进程／CLI，OpenAPI 不覆盖；本次不定义启动错误码。默认 2000000000 字节是 ADR 当前值，不以 const／enum／maximum 冻结。
@@ -109,7 +111,7 @@ smoke 从两个 response 引用实际解析 schema，经 JSON 编码／解码验
 
 入口工作区干净；五条授权路径逐级核对 containment／无 symlink；新 task 不受 ignore，reports 命中 `.gitignore:4:/ai/tasks/**/reports`。沿用前置 rc.2 task 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败；helper active／index 写入超授权。以 edit/write 保存用户指定记录，不声称 TaskStore lifecycle 或自动恢复成功；不写 active、ignore、身份或模型配置。旧 ADR task 的分支仅为历史绑定，closeout 不重绑定。
 
-撤回只涉及本地契约／文档提交，无数据迁移，不删除用户数据；后续消费者采用前须协调错误契约。local done 不等同 operator 提审／合并、R2.2 实现、部署或发布。
+撤回只涉及契约／文档，无数据迁移，不删除用户数据；后续消费者采用前须协调错误契约。当时 local done 不等同 operator 提审／合并；随后 operator push／开 PR #158 并 admin-squash-merge，现 updated_at／completed_at 取合并时间（见 closeout），不等同 R2.2 实现、部署或发布。
 
 1. `92d6a35267da0c2946597d4bd03d4d4231405b33` — `docs(plan): backfill rc.2 item 4 ADR (#157 / 6c344d1) and close task record`，仅 plan 与 ADR task。
 2. `0253f9f09038fb26bf55a51cd488cc3395c2eb26` — `contract(openapi): declare DISK_QUOTA_EXCEEDED 507 for snapshot/export creation (rc.2 item 4)`，仅 OpenAPI 与 golden tests。已提交 blob 的 SHA-256 与最终验证内容完全相等；这是内容身份核对，不冒称提交后的新 CI。
@@ -121,11 +123,11 @@ smoke 从两个 response 引用实际解析 schema，经 JSON 编码／解码验
 
 | agent/session | provider/model | thinkingLevel (thinking_level_change) | assistant messages / toolCall blocks | purpose | resolvedModelIsFallback | title-generation count | job-widget entries |
 |---|---|---|---|---|---|---|---|
-| 主会话／01a16340-612d-7726-aebd-044ea7db772e | openai-codex/gpt-6-astra | high | 32 / 65（提交前 snapshot） | 唯一 writer、验证 controller | false | 未记录 / unknown | 未记录 / unknown |
-| QuotaContractReview／QuotaContractReview.jsonl | kimi-code/k3 | max | 18 / 22（提交前 snapshot） | 只读配额契约语义复核 | false | 未记录 / unknown | 未记录 / unknown |
-| QuotaEvidenceReview／QuotaEvidenceReview.jsonl | kimi-code/k3 | max | 21 / 34（提交前 snapshot） | 只读 golden／历史 closeout 证据复核 | false | 未记录 / unknown | 未记录 / unknown |
+| 主会话／01a16340-612d-7726-aebd-044ea7db772e | openai-codex/gpt-6-astra | high | 39 / 73（最终） | 唯一 writer、验证 controller | false | 未记录 / unknown | 未记录 / unknown |
+| QuotaContractReview／QuotaContractReview.jsonl | kimi-code/k3 | max | 18 / 22（最终） | 只读配额契约语义复核 | false | 未记录 / unknown | 未记录 / unknown |
+| QuotaEvidenceReview／QuotaEvidenceReview.jsonl | kimi-code/k3 | max | 21 / 34（最终） | 只读 golden／历史 closeout 证据复核 | false | 未记录 / unknown | 未记录 / unknown |
 
-统计时间 `2026-10-22T19:10:57+08:00`，只读 Python `json.loads` 解析 `~/.omp/agent/sessions/--workspace-640-skills-item4-errc--/2026-10-22T10-55-25-997Z_01a16340-612d-7726-aebd-044ea7db772e.jsonl` 第 1–169 行及同 stem 目录的 QuotaContractReview 第 1–71 行、QuotaEvidenceReview 第 1–98 行。口径为 `type=message`／`role=assistant` 与其 `type=toolCall` blocks；均为截至提交前快照，不含后续记录、提交与最终输出，不是最终总数。
+三份最终计数均由 operator 只读核实：主会话 `~/.omp/agent/sessions/--workspace-640-skills-item4-errc--/2026-10-22T10-55-25-997Z_01a16340-612d-7726-aebd-044ea7db772e.jsonl` 共 39 assistant messages／73 toolCall blocks，`openai-codex/gpt-6-astra`、thinking high；同 stem 目录的 QuotaContractReview.jsonl 为 18／22，`kimi-code/k3`、thinking max；QuotaEvidenceReview.jsonl 为 21／34，`kimi-code/k3`、thinking max。两位 subagent 在提交前已结束，operator 已读取各自 JSONL 核实，故两行数值不变、标签由「提交前 snapshot」纠正为「最终」；三者 resolvedModelIsFallback=false，无 fallback。主会话最终计数取代 `2026-10-22T19:10:57+08:00` 第 1–169 行的提交前 32／65（当时快照）；历史状态事件中的快照保持原样。统计口径为 `type=message`／`role=assistant` 与其 `type=toolCall` blocks；既有 reviewer 读取范围为 QuotaContractReview 第 1–71 行、QuotaEvidenceReview 第 1–98 行。本修正批次采用用户转达的 operator 核实事实，不冒称重新读取了这三份历史 JSONL。
 
 模型来自 message／model_change，thinking 明确来自 `thinking_level_change`；两 reviewer 的 session_init 另记录 `kimi-code/k3:max`。model_change 的 resolvedModelIsFallback 均为 false，未覆盖模型配置。各 JSONL 各有一个 title 条目，但条目不等于 title-generation request 次数，因此计数 unknown；未见 `type=model_usage`／customType 同名条目，不把缺记录填作 job-widget 0。此前 `01a1633f-0207-7690-b3d5-71c253e14c7c` 是 operator ASTRA_OK ping，不计入本任务主会话。
 
@@ -136,3 +138,4 @@ smoke 从两个 response 引用实际解析 schema，经 JSON 编码／解码验
 | 2026-10-22T18:56:12+08:00 | planned | in-progress | 用户 strict 与三提交授权；保存模式、场景、决定及 gate | HEAD／origin/main 6c344d13ddf6b49882b87d52300b8d697e8aeec4；路径安全；PRD／ADR／rc.2 先例；DDIA confirmed |
 | 2026-10-22T19:06:10+08:00 | in-progress | checking | 回填已提交；基线红灯、schema smoke、最终指定 suites 通过，进入独立 review 与记录收口 | 92d6a35；golden 59／0.336s；runtime 372／10 skipped／109.171s；格式通过；既有 I001 保留 |
 | 2026-10-22T19:10:57+08:00 | checking | done | 本地契约交付收口；前两个 commit 已完成，第三个仅保存本记录；两位独立 review 均无 findings，不等同提审／合并／实现／发布 | 0253f9f09038fb26bf55a51cd488cc3395c2eb26；golden 59 passed，runtime 372／10 skipped；schema smoke／格式通过，既有 I001 保留；被测哈希与提交 blob 一致；主会话提交前 snapshot 32／65 |
+| 2026-10-22T20:23:39+08:00 | done | done | Closeout：operator push／开 PR #158 后 admin-squash-merged；用户于 20:23 +08:00 确认 DISK_QUOTA_EXCEEDED、HTTP 507 与 detail／used_bytes／quota_bytes 三项值；completed_at 采用合并时间，不改历史验证或快照 | merge SHA 82d42a20a6dc757356173535148fdcc7c0b9024d；mergedAt 2026-10-22T12:23:39Z；git committer 时间 %cI 2026-10-22T20:23:39+08:00；operator 只读核实三份最终计数：主会话 openai-codex/gpt-6-astra high 39 assistant messages／73 toolCall blocks；QuotaContractReview kimi-code/k3 max 18／22；QuotaEvidenceReview kimi-code/k3 max 21／34；两位 subagent 提交前已结束，reviewer 数值是最终计数；三者 resolvedModelIsFallback=false，无 fallback |
