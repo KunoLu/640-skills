@@ -648,7 +648,7 @@ class OpenApiDraftTests(unittest.TestCase):
             (
                 "get",
                 "/api/v1/exports/{export_id}",
-                {"200": "Json"},
+                {"200": "ExportStatus"},
                 {"400": "BadRequest", "404": "NotFound", "410": "Gone"},
             ),
             (
@@ -860,6 +860,7 @@ class OpenApiDraftTests(unittest.TestCase):
             "404": "NotFound",
             "410": "Gone",
             "422": "ExportImageSizeLimit",
+            "503": "ExportRendererUnavailable",
         }
         with self.subTest(operation="createExport"):
             self.assertEqual(
@@ -869,6 +870,103 @@ class OpenApiDraftTests(unittest.TestCase):
                     for status, component in expected.items()
                 },
             )
+
+    def test_export_renderer_unavailable_requires_closed_detail_body(self) -> None:
+        # Scenario: 图像与 PDF renderer 不可用时在接受前拒绝
+        response = self.doc["components"]["responses"]["ExportRendererUnavailable"]
+        schema = response["content"]["application/json"]["schema"]
+        jsonschema.Draft202012Validator.check_schema(schema)
+        validator = jsonschema.Draft202012Validator(schema)
+        body = {"detail": "EXPORT_RENDERER_UNAVAILABLE"}
+        self.assertEqual(list(validator.iter_errors(body)), [])
+        for invalid, expected_error in (
+            ({}, "required"),
+            ({"detail": "EXPORT_IMAGE_SIZE_LIMIT"}, "const"),
+            ({"detail": None}, "type"),
+            ({"detail": 503}, "type"),
+            ({**body, "export_id": "export_report"}, "additionalProperties"),
+            ([], "type"),
+        ):
+            with self.subTest(body=invalid):
+                errors = list(validator.iter_errors(invalid))
+                self.assertIn(expected_error, [error.validator for error in errors])
+
+    def test_get_export_status_requires_state_specific_error(self) -> None:
+        # Scenarios: 失败作业使用稳定错误码；非失败状态没有错误码
+        response = self.doc["paths"]["/api/v1/exports/{export_id}"]["get"]["responses"][
+            "200"
+        ]
+        response = self.doc["components"]["responses"][
+            response["$ref"].rsplit("/", 1)[1]
+        ]
+        schema = response["content"]["application/json"]["schema"]
+        jsonschema.Draft202012Validator.check_schema(schema)
+        job_schema = self.doc["components"]["schemas"]["ExportJob"]
+        jsonschema.Draft202012Validator.check_schema(job_schema)
+        self.assertEqual(
+            job_schema["properties"]["status"]["enum"],
+            ["queued", "generating", "ready", "failed", "cancelled"],
+        )
+        validator = jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
+        envelope = {
+            "api_version": "1",
+            "request_id": "req_export",
+            "data": {"status": "queued", "error": None},
+            "meta": {
+                "metrics_version": "1.0",
+                "projection_version": "1.0",
+                "complete": True,
+                "warnings": ["EXPORT_SCALE_DOWNGRADED:1x"],
+            },
+        }
+        codes = ("EXPORT_RENDER_TIMEOUT", "EXPORT_RENDER_FAILED")
+        for status in ("queued", "generating", "ready", "failed", "cancelled"):
+            for error in (None, *codes, "export failed", "EXPORT_FUTURE_ERROR", 42):
+                with self.subTest(status=status, error=error):
+                    data = {"status": status, "error": error}
+                    valid = error in codes if status == "failed" else error is None
+                    self.assertEqual(
+                        validator.is_valid({**envelope, "data": data}), valid
+                    )
+        for data in (
+            {},
+            {"status": "ready"},
+            {"error": None},
+            {"status": "unknown", "error": None},
+            {"status": None, "error": None},
+            None,
+            [],
+        ):
+            with self.subTest(invalid_data=data):
+                self.assertFalse(validator.is_valid({**envelope, "data": data}))
+        for field in envelope:
+            with self.subTest(missing_envelope_field=field):
+                self.assertFalse(
+                    validator.is_valid(
+                        {key: value for key, value in envelope.items() if key != field}
+                    )
+                )
+        for field, value in (
+            ("api_version", "2"),
+            ("request_id", 42),
+            ("meta", {}),
+            ("meta", {**envelope["meta"], "complete": "yes"}),
+        ):
+            with self.subTest(invalid_envelope_field=field):
+                self.assertFalse(validator.is_valid({**envelope, field: value}))
+        data = {
+            **envelope["data"],
+            "export_id": "export_report",
+            "ready_at": None,
+            "byte_count": None,
+            "future_metadata": {"version": 2},
+            "warnings": ["EXPORT_SCALE_DOWNGRADED:1x", "Other warning"],
+        }
+        self.assertEqual(list(validator.iter_errors({**envelope, "data": data})), [])
+        for field in ("data", "meta"):
+            with self.subTest(structured_warning=field):
+                invalid = {**envelope, field: {**envelope[field], "warnings": [{}]}}
+                self.assertFalse(validator.is_valid(invalid))
 
     def test_export_image_size_limit_requires_detail_and_limits(self) -> None:
         # Scenario: JPEG 超限预检返回明确限制
