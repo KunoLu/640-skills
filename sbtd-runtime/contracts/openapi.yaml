@@ -494,6 +494,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "410":
           $ref: "#/components/responses/Gone"
+        "422":
+          $ref: "#/components/responses/ExportImageSizeLimit"
   /api/v1/exports/{export_id}:
     get:
       operationId: getExport
@@ -766,6 +768,32 @@ components:
       description: Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF check on an unsafe method. Does not reveal internal policy details.
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
+    ExportImageSizeLimit:
+      description: |
+        JPEG preflight failed before export acceptance or generation because
+        the complete image would exceed the supported edge or total pixel
+        limit (PRD 13.5). No truncation, splitting, or false success.
+        Limits report the values in effect; suggested defaults are 32,000 px
+        per edge and 80 MP (80,000,000 pixels), to be frozen after platform
+        measurement. Use HTML/PDF or reduce displayed detail instead.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [detail, max_edge_px, max_total_pixels]
+            properties:
+              detail:
+                type: string
+                const: EXPORT_IMAGE_SIZE_LIMIT
+              max_edge_px:
+                type: integer
+                minimum: 1
+                description: Maximum supported width or height of the output image, in pixels.
+              max_total_pixels:
+                type: integer
+                minimum: 1
+                description: Maximum supported total pixel count of the output image.
   schemas:
     CreateExportAccepted:
       type: object
@@ -793,7 +821,7 @@ components:
             missing or invisible: 404. Expired: 410.
         format:
           type: string
-          enum: [html, csv]
+          enum: [html, csv, jpeg, pdf]
         presentation_state:
           $ref: "#/components/schemas/ExportPresentationState"
           description: Optional; when omitted, use the existing ReportDocument default presentation state.
