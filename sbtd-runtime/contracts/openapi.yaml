@@ -416,6 +416,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "201":
           $ref: "#/components/responses/Json"
+        "507":
+          $ref: "#/components/responses/DiskQuotaExceeded"
   /api/v1/report-snapshots/{snapshot_id}:
     get:
       operationId: getReportSnapshot
@@ -498,6 +500,8 @@ paths:
           $ref: "#/components/responses/ExportImageSizeLimit"
         "503":
           $ref: "#/components/responses/ExportRendererUnavailable"
+        "507":
+          $ref: "#/components/responses/DiskQuotaExceeded"
   /api/v1/exports/{export_id}:
     get:
       operationId: getExport
@@ -839,6 +843,46 @@ components:
               detail:
                 type: string
                 const: EXPORT_RENDERER_UNAVAILABLE
+    DiskQuotaExceeded:
+      description: |
+        Shared snapshots/ + exports/ disk quota exceeded (PRD 10.4, ADR 0003
+        sections 4/5). HTTP 507 Insufficient Storage (RFC 4918 section 11.5).
+        Sweep first, then remeasure shared used bytes U; refuse a new snapshot
+        or export only when U > the effective quota L. Exactly at the cap is
+        not refused. This checks current usage, not a reservation for output
+        not yet generated; it does not evict unexpired data.
+        Returned synchronously before createExport acceptance (HTTP 202), for
+        every format: no job, no export_id, and no file for this creation.
+        For createReportSnapshot, refuse before HTTP 201; its current library
+        surface must provide the equivalent refusal with these byte counts
+        before creating a file. This declaration does not add an HTTP handler.
+        Existing-ID reuse and idempotent replay are not new creates; their
+        precedence is not redefined here. This is not an ExportJob failure code.
+        used_bytes > quota_bytes is a semantic requirement; standard JSON Schema
+        cannot compare these two fields. Return parsed numeric byte counts only,
+        never the raw environment variable value or string.
+        The 80% warning (5 * U >= 4 * L) has no meta.warnings code here:
+        log-only / presentation handling belongs to R2.2.
+        Invalid SBTD_RUNTIME_DISK_QUOTA_BYTES startup refusal is a process/CLI
+        concern outside this OpenAPI contract.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [detail, used_bytes, quota_bytes]
+            properties:
+              detail:
+                type: string
+                const: DISK_QUOTA_EXCEEDED
+              used_bytes:
+                type: integer
+                minimum: 0
+                description: Post-sweep shared usage U in bytes, summed from regular-file st_size in snapshots/ and exports/ per ADR 0003 section 4.
+              quota_bytes:
+                type: integer
+                minimum: 1
+                description: Effective shared cap L in bytes; currently defaults to 2000000000, configurable via SBTD_RUNTIME_DISK_QUOTA_BYTES and not frozen to that default.
   schemas:
     ExportJob:
       type: object
@@ -855,7 +899,8 @@ components:
           enum: [EXPORT_RENDER_TIMEOUT, EXPORT_RENDER_FAILED, null]
           description: |
             Non-null only when status is failed; null for every other status.
-            Future failure rows, such as disk-capacity row 4, only add codes.
+            Future job failures only add codes. Disk-capacity row 4 instead uses
+            synchronous HTTP 507 DiskQuotaExceeded before acceptance, not this field.
             Clients must treat unknown codes as generic failure.
         warnings:
           $ref: "#/components/schemas/Meta/properties/warnings"

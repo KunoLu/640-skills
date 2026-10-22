@@ -861,6 +861,7 @@ class OpenApiDraftTests(unittest.TestCase):
             "410": "Gone",
             "422": "ExportImageSizeLimit",
             "503": "ExportRendererUnavailable",
+            "507": "DiskQuotaExceeded",
         }
         with self.subTest(operation="createExport"):
             self.assertEqual(
@@ -870,6 +871,86 @@ class OpenApiDraftTests(unittest.TestCase):
                     for status, component in expected.items()
                 },
             )
+
+    def test_create_report_snapshot_declares_disk_quota_refusal(self) -> None:
+        # Scenario: 清扫后共享占用超限时拒绝新建
+        responses = self.doc["paths"]["/api/v1/report-snapshots"]["post"]["responses"]
+        expected = {
+            "201": "Json",
+            "401": "Unauthorized",
+            "403": "Forbidden",
+            "507": "DiskQuotaExceeded",
+        }
+        self.assertEqual(
+            responses,
+            {
+                status: {"$ref": f"#/components/responses/{component}"}
+                for status, component in expected.items()
+            },
+        )
+
+    def test_disk_quota_exceeded_requires_detail_and_byte_counts(self) -> None:
+        # Scenarios: 清扫后共享占用超限时拒绝新建；返回解析后的有效配额而不是固定默认值或原始配置
+        response = self.doc["components"]["responses"]["DiskQuotaExceeded"]
+        schema = response["content"]["application/json"]["schema"]
+        jsonschema.Draft202012Validator.check_schema(schema)
+        self.assertEqual(schema["properties"]["detail"]["const"], "DISK_QUOTA_EXCEEDED")
+        self.assertEqual(
+            set(schema["required"]), {"detail", "used_bytes", "quota_bytes"}
+        )
+        self.assertIs(schema["additionalProperties"], False)
+        self.assertTrue(
+            {"const", "enum", "maximum"}.isdisjoint(schema["properties"]["quota_bytes"])
+        )
+        validator = jsonschema.Draft202012Validator(schema)
+        body = {
+            "detail": "DISK_QUOTA_EXCEEDED",
+            "used_bytes": 2000000001,
+            "quota_bytes": 2000000000,
+        }
+        self.assertEqual(list(validator.iter_errors(body)), [])
+        self.assertEqual(
+            list(
+                validator.iter_errors(
+                    {**body, "used_bytes": 4000000001, "quota_bytes": 4000000000}
+                )
+            ),
+            [],
+        )
+        # schema 只校验各字段边界；U > L 跨字段关系由 R2.2 准入实现保证。
+        self.assertEqual(
+            list(validator.iter_errors({**body, "used_bytes": 0, "quota_bytes": 1})),
+            [],
+        )
+        for field in body:
+            with self.subTest(missing=field):
+                incomplete = {key: value for key, value in body.items() if key != field}
+                errors = list(validator.iter_errors(incomplete))
+                self.assertIn("required", [error.validator for error in errors])
+        for field, value, expected_error in (
+            ("detail", "EXPORT_IMAGE_SIZE_LIMIT", "const"),
+            ("detail", None, "type"),
+            ("detail", 507, "type"),
+            ("used_bytes", "2000000001", "type"),
+            ("used_bytes", 1.5, "type"),
+            ("used_bytes", True, "type"),
+            ("used_bytes", None, "type"),
+            ("used_bytes", -1, "minimum"),
+            ("quota_bytes", "2000000000", "type"),
+            ("quota_bytes", 1.5, "type"),
+            ("quota_bytes", True, "type"),
+            ("quota_bytes", None, "type"),
+            ("quota_bytes", 0, "minimum"),
+            ("quota_bytes", -1, "minimum"),
+            ("SBTD_RUNTIME_DISK_QUOTA_BYTES", "2GB", "additionalProperties"),
+        ):
+            with self.subTest(invalid=field, value=value):
+                errors = list(validator.iter_errors({**body, field: value}))
+                self.assertIn(expected_error, [error.validator for error in errors])
+        for invalid in ([], None, "DISK_QUOTA_EXCEEDED"):
+            with self.subTest(body=invalid):
+                errors = list(validator.iter_errors(invalid))
+                self.assertIn("type", [error.validator for error in errors])
 
     def test_export_renderer_unavailable_requires_closed_detail_body(self) -> None:
         # Scenario: 图像与 PDF renderer 不可用时在接受前拒绝
