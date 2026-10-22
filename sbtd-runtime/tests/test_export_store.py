@@ -167,6 +167,7 @@ class ExportStoreTests(unittest.TestCase):
         first, downloaded = store.download(export_id)
         again, _repeated = store.download(export_id)
         self.assertEqual(set(info), PUBLIC_FIELDS)
+        self.assertIsNone(info["error"])
         self.assertEqual(first, payload)
         self.assertEqual(again, payload)
         self.assertEqual(downloaded["sha256"], hashlib.sha256(payload).hexdigest())
@@ -192,6 +193,7 @@ class ExportStoreTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertNotIn(str(self.home), manifest)
+        self.assertIsNone(json.loads(manifest)["record"]["manifest"]["error"])
         store.close()
         calls_before = len(self.calls)
         restored = self._open(self._renderer(b"regenerated"))
@@ -201,6 +203,7 @@ class ExportStoreTests(unittest.TestCase):
         self.assertEqual(info2["expires_at"], info["expires_at"])
         self.assertEqual(info2["ready_at"], info["ready_at"])
         self.assertEqual(info2["byte_count"], len(payload))
+        self.assertIsNone(info2["error"])
         self.assertEqual(len(self.calls), calls_before)
         self.assertEqual(
             restored.create(
@@ -251,12 +254,14 @@ class ExportStoreTests(unittest.TestCase):
         queued = store.get(export_id)
         self.assertEqual(queued["export_id"], export_id)
         self.assertIn(queued["status"], ("queued", "generating"))
+        self.assertIsNone(queued["error"])
         self.assertIsNone(queued["expires_at"])
         self.assertIsNone(queued["sha256"])
         self.assertIn("expires_at", queued)
         store.delete(export_id)
         info = store.get(export_id)
         self.assertEqual(info["status"], "cancelled")
+        self.assertIsNone(info["error"])
         self.assertNotEqual(info["status"], "ready")
         with self.assertRaises(ExportNotReady):
             store.download(export_id)
@@ -275,7 +280,7 @@ class ExportStoreTests(unittest.TestCase):
         failed = self._open(explode, failed_home, failed_snapshots)
         failed_id = failed.create(failed_snapshot.snapshot_id, "html", _presentation())
         info = _until(failed, failed_id, status="failed")
-        self.assertEqual(info["error"], "export failed")
+        self.assertEqual(info["error"], "EXPORT_RENDER_FAILED")
         self.assertNotIn(str(failed_home), json.dumps(info))
         with self.assertRaises(ExportNotReady):
             failed.download(failed_id)
@@ -453,6 +458,7 @@ class ExportStoreTests(unittest.TestCase):
         with mock.patch("export_store.os.replace", side_effect=fail_manifest):
             interrupted_id = self._create(interrupted)
             info = _until(interrupted, interrupted_id, status="failed")
+            self.assertEqual(info["error"], "EXPORT_RENDER_FAILED")
         self.assertNotEqual(info["status"], "ready")
         with self.assertRaises(ExportNotReady):
             interrupted.download(interrupted_id)

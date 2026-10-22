@@ -185,8 +185,8 @@ finally:
 JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与不透明背景；等待字体和布局，禁动画。`browser_renderer.MAX_SIDE_PX=32000` 与 `MAX_PIXELS=80000000` 是模块级可配置建议值（实测后冻结），须在提交作业前设置，独立 worker 沿用该次配置。2x 超限仅在完整内容和不低于 1440 CSS px 宽度下回退 1x；截图前在调用进程发出 `RuntimeWarning`（精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`），告警处理返回后才截图，manifest 保留同一字符串。调用方可用 Python `warnings` 机制提前显示／捕获通知；ExportStore 调用发生在其工作线程，应在提交作业前配置告警处理，不应在处理器中阻塞。1x 仍超限抛库级 `RendererError.code=EXPORT_IMAGE_SIZE_LIMIT`，异常的 `max_edge_px`／`max_total_pixels` 是 worker 当次生效的配置值，不截断、不分包、不发布半成品。PDF 为 A3 横向、10mm 边距、保留背景的可搜索文字／矢量文档；长表分页重复表头，9pt 页脚含标题、范围、短 snapshot ID 与页码。
 上述 `RuntimeWarning` 是直接库级生成路径的通知机制；HTTP 预检已决定的降级通过下述 202 `meta.warnings` 通知，作业不再另作比例决定。
 
-HTTP 已按合并的 [contract PR #153](https://github.com/KunoLu/640-skills/pull/153) 开放：JPEG 在返回 202 之前，于线程池内调用 `BrowserRenderer.preflight()`，沿用单作业信号量与隔离浏览器；期间固定 snapshot 引用、呈现状态、同一已过滤／脱敏静态 HTML 和当次 caps。2x 安全则正常受理；仅 1x 安全时，202 Envelope 的 `meta.warnings` 包含精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`（保留其他报告告警），`data` 仍恰为 `{"export_id":"exp_…"}`。作业沿用预检选定比例，不另行静默降级；生成时复测若该比例不安全则失败且不发布。PDF 为多页输出，无图像尺寸预检，正常返回 202 后生成。下载 MIME 分别为 `image/jpeg`、`application/pdf`，get／download／delete 路由不变。
-保留期内的同请求／同 Idempotency-Key 重放（包括重启后重新配对）保留原导出 ID 与告警，不重复预检。过期并清扫后仍沿用既有幂等行为：本进程返回旧 ID，GET／download 为 410；已清理的告警 metadata 不额外保留，不重新生成导出。
+HTTP 已按合并的 [contract PR #153](https://github.com/KunoLu/640-skills/pull/153) 开放，并接线 [#154](https://github.com/KunoLu/640-skills/pull/154) 的失败状态：JPEG／PDF 请求校验后先使用与 capabilities 相同的可用性检查。仅依赖可用时，JPEG 在返回 202 之前，于线程池内调用 `BrowserRenderer.preflight()`，沿用单作业信号量与隔离浏览器；期间固定 snapshot 引用、呈现状态、同一已过滤／脱敏静态 HTML 和当次 caps。2x 安全则正常受理；仅 1x 安全时，202 Envelope 的 `meta.warnings` 包含精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`（保留其他报告告警），`data` 仍恰为 `{"export_id":"exp_…"}`。作业沿用预检选定比例，不另行静默降级；生成时复测若该比例不安全则失败且不发布。PDF 为多页输出，无图像尺寸预检，依赖可用时返回 202 后生成。下载 MIME 分别为 `image/jpeg`、`application/pdf`，get／download／delete 路由不变。
+依赖可用时，保留期内的同请求／同 Idempotency-Key 重放（包括重启后重新配对）保留原导出 ID 与告警，不重复预检。JPEG／PDF createExport 的依赖检查先于幂等重放：依赖不可用返回 503，但已接受作业的 GET／download 不受此 admission 检查影响。过期并清扫后仍沿用既有 Store 幂等行为：本进程返回旧 ID，GET／download 为 410；已清理的告警 metadata 不额外保留，不重新生成导出。
 
 JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelope、不含额外字段：
 
@@ -196,10 +196,10 @@ JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelo
 
 上述数字仅示例；响应携带当次生效 caps，不是冻结常量。422 不创建作业或导出文件，不遗留 snapshot pin；可改用 PDF／HTML 或减少展示明细。库调用仍可独立调用 `BrowserRenderer(home, snapshots).preflight(snapshot, format, presentation_state, cancelled=None)`，返回 `{"scale": 2或1, "warnings": [...]}`（PDF 的 `scale=None`），不截图或创建作业；直接库调用方自行管理 snapshot 生命周期。
 
-两个 **CONTRACT-CHANGE-NEEDED（open）** 未在本轮扩张：
+两项失败协议已由 **#154（`d46d4ad`）定义并实现**；2026-10-22 13:38 的合并前固定字符串规则已被取代：
 
-1. **createExport 时 renderer 不可用**：JPEG 同步预检失败，目前仍返回通用 500 `Internal Server Error`，无作业且释放 snapshot pin；服务端仅记录安全错误码，不输出 traceback。PDF 不做图像预检，仍 202，随后作业 failed、error 精确为 `"export failed"`。是否改用现有 400 BadRequest（“export format”）仍待契约决定，本轮不采用新映射。
-2. **202 后失败协议**：按 Reviewy/Lord 2026-10-22 13:38 +08:00 规则，在 [contract PR #154](https://github.com/KunoLu/640-skills/pull/154) 合并前，所有失败作业的 getExport 均返回 200 Envelope，`data.status=failed`、`data.error="export failed"`。不可用、timeout、crash、作业时尺寸超限及普通异常的诊断只以安全错误码写服务端 warning，不写异常原文、stderr、traceback、路径或凭据，也不写其他 API 字段或 manifest。download 保持 409 `{"detail":"export is not ready"}`；不发布部分文件或伪造 ready。#153 的受理前尺寸 422 与 202 降级 warning 不变。
+1. **createExport 时 renderer 不可用**：JPEG／PDF 同步返回 **503**，封闭 JSON body 精确为 `{"detail":"EXPORT_RENDERER_UNAVAILABLE"}`，不包 Envelope、不含 reason 或其他字段。依赖检查与 capabilities 共用同一检查／原因判定，在 pin／JPEG 预检／建作业之前执行，因此无 job、export_id、文件、snapshot pin 或 manifest。JPEG 不可用时不能执行尺寸预检，故 503 优先于尺寸 422；若依赖在检查后、预检期间消失，同样返回 503 并释放临时 pin。HTML／CSV 不执行该检查，也不返回此 503。其他非尺寸、非不可用的 JPEG 预检故障仍返回安全通用 500，无作业且释放 pin。
+2. **202 后失败协议**：所有格式（包括 HTML／CSV）的 getExport 返回 200 Envelope，`data.status=failed`；renderer timeout 的 `data.error="EXPORT_RENDER_TIMEOUT"`，崩溃、受理后 renderer 不可用、作业时尺寸超限、发布失败及普通异常均为 `"EXPORT_RENDER_FAILED"`。queued／generating／ready／cancelled 的 `error` 必须为 `null`，已发布 manifest 同样如此。内部诊断仅以安全错误码写服务端 warning，不记录异常原文、stderr、traceback、路径或凭据，不塞入其他 API 字段。download 保持 409 `{"detail":"export is not ready"}`；失败不发布 artifact／manifest，不伪造 ready。#153 的受理前尺寸 422 与 202 降级 warning 不变。
 
 每作业独立子进程与临时 profile，不复用浏览器登录态；只允许内存报告主文档，其他路由一律 abort，禁止外联和任意 file 读取。进程内单作业信号量限制 JPEG／PDF 并发，配合服务现有单 runtime writer 锁；取消／超时终止本作业并清理 profile。作业复用现有 pin、`exports/` 原子发布、manifest／SHA-256、ready 后 24h 保留和启动清扫，没有第二条存储路径或新增配额策略。
 

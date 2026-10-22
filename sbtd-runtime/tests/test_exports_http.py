@@ -168,11 +168,6 @@ class ExportHttpTests(unittest.TestCase):
             status, _, payload = self.create_export(body)
             self.assertEqual(status, 202, payload)
             self.ready(json.loads(payload)["data"]["export_id"])
-        status, _, payload = self.create_export({**valid, "format": "pdf"})
-        self.assertEqual(status, 202, payload)
-        accepted = json.loads(payload)
-        self.assertEqual(set(accepted["data"]), {"export_id"})
-        self.assertEqual(accepted["meta"]["warnings"], [])
 
     def test_panel_order_requires_complete_unique_manifest_permutation(self) -> None:
         state = self.presentation()

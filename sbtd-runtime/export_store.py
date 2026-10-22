@@ -513,7 +513,11 @@ class ExportStore:
                     snapshot, format_name, presentation, cancelled, job.renderer
                 )
             except Exception as error:  # noqa: BLE001 — worker boundary releases the pin.
-                from browser_renderer import RENDERER_FAILED, RendererError
+                from browser_renderer import (
+                    RENDERER_FAILED,
+                    RENDERER_TIMEOUT,
+                    RendererError,
+                )
 
                 # Re-allowlist even a mutated exception; never log text or traceback.
                 code = (
@@ -525,7 +529,7 @@ class ExportStore:
                     logging.getLogger(__name__).warning(
                         "export renderer failed: %s", code
                     )
-                self._fail(export_id)
+                self._fail(export_id, timed_out=code == RENDERER_TIMEOUT)
                 return
             if cancelled() or self._closed:
                 self._mark_cancelled(export_id)
@@ -544,7 +548,7 @@ class ExportStore:
                             "cancelled" if job.cancelled or self._closed else "failed"
                         )
                         if job.status == "failed" and job.error is None:
-                            job.error = "export failed"
+                            job.error = "EXPORT_RENDER_FAILED"
                     job.done.set()
 
     def _invoke(
@@ -565,7 +569,7 @@ class ExportStore:
             raise TypeError("renderer must return bytes")
         return blob, meta
 
-    def _fail(self, export_id: str) -> None:
+    def _fail(self, export_id: str, *, timed_out: bool = False) -> None:
         with self._lock:
             job = self._jobs.get(export_id)
             if job is None or job.published:
@@ -576,7 +580,9 @@ class ExportStore:
                 job.error = None
             else:
                 job.status = "failed"
-                job.error = "export failed"
+                job.error = (
+                    "EXPORT_RENDER_TIMEOUT" if timed_out else "EXPORT_RENDER_FAILED"
+                )
 
     def _mark_cancelled(self, export_id: str) -> None:
         with self._lock:

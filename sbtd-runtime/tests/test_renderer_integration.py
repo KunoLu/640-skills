@@ -428,7 +428,7 @@ class RendererLibraryTests(unittest.TestCase):
         store = self._open(renderer, home, snapshots)
         export_id = store.create(snapshot.snapshot_id, "pdf", _presentation())
         info = _until(store, export_id, status="failed")
-        self.assertEqual(info["error"], "export failed")
+        self.assertEqual(info["error"], "EXPORT_RENDER_FAILED")
         self.assertNotIn(str(home), json.dumps(info))
         self.assertNotIn("/", info["error"])
         with self.assertRaises(ExportNotReady):
@@ -439,7 +439,7 @@ class RendererLibraryTests(unittest.TestCase):
         self.assertEqual(snapshots.sweep(now=expired), [snapshot.snapshot_id])
 
     def test_renderer_error_text_is_not_persisted(self) -> None:
-        """Neither renderer codes nor caller text enter public export metadata."""
+        """Only contract failure codes, never caller text, enter public metadata."""
         from browser_renderer import RendererError
 
         secret = str(self.home / "secret-export-path")
@@ -462,14 +462,14 @@ class RendererLibraryTests(unittest.TestCase):
         timed = store.create(self.snapshot.snapshot_id, "csv", _presentation())
         leaked_info = _until(store, leaked, status="failed")
         timed_info = _until(store, timed, status="failed")
-        self.assertEqual(leaked_info["error"], "export failed")
-        self.assertEqual(timed_info["error"], "export failed")
+        self.assertEqual(leaked_info["error"], "EXPORT_RENDER_FAILED")
+        self.assertEqual(timed_info["error"], "EXPORT_RENDER_TIMEOUT")
         encoded = json.dumps([leaked_info, timed_info])
         self.assertNotIn(secret, encoded)
         self.assertNotIn("disk full", encoded)
         self.assertNotIn(str(self.home), encoded)
         for code in SAFE_RENDERER_CODES:
-            self.assertNotIn(code, encoded)
+            self.assertNotIn(f'"{code}"', encoded)
         with self.assertRaises(ExportNotReady):
             store.download(leaked)
 
@@ -805,39 +805,20 @@ class FrozenHttpExportTests(unittest.TestCase):
             time.sleep(0.02)
         self.fail("export did not become ready")
 
-    def test_http_pdf_is_accepted_then_fails_without_renderer(self) -> None:
-        """Missing renderer keeps the async PDF path: 202, then failed."""
-        status, _, body = self.create("pdf")
-        self.assertEqual(status, 202, body)
-        export_id = json.loads(body)["data"]["export_id"]
-        deadline = time.monotonic() + 10
-        info = None
-        while time.monotonic() < deadline:
-            status, _, payload = request(
-                self.port,
-                "GET",
-                f"/api/v1/exports/{export_id}",
-                headers=self.headers,
-            )
-            self.assertEqual(status, 200, payload)
-            info = json.loads(payload)["data"]
-            if info["status"] in ("failed", "cancelled", "ready"):
-                break
-            time.sleep(0.02)
-        else:
-            self.fail(info)
-        self.assertEqual(info["status"], "failed", info)
-        self.assertEqual(info["error"], "export failed")
-        for code in SAFE_RENDERER_CODES:
-            self.assertNotIn(code.encode(), payload)
-        self.assertNotIn(str(self.home), json.dumps(info))
-        status, _, download = request(
-            self.port,
-            "GET",
-            f"/api/v1/exports/{export_id}/file",
-            headers=self.headers,
-        )
-        self.assertEqual(status, 409, download)
+    def test_http_missing_renderer_rejects_jpeg_and_pdf_before_acceptance(self) -> None:
+        """Scenario: renderer 不可用时在受理前拒绝图像和 PDF."""
+        snapshot_id = self.snapshot()
+        before = sorted(path.name for path in (self.home / "exports").iterdir())
+        for format_name in ("jpeg", "pdf"):
+            with self.subTest(format=format_name):
+                status, _, body = self.create(format_name, snapshot_id)
+                self.assertEqual(status, 503, body)
+                self.assertEqual(
+                    json.loads(body), {"detail": "EXPORT_RENDERER_UNAVAILABLE"}
+                )
+                _create_export_validator("503").validate(json.loads(body))
+        after = sorted(path.name for path in (self.home / "exports").iterdir())
+        self.assertEqual(after, before)
 
     def test_capabilities_require_session_and_allowed_host_origin(self) -> None:
         for headers, expected in (
@@ -930,16 +911,6 @@ class FrozenHttpExportTests(unittest.TestCase):
         after = sorted(path.name for path in (self.home / "exports").glob("exp_*"))
         self.assertEqual(after, before)
 
-    def test_http_jpeg_missing_renderer_keeps_500_without_a_job(self) -> None:
-        """JPEG unavailability keeps the generic 500 and creates no job."""
-        snapshot_id = self.snapshot()
-        before = sorted(path.name for path in (self.home / "exports").glob("exp_*"))
-        status, _, body = self.create("jpeg", snapshot_id)
-        self.assertEqual(status, 500, body)
-        self.assertEqual(body, b"Internal Server Error")
-        after = sorted(path.name for path in (self.home / "exports").glob("exp_*"))
-        self.assertEqual(after, before)
-
 
 def _openapi() -> dict:
     import yaml
@@ -965,6 +936,15 @@ def _create_export_validator(status: str):
     if schema is None:
         return None
     return jsonschema.Draft202012Validator(doc).evolve(schema=schema)
+
+
+def _export_job_validator():
+    import jsonschema
+
+    doc = _openapi()
+    return jsonschema.Draft202012Validator(doc).evolve(
+        schema=doc["components"]["schemas"]["ExportJob"]
+    )
 
 
 class _LoopbackApp:
@@ -1038,6 +1018,7 @@ class HttpRendererSeamTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="sbtd-renderer-seam-")
         self.addCleanup(self.temporary.cleanup)
         self.home = Path(self.temporary.name)
+        self.job_validator = _export_job_validator()
         _enable_observation(self.home)
         _seed_golden_events(self.home)
         self.calls: list[dict] = []
@@ -1146,6 +1127,7 @@ class HttpRendererSeamTests(unittest.TestCase):
             )
             self.assertEqual(got, 200, body)
             info = json.loads(body)["data"]
+            self.job_validator.validate(info)
             if info["status"] == status:
                 return info
             if status == "ready" and info["status"] in ("failed", "cancelled"):
@@ -1208,6 +1190,47 @@ class HttpRendererSeamTests(unittest.TestCase):
                     self.assertEqual(len(jobs), 1)
                     self.assertEqual(preflight[0]["html"], jobs[0]["html"])
                     self.assertEqual(jobs[0]["scale"], 2)
+
+    def test_unavailable_renderer_rejects_before_preflight_job_file_or_pin(
+        self,
+    ) -> None:
+        """Scenario: renderer 不可用时在受理前拒绝图像和 PDF."""
+        self.mode = "size"
+        snapshot_id = self.snapshot()
+        before = sorted(self.home.rglob("*"))
+        with (
+            mock.patch(
+                "browser_renderer.renderer_capability",
+                return_value={
+                    "available": False,
+                    "reason": "CJK font is not installed",
+                },
+            ),
+            mock.patch.object(
+                self.server.snapshots, "pin", wraps=self.server.snapshots.pin
+            ) as pin,
+        ):
+            status, _, body = request(
+                self.port, "GET", "/api/v1/capabilities", headers=self.headers
+            )
+            self.assertEqual(status, 200, body)
+            for format_name in ("jpeg", "pdf"):
+                with self.subTest(format=format_name):
+                    capability = json.loads(body)["data"]["exports"][format_name]
+                    self.assertFalse(capability["available"])
+                    self.assertEqual(capability["reason"], "CJK font is not installed")
+                    status, _, rejected = self.post(format_name, snapshot_id)
+                    self.assertEqual(status, 503, rejected)
+                    self.assertEqual(
+                        json.loads(rejected), {"detail": "EXPORT_RENDERER_UNAVAILABLE"}
+                    )
+                    self.assert_schema(503, rejected)
+            pin.assert_not_called()
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.server.exports._jobs, {})
+        self.assertEqual(sorted(self.home.rglob("*")), before)
+        removed = self.server.snapshots.sweep(now=datetime.now(UTC) + timedelta(days=2))
+        self.assertIn(snapshot_id, removed)
 
     def test_jpeg_size_limit_is_422_without_job_file_or_pin(self) -> None:
         snapshot_id = self.snapshot()
@@ -1401,8 +1424,8 @@ class HttpRendererSeamTests(unittest.TestCase):
         thread.join(10)
         self.assertEqual(holder["result"][0], 202, holder["result"][2])
 
-    def test_job_failures_keep_fixed_error_and_log_safe_code(self) -> None:
-        """Scenario: 失败作业在失败状态契约合并前保持固定错误."""
+    def test_job_failures_use_contract_codes_and_log_safe_code(self) -> None:
+        """Scenario: 已受理作业使用稳定失败码."""
         from browser_renderer import RendererError
 
         snapshot_id = self.snapshot()
@@ -1414,13 +1437,18 @@ class HttpRendererSeamTests(unittest.TestCase):
             (RendererError("EXPORT_IMAGE_SIZE_LIMIT"), "EXPORT_IMAGE_SIZE_LIMIT"),
             (RuntimeError(private_detail), "RENDERER_FAILED"),
         ]
-        for format_name in ("jpeg", "pdf"):
+        for format_name in ("html", "csv", "jpeg", "pdf"):
             for error, code in failures:
                 with self.subTest(format=format_name, code=code, error=type(error)):
                     # Keep real JPEG preparation; fail only the accepted job.
+                    target = (
+                        "browser_renderer.BrowserRenderer.__call__"
+                        if format_name in ("jpeg", "pdf")
+                        else "export_render.render_export"
+                    )
                     with (
                         mock.patch(
-                            "browser_renderer.BrowserRenderer.__call__",
+                            target,
                             side_effect=error,
                         ),
                         self.assertLogs("export_store", level="WARNING") as captured,
@@ -1429,7 +1457,12 @@ class HttpRendererSeamTests(unittest.TestCase):
                         self.assertEqual(status, 202, accepted)
                         export_id = json.loads(accepted)["data"]["export_id"]
                         info = self.until(export_id, "failed")
-                    self.assertEqual(info["error"], "export failed")
+                    expected = (
+                        "EXPORT_RENDER_TIMEOUT"
+                        if code == "RENDERER_TIMEOUT"
+                        else "EXPORT_RENDER_FAILED"
+                    )
+                    self.assertEqual(info["error"], expected)
                     status, _, body = request(
                         self.port,
                         "GET",
@@ -1444,7 +1477,7 @@ class HttpRendererSeamTests(unittest.TestCase):
                     )
                     for response in (accepted, body, download):
                         for internal_code in SAFE_RENDERER_CODES:
-                            self.assertNotIn(internal_code.encode(), response)
+                            self.assertNotIn(f'"{internal_code}"'.encode(), response)
                         self.assertNotIn(private_detail.encode(), response)
                         self.assertNotIn(str(self.home).encode(), response)
                     self.assertTrue(
@@ -1457,8 +1490,55 @@ class HttpRendererSeamTests(unittest.TestCase):
                         self.assertNotIn(str(self.home), record.getMessage())
                     self.assertEqual(self.export_names(), [])
 
+    def test_dependency_disappearing_during_preflight_returns_503(self) -> None:
+        from browser_renderer import RendererError
+
+        snapshot_id = self.snapshot()
+        with mock.patch(
+            "browser_renderer.BrowserRenderer.preflight",
+            side_effect=RendererError("RENDERER_UNAVAILABLE"),
+        ):
+            status, _, body = self.post("jpeg", snapshot_id)
+        self.assertEqual(status, 503, body)
+        self.assertEqual(json.loads(body), {"detail": "EXPORT_RENDERER_UNAVAILABLE"})
+        self.assert_schema(503, body)
+        self.assertEqual(self.server.exports._jobs, {})
+        self.assertEqual(self.export_names(), [])
+        removed = self.server.snapshots.sweep(now=datetime.now(UTC) + timedelta(days=2))
+        self.assertIn(snapshot_id, removed)
+
+    def test_non_failed_job_states_have_null_error(self) -> None:
+        """Scenario: 非失败状态不携带错误."""
+        self.mode = "block_job"
+        self.release.clear()
+        snapshot_id = self.snapshot()
+        status, _, body = self.post("pdf", snapshot_id)
+        self.assertEqual(status, 202, body)
+        first = json.loads(body)["data"]["export_id"]
+        self.assertTrue(self.entered.wait(5))
+        self.assertIsNone(self.until(first, "generating")["error"])
+        status, _, body = self.post("pdf", snapshot_id)
+        self.assertEqual(status, 202, body)
+        second = json.loads(body)["data"]["export_id"]
+        self.assertIsNone(self.until(second, "queued")["error"])
+        status, _, body = request(
+            self.port,
+            "DELETE",
+            f"/api/v1/exports/{second}",
+            headers={**self.headers, "Idempotency-Key": uuid.uuid4().hex},
+        )
+        self.assertEqual(status, 204, body)
+        self.assertIsNone(self.until(second, "cancelled")["error"])
+        self.release.set()
+        self.assertIsNone(self.until(first, "ready")["error"])
+        manifest = json.loads(
+            (self.home / "exports" / f"{first}.json").read_text(encoding="utf-8")
+        )["record"]["manifest"]
+        self.job_validator.validate(manifest)
+        self.assertIsNone(manifest["error"])
+
     def test_jpeg_non_size_preflight_error_keeps_generic_500(self) -> None:
-        """Scenario: JPEG 预检不可用保持既有受理边界."""
+        """Scenario: JPEG 预检非依赖故障保持既有受理边界."""
         snapshot_id = self.snapshot()
         self.mode = "fail_preflight"
         with self.assertLogs("serve", level="WARNING") as captured:

@@ -578,6 +578,13 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             snapshot_id, format_name, presentation = _export_request(
                 await request.json(), manifest
             )
+            if format_name in ("jpeg", "pdf"):
+                from browser_renderer import renderer_capability
+
+                capability = await run_in_threadpool(renderer_capability, home)
+                if not capability["available"]:
+                    # No renderer means no JPEG preflight, snapshot pin, or job.
+                    return _json({"detail": "EXPORT_RENDERER_UNAVAILABLE"}, 503)
             export_id = await run_in_threadpool(
                 exports.create,
                 snapshot_id,
@@ -596,6 +603,9 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
         except SnapshotGone:
             return _json({"detail": "gone"}, 410)
         except RendererError as error:
+            if error.code == "RENDERER_UNAVAILABLE":
+                # The dependency can disappear after the admission check.
+                return _json({"detail": "EXPORT_RENDERER_UNAVAILABLE"}, 503)
             if error.code != EXPORT_IMAGE_SIZE_LIMIT:
                 # Preserve the existing generic 500 without a path-bearing traceback.
                 logging.getLogger(__name__).warning(
