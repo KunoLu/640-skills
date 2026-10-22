@@ -199,14 +199,14 @@ Round 3 Release Readiness=`ready`（仅 Linux 库级交付）：最终计划范�
 | Round 2 主会话：决定回填、范围修正、预检通知与验证；session 01a161d9-7264-725e-9d47-caeaf21ccfd9 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 51 | 112 |
 | Round 2 RoundTwoSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 12 | 40 |
 | Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | 42 | 47 |
-| Round 3 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | unknown | unknown |
-| Round 3 RoundThreeDocs：plan／task 文档更新 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | unknown | unknown |
-| Round 3 RoundThreeTests：预检／caps／kana 回归实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | unknown | unknown |
-| Round 3 RoundThreeSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | unknown | unknown |
-| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | unknown | unknown |
+| Round 3 主会话；session 01a161ea-1974-77c4-9051-f6209e7b6283 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 55 | 104 |
+| Round 3 RoundThreeDocs：plan／task 文档更新 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 12 | 25 |
+| Round 3 RoundThreeTests：预检／caps／kana 回归实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 41 | 79 |
+| Round 3 RoundThreeSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 15 | 55 |
+| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | 17 | 35 |
 | Session title generation | unknown | unknown | unknown | unknown |
 
-Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 计数保留 unknown，等待 operator 回填，不推测、不表示零。
+Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数仍为 unknown。
 
 Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview 已只读复核第 3 项修正并确认 P3 关闭，无进一步发现。其回执晚于首次 docs commit 返回，因此仅将该回执与实际模型并入同一未发布的本轮 docs commit；不改 round-1 历史。
 
