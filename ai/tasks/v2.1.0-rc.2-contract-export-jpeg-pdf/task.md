@@ -1,0 +1,159 @@
+---
+schema_version: 1
+id: v2.1.0-rc.2-contract-export-jpeg-pdf
+workflow_mode: strict
+mode_source: user
+mode_note: 用户明确 strict、contract-only；仅指定 worktree 与分支；主会话唯一 writer／验证 controller；子代理仅只读；显式 git add 指定路径；本地两个提交，不 push、不开 PR、不评论、不 merge。
+status: done
+branch: contract/v2.1.0-rc.2-export-jpeg-pdf
+created_at: '2026-10-22T11:27:23+08:00'
+updated_at: '2026-10-22T11:55:23+08:00'
+completed_at: '2026-10-22T11:55:23+08:00'
+---
+
+# JPEG／PDF 与图像超限错误：独立导出契约
+
+## 范围与验收
+
+授权依据：640-skills room 用户于 **2026-10-22 11:23 Asia/Shanghai** 明确「授权开契约PR」；Lord 于 **11:24 +08:00** dispatch。本轮仅本地提交，operator 负责后续 push／PR／merge。基线 `origin/main` 为 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`，工作根 `/workspace/640-skills-contract-jpeg-pdf`，分支见 frontmatter。
+
+仅三个交付文件：`sbtd-runtime/contracts/openapi.yaml`、`sbtd-runtime/tests/test_golden_contracts.py`、本 task。扩展 CreateExportRequest.format 为 `[html, csv, jpeg, pdf]`，仅 createExport 新增 422 → ExportImageSizeLimit；错误 body 必须给出稳定 detail 和实际限制。保留全部 HTML／CSV 定义、其他 operation、CSV 列与版本。
+
+禁止修改 runtime（serve.py／export_store.py／export_render.py）、Dashboard、`test_exports_http.py`、PRD／ADR／plan.md；不纳入磁盘容量错误。不得触碰其他三个 worktree `/workspace/640-skills`、`/workspace/640-skills-r2.1b`、`/workspace/sbtd-plugins-row-c`。不得暂存 `.omp-r12b-addendum.txt` 或 `ai/tasks/codex-verify/`。
+
+验收：四格式请求、完整呈现状态、精确 enum、非法格式与必填／类型约束、精确 createExport 响应集合、错误 schema 正负例；基线 YAML 红灯／修改后绿灯；全部指定验证及只读独立 review。若契约一致性测试因 runtime 仍拒绝 jpeg/pdf 而失败，停止，不改 runtime、不提交契约，记录具体失败。
+
+未完整调用 grill-with-docs：授权、范围、PRD 和验收明确，无需重复需求访谈。测试 seam 由用户指定为 OpenApiDraftTests／Draft202012Validator，不模拟 HTTP 成功。
+
+### 契约验收场景
+
+沿用请求体契约先例，在本次限定三文件任务记录保存中文正文、英文关键词；Cross-repo context: contract-only；Mock Strategy: none。OpenAPI 是持久 wire contract；不把以下契约场景冒充 runtime 实现。
+
+```gherkin
+Scenario: 固定快照可选择四种导出格式
+  Given 客户端持有格式正确的 snapshot_id
+  When 按 createExport 契约校验 html、csv、jpeg 或 pdf 请求
+  Then 省略或完整提供 presentation_state 均被接受
+  And jpg、JPEG、PDF、png 等未声明格式仍被拒绝
+
+Scenario: JPEG 超限预检返回明确限制
+  Given JPEG 完整输出仍超过已验证图像上限
+  When 按 createExport 的预检失败契约校验响应
+  Then HTTP 状态为 422 且 detail 为 EXPORT_IMAGE_SIZE_LIMIT
+  And max_edge_px 与 max_total_pixels 必须给出正整数限制
+  And 错误 detail、缺字段、错误类型或未知字段被拒绝
+```
+
+## 源码证据与决定
+
+- 已读 `git show c7a87e4`（#152）、两份指定 task 及当前 OpenApiDraftTests；沿用精确 status→`$ref` 映射与 subTest 风格。
+- PRD `docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md` §9.6（841 行）：请求体或导出规模超出已验证上限 → 413／422，预检失败、明确限制、不截断。
+- 同 PRD §13.5（1146–1148 行）：单边 32,000 px／总像素 80 MP 是建议值、待平台实测冻结；若保持完整内容的降采样仍超限，返回 EXPORT_IMAGE_SIZE_LIMIT，不截断、不拆文件、不伪造成功。AC-48（1480 行）要求 JPEG 超限明确失败。
+- `serve.py:425–426` 与 `export_store.py:35,255–256` 目前只接受 html/csv；`test_exports_http.py:127` 明确保留 pdf → 400。此 PR 为前置契约，不声明当前 runtime 已支持新格式。
+- `serve.py` 使用 `_json({"detail": str(error)}, status)`；既有 BadRequest／NotFound／Conflict／Gone 为 description-only。新增专用响应，不引入公共错误 envelope 或 code 字段。
+
+## 决策
+
+| 项目 | 决定与理由 |
+|---|---|
+| 名称 | detail const `EXPORT_IMAGE_SIZE_LIMIT`，直接采用 PRD §13.5／AC-48，不发明其他错误码 |
+| HTTP | 422：JSON 请求有效且很小，超限对象是预期渲染输出；413 更适合请求内容大小。符合 §9.6 二选一 |
+| body | 封闭 object，required detail／max_edge_px／max_total_pixels；限制为 minimum 1 的 integer；32,000／80,000,000 只写建议默认值描述，不用 const/default 锁死；不加可选估算值 |
+| operation | 仅 POST /api/v1/exports 的 createExport：生成前、202 接受前预检失败。其余 get/download/delete 无此同步错误路径，不毯式添加 |
+| 异步边界 | R2.1b 必须保证此预检先于 202；若只能在接受后检测，需独立明确 getExport failed 状态／错误信息契约与无半成品成功文件保证；本次不扩张查询 schema，不把后置失败伪称 HTTP 422 |
+| JPEG／PDF | 四格式 enum 是请求选择契约；§13.5 图像限制错误针对 JPEG，PDF 仍按 §13.6 单文件多页语义，不套用 JPEG 单图上限 |
+| 兼容与回滚 | html/csv 及幂等／认证／CSRF／202 envelope 不变；仅新增可选格式和失败响应。撤回实现提交前需协调依赖此契约的 R2.1b；无数据迁移或回放 |
+
+## Book Gate Plan
+
+| Gate | 触发事实 | 阶段 | 状态 |
+|---|---|---|---|
+| book-ddia-data-design | 新请求枚举与失败 wire schema | before-dev | passed / confirmed |
+| book-ddd-distilled-modeling | 无完整 grill、无领域歧义 | before-dev | not-required |
+| book-legacy-change-safety | 无 runtime 行为修改，既有直接 validator seam | before-dev | not-required |
+| book-refactoring-pass | 已读路由；仅声明式契约／测试，无生产代码编辑或结构摩擦 | before-dev | not-required；no refactor needed |
+| book-release-readiness | 无 runtime／部署变更 | finish | not-required；不声称实现或发布就绪 |
+
+DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Export 负责固定快照导出，runtime job 状态不变。新失败只在接受前声明；接受后失败需 R2.1b 单独处理。无共享持久数据写入／一致性／重试／排序／去重／迁移／backfill／replay 变化。detail 与两项实际限制是诊断信号。以实例校验、精确响应集合、红灯证明和现有全套 runtime 测试约束兼容性。Ponytail：内联一个 response schema，复用现有 validator，不加依赖、helper 或公共错误抽象。
+
+## 状态持久化限制
+
+初始根／分支／基线匹配，git status 为空；路径逐级检查无 symlink。`git check-ignore` 证实 `.sbtd/active-task.json` 与本 task reports 受保护；`git ls-files -- .sbtd ai/tasks/v2.1.0-rc.2-contract-export-jpeg-pdf` 为空。namei 对不存在的新任务目录返回 1 是缺失确认，非写入失败。
+
+沿用 #148/#152 已记录的 TaskStore catalog `task has no YAML frontmatter block` 限制，不重跑确认；TaskStore.create 的 index／active 写入也超出三文件范围。本文件是用户明确要求的共享交付记录，不声称 TaskStore helper 生命周期、active 或自动恢复成功；不写身份／ignore／其他任务。原始验证报告与同 stem 中文汇总仅放本任务 ignored reports，不暂存。
+
+## 验证证据
+
+所有命令在授权 worktree 根执行，使用原生工具；`PYTHONDONTWRITEBYTECODE=1 RUFF_NO_CACHE=true`，runtime 命令 `PYTHONPATH=sbtd-runtime`。rtk: skipped-for-report。环境 Linux／Python 3.13.5（CI 配置为 3.12.10，此处不是 CI 环境等价证明）。原始 command／stdout／stderr／exit code／时间／基线／平台存入本 task ignored `reports/<stem>.json`，同 stem 中文 `.md`；不暂存报告。证据为 developer-local／dirty／local-only，不冒称 PR head／部署证明。
+
+| 命令 | 退出码与结果 | 报告 stem |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -c <base YAML red script>` | exit 1（预期）：4 tests，6 failures、1 error；jpeg/pdf 枚举拒绝、精确 enum／422 map 失败、ExportImageSizeLimit 不存在 | `base-yaml-red` |
+| `python -B -c <contract smoke script>` | exit 0：YAML parses；四格式 JSON round-trip 均接受；422 body 接受非建议默认值 24000／60000000；撤掉本次三处语义变化后整个 YAML 结构与基线完全相等 | `contract-smoke` |
+| `PYTHONPATH=sbtd-runtime python -B -m unittest sbtd-runtime/tests/test_golden_contracts.py -v` | 最终 exit 0：54 passed，0.305s；初轮也 54 passed | `golden-final`；保留 `golden` |
+| `PYTHONPATH=sbtd-runtime python -B -m unittest discover -s sbtd-runtime/tests` | exit 0：303 tests，301 passed、2 skipped，48.695s | `runtime-full` |
+| `PYTHONPATH=sbtd-runtime python -B -m unittest discover -s sbtd-runtime/tests -p 'test_panel_manifest.py'` | exit 0：21 passed，0.004s | `panel-manifest` |
+| `PYTHONPATH=sbtd-runtime python -B -m unittest discover -s sbtd-runtime/tests -p 'test_serve.py'` | exit 0：14 passed，6.828s | `serve` |
+| `PYTHONPATH=sbtd-runtime python -B -m unittest discover -s sbtd-runtime/tests -p 'test_export*.py'` | exit 0：35 tests，34 passed、1 skipped，30.720s | `exports` |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | 初轮 exit 1：新增非法格式 tuple 与长方法签名换行；仅修这两处，最终 exit 0：1 file already formatted | `format`、`format-final` |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1：仅既有 I001（19–30 行 import block）；与 #148/#152 记录一致，此段未改，不修无关问题、不宣称 lint 全绿 | `lint` |
+| `env PYTHONDONTWRITEBYTECODE=1 RUFF_NO_CACHE=true VALIDATION_SHA=8931c35ef1aa4a58d3675b6f8d1a8fead309ed90 python -B tests/run_ci.py --platform linux --output ai/tasks/v2.1.0-rc.2-contract-export-jpeg-pdf/reports/native-ci` | exit 1：2375 tests，2 failures、63 skip events，1249.547s；契约／验收 wrapper 70 cases 均 passed；两个失败详见下文 | `native-ci/linux-1.{json,md}`；`linux-ci-review.{json,md}` |
+
+红灯脚本通过 `git show origin/main:sbtd-runtime/contracts/openapi.yaml` 取得基线 YAML，写入 TemporaryDirectory，再只替换测试模块 OPENAPI 路径运行四个修改测试；没有 stash 或改写工作树。完整可复现 `-c` 源码在对应 raw JSON 的 command 数组。Smoke 脚本同样只在进程内执行，无遗留脚手架。
+
+全 runtime 套件包含 test_r1_acceptance、test_serve 与 test_exports_http；**没有出现 runtime 拒绝 jpeg/pdf 导致契约一致性失败**。既有 pdf → 400 测试保持原样并通过，框架容许 rc.2 draft contract 领先实现。两项 skip 均是 Windows junction evidence only：`test_snapshot_junction_is_refused_without_cleaning_target`、`test_export_junction_is_refused_without_cleaning_target`；exports 子集只含后者。套件与子集重叠，不累计通过数量。
+
+根 Linux suite 的两个失败均位于未修改的 `tests/test_sbtd_probe_links.py`：
+
+1. `MaterializeAuthorizationTests.test_link_text_change_is_refused`（867 行）：实际 `link-mismatch`，预期 `identity-mismatch`。
+2. `MaterializeAuthorizationTests.test_replaced_link_with_identical_text_is_refused`（878 行）：预期 ContractError 未抛出。
+
+源码 857–880 行测试 symlink 物化授权／身份，不涉及 OpenAPI、runtime 导出格式或本次改动；不扩张范围修复、不重跑掩盖、不宣称已知根因或 flaky。用户指定「runtime 拒绝 jpeg/pdf 引发契约一致性失败则不提交」未触发；全部契约／验收 wrapper 通过。完整失败原始报告已保留，**根 CI 不全绿**。原生 cases 为 2312 passed／61 skipped／2 failed，而 unittest 汇总为 63 skip events（含 subTest，不同粒度），不简单相减制造通过数。
+
+根 runner 必填 `--output`，因此加本任务 ignored 报告路径；未分片。其 `source_sha`／VALIDATION_SHA 是真实基线，不代表包含修改的 PR head；报告明确 developer-local／dirty／local-only。最终契约／测试文件哈希在根 suite 前后相同。Final Test Report / Run Summary MD: generated；Targeted Rerun: passed（格式修正后的 golden）；runtime planned scope: passed（保留平台 skips）；**Final Full Rerun: failed（根 Linux 两项范围外失败）**。
+
+### 验证边界
+
+- BDD: traceable；中文正文／英文关键词，task 两个契约场景映射至四格式接受／非法请求／精确 map／新 body 测试。API Contract: verified（schema、实例、结构比较）；Cross-repo context: contract-only；Mock Strategy: none。
+- 实际 smoke 是声明式契约消费者校验，不是 JPEG/PDF HTTP 成功或渲染证明。runtime／Dashboard／浏览器／移动端不改；不执行新渲染、TS build、UI E2E 或部署。
+- `.github/workflows/validation.yml` 的三个相关 Python 步骤均已执行；根 Linux runner 另行执行并记录。未安装依赖、未执行 compileall 产生仓库缓存、未更换 TOML 依赖版本。独立完整 OpenAPI meta-schema lint 未配置；使用项目 PyYAML／Draft202012Validator，不冒充 OAS linter。
+- 主会话 Code Readability／Ponytail Review：复用 unittest、subTest、既有 validator；一个 response schema，无新 helper／依赖；正负例针对格式、字段必填／类型／限制可变等消费者边界，不锁定描述措辞。独立审查结果见下。
+- 报告与通过是两回事；已保留红灯、格式首轮与既有 lint 失败。没有新的 durable runtime lesson，不写身份／lesson。TaskStore 自动恢复限制不变。
+
+### 独立审查与可读性
+
+- ContractCorrectness：`overall_correctness: correct`，confidence 0.92，无 blocking finding；核对 PRD、完整契约 diff、当前 runtime 错误 body／格式检查、scope 与前置／异步边界。报告指出正文验证仍在填充，该事实属于审查时快照，不冒称最终记录已审核。
+- ContractCoverage：`overall_correctness: correct`，confidence 0.98，无覆盖／正确性 finding；确认 root wrapper 导入全部 TestCase，新方法进入 tests/run_ci.py，runtime pdf → 400 测试不变。
+- 唯一非阻塞 simplicity 建议：移除只有 createExport 的 subTest，net -1 line。保留：用户明确要求 #152 精确映射与 subTests 风格；reviewer 已确认此决定合理，无需修改。
+- 两位均只读，未运行测试／lint／formatter，无共享 writer；主会话完成 Code Readability Review，无必要重构、helper 或依赖。review 覆盖的是最终格式修正后的契约／测试；未产生代码修正回路。
+
+## 提交与恢复边界
+
+本地契约交付完成；done 不表示 runtime JPEG/PDF 已实现、整仓 CI 全绿、部署或发布就绪。实现提交 `d75ca3b57594d0010d3e0e29850a1942b35347a4`，parent 为指定基线 `8931c35ef1aa4a58d3675b6f8d1a8fead309ed90`。只执行 `git add sbtd-runtime/contracts/openapi.yaml sbtd-runtime/tests/test_golden_contracts.py`，实现提交仅两文件、116 insertions／16 deletions。
+
+提交后读取两个 Git blob，与验证前保存的 SHA-256 完全一致；不重复运行未变化的套件、不把已有失败包装成通过：
+
+| 文件 | 已验证／已提交 SHA-256 |
+|---|---|
+| sbtd-runtime/contracts/openapi.yaml | 2dd450480e79c8b3f186f52e6c4aeb1debcec31f11d829c1d42899e21eb1f0a9 |
+| sbtd-runtime/tests/test_golden_contracts.py | 28323423e5815508d59056aa8ef2dc1a076ebe4d7c3cfc08d1332cebe65d61ee |
+
+本记录以第二个 docs 提交保存，只显式添加 `ai/tasks/v2.1.0-rc.2-contract-export-jpeg-pdf/task.md`；自身提交 SHA 由最终命令输出／本地 receipt 记录，避免自引用。最终交付三文件；reports ignored、不暂存禁止路径；不 push、不开 PR、不评论、不 merge。回滚为协调撤回实现提交（下游 R2.1b 尚不得假设已合并），无持久数据恢复步骤。TaskStore／active／自动恢复限制不变；operator 负责模型计数与后续发布操作。
+
+## 状态事件
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-22T11:27:23+08:00 | planned | in-progress | 用户明确 strict；授权根／分支／基线与三文件范围已确认，完成 PRD／先例与 schema 设计核对 | origin/main 8931c35ef1aa4a58d3675b6f8d1a8fead309ed90；PRD §9.6／§13.5／AC-48；#152 |
+| 2026-10-22T11:32:27+08:00 | in-progress | checking | 契约与测试已完成；红灯、smoke、指定 runtime 子集／全量和格式检查已执行，进入独立 review／根 CI 验证 | golden 54；runtime 303/2 skips；panel 21；serve 14；exports 35/1 skip；既有 I001 保留 |
+| 2026-10-22T11:55:23+08:00 | checking | done | 指定契约／runtime 验证及双独立 review 完成；实现提交内容与验证哈希一致；明确保留根 CI 两项范围外失败与既有 I001，不声称整仓全绿 | d75ca3b57594d0010d3e0e29850a1942b35347a4；parent 为指定基线；golden 54／runtime 303；根 CI 2375 tests、2 failures、63 skip events；契约 wrapper 70 passed |
+
+## 模型使用
+
+operator 将依据本次 session jsonl 回填实际模型及精确计数；下面是明确待回填的计数表，不推测 assistant messages 或工具调用次数。
+
+| 用途 | 请求／配置模型 | 实际模型 | assistant messages | 工具调用次数 |
+|---|---|---|---|---|
+| 主会话 | openai-codex/gpt-6-astra:high | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
+| ContractCorrectness（只读 reviewer） | omp configured task-role（未覆盖 model；用户告知当前 grok-4.7） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
+| ContractCoverage（只读 reviewer） | omp configured task-role（未覆盖 model；用户告知当前 grok-4.7） | 待 operator 按 jsonl 回填 | 待回填 | 待回填 |
