@@ -494,6 +494,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "410":
           $ref: "#/components/responses/Gone"
+        "422":
+          $ref: "#/components/responses/ExportImageSizeLimit"
   /api/v1/exports/{export_id}:
     get:
       operationId: getExport
@@ -744,7 +746,11 @@ components:
           schema:
             $ref: "#/components/schemas/Envelope"
     ExportAccepted:
-      description: Export accepted; use data.export_id to query or download the export.
+      description: |
+        Export accepted; use data.export_id to query or download the export.
+        When createExport downgrades a JPEG export from 2x to 1x, this HTTP 202
+        response carries the fixed-format warning string EXPORT_SCALE_DOWNGRADED:1x
+        in meta.warnings as the user notice before generation.
       content:
         application/json:
           schema:
@@ -766,6 +772,40 @@ components:
       description: Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF check on an unsafe method. Does not reveal internal policy details.
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
+    ExportImageSizeLimit:
+      description: |
+        JPEG preflight failed before export acceptance or generation because
+        the rendered image size or total pixel count would exceed the limit
+        (PRD 13.5, AC-48). If a 2x render would exceed the limits, the runtime
+        downgrades to 1x when content remains complete and the width is still
+        at least the standard report width, with a user notice before generation
+        via EXPORT_SCALE_DOWNGRADED:1x in meta.warnings of the createExport HTTP 202
+        ExportAccepted response.
+        Only if the 1x render still exceeds the limits is EXPORT_IMAGE_SIZE_LIMIT
+        returned. No truncation, splitting into multiple files, partial or
+        half-finished output, or false success.
+        Limits report the values in effect; suggested preflight caps are 32,000 px
+        per edge and 80 MP (80,000,000 pixels), not frozen pending measurement on
+        target platforms and the user's decision. Use HTML/PDF or reduce displayed
+        detail instead.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [detail, max_edge_px, max_total_pixels]
+            properties:
+              detail:
+                type: string
+                const: EXPORT_IMAGE_SIZE_LIMIT
+              max_edge_px:
+                type: integer
+                minimum: 1
+                description: Maximum supported width or height of the output image, in pixels.
+              max_total_pixels:
+                type: integer
+                minimum: 1
+                description: Maximum supported total pixel count of the output image.
   schemas:
     CreateExportAccepted:
       type: object
@@ -793,7 +833,7 @@ components:
             missing or invisible: 404. Expired: 410.
         format:
           type: string
-          enum: [html, csv]
+          enum: [html, csv, jpeg, pdf]
         presentation_state:
           $ref: "#/components/schemas/ExportPresentationState"
           description: Optional; when omitted, use the existing ReportDocument default presentation state.
@@ -898,6 +938,10 @@ components:
           type: string
         warnings:
           type: array
+          description: |
+            Warning strings; known fixed-format codes include EXPORT_SCALE_DOWNGRADED:1x,
+            emitted by createExport in the HTTP 202 ExportAccepted response when a
+            JPEG export is downgraded from 2x to 1x.
           items:
             type: string
         next_cursor:
