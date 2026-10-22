@@ -3,12 +3,12 @@ schema_version: 1
 id: v2.1.0-rc.2-r2.1b-renderer
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict；仅指定 worktree 与分支。显式 git add；不 push、不开 PR、不评论、不 merge；不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/。冻结 OpenAPI、Panel manifest、ADR 0001–0003、PRD、CSV schema。JPEG/PDF 仅库级实现，HTTP 继续拒绝；契约缺口记录而不停止其余工作。
+mode_note: 用户明确 strict；仅指定 worktree 与分支。显式 git add；不 push、不开 PR、不评论、不 merge；不暂存 .omp-r12b-addendum.txt 或 ai/tasks/codex-verify/。冻结 OpenAPI、Panel manifest、ADR 0001–0003、PRD、CSV schema。JPEG/PDF 仅库级实现，HTTP 继续拒绝。#153（open，tip 2084d71，另一 agent）映射 jpeg/pdf 与 createExport 尺寸预接受；合并且 main 以 merge 并入前不接线。
 status: in_progress
 blocked_reason: null
 branch: feat/v2.1.0-rc.2-r2.1b-renderer
 created_at: '2026-10-22T11:12:22+08:00'
-updated_at: '2026-10-22T12:35:13.972967+08:00'
+updated_at: '2026-10-22T12:59:34.599901+08:00'
 completed_at: null
 ---
 
@@ -34,13 +34,14 @@ completed_at: null
 | 2026-10-22T11:13:00+08:00 | in_progress | in_progress | 补记用户后续项 A 决定：保持 #151 事件明细屏蔽行为；不新增 withheld，不为 A 开 contract PR | 用户 round-2 指令；保留四格式 event-detail 屏蔽一致性回归，AC-51 完整验收仍归 R2.2 |
 | 2026-10-22T12:17:20.268311+08:00 | in_progress | in_progress | Run 1b 从 ceb202e 续接；库级实现、真实 smoke、指定回归与两位独立复核完成。本地验收通过，保留 in_progress 等待 operator 提审／契约后续，不宣称已发布 | runtime-final-full 341／7 skip；renderer-final-full 39／1 Windows skip；contracts 69、OpenAPI 16；smoke-receipt.json；reviewer closure |
 | 2026-10-22T12:35:13.972967+08:00 | in_progress | in_progress | Round 2：A/B/C 与独立 contract PR 登记、模型回填、F 文档越界修正；补齐事前降级通知／配置跨进程传递和 capabilities 认证回归；本地指定回归与真实 smoke 通过 | round2/runtime-final-full 344／8 skip；renderer-final-full 42／1 Windows skip；contracts 69、OpenAPI 16；runtime-final/smoke-receipt.json |
+| 2026-10-22T12:59:34.599901+08:00 | in_progress | in_progress | Round 3 库级 PR #153 对齐、受理前 preflight、AC-42 kana／9pt 页脚完成；本地验收通过，HTTP／合并与跨平台仍不冒充完成 | r3/kana-smoke；kana 720；renderer-final-full 44／1 skip；runtime-native-final-full 346／9 skip；ruff-final；两位独立 reviewer 无发现 |
 
 ## 决策
 
 - 未完整调用 grill-with-docs：用户范围、锁定决定与冻结契约边界明确，不重开需求。
 - 后续项 A 已决定（用户 2026-10-22 11:13 +08:00）：保持 #151 行为，仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。四格式共用同一过滤管线，不新增 `withheld` 值，不为 A 开 contract PR。保留 AC-51 四格式事件明细屏蔽一致性测试作为该决定的回归保护；AC-51 完整验收仍在 R2.2，不宣称本轮通过 AC-51。
 - 后续项 B 仅在 F 回填 `install-and-use.md`。后续项 C 根据用户约 11:15 授权及 11:19 放置修订，与计划第 4 项 PRD §10.4 磁盘上限补充同属单独 PRD docs PR；明确两种 event 明细屏蔽条件及派生行不受影响，与 B 措辞一致。本轮不改 PRD，也不提前交付 B。
-- 独立 JPEG/PDF contract PR：用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成；范围为 `CreateExportRequest.format` 加 `jpeg`／`pdf`、`EXPORT_IMAGE_SIZE_LIMIT` 及 golden tests，不含第 4 项磁盘上限错误码。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线。
+- 独立 JPEG/PDF contract PR #153（https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开）。用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成。范围：`CreateExportRequest.format` 加 `jpeg`／`pdf`；仅 createExport 预接受 422 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含第 4 项磁盘上限错误码，后续项 C 仍留在计划第 4 项。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线、不评论、不 merge。
 - 配额决定仅登记在 plan，R2.2 才实现。
 - 沿用 R2.1a 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败、不改 active/ignore；本文件是用户明确要求的共享交付，不声称 helper lifecycle 或自动恢复成功。
 
@@ -57,6 +58,10 @@ completed_at: null
 测试 seam 为用户明确要求的 ExportStore、renderer 隔离／预检、capabilities 与真实 PDF/JPEG。主会话为唯一验证 controller。BDD 沿用 spec 中文正文＋英文关键词，不引入 Gherkin runner。Round 1 未提交场景已复用并修正 A 的状态。
 
 Round 2 before-dev：Legacy Change Safety=`characterized`，`round2/preflight-red` 两项真实失败分别证明低于 1440px 的降级未拒绝、父进程配置／事前告警未生效；保留完整输出、错误码、隔离清理与四格式过滤回归。Refactoring=`proceed / normal`，无需前置重构。DDIA=`confirmed`：配置随现有 request 进入独立 worker；降级通知／确认只在临时 job 目录，通知返回前不截图，取消／超时／处理器异常均沿用清理和不发布语义；不改数据格式、恢复或 HTTP。Python LSP status／references 均实际不可用，使用源码调用点补充。Round 2 release gate 见本轮验证收口，不以 Run 1b 的 ready 替代。
+
+上表与 Round 2 段落是既有轮次证据，不是 Round 3 门禁结果。
+
+Round 3 before-dev：strict、分支与干净入口 `4476b3136e280077816518faa996a59e1ca4f329` 已核对。未完整调用 grill-with-docs：本轮接口、验收与冻结边界明确，无新领域歧义。Legacy Change Safety=`characterized`：`r3/contract-preflight-red` 实测旧 warning、无 public preflight、异常无 caps；`r3/footer-before` 原 PDF 页脚实测 6pt；operator 的零 kana 结果直接采纳，不重跑确认。安全网沿用尺寸／通知／隔离／HTTP 冻结测试，并扩展本轮 public preflight 回归。Refactoring=`proceed / normal`：无需前置重构；复用既有 worker／预算／信号量／清理。DDIA=`confirmed`：无新持久状态、无迁移；SnapshotStore／ExportStore 所有权不变，preflight 不创建导出作业。预检不预留资源；调用者负责 snapshot 生命周期，至受理保持 snapshot／presentation／配置固定，生成仍复检。Python LSP references 实际不可用，源码补充调用分析。沿用已知 TaskStore catalog/frontmatter 限制，不重试 helper、不声称自动恢复；本共享记录保存用户明确 strict 选择。
 
 ## 验证证据
 
@@ -145,6 +150,40 @@ Smoke 产物在 `round2/runtime-final/`：`report.html`、`report.csv`、`report
 
 Round 2 Release Readiness=`ready`（仅用户授权的 Linux 库级交付，不代表 HTTP／跨平台／发布就绪）：指定完整套件与真实 Store smoke 通过；单作业信号量、总预算、取消、处理器异常清理与不发布语义保留；降级可提前观察且 manifest 留据。配置／代码回滚无需迁移，不删除原始事件或产物；未安装／卸载全局依赖。BDD=`traceable`（既有中文场景＋英文关键词，renderer／integration unittest），Cross-repo context=`complete`，API Contract=`verified`（冻结 html/csv），Mock Strategy=`user-approved`；实际浏览器／库 smoke 不混称 HTTP 四格式 E2E。Final Full Rerun=`passed`；原生/raw 与同 stem 中文汇总已校验章节／配对；跨平台与完整 AC-51 按用户计划仍归 R2.2。
 
+### Round 3：AC-42 假名证据、页脚与契约库级对齐
+
+证据根目录 **`/workspace/smoke-r2.1b/r3/`**；既有 venv `/workspace/venv-r2.1b`、browser home `/workspace/smoke-r2.1b/home`，未重装依赖／字体。本轮单独 `r3/home` 写入 72 条真实事件，经 EventStore → load_dataset → SnapshotStore → ExportStore，非 golden fixture。快照 `snap_562bef29d39a4d7cb44ee9f28b787d25`。原生 `.txt`、命令／时间／入口 SHA `.json` 与同 stem 中文 `.md` 保留；developer-local／dirty／local-only，不冒充 CI 或发布。
+
+- 混合字段完整字符串：`中文验收：任务完成 日本語のテキスト・カタカナ検証 English mixed`。`pdftotext -layout report.pdf -` 中逐字找到；U+3040–U+30FF 计数 **720**，出现于 PDF 第 9／10／11 页。`pdftotext.txt`、`kana-evidence.json` 记录文本与计数；不再用 kanji-only 的 `日本語` 作为日文假名覆盖证据。
+- `pdffonts.txt`：`NotoSansCJKsc-Regular`／Bold 和 `NotoSansCJKjp-Regular` 均嵌入（emb/sub/uni=yes）。SC CJK 字体也覆盖本次假名；不把 JP 字体存在单独解释为所有日文字形均选用 JP face。
+- `report.jpg`：完整 **2880×25494**；`report.pdf`：A3 横向 **12 页**。`smoke-receipt.json` 保存 ready／SHA-256／manifest；下载摘要实际匹配。`downgraded.jpg` 的通知与 manifest 精确包含 `EXPORT_SCALE_DOWNGRADED:1x`。
+- `pdftoppm -f 9 -singlefile -png -r 80 report.pdf page-kana` → `page-kana.png`；已查看，第 9 页完整显示假名字符串。第 1 页同命令 → `page-1.png`。Pillow 从 JPEG 原图 `(1260,19130,2630,19520)` 裁出 `jpeg-kana-crop.png`，2 倍放大为 `jpeg-kana-zoom.png`；已查看，中文／平假名／片假名／English 均可读。
+- 页脚根因：`8px` 等效 **6pt**，`pdftohtml -xml -zoom 1` 对原 `report.pdf` 的 fontspec 12／13／14 均为 6（`footer-before.txt`）。仅将 footer template 改为 **9pt**；同命令对新 PDF 实测页脚字体均为 **9pt**（`footer-after.txt`），`footer-zoom.png` 已查看，标题／范围／短 snapshot／页码均保留，没有改正文 CSS。
+- `kana-smoke` 原生执行证明 public preflight 在无 exports 目录时返回 JPEG 2x／PDF None；调整配置后返回 1x＋固定 warning；1x 超限直接抛异常，caps 实测 `(1439,30000000)`。没有受理／生成失败作业来冒充 pre-acceptance 结果。HTTP 仍未接线。
+
+独立复核：`RoundThreeSafetyReview` Findings=`[]`，确认公共 preflight 与生成共用生命周期、无 capture／publication、有效 caps 跨进程回传、固定 warning 顺序及冻结 HTTP；`RoundThreeScopeReview`=`correct`（confidence 0.96），PR #153 映射／后续项 C／模型回填／剩余缺口／kana／9pt 证据一致。两者只读，未运行验证；其静态生产／范围结论不冒充尚未完成的新增测试执行结果。Ponytail Review：复用 worker 与结果文件，无新增存储、缓存、队列或依赖，无需额外抽象。Code Readability Review：public preflight 的生命周期与生成集中在 `_run`，捕获前直接返回测量结果，IPC 只新增允许的数值 caps。
+
+#### Round 3 最终验证与收口
+
+| 命令／检查 | 实际结果 | `r3/` 报告 stem |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. SBTD_RENDERER_TEST_HOME=/workspace/smoke-r2.1b/home /workspace/venv-r2.1b/bin/python -B -m unittest test_browser_renderer test_renderer_integration test_renderer_windows -v` | **44 tests：43 passed、1 Windows skip；35.327s** | `renderer-final-full` |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_*.py' -v` | **346 tests：337 passed、9 skipped；59.944s** | `runtime-native-final-full` |
+| 同系统 Python，`-m unittest test_facade_registration test_history_import -v` | 24 passed；2.469s | `native-environment-targeted` |
+| renderer venv，`-m unittest test_browser_renderer.PreflightTests test_renderer_integration.RendererLibraryTests.test_preflight_measures_real_snapshot_without_capture -v` | 6 passed；6.099s | `preflight-targeted` |
+| `ruff check`、`ruff format --check`：browser_renderer.py、test_browser_renderer.py、test_renderer_integration.py | 全部通过；3 files already formatted | `ruff-final`、`ruff-format-check` |
+| venv `python -B /workspace/smoke-r2.1b/r3/smoke.py`＋pdftotext／pdffonts／pdftohtml／pdftoppm | 真实 Store ready、摘要匹配、exact string 72 次、kana 720、页脚 9pt；已查看 PNG | `kana-smoke`、`pdftotext`、`pdffonts`、`footer-after`、`pdf-preview-kana`、`pdf-preview-footer` |
+
+失败证据保留而不覆盖：`contract-preflight-red` 是修改前的旧 warning／缺 preflight／缺 caps；`ruff-check` 为新增测试两处 SIM117，合并 with 后最终 lint 通过；`runtime-final-full` 是 **renderer venv 的失败尝试**（346 tests，3 failures、8 errors、3 skips，79.438s），该 venv 缺 workflow 所需 `markdown-it-py`，不是产品修复项。未安装新依赖，改用前两轮全量验证的系统 Python，先复跑 facade/history 24 项再跑完整 runtime 全量；最终通过以 `runtime-native-final-full` 为准。`renderer-focused-first` 是新增测试落地前的 42 tests 先行回归，不冒充最终 44 tests。
+
+系统全量的 9 skips＝6 个需显式 browser home 的真实场景＋3 个 Windows 场景；6 个 browser 场景已由 venv 最终 renderer suite 执行通过。套件有重叠，不相加成独立测试数。未运行 Dashboard tests／build：无 Dashboard 修改。`ty` 当前不可用；未安装额外工具、不声称 typecheck 通过。本轮无需独立重跑全仓 workflow；全 runtime 已含 frozen OpenAPI golden tests，HTTP JPEG/PDF 拒绝与 capabilities 访问控制仍通过。
+
+新增持久回归：精确 warning 字面量而非与同源常量自比；配置 caps 的直接异常及真实 worker 回传；public preflight 真实 SnapshotStore → HTML → Chromium 测量，normal／downgrade／oversize／PDF、报告原有 warning 保留，worker 禁止 screenshot／pdf，成功／失败都检查 profile/job 清理及 exports 不存在。删除测试写入的 snapshot/theme 源文本回声检查，不用 wiring 断言替代行为。真实混合文本 fixture 与 PDF 抽取断言均含 `中文日本語のテキスト・カタカナ English`。
+
+Round 3 Release Readiness=`ready`（仅 Linux 库级交付）：最终计划范围通过、真实输出已查看；隔离／单作业背压／总预算／取消／错误清理沿用，preflight 无持久写路径，配置与代码回滚无数据迁移。BDD=`traceable`，`sbtd-runtime/spec/r2.1b-renderer-scenarios.md` 中文正文＋英文关键词；Cross-repo context=`complete`（本仓库面），API Contract=`verified`（已读取 origin/pr153 diff，但不改本分支冻结契约），Mock Strategy=`user-approved`（既有故障替身）；真实 Chromium／Store smoke 不混称 HTTP JPEG/PDF E2E。Final Full Rerun=`passed`；Final Test Report／Run Summary MD=`generated`，rtk=`skipped-for-report`。lessons-record 已评估：kana fixture 与 pt／px 根因的预防已落在持久场景、回归和本段原生证据，不重复创建长期 lesson／身份。HTTP 接线、Windows/macOS 实测与完整 AC-51 仍按原计划归后续。
+
+`validated-source-hashes.json` 绑定最终实际跑过的生产／测试／场景／安装文档字节；`artifact-hashes.json` 绑定 PDF／JPEG／PNG；提交后由 `final-tip.json` 记录实际 tip 和相同字节核对，不把旧入口 SHA 当作新提交执行证明。Smoke 后生产文件仅 ruff 格式化，无行为改变；最终测试使用格式化后代码。报告仍为本地证据，不声明发布或自动恢复。
+
 ## 模型使用
 
 | 轮次／用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
@@ -157,12 +196,17 @@ Round 2 Release Readiness=`ready`（仅用户授权的 Linux 库级交付，不�
 | Run 1b RendererIntegration：库／HTTP／过滤一致性实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 63 | 139 |
 | Run 1b RendererSecurityReview：安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 28 | 82 |
 | Run 1b RendererOutputReview：输出／集成复核 | omp 配置 reviewer role | kimi-code/k3 | 62 | 78 |
-| Round 2 主会话：决定回填、范围修正、剩余项验证与交付 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | unknown | unknown |
-| Round 2 RoundTwoSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | unknown | unknown |
-| Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | unknown | unknown |
+| Round 2 主会话：决定回填、范围修正、预检通知与验证；session 01a161d9-7264-725e-9d47-caeaf21ccfd9 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 51 | 112 |
+| Round 2 RoundTwoSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 12 | 40 |
+| Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | 42 | 47 |
+| Round 3 主会话 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | unknown | unknown |
+| Round 3 RoundThreeDocs：plan／task 文档更新 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | unknown | unknown |
+| Round 3 RoundThreeTests：预检／caps／kana 回归实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | unknown | unknown |
+| Round 3 RoundThreeSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | unknown | unknown |
+| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | unknown | unknown |
 | Session title generation | unknown | unknown | unknown | unknown |
 
-Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 计数待 operator 运行后回填，不推测；unknown 不表示零。
+Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 计数保留 unknown，等待 operator 回填，不推测、不表示零。
 
 Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview 已只读复核第 3 项修正并确认 P3 关闭，无进一步发现。其回执晚于首次 docs commit 返回，因此仅将该回执与实际模型并入同一未发布的本轮 docs commit；不改 round-1 历史。
 
@@ -176,10 +220,14 @@ Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview
 6. `6caf067` — `docs(task): record R2.1b acceptance evidence and contract gaps`（Run 1b）。
 7. `12afbb4` — `fix(runtime): notify JPEG downgrade before capture`（Round 2 预检、测试与 renderer 文档）。
 8. Round 2 决定回填采用用户指定 `docs(r2.1b): record follow-up A decision (keep #151 exportable behavior)`。最终 tip 与源码内容绑定记录在 `/workspace/smoke-r2.1b/round2/final-tip.json` 及 stdout，避免本文件自引用自身哈希。
+9. `aea5cd6` — `feat(runtime): align renderer preflight with export contract`（Round 3：库级 preflight／固定 warning／有效 caps、kana 回归、9pt 页脚、场景与使用文档）。
+10. Round 3 文档收口：`docs(task): record R2.1b AC-42 kana smoke`（本 task、plan 的 #153 登记与模型回填）；实际最终 tip 记录在 `/workspace/smoke-r2.1b/r3/final-tip.json` 及交付输出，避免自身哈希循环。
 
 主要修改：新增 `browser_renderer.py`、`renderer_windows.py`；扩展 `export_render.py`、`export_store.py`、`serve.py`；新增三个 renderer 测试文件并删除旧 pdf 拒绝断言；复用场景、ADR 0004、安装文档、两份依赖清单；更新本 task 与 plan 的后续项 A 决定。
 
 已执行 `git diff 8931c35 -- sbtd-runtime/contracts/ docs/prd/ 'docs/adr/0001*' 'docs/adr/0002*' 'docs/adr/0003*'`，输出为空。CSV schema／Panel manifest 未改。仅显式路径 git add；不暂存／提交禁止路径；未 push、未开 PR、未评论 GitHub、未 merge，未触及主 checkout。
+
+Round 3 提交前已核对仅上述 7 个允许文件变化、index 初始为空；相对入口 `4476b3136e280077816518faa996a59e1ca4f329` 的 contracts／serve.py／PRD／ADR 0001–0003 diff 为空，`git diff --check` 通过。本轮仅显式 `git add <path>`，无禁止路径入 index。
 
 `status` 保持 **in_progress**，`completed_at=null`：本地 Linux 库级验收完成，但 operator 提审／合并、HTTP 契约接线与 R2.2 跨平台／完整 AC-51 仍不冒充完成。原生/raw 与同 stem 中文汇总已生成，Final Full Rerun=`passed`（条件 skip 如上），rtk=`skipped-for-report`；工具诊断不是 CI。
 
@@ -187,11 +235,13 @@ Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview
 
 ## CONTRACT-CHANGE-NEEDED
 
-本轮仅库级 JPEG/PDF；`POST /api/v1/exports` 仍拒绝两格式并返回 400。不修改冻结契约，不用自由 JSON 响应绕过创建请求的格式枚举。
+**addressed by PR #153 (open)**：格式与 createExport 尺寸预接受协议已有独立 PR，本分支仍只做库级 JPEG/PDF。`POST /api/v1/exports` 继续拒绝两格式并返回 400。不在本分支修改冻结契约，不用自由 JSON 绕过创建请求的格式枚举。HTTP jpeg/pdf 只在 #153 合并、且 main 以 merge（非 rebase）并入本分支之后接线。open 不是 merged。
 
-1. `sbtd-runtime/contracts/openapi.yaml:777–799`，尤其 `:794–796`：`CreateExportRequest.format` 只有 `[html, csv]`。HTTP 开放必须由独立契约 PR 加入 `jpeg`／`pdf`，本实现不提前放行。
-2. 同文件 `:739–768` 的 response 定义及 `:757–758` BadRequest 只有描述，没有 `EXPORT_IMAGE_SIZE_LIMIT` 的错误码／错误体协议。PRD §13.5 要求 1x 仍超限可辨识失败；契约 PR 必须确定该错误在异步 failed 作业与／或创建响应中的位置、HTTP 状态和安全字段，不能只把通用 400 当作尺寸语义。
-3. 信息项／待另行决策，**不属于 11:23 已授权 contract PR 的范围**：同一 response/schema 区没有 renderer 不可用的错误协议。缺 Playwright／专用 browser／必需字体，以及超时／渲染失败若要成为稳定客户端错误枚举，需另行确认协议与授权；本轮仅记录库级安全错误与 capabilities 原因，不自行扩展该 PR 或 HTTP 契约。
-4. `/api/v1/capabilities` `:71–84` 已是自由 Json/Envelope 响应；新增按格式的依赖可用性与 `http_available=false` 不需要本轮修改 schema。没有新增 `withheld` 值、过滤规则或 CSV schema。
+PR：https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开、未评论、未 merge。
 
-Operator 已于 2026-10-22 11:24 +08:00 指定：由他人完成已授权契约 PR；合并后将 main **merge（非 rebase）** 进入本分支，再接 HTTP JPEG/PDF。本轮不执行该 merge、不 push／开 PR／评论。
+1. `sbtd-runtime/contracts/openapi.yaml:777–799`，尤其 `:794–796`：本分支 `CreateExportRequest.format` 仍只有 `[html, csv]`。#153 将该 enum 增为含 `jpeg`、`pdf`。映射：已由 PR #153（open）提出；合并前本实现不放行 HTTP。
+2. 同文件 `:739–768` 的 response 定义及 `:757–758` BadRequest 在本分支仍只有描述，没有 `EXPORT_IMAGE_SIZE_LIMIT` 协议。#153 只在 createExport 增加预接受 422，错误体恰为 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`（生效上限）。202 `meta.warnings` 的精确字符串为 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests 在该 PR。映射：尺寸预接受与降级 warning 已由 PR #153（open）提出。这不覆盖 202 之后的失败语义。
+3. 仍未由 #153 覆盖，保持显式：renderer 不可用（缺 Playwright、专用 browser 或必需字体）没有稳定客户端错误枚举。202 之后的失败语义（异步 failed 作业、getExport）也不在该 PR 的 createExport 422 预接受内。尺寸若只能在 202 之后检测，不能把该 422 当成已覆盖的 post-202 失败协议。超时或渲染失败若要成为稳定错误枚举，仍须另行确认协议与授权。本轮只记录缺口，不扩展 #153，不改 HTTP。
+4. `/api/v1/capabilities` `:71–84` 已是自由 Json/Envelope 响应；按格式的依赖可用性与 `http_available=false` 不需要本轮修改 schema。没有新增 `withheld` 值、过滤规则或 CSV schema。磁盘上限错误码仍归计划第 4 项，后续项 C 留在该行，不在 #153。
+
+库级入口已实现并通过 `r3/kana-smoke` 实跑：`BrowserRenderer(home, snapshots).preflight(snapshot, export_format, presentation_state, cancelled=None)` 返回恰好 `{scale: 1|2（JPEG）或 None（PDF）, warnings: list[str]}`；同一隔离 worker／布局路径，不截图、不生成 PDF、不写导出产物、不开 ExportStore 作业。返回包含既有报告告警和固定降级字符串；尺寸失败带 worker 当次有效 caps，保留 code/str allowlist。后续 HTTP 接线须先校验请求并持有 snapshot，在 `ExportStore.create`／202 之前调用 preflight，将 warning 放入 202 `meta.warnings`，捕获 size error 返回 #153 的 422 体；使用相同 snapshot／presentation／配置并让生成阶段继续复检。renderer 不可用与 post-202 失败仍按上列缺口另行决策；本轮不接线。
