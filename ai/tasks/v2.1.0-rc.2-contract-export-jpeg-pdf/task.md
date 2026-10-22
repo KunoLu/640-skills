@@ -3,12 +3,12 @@ schema_version: 1
 id: v2.1.0-rc.2-contract-export-jpeg-pdf
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict、contract-only；仅指定 worktree 与分支；主会话唯一 writer／验证 controller；子代理仅只读；显式 git add 指定路径；Round 1 两个提交保留，Round 2 新增提交，不改写历史、不 push、不开 PR、不评论、不 merge。
+mode_note: 用户明确 strict、contract-only；仅指定 worktree 与分支；主会话唯一 writer／验证 controller；子代理仅只读；显式 git add 指定路径；Round 1–2 与 operator 提交保留，Round 3 新增提交，不改写历史、不 push、不开 PR、不评论、不 merge。
 status: done
 branch: contract/v2.1.0-rc.2-export-jpeg-pdf
 created_at: '2026-10-22T11:27:23+08:00'
-updated_at: '2026-10-22T12:02:52+08:00'
-completed_at: '2026-10-22T12:02:52+08:00'
+updated_at: '2026-10-22T12:14:16+08:00'
+completed_at: '2026-10-22T12:14:16+08:00'
 ---
 
 # JPEG／PDF 与图像超限错误：独立导出契约
@@ -42,6 +42,12 @@ Scenario: JPEG 超限预检返回明确限制
   Then HTTP 状态为 422 且 detail 为 EXPORT_IMAGE_SIZE_LIMIT
   And max_edge_px 与 max_total_pixels 必须给出正整数限制
   And 错误 detail、缺字段、错误类型或未知字段被拒绝
+
+Scenario: JPEG 降采样通过接受响应告知用户
+  Given JPEG 从 2x 降为 1x 后内容完整、宽度至少为标准报告宽度且不再超限
+  When 按 createExport 的 HTTP 202 契约校验接受响应
+  Then meta.warnings 包含固定字符串 EXPORT_SCALE_DOWNGRADED:1x
+  And warnings 项仍为字符串且 data 仍仅含 export_id
 ```
 
 ## 源码证据与决定
@@ -63,6 +69,7 @@ Scenario: JPEG 超限预检返回明确限制
 | 异步边界 | R2.1b 必须保证此预检先于 202；若只能在接受后检测，需独立明确 getExport failed 状态／错误信息契约与无半成品成功文件保证；本次不扩张查询 schema，不把后置失败伪称 HTTP 422 |
 | JPEG／PDF | 四格式 enum 是请求选择契约；§13.5 图像限制错误针对 JPEG，PDF 仍按 §13.6 单文件多页语义，不套用 JPEG 单图上限 |
 | 兼容与回滚 | html/csv 及幂等／认证／CSRF／202 envelope 不变；仅新增可选格式和失败响应。撤回实现提交前需协调依赖此契约的 R2.1b；无数据迁移或回放 |
+| Round 3 降采样通知 | 固定格式 `EXPORT_SCALE_DOWNGRADED:1x`，由 createExport 的 HTTP 202 ExportAccepted 在 `meta.warnings` 携带；Meta.warnings 原本是 string-typed，因此不引入结构化项或 CreateExportAccepted 新字段；运行时生成前发出通知由 R2.1b 实现 |
 
 上限数值 冻结 待定（待目标平台实测及用户决定；PRD 建议值 32,000 px／80 MP 仅为建议）。
 
@@ -81,6 +88,8 @@ Round 2 仅在 `ExportImageSizeLimit.description` 补充触发语义：2x 超限
 DDIA Data Design Review — confirmed。OpenAPI 是 wire contract 事实源；Export 负责固定快照导出，runtime job 状态不变。新失败只在接受前声明；接受后失败需 R2.1b 单独处理。无共享持久数据写入／一致性／重试／排序／去重／迁移／backfill／replay 变化。detail 与两项实际限制是诊断信号。以实例校验、精确响应集合、红灯证明和现有全套 runtime 测试约束兼容性。Ponytail：内联一个 response schema，复用现有 validator，不加依赖、helper 或公共错误抽象。
 
 Round 2 DDIA Data Design Review — confirmed：PRD／OpenAPI 仍为需求／wire contract 事实源；仅补充接受前失败条件，不改变字段、异步 job 状态、一致性、幂等、持久数据、迁移或回放。沿用 Round 1 Gate 适用性；无生产代码重构或发布动作。轻量 golden guard 约束两项限制字段不得出现 const／enum／maximum，保留已有实例验证，不钉死描述措辞。
+
+Round 3 DDIA Data Design Review — confirmed：Lord 2026-10-22 12:08 +08:00 refinement 明确通知格式与载体，无领域歧义，未完整调用 grill-with-docs。OpenAPI 是 wire contract 事实源；只更新 ExportAccepted／Meta.warnings／ExportImageSizeLimit 三处描述，保持 warnings.items 精确为 `{type: string}`、CreateExportAccepted.properties 名称集合精确为 `{export_id}`。无持久数据、一致性、幂等、排序、重试、迁移、回放或异步状态变化；通知实际发出仍属 R2.1b。复用 OpenApiDraftTests／Draft202012Validator，先对 Round 2 YAML 红灯，再做 schema 消费者 smoke、指定验证及独立只读审查；其余 Book Gate 适用性不变，无需重构或发布 Gate。
 
 ## 状态持久化限制
 
@@ -158,6 +167,32 @@ BDD: traceable，仅契约场景；沿用 task 中文正文／英文关键词，
 - AddendumCoverage：correct，confidence 0.98，无 finding；两字段 const／enum／maximum guard、detail const、既有实例正负例和可读性均符合要求，无描述措辞断言。
 - 两位 reviewer 均只读、未运行测试／lint／formatter。主会话 Code Readability Review：复用现有 subTest 的五行 guard，无 helper／依赖／runtime 改动；无必要重构，无修正回路。
 
+### Round 3 验证证据与独立审查
+
+本轮提交前 HEAD 为 `36c4c1915999f478540a202d47bacd90c1f2de23`，Round 2 YAML 来自 `3c1e698`；原始基线与分支不变。全部命令／完整进程内脚本／stdout／stderr／退出码／时间／文件 SHA-256 保存在本任务 ignored `reports/round3-validation.json`，同 stem 中文汇总为 `reports/round3-validation.md`，不暂存。Evidence Source: developer-local；Source Revision: dirty；Evidence Publication: local-only；Environment Alignment: unverified（Linux／Python 3.13.5，非 CI 环境等价证明）；rtk: skipped-for-report。以下均为本轮实际执行，环境 `PYTHONDONTWRITEBYTECODE=1 RUFF_NO_CACHE=true PYTHONPATH=sbtd-runtime:sbtd-runtime/tests`。
+
+| 命令 | 本轮实际结果 |
+|---|---|
+| `python -B -c <Round 2 YAML red script>` | exit 1（预期）；1 test、2 subTest failures：ExportAccepted.description 与 Meta.warnings.description 均缺固定字符串；无 errors。先确认工作树 YAML 与 `git show 3c1e698:sbtd-runtime/contracts/openapi.yaml` 相等，再用 TemporaryDirectory 替换测试模块 OPENAPI 路径，不改写工作树 |
+| `python -B -m unittest test_golden_contracts.OpenApiDraftTests.test_create_export_202_carries_scale_downgrade_warning -v` | 描述补齐后 exit 0；1 passed，0.040s；精确固定字符串、string items、仅 export_id 及 Draft202012 202 envelope 全部通过 |
+| `python -B -c <contract smoke script>` | exit 0；JSON round-trip 的 downgrade 202 envelope 与普通 warning 字符串均接受；结构化 warning 与 data 新字段均拒绝；撤去恰好三处描述改动后整个 YAML 结构与 Round 2 完全相等 |
+| `python -B -m unittest sbtd-runtime/tests/test_golden_contracts.py -v` | exit 0；55 passed，0.313s |
+| `python -B -m unittest discover -s sbtd-runtime/tests` | exit 0；304 tests，302 passed、2 skipped，48.065s |
+| `python -B -m unittest discover -s sbtd-runtime/tests -p 'test_serve.py'` | exit 0；14 passed，6.776s |
+| `python -B -m unittest discover -s sbtd-runtime/tests -p 'test_export*.py'` | exit 0；35 tests，34 passed、1 skipped，30.099s |
+| `python -B -m unittest discover -s sbtd-runtime/tests -p 'test_panel_manifest.py'` | exit 0；21 passed，0.005s |
+| `ruff format --check sbtd-runtime/tests/test_golden_contracts.py` | 首轮 exit 1，仅新测试 for tuple 换行；仅修改该行后最终 exit 0，1 file already formatted；上述完整 golden／runtime／子集均在修正后运行 |
+| `ruff check sbtd-runtime/tests/test_golden_contracts.py` | exit 1；仅既有 I001，19–30 行 import block 未改，不修范围外问题 |
+
+平台 skips 计数与历史 Windows junction 限定一致；全量与子集重叠，不累加通过数。没有出现 runtime 拒绝 jpeg/pdf 导致契约一致性失败。未重跑 Round 1 根 Linux CI，不声称其两项范围外失败已修复。Final Test Report／Run Summary MD: generated；Targeted Rerun: passed；Final Full Rerun: passed（本轮指定 unittest 范围）；**lint 不全绿，整仓 CI 不作通过声明**。原始红灯、格式首轮与 lint 失败均保留，临时目录已清理，无遗留 smoke 脚本。
+
+BDD: traceable，新增 task 场景与新测试同名，中文正文／英文关键词，沿用 no-.feature 先例。API Contract: verified；Cross-repo context: contract-only；Mock Strategy: none（新增 smoke）；E2E Mode: contract-backed。本轮固定的是协议字符串，不锁定其余描述措辞。JPEG/PDF 新渲染、2x→1x 实际降采样、生成前发出通知、UI E2E、目标平台上限冻结和部署均未验证，属 R2.1b／目标平台范围。
+
+- WarningContractReview：correct，confidence 0.92，无 finding；独立核对三处描述、202 引用、warnings.items 精确 string、CreateExportAccepted 仅 export_id、422 触发语义与三文件范围；确认旧 operator 模型表未改。实际模型为 reviewer 自报 kimi-code/k3，jsonl 解析值仍待 operator 回填。
+- WarningCoverageReview：correct，confidence 0.90；确认两处 token 断言、精确 shape guard、Draft202012 引用解析／样例、discoverability、BDD 与红灯证据一致。唯一 P3 建议为再钉住 ExportImageSizeLimit 描述中的 token；不采纳：用户明确 golden 描述断言仅要求 ExportAccepted 与 Meta.warnings，422 本轮作为文档要求由独立 review 核对，保留最小测试范围。reviewer 自报实际模型 kimi-code/k3。
+- 两位均只读，未执行测试／lint／formatter。主会话 Code Readability／Ponytail Review：复用现有 unittest／subTest／validator，无 helper、依赖、runtime 代码或无关重构；无正确性修正回路。无新 durable runtime lesson，不写身份／lesson。TaskStore／active／自动恢复限制不变。
+
+
 ## Round 1 提交与恢复边界
 
 
@@ -178,6 +213,13 @@ BDD: traceable，仅契约场景；沿用 task 中文正文／英文关键词，
 
 本轮验证快照 SHA-256：openapi.yaml 为 `d06209d33396d584422c469cb2d2201e8e28cfe34aa155092d03218e08ba2b43`；test_golden_contracts.py 为 `56bef9031868078513300afc3ebc2a0d205310a8cd18c51d1744a8a39341e3ec`。该证据是提交前 local-only，不冒称新提交的 CI／发布证据。回滚需协调 R2.1b 消费者后撤回本轮补充提交；无数据迁移。TaskStore helper／active／自动恢复限制继续保留；本次仅维护获授权的 task.md。
 
+### Round 3 提交与恢复边界
+
+保留 `d75ca3b`、`0cd5da2`、`3c1e698` 与 operator 提交 `36c4c19` 及原模型表，新增提交 `contract(export): document EXPORT_SCALE_DOWNGRADED:1x warning`，不 amend／rebase。仅显式 git add 两个契约／测试文件及本 task；提交 SHA 由最终 `git log --oneline origin/main..HEAD` 给出，避免自身 SHA 自引用。不 push／PR／merge／comment，不暂存禁止路径，不触碰其他 worktree。
+
+本轮验证快照 SHA-256：openapi.yaml 为 `8bd2d3d1617d9d1ca9d3af117a114eec05123fafc12856c410c2163d448e4df7`；test_golden_contracts.py 为 `d3e2aa3b7d0102bbecdea490abe8fd949ac6d587f2e21692503c5a3b76492d7c`。证据为提交前 local-only；done 仅表示本轮契约交付，不表示 runtime 通知已实现、整仓 CI 全绿或发布就绪。撤回本轮提交前需协调 R2.1b 消费者；无持久数据迁移或恢复。模型使用计数按用户要求留给 operator 回填。
+
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -189,6 +231,10 @@ BDD: traceable，仅契约场景；沿用 task 中文正文／英文关键词，
 | 2026-10-22T11:58:58+08:00 | planned | in-progress | 已核对 Lord 11:34 细节、PRD 1146／1148／1480 与指定 task 模型；继续 strict 三文件范围 | 授权 11:23／dispatch 11:24；路径无 symlink；reports ignored 且未跟踪；TaskStore 既有限制不重跑 |
 | 2026-10-22T12:00:13+08:00 | in-progress | checking | 响应描述与两项限制字段 golden guard 完成；两位只读 reviewer 分别核对语义与覆盖，主会话执行本轮指定验证 | YAML 仅 description 修改；HTTP／body／建议值／R2.1b 边界已记入 task；Python 3.13.5、Ruff 0.17.1 |
 | 2026-10-22T12:02:52+08:00 | checking | done | Round 2 五项补充完成；指定 unittest、format、契约消费者 smoke／六个冻结变异与双独立只读 review 完成；明确保留既有 lint 与 Round 1 根 CI 失败，不声明 runtime 实现 | reports/round2-validation.json 与同 stem 中文 md；golden 54、runtime 303/2 skips、serve 14、exports 35/1 skip、panel 21；I001；AddendumSemantics／AddendumCoverage correct |
+| 2026-10-22T12:09:26+08:00 | done | planned | 用户 Round 3 明确要求继续同任务，保留 Round 1–2 与 operator 模型表提交 | 初始 git status 为空；git log 为 36c4c19、3c1e698、0cd5da2、d75ca3b；分支匹配 |
+| 2026-10-22T12:09:26+08:00 | planned | in-progress | strict 三文件范围；固定 warning 字符串与 202 载体已明确，路径无 symlink，沿用 TaskStore 已知限制，不重复尝试 helper 或写 active | Lord 12:08 refinement；warnings.items 为 string；CreateExportAccepted 仅 export_id；BDD／DDIA 记录见本轮段落 |
+| 2026-10-22T12:11:17+08:00 | in-progress | checking | Round 2 YAML 红灯为两个描述缺少固定字符串；补充三处描述后定点测试通过，schema 消费者 smoke 证明兼容边界，进入指定全量验证与双只读审查 | 新 test_create_export_202_carries_scale_downgrade_warning；warnings string／data export_id 不变；格式首轮仅换行并已修正；无 runtime 修改 |
+| 2026-10-22T12:14:16+08:00 | checking | done | Round 3 固定 warning 契约、精确 shape 与样例校验、三处描述、BDD／决策／模型行完成；红绿、smoke、指定验证与双只读 review 完成；保留既有 lint 与根 CI 风险 | reports/round3-validation.json 与同 stem md；golden 55、runtime 304/2 skips、serve 14、exports 35/1 skip、panel 21；format passed；I001；WarningContractReview／WarningCoverageReview correct |
 
 ## 模型使用
 
@@ -202,3 +248,6 @@ operator 于 2026-10-22 12:10 +08:00 依据 session jsonl（`~/.omp/agent/sessio
 | Round 2 主会话（唯一 writer） | 01a161c2-b2fc-7549-ba1e-b94c3b9f49e2 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 18 | 40 |
 | AddendumSemantics（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 7 | 11 |
 | AddendumCoverage（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 5 | 9 |
+| Round 3 主会话（唯一 writer） | Round 3 主会话；session ID operator 回填 | openai-codex/gpt-6-astra（当前 runtime） | operator 回填 | operator 回填 | operator 回填 | operator 回填 |
+| WarningContractReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | operator 回填（reviewer 自报 kimi-code/k3） | operator 回填 | operator 回填 | operator 回填 |
+| WarningCoverageReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | operator 回填（reviewer 自报 kimi-code/k3） | operator 回填 | operator 回填 | operator 回填 |

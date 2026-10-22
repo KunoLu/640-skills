@@ -921,6 +921,37 @@ class OpenApiDraftTests(unittest.TestCase):
                 errors = list(validator.iter_errors({**body, field: value}))
                 self.assertIn(expected_error, [error.validator for error in errors])
 
+    def test_create_export_202_carries_scale_downgrade_warning(self) -> None:
+        # Scenario: JPEG 降采样通过接受响应告知用户
+        response = self.doc["components"]["responses"]["ExportAccepted"]
+        schemas = self.doc["components"]["schemas"]
+        warnings = schemas["Meta"]["properties"]["warnings"]
+        warning = "EXPORT_SCALE_DOWNGRADED:1x"
+        for name, described in (
+            ("ExportAccepted", response),
+            ("Meta.warnings", warnings),
+        ):
+            with self.subTest(description=name):
+                self.assertIn(warning, described.get("description", ""))
+        self.assertEqual(warnings["items"], {"type": "string"})
+        self.assertEqual(
+            set(schemas["CreateExportAccepted"]["properties"]), {"export_id"}
+        )
+        schema = response["content"]["application/json"]["schema"]
+        validator = jsonschema.Draft202012Validator(self.doc).evolve(schema=schema)
+        accepted = {
+            "api_version": "1",
+            "request_id": "req_export",
+            "data": {"export_id": "export_report"},
+            "meta": {
+                "metrics_version": "1.0",
+                "projection_version": "1.0",
+                "complete": True,
+                "warnings": [warning],
+            },
+        }
+        self.assertEqual(list(validator.iter_errors(accepted)), [])
+
     def test_create_export_202_requires_export_id_and_preserves_envelope(self) -> None:
         # Scenario: 导出接受响应提供后续查询与下载所需标识
         response = self.doc["paths"]["/api/v1/exports"]["post"]["responses"]["202"]
