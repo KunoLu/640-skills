@@ -21,7 +21,7 @@
 | R2.1b | JPEG/PDF 独立 renderer（Playwright 可选 extra，`--only-shell`，精确钉版，renderer 环境含 fonts-noto-cjk）；#153 合并 ce80ca2 经 376ea0c merge 纳入后接线 HTTP jpeg/pdf | P5 | in_progress（review pending；分支 feat/v2.1.0-rc.2-r2.1b-renderer；implement 模型 openai-codex/gpt-6-astra:high） | #153（契约已合并；本行实现 PR 未开） | — | — | ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md |
 | R2.2 | 跨平台 E2E（CI macOS/Windows runner + 用户 Mac 视觉／字体确认）、安全（Host/Origin、ticket、脱敏分层）、性能、导出对账 | P6 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
-| F | docs 回填 + 后续项 B（`install-and-use.md` 写明事件明细屏蔽范围；不含后续项 C） | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| F | docs 回填 + 后续项 B（`install-and-use.md`）+ 后续项 C（第 7 项／F 阶段，单独 PRD docs PR） | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
 
 ## 各行锁定决定与验收
 
@@ -60,7 +60,7 @@
 - 锁定决定：D3（`--only-shell` 安装到扩展自有目录、授权提示按实际模式显示体积）、D4（playwright 精确钉版）、D16（renderer 环境依赖清单含 fonts-noto-cjk 并钉版本）。
 - 验收：Playwright 为可选 extra，未安装时仅 JPEG/PDF 标不可用并说明原因；隔离按 §13.7（独立子进程、每作业临时 profile、路由层 abort 一切外联、单作业信号量），AC-58 出断网与隔离证据；PDF 中／日／英混合文字可显示（§13.6、AC-42）；导出前等待字体完成（§13.5）。
 - 范围：contract PR #153 已 squash-merge 为 `ce80ca2`，并经 `376ea0c` merge 纳入本分支；Round 4 接线 HTTP jpeg/pdf。JPEG 在 202 前对同一静态 HTML 预检，超限 422 携带有效 caps，降级 warning 在 202 meta，作业固定预检比例；PDF 不做图像预检。状态保持 in_progress（review pending）。
-- 契约 PR #153（https://github.com/KunoLu/640-skills/pull/153；status merged；由另一 agent 提交，非本行实现 PR）。范围：`CreateExportRequest.format` 增加 `jpeg`、`pdf`；仅 createExport 预接受 422，错误体 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含磁盘上限错误码（仍归 10-21 计划第 4 项，后续项 C 留在该行）。R2.1b 不修改 OpenAPI；renderer 不可用与 post-202 异步失败两个契约缺口在 task 保持 open，最终由用户决定。
+- 契约 PR #153（https://github.com/KunoLu/640-skills/pull/153；status merged；由另一 agent 提交，非本行实现 PR）。范围：`CreateExportRequest.format` 增加 `jpeg`、`pdf`；仅 createExport 预接受 422，错误体 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含磁盘上限错误码（仍归 10-21 计划第 4 项）；后续项 C 归第 7 项／F 阶段的单独 PRD docs PR。R2.1b 不修改 OpenAPI；renderer 不可用与 post-202 异步失败两个契约缺口在 task 保持 open，最终由用户决定。
 - AC-51 完整验收仍归 R2.2；R2.1b 仅保留四格式 event-detail 屏蔽集合／计数一致性测试，作为后续项 A 决定的回归保护，不宣称 AC-51 已通过。
 - 契约领先实现跟进（[export-failure-states](../v2.1.0-rc.2-contract-export-failure-states/task.md)，用户／Reviewy 2026-10-22 13:14 +08:00）：R2.1b 接入失败路径时，将 runtime 现于 failed 时写入的固定字符串 `export failed` 替换为固定码（HTML/CSV 失败 → `EXPORT_RENDER_FAILED`）、超时映射为 `EXPORT_RENDER_TIMEOUT`；JPEG/PDF renderer 依赖不可用时在 202 前返回 503 `EXPORT_RENDERER_UNAVAILABLE`（无 job、export_id 或半成品文件，html/csv 不适用），并与 capabilities 的 unavailable 及原因保持一致。该 contract-only 任务不修改 runtime。
 
@@ -77,8 +77,8 @@
 ### F — docs 回填
 
 - 锁定决定：D10（E／F 阶段回填）；PRD 若升 v0.3 须用户届时另行授权。
-- 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；PRD 正文不在本任务范围内修改。
-- 后续项 B：F 阶段在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/聚合派生行不屏蔽。与第 4 项后续项 C 的 PRD 条款保持一致。本轮不提前回填；后续项 C 不归 F。
+- 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；常规 docs 回填 PR 不修改 PRD 正文，第 7 项／F 阶段的 C 条款另开单独 PRD docs PR。本轮仅登记，不改 PRD。
+- 后续项 B：第 7 项／F 阶段在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。与同属第 7 项／F 阶段的后续项 C 保持一致，C 另开单独 PRD docs PR；依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。本轮不提前回填。
 
 ## 依赖顺序说明
 
@@ -86,17 +86,17 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 ## 2026-10-21 计划定稿（13:02 +08:00）
 
-以下顺序于 2026-10-21 13:02 +08:00 定稿：
+以下顺序于 2026-10-21 13:02 +08:00 定稿；第 4／7 项的 C 放置按 10-22 15:00 用户决定更新，现归第 7 项／F：
 
 1. R2.1b。
 2. 后续项 A 决策已定 — 用户 2026-10-22 11:13 +08:00：保持 #151 行为（事件明细行按 `exportable=false`／`classification != local-metadata` 屏蔽；task/run/聚合派生行不屏蔽；不新增 `withheld` 值；不开 contract PR）。
 3. R2.1b 评审与合并。
-4. 磁盘上限的 PRD §10.4 补充 + 后续项 C（同一个独立的小 PRD docs PR，用户 10-22 授权）；ADR 0003 §4/§5 修订和磁盘上限新错误码 contract PR 分别独立（contract 附 golden 测试，错误体带已占用量与上限）。后续项 C：PRD 必须补充「本地导出拦截 event 明细（`exportable=false` 或 `classification ≠ local-metadata`），不影响 task/run/聚合派生行」，两种屏蔽条件均须明确；依据用户 2026-10-22 11:13 的 A 决定与约 11:15 +08:00 的授权。按 11:19 补充归本项而非 F，措辞与后续项 B 一致；独立于 R2.1b，本 PR 不改 PRD。
+4. 仅磁盘上限的 PRD §10.4 补充（自己的独立小 PRD docs PR，用户 10-22 授权）；ADR 0003 §4/§5 修订和磁盘上限新错误码 contract PR 分别独立（contract 附 golden 测试，错误体带已占用量与上限）。本轮仅登记，不改 PRD／ADR／contract。
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
 6. E 预发布。
-7. F 文档 + 后续项 B：`install-and-use.md`（F 阶段）写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 的事件明细也屏蔽，task/run/聚合派生行不屏蔽；措辞与第 4 项后续项 C 一致。F 仅 docs + B，不含 PRD 后续项 C。
+7. F 文档 + 后续项 B + 后续项 C：B 在 `install-and-use.md` 写明事件明细屏蔽范围；C 在 F 阶段另开单独 PRD docs PR，补充「本地导出屏蔽 event-detail 行，当 `exportable=false` 或 `classification != local-metadata`；不影响 task/run/aggregate 派生行」，两种屏蔽条件均须明确，B／C 措辞一致。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。该 PR 独立于第 4 项磁盘上限 PRD docs PR；本轮不改 PRD。
 
-后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR。JPEG/PDF HTTP 格式与图像尺寸错误码由独立 PR #153（已合并 `ce80ca2`，经 `376ea0c` merge 纳入 R2.1b）承担；这不取代第 4 项磁盘上限错误码 contract PR，也不移动后续项 C。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
+后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR。JPEG/PDF HTTP 格式与图像尺寸错误码由独立 PR #153（已合并 `ce80ca2`，经 `376ea0c` merge 纳入 R2.1b）承担；这不取代第 4 项磁盘上限错误码 contract PR。后续项 C 按 15:00 决定归第 7 项／F 阶段。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
 
 ### 磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）
 

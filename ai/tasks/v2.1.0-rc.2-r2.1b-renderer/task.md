@@ -33,7 +33,7 @@ completed_at: null
 | 2026-10-22T11:12:22+08:00 | planned | in_progress | 用户指定 strict；授权 worktree、分支与基线匹配；建立共享交付记录 | pwd、git status/branch/rev-parse；用户任务 |
 | 2026-10-22T11:13:00+08:00 | in_progress | in_progress | 补记用户后续项 A 决定：保持 #151 事件明细屏蔽行为；不新增 withheld，不为 A 开 contract PR | 用户 round-2 指令；保留四格式 event-detail 屏蔽一致性回归，AC-51 完整验收仍归 R2.2 |
 | 2026-10-22T12:17:20.268311+08:00 | in_progress | in_progress | Run 1b 从 ceb202e 续接；库级实现、真实 smoke、指定回归与两位独立复核完成。本地验收通过，保留 in_progress 等待 operator 提审／契约后续，不宣称已发布 | runtime-final-full 341／7 skip；renderer-final-full 39／1 Windows skip；contracts 69、OpenAPI 16；smoke-receipt.json；reviewer closure |
-| 2026-10-22T12:35:13.972967+08:00 | in_progress | in_progress | Round 2：A/B/C 与独立 contract PR 登记、模型回填、F 文档越界修正；补齐事前降级通知／配置跨进程传递和 capabilities 认证回归；本地指定回归与真实 smoke 通过 | round2/runtime-final-full 344／8 skip；renderer-final-full 42／1 Windows skip；contracts 69、OpenAPI 16；runtime-final/smoke-receipt.json |
+| 2026-10-22T12:35:13.972967+08:00 | in_progress | in_progress | Round 2：A/B/C 与独立 contract PR 登记、模型回填、F 文档越界修正（C 的当时放置已由 10-22 15:00 决定取代，现归第 7 项／F）；补齐事前降级通知／配置跨进程传递和 capabilities 认证回归；本地指定回归与真实 smoke 通过 | round2/runtime-final-full 344／8 skip；renderer-final-full 42／1 Windows skip；contracts 69、OpenAPI 16；runtime-final/smoke-receipt.json |
 | 2026-10-22T12:59:34.599901+08:00 | in_progress | in_progress | Round 3 库级 PR #153 对齐、受理前 preflight、AC-42 kana／9pt 页脚完成；本地验收通过，HTTP／合并与跨平台仍不冒充完成 | r3/kana-smoke；kana 720；renderer-final-full 44／1 skip；runtime-native-final-full 346／9 skip；ruff-final；两位独立 reviewer 无发现 |
 | 2026-10-22T13:13:53.129882+08:00 | in_progress | in_progress | Round 4 用户明确 strict，入口 340d207、分支与 worktree 匹配；合并 #153 后 HTTP 接线；完成 before-dev 事实与安全网 | http/before-dev-safety：11 passed；合并 OpenAPI 与 #153 task；本轮场景已更新 |
 | 2026-10-22T13:55:48.915515+08:00 | in_progress | in_progress | Round 4 独立安全 review 两项发现经红绿修复；指定全部命令与真实 HTTP smoke 重新通过，保留 in_progress 待评审 | http/review-regression-red／green；runtime-reviewed-full 366／10 skip；renderer-reviewed-full 62／1 skip；final/transcript.json；Safety closure Findings=[] |
@@ -47,8 +47,8 @@ completed_at: null
 
 - 未完整调用 grill-with-docs：用户范围、锁定决定与冻结契约边界明确，不重开需求。
 - 后续项 A 已决定（用户 2026-10-22 11:13 +08:00）：保持 #151 行为，仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。四格式共用同一过滤管线，不新增 `withheld` 值，不为 A 开 contract PR。保留 AC-51 四格式事件明细屏蔽一致性测试作为该决定的回归保护；AC-51 完整验收仍在 R2.2，不宣称本轮通过 AC-51。
-- 后续项 B 仅在 F 回填 `install-and-use.md`。后续项 C 根据用户约 11:15 授权及 11:19 放置修订，与计划第 4 项 PRD §10.4 磁盘上限补充同属单独 PRD docs PR；明确两种 event 明细屏蔽条件及派生行不受影响，与 B 措辞一致。本轮不改 PRD，也不提前交付 B。
-- 独立 JPEG/PDF contract PR #153（https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开）。**当时快照**：上述 tip／open 及本段执行边界保留为历史；#153 后于 **2026-10-22 13:06:35 +08:00** squash-merged 为 `ce80ca2`。用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成。范围：`CreateExportRequest.format` 加 `jpeg`／`pdf`；仅 createExport 预接受 422 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含第 4 项磁盘上限错误码，后续项 C 仍留在计划第 4 项。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线、不评论、不 merge。
+- 后续项 B 在计划第 7 项／F 阶段回填 `install-and-use.md`；后续项 C 同归第 7 项／F 阶段，另开单独 PRD docs PR，独立于第 4 项的 PRD §10.4 磁盘上限补充。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。C 明确本地导出在 `exportable=false` 或 `classification != local-metadata` 时屏蔽 event-detail 行，task/run/aggregate 派生行不受影响，与 B 措辞一致；先前放置决定由本次确认取代。本轮不改 PRD，也不提前交付 B／C。
+- 独立 JPEG/PDF contract PR #153（https://github.com/KunoLu/640-skills/pull/153；tip `2084d71`；status open；另一 agent 提交，非本任务会话所开）。**当时快照**：上述 tip／open 及本段执行边界保留为历史；#153 后于 **2026-10-22 13:06:35 +08:00** squash-merged 为 `ce80ca2`。用户 2026-10-22 11:23 +08:00 授权，11:24 指定他人完成。范围：`CreateExportRequest.format` 加 `jpeg`／`pdf`；仅 createExport 预接受 422 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含第 4 项磁盘上限错误码；后续项 C 的当时放置已由 10-22 15:00 决定取代，现归计划第 7 项／F 阶段的单独 PRD docs PR。合并后 main 以 merge（非 rebase）并入 R2.1b 才开放 HTTP；本轮不接线、不评论、不 merge。
 - 配额决定仅登记在 plan，R2.2 才实现。
 - 沿用 R2.1a 已记录的 TaskStore catalog/frontmatter 限制，不重跑已知失败、不改 active/ignore；本文件是用户明确要求的共享交付，不声称 helper lifecycle 或自动恢复成功。
 - Round 4：#153 已合并为 `ce80ca2` 并经 `376ea0c` merge 纳入；前述 Round 1–3 的 open／HTTP 冻结描述是历史证据。本轮按用户缩小范围接线正常路径，两个尚未定义的失败协议仅登记于文末，不自行改映射。
@@ -136,7 +136,7 @@ Run 1 初始检查与 ignore 事实沿用当轮记录。Run 1b 首次只读核�
 
 本轮入口 HEAD=`6caf067`，工作区干净、分支匹配，strict 沿用用户选择；round-1 六个提交均已存在，不重做已完成的安装、字体下载、隔离实现或四格式屏蔽测试。
 
-修改范围：`plan.md`／本 task 登记 A 决定、B 在 F、C 与第 4 项 PRD docs PR 同行、独立 JPEG/PDF contract PR 和 merge-main 前置条件；安装文档输出安全 bullet 恢复基线，仅「两格式→四格式」并追加消费同一过滤 HTML 的中性说明。spec／ADR 0004 去掉 A 决策归因，决定只在 plan/task；既有行为场景与同源过滤仍保留。
+修改范围（Round 2 历史）：`plan.md`／本 task 登记 A 决定、B 在 F、C 当时的 PRD docs PR 放置、独立 JPEG/PDF contract PR 和 merge-main 前置条件；C 的当时放置已由 10-22 15:00 决定取代，现归第 7 项／F 阶段，与 B 同阶段、另开单独 PRD docs PR。安装文档输出安全 bullet 恢复基线，仅「两格式→四格式」并追加消费同一过滤 HTML 的中性说明。spec／ADR 0004 去掉 A 决策归因，决定只在 plan/task；既有行为场景与同源过滤仍保留。
 
 预检补齐：`MAX_SIDE_PX`／`MAX_PIXELS` 标为建议值、实测后冻结，并随作业传入 worker；2x→1x 要求完整内容、至少 1440 CSS px，重测后复检。截图前 worker 通知、父进程同步发出 `RuntimeWarning` 并重检取消／超时，再确认继续；manifest 保留同一 warning。处理器异常不确认，沿用进程清理／安全错误／不发布。没有改 `serve.py` 或任何 HTTP 错误映射。
 
@@ -162,7 +162,7 @@ Smoke 产物在 `round2/runtime-final/`：`report.html`、`report.csv`、`report
 
 独立安全复核 `RoundTwoSafetyReview`：`Findings: []`，覆盖通知顺序、配置传播、取消／超时／异常清理及 Store 发布边界；只读，未运行测试。其额外建议为给「通知处理器返回后取消／超时」补专门分支回归，非阻断发现；现有检查与生命周期回归保留。Ponytail Review：无新增公共 API、队列、依赖或第二存储路径，保留最小临时通知／确认以保证调用方在截图前收到告警，无可安全删除的控制步骤。Code Readability Review：生产逻辑限于单模块，预检与存储所有权未混合，测试在用户指定预检／HTTP／Store seam 验证行为。
 
-独立范围复核 `RoundTwoScopeReview`：`correct`，A/B/C 放置、HTTP 冻结、AC-51 边界、模型回填、安装 safety bullet 基线逐字比对均通过；唯一 P3 建议已采纳：CONTRACT-CHANGE-NEEDED 第 3 项改成待另行决策的信息项，不扩大 11:23 授权 PR 的范围。两位 reviewer 均只读，不充当验证 controller。
+独立范围复核 `RoundTwoScopeReview`：`correct`，当时的 A/B/C 放置、HTTP 冻结、AC-51 边界、模型回填、安装 safety bullet 基线逐字比对均通过（C 放置结论已由 10-22 15:00 决定取代，现归第 7 项／F）；唯一 P3 建议已采纳：CONTRACT-CHANGE-NEEDED 第 3 项改成待另行决策的信息项，不扩大 11:23 授权 PR 的范围。两位 reviewer 均只读，不充当验证 controller。
 
 Round 2 Release Readiness=`ready`（仅用户授权的 Linux 库级交付，不代表 HTTP／跨平台／发布就绪）：指定完整套件与真实 Store smoke 通过；单作业信号量、总预算、取消、处理器异常清理与不发布语义保留；降级可提前观察且 manifest 留据。配置／代码回滚无需迁移，不删除原始事件或产物；未安装／卸载全局依赖。BDD=`traceable`（既有中文场景＋英文关键词，renderer／integration unittest），Cross-repo context=`complete`，API Contract=`verified`（冻结 html/csv），Mock Strategy=`user-approved`；实际浏览器／库 smoke 不混称 HTTP 四格式 E2E。Final Full Rerun=`passed`；原生/raw 与同 stem 中文汇总已校验章节／配对；跨平台与完整 AC-51 按用户计划仍归 R2.2。
 
@@ -177,7 +177,7 @@ Round 2 Release Readiness=`ready`（仅用户授权的 Linux 库级交付，不�
 - 页脚根因：`8px` 等效 **6pt**，`pdftohtml -xml -zoom 1` 对原 `report.pdf` 的 fontspec 12／13／14 均为 6（`footer-before.txt`）。仅将 footer template 改为 **9pt**；同命令对新 PDF 实测页脚字体均为 **9pt**（`footer-after.txt`），`footer-zoom.png` 已查看，标题／范围／短 snapshot／页码均保留，没有改正文 CSS。
 - `kana-smoke` 原生执行证明 public preflight 在无 exports 目录时返回 JPEG 2x／PDF None；调整配置后返回 1x＋固定 warning；1x 超限直接抛异常，caps 实测 `(1439,30000000)`。没有受理／生成失败作业来冒充 pre-acceptance 结果。HTTP 仍未接线。
 
-独立复核：`RoundThreeSafetyReview` Findings=`[]`，确认公共 preflight 与生成共用生命周期、无 capture／publication、有效 caps 跨进程回传、固定 warning 顺序及冻结 HTTP；`RoundThreeScopeReview`=`correct`（confidence 0.96），PR #153 映射／后续项 C／模型回填／剩余缺口／kana／9pt 证据一致。两者只读，未运行验证；其静态生产／范围结论不冒充尚未完成的新增测试执行结果。Ponytail Review：复用 worker 与结果文件，无新增存储、缓存、队列或依赖，无需额外抽象。Code Readability Review：public preflight 的生命周期与生成集中在 `_run`，捕获前直接返回测量结果，IPC 只新增允许的数值 caps。
+独立复核：`RoundThreeSafetyReview` Findings=`[]`，确认公共 preflight 与生成共用生命周期、无 capture／publication、有效 caps 跨进程回传、固定 warning 顺序及冻结 HTTP；`RoundThreeScopeReview`=`correct`（confidence 0.96），PR #153 映射／后续项 C（当时放置结论已由 10-22 15:00 决定取代，现归第 7 项／F）／模型回填／剩余缺口／kana／9pt 证据一致。两者只读，未运行验证；其静态生产／范围结论不冒充尚未完成的新增测试执行结果。Ponytail Review：复用 worker 与结果文件，无新增存储、缓存、队列或依赖，无需额外抽象。Code Readability Review：public preflight 的生命周期与生成集中在 `_run`，捕获前直接返回测量结果，IPC 只新增允许的数值 caps。
 
 #### Round 3 最终验证与收口
 
@@ -436,4 +436,4 @@ Round 4 仅上述 **11 个允许文件**变化，提交前 index 为空；四个
 1. **createExport 时 renderer 不可用 — satisfied / implemented in Round 6**。JPEG／PDF 共用 capabilities 检查／原因，在 pin／预检／作业前返回 HTTP **503**，封闭 body 精确 `{"detail":"EXPORT_RENDERER_UNAVAILABLE"}`，无 job、export_id、文件、pin 或 manifest。JPEG 无法预检时 503 优先；预检期间依赖消失同样 503 并释放 pin。HTML／CSV 不返回该 503；422 尺寸 caps 与 202 warning 不变。
 2. **202 后失败状态协议 — satisfied / implemented in Round 6**。四格式均适用：renderer timeout → **EXPORT_RENDER_TIMEOUT**；崩溃、受理后不可用、作业时尺寸超限、发布失败及普通异常 → **EXPORT_RENDER_FAILED**。getExport 保持 HTTP200 Envelope，queued／generating／ready／cancelled 的 error=null，ready 持久 manifest 同样 null。内部诊断仅入安全 server warning，异常原文／stderr／路径／凭据不公开。downloadExport 仍 **409**，失败不发布 artifact／manifest。**13:38 的 `"export failed"` 固定字符串规则已被 #154 取代**，此前轮次记录仅为历史。
 
-不包含磁盘上限协议、后续项 B/C、跨平台或完整 AC-51；这些仍按计划单独交付。
+本轮不实施磁盘上限协议、跨平台或完整 AC-51；这些仍按计划单独交付。后续项 B 与后续项 C 均归第 7 项／F 阶段，C 另开单独 PRD docs PR，本轮仅更新放置记录。
