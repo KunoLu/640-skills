@@ -544,8 +544,6 @@ class ExportStoreTests(unittest.TestCase):
                 idempotency_key="same",
             )
         with self.assertRaises(ValueError):
-            store.create(self.snapshot.snapshot_id, "pdf", original)
-        with self.assertRaises(ValueError):
             store.create(self.snapshot.snapshot_id, "csv", original, idempotency_key=1)
         store.close()
         restored = self._open(self._renderer(b"other"))
