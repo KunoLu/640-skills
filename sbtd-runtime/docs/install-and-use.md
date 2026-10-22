@@ -104,15 +104,15 @@ PY
 
 - 没有 HTTP 服务与 Dashboard（R2。R2.0a PR-2 起见下文「R2.0a：serve」）。
 - R1 没有 `/api/v1/exports*` 导出作业；R2.1a 起支持 HTML／CSV，见下文。库面仍可通过 `csv_export.serialize_csv(snapshot)` 直接获得 CSV 字节。
-- R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现，R2.1a 增加 HTML／CSV 作业，R2.1b 增加库级 JPEG／PDF（HTTP 仍未开放）；仍没有远程业务控制端点。
+- R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现，R2.1a 增加 HTML／CSV 作业，R2.1b 增加 JPEG／PDF（#153 合并后 HTTP 已开放）；仍没有远程业务控制端点。
 - codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
 
 ### R2.1a：离线 HTML／全量 CSV 导出
 
 `POST /api/v1/exports` 必须提交
 `application/json`，例如 `{"snapshot_id":"snap_0123456789abcdef0123456789abcdef","format":"html"}`。
-`snapshot_id` 固定点击导出时已完成的快照；`format` 当前仅接受 `html` 或 `csv`，
-不接受 `jpeg`／`pdf`（400）；R2.1b 的这两种格式仅在库级开放，等待独立契约 PR。现有 Bearer、CSRF、Idempotency-Key 要求不变。
+`snapshot_id` 固定点击导出时已完成的快照；`format` 接受 `html`、`csv`、`jpeg` 或 `pdf`。
+JPEG／PDF 需要下述可选 renderer；现有 Bearer、CSRF、Idempotency-Key 要求不变。
 快照 ID 必须完整匹配 `^snap_[0-9a-f]{32}$`。
 
 可省略 `presentation_state`（使用现有 ReportDocument 默认呈现状态）；若提供，
@@ -140,7 +140,7 @@ createExport 对非法／缺失请求（包括 snapshot_id 不满足 pattern）�
 
 一个本地 worker 串行生成；取消由作业在取数／发布边界响应，不影响其他业务测试或 Agent。manifest 摘要用于损坏检测，不抵御同机管理员篡改。Snapshot 磁盘容量上限不在本轮实现；Windows ACL、macOS／Windows 视觉及四格式对账仍属 R2.2。撤回本轮代码不迁移或删除原始事件／快照；已下载文件不由服务回收。
 
-### R2.1b：可选 JPEG／PDF renderer（仅库级）
+### R2.1b：可选 JPEG／PDF renderer（HTTP 与库级）
 
 不改变业务项目依赖或 lockfile。先取得安装授权，再在扩展专用虚拟环境中安装；不自动下载、不回退到用户 Chrome/profile：
 
@@ -180,11 +180,26 @@ finally:
     exports.close()  # 关闭会取消尚未完成的作业；不要在轮询完成前退出。
 ```
 
-`GET /api/v1/capabilities` 的 `data.exports` 分格式提供 `available`、`reason` 与 `http_available`。Playwright、专用 browser 或必需 CJK 字体缺失时，仅 JPEG／PDF 不可用且附原因；HTML／CSV 不受影响。`available` 描述本地库依赖，**不表示 HTTP 已开放**：JPEG／PDF 的 `http_available=false`，POST 仍返回 400。依赖可用也不保证每次作业成功，超时／崩溃通过作业 failed 状态观察。
+`GET /api/v1/capabilities` 的 `data.exports` 分格式提供 `available`、`reason` 与 `http_available`。Playwright、专用 browser 或必需 CJK 字体缺失时，仅 JPEG／PDF 不可用且附原因；HTML／CSV 不受影响。JPEG／PDF 的 `http_available` 与 renderer 的 `available` 一致：依赖可用时为 true，否则 false。依赖可用不保证每次作业成功。
 
 JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与不透明背景；等待字体和布局，禁动画。`browser_renderer.MAX_SIDE_PX=32000` 与 `MAX_PIXELS=80000000` 是模块级可配置建议值（实测后冻结），须在提交作业前设置，独立 worker 沿用该次配置。2x 超限仅在完整内容和不低于 1440 CSS px 宽度下回退 1x；截图前在调用进程发出 `RuntimeWarning`（精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`），告警处理返回后才截图，manifest 保留同一字符串。调用方可用 Python `warnings` 机制提前显示／捕获通知；ExportStore 调用发生在其工作线程，应在提交作业前配置告警处理，不应在处理器中阻塞。1x 仍超限抛库级 `RendererError.code=EXPORT_IMAGE_SIZE_LIMIT`，异常的 `max_edge_px`／`max_total_pixels` 是 worker 当次生效的配置值，不截断、不分包、不发布半成品。PDF 为 A3 横向、10mm 边距、保留背景的可搜索文字／矢量文档；长表分页重复表头，9pt 页脚含标题、范围、短 snapshot ID 与页码。
+上述 `RuntimeWarning` 是直接库级生成路径的通知机制；HTTP 预检已决定的降级通过下述 202 `meta.warnings` 通知，作业不再另作比例决定。
 
-接受作业前可调用 `BrowserRenderer(home, snapshots).preflight(snapshot, format, presentation_state, cancelled=None)`：复用同一 HTML 和隔离浏览器测量布局，返回 `{"scale": 2或1, "warnings": [...]}`（PDF 的 `scale=None`），不截图、不生成 PDF、不创建 ExportStore 作业。告警包含现有报告告警和 JPEG 降级固定字符串；超限直接抛上述带 caps 的异常。调用方负责 snapshot 生命周期，并在预检至受理期间保持 snapshot、presentation 和配置不变；预检不是资源预留，实际生成仍复检。HTTP 接线须等 [contract PR #153](https://github.com/KunoLu/640-skills/pull/153) 合并、main merge 入本分支后再实施：预检发生在 `ExportStore.create`／202 之前，将 warnings 放入 202 `meta.warnings`，尺寸异常映射为 createExport 的 422 `{detail,max_edge_px,max_total_pixels}`。当前 POST JPEG/PDF 仍为 400。
+HTTP 已按合并的 [contract PR #153](https://github.com/KunoLu/640-skills/pull/153) 开放：JPEG 在返回 202 之前，于线程池内调用 `BrowserRenderer.preflight()`，沿用单作业信号量与隔离浏览器；期间固定 snapshot 引用、呈现状态、同一已过滤／脱敏静态 HTML 和当次 caps。2x 安全则正常受理；仅 1x 安全时，202 Envelope 的 `meta.warnings` 包含精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`（保留其他报告告警），`data` 仍恰为 `{"export_id":"exp_…"}`。作业沿用预检选定比例，不另行静默降级；生成时复测若该比例不安全则失败且不发布。PDF 为多页输出，无图像尺寸预检，正常返回 202 后生成。下载 MIME 分别为 `image/jpeg`、`application/pdf`，get／download／delete 路由不变。
+保留期内的同请求／同 Idempotency-Key 重放（包括重启后重新配对）保留原导出 ID 与告警，不重复预检。过期并清扫后仍沿用既有幂等行为：本进程返回旧 ID，GET／download 为 410；已清理的告警 metadata 不额外保留，不重新生成导出。
+
+JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelope、不含额外字段：
+
+```json
+{"detail":"EXPORT_IMAGE_SIZE_LIMIT","max_edge_px":32000,"max_total_pixels":80000000}
+```
+
+上述数字仅示例；响应携带当次生效 caps，不是冻结常量。422 不创建作业或导出文件，不遗留 snapshot pin；可改用 PDF／HTML 或减少展示明细。库调用仍可独立调用 `BrowserRenderer(home, snapshots).preflight(snapshot, format, presentation_state, cancelled=None)`，返回 `{"scale": 2或1, "warnings": [...]}`（PDF 的 `scale=None`），不截图或创建作业；直接库调用方自行管理 snapshot 生命周期。
+
+两个 **CONTRACT-CHANGE-NEEDED（open）** 未在本轮扩张：
+
+1. **createExport 时 renderer 不可用**：JPEG 同步预检抛出 `RENDERER_UNAVAILABLE`，目前没有专用 HTTP 映射，由框架返回 500，无作业；PDF 不做图像预检，仍 202，随后作业 failed、error=`RENDERER_UNAVAILABLE`。Reviewy 初步认为可映射现有 400 BadRequest（“export format”）；最终由用户决定，本轮不采用新映射。
+2. **202 后超时／崩溃**：现有 getExport 返回 200 Envelope，`data.status=failed`、`data.error=RENDERER_TIMEOUT` 或 `RENDERER_FAILED`；download 返回 409 `{"detail":"export is not ready"}`。不发布部分文件或伪造 ready。Reviewy 初步认为需要独立 contract PR；最终由用户决定，#153 的受理前 422 不覆盖此异步失败协议。
 
 每作业独立子进程与临时 profile，不复用浏览器登录态；只允许内存报告主文档，其他路由一律 abort，禁止外联和任意 file 读取。进程内单作业信号量限制 JPEG／PDF 并发，配合服务现有单 runtime writer 锁；取消／超时终止本作业并清理 profile。作业复用现有 pin、`exports/` 原子发布、manifest／SHA-256、ready 后 24h 保留和启动清扫，没有第二条存储路径或新增配额策略。
 
