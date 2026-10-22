@@ -91,7 +91,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 6. E 预发布。
 7. F 文档 + 后续项 B（`install-and-use.md` 按 A 的结论写明 `exportable` 的作用范围）。
 
-A、B 的结论尚未确定，本计划不预设选择。
+定稿时 A、B 尚未确定。后续项 A 已由用户于 2026-10-22 11:13 +08:00 决定：保持 #151 行为——仅屏蔽 `exportable=false` 或 `classification != local-metadata` 的 event-detail 行；派生 task/run/aggregate 不过滤。JPEG/PDF 与 HTML/CSV 共用该过滤路径，不新增 `withheld` 值、不改契约；AC-51 完整验收仍归 R2.2。后续项 B 按此结论写明 `exportable` 的作用范围。
 
 ### 磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）
 
