@@ -594,6 +594,103 @@ class RendererLibraryTests(unittest.TestCase):
         self.assertIn(KEPT_TASK_ID, compact)
         self.assertEqual(_browser_binaries(home), binaries)
 
+    def test_preflight_measures_real_snapshot_without_capture(self) -> None:
+        """Public preflight measures snapshot HTML and does not capture."""
+        home = _renderer_home()
+        if home is None:
+            self.skipTest(
+                "SBTD_RENDERER_TEST_HOME is unset or has no browsers/ install"
+            )
+        from browser_renderer import (
+            BrowserRenderer,
+            RendererError,
+            _make_job_dir,
+            _make_profile,
+            renderer_capability,
+        )
+
+        capability = renderer_capability(home)
+        if not capability["available"]:
+            self.skipTest(capability["reason"])
+        presentation = _presentation()
+        sentinel = Path(self.temporary.name) / "capture-called"
+        worker = (
+            "import sys\n"
+            f"sys.path.insert(0, {str(ROOT)!r})\n"
+            "from pathlib import Path\n"
+            "from playwright.sync_api import Page\n"
+            "from browser_renderer import _worker_entry\n"
+            f"sentinel = {str(sentinel)!r}\n"
+            "def forbid(self, *args, **kwargs):\n"
+            "    Path(sentinel).write_text('captured', encoding='utf-8')\n"
+            "    raise RuntimeError('preflight must not capture')\n"
+            "Page.screenshot = forbid\n"
+            "Page.pdf = forbid\n"
+            "sys.exit(_worker_entry(sys.argv[1]))\n"
+        )
+        jobs: list[Path] = []
+        profiles: list[Path] = []
+
+        def track_job() -> Path:
+            path = _make_job_dir()
+            jobs.append(path)
+            return path
+
+        def track_profile() -> Path:
+            path = _make_profile()
+            profiles.append(path)
+            return path
+
+        def assert_idle() -> None:
+            self.assertFalse(sentinel.exists())
+            self.assertFalse((self.home / "exports").exists())
+            for path in (*jobs, *profiles):
+                self.assertFalse(path.exists(), path)
+
+        renderer = BrowserRenderer(home, self.snapshots)
+        with (
+            mock.patch(
+                "browser_renderer._worker_argv",
+                side_effect=lambda job: [sys.executable, "-c", worker, str(job)],
+            ),
+            mock.patch("browser_renderer._make_job_dir", side_effect=track_job),
+            mock.patch("browser_renderer._make_profile", side_effect=track_profile),
+        ):
+            normal = renderer.preflight(self.snapshot, "jpeg", presentation)
+            self.assertEqual(normal, {"scale": 2, "warnings": ["UNKNOWN_OCCURRED_AT"]})
+            assert_idle()
+            # 2x of this snapshot exceeds 9_000_000 px; 1x of the same page fits.
+            with mock.patch("browser_renderer.MAX_PIXELS", 9_000_000):
+                downgraded = renderer.preflight(self.snapshot, "jpeg", presentation)
+            self.assertEqual(
+                downgraded,
+                {
+                    "scale": 1,
+                    "warnings": [
+                        "UNKNOWN_OCCURRED_AT",
+                        "EXPORT_SCALE_DOWNGRADED:1x",
+                    ],
+                },
+            )
+            assert_idle()
+            with (
+                mock.patch("browser_renderer.MAX_SIDE_PX", 1439),
+                mock.patch("browser_renderer.MAX_PIXELS", 1_234_567),
+                self.assertRaises(RendererError) as caught,
+            ):
+                renderer.preflight(self.snapshot, "jpeg", presentation)
+            error = caught.exception
+            self.assertEqual(error.code, "EXPORT_IMAGE_SIZE_LIMIT")
+            self.assertEqual(str(error), "EXPORT_IMAGE_SIZE_LIMIT")
+            self.assertEqual(error.max_edge_px, 1439)
+            self.assertEqual(error.max_total_pixels, 1_234_567)
+            self.assertNotIn("1439", str(error))
+            self.assertNotIn("1234567", str(error))
+            assert_idle()
+            pdf = renderer.preflight(self.snapshot, "pdf", presentation)
+            self.assertEqual(pdf, {"scale": None, "warnings": ["UNKNOWN_OCCURRED_AT"]})
+            assert_idle()
+
 
 class FrozenHttpExportTests(unittest.TestCase):
     def setUp(self) -> None:

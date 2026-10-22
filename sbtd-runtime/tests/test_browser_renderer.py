@@ -27,7 +27,6 @@ if str(ROOT) not in sys.path:
 
 from browser_renderer import (
     EXPORT_IMAGE_SIZE_LIMIT,
-    JPEG_SCALE_WARNING,
     PLAYWRIGHT_VERSION,
     RENDERER_UNAVAILABLE,
     BrowserRenderer,
@@ -37,6 +36,8 @@ from browser_renderer import (
     _jpeg_scale,
     renderer_capability,
 )
+
+_MIXED_TEXT = "中文日本語のテキスト・カタカナ English"
 
 _SECRET = "PRIVATE_ALIAS_SHOULD_VANISH"
 _PROBE_TOKEN = "PROBE_HTTP_TOKEN_91"
@@ -243,22 +244,22 @@ class PreflightTests(unittest.TestCase):
         self.assertIsNone(warning)
 
     def test_2x_over_limit_falls_back_to_1x_with_warning(self) -> None:
-        scale, warning = _jpeg_scale(1440, 13889)
-        self.assertEqual((scale, warning), (1, JPEG_SCALE_WARNING))
-        scale, warning = _jpeg_scale(1440, 16000)
-        self.assertEqual(scale, 1)
-        self.assertEqual(warning, JPEG_SCALE_WARNING)
-        scale, warning = _jpeg_scale(16001, 10)
-        self.assertEqual(scale, 1)
-        scale, warning = _jpeg_scale(32000, 2500)
-        self.assertEqual(scale, 1)
-        scale, warning = _jpeg_scale(10000, 8000)
-        self.assertEqual(scale, 1)
+        for width, height in (
+            (1440, 13889),
+            (1440, 16000),
+            (16001, 10),
+            (32000, 2500),
+            (10000, 8000),
+        ):
+            with self.subTest(width=width, height=height):
+                scale, warning = _jpeg_scale(width, height)
+                self.assertEqual(scale, 1)
+                self.assertEqual(warning, "EXPORT_SCALE_DOWNGRADED:1x")
 
     def test_downgrade_never_uses_less_than_standard_width(self) -> None:
         with self.assertRaises(RendererError) as caught:
             _jpeg_scale(1439, 16001)
-        self.assertEqual(caught.exception.code, EXPORT_IMAGE_SIZE_LIMIT)
+        self._assert_configured_size_error(caught.exception, 32000, 80_000_000)
 
     def test_1x_over_limit_is_a_safe_size_error(self) -> None:
         for width, height in (
@@ -272,9 +273,27 @@ class PreflightTests(unittest.TestCase):
             with self.subTest(width=width, height=height):
                 with self.assertRaises(RendererError) as caught:
                     _jpeg_scale(width, height)
-                self.assertEqual(caught.exception.code, "EXPORT_IMAGE_SIZE_LIMIT")
-                self.assertEqual(str(caught.exception), "EXPORT_IMAGE_SIZE_LIMIT")
-                self.assertNotIn("/", str(caught.exception))
+                self._assert_configured_size_error(caught.exception, 32000, 80_000_000)
+
+    def test_size_error_reports_effective_configured_caps(self) -> None:
+        with (
+            mock.patch("browser_renderer.MAX_SIDE_PX", 2222),
+            mock.patch("browser_renderer.MAX_PIXELS", 333_333),
+            self.assertRaises(RendererError) as caught,
+        ):
+            _jpeg_scale(1440, 32001)
+        self._assert_configured_size_error(caught.exception, 2222, 333_333)
+
+    def _assert_configured_size_error(
+        self, error: RendererError, edge: int, pixels: int
+    ) -> None:
+        self.assertEqual(error.code, "EXPORT_IMAGE_SIZE_LIMIT")
+        self.assertEqual(str(error), "EXPORT_IMAGE_SIZE_LIMIT")
+        self.assertNotIn("/", str(error))
+        self.assertNotIn(str(edge), str(error))
+        self.assertNotIn(str(pixels), str(error))
+        self.assertEqual(error.max_edge_px, edge)
+        self.assertEqual(error.max_total_pixels, pixels)
 
 
 class IsolationTests(unittest.TestCase):
@@ -789,7 +808,7 @@ class RealBrowserTests(unittest.TestCase):
         html = (
             "<!DOCTYPE html><html><head><meta charset='utf-8'>"
             "<title>SBTD 报告</title></head><body>"
-            f"<p>{_PROBE_TOKEN} 中文日本語 English</p>"
+            f"<p>{_PROBE_TOKEN} {_MIXED_TEXT}</p>"
             "<div style='height:1200px'>tall</div>"
             f"<img src='{http_url}'>"
             f"<iframe src='{file_url}'></iframe>"
@@ -846,6 +865,7 @@ class RealBrowserTests(unittest.TestCase):
                 path.write_bytes(pdf)
                 text = subprocess.check_output(["pdftotext", str(path), "-"])
                 self.assertNotIn(_FILE_TOKEN.encode(), text)
+                self.assertIn(_MIXED_TEXT.encode(), text)
         self.assertNotIn(b"sbtd-export.invalid", pdf)
         self.assertNotIn(str(self.home).encode(), pdf)
 
@@ -875,7 +895,7 @@ class RealBrowserTests(unittest.TestCase):
             presentation={"theme": "light"},
         )
         self.assertEqual(_jpeg_size(payload), (1440, 31999))
-        self.assertIn(JPEG_SCALE_WARNING, metadata["warnings"])
+        self.assertIn("EXPORT_SCALE_DOWNGRADED:1x", metadata["warnings"])
         with self.assertRaises(RendererError) as caught:
             _render_document(
                 document(32001),
@@ -885,6 +905,9 @@ class RealBrowserTests(unittest.TestCase):
                 presentation={"theme": "light"},
             )
         self.assertEqual(caught.exception.code, EXPORT_IMAGE_SIZE_LIMIT)
+        self.assertEqual(str(caught.exception), "EXPORT_IMAGE_SIZE_LIMIT")
+        self.assertEqual(caught.exception.max_edge_px, 32000)
+        self.assertEqual(caught.exception.max_total_pixels, 80_000_000)
 
         # Wide intrinsic content must also be measured, not assumed to fit
         # the 1440 CSS-pixel viewport.
@@ -898,7 +921,7 @@ class RealBrowserTests(unittest.TestCase):
         )
         self.assertEqual(_jpeg_size(payload)[0], 16001)
         self.assertLessEqual(max(_jpeg_size(payload)), 32000)
-        self.assertIn(JPEG_SCALE_WARNING, metadata["warnings"])
+        self.assertIn("EXPORT_SCALE_DOWNGRADED:1x", metadata["warnings"])
 
     def test_configured_limits_and_notice_apply_before_capture(self) -> None:
         from browser_renderer import _make_job_dir, _render_document
@@ -958,7 +981,7 @@ class RealBrowserTests(unittest.TestCase):
                     cancelled=lambda: False,
                     presentation={},
                 )
-            self.assertEqual(notices, [JPEG_SCALE_WARNING])
+            self.assertEqual(notices, ["EXPORT_SCALE_DOWNGRADED:1x"])
             self.assertFalse(jobs[-1].exists())
             with warnings.catch_warnings(record=True) as caught:
                 payload, metadata = _render_document(
@@ -969,12 +992,15 @@ class RealBrowserTests(unittest.TestCase):
                     presentation={},
                 )
             self.assertEqual(
-                [str(item.message) for item in caught], [JPEG_SCALE_WARNING]
+                [str(item.message) for item in caught], ["EXPORT_SCALE_DOWNGRADED:1x"]
             )
             self.assertEqual(_jpeg_size(payload), (1440, 1000))
-            self.assertIn(JPEG_SCALE_WARNING, metadata["warnings"])
+            self.assertIn("EXPORT_SCALE_DOWNGRADED:1x", metadata["warnings"])
 
-        with mock.patch("browser_renderer.MAX_SIDE_PX", 1439):
+        with (
+            mock.patch("browser_renderer.MAX_SIDE_PX", 1439),
+            mock.patch("browser_renderer.MAX_PIXELS", 1_234_567),
+        ):
             with self.assertRaises(RendererError) as caught:
                 _render_document(
                     document,
@@ -984,6 +1010,11 @@ class RealBrowserTests(unittest.TestCase):
                     presentation={},
                 )
             self.assertEqual(caught.exception.code, EXPORT_IMAGE_SIZE_LIMIT)
+            self.assertEqual(caught.exception.max_edge_px, 1439)
+            self.assertEqual(caught.exception.max_total_pixels, 1_234_567)
+            self.assertEqual(str(caught.exception), "EXPORT_IMAGE_SIZE_LIMIT")
+            self.assertNotIn("1439", str(caught.exception))
+            self.assertNotIn("1234567", str(caught.exception))
 
     def test_pdf_is_searchable_a3_with_embedded_cjk(self) -> None:
         missing = [
@@ -1007,7 +1038,7 @@ class RealBrowserTests(unittest.TestCase):
             "<p>范围：2026-01-01T00:00:00Z → 2026-02-01T00:00:00Z（Asia/Shanghai）</p>"
             "<p>数据水位：2026-02-01T00:00:00Z（快照 "
             "snap_abcdef0123456789abcdef0123456789，watermark_seq 3）</p>"
-            "<section class='panel'><h2>质量</h2><p>中文日本語 English</p>"
+            f"<section class='panel'><h2>质量</h2><p>{_MIXED_TEXT}</p>"
             f"<p>{_LATE_TOKEN}</p></section>"
             "<table><thead><tr><th>"
             f"{_HEAD_TOKEN}</th><th>状态</th></tr></thead><tbody>{rows}</tbody></table>"
@@ -1053,9 +1084,7 @@ class RealBrowserTests(unittest.TestCase):
         self.assertAlmostEqual(width, 1190.55, delta=2)
         self.assertAlmostEqual(height, 841.89, delta=2)
         extracted = text.stdout
-        self.assertIn("中文", extracted)
-        self.assertIn("日本語", extracted)
-        self.assertIn("English", extracted)
+        self.assertIn(_MIXED_TEXT, extracted)
         self.assertGreaterEqual("".join(extracted.split()).count("SBTD报告"), 2)
         self.assertGreaterEqual(extracted.count("2026-01-01T00:00:00Z"), 2)
         self.assertGreaterEqual(extracted.count("Asia/Shanghai"), 2)

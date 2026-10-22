@@ -37,9 +37,7 @@ JPEG_QUALITY = 90
 # Configure these module constants before submitting jobs; each worker gets a copy.
 MAX_SIDE_PX = 32000
 MAX_PIXELS = 80_000_000
-JPEG_SCALE_WARNING = (
-    "JPEG_SCALE_1X:2x exceeds configured image limits; using full-page 1x"
-)
+JPEG_SCALE_WARNING = "EXPORT_SCALE_DOWNGRADED:1x"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 RENDERER_UNAVAILABLE = "RENDERER_UNAVAILABLE"
 EXPORT_IMAGE_SIZE_LIMIT = "EXPORT_IMAGE_SIZE_LIMIT"
@@ -97,10 +95,21 @@ _JOB_SEMAPHORE = threading.BoundedSemaphore(1)
 class RendererError(Exception):
     """Library failure. ``code`` and ``str(exc)`` are the same allowlisted token."""
 
-    def __init__(self, code: str = RENDERER_FAILED) -> None:
+    def __init__(
+        self,
+        code: str = RENDERER_FAILED,
+        *,
+        max_edge_px: int | None = None,
+        max_total_pixels: int | None = None,
+    ) -> None:
         if type(code) is not str or code not in _CODES:
             code = RENDERER_FAILED
         self.code = code
+        if code == EXPORT_IMAGE_SIZE_LIMIT:
+            self.max_edge_px = MAX_SIDE_PX if max_edge_px is None else max_edge_px
+            self.max_total_pixels = (
+                MAX_PIXELS if max_total_pixels is None else max_total_pixels
+            )
         super().__init__(code)
 
 
@@ -368,7 +377,7 @@ def _footer_template(document: str) -> str:
     short = _short_snapshot(document)
     left = html.escape(f"{title} · {ranged} · {short}", quote=True)
     return (
-        '<div style="font-size:8px;width:100%;padding:0 4mm;'
+        '<div style="font-size:9pt;width:100%;padding:0 4mm;'
         'display:flex;justify-content:space-between;">'
         f"<span>{left}</span>"
         '<span><span class="pageNumber"></span> / <span class="totalPages"></span></span>'
@@ -464,10 +473,13 @@ def _write_job(
     presentation: Any,
     profile: Path,
     timeout_seconds: float,
+    *,
+    preflight: bool = False,
 ) -> None:
     (job / "report.html").write_text(document, encoding="utf-8")
     payload = {
         "format": export_format,
+        "preflight": preflight,
         "profile": str(profile),
         "home": str(home),
         "presentation": presentation if isinstance(presentation, dict) else None,
@@ -584,7 +596,9 @@ def _execute_job(
             raise RendererError(RENDERER_CANCELLED)
         if time.monotonic() >= deadline:
             raise RendererError(RENDERER_TIMEOUT)
-        return _read_result(job, returncode, export_format)
+        return _read_result(
+            job, returncode, export_format, preflight=spec.get("preflight", False)
+        )
     finally:
         try:
             if owner is not None:
@@ -595,7 +609,7 @@ def _execute_job(
 
 
 def _read_result(
-    job: Path, returncode: int, export_format: str
+    job: Path, returncode: int, export_format: str, *, preflight: bool = False
 ) -> tuple[bytes, dict[str, Any]]:
     error_path = job / "error.json"
     if _real_file(error_path):
@@ -608,18 +622,17 @@ def _read_result(
             code = payload["code"]
         if code not in _CODES:
             code = RENDERER_FAILED
+        if code == EXPORT_IMAGE_SIZE_LIMIT:
+            caps = (payload.get("max_edge_px"), payload.get("max_total_pixels"))
+            if any(type(value) is not int or value <= 0 for value in caps):
+                raise RendererError(RENDERER_FAILED)
+            raise RendererError(code, max_edge_px=caps[0], max_total_pixels=caps[1])
         raise RendererError(code)
     if returncode != 0:
         raise RendererError(RENDERER_FAILED)
-    blob_path = job / "result.bin"
-    if not _real_file(blob_path):
-        raise RendererError(RENDERER_FAILED)
-    blob = blob_path.read_bytes()
-    prefix = b"\xff\xd8\xff" if export_format == "jpeg" else b"%PDF"
-    if not blob.startswith(prefix):
-        raise RendererError(RENDERER_FAILED)
     meta: dict[str, Any] = {"warnings": [], "aborted_urls": []}
     meta_path = job / "result.json"
+    loaded = None
     if _real_file(meta_path):
         try:
             loaded = json.loads(meta_path.read_text(encoding="utf-8"))
@@ -638,6 +651,22 @@ def _read_result(
             ]
             if loaded.get("scale") in {1, 2}:
                 meta["scale"] = loaded["scale"]
+    if preflight:
+        expected = {1, 2} if export_format == "jpeg" else {None}
+        if (
+            not isinstance(loaded, dict)
+            or loaded.get("scale") not in expected
+            or not isinstance(loaded.get("warnings"), list)
+        ):
+            raise RendererError(RENDERER_FAILED)
+        return b"", {"scale": loaded["scale"], "warnings": meta["warnings"]}
+    blob_path = job / "result.bin"
+    if not _real_file(blob_path):
+        raise RendererError(RENDERER_FAILED)
+    blob = blob_path.read_bytes()
+    prefix = b"\xff\xd8\xff" if export_format == "jpeg" else b"%PDF"
+    if not blob.startswith(prefix):
+        raise RendererError(RENDERER_FAILED)
     return blob, meta
 
 
@@ -675,6 +704,7 @@ def _render_document(
     cancelled: Any,
     presentation: Any,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    preflight: bool = False,
 ) -> tuple[bytes, dict[str, Any]]:
     if export_format not in {"jpeg", "pdf"}:
         raise ValueError("format must be jpeg or pdf")
@@ -706,7 +736,14 @@ def _render_document(
         job = _make_job_dir()
         remaining = max(0.1, deadline - time.monotonic())
         _write_job(
-            job, html_text, export_format, home_path, presentation, profile, remaining
+            job,
+            html_text,
+            export_format,
+            home_path,
+            presentation,
+            profile,
+            remaining,
+            preflight=preflight,
         )
         return _execute_job(job, profile, cancelled, deadline)
     finally:
@@ -733,6 +770,37 @@ class BrowserRenderer:
 
     def __call__(
         self, snapshot: Any, export_format: str, presentation_state: Any, cancelled: Any
+    ):
+        return self._run(
+            snapshot, export_format, presentation_state, cancelled, preflight=False
+        )
+
+    def preflight(
+        self,
+        snapshot: Any,
+        export_format: str,
+        presentation_state: Any,
+        cancelled: Any = None,
+    ) -> dict[str, Any]:
+        """Measure before acceptance, without capturing or creating an export job.
+
+        JPEG returns scale 1/2; PDF returns None. Warnings include the report's
+        existing warnings. This is not a reservation: keep snapshot, presentation
+        and configured caps fixed through acceptance; generation rechecks layout.
+        The caller owns the snapshot's lifetime, as for direct rendering.
+        """
+        return self._run(
+            snapshot, export_format, presentation_state, cancelled, preflight=True
+        )
+
+    def _run(
+        self,
+        snapshot: Any,
+        export_format: str,
+        presentation_state: Any,
+        cancelled: Any,
+        *,
+        preflight: bool,
     ):
         if export_format not in {"jpeg", "pdf"}:
             raise ValueError("format must be jpeg or pdf")
@@ -774,7 +842,17 @@ class BrowserRenderer:
                 cancelled=check_budget,
                 presentation=presentation_state,
                 timeout_seconds=deadline - time.monotonic(),
+                preflight=preflight,
             )
+            if preflight:
+                return {
+                    "scale": extra["scale"],
+                    "warnings": list(
+                        dict.fromkeys(
+                            [*(meta.get("warnings") or []), *extra["warnings"]]
+                        )
+                    ),
+                }
             return _published(artifact, extra, meta, export_format)
         except RendererError:
             raise
@@ -959,7 +1037,9 @@ def _capture(
     profile: Path,
     timeout_seconds: float,
     job: Path,
-) -> tuple[bytes, dict[str, Any]]:
+    *,
+    preflight: bool = False,
+) -> tuple[bytes | None, dict[str, Any]]:
     from playwright.sync_api import sync_playwright
 
     prepared = _prepare_document(document, export_format, presentation)
@@ -992,6 +1072,8 @@ def _capture(
                         css_width, css_height = _measured_size(page)
                     if css_width < JPEG_WIDTH or _exceeds(css_width, css_height, scale):
                         raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
+                    if preflight:
+                        return None, {"scale": scale, "warnings": warnings}
                     if warning:
                         _notify_downgrade(job, deadline)
                     payload = page.screenshot(
@@ -1011,6 +1093,8 @@ def _capture(
                         reduced_motion="reduce",
                     )
                     _wait_ready(page)
+                    if preflight:
+                        return None, {"scale": None, "warnings": warnings}
                     payload = page.pdf(
                         format="A3",
                         landscape=True,
@@ -1044,8 +1128,9 @@ def _capture(
     }
 
 
-def _write_result(job: Path, payload: bytes, meta: dict[str, Any]) -> None:
-    (job / "result.bin").write_bytes(payload)
+def _write_result(job: Path, payload: bytes | None, meta: dict[str, Any]) -> None:
+    if payload is not None:
+        (job / "result.bin").write_bytes(payload)
     safe = {
         "warnings": [
             item
@@ -1060,11 +1145,14 @@ def _write_result(job: Path, payload: bytes, meta: dict[str, Any]) -> None:
     (job / "result.json").write_text(json.dumps(safe), encoding="utf-8")
 
 
-def _write_error(job: Path, code: str) -> None:
-    if code not in _CODES:
-        code = RENDERER_FAILED
+def _write_error(job: Path, error: RendererError) -> None:
+    payload: dict[str, Any] = {"code": error.code}
+    if error.code == EXPORT_IMAGE_SIZE_LIMIT:
+        payload.update(
+            max_edge_px=error.max_edge_px, max_total_pixels=error.max_total_pixels
+        )
     try:
-        (job / "error.json").write_text(json.dumps({"code": code}), encoding="utf-8")
+        (job / "error.json").write_text(json.dumps(payload), encoding="utf-8")
     except OSError:
         return
 
@@ -1080,7 +1168,7 @@ def _worker_run(job: Path) -> None:
         or type(max_pixels) is not int
         or max_pixels <= 0
     ):
-        raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
+        raise RendererError(RENDERER_FAILED)
     MAX_SIDE_PX, MAX_PIXELS = max_side, max_pixels
     document = _read_member(job / "report.html", job).decode("utf-8")
     export_format = spec.get("format")
@@ -1108,6 +1196,7 @@ def _worker_run(job: Path) -> None:
         profile,
         float(timeout_seconds),
         job,
+        preflight=spec.get("preflight", False),
     )
     _write_result(job, payload, meta)
 
@@ -1121,10 +1210,10 @@ def _worker_entry(job_dir: str) -> int:
             join_job(os.environ["SBTD_RENDERER_JOB"])
         _worker_run(job)
     except RendererError as exc:
-        _write_error(job, exc.code)
+        _write_error(job, exc)
         return 1
     except Exception:  # noqa: BLE001 — only a fixed safe code crosses the process boundary.
-        _write_error(job, RENDERER_FAILED)
+        _write_error(job, RendererError(RENDERER_FAILED))
         return 1
     return 0
 
