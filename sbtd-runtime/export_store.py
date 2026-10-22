@@ -102,6 +102,7 @@ class _Job:
         self.cancel_event = threading.Event()
         self.done = threading.Event()
         self.future: Any = None
+        self.renderer: Any = None
 
 
 def _now() -> datetime:
@@ -239,6 +240,9 @@ class ExportStore:
         os.chmod(self._directory, 0o700)
         self._directory_identity = self._identity()
         self._lock = threading.RLock()
+        self._admissions = threading.Condition(self._lock)
+        self._preparing = 0
+        self._closing = threading.Event()
         self._jobs: dict[str, _Job] = {}
         self._gone: set[str] = set()
         self._gone_payload: dict[str, str | None] = {}
@@ -255,8 +259,9 @@ class ExportStore:
         presentation_state: dict[str, Any],
         *,
         idempotency_key: str | None = None,
+        prepare: Any = None,
     ) -> str:
-        """Pin the snapshot, copy presentation, then queue one render."""
+        """Pin, optionally preflight before allocating a job, then queue one render."""
         if format not in _FORMATS:
             raise ValueError("export format must be html, csv, jpeg or pdf")
         if not isinstance(presentation_state, dict):
@@ -286,9 +291,19 @@ class ExportStore:
             existing = self._existing_idempotent(idempotency_key, payload)
             if existing is not None:
                 return existing
-        snapshot = self._snapshots.pin(snapshot_id)
-        pinned = True
+            if prepare is not None:
+                self._preparing += 1
+        snapshot = None
+        pinned = False
         try:
+            snapshot = self._snapshots.pin(snapshot_id)
+            pinned = True
+            renderer = self._renderer
+            warnings: list[str] = []
+            if prepare is not None:
+                renderer, warnings = prepare(
+                    snapshot, format, presentation, cancelled=self._closing.is_set
+                )
             with self._lock:
                 if self._closed:
                     raise ValueError("export store is closed")
@@ -306,6 +321,8 @@ class ExportStore:
                     payload if idempotency_key is not None else None,
                     _iso(_now()),
                 )
+                job.renderer = renderer
+                job.metadata = {"warnings": list(warnings)}
                 job.pin_held = True
                 pinned = False
                 self._jobs[export_id] = job
@@ -323,8 +340,23 @@ class ExportStore:
                     raise
                 return export_id
         finally:
-            if pinned:
-                self._snapshots.release(snapshot.snapshot_id)
+            try:
+                if pinned:
+                    self._snapshots.release(snapshot.snapshot_id)
+            finally:
+                if prepare is not None:
+                    with self._admissions:
+                        self._preparing -= 1
+                        self._admissions.notify_all()
+
+    def acceptance_warnings(self, export_id: str) -> list[str]:
+        """Read accepted warnings without changing idempotent replay/expiry behavior."""
+        with self._lock:
+            job = self._jobs.get(export_id)
+            if job is None:
+                return []
+            metadata = job.public if job.public is not None else job.metadata
+            return list(metadata.get("warnings", []))
 
     def get(self, export_id: str) -> dict[str, Any]:
         """Return a JSON-safe status. Ready views are re-verified from disk."""
@@ -388,11 +420,13 @@ class ExportStore:
             job.public = None
 
     def close(self) -> None:
-        """Cancel queued work, wait for the worker, and release leftover pins."""
+        """Cancel preparation/jobs, wait for cleanup, and release leftover pins."""
         with self._lock:
             if self._closed:
+                self._admissions.wait_for(lambda: self._preparing == 0)
                 return
             self._closed = True
+            self._closing.set()
             for job in self._jobs.values():
                 job.cancel_event.set()
                 job.cancelled = True
@@ -400,6 +434,7 @@ class ExportStore:
         if executor is not None:
             executor.shutdown(wait=True, cancel_futures=True)
         with self._lock:
+            self._admissions.wait_for(lambda: self._preparing == 0)
             for job in self._jobs.values():
                 if job.status in ("queued", "generating"):
                     job.status = "cancelled"
@@ -474,7 +509,7 @@ class ExportStore:
                 cancelled = job.cancel_event.is_set
             try:
                 blob, meta = self._invoke(
-                    snapshot, format_name, presentation, cancelled
+                    snapshot, format_name, presentation, cancelled, job.renderer
                 )
             except Exception as error:  # noqa: BLE001 — worker boundary releases the pin.
                 from browser_renderer import RendererError
@@ -509,8 +544,9 @@ class ExportStore:
         format_name: str,
         presentation: dict[str, Any],
         cancelled: Any,
+        renderer: Any,
     ) -> tuple[bytes, Any]:
-        result = self._renderer(snapshot, format_name, presentation, cancelled)
+        result = renderer(snapshot, format_name, presentation, cancelled)
         if not isinstance(result, tuple) or len(result) != 2:
             raise TypeError("renderer must return (bytes, metadata)")
         blob, meta = result
@@ -858,3 +894,4 @@ class ExportStore:
         self._snapshots.release(job.snapshot_id)
         job.snapshot = None
         job.presentation = {}
+        job.renderer = None

@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from browser_renderer import EXPORT_IMAGE_SIZE_LIMIT, RendererError
 from event_store import EventStore, StoreError
 from export_render import ExportRenderer, default_presentation, load_panel_manifest
 from export_store import ExportGone, ExportNotFound, ExportNotReady, ExportStore
@@ -411,7 +412,7 @@ class SecurityMiddleware:
 
 
 def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
-    """Validate the frozen CreateExportRequest, including manifest membership."""
+    """Validate CreateExportRequest, including manifest membership."""
     if not isinstance(body, dict) or not {"snapshot_id", "format"} <= body.keys():
         raise ValueError("snapshot_id and format are required")
     if body.keys() - {"snapshot_id", "format", "presentation_state"}:
@@ -422,8 +423,8 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
     ):
         raise ValueError("invalid snapshot_id")
     format_name = body["format"]
-    if format_name not in ("html", "csv"):
-        raise ValueError("format must be html or csv")
+    if format_name not in ("html", "csv", "jpeg", "pdf"):
+        raise ValueError("format must be html, csv, jpeg or pdf")
     presentation = body.get("presentation_state", default_presentation(manifest))
     required = {
         "theme",
@@ -472,7 +473,8 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
 def create_app(home: Path, access: AccessControl, port: int) -> Any:
     store = SnapshotStore(home)
     manifest = load_panel_manifest()
-    exports = ExportStore(home, store, ExportRenderer(store, home=home))
+    renderer = ExportRenderer(store, home=home)
+    exports = ExportStore(home, store, renderer)
 
     @asynccontextmanager
     async def lifespan(_app: Starlette):
@@ -493,7 +495,10 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             for name in ("html", "csv")
         }
         formats.update(
-            {name: {**renderer, "http_available": False} for name in ("jpeg", "pdf")}
+            {
+                name: {**renderer, "http_available": renderer["available"]}
+                for name in ("jpeg", "pdf")
+            }
         )
         return _json(_envelope({"exports": formats}))
 
@@ -578,6 +583,10 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
                 format_name,
                 presentation,
                 idempotency_key=key,
+                prepare=renderer.prepare if format_name == "jpeg" else None,
+            )
+            warnings = (
+                exports.acceptance_warnings(export_id) if format_name == "jpeg" else []
             )
         except (ValueError, UnicodeError):
             return _json({"detail": "invalid export request"}, 400)
@@ -585,7 +594,18 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             return _json({"detail": "not found"}, 404)
         except SnapshotGone:
             return _json({"detail": "gone"}, 410)
-        return _json(_envelope({"export_id": export_id}), 202)
+        except RendererError as error:
+            if error.code != EXPORT_IMAGE_SIZE_LIMIT:
+                raise
+            return _json(
+                {
+                    "detail": error.code,
+                    "max_edge_px": error.max_edge_px,
+                    "max_total_pixels": error.max_total_pixels,
+                },
+                422,
+            )
+        return _json(_envelope({"export_id": export_id}, {"warnings": warnings}), 202)
 
     async def export_resource(request: Request) -> Response:
         export_id = request.path_params["export_id"]

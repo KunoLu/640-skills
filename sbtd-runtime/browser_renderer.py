@@ -475,7 +475,23 @@ def _write_job(
     timeout_seconds: float,
     *,
     preflight: bool = False,
+    locked_scale: int | None = None,
+    max_side_px: int | None = None,
+    max_pixels: int | None = None,
 ) -> None:
+    side = MAX_SIDE_PX if max_side_px is None else max_side_px
+    pixels = MAX_PIXELS if max_pixels is None else max_pixels
+    if (
+        type(side) is not int
+        or side <= 0
+        or type(pixels) is not int
+        or pixels <= 0
+        or (
+            locked_scale is not None
+            and (type(locked_scale) is not int or locked_scale not in (1, 2))
+        )
+    ):
+        raise RendererError(RENDERER_FAILED)
     (job / "report.html").write_text(document, encoding="utf-8")
     payload = {
         "format": export_format,
@@ -484,9 +500,11 @@ def _write_job(
         "home": str(home),
         "presentation": presentation if isinstance(presentation, dict) else None,
         "timeout_seconds": timeout_seconds,
-        "max_side_px": MAX_SIDE_PX,
-        "max_pixels": MAX_PIXELS,
+        "max_side_px": side,
+        "max_pixels": pixels,
     }
+    if locked_scale is not None:
+        payload["locked_scale"] = locked_scale
     (job / "request.json").write_text(
         json.dumps(payload, ensure_ascii=False),
         encoding="utf-8",
@@ -705,6 +723,9 @@ def _render_document(
     presentation: Any,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     preflight: bool = False,
+    locked_scale: int | None = None,
+    max_side_px: int | None = None,
+    max_pixels: int | None = None,
 ) -> tuple[bytes, dict[str, Any]]:
     if export_format not in {"jpeg", "pdf"}:
         raise ValueError("format must be jpeg or pdf")
@@ -744,6 +765,9 @@ def _render_document(
             profile,
             remaining,
             preflight=preflight,
+            locked_scale=locked_scale,
+            max_side_px=max_side_px,
+            max_pixels=max_pixels,
         )
         return _execute_job(job, profile, cancelled, deadline)
     finally:
@@ -752,6 +776,60 @@ def _render_document(
         finally:
             if acquired:
                 _JOB_SEMAPHORE.release()
+
+
+def _require_timeout(seconds: Any) -> float:
+    if (
+        type(seconds) not in (int, float)
+        or isinstance(seconds, bool)
+        or not math.isfinite(seconds)
+        or seconds <= 0
+    ):
+        raise RendererError(RENDERER_TIMEOUT)
+    return float(seconds)
+
+
+def _html_text(prepared: bytes | str) -> str:
+    if type(prepared) is bytes:
+        return prepared.decode("utf-8")
+    if type(prepared) is str:
+        return prepared
+    raise RendererError(RENDERER_FAILED)
+
+
+def _static_html(
+    home: Any,
+    snapshots: Any,
+    snapshot: Any,
+    presentation: Any,
+    cancelled: Any,
+    deadline: float,
+) -> tuple[bytes, dict[str, Any]]:
+    """Render one static report inside an existing monotonic deadline."""
+
+    def check_budget() -> bool:
+        if _cancelled(cancelled):
+            raise RendererError(RENDERER_CANCELLED)
+        if time.monotonic() >= deadline:
+            raise RendererError(RENDERER_TIMEOUT)
+        return False
+
+    check_budget()
+    capability = renderer_capability(home, timeout_seconds=deadline - time.monotonic())
+    check_budget()
+    if not capability["available"]:
+        raise RendererError(RENDERER_UNAVAILABLE)
+    html_bytes, meta = render_export(
+        snapshot,
+        "html",
+        presentation,
+        check_budget,
+        snapshots=snapshots,
+    )
+    check_budget()
+    if type(html_bytes) is not bytes or not isinstance(meta, dict):
+        raise RendererError(RENDERER_FAILED)
+    return html_bytes, meta
 
 
 class BrowserRenderer:
@@ -769,10 +847,31 @@ class BrowserRenderer:
         self.timeout_seconds = timeout_seconds
 
     def __call__(
-        self, snapshot: Any, export_format: str, presentation_state: Any, cancelled: Any
+        self,
+        snapshot: Any,
+        export_format: str,
+        presentation_state: Any,
+        cancelled: Any,
+        *,
+        prepared_html: bytes | str | None = None,
+        meta: dict[str, Any] | None = None,
+        locked_scale: int | None = None,
+        max_side_px: int | None = None,
+        max_pixels: int | None = None,
+        timeout_seconds: float | None = None,
     ):
         return self._run(
-            snapshot, export_format, presentation_state, cancelled, preflight=False
+            snapshot,
+            export_format,
+            presentation_state,
+            cancelled,
+            preflight=False,
+            prepared_html=prepared_html,
+            meta=meta,
+            locked_scale=locked_scale,
+            max_side_px=max_side_px,
+            max_pixels=max_pixels,
+            timeout_seconds=timeout_seconds,
         )
 
     def preflight(
@@ -781,16 +880,32 @@ class BrowserRenderer:
         export_format: str,
         presentation_state: Any,
         cancelled: Any = None,
+        *,
+        prepared_html: bytes | str | None = None,
+        meta: dict[str, Any] | None = None,
+        max_side_px: int | None = None,
+        max_pixels: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> dict[str, Any]:
         """Measure before acceptance, without capturing or creating an export job.
 
         JPEG returns scale 1/2; PDF returns None. Warnings include the report's
-        existing warnings. This is not a reservation: keep snapshot, presentation
-        and configured caps fixed through acceptance; generation rechecks layout.
-        The caller owns the snapshot's lifetime, as for direct rendering.
+        existing warnings. This is not a reservation and stores nothing on the
+        instance. Optional prepared HTML and caps apply only to this call; omit
+        them to render the snapshot as before. Direct generation still rechecks
+        layout. The caller owns the snapshot's lifetime, as for direct rendering.
         """
         return self._run(
-            snapshot, export_format, presentation_state, cancelled, preflight=True
+            snapshot,
+            export_format,
+            presentation_state,
+            cancelled,
+            preflight=True,
+            prepared_html=prepared_html,
+            meta=meta,
+            max_side_px=max_side_px,
+            max_pixels=max_pixels,
+            timeout_seconds=timeout_seconds,
         )
 
     def _run(
@@ -801,16 +916,17 @@ class BrowserRenderer:
         cancelled: Any,
         *,
         preflight: bool,
+        prepared_html: bytes | str | None = None,
+        meta: dict[str, Any] | None = None,
+        locked_scale: int | None = None,
+        max_side_px: int | None = None,
+        max_pixels: int | None = None,
+        timeout_seconds: float | None = None,
     ):
         if export_format not in {"jpeg", "pdf"}:
             raise ValueError("format must be jpeg or pdf")
-        if (
-            type(self.timeout_seconds) not in (int, float)
-            or not math.isfinite(self.timeout_seconds)
-            or self.timeout_seconds <= 0
-        ):
-            raise RendererError(RENDERER_TIMEOUT)
-        deadline = time.monotonic() + self.timeout_seconds
+        budget = self.timeout_seconds if timeout_seconds is None else timeout_seconds
+        deadline = time.monotonic() + _require_timeout(budget)
 
         def check_budget() -> bool:
             if _cancelled(cancelled):
@@ -820,29 +936,42 @@ class BrowserRenderer:
             return False
 
         try:
-            check_budget()
-            capability = renderer_capability(
-                self.home, timeout_seconds=deadline - time.monotonic()
-            )
-            check_budget()
-            if not capability["available"]:
-                raise RendererError(RENDERER_UNAVAILABLE)
-            html_bytes, meta = render_export(
-                snapshot,
-                "html",
-                presentation_state,
-                check_budget,
-                snapshots=self.snapshots,
-            )
-            check_budget()
+            if prepared_html is None:
+                html_bytes, meta = _static_html(
+                    self.home,
+                    self.snapshots,
+                    snapshot,
+                    presentation_state,
+                    cancelled,
+                    deadline,
+                )
+                document = html_bytes.decode("utf-8")
+            else:
+                document = _html_text(prepared_html)
+                meta = dict(meta) if isinstance(meta, dict) else {}
+                check_budget()
+                capability = renderer_capability(
+                    self.home, timeout_seconds=deadline - time.monotonic()
+                )
+                check_budget()
+                if not capability["available"]:
+                    raise RendererError(RENDERER_UNAVAILABLE)
+            seam: dict[str, Any] = {}
+            if locked_scale is not None:
+                seam["locked_scale"] = locked_scale
+            if max_side_px is not None:
+                seam["max_side_px"] = max_side_px
+            if max_pixels is not None:
+                seam["max_pixels"] = max_pixels
             artifact, extra = _render_document(
-                html_bytes.decode("utf-8"),
+                document,
                 export_format,
                 home=self.home,
                 cancelled=check_budget,
                 presentation=presentation_state,
                 timeout_seconds=deadline - time.monotonic(),
                 preflight=preflight,
+                **seam,
             )
             if preflight:
                 return {
@@ -1039,6 +1168,7 @@ def _capture(
     job: Path,
     *,
     preflight: bool = False,
+    locked_scale: int | None = None,
 ) -> tuple[bytes | None, dict[str, Any]]:
     from playwright.sync_api import sync_playwright
 
@@ -1048,6 +1178,14 @@ def _capture(
     warnings: list[str] = []
     deadline = time.monotonic() + timeout_seconds
     scale = 2 if export_format == "jpeg" else 1
+    if locked_scale is not None:
+        if (
+            export_format != "jpeg"
+            or type(locked_scale) is not int
+            or locked_scale not in (1, 2)
+        ):
+            raise RendererError(RENDERER_FAILED)
+        scale = locked_scale
     try:
         with sync_playwright() as playwright:
             context = None
@@ -1058,23 +1196,31 @@ def _capture(
                 page = _load_report(context, prepared, aborted, deadline)
                 if export_format == "jpeg":
                     css_width, css_height = _measured_size(page)
-                    chosen, warning = _jpeg_scale(css_width, css_height)
-                    if warning:
-                        warnings.append(warning)
-                    if chosen != scale:
-                        context.close()
-                        context = None
-                        scale = chosen
-                        context = _open_context(
-                            playwright, shell, profile, scale, theme, deadline
-                        )
-                        page = _load_report(context, prepared, aborted, deadline)
-                        css_width, css_height = _measured_size(page)
-                    if css_width < JPEG_WIDTH or _exceeds(css_width, css_height, scale):
+                    warning = None
+                    if locked_scale is None:
+                        chosen, warning = _jpeg_scale(css_width, css_height)
+                        if warning:
+                            warnings.append(warning)
+                        if chosen != scale:
+                            context.close()
+                            context = None
+                            scale = chosen
+                            context = _open_context(
+                                playwright, shell, profile, scale, theme, deadline
+                            )
+                            page = _load_report(context, prepared, aborted, deadline)
+                            css_width, css_height = _measured_size(page)
+                    if (
+                        type(css_width) is not int
+                        or type(css_height) is not int
+                        or css_width < JPEG_WIDTH
+                        or css_height < 1
+                        or _exceeds(css_width, css_height, scale)
+                    ):
                         raise RendererError(EXPORT_IMAGE_SIZE_LIMIT)
                     if preflight:
                         return None, {"scale": scale, "warnings": warnings}
-                    if warning:
+                    if warning is not None:
                         _notify_downgrade(job, deadline)
                     payload = page.screenshot(
                         type="jpeg",
@@ -1188,6 +1334,11 @@ def _worker_run(job: Path) -> None:
         timeout_seconds, bool
     ):
         timeout_seconds = DEFAULT_TIMEOUT_SECONDS
+    locked_scale = spec.get("locked_scale")
+    if locked_scale is not None and (
+        type(locked_scale) is not int or locked_scale not in (1, 2)
+    ):
+        raise RendererError(RENDERER_FAILED)
     payload, meta = _capture(
         document,
         export_format,
@@ -1197,6 +1348,7 @@ def _worker_run(job: Path) -> None:
         float(timeout_seconds),
         job,
         preflight=spec.get("preflight", False),
+        locked_scale=locked_scale,
     )
     _write_result(job, payload, meta)
 
