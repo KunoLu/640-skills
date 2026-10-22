@@ -235,6 +235,7 @@ BDD: traceable，新增 task 场景与新测试同名，中文正文／英文关
 | 2026-10-22T12:09:26+08:00 | planned | in-progress | strict 三文件范围；固定 warning 字符串与 202 载体已明确，路径无 symlink，沿用 TaskStore 已知限制，不重复尝试 helper 或写 active | Lord 12:08 refinement；warnings.items 为 string；CreateExportAccepted 仅 export_id；BDD／DDIA 记录见本轮段落 |
 | 2026-10-22T12:11:17+08:00 | in-progress | checking | Round 2 YAML 红灯为两个描述缺少固定字符串；补充三处描述后定点测试通过，schema 消费者 smoke 证明兼容边界，进入指定全量验证与双只读审查 | 新 test_create_export_202_carries_scale_downgrade_warning；warnings string／data export_id 不变；格式首轮仅换行并已修正；无 runtime 修改 |
 | 2026-10-22T12:14:16+08:00 | checking | done | Round 3 固定 warning 契约、精确 shape 与样例校验、三处描述、BDD／决策／模型行完成；红绿、smoke、指定验证与双只读 review 完成；保留既有 lint 与根 CI 风险 | reports/round3-validation.json 与同 stem md；golden 55、runtime 304/2 skips、serve 14、exports 35/1 skip、panel 21；format passed；I001；WarningContractReview／WarningCoverageReview correct |
+| 2026-10-22T13:06:35+08:00 | done | done | Closeout backfill：PR #153 squash-merged 入 main；以 squash commit 为权威实现 SHA；保留本地 completed_at，不重开任务 | PR #153；merge SHA ce80ca20f9d85f77ad3ca6282ff3f21939fd2572；mergedAt 2026-10-22T05:06:35Z（=13:06:35 +08:00）；回填由下一契约任务 v2.1.0-rc.2-contract-export-failure-states 首个 docs-only commit 完成 |
 
 ## 模型使用
 
@@ -255,3 +256,5 @@ operator 于 2026-10-22 12:10 +08:00 依据 session jsonl（`~/.omp/agent/sessio
 | Job widget（Round 1，pid 37926，2026-10-22 11:35:06 +08:00） | 后台 job 进度组件 | omp job widget | 日志未记录模型（是否为 cursor/composer-2.5 无法从日志确认） | — | 1 条「Job widget spec rejected」 | 0 |
 | Session title generation（Round 2，pid 112981） | 含子代理会话标题 | omp title-generator | cursor/composer-2.5 ×4 | — | 4 requests | 0 |
 | Session title generation（Round 3，pid 104959） | 含子代理会话标题 | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | — | 5 requests | 0 |
+
+Closeout：PR #153 于 **2026-10-22 13:06:35 +08:00** squash-merged 为 `ce80ca20f9d85f77ad3ca6282ff3f21939fd2572`（分支 `contract/v2.1.0-rc.2-export-jpeg-pdf`）。squash commit 为权威实现 SHA；上文 d75ca3b／0cd5da2／3c1e698／36c4c19 等为 pre-merge 本地历史。保留本地 completed_at；合并不表示 R2.1b runtime 已实现 JPEG／PDF、降采样通知或发布就绪。

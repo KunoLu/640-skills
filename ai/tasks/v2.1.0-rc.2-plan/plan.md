@@ -62,6 +62,7 @@
 - 范围：contract PR #153 已 squash-merge 为 `ce80ca2`，并经 `376ea0c` merge 纳入本分支；Round 4 接线 HTTP jpeg/pdf。JPEG 在 202 前对同一静态 HTML 预检，超限 422 携带有效 caps，降级 warning 在 202 meta，作业固定预检比例；PDF 不做图像预检。状态保持 in_progress（review pending）。
 - 契约 PR #153（https://github.com/KunoLu/640-skills/pull/153；status merged；由另一 agent 提交，非本行实现 PR）。范围：`CreateExportRequest.format` 增加 `jpeg`、`pdf`；仅 createExport 预接受 422，错误体 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含磁盘上限错误码（仍归 10-21 计划第 4 项，后续项 C 留在该行）。R2.1b 不修改 OpenAPI；renderer 不可用与 post-202 异步失败两个契约缺口在 task 保持 open，最终由用户决定。
 - AC-51 完整验收仍归 R2.2；R2.1b 仅保留四格式 event-detail 屏蔽集合／计数一致性测试，作为后续项 A 决定的回归保护，不宣称 AC-51 已通过。
+- 契约领先实现跟进（[export-failure-states](../v2.1.0-rc.2-contract-export-failure-states/task.md)，用户／Reviewy 2026-10-22 13:14 +08:00）：R2.1b 接入失败路径时，将 runtime 现于 failed 时写入的固定字符串 `export failed` 替换为固定码（HTML/CSV 失败 → `EXPORT_RENDER_FAILED`）、超时映射为 `EXPORT_RENDER_TIMEOUT`；JPEG/PDF renderer 依赖不可用时在 202 前返回 503 `EXPORT_RENDERER_UNAVAILABLE`（无 job、export_id 或半成品文件，html/csv 不适用），并与 capabilities 的 unavailable 及原因保持一致。该 contract-only 任务不修改 runtime。
 
 ### R2.2 — 跨平台 E2E、安全、性能、导出对账
 
