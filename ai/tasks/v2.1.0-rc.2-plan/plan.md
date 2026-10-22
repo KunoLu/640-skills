@@ -92,7 +92,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 1. R2.1b。
 2. 后续项 A 决策已定 — 用户 2026-10-22 11:13 +08:00：保持 #151 行为（事件明细行按 `exportable=false`／`classification != local-metadata` 屏蔽；task/run/聚合派生行不屏蔽；不新增 `withheld` 值；不开 contract PR）。
 3. R2.1b 评审与合并。
-4. 仅磁盘上限的 PRD §10.4 补充（自己的独立小 PRD docs PR，用户 10-22 授权）；ADR 0003 §4/§5 修订和磁盘上限新错误码 contract PR 分别独立（contract 附 golden 测试，错误体带已占用量与上限）。本轮仅登记，不改 PRD／ADR／contract。
+4. 磁盘上限 PRD §10.4 补充已 done：独立 PRD docs PR [#156](https://github.com/KunoLu/640-skills/pull/156) 已 squash-merge，merge SHA `b73ebe501cb529d11e6829b02a363fd7f4f4274a`，完成时间 `2026-10-22T17:42:55+08:00`（mergedAt `2026-10-22T09:42:55Z`；git committer 时间 `2026-10-22T17:42:54+08:00`）。ADR 0003 §4/§5 修订仍 in_progress（本分支 `docs/v2.1.0-rc.2-item4-adr0003-disk-cap`）；磁盘上限新错误码 contract PR 尚未开始，仍须独立提交（附 golden 测试，错误体带已占用量与上限）。
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
 6. E 预发布。
 7. F 文档 + 后续项 B + 后续项 C：B 在 `install-and-use.md` 写明事件明细屏蔽范围；C 在 F 阶段另开单独 PRD docs PR，补充「本地导出屏蔽 event-detail 行，当 `exportable=false` 或 `classification != local-metadata`；不影响 task/run/aggregate 派生行」，两种屏蔽条件均须明确，B／C 措辞一致。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。该 PR 独立于第 4 项磁盘上限 PRD docs PR；本轮不改 PRD。
@@ -103,7 +103,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 `snapshots/` 和 `exports/` 共用一个按字节计的配额，默认 2 GB，可用环境变量调整，80% 预警。每次新建快照或导出前清掉过期且未被 pin 的文件和残留临时文件，不加定时器；清完仍超限则拒绝新建并返回明确错误（含已占用量与上限），不淘汰未过期快照；损坏／无法识别的文件不删但计入占用。
 
-实现归 R2.2；需 PRD §10.4 补充、ADR 0003 §4（清扫可触及 exports/ 与临时文件）与 §5（新增环境变量配置面）修订，以及 contract PR。本轮仅登记决定，不修改上述契约或实施配额。
+实现与容量实测校准默认值归 R2.2；PRD §10.4 补充已随 #156 完成（merge SHA 与两类时间见上方第 4 项）。ADR 0003 §4（清扫可触及 exports/ 与临时文件）与 §5（新增环境变量配置面）修订由本分支进行，尚未合并；独立 contract PR 尚未开始。本轮不实施配额或定义错误码。
 
 ## 风险与边界
 
