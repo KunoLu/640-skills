@@ -238,16 +238,20 @@ BDD: traceable，新增 task 场景与新测试同名，中文正文／英文关
 
 ## 模型使用
 
-operator 于 2026-10-22 12:10 +08:00 依据 session jsonl（`~/.omp/agent/sessions/--workspace-640-skills-contract-jpeg-pdf--/`）回填。主会话命令：`timeout 10800 omp -p "$(cat PROMPT)" --model openai-codex/gpt-6-astra:high --auto-approve --cwd /workspace/640-skills-contract-jpeg-pdf`，无 `--advisor`、无配置覆盖。subagent 均由主会话以 `agent: reviewer` 派出、未显式指定 model，omp 配置解析为 `kimi-code/k3:high`（`session_init` resolvedModel；并非 config `task` 角色的 grok-4.7），全部只读。全部会话 `resolvedModelIsFallback: false`，无 403、无 fallback。
+operator 于 2026-10-22 12:10 +08:00 依据 session jsonl（`~/.omp/agent/sessions/--workspace-640-skills-contract-jpeg-pdf--/`）回填。主会话命令：`timeout 10800 omp -p "$(cat PROMPT)" --model openai-codex/gpt-6-astra:high --auto-approve --cwd /workspace/640-skills-contract-jpeg-pdf`，无 `--advisor`、无配置覆盖。subagent 均由主会话以 `agent: reviewer` 派出（`~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录 `"agent":"reviewer"`），未显式指定 model；内置 reviewer agent 为 `model: "@slow"`，本机 slow 角色配置为 `kimi-code/k3:max`。各子代理 jsonl 的 `session_init.resolvedModel` 实际记录为 `kimi-code/k3:high`（high 的原因未能从日志确认，如实记录），`model_change` 只记 `kimi-code/k3`、不含 thinking level。并非 config `task` 角色的 grok-4.7；全部只读。（operator 2026-10-22 13:15 +08:00 更正）全部会话 `resolvedModelIsFallback: false`，无 403、无 fallback。
 
 | 用途 | 会话 | 请求／配置模型 | 实际模型（jsonl） | resolvedModelIsFallback | assistant messages | 工具调用次数 |
 |---|---|---|---|---|---|---|
 | Round 1 主会话（唯一 writer） | 01a161a5-6bf1-75f4-b636-b712d58cf6df | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 39 | 74 |
-| ContractCorrectness（只读 reviewer） | Round 1 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 19 | 27 |
-| ContractCoverage（只读 reviewer） | Round 1 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 13 | 24 |
+| ContractCorrectness（只读 reviewer） | Round 1 subagent | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | false | 19 | 27 |
+| ContractCoverage（只读 reviewer） | Round 1 subagent | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | false | 13 | 24 |
 | Round 2 主会话（唯一 writer） | 01a161c2-b2fc-7549-ba1e-b94c3b9f49e2 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 18 | 40 |
-| AddendumSemantics（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 7 | 11 |
-| AddendumCoverage（只读 reviewer） | Round 2 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 5 | 9 |
+| AddendumSemantics（只读 reviewer） | Round 2 subagent | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | false | 7 | 11 |
+| AddendumCoverage（只读 reviewer） | Round 2 subagent | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | false | 5 | 9 |
 | Round 3 主会话（唯一 writer） | 01a161cc-3c9b-7399-a067-841d4e763e12 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | false | 23 | 48 |
-| WarningContractReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 11 | 15 |
-| WarningCoverageReview（只读 reviewer） | Round 3 subagent | omp reviewer agent（未覆盖 model） | kimi-code/k3:high | false | 12 | 12 |
+| WarningContractReview（只读 reviewer） | Round 3 subagent | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | false | 11 | 15 |
+| WarningCoverageReview（只读 reviewer） | Round 3 subagent | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | false | 12 | 12 |
+| Session title generation（Round 1，omp log pid 37926） | 含子代理会话标题 | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | — | 5 requests | 0 |
+| Job widget（Round 1，pid 37926，2026-10-22 11:35:06 +08:00） | 后台 job 进度组件 | omp job widget | 日志未记录模型（是否为 cursor/composer-2.5 无法从日志确认） | — | 1 条「Job widget spec rejected」 | 0 |
+| Session title generation（Round 2，pid 112981） | 含子代理会话标题 | omp title-generator | cursor/composer-2.5 ×4 | — | 4 requests | 0 |
+| Session title generation（Round 3，pid 104959） | 含子代理会话标题 | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | — | 5 requests | 0 |

@@ -189,24 +189,29 @@ Round 3 Release Readiness=`ready`（仅 Linux 库级交付）：最终计划范�
 | 轮次／用途 | 请求模型 | 实际模型 | assistant messages | 工具调用次数 |
 |---|---|---|---|---|
 | Run 1 主会话：计划首提交、只读设计；session 01a16197-919f-7482-b4ca-4d8cef45a0e5 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 15 | 52 |
-| Run 1 BrowserRenderer：只读研究，无写入 | omp task role | xai-oauth/grok-4.7 | 7 | 18 |
-| Run 1 RendererIntegrationTests：只读研究，无写入 | omp task role | xai-oauth/grok-4.7 | 5 | 16 |
+| Run 1 BrowserRenderer：只读研究，无写入 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 7 | 18 |
+| Run 1 RendererIntegrationTests：只读研究，无写入 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 5 | 16 |
 | Run 1b 主会话：实现、验证、交付；session 01a161a4-776d-75bb-aef2-39a6e00bc50f | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 130 | 218 |
-| Run 1b BrowserImplementation：renderer 实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 64 | 124 |
-| Run 1b RendererIntegration：库／HTTP／过滤一致性实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 63 | 139 |
-| Run 1b RendererSecurityReview：安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 28 | 82 |
-| Run 1b RendererOutputReview：输出／集成复核 | omp 配置 reviewer role | kimi-code/k3 | 62 | 78 |
+| Run 1b BrowserImplementation：renderer 实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 64 | 124 |
+| Run 1b RendererIntegration：库／HTTP／过滤一致性实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 63 | 139 |
+| Run 1b RendererSecurityReview：安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 28 | 82 |
+| Run 1b RendererOutputReview：输出／集成复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:max`） | 62 | 78 |
 | Round 2 主会话：决定回填、范围修正、预检通知与验证；session 01a161d9-7264-725e-9d47-caeaf21ccfd9 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 51 | 112 |
-| Round 2 RoundTwoSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 12 | 40 |
-| Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | 42 | 47 |
+| Round 2 RoundTwoSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 12 | 40 |
+| Round 2 RoundTwoScopeReview：独立只读范围／输出复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | 42 | 47 |
 | Round 3 主会话；session 01a161ea-1974-77c4-9051-f6209e7b6283 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | 55 | 104 |
-| Round 3 RoundThreeDocs：plan／task 文档更新 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 12 | 25 |
-| Round 3 RoundThreeTests：预检／caps／kana 回归实现 | omp 默认 task role，未显式覆盖 | xai-oauth/grok-4.7 | 41 | 79 |
-| Round 3 RoundThreeSafetyReview：独立只读安全复核 | omp 配置 security-reviewer role | openai-codex/gpt-6-astra | 15 | 55 |
-| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | omp 配置 reviewer role | kimi-code/k3 | 17 | 35 |
-| Session title generation | unknown | unknown | unknown | unknown |
+| Round 3 RoundThreeDocs：plan／task 文档更新 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:medium`） | 12 | 25 |
+| Round 3 RoundThreeTests：预检／caps／kana 回归实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init resolvedModel `xai-oauth/grok-4.7:xhigh`） | 41 | 79 |
+| Round 3 RoundThreeSafetyReview：独立只读安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init resolvedModel `openai-codex/gpt-6-astra:max`） | 15 | 55 |
+| Round 3 RoundThreeScopeReview：独立只读范围／输出复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init resolvedModel `kimi-code/k3:high`） | 17 | 35 |
+| Session title generation（Run 1，omp log pid 23357） | omp `tiny`／title-generator | cursor/composer-2.5 | 4 requests | 0 |
+| Session title generation（Run 1b，pid 36250） | omp title-generator | cursor/composer-2.5 | 6 requests | 0 |
+| Session title generation（Round 2，pid 120521） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
+| Session title generation（Round 3，pid 149475） | omp title-generator | cursor/composer-2.5 ×6；kimi-code/k3-256k ×1 | 7 requests | 0 |
 
-Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数仍为 unknown。
+子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（例如 reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；slow 角色配置为 `kimi-code/k3:max`，Round 2／3 出现 high 的原因未能从日志确认，如实记录）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填。
+
+Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。
 
 Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview 已只读复核第 3 项修正并确认 P3 关闭，无进一步发现。其回执晚于首次 docs commit 返回，因此仅将该回执与实际模型并入同一未发布的本轮 docs commit；不改 round-1 历史。
 
