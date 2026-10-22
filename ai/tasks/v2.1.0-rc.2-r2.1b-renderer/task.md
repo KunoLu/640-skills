@@ -321,14 +321,20 @@ Round 5 本地交付完成，整体任务仍 `in_progress`／`completed_at=null`
 | Session title generation（Run 1b，pid 36250） | omp title-generator | cursor/composer-2.5 | 6 requests | 0 |
 | Session title generation（Round 2，pid 120521） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
 | Session title generation（Round 3，pid 149475） | omp title-generator | cursor/composer-2.5 ×6；kimi-code/k3-256k ×1 | 7 requests | 0 |
-| Round 4 主会话：HTTP 接线与本地验证 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | unknown | unknown |
-| Round 5 主会话：固定失败 error、审计、验证与记录 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra | unknown | unknown |
-| Round 5 FailurePrivacyReview：只读隐私审计 | omp 配置 security-reviewer（未覆盖 model） | unknown（本轮未核实 session resolvedModel） | unknown | unknown |
-| Round 5 FailureContractReview：只读契约／覆盖复核 | omp 配置 reviewer（未覆盖 model） | unknown（本轮未核实 session resolvedModel） | unknown | unknown |
+| Round 4 主会话：HTTP 接线与本地验证；session 01a16205-0866-7749-8956-0c353f38b14b | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking_level_change `high`） | 105 | 172 |
+| Round 4 PreparedRenderer：renderer／store 预检冻结实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init `xai-oauth/grok-4.7:xhigh`） | 57 | 99 |
+| Round 4 HttpRendererTests：HTTP 测试实现 | agent `task` → `@task` 角色 xai-oauth/grok-4.7 | xai-oauth/grok-4.7（session_init `xai-oauth/grok-4.7:xhigh`） | 52 | 99 |
+| Round 4 RoundFourSafety：安全复核 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 20 | 51 |
+| Round 4 RoundFourContractReview：契约复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init `kimi-code/k3:max`） | 68 | 76 |
+| Session title generation（Round 4，pid 190550） | omp title-generator | cursor/composer-2.5 ×6；kimi-code/k3-256k ×2 | 8 requests | 0 |
+| Round 5 主会话：固定失败 error、审计、验证与记录；session 01a16238-6c99-74da-873a-30f8569cfa47 | openai-codex/gpt-6-astra:high | openai-codex/gpt-6-astra（thinking_level_change `high`） | 29 | 85 |
+| Round 5 FailurePrivacyReview：只读隐私审计 | agent `security-reviewer`（未钉 model，继承主会话） | openai-codex/gpt-6-astra（session_init `openai-codex/gpt-6-astra:max`） | 11 | 33 |
+| Round 5 FailureContractReview：只读契约／覆盖复核 | agent `reviewer`（内置 `model: "@slow"`）→ slow 角色 kimi-code/k3:max | kimi-code/k3（session_init `kimi-code/k3:high`） | 33 | 40 |
+| Session title generation（Round 5，pid 269214） | omp title-generator | cursor/composer-2.5 ×4；kimi-code/k3-256k ×1 | 5 requests | 0 |
 
 子代理 agent 名称取自 `~/.omp/logs/omp.2026-10-22.*.log` 的 `subagent launch timing` 记录（`agent` 字段）及各子代理 jsonl 的 `session_init.agent`；`session_init.resolvedModel` 记录了派出时的实际模型与 thinking level（例如 reviewer 在 Run 1b 为 `kimi-code/k3:max`，Round 2／3 为 `kimi-code/k3:high`；slow 角色配置为 `kimi-code/k3:max`，Round 2／3 出现 high 的原因未能从日志确认，如实记录）；`model_change` 记录不含 thinking level（仅 `kimi-code/k3`、`xai-oauth/grok-4.7`、`openai-codex/gpt-6-astra`）。主会话 jsonl 无 session_init，thinking 以命令行 `:high` 为准。operator 2026-10-22 13:15 +08:00 回填。
 
-Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。
+Run 1／1b 模型与计数由 operator 于 2026-10-22 从 session jsonl 核实；计数为 assistant messages／toolCall blocks，全部 `resolvedModelIsFallback: false`，无 advisor。Run 1 两子代理只读，operator 于 11:17 +08:00 停止该轮。Round 2 主会话、SafetyReview、ScopeReview 的计数亦由 operator 从 jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Round 3 主会话与四个子代理计数亦由 operator 于 2026-10-22 从 session jsonl 核实，全部 `resolvedModelIsFallback: false`，无 advisor。Session title generation 计数来自 `~/.omp/logs/omp.2026-10-22.<pid>.log` 的 `title-generator: request` 记录（含子代理会话标题）；R2.1b 各轮无 job-widget 记录。Round 4／5 计数由 operator 于 2026-10-22 14:35 +08:00 从 session jsonl 核实（assistant messages／toolCall blocks），全部 `resolvedModelIsFallback: false`，无 advisor；主会话 thinking 取自 `thinking_level_change`。
 
 Round 2 两位 reviewer 均从各自运行环境确认实际模型；ScopeReview 已只读复核第 3 项修正并确认 P3 关闭，无进一步发现。其回执晚于首次 docs commit 返回，因此仅将该回执与实际模型并入同一未发布的本轮 docs commit；不改 round-1 历史。
 
