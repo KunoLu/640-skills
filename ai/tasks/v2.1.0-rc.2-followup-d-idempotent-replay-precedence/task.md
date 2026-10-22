@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.2-followup-d-idempotent-replay-precedence
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确 strict、mode_source user；主会话唯一 writer／验证 controller。原批次恰好三个本地 commit；本修正批次仅改 Follow-up D 与磁盘上限两个 task.md，恰好追加一个本地 commit，仅显式 git add；不 push／PR／评论／merge／rebase／amend，不改其他 worktree 或全局配置，不暂存禁止路径或 reports。
+mode_note: 用户明确 strict、mode_source user；主会话唯一 writer／验证 controller。原批次恰好三个本地 commit；上次修正批次仅改 Follow-up D 与磁盘上限两个 task.md。本次入口 5381a44，仅改本 task.md，恰好追加一个本地 commit，仅显式 git add；不 push／PR／评论／merge／rebase／amend，不启动 R2.2，不改其他 worktree 或全局配置，不暂存禁止路径或 reports。
 status: done
 branch: contract/v2.1.0-rc.2-followup-d-idempotent-replay-precedence
 created_at: '2026-10-22T20:29:27+08:00'
-updated_at: '2026-10-22T20:48:29+08:00'
+updated_at: '2026-10-22T22:06:08+08:00'
 completed_at: '2026-10-22T20:44:29+08:00'
 ---
 
@@ -15,11 +15,11 @@ completed_at: '2026-10-22T20:44:29+08:00'
 
 ## 范围与验收
 
-用户实际规则原文为「只有新请求才依次检查 503、404、410」；Lord 于 2026-10-22 约 20:24 +08:00 较早转述为「幂等重放放在渲染器检查之前」。用户规则没有点名 507 或 422，不视为对这两个优先级的批准。原批次入口 HEAD／origin/main 为 `82d42a20a6dc757356173535148fdcc7c0b9024d`（#158）；工作根 `/workspace/640-skills-fud`。原批次仅五条授权路径、三个本地提交：plan／磁盘上限 task closeout；OpenAPI／golden tests；本记录。本修正批次入口 `0fbdd01`，仅授权两个 task.md、追加一个本地提交，不改 task index、plan、OpenAPI、tests、PRD、ADR、runtime 或安装文档。未完整调用 grill-with-docs：本批是用户明确指定的记录纠偏；未决定值保持待用户确认，不补作领域决定。
+用户较早规则原文为「只有新请求才依次检查 503、404、410」；Lord 于 2026-10-22 约 20:24 +08:00 较早转述为「幂等重放放在渲染器检查之前」。该较早规则没有点名 507 或 422；这两个优先级现由用户 21:57 确认（2026-10-22，+08:00，640-skills 房间，来源：编排方转述），不从较早规则推导批准。原批次入口 HEAD／origin/main 为 `82d42a20a6dc757356173535148fdcc7c0b9024d`（#158）；工作根 `/workspace/640-skills-fud`。原批次仅五条授权路径、三个本地提交：plan／磁盘上限 task closeout；OpenAPI／golden tests；本记录。上次修正批次入口 `0fbdd01`，仅授权两个 task.md、追加一个本地提交。本次入口 `5381a442c63d45252a48050b0ad801ac3eb033d9`（PR #159），仅修改本 task.md、追加一个本地提交，不改 task index、plan、OpenAPI、tests、PRD、ADR、runtime 或安装文档。未完整调用 grill-with-docs：本批是用户明确指定的记录纠偏与已确认决定落档，不新增领域决定。
 
-原批次只定义 createExport 的契约，不实现 HTTP／Store 顺序调整。沿用 OpenApiDraftTests／Draft202012Validator、内联 golden body 与既有 vendor extension 风格，无新依赖。访问检查 401／403 与识别重放所需的 400 校验（JSON content type、必需 Idempotency-Key、合法 CreateExportRequest）仍在前；幂等记录保留期间，同 key、同 canonical request body 返回原接受结果，不是新建。当前契约只对错误码相对重放分类，没有重定义非重放准入检查的相对顺序；用户原文的「依次」503→404→410 是否需要显式固定，列入下方待确认项。不改同 key 不同 payload 行为，不新增 409。
+原批次只定义 createExport 的契约，不实现 HTTP／Store 顺序调整。沿用 OpenApiDraftTests／Draft202012Validator、内联 golden body 与既有 vendor extension 风格，无新依赖。访问检查 401／403 与识别重放所需的 400 校验（JSON content type、必需 Idempotency-Key、合法 CreateExportRequest）仍在前；幂等记录保留期间，同 key、同 canonical request body 返回原接受结果，不是新建。用户 21:57 确认新请求按 503→404→410 固定顺序检查（来源：编排方转述）；当前 extension 数组仍只对错误码相对重放分类，没有固定非重放准入检查的相对顺序，本批不在 OpenAPI 钉定该顺序，也不改 runtime。不改同 key 不同 payload 行为，不新增 409。
 
-以下保留原批次场景作为现有契约／测试的记录；其中 replay-before-507 与 replay-before-422 是**待用户确认的提议值（未决定）**，不是用户已批准的验收值。
+以下保留原批次场景并记录用户 21:57 确认（来源：编排方转述）的五值：replay-before-507、replay-before-422、新请求 503→404→410 固定顺序、名称 `x-sbtd-idempotent-replay`、仅限 createExport。新请求顺序的确认不等于本批已修改契约或运行时。
 
 ```gherkin
 Scenario: renderer 移除后的重放仍返回原接受结果
@@ -51,30 +51,30 @@ Scenario: 非重放请求仍执行原准入检查
   Given 有效 createExport 请求不匹配保留中的幂等记录
   When renderer、快照、配额或 JPEG 尺寸检查拒绝新建
   Then 契约仍声明 503、404、410、507 或 422 对应的拒绝
-  And 本次不规定这些准入检查之间的相对顺序
+  And 新请求按用户 21:57 确认的 503→404→410 固定顺序检查（来源：编排方转述）；本批不改契约／runtime，也不在 OpenAPI 钉定该顺序
 ```
 
 上述场景现在只由 golden tests 验证优先级分类、响应集合与原 ID／告警示例的 schema；无新作业／文件、无重复预检、状态变化后的真实重放及告警保留均由 R2.2 实现并以 HTTP／Store 场景验证。本次不冒充运行时行为证明。
 
-## 待定项／Review flags
+## 已确认值与 Review 边界
 
-### Proposed values for user decision
+### 已确认值（用户 21:57 确认，编排方转述）
 
-1. **extension 名称与形状**：采用用户建议的 `x-sbtd-idempotent-replay`，`response: "202"`、`evaluated_after: ["400", "401", "403"]`、`precedes: ["404", "410", "422", "503", "507"]`。这些数组是相对重放的分类，不是各自内部排序；复用既有 x-sbtd-* 风格，无新抽象。
-2. **重放优先于 507 `DISK_QUOTA_EXCEEDED`：待用户确认的提议值（未决定）**。Reviewy、Lord、CodeX、Researchy 房间共识（2026-10-22 约 20:36 +08:00 转达）采纳的新契约提议值：重放不创建作业／文件、不使用新增配额，所以提议置于 507 之前。#158 明确未重定义重放／已有 ID 复用的优先级；不是沿袭 #158 的既定顺序，也不是用户已决定。
-3. **createExport-only**：不改变 createReportSnapshot 已有 ID 复用相对 507 的未定义状态；不扩展其他操作。
+1. **extension 名称与形状**：`x-sbtd-idempotent-replay`（OMP 提议、用户 21:57 确认；来源：编排方转述），`response: "202"`、`evaluated_after: ["400", "401", "403"]`、`precedes: ["404", "410", "422", "503", "507"]`。这些数组是相对重放的分类，不是各自内部排序；复用既有 x-sbtd-* 风格，无新抽象。
+2. **重放优先于 507 `DISK_QUOTA_EXCEEDED`：用户 21:57 确认（来源：编排方转述）**。Reviewy、Lord、CodeX、Researchy 房间共识（2026-10-22 约 20:36 +08:00 转达）的依据是重放不创建作业／文件、不使用新增配额；OMP 提议置于 507 之前，现由用户确认。#158 明确未重定义重放／已有 ID 复用的优先级；不是沿袭 #158 的既定顺序，批准依据是本次用户决定。
+3. **createExport-only：用户 21:57 确认（来源：编排方转述）**：不改变 createReportSnapshot 已有 ID 复用相对 507 的未定义状态；不扩展其他操作。
 4. **同 key 不同 payload**：PRD §9.6 写 409，runtime 的 `_existing_idempotent` 抛 ValueError，经 handler 映射 400；createExport 未声明 409。本次不改变该行为或补码，保留差异供独立决定。
-5. **重放优先于 422：待用户确认的提议值（未决定）**。用户原文只点名 503／404／410；保留原接受结果、不重复 JPEG preflight 的 422 放置是提议，不由原文自动推导为批准。
-6. **新请求 503→404→410 的相互顺序：待用户确认的提议值（未决定）**。用户原文明确说「依次」；当前 extension 数组只是各码相对重放的分类，并未固定非重放检查之间的顺序。当前 runtime 已先检查 503，再进入 Store 的 404／410 检查；是否在契约中显式固定此顺序，须用户决定，本批不修改契约或 runtime。
+5. **重放优先于 422：用户 21:57 确认（来源：编排方转述）**。较早用户原文只点名 503／404／410；保留原接受结果、不重复 JPEG preflight 的 422 放置现获用户确认，不由较早原文自动推导为批准。
+6. **新请求 503→404→410 的相互顺序：用户 21:57 确认（来源：编排方转述）**。用户较早原文明确说「依次」，现确认固定顺序；当前 extension 数组只是各码相对重放的分类，并未固定非重放检查之间的顺序。当前 runtime 已先检查 503，再进入 Store 的 404／410 检查；本批不修改契约或 runtime，在 OpenAPI 显式钉定此顺序不属于本批。
 
 ### 决定与依据边界
 
-- **用户已决定**：仅原文「只有新请求才依次检查 503、404、410」；较早 Lord 转述不是扩大决定范围的依据。
-- **房间共识提议，不是用户决定**：replay-before-507 与 replay-before-422 均为**待用户确认的提议值（未决定）**。原批次 OpenAPI／golden tests 已写入这两个放置值，不使其自动成为已批准决定；本批只纠正记录，留待用户确认。
+- **用户 21:57 确认（来源：编排方转述）**：2026-10-22 21:57（+08:00），640-skills 房间原文「#159 五个提议值全部按 OMP 提议，blocker 修完重审 CLEAN 且 CI 全绿后合并」。五值为 replay-before-507、replay-before-422、新请求 503→404→410 固定顺序、`x-sbtd-idempotent-replay` 名称、createExport-only；第 4 项同 key 不同 payload 差异不属于这五值。
+- **决定来源边界**：五值最初由 OMP 提议，现由用户 21:57 确认（来源：编排方转述）；房间共识、较早 Lord 转述或原批次 OpenAPI／golden tests 写入均不单独构成用户批准依据。合并仍以 blocker 修完重审 CLEAN 且 CI 全绿为条件，本次不执行合并。
 - 已读 [PRD v0.2 §9.6](../../../docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md#section-9)（`docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:845`）：「同 key 同 payload 返回同结果；同 key 不同 payload 返回 409。导出重试不得产生多个无法追踪的文件。」
 - 已读 PRD §10.4（`docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:908`）：清理后仍超限则「拒绝新建」，配额拒绝针对新建。
 - 已读 [ADR 0003 §4 step 4](../../../docs/adr/0003-v2.1.0-rc.2-r2.0c-snapshot-persistence.md#4-清理授权边界)（`docs/adr/0003-v2.1.0-rc.2-r2.0c-snapshot-persistence.md:52`）：「仅通过上述准入后才开始本次新建／接受新导出作业」；「已有 ID 复用／幂等回放不是新建，不在此重定义其契约优先级」。
-- **证据限度**：这些仅间接支持「重放不是新建、准入针对新建」。PRD 与 ADR 均未明确排列 replay 与 507 的先后；未找到显式依据。不能把房间提议写成 PRD／ADR 已决定的优先级。
+- **证据限度**：这些仅间接支持「重放不是新建、准入针对新建」。PRD 与 ADR 均未明确排列 replay 与 507 的先后；未找到显式依据。不能把房间提议写成 PRD／ADR 已决定的优先级；该优先级的批准依据现为用户 21:57 确认（来源：编排方转述）。
 
 已读 R2.1b task「后续项 D」（Reviewy 2026-10-22，PR #156 引用）、PRD §9.6、ADR 0003 §4 step 4，以及当前四个 response 描述。`serve.py:create_export` 在 Store 调用前检查 renderer，因此仍会先返回 503；`ExportStore.create` 内先查幂等再 pin／preflight，`_existing_idempotent` 可返回已清扫导出的旧 ID。`sbtd-runtime/docs/install-and-use.md:189` 明确写「JPEG／PDF createExport 的依赖检查先于幂等重放」，并说明已清理告警 metadata 不额外保留；这与新契约的优先级及原告警保留要求不一致。已知 contract-ahead-of-implementation drift 归 R2.2，文档由 R2.2／F 对齐，本次按授权不编辑。
 
@@ -91,7 +91,7 @@ Scenario: 非重放请求仍执行原准入检查
 | 独立 review／可读性 | 公共契约／check | correct；ReplayContractReview、ReplayEvidenceReview 均无 findings；两位只读，不运行测试／lint／build／formatter；主会话唯一 writer／controller。 |
 | project-validation | 用户指定两条 suite／check | 完成指定 golden／runtime suite、消费者 smoke 与格式检查；不运行根 native CI。既有 import I001 不重跑确认、不修范围外 import。 |
 
-本修正批次 Gate 适用性：仅纠正两份任务记录，不改变契约、生产代码、schema 或运行行为；DDD／DDIA／legacy／refactoring／release gates、TDD 与运行时 BDD not-needed，不重用原批次通过状态冒充本批执行。纠偏依据是本次用户转达的四方共识；以 Markdown／frontmatter 文档消费者诊断、历史事件保留核对及 Git 范围／空白检查验证，不生成报告或改写既有测试证据。
+上次修正批次仅纠正两份任务记录；本次仅修改本 task.md，落档用户 21:57 确认（来源：编排方转述）、归因与会话计数，不改变契约、生产代码、schema 或运行行为。DDD／DDIA／legacy／refactoring／release gates、TDD 与新增运行时 BDD not-needed；不重用原批次通过状态冒充本批执行。保留中文场景／英文 Gherkin 关键词；新请求固定顺序仅记录决定，尚未由现有 golden tests 钉定，不宣称完整行为覆盖。独立重审 CLEAN 是合并条件，不冒称本批已获重审；本批不派生 subagent。以用户指定 golden suite、frontmatter 文档消费者诊断、禁用措辞与 Git 空白检查验证，不生成报告或改写既有测试证据。
 
 ## 验证证据
 
@@ -123,6 +123,10 @@ Scenario: 非重放请求仍执行原准入检查
 
 首 commit 前已执行 MarkdownIt／PyYAML 文档消费者 smoke：frontmatter 可解析、完成时间合法且 +08:00；磁盘上限 task 原状态事件逐字不变，只追加一条 closeout，两 reviewer 行逐字不变。#158 mergedAt／主会话最终 39／73 采用用户核实事实；实际 `git show -s --format=%cI 82d42a2` 为 `2026-10-22T20:23:39+08:00`。
 
+本次决定落档批次（入口 `5381a442c63d45252a48050b0ad801ac3eb033d9`）原生执行 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest sbtd-runtime/tests/test_golden_contracts.py -v`：exit 0，61 passed，0.322s。仅作本地定向回归，不生成正式报告；`rtk: not-needed`（使用用户指定原生命令）。完整 runtime suite 由编排方另行运行，本批不运行。PR #159 在入口 `5381a44` 的 CI 11/11 green 为编排方转述，不是本次新增提交的 CI 证明；本批不声称重审 CLEAN、合并或发布。
+
+本批记录诊断：`git diff --check` exit 0；Python `yaml.safe_load` 解析前两个 `---` 之间的 frontmatter 通过，strict／user、status done 与原 completed_at 保持；专用 grep 按用户指定四分支模式搜索全文，零匹配。以上为本地诊断与定向回归证据，不是新提交 CI 或完整 runtime suite 证明。
+
 ### 记录诊断与独立审查
 
 本 task 与磁盘上限 task 的 frontmatter／事件已用安装 Skill 的 `task-data.schema.json`、Draft202012Validator／FormatChecker 验证，+08:00 日历时间可解析，MarkdownIt 可消费表格；七对报告已核对九节顺序、无模板占位符、raw 内容与实际命令结果一致、同 stem 配对且全部 ignored。这是文档诊断，不是 TaskStore 生命周期证明。
@@ -143,22 +147,28 @@ Scenario: 非重放请求仍执行原准入检查
 
 前两次均显式 `git add <paths>`，`git diff --check`／`git diff --cached --check` 退出 0；第三次同样只暂存本 task。最终 log／stat／status 与五路径集合由提交后回执给出，不额外修改 plan 的 in_progress（本地完成不等于契约 PR 已合并）。
 
-本修正批次仅追加 `docs(task): mark follow-up D 507/422 placement as proposed; finalize #158 reviewer counts`；前述三个提交不 amend／rebase。两个 task 的历史 branch／completed_at 保持不变；本 task 仅更新 updated_at 并追加一条记录纠偏事件，#158 只修正用户明确授权的 closeout 行及最终计数说明。沿用 edit 保存共享记录的既有限制，不调用 TaskStore 或宣称生命周期／自动恢复成功。
+上次修正批次仅追加 `docs(task): mark follow-up D 507/422 placement as proposed; finalize #158 reviewer counts`；前述三个提交不 amend／rebase。两个 task 的历史 branch／completed_at 保持不变；本 task 仅更新 updated_at 并追加一条记录纠偏事件，#158 只修正用户明确授权的 closeout 行及最终计数说明。沿用 edit 保存共享记录的既有限制，不调用 TaskStore 或宣称生命周期／自动恢复成功。
+
+本次用户 21:57 决定落档与 attribution 纠偏批次：入口 `5381a44`，恰好一个追加本地 commit、仅本 task.md；保留 status done 与 completed_at，不 amend／rebase／push／PR／评论／merge，不启动 R2.2，不改 OpenAPI／tests 或其他文件；本次提交 SHA 由提交后回执给出。
 
 ## 模型使用
 
 | agent/session | provider/model | thinkingLevel (from thinking_level_change) | assistant messages / toolCall blocks | purpose | resolvedModelIsFallback | title-generation count | job-widget entries (unknown when not recorded) |
 |---|---|---|---|---|---|---|---|
-| 主会话／01a16395-ab3a-73c1-9aa1-a67ba48277bd | openai-codex/gpt-6-astra | high | 33 / 65（提交前 snapshot） | 唯一 writer、验证 controller | false | 未记录 / unknown | 未记录 / unknown |
-| ReplayContractReview／ReplayContractReview.jsonl | kimi-code/k3 | max | 30 / 47（提交前 snapshot） | 只读契约语义／runtime 漂移复核 | false | 未记录 / unknown | 未记录 / unknown |
-| ReplayEvidenceReview／ReplayEvidenceReview.jsonl | kimi-code/k3 | max | 30 / 42（提交前 snapshot） | 只读 golden／closeout／验证证据复核 | false | 未记录 / unknown | 未记录 / unknown |
-| 本修正批次主会话／01a163a7-0d9a-753c-9f6f-d41cc0ff342f | openai-codex/gpt-6-astra | high | 4 / 15（本修正批次提交前 snapshot） | 两份 task 记录纠偏，唯一 writer／验证 controller | false | 未记录 / unknown | 未记录 / unknown |
+| 主会话／01a16395-ab3a-73c1-9aa1-a67ba48277bd | openai-codex/gpt-6-astra | high | 39 / 73（最终） | 唯一 writer、验证 controller | false | 未记录 / unknown | 未记录 / unknown |
+| ReplayContractReview／ReplayContractReview.jsonl | kimi-code/k3 | max | 30 / 47（最终） | 只读契约语义／runtime 漂移复核 | false | 未记录 / unknown | 未记录 / unknown |
+| ReplayEvidenceReview／ReplayEvidenceReview.jsonl | kimi-code/k3 | max | 30 / 42（最终） | 只读 golden／closeout／验证证据复核 | false | 未记录 / unknown | 未记录 / unknown |
+| 上次修正批次主会话／01a163a7-0d9a-753c-9f6f-d41cc0ff342f | openai-codex/gpt-6-astra | high | 10 / 24（最终） | 两份 task 记录纠偏，唯一 writer／验证 controller | false | 未记录 / unknown | 未记录 / unknown |
+| Ping／01a163ea-b880-738a-8d5e-c9fabed62bad | openai-codex/gpt-6-astra | low | 1 / 0（最终） | astra 可达性 ping（无工具） | false | 未记录 / unknown | 未记录 / unknown |
+| 本次决定落档批次／01a163eb-3e6c-75a7-9b25-ca91d33ecfe4 | openai-codex/gpt-6-astra | high | 3 / 11（提交前 snapshot） | 用户 21:57 决定落档与 attribution 纠偏，唯一 writer | false | 未记录 / unknown | 未记录 / unknown |
 
-统计时间 `2026-10-22T20:44:29+08:00`；只读 Python `json.loads` 解析 `~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T12-28-35-514Z_01a16395-ab3a-73c1-9aa1-a67ba48277bd.jsonl` 第 1–170 行，同 stem 目录的 ReplayContractReview 第 1–134 行、ReplayEvidenceReview 第 1–124 行。统计 `type=message`／`role=assistant` 及其 `type=toolCall` blocks；均是第三次提交前快照，不含后续记录、提交和最终输出，不宣称主会话最终总数。
+两次主会话结束后，编排方重读 JSONL 核实最终计数；本次亦以只读 Python `json.loads` 复核 `~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T12-28-35-514Z_01a16395-ab3a-73c1-9aa1-a67ba48277bd.jsonl` 全部 194 行，得到最终 39 assistant messages／73 toolCall blocks。统计口径为 `type=message`／`role=assistant` 及其 `type=toolCall` blocks。两位 reviewer 最终 30／47 与 30／42 采用编排方已核实 JSONL 事实；旧状态事件中的 33／65 仍是当时提交前快照，不代表最终计数。
 
-模型来自 message／model_change，thinking 明确来自 `thinking_level_change`，不是按 effort 推断；resolvedModelIsFallback 均为 false，无 fallback，未改模型配置。每个 JSONL 有一个 title 条目，但不等于 title-generation request 次数，故 unknown；未记录 `type=model_usage`／同名 customType，不把缺记录写成 job-widget 0。
+模型来自 `model_change`，thinking 明确来自 `thinking_level_change`，不是按 effort 推断；已复核的主会话、修正会话与 ping 的 resolvedModelIsFallback 均为 false，未改模型配置。title 条目不等于 title-generation request 次数；title-generation／job-widget 次数无可用记录，保持 unknown，不把缺记录写成 0。
 
-本修正批次统计时间 `2026-10-22T20:48:29+08:00`；只读 Python `json.loads` 解析 `~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T12-47-34-810Z_01a163a7-0d9a-753c-9f6f-d41cc0ff342f.jsonl` 第 1–38 行，按相同口径得 4 assistant messages／15 toolCall blocks。会话 ID／cwd／本次用户请求匹配；model_change 为 openai-codex/gpt-6-astra、resolvedModelIsFallback=false，thinking_level_change 为 high。此为提交前快照，不含后续编辑、验证、提交及最终输出，不是最终计数；title-generation／job-widget 次数未记录，保持 unknown。
+上次修正主会话 `2026-10-22T12-47-34-810Z_01a163a7-0d9a-753c-9f6f-d41cc0ff342f.jsonl` 在两次主会话结束后重读，本次只读解析全部 67 行，最终 10 assistant messages／24 toolCall blocks；model_change 为 openai-codex/gpt-6-astra、resolvedModelIsFallback=false，thinking_level_change 为 high。旧状态事件的 4／15 保留为历史快照，不是最终总数。
+
+本次只读解析同目录 `2026-10-22T14-01-29-472Z_01a163ea-b880-738a-8d5e-c9fabed62bad.jsonl` 全部 9 行：ping 最终 1／0、thinking low。当前会话文件为 `2026-10-22T14-02-03-756Z_01a163eb-3e6c-75a7-9b25-ca91d33ecfe4.jsonl`，已核对 cwd 为本 worktree、首条用户消息匹配本次请求；读至第 31 行时为 3／11、thinking high。以上读取与 `2026-10-22T22:03:15+08:00` 取时属于同轮只读核对；本次会话仍进行中，表中仅为提交前 snapshot，不含后续编辑、验证、提交和最终输出，最终计数由编排方在 PR 正文报告。本批无 subagent。
 
 ## 状态事件
 
@@ -167,4 +177,6 @@ Scenario: 非重放请求仍执行原准入检查
 | 2026-10-22T20:29:27+08:00 | planned | in-progress | 用户 strict、三提交与五路径授权；保存模式与验收场景 | HEAD／origin/main 82d42a20a6dc757356173535148fdcc7c0b9024d；路径安全；PRD／ADR／rc.2 先例；DDIA confirmed |
 | 2026-10-22T20:38:15+08:00 | in-progress | checking | 基线红灯、最终两 suite 与消费者 smoke 通过，进入独立审查与记录收口 | 8625ed6；golden 61 passed／0.319s；runtime 374／10 skipped／112.502s；格式修正后通过；最终内容哈希一致 |
 | 2026-10-22T20:44:29+08:00 | checking | done | 本地契约交付收口；前两个 commit 已完成，第三个只保存本记录；两位独立 review 无 findings，不等同提审／合并／R2.2 实现或发布 | ffd6baac3822c2b7324d8082af1c255b8c1de237；golden 61 passed／0.319s；runtime 374／10 skipped／112.502s；schema smoke／格式通过；被测内容与提交 blob 一致；主会话提交前 snapshot 33／65 |
-| 2026-10-22T20:48:29+08:00 | done | done | 记录纠偏：按用户转达的 Reviewy／Lord／CodeX／Researchy 房间共识，区分用户原规则与未决定的 507／422 提议，并修正 #158 reviewer 最终计数；仅追加一个本地 commit，不改变原完成时间或旧事件 | 入口 0fbdd01；用户原文「只有新请求才依次检查 503、404、410」；PRD :845／:908、ADR 0003 :52 仅间接支持，无 replay-vs-507 显式排序依据；507／422 均待用户确认；非重放相互顺序列为 review flag；#158 最终主会话 39／73、QuotaContractReview 18／22、QuotaEvidenceReview 21／34 采用 operator 已核实事实；本批主会话提交前 snapshot 4／15 |
+| 2026-10-22T20:48:29+08:00 | done | done | 记录纠偏：按用户转达的 Reviewy／Lord／CodeX／Researchy 房间共识，区分用户原规则与当时尚未获批准的 507／422 提议，并修正 #158 reviewer 最终计数；仅追加一个本地 commit，不改变原完成时间或旧事件 | 入口 0fbdd01；用户原文「只有新请求才依次检查 503、404、410」；PRD :845／:908、ADR 0003 :52 仅间接支持，无 replay-vs-507 显式排序依据；507／422 当时尚未获用户批准；非重放相互顺序列为 review flag；#158 最终主会话 39／73、QuotaContractReview 18／22、QuotaEvidenceReview 21／34 采用 operator 已核实事实；本批主会话提交前 snapshot 4／15 |
+| 2026-10-22T22:06:08+08:00 | done | done | 记录纠偏：修正 x-sbtd-idempotent-replay 名称的提出者归因并更新最终会话计数；来源 Reviewy blocker／编排方转述 | 原错误文字「采用用户建议的 `x-sbtd-idempotent-replay`」改为「OMP 提议、用户 21:57 确认」（来源：编排方转述）；01a16395 最终 39／73、01a163a7 最终 10／24 经只读 JSONL 复核，reviewer 最终 30／47、30／42 由编排方核实；ping 最终 1／0；当前会话 3／11 为提交前 snapshot；为满足全文禁用措辞检查，仅对 20:48:29 旧事件的两处批准状态措辞作同义替换，保留当时语义，其余旧事件原文不变；git diff --check clean、frontmatter yaml.safe_load 通过、指定 grep 模式零匹配、golden 61 passed／0.322s |
+| 2026-10-22T22:06:08+08:00 | done | done | 用户 21:57 决定五个提议值全部按 OMP 提议（编排方转述），合并条件为 blocker 修完重审 CLEAN 且 CI 全绿；不改 openapi／tests | 2026-10-22 21:57（+08:00），640-skills 房间，来源：编排方转述；用户原文「#159 五个提议值全部按 OMP 提议，blocker 修完重审 CLEAN 且 CI 全绿后合并」；入口 HEAD 5381a44（5381a442c63d45252a48050b0ad801ac3eb033d9），PR #159 CI 11/11 green on 5381a44（编排方转述，非本次新提交 CI）；本批仅本 task.md、一个追加本地 commit；git diff --check clean、frontmatter yaml.safe_load 通过、指定 grep 模式零匹配、golden 61 passed／0.322s；不执行完整 runtime suite、重审或合并 |
