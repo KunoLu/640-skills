@@ -1,0 +1,3 @@
+# Debian Linux renderer environment (D16). Install only with explicit authorization.
+# Other platforms require separately verified CJK fonts; no fonts are vendored.
+fonts-noto-cjk=1:20240730+repack1-1

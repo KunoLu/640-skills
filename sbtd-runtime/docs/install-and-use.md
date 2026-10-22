@@ -104,7 +104,7 @@ PY
 
 - 没有 HTTP 服务与 Dashboard（R2。R2.0a PR-2 起见下文「R2.0a：serve」）。
 - R1 没有 `/api/v1/exports*` 导出作业；R2.1a 起支持 HTML／CSV，见下文。库面仍可通过 `csv_export.serialize_csv(snapshot)` 直接获得 CSV 字节。
-- R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现，R2.1a 增加 HTML／CSV 作业。JPEG／PDF 属于后续 R2.1b；仍没有远程业务控制端点。
+- R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现，R2.1a 增加 HTML／CSV 作业，R2.1b 增加库级 JPEG／PDF（HTTP 仍未开放）；仍没有远程业务控制端点。
 - codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
 
 ### R2.1a：离线 HTML／全量 CSV 导出
@@ -112,7 +112,7 @@ PY
 `POST /api/v1/exports` 必须提交
 `application/json`，例如 `{"snapshot_id":"snap_0123456789abcdef0123456789abcdef","format":"html"}`。
 `snapshot_id` 固定点击导出时已完成的快照；`format` 当前仅接受 `html` 或 `csv`，
-不包含后续 R2.1b 的 JPEG／PDF。现有 Bearer、CSRF、Idempotency-Key 要求不变。
+不接受 `jpeg`／`pdf`（400）；R2.1b 的这两种格式仅在库级开放，等待独立契约 PR。现有 Bearer、CSRF、Idempotency-Key 要求不变。
 快照 ID 必须完整匹配 `^snap_[0-9a-f]{32}$`。
 
 可省略 `presentation_state`（使用现有 ReportDocument 默认呈现状态）；若提供，
@@ -134,11 +134,59 @@ createExport 对非法／缺失请求（包括 snapshot_id 不满足 pattern）�
 
 - **HTML**：单文件静态正文、内联 CSS／SVG，无外部脚本、CDN、字体或 API；所有 Panel 的身份／指标绑定来自 manifest。系统字体栈含 PingFang SC、Hiragino Sans GB、Microsoft YaHei、Noto Sans CJK SC／JP；不写入机器字体路径。深浅主题、顺序、宽度、排序、预览行数、展开详情和隐藏系列说明随请求固定；HTML 预览不等于完整审计明细。
 - **CSV**：沿 snapshot-bound dataset cursor 取完所有授权数据族，复用 schema **1.1** serializer；BOM、固定列、空值与公式转义不变，不受 HTML 预览／排序／图例限制。
-- **输出安全**：两格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。非 exportable 事件明细不输出，保留省略告警与实际导出数据族计数；不在脱敏前改写指标输入。
+- **输出安全**：四格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。`exportable=false` 或 `classification != local-metadata` 仅屏蔽 **event-detail 行**，保留省略告警与实际导出数据族计数；派生 task／run／aggregate 行不按事件标志过滤，也不回退到最后可导出状态，不在脱敏前改写指标输入。JPEG／PDF 消费同一已过滤 HTML，不能视为更强的整任务保密边界（后续项 A，用户 2026-10-22 决定保持 #151 行为）。
 - **产物与保留**：`$SBTD_RUNTIME_HOME/exports/`，目录 0700、文件 0600（POSIX）。artifact 与 v1 JSON manifest 依次用同目录 temp、fsync、atomic rename 发布；manifest 为 ready 标记。记录 MIME、字节数、SHA-256、固定范围、Panel、数据族行数、renderer／脱敏版本和告警。半成品、坏摘要与未知版本不提供下载；失败只报告安全错误，不泄露本地路径。
 - **清扫**：ready 起默认 **86400 秒（24h）**；启动必扫，可显式调用 `ExportStore.sweep()`，没有后台定时删除器。到期拒绝下载；物理回收在 sweep 时发生。仅删除 `exports/` 内已验证的过期文件，不递归、不跟随链接、不触及 snapshots／audit.db／配置／源 task／报告／handoff／浏览器下载文件；未知、损坏和崩溃遗留 temp 保留且不升级为成品。删除后本进程记 gone，重启后无永久 tombstone，可返回 not found。
 
 一个本地 worker 串行生成；取消由作业在取数／发布边界响应，不影响其他业务测试或 Agent。manifest 摘要用于损坏检测，不抵御同机管理员篡改。Snapshot 磁盘容量上限不在本轮实现；Windows ACL、macOS／Windows 视觉及四格式对账仍属 R2.2。撤回本轮代码不迁移或删除原始事件／快照；已下载文件不由服务回收。
+
+### R2.1b：可选 JPEG／PDF renderer（仅库级）
+
+不改变业务项目依赖或 lockfile。先取得安装授权，再在扩展专用虚拟环境中安装；不自动下载、不回退到用户 Chrome/profile：
+
+```bash
+python3 -m venv /path/to/sbtd-renderer-venv
+/path/to/sbtd-renderer-venv/bin/python -m pip install \
+  -r sbtd-runtime/requirements-serve.txt \
+  -r sbtd-runtime/requirements-renderer.txt
+export SBTD_RUNTIME_HOME=/path/to/sbtd-runtime-home
+PLAYWRIGHT_BROWSERS_PATH="$SBTD_RUNTIME_HOME/browsers" \
+  /path/to/sbtd-renderer-venv/bin/python -m playwright install --only-shell chromium
+```
+
+Playwright 精确固定 **1.64.0**，Chromium headless shell **156.0.8078.4 / revision 1248** 随包固定。Linux 字体依赖见 [`renderer-system-dependencies.txt`](../renderer-system-dependencies.txt)：`fonts-noto-cjk=1:20240730+repack1-1`（本次 Debian 环境实际已安装）。如发行版提供该版本，可在独立授权后使用 `sudo apt-get install 'fonts-noto-cjk=1:20240730+repack1-1'`；不要把别的版本静默当成已验收环境。字体不入仓。可用 `fc-match 'Noto Sans CJK SC'` 和 `fc-match 'Noto Sans CJK JP'` 核验字体选择；macOS／Windows 字体与视觉证据仍属 R2.2。
+
+本次 Linux x64 `--only-shell` 实测：下载 shell 约 **120 MiB**、FFmpeg 约 **2.2 MiB**；解压后整个 `browsers/` apparent size **290,381,668 bytes（约 277 MiB）**，实际分配 **291,356,672 bytes（约 278 MiB）**。不含 Python venv、字体及导出产物；不是所有平台的通用占用值。安装和版本升级都应重新确认磁盘与依赖。
+
+库级调用（`snapshot` 来自当前 `SnapshotStore`，不接受 URL／HTML）：
+
+```python
+import time
+
+from export_render import ExportRenderer, default_presentation
+from export_store import ExportStore
+
+exports = ExportStore(home, snapshots, ExportRenderer(snapshots, home=home))
+try:
+    export_id = exports.create(snapshot.snapshot_id, "pdf", default_presentation())
+    while (info := exports.get(export_id))["status"] not in {
+        "ready", "failed", "cancelled"
+    }:
+        time.sleep(0.1)
+    if info["status"] != "ready":
+        raise RuntimeError(info["error"] or info["status"])
+    payload, metadata = exports.download(export_id)
+finally:
+    exports.close()  # 关闭会取消尚未完成的作业；不要在轮询完成前退出。
+```
+
+`GET /api/v1/capabilities` 的 `data.exports` 分格式提供 `available`、`reason` 与 `http_available`。Playwright、专用 browser 或必需 CJK 字体缺失时，仅 JPEG／PDF 不可用且附原因；HTML／CSV 不受影响。`available` 描述本地库依赖，**不表示 HTTP 已开放**：JPEG／PDF 的 `http_available=false`，POST 仍返回 400。依赖可用也不保证每次作业成功，超时／崩溃通过作业 failed 状态观察。
+
+JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与不透明背景；等待字体和布局，禁动画。单边 32,000 px 或总像素 80 MP 超限时尝试 1x 并记 warning；仍超限则安全失败，不截断、不分包。PDF 为 A3 横向、10mm 边距、保留背景的可搜索文字／矢量文档；长表分页重复表头，页脚含标题、范围、短 snapshot ID 与页码。
+
+每作业独立子进程与临时 profile，不复用浏览器登录态；只允许内存报告主文档，其他路由一律 abort，禁止外联和任意 file 读取。进程内单作业信号量限制 JPEG／PDF 并发，配合服务现有单 runtime writer 锁；取消／超时终止本作业并清理 profile。作业复用现有 pin、`exports/` 原子发布、manifest／SHA-256、ready 后 24h 保留和启动清扫，没有第二条存储路径或新增配额策略。
+
+隔离是应用级边界，Chromium 显式使用 `chromium_sandbox=False`，不声称 OS sandbox 或浏览器漏洞防护。POSIX 在回收 worker PID 前终止其独占进程组；Windows 使用 kill-on-close Job Object 保有后代进程所有权，即使 worker 先退出也能终止后代。Windows 原生 crash 回归已入仓，但本次 Linux 环境跳过；平台实测属 R2.2。整个库级作业默认 60 秒预算，包含依赖预检、HTML 生成、信号量等待和渲染；取消、超时及失败不会发布半成品。
 
 ## R2.0a：serve（本地 Dashboard 服务，D5–D8）
 
