@@ -942,10 +942,19 @@ def render_export(snapshot, format, presentation_state, cancelled, *, snapshots=
 
 
 class ExportRenderer:
-    def __init__(self, snapshots) -> None:
+    def __init__(self, snapshots, *, home: Path | None = None) -> None:
         self.snapshots = snapshots
+        self.home = home
 
     def __call__(self, snapshot, format, presentation_state, cancelled):
+        if format in ("jpeg", "pdf"):
+            from browser_renderer import BrowserRenderer, RendererError
+
+            if self.home is None:
+                raise RendererError("RENDERER_UNAVAILABLE")
+            return BrowserRenderer(self.home, self.snapshots)(
+                snapshot, format, presentation_state, cancelled
+            )
         return render_export(
             snapshot,
             format,

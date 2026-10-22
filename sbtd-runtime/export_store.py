@@ -32,7 +32,12 @@ EXPORT_TTL_SECONDS = 86400
 EXPORT_FORMAT_VERSION = 1
 _EXPORT_ID = re.compile(r"exp_[0-9a-f]{32}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
-_FORMATS = {"html": "text/html; charset=utf-8", "csv": "text/csv; charset=utf-8"}
+_FORMATS = {
+    "html": "text/html; charset=utf-8",
+    "csv": "text/csv; charset=utf-8",
+    "jpeg": "image/jpeg",
+    "pdf": "application/pdf",
+}
 _METADATA_KEYS = (
     "mime_type",
     "redaction_policy_version",
@@ -253,7 +258,7 @@ class ExportStore:
     ) -> str:
         """Pin the snapshot, copy presentation, then queue one render."""
         if format not in _FORMATS:
-            raise ValueError("export format must be html or csv")
+            raise ValueError("export format must be html, csv, jpeg or pdf")
         if not isinstance(presentation_state, dict):
             raise TypeError("presentation_state must be an object")
         if idempotency_key is not None and not isinstance(idempotency_key, str):
@@ -471,8 +476,13 @@ class ExportStore:
                 blob, meta = self._invoke(
                     snapshot, format_name, presentation, cancelled
                 )
-            except Exception:  # noqa: BLE001 — worker boundary records any renderer failure.
-                self._fail(export_id)
+            except Exception as error:  # noqa: BLE001 — worker boundary releases the pin.
+                from browser_renderer import RendererError
+
+                code = (
+                    error.code if isinstance(error, RendererError) else "export failed"
+                )
+                self._fail(export_id, code)
                 return
             if cancelled() or self._closed:
                 self._mark_cancelled(export_id)
@@ -510,7 +520,7 @@ class ExportStore:
             raise TypeError("renderer must return bytes")
         return blob, meta
 
-    def _fail(self, export_id: str) -> None:
+    def _fail(self, export_id: str, error: str = "export failed") -> None:
         with self._lock:
             job = self._jobs.get(export_id)
             if job is None or job.published:
@@ -521,7 +531,7 @@ class ExportStore:
                 job.error = None
             else:
                 job.status = "failed"
-                job.error = "export failed"
+                job.error = error
 
     def _mark_cancelled(self, export_id: str) -> None:
         with self._lock:

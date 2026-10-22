@@ -472,7 +472,7 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
 def create_app(home: Path, access: AccessControl, port: int) -> Any:
     store = SnapshotStore(home)
     manifest = load_panel_manifest()
-    exports = ExportStore(home, store, ExportRenderer(store))
+    exports = ExportStore(home, store, ExportRenderer(store, home=home))
 
     @asynccontextmanager
     async def lifespan(_app: Starlette):
@@ -483,6 +483,19 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
 
     async def health(_request: Request) -> JSONResponse:
         return _json({"status": "ok"})
+
+    async def capabilities(_request: Request) -> JSONResponse:
+        from browser_renderer import renderer_capability
+
+        renderer = await run_in_threadpool(renderer_capability, home)
+        formats = {
+            name: {"available": True, "reason": None, "http_available": True}
+            for name in ("html", "csv")
+        }
+        formats.update(
+            {name: {**renderer, "http_available": False} for name in ("jpeg", "pdf")}
+        )
+        return _json(_envelope({"exports": formats}))
 
     async def pair(request: Request) -> JSONResponse:
         result = access.pair(request.headers.get("x-pairing-code"))
@@ -606,6 +619,7 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
 
     routes = [
         Route("/api/v1/health", health, methods=["GET"]),
+        Route("/api/v1/capabilities", capabilities, methods=["GET"]),
         Route("/api/v1/session/pair", pair, methods=["POST"]),
         Route("/api/v1/metrics/catalog", metric_catalog, methods=["GET"]),
         Route("/api/v1/statistics/query", statistics_query, methods=["POST"]),
