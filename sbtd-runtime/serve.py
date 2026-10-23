@@ -578,6 +578,18 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             snapshot_id, format_name, presentation = _export_request(
                 await request.json(), manifest
             )
+            replay = await run_in_threadpool(
+                exports.lookup_replay,
+                snapshot_id,
+                format_name,
+                presentation,
+                idempotency_key=key,
+            )
+            if replay is not None:
+                export_id, warnings = replay
+                return _json(
+                    _envelope({"export_id": export_id}, {"warnings": warnings}), 202
+                )
             if format_name in ("jpeg", "pdf"):
                 from browser_renderer import renderer_capability
 
