@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T20:37:56+08:00'
+updated_at: '2026-10-23T22:51:23+08:00'
 completed_at: null
 ---
 
@@ -852,3 +852,99 @@ Commit A：`e771f0822dcaafa477e8447b6ea998cbe405de75` — `fix(runtime): treat D
 Commit B：`docs(task): append CI fix4 blockers, verification and remaining risks (R2.2 PR-3)`，仅本 task，SHA 由最终回复给出，避免自引用。全部显式路径暂存；reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env* 不暂存。task 保持 in-progress／completed_at null，旧 frontmatter 除 updated_at 外逐字段不变、旧行逐字保留。无 push／PR／comment／merge／rebase／amend／force，无其他 worktree／omp 全局配置变更；无自动恢复或发布完成声明。
 
 最终记录检查追加：`records-final` exit0／0.053s、`diff-check-final` exit0／0.005s。37 份本轮 raw 均生成同 stem 九节中文 companion，检查章节顺序与 raw 配对通过；完整清单与逐轮命令在 `reports/fix4-verification-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T203512.{json,md}`。37 份为命令轮次，不是37个测试；所有失败／跳过原样保留。首轮 shards 合计2387 tests／2324 passed／63 skipped／0 failures；绑定 SHA 的最终轮2387 tests／2322 passed／63 skipped／2 failures，绝不标记全范围 passed。最终记录与 code 分开提交；reports 不暂存。
+
+## R2.2 PR-3 fix5 入口与 Book Gate Plan（编排方整理）
+
+用户 2026-10-23 22:26 +08:00 群内确认 1A 2重跑，Lord 记录。编排方整理：1A 为本轮 glyph gate retarget；2 为 operator 已执行的失败 jobs 诊断重跑，不是 merge gate。strict 延续；授权根 `/workspace/640-skills-r22-pr3`、分支 `feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation`、入口 `771d728441003e9b37ec26b10e067a60036391c7` 已核实，入口工作区干净。沿用第 212 行 PR-3 追加绑定和既有 Markdown／TaskStore 兼容边界，不调用 helper rebind、不宣称自动恢复；历史 frontmatter 除 updated_at 外不改，所有旧行保留。
+
+未完整调用 grill-with-docs：修复范围与验收已明确，无新领域歧义。已逐行核实 `ai/tasks/v2.1.0-rc.2-plan/grill-r1.md:120,209,238` 的 Q4-D／Q9-C／D9，以及 `sbtd-runtime/spec/r2.2-native-e2e-scenarios.md:17,53`：字形门属于受控 renderer；CI 自动化与 Mac 人工视觉证据分开。编排方整理的失败为 run39955043747 attempt1/job120418673815、attempt2/job120468636401：四格式 passed 后下载 HTML glyph assertion 失败，fonts null；本轮不把该诊断重跑当 merge gate，也不声称本地复现了 macOS 字体选择。
+
+| Gate | 客观触发／阶段 | 本轮状态／计划 |
+|---|---|---|
+| DDD／DDIA | 领域歧义／共享持久模型 | not-needed；未完整 grill，无领域、schema、cache、迁移或所有权变化。 |
+| Legacy Change Safety | 既有 E2E 门与失败证据／编辑前 | needs-safety-net；已确认下载 HTML 调用与返回前断言导致 evidence 赋值未完成；补纯字体选择／断言及 HTML record-only 回归。 |
+| Refactoring／Release Readiness | 生产代码／部署行为 | not-needed；仅 test driver、tests 与证据边界文字，生产 renderer／字体栈／workflow 不改；发布状态仍 pending CI。 |
+| TDD／ponytail／BDD | 既有 gate retarget | 复用 unittest、default_presentation 与 _prepare_document；分别检查 JPEG/PDF；保持原 marker、fonts.ready、Panel、CJK text 断言；场景行不改。 |
+| project-validation／可读性 | check | pending；定向、runtime full、golden、真实 Linux renderer smoke、ruff、diff、added-only 归因、YAML／append-only 检查；原生 raw 与同 stem 中文汇总，reports 不暂存。 |
+
+### fix5 状态事件（追加）
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-23T22:39:56+08:00 | in-progress | in-progress | fix5 strict 开工与既有 PR-3 绑定延续（编排方整理）；仅两个本地提交 | Q9-C／Q4-D／D9 与调用链已核实；LSP references 返回 No language server found，源码检索仅一个 caller；macOS pending CI，未达到 13/13。 |
+
+### fix5 实现与独立观察（编排方整理）
+
+`serve.py:431` 对省略 presentation_state 的请求使用 `default_presentation(manifest)`；`export_render.py:145-155` 为 dark／1440px／完整 panel_order。driver 同样调用该函数，将下载的同快照 HTML 分别传给 `_prepare_document(html, "jpeg", presentation)` 与 `_prepare_document(html, "pdf", presentation)`；两种实际生成的格式均检查，不以相似样式省略 PDF。生产 `_capture` 在 `browser_renderer.py:1210` 使用该准备函数。CDP 完整 response（所有 fonts entry 原样，包括 familyName、postScriptName 若有、isCustomFont、glyphCount）逐文档立即放入共享 evidence，全部采集完成后才运行字体／Panel／CJK text 断言，避免 JPEG 断言阻止 PDF 字体采集。每条带 developer-local／ci、platform、not pixel OCR 与断言边界标签；main 的异常处理随后序列化同一 evidence，不覆盖 fonts。
+
+**Separate observation，仅登记不修复：下载 HTML 已有显式 CJK fallback。** `sbtd-runtime/export_render.py:24-28` 先列 `-apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial`，随后明确列 `"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif`。JPEG/PDF 使用 `browser_renderer.py:65-69` 的 Noto Sans CJK SC／JP／TC／KR、PingFang SC、Hiragino Sans GB、Microsoft YaHei、sans-serif，由 `:342` 强制覆盖全部元素；本轮均不修改。存在 fallback 不等于已证明 macOS 下载 HTML 选用了哪种字体，原 CI fonts null 无此证据。
+
+Legacy Change Safety Review: characterized；CI 观察与源码建立问题／保留行为边界，新增纯 helper／record path／异常报告回归。4 cases red 为 3 AttributeError errors＋1 failure（缺 helper），不是本地重现 macOS glyph 选择；实现后定向 10 tests OK／7.923s、exit0／墙钟8.171s。marker 仍恰为 cjk、pingfang、hiragino、yahei、simsun、unicode。ruff check 首轮 exit0；format 首轮 exit1，仅 evidence_source 长行，随后按 formatter 给出的换行最小修正；失败报告保留。BDD 沿用中文场景／English keywords，只在证据边界增加一句，所有 scenario 行原样保持。
+
+### fix5 验证结果、真实字体与复核（编排方整理）
+
+共同环境：Linux 6.12.94+ x64／Python 3.13.5，`python3` 经 PATH 选择既有 `reports/renderer-venv/bin/python3`（Playwright 1.64.0），`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests RUFF_NO_CACHE=true`。系统已有 Noto CJK 字体；未发现可复用 shell，真实 driver 通过 `--install-browser` 下载 pinned Chromium headless shell 156.0.8078.4 到一次性 runtime home，随后自动移除；无全局安装或配置改动。rtk skipped-for-report，原生 subprocess 保存 command、stdout、stderr、exit、时间、真实入口 SHA／worktree／branch 与 48 个 Python 文件 hash；所有结果 developer-local／dirty／local-only，不是 macOS 证据。
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest test_runtime_e2e_evidence.FontEvidenceTests -v
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest sbtd-runtime/tests/test_runtime_e2e_evidence.py -v
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest discover -s sbtd-runtime/tests
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+python3 -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/fix5-native-linux
+ruff check sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_runtime_e2e_evidence.py
+ruff format --check sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_runtime_e2e_evidence.py
+git diff --check
+```
+
+另执行两个无落盘 `python3 -B -c <script>` real Chromium smoke（完整脚本见对应 raw.command）：`native-linux-timeout-diagnostic` 仅将 `http.client.HTTPConnection` timeout 从既有10秒临时改成60秒后调用原 `runtime_e2e.main()`；`native-font-failure-persistence` 在同样诊断环境仅对 required 字形选择传入空候选，故意使原断言失败，真实 CDP response 不改。`records-check` 用 yaml.safe_load 解析 frontmatter，逐行核对原854行除 updated_at 完全不变、strict／in-progress、仅四个允许路径、plan 全文件及所有 scenario 行不变；新增行单独提取后执行禁用归因 grep，0 matches。`commit-content-identity` 核对48个 runtime Python commit blobs 与最终 full 被测 hash 全相同。
+
+| raw label | exit／原生结果 | 墙钟秒 |
+|---|---|---|
+| font-regression-red | 1；4 tests／3 errors＋1 failure，0.015s；缺待提取 helper，不声称本地 macOS reproduction | 0.273 |
+| evidence-green | 0；10 tests OK，7.923s | 8.171 |
+| ruff-check／ruff-format | 0／1；check passed，format 首轮长行失败保留 | 0.262／0.065 |
+| native-linux | 1；driver 19.586s，HTML／CSV passed；JPEG POST 在既有 HTTP timeout=10 处失败，尚未进入 fonts；诊断重放 worker exit0不改变原失败 | 19.806 |
+| runtime-full | 0；425 tests，415 passed／10既有 skipped／0 failures，155.049s | 155.422 |
+| golden | 0；61 tests OK，0.324s | 0.482 |
+| ruff-final／format-final | 0／0；All checks passed／2 files already formatted | 0.013／0.010 |
+| native-linux-timeout-diagnostic | 0；driver 25.179s；真实四格式／13 Panels／PDF文本／3-case suite passed，SIGINT exit0、lock移除、port关闭 | 25.403 |
+| native-font-failure-persistence | 外层0；被注入 driver 1／15.503s；原 glyph assertion 失败后，HTML／JPEG／PDF完整 raw CDP response 均在 JSON，未变成 passed | 15.738 |
+| diff-check／records-check | 0／0；diff、YAML、append-only、冻结范围通过 | 0.007／0.046 |
+| commit-content-identity | 0；48个提交 blob 与最终full被测内容一致 | 0.106 |
+
+**默认 Linux driver 本轮不是全绿。** 原始超时保留，不改 test_serve.py:156 的10秒 deadline、不加 retry／skip，不将诊断脚本的通过写成默认 native E2E 或 CI 通过。JPEG preflight 诊断重放成功只证明该次 worker 可以完成；超时成因未进一步归责，本轮不修复。后续60秒客户端诊断跑通原字体路径，足以证明改动的三文档采集与断言路径，不证明默认 HTTP deadline 可靠性。
+
+以下为 `native-linux-timeout-diagnostic` 的全部 `CSS.getPlatformFontsForNode` fonts entries（Linux local，非 macOS、非 pixel OCR）；完整 response 在每个 `evidence.fonts.<format>.platform_fonts`：
+
+| 文档 | familyName | postScriptName | isCustomFont | glyphCount | 字形断言 |
+|---|---|---|---|---|---|
+| html | Noto Sans CJK SC | NotoSansCJKsc-Bold | false | 2 | 仅记录、不断言 |
+| html | Roboto | Roboto-Regular | false | 1 | 仅记录、不断言 |
+| html | DejaVu Sans Mono | DejaVuSansMono-Bold | false | 8 | 仅记录、不断言 |
+| jpeg | Noto Sans CJK SC | NotoSansCJKsc-Bold | false | 11 | asserted |
+| pdf | Noto Sans CJK SC | NotoSansCJKsc-Bold | false | 11 | asserted |
+
+所有三文档 fonts_ready=loaded、13 Panels 顺序一致、CJK text present；HTML 标签只限定平台字体字形门，原字体就绪／Panel／文本断言仍保留。四个新增精确测试名：
+
+- `FontEvidenceTests.test_renderer_rejects_non_cjk_glyphs_and_unused_cjk_font`
+- `FontEvidenceTests.test_renderer_accepts_pingfang_with_heading_glyphs`
+- `FontEvidenceTests.test_downloaded_html_records_non_cjk_fonts_without_glyph_assertion`
+- `FontEvidenceTests.test_failed_renderer_glyph_gate_preserves_raw_fonts_in_report`
+
+RendererBoundaryReview：correct／0.85；EvidenceRegressionReview：correct／0.90；均只读、未运行 tests／lint／build，无剩余 finding。前者确认审查对象为 uncommitted working tree，原文“committed state”为表述失误；后者撤回两项P3：HTML label 是本轮明确要求的精确文本，旧 spec:17 与基线:53 引用经 raw 行号复核正确。真实 smoke 补足 CDP session 在多次 set_content 后仍可采集的运行证据。Code Readability Review：短纯 helper、集中断言、先采集后断言，未引入依赖／新 renderer 逻辑或过度抽象。
+
+报告前缀为本目录 ignored `reports/fix5-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<YYYYMMDDTHHMMSSffffff>.{json,md}`，每份 raw 配同 stem 九节中文汇总。关键时间：red `20261023T224102655178`，green `20261023T224154479721`，full `20261023T224424496059`，golden `20261023T224659922352`；全部失败轮保留。driver 原生 JSON／MD 分别位于 `reports/fix5-native-linux/`（stem末尾 `20261023T144317Z`）、`reports/fix5-native-linux-timeout-diagnostic/`（`20261023T144737Z`）、`reports/fix5-native-font-failure-persistence/`（`20261023T144823Z`）。
+
+BDD traceable（既有 Markdown spec／中文场景＋English keywords；本轮场景零变化）；Cross-repo context not-needed；API Contract verified（冻结路径零修改）；Mock Strategy：纯 helper 合成字体样本、异常门局部注入；实际成功诊断 smoke 无 renderer stub，backend-only＋real Chromium。Final Full Rerun runtime passed、默认 native smoke failed、诊断 smoke passed，三者分别记录。ty 不可用，LSP 无 server，未声称 typecheck；macOS／Windows 原生 CI 与 Mac 人工视觉均未本地执行。未调用 advisor；两位独立只读 reviewer 不执行验证环境操作。
+
+### fix5 本地提交与剩余边界（编排方整理）
+
+Commit A：`d3fe6aad75ec2cf288f39e570072b23de2588236` — `fix(test): run macOS CJK glyph gate on the renderer document; record downloaded HTML fonts only (R2.2 PR-3 fix5)`；仅两个 tests Python 文件与 spec 一句。最终 full 的48个 Python hash 与提交内容一致；这是内容身份重验证，不冒称提交后重跑或 PR-head CI。
+
+Commit B：`docs(task): append fix5 CJK gate retarget, evidence and verification (R2.2 PR-3)`；仅本 task，SHA 最终回复给出以避免自引用。task 继续 in-progress／completed_at null；plan.md:22 untouched；不修改 production renderer、export_render.py、字体栈、workflow、PRD、contracts、schema、golden。仅显式路径暂存，无 reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env*。不 push／PR／comment／merge／rebase／amend／force，不接触其他 worktree／omp全局配置。
+
+**macOS pending CI**：operator 推送后才能取得新 SHA 的原生字体结果，未声明13/13。D9 用户 Mac 真机视觉／字体仍 pending；此前 fix4 全范围 link identity 失败历史不改、不以本轮runtime suite覆盖旧失败。无部署／发布完成声明；本地回退边界是撤回本轮代码提交，会恢复旧下载HTML误用字形门及失败字体证据缺失，不执行任何数据迁移或清理。
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-23T22:51:23+08:00 | in-progress | in-progress | fix5 本地代码与定向／全量验证完成，独立review闭环；默认Linux smoke超时保留，macOS pending CI（编排方整理） | A d3fe6aad75ec2cf288f39e570072b23de2588236；10定向／425full（10skipped）／61golden；真实三文档字体与失败保存已诊断验证；不声明13/13或发布就绪。 |
