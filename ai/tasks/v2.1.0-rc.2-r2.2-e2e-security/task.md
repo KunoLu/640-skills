@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T22:51:23+08:00'
+updated_at: '2026-10-23T23:34:56+08:00'
 completed_at: null
 ---
 
@@ -948,3 +948,105 @@ Commit B：`docs(task): append fix5 CJK gate retarget, evidence and verification
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-23T22:51:23+08:00 | in-progress | in-progress | fix5 本地代码与定向／全量验证完成，独立review闭环；默认Linux smoke超时保留，macOS pending CI（编排方整理） | A d3fe6aad75ec2cf288f39e570072b23de2588236；10定向／425full（10skipped）／61golden；真实三文档字体与失败保存已诊断验证；不声明13/13或发布就绪。 |
+
+## R2.2 PR-3 fix6 入口与 Book Gate Plan（编排方整理）
+
+编排方整理：Reviewy 23:24 裁定（2026-10-23 23:24 +08:00，640 room）。用户 2026-10-23 22:26 +08:00 群内确认 1A 2重跑，Lord 记录。strict 延续；授权根 `/workspace/640-skills-r22-pr3`、分支 `feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation`、入口 `b2884260b13b09c56557798d697f76556ceb0da2` 已核实，入口工作区干净。沿用第 212 行 PR-3 追加绑定与既有 Markdown／TaskStore 兼容边界；不调用 helper rebind、不写 active／index、不宣称自动恢复。历史 frontmatter 除 updated_at 外不改，所有旧行逐字保留。
+
+未完整调用 grill-with-docs：编排方整理的修复规则与验收明确，无领域歧义。仅修改 `sbtd-runtime/tests/runtime_e2e.py`、`sbtd-runtime/tests/test_runtime_e2e_evidence.py` 并追加本 task；spec 无需补充，plan 不改。仅两个本地提交，不 push／PR／comment／merge／rebase／amend／force，不接触其他 worktree 或 omp 全局配置。
+
+编排方整理的 CI 证据：run `39974702309` on `b288426`，CI runner `macOS-26.6.2-arm64`，不是用户 Mac 真机；`runtime-e2e-macos` 失败 `AssertionError: no verified CJK font produced heading glyphs`，其余 12 checks passed。`#overview h2` 的完整字体观察如下；本轮不将该观察写成本地 macOS 实测。
+
+| 文档 | familyName | postScriptName | glyphCount | 字形门 |
+|---|---|---|---|---|
+| html | Menlo | Menlo-Bold | 8 | 仅记录、不断言 |
+| html | 蘋方-簡 | PingFangSC-Semibold | 2 | 仅记录、不断言 |
+| html | Helvetica Neue | HelveticaNeue-Bold | 1 | 仅记录、不断言 |
+| jpeg `_prepare_document` | 蘋方-簡 | PingFangSC-Semibold | 11 | asserted |
+| pdf `_prepare_document` | 蘋方-簡 | PingFangSC-Semibold | 11 | asserted |
+
+根因：macOS Chromium 的本地化 familyName「蘋方-簡」不包含现有 ASCII marker；locale-independent postScriptName `PingFangSC-Semibold` 包含 `pingfang`。修复同时检查两个名称（缺失视为空串），大小写不敏感，仍须 glyphCount > 0；原六个 marker、失败消息、JPEG/PDF 准备文档与节点范围保持。不新增中文 marker，不降低断言。
+
+| Gate | 客观触发／阶段 | 本轮状态／计划 |
+|---|---|---|
+| DDD／DDIA | 领域歧义／共享持久模型 | not-needed；未完整 grill，无领域、schema、cache、迁移或所有权变化。 |
+| Legacy Change Safety／TDD | 既有字体 gate bug／编辑前 | needs-safety-net；既有 helper seam 添加本地化 PostScript 名称 red，原四个 FontEvidenceTests 逐字保留；补非 CJK、空列表与零 glyph 负例。 |
+| Refactoring／Release Readiness | 生产代码／部署行为 | not-needed；只改测试 driver 与回归测试，不改生产路径或发布配置。 |
+| ponytail／可读性 | 最小根因修复／check | 复用现有 marker 与采集顺序；保留 raw response，另列每字体名称、glyphCount 和匹配字段。 |
+| project-validation | 编排方整理的验收命令／check | pending；定向 red→green、runtime full、golden、真实字体 smoke、ruff、diff、added-only 归因、YAML／append-only 检查；raw 与同 stem 中文汇总，不暂存 reports。 |
+| 独立 review | 迁移／身份／全局配置／安装／跨服务／广泛公共接口或至少三个热点 | not-needed；本轮仅一个测试证据子系统，不触发强制独立复核，不调用 advisor；主会话执行边界与可读性检查。 |
+
+### fix6 状态事件（追加）
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-23T23:26:58+08:00 | in-progress | in-progress | fix6 strict 开工；编排方整理：Reviewy 23:24 裁定 | 分支／入口已核实；CI run39974702309 的本地化 familyName 根因；macOS pending CI after operator push，非真机验收。 |
+
+### fix6 实现、red→green 与边界复核（编排方整理）
+
+Legacy Change Safety Review：characterized。新增 `FontEvidenceTests.test_renderer_accepts_localized_family_with_cjk_postscript_name` 在实现前以「蘋方-簡／PingFangSC-Semibold／11」触发原 `AssertionError: no verified CJK font produced heading glyphs`，1 test／1 failure／0.001s；实现后同一测试 1 passed／0.000s。这是编排方整理的 CI 样本在真实 helper seam 的回归，不是本地复现 macOS 字体选择；根因已明确，不重跑旧 CI 来确认。
+
+`_cjk_name_matches` 复用原 tuple `("cjk", "pingfang", "hiragino", "yahei", "simsun", "unicode")`；`verified_cjk_families` 对 familyName 与 postScriptName（缺失为空串）分别大小写不敏感匹配，保留 `glyphCount > 0` 和原失败消息。`cjk_families` 继续返回可读 familyName 列表。每个 HTML/JPEG/PDF 文档立即保存完整 `platform_fonts` raw response，另存 `font_summary`：familyName、postScriptName、glyphCount、matched_fields。matched_fields 表示名称包含 marker 的字段，不替代正 glyph 要求；全部文档先采集后断言，因此 JPEG gate 失败仍保留 PDF raw／summary。HTML 的 `"assertion": "仅记录、不断言"`、JPEG/PDF `_prepare_document` 和 `#overview h2` 均不变。
+
+新增三个回归：
+
+- `test_renderer_accepts_localized_family_with_cjk_postscript_name`：本地化 familyName 由 postScriptName 命中，11 glyph 通过。
+- `test_renderer_rejects_non_cjk_family_and_postscript_names`：Menlo／Menlo-Bold 与 Helvetica Neue／HelveticaNeue-Bold 均有 glyph，仍抛原 AssertionError。
+- `test_renderer_rejects_empty_fonts_and_zero_cjk_glyphs`：空列表、CJK family＋非 CJK postScriptName＋0 glyph、本地化 family＋CJK postScriptName＋0 glyph，三个 subcases 均拒绝。
+
+原四个 FontEvidenceTests 逐字保留且均通过：`test_renderer_rejects_non_cjk_glyphs_and_unused_cjk_font`、`test_renderer_accepts_pingfang_with_heading_glyphs`、`test_downloaded_html_records_non_cjk_fonts_without_glyph_assertion`、`test_failed_renderer_glyph_gate_preserves_raw_fonts_in_report`。`git diff b288426 -- sbtd-runtime/tests/test_runtime_e2e_evidence.py` 仅 additions；完整旧文件逐行序列与四方法源字节检查通过。
+
+Code Readability Review：单一短名称 predicate，两个名称明确列出，复用 matcher 避免 marker 漂移；现有返回类型、断言位置与异常语义保留。无生产代码或无关重构。严格独立 review 触发条件本轮不适用（单一测试证据子系统）；未调用 advisor，未宣称独立 review 已执行。LSP references 实际返回 `No language server found for this action`，源码检索确认 helper／record／browser callers；ty 不可用，未声称 typecheck。
+
+### fix6 本地验证与真实 smoke（编排方整理）
+
+共同环境：Linux 6.12.94+ x64／Python 3.13.5；既有 `reports/renderer-venv/bin/python3`。环境变量 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests RUFF_NO_CACHE=true`；rtk skipped-for-report，原生 subprocess 保留 stdout／stderr／exit／时间／worktree／完整 SHA 与48个 runtime Python SHA-256。报告为 developer-local／dirty／local-only，不是 PR-head CI。失败轮保留，全部 raw 配同 stem 九节中文汇总；reports 不暂存。
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3 -B -m unittest test_runtime_e2e_evidence.FontEvidenceTests.test_renderer_accepts_localized_family_with_cjk_postscript_name -v
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3 -B -m unittest sbtd-runtime/tests/test_runtime_e2e_evidence.py -v
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3 -B -m unittest discover -s sbtd-runtime/tests
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+RUFF_NO_CACHE=true ruff check sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_runtime_e2e_evidence.py
+RUFF_NO_CACHE=true ruff format --check sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_runtime_e2e_evidence.py
+git diff --check
+git diff b288426 -- sbtd-runtime/tests/test_runtime_e2e_evidence.py
+```
+
+| raw label | exit／原生结果 | 墙钟秒 |
+|---|---|---|
+| localized-font-red | 1；1 test／1 failure，0.001s，原 glyph assertion | 0.269 |
+| localized-font-green | 0；同一 test passed，0.000s | 0.244 |
+| evidence-green | 0；13 tests passed，8.719s，包含原四个字体测试与六个 NativeEvidenceTests | 8.964 |
+| ruff-check／ruff-format | 0／0；All checks passed／2 files already formatted | 0.281／0.035 |
+| real-font-smoke | 0；真实 Linux Chrome 三文档采集成功＋注入 gate 失败仍保留三文档 raw／summary | 3.262 |
+| runtime-full（Final Full Rerun） | 0；428 tests，418 passed／10既有 skipped／0 failures，159.099s | 159.504 |
+| golden | 0；61 tests passed，0.390s | 0.574 |
+| integrity | 0；tests additions-only／原四方法不变／task旧950行除updated_at不变／YAML／冻结范围／原marker tuple | 0.140 |
+| tests-additions-diff／diff-check | 0／0；测试 diff 仅 additions／无 whitespace error | 0.005／0.021 |
+| commit-content-identity | 0；48个 runtime Python commit blob 与最终 full 被测 hash 相同 | 0.132 |
+
+真实 smoke 使用系统 Google Chrome `156.0.8078.47`，无下载／全局安装。命令为 venv `python3 -B -c <script>`，完整无落盘脚本保留在 `real-font-smoke` raw.command；临时 HTML fixture 含 overview heading 与 CJK 文本，JPEG/PDF 实际调用 `_prepare_document`，`browser_font_check` 实际启动浏览器并调用 CDP。仅把 `_shell_executable` 解析替换为 `/usr/bin/google-chrome`，不是 pinned shell／完整 serve E2E。成功轮 raw fonts 与 summary 逐项一致；随后只对 required helper 注入空候选，故意触发原失败消息，三文档 raw／summary 与成功轮逐项一致，未把失败 renderer 记录标为 passed。未保存临时脚本，未改 repo deadline、retry 或 renderer。
+
+| 文档 | familyName | postScriptName | glyphCount | matched_fields |
+|---|---|---|---|---|
+| html | Tinos | Tinos-Bold | 9 | [] |
+| html | Noto Sans CJK JP | NotoSansCJKjp-Regular | 2 | familyName、postScriptName |
+| jpeg | Noto Sans CJK SC | NotoSansCJKsc-Bold | 11 | familyName、postScriptName |
+| pdf | Noto Sans CJK SC | NotoSansCJKsc-Bold | 11 | familyName、postScriptName |
+
+完整报告位置：本目录 `reports/fix6-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<YYYYMMDDTHHMMSSffffff>.{json,md}`。关键时间 stem：red `20261023T232837373302`、green `20261023T232903499450`、evidence `20261023T232933716224`、smoke `20261023T233026772664`、full `20261023T233037012216`、golden `20261023T233316522452`。单独提取 added lines 后禁用归因 grep 0 matches；marker grep 与 AST 确认原六元 tuple 不变。YAML safe_load 通过，status／mode／completed_at 及全部其他 frontmatter 不改。仅三授权路径发生变更，生产、workflow、PRD、contracts、schema、golden、spec、plan 均 untouched。
+
+BDD skipped：内部测试证据修复，没有产品可见行为或场景变化；Cross-repo context not-needed；API Contract not-needed（未改）；Mock Strategy contract-backed（编排方整理的 CDP 样本），真实 browser smoke 的 executable override 与失败注入单独披露。全量 suite 原生输出仍含既有 renderer stub 提示与10 skipped，不冒称全量 real-browser。Final Test Report／Run Summary MD generated；Targeted Rerun／Final Full Rerun passed，仅限上述本地范围。
+
+### fix6 本地提交与剩余边界（编排方整理）
+
+Commit A：`e4c2318bdbc5e0fbfa8b1db14652af475278504e` — `fix(test): match CJK markers on postScriptName for localized macOS family names (R2.2 PR-3 fix6)`，仅两个 tests Python 文件。已完成48个 runtime Python 内容身份重验证；原始 full 证据仍绑定真实入口 b288426＋dirty，不冒称提交后重跑或新 SHA 的 CI。
+
+Commit B：`docs(task): append fix6 postScriptName matching record and verification (R2.2 PR-3)`，仅本 task，SHA 最终回复给出以避免自引用。显式路径暂存；不暂存 reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env*。task 继续 in-progress／completed_at null；不修改 plan，不 push／PR／comment／merge／rebase／amend／force。
+
+**macOS pending CI after operator push**；CI runner 不等于用户 Mac 真机，D9 人工视觉／字体仍 pending，不声明13/13或部署／发布就绪。fix5 的默认 Linux driver 超时与既有其他失败历史不改，本轮 focused browser smoke 不覆盖这些边界。回退边界是撤回本轮测试代码提交，会恢复只按 familyName 匹配的旧 gate；不涉及生产数据迁移或清理。不调用 TaskStore rebind，不承诺自动恢复。
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-23T23:34:56+08:00 | in-progress | in-progress | fix6 本地代码／red→green／全量验证完成；编排方整理：Reviewy 23:24 裁定 | A e4c2318bdbc5e0fbfa8b1db14652af475278504e；13定向／428full（10skipped）／61golden；真实Linux三文档raw与summary保存验证；macOS pending CI after operator push，非真机验收。 |
