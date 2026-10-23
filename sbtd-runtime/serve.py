@@ -38,6 +38,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from browser_renderer import EXPORT_IMAGE_SIZE_LIMIT, RendererError
+from disk_quota import DiskQuotaExceeded, parse_disk_quota
 from event_store import EventStore, StoreError
 from export_render import ExportRenderer, default_presentation, load_panel_manifest
 from export_store import ExportGone, ExportNotFound, ExportNotReady, ExportStore
@@ -471,8 +472,10 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
     return snapshot_id, format_name, presentation
 
 
-def create_app(home: Path, access: AccessControl, port: int) -> Any:
-    store = SnapshotStore(home)
+def create_app(
+    home: Path, access: AccessControl, port: int, *, quota_bytes: int | None = None
+) -> Any:
+    store = SnapshotStore(home, quota_bytes=quota_bytes, defer_sweep=True)
     manifest = load_panel_manifest()
     renderer = ExportRenderer(store, home=home)
     exports = ExportStore(home, store, renderer)
@@ -614,6 +617,15 @@ def create_app(home: Path, access: AccessControl, port: int) -> Any:
             return _json({"detail": "not found"}, 404)
         except SnapshotGone:
             return _json({"detail": "gone"}, 410)
+        except DiskQuotaExceeded as error:
+            return _json(
+                {
+                    "detail": "DISK_QUOTA_EXCEEDED",
+                    "used_bytes": error.used_bytes,
+                    "quota_bytes": error.quota_bytes,
+                },
+                507,
+            )
         except RendererError as error:
             if error.code == "RENDERER_UNAVAILABLE":
                 # The dependency can disappear after the admission check.
@@ -762,6 +774,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     home = args.home or default_runtime_home()
     try:
+        quota_bytes = parse_disk_quota()
         validate_snapshot_home(home)
     except (OSError, ValueError) as error:
         print(str(error), file=sys.stderr)
@@ -784,7 +797,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         access = AccessControl()
-        app = create_app(home, access, args.port)
+        app = create_app(home, access, args.port, quota_bytes=quota_bytes)
     except (OSError, ValueError) as error:
         lock.release()
         print(str(error), file=sys.stderr)

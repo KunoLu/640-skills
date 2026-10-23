@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from contract_eval import parse_instant
+from disk_quota import exclusive_file, file_identity
 
 EXPORT_TTL_SECONDS = 86400
 EXPORT_FORMAT_VERSION = 1
@@ -257,13 +258,16 @@ class ExportStore:
         self._snapshots = snapshots
         self._renderer = renderer
         validate_export_home(home)
+        self.quota = snapshots.quota
+        if self.quota.home != home:
+            raise ValueError("exports and snapshots must share one runtime home")
         home.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._directory.mkdir(mode=0o700, exist_ok=True)
         validate_export_home(home)
         os.chmod(home, 0o700)
         os.chmod(self._directory, 0o700)
         self._directory_identity = self._identity()
-        self._lock = threading.RLock()
+        self._lock = self.quota.lock
         self._admissions = threading.Condition(self._lock)
         self._preparing = 0
         self._closing = threading.Event()
@@ -274,7 +278,8 @@ class ExportStore:
         self._executor: Any = None
         self._closed = False
         self._restore()
-        self.sweep()
+        self.quota.export_sweep = self.sweep
+        self.quota.sweep()
 
     def lookup_replay(
         self,
@@ -328,8 +333,13 @@ class ExportStore:
         snapshot = None
         pinned = False
         try:
-            snapshot = self._snapshots.pin(snapshot_id)
-            pinned = True
+            with self._lock:
+                existing = self._existing_idempotent(idempotency_key, payload)
+                if existing is not None:
+                    return existing
+                snapshot = self._snapshots.pin(snapshot_id)
+                pinned = True
+                self.quota.admit(now=_now())
             renderer = self._renderer
             warnings: list[str] = []
             if prepare is not None:
@@ -342,6 +352,8 @@ class ExportStore:
                 existing = self._existing_idempotent(idempotency_key, payload)
                 if existing is not None:
                     return existing
+                # Preflight runs unlocked; recheck after any intervening publication.
+                self.quota.admit(now=_now())
                 export_id = f"exp_{uuid.uuid4().hex}"
                 job = _Job(
                     export_id,
@@ -405,10 +417,10 @@ class ExportStore:
                     metadata=job.metadata,
                     error=job.error,
                 )
-        loaded, _artifact = self._read_ready(export_id)
-        if _now() >= loaded.expires_instant:
-            raise ExportGone(export_id)
-        return copy.deepcopy(loaded.public)
+            loaded, _artifact = self._read_ready(export_id)
+            if _now() >= loaded.expires_instant:
+                raise ExportGone(export_id)
+            return copy.deepcopy(loaded.public)
 
     def download(self, export_id: str) -> tuple[bytes, dict[str, Any]]:
         """Return the verified artifact. Does not extend retention."""
@@ -416,10 +428,10 @@ class ExportStore:
             job = self._locked_job(export_id)
             if job.status != "ready":
                 raise ExportNotReady(export_id)
-        loaded, artifact = self._read_ready(export_id)
-        if _now() >= loaded.expires_instant:
-            raise ExportGone(export_id)
-        return artifact, copy.deepcopy(loaded.public)
+            loaded, artifact = self._read_ready(export_id)
+            if _now() >= loaded.expires_instant:
+                raise ExportGone(export_id)
+            return artifact, copy.deepcopy(loaded.public)
 
     def delete(self, export_id: str) -> None:
         """Cancel this job and remove only the files it owns."""
@@ -475,6 +487,10 @@ class ExportStore:
 
     def sweep(self, now: datetime | None = None) -> list[str]:
         """Remove verified ready exports at or after their original expiry."""
+        with self._lock:
+            return self._sweep(now)
+
+    def _sweep(self, now: datetime | None) -> list[str]:
         current = _now() if now is None else _aware(now)
         with self._lock:
             self._check_directory()
@@ -497,7 +513,11 @@ class ExportStore:
                 job = self._jobs.get(export_id)
                 if job is None or job.status != "ready":
                     continue
-                if not self._unlink_exclusive_pair(export_id):
+                try:
+                    if not self._unlink_exclusive_pair(export_id):
+                        continue
+                except OSError:
+                    # Failed deletes still count in the following disk measurement.
                     continue
                 self._jobs.pop(export_id, None)
                 self._gone.add(export_id)
@@ -625,6 +645,10 @@ class ExportStore:
             self._unlink_leaf(self._artifact_path(export_id))
 
     def _publish(self, job: _Job, blob: bytes, meta: Any) -> None:
+        with self._lock:
+            self._publish_locked(job, blob, meta)
+
+    def _publish_locked(self, job: _Job, blob: bytes, meta: Any) -> None:
         if job.cancel_event.is_set() or self._closed:
             self._mark_cancelled(job.export_id)
             return
@@ -663,6 +687,7 @@ class ExportStore:
                     job.status = "cancelled"
                     return
                 os.replace(artifact_tmp, artifact_path)
+                self.quota.finish_temp(artifact_tmp)
                 artifact_tmp = None
                 written, _identity = self._read_regular(artifact_path)
                 if hashlib.sha256(written).hexdigest() != digest or len(written) != len(
@@ -681,6 +706,7 @@ class ExportStore:
                         return
                     try:
                         os.replace(manifest_tmp, manifest_path)
+                        self.quota.finish_temp(manifest_tmp)
                         manifest_tmp = None
                         self._fsync_dir()
                     except Exception:
@@ -699,10 +725,16 @@ class ExportStore:
                     job.published = True
             finally:
                 if manifest_tmp is not None:
-                    self._unlink_leaf(manifest_tmp)
+                    try:
+                        self._unlink_leaf(manifest_tmp)
+                    finally:
+                        self.quota.finish_temp(manifest_tmp)
         finally:
             if artifact_tmp is not None:
-                self._unlink_leaf(artifact_tmp)
+                try:
+                    self._unlink_leaf(artifact_tmp)
+                finally:
+                    self.quota.finish_temp(artifact_tmp)
 
     def _locked_job(self, export_id: str) -> _Job:
         self._check_id(export_id)
@@ -861,6 +893,7 @@ class ExportStore:
             prefix=".export-", suffix=".tmp", dir=self._directory
         )
         temporary = Path(name)
+        self.quota.start_temp(temporary)
         try:
             with os.fdopen(fd, "wb") as handle:
                 os.chmod(temporary, 0o600)
@@ -869,7 +902,10 @@ class ExportStore:
                 os.fsync(handle.fileno())
             return temporary
         except Exception:
-            self._unlink_leaf(temporary)
+            try:
+                self._unlink_leaf(temporary)
+            finally:
+                self.quota.finish_temp(temporary)
             raise
 
     def _fsync_dir(self) -> None:
@@ -892,19 +928,7 @@ class ExportStore:
         path.unlink()
 
     def _exclusive(self, path: Path) -> os.stat_result | None:
-        try:
-            info = path.lstat()
-        except FileNotFoundError:
-            return None
-        if (
-            stat.S_ISLNK(info.st_mode)
-            or not stat.S_ISREG(info.st_mode)
-            or info.st_nlink != 1
-        ):
-            return None
-        if hasattr(os, "getuid") and info.st_uid != os.getuid():
-            return None
-        return info
+        return exclusive_file(path)
 
     def _unlink_exclusive_pair(self, export_id: str) -> bool:
         self._check_directory()
@@ -914,20 +938,25 @@ class ExportStore:
         manifest_info = self._exclusive(manifest)
         if artifact_info is None or manifest_info is None:
             return False
+        try:
+            self._read_ready(export_id)
+        except ExportNotFound:
+            return False
         current_artifact = self._exclusive(artifact)
         current_manifest = self._exclusive(manifest)
         if (
             current_artifact is None
             or current_manifest is None
-            or (current_artifact.st_dev, current_artifact.st_ino)
-            != (artifact_info.st_dev, artifact_info.st_ino)
-            or (current_manifest.st_dev, current_manifest.st_ino)
-            != (manifest_info.st_dev, manifest_info.st_ino)
+            or file_identity(current_artifact) != file_identity(artifact_info)
+            or file_identity(current_manifest) != file_identity(manifest_info)
         ):
             return False
         self._check_directory()
         artifact.unlink()
-        if self._exclusive(manifest) is None:
+        current_manifest = self._exclusive(manifest)
+        if current_manifest is None or file_identity(current_manifest) != file_identity(
+            manifest_info
+        ):
             return False
         self._check_directory()
         manifest.unlink()

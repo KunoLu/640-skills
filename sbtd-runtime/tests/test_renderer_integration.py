@@ -1325,6 +1325,110 @@ class HttpRendererSeamTests(unittest.TestCase):
                     exports[name]["http_available"], exports[name]["available"]
                 )
 
+    def test_replay_precedes_shared_disk_quota(self) -> None:
+        """Scenario: 已受理请求的重放先于准入检查（507）."""
+        self.server.stop()
+        with mock.patch.dict(os.environ, {"SBTD_RUNTIME_DISK_QUOTA_BYTES": "1000000"}):
+            self.server = _LoopbackApp(self.home)
+        self.addCleanup(self.server.stop)
+        self.port = self.server.port
+        self.authenticate()
+        self.mode = "downgrade"
+        snapshot_id = self.snapshot()
+        key = uuid.uuid4().hex
+        status, _, body = self.post("jpeg", snapshot_id, key=key)
+        self.assertEqual(status, 202, body)
+        accepted = json.loads(body)
+        self.assertIn("EXPORT_SCALE_DOWNGRADED:1x", accepted["meta"]["warnings"])
+        self.until(accepted["data"]["export_id"], "ready")
+        self.assertTrue(
+            self.server.exports._jobs[accepted["data"]["export_id"]].done.wait(5)
+        )
+        (self.home / "exports" / "unknown.bin").write_bytes(b"x" * 1000001)
+        before_files = self.export_names()
+        before_jobs = set(self.server.exports._jobs)
+        before_calls = list(self.calls)
+        status, _, body = self.post("jpeg", snapshot_id, key=key)
+        self.assertEqual(status, 202, body)
+        replay = json.loads(body)
+        self.assertEqual(replay["data"], accepted["data"])
+        self.assertEqual(replay["meta"]["warnings"], accepted["meta"]["warnings"])
+        status, _, body = self.post("jpeg", snapshot_id)
+        self.assertEqual(status, 507, body)
+        self.assert_schema(507, body)
+        self.assertEqual(self.export_names(), before_files)
+        self.assertEqual(set(self.server.exports._jobs), before_jobs)
+        self.assertEqual(self.calls, before_calls)
+
+    def test_new_requests_quota_follows_snapshot_and_precedes_size(self) -> None:
+        """Scenario: 新请求保持准入拒绝顺序（503→404→410→507→422）."""
+        self.server.stop()
+        with mock.patch.dict(os.environ, {"SBTD_RUNTIME_DISK_QUOTA_BYTES": "1000000"}):
+            self.server = _LoopbackApp(self.home)
+        self.addCleanup(self.server.stop)
+        self.port = self.server.port
+        self.authenticate()
+        gone = self.snapshot()
+        self.server.snapshots.sweep(now=datetime.now(UTC) + timedelta(days=2))
+        valid = self.snapshot()
+        self.mode = "size"
+        status, _, body = self.post("jpeg", valid)
+        self.assertEqual(status, 422, body)
+        self.calls.clear()
+        (self.home / "exports" / "unknown.bin").write_bytes(b"x" * 1000001)
+        before = self.export_names()
+        used = sum(
+            p.stat().st_size
+            for directory in ("snapshots", "exports")
+            for p in (self.home / directory).iterdir()
+            if p.is_file()
+        )
+        payload = {"snapshot_id": valid, "format": "jpeg"}
+        headers = {**self.headers, "Idempotency-Key": "over-quota-validation"}
+        cases = (
+            ({k: v for k, v in headers.items() if k != "Authorization"}, payload, 401),
+            ({k: v for k, v in headers.items() if k != "X-CSRF-Token"}, payload, 403),
+            (headers, {**payload, "extra": True}, 400),
+        )
+        for request_headers, invalid_payload, expected in cases:
+            with self.subTest(access_or_validation=expected):
+                status, _, body = request(
+                    self.port,
+                    "POST",
+                    "/api/v1/exports",
+                    body=invalid_payload,
+                    headers=request_headers,
+                )
+                self.assertEqual(status, expected, body)
+        for snapshot_id, expected in (
+            ("snap_" + "f" * 32, 404),
+            (gone, 410),
+            (valid, 507),
+        ):
+            with self.subTest(snapshot=snapshot_id):
+                with mock.patch(
+                    "browser_renderer.renderer_capability",
+                    return_value={"available": False, "reason": "missing renderer"},
+                ):
+                    status, _, body = self.post("jpeg", snapshot_id)
+                self.assertEqual(status, 503, body)
+                status, _, body = self.post("jpeg", snapshot_id)
+                self.assertEqual(status, expected, body)
+        expected_body = {
+            "detail": "DISK_QUOTA_EXCEEDED",
+            "used_bytes": used,
+            "quota_bytes": 1000000,
+        }
+        for format_name in ("html", "csv", "jpeg", "pdf"):
+            status, _, body = self.post(format_name, valid)
+            self.assertEqual(status, 507, body)
+            self.assertEqual(json.loads(body), expected_body)
+            self.assert_schema(507, body)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.server.exports._jobs, {})
+        self.assertEqual(self.export_names(), before)
+        self.assertEqual(dict(self.server.snapshots._pins), {})
+
     def test_replay_precedes_unavailable_renderer_for_jpeg_and_pdf(self) -> None:
         """Scenario: 已受理请求的重放先于准入检查（503）."""
         for format_name in ("jpeg", "pdf"):

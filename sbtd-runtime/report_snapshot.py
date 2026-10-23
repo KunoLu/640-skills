@@ -19,7 +19,6 @@ import os
 import re
 import stat
 import tempfile
-import threading
 import uuid
 from collections import Counter
 from collections.abc import Iterable
@@ -41,6 +40,7 @@ from contract_eval import (
     metric_catalog,
     parse_instant,
 )
+from disk_quota import DiskQuota, exclusive_file, file_identity, parse_disk_quota
 from history_read import CursorError, decode_cursor, encode_cursor
 from stats_query import filter_events, normalize_scope
 
@@ -643,10 +643,15 @@ class SnapshotStore:
         ttl_seconds: float = DEFAULT_TTL_SECONDS,
         *,
         pinned_snapshot_ids: Iterable[str] = (),
+        quota_bytes: int | None = None,
+        defer_sweep: bool = False,
     ) -> None:
         if not math.isfinite(ttl_seconds) or ttl_seconds < 0:
             raise ValueError("snapshot TTL must be finite and nonnegative")
         home = Path(home).absolute()
+        self.quota = DiskQuota(
+            home, parse_disk_quota() if quota_bytes is None else quota_bytes
+        )
         self._directory = home / "snapshots"
         validate_snapshot_home(home)
         home.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -655,7 +660,7 @@ class SnapshotStore:
         os.chmod(self._directory, 0o700)
         self._directory_identity = self._identity()
         self._ttl = ttl_seconds
-        self._lock = threading.RLock()
+        self._lock = self.quota.lock
         self._pins = Counter(pinned_snapshot_ids)
         self._snapshots: dict[str, Snapshot] = {}
         self._gone: set[str] = set()
@@ -667,7 +672,16 @@ class SnapshotStore:
             except SnapshotNotFound:
                 continue
             self._snapshots[snapshot.snapshot_id] = snapshot
-        self.sweep()
+        self.quota.snapshot_sweep = self.sweep
+        if not defer_sweep:
+            if (home / "exports").exists():
+                from export_store import ExportStore
+
+                # A snapshot-only library caller still sweeps prior ready exports.
+                # Restore their owner, not another cleanup parser; no worker starts.
+                ExportStore(home, self, renderer=None)
+            else:
+                self.quota.sweep()
 
     def _identity(self) -> tuple[int, int]:
         info = self._directory.stat()
@@ -750,6 +764,7 @@ class SnapshotStore:
             prefix=".snapshot-", suffix=".tmp", dir=self._directory
         )
         temporary = Path(name)
+        self.quota.start_temp(temporary)
         try:
             with os.fdopen(fd, "wb") as handle:
                 os.chmod(temporary, 0o600)
@@ -765,7 +780,10 @@ class SnapshotStore:
                 finally:
                     os.close(directory_fd)
         finally:
-            temporary.unlink(missing_ok=True)
+            try:
+                temporary.unlink(missing_ok=True)
+            finally:
+                self.quota.finish_temp(temporary)
 
     def pin(self, snapshot_id: str, *, now: datetime | None = None) -> Snapshot:
         """Hold one job reference; release in the job's completion/cancel finally."""
@@ -791,11 +809,22 @@ class SnapshotStore:
                 if self._pins[snapshot_id]:
                     continue
                 try:
+                    path = self._path(snapshot_id)
+                    before = exclusive_file(path)
                     snapshot = self._read(snapshot_id)
                 except SnapshotNotFound:
                     continue
-                if now >= snapshot.expires_instant:
-                    self._path(snapshot_id).unlink()
+                if now >= snapshot.expires_instant and before is not None:
+                    self._check_directory()
+                    current = exclusive_file(path)
+                    if current is None or file_identity(current) != file_identity(
+                        before
+                    ):
+                        continue
+                    try:
+                        path.unlink()
+                    except OSError:
+                        continue
                     del self._snapshots[snapshot_id]
                     self._gone.add(snapshot_id)
                     removed.append(snapshot_id)
@@ -862,6 +891,7 @@ class SnapshotStore:
                     return self.get(snapshot.snapshot_id, now=now)
                 except SnapshotNotFound:
                     continue
+        self.quota.admit(now=now)
         rows, unknown_ids = dataset_rows(frozen, scope)
         manifest = [{"record_type": family, "rows": 0} for family in DATASET_FAMILIES]
         counts = {item["record_type"]: 0 for item in manifest}

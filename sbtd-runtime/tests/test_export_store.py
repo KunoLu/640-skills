@@ -225,6 +225,8 @@ class ExportStoreTests(unittest.TestCase):
         order: list[str] = []
 
         class Recording:
+            quota = snapshots.quota
+
             def pin(self, snapshot_id: str, **kwargs):
                 order.append("pin")
                 return snapshots.pin(snapshot_id, **kwargs)
@@ -334,7 +336,7 @@ class ExportStoreTests(unittest.TestCase):
         expired_snapshot = self.snapshots.create_or_reuse(
             self.dataset,
             _scope(self.dataset, metrics=["tasks.created"]),
-            now=datetime.now(UTC) - timedelta(days=3),
+            now=past - timedelta(days=3),
         )
         outside = self.home.parent / "source"
         sentinels = [
@@ -388,9 +390,14 @@ class ExportStoreTests(unittest.TestCase):
         with self.assertRaises(ExportGone):
             restarted.get(expired_id)
         for path, content in expected.items():
-            if path.name.startswith(live_id):
+            if path.name.startswith(live_id) or path.name.startswith(
+                expired_snapshot.snapshot_id
+            ):
                 continue
             self.assertEqual(path.read_bytes(), content, str(path))
+        self.assertFalse(
+            (self.home / "snapshots" / f"{expired_snapshot.snapshot_id}.json").exists()
+        )
         self.assertEqual(
             (exports / ".export-interrupted.tmp").read_bytes(), b"preserve exactly"
         )
@@ -579,9 +586,13 @@ class ExportStoreTests(unittest.TestCase):
 
     def test_foreign_home_and_traversal_cannot_read_bytes(self) -> None:
         other_home = Path(self.temporary.name) / "other-runtime"
-        foreign = self._open(self._renderer(b"foreign-bytes"), other_home)
+        other_snapshots = SnapshotStore(other_home)
+        other_snapshot = other_snapshots.create_or_reuse(self.dataset, self.scope)
+        foreign = self._open(
+            self._renderer(b"foreign-bytes"), other_home, other_snapshots
+        )
         foreign_id = foreign.create(
-            self.snapshot.snapshot_id,
+            other_snapshot.snapshot_id,
             "csv",
             _presentation(),
             idempotency_key="foreign",

@@ -102,8 +102,10 @@ class SnapshotPersistenceTests(unittest.TestCase):
     def test_startup_sweep_touches_only_owned_expired_snapshots(self) -> None:
         store = SnapshotStore(self.home)
         old = datetime.now(UTC) - timedelta(days=2)
-        expired = store.create_or_reuse(self.dataset, self.scope, now=old)
         live = store.create_or_reuse(self.dataset, self.scope)
+        expired = store.create_or_reuse(
+            self.dataset, _scope(self.dataset, metrics=["tasks.created"]), now=old
+        )
         snapshots = self.home / "snapshots"
         expired_path = snapshots / f"{expired.snapshot_id}.json"
         live_path = snapshots / f"{live.snapshot_id}.json"
@@ -118,7 +120,6 @@ class SnapshotPersistenceTests(unittest.TestCase):
             self.home.parent / "source" / "report.json",
             self.home.parent / "source" / "handoff.md",
             snapshots / "unknown.txt",
-            snapshots / ".snapshot-interrupted.tmp",
             snapshots / "nested" / expired_path.name,
             snapshots / ("snap_" + "a" * 32 + ".json"),
         ]
@@ -127,8 +128,11 @@ class SnapshotPersistenceTests(unittest.TestCase):
             path.write_bytes(b"preserve exactly")
         sentinels.append(live_path)
         expected = {path: path.read_bytes() for path in sentinels}
+        leftover = snapshots / ".snapshot-interrupted.tmp"
+        leftover.write_bytes(b"half-written snapshot")
         restarted = SnapshotStore(self.home)
         self.assertFalse(expired_path.exists())
+        self.assertFalse(leftover.exists())
         self.assertEqual(
             restarted.get(live.snapshot_id).public_view(), live.public_view()
         )
@@ -227,7 +231,7 @@ with mock.patch('report_snapshot.os.replace', side_effect=lambda *args: os._exit
         restarted = SnapshotStore(self.home)
         with self.assertRaises(SnapshotNotFound):
             restarted.get(snapshot_id)
-        self.assertTrue(temporary.exists())
+        self.assertFalse(temporary.exists())
 
     @unittest.skipUnless(os.name == "posix", "POSIX mode evidence only")
     def test_private_permissions_include_temporary_file(self) -> None:
