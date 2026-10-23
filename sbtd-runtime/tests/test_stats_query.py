@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -73,6 +75,35 @@ class CatalogTests(unittest.TestCase):
 
 
 class NormalizeScopeTests(unittest.TestCase):
+    def test_iana_queries_and_dst_work_without_system_timezone_data(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-c",
+                (
+                    "from test_stats_query import _dataset, _scope; "
+                    "from stats_query import query; "
+                    "from contract_eval import civil_window_seconds; "
+                    "data = _dataset(); "
+                    "answer = query(data, _scope(data)); "
+                    "assert answer['metrics']['tasks.touched']['value'] == 2; "
+                    "assert civil_window_seconds('America/New_York', "
+                    "'2026-03-08T00:00:00', '2026-03-09T00:00:00') == 82800"
+                ),
+            ],
+            env={
+                **os.environ,
+                "PYTHONTZPATH": "",
+                "PYTHONPATH": os.pathsep.join((str(ROOT), str(ROOT / "tests"))),
+            },
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_unknown_metric_is_rejected_with_the_field_named(self) -> None:
         scope = _scope(_dataset(), metrics=["tasks.touched", "bogus.metric"])
         with self.assertRaises(QueryScopeError) as caught:

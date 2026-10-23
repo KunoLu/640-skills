@@ -42,10 +42,65 @@ from test_serve import (
     _enable_observation,
     _free_port,
     _seed_golden_events,
-    pair,
     request,
 )
 from test_serve_signals import BreakShutdownTests
+
+
+def _safe_text(text: str, secrets: list[str], limit: int | None = None) -> str:
+    # Redact before slicing: a cap must never leave a credential prefix behind.
+    values = {
+        value
+        for secret in secrets
+        if secret
+        for value in (secret, json.dumps(secret)[1:-1])
+    }
+    for value in sorted(values, key=len, reverse=True):
+        text = text.replace(value, "<REDACTED>")
+    assert not any(value in text for value in values), "evidence redaction failed"
+    return text if limit is None else text[:limit]
+
+
+def _capture_logs(
+    home: Path, out: str, err: str, secrets: list[str], evidence: dict
+) -> None:
+    limit = 16_384
+    logs = {
+        "stdout": _safe_text(out, secrets, limit),
+        "stderr": _safe_text(err, secrets, limit),
+        "stdout_truncated": len(out) > limit,
+        "stderr_truncated": len(err) > limit,
+        "runtime_home_logs": [],
+    }
+    evidence["serve_logs"] = logs
+    leaked = any(secret in out + err for secret in secrets if secret)
+    ticket_url = "#ticket=" in out + err
+    remaining = 65_536
+    for path in sorted(home.rglob("*")):
+        relative = path.relative_to(home)
+        if not (".log" in path.name or "logs" in relative.parts):
+            continue
+        if not path.is_file() or path.is_symlink():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        leaked |= any(secret in text for secret in secrets if secret)
+        ticket_url |= "#ticket=" in text
+        if remaining and len(logs["runtime_home_logs"]) < 32:
+            cap = min(limit, remaining)
+            safe = _safe_text(text, secrets, cap)
+            logs["runtime_home_logs"].append(
+                {
+                    "path": _safe_text(str(relative), secrets, 512),
+                    "text": safe,
+                    "truncated": len(text) > cap,
+                }
+            )
+            remaining -= len(safe)
+        else:
+            logs["runtime_home_logs_truncated"] = True
+    # Keep the original security gate: sanitized evidence is not permission to leak.
+    assert not leaked, "credential leaked"
+    assert not ticket_url, "pairing URL leaked"
 
 
 def browser_font_check(home: Path, document: str, panels: list[str]) -> dict:
@@ -110,7 +165,9 @@ def browser_font_check(home: Path, document: str, panels: list[str]) -> dict:
             browser.close()
 
 
-def exercise(home: Path, evidence: dict, install_browser: bool) -> None:
+def exercise(
+    home: Path, evidence: dict, install_browser: bool, secrets: list[str]
+) -> None:
     case = unittest.TestCase()
     _enable_observation(home)
     _seed_golden_events(home)
@@ -171,14 +228,33 @@ def exercise(home: Path, evidence: dict, install_browser: bool) -> None:
         status, response_headers, payload = request(
             port, method, path, body=body, headers=headers, host=f"localhost:{port}"
         )
-        evidence["requests"].append(
-            {"method": method, "path": path, "expected": expected, "status": status}
-        )
+        row = {"method": method, "path": path, "expected": expected, "status": status}
+        evidence["requests"].append(row)
+        if path == "/api/v1/session/pair":
+            # Register issued credentials even if the response status is unexpected.
+            csrf = {key.lower(): value for key, value in response_headers.items()}.get(
+                "x-csrf-token"
+            )
+            if csrf:
+                secrets.append(csrf)
+            try:
+                session = json.loads(payload)
+            except (ValueError, UnicodeError):
+                session = {}
+            if isinstance(session, dict) and isinstance(
+                session.get("access_token"), str
+            ):
+                secrets.append(session["access_token"])
+        if status != expected:
+            row["response_body"] = _safe_text(
+                payload.decode("utf-8", errors="replace"), secrets, 4096
+            )
+            row["response_body_truncated"] = len(payload) > 4096
         case.assertEqual(status, expected, f"{method} {path}")
         return response_headers, payload
 
     server = ServeProcess(home, port, "--no-open")
-    secrets = []
+    out = err = ""
     try:
         server.wait_ready()
         _, health = api("GET", "/api/v1/health")
@@ -197,32 +273,18 @@ def exercise(home: Path, evidence: dict, install_browser: bool) -> None:
         }
         ticket = ticket_file.read_text(encoding="utf-8").strip()
         secrets.append(ticket)
-        status, session, pair_headers = pair(port, ticket)
-        case.assertEqual(status, 200, "pairing failed")
-        secrets.extend([session["access_token"], pair_headers["x-csrf-token"]])
+        headers["X-Pairing-Code"] = ticket
+        pair_headers, pair_body = api("POST", "/api/v1/session/pair")
+        session = json.loads(pair_body)
+        pair_headers = {key.lower(): value for key, value in pair_headers.items()}
         headers.update(
             {
                 "Authorization": f"Bearer {session['access_token']}",
                 "X-CSRF-Token": pair_headers["x-csrf-token"],
             }
         )
-        case.assertEqual(pair(port, ticket)[0], 401)
-        evidence["requests"].extend(
-            [
-                {
-                    "method": "POST",
-                    "path": "/api/v1/session/pair",
-                    "expected": 200,
-                    "status": status,
-                },
-                {
-                    "method": "POST",
-                    "path": "/api/v1/session/pair",
-                    "expected": 401,
-                    "status": 401,
-                },
-            ]
-        )
+        api("POST", "/api/v1/session/pair", 401)
+        headers.pop("X-Pairing-Code")
         _, catalog_bytes = api("GET", "/api/v1/metrics/catalog")
         catalog = json.loads(catalog_bytes)["data"]
         manifest = load_panel_manifest()
@@ -346,26 +408,27 @@ def exercise(home: Path, evidence: dict, install_browser: bool) -> None:
                 if server.proc.poll() is None
                 else (*server.proc.communicate(), server.proc.returncode)
             )
-            evidence["shutdown"] = {
-                "exit_code": code,
-                "signal": "CTRL_BREAK_EVENT" if os.name == "nt" else "SIGINT",
-                "lock_removed": not (home / "serve.lock").exists(),
-            }
-            case.assertEqual(code, 0, "serve did not exit cleanly")
-            case.assertFalse((home / "serve.lock").exists())
-            case.assertFalse(any((home / "exports").glob("*.tmp")))
-            case.assertFalse(
-                any(secret in out + err for secret in secrets), "credential leaked"
-            )
-            case.assertNotIn("#ticket=", out + err)
-            with socket.socket() as probe:
-                case.assertNotEqual(
-                    probe.connect_ex(("127.0.0.1", port)), 0, "server still listening"
-                )
-            evidence["shutdown"]["port_closed"] = True
         finally:
             if server.proc.poll() is None:
-                server.kill()
+                out, err = server.kill()
+            # Startup can fail before the normal ticket read. Never persist it.
+            ticket_path = home / "pairing-ticket"
+            if ticket_path.is_file():
+                secrets.append(ticket_path.read_text(encoding="utf-8").strip())
+            _capture_logs(home, out, err, secrets, evidence)
+        evidence["shutdown"] = {
+            "exit_code": code,
+            "signal": "CTRL_BREAK_EVENT" if os.name == "nt" else "SIGINT",
+            "lock_removed": not (home / "serve.lock").exists(),
+        }
+        case.assertEqual(code, 0, "serve did not exit cleanly")
+        case.assertFalse((home / "serve.lock").exists())
+        case.assertFalse(any((home / "exports").glob("*.tmp")))
+        with socket.socket() as probe:
+            case.assertNotEqual(
+                probe.connect_ex(("127.0.0.1", port)), 0, "server still listening"
+            )
+        evidence["shutdown"]["port_closed"] = True
 
 
 def main() -> int:
@@ -400,6 +463,12 @@ def main() -> int:
         "evidence_source": "ci" if os.environ.get("CI") else "developer-local",
         "publication": "not-configured" if os.environ.get("CI") else "local-only",
         "command": sys.argv,
+        "serve_logs": {
+            "stdout": "",
+            "stderr": "",
+            "runtime_home_logs": [],
+            "capture": "serve not started",
+        },
         "limitations": [
             "Mac visual/font confirmation pending; Windows CI only",
             "JPEG source-document values; pixel OCR not performed",
@@ -409,10 +478,11 @@ def main() -> int:
         ],
     }
     code = 1
+    secrets: list[str] = []
     try:
         with tempfile.TemporaryDirectory(prefix="sbtd-native-e2e-") as temporary:
             home = Path(temporary).resolve()
-            exercise(home, evidence, args.install_browser)
+            exercise(home, evidence, args.install_browser, secrets)
         evidence["temporary_home_removed"] = not home.exists()
         evidence["status"] = (
             "passed"
@@ -426,6 +496,8 @@ def main() -> int:
         evidence["traceback"] = traceback.format_exc()
     evidence["exit_code"] = code
     evidence["seconds"] = round(time.monotonic() - clock, 3)
+    # Also sanitize exception/traceback and embedded test output before either file.
+    evidence = json.loads(_safe_text(json.dumps(evidence, ensure_ascii=False), secrets))
     args.output.mkdir(parents=True, exist_ok=True)
     slug = branch.replace("/", "_")
     stem = f"runtime-e2e-{platform.system().lower()}-{slug}-{started.strftime('%Y%m%dT%H%M%SZ')}"

@@ -4,3 +4,5 @@
 jsonschema==4.26.0
 starlette==1.9.0
 uvicorn==0.54.0
+# zoneinfo 在无系统 IANA 数据库时使用此跨平台后备（包括 Windows）。
+tzdata==2026.5
