@@ -130,6 +130,29 @@ def _canonical(payload: Any) -> str:
     )
 
 
+def _request_identity(
+    snapshot_id: str,
+    format_name: str,
+    presentation: dict[str, Any],
+    idempotency_key: str | None,
+) -> tuple[str | None, str]:
+    try:
+        payload = _canonical(
+            {
+                "snapshot_id": snapshot_id,
+                "format": format_name,
+                "presentation_state": presentation,
+            }
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("presentation_state must be JSON") from exc
+    # Only digests are retained for replay; request text is not export metadata.
+    payload = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    if idempotency_key is not None:
+        idempotency_key = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+    return idempotency_key, payload
+
+
 def _checksum(record: dict[str, Any]) -> str:
     digest = hashlib.sha256(_canonical(record).encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
@@ -253,6 +276,27 @@ class ExportStore:
         self._restore()
         self.sweep()
 
+    def lookup_replay(
+        self,
+        snapshot_id: str,
+        format: str,
+        presentation_state: dict[str, Any],
+        *,
+        idempotency_key: str,
+    ) -> tuple[str, list[str]] | None:
+        """Read a validated request's original acceptance without admission work."""
+        key, payload = _request_identity(
+            snapshot_id, format, presentation_state, idempotency_key
+        )
+        with self._lock:
+            if self._closed:
+                raise ValueError("export store is closed")
+            existing = self._existing_idempotent(key, payload)
+            if existing is None:
+                return None
+            warnings = self.acceptance_warnings(existing) if format == "jpeg" else []
+            return existing, warnings
+
     def create(
         self,
         snapshot_id: str,
@@ -270,22 +314,9 @@ class ExportStore:
         if idempotency_key is not None and not isinstance(idempotency_key, str):
             raise ValueError("idempotency key must be a string")
         presentation = copy.deepcopy(presentation_state)
-        try:
-            payload = _canonical(
-                {
-                    "snapshot_id": snapshot_id,
-                    "format": format,
-                    "presentation_state": presentation,
-                }
-            )
-        except (TypeError, ValueError) as exc:
-            raise ValueError("presentation_state must be JSON") from exc
-        # Only digests are retained for replay; request text is not export metadata.
-        payload = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-        if idempotency_key is not None:
-            idempotency_key = hashlib.sha256(
-                idempotency_key.encode("utf-8")
-            ).hexdigest()
+        idempotency_key, payload = _request_identity(
+            snapshot_id, format, presentation, idempotency_key
+        )
         with self._lock:
             if self._closed:
                 raise ValueError("export store is closed")

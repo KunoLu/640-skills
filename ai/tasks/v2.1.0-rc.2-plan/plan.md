@@ -20,8 +20,9 @@
 | R2.1a | 离线 HTML + 全量 CSV 导出（导出副本 `exports/` 下 24h） | P4 | done（PR #151 已 squash-merge；requested astra; implement 起于 openai-codex/gpt-6-astra:high，2026-10-20 21:19 起 fallback 到 xai-oauth/grok-4.7，后续轮次 kimi-code/k3:max，per session logs） | #151 | 8931c35ef1aa4a58d3675b6f8d1a8fead309ed90 | 2026-10-21T07:07:34+08:00 | ai/tasks/v2.1.0-rc.2-r2.1a-html-csv-export/task.md |
 | R2.1b | JPEG/PDF 独立 renderer（Playwright 可选 extra，`--only-shell`，精确钉版，renderer 环境含 fonts-noto-cjk）；#153 合并 ce80ca2 经 376ea0c merge 纳入后接线 HTTP jpeg/pdf | P5 | done（PR #155 已 squash-merge；openai-codex/gpt-6-astra:high 主会话，reviewer 子代理 kimi-code/k3，per session logs） | #153（契约已合并）；本行实现 PR [#155](https://github.com/KunoLu/640-skills/pull/155) | c5904ef787c29bf9761f44ca4613ce0f2805daa4 | 2026-10-22T16:22:16+08:00 | ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md |
 | R2.2 | 跨平台 E2E（CI macOS/Windows runner + 用户 Mac 视觉／字体确认）、安全（Host/Origin、ticket、脱敏分层）、性能、导出对账 | P6 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md |
+| Docs | 后续项 B（`install-and-use.md` 事件明细屏蔽说明）+ 后续项 C（第 7 项，单独 PRD docs PR） | P6.5 | planned | — | — | — | —（执行时建立 strict 任务记录） |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
-| F | docs 回填 + 后续项 B（`install-and-use.md`）+ 后续项 C（第 7 项／F 阶段，单独 PRD docs PR） | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| F | docs 回填 | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
 
 ## 各行锁定决定与验收
 
@@ -61,14 +62,20 @@
 - 锁定决定：D3（`--only-shell` 安装到扩展自有目录、授权提示按实际模式显示体积）、D4（playwright 精确钉版）、D16（renderer 环境依赖清单含 fonts-noto-cjk 并钉版本）。
 - 验收：Playwright 为可选 extra，未安装时仅 JPEG/PDF 标不可用并说明原因；隔离按 §13.7（独立子进程、每作业临时 profile、路由层 abort 一切外联、单作业信号量），AC-58 出断网与隔离证据；PDF 中／日／英混合文字可显示（§13.6、AC-42）；导出前等待字体完成（§13.5）。
 - 范围：contract PR #153 已 squash-merge 为 `ce80ca2`，并经 `376ea0c` merge 纳入本分支；Round 4 接线 HTTP jpeg/pdf。JPEG 在 202 前对同一静态 HTML 预检，超限 422 携带有效 caps，降级 warning 在 202 meta，作业固定预检比例；PDF 不做图像预检。当时保持 in_progress（review pending），现已随 #155 合并记 done。
-- 契约 PR #153（https://github.com/KunoLu/640-skills/pull/153；status merged；由另一 agent 提交，非本行实现 PR）。范围：`CreateExportRequest.format` 增加 `jpeg`、`pdf`；仅 createExport 预接受 422，错误体 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含磁盘上限错误码（仍归 10-21 计划第 4 项）；后续项 C 归第 7 项／F 阶段的单独 PRD docs PR。R2.1b 不修改 OpenAPI；renderer 不可用与 post-202 异步失败两个契约缺口已由 contract PR #154（`d46d4ad`，2026-10-22 14:33:35 +08:00 合并）关闭，并在 R2.1b Round 6（`18de842`）实现。
+- 契约 PR #153（https://github.com/KunoLu/640-skills/pull/153；status merged；由另一 agent 提交，非本行实现 PR）。范围：`CreateExportRequest.format` 增加 `jpeg`、`pdf`；仅 createExport 预接受 422，错误体 `{detail: 'EXPORT_IMAGE_SIZE_LIMIT', max_edge_px, max_total_pixels}`；202 `meta.warnings` 精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`；golden tests。不含磁盘上限错误码（仍归 10-21 计划第 4 项）；后续项 C 归第 7 项的单独 PRD docs PR，现移至 E 前 Docs 步骤。R2.1b 不修改 OpenAPI；renderer 不可用与 post-202 异步失败两个契约缺口已由 contract PR #154（`d46d4ad`，2026-10-22 14:33:35 +08:00 合并）关闭，并在 R2.1b Round 6（`18de842`）实现。
 - AC-51 完整验收仍归 R2.2；R2.1b 仅保留四格式 event-detail 屏蔽集合／计数一致性测试，作为后续项 A 决定的回归保护，不宣称 AC-51 已通过。
 - 契约领先实现跟进（[export-failure-states](../v2.1.0-rc.2-contract-export-failure-states/task.md)，用户／Reviewy 2026-10-22 13:14 +08:00）：**已完成**。固定字符串 `export failed` 已被 contract #154（`d46d4ad`）取代，并在 R2.1b Round 6（`18de842`）实现：所有格式（含 HTML／CSV）的 failed 作业使用 `EXPORT_RENDER_FAILED`，renderer 超时使用 `EXPORT_RENDER_TIMEOUT`；JPEG／PDF renderer 依赖不可用时在 202 前返回 503 `EXPORT_RENDERER_UNAVAILABLE`（无 job、export_id 或半成品文件，html/csv 不适用），与 capabilities 的 unavailable 及原因保持一致。原 contract-only 任务不修改 runtime；runtime 接线由 R2.1b Round 6 完成。
 
 ### R2.2 — 跨平台 E2E、安全、性能、导出对账
 
 - 锁定决定：D9（CI runner＋用户 Mac 组合证据）、D14（Panel manifest 对账 AC-45）、D15（脱敏三层证据 AC-54/AC-55）；D5–D8 的实现归属 R2.0a（Local Server & Access Control 上下文），本行只对既成实现产出跨平台与安全证据，不改实现。
-- 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。
+- 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
+
+### Docs — 后续项 B／C（E 前）
+
+- 顺序依据：用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录；仅将 B／C 从 F 移到 E 前，使用 P6.5，E P7／F P8 不变。
+- 后续项 B：在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。
+- 后续项 C：第 7 项另开单独 PRD docs PR，与 B 两种屏蔽条件及派生行边界措辞一致；独立于第 4 项磁盘上限 PRD docs PR。本轮仅调整计划，不改 PRD。
 
 ### E — prerelease v2.1.0-rc.2
 
@@ -78,12 +85,12 @@
 ### F — docs 回填
 
 - 锁定决定：D10（E／F 阶段回填）；PRD 若升 v0.3 须用户届时另行授权。
-- 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；常规 docs 回填 PR 不修改 PRD 正文，第 7 项／F 阶段的 C 条款另开单独 PRD docs PR。本轮仅登记，不改 PRD。
-- 后续项 B：第 7 项／F 阶段在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。与同属第 7 项／F 阶段的后续项 C 保持一致，C 另开单独 PRD docs PR；依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。本轮不提前回填。
+- 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；常规 docs 回填 PR 不修改 PRD 正文。本轮仅登记，不改 PRD。
+- 后续项 B／C：已移至 E 前 Docs 步骤（P6.5，见上文「Docs — 后续项 B／C（E 前）」），F 不重复执行；顺序依据用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录。
 
 ## 依赖顺序说明
 
-R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapshot_id` 并持引用直到完成，且 24h 保留语义要求快照在服务重启后仍可解析；若导出先于落盘快照落地，重启即在途导出失效、§13.10 重复下载摘要不变的证据不可重复。R2.1b 依赖 R2.1a 的 ReportDocument 序列化产物作为渲染输入。R2.2 依赖全部功能行完成后统一出证据。E／F 依次收尾。
+R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapshot_id` 并持引用直到完成，且 24h 保留语义要求快照在服务重启后仍可解析；若导出先于落盘快照落地，重启即在途导出失效、§13.10 重复下载摘要不变的证据不可重复。R2.1b 依赖 R2.1a 的 ReportDocument 序列化产物作为渲染输入。R2.2 依赖全部功能行完成后统一出证据。其后 Docs（B／C）→ E → F 依次收尾。
 
 ## 2026-10-21 计划定稿（13:02 +08:00）
 
@@ -99,7 +106,9 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR。JPEG/PDF HTTP 格式与图像尺寸错误码由独立 PR #153（已合并 `ce80ca2`，经 `376ea0c` merge 纳入 R2.1b）承担；这不取代第 4 项磁盘上限错误码 contract PR。后续项 C 按 15:00 决定归第 7 项／F 阶段。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
 
-后续项 D（首见 R2.1b task「后续项 D」，PR #156 引用）：Idempotency-Key 幂等重放先于 renderer 可用性检查；契约 PR 在分支 `contract/v2.1.0-rc.2-followup-d-idempotent-replay-precedence` 上 in_progress，实现归 R2.2。
+2026-10-23 更新（用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录）：B／C 移至 E 前 Docs P6.5；第 7 项编号保留。
+
+后续项 D（首见 R2.1b task「后续项 D」，PR #156 引用）：Idempotency-Key 幂等重放先于 renderer 可用性检查；契约已 done：PR [#159](https://github.com/KunoLu/640-skills/pull/159) 已 squash-merge，merge SHA `de97926811410e7d61d846fc8e95ddaa0738bfbf`，完成时间 `2026-10-22T22:43:15+08:00`（mergedAt `2026-10-22T14:43:15Z`；git committer 时间 `2026-10-22T22:43:14+08:00`）。runtime 实现由本分支 `fix/v2.1.0-rc.2-idempotent-replay-before-503` 承担，状态 in_progress，任务记录 `ai/tasks/v2.1.0-rc.2-idempotent-replay-before-503/task.md`，不再归 R2.2；配额实现仍归 R2.2。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
 
 ### 磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）
 

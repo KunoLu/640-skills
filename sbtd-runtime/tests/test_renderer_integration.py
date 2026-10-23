@@ -1325,6 +1325,145 @@ class HttpRendererSeamTests(unittest.TestCase):
                     exports[name]["http_available"], exports[name]["available"]
                 )
 
+    def test_replay_precedes_unavailable_renderer_for_jpeg_and_pdf(self) -> None:
+        """Scenario: 已受理请求的重放先于准入检查（503）."""
+        for format_name in ("jpeg", "pdf"):
+            with self.subTest(format=format_name):
+                self.mode = "downgrade"
+                snapshot_id = self.snapshot()
+                key = uuid.uuid4().hex
+                status, _, body = self.post(format_name, snapshot_id, key=key)
+                self.assertEqual(status, 202, body)
+                accepted = json.loads(body)
+                self.until(accepted["data"]["export_id"], "ready")
+                before_files = self.export_names()
+                before_jobs = set(self.server.exports._jobs)
+                before_calls = list(self.calls)
+                with (
+                    mock.patch(
+                        "browser_renderer.renderer_capability",
+                        return_value={"available": False, "reason": "missing renderer"},
+                    ) as capability,
+                    mock.patch.object(
+                        self.server.snapshots, "pin", wraps=self.server.snapshots.pin
+                    ) as pin,
+                ):
+                    status, _, body = self.post(format_name, snapshot_id, key=key)
+                    self.assertEqual(status, 202, body)
+                    replayed = json.loads(body)
+                    self.assertEqual(replayed["data"], accepted["data"])
+                    self.assertEqual(
+                        replayed["meta"]["warnings"], accepted["meta"]["warnings"]
+                    )
+                    capability.assert_not_called()
+                    pin.assert_not_called()
+                self.assertEqual(self.export_names(), before_files)
+                self.assertEqual(set(self.server.exports._jobs), before_jobs)
+                self.assertEqual(self.calls, before_calls)
+
+    def test_replay_precedes_missing_and_gone_snapshot(self) -> None:
+        """Scenario: 已受理请求的重放先于准入检查（404／410）."""
+        for expected in (404, 410):
+            for format_name in ("jpeg", "pdf"):
+                with self.subTest(status=expected, format=format_name):
+                    self.mode = "downgrade"
+                    snapshot_id = self.snapshot()
+                    key = uuid.uuid4().hex
+                    status, _, body = self.post(format_name, snapshot_id, key=key)
+                    self.assertEqual(status, 202, body)
+                    accepted = json.loads(body)
+                    export_id = accepted["data"]["export_id"]
+                    self.until(export_id, "ready")
+                    self.assertTrue(self.server.exports._jobs[export_id].done.wait(5))
+                    if expected == 404:
+                        (self.home / "snapshots" / f"{snapshot_id}.json").unlink()
+                    else:
+                        removed = self.server.snapshots.sweep(
+                            now=datetime.now(UTC) + timedelta(days=2)
+                        )
+                        self.assertIn(snapshot_id, removed)
+                    before_files = self.export_names()
+                    before_jobs = set(self.server.exports._jobs)
+                    before_calls = list(self.calls)
+                    # A fresh key proves the rejection condition really exists.
+                    status, _, body = self.post(format_name, snapshot_id)
+                    self.assertEqual(status, expected, body)
+                    with mock.patch.object(
+                        self.server.snapshots, "pin", wraps=self.server.snapshots.pin
+                    ) as pin:
+                        status, _, body = self.post(format_name, snapshot_id, key=key)
+                        self.assertEqual(status, 202, body)
+                        replayed = json.loads(body)
+                        self.assertEqual(replayed["data"], accepted["data"])
+                        self.assertEqual(
+                            replayed["meta"]["warnings"], accepted["meta"]["warnings"]
+                        )
+                        pin.assert_not_called()
+                    self.assertEqual(self.export_names(), before_files)
+                    self.assertEqual(set(self.server.exports._jobs), before_jobs)
+                    self.assertEqual(self.calls, before_calls)
+
+    def test_new_requests_keep_renderer_snapshot_and_size_precedence(self) -> None:
+        """Scenario: 新请求保持准入拒绝顺序."""
+        gone = self.snapshot()
+        self.server.snapshots.sweep(now=datetime.now(UTC) + timedelta(days=2))
+        self.mode = "size"
+        before = self.export_names()
+        for format_name in ("jpeg", "pdf"):
+            for snapshot_id, expected in (("snap_" + "f" * 32, 404), (gone, 410)):
+                with self.subTest(format=format_name, status=expected):
+                    with mock.patch(
+                        "browser_renderer.renderer_capability",
+                        return_value={"available": False, "reason": "missing renderer"},
+                    ):
+                        status, _, body = self.post(format_name, snapshot_id)
+                    self.assertEqual(status, 503, body)
+                    self.assertEqual(
+                        json.loads(body), {"detail": "EXPORT_RENDERER_UNAVAILABLE"}
+                    )
+                    status, _, body = self.post(format_name, snapshot_id)
+                    self.assertEqual(status, expected, body)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.server.exports._jobs, {})
+        self.assertEqual(self.export_names(), before)
+
+    def test_replay_still_requires_access_and_valid_request(self) -> None:
+        """Scenario: 重放仍需通过访问检查与请求校验."""
+        snapshot_id = self.snapshot()
+        key = uuid.uuid4().hex
+        status, _, body = self.post("pdf", snapshot_id, key=key)
+        self.assertEqual(status, 202, body)
+        self.until(json.loads(body)["data"]["export_id"], "ready")
+        valid = {"snapshot_id": snapshot_id, "format": "pdf"}
+        headers = {**self.headers, "Idempotency-Key": key}
+        cases = [
+            ({k: v for k, v in headers.items() if k != "Authorization"}, valid, 401),
+            ({k: v for k, v in headers.items() if k != "X-CSRF-Token"}, valid, 403),
+            ({k: v for k, v in headers.items() if k != "Idempotency-Key"}, valid, 400),
+            ({**headers, "Content-Type": "text/plain"}, None, 400),
+            (headers, {**valid, "extra": True}, 400),
+            (headers, {**valid, "format": "jpeg"}, 400),
+        ]
+        before_files = self.export_names()
+        before_jobs = set(self.server.exports._jobs)
+        with mock.patch(
+            "browser_renderer.renderer_capability",
+            return_value={"available": False, "reason": "missing renderer"},
+        ) as capability:
+            for request_headers, payload, expected in cases:
+                with self.subTest(expected=expected, payload=payload):
+                    status, _, body = request(
+                        self.port,
+                        "POST",
+                        "/api/v1/exports",
+                        body=payload,
+                        headers=request_headers,
+                    )
+                    self.assertEqual(status, expected, body)
+            capability.assert_not_called()
+        self.assertEqual(self.export_names(), before_files)
+        self.assertEqual(set(self.server.exports._jobs), before_jobs)
+
     def test_idempotent_jpeg_replay_keeps_warning_without_new_preflight(self) -> None:
         self.mode = "downgrade"
         snapshot_id = self.snapshot()
@@ -1336,6 +1475,9 @@ class HttpRendererSeamTests(unittest.TestCase):
         self.until(first["data"]["export_id"], "ready")
         preflight = sum(1 for call in self.calls if call["preflight"])
         jobs = sum(1 for call in self.calls if not call["preflight"])
+        self.mode = "size"
+        before_files = self.export_names()
+        before_jobs = set(self.server.exports._jobs)
         status, _, body = self.post("jpeg", snapshot_id, key=key)
         self.assertEqual(status, 202, body)
         self.assert_schema(202, body)
@@ -1344,6 +1486,14 @@ class HttpRendererSeamTests(unittest.TestCase):
         self.assertEqual(second["meta"]["warnings"], first["meta"]["warnings"])
         self.assertEqual(sum(1 for call in self.calls if call["preflight"]), preflight)
         self.assertEqual(sum(1 for call in self.calls if not call["preflight"]), jobs)
+        self.assertEqual(self.export_names(), before_files)
+        self.assertEqual(set(self.server.exports._jobs), before_jobs)
+        # With the same snapshot but a new key the current cap rejects admission.
+        status, _, body = self.post("jpeg", snapshot_id)
+        self.assertEqual(status, 422, body)
+        self.assertEqual(self.export_names(), before_files)
+        self.assertEqual(set(self.server.exports._jobs), before_jobs)
+        preflight += 1
         self.server.stop()
         self.server = _LoopbackApp(self.home)
         self.addCleanup(self.server.stop)
