@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T19:14:52+08:00'
+updated_at: '2026-10-23T20:37:56+08:00'
 completed_at: null
 ---
 
@@ -735,3 +735,120 @@ Commit A：`09bd3fbcde6771e5182fc42c25beb5ff61f48fa8` — `fix(runtime): Windows
 提交后运行 `$P -B -c <commit-a-content-identity>`，逐一比较48个提交runtime Python blob SHA-256与最终runtime-full raw.hashes，全部相同；完整脚本在同label raw.command。这是被测内容身份重验证，原始full证据仍是入口8f87df4＋dirty，不改称09bd3fb上新执行。最终汇总`reports/fix3-verification-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T191003.{json,md}`保留；review-closed汇总另存，不覆盖原native／失败报告。
 
 Commit B：`docs(task): append native CI fix3 diagnosis and verification (R2.2 PR-3)`，仅本task，SHA由最终回复提供以避免自引用。只按显式路径暂存；reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env*均不暂存。task继续in-progress、completed_at null；历史frontmatter／事件保持，仅updated_at更新。沿用Markdown追加绑定与既有TaskStore兼容边界，不宣称helper lifecycle或自动恢复成功。无远端操作／部署／发布。macOS/Windows 待 CI 复跑；本地交付不等于13/13 gate通过。
+
+## R2.2 PR-3 fix4 入口与 Book Gate Plan（编排方整理）
+
+编排方整理：Lord 2026-10-23 19:35 +08:00 fix4 order／rulings，仅修两个已证 CI blocker；strict 不变。授权根 `/workspace/640-skills-r22-pr3`、分支 `feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation`、入口 `75c1c93678a0d50726a397ed5a16bece8778bdcd`，工作区干净。沿用既有 PR-3 追加绑定；保留历史 frontmatter 与所有旧事件，仅更新 updated_at，不调用会重写历史绑定的 TaskStore，不宣称 helper lifecycle／自动恢复。
+
+编排方整理的 CI 证据：run `39945077815` on `75c1c93` 为 10/13；runtime-e2e-windows 已通过四格式、PDF text、CTRL_BREAK；runtime-e2e-macos、linux-shards (2)、linux-full 失败。A：成功 worker 的 result.json 无 warnings／aborted_urls、scale=2，无 error.json；finally killpg(SIGKILL) 在 Darwin zombie-only group 抛 EPERM，遮蔽成功结果。B：shards 只安装 Onboard requirements，缺 tzdata，空系统时区测试失败。已有证据作为事实，不重跑旧 CI 试图确认。
+
+裁定：A 只有 reap 后 probe 明确 ESRCH 才能成功；持续 EPERM、存活组或超时仍失败，真实 worker error／非零退出／缺结果仍失败；Linux WNOWAIT 和 Windows Job Object 路径不改。B 仅在 linux-shards 原安装行追加 `-r sbtd-runtime/requirements-serve.txt`，补齐缺失依赖，不是 bypass。13 个 checks 名称／条件／矩阵／断言不改，不新增 skip／neutral／continue-on-error；contracts／PRD／schema／golden 不改。
+
+未完整调用 grill-with-docs：根因、范围、错误边界与验收明确，无领域歧义。BDD 沿用既有 native E2E Markdown 场景及 unittest，不另建 runner／spec；本轮具体回归为成功结果仅在组已消失后返回、仍存在或权限不明的组 fail closed、worker 真实失败保持失败。测试 seam 为编排方整理明确的 mock killpg＋真实 `_execute_job`／`_terminate_group`／结果读取链。
+
+| Gate | 客观触发／阶段 | 本轮状态／计划 |
+|---|---|---|
+| DDD／DDIA | 需求／数据设计前 | not-needed；无完整 grill、领域歧义、持久化或跨服务设计变更。 |
+| Legacy Change Safety | 既有进程清理 bug／编辑前 | needs-safety-net；先在既有 process-wait 文件补 EPERM red 与失败保留回归，不引入生产 seam。 |
+| Refactoring／ponytail | 生产编辑前 | pending；限定现有 cleanup 的异常分支，不改等待／所有权架构。 |
+| TDD／BDD | 行为编辑前 | killpg seam 已明确；既有中文场景／English keywords，红绿验证不冒充 Darwin kernel。 |
+| project-validation／独立 review／可读性 | check | pending；runtime full、tzdata 空 TZPATH、fresh venv shards、golden、workflow、真实四格式、lint／YAML／冻结边界。 |
+| Release Readiness | runtime／验证后 | pending；macOS 待 CI 复跑；本机不能证明 13/13，不 push／发布。 |
+
+### fix4 实现、审查与状态事件（编排方整理）
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-10-23T19:40:37+08:00 | in-progress | in-progress | A 的平台模拟 red：5 tests、8 errors，均为 cleanup 未处理 EPERM；既有 CI 根因不重新猜测 | reports/fix4-eperm-red-* 原生 stdout／stderr／command |
+| 2026-10-23T19:40:55+08:00 | in-progress | in-progress | A 最小实现后 9 process-wait tests 通过；B 单行依赖补齐 | process-green；validation.yml 单行 diff |
+| 2026-10-23T20:11:42+08:00 | in-progress | in-progress | code commit 已创建，追加绑定 SHA 的 shards 重跑，不覆盖前轮报告 | e771f0822dcaafa477e8447b6ea998cbe405de75 |
+| 2026-10-23T20:35:12+08:00 | in-progress | in-progress | A/B 代码交付；最新额外 shard 重跑暴露范围外 link identity 失败，发布 gate blocked；macOS 待 CI 复跑 | fix4-linux-shards-final；filesystem-identity-probe；无 scope widening |
+
+**A**：原 SIGKILL 捕获增加 PermissionError，但不把该异常当作成功。继续原 `proc.wait(timeout=5)`；原两秒 alive probe 允许 EPERM 继续探测，唯一成功出口仍为 ESRCH。持续 EPERM／存活组到 deadline 抛 RENDERER_FAILED；reap 超时继续传播失败。`_read_result`、Linux waitid/WNOWAIT、Windows Job Object 与其调用顺序均不改。新增五个测试覆盖 SIGKILL EPERM→reap→ESRCH、probe EPERM→ESRCH、持续 EPERM／alive、worker exit7／error.json／缺 result.json、reap timeout；无 skip。独立 review 指出 Windows 不暴露 signal.SIGKILL，测试已将 signal namespace 纳入平台模拟，生产不变。
+
+**B**：只修改 `.github/workflows/validation.yml` 的 linux-shards 安装行，追加已有 pinned serve requirements（含 tzdata==2026.5）。没有修改 step 名称、条件、矩阵、其他 job、contracts 或任何 assertion。workflow 两组 52 tests 通过，无需 expectation 变更。新增依赖使 serve-dependent tests 实际执行；不属于 bypass。
+
+Legacy Change Safety Review: characterized（原实现 EPERM red、真实结果与失败边界回归）；Refactoring Review: proceed／normal（无重构）；Ponytail Review／Code Readability Review: Lean already，沿用原等待／deadline，不增加新架构。CleanupSafetyReview：correct，confidence 0.90，无 blocker；RegressionGateReview：correct，confidence 0.85，Windows 测试常量修正已复审 CLOSED。两位只读、未执行 tests／lint／build；实际验证由主会话独占。LSP 返回 No language server found，源码检索确认唯一生产 cleanup 调用为 `_execute_job`。
+
+### fix4 全部本地验证命令与结果
+
+环境 Linux 6.12.94+／x64、Python 3.13.5；CI Python 仍为 3.12.10，此处不是原生 macOS／Windows 证明。共同环境 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests RUFF_NO_CACHE=true`。rtk skipped-for-report；原生 subprocess 保存 stdout／stderr／exit／命令／时间、真实入口 SHA、worktree、branch 与 48 个 runtime Python SHA-256。所有报告 developer-local／dirty／local-only，不冒充 PR-head CI。
+
+```sh
+R=ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports
+P=$R/renderer-venv/bin/python3
+V=$R/fix4-shards-bra6vd7i/venv
+S=$V/bin/python3
+python3 -m venv "$V"
+$S -m pip install -r sbtd-workflow-onboard/requirements.txt -r sbtd-runtime/requirements-serve.txt
+$P -m pip check
+$P -B -m unittest test_renderer_process_wait.GroupPermissionTests -v
+$P -B -m unittest test_renderer_process_wait -v
+PYTHONTZPATH= $S -B -m unittest test_stats_query.NormalizeScopeTests.test_iana_queries_and_dst_work_without_system_timezone_data -v
+$P -B -m unittest discover -s sbtd-runtime/tests
+$P -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+python3 -B -m unittest tests.test_workflow_contracts tests.test_ci_selection
+$P -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /tmp/r22-pr3-fix4-e2e
+PATH="$V/bin:$PATH" $S -m compileall -q sbtd-workflow-onboard/scripts tests
+PATH="$V/bin:$PATH" $S -B tests/run_ci.py --platform linux --shard 2 --shards 3 --output "$R/fix4-linux-shards"
+PATH="$V/bin:$PATH" $S -B tests/run_ci.py --platform linux --shard 1 --shards 3 --output "$R/fix4-linux-shards"
+PATH="$V/bin:$PATH" $S -B tests/run_ci.py --platform linux --shard 3 --shards 3 --output "$R/fix4-linux-shards"
+$S -B tests/run_ci.py --platform linux --shards 3 --output "$R/fix4-linux-shards" --verify-reports
+VALIDATION_SHA=75c1c93678a0d50726a397ed5a16bece8778bdcd $S -B tests/run_ci.py --platform linux --shards 3 --output "$R/fix4-linux-shards" --verify-reports
+VALIDATION_SHA=e771f0822dcaafa477e8447b6ea998cbe405de75 PATH="$V/bin:$PATH" $S -B tests/run_ci.py --platform linux --shard 2 --shards 3 --output "$R/fix4-linux-shards-final"
+VALIDATION_SHA=e771f0822dcaafa477e8447b6ea998cbe405de75 PATH="$V/bin:$PATH" $S -B tests/run_ci.py --platform linux --shard 1 --shards 3 --output "$R/fix4-linux-shards-final"
+VALIDATION_SHA=e771f0822dcaafa477e8447b6ea998cbe405de75 PATH="$V/bin:$PATH" $S -B tests/run_ci.py --platform linux --shard 3 --shards 3 --output "$R/fix4-linux-shards-final"
+VALIDATION_SHA=e771f0822dcaafa477e8447b6ea998cbe405de75 $S -B tests/run_ci.py --platform linux --shards 3 --output "$R/fix4-linux-shards-final" --verify-reports
+$S -B -m unittest tests.test_sbtd_probe_links.MaterializeAuthorizationTests.test_replaced_link_with_identical_text_is_refused tests.test_sbtd_probe_links.MaterializeAuthorizationTests.test_link_text_change_is_refused -v
+ruff check sbtd-runtime/browser_renderer.py sbtd-runtime/tests/test_renderer_process_wait.py
+ruff format --check sbtd-runtime/browser_renderer.py sbtd-runtime/tests/test_renderer_process_wait.py
+git diff --check
+git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/golden
+git diff 75c1c93 -- .github
+```
+
+另执行 `python3 -B -c <records-check>`、`python3 -B -c <commit-a-content-identity>`、`$S -B -c <filesystem-identity-probe>`；每份完整无落盘脚本均保存于对应 raw.command。records-check 首次脚本字符串换行转义 SyntaxError，修正后 yaml.safe_load／append-only／新增归因／workflow 单行断言通过；未更改产品去迁就检查。没有生成待清理源码脚手架。
+
+| raw label／轮次 | 原生结果 | 墙钟秒 |
+|---|---|---|
+| eperm-red | 5 tests、8 errors，预期 red；原实现 EPERM 直接传播 | 0.212 |
+| process-green／process-final | 各 9 tests OK，最终修正测试平台常量后重跑 | 0.356／0.363 |
+| fresh-venv／shard-deps／renderer-deps | 创建新 venv、双 requirements 安装成功；pip check 无 broken requirements | 1.908／2.401／0.319 |
+| empty-tzpath | 1 test OK，fresh venv 的 tzdata==2026.5，无系统 TZPATH | 0.190 |
+| golden／workflow | 61 OK／52 OK | 0.463／0.528 |
+| runtime-full／runtime-full-final | 各 421 tests，411 passed／10 既有 skipped／0 failures；最终轮原生 158.296s | 145.250／158.657 |
+| native-linux | 四格式 real Chromium、PDF UTF-8／CJK／关键值、13 Panels、3-case suite、SIGINT exit0／lock／port 清理 passed；driver 23.883s | 24.107 |
+| shard-compileall | exit0，沿用 workflow 预编译步骤 | 0.609 |
+| linux-shard-2／1／3（首轮） | 816／694／877 tests，779／680／865 passed，37／14／12 既有 skips，全部0 failures | 402.729／494.422／415.738 |
+| shard-coverage | exit1：缺 VALIDATION_SHA；不是 tests 失败 | 0.045 |
+| shard-coverage-corrected | exit1：首轮原生 source_sha=null，无法补 env 修复旧报告身份，保留旧报告 | 0.055 |
+| linux-shard-2-final | 816 tests，778 passed／37 skipped／1 failure：test_link_text_change_is_refused | 423.193 |
+| linux-shard-1-final | 694 tests，679 passed／14 skipped／1 failure：test_replaced_link_with_identical_text_is_refused | 510.845 |
+| linux-shard-3-final | 877 tests，865 passed／12 skipped／0 failures | 397.942 |
+| shard-coverage-final | exit1：严格拒绝 unsuccessful shard；未绕过 | 0.044 |
+| unrelated-links-targeted | 2 tests、1 failure：link_text_change 再现 link-mismatch != identity-mismatch；identical_text 此轮通过 | 0.133 |
+| filesystem-identity-probe | 200/200 次 symlink unlink/recreate 后 dev／inode／ctime_ns tuple 相同，exit0；仅环境诊断 | 0.033 |
+| ruff-check／ruff-check-final | All checks passed | 0.016／0.017 |
+| ruff-format-check | exit1，单处测试调用换行需调整；手工最小格式修正 | 0.013 |
+| ruff-format-final／ruff-format-reviewed | 2 files already formatted | 0.010／0.011 |
+| diff-check／frozen-paths／github-diff | exit0；冻结三个目录 stat 空；.github 恰一安装行 | 0.007／0.002／0.002 |
+| records-check／records-check-corrected | 首轮脚本 SyntaxError exit1；修正后 YAML／append-only／added-only 归因／workflow 检查 exit0 | 0.020／0.062 |
+| commit-a-content-identity | 48 个最终 full 被测 runtime Python SHA-256 与 code commit blob 全部相同 | 0.100 |
+
+报告 stem 统一 `reports/fix4-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<YYYYMMDDTHHMMSSffffff>.{json,md}`，同 stem 九节中文汇总；失败不覆盖。最终 runtime full 时间 `20261023T200741572668`；原生 E2E `/tmp/r22-pr3-fix4-e2e/runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T114420Z.{json,md}`。shards 首轮／绑定 SHA 轮分别在 `reports/fix4-linux-shards/`、`reports/fix4-linux-shards-final/`，原生逐例结果与 skipped 原因完整保留。首轮 source_sha=null 的限制由外层真实 source metadata 明确记录，不能冒充可聚合 CI 证据。
+
+### fix4 发布与范围边界
+
+**最新全范围验证不是全绿。** 额外绑定 SHA 重跑的两处失败位于未修改的 `test_sbtd_probe_links.MaterializeAuthorizationTests`；该实现用 device／inode／ctime_ns 识别替换。独立 OS smoke 证明本机能在删除重建后得到相同 tuple，与失败路径一致，但不声称已修复该身份问题。首轮三个 shards 全绿不抹掉后轮失败；不加 sleep／skip、不弱化断言、不改范围外授权实现，不用重复运行筛选绿色结果。解除这项阻断需要独立授权的 link identity 调查／修复或可靠平台证据，不属于本次 A/B。
+
+**Release Readiness Review: blocked。** A/B 定向与 runtime full／真实 Chromium E2E 通过；最新额外 shard 汇总失败；macOS 待 CI 复跑，13/13 gate 未完成。编排方整理的 Windows 前轮 CI 通过仅属于 run39945077815，不冒充新 SHA 上结果。资源限制、原五秒 reap／两秒 group deadline、取消／超时错误、单 worker 与结果校验保持；不增加生产日志或 fallback。无迁移、数据清理或部署；代码回退会恢复旧 EPERM／缺依赖缺陷，不承诺旧版本可用。
+
+BDD traceable：沿用 `sbtd-runtime/spec/r2.2-native-e2e-scenarios.md` 的原生导出与退出／失败清理场景，中文场景／English keywords；本轮不改 spec／PRD／contracts／schema／golden。Cross-repo context not-needed；API Contract verified（冻结路径空 diff）；EPERM 测试 Mock Strategy 为编排方整理明确授权的 OS seam，real Chromium E2E 为 backend-only／Mock Strategy none。UI／Maestro／浏览器 MCP not-needed；已有 Python Playwright driver 已运行。Final Test Report／Run Summary MD generated；Targeted Rerun A/B passed；Final Full Rerun runtime passed、额外 shards failed；Evidence Source developer-local／Source Revision dirty／Evidence Publication local-only。无 ty／原生 Darwin kernel 检查声明。
+
+### fix4 本地提交与恢复边界
+
+Commit A：`e771f0822dcaafa477e8447b6ea998cbe405de75` — `fix(runtime): treat Darwin EPERM on reaped renderer group as gone; install serve deps on Linux shards (R2.2 PR-3 fix4)`。仅 `sbtd-runtime/browser_renderer.py`、`sbtd-runtime/tests/test_renderer_process_wait.py`、`.github/workflows/validation.yml`；无 workflow expectation 改动。提交后内容身份检查证明最终 runtime full 的 48 个文件与 commit blob 相同；原始证据仍保留真实入口 75c1c93＋dirty，不改称新 SHA 上执行。
+
+Commit B：`docs(task): append CI fix4 blockers, verification and remaining risks (R2.2 PR-3)`，仅本 task，SHA 由最终回复给出，避免自引用。全部显式路径暂存；reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env* 不暂存。task 保持 in-progress／completed_at null，旧 frontmatter 除 updated_at 外逐字段不变、旧行逐字保留。无 push／PR／comment／merge／rebase／amend／force，无其他 worktree／omp 全局配置变更；无自动恢复或发布完成声明。
+
+最终记录检查追加：`records-final` exit0／0.053s、`diff-check-final` exit0／0.005s。37 份本轮 raw 均生成同 stem 九节中文 companion，检查章节顺序与 raw 配对通过；完整清单与逐轮命令在 `reports/fix4-verification-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T203512.{json,md}`。37 份为命令轮次，不是37个测试；所有失败／跳过原样保留。首轮 shards 合计2387 tests／2324 passed／63 skipped／0 failures；绑定 SHA 的最终轮2387 tests／2322 passed／63 skipped／2 failures，绝不标记全范围 passed。最终记录与 code 分开提交；reports 不暂存。
