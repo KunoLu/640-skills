@@ -130,20 +130,34 @@ def assert_panels(case, documents: dict[str, str], csv_payload: bytes) -> list[s
 def assert_pdf_text(
     case, payload: bytes, panels: list[str], expected_values=None
 ) -> str:
-    if not shutil.which("pdftotext"):
-        return "source-document-only: pdftotext unavailable; no dependency added"
-    with tempfile.TemporaryDirectory(prefix="sbtd-reconcile-pdf-") as temporary:
-        path = Path(temporary) / "report.pdf"
-        path.write_bytes(payload)
-        result = subprocess.run(
-            ["pdftotext", "-layout", str(path), "-"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=True,
-            timeout=30,
-        )
-    text = result.stdout
+    executable = shutil.which("pdftotext")
+    limitation = "source-document-only: pdftotext "
+    if not executable:
+        return limitation + "unavailable; no dependency added"
+    try:
+        with tempfile.TemporaryDirectory(prefix="sbtd-reconcile-pdf-") as temporary:
+            path = Path(temporary) / "report.pdf"
+            path.write_bytes(payload)
+            # Windows text-mode pipe readers decode in background threads; a
+            # decode failure can leave stdout=None rather than raise here.
+            result = subprocess.run(
+                [executable, "-enc", "UTF-8", "-layout", str(path), "-"],
+                capture_output=True,
+                check=False,
+                timeout=30,
+            )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return limitation + f"could not extract text ({type(error).__name__})"
+    if result.returncode != 0:
+        return limitation + f"exit {result.returncode}; text not verified"
+    if result.stdout is None:
+        return limitation + "returned no stdout; text not verified"
+    try:
+        text = result.stdout.decode("utf-8")
+    except UnicodeError:
+        return limitation + "output is not UTF-8; text not verified"
+    if not text.strip():
+        return limitation + "returned empty text; text not verified"
     for panel in panels:
         case.assertIn(panel, text)
     case.assertIn("概览", text)
@@ -152,7 +166,9 @@ def assert_pdf_text(
         case.assertRegex(
             text, re.escape(metric) + r"\s+" + re.escape(expected) + r"(?=\s|$)"
         )
-    return "downloaded-pdf-text: pdftotext -layout; CJK and key values verified"
+    return (
+        "downloaded-pdf-text: pdftotext -enc UTF-8 -layout; CJK and key values verified"
+    )
 
 
 class ExportReconciliationTests(unittest.TestCase):

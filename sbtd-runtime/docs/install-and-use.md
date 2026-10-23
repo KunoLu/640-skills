@@ -251,3 +251,7 @@ python3 -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /path/to
 `--install-browser` 模式下，下载／安装命令失败会使 E2E 失败，不能冒充平台 unavailable；只有安装完成后的真实 capability 检查可记录不支持原因。
 
 无论成功或失败，JSON 保存脱敏后的 serve stdout／stderr 与 runtime home 日志；每段最多 16384 字符，home 日志合计最多 65536 字符／32 个文件。非预期 HTTP 状态另保存最多 4096 字符的响应正文；ticket、Bearer session、CSRF 值在截断和落盘前移除。原始服务日志泄漏凭据仍使 E2E 失败，不因证据脱敏而放行。
+
+JPEG／PDF 的创建或生成失败时，原生 driver 另用同一快照下载的 HTML、同一 runtime home 重跑测试侧 worker 诊断。`renderer_diagnostics` 保存 worker 退出码、`error.json`／`result.json` 的存在状态与内容、stdout／stderr、包含被抑制 context 的异常链和出错位置；每个文本字段最多 16384 字符，先脱敏再截断。诊断沿用生产 job 写入、等待、进程组／Job Object 清理及结果检查，仅替换测试进程的输出捕获与异常记录，不改变服务端安全错误协议。诊断重跑成功也不改变原 E2E 的失败退出码。
+
+PDF 抽取显式使用 `pdftotext -enc UTF-8 -layout`，二进制捕获后严格解码，避免 Windows 后台管道线程解码异常留下 `None`。工具缺失、无法执行、超时、非零退出、无输出、空文本或非 UTF-8 输出只记录 `source-document-only` 及原因，不声明 PDF 文本已验证；成功抽取的文本仍必须通过全部 Panel、CJK 和关键值断言。

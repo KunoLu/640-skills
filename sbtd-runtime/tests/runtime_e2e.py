@@ -30,6 +30,7 @@ sys.path.insert(0, str(RUNTIME))
 
 from browser_renderer import _shell_executable
 from export_render import load_panel_manifest
+from runtime_e2e_diagnostics import diagnose
 from test_csv_export import _dataset, _scope
 from test_export_reconciliation import (
     ExportReconciliationTests,
@@ -326,17 +327,29 @@ def exercise(
                     "reason": formats[format_name]["reason"],
                 }
                 continue
-            _, accepted = api("POST", "/api/v1/exports", 202, body)
-            export_id = json.loads(accepted)["data"]["export_id"]
-            deadline = time.monotonic() + 90
-            while True:
-                _, state = api("GET", f"/api/v1/exports/{export_id}")
-                info = json.loads(state)["data"]
-                if info["status"] == "ready":
-                    break
-                case.assertIn(info["status"], ("queued", "generating"))
-                case.assertLess(time.monotonic(), deadline, "export timeout")
-                time.sleep(0.2)
+            export_id = None
+            try:
+                _, accepted = api("POST", "/api/v1/exports", 202, body)
+                export_id = json.loads(accepted)["data"]["export_id"]
+                deadline = time.monotonic() + 90
+                while True:
+                    _, state = api("GET", f"/api/v1/exports/{export_id}")
+                    info = json.loads(state)["data"]
+                    if info["status"] == "ready":
+                        break
+                    case.assertIn(info["status"], ("queued", "generating"))
+                    case.assertLess(time.monotonic(), deadline, "export timeout")
+                    time.sleep(0.2)
+            except Exception:  # Diagnose, then preserve the original failure.
+                if format_name in ("jpeg", "pdf"):
+                    evidence["renderer_diagnostics"] = diagnose(
+                        home,
+                        payloads["html"],
+                        format_name,
+                        preflight=format_name == "jpeg" and export_id is None,
+                        sanitize=lambda text: _safe_text(text, secrets),
+                    )
+                raise
             download_headers, payload = api("GET", f"/api/v1/exports/{export_id}/file")
             case.assertEqual(info["snapshot_id"], snapshot_id)
             case.assertEqual(info["sha256"], hashlib.sha256(payload).hexdigest())
@@ -472,7 +485,7 @@ def main() -> int:
         "limitations": [
             "Mac visual/font confirmation pending; Windows CI only",
             "JPEG source-document values; pixel OCR not performed",
-            "PDF text only when pdftotext exists",
+            "PDF text verified only when pdftotext produces usable UTF-8 text",
             "Performance section 18 belongs to PR-4",
             "Windows chmod is not POSIX 0600 ACL evidence",
         ],
@@ -536,6 +549,15 @@ def main() -> int:
             + (
                 "\n\n```text\n" + evidence["traceback"] + "```"
                 if "traceback" in evidence
+                else ""
+            )
+            + (
+                "\n\n```json\n"
+                + json.dumps(
+                    evidence["renderer_diagnostics"], ensure_ascii=False, indent=2
+                )
+                + "\n```"
+                if "renderer_diagnostics" in evidence
                 else ""
             ),
         ),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,6 +111,101 @@ class NativeEvidenceTests(unittest.TestCase):
             for path in (raw, raw.with_suffix(".md")):
                 text = path.read_text(encoding="utf-8")
                 self.assertFalse(any(secret in text for secret in issued))
+
+    def test_failed_worker_records_exception_chain_and_result_absence(self) -> None:
+        import runtime_e2e_diagnostics as diagnostics
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            fake = home / "broken_worker.py"
+            fake.write_text(
+                "import sys\n"
+                f"sys.path[:0] = {[str(runtime_e2e.RUNTIME), str(Path(__file__).resolve().parent)]!r}\n"
+                "import browser_renderer as renderer\n"
+                "from runtime_e2e_diagnostics import worker_main\n"
+                "def broken(job):\n"
+                "    try:\n"
+                "        raise ValueError('synthetic-ticket')\n"
+                "    except ValueError:\n"
+                "        raise renderer.RendererError(renderer.RENDERER_FAILED) from None\n"
+                "renderer._worker_run = broken\n"
+                "raise SystemExit(worker_main(sys.argv[1]))\n",
+                encoding="utf-8",
+            )
+            with patch.object(
+                diagnostics,
+                "_worker_argv",
+                side_effect=lambda job: [sys.executable, str(fake), str(job)],
+            ):
+                evidence = diagnostics.diagnose(
+                    home,
+                    b"<html>same frozen snapshot</html>",
+                    "jpeg",
+                    preflight=True,
+                    sanitize=lambda text: runtime_e2e._safe_text(
+                        text, ["synthetic-ticket"]
+                    ),
+                )
+            worker = evidence["workers"][0]
+            self.assertEqual(worker["exit_code"], 1)
+            self.assertEqual(
+                json.loads(worker["files"]["error.json"]["content"]),
+                {"code": "RENDERER_FAILED"},
+            )
+            self.assertFalse(worker["files"]["result.json"]["exists"])
+            chain = json.loads(worker["files"]["exception.json"]["content"])
+            self.assertEqual(
+                [row["type"] for row in chain], ["RendererError", "ValueError"]
+            )
+            self.assertIn("broken", chain[0]["site"])
+            self.assertIn("Traceback", chain[0]["traceback"])
+            self.assertFalse("synthetic-ticket" in json.dumps(evidence))
+            self.assertEqual(evidence["status"], "failed")
+            self.assertIn("_read_result", evidence["exception_chain"][0]["site"])
+
+    def test_cleanup_failure_keeps_successful_worker_result(self) -> None:
+        import browser_renderer
+        import runtime_e2e_diagnostics as diagnostics
+
+        terminate = browser_renderer._terminate_group
+
+        def fail_after_reaping(proc):
+            terminate(proc)
+            raise browser_renderer.RendererError(browser_renderer.RENDERER_FAILED)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            command = (
+                "import pathlib,sys; "
+                "(pathlib.Path(sys.argv[1])/'result.json').write_text("
+                '\'{"scale": 2, "warnings": []}\')'
+            )
+            with (
+                patch.object(
+                    diagnostics,
+                    "_worker_argv",
+                    side_effect=lambda job: [sys.executable, "-c", command, str(job)],
+                ),
+                patch.object(
+                    browser_renderer, "_terminate_group", side_effect=fail_after_reaping
+                ),
+            ):
+                evidence = diagnostics.diagnose(
+                    home,
+                    b"<html>snapshot</html>",
+                    "jpeg",
+                    preflight=True,
+                    sanitize=lambda text: text,
+                )
+            worker = evidence["workers"][0]
+            self.assertEqual(worker["exit_code"], 0)
+            self.assertTrue(worker["files"]["result.json"]["exists"])
+            self.assertEqual(
+                json.loads(worker["files"]["result.json"]["content"])["scale"], 2
+            )
+            self.assertFalse(worker["files"]["error.json"]["exists"])
+            self.assertEqual(evidence["status"], "failed")
+            self.assertIn("fail_after_reaping", evidence["exception_chain"][0]["site"])
 
 
 if __name__ == "__main__":
