@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T14:53:18+08:00'
+updated_at: '2026-10-23T15:33:52+08:00'
 completed_at: null
 ---
 
@@ -191,6 +191,7 @@ PR-1 本地提交证据：
 | 2026-10-23T14:44:42+08:00 | in-progress | in-progress | PR-2 安全证据本地完成；新增测试为 unchanged-production characterization，未发现需要生产修复的缺陷。PR-2 done 不等于 R2.2 done；R2.2 继续 in-progress，plan R2.2 行继续 planned 至 PR-4。 | Commit 1 3bf85861413eb09d7437ac52e529d047fffbeeff；commit 2 864ae0067fbc1f5400fb1d1531ef75f2615b89c1；第三 commit 仅本 task。最终 runtime 395 tests／385 passed／10 skipped，golden 61 passed；真实 CLI smoke 与安全子集通过；两位独立 reviewer correct，无 blocker。无远端操作、部署或发布。 |
 | 2026-10-23T14:44:42+08:00 | in-progress | in-progress | PR-2 模型 PRE-COMMIT SNAPSHOT 与编排方整理的本轮 ping 追加；不改旧 SNAPSHOT／FINAL，不把运行中取样当最终值。 | main session 第 1–200 行 38／77；两位 reviewer 已结束取样见模型表；当前 writer 实际 openai-codex/gpt-6-astra high，无 fallback。 |
 | 2026-10-23T14:53:18+08:00 | in-progress | in-progress | 归因更正（append-only）：14:21:40 「PR-2 strict 开工」行中「四串行 PR 拆分为编排方整理」应为：用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 按 plan.md 定拆分为 4 个串行 PR，Lord 记录；原行逐字保留。 | 编排方整理：本文件 2026-10-23T12:40:31+08:00 planned→in-progress 事件；ai/tasks/v2.1.0-rc.2-plan/plan.md:73。 |
+| 2026-10-23T15:33:52+08:00 | in-progress | in-progress | 归因更正（append-only）：d6f6419 基线 :202（HTTP／进程 seam）与 :227（§11）两处操作指令的归因应为「编排方整理」（Lord 的 prompt 指令），并非用户在群内作出的指示；原行逐字保留。 | Reviewy NOT CLEAN @ d6f6419（B1）；Lord 2026-10-23 15:32 +08:00 确认；append-only. |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
