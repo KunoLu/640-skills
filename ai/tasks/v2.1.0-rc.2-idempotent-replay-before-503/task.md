@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: done
 branch: fix/v2.1.0-rc.2-idempotent-replay-before-503
 created_at: '2026-10-23T09:51:34+08:00'
-updated_at: '2026-10-23T10:09:34+08:00'
+updated_at: '2026-10-23T10:13:34+08:00'
 completed_at: '2026-10-23T10:09:34+08:00'
 ---
 
@@ -110,12 +110,17 @@ Release Readiness Review：服务入口仅改变重复 createExport 的查询顺
 
 | agent/session | provider/model | thinkingLevel (from thinking_level_change) | assistant messages / toolCall blocks | purpose | resolvedModelIsFallback | title-generation count | job-widget entries |
 |---|---|---|---|---|---|---|---|
-| 本次主会话／01a16672-d532-73f1-b125-363df6adb0b0 | openai-codex/gpt-6-astra | high | 37 / 85（提交前 snapshot，2026-10-23T10:09:34+08:00） | 唯一 writer／验证 controller | false | 未知 | 未知 |
+| 本次主会话／01a16672-d532-73f1-b125-363df6adb0b0 | openai-codex/gpt-6-astra | high | 44 / 93（最终） | 唯一 writer／验证 controller | false | 未知 | 未知 |
 | Ping／01a16672-07b5-724c-b90e-dfe6ac1c8262 | openai-codex/gpt-6-astra | high | 1 / 0（最终） | ping | false | 未知 | 未知 |
 | ReplayRuntimeReview／ReplayRuntimeReview.jsonl | kimi-code/k3 | max | 33 / 37（最终） | 只读并发／生命周期／优先级审查 | false | 未知 | 未知 |
 | ReplayCoverageReview／ReplayCoverageReview.jsonl | kimi-code/k3 | max | 29 / 37（最终） | 只读测试／记录／文档审查 | false | 未知 | 未知 |
+| 本批记录补充／01a16687-80f9-71e9-8836-4af310db37c1 | openai-codex/gpt-6-astra | high | 7 / 20（提交前 snapshot，2026-10-23T10:13:34+08:00） | 唯一 writer；仅补 task 记录与指定验证 | false | 未知 | 未知 |
+
+以下段落保留前批提交前的历史取样口径；主会话当前值以上表「最终」44／93 为准，不再沿用历史 snapshot：
 
 只读 JSONL 核实：主会话 `~/.omp/agent/sessions/--workspace-640-skills-s1fix--/2026-10-23T01-49-24-146Z_01a16672-d532-73f1-b125-363df6adb0b0.jsonl`，cwd／任务匹配，取样至 213 行；ping 为 `~/.omp/agent/sessions/-tmp-s1fix-ping/2026-10-23T01-48-31-541Z_01a16672-07b5-724c-b90e-dfe6ac1c8262.jsonl` 共 9 行；两 reviewer 在主会话同 stem 子目录，共 116／112 行。口径为 `type=message`／`role=assistant` 及其 `type=toolCall` blocks；model 来自 `model_change`，thinking 来自 `thinking_level_change`，不从 effort 推断。主会话与 ping 实际回复仅 astra，reviewer 仅 k3；未指定子代理模型，无 grok 回复、无 fallback。主会话计数不含后续记录编辑、校验、提交与最终回复；编排方在 PR 正文报告最终计数。title-gen／job-widget 无可用计数记录，保留未知，不记作 0。
+
+本批只读核实上述主会话 JSONL 最终 238 行、44 assistant／93 toolCall；同 stem 子目录的 ReplayCoverageReview.jsonl 为 113 行、29／37，ReplayRuntimeReview.jsonl 为 117 行、33／37，均为最终值。两位 reviewer 的 model_change 与实际回复均为 kimi-code/k3，thinking_level_change 为 max；主会话为 openai-codex/gpt-6-astra／high，resolvedModelIsFallback=false。本批会话为同一 sessions 根目录最新 JSONL `2026-10-23T02-11-58-841Z_01a16687-80f9-71e9-8836-4af310db37c1.jsonl`，首条 user message 匹配本次 `run-fix2/prompt.md`；2026-10-23T10:13:34+08:00 读取至 53 行，7 assistant／20 toolCall，仅为提交前 snapshot，不含之后编辑、校验、提交与最终回复。任意 grok 回复都计为 fallback；上述已核实会话未观察到 grok 回复或 fallback。title-gen／job-widget 未记录调用计数，均为未知，不能由 title 元数据推算为 0。
 
 ## 状态事件
 
@@ -124,3 +129,5 @@ Release Readiness Review：服务入口仅改变重复 createExport 的查询顺
 | 2026-10-23T09:51:34+08:00 | planned | in-progress | 用户 strict／user；保存本地模式、范围与验证计划；首 records commit 已完成 | 授权根与分支匹配；入口 de97926811410e7d61d846fc8e95ddaa0738bfbf；c595001 仅两份 records；507 runtime grep 零匹配；LSP 无配置；无持久迁移 |
 | 2026-10-23T10:00:37+08:00 | in-progress | checking | 红灯→修复→定向绿灯、真实进程 smoke 与指定 suites 已完成；进入独立审查和最终记录 | corrected red：5 tests／4 failures／17.110s；green：5 passed／16.824s；process smoke exit 0／4.115s；golden 61 passed／0.322s；runtime 378 tests／368 passed／10 skipped／122.100s；ruff check 0.096s 与 format 0.020s exit 0；8 对 raw／中文报告保留；diff check／两份 YAML／contracts 空 diff 通过；首轮 fixture 失误记录不删除 |
 | 2026-10-23T10:09:34+08:00 | checking | done | 本地修复与证据收口；两位独立 review correct／无 findings，Release Readiness Review 对本次局部变更 ready；不等同 PR 审查、合并、部署或发布 | c4480deaf2b260c065bcefea3012655a8d1e4753 五个 blob 与被测哈希一致；corrected red 5／4 failures／17.110s，green 5 passed／16.824s，真实进程 smoke 4.115s；golden 61 passed／0.322s；runtime 378／368 passed／10 skipped／122.100s；ruff check／format exit 0，diff／YAML／contracts 空 diff 通过；8 对报告保留；主会话提交前 37／85，runtime reviewer 最终 33／37，coverage reviewer 最终 29／37，ping 1／0；第三 commit 仅保存本 task |
+| 2026-10-23T10:13:34+08:00 | done | done | 来源：编排方转述，Lord 2026-10-23。「偏差记录：Lord 安排第 2 步（PRD §9.6 A）等第 1 步 PR 开出后再开工。2026-10-23 09:46 OMP 曾同时派发了第 2 步，09:47 收到安排后叫停。叫停前未做 astra ping、未启动 omp、未建 worktree、分支和日志目录，故无模型调用计入任何一方。本 run 模型计数仅含第 1 步。」 | 编排方于 2026-10-23 10:08 +08:00 核验：`pgrep -af "omp -p"` 仅显示第 1 步 run（PID 770671，prompt `~/.omp/logs/640-rc2-s1fix/prompt.md`）；`/workspace/640-skills-s2prd` 不存在；`~/.omp/logs/640-rc2-s2prd96` 不存在；`git worktree list` 仅列 `/workspace/640-skills` 与 `/workspace/640-skills-s1fix`；`~/.omp/agent/sessions` 下无第 2 步 session 目录。本批引用该时点的 operator verification，未将其表述为本批重新执行。 |
+| 2026-10-23T10:13:34+08:00 | done | done | 按 Reviewy／#159 契约补充覆盖映射：replay precedes ALL admission checks；401／403 与识别重放所需 400 校验仍前置。503、404／410、422 均有现存重放回归；507 为 not-applicable，runtime 尚无 quota／507 路径，配额实现仍属 R2.2，不伪造运行时覆盖。状态维持 done，仅补证据。 | 本批使用带行号 grep 工具核实（等价于 `grep -n`）：`sbtd-runtime/tests/test_renderer_integration.py:1328` `test_replay_precedes_unavailable_renderer_for_jpeg_and_pdf` 覆盖 deps down 的 jpeg／pdf，原 202／同 data（含 export_id）／无新 job 断言分别在 :1336、:1352、:1354、:1361；`:1364` `test_replay_precedes_missing_and_gone_snapshot` 覆盖 404／410，拒绝条件 :1388-1390，原 202／同 data／无新 job 为 :1373、:1395、:1397、:1403；`:1467` `test_idempotent_jpeg_replay_keeps_warning_without_new_preflight` 为增强的 422 size-limit 重放测试，原 202／同 data／无新 job 为 :1472、:1482、:1485、:1488-1490，新 key 真正 422 为 :1492-1495，重启重放断言 :1503-1508。新请求顺序：`:1406` `test_new_requests_keep_renderer_snapshot_and_size_precedence`，:1420、:1425-1428 证明 503 优先于 404／410，快照拒绝先于尺寸预检且无作业。访问／请求校验：`:1430` `test_replay_still_requires_access_and_valid_request`。递归 grep 工具对 `sbtd-runtime/**/*.py`（含 ignored）搜索 `507` 或 `DISK_QUOTA`，等价于 `grep -rn "507\|DISK_QUOTA" sbtd-runtime --include=*.py`，仅命中 `sbtd-runtime/tests/test_golden_contracts.py:864,884,925,940,950,976,988,993`；:875 `test_create_export_replay_precedes_admission_checks`／:884 定义含 507 的全部准入优先级，不代表 runtime 配额已实现。复用并逐项核实原记录测试：`sbtd-runtime/tests/test_export_store.py:512` `test_idempotency_replays_same_payload_and_rejects_changes`、`:665` `test_concurrent_same_key_creates_one_job`、`:322` `test_sweep_and_startup_touch_only_verified_expired_exports`；`sbtd-runtime/tests/test_exports_http.py:308` `test_required_headers_and_idempotent_creation`、`:210` `test_missing_foreign_and_expired_snapshot_errors`；`sbtd-runtime/tests/test_renderer_integration.py:1194` `test_unavailable_renderer_rejects_before_preflight_job_file_or_pin`、`:1235` `test_jpeg_size_limit_is_422_without_job_file_or_pin`、`:1467` 上述增强测试；`sbtd-runtime/tests/test_golden_contracts.py:875` 上述契约测试。本批仅重新运行指定 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest sbtd-runtime/tests/test_golden_contracts.py`：61 passed／0.308s／exit 0；未重跑 HTTP 用例或 full suite，沿用原记录的 c4480de 验证，由编排方复跑。 |
