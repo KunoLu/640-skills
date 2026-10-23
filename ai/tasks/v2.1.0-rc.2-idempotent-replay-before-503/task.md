@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: done
 branch: fix/v2.1.0-rc.2-idempotent-replay-before-503
 created_at: '2026-10-23T09:51:34+08:00'
-updated_at: '2026-10-23T13:20:17+08:00'
+updated_at: '2026-10-23T13:52:35+08:00'
 completed_at: '2026-10-23T10:09:34+08:00'
 ---
 
@@ -138,3 +138,4 @@ Release Readiness Review：服务入口仅改变重复 createExport 的查询顺
 | 2026-10-23T12:40:31+08:00 | done | done | 模型 FINAL 回填：fix3 session 01a166ac-a4be-7221-98a8-1b32ca5314a2 最终 16 assistant／34 toolCall；原第 119 行 7／23 仅 PRE-COMMIT SNAPSHOT，保留不改。 | Lord 记录的 FINAL 16／34；不是本次重新读取历史 session 的计数。 |
 | 2026-10-23T12:40:31+08:00 | done | done | #160 PR body 第 101 行注记更正回填；Lord 记录于 2026-10-23 12:37 +08:00 通过 gh pr edit 160 --body-file 完成，本次未执行远端操作。 | 原文「13 / 29 (final; task.md records the pre-commit snapshot 7/20)」已更正为「13 / 29 (FINAL; 7/20 was a mid-run pre-commit SNAPSHOT only — corrected 2026-10-23: task.md :117 (fix2 record) records the FINAL 13 / 29, not 7/20)」；旧 body 备份由 Lord 保存在仓外 ~/.omp/logs/640-rc2-r22-pr1/，本次不读取。 |
 | 2026-10-23T13:20:17+08:00 | done | done | 归因更正（append-only）：acdad55 基线第 137–139 行、2026-10-23T12:40:31+08:00 三条追加事件中，mergedAt、fix3 FINAL 16／34、#160 PR body 第 101 行更正及旧 body 备份的执行／记录主体均应为 operator，不是 Lord；旧事件及第 117、119 行模型记录原样保留，status／completed_at／历史 branch 不变。 | 本轮用户提供的 operator 操作证据：operator 通过 gh pr view 160 --json mergedAt,mergeCommit 取得 mergedAt；2026-10-23 12:37 +08:00 运行 gh pr edit 160 --body-file，旧 body 备份为 ~/.omp/logs/640-rc2-r22-pr1/pr160-body-before.md，重新获取并 diff 确认仅 body 第 101 行变化；operator 独立重数确认 fix3 FINAL 16／34、fix2 FINAL 13／29。本轮 python3 只读复核 ~/.omp/agent/sessions/--workspace-640-skills-s1fix--/ 下 2026-10-23T02-52-32-830Z_01a166ac-a4be-7221-98a8-1b32ca5314a2.jsonl 为 94 行、16 assistant／34 toolCall，2026-10-23T02-11-58-841Z_01a16687-80f9-71e9-8836-4af310db37c1.jsonl 为 79 行、13／29（与第 117 行一致）；均 openai-codex/gpt-6-astra、thinking_level_change=high、resolvedModelIsFallback=false。计数仅含 type=message 且 message.role=assistant 的消息及其中 toolCall blocks；本轮未执行 gh 或远端操作。 |
+| 2026-10-23T13:52:35+08:00 | done | done | 归因更正（append-only）：2026-10-23T13:20:17+08:00 行的操作证据归因应为「编排方整理」，不是「用户提供」；涉及 gh 查询（gh pr view 160 --json mergedAt,mergeCommit、gh pr view 161 --json mergedAt,mergeCommit）、#160 PR body 编辑（2026-10-23 12:37 +08:00，gh pr edit 160 --body-file）及 session 计数复核。13:20:17 行逐字保留，本轮仅更正归因，不重新执行上述操作。 | Reviewy NOT CLEAN @ e67c472 (B1), Lord ruling 2026-10-23; append-only. |
