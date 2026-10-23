@@ -31,9 +31,10 @@ $SBTD_RUNTIME_HOME/
   audit.db         # SQLite/WAL：原始观察事件（观察开启且确认后才创建）
   spool/           # 待入库批次（随 audit.db 一起创建）
   snapshots/       # R2.0c：临时 ReportSnapshot，24h 默认 TTL，0700/0600
+  exports/         # ready 产物及 manifest，ready 后 24h；与 snapshots/ 共享配额
 ```
 
-`exports/`、`backups/`、`projections.db` 目前**不创建**：导出仍是库调用返回的字节，没有导出作业服务。`snapshots/` 由显式 `serve` 或 `SnapshotStore(home)` 创建，不依赖观察开关。
+`backups/`、`projections.db` 目前不创建。`snapshots/` 由显式 `serve` 或 `SnapshotStore(home)` 创建，`exports/` 由 `ExportStore` 创建，均不依赖观察开关。
 
 ## 可选启用与项目授权
 
@@ -94,11 +95,19 @@ PY
 
 文件格式 **v1 + SHA-256**，见 [ADR 0003](../../docs/adr/0003-v2.1.0-rc.2-r2.0c-snapshot-persistence.md)。同目录临时文件完整写入、fsync 后原子 rename，POSIX 同步目录；半写、缺 checksum、错误版本、checksum 不符均拒读。损坏或未来格式文件保留，不替换 audit.db、不冒充空数据；重新查询生成新 ID。遗留 `.snapshot-*.tmp` 不会被当作快照。SHA-256 是损坏检测，不是防同机管理员篡改证明。
 
-**清理授权独立依据 PRD §10.4 临时 ReportSnapshot 行与 D13，不由 AC-61 覆盖。** 启动清扫与显式 `store.sweep()` 只删除 `snapshots/` 内有效、已过期且无引用的本扩展快照；不递归、不跟随 symlink/junction、不碰 `exports/`、审计库、配置、spool、备份、源 task.md／报告／handoff。未知文件、坏文件和遗留 temp 保留。服务持续运行时没有新增定时清理器；到期即拒绝无引用读取，但物理删除在 sweep 执行时发生。当前实例已知的过期 ID 返回 gone；删除并再次重启后返回 not found，不永久保存 tombstone。
+**清理授权独立依据 PRD §10.4 与 D13，不由 AC-61 覆盖。** 启动及每次新建前，共享协调器先清扫已验证的无引用过期 ready 导出对，再清扫无 pin 的过期快照与已确认残留 temp；各 Store 的显式 `sweep()` 仍只清扫其自有成品。不递归、不跟随 symlink/junction、不碰审计库、配置、spool、备份、源 task.md／报告／handoff。未知或损坏成品保留；运行期不明归属 temp 保留。没有定时器；当前实例已知过期 ID 返回 gone，删除后重启可能返回 not found，无永久 tombstone。
 
 **R2.1a pin 对接：** 前端 `PinRegistry` 只固定 snapshot_id；它本身不是后端保活。HTML／CSV 作业接受前调用共享 `store.pin(snapshot_id)`，完成／取消／失败的 `finally` 调用 `store.release(snapshot_id)`；引用计数未归零时，即使到期，get/dataset_page 仍可读且 snapshot sweep 不删除。R2.1a 不恢复进程中断的在途作业；重启只装载已完整发布并通过校验的 ready 产物，因此无需恢复在途 pin。
 
-目录／文件沿用 POSIX 0700／0600，Windows ACL 尚未本机验证。单 runtime writer 由 serve 实例锁保证，不支持多个独立服务并发管理相同 snapshots/。当前仍启动装载全部快照，无新增容量策略。查询审计事件（`query.executed`）当前也不落盘。回滚到 R1 内存实现不会自动删除新文件，但不能解析它们；可重新查询，原始事件不受影响。
+目录／文件沿用 POSIX 0700／0600，Windows ACL 尚未本机验证。单 runtime writer 由 serve 实例锁保证；库调用者须保证同一 home 的独占管理，并将同一个 SnapshotStore 传入 ExportStore。当前仍启动装载全部快照，无内存淘汰策略。查询审计事件（`query.executed`）当前也不落盘。回滚到 R1 内存实现不会自动删除新文件，但不能解析它们；可重新查询，原始事件不受影响。
+
+### 共享磁盘配额（R2.2 PR-1）
+
+`snapshots/` 与 `exports/` 共用 **2,000,000,000 字节（2 GB，非 2 GiB）**。可在启动前设置 `SBTD_RUNTIME_DISK_QUOTA_BYTES`；只接受 ASCII `[0-9]+` 正整数，允许前导零，不接受空白、符号、单位、小数、指数或零。非法值明确拒绝启动，不回显原值；启动只解析一次，不热更新。
+
+清扫后按两目录直接子项的普通文件 `st_size` 合计 U；manifest、坏文件、孤立文件与在途 temp 均计入，链接／非普通项和嵌套目录内容不计入。U 达到 L 的 80% 仅记服务端日志，无新增 `meta.warnings`。U > L 时拒绝新建；U == L 允许。本规则不预留未来产物大小，已受理作业可能暂时使占用越限，不因此删除未过期数据。坏／未知文件持续占用时，应人工确认归属或调整上限，不自动清空。
+
+新导出拒绝返回 HTTP **507**，body 恰为 `{"detail":"DISK_QUOTA_EXCEEDED","used_bytes":U,"quota_bytes":L}`（U／L 是整数），无 job、export_id 或本次文件。快照库抛 `disk_quota.DiskQuotaExceeded`，属性 `used_bytes`／`quota_bytes` 相同；未新增 snapshot HTTP handler。已有快照复用、幂等导出重放不新增文件。默认值容量实测校准留给 PR-4。
 
 ## R1 没有的东西（如实声明）
 
@@ -136,9 +145,9 @@ createExport 对非法／缺失请求（包括 snapshot_id 不满足 pattern）�
 - **CSV**：沿 snapshot-bound dataset cursor 取完所有授权数据族，复用 schema **1.1** serializer；BOM、固定列、空值与公式转义不变，不受 HTML 预览／排序／图例限制。
 - **输出安全**：四格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。非 exportable 事件明细不输出，保留省略告警与实际导出数据族计数；不在脱敏前改写指标输入。JPEG／PDF 消费同一已过滤 HTML。
 - **产物与保留**：`$SBTD_RUNTIME_HOME/exports/`，目录 0700、文件 0600（POSIX）。artifact 与 v1 JSON manifest 依次用同目录 temp、fsync、atomic rename 发布；manifest 为 ready 标记。记录 MIME、字节数、SHA-256、固定范围、Panel、数据族行数、renderer／脱敏版本和告警。半成品、坏摘要与未知版本不提供下载；失败只报告安全错误，不泄露本地路径。
-- **清扫**：ready 起默认 **86400 秒（24h）**；启动必扫，可显式调用 `ExportStore.sweep()`，没有后台定时删除器。到期拒绝下载；物理回收在 sweep 时发生。仅删除 `exports/` 内已验证的过期文件，不递归、不跟随链接、不触及 snapshots／audit.db／配置／源 task／报告／handoff／浏览器下载文件；未知、损坏和崩溃遗留 temp 保留且不升级为成品。删除后本进程记 gone，重启后无永久 tombstone，可返回 not found。
+- **清扫**：ready 起默认 **86400 秒（24h）**；启动、新建前及显式 `ExportStore.sweep()` 清扫，没有后台定时器。仅删除已验证且无引用的过期 artifact／manifest 对；共享启动／准入清扫还调用快照所有者及残留 temp 清理，见上方配额说明。未知、损坏和不明归属文件保留，不升级半成品；不触及 audit.db／配置／源 task／报告／handoff／浏览器下载文件。删除后本进程记 gone，重启后可返回 not found。
 
-一个本地 worker 串行生成；取消由作业在取数／发布边界响应，不影响其他业务测试或 Agent。manifest 摘要用于损坏检测，不抵御同机管理员篡改。Snapshot 磁盘容量上限不在本轮实现；Windows ACL、macOS／Windows 视觉及四格式对账仍属 R2.2。撤回本轮代码不迁移或删除原始事件／快照；已下载文件不由服务回收。
+一个本地 worker 串行生成；取消由作业在取数／发布边界响应，不影响其他业务测试或 Agent。manifest 摘要用于损坏检测，不抵御同机管理员篡改。共享磁盘配额见上方 R2.2 PR-1；Windows ACL、macOS／Windows 视觉及四格式对账仍待 R2.2 后续 PR。撤回代码不迁移或删除原始事件／快照；已下载文件不由服务回收。
 
 ### R2.1b：可选 JPEG／PDF renderer（HTTP 与库级）
 
@@ -186,7 +195,7 @@ JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与�
 上述 `RuntimeWarning` 是直接库级生成路径的通知机制；HTTP 预检已决定的降级通过下述 202 `meta.warnings` 通知，作业不再另作比例决定。
 
 HTTP 已按合并的 [contract PR #153](https://github.com/KunoLu/640-skills/pull/153) 开放，并接线 [#154](https://github.com/KunoLu/640-skills/pull/154) 的失败状态及 [#159](https://github.com/KunoLu/640-skills/pull/159) 的重放优先级：先完成访问检查（401／403）及识别重放所需的 400 校验（JSON content type、必需 Idempotency-Key、合法 CreateExportRequest），再查询幂等重放；仅新 JPEG／PDF 请求继续使用与 capabilities 相同的可用性检查。仅依赖可用时，新 JPEG 请求在返回 202 之前，于线程池内调用 `BrowserRenderer.preflight()`，沿用单作业信号量与隔离浏览器；期间固定 snapshot 引用、呈现状态、同一已过滤／脱敏静态 HTML 和当次 caps。2x 安全则正常受理；仅 1x 安全时，202 Envelope 的 `meta.warnings` 包含精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`（保留其他报告告警），`data` 仍恰为 `{"export_id":"exp_…"}`。作业沿用预检选定比例，不另行静默降级；生成时复测若该比例不安全则失败且不发布。PDF 为多页输出，无图像尺寸预检，新请求在依赖可用时返回 202 后生成。下载 MIME 分别为 `image/jpeg`、`application/pdf`，get／download／delete 路由不变。
-保留期内的同 canonical payload／同 Idempotency-Key 重放（包括重启后重新配对）立即返回原 202、原导出 ID 与原 `meta.warnings`，即使 renderer 依赖已不可用、快照已不存在或过期、JPEG 现在会超限，也不重新检查能力、不重复预检或 pin、不创建新作业／ID／文件。同 key 不同 payload 仍返回 400。仅新请求继续按适用的 503 → 404 → 410 → 507 → 422 顺序准入；507 `DISK_QUOTA_EXCEEDED` 已由契约定义，runtime 配额仍待 R2.2 实现，当前无 507 路径。已接受作业的 GET／download 不受 createExport admission 检查影响。导出自身过期并清扫后仍沿用既有 Store 行为：本进程返回旧 ID，GET／download 为 410；已清理的告警 metadata 不额外保留，不重新生成导出。
+保留期内的同 canonical payload／同 Idempotency-Key 重放（包括重启后重新配对）立即返回原 202、原导出 ID 与原 `meta.warnings`，即使 renderer 依赖已不可用、快照已不存在或过期、共享配额超限、JPEG 现在会超限，也不重新检查能力、不重复预检或 pin、不创建新作业／ID／文件。同 key 不同 payload 仍返回 400。仅新请求继续按适用的 503 → 404 → 410 → 507 → 422 顺序准入；507 `DISK_QUOTA_EXCEEDED` 现由共享配额执行。已接受作业的 GET／download 不受 createExport admission 检查影响。导出自身过期并清扫后仍沿用既有 Store 行为：本进程返回旧 ID，GET／download 为 410；已清理的告警 metadata 不额外保留，不重新生成导出。
 
 JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelope、不含额外字段：
 
@@ -221,6 +230,6 @@ PYTHONPATH=sbtd-runtime python3 -m serve [--port 6400] [--no-open] [--home PATH]
 - 前台运行，Ctrl-C 干净退出并移除锁（D6）。
 - 一次性 ticket 只经自动打开浏览器的 URL fragment 交付（默认 `--open`）；`--no-open` 或打开失败时写入 `$SBTD_RUNTIME_HOME/pairing-ticket`（0600）由用户手动配对。ticket 短时（300s）一次性、读后即毁、终端与日志不打印（D7；命令行参数可见风险与残余风险见 ADR 0002 §3）。配对换取 session Bearer＋CSRF（`X-CSRF-Token` 响应头），unsafe 方法要求两者。
 - 审计库不可用（观察关闭／无 audit.db）时服务仍启动，查询响应 Envelope meta 带 `AUDIT_STORE_UNAVAILABLE:*` warning 且 complete=false，不编造数字。
-- R2.0c 起快照落盘 `snapshots/`，默认 TTL 24h，创建告知 expires_at；TTL 内重启仍可读取，启动只清扫本目录无引用过期快照。
+- R2.0c 起快照落盘 `snapshots/`，默认 TTL 24h，创建告知 expires_at；TTL 内重启仍可读取；R2.2 PR-1 起按共享配额规则执行启动及新建前清扫。
 
 跨平台（macOS／Windows）证据与 Host/Origin 负例对账属 R2.2；Windows 上实例锁的活 pid 判定（`os.kill(pid, 0)` 语义）未在本期验证。
