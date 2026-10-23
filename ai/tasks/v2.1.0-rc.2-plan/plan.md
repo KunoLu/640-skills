@@ -72,6 +72,7 @@
 - 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
 - PR 拆分（用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 记录）：PR-1 配额与 507 → PR-2 安全 → PR-3 跨平台 E2E 与对账 → PR-4 性能、校准与收尾；严格串行，每个 PR 首个 commit 回填上一 PR；行状态至 PR-4 收尾前不变。（归因更正（append-only）：用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 按 plan.md 定拆分为 4 个串行 PR，Lord 记录。）
 - PR-1 已 squash-merge——PR [#162](https://github.com/KunoLu/640-skills/pull/162)，merge SHA `83b14baee4e282d4863e693813b14a02c2b126b3`，完成时间 `2026-10-23T14:18:38+08:00`（mergedAt `2026-10-23T06:18:38Z`；git committer 时间一致）；编排方整理，本轮 git log 核实 SHA／committer 时间。R2.2 行状态保持 planned 至 PR-4 收尾。
+- PR-2 已 squash-merge——PR [#163](https://github.com/KunoLu/640-skills/pull/163)，merge SHA `4d29fc5a76482950965d929715d3096e66a57b54`，head `2d2dbb2c18a0e130d8e63a9994fa0c64e7147cc5`；git committer `%cI` 为 `2026-10-23T15:59:11+08:00`（本轮 git log 核实）；GitHub mergedAt 为 `2026-10-23T15:59:12+08:00`（`2026-10-23T07:59:12Z`，编排方整理），两者相差 1 秒，分别记录。R2.2 行保持 planned 至 PR-4。
 
 ### Docs — 后续项 B／C（E 前）
 

@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T15:33:52+08:00'
+updated_at: '2026-10-23T16:02:31+08:00'
 completed_at: null
 ---
 
@@ -172,6 +172,15 @@ PR-1 本地提交证据：
 | PR-2 main／01a1676b-94e2-76ab-b238-5a67bf8c65ad | openai-codex/gpt-6-astra | high | 38 / 77（PRE-COMMIT SNAPSHOT，非 FINAL） | 2026-10-23T14:44:42+08:00；~/.omp/logs/640-rc2-r22-pr2/main/session/2026-10-23T06-21-06-146Z_01a1676b-94e2-76ab-b238-5a67bf8c65ad.jsonl 第 1–200 行；按 assistant 消息／toolCall blocks 计数；后续工具、编辑、提交与回复不含在内 | false | 未核实（运行中） |
 | PR-2 SecurityEvidenceReview／SecurityEvidenceReview.jsonl | kimi-code/k3 | max | 23 / 30（已结束取样，非主会话 FINAL） | 同 session 目录下同 stem 子目录；第 1–94 行，只读安全 review | false | 未核实 |
 | PR-2 RecordsEvidenceReview／RecordsEvidenceReview.jsonl | kimi-code/k3 | high | 44 / 47（已结束取样，非主会话 FINAL） | 同 session 目录下同 stem 子目录；第 1–149 行，只读 records／ADR review | false | 未核实 |
+| PR-2 ping／01a1676a-bfe7 | openai-codex/gpt-6-astra | high | 1 / 0（FINAL） | 编排方整理；运行结束后 session jsonl 重数 | false | pid 161309，0 requests |
+| PR-2 main／01a1676b-94e2 | openai-codex/gpt-6-astra | high | 44 / 83（FINAL） | 编排方整理；运行结束后重数；旧 SNAPSHOT 38/77 保留 | false | 见独立 title-gen 行 |
+| PR-2 SecurityEvidenceReview | kimi-code/k3 | max | 23 / 30（FINAL） | 编排方整理；运行结束后重数 | false | 不混入主会话 |
+| PR-2 RecordsEvidenceReview | kimi-code/k3 | high | 44 / 47（FINAL） | 编排方整理；运行结束后重数 | false | 不混入主会话 |
+| PR-2 fix1／01a16788-c32c | openai-codex/gpt-6-astra | high | 9 / 17（FINAL） | 编排方整理；运行结束后重数 | false | pid 176915，0 requests |
+| PR-2 fix2 ping／01a167ad-99d1 | openai-codex/gpt-6-astra | high | 1 / 0（FINAL） | 编排方整理；运行结束后重数 | false | pid 200750，0 requests |
+| PR-2 fix2／01a167ad-e792 | openai-codex/gpt-6-astra | high | 9 / 15（FINAL） | 编排方整理；运行结束后重数 | false | pid 201112，0 requests |
+| PR-2 main title-gen／pid 161858 | cursor/composer-2.5 → kimi-code/k3-256k | 不适用 | 3 requests（FINAL；不计入 main） | 编排方整理；composer-2.5 ×2（1 success、1 no title），k3-256k ×1 success | false | 无 grok／fallback |
+| PR-2 ping／fix1／fix2 ping／fix2 title-gen | 不适用 | 不适用 | 各 0 requests（FINAL） | 编排方整理；pids 161309／176915／200750／201112 | false | 与上方对应 session 分列 |
 
 主会话按 message.role=assistant 及其 toolCall blocks 计数，只读 model_change／thinking_level_change；后续编辑、校验、提交和最终回复不在该 SNAPSHOT 内。FINAL 由 Lord 在 PR body 报告，不将提交前取样写成最终值。
 
@@ -192,6 +201,11 @@ PR-1 本地提交证据：
 | 2026-10-23T14:44:42+08:00 | in-progress | in-progress | PR-2 模型 PRE-COMMIT SNAPSHOT 与编排方整理的本轮 ping 追加；不改旧 SNAPSHOT／FINAL，不把运行中取样当最终值。 | main session 第 1–200 行 38／77；两位 reviewer 已结束取样见模型表；当前 writer 实际 openai-codex/gpt-6-astra high，无 fallback。 |
 | 2026-10-23T14:53:18+08:00 | in-progress | in-progress | 归因更正（append-only）：14:21:40 「PR-2 strict 开工」行中「四串行 PR 拆分为编排方整理」应为：用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 按 plan.md 定拆分为 4 个串行 PR，Lord 记录；原行逐字保留。 | 编排方整理：本文件 2026-10-23T12:40:31+08:00 planned→in-progress 事件；ai/tasks/v2.1.0-rc.2-plan/plan.md:73。 |
 | 2026-10-23T15:33:52+08:00 | in-progress | in-progress | 归因更正（append-only）：d6f6419 基线 :202（HTTP／进程 seam）与 :227（§11）两处操作指令的归因应为「编排方整理」（Lord 的 prompt 指令），并非用户在群内作出的指示；原行逐字保留。 | Reviewy NOT CLEAN @ d6f6419（B1）；Lord 2026-10-23 15:32 +08:00 确认；append-only. |
+| 2026-10-23T16:02:31+08:00 | in-progress | in-progress | PR-2 #163 squash-merge 回填（编排方整理）；R2.2 继续开放。 | https://github.com/KunoLu/640-skills/pull/163；head 2d2dbb2c18a0e130d8e63a9994fa0c64e7147cc5；merge SHA 4d29fc5a76482950965d929715d3096e66a57b54；本轮 git log -1 --format='%H %cI' 4d29fc5 核实 %cI 2026-10-23T15:59:11+08:00；GitHub mergedAt 2026-10-23T15:59:12+08:00（07:59:12Z）为编排方整理，两时刻相差 1 秒，不合并。 |
+| 2026-10-23T16:02:31+08:00 | in-progress | in-progress | PR-2 合并前检查与合并后分支删除回填。 | 编排方整理：Lord 15:59 +08:00 room message／operator verification；head 2d2dbb2，OPEN、MERGEABLE、CI 11/11（run 39919059914）；合并后远端 branch deleted，返回 Branch not found；本轮不请求远端。 |
+| 2026-10-23T16:02:31+08:00 | in-progress | in-progress | PR-2 Reviewy CLEAN 与 FINAL 模型回填；旧 SNAPSHOT 不改。 | 编排方整理：Reviewy CLEAN @ 2d2dbb2，model recount confirmed；运行结束后 session jsonl 计数及 title-gen 见新增 FINAL 表行，全部 resolvedModelIsFallback false。本轮未读取历史 session，不冒称独立重数。 |
+| 2026-10-23T16:02:31+08:00 | in-progress | in-progress | 归因更正（append-only）：本次编辑前 4d29fc5 文件第 25 行（TDD seams）、第 39 行（project-validation 本地命令）、第 103 行（真实进程 smoke／worker seam）、第 133 行（独立 review／task slug 路径）四处旧归因应为「编排方整理」，不是群内用户陈述；原行逐字保留。 | Lord 的 prompt 指令；CodeX 提出后 Lord 于 2026-10-23 15:50–15:59 +08:00 间确认，具体分钟编排方未获知。本轮按内容定位并核实编辑前行号；第 203 行已有 15:33:52 更正，本事件不重复改写。 |
+| 2026-10-23T16:02:31+08:00 | in-progress | in-progress | PR-3 strict 开工与本轮绑定追加（编排方整理）；历史 frontmatter／事件不重写。 | 本轮明确授权 /workspace/640-skills-r22-pr3、feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation，入口 HEAD 4d29fc5a76482950965d929715d3096e66a57b54，工作区干净；延续既有 TaskStore 兼容限制，只更新指定 Markdown，不声称 helper rebind／自动恢复，不写 active／index。未完整调用 grill-with-docs：范围与验收已明确，无领域歧义；仅本地提交。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -283,3 +297,9 @@ git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/gold
 3. `docs(task): record R2.2 PR-2 security verification` — 仅本 task；SHA 由最终输出给出，避免自引用。
 
 生产代码未改；contract／schema／PRD／golden 未改，无新契约变更请求。既存 statistics/query 超配额通用 500 仍为 **待用户决定（contract PR）**，本轮未处理。PR-3 继续跨平台 CI（macOS／Windows）、用户 Mac 视觉／字体 AC-33／AC-62 与四格式／Panel 对账 AC-51／AC-45；PR-4 继续 §18 性能、配额容量校准与 R2.2 收尾。浏览器启动参数同机可见的残余窗口不消除。R2.2 task in-progress／completed_at null、plan R2.2 planned 保持不变。只交付三个本地 commits；无 push／PR／评论／merge／rebase／amend，无其他 worktree／全局配置写入。恢复边界为本 worktree 提交内容，不宣称 TaskStore helper 或自动恢复成功。
+
+## R2.2 PR-3 开工边界（追加）
+
+- ADR 0002 §3「R2.2 PR-2 验证注记」范围补充记在本 task，不改 ADR：缓解 1「终端不打印 ticket URL」仅由 `test_serve.py:313` 的 `--no-open` 路径覆盖；浏览器自动打开路径未执行，不能推广为该路径的测试结论。本次 records-only commit 不新增或扩展测试。
+- Book Gate Plan：DDD not-needed（未完整 grill、无领域歧义）；DDIA not-needed（不改持久化／schema／异步机制）；legacy/refactoring not-needed（计划不改生产代码，若发现 blocker 则先加载）；TDD／ponytail 已加载，seams 为真实 serve CLI／loopback API／四格式产物及 ReportDocument，按既成实现 characterization 如实记录；独立 review／Code Readability pending；project-validation 已加载，原生 raw 与同 stem 中文报告；release-readiness pending（新增原生 CI jobs，验证后检查证据与运行边界）。无新产品行为，不另立 BDD runner。
+- 本轮仅 AC-33／62 平台 CI 与 AC-51／45 对账。macOS／Windows evidence pending CI；用户 Mac 视觉／字体仍待 D9 真机确认。statistics/query 超配额 507／500 仍为「待用户决定（contract PR）」；performance §18、配额校准与关闭 R2.2 归 PR-4。冻结 contract／schema／PRD／golden；plan 第 22 行 planned、task in-progress 不变。
