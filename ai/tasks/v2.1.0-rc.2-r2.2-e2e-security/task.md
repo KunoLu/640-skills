@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T16:52:17+08:00'
+updated_at: '2026-10-23T17:48:01+08:00'
 completed_at: null
 ---
 
@@ -214,6 +214,12 @@ PR-1 本地提交证据：
 | 2026-10-23T16:52:17+08:00 | in-progress | in-progress | PR-3 CI 门与真实证据来源追加（编排方整理的验收）：新增原生 jobs 必须执行，不允许条件绕过或 continue-on-error。 | runtime-e2e-macos／runtime-e2e-windows；预期 11+2=13 checks，原 11 个 job 实例配置逐项保持。安装失败强制失败并保留证据；安装后 capability 真不可用时记录 unavailable／原因且验证 503，不能算四格式通过。无 push／PR／评论／merge，等待 operator 后续 push 后 CI。 |
 | 2026-10-23T16:52:17+08:00 | in-progress | in-progress | 引用注记（append-only）：开工边界中的 test_serve.py:313 是 4d29fc5 基线行号；稳定符号为 PairingTests.test_pair_once_only_and_ticket_never_in_output，本轮 helper 编辑后声明位于第 317 行；旧注记原样保留。 | ReconciliationRecordsReview 已独立核实 313→317；覆盖仍仅 --no-open，浏览器自动打开路径未测。不是新增归因更正，不改写既有状态事件。 |
 | 2026-10-23T16:52:17+08:00 | in-progress | in-progress | PR-3 模型 PRE-COMMIT SNAPSHOT 追加，不作 FINAL；历史记录与旧计数不改。 | 2026-10-23T16:50:06+08:00 main jsonl 第 1–405 行 76/142，astra high／fallback false；两位 kimi-code/k3 max reviewer 取样见模型表；ping 为编排方整理。 |
+| 2026-10-23T17:35:29+08:00 | in-progress | in-progress | PR-3 fix1 strict 绑定及 CI 失败记录（编排方整理；Lord 2026-10-23 17:08 +08:00 room message）。原 11 checks passed；runtime-e2e-macos 与 runtime-e2e-windows failed，未达到 13/13。 | run 39928738092 on 1f5145417d3b146de8f9079ed6badeacbcae9e3d；本地读取 ci-artifacts-1 两份原生 JSON 与 ci-failed-1.log。授权根 /workspace/640-skills-r22-pr3、分支 feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation，入口 SHA 匹配且工作树干净；沿用 PR-3 追加绑定与 Markdown 记录边界，不改历史 frontmatter branch／mode_source／事件，不声称 TaskStore helper 成功。 |
+| 2026-10-23T17:35:29+08:00 | in-progress | in-progress | macOS 根因与修复：临时 home 经过 /var → /private/var，生产 symlink 拒绝正确；只在 E2E fixtures 解析真实路径。 | CI macOS-26.6.2-arm64／Python 3.12.10，0.226s，StoreError: runtime home symlink is refused。runtime_e2e.py、test_export_reconciliation.py、test_serve_signals.py 的 runtime home 使用 Path.resolve；driver 清理检查使用同一 resolved home。Linux symlink TMPDIR＋真实 Chromium 实跑通过；macOS 待 CI 复跑。 |
+| 2026-10-23T17:35:29+08:00 | in-progress | in-progress | Windows 根因与修复：Python 3.12 没有 os.fchmod；event_store 的 chmod 异常发生在 fdopen 前，unlink 打开文件造成 WinError 32，遮蔽 AttributeError；facade 同型代码一并修复。 | CI Windows Server 2025／Python 3.12.10，6.36s，spool/.ready.* 文件占用。两个 callsite 改为 fdopen 上下文内设置权限：有 fchmod 则使用 fd，否则 path chmod；写入前设 0600、异常关闭后才 unlink。新增 4 tests red→green，真实 append/replay／config 持久化及权限失败不发布、fd 在 unlink 前关闭；Windows 待 CI 复跑。 |
+| 2026-10-23T17:35:29+08:00 | in-progress | in-progress | fix1 本地验证完成；driver 失败证据新增完整 traceback，未转换失败为 PASS；R2.2 保持 in-progress。 | 最终 runtime 402 tests／392 passed／10 既有 skipped／0 failures，golden 61 OK，定向 4 与子集 37 OK；Linux 普通及 symlink TMPDIR 的 real Chromium 四格式 E2E 通过。关闭下载端口负例 exit 1，JSON 与 MD 均保留完整 traceback。7 changed Python ruff check／format --check 通过；冻结目录 stat 空。macOS/Windows 待 CI 复跑；N/N=13/13 gate 未完成。 |
+| 2026-10-23T17:48:01+08:00 | in-progress | in-progress | fix1 独立 review 闭环与最终证据追加；上方 runtime-full-final 标签保留，其最终性由本事件补充，不改旧行。 | PrivateWriteReview 发现四个新测试在原本无 fchmod 的平台会被 mock teardown 二次 delattr 破坏；已改为 pop＋仅原属性存在时 addCleanup 恢复，复审 correct／无 blocker。进入测试前即无 fchmod 的 4-case smoke 通过；最终 runtime-full-review-closed 为 402 tests／392 passed／10 既有 skipped／0 failures，128.687s；ruff 7 文件通过。NativeFlowReview 静态核查原生流程，无 blocking finding；不代表 CI。 |
+| 2026-10-23T17:48:01+08:00 | in-progress | in-progress | fix1 本地 Commit A 已创建，Commit B 仅追加本 task 证据；macOS/Windows 待 CI 复跑，13/13 是目标门而非本轮结果。 | A 34d26a912451b1c69e2cc107c0ecf4938284a2ed：fix(runtime): portable 0600 writes and resolved native E2E temp homes (R2.2 PR-3 fix1)，7 Python files；44 个提交 runtime Python blob 与最终 full raw 哈希逐一一致，是内容身份重验证，不是提交后 CI。无 push／PR／评论／merge／rebase／amend／force；R2.2 status in-progress，completed_at null。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -392,3 +398,115 @@ git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/gold
 1. `3da831f6926b8fa0031ab18b9c5551cfff9c59e6` — `docs(plan,task): backfill #163 merge and FINAL counts; scope and attribution notes (R2.2 PR-3 commit 1)`；仅 plan.md／本 task。ADR scope note 选择追加在本 task，未改 ADR 文件。
 2. `6649a5e322871fb9683095395fcff4294ca70e68` — `test(runtime): native macOS/Windows E2E and four-format reconciliation; fix Ctrl-Break cleanup`；8 文件：validation.yml、serve.py、test_serve.py、test_serve_signals.py、test_export_reconciliation.py、runtime_e2e.py、r2.2-native-e2e-scenarios.md、install-and-use.md。
 3. `docs(task): record R2.2 PR-3 E2E/reconciliation verification` — 仅本 task；SHA 由最终输出提供，避免自引用。R2.2 保持 in-progress，plan 第 22 行保持 planned；没有 push／PR／评论／merge／rebase／amend／force。
+
+## R2.2 PR-3 fix1（编排方整理，2026-10-23）
+
+### 范围、Book Gate 与实现边界
+
+未完整调用 grill-with-docs：本轮是明确的两个平台 blocker 与失败证据补充，无领域歧义。strict 沿用原 task；唯一 writer／验证 controller 为主会话。未修改 contracts、PRD、schema、golden、CI job 条件、skip 或业务断言；不操作其他 worktree／全局配置，不 push／PR／评论／merge／rebase／amend／force。
+
+| Gate | 客观触发／阶段 | fix1 证据／状态 |
+|---|---|---|
+| DDD | 完整 grill／领域歧义，需求前 | not-needed；无完整 grill，无新领域规则。 |
+| Legacy Change Safety | 既有持久化 portability bug，生产编辑前 | characterized；CI 原始失败＋本地缺失 fchmod 的 4 个 red，保留 symlink／ownership／0600／原子写／异常传播。 |
+| DDIA Data Design | 私有 spool／JSON 写入失败路径，设计前 | confirmed；所有权、格式、commit／replay 顺序不变；权限先于数据，关闭先于 replace／unlink；无迁移／重试／新锁。 |
+| Refactoring | 既有生产代码编辑前 | proceed（normal）；无重构需要，复用 fdopen 和既有 chmod；不引入跨模块 helper 或依赖。 |
+| TDD | 缺失平台 API 与清理边界 | 4 tests 首轮 AttributeError red；最终 4 passed。测试 seam 为真实 EventStore.append/replay 和 RuntimeFacade.set_observation_enabled；仅平台 API 缺失与 chmod 拒绝用 mock。 |
+| Ponytail／可读性 | 实际 smoke 后 | Lean already；两个短条件分支，无抽象层；显式上下文所有权，无吞掉权限错误。测试检查真实写入、发布 mode、清理顺序与失败副作用。 |
+| project-validation | 本地验证 | passed（Linux 指定范围）；见下表及 raw。 |
+| 独立 review | 安全写入／跨平台路径，check | 已启动 PrivateWriteReview 与 NativeFlowReview，只读且不运行测试；最终结论另追加。 |
+| Release Readiness | runtime portability，验证后 | blocked（原生 CI 未复跑）；本地修复交付不是 13/13 或发布就绪。 |
+
+`event_store._write_ready` 与 `facade._write_json` 是生产代码中仅有的两处 `os.fchmod`；源码调用方分别为 append 与 _save_document。LSP references 返回 No language server found，改用源码调用点分析，不宣称 LSP/typecheck 通过。原有 POSIX 0600 路径保持 fd chmod，Windows fallback 不冒充 NTFS ACL 证明；权限异常仍传播。新增 success tests 删除 os.fchmod，检查真正的 append/replay／config 可读、路径 chmod 0600 被执行、POSIX 可观察 mode；failure tests 令临时文件 chmod 拒绝，检查无发布、fd 在实际 unlink 入口已经关闭。
+
+`runtime_e2e.py` 仅增加 resolved home 与 traceback；`traceback.format_exc()` 写入 JSON 的 traceback 字段，同时放入 MD「失败、修复与复跑」代码块，原一行 error 保留。两个内嵌测试的 runtime home 同步 resolve；PDF 抽取临时目录只是 pdftotext 输入，不作为 runtime home，无需改变生产拒绝规则。
+
+显式 changed-file ruff gate 暴露旧 facade／facade test 的 UTC alias、import 顺序与格式问题；仅在本次 7 个 changed Python 内使用 ruff format，实际重排 3 个文件，并修正 UTC alias／import 空行，随后全量重跑。不扩大到全仓格式化；失败报告原样保留。
+
+### 原生路径静态核查
+
+- macOS：三处 runtime temp home 都 resolve；生产 _path_has_symlink 不改；PDF-only temp 路径不进入 Store。
+- Windows：两处 fchmod 均 capability-guarded；getuid 检查原有 hasattr guard；O_DIRECTORY／目录 fsync 与 killpg 原有 POSIX guard，无新增 POSIX-only call。
+- CTRL_BREAK：ServeProcess 与 BreakShutdownTests 均使用 CREATE_NEW_PROCESS_GROUP；发送 CTRL_BREAK_EVENT，serve 既有 SIGBREAK default_int_handler／finally 清锁不变。Linux 仅模拟信号生命周期，不冒充 Windows 控制台证据。
+- Playwright：两 native jobs 固定 Python 3.12.10 与 requirements；install --only-shell chromium 将 PLAYWRIGHT_BROWSERS_PATH 指向本次 home/browsers；renderer 按 pinned revision 和 Darwin arm64／Windows exe 路径查找，worker 使用同一 browser 根。
+- 编码与端口：job PYTHONUTF8=1；driver 安装输出、ServeProcess、signal test 用 UTF-8；默认端口先探测，占用时显式 --port；不改变生产端口策略。
+- 文件锁／清理：seed EventStore 在 finally close；HTTP 连接读取后 close；serve communicate／kill 等待先于 TemporaryDirectory 退出；browser context 的 browser.close 与 worker 清理保持原实现。两轮真实 Linux smoke 确认临时 home 删除、serve.lock 移除、端口关闭、退出 0。
+- gate：未改 validation.yml，未新增 if／continue-on-error／skip／neutral；既有 artifact if: always() 仅保留失败证据，不绕过执行。renderer 真不可用才按原设计记录 unavailable＋503；serve／pair／API／HTML／CSV 不可降级。
+
+### 本地验证命令与结果
+
+环境 Linux 6.12.94+／x64，Python 3.13.5。Evidence Source developer-local，Source Revision dirty（入口完整 SHA 1f5145417d3b146de8f9079ed6badeacbcae9e3d＋当轮工作树），Evidence Publication local-only；原生 subprocess 保存 command／stdout／stderr／exit／时间／worktree／环境及 44 个 runtime Python 文件哈希。rtk skipped-for-report；不以包装器缓存证明执行。报告为 ignored reports/fix1-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<YYYYMMDDTHHMMSSffffff>.json 与同 stem 九节中文 .md，失败轮未覆盖、不暂存。
+
+命令公共环境：`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests RUFF_NO_CACHE=true`。下列 `P` 是既有隔离环境的实际 python3：`ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3`；未安装全局依赖。`CHANGED` 恰为 `sbtd-runtime/event_store.py sbtd-runtime/facade.py sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_export_reconciliation.py sbtd-runtime/tests/test_serve_signals.py sbtd-runtime/tests/test_event_store.py sbtd-runtime/tests/test_facade_registration.py`。
+
+```sh
+python3 -B -m unittest \
+  test_event_store.EventStoreTests.test_append_without_fchmod_preserves_private_spool \
+  test_event_store.EventStoreTests.test_permission_failure_closes_spool_before_cleanup \
+  test_facade_registration.FacadeRegistrationTests.test_observation_without_fchmod_persists_private_config \
+  test_facade_registration.FacadeRegistrationTests.test_permission_failure_closes_config_before_cleanup -v
+python3 -B -m unittest test_event_store test_facade_registration -v
+python3 -B sbtd-runtime/tests/runtime_e2e.py --output /tmp/r22-pr3-fix1-e2e
+$P -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /tmp/r22-pr3-fix1-e2e
+TMPDIR=<本轮临时目录/link，指向同目录/real> $P -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /tmp/r22-pr3-fix1-e2e-symlink
+PLAYWRIGHT_DOWNLOAD_HOST=http://127.0.0.1:9 $P -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /tmp/r22-pr3-fix1-e2e-negative
+python3 -m unittest sbtd-runtime/tests/test_golden_contracts.py
+python3 -B -m unittest discover -s sbtd-runtime/tests
+ruff check $CHANGED
+ruff format --check $CHANGED
+git diff --check
+git diff origin/main --stat -- sbtd-runtime/contracts docs/prd
+```
+
+| raw label／本轮 | 结果 | unittest／墙钟秒 |
+|---|---|---|
+| portability-red | 4 tests／4 AttributeError errors，未改生产代码 | 0.130／0.380 |
+| portability-green（首次，保留失败 label） | 3 passed／1 failure：测试错误期望 append 后仍保留 ready；实际成功提交会消费 spool。改为发布时检查 mode，不修改生产去保留文件 | 0.117／0.377 |
+| portability-green-corrected | 4 passed | 0.126／0.373 |
+| private-write-subset | 37 passed | 3.628／3.864 |
+| native-linux | exit 0，passed-with-renderer-unavailable；真实 serve／pair／API／HTML／CSV 通过，系统 python3 无 Playwright，不计四格式通过 | driver 4.824／4.967 |
+| native-linux-renderer | exit 0，四格式 real Chromium，13 Panels／PDF text／CJK／3-case suite／清理通过 | driver 23.841／24.056 |
+| native-symlink-renderer | exit 0，symlink TMPDIR，同样四格式／3 cases／清理通过 | driver 23.006／23.221 |
+| traceback-negative | 预期 exit 1；关闭的下载端口，安装失败不转 PASS；另用 python3 断言 JSON traceback 含 stack／exercise 且完整出现在 MD | driver 4.638／4.841 |
+| golden | 61 tests，OK | 0.316／0.415 |
+| runtime-full | 402 tests／392 passed／10 既有 skipped，0 failures | 130.277／130.603 |
+| ruff-check／ruff-format | 初轮 exit 1；3 lint 问题／3 files would be reformatted，失败保留 | —／0.020、0.011 |
+| ruff-format-apply／ruff-check-final | 3 files reformatted；剩余 import 空行 I001，exit 1，已修正且保留失败 | —／0.011、0.010 |
+| portability-final | 加强 chmod fallback 与 unlink 前关闭断言后，4 passed | 0.125／0.350 |
+| private-write-subset-final | 37 passed | 3.479／3.705 |
+| runtime-full-final（Final Full Rerun） | 402 tests／392 passed／10 既有 skipped，0 failures；基线 398，新增 4 | 139.045／139.377 |
+| ruff-check-final-closed／ruff-format-final-closed | All checks passed；7 files already formatted，exit 0 | —／0.013、0.009 |
+| diff-check-final／frozen-paths | exit 0；contracts／docs/prd stat 为空 | —／0.006、0.002 |
+
+最终 full raw stem：`reports/fix1-runtime-full-final-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T173255305180`。driver 原生 raw／同 stem MD：`/tmp/r22-pr3-fix1-e2e/runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T092716Z`；symlink 轮在 `/tmp/r22-pr3-fix1-e2e-symlink/`，stem 时间 `20261023T092740Z`；负例在 `/tmp/r22-pr3-fix1-e2e-negative/`，stem 时间 `20261023T092824Z`。每份 driver 记录逐请求 URI／状态，正向含配对、snapshot query、capabilities、四格式创建／轮询／下载；不包含认证值。
+
+BDD traceable：复用既有 R1.1／R1.2a 私有持久化与 R2.2 native scenarios，不新增产品规则／runner。Cross-repo context not-needed；API Contract verified（冻结目录无变化）；真实 E2E backend-only + real renderer／Mock Strategy none；普通 suite 可选 renderer 仍为既有 stub。未改 UI，Chrome/Playwright MCP、Maestro 不需要；实际 Playwright Python／Chromium 已执行。原 full-suite 10 skips 如实保留，未新增 skip，native driver 的 3 cases 无 skip。
+
+### 剩余风险与恢复边界
+
+**macOS/Windows 待 CI 复跑。** 必须由 operator 后续 push 后的原生 CI 达到全部 N/N（当前 13/13），不能用本地 Linux、API 删除模拟或代码审查替代。原生 console signal／NTFS 文件锁、浏览器下载、平台 CJK 字体仍由该 runner 证明；Windows chmod 不是 ACL 证明。本轮未发现需要 contract／PRD／schema／golden 修改的新问题；历史 statistics/query 超配额 507／500 的 contract PR 边界仍保留，不处理。无迁移、数据清理或发布；可撤回代码提交恢复旧行为，不保证旧版在 Windows Python 3.12 可运行。临时 smoke symlink／home 已清理，保留本轮失败与成功 reports；不声称 helper lifecycle 或自动恢复成功。
+
+### fix1 独立审查闭环与最终提交证据（17:48 +08:00 追加）
+
+PrivateWriteReview：生产改动正确；初轮两项 P1 分别定位 event-store／facade 的 regression test：`patch.object(os, "fchmod", create=True)` 内删除 mock 属性，当原平台没有该属性时，mock teardown 还会 delattr 导致 AttributeError。四个测试已用 `os.__dict__.pop("fchmod", None)` 与条件 `addCleanup(setattr, ...)` 修正；Linux 恢复原 API，原本缺失的平台保持缺失。复审 correct／confidence 0.9，最终 SIM117 合并 assertRaisesRegex 上下文后的关闭顺序亦复核，无 remaining blocker。NativeFlowReview：三处 resolved home、两处 private write、guarded POSIX calls、CTRL_BREAK、Playwright 安装与 lookup、UTF-8、端口及清理链全部静态核查，无 blocking finding；只读审查，不运行 tests／lint／formatter。
+
+追加验证命令：常规定向 4-case 命令及 `python3 -B -m unittest test_event_store test_facade_registration -v` 重跑；另用 `python3 -B -c <script>` 在 suite 载入前执行 `os.__dict__.pop("fchmod", None)`，运行同四个 case，随后断言属性仍不存在，完整脚本保存在 portability-initially-absent-final raw.command。它证明“原本没有 API”时测试自身不会在 teardown 报错，仍不是 native Windows 证据。
+
+| raw label | 实际结果 | unittest／墙钟秒 |
+|---|---|---|
+| portability-reviewed | 4 passed | 0.135／0.364 |
+| portability-initially-absent | 4 passed；suite 前已无 fchmod | 0.105／0.314 |
+| private-write-subset-reviewed | 37 passed | 3.362／3.589 |
+| runtime-full-reviewed | 402 tests／392 passed／10 skipped，OK | 129.697／130.018 |
+| ruff-check-reviewed | exit 1，删去 del 语句后暴露两个 SIM117；合并相邻 with，不改异常断言或执行顺序，失败原样保留 | —／0.024 |
+| ruff-check-review-closed／ruff-format-review-closed | All checks passed；7 files already formatted，exit 0 | —／0.013、0.010 |
+| portability-initially-absent-final | 4 passed；最终上下文形态 | 0.120／0.355 |
+| runtime-full-review-closed（本轮最终 Final Full Rerun） | 402 tests／392 passed／10 既有 skipped／0 failures | 128.687／128.999 |
+
+最终 raw／同 stem 中文汇总为 `reports/fix1-runtime-full-review-closed-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T174451931254.{json,md}`。前面 runtime-full-final／runtime-full-reviewed 等 label 原样保留，不能作为后续 test 编辑后的最终结果。生产修复及 driver 行为未因 review 改变；两次真实 Chromium E2E 的证据仍按其原始 SHA／dirty 状态保留。
+
+`python3 -B -c <records-check>` 实际执行 yaml.safe_load，确认 frontmatter 除 updated_at 之外逐字段不变、原 394 行除 updated_at 无删除／重写、所有旧状态事件逐字保留、新增文本无禁用归因措辞、validation.yml 与入口 blob 一致；完整脚本在 records-check raw.command。`git diff --check` 通过；`git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/golden` 为空。44 个 runtime Python 提交 blob SHA-256 与最终 full raw.hashes 一致；不把提交前测试改称提交后执行。
+
+Commit A：`34d26a912451b1c69e2cc107c0ecf4938284a2ed`，`fix(runtime): portable 0600 writes and resolved native E2E temp homes (R2.2 PR-3 fix1)`；文件为 event_store.py、facade.py、tests/runtime_e2e.py、tests/test_event_store.py、tests/test_export_reconciliation.py、tests/test_facade_registration.py、tests/test_serve_signals.py，均在 sbtd-runtime/ 下。Commit B：`docs(task): append native CI fix1 evidence and pending rerun (R2.2 PR-3)`，只含本 task，SHA 由最终输出给出避免自引用。全部显式路径暂存，reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env* 不暂存。
+
+Release Readiness Review 保持 blocked：本地指定范围已通过，原生 N/N=13/13 仍待 operator push 后 CI。上方「当前 13/13」仅指当前目标检查总数，不是通过结果。真实 Windows 控制台信号／Job Object 清理、macOS 字体与 CDP glyph family、CDN 下载和端口竞争仍需原生证据；没有据此弱化 gate 或修改契约。Final Test Report／Run Summary MD generated；Targeted Rerun／Affected Subset Rerun／Final Full Rerun passed（Linux）；Evidence Publication local-only。
