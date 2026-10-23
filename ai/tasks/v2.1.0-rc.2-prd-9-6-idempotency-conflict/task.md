@@ -15,7 +15,7 @@ completed_at: '2026-10-23T10:48:16+08:00'
 
 ## 用户决定与任务身份
 
-任务来源：用户 2026-10-23「640 step 2: PRD §9.6 PR, option A」启动指令。用户于 **2026-10-22 23:23／23:24 Asia/Shanghai** 选择 option A（来源：编排方转述）：createExport 同 key 不同 payload 返回 HTTP 400；snapshot 写成待定，未实现 HTTP 入口，等 POST 路由实现时另开 PRD PR 决定；refresh／ingest 保留 409。
+任务来源：用户 2026-10-23「640 step 2: PRD §9.6 PR, option A」启动指令。用户于 **2026-10-22 23:23／23:24 Asia/Shanghai** 选择 option A（群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）：createExport 同 key 不同 payload 返回 HTTP 400；snapshot 写成待定，未实现 HTTP 入口，等 POST 路由实现时另开 PRD PR 决定；refresh／ingest 保留 409。
 
 入口工作根 `/workspace/640-skills-s2prd`，分支见 frontmatter；HEAD 与 origin/main 均为 `de97926811410e7d61d846fc8e95ddaa0738bfbf`（PR #159 squash-merge）。入口 `git status --short` 为空。第 1 步 [PR #160](https://github.com/KunoLu/640-skills/pull/160) 已 OPEN、under review（来源：编排方转述；本会话不请求远端核验），满足 Lord 要求的开工前提；不读取或修改其 worktree。
 
@@ -94,3 +94,4 @@ completed_at: '2026-10-23T10:48:16+08:00'
 | 2026-10-23T10:45:17+08:00 | planned | in-progress | 第 2 步曾于 2026-10-23 09:46 +08:00 提前开工准备，09:47 按 Lord 安排叫停（未运行 omp、未留分支），偏差已记于 PR #160 的 task.md；本次在 #160 开出后正式开工。 | 入口 HEAD＝origin/main de97926811410e7d61d846fc8e95ddaa0738bfbf（PR #159 squash-merge）；#160 OPEN、under review（来源：编排方转述）；分支匹配、工作区干净、路径／ignore 已核对 |
 | 2026-10-23T10:46:53+08:00 | in-progress | checking | §9.6 单段最小修改完成，runtime／contract／既有测试覆盖已定位，进入文档解析、范围及提交检查 | createExport 400；snapshot 待定；refresh／ingest 409；HTTP 测试已有 :321–323 的 400 断言；golden 61 passed |
 | 2026-10-23T10:48:16+08:00 | checking | done | 本地文档交付收口：PRD 已提交；指定 sanity、Markdown／YAML smoke、范围检查与逐项决定复核通过；本记录随第二个本地 commit 保存，不等同 PR／合并／发布 | PRD commit d4cf709d7682ec61ec52c5b3710012b529d87ee9；golden 61 passed；diff --check clean；runtime/contracts diff empty；仅两份授权文件；PRE-COMMIT SNAPSHOT 11 assistant／42 toolCall |
+| 2026-10-23T11:33:12+08:00 | done | done | 归因更正：PRD §9.6 归因现为「（用户 2026-10-22 23:23／23:24 +08:00 群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）」，第 18 行摘要同步为「选择 option A（群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）」；依据 Reviewy NOT CLEAN @ 8f9045c（blocker B1）及 Lord 2026-10-23 11:18 +08:00 裁定，第二次时间按 Lord 记录为 23:24；PRD 已移除「编排方转述」；既有事件保持不变（append-only）；title-gen note deferred。 | rg -n '编排方转述' docs/prd：零命中，exit 1；golden 61 tests OK；git diff --check clean；diff vs 8f9045c 仅 PRD 第 845 行子串、task.md 第 18 行括注及本追加行；fix1 PRE-COMMIT SNAPSHOT（非最终计数）：2026-10-23T11:33:12+08:00，session 日志 /home/box/.omp/logs/640-rc2-s2prd96/run-fix1/session/2026-10-23T03-31-38-835Z_01a166d0-70d3-77d9-ae2d-7dd4493b66dd.jsonl 第 1–48 行，model_change=openai-codex/gpt-6-astra，thinking_level_change=high，resolvedModelIsFallback=false，assistant messages=6，toolCall blocks=18；title-gen：未知 |
