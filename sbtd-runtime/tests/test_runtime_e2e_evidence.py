@@ -92,6 +92,60 @@ class FontEvidenceTests(unittest.TestCase):
             )
             self.assertEqual(evidence["fonts"]["jpeg"]["platform_fonts"], fonts)
 
+    def test_renderer_accepts_localized_family_with_cjk_postscript_name(self) -> None:
+        self.assertEqual(
+            runtime_e2e.verified_cjk_families(
+                [
+                    {
+                        "familyName": "蘋方-簡",
+                        "postScriptName": "PingFangSC-Semibold",
+                        "glyphCount": 11,
+                    }
+                ]
+            ),
+            ["蘋方-簡"],
+        )
+
+    def test_renderer_rejects_non_cjk_family_and_postscript_names(self) -> None:
+        fonts = [
+            {"familyName": "Menlo", "postScriptName": "Menlo-Bold", "glyphCount": 8},
+            {
+                "familyName": "Helvetica Neue",
+                "postScriptName": "HelveticaNeue-Bold",
+                "glyphCount": 1,
+            },
+        ]
+        with self.assertRaisesRegex(
+            AssertionError, "no verified CJK font produced heading glyphs"
+        ):
+            runtime_e2e.verified_cjk_families(fonts)
+
+    def test_renderer_rejects_empty_fonts_and_zero_cjk_glyphs(self) -> None:
+        for fonts in (
+            [],
+            [
+                {
+                    "familyName": "PingFang SC",
+                    "postScriptName": "Menlo-Bold",
+                    "glyphCount": 0,
+                }
+            ],
+            [
+                {
+                    "familyName": "蘋方-簡",
+                    "postScriptName": "PingFangSC-Semibold",
+                    "glyphCount": 0,
+                }
+            ],
+        ):
+            with (
+                self.subTest(fonts=fonts),
+                self.assertRaisesRegex(
+                    AssertionError, "no verified CJK font produced heading glyphs"
+                ),
+            ):
+                runtime_e2e.verified_cjk_families(fonts)
+
 
 class NativeEvidenceTests(unittest.TestCase):
     def test_redacts_before_truncating_and_handles_overlapping_values(self) -> None:

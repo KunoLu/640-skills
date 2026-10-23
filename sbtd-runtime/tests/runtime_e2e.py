@@ -104,14 +104,21 @@ def _capture_logs(
     assert not ticket_url, "pairing URL leaked"
 
 
+def _cjk_name_matches(name: str) -> bool:
+    return any(
+        marker in name.lower()
+        for marker in ("cjk", "pingfang", "hiragino", "yahei", "simsun", "unicode")
+    )
+
+
 def verified_cjk_families(fonts: list[dict], *, required: bool = True) -> list[str]:
     cjk = [
         font["familyName"]
         for font in fonts
         if font["glyphCount"] > 0
         and any(
-            marker in font["familyName"].lower()
-            for marker in ("cjk", "pingfang", "hiragino", "yahei", "simsun", "unicode")
+            _cjk_name_matches(font.get(field, ""))
+            for field in ("familyName", "postScriptName")
         )
     ]
     if required:
@@ -186,6 +193,19 @@ def browser_font_check(
                 record["platform_fonts"] = session.send(
                     "CSS.getPlatformFontsForNode", {"nodeId": node["nodeId"]}
                 )
+                record["font_summary"] = [
+                    {
+                        "familyName": font.get("familyName", ""),
+                        "postScriptName": font.get("postScriptName", ""),
+                        "glyphCount": font["glyphCount"],
+                        "matched_fields": [
+                            field
+                            for field in ("familyName", "postScriptName")
+                            if _cjk_name_matches(font.get(field, ""))
+                        ],
+                    }
+                    for font in record["platform_fonts"]["fonts"]
+                ]
                 record["status"] = "recorded"
             # Collect every document first, including PDF if JPEG's gate fails.
             assert_font_records(records, panels)
