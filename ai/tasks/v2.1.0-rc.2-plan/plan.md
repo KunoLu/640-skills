@@ -22,7 +22,7 @@
 | R2.2 | 跨平台 E2E（CI macOS/Windows runner + 用户 Mac 视觉／字体确认）、安全（Host/Origin、ticket、脱敏分层）、性能、导出对账 | P6 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md |
 | Docs | 后续项 B（`install-and-use.md` 事件明细屏蔽说明）+ 后续项 C（第 7 项，单独 PRD docs PR） | P6.5 | planned | — | — | — | —（执行时建立 strict 任务记录） |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
-| F | 发布记录 docs 回填 | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| F | docs 回填 | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
 
 ## 各行锁定决定与验收
 
@@ -69,11 +69,11 @@
 ### R2.2 — 跨平台 E2E、安全、性能、导出对账
 
 - 锁定决定：D9（CI runner＋用户 Mac 组合证据）、D14（Panel manifest 对账 AC-45）、D15（脱敏三层证据 AC-54/AC-55）；D5–D8 的实现归属 R2.0a（Local Server & Access Control 上下文），本行只对既成实现产出跨平台与安全证据，不改实现。
-- 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。
+- 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
 
 ### Docs — 后续项 B／C（E 前）
 
-- 顺序依据：Lord 2026-10-22 23:26 +08:00（编排方转述）；仅将 B／C 从 F 移到 E 前，使用 P6.5，E P7／F P8 不变。
+- 顺序依据：用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录；仅将 B／C 从 F 移到 E 前，使用 P6.5，E P7／F P8 不变。
 - 后续项 B：在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。
 - 后续项 C：第 7 项另开单独 PRD docs PR，与 B 两种屏蔽条件及派生行边界措辞一致；独立于第 4 项磁盘上限 PRD docs PR。本轮仅调整计划，不改 PRD。
 
@@ -82,10 +82,11 @@
 - 锁定决定：D10（计划摘要此时回填 CHANGELOG／docs）。
 - 验收：tag v2.1.0-rc.2；中英双语发布说明；CHANGELOG 如实记录 R2 范围与已知限制；报告附真实 SHA／环境，不以旧 HEAD 或缓存输出证明新提交。
 
-### F — 发布记录 docs 回填
+### F — docs 回填
 
 - 锁定决定：D10（E／F 阶段回填）；PRD 若升 v0.3 须用户届时另行授权。
-- 验收：仅发布记录 docs 回填；后续项 B／C 已按 Lord 2026-10-22 23:26 +08:00（编排方转述）移到 E 前 Docs 步骤，不在 F 重复执行。
+- 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；常规 docs 回填 PR 不修改 PRD 正文。本轮仅登记，不改 PRD。
+- 后续项 B／C：已移至 E 前 Docs 步骤（P6.5，见上文「Docs — 后续项 B／C（E 前）」），F 不重复执行；顺序依据用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录。
 
 ## 依赖顺序说明
 
@@ -93,20 +94,21 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 ## 2026-10-21 计划定稿（13:02 +08:00）
 
-以下顺序于 2026-10-21 13:02 +08:00 定稿；第 4／7 项的 C 曾按 10-22 15:00 用户决定归第 7 项／F，现按 Lord 2026-10-22 23:26 +08:00（编排方转述）将 B／C 移至 E 前 Docs 步骤，保留原事项编号：
+以下顺序于 2026-10-21 13:02 +08:00 定稿；第 4／7 项的 C 放置按 10-22 15:00 用户决定更新，现归第 7 项／F：
 
 1. R2.1b。
 2. 后续项 A 决策已定 — 用户 2026-10-22 11:13 +08:00：保持 #151 行为（事件明细行按 `exportable=false`／`classification != local-metadata` 屏蔽；task/run/聚合派生行不屏蔽；不新增 `withheld` 值；不开 contract PR）。
 3. R2.1b 评审与合并。
 4. 磁盘上限 PRD §10.4 补充已 done：独立 PRD docs PR [#156](https://github.com/KunoLu/640-skills/pull/156) 已 squash-merge，merge SHA `b73ebe501cb529d11e6829b02a363fd7f4f4274a`，完成时间 `2026-10-22T17:42:55+08:00`（mergedAt `2026-10-22T09:42:55Z`；git committer 时间 `2026-10-22T17:42:54+08:00`）。ADR 0003 §4/§5 修订已 done：PR [#157](https://github.com/KunoLu/640-skills/pull/157) 已 squash-merge，merge SHA `6c344d13ddf6b49882b87d52300b8d697e8aeec4`，完成时间 `2026-10-22T18:36:03+08:00`（mergedAt `2026-10-22T10:36:03Z`；git committer 时间 `2026-10-22T18:36:02+08:00`）。磁盘上限新错误码 contract PR 已 done：PR [#158](https://github.com/KunoLu/640-skills/pull/158) 已 squash-merge，merge SHA `82d42a20a6dc757356173535148fdcc7c0b9024d`，完成时间 `2026-10-22T20:23:39+08:00`（mergedAt `2026-10-22T12:23:39Z`；git committer 时间 `2026-10-22T20:23:39+08:00`，一致）；用户于 2026-10-22 20:23 +08:00 确认三项值：错误码 `DISK_QUOTA_EXCEEDED`、HTTP 507、body 字段 `detail`／`used_bytes`／`quota_bytes`。
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
-   - E 前 Docs：原第 7 项后续项 B／C，按任务表 P6.5 执行。
 6. E 预发布。
-7. F 仅发布记录 docs 回填。原第 7 项后续项 B／C 已移至 E 前 Docs：B 在 `install-and-use.md` 写明事件明细屏蔽范围；C 另开单独 PRD docs PR，补充「本地导出屏蔽 event-detail 行，当 `exportable=false` 或 `classification != local-metadata`；不影响 task/run/aggregate 派生行」，两种屏蔽条件均须明确，B／C 措辞一致。原依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」，本次顺序依据 Lord 2026-10-22 23:26 +08:00（编排方转述）。该 PR 独立于第 4 项磁盘上限 PRD docs PR；本轮不改 PRD。
+7. F 文档 + 后续项 B + 后续项 C：B 在 `install-and-use.md` 写明事件明细屏蔽范围；C 在 F 阶段另开单独 PRD docs PR，补充「本地导出屏蔽 event-detail 行，当 `exportable=false` 或 `classification != local-metadata`；不影响 task/run/aggregate 派生行」，两种屏蔽条件均须明确，B／C 措辞一致。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。该 PR 独立于第 4 项磁盘上限 PRD docs PR；本轮不改 PRD。
 
-后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR。JPEG/PDF HTTP 格式与图像尺寸错误码由独立 PR #153（已合并 `ce80ca2`，经 `376ea0c` merge 纳入 R2.1b）承担；这不取代第 4 项磁盘上限错误码 contract PR。后续项 C 保留原第 7 项身份，执行顺序现归 E 前 Docs 步骤。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
+后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR。JPEG/PDF HTTP 格式与图像尺寸错误码由独立 PR #153（已合并 `ce80ca2`，经 `376ea0c` merge 纳入 R2.1b）承担；这不取代第 4 项磁盘上限错误码 contract PR。后续项 C 按 15:00 决定归第 7 项／F 阶段。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
 
-后续项 D（首见 R2.1b task「后续项 D」，PR #156 引用）：Idempotency-Key 幂等重放先于 renderer 可用性检查；契约已 done：PR [#159](https://github.com/KunoLu/640-skills/pull/159) 已 squash-merge，merge SHA `de97926811410e7d61d846fc8e95ddaa0738bfbf`，完成时间 `2026-10-22T22:43:15+08:00`（mergedAt `2026-10-22T14:43:15Z`；git committer 时间 `2026-10-22T22:43:14+08:00`）。runtime 实现由本分支 `fix/v2.1.0-rc.2-idempotent-replay-before-503` 承担，状态 in_progress，任务记录 `ai/tasks/v2.1.0-rc.2-idempotent-replay-before-503/task.md`，不再归 R2.2；配额实现仍归 R2.2。
+2026-10-23 更新（用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录）：B／C 移至 E 前 Docs P6.5；第 7 项编号保留。
+
+后续项 D（首见 R2.1b task「后续项 D」，PR #156 引用）：Idempotency-Key 幂等重放先于 renderer 可用性检查；契约已 done：PR [#159](https://github.com/KunoLu/640-skills/pull/159) 已 squash-merge，merge SHA `de97926811410e7d61d846fc8e95ddaa0738bfbf`，完成时间 `2026-10-22T22:43:15+08:00`（mergedAt `2026-10-22T14:43:15Z`；git committer 时间 `2026-10-22T22:43:14+08:00`）。runtime 实现由本分支 `fix/v2.1.0-rc.2-idempotent-replay-before-503` 承担，状态 in_progress，任务记录 `ai/tasks/v2.1.0-rc.2-idempotent-replay-before-503/task.md`，不再归 R2.2；配额实现仍归 R2.2。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
 
 ### 磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）
 
