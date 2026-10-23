@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T17:48:01+08:00'
+updated_at: '2026-10-23T18:45:27+08:00'
 completed_at: null
 ---
 
@@ -220,6 +220,13 @@ PR-1 本地提交证据：
 | 2026-10-23T17:35:29+08:00 | in-progress | in-progress | fix1 本地验证完成；driver 失败证据新增完整 traceback，未转换失败为 PASS；R2.2 保持 in-progress。 | 最终 runtime 402 tests／392 passed／10 既有 skipped／0 failures，golden 61 OK，定向 4 与子集 37 OK；Linux 普通及 symlink TMPDIR 的 real Chromium 四格式 E2E 通过。关闭下载端口负例 exit 1，JSON 与 MD 均保留完整 traceback。7 changed Python ruff check／format --check 通过；冻结目录 stat 空。macOS/Windows 待 CI 复跑；N/N=13/13 gate 未完成。 |
 | 2026-10-23T17:48:01+08:00 | in-progress | in-progress | fix1 独立 review 闭环与最终证据追加；上方 runtime-full-final 标签保留，其最终性由本事件补充，不改旧行。 | PrivateWriteReview 发现四个新测试在原本无 fchmod 的平台会被 mock teardown 二次 delattr 破坏；已改为 pop＋仅原属性存在时 addCleanup 恢复，复审 correct／无 blocker。进入测试前即无 fchmod 的 4-case smoke 通过；最终 runtime-full-review-closed 为 402 tests／392 passed／10 既有 skipped／0 failures，128.687s；ruff 7 文件通过。NativeFlowReview 静态核查原生流程，无 blocking finding；不代表 CI。 |
 | 2026-10-23T17:48:01+08:00 | in-progress | in-progress | fix1 本地 Commit A 已创建，Commit B 仅追加本 task 证据；macOS/Windows 待 CI 复跑，13/13 是目标门而非本轮结果。 | A 34d26a912451b1c69e2cc107c0ecf4938284a2ed：fix(runtime): portable 0600 writes and resolved native E2E temp homes (R2.2 PR-3 fix1)，7 Python files；44 个提交 runtime Python blob 与最终 full raw 哈希逐一一致，是内容身份重验证，不是提交后 CI。无 push／PR／评论／merge／rebase／amend／force；R2.2 status in-progress，completed_at null。 |
+| 2026-10-23T18:12:29+08:00 | in-progress | in-progress | PR-3 fix2 strict 开工与本轮绑定追加（编排方整理；Lord 2026-10-23 18:03 +08:00 room message，延续 17:08 gate）。旧 11 checks green 为编排方整理；两个 native jobs failed，13/13 未达到。 | run 39934849292 on a5e9ee036d257d85f4422b0191caf889c82be077；完整读取 ci-artifacts-2 两份 JSON。当前授权根 /workspace/640-skills-r22-pr3、分支 feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation，入口 SHA 匹配且工作区干净。沿用既有 PR-3 Markdown 绑定与 TaskStore 兼容边界，不改历史 frontmatter branch，不声称 helper rebind／自动恢复。 |
+| 2026-10-23T18:30:15+08:00 | in-progress | in-progress | fix2 原生失败与 fix1 已证明范围追加（编排方整理）。两 runner 均已安装 Chromium headless shell 156.0.8078.4、serve :6400、pair 200／重用 401、catalog 200，正常退出 0、锁移除、端口关闭；fix1 的 resolved home／fchmod blocker 已越过。 | Windows Server 2025／Python 3.12.10：query 400；macOS 26.6.2 arm64／Python 3.12.10：HTML／CSV 202→ready→download 200，JPEG／PDF capabilities available，JPEG POST 500。旧 JSON 未保存错误正文／serve stderr，不能据此确认唯一错误码。 |
+| 2026-10-23T18:30:15+08:00 | in-progress | in-progress | fix2 根因与最小修复：Windows IANA 数据库缺口已由本地真实 query／DST seam 验证，serve requirements 无条件固定 tzdata==2026.5；macOS Python 3.12 缺 os.waitid 已由官方文档与缺 API red 验证，renderer 改用不回收 leader 的 kqueue 退出通知。 | 生产不改时区校验、字体／capability、安全规则或错误协议；先 killpg、再 wait、最后以真实退出码读取结果。两项缺陷明确，但旧 CI 缺错误正文／stderr，未声称它们是该次 native run 的唯一故障。macOS/Windows 待 CI 复跑。 |
+| 2026-10-23T18:30:15+08:00 | in-progress | in-progress | fix2 本地验证追加；新增 7 个测试，原生证据补齐脱敏日志和非预期响应正文，不把失败转 PASS。 | Linux real Chromium 四格式两轮通过；精确凭据正则审计 JSON／MD 零泄漏；nonreaping adapter＋真实 worker／后代清理 3 cases 通过。最终 full 409 tests／399 passed／10 既有 skipped／0 failures，golden 61 OK，workflow 52 OK，5 changed Python ruff check／format --check 通过。初轮缺测试依赖及 lint／fixture 失败保留，后续结论见本轮验证表；13/13 待 native CI。 |
+| 2026-10-23T18:43:47+08:00 | in-progress | in-progress | fix2 独立 review P2 闭环：Darwin worker 在 kqueue 注册前退出可报 ESRCH；新增精确 ProcessLookupError 处理，不捕获其他 OSError、不提前 reap、不假定成功。 | 注册竞态 2 tests／2 errors red → worker suite 4 passed；NativeWaitReview 复审 correct／confidence 0.85。EvidenceSecurityReview correct／confidence 0.85，唯一 P3 保守截断标记按 blocker-only 范围 defer。两位均只读，不运行 tests／lint。 |
+| 2026-10-23T18:43:47+08:00 | in-progress | in-progress | fix2 最终本地结果追加，覆盖上一轮 full 标签；macOS/Windows 待 CI 复跑，R2.2 继续 in-progress。 | 最终 runtime-full-reviewed 411 tests／401 passed／10 既有 skipped／0 failures，144.781s；新增共 9 tests。真实 Chromium 四格式复跑通过，driver 24.737s；nonreaping 真实进程 smoke 3 cases 通过；5 changed Python lint／format 通过。13/13 仍未得到新 CI 证据，无发布。 |
+| 2026-10-23T18:45:27+08:00 | in-progress | in-progress | fix2 Commit A 本地创建，Commit B 仅追加本 task；实现与本地验证交付，macOS/Windows 待 CI 复跑。 | A 7f17563cf354e23c4bf4b83c5369c23b001b8a72：fix(runtime): pin tzdata, preserve native E2E diagnostics and fix macOS worker wait (R2.2 PR-3 fix2)。46 个提交 runtime Python blob SHA-256 与最终 full raw.hashes 全部一致，是内容身份核验，不是提交后 CI。最终 YAML／append-only／归因／diff 检查通过，冻结目录 stat 空；无 push／PR／评论／merge／rebase／amend／force。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -510,3 +517,120 @@ PrivateWriteReview：生产改动正确；初轮两项 P1 分别定位 event-sto
 Commit A：`34d26a912451b1c69e2cc107c0ecf4938284a2ed`，`fix(runtime): portable 0600 writes and resolved native E2E temp homes (R2.2 PR-3 fix1)`；文件为 event_store.py、facade.py、tests/runtime_e2e.py、tests/test_event_store.py、tests/test_export_reconciliation.py、tests/test_facade_registration.py、tests/test_serve_signals.py，均在 sbtd-runtime/ 下。Commit B：`docs(task): append native CI fix1 evidence and pending rerun (R2.2 PR-3)`，只含本 task，SHA 由最终输出给出避免自引用。全部显式路径暂存，reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env* 不暂存。
 
 Release Readiness Review 保持 blocked：本地指定范围已通过，原生 N/N=13/13 仍待 operator push 后 CI。上方「当前 13/13」仅指当前目标检查总数，不是通过结果。真实 Windows 控制台信号／Job Object 清理、macOS 字体与 CDP glyph family、CDN 下载和端口竞争仍需原生证据；没有据此弱化 gate 或修改契约。Final Test Report／Run Summary MD generated；Targeted Rerun／Affected Subset Rerun／Final Full Rerun passed（Linux）；Evidence Publication local-only。
+
+## R2.2 PR-3 fix2 Book Gate Plan（编排方整理）
+
+未完整调用 grill-with-docs：平台 blocker、诊断证据与验收明确，无领域歧义。主会话唯一 writer／验证 controller；只读调查不执行测试。仅本地 code／records 两个提交，不改 contract／PRD／schema／golden，不降低 13/13 门槛。
+
+| Gate | 触发／阶段 | 本轮状态／证据 |
+|---|---|---|
+| DDD／DDIA | 领域／持久化设计前 | not-needed；无完整 grill、领域歧义、数据机制或格式变更。 |
+| Legacy Change Safety | 既有平台故障／编辑前 | characterized；两份 CI 原始失败；本地清空 TZPATH 且阻断 tzdata 后真实 normalize_scope 拒绝合法时区，恢复包后 query 接受且 DST 日为 82800 秒。 |
+| Refactoring | 既有 driver 编辑前 | proceed（normal）；无需生产重构，保留安全与可用性断言，仅补依赖和诊断边界。 |
+| TDD／BDD／ponytail | 证据安全／实现前 | 复用真实 serve 与既有中文 Markdown／English Gherkin；先补失败证据、脱敏／截断回归，再最小实现。 |
+| project-validation／独立 review／可读性 | check | pending；真实 Chromium 四格式、本地指定 suites 与静态检查，主会话控制运行；原生 raw 与同 stem 中文汇总。 |
+| Release Readiness | runtime dependency／验证后 | pending；macOS/Windows 待 CI 复跑，本地通过不能替代 native 13/13。 |
+
+### fix2 根因、设计与静态平台核查
+
+- Windows：`stats_query.normalize_scope` 调用 `ZoneInfo`；缺 IANA 数据时抛 `ZoneInfoNotFoundError`，转为 `QueryScopeError`／query 400。另一个生产调用点是 `contract_eval.civil_window_seconds`。无条件 pin 同时覆盖 Windows 与无系统数据库的精简 Linux；系统数据库仍优先。PyPI JSON 当次返回 2026.5、非 yanked（https://pypi.org/project/tzdata/）。requirements 沿用 `==` 固定版本、无 hash 的既有风格；两 native jobs 已安装此文件，workflow consistency tests 无需变更。
+- macOS：Python 3.12 官方 `os.waitid` 文档明确 not available on macOS（https://docs.python.org/3.12/library/os.html#os.waitid）；旧代码仅以 `os.name == "posix"` 判断可用性。缺 API seam 真实进入 `_execute_job` 后出现 AttributeError。新路径使用 `select.kqueue`／`KQ_NOTE_EXIT`，不使用会提前 reap 的 `proc.poll`；通知只表示退出，真正状态由原 `_terminate_group` 在 killpg 后 wait 得到，再交 `_read_result`。Darwin kevent 初次注册也检测已发生条件；退出前／后注册的真实 native 行为仍待 CI。
+- **DDIA Data Design Review: confirmed（新增 worker 生命周期触发，前表 not-needed 仅是初始范围）。** worker 独占 session／PGID，结果文件事实源和 job/profile 清理所有者不变；先终止组再 reap，队列 finally close；取消、超时和非零退出均失败。无新缓存、重试、schema、迁移或持久化路径。
+- **Legacy Change Safety Review: characterized；Refactoring Review: proceed（normal）。** missing-waitid red 为 2 tests／4 AttributeError errors；green 覆盖成功、非零、信号退出与取消。沿用真实子进程 cleanup tests，另通过 Linux waitid-backed kqueue adapter 实跑 timeout／crash／cancel，检查清理前 PID 未回收、后代和 profile 删除、队列关闭；不把模拟 adapter 当 Darwin kernel 证明。
+- macOS 字体路径不作猜改：本次 CI capability 为 available，已通过静态字体文件探测；生产 renderer 没有 CDP 字体 family 断言。后续 E2E family 检查使用小写 substring，`.PingFang SC` 同样匹配 `pingfang`。PLAYWRIGHT_BROWSERS_PATH、shell 路径、profile HOME／XDG、sandbox 参数、权限及 st_uid 检查不改；Chromium launch、真实字体与时序仍待 native run。
+- PDF 没有 JPEG 同步 preflight，202 后仍经过同一 `_execute_job`，因此同受 waitid portability 影响。四格式后续 Panel／数值／CJK 断言保持；`assert_pdf_text` 缺 `pdftotext` 时原样返回 `source-document-only: pdftotext unavailable; no dependency added`，不是新 skip 或四格式失败放行。Linux 本次实际抽取 PDF 文本并验证 Panel、CJK、关键值。
+
+### fix2 诊断证据与安全边界
+
+driver 统一记录每次请求，包括初次配对和 ticket 重用；非预期状态在断言前记录脱敏正文（最多 4096 字符）。首次配对即使返回非预期状态，也先将返回的 access_token 与 CSRF 纳入原 secrets 列表。session 身份就是 Bearer token，serve 没有第二个 session cookie。finally 停止或强杀服务后，保存 stdout／stderr（各 16384 字符）、runtime-home 日志（每文件 16384、合计 65536 字符／32 文件）及截断标记。未启动 serve 的失败明确记录 not started，而非伪造输出。
+
+所有已知凭据先替换再截断；异常／traceback／嵌入测试输出也在 JSON／MD 落盘前做最终脱敏与布尔断言。原始 stdout／stderr／home logs 中的凭据或 ticket URL 仍使 E2E 失败，脱敏不是豁免。测试对真实配对凭据只做布尔比较，不把失败值打印进报告；仅人工 synthetic markers 用于泄漏／截断负例。新增测试为 `test_runtime_e2e_evidence.py` 4 cases、`test_renderer_process_wait.py` 2 cases、`test_stats_query.py` 1 case；未新增 skip。
+
+### fix2 本地验证命令、失败保留与结果
+
+环境 Linux 6.12.94+／x64、Python 3.13.5；入口 a5e9ee036d257d85f4422b0191caf889c82be077＋dirty 工作树，developer-local／local-only。`P=ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3`；只在这个既有本地 venv 安装声明依赖，不改全局环境。共同环境 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests RUFF_NO_CACHE=true`。rtk skipped-for-report，原生 subprocess 保存 stdout／stderr／exit／完整命令、时间、环境及全部 runtime Python SHA-256。
+
+```sh
+$P -m pip install -r sbtd-runtime/requirements-serve.txt
+$P -m pip install -r sbtd-workflow-onboard/requirements.txt
+$P -B -m unittest test_renderer_process_wait test_runtime_e2e_evidence test_stats_query -v
+PYTHONTZPATH= $P -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /tmp/r22-pr3-fix2-e2e
+$P -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+python3 -B -m unittest tests.test_workflow_contracts tests.test_ci_selection
+$P -B -m unittest test_facade_registration.FacadeRegistrationTests.test_preview_route_does_not_call_saving_route test_history_import test_renderer_integration.HttpRendererSeamTests -v
+$P -B -m unittest discover -s sbtd-runtime/tests
+ruff check sbtd-runtime/browser_renderer.py sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_runtime_e2e_evidence.py sbtd-runtime/tests/test_renderer_process_wait.py sbtd-runtime/tests/test_stats_query.py
+ruff format --check sbtd-runtime/browser_renderer.py sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/test_runtime_e2e_evidence.py sbtd-runtime/tests/test_renderer_process_wait.py sbtd-runtime/tests/test_stats_query.py
+git diff --check
+git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/golden
+```
+
+三个无落盘 smoke 脚本的完整 `python3 -B -c <script>` 命令在对应 raw.command：timezone-diagnosis 清空 TZPATH 并阻断／恢复 tzdata；nonreaping-process-smoke 用 Linux 内核 waitid 模拟 kqueue 事件、实际运行 3 个后代进程清理 case；native-redaction-audit 包装实际 driver，将本次凭据仅留内存，对 JSON／MD 做精确值正则查找，不输出值。
+
+| raw label | 结果 | 原生 unittest／driver 秒；墙钟秒 |
+|---|---|---|
+| timezone-diagnosis | 无数据库拒绝合法时区；包内 fallback 接受，DST=82800；exit 0 | —；0.166 |
+| evidence-red | 3 errors；新增证据 API 尚未实现 | 0.002；0.140 |
+| evidence-green | 2 failures；测试误算 30 字符截断并假定默认 uvicorn stderr 有 shutdown 文案，非产品缺陷 | 3.795；3.984 |
+| evidence-corrected | 3 passed；修正 fixture，删无根据的日志文案断言 | 3.785；3.971 |
+| macos-wait-red | 2 tests／4 errors；缺 os.waitid，实际进入生产等待路径 | 0.008；0.137 |
+| targeted-green | 31 tests／1 failure；系统 python3 未装 tzdata，空 TZPATH 正确暴露安装缺口 | 7.700；7.855 |
+| ruff-check／ruff-format-check | ISC004 字符串括号与 3 个 changed files 格式；失败保留 | —；0.015／0.012 |
+| targeted-venv | 31 passed；使用装有 serve 精确依赖的既有 venv | 7.828；8.058 |
+| native-linux | real Chromium 四格式、13 Panels、PDF text／CJK、3-case suite 与清理通过；空 PYTHONTZPATH | 24.379；24.607 |
+| nonreaping-process-smoke | 3 passed／0 skipped；真实 Linux worker／后代，kqueue 为 nonreaping adapter | 1.327；1.545 |
+| native-redaction-audit | 四格式通过；ticket／Bearer session／CSRF 三种本次真实值在 JSON／MD 零命中 | 23.366；23.597 |
+| golden／runtime-full（环境失败） | venv 缺 PyYAML／Markdown parser；golden 37 tests／1 error，full 381 tests／3 failures／32 errors／10 skipped；没有删断言或改产品 | 0.250／78.077；0.427／78.466 |
+| install-test-dependencies | 按现有 onboard requirements 安装 PyYAML／markdown-it-py／tomlkit／mdurl 到本地 venv，exit 0 | —；0.776 |
+| golden-corrected | 61 tests，OK | 0.319；0.479 |
+| workflow | 52 tests，OK；validation.yml 未改 | 0.419；0.560 |
+| environment-failures-targeted | 32 tests，OK；环境失败路径复跑 | 69.225；69.554 |
+| runtime-full-final | 409 tests／399 passed／10 既有 skipped／0 failures | 145.248；145.687 |
+| ruff-check-final／ruff-format-final | All checks passed／5 files already formatted | —；0.014／0.012 |
+| diff-check | exit 2；本轮 task 追加段落末尾空行；随后继续追加本段消除 EOF 空行，不改历史 | —；0.005 |
+| frozen-paths | exit 0，三个冻结目录 stat 为空 | —；0.002 |
+
+全部 raw／中文汇总 stem 为 `reports/fix2-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<YYYYMMDDTHHMMSSffffff>.{json,md}`；失败轮不覆盖、不暂存。最终 full stem 时间 `20261023T182721174302`。真实 driver JSON／MD：`/tmp/r22-pr3-fix2-e2e/runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T102101Z`；精确脱敏审计轮在 `/tmp/r22-pr3-fix2-e2e-audited/`，stem 时间 `20261023T102336Z`。
+
+### fix2 验收边界
+
+BDD traceable：沿用 `spec/r2.2-native-e2e-scenarios.md` 中文场景／English keywords，不新增 runner；时区恢复既有 QueryScope／DST 语义。Cross-repo context not-needed；API Contract verified（冻结目录无变化）；真实 E2E backend-only + real renderer／Mock Strategy none；缺 API 回归为明确的平台 seam 模拟，普通全量 renderer cases 仍保留既有 stub／10 skips。未改 UI，不运行 Chrome／Playwright MCP 或 Maestro；Playwright Python CLI／真实 Chromium 已运行。LSP references 返回 No language server found，使用源码调用点核查；ty 不可用，未安装全局工具，不声称 typecheck 通过。
+
+**Ponytail Review／Code Readability Review：Lean already。** 使用 stdlib kqueue，未引入 ctypes ABI、Python 版本提升、重试、额外服务或第二套 renderer；保留真实进程组所有权与日志泄漏断言。readiness 仍受 native CI 约束。
+
+### fix2 诊断负例与独立安全审查追加
+
+`preflight-diagnostics-negative`（18:32:54 +08:00）为明确故障注入 smoke：仅本次真实 serve 子进程把 worker seam 设为 `RendererError(RENDERER_FAILED)`，capability 仍 available，HTML／CSV 真正完成后 JPEG 返回 500。driver 保持 exit 1／failed，JSON 同时保存 `Internal Server Error` 正文、stderr 与 runtime-home `runtime.log` 的 `export preflight failed: RENDERER_FAILED`；退出 0、锁／端口清理通过。外层诊断检查 exit 0／7.750s 墙钟，driver 7.516s；不把注入 renderer 当真实渲染成功。完整无落盘脚本在 raw.command；driver 原生证据 `/tmp/r22-pr3-fix2-e2e-negative/runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T103254Z.{json,md}`。
+
+EvidenceSecurityReview：correct／confidence 0.85；已复核当前 snapshot，无 blocking finding。凭据先登记再断言、先脱敏再截断、JSON／MD／traceback 全局脱敏、原始日志泄漏仍 fail、startup／stop-timeout 清理与真实凭据布尔断言均通过只读 review。唯一 P3：`response_body_truncated` 比较原始字节数与 4096 字符 cap，多字节正文可能完整保存却保守标记 truncated；不影响正文、安全或 pass/fail。按编排方整理的“仅修 blocker”边界不改，reviewer 同意 defer；不是新契约决定。
+
+`records-check` 已实际调用 `yaml.safe_load`，除 updated_at 外 frontmatter 逐字段不变、旧行仅 updated_at 替换、旧状态事件全部逐字保留，新增文本无禁用归因，validation.yml 与入口 blob 相同。`diff-check-corrected` exit 0。同 stem 九节中文总报告／raw：`reports/fix2-verification-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T183427.{json,md}`；列出命令、每轮失败／复跑与 API URI 矩阵，不替代 CI。
+
+### fix2 native lifecycle review 闭环与最终验证
+
+NativeWaitReview 初轮 P2：Darwin `NOTE_EXIT` 注册可能在子进程已退出／正在退出时以 ESRCH 拒绝，不能直接传播为渲染故障。该结论有 Chromium `base/process/kill_mac.cc` 的同型调用与竞态说明支持（https://raw.githubusercontent.com/chromium/chromium/main/base/process/kill_mac.cc）。前文“初次注册检测已发生条件”的一般 kevent 描述不能替代此平台例外，按本段补充，不改旧记录。
+
+修复只在注册调用捕获 `ProcessLookupError`，设 `leader_exited`；loop 不再轮询无效注册，但仍执行原取消／deadline 检查。finally 保持 killpg→wait、关闭队列，`_read_result` 使用实际退出码；EPERM／其他 OSError 仍传播且清理。新增 rc=0／rc=7 已退出回归与 EPERM 保留回归，均检查 cleanup 前 returncode 为 None、无 poll、清理一次、queue close。独立复审全部 checkpoint 通过，P2 CLOSED，verdict correct；未宣称 macOS kernel 实测。
+
+| 追加 raw label | 实际结果 | 原生秒；墙钟秒 |
+|---|---|---|
+| registration-race-red | 2 tests／2 errors；ESRCH 路径真实进入生产函数，EPERM case 本来通过 | 0.006；见 raw.seconds |
+| registration-race-green | worker suite 4 tests，OK | 0.157；见 raw.seconds |
+| nonreaping-process-smoke-reviewed | 真实 Linux worker／后代 timeout／crash／cancel 3 passed，0 skipped | 1.326；见 raw.seconds |
+| ruff-check-reviewed／ruff-format-reviewed | All checks passed／5 files already formatted | 见 raw.seconds |
+| native-linux-reviewed | real Chromium 四格式、PDF text／CJK、13 Panels、3-case suite、退出清理通过；空 PYTHONTZPATH | 24.737；24.954 |
+| runtime-full-reviewed（最终 Final Full Rerun） | 411 tests／401 passed／10 既有 skipped／0 failures | 144.781；145.199 |
+
+追加命令：`$P -B -m unittest test_renderer_process_wait.WorkerExitTests.test_exit_before_registration_preserves_real_result test_renderer_process_wait.WorkerExitTests.test_other_registration_errors_fail_and_clean_up -v`（red）、`$P -B -m unittest test_renderer_process_wait -v`（green）；其余与前节 full／ruff／smoke 相同，最终 E2E 输出改为 `/tmp/r22-pr3-fix2-e2e-reviewed`。精确 native stem `runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T104014Z`；最终 full raw stem 时间 `20261023T184039008844`。
+
+记录笔误更正：前文 preflight-diagnostics-negative 的墙钟 `7.750s` 应为 raw.seconds=`7.731662s`（四舍五入 7.732s）；driver 7.516s 与 exit1／外层检查 exit0 均不变。失败及旧报告原样保留，不用后续结果改写早期证据。
+
+最终九节中文总报告与同 stem raw 为 `reports/fix2-verification-review-closed-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T184347.{json,md}`，追加 review／竞态复跑，前份 18:34 汇总保留为中间轮。Final Test Report／Run Summary MD generated；Targeted Rerun／Affected Subset Rerun／Final Full Rerun passed（Linux）；Source Revision dirty／Evidence Publication local-only。
+
+**Release Readiness Review: blocked（native gate）。** 本地实现与指定验证完成，不等于 macOS／Windows 或 release ready。仍须 operator push 后原生 CI 13/13；macOS kqueue／字体／Chromium launch 与 Windows 全四格式链未在本机证明。60s budget、单 worker、pin／原子发布、安全校验及 unavailable 原设计均未弱化。无迁移／数据清理；回退代码提交会恢复旧平台缺陷，不承诺修复前版本可用。无需要 contract／PRD／schema／golden 修改的新问题；历史 statistics/query 超配额 500／507 继续「待用户决定（contract PR）」，本轮未处理。D9 人工视觉、PR-4 性能／容量不在本轮验收。
+
+### fix2 本地提交与恢复边界
+
+Commit A：`7f17563cf354e23c4bf4b83c5369c23b001b8a72`，`fix(runtime): pin tzdata, preserve native E2E diagnostics and fix macOS worker wait (R2.2 PR-3 fix2)`。恰为 `sbtd-runtime/` 下 8 文件：`browser_renderer.py`、`requirements-serve.txt`、`docs/install-and-use.md`、`spec/r2.2-native-e2e-scenarios.md`、`tests/runtime_e2e.py`、`tests/test_renderer_process_wait.py`、`tests/test_runtime_e2e_evidence.py`、`tests/test_stats_query.py`。最终 full 被测 46 个 runtime Python 文件与提交 blob SHA-256 逐一相同；保留原始 a5e9ee0＋dirty 证据，不改称新 SHA 上运行。
+
+Commit B：`docs(task): append native CI fix2 diagnosis and verification (R2.2 PR-3)`，仅本 task，SHA 由最终输出提供避免自引用。全部显式路径暂存；reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env* 均不暂存。未操作其他 worktree 或 omp 全局配置；task status in-progress、completed_at null、历史 frontmatter branch 与旧事件保持，只有 updated_at 更新。沿用追加 Markdown 记录边界，不声称 TaskStore helper lifecycle／自动恢复成功。
