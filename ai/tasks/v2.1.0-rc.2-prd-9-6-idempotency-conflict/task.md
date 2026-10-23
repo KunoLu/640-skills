@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、option A、PRD-only；主会话唯一 writer／
 status: done
 branch: docs/v2.1.0-rc.2-prd-9-6-idempotency-conflict
 created_at: '2026-10-23T10:45:17+08:00'
-updated_at: '2026-10-23T13:52:35+08:00'
+updated_at: '2026-10-23T14:21:40+08:00'
 completed_at: '2026-10-23T10:48:16+08:00'
 ---
 
@@ -117,3 +117,4 @@ completed_at: '2026-10-23T10:48:16+08:00'
 | 2026-10-23T12:40:31+08:00 | done | done | Title-gen FINAL 注记：fix1d 为 cursor/composer-2.5 ×2，均成功、无 fallback（omp log pid 25206）；main #2 与 fix1c 各有 7 步 title-gen 链，grok 回复按 fallback 计，仅标题，不混入主任务模型计数。 | Lord 记录：composer-2.5 → k3-256k → deepseek-flash（error）→ gpt-6-astra → grok-4.7 → grok-4.6 → gpt-6.1-sol；历史表保留，fix1d 原「未知（运行中）」仅当时取样。 |
 | 2026-10-23T13:20:17+08:00 | done | done | 归因更正（append-only）：acdad55 基线第 115–117 行、2026-10-23T12:40:31+08:00 追加事件中的 mergedAt、模型 FINAL 与 Title-gen FINAL「Lord 记录」均应为 operator 记录；FINAL 来源为 #161 PR body 经 Reviewy 核验的模型表，并由 operator 独立重数 session jsonl；title-gen 来源为 omp 日志。旧事件、模型行、status／completed_at／历史 branch 原样保留。 | 本轮用户提供 operator 运行 gh pr view 161 --json mergedAt,mergeCommit 的事实；本轮未执行 gh。python3 只读复核：~/.omp/agent/sessions/--workspace-640-skills-s2prd--/2026-10-23T02-44-14-602Z_01a166a5-0a8a-721e-94a7-0b9a8c4233a6.jsonl 为 129 行、19／51；~/.omp/logs/640-rc2-s2prd96/run-fix1/ 下 session/2026-10-23T03-31-38-835Z_01a166d0-70d3-77d9-ae2d-7dd4493b66dd.jsonl 为 73 行、13／26，session-c/2026-10-23T03-36-53-047Z_01a166d5-3c37-7456-bd38-42d2a7e86e15.jsonl 为 65 行、13／22，session-d/2026-10-23T03-40-07-770Z_01a166d8-34da-74d8-98de-c795840260f3.jsonl 为 75 行、14／26；口径为 type=message 且 message.role=assistant 的消息／其中 toolCall blocks，四者均 openai-codex/gpt-6-astra、thinking_level_change=high、resolvedModelIsFallback=false。专用 grep 核实 ~/.omp/logs/omp.2026-10-23.25206.log 第 8–15 行 title-generator：fix1d cursor/composer-2.5 两次 request、两次 success，无 fallback；main #2／fix1c 七步标题链仍引用 operator 的历史日志记录，grok 回复按标题 fallback 计，不混入主任务计数。 |
 | 2026-10-23T13:52:35+08:00 | done | done | 归因更正（append-only）：2026-10-23T13:20:17+08:00 行的操作证据归因应为「编排方整理」，不是「用户提供」；涉及 gh 查询（gh pr view 160 --json mergedAt,mergeCommit、gh pr view 161 --json mergedAt,mergeCommit）、#160 PR body 编辑（2026-10-23 12:37 +08:00，gh pr edit 160 --body-file）及 session 计数复核。13:20:17 行逐字保留，本轮仅更正归因，不重新执行上述操作。 | Reviewy NOT CLEAN @ e67c472 (B1), Lord ruling 2026-10-23; append-only. |
+| 2026-10-23T14:21:40+08:00 | done | done | 归因范围收窄（append-only）：本文件 13:52:35 更正行所指的 13:20:17 操作证据，仅涉及 `gh pr view 161 --json mergedAt,mergeCommit` 查询及 session 计数复核；不涉及 #160 PR body 编辑或 `gh pr view 160`。归因仍为「编排方整理」，旧行逐字保留。 | 编排方整理；本轮只读核对本文件历史事件，不重新执行 gh 操作。status done、completed_at 及 branch 不变，仅更新 updated_at 并追加本行。 |

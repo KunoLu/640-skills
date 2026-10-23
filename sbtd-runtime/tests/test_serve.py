@@ -70,15 +70,33 @@ def _seed_golden_events(home: Path) -> None:
 class ServeProcess:
     """A real serve subprocess with captured output."""
 
-    def __init__(self, home: Path, port: int, *extra: str) -> None:
+    def __init__(
+        self, home: Path, port: int, *extra: str, debug_logging: bool = False
+    ) -> None:
         env = dict(os.environ)
         env["PYTHONPATH"] = str(RUNTIME)
+        entrypoint = ["-m", "serve"]
+        if debug_logging:
+            # Configure logging before importing serve; leave production logging
+            # policy intact. File + stderr sinks catch application DEBUG records.
+            entrypoint = [
+                "-c",
+                (
+                    "import logging, runpy, sys; "
+                    "from pathlib import Path; "
+                    "home = Path(sys.argv[sys.argv.index('--home') + 1]); "
+                    "logging.basicConfig(level=logging.DEBUG, handlers=["
+                    "logging.StreamHandler(), "
+                    "logging.FileHandler(home / 'python-debug.log')]); "
+                    "logging.debug('security-capture-ready'); "
+                    "runpy.run_module('serve', run_name='__main__')"
+                ),
+            ]
         self.proc = subprocess.Popen(
             [
                 sys.executable,
                 "-B",
-                "-m",
-                "serve",
+                *entrypoint,
                 "--port",
                 str(port),
                 "--home",
@@ -273,15 +291,16 @@ class PairingTests(unittest.TestCase):
 
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
         _enable_observation(self.home)
         self.port = _free_port()
 
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
-
-    def _start(self) -> ServeProcess:
-        server = ServeProcess(self.home, self.port, "--no-open")
+    def _start(self, *, debug_logging: bool = False) -> ServeProcess:
+        server = ServeProcess(
+            self.home, self.port, "--no-open", debug_logging=debug_logging
+        )
+        self.addCleanup(lambda: server.kill() if server.proc.poll() is None else None)
         server.wait_ready()
         return server
 
@@ -292,20 +311,46 @@ class PairingTests(unittest.TestCase):
         return path.read_text(encoding="utf-8").strip()
 
     def test_pair_once_only_and_ticket_never_in_output(self) -> None:
-        server = self._start()
+        server = self._start(debug_logging=True)
         ticket = self._ticket()
         status, session, headers = pair(self.port, ticket)
         self.assertEqual(status, 200)
         self.assertEqual(session["token_type"], "bearer")
-        self.assertIsInstance(session["access_token"], str)
+        bearer = session["access_token"]
+        self.assertIsInstance(bearer, str)
         self.assertGreaterEqual(session["expires_in"], 1)
         self.assertTrue(headers.get("x-csrf-token"))
-        # Destroyed on read: the same ticket never pairs twice.
+        # Exercise the issued credential as a request header, not only a response.
+        status, _, _ = request(
+            self.port,
+            "GET",
+            "/api/v1/metrics/catalog",
+            headers={"Authorization": f"Bearer {bearer}"},
+        )
+        self.assertEqual(status, 200)
         again, _, _ = pair(self.port, ticket)
         self.assertEqual(again, 401)
-        out, err, _rc = server.stop()
-        self.assertNotIn(ticket, out)
-        self.assertNotIn(ticket, err)
+        invalid = "wrong-" + ticket[::-1]
+        wrong, _, _ = pair(self.port, invalid)
+        self.assertEqual(wrong, 401)
+        out, err, rc = server.stop()
+        self.assertEqual(rc, 0)
+        self.assertIn("SBTD Runtime Dashboard:", out)
+        self.assertIn("security-capture-ready", err)
+        debug_log = self.home / "python-debug.log"
+        self.assertIn("security-capture-ready", debug_log.read_text())
+        logs = [
+            path
+            for path in self.home.rglob("*")
+            if path.is_file()
+            and (".log" in path.name or "logs" in path.relative_to(self.home).parts)
+        ]
+        captures = [out.encode(), err.encode(), *(path.read_bytes() for path in logs)]
+        for capture in captures:
+            # Boolean assertions never echo a leaked credential into test reports.
+            for secret in (ticket, invalid, bearer, headers["x-csrf-token"]):
+                self.assertTrue(secret.encode() not in capture, "credential leaked")
+            self.assertTrue(b"#ticket=" not in capture, "pairing URL leaked")
 
     def test_wrong_ticket_unauthorized_and_destroys(self) -> None:
         server = self._start()
