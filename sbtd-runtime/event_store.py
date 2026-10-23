@@ -332,8 +332,11 @@ class EventStore:
         fd, temporary = tempfile.mkstemp(prefix=".ready.", dir=spool)
         temporary_path = Path(temporary)
         try:
-            os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb") as handle:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(handle.fileno(), 0o600)
+                else:
+                    _chmod(temporary_path, 0o600)
                 handle.write(blob)
                 handle.flush()
                 os.fsync(handle.fileno())

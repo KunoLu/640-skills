@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import unittest
 import uuid
 from datetime import UTC, datetime
@@ -410,8 +411,9 @@ def main() -> int:
     code = 1
     try:
         with tempfile.TemporaryDirectory(prefix="sbtd-native-e2e-") as temporary:
-            exercise(Path(temporary), evidence, args.install_browser)
-        evidence["temporary_home_removed"] = not Path(temporary).exists()
+            home = Path(temporary).resolve()
+            exercise(home, evidence, args.install_browser)
+        evidence["temporary_home_removed"] = not home.exists()
         evidence["status"] = (
             "passed"
             if all(row["status"] == "passed" for row in evidence["exports"].values())
@@ -421,6 +423,7 @@ def main() -> int:
     except Exception as error:  # noqa: BLE001 — report failures; never convert them to PASS.
         evidence["status"] = "failed"
         evidence["error"] = f"{type(error).__name__}: {error}"
+        evidence["traceback"] = traceback.format_exc()
     evidence["exit_code"] = code
     evidence["seconds"] = round(time.monotonic() - clock, 3)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -457,6 +460,11 @@ def main() -> int:
             evidence.get(
                 "error",
                 "本轮无失败；历史轮次不覆盖。能力不可用见上表，不计作渲染通过。",
+            )
+            + (
+                "\n\n```text\n" + evidence["traceback"] + "```"
+                if "traceback" in evidence
+                else ""
             ),
         ),
         (

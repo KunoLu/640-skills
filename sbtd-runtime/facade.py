@@ -12,7 +12,7 @@ import secrets
 import sys
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +31,14 @@ from sbtd_task_state import (
     TaskTransfer,
 )
 
-_AUDIT_NAMES = ("audit.db", "projections.db", "spool", "snapshots", "exports", "backups")
+_AUDIT_NAMES = (
+    "audit.db",
+    "projections.db",
+    "spool",
+    "snapshots",
+    "exports",
+    "backups",
+)
 
 
 class FacadeError(Exception):
@@ -55,6 +62,7 @@ def _dump(payload: dict[str, Any]) -> bytes:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
 
+
 def _reject_duplicate_keys(items: list[tuple[str, Any]]) -> dict[str, Any]:
     data: dict[str, Any] = {}
     for key, value in items:
@@ -66,6 +74,8 @@ def _reject_duplicate_keys(items: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def _reject_nonfinite(token: str) -> None:
     raise ValueError(token)
+
+
 def _path_has_symlink(path: Path) -> bool:
     absolute = path if path.is_absolute() else path.absolute()
     current = Path(absolute.anchor)
@@ -80,7 +90,6 @@ def _path_has_symlink(path: Path) -> bool:
         if current.is_symlink():
             return True
     return False
-
 
 
 def _new_id(prefix: str, taken: set[str]) -> str:
@@ -178,9 +187,8 @@ class RuntimeFacade:
             (item for item in projects if item.get("root") == canonical), None
         )
         if existing is not None:
-            if (
-                repository_id is not None
-                and repository_id != existing.get("repository_id")
+            if repository_id is not None and repository_id != existing.get(
+                "repository_id"
             ):
                 return self._refused(
                     "repository_id conflicts with the existing registration"
@@ -197,7 +205,7 @@ class RuntimeFacade:
             "repository_id": repository_id,
             "worktree_id": _new_id("wt_", set()),
             "registration_state": "registered",
-            "registered_at": datetime.now(timezone.utc).isoformat(),
+            "registered_at": datetime.now(UTC).isoformat(),
         }
         self._save_document("registry.json", {"projects": [*projects, record]})
         return self._ok(True, _public_project(record))
@@ -253,9 +261,7 @@ class RuntimeFacade:
         if not isinstance(enabled, bool):
             return self._refused("observation.enabled must be a boolean")
         if not confirmed:
-            return self._result(
-                "preview", False, False, payload={"enabled": enabled}
-            )
+            return self._result("preview", False, False, payload={"enabled": enabled})
         try:
             self._save_document(
                 "config.json",
@@ -310,7 +316,9 @@ class RuntimeFacade:
             snapshot = TaskStore(self.root, read_only=True).inspect(task_id)
         except TaskStateError as exc:
             return self._failed(exc.reason)
-        return self._ok(False, {"task_id": task_id, "events": list(snapshot.document.events)})
+        return self._ok(
+            False, {"task_id": task_id, "events": list(snapshot.document.events)}
+        )
 
     def preview_route(self, request: Any) -> OperationResult:
         guard = self._guard(write=False)
@@ -537,7 +545,13 @@ class RuntimeFacade:
                 object_pairs_hook=_reject_duplicate_keys,
                 parse_constant=_reject_nonfinite,
             )
-        except (TaskDataError, OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        except (
+            TaskDataError,
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ValueError,
+        ) as exc:
             raise FacadeError(f"{name} cannot be parsed") from exc
         if not isinstance(data, dict) or data.get("schema_version") != 1:
             raise FacadeError(f"{name} schema is not version 1")
@@ -558,8 +572,11 @@ class RuntimeFacade:
             raise FacadeError(f"{name} symlink is refused")
         fd, temporary = tempfile.mkstemp(prefix=f".{name}.", dir=home)
         try:
-            os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb") as handle:
+                if hasattr(os, "fchmod"):
+                    os.fchmod(handle.fileno(), 0o600)
+                else:
+                    os.chmod(temporary, 0o600)
                 handle.write(_dump(payload))
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -602,7 +619,9 @@ class RuntimeFacade:
         payload: Any = None,
         reason: str | None = None,
     ) -> OperationResult:
-        return OperationResult(status, persisted, self._audit(), executed, payload, reason)
+        return OperationResult(
+            status, persisted, self._audit(), executed, payload, reason
+        )
 
     def _ok(self, persisted: bool, payload: Any) -> OperationResult:
         return self._result("succeeded", persisted, persisted, payload)

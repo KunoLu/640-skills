@@ -138,6 +138,77 @@ class EventStoreTests(unittest.TestCase):
         self.addCleanup(store.close)
         return store
 
+    def test_append_without_fchmod_preserves_private_spool(self) -> None:
+        store = self._open()
+        real_replace = os.replace
+
+        def publish(source, target):
+            if os.name != "nt":
+                self.assertEqual(_mode(Path(source)), 0o600)
+            return real_replace(source, target)
+
+        original = os.__dict__.pop("fchmod", None)
+        if original is not None:
+            self.addCleanup(setattr, os, "fchmod", original)
+        with (
+            patch.object(os, "replace", side_effect=publish),
+            patch.object(os, "chmod", wraps=os.chmod) as chmod,
+        ):
+            result = store.append(
+                [_event("evt_portable", "native_portable", "2026-10-16T01:00:00Z")]
+            )
+        self.assertEqual([item.status for item in result.outcomes], ["accepted"])
+        self.assertEqual(
+            [item["event_id"] for item in store.replay()], ["evt_portable"]
+        )
+        self.assertTrue(
+            any(
+                Path(call.args[0]).name.startswith(".ready.") and call.args[1] == 0o600
+                for call in chmod.call_args_list
+            )
+        )
+        self.assertEqual(list((self.home / "spool").iterdir()), [])
+
+    def test_permission_failure_closes_spool_before_cleanup(self) -> None:
+        store = self._open()
+        real_chmod = os.chmod
+        real_mkstemp = tempfile.mkstemp
+        real_unlink = os.unlink
+        descriptors = []
+
+        def capture(*args, **kwargs):
+            fd, path = real_mkstemp(*args, **kwargs)
+            descriptors.append(fd)
+            return fd, path
+
+        def refuse_temporary(path, mode):
+            if Path(path).name.startswith(".ready."):
+                raise PermissionError("private mode refused")
+            return real_chmod(path, mode)
+
+        def unlink_closed(path):
+            with self.assertRaises(OSError):
+                os.fstat(descriptors[0])
+            return real_unlink(path)
+
+        original = os.__dict__.pop("fchmod", None)
+        if original is not None:
+            self.addCleanup(setattr, os, "fchmod", original)
+        with (
+            patch.object(os, "chmod", side_effect=refuse_temporary),
+            patch.object(tempfile, "mkstemp", side_effect=capture),
+            patch.object(os, "unlink", side_effect=unlink_closed),
+            self.assertRaisesRegex(PermissionError, "private mode refused"),
+        ):
+            store.append(
+                [_event("evt_refused", "native_refused", "2026-10-16T01:00:00Z")]
+            )
+        self.assertEqual(store.replay(), [])
+        self.assertEqual(list((self.home / "spool").iterdir()), [])
+        self.assertEqual(len(descriptors), 1)
+        with self.assertRaises(OSError):
+            os.fstat(descriptors[0])
+
     def test_switch_off_creates_no_store_or_spool(self) -> None:
         missing = self.home
         with self.assertRaises(StoreError):

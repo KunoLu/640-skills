@@ -159,7 +159,7 @@ class ExportReconciliationTests(unittest.TestCase):
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory(prefix="sbtd-reconciliation-")
         self.addCleanup(temporary.cleanup)
-        home = Path(temporary.name)
+        home = Path(temporary.name).resolve()
         self.snapshots = SnapshotStore(home)
         manifest = load_panel_manifest()
         metrics = sorted(

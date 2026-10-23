@@ -22,7 +22,7 @@ class BreakShutdownTests(unittest.TestCase):
     def test_break_signal_exits_zero_and_releases_lock(self) -> None:
         port = _free_port()
         with tempfile.TemporaryDirectory(prefix="sbtd-break-") as temporary:
-            home = Path(temporary)
+            home = Path(temporary).resolve()
             entrypoint = ["-m", "serve"]
             if os.name != "nt":
                 entrypoint = [
