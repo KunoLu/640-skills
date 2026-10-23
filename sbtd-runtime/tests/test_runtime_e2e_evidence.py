@@ -12,6 +12,87 @@ from unittest.mock import patch
 import runtime_e2e
 
 
+class FontEvidenceTests(unittest.TestCase):
+    def test_renderer_rejects_non_cjk_glyphs_and_unused_cjk_font(self) -> None:
+        fonts = [
+            {"familyName": "Helvetica", "glyphCount": 2, "isCustomFont": False},
+            {"familyName": "Times", "glyphCount": 3, "isCustomFont": False},
+            {"familyName": "PingFang SC", "glyphCount": 0, "isCustomFont": False},
+        ]
+        with self.assertRaisesRegex(
+            AssertionError, "no verified CJK font produced heading glyphs"
+        ):
+            runtime_e2e.verified_cjk_families(fonts)
+
+    def test_renderer_accepts_pingfang_with_heading_glyphs(self) -> None:
+        self.assertEqual(
+            runtime_e2e.verified_cjk_families(
+                [{"familyName": "PingFang SC", "glyphCount": 2, "isCustomFont": False}]
+            ),
+            ["PingFang SC"],
+        )
+
+    def test_downloaded_html_records_non_cjk_fonts_without_glyph_assertion(
+        self,
+    ) -> None:
+        record = {
+            "fonts_ready": "loaded",
+            "panels": ["overview"],
+            "cjk_text_present": True,
+            "platform_fonts": {
+                "fonts": [
+                    {
+                        "familyName": "Helvetica",
+                        "postScriptName": "Helvetica",
+                        "glyphCount": 2,
+                        "isCustomFont": False,
+                    }
+                ]
+            },
+        }
+        runtime_e2e.assert_font_records({"html": record}, ["overview"])
+        self.assertEqual(record["cjk_families"], [])
+        self.assertEqual(record["status"], "passed")
+        self.assertEqual(record["platform_fonts"]["fonts"][0]["glyphCount"], 2)
+
+    def test_failed_renderer_glyph_gate_preserves_raw_fonts_in_report(self) -> None:
+        fonts = {
+            "fonts": [
+                {
+                    "familyName": "Times",
+                    "postScriptName": "Times-Roman",
+                    "glyphCount": 2,
+                    "isCustomFont": False,
+                },
+                {"familyName": "PingFang SC", "glyphCount": 0, "isCustomFont": False},
+            ]
+        }
+
+        def fail_glyph_gate(home, evidence, install_browser, secrets):
+            evidence["fonts"] = {
+                "jpeg": {
+                    "fonts_ready": "loaded",
+                    "panels": ["overview"],
+                    "cjk_text_present": True,
+                    "platform_fonts": fonts,
+                }
+            }
+            runtime_e2e.assert_font_records(evidence["fonts"], ["overview"])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with (
+                patch.object(runtime_e2e, "exercise", side_effect=fail_glyph_gate),
+                patch("sys.argv", ["runtime_e2e.py", "--output", temporary]),
+            ):
+                self.assertEqual(runtime_e2e.main(), 1)
+            raw = next(Path(temporary).glob("*.json"))
+            evidence = json.loads(raw.read_text(encoding="utf-8"))
+            self.assertIn(
+                "no verified CJK font produced heading glyphs", evidence["error"]
+            )
+            self.assertEqual(evidence["fonts"]["jpeg"]["platform_fonts"], fonts)
+
+
 class NativeEvidenceTests(unittest.TestCase):
     def test_redacts_before_truncating_and_handles_overlapping_values(self) -> None:
         secrets = ["synthetic-ticket", "synthetic-ticket-extended", "synthetic-csrf"]

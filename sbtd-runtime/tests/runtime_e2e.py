@@ -28,8 +28,8 @@ from pathlib import Path
 RUNTIME = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RUNTIME))
 
-from browser_renderer import _shell_executable
-from export_render import load_panel_manifest
+from browser_renderer import _prepare_document, _shell_executable
+from export_render import default_presentation, load_panel_manifest
 from runtime_e2e_diagnostics import diagnose
 from test_csv_export import _dataset, _scope
 from test_export_reconciliation import (
@@ -104,9 +104,39 @@ def _capture_logs(
     assert not ticket_url, "pairing URL leaked"
 
 
-def browser_font_check(home: Path, document: str, panels: list[str]) -> dict:
+def verified_cjk_families(fonts: list[dict], *, required: bool = True) -> list[str]:
+    cjk = [
+        font["familyName"]
+        for font in fonts
+        if font["glyphCount"] > 0
+        and any(
+            marker in font["familyName"].lower()
+            for marker in ("cjk", "pingfang", "hiragino", "yahei", "simsun", "unicode")
+        )
+    ]
+    if required:
+        assert cjk, "no verified CJK font produced heading glyphs"
+    return cjk
+
+
+def assert_font_records(records: dict, panels: list[str]) -> None:
+    for name, record in records.items():
+        assert record["fonts_ready"] == "loaded", "font readiness failed"
+        assert record["panels"] == panels, "browser panel structure differs"
+        assert record["cjk_text_present"], "CJK text missing"
+        record["cjk_families"] = verified_cjk_families(
+            record["platform_fonts"]["fonts"], required=name != "html"
+        )
+        record["status"] = "passed"
+
+
+def browser_font_check(
+    home: Path, documents: dict[str, str], panels: list[str], evidence: dict
+) -> None:
     from playwright.sync_api import sync_playwright
 
+    records = {}
+    evidence["fonts"] = records
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
             executable_path=str(_shell_executable(home))
@@ -115,53 +145,50 @@ def browser_font_check(home: Path, document: str, panels: list[str]) -> dict:
             context = browser.new_context(service_workers="block")
             context.route("**/*", lambda route: route.abort())
             page = context.new_page()
-            page.set_content(document)
-            state = page.evaluate("""async () => {
-                await document.fonts.ready;
-                return {fonts: document.fonts.status,
-                    panels: [...document.querySelectorAll('section.panel')].map(p => p.id),
-                    text: document.body.innerText};
-            }""")
-            assert state["fonts"] == "loaded", "font readiness failed"
-            assert state["panels"] == panels, "browser panel structure differs"
-            assert "概览" in state["text"] and "数据质量" in state["text"], (
-                "CJK text missing"
-            )
-            # The actual glyph-producing font, not fonts.check()'s fallback success.
             session = context.new_cdp_session(page)
             session.send("DOM.enable")
             session.send("CSS.enable")
-            dom = session.send("DOM.getDocument")
-            node = session.send(
-                "DOM.querySelector",
-                {"nodeId": dom["root"]["nodeId"], "selector": "#overview h2"},
-            )
-            fonts = session.send(
-                "CSS.getPlatformFontsForNode", {"nodeId": node["nodeId"]}
-            )["fonts"]
-            cjk = [
-                font["familyName"]
-                for font in fonts
-                if font["glyphCount"] > 0
-                and any(
-                    marker in font["familyName"].lower()
-                    for marker in (
-                        "cjk",
-                        "pingfang",
-                        "hiragino",
-                        "yahei",
-                        "simsun",
-                        "unicode",
+            for name, document in documents.items():
+                record = {
+                    "status": "collecting",
+                    "assertion": "仅记录、不断言" if name == "html" else "asserted",
+                    "source": (
+                        "downloaded HTML"
+                        if name == "html"
+                        else f"controlled renderer _prepare_document: {name}"
                     )
+                    + "; real Chromium; not pixel OCR",
+                    "evidence_source": "ci"
+                    if os.environ.get("CI")
+                    else "developer-local",
+                    "platform": platform.platform(),
+                }
+                records[name] = record
+                page.set_content(document)
+                state = page.evaluate("""async () => {
+                    await document.fonts.ready;
+                    return {fonts: document.fonts.status,
+                        panels: [...document.querySelectorAll('section.panel')].map(p => p.id),
+                        text: document.body.innerText};
+                }""")
+                record.update(
+                    fonts_ready=state["fonts"],
+                    panels=state["panels"],
+                    cjk_text_present="概览" in state["text"]
+                    and "数据质量" in state["text"],
                 )
-            ]
-            assert cjk, "no verified CJK font produced heading glyphs"
-            return {
-                "status": "passed",
-                "fonts_ready": state["fonts"],
-                "cjk_families": cjk,
-                "source": "downloaded HTML in real Chromium; not pixel OCR",
-            }
+                dom = session.send("DOM.getDocument")
+                node = session.send(
+                    "DOM.querySelector",
+                    {"nodeId": dom["root"]["nodeId"], "selector": "#overview h2"},
+                )
+                # Preserve the complete CDP response before any gate can fail.
+                record["platform_fonts"] = session.send(
+                    "CSS.getPlatformFontsForNode", {"nodeId": node["nodeId"]}
+                )
+                record["status"] = "recorded"
+            # Collect every document first, including PDF if JPEG's gate fails.
+            assert_font_records(records, panels)
         finally:
             browser.close()
 
@@ -289,6 +316,7 @@ def exercise(
         _, catalog_bytes = api("GET", "/api/v1/metrics/catalog")
         catalog = json.loads(catalog_bytes)["data"]
         manifest = load_panel_manifest()
+        presentation = default_presentation(manifest)
         metrics = sorted(
             {metric for panel in manifest["panels"] for metric in panel["metric_ids"]}
         )
@@ -374,10 +402,16 @@ def exercise(
             evidence["pdf_text"] = assert_pdf_text(
                 case, payloads["pdf"], evidence["panels"], expected_values
             )
-        if "jpeg" in payloads:
-            evidence["fonts"] = browser_font_check(
-                home, documents["html"], evidence["panels"]
-            )
+        if "jpeg" in payloads or "pdf" in payloads:
+            font_documents = {
+                "html": documents["html"],
+                **{
+                    name: _prepare_document(documents["html"], name, presentation)
+                    for name in ("jpeg", "pdf")
+                    if name in payloads
+                },
+            }
+            browser_font_check(home, font_documents, evidence["panels"], evidence)
         else:
             evidence["fonts"] = {
                 "status": "unavailable",
