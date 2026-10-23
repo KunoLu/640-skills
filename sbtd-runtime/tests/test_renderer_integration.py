@@ -1011,6 +1011,99 @@ class _LoopbackApp:
             raise AssertionError("HTTP test server did not stop")
 
 
+class HostOriginSecurityTests(unittest.TestCase):
+    """AC-56: real HTTP and stores; no renderer behavior is substituted."""
+
+    def test_rejected_origins_cannot_pair_read_or_create_exports(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="sbtd-security-") as tmp:
+            home = Path(tmp)
+            _enable_observation(home)
+            _seed_golden_events(home)
+            server = _LoopbackApp(home)
+            try:
+                port = server.port
+                wrong_port = port + 1 if port < 65535 else port - 1
+                cases = (
+                    ("external-host", "evil.example", {}),
+                    ("host-port", f"127.0.0.1:{wrong_port}", {}),
+                    ("origin-port", None, {"Origin": f"http://127.0.0.1:{wrong_port}"}),
+                    ("cross-origin", None, {"Origin": "https://evil.example"}),
+                )
+                ticket = (home / "pairing-ticket").read_text().strip()
+                # Rejected pairing must not consume the valid one-time ticket.
+                for name, host, origin in cases:
+                    with self.subTest(case=name, method="POST", path="pair"):
+                        status, headers, body = request(
+                            port,
+                            "POST",
+                            "/api/v1/session/pair",
+                            host=host,
+                            headers={**origin, "X-Pairing-Code": ticket},
+                        )
+                        self.assertEqual(status, 403)
+                        self.assertEqual(json.loads(body), {"detail": "forbidden"})
+                        self.assertNotIn(
+                            "access-control-allow-origin", {k.lower() for k in headers}
+                        )
+                status, session, headers = pair(port, ticket)
+                self.assertEqual(status, 200)
+                auth = {
+                    "Authorization": f"Bearer {session['access_token']}",
+                    "X-CSRF-Token": headers["x-csrf-token"],
+                }
+                status, _, body = request(
+                    port,
+                    "POST",
+                    "/api/v1/statistics/query",
+                    headers=auth,
+                    body=_scope(_dataset(), ["tasks.touched"]),
+                )
+                self.assertEqual(status, 200)
+                snapshot_id = json.loads(body)["data"]["snapshot_id"]
+                read_path = f"/api/v1/report-snapshots/{snapshot_id}"
+                status, _, body = request(port, "GET", read_path, headers=auth)
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body)["data"]["snapshot_id"], snapshot_id)
+                payload = {"snapshot_id": snapshot_id, "format": "csv"}
+                for name, host, origin in cases:
+                    for method, path, data in (
+                        ("GET", read_path, None),
+                        ("POST", "/api/v1/exports", payload),
+                    ):
+                        with self.subTest(case=name, method=method):
+                            status, headers, body = request(
+                                port,
+                                method,
+                                path,
+                                host=host,
+                                headers={**auth, **origin, "Idempotency-Key": name},
+                                body=data,
+                            )
+                            self.assertEqual(status, 403)
+                            self.assertEqual(json.loads(body), {"detail": "forbidden"})
+                            self.assertNotIn(
+                                "access-control-allow-origin",
+                                {k.lower() for k in headers},
+                            )
+                            self.assertEqual(server.exports._jobs, {})
+                            self.assertEqual(list((home / "exports").iterdir()), [])
+                # The same valid request succeeds with the allowed authority:
+                # a 403 above cannot be explained by a broken export fixture.
+                status, _, body = request(
+                    port,
+                    "POST",
+                    "/api/v1/exports",
+                    headers={**auth, "Idempotency-Key": "allowed-control"},
+                    body=payload,
+                )
+                self.assertEqual(status, 202)
+                self.assertIn(
+                    json.loads(body)["data"]["export_id"], server.exports._jobs
+                )
+            finally:
+                server.stop()
+
+
 class HttpRendererSeamTests(unittest.TestCase):
     """App HTTP jpeg/pdf behavior mocked at browser_renderer._render_document."""
 
