@@ -842,7 +842,7 @@ clock_quality / parser_version / last_error_code
 | 同格式作业过多 | 429 | 返回 retry-after，不启动无限 renderer |
 | 数据库／renderer 不可用 | 503 | 区分只读查询、HTML／CSV 与图像／PDF 能力 |
 
-有副作用的 refresh、ingest、snapshot、export 请求支持 `Idempotency-Key`。同 key 同 payload 返回同结果；同 key 不同 payload 返回 409。导出重试不得产生多个无法追踪的文件。
+有副作用的 refresh、ingest、snapshot、export 请求支持 `Idempotency-Key`。同 key 同 payload 返回同结果；同 key 不同 payload：createExport 返回 HTTP 400，refresh、ingest 仍返回 409；createReportSnapshot 待定：未实现 HTTP 入口，等 POST 路由实现时另开 PRD PR 决定（用户 2026-10-22 23:23／23:24 +08:00 群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）。导出重试不得产生多个无法追踪的文件。
 
 ---
 
