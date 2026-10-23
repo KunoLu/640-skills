@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、mode_source user；主会话唯一 writer／验
 status: done
 branch: contract/v2.1.0-rc.2-followup-d-idempotent-replay-precedence
 created_at: '2026-10-22T20:29:27+08:00'
-updated_at: '2026-10-22T22:06:08+08:00'
+updated_at: '2026-10-23T09:49:35+08:00'
 completed_at: '2026-10-22T20:44:29+08:00'
 ---
 
@@ -160,7 +160,7 @@ Scenario: 非重放请求仍执行原准入检查
 | ReplayEvidenceReview／ReplayEvidenceReview.jsonl | kimi-code/k3 | max | 30 / 42（最终） | 只读 golden／closeout／验证证据复核 | false | 未记录 / unknown | 未记录 / unknown |
 | 上次修正批次主会话／01a163a7-0d9a-753c-9f6f-d41cc0ff342f | openai-codex/gpt-6-astra | high | 10 / 24（最终） | 两份 task 记录纠偏，唯一 writer／验证 controller | false | 未记录 / unknown | 未记录 / unknown |
 | Ping／01a163ea-b880-738a-8d5e-c9fabed62bad | openai-codex/gpt-6-astra | low | 1 / 0（最终） | astra 可达性 ping（无工具） | false | 未记录 / unknown | 未记录 / unknown |
-| 本次决定落档批次／01a163eb-3e6c-75a7-9b25-ca91d33ecfe4 | openai-codex/gpt-6-astra | high | 3 / 11（提交前 snapshot） | 用户 21:57 决定落档与 attribution 纠偏，唯一 writer | false | 未记录 / unknown | 未记录 / unknown |
+| 本次决定落档批次／01a163eb-3e6c-75a7-9b25-ca91d33ecfe4 | openai-codex/gpt-6-astra | high | 13 / 31（最终） | 用户 21:57 决定落档与 attribution 纠偏，唯一 writer | false | 未记录 / unknown | 未记录 / unknown |
 
 两次主会话结束后，编排方重读 JSONL 核实最终计数；本次亦以只读 Python `json.loads` 复核 `~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T12-28-35-514Z_01a16395-ab3a-73c1-9aa1-a67ba48277bd.jsonl` 全部 194 行，得到最终 39 assistant messages／73 toolCall blocks。统计口径为 `type=message`／`role=assistant` 及其 `type=toolCall` blocks。两位 reviewer 最终 30／47 与 30／42 采用编排方已核实 JSONL 事实；旧状态事件中的 33／65 仍是当时提交前快照，不代表最终计数。
 
@@ -168,7 +168,7 @@ Scenario: 非重放请求仍执行原准入检查
 
 上次修正主会话 `2026-10-22T12-47-34-810Z_01a163a7-0d9a-753c-9f6f-d41cc0ff342f.jsonl` 在两次主会话结束后重读，本次只读解析全部 67 行，最终 10 assistant messages／24 toolCall blocks；model_change 为 openai-codex/gpt-6-astra、resolvedModelIsFallback=false，thinking_level_change 为 high。旧状态事件的 4／15 保留为历史快照，不是最终总数。
 
-本次只读解析同目录 `2026-10-22T14-01-29-472Z_01a163ea-b880-738a-8d5e-c9fabed62bad.jsonl` 全部 9 行：ping 最终 1／0、thinking low。当前会话文件为 `2026-10-22T14-02-03-756Z_01a163eb-3e6c-75a7-9b25-ca91d33ecfe4.jsonl`，已核对 cwd 为本 worktree、首条用户消息匹配本次请求；读至第 31 行时为 3／11、thinking high。以上读取与 `2026-10-22T22:03:15+08:00` 取时属于同轮只读核对；本次会话仍进行中，表中仅为提交前 snapshot，不含后续编辑、验证、提交和最终输出，最终计数由编排方在 PR 正文报告。本批无 subagent。
+原决定落档批次只读解析同目录 `2026-10-22T14-01-29-472Z_01a163ea-b880-738a-8d5e-c9fabed62bad.jsonl` 全部 9 行：ping 最终 1／0、thinking low。fix batch 2 会话 `2026-10-22T14-02-03-756Z_01a163eb-3e6c-75a7-9b25-ca91d33ecfe4.jsonl` 现已结束；2026-10-23 本分支只读解析全部 84 行，按 assistant message／toolCall block 口径核实最终 13／31，model_change 为 openai-codex/gpt-6-astra、resolvedModelIsFallback=false，thinking_level_change 为 high。旧事件中的 3／11 保留为当时提交前 snapshot，不是最终计数。该批无 subagent。
 
 ## 状态事件
 
@@ -180,3 +180,5 @@ Scenario: 非重放请求仍执行原准入检查
 | 2026-10-22T20:48:29+08:00 | done | done | 记录纠偏：按用户转达的 Reviewy／Lord／CodeX／Researchy 房间共识，区分用户原规则与当时尚未获批准的 507／422 提议，并修正 #158 reviewer 最终计数；仅追加一个本地 commit，不改变原完成时间或旧事件 | 入口 0fbdd01；用户原文「只有新请求才依次检查 503、404、410」；PRD :845／:908、ADR 0003 :52 仅间接支持，无 replay-vs-507 显式排序依据；507／422 当时尚未获用户批准；非重放相互顺序列为 review flag；#158 最终主会话 39／73、QuotaContractReview 18／22、QuotaEvidenceReview 21／34 采用 operator 已核实事实；本批主会话提交前 snapshot 4／15 |
 | 2026-10-22T22:06:08+08:00 | done | done | 记录纠偏：修正 x-sbtd-idempotent-replay 名称的提出者归因并更新最终会话计数；来源 Reviewy blocker／编排方转述 | 原错误文字「采用用户建议的 `x-sbtd-idempotent-replay`」改为「OMP 提议、用户 21:57 确认」（来源：编排方转述）；01a16395 最终 39／73、01a163a7 最终 10／24 经只读 JSONL 复核，reviewer 最终 30／47、30／42 由编排方核实；ping 最终 1／0；当前会话 3／11 为提交前 snapshot；为满足全文禁用措辞检查，仅对 20:48:29 旧事件的两处批准状态措辞作同义替换，保留当时语义，其余旧事件原文不变；git diff --check clean、frontmatter yaml.safe_load 通过、指定 grep 模式零匹配、golden 61 passed／0.322s |
 | 2026-10-22T22:06:08+08:00 | done | done | 用户 21:57 决定五个提议值全部按 OMP 提议（编排方转述），合并条件为 blocker 修完重审 CLEAN 且 CI 全绿；不改 openapi／tests | 2026-10-22 21:57（+08:00），640-skills 房间，来源：编排方转述；用户原文「#159 五个提议值全部按 OMP 提议，blocker 修完重审 CLEAN 且 CI 全绿后合并」；入口 HEAD 5381a44（5381a442c63d45252a48050b0ad801ac3eb033d9），PR #159 CI 11/11 green on 5381a44（编排方转述，非本次新提交 CI）；本批仅本 task.md、一个追加本地 commit；git diff --check clean、frontmatter yaml.safe_load 通过、指定 grep 模式零匹配、golden 61 passed／0.322s；不执行完整 runtime suite、重审或合并 |
+| 2026-10-23T09:49:35+08:00 | done | done | 首 commit 回填契约 PR #159 已 squash-merge；保留历史 branch、status done 与 completed_at；runtime 转交本次 fix 分支而非 R2.2 | PR #159；merge SHA de97926811410e7d61d846fc8e95ddaa0738bfbf；git log -1 --format=%cI de97926 核实 git committer 2026-10-22T22:43:14+08:00；gh pr view 159 --json mergedAt,mergeCommit,state 核实 MERGED、mergedAt 2026-10-22T14:43:15Z = 2026-10-22T22:43:15+08:00；runtime task v2.1.0-rc.2-idempotent-replay-before-503 in_progress |
+| 2026-10-23T09:49:35+08:00 | done | done | fix batch 2 最终计数纠偏；仅更新当前值，全部既有状态事件原文保留 | 只读解析 ~/.omp/agent/sessions/--workspace-640-skills-fud--/2026-10-22T14-02-03-756Z_01a163eb-3e6c-75a7-9b25-ca91d33ecfe4.jsonl 全部 84 行：13 assistant／31 toolCall；model_change openai-codex/gpt-6-astra、thinking_level_change high、resolvedModelIsFallback=false；旧 3／11 是历史提交前 snapshot |
