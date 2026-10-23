@@ -18,7 +18,7 @@ from history_read import list_events, task_history
 PY
 ```
 
-依赖：Python 3.11+（`zoneinfo`）、PyYAML（仅测试与契约读取需要；库模块本身只用标准库）。
+依赖：Python 3.11+（`zoneinfo`）、`tzdata==2026.5`（无系统 IANA 时区数据库时的后备，含 Windows；已固定于 `requirements-serve.txt`）、PyYAML（仅测试与契约读取需要）。
 
 ## 运行时家目录（SBTD_RUNTIME_HOME）
 
@@ -214,6 +214,8 @@ JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelo
 
 隔离是应用级边界，Chromium 显式使用 `chromium_sandbox=False`，不声称 OS sandbox 或浏览器漏洞防护。POSIX 在回收 worker PID 前终止其独占进程组；Windows 使用 kill-on-close Job Object 保有后代进程所有权，即使 worker 先退出也能终止后代。Windows 原生 crash 回归已入仓，但本次 Linux 环境跳过；平台实测属 R2.2。整个库级作业默认 60 秒预算，包含依赖预检、HTML 生成、信号量等待和渲染；取消、超时及失败不会发布半成品。
 
+macOS Python 3.11／3.12 缺少 `os.waitid`，renderer 使用 `kqueue` 观察退出但不提前回收 leader；终止独占进程组后才回收并检查真实退出码。Linux 的 `waitid(WNOWAIT)` 与 Windows Job Object 隔离保持不变。
+
 ## R2.0a：serve（本地 Dashboard 服务，D5–D8）
 
 R2.0a PR-2 起仓内有 HTTP 服务层 `sbtd-runtime/serve.py`（Starlette＋uvicorn，ADR 0001 §2），服务入仓的 `dashboard/static/` 产物并接 R1 真实库面（`stats_query`／`report_snapshot` over `EventStore`）。安装精确钉版依赖后从仓库根启动：
@@ -233,3 +235,23 @@ PYTHONPATH=sbtd-runtime python3 -m serve [--port 6400] [--no-open] [--home PATH]
 - R2.0c 起快照落盘 `snapshots/`，默认 TTL 24h，创建告知 expires_at；TTL 内重启仍可读取；R2.2 PR-1 起按共享配额规则执行启动及新建前清扫。
 
 跨平台（macOS／Windows）证据与 Host/Origin 负例对账属 R2.2；Windows 上实例锁的活 pid 判定（`os.kill(pid, 0)` 语义）未在本期验证。
+
+### R2.2：原生 E2E 与对账
+
+CI 新增 `runtime-e2e-macos`／`runtime-e2e-windows`：真实 serve 子进程、`--no-open` 文件配对、API、同快照四格式下载、字体及 Panel／关键值对账。Windows 自动化使用独立 console process group 的 CTRL_BREAK；serve 将 SIGBREAK 按 Ctrl-C 清理，释放实例锁。POSIX 仍用 SIGINT。
+
+安装上述 serve／renderer 精确版本后，可在仓库根运行：
+
+```sh
+python3 -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /path/to/evidence
+```
+
+`--install-browser` 仅授权向本轮隔离临时 home 安装 pinned Chromium `--only-shell`，退出后删除该临时 home；不碰已有用户 runtime。JSON／同 stem 中文 Markdown 逐格式记录结果和来源。renderer 不可用时 HTML／CSV 仍须成功，JPEG／PDF 明确为 unavailable，不是四格式通过；可用时渲染失败使命令失败。PDF 使用已有 `pdftotext`，缺工具时只对账 renderer 输入；JPEG 不做 OCR。Windows chmod 不等于 POSIX 0600／NTFS ACL 证明。CI 平台报告不替代 D9 用户 Mac 视觉／字体确认或 §18 性能验收。
+
+`--install-browser` 模式下，下载／安装命令失败会使 E2E 失败，不能冒充平台 unavailable；只有安装完成后的真实 capability 检查可记录不支持原因。
+
+无论成功或失败，JSON 保存脱敏后的 serve stdout／stderr 与 runtime home 日志；每段最多 16384 字符，home 日志合计最多 65536 字符／32 个文件。非预期 HTTP 状态另保存最多 4096 字符的响应正文；ticket、Bearer session、CSRF 值在截断和落盘前移除。原始服务日志泄漏凭据仍使 E2E 失败，不因证据脱敏而放行。
+
+JPEG／PDF 的创建或生成失败时，原生 driver 另用同一快照下载的 HTML、同一 runtime home 重跑测试侧 worker 诊断。`renderer_diagnostics` 保存 worker 退出码、`error.json`／`result.json` 的存在状态与内容、stdout／stderr、包含被抑制 context 的异常链和出错位置；每个文本字段最多 16384 字符，先脱敏再截断。诊断沿用生产 job 写入、等待、进程组／Job Object 清理及结果检查，仅替换测试进程的输出捕获与异常记录，不改变服务端安全错误协议。诊断重跑成功也不改变原 E2E 的失败退出码。
+
+PDF 抽取显式使用 `pdftotext -enc UTF-8 -layout`，二进制捕获后严格解码，避免 Windows 后台管道线程解码异常留下 `None`。工具缺失、无法执行、超时、非零退出、无输出、空文本或非 UTF-8 输出只记录 `source-document-only` 及原因，不声明 PDF 文本已验证；成功抽取的文本仍必须通过全部 Panel、CJK 和关键值断言。

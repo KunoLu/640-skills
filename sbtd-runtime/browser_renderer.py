@@ -15,6 +15,7 @@ import json
 import math
 import os
 import platform
+import select
 import shutil
 import signal
 import stat
@@ -528,7 +529,9 @@ def _terminate_group(proc: subprocess.Popen[bytes]) -> None:
     if os.name == "posix":
         try:
             os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
+            # Darwin may deny SIGKILL for a zombie-only group. Reap first;
+            # only ESRCH from the subsequent probe proves cleanup succeeded.
             pass
         proc.wait(timeout=5)
         deadline = time.monotonic() + 2
@@ -537,6 +540,10 @@ def _terminate_group(proc: subprocess.Popen[bytes]) -> None:
                 os.killpg(proc.pid, 0)
             except ProcessLookupError:
                 return
+            except PermissionError:
+                # A reaped leader alone does not prove its descendants are gone.
+                # Persistent EPERM must reach the same failure deadline.
+                pass
             if time.monotonic() >= deadline:
                 raise RendererError(RENDERER_FAILED)
             time.sleep(0.01)
@@ -571,6 +578,8 @@ def _execute_job(
             popen_kwargs["creationflags"] = flags
     owner = None
     proc = None
+    exit_queue = None
+    leader_exited = False
     try:
         if os.name == "nt":
             from renderer_windows import WindowsJob
@@ -578,9 +587,29 @@ def _execute_job(
             owner = WindowsJob()
             env["SBTD_RENDERER_JOB"] = owner.name
         proc = subprocess.Popen(_worker_argv(job), **popen_kwargs)
+        if os.name == "posix" and not hasattr(os, "waitid"):
+            # macOS Python <3.13 lacks waitid. kqueue observes exit without
+            # reaping the leader, so its PGID stays owned until group cleanup.
+            exit_queue = select.kqueue()
+            event = select.kevent(
+                proc.pid,
+                filter=select.KQ_FILTER_PROC,
+                flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                fflags=select.KQ_NOTE_EXIT,
+            )
+            try:
+                exit_queue.control([event], 0, 0)
+            except ProcessLookupError:
+                # Darwin can reject NOTE_EXIT while the child is already dying.
+                # It is still ours and unreaped; finally kills/reaps the group.
+                leader_exited = True
         downgrade_notified = False
         while True:
-            if os.name == "posix":
+            returncode = None
+            if exit_queue is not None:
+                if leader_exited or exit_queue.control(None, 1, 0):
+                    break
+            elif os.name == "posix":
                 # Keep the exited leader unreaped: its PID/PGID cannot be
                 # reused before finally terminates this job's process group.
                 status = os.waitid(
@@ -614,16 +643,22 @@ def _execute_job(
             raise RendererError(RENDERER_CANCELLED)
         if time.monotonic() >= deadline:
             raise RendererError(RENDERER_TIMEOUT)
-        return _read_result(
-            job, returncode, export_format, preflight=spec.get("preflight", False)
-        )
     finally:
         try:
             if owner is not None:
                 owner.close()
         finally:
-            if proc is not None:
-                _terminate_group(proc)
+            try:
+                if proc is not None:
+                    _terminate_group(proc)
+            finally:
+                if exit_queue is not None:
+                    exit_queue.close()
+    # kqueue only reports exit, not a portable exit status. Cleanup reaps the
+    # leader after killpg; use that real status, never assume success on exit.
+    return _read_result(
+        job, proc.returncode, export_format, preflight=spec.get("preflight", False)
+    )
 
 
 def _read_result(

@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
@@ -24,13 +24,11 @@ for path in (ROOT, SCRIPTS):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from facade import FacadeError, HelperAdapter, RuntimeFacade
 from sbtd_handoff import HandoffPolicy, HandoffStore
 from sbtd_identity import DeveloperStore
 from sbtd_task_routing import RouteRequest, TaskRouter
 from sbtd_task_state import TaskStore
-
-from facade import FacadeError, HelperAdapter, RuntimeFacade
-
 
 AUDIT_NAMES = {"audit.db", "projections.db", "spool", "snapshots", "exports", "backups"}
 HANDOFF_CONTENT = {
@@ -49,7 +47,7 @@ HANDOFF_CONTENT = {
 class FrozenDateTime(datetime):
     @classmethod
     def now(cls, tz=None):
-        moment = datetime(2026, 10, 16, 8, 0, tzinfo=timezone.utc)
+        moment = datetime(2026, 10, 16, 8, 0, tzinfo=UTC)
         if tz is not None:
             return moment.astimezone(tz)
         return moment
@@ -119,6 +117,62 @@ class FacadeRegistrationTests(unittest.TestCase):
         self.assertNotIn(str(root or self.root), result.payload["project_id"])
         return result.payload["project_id"]
 
+    def test_observation_without_fchmod_persists_private_config(self) -> None:
+        original = os.__dict__.pop("fchmod", None)
+        if original is not None:
+            self.addCleanup(setattr, os, "fchmod", original)
+        with mock.patch.object(os, "chmod", wraps=os.chmod) as chmod:
+            result = self._facade().set_observation_enabled(True, confirmed=True)
+        self.assertEqual(result.operation_status, "succeeded")
+        self.assertTrue(self._facade().observation_enabled)
+        if os.name != "nt":
+            self.assertEqual(_mode(self.home / "config.json"), 0o600)
+        self.assertTrue(
+            any(
+                Path(call.args[0]).name.startswith(".config.json.")
+                and call.args[1] == 0o600
+                for call in chmod.call_args_list
+            )
+        )
+        self.assertEqual(list(self.home.glob(".config.json.*")), [])
+
+    def test_permission_failure_closes_config_before_cleanup(self) -> None:
+        real_chmod = os.chmod
+        real_mkstemp = tempfile.mkstemp
+        real_unlink = os.unlink
+        descriptors = []
+
+        def capture(*args, **kwargs):
+            fd, path = real_mkstemp(*args, **kwargs)
+            descriptors.append(fd)
+            return fd, path
+
+        def refuse_temporary(path, mode):
+            if Path(path).name.startswith(".config.json."):
+                raise PermissionError("private mode refused")
+            return real_chmod(path, mode)
+
+        def unlink_closed(path):
+            with self.assertRaises(OSError):
+                os.fstat(descriptors[0])
+            return real_unlink(path)
+
+        original = os.__dict__.pop("fchmod", None)
+        if original is not None:
+            self.addCleanup(setattr, os, "fchmod", original)
+        with (
+            mock.patch.object(os, "chmod", side_effect=refuse_temporary),
+            mock.patch.object(tempfile, "mkstemp", side_effect=capture),
+            mock.patch.object(os, "unlink", side_effect=unlink_closed),
+            self.assertRaisesRegex(PermissionError, "private mode refused"),
+        ):
+            self._facade().set_observation_enabled(True, confirmed=True)
+        self.assertFalse(self._facade().observation_enabled)
+        self.assertEqual(list(self.home.iterdir()), [])
+        self.assertEqual(len(descriptors), 1)
+        with self.assertRaises(OSError):
+            os.fstat(descriptors[0])
+
     def test_switch_off_matches_direct_helper_and_writes_no_audit(self) -> None:
         direct_root = _init_project(self.parent, "direct")
         wrapped_root = _init_project(self.parent, "wrapped")
@@ -134,8 +188,12 @@ class FacadeRegistrationTests(unittest.TestCase):
         adapter.transition(
             "slice", "in-progress", reason="started", evidence="scope", confirmed=True
         )
-        direct.set_mode("slice", "lite", note="user kept the short path", confirmed=True)
-        adapter.set_mode("slice", "lite", note="user kept the short path", confirmed=True)
+        direct.set_mode(
+            "slice", "lite", note="user kept the short path", confirmed=True
+        )
+        adapter.set_mode(
+            "slice", "lite", note="user kept the short path", confirmed=True
+        )
         self.assertEqual(_business_files(direct_root), _business_files(wrapped_root))
         self.assertFalse((self.home / "audit.db").exists())
         self.assertFalse((self.home / "spool").exists())
@@ -189,7 +247,9 @@ class FacadeRegistrationTests(unittest.TestCase):
         facade.set_observation_enabled(True, confirmed=True)
         registered = facade.register_project(confirmed=True)
         created = facade.create("slice", body="Must not land.\n", confirmed=True)
-        with mock.patch.object(DeveloperStore, "ensure", side_effect=AssertionError("ensure")):
+        with mock.patch.object(
+            DeveloperStore, "ensure", side_effect=AssertionError("ensure")
+        ):
             identity = facade.resolve_identity()
         self.assertEqual(registered.operation_status, "refused")
         self.assertEqual(created.operation_status, "refused")
@@ -211,7 +271,9 @@ class FacadeRegistrationTests(unittest.TestCase):
         os.chmod(self.home, 0o755)
         linked_home = self.parent / "linked-home"
         linked_home.symlink_to(self.home, target_is_directory=True)
-        home_refused = RuntimeFacade(linked_home, self.root).register_project(confirmed=True)
+        home_refused = RuntimeFacade(linked_home, self.root).register_project(
+            confirmed=True
+        )
         self.assertEqual(home_refused.operation_status, "refused")
         self.assertEqual((self.home / "notes.txt").read_text(encoding="utf-8"), "keep")
         self.assertFalse((self.home / "registry.json").exists())
@@ -242,11 +304,15 @@ class FacadeRegistrationTests(unittest.TestCase):
         self.assertEqual((self.home / "notes.txt").read_text(encoding="utf-8"), "keep")
         TaskStore(self.root).create("kept", body="Still here.\n", confirmed=True)
         before = (self.root / ".sbtd/tasks/kept/task.md").read_bytes()
-        removed = self._facade().unregister_project(first.payload["project_id"], confirmed=True)
+        removed = self._facade().unregister_project(
+            first.payload["project_id"], confirmed=True
+        )
         self.assertEqual(removed.operation_status, "succeeded")
         self.assertEqual((self.root / ".sbtd/tasks/kept/task.md").read_bytes(), before)
         listed = self._facade().list_registered_projects().payload
-        self.assertEqual([item["project_id"] for item in listed], [separate.payload["project_id"]])
+        self.assertEqual(
+            [item["project_id"] for item in listed], [separate.payload["project_id"]]
+        )
         self.assertFalse((self.home / "audit.db").exists())
 
     def test_preview_route_does_not_call_saving_route(self) -> None:
@@ -258,7 +324,9 @@ class FacadeRegistrationTests(unittest.TestCase):
             confirmed=True,
             body="Must stay unwritten.\n",
         )
-        with mock.patch.object(TaskRouter, "route", side_effect=AssertionError("route")):
+        with mock.patch.object(
+            TaskRouter, "route", side_effect=AssertionError("route")
+        ):
             preview = self._facade().preview_route(request)
         self.assertFalse(preview.executed)
         self.assertFalse(preview.state_persisted)
@@ -329,7 +397,9 @@ class FacadeRegistrationTests(unittest.TestCase):
         dotdot = self.parent / "dotdot"
         dotdot.symlink_to(elsewhere / "nested", target_is_directory=True)
         escaped = dotdot / ".." / "other"
-        escaped_refused = RuntimeFacade(self.home, escaped).register_project(confirmed=True)
+        escaped_refused = RuntimeFacade(self.home, escaped).register_project(
+            confirmed=True
+        )
         self.assertEqual(escaped_refused.operation_status, "refused")
         self.assertFalse((elsewhere / "other" / ".sbtd").exists())
         real_home = self.parent / "real-home"
@@ -374,7 +444,9 @@ class FacadeRegistrationTests(unittest.TestCase):
         facade = self._facade()
         facade.set_observation_enabled(True, confirmed=True)
         (self.home / "config.json").write_text("{", encoding="utf-8")
-        result = facade.create("slice", body="Still the helper write.\n", confirmed=True)
+        result = facade.create(
+            "slice", body="Still the helper write.\n", confirmed=True
+        )
         self.assertEqual(result.operation_status, "succeeded")
         self.assertTrue(result.state_persisted)
         self.assertEqual(result.audit_status, "gap")

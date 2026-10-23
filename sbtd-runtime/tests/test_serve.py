@@ -108,6 +108,8 @@ class ServeProcess:
             text=True,
             env=env,
             cwd=REPO,
+            encoding="utf-8",
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
         )
         self.port = port
 
@@ -130,7 +132,9 @@ class ServeProcess:
         raise AssertionError("serve did not become ready")
 
     def stop(self) -> tuple[str, str, int]:
-        self.proc.send_signal(signal.SIGINT)
+        self.proc.send_signal(
+            signal.CTRL_BREAK_EVENT if os.name == "nt" else signal.SIGINT
+        )
         out, err = self.proc.communicate(timeout=15)
         return out, err, self.proc.returncode
 
