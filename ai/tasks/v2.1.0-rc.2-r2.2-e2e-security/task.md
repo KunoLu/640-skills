@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T13:10:53+08:00'
+updated_at: '2026-10-23T13:20:17+08:00'
 completed_at: null
 ---
 
@@ -159,6 +159,7 @@ PR-1 本地提交证据：
 | main／01a1670e-d268-7166-9235-0ea39b58c08f（追加取样） | openai-codex/gpt-6-astra | high | 70 / 123（PRE-COMMIT SNAPSHOT，非 FINAL） | 2026-10-23T13:10:53+08:00，main/session/2026-10-23T04-39-47-048Z_01a1670e-d268-7166-9235-0ea39b58c08f.jsonl 第 1–329 行；含实现与验证，不含本次记录提交后回复 | false | 未知（运行中） |
 | QuotaSafetyReview／QuotaSafetyReview.jsonl | kimi-code/k3 | max | 18 / 29（已结束取样，第 1–91 行） | 只读安全／并发／所有权审查；2026-10-23T13:10:53+08:00 读取 | false | 未知 |
 | QuotaCoverageReview／QuotaCoverageReview.jsonl | kimi-code/k3 | max | 60 / 78（已结束取样，第 1–227 行） | 只读覆盖／记录审查及 P3 闭环；2026-10-23T13:10:53+08:00 读取 | false | 未知 |
+| fix1／01a16732-f9bc-7106-811b-8024b58b6a99 | openai-codex/gpt-6-astra | high | 5 / 14（PRE-COMMIT SNAPSHOT，非 FINAL） | 唯一 writer；仅三份 task 归因追加；2026-10-23T13:20:17+08:00，~/.omp/logs/640-rc2-r22-pr1/fix1/session/2026-10-23T05-19-16-412Z_01a16732-f9bc-7106-811b-8024b58b6a99.jsonl 第 1–39 行；不含后续编辑、校验、提交及最终回复 | false | 未知（未核实） |
 
 主会话按 message.role=assistant 及其 toolCall blocks 计数，只读 model_change／thinking_level_change；后续编辑、校验、提交和最终回复不在该 SNAPSHOT 内。FINAL 由 Lord 在 PR body 报告，不将提交前取样写成最终值。
 
@@ -169,3 +170,4 @@ PR-1 本地提交证据：
 | 2026-10-23T12:40:31+08:00 | planned | in-progress | 用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 按 plan.md 定拆分为 4 个串行 PR（PR-1 配额与 507 → PR-2 安全 → PR-3 跨平台 E2E 与对账 → PR-4 性能、校准与收尾），Lord 记录 | strict／user；授权根、分支、入口 cb12b606f1ec74d8bc87da12dd0d828628fa7724 已核实；仅三个本地提交；plan R2.2 行保持 planned。 |
 | 2026-10-23T13:09:16+08:00 | in-progress | checking | PR-1 red→green、真实进程 smoke、最终全量与静态检查完成，进入提交／证据收口；初始 Gate pending 的已执行结论见追加记录。 | corrected HTTP red 2 tests／3 failures；最终定向 16 passed／7.536s；full 394／384 passed／10 skipped／126.036s；golden 61 passed／0.391s；两位独立 reviewer correct，P3 已闭环；contract/PRD/ADR stat 空，三份 YAML 与新归因检查通过。 |
 | 2026-10-23T13:10:53+08:00 | checking | in-progress | PR-1 本地实现与验证完成；R2.2 继续开放，PR-1 完成不等于 R2.2 done。严格串行 PR-2 安全 → PR-3 跨平台与对账 → PR-4 性能／校准／收尾仍待执行，plan R2.2 行保持 planned。 | 本地 commits 6da85134ff5e5270c3ac16181338b1612d8fc4a8、62a10b452feb7dfd3b1ea59886775659679871b3；第三 commit 仅本记录。八个 Python 提交 blob 与 final full-suite hash 一致；无 push／PR／部署／发布，completed_at 保持 null。 |
+| 2026-10-23T13:20:17+08:00 | in-progress | in-progress | 归因更正（append-only）：acdad55 基线第 44 行「mergedAt 由 Lord 提供」、第 157 行 ping「1 / 0（Lord 记录）」、第 163 行「FINAL 由 Lord 在 PR body 报告」的主体均应为 operator。operator 执行 gh 查询、ping、独立计数并撰写 PR body；main session 01a1670e-d268-7166-9235-0ea39b58c08f 的 FINAL 将由 operator 在 PR body 报告。本轮 fix1 仅追加 PRE-COMMIT SNAPSHOT，不冒充 FINAL；第 18 行与原第 169 行 12:11 拆分决定的 Lord 记录归因正确，原样保留。 | 本轮用户提供的操作事实：operator 分别运行 gh pr view 160 --json mergedAt,mergeCommit 与 gh pr view 161 --json mergedAt,mergeCommit，取得 mergedAt 2026-10-23T03:28:33Z／2026-10-23T04:01:59Z 及 mergeCommit e748a5eddfba38cd487af9dfc5271e601de7c76b／cb12b606f1ec74d8bc87da12dd0d828628fa7724；operator 运行并计数 ping。本轮 python3 只读复核 ~/.omp/logs/640-rc2-r22-pr1/ping/session/2026-10-23T04-38-00-274Z_01a1670d-3152-7552-9c9d-4115fa5f0d26.jsonl：9 行、1 assistant／0 toolCall、openai-codex/gpt-6-astra、thinking_level_change=high、resolvedModelIsFallback=false；fix1 模型取样见追加表行，计数口径为 type=message 且 message.role=assistant 的消息／其中 toolCall blocks。本轮沿用 strict／user，仅获准一个本地 records commit；未完整调用 grill-with-docs（明确归因修正，无领域歧义）；DDD／DDIA／legacy／refactoring／release Gate、TDD／BDD 与独立 review 对本轮纯记录更正 not-needed，无代码、契约或部署变更；沿用既有 TaskStore 限制，不改 active／index 或历史 branch，不声称 helper lifecycle／自动恢复成功，不执行远端操作。 |
