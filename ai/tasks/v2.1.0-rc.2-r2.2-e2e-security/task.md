@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T16:02:31+08:00'
+updated_at: '2026-10-23T16:52:17+08:00'
 completed_at: null
 ---
 
@@ -181,6 +181,10 @@ PR-1 本地提交证据：
 | PR-2 fix2／01a167ad-e792 | openai-codex/gpt-6-astra | high | 9 / 15（FINAL） | 编排方整理；运行结束后重数 | false | pid 201112，0 requests |
 | PR-2 main title-gen／pid 161858 | cursor/composer-2.5 → kimi-code/k3-256k | 不适用 | 3 requests（FINAL；不计入 main） | 编排方整理；composer-2.5 ×2（1 success、1 no title），k3-256k ×1 success | false | 无 grok／fallback |
 | PR-2 ping／fix1／fix2 ping／fix2 title-gen | 不适用 | 不适用 | 各 0 requests（FINAL） | 编排方整理；pids 161309／176915／200750／201112 | false | 与上方对应 session 分列 |
+| PR-3 ping／01a167c6-9c42-74b1-a31b-fd540df6b868 | openai-codex/gpt-6-astra | high | 1 / 0（编排方整理） | --no-tools；ASTRA_OK | 未独立核实 | omp pid 213823，0 title-gen requests（编排方整理） |
+| PR-3 main／01a167c7-c661-75df-85f6-fa16bfe6b8a9 | openai-codex/gpt-6-astra | high | 76 / 142（PRE-COMMIT SNAPSHOT，非 FINAL） | 2026-10-23T16:50:06+08:00；~/.omp/logs/640-rc2-r22-pr3/main/session/2026-10-23T08-01-48-129Z_01a167c7-c661-75df-85f6-fa16bfe6b8a9.jsonl 第 1–405 行；按 assistant 消息／toolCall blocks 计数，不含后续报告、编辑、校验、提交与最终回复 | false | 未核实（运行中） |
+| PR-3 NativeExecutionReview／NativeExecutionReview.jsonl | kimi-code/k3 | max | 43 / 62（已结束取样，非 FINAL） | 同 session stem 子目录，第 1–180 行；2026-10-23T16:50:06+08:00 读取；只读审查与闭环 | false | 未核实 |
+| PR-3 ReconciliationRecordsReview／ReconciliationRecordsReview.jsonl | kimi-code/k3 | max | 55 / 71（已结束取样，非 FINAL） | 同 session stem 子目录，第 1–207 行；2026-10-23T16:50:06+08:00 读取；只读审查与闭环 | false | 未核实 |
 
 主会话按 message.role=assistant 及其 toolCall blocks 计数，只读 model_change／thinking_level_change；后续编辑、校验、提交和最终回复不在该 SNAPSHOT 内。FINAL 由 Lord 在 PR body 报告，不将提交前取样写成最终值。
 
@@ -206,6 +210,10 @@ PR-1 本地提交证据：
 | 2026-10-23T16:02:31+08:00 | in-progress | in-progress | PR-2 Reviewy CLEAN 与 FINAL 模型回填；旧 SNAPSHOT 不改。 | 编排方整理：Reviewy CLEAN @ 2d2dbb2，model recount confirmed；运行结束后 session jsonl 计数及 title-gen 见新增 FINAL 表行，全部 resolvedModelIsFallback false。本轮未读取历史 session，不冒称独立重数。 |
 | 2026-10-23T16:02:31+08:00 | in-progress | in-progress | 归因更正（append-only）：本次编辑前 4d29fc5 文件第 25 行（TDD seams）、第 39 行（project-validation 本地命令）、第 103 行（真实进程 smoke／worker seam）、第 133 行（独立 review／task slug 路径）四处旧归因应为「编排方整理」，不是群内用户陈述；原行逐字保留。 | Lord 的 prompt 指令；CodeX 提出后 Lord 于 2026-10-23 15:50–15:59 +08:00 间确认，具体分钟编排方未获知。本轮按内容定位并核实编辑前行号；第 203 行已有 15:33:52 更正，本事件不重复改写。 |
 | 2026-10-23T16:02:31+08:00 | in-progress | in-progress | PR-3 strict 开工与本轮绑定追加（编排方整理）；历史 frontmatter／事件不重写。 | 本轮明确授权 /workspace/640-skills-r22-pr3、feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation，入口 HEAD 4d29fc5a76482950965d929715d3096e66a57b54，工作区干净；延续既有 TaskStore 兼容限制，只更新指定 Markdown，不声称 helper rebind／自动恢复，不写 active／index。未完整调用 grill-with-docs：范围与验收已明确，无领域歧义；仅本地提交。 |
+| 2026-10-23T16:52:17+08:00 | in-progress | in-progress | PR-3 本地实现、真实 Linux E2E 与对账验证完成；原生 macOS／Windows 仍 pending CI，不声明跨平台验收或发布就绪。 | Commit 1 3da831f6926b8fa0031ab18b9c5551cfff9c59e6；commit 2 6649a5e322871fb9683095395fcff4294ca70e68；最终 runtime 398 tests／388 passed／10 skipped，golden 61 passed；原生 driver 四格式与 3 cases 无 skip；两个只读 reviewer correct、findings 闭环。R2.2 status in-progress、plan 第 22 行 planned 保持，PR-4 未执行。 |
+| 2026-10-23T16:52:17+08:00 | in-progress | in-progress | PR-3 CI 门与真实证据来源追加（编排方整理的验收）：新增原生 jobs 必须执行，不允许条件绕过或 continue-on-error。 | runtime-e2e-macos／runtime-e2e-windows；预期 11+2=13 checks，原 11 个 job 实例配置逐项保持。安装失败强制失败并保留证据；安装后 capability 真不可用时记录 unavailable／原因且验证 503，不能算四格式通过。无 push／PR／评论／merge，等待 operator 后续 push 后 CI。 |
+| 2026-10-23T16:52:17+08:00 | in-progress | in-progress | 引用注记（append-only）：开工边界中的 test_serve.py:313 是 4d29fc5 基线行号；稳定符号为 PairingTests.test_pair_once_only_and_ticket_never_in_output，本轮 helper 编辑后声明位于第 317 行；旧注记原样保留。 | ReconciliationRecordsReview 已独立核实 313→317；覆盖仍仅 --no-open，浏览器自动打开路径未测。不是新增归因更正，不改写既有状态事件。 |
+| 2026-10-23T16:52:17+08:00 | in-progress | in-progress | PR-3 模型 PRE-COMMIT SNAPSHOT 追加，不作 FINAL；历史记录与旧计数不改。 | 2026-10-23T16:50:06+08:00 main jsonl 第 1–405 行 76/142，astra high／fallback false；两位 kimi-code/k3 max reviewer 取样见模型表；ping 为编排方整理。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -303,3 +311,84 @@ git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/gold
 - ADR 0002 §3「R2.2 PR-2 验证注记」范围补充记在本 task，不改 ADR：缓解 1「终端不打印 ticket URL」仅由 `test_serve.py:313` 的 `--no-open` 路径覆盖；浏览器自动打开路径未执行，不能推广为该路径的测试结论。本次 records-only commit 不新增或扩展测试。
 - Book Gate Plan：DDD not-needed（未完整 grill、无领域歧义）；DDIA not-needed（不改持久化／schema／异步机制）；legacy/refactoring not-needed（计划不改生产代码，若发现 blocker 则先加载）；TDD／ponytail 已加载，seams 为真实 serve CLI／loopback API／四格式产物及 ReportDocument，按既成实现 characterization 如实记录；独立 review／Code Readability pending；project-validation 已加载，原生 raw 与同 stem 中文报告；release-readiness pending（新增原生 CI jobs，验证后检查证据与运行边界）。无新产品行为，不另立 BDD runner。
 - 本轮仅 AC-33／62 平台 CI 与 AC-51／45 对账。macOS／Windows evidence pending CI；用户 Mac 视觉／字体仍待 D9 真机确认。statistics/query 超配额 507／500 仍为「待用户决定（contract PR）」；performance §18、配额校准与关闭 R2.2 归 PR-4。冻结 contract／schema／PRD／golden；plan 第 22 行 planned、task in-progress 不变。
+
+## R2.2 PR-3 覆盖与验证（2026-10-23，developer-local）
+
+### 实现范围与证据来源
+
+唯一生产修复为 `serve.py` 的 Windows SIGBREAK 清理 blocker：固定版 uvicorn 在 ASGI shutdown 后恢复并重触发原 signal handler，默认 SIGBREAK 会直接终止，绕过 `serve.lock` 的 finally。现在在运行期将 SIGBREAK 设为 Python `default_int_handler`，复用既有 KeyboardInterrupt／锁释放路径，退出后恢复原 handler。POSIX 未提供 SIGBREAK 时保持原逻辑，不拓展 SIGTERM 产品语义。真实 Windows 行为仍待 CI；POSIX 用 SIGTERM 编号模拟 SIGBREAK 的回归明确不冒充 Windows。
+
+`ServeProcess` 仅补 Windows 独立 console process group、CTRL_BREAK_EVENT 及 UTF-8 捕获；复用既有 EventStore／ticket／HTTP seam。`runtime_e2e.py` 在隔离临时 home 中实际启动 `python -B -m serve --no-open`，优先 localhost:6400；占用时由 harness 显式传另一端口，不改服务端 D5。依赖固定 `requirements-serve.txt`／`requirements-renderer.txt`；driver 经 Playwright `install --only-shell chromium` 安装至该临时 home 的 browsers/，结束后清理本次 home，不碰已有用户 runtime／全局配置。
+
+| 验收 | test／job | 关键断言 | 已有证据／边界 |
+|---|---|---|---|
+| AC-33／AC-62 平台部分 | `tests/runtime_e2e.py`；`runtime-e2e-macos`／`runtime-e2e-windows` | 真实 CLI、health／根 HTML／catalog／statistics、文件配对 200 与重用 401；同 snapshot 四格式 202→ready→download 200、MIME／magic／size／SHA-256；SIGINT／CTRL_BREAK exit 0、锁移除、端口关闭、临时 home 删除 | Linux 本地默认 6400 实跑通过；两个 native jobs pending CI，不能宣称 Mac／Windows PASS |
+| AC-51 | `ExportReconciliationTests.test_four_formats_key_values_agree`；driver 同一 HTTP snapshot 对账 | CSV metric 行 vs HTML dt/dd vs 实际 JPEG／PDF renderer 输入；库 golden 独立 pins：tasks.touched=2、steps.success_rate_observed=1/2；HTTP EventStore 重建不含 summary role，按同 snapshot API 值对比（本轮 3、1/2） | 普通 suite 明示 worker stub；native smoke 使用真实 Chromium。PDF 已有 pdftotext 时抽取下载字节，缺工具只验源文档；JPEG 不做 OCR |
+| AC-45 | `ExportReconciliationTests.test_every_manifest_panel_has_export_content`；driver | 13 个 manifest Panel 与 HTML／JPEG／PDF 源文档 section.panel 的 Counter 精确相等，缺失／多余／重复均失败；CSV metric IDs 精确集合、数据族 rows 元数据 vs 实际明细计数、无 metric 的 Panel 映射到 task/run/step/event/data_quality；四格式 metadata panel_ids 相等 | 本地 stub 与 real renderer 均通过；PDF 文本含所有 Panel IDs 和 CJK；JPEG/PDF 人工视觉仍待 D9 |
+| 字体／CJK | `runtime_e2e.browser_font_check` | 真实 Chromium 打开下载的 HTML，await document.fonts.ready、状态 loaded、Panel DOM 精确一致、概览／数据质量存在；CDP 读取实际产生 glyph 的 CJK 字体，不用 fallback fonts.check 冒充 | Linux 命中 Noto Sans CJK SC；Mac 视觉／字体待真机，Windows 仅 CI |
+| 控制信号 blocker | `BreakShutdownTests.test_break_signal_exits_zero_and_releases_lock`；纳入 driver 3-case suite | real serve／uvicorn 收 signal 后 exit 0、锁移除；原生 Windows 用 CTRL_BREAK_EVENT，POSIX 仅编号模拟 | red -15→green 0；保留原 SIGINT／实例锁测试 |
+| 安装失败不可伪造成功 | driver --install-browser，真实失败下载负例 | 先保留 command／exit／stdout／stderr，再 assert 安装 exit 0；安装失败整个 E2E exit 1 | PLAYWRIGHT_DOWNLOAD_HOST=http://127.0.0.1:9 负例实际 exit 1；随后正常下载／四格式／3 cases 通过 |
+
+新的两项 jobs 无 job-level `if`、无 run-step 绕过条件、无 `continue-on-error`；只有 artifact upload 用 `if: always()` 保留失败，缺文件为 error。`yaml.safe_load` 后逐项比较原 jobs 完全不变，预期检查总数 **13（11+2）**；当前没有任何本 PR 原生 CI 结果。安装成功但 capability 真不可用时，HTML／CSV 仍须通过，JPEG／PDF 记录 unavailable 与安全原因、验证 503；不可把这种结果写成四格式通过。
+
+### 精确命令、结果与失败保留
+
+环境 Linux 6.12.94+／x64，Python 3.13.5。真实 renderer 在本 task ignored `reports/renderer-venv` 隔离环境安装精确依赖，Playwright 1.64.0／Chromium headless shell 156.0.8078.4 revision 1248；未装全局工具／未改系统字体。普通完整 suite 使用 `python3`，没有 Playwright，10 skipped 原样保留；真实 Chromium 另由 driver 明确执行，不能将二者混称。
+
+命令前缀：`PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests`；ruff 使用 `RUFF_NO_CACHE=true`。native driver 的 python3 完整路径为 `/workspace/640-skills-r22-pr3/ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3`，输出目录为本 task 的 `reports/`；所有原生命令、stdout、stderr、exit、时间和文件哈希均保存在 raw。
+
+```sh
+python3 -B -m unittest test_export_reconciliation -v
+python3 -B -m unittest test_serve_signals -v
+python3 -B -m unittest test_serve_signals test_serve.InstanceLockTests -v
+python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+python3 -B -m unittest discover -s sbtd-runtime/tests
+python3 -B -m unittest tests.test_workflow_contracts tests.test_ci_selection
+python3 -B tests/run_ci.py --platform linux --shard 1 --shards 3 --list --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/ci-inventory
+ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3 -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports
+ruff check sbtd-runtime/serve.py sbtd-runtime/tests/test_serve.py sbtd-runtime/tests/test_serve_signals.py sbtd-runtime/tests/test_export_reconciliation.py sbtd-runtime/tests/runtime_e2e.py
+ruff format --check sbtd-runtime/serve.py sbtd-runtime/tests/test_serve.py sbtd-runtime/tests/test_serve_signals.py sbtd-runtime/tests/test_export_reconciliation.py sbtd-runtime/tests/runtime_e2e.py
+git diff --check
+git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/golden
+```
+
+| raw label | 开始时间 +08:00 | 原生结果 | unittest／墙钟秒 |
+|---|---|---|---|
+| reconciliation-characterization | 16:07:44 | 2 passed；unchanged production 首轮 green，明示 existing worker stub | 0.184／0.371 |
+| native-e2e-first | 16:11:56 | exit 1；测试误用 running 状态，实际契约 generating | —／7.194 |
+| native-e2e-polling-corrected | 16:18:58 | exit 1；四格式已生成，测试混用 library／HTTP tasks 表预期 2/3 | —／16.975 |
+| break-shutdown-red | 16:20:24 | 1 test／1 failure；真实进程 exit -15，而非 0 | 0.649／0.733 |
+| break-shutdown-green | 16:21:25 | 5 passed；含原 SIGINT／实例锁四用例 | 2.609／2.684 |
+| native-e2e-snapshot-corrected | 16:21:28 | 真四格式、13 Panels、PDF text、CJK、cleanup 通过；当时 suite 2 cases | driver 25.327／25.594 |
+| ruff-first | 16:23:43 | exit 1；UP017 timezone.utc，改用 datetime.UTC | —／0.022 |
+| golden | 16:24:10 | 61 passed，OK | 0.331／0.445 |
+| workflow-tests | 16:24:11 | 52 passed，OK | 0.510／0.650 |
+| ci-dry-run | 16:24:34 | exit 2；runner 不支持 --dry-run 且要求 --output，不伪造成功 | —／0.054 |
+| ruff-check／ruff-format | 16:24:34 | All checks passed／5 files already formatted | —／0.012、0.010 |
+| ci-list-equivalent | 16:24:58 | --list --output 等价只列选择，exit 0；未改 run_ci.py | —／1.143 |
+| native-e2e-unavailable | 16:24:59 | HTML／CSV passed；JPEG／PDF capability unavailable（Playwright 未装），503 验证；不算四格式通过 | driver 4.131／4.311 |
+| runtime-full | 16:25:03 | 398 tests／388 passed／10 skipped，OK | 137.091／137.493 |
+| native-e2e-final（后续 review 仍有修正，保留原 label） | 16:30:01 | 四格式通过；2-case suite | driver 24.296／24.521 |
+| install-failure-negative | 16:41:23 | 关闭的本地下载端口，实际 exit 1，证明不可伪造 green；预期负例 | driver 4.638／4.867 |
+| native-e2e-reviewed（最终 native smoke） | 16:42:36 | 四格式 real Chromium、13 Panels、PDF text、CJK、退出清理；suite 3 cases／0 failure／0 error／0 skipped | driver 25.231／25.454 |
+| ruff-check-reviewed／ruff-format-reviewed | 16:43:01 | All checks passed／5 files already formatted | —／0.013、0.010 |
+| runtime-full-reviewed（Final Full Rerun） | 16:47:06 | 398 tests／388 passed／10 skipped，OK | 132.849／133.213 |
+
+每轮 raw／中文汇总 stem：`reports/api-report-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-2026-10-23T<HH-MM-SS>.{json,md}`。最终 driver 自身报告为 `reports/runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T084236Z.{json,md}`。九节中文总报告／同 stem raw：`reports/api-report-pr3-verification-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-2026-10-23T16-52-00.{json,md}`。失败轮全部保留；reports 不暂存／不发布。额外无落盘 corruption smoke 证明缺 Panel、多 Panel、错误 key value 三种变异均被拒绝，不替代正式 suite。
+
+### Gate、review 与剩余边界
+
+- **Legacy Change Safety Review: characterized；Refactoring Review: proceed（normal）。** 发现 SIGBREAK blocker 后、生产编辑前已加载两项 gate；real-process red→green 建立安全网。既有 SIGINT、API、配对、导出语义保持，不做无关重构。SIGBREAK 原 handler 成对安装／恢复，uvicorn 仍执行自身 ASGI shutdown。
+- **TDD：对账为 characterization，退出 blocker 为 red→green。** 不为既成正确导出伪造 red。初稿两处 fixture／协议状态错误与 lint 失败如实保留；修测试，不改生产统计去迁就预期。新增中文 Markdown／English Gherkin 规范为 `sbtd-runtime/spec/r2.2-native-e2e-scenarios.md`，在生产 fix 前落盘。
+- **独立 review／Code Readability：correct。** NativeExecutionReview 两项：安装失败必须 fatal、BreakShutdownTests 必须接 CI，均已修并复审 CLOSED；ReconciliationRecordsReview 的相同安装 finding 已关闭，历史行号漂移按本次追加事件解决。两位只读、不运行测试／lint／formatter，不是远端 Reviewy／CI。Ponytail 复用 stdlib／现有 worker seam，不引入框架、依赖或泛化层。
+- **project-validation：passed（本地指定范围）。** BDD traceable；API Contract verified；Cross-repo context not-needed；真实 CLI smoke backend-only + real renderer／Mock Strategy none。普通 suite 的可选 browser worker 为既有 stub，明确标注。Playwright Python CLI／实际 Chromium 已执行；未改 UI，Chrome/Playwright MCP 与 Maestro 不需要。rtk skipped-for-report，原生 subprocess 保留证据；LSP 实际返回 No language server found，改用源码／调用点；ty 未安装，未声称 typecheck 通过。
+- **Release Readiness Review: blocked（原生 CI／D9 验收未完成）。** 本地 code／tests 交付完成不等于 R2.2 完成或发布就绪。macOS／Windows 的 13 个 checks 必须在后续 CI 真实运行；用户 Mac 视觉／字体、JPEG/PDF 人工视觉仍待 D9。Windows 只有 CI 证据；chmod 的 POSIX mode 不证明 NTFS ACL。JPEG 不做 pixel OCR；PDF 缺 pdftotext 时报告 source-document-only，不装新抽取依赖。性能 §18／容量与默认配额校准归 PR-4。
+- **提交内容身份已重验证。** 原 raw 使用真实被测 HEAD 3da831f + dirty 工作树，不改写为新 SHA。commit 2 的 44 个 runtime Python blob SHA-256 与 runtime-full-reviewed raw 全部相等；这是内容身份校验，不是提交后测试重跑／新 CI。最终 commit 只更新本 task。
+- diff --check exit 0；冻结 contract／PRD／golden stat 为空。workflow YAML 解析并核对原 job 配置不变；task frontmatter 按 yaml.safe_load 校验。commit 1 提交后对 added-only 文本执行禁用归因 grep，零命中；旧行不改写。无新增 schema／contract／PRD／golden 变更请求。statistics/query 超配额 507／500 仍为 **待用户决定（contract PR）**，未处理。
+- Final Test Report／Run Summary MD generated；Targeted Rerun／Affected Subset Rerun／Final Full Rerun passed（本地）。Evidence Source developer-local，Source Revision dirty 原始证据／提交内容身份已核验，Environment Alignment verified 仅 Linux，Evidence Publication local-only。无发布、部署、远端操作或用户数据删除；回退边界为撤回代码提交。沿用 Markdown 绑定记录，不宣称 TaskStore helper／自动恢复可靠。
+
+### 本轮提交
+
+1. `3da831f6926b8fa0031ab18b9c5551cfff9c59e6` — `docs(plan,task): backfill #163 merge and FINAL counts; scope and attribution notes (R2.2 PR-3 commit 1)`；仅 plan.md／本 task。ADR scope note 选择追加在本 task，未改 ADR 文件。
+2. `6649a5e322871fb9683095395fcff4294ca70e68` — `test(runtime): native macOS/Windows E2E and four-format reconciliation; fix Ctrl-Break cleanup`；8 文件：validation.yml、serve.py、test_serve.py、test_serve_signals.py、test_export_reconciliation.py、runtime_e2e.py、r2.2-native-e2e-scenarios.md、install-and-use.md。
+3. `docs(task): record R2.2 PR-3 E2E/reconciliation verification` — 仅本 task；SHA 由最终输出提供，避免自引用。R2.2 保持 in-progress，plan 第 22 行保持 planned；没有 push／PR／评论／merge／rebase／amend／force。
