@@ -7,7 +7,7 @@ mode_note: 用户明确 strict、option A、PRD-only；主会话唯一 writer／
 status: done
 branch: docs/v2.1.0-rc.2-prd-9-6-idempotency-conflict
 created_at: '2026-10-23T10:45:17+08:00'
-updated_at: '2026-10-23T10:48:16+08:00'
+updated_at: '2026-10-23T12:40:31+08:00'
 completed_at: '2026-10-23T10:48:16+08:00'
 ---
 
@@ -17,7 +17,11 @@ completed_at: '2026-10-23T10:48:16+08:00'
 
 任务来源：用户 2026-10-23「640 step 2: PRD §9.6 PR, option A」启动指令。用户于 **2026-10-22 23:23／23:24 Asia/Shanghai** 选择 option A（群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）：createExport 同 key 不同 payload 返回 HTTP 400；snapshot 写成待定，未实现 HTTP 入口，等 POST 路由实现时另开 PRD PR 决定；refresh／ingest 保留 409。
 
+2026-10-23 注记：PRD §9.6 的逐字归因是「（用户 2026-10-22 23:23／23:24 +08:00 群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）」；以此 literal string 为权威措辞，本次对照 PRD 第 845 行核实，上段历史摘要不改。
+
 入口工作根 `/workspace/640-skills-s2prd`，分支见 frontmatter；HEAD 与 origin/main 均为 `de97926811410e7d61d846fc8e95ddaa0738bfbf`（PR #159 squash-merge）。入口 `git status --short` 为空。第 1 步 [PR #160](https://github.com/KunoLu/640-skills/pull/160) 已 OPEN、under review（来源：编排方转述；本会话不请求远端核验），满足 Lord 要求的开工前提；不读取或修改其 worktree。
+
+2026-10-23 更正注记：#160 已于 `2026-10-23T11:28:33+08:00` squash-merge 为 `e748a5eddfba38cd487af9dfc5271e601de7c76b`，上句为开工时状态，保留原文。
 
 未完整调用 grill-with-docs：用户决定、最小修改范围与验收均明确，只转录已批准决定，无新领域设计。
 
@@ -108,3 +112,6 @@ completed_at: '2026-10-23T10:48:16+08:00'
 | 2026-10-23T11:33:12+08:00 | done | done | 归因更正：PRD §9.6 归因现为「（用户 2026-10-22 23:23／23:24 +08:00 群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）」，第 18 行摘要同步为「选择 option A（群内确认（23:23 选 A，23:24 snapshot 待定），Lord 记录）」；依据 Reviewy NOT CLEAN @ 8f9045c（blocker B1）及 Lord 2026-10-23 11:18 +08:00 裁定，第二次时间按 Lord 记录为 23:24；PRD 已移除「编排方转述」；既有事件保持不变（append-only）；title-gen note deferred。 | rg -n '编排方转述' docs/prd：零命中，exit 1；golden 61 tests OK；git diff --check clean；diff vs 8f9045c 仅 PRD 第 845 行子串、task.md 第 18 行括注及本追加行；fix1 PRE-COMMIT SNAPSHOT（非最终计数）：2026-10-23T11:33:12+08:00，session 日志 /home/box/.omp/logs/640-rc2-s2prd96/run-fix1/session/2026-10-23T03-31-38-835Z_01a166d0-70d3-77d9-ae2d-7dd4493b66dd.jsonl 第 1–48 行，model_change=openai-codex/gpt-6-astra，thinking_level_change=high，resolvedModelIsFallback=false，assistant messages=6，toolCall blocks=18；title-gen：未知 |
 | 2026-10-23T11:37:48+08:00 | done | done | 过程记录：第一次 B1 修复 omp 运行在 /workspace/640-skills-s2prd：astra ping 于 2026-10-23 11:19:43 +08:00 回复 ASTRA_OK；主运行于 11:20:14 +08:00 启动（omp 日志 pid 864471，最后一条日志 11:20:16 +08:00），约 11:20–11:21 +08:00 box 重启中断该运行，未产生任何文件修改或本地 commit；该运行的 session 随重启丢失，其模型计数为 未知。重启后 omp 全局安装损坏，按 18.12.6 重新安装（未改全局配置）；在新克隆 /workspace/640-skills-s2prd-fix1（HEAD 8f9045c58d36345c64e183a9fd5a9cd352b3c692 核对一致）于 11:31:14 +08:00 重新 ping（ASTRA_OK），11:31:38 +08:00 重跑修复，产生 commit ba0326c（归因更正）；旧 worktree 因重启弃用。补记运行首次尝试（fix1b，11:36:14 +08:00 启动，openai-codex/gpt-6-astra high，非 fallback，3 assistant／7 toolCall）因提示中启动时间不准确，由编排方在任何文件修改前终止；本行由 fix1c 补记，仅追加事件。 | 历史过程依据编排方提供记录；编辑前 git rev-parse HEAD＝ba0326ce58391013c354615a29591ffa06565823；git diff --check clean；git diff HEAD --stat 仅 task.md，1 insertion；PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py：61 tests OK；fix1c PRE-COMMIT SNAPSHOT（非最终计数）：2026-10-23T11:37:48+08:00，session 日志 /home/box/.omp/logs/640-rc2-s2prd96/run-fix1/session-c/2026-10-23T03-36-53-047Z_01a166d5-3c37-7456-bd38-42d2a7e86e15.jsonl 第 1–32 行，model_change=openai-codex/gpt-6-astra，thinking_level_change=high，resolvedModelIsFallback=false，4 assistant messages／11 toolCall blocks；title-gen：未知。 |
 | 2026-10-23T11:40:54+08:00 | done | done | 模型记录补全：按 CodeX 要求，在「模型使用」表追加本次 B1 修复全部 omp 运行（含 11:20 被重启中断的运行、各次 ping、fix1b 终止尝试、fix1c 及本次 fix1d）与各 title-gen 调用各自一行；计数取自各 session jsonl／omp 日志，无法统计者记为 未知；仅追加，既有行不改。 | 编辑前 HEAD＝f8bb0f83b284bc12aa04b96f2de23060b4291601；git diff --check clean；git diff HEAD --stat 仅 task.md，12 insertions／0 deletions；PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py：61 tests OK；rg -n '编排方转述' docs/prd：等价专用 grep 检查零命中；fix1d PRE-COMMIT SNAPSHOT（非最终计数）：2026-10-23T11:40:54+08:00，session-d/2026-10-23T03-40-07-770Z_01a166d8-34da-74d8-98de-c795840260f3.jsonl 第 1–37 行，model_change=openai-codex/gpt-6-astra，thinking_level_change=high，resolvedModelIsFallback=false，4 assistant／13 toolCall；title-gen 未知（运行中） |
+| 2026-10-23T12:40:31+08:00 | done | done | R2.2 PR-1 首 commit 回填：#161 已 squash-merge；status done、completed_at 与历史事件不变。 | PR https://github.com/KunoLu/640-skills/pull/161；merge SHA cb12b606f1ec74d8bc87da12dd0d828628fa7724；完成时间 2026-10-23T12:01:59+08:00，mergedAt 2026-10-23T04:01:59Z（Lord 记录）；本次 git log -1 --format='%H %cI' 核实 committer 时间一致。 |
+| 2026-10-23T12:40:31+08:00 | done | done | 模型 FINAL 回填，原行不改：ping 01a166a4-25f9 1／0；main 01a166a5-0a8a 19／51（原第 86 行 11／42 为 PRE-COMMIT SNAPSHOT）；ping #1 01a166c5 1／0；main #1 pid 864471 未知／未知（重启丢失）；约 11:31:00 ENOENT ping 0／0；ping #2 01a166d0-1177 1／0；main #2 01a166d0-70d3 13／26；fix1b 01a166d4 3／7（终止）；fix1c 01a166d5 13／22；fix1d 01a166d8 14／26（原第 97 行 4／13 为 PRE-COMMIT SNAPSHOT）。 | Lord 记录：来源为 #161 PR body 经 Reviewy 核验的模型表；计数为 assistant／toolCall，本次不冒充重新读取历史日志。 |
+| 2026-10-23T12:40:31+08:00 | done | done | Title-gen FINAL 注记：fix1d 为 cursor/composer-2.5 ×2，均成功、无 fallback（omp log pid 25206）；main #2 与 fix1c 各有 7 步 title-gen 链，grok 回复按 fallback 计，仅标题，不混入主任务模型计数。 | Lord 记录：composer-2.5 → k3-256k → deepseek-flash（error）→ gpt-6-astra → grok-4.7 → grok-4.6 → gpt-6.1-sol；历史表保留，fix1d 原「未知（运行中）」仅当时取样。 |

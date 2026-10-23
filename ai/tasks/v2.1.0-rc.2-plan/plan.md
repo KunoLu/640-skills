@@ -70,11 +70,12 @@
 
 - 锁定决定：D9（CI runner＋用户 Mac 组合证据）、D14（Panel manifest 对账 AC-45）、D15（脱敏三层证据 AC-54/AC-55）；D5–D8 的实现归属 R2.0a（Local Server & Access Control 上下文），本行只对既成实现产出跨平台与安全证据，不改实现。
 - 验收：GitHub Actions macOS／Windows runner 跑启动、API、四格式导出与字体断言（AC-33、AC-62），用户 Mac 补一轮视觉／字体确认；报告逐条标注证据来自 CI runner 还是真机，Windows 仅 CI 证据时如实写明；Host/Origin 三组负例（外部域名 Host、错误端口、跨 Origin）锁定（AC-56）；ticket 不落日志、命令行参数可见风险与缓解已入 ADR；四格式关键数值一致（AC-51）与 Panel manifest 对账（AC-45）通过；性能按 §18 基线如实记录。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
+- PR 拆分（用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 记录）：PR-1 配额与 507 → PR-2 安全 → PR-3 跨平台 E2E 与对账 → PR-4 性能、校准与收尾；严格串行，每个 PR 首个 commit 回填上一 PR；行状态至 PR-4 收尾前不变。
 
 ### Docs — 后续项 B／C（E 前）
 
 - 顺序依据：用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录；仅将 B／C 从 F 移到 E 前，使用 P6.5，E P7／F P8 不变。
-- 后续项 B：在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。
+- 后续项 B：在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。
 - 后续项 C：第 7 项另开单独 PRD docs PR，与 B 两种屏蔽条件及派生行边界措辞一致；独立于第 4 项磁盘上限 PRD docs PR。本轮仅调整计划，不改 PRD。
 
 ### E — prerelease v2.1.0-rc.2
@@ -108,7 +109,9 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 2026-10-23 更新（用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录）：B／C 移至 E 前 Docs P6.5；第 7 项编号保留。
 
-后续项 D（首见 R2.1b task「后续项 D」，PR #156 引用）：Idempotency-Key 幂等重放先于 renderer 可用性检查；契约已 done：PR [#159](https://github.com/KunoLu/640-skills/pull/159) 已 squash-merge，merge SHA `de97926811410e7d61d846fc8e95ddaa0738bfbf`，完成时间 `2026-10-22T22:43:15+08:00`（mergedAt `2026-10-22T14:43:15Z`；git committer 时间 `2026-10-22T22:43:14+08:00`）。runtime 实现由本分支 `fix/v2.1.0-rc.2-idempotent-replay-before-503` 承担，状态 in_progress，任务记录 `ai/tasks/v2.1.0-rc.2-idempotent-replay-before-503/task.md`，不再归 R2.2；配额实现仍归 R2.2。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。
+后续项 D（首见 R2.1b task「后续项 D」，PR #156 引用）：Idempotency-Key 幂等重放先于 renderer 可用性检查；契约已 done：PR [#159](https://github.com/KunoLu/640-skills/pull/159) 已 squash-merge，merge SHA `de97926811410e7d61d846fc8e95ddaa0738bfbf`，完成时间 `2026-10-22T22:43:15+08:00`（mergedAt `2026-10-22T14:43:15Z`；git committer 时间 `2026-10-22T22:43:14+08:00`）。runtime 实现由本分支 `fix/v2.1.0-rc.2-idempotent-replay-before-503` 承担，状态 in_progress，任务记录 `ai/tasks/v2.1.0-rc.2-idempotent-replay-before-503/task.md`，不再归 R2.2；配额实现仍归 R2.2。R2.2 实现 507 时须新增 HTTP 回归：已受理同 key 重放在配额超限下仍返回原 202、无新 job；新请求 507 位于 410 之后、422 之前。（2026-10-23 回填：runtime PR [#160](https://github.com/KunoLu/640-skills/pull/160) 已 squash-merge，merge SHA `e748a5eddfba38cd487af9dfc5271e601de7c76b`，完成时间 `2026-10-23T11:28:33+08:00`（mergedAt `2026-10-23T03:28:33Z`；git committer 时间一致），状态 done，与其 task.md status done 一致。）
+
+2026-10-23 回填：rc.2 第 2 步 PRD §9.6 Idempotency-Key payload 冲突（option A）PR [#161](https://github.com/KunoLu/640-skills/pull/161) 已 squash-merge，merge SHA `cb12b606f1ec74d8bc87da12dd0d828628fa7724`，完成时间 `2026-10-23T12:01:59+08:00`（mergedAt `2026-10-23T04:01:59Z`；git committer 时间一致），任务记录 `ai/tasks/v2.1.0-rc.2-prd-9-6-idempotency-conflict/task.md`。
 
 ### 磁盘上限决定（用户 2026-10-21 12:58 +08:00 批准）
 
