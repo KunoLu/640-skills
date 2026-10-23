@@ -529,7 +529,9 @@ def _terminate_group(proc: subprocess.Popen[bytes]) -> None:
     if os.name == "posix":
         try:
             os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
+            # Darwin may deny SIGKILL for a zombie-only group. Reap first;
+            # only ESRCH from the subsequent probe proves cleanup succeeded.
             pass
         proc.wait(timeout=5)
         deadline = time.monotonic() + 2
@@ -538,6 +540,10 @@ def _terminate_group(proc: subprocess.Popen[bytes]) -> None:
                 os.killpg(proc.pid, 0)
             except ProcessLookupError:
                 return
+            except PermissionError:
+                # A reaped leader alone does not prove its descendants are gone.
+                # Persistent EPERM must reach the same failure deadline.
+                pass
             if time.monotonic() >= deadline:
                 raise RendererError(RENDERER_FAILED)
             time.sleep(0.01)

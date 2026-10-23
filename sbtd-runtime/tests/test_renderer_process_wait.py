@@ -5,6 +5,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+import subprocess
 import tempfile
 import time
 import unittest
@@ -116,6 +117,123 @@ class WorkerExitTests(unittest.TestCase):
             self.assertEqual(cleaned, [12345])
             queue.close.assert_called_once_with()
             process.poll.assert_not_called()
+
+
+class GroupPermissionTests(unittest.TestCase):
+    def test_sigkill_eperm_returns_result_only_after_reap_and_esrch(self) -> None:
+        self._run_cleanup(kill_denied=True)
+
+    def test_probe_eperm_then_esrch_returns_result(self) -> None:
+        self._run_cleanup(probes=("denied", "gone"))
+
+    def test_group_still_present_after_reap_fails(self) -> None:
+        for probe in ("alive", "denied"):
+            with self.subTest(probe=probe):
+                self._run_cleanup(
+                    kill_denied=True, probes=(probe,), expected_failure=True
+                )
+
+    def test_worker_failure_survives_eperm_cleanup(self) -> None:
+        for failure in ("exit", "error", "missing"):
+            with self.subTest(failure=failure):
+                self._run_cleanup(
+                    kill_denied=True, worker_failure=failure, expected_failure=True
+                )
+
+    def test_unreaped_leader_cannot_turn_eperm_into_success(self) -> None:
+        self._run_cleanup(kill_denied=True, wait_timeout=True, expected_failure=True)
+
+    def _run_cleanup(
+        self,
+        *,
+        kill_denied: bool = False,
+        probes: tuple[str, ...] = ("gone",),
+        worker_failure: str | None = None,
+        wait_timeout: bool = False,
+        expected_failure: bool = False,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            job = Path(temporary)
+            (job / "request.json").write_text(
+                json.dumps({"home": temporary, "format": "jpeg", "preflight": True}),
+                encoding="utf-8",
+            )
+            if worker_failure != "missing":
+                (job / "result.json").write_text(
+                    json.dumps({"scale": 2, "warnings": []}), encoding="utf-8"
+                )
+            if worker_failure == "error":
+                (job / "error.json").write_text(
+                    json.dumps({"code": "RENDERER_FAILED"}), encoding="utf-8"
+                )
+            returncode = 7 if worker_failure == "exit" else 0
+            process = Mock(pid=12345, returncode=None)
+            probe_count = 0
+
+            def reap(timeout):
+                if wait_timeout:
+                    raise subprocess.TimeoutExpired("worker", timeout)
+                process.returncode = returncode
+                return returncode
+
+            def killpg(pid, sig):
+                nonlocal probe_count
+                self.assertEqual(pid, process.pid)
+                if sig == 9:
+                    self.assertIsNone(process.returncode)
+                    if kill_denied:
+                        raise PermissionError(errno.EPERM, "zombie group")
+                    return
+                self.assertEqual(sig, 0)
+                self.assertEqual(process.returncode, returncode, "probe before reap")
+                state = probes[min(probe_count, len(probes) - 1)]
+                probe_count += 1
+                if state == "gone":
+                    raise ProcessLookupError(errno.ESRCH, "group gone")
+                if state == "denied":
+                    raise PermissionError(errno.EPERM, "group inaccessible")
+
+            process.wait.side_effect = reap
+            native_os = SimpleNamespace(
+                name="posix",
+                environ=os.environ,
+                killpg=Mock(side_effect=killpg),
+                waitid=Mock(
+                    return_value=SimpleNamespace(si_status=returncode, si_code=1)
+                ),
+                P_PID=1,
+                WEXITED=4,
+                WNOHANG=1,
+                WNOWAIT=0x1000000,
+                CLD_EXITED=1,
+            )
+            with (
+                patch.object(browser_renderer, "os", native_os),
+                patch.object(browser_renderer, "signal", SimpleNamespace(SIGKILL=9)),
+                patch.object(
+                    browser_renderer.subprocess, "Popen", return_value=process
+                ),
+                patch.object(
+                    browser_renderer.time, "monotonic", side_effect=range(100)
+                ),
+                patch.object(browser_renderer.time, "sleep"),
+            ):
+                if wait_timeout:
+                    with self.assertRaises(subprocess.TimeoutExpired):
+                        browser_renderer._execute_job(job, job, None, 100)
+                elif expected_failure:
+                    with self.assertRaises(browser_renderer.RendererError) as caught:
+                        browser_renderer._execute_job(job, job, None, 100)
+                    self.assertEqual(caught.exception.code, "RENDERER_FAILED")
+                else:
+                    self.assertEqual(
+                        browser_renderer._execute_job(job, job, None, 100),
+                        (b"", {"scale": 2, "warnings": []}),
+                    )
+            process.wait.assert_called_once_with(timeout=5)
+            process.poll.assert_not_called()
+            if not wait_timeout:
+                self.assertGreaterEqual(probe_count, 1)
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ jobs:
           python-version: "3.12.10"
 
       - name: Install declared Onboard dependencies
-        run: python -m pip install -r sbtd-workflow-onboard/requirements.txt
+        run: python -m pip install -r sbtd-workflow-onboard/requirements.txt -r sbtd-runtime/requirements-serve.txt
 
       - name: Prepare Python bytecode before source snapshots
         run: python -m compileall -q sbtd-workflow-onboard/scripts tests
