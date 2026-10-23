@@ -1,0 +1,499 @@
+"""Native AC-33/45/51/62 evidence: real serve CLI, stores and optional Chromium.
+
+Run with python3 -B sbtd-runtime/tests/runtime_e2e.py --output <directory>
+--install-browser authorizes the pinned Playwright --only-shell download into
+this run's disposable runtime home. No user runtime or browser profile is used.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import io
+import json
+import os
+import platform
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+
+RUNTIME = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RUNTIME))
+
+from browser_renderer import _shell_executable
+from export_render import load_panel_manifest
+from test_csv_export import _dataset, _scope
+from test_export_reconciliation import (
+    ExportReconciliationTests,
+    assert_key_values,
+    assert_panels,
+    assert_pdf_text,
+)
+from test_serve import (
+    ServeProcess,
+    _enable_observation,
+    _free_port,
+    _seed_golden_events,
+    pair,
+    request,
+)
+from test_serve_signals import BreakShutdownTests
+
+
+def browser_font_check(home: Path, document: str, panels: list[str]) -> dict:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(
+            executable_path=str(_shell_executable(home))
+        )
+        try:
+            context = browser.new_context(service_workers="block")
+            context.route("**/*", lambda route: route.abort())
+            page = context.new_page()
+            page.set_content(document)
+            state = page.evaluate("""async () => {
+                await document.fonts.ready;
+                return {fonts: document.fonts.status,
+                    panels: [...document.querySelectorAll('section.panel')].map(p => p.id),
+                    text: document.body.innerText};
+            }""")
+            assert state["fonts"] == "loaded", "font readiness failed"
+            assert state["panels"] == panels, "browser panel structure differs"
+            assert "概览" in state["text"] and "数据质量" in state["text"], (
+                "CJK text missing"
+            )
+            # The actual glyph-producing font, not fonts.check()'s fallback success.
+            session = context.new_cdp_session(page)
+            session.send("DOM.enable")
+            session.send("CSS.enable")
+            dom = session.send("DOM.getDocument")
+            node = session.send(
+                "DOM.querySelector",
+                {"nodeId": dom["root"]["nodeId"], "selector": "#overview h2"},
+            )
+            fonts = session.send(
+                "CSS.getPlatformFontsForNode", {"nodeId": node["nodeId"]}
+            )["fonts"]
+            cjk = [
+                font["familyName"]
+                for font in fonts
+                if font["glyphCount"] > 0
+                and any(
+                    marker in font["familyName"].lower()
+                    for marker in (
+                        "cjk",
+                        "pingfang",
+                        "hiragino",
+                        "yahei",
+                        "simsun",
+                        "unicode",
+                    )
+                )
+            ]
+            assert cjk, "no verified CJK font produced heading glyphs"
+            return {
+                "status": "passed",
+                "fonts_ready": state["fonts"],
+                "cjk_families": cjk,
+                "source": "downloaded HTML in real Chromium; not pixel OCR",
+            }
+        finally:
+            browser.close()
+
+
+def exercise(home: Path, evidence: dict, install_browser: bool) -> None:
+    case = unittest.TestCase()
+    _enable_observation(home)
+    _seed_golden_events(home)
+    if install_browser:
+        command = [
+            sys.executable,
+            "-m",
+            "playwright",
+            "install",
+            "--only-shell",
+            "chromium",
+        ]
+        installed = subprocess.run(
+            command,
+            env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(home / "browsers")},
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=300,
+        )
+        evidence["browser_install"] = {
+            "command": command,
+            "exit_code": installed.returncode,
+            "stdout": installed.stdout,
+            "stderr": installed.stderr,
+        }
+        case.assertEqual(
+            installed.returncode,
+            0,
+            "pinned headless-shell installation failed; see browser_install evidence",
+        )
+    elif os.environ.get("SBTD_RENDERER_TEST_HOME"):
+        shutil.copytree(
+            Path(os.environ["SBTD_RENDERER_TEST_HOME"]) / "browsers", home / "browsers"
+        )
+        evidence["browser_install"] = {
+            "source": "copy of explicit SBTD_RENDERER_TEST_HOME/browsers; no profile reused"
+        }
+    else:
+        evidence["browser_install"] = {
+            "source": "not requested; capability must describe unavailable renderer"
+        }
+
+    port = 6400
+    with socket.socket() as probe:
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError:
+            port = _free_port()
+    evidence["port"] = port
+    evidence["default_port"] = port == 6400
+    evidence["requests"] = []
+    headers = {}
+
+    def api(method, path, expected=200, body=None):
+        status, response_headers, payload = request(
+            port, method, path, body=body, headers=headers, host=f"localhost:{port}"
+        )
+        evidence["requests"].append(
+            {"method": method, "path": path, "expected": expected, "status": status}
+        )
+        case.assertEqual(status, expected, f"{method} {path}")
+        return response_headers, payload
+
+    server = ServeProcess(home, port, "--no-open")
+    secrets = []
+    try:
+        server.wait_ready()
+        _, health = api("GET", "/api/v1/health")
+        case.assertEqual(json.loads(health), {"status": "ok"})
+        _, dashboard = api("GET", "/")
+        case.assertIn(b"<html", dashboard.lower())
+        ticket_file = home / "pairing-ticket"
+        mode = ticket_file.stat().st_mode & 0o777
+        if os.name != "nt":
+            case.assertEqual(mode, 0o600)
+        evidence["ticket_file"] = {
+            "mode": oct(mode),
+            "permission_evidence": "POSIX 0600 asserted"
+            if os.name != "nt"
+            else "Windows chmod is not a POSIX ACL proof; isolated runner temp home",
+        }
+        ticket = ticket_file.read_text(encoding="utf-8").strip()
+        secrets.append(ticket)
+        status, session, pair_headers = pair(port, ticket)
+        case.assertEqual(status, 200, "pairing failed")
+        secrets.extend([session["access_token"], pair_headers["x-csrf-token"]])
+        headers.update(
+            {
+                "Authorization": f"Bearer {session['access_token']}",
+                "X-CSRF-Token": pair_headers["x-csrf-token"],
+            }
+        )
+        case.assertEqual(pair(port, ticket)[0], 401)
+        evidence["requests"].extend(
+            [
+                {
+                    "method": "POST",
+                    "path": "/api/v1/session/pair",
+                    "expected": 200,
+                    "status": status,
+                },
+                {
+                    "method": "POST",
+                    "path": "/api/v1/session/pair",
+                    "expected": 401,
+                    "status": 401,
+                },
+            ]
+        )
+        _, catalog_bytes = api("GET", "/api/v1/metrics/catalog")
+        catalog = json.loads(catalog_bytes)["data"]
+        manifest = load_panel_manifest()
+        metrics = sorted(
+            {metric for panel in manifest["panels"] for metric in panel["metric_ids"]}
+        )
+        case.assertTrue(
+            set(metrics) <= {metric["metric_id"] for metric in catalog["metrics"]}
+        )
+        _, query_bytes = api(
+            "POST", "/api/v1/statistics/query", body=_scope(_dataset(), metrics)
+        )
+        answer = json.loads(query_bytes)["data"]
+        snapshot_id = answer["snapshot_id"]
+        # API ingestion derives tasks from events (no summary role field); use
+        # this snapshot's API values, not the richer library fixture's task table.
+        expected_values = {
+            metric: str(answer["metrics"][metric]["value"])
+            for metric in ("tasks.touched", "steps.success_rate_observed")
+        }
+        _, capabilities = api("GET", "/api/v1/capabilities")
+        formats = json.loads(capabilities)["data"]["exports"]
+        evidence["capabilities"] = formats
+        payloads = {}
+        evidence["exports"] = {}
+        for format_name in ("html", "csv", "jpeg", "pdf"):
+            headers["Idempotency-Key"] = uuid.uuid4().hex
+            body = {"snapshot_id": snapshot_id, "format": format_name}
+            if not formats[format_name]["available"]:
+                case.assertIn(format_name, ("jpeg", "pdf"))
+                case.assertTrue(formats[format_name]["reason"])
+                case.assertFalse(formats[format_name]["http_available"])
+                _, rejected = api("POST", "/api/v1/exports", 503, body)
+                case.assertEqual(
+                    json.loads(rejected), {"detail": "EXPORT_RENDERER_UNAVAILABLE"}
+                )
+                evidence["exports"][format_name] = {
+                    "status": "unavailable",
+                    "reason": formats[format_name]["reason"],
+                }
+                continue
+            _, accepted = api("POST", "/api/v1/exports", 202, body)
+            export_id = json.loads(accepted)["data"]["export_id"]
+            deadline = time.monotonic() + 90
+            while True:
+                _, state = api("GET", f"/api/v1/exports/{export_id}")
+                info = json.loads(state)["data"]
+                if info["status"] == "ready":
+                    break
+                case.assertIn(info["status"], ("queued", "generating"))
+                case.assertLess(time.monotonic(), deadline, "export timeout")
+                time.sleep(0.2)
+            download_headers, payload = api("GET", f"/api/v1/exports/{export_id}/file")
+            case.assertEqual(info["snapshot_id"], snapshot_id)
+            case.assertEqual(info["sha256"], hashlib.sha256(payload).hexdigest())
+            case.assertEqual(info["byte_size"], len(payload))
+            case.assertIn(format_name, download_headers.get("content-type", ""))
+            if format_name == "jpeg":
+                case.assertTrue(payload.startswith(b"\xff\xd8\xff"))
+            if format_name == "pdf":
+                case.assertTrue(payload.startswith(b"%PDF-"))
+            payloads[format_name] = payload
+            evidence["exports"][format_name] = {
+                "status": "passed",
+                "sha256": info["sha256"],
+                "byte_size": len(payload),
+            }
+        documents = {"html": payloads["html"].decode("utf-8")}
+        evidence["key_values"] = assert_key_values(
+            case, documents, payloads["csv"], expected_values
+        )
+        evidence["panels"] = assert_panels(case, documents, payloads["csv"])
+        if "pdf" in payloads:
+            evidence["pdf_text"] = assert_pdf_text(
+                case, payloads["pdf"], evidence["panels"], expected_values
+            )
+        if "jpeg" in payloads:
+            evidence["fonts"] = browser_font_check(
+                home, documents["html"], evidence["panels"]
+            )
+        else:
+            evidence["fonts"] = {
+                "status": "unavailable",
+                "reason": formats["jpeg"]["reason"],
+            }
+        # Same source-document boundary tests as the local runtime suite, using
+        # the real installed browser on capable native runners (no stub there).
+        previous_home = os.environ.get("SBTD_RENDERER_TEST_HOME")
+        os.environ["SBTD_RENDERER_TEST_HOME"] = str(home)
+        try:
+            stream = io.StringIO()
+            suite = unittest.TestSuite(
+                unittest.defaultTestLoader.loadTestsFromTestCase(kind)
+                for kind in (ExportReconciliationTests, BreakShutdownTests)
+            )
+            result = unittest.TextTestRunner(stream=stream, verbosity=2).run(suite)
+            evidence["reconciliation"] = {
+                "tests": result.testsRun,
+                "failures": len(result.failures),
+                "errors": len(result.errors),
+                "skipped": len(result.skipped),
+                "output": stream.getvalue(),
+                "renderer": "real"
+                if formats["jpeg"]["available"]
+                else "existing worker stub",
+            }
+            case.assertTrue(
+                result.wasSuccessful(),
+                "reconciliation or break-shutdown regression failed",
+            )
+            case.assertEqual(result.skipped, [])
+        finally:
+            if previous_home is None:
+                os.environ.pop("SBTD_RENDERER_TEST_HOME", None)
+            else:
+                os.environ["SBTD_RENDERER_TEST_HOME"] = previous_home
+    finally:
+        try:
+            out, err, code = (
+                server.stop()
+                if server.proc.poll() is None
+                else (*server.proc.communicate(), server.proc.returncode)
+            )
+            evidence["shutdown"] = {
+                "exit_code": code,
+                "signal": "CTRL_BREAK_EVENT" if os.name == "nt" else "SIGINT",
+                "lock_removed": not (home / "serve.lock").exists(),
+            }
+            case.assertEqual(code, 0, "serve did not exit cleanly")
+            case.assertFalse((home / "serve.lock").exists())
+            case.assertFalse(any((home / "exports").glob("*.tmp")))
+            case.assertFalse(
+                any(secret in out + err for secret in secrets), "credential leaked"
+            )
+            case.assertNotIn("#ticket=", out + err)
+            with socket.socket() as probe:
+                case.assertNotEqual(
+                    probe.connect_ex(("127.0.0.1", port)), 0, "server still listening"
+                )
+            evidence["shutdown"]["port_closed"] = True
+        finally:
+            if server.proc.poll() is None:
+                server.kill()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--install-browser", action="store_true")
+    args = parser.parse_args()
+    started = datetime.now(UTC)
+    clock = time.monotonic()
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=RUNTIME.parent, text=True
+    ).strip()
+    branch = (
+        os.environ.get("GITHUB_HEAD_REF")
+        or subprocess.check_output(
+            ["git", "branch", "--show-current"], cwd=RUNTIME.parent, text=True
+        ).strip()
+    )
+    dirty = bool(
+        subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=RUNTIME.parent, text=True
+        ).strip()
+    )
+    evidence = {
+        "started_at": started.isoformat(),
+        "platform": platform.platform(),
+        "python": sys.version,
+        "sha": sha,
+        "branch": branch,
+        "worktree": str(RUNTIME.parent),
+        "source_revision": "dirty" if dirty else "exact",
+        "evidence_source": "ci" if os.environ.get("CI") else "developer-local",
+        "publication": "not-configured" if os.environ.get("CI") else "local-only",
+        "command": sys.argv,
+        "limitations": [
+            "Mac visual/font confirmation pending; Windows CI only",
+            "JPEG source-document values; pixel OCR not performed",
+            "PDF text only when pdftotext exists",
+            "Performance section 18 belongs to PR-4",
+            "Windows chmod is not POSIX 0600 ACL evidence",
+        ],
+    }
+    code = 1
+    try:
+        with tempfile.TemporaryDirectory(prefix="sbtd-native-e2e-") as temporary:
+            exercise(Path(temporary), evidence, args.install_browser)
+        evidence["temporary_home_removed"] = not Path(temporary).exists()
+        evidence["status"] = (
+            "passed"
+            if all(row["status"] == "passed" for row in evidence["exports"].values())
+            else "passed-with-renderer-unavailable"
+        )
+        code = 0
+    except Exception as error:  # noqa: BLE001 — report failures; never convert them to PASS.
+        evidence["status"] = "failed"
+        evidence["error"] = f"{type(error).__name__}: {error}"
+    evidence["exit_code"] = code
+    evidence["seconds"] = round(time.monotonic() - clock, 3)
+    args.output.mkdir(parents=True, exist_ok=True)
+    slug = branch.replace("/", "_")
+    stem = f"runtime-e2e-{platform.system().lower()}-{slug}-{started.strftime('%Y%m%dT%H%M%SZ')}"
+    raw = args.output / f"{stem}.json"
+    raw.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    sections = [
+        (
+            "执行结论",
+            f"结果：{evidence['status']}；退出码 {code}；耗时 {evidence['seconds']} 秒。renderer unavailable 不是四格式通过。",
+        ),
+        (
+            "运行信息",
+            f"{started.isoformat()}；{evidence['platform']}；Python {platform.python_version()}；分支 {branch}；SHA {sha}；{evidence['source_revision']}；{evidence['evidence_source']}；{evidence['publication']}；E2E Mode backend-only + real renderer（可用时）；rtk skipped-for-report。",
+        ),
+        ("运行命令", "```text\n" + " ".join(sys.argv) + "\n```"),
+        (
+            "关联 BDD 与本轮范围",
+            "AC-33/62：真实 serve CLI、配对、API、退出；AC-45/51：HTML/CSV、renderer 输入、可用时 PDF 文本。沿用 R2.0a／R2.1a／R2.1b Markdown 规范。",
+        ),
+        (
+            "用例结果",
+            "| 格式 | 结果 | 原因 |\n|---|---|---|\n"
+            + "\n".join(
+                f"| {name} | {row['status']} | {row.get('reason', '—')} |"
+                for name, row in evidence.get("exports", {}).items()
+            ),
+        ),
+        (
+            "失败、修复与复跑",
+            evidence.get(
+                "error",
+                "本轮无失败；历史轮次不覆盖。能力不可用见上表，不计作渲染通过。",
+            ),
+        ),
+        (
+            "覆盖范围 → API URI",
+            "| Method | URI | 期望 | 实际 |\n|---|---|---|---|\n"
+            + "\n".join(
+                f"| {row['method']} | {row['path']} | {row['expected']} | {row['status']} |"
+                for row in evidence.get("requests", [])
+            ),
+        ),
+        (
+            "产物与状态",
+            f"原生 raw：{raw.name}；同 stem 中文汇总。报告生成不等于测试通过；未发布。",
+        ),
+        (
+            "未执行项、风险与发布边界",
+            "\n".join(f"- {item}" for item in evidence["limitations"])
+            + "\n- 跨平台结果仅由各自原生 runner 证明；本地 Linux 不替代 CI。",
+        ),
+    ]
+    raw.with_suffix(".md").write_text(
+        "# 原生 Runtime E2E 报告\n\n"
+        + "\n\n".join(f"## {title}\n\n{body}" for title, body in sections)
+        + "\n",
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "status": evidence["status"],
+                "report": str(raw),
+                "seconds": evidence["seconds"],
+            }
+        )
+    )
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

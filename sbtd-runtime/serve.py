@@ -27,6 +27,7 @@ import math
 import os
 import re
 import secrets
+import signal
 import socket
 import sys
 import uuid
@@ -816,12 +817,20 @@ def main(argv: list[str] | None = None) -> int:
 
     _deliver_ticket(access, home, args.port, args.open_browser)
     print(f"SBTD Runtime Dashboard: http://{BIND_HOST}:{args.port}/ （Ctrl-C 退出）")
+    # uvicorn re-raises the captured Windows break signal after ASGI shutdown.
+    # Its default handler terminates before our finally; treat it like Ctrl-C.
+    break_signal = getattr(signal, "SIGBREAK", None)
+    previous_break = None
+    if break_signal is not None:
+        previous_break = signal.signal(break_signal, signal.default_int_handler)
     try:
         server.run()
     except KeyboardInterrupt:
         pass
     finally:
         lock.release()
+        if break_signal is not None:
+            signal.signal(break_signal, previous_break)
     return 0
 
 

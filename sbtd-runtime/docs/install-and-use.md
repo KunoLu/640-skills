@@ -233,3 +233,17 @@ PYTHONPATH=sbtd-runtime python3 -m serve [--port 6400] [--no-open] [--home PATH]
 - R2.0c 起快照落盘 `snapshots/`，默认 TTL 24h，创建告知 expires_at；TTL 内重启仍可读取；R2.2 PR-1 起按共享配额规则执行启动及新建前清扫。
 
 跨平台（macOS／Windows）证据与 Host/Origin 负例对账属 R2.2；Windows 上实例锁的活 pid 判定（`os.kill(pid, 0)` 语义）未在本期验证。
+
+### R2.2：原生 E2E 与对账
+
+CI 新增 `runtime-e2e-macos`／`runtime-e2e-windows`：真实 serve 子进程、`--no-open` 文件配对、API、同快照四格式下载、字体及 Panel／关键值对账。Windows 自动化使用独立 console process group 的 CTRL_BREAK；serve 将 SIGBREAK 按 Ctrl-C 清理，释放实例锁。POSIX 仍用 SIGINT。
+
+安装上述 serve／renderer 精确版本后，可在仓库根运行：
+
+```sh
+python3 -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /path/to/evidence
+```
+
+`--install-browser` 仅授权向本轮隔离临时 home 安装 pinned Chromium `--only-shell`，退出后删除该临时 home；不碰已有用户 runtime。JSON／同 stem 中文 Markdown 逐格式记录结果和来源。renderer 不可用时 HTML／CSV 仍须成功，JPEG／PDF 明确为 unavailable，不是四格式通过；可用时渲染失败使命令失败。PDF 使用已有 `pdftotext`，缺工具时只对账 renderer 输入；JPEG 不做 OCR。Windows chmod 不等于 POSIX 0600／NTFS ACL 证明。CI 平台报告不替代 D9 用户 Mac 视觉／字体确认或 §18 性能验收。
+
+`--install-browser` 模式下，下载／安装命令失败会使 E2E 失败，不能冒充平台 unavailable；只有安装完成后的真实 capability 检查可记录不支持原因。
