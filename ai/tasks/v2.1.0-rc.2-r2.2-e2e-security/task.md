@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T18:45:27+08:00'
+updated_at: '2026-10-23T19:14:52+08:00'
 completed_at: null
 ---
 
@@ -227,6 +227,10 @@ PR-1 本地提交证据：
 | 2026-10-23T18:43:47+08:00 | in-progress | in-progress | fix2 独立 review P2 闭环：Darwin worker 在 kqueue 注册前退出可报 ESRCH；新增精确 ProcessLookupError 处理，不捕获其他 OSError、不提前 reap、不假定成功。 | 注册竞态 2 tests／2 errors red → worker suite 4 passed；NativeWaitReview 复审 correct／confidence 0.85。EvidenceSecurityReview correct／confidence 0.85，唯一 P3 保守截断标记按 blocker-only 范围 defer。两位均只读，不运行 tests／lint。 |
 | 2026-10-23T18:43:47+08:00 | in-progress | in-progress | fix2 最终本地结果追加，覆盖上一轮 full 标签；macOS/Windows 待 CI 复跑，R2.2 继续 in-progress。 | 最终 runtime-full-reviewed 411 tests／401 passed／10 既有 skipped／0 failures，144.781s；新增共 9 tests。真实 Chromium 四格式复跑通过，driver 24.737s；nonreaping 真实进程 smoke 3 cases 通过；5 changed Python lint／format 通过。13/13 仍未得到新 CI 证据，无发布。 |
 | 2026-10-23T18:45:27+08:00 | in-progress | in-progress | fix2 Commit A 本地创建，Commit B 仅追加本 task；实现与本地验证交付，macOS/Windows 待 CI 复跑。 | A 7f17563cf354e23c4bf4b83c5369c23b001b8a72：fix(runtime): pin tzdata, preserve native E2E diagnostics and fix macOS worker wait (R2.2 PR-3 fix2)。46 个提交 runtime Python blob SHA-256 与最终 full raw.hashes 全部一致，是内容身份核验，不是提交后 CI。最终 YAML／append-only／归因／diff 检查通过，冻结目录 stat 空；无 push／PR／评论／merge／rebase／amend／force。 |
+| 2026-10-23T18:53:51+08:00 | in-progress | in-progress | PR-3 fix3 strict 开工（编排方整理）；延续 PR-3 授权根与追加绑定，历史 frontmatter branch／mode／事件不改。 | 入口 8f87df4c58e23fde48940adb519bd1be88a15b50，分支 feat/v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation，工作区干净；完整读取 run 39941735241 两份 JSON（含 serve_logs）：两个 native jobs failed，Windows 四格式已渲染下载，query 200；macOS JPEG preflight RENDERER_FAILED。旧 11 checks 状态本轮未获知，不推定。 |
+| 2026-10-23T19:06:45+08:00 | in-progress | in-progress | fix3 本地诊断与验证追加；macOS/Windows 待 CI 复跑，13/13 gate 尚未完成。 | Windows helper 的 None 崩溃已 red→green；CPython 3.12.10 Windows reader 方法在 Linux 上重现解码异常导致 stdout None，具体 runner 编码仍是未证实推断。Linux 四格式两轮通过；JPEG POST500／PDF failed-job 故障注入均 exit1 并记录 worker 诊断；非 waitid adapter 下真实 Chromium 诊断重跑成功仍不改变原 HTTP500 的失败结论。 |
+| 2026-10-23T19:06:45+08:00 | in-progress | in-progress | fix3 指定本地检查通过；初轮失败与原始记录保留，未新增 skip 或弱化断言。 | 定向15、golden61、workflow52；runtime416 tests／406 passed／10既有 skipped／0 failures（148.533s）；5 changed Python ruff check／format --check、diff --check、冻结目录 stat 空、yaml.safe_load／历史逐行保留／新归因检查通过；独立 review 尚在进行，结论另追加。 |
+| 2026-10-23T19:14:52+08:00 | in-progress | in-progress | fix3 独立 review 闭环与本地 Commit A 追加；macOS/Windows 待 CI 复跑，未声明13/13。 | WorkerEvidenceReview correct／0.87、PdfExtractionReview correct／0.88，均只读／无blocking finding／未运行tests；两项P3非阻塞观察按blocking-only范围保留。A 09bd3fbcde6771e5182fc42c25beb5ff61f48fa8，7文件；48个runtime Python提交blob与最终full被测哈希一致，是内容身份重验证，不是新CI。Commit B仅本task追加记录。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -634,3 +638,100 @@ NativeWaitReview 初轮 P2：Darwin `NOTE_EXIT` 注册可能在子进程已退�
 Commit A：`7f17563cf354e23c4bf4b83c5369c23b001b8a72`，`fix(runtime): pin tzdata, preserve native E2E diagnostics and fix macOS worker wait (R2.2 PR-3 fix2)`。恰为 `sbtd-runtime/` 下 8 文件：`browser_renderer.py`、`requirements-serve.txt`、`docs/install-and-use.md`、`spec/r2.2-native-e2e-scenarios.md`、`tests/runtime_e2e.py`、`tests/test_renderer_process_wait.py`、`tests/test_runtime_e2e_evidence.py`、`tests/test_stats_query.py`。最终 full 被测 46 个 runtime Python 文件与提交 blob SHA-256 逐一相同；保留原始 a5e9ee0＋dirty 证据，不改称新 SHA 上运行。
 
 Commit B：`docs(task): append native CI fix2 diagnosis and verification (R2.2 PR-3)`，仅本 task，SHA 由最终输出提供避免自引用。全部显式路径暂存；reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env* 均不暂存。未操作其他 worktree 或 omp 全局配置；task status in-progress、completed_at null、历史 frontmatter branch 与旧事件保持，只有 updated_at 更新。沿用追加 Markdown 记录边界，不声称 TaskStore helper lifecycle／自动恢复成功。
+
+## R2.2 PR-3 fix3 Book Gate Plan（编排方整理）
+
+未完整调用 grill-with-docs：两个 blocker、诊断要求与验收明确，无领域歧义。沿用既有 Markdown 记录／TaskStore 兼容边界，不声称 helper lifecycle／自动恢复；不写 active／index，不改历史绑定。仅本地 code／records 两提交，13/13 gate 不变。
+
+| Gate | 触发／阶段 | 本轮计划／状态 |
+|---|---|---|
+| DDD／DDIA | 领域／持久化设计前 | not-needed；无完整 grill、领域歧义或持久化设计变化；如生产生命周期需改则重新评估。 |
+| Legacy Change Safety | 既有 PDF helper／诊断失败，编辑前 | needs-safety-net；CI 已证明 None 崩溃与隐藏 preflight 错误；先补 fake pdftotext 与真实失败 worker 回归。 |
+| Refactoring | 生产编辑前 | 计划不改生产；只诊断有证据的根因，不猜改 killpg／字体／sandbox；若需生产修复先执行 gate。 |
+| TDD／BDD／ponytail | 证据行为，编辑前 | 已加载；复用既有 Markdown 中文场景／English keywords、unittest、真实 driver；不增加依赖或 runner。 |
+| project-validation／独立 review／可读性 | check | pending；真实 Linux 四格式与强制失败诊断／脱敏检查、golden 61、runtime ≥411、workflow 52、changed Python ruff、冻结边界／YAML；独立只读 review。 |
+| Release Readiness | native E2E，验证后 | pending；macOS/Windows 待 CI 复跑，不把本地验证等同 13/13 或发布就绪。 |
+
+### fix3 已验证原因与仍待原生证据的假设
+
+- **Windows 已验证缺陷**：`assert_pdf_text` 直接将 `result.stdout` 交给成员／正则断言，没有处理不可用的抽取结果。CI 四格式均 ready、下载成功且记录 SHA-256；之后 `text=None` 导致 TypeError。代码没有重赋值 stdout，driver／ServeProcess 未包装该 run 调用。新增 None case 精确复现同一 TypeError 后修复。
+- **Windows 机制已验证，runner 触发条件仍未知**：读取 CPython v3.12.10 `Lib/subprocess.py`，Windows `_readerthread` 在 `buffer.append(fh.read())` 内解码；reader 抛异常后 buffer 为空，`_communicate` 将其变成 None。无落盘脚本抽取并执行该版本两个真实方法，UTF-8 reader 读 `0x80` → 后台 UnicodeDecodeError／stdout None，二进制 reader → 原 bytes。源码 https://raw.githubusercontent.com/python/cpython/v3.12.10/Lib/subprocess.py 。本机是 Linux 方法级复现，不是 Windows runner；CI JSON 没有 driver reader-thread stderr／pdftotext 路径版本，无法断言具体 cp1252／GBK 或排除其他管道读异常。
+- **Windows 修复**：使用 `shutil.which` 的实际路径；`-enc UTF-8 -layout`，二进制 capture 后在主线程严格 decode。缺工具、执行异常／超时、非零退出、None／空文本／编码失败分别给出 `source-document-only` 原因；不声称文本已验证。可用非空文本的所有 Panel、两项 CJK 与关键值断言保持。fake pdftotext 真 subprocess 覆盖空白、无效 UTF-8、exit7、正确中文和四种错误正文；None case 使用 CompletedProcess seam。
+- **macOS 已验证范围**：fix2 后仍为 JPEG POST500，serve stderr 明确 `export preflight failed: RENDERER_FAILED`；HTML／CSV 通过、capability available。尚不能定位唯一生产失败站点，不将 kqueue、字体或 killpg 假设写成已修复根因。
+- **macOS 路径排查**：生产 `_platform_cjk_files` 已通过 capability；生产 worker 不做 CDP family 名称断言。driver 的 glyph 检查在四格式下载后才执行，不可能产生当前 JPEG POST500；`.PingFang SC` 已匹配 pingfang，Hiragino Sans GB 匹配 hiragino，STHeiti 未包含但不是此次 preflight 的已证原因。`chromium_sandbox=False`、profile HOME、PLAYWRIGHT_BROWSERS_PATH、kqueue、killpg／EPERM／ESRCH 与两秒清理边界均未猜改。
+- **macOS 剩余假设**：Chromium launch／capture 的内部异常、kqueue 错误、或成功 worker 后的进程组清理失败。下一次 CI 的 worker exit、结果／错误文件、stderr、显式 exception site／context 将区分这些来源。没有足够证据安全修改生产逻辑，保持 fail closed。
+
+### fix3 测试侧诊断与安全边界
+
+`runtime_e2e_diagnostics.py` 只由 native driver 在可用 JPEG／PDF 的 POST／轮询失败时调用。输入是已下载的同快照 HTML（记录 SHA-256）和同一 runtime home，不打开／修改 Store。JPEG POST 失败重放 preflight，JPEG／PDF 已受理 job 失败重放渲染；沿用 `_render_document` → `_write_job` → `_execute_job` → worker entry → wait／killpg／Job Object → `_read_result`，生产代码不改。单独诊断尝试不是原失败的精确时序复现，也不把重放成功当原导出成功。
+
+测试侧 worker 包装 `_write_error`，保留 `__cause__`／被 `from None` 抑制的 `__context__` 及 traceback／最后 frame site；父侧在生产清理删除 job 前保存 stdout／stderr、退出码、error.json／result.json／exception.json 是否存在和内容。先替换已知凭据，再对每个文本字段截断到16384字符并记 truncated。诊断结果也进入同 stem MD；原请求／job 断言仍向上抛出，driver 必须 exit1。生产服务仍只记录安全错误码，不扩大生产日志或 HTTP 错误内容。
+
+两项新 worker regression 分别证明失败子进程的异常链／无结果／脱敏，以及“worker exit0＋有效 result.json，但 cleanup 抛错”的准确区分；后一项注入清理异常但先执行真实 kill／wait，不遗留进程。独立 real Chromium 非 waitid smoke 使用 Linux waitid-backed kqueue adapter，证明诊断沿用该分支且关闭队列；不是 Darwin kernel 或 Job Object 实测。
+
+### fix3 本地命令、结果与报告
+
+环境 Linux 6.12.94+／x64、Python 3.13.5；`P=ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports/renderer-venv/bin/python3`。共同环境 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests RUFF_NO_CACHE=true`。rtk skipped-for-report；所有正式检查用原生 subprocess 保存完整 command／stdout／stderr／exit、时间、入口 SHA `8f87df4c58e23fde48940adb519bd1be88a15b50`、worktree、branch 和全部 runtime Python SHA-256；developer-local／dirty／local-only，不冒充 CI。
+
+```sh
+$P -B -m unittest test_pdf_text.PdfTextTests.test_missing_stdout_is_a_reasoned_limitation -v
+$P -B -m unittest test_pdf_text -v
+$P -B -m unittest test_runtime_e2e_evidence.NativeEvidenceTests.test_failed_worker_records_exception_chain_and_result_absence test_runtime_e2e_evidence.NativeEvidenceTests.test_cleanup_failure_keeps_successful_worker_result -v
+$P -B -m unittest test_runtime_e2e_evidence test_pdf_text -v
+$P -B sbtd-runtime/tests/runtime_e2e.py --install-browser --output /tmp/r22-pr3-fix3-e2e
+$P -B -m unittest test_pdf_text test_runtime_e2e_evidence test_renderer_process_wait test_export_reconciliation -v
+$P -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+python3 -B -m unittest tests.test_workflow_contracts tests.test_ci_selection
+$P -B -m unittest discover -s sbtd-runtime/tests
+ruff check sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/runtime_e2e_diagnostics.py sbtd-runtime/tests/test_export_reconciliation.py sbtd-runtime/tests/test_pdf_text.py sbtd-runtime/tests/test_runtime_e2e_evidence.py
+ruff format --check sbtd-runtime/tests/runtime_e2e.py sbtd-runtime/tests/runtime_e2e_diagnostics.py sbtd-runtime/tests/test_export_reconciliation.py sbtd-runtime/tests/test_pdf_text.py sbtd-runtime/tests/test_runtime_e2e_evidence.py
+git diff --check
+git diff origin/main --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/golden
+```
+
+另有四个 `$P -B -c <script>` smoke：forced-worker-failures、native-redaction-audit、nonwaitid-replay-smoke、windows-reader-mechanism；完整可复现无落盘脚本均在对应 raw.command。records-check 同样保存完整脚本，实际使用 yaml.safe_load；只允许 updated_at frontmatter 差异，原历史行按顺序逐字保留，added-only 禁用归因零命中，validation.yml 与入口 byte-identical。工具调用层曾出现一次 throwaway smoke 字符串嵌套 SyntaxError，未启动 runner／未产生产品失败；修正脚本引号后实际执行如下，未隐藏原工具结果。
+
+| raw label | 实际结果 | 原生耗时／墙钟秒 |
+|---|---|---|
+| pdf-none-red | 1 test／1 TypeError error，同 CI 崩溃 | 0.002／0.248 |
+| pdf-green | 3 tests OK | 0.143／0.375 |
+| worker-diagnostics-red | 2 errors，诊断模块尚未实现 | 0.001／0.225 |
+| worker-diagnostics-green | 9 tests OK；包含真实查询／配对失败负例 | 7.840／8.082 |
+| ruff-check／ruff-format-check | 初轮3 lint问题／5文件需格式化，失败保留 | —／0.016、0.010 |
+| ruff-format-apply／ruff-check-corrected | 仅5 changed Python 格式化；All checks passed | —／0.011、0.009 |
+| native-linux | 四格式 real Chromium、PDF文本／CJK／13 Panels／3-case suite／退出清理 passed | driver23.658／23.893 |
+| forced-worker-failures | JPEG POST500 与 PDF failed-job 两次 driver 均 exit1；worker诊断完整；外层断言 exit0 | driver7.965、11.793／合计19.987 |
+| native-redaction-audit | 四格式 real Chromium passed；实际ticket／Bearer／CSRF在JSON／MD精确匹配零 | driver23.316／23.547 |
+| nonwaitid-replay-smoke | 真实Chromium诊断exit0／result存在，但原HTTP500 driver仍exit1；队列关闭 | driver8.797／9.011 |
+| targeted-final | 15 tests OK | 7.689／7.886 |
+| golden | 61 tests OK | 0.317／0.482 |
+| workflow | 52 tests OK | 0.424／0.545 |
+| runtime-full | 416 tests／406 passed／10既有skipped／0 failures | 148.533／149.016 |
+| ruff-check-final／ruff-format-final | All checks passed／5 files already formatted | —／0.013、0.010 |
+| diff-check／frozen-paths | exit0／冻结三个目录stat空 | —／0.005、0.002 |
+| records-check | YAML／append-only／归因／workflow不变均通过 | —／0.041 |
+| windows-reader-mechanism | 真实CPython方法级复现：解码失败→None，binary→原bytes | —／0.216 |
+
+报告统一在本 task ignored `reports/`，最终带分支与时间的 stem 为 `fix3-<label>-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<YYYYMMDDTHHMMSSffffff>`，扩展名 `.json`／同 stem 九节中文 `.md`。初始 report helper 的 Path.with_suffix 将带点分支误当扩展名，已保留原报告并生成带完整时间戳的副本；没有覆盖／删除失败，报告不暂存。最终 full stem 时间 `20261023T190144534827`；本地 Python 内容 SHA-256 逐一核对仍与该被测快照相同。
+
+driver 原生证据：`/tmp/r22-pr3-fix3-e2e/` 的 stem 时间 `20261023T105756Z`；审计轮 `/tmp/r22-pr3-fix3-e2e-audited/` 为 `20261023T110014Z`；强制失败 `/tmp/r22-pr3-fix3-e2e-negative/jpeg/`／`pdf/` 为 `20261023T105926Z`／`20261023T105934Z`；非 waitid 轮 `/tmp/r22-pr3-fix3-nonwaitid/` 为 `20261023T110113Z`。每份均为 `runtime-e2e-linux-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-<时间>.{json,md}`，逐请求状态和证据保留。
+
+### fix3 Gate 与剩余边界
+
+Legacy Change Safety Review: characterized，None red→green 和 worker错误／清理边界安全网已执行。Refactoring Review: proceed（normal），无生产重构；DDD／DDIA not-needed，无领域／数据设计变化。Ponytail Review: Lean already；复用生产worker生命周期、stdlib mock／临时文件，不增加依赖或生产debug开关。Code Readability Review：抽取失败与内容不符明确分开；诊断模块独立于driver正常流程，避免复制生产worker／进程清理实现。
+
+BDD traceable：修改既有 `spec/r2.2-native-e2e-scenarios.md`，中文场景／English keywords，无新runner；上述15-case命令及真实driver对应场景。API Contract verified（冻结目录不变）；Cross-repo context not-needed。真实四格式E2E为backend-only＋real renderer／Mock Strategy none；forced-worker／非waitid为明确故障／平台seam模拟，不能称原生平台通过。普通suite仍保留10既有skips／既有worker stub。未改UI，不运行Chrome／Playwright MCP或Maestro；Playwright Python CLI／真实Chromium已运行。LSP实际返回No language server found，使用源码调用点，不声称typecheck通过。
+
+**Release Readiness Review: blocked（native gate）。** 本地实现与指定验证通过不等于13/13、跨平台验收或发布；macOS/Windows 待 CI 复跑。主会话无push／PR／评论／merge／rebase／amend／force，不操作其他worktree／全局配置。只撤回代码提交即可回退测试侧行为，无迁移或生产数据清理；保留失败证据。用户Mac人工视觉／字体与PR-4性能／容量不在本轮范围。未发现新的contract／PRD／schema／golden变更需要；既存statistics/query超配额500／507仍为「待用户决定（contract PR）」，本轮未处理。独立review与提交证据随后追加。
+
+### fix3 独立 review、最终提交与恢复边界追加
+
+WorkerEvidenceReview：correct／confidence0.87，无blocking finding；静态核实同home／同HTML重放、文件在cleanup前捕获、真实reaped退出码、Windows Job Object join、Darwin非waitid分支、被抑制context、脱敏后截断与原失败重抛。P3仅两项：stdio先完整读入内存再截断；末尾异常链next标记为context但无后继。按编排方整理的blocking-only边界不扩大修复；不是内存有硬上限的证明。reviewer确认PDF抽取不能产出文本时的限制记录是本轮明确授权，非空错误文本仍必须fail。docs编辑不在该reviewer责任范围。
+
+PdfExtractionReview：correct／confidence0.88，无blocking finding；核实None／empty／nonzero／encoding分支、UTF-8 bytes捕获、CJK／Panel／key-value断言、fake subprocess和driver调用点；独立读取CPythonv3.12.10源码，认可“机制已证明、runner触发未证明”的区分。该review同时核查诊断原失败保留、生产生命周期与spec一致性；records读取截止19:06:45状态。两位均未运行tests／lint／build，不将主会话测试写成reviewer独立实跑。
+
+Commit A：`09bd3fbcde6771e5182fc42c25beb5ff61f48fa8` — `fix(runtime): Windows pdftotext handling and native renderer worker diagnostics (R2.2 PR-3 fix3)`。恰为7文件：`sbtd-runtime/tests/runtime_e2e.py`、`runtime_e2e_diagnostics.py`、`test_export_reconciliation.py`、`test_pdf_text.py`、`test_runtime_e2e_evidence.py`（后四项同tests目录），以及`sbtd-runtime/spec/r2.2-native-e2e-scenarios.md`、`sbtd-runtime/docs/install-and-use.md`。没有修改生产renderer、schema、contract、PRD、golden或workflow。
+
+提交后运行 `$P -B -c <commit-a-content-identity>`，逐一比较48个提交runtime Python blob SHA-256与最终runtime-full raw.hashes，全部相同；完整脚本在同label raw.command。这是被测内容身份重验证，原始full证据仍是入口8f87df4＋dirty，不改称09bd3fb上新执行。最终汇总`reports/fix3-verification-feat_v2.1.0-rc.2-r2.2-pr3-e2e-reconciliation-20261023T191003.{json,md}`保留；review-closed汇总另存，不覆盖原native／失败报告。
+
+Commit B：`docs(task): append native CI fix3 diagnosis and verification (R2.2 PR-3)`，仅本task，SHA由最终回复提供以避免自引用。只按显式路径暂存；reports／.omp-r12b-addendum.txt／ai/tasks/codex-verify／.env*均不暂存。task继续in-progress、completed_at null；历史frontmatter／事件保持，仅updated_at更新。沿用Markdown追加绑定与既有TaskStore兼容边界，不宣称helper lifecycle或自动恢复成功。无远端操作／部署／发布。macOS/Windows 待 CI 复跑；本地交付不等于13/13 gate通过。
