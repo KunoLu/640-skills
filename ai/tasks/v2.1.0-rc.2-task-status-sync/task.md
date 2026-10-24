@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.2-task-status-sync
 workflow_mode: strict
 mode_source: user
-mode_note: 编排方整理：strict；本轮 fix2 只做文档／任务记录，主会话唯一 writer／验证 controller，不使用 advisor；恰好一个本地提交，不 push。
+mode_note: 编排方整理：strict；本轮 fix3b 只修改 PRD 与本 task，主会话唯一 writer／验证 controller，不使用 advisor；恰好一个提交。
 status: in-progress
 branch: docs/v2.1.0-rc.2-task-status-sync-prd
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T12:39:40+08:00'
+updated_at: '2026-10-24T12:49:42+08:00'
 completed_at: null
 ---
 
@@ -19,6 +19,8 @@ completed_at: null
 - 用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录：落地方式与生效点；新规则自 PR-a 合入起生效。群内时间均为 +08:00。
 - 用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录：任务跨两个 PR 的结构。
 - 规则事实源：[任务状态及时更新 PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)。
+- 用户 2026-10-24 12:46 群内确认（旧格式事件规则修订版），Lord 记录：A／B／C 一致适用，不依赖 git 或 PR-a 合入边界；旧格式 task.md 不改写、不补造 checking，只读不写的永不写入；仅因旧格式事件解析失败时只按 frontmatter `status` 判断，运行输出提示「旧格式事件，不追溯」，不落盘、不阻塞、不算未记录改动；确需追加新事件时才在同次写入中先追加旧事件基线，记录事件行数及 sha256（不含 frontmatter），不依赖 `at` 或 git；基线内只读不校验，基线后逐行严格校验（含回填历史 done），基线 sha256 变化则追加「发现未记录的改动」交用户判断；其他解析错误照常报错。详见 [PRD「旧格式事件规则」](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md#旧格式事件规则)。
+- 用户 2026-10-24 12:46 群内确认（旧格式判定口径，采纳 OMP 补充），Lord 记录：「仅因旧格式」的判定标准——在没有基线事件的文件中，每一条事件行都必须能按旧格式 schema 解析；若有任何一行既不是旧格式也不是当前格式，按 PRD 该小节第 5 点作为普通解析错误报告。
 
 ## 范围与边界
 
@@ -57,3 +59,6 @@ completed_at: null
 | 2026-10-24T12:39:20+08:00 | in-progress | in-progress | 编排方整理：补记 `34a9b94` 进度，plan.md:8 原文后已追加带真实 PR #168 的停用说明，PR #168 已开启。 | commit `34a9b94`；CI run `40061290088`，13/13 on `34a9b94`（编排方整理，本轮未重跑 CI）；at 为本轮整理时间。 |
 | 2026-10-24T12:39:33+08:00 | in-progress | in-progress | 编排方整理：补记 `fdbb1bd` 归因修正轮，跨两 PR 结构改为用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录；非 git 细则改为属 11:05 完整方案、用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录；已去除错误时间归因。 | commit `fdbb1bd` 已 push（编排方整理）；CI run `40062997215` 结果本轮不可考；at 为本轮整理时间。 |
 | 2026-10-24T12:39:40+08:00 | in-progress | in-progress | 编排方整理：本轮 fix2 按 Reviewy 对 `34a9b94` 的审查意见修正归因格式、state.md／AGENTS.project.md 行号、trailer 理由与本 task 范围描述。 | 本轮修正与本事件纳入同一个本地提交，未 push；保留旧事件，status 保持 in-progress、completed_at 为 null；at 为本轮整理时间。 |
+| 2026-10-24T12:48:08+08:00 | in-progress | in-progress | 用户 2026-10-24 12:46 群内确认（旧格式事件规则修订版），Lord 记录：A／B／C 一致，不依赖 git 或 PR-a 合入边界；旧格式原样保留、不补造 checking、只读不写；仅因旧格式解析失败时只按 status 判断并在运行输出提示，不落盘、不阻塞、不算未记录改动；确需追加新事件时同次先追加含事件行数及 sha256（不含 frontmatter）的旧事件基线，不依赖 at 或 git；基线内只读不校验，基线后严格逐行校验（含回填历史 done），基线哈希变化则记未记录改动交用户判断；其他解析错误照常报错。 | [PRD「旧格式事件规则」](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md#旧格式事件规则)；at 为真实写入时间。 |
+| 2026-10-24T12:49:41+08:00 | in-progress | in-progress | 用户 2026-10-24 12:46 群内确认（旧格式判定口径，采纳 OMP 补充），Lord 记录：「仅因旧格式」的判定口径——在没有基线事件的文件中，每一条事件行都必须能按旧格式 schema 解析；若有任何一行既不是旧格式也不是当前格式，按旧格式事件规则第 5 点作为普通解析错误报告。 | [PRD「旧格式事件规则」](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md#旧格式事件规则)判定口径单列，与五点规则分开归因；at 为真实写入时间。 |
+| 2026-10-24T12:49:42+08:00 | in-progress | in-progress | 编排方整理：fix3b 轮将旧格式事件规则修订版（五点）与判定口径分别写入 PRD 与本 task，纳入同一个提交。 | 两份文件中五点规则与判定口径各自单列用户 2026-10-24 12:46 群内确认归因；旧事件不动，status 保持 in-progress、completed_at 为 null；fdbb1bd 的 CI run `40062997215` 写入时仍在运行（11/12 jobs 已通过），本轮不追加其最终结果；at 为真实写入时间。 |
