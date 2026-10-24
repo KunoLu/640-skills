@@ -536,6 +536,15 @@ def create_app(
             result = query(data, raw_scope, store=store)
         except QueryScopeError as error:
             return _json({"detail": str(error)}, 400)
+        except DiskQuotaExceeded as error:
+            return _json(
+                {
+                    "detail": "DISK_QUOTA_EXCEEDED",
+                    "used_bytes": error.used_bytes,
+                    "quota_bytes": error.quota_bytes,
+                },
+                507,
+            )
         meta = dict(result.get("meta") or {})
         meta["warnings"] = [*meta.get("warnings", []), *warnings]
         if warnings:

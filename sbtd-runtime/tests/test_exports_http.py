@@ -6,12 +6,14 @@ import copy
 import hashlib
 import http.client
 import json
+import os
 import tempfile
 import time
 import unittest
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 from report_snapshot import SnapshotStore
 from test_csv_export import _dataset, _scope
@@ -62,6 +64,62 @@ class ExportHttpTests(unittest.TestCase):
         )
         self.assertEqual(status, 200, body)
         return json.loads(body)["data"]["snapshot_id"]
+
+    def test_statistics_snapshot_quota_refusal_and_reuse(self) -> None:
+        """新快照超限 507；scope 校验优先，等于上限及已有快照复用允许。"""
+        self.server.stop()
+        with mock.patch.dict(os.environ, {"SBTD_RUNTIME_DISK_QUOTA_BYTES": "10"}):
+            self.server = ServeProcess(self.home, self.port, "--no-open")
+        self.server.wait_ready()
+        self.authenticate()
+        snapshots = self.home / "snapshots"
+        unknown = self.home / "exports" / "unknown.bin"
+        unknown.write_bytes(b"x" * 11)
+        before = set(snapshots.iterdir())
+        scope = _scope(_dataset(), ["tasks.touched", "usage.tokens"])
+        status, _, body = request(
+            self.port,
+            "POST",
+            "/api/v1/statistics/query",
+            body={**scope, "schema_version": "9.9"},
+            headers=self.headers,
+        )
+        self.assertEqual(status, 400, body)
+        self.assertEqual(set(snapshots.iterdir()), before)
+        status, _, body = request(
+            self.port,
+            "POST",
+            "/api/v1/statistics/query",
+            body=scope,
+            headers=self.headers,
+        )
+        self.assertEqual(status, 507, body)
+        refusal = json.loads(body)
+        self.assertEqual(
+            refusal,
+            {"detail": "DISK_QUOTA_EXCEEDED", "used_bytes": 11, "quota_bytes": 10},
+        )
+        self.assertIs(type(refusal["used_bytes"]), int)
+        self.assertIs(type(refusal["quota_bytes"]), int)
+        self.assertEqual(set(snapshots.iterdir()), before)
+        self.assertEqual(unknown.read_bytes(), b"x" * 11)
+
+        # At the cap a new snapshot is admitted, even though its bytes exceed it.
+        unknown.write_bytes(b"x" * 10)
+        snapshot_id = self.snapshot()
+        status, _, body = request(
+            self.port,
+            "GET",
+            f"/api/v1/report-snapshots/{snapshot_id}",
+            headers=self.headers,
+        )
+        self.assertEqual(status, 200, body)
+        self.assertEqual(json.loads(body)["data"]["snapshot_id"], snapshot_id)
+        before_reuse = set(snapshots.iterdir())
+        used = sum(path.stat().st_size for path in before_reuse) + 10
+        self.assertGreater(used, 10)
+        self.assertEqual(self.snapshot(), snapshot_id)
+        self.assertEqual(set(snapshots.iterdir()), before_reuse)
 
     def test_accepts_fixed_snapshot_and_returns_export_id(self) -> None:
         status, _, body = request(
