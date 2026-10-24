@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-f-backfill
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交者；不启动子代理、不用 advisor；push 与开 PR 由编排方在 omp 之外执行
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-f-backfill
 created_at: '2026-10-25T00:59:09+08:00'
-updated_at: '2026-10-25T01:53:22+08:00'
-completed_at: null
+updated_at: '2026-10-25T02:23:12+08:00'
+completed_at: '2026-10-25T02:23:12+08:00'
 ---
 
 # rc.2 F 回填：#168–#172 修复轮次记录补正
@@ -89,7 +89,9 @@ completed_at: null
 | 3 | s2 ping（2026-10-25 01:12:32 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-fbackfill--/2026-10-24T17-12-33-566Z_01a16ee6-5e1e-74e5-8b4f-33eed0a73b1c.jsonl` |
 | 4 | s2 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；实际 20／39（编排方整理，按 jsonl 统计） | 第 2 轮裁定修正与 in-progress → checking，一个本地提交 | `~/.omp/logs/640-f-backfill/s2/sessions/2026-10-24T17-13-27-823Z_01a16ee7-320f-7714-a06f-615c08229faa.jsonl` |
 | 5 | s3 ping（2026-10-25 01:48:23 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-fbackfill--/2026-10-24T17-48-25-194Z_01a16f07-32ea-72e8-9317-447f6756adb3.jsonl` |
-| 6 | s3 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 第 3 轮 Reviewy NOT CLEAN 修正（Lord 2026-10-25 01:46 群内裁定），一个本地提交 | `~/.omp/logs/640-f-backfill/s3/2026-10-24T17-51-09-126Z_01a16f09-b346-7798-91ab-99257162de8e.jsonl` |
+| 6 | s3 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；实际 17／36（编排方整理，按 jsonl 统计） | 第 3 轮 Reviewy NOT CLEAN 修正（Lord 2026-10-25 01:46 群内裁定），一个本地提交 | `~/.omp/logs/640-f-backfill/s3/2026-10-24T17-51-09-126Z_01a16f09-b346-7798-91ab-99257162de8e.jsonl` |
+| 7 | done ping（2026-10-25 02:22:20 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-fbackfill--/2026-10-24T18-22-22-053Z_01a16f26-4765-7317-a4e9-66684e8e499b.jsonl` |
+| 8 | done main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | checking → done，一个本地提交 | `~/.omp/logs/640-f-backfill/done/2026-10-24T18-22-48-343Z_01a16f26-ae16-7750-9217-298844e3d3d1.jsonl` |
 
 ## 状态事件
 
@@ -100,3 +102,4 @@ completed_at: null
 | 2026-10-25T01:14:30+08:00 | in-progress | in-progress | 编排方整理：按 Lord 2026-10-25 01:10、01:11 群内裁定与 Reviewy 01:10 群内意见完成第 2 轮修正。 | #171 :47、:53 恢复 BASE 原字节（Lord 01:11 群内裁定），模型第 4 行不变，第 1 轮新增事件修正归因；#170 追加 CI 40094994851 attempt 2 重跑记录，19:38:41 原事件不改；plan 追加三行，P8 F 行不改；本 task 保留 id，明确范围与排除项，补记第 1 轮 37／60 和 s2 模型记录；仅四个授权文件，手写，未经 TaskStore 写入。 |
 | 2026-10-25T01:17:06+08:00 | in-progress | checking | 编排方整理：第 2 轮本地自检通过，送审（Reviewy）与 CI。 | 八模块 Ran 135 tests in 52.042s，OK；四个旧 task 只读解析 done、非旧格式，事件数 5／31／9／7，completed_at 保留；本 task 转前 in-progress False 3 None；catalog 48 条；两项 diff --check 干净，相对 BASE 仅六文件、本轮仅四文件；BASE 事件逐字节保留、删除数均为 0，#171 :47、:53 恢复 BASE，新增行禁词与本机 HOME 绝对路径均 0，plan 恰加三行；本事件写入后再次执行自检 1–6；手写，未经 TaskStore 写入，completed_at 为 null；push 与开 PR 由编排方在 omp 之外执行。 |
 | 2026-10-25T01:53:22+08:00 | checking | checking | 编排方整理：Reviewy 2026-10-25 01:45 对 `d215ed9` 结论 NOT CLEAN；按 Lord 2026-10-25 01:46 群内裁定完成第 3 轮修正，重新送审（Reviewy）与 CI。 | #171 追加 done → done 订正 :19／:45／:47（原行逐字不变）；#172 01:01:57 事件与本 task 原 :43 归因改为编排方整理（CodeX F 清单项）；原 :35 具体分钟不可考；原 :46 改为 Lord 01:11 群内裁定；原 :91 拆分 01:10／01:11；CI 40115693146 attempt 1 cancelled 沿用编排方整理，attempt 2 本轮 gh 核实 macos-bash-installer success（01:45:29–01:50:34 +08:00）、run conclusion success，仅供参考；s2 main 20／39 与 s3 模型行；八模块 Ran 135 tests in 52.821s，OK；事件前五文件 parse 为 done False 6／31／9／7、checking False 4 None，旧 completed_at 不变；catalog CATALOG_OK 48；仅三个文件，BASE 事件删除数均为 0，新增行禁词与本机 HOME 绝对路径 0；本事件写入后再执行自检 1–6；手写，未经 TaskStore 写入；push 由编排方在 omp 之外执行；status 保持 checking，completed_at 为 null。 |
+| 2026-10-25T02:23:12+08:00 | checking | done | 编排方整理：Reviewy 对 `162634c` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN @ 162634c（群内 2026-10-25 02:21），SHA `162634c476845911514b41dfc888f11409bf2a2d`；CI run `40118564160`（head `162634c`，attempt 1）13／13 success，无 skipped；Lord 2026-10-25 02:20 群内裁定：保留已核实的 run `40115693146` attempt 2 结论（见验证节 CI 行）；手写，未经 TaskStore 写入。 |
