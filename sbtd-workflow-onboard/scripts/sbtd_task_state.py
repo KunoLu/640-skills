@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -347,6 +348,7 @@ class TaskStore:
         temporary: str | None = None
         lock = path.with_name(path.name + ".sbtd-lock")
         lock_fd: int | None = None
+        write_completed = False
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             try:
@@ -384,25 +386,46 @@ class TaskStore:
             else:
                 os.replace(temporary, path)
                 temporary = None
+            write_completed = True
         except OSError:
             raise TaskStateError(
                 "task state write failed; existing data was not force-overwritten"
             ) from None
         finally:
+            cleanup_error: OSError | None = None
             if lock_fd is not None:
                 try:
-                    owned, current = os.fstat(lock_fd), lock.lstat()
-                    if (owned.st_dev, owned.st_ino) == (current.st_dev, current.st_ino):
-                        lock.unlink()
-                except FileNotFoundError:
-                    pass
-                finally:
-                    os.close(lock_fd)
+                    try:
+                        owned = os.fstat(lock_fd)
+                    finally:
+                        os.close(lock_fd)
+                    for attempt in range(5):
+                        try:
+                            current = lock.lstat()
+                            if (owned.st_dev, owned.st_ino) == (current.st_dev, current.st_ino):
+                                lock.unlink()
+                            break
+                        except FileNotFoundError:
+                            break
+                        except PermissionError:
+                            if attempt == 4:
+                                raise
+                            time.sleep(0.05)
+                except OSError as error:
+                    cleanup_error = error
             if temporary is not None:
                 try:
                     os.unlink(temporary)
                 except FileNotFoundError:
                     pass
+                except OSError:
+                    if write_completed and cleanup_error is None:
+                        raise
+            if write_completed and cleanup_error is not None:
+                raise TaskStateError(
+                    f"写入已完成但锁文件未能移除：{lock}",
+                    "确认无其他 writer 后手动删除该锁文件；写入本身已完成，不要盲目重试写入",
+                ) from cleanup_error
 
     def create(
         self,

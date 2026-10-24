@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "sbtd-workflow-onboard/scripts"))
@@ -177,6 +178,99 @@ class ProgressTests(unittest.TestCase):
         saved = sync.record_check(result, writer="乙", confirmed=True)
         self.assertEqual(saved.document.frontmatter["status"], "done")
         self.assertIn("发现未记录的改动", saved.document.events[-1]["reason"])
+
+
+class LockCleanupTests(unittest.TestCase):
+    def setUp(self):
+        from sbtd_task_state import TaskStore
+
+        self.tmp = tempfile.TemporaryDirectory(prefix="sbtd-lock-cleanup-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.store = TaskStore(self.root)
+        self.target = self.root / "target.txt"
+        self.lock = self.root / "target.txt.sbtd-lock"
+
+    def test_windows_unlink_requires_closed_lock_descriptor(self):
+        real_open, real_unlink = os.open, Path.unlink
+        lock_fd = None
+
+        def capture_open(path, *args, **kwargs):
+            nonlocal lock_fd
+            descriptor = real_open(path, *args, **kwargs)
+            if Path(path) == self.lock:
+                lock_fd = descriptor
+            return descriptor
+
+        def windows_unlink(path, *args, **kwargs):
+            if path == self.lock:
+                self.assertIsNotNone(lock_fd)
+                try:
+                    os.fstat(lock_fd)
+                except OSError:
+                    pass
+                else:
+                    raise PermissionError("Windows refuses unlink of an open lock")
+            return real_unlink(path, *args, **kwargs)
+
+        with (
+            mock.patch("sbtd_task_state.os.open", side_effect=capture_open),
+            mock.patch.object(Path, "unlink", windows_unlink),
+        ):
+            self.store._write("target.txt", b"persisted", None)
+
+        self.assertEqual(self.target.read_bytes(), b"persisted")
+        self.assertFalse(self.lock.exists())
+
+    def test_transient_permission_error_does_not_fail_completed_write(self):
+        real_unlink = Path.unlink
+        attempts = 0
+
+        def transient_unlink(path, *args, **kwargs):
+            nonlocal attempts
+            if path == self.lock:
+                attempts += 1
+                if attempts <= 2:
+                    raise PermissionError("temporarily busy")
+            return real_unlink(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "unlink", transient_unlink):
+            self.store._write("target.txt", b"persisted", None)
+
+        self.assertEqual(self.target.read_bytes(), b"persisted")
+        self.assertFalse(self.lock.exists())
+
+    def test_persistent_permission_error_reports_completed_write_and_stale_lock(self):
+        from sbtd_task_state import TaskStateError
+
+        with (
+            mock.patch.object(Path, "unlink", side_effect=PermissionError("busy")) as unlink,
+            self.assertRaises(TaskStateError) as raised,
+        ):
+            self.store._write("target.txt", b"persisted", None)
+
+        self.assertIn("写入已完成", str(raised.exception))
+        self.assertIn(str(self.lock), str(raised.exception))
+        self.assertIn("确认无其他 writer 后手动删除", raised.exception.next_step)
+        self.assertLessEqual(unlink.call_count, 5)
+        self.assertEqual(self.target.read_bytes(), b"persisted")
+        self.assertTrue(self.lock.exists())
+        self.assertEqual(list(self.root.glob(".sbtd-write-*")), [])
+
+    def test_cleanup_error_does_not_mask_original_write_error(self):
+        from sbtd_task_state import TaskStateError
+
+        self.target.write_bytes(b"original")
+        with (
+            mock.patch.object(Path, "unlink", side_effect=PermissionError("busy")),
+            mock.patch("sbtd_task_state.os.replace", side_effect=OSError("write failed")),
+            self.assertRaisesRegex(TaskStateError, "task state write failed"),
+        ):
+            self.store._write("target.txt", b"replacement", b"original")
+
+        self.assertEqual(self.target.read_bytes(), b"original")
+        self.assertTrue(self.lock.exists())
+        self.assertEqual(list(self.root.glob(".sbtd-write-*")), [])
 
 
 if __name__ == "__main__":
