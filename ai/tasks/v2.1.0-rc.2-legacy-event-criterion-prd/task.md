@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-legacy-event-criterion-prd
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict；主会话为两个授权文件的唯一 writer、git 提交者与验证 controller；恰好两个本地提交，不启动子代理、不使用 advisor；push 与开 PR 由编排方在 omp 之外执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-legacy-event-criterion-prd
 created_at: '2026-10-24T18:36:34+08:00'
-updated_at: '2026-10-24T19:38:41+08:00'
-completed_at: null
+updated_at: '2026-10-24T20:39:06+08:00'
+completed_at: '2026-10-24T20:39:06+08:00'
 ---
 
 # rc.2：旧格式事件判定口径 PRD strict 任务
@@ -72,3 +72,4 @@ completed_at: null
 | 2026-10-24T18:37:26+08:00 | in-progress | in-progress | 编排方整理，主会话记录：完成手写任务记录与本地只读自检，开始 Commit 2 提交。 | 仓库 sbtd_task_state.TaskDocument.parse 已通过；strict／in-progress、id／branch、completed_at=null 与现有事件 schema 校验通过；git diff --check、git diff --cached --check、git diff origin/main --check 均干净；git diff origin/main --stat 仅含两个授权文件，新增行禁词命中 0。本事件追加后提交前再次只读解析；本轮不调用 TaskStore 写入、不执行 push。 |
 | 2026-10-24T18:51:13+08:00 | in-progress | in-progress | Reviewy b26fbf1 审查阻塞：PRD :65 「只提示一次」超出用户 18:04 原话，改回与第 2 点一致的「提示」；编排方整理 | 编排方整理：按 Lord 18:45 裁定（Reviewy 同意），同一提交将模型记录第 2 行改为实际计数 15／28（Reviewy 依 jsonl 01a16d7b-0848 核对）；git diff b26fbf1 --stat 仅含 PRD 与本 task.md 两个文件；PRD diff 仅第 65 行删除「只」「一次」且仍为单行；PRD :65 与决定第一条「一次」计数均为 0；git diff --check 干净，新增行禁词命中 0；仓库 sbtd_task_state.TaskDocument.parse 已通过；本轮不调用 TaskStore 写入、不执行 push。 |
 | 2026-10-24T19:38:41+08:00 | in-progress | checking | 送审时漏记 checking，现补记，编排方整理：Reviewy 2026-10-24 19:31 群内对 `70cea1c` 给出 CLEAN；Lord 19:36 裁定按方案 A 先补 checking。 | Reviewy CLEAN SHA `70cea1c024f0fc34763c84c6e9d3b07b0b55c8ea`；CI run `40087854878` 13／13 success；编排方整理：按 Lord 19:37 裁定，模型记录表新增第 6–9 行；本次手写，未经 TaskStore 写入（TaskStore._catalog() 被 3 个旧 task.md 阻塞）；提交前以仓库 sbtd_task_state.TaskDocument.parse 读取通过（status=checking，非旧格式）。 |
+| 2026-10-24T20:39:06+08:00 | checking | done | 编排方整理：Reviewy 2026-10-24 20:05 群内对 `47dbc6a` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN SHA `47dbc6aeff5b179c9a96aca97ada8c2593eb33d4`；CI run `40090906238` 13／13 success |
