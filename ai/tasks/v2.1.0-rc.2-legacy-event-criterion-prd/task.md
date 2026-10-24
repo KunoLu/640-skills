@@ -7,7 +7,7 @@ mode_note: 编排方整理：本轮采用 strict；主会话为两个授权文�
 status: done
 branch: docs/v2.1.0-rc.2-legacy-event-criterion-prd
 created_at: '2026-10-24T18:36:34+08:00'
-updated_at: '2026-10-25T01:01:31+08:00'
+updated_at: '2026-10-25T01:14:14+08:00'
 completed_at: '2026-10-24T20:39:06+08:00'
 ---
 
@@ -77,3 +77,4 @@ completed_at: '2026-10-24T20:39:06+08:00'
 | 2026-10-24T20:39:06+08:00 | checking | done | 编排方整理：Reviewy 2026-10-24 20:05 群内对 `47dbc6a` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN SHA `47dbc6aeff5b179c9a96aca97ada8c2593eb33d4`；CI run `40090906238` 13／13 success |
 | 2026-10-25T01:01:15+08:00 | done | done | 编排方整理：更正 2026-10-24T19:38:41 事件中的 Reviewy CLEAN 时间。 | 该事件写「Reviewy 2026-10-24 19:31 群内对 `70cea1c` 给出 CLEAN」，Reviewy 群内更正实际为 19:18；原事件逐字保留，以本事件为准。 |
 | 2026-10-25T01:01:31+08:00 | done | done | 编排方整理：F 回填模型记录与 plan.md 行。 | 第 5 行 fix1 main s2 11／25、第 9 行 checking main s1 9／21（均按 jsonl 统计，原「未知」原文保留）；新增第 10 行 done2 ping 1／0、第 11 行 done2 main s1 11／21；按 Lord 2026-10-24 18:42 群内裁定，plan.md 任务表为本 task 追加一行，四列写「见 task.md／PR 页面」；旧事件逐字不变，completed_at 不变；手写，未经 TaskStore 写入。 |
+| 2026-10-25T01:14:14+08:00 | done | done | 编排方整理：F 回填 done 提交 tip 上 CI run `40094994851` 的 attempt 2 重跑记录。 | gh run view 40094994851 --attempt 1／2 --json jobs 核实：head `1098d88`（done 提交 tip，squash 合入为 `3c49524`）；attempt 1（2026-10-24 20:41:45 +08:00 创建）conclusion failure，linux-shards (2) failure（测试 :228 并发时序竞争，后由 #171 修复）、linux-full 汇总门 failure，其余 11 个 job success；attempt 2（2026-10-24 21:02:35 +08:00 创建）仅重跑 linux-shards (2)（21:02:38–21:19:33）与 linux-full（21:19:36–21:19:52），均 success，其余 11 个 job 沿用 attempt 1 结果，conclusion success，13／13；attempt 2 由编排方未先询问即重跑。合入前 tip 的 CI 证据为 attempt 2；本文件 2026-10-24T20:39:06 done 事件引用的是 CLEAN SHA `47dbc6a` 上的 CI run `40090906238`（attempt 1，13／13 success），不是 40094994851；原事件逐字不变。 |
