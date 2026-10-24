@@ -5,9 +5,9 @@ workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；主会话唯一 writer／验证 controller，不使用 advisor；fix4 为一个提交，push 与 gh 操作由编排方执行。
 status: in-progress
-branch: docs/v2.1.0-rc.2-task-status-sync-prd
+branch: "feat/v2.1.0-rc.2-task-status-sync-workflow"
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T13:55:36+08:00'
+updated_at: "2026-10-24T14:19:07.843334+08:00"
 completed_at: null
 ---
 
@@ -92,3 +92,5 @@ completed_at: null
 | 2026-10-24T13:14:13+08:00 | in-progress | in-progress | 编排方整理：本轮 fix4 按 Reviewy 对 `8fb0afa` 的 NOT CLEAN blocker 新增模型记录一节，并修正过时措辞与 PRD 路径。 | 本轮仅修改本 task 与 PRD，纳入同一个提交；omp 会话不执行 push，push 由编排方执行；旧事件逐字保留，status 保持 in-progress、completed_at 为 null；at 为 date -Iseconds 取得的真实时间。 |
 | 2026-10-24T13:33:34+08:00 | in-progress | in-progress | 编排方整理：按 Lord 最终裁定，模型记录 fix4 main 行计数改为未知（落盘时本轮尚未结束），实际计数见群内交付报告。 | 仅改模型记录第 13 行与本事件；旧事件逐字保留；status 保持 in-progress、completed_at 为 null；omp 会话不执行 push，push 由编排方执行。 |
 | 2026-10-24T13:55:36+08:00 | in-progress | in-progress | 编排方整理：按 Reviewy 对 `1e19c4f` 的 NOT CLEAN 意见，模型记录 fix4 改为逐会话行、补全 openai-codex/ 前缀、逐提交注明执行者，并修正第 51 行措辞。 | 仅改本 task 正文与本事件；旧事件逐字保留（13:14:13 事件 evidence 曾于 `b838603` 中改写，见模型记录第 15 行，本轮不再改动）；status 保持 in-progress、completed_at 为 null；本会话内提交，push 由编排方执行。 |
+| 2026-10-24T14:19:07.425201+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：明确重绑定，branch 从 docs/v2.1.0-rc.2-task-status-sync-prd 改为 feat/v2.1.0-rc.2-task-status-sync-workflow；沿用 strict。 | git show origin/main:ai/tasks/v2.1.0-rc.2-task-status-sync/task.md 与本地逐字节一致；实际 worktree 分支已核对；编排方整理的本轮指令明确授权重绑定。 |
+| 2026-10-24T14:19:07.843334+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：开始 PR-b；开始脚本实现、回归测试与工作流文档同步。 | 已读取 status-sync PRD、两份运行时／数据契约、确认方案和现有实现；本轮不回填 PR-a，不改 PRD、plan、schema 或其他 task；最终仅进入 checking。 |
