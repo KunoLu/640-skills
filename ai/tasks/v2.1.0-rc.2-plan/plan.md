@@ -6,6 +6,7 @@
 
 - 每个任务均为 strict 模式 SBTD 任务，任务记录落 `ai/tasks/<id>/task.md`。
 - 每个 PR 的第一个 commit 回填上一行的 PR、merge SHA 与完成时间（+08:00）。
+  - 自 PR #168 起停用，由 sbtd-workflow-v2-task-status-sync.md 替代（用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录）。
 - Reviewy 在 tip 上 CLEAN 后，Lord squash-merge；合并后本地与远端分支均删除。
 - 锁定决定编号（D1–D17）见 `grill-r1.md`「锁定决定清单」。
 
