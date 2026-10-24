@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-25T04:09:51+08:00'
+updated_at: '2026-10-25T04:36:10+08:00'
 completed_at: null
 ---
 
@@ -244,6 +244,7 @@ PR-1 本地提交证据：
 | 2026-10-25T04:02:20+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成三档可测容量校准与默认值结论 | 18 份 HTML／CSV 样本 SHA-256／st_size 与源报告一致；部分一套 2,579,665／25,507,472／29,329,547 B。保持默认 2,000,000,000，不改代码；完整四格式因 JPEG/PDF unavailable 未测，未当 0。 |
 | 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始最终记录收口与 AC／目标映射（编排方整理） | 三个本地提交已创建；50 个 Python 文件与最终 full 被测 hash 一致；只追加本 task，禁止改 plan 行或完成状态。 |
 | 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成最终证据整理；PR-4 可在无 Mac 证据下完成的部分已本地完成；R2.2 保持 in-progress，等待用户 Mac 证据 | 性能／容量／验证／覆盖映射见 PR-4 追加节；D9 未满足，completed_at null；按用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录；不 push，不宣称发布就绪。 |
+| 2026-10-25T04:36:10+08:00 | in-progress | in-progress | 写入者：PR-4 operator；记录补正：授权根改写为 `/workspace/640-skills-r22-pr4`，PR-4 模型表单列 main 内部辅助 model_usage 行 | Reviewy 要求的路径写法；session jsonl 只读复核 26 条 purpose find、typesafe/jev-latest，不计入 main 93 / 163 与 ping 1 / 0；历史正文与事件保留，status／completed_at 不变。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1068,7 +1069,7 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 
 ## R2.2 PR-4 入口核对与进度补写（追加）
 
-编排方整理：本轮 strict，主会话唯一 writer／验证 controller／本地提交者；授权根 `~/../../workspace/640-skills-r22-pr4`（实际解析为本轮授权 worktree）、分支 `feat/v2.1.0-rc.2-r2.2-pr4-perf-closeout`，入口 HEAD／origin/main `d45cfc8567e57dfe10c397c0143cf01717e1109c`，工作区干净、无 upstream。历史 frontmatter branch 保留，本节记录本轮明确绑定；沿用既有 Markdown 追加与 TaskStore 兼容边界，不调用 helper rebind，不写 active／index／ignore，不声称自动恢复可靠。未完整调用 grill-with-docs：范围、验收与 D9 停止点明确，无新领域决定。
+编排方整理：本轮 strict，主会话唯一 writer／验证 controller／本地提交者；授权根 `/workspace/640-skills-r22-pr4`（本轮授权 worktree）、分支 `feat/v2.1.0-rc.2-r2.2-pr4-perf-closeout`，入口 HEAD／origin/main `d45cfc8567e57dfe10c397c0143cf01717e1109c`，工作区干净、无 upstream。历史 frontmatter branch 保留，本节记录本轮明确绑定；沿用既有 Markdown 追加与 TaskStore 兼容边界，不调用 helper rebind，不写 active／index／ignore，不声称自动恢复可靠。未完整调用 grill-with-docs：范围、验收与 D9 停止点明确，无新领域决定。
 
 本次补写属于 status-sync PRD §四.1 的入口进度核对，不恢复已停用的例行合并回填规则。plan.md「### R2.2」已含 #162–#167，无缺漏，不重复追加、不改任务表行。下列 SHA／git committer 时间均由本轮 `git log -1 --format='%H %cI %s' <sha>` 核实；GitHub head／mergedAt 为编排方整理，CI／Reviewy 本轮不可考。
 
@@ -1109,6 +1110,7 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 |---|---|---|---|---|---|---|
 | PR-4 ping／01a16f40-e5f7-7673-91ad-07e2c12624ae | openai-codex/gpt-6-astra | high | 1 / 0（编排方整理） | --no-tools，回复 OK | false（编排方整理） | 不可考 |
 | PR-4 main／01a16f42-9934-77d9-ae02-de618d2caef2 | openai-codex/gpt-6-astra | high | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 唯一 writer／controller；session 文件名只读核实：`~/.omp/logs/640-rc2-r22-pr4/main/session/2026-10-24T18-53-18-004Z_01a16f42-9934-77d9-ae02-de618d2caef2.jsonl` | 不可考 | 不可考 |
+| PR-4 main 内部辅助 model_usage／01a16f42-9934-77d9-ae02-de618d2caef2 | typesafe/jev-latest | 不可考（记录无该字段） | 26 次调用（purpose find；不计入 main 93 / 163，也不计入 ping 1 / 0） | omp main session 内部辅助调用；只读复核 `~/.omp/logs/640-rc2-r22-pr4/main/session/2026-10-24T18-53-18-004Z_01a16f42-9934-77d9-ae02-de618d2caef2.jsonl`：type=model_usage 共 26 条，均 purpose find、provider typesafe、model jev-latest、stopReason stop，第 94–168 行，2026-10-25T02:54:55+08:00–02:56:10+08:00 | 不可考（记录无该字段） | 不适用 |
 
 ## R2.2 PR-4 初轮证据与实现边界（追加）
 
