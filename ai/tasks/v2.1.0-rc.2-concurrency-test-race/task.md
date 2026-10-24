@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-concurrency-test-race
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交者；不启动子代理、不用 advisor；push 与开 PR 由编排方在 omp 之外执行
-status: checking
+status: done
 branch: test/v2.1.0-rc.2-concurrency-test-race
 created_at: '2026-10-24T21:49:56+08:00'
-updated_at: '2026-10-24T21:55:07+08:00'
-completed_at: null
+updated_at: '2026-10-24T22:26:25+08:00'
+completed_at: '2026-10-24T22:26:25+08:00'
 ---
 
 # rc.2：并发测试时序竞争 strict 测试修复
@@ -75,3 +75,4 @@ completed_at: null
 | 2026-10-24T21:49:56+08:00 | planned | in-progress | 编排方整理，主会话记录：建立手写 strict 任务，开始测试时序修复与本地自检。 | 已核对 HEAD、分支、干净工作区及授权路径安全；按 Lord 21:47 裁定仅改目标测试与本 task；未经 TaskStore 写入；at 为实际记录时间。 |
 | 2026-10-24T21:51:23+08:00 | in-progress | in-progress | 主会话记录：完成最小测试修改与两项本地自检，非正式验证。 | 目标单测 1 项 OK（0.558s），整文件 14 项 OK（7.016s）；首次只读解析输出 in-progress False 1 None。本事件追加后提交前再次解析；两个循环分别收齐退出码和补记事件，原子进程脚本及最终断言未改，不引入重试或 sleep。正式验证由编排方在本提交上运行。 |
 | 2026-10-24T21:55:07+08:00 | in-progress | checking | 编排方整理：正式验证在测试修复提交 a6b1d70 上通过，送审（Reviewy）与 CI。 | SHA a6b1d70aa6b876aeededab1fadfdff7ad68c2418；compileall 0；50 次独立进程单测 50/50 Ran 1 test OK；整文件 Ran 14 tests OK；任务 4 模块 Ran 89 tests OK；Python 3.13.5；日志 /workspace/640-concurrency-fix-verify/；本补记提交只改 task.md；手写，未经 TaskStore 写入 |
+| 2026-10-24T22:26:25+08:00 | checking | done | 编排方整理：Reviewy 对 `56130b9` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN SHA `56130b98025305f13298327c30d9a5ecc640466b`；CI run `40100326009` 13／13 success |
