@@ -107,7 +107,7 @@ PY
 
 清扫后按两目录直接子项的普通文件 `st_size` 合计 U；manifest、坏文件、孤立文件与在途 temp 均计入，hardlink 的每个普通文件目录项各计其 `st_size`；symlink／junction、其他非普通项和嵌套目录内容不计入。U 达到 L 的 80% 仅记服务端日志，无新增 `meta.warnings`。U > L 时拒绝新建；U == L 允许。本规则不预留未来产物大小，已受理作业可能暂时使占用越限，不因此删除未过期数据。坏／未知文件持续占用时，应人工确认归属或调整上限，不自动清空。
 
-新导出拒绝返回 HTTP **507**，body 恰为 `{"detail":"DISK_QUOTA_EXCEEDED","used_bytes":U,"quota_bytes":L}`（U／L 是整数），无 job、export_id 或本次文件。快照库抛 `disk_quota.DiskQuotaExceeded`，属性 `used_bytes`／`quota_bytes` 相同；未新增 snapshot HTTP handler。已有快照复用、幂等导出重放不新增文件。默认值容量实测校准留给 PR-4。
+新导出或 `POST /api/v1/statistics/query` 所需的新快照被拒绝时返回 HTTP **507**，body 恰为 `{"detail":"DISK_QUOTA_EXCEEDED","used_bytes":U,"quota_bytes":L}`（U／L 是异常携带的整数），无本次文件；导出还保证无 job、export_id。统计查询先校验 scope（非法时 400），仅新建快照进入共享配额准入；已有未过期匹配快照即使当前超限也复用并返回 200。快照库仍抛 `disk_quota.DiskQuotaExceeded`，属性 `used_bytes`／`quota_bytes` 相同；未新增独立的 snapshot 创建 HTTP handler。已有快照复用、幂等导出重放不新增文件。默认值容量实测校准留给 PR-4。
 
 ## R1 没有的东西（如实声明）
 

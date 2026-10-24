@@ -256,6 +256,10 @@ export function fetchReportSnapshot(snapshotId: string): Promise<Snapshot> {
 /**
  * POST /api/v1/statistics/query → 200 Envelope whose data carries metric
  * values keyed by metric_id (stats_query.query over contract_eval.evaluate).
+ * Returns 507 with {detail: "DISK_QUOTA_EXCEEDED", used_bytes, quota_bytes}
+ * when a required new snapshot is refused by the shared snapshots/ + exports/
+ * quota after sweeping (used_bytes > quota_bytes; both integers).
+ * Matching unexpired snapshot reuse remains 200; invalid scope remains 400.
  */
 
 /** Stratified rate entry (e.g. validations.run_pass_rate strata). */
