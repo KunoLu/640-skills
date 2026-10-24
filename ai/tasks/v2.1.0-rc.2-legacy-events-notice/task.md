@@ -4,10 +4,10 @@ id: v2.1.0-rc.2-legacy-events-notice
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交者；不启动子代理、不用 advisor；push 与开 PR 由编排方在 omp 之外执行
-status: in-progress
+status: checking
 branch: fix/v2.1.0-rc.2-legacy-events-notice
 created_at: '2026-10-24T22:53:24+08:00'
-updated_at: '2026-10-24T22:57:38+08:00'
+updated_at: '2026-10-24T23:05:33+08:00'
 completed_at: null
 ---
 
@@ -37,8 +37,8 @@ completed_at: null
 | book-ddia-data-design | 持久化事件读取语义，设计前 | confirmed；旧文件是唯一事实，读取不写；无基线仅放宽完整五列的语义，基线后严格；不改变 schema、写入、锁、迁移或恢复机制 |
 | book-legacy-change-safety | 既有解析 bug，生产修改前 | characterized；修复前日志、源码与新增回归建立证据；parse／catalog、畸形行、基线后严格校验、bytes 不变构成安全网，无需 seam |
 | book-refactoring-pass | 既有生产代码，修改前 | proceed（normal）；no refactor needed，删除旧窄放宽分支，以默认 True 的关键字参数沿现有读取链将提示控制传到 catalog |
-| book-release-readiness | 运行时解析变化，本地测试后 | blocked（正式发布门禁）；本地自检通过，但正式提交 SHA 上的验证、CI、Reviewy 尚未执行，由编排方后续推进，不冒充 ready |
-| project-validation | 实现后 | 按编排方原生命令运行新增测试、7 模块回归、catalog 探针、旧文件 sha256 与新 task 解析；仅提交前 dirty worktree 自检 |
+| book-release-readiness | 运行时解析变化，本地测试后 | blocked（正式发布门禁）；编排方整理：正式验证已在 ea4c161 上通过，CI、Reviewy 尚未进行，不冒充 ready |
+| project-validation | 实现后 | s1 为提交前 dirty worktree 自检；编排方整理：ea4c161 上新增 6 tests、task 8 模块 136 tests、catalog、旧文件 sha256、并发 10/10 与 diff 检查通过，详见「验证与剩余边界」 |
 
 ### 行为场景与安全网
 
@@ -66,16 +66,28 @@ completed_at: null
 - `python3 -B /workspace/640-fix4-verify/catalog_probe.py`：exit 0，CATALOG_OK 47；捕获 stderr 为一行「旧格式事件，不追溯」，计数 1。`sha256sum -c /workspace/640-fix4-verify/legacy-sha256-before.txt`：3 项 OK；三个旧 task 的 git status 无变化。
 - 本机 `python3 --version` 为 Python 3.13.5。新 task 首次只读解析输出 `in-progress False 1 None`；本次追加自检事件后，提交前再次执行解析与范围／禁词／diff 检查。
 - Ponytail Review：Lean already，无新增依赖、全局去重状态或抽象；Code Readability Review 自检通过，完整行检查与语义放宽分离，默认提示保留，catalog 独立汇总。没有独立 reviewer，不把本会话自检称为独立复核。
-- BDD：traceable；PRD :59–65 与本 task 中文行为场景对应新增 unittest，无新 .feature／runner。Evidence Source：developer-local；Source Revision：dirty；Environment Alignment：unverified（未对齐正式 CI）；Evidence Publication：local-only；Final Test Report／Run Summary MD：not-needed（本轮仅本地自检）。本 task 保持 in-progress、completed_at null。
+- BDD：traceable；PRD :59–65 与本 task 中文行为场景对应新增 unittest，无新 .feature／runner。s1 自检的 Evidence Source：developer-local；Source Revision：dirty；Environment Alignment：unverified（未对齐正式 CI）；Evidence Publication：local-only；Final Test Report／Run Summary MD：not-needed（s1 仅本地自检）。s1 结束时本 task 为 in-progress、completed_at null。
 - rtk：not-needed，按编排方要求原生命令；Cross-repo context／API Contract：not-needed；Mock Strategy：none。不运行 Web／Mobile E2E、全量 CI 或额外 lint／formatter，不创建正式报告；无 UI／服务变化且本轮正式验证由编排方负责。
 - 不宣称独立审查、CI、合入、部署或发布通过；回退仅涉及本提交的解析逻辑与测试，历史 task bytes 不应改变。
+
+### 编排方正式验证补记（checking s2）
+
+- 编排方整理：正式验证由编排方在 fix4 提交 `ea4c161903a37ef9a1f20fb33511b185ba126be3`（`ea4c161`）上运行，日志目录 `/workspace/640-fix4-verify/`；`head.txt` 记录该 SHA，`python.txt` 记录 Python 3.13.5、nproc 8。本会话读取核对日志，不将这些运行计为本会话执行。
+- 编排方整理：`python3 -B -m unittest -v tests.test_sbtd_task_legacy_events_notice`：Ran 6 tests，OK（`new-tests.log`）；`python3 -B -m unittest` 覆盖全部 `tests/test_sbtd_task*.py`，共 8 个模块（含新文件）：Ran 136 tests，OK（`task-tests.log`）。
+- 编排方整理：`python3 -B /workspace/640-fix4-verify/catalog_probe.py`：`CATALOG_OK 47`，其中 13 个记录 legacy_events=True（`catalog-after.stdout`），stderr 中「旧格式事件，不追溯」恰好 1 次（`catalog-after.stderr`）。修复前为 `CATALOG_FAIL TaskStateError task state event fails the bundled stateEvent schema`，失败前提示 5 次（`catalog-before.log`）；保留失败证据，未重跑。
+- 编排方整理：`legacy-sha256-before.txt`／`legacy-sha256-after.txt` 中 3 个旧 task.md 的 sha256 前后一致：csv-reasoning-tokens `20c911c7d63dbf2178f7abc05971aea15e6792d27b13e2d1ad4b9b6139bb6fec`；r1.3-stats-api `fe74daed7d722493c76a342c1321e0b977b02e79569f084fff72a641afebdfec`；r2.1b-renderer `908f0b7594cf9300a3ef8582ad1522785832083b76d193ed2b4b8246b462c017`。编排方整理：`git diff 2e5ddb5 HEAD` 对这 3 个目录为空。
+- 编排方整理：并发测试 `tests.test_sbtd_task_sync_git.SyncGitTests.test_concurrent_processes_do_not_lose_successful_events` 独立进程 10/10 通过，每次 `Ran 1 test`、OK（`concurrency-10x.csv`、`concurrency-run1.log` 至 `concurrency-run10.log`）。
+- 编排方整理：`git diff --check 2e5ddb5 HEAD` 干净（`diff-check.log`）；新增行禁词 0 命中；task.md 无本机 HOME 绝对路径。
+- 编排方整理：本轮仅手写补记本 task.md 并转 checking，未经 TaskStore 写入；updated_at 与追加事件使用同一实际 Asia/Shanghai 时间，completed_at 保持 null。模型记录 main s1 的 `23／62` 来自编排方按 jsonl 统计（assistant 消息 23、toolCall 62）。
+- 编排方整理：Reviewy 与 CI 尚未进行；done 在 Reviewy CLEAN 后另行提交。本轮不写 done、不 push，不宣称正式发布门禁通过；上述正式验证绑定 ea4c161，不冒充本轮文档提交的 CI 或独立审查结果。
 
 ## 模型记录
 
 | # | 轮次／用途 | 模型（thinking） | assistant 消息／toolCall | 产出 | 会话文件 |
 |---|---|---|---|---|---|
 | 1 | ping（2026-10-24 22:51:03 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-fix4--/2026-10-24T14-51-04-596Z_01a16e64-d614-770e-8cf6-56a462eae4d8.jsonl` |
-| 2 | main s1（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | fix4 实现、测试与本 task，一个本地提交 | `~/.omp/logs/640-fix4/s1/2026-10-24T14-52-27-361Z_01a16e66-1961-775f-88b8-46c936ee8b26.jsonl` |
+| 2 | main s1 | openai-codex/gpt-6-astra（high） | 23／62 | fix4 实现、测试与本 task，一个本地提交 | `~/.omp/logs/640-fix4/s1/2026-10-24T14-52-27-361Z_01a16e66-1961-775f-88b8-46c936ee8b26.jsonl` |
+| 3 | checking s2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 补记正式验证与 in-progress → checking，一个本地提交 | `~/.omp/logs/640-fix4/s2/2026-10-24T15-05-03-619Z_01a16e71-a383-7234-8ae4-1578b2ac9ef2.jsonl` |
 
 ## 状态事件
 
@@ -83,3 +95,4 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-24T22:53:24+08:00 | planned | in-progress | 编排方整理：建立手写 strict 任务，开始 fix4 实现与本地自检。 | HEAD、分支、工作区及路径安全已核对；PRD :55–66 与修复前 catalog 失败日志已读；未经 TaskStore 写入；at 为实际记录时间。 |
 | 2026-10-24T22:57:38+08:00 | in-progress | in-progress | 编排方整理：完成 fix4 实现、测试与本地自检，非正式验证。 | 新增 6 tests OK；指定 7 模块 130 tests OK；catalog CATALOG_OK 47，stderr 提示 1 次；旧文件 sha256 3 项 OK 且 git 无变化；首次 task 解析 in-progress False 1 None，本事件后提交前再次解析。正式验证由编排方在本提交上运行；未经 TaskStore 写入。 |
+| 2026-10-24T23:05:33+08:00 | in-progress | checking | 编排方整理：正式验证在 fix4 提交 ea4c161 上通过，送审（Reviewy）与 CI。 | SHA ea4c161903a37ef9a1f20fb33511b185ba126be3；新测试 6 OK；task 8 模块 136 OK；catalog 47 OK 提示 1 次；3 旧文件 sha256 不变；并发 10/10；diff --check 干净；日志 /workspace/640-fix4-verify/；手写，未经 TaskStore 写入。 |
