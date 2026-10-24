@@ -932,6 +932,30 @@ class OpenApiDraftTests(unittest.TestCase):
             },
         )
 
+    def test_query_statistics_declares_shared_disk_quota_refusal(self) -> None:
+        # Scenario: 统计查询所需快照被共享配额拒绝的响应契约
+        responses = self.doc["paths"]["/api/v1/statistics/query"]["post"]["responses"]
+        expected = {
+            "200": "Json",
+            "400": "BadRequest",
+            "401": "Unauthorized",
+            "403": "Forbidden",
+            "507": "DiskQuotaExceeded",
+        }
+        self.assertEqual(
+            responses,
+            {
+                status: {"$ref": f"#/components/responses/{component}"}
+                for status, component in expected.items()
+            },
+        )
+        for path in ("/api/v1/exports", "/api/v1/report-snapshots"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    responses["507"],
+                    self.doc["paths"][path]["post"]["responses"]["507"],
+                )
+
     def test_disk_quota_exceeded_requires_detail_and_byte_counts(self) -> None:
         # Scenarios: 清扫后共享占用超限时拒绝新建；返回解析后的有效配额而不是固定默认值或原始配置
         response = self.doc["components"]["responses"]["DiskQuotaExceeded"]

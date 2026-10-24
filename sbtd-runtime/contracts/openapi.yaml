@@ -328,6 +328,8 @@ paths:
           $ref: "#/components/responses/Json"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "507":
+          $ref: "#/components/responses/DiskQuotaExceeded"
   /api/v1/statistics/timeseries:
     post:
       operationId: queryTimeseries
@@ -897,6 +899,9 @@ components:
         log-only / presentation handling belongs to R2.2.
         Invalid SBTD_RUNTIME_DISK_QUOTA_BYTES startup refusal is a process/CLI
         concern outside this OpenAPI contract.
+        The queryStatistics contract also allows this response when its required
+        snapshot write is refused by the shared quota; HTTP mapping is deferred
+        to the follow-up implementation PR.
       content:
         application/json:
           schema:
