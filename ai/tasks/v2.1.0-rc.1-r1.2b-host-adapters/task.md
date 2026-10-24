@@ -4,11 +4,11 @@ id: v2.1.0-rc.1-r1.2b-host-adapters
 workflow_mode: strict
 mode_source: user
 mode_note: 用户本次明确要求 SBTD strict mode。
-status: "in-progress"
+status: "done"
 branch: feat/v2.1.0-rc.1-r1.2b-host-adapters
 created_at: '2026-10-17T00:21:58.098736+08:00'
-updated_at: "2026-10-17T02:20:49.156419+08:00"
-completed_at: null
+updated_at: "2026-10-24T10:57:29+08:00"
+completed_at: "2026-10-17T03:38:34+08:00"
 ---
 交付 v2.1.0-rc.1 的 R1.2b：Codex／OMP 宿主来源适配器，把 Skill／Tool 真实调用事件写入 R1.2a 事件库。产物是宿主 capability matrix 更新与结构化回执。不做 R1.2c 历史导入、R1.3 查询 API、HTTP 服务或 Dashboard。
 
@@ -154,6 +154,7 @@ Deferred refactors: 不把 `_secret_key` 提升为公开 API；适配器以私�
 | 2026-10-17T00:22:00.985551+08:00 | planned | in-progress | R1.2b scope is fixed by PRD line 1379, ADR 0001 Q4/Q6, and the user delivery list; failing adapter tests start before adapters exist | docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md:1379 and docs/adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md section 6 |
 | 2026-10-17T02:20:49.156419+08:00 | in-progress | in-progress | 实现与修复完成：orphan 事件 state.previous=null（omp/codex）、畸形时间戳 occurred_at=null 不拒绝整事件、component_id 超 128 字符跳过并计数、CLI 空 installation_id/device_id 以 exit 2 拒绝不建库；Researchy 附录两条（先压平再做秘密键匹配、`.` 作分词符；>256 字符串只丢字段）已有实现并补测试 | `PYTHONPATH=sbtd-runtime:. python3 -B -m unittest tests.test_sbtd_runtime_r1_host_adapters` → Ran 45 tests, OK（含 test_extensions 18 条） |
 | 2026-10-17T02:20:49.156419+08:00 | in-progress | in-progress | 端到端 smoke 复核通过：omp 适配器对真实 smoke 会话文件回执 accepted=2、重复 ingest duplicate=2、重放 2 条；畸形时间戳+orphan 合成会话入库 occurred_at=null、previous=null 且被事件库接受；codex 适配器 orphan item.completed 入库 previous=null；空 identity 两 CLI 均 exit 2 且不建 audit.db。codex@0.163.0 真实 smoke 保持 pending（本仓库不安装不运行 codex） | 本文件「omp@18.11.1 真实 smoke 证据」节；capability-matrix.json smoke.omp=pass / smoke.codex=pending；指令在 sbtd-runtime/docs/host-adapters.md |
+| 2026-10-17T03:38:34+08:00 | in-progress | done | 用户 2026-10-24 10:09 群内确认（同意，需要更新状态），Lord 记录；编排方整理：按 #134 合并事实回填完成状态，保留历史事件与 smoke 边界。 | PR https://github.com/KunoLu/640-skills/pull/134，MERGED；merge SHA `f2bd1fe04efe4f07a01bd7843d1d551ca85764bc`；head `3b19cbbffa8ff89fd8521635e7566d099d0e66c4`（`3b19cbb`）；git committer `%cI` `2026-10-17T03:38:33+08:00`（本轮 git log 核实）；GitHub mergedAt `2026-10-17T03:38:34+08:00`（`2026-10-16T19:38:34Z`，本轮 gh 核实），两者相差 1 秒，completed_at 使用 mergedAt；PR title 记录 omp smoke pass、codex smoke unsupported／pending（未通过）；合并前 CI／review 本轮未核实，均不可考。 |
 
 ## Codex real smoke (box, 2026-10-17 CST)
 
