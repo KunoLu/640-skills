@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.2-statistics-metadata-contract
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict、CONTRACT/METADATA-ONLY；主会话唯一 writer／验证 controller，不使用 advisor，仅本地 commits 2、3。
-status: in-progress
+status: done
 branch: contract/v2.1.0-rc.2-r2.2-statistics-metadata
 created_at: '2026-10-24T10:19:17+08:00'
-updated_at: '2026-10-24T10:29:07+08:00'
-completed_at: null
+updated_at: '2026-10-24T10:57:29+08:00'
+completed_at: '2026-10-24T10:53:09+08:00'
 ---
 
 # R2.2 HTTP-routed operations metadata contract
@@ -72,6 +72,7 @@ Scenario: 已有 HTTP 路由不再被描述为仅进程内实现
 | 2026-10-24T10:26:08+08:00 | in-progress | in-progress | 编排方整理：metadata RED→GREEN、消费者 smoke 与计划验证完成；本地独立检查无 findings。 | golden 63 passed；consumers 51／3 skipped；runtime 430／1 failure／10 skipped，缺 tzdata；validator／format／diff-check 通过；既有 I001 保留；尚未提交 commit 2，PR 未开启。 |
 | 2026-10-24T10:28:08+08:00 | in-progress | in-progress | 编排方整理：commit 2 已本地提交，提交 blob 与全量被测内容一致；追加第三次提交前模型快照。 | `77563361077680a4f78e4d35371753fbc31a8aec`；三文件 SHA-256 与 runtime-full raw.hashes 一致；未重跑 CI，不外推缺 tzdata 的失败；PR 未开启。 |
 | 2026-10-24T10:29:07+08:00 | in-progress | in-progress | 编排方整理：以本 task 的 commit 3 收束本地 commits 2、3；本地交付完成，任务保持开放，PR 尚未开启。 | commit 2 `77563361077680a4f78e4d35371753fbc31a8aec`；本提交只纳入 task；commit3-integrity exit 0，禁词新增行 0、schema／事件／14 对既有 raw＋中文汇总通过；全量缺 tzdata 失败与既有 I001 保留，不声明 CI／PR review／merge。 |
+| 2026-10-24T10:53:09+08:00 | in-progress | done | 编排方整理：statistics metadata 契约 PR #166 已由 Lord squash 合并，回填合并完成状态；不改写历史事件或本地验证结论。 | PR [#166](https://github.com/KunoLu/640-skills/pull/166)；merge SHA `fcd835e397698ab3292d9d7614e1407ff7e0a465`；head SHA `073999fbbcb7087de202227fa538b752495b4595`；git committer `%cI` `2026-10-24T10:53:09+08:00`（本轮 git log 核实）；GitHub mergedAt `2026-10-24T10:53:09+08:00`（`2026-10-24T02:53:09Z`，编排方整理），两者相等但分别记录；合并前 CI 13/13 on `073999f`，run `40054585051`（编排方整理；本轮未重跑 CI）；Reviewy CLEAN @073999f（编排方整理）。 |
 
 ## 未决问题
 
