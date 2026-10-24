@@ -4,10 +4,10 @@ id: v2.1.0-rc.2-legacy-event-criterion-prd
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict；主会话为两个授权文件的唯一 writer、git 提交者与验证 controller；恰好两个本地提交，不启动子代理、不使用 advisor；push 与开 PR 由编排方在 omp 之外执行。
-status: in-progress
+status: checking
 branch: docs/v2.1.0-rc.2-legacy-event-criterion-prd
 created_at: '2026-10-24T18:36:34+08:00'
-updated_at: '2026-10-24T18:51:13+08:00'
+updated_at: '2026-10-24T19:38:41+08:00'
 completed_at: null
 ---
 
@@ -56,6 +56,10 @@ completed_at: null
 | 3 | fix1 ping（2026-10-24 18:45:18 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-legacy-criterion-prd--/2026-10-24T10-45-18-838Z_01a16d83-d576-72f2-b10b-7c4f01f5fa43.jsonl` |
 | 4 | fix1 main s1 | openai-codex/gpt-6-astra（high） | 14／30 | Reviewy b26fbf1 阻塞修复：PRD :65 与决定第一条去掉「只」「一次」；其本地提交 097df0c 未 push，编排方 reset --soft 后由 s2 重新提交 | `~/.omp/logs/640-legacy-criterion-prd/fix1/s1/2026-10-24T10-45-53-074Z_01a16d84-5b32-7189-a3d2-538fe24a5977.jsonl` |
 | 5 | fix1 main s2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 模型记录第 2 行改为 15／28，并以一个本地提交提交 fix1 全部改动 | `~/.omp/logs/640-legacy-criterion-prd/fix1/s2/2026-10-24T10-50-52-187Z_01a16d88-eb9b-72ad-a101-6049e1b0b78a.jsonl` |
+| 6 | done ping（2026-10-24 19:32:06 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-legacy-criterion-prd--/2026-10-24T11-32-06-935Z_01a16dae-ae97-72d1-8195-77ac8e9b86b1.jsonl` |
+| 7 | done main s1 | openai-codex/gpt-6-astra（high） | 9／18 | 本地 done 提交 46d2b94（in-progress → done，会使本 task 成为旧格式）未 push，按 Lord 19:36 方案 A 丢弃 | `~/.omp/logs/640-legacy-criterion-prd/done/s1/2026-10-24T11-33-35-231Z_01a16db0-077f-74b1-8c81-8c38ba04f5bf.jsonl` |
+| 8 | checking ping（2026-10-24 19:37:45 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-legacy-criterion-prd--/2026-10-24T11-37-45-337Z_01a16db3-d879-706c-bf6f-6a5c5bc52035.jsonl` |
+| 9 | checking main s1（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 补记 in-progress → checking 与模型记录第 6–9 行，以一个本地提交提交 | `~/.omp/logs/640-legacy-criterion-prd/checking/s1/2026-10-24T11-38-28-854Z_01a16db4-8275-7227-9a0e-4da313b71c7e.jsonl` |
 
 编排方整理：每个 omp 会话一行；本会话未使用子代理。push 与开 PR 由编排方在 omp 之外执行。
 
@@ -67,3 +71,4 @@ completed_at: null
 | 2026-10-24T18:36:34+08:00 | in-progress | in-progress | 编排方整理，主会话记录：记录已完成的 PRD 判定口径修改与 Commit 1。 | commit `d79c129`；只改 PRD 第 65 行且保持单行，原文归因保留；git diff --check 干净，新增行禁词命中 0；本事件 at 为记录时间，不冒充提交时间。 |
 | 2026-10-24T18:37:26+08:00 | in-progress | in-progress | 编排方整理，主会话记录：完成手写任务记录与本地只读自检，开始 Commit 2 提交。 | 仓库 sbtd_task_state.TaskDocument.parse 已通过；strict／in-progress、id／branch、completed_at=null 与现有事件 schema 校验通过；git diff --check、git diff --cached --check、git diff origin/main --check 均干净；git diff origin/main --stat 仅含两个授权文件，新增行禁词命中 0。本事件追加后提交前再次只读解析；本轮不调用 TaskStore 写入、不执行 push。 |
 | 2026-10-24T18:51:13+08:00 | in-progress | in-progress | Reviewy b26fbf1 审查阻塞：PRD :65 「只提示一次」超出用户 18:04 原话，改回与第 2 点一致的「提示」；编排方整理 | 编排方整理：按 Lord 18:45 裁定（Reviewy 同意），同一提交将模型记录第 2 行改为实际计数 15／28（Reviewy 依 jsonl 01a16d7b-0848 核对）；git diff b26fbf1 --stat 仅含 PRD 与本 task.md 两个文件；PRD diff 仅第 65 行删除「只」「一次」且仍为单行；PRD :65 与决定第一条「一次」计数均为 0；git diff --check 干净，新增行禁词命中 0；仓库 sbtd_task_state.TaskDocument.parse 已通过；本轮不调用 TaskStore 写入、不执行 push。 |
+| 2026-10-24T19:38:41+08:00 | in-progress | checking | 送审时漏记 checking，现补记，编排方整理：Reviewy 2026-10-24 19:31 群内对 `70cea1c` 给出 CLEAN；Lord 19:36 裁定按方案 A 先补 checking。 | Reviewy CLEAN SHA `70cea1c024f0fc34763c84c6e9d3b07b0b55c8ea`；CI run `40087854878` 13／13 success；编排方整理：按 Lord 19:37 裁定，模型记录表新增第 6–9 行；本次手写，未经 TaskStore 写入（TaskStore._catalog() 被 3 个旧 task.md 阻塞）；提交前以仓库 sbtd_task_state.TaskDocument.parse 读取通过（status=checking，非旧格式）。 |
