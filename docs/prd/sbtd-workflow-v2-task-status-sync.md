@@ -5,7 +5,7 @@
 - 归因：用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录。
 - 落地方式与生效点：用户 2026-10-24 11:14 群内确认；新 PRD＋plan.md 追加，分 PR-a／PR-b 落地，新规则自 PR-a 合入起生效。
 - 事实源与交叉引用：[任务状态运行时](sbtd-workflow-v2-task-state-runtime.md)、[任务数据契约](sbtd-workflow-v2-task-data-contract.md)及 `sbtd-task/references/state.md`。沿用既有状态、原子写入和历史证据规则，不另起数据契约副本。
-- 编排方整理：本文按确认方案第一至第九节组织；status-sync 跨两个 PR 的任务结构来自 Reviewy 提出、Lord 2026-10-24 11:16 采纳，不归为用户确认条目。不追溯条款的依据与归因单列。群内时间均为 +08:00。
+- 编排方整理：本文按确认方案第一至第九节组织。不追溯条款的依据与归因单列。群内时间均为 +08:00。status-sync 跨两个 PR 的任务结构：用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录。
 - 本文为工作流规则 PRD，不宣称相关脚本、测试或运行时改动已经实施。
 
 ## 一、根因
@@ -77,7 +77,7 @@
 
 ### 非 git 项目节点细则
 
-Lord 2026-10-24 11:03 已在群内说明，属同一确认方案：
+属 11:05 完整方案，用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录：
 
 - 开始任务先写 frontmatter `status: in-progress`、`branch: null`、带时区 `created_at`、目录范围并追加「开始」事件。
 - 每步「开始 X」／「完成 X」含验证结果、改动文件及 sha256，更新 `updated_at`。
@@ -102,5 +102,5 @@ Reviewy 审查时照样核对 task.md 的状态，有问题算阻塞项。这只
    - PR-a：只加 PRD `docs/prd/sbtd-workflow-v2-task-status-sync.md`，追加 plan.md 停用说明和任务表一行，新建 strict 任务 `ai/tasks/v2.1.0-rc.2-task-status-sync/task.md`。
    - PR-b：PR-a 合入后开。按 PRD 改 `sbtd-workflow-onboard/` 的 SKILL.md、REFERENCE.md、`templates/agents/AGENTS.project.md`、`sbtd-task` 的 state reference 和相关脚本，配齐测试：三种核对方式各自的判定、多人同时写入、中途 `git init`、发现不一致时不自动 reopen。
 3. 生效点：新规则从 PR-a 合入起生效（用户 2026-10-24 11:14 确认）。PR-a 的第一个 commit 按旧规则回填上一个 PR（最后一次）。PR-b 是新规则下的第一个 PR：第一个 commit 不回填 PR-a；收尾按 B 方案写 done；审查按新规则。
-4. 编排方整理（Reviewy 提出、Lord 2026-10-24 11:16 采纳）：status-sync 是一个跨两个 PR 的任务。PR-a 的 task.md 只写进度（PRD 完成），状态保持 in-progress；PR-b 在 CLEAN 后按 B 方案把整个任务写 done。PR-a 的合并 SHA 和时间按新规则不写进 task.md，用 `git log origin/main -- <task.md>` 查。
+4. 用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录：status-sync 是一个跨两个 PR 的任务。PR-a 的 task.md 只写进度（PRD 完成），状态保持 in-progress；PR-b 在 CLEAN 后按 B 方案把整个任务写 done。PR-a 的合并 SHA 和时间按新规则不写进 task.md，用 `git log origin/main -- <task.md>` 查。
 5. Lord 的编排规矩同步改掉，不再要求首个 commit 回填上一个 PR。

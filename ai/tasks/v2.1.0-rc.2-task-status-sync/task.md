@@ -7,7 +7,7 @@ mode_note: 编排方整理：strict；本轮只做文档／任务记录，主会
 status: in-progress
 branch: docs/v2.1.0-rc.2-task-status-sync-prd
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T11:59:52+08:00'
+updated_at: '2026-10-24T12:34:48+08:00'
 completed_at: null
 ---
 
@@ -17,7 +17,7 @@ completed_at: null
 
 - 用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录。
 - 用户 2026-10-24 11:14 群内确认落地方式与生效点；新规则自 PR-a 合入起生效。群内时间均为 +08:00。
-- 编排方整理：任务跨两个 PR 的结构由 Reviewy 提出、Lord 2026-10-24 11:16 采纳，不归为用户确认条目。
+- 用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录：任务跨两个 PR 的结构。
 - 规则事实源：[任务状态及时更新 PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)。
 
 ## 范围与边界
