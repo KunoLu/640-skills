@@ -4,10 +4,10 @@ id: v2.1.0-rc.2-concurrency-test-race
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交者；不启动子代理、不用 advisor；push 与开 PR 由编排方在 omp 之外执行
-status: in-progress
+status: checking
 branch: test/v2.1.0-rc.2-concurrency-test-race
 created_at: '2026-10-24T21:49:56+08:00'
-updated_at: '2026-10-24T21:51:23+08:00'
+updated_at: '2026-10-24T21:55:07+08:00'
 completed_at: null
 ---
 
@@ -26,7 +26,7 @@ completed_at: null
 - 本 task.md 手写，未经 TaskStore 写入。编排方整理：`TaskStore._catalog()` 被 3 个旧 task.md 阻塞：`ai/tasks/v2.1.0-rc.1-csv-reasoning-tokens/task.md`、`ai/tasks/v2.1.0-rc.1-r1.3-stats-api/task.md`、`ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md`。沿用已报告事实，不重跑失败调用，不改写这些旧文件。
 - 仅用仓库 `sbtd_task_state.TaskDocument.parse` 只读解析本 task，不调用 TaskStore 写入，不写 active／index／handoff／ignore／身份，不承诺自动恢复。
 - 未完整调用 grill-with-docs：根因、修复方案、范围与验收已明确，无领域歧义；不重复澄清。不启动子代理、task／reviewer，不用 advisor；本会话自检不等于独立审查。
-- 本提交状态保持 `in-progress`，`completed_at: null`；仅记录 `planned → in-progress` 及可选的 `in-progress → in-progress`，不记录 checking／done 迁移。
+- s1 测试修复提交时状态为 `in-progress`；本补记提交转为 `checking`，`completed_at: null`；`done` 在 Reviewy CLEAN 后另行提交。
 
 ## Book Gate Plan
 
@@ -52,16 +52,21 @@ completed_at: null
 - 入口已核对：HEAD `3c49524fec9561e6feacce40638be11ecea60dc7`，分支 `test/v2.1.0-rc.2-concurrency-test-race`，初始工作区干净；授权父目录与测试文件非 symlink，新 task 目录不存在，授权文件未被 ignore。
 - 本地自检命令：`/home/box/.local/venvs/project-validation/bin/python3 -B -m unittest tests.test_sbtd_task_sync_git.SyncGitTests.test_concurrent_processes_do_not_lose_successful_events`；`/home/box/.local/venvs/project-validation/bin/python3 -B -m unittest tests.test_sbtd_task_sync_git`。各运行一次，分别输出 `Ran 1 test in 0.558s` / `OK`、`Ran 14 tests in 7.016s` / `OK`；目标测试实际启动两个子进程并核对落盘事件。这是提交前 dirty worktree 自检，非正式验证。
 - 提交前另核对两个授权文件的 diff、`git diff --check`、新增行禁词零命中；只读解析应输出 `in-progress False <N> None`。手写代码可读性检查关注两个循环的阶段边界及原有断言保留，不夹带重构。
-- 正式验证（50 次独立进程单测、整文件、89 项任务测试）由编排方在本提交上运行，之后由另一 omp 会话追加证据并转 checking。本会话不执行这些正式验证，不宣称 CI、独立审查、合入或发布通过。
+- 正式验证已由编排方于 2026-10-24 21:52:29–21:53:42 +08:00 在测试修复提交 `a6b1d70aa6b876aeededab1fadfdff7ad68c2418`（`a6b1d70`）上完成；日志目录 `/workspace/640-concurrency-fix-verify/`，脚本 `run.sh`，`sha.txt` 与 `sha-after.txt` 均为该 SHA。`status.txt` 记录运行前工作区干净；编排方确认运行后工作区也干净，本会话入口核对同一 HEAD 且工作区干净。本补记提交只改 task.md，测试代码与正式验证时相同。
+- 本会话已读取并核对上述日志：`python.txt` 为 Python 3.13.5、nproc 8；`python -m compileall -q sbtd-workflow-onboard/scripts tests`（与 CI 同命令）在 `compileall.log` 中记录退出 0。`python3 -B -m unittest tests.test_sbtd_task_sync_git.SyncGitTests.test_concurrent_processes_do_not_lose_successful_events` 作为 50 个独立进程运行，`single.csv` 为 50/50 exit 0，`single/run1.log` 至 `single/run50.log` 每个均为 `Ran 1 test` 且 `OK`。
+- 整文件命令 `python3 -B -m unittest tests.test_sbtd_task_sync_git`：`file.log` 为 `Ran 14 tests in 6.783s`、`OK`、exit 0。任务 4 模块命令 `python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_status_sync`：`task89.log` 为 `Ran 89 tests in 36.329s`、`OK`、exit 0。
+- 本会话仅补记证据并转 `checking`，未重跑正式验证。CI 结果与 Reviewy 审查在 push／开 PR 后由编排方跟进；本提交不宣称 CI 通过、独立审查通过、done、合入或发布通过。
 - BDD：skipped（仅测试时序调整，无用户可见行为变化，无 .feature 变动）；API Contract／Cross-repo context：not-needed；Mock Strategy：none。rtk：not-needed（按约定直接运行原生命令）。不运行额外 lint／formatter／全量 CI，不生成额外报告文件；本轮仅本地自检，正式报告不在本会话范围。
-- 旧 task 的 catalog 阻塞未修复；本地单次通过不能证明所有调度下无竞争，且 Python 环境与失败 CI 不同。测试补记的等待顺序修复不改变 TaskStore 并发语义。
+- 旧 task 的 catalog 阻塞未修复；本地通过不能证明所有调度下无竞争，且本地 Python 3.13.5 与失败 CI 的 Python 3.12.10 不同。测试补记的等待顺序修复不改变 TaskStore 并发语义。
 
 ## 模型记录
 
 | # | 轮次／用途 | 模型（thinking） | assistant 消息／toolCall | 产出 | 会话文件 |
 |---|---|---|---|---|---|
 | 1 | ping（2026-10-24 21:48:25 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-concurrency-test-fix--/2026-10-24T13-48-25-975Z_01a16e2b-7bf7-7005-b0db-1af5d0fdf610.jsonl` |
-| 2 | main s1（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 测试修复与本 task，一个本地提交 | `~/.omp/logs/640-concurrency-test-fix/s1/2026-10-24T13-49-20-644Z_01a16e2c-5184-706a-ad6c-aa91e4b913dc.jsonl` |
+| 2 | main s1 | openai-codex/gpt-6-astra（high） | 15／36 | 测试修复与本 task，一个本地提交 | `~/.omp/logs/640-concurrency-test-fix/s1/2026-10-24T13-49-20-644Z_01a16e2c-5184-706a-ad6c-aa91e4b913dc.jsonl` |
+| 3 | s2 ping（2026-10-24 21:53:57 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-concurrency-test-fix--/2026-10-24T13-53-57-371Z_01a16e30-8a7b-77bc-9724-c92314525fee.jsonl` |
+| 4 | main s2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 补记正式验证证据，in-progress → checking，一个本地提交 | `/home/box/.omp/logs/640-concurrency-test-fix/s2/2026-10-24T13-54-30-294Z_01a16e31-0b16-7391-9090-d2e1f83cef88.jsonl` |
 
 ## 状态事件
 
@@ -69,3 +74,4 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-24T21:49:56+08:00 | planned | in-progress | 编排方整理，主会话记录：建立手写 strict 任务，开始测试时序修复与本地自检。 | 已核对 HEAD、分支、干净工作区及授权路径安全；按 Lord 21:47 裁定仅改目标测试与本 task；未经 TaskStore 写入；at 为实际记录时间。 |
 | 2026-10-24T21:51:23+08:00 | in-progress | in-progress | 主会话记录：完成最小测试修改与两项本地自检，非正式验证。 | 目标单测 1 项 OK（0.558s），整文件 14 项 OK（7.016s）；首次只读解析输出 in-progress False 1 None。本事件追加后提交前再次解析；两个循环分别收齐退出码和补记事件，原子进程脚本及最终断言未改，不引入重试或 sleep。正式验证由编排方在本提交上运行。 |
+| 2026-10-24T21:55:07+08:00 | in-progress | checking | 编排方整理：正式验证在测试修复提交 a6b1d70 上通过，送审（Reviewy）与 CI。 | SHA a6b1d70aa6b876aeededab1fadfdff7ad68c2418；compileall 0；50 次独立进程单测 50/50 Ran 1 test OK；整文件 Ran 14 tests OK；任务 4 模块 Ran 89 tests OK；Python 3.13.5；日志 /workspace/640-concurrency-fix-verify/；本补记提交只改 task.md；手写，未经 TaskStore 写入 |
