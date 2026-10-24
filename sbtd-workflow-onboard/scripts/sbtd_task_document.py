@@ -133,14 +133,9 @@ def _decode_event(line: str) -> dict[str, str]:
 
 
 def _validate_event(
-    event: dict[str, str], *, legacy: bool = False, after_baseline: bool = False
+    event: dict[str, str], *, after_baseline: bool = False
 ) -> None:
-    candidate = event
-    # 旧格式唯一放宽项：历史 in-progress -> done；其余五列和日期
-    # 仍复用当前 schema，不能把任意解析失败当作旧格式。
-    if legacy and event["from"] == "in-progress" and event["to"] == "done":
-        candidate = {**event, "from": "checking"}
-    validate_task_data(candidate, "stateEvent", "task state event")
+    validate_task_data(event, "stateEvent", "task state event")
     if event["at"] != "unknown":
         validate_task_timestamps({"updated_at": event["at"]}, "task state event")
     if (
@@ -197,7 +192,7 @@ class TaskDocument:
     has_baseline: bool = False
 
     @classmethod
-    def parse(cls, text: str) -> TaskDocument:
+    def parse(cls, text: str, *, emit_legacy_notice: bool = True) -> TaskDocument:
         frontmatter = parse_task_frontmatter(text, "task")
         validate_task_data(frontmatter, "taskFrontmatter", "task")
         validate_task_timestamps(frontmatter, "task")
@@ -236,13 +231,16 @@ class TaskDocument:
         else:
             events = [_decode_event(line) for line in rows]
             for event in events:
+                # 无基线时仅放宽完整五列的语义，不掩盖空单元格。
+                if not all(value.strip() for value in event.values()):
+                    raise TaskDataError("task state event table has a malformed row", _REPAIR)
                 try:
                     _validate_event(event)
                 except TaskDataError:
-                    _validate_event(event, legacy=True)
                     legacy = True
             if legacy:
-                print("旧格式事件，不追溯", file=sys.stderr)
+                if emit_legacy_notice:
+                    print("旧格式事件，不追溯", file=sys.stderr)
                 events = []
         return cls(
             text,

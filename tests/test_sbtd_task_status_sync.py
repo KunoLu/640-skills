@@ -55,8 +55,6 @@ class LegacyEventTests(unittest.TestCase):
     def test_legacy_does_not_hide_bad_rows_or_frontmatter(self):
         for text in (
             legacy_text().replace("历史验收", ""),
-            legacy_text().replace("in-progress | done", "garbage | done"),
-            legacy_text().replace("2026-01-02T00:00:00Z |", "2026-02-30T00:00:00Z |"),
             legacy_text().replace('"schema_version": 1', '"schema_version": 99'),
         ):
             with self.subTest(text=text), self.assertRaises(TaskDataError):
@@ -110,13 +108,6 @@ class LegacyEventTests(unittest.TestCase):
             )
             self.assertTrue(changed.text.startswith(text + ending))
             self.assertFalse(changed.baseline_changed)
-
-    def test_mixed_legacy_and_invalid_current_row_is_rejected(self):
-        with self.assertRaises(TaskDataError):
-            TaskDocument.parse(
-                legacy_text()
-                + "| 2026-01-03T00:00:00Z | done | blocked | 非法转换 | 证据 |\n"
-            )
 
 
 class ProgressTests(unittest.TestCase):

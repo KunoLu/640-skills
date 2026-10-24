@@ -12,6 +12,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -238,18 +239,18 @@ class TaskStore:
             )
         return True
 
-    def _read(self, relative: str) -> TaskDocument:
+    def _read(self, relative: str, *, emit_legacy_notice: bool = True) -> TaskDocument:
         path = self._path(relative)
         try:
             with open_regular_file(path, "selected task") as handle:
                 text = handle.read().decode("utf-8")
-            return TaskDocument.parse(text)
+            return TaskDocument.parse(text, emit_legacy_notice=emit_legacy_notice)
         except TaskDataError as exc:
             raise TaskStateError(exc.reason, exc.next_step) from None
         except (OSError, UnicodeDecodeError):
             raise TaskStateError("selected task cannot be read as UTF-8") from None
 
-    def _records(self) -> Iterator[TaskSnapshot]:
+    def _records(self, *, emit_legacy_notice: bool = True) -> Iterator[TaskSnapshot]:
         for relative in (".sbtd/tasks", "ai/tasks"):
             base = self._path(relative)
             if not base.exists():
@@ -267,17 +268,21 @@ class TaskStore:
                 relative_path = (
                     (Path(directory) / "task.md").relative_to(self.root).as_posix()
                 )
-                document = self._read(relative_path)
+                document = self._read(
+                    relative_path, emit_legacy_notice=emit_legacy_notice
+                )
                 yield TaskSnapshot(relative_path, document)
 
     def _catalog(self) -> dict[str, TaskSnapshot]:
         records: dict[str, TaskSnapshot] = {}
-        for snapshot in self._records():
+        for snapshot in self._records(emit_legacy_notice=False):
             task_id = snapshot.document.frontmatter["id"]
             if task_id in records:
                 raise TaskStateError("multiple task records have the same logical ID")
             records[task_id] = snapshot
         self._validate_parents(records)
+        if any(snapshot.document.legacy_events for snapshot in records.values()):
+            print("旧格式事件，不追溯", file=sys.stderr)
         return records
 
     @staticmethod
