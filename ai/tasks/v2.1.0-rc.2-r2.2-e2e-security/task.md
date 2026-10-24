@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-25T04:00:17+08:00'
+updated_at: '2026-10-25T04:02:20+08:00'
 completed_at: null
 ---
 
@@ -241,6 +241,7 @@ PR-1 本地提交证据：
 | 2026-10-25T03:51:43+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始本地全量验证与提交前边界检查（编排方整理） | golden、runtime、workflow/task、changed Python ruff、parse／YAML、append-only／新增行限制／冻结目录；仍保持 in-progress，不关闭 R2.2。 |
 | 2026-10-25T04:00:17+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成本地验证与代码提交前检查，保留首轮环境失败 | golden 实际 63 OK；runtime 首轮 433 tests／1 failure／10 skipped（缺已声明 tzdata），仅本 worktree reports 内安装既有 requirements 后，定向 1 OK、子集 27 OK、最终 433 tests／423 passed／10 skipped／160.464s；workflow/task 135 OK；ruff check／format 两文件通过；parse／YAML／append-only／新增行限制／冻结目录通过。 |
 | 2026-10-25T04:00:17+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始三档容量汇总与默认配额校准（编排方整理） | 复用三档真实 snapshot／HTML／CSV／manifest st_size，计算 24h TTL 假设与 80% 点；JPEG／PDF 不可用，不将缺失值当 0 或宣称完整四格式容量已通过。 |
+| 2026-10-25T04:02:20+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成三档可测容量校准与默认值结论 | 18 份 HTML／CSV 样本 SHA-256／st_size 与源报告一致；部分一套 2,579,665／25,507,472／29,329,547 B。保持默认 2,000,000,000，不改代码；完整四格式因 JPEG/PDF unavailable 未测，未当 0。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1130,3 +1131,29 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 测试方法复核：本轮是明确 CLI／真实 EventStore／serve／报告 seam 的 characterization 与 smoke，不声称 red→green TDD。101 事件末页 smoke 与 nearest-rank 边界共 2 tests，复核轮 7.561s、OK。未新增产品行为，不新增 BDD runner；可选 Python Playwright 分支因本机依赖不可用未实跑，独立 MCP 真浏览器证据单列。
 
 依赖与验证边界：首轮 runtime 全量唯一失败为 `test_iana_queries_and_dst_work_without_system_timezone_data` 的 `ModuleNotFoundError: tzdata`，不修改测试或生产去绕过。`sbtd-runtime/requirements-serve.txt:8` 已钉 `tzdata==2026.5`；本轮创建 ignored `reports/pr4-validation-venv`，仅安装已有 serve／onboard requirements，通过 PATH 选择其 python3 后复跑，不引入仓库新依赖、不修改全局环境。原始失败 raw 保留；基准仍属于原测量环境，未冒称在新验证环境重测。golden 的实际数量为 63，不照抄编排方整理的 61 估计。
+
+## R2.2 PR-4 容量校准（追加）
+
+证据：`reports/pr4-capacity-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T200220Z.{json,md}`；命令 `python3 -B -c <raw.command[2]>`，完整标准库脚本在 raw，exit 0。它读取三份具名实测报告，复核全部 18 份可用格式样本的 SHA-256／st_size，保留源报告校验和；这是派生算术复核，不是再次压测。源测量 developer-local Linux，真实 source revision／dirty 不改写。
+
+每格式 n=3，三次落盘字节相同；下表字节均为普通文件 st_size，manifest 单列，不含 audit.db／浏览器／本地报告副本。
+
+| 事件／任务／步骤 | 单个 7d Snapshot B | HTML 产物／manifest B | CSV 产物／manifest B | JPEG／PDF B | 一次查看＋已测两格式 B | 采样临时文件峰值 B |
+|---|---|---|---|---|---|---|
+| 1000／10／100 | 2,033,130 | 14,336／1,656 | 528,887／1,656 | unavailable／未测 | 2,579,665 | 2,033,130 |
+| 10000／100／1000 | 20,312,945 | 18,672／1,659 | 5,172,535／1,661 | unavailable／未测 | 25,507,472 | 20,312,945 |
+| 11500／115／1150 | 23,361,080 | 18,672／1,659 | 5,946,475／1,661 | unavailable／未测 | 29,329,547 | 23,361,080 |
+
+完整「一次查看＋四格式导出」为 `S+H+C+J+P`，每格式含其 manifest；J／P 未测，完整总量和完整套数均 **not-measured**，不填 0。以下只是 HTML／CSV 子集容量：`B=S+H+C`，`floor(2,000,000,000/B)` 为静态可容纳部分套数；严格低于 80% 的套数为 `floor((1,600,000,000-1)/B)`，首次达到预警为 `ceil(1,600,000,000/B)`。部分套数也是完整四格式套数的上界，不是完整容量承诺；准入只检查当前 U，不能据此保证在途写入不越限。
+
+| 事件 | 2GB 部分套数 | 严格低于 80% 的部分套数 | 首次达到预警的部分套数 | 24 快照＋4 组 HTML/CSV B |
+|---|---|---|---|---|
+| 1000 | 775 | 620 | 621 | 50,981,260 |
+| 10000 | 78 | 62 | 63 | 508,288,788 |
+| 11500 | 68 | 54 | 55 | 584,539,788 |
+
+合理使用假设明确为：24h 内 24 个不同快照＋4 次四格式导出，大小取对应已测档；完整占用 `T=24S+4(H+C+J+P)`。最大档已测部分 584,539,788 B，距 80% 还有 1,015,460,212 B；只有四次 JPEG/PDF 及其 manifest、额外在途占用合计在此余量内，才可说这一完整假设成立。这个条件不是 JPEG/PDF 实测结果。24h TTL 在启动／新建时清扫，不是后台准点释放保证。
+
+结论：**保持默认 2,000,000,000，不改代码**；已测 HTML／CSV 子集负载有余量，没有足够证据建议新默认值，但完整四格式、百万规模和 Mac 实机容量尚不能宣布充足。JPEG/PDF 受字体／平台影响，Mac 实机字节数未测；本机生产 renderer 缺 Playwright，真实 capabilities unavailable／POST 503。默认值修改、契约／PRD／schema 或最大支持规模冻结均未做：需用户群内确认后另行处理，原因是缺完整规模与原生平台证据。ADR 可选注记未追加，避免重复已有决定；install-and-use 保留原句并追加结果指引。
+
+资源采样边界：三个规模 serve VmHWM 分别为 111,259,648／724,287,488／816,705,536 B；snapshots＋exports 总峰值下界为 11,023,197／110,560,617／127,104,873 B，20ms 临时文件峰值见表。RSS 是 serve 进程累计峰值，不是 CSV 单作业增量或 renderer 进程树峰值；目录采样可能漏掉短暂峰值，不能宣称平台资源上限已验证。
