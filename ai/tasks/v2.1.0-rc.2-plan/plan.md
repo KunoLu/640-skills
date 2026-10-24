@@ -25,6 +25,10 @@
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
 | F | docs 回填 | P8 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
 | status-sync | 任务状态及时更新：PR-a 文档／PR-b 规则与测试（用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录；[PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-task-status-sync/task.md |
+| legacy-criterion | 旧格式事件判定口径放宽（PRD :65 方案一；用户 2026-10-24 18:04 群内确认（方案一），Lord 记录） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-legacy-event-criterion-prd/task.md |
+| concurrency-race | 并发测试时序竞争 strict 测试修复（#171 任务；Lord 2026-10-25 01:10 群内裁定补行） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-concurrency-test-race/task.md |
+| legacy-notice | 旧格式事件放宽口径 strict 实现修复（#172 fix4 任务；Lord 2026-10-25 01:10 群内裁定补行） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-legacy-events-notice/task.md |
+| f-backfill | rc.2 F 回填：#168–#172 修复轮次记录补正（独立于 P8 F 行；Lord 2026-10-25 01:10 群内裁定补行） | —（独立记录任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-backfill/task.md |
 
 ## 各行锁定决定与验收
 

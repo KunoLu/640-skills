@@ -7,7 +7,7 @@ mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交�
 status: done
 branch: test/v2.1.0-rc.2-concurrency-test-race
 created_at: '2026-10-24T21:49:56+08:00'
-updated_at: '2026-10-24T22:26:25+08:00'
+updated_at: '2026-10-25T01:51:40+08:00'
 completed_at: '2026-10-24T22:26:25+08:00'
 ---
 
@@ -66,7 +66,7 @@ completed_at: '2026-10-24T22:26:25+08:00'
 | 1 | ping（2026-10-24 21:48:25 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-concurrency-test-fix--/2026-10-24T13-48-25-975Z_01a16e2b-7bf7-7005-b0db-1af5d0fdf610.jsonl` |
 | 2 | main s1 | openai-codex/gpt-6-astra（high） | 15／36 | 测试修复与本 task，一个本地提交 | `~/.omp/logs/640-concurrency-test-fix/s1/2026-10-24T13-49-20-644Z_01a16e2c-5184-706a-ad6c-aa91e4b913dc.jsonl` |
 | 3 | s2 ping（2026-10-24 21:53:57 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-concurrency-test-fix--/2026-10-24T13-53-57-371Z_01a16e30-8a7b-77bc-9724-c92314525fee.jsonl` |
-| 4 | main s2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 补记正式验证证据，in-progress → checking，一个本地提交 | `/home/box/.omp/logs/640-concurrency-test-fix/s2/2026-10-24T13-54-30-294Z_01a16e31-0b16-7391-9090-d2e1f83cef88.jsonl` |
+| 4 | main s2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；F 回填（编排方整理，按 jsonl 统计）：13／34 | 补记正式验证证据，in-progress → checking，一个本地提交 | `~/.omp/logs/640-concurrency-test-fix/s2/2026-10-24T13-54-30-294Z_01a16e31-0b16-7391-9090-d2e1f83cef88.jsonl` |
 
 ## 状态事件
 
@@ -76,3 +76,5 @@ completed_at: '2026-10-24T22:26:25+08:00'
 | 2026-10-24T21:51:23+08:00 | in-progress | in-progress | 主会话记录：完成最小测试修改与两项本地自检，非正式验证。 | 目标单测 1 项 OK（0.558s），整文件 14 项 OK（7.016s）；首次只读解析输出 in-progress False 1 None。本事件追加后提交前再次解析；两个循环分别收齐退出码和补记事件，原子进程脚本及最终断言未改，不引入重试或 sleep。正式验证由编排方在本提交上运行。 |
 | 2026-10-24T21:55:07+08:00 | in-progress | checking | 编排方整理：正式验证在测试修复提交 a6b1d70 上通过，送审（Reviewy）与 CI。 | SHA a6b1d70aa6b876aeededab1fadfdff7ad68c2418；compileall 0；50 次独立进程单测 50/50 Ran 1 test OK；整文件 Ran 14 tests OK；任务 4 模块 Ran 89 tests OK；Python 3.13.5；日志 /workspace/640-concurrency-fix-verify/；本补记提交只改 task.md；手写，未经 TaskStore 写入 |
 | 2026-10-24T22:26:25+08:00 | checking | done | 编排方整理：Reviewy 对 `56130b9` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN SHA `56130b98025305f13298327c30d9a5ecc640466b`；CI run `40100326009` 13／13 success |
+| 2026-10-25T01:00:17+08:00 | done | done | 编排方整理：F 回填（rc.2 修复轮次记录），补正 done 提交按 PRD :79 不能修改的记录；编排方整理（Lord 裁定，具体分钟不可考，22:20 记录）。 | 模型记录第 4 行 main s2 补记实际 13／34（jsonl `~/.omp/logs/640-concurrency-test-fix/s2/2026-10-24T13-54-30-294Z_01a16e31-0b16-7391-9090-d2e1f83cef88.jsonl` 统计），会话路径改为 `~/…`；旧事件逐字不变，completed_at 不变；手写，未经 TaskStore 写入。 |
+| 2026-10-25T01:51:40+08:00 | done | done | 编排方整理：F 回填（CodeX F 清单项），订正 :19、:45、:47 的表述与归因；原行逐字不变。 | :45「根因（Reviewy 同意）」应读作「根因（编排方整理）」：该根因表述由编排方整理并写入 s1 提示，Reviewy 同意该根因的群内消息与具体分钟不可考。:47 开头「编排方提供的修复前本地证据」应读作「编排方整理的修复前本地证据」：证据为编排方在 s1 之前于 main `3c49524` 运行的复现结果，不计为 s1 会话执行。:19 注记：「本会话只创建一个本地提交，不 push」指 s1 omp 会话自身的限制；s2（`56130b9`，in-progress → checking）与 done 会话（`7b73e11`，checking → done）各另有一个本地提交，push 与开 PR 均由编排方在 omp 之外执行，PR #171 已 squash 合入 `2e5ddb5`。:47、:53 与 BASE 逐字节一致，:69 保持第 2 轮结果；旧事件逐字不变，completed_at 不变；手写，未经 TaskStore 写入。 |

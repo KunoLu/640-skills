@@ -7,7 +7,7 @@ mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交�
 status: done
 branch: fix/v2.1.0-rc.2-legacy-events-notice
 created_at: '2026-10-24T22:53:24+08:00'
-updated_at: '2026-10-25T00:17:37+08:00'
+updated_at: '2026-10-25T01:01:57+08:00'
 completed_at: '2026-10-25T00:17:37+08:00'
 ---
 
@@ -37,7 +37,7 @@ completed_at: '2026-10-25T00:17:37+08:00'
 | book-legacy-change-safety | 既有解析 bug，生产修改前 | characterized；s3 已读修复前与基线复现日志，以恢复的日期负例、parse／transition 拒绝、畸形行、基线严格校验和 bytes 不变为安全网，无需 seam |
 | book-refactoring-pass | 既有生产代码，修改前 | proceed（normal）；no refactor needed，无基线仅捕获 stateEvent schema 校验错误，时间戳校验移到 try 外；移除 catalog 提示控制传递链 |
 | book-release-readiness | 运行时解析变化，本地测试后 | blocked（正式发布门禁）；Reviewy NOT CLEAN 所列问题已修复，待重新审查与新 head CI；旧提交正式验证不替代新提交证据 |
-| project-validation | 实现后 | s1 为提交前 dirty worktree 自检；编排方整理：ea4c161 上新增 6 tests、task 8 模块 136 tests、catalog、旧文件 sha256、并发 10/10 与 diff 检查通过，详见「验证与剩余边界」 |
+| project-validation | 实现后 | s1 为提交前 dirty worktree 自检；编排方整理：ea4c161 上新增 6 tests、task 8 模块 136 tests、catalog、旧文件 sha256、并发 10/10 与 diff 检查通过，详见「验证与剩余边界」；F 回填注记（编排方整理）：此为 s2 时 ea4c161 的计数，s3 修复后新增测试为 5 tests、task 8 模块为 135 tests，见 :88、:90 |
 
 ### 行为场景与安全网
 
@@ -82,7 +82,7 @@ completed_at: '2026-10-25T00:17:37+08:00'
 
 ### Reviewy NOT CLEAN 修复（fix s3）
 
-- 入口核对根目录、分支、HEAD `161bd2b4de1929b579925e3cff953cccb94651c6` 与干净工作区符合要求；五个授权文件及父级无 symlink、均已 tracked、ignore 零匹配。strict 不变；本轮仅一个本地提交，不 push，不调用 TaskStore 写入本 task。
+- 入口核对根目录、分支、HEAD `161bd2b4de1929b579925e3cff953cccb94651c6` 与干净工作区符合要求；五个授权文件及父级无 symlink、均已 tracked、ignore 零匹配。strict 不变；本轮仅一个本地提交，不 push，不调用 TaskStore 写入本 task。（F 回填注记，编排方整理：「不 push」指 s3 omp 会话自身的限制，push 由编排方在 omp 之外执行；`aeafdea` 已 push，Reviewy CLEAN，PR #172 已 squash 合入 `4752346`。）
 - 修复三项：无基线仅捕获 stateEvent schema 错误，时间戳校验移到 try 外，基线分支不变；删除 catalog 提示去重及整条参数链，state.py 恢复至 `2e5ddb5`；订正本 task 非事件行与模型记录，仅追加 checking → checking，保留前三行事件和 s1 历史证据。恢复 status-sync 的 `2026-02-30` 负例，删除新测试文件对应旧格式输入及 catalog 去重测试，不新增其他测试。
 - 已读 `/workspace/640-fix4-verify/s3-pre/repro-161bd2b.log` 与 `repro-2e5ddb5.log`：前者接受坏日期并写文件，后者报错且 bytes 不变；沿用失败证据，未重跑修复前失败。修复后本会话执行 `python3 -B /workspace/640-fix4-verify/reviewy_repro.py`：`PARSE_RAISED TaskDataError`、`TRANSITION_REFUSED TaskStateError`，均为 `task state event timestamp field updated_at is not a real calendar/timezone value`；`BYTES_UNCHANGED True`。
 - `python3 -B -m unittest tests.test_sbtd_task_legacy_events_notice`：Ran 5 tests in 1.715s，OK。
@@ -90,7 +90,7 @@ completed_at: '2026-10-25T00:17:37+08:00'
 - `python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_legacy_events_notice tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git`：全部 8 模块，Ran 135 tests in 52.811s，OK。
 - `python3 -B /workspace/640-fix4-verify/catalog_probe.py`：exit 0，`CATALOG_OK 47`，13 个 LEGACY，捕获 stderr 提示 13 次（每个旧文件一次）。源码检索 `emit_legacy_notice` 于 `sbtd-workflow-onboard` 与 `tests` 零命中；`git diff 2e5ddb5 -- sbtd-workflow-onboard/scripts/sbtd_task_state.py` 为空；`git diff --check` 干净。
 - LSP references 返回 `No language server found for this action`，以源码调用点检索补充；Ponytail Review：Lean already，Code Readability Review 自检通过；无新依赖、抽象、重试或迁移。BDD：traceable，本 task 中文 Given／When／Then 场景由上述 unittest 与真实复现／catalog 探针验证；Mock Strategy：none；Cross-repo context／API Contract：not-needed。
-- 本会话证据为 developer-local、Source Revision：dirty、Environment Alignment：unverified、Evidence Publication：local-only；rtk：not-needed，使用原生命令。Final Test Report／Run Summary MD：not-needed，本轮仅本地自检；不运行额外 lint／formatter、Web／Mobile E2E 或全量 CI。正式验证由编排方在本提交上运行，独立 Reviewy 重审及新 head CI 尚未执行。
+- 本会话证据为 developer-local、Source Revision：dirty、Environment Alignment：unverified、Evidence Publication：local-only；rtk：not-needed，使用原生命令。Final Test Report／Run Summary MD：not-needed，本轮仅本地自检；不运行额外 lint／formatter、Web／Mobile E2E 或全量 CI。正式验证由编排方在本提交上运行，独立 Reviewy 重审及新 head CI 尚未执行。（F 回填注记，编排方整理：「尚未执行」为 s3 落盘时状态；之后 Reviewy 已对 `aeafdea` 给出 CLEAN，CI run `40108699894` 13／13 success，见第 5 条事件。）
 - s1／s2 中坏日期放宽、catalog 汇总一次及相关测试计数均为历史证据；当前行为以本节和第四条状态事件为准。无数据迁移或历史回写；回退边界为本次代码／测试／记录提交，不涉及三个旧 task。
 - 追加事件后的只读校验：`python3 -B -c "import sys; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); import sbtd_task_document as s; d=s.TaskDocument.parse(open('ai/tasks/v2.1.0-rc.2-legacy-events-notice/task.md',encoding='utf-8').read()); print(d.frontmatter['status'], d.legacy_events, len(d.events), d.frontmatter.get('completed_at'))"` 输出 `checking False 4 None`；禁词与本机 HOME 绝对路径零命中，前三行事件及原 :61–:71 历史证据逐字不变，变更范围恰为五个授权文件。
 
@@ -102,7 +102,9 @@ completed_at: '2026-10-25T00:17:37+08:00'
 | 2 | main s1 | openai-codex/gpt-6-astra（high） | 23／62 | fix4 实现、测试与本 task，一个本地提交 | `~/.omp/logs/640-fix4/s1/2026-10-24T14-52-27-361Z_01a16e66-1961-775f-88b8-46c936ee8b26.jsonl` |
 | 3 | checking s2 | openai-codex/gpt-6-astra（high） | 9／31 | 补记正式验证与 in-progress → checking，一个本地提交 | `~/.omp/logs/640-fix4/s2/2026-10-24T15-05-03-619Z_01a16e71-a383-7234-8ae4-1578b2ac9ef2.jsonl` |
 | 4 | ping s3 | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-fix4--/2026-10-24T15-40-12-101Z_01a16e91-cfc5-7108-aa3d-ca13635259be.jsonl` |
-| 5 | fix s3（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | Reviewy NOT CLEAN 修复，一个本地提交 | `~/.omp/logs/640-fix4/s3/2026-10-24T15-41-35-239Z_01a16e93-1487-718f-9fd6-25382e70d721.jsonl` |
+| 5 | fix s3（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；F 回填（编排方整理，按 jsonl 统计）：17／54 | Reviewy NOT CLEAN 修复，一个本地提交 | `~/.omp/logs/640-fix4/s3/2026-10-24T15-41-35-239Z_01a16e93-1487-718f-9fd6-25382e70d721.jsonl` |
+| 6 | done ping（2026-10-25 00:16:43 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查（F 回填，编排方整理） | `~/.omp/agent/sessions/--workspace-640-skills-fix4--/2026-10-24T16-16-44-902Z_01a16eb3-4566-7686-b2d1-f8790440ff57.jsonl` |
+| 7 | done main | openai-codex/gpt-6-astra（high） | 10／21 | 本地 done 提交 `0a0e5c0`（checking → done，按 PRD :79）；F 回填，编排方整理 | `~/.omp/logs/640-fix4/done/2026-10-24T16-17-13-657Z_01a16eb3-b5b9-77a8-a3ad-bd4e554a7daa.jsonl` |
 
 ## 状态事件
 
@@ -113,3 +115,5 @@ completed_at: '2026-10-25T00:17:37+08:00'
 | 2026-10-24T23:05:33+08:00 | in-progress | checking | 编排方整理：正式验证在 fix4 提交 ea4c161 上通过，送审（Reviewy）与 CI。 | SHA ea4c161903a37ef9a1f20fb33511b185ba126be3；新测试 6 OK；task 8 模块 136 OK；catalog 47 OK 提示 1 次；3 旧文件 sha256 不变；并发 10/10；diff --check 干净；日志 /workspace/640-fix4-verify/；手写，未经 TaskStore 写入。 |
 | 2026-10-24T23:44:16+08:00 | checking | checking | 编排方整理：Reviewy 对 161bd2b 结论 NOT CLEAN，修复时间戳被吞、移除 catalog 提示去重并订正 task 记录，重新送审。 | Reviewy NOT CLEAN on 161bd2b4de1929b579925e3cff953cccb94651c6；复现脚本修复前接受 2026-02-30 行，修复后 parse 报错且 transition 被拒，BYTES_UNCHANGED True；恢复 status-sync 2026-02-30 负例、删除新文件对应行与 catalog 去重测试；本会话专项 5 tests OK、全部 8 模块 135 tests OK，catalog 47 条含 13 个 LEGACY、stderr 提示 13 次；本事件订正原 :19／:20／:21／:45／:82 等非事件行，先前事件不改，第 2 行事件中「catalog … stderr 提示 1 次」为当时去重行为，现已移除，以本事件为准；正式验证由编排方在本提交上运行；手写，未经 TaskStore 写入。 |
 | 2026-10-25T00:17:37+08:00 | checking | done | 编排方整理：Reviewy 对 `aeafdea` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN SHA `aeafdeab547dd8506637aed0cf3a2fee7591983b`；CI run `40108699894` 13／13 success |
+| 2026-10-25T01:01:40+08:00 | done | done | 编排方整理：Reviewy 非阻塞意见，补记第 3 条事件的过时计数。 | 第 3 条事件（2026-10-24T23:05:33+08:00）evidence 中「catalog 47 OK 提示 1 次」与第 2 条事件相同，均为当时的 catalog 提示去重行为，已于 s3 移除；2026-10-24T23:44:16 事件只点名第 2 条事件，现补记第 3 条亦以 23:44:16 事件为准（每个旧文件提示一次，13 次）；原事件逐字保留。 |
+| 2026-10-25T01:01:57+08:00 | done | done | 编排方整理：F 回填 Reviewy 非阻塞意见与模型记录。 | :85「不 push」、:93「尚未执行」与 :40 project-validation 计数（应为 5／135）以行内 F 回填注记订正，原文保留；模型记录第 5 行 fix s3 17／54（编排方整理（CodeX F 清单项）；按 jsonl 统计），新增第 6 行 done ping 1／0、第 7 行 done main 10／21；旧事件逐字不变，completed_at 不变；手写，未经 TaskStore 写入。 |
