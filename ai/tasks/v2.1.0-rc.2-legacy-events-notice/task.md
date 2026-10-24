@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-legacy-events-notice
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；本会话为唯一 writer 与 git 提交者；不启动子代理、不用 advisor；push 与开 PR 由编排方在 omp 之外执行
-status: checking
+status: done
 branch: fix/v2.1.0-rc.2-legacy-events-notice
 created_at: '2026-10-24T22:53:24+08:00'
-updated_at: '2026-10-24T23:44:16+08:00'
-completed_at: null
+updated_at: '2026-10-25T00:17:37+08:00'
+completed_at: '2026-10-25T00:17:37+08:00'
 ---
 
 # rc.2 fix4：旧格式事件放宽口径 strict 实现修复
@@ -112,3 +112,4 @@ completed_at: null
 | 2026-10-24T22:57:38+08:00 | in-progress | in-progress | 编排方整理：完成 fix4 实现、测试与本地自检，非正式验证。 | 新增 6 tests OK；指定 7 模块 130 tests OK；catalog CATALOG_OK 47，stderr 提示 1 次；旧文件 sha256 3 项 OK 且 git 无变化；首次 task 解析 in-progress False 1 None，本事件后提交前再次解析。正式验证由编排方在本提交上运行；未经 TaskStore 写入。 |
 | 2026-10-24T23:05:33+08:00 | in-progress | checking | 编排方整理：正式验证在 fix4 提交 ea4c161 上通过，送审（Reviewy）与 CI。 | SHA ea4c161903a37ef9a1f20fb33511b185ba126be3；新测试 6 OK；task 8 模块 136 OK；catalog 47 OK 提示 1 次；3 旧文件 sha256 不变；并发 10/10；diff --check 干净；日志 /workspace/640-fix4-verify/；手写，未经 TaskStore 写入。 |
 | 2026-10-24T23:44:16+08:00 | checking | checking | 编排方整理：Reviewy 对 161bd2b 结论 NOT CLEAN，修复时间戳被吞、移除 catalog 提示去重并订正 task 记录，重新送审。 | Reviewy NOT CLEAN on 161bd2b4de1929b579925e3cff953cccb94651c6；复现脚本修复前接受 2026-02-30 行，修复后 parse 报错且 transition 被拒，BYTES_UNCHANGED True；恢复 status-sync 2026-02-30 负例、删除新文件对应行与 catalog 去重测试；本会话专项 5 tests OK、全部 8 模块 135 tests OK，catalog 47 条含 13 个 LEGACY、stderr 提示 13 次；本事件订正原 :19／:20／:21／:45／:82 等非事件行，先前事件不改，第 2 行事件中「catalog … stderr 提示 1 次」为当时去重行为，现已移除，以本事件为准；正式验证由编排方在本提交上运行；手写，未经 TaskStore 写入。 |
+| 2026-10-25T00:17:37+08:00 | checking | done | 编排方整理：Reviewy 对 `aeafdea` 给出 CLEAN，按 PRD :79 关闭。 | Reviewy CLEAN SHA `aeafdeab547dd8506637aed0cf3a2fee7591983b`；CI run `40108699894` 13／13 success |
