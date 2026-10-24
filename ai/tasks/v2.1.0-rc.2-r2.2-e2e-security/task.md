@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-25T02:53:57+08:00'
+updated_at: '2026-10-25T04:00:17+08:00'
 completed_at: null
 ---
 
@@ -236,6 +236,11 @@ PR-1 本地提交证据：
 | 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；记录用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录 | 先完成无需 Mac 证据的部分；AC-33／AC-62 人工视觉／字体只能来自用户 Mac 真机，不用 CI／Linux 替代。 |
 | 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始 PR-4 strict 性能、容量与可做收尾（编排方整理） | 授权根／分支／入口及 #168–#173 基线见上；只作本地提交，不操作远端，不改冻结目录或默认值。 |
 | 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始性能基准实现与实测（编排方整理） | PRD §14.1／§18，实际规模与 met／not-met／not-measured 如实记录；不修性能。 |
+| 2026-10-25T03:18:40+08:00 | in-progress | in-progress | 写入者：PR-4 main；性能实现进度：基准初稿、极小 smoke 与 1000 事件试跑完成，较大规模仍在实测 | 首轮 smoke 2 OK／7.333s；1000 事件完整 append 用时 49.178s，约 20.334 条／秒，仅作为安排生成时限的本地依据，不外推百万性能。百万请求规模的 900 秒限时生成已启动，最终报告以实际接受数量为准。 |
+| 2026-10-25T03:51:43+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成性能基准实现与本机可用测量，未达到百万参考规模 | 1000／10000／11500 实际事件三档完成；基准总墙钟 2385.937s（39.766 分钟，不含开发／验证）；最大档真实 UI 11520 事件 p95=9.315s，not-met。JSON／同 stem 中文摘要与导出样本均已保存；生产无修改。 |
+| 2026-10-25T03:51:43+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始本地全量验证与提交前边界检查（编排方整理） | golden、runtime、workflow/task、changed Python ruff、parse／YAML、append-only／新增行限制／冻结目录；仍保持 in-progress，不关闭 R2.2。 |
+| 2026-10-25T04:00:17+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成本地验证与代码提交前检查，保留首轮环境失败 | golden 实际 63 OK；runtime 首轮 433 tests／1 failure／10 skipped（缺已声明 tzdata），仅本 worktree reports 内安装既有 requirements 后，定向 1 OK、子集 27 OK、最终 433 tests／423 passed／10 skipped／160.464s；workflow/task 135 OK；ruff check／format 两文件通过；parse／YAML／append-only／新增行限制／冻结目录通过。 |
+| 2026-10-25T04:00:17+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始三档容量汇总与默认配额校准（编排方整理） | 复用三档真实 snapshot／HTML／CSV／manifest st_size，计算 24h TTL 假设与 80% 点；JPEG／PDF 不可用，不将缺失值当 0 或宣称完整四格式容量已通过。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1101,3 +1106,27 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 |---|---|---|---|---|---|---|
 | PR-4 ping／01a16f40-e5f7-7673-91ad-07e2c12624ae | openai-codex/gpt-6-astra | high | 1 / 0（编排方整理） | --no-tools，回复 OK | false（编排方整理） | 不可考 |
 | PR-4 main／01a16f42-9934-77d9-ae02-de618d2caef2 | openai-codex/gpt-6-astra | high | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 唯一 writer／controller；session 文件名只读核实：`~/.omp/logs/640-rc2-r22-pr4/main/session/2026-10-24T18-53-18-004Z_01a16f42-9934-77d9-ae02-de618d2caef2.jsonl` | 不可考 | 不可考 |
+
+## R2.2 PR-4 初轮证据与实现边界（追加）
+
+真实机器复核：Linux 6.12.94+／x86_64、Python 3.13.5、8 逻辑 CPU、16,779,640,832 字节 RAM（约 15.63 GiB）；授权根位于 ext4／`/dev/vdb`，lsblk 显示 vda／vdb、ROTA=1，无型号。编排方整理称本地虚拟盘；不据此宣称物理 SSD 或 PRD 的 4 CPU／8 GB 参考机。本轮使用已有 `~/.local/venvs/project-validation/bin/python3`，不新增第三方依赖、不安装全局工具。
+
+基准只新增 `sbtd-runtime/tests/runtime_perf.py` 与小规模 `test_runtime_perf_smoke.py`，不修改生产路径。真实批量 `EventStore.append` 每批不超过 100，schema 校验、秘密拒绝、spool fsync、去重及每事件 SQL commit 全部保留；合成输入复用 golden 的合法形状，固定事件 ID／时间／内容，原 golden 文件不改。每完整 100 条含 1 任务、10 个成对步骤、79 次状态事件；报告记录完整事件大小直方图和输入 SHA-256。参考规模不足时不造 100 万／1 万／10 万结果。
+
+1000 事件／10 任务／100 步骤原生报告：`reports/runtime-perf-1000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T190702573559Z.{json,md}`，总墙钟 57.581s；完整数据写入 49.178s。24h／7d 热查询与冷查询、HTML／CSV 各 n=3；冷查询不同微秒结束时间确保不复用快照，但不清 OS 缓存，既有数据均不在变更边界。原报告审计的 met 仅指延迟：源码实际 replay 全量再排序分页，索引／非全扫描要求 not-met；后续 driver 明列该结构性缺口。CSV 原报告 not-measured 指百万流式目标未测，实际较小规模全量导出有数字；源码完整缓冲，流式要求 not-met。仅记录、不优化。
+
+真实 Playwright MCP／Chrome 156.0.8078.47 另测已启动 serve 页面：1000 原事件加 20 条单次 append 探针，实际 1020 事件；预先真实配对，不计配对时间，当前 24h scope，导航至 13 个核心 Panel，n=3：0.633／0.481／0.369s，p50=0.481s、p95=max=0.633s，当前规模 met。导出 HTML 真实浏览器实测 13 Panels、1440×5736 CSS px、fonts loaded；不是 Mac 人工视觉／字体证据。独立报告 `reports/runtime-perf-ui-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T191106Z.{json,md}`；原 backend 报告不回写。
+
+失败保留：初轮 ruff 有 BLE001／格式差异，收窄捕获并仅格式化新增 Python；随后 lint／format 通过。首次 shell 的 python3 缺 jsonschema，改用上述已有环境后真实 serve 启动并 SIGINT exit 0，不改生产或安装依赖。MCP VM 不提供 dynamic import／require，两个调用在读取票据前失败；改用受控文件上传读取本次合成配对票据，在工具内配对且不输出值，真实浏览器测量成功。无 token／secret 写入报告。
+
+自审发现分页末页可少于 100，新增 smoke 改为 101 事件、2 次分页以覆盖 100＋1；不对耗时设断言。可选 `--renderer-home` 仅复制明确给出的 browsers/，使已有 pinned renderer 的 Mac／Windows 可以用同一驱动复跑；本机 Python 未安装 Playwright，真实 capabilities 返回 unavailable，JPEG／PDF POST 503 已观察，不拿系统 Chrome 或 browser MCP 替代生产 renderer。
+
+较大规模报告：`reports/runtime-perf-1000000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T191005746525Z.{json,md}` 实际 11500 事件／115 任务／1150 步骤，完整写入 1185.380s、总 1559.593s；`reports/runtime-perf-10000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T193717099968Z.{json,md}` 实际 10000／100／1000，写入 501.746s、总 768.763s。900s 是批次间检查的软时限，前轮两批分别 320.606s、311.837s，结束超出时限；原因不可考，不能据此宣称 I/O 异常有硬 deadline。没有重复抽样筛选绿色结果，百万规模未完成。
+
+最大档浏览器另测原 11500 条加 20 条写入探针，真实 11520 事件；n=3 为 8.927／8.879／9.315s，p50=8.927s、p95=max=9.315s，目标 3s，not-met。原最大档导出 HTML 实际 13 Panels、1440×7270 CSS px，符合本轮几何基准；不是 JPEG／PDF 或 Mac 视觉证明。报告 `reports/runtime-perf-ui-large-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T195143Z.{json,md}` 保存真实 MCP code／结果；服务 SIGINT exit 0。此前 about:blank 几何观察出现旧页面配对 init script 访问 sessionStorage 的 SecurityError，不影响已读几何数值；较大 UI 使用全新隔离 context，driver 的几何页也改为无该 init script 的新页。
+
+自审更正：初轮报告中「one heavy renderer worker and bounded queue」不能作为已实现结论。`export_store.py` 使用 `ThreadPoolExecutor(max_workers=1)`，提交路径没有显式队列数量上限；并发页面未负载实测，有界队列要求未证明，不能写 met。后续 driver 去掉已实现有界队列的表述，旧报告保留并以本注释限定；不擅改公共准入或契约。10000 档已对六份下载样本扫描本轮真实合成 ticket／Bearer／CSRF 及 ticket URL marker，0 命中，并核对两格式 manifest 的 13 个 Panel IDs；这不是完整隐私安全认证。
+
+测试方法复核：本轮是明确 CLI／真实 EventStore／serve／报告 seam 的 characterization 与 smoke，不声称 red→green TDD。101 事件末页 smoke 与 nearest-rank 边界共 2 tests，复核轮 7.561s、OK。未新增产品行为，不新增 BDD runner；可选 Python Playwright 分支因本机依赖不可用未实跑，独立 MCP 真浏览器证据单列。
+
+依赖与验证边界：首轮 runtime 全量唯一失败为 `test_iana_queries_and_dst_work_without_system_timezone_data` 的 `ModuleNotFoundError: tzdata`，不修改测试或生产去绕过。`sbtd-runtime/requirements-serve.txt:8` 已钉 `tzdata==2026.5`；本轮创建 ignored `reports/pr4-validation-venv`，仅安装已有 serve／onboard requirements，通过 PATH 选择其 python3 后复跑，不引入仓库新依赖、不修改全局环境。原始失败 raw 保留；基准仍属于原测量环境，未冒称在新验证环境重测。golden 的实际数量为 63，不照抄编排方整理的 61 估计。
