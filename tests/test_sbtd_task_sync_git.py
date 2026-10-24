@@ -218,11 +218,14 @@ except TaskStateError:
             )
             for writer in ("甲", "乙")
         ]
-        successful = []
+        results = []
         for writer, process in zip(("甲", "乙"), processes):
             stdout, stderr = process.communicate(timeout=30)
             self.assertIn(process.returncode, (0, 3), (stdout, stderr))
-            if process.returncode == 0:
+            results.append((writer, process.returncode))
+        successful = []
+        for writer, returncode in results:
+            if returncode == 0:
                 successful.append(writer)
             else:
                 TaskSync(self.store).record(
