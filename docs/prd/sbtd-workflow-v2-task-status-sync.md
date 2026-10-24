@@ -14,14 +14,14 @@
 2. 状态常常在收尾时一次性补写。中途被打断、omp 中止或超时、只改代码的修复轮次，都会把状态漏掉。
 3. 进展只记在聊天或记忆里，没有写进 task.md。
 4. 用户决策等待项没有在用户回复后当场关闭。
-5. 「下一个 PR 回填上一个 PR」不是 sbtd 的规则，是项目自己的约定（`ai/tasks/v2.1.0-rc.2-plan/plan.md:8`）。sbtd 对 done 的定义只是「验收证据成立」（`AGENTS.project.md:29`）。
+5. 「下一个 PR 回填上一个 PR」不是 sbtd 的规则，是项目自己的约定（`ai/tasks/v2.1.0-rc.2-plan/plan.md:8`）。sbtd 对 done 的定义只是「验收证据成立」（`sbtd-workflow-onboard/templates/agents/AGENTS.project.md:29`）。
 
 ## 二、总原则
 
 1. 状态更新与回填是每个工作流节点的第一步，default、lite、strict 三种模式都适用。
 2. 状态在当下的改动里写完。取消「首个 commit 回填上一个 PR」这条项目约定，合入 SHA 和时间不再写回 task.md。
 3. 检查只用 git 或本地文件，不绑定 gh、GitLab、Bitbucket 等平台工具，也不放进 CI。
-4. 沿用 sbtd 现有规则：状态流转、原子写入、写不进去时报告「未持久化」（`AGENTS.project.md:27`）、证明不了的记「不可考」、不补造历史。
+4. 沿用 sbtd 现有规则：状态流转、原子写入、写不进去时报告「未持久化」（`sbtd-workflow-onboard/templates/agents/AGENTS.project.md:27`）、证明不了的记「不可考」、不补造历史。
 
 ## 三、前置判断（两件事分开判断）
 
@@ -46,9 +46,9 @@
 
 ### 不追溯条款：checking-before-done
 
-历史上从 in-progress 直接跳到 done 的记录保持原样不追改；新规则生效后，task 必须先进入 `checking`（`sbtd-task/references/state.md:43`）才能写 `done`。
+历史上从 in-progress 直接跳到 done 的记录保持原样不追改；新规则生效后，task 必须先进入 `checking`（`sbtd-workflow-onboard/templates/skills/sbtd-task/references/state.md:43`）才能写 `done`。
 
-归因：依据 `sbtd-task/references/state.md:43` 与「用户 2026-10-24 10:39 群内「我选B」」，编排方整理。
+归因：依据 `sbtd-workflow-onboard/templates/skills/sbtd-task/references/state.md:43` 与「用户 2026-10-24 10:39 群内「我选B」」，编排方整理。
 
 #### 旧格式事件规则
 
@@ -101,7 +101,7 @@
 
 ## 七、中途 `git init`
 
-1. 所有 task 都追加一条重绑定事件，补上真实 branch（`AGENTS.project.md:29`）。之前的 sha256 证据原样保留，不补造 commit。
+1. 所有 task 都追加一条重绑定事件，补上真实 branch（`sbtd-workflow-onboard/templates/agents/AGENTS.project.md:29`）。之前的 sha256 证据原样保留，不补造 commit。
 2. lite 和 strict 的 task.md 被 git 跟踪后，从这条事件之后改走 git 核对。
 3. default 模式的 `.sbtd/` 仍被忽略，继续用文件核对。
 
