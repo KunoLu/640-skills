@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-24T09:25:04+08:00'
+updated_at: '2026-10-25T02:53:57+08:00'
 completed_at: null
 ---
 
@@ -231,6 +231,11 @@ PR-1 本地提交证据：
 | 2026-10-23T19:06:45+08:00 | in-progress | in-progress | fix3 本地诊断与验证追加；macOS/Windows 待 CI 复跑，13/13 gate 尚未完成。 | Windows helper 的 None 崩溃已 red→green；CPython 3.12.10 Windows reader 方法在 Linux 上重现解码异常导致 stdout None，具体 runner 编码仍是未证实推断。Linux 四格式两轮通过；JPEG POST500／PDF failed-job 故障注入均 exit1 并记录 worker 诊断；非 waitid adapter 下真实 Chromium 诊断重跑成功仍不改变原 HTTP500 的失败结论。 |
 | 2026-10-23T19:06:45+08:00 | in-progress | in-progress | fix3 指定本地检查通过；初轮失败与原始记录保留，未新增 skip 或弱化断言。 | 定向15、golden61、workflow52；runtime416 tests／406 passed／10既有 skipped／0 failures（148.533s）；5 changed Python ruff check／format --check、diff --check、冻结目录 stat 空、yaml.safe_load／历史逐行保留／新归因检查通过；独立 review 尚在进行，结论另追加。 |
 | 2026-10-23T19:14:52+08:00 | in-progress | in-progress | fix3 独立 review 闭环与本地 Commit A 追加；macOS/Windows 待 CI 复跑，未声明13/13。 | WorkerEvidenceReview correct／0.87、PdfExtractionReview correct／0.88，均只读／无blocking finding／未运行tests；两项P3非阻塞观察按blocking-only范围保留。A 09bd3fbcde6771e5182fc42c25beb5ff61f48fa8，7文件；48个runtime Python提交blob与最终full被测哈希一致，是内容身份重验证，不是新CI。Commit B仅本task追加记录。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始入口进度核对（编排方整理） | status-sync §四.1；原最后事件 2026-10-24T09:25:04+08:00，缺 #165–#167；历史正文／事件保留。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成入口核对与 #165–#167 进度补写（编排方整理） | 上表 SHA／git %cI 已核实，mergedAt／head 分列；三个对应 task status done；plan 已完整，不改。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；记录用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录 | 先完成无需 Mac 证据的部分；AC-33／AC-62 人工视觉／字体只能来自用户 Mac 真机，不用 CI／Linux 替代。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始 PR-4 strict 性能、容量与可做收尾（编排方整理） | 授权根／分支／入口及 #168–#173 基线见上；只作本地提交，不操作远端，不改冻结目录或默认值。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始性能基准实现与实测（编排方整理） | PRD §14.1／§18，实际规模与 met／not-met／not-measured 如实记录；不修性能。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1052,3 +1057,47 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 | 2026-10-23T23:34:56+08:00 | in-progress | in-progress | fix6 本地代码／red→green／全量验证完成；编排方整理：Reviewy 23:24 裁定 | A e4c2318bdbc5e0fbfa8b1db14652af475278504e；13定向／428full（10skipped）／61golden；真实Linux三文档raw与summary保存验证；macOS pending CI after operator push，非真机验收。 |
 | 2026-10-24T09:25:04+08:00 | in-progress | in-progress | PR-3 #164 squash-merge 回填（编排方整理）；R2.2 继续开放。 | PR https://github.com/KunoLu/640-skills/pull/164；merge SHA 253dceccc77fb0b7b929a81ac28e4c53d6968240；head 38b3b56aca559d729487665b822c76b48cf8c1f9；git committer %cI 2026-10-24T00:05:38+08:00（本轮 git show 核实）；GitHub mergedAt 2026-10-24T00:05:38+08:00（2026-10-23T16:05:38Z，编排方整理），两时间相等但分别记录；合并前 CI 13/13 on 38b3b56，run 39980290926（编排方整理；本轮未运行 CI）。 |
 | 2026-10-24T09:25:04+08:00 | in-progress | in-progress | 用户 2026-10-23 16:44 群内确认（方案 1），Lord 记录：PR-3 合并后先开 statistics/query 507 DISK_QUOTA_EXCEEDED contract PR，复用 #158（82d42a2）错误体；合并后接小实现 PR，再接 PR-4。此前「待用户决定（contract PR）」已由该决定解决，旧事件原文保留。 | 用户 2026-10-24 09:22 群内确认（开始），Lord 记录；编排方整理：本轮 contract-only，记录 ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-contract/task.md；不改 runtime，不宣称 queryStatistics 507 已实现；本 task 保持 in-progress，plan R2.2 行保持 planned。 |
+
+## R2.2 PR-4 入口核对与进度补写（追加）
+
+编排方整理：本轮 strict，主会话唯一 writer／验证 controller／本地提交者；授权根 `~/../../workspace/640-skills-r22-pr4`（实际解析为本轮授权 worktree）、分支 `feat/v2.1.0-rc.2-r2.2-pr4-perf-closeout`，入口 HEAD／origin/main `d45cfc8567e57dfe10c397c0143cf01717e1109c`，工作区干净、无 upstream。历史 frontmatter branch 保留，本节记录本轮明确绑定；沿用既有 Markdown 追加与 TaskStore 兼容边界，不调用 helper rebind，不写 active／index／ignore，不声称自动恢复可靠。未完整调用 grill-with-docs：范围、验收与 D9 停止点明确，无新领域决定。
+
+本次补写属于 status-sync PRD §四.1 的入口进度核对，不恢复已停用的例行合并回填规则。plan.md「### R2.2」已含 #162–#167，无缺漏，不重复追加、不改任务表行。下列 SHA／git committer 时间均由本轮 `git log -1 --format='%H %cI %s' <sha>` 核实；GitHub head／mergedAt 为编排方整理，CI／Reviewy 本轮不可考。
+
+| PR | merge SHA | git %cI | GitHub mergedAt（+08:00；Z 原值） | head；对应记录 |
+|---|---|---|---|---|
+| #165 | 9ceb53021aa5e90d6369eed037f0b05ab719e928 | 2026-10-24T10:10:14+08:00 | 2026-10-24T10:10:14+08:00；2026-10-24T02:10:14Z | 5bb8a564ea165c784d034eb7145def7c8b8793fc；`ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-contract/task.md`，status done（只读核实） |
+| #166 | fcd835e397698ab3292d9d7614e1407ff7e0a465 | 2026-10-24T10:53:09+08:00 | 2026-10-24T10:53:09+08:00；2026-10-24T02:53:09Z | 073999fbbcb7087de202227fa538b752495b4595；`ai/tasks/v2.1.0-rc.2-r2.2-statistics-metadata-contract/task.md`，status done（只读核实） |
+| #167 | 9ced6680cd838b9a5a2d9602a4939d981321582d | 2026-10-24T11:52:51+08:00 | 2026-10-24T11:52:52+08:00；2026-10-24T03:52:52Z | 95f4e8e86536b0188c13f812711831cf1ec88a4c；`ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-impl/task.md`，status done（只读核实）；两个时间相差 1 秒 |
+
+期间非 R2.2 合并仅作入口事实，不修改其记录：
+
+| PR | 完整 SHA | git %cI |
+|---|---|---|
+| #168 | 72e2c0602fa358f0a522a71a4e0d81b887643131 | 2026-10-24T14:15:54+08:00 |
+| #169 | 6f79e9dc69cd6a7e351e9ca50cf50424b9bbb496 | 2026-10-24T18:33:40+08:00 |
+| #170 | 3c49524fec9561e6feacce40638be11ecea60dc7 | 2026-10-24T21:24:18+08:00 |
+| #171 | 2e5ddb5f588cf250938bc2802fffceb202e984f0 | 2026-10-24T22:48:03+08:00 |
+| #172 | 47523469fff9da00d657cbfa08bc1a1154b3bc57 | 2026-10-25T00:49:36+08:00 |
+| #173 | d45cfc8567e57dfe10c397c0143cf01717e1109c | 2026-10-25T02:47:54+08:00 |
+
+#173 head `7231818eed0c9b1728403ec1e2437b145aa09cb8`，mergedAt `2026-10-25T02:47:55+08:00`（`2026-10-24T18:47:55Z`）为编排方整理，与 git committer 相差 1 秒，分别保留。
+
+## R2.2 PR-4 Book Gate Plan（追加）
+
+| Gate | 客观触发／阶段 | 本轮状态 |
+|---|---|---|
+| book-ddd-distilled-modeling | 完整 grill／领域歧义，需求前 | not-needed；未完整 grill，无新领域决定。 |
+| book-ddia-data-design | 数据／schema／持久化设计前 | not-needed；只测既有真实写入／快照／导出，不改数据机制。 |
+| book-legacy-change-safety／book-refactoring-pass | 生产行为／代码编辑前 | not-needed；只新增基准与 smoke 测试，不优化生产代码；若触及生产先停止对应项。 |
+| TDD／gherkin-bdd／ponytail | 基准与证据实现前 | ponytail 已加载；复用 EventStore／serve／现有测试 helper，标准库优先；既有产品场景不变，小规模 smoke 验证实际数据与报告，不设性能断言。 |
+| 独立 review／Code Readability Review | check | 不启动子代理，主会话自审；不冒充独立审查。单一测试证据子系统，不触发强制独立 review。 |
+| project-validation | check | pending；实跑基准、golden、runtime、workflow/task、ruff 与记录约束；原生 JSON＋同 stem 中文摘要，reports ignored。 |
+| book-release-readiness | runtime／部署变化，验证后 | not-needed；不改生产／部署，不宣称发布就绪；R2.2 仍受 D9 阻塞。 |
+
+## R2.2 PR-4 模型使用（追加）
+
+| agent/session | provider/model | thinkingLevel | assistant / toolCall | purpose | resolvedModelIsFallback | title-gen |
+|---|---|---|---|---|---|---|
+| PR-4 ping／01a16f40-e5f7-7673-91ad-07e2c12624ae | openai-codex/gpt-6-astra | high | 1 / 0（编排方整理） | --no-tools，回复 OK | false（编排方整理） | 不可考 |
+| PR-4 main／01a16f42-9934-77d9-ae02-de618d2caef2 | openai-codex/gpt-6-astra | high | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 唯一 writer／controller；session 文件名只读核实：`~/.omp/logs/640-rc2-r22-pr4/main/session/2026-10-24T18-53-18-004Z_01a16f42-9934-77d9-ae02-de618d2caef2.jsonl` | 不可考 | 不可考 |
