@@ -7,7 +7,7 @@ mode_note: 编排方整理：沿用 strict；PR-b main 为全部文件的唯一 
 status: in-progress
 branch: "feat/v2.1.0-rc.2-task-status-sync-workflow"
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: "2026-10-24T14:53:10.060422+08:00"
+updated_at: "2026-10-24T14:53:47.204477+08:00"
 completed_at: null
 ---
 
@@ -105,3 +105,4 @@ completed_at: null
 | 2026-10-24T14:49:20.237163+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：收到 ParserSafety 审查；开始修正锁清理与中文任务收尾校验。 | 解析／基线／严格后缀／reopen 主干静态核对成立；采纳两个 P2：锁被外部移除后 finally 异常、Git 引号路径导致中文 ID 收尾误拒绝。保留前缀碰撞 P3 以文档声明保留标记消歧。仅主会话修正并运行回归，reviewer 不写文件。 |
 | 2026-10-24T14:51:53.368220+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成 ParserSafety 审查修正并收到复核通过。 | 锁清理按 dev／ino 保留被替换的新锁、容忍外部移除；收尾 diff 使用 NUL 路径列表支持中文 ID；保留基线 reason 前缀已写入 reference。两项运行缺陷均红→绿，P3 文档消歧；独立静态复核三项关闭且无新问题。TaskStore Ruff 与 origin/main 同为 11 项既有 FURB162，无新增；其余修改 Python Ruff 通过；最终任务影响范围复跑正在执行。 |
 | 2026-10-24T14:53:10.060422+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成脚本实现、回归测试与工作流文档同步。 | 最终任务影响范围 python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git：127 tests／OK，50.378s；最终完整 Onboard 副本独立进程 smoke 通过。两名 reviewer 已复核关闭全部 findings；git diff origin/main --check 通过，新增行禁词0，TaskDocument.parse通过，11条旧事件及20行旧模型记录逐字保留；完整 tests 运行结果另记。 |
+| 2026-10-24T14:53:47.204477+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：全量验证未通过；开始冻结实现后的最终全量复验。 | 首轮 python3 -B -m unittest discover -s tests -p test_*.py：2403 tests，2330通过、3失败、7错误、63跳过，1262.209s。7项 migration/followup 错误为 canonical/source/implementation 漂移，首轮运行期间本会话继续修改实现，不能用该轮证明最终提交；保留失败原始输出。另有2项 probe link 失败及1项已知 tzdata 缺失失败，分别调查，不修改无关代码。实现已提交 f35ff9e，后续全量运行期间冻结全部受测源码。 |
