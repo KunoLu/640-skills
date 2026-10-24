@@ -23,6 +23,7 @@
 | Docs | 后续项 B（`install-and-use.md` 事件明细屏蔽说明）+ 后续项 C（第 7 项，单独 PRD docs PR） | P6.5 | planned | — | — | — | —（执行时建立 strict 任务记录） |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
 | F | docs 回填 | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| status-sync | 任务状态及时更新：PR-a 文档／PR-b 规则与测试（编排方整理；[PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)） | —（独立规则任务） | in-progress | PR-a；PR-b | — | — | ai/tasks/v2.1.0-rc.2-task-status-sync/task.md |
 
 ## 各行锁定决定与验收
 
