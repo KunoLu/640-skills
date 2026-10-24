@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.2-task-status-sync
 workflow_mode: strict
 mode_source: user
-mode_note: 编排方整理：strict；本轮只做文档／任务记录，主会话唯一 writer／验证 controller，不使用 advisor；恰好三个本地提交。
+mode_note: 编排方整理：strict；本轮 fix2 只做文档／任务记录，主会话唯一 writer／验证 controller，不使用 advisor；恰好一个本地提交，不 push。
 status: in-progress
 branch: docs/v2.1.0-rc.2-task-status-sync-prd
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T12:34:48+08:00'
+updated_at: '2026-10-24T12:39:40+08:00'
 completed_at: null
 ---
 
@@ -16,18 +16,18 @@ completed_at: null
 ## 决定
 
 - 用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录。
-- 用户 2026-10-24 11:14 群内确认落地方式与生效点；新规则自 PR-a 合入起生效。群内时间均为 +08:00。
+- 用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录：落地方式与生效点；新规则自 PR-a 合入起生效。群内时间均为 +08:00。
 - 用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录：任务跨两个 PR 的结构。
 - 规则事实源：[任务状态及时更新 PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)。
 
 ## 范围与边界
 
 - 本任务跨 PR-a（本 PR：PRD＋plan 停用说明＋任务记录）与 PR-b（按 PRD 改 `sbtd-workflow-onboard` 等并配测试）。PR-a 只记进度，保持 `in-progress`；PR-b 在 CLEAN 后按 B 方案写 `done`。
-- 编排方整理：本轮只回填 #167、编写 PRD、追加 plan 任务表一行和本记录。plan.md 第 8 行保持原文，本轮不追加停用说明；编排方取得真实 PR-a 号后另行追加。该说明仍属于 PR-a 的整体范围，不宣称本轮已经写入。
+- 编排方整理：PR-a 已回填 #167、编写 PRD、追加 plan 任务表一行和本记录；commit `34a9b94` 已在 plan.md:8 原文后追加「自 PR #168 起停用，由 sbtd-workflow-v2-task-status-sync.md 替代」，PR #168 已开启。本轮 fix2 仅修正 PRD 归因格式、行号引用、trailer 理由与本记录，不改 #167 task 及其模型表。
 - PR-a 的合并 SHA／时间按新规则不写入 task.md，用 `git log origin/main -- ai/tasks/v2.1.0-rc.2-task-status-sync/task.md` 查询。PR-b 首个 commit 不回填 PR-a；审查期间进入 `checking`，被打回回到 `in-progress`；CLEAN 后只追加限定的 task 收尾 commit，Reviewy 复核该 diff，CI 全绿后才合入。
 - 编排方整理：仅四个授权文档；不改代码、OpenAPI、schema、技能目录；不 push、不开 PR、不改 git 或 omp 全局配置。不记录不可证明的事实，缺证据记「不可考」。
 - 入口分支与基线已核对，工作区初始干净；授权路径无 symlink 且位于本 worktree 内，新文件未被 ignore。旧任务保留历史 branch，仅回填明确授权的合并事实，不重绑定。
-- 未完整调用 grill-with-docs：确认方案及提交边界完整，无新增领域决策。本轮不运行 TaskStore lifecycle，不写 active／index／ignore／身份，不声明自动恢复可靠；按编排方整理的第三个 commit 顺序保存本 strict 记录。
+- 未完整调用 grill-with-docs：确认方案及提交边界完整，无新增领域决策。本轮不运行 TaskStore lifecycle，不写 active／index／ignore／身份，不声明自动恢复可靠；沿用 strict 模式，本轮 fix2 恰好一个本地提交，不 push。
 
 ## Book Gate Plan
 
@@ -54,3 +54,6 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-24T11:59:03+08:00 | planned | in-progress | 编排方整理，主会话记录：开始 PRD 交付记录与最终核验；按第三个 commit 顺序建立跨 PR strict 任务。 | 已读取完整确认方案及两份既有 PRD；本轮只处理 PR-a 文档进度，不提前完成跨 PR 任务。 |
 | 2026-10-24T11:59:52+08:00 | in-progress | in-progress | 编排方整理，主会话记录：PRD 完成并完成本轮文档／任务记录核验；仅更新 PR-a 进度，整个任务继续 in-progress。 | PRD 已本地提交；第一至第九节、两处 Reviewy 修订、非 git 细则、两 PR 拆分与生效点、不追溯条款均已核对；两份交叉引用可达。定向 unittest 19 tests／OK；新 task 的 TaskDocument.parse、schema／事件表／分支校验通过；旧 task 的兼容拒绝与分层验证结果见上节；git diff --check 通过，新增行及新文件禁词命中 0。 |
+| 2026-10-24T12:39:20+08:00 | in-progress | in-progress | 编排方整理：补记 `34a9b94` 进度，plan.md:8 原文后已追加带真实 PR #168 的停用说明，PR #168 已开启。 | commit `34a9b94`；CI run `40061290088`，13/13 on `34a9b94`（编排方整理，本轮未重跑 CI）；at 为本轮整理时间。 |
+| 2026-10-24T12:39:33+08:00 | in-progress | in-progress | 编排方整理：补记 `fdbb1bd` 归因修正轮，跨两 PR 结构改为用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录；非 git 细则改为属 11:05 完整方案、用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录；已去除错误时间归因。 | commit `fdbb1bd` 已 push（编排方整理）；CI run `40062997215` 结果本轮不可考；at 为本轮整理时间。 |
+| 2026-10-24T12:39:40+08:00 | in-progress | in-progress | 编排方整理：本轮 fix2 按 Reviewy 对 `34a9b94` 的审查意见修正归因格式、state.md／AGENTS.project.md 行号、trailer 理由与本 task 范围描述。 | 本轮修正与本事件纳入同一个本地提交，未 push；保留旧事件，status 保持 in-progress、completed_at 为 null；at 为本轮整理时间。 |
