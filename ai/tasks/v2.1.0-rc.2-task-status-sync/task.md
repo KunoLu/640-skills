@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.2-task-status-sync
 workflow_mode: strict
 mode_source: user
-mode_note: 编排方整理：strict；主会话唯一 writer／验证 controller，不使用 advisor；fix4 为一个提交，push 与 gh 操作由编排方执行。
+mode_note: 编排方整理：沿用 strict；PR-b main 为全部文件的唯一 writer、git 提交者与验证 controller；原生只读审查不使用 advisor；push 与开 PR 由编排方在 omp 之外执行。
 status: in-progress
 branch: "feat/v2.1.0-rc.2-task-status-sync-workflow"
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: "2026-10-24T14:19:07.843334+08:00"
+updated_at: "2026-10-24T14:53:10.060422+08:00"
 completed_at: null
 ---
 
@@ -24,23 +24,23 @@ completed_at: null
 
 ## 范围与边界
 
-- 本任务跨 PR-a（本 PR：PRD＋plan 停用说明＋任务记录）与 PR-b（按 PRD 改 `sbtd-workflow-onboard` 等并配测试）。PR-a 只记进度，保持 `in-progress`；PR-b 在 CLEAN 后按 B 方案写 `done`。
-- 编排方整理：PR-a 已回填 #167、编写 PRD、追加 plan 任务表一行和本记录；commit `34a9b94` 已在 plan.md:8 原文后追加「自 PR #168 起停用，由 sbtd-workflow-v2-task-status-sync.md 替代」，PR #168 已开启。本轮 fix4 按 Reviewy 对 `8fb0afa` 的 NOT CLEAN blocker 新增模型记录，修正本 task 过时措辞与 PRD 路径，不改 plan.md、#167 task 及其模型表。
+- 本任务跨 PR-a（已完成规则文档）与 PR-b（本轮实现 `sbtd-workflow-onboard` 运行库、模板和回归测试）。本轮验收后仅进入 `checking`；CLEAN 后的独立收尾 commit 不在本轮。
+- 编排方整理：本轮实现旧事件容忍／惰性基线、A／B／C 核对、节点进展、并发拒绝覆盖及本地收尾 diff 检查；旧事件只追加，模型旧行保持原样。
 - PR-a 的合并 SHA／时间按新规则不写入 task.md，用 `git log origin/main -- ai/tasks/v2.1.0-rc.2-task-status-sync/task.md` 查询。PR-b 首个 commit 不回填 PR-a；审查期间进入 `checking`，被打回回到 `in-progress`；CLEAN 后只追加限定的 task 收尾 commit，Reviewy 复核该 diff，CI 全绿后才合入。
-- 编排方整理：PR-a 累计涉及四个授权文档，本轮仅修改本 task 与 PRD；不改代码、OpenAPI、schema、技能目录；PR #168 已开启，push 由编排方执行。omp 会话不执行 push 或 gh 操作，均由编排方执行；不改 git 或 omp 全局配置。不记录不可证明的事实，缺证据记「不可考」。
-- 本轮入口分支与基线 `8fb0afa` 已核对，工作区初始干净；两个授权文件均已跟踪、未被 ignore，路径及父目录无 symlink 且位于本 worktree 内。本轮不修改旧任务，不重绑定。
-- 未完整调用 grill-with-docs：确认方案及提交边界完整，无新增领域决策。本轮不运行 TaskStore lifecycle，不写 active／index／ignore／身份，不声明自动恢复可靠；沿用 strict 模式，本轮 fix4 恰好一个本地提交，push 由编排方执行。
+- 编排方整理：本轮只修改 Onboard 实现、模板、相关 tests 与本 task；不改 OpenAPI、schema、docs/prd、plan.md 或其他 task，不执行 push、gh 写操作或全局配置修改。无法证明的事实记「不可考」。
+- 入口 worktree 干净；本 task 与 `git show origin/main:<task.md>` 逐字节一致，路径及父目录无 symlink；第一个 commit 已明确重绑定并追加开始 PR-b 事件。
+- 未完整调用 grill-with-docs：PRD 与确认方案已给出行为边界。本 task 使用解析候选＋预期原文比较＋原子写入，不写 active／index／ignore／身份；不声明跨机器自动恢复。
 
 ## Book Gate Plan
 
 | Gate | 客观触发／阶段 | 本轮结论 |
 |---|---|---|
 | book-ddd-distilled-modeling | 完整 grill 或领域歧义，文档前 | not-needed；未完整 grill，只整理已确认方案 |
-| book-ddia-data-design | 新增数据设计或迁移，设计前 | not-needed；本轮不新增设计选择，PR-b 实施前按真实触发重新评估 |
-| book-legacy-change-safety | 既有运行行为变化，实施前 | not-needed；只补充模型记录、修正文档措辞与路径，不改执行路径 |
-| book-refactoring-pass | 既有生产代码编辑，实施前 | not-needed；无生产代码编辑 |
-| book-release-readiness | runtime／部署／发布变化，收尾 | not-needed；本轮不实施或发布，不宣称发布就绪 |
-| project-validation | 文档／任务记录校验，提交前后 | 已加载；既有 schema／文档测试及真实记录解析，兼容边界单列 |
+| book-ddia-data-design | 持久化事件、并发与恢复，设计前 | confirmed；task 唯一事实源，基线内原文保全，后缀严格；排他写入门与旧内容比较，不冒充跨文件事务 |
+| book-legacy-change-safety | 旧解析／状态写入变化，实施前 | characterized；既有 83 项解析、schema、状态与恢复测试通过；旧格式接受用例先红后绿 |
+| book-refactoring-pass | 既有生产代码编辑，实施前 | proceed／normal；复用 TaskDocument、TaskStore，无需先行重构或新依赖 |
+| book-release-readiness | runtime 行为变化，验证后 | planned；完整本地测试和原生 smoke 后评估，不宣称发布 |
+| project-validation | 全部 tests 与场景验证 | running；原生命令，失败及环境缺口如实保留 |
 
 ## 验证与剩余边界
 
@@ -48,7 +48,7 @@ completed_at: null
 - `git diff --check`、`git diff origin/main --stat` 与新增行禁词检查已在前两个提交后执行；范围分别为两个、三个授权文件，禁词命中 0。第三个提交及后续轮次的核验结果见状态事件表与 PR #168。
 - 真实记录 smoke：#167 frontmatter schema／日期、Markdown 事件表、恰好一条追加事件、历史正文保全以及 done 事件 at 等于 completed_at 均通过。完整 `TaskDocument.parse` 对旧规则 `in-progress → done` 报 `task state event fails the bundled stateEvent schema`；按旧规则最后一次回填与不追溯条款保留，不补造 checking，不声称整篇解析通过。
 - #167 的 CI／Reviewy／合并操作者为编排方整理；历史回填中的 SHA／committer 时间核验及本地测试失败保留原记录。本轮不修改 #167 task、不重跑 CI。
-- 本轮仅本地文档校验，未生成额外报告文件，遵守两文件写入边界；原生命令输出保留在会话工具结果。直接运行原生命令；BDD／API／浏览器／构建不适用，无代码或运行行为改动。PR-b 的测试、审查及收尾尚未执行。
+- 上述 #167 与 PR-a 校验属于历史证据，不代表本轮实现验收。本轮已执行既有任务安全网 83 tests／OK、新增同步场景 14 tests／OK；完整 tests、安装副本 smoke 和独立只读审查正在进行。BDD 使用 REFERENCE.md 文档场景，不新增 runner；浏览器、移动端和平台 CI 不适用或不在授权范围。
 
 ## 模型记录
 
@@ -74,8 +74,12 @@ completed_at: null
 | 18 | fix4 s5（01a16c66） | openai-codex/gpt-6-astra（high） | 10／21 | 在会话内提交 `1e19c4f`（jsonl 含 git commit 调用） | `~/.omp/logs/640-rc2-status-sync-prd/fix4/s5/2026-10-24T05-33-14-422Z_01a16c66-1f36-74ce-8dbe-2ae82a04db91.jsonl` |
 | 19 | fix5 ping | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T05-54-35-469Z_01a16c79-ab4d-7432-ba54-a9a320f66abc.jsonl` |
 | 20 | fix5 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮提交（本会话内执行 git commit） | `~/.omp/logs/640-rc2-status-sync-prd/fix5/s1/` |
+| 21 | PR-b ping | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T06-17-27-247Z_01a16c8e-99cf-74dd-aacc-38fb9f823a78.jsonl` |
+| 22 | PR-b main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮全部文件编辑与本地提交 | `~/.omp/logs/640-rc2-status-sync-workflow/main/s1/` |
 
 编排方整理（按 jsonl 中的 git commit 调用逐一核实）：`a999fdd`、`733f7eb`、`cc88876` 由 PR-a main 会话编辑并提交；`34a9b94` 由编排方在 omp 之外编辑并提交；`fdbb1bd` 由 fix1 main 编辑并提交；`de1ac31` 由 fix2 main 编辑并提交；`8fb0afa` 的草稿由 fix3b main 编辑，占位符替换、判定口径归因与两条事件由编排方在 omp 之外编辑并提交；`b838603` 见第 15 行，其提交（含 13:19:06 对 13:14:13 事件 evidence 列的改写）在现存 jsonl 中无记录，执行者不可考；`1e19c4f` 由 fix4 s5 编辑并提交；本轮提交由 fix5 main 会话编辑并提交。所有 push、开 PR 与修改 PR 描述均由编排方在 omp 之外执行。
+
+编排方整理：本轮 commit 由 PR-b main 会话在会话内编辑并提交；push／开 PR 由编排方在 omp 之外执行。
 
 ## 状态事件
 
@@ -94,3 +98,10 @@ completed_at: null
 | 2026-10-24T13:55:36+08:00 | in-progress | in-progress | 编排方整理：按 Reviewy 对 `1e19c4f` 的 NOT CLEAN 意见，模型记录 fix4 改为逐会话行、补全 openai-codex/ 前缀、逐提交注明执行者，并修正第 51 行措辞。 | 仅改本 task 正文与本事件；旧事件逐字保留（13:14:13 事件 evidence 曾于 `b838603` 中改写，见模型记录第 15 行，本轮不再改动）；status 保持 in-progress、completed_at 为 null；本会话内提交，push 由编排方执行。 |
 | 2026-10-24T14:19:07.425201+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：明确重绑定，branch 从 docs/v2.1.0-rc.2-task-status-sync-prd 改为 feat/v2.1.0-rc.2-task-status-sync-workflow；沿用 strict。 | git show origin/main:ai/tasks/v2.1.0-rc.2-task-status-sync/task.md 与本地逐字节一致；实际 worktree 分支已核对；编排方整理的本轮指令明确授权重绑定。 |
 | 2026-10-24T14:19:07.843334+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：开始 PR-b；开始脚本实现、回归测试与工作流文档同步。 | 已读取 status-sync PRD、两份运行时／数据契约、确认方案和现有实现；本轮不回填 PR-a，不改 PRD、plan、schema 或其他 task；最终仅进入 checking。 |
+| 2026-10-24T14:27:10.258123+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：开始模板与 reference 更新；开始独立只读审查。 | 已有 83 项安全网通过；新同步场景 14 tests／OK；两名原生 reviewer 分别检查解析／并发与核对／收尾，不编辑、不运行验证、不使用 advisor。 |
+| 2026-10-24T14:32:17.718569+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成模板与 reference 更新；开始全量本地验证。 | TaskDocument／TaskStore／TaskSync 与 routing 影响范围：python3 -B -m unittest tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_recovery tests.test_sbtd_task_routing，121 tests／OK；完整 Onboard 副本独立进程文件核对→记录→checking→done smoke 通过（仅合成任务）；Ruff 新增及解析器修改范围通过；catalog 只声明路径，模板测试从当前源读取，无固定模板摘要需回填。全量 unittest discover 已启动，结果尚未完成。 |
+| 2026-10-24T14:36:42.521269+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：收到 SyncSafety 审查；开始修正 A 核对的未合入任务路径。 | 原生只读审查指出默认分支尚无 task 时硬失败，采纳为缺陷并补测。远端 task 解析错误仍按 PRD 旧格式规则第 5 点正常报错，不降级吞掉；默认分支无 task 记不可考，不把缺失副本推断为已丢弃。全量测试当前仍在运行，本轮后续改动另做最终复验。 |
+| 2026-10-24T14:40:20.338795+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成 SyncSafety 审查修正并收到复核通过。 | 默认分支尚无 task 改为不可考 note，保留其他差异、不推断丢弃；存在的远端 task 解析错误照常报错，reviewer 接受并撤回 P2。另修 EOF 基线自报漂移与 Git CRLF 归一化；三项均真实红→绿。最新新增同步测试 18 tests／OK，Ruff 通过；复核结论无 blocking 项，平台真实性仍不由本地检查证明。 |
+| 2026-10-24T14:49:20.237163+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：收到 ParserSafety 审查；开始修正锁清理与中文任务收尾校验。 | 解析／基线／严格后缀／reopen 主干静态核对成立；采纳两个 P2：锁被外部移除后 finally 异常、Git 引号路径导致中文 ID 收尾误拒绝。保留前缀碰撞 P3 以文档声明保留标记消歧。仅主会话修正并运行回归，reviewer 不写文件。 |
+| 2026-10-24T14:51:53.368220+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成 ParserSafety 审查修正并收到复核通过。 | 锁清理按 dev／ino 保留被替换的新锁、容忍外部移除；收尾 diff 使用 NUL 路径列表支持中文 ID；保留基线 reason 前缀已写入 reference。两项运行缺陷均红→绿，P3 文档消歧；独立静态复核三项关闭且无新问题。TaskStore Ruff 与 origin/main 同为 11 项既有 FURB162，无新增；其余修改 Python Ruff 通过；最终任务影响范围复跑正在执行。 |
+| 2026-10-24T14:53:10.060422+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成脚本实现、回归测试与工作流文档同步。 | 最终任务影响范围 python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git：127 tests／OK，50.378s；最终完整 Onboard 副本独立进程 smoke 通过。两名 reviewer 已复核关闭全部 findings；git diff origin/main --check 通过，新增行禁词0，TaskDocument.parse通过，11条旧事件及20行旧模型记录逐字保留；完整 tests 运行结果另记。 |

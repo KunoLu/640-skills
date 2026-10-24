@@ -111,15 +111,19 @@ class TaskStore:
 
     def _git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
         try:
-            return subprocess.run(
+            result = subprocess.run(
                 ["git", "-C", str(self.root), *arguments],
                 env=self._git_environment(),
                 capture_output=True,
-                text=True,
                 timeout=15,
                 check=False,
             )
-        except (OSError, subprocess.TimeoutExpired):
+            # git show 必须保留 CRLF；text=True 会把不同原文归一化。
+            return subprocess.CompletedProcess(
+                result.args, result.returncode,
+                result.stdout.decode("utf-8"), result.stderr.decode("utf-8"),
+            )
+        except (OSError, UnicodeError, subprocess.TimeoutExpired):
             raise TaskStateError("Git binding cannot be inspected safely") from None
 
     def current_binding(self) -> str | None:
@@ -341,7 +345,17 @@ class TaskStore:
     def _write(self, relative: str, content: bytes, expected: bytes | None) -> None:
         path = self._path(relative)
         temporary: str | None = None
+        lock = path.with_name(path.name + ".sbtd-lock")
+        lock_fd: int | None = None
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                lock_fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError:
+                raise TaskStateError(
+                    "task write is busy; 未持久化",
+                    "reread after the other writer finishes; inspect a stale lock before removing it",
+                ) from None
             actual = None
             if path.exists():
                 with open_regular_file(path, "task write target") as handle:
@@ -375,6 +389,15 @@ class TaskStore:
                 "task state write failed; existing data was not force-overwritten"
             ) from None
         finally:
+            if lock_fd is not None:
+                try:
+                    owned, current = os.fstat(lock_fd), lock.lstat()
+                    if (owned.st_dev, owned.st_ino) == (current.st_dev, current.st_ino):
+                        lock.unlink()
+                except FileNotFoundError:
+                    pass
+                finally:
+                    os.close(lock_fd)
             if temporary is not None:
                 try:
                     os.unlink(temporary)
@@ -784,7 +807,7 @@ class TaskStore:
                 if event["to"] == terminal and event["from"] != terminal
             ]
             prepared = previous
-            if not ingress:
+            if not ingress and not (previous.legacy_events or previous.has_baseline):
                 if terminal == "done":
                     preserved_at = previous.frontmatter["completed_at"] or "unknown"
                     preserved_reason = "Preserved historical completion from existing task frontmatter"
@@ -805,7 +828,7 @@ class TaskStore:
                     prepend_event=True,
                 )
             elif (
-                terminal == "done"
+                ingress and terminal == "done"
                 and previous.frontmatter["completed_at"] is not None
             ):
                 recorded = ingress[-1]["at"]
