@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-24T09:25:04+08:00'
+updated_at: '2026-10-25T04:36:10+08:00'
 completed_at: null
 ---
 
@@ -231,6 +231,20 @@ PR-1 本地提交证据：
 | 2026-10-23T19:06:45+08:00 | in-progress | in-progress | fix3 本地诊断与验证追加；macOS/Windows 待 CI 复跑，13/13 gate 尚未完成。 | Windows helper 的 None 崩溃已 red→green；CPython 3.12.10 Windows reader 方法在 Linux 上重现解码异常导致 stdout None，具体 runner 编码仍是未证实推断。Linux 四格式两轮通过；JPEG POST500／PDF failed-job 故障注入均 exit1 并记录 worker 诊断；非 waitid adapter 下真实 Chromium 诊断重跑成功仍不改变原 HTTP500 的失败结论。 |
 | 2026-10-23T19:06:45+08:00 | in-progress | in-progress | fix3 指定本地检查通过；初轮失败与原始记录保留，未新增 skip 或弱化断言。 | 定向15、golden61、workflow52；runtime416 tests／406 passed／10既有 skipped／0 failures（148.533s）；5 changed Python ruff check／format --check、diff --check、冻结目录 stat 空、yaml.safe_load／历史逐行保留／新归因检查通过；独立 review 尚在进行，结论另追加。 |
 | 2026-10-23T19:14:52+08:00 | in-progress | in-progress | fix3 独立 review 闭环与本地 Commit A 追加；macOS/Windows 待 CI 复跑，未声明13/13。 | WorkerEvidenceReview correct／0.87、PdfExtractionReview correct／0.88，均只读／无blocking finding／未运行tests；两项P3非阻塞观察按blocking-only范围保留。A 09bd3fbcde6771e5182fc42c25beb5ff61f48fa8，7文件；48个runtime Python提交blob与最终full被测哈希一致，是内容身份重验证，不是新CI。Commit B仅本task追加记录。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始入口进度核对（编排方整理） | status-sync §四.1；原最后事件 2026-10-24T09:25:04+08:00，缺 #165–#167；历史正文／事件保留。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成入口核对与 #165–#167 进度补写（编排方整理） | 上表 SHA／git %cI 已核实，mergedAt／head 分列；三个对应 task status done；plan 已完整，不改。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；记录用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录 | 先完成无需 Mac 证据的部分；AC-33／AC-62 人工视觉／字体只能来自用户 Mac 真机，不用 CI／Linux 替代。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始 PR-4 strict 性能、容量与可做收尾（编排方整理） | 授权根／分支／入口及 #168–#173 基线见上；只作本地提交，不操作远端，不改冻结目录或默认值。 |
+| 2026-10-25T02:53:57+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始性能基准实现与实测（编排方整理） | PRD §14.1／§18，实际规模与 met／not-met／not-measured 如实记录；不修性能。 |
+| 2026-10-25T03:18:40+08:00 | in-progress | in-progress | 写入者：PR-4 main；性能实现进度：基准初稿、极小 smoke 与 1000 事件试跑完成，较大规模仍在实测 | 首轮 smoke 2 OK／7.333s；1000 事件完整 append 用时 49.178s，约 20.334 条／秒，仅作为安排生成时限的本地依据，不外推百万性能。百万请求规模的 900 秒限时生成已启动，最终报告以实际接受数量为准。 |
+| 2026-10-25T03:51:43+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成性能基准实现与本机可用测量，未达到百万参考规模 | 1000／10000／11500 实际事件三档完成；基准总墙钟 2385.937s（39.766 分钟，不含开发／验证）；最大档真实 UI 11520 事件 p95=9.315s，not-met。JSON／同 stem 中文摘要与导出样本均已保存；生产无修改。 |
+| 2026-10-25T03:51:43+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始本地全量验证与提交前边界检查（编排方整理） | golden、runtime、workflow/task、changed Python ruff、parse／YAML、append-only／新增行限制／冻结目录；仍保持 in-progress，不关闭 R2.2。 |
+| 2026-10-25T04:00:17+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成本地验证与代码提交前检查，保留首轮环境失败 | golden 实际 63 OK；runtime 首轮 433 tests／1 failure／10 skipped（缺已声明 tzdata），仅本 worktree reports 内安装既有 requirements 后，定向 1 OK、子集 27 OK、最终 433 tests／423 passed／10 skipped／160.464s；workflow/task 135 OK；ruff check／format 两文件通过；parse／YAML／append-only／新增行限制／冻结目录通过。 |
+| 2026-10-25T04:00:17+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始三档容量汇总与默认配额校准（编排方整理） | 复用三档真实 snapshot／HTML／CSV／manifest st_size，计算 24h TTL 假设与 80% 点；JPEG／PDF 不可用，不将缺失值当 0 或宣称完整四格式容量已通过。 |
+| 2026-10-25T04:02:20+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成三档可测容量校准与默认值结论 | 18 份 HTML／CSV 样本 SHA-256／st_size 与源报告一致；部分一套 2,579,665／25,507,472／29,329,547 B。保持默认 2,000,000,000，不改代码；完整四格式因 JPEG/PDF unavailable 未测，未当 0。 |
+| 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始最终记录收口与 AC／目标映射（编排方整理） | 三个本地提交已创建；50 个 Python 文件与最终 full 被测 hash 一致；只追加本 task，禁止改 plan 行或完成状态。 |
+| 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成最终证据整理；PR-4 可在无 Mac 证据下完成的部分已本地完成；R2.2 保持 in-progress，等待用户 Mac 证据 | 性能／容量／验证／覆盖映射见 PR-4 追加节；D9 未满足，completed_at null；按用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录；不 push，不宣称发布就绪。 |
+| 2026-10-25T04:36:10+08:00 | in-progress | in-progress | 写入者：PR-4 operator；记录补正：授权根改写为 `/workspace/640-skills-r22-pr4`，PR-4 模型表单列 main 内部辅助 model_usage 行 | Reviewy 要求的路径写法；session jsonl 只读复核 26 条 purpose find、typesafe/jev-latest，不计入 main 93 / 163 与 ping 1 / 0；历史正文与事件保留，status／completed_at 不变。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1052,3 +1066,211 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 | 2026-10-23T23:34:56+08:00 | in-progress | in-progress | fix6 本地代码／red→green／全量验证完成；编排方整理：Reviewy 23:24 裁定 | A e4c2318bdbc5e0fbfa8b1db14652af475278504e；13定向／428full（10skipped）／61golden；真实Linux三文档raw与summary保存验证；macOS pending CI after operator push，非真机验收。 |
 | 2026-10-24T09:25:04+08:00 | in-progress | in-progress | PR-3 #164 squash-merge 回填（编排方整理）；R2.2 继续开放。 | PR https://github.com/KunoLu/640-skills/pull/164；merge SHA 253dceccc77fb0b7b929a81ac28e4c53d6968240；head 38b3b56aca559d729487665b822c76b48cf8c1f9；git committer %cI 2026-10-24T00:05:38+08:00（本轮 git show 核实）；GitHub mergedAt 2026-10-24T00:05:38+08:00（2026-10-23T16:05:38Z，编排方整理），两时间相等但分别记录；合并前 CI 13/13 on 38b3b56，run 39980290926（编排方整理；本轮未运行 CI）。 |
 | 2026-10-24T09:25:04+08:00 | in-progress | in-progress | 用户 2026-10-23 16:44 群内确认（方案 1），Lord 记录：PR-3 合并后先开 statistics/query 507 DISK_QUOTA_EXCEEDED contract PR，复用 #158（82d42a2）错误体；合并后接小实现 PR，再接 PR-4。此前「待用户决定（contract PR）」已由该决定解决，旧事件原文保留。 | 用户 2026-10-24 09:22 群内确认（开始），Lord 记录；编排方整理：本轮 contract-only，记录 ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-contract/task.md；不改 runtime，不宣称 queryStatistics 507 已实现；本 task 保持 in-progress，plan R2.2 行保持 planned。 |
+
+## R2.2 PR-4 入口核对与进度补写（追加）
+
+编排方整理：本轮 strict，主会话唯一 writer／验证 controller／本地提交者；授权根 `/workspace/640-skills-r22-pr4`（本轮授权 worktree）、分支 `feat/v2.1.0-rc.2-r2.2-pr4-perf-closeout`，入口 HEAD／origin/main `d45cfc8567e57dfe10c397c0143cf01717e1109c`，工作区干净、无 upstream。历史 frontmatter branch 保留，本节记录本轮明确绑定；沿用既有 Markdown 追加与 TaskStore 兼容边界，不调用 helper rebind，不写 active／index／ignore，不声称自动恢复可靠。未完整调用 grill-with-docs：范围、验收与 D9 停止点明确，无新领域决定。
+
+本次补写属于 status-sync PRD §四.1 的入口进度核对，不恢复已停用的例行合并回填规则。plan.md「### R2.2」已含 #162–#167，无缺漏，不重复追加、不改任务表行。下列 SHA／git committer 时间均由本轮 `git log -1 --format='%H %cI %s' <sha>` 核实；GitHub head／mergedAt 为编排方整理，CI／Reviewy 本轮不可考。
+
+| PR | merge SHA | git %cI | GitHub mergedAt（+08:00；Z 原值） | head；对应记录 |
+|---|---|---|---|---|
+| #165 | 9ceb53021aa5e90d6369eed037f0b05ab719e928 | 2026-10-24T10:10:14+08:00 | 2026-10-24T10:10:14+08:00；2026-10-24T02:10:14Z | 5bb8a564ea165c784d034eb7145def7c8b8793fc；`ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-contract/task.md`，status done（只读核实） |
+| #166 | fcd835e397698ab3292d9d7614e1407ff7e0a465 | 2026-10-24T10:53:09+08:00 | 2026-10-24T10:53:09+08:00；2026-10-24T02:53:09Z | 073999fbbcb7087de202227fa538b752495b4595；`ai/tasks/v2.1.0-rc.2-r2.2-statistics-metadata-contract/task.md`，status done（只读核实） |
+| #167 | 9ced6680cd838b9a5a2d9602a4939d981321582d | 2026-10-24T11:52:51+08:00 | 2026-10-24T11:52:52+08:00；2026-10-24T03:52:52Z | 95f4e8e86536b0188c13f812711831cf1ec88a4c；`ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-impl/task.md`，status done（只读核实）；两个时间相差 1 秒 |
+
+期间非 R2.2 合并仅作入口事实，不修改其记录：
+
+| PR | 完整 SHA | git %cI |
+|---|---|---|
+| #168 | 72e2c0602fa358f0a522a71a4e0d81b887643131 | 2026-10-24T14:15:54+08:00 |
+| #169 | 6f79e9dc69cd6a7e351e9ca50cf50424b9bbb496 | 2026-10-24T18:33:40+08:00 |
+| #170 | 3c49524fec9561e6feacce40638be11ecea60dc7 | 2026-10-24T21:24:18+08:00 |
+| #171 | 2e5ddb5f588cf250938bc2802fffceb202e984f0 | 2026-10-24T22:48:03+08:00 |
+| #172 | 47523469fff9da00d657cbfa08bc1a1154b3bc57 | 2026-10-25T00:49:36+08:00 |
+| #173 | d45cfc8567e57dfe10c397c0143cf01717e1109c | 2026-10-25T02:47:54+08:00 |
+
+#173 head `7231818eed0c9b1728403ec1e2437b145aa09cb8`，mergedAt `2026-10-25T02:47:55+08:00`（`2026-10-24T18:47:55Z`）为编排方整理，与 git committer 相差 1 秒，分别保留。
+
+## R2.2 PR-4 Book Gate Plan（追加）
+
+| Gate | 客观触发／阶段 | 本轮状态 |
+|---|---|---|
+| book-ddd-distilled-modeling | 完整 grill／领域歧义，需求前 | not-needed；未完整 grill，无新领域决定。 |
+| book-ddia-data-design | 数据／schema／持久化设计前 | not-needed；只测既有真实写入／快照／导出，不改数据机制。 |
+| book-legacy-change-safety／book-refactoring-pass | 生产行为／代码编辑前 | not-needed；只新增基准与 smoke 测试，不优化生产代码；若触及生产先停止对应项。 |
+| TDD／gherkin-bdd／ponytail | 基准与证据实现前 | ponytail 已加载；复用 EventStore／serve／现有测试 helper，标准库优先；既有产品场景不变，小规模 smoke 验证实际数据与报告，不设性能断言。 |
+| 独立 review／Code Readability Review | check | 不启动子代理，主会话自审；不冒充独立审查。单一测试证据子系统，不触发强制独立 review。 |
+| project-validation | check | pending；实跑基准、golden、runtime、workflow/task、ruff 与记录约束；原生 JSON＋同 stem 中文摘要，reports ignored。 |
+| book-release-readiness | runtime／部署变化，验证后 | not-needed；不改生产／部署，不宣称发布就绪；R2.2 仍受 D9 阻塞。 |
+
+## R2.2 PR-4 模型使用（追加）
+
+| agent/session | provider/model | thinkingLevel | assistant / toolCall | purpose | resolvedModelIsFallback | title-gen |
+|---|---|---|---|---|---|---|
+| PR-4 ping／01a16f40-e5f7-7673-91ad-07e2c12624ae | openai-codex/gpt-6-astra | high | 1 / 0（编排方整理） | --no-tools，回复 OK | false（编排方整理） | 不可考 |
+| PR-4 main／01a16f42-9934-77d9-ae02-de618d2caef2 | openai-codex/gpt-6-astra | high | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 唯一 writer／controller；session 文件名只读核实：`~/.omp/logs/640-rc2-r22-pr4/main/session/2026-10-24T18-53-18-004Z_01a16f42-9934-77d9-ae02-de618d2caef2.jsonl` | 不可考 | 不可考 |
+| PR-4 main 内部辅助 model_usage／01a16f42-9934-77d9-ae02-de618d2caef2 | typesafe/jev-latest | 不可考（记录无该字段） | 26 次调用（purpose find；不计入 main 93 / 163，也不计入 ping 1 / 0） | omp main session 内部辅助调用；只读复核 `~/.omp/logs/640-rc2-r22-pr4/main/session/2026-10-24T18-53-18-004Z_01a16f42-9934-77d9-ae02-de618d2caef2.jsonl`：type=model_usage 共 26 条，均 purpose find、provider typesafe、model jev-latest、stopReason stop，第 94–168 行，2026-10-25T02:54:55+08:00–02:56:10+08:00 | 不可考（记录无该字段） | 不适用 |
+
+## R2.2 PR-4 初轮证据与实现边界（追加）
+
+真实机器复核：Linux 6.12.94+／x86_64、Python 3.13.5、8 逻辑 CPU、16,779,640,832 字节 RAM（约 15.63 GiB）；授权根位于 ext4／`/dev/vdb`，lsblk 显示 vda／vdb、ROTA=1，无型号。编排方整理称本地虚拟盘；不据此宣称物理 SSD 或 PRD 的 4 CPU／8 GB 参考机。本轮使用已有 `~/.local/venvs/project-validation/bin/python3`，不新增第三方依赖、不安装全局工具。
+
+基准只新增 `sbtd-runtime/tests/runtime_perf.py` 与小规模 `test_runtime_perf_smoke.py`，不修改生产路径。真实批量 `EventStore.append` 每批不超过 100，schema 校验、秘密拒绝、spool fsync、去重及每事件 SQL commit 全部保留；合成输入复用 golden 的合法形状，固定事件 ID／时间／内容，原 golden 文件不改。每完整 100 条含 1 任务、10 个成对步骤、79 次状态事件；报告记录完整事件大小直方图和输入 SHA-256。参考规模不足时不造 100 万／1 万／10 万结果。
+
+1000 事件／10 任务／100 步骤原生报告：`reports/runtime-perf-1000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T190702573559Z.{json,md}`，总墙钟 57.581s；完整数据写入 49.178s。24h／7d 热查询与冷查询、HTML／CSV 各 n=3；冷查询不同微秒结束时间确保不复用快照，但不清 OS 缓存，既有数据均不在变更边界。原报告审计的 met 仅指延迟：源码实际 replay 全量再排序分页，索引／非全扫描要求 not-met；后续 driver 明列该结构性缺口。CSV 原报告 not-measured 指百万流式目标未测，实际较小规模全量导出有数字；源码完整缓冲，流式要求 not-met。仅记录、不优化。
+
+真实 Playwright MCP／Chrome 156.0.8078.47 另测已启动 serve 页面：1000 原事件加 20 条单次 append 探针，实际 1020 事件；预先真实配对，不计配对时间，当前 24h scope，导航至 13 个核心 Panel，n=3：0.633／0.481／0.369s，p50=0.481s、p95=max=0.633s，当前规模 met。导出 HTML 真实浏览器实测 13 Panels、1440×5736 CSS px、fonts loaded；不是 Mac 人工视觉／字体证据。独立报告 `reports/runtime-perf-ui-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T191106Z.{json,md}`；原 backend 报告不回写。
+
+失败保留：初轮 ruff 有 BLE001／格式差异，收窄捕获并仅格式化新增 Python；随后 lint／format 通过。首次 shell 的 python3 缺 jsonschema，改用上述已有环境后真实 serve 启动并 SIGINT exit 0，不改生产或安装依赖。MCP VM 不提供 dynamic import／require，两个调用在读取票据前失败；改用受控文件上传读取本次合成配对票据，在工具内配对且不输出值，真实浏览器测量成功。无 token／secret 写入报告。
+
+自审发现分页末页可少于 100，新增 smoke 改为 101 事件、2 次分页以覆盖 100＋1；不对耗时设断言。可选 `--renderer-home` 仅复制明确给出的 browsers/，使已有 pinned renderer 的 Mac／Windows 可以用同一驱动复跑；本机 Python 未安装 Playwright，真实 capabilities 返回 unavailable，JPEG／PDF POST 503 已观察，不拿系统 Chrome 或 browser MCP 替代生产 renderer。
+
+较大规模报告：`reports/runtime-perf-1000000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T191005746525Z.{json,md}` 实际 11500 事件／115 任务／1150 步骤，完整写入 1185.380s、总 1559.593s；`reports/runtime-perf-10000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T193717099968Z.{json,md}` 实际 10000／100／1000，写入 501.746s、总 768.763s。900s 是批次间检查的软时限，前轮两批分别 320.606s、311.837s，结束超出时限；原因不可考，不能据此宣称 I/O 异常有硬 deadline。没有重复抽样筛选绿色结果，百万规模未完成。
+
+最大档浏览器另测原 11500 条加 20 条写入探针，真实 11520 事件；n=3 为 8.927／8.879／9.315s，p50=8.927s、p95=max=9.315s，目标 3s，not-met。原最大档导出 HTML 实际 13 Panels、1440×7270 CSS px，符合本轮几何基准；不是 JPEG／PDF 或 Mac 视觉证明。报告 `reports/runtime-perf-ui-large-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T195143Z.{json,md}` 保存真实 MCP code／结果；服务 SIGINT exit 0。此前 about:blank 几何观察出现旧页面配对 init script 访问 sessionStorage 的 SecurityError，不影响已读几何数值；较大 UI 使用全新隔离 context，driver 的几何页也改为无该 init script 的新页。
+
+自审更正：初轮报告中「one heavy renderer worker and bounded queue」不能作为已实现结论。`export_store.py` 使用 `ThreadPoolExecutor(max_workers=1)`，提交路径没有显式队列数量上限；并发页面未负载实测，有界队列要求未证明，不能写 met。后续 driver 去掉已实现有界队列的表述，旧报告保留并以本注释限定；不擅改公共准入或契约。10000 档已对六份下载样本扫描本轮真实合成 ticket／Bearer／CSRF 及 ticket URL marker，0 命中，并核对两格式 manifest 的 13 个 Panel IDs；这不是完整隐私安全认证。
+
+测试方法复核：本轮是明确 CLI／真实 EventStore／serve／报告 seam 的 characterization 与 smoke，不声称 red→green TDD。101 事件末页 smoke 与 nearest-rank 边界共 2 tests，复核轮 7.561s、OK。未新增产品行为，不新增 BDD runner；可选 Python Playwright 分支因本机依赖不可用未实跑，独立 MCP 真浏览器证据单列。
+
+依赖与验证边界：首轮 runtime 全量唯一失败为 `test_iana_queries_and_dst_work_without_system_timezone_data` 的 `ModuleNotFoundError: tzdata`，不修改测试或生产去绕过。`sbtd-runtime/requirements-serve.txt:8` 已钉 `tzdata==2026.5`；本轮创建 ignored `reports/pr4-validation-venv`，仅安装已有 serve／onboard requirements，通过 PATH 选择其 python3 后复跑，不引入仓库新依赖、不修改全局环境。原始失败 raw 保留；基准仍属于原测量环境，未冒称在新验证环境重测。golden 的实际数量为 63，不照抄编排方整理的 61 估计。
+
+## R2.2 PR-4 容量校准（追加）
+
+证据：`reports/pr4-capacity-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T200220Z.{json,md}`；命令 `python3 -B -c <raw.command[2]>`，完整标准库脚本在 raw，exit 0。它读取三份具名实测报告，复核全部 18 份可用格式样本的 SHA-256／st_size，保留源报告校验和；这是派生算术复核，不是再次压测。源测量 developer-local Linux，真实 source revision／dirty 不改写。
+
+每格式 n=3，三次落盘字节相同；下表字节均为普通文件 st_size，manifest 单列，不含 audit.db／浏览器／本地报告副本。
+
+| 事件／任务／步骤 | 单个 7d Snapshot B | HTML 产物／manifest B | CSV 产物／manifest B | JPEG／PDF B | 一次查看＋已测两格式 B | 采样临时文件峰值 B |
+|---|---|---|---|---|---|---|
+| 1000／10／100 | 2,033,130 | 14,336／1,656 | 528,887／1,656 | unavailable／未测 | 2,579,665 | 2,033,130 |
+| 10000／100／1000 | 20,312,945 | 18,672／1,659 | 5,172,535／1,661 | unavailable／未测 | 25,507,472 | 20,312,945 |
+| 11500／115／1150 | 23,361,080 | 18,672／1,659 | 5,946,475／1,661 | unavailable／未测 | 29,329,547 | 23,361,080 |
+
+完整「一次查看＋四格式导出」为 `S+H+C+J+P`，每格式含其 manifest；J／P 未测，完整总量和完整套数均 **not-measured**，不填 0。以下只是 HTML／CSV 子集容量：`B=S+H+C`，`floor(2,000,000,000/B)` 为静态可容纳部分套数；严格低于 80% 的套数为 `floor((1,600,000,000-1)/B)`，首次达到预警为 `ceil(1,600,000,000/B)`。部分套数也是完整四格式套数的上界，不是完整容量承诺；准入只检查当前 U，不能据此保证在途写入不越限。
+
+| 事件 | 2GB 部分套数 | 严格低于 80% 的部分套数 | 首次达到预警的部分套数 | 24 快照＋4 组 HTML/CSV B |
+|---|---|---|---|---|
+| 1000 | 775 | 620 | 621 | 50,981,260 |
+| 10000 | 78 | 62 | 63 | 508,288,788 |
+| 11500 | 68 | 54 | 55 | 584,539,788 |
+
+合理使用假设明确为：24h 内 24 个不同快照＋4 次四格式导出，大小取对应已测档；完整占用 `T=24S+4(H+C+J+P)`。最大档已测部分 584,539,788 B，距 80% 还有 1,015,460,212 B；只有四次 JPEG/PDF 及其 manifest、额外在途占用合计在此余量内，才可说这一完整假设成立。这个条件不是 JPEG/PDF 实测结果。24h TTL 在启动／新建时清扫，不是后台准点释放保证。
+
+结论：**保持默认 2,000,000,000，不改代码**；已测 HTML／CSV 子集负载有余量，没有足够证据建议新默认值，但完整四格式、百万规模和 Mac 实机容量尚不能宣布充足。JPEG/PDF 受字体／平台影响，Mac 实机字节数未测；本机生产 renderer 缺 Playwright，真实 capabilities unavailable／POST 503。默认值修改、契约／PRD／schema 或最大支持规模冻结均未做：需用户群内确认后另行处理，原因是缺完整规模与原生平台证据。ADR 可选注记未追加，避免重复已有决定；install-and-use 保留原句并追加结果指引。
+
+资源采样边界：三个规模 serve VmHWM 分别为 111,259,648／724,287,488／816,705,536 B；snapshots＋exports 总峰值下界为 11,023,197／110,560,617／127,104,873 B，20ms 临时文件峰值见表。RSS 是 serve 进程累计峰值，不是 CSV 单作业增量或 renderer 进程树峰值；目录采样可能漏掉短暂峰值，不能宣称平台资源上限已验证。
+
+## R2.2 PR-4 最终性能结果与覆盖映射（追加）
+
+证据来源全部 **developer-local Linux**；机器不是 PRD 参考机，也不是 macOS／Windows 真机。每份 JSON 带实际 source revision／dirty、命令、数据量、事件大小直方图、源文件 hash 与未验证项；中文摘要同 stem，样本在对应 `-artifacts/`。性能数据不重新标成最终提交或 CI 的结果，后续文字／可选浏览器分支修订不改写原始测量。
+
+### 基准命令与实际规模
+
+以下实际命令使用已有 `~/.local/venvs/project-validation/bin/python3`；`R` 为本 task 的 ignored `reports/`，不是 shell 全局变量修改。
+
+```sh
+python3 -B sbtd-runtime/tests/runtime_perf.py --events 1000 --samples 3 --seed-seconds 120 --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports --keep-home
+python3 -B sbtd-runtime/tests/runtime_perf.py --events 1000000 --samples 3 --seed-seconds 900 --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports --keep-home
+python3 -B sbtd-runtime/tests/runtime_perf.py --events 10000 --samples 3 --seed-seconds 900 --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports
+```
+
+| 请求规模 | 实际事件／任务／步骤 | 实际 CSV 数据行（不含 header） | 生成／总墙钟秒 |
+|---|---|---|---|
+| 1000 | 1000／10／100 | 1158：event1000＋task10＋step100＋metadata17＋metric31 | 49.178／57.581 |
+| 1000000 | 11500／115／1150 | 12813：event11500＋task115＋step1150＋metadata17＋metric31 | 1185.380／1559.593 |
+| 10000 | 10000／100／1000 | 11148：event10000＋task100＋step1000＋metadata17＋metric31 | 501.746／768.763 |
+
+三档基准累计 2385.937s，约 39.766 分钟，含真实写入、查询与导出，不含开发／验证。百万参考规模 **not-measured**；没有外推吞吐、容量或性能代替实测。写入保留完整校验／fsync／去重路径，没有 SQL 直灌、猴子补丁或校验绕过。24h／7d 查询含 HTTP、磁盘读取和快照处理；审计为公开库面真实 replay→list_events→paginate，不冒称不存在的 HTTP audit 测试。
+
+### 数字与 PRD §14.1 对比
+
+每格为 **p50／p95／max 秒**；nearest-rank。写入 n=20，其余已测 API／导出／审计 n=3；小样本不代表稳定统计分布。met／not-met 仅对本机实际规模与测量面，不等于参考机或 AC-62 验收。
+
+| 项目／目标 | 1000 事件 | 10000 事件 | 11500 事件 | 结论 |
+|---|---|---|---|---|
+| 24h 冷查询 ≤3s | 0.125／0.146／0.146 | 1.933／2.078／2.078 | 2.032／2.341／2.341 | 三档 met；冷定义为不同 scope 无快照复用，OS cache 未清 |
+| 24h 热查询 ≤1s | 0.088／0.105／0.105 | 1.278／1.393／1.393 | 1.470／1.489／1.489 | 仅1000档 met，其余 not-met |
+| 7d 冷查询 ≤3s | 0.238／0.246／0.246 | 2.850／3.141／3.141 | 3.409／4.092／4.092 | 仅1000档 met，其余 not-met |
+| 7d 热查询 ≤1s | 0.096／0.101／0.101 | 1.429／1.432／1.432 | 3.554／5.994／5.994 | 仅1000档 met，其余 not-met |
+| 审计100行 ≤0.5s | 0.012／0.020／0.020 | 0.106／0.117／0.117 | 0.134／0.145／0.145 | 延迟 met；全表 replay／排序，索引／非全扫描要求 not-met |
+| HTML ≤5s | 0.647／0.671／0.671 | 39.399／39.790／39.790 | 54.957／59.619／59.619 | 仅1000档 met，其余 not-met |
+| CSV 百万行流式 ≤60s | 0.999／1.016／1.016 | 41.791／41.829／41.829 | 57.113／58.034／58.034 | 当前规模耗时≤60s；百万目标 not-measured，流式要求 not-met |
+| 单事件 append ≤0.020s | 0.051／0.075／0.077 | 0.049／0.058／0.067 | 0.049／0.055／0.056 | 三档 not-met；含校验／fsync／commit，不含事件构造或完整宿主 SDK |
+
+| 其余目标 | 样本／结果 | 结论与边界 |
+|---|---|---|
+| UI 首次可用 ≤3s | 1020事件 n=3，0.481／0.633／0.633s；11520事件 n=3，8.927／9.315／9.315s | 前者 met，后者 not-met；真实 Playwright MCP／Chrome156.0.8078.47，预配对后导航至13个核心Panel，当前24h；非CLI回归／非Mac人工视觉 |
+| 导出基准13 Panels／1440px／≤12000px高 | 1000档 HTML 1440×5736，11500档1440×7270，13 Panels／fonts loaded | 两份已测 HTML 几何 met；不是 JPEG/PDF 字体或最大长图规模验收 |
+| JPEG／PDF ≤20s | n=0，p50／p95／max 未测 | not-measured；本机生产 renderer 无 Playwright，真实 capabilities unavailable／POST503；不拿 Chrome MCP 代替 |
+| 采集到可见 ≤30s、实际延迟展示 | n=0 | not-measured；按代码30秒轮询，未实测端到端延迟／展示／不闪屏 |
+| 并发页面／单重型作业／有界排队 | n=0 | not-measured；代码单 worker；无显式队列数量上限，不证明有界排队 |
+| 内存／像素／时间／临时盘上限的平台验证 | 仅记录 serve VmHWM、目录／temp采样下界 | not-measured；资源观察不是限制／取消／故障验证，未证明完整进程树峰值 |
+| 本地采集 I/O 异常不得无限等待 | 未注入I/O异常；生成批次曾超过300s | not-measured；软时限不承诺硬中断，原因不可考，不修性能 |
+
+### AC／目标覆盖
+
+| AC／规范 | 本轮证据 | 状态 |
+|---|---|---|
+| AC-62／§14.1／§18 | 三档原生 JSON＋中文摘要、真实 serve、两档浏览器观察 | developer-local 部分覆盖；参考规模和原生 macOS／Windows 性能未完成 |
+| AC-33／AC-62／D9 | 仅保留原历史 CI 事实；本轮无 GitHub 查询／新 CI | 用户 Mac 人工视觉／字体 pending，不用 Linux／CI 替代 |
+| AC-51／D14／AC-45 | HTML／CSV可用样本摘要／大小、数据族行数、10000档两格式13个Panel IDs | 本轮仅测量侧核对，未重做四格式人工视觉；既有对账 tests 随 full suite 执行，原 renderer stub 边界保留 |
+| D15／§18.3 敏感数据证据 | 10000档六份下载样本，真实本次合成认证值及 ticket URL marker 扫描0命中 | 限定扫描，不新增完整安全认证或宿主真实数据证据 |
+| ADR0003／24h TTL／共享2GB／80% | 三档真实 st_size、上节容量公式与假设 | 保持默认；仅已测子集有余量，完整四格式 not-measured |
+| PRD 最大长图／CSV规模冻结 | 本机仅11500事件，JPEG/PDF不可用 | 未做：需用户群内确认后另行处理；不得修改 PRD／schema／默认值 |
+
+## R2.2 PR-4 最终本地验证（追加）
+
+正式汇总 `reports/pr4-verification-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T200627Z.{json,md}` 关联截至汇总时35组原始报告的路径与SHA-256；每组九节中文摘要／raw同stem，失败保留。之后的提交前／提交后检查继续单独保存，不覆盖旧报告。两个本次 `--keep-home` 合成目录已在 serve exit0、锁移除后删除；保留样本、public manifest、原始报告和本地验证venv，不清理任何其他数据。
+
+环境区分：基准／首轮检查使用已有 `~/.local/venvs/project-validation/bin/python3`；tzdata 对齐后的定向／子集／runtime最终全量／golden复跑使用 `reports/pr4-validation-venv/bin/python3`（PATH 选择）。共同环境为 `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests`，ruff另加 `RUFF_NO_CACHE=true`。两者均Python3.13.5；不把更换验证环境称为重新性能实测。
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest sbtd-runtime/tests/test_golden_contracts.py
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest discover -s sbtd-runtime/tests
+python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_legacy_events_notice tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git
+~/.local/venvs/project-validation/bin/ruff check sbtd-runtime/tests/runtime_perf.py sbtd-runtime/tests/test_runtime_perf_smoke.py
+~/.local/venvs/project-validation/bin/ruff format --check sbtd-runtime/tests/runtime_perf.py sbtd-runtime/tests/test_runtime_perf_smoke.py
+git diff --check d45cfc8..HEAD
+git diff d45cfc8 --stat -- sbtd-runtime/contracts docs/prd sbtd-runtime/golden
+python3 -B -c "import sys; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); import sbtd_task_document as s; p=sys.argv[1]; d=s.TaskDocument.parse(open(p,encoding='utf-8').read()); print(p, d.frontmatter['status'], d.legacy_events, len(d.events), d.frontmatter.get('completed_at'))" ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md
+```
+
+| 轮次／raw label | 实际结果 | 原生／墙钟秒 |
+|---|---|---|
+| golden-final | 63 tests OK | 0.365／0.478 |
+| runtime-full-final（首轮失败保留） | 433 tests，422 passed／1 failure／10 skipped；缺tzdata | 156.493／156.899 |
+| workflow-task-final | 135 tests OK | 54.154／54.440 |
+| timezone-targeted | 失败用例1 test OK | 0.111／0.219 |
+| query-perf-subset | 27 tests OK | 7.461／7.622 |
+| runtime-full-environment-aligned（最终全量） | 433 tests，423 passed／10 skipped／0 failures | 160.464／160.876 |
+| golden-environment-aligned | 63 tests OK | 0.354／0.475 |
+| ruff-final／format-final | All checks passed／2 files already formatted | 墙钟0.024／0.009 |
+| records-capacity-staged | parse、yaml.safe_load、历史逐行保留、删事件0、新增行限制0、plan不变、四文件白名单、冻结目录空 | 墙钟1.143，exit0 |
+| task-parse-pre-final | in-progress False 50 None（最终收口事件追加前） | 墙钟1.323，exit0 |
+| diff-check-pre-final／protected-paths-pre-final | exit0／受保护三个目录stat空 | 墙钟0.006／0.002 |
+
+上述 raw 文件命名 `reports/pr4-<label>-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-<timestamp>.{json,md}`；最终 full timestamp 为 `20261025T035659804021`，原始失败为 `20261025T035233719896`，workflow为 `20261025T035510631388`。50个当前 runtime Python文件 SHA-256 与最终full raw.hashes完全相同，后续只改记录／说明；这是内容身份核对，不冒称提交后新CI。
+
+Gate结论：DDD／DDIA／legacy／refactoring／release的生产变更触发条件均未发生，维持 not-needed；无完整grill。Ponytail／Code Readability由主会话自审：复用真实EventStore、ServeProcess和标准库，未新增依赖或生产抽象；末页、未知值、失败保留、认证值不落报告、峰值边界已复核。独立review一栏为「不启动子代理，主会话自审」，未冒称独立审查。project-validation在上述Linux范围passed；BDD skipped（内部测量，无产品行为变化）；Cross-repo context not-needed；API Contract verified（零变更）；真实基准Mock Strategy none，普通suite既有stub如实保留。未运行typecheck（ty不可用）、未部署／发布。
+
+## R2.2 PR-4 完成项与阻塞项（追加）
+
+已本地完成：入口 #165–#167 进度补写、strict／D9决定记录、跨平台可复跑基准及极小smoke、三档真实写入与查询／HTML／CSV／审计／append测量、两档真实浏览器观察、资源采样与有限容量校准、既有默认值保持、可用样本／manifest／双报告、指定本地检查与失败保留、四文件范围／append-only约束核验。没有优化生产性能、修改契约、引入新依赖或操作远端。
+
+| pending 项 | 精确原因／停止边界 |
+|---|---|
+| D9：AC-33／AC-62 用户 Mac 人工视觉／字体确认——pending | 原因：只能由用户 Mac 真机产出，本会话无法产出，按用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录 |
+| macOS 实机性能——pending | 本机仅Linux VM，不能生成Mac原生版本／硬件／性能报告；等用户Mac证据，可用同一脚本复跑 |
+| Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉——pending | 只能在Mac实际renderer／字体下取得；本机JPEG/PDF unavailable，Linux HTML几何不能替代 |
+| 原生 Windows 性能——pending | 无Windows真机，本轮无CI运行授权／远端操作；后续只能以真实CI runner报告标注来源，不能冒充真机 |
+| 百万事件／1万任务／10万步骤及百万CSV——pending | 本轮完整写入成本与软时限只取得最大11500事件；未外推，CSV实现非流式，性能优化不在本PR |
+| 完整四格式容量／平台资源上限／最大长图CSV规模——pending | JPEG/PDF缺实测与平台证据；缺失值未当0，未修改默认值／PRD／schema；需要规则变更的项另行处理 |
+| R2.2 收尾——pending | D9未满足，不执行任务完成状态、completed_at或plan R2.2行变更；status保持in-progress、completed_at保持null，plan原行逐字不变 |
+
+本地提交：`b473df9b87616633eb7742f55d2b4418c061beba`（Commit1记录）、`4f32bcd5ff02bb47c44e058ea9a73067269fe1c0`（基准／smoke／使用说明／同步进度）、`ee818c45c5cbe4722bf95fd6eac8e238cacd7cbb`（容量结论与说明）；最终commit只改本task，SHA由交付回复提供，避免自引用。恢复边界为本授权worktree的本地提交；reports／本地venv未入库，不承诺自动恢复或异机可得。主会话唯一writer与git提交者，无task／subagent／advisor、gh、push、PR、merge、rebase、amend、force、全局配置修改或其他worktree操作。
+
+最终收口候选复核（2026-10-25T04:09:51+08:00，写入者：PR-4 main）：`records-final-candidate` exit0／1.090s；`task-parse-final-candidate` exit0／1.094s，输出 **in-progress False 52 None**。yaml.safe_load通过；原事件删除0、历史行仅updated_at变更、五项新增措辞限制及HOME绝对路径限制0命中；冻结三个目录stat空、plan逐字不变、diff --check通过。最终commit之后仍按编排方整理的要求复跑记录／parse／diff检查，结果由交付回复及对应新raw报告给出，不预写未执行结果。
+
+最终状态：PR-4 可在无 Mac 证据下完成的部分已本地完成；R2.2 保持 in-progress，等待用户 Mac 证据。

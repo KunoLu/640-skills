@@ -109,6 +109,14 @@ PY
 
 新导出或 `POST /api/v1/statistics/query` 所需的新快照被拒绝时返回 HTTP **507**，body 恰为 `{"detail":"DISK_QUOTA_EXCEEDED","used_bytes":U,"quota_bytes":L}`（U／L 是异常携带的整数），无本次文件；导出还保证无 job、export_id。统计查询先校验 scope（非法时 400），仅新建快照进入共享配额准入；已有未过期匹配快照即使当前超限也复用并返回 200。快照库仍抛 `disk_quota.DiskQuotaExceeded`，属性 `used_bytes`／`quota_bytes` 相同；未新增独立的 snapshot 创建 HTTP handler。已有快照复用、幂等导出重放不新增文件。默认值容量实测校准留给 PR-4。
 
+PR-4 提供可复跑的开发机基准（不进入默认 unittest discover）：在已具备本仓库 serve 依赖的 Python 环境运行 `python3 -B sbtd-runtime/tests/runtime_perf.py --events 1000000 --samples 3 --seed-seconds 900 --output ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/reports`。它仅创建隔离的合成 runtime home，通过完整 `EventStore.append` 路径写入；达到生成时限后报告实际规模，不外推为百万事件。可分别用 `--events 1000`、`--events 10000` 比较容量增长。报告保存原生 JSON、同 stem 中文摘要、可用格式样本及 public snapshot manifest；默认删除本次合成 home，`--keep-home` 可供后续浏览器实测，不能指向真实账号数据。
+
+热查询重复相同 scope；冷查询用不同结束时间微秒确保没有匹配快照，不清空 OS 缓存、不计服务启动。导出测量真实 serve 的 POST 至 ready，含排队／JPEG preflight／轮询，不含下载。已有合规 renderer 时可加 `--renderer-home <已有 runtime home>`，只复制其 `browsers/`，不复制 profile、不安装依赖；不可用时记录原因与真实 503，不用替身。Python Playwright 与 pinned shell 可用时同时测首次显示 13 个 Panel 和报告几何；平台／字体人工视觉仍独立验收。
+
+审计路径目前为全量 replay／排序后分页；CSV 生成目前完整缓冲，客户端分块下载不代表流式生成。报告区分当前规模耗时、索引／流式要求与百万规模覆盖；小规模 met 不代表 AC-62 通过。容量校准与 D9 证据边界记录在 `ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md` 的 PR-4 追加节，默认配额数值未改。
+
+PR-4 容量实测结论（developer-local Linux，非参考机／Mac 证据）：1,000／10,000／11,500 事件的「一个快照＋HTML＋CSV（含 manifest）」分别占 2,579,665／25,507,472／29,329,547 字节。保持默认 **2,000,000,000**，不改代码；最大已测档按 24h 内 24 个不同快照＋4 组 HTML/CSV 估算为 584,539,788 字节，低于 80% 预警点 1,600,000,000。JPEG/PDF 在本机生产 renderer 不可用，完整四格式一套占用与完整套数仍未测，不能把缺失字节当 0；Mac 字节数与人工视觉／字体确认仍 pending。生成时限只在批次间检查，阻塞批次可能超时，不是硬 deadline。公式、各格式原始字节、临时峰值下界与完整限制见上述 task 的「PR-4 容量校准」节。
+
 ## R1 没有的东西（如实声明）
 
 - 没有 HTTP 服务与 Dashboard（R2。R2.0a PR-2 起见下文「R2.0a：serve」）。
