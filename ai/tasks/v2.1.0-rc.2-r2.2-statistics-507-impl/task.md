@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.2-statistics-507-impl
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；主会话唯一 writer／验证 controller，不使用 advisor；只作本地提交。
-status: in-progress
+status: done
 branch: feat/v2.1.0-rc.2-r2.2-statistics-507
 created_at: '2026-10-24T10:56:51+08:00'
-updated_at: '2026-10-24T11:17:57+08:00'
-completed_at: null
+updated_at: '2026-10-24T11:57:00+08:00'
+completed_at: '2026-10-24T11:52:52+08:00'
 ---
 
 # R2.2 statistics/query HTTP 507 实现
@@ -83,6 +83,7 @@ Scenario: 非法 scope 先于配额拒绝
 | 2026-10-24T11:08:13+08:00 | in-progress | in-progress | 编排方整理：最小异常映射后同一回归 GREEN，独立真实 HTTP smoke 通过。 | query-507-green exit 0，1 test passed；live-http-smoke exit 0，U=18／L=17 返回精确 507，无新快照；等值创建与超限复用 200，非法 scope 400，不同 scope 再次 507。 |
 | 2026-10-24T11:14:37+08:00 | in-progress | in-progress | 编排方整理：实现与文档分别本地提交，全部计划命令执行完毕；保留环境失败，不记全绿或发布就绪。 | commit 3 `1e0db12498eac10f75e53e7c1478002e2532bef0`；commit 4 `f8be1e74dde10339129bd0bc09cece8f5ff146bb`；golden 63 passed；consumers 51／3 skipped；runtime 431／1 failure／10 skipped，缺 tzdata；dashboard 22 passed、static 无变更；ruff 两项通过；两项独立只读 review 无 findings。 |
 | 2026-10-24T11:17:57+08:00 | in-progress | in-progress | 编排方整理：本地交付完成，最后提交仅收录本 task；保持 in-progress／completed_at null，等待外部 PR／CI／review，合并后才 done。 | commits 1–4 SHA 见本地提交；precommit-integrity-green exit 0，八条授权路径、禁词新增行 0、schema／时间／旧记录保留、25 对当时已有 raw＋中文汇总、被测内容等同提交 blob 均通过；本 task 不含自身 SHA；未 push／开启 PR，缺 tzdata 的全量失败仍保留，发布门 blocked。 |
+| 2026-10-24T11:52:52+08:00 | in-progress | done | 编排方整理：statistics/query 507 实现 PR #167 已由 Lord squash 合并，按旧规则最后一次回填合并完成状态；不改写历史事件或本地验证结论。 | PR [#167](https://github.com/KunoLu/640-skills/pull/167)；merge SHA `9ced6680cd838b9a5a2d9602a4939d981321582d`；head SHA `95f4e8e86536b0188c13f812711831cf1ec88a4c`（SHA 与提交内容经本轮 git log 核实）；git committer `%cI` `2026-10-24T11:52:51+08:00`（本轮 git log 核实）；GitHub mergedAt `2026-10-24T11:52:52+08:00`（编排方整理），两者相差 1 秒，completed_at 使用 mergedAt，done 事件 at 与之相同；合并前 CI 13/13 on `95f4e8e`，run `40058443245`（编排方整理；本轮未重跑 CI）；Reviewy CLEAN @95f4e8e（编排方整理）。 |
 
 ## Gate 结论
 

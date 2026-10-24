@@ -6,6 +6,7 @@
 
 - 每个任务均为 strict 模式 SBTD 任务，任务记录落 `ai/tasks/<id>/task.md`。
 - 每个 PR 的第一个 commit 回填上一行的 PR、merge SHA 与完成时间（+08:00）。
+  - 自 PR #168 起停用，由 sbtd-workflow-v2-task-status-sync.md 替代（用户 2026-10-24 11:11 群内确认（最终修订方案确认），Lord 记录）。
 - Reviewy 在 tip 上 CLEAN 后，Lord squash-merge；合并后本地与远端分支均删除。
 - 锁定决定编号（D1–D17）见 `grill-r1.md`「锁定决定清单」。
 
@@ -23,6 +24,7 @@
 | Docs | 后续项 B（`install-and-use.md` 事件明细屏蔽说明）+ 后续项 C（第 7 项，单独 PRD docs PR） | P6.5 | planned | — | — | — | —（执行时建立 strict 任务记录） |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
 | F | docs 回填 | P8 | planned | — | — | — | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| status-sync | 任务状态及时更新：PR-a 文档／PR-b 规则与测试（用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录；[PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)） | —（独立规则任务） | in-progress | PR-a；PR-b | — | — | ai/tasks/v2.1.0-rc.2-task-status-sync/task.md |
 
 ## 各行锁定决定与验收
 
@@ -76,6 +78,7 @@
 - PR-3 已 squash-merge——PR [#164](https://github.com/KunoLu/640-skills/pull/164)，merge SHA `253dceccc77fb0b7b929a81ac28e4c53d6968240`，head `38b3b56aca559d729487665b822c76b48cf8c1f9`；git committer `%cI` 为 `2026-10-24T00:05:38+08:00`（本轮 git 核实）；GitHub mergedAt 为 `2026-10-24T00:05:38+08:00`（`2026-10-23T16:05:38Z`，编排方整理），两者相等但分别记录。合并前 CI 13/13 on `38b3b56`（run `39980290926`，编排方整理；本轮未重跑 CI）。R2.2 行保持 planned 至 PR-4。
 - statistics/query 507 契约 PR 已 squash-merge——PR [#165](https://github.com/KunoLu/640-skills/pull/165)，merge SHA `9ceb53021aa5e90d6369eed037f0b05ab719e928`，head `5bb8a564ea165c784d034eb7145def7c8b8793fc`；git committer `%cI` 为 `2026-10-24T10:10:14+08:00`（本轮 git log 核实）；GitHub mergedAt 为 `2026-10-24T10:10:14+08:00`（`2026-10-24T02:10:14Z`，编排方整理），两者相等但分别记录。合并前 CI 13/13 on `5bb8a56`（run `40051092799`，编排方整理；本轮未重跑 CI）；Reviewy CLEAN @5bb8a56（编排方整理）。R2.2 行保持 planned 至 PR-4。
 - statistics metadata 契约 PR 已 squash-merge——PR [#166](https://github.com/KunoLu/640-skills/pull/166)，merge SHA `fcd835e397698ab3292d9d7614e1407ff7e0a465`，head `073999fbbcb7087de202227fa538b752495b4595`；由 Lord squash 合并（编排方整理）；git committer `%cI` 为 `2026-10-24T10:53:09+08:00`（本轮 git log 核实）；GitHub mergedAt 为 `2026-10-24T10:53:09+08:00`（`2026-10-24T02:53:09Z`，编排方整理），两者相等但分别记录。合并前 CI 13/13 on `073999f`（run `40054585051`，编排方整理；本轮未重跑 CI）；Reviewy CLEAN @073999f（编排方整理）。R2.2 行保持 planned 至 PR-4。
+- statistics/query 507 实现 PR 已 squash-merge——PR [#167](https://github.com/KunoLu/640-skills/pull/167)，merge SHA `9ced6680cd838b9a5a2d9602a4939d981321582d`，head `95f4e8e86536b0188c13f812711831cf1ec88a4c`（SHA 与提交内容经本轮 git log 核实）；由 Lord squash 合并（编排方整理）；git committer `%cI` 为 `2026-10-24T11:52:51+08:00`（本轮 git log 核实）；GitHub mergedAt 为 `2026-10-24T11:52:52+08:00`（编排方整理），两者相差 1 秒，分别记录，完成时间采用 mergedAt。合并前 CI 13/13 on `95f4e8e`（run `40058443245`，编排方整理；本轮未重跑 CI）；Reviewy CLEAN @95f4e8e（编排方整理）。本 PR 不是 PR-4 性能、校准与收尾，R2.2 行保持 planned 至 PR-4。
 
 ### Docs — 后续项 B／C（E 前）
 
