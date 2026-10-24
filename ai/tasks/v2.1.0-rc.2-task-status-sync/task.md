@@ -7,7 +7,7 @@ mode_note: 编排方整理：沿用 strict；PR-b main 为全部文件的唯一 
 status: done
 branch: feat/v2.1.0-rc.2-task-status-sync-workflow
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T18:07:09+08:00'
+updated_at: '2026-10-25T01:01:06+08:00'
 completed_at: '2026-10-24T18:07:09+08:00'
 ---
 
@@ -80,19 +80,19 @@ completed_at: '2026-10-24T18:07:09+08:00'
 | 17 | 编排方在 omp 之外同步本地分支 | 未知 | 不适用 | 重启回滚后，工作区内容与远端 `b838603` 逐字节一致，编排方执行 `git reset`（mixed）将本地 HEAD 对齐 `b838603`，无文件改动 | 无 |
 | 18 | fix4 s5（01a16c66） | openai-codex/gpt-6-astra（high） | 10／21 | 在会话内提交 `1e19c4f`（jsonl 含 git commit 调用） | `~/.omp/logs/640-rc2-status-sync-prd/fix4/s5/2026-10-24T05-33-14-422Z_01a16c66-1f36-74ce-8dbe-2ae82a04db91.jsonl` |
 | 19 | fix5 ping | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T05-54-35-469Z_01a16c79-ab4d-7432-ba54-a9a320f66abc.jsonl` |
-| 20 | fix5 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮提交（本会话内执行 git commit） | `~/.omp/logs/640-rc2-status-sync-prd/fix5/s1/` |
+| 20 | fix5 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；F 回填（编排方整理，按 jsonl 统计）：9／22 | 本轮提交（本会话内执行 git commit） | `~/.omp/logs/640-rc2-status-sync-prd/fix5/s1/` |
 | 21 | PR-b ping | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T06-17-27-247Z_01a16c8e-99cf-74dd-aacc-38fb9f823a78.jsonl` |
 | 22 | PR-b main | openai-codex/gpt-6-astra（high） | 123／182 | 编排方整理：本轮全部文件编辑与本地提交 | `~/.omp/logs/640-rc2-status-sync-workflow/main/s1/2026-10-24T06-18-02-942Z_01a16c8f-253e-733d-92b1-f66692e549ec.jsonl` |
 | 23 | PR-b main 启动的 omp 内置只读 reviewer 子代理 ParserSafety | kimi-code/k3（max） | 43／52 | 编排方整理：只读审查（其 write 仅为向主会话回报，无文件修改、无提交） | `~/.omp/logs/640-rc2-status-sync-workflow/main/s1/2026-10-24T06-18-02-942Z_01a16c8f-253e-733d-92b1-f66692e549ec/ParserSafety.jsonl` |
 | 24 | PR-b main 启动的 omp 内置只读 reviewer 子代理 SyncSafety | kimi-code/k3（max） | 28／38 | 编排方整理：只读审查（其 write 仅为向主会话回报，无文件修改、无提交） | `~/.omp/logs/640-rc2-status-sync-workflow/main/s1/2026-10-24T06-18-02-942Z_01a16c8f-253e-733d-92b1-f66692e549ec/SyncSafety.jsonl` |
 | 25 | PR-b fix1 ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T07-45-40-754Z_01a16cdf-5f92-7685-8880-54558f7eda91.jsonl` |
-| 26 | PR-b fix1 main | openai-codex/gpt-6-astra（high） | 11／26 | 编排方整理：commit `7de6726`（会话内提交） | `/home/box/.omp/logs/640-rc2-status-sync-workflow/fix1/s1/2026-10-24T07-46-10-126Z_01a16cdf-d24e-718d-80c3-dfb2b8838d37.jsonl` |
-| 27 | PR-b fix2 ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `/home/box/.omp/agent/sessions/--workspace--/2026-10-24T07-52-43-785Z_01a16ce5-d409-777e-9bd4-61e059553e97.jsonl` |
+| 26 | PR-b fix1 main | openai-codex/gpt-6-astra（high） | 11／26 | 编排方整理：commit `7de6726`（会话内提交） | `~/.omp/logs/640-rc2-status-sync-workflow/fix1/s1/2026-10-24T07-46-10-126Z_01a16cdf-d24e-718d-80c3-dfb2b8838d37.jsonl` |
+| 27 | PR-b fix2 ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T07-52-43-785Z_01a16ce5-d409-777e-9bd4-61e059553e97.jsonl` |
 | 28 | PR-b fix2 main | openai-codex/gpt-6-astra（high） | 10／23 | commit `f9a2155`（会话内提交） | `~/.omp/logs/640-rc2-status-sync-workflow/fix2/s1/2026-10-24T07-53-14-170Z_01a16ce6-4aba-761c-aaef-e51341103357.jsonl` |
 | 29 | PR-b fix3 ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T08-16-07-020Z_01a16cfb-3d6c-7490-ac26-7ed578b22f4f.jsonl` |
-| 30 | PR-b fix3 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮提交 | `~/.omp/logs/640-rc2-status-sync-workflow/fix3/s1/` |
+| 30 | PR-b fix3 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；F 回填（编排方整理，按 jsonl 统计）：29／58 | 本轮提交 | `~/.omp/logs/640-rc2-status-sync-workflow/fix3/s1/` |
 | 31 | PR-b done ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T10-06-12-354Z_01a16d60-0782-70b2-a4c0-c23f85d5aa5c.jsonl` |
-| 32 | PR-b done main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮提交 | `~/.omp/logs/640-rc2-status-sync-workflow/done/s1/` |
+| 32 | PR-b done main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告；F 回填（编排方整理，按 jsonl 统计）：8／19 | 本轮提交 | `~/.omp/logs/640-rc2-status-sync-workflow/done/s1/` |
 
 编排方整理（按 jsonl 中的 git commit 调用逐一核实）：`a999fdd`、`733f7eb`、`cc88876` 由 PR-a main 会话编辑并提交；`34a9b94` 由编排方在 omp 之外编辑并提交；`fdbb1bd` 由 fix1 main 编辑并提交；`de1ac31` 由 fix2 main 编辑并提交；`8fb0afa` 的草稿由 fix3b main 编辑，占位符替换、判定口径归因与两条事件由编排方在 omp 之外编辑并提交；`b838603` 见第 15 行，其提交（含 13:19:06 对 13:14:13 事件 evidence 列的改写）在现存 jsonl 中无记录，执行者不可考；`1e19c4f` 由 fix4 s5 编辑并提交；本轮提交由 fix5 main 会话编辑并提交。所有 push、开 PR 与修改 PR 描述均由编排方在 omp 之外执行。
 
@@ -131,3 +131,7 @@ completed_at: '2026-10-24T18:07:09+08:00'
 | 2026-10-24T15:53:51+08:00 | checking | checking | 用户 2026-10-24 15:52 群内确认（plan.md 任务表四列口径 C'），Lord 记录：自 PR-b 起，plan.md 任务表中尚未 done 的行，状态／PR／merge SHA／完成时间四列写「见 task.md／PR 页面」；已填写的历史 done 行不动。 | 编排方整理：改动行 seq 为 R2.2、Docs、E、F、status-sync；仅改 plan.md 四列与本 task；旧事件与第 1–25 行旧模型记录逐字保留，第 26 行补记已结束会话；status 保持 checking，completed_at 为 null；本会话内提交，push 由编排方执行。 |
 | 2026-10-24T16:21:55+08:00 | checking | checking | 编排方整理：PR-b fix3 修复 CI run 40076133614（tip f9a2155）windows-shards (1)(3)(4) 的四项 cleanup upgrade 集成失败；根因是锁 fd 尚未关闭即删除，Windows PermissionError 在写入已完成后逸出，触发 identity-conflict 并残留锁。改为关闭先于删除、保留 dev/ino 归属检查、有界重试及持续失败显式报告写入已完成／锁路径／人工处理建议；原写入异常优先。新增 Windows 语义、瞬时／持续 PermissionError 与原异常优先级四项回归。 | python3 -B -m unittest -v tests.test_sbtd_cleanup_upgrade_integration tests.test_sbtd_migration_cleanup tests.test_sbtd_identity tests.test_sbtd_task_schema tests.test_sbtd_task_document tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git tests.test_sbtd_task_state：146 tests／OK，81.748s；新增4项先红后绿，真实写入 smoke 通过。新增测试 Ruff 通过；生产文件11项 FURB162 与基线一致。旧事件与模型第1–27行保留，status 保持 checking，completed_at null；本会话内提交恰好一个新提交，不 amend；push 由编排方执行。本轮无子代理、advisor、gh 或全局配置变更；at 来自 date -Iseconds，无微秒。 |
 | 2026-10-24T18:07:09+08:00 | checking | done | 用户 2026-10-24 18:04 群内确认（先收尾 #169，done 手写并注明），Lord 记录：Reviewy 判定 `2d4f73b` CLEAN，按 B 方案收尾 checking → done。本次 done 由 omp 手写，未经 TaskStore 工具写入：当前 TaskStore.inspect() 因 `_catalog()` 解析全部 task.md 时被 3 个旧 task.md（`ai/tasks/v2.1.0-rc.1-csv-reasoning-tokens/task.md`、`ai/tasks/v2.1.0-rc.1-r1.3-stats-api/task.md`、`ai/tasks/v2.1.0-rc.2-r2.1b-renderer/task.md`）的 stateEvent schema 失败阻塞。 | Reviewy CLEAN SHA `2d4f73b`；CI run `40079306794` 13／13 通过。 |
+| 2026-10-25T01:00:35+08:00 | done | done | 用户 2026-10-24 22:42 群内确认（保留 #169 PR 描述），Lord 记录：#169 PR 描述于 2026-10-24 16:45:59 +08:00 的编辑发生在用户批准之前，用户确认保留现状，无需改动。 | 编排方整理：GitHub PR #169 userContentEdits 记录该次编辑 editedAt 2026-10-24T08:45:59Z（16:45:59 +08:00）；本轮不改 PR 描述；手写，未经 TaskStore 写入。 |
+| 2026-10-25T01:00:49+08:00 | done | done | Lord 2026-10-24 18:42 群内裁定：如实记录 #169 本地测试报告已删除。 | 编排方整理：ignored `reports/unit-report-prb-*-2026_10_24`（.txt／.md，从未提交）于 2026-10-24 18:3x 清理 worktree 时删除，不可恢复；:48、:56 的报告路径按裁定保持原样；CI run `40084725307` 13／13 与 Reviewy 复跑不受影响。 |
+| 2026-10-25T01:00:59+08:00 | done | done | Lord 2026-10-24 13:09 群内裁定：`fdbb1bd` 的 CI 结果不另加专门事件，并入 F 回填，编排方整理。 | 编排方整理：CI run `40062997215`（head `fdbb1bd`）最终 conclusion cancelled，结束于 2026-10-24 12:51:41 +08:00（gh run view 核实）；12:39:33 事件「本轮不可考」与 12:49:42 事件「仍在运行」为当时记录，逐字保留，以本事件为准。 |
+| 2026-10-25T01:01:06+08:00 | done | done | 编排方整理：F 回填模型记录计数与路径。 | 第 20 行 fix5 main 9／22、第 30 行 PR-b fix3 main 29／58、第 32 行 PR-b done main 8／19（均按 jsonl 统计，原「未知」原文保留）；第 26、27 行会话路径改为 `~/…`；并发测试独立跟踪项（Lord 2026-10-24 21:25 群内裁定）的运行次数与结果已记于 `ai/tasks/v2.1.0-rc.2-concurrency-test-race/task.md` :47、:55–:57，本文件不重复；旧事件逐字不变，completed_at 不变；手写，未经 TaskStore 写入。 |

@@ -25,6 +25,7 @@
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
 | F | docs 回填 | P8 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
 | status-sync | 任务状态及时更新：PR-a 文档／PR-b 规则与测试（用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录；[PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-task-status-sync/task.md |
+| legacy-criterion | 旧格式事件判定口径放宽（PRD :65 方案一；用户 2026-10-24 18:04 群内确认（方案一），Lord 记录） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-legacy-event-criterion-prd/task.md |
 
 ## 各行锁定决定与验收
 
