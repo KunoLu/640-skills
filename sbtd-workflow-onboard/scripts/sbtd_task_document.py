@@ -133,14 +133,9 @@ def _decode_event(line: str) -> dict[str, str]:
 
 
 def _validate_event(
-    event: dict[str, str], *, legacy: bool = False, after_baseline: bool = False
+    event: dict[str, str], *, after_baseline: bool = False
 ) -> None:
-    candidate = event
-    # 旧格式唯一放宽项：历史 in-progress -> done；其余五列和日期
-    # 仍复用当前 schema，不能把任意解析失败当作旧格式。
-    if legacy and event["from"] == "in-progress" and event["to"] == "done":
-        candidate = {**event, "from": "checking"}
-    validate_task_data(candidate, "stateEvent", "task state event")
+    validate_task_data(event, "stateEvent", "task state event")
     if event["at"] != "unknown":
         validate_task_timestamps({"updated_at": event["at"]}, "task state event")
     if (
@@ -236,11 +231,15 @@ class TaskDocument:
         else:
             events = [_decode_event(line) for line in rows]
             for event in events:
+                # 无基线时仅放宽完整五列的 schema，不掩盖空单元格或时间戳错误。
+                if not all(value.strip() for value in event.values()):
+                    raise TaskDataError("task state event table has a malformed row", _REPAIR)
                 try:
-                    _validate_event(event)
+                    validate_task_data(event, "stateEvent", "task state event")
                 except TaskDataError:
-                    _validate_event(event, legacy=True)
                     legacy = True
+                if event["at"] != "unknown":
+                    validate_task_timestamps({"updated_at": event["at"]}, "task state event")
             if legacy:
                 print("旧格式事件，不追溯", file=sys.stderr)
                 events = []
