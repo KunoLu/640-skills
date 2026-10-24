@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-23T23:34:56+08:00'
+updated_at: '2026-10-24T09:25:04+08:00'
 completed_at: null
 ---
 
@@ -1050,3 +1050,5 @@ Commit B：`docs(task): append fix6 postScriptName matching record and verificat
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-23T23:34:56+08:00 | in-progress | in-progress | fix6 本地代码／red→green／全量验证完成；编排方整理：Reviewy 23:24 裁定 | A e4c2318bdbc5e0fbfa8b1db14652af475278504e；13定向／428full（10skipped）／61golden；真实Linux三文档raw与summary保存验证；macOS pending CI after operator push，非真机验收。 |
+| 2026-10-24T09:25:04+08:00 | in-progress | in-progress | PR-3 #164 squash-merge 回填（编排方整理）；R2.2 继续开放。 | PR https://github.com/KunoLu/640-skills/pull/164；merge SHA 253dceccc77fb0b7b929a81ac28e4c53d6968240；head 38b3b56aca559d729487665b822c76b48cf8c1f9；git committer %cI 2026-10-24T00:05:38+08:00（本轮 git show 核实）；GitHub mergedAt 2026-10-24T00:05:38+08:00（2026-10-23T16:05:38Z，编排方整理），两时间相等但分别记录；合并前 CI 13/13 on 38b3b56，run 39980290926（编排方整理；本轮未运行 CI）。 |
+| 2026-10-24T09:25:04+08:00 | in-progress | in-progress | 用户 2026-10-23 16:44 群内确认（方案 1），Lord 记录：PR-3 合并后先开 statistics/query 507 DISK_QUOTA_EXCEEDED contract PR，复用 #158（82d42a2）错误体；合并后接小实现 PR，再接 PR-4。此前「待用户决定（contract PR）」已由该决定解决，旧事件原文保留。 | 用户 2026-10-24 09:22 群内确认（开始），Lord 记录；编排方整理：本轮 contract-only，记录 ai/tasks/v2.1.0-rc.2-r2.2-statistics-507-contract/task.md；不改 runtime，不宣称 queryStatistics 507 已实现；本 task 保持 in-progress，plan R2.2 行保持 planned。 |

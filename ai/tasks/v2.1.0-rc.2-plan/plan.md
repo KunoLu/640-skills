@@ -73,6 +73,7 @@
 - PR 拆分（用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 记录）：PR-1 配额与 507 → PR-2 安全 → PR-3 跨平台 E2E 与对账 → PR-4 性能、校准与收尾；严格串行，每个 PR 首个 commit 回填上一 PR；行状态至 PR-4 收尾前不变。（归因更正（append-only）：用户 2026-10-23 12:11 +08:00 群内说开始 R2.2，Lord 按 plan.md 定拆分为 4 个串行 PR，Lord 记录。）
 - PR-1 已 squash-merge——PR [#162](https://github.com/KunoLu/640-skills/pull/162)，merge SHA `83b14baee4e282d4863e693813b14a02c2b126b3`，完成时间 `2026-10-23T14:18:38+08:00`（mergedAt `2026-10-23T06:18:38Z`；git committer 时间一致）；编排方整理，本轮 git log 核实 SHA／committer 时间。R2.2 行状态保持 planned 至 PR-4 收尾。
 - PR-2 已 squash-merge——PR [#163](https://github.com/KunoLu/640-skills/pull/163)，merge SHA `4d29fc5a76482950965d929715d3096e66a57b54`，head `2d2dbb2c18a0e130d8e63a9994fa0c64e7147cc5`；git committer `%cI` 为 `2026-10-23T15:59:11+08:00`（本轮 git log 核实）；GitHub mergedAt 为 `2026-10-23T15:59:12+08:00`（`2026-10-23T07:59:12Z`，编排方整理），两者相差 1 秒，分别记录。R2.2 行保持 planned 至 PR-4。
+- PR-3 已 squash-merge——PR [#164](https://github.com/KunoLu/640-skills/pull/164)，merge SHA `253dceccc77fb0b7b929a81ac28e4c53d6968240`，head `38b3b56aca559d729487665b822c76b48cf8c1f9`；git committer `%cI` 为 `2026-10-24T00:05:38+08:00`（本轮 git 核实）；GitHub mergedAt 为 `2026-10-24T00:05:38+08:00`（`2026-10-23T16:05:38Z`，编排方整理），两者相等但分别记录。合并前 CI 13/13 on `38b3b56`（run `39980290926`，编排方整理；本轮未重跑 CI）。R2.2 行保持 planned 至 PR-4。
 
 ### Docs — 后续项 B／C（E 前）
 
