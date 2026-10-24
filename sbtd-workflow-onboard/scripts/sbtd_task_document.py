@@ -192,7 +192,7 @@ class TaskDocument:
     has_baseline: bool = False
 
     @classmethod
-    def parse(cls, text: str, *, emit_legacy_notice: bool = True) -> TaskDocument:
+    def parse(cls, text: str) -> TaskDocument:
         frontmatter = parse_task_frontmatter(text, "task")
         validate_task_data(frontmatter, "taskFrontmatter", "task")
         validate_task_timestamps(frontmatter, "task")
@@ -231,16 +231,17 @@ class TaskDocument:
         else:
             events = [_decode_event(line) for line in rows]
             for event in events:
-                # 无基线时仅放宽完整五列的语义，不掩盖空单元格。
+                # 无基线时仅放宽完整五列的 schema，不掩盖空单元格或时间戳错误。
                 if not all(value.strip() for value in event.values()):
                     raise TaskDataError("task state event table has a malformed row", _REPAIR)
                 try:
-                    _validate_event(event)
+                    validate_task_data(event, "stateEvent", "task state event")
                 except TaskDataError:
                     legacy = True
+                if event["at"] != "unknown":
+                    validate_task_timestamps({"updated_at": event["at"]}, "task state event")
             if legacy:
-                if emit_legacy_notice:
-                    print("旧格式事件，不追溯", file=sys.stderr)
+                print("旧格式事件，不追溯", file=sys.stderr)
                 events = []
         return cls(
             text,

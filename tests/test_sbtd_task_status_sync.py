@@ -55,6 +55,7 @@ class LegacyEventTests(unittest.TestCase):
     def test_legacy_does_not_hide_bad_rows_or_frontmatter(self):
         for text in (
             legacy_text().replace("历史验收", ""),
+            legacy_text().replace("2026-01-02T00:00:00Z |", "2026-02-30T00:00:00Z |"),
             legacy_text().replace('"schema_version": 1', '"schema_version": 99'),
         ):
             with self.subTest(text=text), self.assertRaises(TaskDataError):

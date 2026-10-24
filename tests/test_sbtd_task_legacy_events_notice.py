@@ -23,7 +23,6 @@ LEGACY_ROWS = (
     "| 2026-10-24T12:00:00+08:00 | verifying | done | 历史完成 | 记录 |\n",
     "| 2026-10-24T12:00:00+08:00 | planned | in_progress | 历史开始 | 记录 |\n",
     "| 2026-10-24T12:00:00.123456+08:00 | planned | in_progress | 历史时间 | 记录 |\n",
-    "| 2026-02-30T12:00:00+08:00 | planned | in-progress | 历史日期 | 记录 |\n",
     "| 2026-10-24T12:00:00+08:00 | in-progress | done | 历史完成 | 记录 |\n",
     "| 2026-10-24T12:00:00+08:00 | done | blocked | 历史转换 | 记录 |\n",
 )
@@ -74,25 +73,6 @@ class LegacyEventsNoticeTests(unittest.TestCase):
                 self.assertEqual(document.text.encode("utf-8"), before)
                 self.assertEqual(output.getvalue().splitlines(), ["旧格式事件，不追溯"])
                 self.assertEqual(path.read_bytes(), before)
-
-    def test_catalog_notices_once_per_call_and_preserves_all_files(self):
-        paths = [
-            self.write_task(f"legacy-{index}", row)
-            for index, row in enumerate(LEGACY_ROWS)
-        ]
-        paths.append(self.write_task("current", CURRENT_ROW))
-        before = {path: path.read_bytes() for path in paths}
-        store = TaskStore(self.root, read_only=True)
-        for _ in range(2):
-            output = io.StringIO()
-            with contextlib.redirect_stderr(output):
-                records = store._catalog()
-            self.assertEqual(set(records), {path.parent.name for path in paths})
-            self.assertEqual(output.getvalue().splitlines(), ["旧格式事件，不追溯"])
-            for task_id, snapshot in records.items():
-                self.assertEqual(snapshot.document.frontmatter["status"], "in-progress")
-                self.assertEqual(snapshot.document.legacy_events, task_id != "current")
-            self.assertEqual({path: path.read_bytes() for path in paths}, before)
 
     def test_malformed_rows_are_not_hidden_by_complete_legacy_rows(self):
         values = ["2026-10-24T12:00:00+08:00", "planned", "in-progress", "开始", "记录"]
