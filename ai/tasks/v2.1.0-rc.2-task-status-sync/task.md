@@ -4,10 +4,10 @@ id: v2.1.0-rc.2-task-status-sync
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：沿用 strict；PR-b main 为全部文件的唯一 writer、git 提交者与验证 controller；原生只读审查不使用 advisor；push 与开 PR 由编排方在 omp 之外执行。
-status: in-progress
+status: "checking"
 branch: "feat/v2.1.0-rc.2-task-status-sync-workflow"
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: "2026-10-24T14:53:47.204477+08:00"
+updated_at: "2026-10-24T15:19:09.879555+08:00"
 completed_at: null
 ---
 
@@ -39,8 +39,8 @@ completed_at: null
 | book-ddia-data-design | 持久化事件、并发与恢复，设计前 | confirmed；task 唯一事实源，基线内原文保全，后缀严格；排他写入门与旧内容比较，不冒充跨文件事务 |
 | book-legacy-change-safety | 旧解析／状态写入变化，实施前 | characterized；既有 83 项解析、schema、状态与恢复测试通过；旧格式接受用例先红后绿 |
 | book-refactoring-pass | 既有生产代码编辑，实施前 | proceed／normal；复用 TaskDocument、TaskStore，无需先行重构或新依赖 |
-| book-release-readiness | runtime 行为变化，验证后 | planned；完整本地测试和原生 smoke 后评估，不宣称发布 |
-| project-validation | 全部 tests 与场景验证 | running；原生命令，失败及环境缺口如实保留 |
+| book-release-readiness | runtime 行为变化，验证后 | blocked；本轮实现可进入 checking 审查，但最终全量仍有 3 项既有／环境失败，不宣称发布就绪 |
+| project-validation | 全部 tests 与场景验证 | executed；最终全量 2409 项：2343通过／3失败／0错误／63跳过；任务影响范围 127 项通过，原始失败报告保留 |
 
 ## 验证与剩余边界
 
@@ -48,7 +48,12 @@ completed_at: null
 - `git diff --check`、`git diff origin/main --stat` 与新增行禁词检查已在前两个提交后执行；范围分别为两个、三个授权文件，禁词命中 0。第三个提交及后续轮次的核验结果见状态事件表与 PR #168。
 - 真实记录 smoke：#167 frontmatter schema／日期、Markdown 事件表、恰好一条追加事件、历史正文保全以及 done 事件 at 等于 completed_at 均通过。完整 `TaskDocument.parse` 对旧规则 `in-progress → done` 报 `task state event fails the bundled stateEvent schema`；按旧规则最后一次回填与不追溯条款保留，不补造 checking，不声称整篇解析通过。
 - #167 的 CI／Reviewy／合并操作者为编排方整理；历史回填中的 SHA／committer 时间核验及本地测试失败保留原记录。本轮不修改 #167 task、不重跑 CI。
-- 上述 #167 与 PR-a 校验属于历史证据，不代表本轮实现验收。本轮已执行既有任务安全网 83 tests／OK、新增同步场景 14 tests／OK；完整 tests、安装副本 smoke 和独立只读审查正在进行。BDD 使用 REFERENCE.md 文档场景，不新增 runner；浏览器、移动端和平台 CI 不适用或不在授权范围。
+- 上述 #167 与 PR-a 校验属于历史证据，不代表本轮实现验收。本轮最终任务影响范围 127 tests／OK；冻结源码后的完整 `python3 -B -m unittest discover -s tests -p 'test_*.py'` 为 2409 tests：2343通过、3失败、0错误、63跳过，1327.554s。首轮运行中继续修改源码导致的 7 项 canonical/source/implementation 漂移错误在冻结复验后全部消失，首轮失败证据保留，不冒充全量通过。
+- 残留失败：`test_link_text_change_is_refused` 返回 link-mismatch 而非 identity-mismatch；`test_replaced_link_with_identical_text_is_refused` 未拒绝同文本重建；`test_iana_queries_and_dst_work_without_system_timezone_data` 缺 tzdata。同文本链接失败已在 origin/main 隔离副本复现；临时目录100次立即重建有99次 device/inode/ctime_ns 相同，暴露既有环境敏感身份假设。本轮未改链接授权、统计模块或安装依赖。
+- 最终完整 Onboard 副本独立进程 smoke 通过：文件差异→记录→完成哈希证据→checking→done，仅合成任务；临时副本已清理。两名原生只读 reviewer 已复核关闭全部发现，不冒充平台 CLEAN。Ruff 新增脚本／解析器／测试通过；TaskStore 与 origin/main 同为11项既有 FURB162，无新增，保留 Python 3.10 时间兼容。ty 当前不可用，未安装；浏览器、移动端、真实 host 升级与平台 CI 不在本轮验证范围。BDD 为 REFERENCE.md 中文场景＋英文关键词，unittest 可追踪；rtk 为 skipped-for-report。
+- 本地 raw＋同stem中文汇总在本 task 的 ignored `reports/`：`unit-report-prb-full-first-2026_10_24`、`unit-report-prb-full-final-2026_10_24`、`unit-report-prb-task-final-2026_10_24`、`unit-report-prb-link-baseline-2026_10_24`（各有 .txt／.md）。最终全量绑定 `f34cc71adcb42e6578a73e3b5ba70a9e523287f9`，本轮最后仅改 task 状态／记录；developer-local／local-only，不是平台 CI 或发布证据。
+- 判定口径：旧格式未另列独立 schema，本轮仅兼容已知历史 in-progress→done，其余事件字段／日期严格；`sync_scope` 用已有 frontmatter 扩展、哈希证据用既有 evidence 字符串，不改 schema。默认分支尚无 task 记不可考，不推断丢弃；存在的远端 task 解析错误照常报错。EOF追加所需换行纳入落盘旧行摘要，Git内容比较保留CRLF。收尾本地检查仅验证 diff，不证明 CLEAN／CI 真伪。
+- Ponytail／可读性复核：保留 TaskDocument 的文档保全与 TaskStore 的持久化职责，TaskSync 集中节点核对，不新增依赖、服务或全局命令。写入锁仅协调遵守库协议的 writer，外部编辑仍需独占协调，异常遗留标记不自动抢占。plan.md 的 status-sync 行未修改，如何同步由编排方判断；本轮无 push／开 PR／全局配置变更，completed_at 保持 null，CLEAN 后独立 done 收尾不在本轮。
 
 ## 模型记录
 
@@ -106,3 +111,5 @@ completed_at: null
 | 2026-10-24T14:51:53.368220+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成 ParserSafety 审查修正并收到复核通过。 | 锁清理按 dev／ino 保留被替换的新锁、容忍外部移除；收尾 diff 使用 NUL 路径列表支持中文 ID；保留基线 reason 前缀已写入 reference。两项运行缺陷均红→绿，P3 文档消歧；独立静态复核三项关闭且无新问题。TaskStore Ruff 与 origin/main 同为 11 项既有 FURB162，无新增；其余修改 Python Ruff 通过；最终任务影响范围复跑正在执行。 |
 | 2026-10-24T14:53:10.060422+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成脚本实现、回归测试与工作流文档同步。 | 最终任务影响范围 python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git：127 tests／OK，50.378s；最终完整 Onboard 副本独立进程 smoke 通过。两名 reviewer 已复核关闭全部 findings；git diff origin/main --check 通过，新增行禁词0，TaskDocument.parse通过，11条旧事件及20行旧模型记录逐字保留；完整 tests 运行结果另记。 |
 | 2026-10-24T14:53:47.204477+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：全量验证未通过；开始冻结实现后的最终全量复验。 | 首轮 python3 -B -m unittest discover -s tests -p test_*.py：2403 tests，2330通过、3失败、7错误、63跳过，1262.209s。7项 migration/followup 错误为 canonical/source/implementation 漂移，首轮运行期间本会话继续修改实现，不能用该轮证明最终提交；保留失败原始输出。另有2项 probe link 失败及1项已知 tzdata 缺失失败，分别调查，不修改无关代码。实现已提交 f35ff9e，后续全量运行期间冻结全部受测源码。 |
+| 2026-10-24T15:18:06.934808+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成冻结源码后的全量验证；记录未通过项与审查边界。 | python3 -B -m unittest discover -s tests -p test_*.py：2409 tests，2343通过、3失败、0错误、63跳过，1327.554s；全量不全绿。首轮7项运行中源码漂移错误已消失。残留：2项既有 probe link 身份用例（同文本重建失败在 origin/main 隔离副本复现；本机100次重建99次 device/inode/ctime_ns 相同）及1项已知缺tzdata失败；未改无关代码或安装依赖。原生raw＋中文同stem汇总保留于本task的ignored reports；PR-b影响范围127项通过，待审查，不宣称发布就绪。 |
+| 2026-10-24T15:19:09.879555+08:00 | in-progress | checking | 编排方整理，PR-b main 记录：完成 PR-b 本轮实现与验证；in-progress → checking，开始审查阶段。 | 实现、工作流模板、20项新增同步场景及既有任务影响范围已完成；python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git：127 tests／OK；完整 python3 -B -m unittest discover -s tests -p test_*.py：2409 tests，2343通过／3失败／0错误／63跳过，残留原因及原生报告见正文。完整运行库副本 smoke、两名独立只读 reviewer 复核、diff／禁词／历史保全检查通过。仅进入 checking，不写 done；completed_at=null，发布门 blocked，CLEAN 后的限定收尾由后续独立 commit 处理。 |
