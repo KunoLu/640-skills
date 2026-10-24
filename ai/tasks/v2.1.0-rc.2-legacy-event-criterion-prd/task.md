@@ -7,7 +7,7 @@ mode_note: 编排方整理：本轮采用 strict；主会话为两个授权文�
 status: in-progress
 branch: docs/v2.1.0-rc.2-legacy-event-criterion-prd
 created_at: '2026-10-24T18:36:34+08:00'
-updated_at: '2026-10-24T18:37:26+08:00'
+updated_at: '2026-10-24T18:51:13+08:00'
 completed_at: null
 ---
 
@@ -15,7 +15,7 @@ completed_at: null
 
 ## 决定
 
-- 用户 2026-10-24 18:04 群内确认（方案一），Lord 记录：在没有基线事件的文件中，一条历史事件行若五列（at／from／to／reason／evidence）均完整、但不符合仓库内置 stateEvent schema（例如任何 schema 版本中都不存在的状态 `verifying`、`in_progress`），也算旧格式；按 frontmatter `status` 判断该 task 当前状态，在本次运行输出中只提示一次「旧格式事件，不追溯」，不阻塞，永不改写该旧文件；五列不完整等其他无法解析的情况仍按第 5 点作为普通解析错误报告。详见 [PRD「旧格式事件规则」](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md#旧格式事件规则)。PRD 保留原 12:46 归因及原有内容的含义，在同一行追加这次放宽。
+- 用户 2026-10-24 18:04 群内确认（方案一），Lord 记录：在没有基线事件的文件中，一条历史事件行若五列（at／from／to／reason／evidence）均完整、但不符合仓库内置 stateEvent schema（例如任何 schema 版本中都不存在的状态 `verifying`、`in_progress`），也算旧格式；按 frontmatter `status` 判断该 task 当前状态，在本次运行输出中提示「旧格式事件，不追溯」，不阻塞，永不改写该旧文件；五列不完整等其他无法解析的情况仍按第 5 点作为普通解析错误报告。详见 [PRD「旧格式事件规则」](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md#旧格式事件规则)。PRD 保留原 12:46 归因及原有内容的含义，在同一行追加这次放宽。
 - 用户 2026-10-24 18:05 群内确认（先收尾 #169），Lord 记录：先收尾 #169，再做本 PRD PR。
 - 编排方整理：本轮指令中的范围、提交顺序、手写记录方式与模型记录要求按本节及下文执行；全部时间使用 Asia/Shanghai（+08:00），本轮事件时间由 `TZ=Asia/Shanghai date -Iseconds` 获取。
 
@@ -52,7 +52,10 @@ completed_at: null
 | # | 轮次／用途 | 模型（thinking） | assistant 消息／toolCall | 产出 | 会话文件 |
 |---|---|---|---|---|---|
 | 1 | ping（2026-10-24 18:34:50 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-legacy-criterion-prd--/2026-10-24T10-34-50-279Z_01a16d7a-3e27-753f-902d-c9382d9eaa5a.jsonl` |
-| 2 | main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | PRD 第 65 行与本 task；两个本地提交由本会话执行 | `~/.omp/logs/640-legacy-criterion-prd/s1/2026-10-24T10-35-42-024Z_01a16d7b-0848-725a-a972-00009e1d972f.jsonl` |
+| 2 | main（本会话） | openai-codex/gpt-6-astra（high） | 15／28 | PRD 第 65 行与本 task；两个本地提交由本会话执行 | `~/.omp/logs/640-legacy-criterion-prd/s1/2026-10-24T10-35-42-024Z_01a16d7b-0848-725a-a972-00009e1d972f.jsonl` |
+| 3 | fix1 ping（2026-10-24 18:45:18 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace-640-skills-legacy-criterion-prd--/2026-10-24T10-45-18-838Z_01a16d83-d576-72f2-b10b-7c4f01f5fa43.jsonl` |
+| 4 | fix1 main s1 | openai-codex/gpt-6-astra（high） | 14／30 | Reviewy b26fbf1 阻塞修复：PRD :65 与决定第一条去掉「只」「一次」；其本地提交 097df0c 未 push，编排方 reset --soft 后由 s2 重新提交 | `~/.omp/logs/640-legacy-criterion-prd/fix1/s1/2026-10-24T10-45-53-074Z_01a16d84-5b32-7189-a3d2-538fe24a5977.jsonl` |
+| 5 | fix1 main s2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 模型记录第 2 行改为 15／28，并以一个本地提交提交 fix1 全部改动 | `~/.omp/logs/640-legacy-criterion-prd/fix1/s2/2026-10-24T10-50-52-187Z_01a16d88-eb9b-72ad-a101-6049e1b0b78a.jsonl` |
 
 编排方整理：每个 omp 会话一行；本会话未使用子代理。push 与开 PR 由编排方在 omp 之外执行。
 
@@ -63,3 +66,4 @@ completed_at: null
 | 2026-10-24T18:36:34+08:00 | planned | in-progress | 编排方整理，主会话记录：建立手写 strict 任务，开始任务记录与交付核验。 | 根目录与分支已核对；授权路径无 symlink，新 task 不存在且未被 ignore；未调用 TaskStore 写入；at 为实际记录时间，不倒填群内决定时间。 |
 | 2026-10-24T18:36:34+08:00 | in-progress | in-progress | 编排方整理，主会话记录：记录已完成的 PRD 判定口径修改与 Commit 1。 | commit `d79c129`；只改 PRD 第 65 行且保持单行，原文归因保留；git diff --check 干净，新增行禁词命中 0；本事件 at 为记录时间，不冒充提交时间。 |
 | 2026-10-24T18:37:26+08:00 | in-progress | in-progress | 编排方整理，主会话记录：完成手写任务记录与本地只读自检，开始 Commit 2 提交。 | 仓库 sbtd_task_state.TaskDocument.parse 已通过；strict／in-progress、id／branch、completed_at=null 与现有事件 schema 校验通过；git diff --check、git diff --cached --check、git diff origin/main --check 均干净；git diff origin/main --stat 仅含两个授权文件，新增行禁词命中 0。本事件追加后提交前再次只读解析；本轮不调用 TaskStore 写入、不执行 push。 |
+| 2026-10-24T18:51:13+08:00 | in-progress | in-progress | Reviewy b26fbf1 审查阻塞：PRD :65 「只提示一次」超出用户 18:04 原话，改回与第 2 点一致的「提示」；编排方整理 | 编排方整理：按 Lord 18:45 裁定（Reviewy 同意），同一提交将模型记录第 2 行改为实际计数 15／28（Reviewy 依 jsonl 01a16d7b-0848 核对）；git diff b26fbf1 --stat 仅含 PRD 与本 task.md 两个文件；PRD diff 仅第 65 行删除「只」「一次」且仍为单行；PRD :65 与决定第一条「一次」计数均为 0；git diff --check 干净，新增行禁词命中 0；仓库 sbtd_task_state.TaskDocument.parse 已通过；本轮不调用 TaskStore 写入、不执行 push。 |
