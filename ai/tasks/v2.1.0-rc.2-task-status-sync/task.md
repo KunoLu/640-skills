@@ -7,7 +7,7 @@ mode_note: 编排方整理：strict；主会话唯一 writer／验证 controller
 status: in-progress
 branch: docs/v2.1.0-rc.2-task-status-sync-prd
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T13:14:13+08:00'
+updated_at: '2026-10-24T13:33:34+08:00'
 completed_at: null
 ---
 
@@ -66,9 +66,9 @@ completed_at: null
 | 10 | fix3b main | gpt-6-astra（high） | 10／25 | 会话结束时未 stage、未 commit；PRD:55 与 task.md:22、:62 仍是确认时间的时间占位符，判定口径仍归因编排方整理 | `~/.omp/logs/640-rc2-status-sync-prd/fix3b/s1/2026-10-24T04-47-23-974Z_01a16c3c-2746-76e3-80f5-158e33fbcf7a.jsonl` |
 | 11 | omp 之外的编排方手工修改 | 未知 | 不适用 | 把时间占位符替换为 12:46，将判定口径归因改为用户 2026-10-24 12:46 群内确认（旧格式判定口径，采纳 OMP 补充），Lord 记录，追加 12:49:41 与 12:49:42 两条事件，并提交 `8fb0afa` | 无 |
 | 12 | fix4 ping | gpt-6-astra（high） | 1／0 | 连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T05-13-08-508Z_01a16c53-b89c-76e1-8307-892ccfe625ed.jsonl` |
-| 13 | fix4 main（本会话） | gpt-6-astra（high） | 见 PR #168 body | 本轮 commit | `~/.omp/logs/640-rc2-status-sync-prd/fix4/s1/` |
+| 13 | fix4 main（本会话） | gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮 commit | `~/.omp/logs/640-rc2-status-sync-prd/fix4/` |
 
-编排方整理：commit `34a9b94` 与 `8fb0afa` 由编排方在 omp 之外提交；其余 commit 由对应 omp main 会话提交；所有 push、开 PR 与修改 PR body 由编排方在 omp 之外执行。
+编排方整理：commit `34a9b94` 与 `8fb0afa` 由编排方在 omp 之外提交；其余 commit 由对应 omp main 会话提交；所有 push、开 PR 与修改 PR 描述由编排方在 omp 之外执行。
 
 ## 状态事件
 
@@ -83,3 +83,4 @@ completed_at: null
 | 2026-10-24T12:49:41+08:00 | in-progress | in-progress | 用户 2026-10-24 12:46 群内确认（旧格式判定口径，采纳 OMP 补充），Lord 记录：「仅因旧格式」的判定口径——在没有基线事件的文件中，每一条事件行都必须能按旧格式 schema 解析；若有任何一行既不是旧格式也不是当前格式，按旧格式事件规则第 5 点作为普通解析错误报告。 | [PRD「旧格式事件规则」](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md#旧格式事件规则)判定口径单列，与五点规则分开归因；at 为真实写入时间。 |
 | 2026-10-24T12:49:42+08:00 | in-progress | in-progress | 编排方整理：fix3b 轮将旧格式事件规则修订版（五点）与判定口径分别写入 PRD 与本 task，纳入同一个提交。 | 两份文件中五点规则与判定口径各自单列用户 2026-10-24 12:46 群内确认归因；旧事件不动，status 保持 in-progress、completed_at 为 null；fdbb1bd 的 CI run `40062997215` 写入时仍在运行（11/12 jobs 已通过），本轮不追加其最终结果；at 为真实写入时间。 |
 | 2026-10-24T13:14:13+08:00 | in-progress | in-progress | 编排方整理：本轮 fix4 按 Reviewy 对 `8fb0afa` 的 NOT CLEAN blocker 新增模型记录一节，并修正过时措辞与 PRD 路径。 | 本轮仅修改本 task 与 PRD，纳入同一个提交；omp 会话不执行 push，push 由编排方执行；旧事件逐字保留，status 保持 in-progress、completed_at 为 null；at 为 date -Iseconds 取得的真实时间。 |
+| 2026-10-24T13:33:34+08:00 | in-progress | in-progress | 编排方整理：按 Lord 最终裁定，模型记录 fix4 main 行计数改为未知（落盘时本轮尚未结束），实际计数见群内交付报告。 | 仅改模型记录第 13 行与本事件；旧事件逐字保留；status 保持 in-progress、completed_at 为 null；omp 会话不执行 push，push 由编排方执行。 |
