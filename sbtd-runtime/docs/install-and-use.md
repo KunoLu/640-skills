@@ -1,6 +1,6 @@
 # R1 本地 API 包：安装与使用
 
-`sbtd-runtime/` 是 v2.1.0-rc.1 的「本地 API 包」：一个进程内 Python 库，不是服务。R1 没有 HTTP 服务、没有 Dashboard；OpenAPI（`contracts/openapi.yaml`）中未标 `x-sbtd-implementation: library` 的操作是 R2 契约，不是当前实现。本文覆盖 §20.1「安装／使用文档」要求的可选启用、项目授权、观察关闭、升级注意、卸载与数据保留。宿主适配器的来源映射与 smoke 判定见 [host-adapters.md](host-adapters.md)。
+`sbtd-runtime/` 是 v2.1.0-rc.1 起的「本地 API 包」：包含进程内 Python 库，`serve.py` 为其已路由的操作提供本地 HTTP 服务与 Dashboard；OpenAPI（`contracts/openapi.yaml`）中未标 `x-sbtd-implementation: library` 的操作已有 `serve.py` HTTP 路由或仍是 R2 契约，并非全部已实现。本文覆盖 §20.1「安装／使用文档」要求的可选启用、项目授权、观察关闭、升级注意、卸载与数据保留。宿主适配器的来源映射与 smoke 判定见 [host-adapters.md](host-adapters.md)。
 
 ## 导入（安装）
 

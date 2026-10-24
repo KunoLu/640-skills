@@ -932,6 +932,35 @@ class OpenApiDraftTests(unittest.TestCase):
             },
         )
 
+    def test_http_routed_operations_metadata_matches_serve_routes(self) -> None:
+        # Scenario: 已有 HTTP 路由不再被描述为仅进程内实现
+        routes = (
+            ("getMetricCatalog", "get", "/api/v1/metrics/catalog"),
+            ("queryStatistics", "post", "/api/v1/statistics/query"),
+            ("getReportSnapshot", "get", "/api/v1/report-snapshots/{snapshot_id}"),
+            (
+                "getSnapshotDataset",
+                "get",
+                "/api/v1/report-snapshots/{snapshot_id}/dataset",
+            ),
+        )
+        for operation_id, method, path in routes:
+            with self.subTest(operation=operation_id):
+                operation = self.doc["paths"][path][method]
+                self.assertEqual(operation["operationId"], operation_id)
+                self.assertNotIn("x-sbtd-implementation", operation)
+                self.assertNotIn("no HTTP server", operation["summary"])
+        self.assertNotIn("No server is implemented", self.doc["info"]["summary"])
+        self.assertEqual(
+            {
+                operation["operationId"]
+                for methods in self.doc["paths"].values()
+                for operation in methods.values()
+                if operation.get("x-sbtd-implementation") == "library"
+            },
+            {"getTaskHistory", "listEvents", "queryTimeseries", "createReportSnapshot"},
+        )
+
     def test_query_statistics_declares_shared_disk_quota_refusal(self) -> None:
         # Scenario: 统计查询所需快照被共享配额拒绝的响应契约
         responses = self.doc["paths"]["/api/v1/statistics/query"]["post"]["responses"]

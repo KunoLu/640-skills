@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.2-statistics-507-contract
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict、CONTRACT-ONLY、三个本地提交；主会话唯一 writer／验证 controller，不使用 advisor。
-status: in-progress
+status: done
 branch: contract/v2.1.0-rc.2-r2.2-statistics-507
 created_at: '2026-10-24T09:25:04+08:00'
-updated_at: '2026-10-24T09:35:45+08:00'
-completed_at: null
+updated_at: '2026-10-24T10:16:16+08:00'
+completed_at: '2026-10-24T10:10:14+08:00'
 ---
 
 # R2.2 statistics/query 507 契约
@@ -55,6 +55,7 @@ Scenario: 统计查询所需快照被共享配额拒绝的响应契约
 | 2026-10-24T09:32:27+08:00 | in-progress | in-progress | 编排方整理：records 已提交，507 契约 red→green 与消费者 smoke 完成；全量 suite 有环境依赖失败，不记全绿。 | commit 1 95284766652862826c13f98a4b69cb671699f133；golden 62 passed；OpenAPI consumers 51／3 skipped；runtime 429／1 failure／10 skipped，缺 tzdata；备用 venv 不存在；既有 I001 保留。 |
 | 2026-10-24T09:34:54+08:00 | in-progress | in-progress | 编排方整理：contract＋golden＋spec 已本地提交；追加提交前模型取样与内容身份核验，保持任务开放。 | commit 2 1eaca41b8f29ed07521a7e8761275b3331e8fad7；三文件提交 blob 与 runtime-full 被测 SHA-256 一致；不是提交后重跑，环境依赖失败仍保留；commit 3 仅本记录，无远端操作。 |
 | 2026-10-24T09:35:45+08:00 | in-progress | in-progress | 编排方整理：第三次提交前 task／归因／范围与已生成报告结构检查完成，追加实际证据；环境失败与未实现边界不变。 | commit3-integrity exit 0／0.164s；report-integrity exit 0／0.062s，核对当时已有 14 对 raw／中文汇总；commit3-diff-check exit 0／0.003s；final-scope-stat exit 0／0.007s。 |
+| 2026-10-24T10:10:14+08:00 | in-progress | done | 编排方整理：statistics/query 507 契约 PR #165 已 squash-merge，回填合并完成状态；不改写历史事件或本地验证结论。 | PR [#165](https://github.com/KunoLu/640-skills/pull/165)；merge SHA `9ceb53021aa5e90d6369eed037f0b05ab719e928`；head SHA `5bb8a564ea165c784d034eb7145def7c8b8793fc`；git committer `%cI` `2026-10-24T10:10:14+08:00`（本轮 git log 核实）；GitHub mergedAt `2026-10-24T10:10:14+08:00`（`2026-10-24T02:10:14Z`，编排方整理），两者相等但分别记录；合并前 CI 13/13 on `5bb8a56`，run `40051092799`（编排方整理；本轮未重跑 CI）；Reviewy CLEAN @5bb8a56（编排方整理）。 |
 
 ## Gate 执行结论（追加）
 
