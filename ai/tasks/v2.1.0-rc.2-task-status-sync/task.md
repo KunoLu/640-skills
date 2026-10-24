@@ -7,7 +7,7 @@ mode_note: 编排方整理：沿用 strict；PR-b main 为全部文件的唯一 
 status: checking
 branch: feat/v2.1.0-rc.2-task-status-sync-workflow
 created_at: '2026-10-24T11:59:03+08:00'
-updated_at: '2026-10-24T15:46:43+08:00'
+updated_at: '2026-10-24T15:53:51+08:00'
 completed_at: null
 ---
 
@@ -24,11 +24,11 @@ completed_at: null
 
 ## 范围与边界
 
-- 本任务跨 PR-a（已完成规则文档）与 PR-b（本轮实现 `sbtd-workflow-onboard` 运行库、模板和回归测试）。本轮验收后仅进入 `checking`；CLEAN 后的独立收尾 commit 不在本轮。
-- 编排方整理：本轮实现旧事件容忍／惰性基线、A／B／C 核对、节点进展、并发拒绝覆盖及本地收尾 diff 检查；旧事件只追加，模型旧行保持原样。
+- 本任务跨 PR-a（已完成规则文档）与 PR-b（已实现 `sbtd-workflow-onboard` 运行库、模板和回归测试；本轮 PR-b fix2 仅调整计划表与任务记录）。本轮保持 `checking`；CLEAN 后的独立收尾 commit 不在本轮。
+- 编排方整理：PR-b 已实现旧事件容忍／惰性基线、A／B／C 核对、节点进展、并发拒绝覆盖及本地收尾 diff 检查；本轮旧事件只追加，模型第 1–25 行保持原样，第 26 行补记已结束会话，追加第 27–28 行。
 - PR-a 的合并 SHA／时间按新规则不写入 task.md，用 `git log origin/main -- ai/tasks/v2.1.0-rc.2-task-status-sync/task.md` 查询。PR-b 首个 commit 不回填 PR-a；审查期间进入 `checking`，被打回回到 `in-progress`；CLEAN 后只追加限定的 task 收尾 commit，Reviewy 复核该 diff，CI 全绿后才合入。
-- 编排方整理：本轮只修改 Onboard 实现、模板、相关 tests 与本 task；不改 OpenAPI、schema、docs/prd、plan.md 或其他 task，不执行 push、gh 写操作或全局配置修改。无法证明的事实记「不可考」。
-- 入口 worktree 干净；本 task 与 `git show origin/main:<task.md>` 逐字节一致，路径及父目录无 symlink；第一个 commit 已明确重绑定并追加开始 PR-b 事件。
+- 编排方整理：本轮仅修改 plan.md 任务表尚未 done 行的状态／PR／merge SHA／完成时间四列与本 task；不改 Onboard 实现、模板、tests、OpenAPI、schema、docs/prd 或其他 task，不执行 push、gh 操作或全局配置修改。无法证明的事实记「不可考」。
+- PR-b main 入口 worktree 干净；当时本 task 与 `git show origin/main:<task.md>` 逐字节一致，路径及父目录无 symlink；第一个 commit 已明确重绑定并追加开始 PR-b 事件。
 - 未完整调用 grill-with-docs：PRD 与确认方案已给出行为边界。本 task 使用解析候选＋预期原文比较＋原子写入，不写 active／index／ignore／身份；不声明跨机器自动恢复。
 
 ## Book Gate Plan
@@ -53,7 +53,7 @@ completed_at: null
 - 编排方整理：最终完整 Onboard 副本独立进程 smoke 通过：文件差异→记录→完成哈希证据→checking→done，仅合成任务；临时副本已清理。两名 omp 内置只读 reviewer 子代理（kimi-code/k3（max））已复核关闭全部发现，不冒充平台 CLEAN。Ruff 新增脚本／解析器／测试通过；TaskStore 与 origin/main 同为11项既有 FURB162，无新增，保留 Python 3.10 时间兼容。ty 当前不可用，未安装；浏览器、移动端、真实 host 升级与平台 CI 不在本轮验证范围。BDD 为 REFERENCE.md 中文场景＋英文关键词，unittest 可追踪；rtk 为 skipped-for-report。
 - 本地 raw＋同stem中文汇总在本 task 的 ignored `reports/`：`unit-report-prb-full-first-2026_10_24`、`unit-report-prb-full-final-2026_10_24`、`unit-report-prb-task-final-2026_10_24`、`unit-report-prb-link-baseline-2026_10_24`（各有 .txt／.md）。最终全量绑定 `f34cc71adcb42e6578a73e3b5ba70a9e523287f9`，本轮最后仅改 task 状态／记录；developer-local／local-only，不是平台 CI 或发布证据。
 - 判定口径：旧格式未另列独立 schema，本轮仅兼容已知历史 in-progress→done，其余事件字段／日期严格；`sync_scope` 用已有 frontmatter 扩展、哈希证据用既有 evidence 字符串，不改 schema。默认分支尚无 task 记不可考，不推断丢弃；存在的远端 task 解析错误照常报错。EOF追加所需换行纳入落盘旧行摘要，Git内容比较保留CRLF。收尾本地检查仅验证 diff，不证明 CLEAN／CI 真伪。
-- Ponytail／可读性复核：保留 TaskDocument 的文档保全与 TaskStore 的持久化职责，TaskSync 集中节点核对，不新增依赖、服务或全局命令。写入锁仅协调遵守库协议的 writer，外部编辑仍需独占协调，异常遗留标记不自动抢占。plan.md 的 status-sync 行未修改，如何同步由编排方判断；本轮无 push／开 PR／全局配置变更，completed_at 保持 null，CLEAN 后独立 done 收尾不在本轮。
+- Ponytail／可读性复核：保留 TaskDocument 的文档保全与 TaskStore 的持久化职责，TaskSync 集中节点核对，不新增依赖、服务或全局命令。写入锁仅协调遵守库协议的 writer，外部编辑仍需独占协调，异常遗留标记不自动抢占。本轮按用户 2026-10-24 15:52 群内确认（plan.md 任务表四列口径 C'），Lord 记录，将 plan.md 任务表尚未 done 行的四列统一写为「见 task.md／PR 页面」，历史 done 行不动；本轮无 push／开 PR／全局配置变更，completed_at 保持 null，CLEAN 后独立 done 收尾不在本轮。
 
 ## 模型记录
 
@@ -84,7 +84,9 @@ completed_at: null
 | 23 | PR-b main 启动的 omp 内置只读 reviewer 子代理 ParserSafety | kimi-code/k3（max） | 43／52 | 编排方整理：只读审查（其 write 仅为向主会话回报，无文件修改、无提交） | `~/.omp/logs/640-rc2-status-sync-workflow/main/s1/2026-10-24T06-18-02-942Z_01a16c8f-253e-733d-92b1-f66692e549ec/ParserSafety.jsonl` |
 | 24 | PR-b main 启动的 omp 内置只读 reviewer 子代理 SyncSafety | kimi-code/k3（max） | 28／38 | 编排方整理：只读审查（其 write 仅为向主会话回报，无文件修改、无提交） | `~/.omp/logs/640-rc2-status-sync-workflow/main/s1/2026-10-24T06-18-02-942Z_01a16c8f-253e-733d-92b1-f66692e549ec/SyncSafety.jsonl` |
 | 25 | PR-b fix1 ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `~/.omp/agent/sessions/--workspace--/2026-10-24T07-45-40-754Z_01a16cdf-5f92-7685-8880-54558f7eda91.jsonl` |
-| 26 | PR-b fix1 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 编排方整理：本轮提交（本会话内执行 git commit） | `~/.omp/logs/640-rc2-status-sync-workflow/fix1/s1/` |
+| 26 | PR-b fix1 main | openai-codex/gpt-6-astra（high） | 11／26 | 编排方整理：commit `7de6726`（会话内提交） | `/home/box/.omp/logs/640-rc2-status-sync-workflow/fix1/s1/2026-10-24T07-46-10-126Z_01a16cdf-d24e-718d-80c3-dfb2b8838d37.jsonl` |
+| 27 | PR-b fix2 ping | openai-codex/gpt-6-astra（high） | 1／0 | 编排方整理：连通性检查 | `/home/box/.omp/agent/sessions/--workspace--/2026-10-24T07-52-43-785Z_01a16ce5-d409-777e-9bd4-61e059553e97.jsonl` |
+| 28 | PR-b fix2 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 本轮提交 | `~/.omp/logs/640-rc2-status-sync-workflow/fix2/s1/` |
 
 编排方整理（按 jsonl 中的 git commit 调用逐一核实）：`a999fdd`、`733f7eb`、`cc88876` 由 PR-a main 会话编辑并提交；`34a9b94` 由编排方在 omp 之外编辑并提交；`fdbb1bd` 由 fix1 main 编辑并提交；`de1ac31` 由 fix2 main 编辑并提交；`8fb0afa` 的草稿由 fix3b main 编辑，占位符替换、判定口径归因与两条事件由编排方在 omp 之外编辑并提交；`b838603` 见第 15 行，其提交（含 13:19:06 对 13:14:13 事件 evidence 列的改写）在现存 jsonl 中无记录，执行者不可考；`1e19c4f` 由 fix4 s5 编辑并提交；本轮提交由 fix5 main 会话编辑并提交。所有 push、开 PR 与修改 PR 描述均由编排方在 omp 之外执行。
 
@@ -120,3 +122,4 @@ completed_at: null
 | 2026-10-24T15:18:06.934808+08:00 | in-progress | in-progress | 编排方整理，PR-b main 记录：完成冻结源码后的全量验证；记录未通过项与审查边界。 | python3 -B -m unittest discover -s tests -p test_*.py：2409 tests，2343通过、3失败、0错误、63跳过，1327.554s；全量不全绿。首轮7项运行中源码漂移错误已消失。残留：2项既有 probe link 身份用例（同文本重建失败在 origin/main 隔离副本复现；本机100次重建99次 device/inode/ctime_ns 相同）及1项已知缺tzdata失败；未改无关代码或安装依赖。原生raw＋中文同stem汇总保留于本task的ignored reports；PR-b影响范围127项通过，待审查，不宣称发布就绪。 |
 | 2026-10-24T15:19:09.879555+08:00 | in-progress | checking | 编排方整理，PR-b main 记录：完成 PR-b 本轮实现与验证；in-progress → checking，开始审查阶段。 | 实现、工作流模板、20项新增同步场景及既有任务影响范围已完成；python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git：127 tests／OK；完整 python3 -B -m unittest discover -s tests -p test_*.py：2409 tests，2343通过／3失败／0错误／63跳过，残留原因及原生报告见正文。完整运行库副本 smoke、两名独立只读 reviewer 复核、diff／禁词／历史保全检查通过。仅进入 checking，不写 done；completed_at=null，发布门 blocked，CLEAN 后的限定收尾由后续独立 commit 处理。 |
 | 2026-10-24T15:46:43+08:00 | checking | checking | 编排方整理：PR-b fix1 按 Lord 批准，补全模型记录（含 kimi-code/k3（max）只读 reviewer 子代理），恢复 frontmatter 格式风格。 | 编排方整理：改动范围仅本 task；旧事件与第 1–20 行模型记录逐字保留；status 保持 checking，completed_at 为 null；本会话内提交，push 由编排方执行。 |
+| 2026-10-24T15:53:51+08:00 | checking | checking | 用户 2026-10-24 15:52 群内确认（plan.md 任务表四列口径 C'），Lord 记录：自 PR-b 起，plan.md 任务表中尚未 done 的行，状态／PR／merge SHA／完成时间四列写「见 task.md／PR 页面」；已填写的历史 done 行不动。 | 编排方整理：改动行 seq 为 R2.2、Docs、E、F、status-sync；仅改 plan.md 四列与本 task；旧事件与第 1–25 行旧模型记录逐字保留，第 26 行补记已结束会话；status 保持 checking，completed_at 为 null；本会话内提交，push 由编排方执行。 |
