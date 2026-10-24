@@ -18,6 +18,22 @@ For validation, install the declared dependency with the interpreter that will l
 AGENTS files are backed up before overwrite. On `reset`, bundled Skill targets are overwritten without backup after their catalog sources pass the startup checks above. On `init`, a bundled Skill target that is already a valid Skill shell is skipped; missing or invalid shells are copied. After the canonical `sbtd-workflow-onboard` target validates, the legacy `kuno-workflow-onboard-skills` directory is removed without leaving an alias only when its own `SKILL.md` frontmatter confirms the legacy identity. An unrelated or mismatched legacy path blocks `init` / `reset` before target changes and remains untouched; deletion errors are returned as migration failures. Project `.gitignore` is updated in place by ensuring that the bundled block exists.
 
 
+## 任务状态及时更新
+
+每个工作流节点先核对 task.md，再进行实现、审查或提交；规则与库入口见 `templates/skills/sbtd-task/references/state.md`。检查只用 Git／本地文件，不调用平台工具，不接入 CI。跨 PR 的中间轮次只记进度，验收成立后进入 checking，CLEAN 后另作限定的 done 收尾。
+
+### 状态同步验收场景
+
+本配置源仓库沿用文档场景与 unittest，不新增 Gherkin runner。覆盖入口：`tests/test_sbtd_task_status_sync.py`。
+
+- **Scenario: 旧格式只读不追溯** — Given 无基线且每行均为合法旧／当前事件，When 核对，Then 仅以 frontmatter status 判断并输出「旧格式事件，不追溯」，And 文件不变；任一非法日期、列或状态仍报普通解析错误。
+- **Scenario: 惰性基线保护旧行** — Given 合法旧事件，When 首次追加新事件，Then 同次追加旧事件行数及 sha256 的基线，And 旧行逐字不变；基线后每行严格校验，包括回填历史 done；旧行哈希变化只记录差异，不自动 reopen。
+- **Scenario: 三种核对各自判定** — Given lite／strict 的已跟踪 task，When 有远端，Then fetch 后按默认分支内容比较并核实记录分支；When 无远端，Then 只比较本地 HEAD／记录分支／工作区，不推断丢弃；其他 task 使用声明范围内文件与 sha256。
+- **Scenario: 文件内容而非 mtime 决定差异** — Given 已登记完成文件及验收证据，When 新增、删除或修改文件，Then 按 sha256 报告真实差异，And ignored 证据仍覆盖，单纯 mtime 变化不报内容变化。
+- **Scenario: 并发写入保全历史** — Given 两个写入者读取相同 task，When 同时追加事件，Then 不丢失已写事件，冲突方明确失败并重读，不覆盖胜者。
+- **Scenario: 中途建立 Git 仓库** — Given branch 为 null 的本地／共享 task，When git init 后明确重绑定，Then 保留旧 sha256 证据；共享 lite／strict 被跟踪后切换 Git 核对，default 仍走文件核对。
+- **Scenario: 新完成必须经过核验** — Given 新任务尚未 checking，When 请求 done，Then 拒绝且不改文件；历史直接 done 保留；CLEAN 收尾仅允许 status／completed_at／updated_at、一条 done 事件及 CLEAN SHA／CI run 证据，其他 diff 要整轮重审。
+
 ## Official Skills CLI Bootstrap
 
 Install only the self-contained Onboard Skill from the public repository:
