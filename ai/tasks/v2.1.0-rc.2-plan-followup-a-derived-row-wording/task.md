@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-plan-followup-a-derived-row-wording
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，仅追加 plan.md 一行并建立本 task；主会话为两个授权文件唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-plan-followup-a-derived-row-wording
 created_at: '2026-10-25T18:55:11+08:00'
-updated_at: '2026-10-25T18:59:34+08:00'
-completed_at: null
+updated_at: '2026-10-25T19:28:18+08:00'
+completed_at: '2026-10-25T19:28:18+08:00'
 ---
 
 # rc.2：plan.md 后续项 A 派生行措辞追加更正
@@ -96,3 +96,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-25T18:55:11+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始 plan.md 后续项 A 措辞追加与本 task 建立 | 基线 `bc82b35`；根目录、分支、干净工作树、路径与 ignore 安全已核对，源码、测试及已对齐文档行号一致。 |
 | 2026-10-25T18:59:34+08:00 | in-progress | checking | 编排方整理；写入者：主会话，plan.md 一行追加与限定验证完成，进入检查 | 基线 `bc82b35`；原字节及末尾换行保留，无删除行，文字限制 0 命中、目标短语 3→4；八模块 Ran 135 tests in 50.247s、OK、exit 0；真实 task 解析 exit 0、stderr 空且字节不变；工作树仅两个授权文件。 |
+| 2026-10-25T19:28:18+08:00 | checking | done | 编排方整理：Reviewy CLEAN 后写入 done；PR #181 | Reviewy CLEAN @ 5e7ece360efe5b9e75a8d3411308fb4a7cd150e7（编排方整理）；CI validation run 40187249826 attempt 1 success 13/13（编排方整理） |
