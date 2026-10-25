@@ -4,10 +4,10 @@ id: v2.1.0-rc.2-backfill-docs-bc-pr4
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本 PR 采用 strict；omp 主会话为本轮文件唯一 writer 与验证 controller，提交、push、开 PR 由编排方在 omp 之外执行；不启动子代理、不用 advisor。
-status: in-progress
+status: checking
 branch: docs/v2.1.0-rc.2-backfill-docs-bc-pr4
 created_at: '2026-10-25T10:45:43+08:00'
-updated_at: '2026-10-25T10:53:09+08:00'
+updated_at: '2026-10-25T10:56:56+08:00'
 completed_at: null
 ---
 
@@ -54,6 +54,11 @@ completed_at: null
 - 提交 3 入口核验（编排方整理）：HEAD 为提交 2 `811a21b`，分支匹配、初始工作树干净；两个授权 task 均已跟踪，路径及父路径无 symlink、位于项目内，`git check-ignore --no-index` 均无命中、退出码 1。写前按指定原生 Python 命令解析，R2.2 为 `in-progress False 53 None`，本 task 为 `in-progress False 1 None`。本轮仅追加历史记录，不重绑定 R2.2 既有 branch，不调用 TaskStore；事件时间与 updated_at 取自实际 `TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00` 输出，晚于两文件既有末条事件。`git show --stat 7cbb929`、`git show --numstat --format= 7cbb929` 与 `%cI` 已只读核对；R2.2 task 的 224 个变更行实际为 +223／−1。
 - 提交 3 写后核验（编排方整理）：分别执行指定 `PYTHONDONTWRITEBYTECODE=1 python3 -B -c` 解析命令，R2.2 为 `in-progress False 54 None`（原 53 条事件加 1），本 task 为 `in-progress False 2 None`。`git diff --check` 退出码 0；`git diff --stat` 只含两个授权 task；全部 diff 与 R2.2 单文件 diff 的删除行检查均仅有各自旧 updated_at。按字节比较 `git show HEAD:<path>` 与工作树，原第 247 行含换行符不变，全部既有事件及其余既有正文逐字保留，新增位置符合授权。新增行禁词与主目录路径 grep 为 0 命中，退出码 1；未跟踪文件清单为空。辅助检查首次把其他章节的历史事件摘录也计入状态事件，触发断言失败；限定到「状态事件」章节后通过，未改正文规避检查、未落盘脚本或报告。BDD、构建、lint、单元测试与 E2E 均 skipped：仅文档记录补正，无产品行为变化；rtk not-needed，使用精确原生命令；证据仅为本地 dirty 工作树检查，不是新 CI 或发布证明。
 - 提交 4 核验（编排方整理）：入口 HEAD 为提交 3 `ebc3bb3`，分支匹配、工作树干净；两个授权 task 均已跟踪、无 ignore 匹配，路径及父路径无 symlink。先解析 HEAD 的 F task 得到 `done False 6 2026-10-25T02:23:12+08:00`；写后分别执行指定 `PYTHONDONTWRITEBYTECODE=1 python3 -B -c` 解析命令，F 结果与 HEAD 相同，本 task 为 `in-progress False 3 None`。Python 按字节比较确认 F 仅第 76 行指定分句替换，其余字节、frontmatter 与全部事件不变；本 task 仅 updated_at 变更及授权位置追加，既有事件保留。`git diff --check` 退出码 0，`git diff --stat` 只含两个授权文件；`git diff -U0 -- ai/tasks/v2.1.0-rc.2-f-backfill/task.md` 仅第 76 行一删一增。`grep '^-[^-]'` 仅列旧 updated_at，因 F 正文为 Markdown 列表、删除行以双减号起始，另用 Python 排除文件头后确认全部删除行恰为旧 updated_at 与 F 原第 76 行。新增行禁词与主目录路径 grep 为 0 命中、退出码 1；无未跟踪或暂存改动。新增事件及 updated_at 使用实际 `TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00` 输出，晚于既有末条事件。本条补入后再次执行相同解析与边界检查。历史 CI 依据为编排方整理，本轮未执行 gh；BDD、构建、lint、单元测试与 E2E skipped，仅文档更正，无产品行为变化；rtk not-needed，使用原生命令。证据为 developer-local／dirty／local-only，不是新 CI、独立审查或发布证明，不生成报告文件。
+- 提交 5 入口与测试核验（编排方整理）：HEAD 为提交 4 `8b62fb4`，分支匹配、初始工作树干净；两个授权文件已跟踪、无 ignore 匹配，路径及父路径无 symlink、位于项目内。追加 checking 事件前运行 `PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_legacy_events_notice tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git`：Ran 135 tests in 52.186s，OK，退出码 0。写前按指定原生 Python 命令解析四个 task，docs-b-c 为 `done False 6 2026-10-25T10:42:57+08:00`，R2.2 为 `in-progress False 54 None`，F 为 `done False 6 2026-10-25T02:23:12+08:00`，本 task 为 `in-progress False 3 None`。本轮只追加一条事件，故最终事件数应为 4，验收预期的 5 与既有三条事件不符；不补造历史事件。新增事件与 updated_at 取自实际 `TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00` 输出，晚于既有末条事件。
+- 提交 5 范围边界（编排方整理）：plan.md 只在原第 91／118 行后各插入一行，第 7 项续行缩进三个空格；第 2 项后续项 A 的旧派生行措辞不在本 PR 处理，未修改也未追加更正。全部既有状态事件保留；本 task 的 completed_at 保持 null，状态仅转 checking，送审不等于合入或发布。BDD、构建、lint、UI 与完整 E2E skipped：仅文档记录变化；rtk not-needed，执行精确原生命令；API Contract／Cross-repo context not-needed，Mock Strategy none。证据为 developer-local／dirty／local-only，不是新 CI 或独立审查；不生成报告文件，不操作暂存区或提交历史。
+- 提交 5 写后检查（编排方整理）：`git diff -U0 -- ai/tasks/v2.1.0-rc.2-plan/plan.md | grep -v '^--- a/' | grep '^-'` 无输出、退出码 1；按字节逐行比较 HEAD，plan.md 仅在原第 91／118 行后各插入一行，其余字节不变，本 task 仅 status／updated_at 替换及授权章节追加，既有事件逐字保留。`git diff --check` 与 `git diff --check origin/main` 均无输出、退出码 0；`git diff --stat` 仅含本轮两个授权文件，`git diff --stat origin/main` 恰含 docs-b-c task、回填 task、R2.2 task、F task、plan.md 五个文件。对本轮及相对 origin/main 的 diff 新增行执行禁词与主目录路径 grep，均 0 命中、退出码 1；无暂存改动或未跟踪文件。
+- 提交 5 删除行清单（编排方整理）：`git diff -U0 | grep '^-[^-]'` 只列本 task 的旧 `status: in-progress` 与 `updated_at: '2026-10-25T10:53:09+08:00'`。`git diff -U0 origin/main | grep -v '^--- a/' | grep '^-'` 输出一个新文件头 `--- /dev/null`，另有五条实际删除行，逐条为：① docs-b-c 的 `status: checking`；② docs-b-c 的 `updated_at: '2026-10-25T08:24:48+08:00'`；③ docs-b-c 的 `completed_at: null`；④ F task 原第 76 行 CI 正文（将 attempt 1 在 Post Check out the exact commit 步骤未结束的旧措辞更正）；⑤ R2.2 的 `updated_at: '2026-10-25T04:36:10+08:00'`。排除所有文件头后已核对上述五条；回填 task 相对 origin/main 为新文件，无正文删除。
+- 提交 5 最终解析（编排方整理）：四个 task 均执行指定 `PYTHONDONTWRITEBYTECODE=1 python3 -B -c` 命令，docs-b-c 输出 `done False 6 2026-10-25T10:42:57+08:00`，R2.2 输出 `in-progress False 54 None`，F 输出 `done False 6 2026-10-25T02:23:12+08:00`，回填 task 输出 `checking False 4 None`；全部退出码 0。事件数与验收预期的差异如上保留，不以额外事件凑数。
 
 ## 模型记录
 
@@ -64,9 +69,11 @@ completed_at: null
 | 3 | 提交 2 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | docs-b-c 记录补正、建立本 task | `2026-10-25T02-45-20-882Z_01a170f2-c572-7456-bfcf-982e9fd2b3c6.jsonl` |
 | 4 | 提交 3 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | R2.2 task 记录补正 | `2026-10-25T02-49-16-483Z_01a170f6-5dc3-7674-b6e6-3bdc370727d3.jsonl` |
 | 5 | 提交 4 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | F task :76 措辞更正 | `2026-10-25T02-52-46-744Z_01a170f9-9318-7571-adb0-311f5b0c8a4c.jsonl` |
+| 6 | 提交 5 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | plan.md 口径更正、本 task 转 checking | `2026-10-25T02-55-25-353Z_01a170fb-fea9-7405-93f9-1937e0d4e7bd.jsonl` |
 
 模型记录更正（编排方整理，按 jsonl 统计）：第 3 行提交 2 会话实际 14／25，无 model_usage 记录；原「未知」原文保留。
 模型记录更正（编排方整理，按 jsonl 统计）：第 4 行提交 3 会话实际 14／33，无 model_usage 记录；原「未知」原文保留。
+模型记录更正（编排方整理，按 jsonl 统计）：第 5 行提交 4 会话实际 12／23，无 model_usage 记录；原「未知」原文保留。
 
 每个 omp 会话一行；omp 会话未使用子代理；内部辅助 model_usage 记录如有另列一行。
 
@@ -77,3 +84,4 @@ completed_at: null
 | 2026-10-25T10:45:43+08:00 | planned | in-progress | 编排方整理：建立回填 strict 任务，提交 1 `8608564` 已完成，开始提交 2 | 基线 `1b609bc`；提交 1 `8608564`；本轮入口根目录、分支、干净工作树、路径与 ignore 检查通过，写前 docs-b-c 只读解析为 done、非旧格式、六条事件；本轮解析与差异检查记录见验证与剩余边界。 |
 | 2026-10-25T10:49:48+08:00 | in-progress | in-progress | 编排方整理：提交 3——R2.2 task 追加记录补正事件与说明节 | 提交 2 `811a21b` 已完成；R2.2 task 仅 updated_at 一行变更，第 247 行及全部既有事件逐字保留；解析与检查结果见验证节。 |
 | 2026-10-25T10:53:09+08:00 | in-progress | in-progress | 编排方整理：提交 4——F 回填 task :76 attempt 1 macos-bash-installer 措辞更正 | 提交 3 `ebc3bb3` 已完成；F task 仅第 76 行一处分句替换，frontmatter 与事件不变；依据 gh run view 40115693146 --attempt 1 只读核实（编排方整理）；解析与检查结果见验证节。 |
+| 2026-10-25T10:56:56+08:00 | in-progress | checking | 编排方整理：提交 5——plan.md 追加 :90／:118 派生行口径更正；本 PR 五个提交的本地交付完成，送审 | 提交 4 `8b62fb4` 已完成；plan.md 纯插入两行；指定八模块单元测试 Ran 135 tests in 52.186s，OK，退出码 0；全部检查结果见验证节。 |
