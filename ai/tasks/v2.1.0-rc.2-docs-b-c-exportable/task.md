@@ -4,10 +4,10 @@ id: v2.1.0-rc.2-docs-b-c-exportable
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict；主会话为三个授权文件的唯一 writer、git 提交者与验证 controller；不启动子代理、不使用 advisor；只新增本地提交，push 与开 PR 由编排方在 omp 之外执行。
-status: in-progress
+status: checking
 branch: docs/v2.1.0-rc.2-docs-b-c-exportable
 created_at: '2026-10-25T07:54:09+08:00'
-updated_at: '2026-10-25T08:23:26+08:00'
+updated_at: '2026-10-25T08:24:48+08:00'
 completed_at: null
 ---
 
@@ -56,6 +56,9 @@ completed_at: null
 - PR 2 状态转换依据：仓库 `task-data.schema.json` 的 stateEvent 允许 checking → in-progress，`sbtd_task_state.py:660–662` 同样允许；`sbtd_task_document.py` 通过该 schema 校验事件。所有新增事件使用真实 `TZ=Asia/Shanghai date -Iseconds` 时间，晚于既有末条；本轮不调用 TaskStore 写入。
 - PR 2 验证边界：仅本地文档与任务记录验证，不生成额外报告文件，不声称 CI 或四格式端到端通过。BDD、构建、代码 lint、浏览器／移动端与完整 E2E：skipped，无代码、UI 或运行时行为变化；API Contract／Cross-repo context：not-needed；Mock Strategy：none；rtk：not-needed，使用精确原生 git 与指定 Python 命令。Evidence Source：developer-local；Evidence Publication：local-only。
 - PR 2 Commit 1 为 `87e7c36`，仅含 `install-and-use.md` 的 1 insertion／1 deletion。提交前 Python 按字节比较确认文件恰为目标分句替换、其他字节与行数不变；本 task 与 origin/main 比较，既有正文及三条事件逐字节保留，仅允许的 frontmatter 值变化，其余均为追加。`git diff --check` 干净；以 `PYTHONDONTWRITEBYTECODE=1` 从仓库 scripts 导入 `TaskDocument.parse`，只读解析通过：strict／in-progress、非旧格式、completed_at=null，四条事件顺序与状态链有效，末条时间等于 updated_at。
+- PR 2 指定命令 `python -B -m unittest tests.test_sbtd_task_schema tests.test_workflow_contracts tests.test_sbtd_task_state`：Ran 111 tests in 35.185s，OK，退出码 0；运行时文档已修改、task 为 in-progress，未修改测试或代码。
+- PR 2 Commit 2 为 `b33c615`。该提交后 `git diff --stat origin/main..HEAD` 仅两个授权文件，15 insertions／3 deletions；`git diff --check origin/main..HEAD` 干净，`git status --porcelain` 为空。对 task diff 运行 `grep '^-[^-]'`，仅有 frontmatter 的 status、updated_at 两行；install-and-use 的 numstat 为 1／1。对完整 diff 的新增行运行 grep，禁词及主目录路径命中 0。本条为 checking 更新提交前的已提交快照；最终 checking 与基线 status 相同，最终 task 删除行应只剩 updated_at，不要求制造 status 差异。
+- PR 2 checking 更新后，以 `PYTHONDONTWRITEBYTECODE=1` 从 `sbtd-workflow-onboard/scripts` 导入 `sbtd_task_document.TaskDocument`，`TaskDocument.parse` 只读解析通过：status=checking、非旧格式、completed_at=null，五条事件按时间递增且状态链连续，updated_at 等于末条事件时间。Python 再次核对历史逐字节保留；`git diff --check origin/main` 干净，增量 grep 禁词与主目录路径命中 0；task 删除行仅 updated_at，install-and-use 仍仅 1 行替换。此为最终记录提交前的本地证据，不冒充最终提交 SHA 的 CI 证明。
 
 ## 模型记录
 
@@ -76,3 +79,4 @@ completed_at: null
 | 2026-10-25T07:55:51+08:00 | in-progress | in-progress | 编排方整理，主会话记录：PRD／plan 提交完成，记录本地验证结果。 | commit `584b121`；PRD 仅新增 4 行、原第 942 行不变；plan 仅第 24 行末列变化；git diff --check 干净；新增行禁词检查命中 0；指定 unittest 111 tests OK；本 task 的 TaskDocument.parse 只读解析通过。 |
 | 2026-10-25T07:56:10+08:00 | in-progress | checking | 编排方整理，主会话记录：PR 1 本地文档交付完成，送审；PR 2 在 C 合入后进行。 | PRD／plan commit `584b121`，任务建立 commit `dc05cf5`；origin/main..HEAD 三文件 diff 检查通过，PRD 纯新增，git diff --check 干净，git status --porcelain 为空；指定 unittest 111 tests OK；本事件与 checking frontmatter 同步更新，completed_at 保持 null。 |
 | 2026-10-25T08:23:26+08:00 | checking | in-progress | 主会话记录：PR 1（C）已以 #175 合入 `8a144a2`，开始 PR 2（B）。 | HEAD／origin/main 为 `8a144a2`，初始工作树干净；本轮在明确授权的 PR 2 分支执行，保留 PR 1 历史字段；状态 schema 允许此转换，未调用 TaskStore 写入。 |
+| 2026-10-25T08:24:48+08:00 | in-progress | checking | 主会话记录：PR 2 本地交付完成，送审。 | 文档 commit `87e7c36`，任务追加 commit `b33c615`；指定 unittest 111 tests OK；两文件差异、单行替换、历史保留、diff --check 与增量禁词检查通过；本事件与 checking frontmatter 同步更新，completed_at 保持 null。 |
