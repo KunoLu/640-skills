@@ -891,6 +891,10 @@ SQLite 适合本地嵌入式数据存储；WAL 具有单 writer 等边界，不�
 
 HTML／JPEG／PDF／CSV 均应用相同脱敏规则；CSV 不能成为绕过页面脱敏的通道。“全部数据”始终指**指定范围内、已采集、已授权且属于本协议的安全统计／审计数据**。
 
+**导出事件明细屏蔽口径（用户 2026-10-25 07:50 +08:00 群内确认（方案一），Lord 记录；v2.1.0-rc.2 计划后续项 C）**
+
+task 行始终导出；聚合值（指标）按全部事件计算，从明细中屏蔽的事件仍计入聚合值。run、step 及其他派生行跟随其依据事件：依据事件被屏蔽时，这些行一并不导出。`privacy.exportable` 为 false，或 `privacy.classification` 不是 `local-metadata`（缺省分别视为 true 与 `local-metadata`）的事件不进入导出明细；`privacy` 缺失或非对象时，不据此屏蔽该事件。元数据行保留，但其中 `rows:<family>` 行数计数按实际导出行重算；有明细行被屏蔽时，追加 `WITHHELD_NON_EXPORTABLE:<n>` 警告，其中 n 为被屏蔽的明细行数。HTML／JPEG／PDF／CSV 均采用上述口径。
+
 ### 10.4 保留、容量与清理
 
 | 数据 | 默认策略 |
