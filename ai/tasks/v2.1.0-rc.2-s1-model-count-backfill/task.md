@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-s1-model-count-backfill
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，仅三个既有 task 追加计数说明与本 task；主会话为四个授权文件唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-s1-model-count-backfill
 created_at: '2026-10-25T23:15:17+08:00'
-updated_at: '2026-10-25T23:18:17+08:00'
-completed_at: null
+updated_at: '2026-10-25T23:51:00+08:00'
+completed_at: '2026-10-25T23:51:00+08:00'
 ---
 
 # rc.2：#181／#182／#183 task s1 模型计数追加式回填
@@ -99,3 +99,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_sbtd_task_document t
 |---|---|---|---|---|
 | 2026-10-25T23:15:17+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始三个 task 追加计数说明与本 task 建立 | 基线 `7007574`；入口干净，根目录、分支、四路径及 ignore 安全；三个基线 task 均 done、事件数 3、解析 stderr 空。 |
 | 2026-10-25T23:18:17+08:00 | in-progress | checking | 编排方整理；写入者：主会话，三个 task 追加计数说明与全部限定验证完成，进入检查 | 基线 `7007574`；expected.py 三行 byte_exact True、exit 0；三个既有文件各 +2／0 删除，原字节保留；八模块 135 tests、OK、exit 0；四份 task 解析 exit 0、stderr 空，三个历史 task 仍 done、事件数 3；新增文字扫描 0 命中，工作树恰四个授权文件。 |
+| 2026-10-25T23:51:00+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 后写入 done；PR #184 | Reviewy CLEAN @ 5c1ea7145898031683e319eb6f236ef87355db91（编排方整理）；CI validation run 40206567441 attempt 1 success 13/13（编排方整理） |
