@@ -103,8 +103,15 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 | 1 | ping（2026-10-25 14:09:30 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-25T06-09-30-918Z_01a171ad-b126-72a4-8ce0-d014f420241a.jsonl` |
 | 2 | 会话 1（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 措辞同步与本 task | `2026-10-25T06-11-23-314Z_01a171af-6832-7167-a827-612eb2a7a174.jsonl` |
 | 3 | 会话 1 内部辅助 model_usage | typesafe/jev-latest（thinking 不可考） | 12 次调用（purpose find，不计入主会话 assistant 消息／toolCall） | 旧格式同步检查源码定位；只读解析本会话 jsonl 的 type=model_usage 记录 | `2026-10-25T06-11-23-314Z_01a171af-6832-7167-a827-612eb2a7a174.jsonl` |
+| 4 | ping2（2026-10-25 14:48:09 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-25T06-48-09-446Z_01a171d1-11e6-76b3-88f6-a49837038257.jsonl` |
+| 5 | 会话 2（正文时间更正） | openai-codex/gpt-6-astra（high） | 7／14 | 本 task 正文 Lord 裁定时间更正 | `2026-10-25T06-48-27-075Z_01a171d1-56c3-7393-95fa-8d4588de6f31.jsonl` |
+| 6 | ping3（2026-10-25 15:12:38 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-25T07-12-38-325Z_01a171e7-7bb5-71be-be7a-8a8e8a219fff.jsonl` |
+| 7 | 会话 3（done 提交） | openai-codex/gpt-6-astra（high） | 9／20 | 本 task 写 done | `2026-10-25T07-12-56-220Z_01a171e7-c19c-7386-acce-6044b1ec084e.jsonl` |
+| 8 | 会话 3 内部辅助 model_usage | typesafe/jev-latest（thinking 不可考） | 5 次调用（purpose find，不计入主会话 assistant 消息／toolCall） | 限定范围源码检索 | `2026-10-25T07-12-56-220Z_01a171e7-c19c-7386-acce-6044b1ec084e.jsonl` |
 
 每个 omp 会话一行；未使用子代理、advisor；内部辅助 model_usage 记录另列一行，落盘前只读统计为 12 条，未读取或输出环境变量值。
+
+编排方整理，按 jsonl 统计：会话 1 实际为 21／54，其内部辅助 model_usage 12 条即第 3 行；会话 2 为 7／14，无 model_usage 记录；会话 3 为 9／20，内部辅助 model_usage 5 条（第 8 行）。上方第 2 行的「未知」写法原样保留。
 
 ## 状态事件
 

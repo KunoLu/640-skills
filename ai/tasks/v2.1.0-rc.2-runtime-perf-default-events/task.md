@@ -135,10 +135,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_sbtd_task_document t
 | 2 | 会话 1（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 代码改动、测试与本 task | `2026-10-25T04-04-57-789Z_01a1713b-a93d-7597-add3-dd173102da5a.jsonl` |
 | 3 | 会话 1 内部辅助 model_usage | typesafe/jev-latest（thinking 不可考） | 2 次调用（purpose find，不计入主会话 assistant 消息／toolCall） | 限定范围源码检索；只读核实本会话 type=model_usage 两条 | `2026-10-25T04-04-57-789Z_01a1713b-a93d-7597-add3-dd173102da5a.jsonl` |
 | 4 | 会话 2（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | 默认运行证据、测试与转 checking | `2026-10-25T04-13-01-074Z_01a17143-0912-7163-8f31-489dc201560e.jsonl` |
+| 5 | ping（2026-10-25 12:50:05 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-25T04-50-05-409Z_01a17164-f9e1-70d2-a983-e5968a4c73d0.jsonl` |
+| 6 | 会话 3（done 提交） | openai-codex/gpt-6-astra（high） | 12／34 | 本 task 与 #177 回填 task 写 done | `2026-10-25T04-50-09-975Z_01a17165-0bb7-7321-adda-66693fa120fc.jsonl` |
 
 每个 omp 会话一行；omp 会话未使用子代理；内部辅助 model_usage 记录如有另列一行。
 
 会话 1 实际计数见群内交付报告（编排方整理）。会话 2 落盘前只读解析本会话 jsonl，`type=model_usage` 条数为 0，未新增内部辅助模型行。
+
+编排方整理，按 jsonl 统计：会话 1 实际为 23／58，其内部辅助 model_usage 2 条即第 3 行；会话 2 实际为 19／44，无 model_usage 记录；会话 3 为 12／34，无 model_usage 记录。会话 2 之前没有单独的 ping 记录（会话日志中本 task 的 ping 仅第 1 行与第 5 行两次）。上方第 2、4 行的「未知」写法原样保留。
 
 ## 状态事件
 
