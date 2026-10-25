@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-docs-b-c-exportable
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict；主会话为三个授权文件的唯一 writer、git 提交者与验证 controller；不启动子代理、不使用 advisor；只新增本地提交，push 与开 PR 由编排方在 omp 之外执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-docs-b-c-exportable
 created_at: '2026-10-25T07:54:09+08:00'
-updated_at: '2026-10-25T08:24:48+08:00'
-completed_at: null
+updated_at: '2026-10-25T10:42:57+08:00'
+completed_at: '2026-10-25T10:42:57+08:00'
 ---
 
 # rc.2：Docs 后续项 B／C 导出事件明细屏蔽口径 strict 任务
@@ -30,6 +30,7 @@ completed_at: null
 - PR 2 只改 `sbtd-runtime/docs/install-and-use.md` :154 一个分句与本 task；PRD、5.5 契约、plan.md（含 :24、:90、:118；:90／:118 更正按 Lord 2026-10-25 08:05 裁定推迟到下一个回填 PR）、代码及 openapi／spec／info 文件不在本 PR。
 - PR 2 沿用 strict；本轮明确授权在 `docs/v2.1.0-rc.2-docs-b-install-and-use` 分支执行，frontmatter 的 `branch` 保留 PR 1 历史值，不冒充已执行 TaskStore 重绑定或自动恢复。除 `status`、`updated_at` 外，既有字段、正文、模型记录与三条状态事件均保留；不写 active／index／handoff／ignore。
 - PR 2 未完整调用 grill-with-docs：范围、实现依据与验收条件明确；上表 Book Gate Plan 的适用性沿用，仅 project-validation 适用，无生产代码、运行时、部署或领域设计变化。主会话为唯一 writer、提交者与验证 controller，不使用子代理或 advisor；本地 checking 不代表独立审查、合入或发布完成。
+- 编排方整理：PR 2（后续项 B，#176）的实际工作分支为 `docs/v2.1.0-rc.2-docs-b-install-and-use`；frontmatter `branch` 保留 PR 1（后续项 C，#175）分支 `docs/v2.1.0-rc.2-docs-b-c-exportable`，不改写。
 
 ## Book Gate Plan
 
@@ -68,8 +69,11 @@ completed_at: null
 | 2 | main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | PRD §10.3 屏蔽口径、plan.md Docs 任务链接与本 strict 记录；本地提交由本会话执行 | `2026-10-24T23-53-33-824Z_01a17055-7f80-7022-92f3-a1e5d81fa3ac.jsonl` |
 | 3 | PR 2 ping（2026-10-25 08:22:15 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-25T00-22-15-611Z_01a1706f-c53b-7061-89a4-72f78cf9982a.jsonl` |
 | 4 | PR 2 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | install-and-use.md :154 屏蔽范围说明、本 task 的 PR 2 追加记录与本地验证提交 | `2026-10-25T00-22-53-874Z_01a17070-5ab2-713e-95e0-b21c885484c6.jsonl` |
+| 5 | PR 1 main 内部辅助 model_usage（第 2 行会话） | 不适用 | 0 条（jsonl 中无 model_usage 记录；编排方整理，按 jsonl 统计） | 无 | `2026-10-24T23-53-33-824Z_01a17055-7f80-7022-92f3-a1e5d81fa3ac.jsonl` |
+| 6 | PR 2 main 内部辅助 model_usage（第 4 行会话） | typesafe/jev-latest | 16 条（purpose find；不计入第 4 行；编排方整理，按 jsonl 统计） | omp main 会话内部辅助调用，input 79,541／output 5,574 tokens | `2026-10-25T00-22-53-874Z_01a17070-5ab2-713e-95e0-b21c885484c6.jsonl` |
 
 每个 omp 会话一行；本会话未使用子代理。
+模型记录更正（编排方整理，按 jsonl 统计）：第 2 行 PR 1 main 实际 17／45，第 4 行 PR 2 main 实际 17／41；两行原「未知（落盘时本轮尚未结束）…」原文保留不改，以本更正为准；第 1、3 行 ping 会话及第 2 行会话均无 model_usage 记录，第 4 行会话的 16 条辅助记录见第 6 行。
 
 ## 状态事件
 
@@ -80,3 +84,4 @@ completed_at: null
 | 2026-10-25T07:56:10+08:00 | in-progress | checking | 编排方整理，主会话记录：PR 1 本地文档交付完成，送审；PR 2 在 C 合入后进行。 | PRD／plan commit `584b121`，任务建立 commit `dc05cf5`；origin/main..HEAD 三文件 diff 检查通过，PRD 纯新增，git diff --check 干净，git status --porcelain 为空；指定 unittest 111 tests OK；本事件与 checking frontmatter 同步更新，completed_at 保持 null。 |
 | 2026-10-25T08:23:26+08:00 | checking | in-progress | 主会话记录：PR 1（C）已以 #175 合入 `8a144a2`，开始 PR 2（B）。 | HEAD／origin/main 为 `8a144a2`，初始工作树干净；本轮在明确授权的 PR 2 分支执行，保留 PR 1 历史字段；状态 schema 允许此转换，未调用 TaskStore 写入。 |
 | 2026-10-25T08:24:48+08:00 | in-progress | checking | 主会话记录：PR 2 本地交付完成，送审。 | 文档 commit `87e7c36`，任务追加 commit `b33c615`；指定 unittest 111 tests OK；两文件差异、单行替换、历史保留、diff --check 与增量禁词检查通过；本事件与 checking frontmatter 同步更新，completed_at 保持 null。 |
+| 2026-10-25T10:42:57+08:00 | checking | done | 编排方整理：任务 v2.1.0-rc.2-docs-b-c-exportable 的两个 PR 均已 squash 合入，关闭。 | 编排方整理，编排方以 git／gh 只读核实：PR 1（后续项 C）#175：merge `8a144a2b6507f553e5ed6d9bd1e897b274cfc966`，git `%cI` `2026-10-25T08:20:32+08:00`，GitHub mergedAt `2026-10-25T08:20:33+08:00`（`2026-10-25T00:20:33Z`），两者相差 1 秒，分别记录；合入 head `b9f91e4`；CI run `40144860776` 13／13 success（head `b9f91e4`）；Reviewy CLEAN SHA 不可考（本 task 与 PR #175 页面均无记录）。PR 2（后续项 B）#176：merge `1b609bcfeb1bface01cec9eb5877feddf27d6121`，git `%cI` `2026-10-25T09:29:15+08:00`，GitHub mergedAt `2026-10-25T09:29:15+08:00`（`2026-10-25T01:29:15Z`），两者相等但分别记录；合入 head `3f10ee0`；Reviewy CLEAN @ `3f10ee0`（编排方整理）；CI run `40146721558` 13／13 success（head `3f10ee0`）。 |

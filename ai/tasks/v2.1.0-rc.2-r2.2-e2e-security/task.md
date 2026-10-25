@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-25T04:36:10+08:00'
+updated_at: '2026-10-25T10:49:48+08:00'
 completed_at: null
 ---
 
@@ -245,6 +245,7 @@ PR-1 本地提交证据：
 | 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；开始最终记录收口与 AC／目标映射（编排方整理） | 三个本地提交已创建；50 个 Python 文件与最终 full 被测 hash 一致；只追加本 task，禁止改 plan 行或完成状态。 |
 | 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成最终证据整理；PR-4 可在无 Mac 证据下完成的部分已本地完成；R2.2 保持 in-progress，等待用户 Mac 证据 | 性能／容量／验证／覆盖映射见 PR-4 追加节；D9 未满足，completed_at null；按用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录；不 push，不宣称发布就绪。 |
 | 2026-10-25T04:36:10+08:00 | in-progress | in-progress | 写入者：PR-4 operator；记录补正：授权根改写为 `/workspace/640-skills-r22-pr4`，PR-4 模型表单列 main 内部辅助 model_usage 行 | Reviewy 要求的路径写法；session jsonl 只读复核 26 条 purpose find、typesafe/jev-latest，不计入 main 93 / 163 与 ping 1 / 0；历史正文与事件保留，status／completed_at 不变。 |
+| 2026-10-25T10:49:48+08:00 | in-progress | in-progress | 写入者：回填 PR（编排方整理）；记录补正：说明 2026-10-25T04:36:10 事件的依据，补充 10000 档审计 not-met 原因与 #174 实际合入数字；原事件逐字保留 | 见文末「R2.2 PR-4 记录补正（回填 PR 追加）」节；status／completed_at 不变；不改 runtime_perf.py 或任何代码。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1274,3 +1275,11 @@ Gate结论：DDD／DDIA／legacy／refactoring／release的生产变更触发条
 最终收口候选复核（2026-10-25T04:09:51+08:00，写入者：PR-4 main）：`records-final-candidate` exit0／1.090s；`task-parse-final-candidate` exit0／1.094s，输出 **in-progress False 52 None**。yaml.safe_load通过；原事件删除0、历史行仅updated_at变更、五项新增措辞限制及HOME绝对路径限制0命中；冻结三个目录stat空、plan逐字不变、diff --check通过。最终commit之后仍按编排方整理的要求复跑记录／parse／diff检查，结果由交付回复及对应新raw报告给出，不预写未执行结果。
 
 最终状态：PR-4 可在无 Mac 证据下完成的部分已本地完成；R2.2 保持 in-progress，等待用户 Mac 证据。
+
+## R2.2 PR-4 记录补正（回填 PR 追加）
+
+编排方整理：2026-10-25T04:36:10 事件（原第 247 行）的依据为 Lord 2026-10-25 约 04:2x 群内裁定，发生于 640 群；确切时间与原文措辞不可考。本节只记录结果：授权根写法改为 `/workspace/640-skills-r22-pr4`；PR-4 模型表把 main 会话内部辅助 model_usage（purpose find，typesafe/jev-latest，26 条）单列一行，不计入 main 与 ping 计数。第 247 行原文及其 evidence 中的「Reviewy 要求的路径写法」逐字保留，不改写；此处授权根仅原样引用 R2.2 既有记录中的项目路径。
+
+编排方整理：依据本 task 原第 1121、1129、1185–1200 行，1000／10000／11500 事件三档审计 100 行延迟 p95 分别为 0.020／0.117／0.145s，均 ≤0.5s，延迟本身三档均 met；not-met 指 PRD 的索引／非全扫描结构要求，既有文字记录源码实际为全表 replay 再排序分页，该结构缺口与规模无关。原第 1121 行明确原报告审计的 met 仅指延迟，后续 driver 明列该结构性缺口。原第 1121、1129 行报告文件名中的时间戳依次为 1000 档 `runtime-perf-1000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T190702573559Z.{json,md}`、实际 11500 档 `runtime-perf-1000000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T191005746525Z.{json,md}`、10000 档 `runtime-perf-10000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T193717099968Z.{json,md}`。据既有文字与文件名时间戳推断：10000 档报告在 driver 改为明列结构缺口之后生成，因此只有该档报告的审计结论写成 not-met，另两档原报告仍为仅指延迟的 met；这是推断，不是本轮读取原报告字段的结果。按原第 1197 行汇总口径，三档结构要求同为 not-met。原第 1131–1133 行另述最大档 UI not-met、有界队列未证明及后续 driver 表述更正，不是审计延迟超限的证据。原始 JSON／md 报告位于 PR-4 授权 worktree 的 ignored `reports/` 目录，本轮机器上已不存在、不可读，报告字段原值不可考；本轮不做新测量，不补造数字。
+
+编排方整理：PR #174 的 head 分支为 `feat/v2.1.0-rc.2-r2.2-pr4-perf-closeout`，共 5 个提交（`b473df9`、`4f32bcd`、`ee818c4`、`20aa440`、`b7f01bd`），head 为 `b7f01bd3f92f74f56311c1fd80da8fccdcf1f802`。实际合入 4 个文件，+1037／−1；`git show --stat 7cbb929` 显示本 task.md 224 个变更行，`git show --numstat` 明确为 +223／−1，另有 `sbtd-runtime/docs/install-and-use.md` +8、`sbtd-runtime/tests/runtime_perf.py` +736、`sbtd-runtime/tests/test_runtime_perf_smoke.py` +70。squash 合入为 `7cbb929bd88ac4df12e6794dc635655da99e79e0`；git `%cI` 为 `2026-10-25T05:04:30+08:00`（本轮只读核对），GitHub mergedAt 为 `2026-10-25T05:04:30+08:00`（`2026-10-24T21:04:30Z`，编排方整理），两者相等但分别记录。head 上 CI run `40130554768` 为 13／13 success（编排方整理），不是本轮新跑 CI。R2.2 仍因 D9 保持 in-progress，completed_at 保持 null；`runtime_perf.py` 的代码修改另开后续 PR，本节不改代码。

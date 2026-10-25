@@ -89,6 +89,7 @@
 - 顺序依据：用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录；仅将 B／C 从 F 移到 E 前，使用 P6.5，E P7／F P8 不变。
 - 后续项 B：在 `install-and-use.md` 写明 `exportable=false` 仅屏蔽事件明细行，同时明确 `classification != local-metadata` 也屏蔽事件明细；task/run/aggregate 派生行不屏蔽。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。
 - 后续项 C：第 7 项另开单独 PRD docs PR，与 B 两种屏蔽条件及派生行边界措辞一致；独立于第 4 项磁盘上限 PRD docs PR。本轮仅调整计划，不改 PRD。
+- 口径更正（append-only；Lord 2026-10-25 08:05 群内裁定，回填 PR 追加）：按用户 2026-10-25 07:50 群内确认（方案一），Lord 记录，上文后续项 B 中「task/run/aggregate 派生行不屏蔽」与后续项 C 所指派生行边界以本条为准——run、step 等派生行随其依据事件一并不导出；task 行与聚合行始终导出，聚合按全部事件计算（从明细中屏蔽的事件仍计入聚合）。该口径已写入 PRD §10.3（#175）与 install-and-use.md（#176）。上文原行保留不改。
 
 ### E — prerelease v2.1.0-rc.2
 
@@ -116,6 +117,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
 6. E 预发布。
 7. F 文档 + 后续项 B + 后续项 C：B 在 `install-and-use.md` 写明事件明细屏蔽范围；C 在 F 阶段另开单独 PRD docs PR，补充「本地导出屏蔽 event-detail 行，当 `exportable=false` 或 `classification != local-metadata`；不影响 task/run/aggregate 派生行」，两种屏蔽条件均须明确，B／C 措辞一致。依据「用户 11:15 授权，10-22 15:00 确认放第 7 项」。该 PR 独立于第 4 项磁盘上限 PRD docs PR；本轮不改 PRD。
+   口径更正（append-only；Lord 2026-10-25 08:05 群内裁定，回填 PR 追加）：按用户 2026-10-25 07:50 群内确认（方案一），Lord 记录，第 7 项中「不影响 task/run/aggregate 派生行」以本条为准——run、step 等派生行随其依据事件一并不导出；task 行与聚合行始终导出，聚合按全部事件计算（从明细中屏蔽的事件仍计入聚合）。原第 7 项文字保留不改。
 
 后续项 A 已决定，不再待定；JPEG/PDF 与 HTML/CSV 共用 #151 过滤路径。A 不需要 contract PR。JPEG/PDF HTTP 格式与图像尺寸错误码由独立 PR #153（已合并 `ce80ca2`，经 `376ea0c` merge 纳入 R2.1b）承担；这不取代第 4 项磁盘上限错误码 contract PR。后续项 C 按 15:00 决定归第 7 项／F 阶段。AC-51 完整验收仍归 R2.2，R2.1b 只提供四格式事件明细屏蔽一致性回归保护。
 
