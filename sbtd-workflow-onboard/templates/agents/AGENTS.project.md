@@ -32,7 +32,7 @@ task唯一拥有mode/status；`.sbtd/active-task.json`只存schema_version/task_
 
 状态正常沿planned→in-progress→checking→done；checking发现问题可回in-progress，done重开先回planned。只有验收证据成立才记done与真实completed_at。进入blocked必须写非空blocked_reason，解除时清空；不保存blocked_from字段。完成／阻塞／重开／归档或明确重绑定事件放在同一task.md的`## 状态事件`表（at/from/to/reason/evidence），与字段一次原子更新。重开先保留旧完成证据再清空当前completed_at；持续blocked只改原因，不重写恢复前态。恢复取最近未解除的真实入阻塞前态；未知／冲突则用户选择planned/in-progress/checking，记录真实解除事件和历史未知原因，不能直接done或伪造ingress。完整细节以可用sbtd-task/state reference为准；缺安全能力不强行写入。
 
-新完成必须先checking，审查退回则回in-progress；历史直接done不追改。旧格式仅因历史in-progress→done而不满足当前事件schema时，每行仍须符合旧／当前格式，运行输出「旧格式事件，不追溯」，不写task、不阻塞、不算差异；其他解析错误照常报错。首次确需追加新事件才同次追加旧事件基线（事件行数＋sha256，不含frontmatter，不依赖at或git）；基线内只读不校验，后缀逐行严格（含回填历史done），基线哈希变化只追加差异。完整细则见sbtd-task/state reference。
+新完成必须先checking，审查退回则回in-progress；历史直接done不追改。旧格式指无基线时五列完整、at为unknown或合法时间戳，但不符合当前事件schema的行（如verifying、in_progress），不设状态名枚举，运行输出「旧格式事件，不追溯」，不写task、不阻塞、不算差异；空单元格、非法时间戳等其他解析错误照常报错。首次确需追加新事件才同次追加旧事件基线（事件行数＋sha256，不含frontmatter，不依赖at或git）；基线内只读不校验，后缀逐行严格（含回填历史done），基线哈希变化只追加差异。完整细则见sbtd-task/state reference。
 
 Git收尾采用B方案：CLEAN后另作只改该task的commit，仅允许frontmatter的status／completed_at／updated_at、一条done事件及仅含CLEAN对应SHA／CI run的证据；其他文件或行变化需要整轮重审。Reviewy复核限定diff，CI仍须全绿。文件核对任务无审查需求时可在同一步依次checking、done；completed_at必须为真实完成时间。
 

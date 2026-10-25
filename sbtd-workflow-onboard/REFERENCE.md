@@ -26,7 +26,7 @@ AGENTS files are backed up before overwrite. On `reset`, bundled Skill targets a
 
 本配置源仓库沿用文档场景与 unittest，不新增 Gherkin runner。覆盖入口：`tests/test_sbtd_task_status_sync.py`。
 
-- **Scenario: 旧格式只读不追溯** — Given 无基线且每行均为合法旧／当前事件，When 核对，Then 仅以 frontmatter status 判断并输出「旧格式事件，不追溯」，And 文件不变；任一非法日期、列或状态仍报普通解析错误。
+- **Scenario: 旧格式只读不追溯** — Given 无基线，且每条事件行五列完整、`at` 为 `unknown` 或合法时间戳，但有行不符合当前事件 schema（例如状态名 `verifying`、`in_progress`），When 核对，Then 仅以 frontmatter status 判断并输出「旧格式事件，不追溯」，And 文件不变、不阻塞；空单元格、非法时间戳等其他无法解析的情况仍报普通解析错误。
 - **Scenario: 惰性基线保护旧行** — Given 合法旧事件，When 首次追加新事件，Then 同次追加旧事件行数及 sha256 的基线，And 旧行逐字不变；基线后每行严格校验，包括回填历史 done；旧行哈希变化只记录差异，不自动 reopen。
 - **Scenario: 三种核对各自判定** — Given lite／strict 的已跟踪 task，When 有远端，Then fetch 后按默认分支内容比较并核实记录分支；When 无远端，Then 只比较本地 HEAD／记录分支／工作区，不推断丢弃；其他 task 使用声明范围内文件与 sha256。
 - **Scenario: 文件内容而非 mtime 决定差异** — Given 已登记完成文件及验收证据，When 新增、删除或修改文件，Then 按 sha256 报告真实差异，And ignored 证据仍覆盖，单纯 mtime 变化不报内容变化。
