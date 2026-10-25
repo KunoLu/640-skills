@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-contract-scope-wording
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，仅新增 scope_checks 现状说明与本 task；主会话为两个授权文件唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-contract-scope-wording
 created_at: '2026-10-25T21:37:23+08:00'
-updated_at: '2026-10-25T21:43:52+08:00'
-completed_at: null
+updated_at: '2026-10-25T22:18:53+08:00'
+completed_at: '2026-10-25T22:18:53+08:00'
 ---
 
 # rc.2：x-sbtd-auth scope 现状说明
@@ -121,3 +121,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-25T21:37:23+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始 scope_checks 单行插入与本 task 建立 | 基线 `745564a`；入口干净，分支匹配，两路径及 ignore 安全；证据行号一致，26 个 operation 声明 scopes。 |
 | 2026-10-25T21:43:52+08:00 | in-progress | checking | 编排方整理；写入者：主会话，单行说明与限定验证完成，进入检查 | 基线 `745564a`；字节 +1／0 删除、LF、保护行、两文件范围与文字扫描通过；YAML 6 键；63／16／35（3 skips）／9／135／4 tests 均 OK、exit 0；task 解析 exit 0、stderr 空；openapi-spec-validator 由编排方另行检查。 |
+| 2026-10-25T22:18:53+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 后写入 done；PR #183 | Reviewy CLEAN @ 615138acca222026d376d47165ed515a99dc78d9（编排方整理）；CI validation run 40199543723 attempt 1 success 13/13（编排方整理） |
