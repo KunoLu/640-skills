@@ -112,6 +112,7 @@ R2.0c（快照落盘）置于 R2.1a 之前：R2.1a 的导出作业固定 `snapsh
 
 1. R2.1b。
 2. 后续项 A 决策已定 — 用户 2026-10-22 11:13 +08:00：保持 #151 行为（事件明细行按 `exportable=false`／`classification != local-metadata` 屏蔽；task/run/聚合派生行不屏蔽；不新增 `withheld` 值；不开 contract PR）。
+   口径更正（append-only；用户 2026-10-25 14:13 群内确认（本项派生行措辞单开 PR 修正），Lord 记录）：按用户 2026-10-25 07:50 群内确认（Docs B/C 与 exportable 选方案一：run、step 等派生行随其依据事件一并不导出，task 行与聚合行始终导出，聚合按全部事件计算），Lord 记录，第 2 项中「task/run/聚合派生行不屏蔽」以本条为准。#151 过滤行为本身未变。原第 2 项文字保留不改。
 3. R2.1b 评审与合并。
 4. 磁盘上限 PRD §10.4 补充已 done：独立 PRD docs PR [#156](https://github.com/KunoLu/640-skills/pull/156) 已 squash-merge，merge SHA `b73ebe501cb529d11e6829b02a363fd7f4f4274a`，完成时间 `2026-10-22T17:42:55+08:00`（mergedAt `2026-10-22T09:42:55Z`；git committer 时间 `2026-10-22T17:42:54+08:00`）。ADR 0003 §4/§5 修订已 done：PR [#157](https://github.com/KunoLu/640-skills/pull/157) 已 squash-merge，merge SHA `6c344d13ddf6b49882b87d52300b8d697e8aeec4`，完成时间 `2026-10-22T18:36:03+08:00`（mergedAt `2026-10-22T10:36:03Z`；git committer 时间 `2026-10-22T18:36:02+08:00`）。磁盘上限新错误码 contract PR 已 done：PR [#158](https://github.com/KunoLu/640-skills/pull/158) 已 squash-merge，merge SHA `82d42a20a6dc757356173535148fdcc7c0b9024d`，完成时间 `2026-10-22T20:23:39+08:00`（mergedAt `2026-10-22T12:23:39Z`；git committer 时间 `2026-10-22T20:23:39+08:00`，一致）；用户于 2026-10-22 20:23 +08:00 确认三项值：错误码 `DISK_QUOTA_EXCEEDED`、HTTP 507、body 字段 `detail`／`used_bytes`／`quota_bytes`。
 5. R2.2（含磁盘上限实现、跨平台 E2E、AC-56、AC-45、性能与容量实测校准默认值）。
