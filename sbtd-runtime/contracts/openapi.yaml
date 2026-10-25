@@ -20,6 +20,7 @@ info:
     long_term_token: file only, mode 0600, never a query parameter
     csrf: required on POST and DELETE
     host_origin: reject external origins and DNS rebinding
+    scope_checks: serve.py issues, stores, and checks no scopes; x-sbtd-scopes is declarative, each process pairs at most one session, and that session bearer alone authenticates /api/v1 requests other than health and pairing.
 servers:
   - url: http://127.0.0.1:6400
     description: IPv4 loopback only
