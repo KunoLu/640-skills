@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-backfill-docs-bc-pr4
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本 PR 采用 strict；omp 主会话为本轮文件唯一 writer 与验证 controller，提交、push、开 PR 由编排方在 omp 之外执行；不启动子代理、不用 advisor。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-backfill-docs-bc-pr4
 created_at: '2026-10-25T10:45:43+08:00'
-updated_at: '2026-10-25T10:56:56+08:00'
-completed_at: null
+updated_at: '2026-10-25T12:50:50+08:00'
+completed_at: '2026-10-25T12:50:50+08:00'
 ---
 
 # rc.2：Docs B／C、R2.2 PR-4／F 记录与 plan 更正 strict 回填任务
@@ -85,3 +85,4 @@ completed_at: null
 | 2026-10-25T10:49:48+08:00 | in-progress | in-progress | 编排方整理：提交 3——R2.2 task 追加记录补正事件与说明节 | 提交 2 `811a21b` 已完成；R2.2 task 仅 updated_at 一行变更，第 247 行及全部既有事件逐字保留；解析与检查结果见验证节。 |
 | 2026-10-25T10:53:09+08:00 | in-progress | in-progress | 编排方整理：提交 4——F 回填 task :76 attempt 1 macos-bash-installer 措辞更正 | 提交 3 `ebc3bb3` 已完成；F task 仅第 76 行一处分句替换，frontmatter 与事件不变；依据 gh run view 40115693146 --attempt 1 只读核实（编排方整理）；解析与检查结果见验证节。 |
 | 2026-10-25T10:56:56+08:00 | in-progress | checking | 编排方整理：提交 5——plan.md 追加 :90／:118 派生行口径更正；本 PR 五个提交的本地交付完成，送审 | 提交 4 `8b62fb4` 已完成；plan.md 纯插入两行；指定八模块单元测试 Ran 135 tests in 52.186s，OK，退出码 0；全部检查结果见验证节。 |
+| 2026-10-25T12:50:50+08:00 | checking | done | Lord 2026-10-25 12:4x 群内裁定：在 #178 中为 #177 补写 done（checking → done） | #177 合入提交 e85873c4f06ac4b17e90ebfcb41dc4d057316068；committer 时间（%cI）2026-10-25T11:23:35+08:00；mergedAt 2026-10-25T11:23:36+08:00（GitHub 返回 03:23:36Z）；head 825493473983680c2e597a37b443eecea0d41893；Reviewy CLEAN @ 825493473983680c2e597a37b443eecea0d41893；CI validation run 40156569678 attempt 1 success 13/13（head 8254934） |

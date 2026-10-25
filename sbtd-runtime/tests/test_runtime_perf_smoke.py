@@ -58,6 +58,9 @@ class RuntimePerfSmokeTests(unittest.TestCase):
             self.assertFalse(list(output.glob("perf-home-*")))
             raw = next(output.glob("runtime-perf-*.json"))
             self.assertTrue(raw.with_suffix(".md").is_file())
+            self.assertIn("未达 1M 档", report["reference_scale_note"])
+            self.assertIn("未达 1M 档", raw.with_suffix(".md").read_text())
+            self.assertIn("未达 1M 档", result.stdout)
 
     def test_nearest_rank_keeps_tail_and_empty_is_unmeasured(self):
         values = list(range(1, 21))

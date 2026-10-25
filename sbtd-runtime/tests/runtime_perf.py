@@ -557,6 +557,12 @@ def exercise(home: Path, samples: int, report: dict, artifacts: Path) -> None:
 
 
 def write_report(report: dict, output: Path, stem: str) -> Path:
+    scale_note = ""
+    if report.get("dataset", {}).get("requested_events", 1_000_000) < 1_000_000:
+        report["reference_scale_note"] = (
+            "未达 1M 档：请求事件数低于 1_000_000；本次结果不代表 1M 档通过。"
+        )
+        scale_note = f"\n规模说明：{report['reference_scale_note']}"
     raw = output / f"{stem}.json"
     raw.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -574,7 +580,7 @@ def write_report(report: dict, output: Path, stem: str) -> Path:
 ## 执行结论
 
 结论：{report["execution"]}；这是 developer-local 测量，不是产品性能通过或发布就绪。
-实际规模：{json.dumps(report.get("dataset", {}), ensure_ascii=False)}
+实际规模：{json.dumps(report.get("dataset", {}), ensure_ascii=False)}{scale_note}
 
 ## 运行信息
 
@@ -633,7 +639,7 @@ Windows 本机未测；并发、故障上限与事件可见延迟未测。CSV �
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--events", type=int, default=1_000_000)
+    parser.add_argument("--events", type=int, default=10_000)
     parser.add_argument("--samples", type=int, default=3)
     parser.add_argument("--seed-seconds", type=float, default=900)
     parser.add_argument("--output", type=Path, required=True)
@@ -690,6 +696,8 @@ def main(argv=None) -> int:
         },
         "execution": "failed",
     }
+    if args.events < 1_000_000:
+        report["dataset"] = {"requested_events": args.events}
     started = time.perf_counter()
     home = Path(tempfile.mkdtemp(prefix="perf-home-", dir=output)).resolve()
     report["synthetic_home"] = str(home) if args.keep_home else "removed after run"
@@ -729,6 +737,8 @@ def main(argv=None) -> int:
             }
         )
     )
+    if args.events < 1_000_000:
+        print(report["reference_scale_note"])
     return 0 if report["execution"] == "completed" else 1
 
 
