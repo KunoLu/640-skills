@@ -113,6 +113,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 
 每个 omp 会话一行；未使用子代理、advisor；内部辅助 model_usage 记录（如有）由群内交付报告另列。本会话文件名仅通过会话目录文件名列表核对，未读取 jsonl 内容。
 
+编排方整理，按 jsonl 统计：会话 1 实际为 22／44；其后 ping2 为 1／0，会话 2 为 12／19，二者均为 openai-codex/gpt-6-astra（high），上表未单列。上方第 2 行的「未知」写法原样保留。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
