@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-docs-b-c-exportable
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict；主会话为三个授权文件的唯一 writer、git 提交者与验证 controller；不启动子代理、不使用 advisor；只新增本地提交，push 与开 PR 由编排方在 omp 之外执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-docs-b-c-exportable
 created_at: '2026-10-25T07:54:09+08:00'
-updated_at: '2026-10-25T08:24:48+08:00'
-completed_at: null
+updated_at: '2026-10-25T10:42:57+08:00'
+completed_at: '2026-10-25T10:42:57+08:00'
 ---
 
 # rc.2：Docs 后续项 B／C 导出事件明细屏蔽口径 strict 任务
@@ -80,3 +80,4 @@ completed_at: null
 | 2026-10-25T07:56:10+08:00 | in-progress | checking | 编排方整理，主会话记录：PR 1 本地文档交付完成，送审；PR 2 在 C 合入后进行。 | PRD／plan commit `584b121`，任务建立 commit `dc05cf5`；origin/main..HEAD 三文件 diff 检查通过，PRD 纯新增，git diff --check 干净，git status --porcelain 为空；指定 unittest 111 tests OK；本事件与 checking frontmatter 同步更新，completed_at 保持 null。 |
 | 2026-10-25T08:23:26+08:00 | checking | in-progress | 主会话记录：PR 1（C）已以 #175 合入 `8a144a2`，开始 PR 2（B）。 | HEAD／origin/main 为 `8a144a2`，初始工作树干净；本轮在明确授权的 PR 2 分支执行，保留 PR 1 历史字段；状态 schema 允许此转换，未调用 TaskStore 写入。 |
 | 2026-10-25T08:24:48+08:00 | in-progress | checking | 主会话记录：PR 2 本地交付完成，送审。 | 文档 commit `87e7c36`，任务追加 commit `b33c615`；指定 unittest 111 tests OK；两文件差异、单行替换、历史保留、diff --check 与增量禁词检查通过；本事件与 checking frontmatter 同步更新，completed_at 保持 null。 |
+| 2026-10-25T10:42:57+08:00 | checking | done | 编排方整理：任务 v2.1.0-rc.2-docs-b-c-exportable 的两个 PR 均已 squash 合入，关闭。 | 编排方整理，编排方以 git／gh 只读核实：PR 1（后续项 C）#175：merge `8a144a2b6507f553e5ed6d9bd1e897b274cfc966`，git `%cI` `2026-10-25T08:20:32+08:00`，GitHub mergedAt `2026-10-25T08:20:33+08:00`（`2026-10-25T00:20:33Z`），两者相差 1 秒，分别记录；合入 head `b9f91e4`；CI run `40144860776` 13／13 success（head `b9f91e4`）；Reviewy CLEAN SHA 不可考（本 task 与 PR #175 页面均无记录）。PR 2（后续项 B）#176：merge `1b609bcfeb1bface01cec9eb5877feddf27d6121`，git `%cI` `2026-10-25T09:29:15+08:00`，GitHub mergedAt `2026-10-25T09:29:15+08:00`（`2026-10-25T01:29:15Z`），两者相等但分别记录；合入 head `3f10ee0`；Reviewy CLEAN @ `3f10ee0`（编排方整理）；CI run `40146721558` 13／13 success（head `3f10ee0`）。 |
