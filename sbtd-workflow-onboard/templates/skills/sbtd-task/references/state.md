@@ -35,7 +35,7 @@ Perform persistent operations with the Python task-state helper installed with `
 
 ### 旧格式事件与惰性基线
 
-旧 task 原样保留，只读永不写入。不根据事件时间、Git 或合入边界猜新旧。无基线时每条五列表格行必须满足当前 schema 或旧格式；旧格式兼容项仅为历史 `in-progress → done`，其余字段、理由／证据和日期校验不变。非法行、frontmatter、重复事件节仍报普通解析错误。仅旧格式不兼容时 `TaskDocument.parse` 向 stderr 输出「旧格式事件，不追溯」，当前状态只取 frontmatter，不算未记录改动。
+旧 task 原样保留，只读永不写入。不根据事件时间、Git 或合入边界猜新旧。无基线时，五列完整、`at` 为 `unknown` 或合法时间戳，但不符合当前事件 schema 的事件行算旧格式（例如状态名 `verifying`、`in_progress`），不设状态名枚举；空单元格、非法时间戳、非法行、frontmatter、重复事件节仍报普通解析错误。仅旧格式不兼容时 `TaskDocument.parse` 向 stderr 输出「旧格式事件，不追溯」，当前状态只取 frontmatter，不算未记录改动。
 
 只有确需追加新事件，`updated` 才同次先追加 `旧事件基线：...`，evidence 为 `{"rows": <旧事件行数>, "sha256": "<旧事件行原文 UTF-8 sha256>"}`，不含 frontmatter／表头，不依赖 at 或 Git。基线内行保持原样且不再语义校验；`events` 是基线起的严格后缀，`event_lines` 保留所有原文行。后缀按当前 schema 校验，回填历史 done 也必须来自 checking（done 自事件不改变状态）。哈希／行数变化由 check 报差异，再经 record_check 追加事实，不覆盖或重建基线。
 
