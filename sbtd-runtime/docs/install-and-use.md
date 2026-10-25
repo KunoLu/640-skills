@@ -151,7 +151,7 @@ createExport 对非法／缺失请求（包括 snapshot_id 不满足 pattern）�
 
 - **HTML**：单文件静态正文、内联 CSS／SVG，无外部脚本、CDN、字体或 API；所有 Panel 的身份／指标绑定来自 manifest。系统字体栈含 PingFang SC、Hiragino Sans GB、Microsoft YaHei、Noto Sans CJK SC／JP；不写入机器字体路径。深浅主题、顺序、宽度、排序、预览行数、展开详情和隐藏系列说明随请求固定；HTML 预览不等于完整审计明细。
 - **CSV**：沿 snapshot-bound dataset cursor 取完所有授权数据族，复用 schema **1.1** serializer；BOM、固定列、空值与公式转义不变，不受 HTML 预览／排序／图例限制。
-- **输出安全**：四格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。非 exportable 事件明细不输出，保留省略告警与实际导出数据族计数；不在脱敏前改写指标输入。JPEG／PDF 消费同一已过滤 HTML。
+- **输出安全**：四格式均在后端输出层应用统一脱敏；manifest 记录 `redaction_policy_version`。不输出原始对话 JSON、秘密或绝对路径；HTML 文本转义，CSV 保留文本公式防护。task 行始终导出，聚合值（指标）按全部事件计算，被屏蔽的事件仍计入聚合值；run、step 及其他派生行按 `fields.event_id` 跟随其依据事件，依据事件被屏蔽时一并不导出；`privacy.exportable` 为 false 或 `privacy.classification` 不是 `local-metadata`（缺省分别视为 true 与 `local-metadata`）的事件不进入导出明细，`privacy` 缺失或非对象时不据此屏蔽；元数据行保留，`rows:<family>` 计数按实际导出行重算，有明细行被屏蔽时追加 `WITHHELD_NON_EXPORTABLE:<n>` 警告，n 为被屏蔽的明细行数，HTML／JPEG／PDF／CSV 均采用上述口径；不在脱敏前改写指标输入。JPEG／PDF 消费同一已过滤 HTML。
 - **产物与保留**：`$SBTD_RUNTIME_HOME/exports/`，目录 0700、文件 0600（POSIX）。artifact 与 v1 JSON manifest 依次用同目录 temp、fsync、atomic rename 发布；manifest 为 ready 标记。记录 MIME、字节数、SHA-256、固定范围、Panel、数据族行数、renderer／脱敏版本和告警。半成品、坏摘要与未知版本不提供下载；失败只报告安全错误，不泄露本地路径。
 - **清扫**：ready 起默认 **86400 秒（24h）**；启动、新建前及显式 `ExportStore.sweep()` 清扫，没有后台定时器。仅删除已验证且无引用的过期 artifact／manifest 对；共享启动／准入清扫还调用快照所有者及残留 temp 清理，见上方配额说明。未知、损坏和不明归属文件保留，不升级半成品；不触及 audit.db／配置／源 task／报告／handoff／浏览器下载文件。删除后本进程记 gone，重启后可返回 not found。
 
