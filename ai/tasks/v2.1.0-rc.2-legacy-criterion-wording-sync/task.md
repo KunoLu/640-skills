@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-legacy-criterion-wording-sync
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，仅同步四处文档措辞并建立本 task；主会话为五个授权文件的唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交由编排方在 omp 之外执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-legacy-criterion-wording-sync
 created_at: '2026-10-25T14:11:50+08:00'
-updated_at: '2026-10-25T14:15:11+08:00'
-completed_at: null
+updated_at: '2026-10-25T15:13:39+08:00'
+completed_at: '2026-10-25T15:13:39+08:00'
 ---
 
 # rc.2：旧格式判定口径措辞同步
@@ -112,3 +112,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-25T14:11:50+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始旧格式口径核对与五文件措辞同步 | 基线 `861c42a`；根目录、分支及干净工作树已核对；真实时间由 Asia/Shanghai date 获取，不倒填群内决定时间；路径与 ignore 核验通过，解析实现与统一口径一致。 |
 | 2026-10-25T14:15:11+08:00 | in-progress | checking | 编排方整理；写入者：主会话，四处措辞同步与 a–f 本地核验完成，进入检查 | 基线 `861c42a`；五模块 Ran 72 tests、OK、exit 0；diff 与新增 task 空白检查通过，四行精确字节替换及保留检查通过，新增行限制 0 命中；三份旧 task 为 done／legacy True／events 0 且仅 stderr 提示，新 task 非 legacy；范围恰为五文件，详见验证节。 |
+| 2026-10-25T15:13:39+08:00 | checking | done | 编排方整理：Reviewy CLEAN 后写入 done；PR #179 | Reviewy CLEAN @ 4dc4c7b2837d63844b095f1fc0478e6c07a1a75d（编排方整理）；CI validation run 40170493454 attempt 1 success 13/13（编排方整理） |
