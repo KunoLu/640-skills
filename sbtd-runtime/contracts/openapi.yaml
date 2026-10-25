@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: SBTD Runtime local API
   version: 1.0.0
-  summary: "Contract draft for v2.1.0-rc.1. serve.py serves the operations it routes over local HTTP; operations marked x-sbtd-implementation: library have only in-process Python library surfaces under sbtd-runtime/. R1.4 acceptance pins event schema 1.0, QueryScope schema_version 1.0, and CSV export_schema_version 1.1; exports* stay v2.1.0-rc.2."
+  summary: "Contract draft for v2.1.0-rc.1. serve.py serves the operations it routes over local HTTP; operations marked x-sbtd-implementation: library have only in-process Python library surfaces under sbtd-runtime/. R1.4 acceptance pins event schema 1.0, QueryScope schema_version 1.0, and CSV export_schema_version 1.1; exports* stay v2.1.0-rc.2. The info-level x-sbtd-implementation: contract-only marks this document as the contract source; it does not state that no operation is implemented."
   x-sbtd-implementation: contract-only
   x-sbtd-release: v2.1.0-rc.1
   x-sbtd-not-implemented-before: R1.1
@@ -896,8 +896,8 @@ components:
         Invalid SBTD_RUNTIME_DISK_QUOTA_BYTES startup refusal is a process/CLI
         concern outside this OpenAPI contract.
         The queryStatistics contract also allows this response when its required
-        snapshot write is refused by the shared quota; HTTP mapping is deferred
-        to the follow-up implementation PR.
+        snapshot write is refused by the shared quota; serve.py maps it to HTTP
+        507 with this body (PR #167).
       content:
         application/json:
           schema:
