@@ -7,7 +7,7 @@ mode_note: 编排方整理：本 PR 采用 strict；omp 主会话为本轮文件
 status: in-progress
 branch: docs/v2.1.0-rc.2-backfill-docs-bc-pr4
 created_at: '2026-10-25T10:45:43+08:00'
-updated_at: '2026-10-25T10:49:48+08:00'
+updated_at: '2026-10-25T10:53:09+08:00'
 completed_at: null
 ---
 
@@ -53,6 +53,7 @@ completed_at: null
 - 验证边界：仅本地文档与任务解析证据，不冒充 CI、独立审查、合入或发布结论。BDD、构建、代码 lint、单元测试、浏览器／移动端与完整 E2E：skipped，仅文档记录补正，无代码、UI 或运行时行为变化。API Contract／Cross-repo context：not-needed；Mock Strategy：none；rtk：not-needed，使用精确原生 git 与指定 Python 命令。Evidence Source：developer-local；Source Revision：dirty；Environment Alignment：not-needed；Evidence Publication：local-only；不生成正式测试报告。
 - 提交 3 入口核验（编排方整理）：HEAD 为提交 2 `811a21b`，分支匹配、初始工作树干净；两个授权 task 均已跟踪，路径及父路径无 symlink、位于项目内，`git check-ignore --no-index` 均无命中、退出码 1。写前按指定原生 Python 命令解析，R2.2 为 `in-progress False 53 None`，本 task 为 `in-progress False 1 None`。本轮仅追加历史记录，不重绑定 R2.2 既有 branch，不调用 TaskStore；事件时间与 updated_at 取自实际 `TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00` 输出，晚于两文件既有末条事件。`git show --stat 7cbb929`、`git show --numstat --format= 7cbb929` 与 `%cI` 已只读核对；R2.2 task 的 224 个变更行实际为 +223／−1。
 - 提交 3 写后核验（编排方整理）：分别执行指定 `PYTHONDONTWRITEBYTECODE=1 python3 -B -c` 解析命令，R2.2 为 `in-progress False 54 None`（原 53 条事件加 1），本 task 为 `in-progress False 2 None`。`git diff --check` 退出码 0；`git diff --stat` 只含两个授权 task；全部 diff 与 R2.2 单文件 diff 的删除行检查均仅有各自旧 updated_at。按字节比较 `git show HEAD:<path>` 与工作树，原第 247 行含换行符不变，全部既有事件及其余既有正文逐字保留，新增位置符合授权。新增行禁词与主目录路径 grep 为 0 命中，退出码 1；未跟踪文件清单为空。辅助检查首次把其他章节的历史事件摘录也计入状态事件，触发断言失败；限定到「状态事件」章节后通过，未改正文规避检查、未落盘脚本或报告。BDD、构建、lint、单元测试与 E2E 均 skipped：仅文档记录补正，无产品行为变化；rtk not-needed，使用精确原生命令；证据仅为本地 dirty 工作树检查，不是新 CI 或发布证明。
+- 提交 4 核验（编排方整理）：入口 HEAD 为提交 3 `ebc3bb3`，分支匹配、工作树干净；两个授权 task 均已跟踪、无 ignore 匹配，路径及父路径无 symlink。先解析 HEAD 的 F task 得到 `done False 6 2026-10-25T02:23:12+08:00`；写后分别执行指定 `PYTHONDONTWRITEBYTECODE=1 python3 -B -c` 解析命令，F 结果与 HEAD 相同，本 task 为 `in-progress False 3 None`。Python 按字节比较确认 F 仅第 76 行指定分句替换，其余字节、frontmatter 与全部事件不变；本 task 仅 updated_at 变更及授权位置追加，既有事件保留。`git diff --check` 退出码 0，`git diff --stat` 只含两个授权文件；`git diff -U0 -- ai/tasks/v2.1.0-rc.2-f-backfill/task.md` 仅第 76 行一删一增。`grep '^-[^-]'` 仅列旧 updated_at，因 F 正文为 Markdown 列表、删除行以双减号起始，另用 Python 排除文件头后确认全部删除行恰为旧 updated_at 与 F 原第 76 行。新增行禁词与主目录路径 grep 为 0 命中、退出码 1；无未跟踪或暂存改动。新增事件及 updated_at 使用实际 `TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S+08:00` 输出，晚于既有末条事件。本条补入后再次执行相同解析与边界检查。历史 CI 依据为编排方整理，本轮未执行 gh；BDD、构建、lint、单元测试与 E2E skipped，仅文档更正，无产品行为变化；rtk not-needed，使用原生命令。证据为 developer-local／dirty／local-only，不是新 CI、独立审查或发布证明，不生成报告文件。
 
 ## 模型记录
 
@@ -62,8 +63,10 @@ completed_at: null
 | 2 | 提交 1 会话（docs-b-c 合入回填） | openai-codex/gpt-6-astra（high） | 8／19（编排方整理，按 jsonl 统计；无 model_usage 记录） | docs-b-c task 合入回填 | `2026-10-25T02-42-31-999Z_01a170f0-31bf-73d7-9e3d-bc2732619e90.jsonl` |
 | 3 | 提交 2 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | docs-b-c 记录补正、建立本 task | `2026-10-25T02-45-20-882Z_01a170f2-c572-7456-bfcf-982e9fd2b3c6.jsonl` |
 | 4 | 提交 3 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | R2.2 task 记录补正 | `2026-10-25T02-49-16-483Z_01a170f6-5dc3-7674-b6e6-3bdc370727d3.jsonl` |
+| 5 | 提交 4 会话（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | F task :76 措辞更正 | `2026-10-25T02-52-46-744Z_01a170f9-9318-7571-adb0-311f5b0c8a4c.jsonl` |
 
 模型记录更正（编排方整理，按 jsonl 统计）：第 3 行提交 2 会话实际 14／25，无 model_usage 记录；原「未知」原文保留。
+模型记录更正（编排方整理，按 jsonl 统计）：第 4 行提交 3 会话实际 14／33，无 model_usage 记录；原「未知」原文保留。
 
 每个 omp 会话一行；omp 会话未使用子代理；内部辅助 model_usage 记录如有另列一行。
 
@@ -73,3 +76,4 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-25T10:45:43+08:00 | planned | in-progress | 编排方整理：建立回填 strict 任务，提交 1 `8608564` 已完成，开始提交 2 | 基线 `1b609bc`；提交 1 `8608564`；本轮入口根目录、分支、干净工作树、路径与 ignore 检查通过，写前 docs-b-c 只读解析为 done、非旧格式、六条事件；本轮解析与差异检查记录见验证与剩余边界。 |
 | 2026-10-25T10:49:48+08:00 | in-progress | in-progress | 编排方整理：提交 3——R2.2 task 追加记录补正事件与说明节 | 提交 2 `811a21b` 已完成；R2.2 task 仅 updated_at 一行变更，第 247 行及全部既有事件逐字保留；解析与检查结果见验证节。 |
+| 2026-10-25T10:53:09+08:00 | in-progress | in-progress | 编排方整理：提交 4——F 回填 task :76 attempt 1 macos-bash-installer 措辞更正 | 提交 3 `ebc3bb3` 已完成；F task 仅第 76 行一处分句替换，frontmatter 与事件不变；依据 gh run view 40115693146 --attempt 1 只读核实（编排方整理）；解析与检查结果见验证节。 |
