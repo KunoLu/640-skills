@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-runtime-perf-default-events
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict；omp 主会话为授权文件唯一 writer 与验证 controller，不启动子代理、不用 advisor；提交由编排方在 omp 之外执行。
-status: checking
+status: done
 branch: fix/v2.1.0-rc.2-runtime-perf-default-events
 created_at: '2026-10-25T12:06:58+08:00'
-updated_at: '2026-10-25T12:17:34+08:00'
-completed_at: null
+updated_at: '2026-10-25T12:50:50+08:00'
+completed_at: '2026-10-25T12:50:50+08:00'
 ---
 
 # rc.2：runtime_perf 默认事件数与规模说明
@@ -146,3 +146,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_sbtd_task_document t
 |---|---|---|---|---|
 | 2026-10-25T12:06:58+08:00 | planned | in-progress | Lord 2026-10-25 11:25 群内裁定；写入者：会话 1 主会话，开始默认事件数调整、兼容性验证与记录 | 基线 `e85873c`；入口根目录、分支、干净工作树、路径与 ignore 检查通过；旧版参数解析与合成报告基线检查退出码 0，详见验证与剩余边界。 |
 | 2026-10-25T12:17:34+08:00 | in-progress | checking | Lord 2026-10-25 11:25 群内裁定；写入者：会话 2 主会话，实现与本地验证完成，进入检查 | 提交 1 `dbc339b`；无 --events 默认运行 exit 0，requested_events=10000，events=1300，truncated=true；四组百万及以上合成 JSON/MD 字节一致，两组小规模仅新版含说明，argparse 检查通过，exit 0；runtime smoke 2 tests OK、task 八模块 135 tests OK，退出码均 0；详见会话 2 验证小节。 |
+| 2026-10-25T12:50:50+08:00 | checking | done | 编排方整理：Reviewy CLEAN 后写入 done；PR #178 | Reviewy CLEAN @ bc3062c94dd1da6669a364a68e2eeec319896bcb（约 2026-10-25 12:48 群内报告，精确秒不可考；编排方整理）；CI validation run 40161526037 attempt 1 success 13/13，head bc3062c，最后一个 job 完成于 2026-10-25T12:40:57+08:00（编排方整理）；PR #178 |
