@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-contract-5-5-wording
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，仅同步三处合约措辞并建立本 task；主会话为三个授权文件唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-contract-5-5-wording
 created_at: '2026-10-25T20:10:08+08:00'
-updated_at: '2026-10-25T20:16:36+08:00'
-completed_at: null
+updated_at: '2026-10-25T20:57:45+08:00'
+completed_at: '2026-10-25T20:57:45+08:00'
 ---
 
 # rc.2：5.5 合约措辞同步
@@ -119,3 +119,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-25T20:10:08+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始三处措辞同步与本 task 建立 | 基线 `7feada2`；入口干净、分支匹配、路径与 ignore 安全；实现证据行号一致，operation 计数 28／11／4／13。 |
 | 2026-10-25T20:16:36+08:00 | in-progress | checking | 编排方整理；写入者：主会话，三处措辞同步与限定验证完成，进入检查 | 基线 `7feada2`；字节、行数、换行、保护行及三文件范围检查通过；文字限制 0 命中；YAML 解析 exit 0；123 tests OK（3 skips）、独立 HTTP 1 test OK、任务回归 135 tests OK；task 解析 exit 0、stderr 空；openapi-spec-validator 未安装，skipped。 |
+| 2026-10-25T20:57:45+08:00 | checking | done | 编排方整理：Reviewy CLEAN 后写入 done；PR #182 | Reviewy CLEAN @ 38e287248dead1d16ffb0d098ae764d60ca3e966（编排方整理）；CI validation run 40192819927 attempt 1 success 13/13（编排方整理） |
