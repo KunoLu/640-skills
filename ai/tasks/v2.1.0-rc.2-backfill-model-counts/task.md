@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-backfill-model-counts
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，仅回填三个 task 并建立本 task；主会话为四个授权文件唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交由编排方在 omp 之外执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-backfill-model-counts
 created_at: '2026-10-25T17:15:26+08:00'
-updated_at: '2026-10-25T17:18:46+08:00'
-completed_at: null
+updated_at: '2026-10-25T18:20:04+08:00'
+completed_at: '2026-10-25T18:20:04+08:00'
 ---
 
 # rc.2：#178／#177／#179 task 模型计数与时间说明回填
@@ -113,3 +113,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-25T17:15:26+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始三个 task 记录回填与本 task 建立 | 基线 `ebc0719`；根目录、分支、干净工作树及授权边界已核对；路径与 ignore 检查通过，既有三文件与基线逐字节一致；解析实现与 done → done 先例已核对。 |
 | 2026-10-25T17:18:46+08:00 | in-progress | checking | 编排方整理；写入者：主会话，三个 task 回填与本地 a–f 检查完成，进入检查 | 基线 `ebc0719`；八模块 Ran 135 tests in 50.352s、OK、exit 0；diff 与新 task 空白检查通过，A／C 原字节全部保留、B 仅 updated_at 变更及指定追加；新增文字限制 0 命中，四份 task 初轮解析 exit 0、stderr 空，工作树恰为四个授权文件；详见验证节。 |
+| 2026-10-25T18:20:04+08:00 | checking | done | 编排方整理：Reviewy CLEAN 后写入 done；PR #180 | Reviewy CLEAN @ 7113ff49aaa97795f6af9de47f6bac2dfccf5b90（编排方整理）；CI validation run 40182684267 attempt 1 success 13/13（编排方整理） |
