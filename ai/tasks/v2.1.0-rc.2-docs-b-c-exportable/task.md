@@ -30,6 +30,7 @@ completed_at: '2026-10-25T10:42:57+08:00'
 - PR 2 只改 `sbtd-runtime/docs/install-and-use.md` :154 一个分句与本 task；PRD、5.5 契约、plan.md（含 :24、:90、:118；:90／:118 更正按 Lord 2026-10-25 08:05 裁定推迟到下一个回填 PR）、代码及 openapi／spec／info 文件不在本 PR。
 - PR 2 沿用 strict；本轮明确授权在 `docs/v2.1.0-rc.2-docs-b-install-and-use` 分支执行，frontmatter 的 `branch` 保留 PR 1 历史值，不冒充已执行 TaskStore 重绑定或自动恢复。除 `status`、`updated_at` 外，既有字段、正文、模型记录与三条状态事件均保留；不写 active／index／handoff／ignore。
 - PR 2 未完整调用 grill-with-docs：范围、实现依据与验收条件明确；上表 Book Gate Plan 的适用性沿用，仅 project-validation 适用，无生产代码、运行时、部署或领域设计变化。主会话为唯一 writer、提交者与验证 controller，不使用子代理或 advisor；本地 checking 不代表独立审查、合入或发布完成。
+- 编排方整理：PR 2（后续项 B，#176）的实际工作分支为 `docs/v2.1.0-rc.2-docs-b-install-and-use`；frontmatter `branch` 保留 PR 1（后续项 C，#175）分支 `docs/v2.1.0-rc.2-docs-b-c-exportable`，不改写。
 
 ## Book Gate Plan
 
@@ -68,8 +69,11 @@ completed_at: '2026-10-25T10:42:57+08:00'
 | 2 | main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | PRD §10.3 屏蔽口径、plan.md Docs 任务链接与本 strict 记录；本地提交由本会话执行 | `2026-10-24T23-53-33-824Z_01a17055-7f80-7022-92f3-a1e5d81fa3ac.jsonl` |
 | 3 | PR 2 ping（2026-10-25 08:22:15 +08:00 开始） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-25T00-22-15-611Z_01a1706f-c53b-7061-89a4-72f78cf9982a.jsonl` |
 | 4 | PR 2 main（本会话） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），实际计数见群内交付报告 | install-and-use.md :154 屏蔽范围说明、本 task 的 PR 2 追加记录与本地验证提交 | `2026-10-25T00-22-53-874Z_01a17070-5ab2-713e-95e0-b21c885484c6.jsonl` |
+| 5 | PR 1 main 内部辅助 model_usage（第 2 行会话） | 不适用 | 0 条（jsonl 中无 model_usage 记录；编排方整理，按 jsonl 统计） | 无 | `2026-10-24T23-53-33-824Z_01a17055-7f80-7022-92f3-a1e5d81fa3ac.jsonl` |
+| 6 | PR 2 main 内部辅助 model_usage（第 4 行会话） | typesafe/jev-latest | 16 条（purpose find；不计入第 4 行；编排方整理，按 jsonl 统计） | omp main 会话内部辅助调用，input 79,541／output 5,574 tokens | `2026-10-25T00-22-53-874Z_01a17070-5ab2-713e-95e0-b21c885484c6.jsonl` |
 
 每个 omp 会话一行；本会话未使用子代理。
+模型记录更正（编排方整理，按 jsonl 统计）：第 2 行 PR 1 main 实际 17／45，第 4 行 PR 2 main 实际 17／41；两行原「未知（落盘时本轮尚未结束）…」原文保留不改，以本更正为准；第 1、3 行 ping 会话及第 2 行会话均无 model_usage 记录，第 4 行会话的 16 条辅助记录见第 6 行。
 
 ## 状态事件
 
