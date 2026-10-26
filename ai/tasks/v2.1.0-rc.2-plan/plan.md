@@ -29,6 +29,7 @@
 | concurrency-race | 并发测试时序竞争 strict 测试修复（#171 任务；Lord 2026-10-25 01:10 群内裁定补行） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-concurrency-test-race/task.md |
 | legacy-notice | 旧格式事件放宽口径 strict 实现修复（#172 fix4 任务；Lord 2026-10-25 01:10 群内裁定补行） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-legacy-events-notice/task.md |
 | f-backfill | rc.2 F 回填：#168–#172 修复轮次记录补正（独立于 P8 F 行；Lord 2026-10-25 01:10 群内裁定补行） | —（独立记录任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-backfill/task.md |
+| R2.1c | 补齐四格式导出菜单接线；方案 B：固定页面快照及七字段 presentation_state，主题含浅色 | —（R2.1a 前端补接线） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-r2.1c-export-menu/task.md |
 
 ## 各行锁定决定与验收
 
@@ -101,6 +102,13 @@
 - 锁定决定：D10（E／F 阶段回填）；PRD 若升 v0.3 须用户届时另行授权。
 - 验收：安装与使用文档更新落盘快照 24h 行为（消除 r1.4 报告 deferred 条目对应差异说明）；renderer 安装授权文档按实际所选模式显示体积；常规 docs 回填 PR 不修改 PRD 正文。本轮仅登记，不改 PRD。
 - 后续项 B／C：已移至 E 前 Docs 步骤（P6.5，见上文「Docs — 后续项 B／C（E 前）」），F 不重复执行；顺序依据用户 2026-10-22 23:23 +08:00 群内确认（顺序按推荐），Lord 记录。
+
+### R2.1c — 四格式导出菜单接线
+
+- 用户 2026-10-26 11:10 群内确认（开始 r2.1c，选方案 B：导出传页面 7 字段 presentation_state、跟随页面主题含浅色；openapi.yaml:699 的 409 措辞与 422／503／507 的 {detail} 错误体按现状兼容、另开 PR），Lord 记录。
+- 认领 U-07、§13.2、AC-36、AC-52；部分涉及 AC-43 界面与 AC-44。补 R2.1a 漏掉的前端接线，不是新需求（PRD:1406、R2.1a task:219）。AC-45–51、AC-53–59 后端已交付，不扩范围；AC-33、AC-62 及真机四格式点击（含浅色）仍归 D9。
+- 验收：认证导出 API、每点击新幂等键／重试同键、固定快照及展示状态、有界退避轮询与取消、blob 下载／释放、错误与警告、renderer 置灰原因、工具栏顺序；34 项前端测试、两次构建逐字节一致及 Python 本地验证见 task。浅色导出不在 CI 覆盖范围，只靠 D9 在用户 Mac 上的页面点击验证；本轮契约模拟 smoke 不等于浅色产物验收。
+- 状态与发布边界见 task.md／PR 页面；本节不记录 CI 与评审结果。
 
 ## 依赖顺序说明
 

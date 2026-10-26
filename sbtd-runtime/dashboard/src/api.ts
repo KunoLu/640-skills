@@ -16,6 +16,7 @@
  */
 
 import type { Snapshot } from "./reportDocument";
+import { parseExportFilename, type ExportFile, type ExportFormat, type ExportInput, type ExportStatus } from "./exportJob.ts";
 
 const SESSION_KEY = "sbtd.session";
 
@@ -96,9 +97,15 @@ export async function pairWithTicket(ticket: string): Promise<SessionCredentials
 
 export class ApiError extends Error {
   readonly status: number | null;
-  constructor(message: string, status: number | null) {
+  readonly detail: string;
+  readonly code: string;
+  readonly requestId: string;
+  constructor(message: string, status: number | null, detail = "", code = "", requestId = "") {
     super(message);
     this.status = status;
+    this.detail = detail;
+    this.code = code;
+    this.requestId = requestId;
   }
 }
 
@@ -107,6 +114,8 @@ async function request<T>(
   path: string,
   body?: unknown,
   extraHeaders?: Record<string, string>,
+  signal?: AbortSignal,
+  binary = false,
 ): Promise<T> {
   const session = readSession();
   const headers: Record<string, string> = { ...extraHeaders };
@@ -121,36 +130,37 @@ async function request<T>(
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
   } catch (error) {
+    signal?.throwIfAborted();
     throw new ApiError(`network error: ${String(error)}`, null);
   }
   if (!response.ok) {
-    // Surface whatever the envelope carries (request_id, meta.warnings) so a
-    // failed call is diagnosable without DevTools.
-    let detail = "";
+    let detail = "", code = "", requestId = "";
     try {
-      const payload = (await response.json()) as {
-        request_id?: unknown;
-        meta?: { warnings?: unknown };
-      };
-      const parts: string[] = [];
-      if (typeof payload?.request_id === "string") {
-        parts.push(`request_id=${payload.request_id}`);
+      const payload = await response.json();
+      if (payload && typeof payload === "object") {
+        const parts: string[] = [];
+        if (typeof payload.detail === "string") parts.push(payload.detail);
+        if (typeof payload.error?.code === "string") code = payload.error.code;
+        if (typeof payload.request_id === "string") requestId = payload.request_id;
+        for (const key of ["max_edge_px", "max_total_pixels", "used_bytes", "quota_bytes"]) {
+          if (typeof payload[key] === "number") parts.push(`${key}=${payload[key]}`);
+        }
+        if (Array.isArray(payload.meta?.warnings)) parts.push(`warnings=${payload.meta.warnings.join(",")}`);
+        detail = parts.join("; ");
       }
-      const warnings = payload?.meta?.warnings;
-      if (Array.isArray(warnings) && warnings.length > 0) {
-        parts.push(`warnings=${warnings.join(",")}`);
-      }
-      if (parts.length > 0) detail = ` (${parts.join("; ")})`;
     } catch {
-      /* non-JSON error body */
+      /* Non-JSON errors still retain their HTTP status. */
     }
     throw new ApiError(
-      `${method} ${path} -> ${response.status}${detail}`,
-      response.status,
+      `${method} ${path} -> ${response.status} ${detail} ${code} ${requestId}`.trim(),
+      response.status, detail, code, requestId,
     );
   }
+  if (binary) return response as T;
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -380,4 +390,36 @@ export async function fetchAllSnapshotRows(
     cursor = result.next_cursor;
   }
   return { rows, total, truncated: true };
+}
+
+export interface ExportCapabilities {
+  exports: Record<ExportFormat, { available: boolean; reason: string | null }>;
+}
+
+export async function getCapabilities(signal?: AbortSignal): Promise<ExportCapabilities> {
+  const path = "/api/v1/capabilities";
+  return unwrapEnvelope(await request("GET", path, undefined, undefined, signal), path);
+}
+
+export async function createExport(input: ExportInput, key: string, signal: AbortSignal) {
+  const path = "/api/v1/exports";
+  const envelope = await request<Envelope<{ export_id: string }>>("POST", path, input, { "Idempotency-Key": key }, signal);
+  return { ...unwrapEnvelope<{ export_id: string }>(envelope, path), warnings: envelope.meta.warnings };
+}
+
+export async function getExport(id: string, signal: AbortSignal): Promise<ExportStatus> {
+  const path = `/api/v1/exports/${encodeURIComponent(id)}`;
+  return unwrapEnvelope(await request("GET", path, undefined, undefined, signal), path);
+}
+
+export function deleteExport(id: string, key: string): Promise<void> {
+  return request("DELETE", `/api/v1/exports/${encodeURIComponent(id)}`, undefined, { "Idempotency-Key": key });
+}
+
+export async function downloadExport(id: string, format: ExportFormat, signal: AbortSignal): Promise<ExportFile> {
+  const response = await request<Response>("GET", `/api/v1/exports/${encodeURIComponent(id)}/file`, undefined, undefined, signal, true);
+  return {
+    blob: await response.blob(),
+    filename: parseExportFilename(response.headers.get("Content-Disposition"), `sbtd-report_${id}.${format}`),
+  };
 }

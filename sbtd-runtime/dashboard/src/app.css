@@ -79,6 +79,16 @@ body {
   margin: 8px 0 0;
 }
 
+.export-feedback {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  font-size: var(--sbtd-font-size-secondary);
+}
+.export-feedback p { margin: 4px 0; }
+.export-unavailable { color: var(--sbtd-text-secondary); }
+.export-error { color: var(--sbtd-error); }
+.export-warning { color: var(--sbtd-unknown); }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
