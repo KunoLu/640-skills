@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   clearTicketFromAddressBar,
+  createExport,
+  deleteExport,
+  downloadExport,
+  getCapabilities,
+  getExport,
+  type ExportCapabilities,
   fetchAllSnapshotRows,
   fetchReportSnapshot,
   pairWithTicket,
@@ -9,6 +15,7 @@ import {
   readSession,
   readTicketFromFragment,
 } from "./api";
+import { ExportJob, exportErrorMessage, type ExportFormat, type ExportState } from "./exportJob";
 import {
   cleanFilters,
   deriveFilterOptions,
@@ -53,6 +60,9 @@ import {
 type Theme = "dark" | "light";
 
 const POLL_INTERVAL_MS = 30_000;
+const EXPORT_FORMATS = [
+  ["html", "HTML 网页"], ["jpeg", "JPEG 长图"], ["pdf", "PDF 文档"], ["csv", "CSV 数据"],
+] as const;
 
 function systemTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches
@@ -76,6 +86,31 @@ export function App() {
   const [expandedPanels, setExpandedPanels] = useState<Record<string, true>>({});
   const [expandedTasks, setExpandedTasks] = useState<string[]>([]);
 
+  const [capabilities, setCapabilities] = useState<ExportCapabilities | null>(null);
+  const [capabilityError, setCapabilityError] = useState("");
+  const [exportState, setExportState] = useState<ExportState | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportLabel, setExportLabel] = useState("");
+  const exportRef = useRef<ExportJob | null>(null);
+  const blobUrls = useRef(new Set<string>());
+  const hasView = model.view !== null;
+
+  useEffect(() => {
+    if (!hasView) return;
+    const controller = new AbortController();
+    getCapabilities(controller.signal).then(
+      value => { if (!controller.signal.aborted) setCapabilities(value); },
+      error => { if (!controller.signal.aborted) setCapabilityError(exportErrorMessage(error)); },
+    );
+    return () => controller.abort();
+  }, [hasView]);
+
+  useEffect(() => () => {
+    exportRef.current?.stop();
+    exportRef.current = null;
+    for (const url of blobUrls.current) URL.revokeObjectURL(url);
+    blobUrls.current.clear();
+  }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("sbtd.theme", theme);
@@ -172,8 +207,61 @@ export function App() {
     return new ReportDocument(model.view.snapshot, {
       ...DEFAULT_PRESENTATION_STATE,
       theme,
+      expanded_detail_ids: [...Object.keys(expandedPanels), ...expandedTasks],
     });
-  }, [model.view, theme]);
+  }, [model.view, theme, expandedPanels, expandedTasks]);
+
+  const unavailableReason = (format: ExportFormat) => {
+    if (format === "html" || format === "csv") return "";
+    const capability = capabilities?.exports[format];
+    return capability?.available ? "" : capability?.reason || capabilityError || "正在检查 renderer 可用性";
+  };
+
+  const startExport = async (format: ExportFormat) => {
+    if (!report || exportBusy || unavailableReason(format)) return;
+    exportRef.current?.stop();
+    const job = new ExportJob(report.snapshot.snapshot_id, format, report.presentation_state,
+      { createExport, getExport, deleteExport, downloadExport }, setExportState);
+    exportRef.current = job;
+    setExportBusy(true);
+    setExportLabel(`${format.toUpperCase()} · ${report.snapshot.effective_from} — ${report.snapshot.effective_to} (${report.snapshot.timezone})`);
+    const file = await job.run();
+    if (exportRef.current !== job || job.controller.signal.aborted) return;
+    try {
+      if (file) {
+        const url = URL.createObjectURL(file.blob);
+        blobUrls.current.add(url);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.filename;
+        document.body.append(link);
+        try { link.click(); } finally {
+          link.remove();
+          setTimeout(() => { URL.revokeObjectURL(url); blobUrls.current.delete(url); }, 0);
+        }
+      }
+    } catch (error) {
+      setExportState(current => ({ status: "failed", message: exportErrorMessage(error), warnings: current?.warnings ?? [] }));
+    }
+    setExportBusy(false);
+  };
+
+  const cancelExport = async () => {
+    const job = exportRef.current;
+    if (!job?.id) return;
+    setExportBusy(true);
+    try {
+      await job.cancel();
+      if (exportRef.current === job) setExportState(current => ({
+        status: "cancelled", message: "导出已取消", warnings: current?.warnings ?? [],
+      }));
+    } catch (error) {
+      if (exportRef.current === job) setExportState(current => ({
+        status: "failed", message: exportErrorMessage(error), warnings: current?.warnings ?? [],
+      }));
+    }
+    if (exportRef.current === job) setExportBusy(false);
+  };
 
   const selectPreset = (preset: (typeof PRESET_IDS)[number]) => {
     const next: TimeSelection = { kind: "preset", preset };
@@ -295,17 +383,33 @@ export function App() {
             </button>
           </div>
           <div className="segmented" role="group" aria-label="导出">
-            {["HTML 网页", "JPEG 长图", "PDF 文档", "CSV 数据"].map((label) => (
+            {EXPORT_FORMATS.map(([format, label]) => (
               <button
-                key={label}
+                key={format}
                 type="button"
-                disabled
-                title="R2.1a 交付导出后启用（导出作业创建时固定当前 snapshot_id，自动刷新不影响在途导出，AC-52）"
+                disabled={!report || exportBusy || Boolean(unavailableReason(format))}
+                title={unavailableReason(format) || "导出当前快照，自动刷新不影响在途导出"}
+                onClick={() => void startExport(format)}
               >
                 {label}
               </button>
             ))}
           </div>
+          {exportRef.current?.id && exportState?.status !== "ready" && exportState?.status !== "cancelled" && (
+            <button type="button" onClick={() => void cancelExport()}
+              disabled={exportRef.current.controller.signal.aborted && exportBusy}>取消导出</button>
+          )}
+        </div>
+        <div className="export-feedback" role="status" aria-live="polite">
+          {(["jpeg", "pdf"] as const).map(format => unavailableReason(format) && (
+            <p className="export-unavailable" key={format}>{format.toUpperCase()}：{unavailableReason(format)}</p>
+          ))}
+          {exportState && <>
+            <p className={exportState.status === "failed" ? "export-error" : undefined}>
+              {exportLabel}：{exportState.message}
+            </p>
+            {exportState.warnings.map(warning => <p className="export-warning" key={warning}>警告：{warning}</p>)}
+          </>}
         </div>
         {customOpen && (
           <div className="custom-range" role="group" aria-label="自定义时间范围">
@@ -474,8 +578,7 @@ export function App() {
       </main>
       <footer className="page-footer">
         全页报告导出包含所有统计 Panel、其图表／表格，以及当前展开的详情；CSV
-        包含筛选范围内全部安全结构化记录，不受预览行数限制。（导出为 R2.1a
-        范围，当前不可用。）
+        包含筛选范围内全部安全结构化记录，不受预览行数限制。
         {view !== null && view.rowsTruncated && (
           <>
             <br />
