@@ -697,7 +697,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/ExportNotReady"
         "410":
           $ref: "#/components/responses/Gone"
 components:
@@ -805,16 +805,48 @@ components:
                     $ref: "#/components/schemas/ExportJob"
     BadRequest:
       description: Invalid or missing request body, field type, export format, time, dimension, or metric. No silent default.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
     Unauthorized:
       description: Missing credential or scope. Does not reveal whether a hidden object exists.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
     NotFound:
       description: Missing or invisible object.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
     Conflict:
       description: Same idempotency key with a different payload, or a source-event conflict.
     Forbidden:
       description: Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF check on an unsafe method. Does not reveal internal policy details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
+    ExportNotReady:
+      description: |
+        The export job exists but is not ready (queued, generating, failed, or
+        cancelled), so it cannot be downloaded. The current JSON body is
+        {"detail":"export is not ready"}. This does not guarantee that a later
+        download will succeed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
+          example:
+            detail: export is not ready
     ExportImageSizeLimit:
       description: |
         JPEG preflight failed before export acceptance or generation because
@@ -918,6 +950,18 @@ components:
                 minimum: 1
                 description: Effective shared cap L in bytes; currently defaults to 2000000000, configurable via SBTD_RUNTIME_DISK_QUOTA_BYTES and not frozen to that default.
   schemas:
+    DetailError:
+      type: object
+      additionalProperties: false
+      required: [detail]
+      description: |
+        Common error body of currently routed HTTP handlers, not an Envelope.
+        This schema does not imply that every operation declared here is routed.
+        Detail strings may be dynamic; errors with extra numeric fields use
+        their own response schemas.
+      properties:
+        detail:
+          type: string
     ExportJob:
       type: object
       required: [status, error]
