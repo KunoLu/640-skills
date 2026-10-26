@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-prd-wording-4a-4b
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，主会话为两个授权文件唯一 writer 与验证 controller；不启动子代理、不使用 advisor；提交、推送与开 PR 由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-prd-wording-4a-4b
 created_at: '2026-10-26T00:27:49+08:00'
-updated_at: '2026-10-26T07:41:24+08:00'
-completed_at: null
+updated_at: '2026-10-26T08:11:16+08:00'
+completed_at: '2026-10-26T08:11:16+08:00'
 ---
 
 # rc.2：PRD 措辞 4a＋4b 定稿
@@ -128,3 +128,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest tests.test_sbtd_task_document t
 |---|---|---|---|---|
 | 2026-10-26T00:27:49+08:00 | planned | in-progress | 编排方整理；写入者：主会话，建立 PRD 4a＋4b 本地草稿记录 | 基线 `9fb137b`；入口干净，分支、两路径及 ignore 安全；源码行号复核一致，时间戳与无基线旧格式解析已实测；草稿阶段不提交。 |
 | 2026-10-26T07:41:24+08:00 | in-progress | checking | 编排方整理；写入者：主会话，4b 归因定稿与全部限定验证完成，进入检查 | 基线 `9fb137b`；expected-final.py 字节核对 True、exit 0，4a、:79 与其余字节保留；numstat 2／1，diff --check exit 0；全文文字扫描 0 命中、无 CRLF／尾随空白；八模块 135 tests OK、exit 0；task 解析 `checking False 2 None`、exit 0、stderr 空；工作树恰两个授权文件，原 planned → in-progress 事件逐字节不变。 |
+| 2026-10-26T08:11:16+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 后写入 done；PR #185 | Reviewy CLEAN @ 93f28fd49a6c8559df928153020f18b41d17f5e6（编排方整理）；CI validation run 40246092529 attempt 1 success 13/13（编排方整理） |
