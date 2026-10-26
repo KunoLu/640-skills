@@ -658,7 +658,7 @@ class OpenApiDraftTests(unittest.TestCase):
                 {
                     "400": "BadRequest",
                     "404": "NotFound",
-                    "409": "Conflict",
+                    "409": "ExportNotReady",
                     "410": "Gone",
                 },
             ),
@@ -683,6 +683,56 @@ class OpenApiDraftTests(unittest.TestCase):
                         status: {"$ref": f"#/components/responses/{component}"}
                         for status, component in expected.items()
                     },
+                )
+
+    def test_detail_error_responses_validate_handler_bodies(self) -> None:
+        # 当前 handler 的单键错误体；动态 detail 不限于这些样本。
+        detail_schema = self.doc["components"]["schemas"]["DetailError"]
+        schemas = {"DetailError": detail_schema}
+        bodies = {
+            "BadRequest": {"detail": "invalid export request"},
+            "Unauthorized": {"detail": "unauthorized"},
+            "Forbidden": {"detail": "forbidden"},
+            "NotFound": {"detail": "not found"},
+            "Gone": {"detail": "gone"},
+            "ExportNotReady": {"detail": "export is not ready"},
+        }
+        for name in bodies:
+            with self.subTest(response=name):
+                response = self.doc["components"]["responses"][name]
+                schema = response["content"]["application/json"]["schema"]
+                self.assertEqual(schema, {"$ref": "#/components/schemas/DetailError"})
+                schemas[name] = schema
+        for name, schema in schemas.items():
+            with self.subTest(schema=name):
+                jsonschema.Draft202012Validator.check_schema(schema)
+                validator = jsonschema.Draft202012Validator(self.doc).evolve(
+                    schema=schema
+                )
+                body = bodies.get(name, bodies["ExportNotReady"])
+                self.assertEqual(list(validator.iter_errors(body)), [])
+                for invalid, expected_error in (
+                    ({}, "required"),
+                    ({"detail": None}, "type"),
+                    ({"detail": 409}, "type"),
+                    ({**body, "export_id": "exp_report"}, "additionalProperties"),
+                    ([], "type"),
+                ):
+                    with self.subTest(body=invalid):
+                        errors = list(validator.iter_errors(invalid))
+                        self.assertIn(
+                            expected_error, [error.validator for error in errors]
+                        )
+        self.assertTrue(
+            {"const", "enum"}.isdisjoint(detail_schema["properties"]["detail"])
+        )
+
+    def test_collection_operations_keep_conflict_response(self) -> None:
+        for path in ("/api/v1/collection/refresh", "/api/v1/ingest/events"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    self.doc["paths"][path]["post"]["responses"]["409"],
+                    {"$ref": "#/components/responses/Conflict"},
                 )
 
     def test_create_export_accepts_supported_formats_without_presentation(self) -> None:

@@ -205,6 +205,12 @@ JPEG 使用当前主题、1440 CSS px、默认 2x、质量 90、完整长图与�
 HTTP 已按合并的 [contract PR #153](https://github.com/KunoLu/640-skills/pull/153) 开放，并接线 [#154](https://github.com/KunoLu/640-skills/pull/154) 的失败状态及 [#159](https://github.com/KunoLu/640-skills/pull/159) 的重放优先级：先完成访问检查（401／403）及识别重放所需的 400 校验（JSON content type、必需 Idempotency-Key、合法 CreateExportRequest），再查询幂等重放；仅新 JPEG／PDF 请求继续使用与 capabilities 相同的可用性检查。仅依赖可用时，新 JPEG 请求在返回 202 之前，于线程池内调用 `BrowserRenderer.preflight()`，沿用单作业信号量与隔离浏览器；期间固定 snapshot 引用、呈现状态、同一已过滤／脱敏静态 HTML 和当次 caps。2x 安全则正常受理；仅 1x 安全时，202 Envelope 的 `meta.warnings` 包含精确字符串 `EXPORT_SCALE_DOWNGRADED:1x`（保留其他报告告警），`data` 仍恰为 `{"export_id":"exp_…"}`。作业沿用预检选定比例，不另行静默降级；生成时复测若该比例不安全则失败且不发布。PDF 为多页输出，无图像尺寸预检，新请求在依赖可用时返回 202 后生成。下载 MIME 分别为 `image/jpeg`、`application/pdf`，get／download／delete 路由不变。
 保留期内的同 canonical payload／同 Idempotency-Key 重放（包括重启后重新配对）立即返回原 202、原导出 ID 与原 `meta.warnings`，即使 renderer 依赖已不可用、快照已不存在或过期、共享配额超限、JPEG 现在会超限，也不重新检查能力、不重复预检或 pin、不创建新作业／ID／文件。同 key 不同 payload 仍返回 400。仅新请求继续按适用的 503 → 404 → 410 → 507 → 422 顺序准入；507 `DISK_QUOTA_EXCEEDED` 现由共享配额执行。已接受作业的 GET／download 不受 createExport admission 检查影响。导出自身过期并清扫后仍沿用既有 Store 行为：本进程返回旧 ID，GET／download 为 410；已清理的告警 metadata 不额外保留，不重新生成导出。
 
+当前已路由 HTTP handler 的通用错误仍为单键 JSON `{"detail":"错误说明"}`，不包 Envelope；OpenAPI 的 `DetailError` 用必需字符串 `detail` 描述 400／401／403／404／410 与下载 409，不枚举动态说明。422／503／507 保留各自独立错误体，不能把带数值字段的 422／507 当成单键通用错误。补齐 schema 不代表 refresh、ingest 或 getOpenApi 等尚未路由的操作已可调用。
+
+下载 `GET /api/v1/exports/{export_id}/file` 的 **409 ExportNotReady** 表示导出作业存在但不是 ready：queued／generating／failed／cancelled 均不能下载，body 为 `{"detail":"export is not ready"}`。这是通过访问及参数检查、且未先触发 404／410 后的状态判断，不保证稍后重试一定成功；get／delete 导出不因此增加 409，其他操作的共享 Conflict 声明不变。
+
+框架未匹配路由的 404、方法不允许的 405，以及通用 500 是 `text/plain`，不是上述 JSON 错误体。此边界依据读代码与最小内存探针，不是完整服务实测；未认证访问未知 `/api/` 路径可能先被中间件返回 JSON 401，不能把所有 404 都视为业务 `{"detail":"not found"}`。通用 500 正文为 `Internal Server Error`，不暴露异常细节。
+
 JPEG 在 1x 仍超限时，createExport 返回 **422**，JSON body 不包 Envelope、不含额外字段：
 
 ```json
