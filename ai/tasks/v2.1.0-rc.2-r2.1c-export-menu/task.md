@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.1c-export-menu
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict、方案 B；主会话唯一 writer 与验证 controller，不启动子代理或 advisor；仅授权前端、构建产物及两份任务文档，提交由编排方执行。
-status: checking
+status: done
 branch: feat/v2.1.0-rc.2-r2.1c-export-menu
 created_at: '2026-10-26T11:14:16+08:00'
-updated_at: '2026-10-26T11:28:33+08:00'
-completed_at: null
+updated_at: '2026-10-26T12:10:12+08:00'
+completed_at: '2026-10-26T12:10:12+08:00'
 ---
 
 # R2.1c：四格式导出菜单接线
@@ -163,3 +163,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 | 2026-10-26T11:14:16+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始 strict 前端导出接线 | 基线 fbaff7be6b3da703cd83f4438a6a66c24e95673e；分支、路径、ignore 核对；方案 B 与契约已复核 |
 | 2026-10-26T11:21:52+08:00 | in-progress | in-progress | 编排方整理；写入者：主会话，实现与首次构建完成，进入完整验证 | npm test 34 pass（原 22＋新增 12）；npm run build exit 0；后续验证产物预算、重建一致、Python、浏览器与 task |
 | 2026-10-26T11:28:33+08:00 | in-progress | checking | 编排方整理；写入者：主会话，全部限定本地验证完成，进入检查 | npm 34 pass；两次 build 字节一致；static 总量 267266 B／最大 259101 B；serve 14、export 38（1 skip）、manifest 21、task 135 均 OK；真实服务与契约浏览器 smoke 分开记录；task 解析 checking False 3 None，CI／独立复核／D9 未执行 |
+| 2026-10-26T12:10:12+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 后写入 done；PR #186 | CLEAN 对应 SHA fd577df979093669acfdfba53bcbcc797ff75e00，CI run 40265329468 |
