@@ -49,7 +49,7 @@ Perform persistent operations with the Python task-state helper installed with `
 
 新操作必须 in-progress → checking → done；历史直接 done 不追改、不补造 checking。审查期间保持 checking，退回则回 in-progress。文件核对无审查需求时，可同节点依次调用 checking、done 两次状态更新，真实 completed_at 与 done.at 一致。
 
-CLEAN 后另作只改 task.md 的收尾 commit，仅允许 status／completed_at／updated_at 的值、一条追加 done 事件及证据。证据使用 JSON `{"clean_sha": "<收尾父提交完整 SHA>", "ci_run": "<CI run 标识>"}`，不夹带其他内容。`check_finish_commit(task_path, commit="HEAD")` 本地验证非 merge 提交、唯一文件、文件模式、正文／旧事件逐字保全及上述候选；额外行变化要整轮重审。此检查不查询平台、不证明 CLEAN／CI 真实性：宿主须已有相应证据，Reviewy 复核限定 diff，合入仍要求 CI 全绿。不自动提交、push 或发布。
+CLEAN 后另作只改 task.md 的收尾 commit，仅允许 status／completed_at／updated_at 的值、一条追加 done 事件及证据。证据只记 CLEAN 对应的 SHA 和 CI run，不夹带其他内容。`check_finish_commit` 校验时要求证据为 JSON `{"clean_sha": "<收尾父提交完整 SHA>", "ci_run": "<CI run 标识>"}`，目前只在测试里调用；现行手写收尾提交用文字证据，内容同样只含这两项。`check_finish_commit(task_path, commit="HEAD")` 本地验证非 merge 提交、唯一文件、文件模式、正文／旧事件逐字保全及上述候选；额外行变化要整轮重审。此检查不查询平台、不证明 CLEAN／CI 真实性：宿主须已有相应证据，Reviewy 复核限定 diff，合入仍要求 CI 全绿。不自动提交、push 或发布。
 
 ## One effective record
 
