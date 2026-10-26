@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-contract-error-bodies
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，主会话为四个授权文件唯一 writer 与验证 controller；不启动子代理、不使用 advisor；提交、推送与开 PR 由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-contract-error-bodies
 created_at: '2026-10-26T15:21:16+08:00'
-updated_at: '2026-10-26T15:29:53+08:00'
-completed_at: null
+updated_at: '2026-10-26T16:00:51+08:00'
+completed_at: '2026-10-26T16:00:51+08:00'
 ---
 
 # rc.2：下载 409 ExportNotReady 与通用 DetailError
@@ -102,3 +102,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-26T15:21:16+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始 strict 契约错误体修订 | HEAD 与 origin/main 均为 `3b5497b360b1325a4ca95c262665d59832cd7c31`；入口干净，分支匹配，四路径及父路径无 symlink／逃逸，ignore 检查 exit 1、输出空；已核对方案 a／c／f、当前源码与参考 task。 |
 | 2026-10-26T15:29:53+08:00 | in-progress | checking | 编排方整理；写入者：主会话，契约／测试／文档修订与限定验收验证完成，进入检查 | 三组回归 81／81／73 tests 均 OK、exit 0；152 个引用解析与 18 个真实构造样本通过，最小内存烟测通过；原 description、Conflict、422／503／507 与既有断言保留，安装文档只新增；diff --check exit 0，恰四个授权文件，LF／文字检查通过；转态前解析 in-progress False 1 None，转态后核对 checking False 2 None；额外 lint 仍有基线 I001，CI 与独立复核未执行，completed_at=null。 |
+| 2026-10-26T16:00:51+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 后写入 done；PR #188 | Reviewy CLEAN 对应 SHA dd89434a5e7831aa533aa03c63c4c4e9226444c2（640 群），CI run 40287229883 13/13 success |
