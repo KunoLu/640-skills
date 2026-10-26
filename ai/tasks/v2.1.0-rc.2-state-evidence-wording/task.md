@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-state-evidence-wording
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：本轮采用 strict，主会话为两个授权文件唯一 writer 与验证 controller；不启动子代理、不使用 advisor；提交与推送由编排方执行。
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-state-evidence-wording
 created_at: '2026-10-26T12:38:48+08:00'
-updated_at: '2026-10-26T12:42:30+08:00'
-completed_at: null
+updated_at: '2026-10-26T13:33:18+08:00'
+completed_at: '2026-10-26T13:33:18+08:00'
 ---
 
 # rc.2：state.md 收尾证据措辞
@@ -98,3 +98,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-26T12:38:48+08:00 | planned | in-progress | 编排方整理；写入者：主会话，开始 strict 收尾证据措辞修订 | 基线 `5aa5a1aa74951a8c57e2bbd7b0a2bf6f132914ae`；入口干净，分支、两路径与 ignore 安全；旧句唯一且位于 state.md:52，代码与 PRD 行号已核对。 |
 | 2026-10-26T12:42:30+08:00 | in-progress | checking | 编排方整理；写入者：主会话，证据句修订与全部限定验证完成，进入检查 | expected.py 字节核对 True、exit 0；state.md numstat 1／1，diff --check exit 0，工作树恰两个授权文件；文字扫描 0 命中、LF 与尾随空白检查通过；三组回归 59／14／135 tests 均 OK、exit 0；task 最终解析核对 checking False 2 None，completed_at=null；CI 与独立复核未执行。 |
+| 2026-10-26T13:33:18+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 后写入 done；PR #187 | CLEAN 对应 SHA 335f96c67fbf3c4c0218e3f0ba598289f658993c，CI run 40272565687 |
