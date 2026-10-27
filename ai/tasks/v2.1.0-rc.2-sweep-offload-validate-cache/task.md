@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-sweep-offload-validate-cache
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：采用 strict；主会话为唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交、推送与开 PR 由编排方执行。
-status: checking
+status: done
 branch: perf/sweep-offload-validate-cache
 created_at: '2026-10-27T13:56:03+08:00'
-updated_at: '2026-10-27T16:20:59+08:00'
-completed_at: null
+updated_at: '2026-10-27T17:09:33+08:00'
+completed_at: '2026-10-27T17:09:33+08:00'
 ---
 
 # PR-2：快照 sweep、线程池与校验缓存
@@ -123,16 +123,18 @@ completed_at: null
 | 4 | 会话 2（续完验证与收尾） | openai-codex/gpt-6-astra（high） | 22／59 | 补跑与本 task | `2026-10-27T06-46-46-887Z_01a17c1c-8767-7178-a2e3-0fd880f01aa4.jsonl` |
 | 5 | ping 3（会话 3 前） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-27T07-00-29-348Z_01a17c29-1424-76b4-9c7a-c762fb814a42.jsonl` |
 | 6 | 会话 3（唯一 writer 协调与收尾） | openai-codex/gpt-6-astra（high） | 30／53 | 重跑 2b／2c 与本 task | `2026-10-27T07-00-34-856Z_01a17c29-29a8-7179-8fad-f4309a2565e2.jsonl` |
-| 7 | Windows 修复 ping（15:47） | 不可核（仅目录列表） | 1／0（编排方实测） | 连通性检查记录 | `2026-10-27T07-47-30-842Z_01a17c54-219a-74fc-aeed-efa1b8875cff.jsonl` |
-| 8 | Windows 修复会话 1（唯一 writer） | openai-codex/gpt-6-astra（thinking 不可核） | 44／93（编排方实测） | ctime 复现、修复、回归与本 task | `2026-10-27T07-47-35-402Z_01a17c54-336a-75ec-b3aa-17b83e6eefeb.jsonl` |
-| 9 | Windows 修复 ping 2 | 不可核（仅目录列表） | 未知（未提供实测计数，未读取 jsonl） | 连通性检查记录 | `2026-10-27T08-09-30-877Z_01a17c68-45fd-73e7-afef-426eadc88448.jsonl` |
-| 10 | Windows 修复会话 2（唯一 writer） | openai-codex/gpt-6-astra（thinking 不可核） | 未知（落盘时本轮尚未结束），待后续回填 | 范围补充、本 task 与 PR 描述文件 | `2026-10-27T08-09-41-054Z_01a17c68-6dbe-7654-82a7-0d3b673ea1de.jsonl` |
+| 7 | Windows 修复 ping（15:47） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查记录 | `2026-10-27T07-47-30-842Z_01a17c54-219a-74fc-aeed-efa1b8875cff.jsonl` |
+| 8 | Windows 修复会话 1（唯一 writer） | openai-codex/gpt-6-astra（high） | 44／93 | ctime 复现、修复、回归与本 task | `2026-10-27T07-47-35-402Z_01a17c54-336a-75ec-b3aa-17b83e6eefeb.jsonl` |
+| 9 | Windows 修复 ping 2（16:09） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查记录 | `2026-10-27T08-09-30-877Z_01a17c68-45fd-73e7-afef-426eadc88448.jsonl` |
+| 10 | Windows 修复会话 2（唯一 writer） | openai-codex/gpt-6-astra（high） | 24／58 | 范围补充、本 task 与 PR 描述文件 | `2026-10-27T08-09-41-054Z_01a17c68-6dbe-7654-82a7-0d3b673ea1de.jsonl` |
+| 11 | Windows 修复 ping 3（16:31） | openai-codex/gpt-6-astra（high） | 1／0 | 连通性检查 | `2026-10-27T08-31-40-278Z_01a17c7c-8ef6-7497-ad5b-104cabaf4b11.jsonl` |
+| 12 | Windows 修复会话 3（PR 描述文件订正，未改工作树） | openai-codex/gpt-6-astra（high） | 9／15 | 订正 PR 描述文件 | `2026-10-27T08-31-45-485Z_01a17c7c-a34d-70ee-8700-38157cec3e44.jsonl` |
 
 编排方整理；ping 文件名仅经目录列表取得，未读取 jsonl 内容。
 
 编排方整理，数据由编排方从会话 jsonl 统计：会话 1 assistant 消息 95、toolCall 150（read 49、edit 27、bash 26、eval 15、todo 9、write 7、grep 7、wait 7、glob 3）；会话 2 assistant 消息 22、toolCall 59（read 27、todo 10、bash 7、eval 7、edit 4、wait 2、glob 1、write 1）；会话 3 assistant 消息 30、toolCall 53（read 18、edit 8、bash 8、todo 8、eval 7、wait 2、glob 1、grep 1）。旧目录 ping／会话 1／ping 2／会话 2／ping 3／会话 3 的 jsonl 中 model_usage 记录数均为 0（实测）；是否存在未落盘的内部辅助调用不可核。ping／ping 2 的 assistant 消息／toolCall 各为 1／0；上述已统计会话模型均为 gpt-6-astra，未用 kimi／子代理／advisor。会话 1 正常退出，非 kill，无 resume；会话 3 计数按编排方统计回填，本轮未读取 jsonl 内容。ping 3、会话 3 及 Windows 修复轮的文件名仅经目录列表取得。
 
-编排方实测（本修复目录）：ping assistant 消息 1／toolCall 0，jsonl 中 model_usage 记录数为 0；修复会话 1 assistant 消息 44／toolCall 93（read 36、edit 20、grep 10、eval 8、todo 8、bash 6、find 2、write 2、glob 1），model_usage 记录 24 条（jev-latest，purpose find，内部辅助检索），正常退出、看门狗未 kill、无 resume。该格式会落盘，但是否存在未落盘的内部辅助调用不可核。修复 ping 2 未提供实测计数，不根据旧 ping 推算；修复会话 2 的 assistant／toolCall／model_usage 计数在落盘时尚未结束，不预估。两行文件名仅经目录列表取得，本轮未读取 jsonl 内容。
+编排方实测（本修复目录）：三次 ping 的 assistant 消息／toolCall 均为 1／0；修复会话 1 为 44／93（read 36、edit 20、grep 10、eval 8、todo 8、bash 6、find 2、write 2、glob 1），正常退出、看门狗未 kill、无 resume；修复会话 2 为 24／58，修复会话 3 为 9／15。修复轮模型均为 openai-codex/gpt-6-astra（high）。修复会话 1、会话 2 的 jsonl 中存在 provider／model 为 typesafe/jev-latest、purpose find 的 model_usage 记录（会话 1 共 24 条、会话 2 共 8 条），属 omp 内部辅助调用，存在、具体内容不可核；修复轮三次 ping 与会话 3 的 jsonl 中无此类记录（编排方实测）。是否存在未落盘的内部辅助调用不可核。文件名仅经目录列表取得，本轮未读取 jsonl 内容。
 
 ## 状态事件
 
@@ -142,6 +144,7 @@ completed_at: null
 | 2026-10-27T15:08:46+08:00 | in-progress | checking | 编排方整理；主会话完成 B／C／D 与验证，进入检查 | 会话 3 唯一 writer；2b3／2c3 独立串行补跑，七组 2424 项无重叠且覆盖全部 scope，skip 63、fail 2 均属基线；ruff exit 0，定向 96 tests、skip 2、exit 0；独立复核尚未执行，不声明发布完成。 |
 | 2026-10-27T15:48:13+08:00 | checking | in-progress | CI run 40468076141 runtime-e2e-windows 导出 404，开始修复 | 分支匹配，入口干净；HEAD aee0418c4accfa7efb65d450c032f3a13e807f76；先 Linux 注入复现，再修改身份比较；仅本会话写入。 |
 | 2026-10-27T16:00:35+08:00 | in-progress | checking | Windows e2e 404 本地复现、身份同源修复与验证完成，进入检查 | 修前 get／ExportStore.create 均 SnapshotNotFound，修后回归及真实 CSV smoke 通过；定向 97 tests、skip 2、exit 0，ruff exit 0；根包装 80 tests、skip 1、fail 1 为已知 tzdata 基线。Windows 原生与独立复核未执行，不声明发布完成；临时复现脚本已删除，raw／中文汇总保留。 |
+| 2026-10-27T17:09:33+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy CLEAN 且 Lord 2026-10-27 16:41 群内下令写 done；PR #190 | Reviewy 对 34bea44dff7ad66ed89ac2c966015d55501b61d7 内容 CLEAN（2026-10-27，16:41 Lord 下令前，分钟不可考）；CI run 40474074238 13/13 全绿；Lord 合并前 --match-head-commit |
 
 ## Windows e2e 404 修复
 
@@ -186,7 +189,7 @@ completed_at: null
 - 读代码推断，未实际运行：`tests/run_ci.py:15-40,51-79` 的 Windows 选择集为升级模块、显式 WINDOWS_CASES、SessionRootResolution、安装器及 workflow/probe 模块，未包含 `test_snapshot_persistence`、`test_serve` 或 stats_api 根包装。`.github/workflows/validation.yml:199-238,296-321` 中 Windows shards 调用该选择集；该工作流 Windows 作业只有 runtime-e2e-windows 通过 `sbtd-runtime/tests/runtime_e2e.py` 进入真实运行时导出路径，使用 Python 3.12.10。
 - 方案：后续把快照持久化及 serve／导出边界测试或对应根包装加入 Windows 选择集，并安装既有声明的运行时依赖；加入本轮异源 ctime 回归，同时保留 Windows 原生创建→首次 get→CSV 导出 smoke。先检查既有“恢复 mtime 后 ctime 必变”测试中的 path.stat 断言是否适合 Windows，按真实 fd ChangeTime 保证明确平台限制；不以 Linux 注入测试代替 Windows 原生验证。本轮未修改 CI 或执行该方案。
 - Release Readiness Review=blocked（发布层面）：本地修复与定向验证已完成，但 Windows 原生运行和独立复核未执行，根包装仍有已知 tzdata 基线失败。共享配额／并发／取消机制未改；没有迁移，恢复边界是代码回退，未执行 Git 写操作。保持 checking、completed_at=null，不声明部署、发布或 Windows CI 已绿。
-- project-validation：BDD=skipped（恢复既有读取语义，持久回归在现有 unittest，无契约或 .feature 修改）；Cross-repo context=not-needed；API Contract=verified（既有错误映射与定向 HTTP 测试）；Mock Strategy=user-approved（stat 身份注入，业务路径真实）；E2E Mode=backend-only，浏览器／移动工具不适用。Final Test Report／Run Summary MD=generated，Targeted Rerun=passed，Final Full Rerun=failed（根包装基线）；所有新报告为本地 dirty 证据，独立复核与发布由 Lord 后续安排。
+- project-validation：BDD=skipped（恢复既有读取语义，持久回归在现有 unittest，无契约或 .feature 修改）；Cross-repo context=not-needed；API Contract=verified（既有错误映射与定向 HTTP 测试）；Mock Strategy=Lord 2026-10-27 15:44 群内下令补 identity 取值注入回归测试，编排方整理（stat 身份注入，业务路径真实）；E2E Mode=backend-only，浏览器／移动工具不适用。Final Test Report／Run Summary MD=generated，Targeted Rerun=passed，Final Full Rerun=failed（根包装基线）；所有新报告为本地 dirty 证据，独立复核与发布由 Lord 后续安排。
 
 ### 范围外订正（Lord 可否决）
 
@@ -194,6 +197,7 @@ completed_at: null
 - 模型表第 6 行原文「未知（落盘时本轮尚未结束），待后续回填」→「30／53」；依据编排方统计 assistant 30、toolCall 53（read 18、edit 8、bash 8、todo 8、eval 7、wait 2、glob 1、grep 1）。对应回填说明原文「会话 3 尚未结束，计数不预估」→「会话 3 计数按编排方统计回填，本轮未读取 jsonl 内容」。
 - 回填说明原文「model_usage 均为 0」→「旧目录六轮 jsonl 中 model_usage 记录数均为 0（实测）；是否存在未落盘的内部辅助调用不可核」。编排方实测本修复会话 1 有 24 条 model_usage（jev-latest，purpose find，内部辅助检索），证明该格式会落盘；不能因此推断所有内部辅助调用都已落盘。
 - 并发说明原文末句「代码与测试未在并发期间修改」→「代码与测试未在并发期间修改。会话 2 检测到 task.md 并发写入后停止写入，未追加 checking」。
+- 编排方实测：修复提交 `git diff --stat aee0418..34bea44` 为 3 files，+174／−43；整个 PR `git diff --stat 5eec997..34bea44` 为 5 files，+552／−52。修复会话 1 结束时汇报的 +145／−41 是会话 2 修改 task.md 之前的工作树中间态统计，不是最终值；若 PR 描述或群内报告引用 +145／−41 即为笔误，以上述实测为准。PR 描述暂未更正，等用户同意。
 
 ## Lord 15:46 范围补充
 
