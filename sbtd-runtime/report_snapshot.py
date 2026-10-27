@@ -709,10 +709,6 @@ class SnapshotStore:
                 raise ValueError("snapshot must be a regular unlinked file")
             if hasattr(os, "getuid") and info.st_uid != os.getuid():
                 raise ValueError("snapshot has unknown ownership")
-            identity = file_identity(info)
-            if not force_validate and cached == identity:
-                self._validated[snapshot_id] = identity
-                return self._snapshots[snapshot_id]
             flags = (
                 os.O_RDONLY
                 | getattr(os, "O_NOFOLLOW", 0)
@@ -721,42 +717,55 @@ class SnapshotStore:
             fd = os.open(path, flags)
             with os.fdopen(fd, encoding="utf-8") as handle:
                 opened = os.fstat(handle.fileno())
-                if file_identity(opened) != identity:
+                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
                     raise ValueError("snapshot file was replaced")
+                if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+                    raise ValueError("snapshot must be a regular unlinked file")
+                if hasattr(os, "getuid") and opened.st_uid != os.getuid():
+                    raise ValueError("snapshot has unknown ownership")
+                # Windows path stat and fd stat can expose different ctime clocks.
+                # Cache and content checks must all use the opened fd's identity.
+                identity = file_identity(opened)
+                if not force_validate and cached == identity:
+                    self._validated[snapshot_id] = identity
+                    return self._snapshots[snapshot_id]
                 envelope = json.load(handle, object_pairs_hook=_unique_object)
                 if file_identity(os.fstat(handle.fileno())) != identity:
                     raise ValueError("snapshot file changed while reading")
-            if set(envelope) != {"format_version", "checksum", "snapshot"}:
-                raise ValueError("invalid snapshot header")
-            version = envelope["format_version"]
-            if type(version) is not int or version != SNAPSHOT_FORMAT_VERSION:
-                raise ValueError("unsupported snapshot format")
-            payload = envelope["snapshot"]
-            if envelope["checksum"] != f"sha256:{_digest(payload)}":
-                raise ValueError("snapshot checksum mismatch")
-            # Validate persisted field types before parsing timestamps.
-            for item in fields(Snapshot):
-                if item.name == "expires_instant":
-                    continue
-                annotation = str(item.type).split("[", 1)[0]
-                expected = {"str": str, "int": int, "dict": dict, "list": list}[
-                    annotation
-                ]
-                if type(payload[item.name]) is not expected:
-                    raise ValueError("invalid snapshot field type")
-            snapshot = Snapshot(
-                **payload, expires_instant=parse_instant(payload["expires_at"])
-            )
-            if snapshot.snapshot_id != snapshot_id:
-                raise ValueError("snapshot id mismatch")
-            if snapshot.expires_instant < parse_instant(snapshot.created_at):
-                raise ValueError("invalid snapshot lifetime")
-            if file_identity(path.lstat()) != identity:
-                raise ValueError("snapshot file was replaced")
-            if not force_validate and snapshot_id in self._snapshots:
-                self._snapshots[snapshot_id] = snapshot
-                self._validated[snapshot_id] = identity
-            return snapshot
+                if set(envelope) != {"format_version", "checksum", "snapshot"}:
+                    raise ValueError("invalid snapshot header")
+                version = envelope["format_version"]
+                if type(version) is not int or version != SNAPSHOT_FORMAT_VERSION:
+                    raise ValueError("unsupported snapshot format")
+                payload = envelope["snapshot"]
+                if envelope["checksum"] != f"sha256:{_digest(payload)}":
+                    raise ValueError("snapshot checksum mismatch")
+                # Validate persisted field types before parsing timestamps.
+                for item in fields(Snapshot):
+                    if item.name == "expires_instant":
+                        continue
+                    annotation = str(item.type).split("[", 1)[0]
+                    expected = {"str": str, "int": int, "dict": dict, "list": list}[
+                        annotation
+                    ]
+                    if type(payload[item.name]) is not expected:
+                        raise ValueError("invalid snapshot field type")
+                snapshot = Snapshot(
+                    **payload, expires_instant=parse_instant(payload["expires_at"])
+                )
+                if snapshot.snapshot_id != snapshot_id:
+                    raise ValueError("snapshot id mismatch")
+                if snapshot.expires_instant < parse_instant(snapshot.created_at):
+                    raise ValueError("invalid snapshot lifetime")
+                current = path.lstat()
+                if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+                    raise ValueError("snapshot file was replaced")
+                if file_identity(os.fstat(handle.fileno())) != identity:
+                    raise ValueError("snapshot file changed while validating")
+                if not force_validate and snapshot_id in self._snapshots:
+                    self._snapshots[snapshot_id] = snapshot
+                    self._validated[snapshot_id] = identity
+                return snapshot
         except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
             raise SnapshotNotFound(snapshot_id) from None
 

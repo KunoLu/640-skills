@@ -113,6 +113,45 @@ class SnapshotPersistenceTests(unittest.TestCase):
             self.assertEqual(store.get(snapshot.snapshot_id).dataset, snapshot.dataset)
             self.assertEqual(load.call_count, 1)
 
+    def test_different_path_and_fd_ctime_preserves_cache_and_rejects_rewrite(self) -> None:
+        store = SnapshotStore(self.home)
+        snapshot = store.create_or_reuse(self.dataset, self.scope)
+        path = self.home / "snapshots" / f"{snapshot.snapshot_id}.json"
+        original_stat = path.lstat()
+        # Model fd ChangeTime differing from the path's ctime.
+        change_time = original_stat.st_ctime_ns + 1_000_000_000
+        real_fstat = os.fstat
+
+        def fd_stat(fd):
+            info = real_fstat(fd)
+            return os.stat_result(
+                info,
+                {
+                    "st_atime_ns": info.st_atime_ns,
+                    "st_mtime_ns": info.st_mtime_ns,
+                    "st_ctime_ns": change_time,
+                },
+            )
+
+        with (
+            mock.patch("report_snapshot.os.fstat", side_effect=fd_stat),
+            mock.patch("report_snapshot.json.load", wraps=json.load) as load,
+        ):
+            self.assertEqual(store.get(snapshot.snapshot_id).rows, snapshot.rows)
+            self.assertEqual(store.get(snapshot.snapshot_id).dataset, snapshot.dataset)
+            self.assertEqual(load.call_count, 1)
+            original = path.read_bytes()
+            tampered = original.replace(b'"checksum":"sha256:', b'"checksum":"sha257:', 1)
+            self.assertNotEqual(tampered, original)
+            path.write_bytes(tampered)
+            os.utime(path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+            change_time += 1
+            self.assertEqual(path.stat().st_size, original_stat.st_size)
+            self.assertEqual(path.stat().st_mtime_ns, original_stat.st_mtime_ns)
+            with self.assertRaises(SnapshotNotFound):
+                store.get(snapshot.snapshot_id)
+            self.assertEqual(load.call_count, 2)
+
     def test_cached_file_rewrite_with_preserved_size_and_mtime_is_rejected(self) -> None:
         store = SnapshotStore(self.home)
         snapshot = store.create_or_reuse(self.dataset, self.scope)
