@@ -1,13 +1,13 @@
 """D5–D8 serve tests: real sockets, real subprocesses, real audit store.
 
-No mocks stand in for the behavior under test: servers run as real
-`python -m serve` subprocesses on real loopback ports, tickets are read
-from the real 0600 file, and metric values are cross-checked against the
-in-process library on the same seeded events.
+Subprocess acceptance uses real loopback servers and audit events.
+The concurrency test additionally instruments real in-process handlers,
+without replacing their results, to observe worker admission and threads.
 """
 
 from __future__ import annotations
 
+import asyncio
 import http.client
 import json
 import os
@@ -16,9 +16,11 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 RUNTIME = Path(__file__).resolve().parents[1]
 REPO = RUNTIME.parent
@@ -173,6 +175,114 @@ def pair(port: int, ticket: str) -> tuple[int, dict, dict[str, str]]:
         port, "POST", "/api/v1/session/pair", headers={"X-Pairing-Code": ticket}
     )
     return status, json.loads(body), {k.lower(): v for k, v in headers.items()}
+
+
+class StatisticsConcurrencyTests(unittest.IsolatedAsyncioTestCase):
+    """Instrument real handlers to observe worker threads and bounded admission."""
+
+    async def test_statistics_workers_are_offloaded_and_bounded(self) -> None:
+        import serve
+        from report_snapshot import SnapshotStore
+        from starlette.requests import Request
+        from test_report_snapshot import _dataset, _scope
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            _enable_observation(home)
+            _seed_golden_events(home)
+            app = serve.create_app(home, serve.AccessControl(), 6400).app
+            endpoints = {
+                route.path: route.endpoint
+                for route in app.routes
+                if hasattr(route, "endpoint")
+            }
+            scope = _scope(_dataset())
+
+            async def invoke(path, snapshot_id=None):
+                async def receive():
+                    return {"type": "http.request", "body": json.dumps(scope).encode()}
+
+                request = Request(
+                    {
+                        "type": "http",
+                        "path_params": {"snapshot_id": snapshot_id},
+                        "query_string": b"",
+                    },
+                    receive,
+                )
+                return await endpoints[path](request)
+
+            async with app.router.lifespan_context(app):
+                response = await invoke("/api/v1/statistics/query")
+                snapshot_id = json.loads(response.body)["data"]["snapshot_id"]
+                loop_thread = threading.get_ident()
+                cases = (
+                    (serve, "load_dataset", "/api/v1/statistics/query"),
+                    (serve, "query", "/api/v1/statistics/query"),
+                    (SnapshotStore, "get", "/api/v1/report-snapshots/{snapshot_id}"),
+                    (
+                        SnapshotStore,
+                        "dataset_page",
+                        "/api/v1/report-snapshots/{snapshot_id}/dataset",
+                    ),
+                )
+                for owner, name, path in cases:
+                    with self.subTest(operation=name):
+                        original = getattr(owner, name)
+                        lock = threading.Lock()
+                        release = threading.Event()
+                        saturated = threading.Event()
+                        active = maximum = 0
+
+                        def observed(
+                            *args,
+                            lock=lock,
+                            saturated=saturated,
+                            release=release,
+                            original=original,
+                            **kwargs,
+                        ):
+                            nonlocal active, maximum
+                            self.assertNotEqual(threading.get_ident(), loop_thread)
+                            with lock:
+                                active += 1
+                                maximum = max(maximum, active)
+                                if active == 4:
+                                    saturated.set()
+                            try:
+                                if not release.wait(5):
+                                    raise AssertionError("workers were not released")
+                                return original(*args, **kwargs)
+                            finally:
+                                with lock:
+                                    active -= 1
+
+                        with mock.patch.object(owner, name, observed):
+                            requests = [
+                                asyncio.create_task(invoke(path, snapshot_id))
+                                for _ in range(8)
+                            ]
+                            try:
+                                self.assertTrue(
+                                    await asyncio.to_thread(saturated.wait, 2)
+                                )
+                                await asyncio.sleep(0.05)
+                                with lock:
+                                    self.assertEqual(active, 4)
+                            finally:
+                                release.set()
+                                responses = await asyncio.gather(
+                                    *requests, return_exceptions=True
+                                )
+                        self.assertLessEqual(maximum, 4)
+                        for response in responses:
+                            if isinstance(response, BaseException):
+                                raise response
+                            self.assertEqual(response.status_code, 200)
+                            self.assertEqual(
+                                json.loads(response.body)["data"]["snapshot_id"],
+                                snapshot_id,
+                            )
 
 
 class PortConflictTests(unittest.TestCase):
