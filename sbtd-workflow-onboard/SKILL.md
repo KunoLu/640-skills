@@ -1,6 +1,6 @@
 ---
 name: sbtd-workflow-onboard
-description: Checks, installs, resets, or explicitly upgrades and verifies selected SBTD workflow Skills, AGENTS and host configuration domains; plans and applies authorized legacy migrations and recovery; reconciles interrupted migration deployment evidence from current state; routes separately confirmed legacy cleanup.
+description: Checks, installs, resets, or explicitly upgrades and verifies selected SBTD workflow Skills, AGENTS and host configuration domains; plans and applies authorized legacy migrations and recovery; reconciles interrupted migration deployment evidence from current state; routes separately confirmed legacy cleanup and local Dashboard launch via "sbtd dashboard" or "sbtd ui".
 ---
 
 # SBTD Workflow Onboard Skills
@@ -251,6 +251,23 @@ Only actually detected items appear in the list:
 - Project `AGENTS.md` blocks exactly paired as `<!-- TRELLIS:START -->` / `<!-- TRELLIS:END -->` and `<!-- gitnexus:start -->` / `<!-- gitnexus:end -->`, recognized only as top-level HTML comment blocks and removed with their contents; graft fences, code-fence content and all other bytes are preserved. Zero pairs is not a candidate; duplicated, interleaved or unmatched markers are blocked for manual resolution.
 
 Entry selection is batch evidence first: with a complete verified migration batch, run `migration --phase cleanup` with `--confirm-cleanup <verification_id>` for its sealed candidates. Batch manifests are immutable and never gain the new target kinds; project `.gitnexus/`, gitnexus MCP entries and AGENTS marker blocks are always handled by a fresh `cleanup-legacy --phase plan`, display of the sealed candidates, then `cleanup-legacy --phase apply --confirm-cleanup <plan_id>`. The fresh plan accepts an optional plan-only `--global-skills-dir` override under the existing resolver precedence (explicit argument, then `$AGENT_SKILLS_DIR`, then the trusted installed Onboard parent, then the platform default) and seals the selected Skills root into the plan; apply runs against that sealed root only — it has no root option and is not redirected by a later environment change, and migration phase arguments are unchanged. Candidate paths that are equal to or nested inside one another are rejected at plan and apply before any target write. Only missing batch evidence falls back to a fresh plan for the retired `.trellis` / Skill targets as well; stale, conflicting or failed batch evidence is never a fallback reason to bypass a gate — preserve it and resolve the rejection first. Both root installers forward `cleanup-legacy` like `migration` / `recovery`. If the user declines, say cleanup can be retriggered later with `sbtd cleanup`, `清理工作流`, or the same explicit intent. Exact commands, detection paths and safety semantics: [Cleanup Runtime](REFERENCE.md#cleanup-runtime).
+
+## Dashboard Launch Routing
+
+When the user says `sbtd dashboard` or `sbtd ui` while using the SBTD workflow, first ask whether to open the SBTD Workflow statistics page (Dashboard) on this machine. The keyword alone is not consent to install dependencies, start `serve`, or open a browser. If the user declines, do not start it; say they can use either keyword again later.
+
+Only after an explicit yes, follow the R2.0a: serve section of [install-and-use.md](../sbtd-runtime/docs/install-and-use.md). This requires a source checkout containing `sbtd-runtime/` and its documented dependencies; Onboard does not install or copy that sibling directory. Locate that checkout first; if it is unavailable, explain the missing prerequisite rather than inventing an installed command. Explain the dependency installation before proceeding, then use the documented commands from the repository root:
+
+```bash
+python3 -m pip install -r sbtd-runtime/requirements-serve.txt
+PYTHONPATH=sbtd-runtime python3 -m serve [--port 6400] [--no-open] [--home PATH]
+```
+
+The brackets denote optional arguments, not literal shell input; omit them for the default launch, which opens the browser. Keep `serve` in the foreground; Ctrl-C exits it. Do not change its lifecycle or add undocumented commands or flags.
+
+If `serve` reports an existing instance and exits with code 2, it has not reopened the browser or reissued a pairing ticket. Tell the user to stop the original `serve` first, then restart it; do not promise re-pairing or silently stop their process.
+
+On a machine without a browser, use the documented `--no-open` option; it, or a failed browser open, writes `$SBTD_RUNTIME_HOME/pairing-ticket` for manual pairing. Report the file location only, never read or print its ticket contents into the conversation.
 
 ## Shared Python Commands
 
