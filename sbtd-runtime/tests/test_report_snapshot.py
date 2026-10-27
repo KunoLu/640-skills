@@ -149,6 +149,108 @@ class SnapshotTests(unittest.TestCase):
         )
         self.assertNotEqual(first.snapshot_id, second.snapshot_id)
 
+    def test_new_event_inside_query_bucket_mints_new_snapshot(self) -> None:
+        from datetime import datetime
+
+        from event_store import EventStore
+        from host_adapter import base_event
+
+        scope = _scope(
+            self.dataset,
+            range={
+                "from": "2026-10-14T16:05:00.000Z",
+                "to": "2026-10-15T16:05:00.000Z",
+                "timezone": "UTC",
+            },
+        )
+        first_now = datetime.fromisoformat("2026-10-15T16:00:10Z")
+        reuse_now = datetime.fromisoformat("2026-10-15T16:00:30Z")
+        later_now = datetime.fromisoformat("2026-10-15T16:03:00Z")
+        for scenario, occurred_at in (
+            ("inside_bucket", "2026-10-15T16:02:00Z"),
+            ("late_arrival", "2026-10-15T15:59:00Z"),
+        ):
+            with self.subTest(scenario=scenario):
+                home = self.home / scenario
+                home.mkdir(parents=True, mode=0o700)
+                (home / "config.json").write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "observation": {
+                                "enabled": True,
+                                "level": "metadata",
+                                "failure_policy": "best-effort",
+                            },
+                        }
+                    ) + "\n",
+                    encoding="utf-8",
+                )
+
+                def make_event(sid: str, occurred: str, recorded: str) -> dict:
+                    return base_event(
+                        event_type="task.state_changed",
+                        occurred_at=occurred,
+                        recorded_at=recorded,
+                        installation_id="inst_bucket",
+                        device_id="device_bucket",
+                        source_id="source_runtime",
+                        source_event_id=sid,
+                        parser_version="1",
+                        project_id="project_a",
+                        logical_task_id="demo/leaf",
+                        state={"previous": "planned", "current": "in-progress"},
+                    )
+
+                events = EventStore.open(home, confirmed=True)
+                self.addCleanup(events.close)
+                initial = make_event(
+                    "first", "2026-10-15T16:00:05Z", "2026-10-15T16:00:05Z"
+                )
+                events.append([initial])
+                snapshots = SnapshotStore(home, ttl_seconds=3600)
+                first = snapshots.create_or_reuse(
+                    {"tasks": [], "events": events.replay()}, scope, now=first_now
+                )
+                saved = (
+                    first.rows, first.snapshot_digest, first.as_of, first.expires_at
+                )
+                reused = snapshots.create_or_reuse(
+                    {"tasks": [], "events": events.replay()}, scope, now=reuse_now
+                )
+                self.assertEqual(reused.snapshot_id, first.snapshot_id)
+                extra = make_event("extra", occurred_at, "2026-10-15T16:02:30Z")
+                events.append([extra])
+                replayed = events.replay()
+                self.assertEqual([event["ingest_seq"] for event in replayed], [0, 0])
+                second = snapshots.create_or_reuse(
+                    {"tasks": [], "events": replayed}, scope, now=later_now
+                )
+                self.assertEqual(second.query_hash, first.query_hash)
+                self.assertNotEqual(
+                    second.dataset_fingerprint, first.dataset_fingerprint
+                )
+                self.assertNotEqual(second.snapshot_id, first.snapshot_id)
+                self.assertIn(
+                    extra["event_id"],
+                    [row["record_id"] for row in second.rows
+                     if row["record_type"] == "event"],
+                )
+                old = snapshots.get(first.snapshot_id, now=later_now)
+                self.assertEqual(
+                    [row["record_id"] for row in old.rows
+                     if row["record_type"] == "event"],
+                    [initial["event_id"]],
+                )
+                self.assertNotIn(
+                    extra["event_id"],
+                    [row["record_id"] for row in old.rows
+                     if row["record_type"] == "event"],
+                )
+                self.assertEqual(
+                    (old.rows, old.snapshot_digest, old.as_of, old.expires_at), saved
+                )
+
     def test_filters_narrow_dataset_rows_not_only_metrics(self) -> None:
         store = SnapshotStore(self.home)
         scope = _scope(self.dataset)

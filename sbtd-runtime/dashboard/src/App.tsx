@@ -164,9 +164,9 @@ export function App() {
     void loadRef.current(paramsRef.current.selection, paramsRef.current.filters);
   }, []);
 
-  // D12: every 30s re-query the current scope; the window anchor is
-  // re-resolved per query (§12.5), the previous view stays until the new
-  // snapshot is fully loaded, then the page swaps whole-snapshot.
+  // D12: re-resolve every 30s; presets use fixed query-bucket ceilings (§12.5).
+  // A query may reuse the same snapshot_id. Keep the previous view until
+  // loading completes, then replace the whole snapshot.
   useEffect(() => {
     const timer = setInterval(reload, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
