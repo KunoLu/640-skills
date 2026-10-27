@@ -16,7 +16,7 @@ import {
 
 const NOW = new Date("2026-10-19T15:00:00.000Z");
 
-test("presets resolve to their exact window sizes ending at now", () => {
+test("presets keep exact durations ending at the next query bucket boundary", () => {
   const cases: Record<string, number> = {
     "1h": 3600_000,
     "24h": 24 * 3600_000,
@@ -25,39 +25,49 @@ test("presets resolve to their exact window sizes ending at now", () => {
     "90d": 90 * 24 * 3600_000,
   };
   for (const [preset, ms] of Object.entries(cases)) {
-    const range = resolvePresetRange(preset as "1h", NOW, "Asia/Shanghai");
-    assert.equal(range.to, NOW.toISOString());
+    const range = resolvePresetRange(
+      preset as "1h", new Date("2026-10-15T16:00:10Z"), "Asia/Shanghai",
+    );
+    assert.equal(range.to, "2026-10-15T16:05:00.000Z");
     assert.equal(
-      new Date(range.from).getTime(),
-      NOW.getTime() - ms,
+      Date.parse(range.to) - Date.parse(range.from),
+      ms,
       `${preset} window size`,
     );
     assert.equal(range.timezone, "Asia/Shanghai");
   }
 });
 
-test("all preset starts at the epoch and ends at now", () => {
-  const range = resolvePresetRange("all", NOW, "UTC");
+test("all preset starts at the epoch and ends at the query bucket boundary", () => {
+  const range = resolvePresetRange("all", new Date("2026-10-15T16:03:00Z"), "UTC");
   assert.equal(range.from, ALL_RANGE_FROM);
-  assert.equal(range.to, NOW.toISOString());
+  assert.equal(range.to, "2026-10-15T16:05:00.000Z");
 });
 
-test("relative presets re-anchor on every query (§12.5)", () => {
-  const earlier = resolvePresetRange("24h", new Date("2026-10-19T00:00:00Z"), "UTC");
-  const later = resolvePresetRange("24h", new Date("2026-10-19T01:00:00Z"), "UTC");
-  assert.notEqual(earlier.from, later.from);
-  assert.notEqual(earlier.to, later.to);
+test("relative presets advance both bounds after a query bucket boundary (§12.5)", () => {
+  const earlier = resolvePresetRange("24h", new Date("2026-10-15T16:00:10Z"), "UTC");
+  const later = resolvePresetRange("24h", new Date("2026-10-15T16:05:00.001Z"), "UTC");
+  assert.deepEqual(earlier, {
+    from: "2026-10-14T16:05:00.000Z",
+    to: "2026-10-15T16:05:00.000Z",
+    timezone: "UTC",
+  });
+  assert.deepEqual(later, {
+    from: "2026-10-14T16:10:00.000Z",
+    to: "2026-10-15T16:10:00.000Z",
+    timezone: "UTC",
+  });
 });
 
 test("valid custom range normalizes to ISO with the given timezone", () => {
   const range = validateCustomRange(
-    "2026-10-18T00:00:00+08:00",
-    "2026-10-19T00:00:00+08:00",
+    "2026-10-18T00:00:07.123+08:00",
+    "2026-10-19T00:03:12.345+08:00",
     "Asia/Shanghai",
     NOW,
   );
-  assert.equal(range.from, "2026-10-17T16:00:00.000Z");
-  assert.equal(range.to, "2026-10-18T16:00:00.000Z");
+  assert.equal(range.from, "2026-10-17T16:00:07.123Z");
+  assert.equal(range.to, "2026-10-18T16:03:12.345Z");
   assert.equal(range.timezone, "Asia/Shanghai");
 });
 
@@ -84,10 +94,14 @@ test("buildScope carries range, metrics and non-empty filters only", () => {
     selection,
     { host_kinds: ["omp"], workflow_modes: [] },
     ["tasks.touched"],
-    NOW,
+    new Date("2026-10-15T16:03:00Z"),
   );
   assert.equal(scope.schema_version, "1.0");
-  assert.equal(scope.range.to, NOW.toISOString());
+  assert.deepEqual(scope.range, {
+    from: "2026-10-08T16:05:00.000Z",
+    to: "2026-10-15T16:05:00.000Z",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  });
   assert.deepEqual(scope.filters, { host_kinds: ["omp"] });
   assert.deepEqual(scope.metrics, ["tasks.touched"]);
 });
@@ -140,4 +154,64 @@ test("describeRange and selectionLabel state the full window honestly", () => {
     }),
     /^自定义 a → b（UTC）$/,
   );
+});
+
+test("取整后查询哈希稳定", () => {
+  // D 节测试②：验证完整 scope，不在前端重写后端 query_hash。
+  const firstNow = new Date("2026-10-15T16:00:10.000Z");
+  const secondNow = new Date("2026-10-15T16:03:00.000Z");
+  const selection: TimeSelection = { kind: "preset", preset: "24h" };
+  const filters = { host_kinds: ["omp"], workflow_modes: ["strict"] };
+  const metrics = ["tasks.touched", "tasks.created"];
+  const first = buildScope(selection, filters, metrics, firstNow);
+  const second = buildScope(selection, filters, metrics, secondNow);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  assert.deepEqual(first, {
+    schema_version: "1.0",
+    range: {
+      from: "2026-10-14T16:05:00.000Z",
+      to: "2026-10-15T16:05:00.000Z",
+      timezone,
+    },
+    filters,
+    metrics,
+  });
+  assert.deepEqual(second, first);
+  assert.deepEqual(
+    buildScope(selection, filters, metrics, new Date("2026-10-15T16:05:00.000Z")),
+    first,
+  );
+  const next = buildScope(
+    selection, filters, metrics, new Date("2026-10-15T16:05:00.001Z"),
+  );
+  assert.deepEqual(next, {
+    ...first,
+    range: {
+      from: "2026-10-14T16:10:00.000Z",
+      to: "2026-10-15T16:10:00.000Z",
+      timezone,
+    },
+  });
+  for (const scope of [first, next]) {
+    assert.equal(Date.parse(scope.range.to) - Date.parse(scope.range.from), 86_400_000);
+  }
+  const custom: TimeSelection = {
+    kind: "custom",
+    from: "2026-10-14T16:00:07.123Z",
+    to: "2026-10-15T16:03:12.345Z",
+    timezone: "UTC",
+  };
+  for (const now of [firstNow, secondNow]) {
+    assert.deepEqual(resolvePresetRange("all", now, "UTC"), {
+      from: "1970-01-01T00:00:00.000Z",
+      to: "2026-10-15T16:05:00.000Z",
+      timezone: "UTC",
+    });
+    assert.deepEqual(buildScope(custom, filters, metrics, now), {
+      schema_version: "1.0",
+      range: { from: custom.from, to: custom.to, timezone: custom.timezone },
+      filters,
+      metrics,
+    });
+  }
 });

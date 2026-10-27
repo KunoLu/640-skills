@@ -3,9 +3,9 @@
  * 1h/24h/7d/30d/90d/All plus a Custom from/to/timezone entry. Default 24h.
  *
  * Hard rules implemented here:
- * - The last selection is remembered (localStorage), but a relative preset
- *   window is re-anchored against `now` on every query — a stored "24h"
- *   never freezes the window it was first saved with.
+ * - The last selection is remembered (localStorage), but preset bounds are
+ *   re-resolved per query using a fixed 300-second UTC-epoch query bucket.
+ *   Calls in the same bucket keep the same window; custom ranges stay exact.
  * - An invalid range (unparseable, from >= to, unknown timezone, entirely
  *   in the future) raises TimeRangeError with a clear message. Nothing here
  *   ever substitutes the 24h default silently (§12.5: 不能 silently 回退 24h).
@@ -19,6 +19,7 @@ export const DEFAULT_PRESET: PresetId = "24h";
 
 const HOUR_MS = 3600 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+const QUERY_BUCKET_MS = 300_000;
 
 const PRESET_DURATION_MS: Record<Exclude<PresetId, "all">, number> = {
   "1h": HOUR_MS,
@@ -57,20 +58,22 @@ export function isValidTimezone(timezone: string): boolean {
 }
 
 /**
- * Resolve a relative preset against `now`. The anchor is re-parsed on every
- * call, so two calls at different times return different windows (§12.5:
- * 每次新查询重新解析相对窗口 anchor).
+ * Resolve a preset using the ceiling of `now` in fixed query buckets, separate
+ * from chart trend buckets. An exact boundary stays put; non-All durations
+ * remain actual elapsed hours, not local calendar days.
  */
 export function resolvePresetRange(
   preset: PresetId,
   now: Date,
   timezone: string = localTimezone(),
 ): QueryScopeRange {
+  const endMs = Math.ceil(now.getTime() / QUERY_BUCKET_MS) * QUERY_BUCKET_MS;
+  const to = new Date(endMs).toISOString();
   if (preset === "all") {
-    return { from: ALL_RANGE_FROM, to: now.toISOString(), timezone };
+    return { from: ALL_RANGE_FROM, to, timezone };
   }
-  const from = new Date(now.getTime() - PRESET_DURATION_MS[preset]);
-  return { from: from.toISOString(), to: now.toISOString(), timezone };
+  const from = new Date(endMs - PRESET_DURATION_MS[preset]);
+  return { from: from.toISOString(), to, timezone };
 }
 
 /**
@@ -103,7 +106,7 @@ export function validateCustomRange(
   return { from: from.toISOString(), to: to.toISOString(), timezone };
 }
 
-/** Resolve any selection to a concrete range (re-anchored at `now`). */
+/** Resolve a selection: bucket-ceiling presets, exact custom bounds. */
 export function resolveRange(
   selection: TimeSelection,
   now: Date = new Date(),
