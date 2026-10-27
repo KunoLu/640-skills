@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-dashboard-keyword-launch
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：采用 strict；主会话为唯一 writer 与验证 controller，不启动子代理、不使用 advisor；提交与开 PR 由编排方执行。
-status: checking
+status: done
 branch: docs/dashboard-keyword-launch
 created_at: '2026-10-27T11:41:35+08:00'
-updated_at: '2026-10-27T12:16:14+08:00'
-completed_at: null
+updated_at: '2026-10-27T13:19:13+08:00'
+completed_at: '2026-10-27T13:19:13+08:00'
 ---
 
 # PR-1：Dashboard 关键词启动流程
@@ -118,3 +118,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 |---|---|---|---|---|
 | 2026-10-27T11:41:35+08:00 | planned | in-progress | 编排方整理；主会话开始 strict 文档任务 | 分支匹配，入口工作树干净；HEAD 与 origin/main 均为 99678289f8e1d756fad3a27a1797bca8c087c25f；四目标路径无 symlink／逃逸，新 task 不存在，ignore 检查 exit 1、无命中。 |
 | 2026-10-27T11:48:15+08:00 | in-progress | checking | 编排方整理；主会话完成文档修改与限定验证，进入检查 | 三模块 112 tests OK、exit 0；TaskDocument 转态前 in-progress False 1 None；命令块逐字一致，四文件格式与限制文字扫描通过；git diff --check exit 0，git status --short --untracked-files=all 仅三份 Skill／README 与本 task；时间取真实 TZ=Asia/Shanghai date；未执行实际 serve／宿主路由或独立复核，completed_at=null。 |
+| 2026-10-27T13:19:13+08:00 | checking | done | 编排方整理；写入者：主会话，Reviewy 无阻塞项后写入 done；PR #189 | CLEAN SHA 736d4239c080198b934ad314e9fe8b0b65219067 + CI run 40449454453（13/13） |
