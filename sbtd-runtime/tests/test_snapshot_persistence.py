@@ -99,6 +99,96 @@ class SnapshotPersistenceTests(unittest.TestCase):
                     restarted.get(snapshot.snapshot_id)
                 self.assertEqual(path.read_bytes(), blob)
 
+    def test_unchanged_file_is_validated_once_and_returns_isolated_data(self) -> None:
+        store = SnapshotStore(self.home)
+        snapshot = store.create_or_reuse(self.dataset, self.scope)
+        with mock.patch("report_snapshot.json.load", wraps=json.load) as load:
+            first = store.get(snapshot.snapshot_id)
+            expected = store.dataset_page(snapshot.snapshot_id, limit=3)
+            changed = store.dataset_page(snapshot.snapshot_id, limit=3)
+            first.rows[0]["fields"]["changed"] = True
+            first.dataset["events"].clear()
+            changed["rows"][0]["fields"]["changed"] = True
+            self.assertEqual(store.dataset_page(snapshot.snapshot_id, limit=3), expected)
+            self.assertEqual(store.get(snapshot.snapshot_id).dataset, snapshot.dataset)
+            self.assertEqual(load.call_count, 1)
+
+    def test_cached_file_rewrite_with_preserved_size_and_mtime_is_rejected(self) -> None:
+        store = SnapshotStore(self.home)
+        snapshot = store.create_or_reuse(self.dataset, self.scope)
+        path = self.home / "snapshots" / f"{snapshot.snapshot_id}.json"
+        store.get(snapshot.snapshot_id)
+        before = path.stat()
+        original = path.read_bytes()
+        tampered = original.replace(b'"checksum":"sha256:', b'"checksum":"sha257:', 1)
+        self.assertNotEqual(tampered, original)
+        path.write_bytes(tampered)
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertEqual(path.stat().st_size, before.st_size)
+        self.assertEqual(path.stat().st_mtime_ns, before.st_mtime_ns)
+        self.assertNotEqual(path.stat().st_ctime_ns, before.st_ctime_ns)
+        with mock.patch("report_snapshot.json.load", wraps=json.load) as load:
+            with self.assertRaises(SnapshotNotFound):
+                store.get(snapshot.snapshot_id)
+            self.assertEqual(load.call_count, 1)
+        path.write_bytes(original)
+        self.assertEqual(store.get(snapshot.snapshot_id).rows, snapshot.rows)
+
+    def test_cached_file_replacement_is_revalidated(self) -> None:
+        store = SnapshotStore(self.home)
+        snapshot = store.create_or_reuse(self.dataset, self.scope)
+        path = self.home / "snapshots" / f"{snapshot.snapshot_id}.json"
+        store.get(snapshot.snapshot_id)
+        before = path.stat()
+        replacement = path.with_suffix(".replacement")
+        replacement.write_bytes(path.read_bytes())
+        os.utime(replacement, ns=(before.st_atime_ns, before.st_mtime_ns))
+        os.replace(replacement, path)
+        self.assertNotEqual(path.stat().st_ino, before.st_ino)
+        with mock.patch("report_snapshot.json.load", wraps=json.load) as load:
+            self.assertEqual(store.get(snapshot.snapshot_id).rows, snapshot.rows)
+            self.assertEqual(store.get(snapshot.snapshot_id).rows, snapshot.rows)
+            self.assertEqual(load.call_count, 1)
+
+    def test_sweep_reads_only_expired_candidates(self) -> None:
+        store = SnapshotStore(self.home, ttl_seconds=10)
+        now = datetime.now(UTC)
+        expired = store.create_or_reuse(self.dataset, self.scope, now=now)
+        live = store.create_or_reuse(
+            self.dataset,
+            _scope(self.dataset, metrics=["tasks.created"]),
+            now=now + timedelta(seconds=1),
+        )
+        store.get(expired.snapshot_id, now=now)
+        with (
+            mock.patch.object(store, "_read", wraps=store._read) as read,
+            mock.patch("report_snapshot.json.load", wraps=json.load) as load,
+        ):
+            removed = store.sweep(now=now + timedelta(seconds=10))
+        self.assertEqual(removed, [expired.snapshot_id])
+        self.assertEqual(
+            [call.args[0] for call in read.call_args_list], [expired.snapshot_id]
+        )
+        self.assertEqual(load.call_count, 1)
+        self.assertNotIn(expired.snapshot_id, store._validated)
+        self.assertFalse(
+            (self.home / "snapshots" / f"{expired.snapshot_id}.json").exists()
+        )
+        self.assertTrue(
+            (self.home / "snapshots" / f"{live.snapshot_id}.json").exists()
+        )
+
+    def test_expired_cache_is_dropped_without_evicting_snapshot(self) -> None:
+        store = SnapshotStore(self.home, ttl_seconds=10)
+        now = datetime.now(UTC)
+        snapshot = store.create_or_reuse(self.dataset, self.scope, now=now)
+        store.get(snapshot.snapshot_id, now=now)
+        self.assertIn(snapshot.snapshot_id, store._validated)
+        with self.assertRaises(SnapshotGone):
+            store.get(snapshot.snapshot_id, now=now + timedelta(seconds=10))
+        self.assertNotIn(snapshot.snapshot_id, store._validated)
+        self.assertIn(snapshot.snapshot_id, store._snapshots)
+
     def test_startup_sweep_touches_only_owned_expired_snapshots(self) -> None:
         store = SnapshotStore(self.home)
         old = datetime.now(UTC) - timedelta(days=2)

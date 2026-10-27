@@ -20,6 +20,7 @@ Starlette + uvicorn (ADR 0001 §2) over the R1 in-process library surface
 from __future__ import annotations
 
 import argparse
+import asyncio
 import ipaddress
 import json
 import logging
@@ -480,6 +481,8 @@ def create_app(
     manifest = load_panel_manifest()
     renderer = ExportRenderer(store, home=home)
     exports = ExportStore(home, store, renderer)
+    # Bound dataset copies and workers waiting on the shared quota/store RLock.
+    statistics_slots = asyncio.Semaphore(4)
 
     @asynccontextmanager
     async def lifespan(_app: Starlette):
@@ -523,6 +526,17 @@ def create_app(
             _envelope(catalog, {"metrics_version": catalog.get("metrics_version")})
         )
 
+    def statistics_response(raw_scope: dict) -> JSONResponse:
+        # Reload per query: the dashboard must reflect newly ingested events.
+        data, warnings = load_dataset(home)
+        result = query(data, raw_scope, store=store)
+        meta = dict(result.get("meta") or {})
+        meta["warnings"] = [*meta.get("warnings", []), *warnings]
+        if warnings:
+            meta["complete"] = False
+            meta["coverage_state"] = "partial"
+        return _json(_envelope(result, meta))
+
     async def statistics_query(request: Request) -> JSONResponse:
         try:
             raw_scope = await request.json()
@@ -530,10 +544,9 @@ def create_app(
             return _json({"detail": "invalid JSON body"}, 400)
         if not isinstance(raw_scope, dict):
             return _json({"detail": "query scope must be a JSON object"}, 400)
-        # Reload per query: the dashboard must reflect newly ingested events.
-        data, warnings = load_dataset(home)
         try:
-            result = query(data, raw_scope, store=store)
+            async with statistics_slots:
+                return await run_in_threadpool(statistics_response, raw_scope)
         except QueryScopeError as error:
             return _json({"detail": str(error)}, 400)
         except DiskQuotaExceeded as error:
@@ -545,38 +558,39 @@ def create_app(
                 },
                 507,
             )
-        meta = dict(result.get("meta") or {})
-        meta["warnings"] = [*meta.get("warnings", []), *warnings]
-        if warnings:
-            meta["complete"] = False
-            meta["coverage_state"] = "partial"
-        return _json(_envelope(result, meta))
+
+    def snapshot_response(snapshot_id: str) -> JSONResponse:
+        view = store.get(snapshot_id).public_view()
+        return _json(_envelope(view, {"metrics_version": view["metrics_version"]}))
 
     async def get_snapshot(request: Request) -> JSONResponse:
         snapshot_id = request.path_params["snapshot_id"]
         try:
-            snapshot = store.get(snapshot_id)
+            async with statistics_slots:
+                return await run_in_threadpool(snapshot_response, snapshot_id)
         except SnapshotNotFound:
             return _json({"detail": "not found"}, 404)
         except SnapshotGone:
             return _json({"detail": "gone"}, 410)
-        view = snapshot.public_view()
-        return _json(_envelope(view, {"metrics_version": view["metrics_version"]}))
+
+    def dataset_response(snapshot_id: str, cursor: str | None) -> JSONResponse:
+        page = store.dataset_page(snapshot_id, cursor=cursor)
+        return _json(
+            _envelope(page, {"next_cursor": page["next_cursor"], "complete": True})
+        )
 
     async def get_snapshot_dataset(request: Request) -> JSONResponse:
         snapshot_id = request.path_params["snapshot_id"]
         cursor = request.query_params.get("cursor")
         try:
-            page = store.dataset_page(snapshot_id, cursor=cursor)
+            async with statistics_slots:
+                return await run_in_threadpool(dataset_response, snapshot_id, cursor)
         except SnapshotNotFound:
             return _json({"detail": "not found"}, 404)
         except SnapshotGone:
             return _json({"detail": "gone"}, 410)
         except CursorError as error:
             return _json({"detail": str(error)}, 400)
-        return _json(
-            _envelope(page, {"next_cursor": page["next_cursor"], "complete": True})
-        )
 
     async def create_export(request: Request) -> JSONResponse:
         try:

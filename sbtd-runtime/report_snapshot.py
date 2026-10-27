@@ -663,6 +663,7 @@ class SnapshotStore:
         self._lock = self.quota.lock
         self._pins = Counter(pinned_snapshot_ids)
         self._snapshots: dict[str, Snapshot] = {}
+        self._validated: dict[str, tuple[int, int, int, int, int]] = {}
         self._gone: set[str] = set()
         for path in self._directory.iterdir():
             if not _SNAPSHOT_ID.fullmatch(path.stem) or path.suffix != ".json":
@@ -698,7 +699,9 @@ class SnapshotStore:
         self._check_directory()
         return self._directory / f"{snapshot_id}.json"
 
-    def _read(self, snapshot_id: str) -> Snapshot:
+    def _read(self, snapshot_id: str, *, force_validate: bool = False) -> Snapshot:
+        # Callers hold the shared RLock, except during single-writer startup.
+        cached = self._validated.pop(snapshot_id, None)
         path = self._path(snapshot_id)
         try:
             info = path.lstat()
@@ -706,6 +709,10 @@ class SnapshotStore:
                 raise ValueError("snapshot must be a regular unlinked file")
             if hasattr(os, "getuid") and info.st_uid != os.getuid():
                 raise ValueError("snapshot has unknown ownership")
+            identity = file_identity(info)
+            if not force_validate and cached == identity:
+                self._validated[snapshot_id] = identity
+                return self._snapshots[snapshot_id]
             flags = (
                 os.O_RDONLY
                 | getattr(os, "O_NOFOLLOW", 0)
@@ -714,9 +721,11 @@ class SnapshotStore:
             fd = os.open(path, flags)
             with os.fdopen(fd, encoding="utf-8") as handle:
                 opened = os.fstat(handle.fileno())
-                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                if file_identity(opened) != identity:
                     raise ValueError("snapshot file was replaced")
                 envelope = json.load(handle, object_pairs_hook=_unique_object)
+                if file_identity(os.fstat(handle.fileno())) != identity:
+                    raise ValueError("snapshot file changed while reading")
             if set(envelope) != {"format_version", "checksum", "snapshot"}:
                 raise ValueError("invalid snapshot header")
             version = envelope["format_version"]
@@ -742,6 +751,11 @@ class SnapshotStore:
                 raise ValueError("snapshot id mismatch")
             if snapshot.expires_instant < parse_instant(snapshot.created_at):
                 raise ValueError("invalid snapshot lifetime")
+            if file_identity(path.lstat()) != identity:
+                raise ValueError("snapshot file was replaced")
+            if not force_validate and snapshot_id in self._snapshots:
+                self._snapshots[snapshot_id] = snapshot
+                self._validated[snapshot_id] = identity
             return snapshot
         except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
             raise SnapshotNotFound(snapshot_id) from None
@@ -805,13 +819,13 @@ class SnapshotStore:
         removed = []
         with self._lock:
             self._check_directory()
-            for snapshot_id in list(self._snapshots):
-                if self._pins[snapshot_id]:
+            for snapshot_id, snapshot in list(self._snapshots.items()):
+                if now < snapshot.expires_instant or self._pins[snapshot_id]:
                     continue
                 try:
                     path = self._path(snapshot_id)
                     before = exclusive_file(path)
-                    snapshot = self._read(snapshot_id)
+                    snapshot = self._read(snapshot_id, force_validate=True)
                 except SnapshotNotFound:
                     continue
                 if now >= snapshot.expires_instant and before is not None:
@@ -939,12 +953,17 @@ class SnapshotStore:
         return snapshot
 
     def get(self, snapshot_id: str, *, now: datetime | None = None) -> Snapshot:
+        return copy.deepcopy(self._get(snapshot_id, now=now))
+
+    def _get(self, snapshot_id: str, *, now: datetime | None) -> Snapshot:
+        """Return a private, read-only snapshot; public callers must copy data."""
         now = now or datetime.now(UTC)
         with self._lock:
             if snapshot_id in self._gone:
                 raise SnapshotGone(snapshot_id)
             snapshot = self._read(snapshot_id)
             if now >= snapshot.expires_instant and not self._pins[snapshot_id]:
+                self._validated.pop(snapshot_id, None)
                 raise SnapshotGone(snapshot_id)
             return snapshot
 
@@ -956,7 +975,7 @@ class SnapshotStore:
         *,
         now: datetime | None = None,
     ) -> dict[str, Any]:
-        snapshot = self.get(snapshot_id, now=now)
+        snapshot = self._get(snapshot_id, now=now)
         offset = 0
         if cursor is not None:
             payload = decode_cursor(cursor)
@@ -966,7 +985,7 @@ class SnapshotStore:
             if offset >= len(snapshot.rows):
                 raise CursorError("cursor offset is beyond the result set")
         limit = max(1, min(limit, MAX_PAGE_SIZE))
-        page = snapshot.rows[offset : offset + limit]
+        page = copy.deepcopy(snapshot.rows[offset : offset + limit])
         end = offset + len(page)
         next_cursor = (
             encode_cursor(end, snapshot_id) if end < len(snapshot.rows) else None
