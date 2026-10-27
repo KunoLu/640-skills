@@ -18,7 +18,7 @@
 - 启用 Dashboard 导出菜单：针对当前页面显示的 `snapshot_id` 创建、轮询、取消和下载，页面刷新不改变在途导出固定的快照。导出接收页面七字段 `presentation_state`，包括主题与展开明细；JPEG／PDF 控件按能力显示不可用原因和降级警告。401 会停止轮询并提示重启 serve、手动重新配对。([#186](https://github.com/KunoLu/640-skills/pull/186))
 - 新增 `snapshots/` 与 `exports/` 共享磁盘准入，默认 2,000,000,000 字节，通过 `SBTD_RUNTIME_DISK_QUOTA_BYTES` 配置。新建前先清扫过期且无引用的文件与可识别的遗留临时文件，用量达到 80% 时记录日志预警，仅在清扫后用量高于上限时返回 `507 DISK_QUOTA_EXCEEDED` 及 `used_bytes`／`quota_bytes`。未知或损坏文件保留并计量，不淘汰未过期快照；不预留输出大小，已准入工作可能暂时超限。([#162](https://github.com/KunoLu/640-skills/pull/162))
 - 新增 Git 与纯文件项目的工作流任务状态节点核对、过期内容／并发写入保护、旧事件历史惰性基线及完成前先进入 checking 的规则。发现不一致时记录事实，不静默重开任务；缺少远端任务证据时保留不可考状态。([#169](https://github.com/KunoLu/640-skills/pull/169))
-- 新增 Host／Origin 拒绝与 ticket 不入日志的安全证据、Dashboard 产物逐字节重建检查，以及原生 `runtime-e2e-macos`／`runtime-e2e-windows` CI 作业，覆盖前台 serve、配对、四格式导出、Panel／数值对账与 renderer CJK 字形。CI runner 证据不能替代仍待完成的用户 Mac 人工视觉／字体检查。([#142](https://github.com/KunoLu/640-skills/pull/142), [#163](https://github.com/KunoLu/640-skills/pull/163), [#164](https://github.com/KunoLu/640-skills/pull/164))
+- 新增 Host／Origin 拒绝与 ticket 不入日志的安全证据、Dashboard 产物逐字节重建检查，以及原生 `runtime-e2e-macos`／`runtime-e2e-windows` CI 作业，覆盖前台 serve、配对、四格式导出、Panel／数值对账与 renderer CJK 字形。CI runner 证据与以下群内记录分开：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录；这七步在 MacBook Air 上全部通过。仓库内 R2.2 task.md 尚未回填该记录，待 f-backfill 任务回填；不据此推导清单步骤范围以外的字体结论。([#142](https://github.com/KunoLu/640-skills/pull/142), [#163](https://github.com/KunoLu/640-skills/pull/163), [#164](https://github.com/KunoLu/640-skills/pull/164))
 
 ### 变更
 
@@ -30,7 +30,7 @@
 - 将导出隐私文档与既有行为对齐：task 行保留、聚合按全部事件计算；`privacy.exportable` 为 false 或 `privacy.classification` 不是 `local-metadata` 时，屏蔽事件明细及以其为依据的 run／step 派生行。四种格式的导出数据族计数与 `WITHHELD_NON_EXPORTABLE:<n>` 均反映实际明细输出。([#175](https://github.com/KunoLu/640-skills/pull/175), [#176](https://github.com/KunoLu/640-skills/pull/176), [#181](https://github.com/KunoLu/640-skills/pull/181))
 - 对齐工作流规格与分发指引中的状态节点核对、旧格式事件判定、时间戳校验和完成证据措辞。旧历史不改写；区分 `check_finish_commit` 要求的 JSON 证据与现行手写完成记录使用的文字证据。([#168](https://github.com/KunoLu/640-skills/pull/168), [#170](https://github.com/KunoLu/640-skills/pull/170), [#179](https://github.com/KunoLu/640-skills/pull/179), [#185](https://github.com/KunoLu/640-skills/pull/185), [#187](https://github.com/KunoLu/640-skills/pull/187))
 - `sbtd dashboard`／`sbtd ui` 先询问明确许可，再安装依赖或以前台方式启动；关键词本身不等于同意。README 现区分可运行的可选 runtime 与 Onboard，后者不安装或复制 runtime。([#189](https://github.com/KunoLu/640-skills/pull/189))
-- 增加有界性能／容量测量，保留未达标或未测量结果，不将小夹具外推至目标规模。共享配额默认值不变；已测 HTML／CSV 容量不是四格式或 Mac 容量结论。([#174](https://github.com/KunoLu/640-skills/pull/174))
+- 增加有界性能／容量测量，保留未满足或未测量结果，不将小夹具外推至目标规模。共享配额默认值不变；已测 HTML／CSV 容量不是四格式或 Mac 容量结论。([#174](https://github.com/KunoLu/640-skills/pull/174))
 - 在任务／PRD／ADR 文档中汇总计划、配额／清扫与幂等决定、合并记录、模型计数更正及证据归属，不把记录完成等同于发布就绪。([#141](https://github.com/KunoLu/640-skills/pull/141), [#145](https://github.com/KunoLu/640-skills/pull/145), [#156](https://github.com/KunoLu/640-skills/pull/156), [#157](https://github.com/KunoLu/640-skills/pull/157), [#161](https://github.com/KunoLu/640-skills/pull/161), [#173](https://github.com/KunoLu/640-skills/pull/173), [#177](https://github.com/KunoLu/640-skills/pull/177), [#180](https://github.com/KunoLu/640-skills/pull/180), [#184](https://github.com/KunoLu/640-skills/pull/184))
 
 ### 修复
@@ -44,16 +44,16 @@
 
 ### 候选边界与已知限制
 
-- 版本元数据有意仍为 `v2.1.0-rc.1`：`sbtd-runtime/contracts/openapi.yaml` 的 `info.x-sbtd-release` 与 info summary 保留该版本，`sbtd-runtime/contracts/capability-matrix.json` 和 `sbtd-runtime/contracts/metrics-catalog.json` 的 `release` 也不变。本纯文档 PR 不升版。
+- 版本元数据有意仍为 `v2.1.0-rc.1`：`sbtd-runtime/contracts/openapi.yaml` 的 `info.x-sbtd-release` 与 info summary 保留该版本，`sbtd-runtime/contracts/capability-matrix.json` 和 `sbtd-runtime/contracts/metrics-catalog.json` 的 `release` 也不变。PR #192 不升版。
 - `sbtd-runtime/` 仍为可选，观察默认关闭，项目注册与观察开启均为显式动作。Serve 与 Dashboard 只通过显式前台命令启动、只绑定 `127.0.0.1`、Ctrl-C 退出；不启动后台采集器或定时器。与 rc.1 不同，快照现已落盘。源码发布不执行本机安装、workflow sync、项目迁移、宿主重载或备份处置。([#144](https://github.com/KunoLu/640-skills/pull/144), [#147](https://github.com/KunoLu/640-skills/pull/147), [#189](https://github.com/KunoLu/640-skills/pull/189))
-- R2.2 保持 `in-progress`、`completed_at: null`。以下记录项均为 **pending，未验证**：D9（AC-33／AC-62 用户 Mac 人工视觉／字体确认）；macOS 实机性能；Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉；原生 Windows 性能；百万事件／1 万任务／10 万步骤及百万 CSV；完整四格式容量／平台资源上限／最大长图 CSV 规模；R2.2 收尾。D9 不是通过。浅色导出没有 CI 覆盖，仍需用户 Mac 检查。([#174](https://github.com/KunoLu/640-skills/pull/174), [#186](https://github.com/KunoLu/640-skills/pull/186))
-- 审计分页仍先全量 replay 与排序，CSV 仍完整缓冲生成而非流式。性能运行只达到 11,500 个事件，未达到百万事件目标，未达标结果原样保留；小规模结果不证明 AC-62 通过。Windows ACL 缺少本机验证，`query.executed` 事件不持久化。([#174](https://github.com/KunoLu/640-skills/pull/174))
+- R2.2 保持 `in-progress`、`completed_at: null`。D9 有以下群内记录：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录；这七步在 MacBook Air 上全部通过。仓库内 R2.2 task.md 尚未回填该记录，待 f-backfill 任务回填。以下记录项仍为 **pending，未验证**：macOS 实机性能；Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉；原生 Windows 性能；百万事件／1 万任务／10 万步骤及百万 CSV；完整四格式容量／平台资源上限／最大长图 CSV 规模；R2.2 收尾。清单 v3 未覆盖 Mac 上 JPEG／PDF 字节数，不据此推导第 1–7 步以外的字体结论。浅色导出仍无 CI 覆盖；用户群内确认的清单包含浅主题，仓库内 R2.2 task.md 尚未回填。([#174](https://github.com/KunoLu/640-skills/pull/174), [#186](https://github.com/KunoLu/640-skills/pull/186))
+- 审计分页仍先全量 replay 与排序，CSV 仍完整缓冲生成而非流式。性能运行只达到 11,500 个事件，未达到百万事件目标，未满足的结果原样保留；小规模结果不证明 AC-62 通过。Windows ACL 缺少本机验证，`query.executed` 事件不持久化。([#174](https://github.com/KunoLu/640-skills/pull/174))
 - 查询桶限制 (1)：指纹覆盖全库事件。事件持续到达时，单页固定 scope、每 30 秒轮询的快照上界仍为 2880／天，不包含额外手动请求或多页。降幅不可考；无新数据时 288／天的目标来源不可考，不是硬上限。([#191](https://github.com/KunoLu/640-skills/pull/191))
 - 查询桶限制 (2)：30 秒轮询仍照常发送请求，不保证每轮得到不同 `snapshot_id`，也不承诺快照数量或性能收益。([#191](https://github.com/KunoLu/640-skills/pull/191))
 - 查询桶限制 (3)：后端不拒绝取整后晚于 `as_of` 的终点，因此终点可能超过快照的观察时刻。([#191](https://github.com/KunoLu/640-skills/pull/191))
 - 查询桶限制 (4)：复用快照时，响应 `meta.as_of` 可能不同于 `snapshot.as_of`；更频繁复用使该差异更常见。([#191](https://github.com/KunoLu/640-skills/pull/191))
-- 查询桶限制 (5)：只取整前端预置，不自动取整 API 调用，分桶变更不改 OpenAPI。这五条查询桶限制来自本 PR 的编号列表，不是沿袭 rc.1 的限制列表。([#191](https://github.com/KunoLu/640-skills/pull/191))
-- 延后项：401 重新配对未实现。Dashboard 仅停止轮询并提示用户重启 serve 后重新配对。([#186](https://github.com/KunoLu/640-skills/pull/186), [#190](https://github.com/KunoLu/640-skills/pull/190))
+- 查询桶限制 (5)：只取整前端预置，不自动取整 API 调用，分桶变更不改 OpenAPI。这五条查询桶限制来自 PR #191 的编号列表，不是沿袭 rc.1 的限制列表。([#191](https://github.com/KunoLu/640-skills/pull/191))
+- 延后项：401 重新配对未实现。401 时导出轮询停止，Dashboard 提示用户重启 serve 后重新配对；页面每 30 秒的主快照轮询不因此停止。([#186](https://github.com/KunoLu/640-skills/pull/186), [#190](https://github.com/KunoLu/640-skills/pull/190))
 - 延后项：快照内存淘汰未实现。启动仍装载全部快照；磁盘清扫与文件校验缓存不提供内存淘汰策略。([#147](https://github.com/KunoLu/640-skills/pull/147), [#190](https://github.com/KunoLu/640-skills/pull/190))
 - 另有缓存／线程池限制：全部身份字段未变的原地改写可能被接受；取消时信号量可能释放而工作线程仍运行；库调用方修改 `create_or_reuse` 返回对象可能影响后续缓存读取。`load_dataset` 移入 handler 异常边界后，其 `QueryScopeError`／`DiskQuotaExceeded` 条件性地由 500 改为 400／507，但未发现正常加载路径可触发，也无该异常场景实测证据。这些是已记录限制，不是吞吐验证或 Windows 缓存失效的全面保证。([#190](https://github.com/KunoLu/640-skills/pull/190))
 
