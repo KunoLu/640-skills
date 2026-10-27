@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.2-contract-bucket-ceiling
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确选择 strict；分支由编排方创建，本轮在绑定工作树实施 C 节范围与 D 节两个新测试，严格 TDD；仅写授权白名单，不启动子代理或 advisor，不提交、不联网、不安装依赖。
+mode_note: 用户明确选择 strict；分支由编排方创建，本轮在绑定工作树实施 C 节范围与 D 节两个新测试，严格 TDD；仅写授权白名单，不启动子代理或 advisor，omp 本身不提交、不推送、不联网、不安装依赖；依赖由编排方经 Lord 批准执行 `npm ci --ignore-scripts` 安装；提交、推送与 PR 由编排方执行者完成。
 status: in-progress
 branch: feat/v2.1.0-rc.2-contract-bucket-ceiling
 created_at: '2026-10-27T17:50:13+08:00'
-updated_at: '2026-10-27T19:53:48+08:00'
+updated_at: '2026-10-27T20:20:43+08:00'
 completed_at: null
 ---
 
@@ -283,7 +283,7 @@ Reviewy 意见始终使用「Reviewy 2026-10-27 群内审阅意见」。
 | gherkin-bdd | 用户可见范围与快照行为 | traceable：D 节两条获准场景对应两个新测试，不扩写长期 spec |
 | project-validation／真实界面烟测 | 实施修改后 | 第 1 轮前端 12 项、后端 13 项及 ruff 通过；真实范围函数 smoke-only；编排方 npm ci --ignore-scripts 退出码 0、锁文件未变；第 2 轮两次 npm run build（--configLoader native，含 tsc）退出码均为 0，static 字节一致；CI 与浏览器未运行 |
 | 可读性／独立审阅 | 实现后及提交审阅前 | 手写改动自核完成；用户禁止子代理／advisor，Reviewy 独立审阅及重新构建仍待编排方安排 |
-| release-readiness | 测试后、运行前端交付前 | blocked：static 已重建，构建内类型检查及本地两次字节一致通过；产物预算／独立重建／CI／真实界面证据未取得，不声明发布就绪 |
+| release-readiness | 测试后、运行前端交付前 | blocked：static 已重建，构建内类型检查及本地两次字节一致通过；产物预算已通过；独立重建／CI／真实界面证据未取得，不声明发布就绪 |
 
 ## F. 模型记录
 
@@ -296,8 +296,10 @@ Reviewy 意见始终使用「Reviewy 2026-10-27 群内审阅意见」。
 | 第二轮 ping | 未知／不可核 | openai-codex/gpt-6-astra | 未知／不可核 | 1 条 assistant 消息／0 toolCall | 编排方整理，据会话 jsonl 核对；模型出处沿用命令行参数 | `ping/2026-10-27T10-34-42-670Z_01a17ced-346e-709f-9728-c4e2bd8e7922.jsonl` |
 | 第二轮草案主会话 | 未知／不可核 | openai-codex/gpt-6-astra | 未知／不可核 | 18 条 assistant 消息／68 次 toolCall | 编排方整理，据会话 jsonl 核对；read 42、bash 9、todo 9、grep 4、glob 2、edit 2；model_usage 记录 0 | `session/2026-10-27T10-34-51-927Z_01a17ced-5897-7348-9a0b-e26bf6509a8c.jsonl` |
 | 第三轮（v3）草案主会话 | 未知／不可核 | openai-codex/gpt-6-astra | 未知／不可核 | 本轮（v3）用量见编排方报告，草案正文不含 | 模型出处：命令行参数；本轮不读取自己的会话 jsonl | 未知／不可核 |
+| 实施第 1 轮（ping＋主会话） | ping 19:34:58、主会话 19:35:07 起（会话 jsonl 记录的 UTC 时间换算为 +08:00） | openai-codex/gpt-6-astra | high | ping 1 条 assistant 消息／0 toolCall；主会话 22 条 assistant 消息／67 次 toolCall | 编排方整理，据会话 jsonl 核对；read 31、bash 16、todo 8、edit 5、grep 4、find 1、write 1、eval 1；model_usage 存在（24 条，均为 purpose=find，辅助模型 typesafe/jev-latest） | `contract-bucket-impl/ping/2026-10-27T11-34-58-057Z_01a17d24-5f09-76df-832f-5c4303e30748.jsonl`；`contract-bucket-impl/session/2026-10-27T11-35-07-027Z_01a17d24-8213-721e-8b95-2c339473181f.jsonl` |
+| 实施第 2 轮（ping＋主会话） | ping 19:51:46、主会话 19:51:53 起（会话 jsonl 记录的 UTC 时间换算为 +08:00） | openai-codex/gpt-6-astra | high | ping 1 条 assistant 消息／0 toolCall；主会话 17 条 assistant 消息／41 次 toolCall | 编排方整理，据会话 jsonl 核对；read 13、eval 8、todo 6、grep 5、bash 4、edit 3、find 1、glob 1；model_usage 存在（4 条，均为 purpose=find，辅助模型 typesafe/jev-latest） | `contract-bucket-impl-r2/ping/2026-10-27T11-51-46-904Z_01a17d33-c3d8-76a3-99a4-e84330b10ce3.jsonl`；`contract-bucket-impl-r2/session/2026-10-27T11-51-53-296Z_01a17d33-dcd0-7316-b5f3-8924f01a20dd.jsonl` |
 
-model_usage 记录 0 不等于没有模型调用或 token 消耗。第二轮统计与文件名已按编排方核对资料记载；未给出的时间及 thinking 档位均为未知／不可核，不从文件名或文件大小推算。第三轮用量只见编排方报告，不在草案正文自算。
+model_usage 记录 0 不等于没有模型调用或 token 消耗。第二轮统计与文件名已按编排方核对资料记载；未给出的时间及 thinking 档位均为未知／不可核，不从文件名或文件大小推算。第三轮用量只见编排方报告，不在草案正文自算。实施两轮的 model_usage 记录均为 find 工具的辅助模型调用，不是子代理。
 
 ## G. 草案阶段（v4）证据、格式自检与交付边界
 
@@ -337,10 +339,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 - TDD GREEN：同一 dashboard 回归命令退出码 0，12 pass／0 fail；原摘要测试块逐字保留，snapshotPin.test.ts 不改。根目录 `TMPDIR=.tmp-omp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_report_snapshot -v` 退出码 0，13 项 OK。`ruff check --no-cache sbtd-runtime/tests/test_report_snapshot.py` 退出码 0，`All checks passed!`。临时路径为第 1 轮实际路径的相对表示。
 - 本地运行烟测：dashboard 用 `node --input-type=module -e` 直接导入真实 buildScope／describeRange，打印 A 节四个时刻、All 与自定义；退出码 0。前三个时刻均输出 `[2026-10-14T16:05:00.000Z,2026-10-15T16:05:00.000Z)`，边界后 1 ms 为 `[2026-10-14T16:10:00.000Z,2026-10-15T16:10:00.000Z)`；All 起点 epoch；自定义毫秒原样保留。此为 smoke-only，不是浏览器、HTTP 或 Node→Python 串接验证，不新增第三个测试。
 - 可读性与 ponytail-review 自核：生产改动仅固定常量、一次上界计算及原路径复用，无新抽象／依赖／后台改动；测试保留真实夹具和独立迟到子场景，无 mock、第三个测试或全局时区修改。R2.0b 第 80 行原句保留并追加更正及上述本轮结果，原状态与历史事件不变。
-- 验证分类：BDD=`traceable`，本任务 D 节中文场景＋英文 Given／When／Then，两个新测试与之对应；Mock Strategy=`none`；Cross-repo context=`not-needed`，API Contract=`verified`（本地 normalize_scope／SnapshotStore 源码与测试，不声称 HTTP 契约全量验收）；rtk=`not-needed`，按用户指定原生命令运行。证据为 developer-local／dirty／local-only，不是 CI 或当前 PR 提交证明；原始运行输出保留在本次工具记录，未生成或宣称正式测试报告。
+- 验证分类：BDD=`traceable`，本任务 D 节中文场景＋英文 Given／When／Then，两个新测试与之对应；Mock Strategy=`none`；Cross-repo context=`not-needed`，API Contract=`verified`（本地 normalize_scope／SnapshotStore 源码与测试，不声称 HTTP 契约全量验收）；rtk=`not-needed`，按编排方整理的原生命令运行。证据为 developer-local／dirty／local-only，不是 CI 或当前 PR 提交证明；原始运行输出保留在本次工具记录，未生成或宣称正式测试报告。
 - TaskDocument 自检：G 节命令的路径参数分别为 `ai/tasks/v2.1.0-rc.2-contract-bucket-ceiling/task.md` 与 `ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md`，各自退出码 0。新任务输出 `in-progress False 1 None`；R2.0b 输出 `done True 0 2026-10-20T03:14:10+08:00`，并提示「旧格式事件，不追溯」。该提示是保留的旧事件格式，不将其写成新格式事件校验通过。
-- 跳过边界（更新至第 2 轮）：依赖由编排方安装，本轮未安装；已执行两次 npm run build（附 --configLoader native），构建内 tsc 及 static 字节一致均通过。未运行 check_artifacts.py，未改预算；未跑前端全套、扩展 Python 套件、根 CI 发现入口、Linux 三片、浏览器／HTTP 全链路。第 1 轮定向回归与真实函数烟测保留为当轮证据，本轮未重跑，不以生成物替代真实界面验证。未联网，未启子代理／advisor，未做 git 写操作、提交、发布或全局配置修改。
-- Release Readiness Review=`blocked`（发布层面）：第 1 轮源码行为验证通过，第 2 轮 static 重建、构建内类型检查与本地两次字节一致通过；预算、独立重建、CI 及真实界面证据仍缺失，独立审阅待编排方安排。本次仅交付分支阶段授权修改，保留 in-progress 与 null 完成时间。无 schema／数据迁移，回退边界是本次源码、文档和配套生成物，不需回滚既有事件库；未实际执行回退。固定窗口前移代价、30 秒轮询请求量与 meta.as_of／snapshot.as_of 的既有差异仍按 B 节说明，不声称数量或性能收益；未改监控／告警或运行手册，不新增服务、队列或背压机制。
+- 跳过边界（更新至第 2 轮）：依赖由编排方安装，本轮未安装；已执行两次 npm run build（附 --configLoader native），构建内 tsc 及 static 字节一致均通过。编排方执行者在根目录运行 `python3 -B sbtd-runtime/dashboard/check_artifacts.py`，输出 `OK: 3 files, 267300 bytes (budget 524288)`，退出码 0；artifact-budget.json 未改；未跑前端全套、扩展 Python 套件、根 CI 发现入口、Linux 三片、浏览器／HTTP 全链路。第 1 轮定向回归与真实函数烟测保留为当轮证据，本轮未重跑，不以生成物替代真实界面验证。未联网，未启子代理／advisor，未做 git 写操作、提交、发布或全局配置修改。
+- Release Readiness Review=`blocked`（发布层面）：第 1 轮源码行为验证通过，第 2 轮 static 重建、构建内类型检查与本地两次字节一致通过；预算已通过；独立重建、CI 及真实界面证据仍缺失，独立审阅待编排方安排。本次仅交付分支阶段授权修改，保留 in-progress 与 null 完成时间。无 schema／数据迁移，回退边界是本次源码、文档和配套生成物，不需回滚既有事件库；未实际执行回退。固定窗口前移代价、30 秒轮询请求量与 meta.as_of／snapshot.as_of 的既有差异仍按 B 节说明，不声称数量或性能收益；未改监控／告警或运行手册，不新增服务、队列或背压机制。
 - 临时数据均限定 `.tmp-omp/`；测试夹具已自动清理，实测为空后执行 `rmdir .tmp-omp` 退出码 0。末次记录时间取同次 `date -Iseconds` 输出 `2026-10-27T19:41:22+08:00`。仅任务文件承载本地结果摘要，不写索引、active、handoff、正式报告目录或长期 spec。
 
 ### 第 2 轮：构建证据与 task 文字修正
@@ -352,6 +354,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 - 第 1 次构建退出码 **0**；输出尾部：`static/index.html 0.46 kB │ gzip: 0.30 kB`、`static/assets/index-cSr3LuxA.css 7.70 kB │ gzip: 1.84 kB`、`static/assets/index-KzymcUqY.js 259.14 kB │ gzip: 82.15 kB`、`✓ built in 915ms`。Vite `v6.4.4`，41 modules transformed。
 - 第 2 次构建退出码 **0**；相同三个文件及体积，输出结束为 `✓ built in 841ms`。根目录 `diff .tmp-omp/static.run1.sha256 .tmp-omp/static.run2.sha256` 退出码 **0**、输出为空，两个文件集合与逐文件 SHA-256 完全相同，static 字节一致。
 - 根目录 `diff .tmp-omp/static.before.sha256 .tmp-omp/static.run1.sha256` 退出码 **1**（预期存在变化）：删除 `sbtd-runtime/dashboard/static/assets/index-I9-hua3C.js`，新增 `sbtd-runtime/dashboard/static/assets/index-KzymcUqY.js`，修改 `sbtd-runtime/dashboard/static/index.html`；`sbtd-runtime/dashboard/static/assets/index-cSr3LuxA.css` 字节不变。dashboard 的 `git status --short -- static` 对应输出 ` D static/assets/index-I9-hua3C.js`、` M static/index.html`、`?? static/assets/index-KzymcUqY.js`。
+- 第三次及独立构建记录：
+  - 编排方执行者第三次构建：在 `sbtd-runtime/dashboard` 执行 CI 同款无参数 `npm run build`，Node v22.20.0，退出码 0；构建前后 static 三个文件的 SHA-256 与前两次构建一致：`static/assets/index-KzymcUqY.js` 为 `d8b9897f984040f7cc95634dcb36c6ea5f74e2e8702c10cb502d788764ec7c10`，`static/assets/index-cSr3LuxA.css` 为 `a678f1d887c2a9838a6be0a1f0fd90869e9c0dc32a252a8a4e6165f29619087f`，`static/index.html` 为 `51611e457cade33850f502df56532e039ae3b2827e965ce11fc44ec6722917b6`；构建前后 `git status --porcelain` 输出完全相同（当时工作树含尚未提交的本任务修改，构建未产生任何新变化）。
+  - Lord 2026-10-27 群内说明：
+    注：分钟不可考。
+    Lord 也独立执行 `npm run build` 两次，哈希一致，`git status` 为空。
+  - Reviewy 2026-10-27 群内审阅意见：
+    注：分钟不可考。
+    Reviewy 也独立构建两次，结果相同（index-KzymcUqY.js 的 sha256 以 d8b9897f 开头，css 以 a678f1d8 开头，html 以 51611e45 开头）。
 - 文字修正：更新 H 节、Gate 表与相关过时边界；新 task 两处过强 DDIA 审阅结论均改为「DDIA 实施自核，未经 Reviewy 审阅」。R2.0b 只修正第 1 轮追加记录；H 节及追加记录的当前工作树临时路径改为相对路径，保留真实 `+08:00` 时间戳与草案历史路径。
 - 第 2 轮自检：按 G 节解析逻辑，以 `python3 -B -c` 分别解析两个 task，退出码均为 0；新任务输出 `in-progress False 1 None`，R2.0b 输出 `done True 0 2026-10-20T03:14:10+08:00`，仍提示「旧格式事件，不追溯」。不调用 TaskStore，不改旧任务 frontmatter／历史事件。全文不区分大小写复扫禁用审阅词零命中，过时缺依赖／未重建陈述及指定当前工作树绝对路径亦零命中。
 - 写入范围自检：以本轮入口文件 SHA-256 为基线，变化仅上述 static 三个路径与两个 task；其余已跟踪／未忽略的未跟踪文件字节保持不变。R2.0b 仅第 82 行有变化，第 80 行逐字不动；两个任务中原有 `+08:00` 时间戳均保留。构建清单与 npm／Node 临时缓存已从本轮创建的 `.tmp-omp/` 删除，目录不存在；原始构建输出及比较结果保留在本轮工具记录，本节承载摘要，不留临时文件或另建正式报告。
