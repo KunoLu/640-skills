@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-e-prerelease
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；omp 为唯一内容 writer，不启动子代理或 advisor；提交、推送与开 PR 由编排方执行
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-e-prerelease-changelog
 created_at: '2026-10-28T00:04:56+08:00'
-updated_at: '2026-10-28T00:14:28+08:00'
-completed_at: null
+updated_at: '2026-10-28T02:08:01+08:00'
+completed_at: '2026-10-28T02:08:01+08:00'
 ---
 
 # rc.2 E：预发布 CHANGELOG 与双语发布说明草稿
@@ -23,7 +23,7 @@ completed_at: null
 
 1. E 单独开小 PR，仅两份 CHANGELOG 与本任务记录。
 2. 本 PR 不升版本元数据，OpenAPI info 与两个 catalog 的 release 仍为 rc.1。
-3. #186／#191 依据证据分类，由 Reviewy 审阅；当前审阅结果见下方第 3 轮记录。
+3. #186／#191 依据证据分类，由 Reviewy 审阅；审阅结果见验证节与状态事件。
 4. 如实陈述未完成项，不写成已经验证。
 5. 本 PR 合入 → 合入精确 SHA CI 13/13 按名称全绿 → 用户明确说「发布」→ annotated tag 与 GitHub prerelease；发布身份由之后的 PR 写入 CHANGELOG。
 
@@ -49,7 +49,7 @@ Reviewy 2026-10-28 群内审阅：NOT CLEAN（3 个阻塞项 B1–B3 及若干�
 
 - **#186 → Added／新增**：`classify-186-191.md:7-18` 记录此前四个导出按钮不可用，之后接入创建、轮询、下载、取消与页面展示状态。虽然它补齐 R2.1a 开发期遗漏，但 rc.1 没有 Dashboard，按上一发布版本比较属于新增用户可见能力；不把开发期遗漏写成已发布版本回归。
 - **#191 → Changed／变更**：`classify-186-191.md:24-31` 记录既有预置窗口由精确当前时间改为固定 300 秒 UTC epoch 桶上界，改变查询范围语义以保持桶内 query_hash 稳定。没有新增用户能力，也未发现将其定性为缺陷修复的事实依据。
-- Reviewy 对 PR #192 tip `e0a8b7c` 与 `7b7cd8e` 的审阅均为 NOT CLEAN；第 3 轮修订待复审，自核不是 Reviewy 审阅通过。
+- Reviewy 对 PR #192 tip `e0a8b7c` 与 `7b7cd8e` 的审阅均为 NOT CLEAN；对第 3 轮 tip `c36a3e2` 的审阅为 CLEAN（日期 2026-10-28，注：分钟不可考。）；自核不是 Reviewy 审阅。
 - `meta.md:4-7`：本次覆盖 #141–#191，排除 #143，共 50 个 PR；#140 已在 rc.1 发布记录。已通读 `meta.md`、`classify-186-191.md`、`unfinished.md`、`known-limitations.md`、`rc1-release-body.md` 及 `all-prs.md`，并逐字核对 50 份独立 PR 文件均包含在汇编中。CHANGELOG 按用户可见主题合并，每个 PR 至少有一处标准链接。
 
 ## 未完成项与 D9
@@ -115,7 +115,7 @@ Reviewy 2026-10-28 群内审阅：NOT CLEAN（3 个阻塞项 B1–B3 及若干�
 - 自检 5：一次运行 `python3 -B -m unittest tests.test_sbtd_task_document tests.test_sbtd_task_legacy_events_notice tests.test_sbtd_task_recovery tests.test_sbtd_task_routing tests.test_sbtd_task_schema tests.test_sbtd_task_state tests.test_sbtd_task_status_sync tests.test_sbtd_task_sync_git`，原生结果为 `Ran 135 tests in 58.284s`、`OK`，exit 0。输出包含测试路径产生的「旧格式事件，不追溯」提示，不是本 task 被识别为旧格式。未重跑该套件。
 - 自检 6（第 1 轮）：checking 事件写入后再次执行上述 parser，实际输出 `ai/tasks/v2.1.0-rc.2-e-prerelease/task.md checking False 2 None`，exit 0；当时的「禁词 0 命中」结论因漏项而不准确，第 2 轮仅补查至 8 项，第 3 轮扩展为 14 项，以第 3 轮实测表为准。本 task 的本机工作区绝对路径前缀当时记录为 0。范围／diff／双语覆盖／历史字节与发布说明一致性当时通过，输出 `SELF_CHECK_1_2_3_OK`。事件时间分别来自两次单独执行 `TZ=Asia/Shanghai date -Iseconds`：`2026-10-28T00:04:56+08:00` 与 `2026-10-28T00:14:28+08:00`，后者晚于前者。当时补入结果后再次运行 parser 与禁词检查，未重跑 unittest。
 - 编排方整理，基线 CI：精确 SHA `55d7b6230f1fe9f302cc06b5100376bdd344aae5`，run [40526884945](https://github.com/KunoLu/640-skills/actions/runs/40526884945)，workflow `validation`，event `push`，attempt 1，conclusion `success`，2026-10-27 23:24:24 (UTC+8) 完成。按名称 13 个作业全部 success：`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`。该 run 各平台测试计数为 `unknown`，事实目录未采集。
-- 编排方整理，PR #192 既有 tip CI：精确 SHA `e0a8b7c3db2bb0bc1b4aeb7d011f42aa826e0e5b`，run [40539754237](https://github.com/KunoLu/640-skills/actions/runs/40539754237)，workflow `validation`，event `pull_request`，attempt 1，conclusion `success`，2026-10-28 00:36:35 (UTC+8) 完成。13/13 作业 success：`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`。本会话未联网重查；本轮修订后的新 tip 需重新运行 CI，结果尚未产生。Reviewy 对 `e0a8b7c` 为 NOT CLEAN，本轮修订待复审。保持 `checking`、`completed_at: null`；取得新 tip CI 13/13 与 Reviewy CLEAN 前不写完成事件。
+- 编排方整理，PR #192 既有 tip CI：精确 SHA `e0a8b7c3db2bb0bc1b4aeb7d011f42aa826e0e5b`，run [40539754237](https://github.com/KunoLu/640-skills/actions/runs/40539754237)，workflow `validation`，event `pull_request`，attempt 1，conclusion `success`，2026-10-28 00:36:35 (UTC+8) 完成。13/13 作业 success：`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`。编排方整理，后续 tip CI：`7b7cd8e19d2593dd5b4ea9095dd65dd8c6b1fea0` 的 run [40545683794](https://github.com/KunoLu/640-skills/actions/runs/40545683794) 13/13 success，2026-10-28 01:15:16 (UTC+8) 完成；`c36a3e2ffe59bc9e5032d22c751faa5637e97af4` 的 run [40552035593](https://github.com/KunoLu/640-skills/actions/runs/40552035593) attempt 1 13/13 success，2026-10-28 01:55:27 (UTC+8) 完成，作业名同上。Reviewy 对 `e0a8b7c` 与 `7b7cd8e` 为 NOT CLEAN，对 `c36a3e2` 为 CLEAN（归属：日期 2026-10-28，注：分钟不可考。）。done 提交 tip 的 CI 以 done 提交 tip 的 CI 为准。
 - 仓库没有检查两份 CHANGELOG 一致性的测试（`meta.md:55`）；第 1 轮运行过任务模块回归与真实 TaskDocument 解析，第 2 轮只运行内存只读文档检查与真实 TaskDocument 解析，不重跑 unittest、不修改测试。
 - Evidence Source：developer-local；Source Revision：dirty；Environment Alignment：unverified；Evidence Publication：local-only。不是正式 CI／发布验收报告。rtk：not-needed，采用约定原生命令；Final Test Report／Run Summary MD：not-needed，不创建额外报告文件。BDD：skipped，仅文档、无 .feature 或行为变化；Cross-repo context／API Contract：not-needed；Mock Strategy：none。不跑构建、额外 lint／formatter、Web／Mobile E2E 或全量 CI，无相应代码变更且本轮禁止构建／联网。
 
@@ -189,7 +189,11 @@ Reviewy 2026-10-28 群内审阅 `7b7cd8e19d2593dd5b4ea9095dd65dd8c6b1fea0` 为 N
 | 3 | ping 第 2 次 | openai-codex/gpt-6-astra（high） | 1／0（2026-10-28 00:02:46 (UTC+8) 开始，编排方据会话 jsonl 统计（executor-counted）） | 0 | 连通性检查 |
 | 4 | main 第 2 次 | openai-codex/gpt-6-astra（high） | 27／54（编排方据会话 jsonl 统计（executor-counted）） | 0 | 两份 CHANGELOG、本任务、仓库外的发布说明草稿（编排方保管，不入库）与本地自检 |
 | 5 | ping 第 3 次 | openai-codex/gpt-6-astra（high） | 1／0（2026-10-28 00:49:57 (UTC+8) 开始，编排方据会话 jsonl 统计（executor-counted）） | 0 | 连通性检查 |
-| 6 | main 第 3 次（本会话，Reviewy 第 1 轮修订） | openai-codex/gpt-6-astra（high） | 未知（落盘时本轮尚未结束），在之后的 done 提交中补记；由编排方据会话 jsonl 统计（executor-counted） | 0 | B1–B3、N1–N3 文档修订与本轮只读自检 |
+| 6 | main 第 3 次（2026-10-28 00:50:12 (UTC+8) 开始，Reviewy 第 1 轮修订） | openai-codex/gpt-6-astra（high） | 10／33（编排方据会话 jsonl 统计（executor-counted）） | 0 | B1–B3、N1–N3 文档修订与本轮只读自检 |
+| 7 | ping 第 4 次 | openai-codex/gpt-6-astra（high） | 1／0（2026-10-28 01:29:55 (UTC+8) 开始，编排方据会话 jsonl 统计（executor-counted）） | 0 | 连通性检查 |
+| 8 | main 第 4 次（2026-10-28 01:30:02 (UTC+8) 开始，Reviewy 第 2 轮修订） | openai-codex/gpt-6-astra（high） | 12／35（编排方据会话 jsonl 统计（executor-counted）） | 0 | 第 3 轮更正：措辞、完整禁词重扫、回填措辞与 D9 范围，并同步仓库外发布说明草稿 |
+| 9 | ping 第 5 次 | openai-codex/gpt-6-astra（high） | 1／0（2026-10-28 02:06:31 (UTC+8) 开始，编排方据会话 jsonl 统计（executor-counted）） | 0 | 连通性检查 |
+| 10 | main 第 5 次（本会话，done 提交） | openai-codex/gpt-6-astra（high） | 本会话落盘时尚未结束，计数不在本文件自计；由编排方据会话 jsonl 统计（executor-counted）后在 PR／群内报告 | 以编排方报告为准 | 新增 done 事件、frontmatter、CI 与审阅结果、模型表补记 |
 
 ## 状态事件
 
@@ -197,3 +201,6 @@ Reviewy 2026-10-28 群内审阅 `7b7cd8e19d2593dd5b4ea9095dd65dd8c6b1fea0` 为 N
 |---|---|---|---|---|
 | 2026-10-28T00:04:56+08:00 | planned | in-progress | 编排方整理：按明确的 strict 文档范围建立 E 任务，由 omp 唯一写入。 | 开始写本文件前单独执行 TZ=Asia/Shanghai date -Iseconds 的实际输出；分支、基线、干净工作区、目标不存在与路径安全已核对；事实已通读，未经 TaskStore 写入。 |
 | 2026-10-28T00:14:28+08:00 | in-progress | checking | 编排方整理：本地自检完成，进入 checking；本 PR 的 CI 与 Reviewy 审阅尚待进行，不标完成。 | 单独执行 TZ=Asia/Shanghai date -Iseconds 的实际输出；八模块 Ran 135 tests in 58.284s，OK，exit 0，仅运行一次；初次 parser 为 in-progress False 1 None；双语条目数 8／10／6／12，各覆盖 50/50 PR，逐条链接与标识一致，历史字节保留；范围符合授权，diff --check 干净，新增章节及两个新文档禁词 0 命中；检查脚本修正过程见验证节；本事件后复跑 parser 与禁词检查，completed_at 保持 null。 |
+| 2026-10-28T02:08:01+08:00 | checking | done | 编排方整理：Reviewy CLEAN、CI 13/13 全绿，按 Lord 指示提交 done commit（Lord、Reviewy 归属：日期 2026-10-28，注：分钟不可考。） | 在 done 提交中补记：Reviewy CLEAN 绑定完整 SHA `c36a3e2ffe59bc9e5032d22c751faa5637e97af4`；CI run 40552035593 attempt 1 在 c36a3e2 上 13/13 作业按名称 success（dashboard-artifacts、linux-full、linux-shards (1)、linux-shards (2)、linux-shards (3)、macos-bash-installer、runtime-e2e-macos、runtime-e2e-windows、windows-powershell-installer、windows-shards (1)、windows-shards (2)、windows-shards (3)、windows-shards (4)），2026-10-28 01:55:27 (UTC+8) 完成；此前 run 40545683794 在 `7b7cd8e19d2593dd5b4ea9095dd65dd8c6b1fea0` 上 13/13 success，2026-10-28 01:15:16 (UTC+8) 完成；CLEAN 与上述 CI 仅适用于各自 SHA，不适用于本 done 提交，done 提交 tip 的 CI 以 done 提交 tip 的 CI 为准；未合并、未发布、未建 tag／Release。 |
+
+以上保留 planned → in-progress 与 in-progress → checking 两条既有事件，并在 done 提交中补记 checking → done 转换；完成依据见 done 事件；未合并、未发布。
