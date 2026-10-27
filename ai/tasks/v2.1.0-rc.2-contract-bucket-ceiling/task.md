@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-contract-bucket-ceiling
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确选择 strict；分支由编排方创建，本轮在绑定工作树实施 C 节范围与 D 节两个新测试，严格 TDD；仅写授权白名单，不启动子代理或 advisor，omp 本身不提交、不推送、不联网、不安装依赖；依赖由编排方经 Lord 批准执行 `npm ci --ignore-scripts` 安装；提交、推送与 PR 由编排方执行者完成。
-status: in-progress
+status: "done"
 branch: feat/v2.1.0-rc.2-contract-bucket-ceiling
 created_at: '2026-10-27T17:50:13+08:00'
-updated_at: '2026-10-27T20:20:43+08:00'
-completed_at: null
+updated_at: '2026-10-27T20:59:40+08:00'
+completed_at: '2026-10-27T20:59:40+08:00'
 ---
 
 # 契约 PR：方案 2——统计／快照查询结束时间按时间桶向上取整
@@ -34,8 +34,10 @@ completed_at: null
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-27T19:36:20+08:00 | planned | in-progress | 编排方已创建绑定分支，按用户授权进入 strict 实施 | date -Iseconds 实际输出；git reflog show --date=iso feat/v2.1.0-rc.2-contract-bucket-ceiling 记录 2026-10-27 19:33:43 +0800 从 c126609d0c0cff3303cf293707284698cebecdc1 创建 |
+| 2026-10-27T20:59:30+08:00 | in-progress | checking | 编排方整理：PR #191 开启后进入审阅与 CI 检查阶段 | 在 done 提交中补记：PR #191 以 head 0722083f2a94a1f5cc6d3dd06ec1b21505052dec 开启；Reviewy 审阅与 CI 随之开始；其后 head 更新为 9914050e2350b79b880a1ccd45c1bb4d498e0606（Lord、Reviewy 归属：日期 2026-10-27，注：分钟不可考。） |
+| 2026-10-27T20:59:40+08:00 | checking | done | 编排方整理：Lord 指示提交 done commit；Reviewy CLEAN；CI 全绿（Lord、Reviewy 归属：日期 2026-10-27，注：分钟不可考。） | 在 done 提交中补记：Reviewy CLEAN 绑定完整 SHA 9914050e2350b79b880a1ccd45c1bb4d498e0606；CI run 40503407766 attempt 1 在该 head 上 13/13 作业按名称全绿：dashboard-artifacts、linux-full、linux-shards (1)、linux-shards (2)、linux-shards (3)、macos-bash-installer、runtime-e2e-macos、runtime-e2e-windows、windows-powershell-installer、windows-shards (1)、windows-shards (2)、windows-shards (3)、windows-shards (4)；整体完成 success 于 20:41（UTC+8）；CLEAN 与 CI 仅适用于 9914050e2350b79b880a1ccd45c1bb4d498e0606，不适用于本 done 提交 |
 
-草案阶段无事件；以上为实施阶段首次真实转换。仓库 schema 使用 `in-progress`（不是 `in_progress`）；`completed_at: null`，不将分支阶段交付冒充独立审阅、合并或发布完成。
+草案阶段无事件；以上保留实施开始事件，并在 done 提交中补记 checking／done 转换，完成依据见 checking／done 事件；未合并、未发布。
 
 ## A. 固定查询桶与 PRD 定稿措辞
 
@@ -262,7 +264,7 @@ Lord 2026-10-27 16:35 群内裁定：范围仅含下列五项。
 2. **哈希不等于快照身份——读代码推断，未实际运行。** 相同 scope 还需全量指纹一致、未过期且文件有效；过滤范围外事件、任务或来源水位变化也能换 ID。不同 ISO 字符串、timezone、metrics 次序或 filters 变化不属于同键保证。
 3. **显示与实际延迟——读代码推断，未实际运行。** UI 读取 snapshot.as_of，查询响应 meta.as_of 取当前时间；取整使这一既有差异更常见，不伪造水位，不承诺请求减少或性能改善。
 4. **时区与 DST——读代码推断，未实际运行。** 固定实际小时不等于自然日；算法按 UTC 毫秒取整，与本地展示分离，不依赖时区偏移是否整除桶宽。时区偏移为 15 分钟整数倍的说法仅为「编排方整理，未对完整时区数据库验证」，不能据此推广当前或历史时区的当地边界。
-5. **生成文件与长期文档。** 编排方整理：Lord 裁定 static 已纳入本 PR，长期查询桶 spec 不做，OpenAPI 不改。这不再是开放范围冲突；第 2 轮已取得本地两次构建字节一致证据，产物预算、独立重建与真实界面证据仍待取得。
+5. **生成文件与长期文档。** 编排方整理：Lord 裁定 static 已纳入本 PR，长期查询桶 spec 不做，OpenAPI 不改。这不再是开放范围冲突；第 2 轮已取得本地两次构建字节一致证据，产物预算已通过（check_artifacts OK），仅真实界面证据仍待取得。
 6. **串接环境。** 串接检查已从测试②与验证计划中删除，不新增 CI 依赖或第三个测试；测试②证据仅依赖前端 timeRange 测试。草案阶段文件传值的前端与真实 Python 快照诊断均退出 0，链式校验已在临时拷贝两步验证通过，未纳入测试；Node 在测试里直接调用 Python 这一步未试，保留会多一个 CI 依赖或一轮验证，按裁定维持删除。既有 CI 环境配置核对不代表 CI 已运行；源码本地测试及第 2 轮构建字节一致证据见 H 节，性能与数量降幅仍无本轮运行证据。
 
 ### 归属规范
@@ -282,8 +284,8 @@ Reviewy 意见始终使用「Reviewy 2026-10-27 群内审阅意见」。
 | refactoring-pass／ponytail | strict 生产编辑前 | proceed／normal，无需重构；局部时间计算，无新抽象、依赖或服务端取整 |
 | gherkin-bdd | 用户可见范围与快照行为 | traceable：D 节两条获准场景对应两个新测试，不扩写长期 spec |
 | project-validation／真实界面烟测 | 实施修改后 | 第 1 轮前端 12 项、后端 13 项及 ruff 通过；真实范围函数 smoke-only；编排方 npm ci --ignore-scripts 退出码 0、锁文件未变；第 2 轮两次 npm run build（--configLoader native，含 tsc）退出码均为 0，static 字节一致；CI 与浏览器未运行 |
-| 可读性／独立审阅 | 实现后及提交审阅前 | 手写改动自核完成；用户禁止子代理／advisor，Reviewy 独立审阅及重新构建仍待编排方安排 |
-| release-readiness | 测试后、运行前端交付前 | blocked：static 已重建，构建内类型检查及本地两次字节一致通过；产物预算已通过；独立重建／CI／真实界面证据未取得，不声明发布就绪 |
+| 可读性／独立审阅 | 实现后及提交审阅前 | 手写改动自核完成；Reviewy 2026-10-27 群内审阅意见在 `9914050e2350b79b880a1ccd45c1bb4d498e0606` 上 CLEAN，并独立构建两次结果一致（注：分钟不可考。） |
+| release-readiness | 测试后、运行前端交付前 | blocked（第 2 轮自核时记录）：static 已重建，构建内类型检查及本地两次字节一致通过；产物预算已通过；当时 CI／真实界面证据未取得，不声明发布就绪。此后 CI run 40503407766 已全绿；真实界面（浏览器）证据仍未取得 |
 
 ## F. 模型记录
 
@@ -298,8 +300,10 @@ Reviewy 意见始终使用「Reviewy 2026-10-27 群内审阅意见」。
 | 第三轮（v3）草案主会话 | 未知／不可核 | openai-codex/gpt-6-astra | 未知／不可核 | 本轮（v3）用量见编排方报告，草案正文不含 | 模型出处：命令行参数；本轮不读取自己的会话 jsonl | 未知／不可核 |
 | 实施第 1 轮（ping＋主会话） | ping 19:34:58、主会话 19:35:07 起（会话 jsonl 记录的 UTC 时间换算为 +08:00） | openai-codex/gpt-6-astra | high | ping 1 条 assistant 消息／0 toolCall；主会话 22 条 assistant 消息／67 次 toolCall | 编排方整理，据会话 jsonl 核对；read 31、bash 16、todo 8、edit 5、grep 4、find 1、write 1、eval 1；model_usage 存在（24 条，均为 purpose=find，辅助模型 typesafe/jev-latest） | `contract-bucket-impl/ping/2026-10-27T11-34-58-057Z_01a17d24-5f09-76df-832f-5c4303e30748.jsonl`；`contract-bucket-impl/session/2026-10-27T11-35-07-027Z_01a17d24-8213-721e-8b95-2c339473181f.jsonl` |
 | 实施第 2 轮（ping＋主会话） | ping 19:51:46、主会话 19:51:53 起（会话 jsonl 记录的 UTC 时间换算为 +08:00） | openai-codex/gpt-6-astra | high | ping 1 条 assistant 消息／0 toolCall；主会话 17 条 assistant 消息／41 次 toolCall | 编排方整理，据会话 jsonl 核对；read 13、eval 8、todo 6、grep 5、bash 4、edit 3、find 1、glob 1；model_usage 存在（4 条，均为 purpose=find，辅助模型 typesafe/jev-latest） | `contract-bucket-impl-r2/ping/2026-10-27T11-51-46-904Z_01a17d33-c3d8-76a3-99a4-e84330b10ce3.jsonl`；`contract-bucket-impl-r2/session/2026-10-27T11-51-53-296Z_01a17d33-dcd0-7316-b5f3-8924f01a20dd.jsonl` |
+| 实施第 3 轮（ping＋主会话） | ping 20:20:00、主会话 20:20:12 起（会话 jsonl 记录的 UTC 时间换算为 +08:00） | openai-codex/gpt-6-astra | high | ping 1 条 assistant 消息／0 toolCall；主会话 9 条 assistant 消息／26 次 toolCall | 编排方整理，据会话 jsonl 核对；todo 10、bash 7、read 5、grep 3、edit 1；model_usage 无记录（0） | `contract-bucket-impl-r3/ping/2026-10-27T12-20-00-698Z_01a17d4d-9c3a-7754-ae38-4dd3edef5cb0.jsonl`；`contract-bucket-impl-r3/session/2026-10-27T12-20-12-193Z_01a17d4d-c921-7249-8264-85daf3704610.jsonl` |
+| 实施第 4 轮（ping＋主会话，已弃用未提交） | ping 20:47:09、主会话 20:47:18 起（会话 jsonl 记录的 UTC 12:47:09／12:47:18 换算为 +08:00） | openai-codex/gpt-6-astra | high | ping 1 条 assistant 消息／0 toolCall；主会话 8 条 assistant 消息／24 次 toolCall | 编排方整理，据会话 jsonl 核对；read 10、bash 5、todo 4、grep 3、find 1、edit 1；model_usage 存在（22 条，均为 purpose=find，辅助模型 typesafe/jev-latest）；该次尝试因违反状态机（直接 in-progress → done）被弃用，其编辑在第 5 轮修正后沿用，未原样提交 | `contract-bucket-impl-r4/ping/2026-10-27T12-47-09-083Z_01a17d66-751b-70d2-8a4f-13136c8a0dc2.jsonl`；`contract-bucket-impl-r4/session/2026-10-27T12-47-18-564Z_01a17d66-9a24-738a-9368-8766dc54d7cb.jsonl` |
 
-model_usage 记录 0 不等于没有模型调用或 token 消耗。第二轮统计与文件名已按编排方核对资料记载；未给出的时间及 thinking 档位均为未知／不可核，不从文件名或文件大小推算。第三轮用量只见编排方报告，不在草案正文自算。实施两轮的 model_usage 记录均为 find 工具的辅助模型调用，不是子代理。
+model_usage 记录 0 不等于没有模型调用或 token 消耗。第二轮统计与文件名已按编排方核对资料记载；未给出的时间及 thinking 档位均为未知／不可核，不从文件名或文件大小推算。草案第三轮（v3）用量只见编排方报告，不在草案正文自算。实施第 1、2、4 轮存在 model_usage 记录，均为 find 工具的辅助模型调用，不是子代理；实施第 3 轮无记录。第 3 轮无记录，待 Reviewy 对会话日志复核。实施第 4 轮已记入上表；本轮（实施第 5 轮）omp 运行的用量不在本文件自计，由编排方在群内／PR 另行报告。
 
 ## G. 草案阶段（v4）证据、格式自检与交付边界
 
@@ -342,7 +346,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -c "import sys; sys.path.insert(0,'sbtd-wor
 - 验证分类：BDD=`traceable`，本任务 D 节中文场景＋英文 Given／When／Then，两个新测试与之对应；Mock Strategy=`none`；Cross-repo context=`not-needed`，API Contract=`verified`（本地 normalize_scope／SnapshotStore 源码与测试，不声称 HTTP 契约全量验收）；rtk=`not-needed`，按编排方整理的原生命令运行。证据为 developer-local／dirty／local-only，不是 CI 或当前 PR 提交证明；原始运行输出保留在本次工具记录，未生成或宣称正式测试报告。
 - TaskDocument 自检：G 节命令的路径参数分别为 `ai/tasks/v2.1.0-rc.2-contract-bucket-ceiling/task.md` 与 `ai/tasks/v2.1.0-rc.2-r2.0b-filters-detail/task.md`，各自退出码 0。新任务输出 `in-progress False 1 None`；R2.0b 输出 `done True 0 2026-10-20T03:14:10+08:00`，并提示「旧格式事件，不追溯」。该提示是保留的旧事件格式，不将其写成新格式事件校验通过。
 - 跳过边界（更新至第 2 轮）：依赖由编排方安装，本轮未安装；已执行两次 npm run build（附 --configLoader native），构建内 tsc 及 static 字节一致均通过。编排方执行者在根目录运行 `python3 -B sbtd-runtime/dashboard/check_artifacts.py`，输出 `OK: 3 files, 267300 bytes (budget 524288)`，退出码 0；artifact-budget.json 未改；未跑前端全套、扩展 Python 套件、根 CI 发现入口、Linux 三片、浏览器／HTTP 全链路。第 1 轮定向回归与真实函数烟测保留为当轮证据，本轮未重跑，不以生成物替代真实界面验证。未联网，未启子代理／advisor，未做 git 写操作、提交、发布或全局配置修改。
-- Release Readiness Review=`blocked`（发布层面）：第 1 轮源码行为验证通过，第 2 轮 static 重建、构建内类型检查与本地两次字节一致通过；预算已通过；独立重建、CI 及真实界面证据仍缺失，独立审阅待编排方安排。本次仅交付分支阶段授权修改，保留 in-progress 与 null 完成时间。无 schema／数据迁移，回退边界是本次源码、文档和配套生成物，不需回滚既有事件库；未实际执行回退。固定窗口前移代价、30 秒轮询请求量与 meta.as_of／snapshot.as_of 的既有差异仍按 B 节说明，不声称数量或性能收益；未改监控／告警或运行手册，不新增服务、队列或背压机制。
+- Release Readiness Review=`blocked`（发布层面，第 2 轮自核时记录）：第 1 轮源码行为验证通过，第 2 轮 static 重建、构建内类型检查与本地两次字节一致通过；预算已通过；当时 CI 及真实界面证据仍缺失，独立审阅待编排方安排。当时仅交付分支阶段授权修改，保留 in-progress 与 null 完成时间。此后 CI run 40503407766 已全绿，独立审阅结果见 done 事件；真实界面（浏览器）证据仍未取得，未合并、未发布。无 schema／数据迁移，回退边界是本次源码、文档和配套生成物，不需回滚既有事件库；未实际执行回退。固定窗口前移代价、30 秒轮询请求量与 meta.as_of／snapshot.as_of 的既有差异仍按 B 节说明，不声称数量或性能收益；未改监控／告警或运行手册，不新增服务、队列或背压机制。
 - 临时数据均限定 `.tmp-omp/`；测试夹具已自动清理，实测为空后执行 `rmdir .tmp-omp` 退出码 0。末次记录时间取同次 `date -Iseconds` 输出 `2026-10-27T19:41:22+08:00`。仅任务文件承载本地结果摘要，不写索引、active、handoff、正式报告目录或长期 spec。
 
 ### 第 2 轮：构建证据与 task 文字修正
