@@ -38,6 +38,10 @@ WINDOWS_CASES = (
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_reports_disappearing_holder_without_deleting_files",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_stops_when_holder_gains_unknown_content",
     "test_sbtd_migration_files.MigrationFileTests.test_conflicting_restore_reports_the_retained_object_without_overwriting",
+    # The real cmd.exe shim execution pair is the only on-Windows proof of the
+    # M03/M04 launcher fix; selection without execution must not pass.
+    "test_onboard_windows_platform.WindowsShimExecutionTests.test_check_cli_tool_executes_cmd_shim_found_on_path",
+    "test_onboard_windows_platform.WindowsShimExecutionTests.test_project_command_executes_cmd_shim_found_on_path",
 )
 
 
