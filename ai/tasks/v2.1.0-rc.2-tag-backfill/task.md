@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-tag-backfill
 workflow_mode: strict
 mode_source: user
 mode_note: 编排方整理：strict；omp 为唯一内容 writer，不启动子代理或 advisor；提交、推送与开 PR 由编排方执行
-status: checking
+status: done
 branch: docs/v2.1.0-rc.2-tag-backfill-d9
 created_at: '2026-10-28T08:03:26+08:00'
-updated_at: '2026-10-28T08:05:52+08:00'
-completed_at: null
+updated_at: '2026-10-28T08:31:20+08:00'
+completed_at: '2026-10-28T08:31:20+08:00'
 ---
 
 # rc.2 tag 发布事实补记与 R2.2 D9 记录
@@ -25,7 +25,7 @@ completed_at: null
 范围限制与 checking → done 两步写法为 Lord 2026-10-28 群内裁定。
 注：分钟不可考。
 
-编排方整理：本轮仅进入 checking，不写 done；done 由之后单独一轮按上述裁定写入。未完整调用 grill-with-docs，因三个授权路径、逐字事实、追加规则与验收条件明确，无领域歧义。事实仅来自本任务提示与仓库，不联网补查，不读取或统计会话 jsonl。
+编排方整理：第 1 轮进入 checking；done 在第 2 轮按上述裁定写入，依据见状态事件。未完整调用 grill-with-docs，因三个授权路径、逐字事实、追加规则与验收条件明确，无领域歧义。事实仅来自本任务提示与仓库，不联网补查，不读取或统计会话 jsonl。
 
 ## 范围与边界
 
@@ -128,7 +128,7 @@ completed_at: null
   ```
 
 - checking 后复核：三个文件仍均 `history consistent = True`；历史字节检查通过；A、B 六项 `grep -F` 均 exit 0；17 项 × 3 范围计数均 0；两种 git status 输出与上方一致；`git diff --check` exit 0、无输出；最终输出 `DOCUMENT_SELF_CHECK_OK`。这些结果仅证明文档解析、事件链与本次变更约束，不证明未测性能或本 PR CI。
-- 本 PR CI 尚待运行；不写 done，done 按上述裁定另轮处理。D9 外性能／规模／容量 pending 项未验证，未在本轮重测；两份 CHANGELOG 的发布章节改动留待用户决定。
+- 编排方整理：第 1 轮提交 `5defaab4dfaa0c95456f297c990077ef6b682f1d` 的 run [40606793366](https://github.com/KunoLu/640-skills/actions/runs/40606793366) attempt 1 13/13 按名称 success，2026-10-28 08:28:11 (UTC+8) 完成；done 提交 tip 的 CI 以 done 提交 tip 的 CI 为准。D9 外性能／规模／容量 pending 项未验证，未在本轮重测；两份 CHANGELOG 的发布章节改动留待用户决定。
 - Evidence Source：developer-local；Source Revision：dirty；Environment Alignment：unverified；Evidence Publication：local-only。基线完整 SHA 为 `e45565aa940f41bb42c3a62d00921b505f2caa30`，验证对象为本 worktree 的文档改动，不是正式 CI／发布验收报告。
 - rtk：not-needed，采用约定原生命令；Final Test Report／Run Summary MD：not-needed，不创建额外报告文件。BDD：skipped，仅文档、无 .feature 或行为变化；Cross-repo context／API Contract：not-needed；Mock Strategy：none。未运行单元／集成／Web／Mobile E2E、构建、额外 lint／formatter 或全量 CI；没有代码变化，且禁止文件副作用、构建与联网。独立 review：not-needed，单一文档记录范围，不触发严格独立复核条件；未调用子代理或 advisor，不冒称独立审查。
 
@@ -137,7 +137,10 @@ completed_at: null
 | # | 轮次／用途 | 模型（thinking） | assistant 消息／toolCall | model_usage | 产出 |
 |---|---|---|---|---|---|
 | 1 | ping 第 1 次 | openai-codex/gpt-6-astra（high） | 1／0（2026-10-28 07:59:59 (UTC+8) 开始，编排方据会话 jsonl 统计（executor-counted）） | 0 | 连通性检查 |
-| 2 | main 第 1 次（本会话） | openai-codex/gpt-6-astra（high） | 本会话落盘时尚未结束，计数不在本文件自计；以编排方报告为准（executor-counted） | 以编排方报告为准 | 三个文件的全部内容修改与本地自检 |
+| 2 | main 第 1 次（2026-10-28 08:01:11 (UTC+8) 开始） | openai-codex/gpt-6-astra（high） | 22／47（编排方据会话 jsonl 统计（executor-counted）） | 0 | 三个文件的全部内容修改与本地自检 |
+| 3 | main 第 1 次内部辅助 | typesafe/jev-latest（purpose find） | —（不计入 main 与 ping） | 24（编排方据会话 jsonl 统计（executor-counted）） | omp 内部检索辅助调用 |
+| 4 | ping 第 2 次 | openai-codex/gpt-6-astra（high） | 1／0（2026-10-28 08:29:42 (UTC+8) 开始，编排方据会话 jsonl 统计（executor-counted）） | 0 | 连通性检查 |
+| 5 | main 第 2 次（本会话，done 提交） | openai-codex/gpt-6-astra（high） | 本会话落盘时尚未结束，计数不在本文件自计；以编排方报告为准（executor-counted） | 以编排方报告为准 | done 事件、frontmatter、CI 结果与模型表补记 |
 
 ## 状态事件
 
@@ -145,3 +148,6 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-28T08:03:26+08:00 | planned | in-progress | 编排方整理：按明确的 strict 文档范围建立本任务，由 omp 唯一写入。 | 开始写本文件前单独执行 TZ=Asia/Shanghai date -Iseconds 的实际输出；分支、基线、干净工作区与目标路径已核对；未经 TaskStore 写入。 |
 | 2026-10-28T08:05:52+08:00 | in-progress | checking | 编排方整理：本地自检完成，进入 checking；本 PR 的 CI 尚待运行，不标完成。 | 转换前本任务 parser 为 in-progress False 1 None；落盘后复核为 checking False 2 None；R2.2 in-progress False 55 None；E done False 3 2026-10-28T02:08:01+08:00；三个 history consistent = True；17 项 × 3 范围禁词计数均 0；git status 仅两个授权修改文件与新任务目录，展开后恰为三个 task.md；git diff --check exit 0、无输出；历史字节保留、唯一删除行为 R2.2 旧 updated_at；片段 A、B 六项 grep -F 均 exit 0；DOCUMENT_SELF_CHECK_OK。 |
+| 2026-10-28T08:31:20+08:00 | checking | done | 编排方整理：第 1 轮提交 CI 13/13 按名称全绿，按 Lord 裁定以 checking → done 两步写法提交 done commit（Lord 归属：日期 2026-10-28，注：分钟不可考。） | 在 done 提交中补记：第 1 轮提交 `5defaab4dfaa0c95456f297c990077ef6b682f1d`（编排方 commit 并普通 push，非 force、非 amend），PR [#193](https://github.com/KunoLu/640-skills/pull/193)（base main，未合并）；该 SHA 的 CI：run [40606793366](https://github.com/KunoLu/640-skills/actions/runs/40606793366)，workflow `validation`，event `pull_request`，attempt 1，conclusion `success`，2026-10-28 08:28:11 (UTC+8) 完成；按名称 13/13 作业 success：dashboard-artifacts、linux-full、linux-shards (1)、linux-shards (2)、linux-shards (3)、macos-bash-installer、runtime-e2e-macos、runtime-e2e-windows、windows-powershell-installer、windows-shards (1)、windows-shards (2)、windows-shards (3)、windows-shards (4)。本 PR 无 Reviewy 审阅记录；done 依据为 CI 与 Lord 群内裁定的 checking → done 两步写法（Lord 归属：日期 2026-10-28，注：分钟不可考。），不是审阅 CLEAN。该 CI 仅适用于 `5defaab`，不适用于本 done 提交，done 提交 tip 的 CI 以 done 提交 tip 的 CI 为准；未合并；R2.2 仍 in-progress。 |
+
+以上保留 planned → in-progress 与 in-progress → checking 两条既有事件，并在 done 提交中补记 checking → done 转换；完成依据见 done 事件；未合并。
