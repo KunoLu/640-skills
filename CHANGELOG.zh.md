@@ -11,6 +11,7 @@
 
 ### 变更
 
+- 受管 Graft pin 从 `@nanonets/graft@0.22.0` 晋升到 `@nanonets/graft@0.28.0`。上游已更名 Trail-code，但同一构建双发包（`@trailhq/trail-code` 与 `@nanonets/graft`），`graft` 命令不变；pin 保持 tarball URL 与 registry 核对的 integrity，构图策略摘要随固定资产同步更新。离线 code map 用法不变：受管 build 仍写 `graft/`，`DO_NOT_TRACK` 下遥测与更新检查保持关闭，六个 MCP 工具名与受管分析动词经实测一致。ENTRYPOINT 的 Graft 行按规则留给发布后版本检查同步。([#198](https://github.com/KunoLu/640-skills/pull/198))
 - 将外部 Skills stable 集刷新到 `2026-10-28.1`：mattpocock/skills（`59db609`）、impeccable（`3e3a917`）、ui-ux-pro-max-skill（`28b3b8d`）、shadcn-ui（`96da9cc`）、ponytail（`09c434a`）与 i-have-adhd（`1ecea19`）固定到各自 2026-10-28 主线 revision；上游许可证均未变。19 个 Skill 全量通过 manifest 摘要校验，strict-stable 隔离安装 19/19 提交。([#197](https://github.com/KunoLu/640-skills/pull/197))
 
 ### 修复

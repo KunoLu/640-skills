@@ -11,6 +11,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ### Changed
 
+- Promote the managed Graft pin from `@nanonets/graft@0.22.0` to `@nanonets/graft@0.28.0`. Upstream renamed graft to Trail-code but ships the same build as both `@trailhq/trail-code` and `@nanonets/graft`, keeping the `graft` command unchanged; the pin keeps the tarball URL and registry-verified integrity, and the build-policy digest is updated with its pinned asset. Offline code-map use is unchanged: the managed build writes `graft/`, telemetry and update checks stay off under `DO_NOT_TRACK`, and the six MCP tool names and managed analysis verbs are verified identical. ENTRYPOINT's Graft row is intentionally left for the post-release version check. ([#198](https://github.com/KunoLu/640-skills/pull/198))
 - Refresh the external-Skills stable set to `2026-10-28.1`: mattpocock/skills (`59db609`), impeccable (`3e3a917`), ui-ux-pro-max-skill (`28b3b8d`), shadcn-ui (`96da9cc`), ponytail (`09c434a`) and i-have-adhd (`1ecea19`) are pinned to their 2026-10-28 main revisions; all upstream licenses are unchanged. The full 19-Skill set passes manifest digest validation, and an isolated strict-stable install commits 19/19. ([#197](https://github.com/KunoLu/640-skills/pull/197))
 
 ### Fixed
