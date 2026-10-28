@@ -30,7 +30,7 @@ def graft_state(root):
     (root / "graft/.cache").mkdir()
     (root / "graft/.graph/wiring.json").write_text('{"fixture":true}\n')
     stamp = {
-        "version": "0.22.0",
+        "version": "0.28.0",
         "hosts": ["agents"],
         "opts": {"global": False, "mcp": False, "hooks": False, "statusline": False},
         "at": "2026-09-19T00:00:00Z",
@@ -88,7 +88,7 @@ class GuardedLaunchTests(unittest.TestCase):
             package = base / "node_modules/@nanonets/graft"
             (package / "dist").mkdir(parents=True)
             (package / "package.json").write_text(
-                '{"name":"@nanonets/graft","version":"0.22.0"}'
+                '{"name":"@nanonets/graft","version":"0.28.0"}'
             )
             cli = package / "dist/cli.js"
             cli.write_text(
@@ -604,7 +604,7 @@ def fake_runtime_fixture(base):
     (package / "dist/claude").mkdir(parents=True)
     (package / "dist/cli.js").write_text("// pinned cli placeholder\n")
     (package / "package.json").write_text(
-        '{"name":"@nanonets/graft","version":"0.22.0"}'
+        '{"name":"@nanonets/graft","version":"0.28.0"}'
     )
     (package / "dist/claude/hooks.js").write_text("// pinned hook module\n")
     return package

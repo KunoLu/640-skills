@@ -163,7 +163,7 @@ Normal onboarding may probe the target CLI read-only first, but collects the act
 
 ## Required Global Tools
 
-Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.22.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
+Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.28.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
 
 ```bash
 python scripts/onboard.py install-graft --json
