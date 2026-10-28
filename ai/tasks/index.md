@@ -2,6 +2,7 @@
 
 <!-- sbtd-task-index:start -->
 - [P3-03](P3-03/task.md)
+- [external-skills-stable-upgrade-2026-10](external-skills-stable-upgrade-2026-10/task.md)
 - [graft-pin-0.21.1](graft-pin-0.21.1/task.md)
 - [graft-pin-0.22.0](graft-pin-0.22.0/task.md)
 - [onboard-upgrade-alignment](onboard-upgrade-alignment/task.md)
