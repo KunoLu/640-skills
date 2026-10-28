@@ -980,5 +980,70 @@ class ExternalSkillInstallTests(unittest.TestCase):
         )
 
 
+class StableSetCheckoutPortabilityTests(unittest.TestCase):
+    """M01/M02 regression guard (2026-10-26 Windows migration).
+
+    The stable set is pinned by raw-byte digests; cross-platform checkout
+    portability comes from the committed root `.gitattributes` rule that
+    disables text conversion for `sbtd-workflow-onboard/**`, not from
+    digest-time line-ending normalization (decision recorded 2026-10-28:
+    normalization was evaluated and rejected in favour of the raw-byte
+    contract). These two tests pin both halves of that contract.
+    """
+
+    def load_module(self):
+        module_name = f"onboard_portability_test_{id(self)}"
+        spec = importlib.util.spec_from_file_location(module_name, ONBOARD)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"cannot load onboard module from {ONBOARD}")
+        loader = cast(importlib.machinery.SourceFileLoader, spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        self.addCleanup(sys.modules.pop, module_name, None)
+        loader.exec_module(module)
+        return module
+
+    def test_every_stable_skill_matches_its_manifest_digest(self) -> None:
+        onboard = self.load_module()
+        stable_root = (
+            ROOT / "sbtd-workflow-onboard" / "assets" / "external-skills" / "stable"
+        )
+        manifest = json.loads(
+            (stable_root / "MANIFEST.json").read_text(encoding="utf-8")
+        )
+        skills = manifest["skills"]
+        self.assertEqual(len(skills), 19)
+        for name, skill in skills.items():
+            with self.subTest(skill=name):
+                actual = onboard.external_tree_sha256(
+                    stable_root / skill["stablePath"]
+                )
+                self.assertEqual(
+                    actual,
+                    skill["treeSha256"],
+                    "stable payload drifted from the pinned manifest digest.",
+                )
+
+    def test_gitattributes_disables_text_conversion_for_pinned_payload(self) -> None:
+        rules: dict[str, set[str]] = {}
+        for line in (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            pattern, _, attrs = line.partition(" ")
+            rules.setdefault(pattern, set()).update(attrs.split())
+        self.assertIn(
+            "-text",
+            rules.get("sbtd-workflow-onboard/**", set()),
+            "checkout text conversion must stay disabled for the pinned payload "
+            "so Windows autocrlf cannot rewrite raw-byte digests.",
+        )
+        self.assertIn(
+            "-text",
+            rules.get("/LICENSE", set()),
+            "the canonical license payload must keep identical bytes on every OS.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

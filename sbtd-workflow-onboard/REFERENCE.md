@@ -194,7 +194,7 @@ This source repository keeps scenarios in documentation, not `.feature` files. C
 
 GitNexus installation and dedicated MCP suggestions are removed. Existing user GitNexus assets are removed only through the confirmed cleanup path (see [Cleanup runtime](#cleanup-runtime)); the npm package, the GitNexus CLI and `~/.gitnexus` global data always remain untouched. Explicit Codex/OMP graph/MCP wiring is described below.
 
-RTK remains optional and retains its confirmation flow. Onboard verifies the binary with an isolated `gain` probe, because running it in an empty user HOME creates a history database. `verificationScope=isolated-probe` means actual user-history directory permissions and contents were not verified. Do not interpret probe success as a repair of the user's data directory.
+RTK remains optional and retains its confirmation flow. Onboard verifies the binary with an isolated `gain` probe, because running it in an empty user HOME creates a history database. `verificationScope=isolated-probe` means actual user-history directory permissions and contents were not verified. Do not interpret probe success as a repair of the user's data directory. Double-evidence rule (2026-10-26 Windows migration, M06): when a wrapped command's result conflicts with the direct CLI result, do not install, repair, or remove anything on the wrapper's word; rerun the native command and treat the native result as the evidence.
 
 ## npm and nvm
 
@@ -288,7 +288,7 @@ No automatic source fallback occurs. Stable manifest, containment, checksum, lic
 
 `init` / `reset --json` embed the required installation report under `requiredExternalInstall` in the single root document, including when installation fails before template writes. Per-Skill source metadata and `transaction` recovery fields remain available; the field is `null` when no required installation ran. Existing root plan fields and exit-code semantics are unchanged.
 
-The vendored stable set lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them.
+The vendored stable set lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them. A vendored Skill's verification scope is its distributed subtree: upstream repository-root development tests that cannot collect standalone inside the subtree are an environment mismatch, not a product regression (2026-10-26 Windows migration, M15); full upstream test suites run only in a full upstream checkout. CI checks the stable set with the installer-owned `stable_external_skill_source()` validation, never a second digest algorithm.
 
 Promote a reviewed repository revision explicitly:
 
@@ -820,7 +820,9 @@ Network, permissions, missing dependencies, unsupported platform execution, malf
 
 ## Upgrade Alignment
 
-跨平台基线按原始文件字节与相对 POSIX 字符串顺序计算。仓库根 `.gitattributes` 对整个 `sbtd-workflow-onboard/**` 禁用 checkout 文本转换，既保留二进制，也保留上游合法 CRLF；运行时不归一化内容来制造 pin 匹配。Stable promotion 必须从保留上游提交原始字节的 checkout 取证，不能把本地自动换行转换后的内容当作上游原样镜像。
+跨平台基线按原始文件字节与相对 POSIX 字符串顺序计算。仓库根 `.gitattributes` 对整个 `sbtd-workflow-onboard/**` 禁用 checkout 文本转换，既保留二进制，也保留上游合法 CRLF；运行时不归一化内容来制造 pin 匹配。Stable promotion 必须从保留上游提交原始字节的 checkout 取证，不能把本地自动换行转换后的内容当作上游原样镜像。2026-10-28 决策（2026-10-26 Windows 迁移 M02 复核）：不引入摘要期 LF/CRLF 归一化，跨平台可移植性完全由上述 raw-byte + `.gitattributes` 契约承担，回归测试见 `tests/test_onboard_external_skills.py` 的 `StableSetCheckoutPortabilityTests`。
+
+Windows 工具检测契约（同次迁移 M03/M04/M05 的固化）：`.CMD`/`.BAT` shim 一律经 `subprocess_command()` 转为 `cmd.exe /d /s /c` 执行；检测类子进程文本输出统一 `errors="replace"` 容错解码，但该容错不适用于必须字节精确的协议、签名或机器数据解析；Java 检测经 `java_binary_path()` 同时接受 `bin/java.exe` 与 `bin/java`。跨平台 CLI gate 至少覆盖 `.exe`、`.cmd`、`.bat`、含空格路径与非 UTF-8 输出。
 
 `upgrade` 对显式范围进行内容对齐，不改变 `init` 跳过合法 Skill 壳、`reset` 重装和 `migration` 迁移数据的既有含义。基线来自执行中的完整 Onboard 包：catalog、模板、固定 stable 内容及来源；绝对安装路径或文件时间不是版本。不能证明历史版本时报告 `unknown-drift`，不凭名称或版本字符串猜测。
 
