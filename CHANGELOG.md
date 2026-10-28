@@ -7,6 +7,13 @@ English · [简体中文](CHANGELOG.zh.md)
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
 
+## v2.1.0-rc.3 (Unreleased)
+
+### Fixed
+
+- Fix Windows tool detection in Onboard: npm-style `.CMD`/`.BAT` global launchers now run through `cmd.exe /d /s /c` via `subprocess_command()` instead of failing as non-PE executables, detection subprocess output tolerates local code pages with `errors="replace"`, and Java discovery accepts `bin/java.exe` via `java_binary_path()`, so installed shim-based CLIs and JDKs are no longer misjudged as missing on Windows. The stable-set digest contract stays raw-byte based (no line-ending normalization); checkout portability remains pinned by `.gitattributes`, guarded by a new full 19-Skill manifest digest regression test. The native CI scopes now include the Windows platform regression tests, whose real `cmd.exe` shim cases execute on Windows runners. ([#196](https://github.com/KunoLu/640-skills/pull/196))
+
+
 ## v2.1.0-rc.2 (2026-10-28)
 
 The [v2.1.0-rc.2 prerelease](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.2) is published (not marked Latest; v2.0.2 remains the latest stable). Its annotated tag (tag object `77a7cce8176a28e1868e2bac9f7c0b9f2d896702`) points to `e45565aa940f41bb42c3a62d00921b505f2caa30`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/40602350203) passed on attempt 1 with all 13 jobs successful by name (`dashboard-artifacts`, `linux-full`, `linux-shards (1)`, `linux-shards (2)`, `linux-shards (3)`, `macos-bash-installer`, `runtime-e2e-macos`, `runtime-e2e-windows`, `windows-powershell-installer`, `windows-shards (1)`, `windows-shards (2)`, `windows-shards (3)`, `windows-shards (4)`); per-platform test counts were not collected (unknown). Source prerelease: it does not perform local installation, workflow sync, project migration, live host reload or backup disposal; `sbtd-runtime/` stays optional with observation off by default, serve and Dashboard start only through an explicit foreground command, and no background collector is started.

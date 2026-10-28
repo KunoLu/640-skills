@@ -7,6 +7,13 @@
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
 
+## v2.1.0-rc.3（未发布）
+
+### 修复
+
+- 修复 Onboard 的 Windows 工具检测：npm 类 `.CMD`/`.BAT` 全局 launcher 经 `subprocess_command()` 通过 `cmd.exe /d /s /c` 执行，不再因非 PE 可执行文件而失败；检测类子进程输出以 `errors="replace"` 容错本地代码页；Java 检测经 `java_binary_path()` 接受 `bin/java.exe`，已安装的 shim 类 CLI 与 JDK 不再被误判为缺失。stable 摘要契约保持 raw-byte（不做换行归一化），checkout 可移植性仍由 `.gitattributes` 钉住，并新增 19 个 Skill 全量 manifest 摘要回归测试防漂移。原生 CI scope 纳入 Windows 平台回归测试，真实 `cmd.exe` shim 用例在 Windows runner 上执行。([#196](https://github.com/KunoLu/640-skills/pull/196))
+
+
 ## v2.1.0-rc.2（2026-10-28）
 
 预发布版 [v2.1.0-rc.2](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.2) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag（tag 对象 `77a7cce8176a28e1868e2bac9f7c0b9f2d896702`）指向 `e45565aa940f41bb42c3a62d00921b505f2caa30`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/40602350203)在 attempt 1 通过，按作业名 13 个 job 全部成功（`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`）；各平台测试计数未采集（unknown）。源码预发布不执行本机安装、workflow sync、项目迁移、现有宿主重载或备份处置；`sbtd-runtime/` 仍为可选且观察默认关闭，serve 与 Dashboard 只通过显式前台命令启动，不启动后台采集器。
