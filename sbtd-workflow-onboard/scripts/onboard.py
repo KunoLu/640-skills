@@ -615,6 +615,24 @@ def resolve_project_roots(
     return roots
 
 
+def subprocess_command(command: tuple[str, ...]) -> tuple[str, ...] | str:
+    """Return an executable form of ``command`` for ``subprocess.run``.
+
+    Windows npm-style global CLIs are ``.CMD``/``.BAT`` batch launchers, not
+    PE executables; starting them directly fails with error 193 or returns
+    empty output. Resolve the real launcher and route batch files through
+    ``cmd.exe /d /s /c``; other platforms and native executables keep the
+    original argv tuple without a shell.
+    """
+
+    if platform.system() != "Windows" or not command:
+        return command
+    resolved = shutil.which(command[0])
+    if not resolved or Path(resolved).suffix.lower() not in {".cmd", ".bat"}:
+        return command
+    return f'cmd.exe /d /s /c "{subprocess.list2cmdline([resolved, *command[1:]])}"'
+
+
 def run_command(
     command: tuple[str, ...],
     timeout: int = 30,
@@ -623,10 +641,11 @@ def run_command(
 ) -> subprocess.CompletedProcess[str] | None:
     try:
         return subprocess.run(
-            command,
+            subprocess_command(command),
             check=False,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=timeout,
             env=env,
             cwd=str(cwd) if cwd else None,
@@ -900,11 +919,28 @@ def java_version_output() -> tuple[str | None, str | None]:
     return None, "java --version"
 
 
+def java_binary_path(java_home: str | Path) -> Path:
+    """Resolve the Java launcher inside a JDK home directory.
+
+    Windows JDKs ship ``bin/java.exe``; other platforms ship ``bin/java``.
+    Windows accepts both names so cross-platform JDK layouts still resolve.
+    """
+
+    home = Path(java_home)
+    if platform.system() == "Windows":
+        for name in ("java.exe", "java"):
+            candidate = home / "bin" / name
+            if candidate.is_file():
+                return candidate
+        return home / "bin" / "java.exe"
+    return home / "bin" / "java"
+
+
 def usable_java_home(candidate: str | Path | None) -> Path | None:
     if not candidate:
         return None
     path = Path(candidate).expanduser()
-    if (path / "bin" / "java").is_file():
+    if java_binary_path(path).is_file():
         return path.resolve()
     return None
 
@@ -920,7 +956,7 @@ def java_binary_version(java_binary: Path) -> tuple[str | None, str | None]:
 
 
 def java_home_major(java_home: Path) -> int | None:
-    version, _ = java_binary_version(java_home / "bin" / "java")
+    version, _ = java_binary_version(java_binary_path(java_home))
     return parse_java_major(version)
 
 
@@ -942,7 +978,12 @@ def infer_java_home_from_path(java_path: str | None) -> Path | None:
         java_bin = Path(java_path).expanduser().resolve()
         if platform.system() == "Darwin" and java_bin == Path("/usr/bin/java"):
             return None
-        if java_bin.name == "java" and java_bin.parent.name == "bin":
+        is_java_launcher = (
+            java_bin.name.lower() in {"java", "java.exe"}
+            if platform.system() == "Windows"
+            else java_bin.name == "java"
+        )
+        if is_java_launcher and java_bin.parent.name == "bin":
             inferred = usable_java_home(java_bin.parent.parent)
             if inferred:
                 return inferred
@@ -1236,7 +1277,7 @@ def check_java_for_maestro() -> dict[str, object]:
     java_home, java_home_major_value, java_home_source = select_java_home(path)
     if java_home:
         selected_version, selected_version_command = java_binary_version(
-            java_home / "bin" / "java"
+            java_binary_path(java_home)
         )
         selected_major = parse_java_major(selected_version) or java_home_major_value
     else:
@@ -1250,7 +1291,7 @@ def check_java_for_maestro() -> dict[str, object]:
         "name": "java",
         "category": "runtime",
         "installed": installed,
-        "path": str(java_home / "bin" / "java") if installed and java_home else path,
+        "path": str(java_binary_path(java_home)) if installed and java_home else path,
         "currentPath": path,
         "currentVersion": current_version,
         "currentVersionMajor": current_major,
@@ -1910,10 +1951,11 @@ def list_platform_plugins(platform_name: str) -> tuple[str, list[dict[str, objec
         return "cli-unavailable", []
     try:
         completed = subprocess.run(
-            [executable, "plugin", "list", "--json"],
+            subprocess_command((executable, "plugin", "list", "--json")),
             check=False,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -3234,6 +3276,7 @@ def clone_repo(repo: str, destination: Path) -> tuple[bool, str]:
             check=False,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=180,
         )
     except subprocess.TimeoutExpired:
@@ -3253,6 +3296,7 @@ def cloned_repo_revision(repo_root: Path) -> str:
             check=False,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=30,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
@@ -3288,6 +3332,7 @@ def clone_repo_at_revision(
                 check=False,
                 capture_output=True,
                 text=True,
+                errors="replace",
                 timeout=180,
             )
         except subprocess.TimeoutExpired:
@@ -5335,11 +5380,19 @@ def safe_extract_tar(archive: Path, destination: Path) -> None:
 
 
 def find_java_home(root: Path) -> Path:
-    candidates = sorted(root.rglob("bin/java"))
+    names = (
+        ("bin/java.exe", "bin/java")
+        if platform.system() == "Windows"
+        else ("bin/java",)
+    )
+    candidates = sorted(
+        candidate for name in names for candidate in root.rglob(name)
+    )
     for java_bin in candidates:
         if java_bin.is_file():
             return java_bin.parent.parent
-    raise RuntimeError("Extracted JDK archive did not contain bin/java.")
+    expected = "bin/java.exe or bin/java" if platform.system() == "Windows" else "bin/java"
+    raise RuntimeError(f"Extracted JDK archive did not contain {expected}.")
 
 
 def activate_java_home(java_home: Path) -> None:
@@ -5620,11 +5673,12 @@ def run_project_command(
 ) -> subprocess.CompletedProcess[str] | None:
     try:
         return subprocess.run(
-            command,
+            subprocess_command(command),
             cwd=str(cwd),
             check=False,
             capture_output=True,
             text=True,
+            errors="replace",
             timeout=timeout,
             input=stdin_text,
             env=env,
