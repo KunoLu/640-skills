@@ -4,11 +4,11 @@ id: windows-migration-fixes-2026-10
 workflow_mode: strict
 mode_source: user
 mode_note: 用户 2026-10-28 明确三个需求统一 strict mode 执行
-status: "checking"
-branch: sbtd/strict-windows-migration-fixes
+status: "done"
+branch: "main"
 created_at: '2026-10-28T16:00:29.266197+08:00'
-updated_at: "2026-10-28T16:28:01.009057+08:00"
-completed_at: null
+updated_at: "2026-10-28T16:51:56.214242+08:00"
+completed_at: "2026-10-28T16:51:56.214242+08:00"
 ---
 # Windows 迁移问题修复移植
 
@@ -37,3 +37,5 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-28T16:01:54.573551+08:00 | planned | in-progress | 开始移植 Windows 迁移修复 | 分支 sbtd/strict-windows-migration-fixes 已建立；仓库现状核查：onboard.py 无 subprocess_command/java_binary_path/errors=replace；无 sbtd-workflow-onboard/tests/；stable 19/19 摘要在本机通过 |
 | 2026-10-28T16:28:01.009057+08:00 | in-progress | checking | 实现与本地验证完成，进入检查/提交流程 | macOS 全量 701 测试与 main 基线 162 个既有环境失败集合完全一致、零新增；新增 14 个 Windows 平台测试 12 通过 2 个按平台 skip；独立 review 三个发现（spec 键、解码测试、错误消息）已修复并复验；py_compile 与 git diff --check 通过 |
+| 2026-10-28T16:51:42.815936+08:00 | checking | checking | Explicit branch rebinding from "sbtd/strict-windows-migration-fixes" to "main": PR #196 已 squash 合入 main（a08cbae），开发分支按授权删除；任务完成记录落在 main | gh pr view 196: state=MERGED mergedAt=2026-10-28T08:50:20Z；main 已含 a08cbae |
+| 2026-10-28T16:51:56.214242+08:00 | checking | done | PR #196 已 admin 合入 main 并删分支 | PR #196 tip e824e7a CI run 40657154740 attempt 1 全绿（13 作业，含 windows-shards 执行新 cmd shim 用例）；squash 合入 a08cbae；本地/远程分支已删 |
