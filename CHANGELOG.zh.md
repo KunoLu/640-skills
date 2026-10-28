@@ -9,6 +9,10 @@
 
 ## v2.1.0-rc.3（未发布）
 
+### 变更
+
+- 将外部 Skills stable 集刷新到 `2026-10-28.1`：mattpocock/skills（`59db609`）、impeccable（`3e3a917`）、ui-ux-pro-max-skill（`28b3b8d`）、shadcn-ui（`96da9cc`）、ponytail（`09c434a`）与 i-have-adhd（`1ecea19`）固定到各自 2026-10-28 主线 revision；上游许可证均未变。19 个 Skill 全量通过 manifest 摘要校验，strict-stable 隔离安装 19/19 提交。([#197](https://github.com/KunoLu/640-skills/pull/197))
+
 ### 修复
 
 - 修复 Onboard 的 Windows 工具检测：npm 类 `.CMD`/`.BAT` 全局 launcher 经 `subprocess_command()` 通过 `cmd.exe /d /s /c` 执行，不再因非 PE 可执行文件而失败；检测类子进程输出以 `errors="replace"` 容错本地代码页；Java 检测经 `java_binary_path()` 接受 `bin/java.exe`，已安装的 shim 类 CLI 与 JDK 不再被误判为缺失。stable 摘要契约保持 raw-byte（不做换行归一化），checkout 可移植性仍由 `.gitattributes` 钉住，并新增 19 个 Skill 全量 manifest 摘要回归测试防漂移。原生 CI scope 纳入 Windows 平台回归测试，真实 `cmd.exe` shim 用例在 Windows runner 上执行。([#196](https://github.com/KunoLu/640-skills/pull/196))

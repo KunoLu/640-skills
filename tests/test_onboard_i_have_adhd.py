@@ -21,9 +21,9 @@ sys.path.insert(0, str(ONBOARD.parent))
 CATALOG = ROOT / "sbtd-workflow-onboard" / "catalog.json"
 STABLE = ROOT / "sbtd-workflow-onboard" / "assets" / "external-skills" / "stable"
 
-I_HAVE_ADHD_REVISION = "4092de07ce3ed88389d77c0d623b7af89b40ac0e"
+I_HAVE_ADHD_REVISION = "1ecea1993b7fce257ffbd686c070948b5e07eda6"
 I_HAVE_ADHD_REVIEWED_SHA256 = (
-    "3170b16ace00aecb0dd7feb54c0b5aa642e7502acda06ecd24fd89a11c7127e9"
+    "88955c019bbb1419ff4b49dbb1f80a867467de6233d7865af2e06a7d7b76c7d3"
 )
 
 I_HAVE_ADHD_LICENSE_SHA256 = (

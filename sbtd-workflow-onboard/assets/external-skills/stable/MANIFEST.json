@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "stableSet": "2026-09-14.6",
-  "promotedAt": "2026-09-14",
+  "stableSet": "2026-10-28.1",
+  "promotedAt": "2026-10-28",
   "repositories": {
     "mattpocock-skills": {
       "url": "https://github.com/mattpocock/skills.git",
-      "revision": "3cca18b368ae95cdbdebbff572ccafa662551015",
+      "revision": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -16,7 +16,7 @@
     },
     "impeccable": {
       "url": "https://github.com/pbakaus/impeccable.git",
-      "revision": "cb56ed6c19a07329a9fa0cd4e657bee040156593",
+      "revision": "3e3a9179e01a60265000ce239c0a99803ec1e60d",
       "license": "Apache-2.0",
       "licenseFiles": [
         {
@@ -31,7 +31,7 @@
     },
     "ui-ux-pro-max-skill": {
       "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git",
-      "revision": "7f69fed6a2717900085f1bc3b263721f8ba025e2",
+      "revision": "28b3b8dee8c976df4fa3e94aed4e092ad43fcb03",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -42,7 +42,7 @@
     },
     "shadcn-ui": {
       "url": "https://github.com/shadcn-ui/ui.git",
-      "revision": "2b3e6d4f8d9161fe5c19340dc383aade392012dd",
+      "revision": "96da9cc7f1aa10580a3741664e2a77c721206c00",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -53,7 +53,7 @@
     },
     "ponytail": {
       "url": "https://github.com/DietrichGebert/ponytail.git",
-      "revision": "356918eba965ee1eac64bd3a7f0dd02108350de5",
+      "revision": "09c434ab73ca43761c5d8b0c5d341926c2fba710",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -64,7 +64,7 @@
     },
     "i-have-adhd": {
       "url": "https://github.com/ayghri/i-have-adhd.git",
-      "revision": "4092de07ce3ed88389d77c0d623b7af89b40ac0e",
+      "revision": "1ecea1993b7fce257ffbd686c070948b5e07eda6",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -79,13 +79,13 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/diagnosing-bugs",
       "stablePath": "skills/diagnosing-bugs",
-      "treeSha256": "8b7b1621013eb3ab3c689e477321b372bf411037c46fa417987d05e3e28f0416"
+      "treeSha256": "d4e28933e6a142aebfb6923e97a38988dde07e43fc32c679398f1af4ca0fc3c7"
     },
     "tdd": {
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/tdd",
       "stablePath": "skills/tdd",
-      "treeSha256": "eef2fe20ae9372fea0a6bb083c65582e6c41089e0897e28274c49f05ccc97dd2"
+      "treeSha256": "bb489703746482dfa35d42352e71c582a600cc1d263bd912c8cd3f3bbaf95358"
     },
     "grill-me": {
       "repository": "mattpocock-skills",
@@ -103,25 +103,25 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/productivity/grilling",
       "stablePath": "skills/grilling",
-      "treeSha256": "b0af4cb93507011cab704853dc540ae142dec2a1256d374a38f4f196a04f7b50"
+      "treeSha256": "f83e444cb16561fe266a8d34d5315e089f2580aed6822087dbb039a2fe151cd7"
     },
     "domain-modeling": {
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/domain-modeling",
       "stablePath": "skills/domain-modeling",
-      "treeSha256": "731ecd11825453ec3d813ac26e7a082bb458bc332781c6dba18d7004468139d7"
+      "treeSha256": "c0bd13ce078a3c8eb5507fc9067165dad89b10f11b33b26e29a5c62f9c840bd2"
     },
     "codebase-design": {
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/codebase-design",
       "stablePath": "skills/codebase-design",
-      "treeSha256": "7767d3c4ca04b8ce94ec28d25ca4632eeac39be9df0ff5bfbfbe1dbb7a3cabdb"
+      "treeSha256": "216f66d2cf91aed33b2d6762f0059ba0e6fe8e885b2e8dc0b6567fdce9b80d73"
     },
     "handoff": {
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/productivity/handoff",
       "stablePath": "skills/handoff",
-      "treeSha256": "c8646a846de8896217189af07caee05204df6aa15601dcf4a4edb791043f20e2"
+      "treeSha256": "e944968db81fc9b7c7baa3757431e7d54289bf5661150a962591e23916f5c60d"
     },
     "writing-for-agents": {
       "repository": "mattpocock-skills",
@@ -139,55 +139,55 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/to-tickets",
       "stablePath": "skills/to-tickets",
-      "treeSha256": "7d82d3f4b50f4f57bafc8e361cdf6b06fde6f3b940bbd13199a184e98f0d34c4"
+      "treeSha256": "98422855972ffb35bf33ce3eee1c1255f58e81cf801d6d3fc0185bb8e0351839"
     },
     "impeccable": {
       "repository": "impeccable",
       "sourceSubpath": "plugin/skills/impeccable",
       "stablePath": "skills/impeccable",
-      "treeSha256": "44da5f30273b944e77f5312cebcf730ed594c928acde4d4800666a70e786e9ae"
+      "treeSha256": "95d55681d5b6f46a78c232b2ccdc16f8a151453971df49d55c5b0893fc0d35c0"
     },
     "ui-ux-pro-max": {
       "repository": "ui-ux-pro-max-skill",
       "sourceSubpath": ".claude/skills/ui-ux-pro-max",
       "stablePath": "skills/ui-ux-pro-max",
-      "treeSha256": "93f67a282405730a1e225e8dc3c772950c25eef3e467e3d2fc2eb42da6165486"
+      "treeSha256": "24d28a3307496fc715328d823ac8877b582dd0a685c5dc1c14287cc21f5fbb04"
     },
     "shadcn": {
       "repository": "shadcn-ui",
       "sourceSubpath": "skills/shadcn",
       "stablePath": "skills/shadcn",
-      "treeSha256": "45192dee2f4f3043b21b61e232c4d5e6c1459345f27e9bbbe22ef6ae749d04f3"
+      "treeSha256": "d48e3dbc1b6ff212eb053cfb51b23bb24265a6b561bfa65f38b9631a54a0124e"
     },
     "ponytail": {
       "repository": "ponytail",
       "sourceSubpath": "skills/ponytail",
       "stablePath": "skills/ponytail",
-      "treeSha256": "1f70d9e01f5e924aa2328546e32c349df1842ff9ed0979445a31000151c6e5c5"
+      "treeSha256": "0bad474975ff44dbcafb3b3f078c48186722ae19d587b05bca3096ca83b8d062"
     },
     "ponytail-review": {
       "repository": "ponytail",
       "sourceSubpath": "skills/ponytail-review",
       "stablePath": "skills/ponytail-review",
-      "treeSha256": "ff27a5ed24b6b4cf3959eb98fdba17e936861e76e81d1d3054dec3ed804d25b9"
+      "treeSha256": "1b908dce7bf348c77530462ad51d75d0d2761b10b4de910dc0d8743e6e8ae5c5"
     },
     "ponytail-audit": {
       "repository": "ponytail",
       "sourceSubpath": "skills/ponytail-audit",
       "stablePath": "skills/ponytail-audit",
-      "treeSha256": "def4ae9e8598c66d63fa197d01771c923033da085eb26939333464d61da17ace"
+      "treeSha256": "a01e898a4683081ffd344fbdf012a079600ca6e55abc6ab57f4b0fff355e9cd3"
     },
     "ponytail-debt": {
       "repository": "ponytail",
       "sourceSubpath": "skills/ponytail-debt",
       "stablePath": "skills/ponytail-debt",
-      "treeSha256": "f9926b4440b0ce1c92008a0a2baff465bd4fdfacf3cbaf7652fe575dacc5345c"
+      "treeSha256": "cf0269d6176c3591c5fa5d39b38e5ebfac88b8ed1a3a449cf33c190772f24ae8"
     },
     "i-have-adhd": {
       "repository": "i-have-adhd",
       "sourceSubpath": "skills/i-have-adhd",
       "stablePath": "skills/i-have-adhd",
-      "treeSha256": "f16ccbc5e669c80344dc887aed4698d27579dc812c3a3989067d7f5531121c09"
+      "treeSha256": "aa3e3d4a8dfb2cad7cceb550fdf41a44e6ff2e7e2714e80aef351329a7b6aa10"
     }
   }
 }
