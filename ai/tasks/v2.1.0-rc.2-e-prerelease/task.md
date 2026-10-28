@@ -15,7 +15,7 @@ completed_at: '2026-10-28T02:08:01+08:00'
 
 ## 目标
 
-为 `v2.1.0-rc.2` 预发布准备纯文档 CHANGELOG PR；不新增需求，不升版，不创建 tag 或 Release。两份 CHANGELOG 使用 `Unreleased`／`未发布`，不提前填写发布日期、tag SHA 或 tag CI。只有本 PR 合入、合入提交的精确 SHA CI 13/13（按作业名）全部 success、且用户明确说「发布」之后，才创建 annotated tag `v2.1.0-rc.2` 与 GitHub prerelease，不标 Latest，`v2.0.2` 仍为最新正式版。之后另一个 PR 按 rc.1 先例记录 tag SHA／日期。
+为 `v2.1.0-rc.2` 预发布准备纯文档 CHANGELOG PR；不新增需求，不升版，不创建 tag 或 Release。两份 CHANGELOG 使用 `Unreleased`／`未发布`，不提前填写发布日期、tag SHA 或 tag CI。只有本 PR 合入、合入提交的精确 SHA CI 13/13（按作业名）全部 success、且用户明确说「发布」之后，才创建 annotated tag `v2.1.0-rc.2` 与 GitHub prerelease，不标 Latest，`v2.0.2` 仍为最新正式版。之后 PR #193 已按 rc.1 先例在两份 CHANGELOG 记录发布日期、tag SHA 与 tag CI。
 
 ## 决定与归属
 
@@ -204,3 +204,16 @@ Reviewy 2026-10-28 群内审阅 `7b7cd8e19d2593dd5b4ea9095dd65dd8c6b1fea0` 为 N
 | 2026-10-28T02:08:01+08:00 | checking | done | 编排方整理：Reviewy CLEAN、CI 13/13 全绿，按 Lord 指示提交 done commit（Lord、Reviewy 归属：日期 2026-10-28，注：分钟不可考。） | 在 done 提交中补记：Reviewy CLEAN 绑定完整 SHA `c36a3e2ffe59bc9e5032d22c751faa5637e97af4`；CI run 40552035593 attempt 1 在 c36a3e2 上 13/13 作业按名称 success（dashboard-artifacts、linux-full、linux-shards (1)、linux-shards (2)、linux-shards (3)、macos-bash-installer、runtime-e2e-macos、runtime-e2e-windows、windows-powershell-installer、windows-shards (1)、windows-shards (2)、windows-shards (3)、windows-shards (4)），2026-10-28 01:55:27 (UTC+8) 完成；此前 run 40545683794 在 `7b7cd8e19d2593dd5b4ea9095dd65dd8c6b1fea0` 上 13/13 success，2026-10-28 01:15:16 (UTC+8) 完成；CLEAN 与上述 CI 仅适用于各自 SHA，不适用于本 done 提交，done 提交 tip 的 CI 以 done 提交 tip 的 CI 为准；未合并、未发布、未建 tag／Release。 |
 
 以上保留 planned → in-progress 与 in-progress → checking 两条既有事件，并在 done 提交中补记 checking → done 转换；完成依据见 done 事件；未合并、未发布。
+
+## 发布后补记（rc.2 tag 回填 PR 追加）
+
+编排方整理：
+
+- annotated tag `v2.1.0-rc.2`：tag 对象 `77a7cce8176a28e1868e2bac9f7c0b9f2d896702`，指向提交 `e45565aa940f41bb42c3a62d00921b505f2caa30`（PR #192 squash 合入 main 的提交），tagger 时间 `2026-10-28T07:41:16+08:00`。
+- GitHub Release [v2.1.0-rc.2](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.2)：prerelease，未标 Latest；v2.0.2 仍为 Latest；发布时间 2026-10-28 07:41:18 (UTC+8)。
+- 该精确提交的 CI：run [40602350203](https://github.com/KunoLu/640-skills/actions/runs/40602350203)，workflow `validation`，event `push`，branch main，attempt 1，conclusion `success`，2026-10-28 07:40:45 (UTC+8) 完成；按名称 13/13 作业 success：dashboard-artifacts、linux-full、linux-shards (1)、linux-shards (2)、linux-shards (3)、macos-bash-installer、runtime-e2e-macos、runtime-e2e-windows、windows-powershell-installer、windows-shards (1)、windows-shards (2)、windows-shards (3)、windows-shards (4)。各平台测试计数 unknown（未采集）。
+
+本文件目标节 :18 所述的 CHANGELOG 记录已由 PR #193 第 3 次提交按 Lord 2026-10-28 群内裁定执行：两份 CHANGELOG 的 rc.2 章节已改名为 `v2.1.0-rc.2 (2026-10-28)`／`v2.1.0-rc.2（2026-10-28）`，并新增发布段（tag 对象、指向提交、精确提交 CI）；条目分类与已发布 Release 正文一致，未调整。
+注：分钟不可考。
+
+本节是 done 之后的追加记录，不改变本任务状态；frontmatter 与三条状态事件逐字节不动。以上发布事实不是本 PR 新执行的 CI 或联网核验结果；历史「未合并、未发布」属于当时记录，原文保留。
