@@ -1025,24 +1025,51 @@ class StableSetCheckoutPortabilityTests(unittest.TestCase):
                 )
 
     def test_gitattributes_disables_text_conversion_for_pinned_payload(self) -> None:
-        rules: dict[str, set[str]] = {}
+        entries: list[tuple[str, set[str]]] = []
         for line in (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
             pattern, _, attrs = line.partition(" ")
-            rules.setdefault(pattern, set()).update(attrs.split())
-        self.assertIn(
-            "-text",
-            rules.get("sbtd-workflow-onboard/**", set()),
-            "checkout text conversion must stay disabled for the pinned payload "
-            "so Windows autocrlf cannot rewrite raw-byte digests.",
-        )
-        self.assertIn(
-            "-text",
-            rules.get("/LICENSE", set()),
-            "the canonical license payload must keep identical bytes on every OS.",
-        )
+            entries.append((pattern, set(attrs.split())))
+
+        def enables_text(attrs: set[str]) -> bool:
+            return "text" in attrs or any(
+                a.startswith(("text=", "eol")) for a in attrs
+            )
+
+        # git applies the last matching rule per attribute; a later rule that
+        # re-enables text conversion must fail this guard instead of being
+        # hidden by the earlier -text line still being present.
+        def effective_text_attr(pattern: str) -> str | None:
+            value: str | None = None
+            for pat, attrs in entries:
+                if pat != pattern:
+                    continue
+                if "-text" in attrs:
+                    value = "-text"
+                elif enables_text(attrs):
+                    value = "text"
+            return value
+
+        for pattern in ("sbtd-workflow-onboard/**", "/LICENSE"):
+            self.assertEqual(
+                effective_text_attr(pattern),
+                "-text",
+                f"{pattern} must resolve to -text under last-match-wins so "
+                "Windows autocrlf cannot rewrite raw-byte digests.",
+            )
+        seen_payload_rule = False
+        for pattern, attrs in entries:
+            if pattern == "sbtd-workflow-onboard/**":
+                seen_payload_rule = True
+                continue
+            if seen_payload_rule and pattern.startswith("sbtd-workflow-onboard/"):
+                self.assertFalse(
+                    enables_text(attrs),
+                    f"later rule {pattern} re-enables text conversion below the "
+                    "pinned payload.",
+                )
 
 
 if __name__ == "__main__":
