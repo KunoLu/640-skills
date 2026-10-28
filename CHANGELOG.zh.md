@@ -7,7 +7,9 @@
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
 
-## 未发布
+## v2.1.0-rc.2（2026-10-28）
+
+预发布版 [v2.1.0-rc.2](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.2) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag（tag 对象 `77a7cce8176a28e1868e2bac9f7c0b9f2d896702`）指向 `e45565aa940f41bb42c3a62d00921b505f2caa30`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/40602350203)在 attempt 1 通过，按作业名 13 个 job 全部成功（`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`）；各平台测试计数未采集（unknown）。源码预发布不执行本机安装、workflow sync、项目迁移、现有宿主重载或备份处置；`sbtd-runtime/` 仍为可选且观察默认关闭，serve 与 Dashboard 只通过显式前台命令启动，不启动后台采集器。
 
 ### 新增
 
@@ -18,7 +20,7 @@
 - 启用 Dashboard 导出菜单：针对当前页面显示的 `snapshot_id` 创建、轮询、取消和下载，页面刷新不改变在途导出固定的快照。导出接收页面七字段 `presentation_state`，包括主题与展开明细；JPEG／PDF 控件按能力显示不可用原因和降级警告。401 会停止轮询并提示重启 serve、手动重新配对。([#186](https://github.com/KunoLu/640-skills/pull/186))
 - 新增 `snapshots/` 与 `exports/` 共享磁盘准入，默认 2,000,000,000 字节，通过 `SBTD_RUNTIME_DISK_QUOTA_BYTES` 配置。新建前先清扫过期且无引用的文件与可识别的遗留临时文件，用量达到 80% 时记录日志预警，仅在清扫后用量高于上限时返回 `507 DISK_QUOTA_EXCEEDED` 及 `used_bytes`／`quota_bytes`。未知或损坏文件保留并计量，不淘汰未过期快照；不预留输出大小，已准入工作可能暂时超限。([#162](https://github.com/KunoLu/640-skills/pull/162))
 - 新增 Git 与纯文件项目的工作流任务状态节点核对、过期内容／并发写入保护、旧事件历史惰性基线及完成前先进入 checking 的规则。发现不一致时记录事实，不静默重开任务；缺少远端任务证据时保留不可考状态。([#169](https://github.com/KunoLu/640-skills/pull/169))
-- 新增 Host／Origin 拒绝与 ticket 不入日志的安全证据、Dashboard 产物逐字节重建检查，以及原生 `runtime-e2e-macos`／`runtime-e2e-windows` CI 作业，覆盖前台 serve、配对、四格式导出、Panel／数值对账与 renderer CJK 字形。CI runner 证据与以下群内记录分开：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录（注：分钟不可考。）；据 Lord 群内记录，这七步在 MacBook Air 上全部通过。字体／长页／分页视觉属于第 1–7 步范围，用户 2026-10-27 群内确认已覆盖，Lord 记录；该记录尚未回填到仓内 R2.2 task.md。([#142](https://github.com/KunoLu/640-skills/pull/142), [#163](https://github.com/KunoLu/640-skills/pull/163), [#164](https://github.com/KunoLu/640-skills/pull/164))
+- 新增 Host／Origin 拒绝与 ticket 不入日志的安全证据、Dashboard 产物逐字节重建检查，以及原生 `runtime-e2e-macos`／`runtime-e2e-windows` CI 作业，覆盖前台 serve、配对、四格式导出、Panel／数值对账与 renderer CJK 字形。CI runner 证据与以下群内记录分开：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录（注：分钟不可考。）；据 Lord 群内记录，这七步在 MacBook Air 上全部通过。字体／长页／分页视觉属于第 1–7 步范围，用户 2026-10-27 群内确认已覆盖，Lord 记录；该记录已写入仓内 R2.2 task.md（追加节 `R2.2 D9 群内确认记录（rc.2 tag 回填 PR 追加）`）。([#142](https://github.com/KunoLu/640-skills/pull/142), [#163](https://github.com/KunoLu/640-skills/pull/163), [#164](https://github.com/KunoLu/640-skills/pull/164))
 
 ### 变更
 
@@ -46,7 +48,7 @@
 
 - 版本元数据有意仍为 `v2.1.0-rc.1`：`sbtd-runtime/contracts/openapi.yaml` 的 `info.x-sbtd-release` 与 info summary 保留该版本，`sbtd-runtime/contracts/capability-matrix.json` 和 `sbtd-runtime/contracts/metrics-catalog.json` 的 `release` 也不变。PR #192 不升版。
 - `sbtd-runtime/` 仍为可选，观察默认关闭，项目注册与观察开启均为显式动作。Serve 与 Dashboard 只通过显式前台命令启动、只绑定 `127.0.0.1`、Ctrl-C 退出；不启动后台采集器或定时器。与 rc.1 不同，快照现已落盘。源码发布不执行本机安装、workflow sync、项目迁移、宿主重载或备份处置。([#144](https://github.com/KunoLu/640-skills/pull/144), [#147](https://github.com/KunoLu/640-skills/pull/147), [#189](https://github.com/KunoLu/640-skills/pull/189))
-- R2.2 保持 `in-progress`、`completed_at: null`。D9 有以下群内记录：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录（注：分钟不可考。）；据 Lord 群内记录，这七步在 MacBook Air 上全部通过。字体／长页／分页视觉属于第 1–7 步范围，用户 2026-10-27 群内确认已覆盖，Lord 记录；该记录尚未回填到仓内 R2.2 task.md。以下项目仍为 **pending，未验证**：macOS 实机性能；Mac 上 JPEG／PDF 字节数；原生 Windows 性能；百万事件／1 万任务／10 万步骤及百万 CSV；完整四格式容量／平台资源上限／最大长图 CSV 规模；R2.2 收尾。Mac 视觉相关项中仅 Mac 上 JPEG／PDF 字节数仍未验证，核验清单 v3 本身不含字节检查。浅色导出仍无 CI 覆盖；据 Lord 群内记录，用户群内确认的清单包含浅主题，该记录尚未回填到仓内 R2.2 task.md。([#174](https://github.com/KunoLu/640-skills/pull/174), [#186](https://github.com/KunoLu/640-skills/pull/186))
+- R2.2 保持 `in-progress`、`completed_at: null`。D9 有以下群内记录：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录（注：分钟不可考。）；据 Lord 群内记录，这七步在 MacBook Air 上全部通过。字体／长页／分页视觉属于第 1–7 步范围，用户 2026-10-27 群内确认已覆盖，Lord 记录；该记录已写入仓内 R2.2 task.md（追加节 `R2.2 D9 群内确认记录（rc.2 tag 回填 PR 追加）`）。以下项目仍为 **pending，未验证**：macOS 实机性能；Mac 上 JPEG／PDF 字节数；原生 Windows 性能；百万事件／1 万任务／10 万步骤及百万 CSV；完整四格式容量／平台资源上限／最大长图 CSV 规模；R2.2 收尾。Mac 视觉相关项中仅 Mac 上 JPEG／PDF 字节数仍未验证，核验清单 v3 本身不含字节检查。浅色导出仍无 CI 覆盖；据 Lord 群内记录，用户群内确认的清单包含浅主题，该记录已写入仓内 R2.2 task.md。([#174](https://github.com/KunoLu/640-skills/pull/174), [#186](https://github.com/KunoLu/640-skills/pull/186))
 - 审计分页仍先全量 replay 与排序，CSV 仍完整缓冲生成而非流式。性能运行只达到 11,500 个事件，未达到百万事件目标，未满足的结果原样保留；小规模结果不证明 AC-62 通过。Windows ACL 缺少本机验证，`query.executed` 事件不持久化。([#174](https://github.com/KunoLu/640-skills/pull/174))
 - 查询桶限制 (1)：指纹覆盖全库事件。事件持续到达时，单页固定 scope、每 30 秒轮询的快照上界仍为 2880／天，不包含额外手动请求或多页。降幅不可考；无新数据时 288／天的目标来源不可考，不是硬上限。([#191](https://github.com/KunoLu/640-skills/pull/191))
 - 查询桶限制 (2)：30 秒轮询仍照常发送请求，不保证每轮得到不同 `snapshot_id`，也不承诺快照数量或性能收益。([#191](https://github.com/KunoLu/640-skills/pull/191))
