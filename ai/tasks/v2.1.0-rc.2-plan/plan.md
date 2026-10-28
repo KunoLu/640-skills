@@ -23,13 +23,14 @@
 | R2.2 | 跨平台 E2E（CI macOS/Windows runner + 用户 Mac 视觉／字体确认）、安全（Host/Origin、ticket、脱敏分层）、性能、导出对账 | P6 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-r2.2-e2e-security/task.md |
 | Docs | 后续项 B（`install-and-use.md` 事件明细屏蔽说明）+ 后续项 C（第 7 项，单独 PRD docs PR） | P6.5 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-docs-b-c-exportable/ |
 | E | prerelease v2.1.0-rc.2：中英双语发布说明 + CHANGELOG | P7 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-e-prerelease/task.md |
-| F | docs 回填 | P8 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md |
+| F | docs 回填 | P8 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-docs-backfill/task.md（该目录未创建；f-backfill 行独立于本行，不承接本行工作，见 Lord 2026-10-25 01:10 群内裁定，ai/tasks/v2.1.0-rc.2-f-backfill/task.md:25） |
 | status-sync | 任务状态及时更新：PR-a 文档／PR-b 规则与测试（用户 2026-10-24 11:14 群内确认（落地方案），Lord 记录；[PRD](../../../docs/prd/sbtd-workflow-v2-task-status-sync.md)） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-task-status-sync/task.md |
 | legacy-criterion | 旧格式事件判定口径放宽（PRD :65 方案一；用户 2026-10-24 18:04 群内确认（方案一），Lord 记录） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-legacy-event-criterion-prd/task.md |
 | concurrency-race | 并发测试时序竞争 strict 测试修复（#171 任务；Lord 2026-10-25 01:10 群内裁定补行） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-concurrency-test-race/task.md |
 | legacy-notice | 旧格式事件放宽口径 strict 实现修复（#172 fix4 任务；Lord 2026-10-25 01:10 群内裁定补行） | —（独立规则任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-legacy-events-notice/task.md |
 | f-backfill | rc.2 F 回填：#168–#172 修复轮次记录补正（独立于 P8 F 行；Lord 2026-10-25 01:10 群内裁定补行） | —（独立记录任务） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-f-backfill/task.md |
 | R2.1c | 补齐四格式导出菜单接线；方案 B：固定页面快照及七字段 presentation_state，主题含浅色 | —（R2.1a 前端补接线） | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | 见 task.md／PR 页面 | ai/tasks/v2.1.0-rc.2-r2.1c-export-menu/task.md |
+| tag-backfill | rc.2 发布后回填：tag 发布事实、R2.2 D9 记录、CHANGELOG 发布章节（用户 2026-10-28 群内要求全部回填在一个小 PR 内完成并「实现后合入」，Lord 记录。注：分钟不可考。） | —（独立记录任务） | done（PR #193 已 squash-merge） | #193 | d2a6e376a6a2d6b88a14694f8e832cd19f690719 | 2026-10-28T09:40:34+08:00 | ai/tasks/v2.1.0-rc.2-tag-backfill/task.md |
 
 ## 各行锁定决定与验收
 
