@@ -9,6 +9,10 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ## v2.1.0-rc.3 (Unreleased)
 
+### Changed
+
+- Refresh the external-Skills stable set to `2026-10-28.1`: mattpocock/skills (`59db609`), impeccable (`3e3a917`), ui-ux-pro-max-skill (`28b3b8d`), shadcn-ui (`96da9cc`), ponytail (`09c434a`) and i-have-adhd (`1ecea19`) are pinned to their 2026-10-28 main revisions; all upstream licenses are unchanged. The full 19-Skill set passes manifest digest validation, and an isolated strict-stable install commits 19/19. ([#197](https://github.com/KunoLu/640-skills/pull/197))
+
 ### Fixed
 
 - Fix Windows tool detection in Onboard: npm-style `.CMD`/`.BAT` global launchers now run through `cmd.exe /d /s /c` via `subprocess_command()` instead of failing as non-PE executables, detection subprocess output tolerates local code pages with `errors="replace"`, and Java discovery accepts `bin/java.exe` via `java_binary_path()`, so installed shim-based CLIs and JDKs are no longer misjudged as missing on Windows. The stable-set digest contract stays raw-byte based (no line-ending normalization); checkout portability remains pinned by `.gitattributes`, guarded by a new full 19-Skill manifest digest regression test. The native CI scopes now include the Windows platform regression tests, whose real `cmd.exe` shim cases execute on Windows runners. ([#196](https://github.com/KunoLu/640-skills/pull/196))
