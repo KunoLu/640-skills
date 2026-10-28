@@ -7,7 +7,7 @@ mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；�
 status: in-progress
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-25T10:49:48+08:00'
+updated_at: '2026-10-28T08:02:27+08:00'
 completed_at: null
 ---
 
@@ -246,6 +246,7 @@ PR-1 本地提交证据：
 | 2026-10-25T04:07:55+08:00 | in-progress | in-progress | 写入者：PR-4 main；完成最终证据整理；PR-4 可在无 Mac 证据下完成的部分已本地完成；R2.2 保持 in-progress，等待用户 Mac 证据 | 性能／容量／验证／覆盖映射见 PR-4 追加节；D9 未满足，completed_at null；按用户 2026-10-24 22:48 群内确认（D9 等 Mac 证据时停），Lord 记录；不 push，不宣称发布就绪。 |
 | 2026-10-25T04:36:10+08:00 | in-progress | in-progress | 写入者：PR-4 operator；记录补正：授权根改写为 `/workspace/640-skills-r22-pr4`，PR-4 模型表单列 main 内部辅助 model_usage 行 | Reviewy 要求的路径写法；session jsonl 只读复核 26 条 purpose find、typesafe/jev-latest，不计入 main 93 / 163 与 ping 1 / 0；历史正文与事件保留，status／completed_at 不变。 |
 | 2026-10-25T10:49:48+08:00 | in-progress | in-progress | 写入者：回填 PR（编排方整理）；记录补正：说明 2026-10-25T04:36:10 事件的依据，补充 10000 档审计 not-met 原因与 #174 实际合入数字；原事件逐字保留 | 见文末「R2.2 PR-4 记录补正（回填 PR 追加）」节；status／completed_at 不变；不改 runtime_perf.py 或任何代码。 |
+| 2026-10-28T08:02:27+08:00 | in-progress | in-progress | 写入者：rc.2 tag 回填 PR（编排方整理）；记录用户 2026-10-27 群内 D9 确认（Lord 记录，注：分钟不可考。）；R2.2 保持 in-progress | 见文末「R2.2 D9 群内确认记录（rc.2 tag 回填 PR 追加）」；D9 外其余 pending 项未验证，completed_at 保持 null；原事件与原表逐字保留 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1283,3 +1284,11 @@ Gate结论：DDD／DDIA／legacy／refactoring／release的生产变更触发条
 编排方整理：依据本 task 原第 1121、1129、1185–1200 行，1000／10000／11500 事件三档审计 100 行延迟 p95 分别为 0.020／0.117／0.145s，均 ≤0.5s，延迟本身三档均 met；not-met 指 PRD 的索引／非全扫描结构要求，既有文字记录源码实际为全表 replay 再排序分页，该结构缺口与规模无关。原第 1121 行明确原报告审计的 met 仅指延迟，后续 driver 明列该结构性缺口。原第 1121、1129 行报告文件名中的时间戳依次为 1000 档 `runtime-perf-1000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T190702573559Z.{json,md}`、实际 11500 档 `runtime-perf-1000000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T191005746525Z.{json,md}`、10000 档 `runtime-perf-10000-feat_v2.1.0-rc.2-r2.2-pr4-perf-closeout-20261024T193717099968Z.{json,md}`。据既有文字与文件名时间戳推断：10000 档报告在 driver 改为明列结构缺口之后生成，因此只有该档报告的审计结论写成 not-met，另两档原报告仍为仅指延迟的 met；这是推断，不是本轮读取原报告字段的结果。按原第 1197 行汇总口径，三档结构要求同为 not-met。原第 1131–1133 行另述最大档 UI not-met、有界队列未证明及后续 driver 表述更正，不是审计延迟超限的证据。原始 JSON／md 报告位于 PR-4 授权 worktree 的 ignored `reports/` 目录，本轮机器上已不存在、不可读，报告字段原值不可考；本轮不做新测量，不补造数字。
 
 编排方整理：PR #174 的 head 分支为 `feat/v2.1.0-rc.2-r2.2-pr4-perf-closeout`，共 5 个提交（`b473df9`、`4f32bcd`、`ee818c4`、`20aa440`、`b7f01bd`），head 为 `b7f01bd3f92f74f56311c1fd80da8fccdcf1f802`。实际合入 4 个文件，+1037／−1；`git show --stat 7cbb929` 显示本 task.md 224 个变更行，`git show --numstat` 明确为 +223／−1，另有 `sbtd-runtime/docs/install-and-use.md` +8、`sbtd-runtime/tests/runtime_perf.py` +736、`sbtd-runtime/tests/test_runtime_perf_smoke.py` +70。squash 合入为 `7cbb929bd88ac4df12e6794dc635655da99e79e0`；git `%cI` 为 `2026-10-25T05:04:30+08:00`（本轮只读核对），GitHub mergedAt 为 `2026-10-25T05:04:30+08:00`（`2026-10-24T21:04:30Z`，编排方整理），两者相等但分别记录。head 上 CI run `40130554768` 为 13／13 success（编排方整理），不是本轮新跑 CI。R2.2 仍因 D9 保持 in-progress，completed_at 保持 null；`runtime_perf.py` 的代码修改另开后续 PR，本节不改代码。
+
+## R2.2 D9 群内确认记录（rc.2 tag 回填 PR 追加）
+
+编排方整理：用户 2026-10-27 群内确认（核验清单 v3 第 1–7 步：暗/浅主题，HTML/JPEG/PDF/CSV），Lord 记录（注：分钟不可考。）；据 Lord 群内记录，这七步在 MacBook Air 上全部通过。字体／长页／分页视觉属于第 1–7 步范围，用户 2026-10-27 群内确认已覆盖，Lord 记录（注：分钟不可考。）。Mac 视觉相关项中仅 Mac 上 JPEG／PDF 字节数仍未验证，核验清单 v3 本身不含字节检查。这是群内记录，不是仓库内测量或 CI 证据，本 PR 未核实用户实际执行的清单。
+
+上方基线 :1263-1271「R2.2 PR-4 完成项与阻塞项」表与各既有事件为历史记录，逐字保留不改写；其中 D9 行与「Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉」行的字体／长页／分页视觉部分由本节群内记录覆盖，Mac 上 JPEG／PDF 字节数仍未验证。
+
+R2.2 状态判定依据：基线 :20-27「范围与验收」，尤其 :27「PR-4 §18 性能、默认配额容量校准与 R2.2 收尾」（提示定位为 :25，实际基线为 :27），以及基线 :1263-1271 完成项与阻塞项表。D9 的用户 Mac 视觉／字体确认已有上述群内记录，但 macOS 实机性能、Mac 上 JPEG／PDF 字节数、原生 Windows 性能、百万事件／1万任务／10万步骤及百万CSV、完整四格式容量／平台资源上限／最大长图CSV规模仍为 pending 未验证，完成条件未满足。因此 status 保持 in-progress、completed_at 保持 null，plan R2.2 行不改；不加 checking／done 事件，R2.2 收尾仍 pending。以上行号均指本 PR 编辑前基线，主状态事件表追加一行后，原阻塞表顺延一行。
