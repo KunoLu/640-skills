@@ -45,12 +45,14 @@ SCHEMA = json.loads(
     (ROOT / "sbtd-workflow-onboard" / "upgrade.schema.json").read_text(encoding="utf-8")
 )
 
-# Fixed protocol fixture, deliberately independent of implementation constants.
+# Fixed protocol fixture standing in for the currently pinned runtime;
+# the probe compares the mock server version against GRAFT_PINNED_VERSION,
+# so this constant must track the pin.
 PINNED_TOOLS = [
     "graft_check_freshness", "graft_file_api", "graft_find_all",
     "graft_find_code", "graft_repo_map", "graft_trace_calls",
 ]
-GRAFT_VERSION = "0.22.0"
+GRAFT_VERSION = "0.28.0"
 HOST_ID = "codex-account"
 
 

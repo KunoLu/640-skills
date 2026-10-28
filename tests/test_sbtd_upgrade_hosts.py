@@ -26,7 +26,7 @@ PINNED_TOOLS = [
     "graft_check_freshness", "graft_file_api", "graft_find_all",
     "graft_find_code", "graft_repo_map", "graft_trace_calls",
 ]
-GRAFT_VERSION = "0.22.0"
+GRAFT_VERSION = "0.28.0"
 SECRET = "sk-live-secret-9f8e7d6c5b4a"
 
 

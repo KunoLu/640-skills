@@ -11,11 +11,11 @@ prints to stdout/stderr; callers own all presentation:
   never the network-bound ``graft version`` command).
 - ``install_graft(*, confirmed, telemetry_only=False)`` — plans (always
   read-only) and, only after explicit confirmation, installs the frozen
-  ``@nanonets/graft@0.22.0`` tarball with integrity verification and
+  ``@nanonets/graft@0.28.0`` tarball with integrity verification and
   conservative telemetry opt-out persistence.
 
 Pinned facts (registry-verified, do not "upgrade" to latest automatically):
-tarball integrity sha512-UQ6VTzNYwRehZ5GXB/RZI/gdY9vkinMlEO4JKuqfvFu+7WKKE7dtf8cWsLtKDlQG/5yGGm5oBe7wS2Av5nXe7g==,
+tarball integrity sha512-zto3AJeK5qMdjhZrsrIr0Bq7agySU/aPIgBgokpPXleabiY9l83iHUETec9oeMiiBZM7YRxh4OSDMHlP4sSwBA==,
 registry repository ``trailhq/Trail-Code``, registry gitHead absent, Node >=20.
 
 Managed subprocesses always run with telemetry/trackable activation
@@ -47,11 +47,11 @@ import urllib.request
 from pathlib import Path
 
 GRAFT_PACKAGE = "@nanonets/graft"
-GRAFT_PINNED_VERSION = "0.22.0"
+GRAFT_PINNED_VERSION = "0.28.0"
 GRAFT_SPEC = f"{GRAFT_PACKAGE}@{GRAFT_PINNED_VERSION}"
-GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.22.0.tgz"
+GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.28.0.tgz"
 GRAFT_TARBALL_INTEGRITY = (
-    "sha512-UQ6VTzNYwRehZ5GXB/RZI/gdY9vkinMlEO4JKuqfvFu+7WKKE7dtf8cWsLtKDlQG/5yGGm5oBe7wS2Av5nXe7g=="
+    "sha512-zto3AJeK5qMdjhZrsrIr0Bq7agySU/aPIgBgokpPXleabiY9l83iHUETec9oeMiiBZM7YRxh4OSDMHlP4sSwBA=="
 )
 GRAFT_REGISTRY_GIT_HEAD = None
 NODE_MIN_MAJOR = 20
@@ -98,7 +98,7 @@ _SCRUBBED_VARS = (
 
 _ADVICE_MISSING = (
     "Install the pinned Graft CLI with the managed install-graft flow after "
-    "explicit confirmation; it fetches the frozen @nanonets/graft@0.22.0 "
+    "explicit confirmation; it fetches the frozen @nanonets/graft@0.28.0 "
     "tarball, verifies its integrity, and disables anonymous telemetry."
 )
 
@@ -126,7 +126,8 @@ def _managed_env(base: dict[str, str], *, ci: bool) -> dict[str, str]:
     env.pop("CI", None)
     env["DO_NOT_TRACK"] = "1"
     env["DNT"] = "1"
-    # 0.22.0 also ships Trail; managed Graft must never rename or rewire a repo.
+    # The pinned package also ships Trail; managed Graft must never rename or
+    # rewire a repo.
     env["TRAIL_INVOKED_AS"] = "graft"
     env["TRAIL_NO_FETCH"] = "1"
     env["GRAFT_NO_TRAIL_SWITCH"] = "1"
@@ -313,7 +314,7 @@ def _package_dir_from_path(path: Path) -> Path | None:
 def _locate_package(executable: str) -> tuple[Path, str] | None:
     """Bind a command to the frozen package, not unverified shim text.
 
-    Accept the package-owned ``dist/cli.js`` or the 0.22.0 npm bin
+    Accept the package-owned ``dist/cli.js`` or the pinned npm bin
     ``dist/bin/graft.js``. Shell and Windows shims are still blocked without
     execution; their text or a nearby package does not prove identity.
     """
