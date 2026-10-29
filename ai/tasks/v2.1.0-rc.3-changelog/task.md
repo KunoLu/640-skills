@@ -7,11 +7,11 @@ mode_note: 编排方整理：strict；omp 为唯一内容 writer，不启动子�
 status: checking
 branch: docs/v2.1.0-rc.3-changelog
 created_at: '2026-10-29T16:41:26+08:00'
-updated_at: '2026-10-29T16:47:50+08:00'
+updated_at: '2026-10-29T17:58:48+08:00'
 completed_at: null
 ---
 
-# v2.1.0-rc.3 CHANGELOG 定稿（第 1 轮）
+# v2.1.0-rc.3 CHANGELOG 定稿（第 1–2 轮）
 
 ## 目标
 
@@ -19,13 +19,13 @@ completed_at: null
 
 ## 决定与归属
 
-Lord 2026-10-29 群内安排（依用户「发布 v2.1.0-rc.3」要求）：准备 docs-only PR，rc.3 日期写为北京时间 2026-10-29，复核候选边界与已知限制，版本元数据不升版。注：分钟不可考。
+用户 2026-10-29 群内确认（要求发布 v2.1.0-rc.3），Lord 记录：准备 docs-only PR，rc.3 日期写为北京时间 2026-10-29，复核候选边界与已知限制，版本元数据不升版。注：分钟不可考。
 
-未完整调用 grill-with-docs：四个写入路径、内容归类、状态终点与验收条件明确，无领域歧义。不扩展其他用户或 Lord 归属，不读取或统计会话 jsonl。
+未完整调用 grill-with-docs：第 1 轮四个写入路径、第 2 轮三个修复路径、内容归类、状态终点与验收条件明确，无领域歧义。不扩展其他用户或 Lord 归属，不读取或统计会话 jsonl。
 
 ## 范围与边界
 
-仅以下四个文件：
+第 1 轮范围仅以下四个文件；第 2 轮仅修改前三个文件，index 不动：
 
 1. `CHANGELOG.md`：rc.3 日期、合并条目与候选边界。
 2. `CHANGELOG.zh.md`：逐条对应英文版本。
@@ -34,9 +34,9 @@ Lord 2026-10-29 群内安排（依用户「发布 v2.1.0-rc.3」要求）：准�
 
 不改源码、测试、PRD、contracts 或版本元数据；不打 tag、不发 Release、不合并，不执行 Git 写命令、不联网、不安装，不启动子代理或 advisor，不读取凭据、不打印环境变量。Python 均使用 `python3 -B`，不写临时脚本、报告、active、handoff、ignore 或身份文件。
 
-两份 CHANGELOG 顶部仍保留“创建对应 tag 后补充发布日期”的一般说明；本次按上述安排先将 rc.3 标题写成 2026-10-29，是本轮日期安排，不是 tag／Release 已存在的证明。当前 rc.3 tag／Release 尚不存在，不添加发布段落。rc.2 及更早章节一字不改。
+两份 CHANGELOG 顶部仍保留“创建对应 tag 后补充发布日期”的一般说明；第 1 轮将 rc.3 标题写成 2026-10-29，日期依据见「决定与归属」，不是 tag／Release 已存在的证明。第 2 轮不联网，远端 rc.3 tag／Release 状态未知，不添加发布段落。rc.2 及更早章节一字不改。
 
-沿用两个 rc.2 模板的手写 task 先例，不调用 TaskStore 写方法；parser 与 `_history` 只读核验。index 单独使用约定的 `TaskStore(Path.cwd(), read_only=True)` catalog／candidate 生成器，最终仅将候选字节写到 index。不声称自动恢复或 helper 状态转换已经执行。
+沿用两个 rc.2 模板的手写 task 先例，不调用 TaskStore 写方法；parser 与 `_history` 只读核验。第 1 轮 index 单独使用约定的 `TaskStore(Path.cwd(), read_only=True)` catalog／candidate 生成器，最终仅将候选字节写到 index；第 2 轮只在内存比较候选字节，不写 index。不声称自动恢复或 helper 状态转换已经执行。
 
 写前已核对：分支与 frontmatter 一致，HEAD 与本地 origin/main 均为 `1eb0e14eeab1544344873e400785efa67761ca1f`，`git status --porcelain` 无输出。三个既有目标为普通文件，根、ai、ai/tasks 为目录；新任务目录此前不存在。已读取根 ignore 规则；最终以含 ignored／展开未跟踪文件的 status 检查目标可见性及写入范围。
 
@@ -48,7 +48,7 @@ Lord 2026-10-29 群内安排（依用户「发布 v2.1.0-rc.3」要求）：准�
 |---|---|---|
 | #199 → Fixed／修复，并入 #196 | `247735ac1994328d1ec62ab7a14e0c81d39e97c5` | 仅 `tests/test_onboard_external_skills.py` 与 `tests/run_ci.py`。前者按 last-match-wins 核验 `sbtd-workflow-onboard/**` 与 `/LICENSE` 的有效 `-text`，拒绝 payload 规则后重开 text 转换的子规则；后者将 `WindowsShimExecutionTests` 两个真实 cmd.exe 用例加入 `WINDOWS_CASES` 必需原生集，防止选中但 skip 仍绿。是 #196 两个回归守卫的加固，无生产代码变化。 |
 | #201 → Added／新增，并入 #200 | `612076e7c648b4b141036491489312f9d530c727` | `sbtd-runtime/dashboard/src/App.tsx`、`i18n.ts`、`i18n.test.ts` 与 `sbtd-runtime/export_render.py`。`footer_rows_note` 恢复「行预览 基于」的空格；测试钉住 `footer_export_note`、`footer_rows_note`、`error_unpaired`，并断言插值后无残留占位符。`live_badge` 入双语词典；`_presentation` 对非字符串 locale 以 isinstance 守卫回落 zh；capability 保存原始 error，渲染时按当前语言翻译，effect 不再依赖 locale。属于 #200 新增双语能力的 review 修复，不另起重复条目。 |
-| #202 → Changed／变更，紧接 #200 | `15892b14ba81ac8c92618d24f0fae189174db114` | `sbtd-runtime/dashboard/src/App.tsx`、`PanelCard.tsx`、`app.css`；`sbtd-runtime/contracts/panel-manifest.json`；`sbtd-runtime/tests/test_panel_manifest.py`；`docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md`。本地时钟用 `toLocaleTimeString` 与 `hourCycle: "h23"`；标题居左、右侧明细按钮与 panel-id 成组，按钮透明 ghost；明细表格发丝行线与行 hover。component-usage 半宽 order 8→7，gate-matrix 整宽 7→8，blockers 与 component-usage 同排；按 panel_id 比较仅 order 变化，数据字段不变；manifest_version 1.0.0→1.1.0，release 仍为 rc.2，hash pin、PANEL_IDS 与 PRD 表同步。h23 午夜问题在该 PR 开发中修正，不作为已发布缺陷列入 Fixed。 |
+| #202 → Changed／变更，紧接 #200 | `15892b14ba81ac8c92618d24f0fae189174db114` | `sbtd-runtime/dashboard/src/App.tsx`、`PanelCard.tsx`、`app.css`；`sbtd-runtime/contracts/panel-manifest.json`；`sbtd-runtime/tests/test_panel_manifest.py`；`docs/prd/SBTD_Runtime_API_and_Local_Dashboard_PRD_v0.2.md`。本地时钟用 `toLocaleTimeString` 与 `hourCycle: "h23"`；标题居左、右侧明细按钮与 panel-id 成组，按钮透明 ghost；明细表格发丝行线与行 hover。component-usage 半宽 order 8→7，gate-matrix 整宽 7→8，blockers 与 component-usage 同排；仅就 panels 数组按 panel_id 比较，除 order 外数据字段不变；manifest_version 1.0.0→1.1.0，release 仍为 rc.2，EXPECTED_MANIFEST_SHA256、EXPECTED_MANIFEST_VERSION、PANEL_IDS 与 PRD v0.2 panel 表顺序同步。h23 午夜问题在该 PR 开发中修正，不作为已发布缺陷列入 Fixed。 |
 
 另核对 `sbtd-runtime/export_render.py:310-322`：`_ordered_panels` 按 manifest order 排序，`default_presentation` 据此生成 panel_order，因此新默认顺序同样作用于导出。这里是源码核验，不是本轮导出实测。
 
@@ -58,7 +58,7 @@ Lord 2026-10-29 群内安排（依用户「发布 v2.1.0-rc.3」要求）：准�
 
 | 项目 | 结论 | 依据 |
 |---|---|---|
-| 版本元数据不统一升到 rc.3 | 成立 | 当前四份 contract 元数据见下一节；本轮零 contract 写入。 |
+| 版本元数据不统一升到 rc.3 | 成立 | 当前四份 contract 元数据见下一节；本 PR 零 contract 写入。rc.2 标签的 manifest_version 为 1.0.0，#202 已升到 1.1.0，release 仍为 v2.1.0-rc.2，不表示 manifest_version 自 rc.2 起未变。 |
 | runtime 可选、观察默认关闭、显式注册／开启、前台 serve、仅 127.0.0.1、Ctrl-C 退出、无后台采集器／定时器 | 成立 | rc.2 原边界；facade.py 区间 diff 无输出，serve.py 唯一变化为 presentation_state 接受可选 locale；不改变启动或绑定。 |
 | 快照已落盘；源码发布不执行安装、workflow sync、迁移、宿主重载或备份处置 | rc.2 遗留 | rc.2 原边界；report_snapshot.py 无区间改动，本轮只改文档，不执行部署。 |
 | R2.2 状态与尚缺的性能／规模／容量证据 | 成立 | R2.2 task frontmatter 为 in-progress、completed_at 为 null；:1264-1272 与 :1288-1294 仍列 macOS／Windows 原生性能、Mac JPEG/PDF 字节数、百万事件／1万任务／10万步骤及百万 CSV、完整四格式容量／平台资源上限／最大长图 CSV 规模、R2.2 收尾。rc.2 至 HEAD 的相关变更未补这些证据。 |
@@ -85,7 +85,7 @@ rc.3 CHANGELOG 将遗留实现限制合为一条，明确指向 rc.2 同名小�
 | 同文件导出 operation 的 `x-sbtd-release` | `v2.1.0-rc.2` |
 | `sbtd-runtime/contracts/capability-matrix.json`：`release` | `v2.1.0-rc.1` |
 | `sbtd-runtime/contracts/metrics-catalog.json`：`release` | `v2.1.0-rc.1` |
-| `sbtd-runtime/contracts/panel-manifest.json`：`release`／`manifest_version` | `v2.1.0-rc.2`／`1.1.0` |
+| `sbtd-runtime/contracts/panel-manifest.json`：`release`／`manifest_version` | `v2.1.0-rc.2`／`1.1.0`；rc.2 标签中后者为 `1.0.0`，由 #202 升为 `1.1.0` |
 
 本 PR 不升版本；标题日期不表示这些 contract 已统一升版。
 
@@ -101,7 +101,7 @@ rc.3 CHANGELOG 将遗留实现限制合为一条，明确指向 rc.2 同名小�
 
 ## 验证与剩余边界
 
-本轮实际检查如下，均在本地未提交工作区执行；Python 均使用 `python3 -B`，检查脚本只在内存运行，没有落盘脚本或额外报告。
+第 1 轮实际检查如下，均在当时本地未提交工作区执行；Python 均使用 `python3 -B`，检查脚本只在内存运行，没有落盘脚本或额外报告。
 
 1. 初始身份：`git rev-parse HEAD` 与 `git rev-parse origin/main` 均为 `1eb0e14eeab1544344873e400785efa67761ca1f`，分支为 `docs/v2.1.0-rc.3-changelog`，修改前 `git status --porcelain` 无输出。创建、开始内容执行、进入 checking 分别单独调用 `date '+%Y-%m-%dT%H:%M:%S+08:00'`，实际时间见三条状态事件；`date '+%z'` 输出 `+0800`。本节写入前同一 date 命令输出 `2026-10-29T16:47:50+08:00`，用于 updated_at。
 2. 按约定运行 index 生成器，exit 0，实际输出 `INDEX_REGEN changed=True rows=74`。catalog 同时输出既有任务的「旧格式事件，不追溯」提示；本任务单独解析为 False，不把 catalog 提示归给本任务。`git diff -- ai/tasks/index.md` 只有新增 `- [v2.1.0-rc.3-changelog](v2.1.0-rc.3-changelog/task.md)`；内存字节对照也证明删去此行即与 HEAD 原文相同，输出 `INDEX_EXACT_ONE_ADDITION_OK`。
@@ -141,12 +141,57 @@ rc.3 CHANGELOG 将遗留实现限制合为一条，明确指向 rc.2 同名小�
    ?? ai/tasks/v2.1.0-rc.3-changelog/task.md
    ```
 
-7. 只读证据补验：七个 runtime 文件的 rc.2 至 HEAD `git diff --stat` 均无输出；#202 前后 manifest 解析为按 panel_id 索引的对象，去掉 order 后完全相同，仅 gate-matrix 7→8、component-usage 8→7，输出 `RUNTIME_SEVEN_FILES_UNCHANGED; MANIFEST_ORDER_ONLY_OK`。这是源码／数据对照，不是运行时测试。
+7. 只读证据补验：七个 runtime 文件的 rc.2 至 HEAD `git diff --stat` 均无输出；#202 前后 manifest 的 panels 数组解析为按 panel_id 索引的对象，去掉 order 后完全相同，仅 gate-matrix 7→8、component-usage 8→7，输出 `RUNTIME_SEVEN_FILES_UNCHANGED; MANIFEST_ORDER_ONLY_OK`。此处相同仅指 panels 数组的上述比较，不含 manifest 顶层；顶层 manifest_version 确由 1.0.0 升到 1.1.0。这是源码／数据对照，不是运行时测试。
 8. 整组检查 exit 0，输出 `DOCUMENT_SELF_CHECK_OK`。记录上述结果后，再对最终文档执行同组只读复核；最终行数与复核结果随交付回复提供。未执行的性能／平台／CI 检查仍为未知，不据此关闭 R2.2 或声称发布就绪。
 
 rtk：not-needed，使用约定原生命令。BDD：skipped，无行为或 .feature 变化；Cross-repo context／API Contract：not-needed；Mock Strategy：none。单元／集成／Web／Mobile E2E、构建、额外 lint／formatter 与全量 CI 不运行：本轮纯文档且写入范围封闭。Final Test Report／Run Summary MD：not-needed，不创建额外报告。独立 review：not-needed，未触发生产迁移、授权或跨系统接口修改条件；未启动子代理或 advisor，自核不是独立审查。
 
 Evidence Source：developer-local；Source Revision：dirty；Environment Alignment：unverified；Evidence Publication：local-only。验证绑定上述基线的本地未提交文档，不是 PR tip CI 或运行时验收。本轮不关闭 R2.2、不承诺自动恢复；提交、推送、开 PR 留给编排方。
+
+## 第 2 轮
+
+范围：仅修改 `CHANGELOG.md`、`CHANGELOG.zh.md`、`ai/tasks/v2.1.0-rc.3-changelog/task.md`；`ai/tasks/index.md` 不动。沿用 strict，`status: checking` 与 `completed_at: null` 保持不变，不新增状态事件。第 1 轮已提交，本轮只修 review 的两个阻塞项及相关措辞，不处理其他 review 意见。
+
+1. 阻塞项 1：双语 #202 条目改为「#202 将 `manifest_version` 由 `1.0.0` 升到 `1.1.0`，数据字段不变」／“#202 bumps `manifest_version` from `1.0.0` to `1.1.0`, with no data-field changes”，并列明 `EXPECTED_MANIFEST_SHA256`、`EXPECTED_MANIFEST_VERSION`、`PANEL_IDS` 顺序与 PRD v0.2 panel 表顺序同步；删除暗示版本未变的布局限定。时钟、header、排序、导出默认顺序和表格句子经真实 diff／源码核对，保留原文。
+2. 阻塞项 2：「决定与归属」改为「用户 2026-10-29 群内确认（要求发布 v2.1.0-rc.3），Lord 记录：准备 docs-only PR，rc.3 日期写为北京时间 2026-10-29，复核候选边界与已知限制，版本元数据不升版。注：分钟不可考。」相应日期说明改为指向该节，不另造归属。
+3. 两份 CHANGELOG `:29` 复核：原当前值准确，但连续沿用语气可能被读成 manifest_version 自 rc.2 起未变。最小修改为「#202 已将 `manifest_version` 从 rc.2 时的 `1.0.0` 升为 `1.1.0`」，英文同步；`release` 仍为 `v2.1.0-rc.2`。归类依据、候选边界与版本现状表同步澄清；第 1 轮验证第 7 条限定比较对象为 panels 数组，不包含顶层版本。
+
+### 本轮实际检查
+
+以下结果来自本轮本地工作区；Python 全部为 `python3 -B`，脚本仅在内存运行。初次双语检查失败及修正后的完整检查结果均保留于此；不将第 1 轮结果当作本轮结果。
+
+1. 写前身份：`git rev-parse --abbrev-ref HEAD` 输出 `docs/v2.1.0-rc.3-changelog`，`git rev-parse HEAD` 输出 `9e452c35dd7805627450a02dac6bde0ef8359f28`；`git status --porcelain` 无输出。三个目标与父路径的普通文件／symlink／根内包含关系检查输出 `PATH_SAFETY_OK 3 regular files`；已读根 ignore 规则，目标含 ignored 的 status 无输出。
+2. 事实复核：执行 `git show v2.1.0-rc.2:sbtd-runtime/contracts/panel-manifest.json` 及 `git show 15892b14ba81ac8c92618d24f0fae189174db114 -- sbtd-runtime/contracts/panel-manifest.json sbtd-runtime/tests/test_panel_manifest.py docs/prd/`，读取真实 diff；另读该提交的 App.tsx、PanelCard.tsx、app.css diff 与 `export_render.py:310-322`。内存解析 #202 父提交与该提交的 manifest，核对顶层版本、release 及按 panel_id 索引的 panels 数据，输出 `MANIFEST_OK rc2=1.0.0; #202=1.0.0->1.1.0; release=v2.1.0-rc.2; panels differ only in order`。这是源码／数据证据，不是 UI 或导出实测。
+3. 执行第 1 轮验证第 3 条所列原生 parser 命令，exit 0，输出 `ai/tasks/v2.1.0-rc.3-changelog/task.md checking False 3 None`；另在 `python3 -B -c` 中只读调用 `TaskStore._history(doc)`，exit 0，输出 `HISTORY (None, True)`。内存对照基线 frontmatter 字段顺序及除 updated_at 外的全部值、状态事件全文和新增模型记录，输出 `TASK_FIELDS_EVENTS_MODEL_ROWS_OK checking null; 3 unchanged events`。未新增 from=to 事件。
+4. 执行以下只读 index 命令，exit 0；catalog 输出既有任务的「旧格式事件，不追溯」提示，最终输出 `INDEX_SAME True True`。本任务 parser 的 legacy_events 为 False。task 标题与正文修正未改变生成的 index 行。
+
+   ```sh
+   python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); print('INDEX_SAME', b==a, a==Path('ai/tasks/index.md').read_bytes())"
+   ```
+
+5. 禁用项脚本：从既有 Unicode 码点表还原 14 项，扫描 task 全文和两份 CHANGELOG 相对 `9e452c3` 的 `git diff -U0` 新增行，排除 `+++` 文件头；第 1 项大小写不敏感。实际逐项输出 `BAN 1 0 0 0` 至 `BAN 14 0 0 0`，汇总 `BAN_COUNTS_OK 14 x 3 = 42 zero counts; TASK_PATH_PREFIX 0`；上表的额外路径前缀也为 0。
+6. 双语脚本初次 exit 1：在条目数检查通过后，额外要求句内代码标识出现顺序相同，触发 `AssertionError`。定位输出 `CODE_ORDER_DIFFERENCE 6`、`CODE_ORDER_DIFFERENCE 7`、`CODE_ORDER_DIFFERENCE 8`，是原有英中翻译语序差异；没有据此改写无关条目。改为逐条比较代码标识多重集合，条目顺序及逐条 PR 链接仍严格有序比较，SHA 多重集合也逐条比较。修正后的完整脚本 exit 0，输出如下：
+
+   ```text
+   ENTRY_COUNTS CHANGELOG.md 1 4 1 4 TOTAL 10
+   ENTRY_COUNTS CHANGELOG.zh.md 1 4 1 4 TOTAL 10
+   BILINGUAL_ENTRY_LINK_SHA_CODE_OK 10 entries
+   HEADER_AND_RC2_HISTORY_BYTES_OK; CHANGELOG_CHANGED_LINES 19 29 only
+   ```
+
+   rc.3 均为新增 1、变更 4、修复 1、候选边界 4；两文件相对 `9e452c3` 仅第 19、29 行改变，文件头及 rc.2 起至末尾逐字节不变。
+7. `git diff --check` exit 0、无输出；`git diff 9e452c3 -- ai/tasks/index.md` 无输出。`git status --porcelain --untracked-files=all` 仅输出：
+
+   ```text
+    M CHANGELOG.md
+    M CHANGELOG.zh.md
+    M ai/tasks/v2.1.0-rc.3-changelog/task.md
+   ```
+
+   脚本断言三条均为未暂存修改且无额外路径，输出 `SCOPE_OK 3 files; DIFF_CHECK_OK; INDEX_DIFF_EMPTY`；完整脚本最终输出 `ROUND2_DOCUMENT_SELF_CHECK_OK`，exit 0。
+8. 最后写入前执行 `date '+%Y-%m-%dT%H:%M:%S+08:00'`，输出 `2026-10-29T17:58:48+08:00`，写入 updated_at；此前 `date '+%z'` 输出 `+0800`。上述记录写入后再执行最终只读复核，结果及最终 +/- 行数随交付回复列出。
+
+验证边界：rtk 为 not-needed，使用要求的原生命令；BDD、单元／集成／UI／E2E、构建、额外 lint／formatter 与 CI 均未运行，原因是本轮只修文档且禁止额外产物，不涉及行为或 .feature 变化。Cross-repo context／API Contract 为 not-needed，Mock Strategy 为 none；Final Test Report／Run Summary MD 为 not-needed，不落盘额外报告。既有 Book Gate Plan 的不适用理由不变；未启动子代理或 advisor，自核不是独立 review。Evidence Source 为 developer-local，Source Revision 为 dirty，Environment Alignment 为 unverified，Evidence Publication 为 local-only；不声称 PR tip CI、运行时验收或发布就绪，远端 tag／Release 状态未知。未提交、推送或执行任何 Git 写命令。
 
 ## 模型记录
 
@@ -154,6 +199,8 @@ Evidence Source：developer-local；Source Revision：dirty；Environment Alignm
 |---|---|---|---|---|---|
 | 1 | ping 第 1 轮 | openai-codex/gpt-6-astra（high） | 未知（写入时本会话尚未结束；由编排方在 done 轮据会话 jsonl 统计（executor-counted）补写） | 未知（写入时本会话尚未结束；由编排方在 done 轮据会话 jsonl 统计（executor-counted）补写） | 连通性记录；本轮未读取 ping 会话 |
 | 2 | main 第 1 轮 | openai-codex/gpt-6-astra（high） | 未知（写入时本会话尚未结束；由编排方在 done 轮据会话 jsonl 统计（executor-counted）补写） | 未知（写入时本会话尚未结束；由编排方在 done 轮据会话 jsonl 统计（executor-counted）补写） | 四文件文档定稿、候选边界复核与本地自检 |
+| 3 | ping 第 2 轮 | openai-codex/gpt-6-astra（high） | 未知，done 轮补写（executor-counted） | 未知，done 轮补写（executor-counted） | 连通性记录；本轮未读取 ping 会话 |
+| 4 | main 第 2 轮 | openai-codex/gpt-6-astra（high） | 未知，done 轮补写（executor-counted） | 未知，done 轮补写（executor-counted） | 双语阻塞项、归属与证据措辞修正；本地只读自检 |
 
 ## 状态事件
 

@@ -16,7 +16,7 @@
 ### 变更
 
 - 将 Dashboard 对齐 omp stats 视觉语言：发丝透明边框卡片、16px 圆角、更强的页面/卡片分层（亮 `#f2f2f3`/`#ffffff`、暗 `#000000`/`#09090a`）、omp 风格顶栏（brand、Live 徽章、时间分段、导出组、主题与语言切换），概览面板改为 KPI 条。直播页取消 1,440px 上限，panel 在任意分辨率铺满无留宽；导出产物保持固定文档宽度。([#200](https://github.com/KunoLu/640-skills/pull/200))
-- 调整 Dashboard Live 徽章：通过 `toLocaleTimeString` 与 `hourCycle: "h23"` 显示浏览器本地时间，避免 en-US 午夜显示 24:xx，不再截取 UTC `as_of` 原文。panel header 标题居左，右侧将透明 ghost 明细按钮与 panel-id 成组。manifest 将 `component-usage` 的 order 从 8 调到 7、`gate-matrix` 从 7 调到 8，使半宽 `blockers` 与 `component-usage` 同排；仅调整布局，`manifest_version` 为 `1.1.0`，数据字段不变。默认 panel 顺序同样作用于导出。明细表格采用发丝行线与行 hover 反馈。([#202](https://github.com/KunoLu/640-skills/pull/202))
+- 调整 Dashboard Live 徽章：通过 `toLocaleTimeString` 与 `hourCycle: "h23"` 显示浏览器本地时间，避免 en-US 午夜显示 24:xx，不再截取 UTC `as_of` 原文。panel header 标题居左，右侧将透明 ghost 明细按钮与 panel-id 成组。manifest 将 `component-usage` 的 order 从 8 调到 7、`gate-matrix` 从 7 调到 8，使半宽 `blockers` 与 `component-usage` 同排；#202 将 `manifest_version` 由 `1.0.0` 升到 `1.1.0`，数据字段不变，并同步更新测试 hash pin（`EXPECTED_MANIFEST_SHA256`）、`EXPECTED_MANIFEST_VERSION`、`PANEL_IDS` 顺序与 PRD v0.2 panel 表顺序。默认 panel 顺序同样作用于导出。明细表格采用发丝行线与行 hover 反馈。([#202](https://github.com/KunoLu/640-skills/pull/202))
 - 受管 Graft pin 从 `@nanonets/graft@0.22.0` 晋升到 `@nanonets/graft@0.28.0`。上游已更名 Trail-code，但同一构建双发包（`@trailhq/trail-code` 与 `@nanonets/graft`），`graft` 命令不变；pin 保持 tarball URL 与 registry 核对的 integrity，构图策略摘要随固定资产同步更新。离线 code map 用法不变：受管 build 仍写 `graft/`，`DO_NOT_TRACK` 下遥测与更新检查保持关闭，六个 MCP 工具名与受管分析动词经实测一致。ENTRYPOINT 的 Graft 行按规则留给发布后版本检查同步。([#198](https://github.com/KunoLu/640-skills/pull/198))
 - 将外部 Skills stable 集刷新到 `2026-10-28.1`：mattpocock/skills（`59db609`）、impeccable（`3e3a917`）、ui-ux-pro-max-skill（`28b3b8d`）、shadcn-ui（`96da9cc`）、ponytail（`09c434a`）与 i-have-adhd（`1ecea19`）固定到各自 2026-10-28 主线 revision；上游许可证均未变。19 个 Skill 全量通过 manifest 摘要校验，strict-stable 隔离安装 19/19 提交。([#197](https://github.com/KunoLu/640-skills/pull/197))
 
@@ -26,7 +26,7 @@
 
 ### 候选边界与已知限制
 
-- 本 PR 不升版本元数据：`sbtd-runtime/contracts/openapi.yaml` 的 `info.x-sbtd-release` 与 info summary 仍为 `v2.1.0-rc.1`，导出 operation 的 `x-sbtd-release` 仍为 `v2.1.0-rc.2`；`sbtd-runtime/contracts/capability-matrix.json` 和 `sbtd-runtime/contracts/metrics-catalog.json` 的 `release` 仍为 `v2.1.0-rc.1`。`sbtd-runtime/contracts/panel-manifest.json` 的 `release` 仍为 `v2.1.0-rc.2`，`manifest_version` 为 `1.1.0`。
+- 本 PR 不升版本元数据：`sbtd-runtime/contracts/openapi.yaml` 的 `info.x-sbtd-release` 与 info summary 仍为 `v2.1.0-rc.1`，导出 operation 的 `x-sbtd-release` 仍为 `v2.1.0-rc.2`；`sbtd-runtime/contracts/capability-matrix.json` 和 `sbtd-runtime/contracts/metrics-catalog.json` 的 `release` 仍为 `v2.1.0-rc.1`。`sbtd-runtime/contracts/panel-manifest.json` 的 `release` 仍为 `v2.1.0-rc.2`；#202 已将 `manifest_version` 从 rc.2 时的 `1.0.0` 升为 `1.1.0`。
 - `sbtd-runtime/` 仍为可选，观察默认关闭，项目注册与观察开启均为显式动作。Serve 与 Dashboard 仍须通过显式前台命令启动、只绑定 `127.0.0.1`、Ctrl-C 退出；不启动后台采集器或定时器。快照仍落盘；源码发布不执行本机安装、workflow sync、项目迁移、宿主重载或备份处置。rc.3 唯一相关 serve 改动是 `presentation_state` 接受可选 `locale`。([#200](https://github.com/KunoLu/640-skills/pull/200))
 - R2.2 保持 `in-progress`、`completed_at: null`。仓库内没有新证据关闭 rc.2 待验证项：macOS／Windows 原生性能、Mac JPEG／PDF 字节数、百万事件／1 万任务／10 万步骤及百万 CSV、完整四格式容量／平台资源上限／最大长图 CSV 规模、R2.2 收尾。这些项目仍未验证，浅色主题导出仍无 CI 覆盖。仓库外是否存在额外结果为未知。
 - rc.2 的实现限制原样延续：审计分页前全量 replay／排序、CSV 完整缓冲、证据仅到 11,500 事件而非百万级验收、Windows ACL 缺本机验证、`query.executed` 不持久化；查询桶限制 (1)–(5)；401 不自动重新配对（导出轮询停止并提示重启 serve 后手动配对，主快照轮询继续）；快照内存淘汰未实现；以及缓存／offload 注意事项。rc.3 未改变相关机制，完整遗留限制与证据边界见下方 rc.2 **候选边界与已知限制**小节。
