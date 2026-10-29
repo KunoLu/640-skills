@@ -137,6 +137,7 @@ JPEG／PDF 需要下述可选 renderer；现有 Bearer、CSRF、Idempotency-Key 
 `report_width_px`、`expanded_detail_ids`、`table_sort`、`preview_row_sets`、
 `panel_order`、`legend_state`，具体类型见 OpenAPI `ExportPresentationState`。
 `report_width_px` 与 `preview_row_sets` 的值为非负 number，允许零与小数；不限制为 integer。
+可选第八个字段 `locale` 决定导出产物的文案语言：`"en"` 或 `"zh"`；省略或取其他值时按 `"zh"` 渲染（向后兼容，中文产物逐字节不变）。`locale` 只影响 HTML 文案与 Panel 标题（`title_en`／`title_zh`），不改变 CSV 数据范围。
 `panel_order` 必须是 `sbtd-runtime/contracts/panel-manifest.json` 中所有 Panel ID
 的完整、唯一排列，可调整顺序；空列表、重复、未知或遗漏 ID 均要求 400 BadRequest。
 schema 检查非空与唯一性；成员资格和完整性由服务按 manifest 校验，不在 schema 复制枚举。

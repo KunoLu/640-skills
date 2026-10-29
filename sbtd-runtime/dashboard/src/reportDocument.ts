@@ -15,6 +15,7 @@ import {
   PANEL_REGISTRY,
   type PanelDefinition,
 } from "./registry";
+import { DEFAULT_LOCALE, type Locale } from "./i18n.ts";
 
 /** Public view of an R1 ReportSnapshot (report_snapshot.Snapshot.public_view). */
 export interface Snapshot {
@@ -48,6 +49,8 @@ export interface PresentationState {
   preview_row_sets: Record<string, number>;
   panel_order: string[];
   legend_state: Record<string, boolean>;
+  /** Export artifact language; the server falls back to "zh" when absent. */
+  locale: Locale;
 }
 
 export const DEFAULT_PRESENTATION_STATE: PresentationState = {
@@ -58,6 +61,7 @@ export const DEFAULT_PRESENTATION_STATE: PresentationState = {
   preview_row_sets: {},
   panel_order: PANEL_REGISTRY.map((panel) => panel.panel_id),
   legend_state: {},
+  locale: DEFAULT_LOCALE,
 };
 
 export interface ReportPanelBinding {

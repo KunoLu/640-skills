@@ -14,21 +14,41 @@ body {
 }
 
 .page {
-  max-width: var(--sbtd-report-width);
-  margin: 0 auto;
+  /* Fluid full width (2026-10): panels stretch to the viewport at any
+   * resolution; no fixed report-width cap on the live page. Export artifacts
+   * keep their own fixed document width server-side. */
+  margin: 0;
   padding: var(--sbtd-space-page);
 }
 
-.topbar h1 {
-  font-size: 20px;
-  margin: 0 0 var(--sbtd-space-gap);
+.topbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px var(--sbtd-space-gap);
+}
+
+.brand {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.brand-sep {
+  color: var(--sbtd-text-secondary);
+  font-weight: 400;
+  margin: 0 6px;
 }
 
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sbtd-space-gap);
+  gap: 8px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .controls button {
@@ -37,8 +57,12 @@ body {
   background: var(--sbtd-bg-elevated);
   border: var(--sbtd-border-width) solid var(--sbtd-border);
   border-radius: var(--sbtd-radius-control);
-  padding: 6px 12px;
+  padding: 5px 11px;
   cursor: pointer;
+}
+
+.controls button:hover:not(:disabled) {
+  border-color: var(--sbtd-border-strong);
 }
 
 .controls button:disabled {
@@ -51,26 +75,56 @@ body {
   outline-offset: 2px;
 }
 
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--sbtd-font-size-secondary);
+  color: var(--sbtd-text-secondary);
+  border: var(--sbtd-border-width) solid var(--sbtd-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: var(--sbtd-bg-elevated);
+  white-space: nowrap;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sbtd-ok);
+  flex: none;
+}
+
 .segmented {
   display: inline-flex;
   border: var(--sbtd-border-width) solid var(--sbtd-border);
   border-radius: var(--sbtd-radius-control);
-  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
+  background: var(--sbtd-bg-elevated);
 }
 
 .segmented button {
   border: none;
-  border-radius: 0;
-  background: var(--sbtd-bg-elevated);
+  border-radius: 7px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--sbtd-text-secondary);
+}
+
+.segmented button:hover:not(:disabled) {
+  color: var(--sbtd-text);
+  border-color: transparent;
 }
 
 .segmented button + button {
-  border-left: var(--sbtd-border-width) solid var(--sbtd-border);
+  border-left: none;
 }
 
 .segmented .segment-active {
-  background: var(--sbtd-accent);
-  color: var(--sbtd-accent-contrast);
+  background: var(--sbtd-segment-active-bg);
+  color: var(--sbtd-segment-active-text);
 }
 
 .watermark {
@@ -97,11 +151,31 @@ body {
 }
 
 @media (max-width: 900px) {
+  .page {
+    padding: 16px;
+  }
   .grid {
     grid-template-columns: 1fr;
   }
   .grid > .panel {
     grid-column: span 1 !important;
+  }
+  .controls {
+    justify-content: flex-start;
+  }
+  .custom-range input {
+    min-width: 0;
+    width: 100%;
+  }
+  .custom-range label {
+    flex: 1 1 180px;
+  }
+  .filter-field {
+    flex: 1 1 140px;
+  }
+  .filter-field select {
+    min-width: 0;
+    width: 100%;
   }
 }
 
@@ -172,15 +246,46 @@ body {
   gap: 8px;
 }
 
+/* KPI panels (manifest kind=kpi): metrics fill the row as equal cells at any
+ * viewport width — no dead space beside the strip. */
+.panel-kpi .panel-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px var(--sbtd-space-gap);
+}
+
+.panel-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.panel-kpi .panel-metric {
+  gap: 4px;
+  padding: 4px 0;
+}
+
 .panel-metric dt {
   font-family: var(--sbtd-font-mono);
   font-size: var(--sbtd-font-size-secondary);
   color: var(--sbtd-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .panel-metric dd {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel-metric-value {
   font-size: var(--sbtd-font-size-metric);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-metric-note {
+  font-size: var(--sbtd-font-size-body);
+  color: var(--sbtd-text-secondary);
 }
 
 .page-footer {

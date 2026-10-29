@@ -17,6 +17,7 @@
 
 import type { Snapshot } from "./reportDocument";
 import { parseExportFilename, type ExportFile, type ExportFormat, type ExportInput, type ExportStatus } from "./exportJob.ts";
+import { DEFAULT_LOCALE, t, type Locale } from "./i18n.ts";
 
 const SESSION_KEY = "sbtd.session";
 
@@ -60,7 +61,10 @@ export function clearTicketFromAddressBar(): void {
  * failed exchange also consumes it). On success the credentials are stored
  * in sessionStorage and returned.
  */
-export async function pairWithTicket(ticket: string): Promise<SessionCredentials> {
+export async function pairWithTicket(
+  ticket: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<SessionCredentials> {
   let response: Response;
   try {
     response = await fetch("/api/v1/session/pair", {
@@ -72,7 +76,7 @@ export async function pairWithTicket(ticket: string): Promise<SessionCredentials
   }
   if (!response.ok) {
     throw new ApiError(
-      `POST /api/v1/session/pair -> ${response.status}（配对失败：ticket 无效或已过期）`,
+      `POST /api/v1/session/pair -> ${response.status}${locale === "zh" ? "（" : " ("}${t(locale, "pair_failed")}${locale === "zh" ? "）" : ")"}`,
       response.status,
     );
   }

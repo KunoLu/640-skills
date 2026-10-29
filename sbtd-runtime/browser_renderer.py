@@ -400,7 +400,9 @@ def _between(document: str, start: str, end: str) -> str | None:
 def _between_pattern(document: str) -> str:
     import re
 
-    match = re.search(r"范围：(.+?) → (.+?)（(.+?)）", document)
+    match = re.search(r"范围：(.+?) → (.+?)（(.+?)）", document) or re.search(
+        r"Range: (.+?) → (.+?) \((.+?)\)", document
+    )
     if match is None:
         return "unknown"
     start, end, zone = (html.unescape(part) for part in match.groups())
@@ -410,7 +412,9 @@ def _between_pattern(document: str) -> str:
 def _short_snapshot(document: str) -> str:
     import re
 
-    match = re.search(r"快照 ([^，<\s]+)", document)
+    match = re.search(r"快照 ([^，<\s]+)", document) or re.search(
+        r"snapshot ([^,<\s]+)", document
+    )
     if match is None:
         return "unknown"
     snapshot_id = html.unescape(match.group(1))

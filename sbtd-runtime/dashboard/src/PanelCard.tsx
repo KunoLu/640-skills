@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { MetricValue, MetricStratum } from "./api";
 import type { PanelDefinition } from "./registry";
+import { t, type Locale } from "./i18n.ts";
 
 export type PanelStatus =
   | { kind: "loading" }
@@ -97,10 +98,12 @@ export function MetricCell({
   metricId,
   entry,
   insufficientDataZh,
+  locale,
 }: {
   metricId: string;
   entry: MetricValue | undefined;
   insufficientDataZh: string;
+  locale: Locale;
 }) {
   let body: ReactNode;
   if (entry === undefined) {
@@ -112,7 +115,8 @@ export function MetricCell({
   } else if (entry.support === "unsupported") {
     body = (
       <span className="panel-state-unknown">
-        不支持{entry.reason ? ` — ${String(entry.reason)}` : ""}
+        {t(locale, "unsupported")}
+        {entry.reason ? ` — ${String(entry.reason)}` : ""}
       </span>
     );
   } else {
@@ -154,10 +158,15 @@ export function MetricCell({
       );
     }
   }
+  const hasValue =
+    entry !== undefined &&
+    entry.support !== "unsupported" &&
+    entry.value !== null &&
+    entry.value !== undefined;
   return (
     <div className="panel-metric">
       <dt>{metricId}</dt>
-      <dd>{body}</dd>
+      <dd className={hasValue ? "panel-metric-value" : "panel-metric-note"}>{body}</dd>
     </div>
   );
 }
@@ -174,6 +183,7 @@ export function PanelFrame({
   status,
   detailExpanded,
   onToggleDetail,
+  locale,
   children,
 }: {
   definition: PanelDefinition;
@@ -183,17 +193,22 @@ export function PanelFrame({
    * accessible toggle per §12.3 accessibility rules). */
   detailExpanded?: boolean;
   onToggleDetail?: () => void;
+  locale: Locale;
   children?: ReactNode;
 }) {
+  const title =
+    locale === "en"
+      ? (definition.title_en ?? definition.title_zh)
+      : definition.title_zh;
   return (
     <section
-      className="panel"
+      className={`panel${definition.kind === "kpi" ? " panel-kpi" : ""}`}
       style={{ gridColumn: definition.gridColumn }}
-      aria-label={definition.title_zh}
+      aria-label={title}
       data-panel-id={definition.panel_id}
     >
       <header className="panel-header">
-        <h2>{definition.title_zh}</h2>
+        <h2>{title}</h2>
         {onToggleDetail !== undefined && (
           <button
             type="button"
@@ -201,19 +216,21 @@ export function PanelFrame({
             aria-expanded={detailExpanded === true}
             onClick={onToggleDetail}
           >
-            {detailExpanded === true ? "收起明细" : "明细"}
+            {detailExpanded === true
+              ? t(locale, "detail_collapse")
+              : t(locale, "detail_show")}
           </button>
         )}
         <span className="panel-id">{definition.panel_id}</span>
       </header>
       {status.kind === "loading" && (
         <p className="panel-state" role="status">
-          正在更新…
+          {t(locale, "updating")}
         </p>
       )}
       {status.kind === "error" && (
         <p className="panel-state panel-state-error" role="alert">
-          查询失败：{status.message}（错误不显示 0，可重试）
+          {t(locale, "query_failed", { message: status.message })}
         </p>
       )}
       {status.kind === "ready" && children}
@@ -234,12 +251,14 @@ export function PanelCard({
   detail,
   detailExpanded,
   onToggleDetail,
+  locale,
 }: {
   definition: PanelDefinition;
   status: PanelStatus;
   detail?: ReactNode;
   detailExpanded?: boolean;
   onToggleDetail?: () => void;
+  locale: Locale;
 }) {
   return (
     <PanelFrame
@@ -247,6 +266,7 @@ export function PanelCard({
       status={status}
       detailExpanded={detailExpanded}
       onToggleDetail={onToggleDetail}
+      locale={locale}
     >
       <dl className="panel-metrics">
         {definition.metric_ids.map((metricId) => (
@@ -256,12 +276,21 @@ export function PanelCard({
             entry={
               status.kind === "ready" ? status.values[metricId] : undefined
             }
-            insufficientDataZh={definition.insufficient_data_zh}
+            insufficientDataZh={
+              locale === "en"
+                ? (definition.insufficient_data_en ?? definition.insufficient_data_zh)
+                : definition.insufficient_data_zh
+            }
+            locale={locale}
           />
         ))}
         {definition.metric_ids.length === 0 && (
           <p className="panel-state">
-            字段依赖：{definition.field_dependencies.join("、")}
+            {t(locale, "field_dependencies", {
+              deps: definition.field_dependencies.join(
+                locale === "zh" ? "、" : ", ",
+              ),
+            })}
           </p>
         )}
       </dl>

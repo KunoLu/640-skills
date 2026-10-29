@@ -1081,6 +1081,12 @@ components:
           additionalProperties:
             type: boolean
           description: Series identifiers mapped to their visibility state.
+        locale:
+          type: string
+          description: |
+            Rendered copy language: `en` or `zh`. Optional. When absent or
+            not one of those two values, the service renders `zh` (the
+            backward-compatible default). Locale never changes CSV scope.
     Health:
       type: object
       additionalProperties: false

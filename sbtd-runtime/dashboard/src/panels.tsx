@@ -19,21 +19,31 @@ import type { DatasetRow } from "./api";
 import { MetricCell, PanelFrame, type PanelStatus } from "./PanelCard";
 import type { PanelDefinition } from "./registry";
 import type { ReadyView } from "./pageModel";
+import { t, type Locale, type StringKey } from "./i18n.ts";
 
-const FAMILY_LABELS_ZH: Record<string, string> = {
-  task: "任务",
-  run: "运行",
-  step: "步骤",
-  gate: "Gate",
-  component: "组件",
-  invocation: "调用",
-  validation_run: "验证运行",
-  validation_case: "验证用例",
-  usage: "用量",
-  artifact: "工件",
-  event: "事件",
-  data_quality: "数据质量",
+const FAMILY_KEYS: Record<string, StringKey> = {
+  task: "family_task",
+  run: "family_run",
+  step: "family_step",
+  gate: "family_gate",
+  component: "family_component",
+  invocation: "family_invocation",
+  validation_run: "family_validation_run",
+  validation_case: "family_validation_case",
+  usage: "family_usage",
+  artifact: "family_artifact",
+  event: "family_event",
+  data_quality: "family_data_quality",
 };
+
+/**
+ * Localized family label; an unknown family id renders verbatim (the server
+ * may add a family before the UI dictionary knows it).
+ */
+function familyLabel(locale: Locale, family: string): string {
+  const key = FAMILY_KEYS[family];
+  return key === undefined ? family : t(locale, key);
+}
 
 /**
  * Presentation mapping: which dataset families back each panel's inline
@@ -92,25 +102,35 @@ export function PanelRowsPreview({
   totals,
   truncated,
   limit = 50,
+  locale,
 }: {
   rows: readonly DatasetRow[];
   family: string;
   totals: Record<string, number>;
   truncated: boolean;
   limit?: number;
+  locale: Locale;
 }) {
   const shown = rows.slice(0, limit);
   const total = totals[family];
-  const totalText = total === undefined ? `${rows.length}（已加载）` : `${total}`;
+  const totalText =
+    total === undefined ? `${rows.length}${t(locale, "loaded_suffix")}` : `${total}`;
   return (
     <div className="panel-detail">
       <p className="panel-detail-count">
-        {FAMILY_LABELS_ZH[family] ?? family}：展示 {shown.length} 条／范围内总{" "}
-        {totalText} 条
-        {truncated && "（数据集过大仅加载前若干页，预览基于已加载部分）"}
+        {t(locale, "family_rows", {
+          family: familyLabel(locale, family),
+          shown: shown.length,
+          total: totalText,
+        })}
+        {truncated && t(locale, "truncated_note")}
       </p>
       {shown.length === 0 ? (
-        <p className="panel-state">范围内无{FAMILY_LABELS_ZH[family] ?? family}记录。</p>
+        <p className="panel-state">
+          {t(locale, "no_family_records", {
+            family: familyLabel(locale, family),
+          })}
+        </p>
       ) : (
         <ul className="panel-detail-list">
           {shown.map((row) => (
@@ -126,9 +146,11 @@ export function PanelRowsPreview({
 export function PanelFamilyDetail({
   panelId,
   view,
+  locale,
 }: {
   panelId: string;
   view: ReadyView;
+  locale: Locale;
 }) {
   const families = PANEL_ROW_FAMILIES[panelId] ?? [];
   const totals = familyTotals(view);
@@ -141,6 +163,7 @@ export function PanelFamilyDetail({
           rows={view.rows.filter((row) => row.record_type === family)}
           totals={totals}
           truncated={view.rowsTruncated}
+          locale={locale}
         />
       ))}
     </>
@@ -157,13 +180,16 @@ export function DataQualityPanel({
   definition,
   status,
   view,
+  locale,
 }: {
   definition: PanelDefinition;
   status: PanelStatus;
   view: ReadyView | null;
+  locale: Locale;
 }) {
+  const listJoiner = locale === "zh" ? "、" : ", ";
   return (
-    <PanelFrame definition={definition} status={status}>
+    <PanelFrame definition={definition} status={status} locale={locale}>
       {status.kind === "ready" && view !== null && (
         <>
           <dl className="panel-metrics">
@@ -172,18 +198,23 @@ export function DataQualityPanel({
                 key={metricId}
                 metricId={metricId}
                 entry={status.values[metricId]}
-                insufficientDataZh={definition.insufficient_data_zh}
+                insufficientDataZh={
+                  locale === "en"
+                    ? (definition.insufficient_data_en ?? definition.insufficient_data_zh)
+                    : definition.insufficient_data_zh
+                }
+                locale={locale}
               />
             ))}
           </dl>
           <div className="quality-sections">
-            <section aria-label="覆盖">
-              <h3>覆盖（dataset manifest，实测行数）</h3>
+            <section aria-label={t(locale, "aria_coverage")}>
+              <h3>{t(locale, "dq_coverage_heading")}</h3>
               <table className="detail-table">
                 <thead>
                   <tr>
-                    <th>数据族</th>
-                    <th>行数</th>
+                    <th>{t(locale, "col_family")}</th>
+                    <th>{t(locale, "col_rows")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,7 +225,7 @@ export function DataQualityPanel({
                       <tr key={typeof family === "string" ? family : index}>
                         <td>
                           {typeof family === "string"
-                            ? (FAMILY_LABELS_ZH[family] ?? family)
+                            ? familyLabel(locale, family)
                             : "unknown"}
                         </td>
                         <td>{typeof rows === "number" ? rows : "unknown"}</td>
@@ -204,40 +235,51 @@ export function DataQualityPanel({
                 </tbody>
               </table>
             </section>
-            <section aria-label="缺口与未关联">
-              <h3>缺口与未关联</h3>
+            <section aria-label={t(locale, "aria_gaps")}>
+              <h3>{t(locale, "dq_gaps")}</h3>
               <ul className="panel-detail-list">
                 <li>
-                  未知发生时间事件：
-                  {view.snapshot.unknown_time_event_ids.length} 条
+                  {t(locale, "unknown_time_events", {
+                    count: view.snapshot.unknown_time_event_ids.length,
+                  })}
                   {view.snapshot.unknown_time_event_ids.length > 0 &&
-                    `（${view.snapshot.unknown_time_event_ids.slice(0, 5).join("、")}${
+                    `${locale === "zh" ? "（" : " ("}${view.snapshot.unknown_time_event_ids
+                      .slice(0, 5)
+                      .join(listJoiner)}${
                       view.snapshot.unknown_time_event_ids.length > 5 ? "…" : ""
-                    }）`}
+                    }${locale === "zh" ? "）" : ")"}`}
                 </li>
                 <li>
-                  quality_summary：
+                  quality_summary{locale === "zh" ? "：" : ": "}
                   {Object.keys(view.snapshot.quality_summary).length === 0
-                    ? "unknown（快照未携带）"
+                    ? t(locale, "not_carried")
                     : Object.entries(view.snapshot.quality_summary)
                         .map(([key, value]) => `${key}=${String(value)}`)
-                        .join("；")}
+                        .join(locale === "zh" ? "；" : "; ")}
                 </li>
                 <li>
-                  快照告警：
-                  {view.snapshot.warnings.length === 0
-                    ? "无"
-                    : view.snapshot.warnings.join("、")}
+                  {t(locale, "snapshot_warnings", {
+                    warnings:
+                      view.snapshot.warnings.length === 0
+                        ? t(locale, "value_none")
+                        : view.snapshot.warnings.join(listJoiner),
+                  })}
                 </li>
                 <li>
-                  来源水位：
-                  {view.snapshot.source_watermarks.length === 0
-                    ? "无声明（单一本地来源）"
-                    : view.snapshot.source_watermarks
-                        .map((item) => JSON.stringify(item))
-                        .join("；")}
+                  {t(locale, "source_watermark", {
+                    value:
+                      view.snapshot.source_watermarks.length === 0
+                        ? t(locale, "no_declared_watermark")
+                        : view.snapshot.source_watermarks
+                            .map((item) => JSON.stringify(item))
+                            .join(locale === "zh" ? "；" : "; "),
+                  })}
                 </li>
-                <li>水位序号 watermark_seq：{view.snapshot.watermark_seq}</li>
+                <li>
+                  {t(locale, "watermark_seq_item", {
+                    seq: view.snapshot.watermark_seq,
+                  })}
+                </li>
               </ul>
             </section>
           </div>
@@ -276,26 +318,39 @@ function eventsOfTask(view: ReadyView, taskUid: string): DatasetRow[] {
 }
 
 /** Inline detail for one expanded task: step timeline + event preview. */
-function TaskDetail({ view, taskUid }: { view: ReadyView; taskUid: string }) {
+function TaskDetail({
+  view,
+  taskUid,
+  locale,
+}: {
+  view: ReadyView;
+  taskUid: string;
+  locale: Locale;
+}) {
   const steps = stepsOfTask(view, taskUid);
   const events = eventsOfTask(view, taskUid);
   const shownSteps = steps.slice(0, STEP_PREVIEW_LIMIT);
   const shownEvents = events.slice(0, EVENT_PREVIEW_LIMIT);
   return (
     <div className="task-detail">
-      <section aria-label="步骤时间线">
-        <h4>步骤时间线（展示 {shownSteps.length} 条／该任务范围内 {steps.length} 条）</h4>
+      <section aria-label={t(locale, "aria_step_timeline")}>
+        <h4>
+          {t(locale, "task_timeline", {
+            shown: shownSteps.length,
+            total: steps.length,
+          })}
+        </h4>
         {shownSteps.length === 0 ? (
-          <p className="panel-state">范围内无该任务的步骤记录。</p>
+          <p className="panel-state">{t(locale, "no_steps")}</p>
         ) : (
           <table className="detail-table">
             <thead>
               <tr>
-                <th>步骤</th>
-                <th>尝试</th>
-                <th>开始</th>
-                <th>耗时 ms</th>
-                <th>状态</th>
+                <th>{t(locale, "th_step")}</th>
+                <th>{t(locale, "th_attempt")}</th>
+                <th>{t(locale, "th_start")}</th>
+                <th>{t(locale, "th_duration")}</th>
+                <th>{t(locale, "th_status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -312,13 +367,15 @@ function TaskDetail({ view, taskUid }: { view: ReadyView; taskUid: string }) {
           </table>
         )}
       </section>
-      <section aria-label="事件预览">
+      <section aria-label={t(locale, "aria_events_preview")}>
         <h4>
-          事件预览（最新优先；展示 {shownEvents.length} 条／该任务范围内{" "}
-          {events.length} 条）
+          {t(locale, "events_preview", {
+            shown: shownEvents.length,
+            total: events.length,
+          })}
         </h4>
         {shownEvents.length === 0 ? (
-          <p className="panel-state">范围内无该任务的事件。</p>
+          <p className="panel-state">{t(locale, "no_events")}</p>
         ) : (
           <ul className="panel-detail-list">
             {shownEvents.map((row) => (
@@ -347,36 +404,43 @@ export function TaskAuditDetailPanel({
   view,
   expandedTaskIds,
   onToggleTask,
+  locale,
 }: {
   definition: PanelDefinition;
   status: PanelStatus;
   view: ReadyView | null;
   expandedTaskIds: readonly string[];
   onToggleTask: (taskUid: string) => void;
+  locale: Locale;
 }) {
   const tasks = view === null ? [] : taskRowsOf(view);
   const shown = tasks.slice(0, TASK_PREVIEW_LIMIT);
   const totals = view === null ? {} : familyTotals(view);
   const total = totals["task"];
   return (
-    <PanelFrame definition={definition} status={status}>
+    <PanelFrame definition={definition} status={status} locale={locale}>
       {status.kind === "ready" && view !== null && (
         <>
           <p className="panel-detail-count">
-            任务摘要：展示 {shown.length} 条／范围内总{" "}
-            {total === undefined ? `${tasks.length}（已加载）` : total} 条
-            {view.rowsTruncated && "（数据集过大仅加载前若干页）"}
+            {t(locale, "task_summary", {
+              shown: shown.length,
+              total:
+                total === undefined
+                  ? `${tasks.length}${t(locale, "loaded_suffix")}`
+                  : total,
+            })}
+            {view.rowsTruncated && t(locale, "truncated_short")}
           </p>
           {shown.length === 0 ? (
-            <p className="panel-state">{definition.insufficient_data_zh}</p>
+            <p className="panel-state">{locale === "en" ? (definition.insufficient_data_en ?? definition.insufficient_data_zh) : definition.insufficient_data_zh}</p>
           ) : (
             <table className="detail-table">
               <thead>
                 <tr>
-                  <th>任务</th>
-                  <th>状态</th>
+                  <th>{t(locale, "th_task")}</th>
+                  <th>{t(locale, "th_status")}</th>
                   <th>worktree</th>
-                  <th>角色</th>
+                  <th>{t(locale, "th_role")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -390,6 +454,7 @@ export function TaskAuditDetailPanel({
                       view={view}
                       expanded={expanded}
                       onToggle={() => onToggleTask(taskUid)}
+                      locale={locale}
                     />
                   );
                 })}
@@ -407,11 +472,13 @@ function TaskRow({
   view,
   expanded,
   onToggle,
+  locale,
 }: {
   row: DatasetRow;
   view: ReadyView;
   expanded: boolean;
   onToggle: () => void;
+  locale: Locale;
 }) {
   return (
     <>
@@ -433,7 +500,7 @@ function TaskRow({
       {expanded && (
         <tr className="task-detail-row">
           <td colSpan={4}>
-            <TaskDetail view={view} taskUid={row.record_id} />
+            <TaskDetail view={view} taskUid={row.record_id} locale={locale} />
           </td>
         </tr>
       )}

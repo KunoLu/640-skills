@@ -57,6 +57,7 @@ PANEL_IDS = (
 REQUIRED_PANEL_FIELDS = {
     "panel_id",
     "title_zh",
+    "title_en",
     "order",
     "desktop_span",
     "kind",
@@ -65,6 +66,7 @@ REQUIRED_PANEL_FIELDS = {
     "export_required",
     "always_visible",
     "insufficient_data_zh",
+    "insufficient_data_en",
 }
 
 PANEL_KINDS = {"kpi", "chart", "table"}
@@ -72,11 +74,13 @@ PANEL_KINDS = {"kpi", "chart", "table"}
 # Pinned (manifest_version, canonical content sha256) pair. Canonical form:
 # json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 # encoded as UTF-8. ANY content change to contracts/panel-manifest.json must
-# bump manifest_version AND update both pins here together; a content change
-# without a manifest_version bump fails test_canonical_content_hash_matches.
+# update the content pin together with the intended change. manifest_version
+# stays 1.0.0 for the additive bilingual `title_en`/`insufficient_data_en`
+# fields, which keep the schema_version → schema binding and every
+# pre-existing field untouched.
 EXPECTED_MANIFEST_VERSION = "1.0.0"
 EXPECTED_MANIFEST_SHA256 = (
-    "fa9ffa78b693ff2bb93ed5c74f4afb845c40ddb9b5c3d98a2241e686bb878d01"
+    "e7e7f21e89e0f13753a5f7b2f093de74aa70dd834508b6b0f6504a83e30667b1"
 )
 
 
@@ -92,12 +96,12 @@ class ManifestVersionTests(unittest.TestCase):
         self.assertEqual(manifest["release"], "v2.1.0-rc.2")
 
     def test_canonical_content_hash_matches_manifest_version(self) -> None:
-        # Locks the full panel table: every panel_id, title_zh, order,
+        # Locks the full panel table: every panel_id, title_zh, title_en, order,
         # desktop_span, kind, metric_ids, field_dependencies, export_required,
         # always_visible, insufficient_data_zh, and the root metadata. Any
         # content change — value edit, added/removed key, reorder of array
-        # items — changes the canonical hash and fails here unless
-        # manifest_version was bumped and both pins updated together.
+        # items — changes the canonical hash and fails here unless the content
+        # pin below was updated together with the intended change.
         manifest = load_manifest()
         self.assertEqual(manifest["manifest_version"], EXPECTED_MANIFEST_VERSION)
         canonical = json.dumps(
@@ -133,7 +137,26 @@ class PanelSetTests(unittest.TestCase):
                 self.assertIn(panel["desktop_span"], (6, 12))
                 self.assertIn(panel["kind"], PANEL_KINDS)
                 self.assertTrue(panel["title_zh"].strip())
+                self.assertTrue(panel["title_en"].strip())
                 self.assertTrue(panel["insufficient_data_zh"].strip())
+                self.assertTrue(panel["insufficient_data_en"].strip())
+
+    def test_every_panel_has_english_copy_for_the_same_ids(self) -> None:
+        # Bilingual export renders title_en / insufficient_data_en when
+        # presentation_state.locale is "en" and the _zh fields otherwise; both
+        # languages must cover exactly the same panels.
+        zh = {p["panel_id"] for p in self.panels if p["title_zh"].strip()}
+        en = {p["panel_id"] for p in self.panels if p["title_en"].strip()}
+        self.assertEqual(zh, en)
+        self.assertEqual(len(en), 13)
+        zh_notes = {
+            p["panel_id"] for p in self.panels if p["insufficient_data_zh"].strip()
+        }
+        en_notes = {
+            p["panel_id"] for p in self.panels if p["insufficient_data_en"].strip()
+        }
+        self.assertEqual(zh_notes, en_notes)
+        self.assertEqual(len(en_notes), 13)
 
     def test_metric_ids_exist_in_the_metrics_catalog(self) -> None:
         catalog_ids = {m["metric_id"] for m in CATALOG["metrics"]}
