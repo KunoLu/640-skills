@@ -9,7 +9,7 @@ const KEYS = [
   "renderer_checking", "warning_prefix", "aria_custom_range", "custom_start",
   "custom_end", "custom_tz", "apply", "aria_filters", "filter_no_values",
   "aria_active_filters", "chip_remove_title", "watermark_unknown", "watermark",
-  "updating", "current_scope", "refresh_failed", "load_failed", "retry",
+  "updating", "live_badge", "current_scope", "refresh_failed", "load_failed", "retry",
   "error_unpaired", "footer_export_note", "footer_rows_note",
   "locale_switch_label", "locale_en", "locale_zh",
   "unsupported", "detail_collapse", "detail_show", "query_failed",
@@ -38,11 +38,18 @@ const KEYS = [
 ] as const;
 
 test("every key translates in both locales and interpolates", () => {
+  const vars = {
+    warning: "w", message: "m", deps: "d", error: "e", family: "f",
+    asOf: "a", snapshotId: "s", watermarkSeq: "0", scope: "sc",
+    totalRows: 9, total: 8, shown: 7, count: 6, warnings: "ws",
+    value: "v", seq: "1", from: "f0", to: "t0", timezone: "tz",
+    granularity: "g", text: "x", time: "12:34",
+  } as const;
   for (const key of KEYS) {
     for (const locale of ["en", "zh"] as const) {
-      const text = t(locale, key, { warning: "w", message: "m", deps: "d" });
+      const text = t(locale, key, vars);
       assert.ok(typeof text === "string" && text.length > 0, `${locale}.${key}`);
-      assert.ok(!text.includes("{warning}"), `${locale}.${key} interpolation`);
+      assert.ok(!/\{[a-zA-Z]+\}/.test(text), `${locale}.${key} leftover placeholder`);
     }
   }
 });
@@ -57,6 +64,23 @@ test("zh stays byte-identical to the legacy UI strings", () => {
   assert.equal(
     t("zh", "family_rows", { family: "任务", shown: 3, total: 20 }),
     "任务：展示 3 条／范围内总 20 条",
+  );
+  // Multi-line legacy JSX folded to a single space at the break; pin the
+  // exact legacy render, including the folded space.
+  assert.equal(
+    t("zh", "footer_export_note"),
+    "全页报告导出包含所有统计 Panel、其图表／表格，以及当前展开的详情；CSV " +
+      "包含筛选范围内全部安全结构化记录，不受预览行数限制。",
+  );
+  assert.equal(
+    t("zh", "footer_rows_note", { totalRows: 42 }),
+    "注意：本快照数据集共 42 行，页面仅加载前若干页，行预览 " +
+      "基于已加载部分；统计指标与 Panel 数值不受影响（服务端全量计算）。",
+  );
+  assert.equal(
+    t("zh", "error_unpaired"),
+    "未配对：本页须经 sbtd-runtime serve 自动打开的配对链接访问" +
+      "（ticket 一次性且短时有效；过期请重启 serve）",
   );
 });
 

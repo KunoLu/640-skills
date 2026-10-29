@@ -95,7 +95,7 @@ export function App() {
   const [expandedTasks, setExpandedTasks] = useState<string[]>([]);
 
   const [capabilities, setCapabilities] = useState<ExportCapabilities | null>(null);
-  const [capabilityError, setCapabilityError] = useState("");
+  const [capabilityError, setCapabilityError] = useState<unknown>(null);
   const [exportState, setExportState] = useState<ExportState | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportLabel, setExportLabel] = useState("");
@@ -108,10 +108,10 @@ export function App() {
     const controller = new AbortController();
     getCapabilities(controller.signal).then(
       value => { if (!controller.signal.aborted) setCapabilities(value); },
-      error => { if (!controller.signal.aborted) setCapabilityError(exportErrorMessage(error, locale)); },
+      error => { if (!controller.signal.aborted) setCapabilityError(error); },
     );
     return () => controller.abort();
-  }, [hasView, locale]);
+  }, [hasView]);
 
   useEffect(() => () => {
     exportRef.current?.stop();
@@ -222,7 +222,7 @@ export function App() {
   const unavailableReason = (format: ExportFormat) => {
     if (format === "html" || format === "csv") return "";
     const capability = capabilities?.exports[format];
-    return capability?.available ? "" : capability?.reason || capabilityError || t(locale, "renderer_checking");
+    return capability?.available ? "" : capability?.reason || (capabilityError ? exportErrorMessage(capabilityError, locale) : "") || t(locale, "renderer_checking");
   };
 
   const startExport = async (format: ExportFormat) => {
@@ -357,7 +357,7 @@ export function App() {
                 <span className="live-dot" aria-hidden="true" />
                 {model.updating
                   ? t(locale, "updating")
-                  : `Live · ${view!.snapshot.as_of.slice(11, 16)}`}
+                  : t(locale, "live_badge", { time: view!.snapshot.as_of.slice(11, 16) })}
               </span>
             )}
             <button type="button" onClick={reload} disabled={model.updating}>

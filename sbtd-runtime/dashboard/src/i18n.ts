@@ -52,6 +52,7 @@ const zh = {
   watermark:
     "数据水位：{asOf}（快照 {snapshotId}，watermark_seq {watermarkSeq}）",
   updating: "正在更新…",
+  live_badge: "实时 · {time}",
   current_scope: "当前范围：{scope}",
   refresh_failed: "刷新失败：{error}（仍显示上一份已完成快照视图）",
   load_failed: "加载失败：{error}",
@@ -63,7 +64,7 @@ const zh = {
     "全页报告导出包含所有统计 Panel、其图表／表格，以及当前展开的详情；CSV " +
     "包含筛选范围内全部安全结构化记录，不受预览行数限制。",
   footer_rows_note:
-    "注意：本快照数据集共 {totalRows} 行，页面仅加载前若干页，行预览" +
+    "注意：本快照数据集共 {totalRows} 行，页面仅加载前若干页，行预览 " +
     "基于已加载部分；统计指标与 Panel 数值不受影响（服务端全量计算）。",
   locale_switch_label: "语言",
   locale_en: "EN",
@@ -197,6 +198,7 @@ const en: Record<StringKey, string> = {
   watermark:
     "Data watermark: {asOf} (snapshot {snapshotId}, watermark_seq {watermarkSeq})",
   updating: "Updating…",
+  live_badge: "Live · {time}",
   current_scope: "Current scope: {scope}",
   refresh_failed: "Refresh failed: {error} (showing the last completed snapshot)",
   load_failed: "Load failed: {error}",
