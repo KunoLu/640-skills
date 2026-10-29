@@ -4,11 +4,11 @@ id: dashboard-ui-i18n-2026-10
 workflow_mode: strict
 mode_source: user
 mode_note: 用户 2026-10-29 明确 strict mode
-status: "checking"
-branch: sbtd/strict-dashboard-ui-alignment
+status: "done"
+branch: "main"
 created_at: '2026-10-29T10:18:06.335145+08:00'
-updated_at: "2026-10-29T11:33:52.790207+08:00"
-completed_at: null
+updated_at: "2026-10-29T11:58:00.918260+08:00"
+completed_at: "2026-10-29T11:58:00.918260+08:00"
 ---
 # Dashboard UI 对齐 omp stats + 双语 i18n
 
@@ -34,3 +34,5 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-10-29T10:18:13.053316+08:00 | planned | in-progress | 开始 dashboard UI 对齐与 i18n | 方案经用户确认（导出跟随 UI 语言；导入真实 QA 数据）；before 截图与 omp 计算样式已取证 |
 | 2026-10-29T11:33:52.790207+08:00 | in-progress | checking | 实现、截图矩阵与两轮 review 修复完成，进入提交流程 | dashboard 38/38 + runtime 447/448（1 个 main 既有 host 失败）+ 根 suite 162 与基线计数一致；截图矩阵 1440/2560/390×明暗×EN/ZH 归档 reports/screenshots；impeccable detect 零发现；独立 review 1P2+4P3 全部修复复验 |
+| 2026-10-29T11:57:47.547528+08:00 | checking | checking | Explicit branch rebinding from "sbtd/strict-dashboard-ui-alignment" to "main": PR #200 已 squash 合入 main（1eeede0），开发分支按授权删除；记录落 main | gh pr view 200 MERGED；CI run 40813321719 attempt 1 全绿；本地/远程分支已删 |
+| 2026-10-29T11:58:00.918260+08:00 | checking | done | Dashboard UI 对齐 + 双语 i18n 已合入 main | PR #200 tip 9a2d3a8 CI 40813321719 attempt 1 全绿（dashboard-artifacts、runtime-e2e-macos/windows 通过）；squash 1eeede0 |
