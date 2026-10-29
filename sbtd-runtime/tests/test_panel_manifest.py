@@ -45,8 +45,8 @@ PANEL_IDS = (
     "mode-decisions",
     "step-performance",
     "blockers",
-    "gate-matrix",
     "component-usage",
+    "gate-matrix",
     "validation-evidence",
     "host-model-usage",
     "project-actor-summary",
@@ -74,13 +74,13 @@ PANEL_KINDS = {"kpi", "chart", "table"}
 # Pinned (manifest_version, canonical content sha256) pair. Canonical form:
 # json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 # encoded as UTF-8. ANY content change to contracts/panel-manifest.json must
-# update the content pin together with the intended change. manifest_version
-# stays 1.0.0 for the additive bilingual `title_en`/`insufficient_data_en`
-# fields, which keep the schema_version → schema binding and every
-# pre-existing field untouched.
-EXPECTED_MANIFEST_VERSION = "1.0.0"
+# update the content pin together with the intended change. Version history:
+# 1.0.0 added the bilingual title_en/insufficient_data_en fields without
+# touching pre-existing fields; 1.1.0 swaps the gate-matrix/component-usage
+# order so two half-width panels share one row (layout-only, no field change).
+EXPECTED_MANIFEST_VERSION = "1.1.0"
 EXPECTED_MANIFEST_SHA256 = (
-    "e7e7f21e89e0f13753a5f7b2f093de74aa70dd834508b6b0f6504a83e30667b1"
+    "43f94e60bfebfd5dc2e90a1dae9b34c0f4ac5771193b1d6a7b365be0234e1584"
 )
 
 
@@ -92,7 +92,7 @@ class ManifestVersionTests(unittest.TestCase):
     def test_schema_version_is_pinned(self) -> None:
         manifest = load_manifest()
         self.assertEqual(manifest["schema_version"], "1.0")
-        self.assertEqual(manifest["manifest_version"], "1.0.0")
+        self.assertEqual(manifest["manifest_version"], EXPECTED_MANIFEST_VERSION)
         self.assertEqual(manifest["release"], "v2.1.0-rc.2")
 
     def test_canonical_content_hash_matches_manifest_version(self) -> None:

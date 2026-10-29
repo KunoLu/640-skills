@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "manifest_version": "1.0.0",
+  "manifest_version": "1.1.0",
   "release": "v2.1.0-rc.2",
   "source": "PRD v0.2 §12.4 Panel 明细与字段依赖；锁定决定 D14（grill-r1.md）",
   "panels": [
@@ -19,7 +19,11 @@
         "gates.evidence_coverage",
         "validations.run_pass_rate"
       ],
-      "field_dependencies": ["gate evidence", "coverage", "样本规模"],
+      "field_dependencies": [
+        "gate evidence",
+        "coverage",
+        "样本规模"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "展示 unknown／partial 与原因",
@@ -37,7 +41,11 @@
         "tasks.completion_events",
         "tasks.reopened"
       ],
-      "field_dependencies": ["task_uid", "状态历史", "as_of"],
+      "field_dependencies": [
+        "task_uid",
+        "状态历史",
+        "as_of"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "明确区分最新观察与历史范围末",
@@ -55,7 +63,11 @@
         "tasks.completion_events",
         "components.invocations"
       ],
-      "field_dependencies": ["occurred_at", "bucket", "source health"],
+      "field_dependencies": [
+        "occurred_at",
+        "bucket",
+        "source health"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "缺口桶用断线／阴影，不伪造 0",
@@ -68,8 +80,15 @@
       "order": 4,
       "desktop_span": 6,
       "kind": "chart",
-      "metric_ids": ["modes.distribution", "modes.recommendation_response"],
-      "field_dependencies": ["mode_at_event", "mode_source", "decision events"],
+      "metric_ids": [
+        "modes.distribution",
+        "modes.recommendation_response"
+      ],
+      "field_dependencies": [
+        "mode_at_event",
+        "mode_source",
+        "decision events"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "未绑定模式单列；unsupported 指标如实标注不支持",
@@ -88,7 +107,11 @@
         "steps.retry_count",
         "duration.step_p50/p95"
       ],
-      "field_dependencies": ["step_definition", "attempt", "duration_basis"],
+      "field_dependencies": [
+        "step_definition",
+        "attempt",
+        "duration_basis"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "样本不足时不给有误导性的分位数",
@@ -101,40 +124,62 @@
       "order": 6,
       "desktop_span": 6,
       "kind": "chart",
-      "metric_ids": ["runs.interrupted", "duration.blocked_ms"],
-      "field_dependencies": ["interval", "reason_code", "closure_quality"],
+      "metric_ids": [
+        "runs.interrupted",
+        "duration.blocked_ms"
+      ],
+      "field_dependencies": [
+        "interval",
+        "reason_code",
+        "closure_quality"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "未闭合区间标示仍在观察／未知",
       "insufficient_data_en": "Unclosed intervals are marked still-observed/unknown"
     },
     {
-      "panel_id": "gate-matrix",
-      "title_zh": "Gate 矩阵",
-      "title_en": "Gate matrix",
-      "order": 7,
-      "desktop_span": 12,
-      "kind": "table",
-      "metric_ids": ["gates.required", "gates.evidence_coverage", "gates.rework"],
-      "field_dependencies": ["GateEvaluation", "scope_revision"],
-      "export_required": true,
-      "always_visible": false,
-      "insufficient_data_zh": "declared-only 与 validated 明显区分",
-      "insufficient_data_en": "Distinguish declared-only from validated clearly"
-    },
-    {
       "panel_id": "component-usage",
       "title_zh": "组件使用",
       "title_en": "Component usage",
-      "order": 8,
+      "order": 7,
       "desktop_span": 6,
       "kind": "table",
-      "metric_ids": ["components.invocations", "components.failure_rate", "components.loaded"],
-      "field_dependencies": ["component_kind", "invocation", "version"],
+      "metric_ids": [
+        "components.invocations",
+        "components.failure_rate",
+        "components.loaded"
+      ],
+      "field_dependencies": [
+        "component_kind",
+        "invocation",
+        "version"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "安装存在不算调用",
       "insufficient_data_en": "Presence of an installation is not an invocation"
+    },
+    {
+      "panel_id": "gate-matrix",
+      "title_zh": "Gate 矩阵",
+      "title_en": "Gate matrix",
+      "order": 8,
+      "desktop_span": 12,
+      "kind": "table",
+      "metric_ids": [
+        "gates.required",
+        "gates.evidence_coverage",
+        "gates.rework"
+      ],
+      "field_dependencies": [
+        "GateEvaluation",
+        "scope_revision"
+      ],
+      "export_required": true,
+      "always_visible": false,
+      "insufficient_data_zh": "declared-only 与 validated 明显区分",
+      "insufficient_data_en": "Distinguish declared-only from validated clearly"
     },
     {
       "panel_id": "validation-evidence",
@@ -150,7 +195,11 @@
         "tests.final_result_distribution",
         "evidence.stale_count"
       ],
-      "field_dependencies": ["validation", "artifact", "source revision"],
+      "field_dependencies": [
+        "validation",
+        "artifact",
+        "source revision"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "HTML 存在或诊断输出不能自动通过",
@@ -163,8 +212,16 @@
       "order": 10,
       "desktop_span": 6,
       "kind": "chart",
-      "metric_ids": ["usage.requests", "usage.tokens", "usage.cost_reported"],
-      "field_dependencies": ["request_id", "raw usage mapping", "billing_basis"],
+      "metric_ids": [
+        "usage.requests",
+        "usage.tokens",
+        "usage.cost_reported"
+      ],
+      "field_dependencies": [
+        "request_id",
+        "raw usage mapping",
+        "billing_basis"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "未提供 usage 显示不支持／未知，不填 0 也不显示成免费",
@@ -178,7 +235,11 @@
       "desktop_span": 6,
       "kind": "table",
       "metric_ids": [],
-      "field_dependencies": ["IDs", "actor binding", "leaf task scope"],
+      "field_dependencies": [
+        "IDs",
+        "actor binding",
+        "leaf task scope"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "本机未绑定主体独立行",
@@ -192,7 +253,9 @@
       "desktop_span": 12,
       "kind": "table",
       "metric_ids": [],
-      "field_dependencies": ["task/run/step/event 关联"],
+      "field_dependencies": [
+        "task/run/step/event 关联"
+      ],
       "export_required": true,
       "always_visible": false,
       "insufficient_data_zh": "标记当前预览行数和完整数据总量",
@@ -205,8 +268,14 @@
       "order": 13,
       "desktop_span": 12,
       "kind": "table",
-      "metric_ids": ["audit.unlinked_count", "audit.gap_intervals"],
-      "field_dependencies": ["CollectionHealth", "DatasetManifest"],
+      "metric_ids": [
+        "audit.unlinked_count",
+        "audit.gap_intervals"
+      ],
+      "field_dependencies": [
+        "CollectionHealth",
+        "DatasetManifest"
+      ],
       "export_required": true,
       "always_visible": true,
       "insufficient_data_zh": "必须始终存在，不能随导出隐藏，不以 0 或绿灯冒充",

@@ -2,6 +2,7 @@
 
 <!-- sbtd-task-index:start -->
 - [P3-03](P3-03/task.md)
+- [dashboard-polish-2026-10](dashboard-polish-2026-10/task.md)
 - [dashboard-ui-i18n-2026-10](dashboard-ui-i18n-2026-10/task.md)
 - [external-skills-stable-upgrade-2026-10](external-skills-stable-upgrade-2026-10/task.md)
 - [graft-pin-0.21.1](graft-pin-0.21.1/task.md)

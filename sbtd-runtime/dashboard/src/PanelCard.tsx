@@ -209,19 +209,21 @@ export function PanelFrame({
     >
       <header className="panel-header">
         <h2>{title}</h2>
-        {onToggleDetail !== undefined && (
-          <button
-            type="button"
-            className="panel-detail-toggle"
-            aria-expanded={detailExpanded === true}
-            onClick={onToggleDetail}
-          >
-            {detailExpanded === true
-              ? t(locale, "detail_collapse")
-              : t(locale, "detail_show")}
-          </button>
-        )}
-        <span className="panel-id">{definition.panel_id}</span>
+        <div className="panel-meta">
+          {onToggleDetail !== undefined && (
+            <button
+              type="button"
+              className="panel-detail-toggle"
+              aria-expanded={detailExpanded === true}
+              onClick={onToggleDetail}
+            >
+              {detailExpanded === true
+                ? t(locale, "detail_collapse")
+                : t(locale, "detail_show")}
+            </button>
+          )}
+          <span className="panel-id">{definition.panel_id}</span>
+        </div>
       </header>
       {status.kind === "loading" && (
         <p className="panel-state" role="status">
