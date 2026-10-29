@@ -182,6 +182,61 @@ class ExportRenderTests(unittest.TestCase):
         self.assertNotIn("password", json.dumps(meta))
         self.assertNotIn("/home", json.dumps(meta))
 
+    def test_english_locale_renders_english_copy(self) -> None:
+        state = default_presentation(self.manifest)
+        state["locale"] = "en"
+        payload, _ = self.renderer(self.snapshot, "html", state, lambda: False)
+        html = payload.decode("utf-8")
+        self.assertIn('lang="en"', html)
+        self.assertIn("<h1>SBTD report</h1>", html)
+        self.assertIn("Range:", html)
+        self.assertIn("Data watermark:", html)
+        self.assertIn("Data quality:", html)
+        for panel in self.manifest["panels"]:
+            self.assertIn(panel["title_en"], html)
+            self.assertNotIn(panel["title_zh"], html)
+        self.assertNotIn("展示", html)
+        self.assertNotIn("范围内", html)
+        self.assertNotIn("数据水位", html)
+
+    def test_missing_or_invalid_locale_is_byte_identical_to_zh_default(self) -> None:
+        baseline, _ = self.renderer(
+            self.snapshot, "html", default_presentation(self.manifest), lambda: False
+        )
+        for locale in (None, "", "EN", "zh-CN", "fr", " english", 7):
+            with self.subTest(locale=locale):
+                state = default_presentation(self.manifest)
+                if locale is None:
+                    state.pop("locale")
+                else:
+                    state["locale"] = locale
+                payload, _ = self.renderer(
+                    self.snapshot, "html", state, lambda: False
+                )
+                self.assertEqual(payload, baseline)
+        absent = default_presentation(self.manifest)
+        del absent["locale"]
+        self.assertEqual(
+            self.renderer(self.snapshot, "html", absent, lambda: False)[0],
+            baseline,
+        )
+        localized = default_presentation(self.manifest)
+        localized["locale"] = "en"
+        self.assertNotEqual(
+            self.renderer(self.snapshot, "html", localized, lambda: False)[0],
+            baseline,
+        )
+
+    def test_locale_never_changes_csv_payload(self) -> None:
+        zh_csv, _ = self.renderer(
+            self.snapshot, "csv", default_presentation(self.manifest), lambda: False
+        )
+        state = default_presentation(self.manifest)
+        state["locale"] = "en"
+        en_csv, _ = self.renderer(self.snapshot, "csv", state, lambda: False)
+        self.assertEqual(zh_csv, en_csv)
+        self.assertEqual(zh_csv, serialize_csv(self.snapshot))
+
     def test_presentation_order_width_legend_sort_and_preview(self) -> None:
         order = list(reversed(default_presentation(self.manifest)["panel_order"]))
         state = default_presentation(self.manifest)

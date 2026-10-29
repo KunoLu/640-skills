@@ -20,11 +20,18 @@ import {
   cleanFilters,
   deriveFilterOptions,
   FILTER_KEYS,
-  FILTER_LABELS_ZH,
+  filterLabel,
   summarizeSnapshotScope,
   type FilterKey,
   type FilterSelection,
 } from "./filters";
+import {
+  initialLocale,
+  persistLocale,
+  t,
+  type Locale,
+  type StringKey,
+} from "./i18n.ts";
 import {
   applyFailure,
   applySuccess,
@@ -60,9 +67,9 @@ import {
 type Theme = "dark" | "light";
 
 const POLL_INTERVAL_MS = 30_000;
-const EXPORT_FORMATS = [
-  ["html", "HTML 网页"], ["jpeg", "JPEG 长图"], ["pdf", "PDF 文档"], ["csv", "CSV 数据"],
-] as const;
+const EXPORT_FORMATS: readonly (readonly [ExportFormat, StringKey])[] = [
+  ["html", "export_format_html"], ["jpeg", "export_format_jpeg"], ["pdf", "export_format_pdf"], ["csv", "export_format_csv"],
+];
 
 function systemTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: light)").matches
@@ -75,6 +82,7 @@ export function App() {
     const saved = localStorage.getItem("sbtd.theme");
     return saved === "light" || saved === "dark" ? saved : systemTheme();
   });
+  const [locale, setLocale] = useState<Locale>(initialLocale);
   const [model, setModel] = useState<PageModel>(INITIAL_MODEL);
   const [selection, setSelection] = useState<TimeSelection>(loadSelection);
   const [filters, setFilters] = useState<FilterSelection>({});
@@ -100,10 +108,10 @@ export function App() {
     const controller = new AbortController();
     getCapabilities(controller.signal).then(
       value => { if (!controller.signal.aborted) setCapabilities(value); },
-      error => { if (!controller.signal.aborted) setCapabilityError(exportErrorMessage(error)); },
+      error => { if (!controller.signal.aborted) setCapabilityError(exportErrorMessage(error, locale)); },
     );
     return () => controller.abort();
-  }, [hasView]);
+  }, [hasView, locale]);
 
   useEffect(() => () => {
     exportRef.current?.stop();
@@ -115,6 +123,9 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("sbtd.theme", theme);
   }, [theme]);
+  useEffect(() => {
+    persistLocale(locale);
+  }, [locale]);
 
   /**
    * One load = one query roundtrip = one snapshot_id. Metric values, the
@@ -128,7 +139,7 @@ export function App() {
     try {
       // TimeSelection is validated before it is stored; buildScope still
       // throws on a corrupt restored selection — never a silent 24h.
-      const scope = buildScope(sel, cleanFilters(selFilters), ALL_METRIC_IDS);
+      const scope = buildScope(sel, cleanFilters(selFilters), ALL_METRIC_IDS, new Date(), locale);
       const stats = await queryStatistics(scope);
       const snapshotId = stats.snapshot_id;
       if (typeof snapshotId !== "string" || snapshotId.length === 0) {
@@ -151,7 +162,7 @@ export function App() {
     } catch (error) {
       setModel((current) => applyFailure(current, String(error)));
     }
-  }, []);
+  }, [locale]);
 
   // Latest selection/filters for the poll tick; the interval itself never
   // re-arms, so a filter change cannot cause overlapping poll loops.
@@ -180,7 +191,7 @@ export function App() {
     const ticket = readTicketFromFragment();
     if (ticket !== null) {
       clearTicketFromAddressBar();
-      pairWithTicket(ticket)
+      pairWithTicket(ticket, locale)
         .then(() =>
           loadRef.current(paramsRef.current.selection, paramsRef.current.filters),
         )
@@ -191,11 +202,7 @@ export function App() {
     }
     if (readSession() === null) {
       setModel((current) =>
-        applyFailure(
-          current,
-          "未配对：本页须经 sbtd-runtime serve 自动打开的配对链接访问" +
-            "（ticket 一次性且短时有效；过期请重启 serve）",
-        ),
+        applyFailure(current, t(locale, "error_unpaired")),
       );
       return;
     }
@@ -207,14 +214,15 @@ export function App() {
     return new ReportDocument(model.view.snapshot, {
       ...DEFAULT_PRESENTATION_STATE,
       theme,
+      locale,
       expanded_detail_ids: [...Object.keys(expandedPanels), ...expandedTasks],
     });
-  }, [model.view, theme, expandedPanels, expandedTasks]);
+  }, [model.view, theme, locale, expandedPanels, expandedTasks]);
 
   const unavailableReason = (format: ExportFormat) => {
     if (format === "html" || format === "csv") return "";
     const capability = capabilities?.exports[format];
-    return capability?.available ? "" : capability?.reason || capabilityError || "正在检查 renderer 可用性";
+    return capability?.available ? "" : capability?.reason || capabilityError || t(locale, "renderer_checking");
   };
 
   const startExport = async (format: ExportFormat) => {
@@ -241,7 +249,7 @@ export function App() {
         }
       }
     } catch (error) {
-      setExportState(current => ({ status: "failed", message: exportErrorMessage(error), warnings: current?.warnings ?? [] }));
+      setExportState(current => ({ status: "failed", message: exportErrorMessage(error, locale), warnings: current?.warnings ?? [] }));
     }
     setExportBusy(false);
   };
@@ -253,11 +261,11 @@ export function App() {
     try {
       await job.cancel();
       if (exportRef.current === job) setExportState(current => ({
-        status: "cancelled", message: "导出已取消", warnings: current?.warnings ?? [],
+        status: "cancelled", message: t(locale, "export_cancelled"), warnings: current?.warnings ?? [],
       }));
     } catch (error) {
       if (exportRef.current === job) setExportState(current => ({
-        status: "failed", message: exportErrorMessage(error), warnings: current?.warnings ?? [],
+        status: "failed", message: exportErrorMessage(error, locale), warnings: current?.warnings ?? [],
       }));
     }
     if (exportRef.current === job) setExportBusy(false);
@@ -275,7 +283,7 @@ export function App() {
   const applyCustom = () => {
     try {
       // Validation only — throws TimeRangeError, never falls back to 24h.
-      validateCustomRange(customFrom, customTo, customTz);
+      validateCustomRange(customFrom, customTo, customTz, new Date(), locale);
     } catch (error) {
       setCustomError(
         error instanceof TimeRangeError ? error.message : String(error),
@@ -341,80 +349,109 @@ export function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <h1>SBTD Runtime Dashboard</h1>
-        <div className="controls">
-          <button type="button" onClick={reload} disabled={model.updating}>
-            刷新来源
-          </button>
-          <button
-            type="button"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            {theme === "dark" ? "浅色" : "深色"}主题
-          </button>
-          <div className="segmented" role="group" aria-label="时间范围">
-            {PRESET_IDS.map((preset) => (
+        <div className="topbar-main">
+          <h1 className="brand">SBTD<span className="brand-sep">/</span>Runtime Dashboard</h1>
+          <div className="controls">
+            {(view !== null || model.updating) && (
+              <span className="live-badge" role="status">
+                <span className="live-dot" aria-hidden="true" />
+                {model.updating
+                  ? t(locale, "updating")
+                  : `Live · ${view!.snapshot.as_of.slice(11, 16)}`}
+              </span>
+            )}
+            <button type="button" onClick={reload} disabled={model.updating}>
+              {t(locale, "refresh")}
+            </button>
+            <div className="segmented" role="group" aria-label={t(locale, "aria_time_range")}>
+              {PRESET_IDS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  className={
+                    selection.kind === "preset" && selection.preset === preset
+                      ? "segment-active"
+                      : undefined
+                  }
+                  aria-pressed={
+                    selection.kind === "preset" && selection.preset === preset
+                  }
+                  onClick={() => selectPreset(preset)}
+                >
+                  {preset}
+                </button>
+              ))}
               <button
-                key={preset}
                 type="button"
                 className={
-                  selection.kind === "preset" && selection.preset === preset
-                    ? "segment-active"
-                    : undefined
+                  selection.kind === "custom" ? "segment-active" : undefined
                 }
-                aria-pressed={
-                  selection.kind === "preset" && selection.preset === preset
-                }
-                onClick={() => selectPreset(preset)}
+                aria-pressed={selection.kind === "custom"}
+                aria-expanded={customOpen}
+                onClick={() => setCustomOpen(!customOpen)}
               >
-                {preset}
+                {t(locale, "custom")}
               </button>
-            ))}
+            </div>
+            <div className="segmented" role="group" aria-label={t(locale, "aria_export")}>
+              {EXPORT_FORMATS.map(([format, labelKey]) => (
+                <button
+                  key={format}
+                  type="button"
+                  disabled={!report || exportBusy || Boolean(unavailableReason(format))}
+                  title={unavailableReason(format) || t(locale, "export_tooltip")}
+                  onClick={() => void startExport(format)}
+                >
+                  {t(locale, labelKey)}
+                </button>
+              ))}
+            </div>
+            {exportRef.current?.id && exportState?.status !== "ready" && exportState?.status !== "cancelled" && (
+              <button type="button" onClick={() => void cancelExport()}
+                disabled={exportRef.current.controller.signal.aborted && exportBusy}>{t(locale, "cancel_export")}</button>
+            )}
             <button
               type="button"
-              className={
-                selection.kind === "custom" ? "segment-active" : undefined
-              }
-              aria-pressed={selection.kind === "custom"}
-              aria-expanded={customOpen}
-              onClick={() => setCustomOpen(!customOpen)}
+             
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
-              自定义
+              {t(locale, theme === "dark" ? "theme_to_light" : "theme_to_dark")}
             </button>
-          </div>
-          <div className="segmented" role="group" aria-label="导出">
-            {EXPORT_FORMATS.map(([format, label]) => (
+            <div className="segmented" role="group" aria-label={t(locale, "locale_switch_label")}>
               <button
-                key={format}
                 type="button"
-                disabled={!report || exportBusy || Boolean(unavailableReason(format))}
-                title={unavailableReason(format) || "导出当前快照，自动刷新不影响在途导出"}
-                onClick={() => void startExport(format)}
+                className={locale === "en" ? "segment-active" : undefined}
+                aria-pressed={locale === "en"}
+                onClick={() => setLocale("en")}
               >
-                {label}
+                {t(locale, "locale_en")}
               </button>
-            ))}
+              <button
+                type="button"
+                className={locale === "zh" ? "segment-active" : undefined}
+                aria-pressed={locale === "zh"}
+                onClick={() => setLocale("zh")}
+              >
+                {t(locale, "locale_zh")}
+              </button>
+            </div>
           </div>
-          {exportRef.current?.id && exportState?.status !== "ready" && exportState?.status !== "cancelled" && (
-            <button type="button" onClick={() => void cancelExport()}
-              disabled={exportRef.current.controller.signal.aborted && exportBusy}>取消导出</button>
-          )}
         </div>
         <div className="export-feedback" role="status" aria-live="polite">
           {(["jpeg", "pdf"] as const).map(format => unavailableReason(format) && (
-            <p className="export-unavailable" key={format}>{format.toUpperCase()}：{unavailableReason(format)}</p>
+            <p className="export-unavailable" key={format}>{format.toUpperCase()}{locale === "zh" ? "：" : ": "}{unavailableReason(format)}</p>
           ))}
           {exportState && <>
             <p className={exportState.status === "failed" ? "export-error" : undefined}>
-              {exportLabel}：{exportState.message}
+              {exportLabel}{locale === "zh" ? "：" : ": "}{exportState.message}
             </p>
-            {exportState.warnings.map(warning => <p className="export-warning" key={warning}>警告：{warning}</p>)}
+            {exportState.warnings.map(warning => <p className="export-warning" key={warning}>{t(locale, "warning_prefix", { warning })}</p>)}
           </>}
         </div>
         {customOpen && (
-          <div className="custom-range" role="group" aria-label="自定义时间范围">
+          <div className="custom-range" role="group" aria-label={t(locale, "aria_custom_range")}>
             <label>
-              开始
+              {t(locale, "custom_start")}
               <input
                 type="text"
                 value={customFrom}
@@ -423,7 +460,7 @@ export function App() {
               />
             </label>
             <label>
-              结束
+              {t(locale, "custom_end")}
               <input
                 type="text"
                 value={customTo}
@@ -432,7 +469,7 @@ export function App() {
               />
             </label>
             <label>
-              时区
+              {t(locale, "custom_tz")}
               <input
                 type="text"
                 value={customTz}
@@ -441,7 +478,7 @@ export function App() {
               />
             </label>
             <button type="button" onClick={applyCustom}>
-              应用
+              {t(locale, "apply")}
             </button>
             {customError !== null && (
               <p className="panel-state panel-state-error" role="alert">
@@ -451,10 +488,10 @@ export function App() {
           </div>
         )}
         {filterOptions !== null && (
-          <div className="filter-bar" aria-label="维度筛选">
+          <div className="filter-bar" aria-label={t(locale, "aria_filters")}>
             {FILTER_KEYS.map((key) => (
               <label key={key} className="filter-field">
-                {FILTER_LABELS_ZH[key]}
+                {filterLabel(locale, key)}
                 <select
                   multiple
                   size={Math.min(Math.max(filterOptions[key].length, 1), 4)}
@@ -470,7 +507,7 @@ export function App() {
                 >
                   {filterOptions[key].length === 0 ? (
                     <option disabled value="">
-                      （范围内无取值）
+                      {t(locale, "filter_no_values")}
                     </option>
                   ) : (
                     filterOptions[key].map((value) => (
@@ -485,7 +522,7 @@ export function App() {
           </div>
         )}
         {activeFilterCount > 0 && (
-          <div className="filter-chips" aria-label="当前筛选">
+          <div className="filter-chips" aria-label={t(locale, "aria_active_filters")}>
             {FILTER_KEYS.flatMap((key) =>
               (filters[key] ?? []).map((value) => (
                 <button
@@ -493,9 +530,9 @@ export function App() {
                   type="button"
                   className="filter-chip"
                   onClick={() => toggleFilterValue(key, value)}
-                  title="点击移除该筛选"
+                  title={t(locale, "chip_remove_title")}
                 >
-                  {FILTER_LABELS_ZH[key]}={value} ✕
+                  {filterLabel(locale, key)}={value} ✕
                 </button>
               )),
             )}
@@ -503,32 +540,36 @@ export function App() {
         )}
         <p className="watermark">
           {view !== null
-            ? `数据水位：${view.snapshot.as_of}（快照 ${view.snapshot.snapshot_id}，watermark_seq ${view.snapshot.watermark_seq}）`
-            : "数据水位：未知（尚未取得快照）"}
+            ? t(locale, "watermark", {
+                asOf: view.snapshot.as_of,
+                snapshotId: view.snapshot.snapshot_id,
+                watermarkSeq: view.snapshot.watermark_seq,
+              })
+            : t(locale, "watermark_unknown")}
           {model.updating && view !== null && (
             <span className="updating-badge" role="status">
-              正在更新…
+              {t(locale, "updating")}
             </span>
           )}
         </p>
         {view !== null && (
           <p className="scope-summary">
-            当前范围：{summarizeSnapshotScope(view.snapshot)}
+            {t(locale, "current_scope", { scope: summarizeSnapshotScope(view.snapshot, locale) })}
           </p>
         )}
         {model.error !== null && view !== null && (
           <p className="panel-state panel-state-error" role="alert">
-            刷新失败：{model.error}（仍显示上一份已完成快照视图）
+            {t(locale, "refresh_failed", { error: model.error })}
             <button type="button" onClick={reload}>
-              重试
+              {t(locale, "retry")}
             </button>
           </p>
         )}
         {model.error !== null && view === null && (
           <p className="panel-state panel-state-error" role="alert">
-            加载失败：{model.error}
+            {t(locale, "load_failed", { error: model.error })}
             <button type="button" onClick={reload}>
-              重试
+              {t(locale, "retry")}
             </button>
           </p>
         )}
@@ -542,6 +583,7 @@ export function App() {
                 definition={definition}
                 status={panelStatus}
                 view={view}
+                locale={locale}
               />
             );
           }
@@ -554,6 +596,7 @@ export function App() {
                 view={view}
                 expandedTaskIds={expandedTasks}
                 onToggleTask={toggleTask}
+                locale={locale}
               />
             );
           }
@@ -567,9 +610,10 @@ export function App() {
               onToggleDetail={
                 hasDetail ? () => togglePanel(definition.panel_id) : undefined
               }
+              locale={locale}
               detail={
                 view !== null && hasDetail ? (
-                  <PanelFamilyDetail panelId={definition.panel_id} view={view} />
+                  <PanelFamilyDetail panelId={definition.panel_id} view={view} locale={locale} />
                 ) : undefined
               }
             />
@@ -577,13 +621,11 @@ export function App() {
         })}
       </main>
       <footer className="page-footer">
-        全页报告导出包含所有统计 Panel、其图表／表格，以及当前展开的详情；CSV
-        包含筛选范围内全部安全结构化记录，不受预览行数限制。
+        {t(locale, "footer_export_note")}
         {view !== null && view.rowsTruncated && (
           <>
             <br />
-            注意：本快照数据集共 {view.totalRows} 行，页面仅加载前若干页，行预览
-            基于已加载部分；统计指标与 Panel 数值不受影响（服务端全量计算）。
+            {t(locale, "footer_rows_note", { totalRows: view.totalRows })}
           </>
         )}
       </footer>

@@ -12,6 +12,7 @@
  */
 
 import type { QueryScope, QueryScopeRange } from "./api";
+import { t, type Locale } from "./i18n.ts";
 
 export const PRESET_IDS = ["1h", "24h", "7d", "30d", "90d", "all"] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
@@ -85,23 +86,24 @@ export function validateCustomRange(
   toRaw: string,
   timezoneRaw: string,
   now: Date = new Date(),
+  locale: Locale = "zh",
 ): QueryScopeRange {
   const timezone = timezoneRaw.trim() || localTimezone();
   if (!isValidTimezone(timezone)) {
     throw new TimeRangeError(
-      `无效时区：${timezoneRaw}（需为 IANA 时区名，如 Asia/Shanghai）`,
+      t(locale, "invalid_timezone", { timezone: timezoneRaw }),
     );
   }
   const from = new Date(fromRaw);
   const to = new Date(toRaw);
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
-    throw new TimeRangeError("起止时间无法解析；请同时给出有效的开始与结束时间");
+    throw new TimeRangeError(t(locale, "range_unparseable"));
   }
   if (!(from.getTime() < to.getTime())) {
-    throw new TimeRangeError("开始时间必须早于结束时间；不会静默回退到 24h");
+    throw new TimeRangeError(t(locale, "range_order"));
   }
   if (from.getTime() > now.getTime()) {
-    throw new TimeRangeError("所选范围完全在未来，范围内不可能有已入库数据");
+    throw new TimeRangeError(t(locale, "range_future"));
   }
   return { from: from.toISOString(), to: to.toISOString(), timezone };
 }
@@ -110,11 +112,18 @@ export function validateCustomRange(
 export function resolveRange(
   selection: TimeSelection,
   now: Date = new Date(),
+  locale: Locale = "zh",
 ): QueryScopeRange {
   if (selection.kind === "preset") {
     return resolvePresetRange(selection.preset, now);
   }
-  return validateCustomRange(selection.from, selection.to, selection.timezone, now);
+  return validateCustomRange(
+    selection.from,
+    selection.to,
+    selection.timezone,
+    now,
+    locale,
+  );
 }
 
 /** Build the full QueryScope for the current selection + dimension filters. */
@@ -123,6 +132,7 @@ export function buildScope(
   filters: Record<string, string[]>,
   metrics: string[],
   now: Date = new Date(),
+  locale: Locale = "zh",
 ): QueryScope {
   const cleanFilters: Record<string, string[]> = {};
   for (const [key, values] of Object.entries(filters)) {
@@ -130,7 +140,7 @@ export function buildScope(
   }
   const scope: QueryScope = {
     schema_version: "1.0",
-    range: resolveRange(selection, now),
+    range: resolveRange(selection, now, locale),
     metrics: [...metrics],
   };
   if (Object.keys(cleanFilters).length > 0) scope.filters = cleanFilters;
@@ -181,7 +191,14 @@ export function describeRange(range: QueryScopeRange): string {
 }
 
 /** Short label for the active selection, used on the toolbar. */
-export function selectionLabel(selection: TimeSelection): string {
+export function selectionLabel(
+  selection: TimeSelection,
+  locale: Locale = "zh",
+): string {
   if (selection.kind === "preset") return selection.preset;
-  return `自定义 ${selection.from} → ${selection.to}（${selection.timezone}）`;
+  return t(locale, "custom_label", {
+    from: selection.from,
+    to: selection.to,
+    timezone: selection.timezone,
+  });
 }

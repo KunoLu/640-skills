@@ -9,6 +9,7 @@
  */
 
 import type { DatasetRow } from "./api";
+import { t, type Locale, type StringKey } from "./i18n.ts";
 
 export const FILTER_KEYS = [
   "project_ids",
@@ -20,14 +21,20 @@ export const FILTER_KEYS = [
 ] as const;
 export type FilterKey = (typeof FILTER_KEYS)[number];
 
-export const FILTER_LABELS_ZH: Record<FilterKey, string> = {
-  project_ids: "项目",
-  actor_ids: "主体",
-  host_kinds: "宿主",
-  workflow_modes: "模式",
-  component_ids: "组件",
-  evidence_levels: "证据等级",
+/** Dictionary key per filter dimension (labels live in i18n.ts). */
+const FILTER_LABEL_KEYS: Record<FilterKey, StringKey> = {
+  project_ids: "filter_project_ids",
+  actor_ids: "filter_actor_ids",
+  host_kinds: "filter_host_kinds",
+  workflow_modes: "filter_workflow_modes",
+  component_ids: "filter_component_ids",
+  evidence_levels: "filter_evidence_levels",
 };
+
+/** Localized label of one filter dimension. */
+export function filterLabel(locale: Locale, key: FilterKey): string {
+  return t(locale, FILTER_LABEL_KEYS[key]);
+}
 
 /** Row field (report_snapshot._base_fields) backing each filter dimension. */
 const FIELD_OF_FILTER: Record<FilterKey, string> = {
@@ -86,14 +93,23 @@ export function cleanFilters(selection: FilterSelection): Record<string, string[
  * rendered (§12.5) — the server's effective window and normalized filters,
  * not the client's request-time guesses.
  */
-export function summarizeSnapshotScope(snapshot: {
-  effective_from: string;
-  effective_to: string;
-  timezone: string;
-  query_scope: Record<string, unknown>;
-}): string {
+export function summarizeSnapshotScope(
+  snapshot: {
+    effective_from: string;
+    effective_to: string;
+    timezone: string;
+    query_scope: Record<string, unknown>;
+  },
+  locale: Locale = "zh",
+): string {
+  const listJoiner = locale === "zh" ? "|" : ", ";
+  const clauseJoiner = locale === "zh" ? "；" : "; ";
   const parts = [
-    `时间 ${snapshot.effective_from} → ${snapshot.effective_to}（${snapshot.timezone}）`,
+    t(locale, "scope_time", {
+      from: snapshot.effective_from,
+      to: snapshot.effective_to,
+      timezone: snapshot.timezone,
+    }),
   ];
   const rawFilters = snapshot.query_scope["filters"];
   const filters =
@@ -105,20 +121,24 @@ export function summarizeSnapshotScope(snapshot: {
     return Array.isArray(values) && values.length > 0;
   });
   if (active.length === 0) {
-    parts.push("筛选：无");
+    parts.push(t(locale, "scope_filters_none"));
   } else {
     const text = active
       .map((key) => {
         const values = filters[key];
-        return `${FILTER_LABELS_ZH[key]}=${(values as unknown[]).map(String).join("|")}`;
+        return `${filterLabel(locale, key)}=${(values as unknown[])
+          .map(String)
+          .join(listJoiner)}`;
       })
-      .join("；");
-    parts.push(`筛选：${text}`);
+      .join(clauseJoiner);
+    parts.push(t(locale, "scope_filters", { text }));
   }
   const granularity = snapshot.query_scope["task_granularity"];
   parts.push(
-    `任务粒度 ${typeof granularity === "string" ? granularity : "executable-leaf"}`,
+    t(locale, "scope_granularity", {
+      granularity:
+        typeof granularity === "string" ? granularity : "executable-leaf",
+    }),
   );
-  return parts.join("；");
+  return parts.join(clauseJoiner);
 }
-

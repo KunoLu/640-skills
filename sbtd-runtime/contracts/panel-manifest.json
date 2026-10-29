@@ -7,6 +7,7 @@
     {
       "panel_id": "overview",
       "title_zh": "概览",
+      "title_en": "Overview",
       "order": 1,
       "desktop_span": 12,
       "kind": "kpi",
@@ -21,11 +22,13 @@
       "field_dependencies": ["gate evidence", "coverage", "样本规模"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "展示 unknown／partial 与原因"
+      "insufficient_data_zh": "展示 unknown／partial 与原因",
+      "insufficient_data_en": "Show unknown/partial with reasons"
     },
     {
       "panel_id": "task-lifecycle",
       "title_zh": "任务生命周期",
+      "title_en": "Task lifecycle",
       "order": 2,
       "desktop_span": 6,
       "kind": "chart",
@@ -37,11 +40,13 @@
       "field_dependencies": ["task_uid", "状态历史", "as_of"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "明确区分最新观察与历史范围末"
+      "insufficient_data_zh": "明确区分最新观察与历史范围末",
+      "insufficient_data_en": "Distinguish the latest observation from the end of the history range"
     },
     {
       "panel_id": "activity-trend",
       "title_zh": "活动趋势",
+      "title_en": "Activity trend",
       "order": 3,
       "desktop_span": 6,
       "kind": "chart",
@@ -53,11 +58,13 @@
       "field_dependencies": ["occurred_at", "bucket", "source health"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "缺口桶用断线／阴影，不伪造 0"
+      "insufficient_data_zh": "缺口桶用断线／阴影，不伪造 0",
+      "insufficient_data_en": "Gap buckets use dashed lines/shading; never fake a 0"
     },
     {
       "panel_id": "mode-decisions",
       "title_zh": "模式决策",
+      "title_en": "Mode decisions",
       "order": 4,
       "desktop_span": 6,
       "kind": "chart",
@@ -65,11 +72,13 @@
       "field_dependencies": ["mode_at_event", "mode_source", "decision events"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "未绑定模式单列；unsupported 指标如实标注不支持"
+      "insufficient_data_zh": "未绑定模式单列；unsupported 指标如实标注不支持",
+      "insufficient_data_en": "Unbound modes get their own row; unsupported metrics are labelled unsupported"
     },
     {
       "panel_id": "step-performance",
       "title_zh": "步骤性能",
+      "title_en": "Step performance",
       "order": 5,
       "desktop_span": 6,
       "kind": "chart",
@@ -82,11 +91,13 @@
       "field_dependencies": ["step_definition", "attempt", "duration_basis"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "样本不足时不给有误导性的分位数"
+      "insufficient_data_zh": "样本不足时不给有误导性的分位数",
+      "insufficient_data_en": "Do not report misleading percentiles when samples are insufficient"
     },
     {
       "panel_id": "blockers",
       "title_zh": "阻塞与中断",
+      "title_en": "Blockers and interruptions",
       "order": 6,
       "desktop_span": 6,
       "kind": "chart",
@@ -94,11 +105,13 @@
       "field_dependencies": ["interval", "reason_code", "closure_quality"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "未闭合区间标示仍在观察／未知"
+      "insufficient_data_zh": "未闭合区间标示仍在观察／未知",
+      "insufficient_data_en": "Unclosed intervals are marked still-observed/unknown"
     },
     {
       "panel_id": "gate-matrix",
       "title_zh": "Gate 矩阵",
+      "title_en": "Gate matrix",
       "order": 7,
       "desktop_span": 12,
       "kind": "table",
@@ -106,11 +119,13 @@
       "field_dependencies": ["GateEvaluation", "scope_revision"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "declared-only 与 validated 明显区分"
+      "insufficient_data_zh": "declared-only 与 validated 明显区分",
+      "insufficient_data_en": "Distinguish declared-only from validated clearly"
     },
     {
       "panel_id": "component-usage",
       "title_zh": "组件使用",
+      "title_en": "Component usage",
       "order": 8,
       "desktop_span": 6,
       "kind": "table",
@@ -118,11 +133,13 @@
       "field_dependencies": ["component_kind", "invocation", "version"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "安装存在不算调用"
+      "insufficient_data_zh": "安装存在不算调用",
+      "insufficient_data_en": "Presence of an installation is not an invocation"
     },
     {
       "panel_id": "validation-evidence",
       "title_zh": "验证证据",
+      "title_en": "Validation evidence",
       "order": 9,
       "desktop_span": 12,
       "kind": "table",
@@ -136,11 +153,13 @@
       "field_dependencies": ["validation", "artifact", "source revision"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "HTML 存在或诊断输出不能自动通过"
+      "insufficient_data_zh": "HTML 存在或诊断输出不能自动通过",
+      "insufficient_data_en": "Presence of HTML or diagnostic output does not auto-pass"
     },
     {
       "panel_id": "host-model-usage",
       "title_zh": "宿主与模型用量",
+      "title_en": "Host and model usage",
       "order": 10,
       "desktop_span": 6,
       "kind": "chart",
@@ -148,11 +167,13 @@
       "field_dependencies": ["request_id", "raw usage mapping", "billing_basis"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "未提供 usage 显示不支持／未知，不填 0 也不显示成免费"
+      "insufficient_data_zh": "未提供 usage 显示不支持／未知，不填 0 也不显示成免费",
+      "insufficient_data_en": "Show unsupported/unknown when usage is absent; never fill 0 or show as free"
     },
     {
       "panel_id": "project-actor-summary",
       "title_zh": "项目与主体汇总",
+      "title_en": "Project and actor summary",
       "order": 11,
       "desktop_span": 6,
       "kind": "table",
@@ -160,11 +181,13 @@
       "field_dependencies": ["IDs", "actor binding", "leaf task scope"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "本机未绑定主体独立行"
+      "insufficient_data_zh": "本机未绑定主体独立行",
+      "insufficient_data_en": "Unbound actors on this machine get their own row"
     },
     {
       "panel_id": "task-audit-detail",
       "title_zh": "任务审计详情",
+      "title_en": "Task audit detail",
       "order": 12,
       "desktop_span": 12,
       "kind": "table",
@@ -172,11 +195,13 @@
       "field_dependencies": ["task/run/step/event 关联"],
       "export_required": true,
       "always_visible": false,
-      "insufficient_data_zh": "标记当前预览行数和完整数据总量"
+      "insufficient_data_zh": "标记当前预览行数和完整数据总量",
+      "insufficient_data_en": "Mark the current preview row count and the full total"
     },
     {
       "panel_id": "data-quality",
       "title_zh": "数据质量",
+      "title_en": "Data quality",
       "order": 13,
       "desktop_span": 12,
       "kind": "table",
@@ -184,7 +209,8 @@
       "field_dependencies": ["CollectionHealth", "DatasetManifest"],
       "export_required": true,
       "always_visible": true,
-      "insufficient_data_zh": "必须始终存在，不能随导出隐藏，不以 0 或绿灯冒充"
+      "insufficient_data_zh": "必须始终存在，不能随导出隐藏，不以 0 或绿灯冒充",
+      "insufficient_data_en": "Must always exist and never hide from export; never impersonated by 0 or a green light"
     }
   ]
 }

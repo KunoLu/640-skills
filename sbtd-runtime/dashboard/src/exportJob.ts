@@ -1,4 +1,5 @@
 import type { PresentationState } from "./reportDocument.ts";
+import { DEFAULT_LOCALE, t, type Locale, type StringKey } from "./i18n.ts";
 
 export type ExportFormat = "html" | "csv" | "jpeg" | "pdf";
 export interface ExportStatus {
@@ -24,20 +25,21 @@ export interface ExportApi {
   downloadExport(id: string, format: ExportFormat, signal: AbortSignal): Promise<ExportFile>;
 }
 
-export function exportErrorMessage(error: unknown): string {
+export function exportErrorMessage(error: unknown, locale: Locale = DEFAULT_LOCALE): string {
   const e = error as { status?: number; detail?: string; code?: string; requestId?: string; message?: string } | null;
-  const messages: Record<number, string> = {
-    401: "会话已过期，请重启 serve 并重新配对", 400: "导出请求无效",
-    404: "快照或导出不存在", 409: "未就绪，请稍候", 410: "快照或导出已过期，请刷新后重新导出",
-    422: "导出尺寸超限", 503: "renderer 不可用", 507: "磁盘配额不足",
+  const statusKeys: Record<number, StringKey> = {
+    401: "export_err_401", 400: "export_err_400",
+    404: "export_err_404", 409: "export_err_409", 410: "export_err_410",
+    422: "export_err_422", 503: "export_err_503", 507: "export_err_507",
   };
-  const codes: Record<string, string> = {
-    EXPORT_RENDER_TIMEOUT: "导出渲染超时", EXPORT_RENDER_FAILED: "导出渲染失败",
+  const codeKeys: Record<string, StringKey> = {
+    EXPORT_RENDER_TIMEOUT: "export_err_timeout", EXPORT_RENDER_FAILED: "export_err_render_failed",
   };
   const code = e?.code || "";
-  const message = messages[e?.status ?? 0] || codes[code] || "导出失败";
+  const key = statusKeys[e?.status ?? 0] || codeKeys[code] || "export_err_generic";
+  const message = t(locale, key);
   const detail = e?.detail || (!code ? e?.message : "");
-  return [message, detail, code, e?.requestId && `request_id=${e.requestId}`].filter(Boolean).join("；");
+  return [message, detail, code, e?.requestId && `request_id=${e.requestId}`].filter(Boolean).join(locale === "zh" ? "；" : "; ");
 }
 
 export function parseExportFilename(disposition: string | null, fallback: string): string {
@@ -77,7 +79,7 @@ export class ExportJob {
       theme: state.theme, report_width_px: state.report_width_px,
       expanded_detail_ids: [...state.expanded_detail_ids], table_sort: { ...state.table_sort },
       preview_row_sets: { ...state.preview_row_sets }, panel_order: [...state.panel_order],
-      legend_state: { ...state.legend_state },
+      legend_state: { ...state.legend_state }, locale: state.locale,
     } };
     this.key = (options.uuid ?? (() => crypto.randomUUID()))();
     this.api = api;
@@ -99,10 +101,11 @@ export class ExportJob {
   async run(): Promise<ExportFile | undefined> {
     const signal = this.controller.signal;
     const wait = this.options.sleep ?? sleep;
+    const locale = this.input.presentation_state.locale;
     let delay = this.options.initialDelay ?? 1000;
     try {
       signal.throwIfAborted();
-      this.emit("requesting", "正在创建导出");
+      this.emit("requesting", t(locale, "export_requesting"));
       let accepted;
       // Only a transport failure is retried, once, with the exact same payload/key.
       try { accepted = await this.api.createExport(this.input, this.key, signal); }
@@ -116,7 +119,7 @@ export class ExportJob {
       signal.throwIfAborted();
       this.id = accepted.export_id;
       this.warnings = accepted.warnings ?? [];
-      this.emit("queued", "导出已排队");
+      this.emit("queued", t(locale, "export_queued"));
       for (let poll = 0; poll < (this.options.maxPolls ?? 40); poll++) {
         signal.throwIfAborted();
         try {
@@ -126,26 +129,26 @@ export class ExportJob {
           if (status.status === "ready") {
             const file = await this.api.downloadExport(this.id, this.input.format, signal);
             signal.throwIfAborted();
-            this.emit("ready", "导出已就绪，开始下载");
+            this.emit("ready", t(locale, "export_ready"));
             return file;
           }
           if (status.status === "failed" || status.status === "cancelled") {
-            this.emit(status.status, status.status === "cancelled" ? "导出已取消" : exportErrorMessage({ code: status.error }));
+            this.emit(status.status, status.status === "cancelled" ? t(locale, "export_cancelled") : exportErrorMessage({ code: status.error }, locale));
             return;
           }
-          this.emit(status.status, status.status === "queued" ? "导出已排队" : "正在生成导出");
+          this.emit(status.status, status.status === "queued" ? t(locale, "export_queued") : t(locale, "export_generating"));
         } catch (error) {
           if (!error || typeof error !== "object" || !("status" in error) || error.status !== 409) throw error;
-          this.emit("generating", exportErrorMessage(error));
+          this.emit("generating", exportErrorMessage(error, locale));
         }
         if (poll + 1 < (this.options.maxPolls ?? 40)) {
           await wait(delay, signal);
           delay = Math.min(delay * 1.5, this.options.maxDelay ?? 5000);
         }
       }
-      this.emit("failed", "导出等待超时，已停止轮询；可取消该作业或重新导出");
+      this.emit("failed", t(locale, "export_wait_timeout"));
     } catch (error) {
-      if (!signal.aborted) this.emit("failed", exportErrorMessage(error));
+      if (!signal.aborted) this.emit("failed", exportErrorMessage(error, locale));
     }
   }
 }

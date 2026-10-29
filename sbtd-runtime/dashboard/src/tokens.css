@@ -16,22 +16,23 @@
   /* spacing */
   --sbtd-space-page: 24px;
   --sbtd-space-gap: 16px;
-  --sbtd-space-panel-padding: 16px;
+  --sbtd-space-panel-padding: 20px;
 
   /* sizing */
-  --sbtd-report-width: 1440px;
-  --sbtd-radius-panel: 10px;
-  --sbtd-radius-control: 8px;
+  --sbtd-radius-panel: 16px;
+  --sbtd-radius-control: 10px;
   --sbtd-border-width: 1px;
 
-  /* typography (system font stack with explicit CJK fallback, §13.4/D16) */
+  /* typography (system font stack with explicit CJK fallback, §13.4/D16;
+   * Inter is used only when locally installed — no webfont download, the
+   * page must keep working fully offline) */
   --sbtd-font-family:
-    -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
-    "Noto Sans CJK JP", sans-serif;
+    "Inter var", Inter, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif;
   --sbtd-font-mono:
     ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-  --sbtd-font-size-body: 14px;
+  --sbtd-font-size-body: 13.5px;
   --sbtd-font-size-secondary: 12px;
   --sbtd-font-size-title: 16px;
   --sbtd-font-size-metric: 28px; /* §12.3: 指标数值 24–32px */
@@ -48,14 +49,17 @@
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --sbtd-bg: #14171c;
-  --sbtd-bg-elevated: #1b1f26;
-  --sbtd-bg-inset: #101318;
-  --sbtd-border: #2c333d;
-  --sbtd-text: #e2e8f0;
-  --sbtd-text-secondary: #94a3b8;
+  --sbtd-bg: #000000;
+  --sbtd-bg-elevated: #09090a;
+  --sbtd-bg-inset: #050506;
+  --sbtd-border: rgba(255, 255, 255, 0.06);
+  --sbtd-border-strong: rgba(255, 255, 255, 0.12);
+  --sbtd-text: #ededf0;
+  --sbtd-text-secondary: #9a9aa3;
   --sbtd-accent: #5b9cf5;
   --sbtd-accent-contrast: #0b1622;
+  --sbtd-segment-active-bg: #ededf0;
+  --sbtd-segment-active-text: #09090a;
   --sbtd-ok: hsl(var(--sbtd-hue-ok) 55% 55%);
   --sbtd-warn: hsl(var(--sbtd-hue-warn) 85% 58%);
   --sbtd-error: hsl(var(--sbtd-hue-error) 72% 62%);
@@ -66,14 +70,17 @@
 /* Light theme */
 :root[data-theme="light"] {
   color-scheme: light;
-  --sbtd-bg: #f5f7fa;
+  --sbtd-bg: #f2f2f3;
   --sbtd-bg-elevated: #ffffff;
   --sbtd-bg-inset: #eceff3;
-  --sbtd-border: #d4dbe3;
-  --sbtd-text: #1d2632;
-  --sbtd-text-secondary: #55647a;
+  --sbtd-border: rgba(0, 0, 0, 0.06);
+  --sbtd-border-strong: rgba(0, 0, 0, 0.12);
+  --sbtd-text: #151518;
+  --sbtd-text-secondary: #5a5a63;
   --sbtd-accent: #1f6fd6;
   --sbtd-accent-contrast: #ffffff;
+  --sbtd-segment-active-bg: #151518;
+  --sbtd-segment-active-text: #ffffff;
   --sbtd-ok: hsl(var(--sbtd-hue-ok) 60% 32%);
   --sbtd-warn: hsl(var(--sbtd-hue-warn) 90% 35%);
   --sbtd-error: hsl(var(--sbtd-hue-error) 68% 45%);

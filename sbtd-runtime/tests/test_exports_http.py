@@ -265,6 +265,35 @@ class ExportHttpTests(unittest.TestCase):
         positions = [text.index(f'id="{panel_id}"') for panel_id in reverse]
         self.assertEqual(positions, sorted(positions))
 
+    def test_locale_passes_through_to_rendered_html(self) -> None:
+        state = self.presentation()
+        for locale, heading in (
+            ("en", "<h1>SBTD report</h1>"),
+            ("zh", "<h1>SBTD 报告</h1>"),
+            ("fr", "<h1>SBTD 报告</h1>"),
+        ):
+            with self.subTest(locale=locale):
+                status, _, body = self.create_export(
+                    {
+                        "snapshot_id": self.snapshot(),
+                        "format": "html",
+                        "presentation_state": {**state, "locale": locale},
+                    }
+                )
+                self.assertEqual(status, 202, body)
+                export_id = json.loads(body)["data"]["export_id"]
+                self.ready(export_id)
+                status, _, payload = request(
+                    self.port,
+                    "GET",
+                    f"/api/v1/exports/{export_id}/file",
+                    headers=self.headers,
+                )
+                self.assertEqual(status, 200)
+                document = payload.decode()
+                self.assertIn(heading, document)
+                self.assertIn('lang="en"' if locale == "en" else 'lang="zh-CN"', document)
+
     def test_missing_foreign_and_expired_snapshot_errors(self) -> None:
         with tempfile.TemporaryDirectory() as other:
             foreign = SnapshotStore(Path(other)).create_or_reuse(

@@ -8,7 +8,7 @@ import type { PresentationState } from "./reportDocument.ts";
 const presentation = (): PresentationState => ({
   theme: "light", report_width_px: 1440, expanded_detail_ids: ["task_a"],
   table_sort: { tasks: "name" }, preview_row_sets: { tasks: 10 },
-  panel_order: ["tasks"], legend_state: { total: false },
+  panel_order: ["tasks"], legend_state: { total: false }, locale: "zh",
 });
 function harness(statuses: ExportStatus["status"][] = ["queued", "generating", "ready"]) {
   const seen: ExportState[] = [], delays: number[] = [];
@@ -122,7 +122,7 @@ test("new clicks use new keys; transport retry and polls retain the clicked snap
   assert.equal(sequence, 2);
   assert.deepEqual(first.input.presentation_state, presentation());
   assert.deepEqual(Object.keys(first.input.presentation_state).sort(), [
-    "expanded_detail_ids", "legend_state", "panel_order", "preview_row_sets", "report_width_px", "table_sort", "theme",
+    "expanded_detail_ids", "legend_state", "locale", "panel_order", "preview_row_sets", "report_width_px", "table_sort", "theme",
   ]);
   assert.equal(h.reads(), 2);
 });
@@ -190,13 +190,13 @@ test("error mappings preserve detail, failure code, and request id", () => {
     [409, "未就绪"], [410, "已过期"], [422, "尺寸超限"], [503, "renderer 不可用"], [507, "磁盘配额不足"],
   ]);
   for (const [status, message] of messages) {
-    const text = exportErrorMessage(new ApiError("error", status, "raw max_edge_px=100", "", "req_a"));
+    const text = exportErrorMessage(new ApiError("error", status, "raw max_edge_px=100", "", "req_a"), "zh");
     assert.ok(text.includes(message));
     assert.match(text, /raw max_edge_px=100/);
     assert.match(text, /request_id=req_a/);
   }
   for (const [code, message] of [["EXPORT_RENDER_TIMEOUT", "渲染超时"], ["EXPORT_RENDER_FAILED", "渲染失败"], ["FUTURE_ERROR", "导出失败"]]) {
-    const text = exportErrorMessage({ code });
+    const text = exportErrorMessage({ code }, "zh");
     assert.ok(text.includes(message));
     assert.ok(text.includes(code));
   }

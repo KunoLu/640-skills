@@ -26,20 +26,189 @@ _FONT_FAMILY = (
     '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", '
     '"Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif'
 )
-_FAMILY_LABELS = {
-    "task": "任务",
-    "run": "运行",
-    "step": "步骤",
-    "gate": "Gate",
-    "component": "组件",
-    "invocation": "调用",
-    "validation_run": "验证运行",
-    "validation_case": "验证用例",
-    "usage": "用量",
-    "artifact": "工件",
-    "event": "事件",
-    "data_quality": "数据质量",
+# Rendered copy is bilingual. The zh values reproduce the pre-i18n output byte
+# for byte; en values carry the English render. Locale arrives in
+# presentation_state and only selects copy, never data.
+_L10N = {
+    "zh": {
+        "lang": "zh-CN",
+        "title": "SBTD 报告",
+        "family": {
+            "task": "任务",
+            "run": "运行",
+            "step": "步骤",
+            "gate": "Gate",
+            "component": "组件",
+            "invocation": "调用",
+            "validation_run": "验证运行",
+            "validation_case": "验证用例",
+            "usage": "用量",
+            "artifact": "工件",
+            "event": "事件",
+            "data_quality": "数据质量",
+        },
+        "headers": {
+            "record": "记录",
+            "status": "状态",
+            "time": "时间",
+            "role": "角色",
+            "task": "任务",
+            "step": "步骤",
+            "attempt": "尝试",
+            "start": "开始",
+            "duration_ms": "耗时 ms",
+            "data_family": "数据族",
+            "rows": "行数",
+        },
+        "count_label": "{title}：展示 {shown} 条／范围内总 {total} 条",
+        "no_range_records": "范围内无记录。",
+        "no_rows": "无展示行。",
+        "no_task_records": "范围内无任务记录。",
+        "no_task_steps": "范围内无该任务的步骤记录。",
+        "no_task_events": "范围内无该任务的事件。",
+        "task_summary": "任务摘要",
+        "step_timeline": "步骤时间线（展示 {shown} 条／该任务范围内 {total} 条）",
+        "event_preview": (
+            "事件预览（最新优先；展示 {shown} 条／该任务范围内 {total} 条）"
+        ),
+        "coverage_heading": "覆盖（dataset manifest，实测行数）",
+        "gaps_heading": "缺口与未关联",
+        "unknown_events": "未知发生时间事件：{count} 条{ids}",
+        "summary_item": "quality_summary：{text}",
+        "warnings_item": "快照告警：{text}",
+        "watermarks_item": "来源水位：{text}",
+        "watermark_seq_item": "水位序号 watermark_seq：{seq}",
+        "unknown_not_carried": "unknown（快照未携带）",
+        "none": "无",
+        "no_watermark": "无声明（单一本地来源）",
+        "ids_wrapper": "（{text}）",
+        "list_sep": "、",
+        "summary_sep": "、",
+        "semicolon": "；",
+        "ellipsis": "…",
+        "legend_hidden": (
+            "隐藏系列：{metric}（仅影响图表显示，不改变 CSV 数据范围）"
+        ),
+        "chart_summary": "图表摘要：{text}",
+        "range_line": "范围：{start} → {end}（{tz}）",
+        "watermark_line": (
+            "数据水位：{as_of}（快照 {snapshot}，watermark_seq {seq}）"
+        ),
+        "quality_line": "数据质量：{coverage}；脱敏版本 {redaction}；导出 schema {schema}",
+        "preview_note": "HTML 预览受呈现状态限制；CSV 导出同一快照的全部授权数据族。",
+        "unsupported": "不支持",
+        "reason_wrapper": "（{reason}）",
+        "status_wrapper": "（{status}）",
+    },
+    "en": {
+        "lang": "en",
+        "title": "SBTD report",
+        "family": {
+            "task": "Task",
+            "run": "Run",
+            "step": "Step",
+            "gate": "Gate",
+            "component": "Component",
+            "invocation": "Invocation",
+            "validation_run": "Validation run",
+            "validation_case": "Validation case",
+            "usage": "Usage",
+            "artifact": "Artifact",
+            "event": "Event",
+            "data_quality": "Data quality",
+        },
+        "headers": {
+            "record": "Record",
+            "status": "Status",
+            "time": "Time",
+            "role": "Role",
+            "task": "Task",
+            "step": "Step",
+            "attempt": "Attempt",
+            "start": "Start",
+            "duration_ms": "Duration ms",
+            "data_family": "Data family",
+            "rows": "Rows",
+        },
+        "count_label": "{title}: showing {shown} of {total} in range",
+        "no_range_records": "No records in range.",
+        "no_rows": "No rows to show.",
+        "no_task_records": "No task records in range.",
+        "no_task_steps": "No step records for this task in range.",
+        "no_task_events": "No events for this task in range.",
+        "task_summary": "Task summary",
+        "step_timeline": (
+            "Step timeline (showing {shown} of {total} in this task's range)"
+        ),
+        "event_preview": (
+            "Event preview (newest first; showing {shown} of {total} in this "
+            "task's range)"
+        ),
+        "coverage_heading": "Coverage (dataset manifest, observed rows)",
+        "gaps_heading": "Gaps and unlinked",
+        "unknown_events": "Unknown-time events: {count}{ids}",
+        "summary_item": "quality_summary: {text}",
+        "warnings_item": "Snapshot warnings: {text}",
+        "watermarks_item": "Source watermarks: {text}",
+        "watermark_seq_item": "Watermark sequence watermark_seq: {seq}",
+        "unknown_not_carried": "unknown (not carried by the snapshot)",
+        "none": "none",
+        "no_watermark": "No declarations (single local source)",
+        "ids_wrapper": " ({text})",
+        "list_sep": ", ",
+        "summary_sep": ", ",
+        "semicolon": "; ",
+        "ellipsis": "...",
+        "legend_hidden": (
+            "Hidden series: {metric} (affects chart display only; does not "
+            "change the CSV data range)"
+        ),
+        "chart_summary": "Chart summary: {text}",
+        "range_line": "Range: {start} → {end} ({tz})",
+        "watermark_line": (
+            "Data watermark: {as_of} (snapshot {snapshot}, watermark_seq {seq})"
+        ),
+        "quality_line": (
+            "Data quality: {coverage}; redaction version {redaction}; "
+            "export schema {schema}"
+        ),
+        "preview_note": (
+            "HTML preview is limited by presentation state; CSV exports every "
+            "authorized data family of the same snapshot."
+        ),
+        "unsupported": "unsupported",
+        "reason_wrapper": " ({reason})",
+        "status_wrapper": " ({status})",
+    },
 }
+# Per-panel insufficient-data copy lives in the manifest (`insufficient_data_zh`
+# and `insufficient_data_en`); the renderer only selects the field, so no
+# second English copy can drift.
+
+
+def _l10n(locale: str) -> dict:
+    return _L10N.get(locale, _L10N["zh"])
+
+
+def _family_label(locale: str, family: str) -> str:
+    return _l10n(locale)["family"].get(family, family)
+
+
+def _panel_title(panel: dict, locale: str) -> str:
+    title = panel.get("title_en") if locale == "en" else None
+    return str(title or panel.get("title_zh") or panel["panel_id"])
+
+
+def _insufficient(panel: dict, locale: str) -> str:
+    if locale == "en":
+        return str(
+            panel.get("insufficient_data_en")
+            or panel.get("insufficient_data_zh")
+            or ""
+        )
+    return str(panel.get("insufficient_data_zh") or "")
+
+
 # View metadata only. Panel identity stays in the manifest.
 _PANEL_FAMILIES = {
     "task-lifecycle": ("task",),
@@ -152,6 +321,7 @@ def default_presentation(manifest: dict | None = None) -> dict:
         "preview_row_sets": {},
         "panel_order": [panel["panel_id"] for panel in _ordered_panels(manifest)],
         "legend_state": {},
+        "locale": "zh",
     }
 
 
@@ -341,6 +511,8 @@ def _presentation(state, manifest: dict) -> dict:
         merged["panel_order"] = list(ids)
     else:
         merged["panel_order"] = list(order)
+    if merged["locale"] not in _L10N:
+        merged["locale"] = "zh"
     return merged
 
 
@@ -425,7 +597,7 @@ def _show(value: Any) -> str:
     return _esc(redact_text(_controls(str(value))))
 
 
-def _render_value(value: Any) -> str:
+def _render_value(value: Any, sep: str = "、") -> str:
     if value is None:
         return "unknown"
     if isinstance(value, bool):
@@ -433,46 +605,50 @@ def _render_value(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value) if math.isfinite(value) else "unknown"
     if isinstance(value, list):
-        return "、".join(_render_value(item) for item in value)
+        return sep.join(_render_value(item, sep) for item in value)
     if isinstance(value, dict):
         if not value:
             return "unknown"
-        return "、".join(
-            f"{_render_value(str(key))} {_render_value(item)}"
+        return sep.join(
+            f"{_render_value(str(key), sep)} {_render_value(item, sep)}"
             for key, item in value.items()
         )
     if isinstance(value, str):
         return "[redacted]" if _raw_audit(value) else redact_text(value)
-    return _render_value(str(value))
+    return _render_value(str(value), sep)
 
 
-def _metric_body(entry: Any, insufficient: str) -> str:
+def _metric_body(entry: Any, insufficient: str, locale: str) -> str:
+    copy = _l10n(locale)
     if not isinstance(entry, dict):
         return f"unknown — {insufficient}"
     if entry.get("support") == "unsupported":
         reason = entry.get("reason")
-        return "不支持" + (f" — {reason}" if reason else "")
+        return copy["unsupported"] + (f" — {reason}" if reason else "")
     reason = entry.get("reason") or entry.get("missing_reason")
     strata = entry.get("strata") if isinstance(entry.get("strata"), dict) else None
     chunks: list[str] = []
     if entry.get("value") is None:
-        text = "unknown" + (f"（{reason}）" if reason else "")
+        text = "unknown" + (
+            copy["reason_wrapper"].format(reason=reason) if reason else ""
+        )
         if not strata:
             text += f" — {insufficient}"
         chunks.append(text)
     else:
-        chunks.append(_render_value(entry.get("value")))
+        chunks.append(_render_value(entry.get("value"), copy["list_sep"]))
     if strata:
         for name, item in strata.items():
             item_value = item.get("value") if isinstance(item, dict) else None
             status = item.get("sample_status") if isinstance(item, dict) else None
             extra = (
-                f"（{status}）"
+                copy["status_wrapper"].format(status=status)
                 if isinstance(status, str) and status != "decidable"
                 else ""
             )
             chunks.append(
-                f"{_render_value(str(name))} {_render_value(item_value)}{extra}"
+                f"{_render_value(str(name), copy['list_sep'])} "
+                f"{_render_value(item_value, copy['list_sep'])}{extra}"
             )
     marks = []
     if entry.get("support") == "conditional":
@@ -487,8 +663,8 @@ def _metric_body(entry: Any, insufficient: str) -> str:
     return " ".join(chunks)
 
 
-def _metric_html(metric_id: str, entry: Any, insufficient: str) -> str:
-    body = _esc(redact_text(_metric_body(entry, insufficient)))
+def _metric_html(metric_id: str, entry: Any, insufficient: str, locale: str) -> str:
+    body = _esc(redact_text(_metric_body(entry, insufficient, locale)))
     return f'<div class="metric"><dt>{_esc(metric_id)}</dt><dd>{body}</dd></div>'
 
 
@@ -513,8 +689,10 @@ def _chart(series: list[tuple[str, float]]) -> str:
     return "".join(parts)
 
 
-def _count_label(title: str, shown: int, total: int) -> str:
-    return f"{title}：展示 {shown} 条／范围内总 {total} 条"
+def _count_label(title: str, shown: int, total: int, locale: str) -> str:
+    return _l10n(locale)["count_label"].format(
+        title=title, shown=shown, total=total
+    )
 
 
 def _rows_of(rows: list[dict], family: str) -> list[dict]:
@@ -527,6 +705,7 @@ def _family_table(
     rows: list[dict],
     state: dict,
     totals: dict[str, int],
+    locale: str,
     *,
     detail: bool,
 ) -> str:
@@ -537,7 +716,8 @@ def _family_table(
     limit = _limit(state, (f"{panel_id}:{family}", panel_id, family), _DETAIL_LIMIT)
     shown = chosen[:limit]
     total = totals.get(family, len(chosen))
-    label = _FAMILY_LABELS.get(family, family)
+    label = _family_label(locale, family)
+    headers = _l10n(locale)["headers"]
     css = "panel-detail" if detail else "panel-table"
     body = []
     for row in shown:
@@ -550,19 +730,24 @@ def _family_table(
             "</tr>"
         )
     if not body:
-        note = "范围内无记录。" if total == 0 else "无展示行。"
+        copy = _l10n(locale)
+        note = copy["no_range_records"] if total == 0 else copy["no_rows"]
         body.append(f'<tr><td colspan="4">{note}</td></tr>')
     return (
         f'<div class="{css}">'
-        f"<p>{_esc(_count_label(label, len(shown), total))}</p>"
-        "<table><thead><tr><th>记录</th><th>状态</th>"
-        "<th>时间</th><th>角色</th></tr></thead><tbody>"
+        f"<p>{_esc(_count_label(label, len(shown), total, locale))}</p>"
+        "<table><thead><tr>"
+        f"<th>{headers['record']}</th><th>{headers['status']}</th>"
+        f"<th>{headers['time']}</th><th>{headers['role']}</th>"
+        "</tr></thead><tbody>"
         + "".join(body)
         + "</tbody></table></div>"
     )
 
 
-def _task_detail(task_uid: str, rows: list[dict], state: dict) -> str:
+def _task_detail(
+    task_uid: str, rows: list[dict], state: dict, locale: str
+) -> str:
     steps = [
         row
         for row in rows
@@ -611,26 +796,43 @@ def _task_detail(task_uid: str, rows: list[dict], state: dict) -> str:
             f"{_show(_field(row, 'occurred_at'))} {_show(_field(row, 'event_type'))}"
             f"{suffix}</li>"
         )
+    copy = _l10n(locale)
+    headers = copy["headers"]
     step_body = (
         "".join(step_rows)
         if step_rows
-        else '<tr><td colspan="5">范围内无该任务的步骤记录。</td></tr>'
+        else f'<tr><td colspan="5">{copy["no_task_steps"]}</td></tr>'
     )
     event_body = (
-        "".join(event_items) if event_items else "<li>范围内无该任务的事件。</li>"
+        "".join(event_items)
+        if event_items
+        else f'<li>{copy["no_task_events"]}</li>'
+    )
+    step_heading = copy["step_timeline"].format(
+        shown=len(shown_steps), total=len(steps)
+    )
+    event_heading = copy["event_preview"].format(
+        shown=len(shown_events), total=len(events)
     )
     return (
         '<div class="panel-detail">'
-        f"<h3>步骤时间线（展示 {len(shown_steps)} 条／该任务范围内 {len(steps)} 条）</h3>"
-        "<table><thead><tr><th>步骤</th><th>尝试</th><th>开始</th>"
-        f"<th>耗时 ms</th><th>状态</th></tr></thead><tbody>{step_body}</tbody></table>"
-        f"<h3>事件预览（最新优先；展示 {len(shown_events)} 条／该任务范围内 "
-        f"{len(events)} 条）</h3><ul>{event_body}</ul></div>"
+        f"<h3>{step_heading}</h3>"
+        "<table><thead><tr>"
+        f"<th>{headers['step']}</th><th>{headers['attempt']}</th>"
+        f"<th>{headers['start']}</th>"
+        f"<th>{headers['duration_ms']}</th><th>{headers['status']}</th>"
+        f"</tr></thead><tbody>{step_body}</tbody></table>"
+        f"<h3>{event_heading}</h3>"
+        f"<ul>{event_body}</ul></div>"
     )
 
 
 def _task_audit(
-    rows: list[dict], state: dict, totals: dict[str, int], expanded: set[str]
+    rows: list[dict],
+    state: dict,
+    totals: dict[str, int],
+    expanded: set[str],
+    locale: str,
 ) -> str:
     tasks = _apply_sort(
         _rows_of(rows, "task"),
@@ -652,26 +854,33 @@ def _task_audit(
         )
         if task_uid in expanded:
             body.append(
-                f'<tr><td colspan="4">{_task_detail(task_uid, rows, state)}</td></tr>'
+                f'<tr><td colspan="4">'
+                f"{_task_detail(task_uid, rows, state, locale)}</td></tr>"
             )
+    copy = _l10n(locale)
+    headers = copy["headers"]
     if not body:
-        note = "范围内无任务记录。" if total == 0 else "无展示行。"
+        note = copy["no_task_records"] if total == 0 else copy["no_rows"]
         body.append(f'<tr><td colspan="4">{note}</td></tr>')
     return (
-        f"<p>{_esc(_count_label('任务摘要', len(shown), total))}</p>"
-        "<table><thead><tr><th>任务</th><th>状态</th><th>worktree</th>"
-        f"<th>角色</th></tr></thead><tbody>{''.join(body)}</tbody></table>"
+        f"<p>{_esc(_count_label(copy['task_summary'], len(shown), total, locale))}</p>"
+        "<table><thead><tr>"
+        f"<th>{headers['task']}</th><th>{headers['status']}</th><th>worktree</th>"
+        f"<th>{headers['role']}</th>"
+        f"</tr></thead><tbody>{''.join(body)}</tbody></table>"
     )
 
 
-def _quality_html(snapshot, blocked: set[str], warnings: list[str]) -> str:
+def _quality_html(
+    snapshot, blocked: set[str], warnings: list[str], locale: str
+) -> str:
+    copy = _l10n(locale)
+    headers = copy["headers"]
     totals = []
     for item in snapshot.dataset_manifest:
         family = item.get("record_type")
         count = item.get("rows")
-        label = (
-            _FAMILY_LABELS.get(family, family) if isinstance(family, str) else "unknown"
-        )
+        label = _family_label(locale, family) if isinstance(family, str) else "unknown"
         shown = (
             count
             if isinstance(count, int) and not isinstance(count, bool)
@@ -684,40 +893,53 @@ def _quality_html(snapshot, blocked: set[str], warnings: list[str]) -> str:
     unknown_count = len(snapshot.unknown_time_event_ids)
     id_text = ""
     if unknown_ids:
-        preview = "、".join(_redact_node(item) for item in unknown_ids[:5])
+        preview = copy["list_sep"].join(
+            _redact_node(item) for item in unknown_ids[:5]
+        )
         if len(unknown_ids) > 5:
-            preview += "…"
-        id_text = f"（{_esc(preview)}）"
+            preview += copy["ellipsis"]
+        id_text = copy["ids_wrapper"].format(text=_esc(preview))
     summary = snapshot.quality_summary
     if isinstance(summary, dict) and summary:
         summary_text = _esc(
-            redact_text("；".join(f"{key}={value}" for key, value in summary.items()))
+            redact_text(
+                copy["semicolon"].join(
+                    f"{key}={value}" for key, value in summary.items()
+                )
+            )
         )
     else:
-        summary_text = "unknown（快照未携带）"
-    warning_text = "无" if not warnings else _esc("、".join(warnings))
+        summary_text = copy["unknown_not_carried"]
+    warning_text = (
+        copy["none"] if not warnings else _esc(copy["list_sep"].join(warnings))
+    )
     watermarks = snapshot.source_watermarks
     if watermarks:
         watermark_text = _esc(
             redact_text(
-                "；".join(
+                copy["semicolon"].join(
                     json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
                     for item in watermarks
                 )
             )
         )
     else:
-        watermark_text = "无声明（单一本地来源）"
+        watermark_text = copy["no_watermark"]
+    seq_item = copy["watermark_seq_item"].format(
+        seq=_esc(snapshot.watermark_seq)
+    )
     return (
-        "<h3>覆盖（dataset manifest，实测行数）</h3>"
-        "<table><thead><tr><th>数据族</th><th>行数</th></tr></thead>"
+        f"<h3>{copy['coverage_heading']}</h3>"
+        "<table><thead><tr>"
+        f"<th>{headers['data_family']}</th><th>{headers['rows']}</th>"
+        "</tr></thead>"
         f"<tbody>{''.join(totals)}</tbody></table>"
-        "<h3>缺口与未关联</h3><ul>"
-        f"<li>未知发生时间事件：{unknown_count} 条{id_text}</li>"
-        f"<li>quality_summary：{summary_text}</li>"
-        f"<li>快照告警：{warning_text}</li>"
-        f"<li>来源水位：{watermark_text}</li>"
-        f"<li>水位序号 watermark_seq：{_esc(snapshot.watermark_seq)}</li>"
+        f"<h3>{copy['gaps_heading']}</h3><ul>"
+        f"<li>{copy['unknown_events'].format(count=unknown_count, ids=id_text)}</li>"
+        f"<li>{copy['summary_item'].format(text=summary_text)}</li>"
+        f"<li>{copy['warnings_item'].format(text=warning_text)}</li>"
+        f"<li>{copy['watermarks_item'].format(text=watermark_text)}</li>"
+        f"<li>{seq_item}</li>"
         "</ul>"
     )
 
@@ -732,17 +954,19 @@ def _panel_html(
     expanded: set[str],
     blocked: set[str],
     warnings: list[str],
+    locale: str,
 ) -> str:
     panel_id = panel["panel_id"]
+    copy = _l10n(locale)
     legend = _mapping(state, "legend_state")
-    insufficient = str(panel.get("insufficient_data_zh") or "")
+    insufficient = _insufficient(panel, locale)
     parts = [
         (
             f'<section id="{_esc(panel_id)}" class="panel" '
             f'style="grid-column: span {int(panel["desktop_span"])}">'
         ),
         (
-            f"<h2>{_esc(panel.get('title_zh') or panel_id)} "
+            f"<h2>{_esc(_panel_title(panel, locale))} "
             f'<span class="panel-id">{_esc(panel_id)}</span></h2>'
         ),
         f'<p class="insufficient">{_esc(insufficient)}</p>',
@@ -751,7 +975,7 @@ def _panel_html(
     hidden: list[str] = []
     for metric_id in panel.get("metric_ids") or []:
         entry = metrics.get(metric_id)
-        parts.append(_metric_html(metric_id, entry, insufficient))
+        parts.append(_metric_html(metric_id, entry, insufficient, locale))
         if legend.get(metric_id) is False:
             hidden.append(metric_id)
             continue
@@ -764,21 +988,28 @@ def _panel_html(
             visible.append((metric_id, float(value)))
     for metric_id in hidden:
         parts.append(
-            f'<p class="legend-hidden">隐藏系列：{_esc(metric_id)}'
-            "（仅影响图表显示，不改变 CSV 数据范围）</p>"
+            f'<p class="legend-hidden">'
+            f"{copy['legend_hidden'].format(metric=_esc(metric_id))}</p>"
         )
     if panel.get("kind") == "chart":
         parts.append(_chart(visible))
-        summary = "、".join(
-            f"{metric_id} {_render_value(metrics.get(metric_id, {}).get('value'))}"
-            for metric_id, _value in visible
-        )
+        rendered = []
+        for metric_id, _value in visible:
+            value = metrics.get(metric_id, {}).get("value")
+            rendered.append(
+                f"{metric_id} {_render_value(value, copy['list_sep'])}"
+            )
+        summary = copy["summary_sep"].join(rendered)
         if summary:
-            parts.append(f"<p>图表摘要：{_esc(redact_text(summary))}</p>")
+            parts.append(
+                "<p>"
+                f"{copy['chart_summary'].format(text=_esc(redact_text(summary)))}"
+                "</p>"
+            )
     if panel_id == "data-quality":
-        parts.append(_quality_html(snapshot, blocked, warnings))
+        parts.append(_quality_html(snapshot, blocked, warnings, locale))
     elif panel_id == "task-audit-detail":
-        parts.append(_task_audit(rows, state, totals, expanded))
+        parts.append(_task_audit(rows, state, totals, expanded, locale))
     else:
         families = _PANEL_FAMILIES.get(panel_id, ())
         show_table = panel.get("kind") == "table" or panel_id in expanded
@@ -790,6 +1021,7 @@ def _panel_html(
                     rows,
                     state,
                     totals,
+                    locale,
                     detail=panel_id in expanded and panel.get("kind") != "table",
                 )
             )
@@ -809,6 +1041,8 @@ def _html(
     theme = presentation.get("theme")
     if theme not in ("dark", "light"):
         theme = "dark"
+    locale = presentation.get("locale")
+    copy = _l10n(locale)
     width = _css_px(presentation.get("report_width_px"))
     panels = {panel["panel_id"]: panel for panel in manifest["panels"]}
     totals = {}
@@ -826,27 +1060,40 @@ def _html(
     coverage = "partial" if snapshot.unknown_time_event_ids else "complete"
     parts = [
         "<!DOCTYPE html>",
-        f'<html lang="zh-CN" data-theme="{theme}">',
-        '<head><meta charset="utf-8"><title>SBTD 报告</title>',
+        f'<html lang="{copy["lang"]}" data-theme="{theme}">',
+        f'<head><meta charset="utf-8"><title>{copy["title"]}</title>',
         '<link rel="icon" href="data:,">',
         f"<style>{_CSS}</style></head><body>",
         f'<article class="report" style="width: {width}px">',
-        "<header><h1>SBTD 报告</h1>",
+        f'<header><h1>{copy["title"]}</h1>',
         (
-            "<p>范围："
-            f"{_show(snapshot.effective_from)} → {_show(snapshot.effective_to)}"
-            f"（{_show(snapshot.timezone)}）</p>"
+            "<p>"
+            + copy["range_line"].format(
+                start=_show(snapshot.effective_from),
+                end=_show(snapshot.effective_to),
+                tz=_show(snapshot.timezone),
+            )
+            + "</p>"
         ),
         (
-            "<p>数据水位："
-            f"{_show(snapshot.as_of)}（快照 {_show(snapshot.snapshot_id)}，"
-            f"watermark_seq {_esc(snapshot.watermark_seq)}）</p>"
+            "<p>"
+            + copy["watermark_line"].format(
+                as_of=_show(snapshot.as_of),
+                snapshot=_show(snapshot.snapshot_id),
+                seq=_esc(snapshot.watermark_seq),
+            )
+            + "</p>"
         ),
         (
-            f"<p>数据质量：{coverage}；脱敏版本 {_esc(REDACTION_POLICY_VERSION)}；"
-            f"导出 schema {_esc(CSV_SCHEMA_VERSION)}</p>"
+            "<p>"
+            + copy["quality_line"].format(
+                coverage=coverage,
+                redaction=_esc(REDACTION_POLICY_VERSION),
+                schema=_esc(CSV_SCHEMA_VERSION),
+            )
+            + "</p>"
         ),
-        "<p>HTML 预览受呈现状态限制；CSV 导出同一快照的全部授权数据族。</p>",
+        f"<p>{copy['preview_note']}</p>",
         '</header><main class="grid">',
     ]
     for panel_id in presentation["panel_order"]:
@@ -864,6 +1111,7 @@ def _html(
                 expanded,
                 blocked,
                 warnings,
+                locale,
             )
         )
     parts.append("</main></article></body></html>")
