@@ -511,7 +511,7 @@ def _presentation(state, manifest: dict) -> dict:
         merged["panel_order"] = list(ids)
     else:
         merged["panel_order"] = list(order)
-    if merged["locale"] not in _L10N:
+    if not isinstance(merged["locale"], str) or merged["locale"] not in _L10N:
         merged["locale"] = "zh"
     return merged
 
