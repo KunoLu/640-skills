@@ -4,10 +4,10 @@ id: dashboard-ui-i18n-2026-10
 workflow_mode: strict
 mode_source: user
 mode_note: 用户 2026-10-29 明确 strict mode
-status: "in-progress"
+status: "checking"
 branch: sbtd/strict-dashboard-ui-alignment
 created_at: '2026-10-29T10:18:06.335145+08:00'
-updated_at: "2026-10-29T10:18:13.053316+08:00"
+updated_at: "2026-10-29T11:33:52.790207+08:00"
 completed_at: null
 ---
 # Dashboard UI 对齐 omp stats + 双语 i18n
@@ -33,3 +33,4 @@ completed_at: null
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-10-29T10:18:13.053316+08:00 | planned | in-progress | 开始 dashboard UI 对齐与 i18n | 方案经用户确认（导出跟随 UI 语言；导入真实 QA 数据）；before 截图与 omp 计算样式已取证 |
+| 2026-10-29T11:33:52.790207+08:00 | in-progress | checking | 实现、截图矩阵与两轮 review 修复完成，进入提交流程 | dashboard 38/38 + runtime 447/448（1 个 main 既有 host 失败）+ 根 suite 162 与基线计数一致；截图矩阵 1440/2560/390×明暗×EN/ZH 归档 reports/screenshots；impeccable detect 零发现；独立 review 1P2+4P3 全部修复复验 |
