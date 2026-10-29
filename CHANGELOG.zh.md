@@ -9,8 +9,13 @@
 
 ## v2.1.0-rc.3（未发布）
 
+### 新增
+
+- 新增 Dashboard 双语 UI：顶栏语言切换（默认英语，可切中文，本地持久化），控件、面板框、表格与反馈文案经零依赖词典覆盖，中文文案与此前界面逐字节一致。导出产物跟随新的可选 `presentation_state.locale`（`en`/`zh`）；无 locale 的旧快照保持中文渲染逐字节不变，CSV 内容不随 locale 变化。([#200](https://github.com/KunoLu/640-skills/pull/200))
+
 ### 变更
 
+- 将 Dashboard 对齐 omp stats 视觉语言：发丝透明边框卡片、16px 圆角、更强的页面/卡片分层（亮 `#f2f2f3`/`#ffffff`、暗 `#000000`/`#09090a`）、omp 风格顶栏（brand、Live 徽章、时间分段、导出组、主题与语言切换），概览面板改为 KPI 条。直播页取消 1,440px 上限，panel 在任意分辨率铺满无留宽；导出产物保持固定文档宽度。([#200](https://github.com/KunoLu/640-skills/pull/200))
 - 受管 Graft pin 从 `@nanonets/graft@0.22.0` 晋升到 `@nanonets/graft@0.28.0`。上游已更名 Trail-code，但同一构建双发包（`@trailhq/trail-code` 与 `@nanonets/graft`），`graft` 命令不变；pin 保持 tarball URL 与 registry 核对的 integrity，构图策略摘要随固定资产同步更新。离线 code map 用法不变：受管 build 仍写 `graft/`，`DO_NOT_TRACK` 下遥测与更新检查保持关闭，六个 MCP 工具名与受管分析动词经实测一致。ENTRYPOINT 的 Graft 行按规则留给发布后版本检查同步。([#198](https://github.com/KunoLu/640-skills/pull/198))
 - 将外部 Skills stable 集刷新到 `2026-10-28.1`：mattpocock/skills（`59db609`）、impeccable（`3e3a917`）、ui-ux-pro-max-skill（`28b3b8d`）、shadcn-ui（`96da9cc`）、ponytail（`09c434a`）与 i-have-adhd（`1ecea19`）固定到各自 2026-10-28 主线 revision；上游许可证均未变。19 个 Skill 全量通过 manifest 摘要校验，strict-stable 隔离安装 19/19 提交。([#197](https://github.com/KunoLu/640-skills/pull/197))
 
