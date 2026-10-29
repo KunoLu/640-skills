@@ -4,11 +4,11 @@ id: dashboard-polish-2026-10
 workflow_mode: strict
 mode_source: user
 mode_note: 用户 2026-10-29 明确 strict mode
-status: "checking"
-branch: sbtd/strict-dashboard-polish
+status: "done"
+branch: "main"
 created_at: '2026-10-29T14:30:28.948606+08:00'
-updated_at: "2026-10-29T14:52:54.082998+08:00"
-completed_at: null
+updated_at: "2026-10-29T15:43:21.044582+08:00"
+completed_at: "2026-10-29T15:43:21.044582+08:00"
 ---
 # Dashboard 修整：本地时间、panel header、行配对、进一步对齐 omp
 
@@ -29,3 +29,5 @@ strict mode；分支 `sbtd/strict-dashboard-polish`；**完成后不提 PR、不
 |---|---|---|---|---|
 | 2026-10-29T14:30:35.799072+08:00 | planned | in-progress | 开始 dashboard 修整 | 用户报告 4 问题 + 进一步对齐要求；#200/#201 已在 main |
 | 2026-10-29T14:52:54.082998+08:00 | in-progress | checking | 修整完成，等用户确认后才允许 PR/合入 | 060bb77 已推送；dashboard 38/38 + manifest 22 + 导出侧全绿；runtime discover 448 仅既有 host 字体失败；impeccable detect 零发现；独立 review 2 P3（h23 午夜、stale 注释）已修；截图矩阵归档 |
+| 2026-10-29T15:43:07.343027+08:00 | checking | checking | Explicit branch rebinding from "sbtd/strict-dashboard-polish" to "main": PR #202 已 admin 合入 main（15892b1），双端分支已按授权删除；记录落 main | gh pr view 202 MERGED；CI run 40834935894 attempt 1 全绿 |
+| 2026-10-29T15:43:21.044582+08:00 | checking | done | dashboard 修整已合入 main | PR #202 squash 15892b1；CI attempt 1 全绿；用户确认后执行合入 |
