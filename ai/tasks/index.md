@@ -71,6 +71,7 @@
 - [v2.1.0-rc.2-sweep-offload-validate-cache](v2.1.0-rc.2-sweep-offload-validate-cache/task.md)
 - [v2.1.0-rc.2-tag-backfill](v2.1.0-rc.2-tag-backfill/task.md)
 - [v2.1.0-rc.2-task-status-sync](v2.1.0-rc.2-task-status-sync/task.md)
+- [v2.1.0-rc.3-changelog](v2.1.0-rc.3-changelog/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)
