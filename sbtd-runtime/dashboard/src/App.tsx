@@ -77,6 +77,14 @@ function systemTheme(): Theme {
     : "dark";
 }
 
+/** Live badge clock: local wall time, never the raw UTC slice of as_of. */
+function localClockTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  // h23, not hour12:false: en-US ICU maps hour12:false to h24 (24:xx at midnight).
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+}
+
 export function App() {
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem("sbtd.theme");
@@ -357,7 +365,7 @@ export function App() {
                 <span className="live-dot" aria-hidden="true" />
                 {model.updating
                   ? t(locale, "updating")
-                  : t(locale, "live_badge", { time: view!.snapshot.as_of.slice(11, 16) })}
+                  : t(locale, "live_badge", { time: localClockTime(view!.snapshot.as_of) })}
               </span>
             )}
             <button type="button" onClick={reload} disabled={model.updating}>

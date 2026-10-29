@@ -1060,8 +1060,8 @@ OMP Stats 的参考点是：主题化卡片、紧凑数据布局、深浅主题�
 | `mode-decisions` | 模式分布、推荐／保留／接受 | mode_at_event、mode_source、decision events | 未绑定模式单列 |
 | `step-performance` | 各步骤次数、p50/p95、重试 | step_definition、attempt、duration_basis | 样本不足时不给有误导性的分位数 |
 | `blockers` | 阻塞、暂停、中断、原因 | interval、reason_code、closure_quality | 未闭合区间标示仍在观察／未知 |
-| `gate-matrix` | required／not-required／undecided 与结果、证据 | GateEvaluation、scope_revision | declared-only 与 validated 明显区分 |
 | `component-usage` | Skill／Tool／MCP／runner 的载入和调用 | component_kind、invocation、version | 安装存在不算调用 |
+| `gate-matrix` | required／not-required／undecided 与结果、证据 | GateEvaluation、scope_revision | declared-only 与 validated 明显区分 |
 | `validation-evidence` | runner/case/重试、E2E scope、来源版本 | validation、artifact、source revision | HTML存在或诊断输出不能自动通过 |
 | `host-model-usage` | 宿主／模型角色、请求、token／费用 | request_id、raw usage mapping、billing_basis | 未提供 usage 显示不支持／未知 |
 | `project-actor-summary` | 项目、worktree、主体汇总 | IDs、actor binding、leaf task scope | 本机未绑定主体独立行 |

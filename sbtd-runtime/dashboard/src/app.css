@@ -190,19 +190,27 @@ body {
 .panel-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .panel-header h2 {
   font-size: var(--sbtd-font-size-title);
+  font-weight: 600;
   margin: 0;
+}
+
+.panel-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
 }
 
 .panel-id {
   font-family: var(--sbtd-font-mono);
-  font-size: var(--sbtd-font-size-secondary);
+  font-size: 11px;
   color: var(--sbtd-text-secondary);
 }
 
@@ -394,12 +402,17 @@ body {
 .panel-detail-toggle {
   font: inherit;
   font-size: var(--sbtd-font-size-secondary);
-  color: var(--sbtd-text);
-  background: var(--sbtd-bg);
+  color: var(--sbtd-text-secondary);
+  background: transparent;
   border: var(--sbtd-border-width) solid var(--sbtd-border);
   border-radius: var(--sbtd-radius-control);
   padding: 2px 10px;
   cursor: pointer;
+}
+
+.panel-detail-toggle:hover {
+  color: var(--sbtd-text);
+  border-color: var(--sbtd-border-strong);
 }
 
 .panel-detail {
@@ -441,15 +454,25 @@ body {
 
 .detail-table th,
 .detail-table td {
-  border: var(--sbtd-border-width) solid var(--sbtd-border);
-  padding: 4px 8px;
+  border: none;
+  border-bottom: var(--sbtd-border-width) solid var(--sbtd-border);
+  padding: 6px 10px;
   text-align: left;
   vertical-align: top;
 }
 
+.detail-table tbody tr:last-child th,
+.detail-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .detail-table th {
   color: var(--sbtd-text-secondary);
-  font-weight: normal;
+  font-weight: 500;
+}
+
+.detail-table tbody tr:hover td {
+  background: var(--sbtd-bg-inset);
 }
 
 .task-link {
