@@ -9,6 +9,8 @@
 
 ## v2.1.0-rc.3（2026-10-29）
 
+预发布版 [v2.1.0-rc.3](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.3) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag（tag 对象 `1715486dfb6da359d6ec6646e923a70795e4a8fd`）指向 `ce37b6d5d7487109a92856c7a2c41a8f86efdfba`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/40868198008)在 attempt 1 通过，按作业名 13 个 job 全部成功（`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`）；各平台测试计数未采集（unknown）。源码预发布不执行本机安装、workflow sync、项目迁移、现有宿主重载或备份处置；`sbtd-runtime/` 仍为可选且观察默认关闭，serve 与 Dashboard 只通过显式前台命令启动，不启动后台采集器。
+
 ### 新增
 
 - 新增 Dashboard 双语 UI：顶栏语言切换（默认英语，可切中文，本地持久化），控件、面板框、表格与反馈文案经零依赖词典覆盖，中文文案与此前界面逐字节一致。导出产物跟随新的可选 `presentation_state.locale`（`en`/`zh`）；无 locale 的旧快照保持中文渲染逐字节不变，CSV 内容不随 locale 变化。review 修复将 Live 徽章文案纳入双语词典，非字符串 locale 回落中文，capability 错误按当前语言渲染且切换语言不重新请求 capabilities，并将上述中文兼容性的测试扩展到多行文案。([#200](https://github.com/KunoLu/640-skills/pull/200), [#201](https://github.com/KunoLu/640-skills/pull/201))
