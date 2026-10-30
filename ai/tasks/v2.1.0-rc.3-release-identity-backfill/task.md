@@ -17,11 +17,11 @@ completed_at: '2026-10-30T08:23:14+08:00'
 
 补记 rc.3 已有发布身份，按 rc.2 逐句镜像中英文发布段；仅同步 ENTRYPOINT 四处版本，保留 #198 历史句，建立 strict 单轮 planned → in-progress → checking → done 记录与生成器导航。
 
-用户 2026-10-30 群内决定（预发布算已发布的 SBTD workflow 版本，同步 ENTRYPOINT 的 Graft 版本到 0.28.0），Lord 记录。注：分钟不可考。
+用户 2026-10-30 群内确认（预发布算已发布的 SBTD workflow 版本，同步 ENTRYPOINT 的 Graft 版本到 0.28.0），Lord 记录。注：分钟不可考。
 
-用户 2026-10-30 群内决定（本轮文档在本地自检完成后按 planned → in-progress → checking → done 落盘，done 在合入前记录），Lord 记录。注：分钟不可考。
+本轮文档在本地自检完成后按 planned → in-progress → checking → done 落盘。编排方整理：按状态机约定在合入前记录 done。
 
-未完整调用 grill-with-docs：路径、逐字改动、发布事实、归属与验收条件明确，无领域歧义。done 仅表示本地文档工作完成与上述决定，不代表发布、合入、PR CI 或独立审阅。本 PR CI 尚待运行，未合并；审阅结果未知。
+未完整调用 grill-with-docs：路径、逐字改动、发布事实、归属与验收条件明确，无领域歧义。done 仅表示本地文档工作完成与上述决定，不代表发布、合入、PR CI 或独立审阅。落盘时本 PR CI 尚待运行，未合并，审阅结果未知。
 
 ## 范围与写入安全
 
@@ -161,7 +161,7 @@ rtk：not-needed，采用约定原生命令。BDD：skipped，纯文档，无行
 
 4. 已实际执行 `python3 -B -m pytest -q -p no:cacheprovider tests/test_workflow_contracts.py`，exit 1。错误原文的消息部分为 `No module named pytest`（解释器绝对路径按记录约束省略）。环境缺少 pytest，测试未运行，不安装依赖；不将此结果写成测试通过。Targeted Rerun：not-needed，非测试用例失败；Final Full Rerun：blocked，缺测试运行器。其余文档检查通过不替代此测试。
 
-5. done 以本地文档验收与上述群内决定为依据，按约定记录测试缺依赖例外；本 PR CI 尚待运行，未合并，审阅结果未知。done 写入后再次执行同组只读自检，最终复核结果随交付列出。
+5. done 以本地文档验收与编排方的状态机约定为依据，不以用户决定或上述群内确认为依据，按约定记录测试缺依赖例外；本 PR CI 尚待运行，未合并，审阅结果未知。done 写入后再次执行同组只读自检，最终复核结果随交付列出。
 
 ### done 后实际复核
 
@@ -190,4 +190,4 @@ index catalog 仍输出 13 行既有任务的「旧格式事件，不追溯」�
 | 2026-10-30T08:20:02+08:00 | planned | planned | created：建立 strict 文档任务，限定五个文件。 | 写入前单独执行 TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00'；分支、HEAD、干净工作区、路径安全与前例已核对。 |
 | 2026-10-30T08:21:02+08:00 | planned | in-progress | 开始插入双语发布段并同步 ENTRYPOINT 四处版本。 | 转换前单独执行 TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00'；本地 tag、#198 pin 与四处旧版本均已核对，Release／CI 来源与边界已记录。 |
 | 2026-10-30T08:21:47+08:00 | in-progress | checking | 双语发布段与四处版本已写入，进入最终本地检查。 | 转换前单独执行 TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00'；生成器输出 INDEX_SAME False False，按候选内容仅新增本任务导航，随后核验字节一致性。 |
-| 2026-10-30T08:23:14+08:00 | checking | done | 本地文档自检完成，按单轮约定在合入前记录 done。用户 2026-10-30 群内决定（本地自检完成后记录 done），Lord 记录。注：分钟不可考。 | 写入前单独执行 TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00'；parser checking False 3 None、HISTORY (None, True)、INDEX_SAME True True；精确字节约束、14 项禁词与路径前缀计数、五文件范围及 diff --check 均通过；pytest 命令 exit 1，No module named pytest，按缺依赖例外记录未运行，未安装。未提交、未合并；本 PR CI 尚待运行，审阅结果未知，不以已发布提交 CI 冒充本 PR 验证；done 后复跑同组只读检查。 |
+| 2026-10-30T08:23:14+08:00 | checking | done | 本地文档自检完成，按单轮约定在合入前记录 done。编排方整理：按状态机约定在合入前记录 done。 | 写入前单独执行 TZ=Asia/Shanghai date '+%Y-%m-%dT%H:%M:%S+08:00'；parser checking False 3 None、HISTORY (None, True)、INDEX_SAME True True；精确字节约束、14 项禁词与路径前缀计数、五文件范围及 diff --check 均通过；pytest 命令 exit 1，No module named pytest，按缺依赖例外记录未运行，未安装。未提交、未合并；本 PR CI 尚待运行，审阅结果未知，不以已发布提交 CI 冒充本 PR 验证；done 后复跑同组只读检查。 |
