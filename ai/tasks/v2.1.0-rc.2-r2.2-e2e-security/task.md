@@ -4,11 +4,11 @@ id: v2.1.0-rc.2-r2.2-e2e-security
 workflow_mode: strict
 mode_source: user
 mode_note: 用户明确 strict；主会话唯一 writer／验证 controller；仅授权 worktree 内三个本地 commit，显式路径暂存；不 push／PR／评论／merge／rebase／amend，不修改全局配置或其他 worktree。
-status: in-progress
+status: done
 branch: feat/v2.1.0-rc.2-r2.2-pr1-disk-quota-507
 created_at: '2026-10-23T12:40:31+08:00'
-updated_at: '2026-10-28T08:02:27+08:00'
-completed_at: null
+updated_at: '2026-10-30T10:33:27+08:00'
+completed_at: '2026-10-30T10:33:27+08:00'
 ---
 
 # R2.2 PR-1：共享磁盘配额与 507
@@ -247,6 +247,8 @@ PR-1 本地提交证据：
 | 2026-10-25T04:36:10+08:00 | in-progress | in-progress | 写入者：PR-4 operator；记录补正：授权根改写为 `/workspace/640-skills-r22-pr4`，PR-4 模型表单列 main 内部辅助 model_usage 行 | Reviewy 要求的路径写法；session jsonl 只读复核 26 条 purpose find、typesafe/jev-latest，不计入 main 93 / 163 与 ping 1 / 0；历史正文与事件保留，status／completed_at 不变。 |
 | 2026-10-25T10:49:48+08:00 | in-progress | in-progress | 写入者：回填 PR（编排方整理）；记录补正：说明 2026-10-25T04:36:10 事件的依据，补充 10000 档审计 not-met 原因与 #174 实际合入数字；原事件逐字保留 | 见文末「R2.2 PR-4 记录补正（回填 PR 追加）」节；status／completed_at 不变；不改 runtime_perf.py 或任何代码。 |
 | 2026-10-28T08:02:27+08:00 | in-progress | in-progress | 写入者：rc.2 tag 回填 PR（编排方整理）；记录用户 2026-10-27 群内 D9 确认（Lord 记录，注：分钟不可考。）；R2.2 保持 in-progress | 见文末「R2.2 D9 群内确认记录（rc.2 tag 回填 PR 追加）」；D9 外其余 pending 项未验证，completed_at 保持 null；原事件与原表逐字保留 |
+| 2026-10-30T10:22:16+08:00 | in-progress | checking | 写入者：PR-2 收口（编排方整理）；用户 2026-10-30 群内确认（接受未验证项，R2.2 按已关闭、未验证项未声称通过收口），Lord 记录。注：分钟不可考。本轮据此追加收口记录，进入 checking。 | 改前 parser：in-progress False 55 None；HISTORY (None, True)。本会话 git log 核实 83b14ba（#162）、4d29fc5（#163）、253dcec（#164）、9ceb530（#165）、fcd835e（#166）、9ced668（#167）、7cbb929（#174）、e85873c（#177）、861c42a（#178）、e45565a（#192）、d2a6e37（#193）、ecab0f0（#194）；见文末「R2.2 收口记录（PR-2 收口追加）」节。 |
+| 2026-10-30T10:33:27+08:00 | checking | done | 写入者：PR-2 收口（编排方整理）；用户 2026-10-30 群内确认（接受未验证项，R2.2 按已关闭、未验证项未声称通过收口），Lord 记录。注：分钟不可考。编排方整理：按状态机约定在合入前记录 done。 | done 前 parser：checking False 56 None；HISTORY (None, True)；INDEX_SAME True True；禁词计数全部 0；历史保全、plan 两行 8 列、index 仅增一行、diff --check 与四文件范围检查完成。pytest（编排方整理）：39 passed, 224 subtests passed in 0.53s（2026-10-30T10:28:31+08:00），非本会话执行。见文末「R2.2 收口记录（PR-2 收口追加）」及「R2.2 收口模型记录与 done（PR-2 收口追加）」两节。未提交、未合并；本 PR CI 尚待运行，审阅结果未知。 |
 
 ## R2.2 PR-2 Book Gate Plan（追加）
 
@@ -1292,3 +1294,68 @@ Gate结论：DDD／DDIA／legacy／refactoring／release的生产变更触发条
 上方基线 :1263-1271「R2.2 PR-4 完成项与阻塞项」表与各既有事件为历史记录，逐字保留不改写；其中 D9 行与「Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉」行的字体／长页／分页视觉部分由本节群内记录覆盖，Mac 上 JPEG／PDF 字节数仍未验证。
 
 R2.2 状态判定依据：基线 :20-27「范围与验收」，尤其 :27「PR-4 §18 性能、默认配额容量校准与 R2.2 收尾」（提示定位为 :25，实际基线为 :27），以及基线 :1263-1271 完成项与阻塞项表。D9 的用户 Mac 视觉／字体确认已有上述群内记录，但 macOS 实机性能、Mac 上 JPEG／PDF 字节数、原生 Windows 性能、百万事件／1万任务／10万步骤及百万CSV、完整四格式容量／平台资源上限／最大长图CSV规模仍为 pending 未验证，完成条件未满足。因此 status 保持 in-progress、completed_at 保持 null，plan R2.2 行不改；不加 checking／done 事件，R2.2 收尾仍 pending。以上行号均指本 PR 编辑前基线，主状态事件表追加一行后，原阻塞表顺延一行。
+
+## R2.2 收口记录（PR-2 收口追加）
+
+用户 2026-10-30 群内确认（接受未验证项，R2.2 按已关闭、未验证项未声称通过收口），Lord 记录。注：分钟不可考。
+
+收口口径：R2.2 已关闭，未验证项未声称通过。本节不改写任何既有表格或事件；基线「R2.2 PR-4 完成项与阻塞项」表（本轮编辑前 :1264–1272）与 D9 记录节为历史记录，逐字保留；其中「R2.2 收尾——pending」一行由本节收口结论取代（append-only）。
+
+本轮在 `docs/v2.1.0-rc.2-r2.2-f-closeout` 分支追加文档记录；历史 frontmatter branch 与既有绑定记录保留，不声称执行 TaskStore rebind 或自动恢复。
+
+### 已有证据
+
+以下提交均由本会话逐个执行 `git log -1 --format='%H %cI %s' <sha>` 只读核实；只引用既有合入，不新增测量：
+
+- `83b14ba`（#162，PR-1）：snapshots／exports 共享磁盘配额与 507。
+- `4d29fc5`（#163，PR-2）：AC-56 Host／Origin 负例、ticket 不落日志证据与 ADR 风险说明。
+- `253dcec`（#164，PR-3）：原生 macOS／Windows E2E、四格式与 Panel 对账。
+- `9ceb530`（#165）：queryStatistics 共享 507 响应契约。
+- `fcd835e`（#166）：移除已接入 HTTP 操作的旧 library 标记与过时摘要。
+- `9ced668`（#167）：statistics/query 新快照受配额拒绝时的 507 实现。
+- `7cbb929`（#174，PR-4）：性能如实测量、默认磁盘配额校准与 D9 停点记录。
+- `e85873c`（#177）：Docs B／C 合入、R2.2 PR-4／F 记录补正与 plan 派生行口径更正。
+- `861c42a`（#178）：runtime_perf 默认事件数改为 10_000，并标注未达 1M 档。
+- `e45565a`（#192）：E 预发布 CHANGELOG 与任务记录。
+- `d2a6e37`（#193）：rc.2 tag 事实、R2.2 D9 记录与 CHANGELOG 日期补记。
+- `ecab0f0`（#194）：plan F 行目录说明与 tag-backfill 行补记。
+
+PR-4 已完成的本地性能／容量测量与覆盖映射见本文件「R2.2 PR-4 最终性能结果与覆盖映射（追加）」节。D9 用户 Mac 视觉／字体确认见本文件「R2.2 D9 群内确认记录（rc.2 tag 回填 PR 追加）」节；该节是群内记录，不是仓库内测量或 CI 证据，本轮不加强其证明范围。
+
+### 未验证项
+
+1. macOS 实机性能（对应基线「macOS 实机性能——pending」）——未验证，未声称通过
+2. Mac 上的 JPEG/PDF 字节数（对应基线「Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉——pending」中的字节数部分；字体／长页／分页视觉部分见 D9 记录节）——未验证，未声称通过
+3. 原生 Windows 性能（对应基线「原生 Windows 性能——pending」）——未验证，未声称通过
+4. 百万级规模（对应基线「百万事件／1万任务／10万步骤及百万CSV——pending」）——未验证，未声称通过
+5. 四格式容量（对应基线「完整四格式容量／平台资源上限／最大长图CSV规模——pending」）——未验证，未声称通过
+
+### 状态与边界
+
+本 PR 不做新测量、不改代码／contract／schema／PRD／默认配额；done 不代表上述五项通过，也不代表发布就绪、AC-62 或 AC-33 通过。
+
+编排方整理：按状态机约定在合入前记录 done。本轮先进入 checking，done 由第 2 轮写入；本轮 completed_at 保持 null，plan.md 不改。
+
+## R2.2 收口模型记录与 done（PR-2 收口追加）
+
+编排方整理：下表模型与计数口径来自 executor 统计（据会话 jsonl）；第 1 轮全部 assistant 消息模型为 openai-codex/gpt-6-astra。本会话不读取会话文件、不自计最终次数。
+
+| 轮次／用途 | 模型（thinking） | assistant 消息／toolCall | model_usage | 产出 |
+|---|---|---|---|---|
+| ping | openai-codex/gpt-6-astra（high） | 1／0（executor 统计） | 无 model_usage 记录（executor 统计） | 连通性确认 |
+| main 第 1 轮 | openai-codex/gpt-6-astra（high） | 20／51（read 16、bash 20、todo 6、grep 4、edit 4、write 1；task 工具调用 0；executor 统计） | 无 model_usage 记录（executor 统计） | R2.2 checking、f-docs-backfill 任务建立、index 生成 |
+| main 第 2 轮（本会话） | openai-codex/gpt-6-astra（high） | 本会话落盘时尚未结束，计数不在本文件自计；以编排方报告为准（executor 统计） | 本会话落盘时尚未结束，计数不在本文件自计；以编排方报告为准（executor 统计） | R2.2 与本任务 done、plan.md 两行同步 |
+
+编排方整理：第 1 轮写入后的工作树上，编排方在 uv 临时环境执行 `uv run --no-project --with pytest --with pyyaml --with jsonschema python -B -m pytest -q -p no:cacheprovider tests/test_workflow_contracts.py`，实际输出 `39 passed, 224 subtests passed in 0.53s`（2026-10-30T10:28:31+08:00）。本会话不运行 pytest，不把他方结果写成本会话通过。
+
+编排方整理：按状态机约定在合入前记录 done。
+
+用户 2026-10-30 群内确认（接受未验证项，R2.2 按已关闭、未验证项未声称通过收口），Lord 记录。注：分钟不可考。
+
+1. macOS 实机性能——未验证，未声称通过。
+2. Mac 上的 JPEG/PDF 字节数——未验证，未声称通过。
+3. 原生 Windows 性能——未验证，未声称通过。
+4. 百万级规模——未验证，未声称通过。
+5. 四格式容量——未验证，未声称通过。
+
+done 不代表上述五项通过，不代表发布就绪、AC-62 或 AC-33 通过。前一收口节的 checking／completed_at null／plan 不改为第 1 轮历史说明；第 2 轮记录 done 并同步 plan 两行。未提交、未合并；本 PR CI 尚待运行，审阅结果未知。
