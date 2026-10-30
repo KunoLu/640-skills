@@ -1324,10 +1324,10 @@ PR-4 已完成的本地性能／容量测量与覆盖映射见本文件「R2.2 P
 
 ### 未验证项
 
-1. macOS 真机性能（对应基线「macOS 实机性能——pending」）——未验证，未声称通过
-2. Mac JPEG/PDF 字节数（对应基线「Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉——pending」中的字节数部分；字体／长页／分页视觉部分见 D9 记录节）——未验证，未声称通过
+1. macOS 实机性能（对应基线「macOS 实机性能——pending」）——未验证，未声称通过
+2. Mac 上的 JPEG/PDF 字节数（对应基线「Mac 上 JPEG／PDF 字节数、字体／长页／分页视觉——pending」中的字节数部分；字体／长页／分页视觉部分见 D9 记录节）——未验证，未声称通过
 3. 原生 Windows 性能（对应基线「原生 Windows 性能——pending」）——未验证，未声称通过
-4. 百万行规模（对应基线「百万事件／1万任务／10万步骤及百万CSV——pending」）——未验证，未声称通过
+4. 百万级规模（对应基线「百万事件／1万任务／10万步骤及百万CSV——pending」）——未验证，未声称通过
 5. 四格式容量（对应基线「完整四格式容量／平台资源上限／最大长图CSV规模——pending」）——未验证，未声称通过
 
 ### 状态与边界
@@ -1343,7 +1343,7 @@ PR-4 已完成的本地性能／容量测量与覆盖映射见本文件「R2.2 P
 | 轮次／用途 | 模型（thinking） | assistant 消息／toolCall | model_usage | 产出 |
 |---|---|---|---|---|
 | ping | openai-codex/gpt-6-astra（high） | 1／0（executor 统计） | 无 model_usage 记录（executor 统计） | 连通性确认 |
-| main 第 1 轮 | openai-codex/gpt-6-astra（high） | 20／51（read 16、bash 20、todo 6、grep 4、edit 4、write 1；task 工具调用 0；executor 统计） | 无 model_usage 记录（executor 统计） | R2.2 checking、本任务建立、index 生成 |
+| main 第 1 轮 | openai-codex/gpt-6-astra（high） | 20／51（read 16、bash 20、todo 6、grep 4、edit 4、write 1；task 工具调用 0；executor 统计） | 无 model_usage 记录（executor 统计） | R2.2 checking、f-docs-backfill 任务建立、index 生成 |
 | main 第 2 轮（本会话） | openai-codex/gpt-6-astra（high） | 本会话落盘时尚未结束，计数不在本文件自计；以编排方报告为准（executor 统计） | 本会话落盘时尚未结束，计数不在本文件自计；以编排方报告为准（executor 统计） | R2.2 与本任务 done、plan.md 两行同步 |
 
 编排方整理：第 1 轮写入后的工作树上，编排方在 uv 临时环境执行 `uv run --no-project --with pytest --with pyyaml --with jsonschema python -B -m pytest -q -p no:cacheprovider tests/test_workflow_contracts.py`，实际输出 `39 passed, 224 subtests passed in 0.53s`（2026-10-30T10:28:31+08:00）。本会话不运行 pytest，不把他方结果写成本会话通过。
@@ -1352,10 +1352,10 @@ PR-4 已完成的本地性能／容量测量与覆盖映射见本文件「R2.2 P
 
 用户 2026-10-30 群内确认（接受未验证项，R2.2 按已关闭、未验证项未声称通过收口），Lord 记录。注：分钟不可考。
 
-1. macOS 真机性能——未验证，未声称通过。
-2. Mac JPEG/PDF 字节数——未验证，未声称通过。
+1. macOS 实机性能——未验证，未声称通过。
+2. Mac 上的 JPEG/PDF 字节数——未验证，未声称通过。
 3. 原生 Windows 性能——未验证，未声称通过。
-4. 百万行规模——未验证，未声称通过。
+4. 百万级规模——未验证，未声称通过。
 5. 四格式容量——未验证，未声称通过。
 
 done 不代表上述五项通过，不代表发布就绪、AC-62 或 AC-33 通过。前一收口节的 checking／completed_at null／plan 不改为第 1 轮历史说明；第 2 轮记录 done 并同步 plan 两行。未提交、未合并；本 PR CI 尚待运行，审阅结果未知。
