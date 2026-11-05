@@ -58,6 +58,22 @@ REVIEWED_FAMILY_V250 = {
     **REVIEWED_FAMILY_V260,
     "caveman": "cfe5ad82c6b43421624d20dd30dc83100bb9516f889b0b2a8bb2cdd0dbd2a6be",
 }
+REVIEWED_FAMILY_V401 = {
+    "cavecrew": "2ba088a27199b7c41b9f9765bf6e8d6f580a645ce0094051f8f5d5733d6cb4de",
+    "caveman": "7d9d77c6a276780f9295d377bb8dfb1fb5be5c16ccb5043e0d1b2acef23508ed",
+    "caveman-commit": "68fce6cc3c50050e8ede6df99d4f478582d9b5952782c441acf2477b16d706db",
+    "caveman-compress": "bf58594d45b03e559935a94a56528835f199808c282a6d7f29105e9599321db5",
+    "caveman-discover": "0a52f133aef4d3b81e9554cc43132bcf1accedb1154f6ac8e75df24f5f58f537",
+    "caveman-evidence-review": "fc5959727ef2f822d756c7e837abea51be91c32e0ca87758c1b77f68c98d5552",
+    "caveman-explore": "8fa46ff537d60dba875442db7530918fe4790cfddfb2d60d23e3a82ba6c95a94",
+    "caveman-help": "346cdf9f89e8be8e8006f2ec01836dd87f365f7b70853dc871aedff58f5c50ad",
+    "caveman-learn": "2c2f56c8792c975a5b250348f970f24eb2654a364fd1162fb08c35625502fda9",
+    "caveman-manage": "e6ad788986936cbe49bdf12cf122fa966dd9e20c0ea7716397e0049d9f833d5a",
+    "caveman-optimize": "35dd36fa4b6fe800e9c1db8818b5e79ee18448372f33bd48ee593516d131a947",
+    "caveman-review": "d50a54e5b5a5bae7fcac1a4472cfd34ce47c9a8183d1357928eac4c2bd8322db",
+    "caveman-setup": "546eb697be5b87cec06117c4eb6d3e9eac55331cb860d2743c2d7b6f45c261b4",
+    "caveman-stats": "00a8e24bd1544e07bf2e372700015746dc7ba3937b1d161bcf9377b2147921e4",
+}
 
 
 def core_only_known_families() -> dict[str, dict[str, dict[str, bytes]]]:
@@ -117,6 +133,12 @@ class CavemanMaintenanceTests(unittest.TestCase):
             for ref, members in declared.items()
         }
         stack = contextlib.ExitStack()
+        # Fixture refs stay labelled "v2.6.0"/"v2.5.0" regardless of the real
+        # pin; patch the pinned ref too so "current" keeps meaning the
+        # fixture's current snapshot when the production pin moves.
+        stack.enter_context(
+            mock.patch.object(module, "CAVEMAN_PINNED_REF", "v2.6.0")
+        )
         stack.enter_context(
             mock.patch.object(module, "CAVEMAN_CORE_SKILL_SHA256", CURRENT_HASH)
         )
@@ -179,18 +201,25 @@ class CavemanMaintenanceTests(unittest.TestCase):
         self.assertEqual(
             module.CAVEMAN_SOURCE_REPO, "https://github.com/JuliusBrussee/caveman.git"
         )
-        self.assertEqual(module.CAVEMAN_PINNED_REF, "v2.6.0")
+        self.assertEqual(module.CAVEMAN_PINNED_REF, "v4.0.1")
         self.assertEqual(
             module.CAVEMAN_PINNED_REVISION,
-            "b82c0ad42c2bedc1f2cd78e414dadfaffbaaeec3",
+            "d262ab3882952a59312ff3537cd86d894523c5ab",
         )
         self.assertEqual(
             module.CAVEMAN_CORE_SKILL_SHA256,
+            "415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b",
+        )
+        self.assertEqual(
+            module.CAVEMAN_KNOWN_CORE_SKILL_SHA256["v2.6.0"],
             "c4d7354b4b063d54601fcdd5097a5b1713d1a1a2e386ac39efa438aa1ffef8ce",
         )
         self.assertEqual(
             module.CAVEMAN_KNOWN_CORE_SKILL_SHA256["v2.5.0"],
             "fec5718a391dd9d8c89746d39e0cc0fa7aa5b50447669a15e44c3244167828c0",
+        )
+        self.assertEqual(
+            module.CAVEMAN_KNOWN_FAMILY_SHA256["v4.0.1"], REVIEWED_FAMILY_V401
         )
         self.assertEqual(
             module.CAVEMAN_KNOWN_FAMILY_SHA256["v2.6.0"], REVIEWED_FAMILY_V260
@@ -1007,9 +1036,10 @@ class CavemanMaintenanceTests(unittest.TestCase):
             mock.patch.dict(module.os.environ, isolated_env, clear=True),
         ):
             results = module.build_check_results(args)
+            pinned_ref = module.CAVEMAN_PINNED_REF
         caveman = next(item for item in results["skills"] if item["name"] == "caveman")
         self.assertEqual(caveman["maintenanceState"], "outdated")
-        self.assertEqual(caveman["pinnedRef"], module.CAVEMAN_PINNED_REF)
+        self.assertEqual(caveman["pinnedRef"], pinned_ref)
         self.assertEqual(caveman["maintenanceScope"], "workflow-skill-payload-only")
         self.assertEqual(self.skill_path("caveman").read_bytes(), OLDER_SKILL)
 
@@ -1120,12 +1150,13 @@ class CavemanMaintenanceTests(unittest.TestCase):
             mock.patch.dict(module.os.environ, isolated_env, clear=True),
         ):
             results = module.build_check_results(args)
+            pinned_ref = module.CAVEMAN_PINNED_REF
             with contextlib.redirect_stdout(stdout):
                 module.print_check_results(results, False)
         text = stdout.getvalue()
         self.assertIn("- caveman [interaction]: installed", text)
         self.assertIn("maintenance: unknown-drift", text)
-        self.assertIn(f"pinned {module.CAVEMAN_PINNED_REF}", text)
+        self.assertIn(f"pinned {pinned_ref}", text)
         self.assertIn("planned action: none", text)
         self.assertEqual(self.skill_path("caveman").read_bytes(), UNKNOWN_SKILL)
 

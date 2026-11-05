@@ -7,6 +7,13 @@
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
 
+## v2.1.0-rc.4（未发布）
+
+### 变更
+
+- 受管 Caveman pin 从 `v2.6.0`（`b82c0ad`）晋升到 `v4.0.1`（`d262ab3`）：`CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`、`CAVEMAN_CORE_SKILL_SHA256` 与 reviewed family 摘要成套更新，`v2.6.0`／`v2.5.0` 身份保留为已知旧载荷，仍按备份后替换升级。审核证据：v4.0.1 核心 `caveman` Skill 是单一默认语气（旧 lite/full/ultra/wenyan 强度级别移入独立的 `ultracave`／`megacave` Skill，二者保持用户管理，不在受管 `caveman*`／`cavecrew*` 载荷范围内）；Onboard 安装路径仍克隆 pinned revision 且只复制 family Skill 目录，上游安装器新增的 hooks/settings 代码不进入受管路径。sbtd-task 表达规则删除对已退役强度级别的引用：手动 `/caveman` 跟随外部 Skill 默认语气，`/caveman ultra`／`/caveman wenyan` 作为可选伴随 Skill 的别名；auto-lite 改为 caveman 语气的内联轻量子集，不再引用「lite 级别」。双 README 的 `/caveman lite` 表述更正为 `/caveman`。ENTRYPOINT 的 Caveman 行不变：它只监控上游 `v*` tag，从不驱动 pin。
+
+
 ## v2.1.0-rc.3（2026-10-29）
 
 预发布版 [v2.1.0-rc.3](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.3) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag（tag 对象 `1715486dfb6da359d6ec6646e923a70795e4a8fd`）指向 `ce37b6d5d7487109a92856c7a2c41a8f86efdfba`，该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/40868198008)在 attempt 1 通过，按作业名 13 个 job 全部成功（`dashboard-artifacts`、`linux-full`、`linux-shards (1)`、`linux-shards (2)`、`linux-shards (3)`、`macos-bash-installer`、`runtime-e2e-macos`、`runtime-e2e-windows`、`windows-powershell-installer`、`windows-shards (1)`、`windows-shards (2)`、`windows-shards (3)`、`windows-shards (4)`）；各平台测试计数未采集（unknown）。源码预发布不执行本机安装、workflow sync、项目迁移、现有宿主重载或备份处置；`sbtd-runtime/` 仍为可选且观察默认关闭，serve 与 Dashboard 只通过显式前台命令启动，不启动后台采集器。

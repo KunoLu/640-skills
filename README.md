@@ -312,7 +312,7 @@ Do not install tools, migrate data, deploy or sync configuration without separat
 
 Want tracker deliverables? Explicitly request **to-spec** or **to-tickets**, identify the tracker and authorize publication. These are not substitutes for local task state, and their tracker setup is not automatically supplied by Onboard.
 
-Want a different reply style? `adhd mode` opts into **i-have-adhd**; `/caveman lite` requests compact replies when Caveman is available. `normal mode` exits both. **Reply style never changes default/lite/strict execution requirements.**
+Want a different reply style? `adhd mode` opts into **i-have-adhd**; `/caveman` requests compact replies when Caveman is available. `normal mode` exits both. **Reply style never changes default/lite/strict execution requirements.**
 
 <a id="workflow"></a>
 ## How the workflow fits together

@@ -303,7 +303,7 @@ OMP 部署也接受由绑定的成功迁移回执及完整原件证明的配置�
 
 需要工单产物？明确请求 **to-spec** 或 **to-tickets**，指定 tracker 并授权发布。它们不替代本地 task 状态；Onboard 也不会自动提供它们需要的 tracker 配置。
 
-需要调整回复风格？`adhd mode` 显式启用 **i-have-adhd**；Caveman 可用时，`/caveman lite` 请求精简回复；`normal mode` 同时退出两者。**输出风格不改变 default/lite/strict 的执行义务。**
+需要调整回复风格？`adhd mode` 显式启用 **i-have-adhd**；Caveman 可用时，`/caveman` 请求精简回复；`normal mode` 同时退出两者。**输出风格不改变 default/lite/strict 的执行义务。**
 
 <a id="workflow"></a>
 ## 工作流如何配合
