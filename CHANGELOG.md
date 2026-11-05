@@ -7,7 +7,9 @@ English · [简体中文](CHANGELOG.zh.md)
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
 
-## v2.1.0-rc.4 (Unreleased)
+## v2.1.0-rc.4 (2026-11-05)
+
+The [v2.1.0-rc.4 prerelease](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.4) is published (not marked Latest; v2.0.2 remains the latest stable). Its annotated tag (tag object `d5bb5b77864229da802421fc771779c81b9b2d37`) points to `de23e61d448bd6ce106dee4ee2ce532de674ac98`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/41999955020) passed with all 13 jobs successful.
 
 ### Added
 
