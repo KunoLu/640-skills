@@ -1,6 +1,6 @@
 # Dashboard 设计规格：自有 Token 定义（D17）
 
-> 状态：PR-1 交付（R2.0a 拆分后）；2026-10-29 按 omp stats 实测页面对齐色系／圆角／密度并加双语 i18n。范围：OMP 风格单页骨架的视觉与设计规格。
+> 状态：PR-1 交付（R2.0a 拆分后）；2026-10-29 按 omp stats 实测页面对齐色系／圆角／密度并加双语 i18n；2026-11-05（rc.4）进一步对齐：面板圆角 16→12px、KPI 带发丝竖分隔、表头 11px 小字距、状态 pill（色相染色填充）、Live 圆点脉冲（唯一动效，respects prefers-reduced-motion）、分段控件 active 态加落差阴影、主题切换改为绘制的 SVG 图标按钮；导出产物 `_CSS` 色板同步到同一组 token 值。范围：OMP 风格单页骨架的视觉与设计规格。
 > 锁定决定：D17（Q10-A）——仅参考 OMP 视觉语言自行实现，**零代码／零资源复制**，无许可证义务；OMP 许可证已核验为 MIT（grill-r1.md Q10），如需升级为 token／图标级复用须另行 ADR。
 > 本文把每一个 OMP 参考点写成**我们自己的 token 定义**；token 值由本项目自行确定，不取自 OMP 源码或资源。实现：`sbtd-runtime/dashboard/src/tokens.css`。
 
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 深色为主、可切浅色的双主题结构 | `:root` 默认深色 + `:root[data-theme="light"]`；`--sbtd-bg`、`--sbtd-bg-elevated`、`--sbtd-bg-inset` | 深色 `#000000 / #09090a / #050506`；浅色 `#f2f2f3 / #ffffff / #eceff3` | §12.3「OMP 风格的暗色主题与浅色主题；默认跟随系统，用户可切换并记忆」；2026-10-29 对齐实测 |
 | 克制的边框分隔而非重阴影 | `--sbtd-border`、`--sbtd-border-strong`、`--sbtd-border-width` | `rgba(255,255,255,.06/.12)`（深）／`rgba(0,0,0,.06/.12)`（浅）；1px | §12.3 版式规则 |
-| 圆角卡片、适中圆角控件 | `--sbtd-radius-panel`、`--sbtd-radius-control` | 16px／10px | 本项目自定（2026-10-29 对齐实测卡片圆角） |
+| 圆角卡片、适中圆角控件 | `--sbtd-radius-panel`、`--sbtd-radius-control` | 12px／10px | 本项目自定（rc.4 按实测卡片圆角复校） |
 | 宽松留白、不挤压表格 | `--sbtd-space-page`、`--sbtd-space-gap`、`--sbtd-space-panel-padding` | 24px／16px／20px | §12.3「页面 padding 24px、Panel gap 16px 为起始建议」 |
 | 正文可读字号、大号指标数值 | `--sbtd-font-size-body`、`--sbtd-font-size-secondary`、`--sbtd-font-size-title`、`--sbtd-font-size-metric` | 13.5px／12px／16px／28px | §12.3「正文／表格默认 14px 以上；指标数值 24–32px」；13.5px 为对齐实测基准，CJK 可读性经截图复核 |
 | 系统字体栈＋明确 CJK fallback | `--sbtd-font-family`、`--sbtd-font-mono` | Inter 本机存在时优先，否则系统栈含 PingFang SC／Hiragino Sans GB／Microsoft YaHei／Noto Sans CJK SC/JP；不下载 webfont | §13.4、D16（离线 HTML 纯系统字体栈＋CJK fallback，不写本机字体路径） |

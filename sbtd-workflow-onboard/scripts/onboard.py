@@ -280,14 +280,32 @@ TEMURIN_RELEASES_API_TEMPLATE = (
 )
 MAESTRO_INSTALL_URL = "https://get.maestro.mobile.dev"
 CAVEMAN_SOURCE_REPO = "https://github.com/JuliusBrussee/caveman.git"
-CAVEMAN_PINNED_REF = "v2.6.0"
-CAVEMAN_PINNED_REVISION = "b82c0ad42c2bedc1f2cd78e414dadfaffbaaeec3"
-CAVEMAN_CORE_SKILL_SHA256 = "c4d7354b4b063d54601fcdd5097a5b1713d1a1a2e386ac39efa438aa1ffef8ce"
+CAVEMAN_PINNED_REF = "v4.0.1"
+CAVEMAN_PINNED_REVISION = "d262ab3882952a59312ff3537cd86d894523c5ab"
+CAVEMAN_CORE_SKILL_SHA256 = "415d43518f2b1a9498c15a445d4657117b129ee5e81b19454ce348439cc6672b"
 CAVEMAN_KNOWN_CORE_SKILL_SHA256 = {
-    "v2.6.0": CAVEMAN_CORE_SKILL_SHA256,
+    "v4.0.1": CAVEMAN_CORE_SKILL_SHA256,
+    "v2.6.0": "c4d7354b4b063d54601fcdd5097a5b1713d1a1a2e386ac39efa438aa1ffef8ce",
     "v2.5.0": "fec5718a391dd9d8c89746d39e0cc0fa7aa5b50447669a15e44c3244167828c0",
 }
 CAVEMAN_KNOWN_FAMILY_SHA256 = {
+    # Reviewed at CAVEMAN_PINNED_REVISION.
+    "v4.0.1": {
+        "cavecrew": "2ba088a27199b7c41b9f9765bf6e8d6f580a645ce0094051f8f5d5733d6cb4de",
+        "caveman": "7d9d77c6a276780f9295d377bb8dfb1fb5be5c16ccb5043e0d1b2acef23508ed",
+        "caveman-commit": "68fce6cc3c50050e8ede6df99d4f478582d9b5952782c441acf2477b16d706db",
+        "caveman-compress": "bf58594d45b03e559935a94a56528835f199808c282a6d7f29105e9599321db5",
+        "caveman-discover": "0a52f133aef4d3b81e9554cc43132bcf1accedb1154f6ac8e75df24f5f58f537",
+        "caveman-evidence-review": "fc5959727ef2f822d756c7e837abea51be91c32e0ca87758c1b77f68c98d5552",
+        "caveman-explore": "8fa46ff537d60dba875442db7530918fe4790cfddfb2d60d23e3a82ba6c95a94",
+        "caveman-help": "346cdf9f89e8be8e8006f2ec01836dd87f365f7b70853dc871aedff58f5c50ad",
+        "caveman-learn": "2c2f56c8792c975a5b250348f970f24eb2654a364fd1162fb08c35625502fda9",
+        "caveman-manage": "e6ad788986936cbe49bdf12cf122fa966dd9e20c0ea7716397e0049d9f833d5a",
+        "caveman-optimize": "35dd36fa4b6fe800e9c1db8818b5e79ee18448372f33bd48ee593516d131a947",
+        "caveman-review": "d50a54e5b5a5bae7fcac1a4472cfd34ce47c9a8183d1357928eac4c2bd8322db",
+        "caveman-setup": "546eb697be5b87cec06117c4eb6d3e9eac55331cb860d2743c2d7b6f45c261b4",
+        "caveman-stats": "00a8e24bd1544e07bf2e372700015746dc7ba3937b1d161bcf9377b2147921e4",
+    },
     # Reviewed at f9a039a93d249f3fcdb47a9e02544cd1ce37ba4a.
     "v2.5.0": {
         "cavecrew": "673643f8c42f06f0904eb975a56923583c2cd47ce4bf5a5ac1e5e49b8e4b2c66",
@@ -305,7 +323,7 @@ CAVEMAN_KNOWN_FAMILY_SHA256 = {
         "caveman-setup": "546eb697be5b87cec06117c4eb6d3e9eac55331cb860d2743c2d7b6f45c261b4",
         "caveman-stats": "652eaffb8f6c635431ed238fa7ae2126e138ad7b1d26fae7390f8edc1af17bb0",
     },
-    # Reviewed at CAVEMAN_PINNED_REVISION.
+    # Reviewed at b82c0ad42c2bedc1f2cd78e414dadfaffbaaeec3.
     "v2.6.0": {
         "cavecrew": "673643f8c42f06f0904eb975a56923583c2cd47ce4bf5a5ac1e5e49b8e4b2c66",
         "caveman": "26b5e133a79a0251dad5e57acaa22ef601731fe59fb4637f9f150d7dfc250bad",

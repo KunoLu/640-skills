@@ -2,8 +2,11 @@
 
 Reads an omp session JSONL file the caller explicitly passes (omp stores them
 under ~/.omp/agent/sessions/<cwd-slug>/). The adapter never writes the session
-file and never scans HOME. Observed record shapes come from real omp 18.11.1
-sessions on this host:
+file and never scans HOME. Before reading a file whose name carries a session
+id (<timestamp>Z_<uuid>.jsonl), the CLI probes `omp session lease --json` and
+refuses the read while a running omp owns that session; a failed probe fails
+closed. `--no-lease-check` opts out explicitly. Observed record shapes come
+from real omp 18.11.1 sessions on this host:
 
 - {"type": "session", "id": ..., "timestamp": ...}         -> context
 - assistant message content item {"type": "toolCall", "id", "name",
@@ -21,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections.abc import Iterable
 from datetime import datetime
@@ -47,6 +51,69 @@ _OCCURRED_AT = re.compile(
 )
 # contracts/event.schema.json: component_id maxLength.
 _MAX_COMPONENT_ID = 128
+# omp session files are named <timestamp>Z_<session-uuid>.jsonl.
+_SESSION_FILE_ID = re.compile(
+    r"_([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\.jsonl$"
+)
+_LEASE_TIMEOUT_S = 10.0
+
+
+class LeaseCheckError(RuntimeError):
+    """The `omp session lease` probe failed, so no-writer is unproven."""
+
+
+def session_id_from_filename(name: str) -> str | None:
+    """Extract the session uuid from an omp-style session file name."""
+    match = _SESSION_FILE_ID.search(name)
+    return match.group(1) if match else None
+
+
+def query_held_session(
+    session_id: str, *, omp_command: str = "omp", timeout: float = _LEASE_TIMEOUT_S
+) -> bool:
+    """True when a running omp owns (may write) the session; fail-closed.
+
+    Any CLI/transport/output failure raises LeaseCheckError: a guard that
+    cannot prove its negative must not silently pass.
+    """
+    try:
+        completed = subprocess.run(
+            [omp_command, "session", "lease", "--json", "--", session_id],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise LeaseCheckError(f"omp session lease failed: {exc}") from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()[:200]
+        raise LeaseCheckError(
+            f"omp session lease exited {completed.returncode}: {detail}"
+        )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise LeaseCheckError(
+            f"omp session lease returned non-JSON output: {exc}"
+        ) from exc
+    held = payload.get("held") if isinstance(payload, dict) else None
+    if not isinstance(held, list):
+        raise LeaseCheckError("omp session lease output misses the held list")
+    return session_id in held
+
+
+def check_session_lease(path: Path | str, *, omp_command: str = "omp") -> str | None:
+    """Return the held session id for an omp-named session file, else None.
+
+    Files whose names carry no session id are foreign (packed/copied) input;
+    no lease question exists for them, so the guard does not apply.
+    """
+    session_id = session_id_from_filename(Path(path).name)
+    if session_id is None:
+        return None
+    if query_held_session(session_id, omp_command=omp_command):
+        return session_id
+    return None
 
 
 def _valid_instant(value: Any) -> str | None:
@@ -309,10 +376,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="confirm opening the store for writing (creates audit.db)",
     )
+    parser.add_argument(
+        "--no-lease-check",
+        action="store_true",
+        help="skip the `omp session lease` guard that proves no running omp "
+        "owns the session file before it is read",
+    )
     args = parser.parse_args(argv)
     if not args.installation_id or not args.device_id:
         print(json.dumps({"error": "installation_id and device_id are required"}))
         return 2
+    if not args.no_lease_check:
+        try:
+            held = check_session_lease(args.session_file)
+        except LeaseCheckError as exc:
+            print(json.dumps({"error": f"session lease check failed: {exc}"}))
+            return 2
+        if held is not None:
+            print(
+                json.dumps(
+                    {
+                        "error": f"session {held} is held by a running omp; "
+                        "refusing to read it"
+                    }
+                )
+            )
+            return 2
     from event_store import EventStore, StoreError
 
     try:

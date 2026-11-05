@@ -82,6 +82,20 @@ function fieldText(row: DatasetRow, name: string): string {
   return String(value);
 }
 
+/** Status text → pill tone (颜色+文字双通道；未知值落 unknown 不猜绿). */
+function statusTone(status: string): "ok" | "warn" | "error" | "unknown" {
+  const normalized = status.toLowerCase();
+  if (["succeeded", "completed", "done", "ok", "passed", "pass"].includes(normalized))
+    return "ok";
+  if (["failed", "error"].includes(normalized)) return "error";
+  if (["blocked", "cancelled", "declined"].includes(normalized)) return "warn";
+  return "unknown";
+}
+
+export function StatusPill({ status }: { status: string }) {
+  return <span className={`pill pill-${statusTone(status)}`}>{status}</span>;
+}
+
 /** One line describing a row for preview lists; nulls render as unknown. */
 function rowLabel(row: DatasetRow): string {
   const occurred = fieldText(row, "occurred_at");
@@ -360,7 +374,9 @@ function TaskDetail({
                   <td>{fieldText(row, "attempt_no")}</td>
                   <td>{fieldText(row, "started_at")}</td>
                   <td>{fieldText(row, "duration_ms")}</td>
-                  <td>{fieldText(row, "status")}</td>
+                  <td>
+                    <StatusPill status={fieldText(row, "status")} />
+                  </td>
                 </tr>
               ))}
             </tbody>

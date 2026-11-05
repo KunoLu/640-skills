@@ -32,6 +32,7 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 - toolResult 没有对应已观察 toolCall（orphan）时 `state.previous=null`，不伪造 `running`，也不产出 measurement（schema 无 null measurement，块整体省略）。
 - `component_id` 超过 128 字符（schema maxLength）的 toolCall 整体跳过并计数，不产出事件。
 - CLI 在 `installation_id`／`device_id` 为空时以 exit 2 + JSON error 拒绝，不创建 audit.db。
+- 读取前 lease 守卫：文件名携带会话 id（`<时间戳>Z_<uuid>.jsonl`）时，CLI 先执行 `omp session lease --json -- <id>`；id 在 held 列表（运行中 omp 持有、可能正在写）→ exit 2 + JSON error 拒绝读取，不打开事件库；探测失败（CLI 不可用／超时／非零退出／输出不可解析）→ 失败关闭，exit 2 + JSON error。文件名不含会话 id 的外来文件（pack／复制）不适用该守卫；`--no-lease-check` 显式跳过。lease 是即时建议性信号，不消除检查后 omp 开始写入的竞态窗口；重复 ingest 的去重语义不受影响。
 
 用法：
 
@@ -39,6 +40,7 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
   --runtime-home "$SBTD_RUNTIME_HOME" \
   --installation-id <opaque-id> --device-id <opaque-id> --confirmed
+  # 可选：--no-lease-check 显式跳过 lease 守卫
 ```
 
 重复 ingest 同一文件：靠 `(source_id, source_event_id)` 去重只确认，不重复计数。

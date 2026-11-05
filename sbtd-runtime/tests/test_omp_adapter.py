@@ -383,5 +383,152 @@ class IngestSessionTests(unittest.TestCase):
         self.assertFalse((self.home / "audit.db").exists())
 
 
+class SessionLeaseTests(unittest.TestCase):
+    """读会话文件前经 `omp session lease` 确认无运行中 omp 持有该会话。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+        self.home = self.dir / "runtime"
+        _enable(self.home)
+        self.path = _write_fixture(self.dir)
+
+    def _main(self, extra: list[str] | None = None) -> tuple[int, str]:
+        from io import StringIO
+        from unittest.mock import patch
+
+        from omp_adapter import main
+
+        argv = [
+            str(self.path),
+            "--runtime-home",
+            str(self.home),
+            "--installation-id",
+            INSTALLATION,
+            "--device-id",
+            DEVICE,
+            "--confirmed",
+            *(extra or []),
+        ]
+        stdout = StringIO()
+        with patch("sys.stdout", stdout):
+            code = main(argv)
+        return code, stdout.getvalue()
+
+    def _lease_result(self, held: list[str]) -> object:
+        import subprocess
+
+        return subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=json.dumps({"held": held, "unknown": []})
+        )
+
+    def test_session_id_from_filename(self) -> None:
+        from omp_adapter import session_id_from_filename
+
+        self.assertEqual(session_id_from_filename(self.path.name), SESSION_ID)
+        self.assertIsNone(session_id_from_filename("notes.txt"))
+        self.assertIsNone(session_id_from_filename("session.jsonl"))
+
+    def test_held_session_blocks_before_store_and_reports(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "omp_adapter.subprocess.run",
+            return_value=self._lease_result([SESSION_ID]),
+        ) as run:
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        payload = json.loads(out)
+        self.assertIn("held", payload["error"])
+        self.assertIn(SESSION_ID, payload["error"])
+        self.assertFalse((self.home / "audit.db").exists())
+        args = run.call_args.args[0]
+        self.assertEqual(args[1:], ["session", "lease", "--json", "--", SESSION_ID])
+
+    def test_unheld_session_ingests(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "omp_adapter.subprocess.run", return_value=self._lease_result([])
+        ):
+            code, out = self._main()
+        self.assertEqual(code, 0)
+        self.assertIn('"accepted": 5', out)
+        self.assertTrue((self.home / "audit.db").exists())
+
+    def test_lease_cli_failure_fails_closed(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "omp_adapter.subprocess.run", side_effect=OSError("omp not found")
+        ):
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        self.assertIn("lease", json.loads(out)["error"])
+        self.assertFalse((self.home / "audit.db").exists())
+
+    def test_lease_bad_output_fails_closed(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        bad = subprocess.CompletedProcess(args=[], returncode=0, stdout="not json")
+        with patch("omp_adapter.subprocess.run", return_value=bad):
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        self.assertFalse((self.home / "audit.db").exists())
+
+    def test_lease_nonzero_exit_fails_closed(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        failed = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="omp exploded"
+        )
+        with patch("omp_adapter.subprocess.run", return_value=failed):
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        self.assertIn("exited 1", json.loads(out)["error"])
+        self.assertFalse((self.home / "audit.db").exists())
+
+    def test_lease_timeout_fails_closed(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        with patch(
+            "omp_adapter.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="omp", timeout=10),
+        ):
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        self.assertIn("lease", json.loads(out)["error"])
+        self.assertFalse((self.home / "audit.db").exists())
+
+    def test_no_lease_check_flag_skips_guard(self) -> None:
+        from unittest.mock import patch
+
+        with patch(
+            "omp_adapter.subprocess.run",
+            side_effect=AssertionError("lease must not run"),
+        ):
+            code, out = self._main(["--no-lease-check"])
+        self.assertEqual(code, 0)
+        self.assertIn('"accepted": 5', out)
+
+    def test_foreign_filename_without_session_id_skips_guard(self) -> None:
+        from unittest.mock import patch
+
+        foreign = self.dir / "packed-export.jsonl"
+        foreign.write_text(self.path.read_text(encoding="utf-8"), encoding="utf-8")
+        self.path = foreign
+        with patch(
+            "omp_adapter.subprocess.run",
+            side_effect=AssertionError("lease must not run"),
+        ):
+            code, out = self._main()
+        self.assertEqual(code, 0)
+        self.assertIn('"accepted": 5', out)
+
+
 if __name__ == "__main__":
     unittest.main()
