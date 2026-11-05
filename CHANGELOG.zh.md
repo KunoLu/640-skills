@@ -15,6 +15,8 @@
 
 ### 变更
 
+- 全量工具版本评审后刷新 ENTRYPOINT 监控基线：Codex `v0.162.1` → `v0.166.0`、OMP `v18.11.0` → `v18.16.0`、Maestro `cli-2.11.0` → `cli-2.12.1`（§0 监控表与 §10 汇总同步），与本机实装及上游 stable 一致；Caveman `v4.0.1`、Playwright `v1.64.1` 与 Graft `v0.28.0` 工作流 pin 经核实为当前（上游 Graft `0.28.1` 按 pin 策略仅评估）。Skill 模板、REFERENCE 与版本检查 automation prompt 中无残留过期版本引用；capability-matrix 冻结 pin（`codex@0.163.0`／`omp@18.11.1`）属 ADR 0001 验收门禁而非版本现值，保持不变。外部 Skills stable 集（`2026-10-28.1`）有三个上游仓库 HEAD 已移动（mattpocock/skills、impeccable、ui-ux-pro-max-skill）；stable 晋升是独立评审流程，不夹带进本次变更。
+
 - 受管 Caveman pin 从 `v2.6.0`（`b82c0ad`）晋升到 `v4.0.1`（`d262ab3`）：`CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`、`CAVEMAN_CORE_SKILL_SHA256` 与 reviewed family 摘要成套更新，`v2.6.0`／`v2.5.0` 身份保留为已知旧载荷，仍按备份后替换升级。审核证据：v4.0.1 核心 `caveman` Skill 是单一默认语气（旧 lite/full/ultra/wenyan 强度级别移入独立的 `ultracave`／`megacave` Skill，二者保持用户管理，不在受管 `caveman*`／`cavecrew*` 载荷范围内）；Onboard 安装路径仍克隆 pinned revision 且只复制 family Skill 目录，上游安装器新增的 hooks/settings 代码不进入受管路径。sbtd-task 表达规则删除对已退役强度级别的引用：手动 `/caveman` 跟随外部 Skill 默认语气，`/caveman ultra`／`/caveman wenyan` 作为可选伴随 Skill 的别名；auto-lite 改为 caveman 语气的内联轻量子集，不再引用「lite 级别」。双 README 的 `/caveman lite` 表述更正为 `/caveman`。ENTRYPOINT 的 Caveman 行不变：它只监控上游 `v*` tag，从不驱动 pin。
 
 
