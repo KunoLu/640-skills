@@ -34,7 +34,7 @@ completed_at: null
 - [x] 1. caveman pin 晋升（c627c4c）
 - [x] 2. omp_adapter session lease（481050f；完成事件 changed_files 因 helper 全角标点序列化问题只记 omp_adapter.py，完整清单：omp_adapter.py、tests/test_omp_adapter.py、spec/r1.2b-host-adapter-scenarios.md、docs/host-adapters.md、双 CHANGELOG，详见该提交）
 - [x] 3. 全量规则/工具版本评估（9f68be8）
-- [ ] 4. dashboard UI（待用户确认细节）
+- [x] 4. dashboard UI（8bcef6c + 02eaf7c；用户确认方向：全面对齐 omp stats，保留双语/导出/单页；panel-id 重复文案已删）
 - review：独立 reviewer approve-with-comments；已修复（非零/超时分支补 2 测试；本进度节更正）
 
 ## 状态事件
