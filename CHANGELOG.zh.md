@@ -9,6 +9,10 @@
 
 ## v2.1.0-rc.4（未发布）
 
+### 新增
+
+- omp 宿主适配器 CLI 新增会话 lease 守卫：读取文件名携带会话 id（`<时间戳>Z_<uuid>.jsonl`）的会话文件前，`omp_adapter.py` 先探测 `omp session lease --json -- <id>`；id 在 held 列表（运行中 omp 持有、可能正在写）即以 exit 2 + JSON error 拒绝读取；探测失败（CLI 不可用、超时、非零退出、输出不可解析）失败关闭；文件名不含会话 id 的外来文件（pack／复制）不适用；`--no-lease-check` 显式跳过。该守卫是即时建议性信号，不改变重复 ingest 的幂等去重语义。新增 `SessionLeaseTests` 覆盖持有／未持有／探测失败／跳过 flag／外来文件名路径，R1.2b 场景文档新增四条 lease 场景。
+
 ### 变更
 
 - 受管 Caveman pin 从 `v2.6.0`（`b82c0ad`）晋升到 `v4.0.1`（`d262ab3`）：`CAVEMAN_PINNED_REF`、`CAVEMAN_PINNED_REVISION`、`CAVEMAN_CORE_SKILL_SHA256` 与 reviewed family 摘要成套更新，`v2.6.0`／`v2.5.0` 身份保留为已知旧载荷，仍按备份后替换升级。审核证据：v4.0.1 核心 `caveman` Skill 是单一默认语气（旧 lite/full/ultra/wenyan 强度级别移入独立的 `ultracave`／`megacave` Skill，二者保持用户管理，不在受管 `caveman*`／`cavecrew*` 载荷范围内）；Onboard 安装路径仍克隆 pinned revision 且只复制 family Skill 目录，上游安装器新增的 hooks/settings 代码不进入受管路径。sbtd-task 表达规则删除对已退役强度级别的引用：手动 `/caveman` 跟随外部 Skill 默认语气，`/caveman ultra`／`/caveman wenyan` 作为可选伴随 Skill 的别名；auto-lite 改为 caveman 语气的内联轻量子集，不再引用「lite 级别」。双 README 的 `/caveman lite` 表述更正为 `/caveman`。ENTRYPOINT 的 Caveman 行不变：它只监控上游 `v*` tag，从不驱动 pin。
