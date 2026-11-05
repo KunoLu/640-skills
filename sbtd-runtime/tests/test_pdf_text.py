@@ -61,14 +61,13 @@ class PdfTextTests(unittest.TestCase):
                 self.assertIn(reason, result)
 
     def test_utf8_text_is_verified_and_incorrect_content_still_fails(self) -> None:
-        valid = "overview 概览 数据质量 tasks.touched 3\n"
+        valid = "概览 数据质量 tasks.touched 3\n"
         self.assertTrue(
             self._extract(valid.encode()).startswith("downloaded-pdf-text:")
         )
         for broken in (
-            valid.replace("overview", "other"),
-            valid.replace("概览", "other"),
-            valid.replace("数据质量", "other"),
+            valid.replace("概览", "其他"),
+            valid.replace("数据质量", "其他"),
             valid.replace(" 3", " 4"),
         ):
             with self.subTest(text=broken), self.assertRaises(AssertionError):

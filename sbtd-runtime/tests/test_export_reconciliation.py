@@ -158,8 +158,15 @@ def assert_pdf_text(
         return limitation + "output is not UTF-8; text not verified"
     if not text.strip():
         return limitation + "returned empty text; text not verified"
+    # Panel identity in PDF text is the localized title (visible text); panel
+    # ids remain available as section id attributes in the HTML source.
+    manifest = load_panel_manifest()
+    titles = {
+        panel["panel_id"]: panel.get("title_zh") or panel["panel_id"]
+        for panel in manifest["panels"]
+    }
     for panel in panels:
-        case.assertIn(panel, text)
+        case.assertIn(titles.get(panel, panel), text)
     case.assertIn("概览", text)
     case.assertIn("数据质量", text)
     for metric, expected in (expected_values or KEY_VALUES).items():
