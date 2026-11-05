@@ -252,16 +252,12 @@ _CSS = """
 :root, [data-theme="dark"] {
   color-scheme: dark;
   --bg: #000000; --panel: #09090a; --text: #ededf0;
-  --muted: #9a9aa3; --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14); --unknown: hsl(210 45% 65%);
-  --ok: hsl(152 55% 55%);
+  --muted: #9a9aa3; --line: rgba(255, 255, 255, 0.08); --unknown: hsl(210 45% 65%);
 }
 [data-theme="light"] {
   color-scheme: light;
   --bg: #f2f2f3; --panel: #ffffff; --text: #151518;
-  --muted: #5a5a63; --line: rgba(0, 0, 0, 0.08);
-  --line-strong: rgba(0, 0, 0, 0.14); --unknown: hsl(210 40% 45%);
-  --ok: hsl(152 60% 32%);
+  --muted: #5a5a63; --line: rgba(0, 0, 0, 0.08); --unknown: hsl(210 40% 45%);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
@@ -298,6 +294,7 @@ body {
   padding: 4px 16px;
 }
 .panel-kpi .metric + .metric { border-left: 1px solid var(--line); }
+/* 已知边界：指标换行时换行首格仍带左竖线；默认 1440px 宽度不换行。 */
 .panel-kpi .metric:first-of-type { padding-left: 0; }
 .metric dd {
   margin: 0; font-size: 28px; font-weight: 600;

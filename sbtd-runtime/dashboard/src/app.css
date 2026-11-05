@@ -256,10 +256,6 @@ body {
   background: var(--sbtd-error);
 }
 
-.panel-state-dot.state-unknown {
-  background: var(--sbtd-unknown);
-}
-
 .panel-meta {
   display: inline-flex;
   align-items: center;
