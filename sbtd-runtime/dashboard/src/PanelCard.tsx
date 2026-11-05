@@ -208,7 +208,13 @@ export function PanelFrame({
       data-panel-id={definition.panel_id}
     >
       <header className="panel-header">
-        <h2>{title}</h2>
+        <h2>
+          <span
+            className={`panel-state-dot state-${status.kind}`}
+            aria-hidden="true"
+          />
+          {title}
+        </h2>
         <div className="panel-meta">
           {onToggleDetail !== undefined && (
             <button
@@ -222,13 +228,14 @@ export function PanelFrame({
                 : t(locale, "detail_show")}
             </button>
           )}
-          <span className="panel-id">{definition.panel_id}</span>
         </div>
       </header>
       {status.kind === "loading" && (
-        <p className="panel-state" role="status">
-          {t(locale, "updating")}
-        </p>
+        <div className="panel-skeleton" role="status" aria-label={t(locale, "updating")}>
+          <span className="skeleton-bar" style={{ width: "38%" }} />
+          <span className="skeleton-bar skeleton-bar-strong" style={{ width: "62%" }} />
+          <span className="skeleton-bar" style={{ width: "47%" }} />
+        </div>
       )}
       {status.kind === "error" && (
         <p className="panel-state panel-state-error" role="alert">

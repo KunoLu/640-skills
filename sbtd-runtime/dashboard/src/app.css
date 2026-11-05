@@ -59,10 +59,13 @@ body {
   border-radius: var(--sbtd-radius-control);
   padding: 5px 11px;
   cursor: pointer;
+  transition: border-color var(--sbtd-transition),
+    background-color var(--sbtd-transition);
 }
 
 .controls button:hover:not(:disabled) {
   border-color: var(--sbtd-border-strong);
+  background: var(--sbtd-bg-inset);
 }
 
 .controls button:disabled {
@@ -73,6 +76,15 @@ body {
 .controls button:focus-visible {
   outline: 2px solid var(--sbtd-focus-ring);
   outline-offset: 2px;
+}
+
+.controls .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
 }
 
 .live-badge {
@@ -96,13 +108,33 @@ body {
   flex: none;
 }
 
+.live-badge[data-live="true"] .live-dot {
+  animation: sbtd-live-pulse 2.4s ease-out infinite;
+}
+
+@keyframes sbtd-live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--sbtd-hue-ok) 55% 55% / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--sbtd-hue-ok) 55% 55% / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge[data-live="true"] .live-dot {
+    animation: none;
+  }
+}
+
 .segmented {
   display: inline-flex;
   border: var(--sbtd-border-width) solid var(--sbtd-border);
   border-radius: var(--sbtd-radius-control);
   padding: 2px;
   gap: 2px;
-  background: var(--sbtd-bg-elevated);
+  background: var(--sbtd-bg-inset);
 }
 
 .segmented button {
@@ -111,6 +143,8 @@ body {
   padding: 4px 10px;
   background: transparent;
   color: var(--sbtd-text-secondary);
+  transition: color var(--sbtd-transition),
+    background-color var(--sbtd-transition);
 }
 
 .segmented button:hover:not(:disabled) {
@@ -125,6 +159,7 @@ body {
 .segmented .segment-active {
   background: var(--sbtd-segment-active-bg);
   color: var(--sbtd-segment-active-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 .watermark {
@@ -199,6 +234,30 @@ body {
   font-size: var(--sbtd-font-size-title);
   font-weight: 600;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Panel state dot: three-channel status cue (颜色 + 既有文字/标记保留) */
+.panel-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--sbtd-ok);
+}
+
+.panel-state-dot.state-loading {
+  background: var(--sbtd-unknown);
+}
+
+.panel-state-dot.state-error {
+  background: var(--sbtd-error);
+}
+
+.panel-state-dot.state-unknown {
+  background: var(--sbtd-unknown);
 }
 
 .panel-meta {
@@ -206,12 +265,6 @@ body {
   align-items: center;
   gap: 8px;
   flex: none;
-}
-
-.panel-id {
-  font-family: var(--sbtd-font-mono);
-  font-size: 11px;
-  color: var(--sbtd-text-secondary);
 }
 
 .panel-state {
@@ -224,6 +277,39 @@ body {
 
 .panel-state-unknown {
   color: var(--sbtd-unknown);
+}
+
+/* Loading skeleton: quiet shimmer bars, respects reduced motion */
+.panel-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.skeleton-bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--sbtd-bg-inset);
+}
+
+.skeleton-bar-strong {
+  height: 18px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-bar {
+    animation: sbtd-skeleton 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes sbtd-skeleton {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .panel-markers {
@@ -255,10 +341,11 @@ body {
 }
 
 /* KPI panels (manifest kind=kpi): metrics fill the row as equal cells at any
- * viewport width — no dead space beside the strip. */
+ * viewport width — no dead space beside the strip. Hairline dividers between
+ * cells echo the reference band; wrapped rows keep their own spacing. */
 .panel-kpi .panel-metrics {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px var(--sbtd-space-gap);
+  gap: 0;
 }
 
 .panel-metric {
@@ -270,7 +357,15 @@ body {
 
 .panel-kpi .panel-metric {
   gap: 4px;
-  padding: 4px 0;
+  padding: 4px 16px;
+}
+
+.panel-kpi .panel-metric + .panel-metric {
+  border-left: var(--sbtd-border-width) solid var(--sbtd-border);
+}
+
+.panel-kpi .panel-metric:first-child {
+  padding-left: 0;
 }
 
 .panel-metric dt {
@@ -361,8 +456,14 @@ body {
   background: var(--sbtd-bg-elevated);
   border: var(--sbtd-border-width) solid var(--sbtd-border);
   border-radius: var(--sbtd-radius-control);
-  padding: 4px;
-  min-width: 160px;
+  padding: 4px 6px;
+  min-width: 140px;
+  transition: border-color var(--sbtd-transition);
+}
+
+.filter-field select:focus-visible {
+  outline: 2px solid var(--sbtd-focus-ring);
+  outline-offset: 1px;
 }
 
 .filter-chips {
@@ -469,10 +570,47 @@ body {
 .detail-table th {
   color: var(--sbtd-text-secondary);
   font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .detail-table tbody tr:hover td {
   background: var(--sbtd-bg-inset);
+}
+
+.detail-table tbody tr {
+  transition: background-color var(--sbtd-transition);
+}
+
+/* Status pill: tinted fill + colored text (颜色+文字双通道，§12.3) */
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  border-radius: 999px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.pill-ok {
+  color: var(--sbtd-ok);
+  background: var(--sbtd-ok-bg);
+}
+
+.pill-warn {
+  color: var(--sbtd-warn);
+  background: var(--sbtd-warn-bg);
+}
+
+.pill-error {
+  color: var(--sbtd-error);
+  background: var(--sbtd-error-bg);
+}
+
+.pill-unknown {
+  color: var(--sbtd-unknown);
+  background: var(--sbtd-unknown-bg);
 }
 
 .task-link {

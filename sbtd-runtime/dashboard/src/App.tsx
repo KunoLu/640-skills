@@ -361,7 +361,11 @@ export function App() {
           <h1 className="brand">SBTD<span className="brand-sep">/</span>Runtime Dashboard</h1>
           <div className="controls">
             {(view !== null || model.updating) && (
-              <span className="live-badge" role="status">
+              <span
+                className="live-badge"
+                role="status"
+                data-live={view !== null && !model.updating ? "true" : "false"}
+              >
                 <span className="live-dot" aria-hidden="true" />
                 {model.updating
                   ? t(locale, "updating")
@@ -420,10 +424,21 @@ export function App() {
             )}
             <button
               type="button"
-             
+              className="icon-button"
+              aria-label={t(locale, theme === "dark" ? "theme_to_light" : "theme_to_dark")}
+              title={t(locale, theme === "dark" ? "theme_to_light" : "theme_to_dark")}
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
-              {t(locale, theme === "dark" ? "theme_to_light" : "theme_to_dark")}
+              {theme === "dark" ? (
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle cx="8" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.4" />
+                  <path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M13.5 9.5A5.5 5.5 0 0 1 6.5 2.5a5.5 5.5 0 1 0 7 7Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                </svg>
+              )}
             </button>
             <div className="segmented" role="group" aria-label={t(locale, "locale_switch_label")}>
               <button

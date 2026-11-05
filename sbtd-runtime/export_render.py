@@ -251,13 +251,17 @@ _PEM = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 _CSS = """
 :root, [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #14171c; --panel: #1b1f26; --text: #e7edf5;
-  --muted: #9aa8b8; --line: #2c333d; --unknown: #8eabcb;
+  --bg: #000000; --panel: #09090a; --text: #ededf0;
+  --muted: #9a9aa3; --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14); --unknown: hsl(210 45% 65%);
+  --ok: hsl(152 55% 55%);
 }
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f7fb; --panel: #ffffff; --text: #1c2430;
-  --muted: #5c6b7c; --line: #d5dee8; --unknown: #3d5f86;
+  --bg: #f2f2f3; --panel: #ffffff; --text: #151518;
+  --muted: #5a5a63; --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.14); --unknown: hsl(210 40% 45%);
+  --ok: hsl(152 60% 32%);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
@@ -274,26 +278,40 @@ body {
 }
 .panel {
   border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--panel);
-  padding: 16px;
+  padding: 20px;
   overflow-wrap: anywhere;
 }
-.panel h2 { margin: 0 0 8px; font-size: 16px; }
-.panel-id, .metric dt {
+.panel h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
+.metric dt {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color: var(--muted);
   font-size: 12px;
 }
 .metric { margin: 0 0 10px; }
-.metric dd { margin: 0; font-size: 28px; }
+.panel-kpi .metric {
+  display: inline-block;
+  vertical-align: top;
+  min-width: 160px;
+  margin: 0;
+  padding: 4px 16px;
+}
+.panel-kpi .metric + .metric { border-left: 1px solid var(--line); }
+.panel-kpi .metric:first-of-type { padding-left: 0; }
+.metric dd {
+  margin: 0; font-size: 28px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .unknown, .marker, .insufficient, .legend-hidden { color: var(--unknown); }
 table { border-collapse: collapse; width: 100%; }
 th, td {
   border-bottom: 1px solid var(--line);
   text-align: left;
-  padding: 4px 8px;
+  padding: 6px 10px;
   vertical-align: top;
 }
+th { color: var(--muted); font-weight: 500; font-size: 11px; letter-spacing: 0.04em; }
 svg { max-width: 100%; height: auto; }
 svg text { fill: currentColor; }
 """.replace("FONT_FAMILY", _FONT_FAMILY)
@@ -960,15 +978,13 @@ def _panel_html(
     copy = _l10n(locale)
     legend = _mapping(state, "legend_state")
     insufficient = _insufficient(panel, locale)
+    kind = panel.get("kind")
     parts = [
         (
-            f'<section id="{_esc(panel_id)}" class="panel" '
+            f'<section id="{_esc(panel_id)}" class="panel{ " panel-kpi" if kind == "kpi" else ""}" '
             f'style="grid-column: span {int(panel["desktop_span"])}">'
         ),
-        (
-            f"<h2>{_esc(_panel_title(panel, locale))} "
-            f'<span class="panel-id">{_esc(panel_id)}</span></h2>'
-        ),
+        f"<h2>{_esc(_panel_title(panel, locale))}</h2>",
         f'<p class="insufficient">{_esc(insufficient)}</p>',
     ]
     visible: list[tuple[str, float]] = []
