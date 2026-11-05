@@ -478,6 +478,32 @@ class SessionLeaseTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertFalse((self.home / "audit.db").exists())
 
+    def test_lease_nonzero_exit_fails_closed(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        failed = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="omp exploded"
+        )
+        with patch("omp_adapter.subprocess.run", return_value=failed):
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        self.assertIn("exited 1", json.loads(out)["error"])
+        self.assertFalse((self.home / "audit.db").exists())
+
+    def test_lease_timeout_fails_closed(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        with patch(
+            "omp_adapter.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="omp", timeout=10),
+        ):
+            code, out = self._main()
+        self.assertEqual(code, 2)
+        self.assertIn("lease", json.loads(out)["error"])
+        self.assertFalse((self.home / "audit.db").exists())
+
     def test_no_lease_check_flag_skips_guard(self) -> None:
         from unittest.mock import patch
 
