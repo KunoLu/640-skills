@@ -27,7 +27,7 @@ TEMPLATES_DIR = SKILL_DIR / "templates"
 
 PONYTAIL_SKILLS = ("ponytail", "ponytail-review", "ponytail-audit", "ponytail-debt")
 PONYTAIL_REPO = "https://github.com/DietrichGebert/ponytail.git"
-PONYTAIL_REVISION = "09c434ab73ca43761c5d8b0c5d341926c2fba710"
+PONYTAIL_REVISION = "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846"
 PONYTAIL_STABLE_SET = "2026-08-27.1"
 
 
@@ -77,8 +77,8 @@ class PonytailCatalogTests(PonytailModuleTests):
             (STABLE_ROOT / "MANIFEST.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(manifest["stableSet"], "2026-10-28.1")
-        self.assertEqual(manifest["promotedAt"], "2026-10-28")
+        self.assertEqual(manifest["stableSet"], "2026-11-11.1")
+        self.assertEqual(manifest["promotedAt"], "2026-11-12")
         repository = manifest["repositories"]["ponytail"]
         self.assertEqual(repository["url"], PONYTAIL_REPO)
         self.assertEqual(repository["revision"], PONYTAIL_REVISION)

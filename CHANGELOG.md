@@ -23,6 +23,8 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 - Change the host acceptance gate from `codex@0.163.0` + `omp@18.11.1` to `codex@0.167.1` + `omp@18.18.8`; both new hosts passed real cloud-host smoke tests. Preserve historical evidence in `smoke_history` and the original ADR Q6 decision, classify old versions as unsupported, and retain the fixed-pair rule, exclusion of parser fixtures as evidence, and fallback completion gate of at least one passing host.
 
+- Refresh the external Skills stable set from `2026-10-28.1` to `2026-11-11.1`, pinning each repository's main-branch HEAD rather than a Release: `mattpocock-skills` → `4ae2317ddb22`, `impeccable` → `c1e0e5492fbb`, `ui-ux-pro-max-skill` → `6ae86f61f520`, `shadcn-ui` → `dd41d19e2f80`, `ponytail` → `96608e078b2d`, and `i-have-adhd` → `1ecea1993b7f` (unchanged). Upstream licenses are unchanged; all 19 Skills pass manifest digest validation, and an isolated strict-stable installation commits 19/19.
+
 ### Fixed
 
 - Fix intermittent probe-link materialize authorization test failures caused by possible inode reuse when rebuilding a symlink: retire the old link with rename before creating the new one; assertions and production code remain unchanged. ([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))

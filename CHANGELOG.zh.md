@@ -23,6 +23,8 @@
 
 - 将宿主验收门禁从 `codex@0.163.0` + `omp@18.11.1` 换为 `codex@0.167.1` + `omp@18.18.8`，两个新宿主均通过真实冒烟（来源：云主机实测）。历史证据保留于 `smoke_history`，ADR Q6 原决策不改写，旧版本标为 unsupported；固定一对版本、parser fixture 不算证据、至少一个宿主通过的兜底完成门规则不变。
 
+- 将外部 Skills stable 集从 `2026-10-28.1` 刷新到 `2026-11-11.1`，锁定各仓库主线 HEAD，而非 Release：`mattpocock-skills` → `4ae2317ddb22`、`impeccable` → `c1e0e5492fbb`、`ui-ux-pro-max-skill` → `6ae86f61f520`、`shadcn-ui` → `dd41d19e2f80`、`ponytail` → `96608e078b2d`、`i-have-adhd` → `1ecea1993b7f`（不变）。上游许可证未变；19 个 Skill 全量通过 manifest 摘要校验，strict-stable 隔离安装 19/19 提交。
+
 ### 修复
 
 - 修复 probe-link materialize 授权测试因重建 symlink 可能复用 inode 而偶发失败：先 rename 退役旧链接，再创建新链接；断言与正式代码不变。([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))
