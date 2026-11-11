@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: docs/v2.1.0-rc.5-dashboard-401-re-pair-contract
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T17:05:15+08:00'
+updated_at: '2026-11-11T18:32:42+08:00'
 completed_at: null
 ---
 
@@ -278,6 +278,38 @@ Evidence Source：developer-local；Source Revision：dirty；Evidence Publicati
 
 API Contract：verified（仅 YAML 与描述变更边界，不是运行时发送该头的证据）；Cross-repo context：contract-only；Mock Strategy：none。BDD／真实浏览器／运行时全量／lint／构建：skipped（仅文档澄清，无对应行为或代码变更），未新增 .feature 或永久文字断言测试。实现 PR 必须对所有 pair 响应补上 `Cache-Control: no-store` 并增加断言该头的测试。Final Full Rerun：passed（仅上述 99 项）；Targeted Rerun／Final Test Report／Run Summary MD：not-needed。前轮失败、跳过及校验器缺口保留；未 commit/push、未部署、未发布，不标 done。
 
+### 第 6 轮：rebase 与冲突处理
+
+基准从 rebase 前审查通过提交 `ff6c8338be4d2dd071f2dea5286fad7a8f496418`（`ff6c833`）变为 main `947fb55`（#211 squash 合入，原审查提交 `609ab2d`；此前 #208 合入为 `616eb99`）。本会话起始 HEAD 为 `6606749`，绑定分支仍为 `docs/v2.1.0-rc.5-dashboard-401-re-pair-contract`，工作区干净。保持 strict／user／checking，completed_at 保持 null，mode_note 不改；本会话仅编辑本 task.md，index 仅由正式生成器写入且字节不变。
+
+冲突处理事实由编排方核实：第一个提交 `fe43dd8` 在 `CHANGELOG.md`、`CHANGELOG.zh.md`、`ai/tasks/index.md` 发生冲突，后三个提交无冲突。编排方以 `git checkout --ours` 将 index 恢复为 rebase 中的 main 一侧，未手工编辑；其直接执行的只有 fetch、rebase、index checkout、add 冲突文件及 rebase --continue，提交者身份通过环境变量保持与原提交一致，未直接编辑仓库文件。第 6 轮冲突处理会话由同一主模型处理两份 CHANGELOG：各只保留一个 rc.5 标题，按 Added→Changed→Fixed／新增→变更→修复依次保留 #210、#211、#208 的三条条目，文字均未改；随后正式生成器补回 #210 一行，输出 `INDEX_REGEN changed=True rows=80`、`INDEX_PREVIEW_SAME True rows=80`，指定 unittest 99 项通过。这些是前一会话的已核实证据，不冒充本会话运行结果。
+
+编排方已逐行比较 rebase 前后补丁，除 index 行外一致；ADR 0001／openapi.yaml 内容未改。本会话不修改 ADR 0001、openapi.yaml 或双语 CHANGELOG，不执行任何 Git 写命令，不调用 task 执行工具、子代理或 find 工具。实现 PR 仍须等 #210 合入后再开。
+
+未完整调用 grill-with-docs：本轮仅补 rebase 事实与验证记录，范围、决策原句和验收步骤明确，无新增领域问题。沿用既有 Book Gate Plan；DDD 完整 grill、DDIA 新设计、Legacy、生产代码重构、TDD 与发布门禁 not-needed（没有对应设计、生产行为或发布变更），作者自检不替代独立审查。
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only；Environment Alignment：unverified。下表为本会话实际运行的本地命令证据，不是 CI 证据或正式 PR-head 报告。rtk：skipped-for-report，使用原生命令保留实际输出。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); Path('ai/tasks/index.md').write_bytes(a); print('INDEX_REGEN', 'changed=%s' % (b!=a), 'rows=%d' % len(s._index_rows(r)))"` | `INDEX_REGEN changed=False rows=80`；生成器实际写入，字节不变；保留“旧格式事件，不追溯”提示 | 0 |
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); print('INDEX_PREVIEW_SAME', Path('ai/tasks/index.md').read_bytes()==a, 'rows=%d' % len(s._index_rows(r)))"` | `INDEX_PREVIEW_SAME True rows=80`；只读预览一致；保留相同旧格式事件提示 | 0 |
+| `python3 -B -c "import yaml; d=yaml.safe_load(open('sbtd-runtime/contracts/openapi.yaml', encoding='utf-8')); print('OPENAPI_PARSE_OK', '/api/v1/session/re-pair-ticket' in d['paths'])"` | `OPENAPI_PARSE_OK True`；YAML 解析成功，新路径存在 | 0 |
+| grep 工具：双语 CHANGELOG 的 rc.5 标题；read 工具：对应发布节 | 两份文件各仅一个 rc.5 标题；Added→Changed→Fixed／新增→变更→修复下的三条条目全部保留 | 工具成功，无 shell 退出码 |
+| `git diff origin/main --stat` | 仅 ADR 0001、openapi.yaml、双语 CHANGELOG、index、本 task 六个文件；检查时共 565 行新增、2 行删除 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 总数 99，通过 99，失败 0，跳过 0；`OK`，56.074 秒 | 0 |
+| `TZ=Asia/Shanghai date --iso-8601=seconds` | `2026-11-11T18:32:42+08:00`；updated_at 与本轮 checking→checking 事件使用同一时间 | 0 |
+
+写入事件和小节后的检查：
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `git diff --check`；`git diff` | 空白检查无输出；工作树差异仅本 task.md，index 无差异，已有正文未改 | 0／0 |
+| grep 工具：本会话新增行的本机路径、三项禁止归因措辞与 U+7EA6 扫描 | 本机路径及三项禁止归因措辞无匹配；U+7EA6 仅在状态事件决策原句中命中 1 处，属于保留原句的唯一例外 | 工具成功，无 shell 退出码 |
+| grep 工具：完整决策原句精确匹配 | 状态事件 reason 中逐字存在，命中 1 处 | 工具成功，无 shell 退出码 |
+
+Final Full Rerun：passed（仅上述 99 项）；Targeted Rerun／Final Test Report／Run Summary MD：not-needed（仅本地命令证据表）。API Contract：verified（仅 YAML 解析及路径存在，不是新行为运行证明）；Cross-repo context：contract-only；Mock Strategy：none。BDD／真实浏览器／运行时全量／lint／构建：skipped（本会话仅补文档记录，无对应行为或代码变更）。前轮失败、跳过和校验器缺口保留；本轮不证明 CI、实现、部署或发布完成，不标 done。
+
 ## 模型记录
 
 | 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
@@ -294,6 +326,9 @@ API Contract：verified（仅 YAML 与描述变更边界，不是运行时发送
 | 第 4 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
 | 第 5 轮（本轮：pair 200 Cache-Control planned 说明） | `openai-codex/gpt-6-astra`（主模型） | 直接补 OpenAPI／ADR planned 说明、验证与任务记录，含最后计数编辑与纯文本收尾 | 11 | 29 |
 | 第 5 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
+| 第 6 轮（冲突处理会话） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 解决 CHANGELOG 双语冲突并用生成器补 index | 7 | 16 |
+| 第 6 轮（记录会话，本会话） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 追加状态事件、生成 index、验证并写入记录 | 16 | 30 |
+| 第 6 轮 | 其他模型 | 两会话日志均未记录其他模型名 | 0 | 0 |
 
 第 1、2 轮 find 的后台归属来自会话日志字段：每条记录为 `"purpose":"find","provider":"typesafe","model":"jev-latest"`；按这些日志字段计数，第 1 轮 35 次、第 2 轮 23 次，不能归为主模型调用。
 
@@ -302,6 +337,8 @@ API Contract：verified（仅 YAML 与描述变更边界，不是运行时发送
 第 4 轮计数方法：收尾前按会话日志计数，筛选 `type=message`、`role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的已有记录，实际为 11 条；加本次最终 edit 所在的 1 次模型调用和随后纯文本收尾 stop 的 1 次，共 13 次。相同记录内 `content.type=toolCall` 已有 39 条，加本次最终 edit 1 次，共 40 次；find 工具调用为 0，本轮 jev-latest／find 为 0 次。统计命令只读日志、未写仓库；上述数字与说明由 omp 本人直接用 edit 写入，这是本轮对仓库文件的最后一次编辑，之后不再调用工具。模型计数按日志条目口径，不将工具调用数当成模型调用数；本次计数未追溯改写前 3 轮。
 
 第 5 轮计数方法：完成其他修改与校验后，由 omp 本人只读统计本会话日志，筛选 `type=message`、`message.role=assistant`、`message.provider=openai-codex`、`message.model=gpt-6-astra`，已有 9 条（包含本次统计调用）；加最后计数 edit 所在的 1 次模型调用及随后纯文本收尾 stop 的 1 次，共 11 次。相同记录内 `content.type=toolCall` 已有 28 条，加最终 edit 1 次，共 29 次；包含进度清单工具，不将其计为独立任务执行或审查。find 调用为 0，本轮 jev-latest／find 为 0 次，未使用子代理。计数命令不写仓库，次数与说明均由 omp 本人直接用 edit 写入；这是本轮对仓库文件的最后一次编辑，之后不再调用任何工具，直接纯文本收尾。此口径按日志条目统计，不将工具调用数当成模型调用数，不追溯改写历史轮次。
+
+第 6 轮计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用；其他模型（如 jev-latest、composer）仅在日志记录了其名字时才列出并计数。冲突处理会话由编排方按此方法统计为 7 次模型调用、16 次工具调用，日志无其他模型记录。本会话完成其他编辑和检查后执行只读统计命令，不写仓库，输出 `astra_assistant=14`、`astra_toolcalls=29`、`other_assistant={}`、`model_usage={}`。模型调用按已有 14 条＋最终 edit 所在的 1 次＋纯文本收尾的 1 次计算，即 A+2=16；工具调用按已有 29 条＋最终 edit 1 次计算，即 T+1=30。次数与说明均由 omp 直接用 edit 写入；本次 edit 是最后一次工具调用，之后直接纯文本收尾，不追溯改写历史轮次。
 
 ## 状态事件
 
@@ -313,3 +350,4 @@ API Contract：verified（仅 YAML 与描述变更边界，不是运行时发送
 | 2026-11-11T16:00:59+08:00 | checking | checking | 按 Reviewy 意见修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | 索引生成 changed=False、预览 True，均为 78 行；指定状态／工作流测试 99 项通过；diff 仅本 task.md，新增行无本机路径，全文禁止措辞无匹配；详情见第 3 轮本地验证。 |
 | 2026-11-11T16:29:52+08:00 | checking | checking | 按 Reviewy NOT CLEAN 一次性修正决策来源措辞、403／401 语义、pair 契约，以及第 3 轮次数披露 | 决策采用分钟不可考的 Lord 记录原文；Bearer／CSRF 整体失败为 401，403 仅来源拒绝；pair 同步恢复票、严格来源、单次消费与 no-store，恢复记录窗口结束即删除；本轮验证结果见第 4 轮证据表。未 commit/push，等待独立复审、批准与 CI。 |
 | 2026-11-11T17:05:15+08:00 | checking | checking | 按 Reviewy 意见修正：为 pair 200 的 Cache-Control 头补 planned 说明，当前 serve 尚未发送，实现 PR 对所有 pair 响应补上并须增加断言该头的测试；同步 ADR §9.3／§9.4 | required=true／const=no-store 保留，401／403 与其他契约内容不变；index 逐字节一致（78 行，6088 字节），OPENAPI_PARSE_OK，状态／工作流测试 99 项通过；只读边界检查与禁止措辞／本机路径检查通过，详见第 5 轮本地验证。保持 strict／user／checking；未 commit/push，独立复审、批准与 CI 仍待完成。 |
+| 2026-11-11T18:32:42+08:00 | checking | checking | rebase 到 main 947fb55（#211 合入）并处理冲突；用户 2026-11-11 17:38 群内确认（合入 #208，批准 #210 契约，按新顺序 #208、#211、#210、#209），Lord 记录 | 首提交 fe43dd8 冲突文件为双语 CHANGELOG 和 index，后三个提交无冲突；编排方用 git checkout --ours 恢复 main 侧 index，冲突处理会话将双语 CHANGELOG 各合为一个 rc.5 标题，按 Added→Changed→Fixed 保留三条原文，再用生成器补 index：INDEX_REGEN changed=True rows=80，INDEX_PREVIEW_SAME True rows=80，99 项 unittest 通过。本记录会话：INDEX_REGEN changed=False rows=80，INDEX_PREVIEW_SAME True rows=80，OPENAPI_PARSE_OK True，99 项 unittest 通过；相对 main 仅六个许可文件。ADR 0001／openapi.yaml 内容未改，rebase 前后补丁比对由编排方核实；详见第 6 轮小节。证据为 developer-local，不是 CI 证据。 |
