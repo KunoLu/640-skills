@@ -54,6 +54,19 @@ paths:
       operationId: pairSession
       tags: [auth]
       summary: Exchange a one-time pairing code for a short-lived session
+      description: |
+        Accepts an initial pairing code or a recovery ticket through X-Pairing-Code.
+        Recovery-ticket support is proposed in ADR 0001 section 9 and is not yet
+        implemented. Recovery exchange requires stricter Host/Origin checks:
+        Host must be an existing loopback-whitelisted hostname with the actual
+        serving port, and Origin must exactly equal http://<Host>, without
+        userinfo, path, query or fragment. Missing or null Origin is forbidden.
+        Source rejection returns 403 before ticket consumption. The first recovery
+        exchange attempt reaching the pairing handler atomically consumes the
+        pending ticket, even on failure; it cannot be reused. Used, expired,
+        missing or invalid tickets return 401 unauthorized. Successful consumption
+        and replacement-session creation are atomic. Recovery exchange responses,
+        including errors, require Cache-Control: no-store.
       security:
         - pairingCode: []
       parameters:
@@ -63,6 +76,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           description: Session bearer. Not a long-term token and not returned in a URL.
+          headers:
+            Cache-Control:
+              required: true
+              schema:
+                type: string
+                const: no-store
           content:
             application/json:
               schema:
@@ -84,19 +103,22 @@ paths:
         the original bearer AND X-CSRF-Token must match the same in-memory
         session recovery record, with constant-time secret comparisons.
         Only original_expires_at <= now < original_expires_at + 60 seconds is
-        eligible. Unexpired, missing, unknown, revoked, pre-restart, out-of-window
-        or already-issued credentials and ineligible chains return 401
-        {"detail":"unauthorized"}. Ordinary APIs still immediately reject expired
-        bearers with 401; this endpoint does not extend their data access.
+        eligible. At now >= original_expires_at + 60 seconds, delete the recovery
+        record from memory. Unexpired, missing, unknown, revoked, pre-restart,
+        out-of-window or already-issued credentials and ineligible chains return
+        401 {"detail":"unauthorized"}. Ordinary APIs still immediately reject
+        expired bearers with 401; this endpoint does not extend their data access.
         Host must be an existing loopback-whitelisted hostname with the actual
         serving port. Origin is mandatory and must exactly equal http://<Host>,
         with no userinfo, path, query or fragment; absent or null Origin fails.
-        Host/Origin failures, or a missing/mismatched CSRF for an otherwise
-        eligible bearer, return 403 {"detail":"forbidden"}. These shared codes
-        deliberately do not distinguish unknown, used, expired or restarted
-        credentials, or disclose which source/CSRF policy failed.
-        Check order is Host/Origin, process rate limit, bearer/recovery eligibility,
-        CSRF, then an atomic eligibility recheck and issuance. A concurrent loser
+        Only Host/Origin failures return 403 {"detail":"forbidden"}.
+        Bearer and CSRF are validated together against the same eligible recovery
+        record; either missing or mismatched secret returns 401
+        {"detail":"unauthorized"}, regardless of whether the bearer alone qualifies.
+        These shared codes do not reveal whether a recovery record exists or let
+        a bearer-only caller distinguish recovery eligibility via 403 versus 401.
+        Check order is Host/Origin, process rate limit, bearer and CSRF together,
+        then an atomic eligibility recheck and issuance. A concurrent loser
         returns 401. All responses, including errors, require Cache-Control: no-store.
         At most 10 requests passing Host/Origin may enter credential validation
         per process in any rolling 60 seconds, including invalid credentials.
@@ -903,7 +925,11 @@ components:
           schema:
             $ref: "#/components/schemas/DetailError"
     Unauthorized:
-      description: Missing credential or scope. Does not reveal whether a hidden object exists.
+      description: |
+        Missing credential or scope. Does not reveal whether a hidden object exists.
+        For re-pair-ticket, bearer and CSRF form one authorization check: either
+        missing or mismatched secret, or an ineligible recovery record, returns
+        detail unauthorized without disclosing record existence or bearer eligibility.
       content:
         application/json:
           schema:
@@ -917,7 +943,13 @@ components:
     Conflict:
       description: Same idempotency key with a different payload, or a source-event conflict.
     Forbidden:
-      description: Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF check on an unsafe method. Does not reveal internal policy details.
+      description: |
+        Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF
+        check on an unsafe method outside re-pair-ticket. For re-pair-ticket and
+        recovery-ticket exchange, 403 detail forbidden is reserved for Host/Origin
+        rejection, including missing or null Origin; a re-pair-ticket CSRF failure
+        belongs to the combined bearer/CSRF 401 response instead.
+        Does not reveal internal policy details.
       content:
         application/json:
           schema:

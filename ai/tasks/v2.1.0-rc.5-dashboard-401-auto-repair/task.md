@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.5-dashboard-401-auto-repair
 workflow_mode: strict
 mode_source: user
-mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；contract-only 范围由编排方整理，决策依据为 640 在群里决定 a甲 b同意
+mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；用户 2026-11-11 群内确认（a甲 b同意），Lord 记录。注：分钟不可考。
 status: checking
 branch: docs/v2.1.0-rc.5-dashboard-401-re-pair-contract
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T16:00:59+08:00'
+updated_at: '2026-11-11T16:29:52+08:00'
 completed_at: null
 ---
 
@@ -15,7 +15,7 @@ completed_at: null
 
 ## 目标与边界
 
-编排方整理：本任务只交付 ADR 0001 §9、OpenAPI 新取票契约、双语 CHANGELOG 的 rc.5 未发布条目、本任务与生成的 index；状态为 checking，等待 Reviewy 安全评审、640 批准与 CI，不是实现完成或发布就绪。不改 serve、Dashboard 或既有 pair operation，不执行提交、推送、开 PR、部署、安装或工作流迁移。
+编排方整理：本任务只交付 ADR 0001 §9、OpenAPI 新取票及 pair 恢复票交换契约、双语 CHANGELOG 的 rc.5 未发布条目、本任务与生成的 index；状态为 checking，等待 Reviewy 安全复审、640 批准与 CI，不是实现完成或发布就绪。不改 serve 或 Dashboard，不执行提交、推送、开 PR、部署、安装或工作流迁移。
 
 未完整调用 grill-with-docs：编排方整理的范围、三个安全问题与验收命令已明确，源码可核对现状，不制造重复访谈。既有 §1–§7 正文逐字保留；§9 编号接并行契约 PR 的 §8，本基线尚无 §8，不代写该节。
 
@@ -23,8 +23,8 @@ completed_at: null
 
 ## 决策来源
 
-- 640 在群里决定 a甲 b同意。
-- 编排方整理：决策消息日期为 2026-11-11，北京时间约 15:07；a甲对应先单独整理契约 PR，经 Reviewy 安全评审、640 批准后另开实现 PR。用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；contract-only 范围、三个问题与具体安全方案由编排方整理。
+- 用户 2026-11-11 群内确认（a甲 b同意），Lord 记录。注：分钟不可考。
+- 编排方整理：a甲对应先单独整理契约 PR，经 Reviewy 安全评审、640 批准后另开实现 PR。用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；contract-only 范围、三个问题与具体安全方案由编排方整理。
 - 编排方整理：沿用创建于 2026-11-11T14:38:57+08:00 的 default／planned 草稿事实，将任务改写为 strict／contract-only；草稿中的多次取票及三轮交换方案被本次一次签发规则替代。草稿是只读输入，不把其外部位置或会话位置写入仓库。
 
 ## strict 模式执行记录
@@ -55,7 +55,7 @@ completed_at: null
 | 当前路由无 re-pair-ticket，新增 OpenAPI 不代表已路由 | `sbtd-runtime/serve.py:710-734` |
 | 启动票只经 fragment 或 SBTD_RUNTIME_HOME 内 0600 文件交付，访问日志关闭，不是页面随时可领取的票 | `sbtd-runtime/serve.py:740-763,828-846` |
 | 既有安全决定与启动 fragment 例外 | `docs/adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md:116-137`；`docs/adr/0002-v2.1.0-rc.2-r2.0a-dashboard-frontend-decisions.md:46-66` |
-| pair 契约保留原字节；401／403 使用 DetailError，仅 detail 字段，不是 error.code | `sbtd-runtime/contracts/openapi.yaml:52-71`；`components.responses.Unauthorized/Forbidden`、`components.schemas.DetailError` |
+| pair 契约已在第 4 轮同步恢复票交换、严格来源检查、单次消费及 no-store；401／403 继续复用仅有 detail 字段的 DetailError | `sbtd-runtime/contracts/openapi.yaml` 的 pair／re-pair-ticket、`components.responses.Unauthorized/Forbidden`、`components.schemas.DetailError` |
 | 数据字典不列 API 错误码，无需同步 | `sbtd-runtime/contracts/data-dictionary.md` 全文 |
 
 ## 契约要点（编排方整理，与 ADR §9 一致）
@@ -64,7 +64,7 @@ completed_at: null
 
 以同一 serve 进程内的恢复记录绑定原配对会话为授权依据：原 Bearer 与原 CSRF 同时常量时间匹配；Host 必须为 loopback 白名单加实际端口，Origin 必须完整等于对应 `http://<Host>`，无 userinfo／路径／query／fragment，缺失或 null 拒绝。来源是附加约束，不是匿名发票授权。
 
-仅 `原 expires_at <= now < 原 expires_at + 60 秒` 有资格；未过期、撤销、未知、重启前及超窗凭证不可恢复。重试不延长窗口，重启清空。普通 API 对过期 Bearer 仍立即 401，不延长数据访问。每条人工配对链最多自动恢复成功一次，替代会话沿用默认 8 小时寿命但无再次恢复权。
+仅 `原 expires_at <= now < 原 expires_at + 60 秒` 有资格；到达窗口右端必须从内存删除恢复记录。未过期、撤销、未知、重启前及超窗凭证不可恢复。重试不延长窗口，重启清空。普通 API 对过期 Bearer 仍立即 401，不延长数据访问。每条人工配对链最多自动恢复成功一次，替代会话沿用默认 8 小时寿命但无再次恢复权。
 
 同源 XSS 或同时取得 Bearer＋CSRF 且能构造合规来源请求的攻击者仍能在窗口内抢先利用；Host／Origin 不是秘密，短窗口及一次性只能限制损害，不能消除此风险。
 
@@ -84,11 +84,11 @@ completed_at: null
 |---|---|---|
 | 重复换票、超窗、未知／重启前／撤销／未过期凭证、无恢复资格或缺 Bearer | 401 | `unauthorized`（复用） |
 | pair 票重复交换、过期、未知、缺失或错误 | 401 | `unauthorized`（复用） |
-| 取票／恢复票交换的 Host 或完整 Origin 不符、缺 Origin | 403 | `forbidden`（复用） |
-| 取票记录合格但缺 CSRF 或 CSRF 不符 | 403 | `forbidden`（复用） |
+| 取票／恢复票交换的 Host 或完整 Origin 不符、Origin 缺失／`null` | 403 | `forbidden`（复用，仅来源拒绝） |
+| 取票 Bearer 或 CSRF 任一缺失或不符 | 401 | `unauthorized`（复用，整体校验） |
 | 新取票端点进程预算耗尽 | 429 | `RE_PAIR_RATE_LIMITED`（唯一新增） |
 
-错误体遵循 `DetailError`，401 共码避免细分未知／已用／过期记录，403 不暴露具体策略；不承诺隐藏全部时序／校验阶段差异。顺序为 Host／Origin → 进程限流 → Bearer／资格 → CSRF → 原子签发复核；表中结果服从此前置优先级，不引入 409／410。
+错误体遵循 `DetailError`，401 共码避免细分未知／已用／过期记录，Bearer 与 CSRF 作为整体校验，任一不符均为 401；仅持有 Bearer 而没有正确 CSRF 时，不能通过 403／401 差异判断恢复资格。403 只用于 Host／Origin 不符（含 Origin 缺失／`null`），不细分来源策略；不承诺隐藏全部时序差异。顺序为 Host／Origin → 进程限流 → Bearer 与 CSRF 作为整体 → 原子签发复核；表中结果服从此前置优先级，不引入 409／410。
 
 限流：每进程任意滚动 60 秒最多接纳 10 次通过来源检查的取票请求进入凭证校验，错误凭证也计数；之后返回 429，不增加接纳数。单调计时，重启清零；Retry-After 为最早接纳请求退出窗口所需秒数向上取整，至少 1。每记录成功签发上限仍为 1，预算未耗尽时重复取票是 401。前端不自动重试 429，不延长窗口；恶意本机请求耗尽预算的可用性风险保留。
 
@@ -99,9 +99,9 @@ completed_at: null
 ### 服务端
 
 - 先经 Reviewy 安全评审和 640 批准本契约，再改 AccessControl／SecurityMiddleware／路由；新路径专用恢复校验，不扩大匿名豁免，不把过期 session 继续留作数据访问凭证。
-- 保存独立的短时恢复记录及链资格；普通 authenticate 到期删除活跃 session 时保留必要恢复信息至原窗口结束。使用同一进程内的原子状态转移，确保首次签发即耗尽记录、首次交换即消费票、成功链只恢复一次。
+- 保存独立的短时恢复记录及链资格；普通 authenticate 到期删除活跃 session 时保留必要恢复信息至原窗口结束，窗口结束即从内存删除恢复记录。使用同一进程内的原子状态转移，确保首次签发即耗尽记录、首次交换即消费票、成功链只恢复一次。
 - 新增一次性票的签发、精确期限、进程预算、no-store 与错误映射；常量时间比较秘密，严格完整来源检查只应用于新恢复路径，不把当前弱一些的解析描述成已经满足要求。
-- 维持初次启动票据和已有 pair 请求／响应格式；恢复票也经 pair 交换，恢复票交换的严格来源要求和 no-store 须在后续实现测试中覆盖。
+- 维持初次启动票据和已有 pair 凭证／会话格式；pair OpenAPI 已补充恢复票交换、严格 Host／Origin、单次消费与 no-store，并在 200 响应声明必需的 `Cache-Control: no-store`；后续实现测试仍须覆盖这些规则。
 
 ### 前端识别、合流与恢复
 
@@ -128,7 +128,7 @@ completed_at: null
 | Legacy safety | 既有高风险行为修改前 | not-needed：本轮不改生产行为；后续实现必须先建立过期鉴权与 pair 保留行为证据 |
 | Refactoring | 生产代码编辑前 | not-needed：没有生产代码编辑，不顺带重构 |
 | Release readiness | 运行时／部署变化及发布前 | not-needed：仅 proposed 契约，未实现、未部署、未发布 |
-| 独立安全评审 | 授权／身份契约；合并及实现前 | pending：Reviewy 未执行；不使用本轮作者自审代替 |
+| 独立安全评审 | 授权／身份契约；合并及实现前 | checking：Reviewy 已给出 NOT CLEAN；第 4 轮修正，等待独立复审，不以作者自审代替 |
 | 批准与 CI | 契约获准、后续实现准入 | pending：640 批准与 CI 尚无本轮证据，保持 checking |
 
 BDD：本轮为契约设计，未变更可执行行为，不新增 .feature 或测试框架；下列场景是后续实现计划，须按项目既有 Markdown 场景规范落实并映射定向测试。新行为 BDD／真实浏览器验证本轮 skipped，原因是 serve 尚未路由且本轮禁止实现。Cross-repo context：contract-only；Mock Strategy：none。代码可读性审查不适用（无手写代码变更），ADR／OpenAPI／任务已按状态边界分层。
@@ -152,11 +152,11 @@ BDD：本轮为契约设计，未变更可执行行为，不新增 .feature 或�
 ### 本契约轮
 
 - ADR §9 明确回答三个问题，原 §1–§7 不改，§8 留给并行 PR。
-- OpenAPI 仅新增 planned 取票 operation 及必要组件；声明 Bearer／X-CSRF-Token／严格来源、200 字段与 no-store、精确 401／403／429；所有原 operations 尤其 pair 不变。
+- OpenAPI 的 planned 取票 operation 声明 Bearer／CSRF 整体校验与严格来源、200 字段与 no-store、精确 401／403／429；同步 pair 的恢复票交换、严格来源、单次消费和 no-store 契约，其他 operations 不变。
 - 一次签发、一次链上成功、时间边界、错误码复用、网络不确定、限流与人工回退在 ADR／OpenAPI／本任务一致。
 - strict 记录保留草稿创建时间与事件，index 仅生成新增一行；指定本地验证结果如实记录，失败不隐藏。
 - 双语 CHANGELOG 在 rc.4 之前各有一个 rc.5 未发布节、一个新增小节与一条对应契约记录；明确未实现、serve 未路由及批准后另开实现 PR，无 PR 号链接。
-- Reviewy 安全评审、640 批准和 CI 仍待外部执行；本地检查通过也不能标 done。
+- Reviewy 安全复审、640 批准和 CI 仍待外部执行；本地检查通过也不能标 done。
 
 ### 后续实现轮（未执行）
 
@@ -168,7 +168,7 @@ BDD：本轮为契约设计，未变更可执行行为，不新增 .feature 或�
 
 - 过期秘密新增短暂恢复权；同源 XSS／Bearer＋CSRF 同时泄露仍可利用。严格来源不能替代凭证保密，进程预算可能被本机攻击者耗尽。
 - 只签发一次意味着响应丢失也可能丧失恢复机会，这是安全优先的取舍；休眠超过窗口必须人工配对，不把 8 小时变为无限有效。
-- 当前 Origin／秘密比较／过期清理实现尚不满足拟议规则；OpenAPI planned 不是运行时实现证据。现有 pair 字节不变不代表其未来内部无需适配恢复票。
+- 当前 Origin／秘密比较／过期清理实现尚不满足拟议规则；OpenAPI planned 不是运行时实现证据。pair 契约已同步，未来内部仍须适配恢复票，不能将文档更新当成行为落地。
 - 本轮仅追加契约文档；未批准时保持既有人工配对。后续实现回退须停自动流程、清掉恢复记录及票据、重新人工配对，不动统计／快照／导出数据。
 - 本地测试基于上述 SHA 的未提交工作树，不代表 PR head、CI、macOS／Windows 或部署证据；本轮不创建提交，不承诺跨会话自动恢复。
 
@@ -240,6 +240,25 @@ API Contract：verified（YAML、形状及已执行 schema 约束；不含完整
 
 本轮仅文档记录修正，不修改契约或生产行为；未完整调用 grill-with-docs，原因是范围与验收已明确，无新增领域歧义。既有 Book Gate Plan 的生产代码／设计／发布门禁本轮不触发，独立安全评审与批准仍沿用 pending 边界，不将 Reviewy 记录修正等同于安全批准。BDD／浏览器／运行时全量／lint／构建：skipped（无对应行为或代码变更）；Cross-repo context：contract-only；API Contract：not-needed（本轮未改契约）；Mock Strategy：none。Final Full Rerun：passed（仅上述指定 unittest 范围）；Targeted Rerun／Final Test Report／Run Summary MD：not-needed。前轮失败、跳过与环境缺口不因本轮 99 项通过而关闭；保持 checking，未 commit/push，CI 与发布状态不变。
 
+### 第 4 轮本地验证（按 Reviewy NOT CLEAN 修正契约）
+
+本轮基准 SHA 为 `f6d3800e118f1f3b50e55c201391f025e151fefa`，绑定分支仍为 `docs/v2.1.0-rc.5-dashboard-401-re-pair-contract`；开始时工作区干净。模式保持 strict，来源保持 user，状态保持 checking，completed_at 保持 null。仅修改 ADR 0001 §9、OpenAPI 和本 task.md；index 已与生成器逐字节核对一致，无需写入。双语 rc.5 Added 的既有错误码概述仍准确，故 CHANGELOG 不变。没有调用 TaskStore 的写入方法，所有仓库正文均由 omp 直接用 edit 写入。
+
+未完整调用 grill-with-docs：修正目标与边界明确，无需追加访谈。domain-modeling 复用现有会话／恢复记录／票据／链术语。DDIA Data Design Review：confirmed（本轮契约自审，不是独立安全批准）；数据所有者为原 serve 进程内存，恢复记录在原到期时间 +60 秒删除；签发与标已用原子完成，首次交换消费票据，成功交换与新会话创建原子完成；不确定网络结果转人工，不补票、不重放；无持久化、迁移或回填，未来回退清理恢复记录及票据。后续仍需可控时钟、并发消费、错误凭证与响应丢失测试。DDD 完整 grill 门禁、生产代码重构／Legacy／TDD／发布门禁本轮 not-needed：没有完整访谈、生产行为编辑或发布。
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only；Environment Alignment：unverified（未对齐 CI）。rtk：skipped-for-report，执行原生命令保留实际输出；本地证据表不是正式 PR-head 报告。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); same=Path('ai/tasks/index.md').read_bytes()==a; print('INDEX_PREVIEW_SAME', same, 'rows=%d' % len(s._index_rows(r))); assert same"` | `INDEX_PREVIEW_SAME True rows=78`；只读生成候选与 index 逐字节一致，未写文件；保留“旧格式事件，不追溯”提示 | 0 |
+| `python3 -c 'import yaml,pathlib,sys; p=pathlib.Path("sbtd-runtime/contracts/openapi.yaml"); yaml.safe_load(p.read_text()); print("OPENAPI_PARSE_OK")'` | `OPENAPI_PARSE_OK` | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 总数 99，通过 99，失败 0，跳过 0；`OK`，45.383 秒 | 0 |
+| `env PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts` | 总数 65，通过 65，失败 0，跳过 0；`OK`，0.410 秒；包含读取 OpenAPI 的鉴权／pair contract 检查 | 0 |
+| `python3 -B -c` 一次性只读契约／变更边界检查 | `ADR_PREFIX_IDENTICAL True; ONLY_PAIR_AND_RE_PAIR_OPERATIONS_CHANGED True; PAIR_NO_STORE_REQUIRED True; ADDED_LINES_LOCAL_PATH_FREE True; CHANGED_FILES 3`；ADR §9 前字节不变，只有 pair／re-pair-ticket 的 operation 变化，pair 的 200 头 required=true／const=no-store，新增行无本机路径 | 0 |
+| grep 工具：本 task 全文、ADR §9、OpenAPI 的禁止归因措辞与错误分钟检查 | 精确检查无匹配；宽泛的“约＋空格”只命中“契约 PR”等正常文字，不是模糊分钟 | 工具成功，无 shell 退出码 |
+
+Final Full Rerun：passed（仅本轮指定的 99 项与 65 项，共 164 项，不是 runtime 全量）；Targeted Rerun：not-needed（本轮没有测试失败）。前轮全量失败、跳过与校验器缺口保留，未重复运行或关闭。API Contract：verified（YAML、既有 golden 与一次性契约形状检查，不是新恢复行为的运行证明）；Cross-repo context：contract-only；Mock Strategy：none。BDD／真实浏览器／新鉴权运行场景／lint／构建：skipped（仅契约文档，没有相应运行时编辑）；未新增 .feature 或测试框架。Final Test Report／Run Summary MD：not-needed（仅本地命令证据）。Reviewy 的 NOT CLEAN 修正不等于独立复审通过，640 批准与 CI 仍待完成；未 commit/push、未部署、未发布。
+
 ## 模型记录
 
 | 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
@@ -250,10 +269,16 @@ API Contract：verified（YAML、形状及已执行 schema 约束；不含完整
 | 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 补 CHANGELOG 与 strict 执行记录、重跑验证 | 11 | 34 |
 | 第 2 轮 | `typesafe/jev-latest` | omp find 工具内部调用 | 23 | — |
 | 第 2 轮 | `cursor/composer-2.5` | omp 会话标题生成 | 2 | — |
-| 第 3 轮（本轮：Reviewy 修正） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 11 | 21 |
+| 第 3 轮（历史：按 Reviewy 意见修正记录） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 11 | 21 |
 | 第 3 轮 | 其他后台模型 | omp 工具内部调用 | 无 | — |
+| 第 4 轮（按 Reviewy NOT CLEAN 修正契约） | `openai-codex/gpt-6-astra`（主模型） | 直接修正 ADR／OpenAPI／任务记录并验证，含最后计数编辑与纯文本收尾 | 13 | 40 |
+| 第 4 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
 
-次数由编排方及第 3 轮会话末尾的统计脚本从 omp 会话日志统计；未使用 task 工具或子代理。
+第 1、2 轮 find 的后台归属来自会话日志字段：每条记录为 `"purpose":"find","provider":"typesafe","model":"jev-latest"`；按这些日志字段计数，第 1 轮 35 次、第 2 轮 23 次，不能归为主模型调用。
+
+第 3 轮次数写入方式披露（Lord 16:21）：第 3 轮写入的调用次数，是当时由仓库外脚本在 omp 最后一次 bash 调用里填入文件的，不是 omp 在文件里亲手写的；从本轮起全部正文由 omp 直接用 write/edit 写入。历史数字保持原记录，不把脚本填数表述成 omp 手写。未使用 task 执行工具或子代理；进度清单不承担任务执行。
+
+第 4 轮计数方法：收尾前按会话日志计数，筛选 `type=message`、`role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的已有记录，实际为 11 条；加本次最终 edit 所在的 1 次模型调用和随后纯文本收尾 stop 的 1 次，共 13 次。相同记录内 `content.type=toolCall` 已有 39 条，加本次最终 edit 1 次，共 40 次；find 工具调用为 0，本轮 jev-latest／find 为 0 次。统计命令只读日志、未写仓库；上述数字与说明由 omp 本人直接用 edit 写入，这是本轮对仓库文件的最后一次编辑，之后不再调用工具。模型计数按日志条目口径，不将工具调用数当成模型调用数；本次计数未追溯改写前 3 轮。
 
 ## 状态事件
 
@@ -262,4 +287,5 @@ API Contract：verified（YAML、形状及已执行 schema 约束；不含完整
 | 2026-11-11T14:38:57+08:00 | planned | planned | 编排方整理：保留 default 延后项草稿建立事件，未开始实现；归因措辞按本轮边界整理 | 草稿记录已读取 PR #186／#190、ADR 0001／0002 和相关源码；历史基准 80f14263e7d8bc6ae84f04ba94218e4857fc8b8f；本轮不将历史读取冒充新查询。 |
 | 2026-11-11T15:15:09+08:00 | planned | checking | 编排方整理：将只读草稿改写为 strict、contract-only 契约任务，等待独立安全评审、批准和 CI | ADR 0001 §9 与 OpenAPI planned operation 已写入；本轮工作树未提交，实际本地验证见上表。此行记录草稿交付阶段变化，不声称调用 TaskStore.transition 跨阶段转换。 |
 | 2026-11-11T15:26:30+08:00 | checking | checking | 按 strict 补 CHANGELOG 与执行记录 | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；第 2 轮补齐双语未发布条目、strict 执行与模型记录（后台调用遗漏在第 3 轮补正），验证结果见第 2 轮证据表；未 commit/push，独立评审、批准与 CI 仍待完成。 |
-| 2026-11-11T16:00:59+08:00 | checking | checking | Reviewy 修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | 索引生成 changed=False、预览 True，均为 78 行；指定状态／工作流测试 99 项通过；diff 仅本 task.md，新增行无本机路径，全文禁止措辞无匹配；详情见第 3 轮本地验证。 |
+| 2026-11-11T16:00:59+08:00 | checking | checking | 按 Reviewy 意见修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | 索引生成 changed=False、预览 True，均为 78 行；指定状态／工作流测试 99 项通过；diff 仅本 task.md，新增行无本机路径，全文禁止措辞无匹配；详情见第 3 轮本地验证。 |
+| 2026-11-11T16:29:52+08:00 | checking | checking | 按 Reviewy NOT CLEAN 一次性修正决策来源措辞、403／401 语义、pair 契约，以及第 3 轮次数披露 | 决策采用分钟不可考的 Lord 记录原文；Bearer／CSRF 整体失败为 401，403 仅来源拒绝；pair 同步恢复票、严格来源、单次消费与 no-store，恢复记录窗口结束即删除；本轮验证结果见第 4 轮证据表。未 commit/push，等待独立复审、批准与 CI。 |
