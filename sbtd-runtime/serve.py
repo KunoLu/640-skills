@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hmac
 import ipaddress
 import json
 import logging
@@ -31,8 +32,12 @@ import secrets
 import signal
 import socket
 import sys
+import threading
+import time
 import uuid
 import webbrowser
+from collections import deque
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -145,6 +150,12 @@ def origin_allowed(origin: str | None, port: int) -> bool:
     return parts.port == port
 
 
+def recovery_origin_allowed(host: str | None, origin: str | None, port: int) -> bool:
+    """Recovery alone requires a canonical, exactly matching HTTP origin."""
+    authorities = {f"localhost:{port}", f"127.0.0.1:{port}", f"[::1]:{port}"}
+    return host in authorities and origin == f"http://{host}"
+
+
 # --- D7: one-time ticket and sessions ---------------------------------------
 
 
@@ -162,12 +173,21 @@ class AccessControl:
         *,
         ticket_ttl_seconds: float = TICKET_TTL_SECONDS,
         session_ttl_seconds: float = SESSION_TTL_SECONDS,
+        wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
+        self._wall_clock = wall_clock
+        self._monotonic = monotonic
+        self._lock = threading.Lock()
         self._ticket = secrets.token_urlsafe(32)
         self._ticket_ttl = ticket_ttl_seconds
-        self._ticket_issued_at = datetime.now(UTC)
+        self._ticket_issued_at = wall_clock()
         self._session_ttl = session_ttl_seconds
         self._sessions: dict[str, dict[str, Any]] = {}
+        self._recovery_ticket: tuple[str, str, datetime] | None = None
+        self._recovery_started = False
+        self._admitted: deque[float] = deque()
+        self._expiry_timer: threading.Timer | None = None
 
     @property
     def ticket(self) -> str:
@@ -177,35 +197,166 @@ class AccessControl:
     def _ticket_expired(self, now: datetime) -> bool:
         return now >= self._ticket_issued_at + timedelta(seconds=self._ticket_ttl)
 
-    def pair(self, code: str | None) -> tuple[str, str, int] | None:
-        """Exchange the one-time code for (bearer, csrf, expires_in).
+    def _prune(self, now: datetime) -> None:
+        # Expired credentials retain recovery authority, never data authority.
+        for bearer, session in list(self._sessions.items()):
+            retain_until = session["expires_at"] + timedelta(
+                seconds=60 if session["recoverable"] else 0
+            )
+            if now >= retain_until:
+                del self._sessions[bearer]
+        if self._recovery_ticket and now >= self._recovery_ticket[2]:
+            self._recovery_ticket = None
 
-        The ticket is destroyed by this call whether the exchange succeeds
-        or fails (读后即毁, D7).
-        """
-        ticket = self._ticket
-        self._ticket = ""
-        now = datetime.now(UTC)
-        if not code or not ticket or code != ticket or self._ticket_expired(now):
-            return None
+    def _expire_records(self) -> None:
+        """Drop secrets even when the browser never makes another request."""
+        with self._lock:
+            now = self._wall_clock()
+            self._prune(now)
+            self._schedule_expiry(now)
+
+    def _schedule_expiry(self, now: datetime) -> None:
+        if self._expiry_timer:
+            self._expiry_timer.cancel()
+            self._expiry_timer = None
+        deadlines = [
+            session["expires_at"]
+            + timedelta(seconds=60 if session["recoverable"] else 0)
+            for session in self._sessions.values()
+        ]
+        if self._recovery_ticket:
+            deadlines.append(self._recovery_ticket[2])
+        if deadlines:
+            delay = max(0.001, (min(deadlines) - now).total_seconds())
+            self._expiry_timer = threading.Timer(delay, self._expire_records)
+            self._expiry_timer.daemon = True
+            self._expiry_timer.start()
+
+    def close(self) -> None:
+        with self._lock:
+            if self._expiry_timer:
+                self._expiry_timer.cancel()
+                self._expiry_timer = None
+            self._sessions.clear()
+            self._recovery_ticket = None
+            self._ticket = ""
+
+    def _new_session(self, now: datetime, *, chain: str, recoverable: bool):
         bearer = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
         self._sessions[bearer] = {
             "csrf": csrf,
             "expires_at": now + timedelta(seconds=self._session_ttl),
+            "chain": chain,
+            "recoverable": recoverable,
+            "issued": False,
+            "recovered": False,
         }
+        self._schedule_expiry(now)
         return bearer, csrf, int(self._session_ttl)
 
+    def pair(
+        self, code: str | None, *, recovery_source_allowed: bool = False
+    ) -> tuple[str, str, int] | None:
+        """Check recovery source and consume under the same lock as issuance."""
+        with self._lock:
+            now = self._wall_clock()
+            self._prune(now)
+            if self._recovery_started:
+                if not recovery_source_allowed:
+                    raise PermissionError("forbidden")
+                pending = self._recovery_ticket
+                self._recovery_ticket = None
+                if pending is None:
+                    return None
+                ticket, bearer, expires_at = pending
+                session = self._sessions.get(bearer)
+                if (
+                    not hmac.compare_digest((code or "").encode(), ticket.encode())
+                    or now >= expires_at
+                    or session is None
+                    or session["recovered"]
+                ):
+                    return None
+                result = self._new_session(
+                    now, chain=session["chain"], recoverable=False
+                )
+                session["recovered"] = True
+                return result
+            ticket = self._ticket
+            self._ticket = ""
+            if (
+                not ticket
+                or not hmac.compare_digest((code or "").encode(), ticket.encode())
+                or self._ticket_expired(now)
+            ):
+                return None
+            return self._new_session(now, chain=uuid.uuid4().hex, recoverable=True)
+
+    def re_pair_ticket(
+        self, bearer: str | None, csrf: str | None
+    ) -> tuple[dict[str, Any] | None, int | None]:
+        """Source was checked by middleware; budget precedes joint credentials.
+
+        Return (ticket, retry_after). Neither field discloses failed credentials.
+        The lock also serializes pair consumption, revocation and pruning.
+        """
+        with self._lock:
+            now = self._wall_clock()
+            self._prune(now)
+            tick = self._monotonic()
+            while self._admitted and self._admitted[0] <= tick - 60:
+                self._admitted.popleft()
+            if len(self._admitted) >= 10:
+                return None, max(1, math.ceil(self._admitted[0] + 60 - tick))
+            self._admitted.append(tick)
+            for original, session in self._sessions.items():
+                bearer_matches = hmac.compare_digest(
+                    (bearer or "").encode(), original.encode()
+                )
+                csrf_matches = hmac.compare_digest(
+                    (csrf or "").encode(), session["csrf"].encode()
+                )
+                if not (bearer_matches & csrf_matches):
+                    continue
+                deadline = session["expires_at"] + timedelta(seconds=60)
+                if (
+                    not session["recoverable"]
+                    or session["issued"]
+                    or session["recovered"]
+                    or not session["expires_at"] <= now < deadline
+                ):
+                    return None, None
+                code = secrets.token_urlsafe(32)
+                expires_at = min(now + timedelta(seconds=30), deadline)
+                payload = {
+                    "pairing_code": code,
+                    "expires_at": expires_at.astimezone(UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "ttl_seconds": (expires_at - now).total_seconds(),
+                }
+                self._recovery_ticket = (code, original, expires_at)
+                self._recovery_started = True
+                session["issued"] = True
+                self._schedule_expiry(now)
+                return payload, None
+            return None, None
+
+    def revoke(self, bearer: str) -> None:
+        with self._lock:
+            self._sessions.pop(bearer, None)
+            if self._recovery_ticket and self._recovery_ticket[1] == bearer:
+                self._recovery_ticket = None
+
     def authenticate(self, bearer: str | None) -> dict[str, Any] | None:
-        if not bearer:
-            return None
-        session = self._sessions.get(bearer)
-        if session is None:
-            return None
-        if datetime.now(UTC) >= session["expires_at"]:
-            del self._sessions[bearer]
-            return None
-        return session
+        with self._lock:
+            now = self._wall_clock()
+            self._prune(now)
+            session = self._sessions.get(bearer or "")
+            if session is None or now >= session["expires_at"]:
+                return None
+            return session
 
 
 # --- D6: instance lock ------------------------------------------------------
@@ -369,7 +520,10 @@ def _json(
 
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
-_AUTH_EXEMPT_PATHS = frozenset({"/api/v1/health", "/api/v1/session/pair"})
+_PAIR_PATH = "/api/v1/session/pair"
+_RE_PAIR_PATH = "/api/v1/session/re-pair-ticket"
+# Recovery is exempt only from ordinary auth; its handler validates both secrets.
+_AUTH_EXEMPT_PATHS = frozenset({"/api/v1/health", _PAIR_PATH, _RE_PAIR_PATH})
 
 
 class SecurityMiddleware:
@@ -386,16 +540,42 @@ class SecurityMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        path = scope["path"]
+        if scope["method"] == "POST" and path in {_PAIR_PATH, _RE_PAIR_PATH}:
+            original_send = send
+
+            async def no_store_send(message: dict) -> None:
+                if message["type"] == "http.response.start":
+                    message = {
+                        **message,
+                        "headers": [
+                            (key, value)
+                            for key, value in message.get("headers", [])
+                            if key.lower() != b"cache-control"
+                        ]
+                        + [(b"cache-control", b"no-store")],
+                    }
+                await original_send(message)
+
+            send = no_store_send
         headers = {
             key.decode("latin-1"): value.decode("latin-1")
             for key, value in scope["headers"]
         }
-        if not host_allowed(headers.get("host"), self.port) or not origin_allowed(
-            headers.get("origin"), self.port
+        try:
+            source_allowed = host_allowed(
+                headers.get("host"), self.port
+            ) and origin_allowed(headers.get("origin"), self.port)
+        except ValueError:
+            source_allowed = False
+        if not source_allowed:
+            await _json({"detail": "forbidden"}, 403)(scope, receive, send)
+            return
+        if path == _RE_PAIR_PATH and not recovery_origin_allowed(
+            headers.get("host"), headers.get("origin"), self.port
         ):
             await _json({"detail": "forbidden"}, 403)(scope, receive, send)
             return
-        path = scope["path"]
         if path.startswith("/api/") and path not in _AUTH_EXEMPT_PATHS:
             bearer = None
             authorization = headers.get("authorization", "")
@@ -494,6 +674,7 @@ def create_app(
         try:
             yield
         finally:
+            access.close()
             await run_in_threadpool(exports.close)
 
     async def health(_request: Request) -> JSONResponse:
@@ -516,7 +697,15 @@ def create_app(
         return _json(_envelope({"exports": formats}))
 
     async def pair(request: Request) -> JSONResponse:
-        result = access.pair(request.headers.get("x-pairing-code"))
+        try:
+            result = access.pair(
+                request.headers.get("x-pairing-code"),
+                recovery_source_allowed=recovery_origin_allowed(
+                    request.headers.get("host"), request.headers.get("origin"), port
+                ),
+            )
+        except PermissionError:
+            return _json({"detail": "forbidden"}, 403)
         if result is None:
             return _json({"detail": "unauthorized"}, 401)
         bearer, csrf, expires_in = result
@@ -524,6 +713,22 @@ def create_app(
             {"token_type": "bearer", "access_token": bearer, "expires_in": expires_in},
             headers={"X-CSRF-Token": csrf},
         )
+
+    async def re_pair_ticket(request: Request) -> JSONResponse:
+        authorization = request.headers.get("authorization", "")
+        bearer = authorization[7:] if authorization.startswith("Bearer ") else None
+        ticket, retry_after = access.re_pair_ticket(
+            bearer, request.headers.get("x-csrf-token")
+        )
+        if retry_after is not None:
+            return _json(
+                {"detail": "RE_PAIR_RATE_LIMITED"},
+                429,
+                headers={"Retry-After": str(retry_after)},
+            )
+        if ticket is None:
+            return _json({"detail": "unauthorized"}, 401)
+        return _json(ticket)
 
     async def metric_catalog(_request: Request) -> JSONResponse:
         catalog = serve_catalog()
@@ -711,6 +916,7 @@ def create_app(
         Route("/api/v1/health", health, methods=["GET"]),
         Route("/api/v1/capabilities", capabilities, methods=["GET"]),
         Route("/api/v1/session/pair", pair, methods=["POST"]),
+        Route(_RE_PAIR_PATH, re_pair_ticket, methods=["POST"]),
         Route("/api/v1/metrics/catalog", metric_catalog, methods=["GET"]),
         Route("/api/v1/statistics/query", statistics_query, methods=["POST"]),
         Route("/api/v1/exports", create_export, methods=["POST"]),

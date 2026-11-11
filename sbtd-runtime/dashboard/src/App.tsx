@@ -7,6 +7,8 @@ import {
   downloadExport,
   getCapabilities,
   getExport,
+  getRecoveryState,
+  subscribeRecovery,
   type ExportCapabilities,
   fetchAllSnapshotRows,
   fetchReportSnapshot,
@@ -92,6 +94,9 @@ export function App() {
   });
   const [locale, setLocale] = useState<Locale>(initialLocale);
   const [model, setModel] = useState<PageModel>(INITIAL_MODEL);
+  const [recovery, setRecovery] = useState(getRecoveryState);
+  const loadController = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
   const [selection, setSelection] = useState<TimeSelection>(loadSelection);
   const [filters, setFilters] = useState<FilterSelection>({});
   const [customOpen, setCustomOpen] = useState(false);
@@ -121,11 +126,16 @@ export function App() {
     return () => controller.abort();
   }, [hasView]);
 
-  useEffect(() => () => {
-    exportRef.current?.stop();
-    exportRef.current = null;
-    for (const url of blobUrls.current) URL.revokeObjectURL(url);
-    blobUrls.current.clear();
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      loadController.current?.abort();
+      exportRef.current?.stop();
+      exportRef.current = null;
+      for (const url of blobUrls.current) URL.revokeObjectURL(url);
+      blobUrls.current.clear();
+    };
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -143,18 +153,24 @@ export function App() {
    * applied at ReportDocument derivation, never a re-query trigger.
    */
   const load = useCallback(async (sel: TimeSelection, selFilters: FilterSelection) => {
+    if (!mounted.current || getRecoveryState() === "recovering" || getRecoveryState() === "manual") return;
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
+    const signal = controller.signal;
     setModel((current) => beginLoad(current));
     try {
       // TimeSelection is validated before it is stored; buildScope still
       // throws on a corrupt restored selection — never a silent 24h.
       const scope = buildScope(sel, cleanFilters(selFilters), ALL_METRIC_IDS, new Date(), locale);
-      const stats = await queryStatistics(scope);
+      const stats = await queryStatistics(scope, signal);
       const snapshotId = stats.snapshot_id;
       if (typeof snapshotId !== "string" || snapshotId.length === 0) {
         throw new ApiError("statistics response carried no snapshot_id", null);
       }
-      const snapshot = await fetchReportSnapshot(snapshotId);
-      const dataset = await fetchAllSnapshotRows(snapshotId);
+      const snapshot = await fetchReportSnapshot(snapshotId, signal);
+      const dataset = await fetchAllSnapshotRows(snapshotId, 100, signal);
+      signal.throwIfAborted();
       const view: ReadyView = {
         snapshot,
         values: stats.metrics,
@@ -168,7 +184,9 @@ export function App() {
       // new panels.
       setExpandedTasks((ids) => retainExpansions(ids, view));
     } catch (error) {
-      setModel((current) => applyFailure(current, String(error)));
+      if (!signal.aborted) setModel((current) => applyFailure(current, String(error)));
+    } finally {
+      if (loadController.current === controller) loadController.current = null;
     }
   }, [locale]);
 
@@ -180,8 +198,17 @@ export function App() {
   loadRef.current = load;
 
   const reload = useCallback(() => {
+    if (loadController.current || !readSession() ||
+        getRecoveryState() === "recovering" || getRecoveryState() === "manual") return;
     void loadRef.current(paramsRef.current.selection, paramsRef.current.filters);
   }, []);
+
+  useEffect(() => subscribeRecovery(state => {
+    setRecovery(state);
+    // An in-flight main load already resumes its original snapshot/pages.
+    // Export-only recovery starts exactly one complete main load here.
+    if (state === "recovered" && !loadController.current) reload();
+  }), [reload]);
 
   // D12: re-resolve every 30s; presets use fixed query-bucket ceilings (§12.5).
   // A query may reuse the same snapshot_id. Keep the previous view until
@@ -234,7 +261,8 @@ export function App() {
   };
 
   const startExport = async (format: ExportFormat) => {
-    if (!report || exportBusy || unavailableReason(format)) return;
+    if (!report || exportBusy || unavailableReason(format) ||
+        recovery === "recovering" || recovery === "manual") return;
     exportRef.current?.stop();
     const job = new ExportJob(report.snapshot.snapshot_id, format, report.presentation_state,
       { createExport, getExport, deleteExport, downloadExport }, setExportState);
@@ -364,15 +392,15 @@ export function App() {
               <span
                 className="live-badge"
                 role="status"
-                data-live={view !== null && !model.updating ? "true" : "false"}
+                data-live={view !== null && !model.updating && recovery !== "recovering" && recovery !== "manual" ? "true" : "false"}
               >
                 <span className="live-dot" aria-hidden="true" />
-                {model.updating
+                {recovery === "recovering" || recovery === "manual" ? t(locale, "recovery_stale") : model.updating
                   ? t(locale, "updating")
                   : t(locale, "live_badge", { time: localClockTime(view!.snapshot.as_of) })}
               </span>
             )}
-            <button type="button" onClick={reload} disabled={model.updating}>
+            <button type="button" onClick={reload} disabled={model.updating || recovery === "recovering" || recovery === "manual"}>
               {t(locale, "refresh")}
             </button>
             <div className="segmented" role="group" aria-label={t(locale, "aria_time_range")}>
@@ -388,6 +416,7 @@ export function App() {
                   aria-pressed={
                     selection.kind === "preset" && selection.preset === preset
                   }
+                  disabled={recovery === "recovering" || recovery === "manual"}
                   onClick={() => selectPreset(preset)}
                 >
                   {preset}
@@ -410,7 +439,7 @@ export function App() {
                 <button
                   key={format}
                   type="button"
-                  disabled={!report || exportBusy || Boolean(unavailableReason(format))}
+                  disabled={!report || exportBusy || Boolean(unavailableReason(format)) || recovery === "recovering" || recovery === "manual"}
                   title={unavailableReason(format) || t(locale, "export_tooltip")}
                   onClick={() => void startExport(format)}
                 >
@@ -461,6 +490,10 @@ export function App() {
           </div>
         </div>
         <div className="export-feedback" role="status" aria-live="polite">
+          {recovery !== "idle" && <p aria-atomic="true">
+            {t(locale, recovery === "recovering" ? "recovery_running" :
+              recovery === "manual" ? "recovery_manual" : "recovery_success")}
+          </p>}
           {(["jpeg", "pdf"] as const).map(format => unavailableReason(format) && (
             <p className="export-unavailable" key={format}>{format.toUpperCase()}{locale === "zh" ? "：" : ": "}{unavailableReason(format)}</p>
           ))}
@@ -500,7 +533,7 @@ export function App() {
                 onChange={(event) => setCustomTz(event.target.value)}
               />
             </label>
-            <button type="button" onClick={applyCustom}>
+            <button type="button" onClick={applyCustom} disabled={recovery === "recovering" || recovery === "manual"}>
               {t(locale, "apply")}
             </button>
             {customError !== null && (
@@ -517,6 +550,7 @@ export function App() {
                 {filterLabel(locale, key)}
                 <select
                   multiple
+                  disabled={recovery === "recovering" || recovery === "manual"}
                   size={Math.min(Math.max(filterOptions[key].length, 1), 4)}
                   value={filters[key] ?? []}
                   onChange={(event) => {
@@ -553,6 +587,7 @@ export function App() {
                   type="button"
                   className="filter-chip"
                   onClick={() => toggleFilterValue(key, value)}
+                  disabled={recovery === "recovering" || recovery === "manual"}
                   title={t(locale, "chip_remove_title")}
                 >
                   {filterLabel(locale, key)}={value} ✕
@@ -583,7 +618,7 @@ export function App() {
         {model.error !== null && view !== null && (
           <p className="panel-state panel-state-error" role="alert">
             {t(locale, "refresh_failed", { error: model.error })}
-            <button type="button" onClick={reload}>
+            <button type="button" onClick={reload} disabled={recovery === "recovering" || recovery === "manual"}>
               {t(locale, "retry")}
             </button>
           </p>
@@ -591,7 +626,7 @@ export function App() {
         {model.error !== null && view === null && (
           <p className="panel-state panel-state-error" role="alert">
             {t(locale, "load_failed", { error: model.error })}
-            <button type="button" onClick={reload}>
+            <button type="button" onClick={reload} disabled={recovery === "recovering" || recovery === "manual"}>
               {t(locale, "retry")}
             </button>
           </p>

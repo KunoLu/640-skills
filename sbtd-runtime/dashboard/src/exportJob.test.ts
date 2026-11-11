@@ -4,6 +4,7 @@ import { ExportJob, exportErrorMessage, parseExportFilename } from "./exportJob.
 import type { ExportApi, ExportState, ExportStatus } from "./exportJob.ts";
 import { ApiError, createExport, getExport, deleteExport, downloadExport, getCapabilities } from "./api.ts";
 import type { PresentationState } from "./reportDocument.ts";
+import type * as Api from "./api.ts";
 
 const presentation = (): PresentationState => ({
   theme: "light", report_width_px: 1440, expanded_detail_ids: ["task_a"],
@@ -148,7 +149,7 @@ test("a newer click cannot receive an older creation or download response", asyn
   }
 });
 
-test("401 stops immediately; other fatal HTTP errors do not retry or download", async () => {
+test("401 after API recovery failure is terminal; other fatal HTTP errors do not retry or download", async () => {
   for (const status of [401, 400, 404, 410, 422, 503, 507]) {
     const h = harness();
     let reads = 0;
@@ -265,4 +266,131 @@ test("API authentication, 204 cancellation, binary download and both error body 
   response = new Response(JSON.stringify({ error: { code: "FUTURE_ERROR" }, request_id: "req_failure" }), { status: 400 });
   await assert.rejects(downloadExport("exp_a", "pdf", signal), e =>
     e instanceof ApiError && e.code === "FUTURE_ERROR" && e.requestId === "req_failure" && e.status === 400);
+});
+
+test("real API recovery preserves each export operation and the forty-query cap", async t => {
+  for (const stage of ["create", "query", "download", "cancel", "cap"]) {
+    await t.test(stage, async t => {
+      // Separate module instances model independent tabs without a production reset hook.
+      const api: typeof Api = await import(`./api.ts?export-stage=${stage}`);
+      const prior = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+      let stored: string | null = JSON.stringify({ bearer: "old", csrf: "old-csrf" });
+      Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
+        getItem: () => stored, setItem: (_key: string, value: string) => { stored = value; },
+        removeItem: () => { stored = null; },
+      } });
+      t.after(() => {
+        if (prior) Object.defineProperty(globalThis, "sessionStorage", prior);
+        else Reflect.deleteProperty(globalThis, "sessionStorage");
+      });
+      const requests: { path: string; method: string; body: unknown; key: string | null }[] = [];
+      let queryCount = 0, tickets = 0, downloads = 0, recovered = false;
+      const envelope = (data: unknown) => Response.json({ api_version: "1", request_id: "req_a", data, meta: {} });
+      t.mock.method(globalThis, "fetch", async (path: string, init: RequestInit) => {
+        const headers = new Headers(init.headers);
+        if (path.endsWith("re-pair-ticket")) {
+          tickets++;
+          return Response.json({ pairing_code: "ephemeral", ttl_seconds: 30, expires_at: new Date(Date.now() + 30000).toISOString() });
+        }
+        if (path.endsWith("/pair")) {
+          recovered = true;
+          return Response.json({ token_type: "bearer", access_token: "new", expires_in: 28800 }, { headers: { "X-CSRF-Token": "new-csrf" } });
+        }
+        requests.push({ path, method: init.method!, body: init.body, key: headers.get("Idempotency-Key") });
+        const kind = init.method === "POST" ? "create" : init.method === "DELETE" ? "cancel" :
+          path.endsWith("/file") ? "download" : "query";
+        if (kind === "query") queryCount++;
+        if (!recovered && (stage === kind || stage === "cap" && queryCount === 10)) {
+          return Response.json({ detail: "unauthorized" }, { status: 401 });
+        }
+        if (kind === "create") return envelope({ export_id: "exp_original" });
+        assert.ok(path.startsWith("/api/v1/exports/exp_original"));
+        if (kind === "cancel") return new Response(null, { status: 204 });
+        if (kind === "download") { downloads++; return new Response("original-file"); }
+        return envelope({ status: stage === "cap" ? "generating" : "ready", error: null });
+      });
+      const states: ExportState[] = [];
+      const job = new ExportJob("snap_original", "csv", presentation(), api, state => states.push(state), {
+        uuid: () => "original-key", sleep: async () => {},
+      });
+      if (stage === "cancel") { job.id = "exp_original"; await job.cancel(); }
+      else {
+        const file = await job.run();
+        assert.equal(file ? await file.blob.text() : undefined, stage === "cap" ? undefined : "original-file");
+      }
+      assert.equal(tickets, 1);
+      const creates = requests.filter(r => r.method === "POST");
+      assert.equal(creates.length, stage === "cancel" ? 0 : stage === "create" ? 2 : 1);
+      for (const call of creates) {
+        assert.deepEqual(JSON.parse(call.body as string), job.input);
+        assert.equal(call.key, "original-key");
+      }
+      if (stage === "cancel") {
+        assert.equal(requests.length, 2);
+        for (const call of requests) assert.deepEqual(call, {
+          path: "/api/v1/exports/exp_original", method: "DELETE", body: undefined, key: "original-key",
+        });
+      }
+      assert.equal(downloads, stage === "cap" || stage === "cancel" ? 0 : 1);
+      if (stage === "cap") {
+        assert.equal(queryCount, 41); // Forty logical queries plus one recovery replay.
+        assert.equal(states.at(-1)?.status, "failed");
+      }
+    });
+  }
+});
+
+test("transport retry never stacks with a recovery replay", async t => {
+  for (const order of ["401-network", "network-401"]) {
+    await t.test(order, async t => {
+      const api: typeof Api = await import(`./api.ts?retry-order=${order}`);
+      const prior = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+      let stored: string | null = JSON.stringify({ bearer: "old", csrf: "csrf" });
+      Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
+        getItem: () => stored, setItem: (_key: string, value: string) => { stored = value; },
+        removeItem: () => { stored = null; },
+      } });
+      t.after(() => {
+        if (prior) Object.defineProperty(globalThis, "sessionStorage", prior);
+        else Reflect.deleteProperty(globalThis, "sessionStorage");
+      });
+      let creates = 0, tickets = 0;
+      t.mock.method(globalThis, "fetch", async (path: string) => {
+        if (path.endsWith("re-pair-ticket")) {
+          tickets++;
+          return Response.json({ pairing_code: "ephemeral", ttl_seconds: 30, expires_at: new Date(Date.now() + 30000).toISOString() });
+        }
+        if (path.endsWith("/pair")) return Response.json({
+          token_type: "bearer", access_token: "new", expires_in: 28800,
+        }, { headers: { "X-CSRF-Token": "new-csrf" } });
+        assert.equal(path, "/api/v1/exports");
+        creates++;
+        if ((creates === 1) === (order === "network-401")) throw new TypeError("connection lost");
+        return Response.json({ detail: "unauthorized" }, { status: 401 });
+      });
+      const states: ExportState[] = [];
+      const job = new ExportJob("snap_original", "csv", presentation(), api, state => states.push(state), { sleep: async () => {} });
+      assert.equal(await job.run(), undefined);
+      assert.equal(creates, 2);
+      assert.equal(tickets, order === "401-network" ? 1 : 0);
+      assert.equal(states.at(-1)?.status, "failed");
+    });
+  }
+});
+
+test("unmount aborts a pending cancellation without reviving the export", async () => {
+  const h = harness();
+  let cancellation: AbortSignal | undefined;
+  h.api.deleteExport = async (_id, _key, signal) => {
+    cancellation = signal;
+    await new Promise<void>((_resolve, reject) => signal!.addEventListener("abort", () => reject(signal!.reason), { once: true }));
+  };
+  const job = h.job();
+  job.id = "exp_a";
+  const cancelling = job.cancel();
+  const rejected = assert.rejects(cancelling, { name: "AbortError" });
+  job.stop();
+  await rejected;
+  assert.equal(cancellation?.aborted, true);
+  assert.equal(h.downloads(), 0);
 });

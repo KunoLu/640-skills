@@ -24,6 +24,8 @@ const SESSION_KEY = "sbtd.session";
 export interface SessionCredentials {
   bearer: string;
   csrf: string;
+  /** Conservative client deadline; server clocks remain authoritative. */
+  expiresAt?: number;
 }
 
 export function readSession(): SessionCredentials | null {
@@ -38,6 +40,150 @@ export function readSession(): SessionCredentials | null {
     /* fall through */
   }
   return null;
+}
+
+export type RecoveryState = "idle" | "recovering" | "recovered" | "manual";
+let recoveryState: RecoveryState = "idle";
+let sessionGeneration = 0;
+const recoveryListeners = new Set<(state: RecoveryState) => void>();
+interface RecoveryFlight {
+  promise: Promise<void>;
+  controller: AbortController;
+  waiters: number;
+}
+let recoveryFlight: RecoveryFlight | null = null;
+
+export function getRecoveryState(): RecoveryState { return recoveryState; }
+
+export function subscribeRecovery(listener: (state: RecoveryState) => void): () => void {
+  recoveryListeners.add(listener);
+  return () => { recoveryListeners.delete(listener); };
+}
+
+function setRecoveryState(state: RecoveryState): void {
+  recoveryState = state;
+  for (const listener of recoveryListeners) listener(state);
+}
+
+function saveSession(credentials: SessionCredentials): void {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(credentials));
+  sessionGeneration++;
+}
+
+function requireManualPairing(): ApiError {
+  sessionStorage.removeItem(SESSION_KEY);
+  setRecoveryState("manual");
+  return new ApiError("session recovery unavailable", 401);
+}
+
+/** Cancel only this waiter; the last departing waiter cancels the exchange. */
+async function waitForRecovery(flight: RecoveryFlight, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  flight.waiters++;
+  let abort: (() => void) | undefined;
+  try {
+    await Promise.race([
+      flight.promise,
+      new Promise<never>((_resolve, reject) => {
+        if (!signal) return;
+        abort = () => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+      }),
+    ]);
+    signal?.throwIfAborted();
+  } finally {
+    if (abort) signal?.removeEventListener("abort", abort);
+    flight.waiters--;
+    if (!flight.waiters && recoveryFlight === flight) flight.controller.abort();
+  }
+}
+
+/** Timeout includes response-body reading; late results never install secrets. */
+async function recoveryPost(
+  path: string, headers: Record<string, string>, deadline: number, parent: AbortSignal,
+): Promise<{ response: Response; body: Record<string, unknown> }> {
+  parent.throwIfAborted();
+  const remaining = Math.min(5000, deadline - performance.now());
+  if (remaining <= 0) throw new ApiError("session recovery deadline", 401);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  parent.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(abort, remaining);
+  try {
+    const response = await fetch(path, { method: "POST", headers, signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw new ApiError("session recovery rejected", response.status);
+    const body = await response.json();
+    controller.signal.throwIfAborted();
+    if (performance.now() >= deadline) throw new ApiError("session recovery deadline", 401);
+    return { response, body };
+  } finally {
+    clearTimeout(timer);
+    parent.removeEventListener("abort", abort);
+  }
+}
+
+function sessionFromResponse(
+  response: Response, body: Record<string, unknown>, startedAt: number,
+): SessionCredentials {
+  const csrf = response.headers.get("X-CSRF-Token");
+  if (body.token_type !== "bearer" || typeof body.access_token !== "string" ||
+      !body.access_token || typeof body.expires_in !== "number" ||
+      !Number.isFinite(body.expires_in) || body.expires_in <= 0 || !csrf) {
+    throw new ApiError("malformed session", 401);
+  }
+  return { bearer: body.access_token, csrf, expiresAt: startedAt + body.expires_in * 1000 };
+}
+
+async function exchangeExpiredSession(
+  expired: SessionCredentials, generation: number, signal: AbortSignal,
+): Promise<void> {
+  const started = performance.now();
+  let deadline = started + 30_000;
+  if (expired.expiresAt !== undefined) {
+    deadline = Math.min(deadline, started + expired.expiresAt + 60_000 - Date.now());
+  }
+  const issued = await recoveryPost("/api/v1/session/re-pair-ticket", {
+    Authorization: `Bearer ${expired.bearer}`, "X-CSRF-Token": expired.csrf,
+  }, deadline, signal);
+  const { pairing_code: code, expires_at: expiresAt, ttl_seconds: ttl } = issued.body;
+  if (typeof code !== "string" || !code || typeof expiresAt !== "string" ||
+      typeof ttl !== "number" || !Number.isFinite(ttl) || ttl <= 0 || ttl > 30 ||
+      !Number.isFinite(Date.parse(expiresAt))) {
+    throw new ApiError("malformed recovery ticket", 401);
+  }
+  // Start-relative TTL deliberately subtracts transport time, never extends it.
+  deadline = Math.min(deadline, started + ttl * 1000,
+    performance.now() + Date.parse(expiresAt) - Date.now());
+  const pairedAt = Date.now();
+  const paired = await recoveryPost("/api/v1/session/pair", { "X-Pairing-Code": code }, deadline, signal);
+  signal.throwIfAborted();
+  if (generation !== sessionGeneration) return;
+  saveSession(sessionFromResponse(paired.response, paired.body, pairedAt));
+}
+
+async function recoverSession(
+  expired: SessionCredentials, generation: number, signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted();
+  if (generation !== sessionGeneration) return;
+  if (recoveryState === "manual") throw new ApiError("session recovery unavailable", 401);
+  if (!recoveryFlight) {
+    sessionStorage.removeItem(SESSION_KEY);
+    const flight: RecoveryFlight = {
+      controller: new AbortController(), waiters: 0, promise: Promise.resolve(),
+    };
+    recoveryFlight = flight;
+    setRecoveryState("recovering");
+    flight.promise = exchangeExpiredSession(expired, generation, flight.controller.signal)
+      .then(() => {
+        recoveryFlight = null;
+        setRecoveryState("recovered");
+      }, () => {
+        recoveryFlight = null;
+        if (generation === sessionGeneration) throw requireManualPairing();
+      });
+  }
+  await waitForRecovery(recoveryFlight, signal);
 }
 
 /** Extract the one-time pairing ticket from the URL fragment, if present. */
@@ -65,6 +211,7 @@ export async function pairWithTicket(
   ticket: string,
   locale: Locale = DEFAULT_LOCALE,
 ): Promise<SessionCredentials> {
+  const startedAt = Date.now();
   let response: Response;
   try {
     response = await fetch("/api/v1/session/pair", {
@@ -72,7 +219,7 @@ export async function pairWithTicket(
       headers: { "X-Pairing-Code": ticket },
     });
   } catch (error) {
-    throw new ApiError(`network error: ${String(error)}`, null);
+    throw new ApiError("pairing network error", null);
   }
   if (!response.ok) {
     throw new ApiError(
@@ -80,22 +227,10 @@ export async function pairWithTicket(
       response.status,
     );
   }
-  const session = (await response.json()) as {
-    token_type?: unknown;
-    access_token?: unknown;
-    expires_in?: unknown;
-  };
-  const csrf = response.headers.get("X-CSRF-Token");
-  if (
-    session.token_type !== "bearer" ||
-    typeof session.access_token !== "string" ||
-    typeof session.expires_in !== "number" ||
-    !csrf
-  ) {
-    throw new ApiError("POST /api/v1/session/pair: malformed session", null);
-  }
-  const credentials: SessionCredentials = { bearer: session.access_token, csrf };
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(credentials));
+  const credentials = sessionFromResponse(response, await response.json(), startedAt);
+  recoveryFlight?.controller.abort();
+  saveSession(credentials);
+  setRecoveryState("idle");
   return credentials;
 }
 
@@ -104,12 +239,14 @@ export class ApiError extends Error {
   readonly detail: string;
   readonly code: string;
   readonly requestId: string;
+  retryable: boolean;
   constructor(message: string, status: number | null, detail = "", code = "", requestId = "") {
     super(message);
     this.status = status;
     this.detail = detail;
     this.code = code;
     this.requestId = requestId;
+    this.retryable = status === null;
   }
 }
 
@@ -120,8 +257,15 @@ async function request<T>(
   extraHeaders?: Record<string, string>,
   signal?: AbortSignal,
   binary = false,
+  allowRecovery = true,
+  payload = body === undefined ? undefined : JSON.stringify(body),
 ): Promise<T> {
-  const session = readSession();
+  signal?.throwIfAborted();
+  const protectedRequest = path !== "/api/v1/health";
+  if (protectedRequest && recoveryFlight) await waitForRecovery(recoveryFlight, signal);
+  if (protectedRequest && recoveryState === "manual") throw new ApiError("session recovery unavailable", 401);
+  const generation = sessionGeneration;
+  let session = protectedRequest ? readSession() : null;
   const headers: Record<string, string> = { ...extraHeaders };
   if (session) {
     headers["Authorization"] = `Bearer ${session.bearer}`;
@@ -133,12 +277,31 @@ async function request<T>(
     response = await fetch(path, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: payload,
       signal,
     });
   } catch (error) {
     signal?.throwIfAborted();
-    throw new ApiError(`network error: ${String(error)}`, null);
+    throw new ApiError("network error", null);
+  }
+  signal?.throwIfAborted();
+  if (response.status === 401 && session) {
+    if (!allowRecovery) {
+      if (generation === sessionGeneration) throw requireManualPairing();
+      throw new ApiError("session replay rejected", 401);
+    }
+    const recovering = recoverSession(session, generation, signal);
+    session = null;
+    delete headers["Authorization"];
+    delete headers["X-CSRF-Token"];
+    await recovering;
+    signal?.throwIfAborted();
+    try {
+      return await request<T>(method, path, body, extraHeaders, signal, binary, false, payload);
+    } catch (error) {
+      if (error instanceof ApiError) error.retryable = false;
+      throw error;
+    }
   }
   if (!response.ok) {
     let detail = "", code = "", requestId = "";
@@ -260,9 +423,9 @@ export function fetchHealth(): Promise<Health> {
  * /api/v1/report-snapshots, so the client never posts a scope there — the
  * query is the only scope-carrying call.
  */
-export function fetchReportSnapshot(snapshotId: string): Promise<Snapshot> {
+export function fetchReportSnapshot(snapshotId: string, signal?: AbortSignal): Promise<Snapshot> {
   const path = `/api/v1/report-snapshots/${encodeURIComponent(snapshotId)}`;
-  return request<Envelope<Snapshot>>("GET", path).then((envelope) =>
+  return request<Envelope<Snapshot>>("GET", path, undefined, undefined, signal).then((envelope) =>
     unwrapEnvelope<Snapshot>(envelope, path),
   );
 }
@@ -312,11 +475,13 @@ export interface StatisticsResult {
   [key: string]: unknown;
 }
 
-export function queryStatistics(scope: QueryScope): Promise<StatisticsResult> {
+export function queryStatistics(scope: QueryScope, signal?: AbortSignal): Promise<StatisticsResult> {
   return request<Envelope<StatisticsResult>>(
     "POST",
     "/api/v1/statistics/query",
     scope,
+    undefined,
+    signal,
   ).then((envelope) => unwrapEnvelope<StatisticsResult>(envelope, "/api/v1/statistics/query"));
 }
 
@@ -347,10 +512,11 @@ export interface DatasetPage {
 export function fetchSnapshotDatasetPage(
   snapshotId: string,
   cursor: string | null = null,
+  signal?: AbortSignal,
 ): Promise<DatasetPage> {
   const base = `/api/v1/report-snapshots/${encodeURIComponent(snapshotId)}/dataset`;
   const path = cursor === null ? base : `${base}?cursor=${encodeURIComponent(cursor)}`;
-  return request<Envelope<DatasetPage>>("GET", path).then((envelope) =>
+  return request<Envelope<DatasetPage>>("GET", path, undefined, undefined, signal).then((envelope) =>
     unwrapEnvelope<DatasetPage>(envelope, path),
   );
 }
@@ -374,12 +540,13 @@ export interface DatasetRows {
 export async function fetchAllSnapshotRows(
   snapshotId: string,
   maxPages = 100,
+  signal?: AbortSignal,
 ): Promise<DatasetRows> {
   const rows: DatasetRow[] = [];
   let cursor: string | null = null;
   let total = 0;
   for (let page = 0; page < maxPages; page += 1) {
-    const result: DatasetPage = await fetchSnapshotDatasetPage(snapshotId, cursor);
+    const result: DatasetPage = await fetchSnapshotDatasetPage(snapshotId, cursor, signal);
     if (result.snapshot_id !== snapshotId) {
       throw new ApiError(
         `dataset page answered with ${result.snapshot_id}, expected ${snapshotId}`,
@@ -405,9 +572,9 @@ export async function getCapabilities(signal?: AbortSignal): Promise<ExportCapab
   return unwrapEnvelope(await request("GET", path, undefined, undefined, signal), path);
 }
 
-export async function createExport(input: ExportInput, key: string, signal: AbortSignal) {
+export async function createExport(input: ExportInput, key: string, signal: AbortSignal, allowRecovery = true) {
   const path = "/api/v1/exports";
-  const envelope = await request<Envelope<{ export_id: string }>>("POST", path, input, { "Idempotency-Key": key }, signal);
+  const envelope = await request<Envelope<{ export_id: string }>>("POST", path, input, { "Idempotency-Key": key }, signal, false, allowRecovery);
   return { ...unwrapEnvelope<{ export_id: string }>(envelope, path), warnings: envelope.meta.warnings };
 }
 
@@ -416,8 +583,8 @@ export async function getExport(id: string, signal: AbortSignal): Promise<Export
   return unwrapEnvelope(await request("GET", path, undefined, undefined, signal), path);
 }
 
-export function deleteExport(id: string, key: string): Promise<void> {
-  return request("DELETE", `/api/v1/exports/${encodeURIComponent(id)}`, undefined, { "Idempotency-Key": key });
+export function deleteExport(id: string, key: string, signal?: AbortSignal): Promise<void> {
+  return request("DELETE", `/api/v1/exports/${encodeURIComponent(id)}`, undefined, { "Idempotency-Key": key }, signal);
 }
 
 export async function downloadExport(id: string, format: ExportFormat, signal: AbortSignal): Promise<ExportFile> {

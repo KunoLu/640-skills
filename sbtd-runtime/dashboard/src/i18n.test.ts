@@ -11,6 +11,7 @@ const KEYS = [
   "aria_active_filters", "chip_remove_title", "watermark_unknown", "watermark",
   "updating", "live_badge", "current_scope", "refresh_failed", "load_failed", "retry",
   "error_unpaired", "footer_export_note", "footer_rows_note",
+  "recovery_running", "recovery_success", "recovery_stale", "recovery_manual",
   "locale_switch_label", "locale_en", "locale_zh",
   "unsupported", "detail_collapse", "detail_show", "query_failed",
   "field_dependencies",
