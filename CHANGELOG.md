@@ -17,6 +17,8 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 - Append §6 to ADR 0003: set an 8-entry full-snapshot memory limit with LRU eviction without deleting disk files, build only a lightweight index at startup, and reload cache misses with the existing safety checks; 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged. Documentation only; implementation will follow in a separate PR.
 
+- Change the host acceptance gate from `codex@0.163.0` + `omp@18.11.1` to `codex@0.167.1` + `omp@18.18.8`, following user 640's group-chat choice of option 1 on 2026-11-11. Codex was upgraded by user decision, OMP 18.18.8 is the primary version, and both new hosts passed real cloud-host smoke tests (source: 云主机实测). Preserve the 2026-10-17 smoke records in `smoke_history` and the original ADR Q6 decision; old versions are now unsupported as non-gate versions. The fixed-pair rule, exclusion of parser fixtures as evidence, and fallback completion gate of at least one passing host are unchanged.
+
 ### Fixed
 
 - Fix intermittent probe-link materialize authorization test failures caused by possible inode reuse when rebuilding a symlink: retire the old link with rename before creating the new one; assertions and production code remain unchanged. ([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))

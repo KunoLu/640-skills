@@ -20,9 +20,9 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 
 所有丢弃都进入回执的 `dropped` 清单（键名 + 原因）。
 
-## omp 适配器（omp@18.11.1）
+## omp 适配器（当前门禁 omp@18.18.8；18.11.1 为历史实测）
 
-来源：omp 会话 JSONL（`~/.omp/agent/sessions/<cwd-slug>/<file>.jsonl`），适配器只读显式给出的路径，不改会话文件、不扫描 HOME。真实字段形状来自本机 18.11.1 会话。映射（parser_version `omp-session-jsonl-1`）：
+来源：omp 会话 JSONL，适配器只读显式给出的路径，不改会话文件、不扫描 HOME。真实字段形状来自 18.11.1 历史会话，18.18.8 亦已于 2026-11-11 云主机实测通过。映射（parser_version `omp-session-jsonl-1`）：
 
 - assistant 消息的 `toolCall` 项 → `invocation.started`（component `tool:<name>`，occurred_at 取记录时间戳）。
 - `read` 且 `arguments.path` 为 `skill://<名>` → 额外产出 `skill.loaded`（component `skill:<名>`；只陈述宿主读入了 skill 资源，不陈述执行通过）。该 read 调用本身仍记 invocation 对。
@@ -45,7 +45,23 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 
 重复 ingest 同一文件：靠 `(source_id, source_event_id)` 去重只确认，不重复计数。
 
-## codex 适配器（codex@0.163.0，smoke 由另一 bot 执行）
+### omp@18.18.8 真实 smoke 证据（pass，2026-11-11）
+
+来源：**云主机实测**，OMP bot 执行。`omp --version` → `omp/18.18.8`，14:40:30–14:40:38 +08:00，在 main `80f1426` 只读副本旁的临时目录运行，退出码 0、stdout `done`。
+
+本页只有 codex 的现场步骤；omp 本次参照 2026-10-17 `omp@18.11.1` 冒烟做法：`omp -p` 强制一次 read 工具调用读取一个系统文件，再将会话文件交给 `omp_adapter.py`。运行参数为 `--model openai-codex/gpt-6-astra:high --tools read,write,edit,bash,grep,glob,find,todo --no-title`。模型 openai-codex/gpt-6-astra、thinking high，2 次调用（工具调用回合与最终回复）。
+
+会话 13 行，session header version 3，runtime.version=18.18.8；第 8 行 assistant toolCall name=read，第 11 行 toolResult 的 toolCallId 相同、toolName=read、isError=false。新类型 `credential_pin` 按未知类型跳过计数，不报错。
+
+回执：source_id=omp-session，host_version=18.18.8，parser_version=omp-session-jsonl-1，records_read=13，records_skipped=9，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]；重复导入 accepted=0、duplicate=2。重放 `invocation.started`（2026-11-11T06:40:35.617Z）+ `invocation.finished`（2026-11-11T06:40:35.645Z），component `tool:read`，succeeded，duration_ms=28（wall）。
+
+stderr 有一条 `sbtd-graft` MCP 连接失败警告；本次冒烟不依赖它。当时旧矩阵把 18.18.8 判为 unsupported、18.11.1 判为 pinned；本次换针后两者分类反转，不改变实测事实。
+
+### omp@18.11.1 历史 smoke（pass，2026-10-17）
+
+来源：**云主机实测**。`omp -p` 强制 read，12 行会话；回执 records_read=12、records_skipped=8、events_emitted=2、accepted=2、duplicate/conflict/rejected=0、dropped=[]。重放 `tool:read` 的 started/finished，succeeded、duration_ms=27（wall）；重复导入 accepted=0、duplicate=2，重放仍为 2 条。原始字段片段及回执见 `ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md`，矩阵保留于 `smoke_history.omp`；历史 pass 不等于当前 pinned。
+
+## codex 适配器（codex@0.167.1，smoke 由另一 bot 执行）
 
 来源：`codex exec --json` 的 JSONL（stdin 实时管道或保存的捕获文件）。该流无时间戳，occurred_at 一律为 null（PRD §8.4.8 进入“时间不可定位”集合），recorded_at 为入库时间。流内也没有宿主版本，调用方用 `--host-version` 传入 `codex --version` 的输出。映射（parser_version `codex-exec-jsonl-1`）：
 
@@ -55,18 +71,18 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 - `item.completed` 没有对应 `item.started`（orphan）时 `state.previous=null`，不伪造 `running`。
 - 命令、输出、参数不进事件。CLI 在 `installation_id`／`device_id` 为空时以 exit 2 + JSON error 拒绝。
 
-本仓库不安装不运行 codex。字段形状以公开 exec JSONL 格式（`thread.started` / `item.started` / `item.completed` / `turn.completed`）为准，未在本机验证。
+本仓库测试不安装不运行 codex。字段形状以公开 exec JSONL 格式（`thread.started` / `item.started` / `item.completed` / `turn.completed`）为准；CodeX bot 已于 2026-11-11 完成 codex@0.167.1 云主机实测。
 
 ## capability matrix 与 smoke 状态
 
-`contracts/capability-matrix.json` 冻结门禁针 `codex@0.163.0` + `omp@18.11.1`，其他版本 unsupported。`smoke` 节记录每宿主真实 smoke 结果：`pass`（真实运行采到 Skill 或 Tool 调用事件）、`unsupported`（固定版本拿不到结构化调用事件，如实标记）、`pending`（尚未执行）。parser fixture 不算 smoke 证据（ADR 0001 Q6）。
+`contracts/capability-matrix.json` 当前门禁针为 `codex@0.167.1` + `omp@18.18.8`，其他版本 unsupported。`smoke` 节记录当前两宿主真实 smoke 结果：`pass`（真实运行采到 Skill 或 Tool 调用事件）、`unsupported`（固定版本拿不到结构化调用事件，如实标记）、`pending`（尚未执行）。`smoke_history` 保留 2026-10-17 的 codex@0.163.0 unsupported 与 omp@18.11.1 pass，旧版本在新契约下均 unsupported。parser fixture 不算 smoke 证据，兜底完成门仍为 ≥1 个门禁宿主通过（ADR 0001 Q6 与第 8 节追加决定）。
 
-## codex@0.163.0 真实 smoke 指令（另一 bot 执行）
+## codex@0.167.1 真实 smoke 指令（另一 bot 执行）
 
-前置：本机已安装 `codex@0.163.0` 且有可用登录（ChatGPT 登录或 API key）。**不要**升级或降级 codex；版本不符则该宿主标 `unsupported` 并停止。
+前置：现场已安装 `codex@0.167.1` 且有可用登录（ChatGPT 登录或 API key）。**不要**升级或降级 codex；版本不符则该宿主标 `unsupported` 并停止。
 
 ```bash
-# 0. 版本钉核对：输出必须含 0.163.0
+# 0. 版本钉核对：输出必须含 0.167.1
 codex --version
 
 # 1. 独立运行时家目录并开启观察开关
@@ -87,7 +103,7 @@ DEVICE_ID="$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
 # 2. 真实运行（强制一次 shell 工具调用），JSONL 既落捕获文件又实时入库
 codex exec --json --sandbox read-only \
   "Use the shell tool to run exactly: echo sbtd-r12b-smoke. Then reply with the word done." \
-  | tee /tmp/codex-r12b-smoke.jsonl \
+  | tee "$SBTD_RUNTIME_HOME/codex-r12b-smoke.jsonl" \
   | python3 sbtd-runtime/codex_adapter.py \
       --runtime-home "$SBTD_RUNTIME_HOME" \
       --installation-id "$INSTALLATION_ID" --device-id "$DEVICE_ID" \
@@ -96,8 +112,8 @@ codex exec --json --sandbox read-only \
 
 通过判定（全部满足才算 `pass`）：
 
-1. `codex --version` 输出含 `0.163.0`。
-2. `/tmp/codex-r12b-smoke.jsonl` 中存在至少一行 `item.started` 或 `item.completed`，其 `item.type` ∈ {command_execution, mcp_tool_call, web_search, collab_tool_call, file_change}（原始行片段记入证据）。
+1. `codex --version` 输出含 `0.167.1`。
+2. 捕获文件 `$SBTD_RUNTIME_HOME/codex-r12b-smoke.jsonl` 中存在至少一行 `item.started` 或 `item.completed`，其 `item.type` ∈ {command_execution, mcp_tool_call, web_search, collab_tool_call, file_change}（原始行片段记入证据）。
 3. 适配器回执（第 2 步 stdout 的 JSON）`events_emitted >= 1` 且 `accepted >= 1`。
 4. 重放核对：
 
@@ -118,3 +134,11 @@ PY
 输出须含 `invocation.started` 或 `invocation.finished`，且至少一个 component 的 kind 为 `tool` 或 `mcp`。
 
 失败处理：固定版本拿不到结构化调用事件（流里没有 item.* 行、或适配器回执 accepted 为 0）时，把 `capability-matrix.json` 的 `smoke.codex` 标为 `unsupported` 并写明真实原因；不得用 parser fixture 代替，不得报 PASS。通过后把 `smoke.codex` 置为 `pass`，附上 smoke 日期、宿主版本原文与原始输出片段位置。
+
+### codex@0.167.1 真实 smoke 证据（pass，2026-11-11）
+
+来源：**云主机实测**，CodeX bot 执行。`codex --version` → `codex-cli 0.167.1`，开始于 14:36:15 +08:00；在 main `80f1426` 只读副本上以 `codex exec --json --sandbox read-only` 执行 `echo sbtd-r12b-smoke`。
+
+JSONL 共 7 行：thread.started、turn.started、item.completed(agent_message)、item.started(command_execution)、item.completed(command_execution, exit_code=0, status=completed)、item.completed(agent_message "done")、turn.completed。回执 source_id=codex-exec、host_version=`codex-cli 0.167.1`、parser_version=codex-exec-jsonl-1、records_read=7、records_skipped=4、events_emitted=2、accepted=2、duplicate/conflict/rejected=0、dropped=[]。重放 `invocation.started` + `invocation.finished`，component `tool:command_execution`（kind tool）。
+
+运行完成；工具命令 exit_code=0，但进程退出码未单独记录，未知。使用全局默认模型，JSONL 未记录模型名，未知；1 turn。这是 codex 首次真实冒烟通过。2026-10-17 的 0.163.0 因 ChatGPT 后端 HTTP 403／workspace routing discovery failed 未采到事件，unsupported 记录保留在矩阵 `smoke_history.codex` 与 `ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md`。

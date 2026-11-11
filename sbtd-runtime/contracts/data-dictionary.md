@@ -13,6 +13,14 @@
 | registry／长期凭证 | `SBTD_RUNTIME_HOME` | 用户私有映射 | 写入项目 tracked 文件 |
 | capability pin | 本目录 `capability-matrix.json` | 固定验收宿主与兜底完成门决策 | 代替 R1.2b 真实 smoke |
 
+### 宿主门禁与冒烟历史
+
+`acceptance_pins` 是当前固定的一对验收版本；`completion_gate.hosts` 必须与之相同。`host_capability` 只按 pin 精确匹配返回 `pinned` 或 `unsupported`，不从实测历史推导当前支持。
+
+`smoke` 按宿主名记录当前门禁的真实冒烟：每项含 `status`（`pass`／`unsupported`／`pending`）、版本原文 `host_version`、日期 `smoked_at` 和事实摘要 `evidence`。`smoke_status` 是当前冒烟汇总（两宿主通过为 `pass`），`smoke_note` 说明决定、限制与完成门；parser fixture 不算真实冒烟。
+
+可选 `smoke_history` 按宿主名保存被本次换针替代的旧冒烟记录，字段与 `smoke` 相同，保留原日期、版本及当时结果；它只提供历史证据，不参与当前 capability 或兜底完成门。2026-10-17 的 omp pass 不意味着旧版本在新契约下仍 pinned。该字段不属于观察事件，不能套用 `event.schema.json`；矩阵由 `contract_eval.py` 直接读取，新增历史字段不改变事件 schema。
+
 ## 标识
 
 ID 是不透明字符串，唯一性不依赖事件时间，也不从 MAC、邮箱、用户名或绝对路径派生。

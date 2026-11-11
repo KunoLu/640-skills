@@ -15,7 +15,7 @@ are never copied into events (observation.level=metadata); only the scalar
 exit_code is kept as an extension.
 
 This repository never installs or runs codex. The real smoke against
-codex@0.163.0 follows sbtd-runtime/docs/host-adapters.md.
+codex@0.167.1 follows sbtd-runtime/docs/host-adapters.md.
 """
 
 from __future__ import annotations
@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--host-version",
         default="unknown",
-        help="output of `codex --version`, e.g. codex-cli 0.163.0",
+        help="output of `codex --version`, e.g. codex-cli 0.167.1",
     )
     parser.add_argument(
         "--file",
