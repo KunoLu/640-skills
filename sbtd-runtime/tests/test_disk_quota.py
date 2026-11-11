@@ -35,6 +35,65 @@ class DiskQuotaTests(unittest.TestCase):
         self.addCleanup(store.close)
         return store
 
+    def test_cold_sweep_keeps_hot_order_and_retries_failed_deletion(self) -> None:
+        store = self.snapshots(1000000, ttl_seconds=10, _cache_capacity=2)
+        now = datetime.now(UTC)
+        cold = store.create_or_reuse(self.dataset, self.scope, now=now)
+        live = []
+        for i in range(2):
+            live.append(store.create_or_reuse(
+                self.dataset,
+                _scope(self.dataset, filters={"project_ids": [str(i)]}),
+                now=now + timedelta(seconds=5),
+            ).snapshot_id)
+        self.assertEqual(list(store._snapshots), live)
+        path = self.home / "snapshots" / f"{cold.snapshot_id}.json"
+        size = store.quota.used_bytes()
+        with mock.patch.object(Path, "unlink", side_effect=PermissionError("denied")):
+            self.assertEqual(store.sweep(now=now + timedelta(seconds=10)), [])
+        self.assertIn(cold.snapshot_id, store._index)
+        self.assertEqual(store.quota.used_bytes(), size)
+        self.assertEqual(list(store._snapshots), live)
+        with mock.patch.object(store, "_read", wraps=store._read) as read:
+            self.assertEqual(
+                store.sweep(now=now + timedelta(seconds=10)), [cold.snapshot_id]
+            )
+        self.assertEqual([call.args[0] for call in read.call_args_list], [cold.snapshot_id])
+        self.assertEqual(list(store._snapshots), live)
+        self.assertNotIn(cold.snapshot_id, store._index)
+        self.assertNotIn(cold.snapshot_id, store._validated)
+        self.assertFalse(path.exists())
+
+    def test_cold_reuse_over_quota_and_bad_expired_file_retention(self) -> None:
+        from disk_quota import DiskQuotaExceeded
+
+        store = self.snapshots(1000000, ttl_seconds=10, _cache_capacity=1)
+        now = datetime.now(UTC)
+        first = store.create_or_reuse(self.dataset, self.scope, now=now)
+        second = store.create_or_reuse(
+            self.dataset, _scope(self.dataset, metrics=["tasks.created"]), now=now
+        )
+        self.assertNotIn(first.snapshot_id, store._snapshots)
+        size = store.quota.used_bytes()
+        files = set((self.home / "snapshots").iterdir())
+        store.quota.quota_bytes = 1
+        reused = store.create_or_reuse(self.dataset, self.scope, now=now)
+        self.assertEqual(reused.snapshot_id, first.snapshot_id)
+        self.assertEqual(store.quota.used_bytes(), size)
+        self.assertEqual(set((self.home / "snapshots").iterdir()), files)
+        with self.assertRaises(DiskQuotaExceeded) as caught:
+            store.create_or_reuse(
+                self.dataset, _scope(self.dataset, metrics=["tasks.touched"]), now=now
+            )
+        self.assertEqual(caught.exception.used_bytes, size)
+        bad = self.home / "snapshots" / f"{second.snapshot_id}.json"
+        bad.write_bytes(b"bad-expired")
+        store.sweep(now=now + timedelta(seconds=10))
+        self.assertEqual(bad.read_bytes(), b"bad-expired")
+        self.assertEqual(store.quota.used_bytes(), len(b"bad-expired"))
+        self.assertNotIn(second.snapshot_id, store._snapshots)
+        self.assertNotIn(second.snapshot_id, store._validated)
+
     def test_environment_parser(self) -> None:
         from disk_quota import parse_disk_quota
 

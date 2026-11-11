@@ -72,6 +72,47 @@ class SnapshotTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.home = Path(temporary.name) / "runtime"
 
+    def test_lru_eviction_preserves_pages_reuse_and_csv(self) -> None:
+        from csv_export import serialize_csv
+
+        store = SnapshotStore(self.home, _cache_capacity=2)
+        a = store.create_or_reuse(self.dataset, self.scope)
+        b_scope = _scope(self.dataset, metrics=["tasks.created"])
+        b = store.create_or_reuse(self.dataset, b_scope)
+        first_page = store.dataset_page(b.snapshot_id, limit=3)
+        csv_before = serialize_csv(b)
+        path = self.home / "snapshots" / f"{b.snapshot_id}.json"
+        disk_before = path.read_bytes()
+        store.get(a.snapshot_id)
+        c = store.create_or_reuse(
+            self.dataset, _scope(self.dataset, metrics=["tasks.touched"])
+        )
+        self.assertEqual(list(store._snapshots), [a.snapshot_id, c.snapshot_id])
+        self.assertNotIn(b.snapshot_id, store._validated)
+        self.assertEqual(path.read_bytes(), disk_before)
+        used = store.quota.used_bytes()
+        files = set(path.parent.iterdir())
+        reused = store.create_or_reuse(self.dataset, b_scope)
+        self.assertEqual(reused.public_view(), b.public_view())
+        self.assertEqual(set(path.parent.iterdir()), files)
+        self.assertEqual(store.quota.used_bytes(), used)
+        self.assertEqual(_all_pages(store, b.snapshot_id, 7), b.rows)
+        self.assertEqual(
+            store.dataset_page(b.snapshot_id, first_page["next_cursor"], 3)["rows"],
+            b.rows[3:6],
+        )
+        self.assertEqual(serialize_csv(store.get(b.snapshot_id)), csv_before)
+        reused.rows.clear()
+        reused.dataset["events"].clear()
+        self.assertEqual(store.get(b.snapshot_id).rows, b.rows)
+        self.assertEqual(store.get(b.snapshot_id).dataset, b.dataset)
+        self.assertEqual(len(store._snapshots), 2)
+
+    def test_cache_capacity_rejects_non_positive_integers(self) -> None:
+        for capacity in (True, False, 0, -1, 1.5, "2", None):
+            with self.subTest(capacity=capacity), self.assertRaises(ValueError):
+                SnapshotStore(self.home, _cache_capacity=capacity)
+
     def test_same_scope_and_watermark_reuse_one_snapshot(self) -> None:
         store = SnapshotStore(self.home)
         first = store.create_or_reuse(self.dataset, self.scope)

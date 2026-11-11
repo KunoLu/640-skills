@@ -216,6 +216,77 @@ class ExportStoreTests(unittest.TestCase):
         )
         self.assertEqual(len(self.calls), calls_before)
 
+    def test_eviction_interleaving_keeps_reader_pages_and_export_bytes(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from csv_export import serialize_csv
+
+        home = Path(self.temporary.name) / "eviction"
+        snapshots = SnapshotStore(home, _cache_capacity=2)
+        now = datetime.now(UTC)
+        original = snapshots.create_or_reuse(self.dataset, self.scope, now=now)
+        sid = original.snapshot_id
+        expected = serialize_csv(original)
+        entered = threading.Event()
+        release = threading.Event()
+        self.addCleanup(release.set)
+
+        def render(snapshot, *args):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError("export reader was not released")
+            return serialize_csv(snapshot), _metadata(snapshot)
+
+        exports = self._open(render, home, snapshots)
+        export_id = exports.create(sid, "csv", {})
+        self.assertTrue(entered.wait(5))
+        barrier = threading.Barrier(3)
+
+        def read_pages():
+            barrier.wait(5)
+            for _ in range(8):
+                self.assertEqual(snapshots.get(sid).rows, original.rows)
+                self.assertEqual(snapshots.dataset_page(sid, limit=3)["rows"], original.rows[:3])
+
+        def evict():
+            barrier.wait(5)
+            for i in range(8):
+                snapshots.create_or_reuse(
+                    self.dataset,
+                    _scope(self.dataset, filters={"project_ids": [str(i)]}),
+                    now=now,
+                )
+                with snapshots._lock:
+                    self.assertLessEqual(len(snapshots._snapshots), 2)
+
+        def sweep():
+            barrier.wait(5)
+            for _ in range(8):
+                self.assertNotIn(sid, snapshots.sweep(now=now + timedelta(days=1)))
+
+        try:
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = [pool.submit(work) for work in (read_pages, evict, sweep)]
+                for future in futures:
+                    future.result(timeout=10)
+            # Deterministically leave the export's pinned ID cold.
+            for i in range(2):
+                snapshots.create_or_reuse(
+                    self.dataset,
+                    _scope(self.dataset, filters={"project_ids": [f"last-{i}"]}),
+                    now=now,
+                )
+            self.assertNotIn(sid, snapshots._snapshots)
+            self.assertEqual(serialize_csv(original), expected)
+        finally:
+            release.set()
+        _until(exports, export_id)
+        exports.close()
+        self.assertEqual(exports.download(export_id)[0], expected)
+        self.assertNotIn(sid, snapshots._pins)
+        with self.assertRaises(SnapshotGone):
+            snapshots.get(sid, now=now + timedelta(days=1))
+
     def test_pin_precedes_render_and_releases_on_each_terminal_state(self) -> None:
         home = Path(self.temporary.name) / "pin-home"
         now = datetime.now(UTC)

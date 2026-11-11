@@ -79,6 +79,7 @@
 - [v2.1.0-rc.5-dashboard-401-repair-impl](v2.1.0-rc.5-dashboard-401-repair-impl/task.md)
 - [v2.1.0-rc.5-host-gate-codex-0167-omp-18188](v2.1.0-rc.5-host-gate-codex-0167-omp-18188/task.md)
 - [v2.1.0-rc.5-probe-links-flaky-test](v2.1.0-rc.5-probe-links-flaky-test/task.md)
+- [v2.1.0-rc.5-snapshot-eviction-impl](v2.1.0-rc.5-snapshot-eviction-impl/task.md)
 - [v2.1.0-rc.5-snapshot-memory-eviction](v2.1.0-rc.5-snapshot-memory-eviction/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
