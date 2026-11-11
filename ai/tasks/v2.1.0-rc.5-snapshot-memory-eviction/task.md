@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.5-snapshot-memory-eviction
 workflow_mode: strict
 mode_source: user
-mode_note: 640 在 11-11 群内确认 rc.5 全程用 strict；docs-only 范围由编排方整理，决策依据为 640 在群里决定 a甲 b同意
+mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；docs-only 范围由编排方整理，决策依据为 640 在群里决定 a甲 b同意
 status: checking
 branch: docs/v2.1.0-rc.5-adr0003-snapshot-memory-eviction
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T15:26:10+08:00'
+updated_at: '2026-11-11T15:58:57+08:00'
 completed_at: null
 ---
 
@@ -173,9 +173,23 @@ runtime 失败记录（未修复、未重跑）：
 - runner 记录 10 项跳过；输出另有 Playwright 未安装提示，但未逐项打印 skip 原因，不把全部跳过归为同一原因。没有把 renderer stub 或故障注入输出当作真实浏览器验证。
 - 本轮只执行一次各指定 suite；失败如实保留，不扩展 docs-only 范围修复，也不声称全绿。`Final Full Rerun: failed`（指定 runtime 基线）；`Targeted Rerun: not-needed`（没有代码修复）；独立 review／CI 仍待执行。正式测试报告／同 stem 汇总未生成，本 task 为本地结果记录，不冒充发布证据。
 
+### 第 3 轮本地验证
+
+本轮仅修订本 `task.md`；`index.md` 仅由生成器写入且字节不变。基准 HEAD 为 `9aa5f4140cdcd6ed71f102ec755255838d330b87`，分支与 front matter 一致；Linux x64 独立克隆，写入前工作区干净。证据为 `developer-local`／`dirty`／`local-only`，不是 CI 或发布证据。
+
+| 命令／检查（按执行顺序） | 实际结果 | 退出码 |
+|---|---|---|
+| 上方索引生成命令（含 `Path('ai/tasks/index.md').write_bytes(a)`） | `INDEX_REGEN changed=False rows=78`；出现既有“旧格式事件，不追溯”提示 | 0 |
+| 上方只读索引预览命令 | `INDEX_PREVIEW_SAME True rows=78`；逐字节一致；出现相同既有提示 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 tests，OK；99 通过，0 跳过，35.455s | 0 |
+| `git diff --stat`、`git diff`、`git diff --check` | 差异仅本 `task.md`，新增行无附件列出的本机路径，空白检查通过 | 0 |
+| 专用 grep：全文件禁用归属措辞、旧模型说法及本机路径扫描 | 均无匹配；三个第 3 轮计数占位符留给会话末尾统计脚本填入 | 不适用（工具未提供进程退出码） |
+
+`rtk: skipped-for-report`（直接执行指定原生命令，避免包装层缓存）；`BDD: skipped`（仅记录修正，无行为变化）；Cross-repo context／API Contract：not-needed；Mock Strategy：none。Book Gates、代码可读性复核、lint／build、Web／Mobile／serve smoke：not-needed（本轮不改设计、代码或测试）。未重跑 runtime 基线，历史失败保留；未生成正式报告，未 commit／push，状态继续为 checking，后续独立 review／CI 不由本地结果替代。
+
 ## strict 模式执行记录
 
-- 编排方整理：本轮使用 strict，先只读确认任务、根目录、分支、授权、基准及路径安全，再读完整 ADR、草稿、指定源码和 CHANGELOG；未把草稿 default 当成当前模式。
+- 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录。编排方整理：先只读确认任务、根目录、分支、授权、基准及路径安全，再读完整 ADR、草稿、指定源码和 CHANGELOG；未把草稿 default 当成当前模式。
 - 先冻结五文件范围再写；仅追加 ADR §6 与历史加注，配套 task／生成式 index／双语 CHANGELOG。状态记录为 checking，等待 review／CI，不写 done。
 - 未完整调用 grill-with-docs：附件给出了明确决策、设计边界和验收条件，源码能回答当前行为，无需重复需求访谈；没有声称完成 grill 后的 DDD Gate。
 - 已读取 sbtd-task strict／state 规则与 project-validation；遵从本轮限定，直接编辑文档，索引仅用指定只读 TaskStore 生成命令，不调用任务状态写 API、task 工具或子代理。
@@ -197,12 +211,21 @@ BDD：skipped（仅决策文档，不新增运行时行为或 feature）；Cross
 
 ## 模型记录
 
-- `openai-codex/gpt-6-astra`（thinking high，主模型）——第 1 轮 omp 会话（编写 ADR §6、双语 CHANGELOG、task.md、index 与本地验证）：18 次模型调用、45 次工具调用（编排方从会话日志统计）；第 2 轮 omp 会话（本轮：补记模型调用次数）：见 PR 描述（调用次数在本轮结束后由编排方统计，写在 PR 描述与群内汇报中）。未使用其他模型、task 工具或子代理。
+| 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
+|---|---|---|---|---|
+| 第 1 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 编写 ADR §6、双语 CHANGELOG、task.md、index 与本地验证 | 18 | 45 |
+| 第 1 轮 | `typesafe/jev-latest` | omp find 工具内部调用 | 10 | — |
+| 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 补记模型调用次数 | 7 | 13 |
+| 第 3 轮（本轮：Reviewy 修正） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 10 | 22 |
+| 第 3 轮 | 其他后台模型 | omp 工具内部调用 | 无 | — |
+
+次数由编排方及第 3 轮会话末尾的统计脚本从 omp 会话日志统计；未使用 task 工具或子代理。
 
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-11-11T14:38:57+08:00 | planned | planned | 编排方整理：保留主会话建立延后项草稿的事件，未开始实现 | 草稿记录已读取 PR #147／#190、ADR 0003 与源码；当时仅 task 草稿范围，基准 80f14263e7d8bc6ae84f04ba94218e4857fc8b8f；本轮不重复声称已访问这些 PR。 |
-| 2026-11-11T15:14:16+08:00 | planned | checking | 编排方整理：按本轮 strict／docs-only 范围编写 ADR 与配套记录，进入验证并等待 review／CI；未实现 | 已核对分支、基准、ADR 与指定源码；本轮命令结果见验证证据，文档提交／PR 由编排方处理。 |
+| 2026-11-11T15:14:16+08:00 | planned | checking | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；编排方整理：按本轮 docs-only 范围编写 ADR 与配套记录，进入验证并等待 review／CI；未实现 | 已核对分支、基准、ADR 与指定源码；本轮命令结果见验证证据，文档提交／PR 由编排方处理。 |
 | 2026-11-11T15:26:10+08:00 | checking | checking | 编排方整理：补记模型调用次数 | 会话日志统计 |
+| 2026-11-11T15:58:57+08:00 | checking | checking | Reviewy 修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | INDEX_REGEN changed=False rows=78；INDEX_PREVIEW_SAME True rows=78；指定 unittest 99 tests，OK；diff 仅本 task.md，新增行无本机路径，禁用措辞无匹配，空白检查通过；详见第 3 轮本地验证。 |
