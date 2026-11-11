@@ -7,6 +7,13 @@
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
 
+## v2.1.0-rc.5（未发布）
+
+### 修复
+
+- 修复 probe-link materialize 授权测试因重建 symlink 可能复用 inode 而偶发失败：先 rename 退役旧链接，再创建新链接；断言与正式代码不变。([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))
+
+
 ## v2.1.0-rc.4（2026-11-05）
 
 预发布版 [v2.1.0-rc.4](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.4) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag（tag 对象 `d5bb5b77864229da802421fc771779c81b9b2d37`）指向 `de23e61d448bd6ce106dee4ee2ce532de674ac98`；该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/41999955020) 通过，13 个作业全部成功。
