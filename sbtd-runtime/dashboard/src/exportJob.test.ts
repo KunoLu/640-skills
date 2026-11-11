@@ -42,6 +42,7 @@ test("failed and cancelled are terminal and never download", async () => {
     h.api.getExport = async () => ({ status, error: status === "failed" ? "EXPORT_RENDER_TIMEOUT" : null });
     assert.equal(await h.job().run(), undefined);
     assert.equal(h.seen.at(-1)?.status, status);
+    assert.match(h.seen.at(-1)!.message, status === "failed" ? /渲染超时/ : /已取消/);
     assert.equal(h.reads(), 0);
     assert.equal(h.downloads(), 0);
   }
@@ -56,6 +57,7 @@ test("polling stops at its cap with exponential backoff capped at five seconds",
   assert.equal(h.reads(), 7);
   assert.deepEqual(h.delays, [1000, 1500, 2250, 3375, 5000, 5000]);
   assert.equal(h.seen.at(-1)?.status, "failed");
+  assert.match(h.seen.at(-1)!.message, /等待超时/);
   assert.equal(h.downloads(), 0);
 });
 
@@ -120,6 +122,9 @@ test("new clicks use new keys; transport retry and polls retain the clicked snap
   ]);
   assert.equal(sequence, 2);
   assert.deepEqual(first.input.presentation_state, presentation());
+  assert.deepEqual(Object.keys(first.input.presentation_state).sort(), [
+    "expanded_detail_ids", "legend_state", "locale", "panel_order", "preview_row_sets", "report_width_px", "table_sort", "theme",
+  ]);
   assert.equal(h.reads(), 2);
 });
 
@@ -154,6 +159,7 @@ test("401 after API recovery failure is terminal; other fatal HTTP errors do not
     assert.equal(h.downloads(), 0);
     assert.equal(h.seen.at(-1)?.status, "failed");
     assert.match(h.seen.at(-1)!.message, /original detail/);
+    if (status === 401) assert.match(h.seen.at(-1)!.message, /会话已过期，请重启 serve 并重新配对/);
   }
 });
 
@@ -172,20 +178,28 @@ test("409 from polling or file download waits and eventually downloads once", as
     };
     await h.job().run();
     assert.equal(attempts, 2);
+    assert.ok(h.seen.some(s => s.status === "generating" && s.message.includes("未就绪")));
     assert.equal(h.seen.at(-1)?.status, "ready");
     assert.equal(h.downloads(), 1);
     assert.deepEqual(h.delays, [1000]);
   }
 });
 
-test("error mappings preserve server detail, failure code, and request id", () => {
-  for (const status of [401, 400, 404, 409, 410, 422, 503, 507]) {
+test("error mappings preserve detail, failure code, and request id", () => {
+  const messages = new Map([
+    [401, "会话已过期，请重启 serve 并重新配对"], [400, "导出请求无效"], [404, "不存在"],
+    [409, "未就绪"], [410, "已过期"], [422, "尺寸超限"], [503, "renderer 不可用"], [507, "磁盘配额不足"],
+  ]);
+  for (const [status, message] of messages) {
     const text = exportErrorMessage(new ApiError("error", status, "raw max_edge_px=100", "", "req_a"), "zh");
+    assert.ok(text.includes(message));
     assert.match(text, /raw max_edge_px=100/);
     assert.match(text, /request_id=req_a/);
   }
-  for (const code of ["EXPORT_RENDER_TIMEOUT", "EXPORT_RENDER_FAILED", "FUTURE_ERROR"]) {
-    assert.ok(exportErrorMessage({ code }, "zh").includes(code));
+  for (const [code, message] of [["EXPORT_RENDER_TIMEOUT", "渲染超时"], ["EXPORT_RENDER_FAILED", "渲染失败"], ["FUTURE_ERROR", "导出失败"]]) {
+    const text = exportErrorMessage({ code }, "zh");
+    assert.ok(text.includes(message));
+    assert.ok(text.includes(code));
   }
 });
 

@@ -295,9 +295,7 @@ class ExportHttpTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 document = payload.decode()
                 self.assertIn(heading, document)
-                self.assertIn(
-                    'lang="en"' if locale == "en" else 'lang="zh-CN"', document
-                )
+                self.assertIn('lang="en"' if locale == "en" else 'lang="zh-CN"', document)
 
     def test_missing_foreign_and_expired_snapshot_errors(self) -> None:
         with tempfile.TemporaryDirectory() as other:

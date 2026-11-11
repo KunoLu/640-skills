@@ -7,6 +7,7 @@ import {
   beginLoad,
   INITIAL_MODEL,
   retainExpansions,
+  type PageModel,
   type ReadyView,
 } from "./pageModel.ts";
 import { makeRow, makeSnapshot } from "./testFixtures.ts";
@@ -21,6 +22,11 @@ function makeView(snapshotId: string): ReadyView {
   };
 }
 
+test("initial model has no view and is updating", () => {
+  assert.equal(INITIAL_MODEL.view, null);
+  assert.equal(INITIAL_MODEL.updating, true);
+  assert.equal(INITIAL_MODEL.error, null);
+});
 
 test("beginLoad keeps the previous completed view and marks updating (D12)", () => {
   const ready = applySuccess(INITIAL_MODEL, makeView("snap_1"));
@@ -58,4 +64,12 @@ test("retainExpansions keeps only records present in the new snapshot", () => {
   const view = makeView("snap_2");
   assert.deepEqual(retainExpansions(["task_a", "task_gone"], view), ["task_a"]);
   assert.deepEqual(retainExpansions([], view), []);
+});
+
+test("pageModel holds no reference to export pins (AC-52 separation)", () => {
+  // The refresh path (beginLoad/applySuccess/applyFailure) takes and returns
+  // only PageModel/ReadyView; there is no pin parameter or field, so a poll
+  // refresh structurally cannot mutate an export pin.
+  const model: PageModel = applySuccess(INITIAL_MODEL, makeView("snap_1"));
+  assert.equal(Object.keys(model).sort().join(","), "error,updating,view");
 });

@@ -619,9 +619,10 @@ def _export_request(body: Any, manifest: dict) -> tuple[str, str, dict]:
         "panel_order",
         "legend_state",
     }
-    if not isinstance(presentation, dict) or not required <= set(
-        presentation
-    ) <= required | {"locale"}:
+    if (
+        not isinstance(presentation, dict)
+        or not required <= set(presentation) <= required | {"locale"}
+    ):
         raise ValueError(
             "presentation_state must contain exactly seven fields plus optional locale"
         )

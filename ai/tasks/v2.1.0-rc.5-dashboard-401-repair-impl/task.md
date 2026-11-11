@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: feat/rc5-401-repair-impl
 created_at: '2026-11-11T19:53:53+08:00'
-updated_at: '2026-11-11T20:48:08+08:00'
+updated_at: '2026-11-11T21:28:13+08:00'
 completed_at: null
 ---
 
@@ -31,7 +31,7 @@ completed_at: null
 - 用户 2026-11-11 17:38 群内确认（合入 #208，批准 #210 契约，按新顺序 #208、#211、#210、#209），Lord 记录。#210 已合入 main，合并提交 `f2887297b2e098b8339758bba918afaa842fbe79`；当时只交付契约，未实现。
 - 用户 2026-11-11 19:48 群内确认（合入 #209），Lord 记录。Lord 于同日 19:48（北京时间）将 #209 squash 合入 main，合并提交 `6c5eef24e6cd4f1dba3872683d26b99a703c059b`，并删除远端分支 `contract/rc5-host-gate-codex-0167-omp-18188`。
 - 合入后 Lord 下令：清掉本地 `pr209-rebase` 分支和工作区，再按 rc.5 顺序开始 401 重新配对实现 PR，先写 task.md。这是 Lord 的调度；本会话未执行或核验该清理，不把它记成本轮完成动作。
-- 本轮的记录边界与后续方案细节由编排方整理，并与契约、当前源码核对；不把这些细节归给用户。上述群内决定和合并经过采用本轮提供的已核实背景，不冒充本会话查询群聊或远端所得。
+- 本轮的记录边界与后续方案细节由编排方整理，并与契约、当前源码核对；不把这些细节归给用户。上述群内确认和合并经过采用本轮提供的已核实背景，不冒充本会话查询群聊或远端所得。
 - Reviewy 2026-11-11 19:57（北京时间）在 640-skills 群指出：401 重新配对实现 PR 必须让所有配对端点响应都带 `Cache-Control: no-store`，并有测试覆盖；这是 ADR 0001 §9.3／§9.4 已有的实现要求，不是新增契约决定。该意见采用已核实背景，本会话未查询群聊。
 - 用户 2026-11-11 群内确认（选 A：在 401 实现 PR 里，只把 `openapi.yaml` 里的两处状态说明改成「已实现」，接口、字段和状态码都不动），Lord 记录。注：分钟不可考。
 
@@ -261,6 +261,32 @@ BDD：traceable；Cross-repo context：complete（前后端均在本仓库）；
 
 Final Full Rerun：passed（仅 66＋99 项指定本地测试）；Targeted Rerun：not-needed。API Contract：verified（YAML 解析、两处差异及 golden 回归）；BDD：skipped；Cross-repo context：not-needed；Mock Strategy：none；Final Test Report／Run Summary MD：not-needed。未改运行时、UI、测试或 schema，因此不重跑 serve／浏览器、前端构建、运行时全仓测试及生产代码相关 Book Gate；本轮不是第 3 轮独立安全评审、CI 或发布就绪证明。其余过时 OpenAPI 描述按本轮边界保留，不能将局部状态更新说成全文状态已统一。不执行 Git 写命令，不建立其他工作流记录。
 
+## 第 5 轮本地验证
+
+按 Reviewy 对 PR #212 的意见，仅恢复无关测试／断言、修正第 34 行措辞、撤回两处纯格式化，并更新本 task。所有恢复内容先读取 `git show origin/main:<path>` 与当前文件，再按 main 原文恢复；保留本 PR 的 recovery／transport／unmount 测试及允许的 import、KEYS 和标题差异。第 1–4 轮历史证据与模型次数不改，status 保持 checking，completed_at 保持 null。
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only；Environment Alignment：unverified。起始 SHA：`27d29db5ee397879e061359273c7170c2f03ec1a`；main 基准：`6c5eef24e6cd4f1dba3872683d26b99a703c059b`；分支与 front matter 一致。rtk：skipped-for-report，使用原生命令保留实际输出；本节仅为本地证据表，不是正式 PR-head 报告或 CI。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); print('INDEX_REGEN', 'changed=%s' % (b!=a), 'rows=%d' % len(s._index_rows(r))); print('INDEX_PREVIEW_SAME', Path('ai/tasks/index.md').read_bytes()==a, 'rows=%d' % len(s._index_rows(r)))"` | 正式生成器只读计算，未写 index；`INDEX_REGEN changed=False rows=82`，`INDEX_PREVIEW_SAME True rows=82`；保留旧格式事件提示 | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts` | 66 项通过，0.431 秒；无失败／跳过 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 项通过，53.028 秒；无失败／跳过 | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_serve test_exports_http` | 39 项通过，72.267 秒；保留 asyncio 慢任务诊断，不当作测试失败 | 0 |
+| `sbtd-runtime/dashboard`：`npm test` | 74 项通过，失败／取消／跳过均为 0；恢复后的 401 提示断言及错误映射断言均通过，保留 MockTimers 实验性警告 | 0 |
+| `python3 sbtd-runtime/dashboard/check_artifacts.py`；`git status --short --untracked-files=all` | `OK: 3 files, 291834 bytes (budget 524288)`；仅本 task、三份前端测试、serve.py 和 test_exports_http.py 六个文件修改，static 无新改动 | 各 0 |
+| `ruff check sbtd-runtime/serve.py sbtd-runtime/tests/test_exports_http.py` | `All checks passed!`；未运行 formatter | 0 |
+| `git diff --check` | 无输出，空白检查通过 | 0 |
+| `git diff origin/main -- sbtd-runtime/dashboard/src/pageModel.test.ts sbtd-runtime/dashboard/src/i18n.test.ts sbtd-runtime/dashboard/src/exportJob.test.ts` | pageModel.test.ts 无差异；i18n.test.ts 仅 KEYS 新增四个 recovery key；exportJob.test.ts 仅新增 Api 类型 import、401 测试标题更名及末尾 recovery／transport／unmount 测试。无关测试和断言已按 main 全部恢复 | 0 |
+| grep 本 task 禁用归因措辞、本机路径及旧群内措辞；精确检查第 34 行 | 禁用项无匹配；第 34 行为“上述群内确认和合并经过”，其余文字不动 | 工具成功，无 shell 退出码 |
+| `TZ=Asia/Shanghai date --iso-8601=seconds` | `2026-11-11T21:28:13+08:00`；用于 updated_at 与本轮 checking→checking 事件 | 0 |
+
+Refactoring Review：proceed，normal；唯一生产编辑是 `_export_request` 条件恢复 main 括号换行，语义和短路顺序不变，无需重构。可读性复核仅按 main 原文与允许差异边界核对，不新增抽象或清理其他代码。DDD／DDIA／Legacy safety／Release readiness：not-needed（本轮不新增领域规则、状态结构或运行时行为）；既有独立安全评审和发布门禁不因本轮回归而关闭。
+
+范围说明：中间件现在对 `host_allowed`／`origin_allowed` 抛出的 ValueError 返回 403，畸形 Origin 以前可能变成 500；这是加固，不是契约里的新状态码。源码检索显示 `AccessControl.revoke()` 目前只被测试调用。本轮只记录这两点，不修改实现、OpenAPI 过时描述或 #210 的 CHANGELOG 条目。
+
+Final Full Rerun：passed（66＋99＋39＋74 项指定本地范围）；Targeted Rerun：not-needed；Final Test Report／Run Summary MD：not-needed。BDD：skipped（仅恢复既有测试与纯格式，无新增场景）；Cross-repo context：not-needed；API Contract：verified（golden 回归，未改契约）；Mock Strategy：contract-backed（既有前端故障注入），后端包含真实 loopback HTTP。未运行 `npm run build`、formatter、浏览器或额外全仓套件：本轮不改变运行时或 UI，static 保持不变；未执行 Git 写命令、子代理或 find。会话内使用 todo 清单，未创建其他仓库任务记录。未形成需要另写长期 lesson 的新规则；CI、独立复审、合入、部署和发布仍未完成，不承诺跨会话自动恢复。
+
 ## 风险与恢复边界
 
 - 同源 XSS 或同时泄露 Bearer＋CSRF 仍可抢先恢复；Host／Origin 不是秘密。一次性和短窗口只限制损害，不消除风险。
@@ -276,6 +302,7 @@ Final Full Rerun：passed（仅 66＋99 项指定本地测试）；Targeted Reru
 | 2026-11-11T20:02:57+08:00 | checking | checking | 按 Reviewy 意见修正：实现 PR 必须让所有配对端点响应带 Cache-Control: no-store，并有测试覆盖（ADR 0001 §9） | 第 2 轮仅修订 task 的范围／验收／测试计划；INDEX_REGEN changed=False rows=82，INDEX_PREVIEW_SAME True rows=82；99 项 unittest 通过；diff 空白检查通过，index 保留第 1 轮同一行差异；文案禁用项 grep 无匹配，范围和验收均明确所有 pair 响应 no-store 及测试；仅 developer-local，尚未实现 |
 | 2026-11-11T20:37:12+08:00 | checking | checking | 第 3 轮实现自动重新配对、全部 pair／取票响应 no-store 及前端单次恢复，完成指定本地验证；独立安全评审、CI 和合入未完成 | 后端 39 项、前端 70 项、工作流 99 项通过；tsc／Vite 构建与产物检查通过；INDEX_REGEN changed=False rows=82，INDEX_PREVIEW_SAME True rows=82；真实 HTTP 完整恢复／重复／超窗通过，浏览器主视图双语恢复与人工回退有限 smoke 通过；仅 developer-local |
 | 2026-11-11T20:48:08+08:00 | checking | checking | 按上述群内确认（选 A）修订 OpenAPI 两处状态说明，并写入决定原文：用户 2026-11-11 群内确认（选 A：在 401 实现 PR 里，只把 `openapi.yaml` 里的两处状态说明改成「已实现」，接口、字段和状态码都不动），Lord 记录。注：分钟不可考。 | 第 4 轮仅同步两处状态说明与 task／中英 CHANGELOG 本实现条目；INDEX_REGEN changed=False rows=82，首次联跑预览超时后单独预览 INDEX_PREVIEW_SAME True rows=82；MARKER implemented，pair description 明确已发送 no-store，响应码 200／401／403／429 不变；golden 66 项、任务／工作流 99 项通过；OpenAPI diff 仅两处，diff 空白检查通过；仅 developer-local |
+| 2026-11-11T21:28:13+08:00 | checking | checking | 按 Reviewy 意见修正：恢复无关测试／断言，修正第 34 行群内确认措辞，撤回 serve.py 与 test_exports_http.py 两处纯格式化 | 第 5 轮只读生成器 changed=False rows=82，INDEX_PREVIEW_SAME True；golden 66 项、任务／工作流 99 项、serve／导出 39 项、Dashboard 74 项通过，恢复断言无失败；产物检查、ruff check、diff 空白检查通过，static 无新改动；相对 main 三份前端测试仅剩允许新增／更名；禁用措辞与本机路径 grep 无匹配，仅 developer-local |
 
 ## 模型记录
 
@@ -285,6 +312,7 @@ Final Full Rerun：passed（仅 66＋99 项指定本地测试）；Targeted Reru
 | 第 2 轮 | openai-codex/gpt-6-astra（thinking high） | 按 Reviewy 意见补范围／验收／测试计划，记录本轮状态事件和本地验证 | 11 | 30 |
 | 第 3 轮 | openai-codex/gpt-6-astra（thinking high） | 实现服务端与 Dashboard 401 恢复、全部配对响应 no-store，补测试／场景／构建／双语 CHANGELOG，执行本地回归与真实 HTTP／有限浏览器 smoke | 70 | 145 |
 | 第 4 轮 | openai-codex/gpt-6-astra（thinking high） | 按群内确认（选 A）修改 OpenAPI 两处状态说明，同步决定原文、范围、状态事件与中英 CHANGELOG，执行指定本地验证 | 14 | 35 |
+| 第 5 轮 | openai-codex/gpt-6-astra（thinking high） | 按 Reviewy 意见逐字恢复无关测试／断言、修正群内确认措辞、撤回两处纯格式化，执行指定回归并记录证据 | 18 | 50 |
 
 计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用。末尾只读统计实际输出 astra_assistant=13、astra_toolcalls=56、other_assistant={}，退出码 0；此后只有本次 edit 和一次纯文本收尾，因此模型调用按 A+2=13+2=15、工具调用按 T+1=56+1=57 推算。该 edit 为最后一次工具调用，数字回填后不再运行校验。find 工具未列入本轮工具，调用为 0；未调用任务执行工具或子代理。不把所读历史文件中的模型名字算成本会话模型调用。
 
@@ -293,3 +321,5 @@ Final Full Rerun：passed（仅 66＋99 项指定本地测试）；Targeted Reru
 第 3 轮计数方法：仅统计本轮 sessions-r3 日志，沿用前两轮 assistant 消息与 toolCall 条目的筛选口径。只读 count.py 实际输出 `astra_assistant=68 astra_toolcalls=144 other_assistant={} model_usage={}`，退出码 0，不写仓库。统计后仅执行本次 edit 与一次纯文本收尾，因此模型调用按 A+2=68+2=70、工具调用按 T+1=144+1=145 推算；第 1 轮 15／57、第 2 轮 11／30 均保持不变。本次 edit 是最后一次工具调用，仅回填本轮次数与推算说明，之后不再执行校验。未调用任务工具、子代理或 find，未执行 Git 写命令。
 
 第 4 轮计数方法：只读 count.py 仅统计 sessions-r4，实际输出 `astra_assistant=12 astra_toolcalls=34 other_assistant={} model_usage={}`，退出码 0。统计后仅执行本次 edit 与一次纯文本收尾，因此模型调用按 A+2=12+2=14、工具调用按 T+1=34+1=35 推算；第 1 轮 15／57、第 2 轮 11／30、第 3 轮 70／145 保持不变。本次 edit 为最后一次工具调用，仅追加本轮模型次数与计数说明，之后不再运行校验；校验结果针对此前已写入的状态说明和记录，不把计数回填说成重新测试。未执行 Git 写命令、子代理或 find；使用了会话内 todo 清单工具，未新增仓库任务文件。
+
+第 5 轮计数方法：只读 count.py 仅统计 sessions-r5，实际输出 `astra_assistant=16 astra_toolcalls=49 other_assistant={} model_usage={}`，退出码 0。统计后仅执行本次 edit 与一次纯文本收尾，因此模型调用按 A+2=16+2=18、工具调用按 T+1=49+1=50 推算；第 1 轮 15／57、第 2 轮 11／30、第 3 轮 70／145、第 4 轮 14／35 均保持不变。本次 edit 为最后一次工具调用，仅追加本轮模型次数与推算说明，之后不再运行校验；本地验证及新写文字 grep 已在此前完成，不将次数回填视为重新测试。未执行 Git 写命令、子代理或 find；使用了会话内 todo 清单工具，未新增仓库任务文件。
