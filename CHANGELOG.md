@@ -9,6 +9,10 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ## v2.1.0-rc.5 (Unreleased)
 
+### Added
+
+- Add ADR 0001 §9 and a contract-first OpenAPI `POST /api/v1/session/re-pair-ticket`: a recovery window of at most 60 seconds after expiry (the endpoint at +60 seconds is excluded), bound to the original paired session; each expired credential can obtain only one ticket, valid for at most 30 seconds and single-use. Main error responses are `401 unauthorized`, `403 forbidden`, and `429 RE_PAIR_RATE_LIMITED`. Not implemented or routed by serve; implementation requires 640's contract approval and a separate PR.
+
 ### Changed
 
 - Append §6 to ADR 0003: set an 8-entry full-snapshot memory limit with LRU eviction without deleting disk files, build only a lightweight index at startup, and reload cache misses with the existing safety checks; 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged. Documentation only; implementation will follow in a separate PR.

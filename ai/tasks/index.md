@@ -75,6 +75,7 @@
 - [v2.1.0-rc.3-changelog](v2.1.0-rc.3-changelog/task.md)
 - [v2.1.0-rc.3-release-identity-backfill](v2.1.0-rc.3-release-identity-backfill/task.md)
 - [v2.1.0-rc.4-release](v2.1.0-rc.4-release/task.md)
+- [v2.1.0-rc.5-dashboard-401-auto-repair](v2.1.0-rc.5-dashboard-401-auto-repair/task.md)
 - [v2.1.0-rc.5-probe-links-flaky-test](v2.1.0-rc.5-probe-links-flaky-test/task.md)
 - [v2.1.0-rc.5-snapshot-memory-eviction](v2.1.0-rc.5-snapshot-memory-eviction/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
