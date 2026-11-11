@@ -20,7 +20,7 @@ import re
 import stat
 import tempfile
 import uuid
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime, timedelta
@@ -630,6 +630,13 @@ def validate_snapshot_home(home: Path) -> None:
             raise ValueError("snapshot directory has unknown ownership")
 
 
+@dataclass(frozen=True)
+class _SnapshotIndexEntry:
+    expires_instant: datetime
+    query_hash: str
+    dataset_fingerprint: str
+
+
 class SnapshotStore:
     """Disk-backed snapshots owned by one runtime writer (ADR 0003).
 
@@ -645,9 +652,12 @@ class SnapshotStore:
         pinned_snapshot_ids: Iterable[str] = (),
         quota_bytes: int | None = None,
         defer_sweep: bool = False,
+        _cache_capacity: int = 8,
     ) -> None:
         if not math.isfinite(ttl_seconds) or ttl_seconds < 0:
             raise ValueError("snapshot TTL must be finite and nonnegative")
+        if type(_cache_capacity) is not int or _cache_capacity <= 0:
+            raise ValueError("snapshot cache capacity must be a positive integer")
         home = Path(home).absolute()
         self.quota = DiskQuota(
             home, parse_disk_quota() if quota_bytes is None else quota_bytes
@@ -662,17 +672,20 @@ class SnapshotStore:
         self._ttl = ttl_seconds
         self._lock = self.quota.lock
         self._pins = Counter(pinned_snapshot_ids)
-        self._snapshots: dict[str, Snapshot] = {}
+        self._cache_capacity = _cache_capacity
+        self._snapshots: OrderedDict[str, Snapshot] = OrderedDict()
+        self._index: dict[str, _SnapshotIndexEntry] = {}
         self._validated: dict[str, tuple[int, int, int, int, int]] = {}
         self._gone: set[str] = set()
         for path in self._directory.iterdir():
             if not _SNAPSHOT_ID.fullmatch(path.stem) or path.suffix != ".json":
                 continue
             try:
-                snapshot = self._read(path.stem)
+                snapshot = self._read(path.stem, force_validate=True)
             except SnapshotNotFound:
                 continue
-            self._snapshots[snapshot.snapshot_id] = snapshot
+            self._index_snapshot(snapshot)
+            del snapshot
         self.quota.snapshot_sweep = self.sweep
         if not defer_sweep:
             if (home / "exports").exists():
@@ -699,11 +712,49 @@ class SnapshotStore:
         self._check_directory()
         return self._directory / f"{snapshot_id}.json"
 
-    def _read(self, snapshot_id: str, *, force_validate: bool = False) -> Snapshot:
+    def _index_snapshot(self, snapshot: Snapshot) -> None:
+        self._index[snapshot.snapshot_id] = _SnapshotIndexEntry(
+            snapshot.expires_instant, snapshot.query_hash, snapshot.dataset_fingerprint
+        )
+
+    def _invalidate(self, snapshot_id: str) -> None:
+        self._snapshots.pop(snapshot_id, None)
+        self._validated.pop(snapshot_id, None)
+
+    def _cache_snapshot(self, snapshot: Snapshot) -> None:
+        self._snapshots[snapshot.snapshot_id] = snapshot
+        self._snapshots.move_to_end(snapshot.snapshot_id)
+        while len(self._snapshots) > self._cache_capacity:
+            evicted, _ = self._snapshots.popitem(last=False)
+            self._validated.pop(evicted, None)
+
+    def _accept_read(
+        self,
+        snapshot: Snapshot,
+        identity: tuple[int, int, int, int, int],
+        now: datetime | None,
+    ) -> Snapshot:
+        self._index_snapshot(snapshot)
+        if (now or datetime.now(UTC)) >= snapshot.expires_instant and not self._pins[
+            snapshot.snapshot_id
+        ]:
+            self._invalidate(snapshot.snapshot_id)
+            raise SnapshotGone(snapshot.snapshot_id)
+        self._cache_snapshot(snapshot)
+        self._validated[snapshot.snapshot_id] = identity
+        return snapshot
+
+    def _read(
+        self,
+        snapshot_id: str,
+        *,
+        force_validate: bool = False,
+        now: datetime | None = None,
+    ) -> Snapshot:
         # Callers hold the shared RLock, except during single-writer startup.
-        cached = self._validated.pop(snapshot_id, None)
-        path = self._path(snapshot_id)
+        cached = self._validated.get(snapshot_id)
         try:
+            path = self._path(snapshot_id)
             info = path.lstat()
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise ValueError("snapshot must be a regular unlinked file")
@@ -726,9 +777,12 @@ class SnapshotStore:
                 # Windows path stat and fd stat can expose different ctime clocks.
                 # Cache and content checks must all use the opened fd's identity.
                 identity = file_identity(opened)
-                if not force_validate and cached == identity:
-                    self._validated[snapshot_id] = identity
-                    return self._snapshots[snapshot_id]
+                if (
+                    not force_validate
+                    and cached == identity
+                    and snapshot_id in self._snapshots
+                ):
+                    return self._accept_read(self._snapshots[snapshot_id], identity, now)
                 envelope = json.load(handle, object_pairs_hook=_unique_object)
                 if file_identity(os.fstat(handle.fileno())) != identity:
                     raise ValueError("snapshot file changed while reading")
@@ -762,11 +816,11 @@ class SnapshotStore:
                     raise ValueError("snapshot file was replaced")
                 if file_identity(os.fstat(handle.fileno())) != identity:
                     raise ValueError("snapshot file changed while validating")
-                if not force_validate and snapshot_id in self._snapshots:
-                    self._snapshots[snapshot_id] = snapshot
-                    self._validated[snapshot_id] = identity
-                return snapshot
+                if force_validate:
+                    return snapshot
+                return self._accept_read(snapshot, identity, now)
         except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            self._invalidate(snapshot_id)
             raise SnapshotNotFound(snapshot_id) from None
 
     def _write(self, snapshot: Snapshot) -> None:
@@ -828,8 +882,8 @@ class SnapshotStore:
         removed = []
         with self._lock:
             self._check_directory()
-            for snapshot_id, snapshot in list(self._snapshots.items()):
-                if now < snapshot.expires_instant or self._pins[snapshot_id]:
+            for snapshot_id, entry in list(self._index.items()):
+                if now < entry.expires_instant or self._pins[snapshot_id]:
                     continue
                 try:
                     path = self._path(snapshot_id)
@@ -837,6 +891,7 @@ class SnapshotStore:
                     snapshot = self._read(snapshot_id, force_validate=True)
                 except SnapshotNotFound:
                     continue
+                self._index_snapshot(snapshot)
                 if now >= snapshot.expires_instant and before is not None:
                     self._check_directory()
                     current = exclusive_file(path)
@@ -848,7 +903,8 @@ class SnapshotStore:
                         path.unlink()
                     except OSError:
                         continue
-                    del self._snapshots[snapshot_id]
+                    self._index.pop(snapshot_id, None)
+                    self._invalidate(snapshot_id)
                     self._gone.add(snapshot_id)
                     removed.append(snapshot_id)
         return removed
@@ -903,17 +959,23 @@ class SnapshotStore:
                 "source_watermarks": [dict(item) for item in source_watermarks],
             }
         )
-        for snapshot in self._snapshots.values():
-            if now >= snapshot.expires_instant:
+        for snapshot_id, entry in list(self._index.items()):
+            if now >= entry.expires_instant:
                 continue
             if (
-                snapshot.query_hash == query_hash
-                and snapshot.dataset_fingerprint == fingerprint
+                entry.query_hash == query_hash
+                and entry.dataset_fingerprint == fingerprint
             ):
                 try:
-                    return self.get(snapshot.snapshot_id, now=now)
-                except SnapshotNotFound:
+                    snapshot = self.get(snapshot_id, now=now)
+                except (SnapshotNotFound, SnapshotGone):
                     continue
+                if (
+                    now < snapshot.expires_instant
+                    and snapshot.query_hash == query_hash
+                    and snapshot.dataset_fingerprint == fingerprint
+                ):
+                    return snapshot
         self.quota.admit(now=now)
         rows, unknown_ids = dataset_rows(frozen, scope)
         manifest = [{"record_type": family, "rows": 0} for family in DATASET_FAMILIES]
@@ -958,7 +1020,8 @@ class SnapshotStore:
             dataset_fingerprint=fingerprint,
         )
         self._write(snapshot)
-        self._snapshots[snapshot.snapshot_id] = snapshot
+        self._index_snapshot(snapshot)
+        self._cache_snapshot(snapshot)
         return snapshot
 
     def get(self, snapshot_id: str, *, now: datetime | None = None) -> Snapshot:
@@ -970,11 +1033,7 @@ class SnapshotStore:
         with self._lock:
             if snapshot_id in self._gone:
                 raise SnapshotGone(snapshot_id)
-            snapshot = self._read(snapshot_id)
-            if now >= snapshot.expires_instant and not self._pins[snapshot_id]:
-                self._validated.pop(snapshot_id, None)
-                raise SnapshotGone(snapshot_id)
-            return snapshot
+            return self._read(snapshot_id, now=now)
 
     def dataset_page(
         self,

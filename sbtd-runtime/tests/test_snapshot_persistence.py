@@ -26,6 +26,163 @@ class SnapshotPersistenceTests(unittest.TestCase):
         self.dataset = _dataset()
         self.scope = _scope(self.dataset)
 
+    def test_cold_and_hot_refusals_invalidate_payload_and_identity(self) -> None:
+        for hot in (False, True):
+            for damage in ("corrupt", "version", "missing", "symlink", "fd-change"):
+                with self.subTest(hot=hot, damage=damage):
+                    home = self.home / f"{hot}-{damage}"
+                    store = SnapshotStore(home, _cache_capacity=1)
+                    snapshot = store.create_or_reuse(self.dataset, self.scope)
+                    sid = snapshot.snapshot_id
+                    store.get(sid)
+                    if not hot:
+                        store.create_or_reuse(
+                            self.dataset, _scope(self.dataset, metrics=["tasks.created"])
+                        )
+                        self.assertNotIn(sid, store._snapshots)
+                    path = home / "snapshots" / f"{sid}.json"
+                    original = path.read_bytes()
+                    if damage == "missing":
+                        path.unlink()
+                    elif damage == "symlink":
+                        if os.name != "posix":
+                            continue
+                        outside = home / "outside"
+                        path.rename(outside)
+                        path.symlink_to(outside)
+                    elif damage == "version":
+                        envelope = json.loads(original)
+                        envelope["format_version"] = 99
+                        path.write_text(json.dumps(envelope))
+                    elif damage == "corrupt":
+                        path.write_bytes(b"broken")
+                    else:
+                        # Force a full read even when formerly hot, then change
+                        # the same fd identity after JSON has been read.
+                        replacement = path.with_suffix(".replacement")
+                        replacement.write_bytes(original)
+                        os.replace(replacement, path)
+                    real_fstat = os.fstat
+                    calls = 0
+
+                    def changed_fd(fd, real_fstat=real_fstat, damage=damage):
+                        nonlocal calls
+                        info = real_fstat(fd)
+                        calls += 1
+                        if damage != "fd-change" or calls == 1:
+                            return info
+                        return os.stat_result(
+                            info,
+                            {
+                                "st_atime_ns": info.st_atime_ns,
+                                "st_mtime_ns": info.st_mtime_ns,
+                                "st_ctime_ns": info.st_ctime_ns + 1,
+                            },
+                        )
+
+                    with (
+                        mock.patch("report_snapshot.os.fstat", side_effect=changed_fd),
+                        self.assertRaises(SnapshotNotFound),
+                    ):
+                        store.get(sid)
+                    self.assertNotIn(sid, store._snapshots)
+                    self.assertNotIn(sid, store._validated)
+                    if damage == "missing":
+                        self.assertFalse(path.exists())
+                    elif damage == "symlink":
+                        self.assertTrue(path.is_symlink())
+                        self.assertEqual(outside.read_bytes(), original)
+                        path.unlink()
+                    else:
+                        self.assertTrue(path.exists())
+                    path.write_bytes(original)
+                    self.assertEqual(store.get(sid).public_view(), snapshot.public_view())
+
+    def test_unindexed_cold_id_is_read_and_expiry_is_not_renewed(self) -> None:
+        store = SnapshotStore(self.home, defer_sweep=True)
+        owner = SnapshotStore(self.home)
+        now = datetime.now(UTC)
+        snapshot = owner.create_or_reuse(self.dataset, self.scope, now=now)
+        self.assertNotIn(snapshot.snapshot_id, store._index)
+        read = store.get(snapshot.snapshot_id, now=now + timedelta(hours=23))
+        self.assertEqual(read.expires_at, snapshot.expires_at)
+        self.assertEqual(read.rows, snapshot.rows)
+        with self.assertRaises(SnapshotGone):
+            store.get(snapshot.snapshot_id, now=now + timedelta(hours=24))
+        self.assertNotIn(snapshot.snapshot_id, store._snapshots)
+        self.assertNotIn(snapshot.snapshot_id, store._validated)
+
+    def test_evicted_pins_and_restored_references_preserve_original_expiry(self) -> None:
+        now = datetime.now(UTC)
+        store = SnapshotStore(self.home, _cache_capacity=1)
+        snapshot = store.create_or_reuse(self.dataset, self.scope, now=now)
+        sid = snapshot.snapshot_id
+        for _ in range(2):
+            store.pin(sid, now=now)
+        other = store.create_or_reuse(
+            self.dataset, _scope(self.dataset, metrics=["tasks.created"]), now=now
+        )
+        self.assertEqual(list(store._snapshots), [other.snapshot_id])
+        self.assertEqual(store.pin(sid, now=now).rows, snapshot.rows)
+        store.release(sid)
+        store.get(other.snapshot_id, now=now)
+        self.assertNotIn(sid, store._snapshots)
+        expired = now + timedelta(days=1)
+        self.assertEqual(store.get(sid, now=expired).public_view(), snapshot.public_view())
+        self.assertEqual(len(store._snapshots), 1)
+        store.release(sid)
+        self.assertEqual(store.dataset_page(sid, now=expired)["total"], len(snapshot.rows))
+        store.release(sid)
+        with self.assertRaises(SnapshotGone):
+            store.get(sid, now=expired)
+        path = self.home / "snapshots" / f"{sid}.json"
+        self.assertTrue(path.exists())
+        # Advance startup's real clock without changing persisted timestamps.
+        with mock.patch("report_snapshot.datetime") as clock:
+            clock.now.return_value = expired
+            restored = SnapshotStore(
+                self.home, pinned_snapshot_ids=[sid, sid], _cache_capacity=1
+            )
+        self.assertEqual(restored._snapshots, {})
+        self.assertEqual(restored.get(sid, now=expired).expires_at, snapshot.expires_at)
+        restored.release(sid)
+        self.assertEqual(restored.sweep(now=expired), [])
+        restored.release(sid)
+        with self.assertRaises(SnapshotGone):
+            restored.pin(sid, now=expired)
+        self.assertEqual(restored.sweep(now=expired), [sid])
+        self.assertFalse(path.exists())
+
+    def test_startup_indexes_all_files_without_retaining_payloads(self) -> None:
+        import weakref
+
+        store = SnapshotStore(self.home)
+        expected = {}
+        for i in range(11):
+            snapshot = store.create_or_reuse(
+                self.dataset, _scope(self.dataset, filters={"project_ids": [str(i)]})
+            )
+            expected[snapshot.snapshot_id] = snapshot.public_view()
+        refs = []
+        original_read = SnapshotStore._read
+
+        def observed(owner, *args, **kwargs):
+            loaded = original_read(owner, *args, **kwargs)
+            refs.append(weakref.ref(loaded))
+            return loaded
+
+        with mock.patch.object(SnapshotStore, "_read", observed):
+            restarted = SnapshotStore(self.home)
+        self.assertEqual(len(refs), 11)
+        self.assertTrue(all(ref() is None for ref in refs))
+        self.assertEqual(restarted._snapshots, {})
+        self.assertEqual(restarted._validated, {})
+        self.assertEqual(set(restarted._index), set(expected))
+        for snapshot_id, view in expected.items():
+            self.assertEqual(restarted.get(snapshot_id).public_view(), view)
+            self.assertLessEqual(len(restarted._snapshots), 8)
+        self.assertEqual(len(restarted._snapshots), 8)
+
     def test_restart_preserves_snapshot_rows_cursor_and_expiry(self) -> None:
         store = SnapshotStore(self.home)
         before = datetime.now(UTC)
@@ -91,12 +248,18 @@ class SnapshotPersistenceTests(unittest.TestCase):
         }
         for name, blob in cases.items():
             with self.subTest(corruption=name):
+                path.write_bytes(original)
+                store.get(snapshot.snapshot_id)
                 path.write_bytes(blob)
                 with self.assertRaises(SnapshotNotFound):
                     store.get(snapshot.snapshot_id)
+                self.assertNotIn(snapshot.snapshot_id, store._snapshots)
+                self.assertNotIn(snapshot.snapshot_id, store._validated)
                 restarted = SnapshotStore(self.home)
                 with self.assertRaises(SnapshotNotFound):
                     restarted.get(snapshot.snapshot_id)
+                self.assertNotIn(snapshot.snapshot_id, restarted._snapshots)
+                self.assertNotIn(snapshot.snapshot_id, restarted._validated)
                 self.assertEqual(path.read_bytes(), blob)
 
     def test_unchanged_file_is_validated_once_and_returns_isolated_data(self) -> None:
@@ -151,6 +314,9 @@ class SnapshotPersistenceTests(unittest.TestCase):
             with self.assertRaises(SnapshotNotFound):
                 store.get(snapshot.snapshot_id)
             self.assertEqual(load.call_count, 2)
+            self.assertNotIn(snapshot.snapshot_id, store._snapshots)
+            self.assertNotIn(snapshot.snapshot_id, store._validated)
+            self.assertEqual(path.read_bytes(), tampered)
 
     def test_cached_file_rewrite_with_preserved_size_and_mtime_is_rejected(self) -> None:
         store = SnapshotStore(self.home)
@@ -170,6 +336,9 @@ class SnapshotPersistenceTests(unittest.TestCase):
             with self.assertRaises(SnapshotNotFound):
                 store.get(snapshot.snapshot_id)
             self.assertEqual(load.call_count, 1)
+        self.assertNotIn(snapshot.snapshot_id, store._snapshots)
+        self.assertNotIn(snapshot.snapshot_id, store._validated)
+        self.assertEqual(path.read_bytes(), tampered)
         path.write_bytes(original)
         self.assertEqual(store.get(snapshot.snapshot_id).rows, snapshot.rows)
 
@@ -226,7 +395,9 @@ class SnapshotPersistenceTests(unittest.TestCase):
         with self.assertRaises(SnapshotGone):
             store.get(snapshot.snapshot_id, now=now + timedelta(seconds=10))
         self.assertNotIn(snapshot.snapshot_id, store._validated)
-        self.assertIn(snapshot.snapshot_id, store._snapshots)
+        self.assertTrue(
+            (self.home / "snapshots" / f"{snapshot.snapshot_id}.json").exists()
+        )
 
     def test_startup_sweep_touches_only_owned_expired_snapshots(self) -> None:
         store = SnapshotStore(self.home)
@@ -324,6 +495,9 @@ class SnapshotPersistenceTests(unittest.TestCase):
                     self.assertRaises(OSError),
                 ):
                     store.create_or_reuse(self.dataset, scope)
+                self.assertEqual(set(store._index), {original.snapshot_id})
+                self.assertEqual(set(store._snapshots), {original.snapshot_id})
+                self.assertEqual(store._validated, {})
                 restarted = SnapshotStore(self.home)
                 self.assertEqual(
                     restarted.get(original.snapshot_id).rows, original.rows

@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: feat/rc5-snapshot-eviction-impl
 created_at: '2026-11-11T22:27:32+08:00'
-updated_at: '2026-11-11T22:27:32+08:00'
+updated_at: '2026-11-11T22:49:27+08:00'
 completed_at: null
 ---
 
@@ -18,6 +18,8 @@ completed_at: null
 本 PR 按已合入的 ADR 0003 §6，实现完整快照内存上限（默认最多 8 份）与 LRU 淘汰；只断开缓存的内存引用，不删除磁盘文件。
 
 第 1 轮只建立本 task.md，以及正式生成器更新的 `ai/tasks/index.md`。实现代码、测试和双语 CHANGELOG 实现条目留待后续轮次。保持 checking，completed_at 为 null；不提交、不推送、不开 PR，不运行 Git 写命令，提交由编排方稍后处理。不建立 active、handoff、developer 或其他工作流记录。
+
+第 2 轮开始实现。已核实背景：用户已在群内要求开始本实现；Lord 于 2026-11-11 22:36（北京时间）确认以本 task.md 范围为准，坏文件拒读后完整缓存未清除直接相关，允许一并修复，不得再扩大范围。这是 Lord 的范围确认，不是新的契约决定，方案细节不归给用户。第 1 轮的“尚未执行／后续计划”保留历史原意；本轮实际结果见「第 2 轮本地验证」。状态继续 checking，独立安全评审、CI、合入未完成。
 
 未完整调用 grill-with-docs：边界、已合入 ADR 和验收条件明确，源码可回答本轮问题，不新增领域决定或重复访谈。旧文档任务只作依据，不改其正文、状态或历史证据。
 
@@ -179,16 +181,86 @@ Evidence Source：developer-local；Source Revision：dirty（新增任务记录
 
 本轮跳过实现测试、真实 serve、内存实测、前端／运行时 lint／build 与全仓测试：只写记录，不改程序。旧文档任务的 runtime 历史失败与平台缺口未重跑、不关闭。BDD：skipped（只列计划，未改长期场景）；Cross-repo context：not-needed（本仓内部，未跨仓）；API Contract：verified（仅只读表述核对、§6 存在与 YAML 解析）；Mock Strategy：none。Final Test Report／Run Summary MD：not-needed（仅 developer-local 证据表）；Final Full Rerun：passed（仅本轮指定的 99 项工作流测试，不是运行时全量）；Targeted Rerun：not-needed。独立安全评审、CI、合入仍待后续。
 
+## 第 2 轮本地验证
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only。基准 SHA 为 `5e5e0109922c96dc45852eb3dec18c7efcdf9ede`，分支 `feat/rc5-snapshot-eviction-impl`；Linux x64、Python 3.13.5。不是 CI、未来提交或发布证明。rtk：skipped-for-report，指定命令由一次性记录器原生执行并保留 stdout、stderr、退出码、时间与 worktree 绑定；未执行 Git 写命令，未调用 task 状态写工具、子代理或 find。会话内使用 todo 清单，不生成 active／handoff／developer。路径与 ignore 检查确认本任务 `reports/` 受既有规则保护，不改 ignore。
+
+### 实际变更与 Gate
+
+- `sbtd-runtime/report_snapshot.py`：默认 8 条 OrderedDict LRU，内部 `_cache_capacity` 只收正整数且排除 bool；轻量索引每项只有 expires_instant、query_hash、dataset_fingerprint，ID 为字典键。成功发布后登记；安全读取与 TTL／pin 判断全部通过后登记完整缓存与 fd 身份。逐出同步去掉 `_validated`，不触及磁盘或配额。
+- 启动逐个强制完整校验、登记索引并释放临时对象；完整缓存为空。复用和 sweep 遍历轻量索引的稳定列表；候选沿 get 复核后再检查复用键及期限。未索引 ID 仍走受控路径读盘。冷清扫不登记完整载荷、不重排热缓存；删除失败保留候选，成功清理索引／缓存／校验并记 Gone。
+- 缺失、坏文件和不安全路径拒读时同时失效完整载荷与校验项，坏文件不删；五字段完全不变的既有限制不扩展修复。get／分页 deepcopy 与新建直接返回对象的既有接口保持。pin 保护磁盘，不能豁免内存容量。
+- 测试改动为 `test_report_snapshot.py`、`test_snapshot_persistence.py`、`test_disk_quota.py`、`test_export_store.py`；新增 `sbtd-runtime/spec/rc5-snapshot-eviction-scenarios.md`。双语 CHANGELOG 各新增唯一 rc.5 Changed／变更条目，紧跟原 ADR §6 文档条目；其余字节保持不变。
+- `serve.py`、`disk_quota.py` 无需生产衔接修改：现有默认构造、defer_sweep、共享 quota 回调与恢复引用顺序可承载改动；真实 HTTP、默认装配观察及回归已执行。前端／static、OpenAPI、ADR、PRD、schema、数据字典、旧文档任务均未修改。
+- DDIA Data Design Review：confirmed（作者自审）。磁盘为事实源，单 writer／共享 RLock 不变；先原子发布再登记，无迁移或新 manifest。Legacy Change Safety Review：characterized；明确问题报告与源码建立坏文件残留根因，既有安全／生命周期测试作为保留行为安全网；容量参数缺失与启动仍保留对象的红灯先于生产编辑。
+- Refactoring Review：proceed / normal；仅拆轻量索引和完整缓存，无额外框架或生产测试 seam。Ponytail Review：无可删除的多余抽象；Code Readability Review 已按本轮改动检查职责、命名和故障注入闭包，未重排无关代码。
+- BDD：traceable，中文场景＋英文关键词；测试映射见新增场景文档，无新 runner。Cross-repo context：not-needed；API Contract：verified（沿用既有路由与错误语义，不修改契约）。HTTP smoke Mock Strategy：none；文件故障注入与导出对账的既有 stub 单独标明，不冒充真实浏览器链路。
+- Lessons 评估：本轮缓存失效／索引分离规则已经是 ADR §6 与持久场景的明确规则，不新增重复长期 lesson，不读取或建立作者身份。独立安全评审仍 pending，作者自审不替代独立评审。
+
+### 命令、结果与失败记录
+
+下表的 unittest 均实际使用 `python3 -B -m unittest`；运行时模块命令前置 `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:.`。初始红灯与 lint 失败保留真实原因，不把后续通过改写成首次即通过。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_report_snapshot.SnapshotTests.test_lru_eviction_preserves_pages_reuse_and_csv test_snapshot_persistence.SnapshotPersistenceTests.test_startup_indexes_all_files_without_retaining_payloads` | 生产编辑前红灯：2 项；1 error 为构造器不接受 `_cache_capacity`，1 failure 为启动 weakref 仍存活；是本轮新增功能的预期失败 | 1 |
+| 上述两项加 `test_report_snapshot.SnapshotTests.test_cache_capacity_rejects_non_positive_integers` | 实现后 3 项通过，0.194 秒 | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_report_snapshot test_snapshot_persistence test_disk_quota` | 首轮 55 项，54 通过、1 Windows junction 跳过，3.005 秒；增强拒读／冷 pin 断言及 lint 修正后最终同范围 55 项，54 通过、1 跳过，3.103 秒 | 0／0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_serve test_exports_http test_export_store test_csv_export` | 71 项，70 通过、1 Windows junction 跳过，65.932 秒；并发读／淘汰／sweep／在途 CSV 交错通过。故障注入日志不代表测试失败 | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_export_reconciliation` | 2 项通过，0.258 秒；原输出明确 `existing worker stub (Playwright is not installed)`，不算真实 JPEG/PDF 浏览器渲染 | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B local://rc5-smoke.py` | 真实 serve HTTP、默认装配与内存诊断通过，16.344 秒；详情见下节与同 stem raw／中文汇总 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 项通过，43.113 秒；按指定原生入口执行，记录器额外提供 runtime PYTHONPATH，不替代测试实现 | 0 |
+| `python3 -B -m unittest sbtd-runtime.tests.test_golden_contracts` | 66 项通过，0.439 秒；未修改 golden | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_snapshot_persistence` | 增强拒读／冷 pin 后定向 24 项，23 通过、1 Windows 跳过，1.505 秒；之后同范围纳入上面的最终 55 项 | 0 |
+| `ruff check sbtd-runtime/report_snapshot.py sbtd-runtime/tests/test_report_snapshot.py sbtd-runtime/tests/test_snapshot_persistence.py sbtd-runtime/tests/test_disk_quota.py sbtd-runtime/tests/test_export_store.py` | 首次 3 个 lint 问题：新测试循环闭包 B023 两项、嵌套 with SIM117 一项；绑定默认参数并合并 with 后同命令 `All checks passed!`，未全仓格式化 | 1→0 |
+| 正式 index 生成器写入（第 1 轮同命令） | `INDEX_REGEN changed=False rows=83`，保留原“旧格式事件，不追溯”提示；未手改 index | 0 |
+| 正式 index 只读预览（第 1 轮同命令） | `INDEX_PREVIEW_SAME True rows=83` | 0 |
+| `git diff --check`、`git status --short --untracked-files=all`、`git diff --stat` | 空白检查通过；只涉及上述生产文件、4 个测试、场景、双语 CHANGELOG 与本任务，index 无差异 | 0 |
+| `git diff origin/main -- sbtd-runtime/tests` | 4 个测试文件共新增 346 行、删除 1 行；无测试函数删除，无无关断言削弱；唯一删除行见下表 | 0 |
+| 双语 CHANGELOG 字节核对 | 各移除本轮新增的条目与空行后，与 `git show HEAD:<文件>` 字节完全相同：两项 True | 0 |
+| `git diff --exit-code HEAD -- docs/adr docs/prd sbtd-runtime/contracts ai/tasks/v2.1.0-rc.5-snapshot-memory-eviction` | 无输出，保护文件无改动；完整 status 未出现数据字典或其他任务 | 0 |
+| 专用 grep：本轮新写文字的本机路径、禁用归因措辞及非“契约”目标用字 | 新增条目／场景／源码测试范围无匹配；一次多路径 selector 检索包含历史 CHANGELOG，发现的历史文字未改动，随后单文件精确行范围复查无匹配 | 工具成功 |
+
+原生报告与同 stem 中文汇总保存在本任务忽略的 `reports/`，共同后缀为 `-feat_rc5-snapshot-eviction-impl-<UTC时间>.json`／`.md`：`snapshots`（20261111T144259）、`serve-exports`（20261111T144305）、`reconciliation`（20261111T144512）、`smoke-memory`（20261111T144522）、`workflow`（20261111T144555）、`golden`（20261111T144703）、`persistence-final`（20261111T144731）、`snapshots-final`（20261111T144852）。初始红灯及 lint 原始输出保留于本会话，不伪造为 CI 报告；该两次为诊断，后续正式范围输出原样保留。Final Test Report／Run Summary MD：generated；Targeted Rerun：passed；Final Full Rerun：passed（本轮指定范围，包含两项平台跳过，不是全仓或跨平台全通过）。
+
+### 真实 HTTP 与内存证据
+
+真实独立 `serve --no-open` 进程、隔离临时 HOME／runtime、loopback、真实配对与 bearer／CSRF 鉴权。使用真实 EventStore 追加 golden 与 150 个合成事件；不是 parser fixture 或生产数据。经 `POST /api/v1/statistics/query` 创建 11 个不同快照；最早 ID 淘汰前后 public_view／digest／expires_at、3 页共 241 行与旧 cursor 完全一致，CSV 108284 字节逐字节一致，SHA-256 为 `4a36d80e063489333e974e50d27c32efb005bdb1ea0e579e25d27344ab263391`。原查询复用不增文件；真实重启后原快照、旧 cursor、原导出下载及导出期限一致。两个服务进程正常停止，退出码 0；未输出票或凭证。
+
+覆盖路由为 health GET、session/pair POST、statistics/query POST、report-snapshots/{snapshot_id} GET、其 dataset GET、exports POST、exports/{export_id} GET 与其 file GET；逐 URI、状态码及字段证据在 smoke 同 stem 中文汇总。没有新增 snapshot POST 或生产调试端点。默认装配另用一次性观察真实 create_app 构造：容量 8，创建 10 个后完整驻留 8、索引 10；不以 HTTP 200 代替内部条数证据。
+
+固定大小合成快照每份 500 个 task，共创建 12 份，操作结束驻留依次为 1、2、3、4、5、6、7、8、8、8、8、8。重启索引 12、完整缓存 0，weakref 观察启动同时存活载荷最多 1，处理完成全部释放。逐出原私有载荷后 weakref 已释放，读者副本仍有 500 行。单个大快照 5000 个 task、磁盘 6048576 字节，最终完整驻留 8、索引 13、Gone 0。tracemalloc 当前 19854409、峰值 36281265 字节，Linux ru_maxrss 96844 KiB；均为本次合成数据观察，不作性能保证，不断言 RSS 立即下降。
+
+索引／_gone、校验临时对象、在途对象和返回副本不计入 8 条；单快照大小无新增上限。启动仍完整读盘及 checksum 校验，不宣称减少读盘量。无后台定时器、环境变量、CLI 或产品配置。
+
+### 既有内部驻留断言调整
+
+| 文件／用例 | 原断言含义 | 必须调整原因 | 保留行为证据 |
+|---|---|---|---|
+| `sbtd-runtime/tests/test_snapshot_persistence.py`：`test_expired_cache_is_dropped_without_evicting_snapshot` | `assertIn(snapshot.snapshot_id, store._snapshots)` 固定过期拒读后完整对象仍驻留 | TTL 拒读不能发布或保留失效完整缓存；驻留不再是磁盘存在性依据 | 原 410（SnapshotGone）、读取前校验命中、拒读后 `_validated` 失效全部保留；替换为磁盘文件仍存在。新 TTL／pin 用例另证完整缓存失效与最后 release 后 410 |
+
+仅这一处调整既有驻留断言；其他既有测试函数和断言未删减。坏文件矩阵及原 corruption／异源 ctime／同大小同 mtime 改写用例新增完整缓存与校验项同步失效、坏字节仍保留断言；发布故障新增索引／缓存／校验无半项断言。
+
+### 剩余门禁、风险与恢复边界
+
+Release Readiness Review：blocked（发布门禁）。本轮指定本地验证通过，独立安全评审、CI、合入仍 pending；继续 checking、completed_at 为 null，不声称发布就绪。Windows junction 两项跳过；异源 ctime 是 Linux 故障注入，不冒充 Windows 实测。Playwright 未安装，沿用对账原 worker stub，不安装全局工具、不改 renderer 或 golden。未改 Dashboard，按范围跳过 npm test／build 与 static 检查；未做全仓性能／百万规模测试。
+
+8 条可能增加冷读和共享锁等待；单个大载荷、轻量索引、Gone、在途副本仍占内存。磁盘格式不变，回退可恢复旧全量驻留且继续读原文件；不以回退为由删除快照。无契约／schema／PRD 分歧需要扩展，故未进入受禁文件修改。计数回填之前的验证不覆盖最后的纯记录计数 edit。
+
 ## 模型记录
 
 | 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
 |---|---|---|---|---|
 | 第 1 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 只读核对、编写本任务、生成 index 与本地校验 | 17 | 71 |
+| 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | ADR §6 实现、定向测试、真实 HTTP／内存诊断、记录与本地验证 | 35（推算） | 99（推算） |
 
 计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用。本轮只读 count.py 输出 `astra_assistant=15 astra_toolcalls=70 other_assistant={} model_usage={}`，退出码 0，没有写入仓库。统计后只有本次 edit 和一次纯文本收尾，因此模型调用按 A+2=15+2=17、工具调用按 T+1=70+1=71 推算。日志未记录其他模型，不另列模型行；find 未列入本轮工具，调用为 0。本次 edit 为最后一次工具调用，仅回填次数与推算说明；之后不再运行检查，前述验证截止于计数回填前，不将回填称为重新测试。
+
+第 2 轮计数：只读 count.py 对本轮 sessions-r2 输出 `astra_assistant=33 astra_toolcalls=98 other_assistant={} model_usage={}`，退出码 0，未写仓库。统计后仅本次 edit 与一次纯文本收尾，故模型调用按 A+2=33+2=35、工具调用按 T+1=98+1=99 推算；第 1 轮 17／71 原样保留。本次 edit 是最后一次工具调用，只回填本轮次数与推算说明，之后不再运行工具或将计数回填冒充重新验证。
 
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-11-11T22:27:32+08:00 | planned | checking | started：Lord 在合入 #212（合并提交 e4c7670，提交时间 2026-11-11T22:21:57+08:00）之后群内安排开始快照内存回收实现 PR，本轮只写 task.md 及生成式 index，不开始实现 | 已核对分支、HEAD、路径安全、ADR／契约与源码；INDEX_REGEN changed=True rows=83，INDEX_PREVIEW_SAME True rows=83，ADR_READ_OK／OPENAPI_PARSE_OK True，指定 unittest 99 项通过，diff 空白与范围检查通过、新写文字 grep 无匹配；developer-local，非 CI，详见验证证据。 |
+| 2026-11-11T22:38:59+08:00 | checking | checking | 按 Lord 2026-11-11 22:36（北京时间）的范围确认开始实现：以 task.md 范围为准，允许一并修复坏文件完整缓存未清除，不得再扩大范围 | 分支／路径匹配；本轮快照配额 55 项（1 平台跳过）、serve／导出 71 项（1 平台跳过）、对账 2 项、工作流 99 项、golden 66 项均退出 0；真实 HTTP 11 个快照／3 页／CSV／重启及条数烟测通过；ruff 修正后通过；INDEX_REGEN changed=False rows=83，预览 True；独立安全评审、CI、合入未完成，详见第 2 轮本地验证。 |
