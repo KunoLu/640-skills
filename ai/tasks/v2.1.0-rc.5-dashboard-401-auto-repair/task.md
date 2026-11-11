@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.5-dashboard-401-auto-repair
 workflow_mode: strict
 mode_source: user
-mode_note: 640 在 11-11 群内确认 rc.5 全程用 strict；contract-only 范围由编排方整理，决策依据为 640 在群里决定 a甲 b同意
+mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；contract-only 范围由编排方整理，决策依据为 640 在群里决定 a甲 b同意
 status: checking
 branch: docs/v2.1.0-rc.5-dashboard-401-re-pair-contract
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T15:26:30+08:00'
+updated_at: '2026-11-11T16:00:59+08:00'
 completed_at: null
 ---
 
@@ -24,7 +24,7 @@ completed_at: null
 ## 决策来源
 
 - 640 在群里决定 a甲 b同意。
-- 编排方整理：决策消息日期为 2026-11-11，北京时间约 15:07；a甲对应先单独整理契约 PR，经 Reviewy 安全评审、640 批准后另开实现 PR。640 于同日 15:11 在群内确认 rc.5 全程用 strict；contract-only 范围、三个问题与具体安全方案由编排方整理。
+- 编排方整理：决策消息日期为 2026-11-11，北京时间约 15:07；a甲对应先单独整理契约 PR，经 Reviewy 安全评审、640 批准后另开实现 PR。用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；contract-only 范围、三个问题与具体安全方案由编排方整理。
 - 编排方整理：沿用创建于 2026-11-11T14:38:57+08:00 的 default／planned 草稿事实，将任务改写为 strict／contract-only；草稿中的多次取票及三轮交换方案被本次一次签发规则替代。草稿是只读输入，不把其外部位置或会话位置写入仓库。
 
 ## strict 模式执行记录
@@ -33,7 +33,7 @@ completed_at: null
 - 范围冻结：本轮只编辑 `CHANGELOG.md`、`CHANGELOG.zh.md`、本 `task.md`，并运行生成器写 `ai/tasks/index.md`；保留第 1 轮 ADR 0001／OpenAPI 契约，不改运行时、数据字典或 golden 测试，不添加其他 rc.5 PR 条目。
 - strict 的 before-dev 按上述源码与 ADR、冻结范围和既有 Book Gate Plan 执行；check 使用原生指定命令，逐步运行索引写入、只读预览、golden 与状态／工作流测试，并检索 CHANGELOG 测试。每项实际结果补入下方第 2 轮验证证据；未执行项不记通过，历史失败原样保留。
 - 状态仍为 checking，新增 checking→checking 事件记录本轮补齐，不伪造 done 或批准。独立安全评审仍交 Reviewy，任何必需项缺失均不得声称 CLEAN；作者自检不代替独立审查。
-- 不 commit/push；提交、推送及 PR 由编排方处理。未调用 task 执行工具或子代理，未使用其他模型；仅使用主会话工具读取、编辑和验证文件，进度清单不承担任务执行或独立审查。
+- 不 commit/push；提交、推送及 PR 由编排方处理。未调用 task 执行工具或子代理；主会话工具用于读取、编辑和验证文件，omp find 工具与会话标题生成另有后台模型调用，完整次数见模型记录；进度清单不承担任务执行或独立审查。
 - 未完整调用 grill-with-docs：补齐项目、边界、文案与验证命令均已明确，源码和契约可回答本轮问题，不新增领域决策或重复访谈；完整 grill 后 DDD 门禁不适用。未编辑生产代码，重构、TDD、运行时／部署与真实浏览器门禁不适用；原契约 DDIA 结论沿用第 1 轮记录，不冒充本轮重新评审。
 - finish-work 仅完成文件补齐与本地验证记录；不关闭前轮全量失败、Reviewy／640 批准或 CI 缺口，不把 contract-only 交付等同于实现、部署或发布就绪。
 
@@ -226,13 +226,34 @@ API Contract：verified（YAML、形状及已执行 schema 约束；不含完整
 
 本轮指定可运行测试共 164 项通过；Final Full Rerun：passed（仅本轮指定的两个 unittest 命令，不是 runtime 全量）。第 1 轮全量的 2 项失败、10 项跳过及校验器缺口仍保留，未重复运行或改写其结论。BDD／真实浏览器／新端点运行验证：skipped（契约未实现、serve 未路由）；生产代码 lint／构建：not-needed（无生产代码变更）。Cross-repo context：contract-only；API Contract：verified（既有 golden 检查范围，不含新恢复行为安全证明）；Mock Strategy：none。Final Test Report／Run Summary MD：not-needed（本地证据表，非正式报告）。Reviewy 独立安全评审、640 批准与 CI 仍 pending，不声称 CLEAN、实现完成或发布就绪。
 
+### 第 3 轮本地验证
+
+本轮仅修正本任务的 strict 决定记录口径、模型表与验证／状态记录；基准 SHA 为 `fe43dd80f683359f0b67c74cbdff0c6b4a1a7bdb`，分支为 `docs/v2.1.0-rc.5-dashboard-401-re-pair-contract`。Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only；Environment Alignment：unverified。rtk：skipped-for-report，使用原生命令保留实际输出；不生成正式 PR-head 报告。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); Path('ai/tasks/index.md').write_bytes(a); print('INDEX_REGEN', 'changed=%s' % (b!=a), 'rows=%d' % len(s._index_rows(r)))"` | `INDEX_REGEN changed=False rows=78`；生成器实际写入，字节不变；保留“旧格式事件，不追溯”提示 | 0 |
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); print('INDEX_PREVIEW_SAME', Path('ai/tasks/index.md').read_bytes()==a, 'rows=%d' % len(s._index_rows(r)))"` | `INDEX_PREVIEW_SAME True rows=78`；只读预览与写入字节一致；相同旧格式事件提示 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 总数 99，通过 99，失败 0，跳过 0；`OK`，35.086 秒 | 0 |
+| `git diff --stat`；`git diff` | 仅本 task.md 有差异；index 无差异；新增行不含本机路径 | 0 |
+| grep 工具：本 task 全文的禁止归因措辞、旧时间、单模型断言与本机路径检查 | 无匹配；第 3 轮次数占位符留待末尾统计脚本填入，不手动估算 | 工具成功，无 shell 退出码 |
+
+本轮仅文档记录修正，不修改契约或生产行为；未完整调用 grill-with-docs，原因是范围与验收已明确，无新增领域歧义。既有 Book Gate Plan 的生产代码／设计／发布门禁本轮不触发，独立安全评审与批准仍沿用 pending 边界，不将 Reviewy 记录修正等同于安全批准。BDD／浏览器／运行时全量／lint／构建：skipped（无对应行为或代码变更）；Cross-repo context：contract-only；API Contract：not-needed（本轮未改契约）；Mock Strategy：none。Final Full Rerun：passed（仅上述指定 unittest 范围）；Targeted Rerun／Final Test Report／Run Summary MD：not-needed。前轮失败、跳过与环境缺口不因本轮 99 项通过而关闭；保持 checking，未 commit/push，CI 与发布状态不变。
+
 ## 模型记录
 
-| 模型 | 用途 | 调用次数 |
-|---|---|---|
-| `openai-codex/gpt-6-astra`（thinking high，主模型） | 第 1 轮 omp 会话：编写 ADR §9、OpenAPI、task.md、index 与本地验证；第 2 轮 omp 会话：补 CHANGELOG 与 strict 执行记录、重跑验证 | 第 1 轮：22 次模型调用、81 次工具调用（编排方从会话日志统计）；第 2 轮：见 PR 描述 |
+| 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
+|---|---|---|---|---|
+| 第 1 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 编写 ADR §9、OpenAPI、task.md、index 与本地验证 | 22 | 81 |
+| 第 1 轮 | `typesafe/jev-latest` | omp find 工具内部调用 | 35 | — |
+| 第 1 轮 | `cursor/composer-2.5` | omp 会话标题生成 | 2 | — |
+| 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 补 CHANGELOG 与 strict 执行记录、重跑验证 | 11 | 34 |
+| 第 2 轮 | `typesafe/jev-latest` | omp find 工具内部调用 | 23 | — |
+| 第 2 轮 | `cursor/composer-2.5` | omp 会话标题生成 | 2 | — |
+| 第 3 轮（本轮：Reviewy 修正） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 11 | 21 |
+| 第 3 轮 | 其他后台模型 | omp 工具内部调用 | 无 | — |
 
-只使用上述一个模型，未使用其他模型、task 执行工具或子代理。第 2 轮调用次数在本轮结束后由编排方统计，写入 PR 描述与群内汇报，本文件不估算。
+次数由编排方及第 3 轮会话末尾的统计脚本从 omp 会话日志统计；未使用 task 工具或子代理。
 
 ## 状态事件
 
@@ -240,4 +261,5 @@ API Contract：verified（YAML、形状及已执行 schema 约束；不含完整
 |---|---|---|---|---|
 | 2026-11-11T14:38:57+08:00 | planned | planned | 编排方整理：保留 default 延后项草稿建立事件，未开始实现；归因措辞按本轮边界整理 | 草稿记录已读取 PR #186／#190、ADR 0001／0002 和相关源码；历史基准 80f14263e7d8bc6ae84f04ba94218e4857fc8b8f；本轮不将历史读取冒充新查询。 |
 | 2026-11-11T15:15:09+08:00 | planned | checking | 编排方整理：将只读草稿改写为 strict、contract-only 契约任务，等待独立安全评审、批准和 CI | ADR 0001 §9 与 OpenAPI planned operation 已写入；本轮工作树未提交，实际本地验证见上表。此行记录草稿交付阶段变化，不声称调用 TaskStore.transition 跨阶段转换。 |
-| 2026-11-11T15:26:30+08:00 | checking | checking | 按 strict 补 CHANGELOG 与执行记录 | 640 于 2026-11-11 15:11 在群内确认 rc.5 全程用 strict；第 2 轮补齐双语未发布条目、strict 执行与单模型记录，验证结果见第 2 轮证据表；未 commit/push，独立评审、批准与 CI 仍待完成。 |
+| 2026-11-11T15:26:30+08:00 | checking | checking | 按 strict 补 CHANGELOG 与执行记录 | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；第 2 轮补齐双语未发布条目、strict 执行与模型记录（后台调用遗漏在第 3 轮补正），验证结果见第 2 轮证据表；未 commit/push，独立评审、批准与 CI 仍待完成。 |
+| 2026-11-11T16:00:59+08:00 | checking | checking | Reviewy 修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | 索引生成 changed=False、预览 True，均为 78 行；指定状态／工作流测试 99 项通过；diff 仅本 task.md，新增行无本机路径，全文禁止措辞无匹配；详情见第 3 轮本地验证。 |
