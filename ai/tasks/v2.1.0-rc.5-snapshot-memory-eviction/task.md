@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: docs/v2.1.0-rc.5-adr0003-snapshot-memory-eviction
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T16:29:09+08:00'
+updated_at: '2026-11-11T17:47:58+08:00'
 completed_at: null
 ---
 
@@ -203,6 +203,39 @@ runtime 失败记录（未修复、未重跑）：
 
 `rtk: skipped-for-report`（直接执行指定原生命令）；`BDD: skipped`（仅措辞与记录修正，无行为变化，无 feature 变更）；Cross-repo context／API Contract：not-needed；Mock Strategy：none。Book Gates、代码可读性复核、lint／build、Web／Mobile／serve smoke：not-needed（不改方案、代码或测试）。未重跑 runtime 基线，历史失败保留；未生成正式报告，未 commit／push，保持 strict／user／checking，completed_at 为 null。独立 review／CI 仍待执行；最后一次文件编辑仅补本轮日志计数，不以本地结果代替发布证据。
 
+### 第 5 轮：rebase 与冲突处理
+
+审查基准从 rebase 前通过提交 `5e20a03e8160e16c3d1bbc2d3de149e586e559f7`（`5e20a03`）变为 main `616eb99f4382d8d3bc210333d44717539beefe6e`（`616eb99`，#208 squash 合入，原审查提交 `8cb88aa`）。#211 的三个提交已 rebase；本记录会话起始 HEAD 为 `1c2b9ed0716ad69d77ae72e3fdaac4a33f51738b`，分支与 front matter 一致，工作区干净。环境为 Linux x64 独立克隆；本轮只修订本 `task.md`，`index.md` 仅由正式生成器写入且字节不变。
+
+冲突处理经过由编排方核实：第一个提交 `9aa5f41` 在 `CHANGELOG.md`、`CHANGELOG.zh.md`、`ai/tasks/index.md` 发生冲突，后两个提交无冲突。上一个 omp 会话（第 5 轮冲突处理会话，同一主模型 `openai-codex/gpt-6-astra`，thinking high）处理三个文件：
+
+- 两份 CHANGELOG 各只保留一个 rc.5 标题：`## v2.1.0-rc.5 (Unreleased)`／`## v2.1.0-rc.5（未发布）`；#211 的 Changed／变更与 #208 的 Fixed／修复条目均保留在其下，先 Changed 后 Fixed，两条条目文字均未改。本会话读取了两份文件的对应段落，结构一致。
+- 冲突状态下正式索引生成命令触发冲突保护而报错；该会话改用同一 TaskStore 的 `_catalog()`／`_index_rows()` 输出整体重建 index，未手写任务行，随后只读预览为 `INDEX_PREVIEW_SAME True rows=79`。本会话在无冲突状态下重新执行正式生成器，结果见下表。
+- 编排方直接执行的只有 Git 操作：fetch、rebase、add 冲突文件、rebase --continue；提交者身份通过环境变量保持与原提交一致，未直接编辑仓库文件。本记录会话未运行任何 Git 写命令。
+
+证据性质为 `developer-local`；Source Revision：`dirty`；Evidence Publication：`local-only`；Environment Alignment：`not-needed`（不涉及部署环境）。以下为本会话实际运行结果，不是 CI 证据；历史审查通过不等于 rebase 后独立 review 或 CI 已通过。
+
+| 命令／检查（按执行顺序） | 实际结果 | 退出码 |
+|---|---|---|
+| `git status --short`、`git branch --show-current`、`git rev-parse HEAD`、`git rev-parse origin/main` | 写入前工作区干净，分支匹配；HEAD 与 main 如上 | 0 |
+| `namei -l`、`git ls-files --stage --`、`git check-ignore -v --no-index --`（本 task、index） | 目标及父路径无链接，目标均为 100644；无 ignore 匹配 | 0／0／1（无匹配） |
+| 上方索引生成命令（含 `Path('ai/tasks/index.md').write_bytes(a)`） | `INDEX_REGEN changed=False rows=79`；出现既有“旧格式事件，不追溯”提示 | 0 |
+| 上方只读索引预览命令 | `INDEX_PREVIEW_SAME True rows=79`；逐字节一致；出现相同既有提示 | 0 |
+| 专用 grep：两份 CHANGELOG 的完整 rc.5 标题匹配计数（替代 shell `grep -c`） | 每份文件各命中 1 条；读取标题下内容确认两个条目都保留，先 Changed／变更后 Fixed／修复 | 不适用（工具未提供进程退出码） |
+| `git diff origin/main --stat` | 仅 ADR、双语 CHANGELOG、index、本 task 五个文件；当时为 303 insertions、2 deletions | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 tests，OK；99 通过，0 跳过，54.707s | 0 |
+| `TZ=Asia/Shanghai date --iso-8601=seconds` | `2026-11-11T17:47:58+08:00`；用于本轮 updated_at 与 checking→checking 事件 | 0 |
+
+`rtk: skipped-for-report`（直接执行原生命令，避免包装层缓存）；`BDD: skipped`（仅记录修订，无行为或 feature 变化，场景语言检查不适用）；Cross-repo context／API Contract：not-needed；Mock Strategy：none。Book Gates、代码可读性复核、lint／build、Web／Mobile／serve smoke：not-needed（不改设计、代码或测试）。未完整调用 grill-with-docs：决策原文、范围与验收条件已明确。未重跑 runtime 基线，历史失败保留；Final Test Report／Run Summary MD：not-needed（仅本地结果记录）；Targeted Rerun：not-needed；Final Full Rerun：passed（仅本轮指定的两个 unittest 模块）。保持 strict／user／checking，completed_at 为 null，mode_note 不改；未 commit／push，独立 review／CI 仍待执行。
+
+写入后检查（在最终日志计数补写前执行）：
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `git diff --check`、`git diff --unified=0` | 空白检查通过；差异仅本 `task.md`，index 无差异；既有正文仅同步 updated_at，其余均为追加 | 0 |
+| 专用 grep：对上述 diff 新增行扫描本机路径、三类禁用措辞及禁用单字 | 本机路径与三类措辞无匹配；禁用单字仅在必须逐字保留的决策原句中命中一次，不能同时满足逐字保留与零命中，不记为全部通过 | 不适用（工具未提供进程退出码） |
+| 专用 grep：完整决策句 | 在本轮状态事件中逐字存在 | 不适用（工具未提供进程退出码） |
+
 ## strict 模式执行记录
 
 - 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录。编排方整理：先只读确认任务、根目录、分支、授权、基准及路径安全，再读完整 ADR、草稿、指定源码和 CHANGELOG；未把草稿 default 当成当前模式。
@@ -236,12 +269,17 @@ BDD：skipped（仅决策文档，不新增运行时行为或 feature）；Cross
 | 第 3 轮 | 其他后台模型 | omp 工具内部调用 | 无 | — |
 | 第 4 轮（本轮：Reviewy NOT CLEAN 修正） | `openai-codex/gpt-6-astra`（主模型） | 修正决策措辞、披露历史填数、验证并直接写入记录 | 10 | 27 |
 | 第 4 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
+| 第 5 轮（冲突处理会话） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 解决 CHANGELOG 双语与 index 冲突 | 7 | 18 |
+| 第 5 轮（记录会话，本会话） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 追加状态事件、生成 index、验证并写入记录 | 15 | 25 |
+| 第 5 轮 | 其他模型 | 两会话日志均未记录其他模型名 | 0 | 0 |
 
 第 1／2 轮次数沿用编排方依据 omp 会话日志的统计。第 1 轮 find 的会话日志每条记录为 `"purpose":"find","provider":"typesafe","model":"jev-latest"`，共 10 次；次数来自这些日志字段，归属 `typesafe/jev-latest`。
 
 第 3 轮次数披露（Lord 16:21）：第 3 轮写入的调用次数，是当时由仓库外脚本在 omp 最后一次 bash 调用里填入文件的，不是 omp 在文件里亲手写的；从本轮起全部正文由 omp 直接写入。第 3 轮的 10 次模型调用、22 次工具调用保留为历史统计，不改称 omp 手写。
 
 第 4 轮由 omp 收尾前按会话日志计数并亲自用 edit 写入：筛选 `type=message`、`role=assistant`、`provider=openai-codex`、`model=gpt-6-astra`，已有 8 条（含最后一次日志统计调用），加本次最终 edit 的 1 次模型调用及随后纯文本收尾 stop 的 1 次，共 10 次。相同 assistant 记录内 `content.type=toolCall` 已有 26 条，加本次最终 edit 1 条，共 27 次；按日志中的实际工具条目计数，不另计并行包装。日志中 `purpose=find`、`provider=typesafe`、`model=jev-latest` 的记录为 0，本轮未调用 find。统计命令只读日志并输出数字，没有写入仓库；本次为最后一次文件编辑，之后不再调用工具。
+
+第 5 轮计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用。其他模型（如 jev-latest、composer）仅在日志记录了其名字时才列出并计数。冲突处理会话的 7 次模型调用、18 次工具调用来自编排方按上述方法核实的日志，未记录其他模型。本记录会话的只读统计输出为 `astra_assistant=13`、`astra_toolcalls=24`、`other_assistant={}`、`model_usage={}`，没有写入仓库。模型调用按已有 13 条加最终 edit 的 1 次及随后纯文本收尾的 1 次，合计 `13+2=15`；工具调用按已有 24 条加最终 edit 的 1 条，合计 `24+1=25`。该 edit 为本会话最后一次工具调用，之后直接纯文本收尾，不再运行检查；前述 diff 与扫描证据截止于本次仅补计数的编辑之前。
 
 ## 状态事件
 
@@ -252,3 +290,4 @@ BDD：skipped（仅决策文档，不新增运行时行为或 feature）；Cross
 | 2026-11-11T15:26:10+08:00 | checking | checking | 编排方整理：补记模型调用次数 | 会话日志统计 |
 | 2026-11-11T15:58:57+08:00 | checking | checking | 按 Reviewy 意见修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | INDEX_REGEN changed=False rows=78；INDEX_PREVIEW_SAME True rows=78；指定 unittest 99 tests，OK；diff 仅本 task.md，新增行无本机路径，禁用措辞无匹配，空白检查通过；详见第 3 轮本地验证。 |
 | 2026-11-11T16:29:09+08:00 | checking | checking | 按 Reviewy NOT CLEAN 一次性修正决策来源／状态措辞，以及第 3 轮次数披露 | 固定决策原文已写入 ADR §6 的状态／来源／编排说明及本 task 的 mode_note／正文；第 3 轮脚本填数已按 Lord 16:21 说明披露；本轮验证结果见第 4 轮本地验证。 |
+| 2026-11-11T17:47:58+08:00 | checking | checking | rebase 到 main 616eb99（#208 合入）并处理冲突；用户 2026-11-11 17:38 群内确认（合入 #208，批准 #210 契约，按新顺序 #208、#211、#210、#209），Lord 记录 | 首个提交 9aa5f41 冲突涉及双语 CHANGELOG 与 ai/tasks/index.md；CHANGELOG 各保留一个 rc.5 标题，Changed／变更先于 Fixed／修复，两条条目文字未改；index 在冲突保护报错后由同一 TaskStore 整体重建，未手写任务行，本会话正式生成器 INDEX_REGEN changed=False rows=79，INDEX_PREVIEW_SAME True rows=79；指定 unittest 99 tests，OK，54.707s；developer-local，非 CI 证据，详见第 5 轮小节。 |
