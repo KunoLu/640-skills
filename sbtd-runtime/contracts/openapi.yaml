@@ -54,6 +54,19 @@ paths:
       operationId: pairSession
       tags: [auth]
       summary: Exchange a one-time pairing code for a short-lived session
+      description: |
+        Accepts an initial pairing code or a recovery ticket through X-Pairing-Code.
+        Recovery-ticket support is proposed in ADR 0001 section 9 and is not yet
+        implemented. Recovery exchange requires stricter Host/Origin checks:
+        Host must be an existing loopback-whitelisted hostname with the actual
+        serving port, and Origin must exactly equal http://<Host>, without
+        userinfo, path, query or fragment. Missing or null Origin is forbidden.
+        Source rejection returns 403 before ticket consumption. The first recovery
+        exchange attempt reaching the pairing handler atomically consumes the
+        pending ticket, even on failure; it cannot be reused. Used, expired,
+        missing or invalid tickets return 401 unauthorized. Successful consumption
+        and replacement-session creation are atomic. Recovery exchange responses,
+        including errors, require Cache-Control: no-store.
       security:
         - pairingCode: []
       parameters:
@@ -63,12 +76,115 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "200":
           description: Session bearer. Not a long-term token and not returned in a URL.
+          headers:
+            Cache-Control:
+              description: "planned: current serve does not send it yet; the implementation PR adds it to all pair responses."
+              required: true
+              schema:
+                type: string
+                const: no-store
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/session/re-pair-ticket:
+    post:
+      operationId: issueRePairTicket
+      tags: [auth]
+      summary: Exchange a just-expired session credential for one recovery pairing ticket
+      x-sbtd-implementation: planned
+      description: |
+        编排方整理：契约先行，serve 尚未路由；实现须在 640 批准本契约后另开 PR。
+        Proposed, pending Reviewy security review; see ADR 0001 section 9.
+        No request body. Authorization is the required HTTP bearer header,
+        Authorization: Bearer <expired-session-credential>, declared by localSession.
+        Unlike ordinary APIs, this operation uses a dedicated recovery check:
+        the original bearer AND X-CSRF-Token must match the same in-memory
+        session recovery record, with constant-time secret comparisons.
+        Only original_expires_at <= now < original_expires_at + 60 seconds is
+        eligible. At now >= original_expires_at + 60 seconds, delete the recovery
+        record from memory. Unexpired, missing, unknown, revoked, pre-restart,
+        out-of-window or already-issued credentials and ineligible chains return
+        401 {"detail":"unauthorized"}. Ordinary APIs still immediately reject
+        expired bearers with 401; this endpoint does not extend their data access.
+        Host must be an existing loopback-whitelisted hostname with the actual
+        serving port. Origin is mandatory and must exactly equal http://<Host>,
+        with no userinfo, path, query or fragment; absent or null Origin fails.
+        Only Host/Origin failures return 403 {"detail":"forbidden"}.
+        Bearer and CSRF are validated together against the same eligible recovery
+        record; either missing or mismatched secret returns 401
+        {"detail":"unauthorized"}, regardless of whether the bearer alone qualifies.
+        These shared codes do not reveal whether a recovery record exists or let
+        a bearer-only caller distinguish recovery eligibility via 403 versus 401.
+        Check order is Host/Origin, process rate limit, bearer and CSRF together,
+        then an atomic eligibility recheck and issuance. A concurrent loser
+        returns 401. All responses, including errors, require Cache-Control: no-store.
+        At most 10 requests passing Host/Origin may enter credential validation
+        per process in any rolling 60 seconds, including invalid credentials.
+        Further requests return 429 {"detail":"RE_PAIR_RATE_LIMITED"} and do not
+        enter the admitted-request count. Use a monotonic clock; restart clears
+        the limiter and invalidates all recovery records and tickets.
+        Each recovery record may issue exactly one cryptographically random
+        ticket: issuance and marking the record used are atomic, before responding,
+        not deferred until pairing succeeds. TTL is at most 30 seconds and at
+        most the remaining original recovery window; retries never extend it.
+        The ticket is bound to the record, manual-pairing chain and process.
+        Exchange only through POST /api/v1/session/pair using X-Pairing-Code.
+        Recovery-ticket exchange also requires the strict Host/Origin checks
+        above; source rejection precedes consumption. The first attempt reaching
+        the pairing handler consumes the pending recovery ticket even on failure.
+        Used, expired, missing or invalid tickets return 401
+        {"detail":"unauthorized"} at pair, not 409/410. A ticket is invalid at
+        now >= expires_at. Successful consumption and replacement-session creation
+        are atomic. Each manual-pairing chain permits at most one automatic
+        recovery success; the replacement session has no further recovery right.
+        A network failure permits retry only if no ticket has been issued.
+        Once issued, no outcome restores eligibility or allows reissuance.
+        A timeout alone cannot prove non-issuance: if delivery is uncertain,
+        fall back to manual pairing, without blind retry or secret-result lookup.
+        A lost pair response also requires manual pairing, never ticket replay.
+        The frontend stops automatic recovery on 401/403/429 and falls back to
+        manual pairing. The ticket stays in memory and is never placed in URLs,
+        logs, exception details, exports, files or browser storage. Recovery pair
+        responses also require Cache-Control: no-store. The initial startup
+        fragment exception in ADR 0002 section 3 does not cover recovery tickets.
+      security:
+        - localSession: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - name: Host
+          in: header
+          required: true
+          description: Existing loopback-whitelisted hostname and exact serving port.
+          schema:
+            type: string
+        - name: Origin
+          in: header
+          required: true
+          description: Exact http://<Host> origin; missing or null is forbidden.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One recovery ticket; issuance has already consumed the recovery record.
+          headers:
+            Cache-Control:
+              required: true
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RePairTicket"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RePairRateLimited"
   /api/v1/capabilities:
     get:
       operationId: getCapabilities
@@ -810,7 +926,11 @@ components:
           schema:
             $ref: "#/components/schemas/DetailError"
     Unauthorized:
-      description: Missing credential or scope. Does not reveal whether a hidden object exists.
+      description: |
+        Missing credential or scope. Does not reveal whether a hidden object exists.
+        For re-pair-ticket, bearer and CSRF form one authorization check: either
+        missing or mismatched secret, or an ineligible recovery record, returns
+        detail unauthorized without disclosing record existence or bearer eligibility.
       content:
         application/json:
           schema:
@@ -824,11 +944,45 @@ components:
     Conflict:
       description: Same idempotency key with a different payload, or a source-event conflict.
     Forbidden:
-      description: Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF check on an unsafe method. Does not reveal internal policy details.
+      description: |
+        Rejected Host or Origin (external origin, DNS rebinding), or a failed CSRF
+        check on an unsafe method outside re-pair-ticket. For re-pair-ticket and
+        recovery-ticket exchange, 403 detail forbidden is reserved for Host/Origin
+        rejection, including missing or null Origin; a re-pair-ticket CSRF failure
+        belongs to the combined bearer/CSRF 401 response instead.
+        Does not reveal internal policy details.
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/DetailError"
+    RePairRateLimited:
+      description: |
+        The re-pair-ticket process budget is exhausted; this request issues no
+        ticket and does not extend any window. This is separate from the one-ticket
+        per-record limit, whose repeated use returns 401 when the process budget
+        is available. Retry-After is the positive ceiling in seconds until the
+        oldest admitted request leaves the rolling 60-second window. The frontend
+        falls back to manual pairing rather than retrying 429 automatically.
+      headers:
+        Cache-Control:
+          required: true
+          schema:
+            type: string
+            const: no-store
+        Retry-After:
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/DetailError"
+              - type: object
+                properties:
+                  detail:
+                    const: RE_PAIR_RATE_LIMITED
     Gone:
       description: Snapshot expired. A new snapshot must not reuse the old id.
       content:
@@ -962,6 +1116,29 @@ components:
       properties:
         detail:
           type: string
+    RePairTicket:
+      type: object
+      additionalProperties: false
+      required: [pairing_code, expires_at, ttl_seconds]
+      description: |
+        Proposed recovery response, not a Session or Envelope. The ticket does
+        not authorize data access. expires_at is the earlier of issuance + 30
+        seconds and original session expiry + 60 seconds. ttl_seconds is that
+        deadline minus issuance time, not a fresh lifetime on receipt or retry.
+      properties:
+        pairing_code:
+          type: string
+          minLength: 1
+          description: One-time random secret; send only as X-Pairing-Code to pair.
+        expires_at:
+          type: string
+          format: date-time
+          description: Absolute UTC RFC 3339 deadline; invalid at or after this instant.
+        ttl_seconds:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 30
+          description: Positive seconds remaining at issuance; may be fractional.
     ExportJob:
       type: object
       required: [status, error]
