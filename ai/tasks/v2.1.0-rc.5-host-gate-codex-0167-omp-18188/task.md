@@ -3,27 +3,27 @@ schema_version: 1
 id: v2.1.0-rc.5-host-gate-codex-0167-omp-18188
 workflow_mode: strict
 mode_source: user
-mode_note: 640 在 11-11 群内确认 rc.5 全程用 strict
+mode_note: "用户 2026-11-11 15:10 群内确认（rc.5 全程 strict、每个 PR 自带 CHANGELOG、主模型 astra），Lord 记录"
 status: "checking"
 branch: contract/rc5-host-gate-codex-0167-omp-18188
 created_at: '2026-11-11T14:48:27.312232+08:00'
-updated_at: "2026-11-11T15:18:19.441119+08:00"
+updated_at: "2026-11-11T19:18:45+08:00"
 completed_at: null
 ---
 # rc.5 宿主验收门禁契约变更
 
 ## 目标与范围
 
-按用户 640 于 2026-11-11 14:43（北京时间）群内选项 1，将门禁换为 codex@0.167.1 + omp@18.18.8。只改契约、相关版本说明、golden 与测试、双语 CHANGELOG 和本任务/index；不改适配器逻辑、ENTRYPOINT、README 或 release notes，不 commit/push/开 PR，不用子代理。
+用户 2026-11-11 14:43 群内确认（选择选项 1：以单独契约 PR 换门禁），Lord 记录；据此将门禁换为 codex@0.167.1 + omp@18.18.8。只改契约、相关版本说明、golden 与测试、双语 CHANGELOG 和本任务/index；不改适配器逻辑、ENTRYPOINT、README 或 release notes，不 commit/push/开 PR，不用子代理。
 
-未完整调用 grill-with-docs：用户决定、版本、真实冒烟事实与交付边界均明确，无领域歧义。
+未完整调用 grill-with-docs：用户决定（见下）、版本、真实冒烟事实与交付边界均明确，无领域歧义。
 
 ## strict mode 落实方式
 
 - 任务文件在开工前创建并落盘；每个阶段用 `TaskStore` 记录真实状态事件，不手改状态时间。
 - 验证证据（命令、结果、失败归因）写入本文件；Book Gate Plan 已列，已有验证结果与本轮补充证据分开记录。
 - 冒烟证据来自真实宿主运行（云主机实测），不用 parser fixture 作为实测证据。
-- 本轮只修订双语 CHANGELOG 与任务记录，不改生产代码、契约或测试；不新增领域、数据、重构或发布 Gate，沿用下方 Book Gate Plan 的适用边界。
+- 第 3 轮仅修订任务记录、ADR 第 8 节与矩阵 smoke_note 的归属措辞，并检查生成索引；不改生产代码、门禁语义或测试，双语 CHANGELOG 保持不变。无新增领域、数据、重构或发布风险，不触发新的 Book Gate；下方既有 Gate 结果为前轮证据，不冒充本轮重新执行。
 - 状态停在 checking，等待 Reviewy 对完整 SHA 的审查与 CI 13/13；合并需 640 说「合入」后由 Lord 合并，本 bot 不合并。
 
 ## Book Gate Plan
@@ -37,7 +37,7 @@ completed_at: null
 | gherkin-bdd | 当前门禁分类可观察，before-dev/check | traceable；沿用中文 Markdown spec 与英文关键字；完成门、非门禁不影响指标、换针后三类场景分别对应既有 gate/golden 测试与新增四版本测试 |
 | project-validation | 契约与测试改动后 | 已执行聚焦门禁与 runtime 验证；Linux 全量主动中止，失败归因与验证边界见下文；全量以 CI 三平台分片为准 |
 | book-release-readiness | 运行时/部署/发布风险，验证后 | not-required；不部署、不发布，不改适配器执行逻辑 |
-| 独立 review 与 CI | 契约 PR 检查 | pending；用户要求留在 checking，本轮不使用子代理 |
+| 独立 review 与 CI | 契约 PR 检查 | pending；编排方要求停在 checking；本任务各轮均不使用子代理 |
 | ponytail-review / Code Readability Review | 修改后自检 | 无新增抽象或依赖；一个四版本参数表覆盖新旧分类，无逻辑重构；不代替独立 review |
 
 ## 设计与保留行为
@@ -125,7 +125,7 @@ ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks �
 
 ## 冒烟证据（来源：云主机实测）
 
-本节只记录用户提供的执行事实，不声称本轮编辑重新运行宿主。
+冒烟由 CodeX bot（codex）与 OMP bot（omp）执行，编排方整理；不声称本轮编辑重新运行宿主。
 
 ### codex 0.167.1 — pass
 
@@ -149,11 +149,19 @@ ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks �
 
 | 工作 | 宿主／模型 | 调用次数与边界 |
 |---|---|---|
-| 第 1 轮文件编辑（omp 18.18.8 会话统计） | 主模型 openai-codex/gpt-6-astra（thinking high）；omp 内置辅助模型 typesafe/jev-latest | 主模型 31 次 assistant 调用；辅助模型 45 次调用（omp 会话 model_usage 记录 purpose=find，由 omp 工具内部发起）。工具调用：read 50、bash 11、grep 11、todo 9、edit 8、find 2、glob 1；无 task 工具、无子代理 |
-| 第 2 轮文件编辑（本轮） | openai-codex/gpt-6-astra（thinking high） | 见 PR 评论／群内报告（本轮结束后才能统计）；无 task 工具、无子代理 |
+| 第 1 轮文件编辑（omp 18.18.8 会话统计） | 主模型 openai-codex/gpt-6-astra（thinking high）；`typesafe/jev-latest` | 主模型 31 次 assistant 调用；`typesafe/jev-latest`：omp find 工具内部调用 45 次。工具调用：read 50、bash 11、grep 11、todo 9、edit 8、find 2、glob 1；无 task 工具、无子代理 |
+| 第 2 轮文件编辑（omp 会话日志统计，executor 调度 bot 统计） | 主模型 openai-codex/gpt-6-astra（thinking high）；`typesafe/jev-latest` | 主模型 18 次 assistant 调用；`typesafe/jev-latest`：find 未调用，0 次；工具调用 read 16、bash 10、todo 10、grep 5、edit 4、write 1（write 为仓外一次性检查脚本，不是仓库文件）；无 task 工具、无子代理 |
+| 第 3 轮文件编辑（编排方第 4 轮按会话日志复核） | 主模型 openai-codex/gpt-6-astra（thinking high）；`typesafe/jev-latest` | 主模型 17 次 assistant 调用；`typesafe/jev-latest`：omp find 工具内部调用 11 次；工具调用 39 次：read 12、bash 10、todo 6、grep 4、edit 3、find 2、glob 1、write 1（仓外一次性检查脚本）；无 task 工具、无子代理 |
+| 第 4 轮冲突处理会话 1（第 1 个提交） | 主模型 openai-codex/gpt-6-astra（thinking high） | 模型调用 8 次、工具调用 19 次；find 未调用；无 task 工具、无子代理 |
+| 第 4 轮冲突处理会话 2（第 2 个提交） | 主模型 openai-codex/gpt-6-astra（thinking high） | 模型调用 5 次、工具调用 9 次；find 未调用；无 task 工具、无子代理 |
+| 第 4 轮记录会话（本会话） | 主模型 openai-codex/gpt-6-astra（thinking high） | 模型调用 13 次、工具调用 33 次；计数脚本读得 astra_assistant=11、astra_toolcalls=32，按已有条数＋最终 edit＋收尾推算：模型 11＋1 次最终 edit 回合＋1 次纯文本收尾＝13，工具 32＋1 次最终 edit＝33；此 edit 为最后一次工具调用，其后仅纯文本收尾；日志 other_assistant={}、model_usage={}；find 未调用；无 task 工具、无子代理 |
 | codex 0.167.1 冒烟 | 模型未知 | 1 次 codex 调用（1 turn） |
 | omp 18.18.8 冒烟 | openai-codex/gpt-6-astra high | 2 次调用 |
 | executor（调度 bot） | 不参与仓库文件编辑 | 只做 git commit/push、gh pr create 与验证命令，未直接编辑仓库文件 |
+
+find 归属：第 1、3 轮 find 的后台归属来自会话日志字段，每条记录为 `"purpose":"find","provider":"typesafe","model":"jev-latest"`；按这些日志字段计数，第 1 轮 45 次、第 3 轮 11 次，不能归为主模型调用；第 2 轮与第 4 轮 find 未调用。
+
+第 4 轮计数方法：omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用；其他模型仅在日志记录了其名字时才列出并计数。第 4 轮三会话日志均未记录其他模型名（如 jev-latest、composer），次数 0。
 
 ## 验证证据
 
@@ -162,28 +170,77 @@ ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks �
 - `PYTHONPATH=sbtd-runtime python -B -c` 调用 `capability_matrix()` / `host_capability()`：codex 0.167.1 与 omp 18.18.8 → pinned，codex 0.163.0 与 omp 18.11.1 → unsupported；exit 0。同次检查当前 smoke 两者 pass、历史 codex unsupported / omp pass 均符合预期。
 - `python -B sbtd-runtime/codex_adapter.py --help`：exit 0，实际 CLI 显示 `codex-cli 0.167.1`。
 - `python -B -m ruff check sbtd-runtime/codex_adapter.py sbtd-runtime/omp_adapter.py sbtd-runtime/tests/test_golden_contracts.py sbtd-runtime/tests/test_codex_adapter.py`：exit 1，两项既有未修改位置告警：OMP lease 的 subprocess.run 缺显式 check（PLW1510）；golden 测试原 import 块排序（I001）。不改适配器逻辑、不夹带无关格式修复；lint 不报通过。
-- 路径检查：对 tracked diff 新增行使用同一禁止路径正则，零命中；新 task、矩阵、host-adapters 与 omp_adapter 全文件同样零命中。原 ADR、旧 CHANGELOG、旧文档/测试中未修改的路径文本不重写，按用户“git diff 只看新增行”界定本次新增内容。旧 codex 矩阵证据已替换为仓内旧 task 引用。
+- 路径检查：对 tracked diff 新增行使用同一禁止路径正则，零命中；新 task、矩阵、host-adapters 与 omp_adapter 全文件同样零命中。原 ADR、旧 CHANGELOG、旧文档/测试中未修改的路径文本不重写，按编排方“git diff 只看新增行”界定本次新增内容。旧 codex 矩阵证据已替换为仓内旧 task 引用。
 - BDD: traceable；`sbtd-runtime/spec/r1.0-contract-scenarios.md` 为中文场景/英文关键字，`r1.2b-host-adapter-scenarios.md` 仅当前 smoke 说明换针；无新 .feature。Cross-repo context: not-needed；API Contract: not-needed（无 HTTP 契约改动）；Mock Strategy: none（门禁分类调用真实评估器）。rtk: skipped-for-report（原生测试与报告）；不运行 UI/移动端或发布验证，因为本轮不改这些表面。
 - Runtime：`PYTHONPATH=sbtd-runtime python -B -m unittest discover -s sbtd-runtime/tests`，458 tests，188.329s，2 failures、10 skipped，exit 1。失败为 `RuntimePerfSmokeTests.test_cli_preserves_dataset_and_reports_unmeasured_boundaries`（performance CLI execution=failed）与 `NormalizeScopeTests.test_iana_queries_and_dst_work_without_system_timezone_data`（缺 Python tzdata，Asia/Tokyo 无可用时区数据）。全部 gate/golden 与适配器测试未报失败。Playwright 未安装，renderer 相关跳过/既有 stub 不视为真实浏览器验证；未安装依赖或修改范围外实现，不伪称全绿。
 - 聚焦 Green：`PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest test_golden_contracts.CapabilityMatrixTests test_golden_contracts.GoldenContractTests.test_unsupported_host_does_not_unsupport_the_metric test_golden_contracts.GoldenContractTests.test_golden_oracle_matches_every_metric`，4 tests，0.003s，OK，exit 0；覆盖新旧针、兜底规则、非门禁不取消指标、全指标 golden oracle。
 - 性能失败诊断：`python -B sbtd-runtime/tests/runtime_perf.py --events 101 --samples 2 --seed-seconds 60 --output "$PERF_DIAGNOSTIC_OUTPUT"`（变量代指本轮仓外临时目录，实际命令使用该目录），exit 1；原生 `runtime-perf-101-contract_rc5-host-gate-codex-0167-omp-18188-20261111T065548863178Z.json` 与同 stem 中文 `.md` 已保留。报告 error 为 `AssertionError: `、html_panel_count=12，而 panel manifest 为 13；`runtime_perf.py:476-479` 按精确字符串 `class="panel"` 计数，导出样本 overview 实为 `class="panel panel-kpi"`。这是范围外 HTML smoke 计数断言问题，不是新门禁分类失败；保留失败，不改 UI、导出或性能测试。该诊断没有完成 CSV／四格式性能验证。
-- Linux 全量（用户提供的执行结果）：`python -B tests/run_ci.py --platform linux --shard 1 --shards 1` 单分片运行约 25 分钟，完成 1044／4914 个用例后被主动中止；单分片太慢，全量以 CI 三平台分片为准。其间唯一异常 `tests.test_sbtd_migration_cleanup_drift.FollowupUpgradeProvenanceGateTests.test_followup_rejects_upgrade_backed_predecessor_cleanup` 在高负载下报 ERROR；本分支单独重跑 2 次均 OK，在 main `80f1426` 单独跑也 OK，判定为负载相关偶发，与本改动（契约/文档/golden）无关。
-- Runtime 失败归因补充（用户提供的复现结果）：`test_cli_preserves_dataset_and_reports_unmeasured_boundaries`、`test_iana_queries_and_dst_work_without_system_timezone_data` 已在 main `80f1426` 的独立工作树上复现同样失败，属本机环境既有问题（面板计数断言、缺 tzdata），非本 PR 引入；本轮不重复运行这些已报告的失败。
-- CI（用户报告）：PR #209 首次推送 SHA `50324255` 的 CI 运行中；最终 13/13 结果由 PR 评论与群内报告给出，本文件不预先声称全绿。上述简称与本轮实际 HEAD `5032425e9b9305e86053b57afff16979a35fb73e` 不一致，保留来源区别；最终审查与 CI 须绑定实际完整 SHA。
-- 冒烟核对（用户确认）：上述事实已与 CodeX 在群里贴出的要点核对一致：codex-cli 0.167.1，14:36:15 开始，7 行输出，进程退出码未记录，命令 exit_code 0、completed，末行 turn.completed；回执 records_read/records_skipped/events_emitted/accepted/duplicate 为 7/4/2/2/0，重放 started+finished `tool:command_execution`，模型未知，1 次 codex 调用（1 turn）。本轮只记录核对结果，不声称重新运行宿主。
+- 本地 Linux 全量由 executor 调度 bot 运行并中止，编排方整理：`python -B tests/run_ci.py --platform linux --shard 1 --shards 1` 单分片运行 25 分钟上下（未精确计时），完成 1044／4914 个用例后被主动中止；单分片太慢，全量以 CI 三平台分片为准。其间唯一异常 `tests.test_sbtd_migration_cleanup_drift.FollowupUpgradeProvenanceGateTests.test_followup_rejects_upgrade_backed_predecessor_cleanup` 在高负载下报 ERROR；本分支单独重跑 2 次均 OK，在 main `80f1426` 单独跑也 OK，判定为负载相关偶发，与本改动（契约/文档/golden）无关。
+- Runtime 失败归因补充（main 基线复现由 executor 调度 bot 执行）：`test_cli_preserves_dataset_and_reports_unmeasured_boundaries`、`test_iana_queries_and_dst_work_without_system_timezone_data` 已在 main `80f1426` 的独立工作树上复现同样失败，属本机环境既有问题（面板计数断言、缺 tzdata），非本 PR 引入；本轮不重复运行这些已报告的失败。
+- PR #209 首个提交 `5032425e9b9305e86053b57afff16979a35fb73e`（门禁变更）；第二个提交 `c419ac8c98d1e98ee46578629c2b8adcd70643c7` 的 CI run 42978591672 13/13 全部通过（executor 调度 bot 记录）。
+- 冒烟核对（编排方整理，与 CodeX bot 在群内贴出的要点核对一致）：codex-cli 0.167.1，14:36:15 开始，7 行输出，进程退出码未记录，命令 exit_code 0、completed，末行 turn.completed；回执 records_read/records_skipped/events_emitted/accepted/duplicate 为 7/4/2/2/0，重放 started+finished `tool:command_execution`，模型未知，1 次 codex 调用（1 turn）。本轮只记录核对结果，不声称重新运行宿主。
 - 第 2 轮验证对象：实际 HEAD `5032425e9b9305e86053b57afff16979a35fb73e` 加本轮未提交的文档修改，分支同上；Evidence Source: developer-local；Source Revision: dirty；Environment Alignment: unverified；Evidence Publication: local-only，不作为最终 PR SHA 的 CI 证明。
 - 第 2 轮只改文件，不提交、不推送、不创建 PR；保留历史状态事件的当时事实，下文新增事件与本节结果取代旧事件中 Linux 套件仍在运行的进度描述，最终状态停在 checking。
 - 第 2 轮 golden：`PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest test_golden_contracts`，66 tests，0.389s，OK，exit 0。
 - 第 2 轮任务相关测试：用专用 grep 执行与 `rg 'CHANGELOG\.zh\.md|ai/tasks/index\.md'` 等价的检索，命中 `tests/test_sbtd_task_state.py` 与 `tests/test_workflow_contracts.py`；另在 tests、runtime tests、Onboard scripts 与 CI 配置中检索 CHANGELOG/changelog，无测试命中，未发现双语一致性测试。运行 `python -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts`，99 tests，39.344s，OK，exit 0。
-- 第 2 轮文档检查：仓外一次性 Python 检查器读取 `git diff --no-ext-diff --unified=0`，仅三文件修改，新增行与 task 全文均无用户禁止的本机路径；输出 `SCOPE_OK 3 files; ADDED_LINES_LOCAL_PATHS 0; TASK_LOCAL_PATHS 0`。双语 rc.5 节均为一个 Changed/变更小节、一个条目，代码标识多重集合一致，人工逐条核对语义一致；rc.4 起已发布历史与 HEAD 相同，输出 `BILINGUAL_RC5_STRUCTURE_IDENTIFIERS_OK; RELEASED_HISTORY_UNCHANGED`。TaskDocument／TaskStore 只读校验模式、事件链及 updated_at 与末事件时间一致，输出 `TASK_STATE_OK in-progress events 3`；均 exit 0。
-- 第 2 轮验证边界：rtk: not-needed（用户指定原生命令）；BDD: skipped（仅文档，无新增场景或行为）；Cross-repo context／API Contract: not-needed；Mock Strategy: none。未重跑 Linux 全量、runtime 已知失败、宿主冒烟、lint、构建、Web／Mobile 或发布验证：本轮仅文档补齐，历史失败与全量 CI 待验边界已明确。Final Test Report／Run Summary MD: not-needed，本轮为本地定向 unittest 与文档检查，结果写入本文件，不新增正式报告；不声称独立 review 或 CI 已通过。
+- 第 2 轮文档检查：仓外一次性 Python 检查器读取 `git diff --no-ext-diff --unified=0`，仅三文件修改，新增行与 task 全文均无仓库规则禁止的本机路径（Reviewy 审查硬项）；输出 `SCOPE_OK 3 files; ADDED_LINES_LOCAL_PATHS 0; TASK_LOCAL_PATHS 0`。双语 rc.5 节均为一个 Changed/变更小节、一个条目，代码标识多重集合一致，人工逐条核对语义一致；rc.4 起已发布历史与 HEAD 相同，输出 `BILINGUAL_RC5_STRUCTURE_IDENTIFIERS_OK; RELEASED_HISTORY_UNCHANGED`。TaskDocument／TaskStore 只读校验模式、事件链及 updated_at 与末事件时间一致，输出 `TASK_STATE_OK in-progress events 3`；均 exit 0。
+- 第 2 轮验证边界：rtk: not-needed（编排方指定原生命令）；BDD: skipped（仅文档，无新增场景或行为）；Cross-repo context／API Contract: not-needed；Mock Strategy: none。未重跑 Linux 全量、runtime 已知失败、宿主冒烟、lint、构建、Web／Mobile 或发布验证：本轮仅文档补齐，历史失败与全量 CI 待验边界已明确。Final Test Report／Run Summary MD: not-needed，本轮为本地定向 unittest 与文档检查，结果写入本文件，不新增正式报告；不声称独立 review 或 CI 已通过。
 - 状态写入执行记录：首次 `TaskStore.transition(..., "checking", confirmed=True)` 在宿主工具设置的 30 秒上限超时，输出为历史任务的「旧格式事件，不追溯」提示；重读确认仍为 in-progress、3 条事件、updated_at 未变，没有把超时记作成功或手填时间。随后仅放宽调用时限重试同一 library API，不更改库或任务生命周期。
+
+### 第 3 轮：Reviewy 措辞／记录修复
+
+- 验证对象：分支 `contract/rc5-host-gate-codex-0167-omp-18188`，HEAD `c419ac8c98d1e98ee46578629c2b8adcd70643c7` 加本轮未提交修改；Evidence Source: developer-local；Source Revision: dirty；Environment Alignment: unverified；Evidence Publication: local-only。本轮没有 commit/push，不以旧 SHA 的 CI 代替新改动验证。
+- 归属核对：冒烟执行者为 CodeX bot／OMP bot；Linux 全量、中止、main 复现与 CI 结果由 executor 调度 bot 记录；汇总与执行边界归编排方。对 `git diff origin/main` 所有新增行逐条核对归属，host-adapters.md、install-and-use.md 与双语 CHANGELOG 无需再改；其余保留的用户字样为已注明来源的决定、决定引用、审查问题分类或回到用户决策的不变规则。
+- 决定时间均为北京时间：升级 codex 为 14:34，选项 1 为 14:43，strict／每 PR CHANGELOG／主模型 astra 为 15:10；统一群内确认与 Lord 记录格式，mode_note 使用带引号 YAML。本轮按 Reviewy 意见修订了这几条历史事件的归属措辞，时间与状态未改。
+- 已更正首个提交 SHA 的编排方笔误，并以第二个提交的 CI run 42978591672、13/13 通过替换过期进度说明；此 CI 事实来自 executor 调度 bot 记录，本轮未重新查询 CI。
+- `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest test_golden_contracts`：66 tests，0.369s，OK，exit 0。
+- `python -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts`：99 tests，40.602s，OK，exit 0。
+- 编辑前用专用 grep 执行与 `rg -n smoke_note sbtd-runtime/tests tests` 等价的检索，零命中；无需改测试文本断言。仓外一次性 Python 检查器使用 `json.loads` 加载 capability-matrix.json 成功，除 smoke_note 外与本轮基线完全相同；双语 CHANGELOG 与本轮基线逐字节内容一致。
+- 索引调用仓库 `TaskStore._index_candidate(records, records)` 重新生成候选，与 `ai/tasks/index.md` 逐字节一致，输出 `INDEX_GENERATED_BYTE_IDENTICAL unchanged`，保持文件不变。TaskStore／TaskDocument 能读取带引号 mode_note、strict 模式与一致事件链；四条历史事件的 at/from/to 与本轮基线一致，输出 `HISTORICAL_AT_FROM_TO_UNCHANGED 4`。
+- 新增行检查覆盖 `git diff` 与 `git diff origin/main`：本机路径零命中、错误决定分钟零命中、五类旧归属措辞零命中、过期 CI／错误 SHA 零命中；输出两组 `LOCAL_PATHS 0`、`WRONG_DECISION_TIME 0`、`STALE_ATTRIBUTIONS 0`、`STALE_CI_SHA 0` 与 `RECORD_CHECKS_OK`。task 全文也无错误决定分钟。
+- 第 3 轮模型统计由 bash 调用 Python，选取与当前仓库 cwd 对应的 omp 会话目录内最新 JSONL，并核对 session header cwd 一致；按 assistant/model、model_usage 的 provider/model/purpose 及 toolCall 名称分别计数，结果见本任务模型记录。
+- 合并顺序由 Lord 定为 #208 先、#209 后；本轮修复由 executor 先在本地提交，待 #208 合入后 rebase 到 main、合并 rc.5 CHANGELOG 条目、重新生成 index 后再推送。本 bot 仅交付文件；新 SHA 仍待 Reviewy 复审相对 c419ac8 的增量与 CI 13/13。
+- 验证边界：rtk: not-needed（编排方指定原生命令）；BDD: skipped（本轮无行为或场景改动）；Cross-repo context／API Contract: not-needed；Mock Strategy: none。未重跑 Linux 全量、runtime 已知失败、宿主冒烟、lint、构建、Web／Mobile 或发布验证：仅修订措辞与记录，无生产代码变更。Final Test Report／Run Summary MD: not-needed；本地定向检查结果记于本节，不冒充正式 PR-head、独立 review 或发布证据。
+
+### 第 4 轮：rebase 到 f288729、冲突处理与 Reviewy 修正
+
+- 基准从 `c419ac8`（基于 main `80f1426`）变为 main `f288729`；编排方已将 #209 两个提交（原 `5032425`、`c419ac8`）rebase。第 3 轮修复提交 `434e019` 未推送，本轮由编排方用 `git cherry-pick -n` 取回、与本轮修正合为同一次提交，提交推送在本会话之后处理。第 3 轮小节中的「待 #208 合入后 rebase」安排已由本轮完成，实际顺序为 #208、#211、#210 先合入。
+- 冲突与处理（编排方已核实）：第 1 个提交在 `CHANGELOG.md`、`CHANGELOG.zh.md`、`ai/tasks/index.md`、`docs/adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md` 冲突；第 2 个提交在两份 CHANGELOG 冲突。其余文件自动合并，编排方比对确认 #209 其余内容与 `c419ac8` 相同，仅增加 main 已有的 #208／#210／#211 改动。
+- 编排方仅执行 git 操作：fetch、checkout -b、rebase、对 index 的 checkout --ours、add 冲突文件、rebase --continue、cherry-pick -n；未直接编辑仓库文件。index 由编排方通过 `git checkout --ours` 取回 main 一侧，没有手工编辑；随后冲突处理会话 1 用正式生成器补上 #209 一行，输出 `INDEX_REGEN changed=True rows=81`、`INDEX_PREVIEW_SAME True rows=81`，task/workflow 99 项通过。
+- 两个 omp 冲突处理会话均由主模型 `openai-codex/gpt-6-astra`（thinking high）执行。会话 1 将 #209 条目并入 main 唯一的 `## v2.1.0-rc.5 (Unreleased)`／`## v2.1.0-rc.5（未发布）` 下已有的 Changed／变更小节，排在 #211 之后，不保留 `## Unreleased`；Added→Changed→Fixed（新增→变更→修复）均保留，#210／#211／#208 条目文字未改。ADR 0001 §8 原文放在 main 已有 §9 之前，§9 写明编号接在 §8 之后，两节文字均未改。
+- 会话 2 将 #209 条目换成与 `c419ac8` 一字不差的定稿，不保留其小写 `(unreleased)` 标题和第二个 Changed 小节。上述冲突处理证据来自编排方记录，不冒充本记录会话重新执行。
+- Reviewy 修正 1：CHANGELOG 并入唯一 rc.5 标题及已有 Changed／变更小节，本记录会话只核对、不编辑 CHANGELOG。
+- Reviewy 修正 2：第 3 轮次数改为编排方按完整日志复核的终值：astra 17 次、find 内部模型 11 次、工具 39 次，并补齐第 4 轮三会话记录及计数方法。
+- Reviewy 修正 3：第 1、3 轮统一 find 内部调用措辞，第 2 轮明确 find 未调用、0 次，表下说明日志归属与主模型分开计数。
+- Reviewy 修正 4：Linux 全量时间改为「单分片运行 25 分钟上下（未精确计时）」；第 3 轮正文的执行边界采用同义表述，避免非契约用字混入新增行。
+- 本记录会话仅用 edit 编辑 task.md；index 仅由生成器写入且字节不变，保留 `434e019` 已暂存的 ADR 与矩阵内容，不执行 git 写命令、不使用 task 工具或子代理。记录适用于已明确的本地重放分支 `pr209-rebase`，任务原远端分支标识保留。
+- 验证对象：本地 `pr209-rebase`，HEAD `a7b60c9262288e7fdf71fa30e9735def74cd0e4c` 加已暂存的第 3 轮内容及本轮记录修改；Evidence Source: developer-local；Source Revision: dirty；Environment Alignment: unverified；Evidence Publication: local-only，不是 CI 证据。
+
+| 命令 | 结果 | 退出码 |
+|---|---|---|
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); Path('ai/tasks/index.md').write_bytes(a); print('INDEX_REGEN', 'changed=%s' % (b!=a), 'rows=%d' % len(s._index_rows(r)))"` | `INDEX_REGEN changed=False rows=81` | 0 |
+| `python3 -B -c "import sys; from pathlib import Path; sys.path.insert(0,'sbtd-workflow-onboard/scripts'); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(), read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); print('INDEX_PREVIEW_SAME', Path('ai/tasks/index.md').read_bytes()==a, 'rows=%d' % len(s._index_rows(r)))"` | `INDEX_PREVIEW_SAME True rows=81` | 0 |
+| `python3 -B -c "import json; json.load(open('sbtd-runtime/contracts/capability-matrix.json', encoding='utf-8')); print('MATRIX_JSON_OK')"` | `MATRIX_JSON_OK` | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest test_golden_contracts` | 66 tests，0.418s，OK | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 tests，49.474s，OK | 0 |
+| 专用 grep 检查两份 CHANGELOG 的 rc.5 标题与 rc.5 小节 | 各一个 rc.5 标题、无独立 Unreleased 标题、各一个 Changed／变更小节；Added→Changed→Fixed 均保留 | 不适用（专用工具无进程退出码） |
+| `git diff origin/main --stat` | 仅 #209 原有 16 个文件 | 0 |
+| `git diff --check` | 无空白错误 | 0 |
+| `git diff HEAD --stat` | 仅 task.md、ADR 0001、capability-matrix.json 三个文件；后两者为 `434e019` 已暂存内容 | 0 |
+| `git diff HEAD --no-ext-diff --unified=0 -- ai/tasks/v2.1.0-rc.5-host-gate-codex-0167-omp-18188/task.md`，再用专用 grep 检查新增行；专用 grep 核对决定原句及全文错误分钟 | 新增行本机路径及禁用措辞零命中（契约除外）；决定原句逐字存在，全文错误决定分钟零命中 | git 为 0；grep 不适用（专用工具无进程退出码） |
+
+- 生成器与预览均输出既有「旧格式事件，不追溯」提示，未将其记为失败或隐藏。上述命令按表内顺序执行；文本检查完成后，仓外只读计数脚本输出 astra_assistant=11、astra_toolcalls=32、other_assistant={}、model_usage={}，exit 0，再以最后一次 edit 补入计数终值与已完成的文本检查结果，其后不再调用工具。
+- 本轮只修订记录，不改生产代码、门禁语义、领域或数据设计，无新增 Book Gate；既有 Gate 不冒充本轮重跑。rtk: not-needed（采用明确的原生命令）；BDD: skipped（无行为或场景改动，既有 spec 不变）；Cross-repo context／API Contract: not-needed；Mock Strategy: none。Linux 全量、runtime 已知失败、宿主冒烟、lint、构建、Web／Mobile 与发布验证未重跑，原因是本轮仅记录修正。Final Test Report／Run Summary MD: not-needed；本地定向结果直接记录本节。
+- 最终 SHA 与 CI 由提交推送后另行报告，本文件不预先声称 CI 通过；状态仍为 checking，等待 Reviewy 复审与 CI 13/13，640 说「合入」后由 Lord 合并。
 
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
-| 2026-11-11T14:48:41.973666+08:00 | planned | in-progress | 开始已授权的宿主门禁契约变更 | 用户群内选项 1；基线 main 80f1426；本文件 Book Gate Plan |
+| 2026-11-11T14:48:41.973666+08:00 | planned | in-progress | 开始已授权的宿主门禁契约变更 | 用户 2026-11-11 14:43 群内确认（选择选项 1：以单独契约 PR 换门禁），Lord 记录；基线 main 80f1426；本文件 Book Gate Plan |
 | 2026-11-11T14:58:06.921787+08:00 | in-progress | checking | 契约与文档修改完成，聚焦门禁验证通过；保留本地套件失败，等待独立 review 与 CI | 本任务验证证据：四版本分类与 4 项聚焦测试通过；runtime 458 项有 2 个范围外失败；Linux 全量套件运行中，结果回填本节 |
-| 2026-11-11T15:14:15.719037+08:00 | checking | in-progress | 按 640 新要求补齐 CHANGELOG 标题、strict 说明、模型记录与验证证据 | 用户本轮明确要求；仅修订双语 CHANGELOG 与本任务记录，不 commit/push、不用 task 工具或子代理 |
+| 2026-11-11T15:14:15.719037+08:00 | checking | in-progress | 编排方整理补齐 CHANGELOG 标题、strict 说明、模型记录与验证证据的要求 | 用户 2026-11-11 15:10 群内确认（rc.5 全程 strict、每个 PR 自带 CHANGELOG、主模型 astra），Lord 记录；仅修订双语 CHANGELOG 与本任务记录，不 commit/push、不用 task 工具或子代理 |
 | 2026-11-11T15:18:19.441119+08:00 | in-progress | checking | 已补齐 rc.5 CHANGELOG 标题、strict 说明、模型记录与验证证据，等待 Reviewy 与 CI | 本轮 golden 66 tests OK；task/workflow 99 tests OK；双语结构与新增行路径检查通过；完整 SHA 由最终 PR 审查与 CI 13/13 绑定；640 说合入后由 Lord 合并，本 bot 不合并 |
+| 2026-11-11T15:43:27.014335+08:00 | checking | in-progress | Reviewy 于 c419ac8c98d1e98ee46578629c2b8adcd70643c7 判 NOT CLEAN，措辞／记录问题：用户归属、决定时间格式、第 2 轮模型次数、过期 CI／SHA | PR #209 Reviewy 意见；编排方整理四项修复要求；保持 strict，仅修改文件，不 commit/push、不使用子代理 |
+| 2026-11-11T15:48:14.639504+08:00 | in-progress | checking | 已修复四项，待 Reviewy 复审新 SHA 相对 c419ac8 的增量与 CI 13/13 | 第 3 轮验证证据：golden 66 tests OK；task/workflow 99 tests OK；JSON 加载、索引逐字节一致、历史事件 at/from/to 不变与新增行检查通过；模型次数来自本轮会话统计；仅改文件，未 commit/push |
+| 2026-11-11T19:18:45+08:00 | checking | checking | rebase 到 main f288729（#210 合入）并处理冲突；按 Reviewy 意见修正：CHANGELOG 并入唯一 rc.5 标题、第 3 轮次数改为日志终值、find 措辞统一、时间描述改为未精确计时 | 用户 2026-11-11 群内确认（合入 #210），Lord 记录。注：分钟不可考。第 1 个提交冲突为两份 CHANGELOG、index、ADR 0001，第 2 个提交冲突为两份 CHANGELOG；编排方用 git 将 index 取回 main 后由生成器补行，omp 会话合并 CHANGELOG 条目并将 ADR §8 放在 §9 前；两份 CHANGELOG 各一个 rc.5 标题且 Added→Changed→Fixed 都保留。冲突会话 1：INDEX_REGEN changed=True rows=81、INDEX_PREVIEW_SAME True rows=81、task/workflow 99 项通过；本记录会话：INDEX_REGEN changed=False rows=81、INDEX_PREVIEW_SAME True rows=81、MATRIX_JSON_OK、golden 66 tests OK、task/workflow 99 tests OK，命令 exit 0；相对 origin/main 仅原有 16 文件。Evidence Source: developer-local，非 CI 证据；保持 checking，等待 Reviewy 与新 SHA 的 CI 13/13 |

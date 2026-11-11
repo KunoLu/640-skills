@@ -56,5 +56,5 @@
       "evidence": "云主机实测。Real `codex exec --json --sandbox read-only` (tip 5a21688) with ChatGPT login produced JSONL turn.failed `workspace routing discovery failed` after Cloudflare HTTP 403 on chatgpt.com/backend-api; no item.started/completed with item.type in {command_execution,mcp_tool_call,web_search,collab_tool_call,file_change}; codex_adapter receipt events_emitted=0 accepted=0; EventStore replay empty. Evidence: ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md. Parser fixture not used."
     }
   },
-  "smoke_note": "用户 640 于 2026-11-11 群内选择选项 1，门禁换为 codex@0.167.1 + omp@18.18.8。云主机实测：两宿主均在 2026-11-11 采到真实 Tool 调用事件并 pass；codex 首次真实冒烟通过。2026-10-17 的 codex 0.163.0 unsupported 与 omp 18.11.1 pass 保留于 smoke_history，不参与当前门禁；旧版本在新契约下均为非门禁版本 → unsupported。固定一对版本、其他 unsupported、parser fixture 不算证据、兜底完成门至少一个宿主通过的规则不变，本次两个通过。"
+  "smoke_note": "用户 2026-11-11 14:43 群内确认（选择选项 1：以单独契约 PR 换门禁），Lord 记录；门禁换为 codex@0.167.1 + omp@18.18.8。云主机实测：两宿主均在 2026-11-11 采到真实 Tool 调用事件并 pass；codex 首次真实冒烟通过。2026-10-17 的 codex 0.163.0 unsupported 与 omp 18.11.1 pass 保留于 smoke_history，不参与当前门禁；旧版本在新契约下均为非门禁版本 → unsupported。固定一对版本、其他 unsupported、parser fixture 不算证据、兜底完成门至少一个宿主通过的规则不变，本次两个通过。"
 }
