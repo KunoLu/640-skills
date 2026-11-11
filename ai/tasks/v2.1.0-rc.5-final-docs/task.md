@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: docs/rc5-final-docs
 created_at: '2026-11-12T01:12:16+08:00'
-updated_at: '2026-11-12T01:12:16+08:00'
+updated_at: '2026-11-12T01:28:57+08:00'
 completed_at: null
 ---
 
@@ -18,6 +18,8 @@ completed_at: null
 本 PR 做 rc.5 最终文档清理：把过时状态句改成与已合入实现一致，保留原方案和历史事实。
 
 第 1 轮只建立本 task.md，以及正式生成器更新的 `ai/tasks/index.md`。生产文档正文和双语 CHANGELOG 实现条目留待后续轮次；本轮不实现、不提交、不推送、不开 PR、不发出上游 issue，不运行 Git 写命令。提交由编排方稍后处理。不建立 active、handoff、developer 或其他工作流记录。保持 checking，completed_at 为 null。
+
+第 2 轮执行下列既有 8 项计划；下文第 1 轮的“本轮不实现”“后续预期”“尚未执行”保留为历史，不代表第 2 轮结果。第 2 轮当前证据见「第 2 轮本地验证」。本轮不提交、不推送、不开 PR、不发布、不发出上游 issue；status 保持 checking，completed_at 保持 null。
 
 未完整调用 grill-with-docs：边界明确，当前文档与合入记录能回答本轮问题，不新增领域决定。
 
@@ -161,14 +163,65 @@ Evidence Source：developer-local；Source Revision：dirty（新增任务记录
 
 本轮跳过生产文档实现、运行时／前端／安装测试、全仓测试、lint／build、真实宿主和 CI：只获记录写入范围，无对应生产变化。BDD：skipped（无场景或行为变化）；Cross-repo context：not-needed；API Contract：not-needed（本轮未改 API，仅核对既有文档）；Mock Strategy：none。Final Test Report／Run Summary MD：not-needed（本地记录校验，不生成正式报告）。独立评审、实现、合入、发布未完成。恢复边界仅为本 task 与生成式 index；没有本机安装或生产状态需要回滚。
 
+## 第 2 轮本地验证
+
+本轮起始 HEAD 为 `7e8ed9e536f7c03e2c17c55cb6edf3828cb264ba`，分支 `docs/rc5-final-docs`，基于 main `7f20fbcce29c8d982d51aaaaa9ac19fcda3cf5a2`；开始时工作区干净。编辑前重读全部目标精确行，均与第 1 轮依据表一致，无行号漂移。生产文档改动后会话遭 SIGTERM 中断；续跑先用 `git status`／`git diff` 核对 8 个已改文件，符合计划，保留原样，未回滚或重做格式。
+
+README 采用甲的最终结果为 5 票同意、0 票反对，已过半数，按授权执行。OMP 于 2026-11-12 01:18，Reviewy 与 Lord 于 2026-11-12 01:19，CodeX 与 Researchy 于 2026-11-12 01:23 投甲；Lord 于 2026-11-12 01:23 记录最终票数，以上均为北京时间，未提供秒数。CodeX、Researchy 各自独立确认 v2.0.2 为当前最新非预发布正式版；这些群内事实来自本轮提供的已核实背景，不替代下表本会话的命令证据。
+
+| 计划项 | 实际改动位置／结果 |
+|---|---|
+| 1 | `README.md:19,33`、`README.zh.md:19,33`：横幅、Release 链接与安装 tag 对齐最新正式版 v2.0.2，其余句子不变 |
+| 2 | `docs/adr/0001-v2.1.0-rc.1-r1.0-runtime-decisions.md:213,215,217,246,266,268,270-271`：§8 已由 #209 合入，§9 已由 #212 实现；原契约先行经过保留，保密、认证和回退条件不变 |
+| 3 | `sbtd-runtime/contracts/openapi.yaml:59-60,99-100,1124`：仅更正三处描述；81／97、规范性 no-store、info 级 contract-only 与 library 标记均不变 |
+| 4 | `CHANGELOG.md:14,20`、`CHANGELOG.zh.md:14,20`：仅改末尾状态，区分契约先行与 #212 实现、#211 文档与 #213 实现；16／22 实现条目保留 |
+| 5 | `docs/adr/0003-v2.1.0-rc.2-r2.0c-snapshot-persistence.md:68,70`：#213 已实现，保留 #211 文档先行顺序；74–102 方案及测试要求不变 |
+| 6 | `sbtd-workflow-onboard/REFERENCE.md:164`：仅标题改为 Global Tools and Optional Graft；安装策略、命令及 pin 不变 |
+| 7 | `CHANGELOG.md:28`、`CHANGELOG.zh.md:28`：在既有 Changed／变更末尾各追加一条，覆盖本次清理，并说明 rc.3 #197 已去掉 v1.0.15 本地补丁；整份换为上游副本后，现按授权投票结果保持上游原样、不重打补丁；已发布历史不改 |
+| 8 | 本 task 保留第 1 轮记录，追加第 2 轮说明、验证、模型记录及两条状态事件；index 仅正式生成器写入，内容未变；issue 草稿未发出 |
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only；Environment Alignment：not-needed。Linux x64，Python 3.13.5；不是 CI 或最终 PR-head 证据。rtk：skipped-for-report，按明确命令使用 native 输出。以下均为本轮实际执行。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `git rev-parse --show-toplevel --abbrev-ref HEAD && git status --short && git rev-parse HEAD` | 仓库／分支／HEAD 匹配，起始干净；本机绝对路径不写入仓库 | 0 |
+| `namei -l` 全部目标、`git ls-files --stage --`、`git check-ignore -v --no-index --` | 目标和父路径无 symlink，均为已跟踪普通文件 100644，无 ignore 命中 | 0／0／1（无匹配） |
+| `TZ=Asia/Shanghai date --iso-8601=seconds` | README 编辑前核查开始时间为 `2026-11-12T01:21:31+08:00` | 0 |
+| `git tag --list --sort=-v:refname` | 最新非预发布 tag 为 v2.0.2；版本更高的 tag 仅 v2.1.0-rc.1、rc.2、rc.3、rc.4，无 v2.1.0 或 rc.5 tag | 0 |
+| `gh release list --limit 100` | v2.0.2 标记 Latest；比它新的 rc.1–rc.4 均标记 Pre-release | 0 |
+| `gh release view v2.0.2 --json tagName,isPrerelease,isDraft,publishedAt,url` | tagName=v2.0.2，isPrerelease=false，isDraft=false，publishedAt=2026-10-15T23:12:58Z，URL 为 https://github.com/KunoLu/640-skills/releases/tag/v2.0.2 | 0 |
+| `gh api repos/KunoLu/640-skills/releases/latest --jq '{tag_name,prerelease,draft,html_url}'` | tag_name=v2.0.2，prerelease=false，draft=false；与 list 的 Latest 标记一致 | 0 |
+| `git status --short --untracked-files=all && git diff --stat && git diff --` 后接上述 8 个生产文件路径 | 中断后核对：8 files changed, 28 insertions(+), 24 deletions(-)；仅计划中的状态句、标题和双语新增条目，未重写正确改动 | 0 |
+| 第 1 轮证据表的正式生成器写入命令原样执行，再执行同表只读预览命令 | `INDEX_REGEN changed=False rows=85`；`INDEX_PREVIEW_SAME True rows=85`；既有“旧格式事件，不追溯”提示保留，不是失败 | 0／0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 项通过，失败 0、跳过 0，OK，36.017 秒 | 0 |
+| `PYTHONPATH=sbtd-runtime python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_golden_contracts.py'` | 66 项通过，失败 0、跳过 0，OK，0.347 秒；实际加载 OpenAPI | 0 |
+| `PYTHONPATH=sbtd-runtime python3 -B -m unittest discover -s sbtd-runtime/tests -p 'test_r1_acceptance.py'` | 16 项通过，失败 0、跳过 0，OK，0.324 秒；含 OpenAPI 版本及导出契约检查 | 0 |
+| `PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python3 -B -m unittest test_serve.RecoveryTests` | 13 项通过，失败 0、跳过 0，OK，0.254 秒；恢复流程及 no-store 回归；asyncio 输出一次 0.138 秒 setup 耗时提示，未失败 | 0 |
+| `python3 -B local://rc5-doc-scope.py`（仓库外临时只读检查） | SCOPE_OK、OPENAPI_STRUCTURE_OK、ADR_BOUNDARIES_OK、FILE_SCOPE_OK；相对 HEAD 仅允许行变化，双语 rc.5 标题各一个、各新增一条，已发布历史逐字不变；YAML 去掉指定三处 description 后完全相等；ADR 246 括号外、266 状态句外、268／271 时态外均不变；无外部副本、catalog、pin、测试、实现或 index 变化 | 0 |
+| `TZ=Asia/Shanghai date --iso-8601=seconds`、`python3 --version` | 记录时间 `2026-11-12T01:27:06+08:00`；Python 3.13.5 | 0 |
+| task 回填后再次执行第 1 轮只读 index 预览命令 | `INDEX_PREVIEW_SAME True rows=85`；新记录仍可被正式生成器读取，index 未变 | 0 |
+| `git diff --check`、`git status --short --untracked-files=all`、`git diff --stat`、`git diff --no-ext-diff --no-color --unified=0` | 空白检查无输出；仅上表 8 个生产文件和本 task，共 9 文件；证据回填前统计为 76 insertions(+), 25 deletions(-)，其中生产文档为 28 insertions(+), 24 deletions(-)；无未跟踪文件、无 index 改动 | 0 |
+| 对上述 diff 新增行执行专用 grep：本机路径、禁用归因措辞及非“契约”目标用字 | 无匹配；固定授权短语保留，未为历史投票编造秒数 | 工具成功，无 shell 退出码 |
+| `rm local://rc5-doc-scope.py && TZ=Asia/Shanghai date --iso-8601=seconds` | 仓库外临时检查脚本已清理；证据更新时刻为 `2026-11-12T01:28:57+08:00` | 0 |
+
+已读 `.github/workflows/validation.yml`：主套件用 `tests/run_ci.py` 分片发现 tests；`tests/test_sbtd_runtime_r1_contracts.py` 与 `tests/test_sbtd_runtime_r1_acceptance.py` 将 golden／acceptance 接入发现。dashboard job 另跑 serve／export、前端及构建检查。本轮执行上述直接模块，未跑完整 13 个 CI job。检索 tests 与 runtime tests 未发现独立 CHANGELOG 检查模块；用本轮临时只读检查验证新增位置、唯一标题及历史保留，文档／REFERENCE 与 index 分别由 workflow_contracts、task_state 和正式生成器覆盖，不新增永久措辞测试。
+
+Strict gate 更新：Refactoring Review 为 proceed／normal，仅文档状态清理，无需重构；未完整调用 grill-with-docs，无领域歧义，DDD not-needed。DDIA、legacy safety、BDD／TDD、release readiness 均 not-needed：不改数据设计或行为，不涉及部署／发布。Code Readability Review 不适用，无手写生产代码或测试修改。独立评审与最终 CI 仍 pending；未把自检或其他人的版本核查当作本 PR 独立批准。使用会话内 todo 清单，未调用任务状态写 API、子代理或 find。
+
+Final Full Rerun：passed（仅上述 194 项本地定向测试，不是全仓或全栈）；Targeted Rerun：not-needed。BDD：skipped（无行为或场景变化）；Cross-repo context：not-needed；API Contract：verified（描述以外结构相等及相关测试，不代表部署验收）；Mock Strategy：none（本轮未新增 mock，RecoveryTests 使用既有可注入时钟装配）。Final Test Report／Run Summary MD：not-needed，本轮为本地校验而非正式 PR-head 报告。跳过全仓 lint／build、前端浏览器、安装与跨平台全量：无对应实现变化。剩余风险为待独立评审／CI，以及已记录的上游四项低风险问题；issue 草稿仍为「草稿，未发出；发不发等 640 确认」。v2.1.0 正式版不动，等 640 授权。本轮没有本机安装或生产状态需要回滚。
+
 ## 模型记录
 
 | 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
 |---|---|---|---|---|
 | 第 1 轮 | openai-codex/gpt-6-astra（thinking high） | 只读核对、任务计划、issue 草稿、index 生成和本地验证 | 18（推算） | 67（推算） |
 | 第 1 轮 | 其他模型 | 本会话未调用 | 0 | 0 |
+| 第 2 轮 | openai-codex/gpt-6-astra | 文档状态更正、中断后续跑、Release 核查、index 与本地定向验证 | 19（推算） | 58（推算） |
+| 第 2 轮 | 其他模型 | 本会话未调用 | 0 | 0 |
 
 计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用。只读统计脚本输出 `astra_assistant=16`、`astra_toolcalls=66`、`other_assistant={}`、`model_usage={}`，退出 0，未写仓库。此后仅一次 edit 回填次数和一次纯文本收尾，因此模型调用按 16+2=18、工具调用按 66+1=67 推算；不是事后重新读取日志的实测总数。其他模型 0，find 工具调用 0，子代理 0；计数 edit 为最后一次工具调用，之后不再运行校验。
+
+第 2 轮计数：按给定命令运行仓库外 `count.py`，只读统计 `sessions-r2` 最新会话日志（含中断前调用），输出 `astra_assistant=17`、`astra_toolcalls=57`、`other_assistant={}`、`model_usage={}`，退出 0，未写仓库。此后仅一次 edit 回填和一次纯文本收尾，因此模型调用按 17+2=19（推算）、工具调用按 57+1=58（推算）；不是事后重新统计的实测总数。其他模型 0，find 工具调用 0，子代理 0。此计数 edit 为最后一次工具调用，之后不再校验；第 1 轮 18／67（推算）保持不变。
 
 ## 状态事件
 
@@ -177,3 +230,5 @@ Evidence Source：developer-local；Source Revision：dirty（新增任务记录
 | 2026-11-12T01:12:16+08:00 | planned | checking | started：Lord 在合入 #214（合并提交 7f20fbcce29c8d982d51aaaaa9ac19fcda3cf5a2，提交时间 2026-11-12T01:06:47+08:00）之后，于 2026-11-12 01:07 群内调度开始最终文档 PR，先写 task.md；本轮只写 task.md 及正式生成的 index，不改生产文档 | 本轮分支／HEAD／干净起始状态核对；当前文档精确行号见源码依据表；本事件 at 为记录时间，不是群内调度秒数 |
 | 2026-11-12T01:12:16+08:00 | checking | checking | 按 640 2026-11-11 23:59 授权的群内投票结果：甲 5 票同意、0 票反对（Reviewy、Researchy、CodeX、Lord、OMP；OMP 于 2026-11-12 01:07 投票；Lord 于 2026-11-12 01:07 记录结果），执行口径为保持上游副本、不重打本地补丁；给上游提 issue 仅以草稿记入本 task，未发出 | 本轮读取 CHANGELOG.zh.md:463 与外部 skills 任务第 2 轮 202–214 行；四项问题及风险写入草稿，负责人未确定，发不发等 640 确认；本事件 at 不是历史投票秒数 |
 | 2026-11-12T01:15:47+08:00 | checking | checking | 第 1 轮完成任务计划、上游 issue 草稿、正式 index 和指定本地验证；生产文档实现仍待后续，保持 checking | INDEX_REGEN changed=True rows=85；INDEX_PREVIEW_SAME True rows=85；99 项测试通过／退出 0；git diff --check／范围核对退出 0，仅本 task 与 index；新文案 grep 无匹配；未发出 issue，无必须改契约决策的开放问题 |
+| 2026-11-12T01:27:06+08:00 | checking | checking | 按 640 2026-11-11 23:59 授权的群内投票结果：README 版本采用甲（对齐最新正式版 v2.0.2，不把 rc.5 或 v2.1.0 称正式版）；OMP（2026-11-12 01:18）、Reviewy（2026-11-12 01:19）、Lord（2026-11-12 01:19）、CodeX（2026-11-12 01:23）、Researchy（2026-11-12 01:23）均投甲，5 票同意、0 票反对，已过半数，按授权执行；Lord 于 2026-11-12 01:23 记录最终票数，以上均为北京时间 | 群内事实来自本轮提供的已核实背景，未提供秒数；本事件 at 为本轮记录时间，不是投票时刻。CodeX 与 Researchy 各自独立确认 v2.0.2 最新非预发布身份；本会话另于 2026-11-12T01:21:31+08:00 执行 tag／Release 核查，Latest、prerelease=false，更高 tag 均为 rc.1–rc.4 预发布 |
+| 2026-11-12T01:28:57+08:00 | checking | checking | 第 2 轮完成既有 8 项文档清理及本地定向验证；SIGTERM 中断后先核对已有 8 个生产文件改动，符合计划并保留；继续更新本 task，保持 checking，completed_at=null | tag／gh release list／view／latest API 核查 v2.0.2，退出 0；INDEX_REGEN changed=False rows=85，INDEX_PREVIEW_SAME True rows=85；99+66+16+13=194 项测试通过，各命令退出 0；临时范围／OpenAPI 结构／ADR 边界检查及 git diff --check 通过、退出 0；新增文字 grep 无匹配，9 个文件在允许范围内，临时脚本已清理；独立评审与 CI 尚未执行，issue 草稿未发出，无 Git 写命令 |

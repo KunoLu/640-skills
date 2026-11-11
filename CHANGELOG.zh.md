@@ -11,19 +11,21 @@
 
 ### 新增
 
-- ADR 0001 追加 §9，OpenAPI 新增契约先行的 `POST /api/v1/session/re-pair-ticket`：过期后恢复窗口 ≤60 秒（不含恰好 +60 秒端点），绑定原配对会话；一个过期凭证只换一次票，票有效期 ≤30 秒且单次使用。主要错误响应为 `401 unauthorized`、`403 forbidden`、`429 RE_PAIR_RATE_LIMITED`。尚未实现，serve 未路由；实现待 640 批准契约后另开 PR。
+- ADR 0001 追加 §9，OpenAPI 新增契约先行的 `POST /api/v1/session/re-pair-ticket`：过期后恢复窗口 ≤60 秒（不含恰好 +60 秒端点），绑定原配对会话；一个过期凭证只换一次票，票有效期 ≤30 秒且单次使用。主要错误响应为 `401 unauthorized`、`403 forbidden`、`429 RE_PAIR_RATE_LIMITED`。契约先行，后续已由 #212 实现并接入 serve。
 
 - 实现 Dashboard 已认证请求 401 后自动重新配对：每条人工配对链只签发、交换一张进程内恢复票，同标签页合流，原快照／导出操作有限重放，失败后提示人工配对步骤。全部 pair／取票响应均发送 `Cache-Control: no-store`，包括中间件拒绝；补充边界、并发、导出和响应头回归测试。OpenAPI 仅将取票 operation 的实现标记和 pair 的 no-store 状态说明改为已实现，接口、字段和状态码不变。
 
 ### 变更
 
-- ADR 0003 追加 §6：确定完整快照内存上限 8 份、LRU 逐出且磁盘文件不删、启动只建轻量索引、缓存未命中按原安全检查重载；24h 过期、分页、404/410、pin 与 507 语义不变。仅文档，实现另开 PR。
+- ADR 0003 追加 §6：确定完整快照内存上限 8 份、LRU 逐出且磁盘文件不删、启动只建轻量索引、缓存未命中按原安全检查重载；24h 过期、分页、404/410、pin 与 507 语义不变。本条记录文档先行（文档 PR 为 #211），后续已由 #213 实现。
 
 - 实现 ADR 0003 §6 的完整快照内存上限 8 份与 LRU 逐出：只断开内存引用，不删除磁盘文件；启动只建轻量索引，缓存未命中按原安全检查重载。24h 过期、分页、404/410、pin 与 507 语义保持不变。
 
 - 将宿主验收门禁从 `codex@0.163.0` + `omp@18.11.1` 换为 `codex@0.167.1` + `omp@18.18.8`，两个新宿主均通过真实冒烟（来源：云主机实测）。历史证据保留于 `smoke_history`，ADR Q6 原决策不改写，旧版本标为 unsupported；固定一对版本、parser fixture 不算证据、至少一个宿主通过的兜底完成门规则不变。
 
 - 将外部 Skills stable 集从 `2026-10-28.1` 刷新到 `2026-11-11.1`，锁定各仓库主线 HEAD，而非 Release：`mattpocock-skills` → `4ae2317ddb22`、`impeccable` → `c1e0e5492fbb`、`ui-ux-pro-max-skill` → `6ae86f61f520`、`shadcn-ui` → `dd41d19e2f80`、`ponytail` → `96608e078b2d`、`i-have-adhd` → `1ecea1993b7f`（不变）。上游许可证未变；19 个 Skill 全量通过 manifest 摘要校验，strict-stable 隔离安装 19/19 提交。
+
+- 清理 rc.5 最终文档：README 发布身份和安装 tag 对齐最新正式版 v2.0.2，更正 ADR、OpenAPI 描述及未发布条目的过时实现状态，将 REFERENCE 标题澄清为“Global Tools and Optional Graft”，graft pin 不变。rc.3 #197 已去掉 v1.0.15 本地补丁：#197 将 impeccable 整份换成上游副本，因而去掉了这些本地补丁；现按授权投票结果保持上游原样、不重打补丁。
 
 ### 修复
 

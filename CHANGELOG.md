@@ -11,19 +11,21 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ### Added
 
-- Add ADR 0001 §9 and a contract-first OpenAPI `POST /api/v1/session/re-pair-ticket`: a recovery window of at most 60 seconds after expiry (the endpoint at +60 seconds is excluded), bound to the original paired session; each expired credential can obtain only one ticket, valid for at most 30 seconds and single-use. Main error responses are `401 unauthorized`, `403 forbidden`, and `429 RE_PAIR_RATE_LIMITED`. Not implemented or routed by serve; implementation requires 640's contract approval and a separate PR.
+- Add ADR 0001 §9 and a contract-first OpenAPI `POST /api/v1/session/re-pair-ticket`: a recovery window of at most 60 seconds after expiry (the endpoint at +60 seconds is excluded), bound to the original paired session; each expired credential can obtain only one ticket, valid for at most 30 seconds and single-use. Main error responses are `401 unauthorized`, `403 forbidden`, and `429 RE_PAIR_RATE_LIMITED`. The contract came first; #212 subsequently implemented it and wired it into serve.
 
 - Implement automatic Dashboard re-pairing after authenticated 401 responses: one process-bound recovery ticket and one exchange per manual pairing chain, same-tab single-flight recovery, bounded replay of the original snapshot/export operation, and manual pairing guidance on failure. All pair and re-pair-ticket responses now send `Cache-Control: no-store`, including middleware rejections; boundary, concurrency, export and response-header regressions cover the implementation. OpenAPI only marks the ticket operation's implementation marker and pair's no-store status description as implemented; interfaces, fields and status codes are unchanged.
 
 ### Changed
 
-- Append §6 to ADR 0003: set an 8-entry full-snapshot memory limit with LRU eviction without deleting disk files, build only a lightweight index at startup, and reload cache misses with the existing safety checks; 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged. Documentation only; implementation will follow in a separate PR.
+- Append §6 to ADR 0003: set an 8-entry full-snapshot memory limit with LRU eviction without deleting disk files, build only a lightweight index at startup, and reload cache misses with the existing safety checks; 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged. This entry records the documentation-first step in #211; #213 subsequently implemented it.
 
 - Implement the 8-entry full-snapshot memory limit and LRU eviction in ADR 0003 §6: eviction only drops memory references and never deletes disk files; startup builds only a lightweight index, and cache misses reload through the existing safety checks. 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged.
 
 - Change the host acceptance gate from `codex@0.163.0` + `omp@18.11.1` to `codex@0.167.1` + `omp@18.18.8`; both new hosts passed real cloud-host smoke tests. Preserve historical evidence in `smoke_history` and the original ADR Q6 decision, classify old versions as unsupported, and retain the fixed-pair rule, exclusion of parser fixtures as evidence, and fallback completion gate of at least one passing host.
 
 - Refresh the external Skills stable set from `2026-10-28.1` to `2026-11-11.1`, pinning each repository's main-branch HEAD rather than a Release: `mattpocock-skills` → `4ae2317ddb22`, `impeccable` → `c1e0e5492fbb`, `ui-ux-pro-max-skill` → `6ae86f61f520`, `shadcn-ui` → `dd41d19e2f80`, `ponytail` → `96608e078b2d`, and `i-have-adhd` → `1ecea1993b7f` (unchanged). Upstream licenses are unchanged; all 19 Skills pass manifest digest validation, and an isolated strict-stable installation commits 19/19.
+
+- Clean up final rc.5 documentation: align the README release identity and installation tag with the latest stable v2.0.2, correct stale implementation status in ADRs, OpenAPI descriptions and Unreleased entries, and clarify the REFERENCE heading as “Global Tools and Optional Graft” without changing the graft pin. rc.3 #197 removed the v1.0.15 local patches by replacing the entire impeccable Skill with the upstream copy; following the authorized vote, keep upstream unchanged and do not reapply those patches.
 
 ### Fixed
 

@@ -161,7 +161,7 @@ python scripts/onboard.py install-agent-cli --platform codex --yes
 
 Normal onboarding may probe the target CLI read-only first, but collects the action, project list and AGENTS scope and passes complete project preflight before any CLI installation or repair. Oh My Pi follows the requested npm path and is accepted only when `omp --version` succeeds.
 
-## Required Global Tools
+## Global Tools and Optional Graft
 
 Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.28.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
 

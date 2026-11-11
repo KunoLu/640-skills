@@ -56,8 +56,8 @@ paths:
       summary: Exchange a one-time pairing code for a short-lived session
       description: |
         Accepts an initial pairing code or a recovery ticket through X-Pairing-Code.
-        Recovery-ticket support is proposed in ADR 0001 section 9 and is not yet
-        implemented. Recovery exchange requires stricter Host/Origin checks:
+        Recovery-ticket support from ADR 0001 section 9 was implemented in #212.
+        Recovery exchange requires stricter Host/Origin checks:
         Host must be an existing loopback-whitelisted hostname with the actual
         serving port, and Origin must exactly equal http://<Host>, without
         userinfo, path, query or fragment. Missing or null Origin is forbidden.
@@ -96,8 +96,8 @@ paths:
       summary: Exchange a just-expired session credential for one recovery pairing ticket
       x-sbtd-implementation: implemented
       description: |
-        编排方整理：契约先行，serve 尚未路由；实现须在 640 批准本契约后另开 PR。
-        Proposed, pending Reviewy security review; see ADR 0001 section 9.
+        编排方整理：契约先行，后续已由 #212 实现并接入 serve。
+        Implemented in #212 after the contract-first PR; see ADR 0001 section 9.
         No request body. Authorization is the required HTTP bearer header,
         Authorization: Bearer <expired-session-credential>, declared by localSession.
         Unlike ordinary APIs, this operation uses a dedicated recovery check:
@@ -1121,7 +1121,7 @@ components:
       additionalProperties: false
       required: [pairing_code, expires_at, ttl_seconds]
       description: |
-        Proposed recovery response, not a Session or Envelope. The ticket does
+        Recovery response, not a Session or Envelope. The ticket does
         not authorize data access. expires_at is the earlier of issuance + 30
         seconds and original session expiry + 60 seconds. ttl_seconds is that
         deadline minus issuance time, not a fresh lifetime on receipt or retry.
