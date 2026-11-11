@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: chore/rc5-external-skills-repin
 created_at: '2026-11-12T00:05:01+08:00'
-updated_at: '2026-11-12T00:05:01+08:00'
+updated_at: '2026-11-12T00:27:58+08:00'
 completed_at: null
 ---
 
@@ -21,6 +21,8 @@ completed_at: null
 
 未完整调用 grill-with-docs：边界与既有晋升契约明确，源码可回答本轮问题，不新增领域决定。
 
+第 2 轮：按下述授权投票结果开始晋升与实现；第 1 轮的“尚未执行”、计划及待选择描述保留为历史。本轮仅经官方晋升器更新既有六仓库与 19 项集合，stableSet 使用 `2026-11-11.1`，promotedAt 由命令实际生成。禁止手改镜像、扩展 source 合同或登记新 Skill；拒绝即停止。继续 strict、checking、completed_at=null；独立安全评审、CI 与合入不在本地通过声明内。只使用会话内 todo 清单，不调用 task 工具、子代理或 find，不运行 Git 写命令。
+
 ## 决策来源
 
 - 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录。
@@ -28,6 +30,7 @@ completed_at: null
 - 用户 2026-11-11 23:55 群内确认合入 #213（快照内存最多留 8 份，最久没用的先踢出），Lord 记录。Lord 将 #213 squash 合入 main，合并提交 `a2a3aa72281e9127de821f19fb5056ad76306d16`，提交时间 `2026-11-11T23:55:48+08:00`，并删除远端开发分支；不把提交秒数当作群内确认的秒数。
 - 在上述合入提交时间之后，Lord 群内调度：清掉本地 #213 分支与工作区，然后开始 rc.5 下一项「外部 skills 重新锁版本」，graft 保持可选的 0.28.0 不动；先照常写 task.md，把范围和要改的文件报到群里。这是 Lord 的调度；本会话未执行或核验该清理。
 - 群内事实及远端合并经过采用本轮提供的已核实背景，不冒充本会话访问群聊或远端所得。本轮计划由主模型对照仓库定义与源码整理；下列上游目标采用编排方核查，不冒充本轮重新联网实测。
+- 按 640 2026-11-11 23:59 授权的群内投票结果：授权规定需要拍板的选择交由群成员投票，按推荐最多的选项执行。640-skills 群在 2026-11-12 00:11 至 00:12（北京时间）完成三项投票；Lord、Reviewy、Researchy、CodeX、OMP 共 5 票，三项各为 5 票同意推荐、0 票反对。结果：各仓库锁主线最新 HEAD，不锁 Release／semver tag；shadcn-ui 与 ponytail 即使受管子路径内容不变仍锁仓库 HEAD，使六仓库对齐同一核查日；mattpocock 新出现而尚未登记的 Skill 不加入本 PR，以后另开 PR。此为提供的已核实事实，不冒充本会话读取群聊所得。
 
 ## 范围与非目标
 
@@ -189,16 +192,128 @@ Evidence Source：developer-local；Source Revision：dirty（新增任务记录
 
 Final Full Rerun：passed（仅本轮指定的 99 项工作流测试，不是安装／运行时全量）；Targeted Rerun：not-needed。证据回填后只复查新文字与空白；最终计数 edit 仅补模型表和推算说明，不再运行工具，不把计数回填称为重新验证。实际改动仅本 task 与正式生成的 index；未改生产文件、快照、测试、CHANGELOG、catalog、契约或旧任务。
 
+## 第 2 轮晋升前审查
+
+- 本轮在 `2026-11-12T00:16:54+08:00` 对六仓库逐一执行 `git ls-remote <manifest URL> refs/heads/main`，以 `gh api repos/<owner>/<repo>/commits/<SHA>` 取得旧／新 commit 的 author 与 committer 时间；六个目标均与第 1 轮计划相同，两种提交时间也分别相同。正式晋升前还会立即复测，若变化先重审而非静默换 pin。
+- 从 GitHub codeload 按完整 SHA 获取 archive，保留全仓目录清单；仅在隔离证据目录展开全部受管子树及声明的许可证，逐 Skill 用 `diff -ru <当前 stablePath> <上游 sourceSubpath>` 比较原始文件。19 项路径均存在，未遇到受管链接／特殊文件、名称或许可证路径迁移。mattpocock 仅 grilling 与 codebase-design 各一处 fresh-context 文案变更；其余 9 项不变。impeccable 主要为 4.8.2 文档、launcher 校验／诊断及 live browser；ui-ux-pro-max 为 RTL 搜索、IME 指引、Apple Native style、Nuxt UI 4.12.0 数据与测试。shadcn、ponytail 四项及 ADHD 内容均无 diff。
+- 七份声明文件（六仓 LICENSE，另含 impeccable NOTICE.md）与现有副本逐字节一致；Apache-2.0／MIT 条款、保留版权及 NOTICE 义务无新增差异，不需修改 source 合同或第三方归属。未登记的 mattpocock Skill 不进入受管复制集合。
+- 第 1 轮记录的 impeccable `scripts/VERSION` 为编排方观察；本轮在相同目标 `c1e0e5492fbb524f5df84d635ecfae7dc438ec45` 实测为 `0.1.22`，旧 pin 为 `0.1.18`，不改写第 1 轮历史。
+
+### impeccable 旧问题复核与开放问题
+
+以下是目标 SHA 的静态源码证据，不冒充 Windows 或完整浏览器运行。当前副本仍按干净上游 pin 对待；保留上游原样，不重打 v1.0.15 本地补丁。
+
+| 旧问题 | 本轮结论与源码证据 |
+|---|---|
+| 用户可见 live-poll 文案 | 再现：`scripts/live-browser.js:8025,10617,11208` 仍提示运行 `live-poll.mjs`，不是 `impeccable live-poll`。 |
+| 已删除模块维护注释 | 再现：`live-browser.js:106,119,125,157,215,1731` 仍引用旧 vocabulary／ui-surfaces／live-server／live-accept／insert-ui 模块；完整 archive 目录清单未见这些运行模块，仅有同名 live-accept 测试文件。 |
+| Svelte reset 范围 | 再现：`resetSvelteComponentSession` 的 6465 行调用无参 `clearHandled()`；`live-browser-session.js` 无 id 时删除整个 handled key，非仅当前会话。 |
+| Windows 下载基址校验 | 再现：`impeccable.cmd:128,155,163,194` 将 `IMPECCABLE_DOWNLOAD_BASE` 直接展开为 URL 并传入 curl，未见旧补丁的 delayed-expansion URL 字符校验。静态风险保留，未在 Windows 复现利用。 |
+| 下载／摘要暂存并发 | 原固定暂存名模式未再现：`impeccable.cmd:133-174` 用时间＋双 RANDOM 命名目录，mkdir 原子占用并冲突重试；载荷与 hash.txt 在本次独占目录内。POSIX 使用 `.impeccable.part.$$`；不把静态审查称为 Windows 并发实测。 |
+
+以上四类再现问题保持开放，供独立安全评审与上游处理；不是绕过晋升器或修镜像的授权。
+
+### 第 2 轮适用 Gate（晋升前）
+
+- Legacy Change Safety Review：`characterized`，normal。安装器 `load_external_stable_manifest()` 与逐项 `stable_external_skill_source()` 对旧集合实跑，输出 `BASELINE_STABLE_VALID 19 2026-10-28.1 2026-10-28`，退出 0。保留离线 stable、raw-byte 摘要、路径 containment、整组事务及失败保留／恢复；现有三模块测试和隔离真实安装是安全网，不新增 seam。
+- Refactoring Review：`proceed`，normal，`no refactor needed`。只用已有晋升接口；不改晋升器、摘要算法、source、catalog，不重构第三方原样载荷。
+- Ponytail：复用现有命令及验证入口，无新生产抽象。BDD／TDD：沿用既有安装／拒绝／恢复场景，本项无安装行为设计变化，不增场景文件或为 pin 复制测试；未声称执行新的 red-green 回路。
+- DDD／DDIA：not-needed，未完整 grill，无新增领域／持久化设计；不把上游镜像内部数据更新当成本仓 schema 调整授权。独立安全评审、Release readiness、CI／合入保持待验证。
+
+## 本轮锁定结果（第 2 轮／PR 事实表）
+
+以下为本轮实测，供 PR 正文直接引用。时间均为北京时间（UTC+08:00）；表中提交时间同时是 GitHub commit 的 author／committer 时间。本轮目标与第 1 轮计划全部一致，无静默换 SHA。第二次 HEAD 核查紧接正式晋升之前，六个 `ls-remote` 均退出 0；不是 tag／Latest Release 选择。
+
+| 仓库 | 完整旧 SHA → 完整新 SHA | 旧提交时间 → 新提交时间 | 晋升前 HEAD 复测时间 | 受管内容／treeSha256 |
+|---|---|---|---|---|
+| mattpocock-skills | `59db609eb1e18aaf59b63284d0e52255aff0c63c` → `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d` | `2026-10-27T15:44:12+08:00` → `2026-10-31T22:23:30+08:00` | `2026-11-12T00:20:39+08:00` | grilling、codebase-design 内容及摘要变化；其余 9 项不变 |
+| impeccable | `3e3a9179e01a60265000ce239c0a99803ec1e60d` → `c1e0e5492fbb524f5df84d635ecfae7dc438ec45` | `2026-10-28T14:05:26+08:00` → `2026-11-11T11:56:37+08:00` | `2026-11-12T00:20:41+08:00` | 1 项内容及摘要变化 |
+| ui-ux-pro-max-skill | `28b3b8dee8c976df4fa3e94aed4e092ad43fcb03` → `6ae86f61f520d6ca229d2f40e070410638c908c5` | `2026-10-26T18:07:27+08:00` → `2026-11-10T21:03:57+08:00` | `2026-11-12T00:20:45+08:00` | 1 项内容及摘要变化 |
+| shadcn-ui | `96da9cc7f1aa10580a3741664e2a77c721206c00` → `dd41d19e2f80ff6891951f7ced74c2c9a650b065` | `2026-10-27T20:30:19+08:00` → `2026-11-11T17:04:13+08:00` | `2026-11-12T00:20:47+08:00` | 内容与摘要不变，仅仓库 revision 变化 |
+| ponytail | `09c434ab73ca43761c5d8b0c5d341926c2fba710` → `96608e078b2d5ea607c5c3b8b5a54d1c1fba6846` | `2026-10-18T09:55:14+08:00` → `2026-10-29T19:59:31+08:00` | `2026-11-12T00:20:50+08:00` | 四项内容与摘要不变，仅仓库 revision 变化 |
+| i-have-adhd | `1ecea1993b7fce257ffbd686c070948b5e07eda6` → `1ecea1993b7fce257ffbd686c070948b5e07eda6` | `2026-10-12T00:03:54+08:00` → `2026-10-12T00:03:54+08:00` | `2026-11-12T00:20:53+08:00` | revision、载荷及摘要均不变，同 SHA 官方复验晋升 |
+
+最终顶层 `stableSet=2026-11-11.1`、`promotedAt=2026-11-12`。编号沿第 1 轮核查日；执行环境时区为 +08:00，promotedAt 由官方命令按实际当日生成，没有手改。集合仍为六仓库／19 项；所有 repo URL、sourceSubpath、stablePath、license／licenseFiles 元数据保持，只有五个仓库 revision、四个 Skill treeSha256 及顶层日期字段变化。七份许可证／NOTICE 与 THIRD_PARTY_NOTICES.md 未变。
+
+### shadcn／ponytail 逐字节证据与测试维护
+
+以完整 SHA 的 codeload archive 受管子树为上游证据，不使用 mock clone。对全部 19 项执行 `diff -rq <晋升后 stablePath> <锁定 SHA 的上游 sourceSubpath>`，退出码全部为 0；该命令直接比较文件原始字节及完整目录，不做换行规范化。重点五项如下（stable 根均为 `sbtd-workflow-onboard/assets/external-skills/stable`）：
+
+| stable 相对子树 | 上游相对子树 | 比较结果 |
+|---|---|---|
+| `skills/shadcn` | shadcn-ui：`skills/shadcn` | `diff -rq` 退出 0，无输出 |
+| `skills/ponytail` | ponytail：`skills/ponytail` | `diff -rq` 退出 0，无输出 |
+| `skills/ponytail-review` | ponytail：`skills/ponytail-review` | `diff -rq` 退出 0，无输出 |
+| `skills/ponytail-audit` | ponytail：`skills/ponytail-audit` | `diff -rq` 退出 0，无输出 |
+| `skills/ponytail-debt` | ponytail：`skills/ponytail-debt` | `diff -rq` 退出 0，无输出 |
+
+另对上述五项、ADHD 子树、licenses 与 THIRD_PARTY_NOTICES.md 执行 `git diff --exit-code -- <各路径>`，退出 0、无输出，证明相对旧集合也无内容变化。结合 manifest diff，shadcn／ponytail 仅更新 MANIFEST 中的 revision（以及集合共享的 stableSet／promotedAt），未修改它们的快照或摘要。完整 19 项 digest 与比较结果保留在 `reports/r2-integrity-install.json`。
+
+`tests/test_onboard_ponytail_integration.py` 只改三个 live 值：`PONYTAIL_REVISION` 跟随上表、live stableSet 为 `2026-11-11.1`、live promotedAt 为 `2026-11-12`。修改 revision 断言的原因就是第 2 项投票结果：受管子路径无内容变化仍锁仓库 HEAD，live 断言含 revision，故必须跟随新 revision。模拟晋升夹具 `PONYTAIL_STABLE_SET = "2026-08-27.1"` 保持不变；ADHD revision 与两个摘要常量不变。`tests/test_onboard_external_skills.py` 无编辑，不改 digest 算法、不删除或削弱无关测试。
+
+## 第 2 轮本地验证
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only。基准 SHA 为 `57c2baa4b738a63fc0fcf09e8b71e897ee53e379`，分支 `chore/rc5-external-skills-repin`，Linux x64、Python 3.13.5、Node v22.20.0。rtk：skipped-for-report，使用 native 命令。下表只记本轮执行，不继承第 1 轮通过结论。晋升、安装、测试和补充诊断的原生 stdout／stderr、退出码、精确时间及命令参数保存在本任务 ignored `reports/r2-*.json`，各有同 stem 中文 `.md`；本地原始报告不自动发布，非未来 PR-head／CI 证据。
+
+官方晋升每行均执行以下原生命令，`<id>`／`<SHA>` 对应上表；没有传 `--license`／`--license-file`，六次均 `registration=false`、`prunedStableSkills=[]`。源码在每次替换前执行完整候选集合元数据及 19 项 `stable_external_skill_source()` 验证；成功 JSON 是真实宿主调用结果。
+
+```sh
+python3 -B sbtd-workflow-onboard/scripts/onboard.py promote-external-skills-stable --repository <id> --revision <SHA> --stable-set 2026-11-11.1 --yes --json
+```
+
+| 命令／证据 | 实际结果 | 退出码 |
+|---|---|---|
+| `TZ=Asia/Shanghai date --iso-8601=seconds`；六仓 `git ls-remote`；`gh api` 旧／新 commits 与 compare | 首次核查 00:16:54；晋升前复测精确到秒见上表，全部与计划一致；12 个 commit 请求的 author／committer 时间完成北京时间换算 | 全部 0 |
+| 官方晋升 mattpocock-skills；`reports/r2-promote-mattpocock-skills.json` | promoted，11 项；3.543 秒 | 0 |
+| 官方晋升 impeccable；`reports/r2-promote-impeccable.json` | promoted，1 项；6.976 秒 | 0 |
+| 官方晋升 ui-ux-pro-max-skill；`reports/r2-promote-ui-ux-pro-max-skill.json` | promoted，1 项；4.209 秒 | 0 |
+| 官方晋升 shadcn-ui；`reports/r2-promote-shadcn-ui.json` | promoted，1 项；7.040 秒 | 0 |
+| 官方晋升 ponytail；`reports/r2-promote-ponytail.json` | promoted，4 项；5.964 秒 | 0 |
+| 官方晋升 i-have-adhd；`reports/r2-promote-i-have-adhd.json` | promoted，1 项；4.190 秒 | 0 |
+| `load_external_stable_manifest()`＋逐项 `stable_external_skill_source()`；19 次 `diff -rq`；许可证原始字节比较 | 六 pin 正确；19/19 摘要正确且与上游原始字节一致；四摘要变化、十五不变；七份许可证／NOTICE 未变，集合没有新增 Skill | 0 |
+| `install-external-skills --all --source stable --global-skills-dir <隔离目标> --yes --json`；`reports/r2-isolated-install.json` | 同时隔离 HOME／USERPROFILE／XDG 目录，未调用 init／reset；真实 CLI transaction=committed，19/19 phase=commit、sourceUsed=stable，安装后 19 个原生摘要及 revision／stableSet 均匹配 manifest；1.375 秒 | 0 |
+| `python3 -B -m unittest tests.test_onboard_external_skills tests.test_onboard_ponytail_integration tests.test_onboard_i_have_adhd`；`reports/r2-external-tests.json` | 67 项通过，失败 0、跳过 0；47.011 秒 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts`；`reports/r2-workflow-tests.json` | 99 项通过，失败 0、跳过 0；39.559 秒 | 0 |
+| `python3 -B -m unittest tests.test_onboard_arguments tests.test_onboard_contracts tests.test_onboard_multi_projects tests.test_onboard_windows_platform`；`reports/r2-onboard-adjacent-tests.json` | 373 项，370 通过、3 跳过、失败 0；87.685 秒。原生输出未逐项列 skip 名；源码包含大小写不敏感文件系统及 Windows batch shim 平台条件，不冒充 Windows 原生通过 | 0 |
+| `PYTHONDONTWRITEBYTECODE=1 python3 -B <stable>/skills/ui-ux-pro-max/scripts/tests/test_rtl_support.py`；`reports/r2-upstream-rtl.json` | 12 项通过；含真实 search.py CLI，0.371 秒 | 0 |
+| `PYTHONDONTWRITEBYTECODE=1 python3 -B <stable>/skills/ui-ux-pro-max/scripts/tests/test_ime_composition.py`；`reports/r2-upstream-ime.json` | 3 项中 2 通过、1 跳过；0.047 秒。跳过上游根文档同步检查，因为安装子树不携带根 docs；CSV 中实际 JavaScript 的 IME／Enter 行为已执行，不是原生 OS IME 或 Safari 证明 | 0 |
+| `sh -n <stable>/skills/impeccable/scripts/impeccable`；`node --check <stable>/skills/impeccable/scripts/live-browser.js` | 均通过；只证明语法，不证明 engine 下载、浏览器 UI 或 Windows 运行 | 各 0 |
+| `git diff --check` | 失败：只命中上游 impeccable.cmd 的 CRLF 行。新文件 354 个 LF 全为 CRLF，旧文件 278 个 LF 也全为 CRLF；与上游字节完全一致，换行前空格／Tab 数为 0。未改镜像或换行消除检查结果 | 2 |
+| `git -c core.whitespace=cr-at-eol diff --check`；`reports/r2-crlf-diagnostic.json` | 通过；仅作 CRLF 原因诊断，不替代前一行失败、不写 Git 配置 | 0 |
+| `git status --short --untracked-files=all`、`git diff --stat`、manifest／测试／CHANGELOG 的 `git diff` | 42 个 tracked 修改、2 个上游原样新测试；index 未变；测试只有三个 live 值调整，CHANGELOG 双语各追加一条；未 staging | 0 |
+| 正式 TaskStore 生成器写入＋只读预览（与第 1 轮两条 `python3 -B -c` 命令完全相同）；`reports/r2-index-regen.json`／`r2-index-preview.json` | `INDEX_REGEN changed=False rows=84`；`INDEX_PREVIEW_SAME True rows=84`，既有旧格式事件提示保留。未手改 index | 各 0 |
+| 一次性范围验证脚本，原始 `reports/r2-scope-check.json` | 检查器首次错误地在整份中文 CHANGELOG 匹配通用前缀，连历史 #197 一并计入，断言失败；不是产品或历史被改。只修证据脚本为检查新增 diff 行，原失败报告保留 | 1 |
+| 修正范围验证；`reports/r2-scope-check-corrected.json` | 42 tracked 修改＋2 个上游新测试，staged=0；白名单以外所有 tracked 文件不变。删除双语新增条目后与原文件逐字节一致；测试文件仅三个已批准 live 值变化，其余字节一致；task 历史仅 updated_at 被替换，其余原文保留 | 0 |
+| 对新增 diff 行及两个上游新文件使用专用 grep 检查本机路径、禁用归因措辞与目标用字 | 本轮手写文字无匹配；全体新增文字只命中 impeccable/reference/hooks.md 三行上游通用 HOME 示例，不是本机路径，不修改原样镜像消除匹配。禁止归因措辞与非契约目标用字均无匹配 | 工具成功，无 shell 退出码 |
+
+隔离安装附带 postCheck 会报告隔离根缺少 bundled Skills／caveman，以及未安装 Java／未检查 Maestro；本项只安装 external Skills，不将它宣称为完整宿主初始化通过，也不按这些提示扩大安装权限。19 项 external transaction 与内容验收均通过。
+
+### 第 2 轮维护判断与剩余 Gate
+
+- README×2 仍将精确 pin 指向 MANIFEST；automation 的版本监控与独立晋升权限边界无文字漂移，三文件不改。双语 CHANGELOG 只在现有唯一 rc.5 Changed／变更尾部新增一条，无 PR 号；历史条目保持。
+- Ponytail-review／Code Readability Review：本仓手写实现无新增抽象，测试仅三值更新，可读性与已有形式一致；镜像不做本地删改。新增两个上游测试是完整目录复制结果，不是本轮另写测试。
+- Release Readiness Review：`blocked`。分发载荷与外部 engine 相关风险存在；集合摘要、真实隔离安装、安装拒绝／恢复回归通过，但四类 impeccable 旧问题及原生空白检查失败仍开放，独立安全评审、跨平台 CI、合入未完成。容量／队列／服务监控不适用；恢复仍沿既有事务保留目录及独立授权，不运行回滚或未知目录清理。
+- BDD：traceable（沿既有稳定安装／拒绝／恢复测试，不改持久化场景）；语言不适用。Cross-repo context：complete（六仓目标与完整受管子树已核查）；API Contract：not-needed；Mock Strategy：既有单测 fixture 与真实上游／真实隔离 CLI 分开，不新增 mock。
+- Final Test Report／Run Summary MD：generated（本地 raw＋同 stem 中文）；Targeted Rerun：not-needed，测试没有失败；Final Full Rerun：passed 仅指上述计划 unittest 范围，共 554 项、550 通过、4 跳过，非全仓或 CI。原生 `git diff --check` 仍 failed，不能称全部验证通过。
+- 跳过全仓其余分片、完整上游开发测试、完整浏览器／Windows 原生运行及 engine 下载：本轮执行限定回归和可独立运行子集，无正常宿主安装或额外依赖安装授权。未部署、未发布、未提交；status 保持 checking、completed_at=null。
+
+修改文件范围：`MANIFEST.json`；grilling／codebase-design 两处上游文案；impeccable 的 SKILL／reference／scripts；ui-ux-pro-max 的 SKILL／data／references／scripts（含两个上游原样新测试 `test_ime_composition.py` 111 行、`test_rtl_support.py` 166 行）；本仓 Ponytail 测试三值；双语 CHANGELOG；本 task。42 个 tracked 修改之外的 2 个新文件不会进入未 staging 的 `git diff --stat`，不能遗漏。没有仓库内临时脚本；本轮辅助脚本与上游审查材料在独立本地证据位置，隔离安装临时目标已随本次拥有的 TemporaryDirectory 释放。未清理未知内容或恢复目录；未运行 Git 写命令，官方晋升器内部临时 clone／checkout 不涉及本工作树的索引或分支。
+
 ## 模型记录
 
 | 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
 |---|---|---|---|---|
 | 第 1 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 只读核对、编写本任务、生成 index 与本地校验 | 14（推算） | 54（推算） |
+| 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 六仓上游复测与审查、官方晋升、隔离安装、回归验证、双语 CHANGELOG 与本任务证据 | 45（推算） | 140（推算） |
 
 计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用。本轮只读 count.py 对 sessions 输出 `astra_assistant=12 astra_toolcalls=53 other_assistant={} model_usage={}`，退出码 0，未写仓库。统计后只有本次 edit 和一次纯文本收尾，因此模型调用按 A+2=12+2=14、工具调用按 T+1=53+1=54 推算。日志没有其他模型，不另列模型行；find 未列入本轮工具，调用为 0。本次 edit 为最后一次工具调用，仅回填模型表与推算说明；之前新文字 grep 无匹配、git diff --check 退出 0，之后不再运行工具，不把计数回填冒充重新测试。
+
+第 2 轮计数：指定只读 count.py 对 sessions-r2 实际输出 `astra_assistant=43 astra_toolcalls=139 other_assistant={} model_usage={}`，退出 0，未写仓库。沿上文日志筛选方法，统计后只执行一次计数回填 edit 与一次纯文本收尾，故模型调用 A+2=43+2=45（推算），工具调用 T+1=139+1=140（推算）。没有其他模型，不另列；find 未列入本轮工具，调用为 0。本次 edit 是最后一次工具调用，仅增加本轮模型行及说明。计数前最终范围／手写文件空白检查退出 0，新增手写文字 grep 无匹配，20 对 raw／同 stem 中文报告核对通过；原生全范围 diff --check 的退出 2 与检查器首次退出 1 均保留，不把计数回填称为再次验证。
 
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-11-12T00:05:01+08:00 | planned | checking | started：Lord 在合入 #213（合并提交 a2a3aa72281e9127de821f19fb5056ad76306d16，提交时间 2026-11-11T23:55:48+08:00）之后群内调度开始外部 skills 重新锁版本，本轮只写 task.md 及生成式 index，不开始实现 | 已核对分支、HEAD、路径安全、既有定义、manifest／catalog、测试断言、晋升源码与帮助；INDEX_REGEN changed=True rows=84，INDEX_PREVIEW_SAME True rows=84，指定 unittest 99 项通过，diff 空白与范围检查通过，新写文字 grep 无匹配；developer-local，非 CI，详见验证证据。 |
+| 2026-11-12T00:15:48+08:00 | checking | checking | 按 640 2026-11-11 23:59 授权的群内投票结果，三项全票同意推荐（各 5 票同意、0 票反对；投票人 Lord、Reviewy、Researchy、CodeX、OMP；投票时间 2026-11-12 00:11 至 00:12 北京时间）：锁主线 HEAD、shadcn／ponytail 无内容变化仍升 revision、不登记 mattpocock 新 Skill；开始第 2 轮实现 | 起始 HEAD 57c2baa4b738a63fc0fcf09e8b71e897ee53e379，分支匹配，工作区干净；完整读取 task、官方晋升流程及 strict 方法，路径普通且报告目录已有 ignore 保护。 |
+| 2026-11-12T00:27:58+08:00 | checking | checking | 第 2 轮完成六仓官方晋升、必要 live pin 测试维护、双语 CHANGELOG 追加及 index／范围核对；原生空白检查因上游 CRLF 失败，保留原始镜像并记录四类 impeccable 旧问题，不声称发布就绪 | 六次 promoted／退出 0；19/19 manifest 摘要及上游逐字节一致，strict-stable 隔离安装 19/19 committed；必跑 unittest 67＋99 通过，补充 373 项跳过 3，RTL 12 通过，IME 3 项跳过 1；index changed=False／84、preview=True／84；范围检查器误匹配历史的失败保留，修正后退出 0；手写文字 grep 无匹配；原生 diff --check 退出 2，CRLF 诊断退出 0。 |

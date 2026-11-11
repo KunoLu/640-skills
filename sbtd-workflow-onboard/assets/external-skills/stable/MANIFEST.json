@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "stableSet": "2026-10-28.1",
-  "promotedAt": "2026-10-28",
+  "stableSet": "2026-11-11.1",
+  "promotedAt": "2026-11-12",
   "repositories": {
     "mattpocock-skills": {
       "url": "https://github.com/mattpocock/skills.git",
-      "revision": "59db609eb1e18aaf59b63284d0e52255aff0c63c",
+      "revision": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -16,7 +16,7 @@
     },
     "impeccable": {
       "url": "https://github.com/pbakaus/impeccable.git",
-      "revision": "3e3a9179e01a60265000ce239c0a99803ec1e60d",
+      "revision": "c1e0e5492fbb524f5df84d635ecfae7dc438ec45",
       "license": "Apache-2.0",
       "licenseFiles": [
         {
@@ -31,7 +31,7 @@
     },
     "ui-ux-pro-max-skill": {
       "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git",
-      "revision": "28b3b8dee8c976df4fa3e94aed4e092ad43fcb03",
+      "revision": "6ae86f61f520d6ca229d2f40e070410638c908c5",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -42,7 +42,7 @@
     },
     "shadcn-ui": {
       "url": "https://github.com/shadcn-ui/ui.git",
-      "revision": "96da9cc7f1aa10580a3741664e2a77c721206c00",
+      "revision": "dd41d19e2f80ff6891951f7ced74c2c9a650b065",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -53,7 +53,7 @@
     },
     "ponytail": {
       "url": "https://github.com/DietrichGebert/ponytail.git",
-      "revision": "09c434ab73ca43761c5d8b0c5d341926c2fba710",
+      "revision": "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846",
       "license": "MIT",
       "licenseFiles": [
         {
@@ -103,7 +103,7 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/productivity/grilling",
       "stablePath": "skills/grilling",
-      "treeSha256": "f83e444cb16561fe266a8d34d5315e089f2580aed6822087dbb039a2fe151cd7"
+      "treeSha256": "3a7559839f45dfa4491f045d56647148c2b90f0e5ce0b5355301ef0e6d1bc428"
     },
     "domain-modeling": {
       "repository": "mattpocock-skills",
@@ -115,7 +115,7 @@
       "repository": "mattpocock-skills",
       "sourceSubpath": "skills/engineering/codebase-design",
       "stablePath": "skills/codebase-design",
-      "treeSha256": "216f66d2cf91aed33b2d6762f0059ba0e6fe8e885b2e8dc0b6567fdce9b80d73"
+      "treeSha256": "5c0afe7f4a973e359b43b3b0fe56ec5bc64d7e09e3b709f9c539324c66a51760"
     },
     "handoff": {
       "repository": "mattpocock-skills",
@@ -145,13 +145,13 @@
       "repository": "impeccable",
       "sourceSubpath": "plugin/skills/impeccable",
       "stablePath": "skills/impeccable",
-      "treeSha256": "95d55681d5b6f46a78c232b2ccdc16f8a151453971df49d55c5b0893fc0d35c0"
+      "treeSha256": "b7c5ec024b7580af7928d9551aad94e9405b7e559362c31bfdb8896d02635f58"
     },
     "ui-ux-pro-max": {
       "repository": "ui-ux-pro-max-skill",
       "sourceSubpath": ".claude/skills/ui-ux-pro-max",
       "stablePath": "skills/ui-ux-pro-max",
-      "treeSha256": "24d28a3307496fc715328d823ac8877b582dd0a685c5dc1c14287cc21f5fbb04"
+      "treeSha256": "061d8392057f534c54cca2544e6d0274340db578d727d0f940f0f7d28555895b"
     },
     "shadcn": {
       "repository": "shadcn-ui",
