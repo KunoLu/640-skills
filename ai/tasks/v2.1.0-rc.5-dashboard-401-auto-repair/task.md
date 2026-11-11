@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: docs/v2.1.0-rc.5-dashboard-401-re-pair-contract
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T16:29:52+08:00'
+updated_at: '2026-11-11T17:05:15+08:00'
 completed_at: null
 ---
 
@@ -240,7 +240,7 @@ API Contract：verified（YAML、形状及已执行 schema 约束；不含完整
 
 本轮仅文档记录修正，不修改契约或生产行为；未完整调用 grill-with-docs，原因是范围与验收已明确，无新增领域歧义。既有 Book Gate Plan 的生产代码／设计／发布门禁本轮不触发，独立安全评审与批准仍沿用 pending 边界，不将 Reviewy 记录修正等同于安全批准。BDD／浏览器／运行时全量／lint／构建：skipped（无对应行为或代码变更）；Cross-repo context：contract-only；API Contract：not-needed（本轮未改契约）；Mock Strategy：none。Final Full Rerun：passed（仅上述指定 unittest 范围）；Targeted Rerun／Final Test Report／Run Summary MD：not-needed。前轮失败、跳过与环境缺口不因本轮 99 项通过而关闭；保持 checking，未 commit/push，CI 与发布状态不变。
 
-### 第 4 轮本地验证（按 Reviewy NOT CLEAN 修正契约）
+### 第 4 轮本地验证（历史：按 Reviewy NOT CLEAN 修正契约）
 
 本轮基准 SHA 为 `f6d3800e118f1f3b50e55c201391f025e151fefa`，绑定分支仍为 `docs/v2.1.0-rc.5-dashboard-401-re-pair-contract`；开始时工作区干净。模式保持 strict，来源保持 user，状态保持 checking，completed_at 保持 null。仅修改 ADR 0001 §9、OpenAPI 和本 task.md；index 已与生成器逐字节核对一致，无需写入。双语 rc.5 Added 的既有错误码概述仍准确，故 CHANGELOG 不变。没有调用 TaskStore 的写入方法，所有仓库正文均由 omp 直接用 edit 写入。
 
@@ -259,6 +259,25 @@ Evidence Source：developer-local；Source Revision：dirty；Evidence Publicati
 
 Final Full Rerun：passed（仅本轮指定的 99 项与 65 项，共 164 项，不是 runtime 全量）；Targeted Rerun：not-needed（本轮没有测试失败）。前轮全量失败、跳过与校验器缺口保留，未重复运行或关闭。API Contract：verified（YAML、既有 golden 与一次性契约形状检查，不是新恢复行为的运行证明）；Cross-repo context：contract-only；Mock Strategy：none。BDD／真实浏览器／新鉴权运行场景／lint／构建：skipped（仅契约文档，没有相应运行时编辑）；未新增 .feature 或测试框架。Final Test Report／Run Summary MD：not-needed（仅本地命令证据）。Reviewy 的 NOT CLEAN 修正不等于独立复审通过，640 批准与 CI 仍待完成；未 commit/push、未部署、未发布。
 
+### 第 5 轮本地验证（pair 200 Cache-Control planned 说明）
+
+本轮基准 SHA 为 `d516fdfea1f3355fbc990fb753196bd345a8b1df`，绑定分支仍为 `docs/v2.1.0-rc.5-dashboard-401-re-pair-contract`；开始时工作区干净，三个许可文件均为已跟踪普通文件，父目录无符号链接，未被 ignore。保持 strict／user／checking，completed_at 保持 null。仅补 OpenAPI pair 200 的头 description、ADR §9.3／§9.4 对应说明及本任务记录；401／403、re-pair-ticket、ADR §1–§7、CHANGELOG 和 index 不变。所有正文均由 omp 直接用 edit 写入，未调用 TaskStore 写入方法。
+
+未完整调用 grill-with-docs：本轮仅澄清现有契约的 planned 状态，不新增领域决策、数据结构、运行时行为或发布动作。domain-modeling 沿用既有术语；既有 Book Gate Plan 的 DDD 完整 grill、DDIA 新设计、Legacy、生产代码重构、TDD 与发布门禁本轮 not-needed。独立安全复审、640 批准及 CI 仍未闭环，作者自检不代替 Reviewy 复审。
+
+Evidence Source：developer-local；Source Revision：dirty；Evidence Publication：local-only；Environment Alignment：unverified。rtk：skipped-for-report，使用原生命令保留实际输出；下表仅为本地证据，不是正式 PR-head 报告。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `python3 -B -c 'import sys; from pathlib import Path; sys.path.insert(0,"sbtd-workflow-onboard/scripts"); from sbtd_task_state import TaskStore; s=TaskStore(Path.cwd(),read_only=True); r=s._catalog(); b,a=s._index_candidate(r,r); cur=Path("ai/tasks/index.md").read_bytes(); print("INDEX_ROWS",len(s._index_rows(r))); print("byte_identical", cur==a, "cur",len(cur),"gen",len(a))'` | `INDEX_ROWS 78`；`byte_identical True cur 6088 gen 6088`；保留“旧格式事件，不追溯”提示；只读核对，未写 index | 0 |
+| `python3 -c 'import yaml,pathlib; p=pathlib.Path("sbtd-runtime/contracts/openapi.yaml"); yaml.safe_load(p.read_text()); print("OPENAPI_PARSE_OK")'` | `OPENAPI_PARSE_OK` | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 总数 99，通过 99，失败 0，跳过 0；`OK`，52.334 秒 | 0 |
+| `python3 -B -c` 一次性只读契约边界检查 | `PAIR_REQUIRED_NO_STORE True; ONLY_HEADER_DESCRIPTION_ADDED True; ADR_PREFIX_IDENTICAL True`；pair 200 的头仍 required=true／const=no-store，英文 description 精确匹配；去掉该新增 description 后，OpenAPI 解析内容与 HEAD 完全一致；ADR §9 前字节不变 | 0 |
+| grep 工具：OpenAPI 新增行、ADR 两处改动行及本 task 全文的本机路径、禁止归因措辞与错误分钟检查 | 无匹配 | 工具成功，无 shell 退出码 |
+| `TZ=Asia/Shanghai date --iso-8601=seconds` | `2026-11-11T17:05:15+08:00`；用于本轮 updated_at 与 checking→checking 事件，不改历史时间戳 | 0 |
+
+API Contract：verified（仅 YAML 与描述变更边界，不是运行时发送该头的证据）；Cross-repo context：contract-only；Mock Strategy：none。BDD／真实浏览器／运行时全量／lint／构建：skipped（仅文档澄清，无对应行为或代码变更），未新增 .feature 或永久文字断言测试。实现 PR 必须对所有 pair 响应补上 `Cache-Control: no-store` 并增加断言该头的测试。Final Full Rerun：passed（仅上述 99 项）；Targeted Rerun／Final Test Report／Run Summary MD：not-needed。前轮失败、跳过及校验器缺口保留；未 commit/push、未部署、未发布，不标 done。
+
 ## 模型记录
 
 | 轮次 | 模型 | 用途 | 模型调用 | 工具调用 |
@@ -271,14 +290,18 @@ Final Full Rerun：passed（仅本轮指定的 99 项与 65 项，共 164 项，
 | 第 2 轮 | `cursor/composer-2.5` | omp 会话标题生成 | 2 | — |
 | 第 3 轮（历史：按 Reviewy 意见修正记录） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 11 | 21 |
 | 第 3 轮 | 其他后台模型 | omp 工具内部调用 | 无 | — |
-| 第 4 轮（按 Reviewy NOT CLEAN 修正契约） | `openai-codex/gpt-6-astra`（主模型） | 直接修正 ADR／OpenAPI／任务记录并验证，含最后计数编辑与纯文本收尾 | 13 | 40 |
+| 第 4 轮（历史：按 Reviewy NOT CLEAN 修正契约） | `openai-codex/gpt-6-astra`（主模型） | 直接修正 ADR／OpenAPI／任务记录并验证，含最后计数编辑与纯文本收尾 | 13 | 40 |
 | 第 4 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
+| 第 5 轮（本轮：pair 200 Cache-Control planned 说明） | `openai-codex/gpt-6-astra`（主模型） | 直接补 OpenAPI／ADR planned 说明、验证与任务记录，含最后计数编辑与纯文本收尾 | 11 | 29 |
+| 第 5 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
 
 第 1、2 轮 find 的后台归属来自会话日志字段：每条记录为 `"purpose":"find","provider":"typesafe","model":"jev-latest"`；按这些日志字段计数，第 1 轮 35 次、第 2 轮 23 次，不能归为主模型调用。
 
 第 3 轮次数写入方式披露（Lord 16:21）：第 3 轮写入的调用次数，是当时由仓库外脚本在 omp 最后一次 bash 调用里填入文件的，不是 omp 在文件里亲手写的；从本轮起全部正文由 omp 直接用 write/edit 写入。历史数字保持原记录，不把脚本填数表述成 omp 手写。未使用 task 执行工具或子代理；进度清单不承担任务执行。
 
 第 4 轮计数方法：收尾前按会话日志计数，筛选 `type=message`、`role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的已有记录，实际为 11 条；加本次最终 edit 所在的 1 次模型调用和随后纯文本收尾 stop 的 1 次，共 13 次。相同记录内 `content.type=toolCall` 已有 39 条，加本次最终 edit 1 次，共 40 次；find 工具调用为 0，本轮 jev-latest／find 为 0 次。统计命令只读日志、未写仓库；上述数字与说明由 omp 本人直接用 edit 写入，这是本轮对仓库文件的最后一次编辑，之后不再调用工具。模型计数按日志条目口径，不将工具调用数当成模型调用数；本次计数未追溯改写前 3 轮。
+
+第 5 轮计数方法：完成其他修改与校验后，由 omp 本人只读统计本会话日志，筛选 `type=message`、`message.role=assistant`、`message.provider=openai-codex`、`message.model=gpt-6-astra`，已有 9 条（包含本次统计调用）；加最后计数 edit 所在的 1 次模型调用及随后纯文本收尾 stop 的 1 次，共 11 次。相同记录内 `content.type=toolCall` 已有 28 条，加最终 edit 1 次，共 29 次；包含进度清单工具，不将其计为独立任务执行或审查。find 调用为 0，本轮 jev-latest／find 为 0 次，未使用子代理。计数命令不写仓库，次数与说明均由 omp 本人直接用 edit 写入；这是本轮对仓库文件的最后一次编辑，之后不再调用任何工具，直接纯文本收尾。此口径按日志条目统计，不将工具调用数当成模型调用数，不追溯改写历史轮次。
 
 ## 状态事件
 
@@ -289,3 +312,4 @@ Final Full Rerun：passed（仅本轮指定的 99 项与 65 项，共 164 项，
 | 2026-11-11T15:26:30+08:00 | checking | checking | 按 strict 补 CHANGELOG 与执行记录 | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；第 2 轮补齐双语未发布条目、strict 执行与模型记录（后台调用遗漏在第 3 轮补正），验证结果见第 2 轮证据表；未 commit/push，独立评审、批准与 CI 仍待完成。 |
 | 2026-11-11T16:00:59+08:00 | checking | checking | 按 Reviewy 意见修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | 索引生成 changed=False、预览 True，均为 78 行；指定状态／工作流测试 99 项通过；diff 仅本 task.md，新增行无本机路径，全文禁止措辞无匹配；详情见第 3 轮本地验证。 |
 | 2026-11-11T16:29:52+08:00 | checking | checking | 按 Reviewy NOT CLEAN 一次性修正决策来源措辞、403／401 语义、pair 契约，以及第 3 轮次数披露 | 决策采用分钟不可考的 Lord 记录原文；Bearer／CSRF 整体失败为 401，403 仅来源拒绝；pair 同步恢复票、严格来源、单次消费与 no-store，恢复记录窗口结束即删除；本轮验证结果见第 4 轮证据表。未 commit/push，等待独立复审、批准与 CI。 |
+| 2026-11-11T17:05:15+08:00 | checking | checking | 按 Reviewy 意见修正：为 pair 200 的 Cache-Control 头补 planned 说明，当前 serve 尚未发送，实现 PR 对所有 pair 响应补上并须增加断言该头的测试；同步 ADR §9.3／§9.4 | required=true／const=no-store 保留，401／403 与其他契约内容不变；index 逐字节一致（78 行，6088 字节），OPENAPI_PARSE_OK，状态／工作流测试 99 项通过；只读边界检查与禁止措辞／本机路径检查通过，详见第 5 轮本地验证。保持 strict／user／checking；未 commit/push，独立复审、批准与 CI 仍待完成。 |

@@ -78,6 +78,7 @@ paths:
           description: Session bearer. Not a long-term token and not returned in a URL.
           headers:
             Cache-Control:
+              description: "planned: current serve does not send it yet; the implementation PR adds it to all pair responses."
               required: true
               schema:
                 type: string
