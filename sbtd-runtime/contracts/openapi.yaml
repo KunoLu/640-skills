@@ -78,7 +78,7 @@ paths:
           description: Session bearer. Not a long-term token and not returned in a URL.
           headers:
             Cache-Control:
-              description: "planned: current serve does not send it yet; the implementation PR adds it to all pair responses."
+              description: "implemented: serve sends Cache-Control: no-store on all pair responses."
               required: true
               schema:
                 type: string
@@ -94,7 +94,7 @@ paths:
       operationId: issueRePairTicket
       tags: [auth]
       summary: Exchange a just-expired session credential for one recovery pairing ticket
-      x-sbtd-implementation: planned
+      x-sbtd-implementation: implemented
       description: |
         编排方整理：契约先行，serve 尚未路由；实现须在 640 批准本契约后另开 PR。
         Proposed, pending Reviewy security review; see ADR 0001 section 9.

@@ -13,6 +13,8 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 - Add ADR 0001 §9 and a contract-first OpenAPI `POST /api/v1/session/re-pair-ticket`: a recovery window of at most 60 seconds after expiry (the endpoint at +60 seconds is excluded), bound to the original paired session; each expired credential can obtain only one ticket, valid for at most 30 seconds and single-use. Main error responses are `401 unauthorized`, `403 forbidden`, and `429 RE_PAIR_RATE_LIMITED`. Not implemented or routed by serve; implementation requires 640's contract approval and a separate PR.
 
+- Implement automatic Dashboard re-pairing after authenticated 401 responses: one process-bound recovery ticket and one exchange per manual pairing chain, same-tab single-flight recovery, bounded replay of the original snapshot/export operation, and manual pairing guidance on failure. All pair and re-pair-ticket responses now send `Cache-Control: no-store`, including middleware rejections; boundary, concurrency, export and response-header regressions cover the implementation. OpenAPI only marks the ticket operation's implementation marker and pair's no-store status description as implemented; interfaces, fields and status codes are unchanged.
+
 ### Changed
 
 - Append §6 to ADR 0003: set an 8-entry full-snapshot memory limit with LRU eviction without deleting disk files, build only a lightweight index at startup, and reload cache misses with the existing safety checks; 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged. Documentation only; implementation will follow in a separate PR.

@@ -19,9 +19,9 @@ export interface ExportInput {
 }
 export interface ExportFile { blob: Blob; filename: string }
 export interface ExportApi {
-  createExport(input: ExportInput, key: string, signal: AbortSignal): Promise<{ export_id: string; warnings?: string[] }>;
+  createExport(input: ExportInput, key: string, signal: AbortSignal, allowRecovery?: boolean): Promise<{ export_id: string; warnings?: string[] }>;
   getExport(id: string, signal: AbortSignal): Promise<ExportStatus>;
-  deleteExport(id: string, key: string): Promise<void>;
+  deleteExport(id: string, key: string, signal?: AbortSignal): Promise<void>;
   downloadExport(id: string, format: ExportFormat, signal: AbortSignal): Promise<ExportFile>;
 }
 
@@ -67,6 +67,7 @@ export class ExportJob {
   readonly input: ExportInput;
   readonly key: string;
   readonly controller = new AbortController();
+  private cancellation = new AbortController();
   id: string | null = null;
   private api: ExportApi;
   private changed: (state: ExportState) => void;
@@ -87,11 +88,14 @@ export class ExportJob {
     this.options = options;
   }
 
-  stop(): void { this.controller.abort(); }
+  stop(): void {
+    this.controller.abort();
+    this.cancellation.abort();
+  }
 
   async cancel(): Promise<void> {
-    this.stop();
-    if (this.id) await this.api.deleteExport(this.id, this.key);
+    this.controller.abort();
+    if (this.id) await this.api.deleteExport(this.id, this.key, this.cancellation.signal);
   }
 
   private emit(status: ExportState["status"], message: string): void {
@@ -112,9 +116,10 @@ export class ExportJob {
       catch (error) {
         signal.throwIfAborted();
         if (!error || typeof error !== "object" || !("status" in error) || error.status !== null) throw error;
+        if ("retryable" in error && error.retryable === false) throw error;
         await wait(delay, signal);
         signal.throwIfAborted();
-        accepted = await this.api.createExport(this.input, this.key, signal);
+        accepted = await this.api.createExport(this.input, this.key, signal, false);
       }
       signal.throwIfAborted();
       this.id = accepted.export_id;

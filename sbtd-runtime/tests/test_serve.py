@@ -19,6 +19,8 @@ import tempfile
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -166,6 +168,13 @@ def request(
     response = conn.getresponse()
     data = response.read()
     result = (response.status, dict(response.getheaders()), data)
+    if method == "POST" and path in (
+        "/api/v1/session/pair",
+        "/api/v1/session/re-pair-ticket",
+    ):
+        assert {k.lower(): v for k, v in response.getheaders()}.get(
+            "cache-control"
+        ) == "no-store", "pairing response must not be cached"
     conn.close()
     return result
 
@@ -661,6 +670,390 @@ class HostOriginAndApiTests(unittest.TestCase):
             },
         )
         self.assertEqual(status, 400)
+
+
+class LoopbackApp:
+    """Real uvicorn with test-only AccessControl clock/lifetime assembly."""
+
+    def __init__(self, home, access):
+        import serve
+        import uvicorn
+
+        self.port = _free_port()
+        self.app = serve.create_app(home, access, self.port)
+        self.server = uvicorn.Server(
+            uvicorn.Config(
+                self.app,
+                host="127.0.0.1",
+                port=self.port,
+                log_level="warning",
+                access_log=False,
+                timeout_graceful_shutdown=2,
+            )
+        )
+        self.thread = threading.Thread(target=self.server.run, daemon=True)
+        self.thread.start()
+        try:
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                if not self.thread.is_alive():
+                    raise AssertionError("loopback serve exited before ready")
+                try:
+                    if request(self.port, "GET", "/api/v1/health")[0] == 200:
+                        return
+                except OSError:
+                    pass
+                time.sleep(0.02)
+            raise AssertionError("loopback serve startup timeout")
+        except BaseException:
+            self.stop()
+            raise
+
+    def stop(self):
+        self.server.should_exit = True
+        self.thread.join(15)
+        if self.thread.is_alive():
+            raise AssertionError("loopback serve shutdown timeout")
+
+
+class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    """ADR §9: real middleware/handlers with independent injectable clocks."""
+
+    async def asyncSetUp(self) -> None:
+        import serve
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.now = datetime(2026, 11, 11, tzinfo=UTC)
+        self.tick = 100.0
+        self.access = serve.AccessControl(
+            session_ttl_seconds=10,
+            wall_clock=lambda: self.now,
+            monotonic=lambda: self.tick,
+        )
+        self.app = serve.create_app(Path(self.tmp.name), self.access, 6400)
+        lifespan = self.app.app.router.lifespan_context(self.app.app)
+        await lifespan.__aenter__()
+        self.addAsyncCleanup(lifespan.__aexit__, None, None, None)
+        self.origin = "http://127.0.0.1:6400"
+        self.ticket_path = "/api/v1/session/re-pair-ticket"
+        self.pair_path = "/api/v1/session/pair"
+
+    async def http(self, path, *, headers=None, method="POST", expected=200):
+        sent = []
+        merged = {"host": "127.0.0.1:6400", "origin": self.origin, **(headers or {})}
+        scope = {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "root_path": "",
+            "query_string": b"",
+            "scheme": "http",
+            "http_version": "1.1",
+            "server": ("127.0.0.1", 6400),
+            "client": ("127.0.0.1", 12345),
+            "headers": [
+                (k.encode(), v.encode()) for k, v in merged.items() if v is not None
+            ],
+        }
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            sent.append(message)
+
+        await self.app(scope, receive, send)
+        response_headers = {
+            k.decode().lower(): v.decode() for k, v in sent[0]["headers"]
+        }
+        self.assertEqual(sent[0]["status"], expected)
+        if path in (self.pair_path, self.ticket_path):
+            self.assertEqual(response_headers.get("cache-control"), "no-store")
+        else:
+            self.assertNotIn("cache-control", response_headers)
+        body = json.loads(b"".join(m.get("body", b"") for m in sent))
+        if expected in (401, 403, 429):
+            self.assertEqual(
+                body,
+                {
+                    "detail": {
+                        401: "unauthorized",
+                        403: "forbidden",
+                        429: "RE_PAIR_RATE_LIMITED",
+                    }[expected]
+                },
+            )
+        return body, response_headers
+
+    async def initial(self):
+        body, headers = await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": self.access.ticket, "origin": None},
+        )
+        return {
+            "authorization": f"Bearer {body['access_token']}",
+            "x-csrf-token": headers["x-csrf-token"],
+        }
+
+    async def pending(self):
+        credentials = await self.initial()
+        self.now += timedelta(seconds=10)
+        ticket, _ = await self.http(self.ticket_path, headers=credentials)
+        return credentials, ticket
+
+    async def test_half_open_window_and_data_authority(self):
+        credentials = await self.initial()
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+        await self.http("/api/v1/metrics/catalog", headers=credentials, method="GET")
+        self.now += timedelta(seconds=10)
+        await self.http(
+            "/api/v1/metrics/catalog", headers=credentials, method="GET", expected=401
+        )
+        ticket, _ = await self.http(self.ticket_path, headers=credentials)
+        self.assertEqual(ticket["ttl_seconds"], 30)
+        self.assertEqual(ticket["expires_at"], "2026-11-11T00:00:40Z")
+        await self.http(
+            "/api/v1/metrics/catalog",
+            method="GET",
+            headers={"authorization": f"Bearer {ticket['pairing_code']}"},
+            expected=401,
+        )
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+        self.now += timedelta(seconds=60)
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+        self.assertEqual(self.access._sessions, {})
+        self.assertIsNone(self.access._recovery_ticket)
+
+    async def test_fractional_remaining_window_and_ticket_expiry(self):
+        credentials = await self.initial()
+        self.now += timedelta(seconds=69.75)
+        ticket, _ = await self.http(self.ticket_path, headers=credentials)
+        self.assertEqual(ticket["ttl_seconds"], 0.25)
+        self.assertEqual(ticket["expires_at"], "2026-11-11T00:01:10Z")
+        self.now += timedelta(seconds=0.25)
+        await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": ticket["pairing_code"]},
+            expected=401,
+        )
+        self.assertEqual(self.access._sessions, {})
+
+    async def test_initial_pair_no_store_and_legacy_origin(self):
+        code = self.access.ticket
+        for headers in (
+            {"host": "evil:6400"},
+            {"host": "127.0.0.1:6401"},
+            {"origin": "null"},
+            {"origin": "https://127.0.0.1:6400"},
+            {"origin": "http://[broken"},
+            {"origin": "http://127.0.0.1:bad"},
+        ):
+            await self.http(
+                self.pair_path,
+                headers={**headers, "x-pairing-code": code},
+                expected=403,
+            )
+        await self.http(
+            self.pair_path,
+            headers={
+                "origin": "http://localhost:6400/path?query#fragment",
+                "x-pairing-code": code,
+            },
+        )
+        for wrong in (None, "", "wrong", code):
+            await self.http(
+                self.pair_path,
+                headers={"x-pairing-code": wrong, "origin": None},
+                expected=401,
+            )
+
+    async def test_missing_initial_ticket_destroys(self):
+        code = self.access.ticket
+        await self.http(self.pair_path, expected=401)
+        await self.http(self.pair_path, headers={"x-pairing-code": code}, expected=401)
+
+    async def test_expired_initial_ticket_rejected(self):
+        import serve
+
+        code = self.access.ticket
+        self.now += timedelta(seconds=serve.TICKET_TTL_SECONDS)
+        await self.http(self.pair_path, headers={"x-pairing-code": code}, expected=401)
+
+    async def test_strict_source_priority_does_not_spend_budget_or_ticket(self):
+        credentials = await self.initial()
+        self.now += timedelta(seconds=10)
+        bad_sources = (
+            {"origin": None},
+            {"origin": "null"},
+            {"origin": self.origin + "/"},
+            {"origin": self.origin + "?x"},
+            {"origin": self.origin + "#x"},
+            {"origin": "http://user@127.0.0.1:6400"},
+            {"origin": "http://localhost:6400"},
+            {"origin": "http://127.0.0.1:6401"},
+            {"host": "evil:6400"},
+            {"host": "127.0.0.1:6401"},
+            {"origin": "http://[broken"},
+            {"origin": "https://127.0.0.1:6400"},
+            {"origin": "http://127.0.0.1:bad"},
+        )
+        for source in bad_sources:
+            await self.http(
+                self.ticket_path, headers={**credentials, **source}, expected=403
+            )
+        ticket, _ = await self.http(self.ticket_path, headers=credentials)
+        for source in bad_sources:
+            await self.http(
+                self.pair_path,
+                headers={
+                    "x-pairing-code": ticket["pairing_code"],
+                    **source,
+                },
+                expected=403,
+            )
+        body, _ = await self.http(
+            self.pair_path, headers={"x-pairing-code": ticket["pairing_code"]}
+        )
+        self.assertEqual(body["expires_in"], 10)
+        await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": ticket["pairing_code"]},
+            expected=401,
+        )
+        self.assertEqual(len(self.access._admitted), 1)
+
+    async def test_joint_credentials_and_ordinary_csrf(self):
+        credentials = await self.initial()
+        await self.http(
+            "/api/v1/statistics/query",
+            headers={"authorization": credentials["authorization"]},
+            expected=403,
+        )
+        self.now += timedelta(seconds=10)
+        for authorization, csrf in (
+            (None, None),
+            (None, credentials["x-csrf-token"]),
+            (credentials["authorization"], None),
+            (credentials["authorization"], "wrong"),
+            ("Bearer wrong", credentials["x-csrf-token"]),
+            ("Basic wrong", "wrong"),
+            ("Bearer wrong", "wrong"),
+        ):
+            await self.http(
+                self.ticket_path,
+                headers={
+                    "authorization": authorization,
+                    "x-csrf-token": csrf,
+                },
+                expected=401,
+            )
+        await self.http(self.ticket_path, headers=credentials)
+
+    async def test_concurrent_issuance_and_exchange_single_chain(self):
+        credentials = await self.initial()
+        self.now += timedelta(seconds=10)
+        bearer = credentials["authorization"][7:]
+        barrier = threading.Barrier(8)
+
+        def issue(_):
+            barrier.wait()
+            return self.access.re_pair_ticket(bearer, credentials["x-csrf-token"])[0]
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(issue, range(8)))
+        tickets = [r for r in results if r is not None]
+        self.assertEqual(len(tickets), 1)
+        code = tickets[0]["pairing_code"]
+        responses = await asyncio.gather(
+            *(
+                self.http(
+                    self.pair_path,
+                    headers={"x-pairing-code": code},
+                    expected=200 if i == 0 else 401,
+                )
+                for i in range(8)
+            )
+        )
+        new_session, new_headers = responses[0]
+        new_credentials = {
+            "authorization": f"Bearer {new_session['access_token']}",
+            "x-csrf-token": new_headers["x-csrf-token"],
+        }
+        await self.http(
+            "/api/v1/metrics/catalog", method="GET", headers=new_credentials
+        )
+        self.now += timedelta(seconds=10)
+        await self.http(self.ticket_path, headers=new_credentials, expected=401)
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+
+    async def test_failed_exchange_consumes_and_never_reissues(self):
+        credentials, ticket = await self.pending()
+        await self.http(
+            self.pair_path, headers={"x-pairing-code": "wrong"}, expected=401
+        )
+        await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": ticket["pairing_code"]},
+            expected=401,
+        )
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+
+    async def test_missing_exchange_consumes(self):
+        _, ticket = await self.pending()
+        await self.http(self.pair_path, expected=401)
+        await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": ticket["pairing_code"]},
+            expected=401,
+        )
+
+    async def test_ticket_right_endpoint_and_lost_response(self):
+        credentials, ticket = await self.pending()
+        self.now += timedelta(seconds=30)
+        await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": ticket["pairing_code"]},
+            expected=401,
+        )
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+
+    async def test_revocation_and_restart_invalidate_recovery(self):
+        import serve
+
+        credentials, ticket = await self.pending()
+        self.access.revoke(credentials["authorization"][7:])
+        await self.http(
+            self.pair_path,
+            headers={"x-pairing-code": ticket["pairing_code"]},
+            expected=401,
+        )
+        await self.http(self.ticket_path, headers=credentials, expected=401)
+        restarted = serve.AccessControl(wall_clock=lambda: self.now)
+        self.assertEqual(
+            restarted.re_pair_ticket(
+                credentials["authorization"][7:], credentials["x-csrf-token"]
+            ),
+            (None, None),
+        )
+        self.assertIsNone(
+            restarted.pair(ticket["pairing_code"], recovery_source_allowed=True)
+        )
+
+    async def test_rolling_rate_limit_and_retry_after(self):
+        for i in range(10):
+            self.tick = 100 + i
+            await self.http(self.ticket_path, expected=401)
+        self.tick = 109.1
+        _, headers = await self.http(self.ticket_path, expected=429)
+        self.assertEqual(headers["retry-after"], "51")
+        self.tick = 159.5
+        _, headers = await self.http(self.ticket_path, expected=429)
+        self.assertEqual(headers["retry-after"], "1")
+        await self.http(self.ticket_path, headers={"origin": None}, expected=403)
+        self.tick = 160
+        await self.http(self.ticket_path, expected=401)
+        await self.http(self.ticket_path, expected=429)
 
 
 if __name__ == "__main__":

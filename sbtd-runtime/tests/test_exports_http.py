@@ -5,7 +5,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import http.client
+import io
 import json
+import logging
 import os
 import tempfile
 import time
@@ -18,6 +20,7 @@ from unittest import mock
 from report_snapshot import SnapshotStore
 from test_csv_export import _dataset, _scope
 from test_serve import (
+    LoopbackApp,
     ServeProcess,
     _enable_observation,
     _free_port,
@@ -292,7 +295,9 @@ class ExportHttpTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 document = payload.decode()
                 self.assertIn(heading, document)
-                self.assertIn('lang="en"' if locale == "en" else 'lang="zh-CN"', document)
+                self.assertIn(
+                    'lang="en"' if locale == "en" else 'lang="zh-CN"', document
+                )
 
     def test_missing_foreign_and_expired_snapshot_errors(self) -> None:
         with tempfile.TemporaryDirectory() as other:
@@ -434,3 +439,144 @@ class ExportHttpTests(unittest.TestCase):
                     self.assertEqual(response.status, 400)
                 finally:
                     connection.close()
+
+
+class RecoveryExportHttpTests(unittest.TestCase):
+    def test_recovery_keeps_export_id_key_and_download_and_does_not_log_secrets(self):
+        from serve import AccessControl
+
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            _enable_observation(home)
+            _seed_golden_events(home)
+            now = datetime.now(UTC)
+            access = AccessControl(session_ttl_seconds=10, wall_clock=lambda: now)
+            capture = io.StringIO()
+            handler = logging.StreamHandler(capture)
+            logger = logging.getLogger()
+            previous_level = logger.level
+            logger.addHandler(handler)
+            logger.setLevel(logging.DEBUG)
+            self.addCleanup(logger.removeHandler, handler)
+            self.addCleanup(logger.setLevel, previous_level)
+            server = LoopbackApp(home, access)
+            self.addCleanup(server.stop)
+            port = server.port
+            startup = access.ticket
+            status, session, response_headers = pair(port, startup)
+            self.assertEqual(status, 200)
+            credentials = {
+                "Authorization": f"Bearer {session['access_token']}",
+                "X-CSRF-Token": response_headers["x-csrf-token"],
+                "Origin": f"http://127.0.0.1:{port}",
+                "Idempotency-Key": "same-export-after-recovery",
+            }
+            status, _, body = request(
+                port,
+                "POST",
+                "/api/v1/statistics/query",
+                headers=credentials,
+                body=_scope(_dataset(), ["tasks.touched"]),
+            )
+            self.assertEqual(status, 200)
+            snapshot_id = json.loads(body)["data"]["snapshot_id"]
+            payload = {"snapshot_id": snapshot_id, "format": "csv"}
+            status, _, body = request(
+                port, "POST", "/api/v1/exports", headers=credentials, body=payload
+            )
+            self.assertEqual(status, 202)
+            export_id = json.loads(body)["data"]["export_id"]
+            now += timedelta(seconds=10)
+            self.assertEqual(
+                request(
+                    port, "GET", f"/api/v1/exports/{export_id}", headers=credentials
+                )[0],
+                401,
+            )
+            status, _, body = request(
+                port, "POST", "/api/v1/session/re-pair-ticket", headers=credentials
+            )
+            self.assertEqual(status, 200)
+            code = json.loads(body)["pairing_code"]
+            self.assertEqual(
+                request(
+                    port, "POST", "/api/v1/session/re-pair-ticket", headers=credentials
+                )[0],
+                401,
+            )
+            status, headers, body = request(
+                port,
+                "POST",
+                "/api/v1/session/pair",
+                headers={
+                    "Origin": credentials["Origin"],
+                    "X-Pairing-Code": code,
+                },
+            )
+            self.assertEqual(status, 200)
+            replacement = json.loads(body)
+            csrf = {k.lower(): v for k, v in headers.items()}["x-csrf-token"]
+            new_credentials = {
+                **credentials,
+                "Authorization": f"Bearer {replacement['access_token']}",
+                "X-CSRF-Token": csrf,
+            }
+            status, _, body = request(
+                port, "POST", "/api/v1/exports", headers=new_credentials, body=payload
+            )
+            self.assertEqual(status, 202)
+            self.assertEqual(json.loads(body)["data"]["export_id"], export_id)
+            for _ in range(100):
+                status, _, body = request(
+                    port, "GET", f"/api/v1/exports/{export_id}", headers=new_credentials
+                )
+                self.assertEqual(status, 200)
+                if json.loads(body)["data"]["status"] == "ready":
+                    break
+                time.sleep(0.02)
+            else:
+                self.fail("original export did not become ready")
+            self.assertEqual(
+                request(
+                    port,
+                    "GET",
+                    f"/api/v1/exports/{export_id}/file",
+                    headers=new_credentials,
+                )[0],
+                200,
+            )
+            self.assertEqual(
+                request(
+                    port,
+                    "DELETE",
+                    f"/api/v1/exports/{export_id}",
+                    headers=new_credentials,
+                )[0],
+                204,
+            )
+            now += timedelta(seconds=10)
+            self.assertEqual(
+                request(
+                    port,
+                    "POST",
+                    "/api/v1/session/re-pair-ticket",
+                    headers=new_credentials,
+                )[0],
+                401,
+            )
+            server.stop()
+            secrets = (
+                startup,
+                session["access_token"],
+                credentials["X-CSRF-Token"],
+                code,
+                replacement["access_token"],
+                csrf,
+            )
+            external = [
+                capture.getvalue().encode(),
+                *(path.read_bytes() for path in home.rglob("*") if path.is_file()),
+            ]
+            for content in external:
+                for secret in secrets:
+                    self.assertTrue(secret.encode() not in content, "credential leaked")

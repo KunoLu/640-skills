@@ -57,6 +57,10 @@ const zh = {
   refresh_failed: "刷新失败：{error}（仍显示上一份已完成快照视图）",
   load_failed: "加载失败：{error}",
   retry: "重试",
+  recovery_running: "正在重新配对；画面尚未刷新，自动请求已暂停。",
+  recovery_success: "已重新配对；本轮刷新使用新会话。",
+  recovery_stale: "画面未刷新",
+  recovery_manual: "自动重新配对已停止。请先在终端停止 serve，再重新运行 sbtd-runtime serve，使用新打开的配对链接进入 Dashboard；旧票不能重用。",
   error_unpaired:
     "未配对：本页须经 sbtd-runtime serve 自动打开的配对链接访问" +
     "（ticket 一次性且短时有效；过期请重启 serve）",
@@ -203,6 +207,10 @@ const en: Record<StringKey, string> = {
   refresh_failed: "Refresh failed: {error} (showing the last completed snapshot)",
   load_failed: "Load failed: {error}",
   retry: "Retry",
+  recovery_running: "Re-pairing; the view has not refreshed and automatic requests are paused.",
+  recovery_success: "Re-paired; this refresh uses the new session.",
+  recovery_stale: "View not refreshed",
+  recovery_manual: "Automatic re-pairing stopped. Stop serve in the terminal, run sbtd-runtime serve again, then use the newly opened pairing link to enter the Dashboard. Do not reuse the old ticket.",
   error_unpaired:
     "Not paired: open this page via the pairing link that sbtd-runtime serve " +
     "opens automatically (the ticket is one-time and short-lived; restart serve if it expired)",
