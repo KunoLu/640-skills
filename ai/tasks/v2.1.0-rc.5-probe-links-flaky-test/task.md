@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: chore/v2.1.0-rc.5-probe-links-flaky-143
 created_at: '2026-11-11T14:38:02+08:00'
-updated_at: '2026-11-11T16:12:34+08:00'
+updated_at: '2026-11-11T16:22:59+08:00'
 completed_at: null
 ---
 
@@ -91,9 +91,11 @@ python3 -B -c 'import sys; from pathlib import Path; sys.path.insert(0,"sbtd-wor
 
 #143 原轮修改目标测试、本 task 与生成索引；本次仅修改本 task、`CHANGELOG.md`、`CHANGELOG.zh.md` 三个授权文件，索引只读生成校验，不修改测试或正式代码。任务保持 `checking`（待审），`completed_at: null`；编排方已创建开发分支、commit 并 push，已开 PR #208，本次不 commit、push 或切分支，不写 done。
 
-模型核账：主模型 openai-codex/gpt-6-astra（thinking high）。#143 原轮 astra 16 次（1 次主会话运行，无子代理），同轮 typesafe/jev-latest 40 次，仅用于 omp 内置 find 工具、未写内容，不计入 astra；按 Reviewy 意见修订第一次会话 astra 10 次、jev-latest 0 次；核次补记会话 astra 9 次（会话结束后核对）、jev-latest 0 次。本轮（strict＋CHANGELOG）会话 astra 14 次，按本会话 jsonl 中 role=assistant、provider=openai-codex、model=gpt-6-astra 的条数核计，并计入 1 次收尾回复；typesafe/jev-latest 次数不可核：本会话 find 日志记录 23 requests，但未提供 provider／model，不能把这些请求确认为 jev-latest，也不并入 astra。15:45 轮（本次措辞修订会话）openai-codex/gpt-6-astra（thinking high）据事后日志更正为 9 次；find 工具用 typesafe/jev-latest 24 次，不并入 astra。主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
+模型核账：主模型 openai-codex/gpt-6-astra（thinking high）。#143 原轮 astra 16 次（1 次主会话运行，无子代理），同轮 typesafe/jev-latest 40 次，仅用于 omp 内置 find 工具、未写内容，不计入 astra；按 Reviewy 意见修订第一次会话 astra 10 次、jev-latest 0 次；核次补记会话 astra 9 次（会话结束后核对）、jev-latest 0 次。本轮（strict＋CHANGELOG）会话 astra 14 次，按本会话 jsonl 中 role=assistant、provider=openai-codex、model=gpt-6-astra 的条数核计，并计入 1 次收尾回复；typesafe/jev-latest 次数不可核：本会话 find 日志记录 23 requests，但未提供 provider／model，不能把这些请求确认为 jev-latest，也不并入 astra。15:45 轮（本次措辞修订会话）openai-codex/gpt-6-astra（thinking high）据事后日志更正为 9 次；find 工具 24 次请求，模型名日志未记录，不并入 astra。主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
 
 本轮（次数勘误）模型核账：主模型 openai-codex/gpt-6-astra（thinking high）按指定口径计 8 次：完成其他修改与校验后，本会话 jsonl 中 role=assistant、provider=openai-codex、model=gpt-6-astra 已出现 7 条，加 1 次收尾 stop 回复；未记录其他模型的 assistant 消息。未调用 find，typesafe/jev-latest 0 次，不并入 astra。本段为本轮对 task.md 的最后一次编辑，写入后不再调用工具。主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
+
+本轮（统一写法与 find 表述）模型核账：主模型 openai-codex/gpt-6-astra 共 8 次。完成其他全部修改与校验后，收尾前按会话日志计数，筛选 role=assistant、provider=openai-codex、model=gpt-6-astra：读取时已有 6 条，计入本次最终写入工具调用 1 条后为 7 条，再加 1 次收尾 stop 回复。未调用 find，jev-latest／find 均为 0 次，不并入 astra。校验已通过现有 TaskDocument.parse／TaskStore._history（EVENTS 6、LEGACY False、HISTORY (None, True)），只读索引生成结果为 INDEX_ROWS 78、byte_identical True cur 6082 gen 6082。本段由 omp 直接写入，为本轮对 task.md 的最后一次编辑；写入后不再调用工具，故最后补记不另跑校验。主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
 
 #143 原轮工具记录：rtk used（Ruff）；unittest 按编排方整理的原生命令执行，避免包装缓存。BDD：skipped，无用户可见行为或 .feature 变化；Cross-repo context／API Contract：not-needed；Mock Strategy：contract-backed（保留既有被测文件操作 seam 与 host doubles，修复未新增 mock）。Final Test Report／Run Summary MD：not-needed，原轮为本地 unittest 验证；Targeted Rerun：passed；Final Full Rerun：passed（仅完整目标模块，不是仓库全套）。本次文档修订 rtk：not-needed（按指定原生只读命令校验）；BDD／代码 lint／单元与集成测试：skipped（未改行为或代码）；Cross-repo context／API Contract：not-needed；Mock Strategy：none；Final Test Report／Run Summary MD：not-needed，未生成正式测试报告。
 
@@ -108,6 +110,7 @@ python3 -B -c 'import sys; from pathlib import Path; sys.path.insert(0,"sbtd-wor
 |---|---|---|---|---|
 | 2026-11-11T14:38:02+08:00 | planned | in-progress | 建立 default 共享记录，开始 #143 测试确定化诊断。 | 分支、完整基线、干净工作树、路径安全已核对；首轮原生目标测试 10 tests OK；时间来自 date --iso-8601=seconds。 |
 | 2026-11-11T14:40:39+08:00 | in-progress | checking | 测试夹具确定化及本地验收完成，进入待审；不标 done，不声明已提 PR。 | 目标类 30/30 轮、完整模块 63/63；Python 语法 116/116、bash syntax exit 0；Ruff 与基线相同的 38 项未修复；task parser/history 有效，索引生成 78 行；时间来自 date --iso-8601=seconds。 |
-| 2026-11-11T15:14:49+08:00 | checking | checking | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；本任务记录据此从 default 改为 strict，状态保持 checking。 | 依据用户本次明确指定的决定原文；workflow_mode=strict、mode_source=user；原轮记录当时为 default，不追溯改写；本行时间为记录切换时间，来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
-| 2026-11-11T15:45:15+08:00 | checking | checking | 按 Reviewy 意见统一 strict 决定原文，仅修订 task.md 措辞与本轮模型核账，保持待审。 | 依据用户本次明确指定的原文，统一 mode_note、正文与模式切换事件；保留 15:10 用户决定时间及 15:14:49 记录切换时间，不改历史模型次数；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
-| 2026-11-11T16:12:34+08:00 | checking | checking | 按事后日志事实更正 15:45 轮次数：astra 8→9，jev-latest 原“不可核”更正为 find 工具用 jev-latest 24 次；保持待审。 | 本轮（次数勘误）核账见模型核账段，astra 按本会话 jsonl 指定条件计数并加 1 次收尾回复；未调用 find，jev-latest 0 次，不并入 astra；仅修改本 task.md；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
+| 2026-11-11T15:14:49+08:00 | checking | checking | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；本任务记录据此从 default 改为 strict，状态保持 checking。 | 按 Lord 记录的统一写法；workflow_mode=strict、mode_source=user；原轮记录当时为 default，不追溯改写；本行时间为记录切换时间，来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
+| 2026-11-11T15:45:15+08:00 | checking | checking | 按 Reviewy 意见统一 strict 决定原文，仅修订 task.md 措辞与本轮模型核账，保持待审。 | 按 Lord 记录的统一写法，统一 mode_note、正文与模式切换事件；保留 15:10 用户决定时间及 15:14:49 记录切换时间，不改历史模型次数；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
+| 2026-11-11T16:12:34+08:00 | checking | checking | 按事后日志事实更正 15:45 轮次数：astra 8→9，find 工具 24 次请求，模型名日志未记录；保持待审。 | 本轮（次数勘误）核账见模型核账段，astra 按本会话 jsonl 指定条件计数并加 1 次收尾回复；未调用 find，jev-latest 0 次，不并入 astra；仅修改本 task.md；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
+| 2026-11-11T16:22:59+08:00 | checking | checking | 按 Lord／Reviewy 16:2x 约定统一 evidence 措辞，并修订 15:45 轮 find 表述；保持待审。 | 两条历史事件 evidence 改为「按 Lord 记录的统一写法」；15:45 轮及上一轮勘误事件统一为「find 工具 24 次请求，模型名日志未记录」，astra 保持 9 次；仅修改本 task.md，保留 strict／user／checking；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
