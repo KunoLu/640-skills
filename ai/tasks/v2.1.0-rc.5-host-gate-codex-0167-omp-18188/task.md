@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.5-host-gate-codex-0167-omp-18188
 workflow_mode: strict
 mode_source: user
-mode_note: 用户明确要求 strict；只改文件，最终停在 checking 等 review 与 CI
+mode_note: 640 在 11-11 群内确认 rc.5 全程用 strict
 status: "checking"
 branch: contract/rc5-host-gate-codex-0167-omp-18188
 created_at: '2026-11-11T14:48:27.312232+08:00'
-updated_at: "2026-11-11T14:58:06.921787+08:00"
+updated_at: "2026-11-11T15:18:19.441119+08:00"
 completed_at: null
 ---
 # rc.5 宿主验收门禁契约变更
@@ -18,6 +18,14 @@ completed_at: null
 
 未完整调用 grill-with-docs：用户决定、版本、真实冒烟事实与交付边界均明确，无领域歧义。
 
+## strict mode 落实方式
+
+- 任务文件在开工前创建并落盘；每个阶段用 `TaskStore` 记录真实状态事件，不手改状态时间。
+- 验证证据（命令、结果、失败归因）写入本文件；Book Gate Plan 已列，已有验证结果与本轮补充证据分开记录。
+- 冒烟证据来自真实宿主运行（云主机实测），不用 parser fixture 作为实测证据。
+- 本轮只修订双语 CHANGELOG 与任务记录，不改生产代码、契约或测试；不新增领域、数据、重构或发布 Gate，沿用下方 Book Gate Plan 的适用边界。
+- 状态停在 checking，等待 Reviewy 对完整 SHA 的审查与 CI 13/13；合并需 640 说「合入」后由 Lord 合并，本 bot 不合并。
+
 ## Book Gate Plan
 
 | 方法 | 触发与阶段 | 状态与证据 |
@@ -27,7 +35,7 @@ completed_at: null
 | book-legacy-change-safety | 弱测试或高风险既有行为，before-dev | not-required；仅换静态 pin，既有 golden 覆盖，解析与存储逻辑不变 |
 | book-refactoring-pass | 既有生产文件编辑前 | proceed / normal；no refactor needed，仅 docstring/help 修改 |
 | gherkin-bdd | 当前门禁分类可观察，before-dev/check | traceable；沿用中文 Markdown spec 与英文关键字；完成门、非门禁不影响指标、换针后三类场景分别对应既有 gate/golden 测试与新增四版本测试 |
-| project-validation | 契约与测试改动后 | planned；runtime、Linux 全量、四版本分类与路径检查 |
+| project-validation | 契约与测试改动后 | 已执行聚焦门禁与 runtime 验证；Linux 全量主动中止，失败归因与验证边界见下文；全量以 CI 三平台分片为准 |
 | book-release-readiness | 运行时/部署/发布风险，验证后 | not-required；不部署、不发布，不改适配器执行逻辑 |
 | 独立 review 与 CI | 契约 PR 检查 | pending；用户要求留在 checking，本轮不使用子代理 |
 | ponytail-review / Code Readability Review | 修改后自检 | 无新增抽象或依赖；一个四版本参数表覆盖新旧分类，无逻辑重构；不代替独立 review |
@@ -38,7 +46,7 @@ completed_at: null
 - 当前 `smoke` 与历史 `smoke_history` 都按宿主保存 status、host_version、smoked_at、evidence。旧 omp 的 pass 保留，但不影响当前旧版本的 unsupported 分类；兜底完成门仍 ≥1，parser fixture 不算真实证据。
 - `evaluate()` 对 accepted 事件的 host 调用 `host_capability()`，capability 与指标计算分开。golden 更新 8 条合成事件的版本：`evt_loaded`、`evt_inv1_start`、`evt_inv1_host`、`evt_inv1_finish`、`evt_inv1_conflict`、`evt_inv2_start`、`evt_inv2_finish`、`evt_gap`。`expected.json` 只断言指标、分子分母和来源事件，不含宿主版本，故保持不变。golden 不是实测证据，不改事件日期、ID 或指标数值。
 - OMP 历史会话形状夹具不依赖门禁，保持 `test_omp_adapter.py` 原样。适配器解析、lease、开关、入库、去重与重放逻辑均不改。
-- TaskStore 源码提供 Python library API，没有 CLI：本轮用 `create(..., mode="strict", confirmed=True)` 创建任务并自动更新 index/受 ignore 保护的 active 引用，用 `transition()` 记录真实状态事件；不手改状态时间。独立克隆分支与授权分支一致，任务路径不存在冲突，既有 ignore 保护已核对，不改 ignore。
+- TaskStore 源码提供 Python library API，没有 CLI：第 1 轮用 `create(..., mode="strict", confirmed=True)` 创建任务并自动更新 index/受 ignore 保护的 active 引用，各轮用 `transition()` 记录真实状态事件；不手改状态时间。独立克隆分支与授权分支一致，任务路径不存在冲突，既有 ignore 保护已核对，不改 ignore。
 
 ## 旧版本 grep 逐条决定表
 
@@ -113,7 +121,7 @@ completed_at: null
 | 同上 | 177 | 保留：解析器忠实转录原宿主版本的断言 |
 | 同上 | 311 | 保留：历史会话 ingest 回执版本断言 |
 
-ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks 与旧 CHANGELOG 条目均不改。新增双语 Unreleased 各一条 Changed/变更，逐条同义。
+ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks 与旧 CHANGELOG 条目均不改。双语 CHANGELOG 的 rc.5 未发布节各保留一条 Changed/变更，逐条同义。
 
 ## 冒烟证据（来源：云主机实测）
 
@@ -141,13 +149,15 @@ ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks �
 
 | 工作 | 宿主／模型 | 调用次数与边界 |
 |---|---|---|
-| 文件编辑 | omp 18.18.8；openai-codex/gpt-6-astra（thinking high） | 待 PR 报告补记；工具限 read/write/edit/bash/grep/glob/find/todo，无子代理 |
-| codex 冒烟 | codex 0.167.1；模型未知 | 1 turn |
-| omp 冒烟 | omp 18.18.8；openai-codex/gpt-6-astra high | 2 次 |
+| 第 1 轮文件编辑（omp 18.18.8 会话统计） | 主模型 openai-codex/gpt-6-astra（thinking high）；omp 内置辅助模型 typesafe/jev-latest | 主模型 31 次 assistant 调用；辅助模型 45 次调用（omp 会话 model_usage 记录 purpose=find，由 omp 工具内部发起）。工具调用：read 50、bash 11、grep 11、todo 9、edit 8、find 2、glob 1；无 task 工具、无子代理 |
+| 第 2 轮文件编辑（本轮） | openai-codex/gpt-6-astra（thinking high） | 见 PR 评论／群内报告（本轮结束后才能统计）；无 task 工具、无子代理 |
+| codex 0.167.1 冒烟 | 模型未知 | 1 次 codex 调用（1 turn） |
+| omp 18.18.8 冒烟 | openai-codex/gpt-6-astra high | 2 次调用 |
+| executor（调度 bot） | 不参与仓库文件编辑 | 只做 git commit/push、gh pr create 与验证命令，未直接编辑仓库文件 |
 
 ## 验证证据
 
-- 验证对象：分支 `contract/rc5-host-gate-codex-0167-omp-18188`，基线 SHA `80f14263e7d8bc6ae84f04ba94218e4857fc8b8f` 加本次未提交文件改动；不是该旧 SHA 的精确提交验证。Evidence Source: developer-local；Source Revision: dirty；Evidence Publication: local-only。
+- 第 1 轮验证对象：分支 `contract/rc5-host-gate-codex-0167-omp-18188`，基线 SHA `80f14263e7d8bc6ae84f04ba94218e4857fc8b8f` 加当轮未提交文件改动；不是该旧 SHA 的精确提交验证。Evidence Source: developer-local；Source Revision: dirty；Evidence Publication: local-only。
 - Red：`PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest test_golden_contracts.CapabilityMatrixTests.test_gate_replacement_unpins_historical_versions`，1 个测试、4 个 subtest 均因旧矩阵新旧分类相反而失败（exit 1），证明断言覆盖真实门禁行为，不是 parser fixture 冒充宿主实测。
 - `PYTHONPATH=sbtd-runtime python -B -c` 调用 `capability_matrix()` / `host_capability()`：codex 0.167.1 与 omp 18.18.8 → pinned，codex 0.163.0 与 omp 18.11.1 → unsupported；exit 0。同次检查当前 smoke 两者 pass、历史 codex unsupported / omp pass 均符合预期。
 - `python -B sbtd-runtime/codex_adapter.py --help`：exit 0，实际 CLI 显示 `codex-cli 0.167.1`。
@@ -157,7 +167,17 @@ ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks �
 - Runtime：`PYTHONPATH=sbtd-runtime python -B -m unittest discover -s sbtd-runtime/tests`，458 tests，188.329s，2 failures、10 skipped，exit 1。失败为 `RuntimePerfSmokeTests.test_cli_preserves_dataset_and_reports_unmeasured_boundaries`（performance CLI execution=failed）与 `NormalizeScopeTests.test_iana_queries_and_dst_work_without_system_timezone_data`（缺 Python tzdata，Asia/Tokyo 无可用时区数据）。全部 gate/golden 与适配器测试未报失败。Playwright 未安装，renderer 相关跳过/既有 stub 不视为真实浏览器验证；未安装依赖或修改范围外实现，不伪称全绿。
 - 聚焦 Green：`PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest test_golden_contracts.CapabilityMatrixTests test_golden_contracts.GoldenContractTests.test_unsupported_host_does_not_unsupport_the_metric test_golden_contracts.GoldenContractTests.test_golden_oracle_matches_every_metric`，4 tests，0.003s，OK，exit 0；覆盖新旧针、兜底规则、非门禁不取消指标、全指标 golden oracle。
 - 性能失败诊断：`python -B sbtd-runtime/tests/runtime_perf.py --events 101 --samples 2 --seed-seconds 60 --output "$PERF_DIAGNOSTIC_OUTPUT"`（变量代指本轮仓外临时目录，实际命令使用该目录），exit 1；原生 `runtime-perf-101-contract_rc5-host-gate-codex-0167-omp-18188-20261111T065548863178Z.json` 与同 stem 中文 `.md` 已保留。报告 error 为 `AssertionError: `、html_panel_count=12，而 panel manifest 为 13；`runtime_perf.py:476-479` 按精确字符串 `class="panel"` 计数，导出样本 overview 实为 `class="panel panel-kpi"`。这是范围外 HTML smoke 计数断言问题，不是新门禁分类失败；保留失败，不改 UI、导出或性能测试。该诊断没有完成 CSV／四格式性能验证。
-- 其余测试结果在实际运行完成后记录。本轮不提交、不推送、不创建 PR；独立 review 与 CI 仍待执行，最终状态按要求停在 checking。
+- Linux 全量（用户提供的执行结果）：`python -B tests/run_ci.py --platform linux --shard 1 --shards 1` 单分片运行约 25 分钟，完成 1044／4914 个用例后被主动中止；单分片太慢，全量以 CI 三平台分片为准。其间唯一异常 `tests.test_sbtd_migration_cleanup_drift.FollowupUpgradeProvenanceGateTests.test_followup_rejects_upgrade_backed_predecessor_cleanup` 在高负载下报 ERROR；本分支单独重跑 2 次均 OK，在 main `80f1426` 单独跑也 OK，判定为负载相关偶发，与本改动（契约/文档/golden）无关。
+- Runtime 失败归因补充（用户提供的复现结果）：`test_cli_preserves_dataset_and_reports_unmeasured_boundaries`、`test_iana_queries_and_dst_work_without_system_timezone_data` 已在 main `80f1426` 的独立工作树上复现同样失败，属本机环境既有问题（面板计数断言、缺 tzdata），非本 PR 引入；本轮不重复运行这些已报告的失败。
+- CI（用户报告）：PR #209 首次推送 SHA `50324255` 的 CI 运行中；最终 13/13 结果由 PR 评论与群内报告给出，本文件不预先声称全绿。上述简称与本轮实际 HEAD `5032425e9b9305e86053b57afff16979a35fb73e` 不一致，保留来源区别；最终审查与 CI 须绑定实际完整 SHA。
+- 冒烟核对（用户确认）：上述事实已与 CodeX 在群里贴出的要点核对一致：codex-cli 0.167.1，14:36:15 开始，7 行输出，进程退出码未记录，命令 exit_code 0、completed，末行 turn.completed；回执 records_read/records_skipped/events_emitted/accepted/duplicate 为 7/4/2/2/0，重放 started+finished `tool:command_execution`，模型未知，1 次 codex 调用（1 turn）。本轮只记录核对结果，不声称重新运行宿主。
+- 第 2 轮验证对象：实际 HEAD `5032425e9b9305e86053b57afff16979a35fb73e` 加本轮未提交的文档修改，分支同上；Evidence Source: developer-local；Source Revision: dirty；Environment Alignment: unverified；Evidence Publication: local-only，不作为最终 PR SHA 的 CI 证明。
+- 第 2 轮只改文件，不提交、不推送、不创建 PR；保留历史状态事件的当时事实，下文新增事件与本节结果取代旧事件中 Linux 套件仍在运行的进度描述，最终状态停在 checking。
+- 第 2 轮 golden：`PYTHONPATH=sbtd-runtime:sbtd-runtime/tests python -B -m unittest test_golden_contracts`，66 tests，0.389s，OK，exit 0。
+- 第 2 轮任务相关测试：用专用 grep 执行与 `rg 'CHANGELOG\.zh\.md|ai/tasks/index\.md'` 等价的检索，命中 `tests/test_sbtd_task_state.py` 与 `tests/test_workflow_contracts.py`；另在 tests、runtime tests、Onboard scripts 与 CI 配置中检索 CHANGELOG/changelog，无测试命中，未发现双语一致性测试。运行 `python -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts`，99 tests，39.344s，OK，exit 0。
+- 第 2 轮文档检查：仓外一次性 Python 检查器读取 `git diff --no-ext-diff --unified=0`，仅三文件修改，新增行与 task 全文均无用户禁止的本机路径；输出 `SCOPE_OK 3 files; ADDED_LINES_LOCAL_PATHS 0; TASK_LOCAL_PATHS 0`。双语 rc.5 节均为一个 Changed/变更小节、一个条目，代码标识多重集合一致，人工逐条核对语义一致；rc.4 起已发布历史与 HEAD 相同，输出 `BILINGUAL_RC5_STRUCTURE_IDENTIFIERS_OK; RELEASED_HISTORY_UNCHANGED`。TaskDocument／TaskStore 只读校验模式、事件链及 updated_at 与末事件时间一致，输出 `TASK_STATE_OK in-progress events 3`；均 exit 0。
+- 第 2 轮验证边界：rtk: not-needed（用户指定原生命令）；BDD: skipped（仅文档，无新增场景或行为）；Cross-repo context／API Contract: not-needed；Mock Strategy: none。未重跑 Linux 全量、runtime 已知失败、宿主冒烟、lint、构建、Web／Mobile 或发布验证：本轮仅文档补齐，历史失败与全量 CI 待验边界已明确。Final Test Report／Run Summary MD: not-needed，本轮为本地定向 unittest 与文档检查，结果写入本文件，不新增正式报告；不声称独立 review 或 CI 已通过。
+- 状态写入执行记录：首次 `TaskStore.transition(..., "checking", confirmed=True)` 在宿主工具设置的 30 秒上限超时，输出为历史任务的「旧格式事件，不追溯」提示；重读确认仍为 in-progress、3 条事件、updated_at 未变，没有把超时记作成功或手填时间。随后仅放宽调用时限重试同一 library API，不更改库或任务生命周期。
 
 ## 状态事件
 
@@ -165,3 +185,5 @@ ENTRYPOINT.md 监控基线不在范围；README、release notes、旧 ai/tasks �
 |---|---|---|---|---|
 | 2026-11-11T14:48:41.973666+08:00 | planned | in-progress | 开始已授权的宿主门禁契约变更 | 用户群内选项 1；基线 main 80f1426；本文件 Book Gate Plan |
 | 2026-11-11T14:58:06.921787+08:00 | in-progress | checking | 契约与文档修改完成，聚焦门禁验证通过；保留本地套件失败，等待独立 review 与 CI | 本任务验证证据：四版本分类与 4 项聚焦测试通过；runtime 458 项有 2 个范围外失败；Linux 全量套件运行中，结果回填本节 |
+| 2026-11-11T15:14:15.719037+08:00 | checking | in-progress | 按 640 新要求补齐 CHANGELOG 标题、strict 说明、模型记录与验证证据 | 用户本轮明确要求；仅修订双语 CHANGELOG 与本任务记录，不 commit/push、不用 task 工具或子代理 |
+| 2026-11-11T15:18:19.441119+08:00 | in-progress | checking | 已补齐 rc.5 CHANGELOG 标题、strict 说明、模型记录与验证证据，等待 Reviewy 与 CI | 本轮 golden 66 tests OK；task/workflow 99 tests OK；双语结构与新增行路径检查通过；完整 SHA 由最终 PR 审查与 CI 13/13 绑定；640 说合入后由 Lord 合并，本 bot 不合并 |
