@@ -860,7 +860,8 @@ class MaterializeAuthorizationTests(_LinksCase):
         root, link, physical, _alpha = self.linked_fixture()
         document = self.prepare("f" * 64, root, link, physical)
         other = _write_skill(self.base / "other", "linked-skill")
-        link.unlink()
+        # Keep the old inode allocated; unlink/recreate can reuse inode + ctime.
+        link.rename(self.base / "retired-link")
         link.symlink_to(str(other), target_is_directory=True)
         private = require_private_directory(self.base / "fixture", create=True)
         # The link object itself was also replaced; identity rejection wins.
@@ -873,7 +874,8 @@ class MaterializeAuthorizationTests(_LinksCase):
         root, link, physical, _alpha = self.linked_fixture()
         document = self.prepare("f" * 64, root, link, physical)
         text = os.readlink(link)
-        link.unlink()
+        # Keep the old inode allocated even if both links have the same ctime.
+        link.rename(self.base / "retired-link")
         link.symlink_to(text, target_is_directory=True)
         self.assertEqual(os.readlink(link), text)
         private = require_private_directory(self.base / "fixture", create=True)
@@ -964,7 +966,8 @@ class MaterializeAuthorizationTests(_LinksCase):
         def poisoned_copy(*args, **kwargs):
             result = real_copy(*args, **kwargs)
             # Attacker replaces the link object mid-copy, keeping its text.
-            link.unlink()
+            # Retain the old inode so post-copy identity rejection is certain.
+            link.rename(self.base / "retired-link")
             link.symlink_to(text, target_is_directory=True)
             return result
 
