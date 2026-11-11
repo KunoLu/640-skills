@@ -102,7 +102,7 @@ class CapabilityMatrixTests(unittest.TestCase):
             f"{pin['host_kind']}@{pin['host_version']}"
             for pin in MATRIX["acceptance_pins"]
         ]
-        self.assertEqual(gate["hosts"], ["codex@0.163.0", "omp@18.11.1"])
+        self.assertEqual(gate["hosts"], ["codex@0.167.1", "omp@18.18.8"])
         self.assertEqual(gate["hosts"], pins)
         self.assertEqual(gate["evidence"], "real-smoke")
         self.assertIs(gate["parser_fixture_counts"], False)
@@ -111,6 +111,17 @@ class CapabilityMatrixTests(unittest.TestCase):
         self.assertLess(gate["minimum_passing_hosts"], len(gate["hosts"]))
         self.assertEqual(gate["both_unsupported"], "r1-fail-return-to-user")
         self.assertIs(gate["release_when_both_unsupported"], False)
+
+    def test_gate_replacement_unpins_historical_versions(self) -> None:
+        # Scenario: 换针后旧门禁版本不再参与当前验收
+        for host, version, expected in (
+            ("codex", "0.167.1", "pinned"),
+            ("omp", "18.18.8", "pinned"),
+            ("codex", "0.163.0", "unsupported"),
+            ("omp", "18.11.1", "unsupported"),
+        ):
+            with self.subTest(host=host, version=version):
+                self.assertEqual(host_capability(MATRIX, host, version), expected)
 
 
 class GoldenContractTests(unittest.TestCase):
@@ -289,11 +300,10 @@ class GoldenContractTests(unittest.TestCase):
 
     def test_unsupported_host_does_not_unsupport_the_metric(self) -> None:
         self.assertEqual(self.result["capability"]["codex@0.164.0"], "unsupported")
-        self.assertEqual(self.result["capability"]["codex@0.163.0"], "pinned")
-        self.assertEqual(self.result["capability"]["omp@18.11.1"], "pinned")
+        self.assertEqual(self.result["capability"]["codex@0.167.1"], "pinned")
+        self.assertEqual(self.result["capability"]["omp@18.18.8"], "pinned")
         self.assertEqual(self.metric("components.invocations")["support"], "supported")
         self.assertEqual(host_capability(MATRIX, "codex", "0.999.0"), "unsupported")
-        self.assertEqual(host_capability(MATRIX, "omp", "18.11.1"), "pinned")
 
     def test_reserved_metrics_are_unsupported_and_not_zero(self) -> None:
         for item in CATALOG["metrics"]:

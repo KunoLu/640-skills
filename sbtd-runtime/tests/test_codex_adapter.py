@@ -3,7 +3,7 @@
 Scenario text lives in spec/r1.2b-host-adapter-scenarios.md. Fixture shapes
 follow the documented exec JSONL format (thread.started, item.started,
 item.completed with command_execution / mcp_tool_call / ...). Codex is not
-installed or run here; the real smoke against codex@0.163.0 is executed by a
+installed or run here; the real smoke against codex@0.167.1 is executed by a
 separate operator using sbtd-runtime/docs/host-adapters.md. The consumer seam
 is codex_adapter.parse_exec_lines / ingest_exec_stream.
 """

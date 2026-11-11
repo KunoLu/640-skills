@@ -17,6 +17,8 @@
 
 - ADR 0003 追加 §6：确定完整快照内存上限 8 份、LRU 逐出且磁盘文件不删、启动只建轻量索引、缓存未命中按原安全检查重载；24h 过期、分页、404/410、pin 与 507 语义不变。仅文档，实现另开 PR。
 
+- 将宿主验收门禁从 `codex@0.163.0` + `omp@18.11.1` 换为 `codex@0.167.1` + `omp@18.18.8`，两个新宿主均通过真实冒烟（来源：云主机实测）。历史证据保留于 `smoke_history`，ADR Q6 原决策不改写，旧版本标为 unsupported；固定一对版本、parser fixture 不算证据、至少一个宿主通过的兜底完成门规则不变。
+
 ### 修复
 
 - 修复 probe-link materialize 授权测试因重建 symlink 可能复用 inode 而偶发失败：先 rename 退役旧链接，再创建新链接；断言与正式代码不变。([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))

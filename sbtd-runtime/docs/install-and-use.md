@@ -122,7 +122,7 @@ PR-4 容量实测结论（developer-local Linux，非参考机／Mac 证据）�
 - 没有 HTTP 服务与 Dashboard（R2。R2.0a PR-2 起见下文「R2.0a：serve」）。
 - R1 没有 `/api/v1/exports*` 导出作业；R2.1a 起支持 HTML／CSV，见下文。库面仍可通过 `csv_export.serialize_csv(snapshot)` 直接获得 CSV 字节。
 - R1 没有 JPEG／PDF／HTML 导出和落盘快照保留；R2.0c 起快照保留已实现，R2.1a 增加 HTML／CSV 作业，R2.1b 增加 JPEG／PDF（#153 合并后 HTTP 已开放）；仍没有远程业务控制端点。
-- codex@0.163.0 的真实 smoke 状态以 `contracts/capability-matrix.json` 为准；unsupported 如实标记，不返回 0。
+- 当前门禁为 codex@0.167.1 + omp@18.18.8，两者于 2026-11-11 云主机实测 pass，状态以 `contracts/capability-matrix.json` 为准；旧冒烟保留为历史，非门禁版本 unsupported 如实标记，不返回 0。
 
 ### R2.1a：离线 HTML／全量 CSV 导出
 
