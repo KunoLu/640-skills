@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.5-snapshot-memory-eviction
 workflow_mode: strict
 mode_source: user
-mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；docs-only 范围由编排方整理，决策依据为 640 在群里决定 a甲 b同意
+mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；用户 2026-11-11 群内确认（a甲 b同意），Lord 记录。注：分钟不可考。docs-only 范围由编排方整理
 status: checking
 branch: docs/v2.1.0-rc.5-adr0003-snapshot-memory-eviction
 created_at: '2026-11-11T14:38:57+08:00'
-updated_at: '2026-11-11T15:58:57+08:00'
+updated_at: '2026-11-11T16:29:09+08:00'
 completed_at: null
 ---
 
@@ -22,8 +22,8 @@ completed_at: null
 
 ## 决策来源
 
-- 640 在群里决定 a甲 b同意。
-- 编排方整理：上述回复发生于 2026-11-11 北京时间约 15:07；b 同意对应完整快照最多 8 份、LRU 移出内存、磁盘文件不删、其他规则不变。具体方案、docs-only 范围、PR 顺序及本轮验证安排均由编排方整理。
+- 用户 2026-11-11 群内确认（a甲 b同意），Lord 记录。注：分钟不可考。
+- 用户 2026-11-11 群内确认（a甲 b同意），Lord 记录。注：分钟不可考。编排方整理：b 同意对应完整快照最多 8 份、LRU 移出内存、磁盘文件不删、其他规则不变。具体方案、docs-only 范围、PR 顺序及本轮验证安排均由编排方整理。
 - 仓库外只读 planned 草稿用于方案参考，不复制其本机路径。保留草稿创建时间和 planned→planned 事件；本记录采用本轮明确的 strict 模式与文档分支，不把草稿的 default 模式或旧分支当成当前绑定。
 
 ## 当前行为与源码依据
@@ -187,6 +187,22 @@ runtime 失败记录（未修复、未重跑）：
 
 `rtk: skipped-for-report`（直接执行指定原生命令，避免包装层缓存）；`BDD: skipped`（仅记录修正，无行为变化）；Cross-repo context／API Contract：not-needed；Mock Strategy：none。Book Gates、代码可读性复核、lint／build、Web／Mobile／serve smoke：not-needed（本轮不改设计、代码或测试）。未重跑 runtime 基线，历史失败保留；未生成正式报告，未 commit／push，状态继续为 checking，后续独立 review／CI 不由本地结果替代。
 
+### 第 4 轮本地验证
+
+本轮按 Reviewy NOT CLEAN 仅修正 ADR §6 的决策来源／状态措辞及本 `task.md` 的记录，不改已确认方案。基准 HEAD 为 `07f1cefe99980a8bffafb5539d0dcba7ee04b5ee`，分支与 front matter 一致，写入前工作区干净；Linux x64 独立克隆。证据为 `developer-local`／`dirty`／`local-only`，不是 CI 或发布证据。
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `git status --short --branch`、`git rev-parse HEAD` | 分支与基准匹配，写入前工作区干净 | 0 |
+| `TZ=Asia/Shanghai date --iso-8601=seconds` | `2026-11-11T16:29:09+08:00`；用于本轮 updated_at 与 checking→checking 事件 | 0 |
+| `namei -l`、`git ls-files --stage --`、`git check-ignore -v --no-index --`（ADR、本 task、index） | 目标及父路径无链接，目标均为 100644；无 ignore 匹配 | 0／0／1（无匹配） |
+| 上方只读索引预览命令，增加 `assert same` | `INDEX_PREVIEW_SAME True rows=78`；与 TaskStore `_index_candidate` 输出逐字节一致，未写入 index；出现既有“旧格式事件，不追溯”提示 | 0 |
+| `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` | 99 tests，OK；99 通过，0 跳过，43.035s | 0 |
+| 专用 grep：ADR 与本 task 的禁用措辞、模糊分钟及本机路径扫描 | 无匹配；固定决策原文含“注：分钟不可考。” | 不适用（工具未提供进程退出码） |
+| `git diff --check`、`git diff --unified=0 --`（本轮授权文件） | 空白检查通过；差异仅 ADR §6 三行措辞及本 task 记录；ADR §1–§5、§6.1–§6.4 全部不变，8 份完整快照／LRU 不删磁盘等方案不变；index 与双语 CHANGELOG 无差异，rc.5 未发布标题不变 | 0 |
+
+`rtk: skipped-for-report`（直接执行指定原生命令）；`BDD: skipped`（仅措辞与记录修正，无行为变化，无 feature 变更）；Cross-repo context／API Contract：not-needed；Mock Strategy：none。Book Gates、代码可读性复核、lint／build、Web／Mobile／serve smoke：not-needed（不改方案、代码或测试）。未重跑 runtime 基线，历史失败保留；未生成正式报告，未 commit／push，保持 strict／user／checking，completed_at 为 null。独立 review／CI 仍待执行；最后一次文件编辑仅补本轮日志计数，不以本地结果代替发布证据。
+
 ## strict 模式执行记录
 
 - 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录。编排方整理：先只读确认任务、根目录、分支、授权、基准及路径安全，再读完整 ADR、草稿、指定源码和 CHANGELOG；未把草稿 default 当成当前模式。
@@ -216,10 +232,16 @@ BDD：skipped（仅决策文档，不新增运行时行为或 feature）；Cross
 | 第 1 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 编写 ADR §6、双语 CHANGELOG、task.md、index 与本地验证 | 18 | 45 |
 | 第 1 轮 | `typesafe/jev-latest` | omp find 工具内部调用 | 10 | — |
 | 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 补记模型调用次数 | 7 | 13 |
-| 第 3 轮（本轮：Reviewy 修正） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 10 | 22 |
+| 第 3 轮（历史：Reviewy 修正） | `openai-codex/gpt-6-astra`（thinking high，主模型） | 改 strict 记录口径与模型表 | 10 | 22 |
 | 第 3 轮 | 其他后台模型 | omp 工具内部调用 | 无 | — |
+| 第 4 轮（本轮：Reviewy NOT CLEAN 修正） | `openai-codex/gpt-6-astra`（主模型） | 修正决策措辞、披露历史填数、验证并直接写入记录 | 10 | 27 |
+| 第 4 轮 | `typesafe/jev-latest` | find 未调用 | 0 | 0 |
 
-次数由编排方及第 3 轮会话末尾的统计脚本从 omp 会话日志统计；未使用 task 工具或子代理。
+第 1／2 轮次数沿用编排方依据 omp 会话日志的统计。第 1 轮 find 的会话日志每条记录为 `"purpose":"find","provider":"typesafe","model":"jev-latest"`，共 10 次；次数来自这些日志字段，归属 `typesafe/jev-latest`。
+
+第 3 轮次数披露（Lord 16:21）：第 3 轮写入的调用次数，是当时由仓库外脚本在 omp 最后一次 bash 调用里填入文件的，不是 omp 在文件里亲手写的；从本轮起全部正文由 omp 直接写入。第 3 轮的 10 次模型调用、22 次工具调用保留为历史统计，不改称 omp 手写。
+
+第 4 轮由 omp 收尾前按会话日志计数并亲自用 edit 写入：筛选 `type=message`、`role=assistant`、`provider=openai-codex`、`model=gpt-6-astra`，已有 8 条（含最后一次日志统计调用），加本次最终 edit 的 1 次模型调用及随后纯文本收尾 stop 的 1 次，共 10 次。相同 assistant 记录内 `content.type=toolCall` 已有 26 条，加本次最终 edit 1 条，共 27 次；按日志中的实际工具条目计数，不另计并行包装。日志中 `purpose=find`、`provider=typesafe`、`model=jev-latest` 的记录为 0，本轮未调用 find。统计命令只读日志并输出数字，没有写入仓库；本次为最后一次文件编辑，之后不再调用工具。
 
 ## 状态事件
 
@@ -228,4 +250,5 @@ BDD：skipped（仅决策文档，不新增运行时行为或 feature）；Cross
 | 2026-11-11T14:38:57+08:00 | planned | planned | 编排方整理：保留主会话建立延后项草稿的事件，未开始实现 | 草稿记录已读取 PR #147／#190、ADR 0003 与源码；当时仅 task 草稿范围，基准 80f14263e7d8bc6ae84f04ba94218e4857fc8b8f；本轮不重复声称已访问这些 PR。 |
 | 2026-11-11T15:14:16+08:00 | planned | checking | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；编排方整理：按本轮 docs-only 范围编写 ADR 与配套记录，进入验证并等待 review／CI；未实现 | 已核对分支、基准、ADR 与指定源码；本轮命令结果见验证证据，文档提交／PR 由编排方处理。 |
 | 2026-11-11T15:26:10+08:00 | checking | checking | 编排方整理：补记模型调用次数 | 会话日志统计 |
-| 2026-11-11T15:58:57+08:00 | checking | checking | Reviewy 修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | INDEX_REGEN changed=False rows=78；INDEX_PREVIEW_SAME True rows=78；指定 unittest 99 tests，OK；diff 仅本 task.md，新增行无本机路径，禁用措辞无匹配，空白检查通过；详见第 3 轮本地验证。 |
+| 2026-11-11T15:58:57+08:00 | checking | checking | 按 Reviewy 意见修正：strict 记录口径改为用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；补全模型调用次数 | INDEX_REGEN changed=False rows=78；INDEX_PREVIEW_SAME True rows=78；指定 unittest 99 tests，OK；diff 仅本 task.md，新增行无本机路径，禁用措辞无匹配，空白检查通过；详见第 3 轮本地验证。 |
+| 2026-11-11T16:29:09+08:00 | checking | checking | 按 Reviewy NOT CLEAN 一次性修正决策来源／状态措辞，以及第 3 轮次数披露 | 固定决策原文已写入 ADR §6 的状态／来源／编排说明及本 task 的 mode_note／正文；第 3 轮脚本填数已按 Lord 16:21 说明披露；本轮验证结果见第 4 轮本地验证。 |
