@@ -9,6 +9,10 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 ## v2.1.0-rc.5 (Unreleased)
 
+### Changed
+
+- Append §6 to ADR 0003: set an 8-entry full-snapshot memory limit with LRU eviction without deleting disk files, build only a lightweight index at startup, and reload cache misses with the existing safety checks; 24h expiry, pagination, 404/410, pin and 507 semantics remain unchanged. Documentation only; implementation will follow in a separate PR.
+
 ### Fixed
 
 - Fix intermittent probe-link materialize authorization test failures caused by possible inode reuse when rebuilding a symlink: retire the old link with rename before creating the new one; assertions and production code remain unchanged. ([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))

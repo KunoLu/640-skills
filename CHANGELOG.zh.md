@@ -9,6 +9,10 @@
 
 ## v2.1.0-rc.5（未发布）
 
+### 变更
+
+- ADR 0003 追加 §6：确定完整快照内存上限 8 份、LRU 逐出且磁盘文件不删、启动只建轻量索引、缓存未命中按原安全检查重载；24h 过期、分页、404/410、pin 与 507 语义不变。仅文档，实现另开 PR。
+
 ### 修复
 
 - 修复 probe-link materialize 授权测试因重建 symlink 可能复用 inode 而偶发失败：先 rename 退役旧链接，再创建新链接；断言与正式代码不变。([#143](https://github.com/KunoLu/640-skills/issues/143), [#208](https://github.com/KunoLu/640-skills/pull/208))

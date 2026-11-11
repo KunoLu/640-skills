@@ -76,6 +76,7 @@
 - [v2.1.0-rc.3-release-identity-backfill](v2.1.0-rc.3-release-identity-backfill/task.md)
 - [v2.1.0-rc.4-release](v2.1.0-rc.4-release/task.md)
 - [v2.1.0-rc.5-probe-links-flaky-test](v2.1.0-rc.5-probe-links-flaky-test/task.md)
+- [v2.1.0-rc.5-snapshot-memory-eviction](v2.1.0-rc.5-snapshot-memory-eviction/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)
