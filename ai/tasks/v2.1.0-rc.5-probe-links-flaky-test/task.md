@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.1.0-rc.5-probe-links-flaky-test
 workflow_mode: strict
 mode_source: user
-mode_note: 640 在 11-11 群内确认 rc.5 全程用 strict；本记录于 2026-11-11T15:14:49+08:00 从 default 切换为 strict，原轮开始时记录为 default，不追溯冒称当时已是 strict；编排方整理共享 task 记录，唯一 writer，不使用子代理；已创建开发分支、commit 并 push，已开 PR #208。
+mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；本记录于 2026-11-11T15:14:49+08:00 从 default 切换为 strict，原轮开始时记录为 default，不追溯冒称当时已是 strict；编排方整理共享 task 记录，唯一 writer，不使用子代理；已创建开发分支、commit 并 push，已开 PR #208。
 status: checking
 branch: chore/v2.1.0-rc.5-probe-links-flaky-143
 created_at: '2026-11-11T14:38:02+08:00'
-updated_at: '2026-11-11T15:14:49+08:00'
+updated_at: '2026-11-11T15:45:15+08:00'
 completed_at: null
 ---
 
@@ -19,7 +19,7 @@ completed_at: null
 
 #143 原轮授权范围为授权工作树根，基线与 origin/main 均为 `80f14263e7d8bc6ae84f04ba94218e4857fc8b8f`。原轮写前工作树无改动；目标路径与父目录无 symlink、无 ignore 命中，新任务目录不存在。原轮允许测试文件、任务记录、必要索引／CHANGELOG 记账；临时诊断辅助只放 tests/，完成后移除。不访问主 checkout，不修改 active、handoff、ignore 或身份，不安装依赖、不发布。本次基线为 `0e7a1a807415110d080d1c1e0a5e96f663581d74`，分支与 frontmatter 一致；保留已有未提交 task 修订，仅授权本 task 与两份 CHANGELOG，路径为普通 tracked 文件、无 symlink 或 ignore 命中。
 
-未完整调用 grill-with-docs：范围、验收与错误码保持要求明确，无领域歧义。#143 原轮开始时记录为 default；640 于 2026-11-11 群内确认 rc.5 全程用 strict 后，本次据此修改记录，不追溯宣称原轮已按 strict 执行。strict 落实为本 task.md 落盘，包含状态事件与验证证据；本次审阅修订的 omp 运行按该记录执行，主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
+未完整调用 grill-with-docs：范围、验收与错误码保持要求明确，无领域歧义。#143 原轮开始时记录为 default；决定依据为「用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录」，本次据此修改记录，不追溯宣称原轮已按 strict 执行。strict 落实为本 task.md 落盘，包含状态事件与验证证据；本次审阅修订的 omp 运行按该记录执行，主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
 
 本次 Book Gate Plan：仅修订任务元数据与双语日志，不改 schema、测试或正式代码；DDD（无完整 grill／领域歧义）、DDIA（无数据模型／迁移／恢复机制变更）、Legacy Safety（无行为变更）、Refactoring（无生产代码编辑）、Release Readiness（无运行时／部署／发布动作）均为 not-needed，适用性在编辑前核对。本次 check 使用现有 parser／history 和索引生成器；无用户可见行为变化，BDD、代码可读性与独立审阅不适用，不把自检称为独立审阅。
 
@@ -91,7 +91,7 @@ python3 -B -c 'import sys; from pathlib import Path; sys.path.insert(0,"sbtd-wor
 
 #143 原轮修改目标测试、本 task 与生成索引；本次仅修改本 task、`CHANGELOG.md`、`CHANGELOG.zh.md` 三个授权文件，索引只读生成校验，不修改测试或正式代码。任务保持 `checking`（待审），`completed_at: null`；编排方已创建开发分支、commit 并 push，已开 PR #208，本次不 commit、push 或切分支，不写 done。
 
-模型核账：主模型 openai-codex/gpt-6-astra（thinking high）。#143 原轮 astra 16 次（1 次主会话运行，无子代理），同轮 typesafe/jev-latest 40 次，仅用于 omp 内置 find 工具、未写内容，不计入 astra；本轮（Reviewy 记录修订）第一次会话 astra 10 次、jev-latest 0 次；核次补记会话 astra 9 次（会话结束后核对）、jev-latest 0 次。本轮（strict＋CHANGELOG）会话 astra 14 次，按本会话 jsonl 中 role=assistant、provider=openai-codex、model=gpt-6-astra 的条数核计，并计入 1 次收尾回复；typesafe/jev-latest 次数不可核：本会话 find 日志记录 23 requests，但未提供 provider／model，不能把这些请求确认为 jev-latest，也不并入 astra。此段模型核账为本次对 task.md 的最后一次编辑。主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
+模型核账：主模型 openai-codex/gpt-6-astra（thinking high）。#143 原轮 astra 16 次（1 次主会话运行，无子代理），同轮 typesafe/jev-latest 40 次，仅用于 omp 内置 find 工具、未写内容，不计入 astra；按 Reviewy 意见修订第一次会话 astra 10 次、jev-latest 0 次；核次补记会话 astra 9 次（会话结束后核对）、jev-latest 0 次。本轮（strict＋CHANGELOG）会话 astra 14 次，按本会话 jsonl 中 role=assistant、provider=openai-codex、model=gpt-6-astra 的条数核计，并计入 1 次收尾回复；typesafe/jev-latest 次数不可核：本会话 find 日志记录 23 requests，但未提供 provider／model，不能把这些请求确认为 jev-latest，也不并入 astra。本轮（本次措辞修订会话）openai-codex/gpt-6-astra（thinking high）按指定口径计 8 次：其他修改与校验完成后，会话 jsonl 中 role=assistant、provider=openai-codex、model=gpt-6-astra 共 7 条，加 1 次收尾回复；未记录其他具名模型的 assistant 消息，find 工具内部模型及次数不可核：工具结果仅给出 24 requests，未提供 provider／model，不将请求数当作模型调用数。此段模型核账为本次对 task.md 的最后一次编辑。主会话唯一 writer／验证 controller，无子代理或独立审阅声明。
 
 #143 原轮工具记录：rtk used（Ruff）；unittest 按编排方整理的原生命令执行，避免包装缓存。BDD：skipped，无用户可见行为或 .feature 变化；Cross-repo context／API Contract：not-needed；Mock Strategy：contract-backed（保留既有被测文件操作 seam 与 host doubles，修复未新增 mock）。Final Test Report／Run Summary MD：not-needed，原轮为本地 unittest 验证；Targeted Rerun：passed；Final Full Rerun：passed（仅完整目标模块，不是仓库全套）。本次文档修订 rtk：not-needed（按指定原生只读命令校验）；BDD／代码 lint／单元与集成测试：skipped（未改行为或代码）；Cross-repo context／API Contract：not-needed；Mock Strategy：none；Final Test Report／Run Summary MD：not-needed，未生成正式测试报告。
 
@@ -106,4 +106,5 @@ python3 -B -c 'import sys; from pathlib import Path; sys.path.insert(0,"sbtd-wor
 |---|---|---|---|---|
 | 2026-11-11T14:38:02+08:00 | planned | in-progress | 建立 default 共享记录，开始 #143 测试确定化诊断。 | 分支、完整基线、干净工作树、路径安全已核对；首轮原生目标测试 10 tests OK；时间来自 date --iso-8601=seconds。 |
 | 2026-11-11T14:40:39+08:00 | in-progress | checking | 测试夹具确定化及本地验收完成，进入待审；不标 done，不声明已提 PR。 | 目标类 30/30 轮、完整模块 63/63；Python 语法 116/116、bash syntax exit 0；Ruff 与基线相同的 38 项未修复；task parser/history 有效，索引生成 78 行；时间来自 date --iso-8601=seconds。 |
-| 2026-11-11T15:14:49+08:00 | checking | checking | 640 于 2026-11-11 群内确认 rc.5 全程用 strict；本任务记录据此从 default 改为 strict，状态保持 checking。 | 本次明确指令转述 640 群内确认；workflow_mode=strict、mode_source=user；原轮记录当时为 default，不追溯改写；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
+| 2026-11-11T15:14:49+08:00 | checking | checking | 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录；本任务记录据此从 default 改为 strict，状态保持 checking。 | 依据用户本次明确指定的决定原文；workflow_mode=strict、mode_source=user；原轮记录当时为 default，不追溯改写；本行时间为记录切换时间，来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
+| 2026-11-11T15:45:15+08:00 | checking | checking | 按 Reviewy 意见统一 strict 决定原文，仅修订 task.md 措辞与本轮模型核账，保持待审。 | 依据用户本次明确指定的原文，统一 mode_note、正文与模式切换事件；保留 15:10 用户决定时间及 15:14:49 记录切换时间，不改历史模型次数；时间来自 TZ=Asia/Shanghai date --iso-8601=seconds。 |
