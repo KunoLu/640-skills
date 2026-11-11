@@ -78,6 +78,7 @@
 - [v2.1.0-rc.5-dashboard-401-auto-repair](v2.1.0-rc.5-dashboard-401-auto-repair/task.md)
 - [v2.1.0-rc.5-dashboard-401-repair-impl](v2.1.0-rc.5-dashboard-401-repair-impl/task.md)
 - [v2.1.0-rc.5-external-skills-repin](v2.1.0-rc.5-external-skills-repin/task.md)
+- [v2.1.0-rc.5-final-docs](v2.1.0-rc.5-final-docs/task.md)
 - [v2.1.0-rc.5-host-gate-codex-0167-omp-18188](v2.1.0-rc.5-host-gate-codex-0167-omp-18188/task.md)
 - [v2.1.0-rc.5-probe-links-flaky-test](v2.1.0-rc.5-probe-links-flaky-test/task.md)
 - [v2.1.0-rc.5-snapshot-eviction-impl](v2.1.0-rc.5-snapshot-eviction-impl/task.md)
