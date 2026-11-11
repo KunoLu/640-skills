@@ -7,7 +7,7 @@ mode_note: 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lor
 status: checking
 branch: feat/rc5-snapshot-eviction-impl
 created_at: '2026-11-11T22:27:32+08:00'
-updated_at: '2026-11-11T22:49:27+08:00'
+updated_at: '2026-11-11T23:19:39+08:00'
 completed_at: null
 ---
 
@@ -19,7 +19,7 @@ completed_at: null
 
 第 1 轮只建立本 task.md，以及正式生成器更新的 `ai/tasks/index.md`。实现代码、测试和双语 CHANGELOG 实现条目留待后续轮次。保持 checking，completed_at 为 null；不提交、不推送、不开 PR，不运行 Git 写命令，提交由编排方稍后处理。不建立 active、handoff、developer 或其他工作流记录。
 
-第 2 轮开始实现。已核实背景：用户已在群内要求开始本实现；Lord 于 2026-11-11 22:36（北京时间）确认以本 task.md 范围为准，坏文件拒读后完整缓存未清除直接相关，允许一并修复，不得再扩大范围。这是 Lord 的范围确认，不是新的契约决定，方案细节不归给用户。第 1 轮的“尚未执行／后续计划”保留历史原意；本轮实际结果见「第 2 轮本地验证」。状态继续 checking，独立安全评审、CI、合入未完成。
+第 2 轮开始实现。已核实背景：Lord 于 2026-11-11 22:36（北京时间）确认以本 task.md 范围为准，坏文件拒读后完整缓存未清除直接相关，允许一并修复，不得再扩大范围。这是 Lord 的范围确认，不是新的契约决定，方案细节不归给用户。第 1 轮的“尚未执行／后续计划”保留历史原意；本轮实际结果见「第 2 轮本地验证」。状态继续 checking，独立安全评审、CI、合入未完成。
 
 未完整调用 grill-with-docs：边界、已合入 ADR 和验收条件明确，源码可回答本轮问题，不新增领域决定或重复访谈。旧文档任务只作依据，不改其正文、状态或历史证据。
 
@@ -28,7 +28,7 @@ completed_at: null
 - 用户 2026-11-11 15:10 群内确认（rc.5 全程用 strict），Lord 记录。
 - 用户 2026-11-11 群内确认（a甲 b同意），Lord 记录。注：分钟不可考。编排方整理：b 同意对应完整快照最多 8 份、LRU 移出内存、磁盘文件不删、其他规则不变。具体方案细节不归给用户。文档 PR #211 已将该决策写入 ADR 0003 §6，合并提交 `947fb55ae112cfa66563f322a1c39c2ebcfd944b`；当时仅文档，尚未实现。
 - 用户 2026-11-11 群内确认（合入 #212），Lord 记录。注：分钟不可考。Lord 将 #212 squash 合入 main，合并提交 `e4c76707b368fb5e9873852ca3ce25abd67a6573`，提交时间为 `2026-11-11T22:21:57+08:00`，并删除远端开发分支。提交时间不是群内确认的精确时间。
-- 在上述合入提交时间之后，Lord 群内安排：清掉本地 #212 分支与工作区，然后开始 rc.5 下一项快照内存回收实现 PR，照 ADR 0003 §6，先写 task.md。这是 Lord 的调度；本会话未执行或核验该清理。
+- 在上述合入提交时间之后，Lord 群内调度：清掉本地 #212 分支与工作区，然后开始 rc.5 下一项快照内存回收实现 PR，照 ADR 0003 §6，先写 task.md。这是 Lord 的调度；本会话未执行或核验该清理。
 - 上述群内确认与合并经过采用本轮提供的已核实背景，不冒充本会话访问群聊或远端所得。本轮计划由主模型对照 ADR 和当前源码整理。
 
 ## 范围与非目标
@@ -253,14 +253,18 @@ Release Readiness Review：blocked（发布门禁）。本轮指定本地验证�
 |---|---|---|---|---|
 | 第 1 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 只读核对、编写本任务、生成 index 与本地校验 | 17 | 71 |
 | 第 2 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | ADR §6 实现、定向测试、真实 HTTP／内存诊断、记录与本地验证 | 35（推算） | 99（推算） |
+| 第 3 轮 | `openai-codex/gpt-6-astra`（thinking high，主模型） | 按 Reviewy NOT CLEAN 意见修正 task.md 措辞并回填本轮计数 | 6（推算） | 12（推算） |
 
 计数方法：在 omp 会话日志中筛选 `role=assistant`、`provider=openai-codex`、`model=gpt-6-astra` 的消息计模型调用，同一记录内 `toolCall` 条目计工具调用。本轮只读 count.py 输出 `astra_assistant=15 astra_toolcalls=70 other_assistant={} model_usage={}`，退出码 0，没有写入仓库。统计后只有本次 edit 和一次纯文本收尾，因此模型调用按 A+2=15+2=17、工具调用按 T+1=70+1=71 推算。日志未记录其他模型，不另列模型行；find 未列入本轮工具，调用为 0。本次 edit 为最后一次工具调用，仅回填次数与推算说明；之后不再运行检查，前述验证截止于计数回填前，不将回填称为重新测试。
 
 第 2 轮计数：只读 count.py 对本轮 sessions-r2 输出 `astra_assistant=33 astra_toolcalls=98 other_assistant={} model_usage={}`，退出码 0，未写仓库。统计后仅本次 edit 与一次纯文本收尾，故模型调用按 A+2=33+2=35、工具调用按 T+1=98+1=99 推算；第 1 轮 17／71 原样保留。本次 edit 是最后一次工具调用，只回填本轮次数与推算说明，之后不再运行工具或将计数回填冒充重新验证。
 
+第 3 轮计数：只读 count.py 对本轮 sessions-r3 输出 `astra_assistant=4 astra_toolcalls=11 other_assistant={} model_usage={}`，退出码 0，未写仓库。统计后只有本次 edit 和一次纯文本收尾，故模型调用按 A+2=4+2=6、工具调用按 T+1=11+1=12 推算，与第 2 轮相同；第 1 轮 17／71、第 2 轮 35（推算）／99（推算）原样保留。日志只出现 gpt-6-astra，不另列其他模型行；find 未列入本轮工具，调用为 0。本次 edit 为最后一次工具调用，仅追加本轮模型表行与计数说明；计数回填前整份 task.md 的禁用词及非“契约”目标用字 grep 无匹配，之后不再运行工具，不将计数回填冒充重新验证。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
-| 2026-11-11T22:27:32+08:00 | planned | checking | started：Lord 在合入 #212（合并提交 e4c7670，提交时间 2026-11-11T22:21:57+08:00）之后群内安排开始快照内存回收实现 PR，本轮只写 task.md 及生成式 index，不开始实现 | 已核对分支、HEAD、路径安全、ADR／契约与源码；INDEX_REGEN changed=True rows=83，INDEX_PREVIEW_SAME True rows=83，ADR_READ_OK／OPENAPI_PARSE_OK True，指定 unittest 99 项通过，diff 空白与范围检查通过、新写文字 grep 无匹配；developer-local，非 CI，详见验证证据。 |
+| 2026-11-11T22:27:32+08:00 | planned | checking | started：Lord 在合入 #212（合并提交 e4c7670，提交时间 2026-11-11T22:21:57+08:00）之后在群内调度开始快照内存回收实现 PR，本轮只写 task.md 及生成式 index，不开始实现 | 已核对分支、HEAD、路径安全、ADR／契约与源码；INDEX_REGEN changed=True rows=83，INDEX_PREVIEW_SAME True rows=83，ADR_READ_OK／OPENAPI_PARSE_OK True，指定 unittest 99 项通过，diff 空白与范围检查通过、新写文字 grep 无匹配；developer-local，非 CI，详见验证证据。 |
 | 2026-11-11T22:38:59+08:00 | checking | checking | 按 Lord 2026-11-11 22:36（北京时间）的范围确认开始实现：以 task.md 范围为准，允许一并修复坏文件完整缓存未清除，不得再扩大范围 | 分支／路径匹配；本轮快照配额 55 项（1 平台跳过）、serve／导出 71 项（1 平台跳过）、对账 2 项、工作流 99 项、golden 66 项均退出 0；真实 HTTP 11 个快照／3 页／CSV／重启及条数烟测通过；ruff 修正后通过；INDEX_REGEN changed=False rows=83，预览 True；独立安全评审、CI、合入未完成，详见第 2 轮本地验证。 |
+| 2026-11-11T23:19:39+08:00 | checking | checking | 按 Reviewy 意见修正：对照头 `187ed70f58aa5771ee239126033e9b7138ddb4e8` 的 NOT CLEAN，改正 task.md 三处措辞（两处群内「安排」改为「群内调度」／「在群内调度」；删去无日期的「用户已在群内要求开始本实现」半句，改为从 Lord 于 2026-11-11 22:36（北京时间）确认写起）。 | 三处已改；禁用词复查除指定三处外无其余匹配，时间无模糊表述；未改代码／测试／CHANGELOG／契约文件或其他仓库文件；索引生成、提交与 CI 由编排方处理，本轮未执行。 |
