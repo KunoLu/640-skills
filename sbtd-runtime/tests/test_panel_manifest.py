@@ -80,7 +80,7 @@ PANEL_KINDS = {"kpi", "chart", "table"}
 # order so two half-width panels share one row (layout-only, no field change).
 EXPECTED_MANIFEST_VERSION = "1.1.0"
 EXPECTED_MANIFEST_SHA256 = (
-    "43f94e60bfebfd5dc2e90a1dae9b34c0f4ac5771193b1d6a7b365be0234e1584"
+    "57d94cb9018a7e544d6ea8010b255c43993b19587825e1652d7040399576749f"
 )
 
 
@@ -93,7 +93,7 @@ class ManifestVersionTests(unittest.TestCase):
         manifest = load_manifest()
         self.assertEqual(manifest["schema_version"], "1.0")
         self.assertEqual(manifest["manifest_version"], EXPECTED_MANIFEST_VERSION)
-        self.assertEqual(manifest["release"], "v2.1.0-rc.2")
+        self.assertEqual(manifest["release"], "v2.1.0")
 
     def test_canonical_content_hash_matches_manifest_version(self) -> None:
         # Locks the full panel table: every panel_id, title_zh, title_en, order,

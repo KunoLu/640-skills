@@ -7,7 +7,30 @@
 中英文变更日志逐版本、逐条目保持一致，仅语言不同；版本号、日期、链接、提交SHA和代码标识保持一致。未发布内容在两份文件中同步维护，历史事实不因翻译改写。
 
 
-## v2.1.0-rc.5（未发布）
+## v2.1.0（未发布）
+
+### 变更
+
+- 在 rc.5 基础上把发布身份对齐 v2.1.0 正式版：README 横幅与安装 tag、契约发布标记（`sbtd-runtime/contracts/openapi.yaml` 的 `info.x-sbtd-release` 与四个导出 operation 的 `x-sbtd-release`，以及 `sbtd-runtime/contracts/capability-matrix.json`、`sbtd-runtime/contracts/metrics-catalog.json`、`sbtd-runtime/contracts/panel-manifest.json` 的 `release`）、OpenAPI info 摘要与 `sbtd-runtime/contracts/data-dictionary.md` 标题均改为 `v2.1.0`。字段和状态码不变；`manifest_version` 仍为 `1.1.0`，`info.version` 仍为 `1.0.0`。相关测试钉同步：collection refresh 断言改为该字段不存在，面板清单内容哈希钉更新。
+
+### 已知上游问题
+
+- 上游 `impeccable` skill（pin 在 `c1e0e5492fbb`）有 4 个已知问题，已作为 [pbakaus/impeccable#1408](https://github.com/pbakaus/impeccable/issues/1408) 报告上游。保持上游副本原样，不重打本地补丁：
+  1. `scripts/live-browser.js:8025,10617,11208` 仍提示用户运行 `live-poll.mjs`；期望方向：改为指向 `impeccable live-poll`，与编译引擎 CLI 一致。
+  2. `scripts/live-browser.js:106,119,125,157,215,1731` 的注释仍指向已删除的 vocabulary/ui-surfaces/live-server/live-accept/insert-ui 模块；期望方向：更新为维护 compiled engine 的描述，而非已删除的源码。
+  3. `scripts/live-browser.js:6465` 的 `resetSvelteComponentSession` 不带 id 调用 `clearHandled()`，无 id 路径会移除整个 handled key；期望方向：只清理当前会话的 handled 记录，保留其他会话历史。
+  4. `scripts/impeccable.cmd:128,155,163,194` 把 `IMPECCABLE_DOWNLOAD_BASE` 直接展开进传给 curl 的 URL，缺少原先 delayed-expansion 的 URL 字符校验；期望方向：在使用该覆盖前校验可接受的 URL 字符。下载产物仍经校验和验证；未声称存在利用或校验和绕过。
+  上述位置来自对 pin 副本的既有静态源码审查记录，不是新的 Windows 或完整浏览器复现。我们 v1.0.15 的本地修复曾覆盖相同方向；rc.3 #197 将整份 skill 换成上游副本后去掉了这些补丁。独立评审评估这 4 项均为低风险、不阻塞。
+
+### 候选边界与已知限制
+
+- graft 仍为可选，pin 保持 `0.28.0`；本发布不改 graft 版本、pin 或安装器。
+- 以下为 rc.2/rc.3 延续项，不是 rc.5 或本发布新欠：R2.2 保持 `in-progress`、`completed_at: null`；macOS／Windows 原生性能、Mac JPEG／PDF 字节数、百万事件／1 万任务／10 万步骤及百万 CSV、完整四格式容量／平台资源上限／最大长图 CSV 规模、R2.2 收尾仍未验证；浅色主题导出仍无 CI 覆盖。rc.3–rc.5 未改变的 rc.2 实现限制同样延续：审计分页前全量 replay／排序、CSV 完整缓冲、证据仅到 11,500 事件而非百万级验收、Windows ACL 缺本机验证、`query.executed` 不持久化、查询桶限制 (1)–(5)；完整清单见 rc.2 **候选边界与已知限制**小节。
+
+
+## v2.1.0-rc.5（2026-11-12）
+
+预发布版 [v2.1.0-rc.5](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.5) 已发布（未标记为 Latest，v2.0.2 仍为最新正式版）。annotated tag（tag 对象 `328b875a8af6eee2cf03c250b4ac17208e6f6531`）指向 `c4227666e2127eca70af591f2e83ad35d7d8bcb6`；该精确提交的[三平台 main CI](https://github.com/KunoLu/640-skills/actions/runs/43073411484)只跑一次，按作业名 13 个 job 全部成功，于 2026-11-12T02:12:14+08:00 跑完。
 
 ### 新增
 

@@ -1415,11 +1415,11 @@ class OpenApiDraftTests(unittest.TestCase):
         for path, item in exports.items():
             for method, operation in item.items():
                 with self.subTest(path=path, method=method):
-                    self.assertEqual(operation["x-sbtd-release"], "v2.1.0-rc.2")
+                    self.assertEqual(operation["x-sbtd-release"], "v2.1.0")
                     self.assertIs(operation["x-sbtd-rc1-blocking"], False)
-        self.assertEqual(self.doc["info"]["x-sbtd-release"], "v2.1.0-rc.1")
+        self.assertEqual(self.doc["info"]["x-sbtd-release"], "v2.1.0")
         refresh = self.doc["paths"]["/api/v1/collection/refresh"]["post"]
-        self.assertNotEqual(refresh.get("x-sbtd-release"), "v2.1.0-rc.2")
+        self.assertNotIn("x-sbtd-release", refresh)
 
     def test_download_export_csv_columns_match_serializer(self) -> None:
         import csv_export

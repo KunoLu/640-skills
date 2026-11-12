@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "metrics_version": "1.0.0",
-  "release": "v2.1.0-rc.1",
+  "release": "v2.1.0",
   "core_rule": "task status, runs, steps, Skill/Tool invocations, gates, test evidence and collection health are supported. Other section 8.2 metrics are reserved as unsupported. Token and cost are conditional.",
   "metrics": [
     {

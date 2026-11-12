@@ -186,7 +186,7 @@ class OpenApiPinTests(unittest.TestCase):
             self.doc["paths"]["/api/v1/exports/{export_id}/file"]["get"],
         ]
         for operation in operations:
-            self.assertEqual(operation["x-sbtd-release"], "v2.1.0-rc.2")
+            self.assertEqual(operation["x-sbtd-release"], "v2.1.0")
             self.assertEqual(operation["x-sbtd-rc1-blocking"], False)
 
     def test_no_remote_business_control_operations(self) -> None:
