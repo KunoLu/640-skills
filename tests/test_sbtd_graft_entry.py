@@ -30,7 +30,7 @@ def graft_state(root):
     (root / "graft/.cache").mkdir()
     (root / "graft/.graph/wiring.json").write_text('{"fixture":true}\n')
     stamp = {
-        "version": "0.28.0",
+        "version": "0.29.0",
         "hosts": ["agents"],
         "opts": {"global": False, "mcp": False, "hooks": False, "statusline": False},
         "at": "2026-09-19T00:00:00Z",
@@ -88,11 +88,11 @@ class GuardedLaunchTests(unittest.TestCase):
             package = base / "node_modules/@nanonets/graft"
             (package / "dist").mkdir(parents=True)
             (package / "package.json").write_text(
-                '{"name":"@nanonets/graft","version":"0.28.0"}'
+                '{"name":"@nanonets/graft","version":"0.29.0"}'
             )
             cli = package / "dist/cli.js"
             cli.write_text(
-                'import json,os\nprint(json.dumps({key:os.environ.get(key) for key in ("HOME","DO_NOT_TRACK","DNT","GRAFT_DIR","GRAFT_NO_REFRESH","CLAUDE_PROJECT_DIR","OPENAI_API_KEY","GRAFT_API_KEY","NODE_OPTIONS")}))\n'
+                'import json,os\nprint(json.dumps({key:os.environ.get(key) for key in ("HOME","DO_NOT_TRACK","DNT","GRAFT_DIR","GRAFT_NO_REFRESH","TRAIL_CLOUD","GRAFT_NO_BROWSER","GRAFT_NO_RENAME_NOTICE","CLAUDE_PROJECT_DIR","OPENAI_API_KEY","GRAFT_API_KEY","NODE_OPTIONS")}))\n'
             )
             environment = {
                 **os.environ,
@@ -127,6 +127,9 @@ class GuardedLaunchTests(unittest.TestCase):
             self.assertEqual(observed["GRAFT_NO_REFRESH"], "1")
             self.assertEqual(observed["DO_NOT_TRACK"], "1")
             self.assertEqual(observed["DNT"], "1")
+            self.assertEqual(observed["TRAIL_CLOUD"], "0")
+            self.assertEqual(observed["GRAFT_NO_BROWSER"], "1")
+            self.assertEqual(observed["GRAFT_NO_RENAME_NOTICE"], "1")
             self.assertEqual(observed["GRAFT_DIR"], str(root / "graft"))
             self.assertEqual(observed["CLAUDE_PROJECT_DIR"], str(root))
             for key in ("OPENAI_API_KEY", "GRAFT_API_KEY", "NODE_OPTIONS"):
@@ -604,7 +607,7 @@ def fake_runtime_fixture(base):
     (package / "dist/claude").mkdir(parents=True)
     (package / "dist/cli.js").write_text("// pinned cli placeholder\n")
     (package / "package.json").write_text(
-        '{"name":"@nanonets/graft","version":"0.28.0"}'
+        '{"name":"@nanonets/graft","version":"0.29.0"}'
     )
     (package / "dist/claude/hooks.js").write_text("// pinned hook module\n")
     return package

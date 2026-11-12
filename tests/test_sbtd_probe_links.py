@@ -52,7 +52,7 @@ PINNED_TOOLS = [
     "graft_check_freshness", "graft_file_api", "graft_find_all",
     "graft_find_code", "graft_repo_map", "graft_trace_calls",
 ]
-GRAFT_VERSION = "0.28.0"
+GRAFT_VERSION = "0.29.0"
 HOST_ID = "codex-account"
 
 

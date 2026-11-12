@@ -11,11 +11,11 @@ prints to stdout/stderr; callers own all presentation:
   never the network-bound ``graft version`` command).
 - ``install_graft(*, confirmed, telemetry_only=False)`` — plans (always
   read-only) and, only after explicit confirmation, installs the frozen
-  ``@nanonets/graft@0.28.0`` tarball with integrity verification and
+  ``@nanonets/graft@0.29.0`` tarball with integrity verification and
   conservative telemetry opt-out persistence.
 
 Pinned facts (registry-verified, do not "upgrade" to latest automatically):
-tarball integrity sha512-zto3AJeK5qMdjhZrsrIr0Bq7agySU/aPIgBgokpPXleabiY9l83iHUETec9oeMiiBZM7YRxh4OSDMHlP4sSwBA==,
+tarball integrity sha512-dYZA/fAI6f2uCt4OZiyAtDZ2itvD4cP1SkMwLwIa51LdEcHyPmeGwH/pbWE4qS2BfG/TqEbT6piHc+kcai/i4g==,
 registry repository ``trailhq/Trail-Code``, registry gitHead absent, Node >=20.
 
 Managed subprocesses always run with telemetry/trackable activation
@@ -47,11 +47,11 @@ import urllib.request
 from pathlib import Path
 
 GRAFT_PACKAGE = "@nanonets/graft"
-GRAFT_PINNED_VERSION = "0.28.0"
+GRAFT_PINNED_VERSION = "0.29.0"
 GRAFT_SPEC = f"{GRAFT_PACKAGE}@{GRAFT_PINNED_VERSION}"
-GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.28.0.tgz"
+GRAFT_TARBALL_URL = "https://registry.npmjs.org/@nanonets/graft/-/graft-0.29.0.tgz"
 GRAFT_TARBALL_INTEGRITY = (
-    "sha512-zto3AJeK5qMdjhZrsrIr0Bq7agySU/aPIgBgokpPXleabiY9l83iHUETec9oeMiiBZM7YRxh4OSDMHlP4sSwBA=="
+    "sha512-dYZA/fAI6f2uCt4OZiyAtDZ2itvD4cP1SkMwLwIa51LdEcHyPmeGwH/pbWE4qS2BfG/TqEbT6piHc+kcai/i4g=="
 )
 GRAFT_REGISTRY_GIT_HEAD = None
 NODE_MIN_MAJOR = 20
@@ -98,7 +98,7 @@ _SCRUBBED_VARS = (
 
 _ADVICE_MISSING = (
     "Install the pinned Graft CLI with the managed install-graft flow after "
-    "explicit confirmation; it fetches the frozen @nanonets/graft@0.28.0 "
+    "explicit confirmation; it fetches the frozen @nanonets/graft@0.29.0 "
     "tarball, verifies its integrity, and disables anonymous telemetry."
 )
 
