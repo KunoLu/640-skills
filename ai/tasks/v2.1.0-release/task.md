@@ -187,7 +187,7 @@ Evidence Source：developer-local；Source Revision：dirty（生产文件已改
 | 第 4 轮 | kimi-code/k3（thinking max） | 补完验证（全量单测、基线对照、index、grep）并更新本 task；单次运行 `--config` 覆盖关闭自动换模型（`retry.modelFallback: false`），未改全局配置 | 41（会话日志实数，编排方第 4 轮结束后复核） | 88（同上） |
 | 第 4 轮 | 启动未成功的两次尝试 | 一次因账号登录失效、一次因未取到 key，均在任何模型调用前退出，未产生会话、未调用模型 | 0 | 0 |
 | 第 4 轮 | 其他模型 | 会话日志未出现其他模型名（other_assistant={}） | 0（会话日志实数） | 0（会话日志实数） |
-| 第 5 轮 | kimi-code/k3（thinking max） | 按 Reviewy 与 Lord 群内提醒修改 task 文字，不改生产文件；单次运行 `--config` 覆盖除关闭自动换模型外，还把 smol、commit、tiny、task、advisor、vision、judge、astra 各用途都指定为 kimi-code/k3:max，依据 Lord 2026-11-12 14:11、14:23 群内调度，未改全局配置 | 未知（本轮结束后由编排方统计） | 未知（本轮结束后由编排方统计） |
+| 第 5 轮 | kimi-code/k3（thinking max） | 按 Reviewy 与 Lord 群内提醒修改 task 文字，不改生产文件；单次运行 `--config` 覆盖除关闭自动换模型外，还把 smol、commit、tiny、task、advisor、vision、judge、astra 各用途都指定为 kimi-code/k3:max，依据 Lord 2026-11-12 14:11、14:23 群内调度，未改全局配置 | 17（会话日志实数） | 28（会话日志实数） |
 
 改模型依据：用户 2026-11-12 08:02 群内确认（主模型改用 k3:max），Lord 记录。
 
