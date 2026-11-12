@@ -163,7 +163,7 @@ Normal onboarding may probe the target CLI read-only first, but collects the act
 
 ## Global Tools and Optional Graft
 
-Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.28.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
+Graft is an explicitly confirmed auxiliary CLI, pinned to `@nanonets/graft@0.29.0` with Node >=20. Existing local availability is checked independently of npm or latest-version reachability. No automatic upgrade, install loop or offline-mirror product is provided.
 
 ```bash
 python scripts/onboard.py install-graft --json
@@ -174,7 +174,9 @@ Without confirmation the handler only reports its package/prefix/telemetry plan.
 
 When only telemetry opt-out is selected, use `install-graft --telemetry-only --yes --json`. The handler rechecks the verified pinned CLI and blocks if it disappeared or changed; it never falls through to npm/package installation under telemetry-only consent. Both root wrappers preserve this action boundary after showing the probe plan.
 
-All managed Graft children receive `DO_NOT_TRACK=1`, an empty dotenv input, `DOTENV_CONFIG_QUIET=true`, and no inherited dotenv-debug or LLM/cloud activation settings. The installation child also uses `CI=1` to avoid this pin's detached postinstall path; runtime DNT is separately exercised without relying on CI. These child settings do not edit the user's global environment.
+All managed Graft children receive `DO_NOT_TRACK=1`, an empty dotenv input, `DOTENV_CONFIG_QUIET=true`, and no inherited dotenv-debug or LLM/cloud activation settings. The installation child also uses `CI=1` to avoid this pin's detached postinstall path; runtime DNT is separately exercised without relying on CI. Managed launcher children (MCP, hook, analyze) additionally receive `TRAIL_CLOUD=0`, `GRAFT_NO_BROWSER=1` and `GRAFT_NO_RENAME_NOTICE=1`, which suppress the pinned package's Trail cloud sign-in prompt, browser launch, daily rename notice and weekly upgrade suggestion. These child settings do not edit the user's global environment.
+
+A pin upgrade invalidates previously built graphs: the managed launcher requires the wiring stamp version to equal the pin exactly, and the pinned package keys its extract cache and fingerprint sidecars to its own version, so a graph built by an earlier pin is refused rather than reused. After the pin changes, rebuild each wired project through the managed project setup (`init`/`init-projects` on the selected roots) before relying on MCP or hook answers.
 
 `graft --version` is local-only; `graft version` invokes npm metadata and can return an offline/unreachable message. Check/plan never run the latter. A cached npm answer is not proof of connectivity; offline verification uses a real network control and empty per-case caches.
 
@@ -344,10 +346,26 @@ The result contains one entry per root:
 - `playwright`
 - `reactBits`
 - `sbtd`: the selected-state inspection with `status`, `reason`, `nextStep`, `validationScope`, `activeTask`, `bootstrapTask` and `legacyPresent`; a present bootstrap record appears under `sbtd.bootstrapTask.relativePath`
+- `languages`: marker-and-source detection of the project's languages (Python, Rust, TypeScript, Go, Julia; the table in `scripts/sbtd_language_tooling.py` is extensible), each with its matched evidence and whether omp has a built-in language server for it
 
 Removed `trellis.*` setup fields have no aliases.
 
 Normal `check` includes the same entries under `projectChecks` while global runtime/tools/Skills remain at the top level.
+
+### Language tooling (omp LSP / ast-grep)
+
+`check` adds a top-level `languageTooling` report over the selected roots: per detected language, whether an omp built-in language server command is on PATH; for a language omp has no built-in server for (for example Julia), whether the global `~/.omp/agent/lsp.yml` already carries a custom entry covering its extensions; and whether `~/.omp/agent/config.yml` enables `astGrep`. `init`/`init-projects` run the same detection after project setup. The only automatic writes are the displayed configuration edits — enabling `astGrep` in `config.yml` and appending custom server entries to `lsp.yml` — and they require the separate `--language-tooling` consent flag; language server binaries are never installed implicitly and the guidance lists their install commands. Without the flag the section reports `needs-confirmation`, writes nothing and lists the skip impact per item.
+
+Two omp facts the guidance restates: omp resolves project roots from its launch directory, so starting it in a parent directory leaves Rust/TypeScript/Go projects in subdirectories without a language server; and a Git repository without `pyproject.toml` needs the global `lsp.yml` to add `.git` to pyright's `rootMarkers` before omp treats it as a Python project root.
+
+#### Language tooling acceptance scenarios
+
+This source repository keeps scenarios in documentation, not `.feature` files. Chinese scenario text uses English Gherkin keywords.
+
+- **Scenario: 同意应用配置写入** — Given 检测到的项目语言缺 omp 语言服务器配置或 astGrep 未启用，When 以 `--language-tooling` 运行 init/init-projects，Then 写入所示 `config.yml`／`lsp.yml` 配置项并复验通过，And 语言服务器二进制仍只给安装步骤不代装。覆盖：`test_init_step_with_flag_applies_config_writes`、`test_consent_creates_config_and_lsp_files`、`test_consent_preserves_existing_config_content`、`test_consent_preserves_existing_lsp_servers`、`test_consent_handles_flow_style_ast_grep_section`。
+- **Scenario: 拒绝则跳过并说明影响** — Given 同上缺口，When 不带 `--language-tooling` 运行，Then 不写任何配置，报告 `needs-confirmation` 与每项 skip impact。覆盖：`test_init_step_without_flag_is_needs_confirmation_without_writes`、`test_refusal_writes_nothing_and_reports_impact`。
+- **Scenario: 内置清单外语言走自定义条目** — Given 项目含 `.jl` 源码，When 检测与引导运行，Then 报告 omp 无内置 Julia 服务器并给出自定义 `lsp.yml` 条目；已存在覆盖该扩展名的条目时不再写入。覆盖：`test_julia_is_detected_as_custom_language`、`test_julia_without_custom_entry_needs_consent_write`、`test_julia_with_custom_entry_is_ready`。
+- **Scenario: 畸形配置不被改写** — Given `config.yml` 或 `lsp.yml` 不是可读 YAML 映射，When 应用写入，Then 报 `failed` 且原字节保留。覆盖：`test_malformed_config_is_unreadable_and_never_written`、`test_malformed_lsp_fails_without_replacing_bytes`。
 
 ### Playwright
 
@@ -698,7 +716,7 @@ The Windows Git root proof decodes output as UTF-8 independently of Python's def
 
 Full installation binds MCP/hooks to the canonical installed Onboard Skill, not a disposable bootstrap checkout. That package is installed and verified before dependent host configuration is published. If ordinary init would retain a merely-valid but different older Skill shell, wiring preflight requests an explicitly confirmed reset instead of running the old guard. Project-only uses its existing executing package because it installs no global Skill.
 
-Hooks are absent from the default write set. `--graft-hooks` is separate consent to install the managed definitions, not host trust or execution proof. The host must support and enable hooks and trust the exact configured hashes; Onboard never edits trust state or bypasses it. Preserve all foreign handlers. Host-event acceptance is a separate real-host check. The root installers forward this option through the implemented deployment flags.
+Hooks are absent from the default write set. `--graft-hooks` is separate consent to install the managed definitions, not host trust or execution proof. The host must support and enable hooks and trust the exact configured hashes; Onboard never edits trust state or bypasses it. Preserve all foreign handlers. Host-event acceptance is a separate real-host check. The root installers do not accept `--graft-hooks` on the `init`/`reset` main flows: `install.sh` dies on any unrecognized option there and the `install.ps1` param block has no such parameter. Both installers forward leftover arguments only on their pass-through workflow modes (`migration`, `recovery`, `cleanup-legacy`, `upgrade`), and of those only `migration` registers `--graft-hooks`. To use it outside a migration plan, pass `--graft-hooks` to the installed `onboard.py` directly.
 
 The generated Python commands use `-E -s` before the installed script: caller `PYTHONHOME`/`PYTHONPATH` and user-site startup cannot run ahead of the guard, while trusted sibling modules remain importable. The launcher uses pinned native code, an ephemeral HOME, DNT and dotenv/LLM/cloud environment isolation. It validates current graph state before every MCP request; native automatic refresh stays disabled. A graph replaced by Stop or explicit deployment is rechecked before the running MCP receives another request. Invalid state returns a sanitized protocol error and stops that session rather than forwarding the request. Missing/old/incomplete stamps are never automatically reconciled. This is a single-controller adapter, not an OS sandbox or arbitrary concurrent-writer isolation.
 
@@ -824,7 +842,7 @@ Network, permissions, missing dependencies, unsupported platform execution, malf
 
 Windows 工具检测契约（同次迁移 M03/M04/M05 的固化）：`.CMD`/`.BAT` shim 一律经 `subprocess_command()` 转为 `cmd.exe /d /s /c` 执行；检测类子进程文本输出统一 `errors="replace"` 容错解码，但该容错不适用于必须字节精确的协议、签名或机器数据解析；Java 检测经 `java_binary_path()` 同时接受 `bin/java.exe` 与 `bin/java`。跨平台 CLI gate 至少覆盖 `.exe`、`.cmd`、`.bat`、含空格路径与非 UTF-8 输出。
 
-`upgrade` 对显式范围进行内容对齐，不改变 `init` 跳过合法 Skill 壳、`reset` 重装和 `migration` 迁移数据的既有含义。基线来自执行中的完整 Onboard 包：catalog、模板、固定 stable 内容及来源；绝对安装路径或文件时间不是版本。不能证明历史版本时报告 `unknown-drift`，不凭名称或版本字符串猜测。
+`upgrade` 对显式范围进行内容对齐，不改变 `init` 跳过合法 Skill 壳、`reset` 重装和 `migration` 迁移数据的既有含义。基线来自执行中的完整 Onboard 包：catalog、模板、固定 stable 内容及来源；绝对安装路径或文件时间不是版本。不能证明历史版本时报告 `unknown-drift`，不凭名称或版本字符串猜测。升级 apply 若带来 Graft pin 变化，旧 pin 构建的代码图与 wiring stamp 会被新守门入口拒绝：升级完成后须对每个已接线项目重跑受管项目设置（`init`/`init-projects`）重建图，再使用 MCP 或 hook。
 
 ### 范围与授权
 

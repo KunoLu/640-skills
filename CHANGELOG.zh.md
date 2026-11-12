@@ -12,6 +12,10 @@
 ### 变更
 
 - 将宿主验收门禁从 `codex@0.167.1` + `omp@18.18.8` 换为 `codex@0.167.1` + `omp@18.19.0`（codex 针不变）；omp 18.19.0 于 2026-11-12 通过真实冒烟（来源：云主机实测）。omp 18.18.8 冒烟记录移入 `smoke_history`，与既有 omp 18.11.1、codex 0.163.0 记录并列保留；ADR 0001 §8 决策与已发布变更日志条目不改写，旧版本标为 unsupported；固定一对版本、parser fixture 不算证据、至少一个宿主通过的兜底完成门规则不变。
+- 受管 Graft pin 从 `@nanonets/graft@0.28.0` 晋升到 `@nanonets/graft@0.29.0`；Graft 仍标记为已弃用但继续支持。tarball URL 与 registry 核对的 integrity（`sha512-dYZA/fAI6f2uCt4OZiyAtDZ2itvD4cP1SkMwLwIa51LdEcHyPmeGwH/pbWE4qS2BfG/TqEbT6piHc+kcai/i4g==`，已对 npm registry 实测复核 0.29.0）随版本同步，`onboard_contracts.py` 的 `GRAFT_BUILD_POLICY_SHA256` 摘要随 `graft-build-policy.json` 资产变化更新。0.28.0 构建的代码图与 wiring stamp 会被拒绝：受管启动器要求 stamp 版本与 pin 完全一致，且 0.29.0 的 extract-cache 与 fingerprint sidecar 以自身包版本为键。本次升级后，须对每个已接线项目重跑受管项目设置（`init`/`init-projects`）重建图，再使用 MCP 或 hook。Codex hook 桥接合同不变——真实 0.29.0 包仍提供 `dist/claude/hooks.js` 并导出 `main(event)`，四个受管事件（`session-start`、`prompt`、`post-edit`、`stop`）均在。
+- 受管 Graft 启动器对 MCP、hook、analyze 子进程新增 `TRAIL_CLOUD=0`、`GRAFT_NO_BROWSER=1`、`GRAFT_NO_RENAME_NOTICE=1`，抑制被 pin 包的 Trail 云登录提示、浏览器打开、每日改名提示与每周升级建议；既有 `DO_NOT_TRACK=1`/`DNT=1` 遥测关闭保持不变，不改动 Codex 全局配置。
+- 修正 REFERENCE 中「根安装器转发 `--graft-hooks`」的说法：`install.sh` 在 `init`/`reset` 主流程对未识别参数直接报错，`install.ps1` 的 param 块无此参数；两个安装器仅在透传工作流模式（`migration`、`recovery`、`cleanup-legacy`、`upgrade`）转发剩余参数，其中只有 `migration` 注册该开关。迁移计划之外的用法，改为直接向已安装的 `onboard.py` 传 `--graft-hooks`。
+- 新增 omp 语言工具检测与引导：`check`/`check-projects` 按标记文件与源码扩展名检测每个所选项目的语言（Python、Rust、TypeScript、Go、Julia；`scripts/sbtd_language_tooling.py` 的检测表可扩展）并给出命中证据，`check` 以 `languageTooling` 报告 omp 语言服务器与 `astGrep` 可用性。`init`/`init-projects` 只有在单独的 `--language-tooling` 同意下才写入展示的配置项（`~/.omp/agent/config.yml` 的 `astGrep.enabled`，以及为 omp 无内置服务器的语言如 Julia 在 `~/.omp/agent/lsp.yml` 追加自定义条目）；不带该开关则报告 `needs-confirmation` 与逐项跳过影响，不写任何内容。语言服务器二进制不由本流程代装，引导文案列出安装命令，并写明 omp 按启动目录解析项目根、pyright 需 `.git` rootMarker 两个注意事项。
 
 
 ## v2.1.0（2026-11-12）
