@@ -7,7 +7,7 @@ name carries a session id (<timestamp>Z_<uuid>.jsonl), the CLI probes
 refuses the read while a running omp owns that session; a failed probe fails
 closed. `--no-lease-check` opts out explicitly. Observed record shapes come
 from real omp 18.11.1 sessions; omp 18.18.8 was also smoke-tested on 2026-11-11
-(云主机实测):
+and omp 18.19.0 on 2026-11-12 (云主机实测):
 
 - {"type": "session", "id": ..., "timestamp": ...}         -> context
 - assistant message content item {"type": "toolCall", "id", "name",

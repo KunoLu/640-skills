@@ -102,7 +102,7 @@ class CapabilityMatrixTests(unittest.TestCase):
             f"{pin['host_kind']}@{pin['host_version']}"
             for pin in MATRIX["acceptance_pins"]
         ]
-        self.assertEqual(gate["hosts"], ["codex@0.167.1", "omp@18.18.8"])
+        self.assertEqual(gate["hosts"], ["codex@0.167.1", "omp@18.19.0"])
         self.assertEqual(gate["hosts"], pins)
         self.assertEqual(gate["evidence"], "real-smoke")
         self.assertIs(gate["parser_fixture_counts"], False)
@@ -116,9 +116,10 @@ class CapabilityMatrixTests(unittest.TestCase):
         # Scenario: 换针后旧门禁版本不再参与当前验收
         for host, version, expected in (
             ("codex", "0.167.1", "pinned"),
-            ("omp", "18.18.8", "pinned"),
+            ("omp", "18.19.0", "pinned"),
             ("codex", "0.163.0", "unsupported"),
             ("omp", "18.11.1", "unsupported"),
+            ("omp", "18.18.8", "unsupported"),
         ):
             with self.subTest(host=host, version=version):
                 self.assertEqual(host_capability(MATRIX, host, version), expected)
@@ -301,7 +302,7 @@ class GoldenContractTests(unittest.TestCase):
     def test_unsupported_host_does_not_unsupport_the_metric(self) -> None:
         self.assertEqual(self.result["capability"]["codex@0.164.0"], "unsupported")
         self.assertEqual(self.result["capability"]["codex@0.167.1"], "pinned")
-        self.assertEqual(self.result["capability"]["omp@18.18.8"], "pinned")
+        self.assertEqual(self.result["capability"]["omp@18.19.0"], "pinned")
         self.assertEqual(self.metric("components.invocations")["support"], "supported")
         self.assertEqual(host_capability(MATRIX, "codex", "0.999.0"), "unsupported")
 

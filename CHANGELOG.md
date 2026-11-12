@@ -7,6 +7,13 @@ English · [简体中文](CHANGELOG.zh.md)
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
 
+## v2.2.0-rc.1 (Unreleased)
+
+### Changed
+
+- Change the host acceptance gate from `codex@0.167.1` + `omp@18.18.8` to `codex@0.167.1` + `omp@18.19.0` (the codex pin is unchanged); omp 18.19.0 passed a real cloud-host smoke test on 2026-11-12. The omp 18.18.8 smoke record moves into `smoke_history`, kept alongside the existing omp 18.11.1 and codex 0.163.0 records; the ADR 0001 §8 decision and released changelog entries stay unchanged, old versions are classified as unsupported, and the fixed-pair rule, the exclusion of parser fixtures as evidence, and the fallback completion gate of at least one passing host are unchanged.
+
+
 ## v2.1.0 (2026-11-12)
 
 The [v2.1.0 stable release](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0) is published and marked Latest. Its annotated tag (tag object `7390b47ba44b1d8cb138e6b82769aeb9f3a0ac2d`) points to `3c835303c23d59d3157ca84121a92f1bd87d4997`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/43178920438) ran once and passed with all 13 jobs successful by name, finishing at 2026-11-12T16:10:33+08:00.

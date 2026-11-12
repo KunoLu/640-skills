@@ -20,9 +20,9 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 
 所有丢弃都进入回执的 `dropped` 清单（键名 + 原因）。
 
-## omp 适配器（当前门禁 omp@18.18.8；18.11.1 为历史实测）
+## omp 适配器（当前门禁 omp@18.19.0；18.18.8、18.11.1 为历史实测）
 
-来源：omp 会话 JSONL，适配器只读显式给出的路径，不改会话文件、不扫描 HOME。真实字段形状来自 18.11.1 历史会话，18.18.8 亦已于 2026-11-11 云主机实测通过。映射（parser_version `omp-session-jsonl-1`）：
+来源：omp 会话 JSONL，适配器只读显式给出的路径，不改会话文件、不扫描 HOME。真实字段形状来自 18.11.1 历史会话，18.18.8 与 18.19.0 亦已分别于 2026-11-11、2026-11-12 云主机实测通过。映射（parser_version `omp-session-jsonl-1`）：
 
 - assistant 消息的 `toolCall` 项 → `invocation.started`（component `tool:<name>`，occurred_at 取记录时间戳）。
 - `read` 且 `arguments.path` 为 `skill://<名>` → 额外产出 `skill.loaded`（component `skill:<名>`；只陈述宿主读入了 skill 资源，不陈述执行通过）。该 read 调用本身仍记 invocation 对。
@@ -45,17 +45,19 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 
 重复 ingest 同一文件：靠 `(source_id, source_event_id)` 去重只确认，不重复计数。
 
-### omp@18.18.8 真实 smoke 证据（pass，2026-11-11）
+### omp@18.19.0 真实 smoke 证据（pass，2026-11-12）
 
-来源：**云主机实测**，OMP bot 执行。`omp --version` → `omp/18.18.8`，14:40:30–14:40:38 +08:00，在 main `80f1426` 只读副本旁的临时目录运行，退出码 0、stdout `done`。
+来源：**云主机实测**。`omp --version` → `omp/18.19.0`，2026-11-12 18:51:03–18:51:17 +08:00，退出码 0、stdout `done`。模型 kimi-code/k3:max；强制一次 read 工具调用，再将会话文件交给 `omp_adapter.py`。
 
-本页只有 codex 的现场步骤；omp 本次参照 2026-10-17 `omp@18.11.1` 冒烟做法：`omp -p` 强制一次 read 工具调用读取一个系统文件，再将会话文件交给 `omp_adapter.py`。运行参数为 `--model openai-codex/gpt-6-astra:high --tools read,write,edit,bash,grep,glob,find,todo --no-title`。模型 openai-codex/gpt-6-astra、thinking high，2 次调用（工具调用回合与最终回复）。
+会话 12 行，sha256 `c5f79ec94f0cedcdbde4eabb472124bd7ea030e5e9457a56df5abeea012116a0`；第 1 行 type=title 且无 id（18.19.0 新出现），第 2 行 session 头 version 3；toolResult 的 toolName=read、isError=false。
 
-会话 13 行，session header version 3，runtime.version=18.18.8；第 8 行 assistant toolCall name=read，第 11 行 toolResult 的 toolCallId 相同、toolName=read、isError=false。新类型 `credential_pin` 按未知类型跳过计数，不报错。
+`omp_adapter.py`（main `a70f270`）回执：records_read=12，records_skipped=8，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]；重复导入 accepted=0、duplicate=2。
 
-回执：source_id=omp-session，host_version=18.18.8，parser_version=omp-session-jsonl-1，records_read=13，records_skipped=9，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]；重复导入 accepted=0、duplicate=2。重放 `invocation.started`（2026-11-11T06:40:35.617Z）+ `invocation.finished`（2026-11-11T06:40:35.645Z），component `tool:read`，succeeded，duration_ms=28（wall）。
+当时旧矩阵把 18.19.0 判为 unsupported、18.18.8 判为 pinned；本次换针后两者分类反转，不改变实测事实。
 
-stderr 有一条 `sbtd-graft` MCP 连接失败警告；本次冒烟不依赖它。当时旧矩阵把 18.18.8 判为 unsupported、18.11.1 判为 pinned；本次换针后两者分类反转，不改变实测事实。
+### omp@18.18.8 历史 smoke（pass，2026-11-11）
+
+来源：**云主机实测**。`omp --version` → `omp/18.18.8`，14:40:30–14:40:38 +08:00，退出码 0、stdout `done`。会话 13 行，session header version 3，runtime.version=18.18.8；第 8 行 read toolCall，第 11 行同 toolCallId 的 toolResult，isError=false；新类型 `credential_pin` 按未知类型跳过计数。回执 records_read=13、records_skipped=9、events_emitted=2、accepted=2、duplicate/conflict/rejected=0、dropped=[]；重复导入 accepted=0、duplicate=2。完整记录见 `ai/tasks/v2.1.0-rc.5-host-gate-codex-0167-omp-18188/task.md`，矩阵保留于 `smoke_history.omp`；历史 pass 不等于当前 pinned。
 
 ### omp@18.11.1 历史 smoke（pass，2026-10-17）
 
@@ -75,7 +77,7 @@ stderr 有一条 `sbtd-graft` MCP 连接失败警告；本次冒烟不依赖它�
 
 ## capability matrix 与 smoke 状态
 
-`contracts/capability-matrix.json` 当前门禁针为 `codex@0.167.1` + `omp@18.18.8`，其他版本 unsupported。`smoke` 节记录当前两宿主真实 smoke 结果：`pass`（真实运行采到 Skill 或 Tool 调用事件）、`unsupported`（固定版本拿不到结构化调用事件，如实标记）、`pending`（尚未执行）。`smoke_history` 保留 2026-10-17 的 codex@0.163.0 unsupported 与 omp@18.11.1 pass，旧版本在新契约下均 unsupported。parser fixture 不算 smoke 证据，兜底完成门仍为 ≥1 个门禁宿主通过（ADR 0001 Q6 与第 8 节追加决定）。
+`contracts/capability-matrix.json` 当前门禁针为 `codex@0.167.1` + `omp@18.19.0`，其他版本 unsupported。`smoke` 节记录当前两宿主真实 smoke 结果：`pass`（真实运行采到 Skill 或 Tool 调用事件）、`unsupported`（固定版本拿不到结构化调用事件，如实标记）、`pending`（尚未执行）。`smoke_history` 保留 2026-11-11 的 omp@18.18.8 pass 与 2026-10-17 的 codex@0.163.0 unsupported、omp@18.11.1 pass，旧版本在新契约下均 unsupported。parser fixture 不算 smoke 证据，兜底完成门仍为 ≥1 个门禁宿主通过（ADR 0001 Q6 与第 8 节追加决定）。
 
 ## codex@0.167.1 真实 smoke 指令（另一 bot 执行）
 
