@@ -7,7 +7,30 @@ English · [简体中文](CHANGELOG.zh.md)
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
 
-## v2.1.0-rc.5 (Unreleased)
+## v2.1.0 (Unreleased)
+
+### Changed
+
+- Align the release identity with the v2.1.0 stable release on top of rc.5: the README banner and installation tag, the contract release markers (`info.x-sbtd-release` and the four export operations' `x-sbtd-release` in `sbtd-runtime/contracts/openapi.yaml`; `release` in `sbtd-runtime/contracts/capability-matrix.json`, `sbtd-runtime/contracts/metrics-catalog.json` and `sbtd-runtime/contracts/panel-manifest.json`), the OpenAPI info summary and the `sbtd-runtime/contracts/data-dictionary.md` title now read `v2.1.0`. Fields and status codes are unchanged; `manifest_version` stays `1.1.0` and `info.version` stays `1.0.0`. Test pins move in sync: the collection-refresh assertion now states that `x-sbtd-release` is absent, and the panel-manifest content hash pin is updated.
+
+### Known Upstream Issues
+
+- Four known issues in the upstream `impeccable` skill (pinned at `c1e0e5492fbb`), reported upstream as [pbakaus/impeccable#1408](https://github.com/pbakaus/impeccable/issues/1408). We keep the upstream copy unchanged and do not reapply local patches:
+  1. `scripts/live-browser.js:8025,10617,11208` still tells users to run `live-poll.mjs`; expected direction: point users to `impeccable live-poll`, matching the compiled-engine CLI.
+  2. Comments at `scripts/live-browser.js:106,119,125,157,215,1731` still refer to the removed vocabulary/ui-surfaces/live-server/live-accept/insert-ui modules; expected direction: update the maintenance comments to describe the compiled engine rather than deleted sources.
+  3. `resetSvelteComponentSession` calls `clearHandled()` without an id at `scripts/live-browser.js:6465`, and the no-id path removes the entire handled key; expected direction: clear only the current session's handled records and retain other sessions' history.
+  4. `scripts/impeccable.cmd:128,155,163,194` expands `IMPECCABLE_DOWNLOAD_BASE` into URLs passed to curl without the previous delayed-expansion URL-character check; expected direction: validate accepted URL characters before using the override. Downloaded artifacts still pass checksum verification; no exploit or checksum bypass is claimed.
+  The locations come from recorded static source review of the pinned copy, not a new Windows or full-browser reproduction. Our v1.0.15 local fixes covered the same directions; rc.3 #197 replaced the entire skill with the upstream copy and removed those patches. Our independent reviewer assessed all four as low risk and non-blocking.
+
+### Candidate Boundaries and Known Limitations
+
+- graft remains optional and pinned at `0.28.0`; this release does not change the graft version, pin or installer.
+- Carried over from rc.2/rc.3, not newly incurred in rc.5 or this release: R2.2 remains `in-progress` with `completed_at: null`; native macOS/Windows performance, Mac JPEG/PDF byte counts, million events / 10,000 tasks / 100,000 steps and million-scale CSV, full four-format capacity / platform resource limits / maximum long-image and CSV scale, and R2.2 closeout remain unverified; light-theme export still lacks CI coverage. The rc.2 implementation limitations that rc.3–rc.5 did not change also continue: full replay/sort before audit pagination, fully buffered CSV, evidence limited to 11,500 events rather than million-scale acceptance, no local-machine Windows ACL verification, no persisted `query.executed`, and query-bucket limitations (1)–(5); see the rc.2 **Candidate Boundaries and Known Limitations** subsection for the full list.
+
+
+## v2.1.0-rc.5 (2026-11-12)
+
+The [v2.1.0-rc.5 prerelease](https://github.com/KunoLu/640-skills/releases/tag/v2.1.0-rc.5) is published (not marked Latest; v2.0.2 remains the latest stable). Its annotated tag (tag object `328b875a8af6eee2cf03c250b4ac17208e6f6531`) points to `c4227666e2127eca70af591f2e83ad35d7d8bcb6`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/43073411484) ran once and passed with all 13 jobs successful by name, finishing at 2026-11-12T02:12:14+08:00.
 
 ### Added
 

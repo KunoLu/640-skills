@@ -1,4 +1,4 @@
-# SBTD Runtime 数据字典（v2.1.0-rc.1 / R1.0）
+# SBTD Runtime 数据字典（v2.1.0 / R1.0）
 
 本字典固定 R1.0 名词。它不改 `task.md` 事实源，也不实现 HTTP 服务。R1.2a 把原始观察写入用户私有 `audit.db`；指标计算仍见 `metrics-catalog.json`，事件形状仍见 `event.schema.json`。
 
