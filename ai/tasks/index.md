@@ -85,6 +85,7 @@
 - [v2.1.0-rc.5-snapshot-eviction-impl](v2.1.0-rc.5-snapshot-eviction-impl/task.md)
 - [v2.1.0-rc.5-snapshot-memory-eviction](v2.1.0-rc.5-snapshot-memory-eviction/task.md)
 - [v2.1.0-release](v2.1.0-release/task.md)
+- [v2.2.0-rc.1-host-gate-omp-18190](v2.2.0-rc.1-host-gate-omp-18190/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)

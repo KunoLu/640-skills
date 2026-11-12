@@ -1809,7 +1809,7 @@
       },
       "host": {
         "host_kind": "omp",
-        "host_version": "18.18.8"
+        "host_version": "18.19.0"
       },
       "state": {
         "previous": null,
@@ -1868,7 +1868,7 @@
       },
       "host": {
         "host_kind": "omp",
-        "host_version": "18.18.8"
+        "host_version": "18.19.0"
       },
       "state": {
         "previous": "running",
@@ -2919,7 +2919,7 @@
       "extensions": {},
       "host": {
         "host_kind": "omp",
-        "host_version": "18.18.8"
+        "host_version": "18.19.0"
       },
       "collection": {
         "gap_id": "gap_omp",
