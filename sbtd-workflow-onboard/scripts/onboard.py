@@ -1480,11 +1480,14 @@ def check_react_bits_project(project_root: Path) -> dict[str, object]:
 def build_project_check(
     project_root: Path, skip_agents: bool = False
 ) -> dict[str, object]:
+    from sbtd_language_tooling import detect_project_languages
+
     return {
         "projectRoot": str(project_root),
         "playwright": check_playwright_project(project_root),
         "reactBits": check_react_bits_project(project_root),
         "sbtd": inspect_project_setup(project_root, skip_agents),
+        "languages": detect_project_languages(project_root),
     }
 
 
@@ -1529,6 +1532,13 @@ def print_projects_check_results(results: dict[str, object], as_json: bool) -> N
         print(f"  Reason: {sbtd['reason']}")
         if sbtd["nextStep"]:
             print(f"  Next step: {sbtd['nextStep']}")
+        languages = item.get("languages") or []
+        names = (
+            ", ".join(str(entry["display"]) for entry in languages)
+            if languages
+            else "none detected"
+        )
+        print(f"  Languages: {names}")
 
 
 def check_skill(
@@ -2176,6 +2186,9 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     }
 
     omp_root = detect_omp_root()
+    from sbtd_language_tooling import check_language_tooling
+
+    language_tooling = check_language_tooling(project_roots)
     results = {
         "mode": "check",
         "platform": platform.system() or sys.platform,
@@ -2197,6 +2210,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
         "missing": missing,
         "ponytailProvider": detect_ponytail_provider(global_skills_dir),
         "contentAlignment": check_content_alignment(global_skills_dir),
+        "languageTooling": language_tooling,
     }
     results["installationReport"] = build_installation_report(results)
     return results
@@ -2296,6 +2310,70 @@ def print_installation_report(
         print("  steps:")
         for index, step in enumerate(item["steps"], start=1):
             print(f"  {index}. {step}")
+
+
+def print_language_tooling(
+    report: dict[str, object], heading: str = "Language tooling"
+) -> None:
+    print(f"\n{heading}: {report.get('status', 'unknown')}")
+    for project in cast(list[dict[str, object]], report.get("projects") or []):
+        languages = cast(list[dict[str, object]], project.get("languages") or [])
+        if languages:
+            names = ", ".join(str(item["display"]) for item in languages)
+            print(f"- {project['root']}: {names}")
+    ast_grep = cast(dict[str, object], report.get("astGrep") or {})
+    if ast_grep:
+        print(f"- omp ast-grep: {ast_grep.get('status')}")
+    languages_map = cast(dict[str, dict[str, object]], report.get("languages") or {})
+    for name in sorted(languages_map):
+        entry = languages_map[name]
+        if entry.get("builtIn"):
+            for server in cast(list[dict[str, object]], entry.get("servers") or []):
+                state = "available" if server.get("available") else "missing"
+                print(f"- {entry['display']} server {server['command']}: {state}")
+        else:
+            state = (
+                "custom lsp.yml entry configured"
+                if entry.get("customConfigured")
+                else "custom lsp.yml entry missing"
+            )
+            print(f"- {entry['display']}: {state}")
+    for item in cast(list[dict[str, object]], report.get("guidance") or []):
+        print(f"  guidance: {item['summary']}")
+        for step in cast(list[str], item.get("steps") or []):
+            print(f"    - {step}")
+        if item.get("requiresConsent"):
+            print(f"    skip impact: {item['skipImpact']}")
+    for write in cast(list[dict[str, object]], report.get("writes") or []):
+        print(f"  wrote: {write['action']} -> {write['path']}")
+    for failure in cast(list[dict[str, object]], report.get("failures") or []):
+        print(f"  failed: {failure['action']} -> {failure['path']}: {failure['error']}")
+    if report.get("nextStep") and report.get("status") in {
+        "needs-confirmation",
+        "configured",
+        "failed",
+    }:
+        print(f"  next: {report['nextStep']}")
+
+
+def run_language_tooling_step(
+    mode: str, args: argparse.Namespace
+) -> dict[str, object] | None:
+    """omp LSP/ast-grep readiness plus consent-gated config writes.
+
+    Detection and guidance are always read-only; the pending configuration
+    writes run only with the separate ``--language-tooling`` consent flag.
+    """
+    if mode not in {"init", "init-projects"}:
+        return None
+    from sbtd_language_tooling import apply_language_tooling, check_language_tooling
+
+    report = check_language_tooling(resolve_project_roots(args))
+    if report["status"] == "skipped":
+        return report
+    return apply_language_tooling(
+        report, confirmed=bool(getattr(args, "language_tooling", False))
+    )
 
 
 def print_check_results(results: dict[str, object], as_json: bool) -> None:
@@ -2440,6 +2518,10 @@ def print_check_results(results: dict[str, object], as_json: bool) -> None:
         print("\nMissing summary: none")
 
     print_installation_report(results["installationReport"])
+
+    language_tooling = results.get("languageTooling")
+    if isinstance(language_tooling, dict):
+        print_language_tooling(language_tooling)
 
 
 def backup_path(target: Path) -> Path:
@@ -7030,6 +7112,9 @@ def run(mode: str, args: argparse.Namespace) -> int:
     wiring_result, wiring_exit = execute_normal_wiring(
         wiring_plan, template_written=not bool(getattr(args, "skip_project_agents", False)),
     )
+    language_tooling = run_language_tooling_step(mode, args)
+    if language_tooling is not None:
+        plan_payload["languageTooling"] = language_tooling
     if wiring_plan["status"] != "skipped":
         plan_payload["graftWiring"] = wiring_result
         plan_payload["operationResults"] = operation_results
@@ -7071,6 +7156,8 @@ def run(mode: str, args: argparse.Namespace) -> int:
             if wiring_result.get("hooks") == "configured-needs-host-trust":
                 print("Hooks configured only: enable supported Codex hooks and trust their exact hashes in the host before use.")
             print("Host-event acceptance is separate from file and graph verification.")
+        if language_tooling is not None:
+            print_language_tooling(language_tooling)
     if wiring_exit:
         return wiring_exit
     setup_exit = project_status_exit_code(sbtd_report["status"])
@@ -7113,6 +7200,11 @@ def build_parser() -> argparse.ArgumentParser:
         sub = subparsers.add_parser(mode)
         if mode in {"init", "init-projects"}:
             _add_migration_context(sub)
+            sub.add_argument(
+                "--language-tooling",
+                action="store_true",
+                help="Apply the displayed omp LSP/ast-grep configuration writes after user confirmation; without it they are reported and skipped.",
+            )
         sub.add_argument("--graft-hooks", action="store_true", help="Separately authorize the displayed Codex hooks; does not grant host trust.")
         sub.add_argument(
             "--no-mcp", action="store_true",

@@ -1,6 +1,6 @@
 """Guarded native Graft MCP/hook launch seam (P1-04).
 
-This is the only path that may start the pinned ``@nanonets/graft@0.28.0``
+This is the only path that may start the pinned ``@nanonets/graft@0.29.0``
 native MCP server or its native hook module for a selected project. It exists
 because every upstream entry point (``graft mcp``, the SessionStart hook) runs
 ``runUpkeep`` → ``reconcileWiring`` at boot, and upstream self-maintenance is
@@ -18,7 +18,7 @@ So this launcher gates ALL native startup, then replaces the shim:
 1. ``validate_runtime`` proves the exact pinned package identity from
    metadata only (no execution): node and the CLI are nofollow ordinary
    files and the CLI resolves to ``dist/cli.js`` or ``dist/bin/graft.js`` of a
-   real ``@nanonets/graft`` package whose ``package.json`` version is 0.28.0.
+   real ``@nanonets/graft`` package whose ``package.json`` version is 0.29.0.
 2. ``validate_build_scope`` proves the selected root is safe for ANY native
    launch or build, even before a graph exists (the explicit-build case):
    no graft workspace index and no workspace-parent shape the pinned
@@ -34,15 +34,17 @@ So this launcher gates ALL native startup, then replaces the shim:
 3. ``validate_project`` routes through ``validate_build_scope`` and then
    requires a complete CURRENT native wiring state: an actual built wiring
    graph (``graft/.graph/wiring.json``) and the native stamp
-   (``graft/.cache/wiring-stamp.json``) whose version is exactly 0.28.0,
+   (``graft/.cache/wiring-stamp.json``) whose version is exactly 0.29.0,
    whose hosts are exactly ``["agents"]``, and whose four wiring opts are
    all false. With that stamp in place the native boot-time reconcile is
    a proven no-op. A missing, unreadable, stale or foreign stamp is never
    repaired here: this path writes nothing and fails closed.
 4. ``managed_environment`` builds the only environment a native child may
    see: the P1-03 scrubbed env (no GRAFT_/LLM/API credentials, no Node
-   preloads, DNT on, dotenv from /dev/null), HOME/USERPROFILE/XDG roots
-   pointed at a provided private temporary HOME, ``GRAFT_DIR`` pinned to the
+   preloads, DNT on, dotenv from /dev/null), login and browser prompts
+   suppressed (``TRAIL_CLOUD=0``, ``GRAFT_NO_BROWSER=1``,
+   ``GRAFT_NO_RENAME_NOTICE=1``), HOME/USERPROFILE/XDG roots pointed at a
+   provided private temporary HOME, ``GRAFT_DIR`` pinned to the
    selected root's ``graft/`` dir, and ``CLAUDE_PROJECT_DIR`` forced to the
    validated root (native hooks consult it before the payload cwd).
 
@@ -866,7 +868,7 @@ def _validate_concept_data(root_real: Path, graft_dir: Path, memo: set[str]) -> 
 
 
 def _validate_note_scope(root: Path) -> None:
-    """Bound 0.28.0 note/skill reads to the selected root, without reading content."""
+    """Bound 0.29.0 note/skill reads to the selected root, without reading content."""
     checkout = next((path for path in (root, *root.parents) if (path / ".git").exists()), None)
     if checkout is not None and checkout != root:
         raise ContractError(
@@ -999,7 +1001,7 @@ def validate_project(root: Path) -> dict[str, Any]:
     wiring graph (``graft/.graph/wiring.json``, a non-empty ordinary file
     physically contained in the root) and the native wiring stamp
     (``graft/.cache/wiring-stamp.json``) as strict unambiguous JSON in
-    exactly the pinned shape — version exactly 0.28.0, hosts exactly
+    exactly the pinned shape — version exactly 0.29.0, hosts exactly
     ``["agents"]``, all four wiring opts explicitly false. Anything
     missing, unreadable, stale, foreign or ambiguous fails closed; nothing
     is written or repaired, because a guessed stamp is precisely what makes
@@ -1101,6 +1103,11 @@ def managed_environment(root: Path, private_home: Path) -> dict[str, str]:
     root's ``graft/`` directory and ``CLAUDE_PROJECT_DIR`` is forced to the
     validated root — native hooks consult it before the event payload cwd, so
     no caller override or payload subdirectory can redirect native state.
+    ``TRAIL_CLOUD=0``, ``GRAFT_NO_BROWSER=1`` and ``GRAFT_NO_RENAME_NOTICE=1``
+    keep the pinned package from opening a browser, prompting for Trail cloud
+    sign-in, or printing its daily rename notice and weekly upgrade
+    suggestion during managed sessions; the inherited ``DO_NOT_TRACK=1``
+    stays the telemetry and cloud-enabled kill switch.
 
     Native MCP tools otherwise refresh/rebuild before answering. A managed
     startup guard cannot cover data derived by that post-launch build, so
@@ -1134,6 +1141,12 @@ def managed_environment(root: Path, private_home: Path) -> dict[str, str]:
     env.pop("NODE_COMPILE_CACHE", None)
     env["GRAFT_NO_REFRESH"] = "1"
     env["NODE_DISABLE_COMPILE_CACHE"] = "1"
+    # Login/prompt suppression on top of the inherited DO_NOT_TRACK=1: no
+    # Trail cloud sign-in prompt, no browser launch, no daily rename notice
+    # or weekly upgrade suggestion from the pinned package.
+    env["TRAIL_CLOUD"] = "0"
+    env["GRAFT_NO_BROWSER"] = "1"
+    env["GRAFT_NO_RENAME_NOTICE"] = "1"
     return env
 
 
