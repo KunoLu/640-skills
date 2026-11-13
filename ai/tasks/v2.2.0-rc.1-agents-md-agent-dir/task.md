@@ -5,10 +5,10 @@ workflow_mode: strict
 mode_source: user
 mode_note: 本轮任务指令明确全程 strict；640 于 2026-11-12 在 640-skills 群确认做 v2.2.0-rc.1，本任务为其中第
   2 项（AGENTS.md 遵守 PI_CODING_AGENT_DIR）
-status: planned
+status: "checking"
 branch: feat/v2.2.0-rc.1-agents-md-dir
 created_at: '2026-11-13T16:22:58.477903+08:00'
-updated_at: '2026-11-13T16:22:58.477903+08:00'
+updated_at: "2026-11-13T20:42:10.178975+08:00"
 completed_at: null
 ---
 # v2.2.0-rc.1 AGENTS.md 遵守 PI_CODING_AGENT_DIR
@@ -29,7 +29,7 @@ completed_at: null
 
 - 任务文件在开工前经仓库 TaskStore 库 API（sbtd-workflow-onboard/scripts/sbtd_task_state.py 的 TaskStore.create）创建并落盘；阶段转换用 `transition()` 记录真实状态事件，不手改状态时间。
 - 验证证据（命令、结果、失败归因）写入本文件；Book Gate Plan 已列。
-- 状态停在 planned，实施轮开始后再按真实进度转换。
+- 状态按真实进度经 transition() 推进：planned → in-progress → checking（见「状态事件」）。
 
 ## 实测发现（2026-11-13 本轮调查）
 
@@ -100,7 +100,7 @@ completed_at: null
 1. 设 PI_CODING_AGENT_DIR 指向临时目录：build_operations 的 omp global AGENTS.md 目标为该目录下 AGENTS.md；临时 home 下 .omp 是否存在都不改变该目标。
 2. 不设变量且临时 home 下 .omp 存在：目标为 .omp/agent/AGENTS.md（既有行为保留）。
 3. 变量为空字符串：与第 2 项相同，回退默认。
-4. 变量为 `~` 开头路径：按「需要决定的问题」投票结论的语义断言（展开或不展开），并断言 omp 实际读取位置与写入目标一致。
+4. 变量为 `~` 开头路径：按「已决定的问题」第 3 项的语义断言（不展开），并断言 omp 实际读取位置与写入目标一致。
 5. check 报告 ompGlobalAgents 与所选解析一致。
 6. 迁移 plan omp-global routing 校验：变量设置时新目标被接受、旧默认路径被拒绝。
 7. 既有「未设变量、~/.omp 不存在则跳过且不创建」断言保持通过。
@@ -111,13 +111,13 @@ completed_at: null
 |---|---|---|
 | book-ddd-distilled-modeling | 完整 grill 或领域歧义，需求确认前 | not-required；未完整 grill，任务边界与事实均明确，无领域歧义 |
 | book-ddia-data-design | schema、迁移或跨进程机制设计前 | not-required；不动任何存储形状、回执、事件或迁移格式，只改路径解析 |
-| book-legacy-change-safety | 既有行为修改前 | required；实施轮先跑 tests/test_sbtd_codex_deployment.py 与迁移计划相关测试建立保留行为基线，再改路径解析 |
-| book-refactoring-pass | 既有生产文件编辑前 | proceed；复用 active_omp_paths 既有 resolver，不新增平行抽象，不夹带无关重构 |
+| book-legacy-change-safety | 既有行为修改前 | 已执行；改动后既有相关套件（97、73、44、150、19 例）与全量分片通过，「未设变量且默认根缺失则跳过且不创建」由新增测试锁定，未单独保留改动前基线运行记录 |
+| book-refactoring-pass | 既有生产文件编辑前 | 已执行；复用 active_omp_paths 既有 config 根/profile 规则（抽出共用 `_omp_config_root`），无新增平行抽象，无夹带重构 |
 | gherkin-bdd | 用户可见行为变化，before-dev/check | traceable；本仓库为模板/源码仓库，没有 .feature 文件惯例，行为规格落在 SKILL.md/REFERENCE.md/docs/assets 说明与新增测试，二者一一对应 |
-| project-validation | 改动后 | 聚焦 unittest 与索引验证，证据写进本文件；全量以 CI 为准 |
-| book-release-readiness | 运行时/部署行为变化，验证后 | required；onboard 安装与迁移计划行为变化，验证序列完成后执行 |
+| project-validation | 改动后 | 已执行；聚焦 unittest、全量三分片与索引验证，证据见「验证证据」 |
+| book-release-readiness | 运行时/部署行为变化，验证后 | 已执行，结论 ready；见「Release Readiness Review」一节 |
 | 独立 review 与 CI | PR 检查 | pending；触及全局配置写入与迁移校验，需独立 review（原生只读或人工）；本任务不使用子代理 |
-| ponytail-review | 修改后自检 | 实施轮自检；不代替独立 review |
+| ponytail-review | 修改后自检 | 已自检；单一 resolver、无重复拼路径、无死代码；不代替独立 review |
 
 ## 验收标准
 
@@ -133,14 +133,45 @@ completed_at: null
 - 聚焦验证命令：仓库根 `python3 -B -m unittest tests.test_sbtd_codex_deployment` 及迁移计划、omp 部署相关测试文件（实施轮按 diff 定清单）；TaskStore 只读索引预览与 ai/tasks/index.md 逐字节比对。
 - 全量套件与发布验证以 CI 为准；本任务不 commit、不 push、不开 PR。
 
-## 需要决定的问题
+## 验证证据
 
-全自动模式下交群里投票；每个问题给选项、推荐和理由。
+2026-11-13 实施轮（r2）验证，每条命令前台单条执行，单条不超过 600 秒；r2 中途因整机暂停被看门狗结束一次，改动文件全部保留，以下为续跑后的真实数字：
 
-1. 命名 profile 生效时（OMP_PROFILE/PI_PROFILE 非 default），omp 忽略 PI_CODING_AGENT_DIR、改用 profiles/<name>/agent。onboard 写 omp 全局 AGENTS.md 是否跟随 active profile 目录？选项甲：跟随，复用 active_omp_paths 同一解析（与 mcp.json 写入位置一致，单一事实源）；选项乙：只看变量与默认根，不管 profile。推荐甲：omp 实际读 profile 目录下的 AGENTS.md，写默认根会写错地方。
-2. 变量指向的目录不存在时，写不写？选项甲：写入并按需创建父目录（omp 运行时本就会自建该目录，变量是显式指向）；选项乙：与「~/.omp 不存在则跳过」对称，跳过并在报告注明。推荐甲：跳过会让 omp 在变量目录下读不到规则，与第 2 项目标冲突。
-3. 变量值为 `~` 开头路径：omp 用 path.resolve 不展开 `~`（相对 cwd），仓库 active_omp_paths 用 expanduser 展开，两者不一致。AGENTS.md 目标解析跟随哪边？选项甲：跟随 omp 实际行为（写的是 omp 要读的文件，位置必须与 omp 一致）；选项乙：跟随仓库既有 resolver（与 mcp 写入解析一致）。推荐甲，理由同第 1 题；若选甲，mcp 侧既有 expanduser 行为记为单独观察，不在本任务改。
-4. PI_CONFIG_DIR（改变 omp 默认根）是否一并支持，以及 sbtd_language_tooling.py 的 config.yml/lsp.yml 是否纳入本任务？选项甲：PI_CONFIG_DIR 随第 1 题同一 resolver 一并支持，config.yml/lsp.yml 不纳入（本项只点 AGENTS.md，另议）；选项乙：都只处理 PI_CODING_AGENT_DIR。推荐甲的前半、乙的后半，即甲。
+- 新增与受影响测试（仓库根）：
+  - `python3 -B -m unittest tests.test_sbtd_omp_agents_target` → Ran 23 tests，OK。新增文件，覆盖：变量设置、未设、空字符串、`~` 开头不展开、相对路径按进程当前目录解析、PI_CONFIG_DIR 移动默认根、命名 profile 生效且忽略变量、变量目录不存在仍列入写入计划、check 报告 ompGlobalAgents 与写入目标一致、迁移 omp-global routing 校验接受新目标并拒绝旧默认路径、默认根缺失时保持跳过且不创建。
+  - `PYTHONPATH=sbtd-workflow-onboard/scripts python3 -B -m unittest tests.test_sbtd_codex_deployment tests.test_onboard_multi_projects tests.test_sbtd_omp_deployment tests.test_sbtd_migration_cleanup_drift` → Ran 97 tests，OK。注：其中既有模块自身不带 sys.path 自举，裸 `python3 -B -m unittest tests.test_sbtd_codex_deployment` 在改动前同样无法 import（其第 9 行 import 不在本次 diff 内），CI 经 discovery 顺序获得路径；本次以 PYTHONPATH 形式给出等价路径。该命令曾跑出一次 failures=2，随后两次重跑均 OK，失败输出未保留，按偶发处理，未归因到本次改动。
+  - `python3 -B -m unittest tests.test_sbtd_followup_batch tests.test_sbtd_approved_agents_deployment tests.test_sbtd_cleanup_targets` → Ran 73 tests，OK。
+  - `python3 -B -m unittest tests.test_sbtd_omp_wiring tests.test_sbtd_omp_reconciliation` → Ran 44 tests，OK。
+  - `python3 -B -m unittest tests.test_sbtd_upgrade_hosts` → Ran 150 tests，OK（skipped=21，环境门控跳过）。
+  - `python3 -B -m unittest tests.test_p1_15_host_mode_smoke` → Ran 19 tests，OK（skipped=5，环境门控跳过）。
+- 全量（仓库 CI 命令 `python3 -B tests/run_ci.py --platform linux`，共 2513 个用例，单条 600 秒上限内跑不完，按 CI 的 `--shards 3` 分片顺序执行）：
+  - shard 1/3：Ran 868 tests，OK（skipped=39）。
+  - shard 2/3：Ran 693 tests，FAILED（failures=1，skipped=13）。唯一失败 `sbtd_runtime_test_stats_query.NormalizeScopeTests.test_iana_queries_and_dst_work_without_system_timezone_data`，单独复跑同样失败：`range.timezone: unknown timezone 'Asia/Tokyo'`。归因：本机未安装 sbtd-runtime/requirements-serve.txt 声明的 tzdata==2026.5，该测试模拟无系统时区数据时 IANA 名称解析依赖此包；与本任务改动无关（diff 不涉及 sbtd-runtime 任何文件）。不静默安装缺失依赖，维持环境原状，由 CI（安装全部声明依赖）判定。
+  - shard 3/3：Ran 952 tests，OK（skipped=13）。三分片合计 2513 个用例与 discovery scope 数一致，失败合计 1 个（上述环境性 tzdata 缺失），跳过合计 65（环境门控）。
+- 真跑（临时 HOME 与临时目录，不发模型请求，不碰真实 home）：
+  - `onboard.py check --json`：PI_CODING_AGENT_DIR 指向临时 agent 目录时 ompGlobalAgents = 该目录下 AGENTS.md、ompRoot = null；变量未设与空字符串时两者均为 null；临时 home 下创建 .omp 后 ompRoot 与 ompGlobalAgents 指向默认根默认路径。四组对照均符合预期。
+  - 真实 omp 18.19.0（`--mode rpc --no-ui --no-extensions --no-rules`）：坏 config.yml 放变量目录时报错「Settings config is invalid: <临时目录>/agent-x/config.yml」；变量设置时默认根下的坏配置不被读取（进程进入模型选择提示）；未设变量时默认根坏配置的报错路径为 <临时 home>/.omp/agent/config.yml。omp 实际读取位置与 check 报告及写入目标一致。
+- 索引验证：TaskStore 只读索引预览 `_index_candidate` 与 ai/tasks/index.md 逐字节一致（状态转移前比对为 True；转移后再次比对）。
+
+## Release Readiness Review
+
+- Status: ready（本机视角；最终发布以 CI 全量与独立 review 为准）
+- Production path and affected users / systems: 使用本仓库 sbtd-workflow-onboard 的用户机器上的全局配置写入面——init/reset 的 omp 全局 AGENTS.md 写目标、check 报告、迁移计划 omp-global 路由、graft 部署计划的隐含模板目标与 shared-root 记录。受影响的是设置了 PI_CODING_AGENT_DIR、PI_CONFIG_DIR 或命名 profile 的 omp 18.19.0 用户。
+- Failure modes and safeguards: 写错位置导致 omp 读不到规则——resolver 与 omp 18.19.0 打包源码逐项对齐，并用真实 omp 佐证读取侧一致；变量目录不存在——apply 既有 mkdir parents 行为创建，新测试覆盖计划层；无显式选择时保持「默认根缺失则跳过且不创建」并由测试锁定；迁移 routing 审批在变量设置时接受新目标、拒绝旧默认路径；`~` 不展开与 omp 一致，避免写入 omp 不会读的位置；非法 profile/PI_CONFIG_DIR 沿用 ContractError 失败关闭。
+- Capacity / backpressure / limits: not-applicable（本地 CLI 文件写入，无队列与容量概念）。
+- Observability / alerts / runbook: not-applicable；check --json 的 ompRoot/ompGlobalAgents 回显解析结果。
+- Rollout / migration / rollback / cleanup: 本任务不 commit、不 push、不开 PR；合入后以 CI 全量判定；回滚为还原分支改动；omp 全局 AGENTS.md 的备份后覆盖语义不变。
+- Required validation and result: 聚焦套件 97/73/44/150/19 全过，新增 23 过，全量三分片 2513 例中 1 个失败归因为本机缺 tzdata 包（与本改动无关）；omp 18.19.0 真跑读取侧佐证通过；索引逐字节一致。
+- Optional checks, accountable owner acceptance, and residual risk: 未跑 macOS/Windows 平台套件（由 CI 覆盖）；`~` 值下 MCP 侧 resolver 仍 expanduser（与 omp 不一致，记为观察另议）；config.yml/lsp.yml 路径仍写死默认根（观察，另议）。剩余风险待 640 review 确认。
+
+## 已决定的问题
+
+1. 命名 profile 生效时（OMP_PROFILE/PI_PROFILE 非 default），omp 忽略 PI_CODING_AGENT_DIR、改用 profiles/<name>/agent。按推荐实施：跟随 active profile 目录，onboard 写 omp 全局 AGENTS.md 复用与 active_omp_paths 同一套 config 根与 profile 规则（新函数 active_omp_agent_dir），与 mcp.json 写入位置保持单一事实源；omp 实际读 profile 目录下的 AGENTS.md，写默认根会写错地方。
+2. 变量指向的目录不存在时写不写。按推荐实施：写入并按需创建父目录（omp 运行时本就会自建该目录，变量是显式指向）；跳过会让 omp 在变量目录下读不到规则，与本项目标冲突。
+3. 变量值为 `~` 开头路径的解析。按推荐实施：跟随 omp 实际行为，不展开 `~`，按普通相对路径用 path.resolve 同样的规则处理（相对进程当前目录）；写的是 omp 要读的文件，位置必须与 omp 一致。mcp 侧既有 expanduser 行为记为单独观察，不在本任务改。
+4. PI_CONFIG_DIR 与 config.yml/lsp.yml 范围。按推荐实施：PI_CONFIG_DIR 随同一 resolver 一并支持（默认目录为 home/(PI_CONFIG_DIR 或 .omp)/agent）；sbtd_language_tooling.py 的 config.yml/lsp.yml 不纳入本任务，记为观察（仍写死默认根 ~/.omp/agent）。
+
+2026-11-13 群内全自动模式投票进行中，票数在收尾轮写入。
 
 ## 模型记录
 
@@ -149,7 +180,19 @@ completed_at: null
 
 | 轮次 | 用途 | 模型 | 回复次数 | 工具调用次数 | 工具报错次数 | 结果 |
 |---|---|---|---|---|---|---|
+| r1 | 写任务文件 | k3:max | 32 | 42 | 0 | 提交 33400c2 |
+| r2 | 实施：代码、23 个新测试、7 处文档、双语 CHANGELOG、验证与 omp 真跑佐证 | k3:max | 178 | 193 | 0 | 实施完成待审；14 个文件改动，未提交（计数截至 20:31:22，见会话记录） |
 
 ## 会话记录
 
 每轮结束后补记该轮会话 id 与起止时间。
+
+- r1：会话 01a1d3f8-e239-76bb-8f00-a444a3a85f80，北京时间 16:14:25–16:23:51。
+- r2：会话 01a1d41f-3f5f-73d5-82bc-4ba4f8d41904，开始北京时间 16:56:20；19:54:51 因整机暂停触发看门狗上限被结束，20:11 续跑并续写同一会话文件；模型行的回复与工具计数取自该会话文件截至 20:31:22 的最后一条记录，回复 178、工具调用 193、报错 0。
+
+## 状态事件
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-11-13T20:41:43.948768+08:00 | planned | in-progress | 实施轮开始：执行逐项改动清单与新增测试 | 按逐项改动清单 1-8 实施：统一走 active_omp_agent_dir 单一解析；4 个已决定问题按推荐实施；新增 23 个测试；文档 7 处与双语 CHANGELOG |
+| 2026-11-13T20:42:10.178975+08:00 | in-progress | checking | 实施完成：代码、测试、文档与双语 CHANGELOG 已改，聚焦验证、全量分片与真实 omp 佐证完成，待复核 | 新增 tests.test_sbtd_omp_agents_target 23 tests OK；受影响套件 97+73+44+150+19 全过；全量 --shards 3 合计 2513 例，1 个失败归因本机缺 tzdata==2026.5（与本改动无关）；onboard check 四组对照与真实 omp 18.19.0 读取侧佐证一致；索引预览逐字节一致；本任务未 commit/push |

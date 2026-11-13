@@ -23,7 +23,7 @@ from sbtd_project import (
     validate_json_compatible,
 )
 
-__all__ = ["active_omp_paths", "analyze_omp_sources", "discover_omp_sources"]
+__all__ = ["active_omp_agent_dir", "active_omp_paths", "analyze_omp_sources", "discover_omp_sources"]
 
 _PROFILE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _RESERVED_PROFILE = re.compile(
@@ -54,10 +54,10 @@ def _profile(environ: Mapping[str, str]) -> str | None:
     return value
 
 
-def active_omp_paths(
+def _omp_config_root(
     *, home: Path, environ: Mapping[str, str]
-) -> dict[str, Path | str | None]:
-    """Resolve the active OMP user MCP target without creating directories."""
+) -> tuple[Path, str | None]:
+    """Validate the home and config-dir override; return (config root, profile)."""
     if not home.is_absolute():
         _fail("invalid-argument", "the user home must be absolute")
     profile = _profile(environ)
@@ -68,7 +68,14 @@ def active_omp_paths(
         or ".." in Path(config_name).parts
     ):
         _fail("invalid-config", "the OMP config directory override is invalid")
-    config_root = home / config_name
+    return home / config_name, profile
+
+
+def active_omp_paths(
+    *, home: Path, environ: Mapping[str, str]
+) -> dict[str, Path | str | None]:
+    """Resolve the active OMP user MCP target without creating directories."""
+    config_root, profile = _omp_config_root(home=home, environ=environ)
     if profile is not None:
         config_root = config_root / "profiles" / profile
         agent = config_root / "agent"
@@ -85,6 +92,54 @@ def active_omp_paths(
         "agent_dir": agent,
         "target": agent / "mcp.json",
         "profile": profile,
+    }
+
+
+def active_omp_agent_dir(
+    *, home: Path, environ: Mapping[str, str]
+) -> dict[str, Path | str | bool | None]:
+    """Resolve the agent directory the pinned OMP reads user AGENTS.md from.
+
+    Mirrors OMP 18.19.0 settings semantics, which differ from the MCP resolver
+    in one respect: a non-empty PI_CODING_AGENT_DIR is resolved lexically
+    against the process current directory (Node ``path.resolve``), so a
+    leading ``~`` is never expanded. A named profile (OMP_PROFILE before
+    PI_PROFILE) selects ``profiles/<name>/agent`` and ignores the variable;
+    a variable naming the derived default agent directory counts as unset;
+    an unset or empty variable falls back to ``<config root>/agent``, with
+    PI_CONFIG_DIR moving the config root. No directory is created.
+    """
+    config_root, profile = _omp_config_root(home=home, environ=environ)
+    if profile is not None:
+        return {
+            "config_root": config_root,
+            "agent_dir": config_root / "profiles" / profile / "agent",
+            "profile": profile,
+            "override": False,
+        }
+    default_agent = config_root / "agent"
+    override = environ.get("PI_CODING_AGENT_DIR", "")
+    if not override.strip():
+        return {
+            "config_root": config_root,
+            "agent_dir": default_agent,
+            "profile": None,
+            "override": False,
+        }
+    resolved = Path(os.path.abspath(override))
+    derived = config_root / "profiles" / (environ.get("PI_PROFILE") or "") / "agent"
+    if resolved == derived:
+        return {
+            "config_root": config_root,
+            "agent_dir": default_agent,
+            "profile": None,
+            "override": False,
+        }
+    return {
+        "config_root": config_root,
+        "agent_dir": resolved,
+        "profile": None,
+        "override": True,
     }
 
 

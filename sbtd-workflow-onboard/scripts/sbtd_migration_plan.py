@@ -2321,7 +2321,7 @@ def _approved_routing_operations(
     bind_live: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[Path, list[dict[str, Any]]]]:
     """Bind each approved candidate to its live target. Mismatch blocks."""
-    from onboard import default_codex_home, omp_global_agents_path, user_home
+    from onboard import default_codex_home, omp_agents_target
 
     pause = read_file(_PAUSE_ASSET)
     approval_ref = {"path": str(approval_path), "state": snapshot(approval_path)}
@@ -2345,13 +2345,16 @@ def _approved_routing_operations(
                     "approval-conflict", "a codex routing approval names another file"
                 )
         elif role == "omp-global":
-            omp_home = user_home() / ".omp"
-            if _omp_root_presence(omp_home) != "directory":
-                _fail(
-                    "ownership-conflict",
-                    "the existing OMP root is not a safe directory",
-                )
-            if target != omp_global_agents_path(omp_home):
+            agents_target, explicit = omp_agents_target()
+            if not explicit:
+                # No PI_CODING_AGENT_DIR or named profile: the default root
+                # must still be a proven safe directory.
+                if _omp_root_presence(agents_target.parent.parent) != "directory":
+                    _fail(
+                        "ownership-conflict",
+                        "the existing OMP root is not a safe directory",
+                    )
+            if target != agents_target:
                 _fail("approval-conflict", "an omp routing approval names another file")
         else:
             matches = [root for root in roots if target == root / "AGENTS.md"]
@@ -4602,9 +4605,8 @@ def _shared_operations(
     """
     from onboard import (
         default_codex_home,
-        omp_global_agents_path,
+        omp_agents_target,
         resolve_global_skills_dir,
-        user_home,
     )
 
     dependents = sorted(str(root) for root in roots)
@@ -4613,12 +4615,15 @@ def _shared_operations(
     needed_roots: dict[str, str] = {}
     codex_home = default_codex_home()
     routing_targets = [("codex-home", codex_home, codex_home / "AGENTS.md")]
-    omp_home = user_home() / ".omp"
+    omp_agents, omp_explicit = omp_agents_target()
+    omp_home = omp_agents.parent.parent
     # Existence only. Every path component is checked nofollow; children are
     # not walked. Unrelated links inside the directory are not routing targets.
+    # An explicit selector (PI_CODING_AGENT_DIR or a named profile) admits an
+    # absent root: apply creates it. Without one the historical rule stands.
     omp_presence = _omp_root_presence(omp_home)
-    if omp_presence == "directory":
-        routing_targets.append(("omp-home", omp_home, omp_global_agents_path(omp_home)))
+    if omp_presence == "directory" or (omp_explicit and omp_presence == "absent"):
+        routing_targets.append(("omp-home", omp_home, omp_agents))
     elif omp_presence == "file":
         _fail("ownership-conflict", "the existing OMP root is not a safe directory")
     pause = _present_file_reference(_PAUSE_ASSET, "the maintenance asset")

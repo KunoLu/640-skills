@@ -90,7 +90,7 @@ flowchart TD
 | rtk / caveman / Java / Maestro | 询问后才装 | 已验证则跳过 |
 | 19 个 required external Skills | 安装缺失或身份无效项；官方 Ponytail plugin 启用时阻断 | 已合法则跳过 |
 | 14 个 bundled Skills | 复制到解析后的全局 Skills 根 | 合法壳跳过；缺失或身份无效才复制 |
-| 全局 `AGENTS.md` | 复制到 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`；若 `~/.omp` 已存在，另备份后覆盖 `~/.omp/agent/AGENTS.md`（Windows 为 `%USERPROFILE%\.omp\agent\AGENTS.md`） | **备份后覆盖**；`~/.omp` 不存在则跳过且不创建 |
+| 全局 `AGENTS.md` | 复制到 `$CODEX_HOME/AGENTS.md` 或 `~/.codex/AGENTS.md`；omp 侧设了 `PI_CODING_AGENT_DIR` 就写 `<变量目录>/AGENTS.md`（目录缺失时创建），未设则回退 `~/.omp/agent/AGENTS.md` 且仅当 `~/.omp` 已存在才写（`PI_CONFIG_DIR` 可替换 `.omp` 部分；Windows 为 `%USERPROFILE%\.omp\agent\AGENTS.md`） | **备份后覆盖**；未设变量且 `~/.omp` 不存在则跳过且不创建 |
 | 项目 `AGENTS.md` | 仅当 Q4 同意时复制 | 同意写入则备份后覆盖 |
 | 项目 `.gitignore` | 追加模板缺行 | 行齐全则 skip |
 | task / developer / spec / lessons / bootstrap | 不预建；无状态正常 | 只读检查选中状态，保留数据；旧 `.trellis` 请求显式迁移 |

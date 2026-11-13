@@ -68,7 +68,7 @@ Onboard needs **Python 3.10+** and its declared dependencies for contract/state/
 python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt
 ```
 
-> **Check the write scope.** Normal `init`/`reset` writes global Codex rules by default, and also backs up and overwrites `~/.omp/agent/AGENTS.md` when `~/.omp` already exists. Selecting a platform does not select the global AGENTS destination. `--global-agents-path` changes only the Codex target. Use project-only mode when global writes are not wanted.
+> **Check the write scope.** Normal `init`/`reset` writes global Codex rules by default, and also backs up and overwrites the OMP global rules file: `$PI_CODING_AGENT_DIR/AGENTS.md` when `PI_CODING_AGENT_DIR` is set (the directory is created when missing), otherwise `~/.omp/agent/AGENTS.md` only when `~/.omp` already exists (`PI_CONFIG_DIR` replaces the `.omp` part of the default). Selecting a platform does not select the global AGENTS destination. `--global-agents-path` changes only the Codex target. Use project-only mode when global writes are not wanted.
 
 [Bootstrap guide](sbtd-workflow-onboard/REFERENCE.md#official-skills-cli-bootstrap) · [Setup contract](sbtd-workflow-onboard/REFERENCE.md#two-execution-modes) · [Path resolution](sbtd-workflow-onboard/REFERENCE.md#paths)
 
