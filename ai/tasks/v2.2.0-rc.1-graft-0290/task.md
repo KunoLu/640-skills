@@ -8,7 +8,7 @@ mode_note: 本轮任务指令明确全程 strict；640 于 2026-11-12 在 640-sk
 status: "in-progress"
 branch: feat/v2.2.0-rc.1-graft-0290
 created_at: '2026-11-12T23:30:01.587596+08:00'
-updated_at: "2026-11-13T10:13:16.410149+08:00"
+updated_at: "2026-11-13T10:55:35.249494+08:00"
 completed_at: null
 ---
 # v2.2.0-rc.1 graft 0.29.0 支持与配套修正
@@ -154,8 +154,8 @@ completed_at: null
 
 - A（云主机）：实施轮先从 npm registry 核对 0.29.0 的 integrity，再真实安装 @nanonets/graft@0.29.0 并经受管链路 build 冒烟；记录版本输出与图产物。
 - B（云主机，状态：r3c3 已跑完 8 条，其中两组未验证到）：四个开关 DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 逐个真跑，每个各开一次、各关一次，记录每个开关管的提示是否出现/消失。r3c3 已跑完 8 条：DO_NOT_TRACK 与 GRAFT_NO_RENAME_NOTICE 两组开/关对照成立；TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未能触发对应提示，开关有没有用没验证到，不算通过。证据见「验证证据」节 r3c3 小节。
-- C：仓库内静态核对 0.29.0 包内容（实施轮已做）；Codex 钩子真跑由 CodeX 负责，本任务只记录。
-- F（云主机，状态：r3d 已跑完 6 条）：5 种语言样例（Python/Rust/TS/Go/Julia）各走同意/拒绝两条路共 10 条路径，记录检测输出、引导文案与实际安装/配置/跳过结果；跑完按 F 项清理规则还原环境。r3d 已跑完 Python/Rust/TS 共 6 条（证据见「验证证据」节 r3d 小节）；Go 与 Julia 共 4 条由 r3e 真跑。
+- C：仓库内静态核对 0.29.0 包内容（实施轮已做）；Codex 钩子真跑由 CodeX 负责，本任务只记录。CodeX 真跑结果已写入「验证证据」节 CodeX 小节。
+- F（云主机，状态：10 条已全部跑完）：5 种语言样例（Python/Rust/TS/Go/Julia）各走同意/拒绝两条路共 10 条路径，记录检测输出、引导文案与实际安装/配置/跳过结果；跑完按 F 项清理规则还原环境。r3d 已跑完 Python/Rust/TS 共 6 条（证据见「验证证据」节 r3d 小节）；r3e 已跑完 Go 与 Julia 共 4 条，Julia 同意路径另在真实全局 lsp.yml 上演示了自定义条目写入并已逐字节还原（证据见「验证证据」节 r3e 小节）。
 - 验证命令（实施轮执行并记录结果）：聚焦 unittest（test_sbtd_graft_entry、test_sbtd_probe_links、tests.test_sbtd_upgrade_hosts、test_graft_runtime、test_sbtd_graft_isolation）、TaskStore 只读索引预览比对、`git grep '0\.28\.0'` 复扫。pytest 不在本环境装，按项目既有方式用 unittest 运行同一文件。
 
 ## 验证证据
@@ -207,11 +207,29 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 
 小结：6 条全部跑通，结果与预期一致——检测输出、引导文案、同意/拒绝两路的写入差异都符合 F 项设计；三种语言都在 omp 自带清单内，同意路径不产生 lsp.yml 写入；onboard 不代装语言服务器本体，引导只列安装命令。真实全局文件跑前跑后 sha256 不变：lsp.yml 跑前 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0、跑后 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0；config.yml 跑前 7f193e4fb8b92960b07a12911aaa9f40d37e748ecf764ba347282071a44bbf56、跑后 7f193e4fb8b92960b07a12911aaa9f40d37e748ecf764ba347282071a44bbf56。跑后 pyright、pyright-langserver、rust-analyzer、typescript-language-server、gopls、bash-language-server、marksman 全部仍在 PATH 上。本轮没发现阻塞问题，代码没改、测试没改（实施轮已有的语言工具单测 26 项在本轮跑前复跑通过：python3 -m unittest tests.test_sbtd_language_tooling，OK，0.034 秒）。`<r3dtmp>` 下的样例项目、临时 HOME、影子目录与日志全部保留在临时目录供检查；没有为测试安装任何组件，无需卸载。Go 与 Julia 的同意/拒绝共 4 条由 r3e 真跑。
 
+### r3e 轮 F 项后半真跑（在 omp 会话里跑）：Go/Julia × 同意/拒绝共 4 条
+
+执行方式：与 r3d 相同——样例项目建在临时目录 `<r3etmp>`（go-proj 含 go.mod 与 main.go；julia-proj 只含 hello.jl），驱动脚本同样导入本工作树的 onboard 模块，用 onboard 自己的 build_parser() 解析参数（`init --projects-root <样例项目> --yes --json`，同意路径再加 `--language-tooling`），再调用 init 流程使用的同一入口 run_language_tooling_step 与同一输出函数 print_language_tooling；与完整 init 流程的偏差同样只有两处——HOME 指向按用例新建的空目录（真实全局 config.yml 与 lsp.yml 不参与、不被写），「拒绝」用例把 PATH 中语言服务器所在目录替换为排除该服务器二进制的影子符号链接目录（真实文件不动、不卸载任何东西）。版本：omp 18.19.0；gopls v0.24.0；云主机没有安装 Julia 与 Julia 语言服务器（which julia 无命中），按事实记录、本轮不安装。公共命令形状：`python3 <r3etmp>/drive.py <用例名> <refuse|consent> <语言> <服务器命令或 -> <hide|show>`。
+
+1. Go 拒绝（hide gopls）：2026-11-13 10:29:38 +0800 开始，同秒结束，退出码 0。检测输出：项目识别为 Go（markers 命中 go.mod，扩展名 .go）；`Go server gopls: missing`；`omp ast-grep: not-configured`。引导文案：「Go was detected but no omp language server for it is on PATH.」，步骤「Install a server, for example: go install golang.org/x/tools/gopls@latest」。实际动作：零写入（`writes: []`），临时 HOME 跑后没有任何文件（find 计数 0）；状态 needs-confirmation；跳过影响：ast-grep 结构化搜索保持不可用。影子目录里 gopls 缺席、其余条目照常，真实 gopls 仍在 PATH 上。结论：拒绝路径符合预期——检测正确、引导给出、配置不写。
+2. Go 同意（gopls 在 PATH 上，v0.24.0）：2026-11-13 10:29:49 +0800 开始，同秒结束，退出码 0。检测输出：`Go server gopls: available`。实际动作：写入 enable-ast-grep → 临时 HOME 的 .omp/agent/config.yml，内容为 `astGrep:` 加 `  enabled: true` 两行；状态 configured；未写 lsp.yml，未安装任何组件。结论：同意路径符合预期——只写 astGrep 配置，语言服务器本体按设计不代装。
+3. Julia 拒绝（Julia 不在 omp 自带清单，无服务器二进制可隐藏）：2026-11-13 10:29:57 +0800 开始，同秒结束，退出码 0。检测输出：项目识别为 Julia（依据扩展名 .jl，markers 为空）；`Julia: custom lsp.yml entry missing`；notes 原文：「omp has no built-in Julia server; a custom entry in the global ~/.omp/agent/lsp.yml is required.」。引导文案：「Julia was detected; omp has no built-in server for it, so a custom lsp.yml entry is required.」，步骤两条：「Install the server itself: julia -e 'import Pkg; Pkg.add(\"LanguageServer\")'」与「Consent to the pending lsp.yml write to register the custom server entry shown in pendingWrites.」；pendingWrites 列出 add-lsp-server 的完整条目（command 为 julia，args 为 `--startup-file=no --history-file=no -e 'using LanguageServer; runserver()'`，fileTypes 为 .jl，rootMarkers 含 Project.toml、JuliaProject.toml、.git）。实际动作：零写入，临时 HOME 跑后没有任何文件；状态 needs-confirmation；跳过影响原文：「omp cannot attach any language server to Julia files without the custom entry.」。结论：拒绝路径符合预期——检测正确、自定义条目引导给出、配置不写。
+4. Julia 同意：分两段。第一段（临时 HOME）：2026-11-13 10:30:06 +0800 开始，同秒结束，退出码 0。实际动作：写入 enable-ast-grep → 临时 HOME 的 .omp/agent/config.yml（astGrep.enabled: true）；写入 add-lsp-server → 临时 HOME 的 .omp/agent/lsp.yml，内容为 servers: 下 julia-languageserver 完整条目（与第 3 条 pendingWrites 里的形状一致）；状态 configured；未安装任何组件。第二段（真实全局 lsp.yml 演示，用模块自身的 `_add_lsp_server`——init 流程调用的同一函数——把同一自定义条目写进真实全局 ~/.omp/agent/lsp.yml）：2026-11-13 10:30:32 +0800 记录跑前 sha256 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0；10:30:42 写入完成（退出码 0），随即用真实 HOME 复跑 check_language_tooling：julia 的 customConfigured 变为 true、ready 变为 true、报告 status 变为 ready、pendingWrites 清空；10:30:46 记录写后 sha256 83a9fd0b53cce6b35e9f0b81bf824c1d15a71028e9c617046e509ad8e69cc38f，文件内容确认 julia-languageserver 条目在、既有 pyright 条目（含 .git rootMarker）原样保留。验证完毕即删：10:30:55 用该函数自己生成的 lsp.yml.sbtd-backup 逐字节还原并删掉该备份文件，删后 sha256 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0，与任务笔记目录里的备份 lsp.yml.before-r3  cmp 无输出、逐字节一致；再跑 check_language_tooling 确认 julia 回到 customConfigured false、报告 status 回到 action-required。结论：同意路径符合预期——临时 HOME 两笔写入正确；真实全局 lsp.yml 的自定义条目写入、生效、还原三步都验证到，最终文件与备份逐字节一致。
+
+小结：4 条全部跑通，结果与预期一致——Go 在 omp 自带清单内，同意路径只写 astGrep 配置；Julia 不在清单内，引导指向全局 lsp.yml 自定义条目，同意路径的写入在临时 HOME 与真实全局文件上都验证到，真实文件已还原。真实全局文件 sha256：lsp.yml 跑前 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0、写后 83a9fd0b53cce6b35e9f0b81bf824c1d15a71028e9c617046e509ad8e69cc38f、删后 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0（与备份逐字节一致，cmp 无输出）；config.yml 本轮未动，跑前 7f193e4fb8b92960b07a12911aaa9f40d37e748ecf764ba347282071a44bbf56、跑后 7f193e4fb8b92960b07a12911aaa9f40d37e748ecf764ba347282071a44bbf56。跑后 pyright、pyright-langserver、rust-analyzer、typescript-language-server、gopls、bash-language-server、marksman 全部仍在 PATH 上。本轮没发现阻塞问题，代码没改、测试没改（实施轮已有的语言工具单测 26 项在本轮跑前复跑通过：python3 -m unittest tests.test_sbtd_language_tooling，OK，0.028 秒）。`<r3etmp>` 下的样例项目、临时 HOME、影子目录与日志全部保留在临时目录供检查；没有为测试安装任何组件，无需卸载。F 项 10 条路径至此全部真跑完成（r3d 6 条 + r3e 4 条）。
+
+### CodeX 轮 C 项 Codex 钩子真跑（由 CodeX 在 Codex 宿主上跑，本任务照实记录）
+
+- 版本：codex 0.167.1、node v22.20.0、graft 0.29.0（graft 装在单独目录，npm integrity 与锁定值 sha512-dYZA/fAI6f2uCt4OZiyAtDZ2itvD4cP1SkMwLwIa51LdEcHyPmeGwH/pbWE4qS2BfG/TqEbT6piHc+kcai/i4g== 一致）；测试提交 62c9e78。
+- 真跑会话：2026-11-13 05:08:01 +0800 开始，05:08:26 结束，退出码 0；触发 4 个 hook 事件；调用链为 sbtd_graft_entry.py hook → graft-hook-entry.mjs → 0.29.0 包的 dist/claude/hooks.js，全程没有引用 0.28.0；INDEX.md 已注入；DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 四个开关都在 hook 拉起的进程环境里。
+- 限制（照实记录）：本次用了 --dangerously-bypass-hook-trust，作用只是跳过 hook 信任提示；hooks 配置只放在临时项目的 .codex/hooks.json，信任记录在隔离的 CODEX_HOME，Codex 全局配置没改，没用禁用的参数；遥测只能算有限通过——没有抓包，是否有外发请求不在证据范围内；会话中模型调用了全局安装的 0.28.0，打印了升级提示；第一次 exec 因账号不能用的模型失败、退出码 1，但 SessionStart 已触发；直接跑启动器与 graft-hook-entry.mjs 的两次补充运行退出码都是 0，只作补充证据。
+- CodeX 的更正：hook 子进程不是终端，所以「没出现改名提示」在这条路上证明不了什么；这次 hook 真跑只证明四个开关进入了进程环境，GRAFT_NO_RENAME_NOTICE 是否管用以 B 项伪终端开/关对照（r3c3 小节第 7、8 条）为准。
+- 会话内模型（照 CodeX 报告记录）：gpt-5.4-mini 第一次 exec，成功请求 0 次；gpt-6.1-sol 第二次 exec，1 轮，3 次 shell 调用，1 次文件修改。
+- 证据摘要文件 sha256：1dc94a9172703cf2ed9c8b4580ad28f38009726a6765a2e0562c9a75be62d0f9。
+
 ### 尚未完成的真跑项
 
-- B 项四个开关（DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_RENAME_NOTICE、GRAFT_NO_BROWSER）逐个开/关真跑：r3c3 已跑完 8 条，DO_NOT_TRACK 与 GRAFT_NO_RENAME_NOTICE 两组开/关对照成立；TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未能触发、开关有没有用没验证到，不算通过，证据见「验证证据」节 r3c3 小节。
-- F 项五种语言（Python/Rust/TS/Go/Julia）同意/拒绝共 10 条路径真跑：r3d 已跑完 Python/Rust/TS 共 6 条（证据见「验证证据」节 r3d 小节）；Go 与 Julia 共 4 条由 r3e 真跑。
-- Codex 钩子真跑：由 CodeX 负责，本任务只记录其结果。
+无。B 项 8 条开关路径（r3c3 小节，TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未触发的限制照实保留）、F 项 10 条语言路径（r3d 与 r3e 小节）、C 项 Codex 钩子真跑（CodeX 小节）均已跑完并记录。
 
 ## r3c3 运行环境与会话记录
 
@@ -229,7 +247,10 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 - 上一轮（r3c4）会话 id：01a1d26c-3cec-72ed-b034-4d75ce338dc0；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取。
 - r3c4 起止时间（均为北京时间）：会话创建 2026-11-13 09:01:11，提交 742bb76 于 09:04:16，进程正常退出 09:04:28。
 - r3c4 次数：k3:max 回复 10 次，工具调用 14 次，工具报错 0 次；没有其他模型调用。
-- 本轮（r3d）会话 id：01a1d2a1-dfa4-723d-97a8-8a8c6f03b454；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取；进程启动 2026-11-13 09:59:46（北京时间，会话文件创建时间）；r3d 次数由 r3e 写入。
+- 本轮（r3d）会话 id：01a1d2a1-dfa4-723d-97a8-8a8c6f03b454；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取。
+- r3d 起止时间（均为北京时间）：会话创建 2026-11-13 09:59:46（会话文件创建时间），提交 6e1c1a1 于 10:14:18，进程正常退出 10:14:38。
+- r3d 次数：k3:max 回复 45 次，工具调用 56 次，工具报错 0 次；没有其他模型调用。
+- 本轮（r3e）会话 id：01a1d2b9-d191-7199-89b0-f462818147bc；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取；会话创建 2026-11-13 10:25:55（北京时间，会话文件创建时间）；r3e 次数在推送前由下一次记录提交写入。
 
 ## 模型记录
 
@@ -241,9 +262,13 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 | r2 | 实施 | k3:max | 115 | 139 | 0 | 完成三项提交（cfda1ff pin 0.29.0、3959711 语言检测引导、392348c 文档修正与重建说明）；进程在等后台全量测试时退出 |
 | r2b | 收尾 | k3:max | 4 | 2 | 1（ECONNRESET 网络重试） | 进程在等后台测试时退出 |
 | r2c | 记录 | k3:max | 10 | 14 | 0 | 只写记录：补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 |
-| r3 | B/F 真跑 | k3:max |  |  |  | graft --version 输出 0.29.0 后云主机整机暂停，看门狗停掉进程；本文件未改、无新提交 |
+| r3 | B/F 真跑 | k3:max | 40 | 53 | 1 | graft --version 输出 0.29.0 后云主机整机暂停，看门狗停掉进程；本文件未改、无新提交。起止实数（均为北京时间）：2026-11-13 05:01:47 起，最后写入 05:12:59，05:29:31 检测到云主机整机暂停 1004 秒，看门狗 05:31:31 结束 |
+| r3b | B/F 真跑（续） | k3:max | 27（增量） | 28（增量） | 1 | 2026-11-13 05:48:58 起（北京时间），最后写入 06:06:06；期间云主机整机暂停三次：05:59:05 检测到 247 秒、06:09:18 检测到 193 秒、06:21:39 检测到 621 秒；看门狗 06:23:39 结束；无新提交 |
+| r3c | B/F 真跑（续） | k3:max | 1（增量） | 0 | 1 | 2026-11-13 06:53:03 起（北京时间）；06:53:43 为改按拆分方案由启动者停止；无新提交 |
+| r3c2 | B/F 真跑（续） | k3:max | 1（增量） | 0 | 1 | 2026-11-13 06:54:26 起（北京时间）；07:03:13 检测到云主机整机暂停 227 秒，看门狗 07:05:13 结束；请求被中止，模型没有输出；无新提交 |
 | r3c3 | B 项真跑与记录 | k3:max | 50 | 55 | 1 | 8 条开关路径真跑完成并写入本文件（DO_NOT_TRACK、GRAFT_NO_RENAME_NOTICE 两组对照成立；TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发，未验证到开关作用）；本轮有一次提交，不推送 |
 | r3c4 | 记录 | k3:max | 10 | 14 | 0 | 只写记录：修正 B 项措辞并补 r3c3 会话实数；提交 742bb76，不推送；进程正常退出 |
+| r3d | F 项前半真跑与记录 | k3:max | 45 | 56 | 0 | Python/Rust/TS 同意/拒绝共 6 条路径真跑完成并写入本文件；提交 6e1c1a1，不推送；进程正常退出 |
 
 ## 状态事件
 
@@ -256,3 +281,4 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 | 2026-11-13T07:50:13.363609+08:00 | in-progress | in-progress | r3c3 真跑轮：B 项四开关 8 条路径真跑完成（DO_NOT_TRACK、GRAFT_NO_RENAME_NOTICE 两组对照成立；TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发、未验证到开关作用），sbtd-graft MCP 说明与会话记录一并写入；不改代码、文档、CHANGELOG、测试 | 验证证据节 r3c3 小节；模型记录表 r3c3 行 |
 | 2026-11-13T09:03:22.669363+08:00 | in-progress | in-progress | r3c4 记录轮：只改本文件——修正 B 项措辞（TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发、不算通过），补 r3c3 真实次数与起止时间；不改代码、文档、CHANGELOG、测试，不跑真跑 | r3c4 会话 id 01a1d26c-3cec-72ed-b034-4d75ce338dc0，起始北京时间 2026-11-13 09:01:11；r3c4 次数由 r3d 写入 |
 | 2026-11-13T10:13:16.410149+08:00 | in-progress | in-progress | r3d 真跑轮：F 项前半 Python/Rust/TS 同意/拒绝共 6 条路径真跑完成，全部符合预期；只改本文件，不改代码、文档、CHANGELOG、测试；Go 与 Julia 共 4 条由 r3e 真跑 | 验证证据节 r3d 小节；模型记录表 r3c4 行；r3d 会话 id 01a1d2a1-dfa4-723d-97a8-8a8c6f03b454，起始北京时间 2026-11-13 09:59:46；r3d 次数由 r3e 写入 |
+| 2026-11-13T10:55:35.249494+08:00 | in-progress | in-progress | r3e 真跑轮：F 项后半 Go/Julia 同意/拒绝共 4 条路径真跑完成，Julia 同意路径另在真实全局 lsp.yml 演示自定义条目写入并已逐字节还原（三次 sha256 与 cmp 证据在验证证据节）；CodeX 的 Codex 钩子真跑结果写入；补 r3d 会话实数与 r3/r3b/r3c/r3c2 模型记录；只改本文件，不改代码、文档、CHANGELOG、测试 | 验证证据节 r3e 与 CodeX 小节；模型记录表 r3d 行；r3e 会话 id 01a1d2b9-d191-7199-89b0-f462818147bc，起始北京时间 2026-11-13 10:25:55；r3e 次数在推送前由下一次记录提交写入 |
