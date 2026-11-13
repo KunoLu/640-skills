@@ -8,7 +8,7 @@ mode_note: 本轮任务指令明确全程 strict；640 于 2026-11-12 在 640-sk
 status: "in-progress"
 branch: feat/v2.2.0-rc.1-graft-0290
 created_at: '2026-11-12T23:30:01.587596+08:00'
-updated_at: "2026-11-13T09:03:22.669363+08:00"
+updated_at: "2026-11-13T10:13:16.410149+08:00"
 completed_at: null
 ---
 # v2.2.0-rc.1 graft 0.29.0 支持与配套修正
@@ -155,7 +155,7 @@ completed_at: null
 - A（云主机）：实施轮先从 npm registry 核对 0.29.0 的 integrity，再真实安装 @nanonets/graft@0.29.0 并经受管链路 build 冒烟；记录版本输出与图产物。
 - B（云主机，状态：r3c3 已跑完 8 条，其中两组未验证到）：四个开关 DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 逐个真跑，每个各开一次、各关一次，记录每个开关管的提示是否出现/消失。r3c3 已跑完 8 条：DO_NOT_TRACK 与 GRAFT_NO_RENAME_NOTICE 两组开/关对照成立；TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未能触发对应提示，开关有没有用没验证到，不算通过。证据见「验证证据」节 r3c3 小节。
 - C：仓库内静态核对 0.29.0 包内容（实施轮已做）；Codex 钩子真跑由 CodeX 负责，本任务只记录。
-- F（云主机，状态：下一轮真跑）：5 种语言样例（Python/Rust/TS/Go/Julia）各走同意/拒绝两条路共 10 条路径，记录检测输出、引导文案与实际安装/配置/跳过结果；跑完按 F 项清理规则还原环境。截至 r2c 记录轮，这 10 条路径尚未真跑。
+- F（云主机，状态：r3d 已跑完 6 条）：5 种语言样例（Python/Rust/TS/Go/Julia）各走同意/拒绝两条路共 10 条路径，记录检测输出、引导文案与实际安装/配置/跳过结果；跑完按 F 项清理规则还原环境。r3d 已跑完 Python/Rust/TS 共 6 条（证据见「验证证据」节 r3d 小节）；Go 与 Julia 共 4 条由 r3e 真跑。
 - 验证命令（实施轮执行并记录结果）：聚焦 unittest（test_sbtd_graft_entry、test_sbtd_probe_links、tests.test_sbtd_upgrade_hosts、test_graft_runtime、test_sbtd_graft_isolation）、TaskStore 只读索引预览比对、`git grep '0\.28\.0'` 复扫。pytest 不在本环境装，按项目既有方式用 unittest 运行同一文件。
 
 ## 验证证据
@@ -194,10 +194,23 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 
 小结：8 条里 4 条验证到开关作用——DO_NOT_TRACK 两条与 GRAFT_NO_RENAME_NOTICE 两条各自构成开/关对照，结果符合预期。TRAIL_CLOUD 两条与 GRAFT_NO_BROWSER 两条均未能触发对应提示，开关有没有用没验证到，不算通过；原因照上面第 4、6 条记录保留：启动器只走 analyze 的封闭只读命令集，Trail 登录提示只在 status 输出出现、浏览器只在 login 流程打开，这条路碰不到登录和浏览器（TRAIL_CLOUD 一条还叠加启动器默认 DO_NOT_TRACK=1 使 telemetryOn 为假）。
 
+### r3d 轮 F 项前半真跑（在 omp 会话里跑）：Python/Rust/TS × 同意/拒绝共 6 条
+
+执行方式：样例项目建在临时目录 `<r3dtmp>`（python-proj 是 git 仓库、无 pyproject.toml、内含 a.py；rust-proj 含 Cargo.toml 与 src/main.rs；ts-proj 含 package.json、tsconfig.json 与 src/index.ts）。驱动脚本导入本工作树的 onboard 模块，用 onboard 自己的 build_parser() 解析参数（`init --projects-root <样例项目> --yes --json`，同意路径再加 `--language-tooling`），再调用 init 流程使用的同一入口 run_language_tooling_step（onboard.py 第 7115 行处被 init 调用），并用同一输出函数 print_language_tooling（onboard.py 第 7160 行处被 init 调用）打印。与完整 init 流程的偏差只有两处：HOME 指向按用例新建的空目录（真实全局 config.yml 与 lsp.yml 不参与、不被写）；「拒绝」用例把 PATH 中语言服务器所在目录替换为排除该服务器二进制的影子目录（符号链接目录，服务器真实文件不动，不卸载任何东西）。版本：omp 18.19.0；pyright 1.1.414；rust-analyzer 0.3.3113-standalone；typescript-language-server 5.3.0。公共命令形状：`python3 <r3dtmp>/drive.py <用例名> <refuse|consent> <语言> <服务器命令> <hide|show>`。
+
+1. Python 拒绝（hide pyright）：2026-11-13 10:08:02 +0800 开始，10:08:03 结束，退出码 0。检测输出：项目识别为 Python（依据扩展名 .py；markers 为空，因为没有 pyproject.toml）；`Python server pyright: missing`；`omp ast-grep: not-configured`。引导文案：「Python was detected but no omp language server for it is on PATH.」，步骤「Install a server, for example: npm install -g pyright」；报告 notes 原文：「A Git repository without pyproject.toml needs the global ~/.omp/agent/lsp.yml to add .git to pyright's rootMarkers, or omp does not treat it as a Python project root.」。实际动作：零写入（`writes: []`），临时 HOME 跑后没有任何文件；状态 needs-confirmation；跳过影响：ast-grep 结构化搜索保持不可用。结论：拒绝路径符合预期——检测正确、引导给出、配置不写。
+2. Python 同意（pyright 在 PATH 上）：2026-11-13 10:08:10 +0800 开始，同秒结束，退出码 0。检测输出：`Python server pyright: available`。实际动作：写入 enable-ast-grep → 临时 HOME 的 .omp/agent/config.yml，文件内容为 `astGrep:` 加 `  enabled: true` 两行；状态 configured；未写 lsp.yml，未安装任何组件。结论：同意路径符合预期——只写 astGrep 配置，语言服务器本体按设计不代装。
+3. Rust 拒绝（hide rust-analyzer）：2026-11-13 10:08:24 +0800 开始，同秒结束，退出码 0。检测输出：项目识别为 Rust（markers 命中 Cargo.toml，扩展名 .rs）；`Rust server rust-analyzer: missing`。引导步骤：「Install a server, for example: rustup component add rust-analyzer」。实际动作：零写入，临时 HOME 跑后没有任何文件；状态 needs-confirmation。结论：拒绝路径符合预期。
+4. Rust 同意（rust-analyzer 在 PATH 上）：2026-11-13 10:08:31 +0800 开始，同秒结束，退出码 0。检测输出：`Rust server rust-analyzer: available`。实际动作：写入 enable-ast-grep → 临时 HOME 的 config.yml（astGrep.enabled: true）；状态 configured；未写 lsp.yml，未安装任何组件。结论：同意路径符合预期。
+5. TypeScript 拒绝（hide typescript-language-server）：2026-11-13 10:08:36 +0800 开始，同秒结束，退出码 0。检测输出：项目识别为 TypeScript（markers 命中 package.json 与 tsconfig.json，扩展名 .ts）；`TypeScript server typescript-language-server: missing`。引导步骤：「Install a server, for example: npm install -g typescript-language-server typescript」。实际动作：零写入，临时 HOME 跑后没有任何文件；状态 needs-confirmation。结论：拒绝路径符合预期。
+6. TypeScript 同意（typescript-language-server 在 PATH 上）：2026-11-13 10:08:42 +0800 开始，同秒结束，退出码 0。检测输出：`TypeScript server typescript-language-server: available`。实际动作：写入 enable-ast-grep → 临时 HOME 的 config.yml；状态 configured；未写 lsp.yml，未安装任何组件。结论：同意路径符合预期。
+
+小结：6 条全部跑通，结果与预期一致——检测输出、引导文案、同意/拒绝两路的写入差异都符合 F 项设计；三种语言都在 omp 自带清单内，同意路径不产生 lsp.yml 写入；onboard 不代装语言服务器本体，引导只列安装命令。真实全局文件跑前跑后 sha256 不变：lsp.yml 跑前 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0、跑后 e4b18a8e0a6224c66ac85fa6b34db2a30e594861536888996b7541d66e54aaa0；config.yml 跑前 7f193e4fb8b92960b07a12911aaa9f40d37e748ecf764ba347282071a44bbf56、跑后 7f193e4fb8b92960b07a12911aaa9f40d37e748ecf764ba347282071a44bbf56。跑后 pyright、pyright-langserver、rust-analyzer、typescript-language-server、gopls、bash-language-server、marksman 全部仍在 PATH 上。本轮没发现阻塞问题，代码没改、测试没改（实施轮已有的语言工具单测 26 项在本轮跑前复跑通过：python3 -m unittest tests.test_sbtd_language_tooling，OK，0.034 秒）。`<r3dtmp>` 下的样例项目、临时 HOME、影子目录与日志全部保留在临时目录供检查；没有为测试安装任何组件，无需卸载。Go 与 Julia 的同意/拒绝共 4 条由 r3e 真跑。
+
 ### 尚未完成的真跑项
 
 - B 项四个开关（DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_RENAME_NOTICE、GRAFT_NO_BROWSER）逐个开/关真跑：r3c3 已跑完 8 条，DO_NOT_TRACK 与 GRAFT_NO_RENAME_NOTICE 两组开/关对照成立；TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未能触发、开关有没有用没验证到，不算通过，证据见「验证证据」节 r3c3 小节。
-- F 项五种语言（Python/Rust/TS/Go/Julia）同意/拒绝共 10 条路径真跑：下一轮真跑。
+- F 项五种语言（Python/Rust/TS/Go/Julia）同意/拒绝共 10 条路径真跑：r3d 已跑完 Python/Rust/TS 共 6 条（证据见「验证证据」节 r3d 小节）；Go 与 Julia 共 4 条由 r3e 真跑。
 - Codex 钩子真跑：由 CodeX 负责，本任务只记录其结果。
 
 ## r3c3 运行环境与会话记录
@@ -213,6 +226,10 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 - 起止时间（均为北京时间）：进程启动 2026-11-13 07:32:18（会话文件创建时间），第一次命令 07:32:38，提交 efdf21d 于 08:02:17，进程正常退出 08:02:41（不是看门狗结束的）。
 - 期间云主机暂停三次，看门狗按规则重新计时：07:43:16 检测到（间隔 288 秒）、07:48:06（170 秒）、08:01:01（593 秒）。
 - 本轮次数：k3:max 回复 50 次，工具调用 55 次，工具报错 1 次；没有其他模型调用。
+- 上一轮（r3c4）会话 id：01a1d26c-3cec-72ed-b034-4d75ce338dc0；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取。
+- r3c4 起止时间（均为北京时间）：会话创建 2026-11-13 09:01:11，提交 742bb76 于 09:04:16，进程正常退出 09:04:28。
+- r3c4 次数：k3:max 回复 10 次，工具调用 14 次，工具报错 0 次；没有其他模型调用。
+- 本轮（r3d）会话 id：01a1d2a1-dfa4-723d-97a8-8a8c6f03b454；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取；进程启动 2026-11-13 09:59:46（北京时间，会话文件创建时间）；r3d 次数由 r3e 写入。
 
 ## 模型记录
 
@@ -226,6 +243,7 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 | r2c | 记录 | k3:max | 10 | 14 | 0 | 只写记录：补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 |
 | r3 | B/F 真跑 | k3:max |  |  |  | graft --version 输出 0.29.0 后云主机整机暂停，看门狗停掉进程；本文件未改、无新提交 |
 | r3c3 | B 项真跑与记录 | k3:max | 50 | 55 | 1 | 8 条开关路径真跑完成并写入本文件（DO_NOT_TRACK、GRAFT_NO_RENAME_NOTICE 两组对照成立；TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发，未验证到开关作用）；本轮有一次提交，不推送 |
+| r3c4 | 记录 | k3:max | 10 | 14 | 0 | 只写记录：修正 B 项措辞并补 r3c3 会话实数；提交 742bb76，不推送；进程正常退出 |
 
 ## 状态事件
 
@@ -237,3 +255,4 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2c 记录轮：只写记录——补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 | 本文件本轮改动；全量测试证据见「验证证据」节 |
 | 2026-11-13T07:50:13.363609+08:00 | in-progress | in-progress | r3c3 真跑轮：B 项四开关 8 条路径真跑完成（DO_NOT_TRACK、GRAFT_NO_RENAME_NOTICE 两组对照成立；TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发、未验证到开关作用），sbtd-graft MCP 说明与会话记录一并写入；不改代码、文档、CHANGELOG、测试 | 验证证据节 r3c3 小节；模型记录表 r3c3 行 |
 | 2026-11-13T09:03:22.669363+08:00 | in-progress | in-progress | r3c4 记录轮：只改本文件——修正 B 项措辞（TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发、不算通过），补 r3c3 真实次数与起止时间；不改代码、文档、CHANGELOG、测试，不跑真跑 | r3c4 会话 id 01a1d26c-3cec-72ed-b034-4d75ce338dc0，起始北京时间 2026-11-13 09:01:11；r3c4 次数由 r3d 写入 |
+| 2026-11-13T10:13:16.410149+08:00 | in-progress | in-progress | r3d 真跑轮：F 项前半 Python/Rust/TS 同意/拒绝共 6 条路径真跑完成，全部符合预期；只改本文件，不改代码、文档、CHANGELOG、测试；Go 与 Julia 共 4 条由 r3e 真跑 | 验证证据节 r3d 小节；模型记录表 r3c4 行；r3d 会话 id 01a1d2a1-dfa4-723d-97a8-8a8c6f03b454，起始北京时间 2026-11-13 09:59:46；r3d 次数由 r3e 写入 |
