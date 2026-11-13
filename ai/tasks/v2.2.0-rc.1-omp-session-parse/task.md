@@ -21,8 +21,8 @@ completed_at: null
 
 ## 背景事实
 
-- 2026-11-12 Lord 在 640-skills 群提出 v2.2.0 三项，640 确认做 v2.2.0-rc.1：第 1 项 omp 会话解析（本任务）；第 2 项 AGENTS.md 遵守 PI_CODING_AGENT_DIR（不在本任务）；graft 项已由 #219 完成。
-- 2026-11-12 omp 18.19.0 冒烟（门禁 PR #218 的证据，记录在 ai/tasks/v2.2.0-rc.1-host-gate-omp-18190/task.md）：会话 12 行；第 1 行 type=title 且无 id 字段（18.19.0 新出现，加 --no-title 也有）；第 2 行 session 头 version 3；适配器回执 records_read=12、records_skipped=8、events_emitted=2、accepted=2，再次导入 duplicate=2。适配器能跑通但跳过 8 行，本任务查清这 8 行分别是什么、该不该跳。
+- 2026-11-12 Lord 在 640-skills 群提出 v2.2.0 三项，640 确认做 v2.2.0-rc.1：第 1 项 omp 会话解析（本任务）；第 2 项 AGENTS.md 遵守 PI_CODING_AGENT_DIR（不在本任务）；graft 项已由 #219 完成。注：分钟不可考。
+- 2026-11-12 omp 18.19.0 冒烟（门禁 PR #218 的证据，记录在 ai/tasks/v2.2.0-rc.1-host-gate-omp-18190/task.md）：会话 12 行；第 1 行 type=title 且无 id 字段（18.19.0 新出现，加 --no-title 也有）；第 2 行 session 头 version 3；适配器回执 records_read=12、records_skipped=8、events_emitted=2、accepted=2，再次导入 duplicate=2。适配器能跑通但跳过 8 行，本任务查清这 8 行分别是什么、该不该跳。注：分钟不可考。
 - 2026-11-13 本机留有 16 个 omp 18.19.0 真实会话文件（v220-graft 任务各轮产出，sessions-r1 至 sessions-r3h 共 16 个目录各一份）。本轮以只读方式统计与试导入；会话文件不复制进仓库，本文件不写它们的路径，统计只写数字与字段名，不贴会话正文。
 
 ## strict mode 落实方式
@@ -111,7 +111,7 @@ message 明细：role=assistant 743、role=toolResult 928、role=user 24。assis
 2. sbtd-runtime/docs/host-adapters.md omp 节（:25-34 映射清单，:30「其余记录类型与坏尾行跳过并计数」）：补一小段列出 18.19.0 其他记录类型（title、model_change、thinking_level_change、custom 四种 customType、custom_message、user 消息），逐项写明跳过是有意的及原因，注明统计来源为 2026-11-13 实测。
 3. sbtd-runtime/spec/r1.2b-host-adapter-scenarios.md OMP 节（:46 起，未识别类型与坏行跳过计数场景在 :91 附近）：加一条场景——18.19.0 新记录类型（title/thinking_level_change/custom/custom_message/user 消息）跳过并计数，且不影响 toolCall/toolResult 映射与去重。
 4. sbtd-runtime/tests/test_omp_adapter.py：加 18.19.0 形状的脱敏最小夹具与测试（见「要加的测试」），不放真实会话内容。
-5. 适配器解析逻辑：没找到要改的。跳过计数是否细分见「需要 640 拍板的问题」，默认不动回执形状。
+5. 适配器解析逻辑：没找到要改的。跳过计数是否细分见「已决定的问题」，默认不动回执形状。
 
 ## 要加的测试
 
@@ -173,10 +173,14 @@ message 明细：role=assistant 743、role=toolResult 928、role=user 24。assis
 
 无失败项，无归因记录。
 
-## 需要 640 拍板的问题
+## 已决定的问题
 
-1. records_skipped 是否细分原因或类型。选项甲：在 ParseOutcome/IngestReceipt 增加按类型或原因的跳过计数（回执形状变更，host_adapter.py:143-176 与 codex 适配器需对齐，契约文档同步）；选项乙：保持现状只记总数，文档写明各类型跳过是有意的。推荐乙：回执是 R1.2b 契约的一部分，改形状牵动 codex 侧与既有测试，收益主要是诊断便利；本轮逐行归因证明现有总数足以核对，没有因不细分而漏掉的解析错误。
-2. session 头 version 是否纳入校验（例如 version 非 3 时拒绝导入或单独计数）。推荐不校验、保持只取 id：18.11.1 到 18.19.0 的 version 都是 3 且适配器只用 id；加校验会把未来新版本的整体导入变成拒绝，与「未识别类型跳过并计数、不拒绝整体导入」的宽松策略不一致。
+2026-11-13 13:58 群成员投票 5:0：Q1 选乙（只记 records_skipped 总数，文档写清哪些类型是故意跳过的），Q2 不校验会话头 version，Lord 记录。
+
+1. records_skipped 是否细分原因或类型。选项甲：在 ParseOutcome/IngestReceipt 增加按类型或原因的跳过计数（回执形状变更，host_adapter.py:143-176 与 codex 适配器需对齐，契约文档同步）；选项乙：保持现状只记总数，文档写明各类型跳过是有意的。投票结果：乙。理由：回执是 R1.2b 契约的一部分，改形状牵动 codex 侧与既有测试，收益主要是诊断便利；本轮逐行归因证明现有总数足以核对，没有因不细分而漏掉的解析错误。
+2. session 头 version 是否纳入校验（例如 version 非 3 时拒绝导入或单独计数）。投票结果：不校验、保持只取 id。理由：18.11.1 到 18.19.0 的 version 都是 3 且适配器只用 id；加校验会把未来新版本的整体导入变成拒绝，与「未识别类型跳过并计数、不拒绝整体导入」的宽松策略不一致。
+
+投票结果与 r2 实施时采用的推荐一致，不需要另起一轮调整。
 
 ## 模型记录
 
@@ -187,10 +191,13 @@ message 明细：role=assistant 743、role=toolResult 928、role=user 24。assis
 |---|---|---|---|---|---|---|
 | r1 | 写任务文件与真实会话调查 | kimi-code/k3:max | 30 | 39 | 1 | de136e5 |
 | r2 | 实施：适配器注释、文档、规格、6 个回归测试、两份 CHANGELOG、验证证据 | kimi-code/k3:max | 56 | 62 | 4 | 077e22f |
+| r2b | 记录轮：把 r2 行写进本表 | kimi-code/k3:max | 4 | 4 | 0 | dd3eeea |
 
 ## 会话记录
 
-- r1：会话 id 01a1d348-220b-7070-aa4a-bda0dd06a0f1，开始时间 2026-11-13 13:01。
+- r1：会话 id 01a1d348-220b-7070-aa4a-bda0dd06a0f1，开始 2026-11-13 13:01:22，结束 13:34:41。
+- r2：会话 id 01a1d368-20ac-7406-b754-711723b8dc32，开始 2026-11-13 13:36:19，结束 15:06:36。
+- r2b：会话 id 01a1d3cf-2fe0-740b-86d8-3b682aaea088，开始 2026-11-13 15:28:53，结束 15:29:23；只补模型记录，状态保持 checking，没有状态转换，所以没有状态事件。
 
 ## 状态事件
 
