@@ -8,7 +8,7 @@ mode_note: 本轮任务指令明确全程 strict；640 于 2026-11-12 在 640-sk
 status: "in-progress"
 branch: feat/v2.2.0-rc.1-graft-0290
 created_at: '2026-11-12T23:30:01.587596+08:00'
-updated_at: "2026-11-13T07:50:13.363609+08:00"
+updated_at: "2026-11-13T09:03:22.669363+08:00"
 completed_at: null
 ---
 # v2.2.0-rc.1 graft 0.29.0 支持与配套修正
@@ -153,7 +153,7 @@ completed_at: null
 ## 真跑计划
 
 - A（云主机）：实施轮先从 npm registry 核对 0.29.0 的 integrity，再真实安装 @nanonets/graft@0.29.0 并经受管链路 build 冒烟；记录版本输出与图产物。
-- B（云主机，状态：r3c3 已真跑）：四个开关 DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 逐个真跑，每个各开一次、各关一次，记录每个开关管的提示是否出现/消失。r3c3 已跑完 8 条，证据见「验证证据」节 r3c3 小节。
+- B（云主机，状态：r3c3 已跑完 8 条，其中两组未验证到）：四个开关 DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 逐个真跑，每个各开一次、各关一次，记录每个开关管的提示是否出现/消失。r3c3 已跑完 8 条：DO_NOT_TRACK 与 GRAFT_NO_RENAME_NOTICE 两组开/关对照成立；TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未能触发对应提示，开关有没有用没验证到，不算通过。证据见「验证证据」节 r3c3 小节。
 - C：仓库内静态核对 0.29.0 包内容（实施轮已做）；Codex 钩子真跑由 CodeX 负责，本任务只记录。
 - F（云主机，状态：下一轮真跑）：5 种语言样例（Python/Rust/TS/Go/Julia）各走同意/拒绝两条路共 10 条路径，记录检测输出、引导文案与实际安装/配置/跳过结果；跑完按 F 项清理规则还原环境。截至 r2c 记录轮，这 10 条路径尚未真跑。
 - 验证命令（实施轮执行并记录结果）：聚焦 unittest（test_sbtd_graft_entry、test_sbtd_probe_links、tests.test_sbtd_upgrade_hosts、test_graft_runtime、test_sbtd_graft_isolation）、TaskStore 只读索引预览比对、`git grep '0\.28\.0'` 复扫。pytest 不在本环境装，按项目既有方式用 unittest 运行同一文件。
@@ -192,11 +192,11 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 7. GRAFT_NO_RENAME_NOTICE 开（伪终端，`env -u CI -u CLAUDECODE script -qec … /dev/null`；GRAFT_NO_RENAME_NOTICE=1 保留）：2026-11-13 07:38:54 +0800，退出码 0。伪终端日志里 JSON 带 CRLF 行尾，证明子进程 stderr 确是 TTY；grep「graft is now trail」命中 0 行。结论：默认开的状态下改名提示在 TTY 下也不出现。
 8. GRAFT_NO_RENAME_NOTICE 关（伪终端，同样 `env -u CI -u CLAUDECODE`；只删 GRAFT_NO_RENAME_NOTICE）：2026-11-13 07:43:52 +0800，退出码 0。伪终端日志开头出现两行：「· graft is now trail. this ran trail build --check, and graft keeps working (shown once a day)」「· run graft upgrade to get the trail command too」，随后是 check 的 JSON；保留 HOME 里 `.graft/rename-notice.json` 写入 `{"shownAt":1794527033296}`。结论：GRAFT_NO_RENAME_NOTICE 管每日改名提示与每周升级提示——删掉后提示在 TTY 下出现，与第 7 条构成对照。注：提示里的「this ran trail build --check」是 0.29.0 把 graft check 映射成 trail 叫法（包内 RENAMED 表），照实记录。
 
-小结：8 条里 6 条结果符合预期对照（DO_NOT_TRACK 两条、GRAFT_NO_RENAME_NOTICE 两条各自构成开/关差异；TRAIL_CLOUD 开、GRAFT_NO_BROWSER 开各自无提示）；TRAIL_CLOUD 关与 GRAFT_NO_BROWSER 关两条没测出区别，原因已逐条照实写在上面。
+小结：8 条里 4 条验证到开关作用——DO_NOT_TRACK 两条与 GRAFT_NO_RENAME_NOTICE 两条各自构成开/关对照，结果符合预期。TRAIL_CLOUD 两条与 GRAFT_NO_BROWSER 两条均未能触发对应提示，开关有没有用没验证到，不算通过；原因照上面第 4、6 条记录保留：启动器只走 analyze 的封闭只读命令集，Trail 登录提示只在 status 输出出现、浏览器只在 login 流程打开，这条路碰不到登录和浏览器（TRAIL_CLOUD 一条还叠加启动器默认 DO_NOT_TRACK=1 使 telemetryOn 为假）。
 
 ### 尚未完成的真跑项
 
-- B 项四个开关（DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_RENAME_NOTICE、GRAFT_NO_BROWSER）逐个开/关真跑：r3c3 已跑完 8 条，证据见「验证证据」节 r3c3 小节。
+- B 项四个开关（DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_RENAME_NOTICE、GRAFT_NO_BROWSER）逐个开/关真跑：r3c3 已跑完 8 条，DO_NOT_TRACK 与 GRAFT_NO_RENAME_NOTICE 两组开/关对照成立；TRAIL_CLOUD 与 GRAFT_NO_BROWSER 两组未能触发、开关有没有用没验证到，不算通过，证据见「验证证据」节 r3c3 小节。
 - F 项五种语言（Python/Rust/TS/Go/Julia）同意/拒绝共 10 条路径真跑：下一轮真跑。
 - Codex 钩子真跑：由 CodeX 负责，本任务只记录其结果。
 
@@ -209,8 +209,10 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 ### 会话记录
 
 - 原会话 01a1d190-d3cc-7617-84e5-54db40113155 因太大停用：续跑时整个会话 1.7MB，模型每次请求开头要等好几分钟，碰上云主机整机暂停就断。
-- 本轮（r3c3）会话 id：01a1d21a-df8d-7313-8822-cd280f814c96；起始时间 2026-11-13 07:32:38 +0800（本轮第一条命令的北京时间）。
-- 本轮的回复次数与工具调用次数先不填，留给下一轮统计。
+- 本轮（r3c3）会话 id：01a1d21a-df8d-7313-8822-cd280f814c96；主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取。
+- 起止时间（均为北京时间）：进程启动 2026-11-13 07:32:18（会话文件创建时间），第一次命令 07:32:38，提交 efdf21d 于 08:02:17，进程正常退出 08:02:41（不是看门狗结束的）。
+- 期间云主机暂停三次，看门狗按规则重新计时：07:43:16 检测到（间隔 288 秒）、07:48:06（170 秒）、08:01:01（593 秒）。
+- 本轮次数：k3:max 回复 50 次，工具调用 55 次，工具报错 1 次；没有其他模型调用。
 
 ## 模型记录
 
@@ -223,7 +225,7 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 | r2b | 收尾 | k3:max | 4 | 2 | 1（ECONNRESET 网络重试） | 进程在等后台测试时退出 |
 | r2c | 记录 | k3:max | 10 | 14 | 0 | 只写记录：补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 |
 | r3 | B/F 真跑 | k3:max |  |  |  | graft --version 输出 0.29.0 后云主机整机暂停，看门狗停掉进程；本文件未改、无新提交 |
-| r3c3 | B 项真跑与记录 | k3:max |  |  |  | 8 条开关路径真跑完成并写入本文件；本轮有一次提交，不推送 |
+| r3c3 | B 项真跑与记录 | k3:max | 50 | 55 | 1 | 8 条开关路径真跑完成并写入本文件（DO_NOT_TRACK、GRAFT_NO_RENAME_NOTICE 两组对照成立；TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发，未验证到开关作用）；本轮有一次提交，不推送 |
 
 ## 状态事件
 
@@ -233,4 +235,5 @@ python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2 实施轮退出：三项提交完成后进程在等后台全量测试时退出（r2c 补记，退出时刻未单独记录） | 提交 cfda1ff、3959711、392348c；模型记录表 r2 行 |
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2b 收尾轮退出：进程同样在等后台测试时退出（r2c 补记，退出时刻未单独记录） | 模型记录表 r2b 行 |
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2c 记录轮：只写记录——补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 | 本文件本轮改动；全量测试证据见「验证证据」节 |
-| 2026-11-13T07:50:13.363609+08:00 | in-progress | in-progress | r3c3 真跑轮：B 项四开关 8 条路径真跑完成，sbtd-graft MCP 说明与会话记录一并写入；不改代码、文档、CHANGELOG、测试 | 验证证据节 r3c3 小节；模型记录表 r3c3 行 |
+| 2026-11-13T07:50:13.363609+08:00 | in-progress | in-progress | r3c3 真跑轮：B 项四开关 8 条路径真跑完成（DO_NOT_TRACK、GRAFT_NO_RENAME_NOTICE 两组对照成立；TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发、未验证到开关作用），sbtd-graft MCP 说明与会话记录一并写入；不改代码、文档、CHANGELOG、测试 | 验证证据节 r3c3 小节；模型记录表 r3c3 行 |
+| 2026-11-13T09:03:22.669363+08:00 | in-progress | in-progress | r3c4 记录轮：只改本文件——修正 B 项措辞（TRAIL_CLOUD、GRAFT_NO_BROWSER 两组未能触发、不算通过），补 r3c3 真实次数与起止时间；不改代码、文档、CHANGELOG、测试，不跑真跑 | r3c4 会话 id 01a1d26c-3cec-72ed-b034-4d75ce338dc0，起始北京时间 2026-11-13 09:01:11；r3c4 次数由 r3d 写入 |
