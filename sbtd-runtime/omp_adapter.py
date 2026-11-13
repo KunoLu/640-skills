@@ -7,13 +7,32 @@ name carries a session id (<timestamp>Z_<uuid>.jsonl), the CLI probes
 refuses the read while a running omp owns that session; a failed probe fails
 closed. `--no-lease-check` opts out explicitly. Observed record shapes come
 from real omp 18.11.1 sessions; omp 18.18.8 was also smoke-tested on 2026-11-11
-and omp 18.19.0 on 2026-11-12 (云主机实测):
+and omp 18.19.0 on 2026-11-12 (云主机实测), and the 18.19.0 shape was checked
+against 16 real session files (2751 records) on 2026-11-13:
 
 - {"type": "session", "id": ..., "timestamp": ...}         -> context
+  (18.19.0 headers carry version 3 and no runtime key; only id is consumed,
+  version is not validated)
 - assistant message content item {"type": "toolCall", "id", "name",
   "arguments"}                                             -> invocation.started
   (name == "read" with arguments.path "skill://<name>"     -> skill.loaded)
+  (18.19.0 toolCall items carry an extra "intent" key; sibling text blocks
+  and thinking blocks with thinkingSignature are ignored, not counted)
 - toolResult message {"toolCallId", "toolName", "isError"} -> invocation.finished
+  (18.19.0 toolResult messages carry extra content/details/timestamp keys)
+
+These record types are skipped and counted by design (18.19.0 shapes
+confirmed on 2026-11-13; none carries a consumable execution fact):
+
+- {"type": "title", "v": 1, ...} (no id): session title only.
+- {"type": "model_change"} / {"type": "thinking_level_change"}: host
+  configuration facts with no R1.0 event type; their runtime.version still
+  feeds host_version.
+- {"type": "custom"} (customType tool_execution_start / session_exit /
+  date-cwd-reminder / system-prompt-digest): duplicates the toolCall record
+  or carries prompt-internal reminders with no R1.0 event type.
+- {"type": "custom_message"}: host display-layer message.
+- role=user messages: metadata observation never collects prompt text.
 
 Other record types and malformed tail lines are skipped and counted.
 Arguments, outputs and message text are never copied into events

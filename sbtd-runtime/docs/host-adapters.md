@@ -34,6 +34,16 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 - CLI 在 `installation_id`／`device_id` 为空时以 exit 2 + JSON error 拒绝，不创建 audit.db。
 - 读取前 lease 守卫：文件名携带会话 id（`<时间戳>Z_<uuid>.jsonl`）时，CLI 先执行 `omp session lease --json -- <id>`；id 在 held 列表（运行中 omp 持有、可能正在写）→ exit 2 + JSON error 拒绝读取，不打开事件库；探测失败（CLI 不可用／超时／非零退出／输出不可解析）→ 失败关闭，exit 2 + JSON error。文件名不含会话 id 的外来文件（pack／复制）不适用该守卫；`--no-lease-check` 显式跳过。lease 是即时建议性信号，不消除检查后 omp 开始写入的竞态窗口；重复 ingest 的去重语义不受影响。
 
+18.19.0 的其他记录类型（统计来源：2026-11-13 对 16 个真实 18.19.0 会话文件、共 2751 行的实测）逐类核对过，跳过并计数是有意设计：
+
+- `title`（无 id，仅 v/title/updatedAt/pad）：只有会话标题，无执行事实。
+- `model_change`、`thinking_level_change`：宿主配置事实，R1.0 事件模型没有对应事件类型；其 `runtime.version` 已用于填 host_version。
+- `custom`：四种 customType——`tool_execution_start` 与 toolCall 记录重复；`session_exit` 无对应事件类型；`date-cwd-reminder`、`system-prompt-digest` 属提示内部。
+- `custom_message`：宿主展示层消息，无执行事实。
+- `role=user` 消息：metadata 观察级别不采提示正文。
+
+18.19.0 形状细节：session 头 version 3 且无 runtime 键（version 不参与校验，只取 id）；toolCall 项多一个 intent 键，id 不含「|」；thinking 块带 thinkingSignature；toolResult 的 message 多 content/details/timestamp 键。这些差异不改变映射。
+
 用法：
 
 ```bash
