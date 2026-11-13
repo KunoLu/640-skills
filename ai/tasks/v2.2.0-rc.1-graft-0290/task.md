@@ -8,7 +8,7 @@ mode_note: 本轮任务指令明确全程 strict；640 于 2026-11-12 在 640-sk
 status: "in-progress"
 branch: feat/v2.2.0-rc.1-graft-0290
 created_at: '2026-11-12T23:30:01.587596+08:00'
-updated_at: "2026-11-13T04:28:04.606917+08:00"
+updated_at: "2026-11-13T07:50:13.363609+08:00"
 completed_at: null
 ---
 # v2.2.0-rc.1 graft 0.29.0 支持与配套修正
@@ -153,7 +153,7 @@ completed_at: null
 ## 真跑计划
 
 - A（云主机）：实施轮先从 npm registry 核对 0.29.0 的 integrity，再真实安装 @nanonets/graft@0.29.0 并经受管链路 build 冒烟；记录版本输出与图产物。
-- B（云主机，状态：下一轮真跑）：四个开关 DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 逐个真跑，每个各开一次、各关一次，记录每个开关管的提示是否出现/消失。截至 r2c 记录轮，这 8 条路径尚未真跑。
+- B（云主机，状态：r3c3 已真跑）：四个开关 DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE 逐个真跑，每个各开一次、各关一次，记录每个开关管的提示是否出现/消失。r3c3 已跑完 8 条，证据见「验证证据」节 r3c3 小节。
 - C：仓库内静态核对 0.29.0 包内容（实施轮已做）；Codex 钩子真跑由 CodeX 负责，本任务只记录。
 - F（云主机，状态：下一轮真跑）：5 种语言样例（Python/Rust/TS/Go/Julia）各走同意/拒绝两条路共 10 条路径，记录检测输出、引导文案与实际安装/配置/跳过结果；跑完按 F 项清理规则还原环境。截至 r2c 记录轮，这 10 条路径尚未真跑。
 - 验证命令（实施轮执行并记录结果）：聚焦 unittest（test_sbtd_graft_entry、test_sbtd_probe_links、tests.test_sbtd_upgrade_hosts、test_graft_runtime、test_sbtd_graft_isolation）、TaskStore 只读索引预览比对、`git grep '0\.28\.0'` 复扫。pytest 不在本环境装，按项目既有方式用 unittest 运行同一文件。
@@ -171,11 +171,46 @@ completed_at: null
 - 失败归因：2026-11-13 04:25:53 +0800 在 main 5ce59d2 上用同一条 unittest discover 命令加 `-k` 该用例名单跑，同样失败，报 ModuleNotFoundError: No module named 'tzdata' → ZoneInfoNotFoundError 'Asia/Tokyo'。结论：云主机 Python 没装 tzdata 包，是环境问题，main 上一样，不是本分支引起的；以 CI 结果为准。
 - 分支核对（r2c 记录轮在本工作树执行）：`git diff --name-only 5ce59d2..HEAD` 经 `grep -i stats` 过滤无任何命中；`git log 5ce59d2..HEAD -- sbtd-runtime/tests/test_stats_query.py sbtd-runtime/stats_query.py sbtd-runtime/stats/` 为空；本任务在基线 5ce59d2 之上的三个提交（cfda1ff、3959711、392348c）不触碰 sbtd-runtime 下任何文件。核对结论：本分支没改 sbtd-runtime/stats 相关文件。
 
+### r3c3 轮 B 项开关真跑（在 omp 会话里跑）
+
+执行方式：8 条全部走真实启动器。驱动脚本导入本工作树的 sbtd_graft_entry 并调用其 `main()`，`managed_environment` 真实构造，graft 子进程由启动器真实拉起；驱动脚本与原版启动器的偏差只有三处——临时 HOME 落到按用例命名的目录、退出后把临时 HOME 改名保留供检查（不删除）、“关”的用例从受管环境里只删一个开关。graft 为临时隔离目录里的 0.29.0（`--version` 实测 0.29.0），node 为 v22.20.0，项目根是临时目录里的 git 仓库（带 graft/ 上下文与接线 stamp，启动器校验通过）。启动器命令统一为 `analyze … check`（只读命令）。任务文件不落本机路径，下文 `<r3tmp>` 指本轮在临时目录下的隔离目录，`<node>` 指 realpath 后的 node v22.20.0。
+
+公共命令形状（每条只换用例名与被删开关）：
+
+```
+python3 <r3tmp>/drive.py <用例> <被删开关或 -> -- analyze --root <r3tmp>/repo --node <node> --entry <r3tmp>/prefix/lib/node_modules/@nanonets/graft/dist/cli.js check
+```
+
+伪终端的两条在最外层套了 `env -u CI -u CLAUDECODE script -qec '<上面这条>' /dev/null`。
+
+1. DO_NOT_TRACK 开（非伪终端；启动器默认，DO_NOT_TRACK=1 保留）：2026-11-13 07:37:54 +0800 开始，同秒结束，退出码 0。stderr 为空；stdout 是 check 的 JSON（`graph.ok=true`、`nodes=2`、`pendingIds` 为 a.py 与 a.py#f）。保留的临时 HOME 里 `.graft/` 只有启动器预置的 update-check.json，没有 telemetry.json、没有 telemetry-queue.ndjson。结论：默认开的状态下遥测告知不出现、遥测事件不入队。
+2. DO_NOT_TRACK 关（非伪终端；只删 DO_NOT_TRACK，DNT=1 与其余默认不变）：2026-11-13 07:38:02 +0800，退出码 0。stderr 出现一次性遥测告知两行：「· graft collects anonymous usage stats (no code, no file paths, no queries).」与「  What exactly: https://github.com/trailhq/Trail-Code/blob/main/TELEMETRY.md. Turn it off with `graft telemetry disable`.」；stdout JSON 与第 1 条一致。保留 HOME 里 `.graft/telemetry.json` 记下 noticeShownAt=2026-11-12T23:38:02Z 与 flushedAt，`.graft/telemetry-queue.ndjson` 排队两条匿名事件（first_run 与 query，command=check，properties 含 app_version=0.29.0、os=linux、node_major=22）。结论：DO_NOT_TRACK 管遥测——删掉后告知出现、事件本地入队，与第 1 条构成对照。边界：本轮未抓包，是否有外发请求不在证据范围内；cloudEnabled 在本条仍为假（TRAIL_CLOUD=0 保留）。
+3. TRAIL_CLOUD 开（非伪终端；TRAIL_CLOUD=0 保留）：2026-11-13 07:38:13 +0800，退出码 0，stderr 为空，stdout JSON 同第 1 条。结论：默认开的状态下无 Trail 登录提示。
+4. TRAIL_CLOUD 关（非伪终端；只删 TRAIL_CLOUD）：2026-11-13 07:38:20 +0800，退出码 0，stderr 为空，stdout 与第 3 条逐字节一致（diff 无输出）。这条没测出区别，原因照实写：0.29.0 的 cloudEnabled 除了看 TRAIL_CLOUD 还要求 telemetryOn（dist/cloud/workspace.js），而启动器默认的 DO_NOT_TRACK=1 在本条仍保留，telemetryOn 为假，所以删掉 TRAIL_CLOUD 后 cloudEnabled 依然为假；Trail 登录提示（status 里的「workspace not signed in · run trail login」）只出现在 status 输出，而启动器 analyze 的封闭只读命令集（ask/map/skeleton/callers/check/grep/blast）不含 status/login。在「只删一个开关、其余保持启动器默认」的限制下，这条路上 TRAIL_CLOUD 没有可观察口。
+5. GRAFT_NO_BROWSER 开（非伪终端；GRAFT_NO_BROWSER=1 保留；记录 opener 调用的 shim xdg-open 放在 PATH 最前）：2026-11-13 07:38:38 +0800，退出码 0，stderr 为空，stdout 与基线一致；opener 日志跑前 1 行、跑后 1 行（现存那 1 行是上一轮调查遗留，非本轮产生）。结论：默认开的状态下无浏览器打开。
+6. GRAFT_NO_BROWSER 关（非伪终端；只删 GRAFT_NO_BROWSER，shim 同第 5 条）：2026-11-13 07:38:45 +0800，退出码 0，stderr 为空，stdout 与基线一致；opener 日志跑前 1 行、跑后 1 行，没有新增。这条没测出区别，原因照实写：0.29.0 里 openBrowser 只有一个调用点（dist/cli.js 的 login 流程），analyze 的封闭只读命令集走不到 login，所以开、关两条都不会触发浏览器。
+7. GRAFT_NO_RENAME_NOTICE 开（伪终端，`env -u CI -u CLAUDECODE script -qec … /dev/null`；GRAFT_NO_RENAME_NOTICE=1 保留）：2026-11-13 07:38:54 +0800，退出码 0。伪终端日志里 JSON 带 CRLF 行尾，证明子进程 stderr 确是 TTY；grep「graft is now trail」命中 0 行。结论：默认开的状态下改名提示在 TTY 下也不出现。
+8. GRAFT_NO_RENAME_NOTICE 关（伪终端，同样 `env -u CI -u CLAUDECODE`；只删 GRAFT_NO_RENAME_NOTICE）：2026-11-13 07:43:52 +0800，退出码 0。伪终端日志开头出现两行：「· graft is now trail. this ran trail build --check, and graft keeps working (shown once a day)」「· run graft upgrade to get the trail command too」，随后是 check 的 JSON；保留 HOME 里 `.graft/rename-notice.json` 写入 `{"shownAt":1794527033296}`。结论：GRAFT_NO_RENAME_NOTICE 管每日改名提示与每周升级提示——删掉后提示在 TTY 下出现，与第 7 条构成对照。注：提示里的「this ran trail build --check」是 0.29.0 把 graft check 映射成 trail 叫法（包内 RENAMED 表），照实记录。
+
+小结：8 条里 6 条结果符合预期对照（DO_NOT_TRACK 两条、GRAFT_NO_RENAME_NOTICE 两条各自构成开/关差异；TRAIL_CLOUD 开、GRAFT_NO_BROWSER 开各自无提示）；TRAIL_CLOUD 关与 GRAFT_NO_BROWSER 关两条没测出区别，原因已逐条照实写在上面。
+
 ### 尚未完成的真跑项
 
-- B 项四个开关（DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_BROWSER、GRAFT_NO_RENAME_NOTICE）逐个开/关真跑：下一轮真跑。
+- B 项四个开关（DO_NOT_TRACK、TRAIL_CLOUD、GRAFT_NO_RENAME_NOTICE、GRAFT_NO_BROWSER）逐个开/关真跑：r3c3 已跑完 8 条，证据见「验证证据」节 r3c3 小节。
 - F 项五种语言（Python/Rust/TS/Go/Julia）同意/拒绝共 10 条路径真跑：下一轮真跑。
 - Codex 钩子真跑：由 CodeX 负责，本任务只记录其结果。
+
+## r3c3 运行环境与会话记录
+
+### sbtd-graft MCP 说明
+
+本轮 omp 启动时报 "MCP subprocess closed stdout before responding"。原因：sbtd_graft_entry.py 的 mcp 路径启动时先校验项目根——工作进程所在目录必须属于某个 Git 仓库、选中的项目根必须有 graft/ 上下文目录；本工作树没有 graft/ 目录，于是以退出码 2 退出，输出 "the selected project root has no graft/ context directory"（在非 Git 目录下则是 "the process working directory does not belong to a Git repository"）。B/F 两项真跑走命令行启动器和临时隔离目录里的 graft 0.29.0，不经过这个 MCP，所以不影响真跑结论。全局 MCP 配置指向的仍是全局安装的 graft 0.28.0，这次没改。
+
+### 会话记录
+
+- 原会话 01a1d190-d3cc-7617-84e5-54db40113155 因太大停用：续跑时整个会话 1.7MB，模型每次请求开头要等好几分钟，碰上云主机整机暂停就断。
+- 本轮（r3c3）会话 id：01a1d21a-df8d-7313-8822-cd280f814c96；起始时间 2026-11-13 07:32:38 +0800（本轮第一条命令的北京时间）。
+- 本轮的回复次数与工具调用次数先不填，留给下一轮统计。
 
 ## 模型记录
 
@@ -186,6 +221,9 @@ completed_at: null
 |---|---|---|---|---|---|---|
 | r2 | 实施 | k3:max | 115 | 139 | 0 | 完成三项提交（cfda1ff pin 0.29.0、3959711 语言检测引导、392348c 文档修正与重建说明）；进程在等后台全量测试时退出 |
 | r2b | 收尾 | k3:max | 4 | 2 | 1（ECONNRESET 网络重试） | 进程在等后台测试时退出 |
+| r2c | 记录 | k3:max | 10 | 14 | 0 | 只写记录：补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 |
+| r3 | B/F 真跑 | k3:max |  |  |  | graft --version 输出 0.29.0 后云主机整机暂停，看门狗停掉进程；本文件未改、无新提交 |
+| r3c3 | B 项真跑与记录 | k3:max |  |  |  | 8 条开关路径真跑完成并写入本文件；本轮有一次提交，不推送 |
 
 ## 状态事件
 
@@ -195,3 +233,4 @@ completed_at: null
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2 实施轮退出：三项提交完成后进程在等后台全量测试时退出（r2c 补记，退出时刻未单独记录） | 提交 cfda1ff、3959711、392348c；模型记录表 r2 行 |
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2b 收尾轮退出：进程同样在等后台测试时退出（r2c 补记，退出时刻未单独记录） | 模型记录表 r2b 行 |
 | 2026-11-13T04:28:04.606917+08:00 | in-progress | in-progress | r2c 记录轮：只写记录——补验证证据、状态事件与 r2/r2b 模型数字，不改代码、文档、CHANGELOG、测试 | 本文件本轮改动；全量测试证据见「验证证据」节 |
+| 2026-11-13T07:50:13.363609+08:00 | in-progress | in-progress | r3c3 真跑轮：B 项四开关 8 条路径真跑完成，sbtd-graft MCP 说明与会话记录一并写入；不改代码、文档、CHANGELOG、测试 | 验证证据节 r3c3 小节；模型记录表 r3c3 行 |
