@@ -80,10 +80,32 @@ class OmpAgentDirResolverTests(unittest.TestCase):
         )
         self.assertNotEqual(resolved["agent_dir"], self.home / "tilde-agent")
 
+    def test_whitespace_only_variable_resolves_against_process_cwd(self) -> None:
+        # omp 18.19.0 truthiness: only "" falls back; " " is a real directory
+        # name resolved against the process current directory.
+        resolved = self.resolve(PI_CODING_AGENT_DIR=" ")
+        self.assertEqual(resolved["agent_dir"], Path(os.path.abspath(" ")))
+        self.assertEqual(resolved["override"], True)
+
     def test_config_dir_override_moves_default_root(self) -> None:
         resolved = self.resolve(PI_CONFIG_DIR="custom-omp")
         self.assertEqual(resolved["agent_dir"], self.home / "custom-omp" / "agent")
         self.assertEqual(resolved["override"], False)
+
+    def test_absolute_config_dir_is_joined_under_home(self) -> None:
+        # omp 18.19.0 path.join(home, value): a leading separator does not
+        # discard home (unlike Python os.path.join).
+        resolved = self.resolve(PI_CONFIG_DIR="/abs/omp-root")
+        self.assertEqual(
+            resolved["agent_dir"], self.home / "abs" / "omp-root" / "agent"
+        )
+
+    def test_dotdot_config_dir_escapes_home(self) -> None:
+        # omp 18.19.0 path.join normalizes ".." against home; not rejected.
+        resolved = self.resolve(PI_CONFIG_DIR="../escaped")
+        self.assertEqual(
+            resolved["agent_dir"], self.home.parent / "escaped" / "agent"
+        )
 
     def test_named_profile_ignores_variable(self) -> None:
         resolved = self.resolve(
@@ -100,12 +122,21 @@ class OmpAgentDirResolverTests(unittest.TestCase):
             PI_CODING_AGENT_DIR=str(self.home / ".omp" / "agent")
         )
         self.assertEqual(resolved["agent_dir"], self.home / ".omp" / "agent")
+        self.assertEqual(resolved["override"], False)
 
-    def test_invalid_config_dir_override_rejected(self) -> None:
+    def test_derived_default_comparison_uses_pi_profile_default(self) -> None:
+        # omp compares the raw value against j$a(Oz(PI_PROFILE)); "default"
+        # maps to the plain root, so the plain default path counts as unset.
+        resolved = self.resolve(
+            PI_CODING_AGENT_DIR=str(self.home / ".omp" / "agent"),
+            PI_PROFILE="default",
+        )
+        self.assertEqual(resolved["agent_dir"], self.home / ".omp" / "agent")
+        self.assertEqual(resolved["override"], False)
+
+    def test_invalid_profile_name_rejected(self) -> None:
         with self.assertRaises(ContractError):
-            self.resolve(PI_CONFIG_DIR="/absolute/override")
-        with self.assertRaises(ContractError):
-            self.resolve(PI_CONFIG_DIR="../escape")
+            self.resolve(OMP_PROFILE="Bad_Name!")
 
 
 class BuildOperationsTargetTests(unittest.TestCase):
@@ -199,6 +230,53 @@ class BuildOperationsTargetTests(unittest.TestCase):
             self.omp_targets(ops),
             [(self.home / "custom-omp" / "agent" / "AGENTS.md").resolve()],
         )
+
+    def test_absolute_config_dir_root_detected_under_home(self) -> None:
+        joined = self.home / "abs" / "omp-root"
+        joined.mkdir(parents=True)
+        patched = scrubbed_environ(
+            HOME=str(self.home),
+            USERPROFILE=str(self.home),
+            CODEX_HOME=str(self.codex_home),
+            PI_CONFIG_DIR="/abs/omp-root",
+        )
+        with mock.patch.dict(os.environ, patched, clear=True):
+            self.assertEqual(onboard.detect_omp_root(), joined.resolve())
+
+    def omp_operation(self, ops: list[onboard.Operation]) -> onboard.Operation:
+        (operation,) = [op for op in ops if op.label == "omp global AGENTS.md"]
+        return operation
+
+    def test_missing_variable_dir_created_and_written_on_apply(self) -> None:
+        agent_dir = self.home / "fresh-agent"
+        self.assertFalse(agent_dir.exists())
+        ops = self.operations(PI_CODING_AGENT_DIR=str(agent_dir))
+        operation = self.omp_operation(ops)
+        action = onboard.copy_operation(operation)
+        self.assertEqual(action, "copied")
+        written = agent_dir / "AGENTS.md"
+        self.assertTrue(written.is_file())
+        self.assertEqual(written.read_bytes(), Path(operation.source).read_bytes())
+
+    def test_tilde_value_creates_literal_tilde_directory_under_cwd(self) -> None:
+        # omp 18.19.0 never expands "~": "~/tilde-agent" resolves to a
+        # directory literally named "~" under the process current directory,
+        # and the write creates it there -- never under the user home.
+        cwd = Path(self.temp_dir.name).resolve() / "cwd"
+        cwd.mkdir()
+        previous = os.getcwd()
+        try:
+            os.chdir(cwd)
+            ops = self.operations(PI_CODING_AGENT_DIR="~/tilde-agent")
+            operation = self.omp_operation(ops)
+            self.assertEqual(
+                operation.target, cwd / "~" / "tilde-agent" / "AGENTS.md"
+            )
+            onboard.copy_operation(operation)
+        finally:
+            os.chdir(previous)
+        self.assertTrue((cwd / "~" / "tilde-agent" / "AGENTS.md").is_file())
+        self.assertFalse((self.home / "tilde-agent").exists())
 
 
 class CheckReportTests(unittest.TestCase):

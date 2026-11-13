@@ -2,7 +2,7 @@
 
 ## Bundled Templates
 
-- `templates/agents/AGENTS.global.md` -> global Codex `AGENTS.md`, and the OMP global `AGENTS.md`: `$PI_CODING_AGENT_DIR/AGENTS.md` when set (created when missing), otherwise `~/.omp/agent/AGENTS.md` when `~/.omp` already exists (`PI_CONFIG_DIR` replaces the `.omp` part)
+- `templates/agents/AGENTS.global.md` -> global Codex `AGENTS.md`, and the OMP global `AGENTS.md`: `$PI_CODING_AGENT_DIR/AGENTS.md` when the variable is non-empty (relative values and a leading `~` resolve against the process current directory, so `~/x` targets a folder literally named `~` there; created when missing), `profiles/<name>/agent/AGENTS.md` under a named profile (variable ignored), otherwise `~/.omp/agent/AGENTS.md` when `~/.omp` already exists (`PI_CONFIG_DIR` names the home subdirectory replacing `.omp`; an absolute value is joined under home too)
 - `templates/agents/AGENTS.project.md` → each selected project root `AGENTS.md`
 - `templates/project/.gitignore` → each selected project root `.gitignore`
 - `templates/skills/**` → required global bundled Skills
@@ -74,7 +74,7 @@ Important arguments:
 - `--global-skills-dir <path>`
 - `--no-mcp`, `--dry-run`, `--yes`, `--no-color`
 
-The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Normal onboarding keeps the Codex global AGENTS default shown under [Paths](#paths) unless `--global-agents-path` / `-GlobalAgentsPath` explicitly overrides it. The OMP target is `$PI_CODING_AGENT_DIR/AGENTS.md` when `PI_CODING_AGENT_DIR` is set (the directory is created when missing); otherwise `init` / `reset` also backup-then-overwrite the same template to `~/.omp/agent/AGENTS.md` (POSIX `~/.omp`, Windows `%USERPROFILE%\.omp`; `PI_CONFIG_DIR` replaces the `.omp` part) only when the user-home `.omp` directory already exists — missing `.omp` is skipped and Onboard does not create it. `--global-agents-path` overrides only the Codex target. Project-only mode never writes global AGENTS.
+The Agent platform selects the CLI and MCP adapter; it does not select the global AGENTS target. Normal onboarding keeps the Codex global AGENTS default shown under [Paths](#paths) unless `--global-agents-path` / `-GlobalAgentsPath` explicitly overrides it. The OMP target is `$PI_CODING_AGENT_DIR/AGENTS.md` when `PI_CODING_AGENT_DIR` is non-empty — relative values, including a leading `~`, resolve against the process current directory (`~/x` means a folder literally named `~` there), and the directory is created when missing. A named profile (`OMP_PROFILE` before `PI_PROFILE`) targets `profiles/<name>/agent/AGENTS.md` and ignores the variable. Otherwise `init` / `reset` also backup-then-overwrite the same template to `~/.omp/agent/AGENTS.md` (POSIX `~/.omp`, Windows `%USERPROFILE%\.omp`; `PI_CONFIG_DIR` names the home subdirectory replacing `.omp`, and an absolute value is joined under home too, never used as an absolute path) only when the user-home `.omp` directory already exists — missing `.omp` is skipped and Onboard does not create it. `--global-agents-path` overrides only the Codex target. Project-only mode never writes global AGENTS.
 
 ### PowerShell
 
@@ -777,12 +777,13 @@ Global AGENTS:
 
 Additional OMP global AGENTS:
 
-- `$PI_CODING_AGENT_DIR/AGENTS.md` when `PI_CODING_AGENT_DIR` is set; the directory is created when missing
-- Otherwise, only when the user-home `.omp` directory already exists (`PI_CONFIG_DIR` replaces the `.omp` part):
+- `$PI_CODING_AGENT_DIR/AGENTS.md` when `PI_CODING_AGENT_DIR` is non-empty; relative values, including a leading `~`, resolve against the process current directory (`~/x` means a folder literally named `~` there); the directory is created when missing
+- Under a named profile (`OMP_PROFILE` before `PI_PROFILE`): `profiles/<name>/agent/AGENTS.md` under the config root; the variable is ignored
+- Otherwise, only when the user-home `.omp` directory already exists (`PI_CONFIG_DIR` names the home subdirectory replacing `.omp`; an absolute value is joined under home too):
   - POSIX: `~/.omp/agent/AGENTS.md`
   - Windows: `%USERPROFILE%\.omp\agent\AGENTS.md`
 
-Existing OMP `AGENTS.md` is backed up then overwritten. Without `PI_CODING_AGENT_DIR`, a missing `.omp` is skipped and Onboard does not create it. `--global-agents-path` does not disable this extra write. If `--global-agents-path` or a project `AGENTS.md` resolves to the same file as the OMP or Codex global target, `init` / `reset` keep a single file write and a single backup.
+Existing OMP `AGENTS.md` is backed up then overwritten. Without `PI_CODING_AGENT_DIR` or a named profile, a missing `.omp` is skipped and Onboard does not create it. `--global-agents-path` does not disable this extra write. If `--global-agents-path` or a project `AGENTS.md` resolves to the same file as the OMP or Codex global target, `init` / `reset` keep a single file write and a single backup.
 
 
 

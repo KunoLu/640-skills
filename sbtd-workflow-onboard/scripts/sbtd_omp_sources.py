@@ -23,7 +23,13 @@ from sbtd_project import (
     validate_json_compatible,
 )
 
-__all__ = ["active_omp_agent_dir", "active_omp_paths", "analyze_omp_sources", "discover_omp_sources"]
+__all__ = [
+    "active_omp_agent_dir",
+    "active_omp_paths",
+    "analyze_omp_sources",
+    "discover_omp_sources",
+    "omp_config_root",
+]
 
 _PROFILE_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _RESERVED_PROFILE = re.compile(
@@ -35,12 +41,8 @@ def _fail(code: str, message: str) -> NoReturn:
     raise contracts.ContractError(code, message)
 
 
-def _profile(environ: Mapping[str, str]) -> str | None:
-    raw = (
-        environ.get("OMP_PROFILE")
-        if "OMP_PROFILE" in environ
-        else environ.get("PI_PROFILE")
-    )
+def _checked_profile(raw: str | None) -> str | None:
+    """Validate one profile name (OMP ``Oz``); None for empty/'default'."""
     value = (raw or "").strip()
     if not value or value == "default":
         return None
@@ -54,21 +56,34 @@ def _profile(environ: Mapping[str, str]) -> str | None:
     return value
 
 
+def _profile(environ: Mapping[str, str]) -> str | None:
+    raw = (
+        environ.get("OMP_PROFILE")
+        if "OMP_PROFILE" in environ
+        else environ.get("PI_PROFILE")
+    )
+    return _checked_profile(raw)
+
+
+def omp_config_root(home: Path, environ: Mapping[str, str]) -> Path:
+    """Mirror Node ``path.join(os.homedir(), PI_CONFIG_DIR || ".omp")``.
+
+    OMP 18.19.0 (dirs.ts ``DA``/``MX``) validates nothing here: every value
+    is appended to ``home``, so a leading separator does not discard it
+    (unlike Python ``os.path.join``), and ``..`` segments normalize against
+    ``home`` and may escape it. An empty value falls back to ``.omp``.
+    """
+    config_name = environ.get("PI_CONFIG_DIR") or ".omp"
+    return Path(os.path.normpath(str(home) + "/" + config_name))
+
+
 def _omp_config_root(
     *, home: Path, environ: Mapping[str, str]
 ) -> tuple[Path, str | None]:
-    """Validate the home and config-dir override; return (config root, profile)."""
+    """Validate the home; return (config root, active profile)."""
     if not home.is_absolute():
         _fail("invalid-argument", "the user home must be absolute")
-    profile = _profile(environ)
-    config_name = environ.get("PI_CONFIG_DIR") or ".omp"
-    if (
-        not config_name
-        or Path(config_name).is_absolute()
-        or ".." in Path(config_name).parts
-    ):
-        _fail("invalid-config", "the OMP config directory override is invalid")
-    return home / config_name, profile
+    return omp_config_root(home, environ), _profile(environ)
 
 
 def active_omp_paths(
@@ -95,6 +110,22 @@ def active_omp_paths(
     }
 
 
+def _derived_default_agent(config_root: Path, environ: Mapping[str, str]) -> Path:
+    """The agent directory OMP compares PI_CODING_AGENT_DIR against.
+
+    Mirrors ``kHt``: only PI_PROFILE feeds the comparison (an invalid name
+    is swallowed to no-profile), because the comparison exists to detect a
+    variable merely restating the directory OMP would derive anyway.
+    """
+    try:
+        name = _checked_profile(environ.get("PI_PROFILE"))
+    except contracts.ContractError:
+        name = None
+    if name is None:
+        return config_root / "agent"
+    return config_root / "profiles" / name / "agent"
+
+
 def active_omp_agent_dir(
     *, home: Path, environ: Mapping[str, str]
 ) -> dict[str, Path | str | bool | None]:
@@ -105,9 +136,11 @@ def active_omp_agent_dir(
     against the process current directory (Node ``path.resolve``), so a
     leading ``~`` is never expanded. A named profile (OMP_PROFILE before
     PI_PROFILE) selects ``profiles/<name>/agent`` and ignores the variable;
-    a variable naming the derived default agent directory counts as unset;
-    an unset or empty variable falls back to ``<config root>/agent``, with
-    PI_CONFIG_DIR moving the config root. No directory is created.
+    a variable string equal to the derived default agent directory counts as
+    unset; only an empty (unset) variable falls back to
+    ``<config root>/agent`` -- a whitespace-only value is a real directory
+    name to OMP. PI_CONFIG_DIR moves the config root per ``omp_config_root``.
+    No directory is created.
     """
     config_root, profile = _omp_config_root(home=home, environ=environ)
     if profile is not None:
@@ -119,16 +152,7 @@ def active_omp_agent_dir(
         }
     default_agent = config_root / "agent"
     override = environ.get("PI_CODING_AGENT_DIR", "")
-    if not override.strip():
-        return {
-            "config_root": config_root,
-            "agent_dir": default_agent,
-            "profile": None,
-            "override": False,
-        }
-    resolved = Path(os.path.abspath(override))
-    derived = config_root / "profiles" / (environ.get("PI_PROFILE") or "") / "agent"
-    if resolved == derived:
+    if not override or override == str(_derived_default_agent(config_root, environ)):
         return {
             "config_root": config_root,
             "agent_dir": default_agent,
@@ -137,7 +161,7 @@ def active_omp_agent_dir(
         }
     return {
         "config_root": config_root,
-        "agent_dir": resolved,
+        "agent_dir": Path(os.path.abspath(override)),
         "profile": None,
         "override": True,
     }

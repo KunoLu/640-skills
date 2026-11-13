@@ -531,18 +531,14 @@ def user_home() -> Path:
 def detect_omp_root() -> Path | None:
     """Probe the default OMP config root (PI_CONFIG_DIR aware) for existence.
 
-    This is a soft probe: an invalid PI_CONFIG_DIR override yields None here,
-    while the target resolver (omp_agents_target) rejects it loudly. An
-    explicit PI_CODING_AGENT_DIR or named profile does not move this root.
+    The root mirrors Node ``path.join(home, PI_CONFIG_DIR or ".omp")``: an
+    absolute-looking value stays under home and ``..`` may escape it, exactly
+    as OMP 18.19.0 resolves it. An explicit PI_CODING_AGENT_DIR or named
+    profile does not move this root.
     """
-    config_name = os.environ.get("PI_CONFIG_DIR") or ".omp"
-    if (
-        not config_name
-        or Path(config_name).is_absolute()
-        or ".." in Path(config_name).parts
-    ):
-        return None
-    root = user_home() / config_name
+    from sbtd_omp_sources import omp_config_root
+
+    root = omp_config_root(user_home(), os.environ)
     try:
         resolved = root.resolve()
     except OSError:

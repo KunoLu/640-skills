@@ -157,12 +157,72 @@ completed_at: null
 
 - Status: ready（本机视角；最终发布以 CI 全量与独立 review 为准）
 - Production path and affected users / systems: 使用本仓库 sbtd-workflow-onboard 的用户机器上的全局配置写入面——init/reset 的 omp 全局 AGENTS.md 写目标、check 报告、迁移计划 omp-global 路由、graft 部署计划的隐含模板目标与 shared-root 记录。受影响的是设置了 PI_CODING_AGENT_DIR、PI_CONFIG_DIR 或命名 profile 的 omp 18.19.0 用户。
-- Failure modes and safeguards: 写错位置导致 omp 读不到规则——resolver 与 omp 18.19.0 打包源码逐项对齐，并用真实 omp 佐证读取侧一致；变量目录不存在——apply 既有 mkdir parents 行为创建，新测试覆盖计划层；无显式选择时保持「默认根缺失则跳过且不创建」并由测试锁定；迁移 routing 审批在变量设置时接受新目标、拒绝旧默认路径；`~` 不展开与 omp 一致，避免写入 omp 不会读的位置；非法 profile/PI_CONFIG_DIR 沿用 ContractError 失败关闭。
+- Failure modes and safeguards: 写错位置导致 omp 读不到规则——resolver 与 omp 18.19.0 打包源码逐项对齐，并用真实 omp 佐证读取侧一致；变量目录不存在——apply 既有 mkdir parents 行为创建，新测试覆盖计划层与 apply 层（在变量指定位置创建目录并写入）；无显式选择时保持「默认根缺失则跳过且不创建」并由测试锁定；迁移 routing 审批在变量设置时接受新目标、拒绝旧默认路径；`~` 不展开与 omp 一致，避免写入 omp 不会读的位置；非法 profile 沿用 ContractError 失败关闭；PI_CONFIG_DIR 无非法值——按 omp 的 path.join 语义拼到 home 下（绝对值同样拼入、`..` 段可越出 home），收尾轮实测对齐。
 - Capacity / backpressure / limits: not-applicable（本地 CLI 文件写入，无队列与容量概念）。
 - Observability / alerts / runbook: not-applicable；check --json 的 ompRoot/ompGlobalAgents 回显解析结果。
 - Rollout / migration / rollback / cleanup: 本任务不 commit、不 push、不开 PR；合入后以 CI 全量判定；回滚为还原分支改动；omp 全局 AGENTS.md 的备份后覆盖语义不变。
-- Required validation and result: 聚焦套件 97/73/44/150/19 全过，新增 23 过，全量三分片 2513 例中 1 个失败归因为本机缺 tzdata 包（与本改动无关）；omp 18.19.0 真跑读取侧佐证通过；索引逐字节一致。
+- Required validation and result: r2 聚焦套件 97/73/44/150/19 全过，新增 23 过，全量三分片 2513 例中 1 个失败归因为本机缺 tzdata 包（与本改动无关）；omp 18.19.0 真跑读取侧佐证通过；索引逐字节一致。r2b 收尾轮：受影响套件 30+42+97+32+44+150+19 全过（明细见「收尾轮（r2b）复核证据」），真实 omp 18.19.0 四点复核与 AGENTS.md 捕获证据通过。
 - Optional checks, accountable owner acceptance, and residual risk: 未跑 macOS/Windows 平台套件（由 CI 覆盖）；`~` 值下 MCP 侧 resolver 仍 expanduser（与 omp 不一致，记为观察另议）；config.yml/lsp.yml 路径仍写死默认根（观察，另议）。剩余风险待 640 review 确认。
+
+## 收尾轮（r2b）复核证据
+
+2026-11-13 收尾轮，复核用真实 omp 18.19.0（`omp --version` 输出 omp/18.19.0）。方法：临时目录 + 临时 HOME（XDG_DATA_HOME/XDG_STATE_HOME/XDG_CACHE_HOME 同样指向临时目录），探针沿用 r2 方式——`omp --mode rpc --no-ui --no-extensions --no-rules`，stdin 发 `negotiate_protocol`（protocolVersion 2）与 `get_state`；坏 YAML config.yml 放候选 agent 目录，从 stderr 的「Settings config is invalid: <路径>」行确认 omp 实际读取的 agent 目录。除第 4 点的回环捕获探针外不发任何模型请求；回环探针的 provider 指向本机临时端口，请求不出本机。以下 <临时home>、<临时cwd>、<临时abs> 均为临时路径占位。
+
+### 第 1 点：命名 profile 忽略 PI_CODING_AGENT_DIR（dirs.ts:366）
+
+真实命令（要点）：`HOME=<临时home> OMP_PROFILE=work PI_CODING_AGENT_DIR=<临时home>/agent-x omp --mode rpc --no-ui --no-extensions --no-rules`，cwd 为临时目录；坏 config.yml 同时放 <临时home>/.omp/profiles/work/agent/ 与 <临时home>/agent-x/。
+
+真实输出：`error: Settings config is invalid: <临时home>/.omp/profiles/work/agent/config.yml (moved to <临时home>/.omp/profiles/work/agent/config.yml.broken-<时间戳>-<随机后缀>): SyntaxError: YAML Parse error: Unexpected token`；进程退出后 <临时home>/agent-x 始终不存在。对照组（坏 config 只放 agent-x，其余相同）：无任何配置报错，omp 自建了 <临时home>/.omp/profiles/work/agent——变量被完全忽略。结论：与第 1 点一致。
+
+r1 关于 profile 的证据形态（Reviewy 条件 1）：r1 未做 profile 的运行时探针，其结论来自打包源码阅读（dist/cli.js 中 settings 构造器的 `profile ? undefined : agentDirOverride` 分支，对应 dirs.ts:366），记录在本文件「实测发现」首节；profile 语义的首个运行时证据由本轮上面的命令补齐。
+
+### 第 2 点：空字符串等同未设（dirs.ts:367）
+
+真实命令：`HOME=<临时home> PI_CODING_AGENT_DIR= omp --mode rpc --no-ui --no-extensions --no-rules`（变量显式置空串），坏 config.yml 放 <临时home>/.omp/agent/。
+
+真实输出：`error: Settings config is invalid: <临时home>/.omp/agent/config.yml (moved to ...): SyntaxError: YAML Parse error: Unexpected token`——回退默认根。结论：与第 2 点一致。
+
+附带发现一处不符并已修正：omp 只对空串回退，纯空白值 `" "` 被当作真实目录名按 cwd 解析（同法实测，报错路径 `<临时cwd>/ /config.yml`）；r2 实现用 strip() 判空会把空白值当未设。本轮 active_omp_agent_dir 改为只对空串回退，新增 test_whitespace_only_variable_resolves_against_process_cwd 锁定。
+
+### 第 3 点：只做 path.resolve()，不展开 `~`
+
+真实命令：`cd <临时cwd> && HOME=<临时home> PI_CODING_AGENT_DIR='~/x' omp --mode rpc --no-ui --no-extensions --no-rules`，坏 config.yml 放 <临时cwd>/~/x/。
+
+真实输出：`error: Settings config is invalid: <临时cwd>/~/x/config.yml (moved to ...): SyntaxError: YAML Parse error: Unexpected token`；<临时home>/x 未创建。结论：与第 3 点一致——`~/x` 实际是「当前目录/~/x」。附带观察：omp 仍会在临时 home 下自建 .omp（与本任务写入目标无关，agentDir 不受影响）。写入侧一致性由新测试锁定：test_tilde_value_creates_literal_tilde_directory_under_cwd 证明本仓库会在进程当前目录创建名为 `~` 的目录并写入 AGENTS.md（Reviewy 条件 3）。
+
+### 第 4 点：PI_CONFIG_DIR 按 path.join(home, 值) 拼接（dirs.ts:117、:333）
+
+- 相对名：`HOME=<临时home> PI_CONFIG_DIR=customdir omp --mode rpc ...`，坏 config.yml 放 <临时home>/customdir/agent/。真实输出：`error: Settings config is invalid: <临时home>/customdir/agent/config.yml (moved to ...): SyntaxError: ...`；<临时home>/.omp 未创建。一致。
+- 绝对值：`PI_CONFIG_DIR=<临时abs>`（绝对路径）→ 真实输出报错路径为 `<临时home>/<临时abs 去掉前导分隔符>/agent/config.yml`——绝对值被拼到 home 下，不作绝对路径使用；<临时abs> 本身未创建。r2 实现对绝对值抛 ContractError，与实测不符，本轮改为跟随 path.join 语义。
+- `..` 值：`PI_CONFIG_DIR=../escaped` → 报错路径为 <临时home> 上级的 escaped/agent/config.yml——omp 不校验、可越出 home。r2 实现同样抛 ContractError，本轮一并改为跟随。
+- AGENTS.md 读取证据（Reviewy 条件 4 的保留依据）：坏 config 只证明 settings 的 agentDir；AGENTS.md 由「Load AGENTS.md from .omp/ directories」加载器读 agentDir/AGENTS.md（打包源码：`join(wn(), "AGENTS.md")`，wn() 即 settings.agentDir），且只在组装系统提示时读取——启动与 get_state 阶段 FIFO 读探针 15 秒无读取。直接证据：夹具 provider 指向本机回环捕获服务（127.0.0.1 临时端口），PI_CONFIG_DIR=customdir 时在 <临时home>/customdir/agent/AGENTS.md 放标记内容、<临时home>/.omp/agent/AGENTS.md 放诱饵内容，发一条 prompt 后捕获到 5 次（宿主重试）发往回环地址的请求，系统提示含 customdir 标记、不含诱饵；不设 PI_CONFIG_DIR 的对照组含默认根标记。结论：omp 读取 AGENTS.md 确实使用 PI_CONFIG_DIR，支持保留，按本点语义实现（home 下目录名，path.join 拼接）。
+
+### 实测驱动的代码修正（相对 r2 已提交内容）
+
+- sbtd_omp_sources.py：`_omp_config_root` 不再拒绝绝对值与 `..`；新 `omp_config_root` 按 Node `path.join(home, 值)` 语义拼接（前导分隔符不丢弃 home，`..` 向 home 规范化可越出），`active_omp_paths` 与 `active_omp_agent_dir` 共用；onboard.py `detect_omp_root` 走同一拼接。
+- `active_omp_agent_dir`：只对空串回退（空白值按 cwd 解析，与 omp truthiness 一致）；「变量值等于推导默认目录按未设」改为 omp 的原始字符串比较（比较对象 j$a(Oz(PI_PROFILE))，PI_PROFILE=default 时推导目录为 <根>/agent）。
+- 影响面：mcp 侧 resolver 共用 config 根规则，绝对值与 `..` 同样从 ContractError 改为跟随宿主；tests/test_sbtd_cleanup_targets.py 对应断言已更新（test_omp_config_dir_override_follows_omp_join_semantics），非法 profile 仍 ContractError 失败关闭。
+
+### Reviewy 四条件落实位置
+
+1. r1 关于 profile 的真实命令与结果：r1 无运行时命令（证据为打包源码阅读），如实写明见「第 1 点」末段；首个运行时证据为本轮 p1/p1c 探针（命令与输出同上）。
+2. 变量目录不存在时创建目录并写入：tests/test_sbtd_omp_agents_target.py `BuildOperationsTargetTests.test_missing_variable_dir_created_and_written_on_apply`——apply 层 copy_operation 在变量指定位置创建目录并写入模板全文，断言文件内容与模板一致。
+3. `~` 不展开、会在当前目录建名为 `~` 的文件夹：文档写在 README.md、README.zh.md、sbtd-workflow-onboard/SKILL.md、sbtd-workflow-onboard/REFERENCE.md（模板清单、init 段落、Paths 表）、docs/assets/onboard-skill-init.md、docs/assets/onboard-skill-reset.md；测试为 test_tilde_variable_is_not_expanded（解析层）与 test_tilde_value_creates_literal_tilde_directory_under_cwd（写入层）。
+4. PI_CONFIG_DIR：保留，依据为「第 4 点」的回环捕获证据；语义按 home 下目录名 path.join 拼接实现（绝对值拼入 home 下、`..` 可越出），测试 test_absolute_config_dir_is_joined_under_home、test_dotdot_config_dir_escapes_home、test_absolute_config_dir_root_detected_under_home 与 cleanup 套件 test_omp_config_dir_override_follows_omp_join_semantics。
+
+### r2b 验证数字
+
+每条命令前台单条执行，单条不超过 600 秒，仓库根 `python3 -B -m unittest`：
+
+- `python3 -B -m unittest tests.test_sbtd_omp_agents_target` → Ran 30 tests，OK（23 → 30：新增空白值、绝对值拼接、`..` 越出、PI_PROFILE=default 推导比较、apply 层创建写入、字面 `~` 目录创建、detect_omp_root 绝对值拼接共 7 个；删去与实测不符的 test_invalid_config_dir_override_rejected）。
+- `python3 -B -m unittest tests.test_sbtd_cleanup_targets` → Ran 42 tests，OK。
+- `PYTHONPATH=sbtd-workflow-onboard/scripts python3 -B -m unittest tests.test_sbtd_codex_deployment tests.test_onboard_multi_projects tests.test_sbtd_omp_deployment tests.test_sbtd_migration_cleanup_drift` → 首跑 FAILED（errors=3，管道只留尾部、失败明细未留存），随后两次完整重跑均 Ran 97 tests，OK。r2 在同一套件也记录过一次 failures=2 的同类偶发；两次重跑全过，按偶发处理并如实留痕。
+- `python3 -B -m unittest tests.test_sbtd_followup_batch tests.test_sbtd_approved_agents_deployment` → Ran 32 tests，OK。
+- `python3 -B -m unittest tests.test_sbtd_omp_wiring tests.test_sbtd_omp_reconciliation` → Ran 44 tests，OK。
+- `python3 -B -m unittest tests.test_sbtd_upgrade_hosts` → Ran 150 tests，OK（skipped=21，环境门控跳过）。
+- `python3 -B -m unittest tests.test_p1_15_host_mode_smoke` → Ran 19 tests，OK（skipped=5，环境门控跳过）。
+- 索引：frontmatter 未动（本轮不改状态），ai/tasks/index.md 本任务行仍与 r2 一致，无需重生成；双语 README 与 CHANGELOG 的中英条目已逐点对齐（变量、profile、空串、空白值、`~`、PI_CONFIG_DIR 拼接语义均双语一致）。
+- 全量分片：r2 已跑（2513 例，1 个环境性失败）；本轮 diff 集中在 resolver 与上述套件覆盖面内，全量以 CI 为准。
 
 ## 已决定的问题
 
@@ -171,7 +231,7 @@ completed_at: null
 3. 变量值为 `~` 开头路径的解析。按推荐实施：跟随 omp 实际行为，不展开 `~`，按普通相对路径用 path.resolve 同样的规则处理（相对进程当前目录）；写的是 omp 要读的文件，位置必须与 omp 一致。mcp 侧既有 expanduser 行为记为单独观察，不在本任务改。
 4. PI_CONFIG_DIR 与 config.yml/lsp.yml 范围。按推荐实施：PI_CONFIG_DIR 随同一 resolver 一并支持（默认目录为 home/(PI_CONFIG_DIR 或 .omp)/agent）；sbtd_language_tooling.py 的 config.yml/lsp.yml 不纳入本任务，记为观察（仍写死默认根 ~/.omp/agent）。
 
-2026-11-13 群内全自动模式投票进行中，票数在收尾轮写入。
+2026-11-13 16:59 群内投票 5:0 通过（概述），Lord 记录。投票人：Lord、OMP、Reviewy、CodeX、Researchy。
 
 ## 模型记录
 
@@ -181,14 +241,16 @@ completed_at: null
 | 轮次 | 用途 | 模型 | 回复次数 | 工具调用次数 | 工具报错次数 | 结果 |
 |---|---|---|---|---|---|---|
 | r1 | 写任务文件 | k3:max | 32 | 42 | 0 | 提交 33400c2 |
-| r2 | 实施：代码、23 个新测试、7 处文档、双语 CHANGELOG、验证与 omp 真跑佐证 | k3:max | 178 | 193 | 0 | 实施完成待审；14 个文件改动，未提交（计数截至 20:31:22，见会话记录） |
+| r2 | 实施：代码、23 个新测试、7 处文档、双语 CHANGELOG、验证与 omp 真跑佐证 | k3:max | 206 | 222 | 5 | 已提交 a15955d（14 个文件，+553/-94）；分段计数见会话记录 |
+| r2b | 收尾：真实 omp 四点复核、实测驱动的解析修正、7 个新测试、文档与双语 CHANGELOG 对齐、Reviewy 条件落实 | k3:max | 92 | 96 | 0 | 收尾完成待审，未提交（计数截至北京时间 21:29:37，见会话记录） |
 
 ## 会话记录
 
 每轮结束后补记该轮会话 id 与起止时间。
 
 - r1：会话 01a1d3f8-e239-76bb-8f00-a444a3a85f80，北京时间 16:14:25–16:23:51。
-- r2：会话 01a1d41f-3f5f-73d5-82bc-4ba4f8d41904，开始北京时间 16:56:20；19:54:51 因整机暂停触发看门狗上限被结束，20:11 续跑并续写同一会话文件；模型行的回复与工具计数取自该会话文件截至 20:31:22 的最后一条记录，回复 178、工具调用 193、报错 0。
+- r2：会话 01a1d41f-3f5f-73d5-82bc-4ba4f8d41904，北京时间 16:56:20 开始；19:54:51 因整机暂停后触发看门狗「30 分钟无写入」上限被结束；20:10:38 用同一会话续跑，20:43:46 正常结束。整个会话文件（两段合计）：回复 206、工具调用 222、工具报错 5；其中 19:54:51 之前：回复 116、工具调用 130、报错 5；续跑段：回复 90、工具调用 92、报错 0。
+- r2b：会话 01a1d4f0-57c3-762f-afa6-b0095a1a224c，北京时间 20:44:43 开始。模型行计数取自该会话文件截至 21:29:37 的记录：回复 92、工具调用 96、报错 0（计数之后本文件收尾落盘还会产生少量调用，未计入）。
 
 ## 状态事件
 

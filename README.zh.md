@@ -68,7 +68,7 @@ Onboard 的契约、状态与迁移校验需要 **Python 3.10+** 和声明依赖
 python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt
 ```
 
-> **先看清写入范围。** 正常 `init`/`reset` 默认写入 Codex 全局规则；omp 全局规则文件的目标：设了 `PI_CODING_AGENT_DIR` 就备份并覆盖 `<变量目录>/AGENTS.md`（目录缺失时创建），没设则回退 `~/.omp/agent/AGENTS.md` 且仅当 `~/.omp` 已存在才写入（`PI_CONFIG_DIR` 可替换默认路径中的 `.omp` 部分）。选择 platform 不等于选择全局 AGENTS 目标；`--global-agents-path` 只改变 Codex 目标。不希望全局写入时，使用 project-only 模式。
+> **先看清写入范围。** 正常 `init`/`reset` 默认写入 Codex 全局规则；omp 全局规则文件的目标遵守 omp 18.19.0 自身的解析：`PI_CODING_AGENT_DIR` 非空时备份并覆盖 `<变量目录>/AGENTS.md`（相对值——包括开头的 `~`——按进程当前目录解析，`~/x` 指当前目录下名为 `~` 的目录；目录缺失时创建）；命名 profile（`OMP_PROFILE` 优先于 `PI_PROFILE`）生效时目标为 `profiles/<名>/agent/AGENTS.md` 并忽略该变量；否则回退 `~/.omp/agent/AGENTS.md` 且仅当 `~/.omp` 已存在才写入，`PI_CONFIG_DIR` 指定替换 `.omp` 的 home 下子目录名（绝对值也同样拼到 home 下，不作为绝对路径使用）。选择 platform 不等于选择全局 AGENTS 目标；`--global-agents-path` 只改变 Codex 目标。不希望全局写入时，使用 project-only 模式。
 
 [Bootstrap 说明](sbtd-workflow-onboard/REFERENCE.md#official-skills-cli-bootstrap) · [初始化契约](sbtd-workflow-onboard/REFERENCE.md#two-execution-modes) · [路径解析](sbtd-workflow-onboard/REFERENCE.md#paths)
 

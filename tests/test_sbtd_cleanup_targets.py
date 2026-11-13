@@ -566,16 +566,39 @@ class McpTargetTests(unittest.TestCase):
             ]
             self.assertEqual(len(omp), 1)
 
-    def test_invalid_omp_resolver_input_fails_closed(self) -> None:
+    def test_omp_config_dir_override_follows_omp_join_semantics(self) -> None:
+        # omp 18.19.0 path.join(home, PI_CONFIG_DIR): absolute-looking values
+        # stay under home; ".." normalizes and may escape it. Neither is
+        # rejected, matching the host.
+        with tempfile.TemporaryDirectory() as directory:
+            home = self._home(Path(directory).resolve())
+            payload = json.dumps({"mcpServers": {"gitnexus": {"command": "gitnexus"}}})
+            joined = home / "absolute" / "path" / "agent"
+            joined.mkdir(parents=True)
+            (joined / "mcp.json").write_text(payload)
+            escaped = home.parent / "escape" / "agent"
+            escaped.mkdir(parents=True)
+            (escaped / "mcp.json").write_text(payload)
+            absolute = detect_mcp_targets(
+                environ={"HOME": str(home), "PI_CONFIG_DIR": "/absolute/path"}
+            )
+            self.assertIn(
+                str(joined / "mcp.json"),
+                [item["path"] for item in absolute["candidates"]],
+            )
+            dotdot = detect_mcp_targets(
+                environ={"HOME": str(home), "PI_CONFIG_DIR": "../escape"}
+            )
+            self.assertIn(
+                str(escaped / "mcp.json"),
+                [item["path"] for item in dotdot["candidates"]],
+            )
+
+    def test_invalid_omp_profile_fails_closed(self) -> None:
         from onboard_contracts import ContractError
 
         with tempfile.TemporaryDirectory() as directory:
             home = self._custom_omp_home(Path(directory).resolve())
-            for override in ("/absolute/path", "../escape"):
-                with self.assertRaises(ContractError):
-                    detect_mcp_targets(
-                        environ={"HOME": str(home), "PI_CONFIG_DIR": override}
-                    )
             with self.assertRaises(ContractError):
                 detect_mcp_targets(
                     environ={"HOME": str(home), "OMP_PROFILE": "Bad_Name!"}

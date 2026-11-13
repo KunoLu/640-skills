@@ -91,7 +91,7 @@ flowchart TD
 | Agent CLI / npm / Graft | 缺失 Agent 按既有授权修复；Graft另行展示计划并确认 | 已验证则不重装，不自动升级 |
 | 19 个 required external Skills | 从 stable 事务安装；官方 Ponytail plugin 启用时阻断 | **强制覆盖** 为当前 stable 快照 |
 | bundled Skills | 复制 | **无备份覆盖** 为当前 Onboard 模板 |
-| 全局 `AGENTS.md` | 复制 Codex 目标；omp 侧设了 `PI_CODING_AGENT_DIR` 就写 `<变量目录>/AGENTS.md`（目录缺失时创建），未设则在 `~/.omp` 已存在时另写 `~/.omp/agent/AGENTS.md`（`PI_CONFIG_DIR` 可替换 `.omp` 部分） | **备份后覆盖**；未设变量时不创建缺失的 `~/.omp` |
+| 全局 `AGENTS.md` | 复制 Codex 目标；omp 侧 `PI_CODING_AGENT_DIR` 非空时写 `<变量目录>/AGENTS.md`（相对值——含开头的 `~`——按进程当前目录解析，`~/x` 会在当前目录建名为 `~` 的目录；目录缺失时创建）；命名 profile（`OMP_PROFILE` 优先于 `PI_PROFILE`）生效时写 `profiles/<名>/agent/AGENTS.md` 并忽略该变量；否则在 `~/.omp` 已存在时另写 `~/.omp/agent/AGENTS.md`（`PI_CONFIG_DIR` 指定替换 `.omp` 的 home 下子目录名，绝对值也拼到 home 下） | **备份后覆盖**；未设变量且无命名 profile 时不创建缺失的 `~/.omp` |
 | 项目 `AGENTS.md` | 仅 Q4 同意时复制 | 同意则备份后覆盖 |
 | `.gitignore` | 追加缺行 | 行齐全则 skip |
 | task / identity / spec / lessons / handoff / 旧 `.trellis` | 不预建 | **不删除、不重建、不迁移**；异常或旧状态先报告 |
