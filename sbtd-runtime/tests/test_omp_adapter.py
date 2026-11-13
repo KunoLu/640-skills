@@ -122,6 +122,167 @@ def _write_fixture(directory: Path) -> Path:
     return path
 
 
+SESSION_ID_18190 = "02c8f3a1-1111-4222-8333-444455556666"
+
+
+def _fixture_lines_18190() -> list[str]:
+    """Sanitized minimal omp 18.19.0 record shapes; no real session content."""
+    return [
+        _record(
+            {
+                "type": "title",
+                "v": 1,
+                "title": "脱敏占位标题",
+                "updatedAt": "2026-11-12T02:00:00.000Z",
+                "pad": "0",
+            }
+        ),
+        _record(
+            {
+                "type": "session",
+                "version": 3,
+                "id": SESSION_ID_18190,
+                "timestamp": "2026-11-12T02:00:00.100Z",
+                "cwd": "/srv/example/project",
+            }
+        ),
+        _record(
+            {
+                "type": "thinking_level_change",
+                "id": "tlc18190",
+                "parentId": None,
+                "timestamp": "2026-11-12T02:00:00.200Z",
+                "thinkingLevel": "high",
+                "configured": None,
+            }
+        ),
+        _record(
+            {
+                "type": "model_change",
+                "id": "mc18190",
+                "parentId": None,
+                "timestamp": "2026-11-12T02:00:00.300Z",
+                "runtime": {"version": "18.19.0"},
+                "model": "example/model",
+            }
+        ),
+        *(
+            _record(
+                {
+                    "type": "custom",
+                    "customType": custom_type,
+                    "id": f"custom18190-{index}",
+                    "timestamp": f"2026-11-12T02:00:00.{400 + index}Z",
+                }
+            )
+            for index, custom_type in enumerate(
+                (
+                    "tool_execution_start",
+                    "session_exit",
+                    "date-cwd-reminder",
+                    "system-prompt-digest",
+                )
+            )
+        ),
+        _record(
+            {
+                "type": "custom_message",
+                "customType": "reminder",
+                "id": "cm18190",
+                "timestamp": "2026-11-12T02:00:00.800Z",
+            }
+        ),
+        _record(
+            {
+                "type": "message",
+                "id": "msg_user_18190",
+                "parentId": "mc18190",
+                "timestamp": "2026-11-12T02:00:00.900Z",
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "脱敏占位输入"}],
+                },
+            }
+        ),
+        _record(
+            {
+                "type": "message",
+                "id": "msg_assist_18190",
+                "parentId": "msg_user_18190",
+                "timestamp": "2026-11-12T02:00:01.000Z",
+                "runtime": {"version": "18.19.0"},
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "脱敏占位回复"},
+                        {
+                            "type": "thinking",
+                            "thinking": "脱敏占位思考",
+                            "thinkingSignature": "sig-placeholder",
+                        },
+                        {
+                            "type": "toolCall",
+                            "id": "call-18190-a",
+                            "name": "read",
+                            "arguments": {"path": "notes.md"},
+                            "intent": "脱敏占位意图",
+                        },
+                        {
+                            "type": "toolCall",
+                            "id": "call-18190-b",
+                            "name": "bash",
+                            "arguments": {"command": "true"},
+                            "intent": "脱敏占位意图",
+                        },
+                    ],
+                },
+            }
+        ),
+        _record(
+            {
+                "type": "message",
+                "id": "msg_result_18190_a",
+                "parentId": "msg_assist_18190",
+                "timestamp": "2026-11-12T02:00:01.250Z",
+                "runtime": {"version": "18.19.0"},
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "call-18190-a",
+                    "toolName": "read",
+                    "isError": False,
+                    "content": [{"type": "text", "text": "脱敏占位输出"}],
+                    "details": {"exitCode": 0},
+                    "timestamp": "2026-11-12T02:00:01.250Z",
+                },
+            }
+        ),
+        _record(
+            {
+                "type": "message",
+                "id": "msg_result_18190_b",
+                "parentId": "msg_assist_18190",
+                "timestamp": "2026-11-12T02:00:02.000Z",
+                "runtime": {"version": "18.19.0"},
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "call-18190-b",
+                    "toolName": "bash",
+                    "isError": False,
+                    "content": [{"type": "text", "text": "脱敏占位输出"}],
+                    "details": {"exitCode": 0},
+                    "timestamp": "2026-11-12T02:00:02.000Z",
+                },
+            }
+        ),
+    ]
+
+
+def _write_fixture_18190(directory: Path) -> Path:
+    path = directory / f"2026-11-12T02-00-00-000Z_{SESSION_ID_18190}.jsonl"
+    path.write_text("\n".join(_fixture_lines_18190()) + "\n", encoding="utf-8")
+    return path
+
+
 def _enable(home: Path) -> None:
     home.mkdir(mode=0o700, exist_ok=True)
     os.chmod(home, 0o700)
@@ -139,6 +300,124 @@ def _enable(home: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+class Session18190ShapeTests(unittest.TestCase):
+    """omp 18.19.0 形状回归；对应 spec OMP 节「18.19.0 新记录类型」场景。"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+        self.home = self.dir / "runtime"
+        _enable(self.home)
+        self.path = _write_fixture_18190(self.dir)
+
+    def parse(self):
+        return parse_session_file(
+            self.path, installation_id=INSTALLATION, device_id=DEVICE
+        )
+
+    def test_title_first_line_skipped_and_session_id_still_set(self) -> None:
+        lines = _fixture_lines_18190()
+        path = self.dir / "title-first.jsonl"
+        # title + session header + one assistant/toolResult pair
+        path.write_text(
+            "\n".join([lines[0], lines[1], lines[10], lines[11]]) + "\n",
+            encoding="utf-8",
+        )
+        outcome = parse_session_file(
+            path, installation_id=INSTALLATION, device_id=DEVICE
+        )
+        self.assertEqual(outcome.records_read, 4)
+        self.assertEqual(outcome.records_skipped, 1)
+        # two toolCalls start, one toolResult finishes
+        self.assertEqual(len(outcome.events), 3)
+        for event in outcome.events:
+            self.assertEqual(event["scope"]["session_id"], SESSION_ID_18190)
+
+    def test_other_18190_types_skipped_and_counted(self) -> None:
+        outcome = self.parse()
+        self.assertEqual(outcome.records_read, 13)
+        # title(1) + thinking_level_change(1) + model_change(1) + custom(4)
+        # + custom_message(1) + user message(1)
+        self.assertEqual(outcome.records_skipped, 9)
+        started = [
+            event
+            for event in outcome.events
+            if event["event_type"] == "invocation.started"
+        ]
+        finished = [
+            event
+            for event in outcome.events
+            if event["event_type"] == "invocation.finished"
+        ]
+        self.assertEqual(len(started), 2)
+        self.assertEqual(len(finished), 2)
+
+    def test_session_header_version3_without_runtime_uses_model_change_version(
+        self,
+    ) -> None:
+        header = json.loads(_fixture_lines_18190()[1])
+        self.assertEqual(header["version"], 3)
+        self.assertNotIn("runtime", header)
+        outcome = self.parse()
+        self.assertTrue(outcome.events)
+        for event in outcome.events:
+            self.assertEqual(
+                event["host"], {"host_kind": "omp", "host_version": "18.19.0"}
+            )
+
+    def test_thinking_and_text_blocks_ignored_without_skip_or_event(self) -> None:
+        outcome = self.parse()
+        # all 9 skips are record-level; text/thinking blocks add none
+        self.assertEqual(outcome.records_skipped, 9)
+        # events come only from the two toolCall/toolResult pairs
+        self.assertEqual(len(outcome.events), 4)
+        validate_events(outcome.events)
+
+    def test_toolcall_intent_key_and_toolresult_extra_keys_map_with_duration(
+        self,
+    ) -> None:
+        outcome = self.parse()
+        started = {
+            event["correlation"]["invocation_id"]: event
+            for event in outcome.events
+            if event["event_type"] == "invocation.started"
+        }
+        self.assertIn("call-18190-a", started)
+        self.assertNotIn("|", "call-18190-a")
+        self.assertEqual(
+            started["call-18190-a"]["component"],
+            {"component_id": "tool:read", "kind": "tool", "name": "read"},
+        )
+        finished = {
+            event["correlation"]["invocation_id"]: event
+            for event in outcome.events
+            if event["event_type"] == "invocation.finished"
+        }
+        self.assertEqual(
+            finished["call-18190-a"]["state"],
+            {"previous": "running", "current": "succeeded"},
+        )
+        self.assertEqual(finished["call-18190-a"]["measurement"]["duration_ms"], 250)
+        self.assertEqual(finished["call-18190-b"]["measurement"]["duration_ms"], 1000)
+
+    def test_end_to_end_first_ingest_accepted_second_all_duplicate(self) -> None:
+        with EventStore.open(self.home, confirmed=True) as store:
+            first = ingest_session(
+                store, self.path, installation_id=INSTALLATION, device_id=DEVICE
+            )
+            self.assertEqual(first.events_emitted, 4)
+            self.assertEqual(first.accepted, 4)
+            self.assertEqual(first.duplicate, 0)
+            self.assertEqual(first.host_version, "18.19.0")
+            second = ingest_session(
+                store, self.path, installation_id=INSTALLATION, device_id=DEVICE
+            )
+            self.assertEqual(second.accepted, 0)
+            self.assertEqual(second.duplicate, first.events_emitted)
+            self.assertEqual(len(store.replay()), first.events_emitted)
 
 
 class ParseSessionTests(unittest.TestCase):

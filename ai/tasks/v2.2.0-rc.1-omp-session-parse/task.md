@@ -5,10 +5,10 @@ workflow_mode: strict
 mode_source: user
 mode_note: 本轮任务指令明确全程 strict；640 于 2026-11-12 在 640-skills 群确认做 v2.2.0-rc.1，本任务为其中第
   1 项（omp 会话解析）
-status: planned
+status: "checking"
 branch: feat/v2.2.0-rc.1-omp-session-parse
 created_at: '2026-11-13T13:33:23.229821+08:00'
-updated_at: '2026-11-13T13:33:23.229821+08:00'
+updated_at: "2026-11-13T15:03:27.667559+08:00"
 completed_at: null
 ---
 # v2.2.0-rc.1 omp 会话解析：18.19.0 格式核对
@@ -133,10 +133,10 @@ message 明细：role=assistant 743、role=toolResult 928、role=user 24。assis
 | book-legacy-change-safety | 既有行为修改前 | not-required；适配器逻辑不改。若实施轮结论反转需要动解析逻辑，先跑 tests/test_omp_adapter.py 建立保留行为基线再改 |
 | book-refactoring-pass | 既有生产文件编辑前 | proceed；只改注释、文档、规格、测试，不夹带重构 |
 | gherkin-bdd | 用户可见行为变化，before-dev/check | traceable；沿用中文 Markdown spec，新增场景与新夹具一一对应，无新 .feature |
-| project-validation | 改动后 | required；聚焦 unittest 与索引验证，全量以 CI 为准 |
+| project-validation | 改动后 | 已执行聚焦 unittest 与索引验证，证据见「验证证据」；全量以 CI 为准 |
 | book-release-readiness | 运行时/部署行为变化，验证后 | not-required；适配器逻辑不改、不部署不发布。若动解析逻辑则 required |
 | 独立 review 与 CI | PR 检查 | pending；本任务不使用子代理 |
-| ponytail-review | 修改后自检 | required；无新增抽象与依赖，不代替独立 review |
+| ponytail-review | 修改后自检 | 已自检：仅注释、文档、规格、测试与双语 CHANGELOG 变动，无新增抽象与依赖；不代替独立 review |
 
 ## 验收标准
 
@@ -151,6 +151,28 @@ message 明细：role=assistant 743、role=toolResult 928、role=user 24。assis
 - 聚焦验证命令：`python3 -B -m unittest tests.test_omp_adapter`（本环境无 pytest，按项目既有方式用 unittest 运行同一文件，不伪造 pytest 结果）；TaskStore 只读索引预览与 ai/tasks/index.md 逐字节比对。
 - 全量套件与发布验证以 CI 为准；本任务不 commit、不 push、不开 PR。
 
+## 验证证据
+
+2026-11-13 实施轮验证，每条命令前台单条执行：
+
+- 基线（加新测试前）：sbtd-runtime 下 `python3 -B -m unittest tests.test_omp_adapter` → 24 tests，8.690s，OK。
+- 改动后聚焦测试：
+  - sbtd-runtime 下 `python3 -B -m unittest tests.test_omp_adapter` → 30 tests（既有 24 + 新增 6），2.081s，OK。
+  - sbtd-runtime 下 `python3 -B -m unittest tests.test_golden_contracts` → 66 tests，0.331s，OK。
+  - 仓库根 `python3 -B -m unittest tests.test_sbtd_task_state tests.test_workflow_contracts` → 99 tests，33.011s，OK。
+- 真实复跑（sessions-r1、sessions-r2c、sessions-r3h 三个真实 18.19.0 会话文件；每文件在仓库外临时目录用独立 runtime home，按既有 facade 做法写 config.json 开 observation，CLI 走真实 lease 守卫，omp 18.19.0，exit 全为 0，host_version 均 18.19.0）：
+
+  | 文件 | records_read | records_skipped | events_emitted | accepted | duplicate | conflict | rejected | dropped | 对比「真实导入回执」基线 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | sessions-r1 | 96 | 42 | 70 | 70 | 0 | 0 | 0 | [] | 逐字段一致 |
+  | sessions-r2c | 46 | 21 | 28 | 28 | 0 | 0 | 0 | [] | 逐字段一致 |
+  | sessions-r3h | 54 | 25 | 36 | 36 | 0 | 0 | 0 | [] | 逐字段一致 |
+
+  sessions-r2c 第二次导入：accepted=0、duplicate=28，其余字段不变，去重语义与基线一致。
+- 索引验证：TaskStore 只读重建索引候选，与 ai/tasks/index.md 逐字节一致（INDEX_PREVIEW_SAME True，rows=90）。
+
+无失败项，无归因记录。
+
 ## 需要 640 拍板的问题
 
 1. records_skipped 是否细分原因或类型。选项甲：在 ParseOutcome/IngestReceipt 增加按类型或原因的跳过计数（回执形状变更，host_adapter.py:143-176 与 codex 适配器需对齐，契约文档同步）；选项乙：保持现状只记总数，文档写明各类型跳过是有意的。推荐乙：回执是 R1.2b 契约的一部分，改形状牵动 codex 侧与既有测试，收益主要是诊断便利；本轮逐行归因证明现有总数足以核对，没有因不细分而漏掉的解析错误。
@@ -163,3 +185,15 @@ message 明细：role=assistant 743、role=toolResult 928、role=user 24。assis
 
 | 轮次 | 用途 | 模型 | 回复次数 | 工具调用次数 | 工具报错次数 | 结果 |
 |---|---|---|---|---|---|---|
+| r1 | 写任务文件与真实会话调查 | kimi-code/k3:max | 30 | 39 | 1 | de136e5 |
+
+## 会话记录
+
+- r1：会话 id 01a1d348-220b-7070-aa4a-bda0dd06a0f1，开始时间 2026-11-13 13:01。
+
+## 状态事件
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-11-13T13:38:29.996319+08:00 | planned | in-progress | 实施轮开始：执行逐项改动清单与新增测试 | 开始实施：按逐项改动清单 1-4 与要加的测试 6 项；需要 640 拍板的两个问题先按推荐（乙：不细分跳过计数；不校验 session version）实施，群内投票结果若不同再另起一轮调整 |
+| 2026-11-13T15:03:27.667559+08:00 | in-progress | checking | 实施完成：注释、文档、规格、测试与双语 CHANGELOG 已改，聚焦验证与真实复跑通过，待复核 | test_omp_adapter 30 tests OK（既有 24 + 新增 6，基线 24 tests OK）；test_golden_contracts 66 tests OK；tests.test_sbtd_task_state + tests.test_workflow_contracts 99 tests OK；sessions-r1/r2c/r3h 复跑回执与基线逐字段一致，r2c 二次导入 accepted=0、duplicate=28；INDEX_PREVIEW_SAME True rows=90；本任务未 commit/push |

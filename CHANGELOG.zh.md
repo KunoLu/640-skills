@@ -16,6 +16,7 @@
 - 受管 Graft 启动器对 MCP、hook、analyze 子进程新增 `TRAIL_CLOUD=0`、`GRAFT_NO_BROWSER=1`、`GRAFT_NO_RENAME_NOTICE=1`；既有 `DO_NOT_TRACK=1`/`DNT=1` 遥测关闭保持不变，不改动 Codex 全局配置。其中 `GRAFT_NO_RENAME_NOTICE=1` 经伪终端开/关对照真跑验证到会关掉被 pin 包的每日改名提示与每周升级建议；`TRAIL_CLOUD=0` 与 `GRAFT_NO_BROWSER=1` 在真跑中未能触发对应提示，开关有没有用没验证到——启动器的 analyze 只走只读命令，不经过登录和浏览器那条路。
 - 修正 REFERENCE 中「根安装器转发 `--graft-hooks`」的说法：`install.sh` 在 `init`/`reset` 主流程对未识别参数直接报错，`install.ps1` 的 param 块无此参数；两个安装器仅在透传工作流模式（`migration`、`recovery`、`cleanup-legacy`、`upgrade`）转发剩余参数，其中只有 `migration` 注册该开关。迁移计划之外的用法，改为直接向已安装的 `onboard.py` 传 `--graft-hooks`。
 - 新增 omp 语言工具检测与引导：`check`/`check-projects` 按标记文件与源码扩展名检测每个所选项目的语言（Python、Rust、TypeScript、Go、Julia；`scripts/sbtd_language_tooling.py` 的检测表可扩展）并给出命中证据，`check` 以 `languageTooling` 报告 omp 语言服务器与 `astGrep` 可用性。`init`/`init-projects` 只有在单独的 `--language-tooling` 同意下才写入展示的配置项（`~/.omp/agent/config.yml` 的 `astGrep.enabled`，以及为 omp 无内置服务器的语言如 Julia 在 `~/.omp/agent/lsp.yml` 追加自定义条目）；不带该开关则报告 `needs-confirmation` 与逐项跳过影响，不写任何内容。语言服务器二进制不由本流程代装，引导文案列出安装命令，并写明 omp 按启动目录解析项目根、pyright 需 `.git` rootMarker 两个注意事项。
+- 用 16 个真实会话文件（2751 行，2026-11-13 核对）验证 omp 18.19.0 会话格式：所有跳过行都属于已知且有意跳过的类型（title、model_change、thinking_level_change、custom、custom_message、user 消息），928 对 toolCall/toolResult 全部正常映射、无解析失败，适配器解析逻辑不变。`omp_adapter.py` 模块 docstring、`docs/host-adapters.md` 与 `spec/r1.2b-host-adapter-scenarios.md` 补记 18.19.0 形状与逐类型跳过原因，`tests/test_omp_adapter.py` 新增脱敏最小 18.19.0 夹具与 6 项回归测试。
 
 
 ## v2.1.0（2026-11-12）
