@@ -323,6 +323,21 @@ class CheckReportTests(unittest.TestCase):
         self.assertEqual(paths["ompRoot"], str(omp_root))
         self.assertEqual(paths["ompGlobalAgents"], str(omp_root / "agent" / "AGENTS.md"))
 
+    def test_check_resolves_symlink_home_when_variable_unset(self) -> None:
+        real_home = self.home / "real-home"
+        omp_root = real_home / ".omp"
+        omp_root.mkdir(parents=True)
+        link_home = self.home / "link-home"
+        try:
+            link_home.symlink_to(real_home, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"symlink creation unavailable: {error}")
+        paths = self.check_paths(HOME=str(link_home), USERPROFILE=str(link_home))
+        self.assertEqual(
+            paths["ompGlobalAgents"],
+            str((omp_root / "agent" / "AGENTS.md").resolve()),
+        )
+
     def test_check_reports_none_when_unconfigured(self) -> None:
         paths = self.check_paths()
         self.assertIsNone(paths["ompRoot"])

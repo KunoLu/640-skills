@@ -564,8 +564,8 @@ def omp_agents_target() -> tuple[Path, bool]:
     return agent_dir / "AGENTS.md", explicit
 
 
-def omp_global_agents_path() -> Path:
-    return omp_agents_target()[0]
+def omp_global_agents_path(omp_root: Path) -> Path:
+    return omp_root / "agent" / "AGENTS.md"
 
 
 def known_global_skills_dirs() -> tuple[Path, ...]:
@@ -2226,7 +2226,13 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
             "projectRoots": [str(project_root) for project_root in project_roots],
             "ompRoot": str(omp_root) if omp_root else None,
             "ompGlobalAgents": (
-                str(omp_agents) if omp_agents_explicit or omp_root is not None else None
+                str(omp_agents)
+                if omp_agents_explicit
+                else (
+                    str(omp_global_agents_path(omp_root).resolve())
+                    if omp_root is not None
+                    else None
+                )
             ),
         },
         "runtime": runtime,
