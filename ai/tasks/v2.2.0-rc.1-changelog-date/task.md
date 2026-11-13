@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.2.0-rc.1-changelog-date
 workflow_mode: strict
 mode_source: user
-mode_note: Lord 2026-11-13 23:53 在 640-skills 群调度本 PR（v2.2.0-rc.1 CHANGELOG 日期小 PR，四处改动），Reviewy CLEAN 加 CI 13/13 同一 head 后合入，640 此前授权的全自动模式覆盖本 PR；本任务按 strict 模式执行。
+mode_note: Lord 2026-11-13 23:53 在 640-skills 群调度本 PR（v2.2.0-rc.1 CHANGELOG 日期小 PR，四处改动），Reviewy CLEAN 加 CI 13/13 同一 head 后合入，用户 2026-11-12 20:49 群内确认（开启全自动模式，到 rc.1 发布、文档补齐为止），Lord 记录；本任务按 strict 模式执行。
 status: checking
 branch: docs/v2.2.0-rc.1-changelog-date
 created_at: '2026-11-14T00:02:59+08:00'
-updated_at: '2026-11-14T00:11:43+08:00'
+updated_at: '2026-11-14T00:37:04+08:00'
 completed_at: null
 ---
 
@@ -17,7 +17,7 @@ completed_at: null
 
 目标：补全 v2.2.0-rc.1 预发布的变更日志记录，使中英两份 CHANGELOG、相关任务记录与任务索引一致。
 
-范围（本轮五项仓库文件改动；⑤ 为仓库外登记项）：
+范围（本轮五项仓库文件改动；⑤⑥ 为仓库外登记项）：
 
 1. `CHANGELOG.md` 第 10 行 `## v2.2.0-rc.1 (Unreleased)` 改为 `## v2.2.0-rc.1 (2026-11-13)`。
 2. `CHANGELOG.zh.md` 第 10 行 `## v2.2.0-rc.1（未发布）` 改为 `## v2.2.0-rc.1（2026-11-13）`，全角括号样式与原行一致。
@@ -27,10 +27,12 @@ completed_at: null
 
 ⑤（仓库外，不属于上述仓库文件改动）：PR #221（KunoLu/640-skills）正文 r2 那组计数已由 OMP 在 GitHub 上从 `206/222/5` 改为 `206/222/6`，仅改这一处、正文其余不动；PR 更新时间 2026-11-13T23:55:34+08:00。该改动不在仓库文件内，本轮仅登记事实并核实。
 
+⑥（仓库外，不属于上述仓库文件改动）：PR #221（KunoLu/640-skills）正文第 13 行 r3b 句中原「（k3:max 最终 37/51/0；task.md 里 r3b 行的 14/21/0 是截至 22:03:42 的数）」已由 OMP 在 GitHub 上改为「（k3:max，已提交，最终 37/51/0）」，仅改这一处、正文其余不动；PR 更新时间 2026-11-14T00:32:39+08:00。该改动不在仓库文件内，本轮仅登记事实并核实。
+
 ## 决策来源
 
 - v2.2.0-rc.1 已于 2026-11-13 发布：预发布版 https://github.com/KunoLu/640-skills/releases/tag/v2.2.0-rc.1（pre-release，未标记 Latest，v2.1.0 仍为最新正式版），发布时间 2026-11-13T23:21:48+08:00；annotated tag v2.2.0-rc.1，tag 对象 `a918087fab900d32286874f713bb825408d74f45`，指向 `7f21401ae6c56acd5846ae6ae922111aba3af932`；该精确提交的三平台 main CI https://github.com/KunoLu/640-skills/actions/runs/43444776201 只跑一次（attempt 1），按作业名 13 个 job 全部成功，于 2026-11-13T22:54:30+08:00 跑完。
-- 依据：Lord 2026-11-13 23:53 在 640-skills 群调度本 PR（四处改动），Reviewy CLEAN 加 CI 13/13 同一 head 后合入；640 此前授权的全自动模式覆盖本 PR。
+- 依据：Lord 2026-11-13 23:53 在 640-skills 群调度本 PR（四处改动），Reviewy CLEAN 加 CI 13/13 同一 head 后合入；用户 2026-11-12 20:49 群内确认（开启全自动模式，到 rc.1 发布、文档补齐为止），Lord 记录。
 - r3b 订正事实：修复已提交（提交 `3b97f0e`）；会话 01a1d533-61ce-745f-90d3-460138a1020c 整个会话文件最终计数 回复 37、工具调用 51、报错 0。
 - 文件头规则：`CHANGELOG.md:3` 与 `CHANGELOG.zh.md:3` 写明未发布章节在创建对应 tag 后补充发布日期；tag 已创建，补日期条件成立；该规则行本身不改。
 - 未完整调用 grill-with-docs：文档日期、发布身份段落与任务记录计数订正，边界明确，当前源码与已核实背景能回答本任务问题，不新增领域决定。
@@ -114,6 +116,12 @@ Evidence Source：developer-local；Source Revision：dirty（范围内文件已
 |---|---|---|
 | `gh pr view 221 -R KunoLu/640-skills --json body -q .body \| grep -n "206/222"` | 输出一行：`11:- a15955d r2：代码、测试、7 份文档、中英 CHANGELOG（k3:max 206/222/6，含被看门狗误杀后的续跑）`；即 PR #221 正文第 11 行现为 `（k3:max 206/222/6，含被看门狗误杀后的续跑）`，OMP 已在 GitHub 上把 r2 组数从 `206/222/5` 改为 `206/222/6`，仅这一处 | 0 |
 
+### 第 3 轮（修复，2026-11-14T00:37:04+08:00）
+
+| 命令／检查 | 实际结果 | 退出码 |
+|---|---|---|
+| `gh pr view 221 -R KunoLu/640-skills --json body -q .body \| sed -n 13p` | 输出一行：`- 3b97f0e r3b（修复轮）：变量不设时 ompGlobalAgents 按 main 写法基于 resolve 后的 root 拼并 .resolve()，修 macOS CI；task.md 计数订正（r2b 115/118/0、r2 isError 6）（k3:max，已提交，最终 37/51/0）`；即 PR #221 正文第 13 行 r3b 句末尾已为「（k3:max，已提交，最终 37/51/0）」 | 0 |
+
 ## 模型记录
 
 - 主 agent 用 k3:max，密钥从环境变量 KIMI_API_KEY 读取。
@@ -122,7 +130,8 @@ Evidence Source：developer-local；Source Revision：dirty（范围内文件已
 | 轮次 | 用途 | 模型 | 回复次数 | 工具调用次数 | 工具报错次数 | 结果 |
 |---|---|---|---|---|---|---|
 | r1 | 建立本记录、两份 CHANGELOG 第 10 行与发布身份段、agents-md 任务文件三处订正、`index.md` 索引行、运行验证并填写证据 | k3:max | 12 | 34 | 0 | 五项范围改动完成、验证通过；未提交，提交与 PR 由编排方处理 |
-| r2 | 收尾：r1 最终计数订正、PR #221 正文订正登记 | k3:max | 5（写盘时刻自数实数，含本次写盘所在回复；截至北京时间 2026-11-14T00:11:43+08:00，其后的验证不在这组数字内） | 10（同口径，含本次写盘调用） | 0 | 本文件订正写盘完成；未提交，提交与 PR 由编排方处理 |
+| r2 | 收尾：r1 最终计数订正、PR #221 正文订正登记 | k3:max | 7 | 14 | 0 | 本文件订正写盘完成；未提交，提交与 PR 由编排方处理 |
+| r3 | 修复：授权依据措辞、PR #221 正文第 13 行订正登记 | k3:max | 3（写盘时刻自数实数，含本次写盘所在回复；截至北京时间 2026-11-14T00:37:04+08:00，其后的验证不在这组数字内） | 11（同口径，含本次写盘调用） | 0 | 本文件修复写盘完成；未提交，提交与 PR 由编排方处理 |
 
 - r1 会话 01a1d59e-c471-71a5-856a-38c1528d5c19，北京时间 2026-11-13 23:55:14 开始、2026-11-14 00:05 前结束；12/34/0 为整个会话文件最终计数。
 
@@ -133,3 +142,4 @@ Evidence Source：developer-local；Source Revision：dirty（范围内文件已
 | 2026-11-14T00:02:59+08:00 | planned | in-progress | 任务开始：依据 2026-11-13 23:53 调度建立本记录，随后执行五项范围改动 | 分支 `docs/v2.2.0-rc.1-changelog-date`、HEAD `7f21401ae6c56acd5846ae6ae922111aba3af932`、起始工作区干净；两份 CHANGELOG 第 10 行现状已读取确认；新任务路径无 symlink、无 ignore 匹配、未被跟踪 |
 | 2026-11-14T00:02:59+08:00 | in-progress | checking | 五项范围改动完成，进入验证：tracked 四文件 diff 已核对、frontmatter 解析与 rg 已通过，本文件写盘后补 frontmatter 与禁用措辞复核 | `git diff --stat` 为 4 files changed, 10 insertions(+), 5 deletions(-)；agents-md 任务文件 frontmatter 解析通过；rg 确认 v2.2.0-rc.1 标题行已无 Unreleased／未发布 |
 | 2026-11-14T00:11:43+08:00 | checking | checking | 收尾轮开始：r1 计数订正（模型表 r1 行改为整个会话文件最终计数 12/34/0）、PR #221 正文订正登记（仓库外，范围第 ⑤ 项）；status 保持 checking | `gh pr view 221 -R KunoLu/640-skills --json body -q .body` 输出第 11 行已核实为 `206/222/6`；r1 会话 01a1d59e-c471-71a5-856a-38c1528d5c19 最终计数 12/34/0 |
+| 2026-11-14T00:37:04+08:00 | checking | checking | 修复轮：Reviewy 对 PR #222 head `041da568` 判 NOT CLEAN，唯一阻断为授权依据写法；本轮修复授权依据措辞并登记 PR #221 正文第 13 行订正，status 保持 checking | Reviewy 对 `041da568` 的 NOT CLEAN 评审结论（一个阻断）；`gh pr view 221 -R KunoLu/640-skills --json body -q .body \| sed -n 13p` 输出第 13 行已核实为「（k3:max，已提交，最终 37/51/0）」 |
