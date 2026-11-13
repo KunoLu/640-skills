@@ -529,12 +529,39 @@ def user_home() -> Path:
 
 
 def detect_omp_root() -> Path | None:
-    root = user_home() / ".omp"
+    """Probe the default OMP config root (PI_CONFIG_DIR aware) for existence.
+
+    The root mirrors Node ``path.join(home, PI_CONFIG_DIR or ".omp")``: an
+    absolute-looking value stays under home and ``..`` may escape it, exactly
+    as OMP 18.19.0 resolves it. An explicit PI_CODING_AGENT_DIR or named
+    profile does not move this root.
+    """
+    from sbtd_omp_sources import omp_config_root
+
+    root = omp_config_root(user_home(), os.environ)
     try:
         resolved = root.resolve()
     except OSError:
         return None
     return resolved if resolved.is_dir() else None
+
+
+def omp_agents_target() -> tuple[Path, bool]:
+    """Resolve the OMP user-level AGENTS.md OMP 18.19.0 reads, plus explicitness.
+
+    Explicit means a non-empty PI_CODING_AGENT_DIR or a named profile selected
+    the agent directory; onboard then writes the target even when it does not
+    exist yet. Without an explicit selector the historical rule stands: the
+    target lives under the default config root and onboard writes only when
+    that root already exists, never creating it.
+    """
+    from sbtd_omp_sources import active_omp_agent_dir
+
+    resolved = active_omp_agent_dir(home=user_home(), environ=os.environ)
+    agent_dir = resolved["agent_dir"]
+    assert isinstance(agent_dir, Path)
+    explicit = bool(resolved["override"]) or resolved["profile"] is not None
+    return agent_dir / "AGENTS.md", explicit
 
 
 def omp_global_agents_path(omp_root: Path) -> Path:
@@ -2186,6 +2213,7 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
     }
 
     omp_root = detect_omp_root()
+    omp_agents, omp_agents_explicit = omp_agents_target()
     from sbtd_language_tooling import check_language_tooling
 
     language_tooling = check_language_tooling(project_roots)
@@ -2198,7 +2226,13 @@ def build_check_results(args: argparse.Namespace) -> dict[str, object]:
             "projectRoots": [str(project_root) for project_root in project_roots],
             "ompRoot": str(omp_root) if omp_root else None,
             "ompGlobalAgents": (
-                str(omp_global_agents_path(omp_root)) if omp_root else None
+                str(omp_agents)
+                if omp_agents_explicit
+                else (
+                    str(omp_global_agents_path(omp_root).resolve())
+                    if omp_root is not None
+                    else None
+                )
             ),
         },
         "runtime": runtime,
@@ -6199,9 +6233,9 @@ def build_operations(mode: str, args: argparse.Namespace) -> list[Operation]:
                 "file",
             )
         )
-        omp_root = detect_omp_root()
-        if omp_root is not None:
-            omp_agents = omp_global_agents_path(omp_root).resolve()
+        omp_agents_path, omp_agents_explicit = omp_agents_target()
+        if omp_agents_explicit or detect_omp_root() is not None:
+            omp_agents = omp_agents_path.resolve()
             if omp_agents != global_agents.resolve():
                 operations.append(
                     Operation(

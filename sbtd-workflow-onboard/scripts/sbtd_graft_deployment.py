@@ -497,23 +497,29 @@ def _omp_agents_template_target(
 ) -> Path | None:
     """The OMP global rules target an OMP init deployment implicitly creates.
 
-    The installer catalog includes the OMP global AGENTS.md only when the OMP
-    root already exists; an OMP deployment itself creates that root with its
-    MCP write. Naming the target explicitly keeps the canonical set identical
-    at plan time and at every later re-derivation.
+    The installer catalog includes the OMP global AGENTS.md when the OMP root
+    already exists or an explicit selector (PI_CODING_AGENT_DIR or a named
+    profile) points at the agent directory; otherwise an OMP deployment itself
+    creates the default root with its MCP write. Naming the target explicitly
+    keeps the canonical set identical at plan time and at every later
+    re-derivation.
     """
     if platform != "omp" or omp_home is None:
         return None
-    from onboard import detect_omp_root, omp_global_agents_path, user_home
+    from onboard import detect_omp_root, omp_agents_target
 
-    if detect_omp_root() is not None:
+    target, explicit = omp_agents_target()
+    if explicit or detect_omp_root() is not None:
         return None
-    root = (user_home() / ".omp").resolve()
+    # No explicit selector and the default config root is absent: the
+    # deployment's MCP write creates that root, so the installer catalog
+    # skips the AGENTS.md and it must be named here. Guard that the
+    # discovered agent dir is the resolved default one.
     try:
-        omp_home.resolve().relative_to(root)
+        omp_home.resolve().relative_to(target.parent.resolve())
     except (OSError, ValueError, RuntimeError):
         return None
-    return omp_global_agents_path(root)
+    return target.resolve()
 
 
 def _installation_templates(
@@ -567,6 +573,7 @@ def attach_deployment(
         resolve_global_skills_dir,
         user_home,
     )
+    from onboard import omp_agents_target as resolve_omp_agents_target
     from sbtd_migration_plan import _ignore_operation
 
     if platform not in {"codex", "omp"}:
@@ -626,39 +633,27 @@ def attach_deployment(
                 }
             )
         omp_root = detect_omp_root()
-        if platform == "codex":
-            if omp_root is not None and not any(
-                record["path"] == str(omp_root) for record in payload["shared_roots"]
-            ):
-                payload["shared_roots"].append(
-                    {
-                        "kind": "omp-home",
-                        "path": str(omp_root),
-                        "dependent_projects": roots,
-                    }
-                )
-        elif omp_home is not None:
-            effective_omp_root = (
-                omp_root
-                if omp_root is not None
-                else (
-                    omp_agents_target.parent.parent
-                    if omp_agents_target is not None
-                    else None
-                )
+        omp_target, omp_explicit = resolve_omp_agents_target()
+        if omp_explicit:
+            effective_omp_root = omp_target.parent.parent
+        elif omp_root is not None:
+            effective_omp_root = omp_root
+        elif omp_agents_target is not None:
+            effective_omp_root = omp_agents_target.parent.parent
+        else:
+            effective_omp_root = None
+        if effective_omp_root is not None and not any(
+            record["path"] == str(effective_omp_root)
+            for record in payload["shared_roots"]
+        ):
+            payload["shared_roots"].append(
+                {
+                    "kind": "omp-home",
+                    "path": str(effective_omp_root),
+                    "dependent_projects": roots,
+                }
             )
-            if effective_omp_root is not None and not any(
-                record["path"] == str(effective_omp_root)
-                for record in payload["shared_roots"]
-            ):
-                payload["shared_roots"].append(
-                    {
-                        "kind": "omp-home",
-                        "path": str(effective_omp_root),
-                        "dependent_projects": roots,
-                    }
-                )
-            if not any(
+            if omp_home is not None and not any(
                 omp_home.is_relative_to(Path(record["path"]))
                 for record in payload["shared_roots"]
             ):
