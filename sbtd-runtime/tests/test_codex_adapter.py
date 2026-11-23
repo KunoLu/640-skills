@@ -3,9 +3,9 @@
 Scenario text lives in spec/r1.2b-host-adapter-scenarios.md. Fixture shapes
 follow the documented exec JSONL format (thread.started, item.started,
 item.completed with command_execution / mcp_tool_call / ...). Codex is not
-installed or run here; the real smoke against codex@0.167.1 is executed by a
-separate operator using sbtd-runtime/docs/host-adapters.md. The consumer seam
-is codex_adapter.parse_exec_lines / ingest_exec_stream.
+installed or run here; real host evidence is documented separately in
+sbtd-runtime/docs/host-adapters.md. The consumer seams include the CLI,
+event-store replay, and capability classification.
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,9 +25,10 @@ if str(ROOT) not in sys.path:
 from codex_adapter import (
     PARSER_VERSION,
     ingest_exec_stream,
+    main,
     parse_exec_lines,
 )
-from contract_eval import validate_events
+from contract_eval import capability_matrix, host_capability, validate_events
 from event_store import EventStore
 
 INSTALLATION = "inst_r12b_test"
@@ -236,6 +239,32 @@ class ParseExecLinesTests(unittest.TestCase):
             self.assertNotIn("bash -lc", blob)
             self.assertNotIn("aggregated_output", blob)
 
+    def test_old_unknown_and_prerelease_banners_remain_unsupported(self) -> None:
+        matrix = capability_matrix()
+        for version in (
+            "codex-cli 0.167.1",
+            "codex-cli unknown",
+            "unknown",
+            "codex-cli 0.173.0-alpha.4",
+            "codex-cli 0.171.0-beta.1",
+            "codex-cli 0.171.0-rc.1",
+            "codex-cli 0.171.0 extra",
+        ):
+            with self.subTest(version=version):
+                outcome = parse_exec_lines(
+                    _fixture_lines(),
+                    installation_id=INSTALLATION,
+                    device_id=DEVICE,
+                    segment_id="capture-version",
+                    host_version=version,
+                )
+                for event in outcome.events:
+                    host = event["host"]
+                    self.assertEqual(
+                        host_capability(matrix, host["host_kind"], host["host_version"]),
+                        "unsupported",
+                    )
+
 
 class IngestExecStreamTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -281,6 +310,72 @@ class IngestExecStreamTests(unittest.TestCase):
             self.assertEqual(again.accepted, 0)
             self.assertEqual(again.duplicate, 5)
             self.assertEqual(len(store.replay()), 5)
+
+    def test_official_banner_cli_replay_matches_capability(self) -> None:
+        capture = Path(self._tmp.name) / "capture.jsonl"
+        capture.write_text("\n".join(_fixture_lines()), encoding="utf-8")
+        arguments = [
+            "--runtime-home", str(self.home),
+            "--installation-id", INSTALLATION,
+            "--device-id", DEVICE,
+            "--file", str(capture),
+            "--confirmed",
+        ]
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*arguments, "--host-version", "codex-cli 0.171.0\n"])
+        self.assertEqual(code, 0)
+        receipt = json.loads(output.getvalue())
+        self.assertEqual(receipt["host_version"], "0.171.0")
+        self.assertEqual(receipt["accepted"], 5)
+
+        with EventStore.open(self.home, read_only=True) as store:
+            events = store.replay()
+        self.assertEqual(len(events), 5)
+        matrix = capability_matrix()
+        for event in events:
+            host = event["host"]
+            self.assertEqual(host["host_version"], "0.171.0")
+            self.assertEqual(
+                host_capability(matrix, host["host_kind"], host["host_version"]),
+                "pinned",
+            )
+
+        output = StringIO()
+        with redirect_stdout(output):
+            code = main([*arguments, "--host-version", "0.171.0"])
+        self.assertEqual(code, 0)
+        repeated = json.loads(output.getvalue())
+        self.assertEqual(repeated["accepted"], 0)
+        self.assertEqual(repeated["duplicate"], 5)
+        self.assertEqual(repeated["conflict"], 0)
+
+    def test_normalization_does_not_rewrite_legacy_raw_version_events(self) -> None:
+        legacy = parse_exec_lines(
+            _fixture_lines(),
+            installation_id=INSTALLATION,
+            device_id=DEVICE,
+            segment_id="capture-legacy",
+            host_version="0.171.0",
+        )
+        for event in legacy.events:
+            event["host"]["host_version"] = "codex-cli 0.171.0"
+        with EventStore.open(self.home, confirmed=True) as store:
+            store.append(list(legacy.events))
+            receipt = ingest_exec_stream(
+                store,
+                _fixture_lines(),
+                installation_id=INSTALLATION,
+                device_id=DEVICE,
+                segment_id="capture-legacy",
+                host_version="codex-cli 0.171.0",
+            )
+            self.assertEqual(receipt.accepted, 0)
+            self.assertEqual(receipt.conflict, 5)
+            self.assertEqual(
+                {event["host"]["host_version"] for event in store.replay()},
+                {"codex-cli 0.171.0"},
+            )
 
     def test_missing_host_version_is_reported(self) -> None:
         with EventStore.open(self.home, confirmed=True) as store:

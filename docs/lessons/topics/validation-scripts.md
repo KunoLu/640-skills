@@ -752,5 +752,17 @@
 - 修正：选择官方清单支持的 ubuntu-24.04，覆盖执行测试和仅聚合报告的全部 Linux 作业；不为绿色状态漂移 Python pin、跳过测试或忽略报告缺失。
 - 预防：环境准备失败先读原生 runner image、架构与安装步骤日志，再核对官方 manifest 的 version/platform/platform_version/arch。本地静态匹配不能替代新完整 SHA 的真实 hosted CI。
 
+## LESSON-20261123-kuno-host-version-consumer-chain: Verify Host Versions Through Real Consumers
+
+- 日期：2026-11-23
+- 标签：host-adapter, version, contracts, evidence, replay
+- 适用场景：将宿主 CLI 版本输出写入事件，再与固定版本契约判断能力。
+- 严重级别：high
+- 来源：PR #223 独立复核 F1／E1 与本轮消费链回归。
+- 问题：golden 直接填裸版本而真实 CLI 带程序标识；工具调用与入库成功，却在下游精确匹配时变成 unsupported。只有本地摘要也不足以让独审核对该链。
+- 根因：单独验证生产者、适配器和 pin，未让真实格式输入经过存储／重放后到达能力消费者。
+- 修正：在所属适配入口规范化一次，保留未知／旧版／预发布拒绝；回归贯穿 CLI、真实存储、重放及能力判断，并验证已有 raw-version 观察不被隐式改写。
+- 预防：通过证据同时提供可核验的脱敏原生片段、进程退出码、导入／重放回执、哈希和具体实现版本；明确片段投影与原件的区别。报告存在、字段看似正确、parser_version 相同或 CI 通过，均不能替代实际消费链和独审可访问证据。
+
 <!-- lessons:kuno:end -->
 

@@ -85,6 +85,10 @@ Air 本机，独立 HOME、PI_CODING_AGENT_DIR、session-dir、缓存、临时�
 
 来源：`codex exec --json` 的 JSONL（stdin 实时管道或保存的捕获文件）。该流无时间戳，occurred_at 一律为 null（PRD §8.4.8 进入“时间不可定位”集合），recorded_at 为入库时间。流内也没有宿主版本，调用方用 `--host-version` 传入 `codex --version` 的输出。映射（parser_version `codex-exec-jsonl-1`）：
 
+`codex --version` 的原文（例如 `codex-cli 0.171.0`）仍可直接传给 `--host-version`。Codex 解析入口只去掉外围空白和官方 `codex-cli ` 标识，事件与回执统一得到 `0.171.0`；裸版本输入保持不变，预发布后缀不丢弃。能力比较器继续精确匹配，不通过别名或默认当前版本放行旧版、unknown、alpha、beta 或 RC。
+
+parser_version 仍表示 `codex-exec-jsonl-1` 的 JSONL 映射格式；具体实现另以 Git SHA 和适配器文件 SHA-256 识别。旧库中已经保存的 raw-version 事件不自动改写；用修复后的规范化结果重导入相同 source_event_id，可能按既有规则报告 conflict 并保留旧事件。需要重算旧捕获时显式选择新观察库，不覆盖原库或删除失败证据。
+
 - `item.started` / `item.completed`，item.type ∈ {command_execution, web_search, collab_tool_call, file_change} → component kind `tool`；`mcp_tool_call` → kind `mcp`、component_id `mcp:<server>.<tool>`。
 - status：completed→succeeded、failed→failed、declined→declined。exit_code 作为扩展标量保留。
 - `thread.started` 提供 session_id；`item.updated`、`turn.*`、`error`、未知 item 类型跳过并计数。
@@ -139,7 +143,7 @@ env -u OMP_PROFILE -u PI_PROFILE -u PI_CONFIG_DIR -u PI_SESSION_ID \
 
 ### codex@0.171.0 当前基础 smoke（pass，2026-11-23）
 
-Air 本机，2026-11-23T04:50:56Z–04:51:09Z，显式模型 `gpt-6-astra`，上述隔离条件下进程 exit 0。7 行 JSONL 包含一次真实 `command_execution` started/completed，`cat probe.txt` 工具 exit_code=0，最后 turn.completed。原适配器读取 7 行、跳过 4 行、产出并接受 2 条事件，重复导入 accepted=0、duplicate=2，conflict/rejected 均为 0。见[任务 1](../../ai/tasks/v2.2.0-rc.2-baseline/task.md)。
+Air 本机原基础 smoke 于 2026-11-23T04:50:56Z–04:51:09Z 完成，但当时未覆盖官方版本原文到能力消费者的完整链路；独立复核 F1 指出该缺口。修复后于 2026-11-23T08:40:23Z–08:40:38Z 重新执行隔离 Codex 调用，显式模型 `gpt-6-astra`，真实 `cat probe.txt` 与宿主进程均 exit 0。官方版本输出为 `codex-cli 0.171.0`；7 行捕获由修复后的原生 CLI 读取、跳过 4 行、产出并接受 2 条事件，回执与重放事件 host_version 均为 `0.171.0`，能力消费者得到 pinned。重复导入 accepted=0、duplicate=2、conflict/rejected=0。旧库与旧报告保留；可交付的脱敏原生片段、退出码、回执、重放与哈希随[任务 1](../../ai/tasks/v2.2.0-rc.2-baseline/task.md)的 E1 证据单独交接，不以本地文件存在代替独审核验。
 
 ### codex@0.167.1 历史 smoke（pass，2026-11-11）
 

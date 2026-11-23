@@ -16,6 +16,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 ### Fixed
 
 - Pin the four Linux validation jobs to `ubuntu-24.04`, where the fixed Python `3.12.10` build is available. This avoids setup failures after `ubuntu-latest` moved to Ubuntu 26.04; Python/Node versions, action SHAs, native platform coverage, test shards and report failure gates remain unchanged.
+- Normalize the official `codex-cli` version banner at Codex ingestion so stored events and receipts use the same version as capability pins. Add CLI-to-store/replay/capability regressions, retain old/unknown/prerelease rejection, and preserve existing raw-version observations on re-import conflicts instead of silently migrating them.
 
 
 ## v2.2.0-rc.1 (2026-11-13)

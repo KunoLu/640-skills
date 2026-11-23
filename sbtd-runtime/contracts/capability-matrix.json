@@ -39,7 +39,7 @@
       "status": "pass",
       "host_version": "codex-cli 0.171.0",
       "smoked_at": "2026-11-23",
-      "evidence": "Air 本机隔离实测；2026-11-23T04:50:56Z–04:51:09Z，显式模型 gpt-6-astra，独立 HOME/CODEX_HOME/cwd，read-only sandbox、approval_policy=never、ephemeral、ignore-user-config、ignore-rules，未设置 --trust。用户通过官方登录，不复制凭据。进程 exit 0；7 行 JSONL 包含真实 cat probe.txt 的 command_execution started/completed，工具 exit_code=0 和 turn.completed。原适配器读取 7 行、跳过 4 行，产出并接受 2 条事件，conflict/rejected=0；重复导入 accepted=0、duplicate=2。本 smoke 不证明审批拒绝场景。详见 ai/tasks/v2.2.0-rc.2-baseline/task.md。"
+      "evidence": "Air 本机修复后实测；2026-11-23T08:40:23Z–08:40:38Z，显式模型 gpt-6-astra，独立 HOME/CODEX_HOME/cwd，read-only sandbox、approval_policy=never、ephemeral、ignore-user-config、ignore-rules，未设置 --trust。官方版本原文 codex-cli 0.171.0 传给适配器；7 行 JSONL 含真实 cat probe.txt 的 started/completed，工具与进程均 exit 0。修复后 CLI 首次读取 7 行、跳过 4 行、接受 2 条事件，重复导入 accepted=0、duplicate=2、conflict/rejected=0；回执与重放事件 host_version 为 0.171.0，实际能力判断为 pinned。原基础 smoke 未覆盖版本消费链的缺口按独审 F1 修复，旧库及旧证据不改写。本 smoke 不证明审批拒绝场景；脱敏原生片段、回执及实现哈希按 E1 单独交接，详见 ai/tasks/v2.2.0-rc.2-baseline/task.md。"
     }
   },
   "smoke_history": {
