@@ -7,7 +7,7 @@ mode_note: rc.2 已确认 PRD；用户授权任务 2 开工
 status: "checking"
 branch: fix/v2.2.0-rc.2-license
 created_at: '2026-11-23T18:31:11.495286+08:00'
-updated_at: "2026-11-23T22:51:29.322791+08:00"
+updated_at: "2026-11-23T23:08:49.299049+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -52,6 +52,12 @@ completed_at: null
 
 两类故障均先红后绿。最终八模块 343 项，333 通过、10 跳过；31 次 CLI 含真实安装后清理失败、无步骤回执时的冲突及其重复验证。源工作目录实际遗留与新安装均可核对；私有证据摘要等于 ID、文件模式 0600，重复阻断未改写。来源锁及 stable 200 项均未动，Ruff、ty 无新增诊断。报告见新 TEMP 的 `final-scenario.md`、`suite-final.log`、`final-scenario.json`，未推送及发布。
 
+## 来源工作目录只读清理：本地验收
+
+在 `isolated/source-fix.EhJugyDQ/` 复现并修复 `676eaa6` 的兼容性回归。仅自建来源工作目录保留 `TemporaryDirectory` 所有者对象，独立于安装事务执行标准库清理并核实目录是否已消失；暂存、回滚和正式技能不使用此权限处理。
+
+实际安装验收：含 `0555` 子树的来源可清理，目标有完整许可、事务 committed、exit 0、无残件。单独限制来源父目录时，真实清理失败但安装已提交，状态 committed-cleanup-incomplete、exit 1，并准确列出来源残件。八模块 344 项，334 通过、10 跳过；32 次 CLI 调用符合预期。第一轮夹具误锁整个测试 TMPDIR 干扰了无关后置探测，已保留该轮并收窄故障范围后复跑。新根下有 `final-scenario.md`、`final-scenario.json` 和 `affected-final.log`。来源锁、stable 200 项及全局配置均未改。REFERENCE 与双语 CHANGELOG 已更新；两份 README 所述真实失败回执不变，版本监控 prompt 的监控及权限范围也未变。未推送。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -70,3 +76,5 @@ completed_at: null
 | 2026-11-23T22:27:05.013508+08:00 | in-progress | checking | 当前 Astra 会话：四个 P2 本地验收达到暂停点；/loop 已关闭，冻结本地提交内置复审 | 新现场 28 次 CLI 正负例符合预期、八模块 331 通过/10 跳过；真实残件与恢复摘要已核实。四项修正红绿回归见 four-p2.d2AyCxfF，旧现场未动。不推送。 |
 | 2026-11-23T22:35:00.194436+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 0fe534c 的两个回执 P2 | 新隔离环境 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/receipt-fix.W2nJKf5S；保留来源工作目录清理失败前的真实事务结果；为恢复预检阻断保留私有 retained_refs 引用。原现场不动，不改锁和全局配置，不推送。 |
 | 2026-11-23T22:51:29.322791+08:00 | in-progress | checking | 当前 Astra 会话：两个回执 P2 本地验收结束，/loop 已关闭，冻结本地提交交内置复审 | 31 个本地 CLI 调用符合预期；八模块 333 通过、10 跳过；私有预检引用可核验且未公开原对象路径。暂不推送。 |
+| 2026-11-23T22:58:18.793061+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 676eaa6 复审指出的来源目录可清理性回归 | 使用新隔离目录 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/source-fix.EhJugyDQ。标准库可清理的只读子树不报残留，真正失败保留提交回执和实际路径；旧现场不动，不改来源锁或全局环境。 |
+| 2026-11-23T23:08:49.299049+08:00 | in-progress | checking | 当前 Astra 会话：来源工作目录只读清理修复完成本地验收，关闭 /loop 并冻结本地提交复审 | 32 次 CLI 正负例均符合预期；334 通过、10 跳过。可清理只读目录无残件；真正无法删除时仍准确报告已提交。仅本地，不推送。 |

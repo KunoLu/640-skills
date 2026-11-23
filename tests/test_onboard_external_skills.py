@@ -656,6 +656,35 @@ class ExternalSkillInstallTests(unittest.TestCase):
                 self.assertTrue(any(row["status"] == "failed" and row["phase"] == "cleanup" for row in results))
                 self.assertTrue((slots / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
 
+    @unittest.skipUnless(os.name == "posix", "POSIX read-only source directory")
+    def test_owned_readonly_source_workspace_does_not_fail_committed_install(self):
+        onboard = self.load_onboard_module()
+        resolve = onboard.resolve_external_install_sources
+        workspaces = []
+
+        def resolve_with_readonly_files(selected, source, workspace):
+            resolved = resolve(selected, source, workspace)
+            directory = workspace / "readonly"
+            directory.mkdir()
+            (directory / "metadata").write_bytes(b"source material")
+            directory.chmod(0o555)
+            workspaces.append(workspace)
+            return resolved
+
+        with mock.patch.object(onboard, "resolve_external_install_sources", side_effect=resolve_with_readonly_files):
+            results, tx = onboard.execute_external_skill_install(
+                argparse.Namespace(source="stable"), ["tdd"], self.skills_dir
+            )
+        workspace, = workspaces
+        if workspace.exists():
+            self.addCleanup(shutil.rmtree, workspace)
+            self.addCleanup((workspace / "readonly").chmod, 0o700)
+        self.assertEqual(tx["status"], "committed")
+        self.assertFalse(workspace.exists())
+        self.assertFalse(tx.get("retainedPaths"))
+        self.assertTrue(any(item["name"] == "tdd" and item["status"] == "installed" for item in results))
+        self.assertTrue((self.skills_dir / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
+
     def test_source_workspace_cleanup_keeps_completed_install_receipt(self):
         onboard = self.load_onboard_module()
         remove = shutil.rmtree

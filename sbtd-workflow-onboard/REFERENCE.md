@@ -305,6 +305,7 @@ The manifest digest still verifies the unmodified mirror. Explicit upgrade compa
 - **Scenario: 恢复中断后重试** — Given 目标字节与原件相同，When 退役目录仍存在或 POSIX 根权限与恢复意图不符，Then 阻断续作，不报告 `reconciled`，不自动改权或清除未知目录。
 - **Scenario: 撤销本批首次安装** — Given 升级前目标不存在且新装目录为只读，When 通过恢复计划撤销安装，Then 先校验并移开目录，再清理与封存状态一致的副本；不向正式目标加写权限。
 - **Scenario: 安装器清理失败** — Given 安装或回退后暂存目录无法完整清理，When 查看命令退出码和回执，Then 命令不报全部成功，保留主操作错误，并明确报告仍需处理的实际路径。
+- **Scenario: 可清理的只读来源** — Given 安装器新建的来源工作目录内有只读子树，When 所有者可以用标准库临时目录清理机制移除它，Then 已提交安装正常退出，不报告残留。此权限处理不适用于安装目标或回滚备份。
 - **Scenario: 提交后来源清理失败** — Given 新技能已提交，When 来源工作目录清理失败，Then 保留各技能实际提交结果，命令非零退出并报告遗留路径，不误报为准备阶段失败。
 - **Scenario: 首次恢复预检发现退役对象** — Given 恢复尚无步骤回执，When 预检发现退役对象，Then 停止写入目标，私有 vault 保存绑定本次计划和步骤的路径与状态；CLI 只返回证据 ID。相同观察复用同一文件，无法保存时不返回虚假 ID。
 

@@ -3615,6 +3615,10 @@ def _cleanup_external_path(path: Path) -> bool:
         shutil.rmtree(path)
     except OSError:
         pass
+    return _external_path_absent(path)
+
+
+def _external_path_absent(path: Path) -> bool:
     try:
         path.lstat()
     except FileNotFoundError:
@@ -4113,12 +4117,12 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
 def execute_external_skill_install(
     args: argparse.Namespace, selected: list[str], target_dir: Path
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
-    workspace: Path | None = None
+    workspace: tempfile.TemporaryDirectory[str] | None = None
     transaction: dict[str, object]
     retained: list[str] = []
     try:
-        workspace = Path(tempfile.mkdtemp(prefix="sbtd-onboard-external-sources-"))
-        resolved = resolve_external_install_sources(selected, args.source, workspace)
+        workspace = tempfile.TemporaryDirectory(prefix="sbtd-onboard-external-sources-")
+        resolved = resolve_external_install_sources(selected, args.source, Path(workspace.name))
         staging = stage_external_skills(selected, resolved, target_dir)
         results, transaction = commit_external_skill_transaction(selected, resolved, target_dir, staging)
     except Exception as exc:  # noqa: BLE001 - commit handles its own mutation failures.
@@ -4135,8 +4139,15 @@ def execute_external_skill_install(
         if isinstance(exc, ExternalCleanupError):
             retained.append(str(exc.retained))
     finally:
-        if workspace is not None and not _cleanup_external_path(workspace):
-            retained.append(str(workspace))
+        if workspace is not None:
+            # Only the source workspace we created gets TemporaryDirectory's
+            # read-only permission handling. Keep cleanup outside the transaction.
+            try:
+                workspace.cleanup()
+            except OSError:
+                pass
+            if not _external_path_absent(Path(workspace.name)):
+                retained.append(workspace.name)
     _record_external_cleanup(results, transaction, retained)
     return results, transaction
 
