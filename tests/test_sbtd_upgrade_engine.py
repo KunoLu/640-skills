@@ -360,17 +360,18 @@ class UpgradeEngineTests(unittest.TestCase):
         before = sbtd_upgrade.snapshot(target)
         original = sbtd_upgrade.snapshot(source)
         step = {
+            "step_id": "b" * 64,
             "action": "restore", "target": str(target), "restore_state": original,
             "backup_ref": {"path": str(source), "state": original},
         }
-        rename = os.rename
+        from sbtd_migration_files import rename_directory_exclusive as rename
 
         def fail_cutover(src, dst):
             if Path(src).name.startswith(".sbtd-migration-stage-") and dst == target:
                 raise OSError("test cutover failure")
             rename(src, dst)
 
-        with mock.patch.object(os, "rename", side_effect=fail_cutover), self.assertRaises(ContractError):
+        with mock.patch("sbtd_migration_files.rename_directory_exclusive", side_effect=fail_cutover), self.assertRaises(ContractError):
             sbtd_upgrade._execute_step(step, before)
         self.assertEqual(sbtd_upgrade.snapshot(target), before)
         self.assertEqual(target.stat().st_mode & 0o777, 0o555)
@@ -1344,6 +1345,42 @@ class UpgradeEngineTests(unittest.TestCase):
             )
         self.assertEqual(wrong.exception.code, "confirmation-mismatch")
 
+    def test_interrupted_restore_with_retired_tree_cannot_be_reconciled(self):
+        plan, receipt, target, _agents, _vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        with mock.patch("sbtd_migration_files.discard_withdrawn_directory",
+                        side_effect=ContractError("write-failed", "injected after publication")):
+            first = self._apply_recovery_local(recovery)
+        self.assertEqual(first["status"], "failed")
+        self.assertEqual((target / "SKILL.md").read_bytes(), b"original bytes\n")
+        with self.assertRaises(ContractError):
+            self._apply_recovery_local(recovery, receipt=first)
+        self.assertEqual((target / "SKILL.md").read_bytes(), b"original bytes\n")
+
+    @unittest.skipUnless(os.name == "posix", "POSIX restore mode contract")
+    def test_completed_restore_retry_requires_root_permissions(self):
+        plan, receipt, target, _agents, _vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        first = self._apply_recovery_local(recovery)
+        self.assertEqual(first["status"], "complete")
+        different = (target.stat().st_mode & 0o777) ^ 0o020
+        target.chmod(different)
+        with self.assertRaises(ContractError):
+            self._apply_recovery_local(recovery, receipt=first)
+        self.assertEqual(target.stat().st_mode & 0o777, different)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
+    def test_remove_recovery_withdraws_new_readonly_directory(self):
+        target = self.base / "new-skill"
+        target.mkdir()
+        (target / "SKILL.md").write_bytes(b"installed only by upgrade")
+        target.chmod(0o555)
+        state = sbtd_upgrade.snapshot(target)
+        step = {"action": "remove", "step_id": "c" * 64, "target": str(target)}
+        sbtd_upgrade._execute_step(step, state)
+        self.assertFalse(target.exists())
+        self.assertEqual(list(self.base.iterdir()), [])
+
     def test_recovery_retry_is_idempotent(self):
         plan, receipt, replaced, agents_file, _vault = self._recovery_batch()
         recovery_plan = sbtd_upgrade.plan_recovery(plan, receipt)
@@ -1572,7 +1609,7 @@ class UpgradeEngineTests(unittest.TestCase):
     def test_recovery_resumes_legacy_absent_target_after_restore_intent(self):
         plan, receipt, target, agents, _vault = self._recovery_batch()
         recovery = sbtd_upgrade.plan_recovery(plan, receipt)
-        def interrupt_old_restore(_backup, path, expected, *, scope):
+        def interrupt_old_restore(_backup, path, expected, *, scope, retired_path):
             # A pre-cutover executor could stop after removal with its intent already persisted.
             sbtd_upgrade.remove_reference(path, expected, scope=scope)
             raise ContractError("write-failed", "injected legacy interruption", exit_code=3)

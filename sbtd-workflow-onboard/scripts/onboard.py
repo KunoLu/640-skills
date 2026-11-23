@@ -47,6 +47,7 @@ from onboard_arguments import (
     validate_upgrade_args,
 )
 from sbtd_external_notices import SUPPLEMENTS, copy_notices, notice_overlay
+from sbtd_migration_files import rename_directory_exclusive
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -3602,6 +3603,27 @@ def resolve_external_install_sources(
     return resolved
 
 
+class ExternalCleanupError(RuntimeError):
+    def __init__(self, primary: Exception, retained: Path) -> None:
+        super().__init__(f"{primary}; cleanup incomplete: {retained}")
+        self.retained = retained
+
+
+def _cleanup_external_path(path: Path) -> bool:
+    """Return success only when the temporary name is provably absent."""
+    try:
+        shutil.rmtree(path)
+    except OSError:
+        pass
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        pass
+    return False
+
+
 def stage_external_skills(
     selected: list[str], resolved: dict[str, dict[str, object]], target_dir: Path
 ) -> Path:
@@ -3625,8 +3647,9 @@ def stage_external_skills(
                 )
             copy_notices(destination, cast(dict[str, Path], resolved[name]["notices"]))
         return staging
-    except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
+    except Exception as exc:
+        if not _cleanup_external_path(staging):
+            raise ExternalCleanupError(exc, staging) from exc
         raise
 
 
@@ -3637,45 +3660,37 @@ def _readonly_mac_directory(path: Path) -> bool:
     return stat.S_ISDIR(mode) and not mode & stat.S_IWUSR
 
 
-def _rename_mac_exclusive(source: Path, target: Path) -> None:
-    """macOS renamex_np(RENAME_EXCL): never replace an unexpected sibling."""
-    import ctypes
-
-    rename = ctypes.CDLL(None, use_errno=True).renamex_np
-    rename.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
-    rename.restype = ctypes.c_int
-    if rename(os.fsencode(source), os.fsencode(target), 0x00000004):
-        code = ctypes.get_errno()
-        raise OSError(code, os.strerror(code), str(target))
-
-
 def _set_aside_sibling(path: Path) -> Path:
     """Withdraw a directory without reparenting it or changing its permissions."""
     from uuid import uuid4
 
     sibling = path.parent / f".sbtd-external-held-{uuid4().hex}"
-    _rename_mac_exclusive(path, sibling)
+    rename_directory_exclusive(path, sibling)
     return sibling
 
 
 def _publish_external_stage(stage: Path, target: Path) -> None:
     mode = stat.S_IMODE(stage.stat().st_mode)
     if sys.platform != "darwin" or mode & stat.S_IWUSR:
-        shutil.move(str(stage), str(target))
+        rename_directory_exclusive(stage, target)
         return
 
     # macOS needs write access to reparent a directory (update "..").
     # Move only the private staged inode; restore its mode before publication.
-    with tempfile.TemporaryDirectory(prefix=".sbtd-external-publish-", dir=target.parent) as tmp:
-        sibling = Path(tmp)
-        stage.chmod(0o700)
-        try:
-            os.replace(stage, sibling)
-        except OSError:
-            stage.chmod(mode)
-            raise
+    from uuid import uuid4
+
+    sibling = target.parent / f".sbtd-external-publish-{uuid4().hex}"
+    stage.chmod(0o700)
+    try:
+        rename_directory_exclusive(stage, sibling)
+    except OSError:
+        stage.chmod(mode)
+        raise
+    try:
         sibling.chmod(mode)
-        _rename_mac_exclusive(sibling, target)
+        rename_directory_exclusive(sibling, target)
+    except OSError as exc:
+        raise ExternalCleanupError(exc, sibling) from exc
 
 
 def commit_external_skill_transaction(
@@ -3683,6 +3698,41 @@ def commit_external_skill_transaction(
     resolved: dict[str, dict[str, object]],
     target_dir: Path,
     staging: Path,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    try:
+        rollback = Path(tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir))
+    except OSError as exc:
+        if not _cleanup_external_path(staging):
+            raise ExternalCleanupError(exc, staging) from exc
+        raise
+    try:
+        results, transaction = _commit_external_skills(selected, resolved, target_dir, staging, rollback)
+    except Exception as exc:  # noqa: BLE001 - do not claim an unknown transaction was unwritten.
+        retained = [str(path) for path in (staging, rollback) if filesystem_entry_exists(path)]
+        return [{"name": name, "phase": "transaction", "status": "failed", "error": str(exc)} for name in selected], {
+            "status": "outcome-unknown", "rolledBack": False, "rollbackErrors": [],
+            "rollbackPath": str(rollback) if str(rollback) in retained else None,
+            "retainedPaths": retained,
+        }
+    paths = [staging]
+    if transaction["rollbackPath"] is None:
+        paths.append(rollback)
+    retained = [str(p) for p in paths if not _cleanup_external_path(p)]
+    if retained:
+        transaction["retainedPaths"] = [*cast(list[str], transaction.get("retainedPaths", [])), *retained]
+        if transaction["status"] in ("committed", "rolled-back", "aborted-before-commit"):
+            transaction["status"] = f"{transaction['status']}-cleanup-incomplete"
+        results.extend(
+            {"name": Path(path).name, "phase": "cleanup", "status": "failed",
+             "target": path, "error": "temporary directory could not be removed"}
+            for path in retained
+        )
+    return results, transaction
+
+
+def _commit_external_skills(
+    selected: list[str], resolved: dict[str, dict[str, object]], target_dir: Path, staging: Path,
+    rollback: Path,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     legacy_names: list[str] = []
     for name in selected:
@@ -3708,17 +3758,12 @@ def commit_external_skill_transaction(
         is not None
     ]
     if identity_conflicts:
-        shutil.rmtree(staging, ignore_errors=True)
         return identity_conflicts, {
             "status": "aborted-before-commit",
             "rolledBack": False,
             "rollbackErrors": [],
             "rollbackPath": None,
         }
-
-    rollback = Path(
-        tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir)
-    )
 
     from sbtd_migration_files import discard_withdrawn_directory, snapshot
 
@@ -3743,7 +3788,7 @@ def commit_external_skill_transaction(
                 backup = _set_aside_sibling(target)
                 sibling_backups[backup] = before
             else:
-                shutil.move(str(target), str(backup))
+                rename_directory_exclusive(target, backup)
             moved.append((target, backup))
             if backup in sibling_backups and snapshot(backup) != sibling_backups[backup]:
                 raise RuntimeError(f"set-aside directory changed: {backup}")
@@ -3799,6 +3844,7 @@ def commit_external_skill_transaction(
         }
         return results, transaction
     except Exception as exc:  # noqa: BLE001 - rollback must cover every local commit failure.
+        retained_paths = [str(exc.retained)] if isinstance(exc, ExternalCleanupError) else []
         for target in reversed(committed):
             try:
                 if target in readonly_installs:
@@ -3806,6 +3852,7 @@ def commit_external_skill_transaction(
                     try:
                         discard_withdrawn_directory(held, readonly_installs[target], scope=target_dir)
                     except Exception:
+                        retained_paths.append(str(held))
                         rollback_errors.append(f"retained installed directory: {held}")
                         raise
                 else:
@@ -3816,10 +3863,7 @@ def commit_external_skill_transaction(
             try:
                 if filesystem_entry_exists(target):
                     raise RuntimeError("target still occupied; backup retained")
-                if backup in sibling_backups:
-                    _rename_mac_exclusive(backup, target)
-                else:
-                    shutil.move(str(backup), str(target))
+                rename_directory_exclusive(backup, target)
             except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
                 rollback_errors.append(f"restore {target}: {rollback_exc}")
         results = [
@@ -3838,17 +3882,16 @@ def commit_external_skill_transaction(
             for name in selected
         ]
         retain_rollback = bool(rollback_errors)
+        if retain_rollback:
+            retained_paths.extend(str(p) for p in sibling_backups if filesystem_entry_exists(p))
         return results, {
-            "status": "rollback-failed" if rollback_errors else "rolled-back",
+            "status": ("rollback-failed" if retain_rollback else
+                       "rolled-back-cleanup-incomplete" if retained_paths else "rolled-back"),
             "rolledBack": True,
             "rollbackErrors": rollback_errors,
             "rollbackPath": str(rollback) if retain_rollback else None,
-            **({"retainedPaths": [str(p) for p in sibling_backups if p.exists()]} if retain_rollback else {}),
+            **({"retainedPaths": retained_paths} if retained_paths else {}),
         }
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-        if not retain_rollback:
-            shutil.rmtree(rollback, ignore_errors=True)
 
 
 def remove_legacy_external_targets(
@@ -4092,6 +4135,8 @@ def execute_external_skill_install(
                 "rolledBack": False,
                 "rollbackErrors": [],
                 "rollbackPath": None,
+                **({"status": "aborted-before-commit-cleanup-incomplete", "retainedPaths": [str(exc.retained)]}
+                   if isinstance(exc, ExternalCleanupError) else {}),
             },
         )
 
@@ -4251,6 +4296,8 @@ def print_external_skill_install_result(
     print(f"Transaction: {transaction['status']}")
     if transaction.get("rollbackPath"):
         print(f"Rollback backup retained at: {transaction['rollbackPath']}")
+    for path in cast(list[str], transaction.get("retainedPaths", [])):
+        print(f"Cleanup retained: {path}")
     rollback_errors = transaction.get("rollbackErrors")
     if isinstance(rollback_errors, list):
         for rollback_error in rollback_errors:

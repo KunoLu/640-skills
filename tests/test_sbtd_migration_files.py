@@ -38,6 +38,36 @@ def file_state(content: bytes) -> dict:
 
 
 class MigrationFileTests(unittest.TestCase):
+    def test_directory_cutover_does_not_replace_new_empty_occupant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target, source, vault = root / "installed", root / "source", root / "vault"
+            for path in (target, source, vault):
+                path.mkdir(mode=0o700)
+            (target / "payload").write_bytes(b"previous")
+            (source / "payload").write_bytes(b"candidate")
+            before = snapshot(target)
+            backup = backup_reference({"path": str(target), "state": before}, vault / "original", private_root=vault)
+            occupant = []
+
+            def inspect(path):
+                measured = snapshot(path)
+                if not occupant and Path(path).name.startswith(".sbtd-migration-retired-"):
+                    target.mkdir()
+                    occupant.append(target.stat())
+                return measured
+
+            with (
+                mock.patch.object(sbtd_migration_files, "snapshot", side_effect=inspect),
+                self.assertRaises(RetainedObjectError) as caught,
+            ):
+                install_reference({"path": str(source), "state": snapshot(source)}, target, before,
+                                  scope=root, backup_ref=backup)
+            self.assertTrue(os.path.samestat(occupant[0], target.stat()))
+            self.assertEqual(list(target.iterdir()), [])
+            held = [Path(ref["path"]) for ref in caught.exception.retained_refs]
+            self.assertTrue(any((p / "payload").is_file() and (p / "payload").read_bytes() == b"previous" for p in held))
+
     @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
     def test_absent_install_discards_stage_with_readonly_nested_skill(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -513,7 +543,7 @@ class MigrationFileTests(unittest.TestCase):
                 private_root=vault,
             )
             reference = {"path": str(candidate), "state": snapshot(candidate)}
-            rename = os.rename
+            rename = sbtd_migration_files.rename_directory_exclusive
             retired_paths = []
 
             def change_after_move(source, destination, *args, **kwargs):
@@ -527,7 +557,7 @@ class MigrationFileTests(unittest.TestCase):
 
             with (
                 mock.patch(
-                    "sbtd_migration_files.os.rename", side_effect=change_after_move
+                    "sbtd_migration_files.rename_directory_exclusive", side_effect=change_after_move
                 ),
                 self.assertRaises(ContractError),
             ):

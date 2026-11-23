@@ -380,6 +380,8 @@ Strict 门禁由事实触发：领域歧义、持久／共享数据、不明确�
 独立安装的外部技能在 `SBTD-NOTICES/` 中携带适用的仓库许可证和通知。`ui-ux-pro-max` 的 Phosphor 图标元数据，以及 Impeccable 的 iOS、Android 参考文档所依据的原作，分别随对应技能携带 MIT。镜像校验和仍覆盖未改写的来源，不是附有通知的安装目录摘要。
 显式 `upstream` 安装这两个技能时，若适用文件改名、内容变化或仓库许可／通知变化，须重新核对归属后才能安装；不相关文件更新不要求提交 SHA 相同。
 
+外部技能安装报告清理未完成时，通过 `transaction.retainedPaths` 定位遗留的暂存或备份目录。安装已经提交也可能因清理失败而非零退出；重试前请先核对回执。
+
 | 分类 | Skills | 用途 |
 |---|---|---|
 | 澄清 | [grilling](sbtd-workflow-onboard/assets/external-skills/stable/skills/grilling/SKILL.md)、[grill-me](sbtd-workflow-onboard/assets/external-skills/stable/skills/grill-me/SKILL.md)、[grill-with-docs](sbtd-workflow-onboard/assets/external-skills/stable/skills/grill-with-docs/SKILL.md) | 压力测试决策；需要领域记录时使用 with-docs 版本 |

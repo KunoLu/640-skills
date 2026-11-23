@@ -631,6 +631,52 @@ class ExternalSkillInstallTests(unittest.TestCase):
             )
         )
 
+    def test_commit_reports_cleanup_residue_without_undoing_new_install(self):
+        onboard = self.load_onboard_module()
+        real_remove = shutil.rmtree
+        for phase in ("staging", "rollback"):
+            with self.subTest(phase=phase):
+                slots = self.root / phase
+                self.write_valid_skill(slots / "tdd", "tdd", "previous")
+
+                def leave(path, *args, prefix=".sbtd-external-" + phase + "-", **kwargs):
+                    if Path(path).name.startswith(prefix):
+                        if not kwargs.get("ignore_errors"):
+                            raise PermissionError("test refused cleanup")
+                        return
+                    return real_remove(path, *args, **kwargs)
+
+                with mock.patch.object(shutil, "rmtree", side_effect=leave):
+                    results, tx = onboard.execute_external_skill_install(
+                        argparse.Namespace(source="stable"), ["tdd"], slots
+                    )
+                self.assertEqual(tx["status"], "committed-cleanup-incomplete")
+                self.assertFalse(tx["rolledBack"])
+                self.assertEqual([str(p) for p in slots.glob(".sbtd-external-" + phase + "-*")], tx["retainedPaths"])
+                self.assertTrue(any(row["status"] == "failed" and row["phase"] == "cleanup" for row in results))
+                self.assertTrue((slots / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
+
+    def test_prepare_reports_primary_failure_and_retained_stage(self):
+        onboard = self.load_onboard_module()
+        remove = shutil.rmtree
+
+        def refuse_stage(path, *args, **kwargs):
+            if Path(path).name.startswith(".sbtd-external-staging-"):
+                raise PermissionError("cannot clear test stage")
+            return remove(path, *args, **kwargs)
+
+        with (
+            mock.patch.object(onboard, "copy_notices", side_effect=OSError("primary notice failure")),
+            mock.patch.object(shutil, "rmtree", side_effect=refuse_stage),
+        ):
+            results, tx = onboard.execute_external_skill_install(
+                argparse.Namespace(source="stable"), ["tdd"], self.skills_dir
+            )
+        self.assertFalse((self.skills_dir / "tdd").exists())
+        self.assertIn("primary notice failure", results[0]["error"])
+        self.assertEqual(tx["status"], "aborted-before-commit-cleanup-incomplete")
+        self.assertTrue((Path(tx["retainedPaths"][0]) / "tdd/SKILL.md").is_file())
+
     def test_rollback_failure_retains_the_only_backup_copy(self) -> None:
         onboard = self.load_onboard_module()
         self.write_valid_skill(
@@ -647,7 +693,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                 "fallbackReason": None,
             }
         }
-        real_move = shutil.move
+        real_move = onboard.rename_directory_exclusive
         move_count = 0
 
         def failing_move(source, destination):
@@ -657,7 +703,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                 raise OSError("simulated commit/restore failure")
             return real_move(source, destination)
 
-        with mock.patch.object(onboard.shutil, "move", side_effect=failing_move):
+        with mock.patch.object(onboard, "rename_directory_exclusive", side_effect=failing_move):
             _, transaction = onboard.commit_external_skill_transaction(
                 ["diagnosing-bugs"], resolved, self.skills_dir, staging
             )
@@ -688,7 +734,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                         "--json",
                     ]
                 )
-                real_move = shutil.move
+                real_move = onboard.rename_directory_exclusive
                 skills_root = skills_dir.resolve()
 
                 def reject_install_and_restore(
@@ -716,7 +762,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                         clear=True,
                     ),
                     mock.patch.object(
-                        onboard.shutil, "move", side_effect=reject_install_and_restore
+                        onboard, "rename_directory_exclusive", side_effect=reject_install_and_restore
                     ),
                     contextlib.redirect_stdout(stdout),
                     contextlib.redirect_stderr(stderr),

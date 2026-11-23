@@ -20,6 +20,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 - Ship the original MIT texts for Phosphor metadata and the work behind Impeccable's platform references. Standalone external installs and explicit upgrades now carry their applicable licenses and notices with the skill; source pins and rollback boundaries are unchanged.
 - Preserve read-only source modes when staging notices. Explicit upstream installs now check the covered files and repository attribution against the reviewed baseline before replacing either affected Skill.
 - Restore an existing read-only Skill directory from its verified private backup without deleting the live tree first. A failed cutover preserves the previous installation or reports the retained paths.
+- Prevent directory cutovers from replacing an unexpected occupant; check retired paths and directory permissions on recovery retries. Undo a new read-only installation without changing its live permissions, and report staging or backup directories left by failed installer cleanup.
 
 
 ## v2.2.0-rc.1 (2026-11-13)

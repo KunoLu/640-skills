@@ -91,6 +91,7 @@ from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_cleanup_targets import strict_json_object
 from sbtd_external_notices import NOTICE_DIR, copy_notices
 from sbtd_migration_files import (
+    RetainedObjectError,
     _canonical,
     _lstat,
     backup_reference,
@@ -102,6 +103,7 @@ from sbtd_migration_files import (
     restore_directory_reference,
     save_document,
     snapshot,
+    withdraw_directory_reference,
     write_file,
 )
 from sbtd_upgrade_paths import paths_overlap
@@ -2750,6 +2752,11 @@ def _apply_recovery_local(
                 "expected_current": step["expected_current"],
                 "restore_state": step["restore_state"],
             }
+            if step["expected_mechanical"]["type"] == "directory" and (
+                step["step_id"] not in intents or "directory_cutover" in intents[step["step_id"]]
+            ):
+                # Do not rewrite an immutable intent from a pre-witness executor.
+                intent["directory_cutover"] = _directory_cutover_witness(step)
             _save_once(
                 intents_dir / f"rintent-{recovery_id[:16]}-{step['step_id'][:32]}.json",
                 {"schema_version": 1, "payload": intent},
@@ -2758,6 +2765,8 @@ def _apply_recovery_local(
             try:
                 _execute_step(step, action["mechanical_before"])
                 after = _payload_state(Path(step["target"]))
+                if step["expected_mechanical"]["type"] == "directory":
+                    _check_recovery_cutover(step, intent, after)
             except ContractError as error:
                 _record_result(results,
                     _step_row(step, "failed", _measured(step["target"]), reason=error.code)
@@ -2882,6 +2891,34 @@ def _step_row(
     }
 
 
+def _recovery_retired_path(step: Mapping[str, Any]) -> Path:
+    # Derived from the revalidated plan, not a path supplied by a receipt.
+    ident = _expect_hex(step["step_id"], "directory recovery step ID")
+    return Path(step["target"]).with_name(f".sbtd-recovery-retired-{ident}")
+
+
+def _directory_cutover_witness(step: Mapping[str, Any]) -> dict[str, Any]:
+    mode = None
+    if os.name == "posix" and step["action"] == "restore" and step["restore_state"]["type"] == "directory":
+        mode = stat.S_IMODE(_canonical(Path(step["backup_ref"]["path"])).lstat().st_mode)
+    return {"version": 1, "root_mode": mode}
+
+
+def _check_recovery_cutover(
+    step: Mapping[str, Any], intent: Mapping[str, Any] | None, live: Mapping[str, Any],
+) -> None:
+    retired = _recovery_retired_path(step)
+    if _lstat(retired) is not None:
+        # Matching bytes (or an absent target) cannot authorize disposal of a remnant.
+        raise RetainedObjectError(retired)
+    witness = _directory_cutover_witness(step)
+    if intent is not None and "directory_cutover" in intent and intent["directory_cutover"] != witness:
+        _fail("intent-mismatch", "directory recovery mode differs from its sealed intent")
+    if (witness["root_mode"] is not None and live == step["restore_state"]
+            and stat.S_IMODE(_canonical(Path(step["target"])).lstat().st_mode) != witness["root_mode"]):
+        _fail("state-conflict", "restored directory mode differs from its private original")
+
+
 def _reconcile_step(
     step: dict[str, Any],
     prior: dict[str, Any] | None,
@@ -2892,6 +2929,12 @@ def _reconcile_step(
     expected_after = (
         dict(_ABSENT) if step["action"] == "remove" else step["restore_state"]
     )
+    intent = intents.get(step["step_id"])
+    if step["expected_mechanical"]["type"] == "directory":
+        _check_recovery_cutover(step, intent, live)
+        if (live == expected_after and intent is not None and "directory_cutover" not in intent
+                and (prior is None or prior["result"] not in ("succeeded", "skipped-complete"))):
+            _fail("state-conflict", "legacy directory outcome requires manual cleanup verification")
     if prior is not None and prior.get("result") in _COMPLETED_TOKENS:
         if live == expected_after and mechanical == prior.get("mechanical_after"):
             return {"verb": "record", "row": _step_row(step, "skipped-complete", live)}
@@ -2899,7 +2942,6 @@ def _reconcile_step(
             "state-conflict",
             "a completed recovery step no longer matches its receipt outcome",
         )
-    intent = intents.get(step["step_id"])
     if intent is not None:
         if step["action"] == "restore" and live["type"] == "absent":
             return {"verb": "write", "step": step}
@@ -2929,6 +2971,9 @@ def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
     if snapshot(target) != expected:
         _fail("state-conflict", "a recovery target changed immediately before its write")
     if step["action"] == "remove":
+        if expected["type"] == "directory":
+            withdraw_directory_reference(target, expected, scope=scope, retired_path=_recovery_retired_path(step))
+            return
         remove_reference(target, expected, scope=scope)
         return
     backup_ref = step["backup_ref"]
@@ -2948,7 +2993,9 @@ def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
         install_reference(backup_ref, target, expected, scope=scope)
         return
     if expected["type"] == "directory":
-        restore_directory_reference(backup_ref, target, expected, scope=scope)
+        restore_directory_reference(
+            backup_ref, target, expected, scope=scope, retired_path=_recovery_retired_path(step),
+        )
         return
     if expected["type"] != "absent":
         remove_reference(target, expected, scope=scope)

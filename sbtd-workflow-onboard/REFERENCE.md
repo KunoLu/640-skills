@@ -301,6 +301,10 @@ The manifest digest still verifies the unmodified mirror. Explicit upgrade compa
 - **Scenario: 只读来源** — Given 技能源根目录为 `0555`，When 独立安装或升级组装通知，Then 只临时开放私有暂存根的所有者写权限，恢复原模式，不改来源权限。
 - **Scenario: 显式上游归属变动** — Given 显式 `upstream` 获取带附加许可的技能，When 适用文档移动、替换或其仓库许可证／通知字节与已审基线不一致，Then 在替换目标前拒绝；仅不相关文件变动仍可安装。
 - **Scenario: 恢复只读技能目录** — Given 现有安装和私有备份均匹配封存状态，When 确认恢复，Then 在暂存区校验完整候选后移开当前目录并换入原件；不对正式目标加写权限。换入失败且目标名仍空闲时归还原目录，未知占位则保留现场并报告。
+- **Scenario: 换入时出现新占位** — Given 原目录已移开，When 目标名被另一个空目录占用，Then 排他改名拒绝覆盖，回执指出应保全的目录；不以预先检查代替改名时的排他约束。
+- **Scenario: 恢复中断后重试** — Given 目标字节与原件相同，When 退役目录仍存在或 POSIX 根权限与恢复意图不符，Then 阻断续作，不报告 `reconciled`，不自动改权或清除未知目录。
+- **Scenario: 撤销本批首次安装** — Given 升级前目标不存在且新装目录为只读，When 通过恢复计划撤销安装，Then 先校验并移开目录，再清理与封存状态一致的副本；不向正式目标加写权限。
+- **Scenario: 安装器清理失败** — Given 安装或回退后暂存目录无法完整清理，When 查看命令退出码和回执，Then 命令不报全部成功，保留主操作错误，并明确报告仍需处理的实际路径。
 
 `init` / `reset --json` embed the required installation report under `requiredExternalInstall` in the single root document, including when installation fails before template writes. Per-Skill source metadata and `transaction` recovery fields remain available; the field is `null` when no required installation ran. Existing root plan fields and exit-code semantics are unchanged.
 
@@ -1022,6 +1026,8 @@ python scripts/onboard.py recovery --phase apply \
 恢复只针对本批实际写过的资源，绑定当前实测后态及原件。展示恢复清单后另行确认；后态漂移时保留用户内容并阻断。不自动删除备份，也不承诺恢复旧运行时可用。恢复重试使用返回的累计 `--recovery-receipt`。升级恢复参数不能与 migration 恢复参数混用。
 
 已确认的 restore 意图之后，目标 `absent` 是既有恢复续作窗口，不要求额外“删除完成”checkpoint；这不是覆盖未知非空内容的授权。当前内容与可接受续作状态不符时仍停止，保留备份和冲突内容。
+
+目录恢复按步骤身份选择同父退役路径。该处有残件时，无论目标已恢复到原件字节或已不存在，都停止并报告；保留现场供人工核对。POSIX 目录恢复还要核对备份根模式，不能仅凭内容摘要完成续作。
 
 **历史信任边界：** 操作人明确选择且独占管理的已有私有 vault 是受信历史来源。摘要和相互引用验证一致性，不是签名认证；不能防御有 vault 写权限的人整组一致伪造计划、回执、意图与 checkpoint。不得从未知来源接收整套 vault 并据此自动删除文件。来源或控制权存疑时停止恢复，人工核对原件及操作记录。本流程不创建独立签名密钥或后台信任服务。
 

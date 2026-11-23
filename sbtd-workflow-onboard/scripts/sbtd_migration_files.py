@@ -40,10 +40,12 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import errno
 import functools
 import hashlib
 import os
 import stat
+import sys
 import tempfile
 import types
 from collections.abc import Iterator, Mapping
@@ -61,10 +63,12 @@ __all__ = [
     "install_reference",
     "read_file",
     "remove_reference",
+    "rename_directory_exclusive",
     "require_private_directory",
     "restore_directory_reference",
     "save_document",
     "snapshot",
+    "withdraw_directory_reference",
     "write_file",
 ]
 
@@ -895,6 +899,57 @@ def _fresh_sibling(parent: Path, prefix: str) -> Path:
     return holder
 
 
+def rename_directory_exclusive(source: Path, target: Path) -> None:
+    """Move a directory without replacing even an empty concurrent occupant."""
+    if os.name == "nt":
+        os.rename(source, target)  # Windows rename refuses an existing destination.
+        return
+    libc = ctypes.CDLL(None, use_errno=True)
+    args = (os.fsencode(source), os.fsencode(target))
+    if sys.platform == "darwin" and hasattr(libc, "renamex_np"):
+        rename = libc.renamex_np
+        rename.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+        result = rename(*args, 0x4)  # RENAME_EXCL
+    elif sys.platform.startswith("linux") and hasattr(libc, "renameat2"):
+        rename = libc.renameat2
+        rename.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+        result = rename(-100, args[0], -100, args[1], 1)  # AT_FDCWD, RENAME_NOREPLACE
+    else:
+        raise OSError(errno.ENOTSUP, "exclusive directory rename is unavailable")
+    if result:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code))
+
+
+def _retired_sibling(target: Path, retired: Path) -> Path:
+    if retired.parent != target.parent or retired == target or not retired.name.startswith(".sbtd-recovery-retired-"):
+        _fail("invalid-argument", "invalid recovery retirement path")
+    if _lstat(retired) is not None:
+        raise RetainedObjectError(retired)
+    return retired
+
+
+def withdraw_directory_reference(
+    target: Path, expected: Mapping[str, Any], *, scope: Path, retired_path: Path,
+) -> None:
+    """Undo a new directory install without ever making its live name writable."""
+    target = _target_in_scope(target, scope)
+    before = _expect_state(expected)
+    retired = _retired_sibling(target, retired_path)
+    identity = target.lstat()
+    if before["type"] != "directory" or snapshot(target) != before:
+        _fail("state-conflict", "the directory changed before recovery removal")
+    rename_directory_exclusive(target, retired)
+    try:
+        if not os.path.samestat(identity, retired.lstat()):
+            raise RetainedObjectError(retired)
+        discard_withdrawn_directory(retired, before, scope=scope)
+    except (OSError, ContractError) as error:
+        if isinstance(error, RetainedObjectError):
+            raise
+        raise RetainedObjectError(retired) from error
+
+
 def discard_withdrawn_directory(path: Path, expected: Mapping[str, Any], *, scope: Path) -> None:
     """Dispose of a private stage or set-aside directory, never a live install.
 
@@ -1175,6 +1230,7 @@ def _replace_directory(
     before: dict[str, Any],
     *,
     restore_root_mode: bool = False,
+    retired_path: Path | None = None,
 ) -> None:
     """Controlled directory replacement behind an already verified backup.
 
@@ -1186,6 +1242,10 @@ def _replace_directory(
     backup. No cross-process compare-and-swap is claimed.
     """
     parent = destination.parent
+    retired = (
+        _retired_sibling(destination, retired_path)
+        if retired_path is not None else _fresh_sibling(parent, ".sbtd-migration-retired-")
+    )
     staging, created = _stage_tree(source, source_state, parent)
     try:
         mode = stat.S_IMODE(source.lstat().st_mode)
@@ -1198,9 +1258,11 @@ def _replace_directory(
     except (ContractError, OSError):
         _remove_staging(staging, created)
         raise
-    retired = _fresh_sibling(parent, ".sbtd-migration-retired-")
     try:
-        os.rename(destination, retired)
+        rename_directory_exclusive(destination, retired)
+    except FileExistsError as exc:
+        _remove_staging(staging, created)
+        raise RetainedObjectError(retired) from exc
     except OSError:
         _remove_staging(staging, created)
         _fail(
@@ -1216,7 +1278,7 @@ def _replace_directory(
     except ContractError:
         if _lstat(destination) is None:
             try:
-                os.rename(retired, destination)
+                rename_directory_exclusive(retired, destination)
             except OSError:
                 raise RetainedObjectError(retired) from None
         _remove_staging(staging, created)
@@ -1224,12 +1286,12 @@ def _replace_directory(
             raise RetainedObjectError(retired) from None
         raise
     try:
-        os.rename(staging, destination)
+        rename_directory_exclusive(staging, destination)
     except OSError:
         if _lstat(destination) is not None:
             raise RetainedObjectError(retired, staging, destination) from None
         try:
-            os.rename(retired, destination)
+            rename_directory_exclusive(retired, destination)
         except OSError:
             raise RetainedObjectError(retired) from None
         _remove_staging(staging, created)
@@ -1241,8 +1303,8 @@ def _replace_directory(
         damaged: Path | None = None
         try:
             damaged = _fresh_sibling(parent, ".sbtd-migration-damaged-")
-            os.rename(destination, damaged)
-            os.rename(retired, destination)
+            rename_directory_exclusive(destination, damaged)
+            rename_directory_exclusive(retired, destination)
         except OSError:
             retained = [retired, destination]
             if damaged is not None:
@@ -1472,7 +1534,8 @@ def write_file(
 
 
 def restore_directory_reference(
-    backup_ref: Mapping[str, Any], target: Path, expected: Mapping[str, Any], *, scope: Path
+    backup_ref: Mapping[str, Any], target: Path, expected: Mapping[str, Any], *, scope: Path,
+    retired_path: Path | None = None,
 ) -> None:
     """Replace the sealed installed tree with a verified private original.
 
@@ -1491,7 +1554,7 @@ def restore_directory_reference(
         _fail("preservation-failed", "the private original differs from its recovery reference", exit_code=3)
     if snapshot(destination) != before:
         _fail("state-conflict", "the installed directory changed before restoration")
-    _replace_directory(source, original, destination, before, restore_root_mode=True)
+    _replace_directory(source, original, destination, before, restore_root_mode=True, retired_path=retired_path)
 
 
 def install_reference(

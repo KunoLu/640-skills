@@ -7,7 +7,7 @@ mode_note: rc.2 已确认 PRD；用户授权任务 2 开工
 status: "checking"
 branch: fix/v2.2.0-rc.2-license
 created_at: '2026-11-23T18:31:11.495286+08:00'
-updated_at: "2026-11-23T22:00:45.130163+08:00"
+updated_at: "2026-11-23T22:27:05.013508+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -38,6 +38,14 @@ completed_at: null
 
 最终本地 23 次 CLI 调用符合预期。真实 0555 连续安装、显式升级、verify (`aligned`)、恢复 (`complete`) 均通过；恢复的目录与备份机械摘要及 0755 模式相同。本地 Git clone 的两种技能均拒绝改名与等长字节漂移。200 个 stable 文件与父提交一致。八模块运行 335 项，325 通过、10 跳过；首轮旧故障注入接缝的失败保留。详细原生回执／中文报告见新隔离目录 `final-scenario.log`、`final-scenario.md`、`affected-final.log`。旧现场、旧 vault 均未改动。未推送、未跑远端 CI；当前内审和外审不得以测试代替。
 
+## 四项 P2 修正：本地验收
+
+`bd1a22a` 的四个复核项已在独立 `isolated/four-p2.d2AyCxfF/` 修正：换入和归还均不覆盖新占位；中断续作核对按步骤导出的退役路径与 POSIX 根模式；首次安装的目录可安全撤销至 absent；暂存或备份清理失败非零退出并列出实际残件，不丢失主操作状态。
+
+新用例先红后绿。最终八模块共 341 项，331 通过、10 跳过。最终 28 次 CLI 调用符合预期：21 次退出 0，6 次负例退出 1，1 次负例退出 2。空范围升级的 33 个恢复步骤全部成功，根目录无残余。真实清理故障返回 `committed-cleanup-incomplete`，新安装与回执列出的原件均可读。对于未知占位、遗留退役树和权限不符，只保留并报告，不自动清理。200 个 stable 文件对照一致；Ruff 与 ty 均无新增诊断。双语 README 与 CHANGELOG、REFERENCE 已同步回执和行为；版本监控 prompt 无需改动，监控对象、权限和版本规则未变。
+
+详细输出、两类红灯和最终实测报告保存在该新 TEMP 根。未改全局环境、未移动或清理旧现场。当前仅本地提交与内置审查；不把 Linux/Windows 原生、外部复核、远端 CI、合入或发布记为通过。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -52,3 +60,5 @@ completed_at: null
 | 2026-11-23T21:41:18.038635+08:00 | in-progress | blocked | 当前 Astra 会话：私有暂存清理与只读重装通过，恢复正式 0555 目标触发新的 foreign-content-conflict，按用户边界停止，不改该目标或原现场权限。已关闭 /loop。 | 新现场 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/retained-fix.GInG4Ktd/delivery-4xfmoa9z。私有只读子目录无漂移时正常清理；额外/改写负例保留。两次真实 0555 安装均成功、mode=0555，等长漂移定点负例通过。apply-preserve、upgrade-apply、verify 成功且 aligned；recover-plan 成功，recover-apply 退出 3。现场 snapshot 与升级后值一致、backup_ref 摘要相符；失败非早前私有 stage 清理。先保存未提交检查点进行内审；真实 clone 后续场景、最终全影响回归未完成，未推送。 |
 | 2026-11-23T21:46:37.130090+08:00 | blocked | in-progress | 当前 Astra 会话：用户采纳建议，在另一新隔离目录修复正式只读目标恢复，不放宽正式目标权限 | 仅使用 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/restore-fix.z5rLXm0P；保全既有所有现场。校验目标和备份后受保护替换，复跑本地验收及内置复审，不推送。 |
 | 2026-11-23T22:00:45.130163+08:00 | in-progress | checking | 当前 Astra 会话：任务 2 正式只读目录恢复本地验收通过，关闭 /loop，冻结提交并内置复审 | 23 次 CLI 含正负例；回退原件内容及权限一致，335 项中 325 通过、10 跳过。来源锁不变，原现场未动；不推送。 |
+| 2026-11-23T22:06:40.305071+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 bd1a22a 复审的四项 P2，仅本地实现验收，不推送 | 新环境 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/four-p2.d2AyCxfF；换入不覆盖、恢复中断核验权限与旧目录、撤销只读新装、安装暂存清理回执。保留已有现场和来源锁。 |
+| 2026-11-23T22:27:05.013508+08:00 | in-progress | checking | 当前 Astra 会话：四个 P2 本地验收达到暂停点；/loop 已关闭，冻结本地提交内置复审 | 新现场 28 次 CLI 正负例符合预期、八模块 331 通过/10 跳过；真实残件与恢复摘要已核实。四项修正红绿回归见 four-p2.d2AyCxfF，旧现场未动。不推送。 |
