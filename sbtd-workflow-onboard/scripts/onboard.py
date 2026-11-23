@@ -3693,6 +3693,21 @@ def _publish_external_stage(stage: Path, target: Path) -> None:
         raise ExternalCleanupError(exc, sibling) from exc
 
 
+def _record_external_cleanup(
+    results: list[dict[str, object]], transaction: dict[str, object], retained: list[str],
+) -> None:
+    if not retained:
+        return
+    transaction["retainedPaths"] = [*cast(list[str], transaction.get("retainedPaths", [])), *retained]
+    if transaction["status"] in ("committed", "rolled-back", "aborted-before-commit"):
+        transaction["status"] = f"{transaction['status']}-cleanup-incomplete"
+    results.extend(
+        {"name": Path(path).name, "phase": "cleanup", "status": "failed",
+         "target": path, "error": "temporary directory could not be removed"}
+        for path in retained
+    )
+
+
 def commit_external_skill_transaction(
     selected: list[str],
     resolved: dict[str, dict[str, object]],
@@ -3718,15 +3733,7 @@ def commit_external_skill_transaction(
     if transaction["rollbackPath"] is None:
         paths.append(rollback)
     retained = [str(p) for p in paths if not _cleanup_external_path(p)]
-    if retained:
-        transaction["retainedPaths"] = [*cast(list[str], transaction.get("retainedPaths", [])), *retained]
-        if transaction["status"] in ("committed", "rolled-back", "aborted-before-commit"):
-            transaction["status"] = f"{transaction['status']}-cleanup-incomplete"
-        results.extend(
-            {"name": Path(path).name, "phase": "cleanup", "status": "failed",
-             "target": path, "error": "temporary directory could not be removed"}
-            for path in retained
-        )
+    _record_external_cleanup(results, transaction, retained)
     return results, transaction
 
 
@@ -4106,39 +4113,32 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
 def execute_external_skill_install(
     args: argparse.Namespace, selected: list[str], target_dir: Path
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
+    workspace: Path | None = None
+    transaction: dict[str, object]
+    retained: list[str] = []
     try:
-        with tempfile.TemporaryDirectory(
-            prefix="sbtd-onboard-external-sources-"
-        ) as tmp:
-            resolved = resolve_external_install_sources(
-                selected, args.source, Path(tmp)
-            )
-            staging = stage_external_skills(selected, resolved, target_dir)
-            return commit_external_skill_transaction(
-                selected, resolved, target_dir, staging
-            )
-    except Exception as exc:  # noqa: BLE001 - no target is changed before the transaction begins.
-        return (
-            [
-                {
-                    "name": name,
-                    "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
-                    "target": str(target_dir / name),
-                    "status": "failed",
-                    "phase": "prepare",
-                    "error": str(exc),
-                }
-                for name in selected
-            ],
-            {
-                "status": "aborted-before-commit",
-                "rolledBack": False,
-                "rollbackErrors": [],
-                "rollbackPath": None,
-                **({"status": "aborted-before-commit-cleanup-incomplete", "retainedPaths": [str(exc.retained)]}
-                   if isinstance(exc, ExternalCleanupError) else {}),
-            },
-        )
+        workspace = Path(tempfile.mkdtemp(prefix="sbtd-onboard-external-sources-"))
+        resolved = resolve_external_install_sources(selected, args.source, workspace)
+        staging = stage_external_skills(selected, resolved, target_dir)
+        results, transaction = commit_external_skill_transaction(selected, resolved, target_dir, staging)
+    except Exception as exc:  # noqa: BLE001 - commit handles its own mutation failures.
+        results = [
+            {"name": name, "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
+             "target": str(target_dir / name), "status": "failed", "phase": "prepare",
+             "error": str(exc)}
+            for name in selected
+        ]
+        transaction = {
+            "status": "aborted-before-commit", "rolledBack": False,
+            "rollbackErrors": [], "rollbackPath": None,
+        }
+        if isinstance(exc, ExternalCleanupError):
+            retained.append(str(exc.retained))
+    finally:
+        if workspace is not None and not _cleanup_external_path(workspace):
+            retained.append(str(workspace))
+    _record_external_cleanup(results, transaction, retained)
+    return results, transaction
 
 
 def external_migration_identity_failures(

@@ -68,6 +68,16 @@ def _failure(args: Any, error: Exception, mode: str) -> int:
     reason = getattr(error, "code", "invalid-input")
     details = getattr(error, "details", None)
     batch = details.get("batch") if isinstance(details, dict) else None
+    if reason == "foreign-content-conflict" and mode == "recovery" and isinstance(details, dict):
+        evidence_id = details.get("retained_evidence_id")
+        if (isinstance(evidence_id, str) and len(evidence_id) == 64
+                and all(char in "0123456789abcdef" for char in evidence_id)):
+            return _emit(args, {"mode": mode, "phase": args.phase, "status": "blocked",
+                                "reason": reason, "retained_evidence_id": evidence_id,
+                                "nextStep": f"Inspect recovery-preflight-{evidence_id}.json in the plan's private backup root; preserve retained objects."}, 2)
+        if details.get("retained_evidence_unavailable") is True:
+            return _emit(args, {"mode": mode, "phase": args.phase, "status": "blocked",
+                                "reason": reason, "nextStep": "Private preflight evidence could not be saved. Preserve the vault and retained objects; inspect vault write access."}, 3)
     if batch is not None:
         # Post-mutation halt: bind the batch identity, backup root, latest
         # checkpoint and measured/unknown mutation state. The checkpoint is

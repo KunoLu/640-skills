@@ -2713,7 +2713,24 @@ def _apply_recovery_local(
     actions: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     for step in payload["steps"]:
-        action = _reconcile_step(step, prior_steps.get(step["step_id"]), intents)
+        try:
+            action = _reconcile_step(step, prior_steps.get(step["step_id"]), intents)
+        except RetainedObjectError as error:
+            # Preflight precedes write intents and step receipts. Keep raw paths
+            # in the private vault; only the content-addressed locator crosses IPC.
+            evidence = {
+                "schema_version": 1, "reason": error.code,
+                "plan_id": payload["plan_id"], "recovery_id": recovery_id,
+                "step_id": step["step_id"], "retained_refs": error.retained_refs,
+            }
+            evidence_id = _digest(evidence)
+            try:
+                _save_once(vault / f"recovery-preflight-{evidence_id}.json", evidence, vault)
+            except (ContractError, OSError) as save_error:
+                raise ContractError(error.code, error.message, exit_code=3,
+                                    details={"retained_evidence_unavailable": True}) from save_error
+            raise ContractError(error.code, error.message, exit_code=2,
+                                details={"retained_evidence_id": evidence_id}) from error
         if action["verb"] == "write":
             action["mechanical_before"] = snapshot(Path(step["target"]))
             actions.append(action)

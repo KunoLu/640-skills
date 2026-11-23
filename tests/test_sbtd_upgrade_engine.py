@@ -1346,16 +1346,38 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(wrong.exception.code, "confirmation-mismatch")
 
     def test_interrupted_restore_with_retired_tree_cannot_be_reconciled(self):
-        plan, receipt, target, _agents, _vault = self._recovery_batch()
+        plan, receipt, target, _agents, vault = self._recovery_batch()
         recovery = sbtd_upgrade.plan_recovery(plan, receipt)
         with mock.patch("sbtd_migration_files.discard_withdrawn_directory",
                         side_effect=ContractError("write-failed", "injected after publication")):
             first = self._apply_recovery_local(recovery)
         self.assertEqual(first["status"], "failed")
         self.assertEqual((target / "SKILL.md").read_bytes(), b"original bytes\n")
-        with self.assertRaises(ContractError):
-            self._apply_recovery_local(recovery, receipt=first)
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"], receipt=first)
+        self.assertEqual(caught.exception.code, "foreign-content-conflict")
+        details = caught.exception.details or {}
+        evidence_id = details["retained_evidence_id"]
+        document = json.loads((vault / f"recovery-preflight-{evidence_id}.json").read_bytes())
+        self.assertEqual(sbtd_upgrade._digest(document), evidence_id)
+        self.assertEqual(document["recovery_id"], recovery["recovery_id"])
+        self.assertEqual(document["plan_id"], plan["plan_id"])
+        self.assertEqual(document["retained_refs"], first["payload"]["failure"]["retained_refs"])
+        self.assertNotIn(".sbtd-recovery-retired-", json.dumps(details))
         self.assertEqual((target / "SKILL.md").read_bytes(), b"original bytes\n")
+
+    def test_preflight_evidence_write_failure_returns_no_locator(self):
+        plan, receipt, target, _agents, vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        step = next(row for row in recovery["payload"]["steps"] if row["target"] == str(target))
+        held = sbtd_upgrade._recovery_retired_path(step)
+        held.mkdir()
+        with mock.patch.object(sbtd_upgrade, "_save_once", side_effect=OSError("vault full")), self.assertRaises(ContractError) as caught:
+            self._apply_recovery_local(recovery)
+        self.assertEqual(caught.exception.code, "foreign-content-conflict")
+        self.assertEqual(caught.exception.details, {"retained_evidence_unavailable": True})
+        self.assertEqual(list(vault.glob("recovery-preflight-*.json")), [])
+        self.assertTrue(held.is_dir())
 
     @unittest.skipUnless(os.name == "posix", "POSIX restore mode contract")
     def test_completed_restore_retry_requires_root_permissions(self):

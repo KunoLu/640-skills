@@ -7,7 +7,7 @@ mode_note: rc.2 已确认 PRD；用户授权任务 2 开工
 status: "checking"
 branch: fix/v2.2.0-rc.2-license
 created_at: '2026-11-23T18:31:11.495286+08:00'
-updated_at: "2026-11-23T22:27:05.013508+08:00"
+updated_at: "2026-11-23T22:51:29.322791+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -46,6 +46,12 @@ completed_at: null
 
 详细输出、两类红灯和最终实测报告保存在该新 TEMP 根。未改全局环境、未移动或清理旧现场。当前仅本地提交与内置审查；不把 Linux/Windows 原生、外部复核、远端 CI、合入或发布记为通过。
 
+## 两项回执 P2 修正：本地验收
+
+仅在新根 `isolated/receipt-fix.W2nJKf5S/` 验证。来源工作目录清理失败时，保留逐技能结果和事务原有阶段，追加清理失败与实际遗留路径。恢复预检在任何目标写入前识别退役冲突，将绑定计划、恢复和步骤的 `retained_refs` 原子保存在私有 vault；隔离执行器和公开 CLI 只传证据 ID。相同记录不覆盖，保存失败不返回虚假 ID。
+
+两类故障均先红后绿。最终八模块 343 项，333 通过、10 跳过；31 次 CLI 含真实安装后清理失败、无步骤回执时的冲突及其重复验证。源工作目录实际遗留与新安装均可核对；私有证据摘要等于 ID、文件模式 0600，重复阻断未改写。来源锁及 stable 200 项均未动，Ruff、ty 无新增诊断。报告见新 TEMP 的 `final-scenario.md`、`suite-final.log`、`final-scenario.json`，未推送及发布。
+
 ## 状态事件
 
 | at | from | to | reason | evidence |
@@ -62,3 +68,5 @@ completed_at: null
 | 2026-11-23T22:00:45.130163+08:00 | in-progress | checking | 当前 Astra 会话：任务 2 正式只读目录恢复本地验收通过，关闭 /loop，冻结提交并内置复审 | 23 次 CLI 含正负例；回退原件内容及权限一致，335 项中 325 通过、10 跳过。来源锁不变，原现场未动；不推送。 |
 | 2026-11-23T22:06:40.305071+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 bd1a22a 复审的四项 P2，仅本地实现验收，不推送 | 新环境 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/four-p2.d2AyCxfF；换入不覆盖、恢复中断核验权限与旧目录、撤销只读新装、安装暂存清理回执。保留已有现场和来源锁。 |
 | 2026-11-23T22:27:05.013508+08:00 | in-progress | checking | 当前 Astra 会话：四个 P2 本地验收达到暂停点；/loop 已关闭，冻结本地提交内置复审 | 新现场 28 次 CLI 正负例符合预期、八模块 331 通过/10 跳过；真实残件与恢复摘要已核实。四项修正红绿回归见 four-p2.d2AyCxfF，旧现场未动。不推送。 |
+| 2026-11-23T22:35:00.194436+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 0fe534c 的两个回执 P2 | 新隔离环境 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/receipt-fix.W2nJKf5S；保留来源工作目录清理失败前的真实事务结果；为恢复预检阻断保留私有 retained_refs 引用。原现场不动，不改锁和全局配置，不推送。 |
+| 2026-11-23T22:51:29.322791+08:00 | in-progress | checking | 当前 Astra 会话：两个回执 P2 本地验收结束，/loop 已关闭，冻结本地提交交内置复审 | 31 个本地 CLI 调用符合预期；八模块 333 通过、10 跳过；私有预检引用可核验且未公开原对象路径。暂不推送。 |

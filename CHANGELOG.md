@@ -21,6 +21,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 - Preserve read-only source modes when staging notices. Explicit upstream installs now check the covered files and repository attribution against the reviewed baseline before replacing either affected Skill.
 - Restore an existing read-only Skill directory from its verified private backup without deleting the live tree first. A failed cutover preserves the previous installation or reports the retained paths.
 - Prevent directory cutovers from replacing an unexpected occupant; check retired paths and directory permissions on recovery retries. Undo a new read-only installation without changing its live permissions, and report staging or backup directories left by failed installer cleanup.
+- Preserve the external install result when source workspace cleanup fails. Recovery preflight now returns a content-addressed reference to retained-object evidence in the private vault instead of exposing the object's path or dropping it at the subprocess boundary.
 
 
 ## v2.2.0-rc.1 (2026-11-13)

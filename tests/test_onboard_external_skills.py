@@ -656,6 +656,29 @@ class ExternalSkillInstallTests(unittest.TestCase):
                 self.assertTrue(any(row["status"] == "failed" and row["phase"] == "cleanup" for row in results))
                 self.assertTrue((slots / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
 
+    def test_source_workspace_cleanup_keeps_completed_install_receipt(self):
+        onboard = self.load_onboard_module()
+        remove = shutil.rmtree
+        paths = []
+
+        def fail_workspace(path, *args, **kwargs):
+            if Path(path).name.startswith("sbtd-onboard-external-sources-"):
+                paths.append(str(path))
+                raise PermissionError("source workspace busy")
+            return remove(path, *args, **kwargs)
+
+        with mock.patch.object(shutil, "rmtree", side_effect=fail_workspace):
+            results, tx = onboard.execute_external_skill_install(
+                argparse.Namespace(source="stable"), ["tdd"], self.skills_dir
+            )
+        self.addCleanup(remove, paths[0])
+        self.assertTrue((self.skills_dir / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
+        self.assertEqual(tx["status"], "committed-cleanup-incomplete")
+        self.assertFalse(tx["rolledBack"])
+        self.assertEqual(tx["retainedPaths"], paths)
+        self.assertTrue(any(item["name"] == "tdd" and item["status"] == "installed" for item in results))
+        self.assertTrue(any(item["phase"] == "cleanup" and item["target"] == paths[0] for item in results))
+
     def test_prepare_reports_primary_failure_and_retained_stage(self):
         onboard = self.load_onboard_module()
         remove = shutil.rmtree
