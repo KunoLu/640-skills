@@ -195,6 +195,65 @@ class ExternalSkillInstallTests(unittest.TestCase):
                         {Path(p).name: (package / p).read_bytes() for p in expected},
                     )
 
+    @unittest.skipUnless(os.name == "posix", "POSIX directory mode contract")
+    def test_readonly_stage_preserves_mode_on_success_and_failure(self) -> None:
+        from sbtd_external_notices import copy_notices
+
+        source = self.root / "license"
+        source.write_bytes(b"upstream terms\n")
+        for succeeds in (False, True):
+            stage = self.root / str(succeeds)
+            stage.mkdir(mode=0o700)
+            stage.chmod(0o555)
+            self.addCleanup(stage.chmod, 0o700)
+            overlay = {"SBTD-NOTICES/LICENSE": source if succeeds else self.root / "absent"}
+            if succeeds:
+                copy_notices(stage, overlay)
+                self.assertEqual((stage / "SBTD-NOTICES/LICENSE").read_bytes(), source.read_bytes())
+            else:
+                with self.assertRaises(FileNotFoundError):
+                    copy_notices(stage, overlay)
+            self.assertEqual(stat.S_IMODE(stage.stat().st_mode), 0o555)
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS read-only directory reparenting")
+    def test_readonly_existing_skill_reinstalls_without_losing_notices(self) -> None:
+        target = self.skills_dir / "impeccable"
+        for attempt in range(2):
+            if attempt:
+                (target / "SKILL.md").write_bytes(b"old payload")
+                target.chmod(0o555)
+            result = self.install("impeccable", "stable")
+            self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotEqual((target / "SKILL.md").read_bytes(), b"old payload")
+        self.assertTrue((target / "SBTD-NOTICES/platform-design-skills-LICENSE").is_file())
+        self.assertFalse(list(self.skills_dir.glob(".sbtd-external-*")))
+
+    def test_upstream_supplement_requires_reviewed_content_and_attribution(self) -> None:
+        stable = ONBOARD.parents[1] / "assets/external-skills/stable"
+        self.write_fake_git(clone_succeeds=True)
+        skill = self.fake_repo / "plugin/skills/impeccable"
+        shutil.copytree(stable / "skills/impeccable", skill)
+        for name in ("LICENSE", "NOTICE.md"):
+            shutil.copyfile(stable / f"licenses/impeccable-{name}", self.fake_repo / name)
+        # A different revision with unrelated changes can still use the same evidence.
+        (skill / "other.md").write_text("unrelated update", encoding="utf-8")
+        result = self.install("impeccable", "upstream")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        target = self.skills_dir / "impeccable"
+        (target / "local-marker").write_bytes(b"unchanged")
+        for changed in (skill / "reference/ios.md", skill / "reference/android.md", self.fake_repo / "NOTICE.md"):
+            original = changed.read_bytes()
+            with self.subTest(changed=changed.name):
+                if changed.name == "ios.md":
+                    changed.rename(changed.with_suffix(".moved"))
+                else:
+                    changed.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+                result = self.install("impeccable", "upstream")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("attribution", result.stdout)
+                self.assertEqual((target / "local-marker").read_bytes(), b"unchanged")
+            changed.write_bytes(original)
+
     def test_stable_mode_does_not_invoke_git(self) -> None:
         self.write_fake_git(clone_succeeds=False)
 

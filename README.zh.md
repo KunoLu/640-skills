@@ -378,6 +378,7 @@ Strict 门禁由事实触发：领域歧义、持久／共享数据、不明确�
 这些是经过审阅的**上游原样镜像**，不是本地 fork。`auto` 与 `stable` 从包内快照安装，不获取上游；只有显式选择 `upstream` 才进入当前上游评估。精确 revision、checksum 与许可证见 [stable manifest](sbtd-workflow-onboard/assets/external-skills/stable/MANIFEST.json)。
 
 独立安装的外部技能在 `SBTD-NOTICES/` 中携带适用的仓库许可证和通知。`ui-ux-pro-max` 的 Phosphor 图标元数据，以及 Impeccable 的 iOS、Android 参考文档所依据的原作，分别随对应技能携带 MIT。镜像校验和仍覆盖未改写的来源，不是附有通知的安装目录摘要。
+显式 `upstream` 安装这两个技能时，若适用文件改名、内容变化或仓库许可／通知变化，须重新核对归属后才能安装；不相关文件更新不要求提交 SHA 相同。
 
 | 分类 | Skills | 用途 |
 |---|---|---|

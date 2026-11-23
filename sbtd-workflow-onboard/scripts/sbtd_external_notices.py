@@ -3,9 +3,21 @@ from __future__ import annotations
 
 import re
 import shutil
+import stat
 from pathlib import Path
 
 NOTICE_DIR = "SBTD-NOTICES"
+# Relative source files covered by each attribution, and the notices to distribute.
+SUPPLEMENTS = {
+    "ui-ux-pro-max": (
+        ("data/phosphor-icons-upstream.json",),
+        ("phosphor-core-NOTICE", "phosphor-core-LICENSE"),
+    ),
+    "impeccable": (
+        ("reference/ios.md", "reference/android.md"),
+        ("platform-design-skills-LICENSE",),
+    ),
+}
 
 
 def notice_overlay(
@@ -21,11 +33,8 @@ def notice_overlay(
     if any(p.name.casefold() == NOTICE_DIR.casefold() for p in source.iterdir()):
         raise RuntimeError(f"{skill} already contains reserved {NOTICE_DIR}")
     files = dict(licenses)
-    extra: tuple[str, ...] = ()
-    if skill == "ui-ux-pro-max" and (source / "data/phosphor-icons-upstream.json").is_file():
-        extra = ("phosphor-core-NOTICE", "phosphor-core-LICENSE")
-    elif skill == "impeccable" and any((source / "reference" / name).is_file() for name in ("ios.md", "android.md")):
-        extra = ("platform-design-skills-LICENSE",)
+    inputs, notices = SUPPLEMENTS.get(skill, ((), ()))
+    extra = notices if any((source / path).is_file() for path in inputs) else ()
     if extra and (notices_root.is_symlink() or notices_root.resolve() != notices_root.absolute()):
         raise RuntimeError(f"unsafe supplemental notices directory: {notices_root}")
     for name in extra:
@@ -42,6 +51,14 @@ def notice_overlay(
 
 def copy_notices(destination: Path, overlay: dict[str, Path]) -> None:
     """Materialize a verified overlay in a fresh private stage, never in a live target."""
-    (destination / NOTICE_DIR).mkdir()
+    mode = stat.S_IMODE(destination.stat().st_mode)
+    readonly = not (mode & stat.S_IWUSR)
+    if readonly:
+        destination.chmod(mode | stat.S_IWUSR)
+    try:
+        (destination / NOTICE_DIR).mkdir()
+    finally:
+        if readonly:
+            destination.chmod(mode)
     for relative, source in overlay.items():
         shutil.copyfile(source, destination / relative)

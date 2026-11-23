@@ -38,6 +38,38 @@ def file_state(content: bytes) -> dict:
 
 
 class MigrationFileTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
+    def test_absent_install_discards_stage_with_readonly_nested_skill(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            source, target = root / "source", root / "installed"
+            skill = source / "skill"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_bytes(b"approved")
+            skill.chmod(0o555)
+            install_reference({"path": str(source), "state": snapshot(source)}, target, ABSENT, scope=root)
+            self.assertEqual((target / "skill/SKILL.md").read_bytes(), b"approved")
+            self.assertEqual(stat.S_IMODE((target / "skill").stat().st_mode), 0o555)
+            self.assertEqual(stat.S_IMODE(skill.stat().st_mode), 0o555)
+            self.assertEqual(list(root.glob(".sbtd-migration-stage-*")), [])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
+    def test_stage_cleanup_preserves_changed_and_additional_content(self):
+        for changed in (False, True):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                source = root / "src"
+                (source / "readonly").mkdir(parents=True)
+                (source / "readonly/owned").write_bytes(b"old")
+                (source / "readonly").chmod(0o555)
+                stage, created = sbtd_migration_files._stage_tree(source, snapshot(source), root)
+                foreign = stage / ("readonly/owned" if changed else "extra")
+                foreign.write_bytes(b"new")
+                with self.assertRaises(RetainedObjectError):
+                    sbtd_migration_files._remove_staging(stage, created)
+                self.assertEqual(foreign.read_bytes(), b"new")
+                self.assertEqual(stat.S_IMODE((stage / "readonly").stat().st_mode), 0o555)
+
     def test_directory_publication_uses_only_the_fully_verified_candidate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()

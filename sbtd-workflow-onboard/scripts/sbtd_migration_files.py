@@ -57,10 +57,12 @@ __all__ = [
     "RetainedObjectError",
     "backup_reference",
     "directory_snapshot",
+    "discard_withdrawn_directory",
     "install_reference",
     "read_file",
     "remove_reference",
     "require_private_directory",
+    "restore_directory_reference",
     "save_document",
     "snapshot",
     "write_file",
@@ -893,12 +895,43 @@ def _fresh_sibling(parent: Path, prefix: str) -> Path:
     return holder
 
 
+def discard_withdrawn_directory(path: Path, expected: Mapping[str, Any], *, scope: Path) -> None:
+    """Dispose of a private stage or set-aside directory, never a live install.
+
+    Verify the complete tree first. Pin read-only directories by descriptor
+    so failure restores the same inode, not a new occupant of its path.
+    """
+    root = _target_in_scope(path, scope)
+    observed, entries = directory_snapshot(root)
+    if observed != expected or observed["type"] != "directory":
+        raise RetainedObjectError(root)
+    with contextlib.ExitStack() as restore:
+        if os.name == "posix":
+            dirs = [root, *(root / e["path"] for e in entries if e["type"] == "directory")]
+            for directory in dirs:
+                info = _canonical(directory).lstat()
+                if info.st_mode & stat.S_IWUSR:
+                    continue
+                fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                restore.callback(os.close, fd)
+                if info.st_uid != os.geteuid() or not os.path.samestat(info, os.fstat(fd)):
+                    raise RetainedObjectError(root)
+                mode = stat.S_IMODE(info.st_mode)
+                os.fchmod(fd, mode | stat.S_IWUSR)
+                restore.callback(os.fchmod, fd, mode)
+        remove_reference(root, expected, scope=scope)
+
+
 def _remove_staging(staging: Path, created: list[CreatedEntry]) -> None:
+    entries: list[dict[str, Any]] = [
+        {"path": path.relative_to(staging).as_posix(), "type": kind, "checksum": checksum}
+        for path, kind, checksum in created
+    ]
+    entries.sort(key=lambda entry: entry["path"])
+    expected = {"type": "directory", "checksum": hashlib.sha256(canonical_json_bytes(entries)).hexdigest()}
     try:
-        complete = _remove_created(created)
-        if complete:
-            staging.rmdir()
-            return
+        discard_withdrawn_directory(staging, expected, scope=staging.parent)
+        return
     except (ContractError, OSError):
         pass
     raise RetainedObjectError(staging)
@@ -1140,6 +1173,8 @@ def _replace_directory(
     source_state: dict[str, Any],
     destination: Path,
     before: dict[str, Any],
+    *,
+    restore_root_mode: bool = False,
 ) -> None:
     """Controlled directory replacement behind an already verified backup.
 
@@ -1153,12 +1188,14 @@ def _replace_directory(
     parent = destination.parent
     staging, created = _stage_tree(source, source_state, parent)
     try:
+        mode = stat.S_IMODE(source.lstat().st_mode)
+        staged_identity = staging.lstat()
         if snapshot(destination) != before:
             _fail(
                 "state-conflict",
                 "install target changed while the replacement was staged",
             )
-    except ContractError:
+    except (ContractError, OSError):
         _remove_staging(staging, created)
         raise
     retired = _fresh_sibling(parent, ".sbtd-migration-retired-")
@@ -1189,10 +1226,13 @@ def _replace_directory(
     try:
         os.rename(staging, destination)
     except OSError:
+        if _lstat(destination) is not None:
+            raise RetainedObjectError(retired, staging, destination) from None
         try:
             os.rename(retired, destination)
         except OSError:
             raise RetainedObjectError(retired) from None
+        _remove_staging(staging, created)
         _fail(
             "write-failed",
             "directory replacement failed before commit; the original was restored",
@@ -1209,11 +1249,23 @@ def _replace_directory(
                 retained.append(damaged)
             raise RetainedObjectError(*retained) from None
         raise RetainedObjectError(damaged)
+    # Only the verified new inode takes the backup's mode on restore.
+    if os.name == "posix" and (restore_root_mode or not mode & stat.S_IWUSR):
+        try:
+            fd = os.open(destination, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                if not os.path.samestat(staged_identity, os.fstat(fd)):
+                    raise RetainedObjectError(retired, destination)
+                os.fchmod(fd, mode)
+            finally:
+                os.close(fd)
+        except OSError as exc:
+            raise RetainedObjectError(retired, destination) from exc
     # Recheck and remove only the captured old entries. A changed set-aside
     # tree is retained and reported; recursive deletion would erase new work.
     try:
-        remove_reference(retired, before, scope=parent)
-    except ContractError as error:
+        discard_withdrawn_directory(retired, before, scope=parent)
+    except (ContractError, OSError) as error:
         if isinstance(error, RetainedObjectError):
             raise
         raise RetainedObjectError(retired) from None
@@ -1417,6 +1469,29 @@ def write_file(
         _fail("state-conflict", "write target changed before the authorized write")
     temporary = _stage(target.parent, payload)
     _commit_staged(target, temporary, before, None, _bytes_checksum(payload))
+
+
+def restore_directory_reference(
+    backup_ref: Mapping[str, Any], target: Path, expected: Mapping[str, Any], *, scope: Path
+) -> None:
+    """Replace the sealed installed tree with a verified private original.
+
+    Recovery already owns a pre-upgrade backup. The installed tree, not
+    that backup, is set aside and rechecked before it can be discarded.
+    """
+    path, original = _reference(backup_ref)
+    source = _canonical(path)
+    destination = _target_in_scope(target, scope)
+    before = _expect_state(expected)
+    require_private_directory(source.parent)
+    if (source.is_relative_to(destination) or destination.is_relative_to(source)
+            or original["type"] != "directory" or before["type"] != "directory"):
+        _fail("invalid-argument", "restore requires separate backup and target directories")
+    if snapshot(source) != original:
+        _fail("preservation-failed", "the private original differs from its recovery reference", exit_code=3)
+    if snapshot(destination) != before:
+        _fail("state-conflict", "the installed directory changed before restoration")
+    _replace_directory(source, original, destination, before, restore_root_mode=True)
 
 
 def install_reference(

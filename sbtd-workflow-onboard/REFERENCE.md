@@ -298,6 +298,9 @@ The manifest digest still verifies the unmodified mirror. Explicit upgrade compa
 - **Scenario: 独立安装及重装** — Given 只选择一个 External Skill，When 安装或重装后单独分发该目录，Then 无需访问 Onboard 父目录即可读取该技能适用的版权、许可证和通知；不把其他技能的许可证当成该技能的许可。
 - **Scenario: 升级与保留冲突** — Given 目标存在旧的独立安装或与受管内容冲突，When 运行显式升级，Then 获准替换的目标随新内容取得相应许可；选择保留的目标及其原有通知不变。
 - **Scenario: 写入失败** — Given 目标已有内容与通知，When 安装事务在移动原目录后失败，Then 按既有恢复契约同时保全原内容和原通知，不留下新旧混合的安装单元。
+- **Scenario: 只读来源** — Given 技能源根目录为 `0555`，When 独立安装或升级组装通知，Then 只临时开放私有暂存根的所有者写权限，恢复原模式，不改来源权限。
+- **Scenario: 显式上游归属变动** — Given 显式 `upstream` 获取带附加许可的技能，When 适用文档移动、替换或其仓库许可证／通知字节与已审基线不一致，Then 在替换目标前拒绝；仅不相关文件变动仍可安装。
+- **Scenario: 恢复只读技能目录** — Given 现有安装和私有备份均匹配封存状态，When 确认恢复，Then 在暂存区校验完整候选后移开当前目录并换入原件；不对正式目标加写权限。换入失败且目标名仍空闲时归还原目录，未知占位则保留现场并报告。
 
 `init` / `reset --json` embed the required installation report under `requiredExternalInstall` in the single root document, including when installation fails before template writes. Per-Skill source metadata and `transaction` recovery fields remain available; the field is `null` when no required installation ran. Existing root plan fields and exit-code semantics are unchanged.
 

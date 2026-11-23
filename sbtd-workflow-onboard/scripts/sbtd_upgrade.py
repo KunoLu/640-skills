@@ -99,6 +99,7 @@ from sbtd_migration_files import (
     read_file,
     remove_reference,
     require_private_directory,
+    restore_directory_reference,
     save_document,
     snapshot,
     write_file,
@@ -2945,6 +2946,9 @@ def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
         )
     if step["restore_state"]["type"] == "file":
         install_reference(backup_ref, target, expected, scope=scope)
+        return
+    if expected["type"] == "directory":
+        restore_directory_reference(backup_ref, target, expected, scope=scope)
         return
     if expected["type"] != "absent":
         remove_reference(target, expected, scope=scope)

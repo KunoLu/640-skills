@@ -348,6 +348,38 @@ class UpgradeEngineTests(unittest.TestCase):
 
         self.addCleanup(restore_providers)
 
+    @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
+    def test_restore_readonly_directory_preserves_current_tree_on_cutover_failure(self):
+        source = self._vault() / "original"
+        target = self.base / "installed"
+        source.mkdir(mode=0o750)
+        target.mkdir()
+        (source / "payload").write_bytes(b"original")
+        (target / "payload").write_bytes(b"installed")
+        target.chmod(0o555)
+        before = sbtd_upgrade.snapshot(target)
+        original = sbtd_upgrade.snapshot(source)
+        step = {
+            "action": "restore", "target": str(target), "restore_state": original,
+            "backup_ref": {"path": str(source), "state": original},
+        }
+        rename = os.rename
+
+        def fail_cutover(src, dst):
+            if Path(src).name.startswith(".sbtd-migration-stage-") and dst == target:
+                raise OSError("test cutover failure")
+            rename(src, dst)
+
+        with mock.patch.object(os, "rename", side_effect=fail_cutover), self.assertRaises(ContractError):
+            sbtd_upgrade._execute_step(step, before)
+        self.assertEqual(sbtd_upgrade.snapshot(target), before)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o555)
+        self.assertEqual(list(target.parent.glob(".sbtd-migration-stage-*")), [])
+        sbtd_upgrade._execute_step(step, before)
+        self.assertEqual(sbtd_upgrade.snapshot(target), original)
+        self.assertEqual(target.stat().st_mode & 0o777, source.stat().st_mode & 0o777)
+        self.assertEqual(sbtd_upgrade.snapshot(source), original)
+
     # -- fixture helpers ----------------------------------------------------
 
     def _vault(self, name: str = "vault") -> Path:
@@ -1537,12 +1569,16 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(recovered["status"], "complete")
         self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original\n")
 
-    def test_recovery_resumes_after_remove_before_restore_copy(self):
+    def test_recovery_resumes_legacy_absent_target_after_restore_intent(self):
         plan, receipt, target, agents, _vault = self._recovery_batch()
         recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        def interrupt_old_restore(_backup, path, expected, *, scope):
+            # A pre-cutover executor could stop after removal with its intent already persisted.
+            sbtd_upgrade.remove_reference(path, expected, scope=scope)
+            raise ContractError("write-failed", "injected legacy interruption", exit_code=3)
+
         with mock.patch.object(
-            sbtd_upgrade, "install_reference",
-            side_effect=ContractError("write-failed", "injected restore interruption", exit_code=3),
+            sbtd_upgrade, "restore_directory_reference", side_effect=interrupt_old_restore,
         ):
             failed = self._apply_recovery_local(recovery)
         self.assertEqual(failed["status"], "failed")

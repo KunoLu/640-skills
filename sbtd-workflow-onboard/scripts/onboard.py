@@ -46,7 +46,7 @@ from onboard_arguments import (
     validate_recovery_args,
     validate_upgrade_args,
 )
-from sbtd_external_notices import copy_notices, notice_overlay
+from sbtd_external_notices import SUPPLEMENTS, copy_notices, notice_overlay
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -3522,6 +3522,20 @@ def _install_notices(
             item["source"] if upstream is not None else item["stablePath"],
             f"license for {name}",
         )
+    if upstream is not None and name in SUPPLEMENTS:
+        reviewed, _, _ = stable_external_skill_source(manifest, name, EXTERNAL_STABLE_ROOT)
+        inputs, _ = SUPPLEMENTS[name]
+        evidence = [(source / rel, reviewed / rel) for rel in inputs]
+        for item in repository["licenseFiles"]:
+            original = resolve_contained_relative_path(
+                EXTERNAL_STABLE_ROOT, item["stablePath"], f"reviewed attribution for {name}"
+            )
+            evidence.append((licenses[Path(item["stablePath"]).name], original))
+        for acquired, reference in evidence:
+            if not (acquired.is_file() and reference.is_file()
+                    and acquired.stat().st_size == reference.stat().st_size
+                    and acquired.read_bytes() == reference.read_bytes()):
+                raise RuntimeError(f"upstream attribution for {name} requires review: {acquired.name}")
     return notice_overlay(name, source, licenses, SKILL_DIR / "assets/external-skills/notices")
 
 
@@ -3616,6 +3630,54 @@ def stage_external_skills(
         raise
 
 
+def _readonly_mac_directory(path: Path) -> bool:
+    if sys.platform != "darwin":
+        return False
+    mode = path.lstat().st_mode
+    return stat.S_ISDIR(mode) and not mode & stat.S_IWUSR
+
+
+def _rename_mac_exclusive(source: Path, target: Path) -> None:
+    """macOS renamex_np(RENAME_EXCL): never replace an unexpected sibling."""
+    import ctypes
+
+    rename = ctypes.CDLL(None, use_errno=True).renamex_np
+    rename.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+    rename.restype = ctypes.c_int
+    if rename(os.fsencode(source), os.fsencode(target), 0x00000004):
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code), str(target))
+
+
+def _set_aside_sibling(path: Path) -> Path:
+    """Withdraw a directory without reparenting it or changing its permissions."""
+    from uuid import uuid4
+
+    sibling = path.parent / f".sbtd-external-held-{uuid4().hex}"
+    _rename_mac_exclusive(path, sibling)
+    return sibling
+
+
+def _publish_external_stage(stage: Path, target: Path) -> None:
+    mode = stat.S_IMODE(stage.stat().st_mode)
+    if sys.platform != "darwin" or mode & stat.S_IWUSR:
+        shutil.move(str(stage), str(target))
+        return
+
+    # macOS needs write access to reparent a directory (update "..").
+    # Move only the private staged inode; restore its mode before publication.
+    with tempfile.TemporaryDirectory(prefix=".sbtd-external-publish-", dir=target.parent) as tmp:
+        sibling = Path(tmp)
+        stage.chmod(0o700)
+        try:
+            os.replace(stage, sibling)
+        except OSError:
+            stage.chmod(mode)
+            raise
+        sibling.chmod(mode)
+        _rename_mac_exclusive(sibling, target)
+
+
 def commit_external_skill_transaction(
     selected: list[str],
     resolved: dict[str, dict[str, object]],
@@ -3658,6 +3720,12 @@ def commit_external_skill_transaction(
         tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir)
     )
 
+    from sbtd_migration_files import discard_withdrawn_directory, snapshot
+
+    # Darwin cannot move a nonempty 0555 folder across parents. Keep such
+    # originals at unique sibling names until the complete batch commits.
+    sibling_backups: dict[Path, dict] = {}
+    readonly_installs: dict[Path, dict] = {}
     existed = {name: filesystem_entry_exists(target_dir / name) for name in selected}
     moved: list[tuple[Path, Path]] = []
     committed: list[Path] = []
@@ -3670,12 +3738,21 @@ def commit_external_skill_transaction(
             if not filesystem_entry_exists(target):
                 continue
             backup = rollback / name
-            shutil.move(str(target), str(backup))
+            if _readonly_mac_directory(target):
+                before = snapshot(target)
+                backup = _set_aside_sibling(target)
+                sibling_backups[backup] = before
+            else:
+                shutil.move(str(target), str(backup))
             moved.append((target, backup))
+            if backup in sibling_backups and snapshot(backup) != sibling_backups[backup]:
+                raise RuntimeError(f"set-aside directory changed: {backup}")
 
         for name in selected:
             target = target_dir / name
-            shutil.move(str(staging / name), str(target))
+            if _readonly_mac_directory(staging / name):
+                readonly_installs[target] = snapshot(staging / name)
+            _publish_external_stage(staging / name, target)
             committed.append(target)
             source_info = resolved[name]
             result = {
@@ -3693,7 +3770,7 @@ def commit_external_skill_transaction(
             results.append(result)
 
         for legacy_name in legacy_names:
-            if (rollback / legacy_name).exists():
+            if any(target.name == legacy_name for target, _ in moved):
                 results.append(
                     {
                         "name": legacy_name,
@@ -3703,6 +3780,17 @@ def commit_external_skill_transaction(
                         "phase": "remove-legacy-after-commit",
                     }
                 )
+        for backup, expected in sibling_backups.items():
+            try:
+                discard_withdrawn_directory(backup, expected, scope=target_dir)
+            except Exception as exc:
+                # Installation committed. Never roll it back using a partially disposed original.
+                results.append({"name": backup.name, "status": "failed", "phase": "cleanup", "error": str(exc)})
+                return results, {
+                    "status": "committed-cleanup-incomplete", "rolledBack": False,
+                    "rollbackErrors": [], "rollbackPath": None,
+                    "retainedPaths": [str(path) for path in sibling_backups if path.exists()],
+                }
         transaction = {
             "status": "committed",
             "rolledBack": False,
@@ -3713,14 +3801,25 @@ def commit_external_skill_transaction(
     except Exception as exc:  # noqa: BLE001 - rollback must cover every local commit failure.
         for target in reversed(committed):
             try:
-                remove_existing_target(target)
+                if target in readonly_installs:
+                    held = _set_aside_sibling(target)
+                    try:
+                        discard_withdrawn_directory(held, readonly_installs[target], scope=target_dir)
+                    except Exception:
+                        rollback_errors.append(f"retained installed directory: {held}")
+                        raise
+                else:
+                    remove_existing_target(target)
             except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
                 rollback_errors.append(f"remove {target}: {rollback_exc}")
         for target, backup in reversed(moved):
             try:
-                if target.exists():
-                    remove_existing_target(target)
-                shutil.move(str(backup), str(target))
+                if filesystem_entry_exists(target):
+                    raise RuntimeError("target still occupied; backup retained")
+                if backup in sibling_backups:
+                    _rename_mac_exclusive(backup, target)
+                else:
+                    shutil.move(str(backup), str(target))
             except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
                 rollback_errors.append(f"restore {target}: {rollback_exc}")
         results = [
@@ -3744,6 +3843,7 @@ def commit_external_skill_transaction(
             "rolledBack": True,
             "rollbackErrors": rollback_errors,
             "rollbackPath": str(rollback) if retain_rollback else None,
+            **({"retainedPaths": [str(p) for p in sibling_backups if p.exists()]} if retain_rollback else {}),
         }
     finally:
         shutil.rmtree(staging, ignore_errors=True)
