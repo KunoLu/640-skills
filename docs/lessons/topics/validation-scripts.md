@@ -740,5 +740,17 @@
 - 修正：只更正派生摘要，原生报告不改；使用 runner 的 `skipped` 和完整 `skip_details`，同时保留父例状态。优化对照逐项比较父例身份／状态与跳过子场景身份／理由，不仅比较一个总数。
 - 预防：先确认 runner 对父例、subTest、跳过和失败的记录粒度；不能从 `testsRun` 或父例状态推导原生事件总数。摘要纠正不得改写原件或被表述为补跑通过。
 
+## LESSON-20261123-kuno-ci-python-runner-pair: Pin Runner Images With Fixed Python Builds
+
+- 日期：2026-11-23
+- 标签：ci, github-actions, python, runner, version-pin
+- 适用场景：CI 固定 Python 补丁版本，同时使用可漂移的 runner 标签。
+- 严重级别：high
+- 来源：PR #223 的真实 Set up Python 失败日志，以及官方 actions/python-versions 制品清单。
+- 问题：ubuntu-latest 转向 Ubuntu 26.04 后，固定 Python 3.12.10 没有对应 x64 制品，测试未启动；后续报告缺失是连带失败。
+- 根因：Python 精确版本与操作系统制品平台没有共同固定；工具缓存也不保证长期保留旧补丁版本。
+- 修正：选择官方清单支持的 ubuntu-24.04，覆盖执行测试和仅聚合报告的全部 Linux 作业；不为绿色状态漂移 Python pin、跳过测试或忽略报告缺失。
+- 预防：环境准备失败先读原生 runner image、架构与安装步骤日志，再核对官方 manifest 的 version/platform/platform_version/arch。本地静态匹配不能替代新完整 SHA 的真实 hosted CI。
+
 <!-- lessons:kuno:end -->
 

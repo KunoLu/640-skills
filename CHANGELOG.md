@@ -13,6 +13,10 @@ The Chinese and English changelogs are kept consistent version by version and en
 
 - Pin host acceptance to `codex@0.171.0` + `omp@19.1.0` and require both hosts instead of the historical one-host fallback. Both completed isolated Air tool-call, ingestion and duplicate-import smoke checks on 2026-11-23; retain earlier cloud smoke records in `smoke_history`. Version matching alone, old reports and parser fixtures are not passing evidence. This baseline does not certify the full approval/MCP/failure/interruption matrix or release readiness, upgrade existing installations, or change the original Astra session.
 
+### Fixed
+
+- Pin the four Linux validation jobs to `ubuntu-24.04`, where the fixed Python `3.12.10` build is available. This avoids setup failures after `ubuntu-latest` moved to Ubuntu 26.04; Python/Node versions, action SHAs, native platform coverage, test shards and report failure gates remain unchanged.
+
 
 ## v2.2.0-rc.1 (2026-11-13)
 
