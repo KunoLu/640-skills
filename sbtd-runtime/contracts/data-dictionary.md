@@ -11,15 +11,19 @@
 | 观察事件 | 用户私有 `audit.db` | 原始记录 | 当成业务授权或法律不可抵赖，或回放覆盖 task.md |
 | 指标 | 版本化投影 | 从已接受事件重建 | 用 0 或 mock 填未实现指标 |
 | registry／长期凭证 | `SBTD_RUNTIME_HOME` | 用户私有映射 | 写入项目 tracked 文件 |
-| capability pin | 本目录 `capability-matrix.json` | 固定验收宿主与兜底完成门决策 | 代替 R1.2b 真实 smoke |
+| capability pin | 本目录 `capability-matrix.json` | 固定验收宿主与当前完成门决策 | 代替 R1.2b 真实 smoke |
 
 ### 宿主门禁与冒烟历史
 
 `acceptance_pins` 是当前固定的一对验收版本；`completion_gate.hosts` 必须与之相同。`host_capability` 只按 pin 精确匹配返回 `pinned` 或 `unsupported`，不从实测历史推导当前支持。
 
-`smoke` 按宿主名记录当前门禁的真实冒烟：每项含 `status`（`pass`／`unsupported`／`pending`）、版本原文 `host_version`、日期 `smoked_at` 和事实摘要 `evidence`。`smoke_status` 是当前冒烟汇总（两宿主通过为 `pass`），`smoke_note` 说明决定、限制与完成门；parser fixture 不算真实冒烟。
+`smoke` 按宿主名记录当前门禁的真实冒烟：每项含 `status`、版本原文 `host_version`、日期 `smoked_at` 和事实摘要 `evidence`。只有本轮固定宿主的真实调用可记 `pass`；`failed`、`unsupported`、`unknown`、`pending` 均不通过。`smoke_status` 是基础冒烟汇总（两宿主通过为 `pass`），不是整版发布状态；parser fixture 不算真实冒烟。
 
-可选 `smoke_history` 按宿主名保存被本次换针替代的旧冒烟记录，字段与 `smoke` 相同，保留原日期、版本及当时结果；它只提供历史证据，不参与当前 capability 或兜底完成门。2026-10-17 的 omp pass 不意味着旧版本在新契约下仍 pinned。该字段不属于观察事件，不能套用 `event.schema.json`；矩阵由 `contract_eval.py` 直接读取，新增历史字段不改变事件 schema。
+可选 `smoke_history` 按宿主名保存按时间倒序排列的旧冒烟数组，当前 omp 与 codex 均使用此形状。记录字段与 `smoke` 相同，保留原日期、版本、事实摘要及当时结果；它只提供历史证据，不参与当前 capability 或完成门。该字段不属于观察事件，不能套用 `event.schema.json`；矩阵由 `contract_eval.py` 直接读取，历史记录形状不改变事件 schema。
+
+当前固定版本为 `codex@0.171.0` 与 `omp@19.1.0`。rc.2 的 `completion_gate.minimum_passing_hosts` 为 2，且全部适用验收仍须通过；旧 R1 至少一个宿主通过的决定保留在 ADR 和历史发布记录中，不再用于放行 rc.2。`host_capability` 的 `pinned` 只表示版本匹配，不表示实际验收通过。
+
+Codex CLI 的 `codex-cli ` 是程序标识，不属于事件中的版本号。适配入口移除该标识及外围空白，事件与 IngestReceipt 使用同一版本值；原始命令输出仍保留在原生证据中。规范化不删除预发布后缀，不改变精确 pin。旧库中的原始版本表示保持不变，重导入触发的内容冲突仍保留旧观察，不隐式迁移或覆盖。
 
 ## 标识
 

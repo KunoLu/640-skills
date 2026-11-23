@@ -4,46 +4,52 @@
   "acceptance_pins": [
     {
       "host_kind": "codex",
-      "host_version": "0.167.1"
+      "host_version": "0.171.0"
     },
     {
       "host_kind": "omp",
-      "host_version": "18.19.0"
+      "host_version": "19.1.0"
     }
   ],
   "other_versions": "unsupported",
   "rule": "A host version that is not pinned is unsupported for that host only. It does not mark another host or a metric category unsupported.",
-  "pass_condition": "A pinned host passes only when a real smoke collects a Skill or Tool call event. A parser fixture is not that evidence. Failure marks only that host unsupported.",
+  "pass_condition": "Both pinned hosts must collect a Skill or Tool call event in this release's real isolated Air smoke. A pinned version alone, parser fixture, historical smoke, failed, unsupported, unknown or pending result is not passing evidence.",
   "completion_gate": {
-    "statement": "Fallback completion gate from ADR 0001 section 6: at least one pinned host must collect a Skill or Tool call event in a real smoke for the component-call requirement to count as done. If both pinned hosts end up unsupported, the R1 gate fails and returns to the user for a new decision; it must not be released.",
+    "statement": "The v2.2.0-rc.2 PRD requires both pinned hosts to pass current real isolated Air smoke and all applicable acceptance checks. Any missing or failed required result blocks release. The earlier ADR 0001 section 6 one-host fallback remains historical and cannot release rc.2.",
     "hosts": [
-      "codex@0.167.1",
-      "omp@18.19.0"
+      "codex@0.171.0",
+      "omp@19.1.0"
     ],
     "evidence": "real-smoke",
     "parser_fixture_counts": false,
     "event": "skill-or-tool-call",
-    "minimum_passing_hosts": 1,
-    "both_unsupported": "r1-fail-return-to-user",
+    "minimum_passing_hosts": 2,
+    "both_unsupported": "rc2-fail-return-to-user",
     "release_when_both_unsupported": false
   },
   "smoke_status": "pass",
   "smoke": {
     "omp": {
       "status": "pass",
-      "host_version": "omp/18.19.0",
-      "smoked_at": "2026-11-12",
-      "evidence": "云主机实测；2026-11-12 18:51:03–18:51:17 +08:00，强制一次 read 工具调用，退出码 0、stdout done；模型 kimi-code/k3:max。会话 12 行，sha256 c5f79ec94f0cedcdbde4eabb472124bd7ea030e5e9457a56df5abeea012116a0；第 1 行 type=title 且无 id（18.19.0 新出现），第 2 行 session 头 version 3；toolResult toolName=read、isError=false。omp_adapter.py（main a70f270）回执：records_read=12，records_skipped=8，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]；重复导入 accepted=0、duplicate=2。详见 ai/tasks/v2.2.0-rc.1-host-gate-omp-18190/task.md。"
+      "host_version": "omp/19.1.0",
+      "smoked_at": "2026-11-23",
+      "evidence": "Air 本机隔离实测；2026-11-23T05:10:59Z–05:11:04Z，omp -p --mode json，显式模型 openai-codex/gpt-6-astra，仅 read 工具，approval-mode always-ask。独立 HOME、agent、session-dir、缓存与临时目录均在本任务 TEMP；用户通过官方登录，不复制凭据。进程 exit 0，真实 read probe.txt 成功。已结束会话 lease 返回 held=[]、unknown=[]；原适配器读取 13 行、跳过 9 行，产出并接受 2 条事件，conflict/rejected=0；重复导入 accepted=0、duplicate=2。此前无凭据的 exit 1 保留为失败，不计通过。详见 ai/tasks/v2.2.0-rc.2-baseline/task.md。"
     },
     "codex": {
       "status": "pass",
-      "host_version": "codex-cli 0.167.1",
-      "smoked_at": "2026-11-11",
-      "evidence": "云主机实测；CodeX bot，开始 14:36:15 +08:00，main 80f1426 只读副本，codex exec --json --sandbox read-only 执行 echo sbtd-r12b-smoke。JSONL 7 行：thread.started、turn.started、item.completed(agent_message)、item.started(command_execution)、item.completed(command_execution, exit_code=0, status=completed)、item.completed(agent_message done)、turn.completed；一次真实工具调用。回执 source_id=codex-exec，host_version=codex-cli 0.167.1，parser_version=codex-exec-jsonl-1，records_read=7，records_skipped=4，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]。重放 invocation.started + invocation.finished，tool:command_execution（kind tool）。运行完成；进程退出码未单独记录，未知；全局默认模型名未出现在 JSONL，未知，1 turn。详见 ai/tasks/v2.1.0-rc.5-host-gate-codex-0167-omp-18188/task.md。"
+      "host_version": "codex-cli 0.171.0",
+      "smoked_at": "2026-11-23",
+      "evidence": "Air 本机修复后实测；2026-11-23T08:40:23Z–08:40:38Z，显式模型 gpt-6-astra，独立 HOME/CODEX_HOME/cwd，read-only sandbox、approval_policy=never、ephemeral、ignore-user-config、ignore-rules，未设置 --trust。官方版本原文 codex-cli 0.171.0 传给适配器；7 行 JSONL 含真实 cat probe.txt 的 started/completed，工具与进程均 exit 0。修复后 CLI 首次读取 7 行、跳过 4 行、接受 2 条事件，重复导入 accepted=0、duplicate=2、conflict/rejected=0；回执与重放事件 host_version 为 0.171.0，实际能力判断为 pinned。原基础 smoke 未覆盖版本消费链的缺口按独审 F1 修复，旧库及旧证据不改写。本 smoke 不证明审批拒绝场景；脱敏原生片段、回执及实现哈希按 E1 单独交接，详见 ai/tasks/v2.2.0-rc.2-baseline/task.md。"
     }
   },
   "smoke_history": {
     "omp": [
+      {
+        "status": "pass",
+        "host_version": "omp/18.19.0",
+        "smoked_at": "2026-11-12",
+        "evidence": "云主机实测；2026-11-12 18:51:03–18:51:17 +08:00，强制一次 read 工具调用，退出码 0、stdout done；模型 kimi-code/k3:max。会话 12 行，sha256 c5f79ec94f0cedcdbde4eabb472124bd7ea030e5e9457a56df5abeea012116a0；第 1 行 type=title 且无 id（18.19.0 新出现），第 2 行 session 头 version 3；toolResult toolName=read、isError=false。omp_adapter.py（main a70f270）回执：records_read=12，records_skipped=8，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]；重复导入 accepted=0、duplicate=2。详见 ai/tasks/v2.2.0-rc.1-host-gate-omp-18190/task.md。"
+      },
       {
         "status": "pass",
         "host_version": "omp/18.18.8",
@@ -57,12 +63,20 @@
         "evidence": "云主机实测。Real `omp -p` invocation produced a real `read` toolCall (`call-d9b26888-01fc-4abd-aa3d-70b9f7840f07-0|fc_f54d5b30-39ec-90ed-8dad-17bd5574bee2_0`) and toolResult `11aef67c` in session 2026-10-16T17-06-22-104Z_01a145ad-d318-7734-8b78-7402c5b01884.jsonl; omp_adapter emitted invocation.started + invocation.finished (tool:read, duration_ms 27, wall) and the event store accepted both; re-ingest returned 2 duplicates and replay stayed at 2. Receipt and raw line snippets are in ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md."
       }
     ],
-    "codex": {
-      "status": "unsupported",
-      "host_version": "codex-cli 0.163.0",
-      "smoked_at": "2026-10-17",
-      "evidence": "云主机实测。Real `codex exec --json --sandbox read-only` (tip 5a21688) with ChatGPT login produced JSONL turn.failed `workspace routing discovery failed` after Cloudflare HTTP 403 on chatgpt.com/backend-api; no item.started/completed with item.type in {command_execution,mcp_tool_call,web_search,collab_tool_call,file_change}; codex_adapter receipt events_emitted=0 accepted=0; EventStore replay empty. Evidence: ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md. Parser fixture not used."
-    }
+    "codex": [
+      {
+        "status": "pass",
+        "host_version": "codex-cli 0.167.1",
+        "smoked_at": "2026-11-11",
+        "evidence": "云主机实测；CodeX bot，开始 14:36:15 +08:00，main 80f1426 只读副本，codex exec --json --sandbox read-only 执行 echo sbtd-r12b-smoke。JSONL 7 行：thread.started、turn.started、item.completed(agent_message)、item.started(command_execution)、item.completed(command_execution, exit_code=0, status=completed)、item.completed(agent_message done)、turn.completed；一次真实工具调用。回执 source_id=codex-exec，host_version=codex-cli 0.167.1，parser_version=codex-exec-jsonl-1，records_read=7，records_skipped=4，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]。重放 invocation.started + invocation.finished，tool:command_execution（kind tool）。运行完成；进程退出码未单独记录，未知；全局默认模型名未出现在 JSONL，未知，1 turn。详见 ai/tasks/v2.1.0-rc.5-host-gate-codex-0167-omp-18188/task.md。"
+      },
+      {
+        "status": "unsupported",
+        "host_version": "codex-cli 0.163.0",
+        "smoked_at": "2026-10-17",
+        "evidence": "云主机实测。Real `codex exec --json --sandbox read-only` (tip 5a21688) with ChatGPT login produced JSONL turn.failed `workspace routing discovery failed` after Cloudflare HTTP 403 on chatgpt.com/backend-api; no item.started/completed with item.type in {command_execution,mcp_tool_call,web_search,collab_tool_call,file_change}; codex_adapter receipt events_emitted=0 accepted=0; EventStore replay empty. Evidence: ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md. Parser fixture not used."
+      }
+    ]
   },
-  "smoke_note": "640 于 2026-11-12 在 640-skills 群内确认（选甲：发布 v2.2.0-rc.1 预发布）；门禁换为 codex@0.167.1 + omp@18.19.0（codex 不变，只改 omp）。云主机实测：omp 18.19.0 于 2026-11-12 采到真实 Tool 调用事件并 pass，codex 0.167.1 沿用 2026-11-11 实测 pass。omp 18.18.8 的 2026-11-11 pass 记录与 2026-10-17 的 omp 18.11.1 pass、codex 0.163.0 unsupported 保留于 smoke_history，不参与当前门禁；旧版本在新契约下均为非门禁版本 → unsupported。固定一对版本、其他 unsupported、parser fixture 不算证据、兜底完成门至少一个宿主通过的规则不变，本次两个通过。"
+  "smoke_note": "依据已确认的 v2.2.0-rc.2 PRD，将当前验收 pin 更新为 codex@0.171.0 + omp@19.1.0，要求两宿主均有本轮 Air 隔离真实调用证据。2026-11-23 两宿主基础调用与原适配器入库／重复导入通过；这不代表任务 3 的完整审批、MCP、失败与中断矩阵已通过，也不代表 rc.2 已发布。旧云端 smoke 原样保留于 smoke_history，不参与当前通过判定；旧 R1 至少一个宿主通过的兜底不适用于 rc.2。当前 capability 仍只按精确 pin 分类，pinned 不等于验收 pass。"
 }

@@ -5,7 +5,8 @@ piped live on stdin or replayed from a saved capture file. The stream carries
 no timestamps, so occurred_at stays null (PRD section 8.4 rule 8: records with
 unknown occurred_at enter the unlocatable set); recorded_at is the ingest
 time. The host version is not in the stream either: callers pass the output of
-`codex --version`.
+`codex --version`. The CLI banner is removed at ingestion; the version and
+any prerelease suffix remain intact for exact capability matching.
 
 Mapped item types: command_execution, mcp_tool_call, web_search,
 collab_tool_call, file_change. item.started -> invocation.started;
@@ -14,8 +15,8 @@ unknown item types are skipped and counted. Commands, outputs and arguments
 are never copied into events (observation.level=metadata); only the scalar
 exit_code is kept as an extension.
 
-This repository never installs or runs codex. The real smoke against
-codex@0.167.1 follows sbtd-runtime/docs/host-adapters.md.
+Unit tests do not install or run codex. Real host smoke evidence and version
+boundaries are documented in sbtd-runtime/docs/host-adapters.md.
 """
 
 from __future__ import annotations
@@ -83,6 +84,7 @@ def parse_exec_lines(
     host_version: str = "unknown",
 ) -> ParseOutcome:
     """Translate exec JSONL lines into observation events."""
+    host_version = host_version.strip().removeprefix("codex-cli ")
     events: list[dict[str, Any]] = []
     drops = []
     records_read = 0
