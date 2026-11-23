@@ -256,6 +256,9 @@ def install_all(pkg: Path, root: Path) -> None:
             pkg / "assets" / "external-skills" / "stable" / "skills" / name,
             root / name,
         )
+        notices = root / name / "SBTD-NOTICES"
+        notices.mkdir()
+        shutil.copyfile(pkg / "assets/external-skills/stable/licenses/upstream-LICENSE", notices / "upstream-LICENSE")
 
 
 def by_name(document: dict) -> dict[str, dict]:
@@ -704,10 +707,17 @@ class MissingCurrentDriftTests(InventoryTests):
             self.assertEqual(resource["classification"], "missing", name)
             self.assertEqual(resource["decision"], "install", name)
             self.assertEqual(resource["before"], {"type": "absent", "checksum": None}, name)
-            self.assertEqual(resource["details"], {}, name)
         self.assertFalse(self.skills_root.exists())
         after = {str(path.relative_to(self.pkg)) for path in self.pkg.rglob("*")}
         self.assertEqual(before, after)
+
+    def test_raw_external_tree_is_not_a_complete_standalone_install(self):
+        source = self.pkg / "assets/external-skills/stable/skills/gamma-skill"
+        shutil.copytree(source, self.skills_root / "gamma-skill")
+        row = by_name(self.build(self.scope(skills_roots=[str(self.skills_root)])))["gamma-skill"]
+        self.assertEqual(row["classification"], "unknown-drift")
+        self.assertEqual(row["decision"], "blocked")
+        self.assertIn("SBTD-NOTICES/upstream-LICENSE", row["details"]["missing"])
 
     def test_exact_install_is_current_and_keep(self):
         install_all(self.pkg, self.skills_root)
@@ -716,7 +726,6 @@ class MissingCurrentDriftTests(InventoryTests):
             self.assertEqual(resource["classification"], "current", name)
             self.assertEqual(resource["decision"], "keep", name)
             self.assertEqual(resource["before"], resource["desired"], name)
-            self.assertEqual(resource["details"], {}, name)
 
     def test_declared_caches_do_not_change_identity(self):
         """Existing exclusion semantics: generated caches never cause drift."""
@@ -1304,7 +1313,7 @@ class RealPackageCoverageTests(unittest.TestCase):
         self.assertEqual(set(document["baseline"]["stable"]["skills"]), set(manifest["skills"]))
         for name, pin in manifest["skills"].items():
             self.assertEqual(
-                resources[name]["desired"],
+                resources[name]["source"]["state"],
                 {"type": "directory", "checksum": pin["treeSha256"]},
                 name,
             )

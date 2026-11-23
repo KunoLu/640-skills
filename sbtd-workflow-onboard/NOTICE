@@ -13,3 +13,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 Third-party components and source-derived material, where present, retain their own licenses, notices, and attribution requirements.
+
+Phosphor Icons metadata
+
+assets/external-skills/stable/skills/ui-ux-pro-max/data/phosphor-icons-upstream.json
+includes metadata for 1,512 icons from @phosphor-icons/core 2.1.1.
+Copyright (c) 2023 Phosphor Icons. The upstream MIT License for this
+metadata is distributed in assets/external-skills/notices/phosphor-core-LICENSE.
+It does not license the rest of the Onboard package.
+
+Impeccable platform design references
+
+The distributed Impeccable reference/ios.md and reference/android.md are
+derived from ehmo's platform-design-skills (https://github.com/ehmo/platform-design-skills).
+See assets/external-skills/stable/licenses/impeccable-NOTICE.md for the
+upstream attribution and assets/external-skills/notices/platform-design-skills-LICENSE
+for the original work's MIT License. This does not relicense Impeccable.

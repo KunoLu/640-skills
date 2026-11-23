@@ -134,6 +134,8 @@ class ExternalSkillInstallTests(unittest.TestCase):
     def test_upstream_uses_repository_when_the_contract_is_valid(self) -> None:
         self.write_fake_git(clone_succeeds=True)
         self.write_upstream_skill("diagnosing-bugs", "upstream marker")
+        original = b"Repository license from this acquired revision.\n"
+        (self.fake_repo / "LICENSE").write_bytes(original)
 
         completed = self.install("diagnosing-bugs", "upstream")
 
@@ -149,6 +151,10 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertIn(
             "upstream marker",
             (self.skills_dir / "diagnosing-bugs" / "SKILL.md").read_text(),
+        )
+        self.assertEqual(
+            (self.skills_dir / "diagnosing-bugs/SBTD-NOTICES/mattpocock-skills-LICENSE").read_bytes(),
+            original,
         )
 
     def test_auto_uses_vendored_stable_without_accessing_upstream(self) -> None:
@@ -170,6 +176,24 @@ class ExternalSkillInstallTests(unittest.TestCase):
             "upstream marker",
             (self.skills_dir / "diagnosing-bugs" / "SKILL.md").read_text(),
         )
+
+    def test_standalone_notices_survive_reinstall_and_stay_scoped(self) -> None:
+        package = ONBOARD.parents[1] / "assets/external-skills"
+        for name, expected in (
+            ("impeccable", ("stable/licenses/impeccable-LICENSE", "stable/licenses/impeccable-NOTICE.md",
+                            "notices/platform-design-skills-LICENSE")),
+            ("ui-ux-pro-max", ("stable/licenses/ui-ux-pro-max-skill-LICENSE",
+                               "notices/phosphor-core-NOTICE", "notices/phosphor-core-LICENSE")),
+        ):
+            target = self.skills_dir / name / "SBTD-NOTICES"
+            for attempt in ("install", "reinstall"):
+                with self.subTest(skill=name, attempt=attempt):
+                    result = self.install(name, "stable")
+                    self.assertEqual(result.returncode, 0, result.stdout)
+                    self.assertEqual(
+                        {p.name: p.read_bytes() for p in target.iterdir()},
+                        {Path(p).name: (package / p).read_bytes() for p in expected},
+                    )
 
     def test_stable_mode_does_not_invoke_git(self) -> None:
         self.write_fake_git(clone_succeeds=False)

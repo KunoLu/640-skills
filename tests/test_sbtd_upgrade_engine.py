@@ -321,6 +321,7 @@ def verify_hosts(scope, *, package_root=None, probe=False, link_authorizations=N
 
 ENGINE_COPY = (
     "sbtd_upgrade.py",
+    "sbtd_external_notices.py",
     "sbtd_upgrade_paths.py",
     "onboard_contracts.py",
     "sbtd_migration_files.py",

@@ -370,10 +370,11 @@ class WorkflowContractTests(unittest.TestCase):
                     (skill_root / "LICENSE").read_bytes(),
                     canonical_license,
                 )
-                self.assertEqual(
-                    (skill_root / "NOTICE").read_text(encoding="utf-8"),
-                    notice,
-                )
+                actual_notice = (skill_root / "NOTICE").read_text(encoding="utf-8")
+                if skill_root == ROOT / "sbtd-workflow-onboard":
+                    self.assertTrue(actual_notice.startswith(notice))
+                else:
+                    self.assertEqual(actual_notice, notice)
                 self.assertIn(
                     (skill_root / "LICENSE").relative_to(ROOT).as_posix(),
                     tracked_files,
@@ -382,6 +383,22 @@ class WorkflowContractTests(unittest.TestCase):
                     (skill_root / "NOTICE").relative_to(ROOT).as_posix(),
                     tracked_files,
                 )
+
+    def test_distributed_icon_metadata_has_its_own_complete_license(self) -> None:
+        package = ROOT / "sbtd-workflow-onboard"
+        catalog = "assets/external-skills/stable/skills/ui-ux-pro-max/data/phosphor-icons-upstream.json"
+        metadata = json.loads((package / catalog).read_bytes())
+        self.assertEqual(metadata["source"]["package"], "@phosphor-icons/core")
+        self.assertEqual(len(metadata["icons"]), 1512)
+        license_path = "assets/external-skills/notices/phosphor-core-LICENSE"
+        notice = (package / "NOTICE").read_text(encoding="utf-8")
+        self.assertIn(catalog, notice)
+        self.assertIn(license_path, notice)
+        # SHA-256 of package/LICENSE from the integrity-verified core@2.1.1 tarball.
+        self.assertEqual(
+            hashlib.sha256((package / license_path).read_bytes()).hexdigest(),
+            "ddbe6082ec3cf979db47e5af549d2849c5d6182b3e005ef91ce1dbb9eb122f11",
+        )
 
     def test_seo_geo_preserves_upstream_provenance_and_scopes_local_modifications(
         self,

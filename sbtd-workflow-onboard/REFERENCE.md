@@ -288,6 +288,17 @@ Preparation and commit are separate phases. Every selected Skill is resolved, co
 
 No automatic source fallback occurs. Stable manifest, containment, checksum, license, or snapshot validation failures are fatal for `auto` and `stable`; upstream acquisition or validation failures are fatal for `upstream`. Target-side staging, permission, disk, commit, and rollback failures are always fatal. A local commit failure attempts to restore all prior targets; if any restore step fails, the transaction reports and retains the rollback directory path instead of deleting the only remaining backup copy.
 
+For a standalone installation, `SBTD-NOTICES/` travels inside the selected Skill. Stable installs copy that repository's manifest-listed license and notice bytes; explicit upstream installs take those files from the acquired revision. Supplemental MIT texts apply only to the Phosphor metadata in `ui-ux-pro-max` and the original work behind `impeccable/reference/{ios,android}.md`. Impeccable's Apache license and its own attribution notice remain separate. A source that already uses the reserved directory is rejected rather than overwritten.
+
+The manifest digest still verifies the unmodified mirror. Explicit upgrade compares the target with the complete standalone installation, including notices. An existing bare mirror is not silently adopted: review the reported drift and choose preserve or replace. Recovery restores the previous complete directory, including any original notices.
+
+#### 许可随分发单元交付：验收场景
+
+- **Scenario: 完整 Onboard 包** — Given 包含固定技能快照，When 使用官方 Skills CLI 复制整个 Onboard 包，Then Phosphor 元数据与 Impeccable 两份平台文档原作均有明确归属及对应 MIT 全文；Matt 与 SEO 的既有声明保持原样。
+- **Scenario: 独立安装及重装** — Given 只选择一个 External Skill，When 安装或重装后单独分发该目录，Then 无需访问 Onboard 父目录即可读取该技能适用的版权、许可证和通知；不把其他技能的许可证当成该技能的许可。
+- **Scenario: 升级与保留冲突** — Given 目标存在旧的独立安装或与受管内容冲突，When 运行显式升级，Then 获准替换的目标随新内容取得相应许可；选择保留的目标及其原有通知不变。
+- **Scenario: 写入失败** — Given 目标已有内容与通知，When 安装事务在移动原目录后失败，Then 按既有恢复契约同时保全原内容和原通知，不留下新旧混合的安装单元。
+
 `init` / `reset --json` embed the required installation report under `requiredExternalInstall` in the single root document, including when installation fails before template writes. Per-Skill source metadata and `transaction` recovery fields remain available; the field is `null` when no required installation ran. Existing root plan fields and exit-code semantics are unchanged.
 
 The vendored stable set lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them. A vendored Skill's verification scope is its distributed subtree: upstream repository-root development tests that cannot collect standalone inside the subtree are an environment mismatch, not a product regression (2026-10-26 Windows migration, M15); full upstream test suites run only in a full upstream checkout. CI checks the stable set with the installer-owned `stable_external_skill_source()` validation, never a second digest algorithm.

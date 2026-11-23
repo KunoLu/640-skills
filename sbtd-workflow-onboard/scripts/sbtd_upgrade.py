@@ -78,15 +78,18 @@ import hashlib
 import importlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_cleanup_targets import strict_json_object
+from sbtd_external_notices import NOTICE_DIR, copy_notices
 from sbtd_migration_files import (
     _canonical,
     _lstat,
@@ -1614,9 +1617,7 @@ def _apply_upgrade_local(
                 "desired": resource["desired"],
                 "backup_ref": action["backup_ref"],
                 "mechanical_desired": (
-                    snapshot(
-                        Path(recomputed_by_id[resource["id"]]["source"]["path"])
-                    )
+                    _mechanical_install_state(recomputed_by_id[resource["id"]], inventory_root)
                     if resource["kind"] in ("skill", "agents") else resource["desired"]
                 ),
                 "mechanical_before": action["mechanical_before"],
@@ -1890,6 +1891,20 @@ def _reconcile_resource(
     return {"verb": "write", "resource": resource}
 
 
+def _fresh_notices(fresh: Mapping[str, Any], package_root: Path | None) -> dict[str, Path]:
+    # Only freshly derived inventory may select files, never caller-supplied plan paths.
+    root = package_root or _trusted_package_root()
+    return {dest: root / path for dest, path in fresh["details"].get("notice_sources", {}).items()}
+
+
+def _mechanical_install_state(fresh: Mapping[str, Any], root: Path | None, *, recovery: bool = False) -> dict[str, Any]:
+    path = Path(fresh["source"]["path"])
+    overlay = _fresh_notices(fresh, root)
+    if recovery or overlay:
+        return _cacheless_mechanical_state(path, overlay)
+    return snapshot(path)
+
+
 def _write_resource(
     sealed: Mapping[str, Any],
     fresh: Mapping[str, Any],
@@ -1917,6 +1932,23 @@ def _write_resource(
         )
         return
     source_path = Path(fresh["source"]["path"])
+    overlay = _fresh_notices(fresh, package_root)
+    if overlay:
+        # Assemble one unit before the guarded replacement. Never add notices to a live target.
+        with tempfile.TemporaryDirectory(prefix="sbtd-upgrade-skill-") as directory:
+            candidate = Path(directory).resolve() / "payload"
+            shutil.copytree(source_path, candidate, symlinks=True)
+            _purge_stage_caches(candidate)
+            copy_notices(candidate, overlay)
+            _install_verified_payload(candidate, sealed, target, expected, scope, backup_ref, mutation)
+        return
+    _install_verified_payload(source_path, sealed, target, expected, scope, backup_ref, mutation)
+
+
+def _install_verified_payload(
+    source_path: Path, sealed: Mapping[str, Any], target: Path, expected: Mapping[str, Any],
+    scope: Path, backup_ref: dict[str, Any] | None, mutation: dict[str, Any],
+) -> None:
     if _payload_state(source_path) != sealed["desired"]:
         _fail(
             "plan-stale",
@@ -2217,7 +2249,7 @@ def _require_saved(path: Path, document: Mapping[str, Any]) -> None:
         _fail("evidence-mismatch", "a document differs from the immutable vault evidence")
 
 
-def _cacheless_mechanical_state(path: Path) -> dict[str, Any]:
+def _cacheless_mechanical_state(path: Path, overlay: Mapping[str, Path] | None = None) -> dict[str, Any]:
     state = snapshot(path)
     if state["type"] != "directory":
         return state
@@ -2228,6 +2260,10 @@ def _cacheless_mechanical_state(path: Path) -> dict[str, Any]:
         if not any(part in caches for part in Path(entry["path"]).parts)
         and not (entry["type"] == "file" and entry["path"].endswith((".pyc", ".pyo")))
     ]
+    if overlay:
+        payload_entries.append({"path": NOTICE_DIR, "type": "directory", "checksum": None})
+        payload_entries.extend({"path": relative, **snapshot(source)} for relative, source in overlay.items())
+        payload_entries.sort(key=lambda entry: entry["path"])
     return {"type": "directory", "checksum": _digest(payload_entries)}
 
 
@@ -2288,7 +2324,7 @@ def _authorize_recovery_evidence(
         ):
             _fail("intent-mismatch", "recovery intent contradicts the canonical write")
         canonical_goal = (
-            _cacheless_mechanical_state(Path(expected[row["id"]]["source"]["path"]))
+            _mechanical_install_state(expected[row["id"]], trusted, recovery=True)
             if resource["kind"] in ("skill", "agents") else resource["desired"]
         )
         if intent.get("mechanical_desired") != canonical_goal:

@@ -46,6 +46,7 @@ from onboard_arguments import (
     validate_recovery_args,
     validate_upgrade_args,
 )
+from sbtd_external_notices import copy_notices, notice_overlay
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -3504,6 +3505,26 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
     return ("replaced" if replaced_existing else "installed"), replaced_existing, None
 
 
+def _install_notices(
+    manifest: dict, name: str, source: Path, upstream: Path | None = None
+) -> dict[str, Path]:
+    skill = manifest["skills"][name]
+    repository = manifest["repositories"][skill["repository"]]
+    if repository["url"] != EXTERNAL_SKILL_SOURCES[name]["repo"]:
+        raise RuntimeError(f"license mapping does not match the repository for {name}")
+    licenses: dict[str, Path] = {}
+    for item in repository["licenseFiles"]:
+        key = Path(item["stablePath"]).name
+        if key in licenses:
+            raise RuntimeError(f"duplicate license destination for {name}: {key}")
+        licenses[key] = resolve_contained_relative_path(
+            upstream if upstream is not None else EXTERNAL_STABLE_ROOT,
+            item["source"] if upstream is not None else item["stablePath"],
+            f"license for {name}",
+        )
+    return notice_overlay(name, source, licenses, SKILL_DIR / "assets/external-skills/notices")
+
+
 def resolve_external_install_sources(
     selected: list[str], requested_source: str, workspace: Path
 ) -> dict[str, dict[str, object]]:
@@ -3531,9 +3552,13 @@ def resolve_external_install_sources(
                     source = source_dir_for_external_skill(repo_root, name)
                     validate_external_skill_source(name, source)
                     upstream_sources[name] = source
+                # Read only the agreed license paths. The selected clone supplies the bytes.
+                if manifest is None:
+                    manifest = json.loads(EXTERNAL_STABLE_MANIFEST.read_bytes())
                 for name, source in upstream_sources.items():
                     resolved[name] = {
                         "source": source,
+                        "notices": _install_notices(manifest, name, source, repo_root),
                         "repo": repo,
                         "sourceUsed": "upstream",
                         "sourceRevision": revision,
@@ -3553,6 +3578,7 @@ def resolve_external_install_sources(
         for name, (source, revision, stable_set) in stable_group.items():
             resolved[name] = {
                 "source": source,
+                "notices": _install_notices(manifest, name, source),
                 "repo": repo,
                 "sourceUsed": "stable",
                 "sourceRevision": revision,
@@ -3583,6 +3609,7 @@ def stage_external_skills(
                     f"staging verification failed for {name}: "
                     + ", ".join(failures[:20])
                 )
+            copy_notices(destination, cast(dict[str, Path], resolved[name]["notices"]))
         return staging
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
