@@ -7,6 +7,13 @@ English · [简体中文](CHANGELOG.zh.md)
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
 
+## v2.2.0-rc.2 (Unreleased)
+
+### Changed
+
+- Pin host acceptance to `codex@0.171.0` + `omp@19.1.0` and require both hosts instead of the historical one-host fallback. Both completed isolated Air tool-call, ingestion and duplicate-import smoke checks on 2026-11-23; retain earlier cloud smoke records in `smoke_history`. Version matching alone, old reports and parser fixtures are not passing evidence. This baseline does not certify the full approval/MCP/failure/interruption matrix or release readiness, upgrade existing installations, or change the original Astra session.
+
+
 ## v2.2.0-rc.1 (2026-11-13)
 
 The [v2.2.0-rc.1 prerelease](https://github.com/KunoLu/640-skills/releases/tag/v2.2.0-rc.1) is published (not marked Latest; v2.1.0 remains the latest stable). Its annotated tag (tag object `a918087fab900d32286874f713bb825408d74f45`) points to `7f21401ae6c56acd5846ae6ae922111aba3af932`; the exact commit's [three-platform main CI](https://github.com/KunoLu/640-skills/actions/runs/43444776201) ran once and passed with all 13 jobs successful by name, finishing at 2026-11-13T22:54:30+08:00.

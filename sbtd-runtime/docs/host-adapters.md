@@ -20,9 +20,9 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 
 所有丢弃都进入回执的 `dropped` 清单（键名 + 原因）。
 
-## omp 适配器（当前门禁 omp@18.19.0；18.18.8、18.11.1 为历史实测）
+## omp 适配器（当前门禁 omp@19.1.0；旧版本保留为历史实测）
 
-来源：omp 会话 JSONL，适配器只读显式给出的路径，不改会话文件、不扫描 HOME。真实字段形状来自 18.11.1 历史会话，18.18.8 与 18.19.0 亦已分别于 2026-11-11、2026-11-12 云主机实测通过。映射（parser_version `omp-session-jsonl-1`）：
+来源：omp 会话 JSONL，适配器只读显式给出的路径，不改会话文件、不扫描 HOME。真实字段形状来自历史会话；19.1.0 于 2026-11-23 完成 Air 隔离基础调用与入库／重复导入实测，适配器逻辑不变。映射（parser_version `omp-session-jsonl-1`）：
 
 - assistant 消息的 `toolCall` 项 → `invocation.started`（component `tool:<name>`，occurred_at 取记录时间戳）。
 - `read` 且 `arguments.path` 为 `skill://<名>` → 额外产出 `skill.loaded`（component `skill:<名>`；只陈述宿主读入了 skill 资源，不陈述执行通过）。该 read 调用本身仍记 invocation 对。
@@ -55,7 +55,15 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 
 重复 ingest 同一文件：靠 `(source_id, source_event_id)` 去重只确认，不重复计数。
 
-### omp@18.19.0 真实 smoke 证据（pass，2026-11-12）
+### omp@19.1.0 当前基础 smoke（pass，2026-11-23）
+
+Air 本机，独立 HOME、PI_CODING_AGENT_DIR、session-dir、缓存、临时目录与受控测试项目均位于本任务 TEMP。用户通过官方登录取得隔离认证，不复制主会话凭据；原 Astra 实现会话未变。
+
+`omp -p --mode json` 显式使用 `openai-codex/gpt-6-astra`、仅允许 read，审批模式 `always-ask`。2026-11-23T05:10:59Z–05:11:04Z，进程 exit 0，真实读取 `probe.txt`。已结束会话 lease 的 held／unknown 均为空，13 行会话被原适配器读取、跳过 9 行、产出并接受 2 条事件；重复导入 accepted=0、duplicate=2，conflict/rejected 均为 0。
+
+此前无凭据启动的 exit 1 保留为失败。该结果只证明基础调用、采集与重放路径，不证明完整审批、MCP、失败与中断矩阵已通过。命令、私有证据与限制见[任务 1](../../ai/tasks/v2.2.0-rc.2-baseline/task.md)。
+
+### omp@18.19.0 历史 smoke（pass，2026-11-12）
 
 来源：**云主机实测**。`omp --version` → `omp/18.19.0`，2026-11-12 18:51:03–18:51:17 +08:00，退出码 0、stdout `done`。模型 kimi-code/k3:max；强制一次 read 工具调用，再将会话文件交给 `omp_adapter.py`。
 
@@ -63,7 +71,7 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 
 `omp_adapter.py`（main `a70f270`）回执：records_read=12，records_skipped=8，events_emitted=2，accepted=2，duplicate=0，conflict=0，rejected=0，dropped=[]；重复导入 accepted=0、duplicate=2。
 
-当时旧矩阵把 18.19.0 判为 unsupported、18.18.8 判为 pinned；本次换针后两者分类反转，不改变实测事实。
+当时旧矩阵把 18.19.0 判为 unsupported、18.18.8 判为 pinned；rc.1 换针后两者分类反转，不改变实测事实。rc.2 当前 pin 为 19.1.0，这两版均为历史。
 
 ### omp@18.18.8 历史 smoke（pass，2026-11-11）
 
@@ -73,7 +81,7 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 
 来源：**云主机实测**。`omp -p` 强制 read，12 行会话；回执 records_read=12、records_skipped=8、events_emitted=2、accepted=2、duplicate/conflict/rejected=0、dropped=[]。重放 `tool:read` 的 started/finished，succeeded、duration_ms=27（wall）；重复导入 accepted=0、duplicate=2，重放仍为 2 条。原始字段片段及回执见 `ai/tasks/v2.1.0-rc.1-r1.2b-host-adapters/task.md`，矩阵保留于 `smoke_history.omp`；历史 pass 不等于当前 pinned。
 
-## codex 适配器（codex@0.167.1，smoke 由另一 bot 执行）
+## codex 适配器（当前门禁 codex@0.171.0）
 
 来源：`codex exec --json` 的 JSONL（stdin 实时管道或保存的捕获文件）。该流无时间戳，occurred_at 一律为 null（PRD §8.4.8 进入“时间不可定位”集合），recorded_at 为入库时间。流内也没有宿主版本，调用方用 `--host-version` 传入 `codex --version` 的输出。映射（parser_version `codex-exec-jsonl-1`）：
 
@@ -83,71 +91,57 @@ python3 sbtd-runtime/omp_adapter.py <session.jsonl> \
 - `item.completed` 没有对应 `item.started`（orphan）时 `state.previous=null`，不伪造 `running`。
 - 命令、输出、参数不进事件。CLI 在 `installation_id`／`device_id` 为空时以 exit 2 + JSON error 拒绝。
 
-本仓库测试不安装不运行 codex。字段形状以公开 exec JSONL 格式（`thread.started` / `item.started` / `item.completed` / `turn.completed`）为准；CodeX bot 已于 2026-11-11 完成 codex@0.167.1 云主机实测。
+默认单元测试不安装或运行 codex。0.171.0 已于 2026-11-23 完成 Air 隔离基础调用与入库／重复导入实测；0.167.1 云主机证据保留在下方历史节，不用于当前通过判定。
 
 ## capability matrix 与 smoke 状态
 
-`contracts/capability-matrix.json` 当前门禁针为 `codex@0.167.1` + `omp@18.19.0`，其他版本 unsupported。`smoke` 节记录当前两宿主真实 smoke 结果：`pass`（真实运行采到 Skill 或 Tool 调用事件）、`unsupported`（固定版本拿不到结构化调用事件，如实标记）、`pending`（尚未执行）。`smoke_history` 保留 2026-11-11 的 omp@18.18.8 pass 与 2026-10-17 的 codex@0.163.0 unsupported、omp@18.11.1 pass，旧版本在新契约下均 unsupported。parser fixture 不算 smoke 证据，兜底完成门仍为 ≥1 个门禁宿主通过（ADR 0001 Q6 与第 8 节追加决定）。
+`contracts/capability-matrix.json` 当前门禁针为 `codex@0.171.0` + `omp@19.1.0`，其他版本 unsupported。`pinned` 只表示版本匹配，不是验收通过。rc.2 要求两个宿主均有本轮 Air 隔离真实调用证据，并完成所有适用验收；旧 R1 至少一个宿主通过的兜底仅作历史。`failed`、`unsupported`、`unknown`、`pending` 均不得当作 PASS。
 
-## codex@0.167.1 真实 smoke 指令（另一 bot 执行）
+`smoke` 记录当前基础冒烟，`smoke_history` 按宿主以数组保留旧证据。基础 smoke pass 不代表整版发布就绪；任务 3 的权限／审批、MCP、失败和中断矩阵须另行验收。旧版本、旧主机和 parser fixture 不能替代本轮证据。
 
-前置：现场已安装 `codex@0.167.1` 且有可用登录（ChatGPT 登录或 API key）。**不要**升级或降级 codex；版本不符则该宿主标 `unsupported` 并停止。
+## 当前固定版本的隔离 smoke
 
-```bash
-# 0. 版本钉核对：输出必须含 0.167.1
-codex --version
+开始前核对 `omp --version` 为 `omp/19.1.0`、`codex --version` 为 `codex-cli 0.171.0`、Bun 满足 `>=1.4.4`；不符或未知则阻断，不跟随 latest。只在获准的临时根内准备 HOME、agent、CODEX_HOME、session-dir、缓存和受控测试项目。账号只通过单独获准的官方登录流程使用，不复制 auth.json／agent.db，不更换原实现会话模型。
 
-# 1. 独立运行时家目录并开启观察开关
-export SBTD_RUNTIME_HOME="$(mktemp -d)/runtime"
-python3 - <<'PY'
-import json, os
-from pathlib import Path
-home = Path(os.environ["SBTD_RUNTIME_HOME"])
-home.mkdir(mode=0o700, parents=True, exist_ok=True)
-(home / "config.json").write_text(json.dumps({
-    "schema_version": 1,
-    "observation": {"enabled": True, "level": "metadata", "failure_policy": "best-effort"},
-}) + "\n")
-PY
-INSTALLATION_ID="$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
-DEVICE_ID="$(python3 -c 'import uuid; print(uuid.uuid4().hex)')"
-
-# 2. 真实运行（强制一次 shell 工具调用），JSONL 既落捕获文件又实时入库
-codex exec --json --sandbox read-only \
-  "Use the shell tool to run exactly: echo sbtd-r12b-smoke. Then reply with the word done." \
-  | tee "$SBTD_RUNTIME_HOME/codex-r12b-smoke.jsonl" \
-  | python3 sbtd-runtime/codex_adapter.py \
-      --runtime-home "$SBTD_RUNTIME_HOME" \
-      --installation-id "$INSTALLATION_ID" --device-id "$DEVICE_ID" \
-      --host-version "$(codex --version)" --confirmed
-```
-
-通过判定（全部满足才算 `pass`）：
-
-1. `codex --version` 输出含 `0.167.1`。
-2. 捕获文件 `$SBTD_RUNTIME_HOME/codex-r12b-smoke.jsonl` 中存在至少一行 `item.started` 或 `item.completed`，其 `item.type` ∈ {command_execution, mcp_tool_call, web_search, collab_tool_call, file_change}（原始行片段记入证据）。
-3. 适配器回执（第 2 步 stdout 的 JSON）`events_emitted >= 1` 且 `accepted >= 1`。
-4. 重放核对：
+本轮 `$SMOKE_ROOT` 位于用户指定的 `$HOME/TEMP/`。以下命令要求其子目录与仅含 `sbtd-rc2-task1-isolated-smoke` 的 `probe.txt` 已准备好；登录须先获授权。它们是临时测试进程，不是新的实现主会话。
 
 ```bash
-python3 - <<'PY'
-import os
-from pathlib import Path
-import sys
-sys.path.insert(0, "sbtd-runtime")
-from event_store import EventStore
-with EventStore.open(Path(os.environ["SBTD_RUNTIME_HOME"]), read_only=True) as store:
-    events = store.replay()
-    print(sorted({e["event_type"] for e in events}))
-    print([e.get("component") for e in events])
-PY
+HOME="$SMOKE_ROOT/isolated/codex-user-home" \
+CODEX_HOME="$SMOKE_ROOT/isolated/codex-home" \
+TMPDIR="$SMOKE_ROOT/tmp" TMP="$SMOKE_ROOT/tmp" TEMP="$SMOKE_ROOT/tmp" \
+XDG_CACHE_HOME="$SMOKE_ROOT/cache" \
+codex exec --json --ephemeral --ignore-user-config --ignore-rules \
+  --sandbox read-only -c 'approval_policy="never"' --model gpt-6-astra \
+  --cd "$SMOKE_ROOT/isolated/probe-project" --skip-git-repo-check \
+  'Use the shell tool exactly once to run: cat probe.txt . Do not write files or use network tools.'
 ```
 
-输出须含 `invocation.started` 或 `invocation.finished`，且至少一个 component 的 kind 为 `tool` 或 `mcp`。
+`--skip-git-repo-check` 只用于本轮自行建立的受控测试目录，不添加信任；不得使用 `--trust`。`approval_policy=never` 不证明真实审批允许／拒绝。OMP 对应调用在该受控目录内执行：
 
-失败处理：固定版本拿不到结构化调用事件（流里没有 item.* 行、或适配器回执 accepted 为 0）时，把 `capability-matrix.json` 的 `smoke.codex` 标为 `unsupported` 并写明真实原因；不得用 parser fixture 代替，不得报 PASS。通过后把 `smoke.codex` 置为 `pass`，附上 smoke 日期、宿主版本原文与原始输出片段位置。
+```bash
+env -u OMP_PROFILE -u PI_PROFILE -u PI_CONFIG_DIR -u PI_SESSION_ID \
+  -u ORCA_TERMINAL_HANDLE \
+  HOME="$SMOKE_ROOT/isolated/omp-home" \
+  PI_CODING_AGENT_DIR="$SMOKE_ROOT/isolated/omp-agent" \
+  TMPDIR="$SMOKE_ROOT/tmp" TMP="$SMOKE_ROOT/tmp" TEMP="$SMOKE_ROOT/tmp" \
+  XDG_CACHE_HOME="$SMOKE_ROOT/cache" \
+  omp -p --mode json --model openai-codex/gpt-6-astra --tools read \
+  --no-extensions --no-skills --no-rules --no-context-files --no-lsp \
+  --no-title --no-judge --no-spotlight --offline \
+  --session-dir "$SMOKE_ROOT/isolated/omp-sessions" \
+  --approval-mode always-ask --max-time 90 \
+  'Use the read tool exactly once on probe.txt. Do not write files or use network tools.'
+```
 
-### codex@0.167.1 真实 smoke 证据（pass，2026-11-11）
+分别捕获 stdout、stderr、起止时间与进程退出码，再执行适配器；不要用管道末端成功冒充宿主成功。OMP 仅消费该测试进程已结束、lease 未占用的会话文件，不读取原实现主会话活动日志。观察库使用隔离的 `SBTD_RUNTIME_HOME`，按[使用说明](install-and-use.md#可选启用与项目授权)显式启用 metadata 观察。
+
+通过判定：固定版本匹配、宿主进程 exit 0、实际 Skill／Tool 调用成功、适配器接受对应事件，重复导入不新增事件，重放可见预期 component。任一关键项未知或失败均不通过；失败证据保留，不能把更新矩阵本身当作验证。验收结束保留必要证据，临时目录与认证存储按已确认清理清单处理，不删除其他目录。
+
+### codex@0.171.0 当前基础 smoke（pass，2026-11-23）
+
+Air 本机，2026-11-23T04:50:56Z–04:51:09Z，显式模型 `gpt-6-astra`，上述隔离条件下进程 exit 0。7 行 JSONL 包含一次真实 `command_execution` started/completed，`cat probe.txt` 工具 exit_code=0，最后 turn.completed。原适配器读取 7 行、跳过 4 行、产出并接受 2 条事件，重复导入 accepted=0、duplicate=2，conflict/rejected 均为 0。见[任务 1](../../ai/tasks/v2.2.0-rc.2-baseline/task.md)。
+
+### codex@0.167.1 历史 smoke（pass，2026-11-11）
 
 来源：**云主机实测**，CodeX bot 执行。`codex --version` → `codex-cli 0.167.1`，开始于 14:36:15 +08:00；在 main `80f1426` 只读副本上以 `codex exec --json --sandbox read-only` 执行 `echo sbtd-r12b-smoke`。
 

@@ -1,0 +1,157 @@
+---
+schema_version: 1
+id: v2.2.0-rc.2-baseline
+workflow_mode: strict
+mode_source: user
+mode_note: 用户确认 PRD 开发计划并授权任务 1，明确 TEMP 生命周期与任务 6 三文件范围
+status: "checking"
+branch: contract/v2.2.0-rc.2-baseline
+created_at: '2026-11-23T12:42:25.121332+08:00'
+updated_at: "2026-11-23T13:25:22.432119+08:00"
+completed_at: null
+"sync_scope": ["ai/tasks/v2.2.0-rc.2-baseline"]
+"blocked_reason": null
+---
+# v2.2.0-rc.2 任务 1：开工基线与版本契约
+
+## 授权、范围与执行约束
+
+用户在当前原交互会话确认开发计划，明确授权开始任务 1，执行 strict。依据为用户提供的《640-skills v2.2.0-rc.2 开发与发布 PRD》（2026-11-23）；本任务不授权任务 2—8 实施、发布、合入 main、force push、reset --hard 或全机同步。允许在本任务分支按 PRD 提交、推送和创建 PR；合入由协调方负责。
+
+用户同时确认任务 6 仅修改以下三个自有规则文件，本任务仅保存决定，不修改它们：
+
+- `sbtd-workflow-onboard/templates/skills/sbtd-task/references/methods.md`
+- `sbtd-workflow-onboard/templates/skills/book-ddd-distilled-modeling/SKILL.md`
+- `sbtd-workflow-onboard/templates/skills/gherkin-bdd/SKILL.md`
+
+临时环境、隔离 HOME、临时 CODEX_HOME、测试项目、缓存和一次性脚本统一放在 `$HOME/TEMP/` 下本任务独有目录。用户确认开发完成且后续不再使用后，展示实际生成项并删除确认范围；不得删除既有 TEMP 内容。恢复备份另列用途、保留条件与销毁确认。正式证据留在本任务受 ignore 保护的 reports 中，不随临时环境清理丢失。
+
+未完整调用 grill-with-docs：需求、精确版本与职责边界已由 PRD 和当前确认给定，无需重复访谈；执行事实不明时仍阻断相应步骤。
+
+## 目标与非目标
+
+- 核对本机 HEAD、工作区、原 Astra 会话身份、占用、宿主版本及审批策略。
+- 建立可恢复基线，必要时才对齐精确 OMP 19.1.0 / Codex 0.171.0。
+- 更新本项目当前宿主验收 pin、相关断言和说明，保留历史事实。
+- 在本机隔离环境重新验证基本真实调用及事件链，不用云端或 fixture 代替。
+- 对旧 R1 至少一个宿主的兜底与 rc.2 双宿主必验要求作明确区分；不得借旧兜底放行 rc.2。
+- 不更换主会话、provider、全局审批策略，不额外开启可选 eval，不读取或导入正在写的主会话日志。
+- 不执行 graft 清理、许可修复、术语修改、ENTRYPOINT 版本写回、live automation 或 sync。
+
+## 已观察基线
+
+- 初始分支：`main`；HEAD：`e4b6f55d4cb7949aca6f837aa2662b57951f5f4b`。
+- 初始 `GIT_OPTIONAL_LOCKS=0 git status --short` 无输出；远端 `git ls-remote --heads origin main` 返回同一完整 SHA。
+- 本任务分支：`contract/v2.2.0-rc.2-baseline`，由上述 main 创建，未新建实现会话或 worktree。
+- 原交互会话：`01a20688-2e22-7233-8c18-467125f15269`；Orca session：`861c7f0b-d489-4f48-8066-6eef9ab2c392`。
+- 当前终端 `term_8716668a-b6a5-48d2-88b9-e06040c088fa` 与进程的 ORCA_TERMINAL_HANDLE 一致；工作区内只列出该 OMP agent，另一个终端为 shell。未访问其他项目。
+- `omp session lease --json -- <当前会话 id>` 返回 held 当前 id、unknown 空列表。该 lease 属本会话，不导入其活动日志。
+- 当前终端状态栏显示 GPT-6 Astra / high；当前 harness 模型为 `openai-codex/gpt-6-astra`。
+- `omp --version`：`omp/19.1.0`；`codex --version`：`codex-cli 0.171.0`；`bun --version`：`1.4.4`。无需安装或升级。
+- `omp config get tools.approvalMode --json`：`yolo`，是现有配置读数，不证明审批拒绝场景已通过；本任务不修改该全局策略。
+- `omp config get loop.mode --json`：`prompt`；`loop.conditionTimeoutMs`：30000。
+- `goal.enabled=true` 仅表示能力可用；随后在本终端执行 `/goal show`，真实界面返回 `No goal set.`。未启用 Goal。
+- Codex 有当前 Orca 账户专属 CODEX_HOME；不复制凭据，不修改该目录的配置或信任。隔离调用使用本任务 TEMP 下独立 CODEX_HOME。
+- task helper 的 PyYAML、jsonschema、markdown-it-py 可导入；LSP 返回 No language servers configured for this project，采用源码与契约分析，不安装 LSP。
+- `.sbtd/active-task.json` 原来指向 `v2.1.0-rc.4-release`；这是另一任务的旧书签，不把该任务重绑定或改写。
+
+## TEMP 清单与备份
+
+本任务独有根：`$HOME/TEMP/640-skills-rc2-task1.n4E4XPx9/`（创建时为私有目录）。
+
+| 相对路径 | 用途 | 生命周期 |
+|---|---|---|
+| `tmp/` | 子进程 TMPDIR/TMP/TEMP | 开发完成且不再使用后确认清理 |
+| `cache/` | 子进程工具缓存 | 同上 |
+| `isolated/`（已建立 `codex-home/`） | 临时 HOME、CODEX_HOME、测试项目与运行环境 | 同上；先停止本任务进程 |
+| `task-body.md` | TaskStore.create 的输入正文 | 记录落盘后仍保留，最终按清单清理 |
+| `backups/active-task.before.json` | 创建任务前书签副本 | 恢复不再需要后单独确认销毁 |
+| `backups/approved-prd.md` | 用户 PRD 原字节快照 | 同上 |
+| `backups/repository-baseline.tar` | 初始完整提交树的 git archive | 同上；不包含 HOME、ignored 或未跟踪数据 |
+
+备份检查：书签和 PRD 的 `cmp -s` 通过；原始摘要如下。
+
+- active-task.before.json：`b97ec02bd376ac5afb8be13fdb582bf9f57a3ae8071b15f29b879ca1faeaa39d`
+- approved-prd.md：`27ba7fadcaf2e4b0285f2a4dbf7b50d211c1be54fc01ffb5bb9301dc283db11b`
+- repository-baseline.tar：`d4a8b758bc7775b9f1d8ca09e9bb9b57909c50372c071d5e938cb3fdeb701a18`
+
+恢复边界：全局宿主版本与配置未被本任务修改，因此未复制任何全局凭据或 auth 文件。仓库代码可从已记录提交或 tar 在独立目录恢复，不用 reset --hard 覆盖现场；书签恢复必须先核对届时归属，不能覆盖后来任务。尚未执行恢复演练。
+
+## 验收与负测
+
+1. 本机版本读数精确匹配，Astra 主会话保持不变，备份和恢复范围可说明。
+2. 两宿主在 Air 隔离条件下发生真实工具调用，记录退出码、已完成的事件捕获、适配器回执和重复导入结果。
+3. 旧证据不能用于新版本通过；unknown、unsupported、未运行不能记为 PASS。
+4. 被其他进程占用或归属未知的会话不能导入；本次原主会话也不导入。
+5. Codex 全局配置与信任未被写入，未知仓库不自动信任；秘密不进入日志或报告。
+6. 相关 golden／adapter／任务记录与工作流契约测试通过；真实宿主和模拟单测分别报告。
+7. 原交互会话有界 /loop 已运行并在本地验收结束后关闭；必需 /review 针对最终 SHA 执行，之后外部独立复核及同 SHA CI 仍单独等待。
+
+## Book Gate Plan
+
+| Gate | 触发与时机 | 当前状态 |
+|---|---|---|
+| DDD Boundary Review | 无完整 grill；若领域语义歧义再触发 | not-required（当前仅执行事实待查） |
+| DDIA Data Design Review | 修改共享 capability contract、证据和恢复语义前 | confirmed；仅更新静态矩阵，当前证据与历史分离；不改事件 schema、数据库、去重和重放；旧 codex 单条历史扩为与 omp 相同的历史数组，无代码消费者 |
+| Legacy Change Safety Review | 既有完成门／适配器行为改变前 | not-required；适配器逻辑不改，原生双宿主各接受 2 条事件、重导入 0 新增／2 重复；版本与完成门由既有契约测试覆盖 |
+| Refactoring Review | 既有生产代码首次修改前 | not-required；本任务无生产 Python 逻辑修改，不做重构 |
+| BDD／TDD | 持久契约场景与高风险行为 | passed／traceable；旧矩阵下 2 tests、5 failure entries（exit 1），换针后最终 154 tests 通过；中文场景／英文关键字，不生成 .feature |
+| project-validation | 修改后聚焦验证及正式证据 | passed（本地任务范围）；最终五模块 154 tests / 3.154s / exit 0，修改测试文件 Ruff exit 0；完整 CI 尚未执行 |
+| OMP /review | 最终本地提交，循环关闭后 | planned；已执行一次未提交检查点审查，correct／无 findings，不代替最终实现 SHA 审查 |
+| 独立复核／精确 SHA CI | /review 修正闭环后 | planned；由外部角色接续 |
+| Release Readiness | 宿主兼容／发布门禁修改验证后 | blocked；本地任务范围通过，但独立复核、精确提交 CI 与后续发布任务未完成，不能宣布发布就绪 |
+
+## 模型使用
+
+主会话模型 `openai-codex/gpt-6-astra`，用途为只读规划、任务 1 与检查点审查；精确主会话请求次数、token 和历史累计未知，不推算。Codex 隔离 smoke 显式 `--model gpt-6-astra`，一个 turn、一次真实 shell 调用；OMP 隔离 smoke 显式 `openai-codex/gpt-6-astra`，认证后一次真实 read 成功。原生 usage 保留在私有 JSONL，不作为主会话统计；认证前失败不计成功调用。未新建实现主会话或审查子代理。
+
+## 当前进度与未完成项
+
+已完成只读身份与版本核对、TEMP 边界建立、仓库／PRD／书签备份、分支创建及 strict 记录。原会话执行 `/loop 2h <本任务提示>`，界面确认 `Loop mode enabled. Limited to 2 hours.`；未使用未经验证的条件命令，未使用 reset 或 Goal。
+
+随后在本任务 TEMP 下新建的独立 CODEX_HOME 执行 `codex login status`，返回 `Not logged in`，退出码 1。这是认证就绪诊断，不是模型调用，不证明真实兼容性通过。未读取、复制或输出任何现有凭据，未向真实 Codex 全局配置或信任写入。
+
+按用户规定遇认证阻断即发送 `/loop` 关闭；后续原终端状态栏不再显示 Loop running。通过原终端启动内置 `/review`，选择 uncommitted changes，对任务记录与索引的 +134/-0 差异完成当前会话只读审查，结论 correct、无 findings；不是独立复核或 CI。
+
+用户通过确认表明确授权隔离 Codex 官方登录，由用户完成浏览器认证；`codex login` 返回 `Successfully logged in`，exit 0、12.80s。随后另行确认隔离 OMP 官方登录；首次因后台 stdin closed 中断，保留子进程 stdin 后登录 exit 0、10.36s。两次登录均仅指向本任务 TEMP，未读取或复制现有凭据；OAuth URL、账号与登录存储不进入共享记录。两次 blocked 均经 TaskStore.resume 恢复原 in-progress 阶段，真实事件保留。
+
+Codex 已完成隔离真实调用：2026-11-23T04:50:56Z 至 04:51:09Z，进程 exit 0；7 行 JSONL 含一次 `command_execution` started/completed，`cat probe.txt` 返回受控字符串 `sbtd-rc2-task1-isolated-smoke`，工具 exit_code=0，最后 turn.completed。HOME、CODEX_HOME、TMPDIR/TMP/TEMP、XDG_CACHE_HOME 与 cwd 均指向本任务 TEMP；使用 ephemeral、ignore-user-config、ignore-rules、read-only sandbox，approval_policy=never（不证明审批拒绝场景），未设置 --trust。原适配器首次 accepted=2、重复导入 accepted=0／duplicate=2，conflict/rejected 均为 0。
+
+OMP 初次隔离 smoke 于 2026-11-23T04:51:40Z 至 04:51:42Z 返回 exit 1：`No API key found for openai-codex.`，失败原件保留。认证后的成功运行于 2026-11-23T05:10:59Z 至 05:11:04Z 返回 exit 0，真实 read probe.txt 成功。HOME、PI_CODING_AGENT_DIR、session-dir、缓存、临时目录和 cwd 均在本任务 TEMP；只允许 read，禁用 extensions/skills/rules/context-files/LSP/title/auxiliary judge，未改主会话模型。已结束测试会话 lease 返回 held=[]、unknown=[]；原适配器读取 13 行、跳过 9 行、产出并接受 2 条事件，重复导入 accepted=0／duplicate=2，conflict/rejected 均为 0。
+
+临时清单还包括 `isolated/observation-runtime/`、`omp-smoke-authenticated.{jsonl,stderr,receipt}`、两宿主 `*-ingest-{first,repeat}.json`、`gate-red.txt`、`unit-baseline-{green,final}.txt`、`lint-final.txt`、`baseline-acceptance.{json,stderr}`，以及一次性 `verify_baseline.py`、`finalize_evidence.py`。这些均属于本任务 TEMP 根；正式脱离临时环境的本地证据已复制至本任务 ignored reports。原始 OMP 完成会话仍在隔离 session-dir；认证存储不读取、不复制、不发布。
+
+已更新当前版本矩阵、golden 版本、对应 BDD／断言、宿主说明、数据字典和双语 CHANGELOG。生产适配器逻辑、事件 schema、数据库及 dedup 未改；测试文件仅额外删除一处空行以修复本次 Ruff 报出的原有 I001。最终五模块 154 tests 通过，Ruff 通过。一次性验收检查拒绝两宿主各五类不合格证据、确认全部旧 smoke 对象保留、重放总数为 4；真实 held-session 负测返回 exit 2 且未创建运行库（仅合成文件名，不打开主会话日志）。
+
+本地验收结束已再次通过原终端发送 `/loop` 关闭。后续只进行记录收口、本地提交身份固定、内置 `/review` 与外部交接，不进入任务 2，不自动 push、合入或发布。
+
+## 恢复动作与审核边界
+
+- 双宿主隔离官方登录与基础真实调用均已完成；不要重复安装、建分支、复制凭据或重做已正确工作。
+- 下一步由独立复核对最终完整 SHA 核定 CLEAN，再由协调方核对同 SHA CI／适用验收与合入权限；本地编码代理不自行合入。
+- 后续遇新的认证、授权或宿主安全阻断，仍须关闭循环并保存真实检查点；不得改用全局 CODEX_HOME 绕过隔离。
+- 执行时基线为 `e4b6f55d4cb7949aca6f837aa2662b57951f5f4b`；本地提交后的完整 SHA、证据重绑定和最终内置审核结果放在所链接的本地报告／交接回执，避免 task 自引用导致 SHA 不断变化。当前无 PR 或精确提交 CI。
+- README.md 不改：本任务未变更安装／路径语义，原文 18.19.0 为已验证路径来源，不冒称此轮重验。README.zh.md 同理。版本化 automation prompt 不改：监控职责、扫描入口及权限边界未变。双语 CHANGELOG 已同步 rc.2 未发布条目；ENTRYPOINT 与 live automation 不改。
+- TEMP 根及备份继续保留；不能因暂停就删除认证目录、备份或验收所需输入。
+
+## 本地证据与交接入口
+
+- [原生证据清单](reports/task1-local-validation-20261123.json)与[同 stem 中文汇总](reports/task1-local-validation-20261123.md)记录实际日志、退出码、失败轮次、源码摘要、基线和提交绑定；仅 local-only，不冒称 PR／知识库已接收。
+- 最终提交身份与内置审核回执：`reports/local-review-target.json`、`reports/handoff.md`。提交后生成；若文件尚未存在，表示该环节未完成，不能据本条推定通过。
+- 本地验证命令：`PYTHONPATH=sbtd-runtime:sbtd-runtime/tests:. python3 -B -m unittest test_golden_contracts test_codex_adapter test_omp_adapter tests.test_workflow_contracts tests.test_sbtd_task_document -v`；`RUFF_NO_CACHE=true ruff check sbtd-runtime/tests/test_golden_contracts.py`。
+- `BDD=traceable`，`Cross-repo context=environment-only`，`Mock Strategy=none`（真实宿主）；golden 为合成契约样本。`rtk=skipped-for-report`，原生运行避免缓存。Web／Mobile／完整跨平台 CI 未运行：本任务是 CLI 基线，后续完整验收与外部 CI 另行完成。
+- Ponytail／可读性检查：复用现有矩阵、两适配器和测试入口；不新增生产控制器、依赖或重构。长期 lesson 已评估：stdin 生命周期预防已有对应记录，本次不重复新增；TaskSync 既有序列字段异常只记录工作绕行，不冒称产品修复。
+- 恢复边界：回退本任务提交即可恢复版本契约；全局版本／配置未作为写入目标。TEMP、隔离认证与恢复备份仍有后续用途，必须按用户指定条件确认后再清理，不删除既有 TEMP 内容。
+
+## 状态事件
+
+| at | from | to | reason | evidence |
+|---|---|---|---|---|
+| 2026-11-23T12:42:34.962067+08:00 | planned | in-progress | Astra 原交互主会话：开始 任务 1 开工基线与版本契约 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": ""} |
+| 2026-11-23T12:45:43.367680+08:00 | in-progress | in-progress | Astra 原交互主会话：完成 基线核对、任务记录与 TEMP 边界建立 | {"changed_files": ["ai/tasks/v2.2.0-rc.2-baseline/task.md", "ai/tasks/index.md"], "evidence_files": [], "sync_files": {"ai/tasks/index.md": {"mtime_ns": 1795408945166964612, "sha256": "f444bd938dbf6db1db10ec60a1ff916256d0cdd54f080fa5e1c7dc3a21da73a6", "size": 7177}}, "validation": "版本、原终端、备份核对完成。隔离 codex login status: Not logged in / exit 1。前次重复传 scope 触发 SequenceNode.style 异常且未写入；本次省略可选 scope，沿用已保存的相同范围，不修改 helper。"} |
+| 2026-11-23T12:45:54.299134+08:00 | in-progress | blocked | Astra 原交互主会话：独立 CODEX_HOME 未认证；按用户要求暂停本地实施，等待用户通过官方登录流程授权 | codex login status: Not logged in; exit 1。未复制凭据，未改全局配置。/loop 关闭请求已接收且后续原终端状态栏不再显示 Loop running。任务1尚未完成。 |
+| 2026-11-23T12:49:37.958816+08:00 | blocked | in-progress | 用户授权官方隔离登录并已完成浏览器认证，Astra 主会话恢复任务1 | 隔离 CODEX_HOME 下 codex login 返回 Successfully logged in，exit 0，12.80s；未复制凭据，未改变主会话模型。 |
+| 2026-11-23T12:53:02.716585+08:00 | in-progress | blocked | Astra 原交互主会话：隔离 OMP 无 openai-codex 凭据，等待用户授权官方独立登录 | Codex 隔离真实调用 exit 0；OMP 隔离调用 No API key found for openai-codex / exit 1，无真实工具调用；已请求关闭 /loop。原始日志保留于本任务 TEMP，不复制凭据。 |
+| 2026-11-23T13:10:44.085243+08:00 | blocked | in-progress | Astra 主会话：用户授权隔离 OMP 官方登录且已成功，恢复任务1 | 首次登录因 stdin closed 失败；保留子进程 stdin 后官方登录 exit 0（10.36s），凭据由官方 CLI 保存于本任务 TEMP 内，未读取或复制。 |
+| 2026-11-23T13:25:03.314466+08:00 | in-progress | in-progress | Astra 原交互主会话：完成 任务 1 开工基线与版本契约（本地实施与验收） | {"changed_files": ["CHANGELOG.md", "CHANGELOG.zh.md", "ai/tasks/index.md", "ai/tasks/v2.2.0-rc.2-baseline/task.md", "sbtd-runtime/contracts/capability-matrix.json", "sbtd-runtime/contracts/data-dictionary.md", "sbtd-runtime/golden/dataset.json", "sbtd-runtime/tests/test_golden_contracts.py", "sbtd-runtime/spec/r1.0-contract-scenarios.md", "sbtd-runtime/spec/r1.4-acceptance-scenarios.md", "sbtd-runtime/docs/host-adapters.md", "sbtd-runtime/docs/install-and-use.md"], "evidence_files": ["ai/tasks/v2.2.0-rc.2-baseline/reports/task1-local-validation-20261123.json", "ai/tasks/v2.2.0-rc.2-baseline/reports/task1-local-validation-20261123.md"], "sync_files": {"CHANGELOG.md": {"mtime_ns": 1795410974868909199, "sha256": "ac08f6dbd995c4af536fae339edd3a3465a945985f28eef8ed43514014ea0967", "size": 194712}, "CHANGELOG.zh.md": {"mtime_ns": 1795410974871767543, "sha256": "6a5cc865d31e19c0a475f19eadc00d1c06e71e6b3b775194bb27bd2c18430259", "size": 159355}, "ai/tasks/index.md": {"mtime_ns": 1795408945166964612, "sha256": "f444bd938dbf6db1db10ec60a1ff916256d0cdd54f080fa5e1c7dc3a21da73a6", "size": 7177}, "ai/tasks/v2.2.0-rc.2-baseline/reports/baseline-acceptance.json": {"mtime_ns": 1795411117462828000, "sha256": "639b581ad54c6f0063d5933b38110425c494d2b169b794f1ac7f770e9878e742", "size": 706}, "ai/tasks/v2.2.0-rc.2-baseline/reports/codex-ingest-first.json": {"mtime_ns": 1795411117462245000, "sha256": "2b1955ef8c472f4093f0cca36619aa0ba394630167cdddd4e7699b183d896c14", "size": 483}, "ai/tasks/v2.2.0-rc.2-baseline/reports/codex-ingest-repeat.json": {"mtime_ns": 1795411117462351000, "sha256": "ccc5fb45301817421385fb13544a931c4c1a9431ca04fbfab4f5e17d90ea047e", "size": 652}, "ai/tasks/v2.2.0-rc.2-baseline/reports/codex-smoke.jsonl": {"mtime_ns": 1795411117460814000, "sha256": "da5f828880d79ae10c0f080ebff6595ef7637325be38189542971ffee9cf5d63", "size": 900}, "ai/tasks/v2.2.0-rc.2-baseline/reports/codex-smoke.receipt": {"mtime_ns": 1795411117461361000, "sha256": "3ccd75d0f1ecab22c00b8d9089544d031d96a35d18b46a02e70e3b61d79eac97", "size": 71}, "ai/tasks/v2.2.0-rc.2-baseline/reports/codex-smoke.stderr": {"mtime_ns": 1795411117461108000, "sha256": "1aa26269eb1cc57f86b235a03cda53c004edb5b1e9fc99d4da4f00843293d721", "size": 39}, "ai/tasks/v2.2.0-rc.2-baseline/reports/gate-red.txt": {"mtime_ns": 1795411117462685000, "sha256": "13ca7b19bbdd6dab91c6b824ab9586c08ba115e80381a127c109a7cd77054fd1", "size": 4953}, "ai/tasks/v2.2.0-rc.2-baseline/reports/lint-final.txt": {"mtime_ns": 1795411320815051596, "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18", "size": 19}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-ingest-first.json": {"mtime_ns": 1795411117462457000, "sha256": "c753016f0c6d8d0b3ca01f6188b4b3c2c234dc74fc9f19a2079d822fadb3d2de", "size": 813}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-ingest-repeat.json": {"mtime_ns": 1795411117462562000, "sha256": "6b9274f53b5bb31332b3465557d875b5a0cb874a4b6a4d3d8ef64e46e43a9290", "size": 984}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-smoke-authenticated.jsonl": {"mtime_ns": 1795411117461859000, "sha256": "a55f3d83994e40149ed4192a525ebec4544b0a21994ba0b875ba73107b6b9d7a", "size": 12197}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-smoke-authenticated.receipt": {"mtime_ns": 1795411117462120000, "sha256": "c849fc642f4de592dadd21e6d79a9ce8da7ce427c06f4ee49b24139196801e59", "size": 71}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-smoke-authenticated.stderr": {"mtime_ns": 1795411117461970000, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "size": 0}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-smoke.jsonl": {"mtime_ns": 1795411117461504000, "sha256": "b24e7e462adb119e458d50cb70e9555c459f60c72f63e44cd205baec4228b36d", "size": 229}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-smoke.receipt": {"mtime_ns": 1795411117461748000, "sha256": "160cca7168c2121342532c4972cb1b4034b386514d2f3b578c52cd3b6abb9355", "size": 71}, "ai/tasks/v2.2.0-rc.2-baseline/reports/omp-smoke.stderr": {"mtime_ns": 1795411117461621000, "sha256": "cff6a9d6b62907cefba87d0aa3e7276a626e16c06a97bf0712071c91c1ab85b3", "size": 814}, "ai/tasks/v2.2.0-rc.2-baseline/reports/task1-local-validation-20261123.json": {"mtime_ns": 1795411320816038349, "sha256": "c0e69bfc1db80f9bc7ca7dbdb8293aefae8c1cd3068c6290d11fac8a0932c149", "size": 6697}, "ai/tasks/v2.2.0-rc.2-baseline/reports/task1-local-validation-20261123.md": {"mtime_ns": 1795411377075289658, "sha256": "e2a3f11913fb3cf63a5037331a267f9465012ea4db3ce84afec336bc43b9fb8f", "size": 8942}, "ai/tasks/v2.2.0-rc.2-baseline/reports/unit-baseline-final.txt": {"mtime_ns": 1795411320814864970, "sha256": "848dd0f5e2c39225ab381ac8ce17bfc841bc84803ccc2ee4e598f5d709c44262", "size": 24564}, "ai/tasks/v2.2.0-rc.2-baseline/reports/unit-baseline-green.txt": {"mtime_ns": 1795411217080003000, "sha256": "41c5ee68e271437e57b738e07951f0cf796abf1c8c85d94d72a5d016a73fa8e5", "size": 24564}, "sbtd-runtime/contracts/capability-matrix.json": {"mtime_ns": 1795410875176571939, "sha256": "12db6787db2bd489ed9f6750f0bdcba9e54922085debdf4e498e6f931d2b9326", "size": 7875}, "sbtd-runtime/contracts/data-dictionary.md": {"mtime_ns": 1795410974868425739, "sha256": "2a616188cbf0b6cab35b53491d4827bdafc0026e33d0ed9020cf148876f51ec0", "size": 7795}, "sbtd-runtime/docs/host-adapters.md": {"mtime_ns": 1795410974866465108, "sha256": "564aa0088f032de0bdc6a7685e016f132bf9eee4cc12fe33b32b41371eaa394d", "size": 15374}, "sbtd-runtime/docs/install-and-use.md": {"mtime_ns": 1795410974867518070, "sha256": "d33e2b6d38e44d0b74ef629dafcae89ee16c5c105e6e13d930a8fb6c05bb78e4", "size": 34438}, "sbtd-runtime/golden/dataset.json": {"mtime_ns": 1795410875177783401, "sha256": "e98bcd36f0ab71b56824fd899da1b5389faf07fc1a4f651275e715ac38afd01e", "size": 95810}, "sbtd-runtime/spec/r1.0-contract-scenarios.md": {"mtime_ns": 1795410803015945871, "sha256": "f260a3684855ca87f7a75ef37ad161d723b479301e105b3894a718f6f557d225", "size": 9982}, "sbtd-runtime/spec/r1.4-acceptance-scenarios.md": {"mtime_ns": 1795410803020070594, "sha256": "bb1644fd77fe3f81025b91329982a28bc87d6fa0e72ba2649e022bb2f77ac1da", "size": 9833}, "sbtd-runtime/tests/test_golden_contracts.py": {"mtime_ns": 1795411165916608841, "sha256": "11c960d31c74c9b73088952ba2898bd619d4c7f2a46da0a699729445d4eed81e", "size": 64665}}, "validation": "双宿主隔离真实调用、各2条入库及重复导入、10个证据拒绝变体、held-session exit2均通过；最终154 tests/3.154s、Ruff exit0；循环已请求关闭。剩余内置最终review、独立复核与精确提交CI，不宣称整体完成。"} |
+| 2026-11-23T13:25:22.432119+08:00 | in-progress | checking | Astra 原交互主会话：本地验收完成，冻结本地提交供内置审核与独立复核；不进入任务2 | 154 tests passed；Ruff passed；双宿主原生输出、适配器回执、失败保留与同stem中文汇总见reports。最终SHA与内置审核结果另存本地交接回执，不修改被审查提交。 |
