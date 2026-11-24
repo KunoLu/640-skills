@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-license
 workflow_mode: strict
 mode_source: user
 mode_note: rc.2 已确认 PRD；用户授权任务 2 开工
-status: "checking"
+status: "done"
 branch: fix/v2.2.0-rc.2-license
 created_at: '2026-11-23T18:31:11.495286+08:00'
-updated_at: "2026-11-24T15:41:42.265654+08:00"
-completed_at: null
+updated_at: "2026-11-24T16:16:51.411366+08:00"
+completed_at: "2026-11-24T16:16:51.411366+08:00"
 "blocked_reason": null
 ---
 # 任务 2：本项目许可修复
@@ -82,3 +82,4 @@ completed_at: null
 | 2026-11-24T14:25:10.449280+08:00 | in-progress | checking | 当前 Astra 会话：完成 PR #224 四项返修及本地验证，冻结返修提交交内审。 | 隔离 macOS 普通用户四模块 111/111，含只读发布／替换／回滚、真实清理集成、缺模块 blocked JSON、逐字节恢复。首轮回退夹具元数据不足的失败已保留；Ruff 和 ty 相对基线无新增。详见 reports/pr224-fix/validation.md 和 validation.log。Linux、Windows 原生由新 head CI 验证。未合并、未发布。 |
 | 2026-11-24T14:58:27.823711+08:00 | checking | in-progress | 当前 Astra 会话：第二轮外审 CHANGES_REQUESTED，按用户授权开始两项 P2 返修。 | 4f6e980 的 CI 45341065880 13/13 通过，但 macOS 默认临时路径和 POSIX 非 root 的准备失败／批次回滚／嵌套只读旧树清理有独立红灯。范围：路径契约、归属校验清理、原生测试覆盖。保留旧回执，不重跑旧失败。 |
 | 2026-11-24T15:41:42.265654+08:00 | in-progress | checking | 当前 Astra 会话：第二轮两项 P2 本地修正完成；冻结提交交独立内审。 | macOS 默认临时根八模块 315 项，305 通过、10 跳过；macOS CI 选中该模块 41 项。Linux uid 1000 的八项回归及真实缺源／身份预检通过；两平台 CLI 实装与重装均为 committed，内核拒绝清理时保留实际残件与 installed 结果。首轮失败、修正后原生证据及中文总结见 reports/pr224-round2。静态检查无新增诊断；新 head 外审与远端 CI 待办。 |
+| 2026-11-24T16:16:51.411366+08:00 | checking | done | 当前 Astra 会话：第三轮独审 CLEAN，审核提交 CI 全绿，许可任务验收完成。 | {"clean_sha":"c57ae7efc7326249b23f847f299d7bab90fd6534","ci_run":"45351271714"} |

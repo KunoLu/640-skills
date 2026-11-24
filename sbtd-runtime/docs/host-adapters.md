@@ -26,13 +26,14 @@ schema 约束：最多 8 个键，值只能是 string（≤256）、number、boo
 
 - assistant 消息的 `toolCall` 项 → `invocation.started`（component `tool:<name>`，occurred_at 取记录时间戳）。
 - `read` 且 `arguments.path` 为 `skill://<名>` → 额外产出 `skill.loaded`（component `skill:<名>`；只陈述宿主读入了 skill 资源，不陈述执行通过）。该 read 调用本身仍记 invocation 对。
-- `toolResult` → `invocation.finished`（`isError=true` → failed；duration_ms 为记录时间戳差、wall 基准）。
+- `toolResult` → `invocation.finished`。错误结果默认为 `failed`；若已观察到同一 `toolCallId`、工具名的调用及明确的 `tool_approval_resolved`（`approved=false`、`reason="denied by user"`），则记为 `declined`。普通读失败、缺少交互 UI 或取消都不能仅凭 `isError` 推断为用户拒绝。不保存决议正文；成功结果仍为 `succeeded`。耗时取记录时间戳之差，wall 基准。
+- 保持现有会话格式标识与去重键；已入库的旧 `failed` 不自动迁移。对同一来源重新导入时，状态改变的事件按冲突保留旧值；需要新版解释时使用新观察库。
 - 参数、输出、消息正文不进事件（observation.level=metadata）。其余记录类型与坏尾行跳过并计数。
 - `occurred_at` 只保留符合 schema 的时间戳（RFC 3339 带时区）；畸形时间戳置 null，不拒绝整事件，该调用也不产出 duration。
 - toolResult 没有对应已观察 toolCall（orphan）时 `state.previous=null`，不伪造 `running`，也不产出 measurement（schema 无 null measurement，块整体省略）。
 - `component_id` 超过 128 字符（schema maxLength）的 toolCall 整体跳过并计数，不产出事件。
 - CLI 在 `installation_id`／`device_id` 为空时以 exit 2 + JSON error 拒绝，不创建 audit.db。
-- 读取前 lease 守卫：文件名携带会话 id（`<时间戳>Z_<uuid>.jsonl`）时，CLI 先执行 `omp session lease --json -- <id>`；id 在 held 列表（运行中 omp 持有、可能正在写）→ exit 2 + JSON error 拒绝读取，不打开事件库；探测失败（CLI 不可用／超时／非零退出／输出不可解析）→ 失败关闭，exit 2 + JSON error。文件名不含会话 id 的外来文件（pack／复制）不适用该守卫；`--no-lease-check` 显式跳过。lease 是即时建议性信号，不消除检查后 omp 开始写入的竞态窗口；重复 ingest 的去重语义不受影响。
+- 读取前 lease 守卫：文件名携带会话 id（`<时间戳>Z_<uuid>.jsonl`）时，CLI 先执行 `omp session lease --json -- <id>`。只在有效的 `held`、`unknown` 字符串列表都不含当前 id 时继续。已持有、未知、缺失或畸形列表、探测不可用／超时／非零退出均返回 exit 2 + JSON error，不读取会话或打开事件库。文件名不含会话 id 的外来文件（pack／复制）不适用该守卫；`--no-lease-check` 显式跳过。租约是即时信号，不消除检查后有写者进入的竞态。
 
 18.19.0 的其他记录类型（统计来源：2026-11-13 对 16 个真实 18.19.0 会话文件、共 2751 行的实测）逐类核对过，跳过并计数是有意设计：
 
