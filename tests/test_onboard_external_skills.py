@@ -27,7 +27,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-external-skills-test-")
         self.addCleanup(self.temp_dir.cleanup)
-        self.root = Path(self.temp_dir.name)
+        self.root = Path(self.temp_dir.name).resolve()
         self.home = self.root / "home"
         self.home.mkdir()
         self.skills_dir = self.root / "skills"
@@ -229,6 +229,57 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertFalse(list(self.skills_dir.glob(".sbtd-external-*")))
 
     @unittest.skipUnless(os.name == "posix", "POSIX directory permissions")
+    def test_reinstall_cleans_writable_old_root_with_readonly_nested_directory(self) -> None:
+        target = self.write_valid_skill(self.skills_dir / "tdd", "tdd", "old payload")
+        target.chmod(0o755)
+        nested = target / "nested" / "readonly"
+        nested.mkdir(parents=True)
+        (nested / "old.bin").write_bytes(b"old nested payload\x00\xff")
+        nested.chmod(0o555)
+
+        completed = self.install("tdd", "stable")
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["transaction"]["status"], "committed", payload)
+        self.assertFalse(payload["transaction"].get("retainedPaths"))
+        self.assertEqual(
+            (target / "SKILL.md").read_bytes(),
+            (ONBOARD.parents[1] / "assets/external-skills/stable/skills/tdd/SKILL.md").read_bytes(),
+        )
+        self.assertFalse(nested.exists())
+        self.assertEqual(list(self.skills_dir.glob(".sbtd-external-*")), [])
+
+    def test_changed_retired_skill_is_retained_without_undoing_replacement(self):
+        onboard = self.load_onboard_module()
+        target = self.write_valid_skill(self.skills_dir / "tdd", "tdd", "old payload")
+        marker = target / "original-marker"
+        marker.write_bytes(b"old")
+        original = marker.stat()
+        publish = onboard._publish_external_stage
+        changed = []
+
+        def publish_then_edit_retired(candidate, destination):
+            publish(candidate, destination)
+            retired, = (p for p in self.skills_dir.rglob(marker.name)
+                        if os.path.samestat(p.stat(), original))
+            retired.write_bytes(b"new user edit")
+            changed.append(retired)
+
+        with mock.patch.object(onboard, "_publish_external_stage", side_effect=publish_then_edit_retired):
+            results, tx = onboard.execute_external_skill_install(
+                argparse.Namespace(source="stable"), ["tdd"], self.skills_dir
+            )
+        self.assertEqual(tx["status"], "committed-cleanup-incomplete", tx)
+        self.assertFalse(tx["rolledBack"])
+        retired, = changed
+        self.assertEqual(retired.read_bytes(), b"new user edit")
+        self.assertTrue(any(retired.is_relative_to(Path(path)) for path in tx["retainedPaths"]))
+        self.assertTrue(any(row["status"] == "replaced" for row in results))
+        self.assertFalse(marker.exists())
+        self.assertTrue((target / "SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX directory permissions")
     def test_readonly_publication_and_batch_rollback_preserve_modes_and_payloads(self):
         onboard = self.load_onboard_module()
         name = "tdd"
@@ -247,16 +298,69 @@ class ExternalSkillInstallTests(unittest.TestCase):
             original = b"keep this local change\r\n"
             (target / "SKILL.md").write_bytes(original)
 
-            # Publish the replacement, then fail on a missing second candidate.
+            # Publish one readonly replacement, then fail before consuming the next readonly stage.
             stage = onboard.stage_external_skills(batch, resolved, self.skills_dir)
-            shutil.rmtree(stage / batch[1])
-            (stage / name).chmod(0o555)
-            _, tx = onboard.commit_external_skill_transaction(batch, resolved, self.skills_dir, stage)
+            for candidate in batch:
+                (stage / candidate).chmod(0o555)
+            real_publish = onboard._publish_external_stage
+
+            def fail_later_publication(candidate, destination):
+                if candidate.name == batch[1]:
+                    raise OSError("simulated later publication failure")
+                return real_publish(candidate, destination)
+
+            with mock.patch.object(
+                onboard, "_publish_external_stage", side_effect=fail_later_publication
+            ):
+                results, tx = onboard.commit_external_skill_transaction(
+                    batch, resolved, self.skills_dir, stage
+                )
             self.assertEqual(tx["status"], "rolled-back", tx)
+            self.assertTrue(tx["rolledBack"])
+            self.assertFalse(tx.get("retainedPaths"))
+            self.assertFalse(stage.exists())
+            self.assertTrue(
+                all(
+                    row["status"] == "failed"
+                    and "simulated later publication failure" in row["error"]
+                    for row in results
+                )
+            )
             self.assertEqual((target / "SKILL.md").read_bytes(), original)
             self.assertEqual(notice.read_bytes(), original_notice)
             self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o555)
             self.assertEqual(list(self.skills_dir.iterdir()), [target])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX symlinks and directory modes")
+    def test_direct_transaction_apis_reject_symlink_ancestors_before_mutation(self) -> None:
+        migration = importlib.import_module("sbtd_migration_files")
+        contracts = importlib.import_module("onboard_contracts")
+        onboard = self.load_onboard_module()
+        real = self.root / "real"
+        real.mkdir()
+        alias = self.root / "alias"
+        alias.symlink_to(real, target_is_directory=True)
+        with tempfile.TemporaryDirectory(dir=self.root) as workspace:
+            resolved = onboard.resolve_external_install_sources(["tdd"], "stable", Path(workspace))
+            target = self.write_valid_skill(real / "skills" / "tdd", "tdd", "old target")
+            stage = onboard.stage_external_skills(["tdd"], resolved, target.parent)
+            for mode in (0o755, 0o555):
+                target.chmod(mode)
+                (stage / "tdd").chmod(mode)
+                before = migration.snapshot(real)
+                for entry in ("stage", "commit-target", "commit-stage"):
+                    with self.subTest(entry=entry, mode=oct(mode)):
+                        with self.assertRaises(contracts.ContractError) as failure:
+                            if entry == "stage":
+                                onboard.stage_external_skills(["tdd"], resolved, alias / "new-skills")
+                            else:
+                                slots = alias / "skills" if entry == "commit-target" else target.parent
+                                candidate = alias / stage.relative_to(real) if entry == "commit-stage" else stage
+                                onboard.commit_external_skill_transaction(["tdd"], resolved, slots, candidate)
+                        self.assertEqual(failure.exception.code, "unsafe-path")
+                        self.assertEqual(migration.snapshot(real), before)
+                        for path in (target, stage / "tdd"):
+                            self.assertEqual(stat.S_IMODE(path.stat().st_mode), mode)
 
     def test_upstream_supplement_requires_reviewed_content_and_attribution(self) -> None:
         stable = ONBOARD.parents[1] / "assets/external-skills/stable"
@@ -663,26 +767,36 @@ class ExternalSkillInstallTests(unittest.TestCase):
 
     def test_commit_reports_cleanup_residue_without_undoing_new_install(self):
         onboard = self.load_onboard_module()
-        real_remove = shutil.rmtree
+        migration_files = importlib.import_module("sbtd_migration_files")
+        real_discard = migration_files.discard_withdrawn_directory
         for phase in ("staging", "rollback"):
             with self.subTest(phase=phase):
                 slots = self.root / phase
                 self.write_valid_skill(slots / "tdd", "tdd", "previous")
 
-                def leave(path, *args, prefix=".sbtd-external-" + phase + "-", **kwargs):
-                    if Path(path).name.startswith(prefix):
-                        if not kwargs.get("ignore_errors"):
-                            raise PermissionError("test refused cleanup")
-                        return
-                    return real_remove(path, *args, **kwargs)
+                def leave(path, expected, *, scope, prefix=".sbtd-external-" + phase + "-"):
+                    if path.name.startswith(prefix) or path.parent.name.startswith(prefix):
+                        raise PermissionError("test refused cleanup")
+                    return real_discard(path, expected, scope=scope)
 
-                with mock.patch.object(shutil, "rmtree", side_effect=leave):
+                with mock.patch.object(
+                    migration_files, "discard_withdrawn_directory", side_effect=leave
+                ):
                     results, tx = onboard.execute_external_skill_install(
                         argparse.Namespace(source="stable"), ["tdd"], slots
                     )
                 self.assertEqual(tx["status"], "committed-cleanup-incomplete")
                 self.assertFalse(tx["rolledBack"])
-                self.assertEqual([str(p) for p in slots.glob(".sbtd-external-" + phase + "-*")], tx["retainedPaths"])
+                retained = {Path(path) for path in tx["retainedPaths"]}
+                holder, = slots.glob(".sbtd-external-" + phase + "-*")
+                expected = {holder, holder / "tdd"} if phase == "rollback" else {holder}
+                self.assertEqual(retained, expected)
+                self.assertTrue(all(path.is_dir() for path in retained))
+                if phase == "rollback":
+                    self.assertIn(
+                        "previous",
+                        (holder / "tdd/SKILL.md").read_text(encoding="utf-8"),
+                    )
                 self.assertTrue(any(row["status"] == "failed" and row["phase"] == "cleanup" for row in results))
                 self.assertTrue((slots / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
 
@@ -738,26 +852,82 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertTrue(any(item["name"] == "tdd" and item["status"] == "installed" for item in results))
         self.assertTrue(any(item["phase"] == "cleanup" and item["target"] == paths[0] for item in results))
 
-    def test_prepare_reports_primary_failure_and_retained_stage(self):
+    @unittest.skipUnless(os.name == "posix", "POSIX directory permissions")
+    def test_prepare_failure_after_readonly_candidate_preserves_failure_and_stage(self):
         onboard = self.load_onboard_module()
-        remove = shutil.rmtree
+        migration_files = importlib.import_module("sbtd_migration_files")
+        real_discard = migration_files.discard_withdrawn_directory
+        real_copy_notices = onboard.copy_notices
+        selected = ["tdd", "shadcn"]
+        for cleanup_fails in (False, True):
+            with self.subTest(cleanup_fails=cleanup_fails):
+                slots = self.root / f"prepare-{cleanup_fails}"
+                old_target = self.write_valid_skill(slots / "tdd", "tdd", "previous target")
+                old_bytes = (old_target / "SKILL.md").read_bytes()
+                stages = []
 
-        def refuse_stage(path, *args, **kwargs):
-            if Path(path).name.startswith(".sbtd-external-staging-"):
-                raise PermissionError("cannot clear test stage")
-            return remove(path, *args, **kwargs)
+                def fail_later_item(destination, overlay, stages=stages):
+                    real_copy_notices(destination, overlay)
+                    if destination.name == selected[0]:
+                        destination.chmod(0o555)
+                        stages.append(destination.parent)
+                        return
+                    raise OSError("primary notice failure")
 
-        with (
-            mock.patch.object(onboard, "copy_notices", side_effect=OSError("primary notice failure")),
-            mock.patch.object(shutil, "rmtree", side_effect=refuse_stage),
-        ):
-            results, tx = onboard.execute_external_skill_install(
-                argparse.Namespace(source="stable"), ["tdd"], self.skills_dir
-            )
-        self.assertFalse((self.skills_dir / "tdd").exists())
-        self.assertIn("primary notice failure", results[0]["error"])
-        self.assertEqual(tx["status"], "aborted-before-commit-cleanup-incomplete")
-        self.assertTrue((Path(tx["retainedPaths"][0]) / "tdd/SKILL.md").is_file())
+                def refuse_stage(path, expected, *, scope, cleanup_fails=cleanup_fails):
+                    if cleanup_fails and Path(path).name.startswith(".sbtd-external-staging-"):
+                        raise PermissionError("cannot clear test stage")
+                    return real_discard(path, expected, scope=scope)
+
+                with (
+                    mock.patch.object(onboard, "copy_notices", side_effect=fail_later_item),
+                    mock.patch.object(
+                        migration_files,
+                        "discard_withdrawn_directory",
+                        side_effect=refuse_stage,
+                    ),
+                ):
+                    results, tx = onboard.execute_external_skill_install(
+                        argparse.Namespace(source="stable"), selected, slots
+                    )
+
+                self.assertEqual((old_target / "SKILL.md").read_bytes(), old_bytes)
+                primary_results = [row for row in results if row["phase"] == "prepare"]
+                self.assertEqual(len(primary_results), len(selected))
+                self.assertTrue(
+                    all(
+                        row["status"] == "failed"
+                        and "primary notice failure" in row["error"]
+                        for row in primary_results
+                    )
+                )
+                self.assertEqual(len(stages), 1)
+                stage = stages[0]
+                expected_bytes = (
+                    ONBOARD.parents[1] / "assets/external-skills/stable/skills/tdd/SKILL.md"
+                ).read_bytes()
+                if cleanup_fails:
+                    self.addCleanup((stage / "tdd").chmod, 0o700)
+                    self.assertEqual(
+                        tx["status"], "aborted-before-commit-cleanup-incomplete", tx
+                    )
+                    self.assertEqual(tx["retainedPaths"], [str(stage)])
+                    self.assertTrue(
+                        any(
+                            row["phase"] == "cleanup"
+                            and row["status"] == "failed"
+                            and row["target"] == str(stage)
+                            for row in results
+                        )
+                    )
+                    self.assertEqual(stat.S_IMODE((stage / "tdd").stat().st_mode), 0o555)
+                    self.assertEqual((stage / "tdd/SKILL.md").read_bytes(), expected_bytes)
+                    self.assertTrue((stage / "tdd/SBTD-NOTICES/mattpocock-skills-LICENSE").is_file())
+                else:
+                    self.assertEqual(tx["status"], "aborted-before-commit", tx)
+                    self.assertFalse(tx.get("retainedPaths"))
+                    self.assertFalse(stage.exists())
+                    self.assertEqual(list(slots.glob(".sbtd-external-*")), [])
 
     def test_rollback_failure_retains_the_only_backup_copy(self) -> None:
         onboard = self.load_onboard_module()

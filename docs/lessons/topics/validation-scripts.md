@@ -654,6 +654,7 @@
 - 根因：将本次操作创建的临时目录的逻辑拼写直接传入 nofollow 原语，没有区分系统临时别名与用户提交的源／目标路径。
 - 修复：仅在 `mkdtemp` 成功后立即解析本次拥有的临时根，再向下创建和访问夹具。用户提供的 Skills 根、源、目标继续逐级拒绝 symlink／junction，不用 resolve 绕过所有权检查。
 - 预防：回归同时覆盖“自有临时父目录通过系统别名访问仍可探测”和“用户提供的链接／越界 sibling 仍拒绝”。真实宿主探测与脚本化协议测试分别报告；不得通过放宽所有路径链接守卫来修正夹具。
+- 2026-11-24：固定 `TMPDIR` 到项目隔离目录会掩盖 macOS 系统临时根的 `/var` 别名。保留隔离 HOME，同时用 `getconf DARWIN_USER_TEMP_DIR` 返回的路径运行同一个安装事务测试；再单独传入链接目标，证明拒绝发生在创建暂存／移动原件之前。检查原生 CI 的实际用例清单，不以整个作业绿色代替该用例执行。
 
 ## LESSON-20261004-kuno-review-red-is-not-a-contract-defect: Review Red Is Not A Contract Defect
 
