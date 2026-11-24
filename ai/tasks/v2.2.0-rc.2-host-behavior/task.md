@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-host-behavior
 workflow_mode: strict
 mode_source: user
 mode_note: rc.2 PRD；用户授权从任务 2 合入后的 main 开始任务 3。
-status: "checking"
+status: "done"
 branch: test/v2.2.0-rc.2-host-behavior
 created_at: '2026-11-24T16:35:41.545526+08:00'
-updated_at: "2026-11-24T19:12:04.218009+08:00"
-completed_at: null
+updated_at: "2026-11-24T23:21:48.944385+08:00"
+completed_at: "2026-11-24T23:21:48.944385+08:00"
 "blocked_reason": null
 ---
 # 任务 3：新版基础行为与最小兼容调整
@@ -112,3 +112,4 @@ Release Readiness Review：上述两项运行时修复的本地门禁通过；�
 | 2026-11-24T19:03:21.375386+08:00 | in-progress | checking | 当前 Astra 会话：完成 F1–F7 本地返修验证；循环已关闭，冻结提交交内审。 | 真实 Codex exec 命令和 MCP、已结束且租约已释放的 OMP 会话均通过生产导入、重复导入、重放与版本判断。修正 OMP 明确拒绝映射、未知租约守卫；旧库保留冲突。两端私有只读 MCP 通过。136 个 runtime 测试、40 个工作流测试及目标 Ruff/ty 通过。详见 reports/review-fix/consumer.md、mcp.md 和同 stem JSON。升级探测仅验证前置不可用；不把宿主或本地证据算成外审、远端 CI 或发布。 |
 | 2026-11-24T19:07:53.460135+08:00 | checking | in-progress | 当前 Astra 会话：2a680eb 代码审查无发现，证据审查退回；追加持久化 OMP MCP 消费证据与独审交付说明。 | 2a680eb 尚未推送。已有 MCP RPC 和服务回执、Codex MCP 的真实入库、OMP 持久化 read 的真实入库以及私有可复算包；补 OMP MCP 的持久化生产消费，不公开原会话或凭据。 |
 | 2026-11-24T19:12:04.218009+08:00 | in-progress | checking | 当前 Astra 会话：完成内审两项补证，关闭循环并冻结文档修正重新内审。 | 私有持久 OMP MCP 实测：共享关闭，真实 writer held、退出后 held/unknown 空，20 行原件由生产 CLI 首次接受 4、重复 4，四条实际重放均 pinned，工具成功／失败可区分；补充可转交字节摘要、回执及离线复算交付约定。源码与前轮通过的适配器代码相同。 |
+| 2026-11-24T23:21:48.944385+08:00 | checking | done | 当前 Astra 会话：第二轮外审 CLEAN、同一 SHA CI 通过，任务 3 验收完成。 | {"clean_sha":"9ac6ac21b619411bf9ff7106d10f8399f2bf67b8","ci_run":"45382265087"} |
