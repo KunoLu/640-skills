@@ -7,7 +7,7 @@ mode_note: rc.2 PRD；用户授权从任务 2 合入后的 main 开始任务 3�
 status: "checking"
 branch: test/v2.2.0-rc.2-host-behavior
 created_at: '2026-11-24T16:35:41.545526+08:00'
-updated_at: "2026-11-24T19:03:21.375386+08:00"
+updated_at: "2026-11-24T19:12:04.218009+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -75,7 +75,20 @@ OMP 的新会话位于本任务自建的空 0700 目录。`get_state` 的初始 
 两个宿主分别在新建的合成目录运行同一个 stdio 只读工具 `task3fixture.read_fixture`。服务端 `env -i` 白名单不带宿主凭据变量；输入只能选择固定的 `present` 或 `missing`，分别实际读取标记或触发文件不存在。首轮系统 Python 启动器额外加入 SDK 环境变量，服务端拒绝环境检查，两个宿主均未完成调用；换用不会注入这些键的本地解释器，不放宽白名单。未复制或导出认证文件。
 
 - Codex：通过单次 CLI 参数注册且仅放行此 MCP 工具；非交互 `exec` 不是人工审批。宿主及服务端均记录成功、`ENOENT` 两次调用。真实 exec JSONL → 4 个 `mcp:task3fixture.read_fixture` 事件，完成结果 `succeeded`／`failed`，重复 4、零冲突，重放版本均 `pinned`。
-- OMP：官方 `config get mcp.shared` 确认为 `false`，daemon 端点指向不可用作 socket 目录的任务私有路径，采用进程内 MCP host。原生注册和执行名 `mcp__task3fixture_read_fixture`；两个精确调用分别批准，宿主返回标记／工具错误，服务端分别记录 `ok`／`enoent`，宿主退出 0。这次是无会话文件的私有 MCP 运行，不冒充持久化 MCP 日志。任务 4 的 ast-grep、完整 Graft 升级和其他既有 MCP 均未接线。
+- OMP：官方 `config get mcp.shared` 确认为 `false`；不可路由的私有 daemon 端点使其采用进程内 MCP host。原生注册名为 `mcp__task3fixture_read_fixture`；两次精确调用分别批准，服务端记录 `ok`／`enoent`，宿主退出 0。首次无日志的 MCP RPC 只证明协议。补测使用全新私有持久化会话，写入后确认 held，正常退出、确认 held/unknown 均为空后，才导入其原件。20 行 JSONL → 首次接受 4、重复 4、零冲突／拒绝；生产 replay 显示 `tool:mcp__task3fixture_read_fixture` 先成功、后失败，能力判断均为 `pinned`。这是 OMP 的工具名映射，不是 Codex 的 `kind=mcp`。未接线 ast-grep、Graft 或既有共享 MCP。
+
+### 外部独审取证
+
+外审交付物为私下转交的 `pr225-review-<head前12位>.zip`，不是未随仓库分发的本地报告路径。请先核对 PR head 与 `manifest.json`，再校验清单里每个成员的字节数和 SHA-256。`projected/` 提供六份脱敏 JSONL；`receipts/` 提供原件的首次／重复导入回执、重放及能力判断；`rpc/`、`config/`、`mcp/`、`boundaries/` 分别提供宿主原生字段与隔离边界。解包并审阅脚本后，运行 `python -B verify_packet.py --repo <相同SHA的检出目录>` 即可离线复算六组结果，不需要账户、在线宿主或活动日志。
+
+| 可独立复算的投影 | SHA-256（交付字节，不是完整会话哈希） | 首次接受／重复 |
+|---|---|---:|
+| `projected/codex-status.jsonl` | `e78e31ea338268452c38c88763408883b3ea02565b740e74afbf30a4557ab7ec` | 4／4 |
+| `projected/omp-journal.jsonl` | `3708d3498a97b98d893f1d7c3c048a3a8403a4c37edcb893b782863d4f9101bd` | 6／6 |
+| `projected/codex-mcp.jsonl` | `08a64b52fceca2c60501b91cd75c682c1d2bc12766ec30f221d75dbac2bceadd` | 4／4 |
+| `projected/omp-mcp.jsonl` | `fc71653223f4e719d870f53a80ab22fefb3a9052b2adc00d621dc16c3a8c22f5` | 4／4 |
+
+另两份为 Codex 审批尝试与 SIGINT，均无可重放的调用事件。投影不含提示、任意思考／输出、凭据；标识已一致化，字节偏移不同。可复核的是交付字节和相同语义结果，不能据此声称独立取得或验证了完整原件。
 
 ### 变更与验证门禁
 
@@ -97,3 +110,5 @@ Release Readiness Review：上述两项运行时修复的本地门禁通过；�
 | 2026-11-24T18:33:10.723501+08:00 | in-progress | in-progress | Astra 原会话：开始 追补核对 OMP 首轮持久化探针（保留原始失败，不倒填历史） | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": ""} |
 | 2026-11-24T18:33:20.702385+08:00 | in-progress | in-progress | Astra 原会话：完成 追补核对 OMP 首轮持久化探针（保留原始失败，不倒填历史） | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "原始观测时间 2026-11-24T09:21:13+00:00 至 2026-11-24T09:21:14+00:00；首次写入前 held=false、unknown=false；控制器错误前置断言导致停止，未发 prompt；host exit=0 不等于验收通过。现核对原回执，非本时刻重跑。"} |
 | 2026-11-24T19:03:21.375386+08:00 | in-progress | checking | 当前 Astra 会话：完成 F1–F7 本地返修验证；循环已关闭，冻结提交交内审。 | 真实 Codex exec 命令和 MCP、已结束且租约已释放的 OMP 会话均通过生产导入、重复导入、重放与版本判断。修正 OMP 明确拒绝映射、未知租约守卫；旧库保留冲突。两端私有只读 MCP 通过。136 个 runtime 测试、40 个工作流测试及目标 Ruff/ty 通过。详见 reports/review-fix/consumer.md、mcp.md 和同 stem JSON。升级探测仅验证前置不可用；不把宿主或本地证据算成外审、远端 CI 或发布。 |
+| 2026-11-24T19:07:53.460135+08:00 | checking | in-progress | 当前 Astra 会话：2a680eb 代码审查无发现，证据审查退回；追加持久化 OMP MCP 消费证据与独审交付说明。 | 2a680eb 尚未推送。已有 MCP RPC 和服务回执、Codex MCP 的真实入库、OMP 持久化 read 的真实入库以及私有可复算包；补 OMP MCP 的持久化生产消费，不公开原会话或凭据。 |
+| 2026-11-24T19:12:04.218009+08:00 | in-progress | checking | 当前 Astra 会话：完成内审两项补证，关闭循环并冻结文档修正重新内审。 | 私有持久 OMP MCP 实测：共享关闭，真实 writer held、退出后 held/unknown 空，20 行原件由生产 CLI 首次接受 4、重复 4，四条实际重放均 pinned，工具成功／失败可区分；补充可转交字节摘要、回执及离线复算交付约定。源码与前轮通过的适配器代码相同。 |
