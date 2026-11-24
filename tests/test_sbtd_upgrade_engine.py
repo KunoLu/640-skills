@@ -1245,7 +1245,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         replaced = skills / "skill-a"
         replaced.mkdir()
-        (replaced / "SKILL.md").write_text("original bytes\n", encoding="utf-8")
+        (replaced / "SKILL.md").write_bytes(b"original bytes\n")
         agents_file = self.base / "agents-home" / "AGENTS.md"
         package = self._package(
             fixture={

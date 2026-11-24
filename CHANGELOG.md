@@ -23,6 +23,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 - Prevent directory cutovers from replacing an unexpected occupant; check retired paths and directory permissions on recovery retries. Undo a new read-only installation without changing its live permissions, and report staging or backup directories left by failed installer cleanup.
 - Preserve the external install result when source workspace cleanup fails. Recovery preflight now returns a content-addressed reference to retained-object evidence in the private vault instead of exposing the object's path or dropping it at the subprocess boundary.
 - Clean removable read-only content in installer-owned source workspaces without reporting a failed installation. Actual cleanup failures still retain their paths and transaction results.
+- Publish and replace read-only external Skill directories on Linux without making live installations writable. An incomplete migration runtime again returns a structured `blocked` response instead of a startup traceback.
 
 
 ## v2.2.0-rc.1 (2026-11-13)

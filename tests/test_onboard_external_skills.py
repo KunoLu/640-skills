@@ -215,7 +215,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                     copy_notices(stage, overlay)
             self.assertEqual(stat.S_IMODE(stage.stat().st_mode), 0o555)
 
-    @unittest.skipUnless(sys.platform == "darwin", "macOS read-only directory reparenting")
+    @unittest.skipUnless(os.name == "posix", "POSIX directory permissions")
     def test_readonly_existing_skill_reinstalls_without_losing_notices(self) -> None:
         target = self.skills_dir / "impeccable"
         for attempt in range(2):
@@ -227,6 +227,36 @@ class ExternalSkillInstallTests(unittest.TestCase):
         self.assertNotEqual((target / "SKILL.md").read_bytes(), b"old payload")
         self.assertTrue((target / "SBTD-NOTICES/platform-design-skills-LICENSE").is_file())
         self.assertFalse(list(self.skills_dir.glob(".sbtd-external-*")))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX directory permissions")
+    def test_readonly_publication_and_batch_rollback_preserve_modes_and_payloads(self):
+        onboard = self.load_onboard_module()
+        name = "tdd"
+        target = self.skills_dir / name
+        batch = [name, "shadcn"]
+        self.skills_dir.mkdir()
+        with tempfile.TemporaryDirectory(dir=self.root) as workspace:
+            resolved = onboard.resolve_external_install_sources(batch, "stable", Path(workspace))
+            stage = onboard.stage_external_skills([name], resolved, self.skills_dir)
+            (stage / name).chmod(0o555)
+            _, tx = onboard.commit_external_skill_transaction([name], resolved, self.skills_dir, stage)
+            self.assertEqual(tx["status"], "committed", tx)
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o555)
+            notice = target / "SBTD-NOTICES/mattpocock-skills-LICENSE"
+            original_notice = notice.read_bytes()
+            original = b"keep this local change\r\n"
+            (target / "SKILL.md").write_bytes(original)
+
+            # Publish the replacement, then fail on a missing second candidate.
+            stage = onboard.stage_external_skills(batch, resolved, self.skills_dir)
+            shutil.rmtree(stage / batch[1])
+            (stage / name).chmod(0o555)
+            _, tx = onboard.commit_external_skill_transaction(batch, resolved, self.skills_dir, stage)
+            self.assertEqual(tx["status"], "rolled-back", tx)
+            self.assertEqual((target / "SKILL.md").read_bytes(), original)
+            self.assertEqual(notice.read_bytes(), original_notice)
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o555)
+            self.assertEqual(list(self.skills_dir.iterdir()), [target])
 
     def test_upstream_supplement_requires_reviewed_content_and_attribution(self) -> None:
         stable = ONBOARD.parents[1] / "assets/external-skills/stable"
@@ -745,7 +775,8 @@ class ExternalSkillInstallTests(unittest.TestCase):
                 "fallbackReason": None,
             }
         }
-        real_move = onboard.rename_directory_exclusive
+        migration_files = importlib.import_module("sbtd_migration_files")
+        real_move = migration_files.rename_directory_exclusive
         move_count = 0
 
         def failing_move(source, destination):
@@ -755,7 +786,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                 raise OSError("simulated commit/restore failure")
             return real_move(source, destination)
 
-        with mock.patch.object(onboard, "rename_directory_exclusive", side_effect=failing_move):
+        with mock.patch.object(migration_files, "rename_directory_exclusive", side_effect=failing_move):
             _, transaction = onboard.commit_external_skill_transaction(
                 ["diagnosing-bugs"], resolved, self.skills_dir, staging
             )
@@ -786,7 +817,8 @@ class ExternalSkillInstallTests(unittest.TestCase):
                         "--json",
                     ]
                 )
-                real_move = onboard.rename_directory_exclusive
+                migration_files = importlib.import_module("sbtd_migration_files")
+                real_move = migration_files.rename_directory_exclusive
                 skills_root = skills_dir.resolve()
 
                 def reject_install_and_restore(
@@ -814,7 +846,7 @@ class ExternalSkillInstallTests(unittest.TestCase):
                         clear=True,
                     ),
                     mock.patch.object(
-                        onboard, "rename_directory_exclusive", side_effect=reject_install_and_restore
+                        migration_files, "rename_directory_exclusive", side_effect=reject_install_and_restore
                     ),
                     contextlib.redirect_stdout(stdout),
                     contextlib.redirect_stderr(stderr),

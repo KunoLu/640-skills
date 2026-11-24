@@ -47,7 +47,6 @@ from onboard_arguments import (
     validate_upgrade_args,
 )
 from sbtd_external_notices import SUPPLEMENTS, copy_notices, notice_overlay
-from sbtd_migration_files import rename_directory_exclusive
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -3657,8 +3656,8 @@ def stage_external_skills(
         raise
 
 
-def _readonly_mac_directory(path: Path) -> bool:
-    if sys.platform != "darwin":
+def _readonly_posix_directory(path: Path) -> bool:
+    if os.name != "posix":
         return False
     mode = path.lstat().st_mode
     return stat.S_ISDIR(mode) and not mode & stat.S_IWUSR
@@ -3668,18 +3667,22 @@ def _set_aside_sibling(path: Path) -> Path:
     """Withdraw a directory without reparenting it or changing its permissions."""
     from uuid import uuid4
 
+    from sbtd_migration_files import rename_directory_exclusive
+
     sibling = path.parent / f".sbtd-external-held-{uuid4().hex}"
     rename_directory_exclusive(path, sibling)
     return sibling
 
 
 def _publish_external_stage(stage: Path, target: Path) -> None:
+    from sbtd_migration_files import rename_directory_exclusive
+
     mode = stat.S_IMODE(stage.stat().st_mode)
-    if sys.platform != "darwin" or mode & stat.S_IWUSR:
+    if os.name != "posix" or mode & stat.S_IWUSR:
         rename_directory_exclusive(stage, target)
         return
 
-    # macOS needs write access to reparent a directory (update "..").
+    # Reparenting may require write access to the directory (update "..").
     # Move only the private staged inode; restore its mode before publication.
     from uuid import uuid4
 
@@ -3776,10 +3779,13 @@ def _commit_external_skills(
             "rollbackPath": None,
         }
 
-    from sbtd_migration_files import discard_withdrawn_directory, snapshot
+    from sbtd_migration_files import (
+        discard_withdrawn_directory,
+        rename_directory_exclusive,
+        snapshot,
+    )
 
-    # Darwin cannot move a nonempty 0555 folder across parents. Keep such
-    # originals at unique sibling names until the complete batch commits.
+    # Keep read-only originals under the same parent until the batch commits.
     sibling_backups: dict[Path, dict] = {}
     readonly_installs: dict[Path, dict] = {}
     existed = {name: filesystem_entry_exists(target_dir / name) for name in selected}
@@ -3794,7 +3800,7 @@ def _commit_external_skills(
             if not filesystem_entry_exists(target):
                 continue
             backup = rollback / name
-            if _readonly_mac_directory(target):
+            if _readonly_posix_directory(target):
                 before = snapshot(target)
                 backup = _set_aside_sibling(target)
                 sibling_backups[backup] = before
@@ -3806,7 +3812,7 @@ def _commit_external_skills(
 
         for name in selected:
             target = target_dir / name
-            if _readonly_mac_directory(staging / name):
+            if _readonly_posix_directory(staging / name):
                 readonly_installs[target] = snapshot(staging / name)
             _publish_external_stage(staging / name, target)
             committed.append(target)

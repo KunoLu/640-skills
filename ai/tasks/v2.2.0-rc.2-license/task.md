@@ -7,7 +7,7 @@ mode_note: rc.2 已确认 PRD；用户授权任务 2 开工
 status: "checking"
 branch: fix/v2.2.0-rc.2-license
 created_at: '2026-11-23T18:31:11.495286+08:00'
-updated_at: "2026-11-23T23:08:49.299049+08:00"
+updated_at: "2026-11-24T14:25:10.449280+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -78,3 +78,5 @@ completed_at: null
 | 2026-11-23T22:51:29.322791+08:00 | in-progress | checking | 当前 Astra 会话：两个回执 P2 本地验收结束，/loop 已关闭，冻结本地提交交内置复审 | 31 个本地 CLI 调用符合预期；八模块 333 通过、10 跳过；私有预检引用可核验且未公开原对象路径。暂不推送。 |
 | 2026-11-23T22:58:18.793061+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 676eaa6 复审指出的来源目录可清理性回归 | 使用新隔离目录 /Users/lusonglin/TEMP/640-skills-rc2-task2.I2KnjNlp/isolated/source-fix.EhJugyDQ。标准库可清理的只读子树不报残留，真正失败保留提交回执和实际路径；旧现场不动，不改来源锁或全局环境。 |
 | 2026-11-23T23:08:49.299049+08:00 | in-progress | checking | 当前 Astra 会话：来源工作目录只读清理修复完成本地验收，关闭 /loop 并冻结本地提交复审 | 32 次 CLI 正负例均符合预期；334 通过、10 跳过。可清理只读目录无残件；真正无法删除时仍准确报告已提交。仅本地，不推送。 |
+| 2026-11-24T14:14:03.633710+08:00 | checking | in-progress | 当前 Astra 会话：收到 PR #224 外部 CHANGES_REQUESTED，按用户授权开始修复。 | 46454ca，CI 45332421825 最终 4 成功、9 失败。Linux 非 root 0555 发布／替换、通知安装夹具、缺迁移模块的 blocked JSON、Windows 原始字节夹具。隔离验证 pr224-fix.jY0pKQ5n。 |
+| 2026-11-24T14:25:10.449280+08:00 | in-progress | checking | 当前 Astra 会话：完成 PR #224 四项返修及本地验证，冻结返修提交交内审。 | 隔离 macOS 普通用户四模块 111/111，含只读发布／替换／回滚、真实清理集成、缺模块 blocked JSON、逐字节恢复。首轮回退夹具元数据不足的失败已保留；Ruff 和 ty 相对基线无新增。详见 reports/pr224-fix/validation.md 和 validation.log。Linux、Windows 原生由新 head CI 验证。未合并、未发布。 |
