@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from onboard_contracts import ContractError, canonical_json_bytes
+from sbtd_external_notices import notice_overlay
 from sbtd_project import TaskDataError, open_regular_file
 from sbtd_upgrade_paths import path_contains
 
@@ -266,7 +267,7 @@ def _collect_payload_files(root: Path) -> list[str]:
     return files
 
 
-def _payload_scan(root: Path) -> tuple[str, dict[str, str]]:
+def _payload_scan(root: Path, overlay: Mapping[str, Path] | None = None) -> tuple[str, dict[str, str]]:
     """(tree digest, per-file digests) for one payload root.
 
     The tree digest matches ``onboard.external_tree_sha256`` on POSIX:
@@ -278,13 +279,17 @@ def _payload_scan(root: Path) -> tuple[str, dict[str, str]]:
     """
     digest = hashlib.sha256()
     hashes: dict[str, str] = {}
-    for relative in _collect_payload_files(root):
+    overlay = overlay or {}
+    paths = _collect_payload_files(root)
+    if overlay:
+        paths = sorted([*paths, *overlay])
+    for relative in paths:
         encoded = relative.encode("utf-8")
         per_file = hashlib.sha256()
         digest.update(len(encoded).to_bytes(8, "big"))
         digest.update(encoded)
         try:
-            with open_regular_file(root / Path(relative), "payload file") as handle:
+            with open_regular_file(overlay.get(relative, root / relative), "payload file") as handle:
                 before_info = os.fstat(handle.fileno())
                 size = before_info.st_size
                 digest.update(size.to_bytes(8, "big"))
@@ -1264,22 +1269,40 @@ def _skill_resources(
     decisions = scope["decisions"]
     resources: list[dict[str, Any]] = []
     onboard_targets: dict[str, str] = {}
+    projected: dict[str, tuple[str, dict[str, str], dict[str, str]]] = {}
     for root in scope["skills_roots"]:
         for entry in skills:
             name = entry["id"].removeprefix("skill:")
             target = root / name
+            details: dict[str, Any] = {}
             if entry["kind"] == "external-skill":
                 source = _canonical_child(
                     package_root, f"{_STABLE_ROOT}/{stable['skills'][name]['stable_path']}"
                 )
+                if name not in projected:
+                    repository = stable["repositories"][stable["skills"][name]["repository"]]
+                    licenses: dict[str, Path] = {}
+                    for row in repository["license_files"]:
+                        path = _canonical_child(package_root, f"{_STABLE_ROOT}/{row['path']}")
+                        if path.name in licenses:
+                            _fail("source-untrusted", f"duplicate license destination for {name}")
+                        licenses[path.name] = path
+                    try:
+                        overlay = notice_overlay(name, source, licenses, package_root / "assets/external-skills/notices")
+                    except (OSError, RuntimeError) as exc:
+                        _fail("source-untrusted", str(exc))
+                    checksum, files = _payload_scan(source, overlay)
+                    sources = {key: path.relative_to(package_root).as_posix() for key, path in overlay.items()}
+                    projected[name] = checksum, files, sources
+                checksum, desired_files, details["notice_sources"] = projected[name]
+                desired = {"type": "directory", "checksum": checksum}
             else:
                 source = _resolve_local_source(package_root, entry["source"], entry["id"])
+                desired = cache.state(source)
+                desired_files = cache.file_map(source)
             source_state = cache.state(source)
-            desired = dict(source_state)
-            desired_files = cache.file_map(source)
 
             info = _lstat(target)
-            details: dict[str, Any] = {}
             if info is None:
                 before: dict[str, Any] = dict(_ABSENT)
                 classification = "missing"

@@ -485,6 +485,7 @@
         "status": { "enum": ["blocked", "failed"] },
         "reason": { "type": "string" },
         "batch": { "$ref": "#/$defs/batchEvidence" },
+        "retained_evidence_id": { "$ref": "#/$defs/hex" },
         "nextStep": { "type": "string" }
       }
     }

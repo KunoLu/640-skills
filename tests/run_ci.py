@@ -21,7 +21,7 @@ UPGRADE_MODULES = (
 MACOS_MODULES = UPGRADE_MODULES + (
     "test_onboard_multi_projects", "test_sbtd_graft_entry", "test_sbtd_codex_wiring",
     "test_sbtd_omp_wiring", "test_onboard_omp_wiring", "test_global_mcp_installation",
-    "test_sbtd_graft_isolation",
+    "test_sbtd_graft_isolation", "test_onboard_external_skills",
 )
 WINDOWS_CASES = (
     "test_sbtd_followup_section_gate.FollowupSectionGateTests.test_omp_global_receipt_rejects_relative_runtime_paths",

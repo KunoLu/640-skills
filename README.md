@@ -386,6 +386,11 @@ Strict gates are triggered by facts: domain ambiguity, persistent/shared data, u
 
 These are reviewed **upstream mirrors**, not local forks. `auto` and `stable` install from the bundled snapshot without fetching upstream; only an explicit `upstream` selection opts into current upstream evaluation. Exact revisions, checksums and licenses live in the [stable manifest](sbtd-workflow-onboard/assets/external-skills/stable/MANIFEST.json).
 
+Standalone external installs include the applicable repository licenses and notices in `SBTD-NOTICES/`. This also carries the MIT license for the Phosphor icon metadata in `ui-ux-pro-max`, and for the original work behind Impeccable's iOS and Android references. The mirror checksum still covers the unchanged source, not the installed directory with its notices.
+With explicit `upstream`, a renamed or changed covered file, or changed repository license or notice for either Skill, requires a new attribution review before installation. Unrelated updates do not require an identical commit.
+
+If an external install reports incomplete cleanup, use `transaction.retainedPaths` to locate remaining source workspaces, staging or backup directories. A committed installation can still exit nonzero for cleanup; inspect its receipt before retrying.
+
 | Area | Skills | Purpose |
 |---|---|---|
 | Clarification | [grilling](sbtd-workflow-onboard/assets/external-skills/stable/skills/grilling/SKILL.md), [grill-me](sbtd-workflow-onboard/assets/external-skills/stable/skills/grill-me/SKILL.md), [grill-with-docs](sbtd-workflow-onboard/assets/external-skills/stable/skills/grill-with-docs/SKILL.md) | Stress-test decisions; use the documented variant for domain records |

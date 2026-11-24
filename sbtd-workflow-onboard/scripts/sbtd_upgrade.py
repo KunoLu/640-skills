@@ -78,16 +78,20 @@ import hashlib
 import importlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, NoReturn
 
 from onboard_contracts import ContractError, canonical_json_bytes
 from sbtd_cleanup_targets import strict_json_object
+from sbtd_external_notices import NOTICE_DIR, copy_notices
 from sbtd_migration_files import (
+    RetainedObjectError,
     _canonical,
     _lstat,
     backup_reference,
@@ -96,8 +100,10 @@ from sbtd_migration_files import (
     read_file,
     remove_reference,
     require_private_directory,
+    restore_directory_reference,
     save_document,
     snapshot,
+    withdraw_directory_reference,
     write_file,
 )
 from sbtd_upgrade_paths import paths_overlap
@@ -1614,9 +1620,7 @@ def _apply_upgrade_local(
                 "desired": resource["desired"],
                 "backup_ref": action["backup_ref"],
                 "mechanical_desired": (
-                    snapshot(
-                        Path(recomputed_by_id[resource["id"]]["source"]["path"])
-                    )
+                    _mechanical_install_state(recomputed_by_id[resource["id"]], inventory_root)
                     if resource["kind"] in ("skill", "agents") else resource["desired"]
                 ),
                 "mechanical_before": action["mechanical_before"],
@@ -1890,6 +1894,20 @@ def _reconcile_resource(
     return {"verb": "write", "resource": resource}
 
 
+def _fresh_notices(fresh: Mapping[str, Any], package_root: Path | None) -> dict[str, Path]:
+    # Only freshly derived inventory may select files, never caller-supplied plan paths.
+    root = package_root or _trusted_package_root()
+    return {dest: root / path for dest, path in fresh["details"].get("notice_sources", {}).items()}
+
+
+def _mechanical_install_state(fresh: Mapping[str, Any], root: Path | None, *, recovery: bool = False) -> dict[str, Any]:
+    path = Path(fresh["source"]["path"])
+    overlay = _fresh_notices(fresh, root)
+    if recovery or overlay:
+        return _cacheless_mechanical_state(path, overlay)
+    return snapshot(path)
+
+
 def _write_resource(
     sealed: Mapping[str, Any],
     fresh: Mapping[str, Any],
@@ -1917,6 +1935,23 @@ def _write_resource(
         )
         return
     source_path = Path(fresh["source"]["path"])
+    overlay = _fresh_notices(fresh, package_root)
+    if overlay:
+        # Assemble one unit before the guarded replacement. Never add notices to a live target.
+        with tempfile.TemporaryDirectory(prefix="sbtd-upgrade-skill-") as directory:
+            candidate = Path(directory).resolve() / "payload"
+            shutil.copytree(source_path, candidate, symlinks=True)
+            _purge_stage_caches(candidate)
+            copy_notices(candidate, overlay)
+            _install_verified_payload(candidate, sealed, target, expected, scope, backup_ref, mutation)
+        return
+    _install_verified_payload(source_path, sealed, target, expected, scope, backup_ref, mutation)
+
+
+def _install_verified_payload(
+    source_path: Path, sealed: Mapping[str, Any], target: Path, expected: Mapping[str, Any],
+    scope: Path, backup_ref: dict[str, Any] | None, mutation: dict[str, Any],
+) -> None:
     if _payload_state(source_path) != sealed["desired"]:
         _fail(
             "plan-stale",
@@ -2217,7 +2252,7 @@ def _require_saved(path: Path, document: Mapping[str, Any]) -> None:
         _fail("evidence-mismatch", "a document differs from the immutable vault evidence")
 
 
-def _cacheless_mechanical_state(path: Path) -> dict[str, Any]:
+def _cacheless_mechanical_state(path: Path, overlay: Mapping[str, Path] | None = None) -> dict[str, Any]:
     state = snapshot(path)
     if state["type"] != "directory":
         return state
@@ -2228,6 +2263,10 @@ def _cacheless_mechanical_state(path: Path) -> dict[str, Any]:
         if not any(part in caches for part in Path(entry["path"]).parts)
         and not (entry["type"] == "file" and entry["path"].endswith((".pyc", ".pyo")))
     ]
+    if overlay:
+        payload_entries.append({"path": NOTICE_DIR, "type": "directory", "checksum": None})
+        payload_entries.extend({"path": relative, **snapshot(source)} for relative, source in overlay.items())
+        payload_entries.sort(key=lambda entry: entry["path"])
     return {"type": "directory", "checksum": _digest(payload_entries)}
 
 
@@ -2288,7 +2327,7 @@ def _authorize_recovery_evidence(
         ):
             _fail("intent-mismatch", "recovery intent contradicts the canonical write")
         canonical_goal = (
-            _cacheless_mechanical_state(Path(expected[row["id"]]["source"]["path"]))
+            _mechanical_install_state(expected[row["id"]], trusted, recovery=True)
             if resource["kind"] in ("skill", "agents") else resource["desired"]
         )
         if intent.get("mechanical_desired") != canonical_goal:
@@ -2674,7 +2713,24 @@ def _apply_recovery_local(
     actions: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     for step in payload["steps"]:
-        action = _reconcile_step(step, prior_steps.get(step["step_id"]), intents)
+        try:
+            action = _reconcile_step(step, prior_steps.get(step["step_id"]), intents)
+        except RetainedObjectError as error:
+            # Preflight precedes write intents and step receipts. Keep raw paths
+            # in the private vault; only the content-addressed locator crosses IPC.
+            evidence = {
+                "schema_version": 1, "reason": error.code,
+                "plan_id": payload["plan_id"], "recovery_id": recovery_id,
+                "step_id": step["step_id"], "retained_refs": error.retained_refs,
+            }
+            evidence_id = _digest(evidence)
+            try:
+                _save_once(vault / f"recovery-preflight-{evidence_id}.json", evidence, vault)
+            except (ContractError, OSError) as save_error:
+                raise ContractError(error.code, error.message, exit_code=3,
+                                    details={"retained_evidence_unavailable": True}) from save_error
+            raise ContractError(error.code, error.message, exit_code=2,
+                                details={"retained_evidence_id": evidence_id}) from error
         if action["verb"] == "write":
             action["mechanical_before"] = snapshot(Path(step["target"]))
             actions.append(action)
@@ -2713,6 +2769,11 @@ def _apply_recovery_local(
                 "expected_current": step["expected_current"],
                 "restore_state": step["restore_state"],
             }
+            if step["expected_mechanical"]["type"] == "directory" and (
+                step["step_id"] not in intents or "directory_cutover" in intents[step["step_id"]]
+            ):
+                # Do not rewrite an immutable intent from a pre-witness executor.
+                intent["directory_cutover"] = _directory_cutover_witness(step)
             _save_once(
                 intents_dir / f"rintent-{recovery_id[:16]}-{step['step_id'][:32]}.json",
                 {"schema_version": 1, "payload": intent},
@@ -2721,6 +2782,8 @@ def _apply_recovery_local(
             try:
                 _execute_step(step, action["mechanical_before"])
                 after = _payload_state(Path(step["target"]))
+                if step["expected_mechanical"]["type"] == "directory":
+                    _check_recovery_cutover(step, intent, after)
             except ContractError as error:
                 _record_result(results,
                     _step_row(step, "failed", _measured(step["target"]), reason=error.code)
@@ -2845,6 +2908,34 @@ def _step_row(
     }
 
 
+def _recovery_retired_path(step: Mapping[str, Any]) -> Path:
+    # Derived from the revalidated plan, not a path supplied by a receipt.
+    ident = _expect_hex(step["step_id"], "directory recovery step ID")
+    return Path(step["target"]).with_name(f".sbtd-recovery-retired-{ident}")
+
+
+def _directory_cutover_witness(step: Mapping[str, Any]) -> dict[str, Any]:
+    mode = None
+    if os.name == "posix" and step["action"] == "restore" and step["restore_state"]["type"] == "directory":
+        mode = stat.S_IMODE(_canonical(Path(step["backup_ref"]["path"])).lstat().st_mode)
+    return {"version": 1, "root_mode": mode}
+
+
+def _check_recovery_cutover(
+    step: Mapping[str, Any], intent: Mapping[str, Any] | None, live: Mapping[str, Any],
+) -> None:
+    retired = _recovery_retired_path(step)
+    if _lstat(retired) is not None:
+        # Matching bytes (or an absent target) cannot authorize disposal of a remnant.
+        raise RetainedObjectError(retired)
+    witness = _directory_cutover_witness(step)
+    if intent is not None and "directory_cutover" in intent and intent["directory_cutover"] != witness:
+        _fail("intent-mismatch", "directory recovery mode differs from its sealed intent")
+    if (witness["root_mode"] is not None and live == step["restore_state"]
+            and stat.S_IMODE(_canonical(Path(step["target"])).lstat().st_mode) != witness["root_mode"]):
+        _fail("state-conflict", "restored directory mode differs from its private original")
+
+
 def _reconcile_step(
     step: dict[str, Any],
     prior: dict[str, Any] | None,
@@ -2855,6 +2946,12 @@ def _reconcile_step(
     expected_after = (
         dict(_ABSENT) if step["action"] == "remove" else step["restore_state"]
     )
+    intent = intents.get(step["step_id"])
+    if step["expected_mechanical"]["type"] == "directory":
+        _check_recovery_cutover(step, intent, live)
+        if (live == expected_after and intent is not None and "directory_cutover" not in intent
+                and (prior is None or prior["result"] not in ("succeeded", "skipped-complete"))):
+            _fail("state-conflict", "legacy directory outcome requires manual cleanup verification")
     if prior is not None and prior.get("result") in _COMPLETED_TOKENS:
         if live == expected_after and mechanical == prior.get("mechanical_after"):
             return {"verb": "record", "row": _step_row(step, "skipped-complete", live)}
@@ -2862,7 +2959,6 @@ def _reconcile_step(
             "state-conflict",
             "a completed recovery step no longer matches its receipt outcome",
         )
-    intent = intents.get(step["step_id"])
     if intent is not None:
         if step["action"] == "restore" and live["type"] == "absent":
             return {"verb": "write", "step": step}
@@ -2892,6 +2988,9 @@ def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
     if snapshot(target) != expected:
         _fail("state-conflict", "a recovery target changed immediately before its write")
     if step["action"] == "remove":
+        if expected["type"] == "directory":
+            withdraw_directory_reference(target, expected, scope=scope, retired_path=_recovery_retired_path(step))
+            return
         remove_reference(target, expected, scope=scope)
         return
     backup_ref = step["backup_ref"]
@@ -2909,6 +3008,11 @@ def _execute_step(step: Mapping[str, Any], expected: Mapping[str, Any]) -> None:
         )
     if step["restore_state"]["type"] == "file":
         install_reference(backup_ref, target, expected, scope=scope)
+        return
+    if expected["type"] == "directory":
+        restore_directory_reference(
+            backup_ref, target, expected, scope=scope, retired_path=_recovery_retired_path(step),
+        )
         return
     if expected["type"] != "absent":
         remove_reference(target, expected, scope=scope)

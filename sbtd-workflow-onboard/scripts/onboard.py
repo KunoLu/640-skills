@@ -46,6 +46,8 @@ from onboard_arguments import (
     validate_recovery_args,
     validate_upgrade_args,
 )
+from onboard_contracts import canonical_json_bytes
+from sbtd_external_notices import SUPPLEMENTS, copy_notices, notice_overlay
 from sbtd_project import StateInspection, TaskDataError, inspect_project_state
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -3504,6 +3506,40 @@ def copy_external_skill(source: Path, target: Path) -> tuple[str, bool, str | No
     return ("replaced" if replaced_existing else "installed"), replaced_existing, None
 
 
+def _install_notices(
+    manifest: dict, name: str, source: Path, upstream: Path | None = None
+) -> dict[str, Path]:
+    skill = manifest["skills"][name]
+    repository = manifest["repositories"][skill["repository"]]
+    if repository["url"] != EXTERNAL_SKILL_SOURCES[name]["repo"]:
+        raise RuntimeError(f"license mapping does not match the repository for {name}")
+    licenses: dict[str, Path] = {}
+    for item in repository["licenseFiles"]:
+        key = Path(item["stablePath"]).name
+        if key in licenses:
+            raise RuntimeError(f"duplicate license destination for {name}: {key}")
+        licenses[key] = resolve_contained_relative_path(
+            upstream if upstream is not None else EXTERNAL_STABLE_ROOT,
+            item["source"] if upstream is not None else item["stablePath"],
+            f"license for {name}",
+        )
+    if upstream is not None and name in SUPPLEMENTS:
+        reviewed, _, _ = stable_external_skill_source(manifest, name, EXTERNAL_STABLE_ROOT)
+        inputs, _ = SUPPLEMENTS[name]
+        evidence = [(source / rel, reviewed / rel) for rel in inputs]
+        for item in repository["licenseFiles"]:
+            original = resolve_contained_relative_path(
+                EXTERNAL_STABLE_ROOT, item["stablePath"], f"reviewed attribution for {name}"
+            )
+            evidence.append((licenses[Path(item["stablePath"]).name], original))
+        for acquired, reference in evidence:
+            if not (acquired.is_file() and reference.is_file()
+                    and acquired.stat().st_size == reference.stat().st_size
+                    and acquired.read_bytes() == reference.read_bytes()):
+                raise RuntimeError(f"upstream attribution for {name} requires review: {acquired.name}")
+    return notice_overlay(name, source, licenses, SKILL_DIR / "assets/external-skills/notices")
+
+
 def resolve_external_install_sources(
     selected: list[str], requested_source: str, workspace: Path
 ) -> dict[str, dict[str, object]]:
@@ -3531,9 +3567,13 @@ def resolve_external_install_sources(
                     source = source_dir_for_external_skill(repo_root, name)
                     validate_external_skill_source(name, source)
                     upstream_sources[name] = source
+                # Read only the agreed license paths. The selected clone supplies the bytes.
+                if manifest is None:
+                    manifest = json.loads(EXTERNAL_STABLE_MANIFEST.read_bytes())
                 for name, source in upstream_sources.items():
                     resolved[name] = {
                         "source": source,
+                        "notices": _install_notices(manifest, name, source, repo_root),
                         "repo": repo,
                         "sourceUsed": "upstream",
                         "sourceRevision": revision,
@@ -3553,6 +3593,7 @@ def resolve_external_install_sources(
         for name, (source, revision, stable_set) in stable_group.items():
             resolved[name] = {
                 "source": source,
+                "notices": _install_notices(manifest, name, source),
                 "repo": repo,
                 "sourceUsed": "stable",
                 "sourceRevision": revision,
@@ -3562,20 +3603,129 @@ def resolve_external_install_sources(
     return resolved
 
 
+class ExternalCleanupError(RuntimeError):
+    def __init__(self, primary: Exception, retained: Path, *additional: Path) -> None:
+        self.retained_paths = (retained, *additional)
+        paths = ", ".join(str(path) for path in self.retained_paths)
+        super().__init__(f"{primary}; cleanup incomplete: {paths}")
+
+
+def _external_directory_path(path: Path, *, allow_absent: bool) -> Path:
+    from sbtd_migration_files import _canonical, _lstat
+
+    checked = _canonical(path)
+    info = _lstat(checked)
+    if (info is None and not allow_absent) or (
+        info is not None and not stat.S_ISDIR(info.st_mode)
+    ):
+        kind = "target" if allow_absent else "staging"
+        raise RuntimeError(f"external Skill {kind} is not a real directory: {checked}")
+    return checked
+
+
+def _external_directory_state(entries: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "type": "directory",
+        "checksum": hashlib.sha256(canonical_json_bytes(entries)).hexdigest(),
+    }
+
+
+def _cleanup_external_path(
+    path: Path,
+    expected: dict[str, object],
+    scope: Path,
+    identity: os.stat_result | None = None,
+) -> bool:
+    """Dispose of the bound object; a remaining or uninspectable path is not success."""
+    try:
+        if identity is not None and not os.path.samestat(identity, path.lstat()):
+            return False
+        from sbtd_migration_files import discard_withdrawn_directory, remove_reference
+
+        if expected["type"] == "directory":
+            discard_withdrawn_directory(path, expected, scope=scope)
+        else:
+            remove_reference(path, expected, scope=scope)
+    except Exception:  # noqa: BLE001 - a failed cleanup may already have removed the object.
+        return _external_path_absent(path)
+    return _external_path_absent(path)
+
+
+def _external_path_absent(path: Path) -> bool:
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
+def _external_prepare_cleanup_state(
+    staging: Path,
+    resolved: dict[str, dict[str, object]],
+    copied: dict[str, os.stat_result],
+    writing_notices: str | None,
+) -> dict[str, object]:
+    """Verify the staged payload against its sources before disposing of it.
+
+    A failed notice write may have created only part of the overlay. Unknown
+    entries or unverified partial bytes stay on disk with the primary error.
+    """
+    from sbtd_external_notices import NOTICE_DIR
+    from sbtd_migration_files import directory_snapshot, snapshot
+
+    state, entries = directory_snapshot(staging)
+    actual = {entry["path"]: entry for entry in entries}
+    for name, identity in copied.items():
+        if not os.path.samestat(identity, (staging / name).lstat()):
+            raise RuntimeError(f"staged directory replaced: {name}")
+        required = {name: ("directory", None)}
+        _, payload = directory_snapshot(Path(str(resolved[name]["source"])))
+        for entry in payload:
+            path = Path(entry["path"])
+            if EXTERNAL_TREE_COMPARE_EXCLUDED_DIRS.intersection(path.parts):
+                continue
+            if entry["type"] == "file" and path.suffix in EXTERNAL_TREE_DIGEST_EXCLUDED_SUFFIXES:
+                continue
+            required[f"{name}/{entry['path']}"] = (entry["type"], entry["checksum"])
+
+        overlay = {f"{name}/{NOTICE_DIR}": ("directory", None)}
+        for relative, source in cast(dict[str, Path], resolved[name]["notices"]).items():
+            overlay[f"{name}/{relative}"] = ("file", snapshot(source)["checksum"])
+        for path, value in overlay.items():
+            if name != writing_notices or path in actual:
+                required[path] = value
+        for path, value in required.items():
+            found = actual.pop(path, None)
+            if found is None or (found["type"], found["checksum"]) != value:
+                raise RuntimeError(f"unverified prepared entry: {path}")
+    if actual:
+        raise RuntimeError("unexpected content in private staging directory")
+    return state
+
+
 def stage_external_skills(
     selected: list[str], resolved: dict[str, dict[str, object]], target_dir: Path
 ) -> Path:
+    target_dir = _external_directory_path(target_dir, allow_absent=True)
     target_dir.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".sbtd-external-staging-", dir=target_dir))
+    identity: os.stat_result | None = None
+    copied: dict[str, os.stat_result] = {}
+    writing_notices: str | None = None
     try:
+        identity = staging.lstat()
         for name in selected:
             source = Path(str(resolved[name]["source"]))
+            writing_notices = name
             destination = staging / name
             shutil.copytree(
                 source,
                 destination,
                 ignore=external_copy_ignore(".git"),
             )
+            copied[name] = destination.lstat()
             validate_external_skill_source(name, destination)
             failures = compare_tree(source, destination, EXTERNAL_TREE_COMPARE_EXCLUDED_DIRS)
             if failures:
@@ -3583,10 +3733,82 @@ def stage_external_skills(
                     f"staging verification failed for {name}: "
                     + ", ".join(failures[:20])
                 )
+            copy_notices(destination, cast(dict[str, Path], resolved[name]["notices"]))
+            writing_notices = None
         return staging
-    except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
+    except Exception as exc:
+        expected: dict[str, object] | None = None
+        if identity is not None:
+            try:
+                expected = _external_prepare_cleanup_state(staging, resolved, copied, writing_notices)
+            except Exception:  # noqa: BLE001 - a proof failure must not replace the primary failure.
+                expected = None
+        if (
+            expected is None
+            or identity is None
+            or not _cleanup_external_path(staging, expected, target_dir, identity)
+        ):
+            raise ExternalCleanupError(exc, staging) from exc
         raise
+
+
+def _readonly_posix_directory(path: Path) -> bool:
+    if os.name != "posix":
+        return False
+    mode = path.lstat().st_mode
+    return stat.S_ISDIR(mode) and not mode & stat.S_IWUSR
+
+
+def _set_aside_sibling(path: Path) -> Path:
+    """Withdraw a directory without reparenting it or changing its permissions."""
+    from uuid import uuid4
+
+    from sbtd_migration_files import rename_directory_exclusive
+
+    sibling = path.parent / f".sbtd-external-held-{uuid4().hex}"
+    rename_directory_exclusive(path, sibling)
+    return sibling
+
+
+def _publish_external_stage(stage: Path, target: Path) -> None:
+    from sbtd_migration_files import rename_directory_exclusive
+
+    mode = stat.S_IMODE(stage.stat().st_mode)
+    if os.name != "posix" or mode & stat.S_IWUSR:
+        rename_directory_exclusive(stage, target)
+        return
+
+    # Reparenting may require write access to the directory (update "..").
+    # Move only the private staged inode; restore its mode before publication.
+    from uuid import uuid4
+
+    sibling = target.parent / f".sbtd-external-publish-{uuid4().hex}"
+    stage.chmod(0o700)
+    try:
+        rename_directory_exclusive(stage, sibling)
+    except OSError:
+        stage.chmod(mode)
+        raise
+    try:
+        sibling.chmod(mode)
+        rename_directory_exclusive(sibling, target)
+    except OSError as exc:
+        raise ExternalCleanupError(exc, sibling) from exc
+
+
+def _record_external_cleanup(
+    results: list[dict[str, object]], transaction: dict[str, object], retained: list[str],
+) -> None:
+    if not retained:
+        return
+    transaction["retainedPaths"] = [*cast(list[str], transaction.get("retainedPaths", [])), *retained]
+    if transaction["status"] in ("committed", "rolled-back", "aborted-before-commit"):
+        transaction["status"] = f"{transaction['status']}-cleanup-incomplete"
+    results.extend(
+        {"name": Path(path).name, "phase": "cleanup", "status": "failed",
+         "target": path, "error": "temporary directory could not be removed"}
+        for path in retained
+    )
 
 
 def commit_external_skill_transaction(
@@ -3595,6 +3817,68 @@ def commit_external_skill_transaction(
     target_dir: Path,
     staging: Path,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
+    from sbtd_migration_files import directory_snapshot
+
+    target_dir = _external_directory_path(target_dir, allow_absent=True)
+    staging = _external_directory_path(staging, allow_absent=False)
+    if target_dir.is_relative_to(staging) or (
+        staging.is_relative_to(target_dir)
+        and (staging.parent != target_dir or not staging.name.startswith(".sbtd-external-staging-"))
+    ):
+        raise RuntimeError("external Skill staging overlaps an installation directory")
+    try:
+        staging_identity = staging.lstat()
+        staging_state, entries = directory_snapshot(staging)
+    except Exception as exc:
+        if not _external_path_absent(staging):
+            raise ExternalCleanupError(exc, staging) from exc
+        raise
+    selected_names = set(selected)
+    if any(entry["path"].split("/", 1)[0] not in selected_names for entry in entries):
+        raise ExternalCleanupError(RuntimeError("unexpected entry in external Skill staging"), staging)
+    published: set[str] = set()
+    rollback: Path | None = None
+    rollback_identity: os.stat_result | None = None
+    try:
+        rollback = Path(tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir))
+        rollback_identity = rollback.lstat()
+    except Exception as exc:
+        retained = [rollback] if rollback is not None and filesystem_entry_exists(rollback) else []
+        if not _cleanup_external_path(staging, staging_state, staging.parent, staging_identity):
+            retained.append(staging)
+        if retained:
+            raise ExternalCleanupError(exc, retained[0], *retained[1:]) from exc
+        raise
+    try:
+        results, transaction = _commit_external_skills(selected, resolved, target_dir, staging, rollback, published)
+    except Exception as exc:  # noqa: BLE001 - do not claim an unknown transaction was unwritten.
+        retained = [str(path) for path in (staging, rollback) if filesystem_entry_exists(path)]
+        return [{"name": name, "phase": "transaction", "status": "failed", "error": str(exc)} for name in selected], {
+            "status": "outcome-unknown", "rolledBack": False, "rollbackErrors": [],
+            "rollbackPath": str(rollback) if str(rollback) in retained else None,
+            "retainedPaths": retained,
+        }
+    if published:
+        remaining = [entry for entry in entries if entry["path"].split("/", 1)[0] not in published]
+        staging_state = _external_directory_state(remaining)
+    paths = [(staging, staging.parent, staging_state, staging_identity)]
+    if transaction["rollbackPath"] is None:
+        paths.append((rollback, target_dir, _external_directory_state([]), rollback_identity))
+    retained = [
+        str(path)
+        for path, scope, expected, identity in paths
+        if not _cleanup_external_path(path, expected, scope, identity)
+    ]
+    _record_external_cleanup(results, transaction, retained)
+    return results, transaction
+
+
+def _commit_external_skills(
+    selected: list[str], resolved: dict[str, dict[str, object]], target_dir: Path, staging: Path,
+    rollback: Path, published: set[str],
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    from sbtd_migration_files import rename_directory_exclusive, snapshot
+
     legacy_names: list[str] = []
     for name in selected:
         for legacy_name in legacy_external_skill_names_for(name):
@@ -3619,7 +3903,6 @@ def commit_external_skill_transaction(
         is not None
     ]
     if identity_conflicts:
-        shutil.rmtree(staging, ignore_errors=True)
         return identity_conflicts, {
             "status": "aborted-before-commit",
             "rolledBack": False,
@@ -3627,29 +3910,44 @@ def commit_external_skill_transaction(
             "rollbackPath": None,
         }
 
-    rollback = Path(
-        tempfile.mkdtemp(prefix=".sbtd-external-rollback-", dir=target_dir)
-    )
-
     existed = {name: filesystem_entry_exists(target_dir / name) for name in selected}
-    moved: list[tuple[Path, Path]] = []
-    committed: list[Path] = []
+    # Bind each rename to its source inode and contents until cleanup or restoration.
+    moved: dict[Path, tuple[Path, dict, os.stat_result]] = {}
+    committed: dict[Path, tuple[dict, os.stat_result]] = {}
     results: list[dict[str, object]] = []
     rollback_errors: list[str] = []
-    retain_rollback = False
     try:
         for name in (*selected, *legacy_names):
             target = target_dir / name
             if not filesystem_entry_exists(target):
                 continue
+            identity = target.lstat()
+            before = snapshot(target)
             backup = rollback / name
-            shutil.move(str(target), str(backup))
-            moved.append((target, backup))
+            if _readonly_posix_directory(target):
+                backup = _set_aside_sibling(target)
+            else:
+                rename_directory_exclusive(target, backup)
+            moved[target] = (backup, before, identity)
+            if not os.path.samestat(identity, backup.lstat()) or snapshot(backup) != before:
+                raise RuntimeError(f"set-aside directory changed: {backup}")
 
         for name in selected:
             target = target_dir / name
-            shutil.move(str(staging / name), str(target))
-            committed.append(target)
+            identity = (staging / name).lstat()
+            before = snapshot(staging / name)
+            if before["type"] != "directory":
+                raise RuntimeError(f"staged External Skill is not a real directory: {staging / name}")
+            try:
+                _publish_external_stage(staging / name, target)
+            except ExternalCleanupError:
+                if _external_path_absent(staging / name):
+                    published.add(name)  # private publish sibling is reported separately
+                raise
+            published.add(name)
+            committed[target] = (before, identity)
+            if not os.path.samestat(identity, target.lstat()):
+                raise RuntimeError(f"published External Skill changed: {target}")
             source_info = resolved[name]
             result = {
                 "name": name,
@@ -3666,7 +3964,7 @@ def commit_external_skill_transaction(
             results.append(result)
 
         for legacy_name in legacy_names:
-            if (rollback / legacy_name).exists():
+            if target_dir / legacy_name in moved:
                 results.append(
                     {
                         "name": legacy_name,
@@ -3682,19 +3980,43 @@ def commit_external_skill_transaction(
             "rollbackErrors": [],
             "rollbackPath": None,
         }
+        retained_cleanup = []
+        for backup, expected, identity in moved.values():
+            if not _cleanup_external_path(backup, expected, backup.parent, identity):
+                retained_cleanup.append(str(backup))
+        _record_external_cleanup(results, transaction, retained_cleanup)
         return results, transaction
     except Exception as exc:  # noqa: BLE001 - rollback must cover every local commit failure.
-        for target in reversed(committed):
+        retained_paths = (
+            [str(path) for path in exc.retained_paths]
+            if isinstance(exc, ExternalCleanupError)
+            else []
+        )
+        for target, (expected, identity) in reversed(committed.items()):
             try:
-                remove_existing_target(target)
+                if not os.path.samestat(identity, target.lstat()) or snapshot(target) != expected:
+                    raise RuntimeError("installed target changed; left in place")
+                held = _set_aside_sibling(target)
             except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
+                if not _external_path_absent(target):
+                    retained_paths.append(str(target))
                 rollback_errors.append(f"remove {target}: {rollback_exc}")
-        for target, backup in reversed(moved):
+            else:
+                if not _cleanup_external_path(held, expected, target_dir, identity):
+                    retained_paths.append(str(held))
+                    rollback_errors.append(f"retained installed directory: {held}")
+        for target, (backup, expected, identity) in reversed(moved.items()):
             try:
-                if target.exists():
-                    remove_existing_target(target)
-                shutil.move(str(backup), str(target))
+                if filesystem_entry_exists(target):
+                    raise RuntimeError("target still occupied; backup retained")
+                if not os.path.samestat(identity, backup.lstat()):
+                    raise RuntimeError("backup replaced; backup retained")
+                if snapshot(backup) != expected:
+                    raise RuntimeError("backup changed; backup retained")
+                rename_directory_exclusive(backup, target)
             except Exception as rollback_exc:  # noqa: BLE001 - aggregate rollback failures.
+                if not _external_path_absent(backup):
+                    retained_paths.append(str(backup))
                 rollback_errors.append(f"restore {target}: {rollback_exc}")
         results = [
             {
@@ -3713,15 +4035,13 @@ def commit_external_skill_transaction(
         ]
         retain_rollback = bool(rollback_errors)
         return results, {
-            "status": "rollback-failed" if rollback_errors else "rolled-back",
+            "status": ("rollback-failed" if retain_rollback else
+                       "rolled-back-cleanup-incomplete" if retained_paths else "rolled-back"),
             "rolledBack": True,
             "rollbackErrors": rollback_errors,
             "rollbackPath": str(rollback) if retain_rollback else None,
+            **({"retainedPaths": retained_paths} if retained_paths else {}),
         }
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-        if not retain_rollback:
-            shutil.rmtree(rollback, ignore_errors=True)
 
 
 def remove_legacy_external_targets(
@@ -3936,37 +4256,39 @@ def run_external_migration(plan: dict[str, object]) -> list[dict[str, object]]:
 def execute_external_skill_install(
     args: argparse.Namespace, selected: list[str], target_dir: Path
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
+    workspace: tempfile.TemporaryDirectory[str] | None = None
+    transaction: dict[str, object]
+    retained: list[str] = []
     try:
-        with tempfile.TemporaryDirectory(
-            prefix="sbtd-onboard-external-sources-"
-        ) as tmp:
-            resolved = resolve_external_install_sources(
-                selected, args.source, Path(tmp)
-            )
-            staging = stage_external_skills(selected, resolved, target_dir)
-            return commit_external_skill_transaction(
-                selected, resolved, target_dir, staging
-            )
-    except Exception as exc:  # noqa: BLE001 - no target is changed before the transaction begins.
-        return (
-            [
-                {
-                    "name": name,
-                    "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
-                    "target": str(target_dir / name),
-                    "status": "failed",
-                    "phase": "prepare",
-                    "error": str(exc),
-                }
-                for name in selected
-            ],
-            {
-                "status": "aborted-before-commit",
-                "rolledBack": False,
-                "rollbackErrors": [],
-                "rollbackPath": None,
-            },
-        )
+        workspace = tempfile.TemporaryDirectory(prefix="sbtd-onboard-external-sources-")
+        resolved = resolve_external_install_sources(selected, args.source, Path(workspace.name))
+        staging = stage_external_skills(selected, resolved, target_dir)
+        results, transaction = commit_external_skill_transaction(selected, resolved, target_dir, staging)
+    except Exception as exc:  # noqa: BLE001 - commit handles its own mutation failures.
+        results = [
+            {"name": name, "repo": EXTERNAL_SKILL_SOURCES[name]["repo"],
+             "target": str(target_dir / name), "status": "failed", "phase": "prepare",
+             "error": str(exc)}
+            for name in selected
+        ]
+        transaction = {
+            "status": "aborted-before-commit", "rolledBack": False,
+            "rollbackErrors": [], "rollbackPath": None,
+        }
+        if isinstance(exc, ExternalCleanupError):
+            retained.extend(str(path) for path in exc.retained_paths)
+    finally:
+        if workspace is not None:
+            # Only the source workspace we created gets TemporaryDirectory's
+            # read-only permission handling. Keep cleanup outside the transaction.
+            try:
+                workspace.cleanup()
+            except OSError:
+                pass
+            if not _external_path_absent(Path(workspace.name)):
+                retained.append(workspace.name)
+    _record_external_cleanup(results, transaction, retained)
+    return results, transaction
 
 
 def external_migration_identity_failures(
@@ -4124,6 +4446,8 @@ def print_external_skill_install_result(
     print(f"Transaction: {transaction['status']}")
     if transaction.get("rollbackPath"):
         print(f"Rollback backup retained at: {transaction['rollbackPath']}")
+    for path in cast(list[str], transaction.get("retainedPaths", [])):
+        print(f"Cleanup retained: {path}")
     rollback_errors = transaction.get("rollbackErrors")
     if isinstance(rollback_errors, list):
         for rollback_error in rollback_errors:

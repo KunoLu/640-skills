@@ -288,6 +288,30 @@ Preparation and commit are separate phases. Every selected Skill is resolved, co
 
 No automatic source fallback occurs. Stable manifest, containment, checksum, license, or snapshot validation failures are fatal for `auto` and `stable`; upstream acquisition or validation failures are fatal for `upstream`. Target-side staging, permission, disk, commit, and rollback failures are always fatal. A local commit failure attempts to restore all prior targets; if any restore step fails, the transaction reports and retains the rollback directory path instead of deleting the only remaining backup copy.
 
+For a standalone installation, `SBTD-NOTICES/` travels inside the selected Skill. Stable installs copy that repository's manifest-listed license and notice bytes; explicit upstream installs take those files from the acquired revision. Supplemental MIT texts apply only to the Phosphor metadata in `ui-ux-pro-max` and the original work behind `impeccable/reference/{ios,android}.md`. Impeccable's Apache license and its own attribution notice remain separate. A source that already uses the reserved directory is rejected rather than overwritten.
+
+The manifest digest still verifies the unmodified mirror. Explicit upgrade compares the target with the complete standalone installation, including notices. An existing bare mirror is not silently adopted: review the reported drift and choose preserve or replace. Recovery restores the previous complete directory, including any original notices.
+
+#### 许可随分发单元交付：验收场景
+
+- **Scenario: 完整 Onboard 包** — Given 包含固定技能快照，When 使用官方 Skills CLI 复制整个 Onboard 包，Then Phosphor 元数据与 Impeccable 两份平台文档原作均有明确归属及对应 MIT 全文；Matt 与 SEO 的既有声明保持原样。
+- **Scenario: 独立安装及重装** — Given 只选择一个 External Skill，When 安装或重装后单独分发该目录，Then 无需访问 Onboard 父目录即可读取该技能适用的版权、许可证和通知；不把其他技能的许可证当成该技能的许可。
+- **Scenario: 升级与保留冲突** — Given 目标存在旧的独立安装或与受管内容冲突，When 运行显式升级，Then 获准替换的目标随新内容取得相应许可；选择保留的目标及其原有通知不变。
+- **Scenario: 写入失败** — Given 目标已有内容与通知，When 安装事务在移动原目录后失败，Then 按既有恢复契约同时保全原内容和原通知，不留下新旧混合的安装单元。
+- **Scenario: 只读来源** — Given 技能源根目录为 `0555`，When 独立安装或升级组装通知，Then 只临时开放私有暂存根的所有者写权限，恢复原模式，不改来源权限。
+- **Scenario: POSIX 只读目录发布与替换** — Given Linux 或 macOS 上的普通用户拥有 `0555` 技能目录，When 首次发布只读候选或替换只读旧安装，Then 安装后的内容、通知和候选权限完整；批次后续失败时保全旧目录的字节和权限，不向正式目标加写权限。
+- **Scenario: 直接调用安装事务时路径含链接** — Given 传入的目标或暂存路径含符号链接祖先，When 直接调用暂存或提交接口，Then 在创建目录或移动候选前拒绝；结果不因技能是否只读而变化。CLI 保留原有的路径解析约定。
+- **Scenario: 私有暂存或旧安装内含只读子目录** — Given 准备中止、批次回滚或替换已完成，When 清理安装器创建的剩余候选或已核验的退役旧树，Then 可安全删除的 `0555` 子目录不导致误报；现场与既有证据不符或清理确实失败时，保留实际残件并报告路径，不处置唯一回滚副本。
+- **Scenario: 显式上游归属变动** — Given 显式 `upstream` 获取带附加许可的技能，When 适用文档移动、替换或其仓库许可证／通知字节与已审基线不一致，Then 在替换目标前拒绝；仅不相关文件变动仍可安装。
+- **Scenario: 恢复只读技能目录** — Given 现有安装和私有备份均匹配封存状态，When 确认恢复，Then 在暂存区校验完整候选后移开当前目录并换入原件；不对正式目标加写权限。换入失败且目标名仍空闲时归还原目录，未知占位则保留现场并报告。
+- **Scenario: 换入时出现新占位** — Given 原目录已移开，When 目标名被另一个空目录占用，Then 排他改名拒绝覆盖，回执指出应保全的目录；不以预先检查代替改名时的排他约束。
+- **Scenario: 恢复中断后重试** — Given 目标字节与原件相同，When 退役目录仍存在或 POSIX 根权限与恢复意图不符，Then 阻断续作，不报告 `reconciled`，不自动改权或清除未知目录。
+- **Scenario: 撤销本批首次安装** — Given 升级前目标不存在且新装目录为只读，When 通过恢复计划撤销安装，Then 先校验并移开目录，再清理与封存状态一致的副本；不向正式目标加写权限。
+- **Scenario: 安装器清理失败** — Given 安装或回退后暂存目录无法完整清理，When 查看命令退出码和回执，Then 命令不报全部成功，保留主操作错误，并明确报告仍需处理的实际路径。
+- **Scenario: 可清理的只读来源** — Given 安装器新建的来源工作目录内有只读子树，When 所有者可以用标准库临时目录清理机制移除它，Then 已提交安装正常退出，不报告残留。此权限处理不适用于安装目标或回滚备份。
+- **Scenario: 提交后来源清理失败** — Given 新技能已提交，When 来源工作目录清理失败，Then 保留各技能实际提交结果，命令非零退出并报告遗留路径，不误报为准备阶段失败。
+- **Scenario: 首次恢复预检发现退役对象** — Given 恢复尚无步骤回执，When 预检发现退役对象，Then 停止写入目标，私有 vault 保存绑定本次计划和步骤的路径与状态；CLI 只返回证据 ID。相同观察复用同一文件，无法保存时不返回虚假 ID。
+
 `init` / `reset --json` embed the required installation report under `requiredExternalInstall` in the single root document, including when installation fails before template writes. Per-Skill source metadata and `transaction` recovery fields remain available; the field is `null` when no required installation ran. Existing root plan fields and exit-code semantics are unchanged.
 
 The vendored stable set lives at `assets/external-skills/stable/`. Its `MANIFEST.json` is the single source of truth for stable-set id, upstream repository, full commit SHA, upstream subpath, local stable path, tree SHA-256, and license/NOTICE files. The snapshots are upstream content copied unchanged. Do not hand-edit them. A vendored Skill's verification scope is its distributed subtree: upstream repository-root development tests that cannot collect standalone inside the subtree are an environment mismatch, not a product regression (2026-10-26 Windows migration, M15); full upstream test suites run only in a full upstream checkout. CI checks the stable set with the installer-owned `stable_external_skill_source()` validation, never a second digest algorithm.
@@ -1008,6 +1032,9 @@ python scripts/onboard.py recovery --phase apply \
 恢复只针对本批实际写过的资源，绑定当前实测后态及原件。展示恢复清单后另行确认；后态漂移时保留用户内容并阻断。不自动删除备份，也不承诺恢复旧运行时可用。恢复重试使用返回的累计 `--recovery-receipt`。升级恢复参数不能与 migration 恢复参数混用。
 
 已确认的 restore 意图之后，目标 `absent` 是既有恢复续作窗口，不要求额外“删除完成”checkpoint；这不是覆盖未知非空内容的授权。当前内容与可接受续作状态不符时仍停止，保留备份和冲突内容。
+
+目录恢复按步骤身份选择同父退役路径。该处有残件时，无论目标已恢复到原件字节或已不存在，都停止并报告；保留现场供人工核对。POSIX 目录恢复还要核对备份根模式，不能仅凭内容摘要完成续作。
+恢复预检因退役对象而阻断时，错误中的 `retained_evidence_id` 对应本计划私有备份根下的 `recovery-preflight-<id>.json`。文件包含 `plan_id`、`recovery_id`、`step_id` 和 `retained_refs`，不是恢复成功回执，也不授权删除。保留私有文件；无需把路径或内容贴到公开报告。
 
 **历史信任边界：** 操作人明确选择且独占管理的已有私有 vault 是受信历史来源。摘要和相互引用验证一致性，不是签名认证；不能防御有 vault 写权限的人整组一致伪造计划、回执、意图与 checkpoint。不得从未知来源接收整套 vault 并据此自动删除文件。来源或控制权存疑时停止恢复，人工核对原件及操作记录。本流程不创建独立签名密钥或后台信任服务。
 

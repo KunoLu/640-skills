@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import base64
 import io
 import json
@@ -97,6 +98,14 @@ class CleanupUpgradeIntegrationTests(unittest.TestCase):
                     fixture.verification = verified["migration"]["verification"]
                     fixture.verification_path.write_bytes(canonical_json_bytes(fixture.verification))
 
+                external_results, external_transaction = onboard.execute_external_skill_install(
+                    argparse.Namespace(source="stable"),
+                    list(onboard.EXTERNAL_SKILL_SOURCES),
+                    skills,
+                )
+                self.assertEqual(
+                    external_transaction["status"], "committed", external_results
+                )
                 scope = {
                     "schema_version": 1, "skills_roots": [str(skills)],
                     "agents_targets": [], "hosts": [], "shell_profiles": [],

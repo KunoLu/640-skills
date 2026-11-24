@@ -321,6 +321,7 @@ def verify_hosts(scope, *, package_root=None, probe=False, link_authorizations=N
 
 ENGINE_COPY = (
     "sbtd_upgrade.py",
+    "sbtd_external_notices.py",
     "sbtd_upgrade_paths.py",
     "onboard_contracts.py",
     "sbtd_migration_files.py",
@@ -346,6 +347,39 @@ class UpgradeEngineTests(unittest.TestCase):
                     sys.modules[name] = module
 
         self.addCleanup(restore_providers)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
+    def test_restore_readonly_directory_preserves_current_tree_on_cutover_failure(self):
+        source = self._vault() / "original"
+        target = self.base / "installed"
+        source.mkdir(mode=0o750)
+        target.mkdir()
+        (source / "payload").write_bytes(b"original")
+        (target / "payload").write_bytes(b"installed")
+        target.chmod(0o555)
+        before = sbtd_upgrade.snapshot(target)
+        original = sbtd_upgrade.snapshot(source)
+        step = {
+            "step_id": "b" * 64,
+            "action": "restore", "target": str(target), "restore_state": original,
+            "backup_ref": {"path": str(source), "state": original},
+        }
+        from sbtd_migration_files import rename_directory_exclusive as rename
+
+        def fail_cutover(src, dst):
+            if Path(src).name.startswith(".sbtd-migration-stage-") and dst == target:
+                raise OSError("test cutover failure")
+            rename(src, dst)
+
+        with mock.patch("sbtd_migration_files.rename_directory_exclusive", side_effect=fail_cutover), self.assertRaises(ContractError):
+            sbtd_upgrade._execute_step(step, before)
+        self.assertEqual(sbtd_upgrade.snapshot(target), before)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o555)
+        self.assertEqual(list(target.parent.glob(".sbtd-migration-stage-*")), [])
+        sbtd_upgrade._execute_step(step, before)
+        self.assertEqual(sbtd_upgrade.snapshot(target), original)
+        self.assertEqual(target.stat().st_mode & 0o777, source.stat().st_mode & 0o777)
+        self.assertEqual(sbtd_upgrade.snapshot(source), original)
 
     # -- fixture helpers ----------------------------------------------------
 
@@ -1211,7 +1245,7 @@ class UpgradeEngineTests(unittest.TestCase):
         skills = self._skills_root()
         replaced = skills / "skill-a"
         replaced.mkdir()
-        (replaced / "SKILL.md").write_text("original bytes\n", encoding="utf-8")
+        (replaced / "SKILL.md").write_bytes(b"original bytes\n")
         agents_file = self.base / "agents-home" / "AGENTS.md"
         package = self._package(
             fixture={
@@ -1310,6 +1344,64 @@ class UpgradeEngineTests(unittest.TestCase):
                 recovery_plan, confirmed="1" * 64, receipt=None, package_root=None
             )
         self.assertEqual(wrong.exception.code, "confirmation-mismatch")
+
+    def test_interrupted_restore_with_retired_tree_cannot_be_reconciled(self):
+        plan, receipt, target, _agents, vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        with mock.patch("sbtd_migration_files.discard_withdrawn_directory",
+                        side_effect=ContractError("write-failed", "injected after publication")):
+            first = self._apply_recovery_local(recovery)
+        self.assertEqual(first["status"], "failed")
+        self.assertEqual((target / "SKILL.md").read_bytes(), b"original bytes\n")
+        with self.assertRaises(ContractError) as caught:
+            sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"], receipt=first)
+        self.assertEqual(caught.exception.code, "foreign-content-conflict")
+        details = caught.exception.details or {}
+        evidence_id = details["retained_evidence_id"]
+        document = json.loads((vault / f"recovery-preflight-{evidence_id}.json").read_bytes())
+        self.assertEqual(sbtd_upgrade._digest(document), evidence_id)
+        self.assertEqual(document["recovery_id"], recovery["recovery_id"])
+        self.assertEqual(document["plan_id"], plan["plan_id"])
+        self.assertEqual(document["retained_refs"], first["payload"]["failure"]["retained_refs"])
+        self.assertNotIn(".sbtd-recovery-retired-", json.dumps(details))
+        self.assertEqual((target / "SKILL.md").read_bytes(), b"original bytes\n")
+
+    def test_preflight_evidence_write_failure_returns_no_locator(self):
+        plan, receipt, target, _agents, vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        step = next(row for row in recovery["payload"]["steps"] if row["target"] == str(target))
+        held = sbtd_upgrade._recovery_retired_path(step)
+        held.mkdir()
+        with mock.patch.object(sbtd_upgrade, "_save_once", side_effect=OSError("vault full")), self.assertRaises(ContractError) as caught:
+            self._apply_recovery_local(recovery)
+        self.assertEqual(caught.exception.code, "foreign-content-conflict")
+        self.assertEqual(caught.exception.details, {"retained_evidence_unavailable": True})
+        self.assertEqual(list(vault.glob("recovery-preflight-*.json")), [])
+        self.assertTrue(held.is_dir())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX restore mode contract")
+    def test_completed_restore_retry_requires_root_permissions(self):
+        plan, receipt, target, _agents, _vault = self._recovery_batch()
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        first = self._apply_recovery_local(recovery)
+        self.assertEqual(first["status"], "complete")
+        different = (target.stat().st_mode & 0o777) ^ 0o020
+        target.chmod(different)
+        with self.assertRaises(ContractError):
+            self._apply_recovery_local(recovery, receipt=first)
+        self.assertEqual(target.stat().st_mode & 0o777, different)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX directory modes")
+    def test_remove_recovery_withdraws_new_readonly_directory(self):
+        target = self.base / "new-skill"
+        target.mkdir()
+        (target / "SKILL.md").write_bytes(b"installed only by upgrade")
+        target.chmod(0o555)
+        state = sbtd_upgrade.snapshot(target)
+        step = {"action": "remove", "step_id": "c" * 64, "target": str(target)}
+        sbtd_upgrade._execute_step(step, state)
+        self.assertFalse(target.exists())
+        self.assertEqual(list(self.base.iterdir()), [])
 
     def test_recovery_retry_is_idempotent(self):
         plan, receipt, replaced, agents_file, _vault = self._recovery_batch()
@@ -1536,12 +1628,16 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertEqual(recovered["status"], "complete")
         self.assertEqual((target / "SKILL.md").read_text(encoding="utf-8"), "original\n")
 
-    def test_recovery_resumes_after_remove_before_restore_copy(self):
+    def test_recovery_resumes_legacy_absent_target_after_restore_intent(self):
         plan, receipt, target, agents, _vault = self._recovery_batch()
         recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        def interrupt_old_restore(_backup, path, expected, *, scope, retired_path):
+            # A pre-cutover executor could stop after removal with its intent already persisted.
+            sbtd_upgrade.remove_reference(path, expected, scope=scope)
+            raise ContractError("write-failed", "injected legacy interruption", exit_code=3)
+
         with mock.patch.object(
-            sbtd_upgrade, "install_reference",
-            side_effect=ContractError("write-failed", "injected restore interruption", exit_code=3),
+            sbtd_upgrade, "restore_directory_reference", side_effect=interrupt_old_restore,
         ):
             failed = self._apply_recovery_local(recovery)
         self.assertEqual(failed["status"], "failed")
