@@ -477,6 +477,30 @@ class ParseSessionTests(unittest.TestCase):
         )
         self.assertEqual(event["provenance"]["observation_level"], "loaded")
 
+    def test_only_matching_explicit_user_denial_changes_a_failed_result(self) -> None:
+        call_id = "call-bbb|fc_2"
+        denied = {"toolCallId": call_id, "toolName": "bash", "approved": False, "reason": "denied by user"}
+        for decisions, expected in (
+            ([denied], "declined"),
+            ([{**denied, "reason": "no interactive UI available"}], "failed"),
+            ([{**denied, "toolName": "read"}], "failed"),
+            ([{**denied, "toolCallId": "other"}], "failed"),
+            ([denied, {**denied, "approved": True}], "failed"),
+        ):
+            with self.subTest(decisions=decisions):
+                lines = _fixture_lines()
+                pos = next(i for i, line in enumerate(lines) if json.loads(line).get("id") == "msg_result_2")
+                lines[pos:pos] = [
+                    _record({"type": "custom", "customType": "tool_approval_resolved", "data": data})
+                    for data in decisions
+                ]
+                self.path.write_text("\n".join(lines), encoding="utf-8")
+                result = next(
+                    e for e in self.parse().events
+                    if e["event_type"] == "invocation.finished" and e["correlation"]["invocation_id"] == call_id
+                )
+                self.assertEqual(result["state"]["current"], expected)
+
     def test_tool_result_maps_to_invocation_finished_with_duration(self) -> None:
         outcome = self.parse()
         finished = {
@@ -725,6 +749,25 @@ class SessionLeaseTests(unittest.TestCase):
         args = run.call_args.args[0]
         self.assertEqual(args[1:], ["session", "lease", "--json", "--", SESSION_ID])
 
+    def test_uncertain_lease_refuses_ingest_before_opening_store(self) -> None:
+        import subprocess
+        from unittest.mock import patch
+
+        for report in (
+            {"held": [], "unknown": [SESSION_ID]},
+            {"held": []},
+            {"held": [], "unknown": None},
+            {"held": [None], "unknown": []},
+        ):
+            with self.subTest(report=report), patch(
+                "omp_adapter.subprocess.run",
+                return_value=subprocess.CompletedProcess([], 0, json.dumps(report)),
+            ):
+                code, out = self._main()
+                self.assertEqual(code, 2)
+                self.assertIn("lease", json.loads(out)["error"])
+                self.assertFalse((self.home / "audit.db").exists())
+
     def test_unheld_session_ingests(self) -> None:
         from unittest.mock import patch
 
@@ -755,6 +798,7 @@ class SessionLeaseTests(unittest.TestCase):
         with patch("omp_adapter.subprocess.run", return_value=bad):
             code, out = self._main()
         self.assertEqual(code, 2)
+        self.assertIn("lease", json.loads(out)["error"])
         self.assertFalse((self.home / "audit.db").exists())
 
     def test_lease_nonzero_exit_fails_closed(self) -> None:

@@ -25,6 +25,8 @@ The Chinese and English changelogs are kept consistent version by version and en
 - Clean removable read-only content in installer-owned source workspaces without reporting a failed installation. Actual cleanup failures still retain their paths and transaction results.
 - Publish and replace read-only external Skill directories on Linux without making live installations writable. An incomplete migration runtime again returns a structured `blocked` response instead of a startup traceback.
 - Clean read-only subdirectories in private staging and verified retired Skill trees. Direct staging and commit calls reject linked paths before changing the target; CLI path resolution is unchanged. Native macOS CI now covers the external installer regression.
+- Refuse OMP session imports before opening the event store when the host cannot determine the target lease or returns incomplete lease metadata.
+- Distinguish an explicit user denial from an ordinary failed OMP tool result when the journal carries the matching approval decision. Existing stored events are not rewritten.
 
 
 ## v2.2.0-rc.1 (2026-11-13)

@@ -102,6 +102,7 @@ def query_held_session(
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise LeaseCheckError(f"omp session lease failed: {exc}") from exc
@@ -117,8 +118,13 @@ def query_held_session(
             f"omp session lease returned non-JSON output: {exc}"
         ) from exc
     held = payload.get("held") if isinstance(payload, dict) else None
-    if not isinstance(held, list):
-        raise LeaseCheckError("omp session lease output misses the held list")
+    unknown = payload.get("unknown") if isinstance(payload, dict) else None
+    if not isinstance(held, list) or not all(isinstance(value, str) for value in held):
+        raise LeaseCheckError("omp session lease output has an invalid held list")
+    if not isinstance(unknown, list) or not all(isinstance(value, str) for value in unknown):
+        raise LeaseCheckError("omp session lease output has an invalid unknown list")
+    if session_id in unknown:
+        raise LeaseCheckError("omp could not determine the target session's lease")
     return session_id in held
 
 
@@ -173,6 +179,7 @@ def parse_session_records(
     session_id: str | None = None
     host_version = "unknown"
     started: dict[str, tuple[str, str]] = {}  # toolCallId -> (timestamp, name)
+    denied_calls: set[str] = set()
     recorded_at = utc_now()
     for offset, line in lines:
         text = line.strip()
@@ -193,6 +200,16 @@ def parse_session_records(
                 session_id = record["id"]
             continue
         host_version = _host_version(record, host_version)
+        if record_type == "custom" and record.get("customType") == "tool_approval_resolved":
+            decision = record.get("data")
+            if isinstance(decision, dict):
+                call_id = decision.get("toolCallId")
+                start = started.get(call_id) if isinstance(call_id, str) else None
+                if start is not None and start[1] == decision.get("toolName"):
+                    if decision.get("approved") is False and decision.get("reason") == "denied by user":
+                        denied_calls.add(call_id)
+                    else:
+                        denied_calls.discard(call_id)
         if record_type != "message" or not isinstance(record.get("message"), dict):
             records_skipped += 1
             continue
@@ -254,6 +271,7 @@ def parse_session_records(
                             )
                         )
                 started[call_id] = (occurred_at or "", name)
+                denied_calls.discard(call_id)
                 events.append(
                     base_event(
                         event_type="invocation.started",
@@ -287,6 +305,10 @@ def parse_session_records(
             failed = message.get("isError") is True
             measurement = None
             start = started.get(call_id)
+            result = "failed" if failed else "succeeded"
+            if failed and call_id in denied_calls and start is not None and start[1] == message.get("toolName"):
+                result = "declined"
+            denied_calls.discard(call_id)
             if start is not None and start[0] and occurred_at:
                 try:
                     duration = _parse_instant_ms(occurred_at) - (
@@ -322,7 +344,7 @@ def parse_session_records(
                         # previous=running only when this session observed the
                         # start; an orphan result must not invent it.
                         "previous": "running" if start is not None else None,
-                        "current": "failed" if failed else "succeeded",
+                        "current": result,
                     },
                     measurement=measurement,
                     correlation={"invocation_id": call_id, "attempt_id": "1"},
