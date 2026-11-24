@@ -7,9 +7,9 @@ mode_note: rc.2 PRD；用户授权从任务 2 合入后的 main 开始任务 3�
 status: "blocked"
 branch: test/v2.2.0-rc.2-host-behavior
 created_at: '2026-11-24T16:35:41.545526+08:00'
-updated_at: "2026-11-24T16:41:39.990741+08:00"
+updated_at: "2026-11-24T16:59:16.609066+08:00"
 completed_at: null
-"blocked_reason": "当前 Astra 会话：任务 3 的新隔离 CODEX_HOME 未登录；按认证停止条件关闭 /loop，待本域受控官方认证。"
+"blocked_reason": "当前 Astra 会话：Codex 隔离真实调用及审批／失败／中断已验证；OMP 独立域尚无可用模型，已关闭循环，等待用户完成本域官方认证。"
 ---
 # 任务 3：新版基础行为与最小兼容调整
 
@@ -37,3 +37,5 @@ completed_at: null
 |---|---|---|---|---|
 | 2026-11-24T16:37:53.200209+08:00 | planned | in-progress | 当前 Astra 会话：开始任务 3，隔离预检及固定宿主行为验收。 | main b0958078cf8e9d31739bef9cf17e76973f2dfee3 CI 45354457553 13/13 通过，任务 2 本地及远端分支已清除。固定版 OMP 19.1.0（发行制品 SHA256 已校验）、Codex 0.171.0、Bun 1.4.4；原会话 CLI 19.1.1 保留不动。临时域 /Users/lusonglin/TEMP/640-skills-rc2-task3.IL73xkq4，未复制认证。 |
 | 2026-11-24T16:41:39.990741+08:00 | in-progress | blocked | 当前 Astra 会话：任务 3 的新隔离 CODEX_HOME 未登录；按认证停止条件关闭 /loop，待本域受控官方认证。 | 固定 OMP 19.1.0、Codex CLI 0.171.0、Bun 1.4.4；已验证 OMP 临时配置读取、Codex app-server config/read 与空 MCP 配置。codex login status：exit 1，Not logged in；原交互终端确认 Loop mode disabled。详见 reports/preflight.json 与 preflight.md。没有复用凭据、发起模型调用或变更全局信任。 |
+| 2026-11-24T16:50:20.739682+08:00 | blocked | in-progress | 当前 Astra 会话：用户已授权的任务 3 隔离 Codex 官方登录完成，解除该认证阻断。 | 同一临时 CODEX_HOME 的 codex login 与 login status 均 exit 0；仅保留脱敏回执 reports/codex-login.json。未启动 OMP 登录、模型请求或 /loop。 |
+| 2026-11-24T16:59:16.609066+08:00 | in-progress | blocked | 当前 Astra 会话：Codex 隔离真实调用及审批／失败／中断已验证；OMP 独立域尚无可用模型，已关闭循环，等待用户完成本域官方认证。 | Codex 0.171.0：read_fixture 成功与 ENOENT、原生 cksum 审批 decline 与一次性 accept/exit 0、turn/interrupt ACK 和 interrupted；host exit 0。OMP 19.1.0 不可读取 Codex 凭据；只读尝试 exit 1、无工具事件，官方 models 目录为 0 并提示配置认证。见 reports/codex-turns.jsonl、codex-turns.md、omp-readiness.json、omp-readiness.md。未启动 OMP 登录、未推送。 |
