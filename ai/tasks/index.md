@@ -91,6 +91,7 @@
 - [v2.2.0-rc.1-host-gate-omp-18190](v2.2.0-rc.1-host-gate-omp-18190/task.md)
 - [v2.2.0-rc.1-omp-session-parse](v2.2.0-rc.1-omp-session-parse/task.md)
 - [v2.2.0-rc.2-baseline](v2.2.0-rc.2-baseline/task.md)
+- [v2.2.0-rc.2-host-behavior](v2.2.0-rc.2-host-behavior/task.md)
 - [v2.2.0-rc.2-license](v2.2.0-rc.2-license/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
