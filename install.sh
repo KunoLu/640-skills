@@ -1269,7 +1269,7 @@ show_plan_and_execute() {
   color '1;36' 'Final plan'
   printf '\n'
   if [[ "$PROJECTS_ONLY" -eq 0 ]]; then
-    run_onboard plan ${common[@]+"${common[@]}"}
+    run_onboard plan ${common[@]+"${common[@]}"} --action "$ACTION"
   else
     printf 'Project-only mode will run init-projects without global writes.\n'
   fi

@@ -292,6 +292,7 @@ Normal plan/init/reset:
 ```bash
 python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --json
 python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --yes
+python scripts/onboard.py plan --action reset --platform codex --projects-root /abs/one,/abs/two --json
 python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --yes
 ```
 

@@ -17,6 +17,7 @@ sys.path.insert(0, str(PACKAGE / "scripts"))
 
 import onboard
 import sbtd_graft_deployment as deployment
+from onboard_contracts import ContractError
 from sbtd_migration_files import snapshot
 
 from tests.test_sbtd_graft_isolation import _git_repo
@@ -39,6 +40,8 @@ class GlobalMcpInstallationTests(unittest.TestCase):
             "HOME": str(self.home), "USERPROFILE": str(self.home),
             "CODEX_HOME": str(self.home / ".codex"),
             "AGENT_SKILLS_DIR": str(self.skills),
+            "PI_CONFIG_DIR": ".omp", "PI_CODING_AGENT_DIR": "",
+            "OMP_PROFILE": "", "PI_PROFILE": "",
         }
         self.runtime = {
             "node": str(self.base / "runtime/node"),
@@ -58,12 +61,174 @@ class GlobalMcpInstallationTests(unittest.TestCase):
         }))
         return path
 
-    def arguments(self, approval=None, *, mode="reset", extra=()):
-        argv = [mode, "--platform", "codex", "--global-skills-dir", str(self.skills),
-                "--projects-root", str(self.project), "--skip-project-agents", "--json", "--yes"]
+    def arguments(
+        self, approval=None, *, mode="reset", platform="codex", with_project=True,
+        extra=(),
+    ):
+        argv = [mode, "--platform", platform, "--global-skills-dir", str(self.skills)]
+        if with_project:
+            argv += ["--projects-root", str(self.project)]
+        argv += ["--skip-project-agents", "--json", "--yes"]
         if approval is not None:
             argv += ["--graft-retire-legacy", "--graft-legacy-bindings", str(approval)]
         return onboard.build_parser().parse_args([*argv, *extra])
+
+    def run_cli(self, mode, args, *, runtime_error=None):
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, self.environment),
+            mock.patch.object(
+                deployment,
+                "verified_runtime",
+                return_value=self.runtime,
+                side_effect=runtime_error,
+            ) as runtime,
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            code = onboard.run(mode, args)
+        return code, json.loads(output.getvalue()), runtime
+
+    def host_target(self, platform):
+        return (
+            self.home / ".codex/config.toml"
+            if platform == "codex"
+            else self.home / ".omp/agent/mcp.json"
+        )
+
+    def isolate_host_home(self, platform):
+        self.home = self.base / f"home-{platform}"
+        self.home.mkdir()
+        self.skills = self.home / ".agent/skills"
+        self.installed = self.skills / "sbtd-workflow-onboard"
+        shutil.copytree(PACKAGE, self.installed)
+        self.environment.update({
+            "HOME": str(self.home),
+            "USERPROFILE": str(self.home),
+            "CODEX_HOME": str(self.home / ".codex"),
+            "AGENT_SKILLS_DIR": str(self.skills),
+        })
+
+    def test_reset_action_previews_exact_host_write_without_writing(self):
+        for platform in ("codex", "omp"):
+            with self.subTest(platform=platform):
+                self.isolate_host_home(platform)
+                target = self.host_target(platform)
+                args = self.arguments(
+                    mode="plan",
+                    platform=platform,
+                    with_project=False,
+                    extra=("--action", "reset"),
+                )
+                before = snapshot(self.base)
+                code, preview, runtime = self.run_cli("plan", args)
+
+                self.assertEqual(code, 0, preview)
+                self.assertEqual(preview["plannedAction"], "reset")
+                wiring = preview["graftWiring"]
+                self.assertEqual(wiring["status"], "planned", wiring)
+                self.assertEqual(wiring["roots"], [])
+                preview_targets = [
+                    operation["target"]
+                    for operation in wiring["sharedOperations"]
+                ]
+                preview_resources = [
+                    operation["resource_id"]
+                    for operation in wiring["sharedOperations"]
+                ]
+                self.assertEqual(preview_targets, [str(target)])
+                runtime.assert_called_once_with()
+                self.assertEqual(snapshot(self.base), before)
+                self.assertFalse(target.exists())
+
+                reset_args = self.arguments(
+                    mode="reset", platform=platform, with_project=False
+                )
+                code, applied, _ = self.run_cli("reset", reset_args)
+                self.assertEqual(code, 0, applied)
+                actual_resources = [
+                    operation["resource_id"]
+                    for operation in applied["graftWiring"]["operationResults"]
+                ]
+                self.assertEqual(actual_resources, preview_resources)
+                self.assertTrue(target.is_file())
+                servers_key = "mcp_servers" if platform == "codex" else "mcpServers"
+                document = (
+                    tomllib.loads(target.read_text(encoding="utf-8"))
+                    if platform == "codex"
+                    else json.loads(target.read_bytes())
+                )
+                self.assertEqual(set(document[servers_key]), {"sbtd-graft"})
+
+    def test_default_plan_and_init_do_not_wire_global_host_without_project(self):
+        for platform in ("codex", "omp"):
+            self.isolate_host_home(platform)
+            target = self.host_target(platform)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            original = (
+                b'model = "keep-user-model"\n'
+                if platform == "codex"
+                else b'{"mcpServers": {"foreign": {"command": "/foreign/server"}}}\n'
+            )
+            target.write_bytes(original)
+            for mode in ("plan", "init"):
+                with self.subTest(platform=platform, mode=mode):
+                    args = self.arguments(
+                        mode=mode, platform=platform, with_project=False
+                    )
+                    before = snapshot(self.base)
+                    code, result, runtime = self.run_cli(mode, args)
+
+                    self.assertEqual(code, 0, result)
+                    self.assertNotIn("graftWiring", result)
+                    runtime.assert_not_called()
+                    self.assertEqual(target.read_bytes(), original)
+                    if mode == "plan":
+                        self.assertEqual(result["plannedAction"], "init")
+                        self.assertEqual(snapshot(self.base), before)
+
+    def test_reset_action_failures_and_no_mcp_never_claim_host_targets(self):
+        cases = [
+            ("no-mcp", ("--no-mcp",), AssertionError("runtime must not be probed"), 0, None),
+            (
+                "unavailable",
+                (),
+                ContractError("runtime-unavailable", "runtime unavailable"),
+                0,
+                "not-available",
+            ),
+            ("error", (), OSError("runtime probe failed"), 2, "blocked"),
+        ]
+        for platform in ("codex", "omp"):
+            self.isolate_host_home(platform)
+            for name, extra, error, expected_code, status in cases:
+                with self.subTest(platform=platform, case=name):
+                    target = self.host_target(platform)
+                    args = self.arguments(
+                        mode="plan",
+                        platform=platform,
+                        with_project=False,
+                        extra=("--action", "reset", *extra),
+                    )
+                    before = snapshot(self.base)
+                    code, result, runtime = self.run_cli(
+                        "plan", args, runtime_error=error
+                    )
+
+                    self.assertEqual(code, expected_code, result)
+                    self.assertEqual(result["plannedAction"], "reset")
+                    wiring = result.get("graftWiring")
+                    if status is None:
+                        self.assertIsNone(wiring)
+                        runtime.assert_not_called()
+                    else:
+                        self.assertEqual(wiring["status"], status, wiring)
+                        runtime.assert_called_once_with()
+                    self.assertNotIn("sharedOperations", wiring or {})
+                    self.assertIsNone((wiring or {}).get("codexHome"))
+                    self.assertIsNone((wiring or {}).get("ompHome"))
+                    self.assertEqual(snapshot(self.base), before)
+                    self.assertFalse(target.exists())
 
     def test_reset_refuses_approval_inside_installed_skill_before_any_write(self):
         for skill in ("sbtd-workflow-onboard", "sbtd-task"):

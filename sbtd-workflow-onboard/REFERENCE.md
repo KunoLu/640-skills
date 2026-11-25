@@ -723,6 +723,8 @@ Ordinary Python `init` with `--platform codex|omp` no longer selects global Graf
 
 `graftWiring` in default `check` and `plan` is read-only installation feasibility for the selected project-local scope, not a health certificate for the currently installed project instructions or a global MCP mutation plan. Explicit wiring options retain their own validation. When project AGENTS replacement is selected, pre-render the canonical template that would be backed up/applied by the later confirmed install; `--skip-project-agents` instead validates the current file. `status=planned` never authorizes a write or claims the current bytes were repaired. Root installers use the same preflight before installation.
 
+For a reset preview, use `plan --action reset` with the same platform, roots and options as the intended `reset`. The command remains read-only (`mode: plan`); `plannedAction` identifies the action. When Graft wiring is planned, the human-readable plan lists each `host resource` path from `graftWiring.sharedOperations`. Both root installers display this plan before asking for reset confirmation. Omitting `--action` previews `init`.
+
 OMP plugin MCP manifests are not modeled by this installer. The global-wiring preflight conservatively rejects any discovered installed-plugin registry, including Claude configuration overrides, OMP base/profile/XDG data roots and the nearest selected-project registry. This guard does not depend only on an explicit `claude-plugins` user opt-in: the pinned host can load OMP-origin and project plugin roots by default. No registry is rewritten or plugin executed.
 
 `reset` and explicitly authorized global wiring merge one stable global `sbtd-graft` server into the effective host configuration domain, with absolute installed runtime/launcher arguments and neither a fixed `cwd` nor a project `--root`. Ordinary `init` and `init-projects` do not add another server or change an existing one. Foreign configuration is preserved and conflicting managed definitions block in contexts that actually wire the host. Project-only setup writes no HOME, global Skill or MCP/hook configuration. Existing AGENTS mirror policy remains separate from OMP MCP wiring; sealed migration lists its shared writes before confirmation.
@@ -837,6 +839,7 @@ python scripts/onboard.py check --projects-root /abs/one,/abs/two
 python scripts/onboard.py check-projects --projects-root /abs/one,/abs/two
 python scripts/onboard.py plan --platform codex --projects-root /abs/one,/abs/two --json
 python scripts/onboard.py init --platform codex --projects-root /abs/one,/abs/two --yes
+python scripts/onboard.py plan --action reset --platform codex --projects-root /abs/one,/abs/two --json
 python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/two --yes
 python scripts/onboard.py init-projects --platform codex --projects-root /abs/one,/abs/two --yes
 ```

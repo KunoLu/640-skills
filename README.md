@@ -214,8 +214,8 @@ These prompts map to the [implemented upgrade and recovery commands](sbtd-workfl
 **Use reset only when you intend to replace Skill content:**
 
 ```text
-Use the reviewed v2 sbtd-workflow-onboard package to plan reset for platform codex
-and /abs/project. I want project AGENTS.md rewritten, subject to the displayed plan.
+Preview the reviewed v2 package with `plan --action reset --platform codex --projects-root /abs/project`.
+I want project AGENTS.md rewritten, subject to the displayed plan. Plain `plan` previews init, not reset.
 Verify the package revision and interpreter dependencies. Explain that bundled Skills
 will be overwritten without backup and required external Skills reinstalled.
 Identify custom Skill content; if I need it preserved, stop for a separately approved backup

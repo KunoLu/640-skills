@@ -7,7 +7,7 @@ mode_note: 用户授权 main CI 全绿后按已确认 PRD 推进任务 5；§4 �
 status: "checking"
 branch: feat/v2.2.0-rc.2-graft-retirement
 created_at: '2026-11-25T10:04:13.021586+08:00'
-updated_at: "2026-11-25T11:32:59.263646+08:00"
+updated_at: "2026-11-25T12:25:43.060930+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -39,3 +39,5 @@ completed_at: null
 | 2026-11-25T11:17:34.072623+08:00 | in-progress | blocked | 当前 Astra 会话：新安装默认不再生成 Graft 接线未通过。两个现场条目仍保留；本轮只验证，未更改生产安装逻辑。 | 四个独立空 HOME，未传 --no-mcp。生产 init 两端均 exit 0、包已安装，0.30.1 与 pin 0.29.0 不符，not-available 而无接线。仅替换 verified_runtime 返回值的可用分支对照中，两端均 success，在对应 MCP 配置实际生成 sbtd-graft。不是原生 0.29.0 全链；未运行真实宿主。详见 reports/fresh-init/results.json、results.md 与私有证据包。 |
 | 2026-11-25T11:19:58.863655+08:00 | blocked | in-progress | 当前 Astra 会话：用户授权修改普通 init 的默认全局 Graft 接线，不访问两个现场条目；在全新隔离 HOME 复验。 | Legacy Safety characterized：上一轮可用运行时条件对照两端都创建了条目。Refactoring proceed：在共用规划器界定默认和显式分支，不改接口。DDIA confirmed / migration：不写入或回填既有宿主配置，无 schema 变化。保留有根项目准备、reset 及显式 hooks、legacy 和 sealed migration。 |
 | 2026-11-25T11:32:59.263646+08:00 | in-progress | checking | 当前 Astra 会话：普通 init 默认不接线已修正，两端隔离复验通过，进入本地检查点；真实未知项仍保留。 | 默认 init/check/plan 不产生全局 Graft MCP 操作，带根项目保留本地图与围栏；reset、显式 hooks/legacy、迁移上下文分别处理。六个隔离 HOME 安装成功，空配置不创建，预置 MCP 与 hook 原字节、inode/模式/mtime 不变；可用条件对照不触发接线运行时探测。六模块 65/65、双语契约及定向 Ruff 通过；首轮 Bash 临时文件沙箱失败单列保留。见 reports/init-default-fix/smoke.json、regression-final.log、docs.json、同 stem 中文汇总和 fresh-home-proof.zip。Release Readiness：本地通过，精确提交内审、独审、远端 CI 与发布仍未完成；真实现场未读写，未改变旧回执指纹门。 |
+| 2026-11-25T12:17:36.246057+08:00 | checking | in-progress | 当前 Astra 会话：a9d18a3 原生内审 CHANGES_REQUESTED；用户指定本轮修复 P1 reset 确认前预览漏报宿主目标。 | Bash/PowerShell 在批准前传 plan 而后执行 reset。Legacy characterized；Refactoring proceed：传入选定动作并复用规划；DDIA confirmed：只读预览，不改持久数据格式或实际授权。普通 init 及真实双端条目保持不动；P2 文档项单列，不作为本次已修复。 |
+| 2026-11-25T12:25:43.060930+08:00 | in-progress | checking | 当前 Astra 会话：完成指定 P1 reset 最终预览修正，冻结本地检查点；普通 init 行为不变。 | Bash 和 PowerShell 最终计划按选定动作调用只读 plan --action init&#124;reset；未指定默认 init。文本列出实际宿主目标，JSON 保持 mode=plan。两平台隔离预览零写，确认后 reset 实际资源 ID 与路径一致；Bash/Codex 和 PowerShell/OMP 拒绝确认后目标均不存在。可用 runtime 为显式测试条件，不冒称原生 0.29.0。六模块 72/72，目标 Ruff/Bash 检查通过，首次 Bash 驱动加载失败单列。见 reports/reset-preview/smoke.json、regression.log 和同 stem 中文汇总。双语 README/CHANGELOG 和版本检查影响参考同步；监控 prompt 主体与 live 配置未改。不认领此前两项 P2 文档修复；新 SHA 复审、独审、CI 和现场清理均未完成。 |

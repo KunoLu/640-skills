@@ -205,6 +205,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         platform: str = "codex",
         yes: bool = True,
         no_mcp: bool = True,
+        dry_run: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         project_args = (
             ("--init-projects", str(self.project_root))
@@ -221,6 +222,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             optional_args.append("--yes")
         if no_mcp:
             optional_args.append("--no-mcp")
+        if dry_run:
+            optional_args.append("--dry-run")
         return subprocess.run(
             (
                 "/bin/bash",
@@ -449,6 +452,34 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertEqual(modes[0], "check-agent-cli")
         self.assertLess(modes.index("check-agent-cli"), modes.index("check"))
         self.assertIn("reset", modes)
+
+    def test_final_plan_forwards_selected_action_before_separate_execution(self) -> None:
+        for action, dry_run in (("init", False), ("reset", False), ("reset", True)):
+            with self.subTest(action=action, dry_run=dry_run):
+                self.log_path.write_text("", encoding="utf-8")
+                self.args_log_path.write_text("", encoding="utf-8")
+
+                completed = self.run_installer(action=action, dry_run=dry_run)
+
+                self.assertEqual(
+                    completed.returncode, 0, completed.stderr or completed.stdout
+                )
+                invocations = [line.split() for line in self.invocation_args()]
+                plan = next(args for args in invocations if args[1:2] == ["plan"])
+                self.assertEqual(plan.count("--action"), 1)
+                self.assertEqual(plan[plan.index("--action") + 1], action)
+                self.assertIn("--no-mcp", plan)
+                modes = self.modes()
+                if dry_run:
+                    self.assertNotIn(action, modes)
+                    self.assertIn("Dry run: skipped onboard reset writes.", completed.stdout)
+                else:
+                    execution = next(
+                        args for args in invocations if args[1:2] == [action]
+                    )
+                    self.assertNotIn("--action", execution)
+                    self.assertEqual(execution[-1], "--yes")
+                    self.assertLess(modes.index("plan"), modes.index(action))
 
     def test_agent_platform_is_forwarded_to_onboarding_operations(
         self,
@@ -1269,7 +1300,11 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertFalse(self.log_path.exists())
 
     def run_powershell_installer(
-        self, runtime: str, environment: dict[str, str]
+        self,
+        runtime: str,
+        environment: dict[str, str],
+        action: str = "init",
+        dry_run: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
@@ -1285,11 +1320,12 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "-ProjectsRoot",
                 str(self.project_root),
                 "-Action",
-                "init",
+                action,
                 "-SkipProjectAgents",
                 "-NoMcp",
                 "-NoColor",
                 "-Yes",
+                *(["-DryRun"] if dry_run else []),
             ],
             env=environment,
             capture_output=True,
@@ -1299,6 +1335,43 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             timeout=60,
             check=False,
         )
+
+    def test_powershell_final_plan_forwards_normalized_action_before_execution(
+        self,
+    ) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        for supplied_action, action, dry_run in (
+            ("init", "init", False),
+            ("Reset", "reset", False),
+            ("reset", "reset", True),
+        ):
+            with self.subTest(action=supplied_action, dry_run=dry_run):
+                self.log_path.write_text("", encoding="utf-8")
+                self.args_log_path.write_text("", encoding="utf-8")
+
+                completed = self.run_powershell_installer(
+                    runtime, environment, action=supplied_action, dry_run=dry_run
+                )
+
+                self.assertEqual(
+                    completed.returncode, 0, completed.stderr or completed.stdout
+                )
+                invocations = [line.split() for line in self.invocation_args()]
+                plan = next(args for args in invocations if args[1:2] == ["plan"])
+                self.assertEqual(plan.count("--action"), 1)
+                self.assertEqual(plan[plan.index("--action") + 1], action)
+                self.assertIn("--no-mcp", plan)
+                modes = self.modes()
+                if dry_run:
+                    self.assertNotIn(action, modes)
+                    self.assertIn("Dry run: skipped onboard reset writes.", completed.stdout)
+                else:
+                    execution = next(
+                        args for args in invocations if args[1:2] == [action]
+                    )
+                    self.assertNotIn("--action", execution)
+                    self.assertEqual(execution[-1], "--yes")
+                    self.assertLess(modes.index("plan"), modes.index(action))
 
     def test_powershell_blocks_on_ponytail_provider_conflict(self) -> None:
         runtime, environment = self.powershell_fake_onboard_environment()

@@ -209,8 +209,8 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 **只有明确要替换 Skill 内容时才使用 reset：**
 
 ```text
-请使用已审阅的 v2 sbtd-workflow-onboard，为平台 codex 和 /abs/project 制定 reset 计划。
-我需要重写项目级 AGENTS.md，但须先看到实际计划并确认。
+请用已审阅的 v2 包运行 `plan --action reset --platform codex --projects-root /abs/project`。
+我需要重写项目级 AGENTS.md，但须先看计划并确认。普通 `plan` 预览的是 init，不是 reset。
 核对包 revision 和解释器依赖；说明 bundled Skills 会无备份覆盖、
 required external Skills 会重装。识别定制 Skill 内容；如果我需要保留，
 停下来另行确认备份，或建议改用 upgrade。

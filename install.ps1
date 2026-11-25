@@ -544,6 +544,7 @@ function Resolve-InteractiveInputs {
     if (-not $Action) {
       $script:Action = Select-One "Onboard action:" @("init", "reset")
     }
+    $script:Action = $Action.ToLowerInvariant()
   }
 
   if ($ProjectsRoot) {
@@ -1038,7 +1039,7 @@ function Show-PlanAndExecute {
   Write-Host ""
   Write-Colored "Final plan" Cyan
   if (-not $script:ProjectsOnly) {
-    Invoke-Onboard "plan" $common
+    Invoke-Onboard "plan" ($common + @("--action", $Action))
   }
   else {
     Write-Host "Project-only mode will run init-projects without global writes."
