@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-glossary
 workflow_mode: strict
 mode_source: user
 mode_note: 用户授权在任务 5 合入后按已确认的三文件范围推进任务 6；PRD §4 要求 strict。
-status: "checking"
+status: "done"
 branch: docs/v2.2.0-rc.2-glossary
 created_at: '2026-11-25T14:43:37.562879+08:00'
-updated_at: "2026-11-25T15:17:42.634552+08:00"
-completed_at: null
+updated_at: "2026-11-25T16:31:19.451022+08:00"
+completed_at: "2026-11-25T16:31:19.451022+08:00"
 ---
 # 任务 6：自有入口术语表约定
 
@@ -28,3 +28,4 @@ completed_at: null
 | 2026-11-25T14:49:16.662530+08:00 | in-progress | checking | 当前 Astra 原会话：三份自有规则本地验收完成；有界循环已关闭，冻结分支交内置复审。 | 三入口均优先尊重项目约定，否则使用根 GLOSSARY.md。旧 CONTEXT 仅作只读证据，先提取建议及差异，经明确确认才应用。三次无工具读者调用共 9/9 判断符合预期（不是宿主写保护），既有方法与 DDD 契约 2/2；夹具前后摘要不变，无既有文件迁移、无第三方或生效路径变更。见 reports/reader.json、contracts.log 及同 stem 中文汇总。未推送、未外审或发布。 |
 | 2026-11-25T15:16:15.334747+08:00 | checking | in-progress | 当前 Astra 会话：收到 80d2bf5 整分支内审两项 P2，用户授权修正文档并复审新提交。 | 限定 DDD 决策晋升条件和任务 5 结案正文，不改变其历史事件或现场授权。 |
 | 2026-11-25T15:17:42.634552+08:00 | in-progress | checking | 当前 Astra 会话：两项 P2 文档修正完成本地验收，冻结新提交复审。 | DDD 明确仅稳定且跨任务的领域决策可提升到 ADR 或 docs/spec，其余在任务级材料。1 次无工具读者调用四类判定 4/4，两个既有规则契约测试 2/2。任务 5 正文与 done、PR #227 合入及保留现场一致，历史事件逐字未变。见 reports/review-fix/reader.json、check.log 与同 stem 中文汇总。无 CONTEXT 迁移、同步、推送或新 SHA 外审／CI 结论。 |
+| 2026-11-25T16:31:19.451022+08:00 | checking | done | 当前 Astra 会话：任务 6 两项 P2 已关闭，PR #228 已合入，独审 CLEAN 与精确主线 CI 核验完成。 | {"clean_sha": "90bb80ddee63a1d625aebf6f4a81ce27693d5bc2", "ci_run": "45570440726", "pr": 228, "main_sha": "479095dc21747ffa471898fe6a2ac92f233edcfe", "main_ci_run": "45573097426", "pr_jobs_passed": 13, "main_jobs_passed": 13, "external": "user-reported CLEAN", "receipt": "reports/closeout-228/"} |
