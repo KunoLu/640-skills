@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-graft-retirement
 workflow_mode: strict
 mode_source: user
 mode_note: 用户授权 main CI 全绿后按已确认 PRD 推进任务 5；§4 要求 strict。
-status: "checking"
+status: "done"
 branch: feat/v2.2.0-rc.2-graft-retirement
 created_at: '2026-11-25T10:04:13.021586+08:00'
-updated_at: "2026-11-25T13:11:03.147864+08:00"
-completed_at: null
+updated_at: "2026-11-25T14:42:37.617205+08:00"
+completed_at: "2026-11-25T14:42:37.617205+08:00"
 "blocked_reason": null
 ---
 # 任务 5：替代检索验收后退役 Graft
@@ -23,7 +23,7 @@ completed_at: null
 
 ## 工程与验证门禁
 
-首次盘点仅做只读检查。安装器修复已通过本地验证，现处于提交复审阶段（`checking`）。Codex 和 OMP 的两个真实 `sbtd-graft` 条目继续保留，未授权现场清除。
+任务 5 已完成（`done`）：首次盘点为只读检查；安装器修复经本地验证、内审和外部独审后，通过 PR #227 合入 `main`，合入后的主线 CI 全绿。完成的是安装策略修复和隔离验收，不是现场退役；Codex 和 OMP 的两个真实 `sbtd-graft` 条目继续保留，未授权清除。
 
 strict：生产编辑前完成 Legacy Change Safety、Refactoring；持久配置的迁移证据和可回退设计须经 DDIA、migration。验证用任务 5 私有 TEMP 合成配置，不沿用任务 4 凭据或环境；精确 SHA 内置 `/review`、外审、CI 分别记录。当前主会话 Astra，精确调用次数未知。未完整调用 grill-with-docs：输入、归属门和负例已由 PRD 明定；不把无法证明的归属作为需求假设。
 
@@ -49,3 +49,4 @@ strict：生产编辑前完成 Legacy Change Safety、Refactoring；持久配置
 | 2026-11-25T12:52:35.369573+08:00 | in-progress | checking | 当前 Astra 会话：四项 P2 返修本地验收通过，按用户要求继续冻结并执行新的整分支内审。 | 普通 init 无 Graft 仍含实际文件回执，部分失败 exit 3 如实列出 1 个失败和 14 个成功。Bash/PowerShell 对真实旧 source-root 均在解析门禁退出 1，未创建宿主配置；新版和绕行入口有回归。双语步骤分别指定写入凭证、新建与替换；每次退役后封存存在性／摘要／权限绑定备份，拒绝覆盖漂移。4 模块 81/81，首轮测试断言折行与 Bash 夹具失败均保留。证据见 reports/four-p2/acceptance.json、acceptance.md 和 regression-final.log。README、README.zh、两份 CHANGELOG 及版本检查影响参考已同步；监控 prompt 主体和 pin 未变。未碰真实现场、未推送，待新 SHA 内审、独审与远端 CI。 |
 | 2026-11-25T13:08:18.484022+08:00 | checking | in-progress | 当前 Astra 会话：f4d212b 整分支原生内审 CHANGES_REQUESTED；用户授权修复 Bash/PowerShell 能力探针调用目录导入问题。 | Legacy characterized；Refactoring proceed：启动解释器即隔离，仅加入已选 scripts；保留 -B、只解析两种动作及旧源提前拒绝。只在任务私有域验收，不读写真实宿主。 |
 | 2026-11-25T13:11:03.147864+08:00 | in-progress | checking | 当前 Astra 会话：双端能力探针导入隔离修正已完成本地验证，冻结提交交整分支复审。 | Bash/PowerShell 以 -IB 启动只读解析器探针，保留选定 scripts；从含空 pathlib.py 的合成 cwd 启动，兼容源可达 dry-run 计划，旧源仍在后续动作前被拒绝。两模块 53/53 通过，Bash 语法及定向 Ruff 通过。见 reports/probe-import/regression.log 及同 stem 中文汇总。双语 CHANGELOG 与 REFERENCE 已更新；README、监控 prompt 和 pin 无契约变更，未同步。无真实宿主访问，无 Windows 实机、独审、CI 或发布结论。 |
+| 2026-11-25T14:42:37.617205+08:00 | checking | done | 当前 Astra 会话：受审安装策略与隔离验收范围已合入并通过 main CI；用户指定的两个真实宿主条目继续保留，未执行现场退役。 | {"clean_sha": "9b769db59199454aac2d848c5d854cfae2ea8149", "ci_run": "45558564713", "pr": 227, "main_sha": "4cc41d2fb0d9ebfea1a85c5be1eb18af9239e334", "main_ci_run": "45560137911", "pr_jobs_passed": 13, "main_jobs_passed": 13, "external": "user-reported CLEAN", "live_retirement": false, "receipt": "reports/closeout-227/"} |
