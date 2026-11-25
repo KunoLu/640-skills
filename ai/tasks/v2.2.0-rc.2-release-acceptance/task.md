@@ -4,11 +4,12 @@ id: v2.2.0-rc.2-release-acceptance
 workflow_mode: strict
 mode_source: user
 mode_note: 用户要求主线 CI 全绿后继续原计划；执行 rc.2 PRD 任务 7，strict。
-status: "in-progress"
+status: "blocked"
 branch: test/v2.2.0-rc.2-release-acceptance
 created_at: '2026-11-25T16:32:34.200219+08:00'
-updated_at: "2026-11-25T16:32:46.160196+08:00"
+updated_at: "2026-11-25T16:36:49.662161+08:00"
 completed_at: null
+"blocked_reason": "当前 Astra 会话：已完成本轮固定提交归档、隔离安装、升级回退与离线回归；新认证域尚不能执行固定宿主矩阵，停止宿主路径，不启动循环。"
 ---
 # 任务 7：统一回归与真实分发／安装许可验收
 
@@ -27,3 +28,4 @@ completed_at: null
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-11-25T16:32:46.160196+08:00 | planned | in-progress | 当前 Astra 会话：从任务 6 已通过主线 CI 的提交启动任务 7，先验分发及本地回归。 | 任务 6 本地及远端开发分支已清理，冻结提交和 CI 回执已保全；新隔离目录 640-skills-rc2-task7.niFnD51H。不复用历史成功报告或其他任务凭据。 |
+| 2026-11-25T16:36:49.662161+08:00 | in-progress | blocked | 当前 Astra 会话：已完成本轮固定提交归档、隔离安装、升级回退与离线回归；新认证域尚不能执行固定宿主矩阵，停止宿主路径，不启动循环。 | GitHub 主线源码归档 479095dc 的 19 项安装／重装、23 个通知原字节、1512 项 Phosphor 通过；真实 upgrade plan 冲突 exit 2、裁决 plan/apply exit 0，批次失败恢复旧 inode 及通知。归档回归 156 通过 6 跳过；适配器和存储 70 通过。新 CODEX_HOME login status exit 1 Not logged in；PATH OMP=19.1.1 不能替代 19.1.0。见 reports/checkpoint.json 和同 stem 中文汇总。待任务 7 独立认证及精确宿主验收，未进入任务 8、未发布。 |
