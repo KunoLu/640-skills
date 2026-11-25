@@ -7,7 +7,7 @@ mode_note: 用户授权 main CI 全绿后按已确认 PRD 推进任务 5；§4 �
 status: "checking"
 branch: feat/v2.2.0-rc.2-graft-retirement
 created_at: '2026-11-25T10:04:13.021586+08:00'
-updated_at: "2026-11-25T12:25:43.060930+08:00"
+updated_at: "2026-11-25T12:29:15.652748+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -41,3 +41,5 @@ completed_at: null
 | 2026-11-25T11:32:59.263646+08:00 | in-progress | checking | 当前 Astra 会话：普通 init 默认不接线已修正，两端隔离复验通过，进入本地检查点；真实未知项仍保留。 | 默认 init/check/plan 不产生全局 Graft MCP 操作，带根项目保留本地图与围栏；reset、显式 hooks/legacy、迁移上下文分别处理。六个隔离 HOME 安装成功，空配置不创建，预置 MCP 与 hook 原字节、inode/模式/mtime 不变；可用条件对照不触发接线运行时探测。六模块 65/65、双语契约及定向 Ruff 通过；首轮 Bash 临时文件沙箱失败单列保留。见 reports/init-default-fix/smoke.json、regression-final.log、docs.json、同 stem 中文汇总和 fresh-home-proof.zip。Release Readiness：本地通过，精确提交内审、独审、远端 CI 与发布仍未完成；真实现场未读写，未改变旧回执指纹门。 |
 | 2026-11-25T12:17:36.246057+08:00 | checking | in-progress | 当前 Astra 会话：a9d18a3 原生内审 CHANGES_REQUESTED；用户指定本轮修复 P1 reset 确认前预览漏报宿主目标。 | Bash/PowerShell 在批准前传 plan 而后执行 reset。Legacy characterized；Refactoring proceed：传入选定动作并复用规划；DDIA confirmed：只读预览，不改持久数据格式或实际授权。普通 init 及真实双端条目保持不动；P2 文档项单列，不作为本次已修复。 |
 | 2026-11-25T12:25:43.060930+08:00 | in-progress | checking | 当前 Astra 会话：完成指定 P1 reset 最终预览修正，冻结本地检查点；普通 init 行为不变。 | Bash 和 PowerShell 最终计划按选定动作调用只读 plan --action init&#124;reset；未指定默认 init。文本列出实际宿主目标，JSON 保持 mode=plan。两平台隔离预览零写，确认后 reset 实际资源 ID 与路径一致；Bash/Codex 和 PowerShell/OMP 拒绝确认后目标均不存在。可用 runtime 为显式测试条件，不冒称原生 0.29.0。六模块 72/72，目标 Ruff/Bash 检查通过，首次 Bash 驱动加载失败单列。见 reports/reset-preview/smoke.json、regression.log 和同 stem 中文汇总。双语 README/CHANGELOG 和版本检查影响参考同步；监控 prompt 主体与 live 配置未改。不认领此前两项 P2 文档修复；新 SHA 复审、独审、CI 和现场清理均未完成。 |
+| 2026-11-25T12:27:30.806984+08:00 | checking | in-progress | 当前 Astra 会话：继续处理原生内审剩余两项 P2 文档问题，保留 P1 修正和两个现场条目。 | 区分普通接线、密封迁移和显式升级的备份定位；补充获准升级可写 Codex/OMP MCP 的条件。只修文档，不执行真实 upgrade 或宿主清理。 |
+| 2026-11-25T12:29:15.652748+08:00 | in-progress | checking | 当前 Astra 会话：已修两项升级文档 P2，冻结当前分支，交 OMP 内置整分支复审。 | 三种备份来源分别核实；SKILL 和双语 README 明确选定宿主且已确认的升级 apply 可写受管 MCP。隔离 4/4 通过，双语标识与参考锚点检查通过。见 reports/upgrade-docs/verification.log 和同 stem 中文汇总。本轮不改产品行为；不把本地修正判为独审或远端 CI，不访问真实宿主配置。 |

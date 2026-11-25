@@ -95,7 +95,9 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 <details>
 <summary><strong>旧项目：移除 Graft 是不兼容改动（breaking change）</strong></summary>
 
-移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意删除连接或处理器。** 普通 `init` 和默认 `check`/`plan` 不会为 Codex 或 OMP 创建、更新或移除全局 Graft MCP 定义。显式项目根仍保留项目本地围栏／图设置；图存在不证明宿主已接线。`reset`、显式 `--graft-hooks` / `--graft-retire-legacy` 和密封迁移部署保持既有接线契约。其余既有 Graft MCP/hook 配置保持原样；这不是整机退役。`cleanup-legacy` 和 `--graft-retire-legacy` 都不是当前全局连接的卸载命令；后者用于把旧的固定根绑定切换到当前接线。
+移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意退役 Graft。**
+
+普通 `init` 和默认 `check`/`plan` 不改全局 Graft MCP 或 hook 配置。显式项目根仍保留项目本地围栏和图；图存在不证明宿主已接线。`reset`、显式 `--graft-hooks` / `--graft-retire-legacy` 和密封迁移部署保持各自的接线契约。若升级计划选中了该宿主并列出配置变更，另行确认的 `upgrade --phase apply` 可以写入受管 MCP 配置。查找升级前的原件，应使用计划的 `payload.backup_root` 和回执的 `backup_ref`。`cleanup-legacy` 和 `--graft-retire-legacy` 都不会卸载当前全局连接；后者用于把旧的固定根绑定切换到当前接线。
 
 1. **先验证替代能力。** 在选定宿主中批准一次对已知夹具的只读检索，核对实际命中，并确认未放行的工具不能执行。如果项目仍依赖图查询或 hook，保留 Graft。
 2. **逐项证明写入归属。** 对选定的 Codex `mcp_servers.sbtd-graft`、OMP `mcpServers.sbtd-graft` 或单个 Codex hook 处理器，核对 SBTD 成功部署回执，确认是该次部署实际改动的条目。核验安装前原件，并比对当前文件是否仍与部署后状态一致。同名、存在备份目录或条目原已存在，都不能证明归属。来源不明或文件已变化，保持原样。

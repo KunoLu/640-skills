@@ -226,7 +226,7 @@ React Bits remains project-only and optional:
 
 ## MCP Scope Policy
 
-The generic interactive MCP menu and the Codex Graft producer are separate. The menu offers Chrome DevTools, Playwright, Maestro and custom stdio MCP; project-only skips user-level MCP configuration. No GitNexus fallback/alias is provided. The guarded Graft producer is limited to `reset`, explicit hooks/legacy operations, and sealed migration deployment; ordinary `init` without an explicit Graft operation does not invoke it for global MCP.
+The generic interactive MCP menu (Chrome DevTools, Playwright, Maestro and custom stdio servers) is separate from managed Graft wiring. Ordinary `init` without an explicit Graft operation does not write a global Graft MCP definition; project-only setup skips user-level MCP and hooks. `reset`, explicit hooks/legacy operations and sealed migration deployment retain their own wiring rules. An [explicit upgrade](REFERENCE.md#upgrade-alignment) can also plan a managed Codex or OMP MCP configuration for a selected host. Only a confirmed `upgrade --phase apply` writes the changes authorized by that upgrade plan. No GitNexus fallback or alias is provided.
 
 The target scope is fixed by Agent platform:
 
