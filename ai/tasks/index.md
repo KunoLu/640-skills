@@ -93,6 +93,7 @@
 - [v2.2.0-rc.2-baseline](v2.2.0-rc.2-baseline/task.md)
 - [v2.2.0-rc.2-host-behavior](v2.2.0-rc.2-host-behavior/task.md)
 - [v2.2.0-rc.2-license](v2.2.0-rc.2-license/task.md)
+- [v2.2.0-rc.2-search-tools](v2.2.0-rc.2-search-tools/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)
