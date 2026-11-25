@@ -48,7 +48,13 @@ flowchart TD
   preserve -->|否或不适用| noRb[不询问也不安装 React Bits]
   keepTier --> plan
   noRb --> plan["用相同平台、根和选项输出 plan --action reset --json"]
-  plan --> confirm{"已查看 graftWiring.sharedOperations 中的宿主目标，确认 reset --yes？"}
+  plan --> wiring{"计划中的 graftWiring？"}
+  wiring -->|planned| targets["逐项核对 sharedOperations 中的宿主目标；空列表表示没有共享写入"]
+  wiring -->|字段省略| confirm
+  wiring -->|not-available| unavailable[查看原因，只考虑不依赖 Graft 的操作]
+  wiring -->|blocked| blockPlan[报告原因，停止执行 reset]
+  targets --> confirm{"其余计划项也已核对，确认 reset --yes？"}
+  unavailable --> confirm
   confirm -->|否| abort[不执行 reset 或其接线写入]
   confirm -->|是| stateCheck[检查所有所选项目状态及安装目标]
   stateCheck --> stateOk{允许写入?}

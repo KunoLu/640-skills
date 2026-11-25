@@ -12,26 +12,18 @@ project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥
 
 ```mermaid
 flowchart TD
-  start[调用 init-projects] --> entry{入口?}
-  entry -->|onboard.py 子命令| pyStart[解析可选 --platform]
-  entry -->|install.sh 包装器| shStart[跳过 Agent CLI gate, 仍转发 --platform]
-  shStart --> shSkip[跳过 Agent CLI / npm / Skills / 全局 AGENTS / MCP]
-  shSkip --> common
-  pyStart --> common[解析 --projects-root]
-  common --> mode{是否同时给了 --action?}
-  mode -->|是| reject[拒绝: init-projects 与 action 互斥]
-  mode -->|否| roots{每个路径都是已存在的绝对目录?}
-  roots -->|否| badPath[拒绝相对路径 / 空路径 / 不存在目录]
-  roots -->|是| q4{用户是否明确同意安装项目 AGENTS.md?}
-  q4 -->|未表态| askAgents[停下来问 Q4]
-  q4 -->|明确跳过| skipAgents[带 --skip-project-agents]
-  q4 -->|明确安装| planAgents[计划写入项目 AGENTS.md]
-  askAgents --> stopAsk[等待用户]
-  skipAgents --> plan
-  planAgents --> plan[展示所选项目文件及适用的本地 Graft 资源]
-  plan --> confirm{确认 --yes?}
-  confirm -->|否| abort[不写文件]
-  confirm -->|是| stateCheck[检查全部所选项目状态与目标]
+  start[确定项目根及是否写项目 AGENTS.md] --> entry{入口？}
+  entry -->|根安装器| summary["Final plan 仅列平台、动作、项目根及 AGENTS 等摘要；不调用 plan，不列本地 Graft 明细"]
+  summary --> confirm{"确认执行，或已传 --yes？"}
+  confirm -->|否| abort[不调用 init-projects]
+  confirm -->|是| dry{dry-run？}
+  dry -->|是| stopDry[到此停止，不执行核心写入]
+  dry -->|否| wrapperCall["携带所选范围和 --yes 调用 init-projects"]
+  entry -->|直接调用 Python| core
+  wrapperCall --> core["Python 构建文件操作与适用的本地 Graft 计划；非 JSON 模式打印计划摘要"]
+  core --> yes{"已传 --yes？"}
+  yes -->|否| refuse[拒绝执行，不等待交互确认]
+  yes -->|是| stateCheck[检查所选项目状态与目标]
   stateCheck --> stateOk{允许安装写入?}
   stateOk -->|否| stateBlock[逐项目报告 reason / nextStep, 零写入]
   stateOk -->|是| writes[按计划写必要项目文件]

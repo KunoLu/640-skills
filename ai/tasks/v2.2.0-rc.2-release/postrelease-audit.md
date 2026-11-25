@@ -29,8 +29,8 @@
 |---|---|
 | 双语变更日志 | 补入上述已发布的词汇表规则，两种语言的 rc.2 条目与公开正文相符。 |
 | `ENTRYPOINT.md` | 区分上游方法与 SBTD 自有术语表默认路径；完整 grill 后先独立完成 DDD 审查，确认后才进入设计。没有改监控版本表。 |
-| reset 流程图 | 确认前展示 `plan --action reset`、宿主目标及项目本地资源，不再用普通 init 计划代表 reset。 |
-| project-only 流程图 | 补充本地 Graft 围栏／图／stamp，区分核验已有 runtime 与写入用户级配置。 |
+| reset 流程图 | 按同一范围预览 `plan --action reset`。仅在接线为 `planned` 时核对共享目标；字段省略不等于计划失败，`blocked` 不得继续。 |
+| project-only 流程图 | 区分包装器确认前的范围摘要和 Python 核心的计划与执行；本地围栏／图／stamp 可能写入，但包装器不逐项预览。 |
 | KPi 上游同步手册 | 标注旧版适用范围，避免将已移除的 Trellis 参数当作现行 v2 命令；不推断外部项目当前状态。 |
 | 双语 README | 两端展示的根忽略规则均补 `node_modules/`，与实际 `.gitignore` 核对一致。 |
 | bootstrap 图解 | v2 示例不再指向 v1 包；从实际安装清单定位目录，不声称 README 指定 HOME 路径。 |
