@@ -12,6 +12,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 ### Changed
 
 - Pin host acceptance to `codex@0.171.0` + `omp@19.1.0` and require both hosts instead of the historical one-host fallback. Both completed isolated Air tool-call, ingestion and duplicate-import smoke checks on 2026-11-23; retain earlier cloud smoke records in `smoke_history`. Version matching alone, old reports and parser fixtures are not passing evidence. This baseline does not certify the full approval/MCP/failure/interruption matrix or release readiness, upgrade existing installations, or change the original Astra session.
+- Document the breaking impact of removing Graft from an existing project, how to verify ownership before removal, and how to restore its wiring without overwriting later edits. No host configuration changes automatically.
 
 ### Fixed
 

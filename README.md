@@ -91,6 +91,21 @@ These are **natural-language requests to your agent**, not new CLI commands. Rep
 | Retire detected legacy assets | `cleanup-legacy` | Display actual candidates, then obtain separate execution consent |
 | Restore an authorized batch | `recovery` | Plan and confirm restoration from trusted batch evidence; not a general undo command |
 
+<a id="graft-retirement"></a>
+<details>
+<summary><strong>Existing projects: Graft retirement is a breaking change</strong></summary>
+
+Removing `sbtd-graft` takes away the MCP connection used for graph queries. Removing its Codex hook handlers also stops their event-driven updates. AST search is a replacement for structural search, not a replacement for every graph query or hook. **An upgrade is not consent to remove either.** Current Onboard can still configure Graft during `init` or `reset`. Neither `cleanup-legacy` nor `--graft-retire-legacy` is an uninstall command for the current global connection; the latter switches older fixed-root bindings to the current wiring.
+
+1. **Test the replacement first.** In the selected host, approve and run a read-only search on a known fixture; verify the match and that a tool outside the allowlist cannot run. If the project still needs graph queries or hooks, keep Graft.
+2. **Prove who wrote each entry.** Match the selected Codex `mcp_servers.sbtd-graft`, OMP `mcpServers.sbtd-graft`, or individual Codex hook handler to a successful SBTD deployment receipt showing that entry changed. Check the original backup and compare the current file with the recorded post-deployment state. A name match, a backup directory, or an already-present entry is not proof. Leave unknown or changed files alone.
+3. **For an approved cutover**, list the exact entries, affected projects sharing the connection, and the recovery path. Obtain separate consent and stop concurrent writers. Privately back up the **current, still-wired** files, including permissions, before removing anything. Keep unrelated entries and the user's hook file. Verify replacement search still works and a second pass writes nothing.
+4. **To roll back**, compare each current file with its recorded **post-retirement** state. If it still matches, restore the corresponding pre-retirement backup and verify bytes and permissions. If it differs, preserve both copies and reconcile the later edit; do not overwrite it. Re-check host loading separately. This procedure was exercised on isolated fixtures, not as a production uninstall command.
+
+[Current wiring, backup locations and legacy cutover](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+
+</details>
+
 The [first-time initialization prompt](#install) covers a new v2 installation after bootstrap. Use the following prompts for an existing installation or a v1 project; substitute the exact reviewed v2 source, project roots and configuration domains before execution.
 
 <details>

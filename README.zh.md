@@ -91,6 +91,21 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 | 退役已检测旧资产 | `cleanup-legacy` | 展示实际候选，再单独确认执行 |
 | 恢复已授权批次 | `recovery` | 根据可信批次证据计划并确认恢复，不是通用撤销命令 |
 
+<a id="graft-retirement"></a>
+<details>
+<summary><strong>旧项目：移除 Graft 是不兼容改动（breaking change）</strong></summary>
+
+移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意删除连接或处理器。** 现有 Onboard 在 `init` 或 `reset` 时仍可配置 Graft。`cleanup-legacy` 和 `--graft-retire-legacy` 都不是当前全局连接的卸载命令；后者用于把旧的固定根绑定切换到当前接线。
+
+1. **先验证替代能力。** 在选定宿主中批准一次对已知夹具的只读检索，核对实际命中，并确认未放行的工具不能执行。如果项目仍依赖图查询或 hook，保留 Graft。
+2. **逐项证明写入归属。** 对选定的 Codex `mcp_servers.sbtd-graft`、OMP `mcpServers.sbtd-graft` 或单个 Codex hook 处理器，核对 SBTD 成功部署回执，确认是该次部署实际改动的条目。核验安装前原件，并比对当前文件是否仍与部署后状态一致。同名、存在备份目录或条目原已存在，都不能证明归属。来源不明或文件已变化，保持原样。
+3. **获准切换时**，先列出精确条目、共用连接的受影响项目及恢复路径，另取确认并停止并发写入。删除前在私有位置备份**当前仍有 Graft 接线**的文件及权限。保留无关条目和用户的 hook 文件。切换后验证替代检索仍可用，第二次执行应为零写入。
+4. **需要回退时**，逐文件比对当前状态与记录的**退役后状态**。仍一致才用对应的退役前备份恢复，并核验字节和权限；不一致则保留两份，先核对后续编辑，不得覆盖。宿主是否已重新加载须另行验证。上述流程已在隔离夹具演练，不代表已有生产卸载命令。
+
+[现行接线、备份位置与旧绑定切换说明](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+
+</details>
+
 [首次初始化提示词](#install)用于 bootstrap 之后的新 v2 环境。已有安装或 v1 项目使用下列对应提示词；执行前替换为精确的已审阅 v2 来源、项目根和配置域。
 
 <details>
