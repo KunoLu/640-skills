@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-release-acceptance
 workflow_mode: strict
 mode_source: user
 mode_note: 用户要求主线 CI 全绿后继续原计划；执行 rc.2 PRD 任务 7，strict。
-status: "checking"
+status: "done"
 branch: test/v2.2.0-rc.2-release-acceptance
 created_at: '2026-11-25T16:32:34.200219+08:00'
-updated_at: "2026-11-25T17:08:13.555239+08:00"
-completed_at: null
+updated_at: "2026-11-25T18:09:14.702098+08:00"
+completed_at: "2026-11-25T18:09:14.702098+08:00"
 "blocked_reason": null
 ---
 # 任务 7：统一回归与真实分发／安装许可验收
@@ -45,3 +45,4 @@ completed_at: null
 | 2026-11-25T16:57:12.752546+08:00 | in-progress | blocked | 当前 Astra 会话：固定 OMP 已就位，任务 7 独立域没有可用的 openai-codex 模型，等待本域官方账号认证。 | 官方 arm64 v19.1.0 制品大小、SHA-256 一致，--version 实测 omp/19.1.0；离线 models openai-codex --json --no-extensions 返回 0 个模型。见 reports/host-readiness.json 和同 stem 中文摘要。未发起登录、模型请求或循环。 |
 | 2026-11-25T17:02:43.260366+08:00 | blocked | in-progress | 当前 Astra 会话：任务 7 本域 OMP 官方登录已完成，恢复双宿主实测。 | 本域浏览器登录退出 0；固定 OMP 19.1.0 官方模型查询返回 10 项，含目标 Astra。固定 Codex 0.171.0，两个专用域哨兵互相拒读。本轮重新生成合成输入、事件及回执，不引用旧通过数。 |
 | 2026-11-25T17:08:13.555239+08:00 | in-progress | checking | 当前 Astra 会话：任务 7 隔离验收达到本地暂停点，已关闭原终端循环，冻结提交交内审。 | 双端真实审批、失败、中断及生产重放已核对；unknown 负例 exit 2 不建库；合成配置保护、重复导入与已完成的归档实装证据分列。保留 SEO 首轮缺 Git 索引错误，仅该项在相同源码 Git 检出补跑通过。报告型命令使用原生 runner。未推送、未发布；内审、外审及精确 SHA CI 待验。 |
+| 2026-11-25T18:09:14.702098+08:00 | checking | done | 当前 Astra 会话：PR #229 已 squash 合入，精确主线 CI 全绿，任务 7 隔离验收结案；不表示已发布。 | {"clean_sha": "674f90555f57b2e7677f2e865ab6b788293ddb52", "ci_run": "45586496681", "pr": 229, "main_sha": "d8b2191204e368035fd69544aa74c6600961a2f6", "main_ci_run": "45589961883", "pr_jobs_passed": 13, "main_jobs_passed": 13, "external": "user-reported CLEAN", "bundle": "reports/closeout-229/task7.bundle", "published": false} |
