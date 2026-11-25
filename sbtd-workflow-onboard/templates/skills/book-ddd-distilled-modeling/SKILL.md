@@ -59,7 +59,9 @@ Open conflicts and questions: ...
 
 Use `not-applicable` for a subdomain classification only when it has no bearing on the current decision; do not omit the field. A post-grill review must explicitly state whether it corrected the earlier result, even when the answer is `none`.
 
-Propose only stable, cross-task terms for the glossary. Keep domain decisions in ADRs or `docs/spec`, and the full review in task output, `prd.md`, `design.md`, or `implement.md`. A legacy `CONTEXT.md` may inform the review: show the proposed term extraction, conflicts and exact diff, then wait for explicit approval before applying it. Never migrate or overwrite the legacy file automatically.
+Propose only stable, cross-task terms for the glossary. Promote a domain decision to an ADR or `docs/spec` only if it is both stable and relevant across tasks. Keep provisional or task-specific decisions with the full review in task output, `prd.md`, `design.md`, or `implement.md`.
+
+A legacy `CONTEXT.md` may inform the review: show the proposed term extraction, conflicts and exact diff, then wait for explicit approval before applying it. Never migrate or overwrite the legacy file automatically.
 
 ## Guardrails
 
