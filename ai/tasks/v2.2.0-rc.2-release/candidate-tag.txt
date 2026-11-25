@@ -1,0 +1,4 @@
+v2.2.0-rc.2: isolated host and installer acceptance / 隔离宿主及安装验收
+
+See GitHub Release for full EN+ZH notes. / 完整双语说明见 GitHub Release。
+Commit: d8b2191204e368035fd69544aa74c6600961a2f6

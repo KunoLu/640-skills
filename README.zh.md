@@ -527,6 +527,7 @@ Project-only 使用 `bash install.sh --platform codex --init-projects /abs/proje
 __pycache__/
 /.pytest_cache/
 /.ruff_cache/
+node_modules/
 AGENTS.md
 .chrome-devtools-mcp/
 .playwright-mcp/

@@ -536,6 +536,7 @@ This source repository's root `AGENTS.md` is **optional, ignored and local-only*
 __pycache__/
 /.pytest_cache/
 /.ruff_cache/
+node_modules/
 AGENTS.md
 .chrome-devtools-mcp/
 .playwright-mcp/

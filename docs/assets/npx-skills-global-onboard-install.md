@@ -13,9 +13,9 @@ npx --yes skills@latest add \
   --copy
 ```
 
-本仓库文档示例常用 `--agent codex`。固定版本时把 Git tag 放在仓库 shorthand 与 `@skill` 之间，例如 `KunoLu/640-skills#v1.0.0@sbtd-workflow-onboard`。私有仓库用本机已认证的 `git+ssh://` source。
+本仓库示例使用 `--agent codex`。固定来源时使用已审阅的 v2 标签或提交，例如 `'KunoLu/640-skills#v2.2.0-rc.2@sbtd-workflow-onboard'`。不要用 v1 包执行 v2 初始化提示词。私有仓库用本机已认证的 `git+ssh://` source。
 
-实际安装路径**不能预先写死**。本仓库 README 把 `$HOME/.agents/skills/sbtd-workflow-onboard` 标为示例，并要求用 `npx skills list --global --agent <id>` 与 Skill 检测结果确认。Onboard 之后解析全局 Skills 根的顺序见下表。
+实际安装路径**不能预先写死**。用 `npx skills list --global --agent <id>` 和宿主发现结果确认真实路径，再调用已安装的 Skill。
 
 ```mermaid
 flowchart TD

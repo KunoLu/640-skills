@@ -95,6 +95,7 @@
 - [v2.2.0-rc.2-graft-retirement](v2.2.0-rc.2-graft-retirement/task.md)
 - [v2.2.0-rc.2-host-behavior](v2.2.0-rc.2-host-behavior/task.md)
 - [v2.2.0-rc.2-license](v2.2.0-rc.2-license/task.md)
+- [v2.2.0-rc.2-release](v2.2.0-rc.2-release/task.md)
 - [v2.2.0-rc.2-release-acceptance](v2.2.0-rc.2-release-acceptance/task.md)
 - [v2.2.0-rc.2-search-tools](v2.2.0-rc.2-search-tools/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
