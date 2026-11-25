@@ -23,7 +23,9 @@ completed_at: null
 
 ## 工程与验证门禁
 
-当前阶段为只读盘点，未批准真实宿主清除。strict：生产编辑前完成 Legacy Change Safety、Refactoring；持久配置的迁移证据和可回退设计须经 DDIA、migration。验证用任务 5 私有 TEMP 合成配置，不沿用任务 4 凭据或环境；精确 SHA 内置 `/review`、外审、CI 分别记录。当前主会话 Astra，精确调用次数未知。未完整调用 grill-with-docs：输入、归属门和负例已由 PRD 明定；不把无法证明的归属作为需求假设。
+首次盘点仅做只读检查。安装器修复已通过本地验证，现处于提交复审阶段（`checking`）。Codex 和 OMP 的两个真实 `sbtd-graft` 条目继续保留，未授权现场清除。
+
+strict：生产编辑前完成 Legacy Change Safety、Refactoring；持久配置的迁移证据和可回退设计须经 DDIA、migration。验证用任务 5 私有 TEMP 合成配置，不沿用任务 4 凭据或环境；精确 SHA 内置 `/review`、外审、CI 分别记录。当前主会话 Astra，精确调用次数未知。未完整调用 grill-with-docs：输入、归属门和负例已由 PRD 明定；不把无法证明的归属作为需求假设。
 
 ## 状态事件
 
