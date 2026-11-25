@@ -31,7 +31,7 @@
 - 核对双语用户提示词是否分别覆盖v2 bootstrap/首次及重复init、明确reset、v1→v2的包upgrade与数据migration，以及upgrade plan/apply/verify、可选probe/authorize-link和独立recovery。提示词不得把合法壳跳过当版本对齐，不得把reset当迁移/恢复，不让用户手抄计划ID，不合并部署、探测、cleanup或备份销毁授权。现行host验证说明不得指导读取/复制真实认证文件；旧执行器若不符合受控认证边界应明确blocked，不以CI skip冒充host通过。
 
 - 根安装器须在全局安装、MCP写入及可选项目安装前执行完整只读项目前置检查，不能仅在最终Python写入时检查；`check-projects`与`plan`复用状态/scaffold/保护判定，并传递`--skip-project-agents`范围。验证有效输入正向控制及冲突时零mutation；只读Agent version探测不能触发安装。
-- 核对两端安装器最终预览传入所选动作：`plan --action reset` 在确认前列出的 Graft 宿主写入目标须与 `reset` 一致；不能用普通 `plan`（默认 init）代替。
+- 核对两端安装器在可选安装或配置前拒绝不支持按动作预览的来源；`plan --action reset` 在确认前列出的宿主目标须与 `reset` 一致，不能用普通 `plan` 代替。即使不接线，已执行的文件操作仍须保留在顶层 `operationResults`。
 
 - 协议模块／交换schema变更须核对严格解码、闭集字段、批准快照、资源归属／ID、累计证据和单JSON输出；不修改原生验证报告schema。检查公开入口与真实handler是否已原子接线，不能以文件存在或接口fixture通过冒充migration/deployment/recovery可执行，也不注册占位handler。目录复制或`npx skills add`不安装Python依赖；依赖须惰性加载、缺失fail-closed，必要时在完整隔离安装副本中分别验证无依赖和按副本requirements准备依赖的路径，不以宿主CI已有包推断用户副本可用，不改真实HOME或全局Python。
 

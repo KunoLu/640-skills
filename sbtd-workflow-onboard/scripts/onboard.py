@@ -7360,6 +7360,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 )
             )
 
+    plan_payload["operationResults"] = operation_results
     failed_operations = [
         item for item in operation_results if item["status"] == "failed"
     ]
@@ -7385,9 +7386,6 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return 3
 
     if developer_plan is not None:
-        # Capture completed writes before identity work: its failure must not
-        # leave automation with a plan that hides already-applied changes.
-        plan_payload["operationResults"] = operation_results
         identity_roots = [
             Path(str(entry["projectRoot"]))
             for entry in cast(list[dict[str, object]], developer_plan["projects"])
@@ -7481,7 +7479,6 @@ def run(mode: str, args: argparse.Namespace) -> int:
         plan_payload["languageTooling"] = language_tooling
     if wiring_plan["status"] != "skipped":
         plan_payload["graftWiring"] = wiring_result
-        plan_payload["operationResults"] = operation_results
         if wiring_exit:
             wiring_status = "blocked" if wiring_exit == 2 else "failed"
             for project in cast(list[dict[str, object]], sbtd_report["projects"]):

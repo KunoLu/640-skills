@@ -7,7 +7,7 @@ mode_note: 用户授权 main CI 全绿后按已确认 PRD 推进任务 5；§4 �
 status: "checking"
 branch: feat/v2.2.0-rc.2-graft-retirement
 created_at: '2026-11-25T10:04:13.021586+08:00'
-updated_at: "2026-11-25T12:29:15.652748+08:00"
+updated_at: "2026-11-25T12:52:35.369573+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -43,3 +43,5 @@ completed_at: null
 | 2026-11-25T12:25:43.060930+08:00 | in-progress | checking | 当前 Astra 会话：完成指定 P1 reset 最终预览修正，冻结本地检查点；普通 init 行为不变。 | Bash 和 PowerShell 最终计划按选定动作调用只读 plan --action init&#124;reset；未指定默认 init。文本列出实际宿主目标，JSON 保持 mode=plan。两平台隔离预览零写，确认后 reset 实际资源 ID 与路径一致；Bash/Codex 和 PowerShell/OMP 拒绝确认后目标均不存在。可用 runtime 为显式测试条件，不冒称原生 0.29.0。六模块 72/72，目标 Ruff/Bash 检查通过，首次 Bash 驱动加载失败单列。见 reports/reset-preview/smoke.json、regression.log 和同 stem 中文汇总。双语 README/CHANGELOG 和版本检查影响参考同步；监控 prompt 主体与 live 配置未改。不认领此前两项 P2 文档修复；新 SHA 复审、独审、CI 和现场清理均未完成。 |
 | 2026-11-25T12:27:30.806984+08:00 | checking | in-progress | 当前 Astra 会话：继续处理原生内审剩余两项 P2 文档问题，保留 P1 修正和两个现场条目。 | 区分普通接线、密封迁移和显式升级的备份定位；补充获准升级可写 Codex/OMP MCP 的条件。只修文档，不执行真实 upgrade 或宿主清理。 |
 | 2026-11-25T12:29:15.652748+08:00 | in-progress | checking | 当前 Astra 会话：已修两项升级文档 P2，冻结当前分支，交 OMP 内置整分支复审。 | 三种备份来源分别核实；SKILL 和双语 README 明确选定宿主且已确认的升级 apply 可写受管 MCP。隔离 4/4 通过，双语标识与参考锚点检查通过。见 reports/upgrade-docs/verification.log 和同 stem 中文汇总。本轮不改产品行为；不把本地修正判为独审或远端 CI，不访问真实宿主配置。 |
+| 2026-11-25T12:36:55.937721+08:00 | checking | in-progress | 当前 Astra 会话：收到整分支内审 CHANGES_REQUESTED；按用户授权修复 d9ada83 的四项 P2。 | Legacy characterized：缺少根级 operationResults、旧 source-root 过晚拒绝、指引遗漏升级新增凭证及退役后漂移对照。Refactoring proceed，DDIA confirmed：沿用既有操作结果和只读能力预检，不扩大全局配置写入。只在新隔离目录验证，不读取两个现场条目。 |
+| 2026-11-25T12:52:35.369573+08:00 | in-progress | checking | 当前 Astra 会话：四项 P2 返修本地验收通过，按用户要求继续冻结并执行新的整分支内审。 | 普通 init 无 Graft 仍含实际文件回执，部分失败 exit 3 如实列出 1 个失败和 14 个成功。Bash/PowerShell 对真实旧 source-root 均在解析门禁退出 1，未创建宿主配置；新版和绕行入口有回归。双语步骤分别指定写入凭证、新建与替换；每次退役后封存存在性／摘要／权限绑定备份，拒绝覆盖漂移。4 模块 81/81，首轮测试断言折行与 Bash 夹具失败均保留。证据见 reports/four-p2/acceptance.json、acceptance.md 和 regression-final.log。README、README.zh、两份 CHANGELOG 及版本检查影响参考已同步；监控 prompt 主体和 pin 未变。未碰真实现场、未推送，待新 SHA 内审、独审与远端 CI。 |

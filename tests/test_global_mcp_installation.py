@@ -364,6 +364,31 @@ class GlobalMcpInstallationTests(unittest.TestCase):
                     self.assertIn(reason, plan["reason"])
         self.assertEqual(snapshot(self.base), before)
 
+    def test_global_only_init_reports_file_and_skill_results_without_wiring(self):
+        valid_skill = self.skills / "sbtd-task"
+        shutil.copytree(PACKAGE / "templates/skills/sbtd-task", valid_skill)
+        args = self.arguments(mode="init", with_project=False)
+
+        code, result, runtime = self.run_cli("init", args)
+
+        self.assertEqual(code, 0, result)
+        self.assertNotIn("graftWiring", result)
+        self.assertNotIn("developerPlan", result)
+        runtime.assert_not_called()
+        operations = {
+            item["label"]: item for item in result["operationResults"]
+        }
+        agents = operations["codex global AGENTS.md"]
+        self.assertEqual(agents["target"], str(self.home / ".codex/AGENTS.md"))
+        self.assertEqual(agents["action"], "copied")
+        self.assertEqual(agents["status"], "success")
+        skipped = operations["global skill sbtd-task"]
+        self.assertEqual(skipped["target"], str(valid_skill))
+        self.assertEqual(skipped["action"], "skipped-already-valid")
+        self.assertEqual(skipped["status"], "skipped")
+        self.assertTrue(Path(agents["target"]).is_file())
+        self.assertFalse(self.host_target("codex").exists())
+
     def test_global_only_no_mcp_does_not_probe_or_register_a_runtime(self):
         args = self.arguments(extra=("--no-mcp",))
         args.projects_root = None

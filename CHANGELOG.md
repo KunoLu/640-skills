@@ -18,6 +18,7 @@ The Chinese and English changelogs are kept consistent version by version and en
 ### Fixed
 
 - Both root installers now preview the selected action before confirmation. `plan --action reset` shows the global Graft MCP targets that reset plans to write; plain `plan` still previews init and does not authorize writes.
+- Preserve actual file-operation results in installation JSON even when Graft wiring is skipped. Both root installers reject a source without action-aware previews before starting optional setup.
 - Pin the four Linux validation jobs to `ubuntu-24.04`, where the fixed Python `3.12.10` build is available. This avoids setup failures after `ubuntu-latest` moved to Ubuntu 26.04; Python/Node versions, action SHAs, native platform coverage, test shards and report failure gates remain unchanged.
 - Normalize the official `codex-cli` version banner at Codex ingestion so stored events and receipts use the same version as capability pins. Add CLI-to-store/replay/capability regressions, retain old/unknown/prerelease rejection, and preserve existing raw-version observations on re-import conflicts instead of silently migrating them.
 - Ship the original MIT texts for Phosphor metadata and the work behind Impeccable's platform references. Standalone external installs and explicit upgrades now carry their applicable licenses and notices with the skill; source pins and rollback boundaries are unchanged.

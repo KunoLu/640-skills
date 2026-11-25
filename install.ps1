@@ -287,6 +287,32 @@ function Find-Python {
   Stop-WithMessage "python or py is required to run $SourceRoot\scripts\onboard.py"
 }
 
+function Assert-PlanActionSupport {
+  $probe = @'
+import runpy
+import sys
+from pathlib import Path
+
+script = Path(sys.argv[1]).resolve()
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(script.parent))
+module = runpy.run_path(str(script), run_name="_sbtd_installer_capability_probe")
+build_parser = module.get("build_parser")
+if not callable(build_parser):
+    raise SystemExit("onboard.py does not expose build_parser().")
+parser = build_parser()
+for action in ("init", "reset"):
+    args = parser.parse_args(["plan", "--action", action])
+    if args.mode != "plan" or getattr(args, "action", None) != action:
+        raise SystemExit("plan does not support both --action init and --action reset.")
+'@
+  $arguments = $PythonPrefix + @("-B", "-", (Get-OnboardPy))
+  $probe | & $PythonExe @arguments
+  if ($LASTEXITCODE -ne 0) {
+    Stop-WithMessage "The selected SBTD Onboard source must support plan --action init and plan --action reset. Use a current sbtd-workflow-onboard directory or pass -SourceRoot to a compatible source. No onboarding actions were run."
+  }
+}
+
 function Invoke-WorkflowMode {
   $source = $SourceRoot
   $forwarded = @()
@@ -1120,6 +1146,9 @@ if ($Help) {
 
 Validate-SourceRoot $SourceRoot
 Find-Python
+if (-not $script:ProjectsOnly) {
+  Assert-PlanActionSupport
+}
 Show-Logo
 Resolve-InteractiveInputs
 Update-ProjectsCheck
