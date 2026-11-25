@@ -11,6 +11,7 @@
 
 ### 变更
 
+- 普通 `init` 和默认 `check`/`plan` 不再为 Codex／OMP 创建、更新或移除全局 Graft MCP 定义，与 runtime 是否已验证可用无关。显式项目根仍维护项目本地围栏／图；图存在不证明宿主已接线。`reset`、`init-projects`、migration-context `init` 及显式 `--graft-hooks` / `--graft-retire-legacy` 保持既有契约和校验。普通路径不改动既有全局 Graft MCP/hook 配置，也不宣称完成整机退役。
 - 将宿主验收固定为 `codex@0.171.0` + `omp@19.1.0`，要求两个宿主均通过，不再采用历史单宿主兜底。两者于 2026-11-23 完成 Air 隔离工具调用、入库与重复导入基础冒烟；旧云端记录保留于 `smoke_history`。仅版本匹配、旧报告和 parser fixture 均不是通过证据。本基线不证明完整审批／MCP／失败／中断矩阵或发布就绪，不升级既有安装，也不改变原 Astra 会话。
 - 补充旧项目移除 Graft 的不兼容影响、移除前的归属核验及不覆盖后续编辑的接线恢复步骤。不自动更改宿主配置。
 

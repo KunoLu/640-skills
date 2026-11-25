@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -117,6 +118,86 @@ class GlobalMcpInstallationTests(unittest.TestCase):
         self.assertIn("before installation", result["graftWiring"]["reason"])
         self.assertEqual(snapshot(self.home), before)
         self.assertIsNone(result["requiredExternalInstall"])
+
+    def test_init_with_explicit_hooks_still_writes_global_mcp_and_hooks(self):
+        args = self.arguments(mode="init", extra=("--graft-hooks",))
+        target = self.home / ".codex/config.toml"
+        target.parent.mkdir()
+        target.write_bytes(
+            b'model = "keep-user-model"\ncustom = { keep = true }\n\n'
+            b'[mcp_servers.foreign]\ncommand = "/foreign/server"\nargs = ["keep"]\n'
+        )
+        hooks_target = self.home / ".codex/hooks.json"
+        hooks_target.write_bytes(b'{"custom": {"keep": true}}\n')
+
+        def graph(project, _runtime):
+            (project / "graft").mkdir()
+
+        with (
+            mock.patch.dict(os.environ, self.environment),
+            mock.patch.object(deployment, "verified_runtime", return_value=self.runtime),
+            mock.patch.object(deployment, "build_project_graph", side_effect=graph),
+        ):
+            plan = deployment.plan_normal_wiring("init", args)
+            self.assertEqual(plan["status"], "planned", plan)
+            result, code = deployment.execute_normal_wiring(
+                plan, template_written=False
+            )
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["hooks"], "configured-needs-host-trust")
+        config = tomllib.loads(target.read_text(encoding="utf-8"))
+        self.assertEqual(config["model"], "keep-user-model")
+        self.assertEqual(config["custom"], {"keep": True})
+        self.assertEqual(set(config["mcp_servers"]), {"foreign", "sbtd-graft"})
+        self.assertEqual(config["mcp_servers"]["foreign"]["args"], ["keep"])
+        hooks = json.loads(hooks_target.read_bytes())
+        self.assertEqual(hooks["custom"], {"keep": True})
+        self.assertTrue(hooks["hooks"])
+        self.assertTrue((self.project / "graft").is_dir())
+
+    def test_explicit_wiring_flags_keep_their_scope_validation(self):
+        approval = self.approval(self.base / "private")
+        hooks_without_root = self.arguments(mode="init", extra=("--graft-hooks",))
+        hooks_without_root.projects_root = None
+        omp_hooks = self.arguments(mode="init", extra=("--graft-hooks",))
+        omp_hooks.platform = "omp"
+        project_only_hooks = self.arguments(
+            mode="init-projects", extra=("--graft-hooks",)
+        )
+        retirement_without_root = self.arguments(approval, mode="init")
+        retirement_without_root.projects_root = None
+        bindings_without_retirement = self.arguments(
+            mode="init", extra=("--graft-legacy-bindings", str(approval))
+        )
+        cases = [
+            ("hook authorization requires", hooks_without_root, "init"),
+            ("OMP wiring does not include Codex hooks", omp_hooks, "init"),
+            (
+                "project-only setup cannot change global hooks",
+                project_only_hooks,
+                "init-projects",
+            ),
+            ("legacy retirement requires", retirement_without_root, "init"),
+            ("legacy bindings require explicit", bindings_without_retirement, "init"),
+        ]
+        before = snapshot(self.base)
+        with (
+            mock.patch.dict(os.environ, self.environment),
+            mock.patch.object(
+                deployment,
+                "verified_runtime",
+                side_effect=AssertionError(
+                    "scope validation must precede runtime probing"
+                ),
+            ),
+        ):
+            for reason, args, mode in cases:
+                with self.subTest(reason=reason):
+                    plan = deployment.plan_normal_wiring(mode, args)
+                    self.assertEqual(plan["status"], "blocked")
+                    self.assertIn(reason, plan["reason"])
+        self.assertEqual(snapshot(self.base), before)
 
     def test_global_only_no_mcp_does_not_probe_or_register_a_runtime(self):
         args = self.arguments(extra=("--no-mcp",))

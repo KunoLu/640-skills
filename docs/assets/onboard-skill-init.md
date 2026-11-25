@@ -97,4 +97,4 @@ flowchart TD
 | MCP | 交互配置；提示词没提则不要静默写 | 已有配置不自动改 |
 | Playwright / React Bits | 仅项目适用时询问 | 仍是条件项，不是全量重装 |
 
-`onboard.py init` 不代替 Agent/Graft 安装授权。Graft 使用独立 `install-graft`；受管 Codex/OMP 接线在完整计划和确认后维护每个有效配置域的一条通用 MCP，项目初始化只维护本地图与围栏，不追加全局连接。project-only不进行全局安装。已有旧工具配置保留，不借本项清理；合法 Skill 壳被 init 跳过不代表内容已升级，版本对齐另走[upgrade](../../sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。
+`onboard.py init` 不代替 Agent/Graft 安装授权。Graft 使用独立 `install-graft`；普通 `init` 与默认 `check`/`plan` 不创建、更新或移除 Codex/OMP 全局 Graft MCP，有无可用 runtime 均一样，既有 Graft MCP/hook 配置保持原样。显式项目根仍维护项目本地围栏和图；图存在不证明宿主已接线。`reset`、`init-projects`、migration-context `init` 及显式 `--graft-hooks` / `--graft-retire-legacy` 保持原有契约和校验。project-only不进行全局安装。已有旧工具配置保留，不借本项清理；合法 Skill 壳被 init 跳过不代表内容已升级，版本对齐另走[upgrade](../../sbtd-workflow-onboard/REFERENCE.md#upgrade-alignment)。

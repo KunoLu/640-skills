@@ -83,7 +83,7 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 | 目标 | 选择 | 含义 |
 |---|---|---|
 | 检查而不安装 | `check` / `plan` | 只读盘点和拟执行内容，不代表已完成初始化 |
-| 首次完整初始化 | `init` | 安装缺失／无效 Skill；保留合法 Skill 壳，不保证其内容最新 |
+| 首次完整初始化 | `init` | 安装缺失／无效 Skill；保留合法 Skill 壳，不保证其内容最新；默认不写全局 Graft MCP |
 | 只追加项目 | `init-projects` | 项目 AGENTS／ignore 与适用本地资产；不做全局安装或用户级 MCP／hooks 写入 |
 | 对齐已有环境 | `upgrade` | 固定基线的 plan/apply/verify，显式裁决漂移，保留备份与恢复入口 |
 | 明确要求重装 | `reset` | **不备份**覆盖 bundled Skills，重装 required external Skills；不是带恢复保证的升级流程 |
@@ -95,7 +95,7 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 <details>
 <summary><strong>旧项目：移除 Graft 是不兼容改动（breaking change）</strong></summary>
 
-移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意删除连接或处理器。** 现有 Onboard 在 `init` 或 `reset` 时仍可配置 Graft。`cleanup-legacy` 和 `--graft-retire-legacy` 都不是当前全局连接的卸载命令；后者用于把旧的固定根绑定切换到当前接线。
+移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意删除连接或处理器。** 普通 `init` 和默认 `check`/`plan` 不会为 Codex 或 OMP 创建、更新或移除全局 Graft MCP 定义。显式项目根仍保留项目本地围栏／图设置；图存在不证明宿主已接线。`reset`、显式 `--graft-hooks` / `--graft-retire-legacy` 和密封迁移部署保持既有接线契约。其余既有 Graft MCP/hook 配置保持原样；这不是整机退役。`cleanup-legacy` 和 `--graft-retire-legacy` 都不是当前全局连接的卸载命令；后者用于把旧的固定根绑定切换到当前接线。
 
 1. **先验证替代能力。** 在选定宿主中批准一次对已知夹具的只读检索，核对实际命中，并确认未放行的工具不能执行。如果项目仍依赖图查询或 hook，保留 Graft。
 2. **逐项证明写入归属。** 对选定的 Codex `mcp_servers.sbtd-graft`、OMP `mcpServers.sbtd-graft` 或单个 Codex hook 处理器，核对 SBTD 成功部署回执，确认是该次部署实际改动的条目。核验安装前原件，并比对当前文件是否仍与部署后状态一致。同名、存在备份目录或条目原已存在，都不能证明归属。来源不明或文件已变化，保持原样。
@@ -422,7 +422,7 @@ Onboard 使用 **Ponytail skill-only provider**。官方 Ponytail plugin 已启�
 | Maestro CLI / MCP | Mobile／Hybrid flow、设备与 flow 诊断、可选 Web smoke | Web 回归主责或缺失设备上的真实行为 |
 | RTK / Caveman | 终端输出／对话压缩 | 测试执行、报告生成或工作流义务降低 |
 
-Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/scripts/graft_runtime.py)固定。每个有效 Codex／OMP 配置域只有一条全局 `sbtd-graft` 连接，按启动 cwd 锁定真实仓库／worktree；项目初始化准备本地图。不做共同父目录多项目图、不隐式开启 cloud enrichment、不静默替换旧绑定。Codex hooks 单独 opt-in；OMP 初始化不写 hooks。[接线契约](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/scripts/graft_runtime.py)固定。普通 `init` 和默认 `check`/`plan` 不创建、更新或移除全局 `sbtd-graft` 连接；既有全局 Graft MCP/hook 配置保持原样。`reset` 和显式 `--graft-hooks` / `--graft-retire-legacy` 保持既有接线行为。显式项目根的项目设置会准备本地围栏和图；图存在不证明宿主已接线。全局连接已存在或经显式配置时，每个有效 Codex／OMP 配置域的一条连接按启动 cwd 锁定真实仓库／worktree。不做共同父目录多项目图、不隐式开启 cloud enrichment、不静默替换旧绑定。Codex hooks 单独 opt-in；OMP 初始化不写 hooks。[接线契约](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
 
 即使本机安装了 Trail，受管 Graft 也保持 Graft 命令／工具合同：子进程禁用自动 Trail 切换并隔离继承的 Trail 配置。项目 `.trail` 笔记与原生图输入同样执行拒绝链接／特殊文件的范围检查。见 [pin 验收场景](sbtd-workflow-onboard/REFERENCE.md#graft-pin-acceptance-scenarios)。
 
