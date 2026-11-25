@@ -63,7 +63,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             if [ "$1" = "-" ]; then
               exec "$REAL_PYTHON" "$@"
             fi
-            if [ "$1" = "-B" ] && [ "$2" = "-" ]; then
+            if { [ "$1" = "-B" ] || [ "$1" = "-IB" ]; } && [ "$2" = "-" ]; then
               printf '%s\n' "$*" >> "$FAKE_ONBOARD_CAPABILITY_LOG"
               exec "$REAL_PYTHON" "$@"
             fi
@@ -248,6 +248,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         no_mcp: bool = True,
         dry_run: bool = False,
         source_root: Path = SOURCE_ROOT,
+        cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         project_args = (
             ("--init-projects", str(self.project_root))
@@ -279,6 +280,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 *optional_args,
                 "--no-color",
             ),
+            cwd=cwd,
             input=user_input,
             check=False,
             capture_output=True,
@@ -557,7 +559,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             path.unlink(missing_ok=True)
         for state in ("npm", "agent", "graft"):
             (self.state_dir / state).touch()
-        completed = self.run_installer(action="reset", dry_run=True)
+        # An empty, unrelated project module must not replace the probe's stdlib pathlib.
+        (self.project_root / "pathlib.py").touch()
+        completed = self.run_installer(action="reset", dry_run=True, cwd=self.project_root)
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         self.assertIn("plan", self.modes())
@@ -932,7 +936,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 """
                 #!/bin/sh
                 if [ "$1" = "-" ]; then exec "$REAL_PYTHON" "$@"; fi
-                if [ "$1" = "-B" ] && [ "$2" = "-" ]; then exec "$REAL_PYTHON" "$@"; fi
+                if { [ "$1" = "-B" ] || [ "$1" = "-IB" ]; } && [ "$2" = "-" ]; then exec "$REAL_PYTHON" "$@"; fi
                 case "$2" in
                   check|check-projects|check-agent-cli|plan) exec "$REAL_PYTHON" "$@" ;;
                   *) : > "$MUTATION_LOG"; exit 99 ;;
@@ -1410,6 +1414,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         dry_run: bool = False,
         source_root: Path = SOURCE_ROOT,
         projects_only: bool = False,
+        cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         scope = (
             ["-InitProjects", str(self.project_root)]
@@ -1434,6 +1439,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "-Yes",
                 *(["-DryRun"] if dry_run else []),
             ],
+            cwd=cwd,
             env=environment,
             capture_output=True,
             text=True,
@@ -1521,8 +1527,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             path.unlink(missing_ok=True)
         for state in ("npm", "agent", "graft"):
             (self.state_dir / state).touch()
+        (self.project_root / "pathlib.py").touch()
         completed = self.run_powershell_installer(
-            runtime, environment, action="reset", dry_run=True
+            runtime, environment, action="reset", dry_run=True, cwd=self.project_root
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)

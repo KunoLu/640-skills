@@ -306,7 +306,7 @@ for action in ("init", "reset"):
     if args.mode != "plan" or getattr(args, "action", None) != action:
         raise SystemExit("plan does not support both --action init and --action reset.")
 '@
-  $arguments = $PythonPrefix + @("-B", "-", (Get-OnboardPy))
+  $arguments = $PythonPrefix + @("-IB", "-", (Get-OnboardPy))
   $probe | & $PythonExe @arguments
   if ($LASTEXITCODE -ne 0) {
     Stop-WithMessage "The selected SBTD Onboard source must support plan --action init and plan --action reset. Use a current sbtd-workflow-onboard directory or pass -SourceRoot to a compatible source. No onboarding actions were run."

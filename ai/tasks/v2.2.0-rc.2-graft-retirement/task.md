@@ -7,7 +7,7 @@ mode_note: 用户授权 main CI 全绿后按已确认 PRD 推进任务 5；§4 �
 status: "checking"
 branch: feat/v2.2.0-rc.2-graft-retirement
 created_at: '2026-11-25T10:04:13.021586+08:00'
-updated_at: "2026-11-25T12:52:35.369573+08:00"
+updated_at: "2026-11-25T13:11:03.147864+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -45,3 +45,5 @@ completed_at: null
 | 2026-11-25T12:29:15.652748+08:00 | in-progress | checking | 当前 Astra 会话：已修两项升级文档 P2，冻结当前分支，交 OMP 内置整分支复审。 | 三种备份来源分别核实；SKILL 和双语 README 明确选定宿主且已确认的升级 apply 可写受管 MCP。隔离 4/4 通过，双语标识与参考锚点检查通过。见 reports/upgrade-docs/verification.log 和同 stem 中文汇总。本轮不改产品行为；不把本地修正判为独审或远端 CI，不访问真实宿主配置。 |
 | 2026-11-25T12:36:55.937721+08:00 | checking | in-progress | 当前 Astra 会话：收到整分支内审 CHANGES_REQUESTED；按用户授权修复 d9ada83 的四项 P2。 | Legacy characterized：缺少根级 operationResults、旧 source-root 过晚拒绝、指引遗漏升级新增凭证及退役后漂移对照。Refactoring proceed，DDIA confirmed：沿用既有操作结果和只读能力预检，不扩大全局配置写入。只在新隔离目录验证，不读取两个现场条目。 |
 | 2026-11-25T12:52:35.369573+08:00 | in-progress | checking | 当前 Astra 会话：四项 P2 返修本地验收通过，按用户要求继续冻结并执行新的整分支内审。 | 普通 init 无 Graft 仍含实际文件回执，部分失败 exit 3 如实列出 1 个失败和 14 个成功。Bash/PowerShell 对真实旧 source-root 均在解析门禁退出 1，未创建宿主配置；新版和绕行入口有回归。双语步骤分别指定写入凭证、新建与替换；每次退役后封存存在性／摘要／权限绑定备份，拒绝覆盖漂移。4 模块 81/81，首轮测试断言折行与 Bash 夹具失败均保留。证据见 reports/four-p2/acceptance.json、acceptance.md 和 regression-final.log。README、README.zh、两份 CHANGELOG 及版本检查影响参考已同步；监控 prompt 主体和 pin 未变。未碰真实现场、未推送，待新 SHA 内审、独审与远端 CI。 |
+| 2026-11-25T13:08:18.484022+08:00 | checking | in-progress | 当前 Astra 会话：f4d212b 整分支原生内审 CHANGES_REQUESTED；用户授权修复 Bash/PowerShell 能力探针调用目录导入问题。 | Legacy characterized；Refactoring proceed：启动解释器即隔离，仅加入已选 scripts；保留 -B、只解析两种动作及旧源提前拒绝。只在任务私有域验收，不读写真实宿主。 |
+| 2026-11-25T13:11:03.147864+08:00 | in-progress | checking | 当前 Astra 会话：双端能力探针导入隔离修正已完成本地验证，冻结提交交整分支复审。 | Bash/PowerShell 以 -IB 启动只读解析器探针，保留选定 scripts；从含空 pathlib.py 的合成 cwd 启动，兼容源可达 dry-run 计划，旧源仍在后续动作前被拒绝。两模块 53/53 通过，Bash 语法及定向 Ruff 通过。见 reports/probe-import/regression.log 及同 stem 中文汇总。双语 CHANGELOG 与 REFERENCE 已更新；README、监控 prompt 和 pin 无契约变更，未同步。无真实宿主访问，无 Windows 实机、独审、CI 或发布结论。 |

@@ -328,7 +328,7 @@ for action in ("init", "reset"):
     if args.mode != "plan" or getattr(args, "action", None) != action:
         raise SystemExit("plan does not support both --action init and --action reset.")
 '
-  if ! printf '%s\n' "$probe" | "$PYTHON_BIN" -B - "$SOURCE_ROOT/scripts/onboard.py"; then
+  if ! printf '%s\n' "$probe" | "$PYTHON_BIN" -IB - "$SOURCE_ROOT/scripts/onboard.py"; then
     die "The selected SBTD Onboard source must support plan --action init and plan --action reset. Use a current sbtd-workflow-onboard directory or pass --source-root to a compatible source. No onboarding actions were run."
   fi
 }
