@@ -1,13 +1,10 @@
 # ruff: noqa: I001 -- local scripts require the explicit test path before import.
 from __future__ import annotations
-import json
-
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import unittest
 from argparse import Namespace
 from pathlib import Path
@@ -123,6 +120,14 @@ class GraftIsolationTests(unittest.TestCase):
             installed = skills / "sbtd-workflow-onboard"
             home.mkdir(exist_ok=True)
             shutil.copytree(PACKAGE, installed)
+            target = home / ".codex/config.toml"
+            target.parent.mkdir(parents=True)
+            original = (
+                b'# custom comment\nmodel = "keep-user-model"\n\n'
+                b'[mcp_servers.sbtd-graft]\ncommand = "/old/graft"\n\n'
+                b'[mcp_servers.foreign]\ncommand = "/foreign/server"\nargs = ["keep"]\n'
+            )
+            target.write_bytes(original)
             args = _args([alpha, beta], skills)
             environment = {
                 "HOME": str(home),
@@ -167,13 +172,12 @@ class GraftIsolationTests(unittest.TestCase):
             self.assertEqual(snapshot(sibling), before_sibling)
             self.assertFalse((workspace / "graft").exists())
             self.assertFalse((workspace / ".graft").exists())
-            config = tomllib.loads(
-                (home / ".codex/config.toml").read_text(encoding="utf-8")
-            )
-            servers = config["mcp_servers"]
-            self.assertEqual(set(servers), {"sbtd-graft"})
-            self.assertNotIn("cwd", servers["sbtd-graft"])
-            self.assertNotIn("--root", servers["sbtd-graft"]["args"])
+            for root in (alpha, beta):
+                self.assertEqual(
+                    (root / "graft/marker.txt").read_text(encoding="utf-8"),
+                    root.name + "\n",
+                )
+            self.assertEqual(target.read_bytes(), original)
 
     def test_linked_worktrees_on_different_branches_are_distinct_selected_roots(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -240,14 +244,11 @@ class GraftIsolationTests(unittest.TestCase):
                 result, code = execute_normal_wiring(plan, template_written=False)
             self.assertEqual(code, 0, result)
             self.assertEqual(built, [main, linked])
-            config = tomllib.loads(
-                (home / ".codex/config.toml").read_text(encoding="utf-8")
-            )
-            self.assertEqual(set(config["mcp_servers"]), {"sbtd-graft"})
-            self.assertNotIn("cwd", config["mcp_servers"]["sbtd-graft"])
-            self.assertNotIn("--root", config["mcp_servers"]["sbtd-graft"]["args"])
+            self.assertTrue((main / "graft").is_dir())
+            self.assertTrue((linked / "graft").is_dir())
+            self.assertFalse((home / ".codex/config.toml").exists())
 
-    def test_omp_two_roots_share_one_session_scoped_definition(self):
+    def test_omp_two_roots_build_graphs_without_a_shared_definition(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             home = base / "home"
@@ -291,11 +292,9 @@ class GraftIsolationTests(unittest.TestCase):
             ):
                 result, code = execute_normal_wiring(plan, template_written=False)
             self.assertEqual(code, 0, result)
-            target = home / ".omp/agent/mcp.json"
-            servers = json.loads(target.read_text(encoding="utf-8"))["mcpServers"]
-            self.assertEqual(set(servers), {"sbtd-graft"})
-            self.assertNotIn("cwd", servers["sbtd-graft"])
-            self.assertNotIn("--root", servers["sbtd-graft"]["args"])
+            self.assertTrue((alpha / "graft").is_dir())
+            self.assertTrue((beta / "graft").is_dir())
+            self.assertFalse((home / ".omp/agent/mcp.json").exists())
 
 
 if __name__ == "__main__":

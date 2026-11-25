@@ -83,13 +83,33 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 | 目标 | 选择 | 含义 |
 |---|---|---|
 | 检查而不安装 | `check` / `plan` | 只读盘点和拟执行内容，不代表已完成初始化 |
-| 首次完整初始化 | `init` | 安装缺失／无效 Skill；保留合法 Skill 壳，不保证其内容最新 |
+| 首次完整初始化 | `init` | 安装缺失／无效 Skill；保留合法 Skill 壳，不保证其内容最新；默认不写全局 Graft MCP |
 | 只追加项目 | `init-projects` | 项目 AGENTS／ignore 与适用本地资产；不做全局安装或用户级 MCP／hooks 写入 |
 | 对齐已有环境 | `upgrade` | 固定基线的 plan/apply/verify，显式裁决漂移，保留备份与恢复入口 |
 | 明确要求重装 | `reset` | **不备份**覆盖 bundled Skills，重装 required external Skills；不是带恢复保证的升级流程 |
 | 迁移旧数据 | `migration` | 批准投影、保留原件和验证回执；部署另行授权；中断未保存的部署证据只按当前状态调和，绝不回填伪造 |
 | 退役已检测旧资产 | `cleanup-legacy` | 展示实际候选，再单独确认执行 |
 | 恢复已授权批次 | `recovery` | 根据可信批次证据计划并确认恢复，不是通用撤销命令 |
+
+<a id="graft-retirement"></a>
+<details>
+<summary><strong>旧项目：移除 Graft 是不兼容改动（breaking change）</strong></summary>
+
+移除 `sbtd-graft` 后，项目不能再通过这个 MCP 连接查询代码图；移除对应的 Codex hook 处理器，也会停止由这些事件触发的更新。AST 检索只替代结构搜索，不替代全部图查询或 hook。**升级不等于同意退役 Graft。**
+
+普通 `init` 和默认 `check`/`plan` 不改全局 Graft MCP 或 hook 配置。显式项目根仍保留项目本地围栏和图；图存在不证明宿主已接线。`reset`、显式 `--graft-hooks` / `--graft-retire-legacy` 和密封迁移部署保持各自的接线契约。若升级计划选中了该宿主并列出配置变更，另行确认的 `upgrade --phase apply` 可以写入受管 MCP 配置。查找升级前的原件，应使用计划的 `payload.backup_root` 和回执的 `backup_ref`。`cleanup-legacy` 和 `--graft-retire-legacy` 都不会卸载当前全局连接；后者用于把旧的固定根绑定切换到当前接线。
+
+1. **先验证替代能力。** 在选定宿主中批准一次对已知夹具的只读检索，核对实际命中，并确认未放行的工具不能执行。如果项目仍依赖图查询或 hook，保留 Graft。
+2. **证明具体条目是谁写的。** 确定 Codex `mcp_servers.sbtd-graft`、OMP `mcpServers.sbtd-graft` 或单个 Codex hook 处理器。普通接线／重装核对计划和 `graftWiring.operationResults`；迁移核对 manifest 和部署证据；升级核对升级计划和 apply 回执。把成功写入结果对应到具体条目；文件被改过，不代表其中所有条目都属于 SBTD。
+   - **替换已有文件：** 核验记录的原件备份，与记录的写后状态比对，确认实际变更。
+   - **新建文件：** 须有 `before.type=absent`，并有该操作成功创建目标且其中含此条目的记录。原先没有文件可备份；单凭 `backup_ref=null` 不能证明新建。
+   - 两种情况都须核对当前文件仍与记录的写后状态一致。来源不明或之后已被编辑的条目保留。
+3. **记录切换现场。** 列明精确条目、共用连接的项目及恢复路径，另取确认并停止并发写入。在私有位置备份**仍有接线**的文件及权限。仅移除获准条目，保留无关条目和用户的 hook 文件。每次变更后、继续下一项前，记录目标路径和是否存在；若存在，再记录内容摘要及权限，并关联到对应的退役前备份。不能记录就停止。验证替代检索可用，且第二次执行无额外写入。
+4. **按该记录回退。** 逐项比对当前目标与记录的退役后存在性、内容摘要和权限。匹配才从已核验的退役前备份恢复，再核验恢复后的字节及权限。记录缺失或目标已变化时，保留现场和备份，不得覆盖后续编辑。宿主加载另行检查。隔离夹具验证的是文件恢复，不是生产卸载命令。
+
+[现行接线、备份位置与旧绑定切换说明](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+
+</details>
 
 [首次初始化提示词](#install)用于 bootstrap 之后的新 v2 环境。已有安装或 v1 项目使用下列对应提示词；执行前替换为精确的已审阅 v2 来源、项目根和配置域。
 
@@ -194,8 +214,8 @@ python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.t
 **只有明确要替换 Skill 内容时才使用 reset：**
 
 ```text
-请使用已审阅的 v2 sbtd-workflow-onboard，为平台 codex 和 /abs/project 制定 reset 计划。
-我需要重写项目级 AGENTS.md，但须先看到实际计划并确认。
+请用已审阅的 v2 包运行 `plan --action reset --platform codex --projects-root /abs/project`。
+我需要重写项目级 AGENTS.md，但须先看计划并确认。普通 `plan` 预览的是 init，不是 reset。
 核对包 revision 和解释器依赖；说明 bundled Skills 会无备份覆盖、
 required external Skills 会重装。识别定制 Skill 内容；如果我需要保留，
 停下来另行确认备份，或建议改用 upgrade。
@@ -407,7 +427,7 @@ Onboard 使用 **Ponytail skill-only provider**。官方 Ponytail plugin 已启�
 | Maestro CLI / MCP | Mobile／Hybrid flow、设备与 flow 诊断、可选 Web smoke | Web 回归主责或缺失设备上的真实行为 |
 | RTK / Caveman | 终端输出／对话压缩 | 测试执行、报告生成或工作流义务降低 |
 
-Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/scripts/graft_runtime.py)固定。每个有效 Codex／OMP 配置域只有一条全局 `sbtd-graft` 连接，按启动 cwd 锁定真实仓库／worktree；项目初始化准备本地图。不做共同父目录多项目图、不隐式开启 cloud enrichment、不静默替换旧绑定。Codex hooks 单独 opt-in；OMP 初始化不写 hooks。[接线契约](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+Graft 安装须单独确认，版本由[受管运行时](sbtd-workflow-onboard/scripts/graft_runtime.py)固定。普通 `init` 和默认 `check`/`plan` 不创建、更新或移除全局 `sbtd-graft` 连接；既有全局 Graft MCP/hook 配置保持原样。`reset` 和显式 `--graft-hooks` / `--graft-retire-legacy` 保持既有接线行为。显式项目根的项目设置会准备本地围栏和图；图存在不证明宿主已接线。全局连接已存在或经显式配置时，每个有效 Codex／OMP 配置域的一条连接按启动 cwd 锁定真实仓库／worktree。不做共同父目录多项目图、不隐式开启 cloud enrichment、不静默替换旧绑定。Codex hooks 单独 opt-in；OMP 初始化不写 hooks。[接线契约](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
 
 即使本机安装了 Trail，受管 Graft 也保持 Graft 命令／工具合同：子进程禁用自动 Trail 切换并隔离继承的 Trail 配置。项目 `.trail` 笔记与原生图输入同样执行拒绝链接／特殊文件的范围检查。见 [pin 验收场景](sbtd-workflow-onboard/REFERENCE.md#graft-pin-acceptance-scenarios)。
 

@@ -21,36 +21,41 @@ from tests.test_sbtd_migration_apply import file_contents, legacy_project
 
 
 class OmpNormalWiringTests(unittest.TestCase):
-    def test_unavailable_runtime_is_readonly_and_never_creates_omp_state(self):
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory).resolve()
-            root = legacy_project(base, "project")
-            home = base / "home"
-            home.mkdir()
-            args = Namespace(
-                projects_root=str(root),
-                platform="omp",
-                graft_hooks=False,
-                global_skills_dir=str(home / ".agent/skills"),
-            )
-            before = file_contents(base)
-            with (
-                mock.patch.dict(
-                    os.environ,
-                    {
-                        "HOME": str(home),
-                        "USERPROFILE": str(home),
-                        "CODEX_HOME": str(home / ".codex"),
-                    },
-                ),
-                mock.patch(
-                    "sbtd_graft_deployment.verified_runtime",
-                    side_effect=ContractError("runtime-unavailable", "missing"),
-                ),
-            ):
-                plan = plan_normal_wiring("init", args)
-            self.assertEqual(plan["status"], "not-available")
-            self.assertEqual(file_contents(base), before)
+    def test_default_modes_with_unavailable_runtime_never_create_host_state(self):
+        for platform in ("codex", "omp"):
+            for mode in ("init", "check", "plan"):
+                with (
+                    self.subTest(platform=platform, mode=mode),
+                    tempfile.TemporaryDirectory() as directory,
+                ):
+                    base = Path(directory).resolve()
+                    root = legacy_project(base, "project")
+                    home = base / "home"
+                    home.mkdir()
+                    args = Namespace(
+                        projects_root=str(root),
+                        platform=platform,
+                        graft_hooks=False,
+                        global_skills_dir=str(home / ".agent/skills"),
+                    )
+                    before = file_contents(base)
+                    with (
+                        mock.patch.dict(
+                            os.environ,
+                            {
+                                "HOME": str(home),
+                                "USERPROFILE": str(home),
+                                "CODEX_HOME": str(home / ".codex"),
+                            },
+                        ),
+                        mock.patch(
+                            "sbtd_graft_deployment.verified_runtime",
+                            side_effect=ContractError("runtime-unavailable", "missing"),
+                        ),
+                    ):
+                        plan = plan_normal_wiring(mode, args)
+                    self.assertEqual(plan["status"], "not-available")
+                    self.assertEqual(file_contents(base), before)
 
     def test_normal_plan_uses_template_only_when_project_agents_will_be_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -71,10 +76,10 @@ class OmpNormalWiringTests(unittest.TestCase):
                 "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
             }
 
-            def plan(skip_project_agents, mode="init"):
+            def plan(skip_project_agents, mode="init", platform="omp"):
                 args = Namespace(
                     projects_root=str(root),
-                    platform="omp",
+                    platform=platform,
                     graft_hooks=False,
                     global_skills_dir=str(home / ".agent/skills"),
                     skip_project_agents=skip_project_agents,
@@ -87,21 +92,36 @@ class OmpNormalWiringTests(unittest.TestCase):
                 ):
                     return plan_normal_wiring(mode, args)
 
-            self.assertEqual(plan(False)["status"], "planned")
-            self.assertEqual(plan(True)["status"], "blocked")
-            self.assertEqual(plan(False, "check")["status"], "planned")
-            self.assertEqual(plan(True, "check")["status"], "blocked")
+            for platform in ("codex", "omp"):
+                for mode in ("init", "check", "plan"):
+                    with self.subTest(platform=platform, mode=mode):
+                        planned = plan(False, mode, platform)
+                        self.assertEqual(planned["status"], "planned")
+                        self.assertIsNone(planned["codexHome"])
+                        self.assertIsNone(planned["ompHome"])
+                        self.assertEqual(planned["sharedOperations"], [])
+                        self.assertEqual(plan(True, mode, platform)["status"], "blocked")
             self.assertEqual((root / "AGENTS.md").read_bytes(), b"\xff<!-- graft:start -->broken")
 
 
-    def test_planned_omp_wiring_writes_active_config_without_hooks(self):
+    def test_default_init_writes_project_resources_and_preserves_global_mcp_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             root = legacy_project(base, "project")
             home = base / "home"
-            installed = home / ".agent/skills/sbtd-workflow-onboard"
             home.mkdir()
-            shutil.copytree(PACKAGE, installed)
+            target = home / ".omp/agent/mcp.json"
+            target.parent.mkdir(parents=True)
+            original = (
+                b'{\n'
+                b'  "custom": {"keep": [1, 2, 3]},\n'
+                b'  "mcpServers": {\n'
+                b'    "sbtd-graft": {"command": "/old/graft", "args": ["--root", "/old"]},\n'
+                b'    "foreign": {"command": "/foreign/server", "args": ["keep"]}\n'
+                b'  }\n'
+                b'}\n'
+            )
+            target.write_bytes(original)
             args = Namespace(
                 projects_root=str(root),
                 platform="omp",
@@ -128,8 +148,8 @@ class OmpNormalWiringTests(unittest.TestCase):
                 plan = plan_normal_wiring("init", args)
             self.assertEqual(plan["status"], "planned", plan)
             self.assertIsNone(plan["codexHome"])
-            self.assertEqual(plan["ompHome"], str(home / ".omp/agent"))
-            self.assertFalse((home / ".omp").exists())
+            self.assertIsNone(plan["ompHome"])
+            self.assertEqual(plan["sharedOperations"], [])
 
             def graph(project, _runtime):
                 (project / "graft").mkdir()
@@ -144,18 +164,78 @@ class OmpNormalWiringTests(unittest.TestCase):
                 result, code = execute_normal_wiring(plan, template_written=False)
             self.assertEqual(code, 0, result)
             self.assertEqual(result["status"], "success")
-            target = home / ".omp/agent/mcp.json"
-            servers = json.loads(target.read_text(encoding="utf-8"))["mcpServers"]
-            self.assertEqual(len(servers), 1)
-            server = next(iter(servers.values()))
-            self.assertEqual(server["command"], runtime["python"])
-            self.assertNotIn("cwd", server)
-            self.assertNotIn("--root", server["args"])
+            self.assertEqual(target.read_bytes(), original)
+            self.assertEqual(
+                (root / "graft/fixture").read_bytes(), b"synthetic native output"
+            )
+            agents = (root / "AGENTS.md").read_bytes()
+            self.assertTrue(agents.startswith(b"Foreign project rule.\n"))
+            self.assertIn(b"<!-- graft:start -->", agents)
             self.assertFalse((home / ".codex/hooks.json").exists())
             self.assertEqual(result["hooks"], "not-installed")
 
-    def test_global_only_install_preserves_foreign_config_and_repeats_without_changes(self):
-        """GM-01/06: no project is required to install the shared connection."""
+    def test_global_only_default_modes_preserve_existing_and_missing_mcp(self):
+        """GM-01/06: selecting a host without a project does not authorize wiring."""
+        for platform in ("codex", "omp"):
+            for mode in ("init", "check", "plan"):
+                for exists in (False, True):
+                    with self.subTest(
+                        platform=platform, mode=mode, exists=exists
+                    ), tempfile.TemporaryDirectory() as directory:
+                        base = Path(directory).resolve()
+                        home = base / "home"
+                        home.mkdir()
+                        target = (
+                            home / ".codex/config.toml"
+                            if platform == "codex"
+                            else home / ".omp/agent/mcp.json"
+                        )
+                        if exists:
+                            target.parent.mkdir(parents=True)
+                            original = (
+                                b'# custom comment\nmodel = "keep-user-model"\n\n'
+                                b'[mcp_servers.sbtd-graft]\ncommand = "/old/graft"\n\n'
+                                b'[mcp_servers.foreign]\ncommand = "/foreign/server"\n'
+                                if platform == "codex"
+                                else b'{\n'
+                                b'  "custom": {"keep": true},\n'
+                                b'  "mcpServers": {\n'
+                                b'    "sbtd-graft": {"command": "/old/graft"},\n'
+                                b'    "foreign": {"command": "/foreign/server", "args": ["keep"]}\n'
+                                b'  }\n'
+                                b'}\n'
+                            )
+                            target.write_bytes(original)
+                        before = file_contents(base)
+                        args = Namespace(
+                            projects_root=None,
+                            platform=platform,
+                            graft_hooks=False,
+                            global_skills_dir=str(home / ".agent/skills"),
+                        )
+                        with (
+                            mock.patch.dict(os.environ, {
+                                "HOME": str(home),
+                                "USERPROFILE": str(home),
+                                "CODEX_HOME": str(home / ".codex"),
+                                "AGENT_SKILLS_DIR": str(home / ".agent/skills"),
+                            }),
+                            mock.patch(
+                                "sbtd_graft_deployment.verified_runtime",
+                                side_effect=AssertionError("runtime probe is not needed"),
+                            ),
+                        ):
+                            plan = plan_normal_wiring(mode, args)
+                            result, code = execute_normal_wiring(
+                                plan, template_written=False
+                            )
+                        self.assertEqual(plan["status"], "skipped", plan)
+                        self.assertEqual(result["status"], "skipped")
+                        self.assertEqual(code, 0, result)
+                        self.assertEqual(file_contents(base), before)
+
+    def test_reset_global_only_install_preserves_foreign_config_and_repeats_without_changes(self):
+        """GM-01/06: reset retains the explicitly supported shared connection."""
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             home = base / "home"
@@ -185,7 +265,7 @@ class OmpNormalWiringTests(unittest.TestCase):
                 }),
                 mock.patch("sbtd_graft_deployment.verified_runtime", return_value=runtime),
             ):
-                plan = plan_normal_wiring("init", args)
+                plan = plan_normal_wiring("reset", args)
                 self.assertEqual(plan["status"], "planned", plan)
                 self.assertEqual(plan["privateOperations"], {})
                 result, code = execute_normal_wiring(plan, template_written=False)
@@ -197,14 +277,14 @@ class OmpNormalWiringTests(unittest.TestCase):
                 self.assertNotIn("cwd", servers["sbtd-graft"])
                 self.assertNotIn("--root", servers["sbtd-graft"]["args"])
                 before = target.read_bytes()
-                second = plan_normal_wiring("init", args)
+                second = plan_normal_wiring("reset", args)
                 result, code = execute_normal_wiring(second, template_written=False)
                 self.assertEqual(code, 0, result)
                 self.assertEqual(target.read_bytes(), before)
                 self.assertFalse((home / "graft").exists())
 
-    def test_global_only_failed_write_does_not_report_empty_project_success(self):
-        """GM-01/07: a shared-resource failure is failure even with zero roots."""
+    def test_reset_global_only_failed_write_does_not_report_empty_project_success(self):
+        """GM-01/07: reset still reports a shared-resource failure with zero roots."""
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()
             installed = base / ".agent/skills/sbtd-workflow-onboard"
@@ -224,7 +304,7 @@ class OmpNormalWiringTests(unittest.TestCase):
                 }),
                 mock.patch("sbtd_graft_deployment.verified_runtime", return_value=runtime),
             ):
-                plan = plan_normal_wiring("init", args)
+                plan = plan_normal_wiring("reset", args)
                 self.assertEqual(plan["status"], "planned", plan)
                 with mock.patch("sbtd_graft_deployment.write_file", side_effect=OSError("full disk")):
                     result, code = execute_normal_wiring(plan, template_written=False)

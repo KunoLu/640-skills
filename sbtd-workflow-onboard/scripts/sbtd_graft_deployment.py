@@ -2215,6 +2215,10 @@ def plan_normal_wiring(
             "status": "blocked",
             "reason": "OMP wiring does not include Codex hooks",
         }
+    # Selecting a platform selects the installer, not a global Graft connection.
+    wire_host = not no_mcp and (mode == "reset" or authorized or retire_legacy)
+    if not wire_host and not roots:
+        return {"status": "skipped", "reason": "Global Graft wiring was not requested"}
     try:
         _validate_selected_root_batch(roots)
         try:
@@ -2243,7 +2247,7 @@ def plan_normal_wiring(
         codex_home = None
         omp_home = None
         discovered = None
-        if mode != "init-projects" and not no_mcp:
+        if wire_host:
             if platform == "codex":
                 codex_home = default_codex_home()
             else:

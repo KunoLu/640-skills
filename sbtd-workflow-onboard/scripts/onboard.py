@@ -6815,6 +6815,8 @@ def build_plan_payload(
 
 def print_plan(payload: dict[str, object]) -> None:
     print(f"Mode: {payload['mode']}")
+    if "plannedAction" in payload:
+        print(f"Planned action: {payload['plannedAction']}")
     print(f"Platform: {payload['platform']}")
     if "contentAlignment" in payload:
         print(f"Skills-only content alignment: {payload['contentAlignment']['status']}")
@@ -7144,8 +7146,10 @@ def run(mode: str, args: argparse.Namespace) -> int:
     global_skills_dir, global_skills_dir_source = resolve_global_skills_dir(
         getattr(args, "global_skills_dir", None)
     )
-    operations = build_operations(mode, args)
-    bundled_migration_plan = build_bundled_skill_migration_plan(mode, args)
+    # Use the selected action to plan targets, never to dispatch writes.
+    planned_action = (getattr(args, "action", None) or "init") if mode == "plan" else mode
+    operations = build_operations(planned_action, args)
+    bundled_migration_plan = build_bundled_skill_migration_plan(planned_action, args)
     external_migration_plan = (
         {
             "mode": "mattpocock-external-migration",
@@ -7164,10 +7168,12 @@ def run(mode: str, args: argparse.Namespace) -> int:
         global_skills_dir_source,
         build_sbtd_project_setup(mode, args),
     )
+    if mode == "plan":
+        plan_payload["plannedAction"] = planned_action
     from sbtd_graft_deployment import plan_normal_wiring
 
     wiring_plan = plan_normal_wiring(
-        mode, args,
+        planned_action, args,
         installation_targets=[op.target for op in operations if not op.same_location],
     )
     if wiring_plan["status"] != "skipped":
@@ -7354,6 +7360,7 @@ def run(mode: str, args: argparse.Namespace) -> int:
                 )
             )
 
+    plan_payload["operationResults"] = operation_results
     failed_operations = [
         item for item in operation_results if item["status"] == "failed"
     ]
@@ -7379,9 +7386,6 @@ def run(mode: str, args: argparse.Namespace) -> int:
         return 3
 
     if developer_plan is not None:
-        # Capture completed writes before identity work: its failure must not
-        # leave automation with a plan that hides already-applied changes.
-        plan_payload["operationResults"] = operation_results
         identity_roots = [
             Path(str(entry["projectRoot"]))
             for entry in cast(list[dict[str, object]], developer_plan["projects"])
@@ -7475,7 +7479,6 @@ def run(mode: str, args: argparse.Namespace) -> int:
         plan_payload["languageTooling"] = language_tooling
     if wiring_plan["status"] != "skipped":
         plan_payload["graftWiring"] = wiring_result
-        plan_payload["operationResults"] = operation_results
         if wiring_exit:
             wiring_status = "blocked" if wiring_exit == 2 else "failed"
             for project in cast(list[dict[str, object]], sbtd_report["projects"]):
@@ -7556,6 +7559,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     for mode in ("check", "plan", "init", "reset", "init-projects"):
         sub = subparsers.add_parser(mode)
+        if mode == "plan":
+            sub.add_argument(
+                "--action", choices=("init", "reset"), action=SingleValueAction,
+                help="Preview targets for this action without writing (default: init).",
+            )
         if mode in {"init", "init-projects"}:
             _add_migration_context(sub)
             sub.add_argument(

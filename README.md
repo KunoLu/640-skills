@@ -83,13 +83,33 @@ These are **natural-language requests to your agent**, not new CLI commands. Rep
 | Goal | Choose | What it means |
 |---|---|---|
 | Inspect without installing | `check` / `plan` | Read-only inventory and proposed work; not proof that setup ran |
-| First full setup | `init` | Install missing/invalid Skills; preserve valid Skill shells, not necessarily current content |
+| First full setup | `init` | Install missing/invalid Skills; preserve valid Skill shells, not necessarily current content; no default global Graft MCP |
 | Add a project only | `init-projects` | Project AGENTS/ignore and applicable local assets; no global installation or user MCP/hooks |
 | Align an existing environment | `upgrade` | Fixed-baseline plan/apply/verify, explicit drift decisions, backups and recovery |
 | Deliberately reinstall | `reset` | Overwrite bundled Skills **without backup**, reinstall required externals; not an upgrade recovery protocol |
 | Move legacy data | `migration` | Approved projections, retained originals and verified receipts; separate deployment authorization; interrupted deployment evidence is reconciled from current state, never backfilled |
 | Retire detected legacy assets | `cleanup-legacy` | Display actual candidates, then obtain separate execution consent |
 | Restore an authorized batch | `recovery` | Plan and confirm restoration from trusted batch evidence; not a general undo command |
+
+<a id="graft-retirement"></a>
+<details>
+<summary><strong>Existing projects: Graft retirement is a breaking change</strong></summary>
+
+Removing `sbtd-graft` takes away the MCP connection used for graph queries. Removing its Codex hook handlers also stops their event-driven updates. AST search replaces structural search, not every graph query or hook. **An upgrade is not consent to retire Graft.**
+
+Ordinary `init` and default `check`/`plan` leave global Graft MCP and hook configuration untouched. Explicit project roots still retain local fence/graph setup; a graph does not prove host registration. `reset`, explicit `--graft-hooks` / `--graft-retire-legacy`, and sealed migration deployment keep their wiring contracts. A separately confirmed `upgrade --phase apply` can write a managed MCP configuration if the upgrade plan includes that host and calls for the change. For upgrade originals, use the plan's `payload.backup_root` and the receipt's `backup_ref`. Neither `cleanup-legacy` nor `--graft-retire-legacy` uninstalls the current global connection; the latter switches older fixed-root bindings to the current wiring.
+
+1. **Test the replacement first.** In the selected host, approve and run a read-only search on a known fixture; verify the match and that a tool outside the allowlist cannot run. If the project still needs graph queries or hooks, keep Graft.
+2. **Prove who wrote the entry.** Identify the exact Codex `mcp_servers.sbtd-graft`, OMP `mcpServers.sbtd-graft`, or Codex hook handler. Use the plan and `graftWiring.operationResults` for normal/reset wiring, the manifest and deployment evidence for migration, or the upgrade plan and its apply receipt for upgrade. Match the successful write to the specific entry; a changed file alone does not prove who wrote every entry in it.
+   - **Replaced file:** verify the recorded original backup and compare it with the recorded after-state to establish what changed.
+   - **New file:** require a recorded `before.type=absent` and evidence that the operation created the target with this entry. There was no original to back up; `backup_ref=null` alone does not prove creation.
+   - In either case, verify the current file still matches the recorded after-state. Preserve entries with unknown ownership or later edits.
+3. **Record the cutover.** List the exact entries, projects sharing the connection, and recovery path. Obtain separate consent and stop concurrent writers. Privately back up the **still-wired** files and their permissions. Remove only approved entries; keep unrelated entries and the user's hook file. After each change, before proceeding, record the target path, whether it now exists, and, if present, its content digest and permissions. Link that observation to its pre-retirement backup. If it cannot be recorded, stop. Verify replacement search and a second pass with no further writes.
+4. **Roll back only against that record.** Compare each target to its recorded post-retirement existence, digest and permissions. Restore the verified pre-retirement backup only on a match, then verify the restored bytes and permissions. If evidence is missing or the target has changed, preserve both copies; do not overwrite later edits. Check host loading separately. The isolated fixture exercised file restoration, not a production uninstall command.
+
+[Current wiring, backup locations and legacy cutover](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+
+</details>
 
 The [first-time initialization prompt](#install) covers a new v2 installation after bootstrap. Use the following prompts for an existing installation or a v1 project; substitute the exact reviewed v2 source, project roots and configuration domains before execution.
 
@@ -199,8 +219,8 @@ These prompts map to the [implemented upgrade and recovery commands](sbtd-workfl
 **Use reset only when you intend to replace Skill content:**
 
 ```text
-Use the reviewed v2 sbtd-workflow-onboard package to plan reset for platform codex
-and /abs/project. I want project AGENTS.md rewritten, subject to the displayed plan.
+Preview the reviewed v2 package with `plan --action reset --platform codex --projects-root /abs/project`.
+I want project AGENTS.md rewritten, subject to the displayed plan. Plain `plan` previews init, not reset.
 Verify the package revision and interpreter dependencies. Explain that bundled Skills
 will be overwritten without backup and required external Skills reinstalled.
 Identify custom Skill content; if I need it preserved, stop for a separately approved backup
@@ -416,7 +436,7 @@ Onboard uses the **Ponytail skill-only provider**. An enabled official Ponytail 
 | Maestro CLI / MCP | Mobile/Hybrid flows; device/flow diagnostics; optional Web smoke | Primary Web regression or unavailable real-device behavior |
 | RTK / Caveman | Terminal-output / reply compression | Test execution, reports or reduced workflow obligations |
 
-Graft installation is separately confirmed and pinned by the [managed runtime](sbtd-workflow-onboard/scripts/graft_runtime.py). One global `sbtd-graft` connection per effective Codex/OMP configuration domain locks the real repository/worktree from startup cwd; project initialization prepares local graphs. No parent-directory multi-project graph, implicit cloud enrichment, or silent legacy binding replacement. Codex hooks are a separate opt-in; OMP setup does not write hooks. [Wiring contract](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
+Graft installation is separately confirmed and pinned by the [managed runtime](sbtd-workflow-onboard/scripts/graft_runtime.py). Ordinary `init` and default `check`/`plan` do not create, update, or remove a global `sbtd-graft` connection; existing global Graft MCP/hook configuration stays untouched. `reset` and explicit `--graft-hooks` / `--graft-retire-legacy` retain their existing wiring behavior. With explicit project roots, project setup prepares the local fence and graph; graph presence does not prove host registration. Where a global connection already exists or is explicitly configured, one connection per effective Codex/OMP configuration domain locks the real repository/worktree from startup cwd. No parent-directory multi-project graph, implicit cloud enrichment, or silent legacy binding replacement. Codex hooks are a separate opt-in; OMP setup does not write hooks. [Wiring contract](sbtd-workflow-onboard/REFERENCE.md#codex-and-omp-wiring-and-deployment)
 
 Managed Graft stays on the Graft command/tool contract even when Trail is installed: child environments disable automatic Trail switching and inherited Trail configuration. Project `.trail` notes are subject to the same no-link/no-special-file scope checks as native graph inputs. See [pin acceptance scenarios](sbtd-workflow-onboard/REFERENCE.md#graft-pin-acceptance-scenarios).
 

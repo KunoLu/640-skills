@@ -31,6 +31,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.project_root_two.mkdir()
         self.log_path = self.root / "onboard-modes.log"
         self.args_log_path = self.root / "onboard-args.log"
+        self.capability_log_path = self.root / "onboard-capability.log"
         self.env = os.environ.copy()
         self.env["PATH"] = os.pathsep.join(
             (str(self.bin_dir), os.environ.get("PATH", ""))
@@ -39,6 +40,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.env["FAKE_STATE_DIR"] = str(self.state_dir)
         self.env["FAKE_ONBOARD_LOG"] = str(self.log_path)
         self.env["FAKE_ONBOARD_ARGS_LOG"] = str(self.args_log_path)
+        self.env["FAKE_ONBOARD_CAPABILITY_LOG"] = str(self.capability_log_path)
         self.env["FAKE_PROJECT_ROOT"] = str(self.project_root)
         self.write_fake_python()
 
@@ -59,6 +61,10 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         return """
             #!/bin/sh
             if [ "$1" = "-" ]; then
+              exec "$REAL_PYTHON" "$@"
+            fi
+            if { [ "$1" = "-B" ] || [ "$1" = "-IB" ]; } && [ "$2" = "-" ]; then
+              printf '%s\n' "$*" >> "$FAKE_ONBOARD_CAPABILITY_LOG"
               exec "$REAL_PYTHON" "$@"
             fi
 
@@ -197,6 +203,41 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             self.fake_onboard_python_body(),
         )
 
+    def make_legacy_plan_action_source(self) -> Path:
+        source = self.root / "legacy-plan-action-source"
+        for relative in (
+            "SKILL.md",
+            "REFERENCE.md",
+            "catalog.json",
+            "catalog.schema.json",
+            "scripts/sbtd_project.py",
+            "templates/agents/AGENTS.global.md",
+            "templates/agents/AGENTS.project.md",
+            "assets/external-skills/stable/MANIFEST.json",
+        ):
+            target = source / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("fixture\n", encoding="utf-8")
+        (source / "templates/skills").mkdir(parents=True)
+        (source / "scripts/onboard.py").write_text(
+            textwrap.dedent(
+                """
+                import argparse
+
+                def build_parser():
+                    parser = argparse.ArgumentParser()
+                    modes = parser.add_subparsers(dest="mode", required=True)
+                    modes.add_parser("plan")
+                    return parser
+
+                if __name__ == "__main__":
+                    build_parser().parse_args()
+                """
+            ).lstrip(),
+            encoding="utf-8",
+        )
+        return source
+
     def run_installer(
         self,
         user_input: str = "",
@@ -205,6 +246,9 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         platform: str = "codex",
         yes: bool = True,
         no_mcp: bool = True,
+        dry_run: bool = False,
+        source_root: Path = SOURCE_ROOT,
+        cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         project_args = (
             ("--init-projects", str(self.project_root))
@@ -221,6 +265,8 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             optional_args.append("--yes")
         if no_mcp:
             optional_args.append("--no-mcp")
+        if dry_run:
+            optional_args.append("--dry-run")
         return subprocess.run(
             (
                 "/bin/bash",
@@ -228,12 +274,13 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "--platform",
                 platform,
                 "--source-root",
-                str(SOURCE_ROOT),
+                str(source_root),
                 *project_args,
                 "--skip-project-agents",
                 *optional_args,
                 "--no-color",
             ),
+            cwd=cwd,
             input=user_input,
             check=False,
             capture_output=True,
@@ -249,7 +296,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         return self.args_log_path.read_text(encoding="utf-8").splitlines()
 
     def run_workflow_mode(
-        self, mode: str, *args: str
+        self, mode: str, *args: str, source_root: Path = SOURCE_ROOT
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             (
@@ -257,7 +304,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 str(INSTALL_SH),
                 mode,
                 "--source-root",
-                str(SOURCE_ROOT),
+                str(source_root),
                 *args,
             ),
             check=False,
@@ -449,6 +496,96 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertEqual(modes[0], "check-agent-cli")
         self.assertLess(modes.index("check-agent-cli"), modes.index("check"))
         self.assertIn("reset", modes)
+
+    def test_final_plan_forwards_selected_action_before_separate_execution(self) -> None:
+        for action, dry_run in (("init", False), ("reset", False), ("reset", True)):
+            with self.subTest(action=action, dry_run=dry_run):
+                self.log_path.write_text("", encoding="utf-8")
+                self.args_log_path.write_text("", encoding="utf-8")
+
+                completed = self.run_installer(action=action, dry_run=dry_run)
+
+                self.assertEqual(
+                    completed.returncode, 0, completed.stderr or completed.stdout
+                )
+                invocations = [line.split() for line in self.invocation_args()]
+                plan = next(args for args in invocations if args[1:2] == ["plan"])
+                self.assertEqual(plan.count("--action"), 1)
+                self.assertEqual(plan[plan.index("--action") + 1], action)
+                self.assertIn("--no-mcp", plan)
+                modes = self.modes()
+                if dry_run:
+                    self.assertNotIn(action, modes)
+                    self.assertIn("Dry run: skipped onboard reset writes.", completed.stdout)
+                else:
+                    execution = next(
+                        args for args in invocations if args[1:2] == [action]
+                    )
+                    self.assertNotIn("--action", execution)
+                    self.assertEqual(execution[-1], "--yes")
+                    self.assertLess(modes.index("plan"), modes.index(action))
+
+    def test_bash_plan_action_capability_rejects_legacy_source_before_actions(self) -> None:
+        source = self.make_legacy_plan_action_source()
+        help_completed = subprocess.run(
+            [sys.executable, "-B", str(source / "scripts/onboard.py"), "plan", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(help_completed.returncode, 0, help_completed.stderr)
+
+        for action in ("init", "reset"):
+            with self.subTest(action=action):
+                for path in (self.log_path, self.args_log_path, self.capability_log_path):
+                    path.unlink(missing_ok=True)
+                completed = self.run_installer(
+                    action=action, dry_run=True, source_root=source
+                )
+
+                self.assertNotEqual(completed.returncode, 0)
+                combined = completed.stdout + completed.stderr
+                self.assertIn("--source-root", combined)
+                self.assertFalse(self.log_path.exists())
+                self.assertFalse(self.args_log_path.exists())
+                self.assertEqual(list(self.project_root.iterdir()), [])
+                self.assertIn(
+                    str(source / "scripts/onboard.py"),
+                    self.capability_log_path.read_text(encoding="utf-8"),
+                )
+
+        for path in (self.log_path, self.args_log_path, self.capability_log_path):
+            path.unlink(missing_ok=True)
+        for state in ("npm", "agent", "graft"):
+            (self.state_dir / state).touch()
+        # An empty, unrelated project module must not replace the probe's stdlib pathlib.
+        (self.project_root / "pathlib.py").touch()
+        completed = self.run_installer(action="reset", dry_run=True, cwd=self.project_root)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("plan", self.modes())
+        self.assertNotIn("reset", self.modes())
+        self.assertIn(
+            str(SOURCE_ROOT / "scripts/onboard.py"),
+            self.capability_log_path.read_text(encoding="utf-8"),
+        )
+
+    def test_bash_plan_action_capability_is_limited_to_full_init_reset(self) -> None:
+        source = self.make_legacy_plan_action_source()
+        completed = self.run_installer(projects_only=True, source_root=source)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("init-projects", self.modes())
+        self.assertFalse(self.capability_log_path.exists())
+
+        self.log_path.unlink()
+        self.args_log_path.unlink()
+        completed = self.run_workflow_mode("migration", "--json", source_root=source)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.modes(), ["migration"])
+        self.assertFalse(self.capability_log_path.exists())
 
     def test_agent_platform_is_forwarded_to_onboarding_operations(
         self,
@@ -799,6 +936,7 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 """
                 #!/bin/sh
                 if [ "$1" = "-" ]; then exec "$REAL_PYTHON" "$@"; fi
+                if { [ "$1" = "-B" ] || [ "$1" = "-IB" ]; } && [ "$2" = "-" ]; then exec "$REAL_PYTHON" "$@"; fi
                 case "$2" in
                   check|check-projects|check-agent-cli|plan) exec "$REAL_PYTHON" "$@" ;;
                   *) : > "$MUTATION_LOG"; exit 99 ;;
@@ -1269,8 +1407,20 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
         self.assertFalse(self.log_path.exists())
 
     def run_powershell_installer(
-        self, runtime: str, environment: dict[str, str]
+        self,
+        runtime: str,
+        environment: dict[str, str],
+        action: str = "init",
+        dry_run: bool = False,
+        source_root: Path = SOURCE_ROOT,
+        projects_only: bool = False,
+        cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        scope = (
+            ["-InitProjects", str(self.project_root)]
+            if projects_only
+            else ["-ProjectsRoot", str(self.project_root), "-Action", action]
+        )
         return subprocess.run(
             [
                 runtime,
@@ -1279,18 +1429,17 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
                 "-File",
                 str(INSTALL_PS1),
                 "-SourceRoot",
-                str(SOURCE_ROOT),
+                str(source_root),
                 "-Platform",
                 "codex",
-                "-ProjectsRoot",
-                str(self.project_root),
-                "-Action",
-                "init",
+                *scope,
                 "-SkipProjectAgents",
                 "-NoMcp",
                 "-NoColor",
                 "-Yes",
+                *(["-DryRun"] if dry_run else []),
             ],
+            cwd=cwd,
             env=environment,
             capture_output=True,
             text=True,
@@ -1299,6 +1448,138 @@ class BashInstallerAgentCliFlowTests(unittest.TestCase):
             timeout=60,
             check=False,
         )
+
+    def test_powershell_final_plan_forwards_normalized_action_before_execution(
+        self,
+    ) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        for supplied_action, action, dry_run in (
+            ("init", "init", False),
+            ("Reset", "reset", False),
+            ("reset", "reset", True),
+        ):
+            with self.subTest(action=supplied_action, dry_run=dry_run):
+                self.log_path.write_text("", encoding="utf-8")
+                self.args_log_path.write_text("", encoding="utf-8")
+
+                completed = self.run_powershell_installer(
+                    runtime, environment, action=supplied_action, dry_run=dry_run
+                )
+
+                self.assertEqual(
+                    completed.returncode, 0, completed.stderr or completed.stdout
+                )
+                invocations = [line.split() for line in self.invocation_args()]
+                plan = next(args for args in invocations if args[1:2] == ["plan"])
+                self.assertEqual(plan.count("--action"), 1)
+                self.assertEqual(plan[plan.index("--action") + 1], action)
+                self.assertIn("--no-mcp", plan)
+                modes = self.modes()
+                if dry_run:
+                    self.assertNotIn(action, modes)
+                    self.assertIn("Dry run: skipped onboard reset writes.", completed.stdout)
+                else:
+                    execution = next(
+                        args for args in invocations if args[1:2] == [action]
+                    )
+                    self.assertNotIn("--action", execution)
+                    self.assertEqual(execution[-1], "--yes")
+                    self.assertLess(modes.index("plan"), modes.index(action))
+
+    def test_powershell_plan_action_capability_rejects_legacy_source_before_actions(
+        self,
+    ) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        source = self.make_legacy_plan_action_source()
+        help_completed = subprocess.run(
+            [sys.executable, "-B", str(source / "scripts/onboard.py"), "plan", "--help"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(help_completed.returncode, 0, help_completed.stderr)
+
+        for action in ("init", "reset"):
+            with self.subTest(action=action):
+                for path in (self.log_path, self.args_log_path, self.capability_log_path):
+                    path.unlink(missing_ok=True)
+                completed = self.run_powershell_installer(
+                    runtime,
+                    environment,
+                    action=action,
+                    dry_run=True,
+                    source_root=source,
+                )
+
+                self.assertNotEqual(completed.returncode, 0)
+                combined = completed.stdout + completed.stderr
+                self.assertIn("-SourceRoot", combined)
+                self.assertFalse(self.log_path.exists())
+                self.assertFalse(self.args_log_path.exists())
+                self.assertEqual(list(self.project_root.iterdir()), [])
+                self.assertIn(
+                    str(source / "scripts/onboard.py"),
+                    self.capability_log_path.read_text(encoding="utf-8"),
+                )
+
+        for path in (self.log_path, self.args_log_path, self.capability_log_path):
+            path.unlink(missing_ok=True)
+        for state in ("npm", "agent", "graft"):
+            (self.state_dir / state).touch()
+        (self.project_root / "pathlib.py").touch()
+        completed = self.run_powershell_installer(
+            runtime, environment, action="reset", dry_run=True, cwd=self.project_root
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("plan", self.modes())
+        self.assertNotIn("reset", self.modes())
+        self.assertIn(
+            str(SOURCE_ROOT / "scripts/onboard.py"),
+            self.capability_log_path.read_text(encoding="utf-8"),
+        )
+
+    def test_powershell_plan_action_capability_is_limited_to_full_init_reset(
+        self,
+    ) -> None:
+        runtime, environment = self.powershell_fake_onboard_environment()
+        source = self.make_legacy_plan_action_source()
+        completed = self.run_powershell_installer(
+            runtime, environment, source_root=source, projects_only=True
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
+        self.assertIn("init-projects", self.modes())
+        self.assertFalse(self.capability_log_path.exists())
+
+        self.log_path.unlink()
+        self.args_log_path.unlink()
+        completed = subprocess.run(
+            [
+                runtime,
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(INSTALL_PS1),
+                "-WorkflowMode",
+                "migration",
+                "-SourceRoot",
+                str(source),
+                "--json",
+            ],
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(self.modes(), ["migration"])
+        self.assertFalse(self.capability_log_path.exists())
 
     def test_powershell_blocks_on_ponytail_provider_conflict(self) -> None:
         runtime, environment = self.powershell_fake_onboard_environment()

@@ -11,10 +11,14 @@
 
 ### 变更
 
+- 普通 `init` 和默认 `check`/`plan` 不再为 Codex／OMP 创建、更新或移除全局 Graft MCP 定义，与 runtime 是否已验证可用无关。显式项目根仍维护项目本地围栏／图；图存在不证明宿主已接线。`reset`、`init-projects`、migration-context `init` 及显式 `--graft-hooks` / `--graft-retire-legacy` 保持既有契约和校验。普通路径不改动既有全局 Graft MCP/hook 配置，也不宣称完成整机退役。
 - 将宿主验收固定为 `codex@0.171.0` + `omp@19.1.0`，要求两个宿主均通过，不再采用历史单宿主兜底。两者于 2026-11-23 完成 Air 隔离工具调用、入库与重复导入基础冒烟；旧云端记录保留于 `smoke_history`。仅版本匹配、旧报告和 parser fixture 均不是通过证据。本基线不证明完整审批／MCP／失败／中断矩阵或发布就绪，不升级既有安装，也不改变原 Astra 会话。
+- 补充旧项目移除 Graft 的不兼容影响、移除前的归属核验及不覆盖后续编辑的接线恢复步骤。不自动更改宿主配置。
 
 ### 修复
 
+- 两个根安装器现按所选动作生成确认前计划。`plan --action reset` 显示 reset 计划写入的全局 Graft MCP 目标；普通 `plan` 仍预览 init，不授权写入。
+- 即使跳过 Graft 接线，安装 JSON 仍保留实际文件操作结果。两端根安装器在可选安装前检查所选来源是否支持按动作预览，预检不再隐式从调用者工作目录导入模块。
 - 将四个 Linux 验证作业固定到提供 Python `3.12.10` 制品的 `ubuntu-24.04`，避免 `ubuntu-latest` 转向 Ubuntu 26.04 后的环境准备失败；Python／Node 版本、action SHA、原生平台覆盖、测试分片及报告失败门禁均保持不变。
 - 在 Codex 导入边界规范化官方 `codex-cli` 版本标识，让存储事件、回执与能力 pin 使用同一版本表示；新增 CLI→入库／重放→能力判断回归，保留旧版／未知版／预发布版拒绝，并在重导入冲突时保全既有 raw-version 观察，不静默迁移。
 - 随包交付 Phosphor 元数据及 Impeccable 平台参考文档原作的 MIT 全文。独立安装外部技能和显式升级均随技能交付适用的许可证和通知；来源 pin 与回退边界不变。

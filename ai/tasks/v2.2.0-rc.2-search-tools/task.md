@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-search-tools
 workflow_mode: strict
 mode_source: user
 mode_note: 'rc.2 PRD；用户已确认在 #225 合入、主线 CI 全绿、清理任务 3 分支后启动任务 4。'
-status: "checking"
+status: "done"
 branch: test/v2.2.0-rc.2-search-tools
 created_at: '2026-11-24T23:22:36.394772+08:00'
-updated_at: "2026-11-25T08:05:03.925639+08:00"
-completed_at: null
+updated_at: "2026-11-25T10:03:01.866351+08:00"
+completed_at: "2026-11-25T10:03:01.866351+08:00"
 "blocked_reason": null
 ---
 # 任务 4：替代检索能力
@@ -53,3 +53,4 @@ strict。未完整调用 grill-with-docs：PRD 任务 4 已确定四项能力、
 | 2026-11-25T07:55:33.013847+08:00 | blocked | in-progress | 当前 Astra 会话：用户已授权仅写入一次性合成 OMP 配置夹具，开始 Onboard 备份、重复运行及原字节恢复验收。 | 只执行生产 language_tooling 接口；不运行全局 init/reset，不触及已认证宿主。 |
 | 2026-11-25T07:56:55.911322+08:00 | in-progress | checking | 当前 Astra 会话：已完成获准的 Onboard 新合成配置夹具验收，保持循环关闭，转入检查。 | macOS 隔离生产 check/apply：拒绝零写；获准后原子替换前实测 0600 备份与仍在位原件字节相同；新配置仅启用 astGrep.enabled。二次检查及应用均无待写，无写入，内容、权限与 mtime 未变。验收驱动以备份替回，配置 SHA-256 与原件一致，不宣称自动恢复。见 reports/onboard-private-accept/acceptance.json 和同 stem 中文汇总。没有修改生产代码、已认证宿主或全局配置，未提交、推送或发布。 |
 | 2026-11-25T08:05:03.925639+08:00 | checking | checking | 当前 Astra 会话：完成 任务 4 本地工作树双路独立内审及原审查人复核 | {"changed_files": [], "evidence_files": ["ai/tasks/v2.2.0-rc.2-search-tools/reports/internal-review/review.json", "ai/tasks/v2.2.0-rc.2-search-tools/reports/internal-review/review.md", "ai/tasks/v2.2.0-rc.2-search-tools/reports/internal-review/evidence.zip"], "sync_files": {"ai/tasks/v2.2.0-rc.2-search-tools/reports/internal-review/evidence.zip": {"mtime_ns": 1795564951658549097, "sha256": "57eacc572d5236d1eb044bf7bd0986acdebc86c720d7d4966074d98e41bcc04f", "size": 7834}, "ai/tasks/v2.2.0-rc.2-search-tools/reports/internal-review/review.json": {"mtime_ns": 1795565043212468758, "sha256": "d8170feb17c66db42f4a1cde0a48ace3f3ed4c40ea4d4ed134ea0ff66dc4d1a9", "size": 982}, "ai/tasks/v2.2.0-rc.2-search-tools/reports/internal-review/review.md": {"mtime_ns": 1795565057009850558, "sha256": "643b877c2a13d8aa0e8fb064121c59b54e7902f6a5a259d8f8ebecf1cb737f3d", "size": 1627}}, "validation": "Onboard 首审 CLEAN；宿主首审退回四项证据，补充分离 HEAD、离线四项原生结果、历史批准参数及结果投影、负例零转发计数后，原审查人关闭 F1–F4，限本地授权范围 CLEAN。附加未知工具探针仍为驱动 exit 1、宿主退出码未知，离线重放不代替历史正文。十份私有证据投影已校验。本轮未重启认证宿主、未提交或推送；待冻结精确提交并绑定附件后外审、核对同 SHA CI。"} |
+| 2026-11-25T10:03:01.866351+08:00 | checking | done | 当前 Astra 会话：外部独审 CLEAN、PR #226 已合入、精确主线提交 CI 全绿；按用户确认收尾。 | {"clean_sha": "6da39c49765b1b28412ca58932868342e3cbe408", "ci_run": "45525529727", "main_sha": "d6e0bc3c0e366a65d1abd5e25ebc78969e1e9329", "main_ci_run": "45527867674", "main_jobs_passed": 13, "review_scope": "两路内置 reviewer 与外部独审；无交互 /review 执行回执"} |
