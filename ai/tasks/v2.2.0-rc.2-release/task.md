@@ -4,11 +4,11 @@ id: v2.2.0-rc.2-release
 workflow_mode: strict
 mode_source: user
 mode_note: 用户要求任务 8 采用 strict；先准备及审查候选，后单独授权在已验证的主线提交发布 rc.2。
-status: "checking"
+status: "done"
 branch: release/v2.2.0-rc.2
 created_at: '2026-11-25T18:10:37.782164+08:00'
-updated_at: "2026-11-25T22:20:57.173836+08:00"
-completed_at: null
+updated_at: "2026-11-25T23:11:17.527047+08:00"
+completed_at: "2026-11-25T23:11:17.527047+08:00"
 "blocked_reason": null
 ---
 # 任务 8：准备 rc.2 双语预发行与公开核验
@@ -41,3 +41,4 @@ completed_at: null
 | 2026-11-25T22:08:01.044191+08:00 | in-progress | checking | 当前 Astra 会话：完成双语日期、发布文档全树核对及审核方式复盘，收尾文档冻结交内审；不修改已发布制品。 | 日期独立提交 d7f0923。公开归档 830/830 Git 文件一致，361 份可解析文档共 1476 个引用，仓内目标 974 通过、3 个历史私有例外，另 499 未按文件爬取。8 项语义差异在工作分支订正，5 个定向契约通过。见同目录 postrelease-audit.md、review-retrospective.md 和本地 reports。任务 1 仍 checking；任务 8 未标 done，未更新远端 PR 或全局规则。 |
 | 2026-11-25T22:18:58.685657+08:00 | checking | in-progress | 当前 Astra 会话：用户授权修复 c80d2d1 整分支内审指出的两项预览说明 P2。 | project-only 包装器确认前不展示本地 Graft 明细；reset 预览在跳过接线时没有 graftWiring。只修读者指引，不改安装器或已公开制品。 |
 | 2026-11-25T22:20:57.173836+08:00 | in-progress | checking | 当前 Astra 会话：两项 P2 预览说明已修正，冻结本地文档提交复审。 | 真实 Bash project-only dry-run 只列范围摘要；Python 缺 --yes 拒绝，合成项目无写入。Claude/Kimi 及全局 Codex/OMP --no-mcp 的 reset plan 均省略 graftWiring；另 3 项定向测试通过，覆盖 planned 目标及不可用／阻断。见 reports/preview-fix/verify.log 和 verify.md。仅更新两份指引及任务文档，不改安装器、已发布标签或 Release。 |
+| 2026-11-25T23:11:17.527047+08:00 | checking | done | 当前 Astra 会话：任务 1 历史核销已补录；#230 收尾提交已 squash 至 2cb4e10133fd9c7d6937d67edeb6bf2596582ec9，主线 CI 45639152867 为 13/13，原开发分支双端已清理。发布与发布后核验、双语日期、全树核对及复盘均已交付；不移动 tag、不改 Release。 | {"clean_sha": "f50eb5af6a6559a07d055823ceb5a51aa80d02b6", "ci_run": "45636631415"} |
