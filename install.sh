@@ -76,8 +76,8 @@ Options:
       Forward directly to scripts/onboard.py recovery without onboarding.
   cleanup-legacy --phase <plan|apply> [cleanup options]
       Forward directly to scripts/onboard.py; no normal onboarding.
-  upgrade --phase <plan|apply|verify> [upgrade options]
-      Plan, apply, or verify only an explicitly selected upgrade scope.
+  upgrade --phase <plan|apply|verify|authorize-link> [upgrade options]
+      Forward the selected upgrade phase. Link authorization is a separate opt-in.
   -h, --help
       Show this help.
 EOF

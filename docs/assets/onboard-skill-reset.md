@@ -47,9 +47,9 @@ flowchart TD
   preserve -->|是| keepTier[保留已检测 tier 和 registry]
   preserve -->|否或不适用| noRb[不询问也不安装 React Bits]
   keepTier --> plan
-  noRb --> plan[输出 plan --json]
-  plan --> confirm{确认执行 reset --yes?}
-  confirm -->|否| abort[不写文件]
+  noRb --> plan["用相同平台、根和选项输出 plan --action reset --json"]
+  plan --> confirm{"已查看 graftWiring.sharedOperations 中的宿主目标，确认 reset --yes？"}
+  confirm -->|否| abort[不执行 reset 或其接线写入]
   confirm -->|是| stateCheck[检查所有所选项目状态及安装目标]
   stateCheck --> stateOk{允许写入?}
   stateOk -->|否| stateBlock[逐项目报告, Python 零安装写入]
@@ -87,8 +87,10 @@ flowchart TD
 
 | 对象 | 环境从未装过就直接 reset | 已装过再 reset |
 |---|---|---|
-| 行为本质 | 与 `init` 相同的补齐 + 写入 | 检查后把模板回写到已有目标 |
+| 行为本质 | 按 reset 的计划安装；不能用默认 init 的计划代替 | 按已确认的 reset 计划回写 |
 | Agent CLI / npm / Graft | 缺失 Agent 按既有授权修复；Graft另行展示计划并确认 | 已验证则不重装，不自动升级 |
+| 宿主 Graft 接线 | 可用 runtime 且计划包含接线时，可能创建所选宿主的全局 MCP 配置 | 核对预览中的实际宿主路径；`--no-mcp` 不授权接线，hooks 与旧绑定仍有独立确认门 |
+| 项目本地 Graft 资源 | 显式项目根与可用 runtime 对应项目围栏／图／stamp；`--no-mcp` 不等于跳过本地项目资源 | 无可用 runtime 时报告不可用，不以目录已存在推断建图成功 |
 | 19 个 required external Skills | 从 stable 事务安装；官方 Ponytail plugin 启用时阻断 | **强制覆盖** 为当前 stable 快照 |
 | bundled Skills | 复制 | **无备份覆盖** 为当前 Onboard 模板 |
 | 全局 `AGENTS.md` | 复制 Codex 目标；omp 侧 `PI_CODING_AGENT_DIR` 非空时写 `<变量目录>/AGENTS.md`（相对值——含开头的 `~`——按进程当前目录解析，`~/x` 会在当前目录建名为 `~` 的目录；目录缺失时创建）；命名 profile（`OMP_PROFILE` 优先于 `PI_PROFILE`）生效时写 `profiles/<名>/agent/AGENTS.md` 并忽略该变量；否则在 `~/.omp` 已存在时另写 `~/.omp/agent/AGENTS.md`（`PI_CONFIG_DIR` 指定替换 `.omp` 的 home 下子目录名，绝对值也拼到 home 下） | **备份后覆盖**；未设变量且无命名 profile 时不创建缺失的 `~/.omp` |

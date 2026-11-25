@@ -1,6 +1,6 @@
 # --init-projects 只初始化项目
 
-project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥。不检测、不安装、不更新、不配置任何全局 Agent CLI、runtime、Tools、Skills、全局 AGENTS 或 MCP。
+project-only 模式。与普通 `--projects-root` + `--action init|reset` 互斥。不安装或更新全局工具、Skills、AGENTS、MCP 或 hooks。为准备项目本地 Graft 资源，可以只读核验既有 runtime。
 
 `python scripts/onboard.py init-projects` 接受可选 `--platform`，但不需要 Trellis CLI、用户名或其平台标志。Trellis 参数已移除；普通项目无 task、developer 或 bootstrap 仍可检查和安装必要资产。
 
@@ -28,7 +28,7 @@ flowchart TD
   q4 -->|明确安装| planAgents[计划写入项目 AGENTS.md]
   askAgents --> stopAsk[等待用户]
   skipAgents --> plan
-  planAgents --> plan[输出 plan: 仅项目 AGENTS 与 gitignore]
+  planAgents --> plan[展示所选项目文件及适用的本地 Graft 资源]
   plan --> confirm{确认 --yes?}
   confirm -->|否| abort[不写文件]
   confirm -->|是| stateCheck[检查全部所选项目状态与目标]
@@ -46,7 +46,7 @@ flowchart TD
   pAgents -->|是且文件已存在| bakProj[备份后覆盖]
   copyProj --> post
   bakProj --> post
-  post[只读复查 SBTD 并汇报项目条件项]
+  post[按计划维护项目本地围栏、图与 stamp，再只读复查；不追加宿主接线]
   post --> pw{项目已有 Playwright 适用标记?}
   pw -->|否| skipPw[Playwright: not-needed]
   pw -->|是且未装| notePw[仅汇报; 安装要另走 install-playwright-cli]
@@ -65,10 +65,11 @@ flowchart TD
 
 | 对象 | 项目从未初始化 | 项目已有文件后再跑 |
 |---|---|---|
-| 全局任何东西 | 不检查、不安装 | 仍然不碰 |
+| 用户级配置与全局工具 | 不安装、不写入；适用时只读检查已有 runtime | 不写用户级 MCP 或 hooks |
 | Agent `--platform` | 仅平台上下文，不调用或安装 Agent CLI | 同样无全局操作 |
 | 项目 `AGENTS.md` | Q4 同意才复制 | Q4 同意则备份后覆盖 |
 | `.gitignore` | 追加缺行 | 行齐全则 skip |
+| 项目本地 Graft 资源 | 按平台、项目根及可用 runtime 维护围栏／图／stamp | 图存在不证明已注册宿主 MCP |
 | task / developer / bootstrap | 不预建，缺失正常 | 只读检查选中记录；未完成 bootstrap 返回 6 |
 | 旧 `.trellis` 或异常状态 | 无旧工具前置依赖 | 保留并报告需用户处理，不自动迁移或重建 |
 | Playwright / React Bits | `onboard.py` 只在写入后汇报 | `install.sh` 才可能在写入前询问并另装 |

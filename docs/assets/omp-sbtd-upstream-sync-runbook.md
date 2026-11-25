@@ -4,14 +4,14 @@
 
 | 项目 | 内容 |
 |---|---|
-| 状态 | 已实现并通过 KPi 本地验证；尚未发布 npm 包 |
+| 状态 | 2026-07-29 的 KPi 集成记录：当时通过本地验证、尚未发布 npm 包。非当前 SBTD v2 安装手册。 |
 | 编写日期 | 2026-07-29 |
 | 上游源 | `/Users/lusonglin/github/640-skills/sbtd-workflow-onboard` |
 | KPi Kit | `/Users/lusonglin/github/KPi/packages/sbtd-workflow-kit` |
 | KPi Plugin | `/Users/lusonglin/github/KPi/plugins/omp-sbtd` |
 | 配套 PRD | [OMP SBTD 上游提升与平台适配改造 PRD](../prd/omp-sbtd-upstream-promotion-prd.md) |
 
-本文描述配套 PRD 完成后，维护者如何把 `640-skills/sbtd-workflow-onboard` 的已提交更新同步到 KPi、嵌入 `plugins/omp-sbtd`、发布 npm 包并让用户环境最终生效。
+本文保留当时上游与 KPi bridge 的运行合同。下文 Trellis／Channel 章节和 `--skip-trellis-*` 参数只用于解释旧版本，不可照搬到 v2；不能由本记录推断今天的 KPi 或 npm 状态。当前 SBTD 安装、升级与迁移使用[仓内入口](../../README.zh.md#onboard-prompts)。
 
 > 重要：只通过 `sync-upstream --plan` 和匹配的 `--apply <plan-digest>` 提升上游。Plan 必须使用 canonical local repository 中的已提交完整 SHA；Apply 会重新计算输入、分阶段验证，并在替换失败时回滚已替换的目标。不得手工复制 vendor、lock 或 `plugins/omp-sbtd/kit` 来模拟成功。
 
@@ -382,7 +382,7 @@ sync-report.unmapped == []
 
 #### Python bridge 不变量
 
-当前 bridge 必须继续：
+当时版本的 bridge 约束如下。此处两个 `--skip-trellis-*` 参数已被 v2 删除，不用于今天的 plan。
 
 ```text
 运行 onboard.py plan --json

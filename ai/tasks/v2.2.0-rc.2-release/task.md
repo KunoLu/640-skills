@@ -3,11 +3,11 @@ schema_version: 1
 id: v2.2.0-rc.2-release
 workflow_mode: strict
 mode_source: user
-mode_note: 用户授权在任务 7 主线 CI 全绿后推进任务 8；可做本地发布准备，未授权公开发布。
+mode_note: 用户要求任务 8 采用 strict；先准备及审查候选，后单独授权在已验证的主线提交发布 rc.2。
 status: "checking"
 branch: release/v2.2.0-rc.2
 created_at: '2026-11-25T18:10:37.782164+08:00'
-updated_at: "2026-11-25T20:49:54.150161+08:00"
+updated_at: "2026-11-25T22:08:01.044191+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -15,13 +15,17 @@ completed_at: null
 
 任务 7 经 PR #229 合入，main `d8b2191204e368035fd69544aa74c6600961a2f6` 的 CI 45589961883 为 13/13。只清理任务 7 对应的开发分支，归档和私有证据保留。
 
-## 发布前置与范围
+## 已发布制品与收尾范围
 
-上一公开标签 `v2.2.0-rc.1` 指向 `7f21401ae6c56acd5846ae6ae922111aba3af932`。只做候选准备；当前 main 不是对未来发布点的预先批准。按 `docs/release-notes-template.md`、历史 `v2.0.2` 和 `v2.2.0-rc.1` 的版式核对双语正文、双语 annotated tag 注解、旧项目升级与恢复说明。若 main 改变，必须更新发布身份并核对新提交的精确 CI。不得以任务分支的 CI 或旧 SHA 替代。
+[v2.2.0-rc.2 预发行版](https://github.com/KunoLu/640-skills/releases/tag/v2.2.0-rc.2) 于 **2026-11-25 13:39:38 UTC** 发布。双语 annotated tag 对象 `613e0ba7cee07e17c71ee5906ecb1c3a6aca8eca` 指向主线 `d8b2191204e368035fd69544aa74c6600961a2f6`；[与 rc.1 的公开对比](https://github.com/KunoLu/640-skills/compare/v2.2.0-rc.1...v2.2.0-rc.2) 共 8 次提交。`rc.1` 解引用为 `7f21401ae6c56acd5846ae6ae922111aba3af932`。
 
-本次按用户确认的仓内模板内审，不再等待独立安装 `bilingual-release-notes`。可审阅材料为[候选 Release 正文](candidate-notes.md)和[候选标签注解](candidate-tag.txt)，均为本地文本，不是已创建的 GitHub Release 或 Git 标签。正文和注解中的 SHA 是本次候选发布点，不是承载内审材料的分支提交。
+用户授权使用[仓内模板](../../../docs/release-notes-template.md)。公开[正文](candidate-notes.md)及[标签注解](candidate-tag.txt)与受审提交 `7e0c78f2571db15e62446e3413f8eade1132f36f` 的字节一致。文案提交与产品发布点不同；本次日期回填不移动标签，也不重发制品。
 
-未完整调用 grill-with-docs：PRD §8–9 已规定产物与门禁。无代码、schema、部署配置修改。本次仅推进内审；公开发布仍须单独确认目标 SHA，指定 RC 为 prerelease。标签和 Release 公开后，才验证远端注解、比较范围、文档全树与升级／许可链接并交付审核复盘；不自动推广方法或销毁备份。
+[审核复盘](review-retrospective.md)区分发现、误报、返修回归与时间开销。是否推广双层审核由用户决定。未完整调用 grill-with-docs：PRD §8–9 与本次指示已经明确范围。本轮不合并 PR、不删除分支或私有证据；不能用发布成功替代任务收尾门禁。
+
+## 发布后交付
+
+见[文档全树核对](postrelease-audit.md)：日期回填、不可变归档的逐文件比对、仓内链接例外，以及 8 项现行文档与实现差异的分支订正分别记录。审核复盘已交付，未自动推广。#223–#229 已合入且相应分支已清理；任务 1 仍缺 `done` 状态事件。当前分支待收尾变更审查，PR #230 未合入；不能把已经公开的预发行版再算作本分支的合入。
 
 ## 状态事件
 
@@ -33,3 +37,5 @@ completed_at: null
 | 2026-11-25T18:34:28.655369+08:00 | in-progress | checking | 当前 Astra 会话：按获准仓内模板完成候选文本核对，冻结本地分支交内置审查。 | 候选主线 d8b2191204e368035fd69544aa74c6600961a2f6，CI 45589961883 为 13/13。正文双语各 4 项变更、14 项修复，核对双语 changelog、升级恢复锚点、前一标签及任务 7 原生计数。正文 SHA-256 3cc6e387e2dd2b39a4b11987941e2df91f08e3620cc45ea7eaee03740e81e56a；注解 3d145760826c5d95de1ab26f5e643e4fb8b1a127d0ccda5690e6171132ec5ff3。未访问真实宿主、未推送、未打标签或发布。 |
 | 2026-11-25T20:48:58.683352+08:00 | checking | in-progress | 当前 Astra 会话：收到冻结提交的外部独审 CHANGES_REQUESTED，返修正文身份与双语术语说明。 | 5dbdafc4ef4022fdde16678034af10e79fcb9d5b：P2 已审原字节不宜原样发布；P3 中英文差异与旧文件保护说明不够对等。旧摘要保留为历史，注解不动。不涉及发布授权。 |
 | 2026-11-25T20:49:54.150161+08:00 | in-progress | checking | 当前 Astra 会话：P2/P3 返修后冻结本地提交，交新 SHA 内审及外部复核。 | 发布原文以同目录受版本控制的 candidate-notes.md 为准，SHA-256 a2c9da530386eba784bc7927055b482df0e854c92559d6463f1b09815ec824ec；candidate-tag.txt 保持 3d145760826c5d95de1ab26f5e643e4fb8b1a127d0ccda5690e6171132ec5ff3。模板身份行及目标 SHA 不需发布时改写；两种语言均写明展示精确差异、明确批准、不自动迁移或覆盖。双语 4/14，其他原文字节与先前审阅范围一致。此前事件及 reports 中的旧稿仅作历史证据。未推送、未打标签、未发布。 |
+| 2026-11-25T21:45:04.014818+08:00 | checking | in-progress | 当前 Astra 会话：rc.2 已按授权公开并核验，开始双语日期、文档全树核对和内外审复盘。 | 发布点 d8b2191204e368035fd69544aa74c6600961a2f6，标签对象 613e0ba7cee07e17c71ee5906ecb1c3a6aca8eca，2026-11-25T13:39:38Z 发布；公开正文和注解等于受审提交 7e0c78f 原件，PR #230 保持打开。不移动 tag、不改 Release、不合并或删除分支。 |
+| 2026-11-25T22:08:01.044191+08:00 | in-progress | checking | 当前 Astra 会话：完成双语日期、发布文档全树核对及审核方式复盘，收尾文档冻结交内审；不修改已发布制品。 | 日期独立提交 d7f0923。公开归档 830/830 Git 文件一致，361 份可解析文档共 1476 个引用，仓内目标 974 通过、3 个历史私有例外，另 499 未按文件爬取。8 项语义差异在工作分支订正，5 个定向契约通过。见同目录 postrelease-audit.md、review-retrospective.md 和本地 reports。任务 1 仍 checking；任务 8 未标 done，未更新远端 PR 或全局规则。 |

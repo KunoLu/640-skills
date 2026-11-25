@@ -124,9 +124,9 @@ to-tickets
 | `diagnosing-bugs` | bug、测试失败、运行时错误、性能回归、线上问题、日志异常、数据不一致 | 结合源码 / LSP / contract 定位；修复后补充回归测试 |
 | `tdd` | bug 修复、核心业务逻辑、算法行为、数据转换、导入 / 导出 / 同步逻辑、高风险修改 | 依赖 `codebase-design`；不强制用于简单文案、样式、配置说明或一次性脚本 |
 | `grill-me` | 通用需求澄清、方案质询、计划压力测试 | 依赖 `grilling`；一次问一个关键问题；能通过读项目文件回答时先读文件 |
-| `grill-with-docs` | 项目内需求澄清、术语对齐、CONTEXT.md / ADR 沉淀 | 依赖 `grilling` 和 `domain-modeling`；不把 CONTEXT.md 写成临时规格书；未调用时说明原因，仅在调用与跳过存在实质决策权衡时询问 |
+| `grill-with-docs` | 项目内需求澄清、术语对齐 | 依赖 `grilling` 和 `domain-modeling`；是否完整调用要如实说明。完整访谈后另做 DDD Boundary Review，不能用访谈本身代替。 |
 | `grilling` | 可复用逐问题访谈循环 | 作为 `grill-me` / `grill-with-docs` 的底层依赖，不作为默认独立入口 |
-| `domain-modeling` | 项目语言、glossary、CONTEXT.md / ADR 建模辅助 | 遵守本地 `docs/CONTEXT.md`、`docs/adr/*.md` 路径约束 |
+| `domain-modeling` | 项目语言、术语表和 ADR 建模辅助 | 自有入口遵循项目指定的术语表，否则使用根 `GLOSSARY.md`；从旧 `CONTEXT.md` 提取术语须先展示精确差异并获明确确认，不自动迁移或覆盖。ADR 沿用项目约定，默认 `docs/adr/`。 |
 | `codebase-design` | 模块、接口、seam、adapter 和测试面设计 | 作为 `tdd`、陌生模块理解和结构性修改前的设计辅助 |
 | `handoff` | 长会话切换、`/clear`、新会话、任务暂停或多会话交接 | 输出目标、已完成工作、决策、文件、命令、开放问题、下一步和脱敏说明 |
 | `writing-for-agents` | 创建或维护 Skill、AGENTS.md、CLAUDE.md | `SKILL.md` 做入口；长内容拆 reference；确定性操作优先脚本化。`writing-great-skills` 只是迁移别名，不是当前安装名 |
@@ -169,6 +169,7 @@ diagnosing-bugs
 
 ```text
 grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用 domain-modeling）
+  → 完整调用 grill-with-docs 后：book-ddd-distilled-modeling 独立输出 DDD Boundary Review，confirmed 后才可确认需求或进入设计
   → to-spec
   → to-tickets as executable Markdown tasks
   → sbtd-task strict workflow（适用时）
@@ -191,8 +192,8 @@ grill-me / grill-with-docs（内部使用 grilling，涉及项目语言时使用
 高风险后端逻辑 / 算法 / 权限 / 计费 / 状态机 / 数据同步：
 
 ```text
-grill-with-docs
-  → domain-modeling
+grill-with-docs（访谈时按需使用 domain-modeling）
+  → book-ddd-distilled-modeling：各模式均须独立输出 DDD Boundary Review；未 confirmed 不进入下一步
   → to-spec
   → to-tickets as executable Markdown tasks
   → sbtd-task strict workflow（适用时）
