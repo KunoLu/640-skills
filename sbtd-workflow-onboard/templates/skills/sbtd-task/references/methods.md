@@ -7,7 +7,8 @@ Read only the branch relevant to the task. Mode controls method selection and ar
 - Use `grill-with-docs` for unresolved project/domain questions after reading facts, or when explicitly requested; `grilling` and `domain-modeling` support the interview. State whether the complete method actually ran. Mere reading/evidence-first thinking is not full invocation.
 - Use `grill-me`/`grilling` for a requested general plan challenge. Do not turn every clear request into an interview.
 - Use `book-ddd-distilled-modeling` after every full grill-with-docs and when the domain review is selected/required. The post-grill pass is separate, visible and governed by that Skill's result/correction loop; unavailable/unreadable/insufficient evidence blocks dependent confirmation/design in every mode.
-- Use `domain-modeling` for durable vocabulary/context/ADR needs; existing project paths win, otherwise `docs/CONTEXT.md` and `docs/adr/`, or per-context subdirectories. Temporary task plans do not become permanent domain rules.
+- Use `domain-modeling` for durable vocabulary and domain decisions. Follow the project's documented glossary location (including per-context glossaries); otherwise use `GLOSSARY.md` at the project root. Keep ADRs in the project's existing location, defaulting to `docs/adr/`.
+- Treat an existing `CONTEXT.md` as read-only input. Before extracting its terms, show the proposed terms, conflicts and exact file diff; wait for explicit approval. Do not migrate, rename or overwrite it automatically. Temporary task plans are not glossary entries.
 - Use `to-spec` for a requested durable requirement specification and `to-tickets` for requested implementation slices. Put task artifacts under the chosen SBTD task record when appropriate; do not publish to an issue tracker without authorization. Do not route these methods back to a retired runtime or create a compatibility alias.
 
 ## Implementation and safety

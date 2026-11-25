@@ -36,7 +36,7 @@ When `grill-with-docs` was not used, do not use this Skill for purely technical 
 ## Workflow
 
 1. Read existing project facts first: README, domain docs, `docs/spec`, ADRs, task artifacts, and relevant code.
-2. List the key terms and their current meanings in the project.
+2. Read terms from the glossary designated by the project; otherwise use `GLOSSARY.md` at the project root. List each term with its meaning and bounded context. If the glossary is missing, report the gap rather than treating a legacy `CONTEXT.md` as the new glossary.
 3. Identify bounded contexts where the same word may have different meanings.
 4. Distinguish core, supporting, and generic subdomains when that affects priority or design.
 5. State invariants and business rules in the language used by the project.
@@ -59,7 +59,7 @@ Open conflicts and questions: ...
 
 Use `not-applicable` for a subdomain classification only when it has no bearing on the current decision; do not omit the field. A post-grill review must explicitly state whether it corrected the earlier result, even when the answer is `none`.
 
-Only stable, cross-task domain decisions should be promoted to `docs/CONTEXT.md`, ADRs, or `docs/spec`. Keep the complete review in task-level output or the current `prd.md`, `design.md`, or `implement.md`.
+Propose only stable, cross-task terms for the glossary. Keep domain decisions in ADRs or `docs/spec`, and the full review in task output, `prd.md`, `design.md`, or `implement.md`. A legacy `CONTEXT.md` may inform the review: show the proposed term extraction, conflicts and exact diff, then wait for explicit approval before applying it. Never migrate or overwrite the legacy file automatically.
 
 ## Guardrails
 

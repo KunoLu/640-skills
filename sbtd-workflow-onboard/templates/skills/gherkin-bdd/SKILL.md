@@ -41,7 +41,8 @@ Task artifacts can draft or reference scenarios, but they are not the default lo
 - Use English Gherkin structural keywords by default: `Feature`, `Rule`, `Background`, `Scenario`, `Scenario Outline`, `Examples`, `Given`, `When`, `Then`, `And`, and `But`.
 - Do not add `# language: zh-CN` when using English Gherkin keywords. Add it only when the project already uses localized Chinese Gherkin keywords or the user explicitly requests them.
 - Avoid mixing keyword languages inside the same bounded context or feature area.
-- Domain terms must follow the project glossary, `docs/CONTEXT.md`, context docs, `docs/spec`, and existing scenario vocabulary.
+- Use the project's designated glossary for domain terms; otherwise use `GLOSSARY.md` at the project root. Check scenario vocabulary against it in the relevant bounded context. If definitions conflict, surface the conflict instead of silently changing the glossary or scenarios.
+- An existing `CONTEXT.md` is read-only evidence, not a reason to start a migration during BDD work. If terms should be extracted, show the proposed terms and exact diff; wait for explicit approval. Do not rename or overwrite the legacy file automatically.
 
 Before creating or rewriting a `.feature` file, make an explicit language decision:
 
