@@ -7,7 +7,7 @@ mode_note: 用户授权在任务 7 主线 CI 全绿后推进任务 8；可做本
 status: "checking"
 branch: release/v2.2.0-rc.2
 created_at: '2026-11-25T18:10:37.782164+08:00'
-updated_at: "2026-11-25T18:34:28.655369+08:00"
+updated_at: "2026-11-25T20:49:54.150161+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -31,3 +31,5 @@ completed_at: null
 | 2026-11-25T18:10:58.634287+08:00 | in-progress | blocked | 当前 Astra 会话：本地双语候选草案完成；公开发布需单独授权，且 PRD 指定的 bilingual-release-notes 当前不可调用。 | 仓内模板可读，GitHub 上 v2.0.2 与 rc.1 版式核对通过；skill:// 明确返回 Unknown skill，未安装或声称调用。候选正文、短双语注解仅存任务私有 reports。rc.2 尚无远端 tag 或 Release，比较链接尚不能当作发布后验证。未打标签、推送、创建远端草稿或发布。 |
 | 2026-11-25T18:33:04.985808+08:00 | blocked | in-progress | 当前 Astra 会话：用户明确同意以仓内模板作为任务 8 本次发布规范，恢复本地候选验证与内审。 | 只替代本仓本次 bilingual-release-notes 方法入口，不安装全局 Skill，不授权公开发布。候选正文和双语注解留在本地；发布须另行确认。 |
 | 2026-11-25T18:34:28.655369+08:00 | in-progress | checking | 当前 Astra 会话：按获准仓内模板完成候选文本核对，冻结本地分支交内置审查。 | 候选主线 d8b2191204e368035fd69544aa74c6600961a2f6，CI 45589961883 为 13/13。正文双语各 4 项变更、14 项修复，核对双语 changelog、升级恢复锚点、前一标签及任务 7 原生计数。正文 SHA-256 3cc6e387e2dd2b39a4b11987941e2df91f08e3620cc45ea7eaee03740e81e56a；注解 3d145760826c5d95de1ab26f5e643e4fb8b1a127d0ccda5690e6171132ec5ff3。未访问真实宿主、未推送、未打标签或发布。 |
+| 2026-11-25T20:48:58.683352+08:00 | checking | in-progress | 当前 Astra 会话：收到冻结提交的外部独审 CHANGES_REQUESTED，返修正文身份与双语术语说明。 | 5dbdafc4ef4022fdde16678034af10e79fcb9d5b：P2 已审原字节不宜原样发布；P3 中英文差异与旧文件保护说明不够对等。旧摘要保留为历史，注解不动。不涉及发布授权。 |
+| 2026-11-25T20:49:54.150161+08:00 | in-progress | checking | 当前 Astra 会话：P2/P3 返修后冻结本地提交，交新 SHA 内审及外部复核。 | 发布原文以同目录受版本控制的 candidate-notes.md 为准，SHA-256 a2c9da530386eba784bc7927055b482df0e854c92559d6463f1b09815ec824ec；candidate-tag.txt 保持 3d145760826c5d95de1ab26f5e643e4fb8b1a127d0ccda5690e6171132ec5ff3。模板身份行及目标 SHA 不需发布时改写；两种语言均写明展示精确差异、明确批准、不自动迁移或覆盖。双语 4/14，其他原文字节与先前审阅范围一致。此前事件及 reports 中的旧稿仅作历史证据。未推送、未打标签、未发布。 |

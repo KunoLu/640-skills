@@ -1,7 +1,7 @@
 ## Release identity / 发布身份
 
-- Annotated tag / 标注标签: `v2.2.0-rc.2` (proposed / 拟用)
-- Candidate main commit / 候选主线提交: `d8b2191204e368035fd69544aa74c6600961a2f6`
+- Annotated tag / 标注标签: `v2.2.0-rc.2`
+- Commit / 提交: `d8b2191204e368035fd69544aa74c6600961a2f6`
 - Exact-commit CI / 精确提交 CI: https://github.com/KunoLu/640-skills/actions/runs/45589961883 (13/13)
 - Native scope verified / 原生范围核验: Task 7 tested isolated macOS hosts; Codex/OMP ingested 4/6 events and accepted none on replayed input. / 任务 7 的隔离 macOS 宿主实测：Codex／OMP 首次接受 4／6 条事件，重复导入均零新增。
 
@@ -9,8 +9,7 @@
 
 ### Changed
 
-- Use the project-designated glossary, or root `GLOSSARY.md` by default. Extracting terms from a legacy `CONTEXT.md` requires an explicit review and approval.
-
+- Use the project-designated glossary, or `GLOSSARY.md` at the project root by default. Before applying terms extracted from a legacy `CONTEXT.md`, show the exact diff and obtain explicit approval. Do not automatically migrate or overwrite the legacy file.
 - Stop ordinary `init` and default `check`/`plan` from creating, updating, or removing a global Graft MCP definition for Codex/OMP, with or without a verified runtime. Explicit project roots still maintain the local fence/graph; graph presence does not prove host registration. `reset`, `init-projects`, migration-context `init`, and explicit `--graft-hooks` / `--graft-retire-legacy` retain their existing contracts and validation. Existing global Graft MCP/hook configuration remains untouched by the ordinary path; no machine-wide retirement is claimed.
 - Pin host acceptance to `codex@0.171.0` + `omp@19.1.0` and require both hosts instead of the historical one-host fallback. Both completed isolated Air tool-call, ingestion and duplicate-import smoke checks on 2026-11-23; retain earlier cloud smoke records in `smoke_history`. Version matching alone, old reports and parser fixtures are not passing evidence. This baseline does not certify the full approval/MCP/failure/interruption matrix or release readiness, upgrade existing installations, or change the original Astra session.
 - Document the breaking impact of removing Graft from an existing project, how to verify ownership before removal, and how to restore its wiring without overwriting later edits. No host configuration changes automatically.
@@ -36,8 +35,7 @@
 
 ### 变更
 
-- 术语以项目指定词汇表为准，否则使用根 `GLOSSARY.md`；从旧 `CONTEXT.md` 提取术语需先审阅差异并明确批准。
-
+- 术语以项目指定的术语表为准，默认使用项目根目录的 `GLOSSARY.md`。应用从旧 `CONTEXT.md` 提取的术语前，须展示精确差异并取得明确批准。不得自动迁移或覆盖旧文件。
 - 普通 `init` 和默认 `check`/`plan` 不再为 Codex／OMP 创建、更新或移除全局 Graft MCP 定义，与 runtime 是否已验证可用无关。显式项目根仍维护项目本地围栏／图；图存在不证明宿主已接线。`reset`、`init-projects`、migration-context `init` 及显式 `--graft-hooks` / `--graft-retire-legacy` 保持既有契约和校验。普通路径不改动既有全局 Graft MCP/hook 配置，也不宣称完成整机退役。
 - 将宿主验收固定为 `codex@0.171.0` + `omp@19.1.0`，要求两个宿主均通过，不再采用历史单宿主兜底。两者于 2026-11-23 完成 Air 隔离工具调用、入库与重复导入基础冒烟；旧云端记录保留于 `smoke_history`。仅版本匹配、旧报告和 parser fixture 均不是通过证据。本基线不证明完整审批／MCP／失败／中断矩阵或发布就绪，不升级既有安装，也不改变原 Astra 会话。
 - 补充旧项目移除 Graft 的不兼容影响、移除前的归属核验及不覆盖后续编辑的接线恢复步骤。不自动更改宿主配置。
