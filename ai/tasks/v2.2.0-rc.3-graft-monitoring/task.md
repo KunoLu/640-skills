@@ -7,7 +7,7 @@ mode_note: 按 rc.3 定稿 PRD D11、D12、D13 执行 T1。
 status: "checking"
 branch: docs/v2.2.0-rc.3-drop-graft-monitoring
 created_at: '2026-11-26T14:57:02.767206+08:00'
-updated_at: "2026-11-26T15:13:01.600831+08:00"
+updated_at: "2026-11-26T18:15:13.984142+08:00"
 completed_at: null
 "sync_scope": ["prompts/automations/references"]
 ---
@@ -34,3 +34,5 @@ completed_at: null
 | 2026-11-26T14:57:14.936502+08:00 | planned | in-progress | OMP：开始 核对接手的八文件并执行 OMP 内置 /review（未提交改动） | {"changed_files": [], "evidence_files": [], "sync_files": {"prompts/automations/references/version-check-impact.md": {"mtime_ns": 1795663315826479285, "sha256": "571865af252953d8df50ae2dc09b3e2d35f53caf1aae1ecdd1e8bde3f38faa69", "size": 35797}, "prompts/automations/references/version-check-scope.md": {"mtime_ns": 1795663274097958049, "sha256": "98786b6e041909b42a1a3b5774f073f4d3679a42297c71fa1bb359f903524ab8", "size": 9028}}, "validation": ""} |
 | 2026-11-26T15:12:40.753878+08:00 | in-progress | in-progress | OMP：完成 核对接手的八文件并执行 OMP 内置 /review（未提交改动） | {"changed_files": ["ENTRYPOINT.md", "prompts/automations/references/version-check-impact.md"], "evidence_files": [], "sync_files": {"ENTRYPOINT.md": {"mtime_ns": 1795677024119457096, "sha256": "77da4daf374ac7f234f87fef522676bb1374e720a7191fa58857f0f7472e2577", "size": 26069}, "prompts/automations/references/version-check-impact.md": {"mtime_ns": 1795677024121350730, "sha256": "b38645204cd3426cb7cb4c5a4b8df41f3fc8c10f69adacf565973ffa1e079cc2", "size": 35943}, "prompts/automations/references/version-check-scope.md": {"mtime_ns": 1795663274097958049, "sha256": "98786b6e041909b42a1a3b5774f073f4d3679a42297c71fa1bb359f903524ab8", "size": 9028}}, "validation": "3 项意见：删除 ENTRYPOINT 引言中的旧 pin 同步例外；恢复迁移 init 的完整证据、计划范围和累计回执检查；不恢复两个 Graft 专用 wiring 模块至监控白名单（模块文档与 PRD §2.1、§5.1 一致）。修正后两文件 pytest：52 passed, 224 subtests passed。两张基线表只删 Graft 行；impact 仅保留两种 ignore 路径。"} |
 | 2026-11-26T15:13:01.600831+08:00 | in-progress | checking | OMP：开始提交候选、开 PR，并在精确 head 复审；等待 agy 和 CI。 | 工作区内审意见已逐项处理；本地测试不是 PR CI。合入门禁仍未完成。 |
+| 2026-11-26T18:14:18.737659+08:00 | checking | in-progress | OMP：收到 agy 独立审查 CHANGES_REQUESTED，开始修正 F1（P2）。 | PR #232，head 36296e835eee475ed8c19760f248fec242757168，validation 45773684518 为 13/13。agy 核对实际导入：OMP 来源发现、升级和迁移使用 wiring；撤回此前仅按模块职责排除二者的判断。A/B 均不恢复：专用 hooks 与遥测文件协议不属于通用要求。F2（P3）留 T3：删除模块前解开 sbtd_omp_sources 顶层导入，特征测试覆盖 omp_agents_target；另评估升级探测子进程 DNT，不是本 PR 门禁。 |
+| 2026-11-26T18:15:13.984142+08:00 | in-progress | checking | OMP：完成 F1 修正与静态验证，开始新 head 的内审、CI 与 agy 复审。 | Python AST 核验来源、升级、迁移计划及验证四个消费者的导入；两个 wiring 文件均列于 scope 只读区和 impact 平台章节，未加入写入区。主 prompt、scope、impact 除 ignore 路径外无 Graft 命中。未改运行模块，未执行接线；旧 SHA 的门禁不继承。 |

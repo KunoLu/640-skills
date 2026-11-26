@@ -30,7 +30,7 @@
 - `sbtd_migration.py`、`sbtd_migration_files.py`、`sbtd_migration_legacy.py`、`sbtd_migration_plan.py`、`sbtd_migration_verify.py`、`sbtd_reconciliation.py`。
 - `sbtd_cleanup_targets.py`、`sbtd_cleanup_legacy.py`、`sbtd_trellis_uninstall.py`、`sbtd_cleanup_upgrade.py`。
 - `sbtd_upgrade.py`、`sbtd_upgrade_inventory.py`、`sbtd_upgrade_hosts.py`、`sbtd_upgrade_cli.py`、`sbtd_upgrade_paths.py`、`sbtd_probe_links.py`。
-- `sbtd_omp_sources.py`。
+- `sbtd_omp_sources.py`、`sbtd_codex_wiring.py`、`sbtd_omp_wiring.py`。后两项仅供静态核对宿主兼容性：rc.2 的来源发现、升级或迁移模块仍导入它们。T3 删除或拆分模块时，按剩余消费者同步调整清单。
 
 命中未列出的新消费者，只报告所缺影响扫描范围；不得顺着引用自动扩展到本机HOME、其他项目、其他账户或未批准私有材料。仓库内文件缺失时报告具体缺失，不以本机安装副本替代基线。
 
