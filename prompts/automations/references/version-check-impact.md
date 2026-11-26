@@ -89,7 +89,7 @@
 
 - 复核 vendor prepared 资源的 `path` 与受检项目 `root/relative` 精确绑定，拒绝非法相对路径和重封后的诱饵替换；fresh replay 路径须一致，备份及测量只能消费已绑定路径。核对合法历史计划的 scope fingerprint 兼容性，不把摘要重算视作授权；仅静态评估或隔离验证，不执行 live 卸载。
 
-- 评估发布前环境保留风险时区分主 PRD P3-05（验证环境／旧 Graft 接线的退役与必要保留交接）和 P3-04（私有备份的独立处置）；TEMP 名称、方案确认或任务 done 均不能证明无运行／恢复依赖。自动化仅只读评估，不执行环境删除、Orca HOME 清理或 MCP 替换，不提前宣称 planned 任务完成。
+- 评估发布前环境保留风险时区分主 PRD P3-05（验证环境与旧受管接线的退役及必要保留交接）和 P3-04（私有备份的独立处置）；TEMP 名称、方案确认或任务 done 均不能证明无运行／恢复依赖。自动化仅只读评估，不执行环境删除、Orca HOME 清理或 MCP 替换，不提前宣称 planned 任务完成。
 
 - 评估旧数据兼容性时，区分受支持数据布局与 vendor 卸载 CLI pin；0.6.15 特定用户内容 hash 声明不得升级为生成文件所有权，也不得豁免发布／私有保全批准，0.6.17 原有拒绝边界保留。无宿主项目的空 platforms 只在宿主根真实缺失时成立；验证阶段仍复核宿主出现／漂移与根 marker 操作完整性，不用空列表或可重算 manifest 摘要掩盖缺失操作。版本和元数据须从封存 inventory／原件解析，不能在原件上改版本号过门。
 
@@ -99,29 +99,20 @@
 
 - 已对齐 AGENTS 的 no-touch 仅限执行包项目模板逐字一致并封存独立不变证据，不能把任意规则认领为生成资产或跳过后续漂移复验。仅文档历史按逐文件源路径归档，不伪造 task 元数据，不转移真实 task 附件逃避闭包。历史分支交接须区分计划 HEAD 取证与旧分支事实、明确后续恢复选择，不自动切分支或重绑定；仅静态／隔离验证，真实文件发布和部署仍需审批。
 
-- 复核已批准项目AGENTS从迁移apply到部署的正文保真：必须绑定已验签候选及实际前态，只解除精确维护暂停前缀、更新受管Graft段，不能用通用模板覆盖项目约束，也不能仅凭pause文本认领未批准正文；原始批次、后继批次、重试、验证与恢复同一判定，普通init及no-touch语义保持。
+- 复核已批准项目AGENTS从迁移apply到部署的正文保真：必须绑定已验签候选及实际前态，只解除精确维护暂停前缀，不能用通用模板覆盖项目约束，也不能仅凭pause文本认领未批准正文；原始批次、后继批次、重试、验证与恢复同一判定，普通init及no-touch语义保持。
 
 - 复核 OMP 迁移配置输入的阶段后态：apply 按计划移除旧宿主文件后，部署／重试／验证／恢复只能消费已绑定成功回执、连续前后态和完整原件证明的变化；输入路径集合及无关漂移仍严格核对。不能重封 manifest、恢复旧入口或放宽 runtime-lineage 签名来绕过拒绝；只做静态／隔离验证，不执行真实续部署。
 
-<a id="graft"></a>
-## Graft、平台接线、协议与隐私
-- 上述只读源清单另包含 `sbtd-workflow-onboard/scripts/sbtd_graft_deployment.py`、`sbtd-workflow-onboard/scripts/sbtd_codex_wiring.py`、`sbtd-workflow-onboard/scripts/sbtd_omp_wiring.py`、`sbtd-workflow-onboard/scripts/sbtd_omp_sources.py`、`sbtd-workflow-onboard/scripts/sbtd_graft_entry.py`、`sbtd-workflow-onboard/assets/graft-build-policy.json`、`sbtd-workflow-onboard/assets/graft-instructions.txt`、`sbtd-workflow-onboard/assets/graft-hook-entry.mjs`；它们不得由无人值守版本检查修改或执行host接线。
+<a id="platform-wiring"></a>
+## 平台接线、协议与隐私
+- 上述只读源清单另包含 `sbtd-workflow-onboard/scripts/sbtd_omp_sources.py`；它不得由无人值守版本检查修改或执行host接线。
 
 - `.gitattributes` 仅作为载荷原始字节边界的只读评估对象：`sbtd-workflow-onboard/** -text` 防止 checkout 改写固定摘要输入；检查目录摘要统一按相对 POSIX 字符串排序，不按平台路径对象排序。不得为消除校验失败而转换 stable 镜像字节、重写 pin 或放宽私有目录 DACL。
 
-- 对 Graft、Codex dispatch、sub-agent、hook 或平台接线的变更，必须额外核验目标 stable tag 的固定包版本、native lifecycle、telemetry、MCP/hooks 边界与部署 producer 行为；区分功能首次引入、默认值变化与既有能力的 bug fix。Graft 结论必须回到固定 pin/source、源码、LSP / contract 定位或真实 host 证据，不得用 latest、缓存元数据或旧 GitNexus 规则替代。`.trellis/**` 与旧平台 dispatch 只作为历史迁移输入，不是现行平台身份；若结论涉及平台调度，还必须读取当前 host 与其专属生成资产，并区分“已配置平台目录”与“当前 host”。不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
-- ENTRYPOINT 的 Graft 当前版本不是官方 latest 的写回目标。`update` 不写回 Graft。只有已发布 SBTD workflow tag 中 `GRAFT_PINNED_VERSION` 与 `graft-build-policy.json` 的 `version` 一致且与 ENTRYPOINT 不同时，版本检查才同步 ENTRYPOINT 的 Graft 版本字段；不改运行 pin、gitHead、integrity 或接线。
+- 对 Codex dispatch、sub-agent、hook 或平台接线的变更，必须额外核验目标 stable tag 的 MCP/hooks 边界、telemetry 与部署 producer 行为；区分功能首次引入、默认值变化与既有能力的 bug fix。结论必须回到源码、LSP / contract 定位或真实 host 证据，不得用 latest、缓存元数据或旧 GitNexus 规则替代。`.trellis/**` 与旧平台 dispatch 只作为历史迁移输入，不是现行平台身份；若结论涉及平台调度，还必须读取当前 host 与其专属生成资产，并区分“已配置平台目录”与“当前 host”。不得以未发布 `main` 分支文本覆盖 tagged stable 版本结论。若这些依据无法完整取得，必须在 `UPDATE.md` 中逐项说明缺失依据和剩余不确定性，不得以 release body 充分为由跳过；缺少任一项时不得形成或更新平台调度规则。
 
-- Codex部署模块与三份Graft资产只读评估：核对固定policy绑定、项目围栏／图与宿主接线分离、普通init及默认check/plan不创建／更新／移除全局Graft MCP且保留既有Graft配置、reset与显式hooks/legacy及密封迁移维持原全局接线契约和校验、hooks独立opt-in及host信任分离、临时HOME与拒绝危险自维护；init迁移上下文必须先验证完整证据，只执行plan已声明的部署资源并保存实际累计结果。普通init的全局规则/Skills仍复用既有选择，OMP公共AGENTS镜像不等于OMP MCP/event接线；project-only不得写HOME或新增全局连接。历史逐仓绑定只按退役输入／旧回执识别，不作为当前安装要求。不把结构图check报告当作真实host事件通过。
-
-- 受管MCP必须在每个可执行请求前复验当前图，不能只依赖启动证明或native no-refresh；Stop／部署替换后的长连接也须拒绝未证明图。Python启动环境隔离应先于守卫脚本，旧未隔离受管hook不得被当作foreign静默并存；无关hook事件不依赖已失效仓根。核对真实子进程退出／慢读响应，不把thread实现存在当作生命周期通过。
-
-- Graft候选版本以运行模块的精确pin/gitHead/integrity与官方固定版本证据为准，不静默升级latest。check/plan仅验证本地版本且HOME/项目零副作用；已有本地能力不因npm不可达而被判定缺失。安装必须展示计划并确认，验证native与telemetry持久状态；所有受管子进程DNT、dotenv及LLM/cloud环境边界必须真实验证，CI不能作为DNT通过的唯一理由。离线必须有真实网络正反控制与空cache，不用缓存latest冒充联网/断网证明；不提前生成Graft host/MCP配置，不清理用户旧GitNexus资源。
-- 上游新增品牌别名、自动迁移或笔记检索时，核对 canonical 绑定路径与 ownership 消费者一致、父进程品牌／HOME／cloud 参数隔离、匹配 stamp 是否仍足以阻止自动改写，以及新增读取树是否经过启动与逐请求范围校验。Graft/Trail 的 `TRAIL_*`、`GRAFT_NO_TRAIL_SWITCH`、`.trail` 只按固定包证据评估，不执行迁移、联网 fetch 或 live 接线。
-
-- 已存在或由 reset／显式授权操作配置的受管 Graft MCP 为每个有效 host 配置域一条 `sbtd-graft`，无固定 cwd/项目 root；launcher 从实际会话 cwd 选择并锁定最近真实 Git 仓/worktree，缺项目/图/旧 stamp/越界均拒绝，不能回退 demo 或父目录。普通 init 和默认 check/plan 不创建、更新或移除该全局定义，显式项目根只维护本地围栏／图，图存在不证明宿主已接线。只读评估普通全局无项目 init 不产生 Graft MCP 写集、reset 的既有全局无项目行为、批量与追加等价、project-only 不写 HOME、Git 探针环境/PATH 隔离和旧项显式退役契约。`--graft-retire-legacy` 与不同旧运行时的私有 `--graft-legacy-bindings` 只由独立确认执行；无人值守版本检查不生成批准、不切换 live 配置、不停止连接或删除 TEMP/备份。
-
-- 遥测持久化采用不覆盖并发创建者的原子创建；已有disabled配置只读，需要改写的已有配置安全阻断。上游没有共同锁／条件更新协议时，不接受read-compare-replace或readback作为CAS证明，不因更新release而静默恢复覆盖写入。
+- 普通init的全局规则/Skills复用既有选择；OMP公共AGENTS镜像不等于OMP MCP/event接线；project-only不得写HOME或新增全局连接。
+- 核对迁移上下文中的 init：先验证完整迁移证据，只部署计划已声明的资源，按实际执行情况保存累计结果。
 
 <a id="reports"></a>
 ## Web、Mobile与执行报告
