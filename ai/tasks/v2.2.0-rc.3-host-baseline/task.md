@@ -7,9 +7,9 @@ mode_note: rc.3 PRD D11、D13：T2 实测只提交任务记录，原生证据只
 status: "blocked"
 branch: test/v2.2.0-rc.3-host-baseline
 created_at: '2026-11-27T11:03:03.289188+08:00'
-updated_at: "2026-11-27T12:13:41.820165+08:00"
+updated_at: "2026-11-27T12:36:40.471005+08:00"
 completed_at: null
-"blocked_reason": "OMP：三宿主版本阻断已解除；下一阶段 Codex／OMP 真实模型回合需要在各自私有 HOME 内完成人工官方登录。"
+"blocked_reason": "OMP：Codex 和 OMP 已完成本轮真实行为矩阵；剩余阻断是 agy D10 的已有登录复用与钥匙串不写入的可验证边界。"
 ---
 # T2：三宿主行为基线和退役演练
 
@@ -40,3 +40,7 @@ rc.3 精确验收 pin：`codex@0.172.0`、`omp@19.2.1`、`agy@1.5.18`。按用�
 | 2026-11-27T12:05:13.199147+08:00 | blocked | in-progress | OMP：用户授权在 T2 私有环境安装 Codex 0.172.0 并继续实测；保留 agy 1.5.18。 | 仅限任务私有测试域；不更新全局 CLI，不读取或复制真实认证。开始获取并验证固定发行物。 |
 | 2026-11-27T12:13:31.273703+08:00 | in-progress | in-progress | OMP：完成 安装固定 Codex 并核对隔离宿主预检与离线协议 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "Codex 官方 rust-v0.172.0 macOS arm64 资产 SHA-256 bd121f8abd6b28b3fc476da04a348e25a83e89eda19d39107f68f8e966053092。三宿主版本全匹配。Codex config/read 和同进程跨线程 optional stdio 实调用通过，缓存线程首次调用前无新启动、调用后增加一个并返回合成标记；不是模型审批。OMP 空 lease、隔离配置路径、禁用共享 MCP 后的 RPC get_state 成功；首次 RPC -11 已保留，未归因为产品缺陷。agy 1.5.18 的离线 ACP initialize 成功，未访问钥匙串。rc.2 归属夹具首轮缺 tomlkit，复用已有解释器后 7 passed、4 subtests passed，不是 rc.3 完整退役演练。原生或脱敏协议证据与中文汇总在本任务 ignored reports。"} |
 | 2026-11-27T12:13:41.820165+08:00 | in-progress | blocked | OMP：三宿主版本阻断已解除；下一阶段 Codex／OMP 真实模型回合需要在各自私有 HOME 内完成人工官方登录。 | Codex login status 返回 Not logged in（exit 1），account/read 无账号且 requiresOpenaiAuth=true；OMP 使用独立新 HOME，未导入登录。未执行真实模型回合、审批矩阵或 D10 agy 钥匙串 smoke。不要在真实 HOME 登录或导出凭据；恢复后逐项补证。 |
+| 2026-11-27T12:16:30.581259+08:00 | blocked | in-progress | OMP：收到用户已登录的回报，继续 T2 的隔离取证；逐宿主核对该身份是否对任务测试进程可用。 | 既有隔离 Codex login status 仍返回 Not logged in；不推断用户未登录、不搜索其他域。继续不依赖该账号的原生测试和退役演练，独立核验 OMP 与 agy。 |
+| 2026-11-27T12:30:34.086827+08:00 | in-progress | in-progress | OMP：完成 取证隔离 Codex 0.172.0 行为矩阵 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "用户澄清 OMP 登录先成功，Codex 设备码请求失败且 Teams 成员不可使用。隔离 Codex 指定系统公有 CA 后，原生 doctor 的 provider HTTP 从 fail 到 ok；未改代理或系统信任。改用官方浏览器登录，隔离 login status exit 0、account/read=chatgpt。完整包 SHA-256 0970016d48209a09c4039139629ed79b4a31c5e3d864e792c043419d98fa6466，与此前独立发行物的主二进制逐字一致。真实 readOnly/untrusted 线程按精确命令接收一次性审批，批准成功 exit 0、拒绝无退出码、批准缺失文件 exit 1、主动中断 interrupted。真实 MCP 回合同样获得三次匹配审批：允许实际读取，拒绝无服务端调用，允许缺失文件产生 ENOENT。保留初次仅列出目录却无模型调用的两份结果。#62366 同进程延迟启动见前轮原生证据；#62194 保留 exec resume 权限的上游变化只作记录，未作验收结论。"} |
+| 2026-11-27T12:36:29.957993+08:00 | in-progress | in-progress | OMP：完成 验证 OMP 真实行为及 T2 退役演练 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "OMP 19.2.1：真实 JSON 模型回合成功，无模型回退；RPC 明确拒绝、一次批准成功、ENOENT、abort；无交互审批 fail-closed 不算人工拒绝。活动 lease 为 held，退出后释放；不安全合成 lease 进入 unknown，生产适配器默认守卫退出 2 且未创建数据目录，恢复 0700 后为阴性。默认与 named profile 来源已验证。退役夹具验收 50/50：两个 MCP、Codex hooks、项目围栏；启动器缺失后三类悬空，围栏仍可证；第二次零写，恢复四项字节和原权限；五类负例均无目标写入。无真实 Graft/npx/清理；不冒充 T3 的生产退役实现。详见 ignored reports/omp-followup-01/snapshot、omp-unknown-guard-01、retirement-t2-01/result 的 JSON 及同 stem 中文汇总。"} |
+| 2026-11-27T12:36:40.471005+08:00 | in-progress | blocked | OMP：Codex 和 OMP 已完成本轮真实行为矩阵；剩余阻断是 agy D10 的已有登录复用与钥匙串不写入的可验证边界。 | agy 1.5.18，隔离 ACP initialize 成功，缺省／合成 mcp_config.json 的原生 list 差分通过。已放置两份规则、同名与链接 Skill；ACP session/new 返回 -32603。仅放行回环、保持钥匙串和外网禁用的无终端负例提示 authentication required 后停止；没有执行登录、登出或复制凭据。这不是实际 D10 复用失败，也不能证明真实登录无效。官方文档描述静默复用，当前无已验证的只读钥匙串运行／写入审计边界；未开放无限制安全服务。规则预算、同名 Skills 优先级、受保护配置审批、成功 stream-json / transcript 字段和 agy 真实矩阵均未通过。T2 不开 PR、不进 T3。 |
