@@ -99,6 +99,7 @@
 - [v2.2.0-rc.2-release-acceptance](v2.2.0-rc.2-release-acceptance/task.md)
 - [v2.2.0-rc.2-search-tools](v2.2.0-rc.2-search-tools/task.md)
 - [v2.2.0-rc.3-graft-monitoring](v2.2.0-rc.3-graft-monitoring/task.md)
+- [v2.2.0-rc.3-host-baseline](v2.2.0-rc.3-host-baseline/task.md)
 - [windows-ci-acl-optimization](windows-ci-acl-optimization/task.md)
 - [windows-migration-fixes-2026-10](windows-migration-fixes-2026-10/task.md)
 - [windows-recovery-acl-overhead](windows-recovery-acl-overhead/task.md)
