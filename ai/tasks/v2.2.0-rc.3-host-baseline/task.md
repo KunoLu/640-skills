@@ -7,9 +7,9 @@ mode_note: rc.3 PRD D11、D13：T2 实测只提交任务记录，原生证据只
 status: "blocked"
 branch: test/v2.2.0-rc.3-host-baseline
 created_at: '2026-11-27T11:03:03.289188+08:00'
-updated_at: "2026-11-27T12:36:40.471005+08:00"
+updated_at: "2026-11-27T14:34:50.686057+08:00"
 completed_at: null
-"blocked_reason": "OMP：Codex 和 OMP 已完成本轮真实行为矩阵；剩余阻断是 agy D10 的已有登录复用与钥匙串不写入的可验证边界。"
+"blocked_reason": "OMP：修订 D10 已生效；隔离 agy 在放行系统钥匙串服务及网络后仍要求登录，按停止条件结束本次复用尝试。"
 ---
 # T2：三宿主行为基线和退役演练
 
@@ -23,7 +23,7 @@ completed_at: null
 
 rc.3 精确验收 pin：`codex@0.172.0`、`omp@19.2.1`、`agy@1.5.18`。按用户在 D5 提前复核后的决定，只有 agy 的验收目标从 `1.5.16` 改为 `1.5.18`。本次复核时 agy 官方 CLI Latest 仍为 `1.5.16`；验收目标不改写该观察，也不改变官方版本监控的取值规则。后续适配和 T6 能力矩阵按这些目标执行；冻结前仍需复核，验收通过仍需相应版本的真实行为矩阵和 smoke。
 
-每个宿主独用隔离 HOME、缓存、配置和合成项目。Codex／OMP 只允许隔离域内官方登录；agy 仅按 D10 复用已有钥匙串登录，不能读出或复制令牌，若要求重新登录或出现钥匙串写入迹象就停。不更新真实宿主。原生证据及中文摘要保存在本任务 ignored reports，不提交认证或会话正文。
+每个宿主独用隔离 HOME、缓存、配置和合成项目。Codex／OMP 只允许隔离域内官方登录。按用户修订的 D10，agy 官方客户端可复用当前 macOS 用户已有登录并自动刷新该登录；T2 与 T7 均不宣称钥匙串零写入。不得启动登录或登出、提取或复制凭据、修改钥匙串权限或使用替代认证。复用失败、要求重新登录、永久授权或访问非预期条目时停止。不更新真实宿主。原生证据及中文摘要保存在本任务 ignored reports，不提交认证或会话正文。
 
 ## Book Gate Plan
 
@@ -44,3 +44,5 @@ rc.3 精确验收 pin：`codex@0.172.0`、`omp@19.2.1`、`agy@1.5.18`。按用�
 | 2026-11-27T12:30:34.086827+08:00 | in-progress | in-progress | OMP：完成 取证隔离 Codex 0.172.0 行为矩阵 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "用户澄清 OMP 登录先成功，Codex 设备码请求失败且 Teams 成员不可使用。隔离 Codex 指定系统公有 CA 后，原生 doctor 的 provider HTTP 从 fail 到 ok；未改代理或系统信任。改用官方浏览器登录，隔离 login status exit 0、account/read=chatgpt。完整包 SHA-256 0970016d48209a09c4039139629ed79b4a31c5e3d864e792c043419d98fa6466，与此前独立发行物的主二进制逐字一致。真实 readOnly/untrusted 线程按精确命令接收一次性审批，批准成功 exit 0、拒绝无退出码、批准缺失文件 exit 1、主动中断 interrupted。真实 MCP 回合同样获得三次匹配审批：允许实际读取，拒绝无服务端调用，允许缺失文件产生 ENOENT。保留初次仅列出目录却无模型调用的两份结果。#62366 同进程延迟启动见前轮原生证据；#62194 保留 exec resume 权限的上游变化只作记录，未作验收结论。"} |
 | 2026-11-27T12:36:29.957993+08:00 | in-progress | in-progress | OMP：完成 验证 OMP 真实行为及 T2 退役演练 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "OMP 19.2.1：真实 JSON 模型回合成功，无模型回退；RPC 明确拒绝、一次批准成功、ENOENT、abort；无交互审批 fail-closed 不算人工拒绝。活动 lease 为 held，退出后释放；不安全合成 lease 进入 unknown，生产适配器默认守卫退出 2 且未创建数据目录，恢复 0700 后为阴性。默认与 named profile 来源已验证。退役夹具验收 50/50：两个 MCP、Codex hooks、项目围栏；启动器缺失后三类悬空，围栏仍可证；第二次零写，恢复四项字节和原权限；五类负例均无目标写入。无真实 Graft/npx/清理；不冒充 T3 的生产退役实现。详见 ignored reports/omp-followup-01/snapshot、omp-unknown-guard-01、retirement-t2-01/result 的 JSON 及同 stem 中文汇总。"} |
 | 2026-11-27T12:36:40.471005+08:00 | in-progress | blocked | OMP：Codex 和 OMP 已完成本轮真实行为矩阵；剩余阻断是 agy D10 的已有登录复用与钥匙串不写入的可验证边界。 | agy 1.5.18，隔离 ACP initialize 成功，缺省／合成 mcp_config.json 的原生 list 差分通过。已放置两份规则、同名与链接 Skill；ACP session/new 返回 -32603。仅放行回环、保持钥匙串和外网禁用的无终端负例提示 authentication required 后停止；没有执行登录、登出或复制凭据。这不是实际 D10 复用失败，也不能证明真实登录无效。官方文档描述静默复用，当前无已验证的只读钥匙串运行／写入审计边界；未开放无限制安全服务。规则预算、同名 Skills 优先级、受保护配置审批、成功 stream-json / transcript 字段和 agy 真实矩阵均未通过。T2 不开 PR、不进 T3。 |
+| 2026-11-27T14:33:03.038033+08:00 | blocked | in-progress | OMP：用户修订 D10，开始在隔离 HOME 使用当前 macOS 用户的既有 agy 登录。 | 仅允许官方客户端自动刷新该登录；不要求零写入证明，不访问凭据内容，不改变其他隔离与停止条件。先做一次无交互复用探针，再按真实结果决定是否继续。 |
+| 2026-11-27T14:34:50.686057+08:00 | in-progress | blocked | OMP：修订 D10 已生效；隔离 agy 在放行系统钥匙串服务及网络后仍要求登录，按停止条件结束本次复用尝试。 | 原始签名 agy 1.5.18、当前 macOS 用户、任务专用 HOME、无 API key/ADC、关闭 stdin；允许官方自动刷新，不要求零写入。一次真实无工具提示，login_required，exit 1，无成功回应；未主动登录、登出、重试或改变钥匙串权限。账号类型及失败根因未知。证据 reports/agy-d10-reuse-01.json 和同 stem 中文汇总。三宿主门禁未齐；不开验收 PR、不交外审。 |
