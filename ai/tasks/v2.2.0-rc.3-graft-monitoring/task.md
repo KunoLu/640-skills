@@ -7,7 +7,7 @@ mode_note: 按 rc.3 定稿 PRD D11、D12、D13 执行 T1。
 status: "checking"
 branch: docs/v2.2.0-rc.3-drop-graft-monitoring
 created_at: '2026-11-26T14:57:02.767206+08:00'
-updated_at: "2026-11-26T18:15:13.984142+08:00"
+updated_at: "2026-11-27T09:27:37.594208+08:00"
 completed_at: null
 "sync_scope": ["prompts/automations/references"]
 ---
@@ -36,3 +36,5 @@ completed_at: null
 | 2026-11-26T15:13:01.600831+08:00 | in-progress | checking | OMP：开始提交候选、开 PR，并在精确 head 复审；等待 agy 和 CI。 | 工作区内审意见已逐项处理；本地测试不是 PR CI。合入门禁仍未完成。 |
 | 2026-11-26T18:14:18.737659+08:00 | checking | in-progress | OMP：收到 agy 独立审查 CHANGES_REQUESTED，开始修正 F1（P2）。 | PR #232，head 36296e835eee475ed8c19760f248fec242757168，validation 45773684518 为 13/13。agy 核对实际导入：OMP 来源发现、升级和迁移使用 wiring；撤回此前仅按模块职责排除二者的判断。A/B 均不恢复：专用 hooks 与遥测文件协议不属于通用要求。F2（P3）留 T3：删除模块前解开 sbtd_omp_sources 顶层导入，特征测试覆盖 omp_agents_target；另评估升级探测子进程 DNT，不是本 PR 门禁。 |
 | 2026-11-26T18:15:13.984142+08:00 | in-progress | checking | OMP：完成 F1 修正与静态验证，开始新 head 的内审、CI 与 agy 复审。 | Python AST 核验来源、升级、迁移计划及验证四个消费者的导入；两个 wiring 文件均列于 scope 只读区和 impact 平台章节，未加入写入区。主 prompt、scope、impact 除 ignore 路径外无 Graft 命中。未改运行模块，未执行接线；旧 SHA 的门禁不继承。 |
+| 2026-11-27T09:25:50.086027+08:00 | checking | in-progress | OMP：收到内审 REQUEST_CHANGES，开始修正迁移正文保真与宿主发行证据两项 P1。 | 受审 head cc5f929e04f60e03c58d654287ec01832ec073ff。先修正并在新 head 重新内审；取得通过结论前不交给 agy。 |
+| 2026-11-27T09:27:37.594208+08:00 | in-progress | checking | OMP：完成两个 P1 修正和本地验证，开始对修正后的完整 PR 做内置 /review。 | 迁移正文只接受批准计划内的指定受管段操作及精确暂停前缀解除；宿主接线须核对发布包精确版本，含原生组件时核对生命周期。两文件 pytest 52 passed、224 subtests passed；专项路由与 D9 排除检查通过。新 SHA 的 OMP、agy、CI 门禁均不继承旧结果。 |
