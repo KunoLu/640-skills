@@ -7,6 +7,12 @@ English · [简体中文](CHANGELOG.zh.md)
 The Chinese and English changelogs are kept consistent version by version and entry by entry, differing only in language; version numbers, dates, links, commit SHAs, and code identifiers stay identical. Unreleased content is maintained in sync in both files, and historical facts are not rewritten through translation.
 
 
+## v2.2.0-rc.3 (Unreleased)
+
+### Changed
+
+- Stop monitoring Graft in the version-check automation. Remove the Graft row from the `ENTRYPOINT.md` monitoring table and version summary, the published-pin sync exception, and the Graft-specific scope and impact checks. `update` no longer has a Graft skip branch, and the automation no longer queries `nanonets/graft` or `@nanonets/graft`. The pinned Graft runtime in the released workflow is unchanged by this entry.
+
 ## v2.2.0-rc.2 (2026-11-25)
 
 ### Changed
