@@ -7,9 +7,9 @@ mode_note: rc.3 PRD D11、D13：T2 实测只提交任务记录，原生证据只
 status: "blocked"
 branch: test/v2.2.0-rc.3-host-baseline
 created_at: '2026-11-27T11:03:03.289188+08:00'
-updated_at: "2026-11-27T12:03:04.707518+08:00"
+updated_at: "2026-11-27T12:13:41.820165+08:00"
 completed_at: null
-"blocked_reason": "OMP：Codex 隔离预检为 0.171.0，仍缺已验证的 0.172.0 测试入口。"
+"blocked_reason": "OMP：三宿主版本阻断已解除；下一阶段 Codex／OMP 真实模型回合需要在各自私有 HOME 内完成人工官方登录。"
 ---
 # T2：三宿主行为基线和退役演练
 
@@ -37,3 +37,6 @@ rc.3 精确验收 pin：`codex@0.172.0`、`omp@19.2.1`、`agy@1.5.18`。按用�
 | 2026-11-27T11:03:56.108763+08:00 | in-progress | blocked | OMP：完成隔离版本预检；agy 已从 PRD 所述本机 1.5.16 变为 1.5.18，与 T2 精确验收 pin 不符，按定稿差异规则停止。 | 本地三组 --version 均 exit 0：codex-cli 0.171.0（目标 0.172.0），omp/19.2.1（匹配），agy 1.5.18（目标 1.5.16）。见 ignored reports/{codex,omp,agy}-version.txt 及同 stem 中文摘要。没有启动真实会话、登录或退役操作；未改变 pin、真实宿主或钥匙串。需可用的受信 agy 1.5.16 或经用户决定提前执行 D5 复核；Codex 仍需独立的匹配版本。 |
 | 2026-11-27T12:02:53.960956+08:00 | blocked | in-progress | OMP：用户指定 agy 验收 pin 为 1.5.18，解除旧 agy 版本不匹配的阻断。 | D5 查询的 CLI Latest 为 1.5.16；此次为用户明确指定的验收例外，不作为官方 Latest 证据。 |
 | 2026-11-27T12:03:04.707518+08:00 | in-progress | blocked | OMP：Codex 隔离预检为 0.171.0，仍缺已验证的 0.172.0 测试入口。 | 确认验收目标为 Codex 0.172.0、OMP 19.2.1、agy 1.5.18；后两者在已有预检中匹配。没有安装或升级，也没有新的 smoke。 |
+| 2026-11-27T12:05:13.199147+08:00 | blocked | in-progress | OMP：用户授权在 T2 私有环境安装 Codex 0.172.0 并继续实测；保留 agy 1.5.18。 | 仅限任务私有测试域；不更新全局 CLI，不读取或复制真实认证。开始获取并验证固定发行物。 |
+| 2026-11-27T12:13:31.273703+08:00 | in-progress | in-progress | OMP：完成 安装固定 Codex 并核对隔离宿主预检与离线协议 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": "Codex 官方 rust-v0.172.0 macOS arm64 资产 SHA-256 bd121f8abd6b28b3fc476da04a348e25a83e89eda19d39107f68f8e966053092。三宿主版本全匹配。Codex config/read 和同进程跨线程 optional stdio 实调用通过，缓存线程首次调用前无新启动、调用后增加一个并返回合成标记；不是模型审批。OMP 空 lease、隔离配置路径、禁用共享 MCP 后的 RPC get_state 成功；首次 RPC -11 已保留，未归因为产品缺陷。agy 1.5.18 的离线 ACP initialize 成功，未访问钥匙串。rc.2 归属夹具首轮缺 tomlkit，复用已有解释器后 7 passed、4 subtests passed，不是 rc.3 完整退役演练。原生或脱敏协议证据与中文汇总在本任务 ignored reports。"} |
+| 2026-11-27T12:13:41.820165+08:00 | in-progress | blocked | OMP：三宿主版本阻断已解除；下一阶段 Codex／OMP 真实模型回合需要在各自私有 HOME 内完成人工官方登录。 | Codex login status 返回 Not logged in（exit 1），account/read 无账号且 requiresOpenaiAuth=true；OMP 使用独立新 HOME，未导入登录。未执行真实模型回合、审批矩阵或 D10 agy 钥匙串 smoke。不要在真实 HOME 登录或导出凭据；恢复后逐项补证。 |
