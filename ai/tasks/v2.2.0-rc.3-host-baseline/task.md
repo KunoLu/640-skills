@@ -4,11 +4,12 @@ id: v2.2.0-rc.3-host-baseline
 workflow_mode: strict
 mode_source: user
 mode_note: rc.3 PRD D11、D13：T2 实测只提交任务记录，原生证据只保留在本地。
-status: "in-progress"
+status: "blocked"
 branch: test/v2.2.0-rc.3-host-baseline
 created_at: '2026-11-27T11:03:03.289188+08:00'
-updated_at: "2026-11-27T11:03:13.975367+08:00"
+updated_at: "2026-11-27T11:03:56.108763+08:00"
 completed_at: null
+"blocked_reason": "OMP：完成隔离版本预检；agy 已从 PRD 所述本机 1.5.16 变为 1.5.18，与 T2 精确验收 pin 不符，按定稿差异规则停止。"
 ---
 # T2：三宿主行为基线和退役演练
 
@@ -31,3 +32,4 @@ completed_at: null
 | at | from | to | reason | evidence |
 |---|---|---|---|---|
 | 2026-11-27T11:03:13.975367+08:00 | planned | in-progress | OMP：开始 核对三宿主测试入口及精确版本 | {"changed_files": [], "evidence_files": [], "sync_files": {}, "validation": ""} |
+| 2026-11-27T11:03:56.108763+08:00 | in-progress | blocked | OMP：完成隔离版本预检；agy 已从 PRD 所述本机 1.5.16 变为 1.5.18，与 T2 精确验收 pin 不符，按定稿差异规则停止。 | 本地三组 --version 均 exit 0：codex-cli 0.171.0（目标 0.172.0），omp/19.2.1（匹配），agy 1.5.18（目标 1.5.16）。见 ignored reports/{codex,omp,agy}-version.txt 及同 stem 中文摘要。没有启动真实会话、登录或退役操作；未改变 pin、真实宿主或钥匙串。需可用的受信 agy 1.5.16 或经用户决定提前执行 D5 复核；Codex 仍需独立的匹配版本。 |
