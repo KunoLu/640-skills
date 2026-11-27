@@ -7,7 +7,7 @@ mode_note: rc.3 PRD D11、D13：T2 实测只提交任务记录，原生证据只
 status: "checking"
 branch: test/v2.2.0-rc.3-host-baseline
 created_at: '2026-11-27T11:03:03.289188+08:00'
-updated_at: "2026-11-27T15:43:53.840949+08:00"
+updated_at: "2026-11-27T17:34:27.919762+08:00"
 completed_at: null
 "blocked_reason": null
 ---
@@ -31,23 +31,50 @@ rc.3 精确验收 pin：`codex@0.172.0`、`omp@19.2.1`、`agy@1.5.18`。按用�
 
 ## Phase 0：实测结果与下游约束
 
-以下是本机 macOS arm64 的 T2 结果，不是 Linux／Windows 原生 smoke，也不是 T7 的数据入库、去重和重放验收。以各自宿主发出的事件、审批回复和磁盘／服务端结果为据；回合成功不等于工具成功。
+以下是本机 macOS arm64 的 T2 结果，不是 Linux／Windows 原生 smoke，也不是 T7 的入库、去重和重放验收。表中所有批准和拒绝，均由测试控制器回应真实宿主协议（Codex app-server RPC、OMP rpc-ui、agy ACP `session/request_permission`），不是人在 UI/TUI 中点击。协议决定、工具执行结果和模型回合终态分别取证；回合成功不等于工具成功。
 
 | 固定宿主 | 原生配置与调用 | 拒绝、失败和中断 |
 |---|---|---|
 | Codex `0.172.0` | `initialize` 返回任务专用 `codexHome`，`config/read` 返回只读策略；`untrusted` 线程内单次批准 `cksum` 后退出 0。另测真实模型 MCP 调用，批准后服务端收到请求。 | 命令拒绝为 `declined` 且无退出码，批准读取缺失文件退出 1；MCP 拒绝后服务端无调用，批准缺失文件得到 ENOENT。`turn/interrupt` 后终态 `interrupted`。 |
-| OMP `19.2.1` | `--mode json` 的真实模型回合成功且无回退；RPC 只批准合成文件的 `read`，返回标记。默认 agent 目录与 named profile 分别指向隔离 HOME 下的不同路径。 | 用户拒绝与无交互 UI 拒绝可区分；批准读取缺失文件得到错误；RPC `abort` 后为 `aborted`。活动租约 held，退出后释放；原生 unknown 进入生产守卫后退出 2，不创建 runtime 目录。 |
+| OMP `19.2.1` | `--mode json` 的真实模型回合成功且无回退；RPC 单次批准合成文件的 `read` 后得到标记。离线 `config path` 的四组目录对照见下文。 | rpc-ui 控制器选择 Deny 时为 `denied by user`，无界面 JSON 则为 `no interactive UI available`；批准读缺失文件得到错误；RPC `abort` 后为 `aborted`。活动租约 held，退出后释放；原生 unknown 进入生产守卫后退出 2，未创建 runtime 目录。 |
 | agy `1.5.18` | 经本轮授权的隔离 Google 个人 OAuth 重新认证，首个无工具真实回合成功。ACP `run_command` 收到 `allow_once` 后读到合成标记。 | 同一命令获 `reject_once`，工具为 failed；批准读缺失文件后是 `No such file`，不能由 ACP 包装层的 completed 判断成功。收到原生回合更新后发 `session/cancel`，终态 `cancelled`。 |
 
-**Codex 与退役。** 官方完整包的主二进制与已验证的独立二进制逐字相同；只用独立二进制时，工具虽可列出，模型调用证据不足。对可选 stdio MCP 的缓存测试以同一 app-server 进程的新线程为单位：有缓存时服务在第一次调用时才启动；跨进程对照不证明这一性质。退役控制器使用四种 rc.2 生产渲染形态与私有文件原语；50/50 项通过。替换夹具启动器后，三个引用启动器的配置出现悬空，项目围栏仍有归属；第二次执行零写，四文件恢复原字节和权限。未知归属、同名第三方、写后编辑、缺创建证据、不安全路径的负例均未改目标。不是 T3 的生产退役入口。
+**Codex 与 OMP。** Codex 官方完整包的主二进制与已验证的独立二进制逐字相同。只用独立二进制时，目录可列出，未取得模型实际调用证据。可选 stdio MCP 延迟启动试验是协议客户端直调、没有模型回合：在同一 app-server 进程中新建线程，缓存存在时服务到首次调用才启动；跨进程对照不能证明这一性质。
+
+OMP `19.2.1` 在新隔离 HOME 的 `config path` 实测：不设覆盖为 `~/.omp/agent`；只设 `PI_CODING_AGENT_DIR` 则采用指定目录；只传 `--profile t2check` 为 `~/.omp/profiles/t2check/agent`；两者同时指定时仍取 named profile。此结论仅限 agent 目录解析，不证明对应目录内已退役任何 MCP。前轮 `--config <overlay> config get` 未显示覆盖层，不能用那个输出证明审批生效；运行时 `always-ask` 会话记录和实际审批回复是独立证据。
+
+**T3：退役与归属。** 50/50 是隔离夹具检查数，不是生产退役 CLI 的结果。删除夹具启动器桩后，Codex/OMP MCP 和 Codex hooks 三项既有已证明归属，又指向缺失启动器；围栏没有启动器路径，仍可证明归属。`verify_owned_*` 接受形状既不能检测悬空，也不能证明写入者：缺少回执的同形项、写后被追加注释的配置都可通过形状检查。对记录的启动器路径独立 `lstat`；用写入回执、实际写后校验和及所需模式核对归属和漂移。D6 下，已证明归属且悬空的项经确认和备份后退役；归属不明且指向将删除或已缺失启动器的项不能据名清理，阻断相应 reset／upgrade。
+
+四个正例均保留原有第三方内容，用 `write_file` 写回。二次执行零写，回退恢复四文件字节与权限。未知归属、第三方同名、写后编辑、无成功创建凭证、不安全路径均未改目标。T3 必须另测三类正例：`before.type=absent` 且有成功创建凭证时用 `remove_reference` 删除；固定根 `sbtd-graft-<root-hash>` 的有凭证退役；named profile 和 `PI_CODING_AGENT_DIR` 各自生效的 OMP 目标文件。rc.2 单测与目录解析观察不能替代这些端到端检查。
 
 **T4：规则与 Skills。** 无工具提示能返回 `~/.gemini/AGENTS.md` 与 `~/.gemini/config/AGENTS.md` 各自的标记，证明累加加载。同名 slash skill 选择 `~/.gemini/config/skills` 的夹具；只存在于 `~/.agents/skills` 的另一项也能调用，该目录在本测试中是指向 `~/.agent/skills` 的符号链接。四次同模型、同提示对照的首步 `input_tokens + cache_read_tokens` 依次为 10660（两文件）、10628（仅根文件）、10537（均无）、10663（恢复两文件）。两文件相对均无增加 123／126；这是整体输入观察，不能当成固定逐文件费率。`/context` 没有取得 Rules 分类计数，也没有代用户接受交互条款。
 
-**T4：受保护配置。** 真实 `run_command` 调用了仓内 Onboard 的 `snapshot`、`backup_reference`、`write_file` 原语，目标仅为任务域 `~/.gemini/config/mcp_config.json`。普通模式拒绝后字节不变；单次批准后新增指定测试 server，原有 server 保留。`--sandbox` 会话也请求审批；单次批准且 `BypassSandbox=false` 后，内层 `sandbox-exec` 在外层文件隔离内报 `sandbox_apply: Operation not permitted`，目标未变。这是嵌套沙箱的实测限制，不是“已验证内层路径策略拒绝该文件”，也不是 T4 安装菜单已上线。未降低隔离以取得写入结果。
+T4 要区分 Onboard 安装根与 agy 实际加载来源：即使写入 `~/.agents/skills`，`~/.gemini/config/skills` 的旧同名项仍可遮蔽它。`plan/check` 应报告这一同名冲突及实际来源；不得据此覆盖用户副本。
 
-**T5：事件契约。** 实际 NDJSON 为 `event=init/step_update/result`；工具步骤可包含 `tool_info.name/parameters/output` 或 `error`。对比同一已结束进程的 `conversation_id` 和唯一 `transcript.jsonl`，读取前后大小与 mtime 均稳定；普通文件工具和 `call_mcp_tool` 均有 `tool_calls[].name/args` 形态。MCP 的 `ServerName`、`ToolName` 在流的 `parameters` 和 transcript 的 `args` 内出现，`Arguments` 不可作为事件元数据保留。有的 transcript 参数值本身是 JSON 引号编码的字符串。默认无界面 MCP 样本中工具 ERROR、服务端零调用，但 `result.status=SUCCESS`、进程退出 0；只可作失败调用形态，不计成功。后续解析不得采集命令、参数值、输出、正文或 thinking。
+**T4：受保护配置。** 目标仅为隔离 HOME 的 `~/.gemini/config/mcp_config.json`，由真实 `run_command` 调用 Onboard 的 `snapshot`、`backup_reference`、`write_file` 文件原语。原首轮 `agy-acp-matrix-01` 的 `deny`、`standard-deny` 在 PTY 尚不可用时得到拒绝；原次轮 `agy-acp-matrix-02` 放行任务 PTY 后才有普通模式批准写入。不要跨这两轮构造控制对。返修用同一 PTY 策略补做五项：普通读取拒绝、普通受保护写拒绝和 `--sandbox` 受保护写拒绝均为 `reject_once`、工具 failed、目标未改；普通写 `allow_once` 后磁盘确实新增合成 server 并保留原项；`--sandbox` 写获 `allow_once`（无 `BypassSandbox=true`），包装层 completed，但嵌套 `sandbox_apply` 报 `Operation not permitted`，目标未改。
+
+实际触发的是通用 `run_command` 审批，不足以证明 `mcp_config.json` 有独立的路径级审批门。未撤掉外层文件隔离；缺少非嵌套 `agy --sandbox` 对受保护配置与普通文件的同条件写入对照。T4 不得推定内层路径策略、特定 errno 或 Onboard 错误码；拒绝、沙箱启动失败及任一 `OSError`／`ContractError` 均须 fail-closed，如实报告所处步骤和实际错误，不把工具包装层完成当作磁盘写入成功。上述观察不是对 T4 安装菜单的验收。
+
+**T5：`agy-stream-json-1`。** agy `--version` 的 stdout 是裸字符串 `1.5.18`。两种输入的本轮样本都没有可用的宿主版本字段；按 FR-5 独立传入并精确验证 `--host-version`，不从模型名或目录猜版本。
+
+只消费 `event=step_update` 且 `step_update.step_type=tool` 的工具事实。`init`、`result`、`user_input`、`agent_response` 均不是工具执行；`init.tools` 是目录，不一定等于实际工具名。两个原生样本的同一工具步先 `ACTIVE`，再分别为 `DONE`（`read_file`，工具层成功）或 `ERROR`（`call_mcp_tool`，工具层失败，不能据此细分拒绝）。`step_update.tool_name` 是外层名称，实测与 `tool_info.name` 同时存在且相等；T5 不在两者冲突时任选其一。MCP 的 `tool_info.parameters.ServerName/ToolName` 实测为裸字符串，用于构造 `mcp:<server>.<tool>`；不采集 `Arguments`、输出、错误消息、命令或模型正文。旧投影 `agy-mcp-shapes-01.json` 的 scope 误写了批准规则，以同 stem 中文勘误为准：实际是 `request-review`、零服务端调用。`result.status=SUCCESS` 与进程退出 0 均不能把工具 `ERROR` 改判成功。
+
+实测工具步无时间戳或独立 call ID。`occurred_at=null`，不得拿接收时间填充；`duration_seconds` 在 ACTIVE 未见，终态样本有浮点秒，不能当作时间戳。T5 以进程内一致、合法的 `conversation_id`（UUID）绑定非负整数 `step_index`，用相同索引聚合更新；不要按流行号识别一次调用。派生键规则见下。这里只锁定观测到的枚举，未知状态、孤立终态与相互冲突的标识不能视为成功。
+
+**T5：`agy-transcript-jsonl-1`。** 20 份已结束、大小和 mtime 稳定的合成样本中，见 `USER_INPUT`、`PLANNER_RESPONSE`、`GENERIC`、`SYSTEM_MESSAGE`，状态为 `DONE` 或 `ERROR`，来源为 `USER_EXPLICIT`、`MODEL` 或 `SYSTEM`；不是对未来发行版的枚举穷举。13 行声明工具调用，均为单项 `PLANNER_RESPONSE.tool_calls[]`，只有 `name`、`args`，无调用 ID。MCP 的 `args.ServerName/ToolName` 是内含 JSON 引号的字符串：仅对两个身份字段 JSON 解码一次，要求结果为合法字符串再构造组件名，不把引号拼入标识。不要对业务参数、`content`、`thinking`、输出或 `error` 文本取值入库。
+
+| 已知夹具事实 | 紧随单调用 planner 的结果行（索引 +1） | T5 可判定的上限 |
+|---|---|---|
+| 读取成功、命令成功、读缺失文件、嵌套沙箱拒绝执行 | 均为 `GENERIC/DONE`，无 error 键 | 只知该步骤已结束，不知底层调用成功与否；不能一律计入 `succeeded`。 |
+| 控制器经协议拒绝、MCP 工具报错 | 均为 `GENERIC/ERROR`，有字符串 error，无独立 error code/type | 至多标记工具层失败，不能推出 `declined`，也不能解析错误消息来区分。 |
+
+结果行本身无工具名、call ID、会话 ID 或结构化退出码。只在同一已绑定会话中、单一待配对调用且相邻索引唯一时关联；多调用批次未实测，不把下一条 `GENERIC` 分配给任意一个工具。无法证明的关联、未知枚举或冲突行应计入跳过／缺口，不合成完成事件。`created_at` 为带 Z 的秒级时间，可作该行 `occurred_at`，同秒可重复，不是键；没有可靠耗时就保留空值。
+
+**T5 身份与重放约束（派生规则，不是宿主原生字段）。** 流取经验证且前后一致的 `conversation_id`；离线行不含该 ID，必须由显式输入的受控、归属唯一的会话目录 UUID 绑定 `transcript.jsonl`。本次发现同名会话数据库 stem 与目录一致；不要求读取数据库正文。导入仍需确认会话结束、`--confirmed` 和前后 stat 一致；裸复制文件、路径越界、多个候选或归属不明时拒绝，不按文件名 `transcript.jsonl`、mtime 或正文猜 ID。每格式独立 `source_id`；`source_event_id` 由会话 UUID、调用起点索引（流的工具步／离线的 planner 步）、该步调用序号（本样本均为 0）和阶段 `start`/`finish` 确定派生，编码需无歧义且不超过 128 字符。同一调用两阶段共享 `invocation_id`；重复 ACTIVE 更新不生成新开始。`(source_id, source_event_id)` 保证同格式同原件重放用同一键，不以接收时间、随机 ID 或原始正文摘要去重。两种格式没有原生跨格式调用 ID，不应将同一会话两份输入重复计入一组验收。
 
 **证据与维护范围。** 详细测试报告保留在本任务的 ignored `reports/`。关键组为 `codex-live-matrix-02`、`codex-live-mcp-approval-02`、`codex-mcp-same-process-02`、`omp-followup-01/snapshot`、`omp-unknown-guard-01`、`retirement-t2-01/result`、`agy-budget-accounting-04`、`agy-acp-matrix-01`、`agy-acp-matrix-02`、`agy-tool-witnesses-04`、`agy-parser-shapes-02` 和 `agy-mcp-shapes-01`；每组均有同 stem 中文汇总。保留未成功的控制轮。没有改产品、运行时契约、安装器或监控规则；双语 README、CHANGELOG 和版本检查 prompt 无用户可见行为要同步。
+
+外审返修增加五组本地证据：`agy-stream-tool-contract-01`、`agy-transcript-result-rows-01`、`omp-directory-precedence-r2`、`agy-pty-paired-r2`、`agy-pty-outcomes-r2`。`phase0-evidence.sha256` 更新为 89 项；原 79 项的字节和旧清单原件（`phase0-evidence-0b1c6b2.sha256`）均保留。两轮清单范围都是 JSON/XML/中文摘要，不包含未发布的会话正文或登录资料。
 
 ## 状态事件
 
@@ -71,3 +98,6 @@ rc.3 精确验收 pin：`codex@0.172.0`、`omp@19.2.1`、`agy@1.5.18`。按用�
 | 2026-11-27T15:27:46.873455+08:00 | blocked | in-progress | OMP：用户报告 agy 已登录，任务隔离域的一次性官方登录回执 exit 0；开始用同一域验证真实模型回合。 | 仅检查一次性预留标记和退出码，未读取凭据或登录界面；本轮是授权的重新认证，不记为此前的静默复用。 |
 | 2026-11-27T15:43:31.773506+08:00 | in-progress | in-progress | OMP：完成 验证隔离域 agy 登录后的规则、Skills、审批、原生事件与失败／中断 | {"changed_files": [], "evidence_files": ["ai/tasks/v2.2.0-rc.3-host-baseline/reports/phase0-evidence.sha256"], "sync_files": {"ai/tasks/v2.2.0-rc.3-host-baseline/reports/phase0-evidence.sha256": {"mtime_ns": 1795765400582803617, "sha256": "999402d0b63507dac8b0fcab8eeef1c602b1c0cd9192dc4f202e3b42911ca1fb", "size": 7263}}, "validation": "一次性 Google 个人 OAuth 后真实回合 SUCCESS；不是此前的静默复用。批准的合成读取、拒绝、缺失文件、原生 cancel、普通受保护文件写入与 --sandbox 嵌套失败分别有证据，未绕过沙箱。36 份 JSON 均有同 stem 汇总，关键回执断言通过；完整报告清单的 SHA-256 绑定本轮本地证据。"} |
 | 2026-11-27T15:43:53.840949+08:00 | in-progress | checking | OMP：Phase 0 结果与限制已登记，开始在精确 PR head 执行内置 /review；外审和 CI 尚待完成。 | 只提交任务记录与索引。三宿主、私有退役夹具与正式发布验收分开；没有提交报告、登录材料或产品变更。 |
+| 2026-11-27T17:16:48.365325+08:00 | checking | in-progress | OMP：收到 agy 对 0b1c6b2dbefea5eb26de46ffd8630ab9dd4c7a07 的 CHANGES_REQUESTED；开始补证事件格式、配置来源、审批与退役边界。 | agy 只读复核旧清单 79/79；旧 head 内审 CLEAN、validation 45960511880 为 13/13，均不抵消 P1-1、P2-1 至 P2-4。同步处理两项 P3；不降低外层隔离，不改生产模块或回写历史事件。 |
+| 2026-11-27T17:34:06.554353+08:00 | in-progress | in-progress | OMP：完成 补证两种 agy 事件格式、同 PTY 审批、OMP 来源和退役边界 | {"changed_files": [], "evidence_files": ["ai/tasks/v2.2.0-rc.3-host-baseline/reports/phase0-evidence.sha256", "ai/tasks/v2.2.0-rc.3-host-baseline/reports/phase0-evidence-0b1c6b2.sha256"], "sync_files": {"ai/tasks/v2.2.0-rc.3-host-baseline/reports/phase0-evidence-0b1c6b2.sha256": {"mtime_ns": 1795771178675921020, "sha256": "999402d0b63507dac8b0fcab8eeef1c602b1c0cd9192dc4f202e3b42911ca1fb", "size": 7263}, "ai/tasks/v2.2.0-rc.3-host-baseline/reports/phase0-evidence.sha256": {"mtime_ns": 1795772035773406384, "sha256": "6e06247736cadc40aa3841ca033d8210399d040711abc9d5a7b80399733506f4", "size": 8211}}, "validation": "P1-1 与 P2-1/2/3/4 已按实测修正；两项 P3 已澄清。同一外层隔离下追加五个 ACP 对照，不主张非嵌套策略。新旧清单均逐文件验算通过；T5 派生身份仅为后续约束，尚未实现入库。"} |
+| 2026-11-27T17:34:27.919762+08:00 | in-progress | checking | OMP：完成外审返修并开始新 head 全 PR 内置 /review。 | 新 SHA 须重做 OMP 内审、agy 复审与 CI；旧 13/13 不继承。 |
