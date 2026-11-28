@@ -950,11 +950,46 @@ class OnboardCliSmokeTests(unittest.TestCase):
                 "previous_deployment_id": None,
             }
             validate_deployment_reports(payload, record)
+            for exit_code in (False, 0.0, 1):
+                with self.subTest(exit_code=exit_code):
+                    document["exitCode"] = exit_code
+                    path.write_text(json.dumps(document), encoding="utf-8")
+                    record["report_refs"] = [{"path": str(path), "state": snapshot(path)}]
+                    with self.assertRaisesRegex(
+                        ContractError, "an Onboard CLI smoke record did not exit cleanly"
+                    ) as raised:
+                        validate_deployment_reports(payload, record)
+                    self.assertEqual(raised.exception.code, "report-acceptance")
+            document["exitCode"] = 0
             document["mockStrategy"] = "app-mocked"
             path.write_text(json.dumps(document), encoding="utf-8")
             record["report_refs"] = [{"path": str(path), "state": snapshot(path)}]
             with self.assertRaises(ContractError) as raised:
                 validate_deployment_reports(payload, record)
+            self.assertEqual(raised.exception.code, "report-acceptance")
+
+            # A passing project check cannot replace the raw exit of a native API run.
+            fixture = ReportFixture(root)
+            fixture.raw["exitCode"] = 1
+            fixture.save()
+            project = fixture.project
+            projection["projects"][0]["projectRoot"] = project["root"]
+            document.update(
+                projectRoot=project["root"],
+                sourceRef=project["source_ref"],
+                sourceCommit=project["head"],
+                startedAt=fixture.raw["startedAt"],
+                finishedAt=fixture.raw["finishedAt"],
+                command=onboard_cli_smoke_command(fixture.root),
+                mockStrategy="none",
+                projectionSha256=hashlib.sha256(canonical_json_bytes(projection)).hexdigest(),
+            )
+            path.write_text(json.dumps(document), encoding="utf-8")
+            project["report_refs"].append({"path": str(path), "state": snapshot(path)})
+            with self.assertRaisesRegex(
+                ContractError, "an API smoke raw run did not exit cleanly"
+            ) as raised:
+                validate_deployment_reports(fixture.deployment, project)
             self.assertEqual(raised.exception.code, "report-acceptance")
 
 

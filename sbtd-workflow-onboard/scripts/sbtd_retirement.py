@@ -35,7 +35,7 @@ from onboard_contracts import (
     resource_id,
 )
 import sbtd_retirement_permissions as windows_permissions
-from sbtd_retirement_paths import HISTORY_DIRS
+from sbtd_retirement_paths import HISTORY_DIRS, LEGACY_LAUNCHER_RELATIVE
 
 REPORT_SCHEMA = "sbtd-retirement/1"
 RECEIPT_SCHEMA = "sbtd-retirement-receipt/1"
@@ -68,6 +68,7 @@ _FENCE_BODY_SHA = "7a697bc2a19853aa0c63ea89198b656adb055e7d0a4cad6989f4cb70a241f
 _FENCE_START = "<!-- graft:start -->"
 _FENCE_END = "<!-- graft:end -->"
 _GLOBAL_KEY = "sbtd-graft"
+_LAUNCHER_NAME = Path(LEGACY_LAUNCHER_RELATIVE).name
 _ENV = {"DO_NOT_TRACK": "1", "DNT": "1"}
 _FLAGS = ("-E", "-s")
 _HOOK_EVENTS = {
@@ -751,11 +752,13 @@ def _abs(value: object) -> bool:
 
 def _mcp_launcher(key: str, entry: Mapping[str, Any], *, omp: bool) -> str | None:
     """Return the launcher only for the producer argv, never a name-only key."""
+    if key != _GLOBAL_KEY and not key.startswith(f"{_GLOBAL_KEY}-"):
+        return None
     args = entry.get("args")
     command = entry.get("command")
     if not _abs(command) or not isinstance(args, list) or any(not isinstance(token, str) for token in args):
         return None
-    if dict(entry.get("env") or {}) != _ENV:
+    if entry.get("env") != _ENV:
         return None
     base = {"type", "command", "args", "env"} if omp else {"command", "args", "env"}
     if omp and entry.get("type") != "stdio":
@@ -829,6 +832,11 @@ def _hook_identity(command: str) -> tuple[str, str] | None:
     return _HOOK_EVENTS[event], launcher
 
 
+def _hook_entry(event: str, command: str) -> str:
+    # The full command identifies a hook without disclosing its arguments.
+    return f"{event}:{_digest(command)}"
+
+
 def _toml_document(raw: bytes) -> dict[str, Any]:
     if not raw.strip():
         return {}
@@ -855,7 +863,7 @@ def _json_document(raw: bytes) -> dict[str, Any]:
 
 
 def _servers(document: Mapping[str, Any], *, omp: bool) -> dict[str, Any]:
-    key = "mcpServers" if omp or "mcpServers" in document else "mcp_servers"
+    key = _table_key(document, omp=omp)
     servers = document.get(key, {})
     if not isinstance(servers, dict):
         _fail("invalid-config", "a selected MCP table is not a table")
@@ -872,7 +880,23 @@ def _plain(value: Any) -> Any:
     return value
 
 
+def _same_value(before: Any, after: Any) -> bool:
+    if type(before) is not type(after):
+        return False
+    if isinstance(before, dict):
+        return before.keys() == after.keys() and all(
+            _same_value(value, after[key]) for key, value in before.items()
+        )
+    if isinstance(before, list):
+        return len(before) == len(after) and all(
+            _same_value(left, right) for left, right in zip(before, after)
+        )
+    return before == after
+
+
 def _table_key(document: Mapping[str, Any], *, omp: bool) -> str:
+    if not omp and "mcp_servers" in document and "mcpServers" in document:
+        _fail("invalid-config", "a selected Codex file has ambiguous MCP server tables")
     return "mcpServers" if omp or "mcpServers" in document else "mcp_servers"
 
 
@@ -881,7 +905,7 @@ def _foreign_same(before: Mapping[str, Any], after: Mapping[str, Any], table: st
     after_keys = set(after) - {table}
     if before_keys != after_keys:
         return False
-    return all(_plain(before.get(key)) == _plain(after.get(key)) for key in before_keys)
+    return all(_same_value(_plain(before[key]), _plain(after[key])) for key in before_keys)
 
 
 def _attribute_mcp(before: bytes | None, after: bytes, *, omp: bool, toml: bool) -> tuple[list[tuple[str, str]], bool] | None:
@@ -910,14 +934,14 @@ def _attribute_mcp(before: bytes | None, after: bytes, *, omp: bool, toml: bool)
         before_servers = {}
     attributable = []
     for key, entry in after_servers.items():
-        plain = _plain(entry) if isinstance(entry, Mapping) else None
+        plain = _plain(entry)
         launcher = _mcp_launcher(key, plain, omp=omp) if isinstance(plain, Mapping) else None
         previous = before_servers.get(key)
         if launcher is None:
-            if _plain(previous) != plain:
+            if key not in before_servers or not _same_value(_plain(previous), plain):
                 return None
             continue
-        if _plain(previous) == plain:
+        if _same_value(_plain(previous), plain):
             continue
         attributable.append((key, launcher))
     for key, entry in before_servers.items():
@@ -966,6 +990,15 @@ def _strict_groups(groups: Any) -> list[str] | None:
     return commands
 
 
+def _retained_hook_groups(groups: list, commands: set[str]) -> list[dict[str, Any]]:
+    retained = []
+    for group in groups:
+        hooks = [hook for hook in group["hooks"] if hook["command"] in commands]
+        if hooks:
+            retained.append({**group, "hooks": hooks})
+    return retained
+
+
 def _attribute_hooks(before: bytes | None, after: bytes) -> tuple[list[tuple[str, str]], bool] | None:
     after_document = _json_document(after)
     if before is None:
@@ -983,7 +1016,7 @@ def _attribute_hooks(before: bytes | None, after: bytes) -> tuple[list[tuple[str
                 identity = _hook_identity(command)
                 if identity is None or identity[0] != event:
                     return None
-                owned.append(identity)
+                owned.append((_hook_entry(event, command), identity[1]))
         return (owned, True) if owned else None
     before_document = _json_document(before)
     if not _foreign_same(before_document, after_document, "hooks"):
@@ -996,22 +1029,29 @@ def _attribute_hooks(before: bytes | None, after: bytes) -> tuple[list[tuple[str
     for event in set(before_hooks) | set(after_hooks):
         previous = before_hooks.get(event, [])
         current = after_hooks.get(event, [])
-        if _plain(previous) == _plain(current):
+        if _same_value(previous, current):
+            if (event in before_hooks) != (event in after_hooks):
+                return None
             continue
-        previous_commands = _strict_groups(previous) if previous else []
-        current_commands = _strict_groups(current) if current else []
+        previous_commands = _strict_groups(previous)
+        current_commands = _strict_groups(current)
         if previous_commands is None or current_commands is None or previous_commands == current_commands:
             return None
+        shared = set(previous_commands).intersection(current_commands)
+        if not _same_value(_retained_hook_groups(previous, shared), _retained_hook_groups(current, shared)):
+            return None
         for command in current_commands:
-            if command in previous_commands:
+            if command in shared:
                 continue
             identity = _hook_identity(command)
             if identity is None or identity[0] != event:
                 return None
-            attributable.append(identity)
+            attributable.append((_hook_entry(event, command), identity[1]))
         for command in previous_commands:
-            if command not in current_commands and _hook_identity(command) is None:
-                return None
+            if command not in shared:
+                identity = _hook_identity(command)
+                if identity is None or identity[0] != event:
+                    return None
     if "hooks" not in before_document and attributable == []:
         return None
     return attributable, False
@@ -1103,7 +1143,7 @@ def _item(
     presence = _presence(launcher) if launcher else None
     if mode is None or (os.name == "nt" and windows_acl_digest is None):
         write = False
-    if recognized and presence == "absent":
+    if presence == "absent":
         status = "dangling"
     writable = write and ownership == "proven" and isinstance(mode, str)
     at_risk = bool(launcher) and not writable and (points or presence == "absent")
@@ -1145,7 +1185,25 @@ def _proof_for(proofs: Sequence[Mapping[str, Any]], target: str) -> Mapping[str,
     return matched[-1]
 
 
-def _watch(raw: bytes, role: str, retiring: Sequence[str]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+def _launcher_token(values: Sequence[Any], retiring: set[Path], *, cwd: Any = None) -> str | None:
+    for value in values:
+        if not isinstance(value, str) or not value:
+            continue
+        if not _abs(value):
+            if not _abs(cwd):
+                continue
+            value = os.path.join(cwd, value)
+        path = Path(os.path.normpath(value))
+        if path in retiring or (Path(path.name) == Path(_LAUNCHER_NAME) and _presence(str(path)) == "absent"):
+            return str(path)
+    return None
+
+
+def _points_at_retiring(launcher: str, retiring: set[Path]) -> bool:
+    return bool(launcher) and Path(os.path.normpath(launcher)) in retiring
+
+
+def _watch(raw: bytes, role: str, retiring: set[Path]) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
     """Split producer-shaped launchers from token hits. A name is not ownership."""
     recognized: list[tuple[str, str]] = []
     pointed: list[tuple[str, str]] = []
@@ -1157,17 +1215,16 @@ def _watch(raw: bytes, role: str, retiring: Sequence[str]) -> tuple[list[tuple[s
             for command in values:
                 identity = _hook_identity(command)
                 if identity and identity[0] == event:
-                    recognized.append(identity)
-                    continue
-                for token in _hook_argv(command) or []:
-                    if token in retiring:
-                        pointed.append((event, token))
-                        break
+                    recognized.append((_hook_entry(event, command), identity[1]))
+                else:
+                    launcher = _launcher_token(_hook_argv(command) or [], retiring)
+                    if launcher:
+                        pointed.append((_hook_entry(event, command), launcher))
         return recognized, pointed
     omp = role == "omp-mcp"
     document = _toml_document(raw) if role == "codex-mcp" else _json_document(raw)
     for key, entry in _servers(document, omp=omp).items():
-        if not isinstance(key, str) or not key.startswith(_GLOBAL_KEY) or not isinstance(entry, Mapping):
+        if not isinstance(entry, Mapping):
             continue
         plain = _plain(entry)
         launcher = _mcp_launcher(key, plain, omp=omp)
@@ -1178,10 +1235,9 @@ def _watch(raw: bytes, role: str, retiring: Sequence[str]) -> tuple[list[tuple[s
         args = plain.get("args")
         if isinstance(args, list):
             values.extend(args)
-        for value in values:
-            if isinstance(value, str) and value in retiring:
-                pointed.append((key, value))
-                break
+        launcher = _launcher_token(values, retiring, cwd=plain.get("cwd"))
+        if launcher:
+            pointed.append((key, launcher))
     return recognized, pointed
 
 
@@ -1251,9 +1307,9 @@ def _toml_drop(raw: bytes, table: str, keys: Sequence[str]) -> bytes | None:
         return None
     before = _toml_document(raw)
     after = _toml_document(rendered)
-    for key in set(before) - {table}:
-        if _plain(before.get(key)) != _plain(after.get(key)):
-            return None
+    remaining = {key: value for key, value in before[table].items() if key not in keys}
+    if not _foreign_same(before, after, table) or not _same_value(remaining, after.get(table, {})):
+        return None
     return rendered
 
 
@@ -1261,7 +1317,7 @@ def _selective_remove(live: bytes, role: str, keys: Sequence[str]) -> bytes | No
     if role == "omp-mcp":
         return _json_drop(live, "mcpServers", keys)
     if role == "codex-mcp":
-        return _toml_drop(live, "mcp_servers", keys)
+        return _toml_drop(live, _table_key(_toml_document(live), omp=False), keys)
     if role == "codex-hooks":
         return _json_drop(live, "hooks", keys)
     return None
@@ -1298,7 +1354,7 @@ def _classify_file(
     role: str,
     raw: bytes,
     proof: Mapping[str, Any] | None,
-    retiring: Sequence[str],
+    retiring: set[Path],
     errors: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
     mode = _mode(path)
@@ -1348,8 +1404,11 @@ def _classify_file(
         entry for entry, launcher in entries
         if proven and (not upgrade_launcher or not launcher or upgrade_launcher == launcher)
     }
+    # A file is only retired as a unit. No entry can be retired if a sibling
+    # prevents the file edit, even when this entry's ownership was proven.
+    whole_file_writable = writable == shown.keys()
     acl_digest = None
-    if os.name == "nt" and writable:
+    if os.name == "nt" and writable and whole_file_writable:
         try:
             acl_digest = windows_permissions.digest(windows_permissions.capture(path))
         except (ContractError, OSError):
@@ -1369,7 +1428,9 @@ def _classify_file(
             status, reason = "not-verified", "the retained original does not match the recorded before state"
         else:
             status, reason = "unproven", "no attributable managed change was proven"
-        if this_write and os.name == "nt" and acl_digest is None:
+        if this_write and not whole_file_writable:
+            reason = "another entry in this file is not attributable"
+        if this_write and whole_file_writable and os.name == "nt" and acl_digest is None:
             reason = "the Windows permissions could not be verified"
         action = "remove-file" if this_write and created_only else "edit" if this_write else None
         if action == "edit" and file_safe is None:
@@ -1380,15 +1441,15 @@ def _classify_file(
             {"type": "file", "checksum": _sha(file_safe)} if action == "edit" and file_safe is not None else None
         )
         items.append(_item(
-            role="fixed-root-mcp" if entry.startswith(f"{_GLOBAL_KEY}-") else role,
-            path=str(path), entry=entry, status=status, reason=reason, write=this_write,
+            role="fixed-root-mcp" if entry in recognized_names and entry.startswith(f"{_GLOBAL_KEY}-") else role,
+            path=str(path), entry=entry, status=status, reason=reason, write=this_write and whole_file_writable,
             mode=mode, windows_acl_digest=acl_digest, action=action, before=live,
             after=None if not proof or proof.get("conflict") else proof["after"],
             desired=desired, launcher=launcher or None,
             evidence=None if not this_write or not proof or proof.get("conflict") else proof,
             recognized=entry in recognized_names,
             body="remove" if action == "remove-file" else "preserve",
-            points=bool(launcher) and launcher in retiring,
+            points=_points_at_retiring(launcher, retiring),
             backup_ref=None if not this_write or not proof or proof.get("conflict") else proof.get("backup_ref"),
         ))
     return items
@@ -1456,6 +1517,7 @@ def inspect_retirement(
         vault = _files()["require_private_directory"](vault)
         _overlap(vault, parsed)
     proofs, descriptor = _load_evidence(evidence, parsed, vault)
+    retiring = {Path(os.path.normpath(path)) for path in parsed["retiring_launchers"]}
     items: list[dict[str, Any]] = []
     errors: list[dict[str, str]] = []
     for config in parsed["configs"]:
@@ -1464,7 +1526,7 @@ def inspect_retirement(
             continue
         items.extend(_classify_file(
             config["path"], config["role"], raw, _proof_for(proofs, str(config["path"])),
-            parsed["retiring_launchers"], errors,
+            retiring, errors,
         ))
     for root in parsed["projects"]:
         agents = root / "AGENTS.md"
@@ -1472,7 +1534,7 @@ def inspect_retirement(
         if raw is None:
             continue
         items.extend(_classify_file(
-            agents, "agents-fence", raw, _proof_for(proofs, str(agents)), parsed["retiring_launchers"], errors,
+            agents, "agents-fence", raw, _proof_for(proofs, str(agents)), retiring, errors,
         ))
     items.sort(key=lambda item: (item["path"], item["role"], item["entry"]))
     report = _blank("blocked" if errors else "reported")
@@ -1550,7 +1612,7 @@ def render_candidates(report: Mapping[str, Any], *, purpose: str) -> dict[str, A
     drifted = False
     drifted_items: list[Mapping[str, Any]] = []
     for group in grouped.values():
-        if not all(item.get("write_authority") for item in group):
+        if not all(item.get("write_authority") is True for item in group):
             preserved.extend(group)
             continue
         candidate = _candidate(group)
@@ -1958,6 +2020,7 @@ def merge_reports(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         return _blank()
     merged = _blank("reported")
     seen: dict[str, Mapping[str, Any]] = {}
+    manual: dict[bytes, Mapping[str, Any]] = {}
     descriptors = []
     for report in reports:
         if not isinstance(report, Mapping) or report.get("schema") != REPORT_SCHEMA:
@@ -1968,15 +2031,21 @@ def merge_reports(reports: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
             if not isinstance(item, Mapping) or not isinstance(item.get("id"), str):
                 _fail("invalid-argument", "retirement report is not recognized")
             prior = seen.get(item["id"])
-            if prior is not None and any(prior.get(key) != item.get(key) for key in (
+            if prior is not None and any(not _same_value(prior.get(key), item.get(key)) for key in (
                 "status", "write_authority", "path", "entry", "windows_acl_digest",
             )):
                 _fail("state-conflict", "retirement reports disagree on one entry")
-            seen.setdefault(item["id"], item)
+            if prior is None:
+                seen[item["id"]] = item
+            elif item.get("at_risk") and not prior.get("at_risk"):
+                seen[item["id"]] = {**prior, "at_risk": True}
         merged["errors"].extend(report.get("errors") or [])
+        for entry in report.get("manual") or []:
+            manual.setdefault(canonical_json_bytes(entry), entry)
         if report.get("evidence_descriptor"):
             descriptors.append(report["evidence_descriptor"])
     merged["items"] = sorted(seen.values(), key=lambda item: (item["path"], item["role"], item["entry"]))
+    merged["manual"] = [manual[key] for key in sorted(manual)]
     merged["evidence_descriptor"] = descriptors[0] if len(descriptors) == 1 else None
     if len(descriptors) > 1:
         merged["evidence_descriptors"] = descriptors

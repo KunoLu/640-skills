@@ -62,10 +62,14 @@ class OmpSourceDiscoveryTests(unittest.TestCase):
             with self.assertRaises(ContractError) as project_failure:
                 discover_omp_sources([root], home=home, environ={})
             self.assertEqual(project_failure.exception.code, "invalid-config")
+            project_config = root / ".omp/config.yml"
+            self.assertEqual(project_config.read_bytes(), before[str(project_config.relative_to(base))])
+            project_config.unlink()
+            del before[str(project_config.relative_to(base))]
             with self.assertRaises(ContractError) as overlay_failure:
                 discover_omp_sources(
                     [root],
-                        home=home,
+                    home=home,
                     environ={"PI_CONFIG_FILES": "/private/unknown-overlay.yml"},
                 )
             self.assertEqual(overlay_failure.exception.code, "invalid-config")

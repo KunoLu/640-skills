@@ -282,19 +282,20 @@ def _classify_legacy_resource(
     record["bytes"] = "match" if state == after else "differ"
     # post_write_mode on the result is ignored. Resealing that field is not proof.
     mode, source = _attested_mode(proofs, deployment_id, operation["resource_id"], after)
-    if mode is not None and os.name == "posix":
-        live = _posix_mode(Path(operation["target"]))
-        if live is None:
-            record["reason"] = (
-                "recorded bytes were observed, but the live POSIX mode could not be read; this is not drift"
-            )
+    if mode is not None and state["type"] != "absent":
+        if os.name == "posix":
+            live = _posix_mode(Path(operation["target"]))
+            if live is None:
+                record["reason"] = (
+                    "recorded bytes were observed, but the live POSIX mode could not be read; this is not drift"
+                )
+            else:
+                record["mode"] = "match" if live == mode else "differ"
+                record["mode_source"] = source
         else:
-            record["mode"] = "match" if live == mode else "differ"
-            record["mode_source"] = source
-    elif mode is not None:
-        record["reason"] = (
-            "recorded bytes were observed, but this platform has no POSIX mode and no DACL evidence"
-        )
+            record["reason"] = (
+                "recorded bytes were observed, but this platform has no POSIX mode and no DACL evidence"
+            )
     if record["bytes"] == "differ" or record["mode"] == "differ":
         record["status"] = "drifted"
         record["reason"] = (
@@ -305,6 +306,8 @@ def _classify_legacy_resource(
     elif record["mode"] == "match":
         record["status"] = "verified"
         record["reason"] = "recorded bytes and the trusted post-write mode match"
+    elif state["type"] == "absent":
+        record["reason"] = "the resource is still absent; no live permission mode exists"
     elif record["bytes"] == "match" and mode is None:
         record["reason"] = (
             "recorded bytes match, but no trusted post-write permission evidence exists"
@@ -771,7 +774,7 @@ def _accept_onboard_cli_smoke(
             3,
         )
     exit_code = document.get("exitCode")
-    if isinstance(exit_code, bool) or exit_code != 0:
+    if type(exit_code) is not int or exit_code != 0:
         _fail("report-acceptance", "an Onboard CLI smoke record did not exit cleanly", 3)
     if document.get("projectRoot") != str(root) or document.get("sourceRef") != source_ref:
         _fail(
@@ -859,12 +862,12 @@ def validate_deployment_reports(
     within the same bound apply epoch, so the caller passes that epoch's lower
     bound (the bound apply receipt's finished_at) separately as
     ``epoch_started`` while the deployment bytes stay immutable. Every
-    reference must still be the exact recorded file, at least one native
-    validation-evidence v1/v2 envelope must pass its own unchanged schema
-    validation, and at least one genuine non-mock API smoke raw run must be
-    bound to this root, revision and window. When ``context_paths`` is supplied,
-    an Onboard CLI record must also carry this payload's manifest/apply IDs and
-    the exact argv for those paths; genuine native API evidence stays separate.
+    reference must still be the exact recorded file. A trusted Onboard CLI
+    capture can satisfy project checking, not native API acceptance. When
+    native envelopes are supplied, they must pass unchanged v1/v2 validation
+    and prove a genuine non-mock API smoke for this root, revision and window.
+    When ``context_paths`` is supplied, the CLI record must also carry this
+    payload's manifest/apply IDs and the exact argv for those paths.
     Fresh acceptance requires the installed runtime, which must also match
     the reconciliation observer when present. Pass ``verified_manifest`` only
     after checking the completed evidence's bindings, runtime and provenance.
@@ -958,24 +961,30 @@ def validate_deployment_reports(
 
 def _check_approved_routing(
     manifest: Mapping[str, Any], *, collect: bool = False
-) -> set[str]:
+) -> tuple[set[str], set[str]]:
     """Re-derive approved project AGENTS bytes. A copy digest is not success.
 
     Selector ``approved-agents:<sha256>`` must name the signed paused
     candidate minus the pause-file prefix and at most one following blank.
     The live file must equal that rederived body. The sealed source stays
     the paused candidate and is not the expected render. Historical D7
-    collection records a drifted target and continues; it does not abort
-    unrelated rows.
+    collection records dependent projects with drift or unavailable
+    observations and continues; it does not abort unrelated rows.
+    This does not waive outer manifest containment or authenticate an
+    unavailable approval or candidate. Only already-bound observations
+    may be reported as unavailable.
     """
     from sbtd_deployment import APPROVED_AGENTS, approved_agents_selector
     from sbtd_migration_plan import approved_agents_provenance
 
     drifted: set[str] = set()
+    unavailable: set[str] = set()
 
-    def note(target: str, message: str) -> None:
+    def note(
+        operation: Mapping[str, Any], message: str, *, observed: bool = True
+    ) -> None:
         if collect:
-            drifted.add(target)
+            (drifted if observed else unavailable).update(operation["dependent_projects"])
             return
         migration._fail("approved-routing-drift", message)
 
@@ -991,15 +1000,15 @@ def _check_approved_routing(
     for target, operation in deployed.items():
         expected = bodies.get(target)
         if not isinstance(expected, bytes) or operation["selector"] != approved_agents_selector(expected):
-            note(target, "an approved project AGENTS body was not rederived from the signed candidate")
+            note(operation, "an approved project AGENTS body was not rederived from the signed candidate")
             continue
         try:
             live = read_file(Path(target))
-        except contracts.ContractError:
-            note(target, "an approved project AGENTS file is not the signed body")
+        except (contracts.ContractError, OSError, RuntimeError):
+            note(operation, "an approved project AGENTS file could not be read", observed=False)
             continue
         if live != expected:
-            note(target, "an approved project AGENTS file is not the signed body")
+            note(operation, "an approved project AGENTS file is not the signed body")
     rendered = set(deployed) | {
         operation["target"]
         for operation in migration._operations(manifest)
@@ -1012,10 +1021,15 @@ def _check_approved_routing(
         if target in rendered:
             continue
         candidate = operation["change"]["source_ref"]
-        expected_state = snapshot(Path(candidate["path"]))
-        if expected_state is None or snapshot(Path(target)) != expected_state:
-            note(target, "an approved routing file no longer matches its candidate")
-    return drifted
+        try:
+            expected_state = snapshot(Path(candidate["path"]))
+            live_state = snapshot(Path(target))
+        except (contracts.ContractError, OSError, RuntimeError):
+            note(operation, "an approved routing file or candidate could not be read", observed=False)
+            continue
+        if expected_state != candidate["state"] or live_state != expected_state:
+            note(operation, "an approved routing file no longer matches its candidate")
+    return drifted, unavailable
 
 
 
@@ -1119,8 +1133,7 @@ def verify_migration(
     legacy_ops = migration._legacy_deploy_operations(manifest)
     contracts._bind_success_gate(deployment, {"succeeded"})
     legacy_by_id = {operation["resource_id"]: operation for operation in legacy_ops}
-    legacy_records: list[dict[str, Any]] = []
-    seen_legacy: set[str] = set()
+    legacy_observations: dict[str, tuple[Mapping[str, Any] | None, dict[str, Any]]] = {}
     migration._validate_context(
         manifest_path,
         manifest,
@@ -1134,11 +1147,7 @@ def verify_migration(
         "deploy": migration._result_index(deployment),
     }
     migration._check_stage_backups(stage_results)
-    if legacy_ops:
-        route_drift = _check_approved_routing(manifest, collect=True)
-    else:
-        _check_approved_routing(manifest)
-        route_drift = set()
+    failed_roots, blocked_roots = _check_approved_routing(manifest, collect=bool(legacy_ops))
 
     epoch_started = None
     if deployment["payload"].get("previous_deployment_id") is not None:
@@ -1163,8 +1172,6 @@ def verify_migration(
 
     deployment_id = deployment["deployment_id"]
     proofs = _load_post_write_attestation(post_write_attestation, deployment_id)
-    failed_roots: set[str] = set()
-    blocked_roots: set[str] = set()
     for project in deployment["payload"]["projects"]:
         try:
             validate_deployment_reports(
@@ -1221,10 +1228,7 @@ def verify_migration(
     projects: list[dict[str, Any]] = []
     for manifest_project in payload["projects"]:
         root = manifest_project["root"]
-        drift = root in failed_roots or any(
-            Path(target) == Path(root) or Path(target).is_relative_to(Path(root))
-            for target in route_drift
-        )
+        drift = root in failed_roots
         blocked = root in blocked_roots
         project_rows: list[dict[str, Any]] = []
         retained_assets: list[dict[str, Any]] = []
@@ -1246,10 +1250,20 @@ def verify_migration(
             phases = retained_resources[rid]
             owner_kind, target = identity[rid]
             expected_type = "directory" if owner_kind == "directory" else "file"
-            try:
-                state = snapshot(Path(target))
-            except (contracts.ContractError, OSError, RuntimeError):
-                state = None
+            record = None
+            if rid in legacy_observations:
+                state, record = legacy_observations[rid]
+            else:
+                try:
+                    state = snapshot(Path(target))
+                except (contracts.ContractError, OSError, RuntimeError):
+                    state = None
+                if rid in legacy_by_id:
+                    record = _classify_legacy_resource(
+                        legacy_by_id[rid], stage_results["deploy"].get(rid),
+                        state, proofs, deployment_id,
+                    )
+                    legacy_observations[rid] = (state, record)
             if state is not None:
                 if track_freshness:
                     observed_states[target] = state
@@ -1257,7 +1271,12 @@ def verify_migration(
                     retained_assets.append({"path": target, "state": state})
                 if target in publications and state != publications[target]:
                     drift = True
-            elif rid not in legacy_by_id:
+            if record is not None:
+                project_rows.append(record)
+                if record["status"] == "drifted":
+                    drift = True
+                continue
+            if state is None:
                 blocked = True
                 continue
             last_phase = max(
@@ -1265,17 +1284,6 @@ def verify_migration(
                 key=contracts._PHASE_ORDER.__getitem__, default=None,
             )
             result = stage_results.get(last_phase, {}).get(rid)
-            if rid in legacy_by_id:
-                record = _classify_legacy_resource(
-                    legacy_by_id[rid], result, state, proofs, deployment_id
-                )
-                if rid not in seen_legacy:
-                    legacy_records.append(record)
-                    seen_legacy.add(rid)
-                project_rows.append(record)
-                if record["status"] == "drifted":
-                    drift = True
-                continue
             if (
                 state["type"] not in {"absent", expected_type}
                 or result is None
@@ -1324,7 +1332,9 @@ def verify_migration(
             status = "verified"
         if legacy_ops:
             parts = [row["reason"] for row in project_rows]
-            reason = " ".join(parts) if parts else _PROJECT_OUTCOME[status][0]
+            if not parts or status in {"failed", "blocked"}:
+                parts.insert(0, _PROJECT_OUTCOME[status][0])
+            reason = " ".join(parts)
             if (
                 status == "not-verified"
                 and project_rows
@@ -1364,8 +1374,10 @@ def verify_migration(
         "shared_cleanup_candidates": shared_candidates,
         "verified_at": _now(),
     }
-    if legacy_records:
-        verification_payload["legacy_resources"] = legacy_records
+    if legacy_observations:
+        verification_payload["legacy_resources"] = [
+            record for _state, record in legacy_observations.values()
+        ]
     if deployment["payload"].get("reconciliation") is not None:
         # The bound evidence is a provenance-marked current-state observation
         # of an interrupted deployment, not an executed-origin receipt; expose

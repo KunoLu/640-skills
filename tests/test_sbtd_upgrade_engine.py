@@ -256,7 +256,7 @@ def build_host_resources(scope, *, package_root=None):
     return resources
 
 
-def plan_retirement(scope, *, vault=None, evidence=None, retiring_launchers=()):
+def plan_retirement(scope, *, vault=None, evidence=None, retiring_launchers=(), required_targets=()):
     return {
         "disclosure": {
             "schema": "sbtd-retirement/1",
@@ -1262,7 +1262,7 @@ class UpgradeEngineTests(unittest.TestCase):
 
     # -- recovery --------------------------------------------------------------
 
-    def _recovery_batch(self):
+    def _recovery_batch(self, *, historical: bool = False):
         skills = self._skills_root()
         replaced = skills / "skill-a"
         replaced.mkdir()
@@ -1295,6 +1295,8 @@ class UpgradeEngineTests(unittest.TestCase):
             "decisions": {str(replaced): "replace"},
         }
         plan = self._plan(scope, vault, package)
+        if historical:
+            plan = self._forge(plan, lambda payload: payload.pop("graftRetirement"))
         receipt = self._apply_local(plan)
         self.assertEqual(receipt["payload"]["status"], "complete")
         return plan, receipt, replaced, agents_file, vault
@@ -1579,6 +1581,33 @@ class UpgradeEngineTests(unittest.TestCase):
         recovery_receipt = self._apply_recovery_local(recovery_plan)
         jsonschema.validate(recovery_receipt, schema)
         jsonschema.validate(plan["payload"]["scope"], schema)
+
+    def test_historical_plan_and_embedded_recovery_accept_absent_disclosure(self):
+        import jsonschema
+
+        schema = json.loads((ROOT / "sbtd-workflow-onboard" / "upgrade.schema.json").read_text(encoding="utf-8"))
+        plan, receipt, replaced, agents, vault = self._recovery_batch(historical=True)
+        self.assertNotIn("graftRetirement", plan["payload"])
+        jsonschema.validate(plan, schema)
+        recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+        jsonschema.validate(recovery, schema)
+        self.assertEqual(recovery["payload"]["upgrade_plan"], plan)
+        self.assertEqual(self._apply_recovery_local(recovery)["status"], "complete")
+        self.assertEqual((replaced / "SKILL.md").read_bytes(), b"original bytes\n")
+        self.assertFalse(agents.exists())
+
+        for invalid in (None, {}, {"stop": "false"}, {"stop": False, "candidates": {}}):
+            with self.subTest(disclosure=invalid):
+                malformed = self._forge(plan, lambda payload: payload.update(graftRetirement=invalid))
+                embedded = copy.deepcopy(recovery)
+                embedded["payload"]["upgrade_plan"] = malformed
+                for document in (malformed, embedded):
+                    with self.assertRaises(jsonschema.ValidationError):
+                        jsonschema.validate(document, schema)
+                with self.assertRaises(ContractError) as caught:
+                    sbtd_upgrade.save_plan(malformed, vault / "invalid-plan.json")
+                self.assertEqual(caught.exception.code, "invalid-document")
+                self.assertFalse((vault / "invalid-plan.json").exists())
 
     def test_public_apply_rejects_untrusted_executor_source(self):
         plan, _receipt, _skill, _agents, vault = self._recovery_batch()
@@ -1999,6 +2028,42 @@ class UpgradeEngineTests(unittest.TestCase):
         self.assertFalse(any(row["kind"] == "mcp" for row in plan["payload"]["resources"]))
         self.assertIn("graftRetirement", plan["payload"])
         self.assertFalse(plan["payload"]["graftRetirement"]["stop"])
+
+    def test_noncanonical_codex_scope_fails_before_any_upgrade_write(self):
+        agents_target = self.base / "global" / "AGENTS.md"
+        package = self._package(
+            fixture={"baseline_id": "b1", "resources": [{
+                "id": f"agents@{agents_target}", "kind": "agents",
+                "source": "payload/AGENTS.md", "target": str(agents_target),
+            }]},
+            files={"payload/AGENTS.md": "managed\n"},
+        )
+        self._register(package)
+        sys.modules["sbtd_upgrade_hosts"] = self._real_module("sbtd_upgrade_hosts")
+        home = self.base / "codex-home"
+        home.mkdir()
+        project = self.base / "selected-project"
+        project.mkdir()
+        scope = {
+            "schema_version": 1, "agents_targets": [str(agents_target)],
+            "hosts": [{
+                "id": "codex", "platform": "codex", "config_home": str(home),
+                "config": str(home / "config.toml"), "skills_roots": [],
+                "project_roots": [str(project)], "runtime": {"python": None, "node": None, "cli": None},
+            }],
+        }
+        vault = self._vault()
+        plan = self._plan(scope, vault, package)
+        scope["hosts"][0]["config"] = str(home / "unselected.toml")
+        with self.assertRaises(ContractError) as planning:
+            self._plan(scope, vault, package)
+        self.assertEqual(planning.exception.code, "scope-conflict")
+        forged = self._forge(plan, lambda payload: payload.update(scope=scope))
+        with self.assertRaises(ContractError) as applying:
+            sbtd_upgrade.apply_upgrade(forged, confirmed=forged["plan_id"])
+        self.assertEqual(applying.exception.code, "scope-conflict")
+        self.assertFalse(agents_target.parent.exists())
+        self.assertEqual(list(vault.iterdir()), [])
 
     def test_nullable_host_runtime_scope_and_plan_match_schema(self):
         import jsonschema

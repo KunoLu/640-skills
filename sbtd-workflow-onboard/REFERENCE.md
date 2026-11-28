@@ -116,7 +116,7 @@ Normal onboarding:
 2. May inspect the target Agent CLI read-only before collecting the remaining inputs.
 3. Resolves all project roots and AGENTS scope, then runs complete `check-projects` before any installation or configuration write.
 4. Repairs the selected Agent/npm only after project preflight passes, then runs the global preflight.
-5. Reports read-only `graftRetirement` for the selected domain. The report is not consent to remove entries, and a missing or blocked report does not block unrelated safe work.
+5. Preflight `check` and `plan` disclose retirement for the selected domain. The report grants no removal rights. Ordinary `init` itself does not invoke retirement; reset stops if the affected domain cannot be inspected safely.
 6. Preserves the existing optional RTK, caveman, Java, and Maestro decisions.
 7. For `init`, installs only missing or invalid required external Skills globally. For `reset`, force-reinstalls every required external Skill from the current stable snapshot.
 8. Optionally configures selected generic user/global MCP servers. Ordinary `init` does not retire host entries. `reset` retires a proven entry only when the displayed digest, `--yes`, and an existing private `--retirement-backup-root` are all present. See [Host Wiring and Deployment](#codex-and-omp-wiring-and-deployment).
@@ -478,7 +478,7 @@ Ordinary resolve/plan/check/global installation never reads `.trellis/.developer
 
 ## Migration Runtime
 
-The installed Onboard script exposes `migration --phase plan`, `apply`, `verify`, `reconcile` and `cleanup`, plus the separate `recovery --phase plan|apply` mode and the fresh-detection `cleanup-legacy --phase plan|apply` mode. This is not a second CLI, and there is no positional `migration plan` alias. Batch cleanup consumes the bound verification record and an explicitly confirmed `verification_id`; recovery consumes the manifest-scoped evidence chain and an explicitly confirmed `plan_id`; `cleanup-legacy` consumes a freshly sealed cleanup plan and an explicitly confirmed `plan_id`. Before a real-project cutover, verify the selected version's integration and applicable native-platform evidence, then obtain the separate exact-scope deployment authorization. A release tag does not grant that authorization.
+Use `migration --phase plan|apply|verify|reconcile|cleanup` for a migration batch, `recovery --phase plan|apply` for batch recovery, or `cleanup-legacy --phase plan|apply|rollback` for standalone cleanup. Batch cleanup requires its verified `verification_id`; recovery and standalone cleanup require their own sealed `plan_id`. A release tag is not deployment or cleanup consent.
 
 ### Authorized preparation and plan
 
@@ -588,11 +588,11 @@ python <installed-onboard.py> migration --phase plan --projects-root <same-absol
 
 Followup inputs are plan-only, mutually exclusive with successor/publication/routing approval inputs, and reject hooks. The manifest seals five immutable file references and their IDs under `payload.followup`; preserve those files in their private locations for the entire followup lifetime. Every consumer rechecks their bindings, success states, retained backups and non-overwritten outcomes. Project roots, platforms, vault, custodian and retention are inherited; Git revision is observed again. Missing ignore protection blocks instead of adding a data-migration operation.
 
-Review the complete plan before authorizing deployment: it includes project AGENTS, canonical global rules/Skills and OMP MCP, not a graph build and not just one MCP file. An older managed installation can be replaced only when its target and current state are proven by the predecessor's successful results. Unknown customizations remain conflicts. The new batch uses concrete before-states, empty project sources and no apply/legacy-cleanup operations; it does not relax old successor rules or the current batch's runtime/source checks. Historical predecessor source files need not equal the new release's templates. A sealed plan that still contains `build-graft` or `configure-graft` fails closed until regenerated.
+Review the followup's declared project rules, global rules and Skills before authorizing deployment. It does not install OMP MCP servers. An older managed installation can be replaced only when its target and current state are proven by successful predecessor results. Foreign project rules remain untouched. The new batch seals concrete before-states, empty project sources and no apply or legacy-cleanup operations. Historical predecessor sources need not equal the new templates.
 
 A sealed followup that still contains `build-graft` or `configure-graft` fails closed as `unsupported-in-rc.3` and must be regenerated. Do not execute it. Directory upgrades pass their verified retained backup to the existing replacement primitive so recovery can restore the older installation. Deployment evidence output cannot overlap predecessor/ancestor documents, source or stage backups, publication candidates, report artifacts or other sealed inputs; a new file inside a protected directory is also an overlap. A disjoint sibling evidence directory within the private vault remains allowed.
 
-After saving the bare manifest privately, use the ordinary confirmed apply with `--no-routing-approvals`, then the existing `init` migration deployment context and ordinary verify inputs for this new batch. No new flags are needed by later phases: the manifest carries predecessor references. Empty cleanup does not authorize deletion. Recovery restores only this followup's proven writes to its own before-state; it does not undo predecessor cleanup, reactivate Trellis or remove any predecessor/followup backups. Actual HOME deployment, OMP session restart and `initialize` / `tools/list` / root-bound query proof remain separately authorized operational work.
+Save the manifest privately, explicitly apply it with `--no-routing-approvals`, then use the migration `init` context and verify its evidence. Recovery restores only this followup's proven writes to their before-states. It does not undo predecessor cleanup, reactivate Trellis, delete backups or establish host-session acceptance.
 
 ### Apply, retry and verification
 
@@ -632,7 +632,7 @@ python <installed-onboard.py> migration --phase reconcile --manifest <private-ma
 
 ### Cleanup runtime
 
-Cleanup has two entry points over one detection and execution engine. The batch entry `migration --phase cleanup` consumes the bound verified verification record and an explicitly confirmed `verification_id`; its sealed candidate set, cumulative receipt and retry semantics are unchanged, and immutable batch manifests never gain the new target kinds — project `.gitnexus/`, gitnexus MCP entries and AGENTS marker blocks are always handled by a fresh plan, never by hidden batch scope expansion. The fresh entry `cleanup-legacy --phase plan|apply` re-detects every supported target live and binds the confirmation to a freshly sealed plan. Neither id is authentication or ownership proof; each only binds one explicit confirmation to the candidate set that was displayed and sealed.
+Batch `migration --phase cleanup` consumes its bound verification and confirmed `verification_id`. It never adds fresh targets to an immutable manifest. Standalone `cleanup-legacy --phase plan|apply|rollback` seals a fresh candidate set and requires confirmation of its `plan_id`. Rollback additionally requires the matching apply receipt. Neither ID establishes ownership on its own.
 
 Batch cleanup does not redeploy. It may retain changed or absent deployment-discovery inputs only when a closed dependency check proves they do not influence cleanup: project-root identity, actual vendor footprints, all declared operation targets, ownership/source references and the backup scope remain protected. Both observations must be ordinary files or absent; new discovery paths, profile/tool binding changes, symlinks, unknown kinds and unproven dependencies still reject. Receipt-proven input changes keep their existing rules. Accepted unrelated observations are recorded as `deployment_only_inputs`, not as fresh deployment acceptance. Apply, deploy, reconcile, verify and recovery do not inherit this exception. Retained assets and root/branch/HEAD are rechecked at the last mutation gate and before acceptance publication.
 
@@ -667,7 +667,7 @@ python <installed-onboard.py> cleanup-legacy --phase apply --plan <private-clean
 
 `plan` does not mutate cleanup targets: it detects every candidate kind above for the selected roots, the resolved global Skills root and the existing host MCP files, snapshots each before-state, seals the private backup root / home / Skills root and the prepared vendor-uninstall descriptor for each `.trellis` candidate, and saves `cleanup-legacy-plan-<plan_id>.json` inside the verified private backup root; the JSON envelope carries `cleanup_legacy.plan` and its private `plan_path`. The plan-time global Skills root follows the existing resolver precedence — explicit `--global-skills-dir`, then `$AGENT_SKILLS_DIR`, then the trusted installed Onboard parent directory, then the platform default — and is sealed into the plan; `apply` consumes only that sealed root, accepts no Skills-root option of its own, and is not redirected by a changed environment. This override exists only on `cleanup-legacy --phase plan`: migration phase arguments and `cleanup-legacy --phase apply` are unchanged. Both phases reject, before any target write, candidate paths that are equal to or nested inside one another — for example a selected project `.gitnexus` containing a selected retired Skill directory — leaving every original untouched rather than relying on execution order. A target whose vendor preparation fails is recorded as blocked, and any blocked item makes the plan result `blocked` (exit 2); with no candidates the result is `nothing-to-clean` (exit 0). `apply` requires `--confirm-cleanup` equal to the current sealed `plan_id` and the plan file still in its declared private backup root; a plan whose content no longer matches its `plan_id` is a binding violation and stays blocked. Apply refuses while any blocked item remains and re-validates the whole scope before writing: the home and selected Skill root must match the plan and every remaining candidate must retain its authorized identity and intended effect. A first execution requires the sealed before-state; a receipt retry may instead use an exactly matching after-state from a proven successful vendor transition bound to that plan's prepared resources. Original backups are immutable and reused for those transitioned candidates; remaining marker edits are rendered from the original bytes, not from the partly scrubbed file. Unexpected drift or unproven state still blocks. When a successful batch has changed fresh-plan originals, regenerate the fresh plan and use its new plan_id; this token refresh does not itself require a second user yes. Within the same confirmed flow, unchanged targets/effects or a receipt-proven completed-only reduction retain the original consent; added targets or changed effects require renewed consent, and unexplained changes require reconciliation. Every candidate original is privately backed up before execution begins, then each resource executes fail-stop and its after-state is verified against the intended goal: absent for removals, exact rendered bytes for file edits. A cumulative `cleanup-legacy-receipt-<receipt_id>.json` is saved atomically beside the plan; if saving fails after writes, the run reports failure and the private backup directory must be preserved. An explicit retry passes the prior `--cleanup-receipt` of the same plan; proven successes are not replayed. Failed/partial vendor work, forged transition evidence, user edits, or an unsuccessful resource's unexplained after-state block retry until reconciled. Exit codes: plan 0 planned / nothing-to-clean, 2 blocked; apply 0 cleaned, 2 blocked, 3 failed. Non-JSON output prints only the status; detailed references stay private.
 
-The `recovery` CLI consumes migration-batch evidence only; it does not accept cleanup-legacy plans or receipts. Fresh-path backups are retained private files with no automated restore command; restoration from them is a manual custodian operation under the retention and destruction rules below.
+`recovery` consumes migration-batch evidence only. To restore a supported standalone cleanup, use `cleanup-legacy --phase rollback` with that plan and its matching receipt. A loose backup without the required evidence is not automated restore authority; retain it for the custodian.
 
 #### Upgrade-backed batch cleanup
 
@@ -710,16 +710,14 @@ Root installers never approve retirement by themselves. When retirement is requi
 Standalone cleanup:
 
 ```bash
-python scripts/onboard.py cleanup-legacy --phase plan \
-  --projects-root /abs/project --backup-root /abs/private-vault \
-  [--retirement-evidence /abs/private-vault/evidence.json]
-python scripts/onboard.py cleanup-legacy --phase apply \
-  --plan /abs/private-vault/plan.json [--cleanup-receipt /abs/previous.json] \
-  --confirm-cleanup <plan_id>
-python scripts/onboard.py cleanup-legacy --phase rollback \
-  --plan /abs/private-vault/plan.json \
-  --cleanup-receipt /abs/private-vault/receipt.json \
-  --confirm-cleanup <plan_id>
+python scripts/onboard.py cleanup-legacy --phase plan --projects-root /abs/project \
+  --backup-root /abs/private-vault --retirement-evidence /abs/private-vault/evidence.json --json
+# After review, set PLAN_PATH from cleanup_legacy.plan_path and PLAN_ID from plan_id.
+python scripts/onboard.py cleanup-legacy --phase apply --plan "${PLAN_PATH:?}" \
+  --confirm-cleanup "${PLAN_ID:?}" --json
+# Only for rollback: set RECEIPT_PATH from the preceding apply's cleanup_legacy.receipt_path.
+python scripts/onboard.py cleanup-legacy --phase rollback --plan "${PLAN_PATH:?}" \
+  --cleanup-receipt "${RECEIPT_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
 ```
 
 Rollback restores a retired resource only when the current bytes and permissions still match the recorded post-retirement state. There is no `restore-retirement` command. Project `graft/` and `.graft`, the user telemetry file, and the global npm package are not deleted. The report lists present project trees and manual commands, including `npm uninstall -g @nanonets/graft`.
@@ -858,23 +856,13 @@ Windows 工具检测契约（同次迁移 M03/M04/M05 的固化）：`.CMD`/`.BA
 
 同一物理 Skills 根的路径拼写别名只产生一个写入集合；目标与决定键同步绑定到选定拼写。不把大小写敏感卷上的真实不同目录合并，也不通过再次跟随 symlink／junction 来归一化用户路径。
 
-可选 `executable` 是实际宿主 CLI 的绝对路径。`onboard_root` 表示宿主要加载的**已安装 Onboard 包目录**，不是 Skills 根：仅有一个宿主 Skills 根时派生为该根的 `sbtd-workflow-onboard`；多个根必须明确选定其中一个包目录。host-only 范围需显式选定已有且受信的包目录。最终 MCP launcher 指向这个安装目标，不能指向仓库源码或升级暂存执行器。OMP 计划同时核对所选项目的有效继承来源；相同继承连接可复用，来源变化或被禁用／冲突的受管连接不能冒充对齐。
+可选 `executable` 是选定宿主 CLI 的绝对路径。`onboard_root` 标识所选安装包，不是新 MCP 接线目标。升级不安装 MCP 启动器，不把继承连接的存在当作受管写入证明。已有配置只有满足退役凭证、范围及单独披露要求时才进入退役候选。
 
-若 OMP 的有效继承来源同时属于本批将改写的 provider 配置，计划／应用以 `inherited-dependency-conflict` 在目标写入前拒绝。先对齐 provider 配置域，再以其实际新状态重新规划 consumer；不把上一份计划中的旧继承快照用作新状态，也不在同一批中先写一半再因自身写入失败。
-
-可选 shell profile 以 `path`、`shell`（`bash`／`zsh`／`powershell`）与绝对 `bin` 描述。仅修改该文件中的受管 PATH 块，保留其他内容；MCP 使用固定绝对运行时，不依赖 PATH。执行 profile 会运行其中用户代码，因此只读计划不启动 shell。
-
-带 UTF-16 LE／BE BOM 的 profile 在生成候选前明确拒绝，保持原件字节，不混写 UTF-8，也不自动转码。不能表示为单个 PATH 项的目录同样写前拒绝：POSIX 的 `:`、Windows PowerShell 的 `;`，以及驱动器转换后仍含 `:` 的 Windows POSIX-shell 路径。
-
-Windows Git Bash／zsh 的受管 PATH 使用 `/c/...` 驱动器别名（UNC 使用 `//server/share/...`），避免把 `C:` 的冒号误作 PATH 分隔符。探测只转换路径拼写，仍绑定所选 shell 实际使用的可执行文件；并存的同名 `.ps1` 与 `.exe` 不能仅因同名被判为同一目标。PowerShell 使用原生路径。
-
-显式 shell probe 在隔离 HOME 中以交互条件加载 Bash／zsh profile；PowerShell 检查实际优先级最高的命令，alias／function 遮蔽不能被筛掉后报通过。受支持的 npm shim 按已识别的包装器结构绑定其字面相对 CLI 目标，不能把普通 `.cmd`／`.ps1` 文件的物理路径当作 `cli.js`。这证明命令解析及 CLI 文件指向，不执行包装器，也不证明其 Node 选择或实际运行成功；固定 Node 的协议能力由独立 host/runtime 检查证明。未知或具有动态路径展开的包装器不冒报匹配。
-
-新增 Bash／zsh PATH 块使用 LF，原有 CRLF 内容不转码，避免 CR 附着于原 PATH 最后一项。旧 PATH 检测同时识别所选目录的原生／POSIX 拼写及 zsh 数组项，按完整目录边界匹配，不把同前缀目录或子目录算作已选 bin。BOMless 非 ASCII npm PS1 shim 仅在实际 PowerShell 引擎使用 UTF-8（新版引擎或 UTF-8 默认代码页）时可按 UTF-8 字面目标证明，否则报告编码未证明；不执行 wrapper。
+可选 shell profile 仍校验 `path`、`shell`（`bash`／`zsh`／`powershell`）及绝对 `bin` 的输入。升级不改写其内容，不追加 PATH，也不执行 profile 进行验证。宿主协议与 Skills 探针使用独立的显式授权。
 
 `decisions` 以计划中的绝对目标路径为键，值为 `replace` 或 `preserve`。缺失受管资产进入安装；当前内容跳过；未知内容必须选择后重新计划，先展示额外文件及替换影响。身份不符、不安全路径或候选重叠不能靠 `replace` 放行。保留差异属于例外，不是完全对齐。个人 Skills、Caveman 未知定制、插件、hooks、账号与凭据不在默认升级范围。
 
-对已选但缺失的 host MCP／shell profile，`preserve` 不表示“保持不存在”：仍按缺失资源安装契约处理。不需要安装时应从 scope 移除该目标；对已经存在的差异才使用 `preserve` 保留例外。
+缺失的宿主 MCP 配置或 shell profile 不会因列入 scope 而被创建。已完成退役的缺失配置，只有与原确认计划、写入回执及当前状态均匹配时才可恢复。
 
 ### 计划、应用与分层验收
 
@@ -883,6 +871,8 @@ Windows Git Bash／zsh 的受管 PATH 使用 `/c/...` 驱动器别名（UNC 使�
 POSIX 使用当前用户所有权及私有权限证明；Windows 必须有可验证的私有 DACL，`chmod(0700)` 不等于 Windows 隐私证明。已有 vault 只校验、不自动修权限；执行器仅对本次新建的子目录使用既有跨平台私有目录初始化器。准备根目录时须由操作人确认，不能把 plan 变成隐式 ACL 修复。
 
 Windows 退役另有目标文件的权限门禁，与 vault 的私密性分开：计划只披露访问权限摘要，私有原件保存恢复所需的原生描述符。写入或回退不得只比较 `st_mode`，也不得先公开替换文件再修 ACL。不能在发布前证明能保留原件权限，就停止该次退役；不申请管理员权限。此规则不为旧版回执补造 D7 写后权限证据。
+
+替换既有 Windows 文件时，执行器持有已验证原件的排他句柄，将其暂存，再只向空出的目标名发布候选文件。这不是无间隙替换。若其他写入者已重新创建同名文件，不覆盖新文件，也不以回退为由删除它；保留原件、私有备份和回执，交由操作人核对。
 
 ```bash
 python scripts/onboard.py upgrade --phase plan \
@@ -904,22 +894,17 @@ python scripts/onboard.py upgrade --phase verify \
 
 apply 重新推导范围并校验源、完整前态与私有备份路径，先保存原件，再逐资源写入和测量；写入意图与累计回执供中断后调和。重试必须传入对应 `--receipt`；用户新增或未知后态停止，不通过重新规划丢弃失败事实。Onboard 自身更新由校验后的独立包副本执行，不在被覆盖目录中混合导入新旧模块。跨资源不承诺原子提交；失败报告与原件均保留。
 
-只读 verify 实测当前磁盘，不启动宿主、不构建图、不自动修复。明确批准后可添加 `--probe --yes` 进行运行时与宿主探测。报告分开：
+只读 verify 检查计划内资源；默认不启动宿主，也不自动修复。另行确认 `--probe --yes` 才能检查所选 Codex／OMP 的协议和 Skills。各层证据不可替代：
 
-| 层级 | 通过所需证据 | 不可替代的边界 |
+| 检查 | 证据 | 限制 |
 |---|---|---|
-| disk | 实际完整载荷或受管配置语义匹配固定基线 | 合法 Skill 壳或旧回执不够 |
-| runtime | 实际绑定命令及协议能力 | shell 版本号不代表 GUI 使用相同路径 |
-| host | 真实 Codex／OMP 进程加载所选受管配置的隔离投影，标记 `isolated-host/selected-projection` | 不是原配置域、GUI 或既有会话重载证明；`live_reload` 保持 unverified |
-| legacy | 实际旧入口检测与独立清理结果 | 升级成功不授权删除旧资产 |
+| 资源 | 磁盘实际内容与封存状态匹配 | 不是宿主重载证明 |
+| 宿主 | 在隔离环境通过实际宿主协议读取所选 Skills | 不证明业务 API、模型或已有会话的状态 |
+| 退役 | `graftRetirement` 单独列出归属、当前状态和已确认的处理范围 | 不按名称或升级成功认领旧条目 |
 
 `aligned` 仅表示内容对齐；host 未验证必须继续显示未验证。`preserve` 导致 `exceptions`，必需资源不同导致 `drift`；两者非零退出。缺依赖、身份冲突、缺确认或不安全路径为 blocked，执行失败和部分失败保留实际结果。不能把该阶段退出 0 改写成“整机已经与全新安装完全一致”。
 
-聚合状态保留 `blocked` 高于 `drift` 的优先级，并保留逐域结果。合法配置仅包含无关 MCP 时，legacy 为 `none`；非法配置仍为 `unknown`，不把两者混为一谈。
-
-OMP 的 legacy 还计入已启用继承来源中的历史 `sbtd-graft-*` 入口，不把未选 provider 或 YAML 设置文件当作 MCP 源。这些入口是退役报告项，不是新接线。存在但非文件的配置不能证明无旧入口，报告 unknown。host RPC 已证明 unsupported 时，host 与域汇总保持该状态，不降为 unverified。host-home 别名只绑定配置目标，不改写已精确选中的其他决定键。
-
-OMP 来源发现／分析未完成且没有旧入口证据时，legacy 为 `unknown`／`source-discovery-incomplete`，不能由缺失 active 文件推出无继承旧项。直接 MCP 回复必须带 `jsonrpc: "2.0"`；RPC 数字 ID 不接受 Boolean 代替，合法 Number 表示仍匹配，Codex 不回显版本的独立约定保持。
+逐域保留 `blocked`、`drift` 和未验证等状态。缺失主动配置文件不代表所有继承来源均为空；不将宿主探针未检查的运行时或历史入口标成通过。Codex RPC 的数值 ID 不接受 Boolean，合法且等值的 JSON Number 表示仍匹配。OMP 的字符串 ID 必须精确匹配。
 
 写后发生回执持久化或隔离执行器失败时，CLI 返回 `status=failed`、exit 3，并携带绑定本批的 `batch`：计划／恢复 ID、`backup_root`、可取得的最后持久 `checkpoint`（或 `null`）及实测／`unknown` 的 `mutation`。旧 checkpoint 不是本次成功证明；证据再次读取失败也不得把已有写入改报为普通写前 blocked。保留这些恢复入口和原件，先核对实际状态，再按同一批次的续作／恢复规则处理。
 
@@ -927,9 +912,7 @@ OMP 来源发现／分析未完成且没有旧入口证据时，legacy 为 `unkn
 
 升级／恢复的计划与执行使用当前 `sys.executable -I -B` 和净化环境检查声明 Python 依赖。依赖仅在父进程 user-site 可见时，在目标及 vault 写入前以 `isolated-dependencies-unavailable` 受控拒绝；执行入口先校验封存ID确认，再检查当前解释器，不能沿用计划时另一环境的证明。须由操作人准备隔离可用的解释器依赖，不注入 user-site、取消隔离或自动安装。
 
-OMP 隔离宿主探测保持 **user-wide** 投影边界；它不创建私有项目图，也不证明仅由项目级配置提供的连接已加载。项目级路由没有用户级等价连接时，不得把该探测报告成通过；用户级路由通过也不构成项目级路由已验证的证据。
-
-OMP 加载判据使用 `get_state.dumpTools` 的结构化工具名与参数 schema；prompt 中提到工具 URI 不构成注册或可调用证据。隔离配置显式关闭 xdev 延迟入口，以核对实际注册的目标工具。RPC 请求写入与响应共用期限，宿主不消费 stdin 也不能无限阻塞；探测结束负责回收自有进程及管道。
+OMP 的隔离探针将明确选择且经过授权的 Skills 复制到临时 agent 目录，用 `get_available_commands` 核对实际发现结果；它不查询项目图、加载用户 MCP 或证明模型工具调用。RPC 写入与读取共用期限，探针负责回收自有进程及管道。
 
 <a id="probe-skill-link-authorization"></a>
 #### 隔离 probe 的精确 Skill 链接授权

@@ -27,7 +27,7 @@
 
 - `onboard.py`、`onboard_arguments.py`、`onboard_contracts.py`、`sbtd_project.py`。
 - `sbtd_task_document.py`、`sbtd_task_state.py`、`sbtd_task_routing.py`、`sbtd_handoff.py`、`sbtd_identity.py`。
-- `sbtd_migration.py`、`sbtd_migration_files.py`、`sbtd_migration_legacy.py`、`sbtd_migration_plan.py`、`sbtd_migration_verify.py`、`sbtd_reconciliation.py`。
+- `sbtd_migration.py`、`sbtd_migration_files.py`、`sbtd_migration_legacy.py`、`sbtd_migration_plan.py`、`sbtd_migration_verify.py`、`sbtd_reconciliation.py`、`sbtd_recovery.py`、`sbtd_language_tooling.py`。
 - `sbtd_cleanup_targets.py`、`sbtd_cleanup_legacy.py`、`sbtd_trellis_uninstall.py`、`sbtd_cleanup_upgrade.py`。
 - `sbtd_upgrade.py`、`sbtd_upgrade_inventory.py`、`sbtd_upgrade_hosts.py`、`sbtd_upgrade_cli.py`、`sbtd_upgrade_paths.py`、`sbtd_probe_links.py`。
 - `sbtd_omp_sources.py`、`sbtd_deployment.py`、`sbtd_deployment_smoke.py`、`sbtd_retirement.py`、`sbtd_onboard_retirement.py`、`sbtd_retirement_paths.py`、`sbtd_retirement_permissions.py`。按实际导入只读核对配置来源、部署验证、退役识别与权限保真，不执行接线或探针。

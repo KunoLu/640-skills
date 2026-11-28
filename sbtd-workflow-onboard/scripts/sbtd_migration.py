@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import stat
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, NoReturn
@@ -413,8 +413,14 @@ def _original_reference(
     previous: Mapping[str, Any] | None = None,
     deployment: Mapping[str, Any] | None = None,
     cleanup: Mapping[str, Any] | None = None,
+    *,
+    historical_targets: Collection[Path] = (),
 ) -> Mapping[str, Any]:
-    if snapshot(Path(reference["path"])) == reference["state"]:
+    source = Path(reference["path"])
+    # D7 compares live outcomes separately; re-prove historical originals
+    # from bound backups even when the corresponding live target drifted.
+    historical = source in historical_targets
+    if not historical and snapshot(source) == reference["state"]:
         return reference
     stages = [
         _result_index(document)
@@ -428,7 +434,6 @@ def _original_reference(
         operation["resource_id"]: Path(operation["target"])
         for operation in _operations(manifest)
     }
-    source = Path(reference["path"])
     for resource_id, target in targets.items():
         if not source.is_relative_to(target):
             continue
@@ -436,7 +441,7 @@ def _original_reference(
         if (
             last is None
             or last["status"] != "succeeded"
-            or last["after"] != snapshot(target)
+            or (not historical and last["after"] != snapshot(target))
         ):
             continue
         for results in stages:
@@ -804,10 +809,11 @@ def _require_runtime_lineage(
         predecessor = successor = consumer["onboard"]
     else:
         predecessor, successor = _verified_runtime_pair(previous_package)
+    # The Graft pin belongs to the consumer of the sealed plan. A native
+    # upgrade can prove that consumer without restoring Graft in this runtime.
     if (
         previous is None
         or not isinstance(sealed, Mapping)
-        or sealed.get("graft") != current.get("graft")
         or sealed.get("graft") != consumer.get("graft")
         or onboard != predecessor
         or consumer.get("onboard") != successor
@@ -1043,7 +1049,9 @@ def _validate_context(
     )
     sealed_versions = manifest["payload"]["tool_versions"]
     current_versions = runtime_versions()
-    if readonly_legacy and _legacy_deploy_operations(manifest):
+    legacy_operations = _legacy_deploy_operations(manifest) if readonly_legacy else ()
+    historical_targets = {Path(operation["target"]) for operation in legacy_operations}
+    if legacy_operations:
         # Ordinary and followup verifies stay read-only too. Lineage binding
         # applies only when this manifest itself carries historical Graft ops.
         _bind_legacy_d7(manifest)
@@ -1075,14 +1083,28 @@ def _validate_context(
         source_ref, head = _project_revision(root)
         if (source_ref, head) != (project["source_ref"], project["head"]):
             _fail("revision-conflict", "a project revision changed after planning")
-    for operation in _operations(manifest):
+    operations = _operations(manifest)
+    diagnostic_targets = historical_targets | {
+        Path(operation["target"])
+        for operation in operations
+        if legacy_operations and operation["selector"] == "approved-routing-replacement"
+    }
+    for operation in operations:
         target = Path(operation["target"])
-        state = snapshot(target)
-        if state["type"] != "absent":
-            metadata = target.lstat()
+        if target in diagnostic_targets:
+            # Read-only history can report an unavailable live target. Still
+            # reject any observable physical alias; never follow a link.
+            try:
+                metadata = _lstat(_canonical(target))
+            except contracts.ContractError:
+                continue
+        else:
+            state = snapshot(target)
+            metadata = target.lstat() if state["type"] != "absent" else None
+        if metadata is not None:
             identity = metadata.st_dev, metadata.st_ino
             if (
-                state["type"] == "file" and metadata.st_nlink > 1
+                stat.S_ISREG(metadata.st_mode) and metadata.st_nlink > 1
             ) or resource_inodes.setdefault(identity, str(target)) != str(target):
                 _fail(
                     "physical-alias",
@@ -1093,7 +1115,10 @@ def _validate_context(
     def resolve_reference(reference: Mapping[str, Any]) -> Mapping[str, Any]:
         if archived_policy is not None and reference == archived_policy:
             return reference
-        return _original_reference(reference, manifest, previous, deployment, cleanup)
+        return _original_reference(
+            reference, manifest, previous, deployment, cleanup,
+            historical_targets=historical_targets,
+        )
 
     for reference in _all_input_references(manifest):
         resolve_reference(reference)

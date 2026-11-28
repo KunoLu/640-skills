@@ -36,6 +36,7 @@ from onboard_arguments import (
     _add_migration_context,
     _check_migration_context,
     add_cleanup_legacy_parser,
+    add_project_check_parser,
     add_migration_parser,
     add_retirement_options,
     add_recovery_parser,
@@ -43,6 +44,7 @@ from onboard_arguments import (
     validate_cleanup_legacy_args,
     validate_developer_name,
     validate_migration_args,
+    validate_project_check_args,
     validate_recovery_args,
     validate_upgrade_args,
 )
@@ -7137,9 +7139,22 @@ def run(mode: str, args: argparse.Namespace) -> int:
     if mode in {"plan", "reset"}:
         from sbtd_onboard_retirement import preview
 
+        other_directory_targets: set[Path] = set()
+        if planned_action == "reset":
+            other_directory_targets.update(
+                global_skills_dir / name
+                for name in external_skill_dependency_closure(list(EXTERNAL_SKILL_SOURCES))
+            )
+            other_directory_targets.update(global_skills_dir / name for name in external_migration_plan["removeLegacy"])
+            for item in bundled_migration_plan.get("migrations", ()):
+                other_directory_targets.update(Path(path) for path in item["legacyTargets"])
+            if plan_payload["cavemanMaintenance"]["plannedAction"] in {"repair", "upgrade"}:
+                other_directory_targets.update(caveman_family_dirs(global_skills_dir))
+                other_directory_targets.update(global_skills_dir / name for name in CAVEMAN_KNOWN_FAMILY_SHA256[CAVEMAN_PINNED_REF])
         retirement, execution = preview(
             args, action=planned_action, operations=operations, skills_root=global_skills_dir,
             home=user_home(), environ=os.environ, plan_entries=plan_payload["operations"],
+            other_directory_targets=other_directory_targets,
         )
         plan_payload["graftRetirement"] = retirement
         retained = set(retirement.get("skipTemplateWrites", ()))
@@ -7557,28 +7572,7 @@ def build_parser() -> argparse.ArgumentParser:
             help="Target Agent platform: codex, claude, kimi, oh-my-pi, or omp.",
         )
 
-    project_check = subparsers.add_parser("check-projects")
-    project_check.add_argument(
-        "--projects-root",
-        required=True,
-        help="Comma-separated absolute project root paths.",
-    )
-    project_check.add_argument(
-        "--json", action="store_true", help="Print machine-readable project checks."
-    )
-    project_check.add_argument(
-        "--skip-project-agents",
-        action="store_true",
-        help="Exclude project AGENTS.md from installation-target checks.",
-    )
-    project_check.add_argument(
-        "--migration-manifest", action=SingleValueAction,
-        help="Read-only deployment smoke: exact private manifest (requires --migration-apply-receipt).",
-    )
-    project_check.add_argument(
-        "--migration-apply-receipt", action=SingleValueAction,
-        help="Read-only deployment smoke: successful apply receipt for that manifest and selected project.",
-    )
+    add_project_check_parser(subparsers)
 
     install = subparsers.add_parser("install-external-skills")
     install.add_argument(
@@ -7841,6 +7835,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    if args.mode == "check-projects":
+        validate_project_check_args(args, parser=parser)
     if args.mode == "migration":
         validate_migration_args(args, parser=parser)
     elif args.mode == "recovery":

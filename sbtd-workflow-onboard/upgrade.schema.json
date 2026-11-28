@@ -202,7 +202,13 @@
         "plan_id": { "$ref": "#/$defs/hex" },
         "payload": {
           "type": "object",
-          "required": ["plan_schema", "status", "baseline", "scope", "backup_root", "resources", "domains", "blocked_resources", "graftRetirement"],
+          "required": ["plan_schema", "status", "baseline", "scope", "backup_root", "resources", "domains", "blocked_resources"],
+          "if": {
+            "properties": {
+              "resources": { "contains": { "properties": { "kind": { "const": "retirement" } } } }
+            }
+          },
+          "then": { "required": ["graftRetirement"] },
           "properties": {
             "plan_schema": { "const": "upgrade-plan" },
             "status": { "enum": ["planned", "blocked"] },
@@ -212,7 +218,24 @@
             "resources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/resource" } },
             "domains": { "type": "array" },
             "blocked_resources": { "type": "array", "items": { "type": "string" } },
-            "graftRetirement": { "type": "object" }
+            "graftRetirement": {
+              "type": "object",
+              "required": ["stop"],
+              "properties": {
+                "stop": { "type": "boolean" },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "path"],
+                    "properties": { "id": { "type": "string" }, "path": { "type": "string" } }
+                  }
+                },
+                "blocked": { "type": "array", "items": { "type": "object" } },
+                "preserved": { "type": "array", "items": { "type": "object" } },
+                "global_effects": { "type": "array", "items": { "type": "string" } }
+              }
+            }
           }
         }
       }

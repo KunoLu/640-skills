@@ -2512,7 +2512,7 @@ def approved_agents_provenance(
     at most one immediately following formatting blank line, keyed by the
     sealed operation target. Only demo-project replacements carry project
     bodies; followup batches and batches without signed routing return an
-    empty mapping (their deployments keep merging proven live bytes).
+    empty mapping and have no approved project rules to deploy.
     """
     origin = manifest
     payload = manifest["payload"]

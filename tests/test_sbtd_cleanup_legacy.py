@@ -91,24 +91,34 @@ def _fake_vendor_prepare(root, *, environ=None):
     }
 
 
-def _fake_vendor_execute(root, prepared, backup_root, *, environ=None, partial=False):
+def _fake_vendor_execute(root, prepared, backup_root, *, environ=None, before_execute=None, partial=False):
     """Run test-double vendor effects with real private backups and measures."""
     vault = Path(backup_root)
     backup_dir = require_private_directory(vault / prepared["prepared_id"], create=True)
     resources_dir = require_private_directory(backup_dir / "resources", create=True)
-    results = []
-    for index, resource in enumerate(prepared["payload"]["resources"]):
-        backup_ref = backup_reference(
+    resources = prepared["payload"]["resources"]
+    backups = [
+        backup_reference(
             {"path": resource["path"], "state": resource["before"]},
             resources_dir / f"{index:03d}",
             private_root=vault,
         )
+        for index, resource in enumerate(resources)
+    ]
+    if before_execute is not None:
+        before_execute()
+    for resource in resources:
         path = Path(resource["path"])
         if resource["kind"] == "vendor-scrub":
             path.write_bytes(_vendor_scrub(path.read_bytes()))  # Test double only.
         elif not partial:
-            shutil.rmtree(path)  # Test double only; production never deletes .trellis.
-        after = snapshot(path)
+            if path.is_dir():
+                shutil.rmtree(path)  # Test double only; production never deletes .trellis.
+            else:
+                path.unlink()
+    results = []
+    for resource, backup_ref in zip(resources, backups):
+        after = snapshot(Path(resource["path"]))
         results.append(
             {
                 "resource_id": resource["resource_id"],
@@ -136,11 +146,11 @@ def _fake_vendor_execute(root, prepared, backup_root, *, environ=None, partial=F
 
 
 @contextmanager
-def _fake_vendor(*, execute=None):
+def _fake_vendor(*, prepare=_fake_vendor_prepare, execute=None):
     with (
         mock.patch(
             "sbtd_trellis_uninstall.prepare_trellis_uninstall",
-            side_effect=_fake_vendor_prepare,
+            side_effect=prepare,
         ),
         mock.patch(
             "sbtd_trellis_uninstall.execute_trellis_uninstall",
@@ -635,6 +645,192 @@ class CleanupLegacyTests(unittest.TestCase):
             Path(envelope["cleanup_legacy"]["receipt_path"]),
         )
 
+    @unittest.skipUnless(os.name == "posix", "POSIX mode fixture")
+    def test_rollback_restores_all_vendor_effects_in_reverse_once(self):
+        import sbtd_cleanup_legacy as cleanup
+
+        fixture = self.fixture
+        agents = fixture.project / "AGENTS.md"
+        agents.chmod(0o640)
+        trellis = fixture.project / ".trellis"
+        trellis.mkdir(mode=0o750)
+        (trellis / "state.json").write_bytes(b"{}")
+        pruned = fixture.project / "managed"
+        pruned.mkdir(mode=0o750)
+        nested = pruned / "obsolete.json"
+        nested.write_bytes(b'{"old":true}')
+        nested.chmod(0o640)
+        scrubbed = fixture.project / "vendor-rules.md"
+        scrubbed.write_bytes(AGENTS_RAW)
+        scrubbed.chmod(0o640)
+
+        def prepare(root, *, environ=None):
+            prepared = _fake_vendor_prepare(root, environ=environ)
+            payload = prepared["payload"]
+            agent, trellis_resource = payload["resources"]
+            absent = {"type": "absent", "checksum": None}
+            agent.update(kind="vendor-delete", expected_after=absent)
+
+            def resource(index, kind, path, after):
+                return {"resource_id": f"trellis-{index:03d}", "kind": kind,
+                        "path": str(path), "relative": path.relative_to(root).as_posix(),
+                        "before": snapshot(path), "expected_after": after}
+
+            payload["resources"] = [
+                agent,
+                resource(2, "vendor-delete", nested, absent),
+                resource(3, "vendor-scrub", scrubbed, {
+                    "type": "file", "checksum": hashlib.sha256(_vendor_scrub(AGENTS_RAW)).hexdigest(),
+                }),
+                trellis_resource,
+                resource(4, "vendor-prune-dir", pruned, absent),
+            ]
+            return _seal_document(payload, "prepared_id") | {"kind": prepared["kind"]}
+
+        def execute(*args, **kwargs):
+            outcome = _fake_vendor_execute(*args, **kwargs)
+            scrubbed.chmod(0o600)
+            return outcome
+
+        before = {path: (snapshot(path), path.stat().st_mode) for path in (agents, trellis, pruned, nested, scrubbed)}
+        with _fake_vendor(prepare=prepare, execute=execute):
+            plan, plan_id = fixture.prepare()
+            applied, code = fixture.apply(plan, plan_id)
+        self.assertEqual((code, applied["status"]), (0, "cleaned"), applied)
+        self.assertEqual(agents.read_bytes(), AGENTS_CLEAN)
+        self.assertEqual(scrubbed.read_bytes(), _vendor_scrub(AGENTS_RAW))
+        self.assertFalse(pruned.exists())
+        self.assertFalse(trellis.exists())
+
+        receipt = Path(applied["cleanup_legacy"]["receipt_path"])
+        rows = applied["cleanup_legacy"]["receipt"]["payload"]["results"]
+        marker = next(row for row in rows if row["kind"] == "marker-blocks")
+        self.assertEqual(marker["mode_before"], "0640")
+        vendor = next(row for row in rows if row["kind"] == "trellis-uninstall")
+        original = next(row["backup_ref"] for row in vendor["vendor"]["results"] if row["path"] == str(scrubbed))
+        backup = Path(original["path"])
+        self.assertEqual((backup.read_bytes(), backup.stat().st_mode & 0o777), (AGENTS_RAW, 0o640))
+
+        def rollback(receipt_path):
+            return cleanup.rollback_cleanup_legacy(
+                plan, confirm_cleanup=plan_id, cleanup_receipt_path=receipt_path, environ=fixture.environ,
+            )
+
+        old_receipt = fixture.vault / "legacy-without-vendor-modes.json"
+        old_payload = json.loads(receipt.read_bytes())["payload"]
+        next(row for row in old_payload["results"] if row["kind"] == "trellis-uninstall").pop("vendor_modes_after")
+        _write_sealed(old_receipt, old_payload, "receipt_id")
+        retired_project = snapshot(fixture.project)
+        refused, code = rollback(old_receipt)
+        self.assertEqual((code, refused["status"]), (2, "blocked"))
+        self.assertIn("bound per-target mode evidence", refused["reason"])
+        self.assertEqual(snapshot(fixture.project), retired_project)
+
+        backup.chmod(0o600)
+        refused, code = rollback(receipt)
+        self.assertEqual((code, refused["status"]), (2, "blocked"))
+        self.assertEqual(snapshot(fixture.project), retired_project)
+        self.assertFalse((fixture.skills / "trellis-workflow").exists())
+        backup.chmod(0o640)
+        with mock.patch.object(cleanup, "_restore_retired", wraps=cleanup._restore_retired) as restore:
+            restored, code = rollback(receipt)
+        self.assertEqual((code, restored["status"]), (0, "rolled-back"), restored)
+        order = [call.args[2] for call in restore.call_args_list if call.args[2].is_relative_to(fixture.project)]
+        self.assertEqual(order, [agents, fixture.project / ".gitnexus", pruned, trellis, scrubbed])
+        self.assertEqual({path: (snapshot(path), path.stat().st_mode) for path in before}, before)
+        self.assertEqual(backup.read_bytes(), AGENTS_RAW)
+
+    def test_rollback_restores_vendor_effect_on_pending_marker_target(self):
+        from sbtd_cleanup_legacy import rollback_cleanup_legacy
+
+        fixture, plan, plan_id, receipt = self._vendor_failed_run()
+        restored, code = rollback_cleanup_legacy(
+            plan, confirm_cleanup=plan_id, cleanup_receipt_path=receipt, environ=fixture.environ,
+        )
+        self.assertEqual((code, restored["status"]), (0, "rolled-back"), restored)
+        self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), AGENTS_RAW)
+        self.assertTrue((fixture.project / ".trellis" / "state.json").is_file())
+        self.assertTrue((fixture.project / ".gitnexus").is_dir())
+
+    def test_vendor_execution_requires_complete_sealed_modes(self):
+        fixture = self.fixture
+        (fixture.project / ".trellis").mkdir()
+        execute = mock.Mock()
+        with _fake_vendor(execute=execute):
+            plan, _ = fixture.prepare()
+            payload = json.loads(plan.read_bytes())["payload"]
+            vendor = payload["projects"][0]["candidates"][0]
+            vendor["vendor_modes_before"].pop(str(fixture.project / "AGENTS.md"))
+            _write_sealed(plan, payload, "plan_id")
+            plan_id = hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+            before = snapshot(fixture.project)
+            vault_files = set(fixture.vault.iterdir())
+            refused, code = fixture.apply(plan, plan_id)
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertIn("bound per-target mode evidence", refused["reason"])
+        self.assertEqual(snapshot(fixture.project), before)
+        self.assertEqual(set(fixture.vault.iterdir()), vault_files)
+        execute.assert_not_called()
+
+    def test_nested_vendor_overlap_without_bound_target_blocks_before_apply(self):
+        fixture = self.fixture
+        trellis = fixture.project / ".trellis"
+        trellis.mkdir()
+        nested = fixture.project / ".gitnexus" / "index" / "db.bin"
+
+        def prepare(root, *, environ=None):
+            prepared = _fake_vendor_prepare(root, environ=environ)
+            payload = prepared["payload"]
+            payload["resources"].insert(0, {
+                "resource_id": "trellis-002", "kind": "vendor-delete",
+                "path": str(nested), "relative": nested.relative_to(root).as_posix(),
+                "before": snapshot(nested), "expected_after": {"type": "absent", "checksum": None},
+            })
+            return _seal_document(payload, "prepared_id") | {"kind": prepared["kind"]}
+
+        execute = mock.Mock()
+        before = snapshot(fixture.project)
+        with _fake_vendor(prepare=prepare, execute=execute):
+            plan, code = fixture.plan()
+            self.assertEqual((code, plan["status"]), (2, "blocked"), plan)
+            self.assertIn("without a bound transition", plan["reason"])
+            path = Path(plan["cleanup_legacy"]["plan_path"])
+            blocked, code = fixture.apply(path, plan["plan_id"])
+        self.assertEqual((code, blocked["status"]), (2, "blocked"), blocked)
+        self.assertEqual(snapshot(fixture.project), before)
+        execute.assert_not_called()
+
+    def test_legacy_vendor_receipt_retries_without_claiming_unknown_modes(self):
+        from sbtd_cleanup_legacy import rollback_cleanup_legacy
+
+        fixture, plan, _plan_id, receipt = self._vendor_failed_run()
+        payload = json.loads(plan.read_bytes())["payload"]
+        payload.pop("graftRetirement")
+        payload["projects"][0]["candidates"][0].pop("vendor_modes_before")
+        _write_sealed(plan, payload, "plan_id")
+        plan_id = hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+        previous = json.loads(receipt.read_bytes())["payload"]
+        previous["plan_id"] = plan_id
+        for row in previous["results"]:
+            for key in ("vendor_modes_after", "mode_before", "mode_after"):
+                row.pop(key, None)
+        _write_sealed(receipt, previous, "receipt_id")
+
+        refused, code = rollback_cleanup_legacy(
+            plan, confirm_cleanup=plan_id, cleanup_receipt_path=receipt, environ=fixture.environ,
+        )
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertIn("bound per-target mode evidence", refused["reason"])
+        self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), _vendor_scrub(AGENTS_RAW))
+        retry, code = fixture.apply(plan, plan_id, receipt)
+        self.assertEqual((code, retry["status"]), (0, "cleaned"), retry)
+        self.assertEqual((fixture.project / "AGENTS.md").read_bytes(), AGENTS_CLEAN)
+        self.assertFalse((fixture.project / ".trellis").exists())
+        self.assertFalse((fixture.project / ".gitnexus").exists())
+        row = next(row for row in retry["cleanup_legacy"]["receipt"]["payload"]["results"]
+                   if row["kind"] == "marker-blocks")
+        self.assertIsNone(row["mode_before"])
+
     def test_retry_uses_successful_vendor_after_states_for_remaining_candidates(self):
         fixture = self.fixture
         agents = fixture.project / "AGENTS.md"
@@ -653,8 +849,8 @@ class CleanupLegacyTests(unittest.TestCase):
             ).hexdigest()
             return prepared
 
-        def execute_with_extra(root, prepared, backup_root, *, environ=None):
-            outcome = _fake_vendor_execute(root, prepared, backup_root, environ=environ)
+        def execute_with_extra(root, prepared, backup_root, *, environ=None, before_execute=None):
+            outcome = _fake_vendor_execute(root, prepared, backup_root, environ=environ, before_execute=before_execute)
             agents.write_bytes(vendor_after)
             outcome["results"][0]["after"] = snapshot(agents)
             outcome["results"][0]["status"] = "scrubbed"
@@ -1275,6 +1471,44 @@ class RetirementArtifactTests(unittest.TestCase):
         self.assertTrue(native_file_acl(agents) == acl, "composed rollback changed Windows ACL")
 
     @unittest.skipUnless(os.name == "nt", "Windows ACL semantics")
+    def test_windows_reset_retry_refuses_acl_only_drift(self):
+        from sbtd_cleanup_legacy import plan_reset_retirement
+        from tests.test_sbtd_retirement import native_file_acl
+
+        fixture = self.fixture
+        agents = fixture.project / "AGENTS.md"
+        acl = native_file_acl(agents, world_rights="ReadAttributes")
+        descriptor = self._fence_evidence()
+        selections = {
+            "host": "codex",
+            "configs": [{"role": "codex-mcp", "path": str(fixture.home / ".codex" / "config.toml")}],
+            "projects": [str(fixture.project)], "vault": str(fixture.vault), "retiring_launchers": [],
+        }
+        options = {
+            "selections": selections, "evidence": [{"kind": "descriptor", "path": str(descriptor)}],
+            "vault": fixture.vault,
+        }
+        preview = plan_reset_retirement(**options)
+        with mock.patch.dict(os.environ, fixture.environ, clear=True):
+            applied = plan_reset_retirement(**options, confirm=preview["plan_id"])
+        self.assertEqual(applied["status"], "cleaned", applied)
+        self.assertEqual(native_file_acl(agents), acl)
+        plan, receipt = Path(applied["plan_path"]), Path(applied["receipt_path"])
+        retried, code = fixture.apply(plan, preview["plan_id"], receipt)
+        self.assertEqual((code, retried["status"]), (0, "cleaned"), retried)
+
+        cleaned = agents.read_bytes()
+        mode = agents.stat().st_mode
+        self.assertNotEqual(native_file_acl(agents, world_rights="ReadData"), acl)
+        self.assertEqual((agents.read_bytes(), agents.stat().st_mode), (cleaned, mode))
+        retained = set(fixture.vault.rglob("*"))
+        refused, code = fixture.apply(plan, preview["plan_id"], receipt)
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertEqual((agents.read_bytes(), agents.stat().st_mode), (cleaned, mode))
+        self.assertNotEqual(native_file_acl(agents), acl)
+        self.assertEqual(set(fixture.vault.rglob("*")), retained)
+
+    @unittest.skipUnless(os.name == "nt", "Windows ACL semantics")
     def test_windows_vendor_overlap_blocks_before_execution(self):
         fixture = self.fixture
         agents = fixture.project / "AGENTS.md"
@@ -1406,8 +1640,16 @@ class RetirementArtifactTests(unittest.TestCase):
         )
         self.assertEqual(code, 2, refused)
         self.assertEqual(config.read_bytes(), retired)
+        config.write_bytes(retired + b"\n# user changed config\n")
+        refused, code = fixture.apply(plan_path, preview["plan_id"], receipt)
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertEqual(config.read_bytes(), retired + b"\n# user changed config\n")
+        config.write_bytes(retired)
         mode = config.stat().st_mode & 0o777
         config.chmod(mode ^ 0o200)
+        refused, code = fixture.apply(plan_path, preview["plan_id"], receipt)
+        self.assertEqual((code, refused["status"]), (2, "blocked"), refused)
+        self.assertEqual(config.read_bytes(), retired)
         refused, code = rollback_cleanup_legacy(
             plan_path,
             confirm_cleanup=preview["plan_id"],

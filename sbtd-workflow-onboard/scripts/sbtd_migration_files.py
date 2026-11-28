@@ -356,8 +356,6 @@ _OPEN_EXISTING = 3
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
-_TOKEN_QUERY = 0x0008
-_TOKEN_USER_CLASS = 1
 _SE_FILE_OBJECT = 1
 _OWNER_SECURITY_INFORMATION = 0x00000001
 _DACL_SECURITY_INFORMATION = 0x00000004
@@ -402,7 +400,6 @@ def _win32() -> Any:
 
     return types.SimpleNamespace(
         msvcrt=msvcrt,
-        wintypes=w,
         AceHeader=AceHeader,
         AclSizeInformation=AclSizeInformation,
         CreateFileW=bind(
@@ -419,25 +416,6 @@ def _win32() -> Any:
         ),
         CloseHandle=bind(kernel32, "CloseHandle", w.BOOL, w.HANDLE),
         LocalFree=bind(kernel32, "LocalFree", void, void),
-        GetCurrentProcess=bind(kernel32, "GetCurrentProcess", w.HANDLE),
-        OpenProcessToken=bind(
-            advapi32,
-            "OpenProcessToken",
-            w.BOOL,
-            w.HANDLE,
-            w.DWORD,
-            ctypes.POINTER(w.HANDLE),
-        ),
-        GetTokenInformation=bind(
-            advapi32,
-            "GetTokenInformation",
-            w.BOOL,
-            w.HANDLE,
-            ctypes.c_int,
-            void,
-            w.DWORD,
-            ctypes.POINTER(w.DWORD),
-        ),
         GetSecurityInfo=bind(
             advapi32,
             "GetSecurityInfo",
@@ -531,30 +509,6 @@ def _win32_directory(path: Path, access: int) -> Iterator[int]:
 
 
 @contextlib.contextmanager
-def _win32_current_user_sid() -> Iterator[Any]:
-    api = _win32()
-    w = api.wintypes
-    token = w.HANDLE()
-    _win32_check(
-        api.OpenProcessToken(api.GetCurrentProcess(), _TOKEN_QUERY, ctypes.byref(token))
-    )
-    try:
-        needed = w.DWORD()
-        api.GetTokenInformation(token, _TOKEN_USER_CLASS, None, 0, ctypes.byref(needed))
-        buffer = ctypes.create_string_buffer(needed.value)
-        _win32_check(
-            api.GetTokenInformation(
-                token, _TOKEN_USER_CLASS, buffer, needed, ctypes.byref(needed)
-            )
-        )
-    finally:
-        api.CloseHandle(token)
-    sid = ctypes.c_void_p.from_buffer(buffer)
-    _win32_check(sid.value and api.IsValidSid(sid))
-    yield sid
-
-
-@contextlib.contextmanager
 def _win32_well_known_sids() -> Iterator[list[Any]]:
     api = _win32()
     sids: list[Any] = []
@@ -623,7 +577,7 @@ def assert_private_file(path: Path) -> None:
     try:
         with (
             _retirement_permissions._file(target) as (handle, _),
-            _win32_current_user_sid() as me,
+            _retirement_permissions._current_user_sid() as me,
             _win32_well_known_sids() as trusted,
         ):
             if _win32_acl_private(handle, me, trusted):
@@ -643,7 +597,7 @@ def _windows_acl_proven(path: Path) -> bool:
     try:
         with (
             _win32_directory(path, _READ_CONTROL) as handle,
-            _win32_current_user_sid() as me,
+            _retirement_permissions._current_user_sid() as me,
             _win32_well_known_sids() as trusted,
         ):
             return _win32_acl_private(handle, me, trusted)
@@ -660,7 +614,7 @@ def _windows_make_private(path: Path) -> bool:
     try:
         with (
             _win32_directory(path, _READ_CONTROL | _WRITE_DAC | _WRITE_OWNER) as handle,
-            _win32_current_user_sid() as me,
+            _retirement_permissions._current_user_sid() as me,
         ):
             api = _win32()
             # ACL header + ACCESS_ALLOWED_ACE (its SidStart overlaps the SID).
@@ -1427,6 +1381,35 @@ def _windows_handle_checksum(fd: int) -> str:
     return observed.hexdigest()
 
 
+@contextlib.contextmanager
+def _hold_windows_original(
+    target: Path, held: Path, checksum: str, raw: bytes, mode: int | None,
+) -> Iterator[None]:
+    """Hold the verified object until its successor has claimed the vacant name."""
+    permissions = _retirement_permissions
+    with permissions._file(target, permissions._DELETE | permissions._READ_DATA, share=0) as (live, fd):
+        info = os.fstat(fd)
+        if (stat.S_IMODE(info.st_mode) != mode or _windows_handle_checksum(fd) != checksum
+                or permissions._read_handle(live) != raw):
+            _fail("state-conflict", "live Windows bytes, mode or permissions changed before publication")
+        permissions._rename_handle(live, held)
+        try:
+            yield
+        except BaseException:
+            try:
+                # A concurrent creator owns the public name. Keep both originals
+                # rather than replacing that file in an attempted rollback.
+                permissions._rename_handle(live, target)
+            except OSError:
+                raise RetainedObjectError(held) from None
+            raise
+        else:
+            try:
+                permissions._delete_handle(live, read_only=not info.st_mode & stat.S_IWUSR)
+            except OSError:
+                raise RetainedObjectError(held) from None
+
+
 def _windows_replay_stage(
     target: Path,
     content: bytes,
@@ -1441,7 +1424,7 @@ def _windows_replay_stage(
     holder = _private_sibling(target.parent, ".sbtd-retirement-stage-")
     identity = holder.lstat()
     try:
-        staged = holder / target.name
+        staged = holder / "candidate"
         try:
             os.close(os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
         except OSError:
@@ -1478,23 +1461,13 @@ def _windows_replay_stage(
                         return
                     if permissions._read_handle(handle) != raw:
                         _fail("state-conflict", "staged Windows file permissions changed before publication")
-                    replace = before["type"] == "file"
-                    if replace:
-                        if _windows_mode(target) != mode:
-                            _fail("state-conflict", "live Windows file mode changed before publication")
-                        with permissions._file(target, permissions._READ_DATA, share=1) as (live, live_fd):
-                            if (
-                                _windows_handle_checksum(live_fd) != before["checksum"]
-                                or permissions._read_handle(live) != raw
-                            ):
-                                _fail("state-conflict", "live Windows bytes or permissions changed before publication")
-                    elif snapshot(target) != before:
-                        _fail("state-conflict", "target appeared while the Windows write was staged")
-                    permissions._rename_handle(
-                        handle, target, replace=replace,
-                        read_only=replace and mode is not None and not mode & stat.S_IWUSR,
+                    guard = (
+                        _hold_windows_original(target, holder / "original", before["checksum"], raw, mode)
+                        if before["type"] == "file" else contextlib.nullcontext()
                     )
-                    published = True
+                    with guard:
+                        permissions._rename_handle(handle, target)
+                        published = True
                 finally:
                     if not published:
                         try:

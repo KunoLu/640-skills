@@ -98,6 +98,19 @@ class CommonModeGrammarTests(ParseErrorAssertions):
             ["check-projects", "--projects-root", "/repo/one", "--yes"]
         )
 
+    def test_bound_project_check_requires_a_pair_and_one_complete_project(self) -> None:
+        base = ["check-projects", "--projects-root", "/repo/one"]
+        manifest = ["--migration-manifest", "/private/m.json"]
+        receipt = ["--migration-apply-receipt", "/private/a.json"]
+        parsed = parse_workflow_args(base + manifest + receipt)
+        self.assertEqual((parsed.migration_manifest, parsed.migration_apply_receipt),
+                         (manifest[1], receipt[1]))
+        for args in (base + manifest, base + receipt,
+                     base + manifest + receipt + ["--skip-project-agents"],
+                     ["check-projects", "--projects-root", "/a,/b", *manifest, *receipt]):
+            with self.subTest(args=args):
+                self.assert_parse_error(args)
+
     def test_developer_rejects_non_matching_values(self) -> None:
         self.assert_parse_error(["check", "--developer", "Alice"])
         self.assert_parse_error(["check", "--developer", "dev_1"])

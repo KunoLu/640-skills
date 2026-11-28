@@ -63,7 +63,7 @@ def _check_candidate_path(
     candidate: Path,
     *,
     private: Path,
-    reserved: Sequence[Path],
+    reserved: set[Path],
     protected: Sequence[tuple[Path, bool]],
 ) -> None:
     """One evidence path: new, private, physical, disjoint from all managed state."""
@@ -84,7 +84,7 @@ def _check_candidate_path(
                 "private-scope",
                 f"the {label} evidence path overlaps a declared or protected object",
             )
-    for protected_path, is_directory in protected:
+    for protected_path, _ in protected:
         if contracts._publication_paths_overlap(str(candidate), str(protected_path)):
             _fail(
                 "private-scope",
@@ -237,11 +237,11 @@ def reconcile_deployment(
         _protected_followup_ancestry,
         _require_reconciliation_provenance,
         _result_index,
-        _source_backup_paths,
         _validate_context,
         _verified_runtime_lineage,
         runtime_versions,
     )
+    from sbtd_deployment_smoke import _require_canonical_input
 
     if not confirmed:
         _fail(
@@ -266,6 +266,8 @@ def reconcile_deployment(
         {"manifest": manifest_raw, "apply_receipt": apply_raw},
     )
     contracts._bind_success_gate(applied, {"applied", "already-complete"})
+    _require_canonical_input("manifest", manifest, manifest_raw)
+    _require_canonical_input("apply_receipt", applied, apply_raw)
     started_at = datetime.now(timezone.utc).isoformat()
     if contracts._parse_timestamp(
         applied["payload"]["finished_at"]
@@ -287,31 +289,17 @@ def reconcile_deployment(
         for operation in payload["shared_operations"]
         if operation["phase"] == "deploy"
     ]
-    if declaration is None or not operations:
+    zero_write = contracts._is_zero_write_project_successor(payload)
+    if declaration is None or (not operations and not zero_write):
         _fail(
             "missing-deployment-plan",
             "this manifest contains no declared deployment operations",
         )
     vault = Path(payload["backup_root"])
     applied_results = _result_index(applied)
-    reserved = [manifest_path, apply_path]
-    reserved.extend(Path(operation["target"]) for operation in _operations(manifest))
-    reserved.extend(_source_backup_paths(manifest).values())
-    # Every sealed manifest input is reserved, including absent OMP
-    # configuration inputs: new evidence may never equal or contain one.
-    reserved.extend(
-        Path(reference["path"])
-        for reference in contracts._manifest_input_references(payload)
-    )
-    reserved.extend(
-        Path(result["backup_ref"]["path"])
-        for result in applied_results.values()
-        if result["backup_ref"] is not None
-    )
-    reserved.extend(
-        vault / manifest["manifest_id"] / "deploy" / operation["resource_id"]
-        for operation in operations
-    )
+    reserved = deployment._deployment_protected_paths(manifest, applied) | {
+        manifest_path, apply_path,
+    }
     protected = _protected_followup_ancestry(manifest)
     for label, candidate in (("missing historical", missing_path), ("output", output_path)):
         _check_candidate_path(
@@ -326,6 +314,19 @@ def reconcile_deployment(
         _fail("state-conflict", "the reconciliation evidence target already exists")
 
     roots = [Path(project["root"]) for project in payload["projects"]]
+    smoke_dirs = deployment._preflight_smoke_evidence_paths(
+        private,
+        (str(root) for root in roots),
+        reserved=(
+            reserved
+            | {missing_path, output_path}
+            | {path for path, directory in protected if directory}
+        ),
+    )
+    if zero_write:
+        # A zero-write observation still has to prove its complete inherited
+        # deployment set before creating any report evidence.
+        _validate_context(manifest_path, manifest, previous=applied)
 
     from sbtd_migration_plan import approved_agents_provenance
 
@@ -356,7 +357,7 @@ def reconcile_deployment(
             approved_body=approved_bodies.get(operation["target"]),
         )
 
-    if declaration["platform"] == "omp":
+    if declaration["mode"] == "init" and declaration["platform"] == "omp":
         from onboard import user_home
         from sbtd_omp_sources import discover_omp_sources
 
@@ -374,8 +375,8 @@ def reconcile_deployment(
         payload["projects"],
         operations,
         results,
-        private_root=manifest_path.parent,
-        reserved=[manifest_path, apply_path, missing_path, output_path],
+        evidence_dirs=smoke_dirs,
+        include_unwritten=zero_write,
         context_paths=(manifest_path, apply_path),
     )
     for operation in operations:
@@ -415,6 +416,7 @@ def reconcile_deployment(
         manifest_raw=manifest_raw,
         apply_raw=apply_raw,
         context_paths=(manifest_path, apply_path),
+        smoke_dirs=smoke_dirs,
     )
     evidence = deployment._assemble_deployment_evidence(
         context, results, reports, failed_smokes=failed_smokes, reconciliation=reconciliation

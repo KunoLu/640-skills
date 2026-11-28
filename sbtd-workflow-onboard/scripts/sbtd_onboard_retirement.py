@@ -43,7 +43,10 @@ def _domain_paths(host: str | None, home: Path, environ: Mapping[str, str]) -> l
     return []
 
 
-def preview(args, *, action, operations, skills_root: Path, home: Path, environ, plan_entries):
+def preview(
+    args, *, action, operations, skills_root: Path, home: Path, environ, plan_entries,
+    other_directory_targets=(),
+):
     """Return public disclosure and private in-process execution data. No writes."""
     try:
         roots = [Path(x.strip()).expanduser() for x in (getattr(args, "projects_root", None) or "").split(",") if x.strip()]
@@ -55,11 +58,24 @@ def preview(args, *, action, operations, skills_root: Path, home: Path, environ,
             require_private_directory(vault)
         if descriptor is not None and (vault is None or not descriptor.is_relative_to(vault)):
             raise ValueError("retirement evidence must be inside the selected private backup root")
-        if vault is not None and any(vault == op.target or vault.is_relative_to(op.target) or op.target.is_relative_to(vault) for op in operations):
+        active = [op for op in operations if not op.same_location]
+        targets = {op.target.resolve() for op in active}
+        directories = {op.target.resolve() for op in active if op.kind == "dir"}
+        directories.update(path.resolve() for path in other_directory_targets)
+        if vault is not None and any(
+            vault.is_relative_to(target) or target.is_relative_to(vault)
+            for target in directories | targets
+        ):
             raise ValueError("retirement backup root overlaps an installation target")
         configs = _domain_paths(host, home, environ)
-        replaced = [str(op.target / LEGACY_LAUNCHER_RELATIVE) for op in operations
-                    if action == "reset" and not op.same_location and op.target == skills_root / "sbtd-workflow-onboard"]
+        onboard_target = (skills_root / "sbtd-workflow-onboard").resolve()
+        replaced = sorted(
+            str(target / LEGACY_LAUNCHER_RELATIVE)
+            for target in directories
+            if action == "reset" and (
+                target == onboard_target or os.path.lexists(target / LEGACY_LAUNCHER_RELATIVE)
+            )
+        )
         selections = {"host": host, "configs": configs, "projects": [str(p) for p in roots],
                       "vault": str(vault) if vault else None, "retiring_launchers": replaced}
         evidence = [{"kind": "descriptor", "path": str(descriptor)}] if descriptor else []
@@ -68,15 +84,23 @@ def preview(args, *, action, operations, skills_root: Path, home: Path, environ,
         candidates = render["candidates"] if action == "reset" else []
         # A proven project fence is a selective write. Installing a whole
         # template afterwards would destroy both the user's rules and rollback.
-        targets = {str(op.target) for op in operations if not op.same_location}
-        overlaps = {item["path"] for item in report["items"] if item["path"] in targets}
-        project_rules = {str(root / "AGENTS.md") for root in roots}
+        project_rules = {root / "AGENTS.md" for root in roots}
+        config_paths = {Path(item["path"]) for item in configs if os.path.lexists(item["path"])}
+        watched = config_paths | {Path(item["path"]) for item in report["items"]}
+        overlaps = {str(path) for path in watched if path.resolve() in targets}
+        watched_files = watched | {path for path in project_rules if os.path.lexists(path)}
+        directory_overlaps = [
+            {"installationTarget": str(target), "retirementPath": str(path)}
+            for target in sorted(directories)
+            for path in sorted(watched_files)
+            if action == "reset" and path.resolve().is_relative_to(target)
+        ]
         retained = sorted(
             c["path"] for c in candidates
             if c["role"] == "agents-fence" and c["path"] in overlaps
-            and c["path"] in project_rules
+            and Path(c["path"]) in project_rules
         )
-        unsafe_overlap = action == "reset" and bool(overlaps.difference(retained))
+        unsafe_overlap = action == "reset" and bool(directory_overlaps or overlaps.difference(retained))
         stop = bool(report["status"] == "blocked" or render["stop"] or unsafe_overlap)
         reason = render.get("stop_reason")
         if unsafe_overlap:
@@ -99,10 +123,12 @@ def preview(args, *, action, operations, skills_root: Path, home: Path, environ,
                 binding = {
                     "retirementPlan": preview_plan["plan_id"],
                     "installation": [row for row in plan_entries if row["target"] not in retained],
+                    "directoryInstallation": sorted(map(str, directories)),
                 }
                 plan_id = hashlib.sha256(canonical_json_bytes(binding)).hexdigest()
         public = {**report, "blocked": stop, "reason": reason, "globalEffects": render["global_effects"],
                   "targetsToRetire": [str(c["path"]) for c in candidates],
+                  "directoryOverlaps": directory_overlaps,
                   "skipTemplateWrites": retained, "confirmationId": plan_id}
         return public, execution
     except (ContractError, ValueError, OSError, RuntimeError) as error:
@@ -132,10 +158,14 @@ def print_report(payload: Mapping[str, Any]) -> None:
     if not isinstance(report, dict):
         return
     print(f"Legacy retirement: {report['status']}")
+    retiring = set(report.get("targetsToRetire", [])) if not report.get("blocked") else set()
     for item in report.get("items", []):
         status = item.get("status")
         detail = f"; ownership: {item['verification']}" if status == "dangling" else ""
-        print(f"- {item.get('path')}: {status}{detail}")
+        action = item.get("action") if item["path"] in retiring else "preserve"
+        print(f"- {item['path']!r}: {item['entry']!r}: {action} ({status}{detail})")
+    for overlap in report.get("directoryOverlaps", []):
+        print(f"- {overlap['retirementPath']!r}: overlaps installation directory {overlap['installationTarget']!r}")
     for path in report.get("skipTemplateWrites", []):
         print(f"- {path}: retire only the proven fence; do not install a replacement template")
     if report.get("globalEffects"):

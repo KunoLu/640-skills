@@ -103,18 +103,26 @@ rc.3 removes Graft from the workflow. There is no `install-graft` command and no
 
 Root installers never approve retirement by themselves. When retirement is required, they stop and direct you to this plan/confirm sequence. `--no-mcp` only skips the installer's generic MCP menu. It is not forwarded to Onboard and it is not host wiring.
 
-Standalone cleanup, from the installed `scripts/onboard.py`:
+From the installed Onboard directory, run the plan and inspect its JSON. Only after approving its targets, set `PLAN_PATH` to `cleanup_legacy.plan_path` and `PLAN_ID` to the top-level `plan_id`.
 
 ```bash
 python scripts/onboard.py cleanup-legacy --phase plan \
   --projects-root /abs/project --backup-root /abs/private-vault \
-  --retirement-evidence /abs/private-vault/evidence.json
+  --retirement-evidence /abs/private-vault/evidence.json --json
+```
+
+Apply the approved plan:
+
+```bash
 python scripts/onboard.py cleanup-legacy --phase apply \
-  --plan /abs/private-vault/plan.json --confirm-cleanup <plan_id>
-python scripts/onboard.py cleanup-legacy --phase rollback \
-  --plan /abs/private-vault/plan.json \
-  --cleanup-receipt /abs/private-vault/receipt.json \
-  --confirm-cleanup <plan_id>
+  --plan "${PLAN_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
+```
+
+For a separately requested rollback, set `RECEIPT_PATH` to `cleanup_legacy.receipt_path` from that apply:
+
+```bash
+python scripts/onboard.py cleanup-legacy --phase rollback --plan "${PLAN_PATH:?}" \
+  --cleanup-receipt "${RECEIPT_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
 ```
 
 `--retirement-evidence` is optional on plan and must stay inside the selected vault. Apply may also pass the previous `--cleanup-receipt` for a retry. Rollback restores a retired resource only when the current bytes and permissions still match the recorded post-retirement state. There is no `restore-retirement` command.

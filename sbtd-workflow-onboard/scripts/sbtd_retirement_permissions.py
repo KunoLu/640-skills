@@ -47,8 +47,9 @@ _FILE_INFORMATION_BASIC = 0
 _FILE_INFORMATION_RENAME = 3
 _FILE_INFORMATION_DISPOSITION = 4
 _FILE_INFORMATION_DISPOSITION_EX = 21
-_FILE_INFORMATION_RENAME_EX = 22
 _INVALID_HANDLE = ctypes.c_void_p(-1).value
+_EFFECTIVE_TOKEN = ctypes.c_void_p(-6)  # GetCurrentThreadEffectiveToken(), a query-only pseudo-handle
+_TOKEN_USER = 1
 _SD = struct.Struct("<BBHIIII")
 _ACL = struct.Struct("<BBHHH")
 _ACE = struct.Struct("<BBH")
@@ -166,6 +167,10 @@ def _win32() -> Any:
         CloseHandle=bind(kernel, "CloseHandle", w.BOOL, w.HANDLE),
         FinalName=bind(kernel, "GetFinalPathNameByHandleW", w.DWORD, w.HANDLE, w.LPWSTR, w.DWORD, w.DWORD),
         LocalFree=bind(kernel, "LocalFree", pointer, pointer),
+        GetTokenInformation=bind(security, "GetTokenInformation", w.BOOL, w.HANDLE,
+                                 ctypes.c_int, pointer, w.DWORD, ctypes.POINTER(w.DWORD)),
+        IsValidSid=bind(security, "IsValidSid", w.BOOL, pointer),
+        EqualSid=bind(security, "EqualSid", w.BOOL, pointer, pointer),
         GetSecurity=bind(security, "GetSecurityInfo", w.DWORD, w.HANDLE, ctypes.c_int,
                          w.DWORD, out, out, out, out, out),
         SecurityLength=bind(security, "GetSecurityDescriptorLength", w.DWORD, pointer),
@@ -176,6 +181,23 @@ def _win32() -> Any:
         RenameInformation=RenameInformation,
         BasicInformation=BasicInformation,
     )
+
+
+@contextlib.contextmanager
+def _current_user_sid() -> Iterator[ctypes.c_void_p]:
+    """Keep the effective token's user SID buffer alive without changing the token."""
+    api = _win32()
+    size = ctypes.c_ulong()
+    api.GetTokenInformation(_EFFECTIVE_TOKEN, _TOKEN_USER, None, 0, ctypes.byref(size))
+    if size.value < ctypes.sizeof(ctypes.c_void_p):
+        raise OSError("Windows token user size could not be read")
+    buffer = ctypes.create_string_buffer(size.value)
+    if not api.GetTokenInformation(_EFFECTIVE_TOKEN, _TOKEN_USER, buffer, size, ctypes.byref(size)):
+        raise OSError("Windows token user could not be read")
+    sid = ctypes.c_void_p.from_buffer(buffer)
+    if not sid.value or not api.IsValidSid(sid):
+        raise OSError("Windows token user SID is invalid")
+    yield sid
 
 
 def _native_path(path: Path) -> str:
@@ -234,7 +256,7 @@ def _file(path: Path, access: int = 0, *, share: int = _SHARE_ALL) -> Iterator[t
         os.close(fd)
 
 
-def _read_handle(handle: int) -> bytes:
+def _read_handle_parts(handle: int) -> tuple[int, bytes, bytes, bytes]:
     api = _win32()
     descriptor = ctypes.c_void_p()
     flags = _OWNER_INFORMATION | _GROUP_INFORMATION | _DACL_INFORMATION | _ACCESS_QUALIFIERS
@@ -245,10 +267,14 @@ def _read_handle(handle: int) -> bytes:
         size = api.SecurityLength(descriptor)
         if not _SD.size <= size <= _MAX_DESCRIPTOR:
             _unproved("Windows security descriptor length is invalid")
-        return _pack(*_parts(ctypes.string_at(descriptor, size), native=True))
+        return _parts(ctypes.string_at(descriptor, size), native=True)
     finally:
         if descriptor.value:
             api.LocalFree(descriptor)
+
+
+def _read_handle(handle: int) -> bytes:
+    return _pack(*_read_handle_parts(handle))
 
 
 def capture(path: Path) -> bytes:
@@ -260,9 +286,19 @@ def capture(path: Path) -> bytes:
 def _apply_permissions(handle: int, fd: int, raw: bytes) -> None:
     if os.fstat(fd).st_size:
         _unproved("Windows permission replay requires an empty unpublished file")
-    control, owner, group, acl = _parts(raw)
-    desired = _pack(control, owner, group, acl)
-    if _read_handle(handle) == desired:
+    desired = _parts(raw)
+    control, owner, group, acl = desired
+    current = _read_handle_parts(handle)
+    api = _win32()
+    # Successful replay on a privileged runner does not prove ordinary authority.
+    try:
+        with _current_user_sid() as user:
+            matches_user = api.EqualSid(user, owner)
+    except OSError:
+        _unproved("Windows current user could not be identified for permission replay")
+    if not matches_user or owner != current[1]:
+        _unproved("Windows file owner cannot be replayed within current user authority")
+    if current == desired:
         return
     # Ask the file system to retain AUTO_INHERITED rather than clear it on
     # the security write. Exact readback below remains the authority.
@@ -271,7 +307,6 @@ def _apply_permissions(handle: int, fd: int, raw: bytes) -> None:
     descriptor = _pack(control, owner, group, acl)
     # One WIN32_STREAM_ID: BACKUP_SECURITY_DATA | STREAM_CONTAINS_SECURITY.
     stream = struct.pack("<IIQI", 3, 2, len(descriptor), 0) + descriptor
-    api = _win32()
     context = ctypes.c_void_p()
     written = ctypes.c_ulong()
     try:
@@ -282,7 +317,7 @@ def _apply_permissions(handle: int, fd: int, raw: bytes) -> None:
     finally:
         if context.value:
             api.BackupWrite(handle, None, 0, ctypes.byref(written), True, True, ctypes.byref(context))
-    if _read_handle(handle) != desired:
+    if _read_handle_parts(handle) != desired:
         _unproved("Windows changed staged permission semantics during replay")
 
 
@@ -310,19 +345,19 @@ def _set_read_only(handle: int, attrs: int, *, enabled: bool) -> None:
         _unproved("Windows staged read-only attribute could not be set")
 
 
-def _rename_handle(handle: int, target: Path, *, replace: bool, read_only: bool) -> None:
+def _rename_handle(handle: int, target: Path) -> None:
+    """Publish an open file only to an absent destination."""
     api = _win32()
     name = _native_path(target).encode("utf-16-le")
     prefix = api.RenameInformation.FileName.offset
     size = max(ctypes.sizeof(api.RenameInformation), prefix + len(name) + 2)
     buffer = ctypes.create_string_buffer(size)
     info = api.RenameInformation.from_buffer(buffer)
-    info.Flags = int(replace) | (0x40 if read_only else 0)  # IGNORE_READONLY_ATTRIBUTE
+    info.Flags = 0  # ReplaceIfExists is always FALSE.
     info.FileNameLength = len(name)
     ctypes.memmove(ctypes.addressof(info) + prefix, name, len(name))
-    kind = _FILE_INFORMATION_RENAME_EX if read_only else _FILE_INFORMATION_RENAME
-    if not api.SetFileInformation(handle, kind, buffer, size):
-        if not replace and ctypes.get_last_error() in {80, 183}:
+    if not api.SetFileInformation(handle, _FILE_INFORMATION_RENAME, buffer, size):
+        if ctypes.get_last_error() in {80, 183}:
             raise FileExistsError("Windows target appeared during publication")
         raise OSError("Windows file handle rename failed")
 

@@ -442,11 +442,28 @@ def _validate_plan(plan: Any) -> tuple[str, dict[str, Any]]:
         _validate_resource(resource, f"plan resource {index}")
     if not isinstance(payload.get("domains"), list):
         _fail("invalid-document", "plan domains must be a list")
-    if "graftRetirement" in payload and (
-        not isinstance(payload.get("graftRetirement"), Mapping)
-        or type(payload["graftRetirement"].get("stop")) is not bool
-    ):
-        _fail("invalid-document", "plan retirement disclosure is missing")
+    if "graftRetirement" in payload:
+        report = payload["graftRetirement"]
+        if (
+            not isinstance(report, Mapping) or type(report.get("stop")) is not bool
+            or any(
+                key in report and (
+                    not isinstance(report[key], list) or any(not isinstance(row, dict) for row in report[key])
+                )
+                for key in ("candidates", "blocked", "preserved")
+            )
+            or any(
+                not isinstance(row.get("path"), str) or not isinstance(row.get("id"), str)
+                for row in report.get("candidates", [])
+            )
+            or ("global_effects" in report and (
+                not isinstance(report["global_effects"], list)
+                or any(not isinstance(path, str) for path in report["global_effects"])
+            ))
+        ):
+            _fail("invalid-document", "plan retirement disclosure is malformed")
+    elif any(resource["kind"] == "retirement" for resource in resources):
+        _fail("invalid-document", "a plan without a retirement disclosure cannot authorize retirement resources")
     return plan_id, payload
 
 
@@ -664,15 +681,28 @@ def _retirement_planner():
     return planner
 
 
-def _same_retirement(sealed: Mapping[str, Any], fresh: Mapping[str, Any]) -> bool:
+def _same_retirement(
+    sealed: Mapping[str, Any], fresh: Mapping[str, Any], *, completed_paths: set[str] | None = None,
+) -> bool:
     """Historical plans omit the report and gain no targets. A hash is not authority."""
     if "graftRetirement" not in sealed:
         return (
             fresh.get("stop") is False
             and not fresh.get("candidates")
             and not fresh.get("blocked")
+            and not completed_paths
         )
-    return sealed.get("graftRetirement") == fresh
+    report = sealed["graftRetirement"]
+    if completed_paths:
+        candidates = report.get("candidates", [])
+        if not completed_paths.issubset(row.get("path") for row in candidates):
+            return False
+        report = {
+            **report,
+            "candidates": [row for row in candidates if row["path"] not in completed_paths],
+            "global_effects": [path for path in report.get("global_effects", []) if path not in completed_paths],
+        }
+    return canonical_json_bytes(report) == canonical_json_bytes(fresh)
 
 
 def _derive_resources(
@@ -681,6 +711,7 @@ def _derive_resources(
     *,
     host_package_root: Path | None = None,
     vault: Path | None = None,
+    required_retirement_targets: Sequence[str] = (),
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[Any], dict[str, Any]]:
     inventory = _inventory_module().build_inventory(scope, package_root=package_root)
     result = _expect_mapping(inventory, "inventory result")
@@ -720,6 +751,7 @@ def _derive_resources(
         vault=None if vault is None else str(vault),
         evidence=evidence,
         retiring_launchers=_retiring_launchers(resources),
+        required_targets=required_retirement_targets,
     )
     if not isinstance(retirement, Mapping):
         _fail("invalid-inventory", "retirement planning must return an object")
@@ -825,21 +857,10 @@ def _identity_view(resource: Mapping[str, Any], package_path: str) -> dict[str, 
             key: launcher[key] for key in ("path", "desired") if key in launcher
         }
     if resource["kind"] == "retirement":
-        view["bindings"]["retirement"] = {
-            "action": details.get("action"),
-            "items": [
-                {
-                    "id": item.get("id"),
-                    "path": item.get("path"),
-                    "action": item.get("action"),
-                    "mode": item.get("mode"),
-                    "historical_mode": "unknown",
-                }
-                for item in details.get("items", [])
-            ],
-        }
-        if _WINDOWS_ACL in details:
-            view["bindings"]["retirement"][_WINDOWS_ACL] = details[_WINDOWS_ACL]
+        view.update(before=resource["before"], classification=resource["classification"], decision=resource["decision"])
+        # The inspection report also covers sibling targets, which can already
+        # be retired. Bind the exact candidate and effects for this target.
+        view["bindings"]["retirement"] = {key: value for key, value in details.items() if key != "report"}
     if "effective_inputs" in details:
         view["bindings"]["effective_inputs"] = [
             dependency for dependency in details["effective_inputs"]
@@ -2692,36 +2713,35 @@ def _authorize_recovery_evidence(
     isolated = trusted.parent == vault / "self"
     if not isolated and _payload_state(trusted) != payload["baseline"]["source"]["state"]:
         _fail("source-stale", "recovery source is not an equivalent running trusted package")
+    sealed = {row["id"]: row for row in payload["resources"]}
+    completed_retirements = {
+        row["id"] for row in rows
+        if (resource := sealed.get(row["id"])) is not None
+        and resource["kind"] == "retirement"
+        and resource["decision"] in _WRITABLE
+        and resource["before"]["type"] == "file"
+        and resource["desired"]["type"] in {"file", "absent"}
+        and row.get("result") in _COMPLETED_TOKENS
+        and row.get("mutated") is True
+        and all(row.get(key) == resource[key] for key in ("kind", "target", "decision", "before", "desired"))
+        and row.get("after") == row.get("mechanical_after") == resource["desired"]
+    }
     baseline, fresh, _domains, disclosure = _derive_resources(
-        payload["scope"], trusted, host_package_root=trusted, vault=vault
+        payload["scope"], trusted, host_package_root=trusted, vault=vault,
+        required_retirement_targets=sorted(sealed[identifier]["target"] for identifier in completed_retirements),
     )
     expected = {row["id"]: row for row in fresh}
-    sealed = {row["id"]: row for row in payload["resources"]}
-    receipt_rows = {row["id"]: row for row in rows}
     missing = set(sealed) - set(expected)
-    completed_retirements = {
-        identifier for identifier in missing
-        if sealed[identifier]["kind"] == "retirement"
-        and receipt_rows.get(identifier, {}).get("result") in _COMPLETED_TOKENS
-        and receipt_rows[identifier].get("mutated") is True
-        and receipt_rows[identifier].get("after") == sealed[identifier]["desired"]
-        and receipt_rows[identifier].get("mechanical_after") == sealed[identifier]["desired"]
-    }
-    if completed_retirements != missing or set(expected) - set(sealed):
+    if not missing.issubset(completed_retirements) or set(expected) - set(sealed):
         _fail("plan-stale", "recovery resource identities do not derive from the trusted catalog")
-    if not _same_retirement(payload, disclosure) and (
-        not completed_retirements
-        or disclosure.get("stop") is not False
-        or disclosure.get("candidates")
-        or disclosure.get("blocked")
-    ):
+    if not _same_retirement(payload, disclosure, completed_paths={sealed[identifier]["target"] for identifier in missing}):
         _fail("plan-stale", "retirement disclosure differs from a fresh derivation")
     if baseline["baseline_id"] != payload["baseline"]["baseline_id"] or baseline["source"]["state"] != payload["baseline"]["source"]["state"]:
         _fail("source-stale", "the trusted recovery package no longer matches the batch baseline")
-    expected.update({identifier: sealed[identifier] for identifier in completed_retirements})
+    expected.update({identifier: sealed[identifier] for identifier in missing})
     _check_decisions(payload)
     for identifier, resource in sealed.items():
-        if identifier in completed_retirements:
+        if identifier in missing:
             continue
         actual = _identity_view(resource, str(source))
         derived = _identity_view(expected[identifier], baseline["source"]["path"])
@@ -2730,7 +2750,7 @@ def _authorize_recovery_evidence(
             actual["desired"] = derived["desired"] = None
             actual["managed_goal"] = resource["details"].get("managed_digest")
             derived["managed_goal"] = expected[identifier]["details"].get("managed_digest")
-        if actual != derived:
+        if canonical_json_bytes(actual) != canonical_json_bytes(derived):
             _fail("plan-stale", "recovery content or source pins do not derive from the trusted package")
     intents = _scan_intents(vault, f"intent-{plan['plan_id'][:16]}-", "resource_id")
     checkpoints = _scan_documents(vault, "upgrade-receipt-")
@@ -2839,6 +2859,10 @@ def _check_recovery_binding(recovery_plan: Mapping[str, Any]) -> None:
                 target, measured, windows["mode_before"], windows[_WINDOWS_ACL],
             )
             receipt_proof = receipt_proof and restored and _matches_binding(prior, _windows_restored_outcome(windows))
+            intent_proof = intent is not None and restored
+        elif step["kind"] == "retirement":
+            restored = measured == goal and _posix_mode(target) == step["mode_before"]
+            receipt_proof = receipt_proof and restored
             intent_proof = intent is not None and restored
         if receipt_proof or intent_proof:
             step["status"] = "actionable"
@@ -2988,6 +3012,12 @@ def _plan_recovery(
                 })
                 blocked = True
                 continue
+            mode_before = resource["details"].get("mode_before")
+            mode_after = mode_before if resource["desired"]["type"] == "file" else None
+            if not isinstance(mode_before, str) or not _matches_binding(
+                row, {"mode_before": mode_before, "mode_after": mode_after},
+            ):
+                _fail("receipt-mismatch", "a completed retirement does not match its sealed file mode")
             base.update(mode_before=row["mode_before"], mode_after=row["mode_after"])
             base.update(windows)
             if _posix_mode(Path(target)) != row["mode_after"] or (
@@ -3466,6 +3496,10 @@ def _reconcile_step(
         current = current and _retirement_permissions_match(
             Path(step["target"]), live, windows["mode_after"], windows[_WINDOWS_ACL_AFTER],
         )
+    elif step.get("kind") == "retirement":
+        mode = _posix_mode(Path(step["target"]))
+        restored = restored and "mode_before" in step and mode == step["mode_before"]
+        current = current and "mode_after" in step and mode == step["mode_after"]
     if step["expected_mechanical"]["type"] == "directory":
         _check_recovery_cutover(step, intent, live)
         if (live == expected_after and intent is not None and "directory_cutover" not in intent
@@ -3481,7 +3515,7 @@ def _reconcile_step(
             "a completed recovery step no longer matches its receipt outcome",
         )
     if intent is not None:
-        if not windows and step["action"] == "restore" and live["type"] == "absent":
+        if step.get("kind") != "retirement" and step["action"] == "restore" and live["type"] == "absent":
             return {"verb": "write", "step": step}
         if restored and (
             mechanical == (dict(_ABSENT) if step["action"] == "remove" else step["backup_ref"]["state"])

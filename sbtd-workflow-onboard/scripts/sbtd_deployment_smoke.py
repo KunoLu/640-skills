@@ -147,6 +147,13 @@ def _closed_projection(raw: str, root: Path) -> dict[str, Any]:
     return projected
 
 
+def _require_canonical_input(
+    kind: str, document: Mapping[str, Any], raw: bytes
+) -> None:
+    if raw != canonical_json_bytes(document):
+        _fail("invalid-document", f"migration {kind} is not canonical JSON")
+
+
 def _bound_document(path: Path, kind: str) -> tuple[Path, dict[str, Any], bytes]:
     from sbtd_migration import _private_document
     from sbtd_migration_files import read_file, require_private_directory
@@ -165,8 +172,7 @@ def _bound_document(path: Path, kind: str) -> tuple[Path, dict[str, Any], bytes]
         _fail("unsafe-path", f"migration {kind} must be an existing canonical file")
     require_private_directory(candidate.parent)
     document, raw = _private_document(candidate, kind)
-    if raw != canonical_json_bytes(document):
-        _fail("invalid-document", f"migration {kind} is not canonical JSON")
+    _require_canonical_input(kind, document, raw)
     if read_file(candidate) != raw:
         _fail("state-conflict", f"migration {kind} changed while being read")
     return candidate, document, raw

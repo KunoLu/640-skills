@@ -38,7 +38,7 @@ Cleanup alone may accept deployment-discovery input file/absent drift only when 
 
 An already exact project-template AGENTS may be bound as unchanged evidence without signing or rewriting it; any drift remains a conflict. Document-only legacy task history requires explicit source-bound document publication, never a fabricated task. Historical-branch handoffs must distinguish migration checkout/HEAD evidence from the old task branch and defer real recovery to an explicit user choice. These compatibility paths grant no publication/apply/cleanup authority.
 
-Before project initialization or migration-context init, read [Host Wiring and Deployment](REFERENCE.md#codex-and-omp-wiring-and-deployment). Ordinary `init`, `check`, and `plan` report read-only `graftRetirement` and do not install or retire managed host entries. `reset` retires a proven entry only with the displayed digest, `--yes`, and an existing private `--retirement-backup-root`. There is no `install-graft` command and no `--graft-*` flag. Project-only setup does not build a graph or write a fence. This does not authorize TEMP or backup deletion.
+Before project initialization or migration-context init, read [Host Wiring and Deployment](REFERENCE.md#codex-and-omp-wiring-and-deployment). `check` and `plan` can inspect retirement; ordinary `init` does not retire host entries. `reset` requires the displayed digest, `--yes`, and a private backup root to retire proven entries. Project-only setup does not build a graph or write a fence. This does not authorize deleting TEMP or backups.
 
 Whole-directory installation and `npx skills add` do not run pip. Before validating exchange contracts, task state or migration, use the actual installed-copy interpreter: `python -m pip install -r /path/to/installed/sbtd-workflow-onboard/requirements.txt`. This declares jsonschema, PyYAML, markdown-it-py, tomlkit and cryptography; missing dependencies block the affected validation or write without breaking help or pure argument parsing. Verify a fresh installed copy, not the source machine's existing packages.
 
@@ -223,7 +223,7 @@ React Bits remains project-only and optional:
 
 ## MCP Scope Policy
 
-The generic interactive MCP menu (Chrome DevTools, Playwright, Maestro and custom stdio servers) does not install or retire managed host entries. Project-only setup skips user-level MCP and hooks. An [explicit upgrade](REFERENCE.md#upgrade-alignment) can plan a selected generic MCP configuration. Only a confirmed `upgrade --phase apply` writes the changes authorized by that upgrade plan. No GitNexus fallback or alias is provided. Retirement is the separate confirmed sequence in [Host Wiring and Deployment](REFERENCE.md#codex-and-omp-wiring-and-deployment).
+The interactive MCP menu configures selected Chrome DevTools, Playwright, Maestro or custom stdio servers; project-only setup skips user-level MCP and hooks. `upgrade` does not install generic MCP servers, write PATH blocks or execute user shell profiles. Retirement uses the separate confirmed sequence in [Host Wiring and Deployment](REFERENCE.md#codex-and-omp-wiring-and-deployment).
 
 The target scope is fixed by Agent platform:
 
@@ -296,10 +296,12 @@ python scripts/onboard.py reset --platform codex --projects-root /abs/one,/abs/t
 Preview a reset before any retirement write:
 
 ```bash
-python scripts/onboard.py plan --action reset --platform codex --projects-root /abs/one --json
+python scripts/onboard.py plan --action reset --platform codex --projects-root /abs/one \
+  --retirement-backup-root /abs/private-vault --retirement-evidence /abs/private-vault/evidence.json --json
+# After reviewing the plan, set RETIREMENT_ID to graftRetirement.confirmationId.
 python scripts/onboard.py reset --platform codex --projects-root /abs/one \
-  --retirement-backup-root /abs/private-vault \
-  --confirm-retirement <displayed-digest> --yes
+  --retirement-backup-root /abs/private-vault --retirement-evidence /abs/private-vault/evidence.json \
+  --confirm-retirement "${RETIREMENT_ID:?}" --yes
 ```
 
 The preview does not write. `--confirm-retirement` must be the displayed digest. `--yes` alone does not authorize retirement. See [Host Wiring and Deployment](REFERENCE.md#codex-and-omp-wiring-and-deployment).

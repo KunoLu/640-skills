@@ -113,7 +113,8 @@ class _OmpBatch:
         return next(
             operation
             for operation in self.manifest["payload"]["shared_operations"]
-            if operation["phase"] == "deploy" and operation["change"]["kind"] == "copy-file"
+            if operation["phase"] == "deploy"
+            and operation["target"] == str(self.agent / "AGENTS.md")
         )
 
 
@@ -180,6 +181,102 @@ class OmpCurrentStateReconciliationLifecycleTests(unittest.TestCase):
 
 
 class OmpCurrentStateReconciliationRefusalTests(unittest.TestCase):
+    def test_no_touch_drift_after_final_provenance_blocks_reconciliation(self):
+        from sbtd_migration import _require_reconciliation_provenance
+
+        batch = _OmpBatch(self, no_touch=True)
+        agents = batch.root / "AGENTS.md"
+        drifted = agents.read_bytes() + b"\nOperator edit after provenance check.\n"
+        output = batch.evidence / "current-state-evidence.json"
+        calls = 0
+
+        def drift_after_final_provenance(*args, **kwargs):
+            nonlocal calls
+            refs = _require_reconciliation_provenance(*args, **kwargs)
+            calls += 1
+            if calls == 2:
+                agents.write_bytes(drifted)
+            return refs
+
+        with (
+            mock.patch(
+                "sbtd_migration._require_reconciliation_provenance",
+                side_effect=drift_after_final_provenance,
+            ),
+            self.assertRaises(contracts.ContractError) as failure,
+        ):
+            _reconcile(batch, output)
+        self.assertEqual(calls, 2)
+        self.assertEqual(failure.exception.code, "state-conflict")
+        self.assertEqual(agents.read_bytes(), drifted)
+        self.assertFalse(output.exists())
+        self.assertFalse(batch.missing_path.exists())
+
+    def test_no_touch_drift_after_retry_provenance_blocks_publication(self):
+        from sbtd_migration import _require_reconciliation_provenance
+
+        batch = _OmpBatch(self, no_touch=True)
+        agents = batch.root / "AGENTS.md"
+        drifted = agents.read_bytes() + b"\nOperator edit during retry.\n"
+        previous = batch.evidence / "current-state-evidence.json"
+        _reconcile(batch, previous)
+        previous_bytes = previous.read_bytes()
+        retry = batch.evidence / "retry.json"
+        host_before = snapshot(batch.home)
+        vault_before = snapshot(batch.vault)
+
+        def drift_after_provenance(*args, **kwargs):
+            refs = _require_reconciliation_provenance(*args, **kwargs)
+            agents.write_bytes(drifted)
+            return refs
+
+        with mock.patch.dict(os.environ, batch.environment):
+            context = load_deployment_context(
+                batch.manifest_path, batch.apply_path, retry, previous_path=previous,
+                mode="init", roots=[batch.root], hooks_authorized=False,
+            )
+            with mock.patch(
+                "sbtd_migration._require_reconciliation_provenance",
+                side_effect=drift_after_provenance,
+            ) as provenance:
+                result, code = execute_migration_deployment(context)
+        provenance.assert_called_once()
+        self.assertEqual(code, 5, result)
+        self.assertIsNone(result["deploymentEvidence"])
+        self.assertFalse(retry.exists())
+        self.assertFalse(batch.missing_path.exists())
+        self.assertEqual(agents.read_bytes(), drifted)
+        self.assertEqual(previous.read_bytes(), previous_bytes)
+        self.assertEqual(snapshot(batch.home), host_before)
+        self.assertEqual(snapshot(batch.vault), vault_before)
+        evidence_before = snapshot(batch.evidence)
+        with (
+            mock.patch.dict(os.environ, batch.environment),
+            self.assertRaises(contracts.ContractError) as failure,
+        ):
+            load_deployment_context(
+                batch.manifest_path, batch.apply_path, retry, previous_path=previous,
+                mode="init", roots=[batch.root], hooks_authorized=False,
+            )
+        self.assertEqual(failure.exception.code, "state-conflict")
+        self.assertEqual(snapshot(batch.evidence), evidence_before)
+
+    def test_reconciliation_reserves_both_outputs_from_the_smoke_directory(self):
+        batch = _OmpBatch(self)
+        digest = hashlib.sha256(str(batch.root).encode("utf-8")).hexdigest()
+        smoke_path = batch.evidence / "deployment-smoke" / digest / "receipt.json"
+        plain_path = batch.evidence / "current-state-evidence.json"
+        before = snapshot(batch.base)
+        with mock.patch.dict(os.environ, batch.environment):
+            for missing, output in ((smoke_path, plain_path), (batch.missing_path, smoke_path)):
+                with self.subTest(missing=missing, output=output):
+                    with self.assertRaises(contracts.ContractError) as failure:
+                        reconcile_deployment(
+                            batch.manifest_path, batch.apply_path, missing, output, confirmed=True
+                        )
+                    self.assertEqual(failure.exception.code, "private-scope")
+                    self.assertEqual(snapshot(batch.base), before)
+
     def test_tampered_install_target_fails_closed_without_repairs(self):
         batch = _OmpBatch(self)
         tampered = batch.target.read_bytes() + b"\ntampered\n"

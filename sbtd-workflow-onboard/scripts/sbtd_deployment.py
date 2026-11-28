@@ -13,7 +13,7 @@ import hashlib
 import json
 import os
 import stat
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -233,6 +233,18 @@ def _declare_approved_agents(
         )
 
 
+def _approved_agents_body(operation: Mapping[str, Any]) -> bytes:
+    from sbtd_migration_plan import project_approved_body
+
+    body = project_approved_body(operation["change"]["source_ref"])
+    if operation["selector"] != approved_agents_selector(body):
+        _fail(
+            "candidate-conflict",
+            "the sealed projection digest does not match the signed candidate",
+        )
+    return body
+
+
 def execute_resource(
     operation: Mapping[str, Any],
     *,
@@ -263,6 +275,12 @@ def execute_resource(
         if before != expected:
             _fail("state-conflict", "the deployment resource changed before execution")
         kind = operation["change"]["kind"]
+        body = None
+        if _is_approved_agents(operation):
+            body = _approved_agents_body(operation)
+            live = b"" if before["type"] == "absent" else read_file(target, before)
+        elif kind not in {"copy-file", "copy-directory"}:
+            _fail("unsupported-operation", "the deployment operation is not supported")
         root_info = _lstat(_canonical(root))
         if root_info is None:
             root.mkdir(parents=True, mode=0o700)
@@ -285,21 +303,11 @@ def execute_resource(
                 "the deployment resource changed while retaining its original",
             )
         started = True
-        if _is_approved_agents(operation):
-            from sbtd_migration_plan import project_approved_body
-
-            source = operation["change"]["source_ref"]
-            body = project_approved_body(source)
-            if operation["selector"] != approved_agents_selector(body):
-                _fail(
-                    "candidate-conflict",
-                    "the sealed projection digest does not match the signed candidate",
-                )
-            live = b"" if before["type"] == "absent" else read_file(target, before)
+        if body is not None:
             if live != body:
                 _prepare_target_parents(target, root)
                 write_file(target, body, before, scope=root)
-        elif kind in {"copy-file", "copy-directory"}:
+        else:
             _prepare_target_parents(target, root)
             install_reference(
                 operation["change"]["source_ref"],
@@ -308,8 +316,6 @@ def execute_resource(
                 scope=root,
                 backup_ref=result.get("backup_ref"),
             )
-        else:
-            _fail("unsupported-operation", "the deployment operation is not supported")
         result.update(status="succeeded", after=snapshot(target), error=None)
     except (contracts.ContractError, OSError, RuntimeError):
         result["status"] = "failed" if started else "blocked"
@@ -371,28 +377,6 @@ def _installation_templates(
             )
         )
     return selected
-
-
-def _empty_no_touch_successor(payload: Mapping[str, Any]) -> bool:
-    declaration = payload.get("deployment")
-    return (
-        declaration is not None
-        and payload.get("successor") is not None
-        and declaration["mode"] == "init-projects"
-        and all(
-            project.get("agents_no_touch") is not None
-            for project in payload["projects"]
-        )
-        and not any(
-            operation["phase"] == "deploy"
-            for project in payload["projects"]
-            for operation in project["private_operations"]
-        )
-        and not any(
-            operation["phase"] == "deploy"
-            for operation in payload["shared_operations"]
-        )
-    )
 
 
 def attach_deployment(
@@ -626,12 +610,9 @@ def attach_deployment(
         )
     has_deploy = any(
         operation["phase"] == "deploy"
-        for project in payload["projects"]
-        for operation in project["private_operations"]
-    ) or any(
-        operation["phase"] == "deploy" for operation in payload["shared_operations"]
+        for operation in contracts._manifest_operations(payload)
     )
-    if not has_deploy and not _empty_no_touch_successor(payload):
+    if not has_deploy and not contracts._is_zero_write_project_successor(payload):
         payload["deployment"] = None
 
 
@@ -889,6 +870,24 @@ def _cleanup_safe_input_drift(
     return ignored
 
 
+def _check_approved_agents_declarations(payload: Mapping[str, Any]) -> None:
+    expected: dict[str, list[dict[str, Any]]] = {
+        project["root"]: [] for project in payload["projects"]
+    }
+    _declare_approved_agents(payload, expected, check_live=False)
+    for project in payload["projects"]:
+        actual = [
+            operation
+            for operation in project["private_operations"]
+            if operation["phase"] == "deploy"
+        ]
+        if actual != expected[project["root"]]:
+            _fail(
+                "semantic-violation",
+                "the approved project AGENTS deployment set was changed",
+            )
+
+
 def validate_deployment_declarations(
     payload: Mapping[str, Any],
     *,
@@ -938,22 +937,17 @@ def validate_deployment_declarations(
         if operation["phase"] == "deploy"
     ]
     declaration = payload["deployment"]
-    if not all_deploy:
-        if declaration is not None:
-            if not _empty_no_touch_successor(payload):
-                _fail(
-                    "semantic-violation",
-                    "a deployment declaration requires declared deployment operations",
-                )
-            from sbtd_migration_plan import _check_agents_no_touch_untouched
-
-            for project in payload["projects"]:
-                _check_agents_no_touch_untouched(project)
-        return ignored if cleanup_only else None
     if declaration is None:
+        if all_deploy:
+            _fail(
+                "semantic-violation",
+                "deployment operations require an explicit deployment declaration",
+            )
+        return ignored if cleanup_only else None
+    if not all_deploy and not contracts._is_zero_write_project_successor(payload):
         _fail(
             "semantic-violation",
-            "deployment operations require an explicit deployment declaration",
+            "a deployment declaration requires declared deployment operations",
         )
     expected_mode = "init" if shared_deploy else "init-projects"
     if declaration["mode"] != expected_mode:
@@ -973,32 +967,21 @@ def validate_deployment_declarations(
             reject_legacy_execution(payload)
         validate_archived_graft_declarations(payload)
         return ignored if cleanup_only else None
-    expected_private: dict[str, list[dict[str, Any]]] = {
-        project["root"]: [] for project in payload["projects"]
-    }
-    _declare_approved_agents(payload, expected_private, check_live=False)
-    for project in payload["projects"]:
-        actual = [
-            operation
-            for operation in project["private_operations"]
-            if operation["phase"] == "deploy"
-        ]
-        if actual != expected_private[project["root"]]:
-            _fail(
-                "semantic-violation",
-                "the approved project AGENTS deployment set was changed",
-            )
-    shared = [
-        operation
-        for operation in payload["shared_operations"]
-        if operation["phase"] == "deploy"
-    ]
+    # Empty successor deployments must still prove no signed project writes
+    # were dropped. They do not grant authority over unsigned project rules.
+    _check_approved_agents_declarations(payload)
+    shared = shared_deploy
     if not shared:
         if payload["shared_operations"]:
             _fail(
                 "scope-conflict",
                 "shared legacy operations require their declared deployment",
             )
+        if not all_deploy:
+            from sbtd_migration_plan import _check_agents_no_touch_untouched
+
+            for project in payload["projects"]:
+                _check_agents_no_touch_untouched(project)
         return ignored if cleanup_only else None
     if any(operation["dependent_projects"] != roots for operation in shared):
         _fail(
@@ -1119,6 +1102,7 @@ class DeploymentContext:
     manifest_raw: bytes
     apply_raw: bytes
     context_paths: tuple[Path, Path]
+    smoke_dirs: dict[str, Path]
 
 
 def _require_output_clear_of_missing(
@@ -1141,6 +1125,58 @@ def _require_output_clear_of_missing(
         )
 
 
+def _deployment_protected_paths(
+    manifest: Mapping[str, Any],
+    applied: Mapping[str, Any],
+    previous: Mapping[str, Any] | None = None,
+) -> set[Path]:
+    from sbtd_migration import _result_index, _source_backup_paths
+
+    payload = manifest["payload"]
+    protected = {
+        Path(reference["path"])
+        for reference in contracts._manifest_input_references(payload)
+    }
+    protected.update(_source_backup_paths(manifest).values())
+    stage_root = Path(payload["backup_root"]) / manifest["manifest_id"]
+    for operation in contracts._manifest_operations(payload):
+        protected.add(Path(operation["target"]))
+        protected.add(stage_root / operation["phase"] / operation["resource_id"])
+    results = [*_result_index(applied).values(), *_result_index(previous).values()]
+    successor = payload.get("successor")
+    if successor is not None:
+        protected.add(Path(successor["manifest_ref"]["path"]))
+        protected.add(Path(successor["apply_receipt_ref"]["path"]))
+        results.extend(successor["apply_results"])
+    for result in results:
+        if result["backup_ref"] is not None:
+            protected.add(Path(result["backup_ref"]["path"]))
+    return protected
+
+
+def _require_disjoint_evidence_path(path: Path, reserved: Iterable[Path]) -> None:
+    if any(contracts._publication_paths_overlap(str(path), str(other)) for other in reserved):
+        _fail("private-scope", "a deployment evidence path overlaps a declared or reserved object")
+
+
+def _preflight_smoke_evidence_paths(
+    private_root: Path, roots: Iterable[str], *, reserved: Iterable[Path]
+) -> dict[str, Path]:
+    """Check the complete smoke write scope without creating directories."""
+    parent = private_root / "deployment-smoke"
+    paths = {
+        root: parent / hashlib.sha256(root.encode("utf-8")).hexdigest()
+        for root in roots
+    }
+    reserved_paths = tuple(reserved)
+    for path in paths.values():
+        _require_disjoint_evidence_path(path, reserved_paths)
+    for path in (parent, *paths.values()):
+        if _lstat(_canonical(path)) is not None:
+            require_private_directory(path)
+    return paths
+
+
 def load_deployment_context(
     manifest_path: Path,
     apply_path: Path,
@@ -1159,6 +1195,7 @@ def load_deployment_context(
         _result_index,
         _validate_context,
     )
+    from sbtd_deployment_smoke import _require_canonical_input
 
     if mode not in {"init", "init-projects"}:
         _fail(
@@ -1198,15 +1235,6 @@ def load_deployment_context(
             "private-scope",
             "deployment evidence requires a new path inside the manifest directory",
         )
-    require_private_directory(output_path.parent)
-    if snapshot(output_path) != _ABSENT:
-        _fail("state-conflict", "the deployment evidence target already exists")
-    for protected_path, is_directory in _protected_followup_ancestry(manifest):
-        if contracts._publication_paths_overlap(str(output_path), str(protected_path)):
-            _fail(
-                "private-scope",
-                "deployment evidence must not overlap a protected predecessor object",
-            )
     if previous is not None:
         _require_output_clear_of_missing(output_path, previous["payload"])
     declared_roots = {project["root"] for project in manifest["payload"]["projects"]}
@@ -1227,7 +1255,7 @@ def load_deployment_context(
         for operation in manifest["payload"]["shared_operations"]
         if operation["phase"] == "deploy"
     ]
-    if not operations and not _empty_no_touch_successor(manifest["payload"]):
+    if not operations and not contracts._is_zero_write_project_successor(manifest["payload"]):
         _fail(
             "missing-deployment-plan",
             "this manifest contains no declared deployment operations",
@@ -1245,6 +1273,38 @@ def load_deployment_context(
         operation["selector"] == "graft-hooks" for operation in operations
     ):
         _fail(*_UNSUPPORTED)
+    _require_canonical_input("manifest", manifest, manifest_raw)
+    _require_canonical_input("apply_receipt", applied, apply_raw)
+    managed = _deployment_protected_paths(manifest, applied, previous)
+    protected = _protected_followup_ancestry(manifest)
+    evidence_inputs = {manifest_path, apply_path}
+    if previous_path is not None:
+        evidence_inputs.add(previous_path)
+    if previous is not None and previous["payload"].get("reconciliation") is not None:
+        missing = previous["payload"]["reconciliation"]["missing_deployment_evidence"]
+        evidence_inputs.add(Path(missing["path"]))
+    stage_outputs = (
+        {Path(ref["path"]) for ref in contracts._immutable_stage_references(previous["payload"])}
+        if previous is not None
+        else set()
+    )
+    _require_disjoint_evidence_path(
+        output_path,
+        managed | evidence_inputs | stage_outputs | {path for path, _ in protected},
+    )
+    smoke_dirs = _preflight_smoke_evidence_paths(
+        private,
+        declared_roots,
+        reserved=(
+            managed
+            | evidence_inputs
+            | {output_path}
+            | {path for path, directory in protected if directory}
+        ),
+    )
+    require_private_directory(output_path.parent)
+    if snapshot(output_path) != _ABSENT:
+        _fail("state-conflict", "the deployment evidence target already exists")
     try:
         _validate_context(manifest_path, manifest, previous=applied, deployment=previous)
         _check_source_backups(manifest)
@@ -1296,6 +1356,7 @@ def load_deployment_context(
         manifest_raw,
         apply_raw,
         (manifest_path, apply_path),
+        smoke_dirs,
     )
 
 
@@ -1529,15 +1590,6 @@ def save_deployment_evidence(
 
 
 
-def smoke_evidence_dir(private_root: Path, root: str) -> Path:
-    """Private per-root report directory under the manifest vault. No project write."""
-    digest = hashlib.sha256(root.encode("utf-8")).hexdigest()
-    path = private_root / "deployment-smoke" / digest
-    require_private_directory(private_root)
-    _prepare_target_parents(path / ".keep", private_root)
-    return require_private_directory(path, create=True)
-
-
 def collect_project_smoke(
     root: Path,
     evidence_dir: Path,
@@ -1630,10 +1682,9 @@ def run_completed_smokes(
     operations: Sequence[Mapping[str, Any]],
     results: Mapping[str, Mapping[str, Any]],
     *,
-    private_root: Path,
+    evidence_dirs: Mapping[str, Path],
     context_paths: tuple[Path, Path],
     previous_reports: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
-    reserved: Sequence[Path] = (),
     include_unwritten: bool = False,
 ) -> tuple[dict[str, list[dict[str, Any]]], set[str]]:
     """Fresh smoke for completed roots only. Successful fresh refs replace prior refs.
@@ -1648,14 +1699,10 @@ def run_completed_smokes(
     for root in _completed_roots(
         projects, operations, results, include_unwritten=include_unwritten
     ):
-        evidence_dir = smoke_evidence_dir(private_root, root)
-        if any(
-            contracts._publication_paths_overlap(str(evidence_dir), str(path))
-            for path in reserved
-        ):
-            failed.add(root)
-            continue
+        evidence_dir = evidence_dirs[root]
         try:
+            require_private_directory(evidence_dir.parent, create=True)
+            require_private_directory(evidence_dir, create=True)
             fresh = collect_project_smoke(
                 Path(root), evidence_dir, context_paths=context_paths
             )
@@ -1670,7 +1717,7 @@ def execute_migration_deployment(
     context: DeploymentContext,
 ) -> tuple[dict[str, Any], int]:
     """Execute only the sealed deploy closure and save truthful cumulative results."""
-    from sbtd_migration import _result_index, runtime_versions
+    from sbtd_migration import _check_reference, _result_index, runtime_versions
 
     manifest = context.manifest
     reject_legacy_execution(manifest["payload"])
@@ -1702,6 +1749,21 @@ def execute_migration_deployment(
             "provenance-conflict",
             "a different observer cannot retry unfinished reconciled deployment writes",
         )
+    if (
+        read_file(context.context_paths[0]) != context.manifest_raw
+        or read_file(context.context_paths[1]) != context.apply_raw
+    ):
+        _fail("state-conflict", "the bound deployment inputs changed before execution")
+    _require_disjoint_evidence_path(context.output_path, context.smoke_dirs.values())
+    require_private_directory(context.output_path.parent)
+    if snapshot(context.output_path) != _ABSENT:
+        _fail("state-conflict", "the deployment evidence target already exists")
+    # Recheck every authenticated candidate and its projection before the
+    # first resource can create directories, retain originals, or write.
+    for operation in operations:
+        if _is_approved_agents(operation):
+            _check_reference(operation["ownership"]["approval_ref"])
+            _approved_agents_body(operation)
     results = {resource: dict(value) for resource, value in prior.items()}
     scopes = {
         operation["resource_id"]: Path(project["root"])
@@ -1760,10 +1822,9 @@ def execute_migration_deployment(
             projects,
             operations,
             results,
-            private_root=context.manifest_path.parent,
+            evidence_dirs=context.smoke_dirs,
             previous_reports=previous_reports,
-            reserved=[context.output_path, context.manifest_path],
-            include_unwritten=_empty_no_touch_successor(manifest["payload"]),
+            include_unwritten=contracts._is_zero_write_project_successor(manifest["payload"]),
             context_paths=context.context_paths,
         )
     try:

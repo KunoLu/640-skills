@@ -81,6 +81,21 @@ class ScopeValidationTests(unittest.TestCase):
                 hosts.build_host_resources({"hosts": [host]}, package_root=_package(base))
         self.assertEqual(caught.exception.code, "scope-conflict")
 
+    def test_noncanonical_codex_config_refuses_selected_host(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            host = _codex_host(base, _runtime(base))
+            project = base / "project"
+            project.mkdir()
+            host["project_roots"] = [str(project)]
+            host["config"] = str(Path(host["config_home"]) / "other.toml")
+            scope = {"hosts": [host]}
+            for consumer in (hosts.build_host_resources, hosts.plan_retirement, hosts.verify_hosts):
+                with self.subTest(consumer=consumer.__name__), self.assertRaises(ContractError) as caught:
+                    consumer(scope)
+                self.assertEqual(caught.exception.code, "scope-conflict")
+                self.assertIn("config_home/config.toml", caught.exception.message)
+
     def test_host_skills_root_must_be_selected_top_level(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory).resolve()

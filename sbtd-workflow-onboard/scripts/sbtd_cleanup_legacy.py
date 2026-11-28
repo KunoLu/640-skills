@@ -52,11 +52,24 @@ _EVIDENCE_KEYS = {
     "manifest-deployment": frozenset({"kind", "manifest", "deployment"}),
     "upgrade-plan-apply": frozenset({"kind", "plan", "receipt"}),
 }
-_COMPARE_SKIP = {"before", "trellis", "graft"}
+_COMPARE_SKIP = {"before", "trellis", "graft", "vendor_modes_before"}
 _WINDOWS_VENDOR_OVERLAP = (
     "Windows vendor cleanup would write a retirement file without preserving its ACL. "
     "Retire the Graft entry separately, then generate a fresh cleanup plan."
 )
+_VENDOR_MODE_UNPROVEN = (
+    "Vendor cleanup lacks bound per-target mode evidence. Generate a fresh plan, "
+    "or preserve the backups and reconcile the old receipt before retry or rollback."
+)
+_VENDOR_OVERLAP_UNPROVEN = (
+    "The vendor footprint overlaps another cleanup target without a bound transition for that target. "
+    "Separate those cleanup targets and plan again."
+)
+_VENDOR_REFUSALS = {
+    "vendor-mode-unproven": _VENDOR_MODE_UNPROVEN,
+    "vendor-overlap-unproven": _VENDOR_OVERLAP_UNPROVEN,
+    "windows-retirement-vendor-overlap": _WINDOWS_VENDOR_OVERLAP,
+}
 
 
 def _retirement():
@@ -420,6 +433,21 @@ def _windows_vendor_overlap(plan: Mapping[str, Any]) -> bool:
 
 
 
+def _unbound_vendor_overlap(plan: Mapping[str, Any]) -> bool:
+    candidates = _all_candidates(plan)
+    targets = {Path(candidate["path"]) for candidate in candidates}
+    for candidate in candidates:
+        if candidate["kind"] != "trellis-uninstall":
+            continue
+        footprint = {Path(path) for path in _vendor_resources(candidate)}
+        if any(
+            target.is_relative_to(resource) or resource.is_relative_to(target)
+            for target in targets - footprint for resource in footprint
+        ):
+            return True
+    return False
+
+
 def _check_candidate_paths(plan: Mapping[str, Any], vault: Path) -> None:
     seen: list[Path] = []
     for candidate in _all_candidates(plan):
@@ -488,6 +516,11 @@ def plan_cleanup_legacy(
                             }
                         )
                         continue
+                    resources = _vendor_resources(candidate)
+                    candidate["vendor_modes_before"] = {
+                        path: _mode_text(Path(path)) for path in resources
+                    }
+                    _vendor_modes(candidate["vendor_modes_before"], resources)
                 except (contracts.ContractError, OSError, ValueError) as error:
                     detected["blocked"].append(
                         {
@@ -536,6 +569,10 @@ def plan_cleanup_legacy(
     retirement_block = None
     if _windows_vendor_overlap(plan):
         retirement_block = _WINDOWS_VENDOR_OVERLAP
+    elif _unbound_vendor_overlap(plan):
+        retirement_block = _VENDOR_OVERLAP_UNPROVEN
+    elif any(item["reason"] == "vendor-mode-unproven" for item in _blocked(payload)):
+        retirement_block = _VENDOR_MODE_UNPROVEN
     elif os.name == "nt" and view.get("stop"):
         retirement_block = view.get("stop_reason") or "Windows retirement inspection is blocked."
     status = (
@@ -618,6 +655,8 @@ def _validate_scope(
     done: Mapping[str, Any],
     progressed: Mapping[str, Any],
     environ: Mapping[str, str],
+    *,
+    legacy_retry: bool = False,
 ) -> None:
     payload = plan["payload"]
     if payload.get("purpose") == "retirement-reset":
@@ -632,13 +671,18 @@ def _validate_scope(
     _roots([Path(p["root"]) for p in payload["projects"]], vault, home)
     # The confirmed plan owns this selection; ambient settings cannot redirect it.
     skills_root = _safe_path(Path(payload["skills_root"]))
-    if _blocked(payload):
+    blocked = _blocked(payload)
+    if any(item["reason"] == "vendor-mode-unproven" for item in blocked):
+        _fail("vendor-mode-unproven", _VENDOR_MODE_UNPROVEN)
+    if blocked:
         _fail(
             "blocked-target", "resolve blocked cleanup targets and generate a new plan"
         )
     _check_candidate_paths(plan, vault)
     if _windows_vendor_overlap(plan):
         _fail("windows-retirement-vendor-overlap", _WINDOWS_VENDOR_OVERLAP)
+    if not legacy_retry and _unbound_vendor_overlap(plan):
+        _fail("vendor-overlap-unproven", _VENDOR_OVERLAP_UNPROVEN)
 
     def compare(sealed, detected):
         if detected["blocked"]:
@@ -699,23 +743,19 @@ def _validate_scope(
                 _fail("scope-conflict", "legacy MCP target is outside the selected environment")
     compare(payload["shared"]["mcp"]["candidates"], detect_mcp_targets(environ=environ))
     for candidate in _all_candidates(plan):
-        current = snapshot(Path(candidate["path"]))
+        path = candidate["path"]
         # Pending targets sit at their sealed before-state, or exactly at the
         # expected_after a successful vendor transition recorded for them.
-        completed = done.get(candidate["path"])
+        completed = done.get(path)
         if completed is not None:
-            allowed = completed["after"]
-        else:
-            advance = progressed.get(candidate["path"])
-            allowed = (
-                advance["expected_current"]
-                if advance is not None
-                else candidate["before"]
-            )
-        if current != allowed:
-            _fail(
-                "state-conflict", "cleanup target changed after plan or prior receipt"
-            )
+            _retired_matches(completed, check_mode=not legacy_retry)
+            continue
+        if candidate["kind"] == "trellis-uninstall":
+            _preflight_vendor(candidate, vault, legacy_retry=legacy_retry)
+        advance = progressed.get(path)
+        allowed = advance["after"] if advance is not None else candidate["before"]
+        if snapshot(Path(path)) != allowed:
+            _fail("state-conflict", "cleanup target changed after plan or prior receipt")
     _recheck_graft(plan, purpose="cleanup", done=done, progressed=progressed, environ=environ)
 
 
@@ -912,7 +952,7 @@ def _recheck_graft(
     evidence = _evidence_bindings(evidence, vault)
     _assert_graft_domain(plan, allowed)
     _assert_graft_backups(plan, vault)
-    if os.name == "nt":
+    if purpose == "reset" or os.name == "nt":
         for item in _all_candidates(plan):
             path = item["path"]
             if _graft_candidate(item) is not None and path in done:
@@ -950,8 +990,90 @@ def _validate_retirement(
         if candidate["path"] not in done and snapshot(Path(candidate["path"])) != candidate["before"]:
             _fail("state-conflict", "retirement target changed after the plan")
 
+
+def _vendor_resources(candidate: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    from sbtd_trellis_uninstall import _bound_resource_path, _checked_state
+
+    prepared = candidate["trellis"]
+    payload = prepared["payload"]
+    root = _safe_path(Path(candidate["root"]))
+    if (
+        payload.get("root") != str(root)
+        or payload.get("status") != "ready"
+        or prepared.get("prepared_id") != _digest(payload)
+        or not isinstance(payload.get("resources"), list)
+    ):
+        _fail("binding-violation", "vendor preparation is not bound to the project")
+    resources = {}
+    paths: set[Path] = set()
+    ids = set()
+    for resource in payload["resources"]:
+        if not isinstance(resource, Mapping):
+            _fail("binding-violation", "a prepared vendor resource is malformed")
+        path = _safe_path(_bound_resource_path(root, resource))
+        identity = resource.get("resource_id")
+        if path in paths or not isinstance(identity, str) or identity in ids:
+            _fail("binding-violation", "prepared vendor resources repeat a path or identifier")
+        kind = resource.get("kind")
+        before = _checked_state(resource.get("before"))
+        after = _checked_state(resource.get("expected_after"))
+        if (
+            (kind == "vendor-trellis-dir") != (str(path) == candidate["path"])
+            or kind not in {"vendor-delete", "vendor-scrub", "vendor-trellis-dir", "vendor-prune-dir"}
+            or before["type"] == "absent"
+            or (kind in {"vendor-trellis-dir", "vendor-prune-dir"} and before["type"] != "directory")
+            or (kind == "vendor-scrub" and before["type"] != "file")
+            or after["type"] != ("file" if kind == "vendor-scrub" else "absent")
+        ):
+            _fail("binding-violation", "a prepared vendor resource has an unsupported transition")
+        resources[str(path)] = resource
+        paths.add(path)
+        ids.add(identity)
+    if candidate["path"] not in resources:
+        _fail("binding-violation", "vendor preparation omits the selected .trellis directory")
+    return resources
+
+
+def _vendor_modes(
+    modes: Any, resources: Mapping[str, Mapping[str, Any]], *, state: str = "before",
+) -> Mapping[str, str | None]:
+    if not isinstance(modes, Mapping) or modes.keys() != resources.keys():
+        _fail("vendor-mode-unproven", _VENDOR_MODE_UNPROVEN)
+    for path, mode in modes.items():
+        if resources[path][state]["type"] == "absent":
+            valid = mode is None
+        else:
+            valid = isinstance(mode, str) and len(mode) == 4 and all(char in "01234567" for char in mode)
+        if not valid:
+            _fail("vendor-mode-unproven", _VENDOR_MODE_UNPROVEN)
+    return modes
+
+
+def _vendor_backup_path(vault: Path, candidate: Mapping[str, Any], index: int) -> Path:
+    return vault / candidate["trellis"]["prepared_id"] / "resources" / f"{index:03d}"
+
+
+def _preflight_vendor(
+    candidate: Mapping[str, Any], vault: Path, *, legacy_retry: bool = False,
+    require_backups: bool = False,
+) -> None:
+    resources = _vendor_resources(candidate)
+    mode_bound = not (legacy_retry and "vendor_modes_before" not in candidate)
+    modes = _vendor_modes(candidate.get("vendor_modes_before"), resources) if mode_bound else {}
+    for index, (path, resource) in enumerate(resources.items()):
+        target = Path(path)
+        if snapshot(target) != resource["before"] or (mode_bound and _mode_text(target) != modes[path]):
+            _fail("state-conflict", "a vendor target changed after its pre-state was recorded")
+        backup = _vendor_backup_path(vault, candidate, index)
+        if require_backups or os.path.lexists(backup):
+            _preflight_backup({
+                "before": resource["before"], "mode_before": modes.get(path),
+                "backup_ref": {"path": str(backup), "state": resource["before"]},
+            }, vault, target, check_mode=mode_bound)
+
+
 def _vendor_transitions(
-    candidate: Mapping[str, Any], row: Mapping[str, Any], vault: Path
+    candidate: Mapping[str, Any], row: Mapping[str, Any], vault: Path, *, legacy_retry: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Per-path effects of a succeeded vendor uninstall, bound to the plan.
     The receipt's vendor outcome proves a transition only when it is bound to
@@ -964,35 +1086,29 @@ def _vendor_transitions(
     """
     outcome = row.get("vendor")
     prepared = candidate["trellis"]
-    payload = prepared["payload"]
     if (
         not isinstance(outcome, Mapping)
         or outcome.get("status") != "removed"
         or type(outcome.get("exit")) is not int
         or outcome.get("exit") != 0
         or outcome.get("prepared_id") != prepared.get("prepared_id")
-        or prepared.get("prepared_id") != _digest(payload)
-        or outcome.get("root") != payload["root"]
-        or payload["root"] != candidate["root"]
+        or outcome.get("root") != candidate["root"]
     ):
         _fail("binding-violation", "receipt vendor outcome is not bound to the plan")
     if not isinstance(outcome.get("results"), list):
         _fail("binding-violation", "receipt vendor results must be a list")
-    resources = {}
-    resource_ids = set()
-    for resource in payload["resources"]:
-        if not isinstance(resource, Mapping):
-            _fail("binding-violation", "a prepared vendor resource is malformed")
-        if (
-            resource.get("path") in resources
-            or resource.get("resource_id") in resource_ids
-        ):
-            _fail(
-                "binding-violation",
-                "prepared vendor resources repeat a path or identifier",
-            )
-        resources[resource.get("path")] = resource
-        resource_ids.add(resource.get("resource_id"))
+    resources = _vendor_resources(candidate)
+    mode_bound = not (
+        legacy_retry and "vendor_modes_before" not in candidate and "vendor_modes_after" not in row
+    )
+    modes_before = _vendor_modes(candidate.get("vendor_modes_before"), resources) if mode_bound else {}
+    modes_after = (
+        _vendor_modes(row.get("vendor_modes_after"), resources, state="expected_after") if mode_bound else {}
+    )
+    backup_paths = {
+        path: _vendor_backup_path(vault, candidate, index)
+        for index, path in enumerate(resources)
+    }
     transitions: dict[str, dict[str, Any]] = {}
     seen_ids = set()
     for result in outcome["results"]:
@@ -1024,42 +1140,46 @@ def _vendor_transitions(
             )
         seen_ids.add(result["resource_id"])
         backup = result.get("backup_ref")
-        if not backup:
-            _fail("binding-violation", "receipt vendor result keeps no original")
-        backup_path = _safe_path(Path(backup["path"]))
-        if (
-            not backup_path.is_relative_to(vault)
-            or backup.get("state") != resource["before"]
-            or snapshot(backup_path) != resource["before"]
-        ):
-            _fail("backup-conflict", "vendor backup is unavailable or changed")
-        transitions[path] = {
+        if not isinstance(backup, Mapping) or backup.get("path") != str(backup_paths[path]):
+            _fail("binding-violation", "vendor backup is not bound to the prepared resource")
+        transition = {
+            "path": path,
             "before": resource["before"],
-            "expected_current": result["after"],
+            "after": result["after"],
             "backup_ref": backup,
         }
+        if mode_bound:
+            transition.update(mode_before=modes_before[path], mode_after=modes_after[path])
+        _preflight_backup(transition, vault, Path(path), check_mode=mode_bound)
+        transitions[path] = transition
     if len(transitions) != len(resources):
         _fail("binding-violation", "receipt vendor outcome omits a prepared path")
-    return transitions
+    return {path: transitions[path] for path in resources}
 
 
-def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path):
+def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path, *, legacy_retry: bool = False):
     if path is None:
-        return None, {}, {}
+        return None, {}, {}, {}
+    if not _safe_path(path).is_relative_to(vault):
+        _fail("scope-conflict", "cleanup receipt is outside the plan vault")
     previous = _read_document(path, "receipt_id")
     if previous["payload"]["plan_id"] != plan["plan_id"]:
         _fail("binding-violation", "cleanup receipt belongs to a different plan")
     candidates = {item["path"]: item for item in _all_candidates(plan)}
     done = {}
     progressed: dict[str, dict[str, Any]] = {}
+    vendor_rows = {}
+    seen = set()
     for row in previous["payload"]["results"]:
         candidate = candidates.get(row["path"])
         if (
             candidate is None
             or row["kind"] != candidate["kind"]
             or row["before"] != candidate["before"]
+            or row["path"] in seen
         ):
             _fail("binding-violation", "receipt contains an unbound cleanup result")
+        seen.add(row["path"])
         backup = row["backup_ref"]
         if backup:
             backup_path = _safe_path(Path(backup["path"]))
@@ -1074,37 +1194,29 @@ def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path):
                     "binding-violation",
                     "receipt success does not prove the intended result",
                 )
+            advance = progressed.get(row["path"])
+            if advance is not None and "mode_before" in advance and row.get("mode_before") != advance["mode_before"]:
+                _fail("binding-violation", "cleanup result does not bind the pre-vendor mode")
             done[row["path"]] = row
             progressed.pop(row["path"], None)
             if candidate["kind"] == "trellis-uninstall":
-                for resource_path, transition in _vendor_transitions(
-                    candidate, row, vault
-                ).items():
-                    if resource_path == row["path"] or resource_path in done:
+                transitions = _vendor_transitions(candidate, row, vault, legacy_retry=legacy_retry)
+                vendor_rows[row["path"]] = transitions
+                for resource_path, transition in transitions.items():
+                    if resource_path == row["path"]:
+                        if any(row.get(key) != transition[key] for key in ("after", "mode_before", "mode_after") if key in transition):
+                            _fail("binding-violation", "cleanup result does not match the vendor directory transition")
                         continue
+                    if resource_path in done or resource_path in progressed:
+                        _fail("binding-violation", "another cleanup result already covers this vendor target")
                     other = candidates.get(resource_path)
-                    if other is None:
-                        # Not a cleanup candidate: only the recorded vendor
-                        # transition may explain its current state.
-                        if (
-                            snapshot(_safe_path(Path(resource_path)))
-                            != transition["expected_current"]
-                        ):
-                            _fail(
-                                "state-conflict",
-                                "vendor-cleaned path changed after the receipt",
-                            )
-                        continue
-                    if transition["before"] != other["before"]:
-                        _fail(
-                            "binding-violation",
-                            "vendor transition does not match the sealed candidate",
-                        )
+                    if other is not None and transition["before"] != other["before"]:
+                        _fail("binding-violation", "vendor transition does not match the sealed candidate")
                     progressed[resource_path] = transition
         else:
             advance = progressed.get(row["path"])
             allowed = (
-                advance["expected_current"] if advance is not None else row["before"]
+                advance["after"] if advance is not None else row["before"]
             )
             if row["after"] != allowed:
                 _fail(
@@ -1127,7 +1239,9 @@ def _previous_receipt(path: Path | None, plan: Mapping[str, Any], vault: Path):
                 "partial-cleanup",
                 "vendor side effects require reconciliation before retry",
             )
-    return previous, done, progressed
+    for transition in progressed.values():
+        _retired_matches(transition, check_mode="mode_after" in transition)
+    return previous, done, progressed, vendor_rows
 
 
 def _rejection(phase: str, reason: str, code: int = 2):
@@ -1161,10 +1275,13 @@ def apply_cleanup_legacy(
             )
         if confirm_cleanup != plan["plan_id"]:
             _fail("confirmation-required", "confirm this plan_id before cleanup")
-        previous, done, progressed = _previous_receipt(
-            cleanup_receipt_path, plan, vault
+        # rc.2 cleanup had byte/state receipts, with no modes and no Graft
+        # retirement scope. Resume only that already-sealed, non-Graft work.
+        legacy_retry = cleanup_receipt_path is not None and "graftRetirement" not in plan["payload"]
+        previous, done, progressed, _vendor_rows = _previous_receipt(
+            cleanup_receipt_path, plan, vault, legacy_retry=legacy_retry,
         )
-        _validate_scope(plan, done, progressed, environ)
+        _validate_scope(plan, done, progressed, environ, legacy_retry=legacy_retry)
     except (
         contracts.ContractError,
         TaskDataError,
@@ -1173,11 +1290,9 @@ def apply_cleanup_legacy(
         KeyError,
         TypeError,
     ) as error:
-        return _rejection(
-            "apply",
-            _WINDOWS_VENDOR_OVERLAP if getattr(error, "code", None) == "windows-retirement-vendor-overlap"
-            else "cleanup confirmation, scope, identity or evidence validation failed",
-        )
+        return _rejection("apply", _VENDOR_REFUSALS.get(
+            getattr(error, "code", None), "cleanup confirmation, scope, identity or evidence validation failed",
+        ))
     from sbtd_migration import _prepare_backup_parent
 
     candidates = _all_candidates(plan)
@@ -1187,6 +1302,7 @@ def apply_cleanup_legacy(
     started = _now()
     status = "cleaned"
     backups: dict[str, dict[str, Any]] = {}
+    modes_before = {}
     # Preserve every original before the vendor can edit another candidate (AGENTS).
     try:
         for index, item in enumerate(candidates):
@@ -1198,10 +1314,14 @@ def apply_cleanup_legacy(
                 # run; reuse that immutable backup instead of demanding the
                 # target still match its sealed before-state.
                 backups[item["path"]] = advance["backup_ref"]
+                modes_before[item["path"]] = advance.get("mode_before")
                 continue
             destination = vault / plan["plan_id"] / "cleanup" / f"{index:03d}"
             _prepare_backup_parent(destination, vault)
             graft = _graft_candidate(item)
+            mode = _mode_text(Path(item["path"]))
+            if mode is None or (graft is not None and mode != graft.get("mode")):
+                _fail("state-conflict", "cleanup could not bind the original mode before backing up")
             if os.name == "nt" and graft is not None:
                 from sbtd_retirement import backup_candidate, retained_windows_permissions
 
@@ -1215,17 +1335,26 @@ def apply_cleanup_legacy(
                     private_root=vault,
                 )
             backups[item["path"]] = backup
+            modes_before[item["path"]] = mode
+            _preflight_backup({
+                "before": item["before"], "mode_before": mode, "backup_ref": backup,
+            }, vault, Path(item["path"]))
     except (contracts.ContractError, TaskDataError, OSError):
         return _rejection(
             "apply", "backup preservation failed; no cleanup execution started", 3
         )
     current_states = {
         item["path"]: (
-            progressed[item["path"]]["expected_current"]
+            progressed[item["path"]]["after"]
             if item["path"] in progressed
             else item["before"]
         )
         for item in candidates
+    }
+    current_modes = {
+        path: progressed[path]["mode_after"] if path in progressed else mode
+        for path, mode in modes_before.items()
+        if path not in progressed or "mode_after" in progressed[path]
     }
     for index, item in enumerate(candidates):
         if item["path"] in done:
@@ -1240,18 +1369,17 @@ def apply_cleanup_legacy(
             "status": "failed",
             "before": item["before"],
             "after": None,
-            "mode_before": _mode_text(path) if item["before"]["type"] != "absent" else None,
+            "mode_before": modes_before[str(path)],
             "mode_after": None,
             "backup_ref": backups[str(path)],
         }
         if native:
-            row["mode_before"] = graft["mode"]
             row["windows_acl_digest"] = graft["windows_acl_digest"]
         try:
-            if snapshot(path) != current_states[str(path)]:
-                _fail("state-conflict", "target changed during cleanup")
-            if native and _mode_text(path) != row["mode_before"]:
-                _fail("state-conflict", "retirement target mode changed during cleanup")
+            if snapshot(path) != current_states[str(path)] or (
+                str(path) in current_modes and _mode_text(path) != current_modes[str(path)]
+            ):
+                _fail("state-conflict", "target bytes or mode changed during cleanup")
             if item["kind"] == "graft-retire":
                 # Sealed plan item only. Fresh inspection compares; it does not supply bytes.
                 receipt_path = vault / plan["plan_id"] / "retirement" / f"{index:03d}.json"
@@ -1274,14 +1402,27 @@ def apply_cleanup_legacy(
                 from sbtd_trellis_uninstall import execute_trellis_uninstall
 
                 outcome = execute_trellis_uninstall(
-                    Path(item["root"]), item["trellis"], vault, environ=environ
+                    Path(item["root"]), item["trellis"], vault, environ=environ,
+                    before_execute=lambda: _preflight_vendor(
+                        item, vault, legacy_retry=legacy_retry, require_backups=True,
+                    ),
                 )
                 row["vendor"] = outcome
-                for resource in outcome["results"]:
-                    if resource["path"] in current_states:
-                        current_states[resource["path"]] = resource["after"]
                 if outcome["status"] != "removed":
                     _fail("uninstall-failed", "vendor uninstall did not complete")
+                if "vendor_modes_before" in item:
+                    row["vendor_modes_after"] = {
+                        path: _mode_text(Path(path)) for path in item["vendor_modes_before"]
+                    }
+                for resource_path, transition in _vendor_transitions(item, row, vault, legacy_retry=legacy_retry).items():
+                    mode_bound = "mode_after" in transition
+                    _retired_matches(transition, check_mode=mode_bound)
+                    if resource_path in current_states:
+                        current_states[resource_path] = transition["after"]
+                        if mode_bound:
+                            current_modes[resource_path] = transition["mode_after"]
+                        else:
+                            current_modes.pop(resource_path, None)
             elif item["kind"] in {"directory-remove", "skill-directory"}:
                 remove_reference(path, current_states[str(path)], scope=path.parent)
             else:
@@ -1495,13 +1636,17 @@ _CLEANUP_RESTORE_KINDS = frozenset({
 })
 
 
-def _retired_matches(row: Mapping[str, Any], *, native: bool = False) -> None:
+def _retired_matches(row: Mapping[str, Any], *, native: bool = False, check_mode: bool = True) -> None:
     path = _safe_path(Path(row["path"]))
     if str(path) != row["path"]:
         _fail("binding-violation", "restore path is not canonical")
     if snapshot(path) != row["after"]:
         _fail("state-conflict", "retired target no longer matches its receipt")
+    if not check_mode:
+        return
     if row["after"]["type"] == "absent":
+        if "mode_after" not in row or row["mode_after"] is not None:
+            _fail("binding-violation", "a removed target must record an absent mode")
         return
     if not isinstance(row.get("mode_after"), str) or _mode_text(path) != row["mode_after"]:
         _fail("state-conflict", "retired target mode does not match its receipt")
@@ -1511,7 +1656,7 @@ def _retired_matches(row: Mapping[str, Any], *, native: bool = False) -> None:
         capture_windows_permissions(path, row.get("windows_acl_digest_after"))
 
 
-def _preflight_backup(row: Mapping[str, Any], vault: Path, live: Path) -> None:
+def _preflight_backup(row: Mapping[str, Any], vault: Path, live: Path, *, check_mode: bool = True) -> None:
     backup = row.get("backup_ref")
     if not isinstance(backup, Mapping) or "path" not in backup or "state" not in backup:
         _fail("backup-conflict", "restore has no trusted backup")
@@ -1520,7 +1665,7 @@ def _preflight_backup(row: Mapping[str, Any], vault: Path, live: Path) -> None:
         _fail("scope-conflict", "restore backup is outside the private vault")
     if snapshot(backup_path) != row["before"] or backup.get("state") != row["before"]:
         _fail("backup-conflict", "restore backup does not match the recorded original")
-    if row["before"]["type"] == "absent":
+    if not check_mode or row["before"]["type"] == "absent":
         return
     mode = row.get("mode_before")
     if not isinstance(mode, str) or _mode_text(backup_path) != mode:
@@ -1538,6 +1683,7 @@ def _preflight_retirement_receipt(
     if (
         set(document) != {"schema_version", "payload", "receipt_id"}
         or document.get("schema_version") != 1
+        or type(document.get("schema_version")) is not int
         or not isinstance(payload, dict)
         or document.get("receipt_id") != _digest(payload)
     ):
@@ -1605,6 +1751,10 @@ def _preflight_restore_row(
                 "only a retirement-owned target inside the active domain can be restored from a retirement receipt",
             )
         _preflight_retirement_receipt(row, candidate, vault, path)
+        if row.get("mode_before") != candidate.get("mode") or row.get("mode_after") != (
+            None if row["after"]["type"] == "absent" else candidate.get("mode")
+        ):
+            _fail("binding-violation", "retirement receipt mode differs from the sealed candidate")
     elif kind == "graft-retire":
         _fail("binding-violation", "retirement removal has no receipt")
     elif kind not in _CLEANUP_RESTORE_KINDS:
@@ -1635,6 +1785,7 @@ def _restore_retired(row: Mapping[str, Any], vault: Path, target: Path, *, nativ
     path = _safe_path(target)
     if str(path) != row["path"]:
         _fail("binding-violation", "restore target is not the sealed plan path")
+    _retired_matches(row, native=native)
     if row.get("retirement_receipt"):
         receipt_path = _safe_path(Path(row["retirement_receipt"]))
         _retirement().restore_candidate(
@@ -1689,6 +1840,10 @@ def _restore_retired(row: Mapping[str, Any], vault: Path, target: Path, *, nativ
         if not isinstance(mode, str):
             _fail("state-conflict", "rollback has no recorded pre-retirement mode")
         os.chmod(path, int(mode, 8))
+    _restored_matches(row, path)
+
+
+def _restored_matches(row: Mapping[str, Any], path: Path) -> None:
     if snapshot(path) != row["before"] or _mode_text(path) != row.get("mode_before"):
         _fail("post-state-conflict", "rollback did not restore the recorded bytes and mode")
 
@@ -1715,27 +1870,47 @@ def rollback_cleanup_legacy(
         receipt_path = _safe_path(cleanup_receipt_path)
         if not receipt_path.is_relative_to(vault) or receipt_path == plan_path:
             _fail("scope-conflict", "cleanup receipt is outside the plan vault")
-        receipt, done, progressed = _previous_receipt(receipt_path, plan, vault)
+        _receipt, done, progressed, vendor_rows = _previous_receipt(receipt_path, plan, vault)
         _validate_scope(plan, done, progressed, environ)
         allowed = _rollback_allowed(plan, environ, vault)
-        candidates = {item["path"]: item for item in _all_candidates(plan)}
         rows = []
-        for row in receipt["payload"]["results"]:
-            if row.get("status") != "succeeded":
+        for candidate in _all_candidates(plan):
+            row = done.get(candidate["path"])
+            if row is None:
                 continue
-            candidate = candidates.get(row["path"])
-            if (
-                candidate is None
-                or row["kind"] != candidate["kind"]
-                or row["before"] != candidate["before"]
-                or not row.get("backup_ref")
-            ):
-                _fail("binding-violation", "receipt success is not bound to the plan")
             sealed_target = _safe_path(Path(candidate["path"]))
             if str(sealed_target) != row["path"]:
                 _fail("binding-violation", "receipt path is not the sealed plan target")
             _preflight_restore_row(row, candidate, vault, allowed)
-            rows.append((row, sealed_target, os.name == "nt" and _graft_candidate(candidate) is not None))
+            native = os.name == "nt" and _graft_candidate(candidate) is not None
+            if row["kind"] == "trellis-uninstall":
+                for path, transition in vendor_rows[row["path"]].items():
+                    if path == row["path"]:
+                        rows.append((row, sealed_target, native))
+                    elif path not in done:
+                        rows.append((transition, Path(path), False))
+            else:
+                rows.append((row, sealed_target, native))
+        directories = {
+            target: Path(row["backup_ref"]["path"]) for row, target, _native in rows
+            if row["before"]["type"] == "directory"
+        }
+        restore = []
+        covered = {}
+        for row, target, native in reversed(rows):
+            # A pruned directory's verified original already contains its
+            # deleted children. Restore it once, but prove each child's mode too.
+            parent = next((parent for parent in reversed(target.parents) if parent in directories), None)
+            if parent is None:
+                if not target.parent.is_dir():
+                    _fail("state-conflict", "a rollback parent directory is missing")
+                restore.append((row, target, native))
+                continue
+            original = directories[parent] / target.relative_to(parent)
+            _preflight_backup({
+                **row, "backup_ref": {"path": str(original), "state": row["before"]},
+            }, vault, target)
+            covered.setdefault(parent, []).append((row, target))
     except (
         contracts.ContractError,
         TaskDataError,
@@ -1743,14 +1918,15 @@ def rollback_cleanup_legacy(
         ValueError,
         KeyError,
         TypeError,
-    ):
-        return _rejection(
-            "rollback",
-            "rollback confirmation, scope, identity or evidence validation failed",
-        )
+    ) as error:
+        return _rejection("rollback", _VENDOR_REFUSALS.get(
+            getattr(error, "code", None), "rollback confirmation, scope, identity or evidence validation failed",
+        ))
     try:
-        for row, sealed_target, native in reversed(rows):
+        for row, sealed_target, native in restore:
             _restore_retired(row, vault, sealed_target, native=native)
+            for nested, path in covered.get(sealed_target, ()):
+                _restored_matches(nested, path)
     except (contracts.ContractError, TaskDataError, OSError, ValueError):
         return _rejection(
             "rollback",

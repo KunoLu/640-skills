@@ -103,18 +103,26 @@ rc.3 从工作流移除 Graft。没有 `install-graft`，也没有 `--graft-*`�
 
 根安装器不会自行同意退役。需要退役时，安装器停止并指向上述 plan/confirm 序列。`--no-mcp` 只跳过安装器的通用 MCP 菜单，不转发给 Onboard，也不是宿主接线。
 
-独立清理使用已安装的 `scripts/onboard.py`：
+在已安装的 Onboard 目录执行 plan 并检查 JSON。确认目标后，才将 `PLAN_PATH` 设为 `cleanup_legacy.plan_path`、`PLAN_ID` 设为顶层 `plan_id`。
 
 ```bash
 python scripts/onboard.py cleanup-legacy --phase plan \
   --projects-root /abs/project --backup-root /abs/private-vault \
-  --retirement-evidence /abs/private-vault/evidence.json
+  --retirement-evidence /abs/private-vault/evidence.json --json
+```
+
+执行已批准的计划：
+
+```bash
 python scripts/onboard.py cleanup-legacy --phase apply \
-  --plan /abs/private-vault/plan.json --confirm-cleanup <plan_id>
-python scripts/onboard.py cleanup-legacy --phase rollback \
-  --plan /abs/private-vault/plan.json \
-  --cleanup-receipt /abs/private-vault/receipt.json \
-  --confirm-cleanup <plan_id>
+  --plan "${PLAN_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
+```
+
+单独决定回退时，将 `RECEIPT_PATH` 设为上述 apply 返回的 `cleanup_legacy.receipt_path`：
+
+```bash
+python scripts/onboard.py cleanup-legacy --phase rollback --plan "${PLAN_PATH:?}" \
+  --cleanup-receipt "${RECEIPT_PATH:?}" --confirm-cleanup "${PLAN_ID:?}" --json
 ```
 
 `--retirement-evidence` 只在 plan 可选，且必须位于所选 vault 内。apply 重试还可传入此前的 `--cleanup-receipt`。rollback 只在当前字节和权限仍与记录的退役后状态一致时恢复该资源。没有 `restore-retirement` 命令。

@@ -527,6 +527,51 @@ class ApprovedAgentsDeploymentTests(unittest.TestCase):
             self.assertEqual(batch.agents.read_bytes(), paused)
             self.assertFalse((batch.evidence / "deployment.json").exists())
 
+    def test_candidate_drift_after_context_refuses_all_deployment_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            batch = _SignedBatch(Path(directory).resolve())
+            manifest_path = batch.write_manifest(batch.plan(deployment_mode="init"), "manifest.json")
+            _receipt, apply_path = batch.apply(manifest_path, routing_approvals=batch.approval)
+            output = batch.evidence / "deployment.json"
+            with mock.patch.dict(os.environ, batch.environment):
+                context = load_deployment_context(
+                    manifest_path, apply_path, output, previous_path=None,
+                    mode="init", roots=[batch.root], hooks_authorized=False,
+                )
+                batch.candidate.write_bytes(batch.paused + b"\nChanged after loading.\n")
+                before = snapshot(batch.base)
+                with self.assertRaises(ContractError) as failure:
+                    execute_migration_deployment(context)
+            self.assertEqual(failure.exception.code, "state-conflict")
+            self.assertEqual(snapshot(batch.base), before)
+            self.assertFalse(output.exists())
+
+    def test_resealed_zero_write_successor_cannot_drop_signed_project_deployment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            batch = _SignedBatch(Path(directory).resolve())
+            original_path = batch.write_manifest(batch.plan(), "original-manifest.json")
+            _receipt, apply_path = batch.apply(original_path, routing_approvals=batch.approval)
+            with mock.patch.dict(os.environ, batch.environment):
+                successor = plan_migration(
+                    [batch.root], batch.vault, "fixture", None, tool_versions=runtime_versions(),
+                    deployment_mode="init-projects", successor_manifest=original_path,
+                    successor_apply_receipt=apply_path,
+                )
+                payload = json.loads(canonical_json_bytes(successor))["payload"]
+                project = payload["projects"][0]
+                self.assertEqual(sum(op["phase"] == "deploy" for op in project["private_operations"]), 1)
+                project["private_operations"] = [
+                    op for op in project["private_operations"] if op["phase"] != "deploy"
+                ]
+                tampered = contracts.seal_document("manifest", payload)
+                path = batch.write_manifest(tampered, "dropped-project-deploy.json")
+                before = snapshot(batch.base)
+                with self.assertRaises(ContractError) as failure:
+                    apply_migration(path, confirmed=True, no_routing_approvals=True)
+            self.assertEqual(failure.exception.code, "semantic-violation")
+            self.assertEqual(snapshot(batch.base), before)
+            self.assertEqual(batch.agents.read_bytes(), batch.paused)
+
     def test_successor_deploy_refuses_drifted_predecessor_candidate(self):
         with tempfile.TemporaryDirectory() as directory:
             batch = _SignedBatch(Path(directory).resolve())

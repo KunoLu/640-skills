@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from sbtd_migration_files import require_private_directory, snapshot
 from sbtd_retirement import (
     apply_candidate,
     inspect_retirement,
+    merge_reports,
     render_candidate_bytes,
     render_candidates,
     restore_candidate,
@@ -331,15 +333,16 @@ class RetirementProofTests(unittest.TestCase):
         report = inspect_retirement(selections=self._select(config), evidence=evidence)
         item = next(row for row in report["items"] if row["entry"] == key)
         self.assertTrue(item["write_authority"])
-        view = render_candidates(report, purpose="cleanup")
+        (candidate,) = render_candidates(report, purpose="cleanup")["candidates"]
         apply_candidate(
-            view["candidates"][0], scope=config.parent, vault=self.vault,
-            expected={**view["candidates"][0]["before"], "mode": view["candidates"][0]["mode"]},
+            candidate, scope=config.parent, vault=self.vault,
+            expected={**candidate["before"], "mode": candidate["mode"],
+                      "windows_acl_digest": candidate.get("windows_acl_digest")},
             receipt_path=self.vault / "fixed-receipt.json",
         )
         restored = json.loads(config.read_text())
         self.assertEqual(restored["mcpServers"], {"other": {"type": "stdio", "command": "keep"}})
-        self.assertEqual(_mode(config), view["candidates"][0]["mode"])
+        self.assertEqual(_mode(config), candidate["mode"])
 
     def test_other_table_blocks_created_file_removal(self):
         config = self.home / "config.toml"
@@ -666,6 +669,135 @@ class RetirementProofTests(unittest.TestCase):
         self.assertNotIn("sbtd-graft", restored["mcpServers"])
         self.assertEqual(restored["mcpServers"]["other"], {"command": "keep"})
 
+    def test_codex_fixed_root_retirement_serializes_toml_and_preserves_neighbors(self):
+        config = self.home / "config.toml"
+        root = self.home / "project"
+        root.mkdir()
+        fixed_key = "sbtd-graft-" + _sha(str(root).encode())[:16]
+        neighbors = (
+            '# Retain this user comment.\nmodel = "selected"  # retain inline trivia\n\n'
+            '[mcp_servers.context7]\ncommand = "keep"\nargs = ["one", "two"]\n'
+        )
+
+        def table(key, argv, cwd=None):
+            return (
+                f"\n[mcp_servers.{key}]\ncommand = {json.dumps(str(self.home / 'python'))}\n"
+                f"args = {json.dumps(argv)}\nenv = {{ DO_NOT_TRACK = '1', DNT = '1' }}\n"
+                + (f"cwd = {json.dumps(str(cwd))}\n" if cwd is not None else "")
+            )
+
+        backup = self.vault / "fixed.toml"
+        backup.write_bytes((neighbors + table(fixed_key, self._fixed(root), root)).encode())
+        raw = (neighbors + table("sbtd-graft", self._global())).encode()
+        config.write_bytes(raw)
+        before = snapshot(backup)
+        evidence = self._evidence(_result(
+            str(config), "toml", "graft-mcp", before, snapshot(config),
+            {"path": str(backup), "state": before},
+        ))
+        selections = self._select(config, host="codex")
+        selections["configs"] = [{"role": "codex-mcp", "path": str(config)}]
+        report = inspect_retirement(selections=selections, evidence=evidence)
+        (candidate,) = render_candidates(report, purpose="cleanup")["candidates"]
+        self.assertEqual(candidate["action"], "edit")
+        apply_candidate(
+            candidate, scope=config.parent, vault=self.vault,
+            expected={**candidate["before"], "mode": candidate["mode"],
+                      "windows_acl_digest": candidate.get("windows_acl_digest")},
+            receipt_path=self.vault / "toml-retirement.json",
+        )
+        retired = config.read_text()
+        self.assertIn(neighbors, retired)
+        self.assertNotIn("sbtd-graft", retired)
+
+    def test_renamed_mcp_key_is_watched_but_never_owned(self):
+        config = self.home / "mcp.json"
+        raw = self._write(config, {"mcpServers": {
+            "renamed": self._server(self._global()),
+            "unrelated": {"command": "elsewhere", "env": 7},
+        }})
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-omp-mcp", {"type": "absent", "checksum": None}, snapshot(config),
+        ))
+        selections = self._select(config)
+        report = inspect_retirement(selections=selections, evidence=evidence)
+        (item,) = render_candidates(report, purpose="reset")["blocked"]
+        self.assertEqual((item["entry"], item["verification"]), ("renamed", "unproven"))
+        self.assertFalse(item["write_authority"])
+        self.launcher.unlink()
+        selections["retiring_launchers"] = []
+        report = inspect_retirement(selections=selections, evidence=evidence)
+        (item,) = report["items"]
+        self.assertEqual((item["entry"], item["status"], item["verification"]), ("renamed", "dangling", "unproven"))
+        self.assertTrue(render_candidates(report, purpose="reset")["stop"])
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_custom_mcp_entry_with_relative_launcher_and_explicit_cwd_is_watched(self):
+        config = self.home / "mcp.json"
+        path = self.launcher
+        raw = self._write(config, {"mcpServers": {
+            "custom": {"command": str(self.home / "python"), "cwd": str(path.parent), "args": [path.name]},
+        }})
+        report = inspect_retirement(selections=self._select(config))
+        (item,) = render_candidates(report, purpose="reset")["blocked"]
+        self.assertEqual((item["entry"], item["launcher"]["path"]), ("custom", str(path)))
+        self.assertFalse(item["write_authority"])
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_ambiguous_codex_mcp_tables_refuse_retirement(self):
+        config = self.home / "config.toml"
+        raw = (
+            "[mcpServers.unrelated]\ncommand = 'keep'\n"
+            "[mcp_servers.custom]\ncommand = " + json.dumps(str(self.launcher)) + "\n"
+        ).encode()
+        config.write_bytes(raw)
+        selections = self._select(config, host="codex")
+        selections["configs"] = [{"role": "codex-mcp", "path": str(config)}]
+        with self.assertRaises(ContractError) as error:
+            inspect_retirement(selections=selections)
+        self.assertEqual(error.exception.code, "invalid-config")
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_nested_unowned_json_type_changes_block_attribution(self):
+        config = self.home / "mcp.json"
+        backup = self.vault / "original.json"
+        for location in ("top-level", "neighbor"):
+            with self.subTest(location=location):
+                before = {"mcpServers": {}}
+                after = {"mcpServers": {"sbtd-graft": self._server(self._global())}}
+                left = before if location == "top-level" else before["mcpServers"]
+                right = after if location == "top-level" else after["mcpServers"]
+                left["foreign"] = {"nested": [True, {"fallback": False}]}
+                right["foreign"] = {"nested": [1, {"fallback": 0}]}
+                self._write(backup, before)
+                raw = self._write(config, after)
+                original = snapshot(backup)
+                evidence = self._evidence(_result(
+                    str(config), "json", "graft-omp-mcp", original, snapshot(config),
+                    {"path": str(backup), "state": original},
+                ))
+                report = inspect_retirement(selections=self._select(config), evidence=evidence)
+                self.assertEqual(render_candidates(report, purpose="reset")["candidates"], [])
+                self.assertTrue(render_candidates(report, purpose="reset")["stop"])
+                self.assertEqual(config.read_bytes(), raw)
+
+    def test_merge_preserves_deduplicated_manual_disclosures(self):
+        first, second = self.home / "first", self.home / "second"
+        (first / "graft").mkdir(parents=True)
+        (first / ".graft").mkdir()
+        (second / "graft").mkdir(parents=True)
+        left = inspect_retirement(selections={"projects": [str(first)]})
+        right = inspect_retirement(selections={"projects": [str(first), str(second)]})
+        expected = {
+            ("graph", str(first / "graft")), ("graph-state", str(first / ".graft")),
+            ("graph", str(second / "graft")), ("npm", "<npm root -g>/@nanonets/graft"),
+            ("telemetry", "~/.graft/telemetry.json"),
+        }
+        manual = render_candidates(merge_reports([left, right]), purpose="cleanup")["manual"]
+        self.assertEqual({(row["kind"], row["path"]) for row in manual}, expected)
+        self.assertEqual(len(manual), len(expected))
+        self.assertEqual(merge_reports([right, left])["manual"], manual)
+
     def test_path_escape_and_arbitrary_created_fence_fail(self):
         config = self.home / "mcp.json"
         self._write(config, {"mcpServers": {}})
@@ -704,6 +836,77 @@ class RetirementProofTests(unittest.TestCase):
         selections["configs"] = [{"role": "codex-hooks", "path": str(config)}]
         report = inspect_retirement(selections=selections, evidence=evidence)
         self.assertFalse(any(item.get("write_authority") for item in report["items"]))
+        self.assertEqual(config.read_bytes(), raw)
+
+    def test_same_event_hook_commands_have_distinct_identities_and_risks(self):
+        config = self.home / "hooks.json"
+        safe = self.home / "present-launcher.py"
+        safe.write_bytes(b"keep")
+        join = subprocess.list2cmdline if os.name == "nt" else shlex.join
+        commands = [
+            join([sys.executable, "-E", "-s", str(launcher), "hook", "--root", str(root),
+                  "--node", str(self.node), "--entry", str(self.cli), "--event", "session-start"])
+            for launcher, root in (
+                (self.launcher, self.home / "a"), (safe, self.home / "a"), (safe, self.home / "b")
+            )
+        ]
+        raw = self._write(config, {"hooks": {"SessionStart": [
+            {"hooks": [{"type": "command", "command": command}]} for command in commands
+        ]}})
+        selections = self._select(config, host="codex")
+        selections["configs"] = [{"role": "codex-hooks", "path": str(config)}]
+        report = inspect_retirement(selections=selections)
+        self.assertEqual(len({item["id"] for item in report["items"]}), 3)
+        view = render_candidates(report, purpose="reset")
+        self.assertTrue(view["stop"])
+        self.assertEqual([item["launcher"]["path"] for item in view["blocked"]], [str(self.launcher)])
+
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-hooks", {"type": "absent", "checksum": None}, snapshot(config),
+        ))
+        report = inspect_retirement(selections=selections, evidence=evidence)
+        (candidate,) = render_candidates(report, purpose="reset")["candidates"]
+        self.assertEqual(candidate["action"], "remove-file")
+        self.assertEqual(len({item["entry"] for item in candidate["entries"]}), 3)
+        self.assertEqual(config.read_bytes(), raw)
+
+        backup = self.vault / "old-hooks.json"
+        self._write(backup, {"hooks": {"SessionStart": [
+            {"hooks": [{"type": "command", "command": command}]} for command in commands[1:]
+        ]}})
+        original = snapshot(backup)
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-hooks", original, snapshot(config),
+            {"path": str(backup), "state": original},
+        ))
+        report = inspect_retirement(selections=selections, evidence=evidence)
+        view = render_candidates(report, purpose="reset")
+        self.assertTrue(view["stop"])
+        self.assertEqual(view["candidates"], [])
+        (item,) = view["blocked"]
+        self.assertEqual((item["verification"], item["write_authority"]), ("proven", False))
+
+    def test_same_command_hook_metadata_cannot_change_with_managed_addition(self):
+        config = self.home / "hooks.json"
+        backup = self.vault / "hooks-before.json"
+        join = subprocess.list2cmdline if os.name == "nt" else shlex.join
+        command = join([sys.executable, "-E", "-s", str(self.launcher), "hook", "--root", str(self.home),
+                        "--node", str(self.node), "--entry", str(self.cli), "--event", "session-start"])
+        other = {"type": "command", "command": "foreign-hook", "timeout": True}
+        self._write(backup, {"hooks": {"SessionStart": [{"hooks": [other]}]}})
+        raw = self._write(config, {"hooks": {"SessionStart": [
+            {"hooks": [dict(other, timeout=1)]}, {"hooks": [{"type": "command", "command": command}]},
+        ]}})
+        original = snapshot(backup)
+        evidence = self._evidence(_result(
+            str(config), "json", "graft-hooks", original, snapshot(config),
+            {"path": str(backup), "state": original},
+        ))
+        selections = self._select(config, host="codex")
+        selections["configs"] = [{"role": "codex-hooks", "path": str(config)}]
+        view = render_candidates(inspect_retirement(selections=selections, evidence=evidence), purpose="reset")
+        self.assertTrue(view["stop"])
+        self.assertEqual(view["candidates"], [])
         self.assertEqual(config.read_bytes(), raw)
 
 

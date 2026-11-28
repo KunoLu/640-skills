@@ -26,6 +26,7 @@ import threading
 import time
 import warnings
 from collections.abc import Mapping, Sequence
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -199,10 +200,17 @@ class _JsonLines:
             if not line:
                 continue
             try:
-                message = json.loads(line)
-            except ValueError:
+                message = json.loads(line, parse_float=Decimal)
+            except (ValueError, InvalidOperation):
                 continue
-            if not isinstance(message, dict) or message.get("id") != request_id:
+            # JSON Number echoes may use a different spelling, but bool is
+            # not a Number and rounding must not turn a fractional ID into ours.
+            id_types = (int, Decimal) if type(request_id) is int else (str,)
+            if (
+                not isinstance(message, dict)
+                or type(message.get("id")) not in id_types
+                or message["id"] != request_id
+            ):
                 continue
             if self._require_jsonrpc and message.get("jsonrpc") != "2.0":
                 raise _ProbeError("failed", "host-invalid-envelope")
@@ -222,6 +230,8 @@ class _JsonLines:
                 ):
                     raise _ProbeError("unsupported", "host-method-unsupported")
                 raise _ProbeError("failed", "host-request-refused")
+            if message.get("success") is False:
+                raise _ProbeError("failed", "host-request-refused")
             if "result" not in message:
                 raise _ProbeError("failed", "protocol-evidence-invalid")
             return message["result"]
@@ -232,15 +242,20 @@ class _JsonLines:
             time.monotonic() + self._timeout,
         )
 
+    @staticmethod
+    def _close_pipe(stream: Any) -> None:
+        if stream is not None and not getattr(stream, "closed", False):
+            try:
+                stream.close()
+            except (OSError, ValueError):
+                pass
+
     def close(self) -> int:
         proc = self._proc
         self._outbox.put(None)
         graceful = self._writer_done.wait(0.5)
-        if graceful and proc.stdin is not None:
-            try:
-                proc.stdin.close()
-            except (OSError, ValueError):
-                pass
+        if graceful:
+            self._close_pipe(proc.stdin)
         else:
             try:
                 proc.terminate()
@@ -258,11 +273,17 @@ class _JsonLines:
                 code = proc.wait(timeout=_HOST_SHUTDOWN)
             except subprocess.TimeoutExpired:
                 code = proc.returncode if proc.returncode is not None else -1
-        self._writer.join(timeout=_HOST_SHUTDOWN)
-        self._reader.join(timeout=_HOST_SHUTDOWN)
-        if self._writer.is_alive() or self._reader.is_alive():
+        # Do not close a buffered stream while its thread holds the I/O lock.
+        incomplete = False
+        for worker, stream in ((self._writer, proc.stdin), (self._reader, proc.stdout)):
+            worker.join(timeout=_HOST_SHUTDOWN)
+            if worker.is_alive():
+                incomplete = True
+            else:
+                self._close_pipe(stream)
+        if incomplete:
             warnings.warn(
-                "host probe cleanup incomplete; owned pipes are left to process exit",
+                "host probe cleanup incomplete; I/O workers have not stopped",
                 RuntimeWarning,
                 stacklevel=2,
             )
@@ -536,6 +557,8 @@ def _scope_hosts(scope: Mapping[str, Any]) -> list[dict[str, Any]]:
         config_path = Path(config)
         if config_path == home_path or not config_path.is_relative_to(home_path):
             _fail("scope-conflict", "a scope host config must live inside its config_home")
+        if platform == "codex" and str(config_path) != str(home_path / "config.toml"):
+            _fail("scope-conflict", "Codex config must be config_home/config.toml")
         skills_roots = _string_list(entry.get("skills_roots") or [], "host skills_roots")
         if any(os.path.normpath(item) not in top_roots for item in skills_roots):
             _fail("scope-conflict", "a scope host skills root is not a selected top-level root")
@@ -653,6 +676,8 @@ def _selections(
     scope: Mapping[str, Any],
     vault: str | None,
     retiring_launchers: Sequence[str],
+    *,
+    include_absent_configs: bool,
 ) -> list[dict[str, Any]]:
     launchers = [str(path) for path in retiring_launchers]
     if any(not _is_abs(path) or _protected_history(path) for path in launchers):
@@ -664,16 +689,13 @@ def _selections(
             continue
         configs: list[dict[str, str]] = []
         if platform == "codex":
-            canonical = str(Path(host["config_home"]) / "config.toml")
-            if os.path.normpath(host["config"]) != os.path.normpath(canonical):
-                continue
-            if _regular_or_absent(host["config"]) == "file":
+            if _regular_or_absent(host["config"]) == "file" or include_absent_configs:
                 configs.append({"role": "codex-mcp", "path": host["config"]})
             hooks = str(Path(host["config_home"]) / "hooks.json")
-            if _regular_or_absent(hooks) == "file":
+            if _regular_or_absent(hooks) == "file" or include_absent_configs:
                 configs.append({"role": "codex-hooks", "path": hooks})
         else:
-            if _regular_or_absent(host["config"]) == "file":
+            if _regular_or_absent(host["config"]) == "file" or include_absent_configs:
                 configs.append({"role": "omp-mcp", "path": host["config"]})
         projects = [
             root for root in host["project_roots"] if _directory_or_absent(root) == "directory"
@@ -769,6 +791,7 @@ def plan_retirement(
     *,
     evidence: Sequence[Mapping[str, Any]] | None = None,
     retiring_launchers: Sequence[str] = (),
+    required_targets: Sequence[str] = (),
 ) -> dict[str, Any]:
     """Read-only retirement disclosure and resources for one upgrade scope."""
     if not isinstance(scope, Mapping):
@@ -776,7 +799,15 @@ def plan_retirement(
     _scope_decisions(scope)
     _scope_shell_profiles(scope)
     bindings = list(evidence or [])
-    selections = _selections(scope, vault, retiring_launchers)
+    # Keep evidence scoped to the selected domain after an authorized file removal.
+    selections = _selections(scope, vault, retiring_launchers, include_absent_configs=bool(bindings))
+    if required_targets:
+        if not bindings:
+            _fail("plan-stale", "a completed retirement lacks its selected ownership evidence")
+        selected = {config["path"] for selection in selections for config in selection["configs"]}
+        selected.update(str(Path(root) / "AGENTS.md") for selection in selections for root in selection["projects"])
+        if not selected.issuperset(required_targets):
+            _fail("plan-stale", "a completed retirement is outside the selected host or project paths")
     if bindings and not selections:
         _fail("scope-conflict", "retirement evidence requires a selected host config domain")
     if not selections:
@@ -1028,11 +1059,13 @@ def _materialize_link(
     if not isinstance(payload, Mapping):
         return "invalid-argument"
     try:
-        with tempfile.TemporaryDirectory(prefix="sbtd-skill-link-") as directory:
-            root = Path(directory)
+        holder, root = _probe_fixture("sbtd-skill-link-")
+        try:
             materialize_authorized_skill(
                 payload, destination=root / "materialized", private_root=root,
             )
+        finally:
+            shutil.rmtree(holder, ignore_errors=True)
     except ContractError as error:
         return error.code
     state = payload.get("state")
@@ -1168,6 +1201,8 @@ def _parse_skills(payload: Any, copies: Sequence[str]) -> tuple[list[str], int]:
                     found.add(name)
                 else:
                     errors += 1
+            if isinstance(value.get("message"), str) and under(value.get("path")):
+                errors += 1
             for item in value.values():
                 if isinstance(item, (Mapping, list)):
                     walk(item)
@@ -1356,10 +1391,8 @@ def _probe_selected_host(
                 commands = rpc.call("get_available_commands", {}, key="type")
                 found = _omp_skill_names(commands, expected)
                 errors = 0
+        finally:
             exit_code = rpc.close()
-        except _ProbeError:
-            rpc.close()
-            raise
         return {
             "expected": expected,
             "found": found,

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UPGRADE_MODULES = (
     "test_onboard_upgrade", "test_sbtd_upgrade_inventory",
     "test_sbtd_upgrade_engine", "test_sbtd_upgrade_hosts",
+    "test_sbtd_upgrade_retirement",
     "test_sbtd_cleanup_upgrade", "test_sbtd_cleanup_upgrade_integration",
     "test_onboard_windows_platform",
 )
@@ -32,8 +33,10 @@ WINDOWS_CASES = (
     "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_unprotected_inherited_dacl_survives_a_write",
     "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_null_and_empty_dacls_never_authorize_a_live_write",
     "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_unassignable_owner_cannot_publish_a_candidate",
+    "test_sbtd_migration_files.WindowsRetirementPermissionTests.test_publication_preserves_a_recreated_target_and_held_original",
     "test_sbtd_upgrade_retirement.RealRetirementUpgradeTests.test_windows_native_retirement_edit_and_remove_restore_permissions",
     "test_sbtd_retirement.RetirementProofTests.test_windows_remove_and_restore_preserves_native_descriptor",
+    "test_sbtd_cleanup_legacy.RetirementArtifactTests.test_windows_reset_retry_refuses_acl_only_drift",
     "test_sbtd_cleanup_legacy.RetirementArtifactTests.test_windows_composed_cleanup_binds_acl_on_apply_retry_and_rollback",
     "test_sbtd_cleanup_legacy.RetirementArtifactTests.test_windows_vendor_overlap_blocks_before_execution",
     "test_sbtd_migration_files.MigrationFileTests.test_directory_removal_keeps_later_user_edit_and_new_file",

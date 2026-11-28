@@ -6679,8 +6679,10 @@ class MigrationAgentsNoTouchTests(unittest.TestCase):
             before = _tree_bytes(base)
             without_proof = copy.deepcopy(successor["payload"])
             del without_proof["projects"][0]["agents_no_touch"]
-            with self.assertRaises(ContractError) as error:
-                contracts.seal_document("manifest", without_proof)
+            with _home_env(home), self.assertRaises(ContractError) as error:
+                validate_legacy_inputs(
+                    contracts.seal_document("manifest", without_proof), _reader
+                )
             self.assertEqual(error.exception.code, "semantic-violation")
             self.assertEqual(_tree_bytes(base), before)
 

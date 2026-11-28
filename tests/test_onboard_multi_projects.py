@@ -19,7 +19,7 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="sbtd-multi-project-test-")
         self.addCleanup(self.temp_dir.cleanup)
-        self.root = Path(self.temp_dir.name)
+        self.root = Path(self.temp_dir.name).resolve()
         self.home = self.root / "home"
         self.home.mkdir()
         self.codex_home = self.home / ".codex"
@@ -1178,6 +1178,35 @@ class MultiProjectOnboardCommandTests(unittest.TestCase):
                 self.assertEqual(report["status"], "success")
                 self.assertEqual(list(self.project_one.iterdir()), [])
                 self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_plan_and_reset_refuse_a_linked_project_root(self) -> None:
+        linked_project = self.root / "project-link"
+        linked_project.symlink_to(self.project_one, target_is_directory=True)
+        skills = self.root / "global-skills"
+        agents = self.root / "global-AGENTS.md"
+        for command in (("plan", "--action", "reset"), ("reset", "--yes")):
+            with self.subTest(mode=command[0]):
+                completed = self.run_onboard(
+                    *command,
+                    "--projects-root",
+                    str(linked_project),
+                    "--global-skills-dir",
+                    str(skills),
+                    "--global-agents-path",
+                    str(agents),
+                    "--json",
+                )
+                self.assertEqual(completed.returncode, 2, completed.stderr or completed.stdout)
+                report = json.loads(completed.stdout)["graftRetirement"]
+                self.assertTrue(report["blocked"], report)
+                self.assertEqual(
+                    [(row["path"], row["code"]) for row in report["errors"]],
+                    [(str(linked_project / "AGENTS.md"), "unsafe-path")],
+                )
+                self.assertTrue(linked_project.is_symlink())
+                self.assertEqual(list(self.project_one.iterdir()), [])
+                self.assertFalse(skills.exists())
+                self.assertFalse(agents.exists())
 
     def test_new_ignore_protection_does_not_hide_existing_reserved_data(self) -> None:
         private = self.project_one / "graft" / "user-content.txt"

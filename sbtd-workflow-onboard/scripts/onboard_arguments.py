@@ -25,6 +25,7 @@ __all__ = [
     "SingleValueAction",
     "WorkflowArgumentParser",
     "add_cleanup_legacy_parser",
+    "add_project_check_parser",
     "add_retirement_options",
     "add_migration_parser",
     "add_recovery_parser",
@@ -33,6 +34,7 @@ __all__ = [
     "validate_cleanup_legacy_args",
     "validate_developer_name",
     "validate_migration_args",
+    "validate_project_check_args",
     "validate_recovery_args",
     "validate_upgrade_args",
 ]
@@ -232,6 +234,30 @@ def add_retirement_options(sub: argparse.ArgumentParser, mode: str) -> None:
     if mode == "reset":
         sub.add_argument("--confirm-retirement", action=SingleValueAction,
                          help="Digest from plan --action reset. Required for a retirement write, in addition to --yes.")
+
+
+def add_project_check_parser(subparsers: Any) -> argparse.ArgumentParser:
+    sub = subparsers.add_parser("check-projects", allow_abbrev=False)
+    sub.add_argument("--projects-root", action=SingleValueAction, required=True,
+                     help="Comma-separated absolute project root paths.")
+    sub.add_argument("--json", action="store_true", help="Print machine-readable project checks.")
+    sub.add_argument("--skip-project-agents", action="store_true",
+                     help="Exclude project AGENTS.md from installation-target checks.")
+    sub.add_argument("--migration-manifest", action=SingleValueAction,
+                     help="Private manifest for read-only deployment smoke; requires its apply receipt.")
+    sub.add_argument("--migration-apply-receipt", action=SingleValueAction,
+                     help="Successful apply receipt bound to the selected manifest and project.")
+    return sub
+
+
+def validate_project_check_args(args: argparse.Namespace, *, parser: argparse.ArgumentParser) -> None:
+    paths = (args.migration_manifest, args.migration_apply_receipt)
+    if paths == (None, None):
+        return
+    if not all(isinstance(p, str) and p.strip() for p in paths):
+        parser.error("provide both migration evidence paths")
+    if args.skip_project_agents or "," in args.projects_root or not args.projects_root.strip():
+        parser.error("migration smoke checks one complete project")
 
 
 def _add_common_options(
@@ -582,24 +608,7 @@ def _build_parser() -> tuple[
             _add_migration_context(sub)
         subs[mode] = sub
 
-    project_check = subparsers.add_parser("check-projects", allow_abbrev=False)
-    project_check.add_argument(
-        "--projects-root",
-        action=SingleValueAction,
-        required=True,
-        help="Comma-separated absolute project root paths.",
-    )
-    project_check.add_argument(
-        "--json",
-        action="store_true",
-        help="Print machine-readable project checks.",
-    )
-    project_check.add_argument(
-        "--skip-project-agents",
-        action="store_true",
-        help="Exclude project AGENTS.md from installation-target checks.",
-    )
-    subs["check-projects"] = project_check
+    subs["check-projects"] = add_project_check_parser(subparsers)
 
     subs["migration"] = add_migration_parser(subparsers)
 
@@ -750,6 +759,8 @@ def parse_workflow_args(argv: Sequence[str]) -> argparse.Namespace:
 
     parser, subs = _build_parser()
     args = parser.parse_args(argv)
+    if args.mode == "check-projects":
+        validate_project_check_args(args, parser=subs["check-projects"])
     if args.mode == "migration":
         validate_migration_args(args, parser=subs["migration"])
     elif args.mode == "recovery":

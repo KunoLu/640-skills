@@ -1313,6 +1313,35 @@ class WindowsRetirementDigestTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "nt", "requires native Windows file security")
 class WindowsRetirementPermissionTests(unittest.TestCase):
+    def test_publication_preserves_a_recreated_target_and_held_original(self):
+        import sbtd_retirement_permissions as permissions
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            target = root / "rules"
+            target.write_bytes(b"original")
+            before = snapshot(target)
+            descriptor = capture_windows_permissions(target)
+            rename = permissions._rename_handle
+            held = []
+
+            def publish(handle, destination):
+                if destination.name == "original":
+                    rename(handle, destination)
+                    held.append(destination)
+                    with target.open("xb") as other:
+                        other.write(b"new occupant")
+                    return
+                rename(handle, destination)
+
+            with mock.patch.object(permissions, "_rename_handle", side_effect=publish), self.assertRaises(RetainedObjectError):
+                write_file(target, b"replacement", before, scope=root,
+                           windows_permissions=descriptor, expected_windows_digest=windows_permissions_digest(descriptor))
+            self.assertEqual(target.read_bytes(), b"new occupant")
+            self.assertEqual(len(held), 1)
+            self.assertEqual(held[0].read_bytes(), b"original")
+            self.assertEqual(capture_windows_permissions(held[0]), descriptor)
+
     def test_protected_file_permissions_survive_writes_removal_and_restore(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -1399,6 +1428,8 @@ class WindowsRetirementPermissionTests(unittest.TestCase):
             root = Path(directory).resolve()
             target = root / "selected.txt"
             target.write_bytes(b"before")
+            identity = target.stat()
+            before = file_state(b"before")
             raw = capture_windows_permissions(target)
             fingerprint = windows_permissions_digest(raw)
             api = sbtd_migration_files._win32()
@@ -1410,25 +1441,31 @@ class WindowsRetirementPermissionTests(unittest.TestCase):
                 self.assertEqual(api.GetSecurityInfo(
                     handle, 1, 4, None, None, ctypes.byref(dacl), None, ctypes.byref(descriptor),
                 ), 0)
-                self.assertEqual(api.SetSecurityInfo(handle, 1, 0x80000004, None, None, None, None), 0)
-                with self.assertRaisesRegex(ContractError, "null DACL"):
-                    capture_windows_permissions(target)
-                with self.assertRaises(ContractError):
-                    write_file(
-                        target, b"replacement", file_state(b"before"), scope=root,
-                        windows_permissions=raw, expected_windows_digest=fingerprint,
-                    )
-                with self.assertRaises(ContractError):
-                    remove_reference(target, file_state(b"before"), scope=root, expected_windows_digest=fingerprint)
-                with self.assertRaisesRegex(ContractError, "null DACL"):
-                    capture_windows_permissions(target)
-                self.assertEqual(target.read_bytes(), b"before")
-
                 empty = ctypes.create_string_buffer(8)
                 self.assertTrue(api.InitializeAcl(empty, len(empty), 2))
-                self.assertEqual(api.SetSecurityInfo(handle, 1, 0x80000004, None, None, empty, None), 0)
-                with self.assertRaisesRegex(ContractError, "empty DACL"):
-                    capture_windows_permissions(target)
+                for kind, acl in (("null", None), ("empty", empty)):
+                    with self.subTest(dacl=kind):
+                        self.assertEqual(api.SetSecurityInfo(handle, 1, 0x80000004, None, None, acl, None), 0)
+                        with self.assertRaises(ContractError) as rejected:
+                            capture_windows_permissions(target)
+                        self.assertEqual(rejected.exception.code, "permissions-unproven")
+                        if acl is None:
+                            self.assertIn("null DACL", str(rejected.exception))
+
+                        # An empty DACL may block even the initial file read.
+                        with self.assertRaises(ContractError) as rejected:
+                            write_file(
+                                target, b"replacement", before, scope=root,
+                                windows_permissions=raw, expected_windows_digest=fingerprint,
+                            )
+                        self.assertIn(rejected.exception.code, {"permissions-unproven", "read-failed"})
+                        with self.assertRaises(ContractError) as rejected:
+                            remove_reference(target, before, scope=root, expected_windows_digest=fingerprint)
+                        self.assertIn(rejected.exception.code, {"permissions-unproven", "read-failed"})
+                        if acl is None:
+                            with self.assertRaisesRegex(ContractError, "null DACL"):
+                                capture_windows_permissions(target)
+                            self.assertEqual(target.read_bytes(), b"before")
             finally:
                 try:
                     if descriptor.value:
@@ -1437,6 +1474,8 @@ class WindowsRetirementPermissionTests(unittest.TestCase):
                     if descriptor.value:
                         api.LocalFree(descriptor)
                     api.CloseHandle(handle)
+            self.assertEqual(list(root.iterdir()), [target])
+            self.assertTrue(os.path.samestat(identity, target.stat()))
             self.assertEqual(target.read_bytes(), b"before")
 
 
@@ -1446,21 +1485,25 @@ class WindowsRetirementPermissionTests(unittest.TestCase):
             original = root / "selected.txt"
             target = root / "absent.txt"
             original.write_bytes(b"unchanged")
+            identity = original.stat()
             raw = capture_windows_permissions(original)
-            # A synthetic non-token owner. This exercises real Win32 replay.
+            # Use a synthetic owner in the descriptor, not on the live file.
             foreign = bytearray(raw)
             struct.pack_into("<I", foreign, 4, len(foreign))
             foreign.extend(bytes.fromhex("010500000000000515000000ae040000c01000001d28000047430800"))
             replacement = bytes(foreign)
             self.assertNotEqual(windows_permissions_digest(replacement), windows_permissions_digest(raw))
-            with self.assertRaisesRegex(ContractError, "replayed|replay"):
+            with self.assertRaisesRegex(ContractError, "owner cannot be replayed") as rejected:
                 preflight_windows_permissions(original, replacement)
-            with self.assertRaisesRegex(ContractError, "replayed|replay"):
+            self.assertEqual(rejected.exception.code, "permissions-unproven")
+            with self.assertRaisesRegex(ContractError, "owner cannot be replayed") as rejected:
                 write_file(
                     target, b"not published", ABSENT, scope=root, windows_permissions=replacement,
                     windows_mode=stat.S_IMODE(original.stat().st_mode),
                 )
-            self.assertFalse(target.exists())
+            self.assertEqual(rejected.exception.code, "permissions-unproven")
+            self.assertEqual(list(root.iterdir()), [original])
+            self.assertTrue(os.path.samestat(identity, original.stat()))
             self.assertEqual(original.read_bytes(), b"unchanged")
             self.assertEqual(windows_permissions_digest(capture_windows_permissions(original)), windows_permissions_digest(raw))
 

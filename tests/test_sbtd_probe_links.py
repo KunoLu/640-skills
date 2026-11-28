@@ -184,6 +184,7 @@ def _tree_bytes(root: Path) -> dict[str, bytes]:
 class _Stdin:
     def __init__(self, proc: "_Proc") -> None:
         self._proc = proc
+        self.closed = False
 
     def write(self, data: bytes) -> int:
         for line in data.splitlines():
@@ -195,18 +196,20 @@ class _Stdin:
         return None
 
     def close(self) -> None:
+        self.closed = True
         self._proc._close()
 
 
 class _Stdout:
     def __init__(self, proc: "_Proc") -> None:
         self._proc = proc
+        self.closed = False
 
     def readline(self) -> bytes:
         return self._proc._next_line()
 
     def close(self) -> None:
-        return None
+        self.closed = True
 
 
 class _Proc:
@@ -219,6 +222,7 @@ class _Proc:
         self._pending: list[bytes] = []
         self._closed = False
         self.returncode: int | None = None
+        self.reaped = False
         self.stdin = _Stdin(self)
         self.stdout = _Stdout(self)
         self.requests: list[dict] = []
@@ -228,8 +232,9 @@ class _Proc:
         response = self._handler(request)
         if response is None:
             return
+        line = response if isinstance(response, bytes) else json.dumps(response).encode("utf-8")
         with self._condition:
-            self._pending.append((json.dumps(response) + "\n").encode("utf-8"))
+            self._pending.append(line + b"\n")
             self._condition.notify_all()
 
     def _close(self) -> None:
@@ -252,6 +257,7 @@ class _Proc:
             if self.returncode is None:
                 self.returncode = self._exit_code
                 self._condition.notify_all()
+            self.reaped = True
             return self.returncode
 
     def terminate(self) -> None:
@@ -259,6 +265,36 @@ class _Proc:
 
     def kill(self) -> None:
         self.wait()
+
+
+class _StalledProc(_Proc):
+    def __init__(self, *, stall_write: bool) -> None:
+        super().__init__(lambda _: None)
+        self.stall_write = stall_write
+        self.released = threading.Event()
+        self.killed = False
+
+    def _feed(self, request: dict) -> None:
+        super()._feed(request)
+        if self.stall_write:
+            if not self.released.wait(timeout=3):
+                raise AssertionError("forced shutdown did not release the blocked write")
+            raise BrokenPipeError
+
+    def wait(self, timeout: float | None = None) -> int:
+        if self.returncode is None:
+            raise subprocess.TimeoutExpired("fixture host", timeout)
+        return super().wait(timeout)
+
+    def terminate(self) -> None:
+        pass  # The bad child ignores graceful termination.
+
+    def kill(self) -> None:
+        with self._condition:
+            self.killed = True
+            self.returncode = -9
+            self._condition.notify_all()
+        self.released.set()
 
 
 class _Rig:
@@ -442,6 +478,100 @@ class _LinksCase(unittest.TestCase):
 
     def prepare(self, plan_id: str, root: Path, link: Path, physical: Path) -> dict:
         return _prepare(plan_id, root, link, physical)
+
+
+class IsolatedProbeProtocolTests(_LinksCase):
+    def _scope(self):
+        root = self.base / "skills"
+        _write_skill(root, "alpha")
+        project = self.base / "project"
+        project.mkdir()
+        host = _codex_host(self.base, _runtime(self.base), root, project)
+        return {"hosts": [host], "skills_roots": [str(root)]}
+
+    def test_codex_reply_id_requires_exact_json_category_and_value(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+        for token, expected in (
+            (b"1.0", "pass"), (b"1e0", "pass"), (b"true", "fail"),
+            (b'"1"', "fail"), (b"1.0000000000000000001", "fail"),
+        ):
+            with self.subTest(id=token):
+                def reply(request):
+                    if request["method"] == "initialize":
+                        return b'{"id":' + token + b',"result":{"codexHome":"/fixture"}}'
+                    return original(request)
+
+                with (
+                    mock.patch.object(rig, "_codex_handler", side_effect=reply),
+                    mock.patch.object(hosts, "_HOST_TIMEOUT", 0.2),
+                ):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                self.assertEqual(entry["status"], expected, entry)
+                if expected == "fail":
+                    self.assertEqual(entry["host"]["checks"]["protocol"]["reason"], "host-response-timeout")
+
+    def test_codex_failure_envelope_cannot_supply_result_evidence(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+
+        def reply(request):
+            result = original(request)
+            if request["method"] == "initialize":
+                result["success"] = False
+            return result
+
+        with mock.patch.object(rig, "_codex_handler", side_effect=reply):
+            (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+        self.assertEqual(entry["status"], "fail")
+        self.assertEqual(entry["host"]["checks"]["protocol"], {
+            "status": "failed", "reason": "host-request-refused",
+        })
+
+    def test_codex_load_errors_cannot_hide_behind_enabled_skills(self) -> None:
+        scope = self._scope()
+        rig = _Rig(self, ["alpha"]).install()
+        original = rig._codex_handler
+        for selected in (False, True):
+            with self.subTest(selected=selected):
+                def reply(request):
+                    result = original(request)
+                    if request["method"] == "skills/list":
+                        (row,) = result["result"]["data"]
+                        (skill,) = row["skills"]
+                        path = skill["path"] if selected else str(self.base / "unselected" / "SKILL.md")
+                        row["errors"] = [{"path": path, "message": "Skill could not be loaded"}]
+                    return result
+
+                with mock.patch.object(rig, "_codex_handler", side_effect=reply):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                checks = entry["host"]["checks"]
+                self.assertEqual(checks["protocol"]["status"], "verified")
+                self.assertEqual(entry["status"], "fail" if selected else "pass")
+                self.assertEqual(checks["skills"]["status"], "failed" if selected else "verified")
+                if selected:
+                    self.assertEqual(checks["host_load"]["reason"], "skills-evidence-mismatch")
+
+    def test_stalled_host_probe_reaps_child_and_closes_both_pipes(self) -> None:
+        scope = self._scope()
+        _Rig(self, ["alpha"]).install()
+        for stall_write in (False, True):
+            with self.subTest(stall_write=stall_write):
+                proc = _StalledProc(stall_write=stall_write)
+                self.addCleanup(proc.released.set)
+                with (
+                    mock.patch.object(hosts, "_spawn", return_value=proc),
+                    mock.patch.object(hosts, "_HOST_TIMEOUT", 0.2),
+                    mock.patch.object(hosts, "_HOST_SHUTDOWN", 1.0),
+                ):
+                    (entry,) = hosts.verify_hosts(scope, probe=True)["hosts"]
+                self.assertEqual(entry["host"]["checks"]["host_load"]["reason"], "host-response-timeout")
+                self.assertEqual([row["method"] for row in proc.requests], ["initialize"])
+                self.assertTrue(proc.killed and proc.reaped)
+                self.assertTrue(proc.stdin.closed)
+                self.assertTrue(proc.stdout.closed)
 
 
 # ---------------------------------------------------------------------------
@@ -1190,20 +1320,25 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         scope, package, root, link, physical, host = self._aligned_scope()
         document = self.prepare("1" * 64, root, link, physical)
         rig = _Rig(self, ["alpha", "linked-skill"]).install()
-        result = hosts.verify_hosts(
-            scope,
-            package_root=package,
-            probe=True,
-            link_authorizations=[
-                {
-                    "authorization_id": document["authorization_id"],
-                    "payload": probe_links.validate_link_authorization(
-                        document, plan_id="1" * 64,
-                        hosts=[{"id": HOST_ID, "skills_roots": [str(root)]}],
-                    ),
-                }
-            ],
-        )
+        scratch = self.base / "scratch"
+        scratch.mkdir()
+        alias = self.base / "temp-alias"
+        alias.symlink_to(scratch, target_is_directory=True)
+        with mock.patch.object(tempfile, "tempdir", str(alias)):
+            result = hosts.verify_hosts(
+                scope,
+                package_root=package,
+                probe=True,
+                link_authorizations=[
+                    {
+                        "authorization_id": document["authorization_id"],
+                        "payload": probe_links.validate_link_authorization(
+                            document, plan_id="1" * 64,
+                            hosts=[{"id": HOST_ID, "skills_roots": [str(root)]}],
+                        ),
+                    }
+                ],
+            )
         entry = result["hosts"][0]
         self.assertEqual(entry["status"], "pass", entry)
         skills = entry["host"]["checks"]["skills"]
@@ -1219,6 +1354,7 @@ class VerifyHostsProbeLinkTests(_LinksCase):
         )
         self.assertTrue(rig.host_spawns(), "the isolated host probe never ran")
         self.assertTrue(link.is_symlink())
+        self.assertEqual(list(scratch.iterdir()), [], "probe left temporary copies")
 
     def test_authorized_probe_passes_for_omp_host(self) -> None:
         scope, package, root, link, physical, host = self._aligned_scope("omp")

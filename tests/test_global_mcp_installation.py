@@ -15,6 +15,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "sbtd-workflow-onboard" / "scrip
 
 sys.path.insert(0, str(SCRIPTS))
 from onboard_contracts import canonical_json_bytes, operation_id, resource_id
+from sbtd_migration_files import require_private_directory, snapshot
 
 
 class GlobalRetirementTests(unittest.TestCase):
@@ -34,19 +35,45 @@ class GlobalRetirementTests(unittest.TestCase):
         self.env.update(HOME=str(self.home), USERPROFILE=str(self.home), CODEX_HOME=str(self.codex),
                         PATH=str(self.root / "empty-bin"), PYTHONDONTWRITEBYTECODE="1", DO_NOT_TRACK="1")
 
-    def cli(self, mode, *args):
+    def cli(self, mode, *args, human=False):
+        skills_args = ["--global-skills-dir", str(self.skills)] if mode != "cleanup-legacy" else []
         run = subprocess.run([sys.executable, "-B", str(SCRIPTS / "onboard.py"), mode,
-                              "--global-skills-dir", str(self.skills), "--json", *args],
+                              *skills_args, *([] if human else ["--json"]), *args],
                              env=self.env, cwd=self.root, capture_output=True, text=True, timeout=30)
-        return run.returncode, json.loads(run.stdout)
+        return run.returncode, run.stdout if human else json.loads(run.stdout)
 
-    def set_server(self, owned_shape=True):
+    def set_server(self, owned_shape=True, *, name="sbtd-graft"):
         args = ["-E", "-s", str(self.launcher), "mcp", "--node", str(self.root / "node"),
                 "--entry", str(self.root / "cli.js")] if owned_shape else []
-        raw = ("[mcp_servers.sbtd-graft]\n" + "command = " + json.dumps(sys.executable) + "\nargs = "
+        raw = (f"[mcp_servers.{name}]\n" + "command = " + json.dumps(sys.executable) + "\nargs = "
                + json.dumps(args) + '\nenv = { DO_NOT_TRACK = "1", DNT = "1" }\n').encode()
         self.config.write_bytes(raw)
         return raw
+
+    def historical_result(self, path, owner, selector, *, backup=None):
+        identity = resource_id(owner, str(path))
+        before = snapshot(backup) if backup else {"type": "absent", "checksum": None}
+        return {
+            "phase": "deploy", "resource_id": identity,
+            "operation_ids": [operation_id("deploy", identity, selector)],
+            "dependent_projects": [], "status": "succeeded", "error": None,
+            "before": before, "backup_ref": {"path": str(backup), "state": before} if backup else None,
+            "after": snapshot(path),
+        }
+
+    def retirement_args(self, *results):
+        vault = require_private_directory(self.root / "vault", create=True)
+        history = vault / "rc2-output.json"
+        history.write_bytes(canonical_json_bytes({"graftWiring": {"operationResults": list(results)}}))
+        binding = {"schema": "sbtd-retirement-evidence/1",
+                   "items": [{"kind": "operation-results", "path": str(history)}]}
+        descriptor = vault / "descriptor.json"
+        descriptor.write_bytes(canonical_json_bytes({
+            "schema_version": 1, "payload": binding,
+            "descriptor_id": hashlib.sha256(canonical_json_bytes(binding)).hexdigest(),
+        }))
+        return ("--platform", "codex", "--retirement-backup-root", str(vault),
+                "--retirement-evidence", str(descriptor))
 
     def test_present_launcher_and_unproven_binding_stop_reset_before_installation(self):
         raw = self.set_server()
@@ -62,26 +89,8 @@ class GlobalRetirementTests(unittest.TestCase):
 
     def test_proven_reset_requires_displayed_confirmation_and_supports_rollback(self):
         raw = self.set_server()
+        args = self.retirement_args(self.historical_result(self.config, "toml", "graft-mcp"))
         vault = self.root / "vault"
-        vault.mkdir(mode=0o700)
-        identity = resource_id("toml", str(self.config))
-        history = vault / "rc2-output.json"
-        history.write_bytes(canonical_json_bytes({"graftWiring": {"operationResults": [{
-            "phase": "deploy", "resource_id": identity,
-            "operation_ids": [operation_id("deploy", identity, "graft-mcp")],
-            "dependent_projects": [], "status": "succeeded", "error": None,
-            "before": {"type": "absent", "checksum": None}, "backup_ref": None,
-            "after": {"type": "file", "checksum": hashlib.sha256(raw).hexdigest()},
-        }]}}))
-        binding = {"schema": "sbtd-retirement-evidence/1",
-                   "items": [{"kind": "operation-results", "path": str(history)}]}
-        descriptor = vault / "descriptor.json"
-        descriptor.write_bytes(canonical_json_bytes({
-            "schema_version": 1, "payload": binding,
-            "descriptor_id": hashlib.sha256(canonical_json_bytes(binding)).hexdigest(),
-        }))
-        args = ("--platform", "codex", "--retirement-backup-root", str(vault),
-                "--retirement-evidence", str(descriptor))
         code, plan = self.cli("plan", "--action", "reset", *args)
         self.assertEqual(code, 0, plan["graftRetirement"])
         view = plan["graftRetirement"]
@@ -92,7 +101,7 @@ class GlobalRetirementTests(unittest.TestCase):
         self.assertEqual((code, refused["retirementResult"]["status"]), (2, "blocked"))
         self.assertEqual(self.config.read_bytes(), raw)
         self.assertTrue(self.launcher.exists())
-        self.assertEqual(set(vault.iterdir()), {history, descriptor})
+        self.assertEqual({path.name for path in vault.iterdir()}, {"rc2-output.json", "descriptor.json"})
 
         mode = self.config.stat().st_mode & 0o777
         code, applied = self.cli("reset", "--yes", "--confirm-retirement", view["confirmationId"], *args)
@@ -101,6 +110,16 @@ class GlobalRetirementTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "cleaned")
         self.assertFalse(self.config.exists())
         self.assertFalse(self.launcher.exists())
+        self.config.write_bytes(raw)
+        vault_entries = set(vault.rglob("*"))
+        blocked, retry = self.cli(
+            "cleanup-legacy", "--phase", "apply", "--plan", receipt["plan_path"],
+            "--cleanup-receipt", receipt["receipt_path"], "--confirm-cleanup", receipt["retirement_plan_id"],
+        )
+        self.assertEqual((blocked, retry["status"]), (2, "blocked"))
+        self.assertEqual(self.config.read_bytes(), raw)
+        self.assertEqual(set(vault.rglob("*")), vault_entries)
+        self.config.unlink()
         rollback = subprocess.run([
             sys.executable, "-B", str(SCRIPTS / "onboard.py"), "cleanup-legacy",
             "--phase", "rollback", "--plan", receipt["plan_path"],
@@ -112,6 +131,66 @@ class GlobalRetirementTests(unittest.TestCase):
         self.assertEqual(self.config.read_bytes(), raw)
         self.assertEqual(self.config.stat().st_mode & 0o777, mode)
         self.assertFalse(self.launcher.exists())  # Restores configuration, not deleted software.
+
+    def test_human_reset_plan_discloses_every_entry_and_action(self):
+        raw = self.set_server()
+        vault = require_private_directory(self.root / "vault", create=True)
+        original = vault / "project-before.md"
+        original.write_bytes(b"# User rules\n\n")
+        project = self.root / "project"
+        project.mkdir()
+        agents = project / "AGENTS.md"
+        owned = original.read_bytes() + b"<!-- graft:start -->\nlegacy rules\n<!-- graft:end -->\n"
+        agents.write_bytes(owned)
+        args = self.retirement_args(
+            self.historical_result(self.config, "toml", "graft-mcp"),
+            self.historical_result(agents, "markdown", "graft-agents", backup=original),
+        )
+        code, stdout = self.cli("plan", "--action", "reset", "--projects-root", str(project), *args, human=True)
+        self.assertEqual(code, 0, stdout)
+        confirmation = stdout.index("Confirm these targets with --confirm-retirement")
+        self.assertLess(stdout.index(f"{str(self.config)!r}: 'sbtd-graft': remove-file"), confirmation)
+        self.assertLess(stdout.index(f"{str(agents)!r}: 'graft-fence': edit"), confirmation)
+        self.assertEqual(self.config.read_bytes(), raw)
+        self.assertEqual(agents.read_bytes(), owned)
+
+    def test_reset_refuses_nested_preserved_config_before_any_installation(self):
+        for skill in ("sbtd-workflow-onboard", "writing-for-agents"):
+            with self.subTest(skill=skill):
+                target = self.skills / skill
+                domain = target / "private-domain"
+                domain.mkdir(parents=True)
+                config = domain / "config.toml"
+                raw = b'[mcp_servers.keep]\ncommand = "user-tool"\n'
+                config.write_bytes(raw)
+                self.env["CODEX_HOME"] = str(domain)
+                code, result = self.cli("reset", "--platform", "codex", "--yes")
+                self.assertEqual(code, 2, result)
+                report = result["graftRetirement"]
+                self.assertEqual(report["items"], [])
+                self.assertEqual(report["directoryOverlaps"], [
+                    {"installationTarget": str(target), "retirementPath": str(config)},
+                ])
+                self.assertIsNone(report["confirmationId"])
+                self.assertEqual(config.read_bytes(), raw)
+                self.assertFalse((domain / "AGENTS.md").exists())
+                self.assertEqual(self.launcher.read_bytes(), b"synthetic old launcher; must not execute\n")
+
+    def test_renamed_launcher_reference_blocks_reset_before_installation(self):
+        raw = self.set_server(name="renamed")
+        for present in (True, False):
+            with self.subTest(present=present):
+                if not present:
+                    self.launcher.unlink()
+                code, result = self.cli("reset", "--platform", "codex", "--yes")
+                self.assertEqual(code, 2, result)
+                report = result["graftRetirement"]
+                (item,) = report["items"]
+                self.assertEqual((item["entry"], item["at_risk"], item["write_authority"]), ("renamed", True, False))
+                self.assertEqual(item["launcher"]["present"], present)
+                self.assertEqual(report["targetsToRetire"], [])
+                self.assertEqual(self.config.read_bytes(), raw)
+                self.assertFalse((self.codex / "AGENTS.md").exists())
 
     def test_overwritten_onboard_is_reported_without_recreating_launcher(self):
         raw = self.set_server()

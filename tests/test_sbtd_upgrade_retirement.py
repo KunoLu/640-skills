@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import os
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -414,11 +416,14 @@ class EvidenceScopeTests(unittest.TestCase):
             self.assertEqual(config.read_bytes(), b"owned\n")
 
 
-def _codex_retirement_fixture(base: Path, *, remove_file: bool = False):
+def _codex_retirement_fixture(
+    base: Path, *, remove_file: bool = False, vault: Path | None = None, host_id: str = "codex",
+):
     home = base / ".codex"
-    home.mkdir()
+    home.mkdir(parents=True)
     config = home / "config.toml"
-    vault = require_private_directory(base / "vault", create=True)
+    if vault is None:
+        vault = require_private_directory(base / "vault", create=True)
     original = (
         b'model = "keep-me"\n\n'
         b'[mcp_servers.foreign]\ncommand = "unrelated"\n'
@@ -430,7 +435,7 @@ def _codex_retirement_fixture(base: Path, *, remove_file: bool = False):
         historical = require_private_directory(vault / "historical", create=True)
         backup = backup_reference(
             {"path": str(config), "state": snapshot(config)},
-            historical / "config.toml",
+            historical / f"{host_id}-config.toml",
             private_root=vault,
         )
     launcher = base / "old-onboard" / "scripts" / "sbtd_graft_entry.py"
@@ -446,7 +451,7 @@ def _codex_retirement_fixture(base: Path, *, remove_file: bool = False):
     ).encode("utf-8")
     config.write_bytes(installed)
     identity = resource_id("toml", str(config))
-    evidence = vault / "operation-results.json"
+    evidence = vault / f"{host_id}-operation-results.json"
     evidence.write_text(json.dumps({
         "operationResults": [{
             "phase": "deploy",
@@ -462,40 +467,63 @@ def _codex_retirement_fixture(base: Path, *, remove_file: bool = False):
     }), encoding="utf-8")
     scope = {
         "schema_version": 1,
-        "hosts": [_host(base, config)],
+        "hosts": [{**_host(base, config), "id": host_id}],
         "retirement_evidence": [{"kind": "operation-results", "path": str(evidence)}],
     }
     return scope, vault, config, launcher, installed
 
 
-def _windows_acl_fingerprint(path: Path, rights: str = "") -> str:
-    # Independent Windows oracle: return a hash, never the descriptor or account SID.
+def _set_windows_fixture_acl(path: Path, *, allow_execute: bool = False) -> None:
+    # Replace the whole DACL, not a rule in an inherited DACL.
     script = r"""
 $ErrorActionPreference = 'Stop'
 $path = $env:SBTD_FIXTURE_PATH
 $acl = Get-Acl -LiteralPath $path
-if ($env:SBTD_FIXTURE_RIGHTS) {
-    $acl.SetAccessRuleProtection($true, $true)
-    $sid = [System.Security.Principal.SecurityIdentifier]::new(
-        [System.Security.Principal.WellKnownSidType]::WorldSid, $null)
-    $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
-        $sid, [System.Security.AccessControl.FileSystemRights]$env:SBTD_FIXTURE_RIGHTS,
-        [System.Security.AccessControl.AccessControlType]::Allow)
-    $acl.SetAccessRule($rule)
-    Set-Acl -LiteralPath $path -AclObject $acl
-    $acl = Get-Acl -LiteralPath $path
-}
-$sections = [System.Security.AccessControl.AccessControlSections]'Owner, Group, Access'
-$sddl = $acl.GetSecurityDescriptorSddlForm($sections)
-$hash = [System.Security.Cryptography.SHA256]::Create()
-[Console]::Write([BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($sddl))).Replace('-', ''))
+$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$rights = $env:SBTD_FIXTURE_WORLD_RIGHTS
+$acl.SetSecurityDescriptorSddlForm("D:P(A;;FA;;;$sid)(A;;$rights;;;WD)", 'Access')
+Set-Acl -LiteralPath $path -AclObject $acl
 """
-    result = subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-        env={**os.environ, "SBTD_FIXTURE_PATH": str(path), "SBTD_FIXTURE_RIGHTS": rights},
-        capture_output=True, text=True, timeout=15, check=True,
+    powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+    subprocess.run(
+        [str(powershell), "-NoProfile", "-NonInteractive", "-Command", script],
+        env={
+            **os.environ, "SBTD_FIXTURE_PATH": str(path),
+            "SBTD_FIXTURE_WORLD_RIGHTS": "FRFX" if allow_execute else "FR",
+        },
+        capture_output=True, timeout=15, check=True,
     )
-    return result.stdout.strip()
+
+
+def _windows_acl_fingerprint(path: Path) -> str:
+    """Read native control, SIDs and ordered ACEs without .NET ACL normalization."""
+    from ctypes import wintypes
+
+    read_acl = ctypes.WinDLL("advapi32", use_last_error=True).GetFileSecurityW
+    read_acl.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    read_acl.restype = wintypes.BOOL
+    sections = 0x7  # Owner, group and DACL.
+    length = wintypes.DWORD()
+    read_acl(str(path), sections, None, 0, ctypes.byref(length))
+    if ctypes.get_last_error() != 122 or not length.value:  # ERROR_INSUFFICIENT_BUFFER
+        raise AssertionError("native ACL size could not be read")
+    raw = ctypes.create_string_buffer(length.value)
+    if not read_acl(str(path), sections, raw, length.value, ctypes.byref(length)):
+        raise AssertionError("native ACL could not be read")
+    revision, reserved, control, owner, group, _, dacl = struct.unpack_from("<BBHIIII", raw)
+    acl_revision, _, _, ace_count, _ = struct.unpack_from("<BBHHH", raw, dacl)
+    ace_start = end = dacl + 8
+    for _ in range(ace_count):
+        end += struct.unpack_from("<H", raw, end + 2)[0]
+    # Do not compare offsets or unused ACL storage.
+    fingerprint = hashlib.sha256(struct.pack("<BBHBH", revision, reserved, control, acl_revision, ace_count))
+    for offset in (owner, group):
+        fingerprint.update(raw[offset:offset + 8 + 4 * raw[offset + 1][0]])
+    fingerprint.update(raw[ace_start:end])
+    return fingerprint.hexdigest()
 
 
 class RealRetirementUpgradeTests(unittest.TestCase):
@@ -544,9 +572,174 @@ class RealRetirementUpgradeTests(unittest.TestCase):
             for document in (plan, receipt, verification, recovery, restored):
                 jsonschema.validate(document, schema)
 
+    def test_scoped_remove_recovery_refuses_foreign_recreation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            scope, vault, config, _, installed = _codex_retirement_fixture(
+                Path(directory).resolve(), remove_file=True,
+            )
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            (resource,) = plan["payload"]["resources"]
+            self.assertEqual(resource["details"]["action"], "remove-file")
+            receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+            self.assertEqual(receipt["payload"]["status"], "complete")
+            self.assertFalse(config.exists())
+            recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(recovery["payload"]["status"], "planned")
+            (step,) = recovery["payload"]["steps"]
+            self.assertEqual(step["expected_current"], {"type": "absent", "checksum": None})
+
+            foreign = b'model = "foreign"\n'
+            config.write_bytes(foreign)
+            blocked = sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(blocked["payload"]["status"], "blocked")
+            self.assertEqual(blocked["payload"]["steps"][0]["reason"], "live-drift")
+            with self.assertRaises(ContractError) as caught:
+                sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(caught.exception.code, "plan-stale")
+            self.assertEqual(config.read_bytes(), foreign)
+
+            config.unlink()
+            restored = sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(restored["payload"]["status"], "complete")
+            self.assertEqual(config.read_bytes(), installed)
+            self.assertEqual(Path(step["backup_ref"]["path"]).read_bytes(), installed)
+            retry = sbtd_upgrade.apply_recovery(
+                recovery, confirmed=recovery["recovery_id"], receipt=restored,
+            )
+            self.assertEqual(retry["payload"]["steps"][0]["result"], "skipped-complete")
+            self.assertEqual(config.read_bytes(), installed)
+            if os.name == "posix":
+                config.chmod(stat.S_IMODE(config.stat().st_mode) ^ stat.S_IXUSR)
+                with self.assertRaises(ContractError) as drifted:
+                    sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"], receipt=retry)
+                self.assertEqual(drifted.exception.code, "plan-stale")
+                self.assertEqual(config.read_bytes(), installed)
+
+    def _partial_retirement(self, base: Path):
+        scope, vault, completed, _, original = _codex_retirement_fixture(base / "completed")
+        unfinished_scope, _, unfinished, launcher, untouched = _codex_retirement_fixture(
+            base / "unfinished", remove_file=True, vault=vault, host_id="unfinished",
+        )
+        new_scope, _, new_target, _, new_bytes = _codex_retirement_fixture(
+            base / "new", remove_file=True, vault=vault, host_id="new",
+        )
+        new_target.unlink()
+        for other in (unfinished_scope, new_scope):
+            scope["hosts"].extend(other["hosts"])
+            scope["retirement_evidence"].extend(other["retirement_evidence"])
+        plan = sbtd_upgrade.plan_upgrade(scope, vault)
+        self.assertEqual(plan["payload"]["status"], "planned")
+        self.assertEqual(
+            [row["path"] for row in plan["payload"]["graftRetirement"]["candidates"]],
+            [str(completed), str(unfinished)],
+        )
+        real_write = sbtd_upgrade._write_resource
+
+        def fail_unfinished(sealed, *args):
+            if sealed["target"] == str(unfinished):
+                raise ContractError("write-failed", "fixture stopped before the second retirement")
+            return real_write(sealed, *args)
+
+        with mock.patch.object(sbtd_upgrade, "_write_resource", side_effect=fail_unfinished):
+            receipt = sbtd_upgrade._apply_upgrade_local(
+                plan, confirmed=plan["plan_id"], receipt=None, package_root=SCRIPTS.parent,
+            )
+        self.assertEqual(receipt["status"], "partial")
+        self.assertEqual([row["result"] for row in receipt["payload"]["resources"]], ["succeeded", "failed"])
+        self.assertEqual(unfinished.read_bytes(), untouched)
+        return plan, receipt, (completed, original), (unfinished, launcher, untouched), (new_target, new_bytes)
+
+    def test_partial_recovery_restores_only_completed_retirement_and_rechecks_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            plan, receipt, (completed, original), (unfinished, _, untouched), _ = self._partial_retirement(
+                Path(directory).resolve(),
+            )
+            retired = completed.read_bytes()
+            self.assertNotIn(b"sbtd-graft", retired)
+            recovery = sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(recovery["payload"]["status"], "planned")
+            (step,) = recovery["payload"]["steps"]
+            self.assertEqual((step["target"], step["status"]), (str(completed), "actionable"))
+
+            foreign = b'model = "foreign"\n'
+            completed.write_bytes(foreign)
+            blocked = sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(blocked["payload"]["status"], "blocked")
+            self.assertEqual(blocked["payload"]["steps"][0]["reason"], "live-drift")
+            with self.assertRaises(ContractError) as caught:
+                sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(caught.exception.code, "plan-stale")
+            self.assertEqual(completed.read_bytes(), foreign)
+            self.assertEqual(unfinished.read_bytes(), untouched)
+
+            completed.write_bytes(retired)
+            restored = sbtd_upgrade.apply_recovery(recovery, confirmed=recovery["recovery_id"])
+            self.assertEqual(restored["status"], "complete")
+            self.assertEqual(completed.read_bytes(), original)
+            self.assertEqual(unfinished.read_bytes(), untouched)
+
+    def test_partial_recovery_rejects_changed_and_new_retirement_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            plan, receipt, (completed, _), (unfinished, launcher, untouched), (new_target, new_bytes) = (
+                self._partial_retirement(Path(directory).resolve())
+            )
+            payload = plan["payload"]
+            scope, vault = payload["scope"], payload["backup_root"]
+            evidence = Path(scope["retirement_evidence"][1]["path"])
+            original_evidence = evidence.read_bytes()
+            alternate = launcher.parents[1].with_name("different-onboard") / "scripts" / launcher.name
+            changed = untouched.replace(json.dumps(str(launcher)).encode(), json.dumps(str(alternate)).encode())
+            self.assertNotEqual(changed, untouched)
+            unfinished.write_bytes(changed)
+            proof = json.loads(original_evidence)
+            proof["operationResults"][0]["after"] = snapshot(unfinished)
+            evidence.write_text(json.dumps(proof), encoding="utf-8")
+            fresh = hosts.plan_retirement(scope, vault, evidence=scope["retirement_evidence"])
+            (candidate,) = fresh["disclosure"]["candidates"]
+            self.assertEqual(candidate["id"], payload["graftRetirement"]["candidates"][1]["id"])
+            self.assertEqual(candidate["launcher"]["path"], str(alternate))
+            with self.assertRaises(ContractError) as drifted:
+                sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(drifted.exception.code, "plan-stale")
+            self.assertEqual(unfinished.read_bytes(), changed)
+
+            unfinished.write_bytes(untouched)
+            evidence.write_bytes(original_evidence)
+            new_target.write_bytes(new_bytes)
+            with self.assertRaises(ContractError) as added:
+                sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(added.exception.code, "plan-stale")
+            self.assertEqual(new_target.read_bytes(), new_bytes)
+            self.assertNotIn(b"sbtd-graft", completed.read_bytes())
+
+            new_target.unlink()
+            unfinished.unlink()
+            with self.assertRaises(ContractError) as missing:
+                sbtd_upgrade.plan_recovery(plan, receipt)
+            self.assertEqual(missing.exception.code, "plan-stale")
+            self.assertFalse(unfinished.exists())
+
+    def test_missing_disclosure_does_not_authorize_retirement(self) -> None:
+        import jsonschema
+
+        with tempfile.TemporaryDirectory() as directory:
+            scope, vault, config, _, original = _codex_retirement_fixture(Path(directory).resolve())
+            plan = sbtd_upgrade.plan_upgrade(scope, vault)
+            self.assertTrue(plan["payload"].pop("graftRetirement")["candidates"])
+            plan["plan_id"] = sbtd_upgrade._digest(plan["payload"])
+            schema = json.loads((SCRIPTS.parent / "upgrade.schema.json").read_text(encoding="utf-8"))
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(plan, schema)
+            with self.assertRaises(ContractError) as caught:
+                sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+            self.assertEqual(caught.exception.code, "invalid-document")
+            self.assertEqual(config.read_bytes(), original)
+            self.assertFalse(list(vault.glob("upgrade-*.json")))
+
     @unittest.skipUnless(os.name == "nt", "native Windows retirement permissions")
     def test_windows_native_retirement_edit_and_remove_restore_permissions(self) -> None:
         import jsonschema
+        from sbtd_retirement_permissions import capture, digest
 
         schema = json.loads((SCRIPTS.parent / "upgrade.schema.json").read_text(encoding="utf-8"))
         for action in ("edit", "remove-file"):
@@ -555,12 +748,13 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                     Path(directory).resolve(), remove_file=action == "remove-file",
                 )
                 default_acl = _windows_acl_fingerprint(config)
-                original_acl = _windows_acl_fingerprint(config, "Read")
-                self.assertRegex(original_acl, r"^[0-9A-F]{64}$")
+                _set_windows_fixture_acl(config)
+                original_acl = _windows_acl_fingerprint(config)
+                self.assertRegex(original_acl, r"^[0-9a-f]{64}$")
                 self.assertNotEqual(original_acl, default_acl)
                 if action == "remove-file":
                     config.chmod(stat.S_IREAD)
-                mode = format(stat.S_IMODE(config.stat().st_mode), "04o")
+                mode = format(stat.S_IMODE(config.lstat().st_mode), "04o")
                 self.assertEqual(mode, "0444" if action == "remove-file" else "0666")
                 plan = sbtd_upgrade.plan_upgrade(scope, vault)
                 self.assertEqual(plan["payload"]["status"], "planned")
@@ -569,14 +763,25 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                 sealed_acl = resource["details"]["windows_acl_digest"]
                 self.assertRegex(sealed_acl, r"^[0-9a-f]{64}$")
                 self.assertEqual(plan["payload"]["graftRetirement"]["candidates"][0]["windows_acl_digest"], sealed_acl)
+                self.assertEqual(plan["payload"]["graftRetirement"]["candidates"][0]["mode"], mode)
+                original_descriptor = capture(config)
+                self.assertEqual(digest(original_descriptor), sealed_acl)
 
-                changed_acl = _windows_acl_fingerprint(config, "ReadAndExecute")
+                _set_windows_fixture_acl(config, allow_execute=True)
+                changed_acl = _windows_acl_fingerprint(config)
+                changed_descriptor = capture(config)
                 self.assertNotEqual(changed_acl, original_acl)
-                with self.assertRaises(ContractError):
+                self.assertNotEqual(digest(changed_descriptor), sealed_acl)
+                self.assertEqual(format(stat.S_IMODE(config.lstat().st_mode), "04o"), mode)
+                with self.assertRaises(ContractError) as drifted:
                     sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
+                self.assertEqual(drifted.exception.code, "plan-stale")
                 self.assertEqual(config.read_bytes(), installed)
                 self.assertEqual(_windows_acl_fingerprint(config), changed_acl)
-                self.assertEqual(_windows_acl_fingerprint(config, "Read"), original_acl)
+                _set_windows_fixture_acl(config)
+                self.assertEqual(_windows_acl_fingerprint(config), original_acl)
+                self.assertEqual(digest(capture(config)), sealed_acl)
+                self.assertEqual(format(stat.S_IMODE(config.lstat().st_mode), "04o"), mode)
 
                 receipt = sbtd_upgrade.apply_upgrade(plan, confirmed=plan["plan_id"])
                 self.assertEqual(receipt["payload"]["status"], "complete")
@@ -586,9 +791,14 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                 self.assertEqual(row["mode_before"], mode)
                 self.assertEqual(row["windows_acl_digest"], sealed_acl)
                 backup_path = Path(row["backup_ref"]["path"])
+                self.assertEqual(backup_path.read_bytes(), installed)
+                self.assertEqual(format(stat.S_IMODE(backup_path.lstat().st_mode), "04o"), mode)
                 self.assertNotEqual(_windows_acl_fingerprint(backup_path), original_acl)
                 sidecar = backup_path.with_suffix(".windows-acl")
-                self.assertTrue(sidecar.is_file())
+                self.assertTrue(
+                    sidecar.read_bytes() == original_descriptor,
+                    "private ACL sidecar differs from the original native descriptor",
+                )
                 self.assertNotEqual(_windows_acl_fingerprint(sidecar), original_acl)
                 (intent_path,) = (vault / "intents").glob("intent-*.json")
                 intent = json.loads(intent_path.read_text(encoding="utf-8"))["payload"]
@@ -600,12 +810,16 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                     self.assertEqual(_windows_acl_fingerprint(config), original_acl)
                     edited = config.read_bytes()
                     self.assertNotIn(b"sbtd-graft", edited)
-                    self.assertEqual(_windows_acl_fingerprint(config, "ReadAndExecute"), changed_acl)
+                    _set_windows_fixture_acl(config, allow_execute=True)
+                    self.assertEqual(_windows_acl_fingerprint(config), changed_acl)
+                    self.assertEqual(format(stat.S_IMODE(config.lstat().st_mode), "04o"), mode)
                     drifted = sbtd_upgrade.plan_recovery(plan, receipt)
                     self.assertEqual(drifted["payload"]["status"], "blocked")
                     self.assertEqual(drifted["payload"]["steps"][0]["reason"], "live-drift")
                     self.assertEqual(config.read_bytes(), edited)
-                    self.assertEqual(_windows_acl_fingerprint(config, "Read"), original_acl)
+                    _set_windows_fixture_acl(config)
+                    self.assertEqual(_windows_acl_fingerprint(config), original_acl)
+                    self.assertEqual(digest(capture(config)), sealed_acl)
                 else:
                     self.assertIsNone(row["mode_after"])
                     self.assertIsNone(row["windows_acl_digest_after"])
@@ -619,6 +833,13 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                         sbtd_upgrade.plan_recovery(plan, receipt)
                 finally:
                     moved.rename(sidecar)
+                try:
+                    sidecar.write_bytes(changed_descriptor)
+                    with self.assertRaises(ContractError) as changed:
+                        sbtd_upgrade.plan_recovery(plan, receipt)
+                    self.assertEqual(changed.exception.code, "backup-conflict")
+                finally:
+                    sidecar.write_bytes(original_descriptor)
 
                 recovery = sbtd_upgrade.plan_recovery(plan, receipt)
                 self.assertEqual(recovery["payload"]["status"], "planned")
@@ -629,7 +850,7 @@ class RealRetirementUpgradeTests(unittest.TestCase):
                 self.assertEqual(recovered["payload"]["steps"][0]["mode_after"], mode)
                 self.assertEqual(config.read_bytes(), installed)
                 self.assertEqual(_windows_acl_fingerprint(config), original_acl)
-                self.assertEqual(format(stat.S_IMODE(config.stat().st_mode), "04o"), mode)
+                self.assertEqual(format(stat.S_IMODE(config.lstat().st_mode), "04o"), mode)
                 for document in (plan, receipt, verification, recovery, recovered):
                     jsonschema.validate(document, schema)
 

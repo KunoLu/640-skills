@@ -756,6 +756,19 @@ def _manifest_operations(payload: Mapping[str, Any]) -> Iterator[Mapping[str, An
     yield from payload["shared_operations"]
 
 
+def _is_zero_write_project_successor(payload: Mapping[str, Any]) -> bool:
+    """Structural eligibility only; runtime rederives the inherited scope."""
+    deployment = payload["deployment"]
+    return (
+        deployment is not None
+        and payload.get("successor") is not None
+        and deployment["mode"] == "init-projects"
+        and not deployment["inputs"]
+        and not payload["shared_operations"]
+        and not any(operation["phase"] == "deploy" for operation in _manifest_operations(payload))
+    )
+
+
 def _manifest_input_references(
     payload: Mapping[str, Any],
 ) -> Iterator[Mapping[str, Any]]:
@@ -894,24 +907,11 @@ def _check_manifest_payload(payload: Mapping[str, Any]) -> None:
                 "deployment operations require an explicit deployment declaration",
             )
     else:
-        if not deploy_operations:
-            empty_no_touch_successor = (
-                payload.get("successor") is not None
-                and deployment["mode"] == "init-projects"
-                and all(
-                    project.get("agents_no_touch") is not None
-                    for project in projects
-                )
-                and not any(
-                    operation["phase"] == "deploy"
-                    for operation in payload["shared_operations"]
-                )
+        if not deploy_operations and not _is_zero_write_project_successor(payload):
+            _fail(
+                "semantic-violation",
+                "a deployment declaration requires declared deployment operations",
             )
-            if not empty_no_touch_successor:
-                _fail(
-                    "semantic-violation",
-                    "a deployment declaration requires declared deployment operations",
-                )
         if deployment["mode"] == "init-projects" and any(
             operation in payload["shared_operations"] for operation in deploy_operations
         ):
@@ -1543,36 +1543,40 @@ def _check_verification_payload(payload: Mapping[str, Any]) -> None:
             "semantic-violation",
             "verification status does not match the priority aggregation of project statuses",
         )
-    if payload.get("legacy_resources") and payload["status"] == "verified":
+    legacy_rows = payload.get("legacy_resources") or ()
+    if legacy_rows and "verified" in statuses:
         _fail(
             "semantic-violation",
             "historical Graft verification does not authorize cleanup",
         )
-    for row in payload.get("legacy_resources") or ():
-        if not isinstance(row.get("reason"), str) or not row["reason"].strip():
+    if len({row["resource_id"] for row in legacy_rows}) != len(legacy_rows) or (
+        _paths_identify_same([row["target"] for row in legacy_rows])
+    ):
+        _fail("semantic-violation", "duplicate historical Graft resource")
+    for row in legacy_rows:
+        if not row["reason"].strip():
             _fail(
                 "semantic-violation",
                 "a historical Graft resource needs a readable reason",
             )
-        if row["status"] == "verified" and (
-            row["bytes"] != "match"
-            or row["mode"] != "match"
-            or row.get("mode_source") is None
+        byte_state, mode_state = row["bytes"], row["mode"]
+        if (mode_state == "absent") != (row["mode_source"] is None) or (
+            byte_state == "unreadable" and mode_state != "absent"
         ):
             _fail(
                 "semantic-violation",
-                "historical verification requires matching bytes and a trusted mode",
+                "historical mode requires a readable resource and a trusted source",
             )
-        if row["status"] == "drifted" and row["bytes"] == "unreadable":
-            _fail(
-                "semantic-violation",
-                "an unreadable historical resource is not drift",
-            )
-        if row["status"] == "not-verified" and row["mode"] == "differ":
-            _fail(
-                "semantic-violation",
-                "a differing historical mode is drift",
-            )
+        if byte_state == "differ" or mode_state == "differ":
+            verdict = "drifted"
+        elif byte_state == "match" and mode_state == "match":
+            verdict = "verified"
+        else:
+            verdict = "not-verified"
+        if row["status"] != verdict:
+            _fail("semantic-violation", "historical verdict differs from its bytes or mode")
+        if verdict == "drifted" and payload["status"] != "failed":
+            _fail("semantic-violation", "historical drift requires a failed verification")
     for project in payload["projects"]:
         if project["status"] == "not-verified" and (
             not project["reason"].strip() or not project["nextStep"].strip()
@@ -2612,6 +2616,53 @@ def _bind_reconciliation(
             )
 
 
+def _bind_legacy_verification(
+    manifest_payload: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    deploy_results: Mapping[str, Any] | None,
+) -> None:
+    if "legacy_resources" not in payload:
+        # Pre-D7 receipts remain readable history; write paths reject Graft.
+        return
+    declared = {
+        operation["resource_id"]: operation
+        for operation in _manifest_operations(manifest_payload)
+        if operation["change"]["kind"] in {"build-graft", "configure-graft"}
+    }
+    rows = {row["resource_id"]: row for row in payload["legacy_resources"]}
+    if rows.keys() != declared.keys():
+        _fail("binding-violation", "historical rows differ from the manifest Graft resources")
+    projects = {project["root"]: project for project in payload["projects"]}
+    for rid, row in rows.items():
+        operation = declared[rid]
+        target = operation["target"]
+        if row["target"] != target:
+            _fail("binding-violation", "historical row target differs from its manifest resource")
+        for root in operation["dependent_projects"]:
+            project = projects[root]
+            if row["status"] == "drifted" and project["status"] != "failed":
+                _fail("binding-violation", "project status masks historical resource drift")
+            observed = next(
+                (asset["state"] for asset in project["retained_assets"] if asset["path"] == target),
+                None,
+            )
+            if row["bytes"] == "unreadable":
+                if observed is not None:
+                    _fail("binding-violation", "unreadable historical resource has a retained state")
+                continue
+            if observed is None:
+                if row["mode"] != "absent":
+                    _fail("binding-violation", "an absent historical resource has a mode verdict")
+                observed = {"type": "absent", "checksum": None}
+            if deploy_results is not None:
+                matches = observed == deploy_results[rid]["after"]
+                if (row["bytes"] == "match") != matches:
+                    _fail(
+                        "binding-violation",
+                        "historical byte verdict differs from the retained state and deployment",
+                    )
+
+
 def _bind_verification(
     manifest_payload: Mapping[str, Any],
     document: Mapping[str, Any],
@@ -2653,6 +2704,7 @@ def _bind_verification(
         _fail(
             "binding-violation", "verification project scope differs from the manifest"
         )
+    _bind_legacy_verification(manifest_payload, payload, stage_results.get("deploy"))
 
     def check_candidate(
         candidate: Mapping[str, Any],

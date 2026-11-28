@@ -7,12 +7,14 @@ successor. These tests do not sign or replace the release lineage pair.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import stat
 import sys
 import tempfile
 import unittest
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -23,6 +25,7 @@ sys.path.insert(0, str(SCRIPTS))
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from onboard_contracts import (
+    ARCHIVED_GRAFT_PIN,
     ContractError,
     archived_graft_policy,
     canonical_json_bytes,
@@ -39,7 +42,7 @@ from sbtd_migration import (
     runtime_versions,
 )
 from sbtd_migration_files import snapshot
-from sbtd_migration_verify import verify_migration
+from sbtd_migration_verify import validate_deployment_reports, verify_migration
 
 # Measured from the rc.2 tag with declared dependencies. Not an allowlist.
 RC2_ONBOARD = (
@@ -162,9 +165,17 @@ class NewPlanTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(target.stat().st_mode), mode)
 
 
-def _graft_operation(root: Path, target: Path, owner: str, selector: str, kind: str) -> dict:
+def _graft_operation(
+    root: Path, target: Path, owner: str, selector: str, kind: str, earlier: list[dict]
+) -> dict:
     policy = archived_graft_policy()
     rid = resource_id(owner, str(target))
+    # rc.2 _operation chains by target to any earlier apply operation.
+    requirement = (
+        {"kind": "phase-after", "phase": "apply", "resource_id": rid}
+        if any(operation["target"] == str(target) for operation in earlier)
+        else {"kind": "state", "state": snapshot(target)}
+    )
     return {
         "phase": "deploy",
         "resource_id": rid,
@@ -174,12 +185,9 @@ def _graft_operation(root: Path, target: Path, owner: str, selector: str, kind: 
         "selector": selector,
         "change": {"kind": kind, "source_ref": policy},
         "ownership": {"kind": "template-source", "reference": policy},
-        "before_requirement": {"kind": "state", "state": snapshot(target)},
+        "before_requirement": requirement,
         "dependent_projects": [str(root)],
     }
-
-
-ABSENT = {"type": "absent", "checksum": None}
 
 
 def _iso(moment: datetime) -> str:
@@ -256,8 +264,6 @@ def _install_lineage(directory: Path, predecessor: str, successor: str):
 
 
 def _smoke_refs(evidence: Path, root: Path, started: str, finished: str) -> list[dict]:
-    import hashlib
-
     report = evidence / f"smoke-{root.name}.json"
     summary = evidence / f"smoke-{root.name}.md"
     summary.write_text("合成契约夹具；不证明真实host部署。\n")
@@ -327,16 +333,31 @@ def _smoke_refs(evidence: Path, root: Path, started: str, finished: str) -> list
     ]
 
 
-def build_completed_historical(base: Path, *, predecessor: str | None = None) -> dict:
-    """Sealed completed old deployment. Does not apply a new-runtime manifest."""
-    import hashlib
-
-    from sbtd_migration import _backup_sources, _prepare_backup_parent
+def build_completed_historical(
+    base: Path,
+    *,
+    predecessor: str | None = None,
+    drift: bool = True,
+    signed_route: bool = False,
+) -> dict:
+    """Model a completed rc.2 deployment without running Graft."""
+    import sbtd_migration_plan as migration_plan
+    from sbtd_migration import (
+        _apply_projects,
+        _apply_resource,
+        _backup_sources,
+        _groups,
+        _prepare_backup_parent,
+    )
     from sbtd_migration_files import backup_reference
-    from sbtd_migration_plan import plan_migration
     from tests.test_sbtd_migration_apply import legacy_project
 
     roots = [legacy_project(base, name) for name in ("alpha", "beta")]
+    agents = roots[0] / "AGENTS.md"
+    hashes_path = roots[0] / ".trellis/.template-hashes.json"
+    hashes = json.loads(hashes_path.read_bytes())
+    hashes["hashes"]["AGENTS.md"] = hashlib.sha256(agents.read_bytes()).hexdigest()
+    hashes_path.write_bytes(canonical_json_bytes(hashes))
     home, vault, evidence = (base / name for name in ("home", "vault", "evidence"))
     for path in (home, vault, evidence):
         path.mkdir(mode=0o700)
@@ -349,25 +370,63 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
     successor = runtime_versions()["onboard"]
     if predecessor is None:
         predecessor = "runtime-sha256:" + hashlib.sha256(b"rc2-historical-fixture").hexdigest()
-    with mock.patch.dict(os.environ, environment):
-        manifest = plan_migration(
-            roots, vault, "fixture-custodian", None, tool_versions=runtime_versions()
+    private, public, pair = _install_lineage(base / "trust", predecessor, successor)
+    approval = None
+    routing_public = None
+    if signed_route:
+        routing_key = Ed25519PrivateKey.generate()
+        routing_public = public.parent / "routing.pub"
+        routing_public.write_bytes(
+            routing_key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+        )
+        target = home / ".codex/AGENTS.md"
+        target.parent.mkdir()
+        target.write_bytes(b"Legacy global routing.\n")
+        candidate = vault / "routing-candidate.md"
+        pause = (SCRIPTS.parent / "assets/migration-paused-agents.txt").read_bytes()
+        candidate.write_bytes(pause + b"\nApproved body.\n")
+        routing = {
+            "schema_version": 1,
+            "items": [{
+                "role": "codex-global",
+                "target_path": str(target),
+                "before": snapshot(target),
+                "candidate_ref": {"path": str(candidate), "state": snapshot(candidate)},
+                "basis": "fixture custodian approval",
+            }],
+        }
+        routing["signature"] = base64.b64encode(
+            routing_key.sign(canonical_json_bytes(routing))
+        ).decode("ascii")
+        approval = vault / "routing-approval.json"
+        approval.write_bytes(canonical_json_bytes(routing))
+    with (
+        mock.patch.dict(os.environ, environment),
+        mock.patch.object(migration_plan, "_ROUTING_APPROVAL_PUBLIC_KEY", routing_public)
+        if routing_public is not None else nullcontext(),
+    ):
+        manifest = migration_plan.plan_migration(
+            roots, vault, "fixture-custodian", None, tool_versions=runtime_versions(),
+            routing_approvals=approval,
         )
     payload = manifest["payload"]
-    if payload["shared_operations"]:
-        raise AssertionError("isolated fixture must not declare shared operations")
     created = datetime.now(timezone.utc) - timedelta(minutes=2)
     payload["created_at"] = _iso(created)
-    payload["tool_versions"] = {"onboard": predecessor, "graft": "0.29.0"}
+    payload["tool_versions"] = {"onboard": predecessor, "graft": ARCHIVED_GRAFT_PIN}
     payload["deployment"] = {"mode": "init-projects", "platform": "codex", "inputs": []}
     graft_ops: dict[str, list[dict]] = {}
     for project in payload["projects"]:
         if project.get("agents_no_touch") is not None:
             raise AssertionError("fixture AGENTS.md must not be an untouched template")
         root = Path(project["root"])
+        earlier = project["private_operations"]
         operations = [
-            _graft_operation(root, root / "graft", "directory", "whole-resource", "build-graft"),
-            _graft_operation(root, root / "AGENTS.md", "markdown", "graft-agents", "configure-graft"),
+            _graft_operation(
+                root, root / "graft", "directory", "whole-resource", "build-graft", earlier
+            ),
+            _graft_operation(
+                root, root / "AGENTS.md", "markdown", "graft-agents", "configure-graft", earlier
+            ),
         ]
         project["private_operations"].extend(operations)
         graft_ops[str(root)] = operations
@@ -376,56 +435,35 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
     manifest_path.write_bytes(canonical_json_bytes(sealed))
     with mock.patch.dict(os.environ, environment):
         _backup_sources(sealed)
+        applied = {}
+        for group in _groups(sealed, "apply"):
+            result, code = _apply_resource(sealed, group, previous=None)
+            if code or result["status"] != "succeeded":
+                raise AssertionError(f"fixture apply failed: {result}")
+            applied[result["resource_id"]] = result
+    apply_projects = _apply_projects(sealed, applied, None, None, originals_ready=True)
     manifest_id = sealed["manifest_id"]
 
-    def materialize(operation: dict) -> dict:
-        requirement = operation["before_requirement"]
-        if requirement["kind"] != "state":
-            raise AssertionError("historical fixture requires a concrete before state")
-        before = requirement["state"]
-        target = Path(operation["target"])
-        backup = None
-        if operation["change"]["kind"] == "migrate-developer":
-            target.parent.mkdir(mode=0o700)
-            target.write_bytes(f"name={operation['change']['name']}\n".encode())
-        elif (
-            operation["change"]["kind"] == "remove"
-            and operation["selector"] == "whole-resource"
-            and before["type"] != "absent"
-        ):
-            destination = vault / manifest_id / "apply" / operation["resource_id"]
-            _prepare_backup_parent(destination, vault)
-            backup = backup_reference(
-                {"path": str(target), "state": before}, destination, private_root=vault
-            )
-            target.unlink()
-        elif before["type"] != "absent":
-            destination = vault / manifest_id / "apply" / operation["resource_id"]
-            _prepare_backup_parent(destination, vault)
-            backup = backup_reference(
-                {"path": str(target), "state": before}, destination, private_root=vault
-            )
-        return _stage_result(operation, before, snapshot(target), backup)
-
-    private, public, pair = _install_lineage(base / "trust", predecessor, successor)
-    apply_projects = []
     deploy_projects = []
     proof_specs = []
     report_started = _z(created + timedelta(seconds=18))
     report_finished = _z(created + timedelta(seconds=20))
     for project in sealed["payload"]["projects"]:
         root = Path(project["root"])
-        apply_results = [
-            materialize(operation)
-            for operation in project["private_operations"] if operation["phase"] == "apply"
-        ]
         graph = root / "graft"
         graph.mkdir()
         (graph / "INDEX.md").write_bytes(b"graph\n")
         deploy_results = []
         for operation in graft_ops[str(root)]:
             target = Path(operation["target"])
-            before = operation["before_requirement"]["state"]
+            requirement = operation["before_requirement"]
+            before = (
+                applied[operation["resource_id"]]["after"]
+                if requirement["kind"] == "phase-after"
+                else requirement["state"]
+            )
+            if operation["selector"] == "graft-agents" and snapshot(target) != before:
+                raise AssertionError("fixture deployment must start at its declared predecessor")
             backup = None
             if before["type"] != "absent":
                 destination = vault / manifest_id / "deploy" / operation["resource_id"]
@@ -439,7 +477,7 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
                 target.chmod(0o640)
             result = _stage_result(
                 operation,
-                operation["before_requirement"]["state"],
+                before,
                 snapshot(Path(operation["target"])),
                 backup,
             )
@@ -455,13 +493,6 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
             "nextStep": "",
             "shared_operation_ids": [],
         }
-        apply_projects.append(
-            {
-                **common,
-                "status": "applied",
-                "private_results": apply_results,
-            }
-        )
         deploy_projects.append(
             {
                 **common,
@@ -477,7 +508,11 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
             "previous_receipt_id": None,
             "status": "applied",
             "projects": apply_projects,
-            "shared_results": [],
+            "shared_results": [
+                applied[operation["resource_id"]]
+                for operation in sealed["payload"]["shared_operations"]
+                if operation["phase"] == "apply"
+            ],
             "started_at": _iso(created + timedelta(seconds=5)),
             "finished_at": _iso(created + timedelta(seconds=10)),
         },
@@ -516,8 +551,9 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
         )
     )
     (vault / "untrusted-mode.txt").write_text("0640\n")
-    (roots[1] / "AGENTS.md").chmod(0o600)
-    (roots[1] / "graft" / "INDEX.md").write_bytes(b"graph\ntampered\n")
+    if drift:
+        (roots[1] / "AGENTS.md").chmod(0o600)
+        (roots[1] / "graft" / "INDEX.md").write_bytes(b"graph\ntampered\n")
     return {
         "environment": environment,
         "manifest_path": manifest_path,
@@ -530,17 +566,21 @@ def build_completed_historical(base: Path, *, predecessor: str | None = None) ->
         "predecessor": predecessor,
         "successor": successor,
         "roots": roots,
+        "routing_public": routing_public,
         "attestation": attestation,
     }
 
 
 def _verify(built: dict):
     import sbtd_migration as migration
+    import sbtd_migration_plan as migration_plan
 
     with (
         mock.patch.dict(os.environ, built["environment"]),
         mock.patch.object(migration, "_LINEAGE_PUBLIC_KEY", built["public"]),
         mock.patch.object(migration, "_LINEAGE_DOCUMENT", built["pair"]),
+        mock.patch.object(migration_plan, "_ROUTING_APPROVAL_PUBLIC_KEY", built["routing_public"])
+        if built["routing_public"] is not None else nullcontext(),
     ):
         return verify_migration(
             built["manifest_path"],
@@ -557,6 +597,23 @@ class PublicVerifyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             built = build_completed_historical(Path(directory).resolve())
             alpha, beta = built["roots"]
+            manifest = json.loads(built["manifest_path"].read_bytes())
+            apply = json.loads(built["apply_path"].read_bytes())
+            deployment = json.loads(built["deployment_path"].read_bytes())
+            operations = manifest["payload"]["projects"][0]["private_operations"]
+            marker = next(op for op in operations if op["selector"] == "trellis-block")
+            wiring = next(op for op in operations if op["selector"] == "graft-agents")
+            rid = marker["resource_id"]
+            self.assertEqual(
+                wiring["before_requirement"],
+                {"kind": "phase-after", "phase": "apply", "resource_id": rid},
+            )
+            apply_results = apply["payload"]["projects"][0]["private_results"]
+            deploy_results = deployment["payload"]["projects"][0]["private_results"]
+            apply_row = next(row for row in apply_results if row["resource_id"] == rid)
+            deploy_row = next(row for row in deploy_results if row["resource_id"] == rid)
+            self.assertNotEqual(apply_row["before"], apply_row["after"])
+            self.assertEqual(deploy_row["before"], apply_row["after"])
             watched = (
                 alpha / "AGENTS.md",
                 alpha / "graft" / "INDEX.md",
@@ -709,17 +766,97 @@ class PublicVerifyTests(unittest.TestCase):
 
     def test_a_failed_report_is_not_skipped(self):
         with tempfile.TemporaryDirectory() as directory:
-            built = build_completed_historical(Path(directory).resolve())
-            smoke = next(built["evidence"].glob("smoke-*.json"))
-            raw = json.loads(smoke.read_text())
+            built = build_completed_historical(Path(directory).resolve(), drift=False)
+            alpha, beta = built["roots"]
+            smoke = built["evidence"] / "smoke-alpha.json"
+            native = built["evidence"] / "smoke-alpha.evidence.json"
+            raw = json.loads(smoke.read_bytes())
             raw["exitCode"] = 1
-            smoke.write_text(json.dumps(raw))
+            smoke.write_bytes(canonical_json_bytes(raw))
+            report = json.loads(native.read_bytes())
+            report["reports"][0]["sha256"] = snapshot(smoke)["checksum"]
+            native.write_bytes(canonical_json_bytes(report))
+            deployment = json.loads(built["deployment_path"].read_bytes())["payload"]
+            project = deployment["projects"][0]
+            self.assertEqual(project["root"], str(alpha))
+            for reference in project["report_refs"]:
+                reference["state"] = snapshot(Path(reference["path"]))
+            built["deployment_path"].write_bytes(
+                canonical_json_bytes(seal_document("deployment_evidence", deployment))
+            )
+            with self.assertRaisesRegex(
+                ContractError, "an API smoke raw run did not exit cleanly"
+            ) as raised:
+                validate_deployment_reports(deployment, project)
+            self.assertEqual(raised.exception.code, "report-acceptance")
             envelope, code = _verify(built)
             self.assertEqual(code, 3, envelope)
             self.assertEqual(envelope["status"], "failed")
-            rows = envelope["migration"]["verification"]["payload"]["legacy_resources"]
-            self.assertGreaterEqual(len(rows), 3)
-            self.assertTrue(all(row["reason"].strip() for row in rows))
+            payload = envelope["migration"]["verification"]["payload"]
+            self.assertEqual(
+                {row["root"]: row["status"] for row in payload["projects"]},
+                {str(alpha): "failed", str(beta): "not-verified"},
+            )
+            self.assertEqual(len(payload["legacy_resources"]), 4)
+
+    def test_unreadable_or_unsafe_routing_keeps_other_historical_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            built = build_completed_historical(base, drift=False, signed_route=True)
+            route = base / "home/.codex/AGENTS.md"
+            alpha, beta = built["roots"]
+            agents = alpha / "AGENTS.md"
+
+            def check_unavailable() -> None:
+                envelope, code = _verify(built)
+                self.assertEqual(code, 2, envelope)
+                self.assertEqual(envelope["status"], "blocked")
+                payload = envelope["migration"]["verification"]["payload"]
+                rows = {row["target"]: row for row in payload["legacy_resources"]}
+                self.assertEqual(len(rows), 4)
+                self.assertEqual(rows[str(beta / "graft")]["bytes"], "match")
+                self.assertEqual(rows[str(agents)]["bytes"], "unreadable")
+                self.assertEqual(rows[str(agents)]["status"], "not-verified")
+                self.assertTrue(all(project["status"] == "blocked" for project in payload["projects"]))
+
+            def unreadable(path: Path) -> dict:
+                if path in {route, agents}:
+                    raise ContractError("read-failed", "fixture unreadable routing")
+                return snapshot(path)
+
+            with mock.patch("sbtd_migration_verify.snapshot", side_effect=unreadable):
+                check_unavailable()
+            if os.name == "posix":
+                from sbtd_migration import _check_stage_backups
+
+                referent = route.with_name("unmanaged.md")
+                referent.write_bytes(b"not an approved routing file\n")
+
+                def replace_after_binding(results):
+                    _check_stage_backups(results)
+                    route.unlink()
+                    agents.unlink()
+                    route.symlink_to(referent)
+                    os.mkfifo(agents)
+
+                # Keep the referent in the declared root. Containment still
+                # binds, but the late link and FIFO cannot supply state.
+                with mock.patch(
+                    "sbtd_migration._check_stage_backups",
+                    side_effect=replace_after_binding,
+                ):
+                    check_unavailable()
+                self.assertTrue(route.is_symlink())
+                self.assertTrue(stat.S_ISFIFO(agents.lstat().st_mode))
+
+                # A preexisting escape is not a safely bound observation.
+                route.unlink()
+                route.symlink_to(base / "outside-codex.md")
+                with self.assertRaisesRegex(
+                    ContractError, "shared target needs one declared root"
+                ) as raised:
+                    _verify(built)
+                self.assertEqual(raised.exception.code, "semantic-violation")
 
 
 if __name__ == "__main__":
